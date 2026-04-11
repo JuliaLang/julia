@@ -52,7 +52,7 @@ Rational(n::Integer) = unsafe_rational(n, one(n))
 """
     divgcd(x::Integer, y::Integer)
 
-Returns `(x÷gcd(x,y), y÷gcd(x,y))`.
+Return `(x÷gcd(x,y), y÷gcd(x,y))`.
 
 See also [`div`](@ref), [`gcd`](@ref).
 """
@@ -105,8 +105,42 @@ function //(x::Rational, y::Rational)
 end
 
 //(x::Complex, y::Real) = complex(real(x)//y, imag(x)//y)
-//(x::Number, y::Complex) = x*conj(y)//abs2(y)
 
+# Return a complex numerator and real denominator
+# of the exact inverse of a Complex number.
+function _complex_exact_inv(y::Complex)
+    c, d = reim(y)
+    num = if (isinf(c) | isinf(d))
+        conj(zero(y))
+    else
+        conj(y)
+    end
+    num, abs2(y)
+end
+function _complex_exact_inv(y::Complex{<:Integer})
+    c, d = reim(y)
+    c_r, d_r = divgcd(c, d)
+    abs2y_r = checked_add(checked_mul(c, c_r), checked_mul(d, d_r))
+    num = complex(c_r, checked_neg(d_r))
+    num, abs2y_r
+end
+
+function //(x::Number, y::Complex)
+    num, den = _complex_exact_inv(y)
+    (x * num) // den
+end
+function //(x::Integer, y::Complex{<:Integer})
+    complex(x) // y
+end
+function //(x::Complex{<:Integer}, y::Complex{<:Integer})
+    a, b, c, d = promote(reim(x)..., reim(y)...)
+    c_r, d_r = divgcd(c, d)
+    abs2y_r = checked_add(checked_mul(c, c_r), checked_mul(d, d_r))
+    complex(
+        checked_add(checked_mul(a, c_r), checked_mul(b, d_r)),
+        checked_add(checked_mul(b, c_r), checked_neg(checked_mul(a, d_r)))
+    )//abs2y_r
+end
 
 //(X::AbstractArray, y::Number) = X .// y
 
@@ -235,14 +269,18 @@ function rationalize(::Type{T}, x::Union{AbstractFloat, Rational}, tol::Real) wh
     while r > nt
         try
             ia = convert(T,a)
-
             np = checked_add(checked_mul(ia,p),pp)
             nq = checked_add(checked_mul(ia,q),qq)
             p, pp = np, p
             q, qq = nq, q
         catch e
             isa(e,InexactError) || isa(e,OverflowError) || rethrow()
-            return p // q
+            (a ≤ 2 || ((-p == p) && (p < 0))) && return p // q
+            # find best semiconvergent that fits in T
+            ia_p = iszero(p) ? typemax(T) : fld(typemax(T) - abs(pp), abs(p))
+            ia_q = iszero(q) ? typemax(T) : fld(typemax(T) - qq, q)
+            ia = min(ia_p, ia_q)
+            return ia > a/2 ? (ia*p + pp) // (ia*q + qq) : p // q
         end
 
         # naive approach of using
@@ -259,15 +297,19 @@ function rationalize(::Type{T}, x::Union{AbstractFloat, Rational}, tol::Real) wh
 
     # find optimal semiconvergent
     # smallest a such that x-a*y < a*t+tt
-    a = cld(x-tt,y+t)
+    a_min = cld(x-tt,y+t)
     try
-        ia = convert(T,a)
+        ia = convert(T,a_min)
         np = checked_add(checked_mul(ia,p),pp)
         nq = checked_add(checked_mul(ia,q),qq)
         return np // nq
     catch e
         isa(e,InexactError) || isa(e,OverflowError) || rethrow()
-        return p // q
+        (a ≤ 2 || ((-p == p) && (p < 0))) && return p // q
+        ia_p = iszero(p) ? typemax(T) : fld(typemax(T) - abs(pp), abs(p))
+        ia_q = iszero(q) ? typemax(T) : fld(typemax(T) - qq, q)
+        ia = min(ia_p, ia_q)
+        return ia > a/2 ? (ia*p + pp) // (ia*q + qq) : p // q
     end
 end
 rationalize(::Type{T}, x::AbstractFloat; tol::Real = eps(x)) where {T<:Integer} = rationalize(T, x, tol)
@@ -278,6 +320,7 @@ rationalize(::Type{T}, x::Rational; tol::Real = 0) where {T<:Integer} = rational
 rationalize(x::Rational; kvs...) = x
 rationalize(x::Integer; kvs...) = Rational(x)
 function rationalize(::Type{T}, x::Integer; kvs...) where {T<:Integer}
+    T<:Unsigned && x < 0 && __throw_negate_unsigned()
     if Base.hastypemax(T) # BigInt doesn't
         x < typemin(T) && return unsafe_rational(-one(T), zero(T))
         x > typemax(T) && return unsafe_rational(one(T), zero(T))

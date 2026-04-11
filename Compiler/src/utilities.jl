@@ -21,7 +21,7 @@ function contains_is(itr, @nospecialize(x))
     return false
 end
 
-anymap(f::Function, a::Array{Any,1}) = Any[ f(a[i]) for i in 1:length(a) ]
+anymap(f::Function, a::Vector{Any}) = Any[ f(a[i]) for i in 1:length(a) ]
 
 ############
 # inlining #
@@ -169,7 +169,6 @@ isa_compileable_sig(@nospecialize(atype), sparams::SimpleVector, method::Method)
 isa_compileable_sig(m::MethodInstance) = (def = m.def; !isa(def, Method) || isa_compileable_sig(m.specTypes, m.sparam_vals, def))
 isa_compileable_sig(::ABIOverride) = false
 
-has_typevar(@nospecialize(t), v::TypeVar) = ccall(:jl_has_typevar, Cint, (Any, Any), t, v) != 0
 
 """
     is_declared_inline(method::Method)::Bool

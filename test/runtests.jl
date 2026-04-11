@@ -28,6 +28,7 @@ end
 
 const rmwait_timeout = running_under_rr() ? 300 : 30
 
+ENV["JULIA_TEST_BUILDROOT"] = buildroot
 if use_revise
     # First put this at the top of the DEPOT PATH to install revise if necessary.
     # Once it's loaded, we swizzle it to the end, to avoid confusing any tests.
@@ -90,8 +91,10 @@ move_to_node1("stress")
 limited_worker_rss && move_to_node1("Distributed")
 
 # Move LinearAlgebra and Pkg tests to the front, because they take a while, so we might
-# as well get them all started early.
-for prependme in ["LinearAlgebra", "Pkg"]
+# as well get them all started early. JuliaLowering_stdlibs both takes a while and
+# uses a lot of a memory at the beginning so try to run it early to keep total memory
+# use flatter.
+for prependme in ["LinearAlgebra", "Pkg", "JuliaLowering_stdlibs"]
     prependme_test_ids = findall(x->occursin(prependme, x), tests)
     prependme_tests = tests[prependme_test_ids]
     deleteat!(tests, prependme_test_ids)
@@ -236,6 +239,7 @@ cd(@__DIR__) do
         if !Sys.iswindows() && isa(stdin, Base.TTY)
             t = current_task()
             stdin_monitor = @async begin
+                trylock(stdin.raw_lock) || return
                 term = Base.Terminals.TTYTerminal("xterm", stdin, stdout, stderr)
                 try
                     Base.Terminals.raw!(term, true)
@@ -256,8 +260,10 @@ cd(@__DIR__) do
                     isa(e, InterruptException) || rethrow()
                 finally
                     Base.Terminals.raw!(term, false)
+                    unlock(stdin.raw_lock)
                 end
             end
+            Base.errormonitor(stdin_monitor)
         end
         o_ts_duration = @elapsed Experimental.@sync begin
             for p in workers()
@@ -389,7 +395,7 @@ cd(@__DIR__) do
         foreach(wait, all_tasks)
     finally
         if @isdefined stdin_monitor
-            schedule(stdin_monitor, InterruptException(); error=true)
+            istaskdone(stdin_monitor) || schedule(stdin_monitor, InterruptException(); error=true)
         end
         if @isdefined test_timers
             foreach(close, values(test_timers))

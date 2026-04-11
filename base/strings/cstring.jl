@@ -109,7 +109,7 @@ if ccall(:jl_get_UNAME, Any, ()) === :NT
 """
     Base.cwstring(s)
 
-Converts a string `s` to a NUL-terminated `Vector{Cwchar_t}`, suitable for passing to C
+Convert a string `s` to a NUL-terminated `Vector{Cwchar_t}`, suitable for passing to C
 functions expecting a `Ptr{Cwchar_t}`. The main advantage of using this over the implicit
 conversion provided by [`Cwstring`](@ref) is if the function is called multiple times with the
 same argument.

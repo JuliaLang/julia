@@ -216,85 +216,85 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeF
     local dy
     dm = dd = Int64(1)
     th = tm = ts = tms = Int64(0)
+    @label error begin
+        @label done begin
+            # Optional sign
+            let val = tryparsenext_sign(s, i, end_pos)
+                if val !== nothing
+                    coefficient, i = val
+                end
+            end
 
-    # Optional sign
-    let val = tryparsenext_sign(s, i, end_pos)
-        if val !== nothing
-            coefficient, i = val
+            let val = tryparsenext_base10(s, i, end_pos, 1)
+                val === nothing && break error
+                dy, i = val
+                i > end_pos && break done
+            end
+
+            c, i = iterate(s, i)::Tuple{Char, Int}
+            c != '-' && break error
+            i > end_pos && break done
+
+            let val = tryparsenext_base10(s, i, end_pos, 1, 2)
+                val === nothing && break error
+                dm, i = val
+                i > end_pos && break done
+            end
+
+            c, i = iterate(s, i)::Tuple{Char, Int}
+            c != '-' && break error
+            i > end_pos && break done
+
+            let val = tryparsenext_base10(s, i, end_pos, 1, 2)
+                val === nothing && break error
+                dd, i = val
+                i > end_pos && break done
+            end
+
+            c, i = iterate(s, i)::Tuple{Char, Int}
+            c != 'T' && break error
+            i > end_pos && break done
+
+            let val = tryparsenext_base10(s, i, end_pos, 1, 2)
+                val === nothing && break error
+                th, i = val
+                i > end_pos && break done
+            end
+
+            c, i = iterate(s, i)::Tuple{Char, Int}
+            c != ':' && break error
+            i > end_pos && break done
+
+            let val = tryparsenext_base10(s, i, end_pos, 1, 2)
+                val === nothing && break error
+                tm, i = val
+                i > end_pos && break done
+            end
+
+            c, i = iterate(s, i)::Tuple{Char, Int}
+            c != ':' && break error
+            i > end_pos && break done
+
+            let val = tryparsenext_base10(s, i, end_pos, 1, 2)
+                val === nothing && break error
+                ts, i = val
+                i > end_pos && break done
+            end
+
+            c, i = iterate(s, i)::Tuple{Char, Int}
+            c != '.' && break error
+            i > end_pos && break done
+
+            let val = tryparsenext_base10(s, i, end_pos, 1, 3)
+                val === nothing && break error
+                tms, j = val
+                tms *= 10 ^ (3 - (j - i))
+                j > end_pos || break error
+            end
         end
+
+        return DateTime(dy * coefficient, dm, dd, th, tm, ts, tms)
     end
-
-    let val = tryparsenext_base10(s, i, end_pos, 1)
-        val === nothing && @goto error
-        dy, i = val
-        i > end_pos && @goto done
-    end
-
-    c, i = iterate(s, i)::Tuple{Char, Int}
-    c != '-' && @goto error
-    i > end_pos && @goto done
-
-    let val = tryparsenext_base10(s, i, end_pos, 1, 2)
-        val === nothing && @goto error
-        dm, i = val
-        i > end_pos && @goto done
-    end
-
-    c, i = iterate(s, i)::Tuple{Char, Int}
-    c != '-' && @goto error
-    i > end_pos && @goto done
-
-    let val = tryparsenext_base10(s, i, end_pos, 1, 2)
-        val === nothing && @goto error
-        dd, i = val
-        i > end_pos && @goto done
-    end
-
-    c, i = iterate(s, i)::Tuple{Char, Int}
-    c != 'T' && @goto error
-    i > end_pos && @goto done
-
-    let val = tryparsenext_base10(s, i, end_pos, 1, 2)
-        val === nothing && @goto error
-        th, i = val
-        i > end_pos && @goto done
-    end
-
-    c, i = iterate(s, i)::Tuple{Char, Int}
-    c != ':' && @goto error
-    i > end_pos && @goto done
-
-    let val = tryparsenext_base10(s, i, end_pos, 1, 2)
-        val === nothing && @goto error
-        tm, i = val
-        i > end_pos && @goto done
-    end
-
-    c, i = iterate(s, i)::Tuple{Char, Int}
-    c != ':' && @goto error
-    i > end_pos && @goto done
-
-    let val = tryparsenext_base10(s, i, end_pos, 1, 2)
-        val === nothing && @goto error
-        ts, i = val
-        i > end_pos && @goto done
-    end
-
-    c, i = iterate(s, i)::Tuple{Char, Int}
-    c != '.' && @goto error
-    i > end_pos && @goto done
-
-    let val = tryparsenext_base10(s, i, end_pos, 1, 3)
-        val === nothing && @goto error
-        tms, j = val
-        tms *= 10 ^ (3 - (j - i))
-        j > end_pos || @goto error
-    end
-
-    @label done
-    return DateTime(dy * coefficient, dm, dd, th, tm, ts, tms)
-
-    @label error
     throw(ArgumentError("Invalid DateTime string"))
 end
 

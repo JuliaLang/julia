@@ -26,7 +26,7 @@ NATIVE_BUILDDIR := $(BUILDDIR)
 LLT_BUILDDIR := $(BUILDDIR)/$(LLTDIR)
 endif
 
-HEADERS := $(wildcard *.h) $(LIBUV_INC)/uv.h $(wildcard $(LLTDIR)/*.h)
+HEADERS := $(wildcard *.h) $(LIBUV_INC)/uv.h $(wildcard $(LLTDIR)/*.h) $(wildcard $(LLTDIR)/*.inc)
 
 OBJS := $(SRCS:%.c=$(BUILDDIR)/%.o)
 DOBJS := $(SRCS:%.c=$(BUILDDIR)/%.dbg.obj)
@@ -142,7 +142,7 @@ INCLUDED_FLISP_FILES := flisp.c:cvalues.c flisp.c:types.c flisp.c:print.c flisp.
 # Compilation database generation
 .PHONY: regenerate-compile_commands
 regenerate-compile_commands:
-	TMPFILE=$$(mktemp -p $(BUILDDIR) compile_commands.json.XXXXXX); \
+	@TMPFILE=$$(mktemp $(abspath $(BUILDDIR)/compile_commands.json.XXXXXX)); \
 	{ \
 		CLANG_TOOLING_C_FLAGS="$$($(JULIAHOME)/contrib/escape_json.sh clang $(CLANG_TOOLING_C_FLAGS))"; \
 		echo "["; \
@@ -176,7 +176,7 @@ clean:
 	rm -f $(BUILDDIR)/*.a
 	rm -f $(BUILDDIR)/$(EXENAME)$(EXE)
 	rm -f $(BUILDDIR)/$(EXENAME)-debug$(EXE)
-	rm -f $(BUILDDIR)/compile_commands.json
+	rm -f $(BUILDDIR)/compile_commands.json*
 	rm -f $(BUILDDIR)/host/*
 
 .PHONY: flisp-deps compile-database

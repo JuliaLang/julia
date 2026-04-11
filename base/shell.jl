@@ -2,7 +2,7 @@
 
 ## shell-like command parsing ##
 
-const shell_special = "#{}()[]<>|&*?~;"
+const shell_special = "#{}()[]<>|&*?;"
 
 (@doc raw"""
     rstrip_shell(s::AbstractString)
@@ -28,8 +28,12 @@ function rstrip_shell(s::AbstractString)
     SubString(s, 1, 0)
 end)
 
-function shell_parse(str::AbstractString, interpolate::Bool=true;
-                     special::AbstractString="", filename="none")
+shell_parse(str::AbstractString, interpolate::Bool=true;
+            special::AbstractString="", filename="none") =
+    __repl_entry_shell_parse(str, interpolate, special, filename)
+
+# N.B.: Any functions starting with __repl_entry cut off backtraces when printing in the REPL.
+function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, special::AbstractString, filename)
     last_arg = firstindex(str) # N.B.: This is used by REPLCompletions
     s = SubString(str, last_arg)
     s = rstrip_shell(lstrip(s))
@@ -63,6 +67,30 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
 
     C = eltype(str)
     P = Pair{Int,C}
+
+    # Parse the expression following a `$` interpolation marker.
+    # Pops the first char of the expression from `st`, parses the atom, advances
+    # `s` past it, and resets `st`. Returns `(expr, new_s, interp_pos)` where
+    # `interp_pos` is the absolute position in `str` (for REPLCompletions).
+    function parse_dollar_interp(st, s)
+        isempty(st) && error("\$ right before end of command")
+        stpos, c = popfirst!(st)::P
+        isspace(c) && error("space not allowed right after \$")
+        if startswith(SubString(s, stpos), "var\"")
+            # Disallow var"#" syntax in cmd interpolations.
+            # TODO: Allow only identifiers after the $ for consistency with
+            # string interpolation syntax (see #3150)
+            ex, j = :var, stpos+3
+        else
+            # use parseatom instead of parse to respect filename (#28188)
+            ex, j = Meta.parseatom(s, stpos, filename=filename)
+        end
+        interp_pos = stpos + s.offset
+        s = SubString(s, j)
+        Iterators.reset!(st, pairs(s))
+        return ex, s, interp_pos
+    end
+
     for (j, c) in st
         j, c = j::Int, c::C
         if !in_single_quotes && !in_double_quotes && isspace(c)
@@ -78,23 +106,11 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
             end
         elseif interpolate && !in_single_quotes && c == '$'
             i = consume_upto!(arg, s, i, j)
-            isempty(st) && error("\$ right before end of command")
-            stpos, c = popfirst!(st)::P
-            isspace(c) && error("space not allowed right after \$")
-            if startswith(SubString(s, stpos), "var\"")
-                # Disallow var"#" syntax in cmd interpolations.
-                # TODO: Allow only identifiers after the $ for consistency with
-                # string interpolation syntax (see #3150)
-                ex, j = :var, stpos+3
-            else
-                # use parseatom instead of parse to respect filename (#28188)
-                ex, j = Meta.parseatom(s, stpos, filename=filename)
-            end
-            last_arg = stpos + s.offset
+            result = parse_dollar_interp(st, s)
+            s = result[2]
+            last_arg = result[3]
             update_last_arg = true
-            push!(arg, ex)
-            s = SubString(s, j)
-            Iterators.reset!(st, pairs(s))
+            push!(arg, result[1])
             i = firstindex(s)
         else
             if update_last_arg
@@ -130,6 +146,40 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
                     i = consume_upto!(arg, s, i, j)
                     _ = popfirst!(st)
                 end
+            elseif interpolate && !in_single_quotes && !in_double_quotes &&
+                    c == '~' && i == j && isempty(arg)
+                # Tilde expansion: `~` or `~username` at start of a word.
+                # Collect the username, which may include $interpolations (e.g. `~$user`).
+                # Stop at /, whitespace, or uninterpolable chars (quotes, backslash).
+                i = consume_upto!(arg, s, i, j)  # i now points past the ~
+                user_parts = []
+                user_lit_start = i
+                while !isempty(st)
+                    nxt = peek(st)::P
+                    nc = nxt[2]
+                    (nc == '/' || isspace(nc) || nc == '\'' || nc == '"' || nc == '\\') && break
+                    if nc == '$'
+                        push_nonempty!(user_parts, s[user_lit_start:prevind(s, nxt[1])])
+                        popfirst!(st)  # consume $
+                        result = parse_dollar_interp(st, s)
+                        push!(user_parts, result[1])
+                        s = result[2]
+                        i = firstindex(s)
+                        user_lit_start = i
+                    else
+                        popfirst!(st)
+                    end
+                end
+                user_end = something(peek(st), (lastindex(s) + 1) => '\0').first
+                push_nonempty!(user_parts, s[user_lit_start:prevind(s, user_end)])
+                if isempty(user_parts)
+                    push!(arg, :(expanduser("~")))
+                elseif length(user_parts) == 1 && isa(user_parts[1], AbstractString)
+                    push!(arg, :(expanduser($("~" * user_parts[1]))))
+                else
+                    push!(arg, :(let _u = string($(user_parts...)); isempty(_u) ? "~" : expanduser(string('~', _u)) end))
+                end
+                i = user_end
             elseif !in_single_quotes && !in_double_quotes && c in special
                 error("parsing command `$str`: special characters \"$special\" must be quoted in commands")
             end
@@ -145,11 +195,11 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
     interpolate || return args, last_arg
 
     # construct an expression
-    ex = Expr(:tuple)
+    expr = Expr(:tuple)
     for arg in args
-        push!(ex.args, Expr(:tuple, arg...))
+        push!(expr.args, Expr(:tuple, arg...))
     end
-    return ex, last_arg
+    return expr, last_arg
 end
 
 """
@@ -171,7 +221,7 @@ function shell_split(s::AbstractString)
     parsed = shell_parse(s, false)[1]
     args = String[]
     for arg in parsed
-        push!(args, string(arg...))
+        push!(args, string(arg...)::String)
     end
     args
 end
@@ -196,7 +246,7 @@ function print_shell_word(io::IO, word::AbstractString, special::AbstractString 
     else
         print(io, '"')
         for c in word
-            if c == '"' || c == '$'
+            if c == '"' || c == '$' || c == '\\'
                 print(io, '\\')
             end
             print(io, c)
@@ -244,34 +294,40 @@ function print_shell_escaped_posixly(io::IO, args::AbstractString...)
         first || print(io, ' ')
         # avoid printing quotes around simple enough strings
         # that any (reasonable) shell will definitely never consider them to be special
-        have_single::Bool = false
-        have_double::Bool = false
-        function isword(c::AbstractChar)
-            if '0' <= c <= '9' || 'a' <= c <= 'z' || 'A' <= c <= 'Z'
-                # word characters
-            elseif c == '_' || c == '/' || c == '+' || c == '-' || c == '.'
-                # other common characters
-            elseif c == '\''
-                have_single = true
-            elseif c == '"'
-                have_double && return false # switch to single quoting
-                have_double = true
-            elseif !first && c == '='
-                # equals is special if it is first (e.g. `env=val ./cmd`)
-            else
-                # anything else
-                return false
-            end
-            return true
-        end
         if isempty(arg)
             print(io, "''")
-        elseif all(isword, arg)
-            have_single && (arg = replace(arg, '\'' => "\\'"))
-            have_double && (arg = replace(arg, '"' => "\\\""))
-            print(io, arg)
         else
-            print(io, '\'', replace(arg, '\'' => "'\\''"), '\'')
+            have_single = false
+            have_double = false
+            isword = true
+            for c in arg
+                if '0' <= c <= '9' || 'a' <= c <= 'z' || 'A' <= c <= 'Z'
+                    # word characters
+                elseif c == '_' || c == '/' || c == '+' || c == '-' || c == '.'
+                    # other common characters
+                elseif c == '\''
+                    have_single = true
+                elseif c == '"'
+                    if have_double
+                        isword = false
+                        break # switch to single quoting
+                    end
+                    have_double = true
+                elseif !first && c == '='
+                    # equals is special if it is first (e.g. `env=val ./cmd`)
+                else
+                    # anything else
+                    isword = false
+                    break
+                end
+            end
+            if isword
+                have_single && (arg = replace(arg, '\'' => "\\'"))
+                have_double && (arg = replace(arg, '"' => "\\\""))
+                print(io, arg)
+            else
+                print(io, '\'', replace(arg, '\'' => "'\\''"), '\'')
+            end
         end
         first = false
     end

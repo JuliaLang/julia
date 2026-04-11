@@ -34,7 +34,7 @@ Base.axes(C::Const) = axes(C.a)
 """
     @aliasscope expr
 
-Allows the compiler to assume that all `Const`s are not being modified through stores
+Allow the compiler to assume that all `Const`s are not being modified through stores
 within this scope, even if the compiler can't prove this to be the case.
 
 !!! warning
@@ -543,7 +543,7 @@ This metric is only updated when `t` yields or completes unless `t` is the curre
 which it will be updated continuously.
 See also [`Base.Experimental.task_wall_time_ns`](@ref).
 
-Returns `nothing` if task timings are not enabled.
+Return `nothing` if task timings are not enabled.
 See [`Base.Experimental.task_metrics`](@ref).
 
 !!! note "This metric is from the Julia scheduler"
@@ -572,7 +572,7 @@ This is the time since the task first entered the run queue until the time at wh
 completed, or until the current time if the task has not yet completed.
 See also [`Base.Experimental.task_running_time_ns`](@ref).
 
-Returns `nothing` if task timings are not enabled.
+Return `nothing` if task timings are not enabled.
 See [`Base.Experimental.task_metrics`](@ref).
 
 !!! compat "Julia 1.12"
@@ -655,26 +655,7 @@ function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real
         timer = Timer(timeout)
         waiter_left = Threads.Atomic{Bool}(false)
         # start a task to wait on the timer
-        t = Task() do
-            try
-                wait(timer)
-            catch e
-                # if the timer was closed, the waiting task has been scheduled; do nothing
-                e isa EOFError && return
-            end
-            dosched = false
-            lock(c.lock)
-            # Confirm that the waiting task is still in the wait queue and remove it. If
-            # the task is not in the wait queue, it must have been notified already so we
-            # don't do anything here.
-            if !waiter_left[] && ct.queue === c.waitq
-                dosched = true
-                Base.list_deletefirst!(c.waitq, ct)
-            end
-            unlock(c.lock)
-            # send the waiting task a timeout
-            dosched && schedule(ct, :timed_out)
-        end
+        t = _wait_with_timeout_task(c, ct, timer, waiter_left)
         t.sticky = false
         Threads._spawn_set_thrpool(t, :interactive)
         schedule(t)
@@ -692,6 +673,30 @@ function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real
         rethrow()
     finally
         Base.relockall(c.lock, token)
+    end
+end
+
+function _wait_with_timeout_task(c::GenericCondition, ct::Task, timer::Timer,
+    waiter_left::Threads.Atomic{Bool})
+    return Task() do
+        try
+            wait(timer)
+        catch e
+            # if the timer was closed, the waiting task has been scheduled; do nothing
+            e isa EOFError && return
+        end
+        dosched = false
+        lock(c.lock)
+        # Confirm that the waiting task is still in the wait queue and remove it. If
+        # the task is not in the wait queue, it must have been notified already so we
+        # don't do anything here.
+        if !waiter_left[] && ct.queue === c.waitq
+            dosched = true
+            Base.list_deletefirst!(c.waitq, ct)
+        end
+        unlock(c.lock)
+        # send the waiting task a timeout
+        dosched && schedule(ct, :timed_out)
     end
 end
 
@@ -744,6 +749,87 @@ macro reexport(ex)
     push!(calls.args, :nothing)
 
     return esc(calls)
+end
+
+struct VersionedLower
+    ver::VersionNumber
+end
+
+function (vp::VersionedLower)(@nospecialize(code), mod::Module,
+                              file="none", line=0, world=typemax(Csize_t), warn=false)
+    if !isdefined(Base, :JuliaLowering)
+        if vp.ver === VERSION
+            return Core._parse
+        end
+        error("JuliaLowering module is required for syntax version $(vp.ver), but it is not loaded.")
+    end
+    Base.JuliaLowering.core_lowering_hook(code, filename, lineno, offset, options; syntax_version=vp.ver)
+end
+
+function Base.set_syntax_version(m::Module, ver::VersionNumber)
+    parser = Base.VersionedParse(ver)
+    Core.declare_const(m, Symbol("#_internal_julia_parse"), parser)
+    #lowerer = VersionedLower(ver)
+    #Core.declare_const(m, :_internal_julia_lower, lowerer)
+    nothing
+end
+
+"""
+    Base.Experimental.@set_syntax_version ver
+
+Sets the syntax version to the current module to `ver`. This overrides settings of `syntax.julia_version` or
+`compat.julia` from Project.toml.
+
+!!! compat "Julia 1.14"
+    This macro was added in Julia 1.14.
+
+!!! warning
+    The new syntax version will take effect only for code parsed after the *invocation* of the result of the macro
+    expansion. This may be unintuitive if the macro is used inside a module body, as the entire module will be parsed
+    before any statements therein are executed, e.g. consider.
+
+    ```
+    @set_syntax_version v"1.13"
+    module ChangeSyntax
+        @set_syntax_version v"1.14"
+        expr1 # Parsed with syntax version 1.13
+     # The call itself is parsed with syntax version 1.13, but the included code is parsed with syntax version 1.14
+        include_string(ChangeSyntax, "expr2")
+        expr3 # Parsed with syntax version 1.13
+    end
+    ```
+
+    For this reason, the Project.toml mechanism is strongly preferred for packages.
+    However, this macro may be useful for scripts or the REPL.
+
+!!! warning
+    This interface is experimental and subject to change or removal without notice.
+"""
+macro set_syntax_version(ver)
+    Expr(:call, Base.set_syntax_version, __module__, esc(ver))
+end
+
+"""
+    Base.Experimental.@VERSION ver
+
+This macro provides access to parser (and possibly in the future other frontend component) language version
+information. In particular, `(@VERSION).syntax` provides the syntax version used to parse the location where the macro is invoked.
+
+!!! compat "Julia 1.14"
+    This macro was added in Julia 1.14.
+
+!!! note
+    Calls to this macro have special handling in the parser and the name `@VERSION` is mandatory. At this time, other macros do not
+    have access to source syntax version information.
+"""
+function var"@VERSION"(__source__::Union{LineNumberNode, Core.MacroSource}, __module__::Module)
+    # This macro has special handling in the parser, which puts the current syntax
+    # version into __source__.
+    if isa(__source__, LineNumberNode)
+        return :((; syntax = v"1.13", runtime = VERSION))
+    else
+        return :((; syntax = $(__source__.syntax_ver), runtime = VERSION))
+    end
 end
 
 end # module

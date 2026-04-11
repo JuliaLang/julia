@@ -22,7 +22,7 @@ defines the convenience entries `code_escapes` and `@code_escapes` for testing a
 ```@repl EAUtils
 # InteractiveUtils.@activate Compiler # to use the stdlib version of the Compiler
 
-let JULIA_DIR = normpath(Sys.BINDIR, "..", "share", "julia")
+let JULIA_DIR = normpath(Sys.BINDIR, Base.DATAROOTDIR, "julia")
     include(normpath(JULIA_DIR, "Compiler", "test", "EAUtils.jl"))
     using .EAUtils
 end

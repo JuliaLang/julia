@@ -759,12 +759,12 @@ end
 # Here we try to consume N of the indices (if there are that many available)
 @inline function checkbounds_indices(::Type{Bool}, inds::Tuple, I::Tuple{CartesianIndex,Vararg})
     inds1, rest = IteratorsMD.split(inds, Val(length(I[1])))
-    checkindex(Bool, inds1, I[1]) & checkbounds_indices(Bool, rest, tail(I))
+    checkindex(Bool, inds1, I[1]) && checkbounds_indices(Bool, rest, tail(I))
 end
 @inline checkindex(::Type{Bool}, inds::Tuple, I::CartesianIndex) =
     checkbounds_indices(Bool, inds, I.I)
 @inline checkindex(::Type{Bool}, inds::Tuple, i::AbstractRange{<:CartesianIndex}) =
-    isempty(i) | (checkindex(Bool, inds, first(i)) & checkindex(Bool, inds, last(i)))
+    isempty(i) | (checkindex(Bool, inds, first(i)) && checkindex(Bool, inds, last(i)))
 
 # Indexing into Array with mixtures of Integers and CartesianIndices is
 # extremely performance-sensitive. While the abstract fallbacks support this,
@@ -781,7 +781,7 @@ end
 # Here we try to consume N of the indices (if there are that many available)
 @inline function checkbounds_indices(::Type{Bool}, inds::Tuple, I::Tuple{AbstractArray{CartesianIndex{N}},Vararg}) where N
     inds1, rest = IteratorsMD.split(inds, Val(N))
-    checkindex(Bool, inds1, I[1]) & checkbounds_indices(Bool, rest, tail(I))
+    checkindex(Bool, inds1, I[1]) && checkbounds_indices(Bool, rest, tail(I))
 end
 @inline checkindex(::Type{Bool}, inds::Tuple, I::CartesianIndices) =
     checkbounds_indices(Bool, inds, I.indices)
@@ -907,12 +907,12 @@ checkbounds(::Type{Bool}, A::AbstractArray, i::AbstractVector{Bool}) =
     checkindex(Bool, eachindex(IndexLinear(), A), i)
 @inline function checkbounds_indices(::Type{Bool}, inds::Tuple, I::Tuple{AbstractArray{Bool},Vararg})
     inds1, rest = IteratorsMD.split(inds, Val(ndims(I[1])))
-    checkindex(Bool, inds1, I[1]) & checkbounds_indices(Bool, rest, tail(I))
+    checkindex(Bool, inds1, I[1]) && checkbounds_indices(Bool, rest, tail(I))
 end
 checkindex(::Type{Bool}, inds::AbstractUnitRange, I::AbstractVector{Bool}) = axes1(I) == inds
 checkindex(::Type{Bool}, inds::AbstractUnitRange, I::AbstractRange{Bool}) = axes1(I) == inds
 checkindex(::Type{Bool}, inds::Tuple, I::AbstractArray{Bool}) = _check_boolean_axes(inds, axes(I))
-_check_boolean_axes(inds::Tuple, axes::Tuple) = (inds[1] == axes[1]) & _check_boolean_axes(tail(inds), tail(axes))
+_check_boolean_axes(inds::Tuple, axes::Tuple) = (inds[1] == axes[1]) && _check_boolean_axes(tail(inds), tail(axes))
 _check_boolean_axes(::Tuple{}, axes::Tuple) = all(==(OneTo(1)), axes)
 
 ensure_indexable(I::Tuple{}) = ()
@@ -1118,7 +1118,7 @@ end
 function mightalias(A::SubArray, B::SubArray)
     # There are three ways that SubArrays might _problematically_ alias one another:
     #   1. The parents are the same we can conservatively check if the indices might overlap OR
-    #   2. The parents alias eachother in a more complicated manner (and we can't trace indices) OR
+    #   2. The parents alias each other in a more complicated manner (and we can't trace indices) OR
     #   3. One's parent is used in the other's indices
     # Note that it's ok for just the indices to alias each other as those should not be mutated,
     # so we can always do better than the default !_isdisjoint(dataids(A), dataids(B))
@@ -1488,7 +1488,7 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::StridedArra
     end
 
     @inbounds if bind ≤ kd1
-        @assert bind == kd1
+        @assert bind == kd1 "bind != kd1"
         c = UInt64(0)
         for j = 0:ld1
             c |= (UInt64(unchecked_bool_convert(C[ind])) << j)

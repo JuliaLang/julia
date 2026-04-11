@@ -109,8 +109,8 @@ function isvalid(s::SubString, i::Integer)
     @inbounds return ib && isvalid(s.string, s.offset + i)::Bool
 end
 
-thisind(s::SubString{String}, i::Int) = _thisind_str(s, i)
-nextind(s::SubString{String}, i::Int) = _nextind_str(s, i)
+@propagate_inbounds thisind(s::SubString{String}, i::Int) = _thisind_str(s, i)
+@propagate_inbounds nextind(s::SubString{String}, i::Int) = _nextind_str(s, i)
 
 parent(s::SubString) = s.string
 parentindices(s::SubString) = (s.offset + 1 : thisind(s.string, s.offset + s.ncodeunits),)

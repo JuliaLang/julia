@@ -80,8 +80,8 @@ const AnyConditionalsLattice{𝕃<:AbstractLattice} = Union{ConditionalsLattice{
 const AnyMustAliasesLattice{𝕃<:AbstractLattice} = Union{MustAliasesLattice{𝕃}, InterMustAliasesLattice{𝕃}}
 
 const SimpleInferenceLattice = typeof(PartialsLattice(ConstsLattice()))
-const BaseInferenceLattice = typeof(ConditionalsLattice(SimpleInferenceLattice.instance))
-const IPOResultLattice = typeof(InterConditionalsLattice(SimpleInferenceLattice.instance))
+const BaseInferenceLattice = typeof(MustAliasesLattice(ConditionalsLattice(SimpleInferenceLattice.instance)))
+const IPOResultLattice = typeof(InterMustAliasesLattice(InterConditionalsLattice(SimpleInferenceLattice.instance)))
 
 """
     struct InferenceLattice{𝕃<:AbstractLattice} <: AbstractLattice
@@ -183,7 +183,7 @@ end
 """
     has_nontrivial_extended_info(𝕃::AbstractLattice, t)::Bool
 
-Determines whether the given lattice element `t` of `𝕃` has non-trivial extended lattice
+Determine whether the given lattice element `t` of `𝕃` has non-trivial extended lattice
 information that would not be available from the type itself.
 """
 @nospecializeinfer has_nontrivial_extended_info(𝕃::AbstractLattice, @nospecialize t) =
@@ -206,7 +206,7 @@ end
 """
     is_const_prop_profitable_arg(𝕃::AbstractLattice, t)::Bool
 
-Determines whether the given lattice element `t` of `𝕃` has new extended lattice information
+Determine whether the given lattice element `t` of `𝕃` has new extended lattice information
 that should be forwarded along with constant propagation.
 """
 @nospecializeinfer is_const_prop_profitable_arg(𝕃::AbstractLattice, @nospecialize t) =
@@ -250,6 +250,10 @@ end
 end
 @nospecializeinfer function is_forwardable_argtype(𝕃::ConstsLattice, @nospecialize x)
     isa(x, Const) && return true
+    return is_forwardable_argtype(widenlattice(𝕃), x)
+end
+@nospecializeinfer function is_forwardable_argtype(𝕃::MustAliasesLattice, @nospecialize x)
+    isa(x, MustAlias) && return true
     return is_forwardable_argtype(widenlattice(𝕃), x)
 end
 @nospecializeinfer is_forwardable_argtype(::JLTypeLattice, @nospecialize x) = false

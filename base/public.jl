@@ -69,6 +69,7 @@ public
     isexported,
     ispublic,
     remove_linenums!,
+    generating_output,
 
 # AST handling
     IR,
@@ -99,6 +100,8 @@ public
     @constprop,
     @locals,
     @propagate_inbounds,
+    @__doc__,
+    @nospecializeinfer,
 
 # External processes
     shell_escape,
@@ -110,6 +113,11 @@ public
 
 # Strings
     escape_raw_string,
+
+# Chars
+    ismalformed,
+    isoverlong,
+    show_invalid,
 
 # IO
     # types
@@ -127,9 +135,13 @@ public
 # filesystem operations
     rename,
 
+# promotion
+    promote_typejoin,
+
 # misc
     notnothing,
     runtests,
     text_colors,
     depwarn,
+    blackbox,
     donotdelete

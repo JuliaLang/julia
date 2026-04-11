@@ -71,6 +71,7 @@ endif
 	@printf "%s\n" "const PRIVATE_LIBDIR = "$(call shell_escape,$(call julia_escape,$(call normalize_path,$(private_libdir_rel)))) >> $@
 	@printf "%s\n" "const PRIVATE_LIBEXECDIR = "$(call shell_escape,$(call julia_escape,$(call normalize_path,$(private_libexecdir_rel)))) >> $@
 	@printf "%s\n" "const INCLUDEDIR = "$(call shell_escape,$(call julia_escape,$(call normalize_path,$(includedir_rel)))) >> $@
+	@printf "%s\n" "const SOURCEDIR = "$(call shell_escape,$(call julia_escape,$(call normalize_path,$(shell echo $(call cygpath_w,$(JULIAHOME)))))) >> $@
 ifeq ($(DARWIN_FRAMEWORK), 1)
 	@printf "%s\n" "const DARWIN_FRAMEWORK = true" >> $@
 	@printf "%s\n" "const DARWIN_FRAMEWORK_NAME = \"$(FRAMEWORK_NAME)\"" >> $@
@@ -79,7 +80,7 @@ else
 endif
 ifeq ($(OS), Darwin)
 	@printf "%s\n" "const MACOS_PRODUCT_VERSION = \"$(shell sw_vers -productVersion)\"" >> $@
-	@printf "%s\n" "const MACOS_PLATFORM_VERSION = \"$(shell xcrun --show-sdk-version)\"" >> $@
+	@printf "%s\n" "const MACOS_PLATFORM_VERSION = \"$(shell xcrun --sdk macosx --show-sdk-version)\"" >> $@
 endif
 	@printf "%s\n" "const BUILD_TRIPLET = \"$(BB_TRIPLET_LIBGFORTRAN_CXXABI)\"" >> $@
 
@@ -160,11 +161,10 @@ endif
 
 define symlink_system_library
 libname_$2 := $$(notdir $(call versioned_libname,$2,$3))
-libpath_$2 := $$(shell $$(call spawn,$$(LIBWHICH)) -p $$(libname_$2) 2>/dev/null)
 symlink_$2: $$(build_private_libdir)/$$(libname_$2)
 $$(build_private_libdir)/$$(libname_$2):
-	@if [ -e "$$(libpath_$2)" ]; then \
-		REALPATH=$$(libpath_$2); \
+	@REALPATH=`$$(call spawn,$$(LIBWHICH)) -p $$(libname_$2) 2>/dev/null`; \
+	if [ -e "$$$$REALPATH" ]; then \
 		$$(call resolve_path,REALPATH) && \
 		[ -e "$$$$REALPATH" ] && \
 		rm -f "$$@" && \
@@ -182,14 +182,14 @@ endif
 endef
 
 # libexec executables
-symlink_p7zip: $(build_bindir)/7z$(EXE)
+symlink_p7zip: $(build_private_libexecdir)/7z$(EXE)
 
 ifneq ($(USE_SYSTEM_P7ZIP),0)
 SYMLINK_SYSTEM_LIBRARIES += symlink_p7zip
 7Z_PATH := $(shell which 7z$(EXE))
 endif
 
-$(build_bindir)/7z$(EXE):
+$(build_private_libexecdir)/7z$(EXE):
 	[ -e "$(7Z_PATH)" ] && \
 	rm -f "$@" && \
 	ln -sf "$(7Z_PATH)" "$@"

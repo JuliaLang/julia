@@ -126,13 +126,13 @@ mutable struct Timer
         associate_julia_struct(this.handle, this)
         iolock_begin()
         err = ccall(:uv_timer_init, Cint, (Ptr{Cvoid}, Ptr{Cvoid}), loop, this)
-        @assert err == 0
+        @assert err == 0 "failed to initialize timer"
         finalizer(uvfinalize, this)
         ccall(:uv_update_time, Cvoid, (Ptr{Cvoid},), loop)
         err = ccall(:uv_timer_start, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, UInt64, UInt64),
             this, @cfunction(uv_timercb, Cvoid, (Ptr{Cvoid},)),
             timeoutms, intervalms)
-        @assert err == 0
+        @assert err == 0 "failed to start timer"
         iolock_end()
         return this
     end
@@ -165,7 +165,7 @@ function _trywait(t::Union{Timer, AsyncCondition})
     set = t.set
     if set
         # full barrier now for AsyncCondition
-        t isa Timer || Core.Intrinsics.atomic_fence(:acquire_release)
+        t isa Timer || Core.Intrinsics.atomic_fence(:acquire_release, :system)
     else
         if !isopen(t)
             set = t.set
@@ -213,7 +213,7 @@ isopen(t::Union{Timer, AsyncCondition}) = @atomic :acquire t.isopen
 Close an object `t` and thus mark it as inactive. Once a timer or condition is inactive, it will not produce
 a new event.
 
-See also: [`isopen`](@ref)
+See also [`isopen`](@ref).
 """
 function close(t::Union{Timer, AsyncCondition})
     t.handle == C_NULL && !t.isopen && return # short-circuit path, :monotonic

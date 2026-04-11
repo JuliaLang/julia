@@ -93,6 +93,9 @@ end
     @test str[1] == Base.AnnotatedChar('h', [(:attr, "h0h0")])
     @test str[2] == Base.AnnotatedChar('m', [(:attr, "h0m1"), (:attr, "m1m2")])
     @test str[3] == Base.AnnotatedChar('m', [(:attr, "m1m2")])
+    chr = Base.annotate!(Base.AnnotatedChar('m'), :attr, "h0m1")
+    @test chr == Base.AnnotatedChar('m', [(:attr, "h0m1")])
+    @test Base.annotate!(chr, :attr, "m1m2") == Base.AnnotatedChar('m', [(:attr, "h0m1"), (:attr, "m1m2")])
 end
 
 @testset "Styling preservation" begin

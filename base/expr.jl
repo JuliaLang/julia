@@ -9,7 +9,11 @@ const is_expr = isexpr
 """
     gensym([tag])
 
-Generates a symbol which will not conflict with other variable names (in the same module).
+Generate a symbol unique among all calls to this function within the same process.
+If a string or symbol tag argument is specified, it is included in the generated name.
+
+Note that packages may be precompiled in separate processes, so names will not be unique
+between definition time and run time.
 """
 gensym() = ccall(:jl_gensym, Ref{Symbol}, ())
 
@@ -19,10 +23,10 @@ gensym(ss::String...) = map(gensym, ss)
 gensym(s::Symbol) = ccall(:jl_tagged_gensym, Ref{Symbol}, (Ptr{UInt8}, Csize_t), s, -1 % Csize_t)
 
 """
-    @gensym
+    @gensym var1 var2 ...
 
-Generates a gensym symbol for a variable. For example, `@gensym x y` is transformed into
-`x = gensym("x"); y = gensym("y")`.
+Generate symbols with [`gensym`](@ref) and assign them to the given variables.
+For example, `@gensym x y` is transformed into `x = gensym("x"); y = gensym("y")`.
 """
 macro gensym(names...)
     blk = Expr(:block)
