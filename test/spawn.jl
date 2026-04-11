@@ -6,6 +6,8 @@
 
 using Random, Sockets, SHA
 using Downloads: Downloads, download
+isdefined(Main, :samepath) || @eval Main include("testhelpers/samepath.jl")
+using Main: samepath
 
 valgrind_off = ccall(:jl_running_on_valgrind, Cint, ()) == 0
 
@@ -543,6 +545,44 @@ end
 
 
 @test Base.shell_split("\"\\\\\"") == ["\\"]
+
+# Tilde expansion in backtick commands
+@test samepath(only(`~`.exec), homedir())
+@test samepath(only(`~/foo`.exec), joinpath(homedir(), "foo"))
+@test samepath(`foo ~`.exec[2], homedir())
+@test samepath(`foo ~/bar`.exec[2], joinpath(homedir(), "bar"))
+@test `foo~bar` == Cmd(["foo~bar"])  # ~ mid-word: no expansion
+@test `foo~` == Cmd(["foo~"])        # ~ end-word: no expansion
+@test `'~'` == Cmd(["~"])            # ~ in single quotes: no expansion
+@test `"~"` == Cmd(["~"])            # ~ in double quotes: no expansion
+@test Base.shell_split("~/foo") == ["~/foo"]  # shell_split does not expand ~
+if !Sys.iswindows()
+    me = Sys.username()
+    # ~user expansion: use samepath since passwd home may differ from $HOME
+    @test samepath(only(`~$me`.exec), homedir(me))
+    @test samepath(only(`~$me/foo`.exec), joinpath(homedir(me), "foo"))
+    nouser = "nouser_" * randstring(12)
+    @test `~$nouser` == Cmd(["~$nouser"])
+    name = ""
+    @test `~$name` == Cmd(["~"])
+end
+
+# Tilde expansion in shell mode via repl_cmd
+withenv("OLDPWD" => nothing) do
+    mktempdir() do dir
+        # cd \~ goes to a directory literally named "~", not home
+        cd(dir) do
+            mkdir("~") # literal tilde directory
+            Base.repl_cmd(@cmd("cd \\~"), devnull)
+            @test samefile(pwd(), joinpath(dir, "~"))
+        end
+        # cd ~ goes to home directory
+        cd(dir) do
+            Base.repl_cmd(@cmd("cd ~"), devnull)
+            @test samefile(pwd(), homedir())
+        end
+    end
+end
 
 let roundtrip(s) = first(Base.shell_split(Base.shell_escape(s))) == s
     @test roundtrip("foo'bar\\\$baz")

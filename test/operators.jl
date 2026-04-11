@@ -417,4 +417,10 @@ end
     let t = ntuple(x->'A', 10000);
         @test Base.infer_return_type(in, (Char,typeof(t))) == Bool
     end
+
+    @test Base.infer_return_type(in, (String,Tuple{Vararg{String}})) == Bool
+    @test Base.infer_return_type((Vector{String},)) do xs
+        "foo" in tuple(xs...)
+    end == Bool
+    @test Base.infer_return_type(in, (Symbol,Tuple{Vararg{String}})) == Bool
 end
