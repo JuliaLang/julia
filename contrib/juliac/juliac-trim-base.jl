@@ -80,7 +80,9 @@ end
     end
     # these functions are not `--trim`-compatible if it resolves to a Varargs{...} specialization
     # and since it only has 1-argument methods this happens too often by default (just 2-3 args)
+    setfield!(typeof(throw_boundserror).name, :max_args, Int32(5), :monotonic)
     setfield!(typeof(throw_eachindex_mismatch_indices).name, :max_args, Int32(5), :monotonic)
+    setfield!(typeof(_throw_boundserror_indices).name, :max_args, Int32(5), :monotonic)
     setfield!(typeof(print).name, :max_args, Int32(10), :monotonic)
     setfield!(typeof(println).name, :max_args, Int32(10), :monotonic)
     setfield!(typeof(print_to_string).name, :max_args, Int32(10), :monotonic)
