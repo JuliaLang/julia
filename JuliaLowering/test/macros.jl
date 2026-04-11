@@ -905,4 +905,15 @@ end
     # the following test needs to define this to be effective
     @test_throws UndefVarError JuliaLowering.include_string(test_mod, "invokelatest_target(1,2)")
     @test JuliaLowering.include_string(test_mod, "test_invokelatest()") === 3
+
+    for expr_compat_mode in (false, true),
+        version in (v"1.13", v"1.14")
+
+        _version = JuliaLowering.include_string(test_mod,
+            "Base.Experimental.@VERSION";
+            expr_compat_mode, version
+        )
+        @test _version isa NamedTuple
+        @test _version.syntax == version
+    end
 end

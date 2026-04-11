@@ -1286,18 +1286,17 @@ end
 10  latestworld
 11  TestMod.f
 12  (= slot₁/val %₁₁)
-13  (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree f))
-14  (call Base.Docs.Binding TestMod %₁₃)
-15  (call Core.svec "some docs\n")
-16  (call Dict{Symbol, Any} :path => "none" :linenumber => 1 :module => TestMod)
-17  (call Base.Docs.docstr %₁₅ %₁₆)
-18  TestMod.Union
-19  TestMod.Tuple
-20  (call core.apply_type %₁₉)
-21  (call core.apply_type %₁₈ %₂₀)
-22  (call Base.Docs.doc! TestMod %₁₄ %₁₇ %₂₁)
-23  slot₁/val
-24  (return %₂₃)
+13  (call Base.Docs.Binding TestMod :f)
+14  (call Core.svec "some docs\n")
+15  (call Dict{Symbol, Any} :path => "none" :linenumber => 1 :module => TestMod)
+16  (call Base.Docs.docstr %₁₄ %₁₅)
+17  TestMod.Union
+18  TestMod.Tuple
+19  (call core.apply_type %₁₈)
+20  (call core.apply_type %₁₇ %₁₉)
+21  (call Base.Docs.doc! TestMod %₁₃ %₁₆ %₂₀)
+22  slot₁/val
+23  (return %₂₂)
 
 ########################################
 # Binding docs to callable type
@@ -1317,18 +1316,17 @@ end
     1   (return core.nothing)
 7   latestworld
 8   (= slot₁/val core.nothing)
-9   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree T))
-10  (call Base.Docs.Binding TestMod %₉)
-11  (call Core.svec "some docs\n")
-12  (call Dict{Symbol, Any} :path => "none" :linenumber => 1 :module => TestMod)
-13  (call Base.Docs.docstr %₁₁ %₁₂)
-14  TestMod.Union
-15  TestMod.Tuple
-16  (call core.apply_type %₁₅)
-17  (call core.apply_type %₁₄ %₁₆)
-18  (call Base.Docs.doc! TestMod %₁₀ %₁₃ %₁₇)
-19  slot₁/val
-20  (return %₁₉)
+9   (call Base.Docs.Binding TestMod :T)
+10  (call Core.svec "some docs\n")
+11  (call Dict{Symbol, Any} :path => "none" :linenumber => 1 :module => TestMod)
+12  (call Base.Docs.docstr %₁₀ %₁₁)
+13  TestMod.Union
+14  TestMod.Tuple
+15  (call core.apply_type %₁₄)
+16  (call core.apply_type %₁₃ %₁₅)
+17  (call Base.Docs.doc! TestMod %₉ %₁₂ %₁₆)
+18  slot₁/val
+19  (return %₁₈)
 
 ########################################
 # Keyword function with defaults.

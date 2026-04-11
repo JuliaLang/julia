@@ -444,13 +444,10 @@ function est_to_dst(st::SyntaxTree)
             @ast g st [K"call" "'"::K"Identifier"(scope_layer=st.scope_layer) rec(x)]
         [K"." f [K"tuple" args...]] -> _expand_literal_pow(
             @ast g st [K"dotcall" rec(f) _dst_sink_parameters(args)...])
-        [K"." l r] -> let r2 = rec(r)
-            @stm r2 begin
-                [K"inert" r3] -> @ast g st [K"." rec(l) r3]
-                r3 -> @ast g st [K"." rec(l) r3]
-            end
-        end
-        ([K"inert" [K"Identifier"]], when=!hasattr(st[1], :mod)) -> @ast g st st[1]=>K"Symbol"
+        ([K"inert" [K"Identifier"]], when=!hasattr(st[1], :mod)) ->
+            @ast g st st[1]=>K"Symbol"
+        ([K"inert_syntaxtree" [K"Identifier"]], when=!hasattr(st[1], :mod)) ->
+            @ast g st st[1]=>K"Symbol"
         [K"inert" _] -> st
         [K"inert_syntaxtree" _] -> st
         [K"module" _...] -> st

@@ -2,7 +2,7 @@
 
 ## shell-like command parsing ##
 
-const shell_special = "#{}()[]<>|&*?~;"
+const shell_special = "#{}()[]<>|&*?;"
 
 (@doc raw"""
     rstrip_shell(s::AbstractString)
@@ -67,6 +67,30 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
 
     C = eltype(str)
     P = Pair{Int,C}
+
+    # Parse the expression following a `$` interpolation marker.
+    # Pops the first char of the expression from `st`, parses the atom, advances
+    # `s` past it, and resets `st`. Returns `(expr, new_s, interp_pos)` where
+    # `interp_pos` is the absolute position in `str` (for REPLCompletions).
+    function parse_dollar_interp(st, s)
+        isempty(st) && error("\$ right before end of command")
+        stpos, c = popfirst!(st)::P
+        isspace(c) && error("space not allowed right after \$")
+        if startswith(SubString(s, stpos), "var\"")
+            # Disallow var"#" syntax in cmd interpolations.
+            # TODO: Allow only identifiers after the $ for consistency with
+            # string interpolation syntax (see #3150)
+            ex, j = :var, stpos+3
+        else
+            # use parseatom instead of parse to respect filename (#28188)
+            ex, j = Meta.parseatom(s, stpos, filename=filename)
+        end
+        interp_pos = stpos + s.offset
+        s = SubString(s, j)
+        Iterators.reset!(st, pairs(s))
+        return ex, s, interp_pos
+    end
+
     for (j, c) in st
         j, c = j::Int, c::C
         if !in_single_quotes && !in_double_quotes && isspace(c)
@@ -82,23 +106,11 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
             end
         elseif interpolate && !in_single_quotes && c == '$'
             i = consume_upto!(arg, s, i, j)
-            isempty(st) && error("\$ right before end of command")
-            stpos, c = popfirst!(st)::P
-            isspace(c) && error("space not allowed right after \$")
-            if startswith(SubString(s, stpos), "var\"")
-                # Disallow var"#" syntax in cmd interpolations.
-                # TODO: Allow only identifiers after the $ for consistency with
-                # string interpolation syntax (see #3150)
-                ex, j = :var, stpos+3
-            else
-                # use parseatom instead of parse to respect filename (#28188)
-                ex, j = Meta.parseatom(s, stpos, filename=filename)
-            end
-            last_arg = stpos + s.offset
+            result = parse_dollar_interp(st, s)
+            s = result[2]
+            last_arg = result[3]
             update_last_arg = true
-            push!(arg, ex)
-            s = SubString(s, j)
-            Iterators.reset!(st, pairs(s))
+            push!(arg, result[1])
             i = firstindex(s)
         else
             if update_last_arg
@@ -134,6 +146,40 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
                     i = consume_upto!(arg, s, i, j)
                     _ = popfirst!(st)
                 end
+            elseif interpolate && !in_single_quotes && !in_double_quotes &&
+                    c == '~' && i == j && isempty(arg)
+                # Tilde expansion: `~` or `~username` at start of a word.
+                # Collect the username, which may include $interpolations (e.g. `~$user`).
+                # Stop at /, whitespace, or uninterpolable chars (quotes, backslash).
+                i = consume_upto!(arg, s, i, j)  # i now points past the ~
+                user_parts = []
+                user_lit_start = i
+                while !isempty(st)
+                    nxt = peek(st)::P
+                    nc = nxt[2]
+                    (nc == '/' || isspace(nc) || nc == '\'' || nc == '"' || nc == '\\') && break
+                    if nc == '$'
+                        push_nonempty!(user_parts, s[user_lit_start:prevind(s, nxt[1])])
+                        popfirst!(st)  # consume $
+                        result = parse_dollar_interp(st, s)
+                        push!(user_parts, result[1])
+                        s = result[2]
+                        i = firstindex(s)
+                        user_lit_start = i
+                    else
+                        popfirst!(st)
+                    end
+                end
+                user_end = something(peek(st), (lastindex(s) + 1) => '\0').first
+                push_nonempty!(user_parts, s[user_lit_start:prevind(s, user_end)])
+                if isempty(user_parts)
+                    push!(arg, :(expanduser("~")))
+                elseif length(user_parts) == 1 && isa(user_parts[1], AbstractString)
+                    push!(arg, :(expanduser($("~" * user_parts[1]))))
+                else
+                    push!(arg, :(let _u = string($(user_parts...)); isempty(_u) ? "~" : expanduser(string('~', _u)) end))
+                end
+                i = user_end
             elseif !in_single_quotes && !in_double_quotes && c in special
                 error("parsing command `$str`: special characters \"$special\" must be quoted in commands")
             end
@@ -149,11 +195,11 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
     interpolate || return args, last_arg
 
     # construct an expression
-    ex = Expr(:tuple)
+    expr = Expr(:tuple)
     for arg in args
-        push!(ex.args, Expr(:tuple, arg...))
+        push!(expr.args, Expr(:tuple, arg...))
     end
-    return ex, last_arg
+    return expr, last_arg
 end
 
 """

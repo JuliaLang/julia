@@ -1152,8 +1152,7 @@ end
 end
 
 @testset "provide informative location in backtrace for test failures" begin
-    win2unix(filename) = replace(filename, "\\" => '/')
-    utils = win2unix(tempname())
+    utils = tempname()
     write(utils,
     """
     function test_properties2(value)
@@ -1161,7 +1160,7 @@ end
     end
     """)
 
-    included = win2unix(tempname())
+    included = tempname()
     write(included,
     """
     @testset "Other tests" begin
@@ -1178,12 +1177,12 @@ end
     end))
     """)
 
-    runtests = win2unix(tempname())
+    runtests = tempname()
     write(runtests,
     """
     using Test
 
-    include("$utils")
+    include($(repr(utils)))
 
     function test_properties(value)
         @test isodd(value)
@@ -1194,11 +1193,13 @@ end
         @noinline test_properties(8)
         test_properties2(8)
 
-        include("$included")
+        include($(repr(included)))
     end
     """)
-    msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $runtests`), stderr=devnull), String)
-    msg = win2unix(msg)
+    # Disable homedir contraction in stack traces so paths match tempname() output
+    msg = withenv("JULIA_STACKTRACE_CONTRACT_HOMEDIR" => "0") do
+        read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $runtests`), stderr=devnull), String)
+    end
     regex = r"((?:Tests|Other tests|Testset without source): Test Failed (?:.|\n)*?)\n  Stacktrace:(?:.|\n)*?(?=\n(?:Tests|Other tests))"
     failures = map(eachmatch(regex, msg)) do m
         m = match(r"(Tests|Other tests|Testset without source): .*? at (.*?)\n  Expression: (.*)(?:.|\n)*\n  Stacktrace:\n((?:.|\n)*)", m.match)

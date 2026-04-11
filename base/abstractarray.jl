@@ -721,7 +721,7 @@ See also [`checkbounds`](@ref).
 """
 function checkbounds_indices(::Type{Bool}, inds::Tuple, I::Tuple{Any, Vararg})
     @inline
-    return checkindex(Bool, get(inds, 1, OneTo(1)), I[1])::Bool &
+    return checkindex(Bool, get(inds, 1, OneTo(1)), I[1])::Bool &&
         checkbounds_indices(Bool, safe_tail(inds), tail(I))
 end
 

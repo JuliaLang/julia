@@ -18,7 +18,7 @@ x.a
 x."b"
 #---------------------
 1   TestMod.x
-2   (call top.getproperty %₁ "b")
+2   (call top.getproperty %₁ (inert "b"))
 3   (return %₂)
 
 ########################################
