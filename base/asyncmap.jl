@@ -74,9 +74,9 @@ julia> asyncmap(batch_func, 1:5; ntasks=2, batch_size=2)
 ```
 """
 function asyncmap(f, c...; ntasks=0, batch_size=nothing)
-    c1 = c[1]
-    if haslength(c1)
-        n = length(c1)
+    src = isone(length(c)) ? c[1] : zip(c...)
+    if haslength(src)
+        n = length(src)
         results = Vector{Any}(undef, n)
     else
         results = Dict{Int,Any}()
@@ -89,15 +89,15 @@ function asyncmap(f, c...; ntasks=0, batch_size=nothing)
     else
         v = results
     end
-    # Narrow element type to try to match what `map` would return.
-    if c1 isa AbstractArray
-        return collect_similar(c1, Generator(identity, reshape(v, axes(c1))))
-    elseif c1 isa Tuple
-        return Tuple(map(identity, v))
-    else
-        return map(identity, v)
-    end
+    return _asyncmap_result(v, src)
 end
+
+# Narrow element type and reshape to try to match what `map` would return.
+_asyncmap_result(v, c1::Tuple) = Tuple(map(identity, v))
+_asyncmap_result(v, c1::AbstractArray) = collect_similar(c1, Generator(identity, reshape(v, axes(c1))))
+_asyncmap_result(v, c1) = _asyncmap_result(v, c1, IteratorSize(c1))
+_asyncmap_result(v, c1, ::HasShape) = collect(Generator(identity, reshape(v, axes(c1))))
+_asyncmap_result(v, _, _) = map(identity, v)
 
 batch_size_err_str(batch_size) = string("batch_size must be specified as a positive integer. batch_size=", batch_size)
 function verify_batch_size(batch_size)
