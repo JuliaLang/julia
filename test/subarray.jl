@@ -1228,3 +1228,9 @@ end
     test_strided_vs_getindex(view(MyStridedTestArray(rand(10, 10)), 2:2:6, 1:3:9))
     test_strided_vs_getindex(view(transpose(view(MyStridedTestArray(rand(10, 10)), 2:2:6, 1:3:9)), 2:3, 3:-1:1))
 end
+
+# issue #57003
+@testset "copyto! @inbounds propagation" begin
+    @test @inbounds(copyto!(Vector{Int}(undef, 10), 1, collect(1:10), 1, 10)) == 1:10
+    @test_throws BoundsError copyto!(Vector{Int}(undef, 5), 1, collect(1:10), 1, 10)
+end
