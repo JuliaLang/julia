@@ -337,15 +337,24 @@ const _login_shells = Base.OncePerProcess{Vector{String}}() do
     end
 end
 
-# pw_shell byte offset in struct passwd — everything before the pw_shell field:
-# Linux:     pw_name, pw_passwd (2 Ptrs), pw_uid, pw_gid (2 Cuints),
-#            pw_gecos, pw_dir (2 Ptrs)
-# macOS/BSD: same as Linux plus pw_change (Clong) and pw_class (Ptr)
-#            between pw_gid and pw_gecos
-const _pw_shell_offset = @static if Sys.islinux()
-    4 * sizeof(Ptr{Cvoid}) + 2 * sizeof(Cuint)
-else
-    5 * sizeof(Ptr{Cvoid}) + 2 * sizeof(Cuint) + sizeof(Clong)
+# getpwent_r is available on Linux and FreeBSD but not macOS.
+const _getpwent_lock = Base.ReentrantLock()
+
+# Name of the `struct passwd` entry at `ptr`, or `nothing` if `list_users` should skip it.
+# pw_name is the first field and pw_uid follows pw_name and pw_passwd on all supported
+# platforms; the rest of the layout varies, so the shell is looked up via `Libc.getpwuid`.
+function _passwd_entry_name(ptr::Ptr{Cvoid}, all::Bool, valid_shells::Vector{String})
+    name_ptr = unsafe_load(Ptr{Ptr{UInt8}}(ptr))
+    name_ptr == C_NULL && return nothing
+    name = unsafe_string(name_ptr)
+    all && return name
+    @static Sys.isapple() && startswith(name, '_') && return nothing
+    if !isempty(valid_shells)
+        uid = unsafe_load(Ptr{Cuint}(ptr + 2 * sizeof(Ptr{Cvoid})))
+        pd = Libc.getpwuid(uid, false)
+        (pd === nothing || !(pd.shell in valid_shells)) && return nothing
+    end
+    return name
 end
 
 # Return a sorted, deduplicated list of real local usernames. When all=false
@@ -355,26 +364,47 @@ function list_users(; all::Bool=false)
     seen = Set{String}()
     @static if !Sys.iswindows()
         valid_shells = all ? String[] : _login_shells()
-        ccall(:setpwent, Cvoid, ())
-        try
-            while true
-                ptr = ccall(:getpwent, Ptr{Cvoid}, ())
-                ptr == C_NULL && break
-                name_ptr = unsafe_load(Ptr{Ptr{UInt8}}(ptr))
-                name_ptr == C_NULL && continue
-                name = unsafe_string(name_ptr)
-                if !all
-                    @static Sys.isapple() && startswith(name, '_') && continue
-                    if !isempty(valid_shells)
-                        shell_ptr = unsafe_load(Ptr{Ptr{UInt8}}(ptr + _pw_shell_offset))
-                        shell_ptr == C_NULL && continue
-                        unsafe_string(shell_ptr) in valid_shells || continue
+        @static if Sys.islinux() || Sys.isfreebsd()
+            # Use thread-safe getpwent_r on Linux and FreeBSD.
+            pwd_storage = zeros(UInt8, 256)
+            buflen = 1024
+            str_buf = Vector{UInt8}(undef, buflen)
+            result = Ref{Ptr{Cvoid}}(C_NULL)
+            ccall(:setpwent, Cvoid, ())
+            try
+                while true
+                    ret = ccall(:getpwent_r, Cint,
+                                (Ptr{Cvoid}, Ptr{UInt8}, Csize_t, Ptr{Ptr{Cvoid}}),
+                                pwd_storage, str_buf, Csize_t(buflen), result)
+                    if ret == Libc.ERANGE
+                        buflen *= 2
+                        buflen > 65536 && break
+                        str_buf = Vector{UInt8}(undef, buflen)
+                        continue
                     end
+                    (ret != 0 || result[] == C_NULL) && break
+                    name = GC.@preserve pwd_storage str_buf _passwd_entry_name(result[], all, valid_shells)
+                    name === nothing || push!(seen, name)
                 end
-                push!(seen, name)
+            finally
+                ccall(:endpwent, Cvoid, ())
             end
-        finally
-            ccall(:endpwent, Cvoid, ())
+        else
+            # macOS: getpwent_r is not available, so guard the
+            # entire setpwent/getpwent/endpwent sequence with a lock.
+            @lock _getpwent_lock begin
+                ccall(:setpwent, Cvoid, ())
+                try
+                    while true
+                        ptr = ccall(:getpwent, Ptr{Cvoid}, ())
+                        ptr == C_NULL && break
+                        name = _passwd_entry_name(ptr, all, valid_shells)
+                        name === nothing || push!(seen, name)
+                    end
+                finally
+                    ccall(:endpwent, Cvoid, ())
+                end
+            end
         end
     end
     return sort!(collect(seen))
