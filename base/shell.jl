@@ -168,6 +168,304 @@ function _brace_alt_expr(parts)
     end
 end
 
+## Helper functions for shell_parse ##
+
+function _push_nonempty!(list, x)
+    if !isa(x,AbstractString) || !isempty(x)
+        push!(list, x)
+    end
+    return nothing
+end
+
+function _consume_upto!(list, st, s, i, j)
+    _push_nonempty!(list, s[i:prevind(s, j)::Int])
+    something(peek(st), lastindex(s)::Int+1 => '\0').first::Int
+end
+
+function _append_word!(list, innerlist)
+    if isempty(innerlist); push!(innerlist, ""); end
+    push!(list, copy(innerlist))
+    empty!(innerlist)
+end
+
+function _redirect_word_expr(word)
+    if length(word) == 1 && isa(word[1], AbstractString)
+        return String(word[1])
+    else
+        return Expr(:call, GlobalRef(Base, :cmd_interpolate), word...)
+    end
+end
+
+# Parse the expression following a `$` interpolation marker.
+# Pops the first char of the expression from `st`, parses the atom, advances
+# `s` past it, and resets `st`. Returns `(expr, new_s, interp_pos)` where
+# `interp_pos` is the absolute position in `str` (for REPLCompletions).
+function _parse_dollar_interp(st, s, ::Type{P}, filename) where P
+    isempty(st) && error("\$ right before end of command")
+    stpos, c = popfirst!(st)::P
+    isspace(c) && error("space not allowed right after \$")
+    if startswith(SubString(s, stpos), "var\"")
+        # Disallow var"#" syntax in cmd interpolations.
+        # TODO: Allow only identifiers after the $ for consistency with
+        # string interpolation syntax (see #3150)
+        atom, j = :var, stpos+3
+    else
+        # use parseatom instead of parse to respect filename (#28188)
+        atom, j = Meta.parseatom(s, stpos, filename=filename)
+    end
+    interp_pos = stpos + s.offset
+    s = SubString(s, j)
+    Iterators.reset!(st, pairs(s))
+    return atom, s, interp_pos
+end
+
+# Redirect state for the current pipeline segment.
+mutable struct _RedirectState
+    stdin::Any
+    stdout::Any
+    stdout_append::Bool
+    stderr::Any
+    stderr_append::Bool
+    mode::Symbol  # :none | :stdin | :stdout | :stderr
+end
+_RedirectState() = _RedirectState(nothing, nothing, false, nothing, false, :none)
+
+function _reset_redirect!(r::_RedirectState)
+    r.stdin = nothing
+    r.stdout = nothing
+    r.stdout_append = false
+    r.stderr = nothing
+    r.stderr_append = false
+    r.mode = :none
+    return nothing
+end
+
+# Finalize the current word: if we're in redirect mode, assign the word as the redirect
+# filename; otherwise append it as a command argument.
+function _finalize_word!(args, arg, redir::_RedirectState, word_has_special::Bool)
+    if redir.mode != :none && (!isempty(arg) || word_has_special)
+        re = _redirect_word_expr(arg)
+        if redir.mode === :stdin; redir.stdin = re
+        elseif redir.mode === :stdout; redir.stdout = re
+        else; redir.stderr = re; end
+        empty!(arg)
+        redir.mode = :none
+    elseif redir.mode == :none && (!isempty(arg) || word_has_special)
+        _append_word!(args, arg)
+    end
+    return nothing
+end
+
+# Save the current pipeline segment and reset state for the next segment.
+function _save_pipeline_segment!(pipeline_parts, args, redir::_RedirectState)
+    seg_tuple = Expr(:tuple)
+    for a in args; push!(seg_tuple.args, Expr(:tuple, a...)); end
+    push!(pipeline_parts, (seg_tuple, redir.stdin, redir.stdout, redir.stdout_append,
+                           redir.stderr, redir.stderr_append))
+    empty!(args)
+    _reset_redirect!(redir)
+    return nothing
+end
+
+# Parse tilde expansion (~, ~user, ~$var) at the start of a word.
+# `i` should point to the position just after the `~` character.
+# Returns (s, i).
+function _parse_tilde!(arg, st, s, i, ::Type{P}, filename) where P
+    user_parts = []
+    user_lit_start = i
+    while !isempty(st)
+        nxt = peek(st)::P
+        nc = nxt[2]
+        (nc == '/' || isspace(nc) || nc == '\'' || nc == '"' || nc == '\\' ||
+         nc == '|' || nc == '<' || nc == '>') && break
+        if nc == '$'
+            _push_nonempty!(user_parts, s[user_lit_start:prevind(s, nxt[1])])
+            popfirst!(st)  # consume $
+            atom, s, _ = _parse_dollar_interp(st, s, P, filename)
+            push!(user_parts, atom)
+            i = firstindex(s)
+            user_lit_start = i
+        else
+            popfirst!(st)
+        end
+    end
+    user_end = something(peek(st), (lastindex(s) + 1) => '\0').first
+    _push_nonempty!(user_parts, s[user_lit_start:prevind(s, user_end)])
+    if isempty(user_parts)
+        push!(arg, :(expanduser("~")))
+    elseif length(user_parts) == 1 && isa(user_parts[1], AbstractString)
+        push!(arg, :(expanduser($("~" * user_parts[1]))))
+    else
+        push!(arg, :(let _u = string($(user_parts...)); isempty(_u) ? "~" : expanduser(string('~', _u)) end))
+    end
+    return s, user_end
+end
+
+# Parse comma-separated brace alternatives: {alt1,alt2,...}
+# `i` should point to the position just after the opening `{`.
+# Returns (alts, s, i, last_arg, update_last_arg).
+function _parse_brace_alts!(st, s, i, ::Type{P}, str, filename, last_arg, update_last_arg) where P
+    alts = Any[]
+    alt_parts = Any[]
+    alt_i = i   # start of current literal segment
+    bsq = false # single quotes within brace content
+    bdq = false # double quotes within brace content
+    bdepth = 0  # nested brace depth
+    while !isempty(st)
+        (bp, bc) = peek(st)::P
+        if bsq
+            # In single quotes: everything is literal until closing '
+            popfirst!(st)
+            if bc == '\''
+                _push_nonempty!(alt_parts, s[alt_i:prevind(s, bp)::Int])
+                bsq = false
+                alt_i = something(peek(st), (lastindex(s)::Int+1) => '\0').first::Int
+            end
+        elseif !bdq && bc == '\''
+            _push_nonempty!(alt_parts, s[alt_i:prevind(s, bp)::Int])
+            popfirst!(st)
+            bsq = true
+            alt_i = something(peek(st), (lastindex(s)::Int+1) => '\0').first::Int
+        elseif bc == '"'
+            _push_nonempty!(alt_parts, s[alt_i:prevind(s, bp)::Int])
+            popfirst!(st)
+            bdq = !bdq
+            alt_i = something(peek(st), (lastindex(s)::Int+1) => '\0').first::Int
+        elseif !bsq && bc == '$'
+            _push_nonempty!(alt_parts, s[alt_i:prevind(s, bp)::Int])
+            popfirst!(st)
+            atom, s, interp_pos = _parse_dollar_interp(st, s, P, filename)
+            push!(alt_parts, atom)
+            last_arg = interp_pos
+            update_last_arg = true
+            alt_i = firstindex(s)
+        elseif !bsq && bc == '\\'
+            _push_nonempty!(alt_parts, s[alt_i:prevind(s, bp)::Int])
+            popfirst!(st)  # consume \
+            if bdq
+                if !isempty(st) && (peek(st)::P).second in ('"', '$', '\\')
+                    alt_i = (peek(st)::P).first::Int
+                    popfirst!(st)
+                else
+                    push!(alt_parts, "\\")
+                    alt_i = something(peek(st), (lastindex(s)::Int+1) => '\0').first::Int
+                end
+            else
+                isempty(st) && error("parsing command `$str`: dangling backslash in brace expansion")
+                alt_i = (peek(st)::P).first::Int
+                popfirst!(st)
+            end
+        elseif !bsq && !bdq && bc == '{'
+            bdepth += 1
+            popfirst!(st)
+        elseif !bsq && !bdq && bc == '}' && bdepth > 0
+            bdepth -= 1
+            popfirst!(st)
+        elseif !bsq && !bdq && bc == '}' && bdepth == 0
+            # End of brace expansion
+            _push_nonempty!(alt_parts, s[alt_i:prevind(s, bp)::Int])
+            push!(alts, _brace_alt_expr(alt_parts))
+            popfirst!(st)
+            break
+        elseif !bsq && !bdq && bc == ',' && bdepth == 0
+            # Alternative separator
+            _push_nonempty!(alt_parts, s[alt_i:prevind(s, bp)::Int])
+            push!(alts, _brace_alt_expr(alt_parts))
+            empty!(alt_parts)
+            popfirst!(st)
+            alt_i = something(peek(st), (lastindex(s)::Int+1) => '\0').first::Int
+        else
+            popfirst!(st)
+        end
+    end
+    i = something(peek(st), (lastindex(s)::Int+1) => '\0').first::Int
+    return alts, s, i, last_arg, update_last_arg
+end
+
+# Parse brace expansion at current position.
+# `i` should point to the position just after the opening `{`.
+# Returns (s, i, word_has_special, last_arg, update_last_arg).
+function _parse_brace!(arg, st, s, i, ::Type{P}, str, filename, last_arg, update_last_arg) where P
+    found_close, has_comma, has_dotdot, has_space = _scan_brace(s, i)
+    if found_close && has_dotdot && !has_comma
+        # Range expansion: {1..10}, {a..z}, {1..10..2}, {01..10}
+        brace_content = ""
+        while !isempty(st)
+            (bp, bc) = peek(st)::P
+            if bc == '}'
+                brace_content = String(s[i:prevind(s, bp)::Int])
+                popfirst!(st)
+                break
+            end
+            popfirst!(st)
+        end
+        i = something(peek(st), (lastindex(s)::Int+1) => '\0').first::Int
+        expanded = _brace_range_expand(brace_content)
+        if expanded === nothing
+            error("parsing command `$str`: invalid brace range expansion {$brace_content}")
+        end
+        push!(arg, Expr(:tuple, expanded...))
+        return s, i, true, last_arg, update_last_arg
+    elseif found_close && has_comma && has_space
+        error("parsing command `$str`: unquoted space inside braces")
+    elseif !(found_close && has_comma)
+        # Not a valid brace expansion (no matching } or no comma):
+        # treat the { as a literal character.
+        push!(arg, "{")
+        return s, i, false, last_arg, update_last_arg
+    else
+        alts, s, i, last_arg, update_last_arg =
+            _parse_brace_alts!(st, s, i, P, str, filename, last_arg, update_last_arg)
+        push!(arg, Expr(:tuple, alts...))
+        return s, i, true, last_arg, update_last_arg
+    end
+end
+
+# Build expression for a single pipeline segment with optional redirections.
+function _build_seg_expr(seg_tuple, s_in, s_out, s_out_app, s_err, s_err_app)
+    cmd_ex = Expr(:call, GlobalRef(Base, :cmd_gen), seg_tuple)
+    if s_in !== nothing || s_out !== nothing
+        kwargs = Any[]
+        s_in !== nothing && push!(kwargs, Expr(:kw, :stdin, s_in))
+        s_out !== nothing && push!(kwargs, Expr(:kw, :stdout, s_out))
+        s_out_app && push!(kwargs, Expr(:kw, :append, true))
+        cmd_ex = Expr(:call, GlobalRef(Base, :pipeline), Expr(:parameters, kwargs...), cmd_ex)
+    end
+    if s_err !== nothing
+        kwargs = Any[Expr(:kw, :stderr, s_err)]
+        s_err_app && push!(kwargs, Expr(:kw, :append, true))
+        cmd_ex = Expr(:call, GlobalRef(Base, :pipeline), Expr(:parameters, kwargs...), cmd_ex)
+    end
+    return cmd_ex
+end
+
+# Build the final expression for a pipeline with redirections.
+function _build_pipeline_expr(pipeline_parts, args, redir::_RedirectState)
+    final_seg_tuple = Expr(:tuple)
+    for a in args; push!(final_seg_tuple.args, Expr(:tuple, a...)); end
+
+    if isempty(pipeline_parts)
+        # Only redirects, no pipes.
+        return _build_seg_expr(final_seg_tuple, redir.stdin, redir.stdout, redir.stdout_append,
+                               redir.stderr, redir.stderr_append)
+    end
+
+    # Chain pipeline segments left-to-right: pipeline(seg1, pipeline(seg2, seg3, ...)).
+    (s0_args, s0_in, s0_out, s0_out_app, s0_err, s0_err_app) = pipeline_parts[1]
+    result = _build_seg_expr(s0_args, s0_in, s0_out, s0_out_app, s0_err, s0_err_app)
+    for k in 2:length(pipeline_parts)
+        (sk_args, sk_in, sk_out, sk_out_app, sk_err, sk_err_app) = pipeline_parts[k]
+        result = Expr(:call, GlobalRef(Base, :pipeline), result,
+                      _build_seg_expr(sk_args, sk_in, sk_out, sk_out_app, sk_err, sk_err_app))
+    end
+    result = Expr(:call, GlobalRef(Base, :pipeline), result,
+                  _build_seg_expr(final_seg_tuple, redir.stdin, redir.stdout, redir.stdout_append,
+                                   redir.stderr, redir.stderr_append))
+    return result
+end
+
+## Main shell_parse entry point ##
+
 shell_parse(str::AbstractString, interpolate::Bool=true;
             special::AbstractString="", filename="none") =
     __repl_entry_shell_parse(str, interpolate, special, filename)
@@ -190,126 +488,42 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
     update_last_arg = false # true after spaces or interpolate
     word_has_special = false # true if current word contains any quoted/escaped content
 
-    # Pipeline/redirection state (used only when interpolate=true).
-    # pipeline_parts accumulates completed segments as (seg_tuple, stdin, stdout, stdout_append, stderr, stderr_append).
     pipeline_parts = []
-    seg_stdin = nothing        # stdin redirect expression for current segment
-    seg_stdout = nothing       # stdout redirect expression for current segment
-    seg_stdout_append = false  # true if stdout redirect is >> (append mode)
-    seg_stderr = nothing       # stderr redirect expression for current segment
-    seg_stderr_append = false  # true if stderr redirect is >> (append mode)
-    redirect_mode = :none      # :none | :stdin | :stdout | :stderr
-
-    function push_nonempty!(list, x)
-        if !isa(x,AbstractString) || !isempty(x)
-            push!(list, x)
-        end
-        return nothing
-    end
-    function consume_upto!(list, s, i, j)
-        push_nonempty!(list, s[i:prevind(s, j)::Int])
-        something(peek(st), lastindex(s)::Int+1 => '\0').first::Int
-    end
-    function append_2to1!(list, innerlist)
-        if isempty(innerlist); push!(innerlist, ""); end
-        push!(list, copy(innerlist))
-        empty!(innerlist)
-    end
+    redir = _RedirectState()
 
     C = eltype(str)
     P = Pair{Int,C}
-
-    # Parse the expression following a `$` interpolation marker.
-    # Pops the first char of the expression from `st`, parses the atom, advances
-    # `s` past it, and resets `st`. Returns `(expr, new_s, interp_pos)` where
-    # `interp_pos` is the absolute position in `str` (for REPLCompletions).
-    function parse_dollar_interp(st, s)
-        isempty(st) && error("\$ right before end of command")
-        stpos, c = popfirst!(st)::P
-        isspace(c) && error("space not allowed right after \$")
-        if startswith(SubString(s, stpos), "var\"")
-            # Disallow var"#" syntax in cmd interpolations.
-            # TODO: Allow only identifiers after the $ for consistency with
-            # string interpolation syntax (see #3150)
-            atom, j = :var, stpos+3
-        else
-            # use parseatom instead of parse to respect filename (#28188)
-            atom, j = Meta.parseatom(s, stpos, filename=filename)
-        end
-        interp_pos = stpos + s.offset
-        s = SubString(s, j)
-        Iterators.reset!(st, pairs(s))
-        return atom, s, interp_pos
-    end
-
-    # Convert a word (list of string/expr parts) to a redirect filename expression.
-    function redirect_word_expr(word)
-        if length(word) == 1 && isa(word[1], AbstractString)
-            return String(word[1])
-        else
-            return Expr(:call, GlobalRef(Base, :cmd_interpolate), word...)
-        end
-    end
 
     for (j, c) in st
         j, c = j::Int, c::C
         if !in_single_quotes && !in_double_quotes && isspace(c)
             update_last_arg = true
-            i = consume_upto!(arg, s, i, j)
-            if redirect_mode != :none && (!isempty(arg) || word_has_special)
-                # This word is the redirect filename.
-                re = redirect_word_expr(arg)
-                if redirect_mode === :stdin; seg_stdin = re
-                elseif redirect_mode === :stdout; seg_stdout = re
-                else; seg_stderr = re; end
-                empty!(arg)
-                redirect_mode = :none
-            elseif redirect_mode == :none && (!isempty(arg) || word_has_special)
-                append_2to1!(args, arg)
-            end
+            i = _consume_upto!(arg, st, s, i, j)
+            _finalize_word!(args, arg, redir, word_has_special)
             word_has_special = false
-            # else: in redirect_mode but arg empty — still waiting for the filename.
             while !isempty(st)
-                # We've made sure above that we don't end in whitespace,
-                # so updating `i` here is ok
                 (i, c) = peek(st)::P
                 isspace(c) || break
                 popfirst!(st)
             end
         elseif interpolate && !in_single_quotes && c == '$'
-            i = consume_upto!(arg, s, i, j)
-            result = parse_dollar_interp(st, s)
-            s = result[2]
-            last_arg = result[3]
+            i = _consume_upto!(arg, st, s, i, j)
+            atom, s, interp_pos = _parse_dollar_interp(st, s, P, filename)
+            last_arg = interp_pos
             update_last_arg = true
-            push!(arg, result[1])
+            push!(arg, atom)
             i = firstindex(s)
         elseif interpolate && !in_single_quotes && !in_double_quotes && c == '|'
             # Pipeline operator: finalize current word/redirect, then save segment.
-            i = consume_upto!(arg, s, i, j)
-            if redirect_mode != :none && (!isempty(arg) || word_has_special)
-                re = redirect_word_expr(arg)
-                if redirect_mode === :stdin; seg_stdin = re
-                elseif redirect_mode === :stdout; seg_stdout = re
-                else; seg_stderr = re; end
-                empty!(arg)
-                redirect_mode = :none
-            elseif redirect_mode == :none && (!isempty(arg) || word_has_special)
-                append_2to1!(args, arg)
-            end
-            seg_tuple = Expr(:tuple)
-            for a in args; push!(seg_tuple.args, Expr(:tuple, a...)); end
-            push!(pipeline_parts, (seg_tuple, seg_stdin, seg_stdout, seg_stdout_append,
-                                   seg_stderr, seg_stderr_append))
-            empty!(args)
-            seg_stdin = nothing; seg_stdout = nothing; seg_stdout_append = false
-            seg_stderr = nothing; seg_stderr_append = false; redirect_mode = :none
+            i = _consume_upto!(arg, st, s, i, j)
+            _finalize_word!(args, arg, redir, word_has_special)
+            _save_pipeline_segment!(pipeline_parts, args, redir)
             word_has_special = false
             update_last_arg = true
         elseif interpolate && !in_single_quotes && !in_double_quotes && (c == '<' || c == '>')
             # Redirection operator: finalize any pending word, then set redirect mode.
             # A pure-integer word immediately before the operator is an fd number (e.g. 2>).
-            i = consume_upto!(arg, s, i, j)
+            i = _consume_upto!(arg, st, s, i, j)
             fd = nothing
             if !word_has_special && length(arg) == 1 && isa(arg[1], AbstractString) &&
                     !isempty(arg[1]::AbstractString) && all(isdigit, arg[1]::AbstractString)
@@ -317,7 +531,7 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
                 empty!(arg)
                 word_has_special = false
             elseif !isempty(arg)
-                append_2to1!(args, arg)
+                _append_word!(args, arg)
             end
             if c == '>'
                 append = false
@@ -327,16 +541,16 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
                     i = something(peek(st), lastindex(s)::Int+1 => '\0').first::Int
                 end
                 if fd === nothing || fd == 1
-                    redirect_mode = :stdout; seg_stdout_append = append
+                    redir.mode = :stdout; redir.stdout_append = append
                 elseif fd == 2
-                    redirect_mode = :stderr; seg_stderr_append = append
+                    redir.mode = :stderr; redir.stderr_append = append
                 else
                     error("parsing command `$str`: unsupported fd $fd in redirection")
                 end
             else  # '<'
                 (fd === nothing || fd == 0) ||
                     error("parsing command `$str`: unsupported fd $fd in redirection")
-                redirect_mode = :stdin
+                redir.mode = :stdin
             end
             update_last_arg = true
         else
@@ -347,15 +561,15 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
             if !in_double_quotes && c == '\''
                 in_single_quotes = !in_single_quotes
                 word_has_special = true
-                i = consume_upto!(arg, s, i, j)
+                i = _consume_upto!(arg, st, s, i, j)
             elseif !in_single_quotes && c == '"'
                 in_double_quotes = !in_double_quotes
                 word_has_special = true
-                i = consume_upto!(arg, s, i, j)
+                i = _consume_upto!(arg, st, s, i, j)
             elseif !in_single_quotes && c == '\\'
                 word_has_special = true
                 if !isempty(st) && (peek(st)::P)[2] in ('\n', '\r')
-                    i = consume_upto!(arg, s, i, j) + 1
+                    i = _consume_upto!(arg, st, s, i, j) + 1
                     if popfirst!(st)[2] == '\r' && (peek(st)::P)[2] == '\n'
                         i += 1
                         popfirst!(st)
@@ -368,160 +582,23 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
                     isempty(st) && error("unterminated double quote")
                     k, c′ = peek(st)::P
                     if c′ == '"' || c′ == '$' || c′ == '\\'
-                        i = consume_upto!(arg, s, i, j)
+                        i = _consume_upto!(arg, st, s, i, j)
                         _ = popfirst!(st)
                     end
                 else
                     isempty(st) && error("dangling backslash")
-                    i = consume_upto!(arg, s, i, j)
+                    i = _consume_upto!(arg, st, s, i, j)
                     _ = popfirst!(st)
                 end
             elseif interpolate && !in_single_quotes && !in_double_quotes &&
                     c == '~' && i == j && isempty(arg)
-                # Tilde expansion: `~` or `~username` at start of a word.
-                # Collect the username, which may include $interpolations (e.g. `~$user`).
-                # Stop at /, whitespace, uninterpolable chars (quotes, backslash), or operators.
-                i = consume_upto!(arg, s, i, j)  # i now points past the ~
-                user_parts = []
-                user_lit_start = i
-                while !isempty(st)
-                    nxt = peek(st)::P
-                    nc = nxt[2]
-                    (nc == '/' || isspace(nc) || nc == '\'' || nc == '"' || nc == '\\' ||
-                     nc == '|' || nc == '<' || nc == '>') && break
-                    if nc == '$'
-                        push_nonempty!(user_parts, s[user_lit_start:prevind(s, nxt[1])])
-                        popfirst!(st)  # consume $
-                        result = parse_dollar_interp(st, s)
-                        push!(user_parts, result[1])
-                        s = result[2]
-                        i = firstindex(s)
-                        user_lit_start = i
-                    else
-                        popfirst!(st)
-                    end
-                end
-                user_end = something(peek(st), (lastindex(s) + 1) => '\0').first
-                push_nonempty!(user_parts, s[user_lit_start:prevind(s, user_end)])
-                if isempty(user_parts)
-                    push!(arg, :(expanduser("~")))
-                elseif length(user_parts) == 1 && isa(user_parts[1], AbstractString)
-                    push!(arg, :(expanduser($("~" * user_parts[1]))))
-                else
-                    push!(arg, :(let _u = string($(user_parts...)); isempty(_u) ? "~" : expanduser(string('~', _u)) end))
-                end
-                i = user_end
+                i = _consume_upto!(arg, st, s, i, j)
+                s, i = _parse_tilde!(arg, st, s, i, P, filename)
             elseif interpolate && !in_single_quotes && !in_double_quotes && c == '{'
-                # Brace expansion: {alt1,alt2,...} produces a tuple of alternatives.
-                # The tuple integrates with arg_gen's Cartesian product, so
-                # `pre{a,b}suf` generates arguments "preasuf" and "prebsuf".
-                i = consume_upto!(arg, s, i, j)
-                found_close, has_comma, has_dotdot, has_space = _scan_brace(s, i)
-                if found_close && has_dotdot && !has_comma
-                    # Range expansion: {1..10}, {a..z}, {1..10..2}, {01..10}
-                    # Extract the raw content between { and }, advance past }.
-                    brace_content = ""
-                    while !isempty(st)
-                        (bp, bc) = peek(st)::P
-                        if bc == '}'
-                            brace_content = String(s[i:prevind(s, bp)::Int])
-                            popfirst!(st)
-                            break
-                        end
-                        popfirst!(st)
-                    end
-                    i = something(peek(st), (lastindex(s)::Int+1) => '\0').first::Int
-                    expanded = _brace_range_expand(brace_content)
-                    if expanded === nothing
-                        error("parsing command `$str`: invalid brace range expansion {$brace_content}")
-                    end
-                    push!(arg, Expr(:tuple, expanded...))
-                    word_has_special = true
-                elseif found_close && has_comma && has_space
-                    error("parsing command `$str`: unquoted space inside braces")
-                elseif !(found_close && has_comma)
-                    # Not a valid brace expansion (no matching } or no comma):
-                    # treat the { as a literal character.
-                    push!(arg, "{")
-                else
-                    word_has_special = true
-                    alts = Any[]
-                    alt_parts = Any[]
-                    alt_i = i   # start of current literal segment
-                    bsq = false # single quotes within brace content
-                    bdq = false # double quotes within brace content
-                    bdepth = 0  # nested brace depth
-                    while !isempty(st)
-                        (bp, bc) = peek(st)::P
-                        if bsq
-                            # In single quotes: everything is literal until closing '
-                            popfirst!(st)
-                            if bc == '\''
-                                push_nonempty!(alt_parts, s[alt_i:prevind(s, bp)::Int])
-                                bsq = false
-                                alt_i = something(peek(st), (lastindex(s)::Int+1) => '\0').first::Int
-                            end
-                        elseif !bdq && bc == '\''
-                            push_nonempty!(alt_parts, s[alt_i:prevind(s, bp)::Int])
-                            popfirst!(st)
-                            bsq = true
-                            alt_i = something(peek(st), (lastindex(s)::Int+1) => '\0').first::Int
-                        elseif bc == '"'
-                            push_nonempty!(alt_parts, s[alt_i:prevind(s, bp)::Int])
-                            popfirst!(st)
-                            bdq = !bdq
-                            alt_i = something(peek(st), (lastindex(s)::Int+1) => '\0').first::Int
-                        elseif !bsq && bc == '$'
-                            push_nonempty!(alt_parts, s[alt_i:prevind(s, bp)::Int])
-                            popfirst!(st)
-                            result = parse_dollar_interp(st, s)
-                            push!(alt_parts, result[1])
-                            last_arg = result[3]
-                            update_last_arg = true
-                            s = result[2]
-                            alt_i = firstindex(s)
-                        elseif !bsq && bc == '\\'
-                            push_nonempty!(alt_parts, s[alt_i:prevind(s, bp)::Int])
-                            popfirst!(st)  # consume \
-                            if bdq
-                                if !isempty(st) && (peek(st)::P).second in ('"', '$', '\\')
-                                    alt_i = (peek(st)::P).first::Int
-                                    popfirst!(st)
-                                else
-                                    push!(alt_parts, "\\")
-                                    alt_i = something(peek(st), (lastindex(s)::Int+1) => '\0').first::Int
-                                end
-                            else
-                                isempty(st) && error("parsing command `$str`: dangling backslash in brace expansion")
-                                alt_i = (peek(st)::P).first::Int
-                                popfirst!(st)
-                            end
-                        elseif !bsq && !bdq && bc == '{'
-                            bdepth += 1
-                            popfirst!(st)
-                        elseif !bsq && !bdq && bc == '}' && bdepth > 0
-                            bdepth -= 1
-                            popfirst!(st)
-                        elseif !bsq && !bdq && bc == '}' && bdepth == 0
-                            # End of brace expansion
-                            push_nonempty!(alt_parts, s[alt_i:prevind(s, bp)::Int])
-                            push!(alts, _brace_alt_expr(alt_parts))
-                            popfirst!(st)
-                            break
-                        elseif !bsq && !bdq && bc == ',' && bdepth == 0
-                            # Alternative separator
-                            push_nonempty!(alt_parts, s[alt_i:prevind(s, bp)::Int])
-                            push!(alts, _brace_alt_expr(alt_parts))
-                            empty!(alt_parts)
-                            popfirst!(st)
-                            alt_i = something(peek(st), (lastindex(s)::Int+1) => '\0').first::Int
-                        else
-                            popfirst!(st)
-                        end
-                    end
-                    i = something(peek(st), (lastindex(s)::Int+1) => '\0').first::Int
-                    push!(arg, Expr(:tuple, alts...))
-                end
+                i = _consume_upto!(arg, st, s, i, j)
+                s, i, whs, last_arg, update_last_arg =
+                    _parse_brace!(arg, st, s, i, P, str, filename, last_arg, update_last_arg)
+                if whs; word_has_special = true; end
             elseif !in_single_quotes && !in_double_quotes && c in special
                 error("parsing command `$str`: special characters \"$special\" must be quoted in commands")
             end
@@ -531,23 +608,23 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
     if in_single_quotes; error("unterminated single quote"); end
     if in_double_quotes; error("unterminated double quote"); end
 
-    push_nonempty!(arg, s[i:end])
-    if interpolate && redirect_mode != :none
+    _push_nonempty!(arg, s[i:end])
+    if interpolate && redir.mode != :none
         isempty(arg) && error("parsing command `$str`: redirect operator without filename")
-        re = redirect_word_expr(arg)
-        if redirect_mode === :stdin; seg_stdin = re
-        elseif redirect_mode === :stdout; seg_stdout = re
-        else; seg_stderr = re; end
+        re = _redirect_word_expr(arg)
+        if redir.mode === :stdin; redir.stdin = re
+        elseif redir.mode === :stdout; redir.stdout = re
+        else; redir.stderr = re; end
         empty!(arg)
     elseif !isempty(arg) || word_has_special
-        append_2to1!(args, arg)
+        _append_word!(args, arg)
     end
 
     interpolate || return args, last_arg
 
-    # If no pipeline operators and no redirects: return existing tuple format (backward compat).
-    if isempty(pipeline_parts) && seg_stdin === nothing && seg_stdout === nothing &&
-            seg_stderr === nothing
+    # If no pipeline operators and no redirects: return existing tuple format.
+    if isempty(pipeline_parts) && redir.stdin === nothing && redir.stdout === nothing &&
+            redir.stderr === nothing
         ex = Expr(:tuple)
         for arg in args
             push!(ex.args, Expr(:tuple, arg...))
@@ -555,49 +632,7 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
         return ex, last_arg
     end
 
-    # Build a cmd_gen(seg_tuple) expression, wrapped in pipeline() calls for each redirect.
-    # stdin and stdout (with its append flag) are combined into one call; stderr is separate
-    # so that different append modes can be handled independently.
-    function build_seg_expr(seg_tuple, s_in, s_out, s_out_app, s_err, s_err_app)
-        cmd_ex = Expr(:call, GlobalRef(Base, :cmd_gen), seg_tuple)
-        if s_in !== nothing || s_out !== nothing
-            kwargs = Any[]
-            s_in !== nothing && push!(kwargs, Expr(:kw, :stdin, s_in))
-            s_out !== nothing && push!(kwargs, Expr(:kw, :stdout, s_out))
-            s_out_app && push!(kwargs, Expr(:kw, :append, true))
-            cmd_ex = Expr(:call, GlobalRef(Base, :pipeline), Expr(:parameters, kwargs...), cmd_ex)
-        end
-        if s_err !== nothing
-            kwargs = Any[Expr(:kw, :stderr, s_err)]
-            s_err_app && push!(kwargs, Expr(:kw, :append, true))
-            cmd_ex = Expr(:call, GlobalRef(Base, :pipeline), Expr(:parameters, kwargs...), cmd_ex)
-        end
-        return cmd_ex
-    end
-
-    # Build the final segment's tuple.
-    final_seg_tuple = Expr(:tuple)
-    for a in args; push!(final_seg_tuple.args, Expr(:tuple, a...)); end
-
-    if isempty(pipeline_parts)
-        # Only redirects, no pipes.
-        return build_seg_expr(final_seg_tuple, seg_stdin, seg_stdout, seg_stdout_append,
-                              seg_stderr, seg_stderr_append), last_arg
-    end
-
-    # Chain pipeline segments left-to-right: pipeline(seg1, pipeline(seg2, seg3, ...)).
-    (s0_args, s0_in, s0_out, s0_out_app, s0_err, s0_err_app) = pipeline_parts[1]
-    result = build_seg_expr(s0_args, s0_in, s0_out, s0_out_app, s0_err, s0_err_app)
-    for k in 2:length(pipeline_parts)
-        (sk_args, sk_in, sk_out, sk_out_app, sk_err, sk_err_app) = pipeline_parts[k]
-        result = Expr(:call, GlobalRef(Base, :pipeline), result,
-                      build_seg_expr(sk_args, sk_in, sk_out, sk_out_app, sk_err, sk_err_app))
-    end
-    result = Expr(:call, GlobalRef(Base, :pipeline), result,
-                  build_seg_expr(final_seg_tuple, seg_stdin, seg_stdout, seg_stdout_append,
-                                 seg_stderr, seg_stderr_append))
-
-    return result, last_arg
+    return _build_pipeline_expr(pipeline_parts, args, redir), last_arg
 end
 
 """
