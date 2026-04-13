@@ -854,15 +854,13 @@ static bool isTBAA(MDNode *TBAA, std::initializer_list<const char*> const strset
     return false;
 }
 
-// Check if this is a load from an immutable value. The easiest
-// way to do so is to look at the tbaa and see if it derives from
-// jtbaa_immut.
+// Check if this is a load from an immutable value.
 static bool isLoadFromImmut(LoadInst *LI)
 {
     if (LI->getMetadata(LLVMContext::MD_invariant_load))
         return true;
     MDNode *TBAA = LI->getMetadata(LLVMContext::MD_tbaa);
-    if (isTBAA(TBAA, {"jtbaa_immut", "jtbaa_const", "jtbaa_datatype", "jtbaa_memoryptr", "jtbaa_memorylen", "jtbaa_memoryown"}))
+    if (isTBAA(TBAA, {"jtbaa_const", "jtbaa_datatype"}))
         return true;
     return false;
 }
