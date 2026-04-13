@@ -166,14 +166,9 @@ impl Scanning<JuliaVM> for VMScanning {
     ) {
         process_object(object, slot_visitor);
     }
-    fn notify_initial_thread_scan_complete(_partial_scan: bool, _tls: VMWorkerThread) {
-        let sweep_vm_specific_work = SweepVMSpecific::new();
-        memory_manager::add_work_packet(
-            &SINGLETON,
-            WorkBucketStage::Compact,
-            sweep_vm_specific_work,
-        );
-    }
+
+    fn notify_initial_thread_scan_complete(_partial_scan: bool, _tls: VMWorkerThread) {}
+
     fn supports_return_barrier() -> bool {
         unimplemented!()
     }
@@ -191,6 +186,16 @@ impl Scanning<JuliaVM> for VMScanning {
             &SINGLETON,
             WorkBucketStage::VMRefClosure,
             single_thread_process_finalizer,
+        );
+
+        // We used to do this in the Compact stage, and add this work packet in notify_initial_thread_scan_complete.
+        // But notify_inital_thread_scan_complete is always called, even if MMTK does not do weak reference scanning, which makes it not a good place to add the work packet.
+        // I think it makes more sense to do this here -- if MMTK does not do weak ref scanning, this method will not be called and the work packet will not be added.
+        let sweep_vm_specific_work = SweepVMSpecific::new();
+        memory_manager::add_work_packet(
+            &SINGLETON,
+            WorkBucketStage::Release, // This has to happen after weak references are processed.
+            sweep_vm_specific_work,
         );
 
         // We have pushed work. No need to repeat this method.
