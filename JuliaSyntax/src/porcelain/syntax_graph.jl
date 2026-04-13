@@ -1236,7 +1236,9 @@ function _insert_green(graph::SyntaxGraph, sf::Base.RefValue{SourceFile},
                        cursor::RedTreeCursor)
     id = new_id!(graph)
     setattr!(graph, id, :kind, kind(cursor))
-    setattr!(graph, id, :syntax_flags, flags(cursor))
+    let f = remove_flags(flags(cursor), NON_TERMINAL_FLAG)
+        f != 0 && setattr!(graph, id, :syntax_flags, f)
+    end
     setattr!(graph, id, :source, SourceRef(sf, first_byte(cursor), last_byte(cursor)))
     if !is_leaf(cursor)
         cs = NodeId[]
