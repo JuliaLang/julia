@@ -227,20 +227,7 @@ There are some exceptions to the above rules: the postfix adjoint operator `'`,
 the infix range operator `:` and the property access operator `.` don't have a
 dotted version (they can still be broadcasted using the function call syntax as
 in `adjoint.(A)`, `(:).(a, b)` and `getproperty.(a, x)`). These operators are
-also unaffected by the `@.` macro. In the case of `'` this can be convenient to
-broadcast vectors along different
-dimensions:
-
-```jldoctest
-julia> x = 1:3;
-
-julia> y = 1:2;
-
-julia> z = @. x'^2 + y^2
-2×3 Matrix{Int64}:
- 2  5  10
- 5  8  13
-```
+also unaffected by the `@.` macro.
 
 ## Numeric Comparisons
 
