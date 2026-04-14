@@ -273,6 +273,27 @@ function closure_type_fields(ctx, srcref, closure_binds, is_opaque)
     return field_syms, field_orig_bindings, field_inds, field_is_box
 end
 
+# Construct the closure type name following the flisp convention from
+# julia-syntax.scm:4461-4466. `name_stack` has the outermost enclosing
+# function first and the closure's own name last.
+#
+# - Named closure `inner` in `outer`: `#inner#outer##0`
+# - Anon closure (#N) in `outer`:     `#outer##0#outer##1`
+# - Anon closure at toplevel:         `#N#M`
+function closure_type_name!(mod::Module, name_stack)
+    closure_name = last(name_stack)
+    is_anon = length(closure_name) >= 2 &&
+              closure_name[1] == '#' && isdigit(closure_name[2])
+    prefix = if is_anon
+        "#$(current_module_counter!(mod, name_stack))"
+    elseif closure_name[1] == '#'
+        closure_name
+    else
+        "#$closure_name"
+    end
+    return "$prefix#$(current_module_counter!(mod, name_stack))"
+end
+
 # Return a thunk which creates a new type for a closure with `field_syms` named
 # fields. The new type will be named `name_str` which must be an unassigned
 # name in the module.
@@ -416,9 +437,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
                 closure_binds = ctx.closure_bindings[func_name_id]
                 field_syms, field_orig_bindings, field_inds, field_is_box =
                     closure_type_fields(ctx, ex, closure_binds, false)
-                name_str = reserve_module_binding_i(
-                    ctx.mod,
-                    string("#", join(closure_binds.name_stack, "#"), "##"))
+                name_str = closure_type_name!(ctx.mod, closure_binds.name_stack)
                 closure_type_def, closure_type_ =
                     type_for_closure(ctx, ex, name_str, field_syms, field_is_box)
                 if !ctx.is_toplevel_seq_point

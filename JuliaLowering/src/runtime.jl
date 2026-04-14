@@ -439,6 +439,28 @@ function reserve_module_binding_i(mod, basename)
     end
 end
 
+function module_next_counter!(mod::Module)
+    ccall(:jl_module_next_counter, UInt32, (Any,), mod)
+end
+
+# Replicate fl_module_unique_name (src/ast.c:95-127).
+#
+# When name_stack is non-empty and the outermost enclosing function name
+# doesn't contain '#', uses binding reservation with the format
+# "outermost##N" to produce names scoped to the outermost function.
+# This makes precompile statements more stable (see JuliaLang/julia#53719).
+#
+# Otherwise, falls back to the bare module counter.
+function current_module_counter!(mod::Module, name_stack)
+    if !isempty(name_stack)
+        outermost = first(name_stack)
+        if !occursin('#', outermost)
+            return reserve_module_binding_i(mod, "$(outermost)##")
+        end
+    end
+    return string(module_next_counter!(mod))
+end
+
 function lookup_method_instance(func, args, world::Integer)
     allargs = Vector{Any}(undef, length(args) + 1)
     allargs[1] = func

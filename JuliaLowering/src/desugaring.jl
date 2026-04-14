@@ -2454,9 +2454,9 @@ end
 # by adding (meta generated ...) to the non-generated body
 function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
     @jl_assert kind(body) === K"_generated_body" && numchildren(body) == 2 body
-    gen_name = let mangled = reserve_module_binding_i(
-        ctx.mod, "#$(is_core_nothing(mtable) ? "_" : mtable)@generator#")
-        new_global_binding(ctx, src, mangled, ctx.mod)
+    gen_name = let c1 = module_next_counter!(ctx.mod),
+                   c2 = module_next_counter!(ctx.mod)
+        new_global_binding(ctx, src, "#$c1#$c2", ctx.mod)
     end
 
     gen_mdef = let arg1_name = newsym(ctx, argl[1], "#self#"),
@@ -2622,8 +2622,9 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, p
     positional_sparams = used_typevars(pargl, sparams)
 
     m1_name = let n = is_core_nothing(mtable) ? "_" : mtable.name_val,
-        mangled = string(startswith(n, '#') ? "" : "#kw_body#", n, "#")
-        newsym(ctx, argl[1], reserve_module_binding_i(ctx.mod, mangled))
+        mangled = string(startswith(n, '#') ? "" : "#", n, "#",
+                         module_next_counter!(ctx.mod))
+        newsym(ctx, argl[1], mangled)
     end
     # (1) Body method.  This contains the actual function body, and requires
     # every possible default to be filled.  `rett` is only passed here since it
@@ -4261,7 +4262,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
             [K"tuple" as...] -> (nothing, as, @ast(ctx, sig, "Any"::K"core"))
         end
         if isnothing(name)
-            name = newsym(ctx, sig, "#anon#")
+            name = newsym(ctx, sig, "#$(module_next_counter!(ctx.mod))")
             @ast ctx ex [K"block" [K"local" name] expand_function_def(
                 ctx, ex, SyntaxList(name, args...), wheres, ex[2], rett)]
         else
@@ -4271,7 +4272,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"->"
         sig, wheres = flatten_wheres(ex[1])
         @jl_assert kind(sig) === K"tuple" ex
-        name = newsym(ctx, sig, "#->#")
+        name = newsym(ctx, sig, "#$(module_next_counter!(ctx.mod))")
         rett = @ast(ctx, sig, "Any"::K"core")
         @ast ctx ex [K"block" [K"local" name] expand_function_def(
             ctx, ex, SyntaxList(name, children(sig)...), wheres, ex[2], rett)]

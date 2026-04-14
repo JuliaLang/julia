@@ -200,7 +200,9 @@ function refresh_ir_test_cases(filename, pattern=nothing)
         println(io, "#*******************************************************************************")
     end
     for case in cases
-        if isnothing(pattern) || occursin(pattern, case.description)
+        if case.is_broken
+            ir = case.output # don't update broken tests - this would affect the module counter
+        elseif isnothing(pattern) || occursin(pattern, case.description)
             ir = format_ir_for_test(test_mod, case)
             if rstrip(ir) != case.output
                 @info "Refreshing test case $(repr(case.description)) in $filename"

@@ -589,7 +589,7 @@ end
 let (inner, result) = test_mod.f_kwbody_box()
     @test result == 1
     # The kw body closure should be captured directly, not through a Box
-    kw_body_field = only(filter(f -> startswith(string(f), "#kw_body#"), fieldnames(typeof(inner))))
+    kw_body_field = only(filter(f -> startswith(string(f), "#inner#"), fieldnames(typeof(inner))))
     @test !(getfield(inner, kw_body_field) isa Core.Box)
 end
 
