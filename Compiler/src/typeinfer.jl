@@ -727,7 +727,9 @@ function is_already_cached(interp::AbstractInterpreter, result::InferenceResult)
     cache = code_cache(interp, result.valid_worlds)
     if haskey(cache, mi)
         # n.b.: accurate edge representation might cause the CodeInstance for this to be constructed later
-        @assert isdefined(cache[mi], :inferred)
+        cached = cache[mi]
+        ci = cached isa InferenceResult ? cached.ci : cached
+        @assert isdefined(ci, :inferred)
         return true
     end
     return false
