@@ -1578,6 +1578,12 @@ struct JuliaOJIT::DLSymOptimizer {
                     DenseMap<jl_csymbol_spec_t, std::pair<std::string, void *>> *csymbols =
                         nullptr) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
     {
+        // StackSafetyAnalysis fails on LLVM call instructions that call
+        // GlobalVariables, so we'll disable this pass for now when addrsan is
+        // used in the JIT.
+#ifdef _COMPILER_ASAN_ENABLED_
+        return;
+#endif
         jl_name_counter_t Names;
         for (auto &GV : M.globals()) {
             auto Name = GV.getName();
