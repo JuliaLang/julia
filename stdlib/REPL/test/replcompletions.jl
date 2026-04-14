@@ -1193,23 +1193,79 @@ let s, c, r
     mktempdir() do tmphome
         withenv("HOME" => tmphome, "USERPROFILE" => tmphome) do
             path = homedir()
-            dir = joinpath(path, "tmpfoobar")
+            dname = "tilde_" * randstring(12)
+            prefix = dname[1:8]
+            dir = joinpath(path, dname)
             mkdir(dir)
-            s = "\"" * path * "/tmpfoob"
+            s = "\"" * path * "/" * prefix
             c,r = test_complete(s)
             @test string(dir, "/") in c
             @test r == 2:sizeof(s)
-            @test s[r] == joinpath(path, "tmpfoob")
+            @test s[r] == joinpath(path, prefix)
 
             # Homedir expansion inside Cmd string (#57624)
-            s = "`ls " * path * "/tmpfoob"
+            s = "`ls " * path * "/" * prefix
             c,r = test_complete(s)
             @test string(dir, "/") in c
             @test r == 5:sizeof(s)
-            @test s[r] == joinpath(path, "tmpfoob")
+            @test s[r] == joinpath(path, prefix)
+
+            # `~ completes to ~/ for current user plus ~name/ for other real users
+            me = Sys.username()
+            s_bare = "`ls ~"
+            c_bare, r_bare = test_complete(s_bare)
+            @test "~/" in c_bare              # current user always offered as ~/
+            @test !("~$me/" in c_bare)        # current user NOT listed by name (covered by ~/)
+            @test allunique(c_bare)           # no duplicates
+            @test all(c -> startswith(c, "~"), c_bare)
+            @test s_bare[r_bare] == "~"
+
+            # `~/prefix completes to ~/dname/ keeping the tilde form
+            s_tilde = "`ls ~/" * prefix
+            c_tilde, r_tilde = test_complete(s_tilde)
+            @test "~/$dname/" in c_tilde
+            @test all(c -> startswith(c, "~/"), c_tilde)
+            @test s_tilde[r_tilde] == "~/" * prefix
+
+            # `~/ (trailing slash) lists directory contents, all with ~/ prefix
+            s_tilde_slash = "`ls ~/"
+            c_tilde2, r_tilde2 = test_complete(s_tilde_slash)
+            @test "~/$dname/" in c_tilde2
+            @test all(c -> startswith(c, "~/"), c_tilde2)
+            @test s_tilde_slash[r_tilde2] == "~/"
+
+            # `~/. lists dotfiles (not just ~/.)
+            dotname = ".dot_" * randstring(12)
+            dotdir = joinpath(path, dotname)
+            mkdir(dotdir)
+            try
+                s_dot = "`ls ~/."
+                c_dot, r_dot = test_complete(s_dot)
+                @test "~/$dotname/" in c_dot          # dotfiles shown with tilde prefix
+                @test !("~/./" in c_dot)              # ~/. does NOT complete to ~/./
+                @test all(c -> startswith(c, "~/."), c_dot)
+                @test s_dot[r_dot] == "~/."
+            finally
+                rm(dotdir)
+            end
+
+            # `~letter completes to matching usernames including the current user's name
+            first_char = string(first(me))
+            s_prefix = "`ls ~$first_char"
+            c_prefix, r_prefix = test_complete(s_prefix)
+            @test "~$me/" in c_prefix             # current user included by name
+            @test !("~/" in c_prefix)             # ~/ shorthand NOT offered for non-empty prefix
+            @test all(c -> startswith(c, "~$first_char"), c_prefix)
+            @test s_prefix[r_prefix] == "~$first_char"
+
+            # Shell mode: ~/prefix completes with tilde preserved, not escaped
+            s_shell = "ls ~/" * prefix
+            c_shell, r_shell = test_scomplete(s_shell)
+            @test "~/$dname/" in c_shell
+            @test all(c -> startswith(c, "~/"), c_shell)
 
             s = "\"~"
-            @test joinpath(path, "tmpfoobar/") in c
+            @test joinpath(path, "$dname/") in c
             c,r = test_complete(s)
             s = "\"~user"
             c, r = test_complete(s)
@@ -1417,12 +1473,9 @@ mktempdir() do path
 end
 
 # Test tilde path completion
-let (c, r, res) = test_complete("\"~/ka8w5rsz")
-    if !Sys.iswindows()
-        @test res && c == String[homedir() * "/ka8w5rsz\""]
-    else
-        @test !res
-    end
+let home = replace(homedir(), "\\" => "/"),
+    (c, r, res) = test_complete("\"~/ka8w5rsz")
+    @test res && c == String["$home/ka8w5rsz\""]
 
     c, r, res = test_complete("\"foo~bar")
     @test !res
@@ -1494,6 +1547,23 @@ mktempdir() do path
         @test length(c) == 2
         @test "$(path_expected)$(sep)foo_dir$(sep)" in c
         @test "$(path_expected)$(sep)foo_file.txt" in c
+    end
+
+    # Issue #60444: path completion should not delete text after the string (e.g. indexing)
+    let (c, r, res) = test_complete_pos("f(\"$(path)$(sep)foo|\")")
+        @test res
+        @test length(c) == 2
+        @test "$(path_expected)$(sep)foo_dir$(sep)" in c
+        @test "$(path_expected)$(sep)foo_file.txt" in c
+    end
+    let (c, r, res) = test_complete_pos("f(\"$(path)$(sep)foo|\")[1]")
+        @test res
+        @test length(c) == 2
+        @test "$(path_expected)$(sep)foo_dir$(sep)" in c
+        @test "$(path_expected)$(sep)foo_file.txt" in c
+        # Range should end at cursor position, not overwrite ")[1]"
+        pos = findfirst('|', "f(\"$(path)$(sep)foo|\")[1]") - 1
+        @test last(r) == pos
     end
 end
 
@@ -1648,6 +1718,14 @@ test_dict_completion("test_repl_comp_customdict")
     let s = "test_dict_no_length["
         @test REPLCompletions.completions(s, sizeof(s), Main.CompletionFoo) isa Tuple
     end
+
+    # Issue #60444: completing dict keys should not overwrite input after cursor
+    let s = "test_dict[\"ab|c\"]"
+        c, r = test_complete_context_pos(s, Main.CompletionFoo)
+        @test "\"abc\"" in c
+        @test "\"abcd\"" in c
+        @test r == 11:13  # range ends at cursor, not at end of key
+    end
 end
 
 @testset "completion of string/cmd macros (#22577)" begin
@@ -1794,6 +1872,13 @@ end
     @test hasnokwsuggestions("CompletionFoo.kwtest5('a', 3, 5, unknownsplat...; xy")
     @test hasnokwsuggestions("CompletionFoo.kwtest5(3; somek")
     =#
+
+    # Issue #60444: completing keyword arguments should not overwrite input after cursor
+    let s = "CompletionFoo.kwtest3(a; foob|true)"
+        c, r = test_complete_pos(s)
+        @test c == ["foobar="]
+        @test r == 26:29
+    end
 end
 
 # Test completion in context

@@ -297,6 +297,7 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_task_t *ct, jl_handler_t *eh)
     ct->eh = eh->prev;
     ct->gcstack = eh->gcstack;
     ct->scope = eh->scope;
+    jl_gc_wb_current_task(ct, ct->scope);
     small_arraylist_t *locks = &ptls->locks;
     int unlocks = locks->len > eh->locks_len;
     if (unlocks) {
@@ -336,6 +337,7 @@ JL_DLLEXPORT void jl_eh_restore_state_noexcept(jl_task_t *ct, jl_handler_t *eh)
 {
     assert(ct->gcstack == eh->gcstack && "Incorrect GC usage under try catch");
     ct->scope = eh->scope;
+    jl_gc_wb_current_task(ct, ct->scope);
     ct->eh = eh->prev;
     ct->ptls->defer_signal = eh->defer_signal; // optional, but certain try-finally (in stream.jl) may be slightly harder to write without this
 }
@@ -828,7 +830,7 @@ static size_t jl_static_show_float(JL_STREAM *out, double v,
 {
     size_t n = 0;
     // TODO: non-canonical NaNs do not round-trip
-    // TOOD: BFloat16
+    // TODO: BFloat16
     const char *size_suffix = vt == jl_float16_type ? "16" :
                               vt == jl_float32_type ? "32" :
                                                       "";
@@ -919,6 +921,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_static_show_func_sig(out, m->sig);
     }
     else if (vt == jl_method_instance_type) {
+        n += jl_printf(out, "MethodInstance ");
         jl_method_instance_t *li = (jl_method_instance_t*)v;
         if (jl_is_method(li->def.method)) {
             n += jl_static_show_func_sig(out, li->specTypes);
@@ -930,6 +933,24 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
             n += jl_printf(out, ".<toplevel thunk> -> ");
             n += jl_static_show_x(out, jl_atomic_load_relaxed(&jl_cached_uninferred(
                 jl_atomic_load_relaxed(&li->cache), 1)->inferred), depth, ctx);
+        }
+    }
+    else if (vt == jl_code_instance_type && ctx.verbosity < JL_STATIC_SHOW_VERBOSITY_FULL) {
+        jl_code_instance_t *ci = (jl_code_instance_t*)v;
+        n += jl_printf(
+            out, "CodeInstance(min_world=0x%zx, max_world=0x%zx) for ",
+            jl_atomic_load_relaxed(&ci->min_world),
+            jl_atomic_load_relaxed(&ci->max_world));
+        if (jl_is_method_instance(ci->def)) {
+            n += jl_static_show_x(out, ci->def, depth, ctx);
+        }
+        else if (jl_is_abioverride(ci->def)) {
+            jl_abi_override_t* def = (jl_abi_override_t*)ci->def;
+            n += jl_static_show_x(out, (jl_value_t*)def->def, depth, ctx);
+            n += jl_printf(out, " (ABI overridden)");
+        }
+        if (ci->owner != jl_nothing) {
+            n += jl_printf(out, " (foreign)");
         }
     }
     else if (vt == jl_typename_type) {
@@ -1003,7 +1024,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
                 return n;
             }
         }
-        if (ctx.quiet) {
+        if (ctx.verbosity == JL_STATIC_SHOW_VERBOSITY_MINIMAL) {
             return jl_static_show_symbol(out, dv->name->name);
         }
         jl_sym_t *globname;
@@ -1494,13 +1515,13 @@ static size_t jl_static_show_next_(JL_STREAM *out, jl_value_t *v, jl_value_t *pr
 
 JL_DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v) JL_NOTSAFEPOINT
 {
-    jl_static_show_config_t ctx = { /* quiet */ 0 };
+    jl_static_show_config_t ctx = { /* verbosity */ JL_STATIC_SHOW_VERBOSITY_DEFAULT };
     return jl_static_show_x(out, v, 0, ctx);
 }
 
 JL_DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type) JL_NOTSAFEPOINT
 {
-    jl_static_show_config_t ctx = { /* quiet */ 0 };
+    jl_static_show_config_t ctx = { /* verbosity */ JL_STATIC_SHOW_VERBOSITY_DEFAULT };
     return jl_static_show_func_sig_(s, type, ctx);
 }
 
@@ -1578,14 +1599,15 @@ size_t jl_static_show_func_sig_(JL_STREAM *s, jl_value_t *type, jl_static_show_c
     return n;
 }
 
-JL_DLLEXPORT size_t jl_safe_static_show(JL_STREAM *s, jl_value_t *v) JL_NOTSAFEPOINT
+JL_DLLEXPORT size_t jl_safe_static_show_(
+    JL_STREAM *s, jl_value_t *v, jl_static_show_config_t ctx) JL_NOTSAFEPOINT
 {
     jl_jmp_buf *old_buf = jl_get_safe_restore();
     jl_jmp_buf buf;
     jl_set_safe_restore(&buf);
     volatile size_t sz = 0;
     if (!jl_setjmp(buf, 0)) {
-        sz += jl_static_show(s, (jl_value_t*)v);
+        sz += jl_static_show_x(s, (jl_value_t*)v, NULL, ctx);
         sz += jl_printf(s, "\n");
     }
     else {
@@ -1595,19 +1617,23 @@ JL_DLLEXPORT size_t jl_safe_static_show(JL_STREAM *s, jl_value_t *v) JL_NOTSAFEP
     return sz;
 }
 
+JL_DLLEXPORT size_t jl_safe_static_show(JL_STREAM *s, jl_value_t *v) JL_NOTSAFEPOINT
+{
+    jl_static_show_config_t ctx = { /* verbosity */ JL_STATIC_SHOW_VERBOSITY_DEFAULT };
+    return jl_safe_static_show_(s, v, ctx);
+}
+
 JL_DLLEXPORT void jl_(void *jl_value) JL_NOTSAFEPOINT
 {
-    jl_jmp_buf *old_buf = jl_get_safe_restore();
-    jl_jmp_buf buf;
-    jl_set_safe_restore(&buf);
-    if (!jl_setjmp(buf, 0)) {
-        jl_static_show((JL_STREAM*)STDERR_FILENO, (jl_value_t*)jl_value);
-        jl_printf((JL_STREAM*)STDERR_FILENO,"\n");
-    }
-    else {
-        jl_printf((JL_STREAM*)STDERR_FILENO, "\n!!! ERROR in jl_ -- ABORTING !!!\n");
-    }
-    jl_set_safe_restore(old_buf);
+    jl_static_show_config_t ctx = { /* verbosity */ JL_STATIC_SHOW_VERBOSITY_DEFAULT };
+    jl_safe_static_show_((JL_STREAM*)STDERR_FILENO, (jl_value_t*)jl_value, ctx);
+}
+
+// high-verbosity alternative to `jl_`
+JL_DLLEXPORT void jl__(void *jl_value) JL_NOTSAFEPOINT
+{
+    jl_static_show_config_t ctx = { /* verbosity */ JL_STATIC_SHOW_VERBOSITY_FULL };
+    jl_safe_static_show_((JL_STREAM*)STDERR_FILENO, (jl_value_t*)jl_value, ctx);
 }
 
 JL_DLLEXPORT void jl_breakpoint(jl_value_t *v)

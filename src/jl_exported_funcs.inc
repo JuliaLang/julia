@@ -144,7 +144,6 @@
     XX(jl_gc_enable) \
     XX(jl_gc_enable_conservative_gc_support) \
     XX(jl_gc_enable_finalizers) \
-    XX(jl_gc_external_obj_hdr_size) \
     XX(jl_gc_find_taggedvalue_pool) \
     XX(jl_gc_get_total_bytes) \
     XX(jl_gc_get_max_memory) \
@@ -315,6 +314,7 @@
     XX(jl_module_names) \
     XX(jl_module_parent) \
     XX(jl_module_getloc) \
+    XX(jl_module_public) \
     XX(jl_module_public_p) \
     XX(jl_module_using) \
     XX(jl_module_usings) \
@@ -388,6 +388,7 @@
     XX(jl_realloc) \
     XX(jl_register_newmeth_tracer) \
     XX(jl_resolve_definition_effects_in_ir) \
+    XX(jl_resolve_typegroup) \
     XX(jl_restore_excstack) \
     XX(jl_restore_incremental) \
     XX(jl_restore_package_image_from_file) \
@@ -460,6 +461,7 @@
     XX(jl_too_many_args) \
     XX(jl_toplevel_eval) \
     XX(jl_toplevel_eval_in) \
+    XX(jl_eval_thunk) \
     XX(jl_try_substrtod) \
     XX(jl_try_substrtof) \
     XX(jl_tty_set_mode) \
@@ -542,11 +544,14 @@
     YY(jl_dump_fptr_asm) \
     YY(jl_emit_native) \
     YY(jl_get_function_id) \
+    YY(jl_struct_to_llvm) \
     YY(jl_type_to_llvm) \
     YY(jl_getUnwindInfo) \
     YY(jl_get_libllvm) \
     YY(jl_register_passbuilder_callbacks) \
     YY(jl_jit_abi_converter) \
+    YY(jl_jit_register_ci) \
+    YY(jl_jit_unregister_ci) \
     YY(JLJITGetLLVMOrcExecutionSession) \
     YY(JLJITGetJuliaOJIT) \
     YY(JLJITGetExternalJITDylib) \

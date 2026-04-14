@@ -151,8 +151,14 @@ end
     end
 
     (src, _) = only(code_typed(sum27403, Tuple{Vector{Int}}))
+    is_bounds_throw_invoke_target(@nospecialize(callee)) =
+        callee === Base.throw_boundserror ||
+        callee == Core.GlobalRef(Base, :throw_boundserror) ||
+        callee == Core.GlobalRef(Base, :_throw_boundserror_indices) ||
+        (callee isa Core.MethodInstance && (callee.def.def.name === :throw_boundserror ||
+                                            callee.def.def.name === :_throw_boundserror_indices))
     @test !any(src.code) do x
-        x isa Expr && x.head === :invoke && !(x.args[2] in (Core.GlobalRef(Base, :throw_boundserror), Base.throw_boundserror))
+        x isa Expr && x.head === :invoke && !is_bounds_throw_invoke_target(x.args[2])
     end
 end
 
@@ -1733,7 +1739,7 @@ let src = code_typed1(with_unmatched_typeparam)
             break
         end
     end
-    @test isnothing(found) || (source=src, statement=found)
+    @test isnothing(found) context=(; source=src, statement=found)
 end
 
 function twice_sitofp(x::Int, y::Int)
@@ -2343,6 +2349,33 @@ end
 let src = code_typed1(Base.setindex, (@NamedTuple{next::UInt32,prev::UInt32}, Int, Symbol))
     @test count(isinvoke(:merge_fallback), src.code) == 0
     @test count(iscall((src, Base.merge_fallback)), src.code) == 0
+end
+
+# @nospecialize annotation on uunamed arguments
+# https://github.com/JuliaLang/julia/issues/44428
+@noinline _issue44428_1(@nospecialize _::Any) = println(Base.inferencebarrier(0))
+@noinline _issue44428_2(@nospecialize ::Any) = println(Base.inferencebarrier(0))
+@noinline _issue44428_3(@nospecialize _) = println(Base.inferencebarrier(0))
+function issue44428(x)
+    _issue44428_1(x)
+    _issue44428_2(x)
+    _issue44428_3(x)
+end
+let src = code_typed1(issue44428, (Any,))
+    @test count(isinvoke(:_issue44428_1), src.code) == 1
+    @test count(isinvoke(:_issue44428_2), src.code) == 1
+    @test count(isinvoke(:_issue44428_3), src.code) == 1
+    @test count(x->Meta.isexpr(x,:call), src.code) == 0
+end
+
+# issue #61552
+let mi = Compiler.specialize_method(only(methods(ndims, (Matrix{Float64},))),
+        Tuple{typeof(ndims), Matrix{Float64}}, Core.svec())
+    codeinst = getcacheci(mi)::Core.CodeInstance
+    @test Compiler.use_const_api(codeinst)
+    @test codeinst.inferred === nothing
+    interp = Compiler.NativeInterpreter()
+    @test Compiler.ci_get_source(interp, codeinst) isa Core.CodeInfo
 end
 
 end # module inline_tests

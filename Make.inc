@@ -98,6 +98,9 @@ WITH_NVTX := 0
 WITH_TRACY := 0
 WITH_TRACY_CALLSTACKS := 0
 
+# Enable Apple Instruments support
+WITH_APPLE_OSLOG := 0
+
 # Enable Timing Counts support
 WITH_TIMING_COUNTS := 0
 
@@ -895,7 +898,11 @@ MMTK_BUILD ?= release
 
 # Location of mmtk-julia binding
 # (needed for api/*.h and .so file)
-MMTK_JULIA_DIR ?= $(BUILDROOT)/usr/lib/mmtk_julia
+ifdef MMTK_JULIA_DIR
+MMTK_JULIA_DIR := $(abspath $(MMTK_JULIA_DIR))
+else
+MMTK_JULIA_DIR := $(BUILDROOT)/usr/lib/mmtk_julia
+endif
 MMTK_DIR = ${MMTK_JULIA_DIR}/mmtk
 MMTK_API_INC = ${MMTK_DIR}/api
 MMTK_LIB := -lmmtk_julia
@@ -927,6 +934,15 @@ ifeq ($(WITH_TRACY_CALLSTACKS), 1)
 JCXXFLAGS += -DTRACY_CALLSTACK=32
 JCFLAGS += -DTRACY_CALLSTACK=32
 LIBTRACYCLIENT:=-lTracyClient
+endif
+
+ifeq ($(WITH_APPLE_OSLOG), 1)
+ifeq ($(OS), Darwin)
+JCXXFLAGS += -DUSE_APPLE_OSLOG
+JCFLAGS += -DUSE_APPLE_OSLOG
+else
+$(warning "WITH_APPLE_OSLOG=1 is only supported on Darwin, ignoring")
+endif
 endif
 
 ifeq ($(WITH_TIMING_COUNTS), 1)
@@ -1704,12 +1720,21 @@ endif
 CLANGSA_FLAGS :=
 CLANGSA_CXXFLAGS :=
 ifeq ($(OS), Darwin) # on new XCode, the files are hidden
- CLANGSA_FLAGS += -isysroot $(shell xcrun --show-sdk-path -sdk macosx)
+ CLANGSA_FLAGS += -isysroot $(shell xcrun --show-sdk-path --sdk macosx)
 endif
 ifeq ($(USEGCC),1)
 # try to help clang find the c++ files for CC by guessing the value for --prefix
 # by dropping lib/gcc/<platform>/<version> from the install directory it reports
 CLANGSA_CXXFLAGS += --gcc-toolchain="$(abspath $(shell LANG=C $(CC) -print-search-dirs | grep '^install: ' | sed -e "s/^install: //")/../../../..)"
+# On Linux without system headers (e.g., BinaryBuilder containers), derive sysroot from GCC
+ifeq ($(OS), Linux)
+GCC_SYSROOT := $(shell $(CC) --print-sysroot 2>/dev/null)
+ifneq ($(GCC_SYSROOT),)
+ifeq ($(wildcard /usr/include/stdlib.h),)
+ CLANGSA_FLAGS += --sysroot=$(GCC_SYSROOT)
+endif
+endif
+endif
 endif
 
 

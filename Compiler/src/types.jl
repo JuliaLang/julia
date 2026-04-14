@@ -70,14 +70,23 @@ SpecInfo(src::CodeInfo) = SpecInfo(
 A special wrapper that represents a local variable of a method being analyzed.
 This does not participate in the native type system nor the inference lattice, and it thus
 should be always unwrapped to `v.typ` when performing any type or lattice operations on it.
+
 `v.undef` represents undefined-ness of this static parameter. If `true`, it means that the
 variable _may_ be undefined at runtime, otherwise it is guaranteed to be defined.
 If `v.typ === Bottom` it means that the variable is strictly undefined.
+
+`v.ssadef` represents the "reaching definition" for the variable.
+If zero, then the value comes from an argument.
+If negative, this refers to a "virtual ϕ-block" preceding the given index,
+that would have been inserted as the value of this slot in a truly SSA-form IR.
+If a slot has the same `ssadef` at two different points of execution,
+the slot contents are guaranteed to share identity (`x₀ === x₁`).
 """
 struct VarState
     typ
+    ssadef::Int
     undef::Bool
-    VarState(@nospecialize(typ), undef::Bool) = new(typ, undef)
+    VarState(@nospecialize(typ), ssadef::Int, undef::Bool) = new(typ, ssadef, undef)
 end
 
 struct AnalysisResults
@@ -150,6 +159,45 @@ function traverse_analysis_results(callback, (;analysis_results)::Union{Inferenc
         analysis_results = analysis_results.next
     end
     return nothing
+end
+
+"""
+    InferenceCache
+
+A cache for `InferenceResult` objects that maintains an index for fast lookups by `MethodInstance`.
+This is used as the local inference cache for `AbstractInterpreter` implementations.
+"""
+struct InferenceCache
+    results::Vector{InferenceResult}
+    # Index from MethodInstance to indices in `results` where linfo === mi
+    index::IdDict{MethodInstance, Vector{Int}}
+end
+
+InferenceCache() = InferenceCache(Vector{InferenceResult}(), IdDict{MethodInstance, Vector{Int}}())
+
+function Base.push!(cache::InferenceCache, result::InferenceResult)
+    push!(cache.results, result)
+    mi = result.linfo
+    idx = length(cache.results)
+    if haskey(cache.index, mi)
+        push!(cache.index[mi], idx)
+    else
+        cache.index[mi] = Int[idx]
+    end
+    return cache
+end
+
+Base.length(cache::InferenceCache) = length(cache.results)
+Base.isempty(cache::InferenceCache) = isempty(cache.results)
+
+Base.iterate(cache::InferenceCache) = iterate(cache.results)
+Base.iterate(cache::InferenceCache, state) = iterate(cache.results, state)
+Base.eltype(::Type{InferenceCache}) = InferenceResult
+Base.getindex(cache::InferenceCache, i::Int) = cache.results[i]
+
+# Get indices for a specific MethodInstance (returns empty vector if not found)
+function get_indices(cache::InferenceCache, mi::MethodInstance)
+    return get(cache.index, mi, Int[])
 end
 
 """
@@ -393,7 +441,7 @@ struct NativeInterpreter <: AbstractInterpreter
     method_table::CachedMethodTable{InternalMethodTable}
 
     # Cache of inference results for this particular interpreter
-    inf_cache::Vector{InferenceResult}
+    inf_cache::InferenceCache
     codegen::IdDict{CodeInstance,CodeInfo}
 
     # Parameters for inference and optimization
@@ -414,7 +462,7 @@ function NativeInterpreter(world::UInt = get_world_counter();
     # incorrect, fail out loudly.
     @assert world <= curr_max_world
     method_table = CachedMethodTable(InternalMethodTable(world))
-    inf_cache = Vector{InferenceResult}() # Initially empty cache
+    inf_cache = InferenceCache() # Initially empty cache
     codegen = IdDict{CodeInstance,CodeInfo}()
     return NativeInterpreter(world, method_table, inf_cache, codegen, inf_params, opt_params)
 end
@@ -502,7 +550,7 @@ optimizer_lattice(::AbstractInterpreter) = SimpleInferenceLattice.instance
 
 struct OverlayCodeCache{Cache}
     globalcache::Cache
-    localcache::Vector{InferenceResult}
+    localcache::InferenceCache
 end
 
 setindex!(cache::OverlayCodeCache, ci::CodeInstance, mi::MethodInstance) = (setindex!(cache.globalcache, ci, mi); cache)
@@ -510,9 +558,12 @@ setindex!(cache::OverlayCodeCache, ci::CodeInstance, mi::MethodInstance) = (seti
 haskey(cache::OverlayCodeCache, mi::MethodInstance) = get(cache, mi, nothing) !== nothing
 
 function get(cache::OverlayCodeCache, mi::MethodInstance, default)
-    for cached_result in Iterators.reverse(cache.localcache)
+    localcache = cache.localcache
+    indices = get_indices(localcache, mi)
+    # Iterate in reverse to get the most recent matching entry
+    for i in length(indices):-1:1
+        cached_result = localcache.results[indices[i]]
         cached_result.tombstone && continue # ignore deleted entries (due to LimitedAccuracy)
-        cached_result.linfo === mi || continue
         cached_result.overridden_by_const === nothing || continue
         isdefined(cached_result, :ci) || continue
         ci = cached_result.ci

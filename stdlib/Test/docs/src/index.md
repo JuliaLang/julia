@@ -420,6 +420,8 @@ Test.GenericOrder
 Test.GenericSet
 Test.GenericString
 Test.detect_ambiguities
+Test.detect_closure_boxes
+Test.detect_closure_boxes_all_modules
 Test.detect_unbound_args
 ```
 

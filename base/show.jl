@@ -1,6 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using .Compiler: has_typevar
 using .Meta: isidentifier, isoperator, isunaryoperator, isbinaryoperator, ispostfixoperator,
             is_id_start_char, is_id_char, _isoperator, is_syntactic_operator, is_valid_identifier,
             is_unary_and_binary_operator
@@ -1265,7 +1264,7 @@ show_supertypes(typ::DataType) = show_supertypes(stdout, typ)
 
 Prints one or more expressions, and their results, to `stdout`, and returns the last result.
 
-See also: [`show`](@ref), [`@info`](@ref man-logging), [`println`](@ref).
+See also [`show`](@ref), [`@info`](@ref man-logging), [`println`](@ref).
 
 # Examples
 ```jldoctest
@@ -1399,6 +1398,9 @@ function show(io::IO, codeinst::Core.CodeInstance)
         print(io, " (ABI Overridden)")
     else
         show_mi(io, def::MethodInstance)
+    end
+    if codeinst.owner !== nothing
+        print(io, " (foreign)")
     end
 end
 
@@ -1950,6 +1952,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     elseif (head in expr_infix_any && nargs==2)
         func_prec = operator_precedence(head)
         head_ = head in expr_infix_wide ? " $head " : head
+        if head == :-> && is_expr(args[1], :...)
+            args = Any[Expr(:tuple, args[1]), args[2]]
+        end
         if func_prec <= prec
             show_enclosed_list(io, '(', args, head_, ')', indent, func_prec, quote_level, true)
         else
@@ -2181,7 +2186,12 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
             print(io, "end")
         end
 
+    elseif head === :module && nargs==4 && isa(args[1],VersionNumber) && isa(args[2],Bool)
+        # New 4-argument form: (version, baremodule_flag, name, body)
+        show_block(IOContext(io, beginsym=>false), args[2] ? :module : :baremodule, args[3], args[4], indent, quote_level)
+        print(io, "end")
     elseif head === :module && nargs==3 && isa(args[1],Bool)
+        # Old 3-argument form: (baremodule_flag, name, body)
         show_block(IOContext(io, beginsym=>false), args[1] ? :module : :baremodule, args[2], args[3], indent, quote_level)
         print(io, "end")
 
@@ -2586,11 +2596,11 @@ function type_depth_limit(str::String, n::Int; maxdepth = nothing)
     levelcount = Int[]                     # number of nodes at each level
     strwid = 0
     st_0, st_backslash, st_squote, st_dquote = 0,1,2,4
-    state::Int = st_0
-    stateis(s) = (state & s) != 0
+    state = Ref(st_0)
+    stateis(s) = (state[] & s) != 0
     quoted() = stateis(st_squote) || stateis(st_dquote)
-    enter(s) = (state |= s)
-    leave(s) = (state &= ~s)
+    enter(s) = (state[] |= s)
+    leave(s) = (state[] &= ~s)
     for (i, c) in ANSIIterator(str)
         if c isa ANSIDelimiter
             depths[i] = depth
@@ -3128,6 +3138,14 @@ function array_summary(io::IO, a, inds)
     print(io, " with indices ", inds2string(inds))
 end
 
+## `summary` for GenericMemoryRef
+function summary(io::IO, mref::GenericMemoryRef)
+    offset = Core.memoryrefoffset(mref)
+    len_after_offset = length(mref.mem) - offset + 1
+    print(io, len_after_offset, "-element ")
+    showarg(io, mref, true)
+end
+
 ## `summary` for Function
 summary(io::IO, f::Function) = show(io, MIME"text/plain"(), f)
 
@@ -3358,7 +3376,7 @@ function print_partition(io::IO, partition::Core.BindingPartition)
         print(io, "explicit `import` from ")
         print(io, partition_restriction(partition).globalref)
     else
-        @assert kind == PARTITION_KIND_GLOBAL
+        @assert kind == PARTITION_KIND_GLOBAL "unexpected partition kind"
         print(io, "global variable with type ")
         print(io, partition_restriction(partition))
     end

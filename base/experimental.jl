@@ -655,26 +655,7 @@ function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real
         timer = Timer(timeout)
         waiter_left = Threads.Atomic{Bool}(false)
         # start a task to wait on the timer
-        t = Task() do
-            try
-                wait(timer)
-            catch e
-                # if the timer was closed, the waiting task has been scheduled; do nothing
-                e isa EOFError && return
-            end
-            dosched = false
-            lock(c.lock)
-            # Confirm that the waiting task is still in the wait queue and remove it. If
-            # the task is not in the wait queue, it must have been notified already so we
-            # don't do anything here.
-            if !waiter_left[] && ct.queue === c.waitq
-                dosched = true
-                Base.list_deletefirst!(c.waitq, ct)
-            end
-            unlock(c.lock)
-            # send the waiting task a timeout
-            dosched && schedule(ct, :timed_out)
-        end
+        t = _wait_with_timeout_task(c, ct, timer, waiter_left)
         t.sticky = false
         Threads._spawn_set_thrpool(t, :interactive)
         schedule(t)
@@ -692,6 +673,30 @@ function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real
         rethrow()
     finally
         Base.relockall(c.lock, token)
+    end
+end
+
+function _wait_with_timeout_task(c::GenericCondition, ct::Task, timer::Timer,
+    waiter_left::Threads.Atomic{Bool})
+    return Task() do
+        try
+            wait(timer)
+        catch e
+            # if the timer was closed, the waiting task has been scheduled; do nothing
+            e isa EOFError && return
+        end
+        dosched = false
+        lock(c.lock)
+        # Confirm that the waiting task is still in the wait queue and remove it. If
+        # the task is not in the wait queue, it must have been notified already so we
+        # don't do anything here.
+        if !waiter_left[] && ct.queue === c.waitq
+            dosched = true
+            Base.list_deletefirst!(c.waitq, ct)
+        end
+        unlock(c.lock)
+        # send the waiting task a timeout
+        dosched && schedule(ct, :timed_out)
     end
 end
 
@@ -746,20 +751,6 @@ macro reexport(ex)
     return esc(calls)
 end
 
-struct VersionedParse
-    ver::VersionNumber
-end
-
-function (vp::VersionedParse)(code, filename::String, lineno::Int, offset::Int, options::Symbol)
-    if !isdefined(Base, :JuliaSyntax)
-        if vp.ver === VERSION
-            return Core._parse
-        end
-        error("JuliaSyntax module is required for syntax version $(vp.ver), but it is not loaded.")
-    end
-    Base.JuliaSyntax.core_parser_hook(code, filename, lineno, offset, options; syntax_version=vp.ver)
-end
-
 struct VersionedLower
     ver::VersionNumber
 end
@@ -776,8 +767,8 @@ function (vp::VersionedLower)(@nospecialize(code), mod::Module,
 end
 
 function Base.set_syntax_version(m::Module, ver::VersionNumber)
-    parser = VersionedParse(ver)
-    Core.declare_const(m, :_internal_julia_parse, parser)
+    parser = Base.VersionedParse(ver)
+    Core.declare_const(m, Symbol("#_internal_julia_parse"), parser)
     #lowerer = VersionedLower(ver)
     #Core.declare_const(m, :_internal_julia_lower, lowerer)
     nothing

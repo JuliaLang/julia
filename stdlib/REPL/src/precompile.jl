@@ -96,7 +96,7 @@ function repl_workload()
     println("done")
     """
 
-    tmphistfile = tempname()
+    tmphistfile = tempname(; cleanup = false)
     write(tmphistfile, """
     # time: 2020-10-31 13:16:39 AWST
     # mode: julia
@@ -203,10 +203,12 @@ let
         ccall(:jl_tag_newly_inferred_enable, Cvoid, ())
         try
             repl_workload()
+            precompile(Tuple{typeof(Base.HashArrayMappedTries.next), Base.HashArrayMappedTries.HashState{Base.ScopedValues.ScopedValue{Any}}})
             precompile(Tuple{typeof(Base.setindex!), Base.Dict{Any, Any}, Any, Char})
             precompile(Tuple{typeof(Base.setindex!), Base.Dict{Any, Any}, Any, Int})
             precompile(Tuple{typeof(Base.delete!), Base.Set{Any}, String})
             precompile(Tuple{typeof(Base.:(==)), Char, String})
+            precompile(Tuple{typeof(Base.convert), Type{Array{String, 1}}, Array{String, 1}})
         finally
             ccall(:jl_tag_newly_inferred_disable, Cvoid, ())
         end

@@ -1,11 +1,13 @@
+# TODO: Allow `soft_scope::Union{Nothing,Bool}` to be passed through `jl_lower` C API
+
 """
 Becomes `Core._lower()` upon activating JuliaLowering.
 
 Returns an svec with the lowered code (usually expr) as its first element, and
 (until integration is less experimental) whatever we want after it
 """
-function core_lowering_hook(@nospecialize(code), mod::Module,
-                            file="none", line=0, world=typemax(Csize_t), warn=false)
+function core_lowering_hook(@nospecialize(code), mod::Module, file::Union{String,Ptr{UInt8}}="none",
+                            line::Integer=0, world::UInt=typemax(Csize_t), _warn::Bool=false)
     if !(code isa SyntaxTree || code isa Expr)
         # e.g. LineNumberNode, integer...
         return Core.svec(code)
@@ -17,12 +19,12 @@ function core_lowering_hook(@nospecialize(code), mod::Module,
 
     local st0, st1 = nothing, nothing
     try
-        st0 = code isa Expr ? expr_to_syntaxtree(code, LineNumberNode(line, file)) : code
+        st0 = code isa Expr ? expr_to_est(code, LineNumberNode(line, file)) : code
         if kind(st0) in KSet"toplevel module"
             return Core.svec(code)
         elseif kind(st0) === K"doc" && numchildren(st0) >= 2 && kind(st0[2]) === K"module"
             # TODO: this ignores module docstrings for now
-            return Core.svec(Expr(st0[2]))
+            return Core.svec(est_to_expr(st0[2]))
         end
         ctx1, st1 = expand_forms_1(  mod,  st0, true, world)
         ctx2, st2 = expand_forms_2(  ctx1, st1)

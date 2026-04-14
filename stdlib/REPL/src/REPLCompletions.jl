@@ -210,14 +210,15 @@ function complete_symbol!(suggestions::Vector{Completion},
     end
 
     if @isdefined(mod) # lookup names available within the module
-        let modname = nameof(mod),
-            is_main = mod===Main
+        let mod_for_check = mod,
+            modname = nameof(mod_for_check),
+            is_main = mod_for_check === Main
             append_filtered_mod_names!(suggestions, mod, name, complete_internal_only) do s::Symbol
-                if Base.isdeprecated(mod, s)
+                if Base.isdeprecated(mod_for_check, s)
                     return false
                 elseif s === modname
                     return false # exclude `Main.Main.Main`, etc.
-                elseif complete_modules_only && !completes_module(mod, s)
+                elseif complete_modules_only && !completes_module(mod_for_check, s)
                     return false
                 elseif is_main && s === :MainInclude
                     return false
@@ -308,11 +309,99 @@ const sorted_keyvals = ["false", "true"]
 complete_keyval!(suggestions::Vector{Completion}, s::String) =
     complete_from_list!(suggestions, KeyvalCompletion, sorted_keyvals, s)
 
-function do_cmd_escape(s)
-    return Base.escape_raw_string(Base.shell_escape_posixly(s), '`')
+function do_cmd_escape(s; escape_backticks::Bool=false)
+    s = Base.shell_escape_posixly(s)
+    escape_backticks && (s = Base.escape_raw_string(s, '`'))
+    return s
 end
-function do_shell_escape(s)
-    return Base.shell_escape_posixly(s)
+
+# Cache the set of valid login shells from /etc/shells. Real users have their
+# shell listed here; service/daemon accounts use /bin/false etc. which are not.
+const _login_shells = Base.OncePerProcess{Vector{String}}() do
+    @static if Sys.iswindows()
+        String[]
+    else
+        try
+            filter!(l -> !isempty(l) && !startswith(l, '#'), readlines("/etc/shells"))
+        catch
+            String[]  # no /etc/shells; skip shell filtering
+        end
+    end
+end
+
+# pw_shell byte offset in struct passwd — everything before the pw_shell field:
+# Linux:     pw_name, pw_passwd (2 Ptrs), pw_uid, pw_gid (2 Cuints),
+#            pw_gecos, pw_dir (2 Ptrs)
+# macOS/BSD: same as Linux plus pw_change (Clong) and pw_class (Ptr)
+#            between pw_gid and pw_gecos
+const _pw_shell_offset = @static if Sys.islinux()
+    4 * sizeof(Ptr{Cvoid}) + 2 * sizeof(Cuint)
+else
+    5 * sizeof(Ptr{Cvoid}) + 2 * sizeof(Cuint) + sizeof(Clong)
+end
+
+# Return a sorted, deduplicated list of real local usernames. When all=false
+# (the default), service accounts are excluded by requiring their shell to be
+# listed in /etc/shells, and on macOS names starting with '_' are also excluded.
+function list_users(; all::Bool=false)
+    seen = Set{String}()
+    @static if !Sys.iswindows()
+        valid_shells = all ? String[] : _login_shells()
+        ccall(:setpwent, Cvoid, ())
+        try
+            while true
+                ptr = ccall(:getpwent, Ptr{Cvoid}, ())
+                ptr == C_NULL && break
+                name_ptr = unsafe_load(Ptr{Ptr{UInt8}}(ptr))
+                name_ptr == C_NULL && continue
+                name = unsafe_string(name_ptr)
+                if !all
+                    @static Sys.isapple() && startswith(name, '_') && continue
+                    if !isempty(valid_shells)
+                        shell_ptr = unsafe_load(Ptr{Ptr{UInt8}}(ptr + _pw_shell_offset))
+                        shell_ptr == C_NULL && continue
+                        unsafe_string(shell_ptr) in valid_shells || continue
+                    end
+                end
+                push!(seen, name)
+            end
+        finally
+            ccall(:endpwent, Cvoid, ())
+        end
+    end
+    return sort!(collect(seen))
+end
+
+# Return tilde-completion strings for usernames matching `prefix`.
+# With an empty prefix, the current user is represented as "~/" (not "~name/")
+# since that shorthand is always available. With a non-empty prefix the current
+# user's actual name is included when it matches, and "~/" is not offered.
+function _complete_tilde_usernames(prefix::AbstractString)::Vector{String}
+    me = try Sys.username() catch; "" end
+    users = list_users()
+    completions = String[]
+    if isempty(prefix)
+        push!(completions, "~/")            # always offer ~/ for current user
+        for name in users
+            name == me && continue          # ~/  already covers current user
+            push!(completions, "~$name/")
+        end
+    else
+        for name in users
+            startswith(name, prefix) && push!(completions, "~$name/")
+        end
+    end
+    return completions
+end
+
+function do_cmd_escape_tilde(s; escape_backticks::Bool=false)
+    # Tilde paths: ~[username] is handled by shell_parse and must not be
+    # quoted.  Escape only the path component after the first slash.
+    i = findfirst(isequal('/'), s)
+    i === nothing && return s  # bare "~username" — no special chars possible
+    tilde_prefix = SubString(s, 1, i - 1)  # "~" or "~alice"
+    rest = SubString(s, i)                  # "/rest/of/path"
+    return string(tilde_prefix, do_cmd_escape(rest; escape_backticks))
 end
 function do_string_escape(s)
     return escape_string(s, ('\"','$'))
@@ -435,12 +524,11 @@ end
 
 function complete_path(path::AbstractString;
                        use_envpath=false,
-                       shell_escape=false,
                        cmd_escape=false,
+                       escape_backticks=false,
                        string_escape=false,
                        contract_user=false,
                        dirsep=Sys.iswindows() ? '\\' : '/')
-    @assert !(shell_escape && string_escape)
     if Base.Sys.isunix() && occursin(r"^~(?:/|$)", path)
         # if the path is just "~", don't consider the expanded username as a prefix
         if path == "~"
@@ -483,8 +571,8 @@ function complete_path(path::AbstractString;
         end
     end
 
-    matches = ((shell_escape ? do_shell_escape(s) : string_escape ? do_string_escape(s) : s) for s in matches)
-    matches = ((cmd_escape ? do_cmd_escape(s) : s) for s in matches)
+    matches = ((string_escape ? do_string_escape(s) : s) for s in matches)
+    matches = ((cmd_escape ? do_cmd_escape(s; escape_backticks) : s) for s in matches)
     matches = Completion[PathCompletion(contract_user ? contractuser(s) : s) for s in matches]
     return matches, dir, !isempty(matches)
 end
@@ -492,12 +580,11 @@ end
 function complete_path(path::AbstractString,
                        pos::Int;
                        use_envpath=false,
-                       shell_escape=false,
                        string_escape=false,
                        contract_user=false)
     ## TODO: enable this depwarn once Pkg is fixed
     #Base.depwarn("complete_path with pos argument is deprecated because the return value [2] is incorrect to use", :complete_path)
-    paths, dir, success = complete_path(path; use_envpath, shell_escape, string_escape, dirsep='/')
+    paths, dir, success = complete_path(path; use_envpath, string_escape, dirsep='/')
 
     if Base.Sys.isunix() && occursin(r"^~(?:/|$)", path)
         # if the path is just "~", don't consider the expanded username as a prefix
@@ -526,13 +613,13 @@ struct REPLInterpreter <: CC.AbstractInterpreter
     world::UInt
     inf_params::CC.InferenceParams
     opt_params::CC.OptimizationParams
-    inf_cache::Vector{CC.InferenceResult}
+    inf_cache::CC.InferenceCache
     function REPLInterpreter(limit_aggressive_inference::Bool=false;
                              world::UInt = Base.get_world_counter(),
                              inf_params::CC.InferenceParams = CC.InferenceParams(;
                                  aggressive_constant_propagation=true),
                              opt_params::CC.OptimizationParams = CC.OptimizationParams(),
-                             inf_cache::Vector{CC.InferenceResult} = CC.InferenceResult[])
+                             inf_cache::CC.InferenceCache = CC.InferenceCache())
         return new(limit_aggressive_inference, world, inf_params, opt_params, inf_cache)
     end
 end
@@ -1026,8 +1113,8 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         if obj !== nothing
             # Skip leading whitespace inside brackets.
             i = @something findnext(!isspace, string, first(key)) nextind(string, last(key))
-            key = i:last(key)
-            s = string[intersect(key, 1:pos)]
+            key = intersect(i:last(key), 1:pos)
+            s = string[key]
             matches = find_dict_matches(obj, s)
             length(matches) == 1 && !closed && (matches[1] *= ']')
             if length(matches) > 0
@@ -1043,7 +1130,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
     #   `file ~/example.txt TAB  => `file /home/user/example.txt
     if (n = find_parent(cur, K"CmdString")) !== nothing
         off = char_first(n) - 1
-        ret, r, success = shell_completions(string[char_range(n)], pos - off, hint, cmd_escape=true)
+        ret, r, success = shell_completions(string[char_range(n)], pos - off, hint, escape_backticks=true)
         success && return ret, r .+ off, success
     end
 
@@ -1052,7 +1139,8 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
     #  "~/example.txt TAB => "/home/user/example.txt"
     r, closed = find_str(cur)
     if r !== nothing
-        s = do_string_unescape(string[intersect(r, 1:pos)])
+        r = intersect(r, 1:pos)
+        s = do_string_unescape(string[r])
         ret, success = complete_path_string(s, hint; string_escape=true,
                                             dirsep=Sys.iswindows() ? '\\' : '/')
         if length(ret) == 1 && !closed && close_path_completion(ret[1].path)
@@ -1095,8 +1183,8 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         # Keyword argument completion:
         #   foo(ar TAB   => keyword arguments like `arg1=`
         elseif kind(cur) == K"Identifier"
-            r = char_range(cur)
-            s = string[intersect(r, 1:pos)]
+            r = intersect(char_range(cur), 1:pos)
+            s = string[r]
             # Return without adding more suggestions if kwargs only
             complete_keyword_argument!(suggestions, e, s, context_module, arg_pos; shift) &&
                 return sort_suggestions(), r, true
@@ -1134,7 +1222,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
     if (n = find_parent(cur, K"importpath")) !== nothing
         # Given input lines like `using Foo|`, `import Foo, Bar|` and `using Foo.Bar, Baz, |`:
         # Let's look only for packages and modules we can reach from here
-        if prefix == nothing
+        if prefix === nothing
             complete_loading_candidates!(suggestions, s)
             return sort_suggestions(), r, true
         end
@@ -1298,7 +1386,7 @@ function method_search(partial::AbstractString, context_module::Module, shift::B
     end
 end
 
-function shell_completions(str, pos, hint::Bool=false; cmd_escape::Bool=false)
+function shell_completions(str, pos, hint::Bool=false; escape_backticks::Bool=false)
     # First parse everything up to the current position
     scs = str[1:pos]
     args, last_arg_start = try
@@ -1323,70 +1411,82 @@ function shell_completions(str, pos, hint::Bool=false; cmd_escape::Bool=false)
         return ret, range, true
     elseif endswith(scs, ' ') && !endswith(scs, "\\ ")
         r = pos+1:pos
-        paths, dir, success = complete_path(""; use_envpath=false, shell_escape=!cmd_escape, cmd_escape, dirsep='/')
+        paths, dir, success = complete_path(""; use_envpath=false, cmd_escape=true, escape_backticks, dirsep='/')
         return paths, r, success
     elseif all(@nospecialize(arg) -> arg isa AbstractString, ex.args)
-        # Join these and treat this as a path
-        path::String = join(ex.args)
+        path = join(ex.args)
+    elseif Meta.isexpr(get(ex.args, 1, nothing), :call) &&
+           (call = ex.args[1]::Expr; call.args[1] === :expanduser) &&
+           (tilde_idx = findfirst(a -> a isa String, call.args); tilde_idx !== nothing) &&
+           all(@nospecialize(arg) -> arg isa AbstractString, ex.args[2:end])
+        tilde_str = call.args[tilde_idx]::String  # "~" or "~alice"
+        rest = join(ex.args[2:end])
         r = last_arg_start:pos
-
-        # Also try looking into the env path if the user wants to complete the first argument
-        use_envpath = length(args.args) < 2
-
-        paths, success = complete_path_string(path, hint; use_envpath, shell_escape=!cmd_escape, cmd_escape, dirsep='/')
-        return paths, r, success
+        if isempty(rest)
+            # No path after the tilde: complete usernames.
+            username_prefix = SubString(tilde_str, 2)  # everything after "~"
+            usernames = _complete_tilde_usernames(username_prefix)
+            paths = Completion[PathCompletion(do_cmd_escape_tilde(u; escape_backticks))
+                               for u in usernames]
+            return paths, r, !isempty(paths)
+        end
+        path = tilde_str * rest
+    else
+        return Completion[], 1:0, false
     end
-    return Completion[], 1:0, false
+    r = last_arg_start:pos
+    use_envpath = length(args.args) < 2
+    paths, success = complete_path_string(path, hint; use_envpath, cmd_escape=true, escape_backticks, dirsep='/')
+    return paths, r, success
 end
 
 function complete_path_string(path, hint::Bool=false;
-                              shell_escape::Bool=false,
                               cmd_escape::Bool=false,
+                              escape_backticks::Bool=false,
                               string_escape::Bool=false,
                               dirsep='/',
                               kws...)
     # Expand "~" and remember if we expanded it.
-    local expanded
-    try
-        let p = expanduser(path)
-            expanded = path != p
-            path = p
-        end
-    catch e
-        e isa ArgumentError || rethrow()
-        expanded = false
-    end
+    unexpanded_path = path
+    path = try expanduser(path) catch e; e isa ArgumentError || rethrow(); path end
+    expanded = path != unexpanded_path
 
     function escape(p)
-        shell_escape && (p = do_shell_escape(p))
+        # When the original input used a tilde (expanded=true), completions are
+        # returned in "~/..." form.  Use tilde-aware escaping so the "~[user]"
+        # prefix is left unquoted while the rest of the path is properly escaped.
         string_escape && (p = do_string_escape(p))
-        cmd_escape && (p = do_cmd_escape(p))
+        cmd_escape && (p = expanded ? do_cmd_escape_tilde(p; escape_backticks) : do_cmd_escape(p; escape_backticks))
         p
     end
 
     paths, dir, success = complete_path(path; dirsep, kws...)
 
-    # Expand '~' if the user hits TAB after exhausting completions (either
-    # because we have found an existing file, or there is no such file).
-    full_path = try
-        ispath(path) || isempty(paths)
-    catch err
-        # access(2) errors unhandled by ispath: EACCES, EIO, ELOOP, ENAMETOOLONG
-        if err isa Base.IOError
-            false
-        elseif err isa Base.ArgumentError && occursin("embedded NULs", err.msg)
-            false
-        else
-            rethrow()
+    # For string literals (not backtick commands): when the path already exists
+    # or has no completions, expand ~ to the absolute path so the user sees the
+    # resolved location. (In backtick context shell_parse handles ~ at runtime,
+    # so the contracted tilde form is kept; normal processing produces it.)
+    if !cmd_escape && expanded && !hint && !endswith(path, '/')
+        full_path = try
+            ispath(path) || isempty(paths)
+        catch err
+            if err isa Base.IOError
+                false
+            elseif err isa Base.ArgumentError && occursin("embedded NULs", err.msg)
+                false
+            else
+                rethrow()
+            end
         end
+        full_path && return Completion[PathCompletion(escape(path))], true
     end
-    expanded && !hint && full_path && return Completion[PathCompletion(escape(path))], true
 
-    # Expand '~' if the user hits TAB on a path ending in '/'.
-    expanded && (hint || path != dir * "/") && (dir = contractuser(dir))
+    # Contract the directory back to tilde form when the input used a tilde.
+    expanded && (dir = contractuser(dir))
+    local dir_for_paths = dir
 
     map!(paths) do c::PathCompletion
-        p = joinpath_withsep(dir, c.path; dirsep)
+        p = joinpath_withsep(dir_for_paths, c.path; dirsep)
         PathCompletion(escape(p))
     end
     return sort!(paths, by=p->p.path), success

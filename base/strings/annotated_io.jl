@@ -42,8 +42,9 @@ end
 
 write(io::AnnotatedIOBuffer, c::AnnotatedChar) =
     write(io, AnnotatedString(string(c), [(region=1:ncodeunits(c), a...) for a in c.annotations]))
-write(io::AnnotatedIOBuffer, x::AbstractString) = write(io.io, x)
+write(io::AnnotatedIOBuffer, x::AbstractString) = write(io.io, x)::Int
 write(io::AnnotatedIOBuffer, s::Union{SubString{String}, String}) = write(io.io, s)
+write(io::AnnotatedIOBuffer, s::StringViewAndSub) = write(io.io, s)::Int
 write(io::AnnotatedIOBuffer, b::UInt8) = write(io.io, b)
 
 function write(dest::AnnotatedIOBuffer, src::AnnotatedIOBuffer)
@@ -165,28 +166,26 @@ This is implemented so that one can say write an `AnnotatedString` to an
 new annotation for each character.
 """
 function _insert_annotations!(annots::Vector{RegionAnnotation}, newannots::Vector{RegionAnnotation}, offset::Int = 0)
-    run = 0
-    if !isempty(annots) && last(last(annots).region) == offset
-        for i in reverse(axes(newannots, 1))
-            annot = newannots[i]
-            first(annot.region) == 1 || continue
-            i <= length(annots) || continue
-            if annot.label == last(annots).label && annot.value == last(annots).value
-                valid_run = true
-                for runlen in 1:i
+    run = @label search begin
+        if !isempty(annots) && last(last(annots).region) == offset
+            for i in reverse(axes(newannots, 1))
+                annot = newannots[i]
+                first(annot.region) == 1 || continue
+                i <= length(annots) || continue
+                annot.label == last(annots).label || continue
+                annot.value == last(annots).value || continue
+                all(1:i) do runlen
                     new = newannots[begin+runlen-1]
                     old = annots[end-i+runlen]
-                    if last(old.region) != offset || first(new.region) != 1 || old.label != new.label || old.value != new.value
-                        valid_run = false
-                        break
-                    end
-                end
-                if valid_run
-                    run = i
-                    break
-                end
+                    !(last(old.region) != offset ||
+                    first(new.region) != 1 ||
+                    old.label != new.label ||
+                    old.value != new.value)
+                end || continue
+                break search i
             end
         end
+        0
     end
     for runindex in 0:run-1
         old_index = lastindex(annots) - run + 1 + runindex

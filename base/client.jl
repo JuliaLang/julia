@@ -32,9 +32,17 @@ stackframe_lineinfo_color() = repl_color("JULIA_STACKFRAME_LINEINFO_COLOR", :bol
 stackframe_function_color() = repl_color("JULIA_STACKFRAME_FUNCTION_COLOR", :bold)
 
 function repl_cmd(cmd, out)
-    # Immediately expand all arguments, so that typing e.g. ~/bin/foo works.
-    cmd.exec .= expanduser.(cmd.exec)
-
+    if !(cmd isa Cmd)
+        # Pipelines and redirects: run directly without shell wrapping.
+        try
+            run(ignorestatus(cmd))
+        catch
+            lasterr = current_exceptions()
+            lasterr = ExceptionStack(NamedTuple[(exception = e[1], backtrace = [] ) for e in lasterr])
+            invokelatest(display_error, lasterr)
+        end
+        return nothing
+    end
     if isempty(cmd.exec)
         throw(ArgumentError("no cmd to execute"))
     elseif cmd.exec[1] == "cd"
@@ -174,7 +182,7 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
 end
 
 function _parse_input_line_core(s::String, filename::String, mod::Union{Module, Nothing})
-    ex = Meta.parseall(s; filename, mod)
+    ex = Meta.parseall(s; filename, _parse=invokelatest(Meta.parser_for_module, mod))
     if ex isa Expr && ex.head === :toplevel
         if isempty(ex.args)
             return nothing
@@ -307,9 +315,9 @@ function exec_options(opts)
     # process cmds list
     for (cmd, arg) in cmds
         if cmd == 'e'
-            Core.eval(Main, parse_input_line(arg))
+            Core.eval(Main, parse_input_line(arg; mod=Main))
         elseif cmd == 'E'
-            invokelatest(show, Core.eval(Main, parse_input_line(arg)))
+            invokelatest(show, Core.eval(Main, parse_input_line(arg; mod=Main)))
             println()
         elseif cmd == 'm'
             entrypoint = push!(split(arg, "."), "main")
@@ -552,12 +560,17 @@ The thrown errors are collected in a stack of exceptions.
 """
 global err = nothing
 
+const main_parser = Base.ScopedValues.ScopedValue{Any}(Core._parse)
+function var"#_internal_julia_parse"(args...)
+    main_parser[](args...)
+end
+
 # Used for memoizing require_stdlib of these modules
 global InteractiveUtils::Module
 global Distributed::Module
 
 # weakly exposes ans and err variables to Main
-export ans, err
+export ans, err, var"#_internal_julia_parse"
 end
 
 function should_use_main_entrypoint()
@@ -573,7 +586,10 @@ function _start()
     # clear any postoutput hooks that were saved in the sysimage
     empty!(Base.postoutput_hooks)
     local ret = 0
-    try
+    # `--project` has been processed at this point - latch the active project's syntax
+    # version and use it for `-L`, `argfile`, etc. If launched, the REPL will re-evaluate
+    # at each prompt.
+    @Base.ScopedValues.with MainInclude.main_parser=>parser_for_active_project() try
         repl_was_requested = exec_options(JLOptions())
         if invokelatest(should_use_main_entrypoint) && !is_interactive
             main = invokelatest(getglobal, Main, :main)

@@ -1782,7 +1782,7 @@ rm(dirwalk, recursive=true)
             @test issorted(readdir())
             @test issorted(Base.Filesystem._readdirx())
             @test map(o->o.name, Base.Filesystem._readdirx()) == readdir()
-            @test map(o->o.path, Base.Filesystem._readdirx()) == readdir(join=true)
+            @test map(joinpath, Base.Filesystem._readdirx()) == readdir(join=true)
             @test count(isfile, readdir(join=true)) == count(isfile, Base.Filesystem._readdirx())
         end
     end
@@ -1962,7 +1962,7 @@ end
                     # Cannot delete the working directory on Windows
                     rm(dir)
                     @test_throws Base._UVError("pwd()", Base.UV_ENOENT) pwd()
-                    Base.repl_cmd(@cmd("cd \\~"), io)
+                    Base.repl_cmd(@cmd("cd ~"), io)
                 end
             end
         end

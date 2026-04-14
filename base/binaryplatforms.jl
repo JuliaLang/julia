@@ -872,6 +872,42 @@ function get_csl_member(member::Symbol)
     return nothing
 end
 
+
+function _get_libgfortran_path()
+    # If CompilerSupportLibraries_jll is a stdlib, we can just directly ask for
+    # the path here, without checking `dllist()`:
+    libgfortran_path = get_csl_member(:libgfortran_path)
+    if libgfortran_path !== nothing
+        return libgfortran_path::String
+    end
+
+    # Otherwise, look for it having already been loaded by something
+    libgfortran_paths = filter!(x -> occursin("libgfortran", x), Libdl.dllist())
+    if !isempty(libgfortran_paths)
+        return first(libgfortran_paths)::String
+    end
+
+    # One day, I hope to not be linking against libgfortran in base Julia
+    return nothing
+end
+
+function _get_libstdcxx_handle()
+    # If CompilerSupportLibraries_jll is a stdlib, we can just directly open it
+    libstdcxx = get_csl_member(:libstdcxx)
+    if libstdcxx !== nothing
+        return nothing
+    end
+
+    # Otherwise, look for it having already been loaded by something
+    libstdcxx_paths = filter!(x -> occursin("libstdc++", x), Libdl.dllist())
+    if !isempty(libstdcxx_paths)
+        return Libdl.dlopen(first(libstdcxx_paths), Libdl.RTLD_NOLOAD)::Ptr{Cvoid}
+    end
+
+    # One day, I hope to not be linking against libgfortran in base Julia
+    return nothing
+end
+
 """
     detect_libgfortran_version()
 
@@ -880,25 +916,7 @@ linked against (if any).  Returns `nothing` if no libgfortran version dependence
 detected.
 """
 function detect_libgfortran_version()
-    function get_libgfortran_path()
-        # If CompilerSupportLibraries_jll is a stdlib, we can just directly ask for
-        # the path here, without checking `dllist()`:
-        libgfortran_path = get_csl_member(:libgfortran_path)
-        if libgfortran_path !== nothing
-            return libgfortran_path::String
-        end
-
-        # Otherwise, look for it having already been loaded by something
-        libgfortran_paths = filter!(x -> occursin("libgfortran", x), Libdl.dllist())
-        if !isempty(libgfortran_paths)
-            return first(libgfortran_paths)::String
-        end
-
-        # One day, I hope to not be linking against libgfortran in base Julia
-        return nothing
-    end
-
-    libgfortran_path = get_libgfortran_path()
+    libgfortran_path = _get_libgfortran_path()
     name, version = parse_dl_name_version(libgfortran_path, os())
     if version === nothing
         # Even though we complain about this, we allow it to continue in the hopes that
@@ -922,25 +940,8 @@ it is linked against (if any).  `max_minor_version` is the latest version in the
 3.4 series of GLIBCXX where the search is performed.
 """
 function detect_libstdcxx_version(max_minor_version::Int=30)
-    function get_libstdcxx_handle()
-        # If CompilerSupportLibraries_jll is a stdlib, we can just directly open it
-        libstdcxx = get_csl_member(:libstdcxx)
-        if libstdcxx !== nothing
-            return nothing
-        end
-
-        # Otherwise, look for it having already been loaded by something
-        libstdcxx_paths = filter!(x -> occursin("libstdc++", x), Libdl.dllist())
-        if !isempty(libstdcxx_paths)
-            return Libdl.dlopen(first(libstdcxx_paths), Libdl.RTLD_NOLOAD)::Ptr{Cvoid}
-        end
-
-        # One day, I hope to not be linking against libgfortran in base Julia
-        return nothing
-    end
-
     # Brute-force our way through GLIBCXX_* symbols to discover which version we're linked against
-    libstdcxx = get_libstdcxx_handle()
+    libstdcxx = _get_libstdcxx_handle()
 
     if libstdcxx !== nothing
         # Try all GLIBCXX versions down to GCC v4.8:

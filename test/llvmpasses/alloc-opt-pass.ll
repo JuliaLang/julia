@@ -79,8 +79,9 @@ declare ptr addrspace(10) @external_function2()
 
 
 ; CHECK-LABEL: @legal_int_types
-; CHECK: alloca [12 x i8]
-; CHECK-NOT: alloca i96
+; Test that allocations use i64 chunks (capped at 64 bits for backend compatibility)
+; A 12-byte allocation rounds up to 16 bytes, giving [2 x i64]
+; CHECK: alloca [2 x i64], align 16
 ; CHECK: call void @llvm.memset.p0.i64(ptr align 16 %var1,
 ; CHECK: ret void
 define void @legal_int_types() {
@@ -151,11 +152,10 @@ define void @lifetime_no_preserve_end(ptr noalias nocapture noundef nonnull sret
 
 
 ; CHECK-LABEL: @initializers
-; CHECK: alloca [1 x i8]
-; CHECK-DAG: alloca [2 x i8]
-; CHECK-DAG: alloca [3 x i8]
-; CHECK-DAG: call void @llvm.memset.p0.i64(ptr align 1 %var1,
-; CHECK-DAG: call void @llvm.memset.p0.i64(ptr align 4 %var7,
+; Small allocations (1, 2, 3 bytes) all round up to 8 bytes, giving i64
+; CHECK-DAG: alloca i64, align 16
+; CHECK-DAG: call void @llvm.memset.p0.i64(ptr align 16 %var1,
+; CHECK-DAG: call void @llvm.memset.p0.i64(ptr align 16 %var7,
 ; CHECK: ret void
 define void @initializers() {
   %pgcstack = call ptr @julia.get_pgcstack()
@@ -267,6 +267,109 @@ define swiftcc i64 @"atomicrmw"(ptr nonnull swiftself "gcstack" %0) #0 {
   %19 = atomicrmw xchg ptr addrspace(11) %16, i64 %18 seq_cst, align 8, !tbaa !25, !alias.scope !23, !noalias !24                                    ; preds = %19
   ret i64 %19
 }
+
+; Test that an allocation used as the value operand of atomicrmw escapes
+; CHECK-LABEL: @atomicrmw_obj_val_escape
+; CHECK: call{{.*}}@julia.gc_alloc_obj
+; CHECK: ret void
+define void @atomicrmw_obj_val_escape(ptr addrspace(10) %holder) {
+  %pgcstack = call ptr @julia.get_pgcstack()
+  %ptls = call ptr @julia.ptls_states()
+  %v = call noalias nonnull align 8 dereferenceable(8) ptr addrspace(10) @julia.gc_alloc_obj(ptr %ptls, i64 8, ptr addrspace(10) @tag) #7
+  %v_derived = addrspacecast ptr addrspace(10) %v to ptr addrspace(11)
+  store ptr addrspace(10) null, ptr addrspace(11) %v_derived, align 8, !tbaa !20
+  %holder_derived = addrspacecast ptr addrspace(10) %holder to ptr addrspace(11)
+  %old = atomicrmw xchg ptr addrspace(11) %holder_derived, ptr addrspace(10) %v seq_cst, align 8, !tbaa !20
+  ret void
+}
+; CHECK-LABEL: }{{$}}
+
+; Test that an objref field is not falsely marked as multiloc on first access
+; CHECK-LABEL: @objref_no_multiloc
+; CHECK-NOT: @julia.gc_alloc_obj
+; CHECK: ret ptr addrspace(10) %val
+define ptr addrspace(10) @objref_no_multiloc(ptr addrspace(10) %val) {
+  %pgcstack = call ptr @julia.get_pgcstack()
+  %ptls = call ptr @julia.ptls_states()
+  %v = call noalias nonnull align 8 dereferenceable(8) ptr addrspace(10) @julia.gc_alloc_obj(ptr %ptls, i64 8, ptr addrspace(10) @tag) #7
+  %v_derived = addrspacecast ptr addrspace(10) %v to ptr addrspace(11)
+  store ptr addrspace(10) %val, ptr addrspace(11) %v_derived, align 8, !tbaa !20
+  %tok = call token (...) @llvm.julia.gc_preserve_begin(ptr addrspace(10) %v)
+  %loaded = load ptr addrspace(10), ptr addrspace(11) %v_derived, align 8, !tbaa !20
+  call void @llvm.julia.gc_preserve_end(token %tok)
+  ret ptr addrspace(10) %loaded
+}
+; CHECK-LABEL: }{{$}}
+
+; Test that an allocation with ref fields and an escaped address stays on the heap.
+; pointer_from_objref sets addrescaped; the ref store sets has_ref.
+; moveToStack with has_ref would create alloca T_prjlvalue[], causing the GC to
+; scan all slots as pointers, but non-ref data may be written through the escaped address.
+; CHECK-LABEL: @ref_with_addrescaped_no_stack
+; CHECK: call{{.*}}@julia.gc_alloc_obj
+; CHECK: ret void
+define void @ref_with_addrescaped_no_stack(ptr addrspace(10) %val) {
+  %pgcstack = call ptr @julia.get_pgcstack()
+  %ptls = call ptr @julia.ptls_states()
+  %v = call noalias nonnull align 8 dereferenceable(16) ptr addrspace(10) @julia.gc_alloc_obj(ptr %ptls, i64 16, ptr addrspace(10) @tag) #7
+  %v_derived = addrspacecast ptr addrspace(10) %v to ptr addrspace(11)
+  store ptr addrspace(10) %val, ptr addrspace(11) %v_derived, align 8, !tbaa !20
+  %raw = call ptr @julia.pointer_from_objref(ptr addrspace(11) %v_derived)
+  %tok = call token (...) @llvm.julia.gc_preserve_begin(ptr addrspace(10) %v)
+  call void @external_function()
+  call void @llvm.julia.gc_preserve_end(token %tok)
+  ret void
+}
+; CHECK-LABEL: }{{$}}
+
+; Test that higher alignment from the original allocation is inherited
+; 8 bytes with 32-byte alignment uses i64 (element size capped at 64 bits)
+; CHECK-LABEL: @align_inherit
+; CHECK: alloca i64, align 32
+; CHECK: ret void
+define void @align_inherit() {
+  %pgcstack = call ptr @julia.get_pgcstack()
+  %ptls = call ptr @julia.ptls_states()
+  %ptls_i8 = bitcast ptr %ptls to ptr
+  %var1 = call align 32 ptr addrspace(10) @julia.gc_alloc_obj(ptr %ptls_i8, i64 8, ptr addrspace(10) @tag)
+  %var2 = addrspacecast ptr addrspace(10) %var1 to ptr addrspace(11)
+  %var3 = call ptr @julia.pointer_from_objref(ptr addrspace(11) %var2)
+  ret void
+}
+; CHECK-LABEL: }{{$}}
+
+; Test that 8-byte allocation uses i64 with GC alignment
+; CHECK-LABEL: @legal_int_i64
+; CHECK: alloca i64, align 16
+; CHECK: ret void
+define void @legal_int_i64() {
+  %pgcstack = call ptr @julia.get_pgcstack()
+  %ptls = call ptr @julia.ptls_states()
+  %ptls_i8 = bitcast ptr %ptls to ptr
+  %var1 = call ptr addrspace(10) @julia.gc_alloc_obj(ptr %ptls_i8, i64 8, ptr addrspace(10) @tag)
+  %var2 = addrspacecast ptr addrspace(10) %var1 to ptr addrspace(11)
+  %var3 = call ptr @julia.pointer_from_objref(ptr addrspace(11) %var2)
+  ret void
+}
+; CHECK-LABEL: }{{$}}
+
+; Test that atomicrmw on a non-escaping ref field is lowered to load+store
+; CHECK-LABEL: @atomicrmw_ref_split
+; CHECK-NOT: @julia.gc_alloc_obj
+; CHECK-NOT: atomicrmw
+; CHECK: ret ptr addrspace(10)
+define ptr addrspace(10) @atomicrmw_ref_split(ptr addrspace(10) %val) {
+  %pgcstack = call ptr @julia.get_pgcstack()
+  %ptls = call ptr @julia.ptls_states()
+  %v = call noalias nonnull align 8 dereferenceable(8) ptr addrspace(10) @julia.gc_alloc_obj(ptr %ptls, i64 8, ptr addrspace(10) @tag) #7
+  %v_derived = addrspacecast ptr addrspace(10) %v to ptr addrspace(11)
+  store ptr addrspace(10) null, ptr addrspace(11) %v_derived, align 8, !tbaa !20
+  %tok = call token (...) @llvm.julia.gc_preserve_begin(ptr addrspace(10) %v)
+  %old = atomicrmw xchg ptr addrspace(11) %v_derived, ptr addrspace(10) %val seq_cst, align 8, !tbaa !20
+  call void @llvm.julia.gc_preserve_end(token %tok)
+  ret ptr addrspace(10) %old
+}
+; CHECK-LABEL: }{{$}}
 
 declare ptr @julia.ptls_states()
 

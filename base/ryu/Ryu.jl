@@ -18,6 +18,15 @@ neededdigits(::Type{Float32}) = 39 + 9 + 2
 neededdigits(::Type{Float16}) = 9 + 5 + 9
 
 """
+    Ryu.neededfloatdigits(T)
+
+Number of digits necessary to represent type `T` in shortest precision.
+"""
+neededfloatdigits(::Type{Float64}) = 24
+neededfloatdigits(::Type{Float32}) = 17
+neededfloatdigits(::Type{Float16}) = 20
+
+"""
     Ryu.writeshortest(x, plus=false, space=false, hash=true, precision=-1, expchar=UInt8('e'), padexp=false, decchar=UInt8('.'), typed=false, compact=false)
     Ryu.writeshortest(buf::AbstractVector{UInt8}, pos::Int, x, args...)
 
@@ -111,16 +120,16 @@ end
 
 function Base.show(io::IO, x::T, forceuntyped::Bool=false, fromprint::Bool=false) where {T <: Base.IEEEFloat}
     compact = get(io, :compact, false)::Bool
-    buf = Base.StringVector(neededdigits(T))
+    buf = Memory{UInt8}(undef, neededfloatdigits(T))
     typed = !forceuntyped && !compact && Base.nonnothing_nonmissing_typeinfo(io) !== typeof(x)
     pos = writeshortest(buf, 1, x, false, false, true, -1,
         (x isa Float32 && !fromprint) ? UInt8('f') : UInt8('e'), false, UInt8('.'), typed, compact)
-    write(io, resize!(buf, pos - 1))
+    write(io, view(buf, 1:pos - 1))
     return
 end
 
 function Base.string(x::T) where {T <: Base.IEEEFloat}
-    buf = Base.StringVector(neededdigits(T))
+    buf = Base.StringVector(neededfloatdigits(T))
     pos = writeshortest(buf, 1, x, false, false, true, -1,
         UInt8('e'), false, UInt8('.'), false, false)
     return String(resize!(buf, pos - 1))
