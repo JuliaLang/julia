@@ -296,13 +296,25 @@ copyto!(dest::Array{T}, doffs::Integer, src::Array{T}, soffs::Integer, n::Intege
 
 function _copyto_impl!(dest::Union{Array,Memory}, doffs::Integer, src::Union{Array,Memory}, soffs::Integer, n::Integer)
     @inline
+    @_terminates_locally_meta
     n == 0 && return dest
     n > 0 || _throw_argerror("Number of elements to copy must be non-negative.")
     @boundscheck checkbounds(dest, doffs:doffs+n-1)
     @boundscheck checkbounds(src, soffs:soffs+n-1)
-    @inbounds let dest = memoryref(dest isa Array ? getfield(dest, :ref) : dest, doffs),
-                  src = memoryref(src isa Array ? getfield(src, :ref) : src, soffs)
-        unsafe_copyto!(dest, src, n)
+    T = eltype(dest)
+    if isprimitivetype(T) && sizeof(T) <= 8 && T === eltype(src) && n * aligned_sizeof(T) < 65536
+        dm = dest isa Array ? getfield(dest, :ref).mem : dest
+        sm = src isa Array ? getfield(src, :ref).mem : src
+        if dm !== sm || doffs + n <= soffs || soffs + n <= doffs
+            @inbounds for i = 0:n-1
+                dest[doffs + i] = src[soffs + i]
+            end
+        end
+    else
+        @inbounds let dest = memoryref(dest isa Array ? getfield(dest, :ref) : dest, doffs),
+                    src = memoryref(src isa Array ? getfield(src, :ref) : src, soffs)
+            unsafe_copyto!(dest, src, n)
+        end
     end
     return dest
 end
