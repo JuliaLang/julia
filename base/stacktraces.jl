@@ -99,6 +99,56 @@ function hash(frame::StackFrame, h::UInt)
     return h
 end
 
+function debuginfo_func_name(di::Core.DebugInfo)
+    def = di.def
+    if def isa Core.MethodInstance
+        m = def.def
+        return m isa Method ? m.name : nothing
+    elseif def isa Method
+        return def.name
+    elseif def isa Symbol
+        return def
+    end
+    return nothing
+end
+
+# Find a DebugInfo edge matching the inlined frame at `infos[frame_idx]` by function name.
+# When multiple edges match, uses inner frames (`frame_idx-1`, ..., `1`) and then
+# DWARF source location for disambiguation.
+function find_matching_edge(debuginfo::Core.DebugInfo, infos::Core.SimpleVector, frame_idx::Int)
+    edges = debuginfo.edges::Core.SimpleVector
+    func_name = (infos[frame_idx]::Core.SimpleVector)[1]::Symbol
+    candidates = Core.DebugInfo[]
+    for j in 1:length(edges)
+        edge = edges[j]::Core.DebugInfo
+        debuginfo_func_name(edge) === func_name || continue
+        if frame_idx > 1
+            find_matching_edge(edge, infos, frame_idx - 1) === nothing && continue
+        end
+        push!(candidates, edge)
+    end
+    length(candidates) <= 1 && return isempty(candidates) ? nothing : candidates[1]
+    # Multiple matches: disambiguate using DWARF source location.
+    # Different methods of the same generic function have distinct Method objects
+    # with different source file/line, so we match against the DWARF-reported location.
+    info = infos[frame_idx]::Core.SimpleVector
+    file = info[2]::Symbol
+    line = info[3]::Int
+    best = candidates[1]
+    best_line = 0
+    for edge in candidates
+        def = edge.def
+        def isa Core.MethodInstance || continue
+        m = def.def
+        m isa Method || continue
+        if m.file === file && m.line <= line && m.line > best_line
+            best = edge
+            best_line = m.line
+        end
+    end
+    return best
+end
+
 """
     lookup(pointer::Ptr{Cvoid})::Vector{StackFrame}
 
@@ -110,8 +160,10 @@ Base.@constprop :none function lookup(pointer::Ptr{Cvoid})
     infos = @ccall jl_lookup_code_address(pointer::Ptr{Cvoid}, false::Cint)::Core.SimpleVector
     pointer = convert(UInt64, pointer)
     isempty(infos) && return [StackFrame(empty_sym, empty_sym, -1, nothing, true, false, pointer)] # this is equal to UNKNOWN
-    res = Vector{StackFrame}(undef, length(infos))
-    for i in 1:length(infos)
+    ninfos = length(infos)
+    res = Vector{StackFrame}(undef, ninfos)
+    local debuginfo = false
+    for i = ninfos:-1:1
         info = infos[i]::Core.SimpleVector
         @assert length(info) == 6 "corrupt return from jl_lookup_code_address"
         func = info[1]::Symbol
@@ -119,7 +171,23 @@ Base.@constprop :none function lookup(pointer::Ptr{Cvoid})
         linenum = info[3]::Int
         linfo = info[4]
         if linfo isa Core.CodeInstance
+            if debuginfo === false
+                debuginfo = linfo.debuginfo
+            else
+                debuginfo = true
+            end
             linfo = linfo.def
+        elseif debuginfo isa Core.DebugInfo
+            edge = find_matching_edge(debuginfo, infos, i)
+            if edge !== nothing
+                debuginfo = edge
+                def = edge.def
+                if !(def isa Symbol)
+                    linfo = def
+                end
+            else
+                debuginfo = true
+            end
         end
         res[i] = StackFrame(func, file, linenum, linfo, info[5]::Bool, info[6]::Bool, pointer)
     end
