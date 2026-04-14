@@ -86,7 +86,7 @@ end
 # used outside of that scope (binding capture is OK).  This is the alternative.
 function newsym(ctx, src::SyntaxTree, name::String; unused=false)
     out = newleaf(ctx, src, unused ? K"Placeholder" : K"Identifier", name)
-    setattr!(out, :meta, get(src, :meta, nothing))
+    hasattr(src, :meta) && setattr!(out, :meta, src.meta)
     setattr!(out, :scope_layer, new_scope_layer(ctx))
 end
 
@@ -2820,7 +2820,7 @@ expand_function_arg(ctx, arg, used) = @stm arg begin
     [K"::" x t] ->
         @ast ctx arg [K"::" fix_argname(ctx, x, used) t]
     [K"::" t] -> let aname = newsym(ctx, arg, "#arg#"; unused=true)
-        setattr!(aname, :meta, get(arg, :meta, nothing))
+        hasattr(arg, :meta) && setattr!(aname, :meta, arg.meta)
         @ast ctx arg [K"::" fix_argname(ctx, aname, used) t]
     end
     [K"kw" x v] ->
