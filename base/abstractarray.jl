@@ -1067,50 +1067,70 @@ julia> y
 ```
 """
 function copyto!(dest::AbstractArray, src::AbstractArray)
+    @_propagate_inbounds_meta
     isempty(src) && return dest
-    if dest isa BitArray
-        # avoid ambiguities with other copyto!(::AbstractArray, ::SourceArray) methods
-        return _copyto_bitarray!(dest, src)
-    end
-    src′ = unalias(dest, src)
-    copyto_unaliased!(IndexStyle(dest), dest, IndexStyle(src′), src′)
+    @boundscheck length(src) <= length(dest) || throw(BoundsError(dest, LinearIndices(src)))
+    _copyto!(IndexStyle(dest), dest, IndexStyle(src), src)
+    return dest
 end
 
 function copyto!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
+    @_propagate_inbounds_meta
     isempty(src) && return dest
-    src′ = unalias(dest, src)
-    copyto_unaliased!(deststyle, dest, srcstyle, src′)
+    @boundscheck length(src) <= length(dest) || throw(BoundsError(dest, LinearIndices(src)))
+    _copyto!(deststyle, dest, srcstyle, src)
+    return dest
 end
 
-function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
-    isempty(src) && return dest
-    destinds, srcinds = LinearIndices(dest), LinearIndices(src)
-    idf, isf = first(destinds), first(srcinds)
-    Δi = idf - isf
-    (checkbounds(Bool, destinds, isf+Δi) & checkbounds(Bool, destinds, last(srcinds)+Δi)) ||
-        throw(BoundsError(dest, srcinds))
+function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray)
+    @_propagate_inbounds_meta
+    copyto!(dest, dstart, src, first(LinearIndices(src)), length(src))
+end
+
+function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray, sstart::Integer)
+    @_propagate_inbounds_meta
+    srcinds = LinearIndices(src)
+    @boundscheck checkbounds(Bool, srcinds, sstart) || throw(BoundsError(src, sstart))
+    copyto!(dest, dstart, src, sstart, last(srcinds)-sstart+1)
+end
+
+_unwrap_with_offset(a::T) where {T<:AbstractArray} = (a::T, 0)
+
+"""
+    copyto!(dest, doffs, src, soffs, n)
+
+Copy `n` elements from collection `src` starting at the linear index `soffs`, to array `dest` starting at
+the index `doffs`. Return `dest`.
+"""
+function copyto!(dest::AbstractArray, dstart::Integer,
+                 src::AbstractArray, sstart::Integer,
+                 n::Integer)
+    @_propagate_inbounds_meta
+    dp, doff = _unwrap_with_offset(dest)
+    sp, soff = _unwrap_with_offset(src)
+    _copyto!(dp, dstart + doff, sp, sstart + soff, n)
+    return dest
+end
+
+function _copyto!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
+    @_propagate_inbounds_meta
+    if deststyle isa IndexLinear && srcstyle isa IndexLinear
+        copyto!(dest, firstindex(dest), src, firstindex(src), length(src))
+        return dest
+    end
+    src = unalias(dest, src)
     if deststyle isa IndexLinear
-        if srcstyle isa IndexLinear
-            # Single-index implementation
-            @inbounds for i in srcinds
-                dest[i + Δi] = src[i]
-            end
-        else
-            # Dual-index implementation
-            i = idf - 1
-            @inbounds for a in src
-                dest[i+=1] = a
-            end
+        i = first(LinearIndices(dest)) - 1
+        @inbounds for a in src
+            dest[i+=1] = a
         end
     else
         iterdest, itersrc = eachindex(dest), eachindex(src)
         if iterdest == itersrc
-            # Shared-iterator implementation
             for I in iterdest
                 @inbounds dest[I] = src[I]
             end
         else
-            # Dual-iterator implementation
             for (Idest, Isrc) in zip(iterdest, itersrc)
                 @inbounds dest[Idest] = src[Isrc]
             end
@@ -1119,28 +1139,13 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
     return dest
 end
 
-function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray)
-    copyto!(dest, dstart, src, first(LinearIndices(src)), length(src))
-end
-
-function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray, sstart::Integer)
-    srcinds = LinearIndices(src)
-    checkbounds(Bool, srcinds, sstart) || throw(BoundsError(src, sstart))
-    copyto!(dest, dstart, src, sstart, last(srcinds)-sstart+1)
-end
-
-function copyto!(dest::AbstractArray, dstart::Integer,
-                 src::AbstractArray, sstart::Integer,
-                 n::Integer)
+function _copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray, sstart::Integer, n::Integer)
+    @inline
     n == 0 && return dest
-    n < 0 && throw(ArgumentError(LazyString("tried to copy n=",
-        n," elements, but n should be non-negative")))
-    destinds, srcinds = LinearIndices(dest), LinearIndices(src)
-    (checkbounds(Bool, destinds, dstart) && checkbounds(Bool, destinds, dstart+n-1)) || throw(BoundsError(dest, dstart:dstart+n-1))
-    (checkbounds(Bool, srcinds, sstart)  && checkbounds(Bool, srcinds, sstart+n-1))  || throw(BoundsError(src,  sstart:sstart+n-1))
-    src′ = unalias(dest, src)
+    _check_copyto_args(dest, dstart, src, sstart, n)
+    src = unalias(dest, src)
     @inbounds for i = 0:n-1
-        dest[dstart+i] = src′[sstart+i]
+        dest[dstart+i] = src[sstart+i]
     end
     return dest
 end

@@ -1234,3 +1234,29 @@ end
     @test @inbounds(copyto!(Vector{Int}(undef, 10), 1, collect(1:10), 1, 10)) == 1:10
     @test_throws BoundsError copyto!(Vector{Int}(undef, 5), 1, collect(1:10), 1, 10)
 end
+
+@testset "copyto! with contiguous views" begin
+    a = collect(1:10)
+    va = view(a, :)
+    b = zeros(Int, 10)
+    vb = view(b, :)
+    @test copyto!(b, va) == a
+    @test copyto!(vb, a) == a
+    fill!(vb, 0);
+    @test copyto!(vb, va) == a
+
+    p = zeros(Int, 20)
+    @test copyto!(view(p, 5:14), 1, a, 1, 10) == a
+    @test p[5:14] == a
+
+    x = collect(1:10)
+    copyto!(view(x, 1:5), view(x, 3:7))
+    @test x == [3, 4, 5, 6, 7, 6, 7, 8, 9, 10]
+    @test_throws BoundsError copyto!(view(zeros(5), :), 1, a, 1, 10)
+
+    bits = BitVector(rand(Bool, 10))
+    @test copyto!(falses(10), view(bits, :)) == bits
+
+    A = reshape([1:20;], 4, 5)
+    @test copyto!(similar(view(A,:,2:4)), view(A,:,2:4)) == view(A,:,2:4)
+end

@@ -425,8 +425,27 @@ function one(x::BitMatrix)
     return a
 end
 
+function unsafe_copyto!(dest::BitArray, doffs::Integer, src::Union{BitArray,Array}, soffs::Integer, n::Integer)
+    copy_to_bitarray_chunks!(dest.chunks, Int(doffs), src, Int(soffs), Int(n))
+    return dest
+end
+
+function copyto!(dest::BitArray, src::AbstractArray)
+    @_propagate_inbounds_meta
+    isempty(src) && return dest
+    @boundscheck length(src) <= length(dest) || throw(BoundsError(dest, LinearIndices(src)))
+    sp, _ = _unwrap_with_offset(src)
+    if sp isa Union{BitArray,Array}
+        copyto!(dest, firstindex(dest), src, firstindex(src), length(src))
+    else
+        _copyto_bitarray!(dest, src)
+    end
+    return dest
+end
 function copyto!(dest::BitArray, src::BitArray)
-    length(src) > length(dest) && throw(BoundsError(dest, length(dest)+1))
+    @_propagate_inbounds_meta
+    isempty(src) && return dest
+    @boundscheck length(src) <= length(dest) || throw(BoundsError(dest, LinearIndices(src)))
     destc = dest.chunks; srcc = src.chunks
     nc = min(length(destc), length(srcc))
     nc == 0 && return dest
@@ -445,27 +464,12 @@ function copyto!(dest::BitArray, src::BitArray)
     return dest
 end
 
-function unsafe_copyto!(dest::BitArray, doffs::Integer, src::Union{BitArray,Array}, soffs::Integer, n::Integer)
-    copy_to_bitarray_chunks!(dest.chunks, Int(doffs), src, Int(soffs), Int(n))
-    return dest
-end
-
-copyto!(dest::BitArray, doffs::Integer, src::Union{BitArray,Array}, soffs::Integer, n::Integer) =
-    _copyto_int!(dest, Int(doffs), src, Int(soffs), Int(n))
-function _copyto_int!(dest::BitArray, doffs::Int, src::Union{BitArray,Array}, soffs::Int, n::Int)
+function _copyto!(dest::BitArray, doffs::Integer, src::Union{BitArray,Array}, soffs::Integer, n::Integer)
+    @inline
     n == 0 && return dest
-    n < 0 && throw(ArgumentError("Number of elements to copy must be non-negative."))
-    soffs < 1 && throw(BoundsError(src, soffs))
-    doffs < 1 && throw(BoundsError(dest, doffs))
-    soffs+n-1 > length(src) && throw(BoundsError(src, length(src)+1))
-    doffs+n-1 > length(dest) && throw(BoundsError(dest, length(dest)+1))
-    return unsafe_copyto!(dest, doffs, src, soffs, n)
-end
-
-function copyto!(dest::BitArray, src::Array)
-    length(src) > length(dest) && throw(BoundsError(dest, length(dest)+1))
-    length(src) == 0 && return dest
-    return unsafe_copyto!(dest, 1, src, 1, length(src))
+    _check_copyto_args(dest, doffs, src, soffs, n)
+    unsafe_copyto!(dest, doffs, src, soffs, n)
+    return dest
 end
 
 function reshape(B::BitArray{N}, dims::NTuple{N,Int}) where N
@@ -503,9 +507,10 @@ function BitArray{N}(A::AbstractArray{T,N}) where N where T
 end
 
 function _copyto_bitarray!(B::BitArray, A::AbstractArray)
+    @_propagate_inbounds_meta
     l = length(A)
     l == 0 && return B
-    l > length(B) && throw(BoundsError(B, length(B)+1))
+    @boundscheck l <= length(B) || throw(BoundsError(B, LinearIndices(A)))
     Bc = B.chunks
     nc = num_bit_chunks(l)
     Ai = first(eachindex(A))

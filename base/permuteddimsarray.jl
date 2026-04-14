@@ -290,11 +290,12 @@ function permutedims!(dest, src::AbstractArray, perm)
     return dest
 end
 
-function Base.copyto!(dest::PermutedDimsArray{T,N}, src::AbstractArray{T,N}) where {T,N}
-    checkbounds(dest, axes(src)...)
+Base.@propagate_inbounds function Base.copyto!(dest::PermutedDimsArray{T,N}, src::AbstractArray{S,N}) where {T,S,N}
+    isempty(src) && return dest
+    @boundscheck checkbounds(dest, axes(src)...)
+    src = Base.unalias(dest, src)
     _copy!(dest, src)
 end
-Base.copyto!(dest::PermutedDimsArray, src::AbstractArray) = _copy!(dest, src)
 
 function _copy!(P::PermutedDimsArray{T,N,perm}, src) where {T,N,perm}
     # If dest/src are "close to dense," then it pays to be cache-friendly.
@@ -304,7 +305,7 @@ function _copy!(P::PermutedDimsArray{T,N,perm}, src) where {T,N,perm}
         d += 1
     end
     if d == ndims(src)
-        copyto!(parent(P), src) # it's not permuted
+        Base._copyto!(parent(P), src) # axes already validated by caller
     else
         R1 = CartesianIndices(axes(src)[1:d])
         d1 = findfirst(isequal(d+1), perm)::Int  # first permuted dim of dest
