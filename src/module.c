@@ -675,7 +675,7 @@ JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name, jl_module_t *parent)
     return jl_new_module_(name, parent, 1, 1);
 }
 
-uint32_t jl_module_next_counter(jl_module_t *m)
+JL_DLLEXPORT uint32_t jl_module_next_counter(jl_module_t *m)
 {
     return jl_atomic_fetch_add_relaxed(&m->counter, 1);
 }

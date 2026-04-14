@@ -1342,11 +1342,11 @@ function f_kw_simple(a::Int=1, b::Float64=1.0; x::Char='a', y::Bool=true)
     (a, b, x, y)
 end
 #---------------------
-1   (method TestMod.#kw_body#f_kw_simple#0)
+1   (method TestMod.#f_kw_simple#1)
 2   latestworld
 3   (method TestMod.f_kw_simple)
 4   latestworld
-5   TestMod.#kw_body#f_kw_simple#0
+5   TestMod.#f_kw_simple#1
 6   (call core.Typeof %₅)
 7   TestMod.Char
 8   TestMod.Bool
@@ -1358,8 +1358,8 @@ end
 14  (call core.svec)
 15  SourceLocation::1:10
 16  (call core.svec %₁₃ %₁₄ %₁₅)
-17  --- method TestMod.#kw_body#f_kw_simple#0 %₁₆
-    slots: [slot₁/#kw_body#f_kw_simple#0(!read) slot₂/x slot₃/y slot₄/#self#(!read) slot₅/a slot₆/b]
+17  --- method TestMod.#f_kw_simple#1 %₁₆
+    slots: [slot₁/#f_kw_simple#1(!read) slot₂/x slot₃/y slot₄/#self#(!read) slot₅/a slot₆/b]
     1   (meta :nkw 2)
     2   (call core.tuple slot₅/a slot₆/b slot₂/x slot₃/y)
     3   (return %₂)
@@ -1399,7 +1399,7 @@ end
 43  (call core.svec %₄₀ %₄₁ %₄₂)
 44  --- method TestMod.f_kw_simple %₄₃
     slots: [slot₁/#self# slot₂/a slot₃/b]
-    1   TestMod.#kw_body#f_kw_simple#0
+    1   TestMod.#f_kw_simple#1
     2   (call %₁ 'a' true slot₁/#self# slot₂/a slot₃/b)
     3   (return %₂)
 45  latestworld
@@ -1479,7 +1479,7 @@ end
     36  (gotoifnot %₃₅ label₃₈)
     37  (goto label₃₉)
     38  (call top.kwerr slot₂/kws slot₃/#self# slot₄/a slot₅/b)
-    39  TestMod.#kw_body#f_kw_simple#0
+    39  TestMod.#f_kw_simple#1
     40  (call %₃₉ %₁₇ %₃₁ slot₃/#self# slot₄/a slot₅/b)
     41  (return %₄₀)
 75  latestworld
@@ -1491,11 +1491,11 @@ end
 # underscore kwargs apart from `_...` are probably not intended to work anyway
 function f_kw_placeholders(; _=1, _=2); end
 #---------------------
-1   (method TestMod.#kw_body#f_kw_placeholders#0)
+1   (method TestMod.#f_kw_placeholders#2)
 2   latestworld
 3   (method TestMod.f_kw_placeholders)
 4   latestworld
-5   TestMod.#kw_body#f_kw_placeholders#0
+5   TestMod.#f_kw_placeholders#2
 6   (call core.Typeof %₅)
 7   TestMod.f_kw_placeholders
 8   (call core.Typeof %₇)
@@ -1503,8 +1503,8 @@ function f_kw_placeholders(; _=1, _=2); end
 10  (call core.svec)
 11  SourceLocation::1:10
 12  (call core.svec %₉ %₁₀ %₁₁)
-13  --- method TestMod.#kw_body#f_kw_placeholders#0 %₁₂
-    slots: [slot₁/#kw_body#f_kw_placeholders#0(!read) slot₂/#unused#(!read) slot₃/#unused#(!read) slot₄/#self#(!read)]
+13  --- method TestMod.#f_kw_placeholders#2 %₁₂
+    slots: [slot₁/#f_kw_placeholders#2(!read) slot₂/#unused#(!read) slot₃/#unused#(!read) slot₄/#self#(!read)]
     1   (meta :nkw 2)
     2   (return core.nothing)
 14  latestworld
@@ -1516,7 +1516,7 @@ function f_kw_placeholders(; _=1, _=2); end
 20  (call core.svec %₁₇ %₁₈ %₁₉)
 21  --- method TestMod.f_kw_placeholders %₂₀
     slots: [slot₁/#self#]
-    1   TestMod.#kw_body#f_kw_placeholders#0
+    1   TestMod.#f_kw_placeholders#2
     2   (call %₁ 1 2 slot₁/#self#)
     3   (return %₂)
 22  latestworld
@@ -1549,7 +1549,7 @@ function f_kw_placeholders(; _=1, _=2); end
     18  (gotoifnot %₁₇ label₂₀)
     19  (goto label₂₁)
     20  (call top.kwerr slot₂/kws slot₃/#self#)
-    21  TestMod.#kw_body#f_kw_placeholders#0
+    21  TestMod.#f_kw_placeholders#2
     22  (call %₂₁ %₇ %₁₃ slot₃/#self#)
     23  (return %₂₂)
 31  latestworld
@@ -1562,11 +1562,11 @@ function f_kw_slurp_simple(; all_kws...)
     all_kws
 end
 #---------------------
-1   (method TestMod.#kw_body#f_kw_slurp_simple#0)
+1   (method TestMod.#f_kw_slurp_simple#2)
 2   latestworld
 3   (method TestMod.f_kw_slurp_simple)
 4   latestworld
-5   TestMod.#kw_body#f_kw_slurp_simple#0
+5   TestMod.#f_kw_slurp_simple#2
 6   (call core.Typeof %₅)
 7   (call top.pairs core.NamedTuple)
 8   TestMod.f_kw_slurp_simple
@@ -1575,8 +1575,8 @@ end
 11  (call core.svec)
 12  SourceLocation::1:10
 13  (call core.svec %₁₀ %₁₁ %₁₂)
-14  --- method TestMod.#kw_body#f_kw_slurp_simple#0 %₁₃
-    slots: [slot₁/#kw_body#f_kw_slurp_simple#0(!read) slot₂/all_kws slot₃/#self#(!read)]
+14  --- method TestMod.#f_kw_slurp_simple#2 %₁₃
+    slots: [slot₁/#f_kw_slurp_simple#2(!read) slot₂/all_kws slot₃/#self#(!read)]
     1   (meta :nkw 1)
     2   slot₂/all_kws
     3   (return %₂)
@@ -1589,7 +1589,7 @@ end
 21  (call core.svec %₁₈ %₁₉ %₂₀)
 22  --- method TestMod.f_kw_slurp_simple %₂₁
     slots: [slot₁/#self#]
-    1   TestMod.#kw_body#f_kw_slurp_simple#0
+    1   TestMod.#f_kw_slurp_simple#2
     2   (call core.NamedTuple)
     3   (call top.pairs %₂)
     4   (call %₁ %₃ slot₁/#self#)
@@ -1605,7 +1605,7 @@ end
 31  --- method TestMod.f_kw_slurp_simple %₃₀
     slots: [slot₁/#unused#(!read) slot₂/kws slot₃/#self#]
     1   (call top.pairs slot₂/kws)
-    2   TestMod.#kw_body#f_kw_slurp_simple#0
+    2   TestMod.#f_kw_slurp_simple#2
     3   (call %₂ %₁ slot₃/#self#)
     4   (return %₃)
 32  latestworld
@@ -1618,11 +1618,11 @@ function f_kw_slurp(; x=x_default, non_x_kws...)
     all_kws
 end
 #---------------------
-1   (method TestMod.#kw_body#f_kw_slurp#0)
+1   (method TestMod.#f_kw_slurp#3)
 2   latestworld
 3   (method TestMod.f_kw_slurp)
 4   latestworld
-5   TestMod.#kw_body#f_kw_slurp#0
+5   TestMod.#f_kw_slurp#3
 6   (call core.Typeof %₅)
 7   (call top.pairs core.NamedTuple)
 8   TestMod.f_kw_slurp
@@ -1631,8 +1631,8 @@ end
 11  (call core.svec)
 12  SourceLocation::1:10
 13  (call core.svec %₁₀ %₁₁ %₁₂)
-14  --- method TestMod.#kw_body#f_kw_slurp#0 %₁₃
-    slots: [slot₁/#kw_body#f_kw_slurp#0(!read) slot₂/x(!read) slot₃/non_x_kws(!read) slot₄/#self#(!read)]
+14  --- method TestMod.#f_kw_slurp#3 %₁₃
+    slots: [slot₁/#f_kw_slurp#3(!read) slot₂/x(!read) slot₃/non_x_kws(!read) slot₄/#self#(!read)]
     1   (meta :nkw 2)
     2   TestMod.all_kws
     3   (return %₂)
@@ -1645,7 +1645,7 @@ end
 21  (call core.svec %₁₈ %₁₉ %₂₀)
 22  --- method TestMod.f_kw_slurp %₂₁
     slots: [slot₁/#self#]
-    1   TestMod.#kw_body#f_kw_slurp#0
+    1   TestMod.#f_kw_slurp#3
     2   TestMod.x_default
     3   (call core.NamedTuple)
     4   (call top.pairs %₃)
@@ -1674,7 +1674,7 @@ end
     11  (call core.apply_type core.NamedTuple %₁₀)
     12  (call top.structdiff slot₂/kws %₁₁)
     13  (call top.pairs %₁₂)
-    14  TestMod.#kw_body#f_kw_slurp#0
+    14  TestMod.#f_kw_slurp#3
     15  (call %₁₄ %₉ %₁₃ slot₃/#self#)
     16  (return %₁₅)
 32  latestworld
@@ -1690,11 +1690,11 @@ function f_kw_slurp_dep(; a=1, b=a, kws...)
     (a, b, kws)
 end
 #---------------------
-1   (method TestMod.#kw_body#f_kw_slurp_dep#0)
+1   (method TestMod.#f_kw_slurp_dep#4)
 2   latestworld
 3   (method TestMod.f_kw_slurp_dep)
 4   latestworld
-5   TestMod.#kw_body#f_kw_slurp_dep#0
+5   TestMod.#f_kw_slurp_dep#4
 6   (call core.Typeof %₅)
 7   (call top.pairs core.NamedTuple)
 8   TestMod.f_kw_slurp_dep
@@ -1703,8 +1703,8 @@ end
 11  (call core.svec)
 12  SourceLocation::1:10
 13  (call core.svec %₁₀ %₁₁ %₁₂)
-14  --- method TestMod.#kw_body#f_kw_slurp_dep#0 %₁₃
-    slots: [slot₁/#kw_body#f_kw_slurp_dep#0(!read) slot₂/a slot₃/b slot₄/kws slot₅/#self#(!read)]
+14  --- method TestMod.#f_kw_slurp_dep#4 %₁₃
+    slots: [slot₁/#f_kw_slurp_dep#4(!read) slot₂/a slot₃/b slot₄/kws slot₅/#self#(!read)]
     1   (meta :nkw 3)
     2   (call core.tuple slot₂/a slot₃/b slot₄/kws)
     3   (return %₂)
@@ -1721,7 +1721,7 @@ end
     2   (= slot₂/a %₁)
     3   slot₂/a
     4   (= slot₃/b %₃)
-    5   TestMod.#kw_body#f_kw_slurp_dep#0
+    5   TestMod.#f_kw_slurp_dep#4
     6   (call core.NamedTuple)
     7   (call top.pairs %₆)
     8   (call %₅ slot₂/a slot₃/b %₇ slot₁/#self#)
@@ -1756,7 +1756,7 @@ end
     18  (call core.apply_type core.NamedTuple %₁₇)
     19  (call top.structdiff slot₂/kws %₁₈)
     20  (call top.pairs %₁₉)
-    21  TestMod.#kw_body#f_kw_slurp_dep#0
+    21  TestMod.#f_kw_slurp_dep#4
     22  (call %₂₁ slot₅/a slot₆/b %₂₀ slot₃/#self#)
     23  (return %₂₂)
 32  latestworld
@@ -1773,13 +1773,13 @@ function f_kw_sparams(x::X; a::A=a_def, b::X=b_def) where {X,A}
     (X,A)
 end
 #---------------------
-1   (method TestMod.#kw_body#f_kw_sparams#0)
+1   (method TestMod.#f_kw_sparams#5)
 2   latestworld
 3   (method TestMod.f_kw_sparams)
 4   latestworld
 5   (= slot₁/X (call core.TypeVar :X))
 6   (= slot₂/A (call core.TypeVar :A))
-7   TestMod.#kw_body#f_kw_sparams#0
+7   TestMod.#f_kw_sparams#5
 8   (call core.Typeof %₇)
 9   slot₂/A
 10  slot₁/X
@@ -1792,8 +1792,8 @@ end
 17  (call core.svec %₁₅ %₁₆)
 18  SourceLocation::1:10
 19  (call core.svec %₁₄ %₁₇ %₁₈)
-20  --- method TestMod.#kw_body#f_kw_sparams#0 %₁₉
-    slots: [slot₁/#kw_body#f_kw_sparams#0(!read) slot₂/a(!read) slot₃/b(!read) slot₄/#self#(!read) slot₅/x(!read)]
+20  --- method TestMod.#f_kw_sparams#5 %₁₉
+    slots: [slot₁/#f_kw_sparams#5(!read) slot₂/a(!read) slot₃/b(!read) slot₄/#self#(!read) slot₅/x(!read)]
     1   (meta :nkw 2)
     2   static_parameter₁
     3   static_parameter₂
@@ -1811,7 +1811,7 @@ end
 30  (call core.svec %₂₆ %₂₈ %₂₉)
 31  --- method TestMod.f_kw_sparams %₃₀
     slots: [slot₁/#self# slot₂/x]
-    1   TestMod.#kw_body#f_kw_sparams#0
+    1   TestMod.#f_kw_sparams#5
     2   TestMod.a_def
     3   TestMod.b_def
     4   (call %₁ %₂ %₃ slot₁/#self# slot₂/x)
@@ -1861,7 +1861,7 @@ end
     30  (gotoifnot %₂₉ label₃₂)
     31  (goto label₃₃)
     32  (call top.kwerr slot₂/kws slot₃/#self# slot₄/x)
-    33  TestMod.#kw_body#f_kw_sparams#0
+    33  TestMod.#f_kw_sparams#5
     34  (call %₃₃ %₁₀ %₂₅ slot₃/#self# slot₄/x)
     35  (return %₃₄)
 44  latestworld
@@ -1886,11 +1886,11 @@ function f_kw_slurp(a,;kw1,kw2=2,restkw...)
     @nospecialize
 end
 #---------------------
-1   (method TestMod.#kw_body#f_kw_slurp#1)
+1   (method TestMod.#f_kw_slurp#6)
 2   latestworld
 3   (method TestMod.f_kw_slurp)
 4   latestworld
-5   TestMod.#kw_body#f_kw_slurp#1
+5   TestMod.#f_kw_slurp#6
 6   (call core.Typeof %₅)
 7   (call top.pairs core.NamedTuple)
 8   TestMod.f_kw_slurp
@@ -1899,8 +1899,8 @@ end
 11  (call core.svec)
 12  SourceLocation::1:10
 13  (call core.svec %₁₀ %₁₁ %₁₂)
-14  --- method TestMod.#kw_body#f_kw_slurp#1 %₁₃
-    slots: [slot₁/#kw_body#f_kw_slurp#1(!read) slot₂/kw1(nospecialize,!read) slot₃/kw2(nospecialize,!read) slot₄/restkw(nospecialize,!read) slot₅/#self#(!read) slot₆/a(nospecialize,!read)]
+14  --- method TestMod.#f_kw_slurp#6 %₁₃
+    slots: [slot₁/#f_kw_slurp#6(!read) slot₂/kw1(nospecialize,!read) slot₃/kw2(nospecialize,!read) slot₄/restkw(nospecialize,!read) slot₅/#self#(!read) slot₆/a(nospecialize,!read)]
     1   (meta :nkw 3)
     2   (return core.nothing)
 15  latestworld
@@ -1912,7 +1912,7 @@ end
 21  (call core.svec %₁₈ %₁₉ %₂₀)
 22  --- method TestMod.f_kw_slurp %₂₁
     slots: [slot₁/#self# slot₂/a(nospecialize)]
-    1   TestMod.#kw_body#f_kw_slurp#1
+    1   TestMod.#f_kw_slurp#6
     2   (call core.UndefKeywordError :kw1)
     3   (call core.throw %₂)
     4   (call core.NamedTuple)
@@ -1949,7 +1949,7 @@ end
     18  (call core.apply_type core.NamedTuple %₁₇)
     19  (call top.structdiff slot₂/kws %₁₈)
     20  (call top.pairs %₁₉)
-    21  TestMod.#kw_body#f_kw_slurp#1
+    21  TestMod.#f_kw_slurp#6
     22  (call %₂₁ %₁₀ %₁₆ %₂₀ slot₃/#self# slot₄/a)
     23  (return %₂₂)
 32  latestworld
@@ -2021,17 +2021,17 @@ end
 #---------------------
 1   (method TestMod.f_only_generated)
 2   latestworld
-3   (call core.declare_global TestMod :#f_only_generated@generator#0 false)
+3   (call core.declare_global TestMod :#7#8 false)
 4   latestworld
-5   (method TestMod.#f_only_generated@generator#0)
+5   (method TestMod.#7#8)
 6   latestworld
-7   TestMod.#f_only_generated@generator#0
+7   TestMod.#7#8
 8   (call core.Typeof %₇)
 9   (call core.svec %₈ JuliaLowering.MacroContext core.Any core.Any core.Any)
 10  (call core.svec)
 11  SourceLocation::1:21
 12  (call core.svec %₉ %₁₀ %₁₁)
-13  --- method TestMod.#f_only_generated@generator#0 %₁₂
+13  --- method TestMod.#7#8 %₁₂
     slots: [slot₁/#self#(!read) slot₂/__context__(!read) slot₃/#self#(nospecialize,!read) slot₄/x(nospecialize) slot₅/y(nospecialize)]
     1   TestMod.generator_code
     2   (call %₁ slot₄/x slot₅/y)
@@ -2047,7 +2047,7 @@ end
 20  (call core.svec %₁₇ %₁₈ %₁₉)
 21  --- method TestMod.f_only_generated %₂₀
     slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/y(!read)]
-    1   (meta :generated (new JuliaLowering.GeneratedFunctionStub false TestMod.#f_only_generated@generator#0 SourceRef::1:1 (call core.svec :#self# :x :y) (call core.svec)))
+    1   (meta :generated (new JuliaLowering.GeneratedFunctionStub false TestMod.#7#8 SourceRef::1:1 (call core.svec :#self# :x :y) (call core.svec)))
     2   (meta :generated_only)
     3   (return core.nothing)
 22  latestworld
@@ -2070,17 +2070,17 @@ end
 #---------------------
 1   (method TestMod.f_partially_generated)
 2   latestworld
-3   (call core.declare_global TestMod :#f_partially_generated@generator#0 false)
+3   (call core.declare_global TestMod :#9#10 false)
 4   latestworld
-5   (method TestMod.#f_partially_generated@generator#0)
+5   (method TestMod.#9#10)
 6   latestworld
-7   TestMod.#f_partially_generated@generator#0
+7   TestMod.#9#10
 8   (call core.Typeof %₇)
 9   (call core.svec %₈ JuliaLowering.MacroContext core.Any core.Any core.Any)
 10  (call core.svec)
 11  SourceLocation::1:10
 12  (call core.svec %₉ %₁₀ %₁₁)
-13  --- method TestMod.#f_partially_generated@generator#0 %₁₂
+13  --- method TestMod.#9#10 %₁₂
     slots: [slot₁/#self#(!read) slot₂/__context__(!read) slot₃/#self#(nospecialize,!read) slot₄/x(nospecialize,!read) slot₅/y(nospecialize,!read)]
     1   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (= maybe_gen_stuff (call some_gen_stuff x y)))))
     2   (call core.tuple %₁)
@@ -2095,7 +2095,7 @@ end
 20  (call core.svec %₁₇ %₁₈ %₁₉)
 21  --- method TestMod.f_partially_generated %₂₀
     slots: [slot₁/#self#(!read) slot₂/x slot₃/y slot₄/maybe_gen_stuff(single_assign) slot₅/nongen_stuff(single_assign)]
-    1   (meta :generated (new JuliaLowering.GeneratedFunctionStub false TestMod.#f_partially_generated@generator#0 SourceRef::1:37 (call core.svec :#self# :x :y) (call core.svec)))
+    1   (meta :generated (new JuliaLowering.GeneratedFunctionStub false TestMod.#9#10 SourceRef::1:37 (call core.svec :#self# :x :y) (call core.svec)))
     2   TestMod.bothgen
     3   (= slot₅/nongen_stuff (call %₂ slot₂/x slot₃/y))
     4   TestMod.some_nongen_stuff

@@ -97,6 +97,7 @@
     XX(jl_cstr_to_string) \
     XX(jl_current_exception) \
     XX(jl_debug_method_invalidation) \
+    XX(jl_demangle_typename) \
     XX(jl_deprecate_binding) \
     XX(jl_dlclose) \
     XX(jl_dlopen) \
@@ -312,6 +313,7 @@
     XX(jl_module_import) \
     XX(jl_module_name) \
     XX(jl_module_names) \
+    XX(jl_module_next_counter) \
     XX(jl_module_parent) \
     XX(jl_module_getloc) \
     XX(jl_module_public) \

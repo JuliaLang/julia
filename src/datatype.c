@@ -20,7 +20,7 @@ extern "C" {
 
 // allocating TypeNames -----------------------------------------------------------
 
-static jl_sym_t *jl_demangle_typename(jl_sym_t *s) JL_NOTSAFEPOINT
+JL_DLLEXPORT jl_sym_t *jl_demangle_typename(jl_sym_t *s) JL_NOTSAFEPOINT
 {
     char *n = jl_symbol_name(s);
     if (n[0] != '#')
