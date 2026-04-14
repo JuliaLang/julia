@@ -42,8 +42,7 @@ function lower_init(ex::SyntaxTree{T}; expr_compat_mode::Bool=false) where {T}
     LoweringIterator{T}(expr_compat_mode, [(ex, false, 0)])
 end
 
-function lower_step(iter::LoweringIterator, mod::Module;
-                    world::UInt=Base.get_world_counter(),
+function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
                     soft_scope::Union{Nothing,Bool}=nothing)
     if isempty(iter.todo)
         return Core.svec(:done)
@@ -57,7 +56,7 @@ function lower_step(iter::LoweringIterator, mod::Module;
         elseif is_module_body
             return Core.svec(:end_module)
         else
-            return lower_step(iter, mod; soft_scope)
+            return lower_step(iter, mod, world; soft_scope)
         end
     else
         ex = top_ex
@@ -70,7 +69,7 @@ function lower_step(iter::LoweringIterator, mod::Module;
     end
     if k == K"toplevel"
         push!(iter.todo, (ex, false, 1))
-        return lower_step(iter, mod; soft_scope)
+        return lower_step(iter, mod, world; soft_scope)
     elseif k == K"module"
         (version, notbare, name, body) = @stm ex begin
             [K"module" version nb_st name body] ->
@@ -478,7 +477,7 @@ function _eval(mod::Module, iter::LoweringIterator; soft_scope::Union{Nothing,Bo
     modules = Module[mod]
     result = nothing
     while true
-        thunk = lower_step(iter, modules[end]; soft_scope)::Core.SimpleVector
+        thunk = lower_step(iter, modules[end], Base.get_world_counter(); soft_scope)::Core.SimpleVector
         type = thunk[1]::Symbol
         if type == :done
             break
