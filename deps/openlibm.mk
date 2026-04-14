@@ -13,7 +13,7 @@ $(BUILDDIR)/$(OPENLIBM_SRC_DIR)/build-compiled: $(BUILDDIR)/$(OPENLIBM_SRC_DIR)/
 $(eval $(call staged-install, \
 	openlibm,$$(OPENLIBM_SRC_DIR), \
 	MAKE_INSTALL,$$(OPENLIBM_FLAGS),, \
-	$(INSTALL_NAME_CMD)libopenlibm.$(SHLIB_EXT) $(build_shlibdir)/libopenlibm.$(SHLIB_EXT)))
+	$(INSTALL_NAME_CMD)libopenlibm.$(SHLIB_EXT) $(build_private_shlibdir)/libopenlibm.$(SHLIB_EXT)))
 
 clean-openlibm:
 	-rm -f $(BUILDDIR)/$(OPENLIBM_SRC_DIR)/build-compiled $(build_libdir)/libopenlibm.a

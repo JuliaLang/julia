@@ -5,7 +5,7 @@ include $(SRCDIR)/llvmunwind.version
 ifneq ($(USE_BINARYBUILDER_LIBUNWIND),1)
 LIBUNWIND_CFLAGS := -U_FORTIFY_SOURCE $(fPIC) $(SANITIZE_OPTS)
 LIBUNWIND_CPPFLAGS := -I$(build_includedir)
-LIBUNWIND_LDFLAGS := -L$(build_shlibdir)
+LIBUNWIND_LDFLAGS := -L$(build_private_shlibdir)
 
 ifeq ($(USE_SYSTEM_ZLIB),0)
 $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: | $(build_prefix)/manifest/zlib

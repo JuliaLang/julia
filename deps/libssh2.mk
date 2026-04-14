@@ -19,7 +19,7 @@ ifeq ($(OS),WINNT)
 LIBSSH2_OPTS += -DCRYPTO_BACKEND=WinCNG -DENABLE_ZLIB_COMPRESSION=OFF
 else
 LIBSSH2_OPTS += -DCRYPTO_BACKEND=OpenSSL -DENABLE_ZLIB_COMPRESSION=OFF
-LIBSSH2_OPTS += -DOPENSSL_ROOT_DIR=$(build_prefix)
+LIBSSH2_OPTS += -DOPENSSL_ROOT_DIR=$(build_prefix) -D_OPENSSL_LIBDIR=$(build_private_shlibdir)
 endif
 
 ifneq (,$(findstring $(OS),Linux FreeBSD OpenBSD))
@@ -51,7 +51,7 @@ endif
 $(eval $(call staged-install, \
 	libssh2,$(LIBSSH2_SRC_DIR), \
 	MAKE_INSTALL,,, \
-	$$(INSTALL_NAME_CMD)libssh2.$$(SHLIB_EXT) $$(build_shlibdir)/libssh2.$$(SHLIB_EXT)))
+	$$(INSTALL_NAME_CMD)libssh2.$$(SHLIB_EXT) $$(build_private_shlibdir)/libssh2.$$(SHLIB_EXT)))
 
 clean-libssh2:
 	-rm -f $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-compiled

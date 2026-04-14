@@ -82,7 +82,7 @@ LLVM_EXPERIMENTAL_TARGETS :=
 LLVM_CFLAGS :=
 LLVM_CXXFLAGS :=
 LLVM_CPPFLAGS :=
-LLVM_LDFLAGS := "-L$(build_shlibdir)" # hacky way to force zlib to be found when linking against libLLVM and sysroot is set
+LLVM_LDFLAGS := -L$(build_shlibdir) -L$(build_private_shlibdir) # hacky way to force zlib to be found when linking against libLLVM and sysroot is set
 LLVM_CMAKE :=
 
 LLVM_CMAKE += -DLLVM_ENABLE_PROJECTS="$(LLVM_ENABLE_PROJECTS)"
@@ -163,7 +163,7 @@ endif
 ifeq ($(LLVM_SANITIZE),1)
 ifeq ($(SANITIZE_MEMORY),1)
 LLVM_CFLAGS += -fsanitize=memory -fsanitize-memory-track-origins
-LLVM_LDFLAGS += -fsanitize=memory -fsanitize-memory-track-origins -rpath $(build_shlibdir)
+LLVM_LDFLAGS += -fsanitize=memory -fsanitize-memory-track-origins -rpath $(build_private_shlibdir)
 LLVM_CXXFLAGS += -fsanitize=memory -fsanitize-memory-track-origins
 LLVM_CMAKE += -DLLVM_USE_SANITIZER="MemoryWithOrigins"
 endif
@@ -378,6 +378,47 @@ $(build_prefix)/manifest/llvm-tools uninstall-llvm-tools: \
 	TAR:=$(TAR) --exclude=llvm-config.exe
 
 endif # USE_BINARYBUILDER_LLVM
+
+
+
+# work-around for llvm-config not knowing how to find its libraries after we've
+# moved them around with the `TAR_TRANSFORM_CMD`.  We use `libLLVMAnalysis.a` as
+# a canary for whether or not this has happened.
+install-llvm: $(build_libdir)/libLLVMAnalysis.a
+uninstall-llvm: pre-uninstall-llvm
+$(build_libdir)/libLLVMAnalysis.a: $(build_prefix)/manifest/llvm
+	@for lib in $(build_private_libdir)/libLLVM*.a; do \
+		ln -svf "julia/$$(basename "$${lib}")" "$(build_libdir)/$$(basename "$${lib}")" ; \
+	done
+	touch $@
+
+pre-uninstall-llvm:
+	@for lib in $(build_private_libdir)/libLLVM*.a; do \
+		rm -f "$(build_libdir)/$$(basename "$${lib}")" ; \
+	done
+
+# Rewrite llvm-size's RPATH entry to point to the private libdir
+install-llvm-tools: post-install-llvm-tools
+post-install-llvm-tools: $(build_prefix)/manifest/llvm-tools $(PATCHELF_MANIFEST)
+ifeq ($(OS), Darwin)
+	install_name_tool -rpath @loader_path/$(build_libdir_rel) @loader_path/$(reverse_build_depsbindir_rel) $(build_depsbindir)/llvm-size 2>/dev/null
+else ifneq (,$(findstring $(OS),Linux FreeBSD))
+	-$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$ORIGIN/$(reverse_build_depsbindir_rel)' $(build_depsbindir)/llvm-size
+endif
+
+install-clang: post-install-clang
+post-install-clang: $(build_prefix)/manifest/clang $(PATCHELF_MANIFEST)
+ifeq ($(OS), Darwin)
+	-for exe in clang clang-tidy lld; do \
+		install_name_tool -rpath @loader_path/$(build_libdir_rel) @loader_path/$(reverse_build_depsbindir_rel) $(build_depsbindir)/$$exe 2>/dev/null ; \
+	done
+else ifneq (,$(findstring $(OS),Linux FreeBSD))
+	-for exe in clang clang-tidy lld; do \
+		$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$ORIGIN/$(reverse_build_depsbindir_rel)' $(build_depsbindir)/$$exe ; \
+	done
+endif
+
+
 
 get-lld: get-llvm
 install-lld install-clang install-llvm-tools: install-llvm

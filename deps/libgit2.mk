@@ -49,6 +49,7 @@ endif
 
 ifneq (,$(findstring $(OS),Linux FreeBSD OpenBSD))
 LIBGIT2_OPTS += -DUSE_HTTPS="OpenSSL" -DUSE_SHA1="CollisionDetection" -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
+LIBGIT2_OPTS += -DOPENSSL_ROOT_DIR=$(build_prefix) -D_OPENSSL_LIBDIR=$(build_private_shlibdir)
 endif
 
 LIBGIT2_SRC_PATH := $(SRCCACHE)/$(LIBGIT2_SRC_DIR)
@@ -81,7 +82,7 @@ endef
 $(eval $(call staged-install, \
 	libgit2,$(LIBGIT2_SRC_DIR), \
 	LIBGIT2_INSTALL,,, \
-	$$(INSTALL_NAME_CMD)libgit2.$$(SHLIB_EXT) $$(build_shlibdir)/libgit2.$$(SHLIB_EXT)))
+	$$(INSTALL_NAME_CMD)libgit2.$$(SHLIB_EXT) $$(build_private_shlibdir)/libgit2.$$(SHLIB_EXT)))
 
 clean-libgit2:
 	-rm -f $(build_datarootdir)/julia/cert.pem

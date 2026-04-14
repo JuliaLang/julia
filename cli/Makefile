@@ -8,7 +8,7 @@ include $(JULIAHOME)/deps/llvm-ver.make
 HEADERS := $(addprefix $(SRCDIR)/,jl_exports.h loader.h dl-cache.h) $(addprefix $(JULIAHOME)/src/,julia_fasttls.h support/platform.h support/dirpath.h jl_exported_data.inc jl_exported_funcs.inc)
 
 LOADER_CFLAGS = $(JCFLAGS) -I$(BUILDROOT)/src -I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(build_includedir) -ffreestanding
-LOADER_LDFLAGS = $(JLDFLAGS) -ffreestanding -L$(build_shlibdir) -L$(build_libdir)
+LOADER_LDFLAGS = $(JLDFLAGS) -ffreestanding -L$(build_private_libdir) -L$(build_shlibdir) -L$(build_libdir)
 
 ifeq ($(OS),WINNT)
 LOADER_CFLAGS += -municode -mconsole -nostdlib -fno-stack-check -fno-stack-protector -mno-stack-arg-probe

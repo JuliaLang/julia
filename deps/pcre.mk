@@ -48,8 +48,8 @@ endif
 $(eval $(call staged-install, \
 	pcre,pcre2-$$(PCRE_VER), \
 	MAKE_INSTALL,$$(LIBTOOL_CCLD),, \
-	rm -f $$(build_shlibdir)/libpcre2-posix.* && \
-	$$(INSTALL_NAME_CMD)libpcre2-8.$$(SHLIB_EXT) $$(build_shlibdir)/libpcre2-8.$$(SHLIB_EXT)))
+	rm -f $$(build_private_shlibdir)/libpcre2-posix.* && \
+	$$(INSTALL_NAME_CMD)libpcre2-8.$$(SHLIB_EXT) $$(build_private_shlibdir)/libpcre2-8.$$(SHLIB_EXT)))
 
 clean-pcre:
 	-rm -f $(BUILDDIR)/pcre2-$(PCRE_VER)/build-configured $(BUILDDIR)/pcre2-$(PCRE_VER)/build-compiled

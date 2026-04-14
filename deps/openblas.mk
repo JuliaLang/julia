@@ -112,7 +112,7 @@ endef
 $(eval $(call staged-install, \
 	openblas,$(OPENBLAS_SRC_DIR), \
 	OPENBLAS_INSTALL,$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/$(LIBBLASNAME).$(SHLIB_EXT),, \
-	$$(INSTALL_NAME_CMD)libopenblas$$(OPENBLAS_LIBNAMESUFFIX).$$(SHLIB_EXT) $$(build_shlibdir)/libopenblas$$(OPENBLAS_LIBNAMESUFFIX).$$(SHLIB_EXT)))
+	$$(INSTALL_NAME_CMD)libopenblas$$(OPENBLAS_LIBNAMESUFFIX).$$(SHLIB_EXT) $$(build_private_shlibdir)/libopenblas$$(OPENBLAS_LIBNAMESUFFIX).$$(SHLIB_EXT)))
 
 clean-openblas:
 	-rm -f $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled
@@ -133,7 +133,7 @@ $(BUILDDIR)/libgfortblas.$(SHLIB_EXT): $(SRCDIR)/gfortblas.c $(SRCDIR)/gfortblas
 	$(CC) -Wall -O3 $(CPPFLAGS) $(CFLAGS) $(fPIC) -shared $< -o $@ -pipe \
 				-Wl,-reexport_framework,Accelerate -Wl,-alias_list,$(SRCDIR)/gfortblas.alias
 
-$(build_shlibdir)/libgfortblas.$(SHLIB_EXT): $(BUILDDIR)/libgfortblas.$(SHLIB_EXT)
+$(build_private_shlibdir)/libgfortblas.$(SHLIB_EXT): $(BUILDDIR)/libgfortblas.$(SHLIB_EXT)
 	cp -f $< $@
 	$(INSTALL_NAME_CMD)libgfortblas.$(SHLIB_EXT) $@
 endif
@@ -161,7 +161,7 @@ checksum-lapack: $(SRCCACHE)/lapack-$(LAPACK_VER).tgz
 ifeq ($(USE_SYSTEM_BLAS), 0)
 $(BUILDDIR)/lapack-$(LAPACK_VER)/build-compiled0: | $(build_prefix)/manifest/openblas
 else ifeq ($(OS),Darwin)
-$(BUILDDIR)/lapack-$(LAPACK_VER)/build-compiled0: | $(build_shlibdir)/libgfortblas.$(SHLIB_EXT)
+$(BUILDDIR)/lapack-$(LAPACK_VER)/build-compiled0: | $(build_private_shlibdir)/libgfortblas.$(SHLIB_EXT)
 endif
 $(BUILDDIR)/lapack-$(LAPACK_VER)/build-compiled0: $(BUILDDIR)/lapack-$(LAPACK_VER)/source-extracted
 	$(MAKE) -C $(dir $@) lapacklib $(LAPACK_MFLAGS)
@@ -183,7 +183,7 @@ $(BUILDDIR)/lapack-$(LAPACK_VER)/build-compiled: $(BUILDDIR)/lapack-$(LAPACK_VER
 $(eval $(call staged-install, \
 	lapack,lapack-$(LAPACK_VER), \
 	SHLIBFILE_INSTALL,$(BUILDDIR)/lapack-$(LAPACK_VER)/liblapack.$(SHLIB_EXT),, \
-	$$(INSTALL_NAME_CMD)liblapack.$$(SHLIB_EXT) $$(build_shlibdir)/liblapack.$$(SHLIB_EXT)))
+	$$(INSTALL_NAME_CMD)liblapack.$$(SHLIB_EXT) $$(build_private_shlibdir)/liblapack.$$(SHLIB_EXT)))
 
 clean-lapack:
 	-rm -f $(BUILDDIR)/lapack-$(LAPACK_VER)/build-compiled0 $(BUILDDIR)/lapack-$(LAPACK_VER)/build-compiled

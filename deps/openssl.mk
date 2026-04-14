@@ -80,9 +80,9 @@ OPENSSL_INSTALL = \
 OPENSSL_POST_INSTALL := \
 	$(WIN_MAKE_HARD_LINK) $(build_bindir)/libcrypto-*.dll $(build_bindir)/libcrypto.dll && \
 	$(WIN_MAKE_HARD_LINK) $(build_bindir)/libssl-*.dll $(build_bindir)/libssl.dll && \
-	$(INSTALL_NAME_CMD)libcrypto.$(SHLIB_EXT) $(build_shlibdir)/libcrypto.$(SHLIB_EXT) && \
-	$(INSTALL_NAME_CMD)libssl.$(SHLIB_EXT) $(build_shlibdir)/libssl.$(SHLIB_EXT) && \
-	$(INSTALL_NAME_CHANGE_CMD) $(build_shlibdir)/libcrypto.3.dylib @rpath/libcrypto.$(SHLIB_EXT) $(build_shlibdir)/libssl.$(SHLIB_EXT)
+	$(INSTALL_NAME_CMD)libcrypto.$(SHLIB_EXT) $(build_private_shlibdir)/libcrypto.$(SHLIB_EXT) && \
+	$(INSTALL_NAME_CMD)libssl.$(SHLIB_EXT) $(build_private_shlibdir)/libssl.$(SHLIB_EXT) && \
+	$(INSTALL_NAME_CHANGE_CMD) $(build_private_shlibdir)/libcrypto.3.dylib @rpath/libcrypto.$(SHLIB_EXT) $(build_private_shlibdir)/libssl.$(SHLIB_EXT)
 
 $(eval $(call staged-install, \
 	openssl,openssl-$(OPENSSL_VER), \

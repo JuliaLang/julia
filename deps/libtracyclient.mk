@@ -63,7 +63,7 @@ $(LIBTRACYCLIENT_BUILDDIR)/build-compiled: $(LIBTRACYCLIENT_BUILDDIR)/build-conf
 $(eval $(call staged-install, \
 	libtracyclient,$$(LIBTRACYCLIENT_SRC_DIR), \
 	MAKE_INSTALL,,, \
-	$$(INSTALL_NAME_CMD)libtracyclient.$$(SHLIB_EXT) $$(build_shlibdir)/libtracyclient.$$(SHLIB_EXT)))
+	$$(INSTALL_NAME_CMD)libtracyclient.$$(SHLIB_EXT) $$(build_private_shlibdir)/libtracyclient.$$(SHLIB_EXT)))
 
 clean-libtracyclient:
 	rm -rf $(LIBTRACYCLIENT_BUILDDIR)/build-configured $(LIBTRACYCLIENT_BUILDDIR)/build-compiled

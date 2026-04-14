@@ -13,12 +13,16 @@ ifeq ($(USE_SYSTEM_ZLIB), 0)
 $(BUILDDIR)/curl-$(CURL_VER)/build-configured: | $(build_prefix)/manifest/zlib
 endif
 
+ifeq ($(USE_SYSTEM_ZSTD), 0)
+$(BUILDDIR)/curl-$(CURL_VER)/build-configured: | $(build_prefix)/manifest/zstd
+endif
+
 ifeq ($(USE_SYSTEM_NGHTTP2), 0)
 $(BUILDDIR)/curl-$(CURL_VER)/build-configured: | $(build_prefix)/manifest/nghttp2
 endif
 
 ifneq ($(USE_BINARYBUILDER_CURL),1)
-CURL_LDFLAGS := $(RPATH_ESCAPED_ORIGIN) -Wl,-rpath,$(build_shlibdir)
+CURL_LDFLAGS := -L$(build_private_shlibdir) $(RPATH_ESCAPED_ORIGIN) -Wl,-rpath,$(build_private_shlibdir)
 
 # On older Linuces (those that use OpenSSL < 1.1) we include `libpthread` explicitly.
 # It doesn't hurt to include it explicitly elsewhere, so we do so.
@@ -86,7 +90,7 @@ endif
 $(eval $(call staged-install, \
 	curl,curl-$$(CURL_VER), \
 	MAKE_INSTALL,,, \
-	$$(INSTALL_NAME_CMD)libcurl.$$(SHLIB_EXT) $$(build_shlibdir)/libcurl.$$(SHLIB_EXT)))
+	$$(INSTALL_NAME_CMD)libcurl.$$(SHLIB_EXT) $$(build_private_shlibdir)/libcurl.$$(SHLIB_EXT)))
 
 clean-curl:
 	-rm -f $(BUILDDIR)/curl-$(CURL_VER)/build-configured $(BUILDDIR)/curl-$(CURL_VER)/build-compiled

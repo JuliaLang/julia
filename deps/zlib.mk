@@ -20,7 +20,7 @@ $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-compiled: $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-co
 $(eval $(call staged-install, \
 	zlib,$(ZLIB_SRC_DIR), \
 	MAKE_INSTALL,,, \
-	$(INSTALL_NAME_CMD)libz.$(SHLIB_EXT) $(build_shlibdir)/libz.$(SHLIB_EXT)))
+	$(INSTALL_NAME_CMD)libz.$(SHLIB_EXT) $(build_private_shlibdir)/libz.$(SHLIB_EXT)))
 
 clean-zlib:
 	-rm -f $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-configured $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-compiled
