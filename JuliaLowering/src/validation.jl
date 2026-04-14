@@ -1084,7 +1084,7 @@ vst0_macrocall(vcx, st) = @stm st begin
     (_, when=!vcx.unexpanded) ->
         @fail(st, "macrocall not valid in AST after macro expansion")
     ([K"macrocall" name [K"Value"] args...],
-     when=(typeof(st[2].value) in (LineNumberNode, Core.MacroSource))) ->
+     when=(typeof(st[2].value) in (LineNumberNode, MacroSource))) ->
          pass()
     [K"macrocall" _...] ->
         @fail(st, "expected (macrocall name linenode args...)")

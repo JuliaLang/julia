@@ -285,7 +285,7 @@ function expand_macro(ctx, ex)
     raw_args = ex[3:end]
     macro_loc = if kind(ex[2]) === K"Value"
         loc = ex[2].value
-        if loc isa Core.MacroSource
+        if loc isa MacroSource
             loc
         elseif loc isa LineNumberNode
             # Some macros, e.g. @cmd, don't play nicely with file == nothing
@@ -294,7 +294,8 @@ function expand_macro(ctx, ex)
             LineNumberNode(0, :none)
         end
     elseif kind(ex[2]) === K"VERSION"
-        Core.MacroSource(source_location(LineNumberNode, ex), ex[2].value)
+        loc = source_location(LineNumberNode, ex)
+        isdefined(Core, :MacroSource) ? Core.MacroSource(loc, ex[2].value) : loc
     else
         LineNumberNode(0, :none)
     end
@@ -363,7 +364,7 @@ function expand_macro(ctx, ex)
             end
             rethrow(MacroExpansionError(mctx, ex, "Error expanding macro", :all, exc))
         end
-        macro_lnn = macro_loc isa Core.MacroSource ? macro_loc.lno : macro_loc
+        macro_lnn = macro_loc isa MacroSource ? macro_loc.lno : macro_loc
         expanded = expr_to_est(ex._graph, expanded, macro_lnn)
     end
 
