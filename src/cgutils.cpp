@@ -2386,10 +2386,11 @@ static StoreInst *emit_aliased_store(jl_codectx_t &ctx, Value *val, Value *ptr, 
 }
 
 // Load union type tag from ptindex, returns tindex+1 (1-indexed)
-static Value *emit_load_tindex(jl_codectx_t &ctx, Value *ptindex, unsigned union_max, MDNode *tbaa_ptindex)
+static Value *emit_load_tindex(jl_codectx_t &ctx, Value *ptindex, unsigned union_max, MDNode *tbaa_ptindex,
+                               jl_aliasinfo_t::Region region_ptindex = jl_aliasinfo_t::Region::data)
 {
     assert(union_max > 0);
-    jl_aliasinfo_t ai = jl_aliasinfo_t(ctx, jl_aliasinfo_t::Region::unknown, tbaa_ptindex);
+    jl_aliasinfo_t ai = jl_aliasinfo_t(ctx, region_ptindex, tbaa_ptindex);
     Instruction *tindex0 = ai.decorateInst(ctx.builder.CreateAlignedLoad(getInt8Ty(ctx.builder.getContext()), ptindex, Align(1)));
     tindex0->setMetadata(LLVMContext::MD_range, MDNode::get(ctx.builder.getContext(), {
         ConstantAsMetadata::get(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0)),
@@ -2405,14 +2406,14 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
                              bool maybe_null_if_boxed = true, unsigned alignment = 0,
                              Value **nullcheck = nullptr,
                              Value *ptindex = nullptr, MDNode *tbaa_ptindex = nullptr,
-                             jl_aliasinfo_t::Region region_ptindex = jl_aliasinfo_t::Region::unknown)
+                             jl_aliasinfo_t::Region region_ptindex = jl_aliasinfo_t::Region::data)
 {
     // Handle union types (when ptindex is provided)
     if (ptindex != nullptr) {
         assert(jl_is_uniontype(jltype));
         size_t fsz = 0, al = 0;
         int union_max = jl_islayout_inline(jltype, &fsz, &al);
-        Value *tindex = emit_load_tindex(ctx, ptindex, union_max, tbaa_ptindex ? tbaa_ptindex : tbaa);
+        Value *tindex = emit_load_tindex(ctx, ptindex, union_max, tbaa_ptindex ? tbaa_ptindex : tbaa, region_ptindex);
         Value *data = ptr;
         if (fsz > 0) {
             AllocaInst *lv = emit_static_alloca(ctx, fsz, Align(al));
@@ -2534,7 +2535,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         jl_module_t *mod, jl_sym_t *var,
         // Union type support (set ptindex non-null for union stores)
         Value *ptindex = nullptr, MDNode *tbaa_ptindex = nullptr,
-        jl_aliasinfo_t::Region region_ptindex = jl_aliasinfo_t::Region::unknown)
+        jl_aliasinfo_t::Region region_ptindex = jl_aliasinfo_t::Region::data)
 {
     auto newval = [&](const jl_cgval_t &lhs) { // for ismodifyfield
         const jl_cgval_t argv[3] = { cmpop, lhs, rhs };
@@ -3374,15 +3375,20 @@ static std::pair<MDNode*, jl_aliasinfo_t::Region> best_field_tbaa(jl_codectx_t &
             return {ctx.tbaa().tbaa_const, Region::constant};
     if (strct.V && jl_field_isconst(jt, idx) && isLoadFromConstGV(strct.V))
         return {ctx.tbaa().tbaa_const, Region::constant};
-    // Use struct-path TBAA for concrete types with known layout and fields.
     if (jt->isconcretetype && jt->layout && jl_datatype_nfields(jt) > 0) {
-        MDNode *field_tbaa = ctx.tbaa().get_tbaa_for_field(jt, idx);
-        // GenericMemory fields (length, data ptr) are non-user-accessible type metadata,
-        // not element data. Put them in the type_metadata region so ScopedNoAliasAA can
-        // prove they don't alias with element stores (which are in the data region).
-        if (jl_is_genericmemory_type(jt))
+        if (jl_is_genericmemory_type(jt)) {
+            MDNode *field_tbaa = ctx.tbaa().get_tbaa_for_field(jt, idx);
             return {field_tbaa, Region::type_metadata};
-        return {field_tbaa, region};
+        }
+        // Struct-path field tags are children of the type's scalar node, not of
+        // arraybuf/ptrarraybuf. Only emit them when the incoming tbaa is in the
+        // same subtree, otherwise the field load would appear to not alias with
+        // the store that wrote the data (they'd be disjoint TBAA siblings).
+        MDNode *type_tag = ctx.tbaa().get_tbaa_for_type(jt);
+        if (tbaa == type_tag || tbaa == ctx.tbaa().tbaa_value || tbaa == ctx.tbaa().tbaa_data) {
+            MDNode *field_tbaa = ctx.tbaa().get_tbaa_for_field(jt, idx);
+            return {field_tbaa, region};
+        }
     }
     return {tbaa, region};
 }
