@@ -109,6 +109,76 @@ end
     ccall((:ctest, libccalltest_var), Complex{Int}, (Complex{Int},), 10 + 20im)
 """) === 11 + 18im
 
+@testset "(robot-generated) ccall (sym, lib) tuple: globals and hygiene" begin
+    # library is a module-qualified global
+    JuliaLowering.include_string(test_mod, """
+    module CCallLibMod
+        const the_lib = "libccalltest"
+    end
+    """)
+    @test JuliaLowering.include_string(test_mod, """
+        ccall((:ctest, CCallLibMod.the_lib), Complex{Int}, (Complex{Int},), 10 + 20im)
+    """) === 11 + 18im
+
+    # macro in a nested module produces ccall with lib from that module (hygiene)
+    JuliaLowering.include_string(test_mod, raw"""
+    module CCallHygieneMod
+        const mylib = "libccalltest"
+        macro do_ccall()
+            :(ccall((:ctest, mylib), Complex{Int}, (Complex{Int},), 10 + 20im))
+        end
+    end
+    """)
+    @test JuliaLowering.include_string(test_mod, """
+        CCallHygieneMod.@do_ccall()
+    """) === 11 + 18im
+
+    # hygiene: `mylib` in the macro body should resolve in CCallHygieneMod, not
+    # the caller, even when the caller defines a different `mylib`
+    @test JuliaLowering.include_string(test_mod, """
+        mylib = "this_lib_does_not_exist"
+        CCallHygieneMod.@do_ccall()
+    """) === 11 + 18im
+
+    # macro that interpolates the lib value at expansion time
+    JuliaLowering.include_string(test_mod, raw"""
+    module CCallHygieneMod2
+        const mylib2 = "libccalltest"
+        macro do_ccall_interp()
+            lib = mylib2
+            :(ccall((:ctest, $lib), Complex{Int}, (Complex{Int},), 10 + 20im))
+        end
+    end
+    """)
+    @test JuliaLowering.include_string(test_mod, """
+        CCallHygieneMod2.@do_ccall_interp()
+    """) === 11 + 18im
+
+    # ccall with plain symbol name still works inside a function
+    @test JuliaLowering.include_string(test_mod, """
+        function ccall_plain_sym()
+            ccall(:strlen, Csize_t, (Cstring,), "abc")
+        end
+    """) isa Function
+    @test test_mod.ccall_plain_sym() == 3
+
+    # ccall with (sym, lib) tuple where lib is a global, inside a function
+    @test JuliaLowering.include_string(test_mod, """
+        function ccall_global_lib()
+            ccall((:ctest, libccalltest_var), Complex{Int}, (Complex{Int},), 10 + 20im)
+        end
+    """) isa Function
+    @test test_mod.ccall_global_lib() === 11 + 18im
+
+    # ccall with module-qualified lib inside a function
+    @test JuliaLowering.include_string(test_mod, """
+        function ccall_qualified_lib()
+            ccall((:ctest, CCallLibMod.the_lib), Complex{Int}, (Complex{Int},), 10 + 20im)
+        end
+    """) isa Function
+    @test test_mod.ccall_qualified_lib() === 11 + 18im
+end
+
 # cfunction
 JuliaLowering.include_string(test_mod, """
 function f_ccallable(x, y)
