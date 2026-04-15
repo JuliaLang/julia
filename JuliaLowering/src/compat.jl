@@ -458,8 +458,16 @@ function est_to_dst(st::SyntaxTree)
             @ast g st [k _dst_sink_parameters(children(st))...]
         (_, when=(k = kind(st); k in KSet"curly ref")) ->
             @ast g st [k _dst_separate_dotop(st[1])
-                       _dst_sink_parameters(children(st)[2:end])...
-            ]
+                       _dst_sink_parameters(children(st)[2:end])...]
+        # tuple arg should not be converted or desugared
+        [K"foreigncall" [K"tuple" _...] args...] ->
+            @ast g st [K"foreigncall" [K"foreigncall_arg1" st[1]] args...]
+        ([K"call" [K"Identifier"] sym args...],
+         when=st[1].name_val::String === "ccall") -> if kind(sym) === K"tuple"
+             @ast g st [K"call" st[1] [K"foreigncall_arg1" st[2]] mapsyntax(rec, args)...]
+         else
+             @ast g st [K"call" st[1] rec(sym) mapsyntax(rec, args)...]
+         end
         [K"call" f args...] -> let
             out_k, out_f = @stm _dst_separate_dotop(f) begin
                 [K"." op] -> (K"dotcall", op)

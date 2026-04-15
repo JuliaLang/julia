@@ -406,18 +406,12 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
         @jl_assert arg1 isa QuoteNode ex
         args[1] = arg1.value
         Expr(:meta, args...)
+    elseif k == K"foreigncall_arg1"
+        @jl_assert kind(ex[1]) == K"tuple" ex
+        _foreigncall_arg1_expr(ex[1], stmt_offset)
     elseif k == K"static_eval"
         @jl_assert numchildren(ex) == 1 ex
-        @stm ex[1] begin
-            # tuple should just be ccall library spec
-            [K"tuple" s lib] -> Expr(:tuple,
-                                     _to_lowered_expr(s, stmt_offset),
-                                     _to_lowered_expr(lib, stmt_offset))
-            [K"tuple" s] -> Expr(:tuple,
-                                 _to_lowered_expr(s, stmt_offset))
-            [K"function" _...] -> QuoteNode(est_to_expr(ex[1]))
-            _ -> _to_lowered_expr(ex[1], stmt_offset)
-        end
+        _to_lowered_expr(ex[1], stmt_offset)
     else
         # Allowed forms according to https://docs.julialang.org/en/v1/devdocs/ast/
         #
@@ -450,6 +444,17 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
             push!(ret.args, _to_lowered_expr(e, stmt_offset))
         end
         return ret
+    end
+end
+
+# ultra-permissive conversion allowing unlowered structure, but lowered leaves
+function _foreigncall_arg1_expr(ex, stmt_offset)
+    if is_leaf(ex) || kind(ex) == K"inert"
+        _to_lowered_expr(ex, stmt_offset)
+    else
+        k = kind(ex)
+        Expr(Symbol((k === K"unknown_head" ? st.name_val : untokenize(k))::String),
+             map(e->_foreigncall_arg1_expr(e, stmt_offset), children(ex))...)
     end
 end
 
