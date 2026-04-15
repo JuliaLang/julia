@@ -104,6 +104,15 @@ overlay_match(::Any) = nothing
     overlay_match(x)
 end |> only === Union{Nothing,Missing}
 
+# overlay method should shadow the base method with the same signature,
+# filtering it out from method match results
+overlay_shadow_zero() = Any[]
+overlay_shadow_zero(xs::Vector{Int}...) = Int[xs[i][j] for i=eachindex(xs) for j=eachindex(xs[i])]
+@overlay OVERLAY_MT overlay_shadow_zero() = error()
+@test Base.infer_return_type((Vector{Vector{Int}},); interp=MTOverlayInterp()) do x
+    overlay_shadow_zero(x...)
+end == Vector{Int}
+
 # partial concrete evaluation
 @test Base.return_types(; interp=MTOverlayInterp()) do
     isbitstype(Int) ? nothing : missing
