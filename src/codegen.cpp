@@ -560,9 +560,10 @@ struct jl_noaliascache_t {
         MDNode *gcframe;        // GC frame
         MDNode *stack;          // Stack slot
         MDNode *data;           // Any user data that `pointerset/ref` are allowed to alias
+        MDNode *type_metadata;  // Non-user-accessible type metadata incl. memory len/ptr/owner
         MDNode *constant;       // Memory that is immutable by the time LLVM can see it
 
-        jl_regions_t(): gcframe(nullptr), stack(nullptr), data(nullptr), constant(nullptr) {}
+        jl_regions_t(): gcframe(nullptr), stack(nullptr), data(nullptr), type_metadata(nullptr), constant(nullptr) {}
 
         void initialize(llvm::LLVMContext &context) {
             MDBuilder mbuilder(context);
@@ -571,6 +572,7 @@ struct jl_noaliascache_t {
             this->gcframe = mbuilder.createAliasScope("jnoalias_gcframe", domain);
             this->stack = mbuilder.createAliasScope("jnoalias_stack", domain);
             this->data = mbuilder.createAliasScope("jnoalias_data", domain);
+            this->type_metadata = mbuilder.createAliasScope("jnoalias_typemd", domain);
             this->constant = mbuilder.createAliasScope("jnoalias_const", domain);
         }
     } regions;
@@ -1833,7 +1835,7 @@ struct jl_aliasinfo_t {
                                      //                    => inst_a, inst_b do not alias.
     MDNode *noalias = nullptr;       // '!noalias': See '!alias.scope' above.
 
-    enum class Region { unknown, gcframe, stack, data, constant }; // See jl_regions_t
+    enum class Region { unknown, gcframe, stack, data, constant, type_metadata }; // See jl_regions_t
     Region region = Region::unknown;  // The memory region (for propagation)
 
     explicit jl_aliasinfo_t() = default;
@@ -2293,19 +2295,22 @@ jl_aliasinfo_t::jl_aliasinfo_t(jl_codectx_t &ctx, Region r, MDNode *tbaa): tbaa(
         case Region::data:
             alias_scope = regions.data;
             break;
+        case Region::type_metadata:
+            alias_scope = regions.type_metadata;
+            break;
         case Region::constant:
             alias_scope = regions.constant;
             break;
     }
 
-    MDNode *all_scopes[4] = { regions.gcframe, regions.stack, regions.data, regions.constant };
+    MDNode *all_scopes[5] = { regions.gcframe, regions.stack, regions.data, regions.type_metadata, regions.constant };
     if (alias_scope) {
         // The matching region is added to !alias.scope
         // All other regions are added to !noalias
 
         int i = 0;
         Metadata *scopes[1] = { alias_scope };
-        Metadata *noaliases[3];
+        Metadata *noaliases[4];
         for (auto const &scope: all_scopes) {
             if (scope == alias_scope) continue;
             noaliases[i++] = scope;

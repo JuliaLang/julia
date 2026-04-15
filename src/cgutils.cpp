@@ -3377,6 +3377,11 @@ static std::pair<MDNode*, jl_aliasinfo_t::Region> best_field_tbaa(jl_codectx_t &
     // Use struct-path TBAA for concrete types with known layout and fields.
     if (jt->isconcretetype && jt->layout && jl_datatype_nfields(jt) > 0) {
         MDNode *field_tbaa = ctx.tbaa().get_tbaa_for_field(jt, idx);
+        // GenericMemory fields (length, data ptr) are non-user-accessible type metadata,
+        // not element data. Put them in the type_metadata region so ScopedNoAliasAA can
+        // prove they don't alias with element stores (which are in the data region).
+        if (jl_is_genericmemory_type(jt))
+            return {field_tbaa, Region::type_metadata};
         return {field_tbaa, region};
     }
     return {tbaa, region};
@@ -3643,7 +3648,7 @@ static Value *emit_genericmemorylen(jl_codectx_t &ctx, Value *addr, jl_value_t *
     addr = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, addr, 0);
     LoadInst *LI = ctx.builder.CreateAlignedLoad(ctx.types().T_jlgenericmemory->getElementType(0), addr, Align(sizeof(size_t)));
     MDNode *tbaa = mdt ? ctx.tbaa().get_tbaa_for_field(mdt, 0) : ctx.tbaa().tbaa_value;
-    jl_aliasinfo_t aliasinfo_mem = jl_aliasinfo_t(ctx, jl_aliasinfo_t::Region::data, tbaa);
+    jl_aliasinfo_t aliasinfo_mem = jl_aliasinfo_t(ctx, jl_aliasinfo_t::Region::type_metadata, tbaa);
     aliasinfo_mem.decorateInst(LI);
     LI->setMetadata(LLVMContext::MD_invariant_load, MDNode::get(ctx.builder.getContext(), {}));
     MDBuilder MDB(ctx.builder.getContext());
@@ -3666,7 +3671,7 @@ static Value *emit_genericmemoryptr(jl_codectx_t &ctx, Value *mem, jl_value_t *t
     LI->setOrdering(AtomicOrdering::NotAtomic);
     LI->setMetadata(LLVMContext::MD_nonnull, MDNode::get(ctx.builder.getContext(), {}));
     MDNode *tbaa = mdt ? ctx.tbaa().get_tbaa_for_field(mdt, 1) : ctx.tbaa().tbaa_value;
-    jl_aliasinfo_t aliasinfo = jl_aliasinfo_t(ctx, jl_aliasinfo_t::Region::data, tbaa);
+    jl_aliasinfo_t aliasinfo = jl_aliasinfo_t(ctx, jl_aliasinfo_t::Region::type_metadata, tbaa);
     aliasinfo.decorateInst(LI);
     LI->setMetadata(LLVMContext::MD_invariant_load, MDNode::get(ctx.builder.getContext(), {}));
     Value *ptr = LI;
@@ -3688,7 +3693,7 @@ static Value *emit_genericmemoryowner(jl_codectx_t &ctx, Value *t, jl_value_t *t
     LI->setOrdering(AtomicOrdering::NotAtomic);
     LI->setMetadata(LLVMContext::MD_nonnull, MDNode::get(ctx.builder.getContext(), {}));
     MDNode *tbaa = mdt ? ctx.tbaa().get_tbaa_for_field(mdt, 1) : ctx.tbaa().tbaa_value;
-    jl_aliasinfo_t aliasinfo_mem = jl_aliasinfo_t(ctx, jl_aliasinfo_t::Region::data, tbaa);
+    jl_aliasinfo_t aliasinfo_mem = jl_aliasinfo_t(ctx, jl_aliasinfo_t::Region::type_metadata, tbaa);
     aliasinfo_mem.decorateInst(LI);
     LI->setMetadata(LLVMContext::MD_invariant_load, MDNode::get(ctx.builder.getContext(), {}));
     addr = emit_ptrgep(ctx, m, JL_SMALL_BYTE_ALIGNMENT);
@@ -3696,7 +3701,7 @@ static Value *emit_genericmemoryowner(jl_codectx_t &ctx, Value *t, jl_value_t *t
     return emit_guarded_test(ctx, foreign, t, [&] {
             addr = ctx.builder.CreateConstInBoundsGEP1_32(ctx.types().T_jlgenericmemory, m, 1);
             LoadInst *owner = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, addr, Align(sizeof(void*)));
-            jl_aliasinfo_t ai = jl_aliasinfo_t(ctx, jl_aliasinfo_t::Region::data, tbaa);
+            jl_aliasinfo_t ai = jl_aliasinfo_t(ctx, jl_aliasinfo_t::Region::type_metadata, tbaa);
             ai.decorateInst(owner);
             owner->setMetadata(LLVMContext::MD_invariant_load, MDNode::get(ctx.builder.getContext(), {}));
             return ctx.builder.CreateSelect(ctx.builder.CreateIsNull(owner), t, owner);
@@ -4792,7 +4797,7 @@ static void emit_memory_stores(jl_codectx_t &ctx, jl_datatype_t *typ, Value* all
     Value *decay_alloc = decay_derived(ctx, alloc);
     Value *len_field = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, decay_alloc, 0);
     auto len_store = ctx.builder.CreateAlignedStore(nel, len_field, Align(sizeof(void*)));
-    jl_aliasinfo_t(ctx, jl_aliasinfo_t::Region::data, ctx.tbaa().get_tbaa_for_field(typ, 0)).decorateInst(len_store);
+    jl_aliasinfo_t(ctx, jl_aliasinfo_t::Region::type_metadata, ctx.tbaa().get_tbaa_for_field(typ, 0)).decorateInst(len_store);
 }
 
 
@@ -4846,7 +4851,7 @@ static jl_cgval_t emit_const_len_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ
         auto objref = emit_pointer_from_objref(ctx, alloc);
         Value *memory_data = emit_ptrgep(ctx, objref, JL_SMALL_BYTE_ALIGNMENT);
         auto *store = ctx.builder.CreateAlignedStore(memory_data, memory_ptr, Align(sizeof(void*)));
-        jl_aliasinfo_t(ctx, jl_aliasinfo_t::Region::data, ctx.tbaa().get_tbaa_for_field(typ, 1)).decorateInst(store);
+        jl_aliasinfo_t(ctx, jl_aliasinfo_t::Region::type_metadata, ctx.tbaa().get_tbaa_for_field(typ, 1)).decorateInst(store);
         setName(ctx.emission_context, memory_data, "memory_data");
     } else { // just use the dynamic length version since the malloc will be slow anyway
         // For non-pooled, pass zeroinit size via the indirect bundle
