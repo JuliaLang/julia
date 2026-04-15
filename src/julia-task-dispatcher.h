@@ -346,9 +346,15 @@ void JuliaTaskDispatcher::dispatch(std::unique_ptr<Task> T) {
     // Not inside work_until/process_tasks — run inline to prevent deadlock
     // with callers that block on std::future (e.g. LocalTrampolinePool::reenter).
     // Mark the inline run as cooperative so any nested dispatch() queues
-    // instead of recursing on the C stack.
+    // instead of recursing on the C stack, then drain the queue so any
+    // continuations that fulfill the caller's std::future can fire before
+    // we return.
     InCooperativeContext = true;
     T->run();
+    {
+      jl_unique_gcsafe_lock Lock{DispatchMutex};
+      process_tasks(Lock);
+    }
     InCooperativeContext = false;
     return;
   }
