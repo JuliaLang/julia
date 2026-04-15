@@ -4835,7 +4835,6 @@ static jl_cgval_t emit_const_len_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ
     // if allocation fits within GC pools
     int pooled = tot <= GC_MAX_SZCLASS;
     Value *alloc, *decay_alloc, *memory_ptr;
-    jl_aliasinfo_t aliasinfo;
     if (pooled) {
         // For pooled allocations with boxed/union elements, pass zeroinit region info
         // so late-gc-lowering can emit the memset unconditionally after allocation
