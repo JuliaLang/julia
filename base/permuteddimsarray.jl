@@ -305,7 +305,8 @@ function _copy!(P::PermutedDimsArray{T,N,perm}, src) where {T,N,perm}
         d += 1
     end
     if d == ndims(src)
-        Base._copyto!(parent(P), src) # axes already validated by caller
+        # axes already validated by caller
+        Base._copyto!(IndexStyle(parent(P)), parent(P), IndexStyle(src), src)
     else
         R1 = CartesianIndices(axes(src)[1:d])
         d1 = findfirst(isequal(d+1), perm)::Int  # first permuted dim of dest

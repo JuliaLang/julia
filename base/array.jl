@@ -771,12 +771,14 @@ end
 function _collect_indices(::Tuple{}, A)
     dest = Array{eltype(A),0}(undef)
     isempty(A) && return dest
-    return _copyto!(dest, A)
+    _copyto!(IndexStyle(dest), dest, IndexStyle(A), A)
+    return dest
 end
 function _collect_indices(indsA::Tuple{Vararg{OneTo}}, A)
     dest = Array{eltype(A)}(undef, length.(indsA))
     isempty(A) && return dest
-    return _copyto!(dest, A)
+    _copyto!(IndexStyle(dest), dest, IndexStyle(A), A)
+    return dest
 end
 function _collect_indices(indsA, A)
     B = Array{eltype(A)}(undef, length.(indsA))
