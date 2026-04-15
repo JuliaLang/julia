@@ -127,16 +127,9 @@ private:
     objectmap_t objectmap{};
     rev_map<size_t, std::pair<size_t, jl_code_instance_t *>> cimap{};
 
-    // Maintain a mapping of unrealized function names -> linfo objects
-    // so that when we see it get emitted, we can add a link back to the linfo
-    // that it came from (providing name, type signature, file info, etc.)
-    Locked<llvm::StringMap<jl_code_instance_t*>> codeinst_in_flight{};
-
     Locked<llvm::DenseMap<uint64_t, image_info_t>> image_info{};
 
     Locked<objfilemap_t> objfilemap{};
-
-    static std::string mangle(llvm::StringRef Name, const llvm::DataLayout &DL) JL_NOTSAFEPOINT;
 
 public:
 
@@ -145,10 +138,10 @@ public:
 
     libc_frames_t libc_frames{};
 
-    void add_code_in_flight(llvm::StringRef name, jl_code_instance_t *codeinst, const llvm::DataLayout &DL) JL_NOTSAFEPOINT;
     jl_code_instance_t *lookupCodeInstance(size_t pointer) JL_NOTSAFEPOINT;
     void registerJITObject(const llvm::object::ObjectFile &Object,
-                        std::function<uint64_t(const llvm::StringRef &)> getLoadAddress) JL_NOTSAFEPOINT;
+                           std::function<uint64_t(const llvm::StringRef &)> getLoadAddress,
+                           const jl_linker_info_t &Info) JL_NOTSAFEPOINT;
     objectmap_t& getObjectMap() JL_NOTSAFEPOINT;
     void add_image_info(image_info_t info) JL_NOTSAFEPOINT;
     bool get_image_info(uint64_t base, image_info_t *info) const JL_NOTSAFEPOINT;

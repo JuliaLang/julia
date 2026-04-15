@@ -64,6 +64,9 @@ include("osutils.jl")
 include("subarray.jl")
 include("views.jl")
 
+# String views
+include("strings/stringview.jl")
+
 # numeric operations
 include("div.jl")
 include("twiceprecision.jl")
@@ -280,7 +283,7 @@ include("threadcall.jl")
 # code loading
 include("uuid.jl")
 include("pkgid.jl")
-include("toml_parser.jl")
+include("toml/toml.jl")
 include("linking.jl")
 include("loading.jl")
 
@@ -332,9 +335,11 @@ a_method_to_overwrite_in_test() = inferencebarrier(1)
 # Compiler frontend
 Core.println("JuliaSyntax/src/JuliaSyntax.jl")
 include(@__MODULE__, string(DATAROOT, "julia/JuliaSyntax/src/JuliaSyntax.jl"))
-
 # May be replaced in incremental sysimage build after-the-fact
 const JuliaLowering = nothing
+
+# Now that JuliaSyntax is bootstrapped and ready to use, set Base's syntax version.
+set_syntax_version(Base, VERSION)
 
 end_base_include = time_ns()
 

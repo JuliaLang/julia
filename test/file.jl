@@ -1955,7 +1955,7 @@ end
                     # Cannot delete the working directory on Windows
                     rm(dir)
                     @test_throws Base._UVError("pwd()", Base.UV_ENOENT) pwd()
-                    Base.repl_cmd(@cmd("cd \\~"), io)
+                    Base.repl_cmd(@cmd("cd ~"), io)
                 end
             end
         end

@@ -663,10 +663,10 @@ static value_t julia_to_scm_noalloc(fl_context_t *fl_ctx, jl_value_t *v, int che
         return retval;
     assert(!jl_is_expr(v) &&
            !jl_typetagis(v, jl_linenumbernode_type) &&
-           !jl_typetagis(v, jl_gotonode_type) &&
-           !jl_typetagis(v, jl_quotenode_type) &&
+           !jl_is_gotonode(v) &&
+           !jl_is_quotenode(v) &&
            !jl_typetagis(v, jl_newvarnode_type) &&
-           !jl_typetagis(v, jl_globalref_type));
+           !jl_is_globalref(v));
     return julia_to_scm_noalloc2(fl_ctx, v, check_valid);
 }
 
@@ -717,13 +717,13 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v, int check_vali
         fl_free_gc_handles(fl_ctx, 1);
         return scmv;
     }
-    if (jl_typetagis(v, jl_gotonode_type))
+    if (jl_is_gotonode(v))
         return julia_to_list2_noalloc(fl_ctx, (jl_value_t*)jl_goto_sym, jl_fieldref(v,0), check_valid);
-    if (jl_typetagis(v, jl_quotenode_type))
+    if (jl_is_quotenode(v))
         return julia_to_list2(fl_ctx, (jl_value_t*)jl_inert_sym, jl_fieldref_noalloc(v,0), 0);
     if (jl_typetagis(v, jl_newvarnode_type))
         return julia_to_list2_noalloc(fl_ctx, (jl_value_t*)jl_newvar_sym, jl_fieldref(v,0), check_valid);
-    if (jl_typetagis(v, jl_globalref_type)) {
+    if (jl_is_globalref(v)) {
         jl_module_t *m = jl_globalref_mod(v);
         jl_sym_t *sym = jl_globalref_name(v);
         if (m == jl_core_module)
@@ -1277,35 +1277,6 @@ JL_DLLEXPORT jl_value_t *jl_lower(jl_value_t *expr, jl_module_t *inmodule,
     JL_GC_POP();
     return result;
 }
-
-jl_code_info_t *jl_outer_ctor_body(jl_value_t *thistype, size_t nfields, size_t nsparams, jl_module_t *inmodule, const char *file, int line)
-{
-    JL_TIMING(LOWERING, LOWERING);
-    jl_timing_show_location(file, line, inmodule, JL_TIMING_DEFAULT_BLOCK);
-    jl_expr_t *expr = jl_exprn(jl_empty_sym, 3);
-    JL_GC_PUSH1(&expr);
-    jl_exprargset(expr, 0, thistype);
-    jl_exprargset(expr, 1, jl_box_long(nfields));
-    jl_exprargset(expr, 2, jl_box_long(nsparams));
-    jl_code_info_t *ci = (jl_code_info_t*)jl_call_scm_on_ast_and_loc("jl-default-outer-ctor-body", (jl_value_t*)expr, inmodule, file, line);
-    JL_GC_POP();
-    assert(jl_is_code_info(ci));
-    return ci;
-}
-
-jl_code_info_t *jl_inner_ctor_body(jl_array_t *fieldkinds, jl_module_t *inmodule, const char *file, int line)
-{
-    JL_TIMING(LOWERING, LOWERING);
-    jl_timing_show_location(file, line, inmodule, JL_TIMING_DEFAULT_BLOCK);
-    jl_expr_t *expr = jl_exprn(jl_empty_sym, 0);
-    JL_GC_PUSH1(&expr);
-    expr->args = fieldkinds;
-    jl_code_info_t *ci = (jl_code_info_t*)jl_call_scm_on_ast_and_loc("jl-default-inner-ctor-body", (jl_value_t*)expr, inmodule, file, line);
-    JL_GC_POP();
-    assert(jl_is_code_info(ci));
-    return ci;
-}
-
 
 //------------------------------------------------------------------------------
 // Parsing API and utils for calling parser from runtime

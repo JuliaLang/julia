@@ -1,6 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using .Compiler: has_typevar
 using .Meta: isidentifier, isoperator, isunaryoperator, isbinaryoperator, ispostfixoperator,
             is_id_start_char, is_id_char, _isoperator, is_syntactic_operator, is_valid_identifier,
             is_unary_and_binary_operator
@@ -1399,6 +1398,9 @@ function show(io::IO, codeinst::Core.CodeInstance)
         print(io, " (ABI Overridden)")
     else
         show_mi(io, def::MethodInstance)
+    end
+    if codeinst.owner !== nothing
+        print(io, " (foreign)")
     end
 end
 
@@ -3374,7 +3376,7 @@ function print_partition(io::IO, partition::Core.BindingPartition)
         print(io, "explicit `import` from ")
         print(io, partition_restriction(partition).globalref)
     else
-        @assert kind == PARTITION_KIND_GLOBAL
+        @assert kind == PARTITION_KIND_GLOBAL "unexpected partition kind"
         print(io, "global variable with type ")
         print(io, partition_restriction(partition))
     end

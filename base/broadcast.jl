@@ -504,7 +504,7 @@ combine_axes(A) = axes(A)
 """
     broadcast_shape(As...)::Tuple
 
-Determine the result axes for broadcasting across all axes (size Tuples) in `As`.
+Determine the result axes for broadcasting across all axes (size `Tuple`s) in `As`.
 
 ```jldoctest
 julia> Broadcast.broadcast_shape((1,2), (2,1))
@@ -631,12 +631,12 @@ to_index(Is::Tuple{Any}) = Is[1]
 to_index(Is::Tuple) = CartesianIndex(Is)
 
 @inline function Base.checkbounds(bc::Broadcasted, I::CartesianIndex)
-    Base.checkbounds_indices(Bool, axes(bc), (I,)) || Base.throw_boundserror(bc, (I,))
+    Base.checkbounds_indices(Bool, axes(bc), (I,)) || Base.throw_boundserror(bc, I)
     nothing
 end
 
 @inline function Base.checkbounds(bc::Broadcasted, I::Integer)
-    Base.checkindex(Bool, eachindex(IndexLinear(), bc), I) || Base.throw_boundserror(bc, (I,))
+    Base.checkindex(Bool, eachindex(IndexLinear(), bc), I) || Base.throw_boundserror(bc, I)
     nothing
 end
 
@@ -876,9 +876,9 @@ broadcast!(f::Tf, dest, As::Vararg{Any,N}) where {Tf,N} = (materialize!(dest, br
 """
     broadcast_preserving_zero_d(f, As...)
 
-Like [`broadcast`](@ref), except in the case of a 0-dimensional result where it returns a 0-dimensional container
+Like [`broadcast`](@ref), except in the case of a 0-dimensional result where it returns a 0-dimensional container.
 
-Broadcast automatically unwraps zero-dimensional results to be just the element itself,
+`broadcast` automatically unwraps zero-dimensional results to be just the element itself,
 but in some cases it is necessary to always return a container — even in the 0-dimensional case.
 """
 @inline function broadcast_preserving_zero_d(f, As...)
@@ -892,7 +892,7 @@ end
 """
     Broadcast.materialize(bc)
 
-Take a lazy `Broadcasted` object and compute the result
+Take a lazy `Broadcasted` object and compute the result.
 """
 @inline materialize(bc::Broadcasted) = copy(instantiate(bc))
 materialize(x) = x
@@ -1312,6 +1312,10 @@ If you want to *avoid* adding dots for selected function calls in
 `@. sqrt(abs(\$sort(x)))` is equivalent to `sqrt.(abs.(sort(x)))`
 (no dot for `sort`).
 
+Note that the postfix `'` and infix `:` operators don't have a broadcasted
+version (`.'` and `.:` are not valid operators), and are not affected by `@.`.
+The dot operator for property access as in `a.x` is also unaffected.
+
 (`@.` is equivalent to a call to `@__dot__`.)
 
 # Examples
@@ -1324,6 +1328,18 @@ julia> @. y = x + 3 * sin(x)
  4.727892280477045
  3.4233600241796016
 ```
+
+The postfix `'` being unaffected by `@.` can be convenient to broadcast vectors
+along different dimensions:
+
+```jldoctest
+julia> @. (10:10:30) + (1:4)'
+3×4 Matrix{Int64}:
+ 11  12  13  14
+ 21  22  23  24
+ 31  32  33  34
+```
+
 """
 macro __dot__(x)
     esc(__dot__(x))

@@ -388,6 +388,7 @@
     XX(jl_realloc) \
     XX(jl_register_newmeth_tracer) \
     XX(jl_resolve_definition_effects_in_ir) \
+    XX(jl_resolve_typegroup) \
     XX(jl_restore_excstack) \
     XX(jl_restore_incremental) \
     XX(jl_restore_package_image_from_file) \
@@ -549,6 +550,8 @@
     YY(jl_get_libllvm) \
     YY(jl_register_passbuilder_callbacks) \
     YY(jl_jit_abi_converter) \
+    YY(jl_jit_register_ci) \
+    YY(jl_jit_unregister_ci) \
     YY(JLJITGetLLVMOrcExecutionSession) \
     YY(JLJITGetJuliaOJIT) \
     YY(JLJITGetExternalJITDylib) \

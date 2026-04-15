@@ -130,7 +130,7 @@ function _to_SyntaxNode(source::SourceFile, txtbuf::Vector{UInt8}, offset::Int,
         # We need to match up the filtered SyntaxNode children with the unfiltered GreenNode children
         # Both cursor and green children need to be traversed in the same order
         # Since cursor iterates in reverse, we need to match from the end of green_children
-        green_idx = green_children === nothing ? 0 : length(green_children)
+        green_children === nothing ? 0 : length(green_children)
 
         for (i, child_cursor) in enumerate(reverse(cursor))
             if should_include_node(child_cursor)
@@ -173,7 +173,7 @@ numchildren(node::TreeNode) = (isnothing(node.children) ? 0 : length(node.childr
 
 Base.getindex(node::AbstractSyntaxNode, i::Int) = children(node)[i]
 Base.getindex(node::AbstractSyntaxNode, rng::UnitRange) = view(children(node), rng)
-Base.firstindex(node::AbstractSyntaxNode) = 1
+Base.firstindex(::AbstractSyntaxNode) = 1
 Base.length(node::AbstractSyntaxNode) = length(children(node))
 Base.lastindex(node::AbstractSyntaxNode) = length(node)
 
@@ -225,7 +225,6 @@ function _show_syntax_node(io, current_filename, node::AbstractSyntaxNode,
     else
         posstr = ""
     end
-    val = node.val
     nodestr = is_leaf(node) ? leaf_string(node) : "[$(untokenize(head(node)))]"
     treestr = string(indent, nodestr)
     if show_kind && is_leaf(node)

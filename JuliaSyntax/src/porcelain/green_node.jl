@@ -31,7 +31,7 @@ span(node::GreenNode) = node.span
 
 Base.getindex(node::GreenNode, i::Int) = children(node)[i]
 Base.getindex(node::GreenNode, rng::UnitRange) = view(children(node), rng)
-Base.firstindex(node::GreenNode) = 1
+Base.firstindex(::GreenNode) = 1
 Base.lastindex(node::GreenNode) = children(node) === nothing ? 0 : length(children(node))
 
 """
@@ -158,17 +158,16 @@ function build_tree(::Type{GreenNode}, stream::ParseStream;
     if has_toplevel_siblings(cursor)
         # There are multiple toplevel nodes, e.g. because we're using this
         # to test a partial parse. Wrap everything in K"wrapper"
-        all_processed = 0
         local cs
         for child in reverse_toplevel_siblings(cursor)
             c = GreenNode(child)
-            if !@isdefined(cs)
-                cs = GreenNode{SyntaxHead}[c]
-            else
+            if @isdefined(cs)
                 pushfirst!(cs, c)
+            else
+                cs = GreenNode{SyntaxHead}[c]
             end
         end
-        @assert length(cs) != 1
+        @assert @isdefined(cs) && length(cs) != 1
         return GreenNode(SyntaxHead(K"wrapper", NON_TERMINAL_FLAG), stream.next_byte-1, cs)
     else
         return GreenNode(cursor)

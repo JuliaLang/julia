@@ -21,7 +21,7 @@ JL_DLLEXPORT void jl_get_llvm_cis_fallback(void *native_code, size_t *num, void 
 JL_DLLEXPORT jl_value_t *jl_dump_method_asm_fallback(jl_method_instance_t *linfo, size_t world,
         char emit_mc, char getwrapper, const char* asm_variant, const char *debuginfo, char binary) UNAVAILABLE
 JL_DLLEXPORT jl_value_t *jl_dump_function_ir_fallback(jl_llvmf_dump_t *dump, char strip_ir_metadata, char dump_module, const char *debuginfo) UNAVAILABLE
-JL_DLLEXPORT void jl_get_llvmf_defn_fallback(jl_llvmf_dump_t *dump, jl_method_instance_t *linfo, jl_code_info_t *src, char getwrapper, char optimize, const jl_cgparams_t params) UNAVAILABLE
+JL_DLLEXPORT void jl_get_llvmf_defn_fallback(jl_llvmf_dump_t *dump, jl_method_instance_t *linfo, jl_code_info_t *src, char getwrapper, char optimize, const char *llvm_options, const jl_cgparams_t params) UNAVAILABLE
 
 JL_DLLEXPORT void *jl_LLVMCreateDisasm_fallback(const char *TripleName, void *DisInfo, int TagType, void *GetOpInfo, void *SymbolLookUp) UNAVAILABLE
 JL_DLLEXPORT size_t jl_LLVMDisasmInstruction_fallback(void *DC, uint8_t *Bytes, uint64_t BytesSize, uint64_t PC, char *OutString, size_t OutStringSize) UNAVAILABLE
@@ -86,6 +86,14 @@ JL_DLLEXPORT void jl_teardown_codegen_fallback(void) JL_NOTSAFEPOINT
 JL_DLLEXPORT size_t jl_jit_total_bytes_fallback(void)
 {
     return 0;
+}
+
+JL_DLLEXPORT void jl_jit_register_ci_fallback(jl_code_instance_t *ci)
+{
+}
+
+JL_DLLEXPORT void jl_jit_unregister_ci_fallback(jl_code_instance_t *ci)
+{
 }
 
 JL_DLLEXPORT void *jl_create_native_fallback(LLVMOrcThreadSafeModuleRef llvmmod, int _trim, int _external_linkage, size_t _world, jl_array_t *_mod_array, jl_array_t *_worklist, int _all, jl_array_t *_module_init_order) UNAVAILABLE
