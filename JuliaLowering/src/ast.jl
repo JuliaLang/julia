@@ -85,6 +85,7 @@ function JuliaSyntax.newleaf(ctx::AbstractLoweringContext,
 end
 
 function JuliaSyntax.newleaf(ctx, prov, k, @nospecialize(value))
+    @jl_assert k === K"Value" || value !== nothing (prov, "only Value may contain nothing")
     leaf = newleaf(ctx, prov, k)
     if k == K"Identifier" || k == K"core" || k == K"top" || k == K"Symbol" ||
             k == K"globalref" || k == K"Placeholder"
@@ -96,7 +97,7 @@ function JuliaSyntax.newleaf(ctx, prov, k, @nospecialize(value))
     elseif k == K"symboliclabel" || k == K"symbolicgoto"
         setattr!(leaf._graph, leaf._id, :name_val, value)
     elseif k in KSet"TOMBSTONE SourceLocation latestworld latestworld_if_toplevel
-                     softscope"
+                     softscope nothing"
         # no attributes
     else
         val = k == K"Integer" ? convert(Int,     value) :
@@ -119,8 +120,7 @@ JuliaSyntax.newnode(ctx::AbstractLoweringContext,
 
 # Convenience functions to create leaf nodes referring to identifiers within
 # the Core and Top modules.
-core_ref(ctx, ex, name) = newleaf(ctx, ex, K"core", name)
-nothing_(ctx, ex) = core_ref(ctx, ex, "nothing")
+nothing_(ctx, ex) = newleaf(ctx, ex, K"nothing")
 
 # Assign `ex` to an SSA variable.
 # Return (variable, assignment_node)
@@ -230,7 +230,8 @@ function _expand_ast_tree(ctx, srcref, tree, jl_line::QuoteNode)
             kindspec = tree.args[1]
         end
         let (kind, srcref, kws) = _match_kind(srcref, kindspec)
-            n = :(newleaf($ctx, $srcref, $kind, $val))
+            n = isnothing(val) ? :(newleaf($ctx, $srcref, $kind)) :
+                :(newleaf($ctx, $srcref, $kind, $val))
             for (attr, val) in kws
                 n = :(setattr!($n, $attr, $val))
             end
@@ -473,22 +474,15 @@ function is_valid_modref(ex)
            (kind(ex[1]) == K"Identifier" || is_valid_modref(ex[1]))
 end
 
-function is_core_ref(ex, name)
-    kind(ex) == K"core" && ex.name_val == name
-end
-
-function is_core_nothing(ex)
-    is_core_ref(ex, "nothing")
-end
-
 function is_core_Any(ex)
-    is_core_ref(ex, "Any")
+    kind(ex) === K"core" && ex.name_val::String === "Any"
 end
 
 function is_simple_atom(ctx, ex)
     k = kind(ex)
     # TODO thismodule
-    is_literal(k) || k == K"Symbol" || k == K"Value" || is_ssa(ctx, ex) || is_core_nothing(ex)
+    is_literal(k) || k == K"Symbol" || k == K"Value" || is_ssa(ctx, ex) ||
+        k == K"nothing"
 end
 
 function is_identifier_like(ex)

@@ -22,6 +22,10 @@ using .JuliaSyntax: @KSet_str, @stm, Kind, NodeId, SourceAttrType, SourceRef, Sy
 
 const DEBUG = true
 
+# Falls back to `Union{}` so that `loc isa MacroSource` is always false on Julia < 1.14
+# where `Core.MacroSource` is not defined.
+const MacroSource = isdefined(Core, :MacroSource) ? Core.MacroSource : Union{}
+
 _include("kinds.jl")
 _register_kinds()
 

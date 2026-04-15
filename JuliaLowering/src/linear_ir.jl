@@ -619,7 +619,7 @@ end
 # the needed value.
 function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     k = kind(ex)
-    if k == K"BindingId" || is_literal(k) || k == K"quote" ||
+    if k == K"BindingId" || is_literal(k) || k == K"nothing" ||
             k == K"inert" || k == K"inert_syntaxtree" || k == K"top" ||
             k == K"core" || k == K"Value" || k == K"Symbol" ||
             k == K"SourceLocation" || k == K"static_eval"
@@ -898,7 +898,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             emit(ctx, ex)
         end
         if needs_value
-            val = @ast ctx ex "nothing"::K"core"
+            val = @ast ctx ex (::K"nothing")
             if in_tail_pos
                 emit_return(ctx, val)
             else

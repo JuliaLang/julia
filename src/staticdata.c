@@ -4408,7 +4408,7 @@ JL_DLLEXPORT void jl_restore_system_image(jl_image_t *image, jl_image_buf_t buf)
         return;
 
     if (buf.kind == JL_IMAGE_KIND_SO)
-        assert(image->fptrs.ptrs); // jl_init_processor_sysimg should already be run
+        assert(image->fptrs.ptrs); // jl_load_sysimg should already be run
 
     JL_SIGATOMIC_BEGIN();
     ios_static_buffer(&f, (char *)buf.data, buf.size);
@@ -4439,7 +4439,7 @@ JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, j
     jl_gc_notify_image_load(buf.data, buf.size);
 
     // Despite the name, this function actually parses the pkgimage
-    jl_image_t pkgimage = jl_init_processor_pkgimg(buf);
+    jl_image_t pkgimage = jl_load_pkgimg(buf);
 
     if (ignore_native) {
         // Must disable using native code in possible downstream users of this code:

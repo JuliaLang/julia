@@ -98,7 +98,10 @@ function _register_kinds()
             # to occur before the methods are created
             "_generated_body"
             "with_static_parameters"
+            # converted from nothing::K"Value" into desugaring.  flisp: (null)
+            "nothing"
             "top"
+            "core"
             "lambda"
             # "A source location literal" - a node which exists only to record
             # a sourceref

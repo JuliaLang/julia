@@ -1293,6 +1293,51 @@ end
 
 @testset "Generated functions" begin; for expr_compat_mode in (false, true)
     local genfunc_s, genfunc_f
+
+    @testset "returning special syntax forms" begin
+        @test JuliaLowering.include_string(test_mod, raw"""
+        begin
+            @generated f_gen_nothing() = nothing
+            f_gen_nothing()
+        end
+        """; expr_compat_mode) == nothing
+
+        @test JuliaLowering.include_string(test_mod, raw"""
+        begin
+            @generated f_gen_quotenothing() = :(nothing)
+            f_gen_quotenothing()
+        end
+        """; expr_compat_mode) == nothing
+
+        @test JuliaLowering.include_string(test_mod, raw"""
+        begin
+            @generated f_gen_quotenodenothing() = QuoteNode(nothing)
+            f_gen_quotenodenothing()
+        end
+        """; expr_compat_mode) == nothing
+
+        @test JuliaLowering.include_string(test_mod, raw"""
+        begin
+            @generated f_gen_gr_nothing() = GlobalRef(Core, :nothing)
+            f_gen_gr_nothing()
+        end
+        """; expr_compat_mode) == nothing
+
+        @test JuliaLowering.include_string(test_mod, raw"""
+        begin
+            @generated f_gen_quotegr_nothing() = :(GlobalRef(Core, :nothing))
+            f_gen_quotegr_nothing()
+        end
+        """; expr_compat_mode) == GlobalRef(Core, :nothing)
+
+        @test JuliaLowering.include_string(test_mod, raw"""
+        begin
+            @generated f_gen_quotenodegr_nothing() = QuoteNode(GlobalRef(Core, :nothing))
+            f_gen_quotenodegr_nothing()
+        end
+        """; expr_compat_mode) == GlobalRef(Core, :nothing)
+    end
+
     @test JuliaLowering.include_string(test_mod, raw"""
     begin
         @generated function f_gen_trivial(x)
@@ -1343,7 +1388,21 @@ end
         end
         """
         @test (genfunc_f = JL.include_string(test_mod, genfunc_s; expr_compat_mode)) isa Function
-        @test_broken genfunc_f((1,2)) == (Tuple{Int, Int}, "gen")
+        @test genfunc_f((1,2)) == (Tuple{Int, Int}, "gen")
+    end
+
+    @testset "destructured args: values" begin
+        genfunc_s = raw"""
+        function ((d1,d2)::T) where {T}
+            if @generated
+                :(d1, d2, $T, "gen")
+            else
+                :($T, "nongen")
+            end
+        end
+        """
+        @test (genfunc_f = JL.include_string(test_mod, genfunc_s; expr_compat_mode)) isa Function
+        @test_broken genfunc_f((1,2)) == (1, 2, Tuple{Int, Int}, "gen")
     end
 
     @testset "keyword args" begin

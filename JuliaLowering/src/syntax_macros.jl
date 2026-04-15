@@ -66,11 +66,13 @@ function Base.var"@generated"(__context__::MacroContext, ex)
     end
     @ast __context__ __context__.macrocall [K"function"
         ex[1]
-        [K"if" [K"generated"]
-            ex[2]
-            [K"block"
-                [K"meta" "generated_only"::K"Identifier"]
-                [K"return" "nothing"::K"core"]
+        [K"block"
+            [K"if" [K"generated"]
+                ex[2]
+                [K"block"
+                    [K"meta" "generated_only"::K"Identifier"]
+                    [K"return" nothing::K"Value"]
+                ]
             ]
         ]
     ]
@@ -227,9 +229,9 @@ end
 function Base.Experimental.var"@opaque"(__context__::MacroContext, ex)
     @jl_assert kind(ex) == K"->" ex
     @ast __context__ __context__.macrocall [K"opaque_closure"
-        "nothing"::K"core"
-        "nothing"::K"core"
-        "nothing"::K"core"
+        nothing::K"Value"
+        nothing::K"Value"
+        nothing::K"Value"
         true::K"Bool"
         ex
     ]

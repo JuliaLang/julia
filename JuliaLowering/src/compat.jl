@@ -46,15 +46,11 @@ isa_lowering_ast_node(@nospecialize(e)) =
 
 function is_expr_value(st::SyntaxTree)
     k = kind(st)
-    return JuliaSyntax.is_literal(k) || k === K"Value" ||
-        k === K"core" && get(st, :name_val, nothing) === "nothing"
+    return JuliaSyntax.is_literal(k) || k === K"Value"
 end
 
 function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
-    st = if e === Core.nothing
-        # e.value can't be nothing in `K"Value"`, so represent with K"core"
-        setattr!(newleaf(graph, src, K"core"), :name_val, "nothing")
-    elseif e isa Symbol
+    st = if e isa Symbol
         setattr!(newleaf(graph, src, K"Identifier"), :name_val, String(e))
     elseif e isa QuoteNode
         cid, _ = _expr_to_est(graph, e.value, src)
@@ -123,9 +119,7 @@ end
 # children.
 function est_to_expr(st::SyntaxTree, suppress_linenodes=false)
     k = kind(st)
-    return if k === K"core" && numchildren(st) === 0 && st.name_val === "nothing"
-        nothing
-    elseif kind(st) === K"Identifier"
+    if kind(st) === K"Identifier"
         n = Symbol(st.name_val::String)
         mod = get(st, :mod, nothing)
         !isnothing(mod) ? GlobalRef(mod, n) :
@@ -422,6 +416,7 @@ function est_to_dst(st::SyntaxTree)
 
     return @stm st begin
         [K"Identifier"] -> _est_to_dst_ident(st)
+        [K"Value"] -> st.value === nothing ? newleaf(g, st, K"nothing") : st
         (_, when=is_leaf(st)) -> st
         ([K"unknown_head" l r],
          when=(s=st.name_val; Base.isoperator(s))) -> let
@@ -585,7 +580,7 @@ function est_to_dst(st::SyntaxTree)
         ([K"meta" s vs...],
          when=(meta=get(s, :name_val, "")::String; meta in ("nospecialize", "specialize"))) ->
              # Should be handled in the function case
-             @ast g st "nothing"::K"core"
+             newleaf(g, st, K"nothing")
         [K"meta" syms...] ->
             @ast g st [K"meta" mapsyntax(
                 s->(kind(s) === K"Identifier" ? setattr(s, :kind, K"Symbol") : s),
