@@ -3376,7 +3376,7 @@ static std::pair<MDNode*, jl_aliasinfo_t::Region> best_field_tbaa(jl_codectx_t &
     if (strct.V && jl_field_isconst(jt, idx) && isLoadFromConstGV(strct.V))
         return {ctx.tbaa().tbaa_const, Region::constant};
     if (jt->isconcretetype && jt->layout && jl_datatype_nfields(jt) > 0) {
-        if (jl_is_genericmemory_type(jt)) {
+        if (jl_is_genericmemory_type(jt) || jl_is_array_type(jt)) {
             MDNode *field_tbaa = ctx.tbaa().get_tbaa_for_field(jt, idx);
             return {field_tbaa, Region::type_metadata};
         }

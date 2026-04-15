@@ -16,7 +16,7 @@ define void @argument_refinement({} addrspace(10)* %a) {
     %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
     %casted1 = bitcast {} addrspace(10)* %a to {} addrspace(10)* addrspace(10)*
-    %loaded1 = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %casted1, !tbaa !1
+    %loaded1 = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %casted1, !tbaa !1, !invariant.load !5
     call void @jl_safepoint()
     %casted2 = bitcast {} addrspace(10)* %loaded1 to i64 addrspace(10)*
     %loaded2 = load i64, i64 addrspace(10)* %casted2
@@ -31,7 +31,7 @@ define void @heap_refinement1(i64 %a) {
     %ptls = call {}*** @julia.ptls_states()
     %aboxed = call {} addrspace(10)* @ijl_box_int64(i64 signext %a)
     %casted1 = bitcast {} addrspace(10)* %aboxed to {} addrspace(10)* addrspace(10)*
-    %loaded1 = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %casted1, !tbaa !1
+    %loaded1 = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %casted1, !tbaa !1, !invariant.load !5
 ; OPAQUE: store ptr addrspace(10) %aboxed
     call void @jl_safepoint()
     %casted2 = bitcast {} addrspace(10)* %loaded1 to i64 addrspace(10)*
@@ -48,7 +48,7 @@ define void @heap_refinement2(i64 %a) {
     %ptls = call {}*** @julia.ptls_states()
     %aboxed = call {} addrspace(10)* @ijl_box_int64(i64 signext %a)
     %casted1 = bitcast {} addrspace(10)* %aboxed to {} addrspace(10)* addrspace(10)*
-    %loaded1 = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %casted1, !tbaa !1
+    %loaded1 = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %casted1, !tbaa !1, !invariant.load !5
 ; OPAQUE: store ptr addrspace(10) %loaded1
     call void @jl_safepoint()
     %casted2 = bitcast {} addrspace(10)* %loaded1 to i64 addrspace(10)*
@@ -64,7 +64,7 @@ define void @issue22770() {
     %ptls = call {}*** @julia.ptls_states()
     %y = call {} addrspace(10)* @allocate_some_value()
     %casted1 = bitcast {} addrspace(10)* %y to {} addrspace(10)* addrspace(10)*
-    %x = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %casted1, !tbaa !1
+    %x = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %casted1, !tbaa !1, !invariant.load !5
 ; OPAQUE: store ptr addrspace(10) %y,
     %a = call {} addrspace(10)* @allocate_some_value()
 
@@ -164,7 +164,7 @@ L1:
 ; of the phi node. Therefore, we need only one gc slot for `%a`.
   %p = phi {} addrspace(10)* [ %x, %top ], [ %v, %L1 ]
   %ca = bitcast {} addrspace(10)* %a to {} addrspace(10)* addrspace(10)*
-  %v = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %ca, !tbaa !1
+  %v = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %ca, !tbaa !1, !invariant.load !5
   call void @one_arg_boxed({} addrspace(10)* %v)
   call void @one_arg_boxed({} addrspace(10)* %p)
   br i1 %continue, label %L1, label %L2
@@ -187,7 +187,7 @@ L1:
 ; `%p` has circular dependency but it can only be derived from `%a` which dominate `%p`.
   %p = phi {} addrspace(10)* [ %a, %top ], [ %v, %L1 ]
   %ca = bitcast {} addrspace(10)* %p to {} addrspace(10)* addrspace(10)*
-  %v = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %ca, !tbaa !1
+  %v = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %ca, !tbaa !1, !invariant.load !5
   call void @one_arg_boxed({} addrspace(10)* %v)
   call void @one_arg_boxed({} addrspace(10)* %p)
   br i1 %continue, label %L1, label %L2
@@ -231,3 +231,4 @@ attributes #1 = { inaccessiblememonly norecurse nounwind }
 !2 = !{!"jtbaa_immut", !0, i64 0}
 !3 = !{!"jtbaa_const", !0, i64 0}
 !4 = !{!3, !3, i64 0, i64 1}
+!5 = !{}
