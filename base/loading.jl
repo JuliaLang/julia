@@ -136,7 +136,7 @@ for (name, namestr, numbytes) in [(:SHA1, "SHA1", 20), (:SHA256, "SHA256", 32)]
 
         string(hash::$name) = bytes2hex(hash.bytes)
         print(io::IO, hash::$name) = bytes2hex(io, hash.bytes)
-        show(io::IO, hash::$name) = print(io, string($namestr) * "(\"", hash, "\")")
+        show(io::IO, hash::$name) = print(io, $namestr * "(\"", hash, "\")")
 
         isless(a::$name, b::$name) = isless(a.bytes, b.bytes)
         hash(a::$name, h::UInt) = hash(($name, a.bytes), h)
