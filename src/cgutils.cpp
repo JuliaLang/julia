@@ -1172,6 +1172,16 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const
         return;
     ++EmittedMemcpys;
 
+    bool is_scalar = !dt || !dt->layout || jl_datatype_nfields(dt) == 0;
+    if (!is_volatile && is_scalar && (sz == 1 || sz == 2 || sz == 4 || sz == 8)) {
+        Type *IntTy = Type::getIntNTy(ctx.builder.getContext(), sz * 8);
+        auto *LI = ctx.builder.CreateAlignedLoad(IntTy, src, align_src);
+        src_ai.decorateInst(LI);
+        auto *SI = ctx.builder.CreateAlignedStore(LI, dst, align_dst);
+        dst_ai.decorateInst(SI);
+        return;
+    }
+
     auto merged_ai = dst_ai.merge(src_ai);
 
     MDNode *tbaa_tag = merged_ai.tbaa;
