@@ -144,6 +144,7 @@ end
 call_jl_errno()
 
 # Test for proper parenting
+begin
 local foo
 function foo()
     # this IR snippet triggers an optimization relying
@@ -154,6 +155,7 @@ function foo()
     Cvoid, Tuple{})
 end
 code_llvm(devnull, foo, ())
+end
 
 # Issue #48093 - test that non-external globals are not deduplicated
 function kernel()
