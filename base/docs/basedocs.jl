@@ -1013,7 +1013,7 @@ kw"while"
 
 `end` may also be used when indexing with `[...]` to represent the last index of a
 collection or the last index of a dimension of an array, where it is lowered to
-a call to [`lastindex`](@ref).
+a call to [`lastindex`](@ref) along the relevant dimension, as determined by the context.
 
 # Examples
 ```jldoctest
