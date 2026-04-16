@@ -57,6 +57,8 @@ Base.OrdinalRange
 Base.AbstractUnitRange
 Base.StepRange
 Base.UnitRange
+Base.AbstractOneTo
+Base.OneTo
 Base.LinRange
 ```
 
