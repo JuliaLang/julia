@@ -37,8 +37,8 @@ operate on user-visible "characters" (graphemes) rather than codepoints.
 See also [`Iterators.reverse`](@ref) for
 reverse-order iteration without making a copy. Custom string types must implement the
 `reverse` function themselves and should typically return a string with the same normalization
-and encoding, so that `reverseind` works; if they return a string with a different encoding or
-indexing, they must also override `reverseind` for that string type to satisfy `s[reverseind(s,i)] == reverse(s)[i]`.
+and encoding, so that `reverseind` works; if they return a string with a different encoding,
+they must also override `reverseind` for that string type to satisfy `s[reverseind(s,i)] == reverse(s)[i]`.
 
 # Examples
 ```jldoctest
