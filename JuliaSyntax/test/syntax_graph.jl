@@ -1,4 +1,4 @@
-using .JuliaSyntax: SyntaxGraph, SyntaxTree, SyntaxList, ensure_attributes, ensure_attributes!, delete_attributes, copy_ast, attrdefs, @stm, NodeId, SourceRef, SourceAttrType, Kind, syntax_graph
+using .JuliaSyntax: SyntaxGraph, SyntaxTree, SyntaxList, ensure_attributes, ensure_attributes!, delete_attributes, copy_ast, attrdefs, @stm, NodeId, SourceRef, SourceAttrType, Kind, syntax_graph, prov, mktree
 
 @testset "SyntaxGraph attrs" begin
     g_dict = SyntaxGraph()
@@ -54,6 +54,8 @@ end
 
 @testset "SyntaxTree parsing" begin
     # Errors should fall through
+    @test parsestmt(SyntaxTree, ""; ignore_errors=true) isa SyntaxTree
+    @test parsestmt(SyntaxTree, " "; ignore_errors=true) isa SyntaxTree
     @test parsestmt(SyntaxTree, "@"; ignore_errors=true) isa SyntaxTree
     @test parsestmt(SyntaxTree, "@@@"; ignore_errors=true) isa SyntaxTree
     @test parsestmt(SyntaxTree, "(a b c)"; ignore_errors=true) isa SyntaxTree
@@ -74,8 +76,11 @@ end
                 :kind => kinds, :source => sources,
                 :orig => orig, more_attrs...))
     end
+    mprov(st::SyntaxTree) = get(st, :macro_source, nothing) isa NodeId ?
+        SyntaxTree(st._graph, st.macro_source) : nothing
 
-    @testset "copy_ast" begin
+
+    @testset "copy_ast, mktree" begin
         # 1 --> 2 --> 3     src(7-9) = line 7-9
         # 4 --> 5 --> 6     src(i) = i + 3
         # 7 --> 8 --> 9
@@ -85,33 +90,24 @@ end
                           map(i->i+3, 1:6)...
                           map(LineNumberNode, 7:9)...])))
         st = SyntaxTree(g, 1)
-        stcopy = copy_ast(g, st)
-        # Each node should be copied once
-        @test length(g.edge_ranges) === 18
-        @test st._id != stcopy._id
-        @test st ≈ stcopy
-        @test st.source !== stcopy.source
-        @test st.source[1] !== stcopy.source[1]
-        @test st.source[1][1] !== stcopy.source[1][1]
+        new_g = ensure_attributes!(SyntaxGraph(); attrdefs(g)...)
 
-        stcopy2 = copy_ast(g, st; copy_source=false)
+        stcopy = copy_ast(new_g, st)
+        # Each node should be copied once
+        @test length(new_g.edge_ranges) === length(g.edge_ranges)
+        @test st ≈ stcopy
+        @test prov(st) ≈ prov(stcopy)
+        @test prov(prov(st)) ≈ prov(prov(stcopy))
+
+        stcopy2 = mktree(st)
         # Only nodes 1-3 should be copied
-        @test length(g.edge_ranges) === 21
+        @test length(g.edge_ranges) === 12
         @test st._id != stcopy2._id
         @test st ≈ stcopy2
-        @test st.source === stcopy2.source
-        @test st.source[1] === stcopy2.source[1]
-        @test st.source[1][1] === stcopy2.source[1][1]
+        @test stcopy2.source === st._id
 
-        # Copy into a new graph
-        new_g = ensure_attributes!(SyntaxGraph(); attrdefs(g)...)
-        stcopy3 = copy_ast(new_g, st)
-        @test length(new_g.edge_ranges) === 9
-        @test st ≈ stcopy3
-
-        new_g = ensure_attributes!(SyntaxGraph(); attrdefs(g)...)
-        # Disallow for now, since we can't prevent dangling sourcerefs
-        @test_throws ErrorException copy_ast(new_g, st; copy_source=false)
+        # Disallow copying into the same graph; slow for no good reason
+        @test_throws "mktree" copy_ast(st._graph, st)
     end
 
     @testset "unalias_nodes" begin

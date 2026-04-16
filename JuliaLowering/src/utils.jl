@@ -34,13 +34,11 @@ function _value_string(ex)
         str = "$(str)$idstr"
     end
     if k == K"slot" || k == K"BindingId"
-        p = provenance(ex)[1]
-        while p isa SyntaxTree
+        for p in provenance(ex)
             if kind(p) == K"Identifier"
                 str = "$(str)/$(p.name_val)"
                 break
             end
-            p = provenance(p)[1]
         end
     end
     return str
@@ -180,20 +178,28 @@ function _show_provtree(io::IO, ex::SyntaxTree, indent)
     if hasattr(ex, :jl_source)
         printstyled(io, " @$(ex.jl_source)", color=:light_black)
     end
-    print(io, "\n")
     prov = provenance(ex)
-    for (i, e) in enumerate(prov)
-        islast = i == length(prov)
-        printstyled(io, "$indent$(islast ? "└─ " : "├─ ")", color=:light_black)
-        inner_indent = indent * (islast ? "   " : "│  ")
-        _show_provtree(io, e, inner_indent)
-    end
-end
 
-function _show_provtree(io::IO, prov, _indent)
-    fn = filename(prov)
-    line, _ = source_location(prov)
-    printstyled(io, "@ $fn:$line\n", color=:light_black)
+    print(io, "\n")
+
+    src = ex.source
+    msrc = get(ex, :macro_source, nothing)
+    printstyled(io, string(
+        indent, msrc === nothing ? "└─ " : "├─ "); color=:light_black)
+    if src isa NodeId
+        _show_provtree(io, SyntaxTree(ex._graph, src),
+                       string(indent, msrc === nothing ? "   " : "│  "))
+    else
+        @jl_assert ex.source isa Union{LineNumberNode, SourceRef} ex
+        src = sourceref(ex)
+        fn = filename(src)
+        line, _ = source_location(src)
+        printstyled(io, "@ $fn:$line\n", color=:light_black)
+    end
+    if msrc isa NodeId
+        printstyled(io, string(indent, "└─ "); color=:light_black)
+        _show_provtree(io, SyntaxTree(ex._graph, msrc), indent*"   ")
+    end
 end
 
 function showprov(io::IO, exs::AbstractVector;
