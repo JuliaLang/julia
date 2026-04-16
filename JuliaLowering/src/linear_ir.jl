@@ -620,7 +620,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             k == K"inert" || k == K"inert_syntaxtree" || k == K"top" ||
             k == K"core" || k == K"Value" || k == K"Symbol" ||
             k == K"SourceLocation" || k == K"static_eval" ||
-            k == K"foreigncall_arg1"
+            k == K"foreigncall_arg1" || k == K"static_parameter"
         ex1 = ex
         if kind(ex1) == K"BindingId"
             binfo = get_binding(ctx, ex1)
