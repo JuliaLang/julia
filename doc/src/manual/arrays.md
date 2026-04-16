@@ -585,6 +585,13 @@ julia> x[1, [2 3; 4 1]]
 2×2 Matrix{Int64}:
   5  9
  13  1
+
+julia> x[:, div(begin + end, 2)]
+4-element Vector{Int64}:
+ 5
+ 6
+ 7
+ 8
 ```
 
 ## [Indexed Assignment](@id man-indexed-assignment)
