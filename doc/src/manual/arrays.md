@@ -558,8 +558,9 @@ array with size `size(J)`. Its `j`th element is populated by `A[2, J[j], 3]`.
 As a special part of the `[...]` indexing syntax, the `end` keyword may be used to represent the last index of
 a dimension; specifically, it is "lowered" by the compiler to a call to [`lastindex`](@ref) for that
 dimension of the array for the innermost enclosing brackets.  Similarly, `begin` within `[...]` indexing is
-lowered to a call to [`firstindex`](@ref).  Otherwise, the bracket indexing syntax
-is equivalent to a call to [`getindex`](@ref):
+lowered to a call to [`firstindex`](@ref) (which always returns `1` for built-in types like `Array` and `String`, but
+external packages may implement containers with indexes that start at `0` or elsewhere).
+Otherwise, the bracket indexing syntax is equivalent to a call to [`getindex`](@ref):
 
 ```
 X = getindex(A, I_1, I_2, ..., I_n)
