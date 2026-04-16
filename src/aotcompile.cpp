@@ -40,7 +40,6 @@
 #include <llvm/IR/LegacyPassManagers.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 #include <llvm/Support/FormatAdapters.h>
-#include <llvm/Linker/Linker.h>
 
 using namespace llvm;
 
@@ -50,6 +49,7 @@ using namespace llvm;
 #include "serialize.h"
 #include "julia_assert.h"
 #include "processor.h"
+#include "llvm-linker.h"
 
 #define DEBUG_TYPE "julia_aotcompile"
 
@@ -662,7 +662,7 @@ static void generate_cfunc_thunks(jl_codegen_params_t &params, jl_compiled_funct
 // including the DataLayout and ModuleFlags (for example)
 // and that there is no module-level assembly
 // Comdat is also removed, since this needs to be re-added later
-static void jl_merge_module(Linker &L, orc::ThreadSafeModule srcTSM) JL_NOTSAFEPOINT
+static void jl_merge_module(julia::Linker &L, orc::ThreadSafeModule srcTSM) JL_NOTSAFEPOINT
 {
     srcTSM.consumingModuleDo([&L](std::unique_ptr<Module> src) JL_NOTSAFEPOINT {
         bool error = L.linkInModule(std::move(src));
@@ -888,7 +888,7 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
     // clones the contents of the module `m` to the shadow_output collector
     // while examining and recording what kind of function pointer we have
     {
-        Linker L(*clone.getModuleUnlocked());
+        julia::Linker L(*clone.getModuleUnlocked());
         for (auto &def : compiled_functions) {
             jl_code_instance_t *this_code = def.first;
             JL_GC_PROMISE_ROOTED(this_code);
