@@ -1509,7 +1509,7 @@ Usually `begin` will not be necessary, since keywords such as [`function`](@ref)
 implicitly begin blocks of code. See also [`;`](@ref).
 
 `begin` may also be used when indexing with `[...]` to represent the first index of a
-collection or the last index of a dimension of an array, where it is lowered to
+collection or the first index of a dimension of an array, where it is lowered to
 a call to [`firstindex`](@ref).  For example, `a[begin]` is the first element of an array `a`.
 
 !!! compat "Julia 1.4"
