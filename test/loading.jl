@@ -1135,23 +1135,24 @@ end
         # (i.e. an `ExtAB`  where A depends on / loads B, but B provides the extension)
 
         mktempdir() do depot # Parallel pre-compilation
+            proj = joinpath(@__DIR__, "project", "Extensions", "Parent.jl")
             code = """
-            Base.disable_parallel_precompile = false
+            using Pkg
+            Pkg.activate($(repr(proj)))
+            Pkg.precompile()
             using Parent
             Base.get_extension(getfield(Parent, :DepWithParentExt), :ParentExt) isa Module || error("expected extension to load")
             Parent.greet()
             """
-            proj = joinpath(@__DIR__, "project", "Extensions", "Parent.jl")
             cmd =  `$(Base.julia_cmd()) --startup-file=no -e $code`
             cmd = addenv(cmd,
-                "JULIA_LOAD_PATH" => proj,
+                "JULIA_LOAD_PATH" => join([proj, "@stdlib"], sep),
                 "JULIA_DEPOT_PATH" => depot * Base.Filesystem.pathsep(),
             )
             @test occursin("Hello parent!", String(read(cmd)))
         end
         mktempdir() do depot # Serial pre-compilation
             code = """
-            Base.disable_parallel_precompile = true
             using Parent
             Base.get_extension(getfield(Parent, :DepWithParentExt), :ParentExt) isa Module || error("expected extension to load")
             Parent.greet()
@@ -1166,38 +1167,62 @@ end
         end
 
         # Extension with cycles in dependencies
-        code = """
-        using CyclicExtensions
-        Base.get_extension(CyclicExtensions, :ExtA) isa Module || error("expected extension to load")
-        Base.get_extension(CyclicExtensions, :ExtB) isa Module || error("expected extension to load")
-        CyclicExtensions.greet()
-        """
-        proj = joinpath(@__DIR__, "project", "Extensions", "CyclicExtensions")
-        cmd =  `$(Base.julia_cmd()) --startup-file=no -e $code`
-        cmd = addenv(cmd, "JULIA_LOAD_PATH" => proj)
-        @test occursin("Hello Cycles!", String(read(cmd)))
+        mktempdir() do depot # Parallel pre-compilation
+            proj = joinpath(@__DIR__, "project", "Extensions", "CyclicExtensions")
+            code = """
+            using Pkg
+            Pkg.activate($(repr(proj)))
+            Pkg.precompile()
+            using CyclicExtensions
+            Base.get_extension(CyclicExtensions, :ExtA) isa Module || error("expected extension to load")
+            Base.get_extension(CyclicExtensions, :ExtB) isa Module || error("expected extension to load")
+            CyclicExtensions.greet()
+            """
+            cmd =  `$(Base.julia_cmd()) --startup-file=no -e $code`
+            cmd = addenv(cmd,
+                "JULIA_LOAD_PATH" => join([proj, "@stdlib"], sep),
+                "JULIA_DEPOT_PATH" => depot * Base.Filesystem.pathsep(),
+            )
+            @test occursin("Hello Cycles!", String(read(cmd)))
+        end
+        mktempdir() do depot # Serial pre-compilation
+            code = """
+            using CyclicExtensions
+            Base.get_extension(CyclicExtensions, :ExtA) isa Module || error("expected extension to load")
+            Base.get_extension(CyclicExtensions, :ExtB) isa Module || error("expected extension to load")
+            CyclicExtensions.greet()
+            """
+            proj = joinpath(@__DIR__, "project", "Extensions", "CyclicExtensions")
+            cmd =  `$(Base.julia_cmd()) --startup-file=no -e $code`
+            cmd = addenv(cmd,
+                "JULIA_LOAD_PATH" => proj,
+                "JULIA_DEPOT_PATH" => depot * Base.Filesystem.pathsep(),
+            )
+            @test occursin("Hello Cycles!", String(read(cmd)))
+        end
 
         # Extension-to-extension dependencies
 
         mktempdir() do depot # Parallel pre-compilation
+            proj = joinpath(@__DIR__, "project", "Extensions", "ExtToExtDependency")
             code = """
-            Base.disable_parallel_precompile = false
+            using Pkg
+            Pkg.activate($(repr(proj)))
+            Pkg.precompile()
             using ExtToExtDependency
             Base.get_extension(ExtToExtDependency, :ExtA) isa Module || error("expected extension to load")
             Base.get_extension(ExtToExtDependency, :ExtAB) isa Module || error("expected extension to load")
             ExtToExtDependency.greet()
             """
-            proj = joinpath(@__DIR__, "project", "Extensions", "ExtToExtDependency")
             cmd =  `$(Base.julia_cmd()) --startup-file=no -e $code`
             cmd = addenv(cmd,
-                "JULIA_LOAD_PATH" => proj,
+                "JULIA_LOAD_PATH" => join([proj, "@stdlib"], sep),
                 "JULIA_DEPOT_PATH" => depot * Base.Filesystem.pathsep(),
             )
             @test occursin("Hello ext-to-ext!", String(read(cmd)))
         end
         mktempdir() do depot # Serial pre-compilation
             code = """
-            Base.disable_parallel_precompile = true
             using ExtToExtDependency
             Base.get_extension(ExtToExtDependency, :ExtA) isa Module || error("expected extension to load")
             Base.get_extension(ExtToExtDependency, :ExtAB) isa Module || error("expected extension to load")
@@ -1213,24 +1238,25 @@ end
         end
 
         mktempdir() do depot # Parallel pre-compilation
+            proj = joinpath(@__DIR__, "project", "Extensions", "CrossPackageExtToExtDependency")
             code = """
-            Base.disable_parallel_precompile = false
+            using Pkg
+            Pkg.activate($(repr(proj)))
+            Pkg.precompile()
             using CrossPackageExtToExtDependency
             Base.get_extension(CrossPackageExtToExtDependency.CyclicExtensions, :ExtA) isa Module || error("expected extension to load")
             Base.get_extension(CrossPackageExtToExtDependency, :ExtAB) isa Module || error("expected extension to load")
             CrossPackageExtToExtDependency.greet()
             """
-            proj = joinpath(@__DIR__, "project", "Extensions", "CrossPackageExtToExtDependency")
             cmd =  `$(Base.julia_cmd()) --startup-file=no -e $code`
             cmd = addenv(cmd,
-                "JULIA_LOAD_PATH" => proj,
+                "JULIA_LOAD_PATH" => join([proj, "@stdlib"], sep),
                 "JULIA_DEPOT_PATH" => depot * Base.Filesystem.pathsep(),
             )
             @test occursin("Hello x-package ext-to-ext!", String(read(cmd)))
         end
         mktempdir() do depot # Serial pre-compilation
             code = """
-            Base.disable_parallel_precompile = true
             using CrossPackageExtToExtDependency
             Base.get_extension(CrossPackageExtToExtDependency.CyclicExtensions, :ExtA) isa Module || error("expected extension to load")
             Base.get_extension(CrossPackageExtToExtDependency, :ExtAB) isa Module || error("expected extension to load")
