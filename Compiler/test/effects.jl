@@ -1549,3 +1549,7 @@ let effects = Base.infer_effects(Issue57324.f, (Issue57324.T,))
     @test Compiler.is_notaskstate(effects)
     @test Compiler.is_nortcall(effects)
 end
+
+# issue #61590
+@test !Compiler.is_consistent(Base.infer_effects(getproperty, (Core.TypeName, Symbol)))
+@test !Compiler.is_consistent(Base.infer_effects(getfield, (Core.TypeName, Symbol)))
