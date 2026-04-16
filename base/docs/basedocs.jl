@@ -1013,7 +1013,7 @@ kw"while"
 
 `end` may also be used when indexing with `[...]` to represent the last index of a
 collection or the last index of a dimension of an array, where it is lowered to
-a call to [`lastindex`](@ref) along the relevant dimension, as determined by the context.
+a call to [`lastindex`](@ref) along the relevant dimension (as determined by the context).
 
 # Examples
 ```jldoctest
@@ -1510,7 +1510,7 @@ implicitly begin blocks of code. See also [`;`](@ref).
 
 `begin` may also be used when indexing with `[...]` to represent the first index of a
 collection or the first index of a dimension of an array, where it is lowered to
-a call to [`firstindex`](@ref) along the relevant dimension, as determined by the context.  For example, `a[begin]` is the first element of an array `a`.
+a call to [`firstindex`](@ref) along the relevant dimension (as determined by the context).  For example, `a[begin]` is the first element of an array `a`.
 
 !!! compat "Julia 1.4"
     Use of `begin` as an index requires Julia 1.4 or later.
