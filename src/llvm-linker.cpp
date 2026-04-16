@@ -501,16 +501,18 @@ bool ModuleLinker::run() {
     ReplacedDstComdats.insert(DstC);
   }
 
-  // Alias have to go first, since we are not able to find their comdats
-  // otherwise.
-  for (GlobalAlias &GV : llvm::make_early_inc_range(DstM.aliases()))
+  if (!ReplacedDstComdats.empty()) {
+    // Alias have to go first, since we are not able to find their comdats
+    // otherwise.
+    for (GlobalAlias &GV : llvm::make_early_inc_range(DstM.aliases()))
       dropReplacedComdat(GV, ReplacedDstComdats);
 
-  for (GlobalVariable &GV : llvm::make_early_inc_range(DstM.globals()))
+    for (GlobalVariable &GV : llvm::make_early_inc_range(DstM.globals()))
       dropReplacedComdat(GV, ReplacedDstComdats);
 
-  for (Function &GV : llvm::make_early_inc_range(DstM))
+    for (Function &GV : llvm::make_early_inc_range(DstM))
       dropReplacedComdat(GV, ReplacedDstComdats);
+  }
 
   if (!NonPrevailingComdats.empty()) {
     DenseSet<GlobalObject *> AliasedGlobals;
@@ -529,20 +531,22 @@ bool ModuleLinker::run() {
     }
   }
 
-  for (GlobalVariable &GV : SrcM->globals())
-    if (GV.hasLinkOnceLinkage())
-      if (const Comdat *SC = GV.getComdat())
-        LazyComdatMembers[SC].push_back(&GV);
+  if (!SrcM->getComdatSymbolTable().empty()) {
+    for (GlobalVariable &GV : SrcM->globals())
+      if (GV.hasLinkOnceLinkage())
+        if (const Comdat *SC = GV.getComdat())
+          LazyComdatMembers[SC].push_back(&GV);
 
-  for (Function &SF : *SrcM)
-    if (SF.hasLinkOnceLinkage())
-      if (const Comdat *SC = SF.getComdat())
-        LazyComdatMembers[SC].push_back(&SF);
+    for (Function &SF : *SrcM)
+      if (SF.hasLinkOnceLinkage())
+        if (const Comdat *SC = SF.getComdat())
+          LazyComdatMembers[SC].push_back(&SF);
 
-  for (GlobalAlias &GA : SrcM->aliases())
-    if (GA.hasLinkOnceLinkage())
-      if (const Comdat *SC = GA.getComdat())
-        LazyComdatMembers[SC].push_back(&GA);
+    for (GlobalAlias &GA : SrcM->aliases())
+      if (GA.hasLinkOnceLinkage())
+        if (const Comdat *SC = GA.getComdat())
+          LazyComdatMembers[SC].push_back(&GA);
+  }
 
   // Insert all of the globals in src into the DstM module... without linking
   // initializers (which could refer to functions not yet mapped over).
@@ -585,18 +589,20 @@ bool ModuleLinker::run() {
     }
   }
 
-  for (unsigned I = 0; I < ValuesToLink.size(); ++I) {
-    GlobalValue *GV = ValuesToLink[I];
-    const Comdat *SC = GV->getComdat();
-    if (!SC)
-      continue;
-    for (GlobalValue *GV2 : LazyComdatMembers[SC]) {
-      GlobalValue *DGV = getLinkedToGlobal(GV2);
-      bool LinkFromSrc = true;
-      if (DGV && shouldLinkFromSource(LinkFromSrc, *DGV, *GV2))
-        return true;
-      if (LinkFromSrc)
-        ValuesToLink.insert(GV2);
+  if (!LazyComdatMembers.empty()) {
+    for (unsigned I = 0; I < ValuesToLink.size(); ++I) {
+      GlobalValue *GV = ValuesToLink[I];
+      const Comdat *SC = GV->getComdat();
+      if (!SC)
+        continue;
+      for (GlobalValue *GV2 : LazyComdatMembers[SC]) {
+        GlobalValue *DGV = getLinkedToGlobal(GV2);
+        bool LinkFromSrc = true;
+        if (DGV && shouldLinkFromSource(LinkFromSrc, *DGV, *GV2))
+          return true;
+        if (LinkFromSrc)
+          ValuesToLink.insert(GV2);
+      }
     }
   }
 
