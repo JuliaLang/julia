@@ -555,9 +555,10 @@ The location `i_1, i_2, i_3, ..., i_{n+1}` contains the value at `A[I_1[i_1, i_2
 All dimensions indexed with scalars are dropped. For example, if `J` is an array of indices, then the result of `A[2, J, 3]` is an
 array with size `size(J)`. Its `j`th element is populated by `A[2, J[j], 3]`.
 
-As a special part of the `[...]` syntax, the `end` keyword may be used to represent the last index of
+As a special part of the `[...]` indexing syntax, the `end` keyword may be used to represent the last index of
 a dimension; specifically, it is "lowered" by the compiler to a call to [`lastindex`](@ref) for that
-dimension of the array for the innermost enclosing brackets.  Otherwise, the bracket indexing syntax
+dimension of the array for the innermost enclosing brackets.  Similarly, `begin` within `[...]` indexing is
+lowered to a call to [`firstindex`](@ref).  Otherwise, the bracket indexing syntax
 is equivalent to a call to [`getindex`](@ref):
 
 ```
