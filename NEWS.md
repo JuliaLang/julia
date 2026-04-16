@@ -34,6 +34,10 @@ Compiler/Runtime improvements
     effect tracking; for those, the recommended pattern remains storing the field value in
     a local variable before the check (e.g. `val = x.field; if !isnothing(val) ... end`)
     ([#41199], [#47574]).
+  - `IOContext` supports a new `:type_budget => Ref{Int}(n)` property that limits the number of
+    type nodes expanded during printing, preventing exponential blowup on deeply nested parametric
+    types. The budget is auto-initialized from the display width when `:limit => true` is set
+    (e.g. in the REPL and stack traces), so `repr` and `print` remain unaffected.
 
 Command-line option changes
 ---------------------------
@@ -64,6 +68,11 @@ New library functions
 
 New library features
 --------------------
+
+* `IOContext` supports a new `:type_budget => n` property that limits the number of
+  type nodes expanded during printing, preventing exponential blowup on deeply nested parametric
+  types. The budget is auto-initialized from the display width when `:limit => true` is set
+  (e.g. in the REPL and stack traces), so `repr` and `print` remain unaffected.
 
 * `IOContext` supports a new boolean `hexunsigned` option that allows for
   printing unsigned integers in decimal instead of hexadecimal ([#60267]).
