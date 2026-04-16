@@ -5,29 +5,17 @@
 ; COM: This test checks that multiversioning correctly picks up on features that should trigger cloning
 ; COM: Note that for annotations alone, we don't need jl_fvars or jl_gvars
 
-; COM: Copied from src/processor.h
-; COM:    JL_TARGET_VEC_CALL = 1 << 0,
-; COM:    // Clone all functions
-; COM:    JL_TARGET_CLONE_ALL = 1 << 1,
-; COM:    // Clone when there's scalar math operations that can benefit from target-specific
-; COM:    // optimizations. This includes `muladd`, `fma`, `fast`/`contract` flags.
-; COM:    JL_TARGET_CLONE_MATH = 1 << 2,
-; COM:    // Clone when the function has a loop
-; COM:    JL_TARGET_CLONE_LOOP = 1 << 3,
-; COM:    // Clone when the function uses any vectors
-; COM:    // When this is specified, the cloning pass should also record if any of the cloned functions
-; COM:    // used this in any function call (including the signature of the function itself)
-; COM:    JL_TARGET_CLONE_SIMD = 1 << 4,
-; COM:    // The CPU name is unknown
-; COM:    JL_TARGET_UNKNOWN_NAME = 1 << 5,
-; COM:    // Optimize for size for this target
-; COM:    JL_TARGET_OPTSIZE = 1 << 6,
-; COM:    // Only optimize for size for this target
-; COM:    JL_TARGET_MINSIZE = 1 << 7,
-; COM:    // Clone when the function queries CPU features
-; COM:    JL_TARGET_CLONE_CPU = 1 << 8,
-; COM:    // Clone when the function uses fp16
-; COM:    JL_TARGET_CLONE_FLOAT16 = 1 << 9,
+; COM: Target spec packed_flags() encoding (from llvm-multiversioning.cpp):
+; COM:    clone_all       = 1 << 0
+; COM:    opt_size        = 1 << 1
+; COM:    min_size        = 1 << 2
+; COM:    has_new_math    = 1 << 3
+; COM:    has_new_simd    = 1 << 4
+; COM:    has_new_float16 = 1 << 5
+; COM:    has_new_bfloat16 = 1 << 6
+; COM:
+; COM: clone_flags() always includes LOOP and CPU categories.
+; COM: Additionally includes MATH if has_new_math, SIMD if has_new_simd, etc.
 
 ; COM: start with the basics, just one feature per function
 
@@ -78,7 +66,7 @@ define noundef float @simd_fastmath_test(<4 x float> noundef %0) {
   ret float %4
 }
 
-; CHECK: @loop_fastmath_test{{.*}}#[[LOOP_FASTMATH_TEST_ATTRS:[0-9]+]]
+; CHECK: @loop_fastmath_test{{.*}}#[[LOOP_TEST_ATTRS]]
 define noundef i32 @loop_fastmath_test(i32 noundef %0) {
   %2 = icmp sgt i32 %0, 0
   br i1 %2, label %7, label %5
@@ -102,7 +90,7 @@ define noundef i32 @loop_fastmath_test(i32 noundef %0) {
   br i1 %14, label %3, label %7, !llvm.loop !9
 }
 
-; CHECK: @simd_loop_test{{.*}}#[[SIMD_LOOP_TEST_ATTRS:[0-9]+]]
+; CHECK: @simd_loop_test{{.*}}#[[LOOP_TEST_ATTRS]]
 define dso_local noundef i32 @simd_loop_test(<4 x i32> noundef %0) {
   %2 = extractelement <4 x i32> %0, i64 0
   %3 = icmp sgt i32 %2, 0
@@ -122,7 +110,7 @@ define dso_local noundef i32 @simd_loop_test(<4 x i32> noundef %0) {
   br i1 %12, label %4, label %6, !llvm.loop !9
 }
 
-; CHECK: @simd_loop_fastmath_test{{.*}}#[[SIMD_LOOP_FASTMATH_TEST_ATTRS:[0-9]+]]
+; CHECK: @simd_loop_fastmath_test{{.*}}#[[LOOP_TEST_ATTRS]]
 define noundef i32 @simd_loop_fastmath_test(<4 x i32> noundef %0) {
   %2 = extractelement <4 x i32> %0, i64 0
   %3 = icmp sgt i32 %2, 0
@@ -180,12 +168,9 @@ define noundef i32 @uncloned(i32 noundef %0) {
 ; COM: Note that these strings are hex-encoded bits of the target indices that will be cloned
 ; CHECK-DAG: attributes #[[BORING_ATTRS]] = { "julia.mv.clones"="2" }
 ; CHECK-DAG: attributes #[[FASTMATH_TEST_ATTRS]] = { "julia.mv.clones"="6" }
-; CHECK-DAG: attributes #[[LOOP_TEST_ATTRS]] = { "julia.mv.clones"="A" }
+; CHECK-DAG: attributes #[[LOOP_TEST_ATTRS]] = { "julia.mv.clones"="1E" }
 ; CHECK-DAG: attributes #[[SIMD_TEST_ATTRS]] = { "julia.mv.clones"="12" }
 ; CHECK-DAG: attributes #[[SIMD_FASTMATH_TEST_ATTRS]] = { "julia.mv.clones"="16" }
-; CHECK-DAG: attributes #[[LOOP_FASTMATH_TEST_ATTRS]] = { "julia.mv.clones"="E" }
-; CHECK-DAG: attributes #[[SIMD_LOOP_TEST_ATTRS]] = { "julia.mv.clones"="1A" }
-; CHECK-DAG: attributes #[[SIMD_LOOP_FASTMATH_TEST_ATTRS]] = { "julia.mv.clones"="1E" }
 ; CHECK-DAG: attributes #[[FUNC_IN_GV_ATTRS]]
 ; CHECK-SAME: "julia.mv.clones"="2"
 ; CHECK-SAME: "julia.mv.fvar"
@@ -210,9 +195,9 @@ define noundef i32 @uncloned(i32 noundef %0) {
 !1 = !{i32 1, !"julia.mv.skipcloning", i32 1}
 !2 = !{i32 1, !"julia.mv.specs", !3}
 !3 = !{!4, !5, !6, !7, !8}
-!4 = !{!"cpubase", !"nofeatures", i32 0, i32 2}
-!5 = !{!"cpucloneall", !"cloneall", i32 0, i32 2}
-!6 = !{!"cpufastmath", !"fastmathclone", i32 0, i32 4}
-!7 = !{!"cpuloop", !"loopclone", i32 0, i32 8}
+!4 = !{!"cpubase", !"nofeatures", i32 0, i32 0}
+!5 = !{!"cpucloneall", !"cloneall", i32 0, i32 1}
+!6 = !{!"cpufastmath", !"fastmathclone", i32 0, i32 8}
+!7 = !{!"cpuloop", !"loopclone", i32 0, i32 0}
 !8 = !{!"cpusimd", !"simdclone", i32 0, i32 16}
 !9 = !{!9}

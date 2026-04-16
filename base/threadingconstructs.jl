@@ -376,8 +376,8 @@ function _threadsfor_comprehension_fast(esc_range, esc_lidx, esc_body, schedule,
             if niter > 0
                 let items = items, result = result
                 local threadsfor_fun
-                function threadsfor_fun(tid = 1; onethread = false)
-                    # Reads: items, tid, onethread. Defines: r, loop_first, loop_last.
+                function threadsfor_fun(tid = 1)
+                    # Reads: items, tid. Defines: r, loop_first, loop_last.
                     $work_dist
                     for i = loop_first:loop_last
                         local $esc_lidx = @inbounds r[i]
@@ -413,8 +413,8 @@ function _threadsfor_comprehension_fast(esc_range, esc_lidx, esc_body, schedule,
                     let items = items, result = result, _widen_buffers = _widen_buffers,
                         _skip = _skip
                     local threadsfor_fun
-                    function threadsfor_fun(tid = 1; onethread = false)
-                        # Reads: items, tid, onethread. Defines: r, loop_first, loop_last.
+                    function threadsfor_fun(tid = 1)
+                        # Reads: items, tid. Defines: r, loop_first, loop_last.
                         $work_dist
                         local _T = eltype(result)
                         local _my_widen = _widen_buffers[tid]
@@ -486,12 +486,7 @@ function _work_distribution_code()
         r = items # Load into local variable
         lenr = length(r)
         # divide loop iterations among threads
-        if onethread
-            tid = 1
-            len, rem = lenr, 0
-        else
-            len, rem = divrem(lenr, threadpoolsize())
-        end
+        len, rem = divrem(lenr, threadpoolsize())
         # not enough iterations for all the threads?
         if len == 0
             if tid > rem
@@ -519,8 +514,8 @@ function default_func(itr, lidx, lbody)
     work_dist = _work_distribution_code()
     quote
         let items = $itr
-        function threadsfor_fun(tid = 1; onethread = false)
-            # Reads: items, tid, onethread. Defines: r, loop_first, loop_last.
+        function threadsfor_fun(tid = 1)
+            # Reads: items, tid. Defines: r, loop_first, loop_last.
             $work_dist
             for i = loop_first:loop_last
                 local $(esc(lidx)) = @inbounds r[i]
@@ -555,8 +550,8 @@ function default_comprehension_func(itr, esc_lidx, esc_body, esc_condition, resu
         # in tid order preserves iteration order without a sort step.
         local local_bufs = [$buf_init for _ in 1:_npool]
 
-        function threadsfor_fun(tid = 1; onethread = false)
-            # Reads: items, tid, onethread. Defines: r, loop_first, loop_last.
+        function threadsfor_fun(tid = 1)
+            # Reads: items, tid. Defines: r, loop_first, loop_last.
             $work_dist
             local buf = local_bufs[tid]
             for i = loop_first:loop_last

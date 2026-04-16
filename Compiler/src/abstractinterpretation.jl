@@ -67,6 +67,7 @@ any_ambig(info::MethodMatchInfo) = any_ambig(info.results)
 any_ambig(m::MethodMatches) = any_ambig(m.info)
 fully_covering(info::MethodMatchInfo) = info.fullmatch
 fully_covering(m::MethodMatches) = fully_covering(m.info)
+multiple_methods(m::MethodMatches) = length(m.applicable) > 1
 
 struct UnionSplitMethodMatches
     applicable::Vector{MethodMatchTarget}
@@ -78,6 +79,17 @@ any_ambig(info::UnionSplitInfo) = any(any_ambig, info.split)
 any_ambig(m::UnionSplitMethodMatches) = any_ambig(m.info)
 fully_covering(info::UnionSplitInfo) = all(fully_covering, info.split)
 fully_covering(m::UnionSplitMethodMatches) = fully_covering(m.info)
+function multiple_methods(m::UnionSplitMethodMatches)
+    first_method = nothing
+    for target in m.applicable
+        if first_method === nothing
+            first_method = target.match.method
+        elseif target.match.method !== first_method
+            return true
+        end
+    end
+    return false
+end
 
 nmatches(info::MethodMatchInfo) = length(info.results)
 function nmatches(info::UnionSplitInfo)
@@ -143,7 +155,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
     # split the for loop off into a function, so that we can pause and restart it at will
     function infercalls(interp, sv)
         local napplicable = length(applicable)
-        local multiple_matches = napplicable > 1
+        local multiple_matches = multiple_methods(matches)
         while state.inferidx <= napplicable
             (; match, edges, call_results, edge_idx) = applicable[state.inferidx]
             local method = match.method
@@ -296,7 +308,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
             inferidx = SafeBox{Int}(1)
             function infercalls2(interp, sv)
                 local napplicable = length(applicable)
-                local multiple_matches = napplicable > 1
+                local multiple_matches = multiple_methods(matches)
                 while inferidx[] <= napplicable
                     (; match, call_results, edge_idx) = applicable[inferidx[]]
                     inferidx[] += 1
@@ -1350,6 +1362,7 @@ function const_prop_call(interp::AbstractInterpreter,
         cache_argtypes = matching_cache_argtypes(𝕃ᵢ, mi)
     end
     argtypes = matching_cache_argtypes(𝕃ᵢ, mi, forwarded_argtypes, cache_argtypes)
+    argtypes = get_nospecializeinfer_argtypes(argtypes, cache_argtypes, mi.def::Method)
     inf_result = constprop_cache_lookup(𝕃ᵢ, mi, argtypes, get_inference_cache(interp))
     if inf_result === missing
         # a previous const-prop attempt hit a cycle and produced a limited result;
@@ -3130,7 +3143,11 @@ function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(
 end
 
 function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, sv::AbsIntState)
-    if e.head === :call && length(e.args) ≥ 1
+    if e.head === :static_parameter
+        rt = abstract_eval_static_parameter(interp, e, sv)
+        merge_effects!(interp, sv, rt.effects)
+        return rt.rt
+    elseif e.head === :call && length(e.args) ≥ 1
         # TODO: We still have non-linearized cglobal
         @assert e.args[1] === Core.tuple || e.args[1] === GlobalRef(Core, :tuple)
     else

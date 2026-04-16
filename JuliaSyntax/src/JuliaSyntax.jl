@@ -12,18 +12,14 @@ end
 # Public API, in the order of docs/src/api.md
 
 # Parsing.
-export parsestmt,
-    parseall,
-    parseatom
+export parseall, parseatom, parsestmt
 
 @_public parse!,
     ParseStream,
     build_tree
 
 # Tokenization
-export tokenize,
-    Token,
-    untokenize
+export Token, tokenize, untokenize
 
 # Source file handling
 @_public sourcefile,

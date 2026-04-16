@@ -76,8 +76,6 @@ reverse_nontrivia_children(cursor) = Iterators.filter(should_include_node, Itera
 # reference parser.
 function _string_to_Expr(cursor, source, txtbuf::Vector{UInt8}, txtbuf_offset::UInt32)
     ret = Expr(:string)
-    args2 = Any[]
-    i = 1
     it = reverse_nontrivia_children(cursor)
     r = iterate(it)
     while r !== nothing
@@ -369,7 +367,12 @@ end
             if kind(secondchildhead) == K"VERSION"
                 # Encode the syntax version into `loc` so that the argument order
                 # matches what ordinary macros expect.
-                loc = Core.MacroSource(loc, popat!(args, 2))
+                # Core.MacroSource was added in Julia 1.13+; fall back to plain loc on older versions.
+                if isdefined(Core, :MacroSource)
+                    loc = Core.MacroSource(loc, popat!(args, 2))
+                else
+                    popat!(args, 2)  # discard the version argument
+                end
             end
         end
         do_lambda = _extract_do_lambda!(args)

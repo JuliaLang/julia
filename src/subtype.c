@@ -68,7 +68,7 @@ typedef struct jl_varbinding_t {
     jl_tvar_t *var; // store NULL to "delete" this from env (temporarily)
     jl_value_t *JL_NONNULL lb;
     jl_value_t *JL_NONNULL ub;
-    int8_t right;       // whether this variable came from the right side of `A <: B`
+    int8_t existential; // whether this variable should be treated as existential
     int8_t occurs_inv;  // occurs in invariant position
     int8_t occurs_cov;  // # of occurrences in covariant position
     int8_t concrete;    // 1 if another variable has a constraint forcing this one to be concrete
@@ -680,6 +680,37 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param);
 
 static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param, int limit_slow);
 
+static int is_leaf_typevar(jl_tvar_t *v) JL_NOTSAFEPOINT;
+
+// Check whether env (variable bounds & diagonality) changed compared to saved env.
+static int env_unchanged(jl_stenv_t *e, jl_savedenv_t *se) JL_NOTSAFEPOINT
+{
+    jl_value_t **roots = NULL;
+    if (se->gcframe.nroots == JL_GC_ENCODE_PUSHARGS(1)) {
+        jl_svec_t *sv = (jl_svec_t*)se->roots[0];
+        assert(jl_is_svec(sv));
+        roots = jl_svec_data(sv);
+    }
+    else if (se->gcframe.nroots) {
+        roots = se->roots;
+    }
+    jl_varbinding_t *v = e->vars;
+    int i = 0, j = 1;
+    while (v != NULL) {
+        assert(roots != NULL);
+        if (v->existential) {
+            if (v->lb != roots[i] || v->ub != roots[i + 1])
+                return 0; // check if bounds changed
+            if (is_leaf_typevar(v->var) && v->occurs_inv == 0 && v->occurs_cov > 1 && se->buf[j] <= 1)
+                return 0; // check if a variable became digonal from non-diagonal
+        }
+        i += 3; // lb, ub, innervars
+        j += 3;
+        v = v->prev;
+    }
+    return 1;
+}
+
 // subtype for variable bounds consistency check. needs its own forall/exists environment.
 static int subtype_ccheck(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 {
@@ -695,6 +726,8 @@ static int subtype_ccheck(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
         return 1;
     if (x == (jl_value_t*)jl_any_type && jl_is_datatype(y))
         return 0;
+    if (obviously_in_union(y, x))
+        return 1;
     jl_saved_unionstate_t oldLunions; push_unionstate(&oldLunions, &e->Lunions);
     int sub = local_forall_exists_subtype(x, y, e, 0, 1);
     pop_unionstate(&e->Lunions, &oldLunions);
@@ -765,7 +798,7 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
     if (e->Loffset != 0 && !jl_is_typevar(a) &&
         a != jl_bottom_type && a != (jl_value_t *)jl_any_type)
         return 0;
-    if (!bb->right)  // check ∀b . b<:a
+    if (!bb->existential)  // check ∀b . b<:a
         return subtype_left_var(bb->ub, a, e, param);
     if (bb->ub == a)
         return 1;
@@ -786,7 +819,7 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
     assert(bb->ub != (jl_value_t*)b);
     if (jl_is_typevar(a)) {
         jl_varbinding_t *aa = lookup(e, (jl_tvar_t*)a);
-        if (aa && !aa->right && in_union(bb->lb, a) && bb->depth0 != aa->depth0 && var_outside(e, b, (jl_tvar_t*)a)) {
+        if (aa && !aa->existential && in_union(bb->lb, a) && bb->depth0 != aa->depth0 && var_outside(e, b, (jl_tvar_t*)a)) {
             // an "exists" var cannot equal a "forall" var inside it unless the forall
             // var has equal bounds.
             return subtype_left_var(aa->ub, aa->lb, e, param);
@@ -806,7 +839,7 @@ static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
     if (e->Loffset != 0 && !jl_is_typevar(a) &&
         a != jl_bottom_type && a != (jl_value_t *)jl_any_type)
         return 0;
-    if (!bb->right)  // check ∀b . b>:a
+    if (!bb->existential)  // check ∀b . b>:a
         return subtype_left_var(a, bb->lb, e, param);
     if (bb->lb == a)
         return 1;
@@ -821,7 +854,7 @@ static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
     assert(bb->lb != (jl_value_t*)b);
     if (jl_is_typevar(a)) {
         jl_varbinding_t *aa = lookup(e, (jl_tvar_t*)a);
-        if (aa && !aa->right && bb->depth0 != aa->depth0 && param == 2 && var_outside(e, b, (jl_tvar_t*)a))
+        if (aa && !aa->existential && bb->depth0 != aa->depth0 && param == 2 && var_outside(e, b, (jl_tvar_t*)a))
             return subtype_left_var(aa->ub, aa->lb, e, param);
     }
     return 1;
@@ -1384,7 +1417,7 @@ static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, in
     }
     if (vvx != JL_VARARG_NONE && vvx != JL_VARARG_INT &&
         (!xbb || !jl_is_long(xbb->lb))) {
-        if (vvx == JL_VARARG_UNBOUND || (xbb && !xbb->right)) {
+        if (vvx == JL_VARARG_UNBOUND || (xbb && !xbb->existential)) {
             // Unbounded on the LHS, bounded on the RHS
             if (vvy == JL_VARARG_NONE || vvy == JL_VARARG_INT)
                 return 0;
@@ -1424,7 +1457,7 @@ static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, in
 }
 
 static int try_subtype_by_bounds(jl_value_t *a, jl_value_t *b, jl_stenv_t *e);
-static int has_exists_typevar(jl_value_t *x, jl_stenv_t *e) JL_NOTSAFEPOINT;
+static int has_existential_typevar(jl_value_t *x, jl_stenv_t *e) JL_NOTSAFEPOINT;
 
 // `param` means we are currently looking at a parameter of a type constructor
 // (as opposed to being outside any type constructor, or comparing variable bounds).
@@ -1455,7 +1488,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
             // Note: `x <: ∃y` performs a local ∀-∃ check between `x` and `yb->ub`.
             // We need to ensure that there's no ∃ typevar as otherwise that check
             // might cause false alarm due to the accumulated env change.
-            if (yb == NULL || yb->right == 0 || !has_exists_typevar(yb->ub, e))
+            if (yb == NULL || !yb->existential || !has_existential_typevar(yb->ub, e))
                 return subtype_var(yvar, x, e, 1, param);
         }
         x = pick_union_element(x, e, 0);
@@ -1473,7 +1506,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
             // variables lurking inside.
             // note: for forall var, there's no need to split y if it has no free typevars.
             jl_varbinding_t *xx = lookup(e, (jl_tvar_t *)x);
-            ui = ((xx && xx->right) || jl_has_free_typevars(y)) && pick_union_decision(e, 1);
+            ui = ((xx && xx->existential) || jl_has_free_typevars(y)) && pick_union_decision(e, 1);
         }
         if (ui == 1)
             y = pick_union_element(y, e, 1);
@@ -1494,8 +1527,8 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
                 if (yub == ylb && jl_is_typevar(yub))
                     return subtype(x, yub, e, param);
             }
-            int xr = xx && xx->right;  // treat free variables as "forall" (left)
-            int yr = yy && yy->right;
+            int xr = xx && xx->existential;  // treat free variables as "forall" (left)
+            int yr = yy && yy->existential;
             if (xr) {
                 if (yy) record_var_occurrence(yy, e, param);
                 if (yr) {
@@ -1517,7 +1550,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
         if (jl_is_unionall(y)) {
             jl_varbinding_t *xb = lookup(e, (jl_tvar_t*)x);
             jl_value_t *xub = xb == NULL ? ((jl_tvar_t *)x)->ub : xb->ub;
-            if ((xb == NULL ? !e->ignore_free : !xb->right) && xub != y) {
+            if ((xb == NULL ? !e->ignore_free : !xb->existential) && xub != y) {
                 // We'd better unwrap `y::UnionAll` eagerly if `x` isa ∀-var.
                 // This makes sure the following cases work correct:
                 // 1) `∀T <: Union{∃S, SomeType{P}} where {P}`: `S == Any` ==> `S >: T`
@@ -1636,20 +1669,20 @@ static int is_definite_length_tuple_type(jl_value_t *x)
     return k == JL_VARARG_NONE || k == JL_VARARG_INT;
 }
 
-static int is_exists_typevar(jl_value_t *x, jl_stenv_t *e)
+static int is_existential_typevar(jl_value_t *x, jl_stenv_t *e)
 {
     if (!jl_is_typevar(x))
         return 0;
     jl_varbinding_t *vb = lookup(e, (jl_tvar_t *)x);
-    return vb && vb->right;
+    return vb && vb->existential;
 }
 
-static int has_exists_typevar(jl_value_t *x, jl_stenv_t *e) JL_NOTSAFEPOINT
+static int has_existential_typevar(jl_value_t *x, jl_stenv_t *e) JL_NOTSAFEPOINT
 {
     jl_typeenv_t *env = NULL;
     jl_varbinding_t *v = e->vars;
     while (v != NULL) {
-        if (v->right) {
+        if (v->existential) {
             jl_typeenv_t *newenv = (jl_typeenv_t*)alloca(sizeof(jl_typeenv_t));
             newenv->var = v->var;
             newenv->val = NULL;
@@ -1674,8 +1707,8 @@ static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t 
     int kindy = !jl_has_free_typevars(y);
     if (kindx && kindy)
         return jl_subtype(x, y);
-    int has_exists = (!kindx && has_exists_typevar(x, e)) ||
-                     (!kindy && has_exists_typevar(y, e));
+    int has_exists = (!kindx && has_existential_typevar(x, e)) ||
+                     (!kindy && has_existential_typevar(y, e));
     if (!has_exists) {
         // We can use ∀_∃_subtype safely for ∃ free inputs.
         // This helps to save some bits in union stack.
@@ -1687,7 +1720,7 @@ static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t 
         pop_unionstate(&e->Runions, &oldRunions);
         return sub;
     }
-    if (is_exists_typevar(x, e) != is_exists_typevar(y, e)) {
+    if (is_existential_typevar(x, e) != is_existential_typevar(y, e)) {
         e->Lunions.used = 0;
         while (1) {
             e->Lunions.more = 0;
@@ -1721,8 +1754,6 @@ static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t 
                 break;
             if (limited || e->Runions.more == oldRmore) {
                 // re-save env and freeze the ∃decision for previous ∀Union
-                // Note: We could ignore the rest `∃Union` decisions if `x` and `y`
-                // contain no ∃ typevar, as they have no effect on env.
                 ini_count = count;
                 push_unionstate(&latestLunions, &e->Lunions);
                 re_save_env(e, &se, 1);
@@ -1738,7 +1769,9 @@ static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t 
     }
     if (!sub)
         assert(e->Runions.more == oldRmore);
-    else if (limited)
+    else if (e->Runions.more > oldRmore && (limited || env_unchanged(e, &se)))
+        // Ignore the rest ∃Union decisions if env is unchanged/limited.
+        // As otherwise it might cause combinatorial explosion without making any difference to the result.
         e->Runions.more = oldRmore;
     free_env(&se);
     return sub;
@@ -1758,7 +1791,7 @@ static int equal_var(jl_tvar_t *v, jl_value_t *x, jl_stenv_t *e)
         return e->ignore_free || (
             local_forall_exists_subtype(x, v->lb, e, 2, !jl_has_free_typevars(x)) &&
             local_forall_exists_subtype(v->ub, x, e, 0, 0));
-    if (!vb->right)
+    if (!vb->existential)
         return local_forall_exists_subtype(x, vb->lb, e, 2, !jl_has_free_typevars(x)) &&
                local_forall_exists_subtype(vb->ub, x, e, 0, 0);
     if (vb->lb == x)
@@ -2769,14 +2802,14 @@ static int subtype_in_env_existential(jl_value_t *x, jl_value_t *y, jl_stenv_t *
     jl_varbinding_t *v = e->vars;
     int n = 0;
     while (v != NULL) {
-        rs[n++] = v->right;
-        v->right = 1;
+        rs[n++] = v->existential;
+        v->existential = 1;
         v = v->prev;
     }
     int issub = subtype_in_env(x, y, e);
     n = 0; v = e->vars;
     while (v != NULL) {
-        v->right = rs[n++];
+        v->existential = rs[n++];
         v = v->prev;
     }
     return issub;
@@ -3422,7 +3455,7 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
         }
     }
 
-    if (vb->right && e->envidx < e->envsz) {
+    if (vb->existential && e->envidx < e->envsz) {
         jl_value_t *oldval = e->envout[e->envidx];
         if (!varval || (!is_leaf_bound(varval) && !vb->occurs_inv))
             e->envout[e->envidx] = (jl_value_t*)vb->var;
@@ -3866,7 +3899,7 @@ static void flip_vars(jl_stenv_t *e)
 {
     jl_varbinding_t *btemp = e->vars;
     while (btemp != NULL) {
-        btemp->right = !btemp->right;
+        btemp->existential = !btemp->existential;
         btemp = btemp->prev;
     }
 }

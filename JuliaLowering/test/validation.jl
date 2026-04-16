@@ -48,7 +48,6 @@ let
         "gc_preserve",
         "isdefined",
         "lambda",
-        "generated_function",
         "foreigncall",
         "cfunction",
         "cconv",
@@ -121,8 +120,36 @@ let
     end
 end
 
+@test !vst1_ok(Expr(:nothing))
+@test vst1_ok(Expr(:block, nothing))
+@test vst1_ok(Expr(:block, GlobalRef(Core, :nothing)))
+
 @test vst1_ok(Expr(:-->, 1))
 @test vst1_ok(Expr(:-->, 1, 2))
 @test vst1_ok(Expr(:-->, 1, 2, 3))
 
 @test vst1_ok(Expr(:const, :a, 1))
+
+# vst1_dot_getproperty_rhs allows usually-invalid forms
+@testset "dot rhs forms" for rhs in [:_, :__, Symbol("#unused#"), :ccall, :cglobal, 1]
+    @test vst1_ok(Expr(:., :Mod, rhs))
+    @test vst1_ok(Expr(:., :Mod, Expr(:inert, rhs)))
+    @test vst1_ok(Expr(:., :Mod, QuoteNode(rhs)))
+
+    @test vst1_ok(Expr(:., :Mod, string(rhs)))
+    @test vst1_ok(Expr(:., :Mod, Expr(:inert, string(rhs))))
+    @test vst1_ok(Expr(:., :Mod, QuoteNode(string(rhs))))
+end
+
+@test vst1_ok(:(using Mod: cglobal))
+@test vst1_ok(:(Mod.cglobal))
+@test vst1_ok(:(Mod._ = 1))
+
+@testset "underscores that should probably not be valid" begin
+    @test vst1_ok(:(Mod._))
+    @test vst1_ok(:(function f(x::_); x; end))
+    @test vst1_ok(:(global _))
+    @test vst1_ok(:(global _::Int))
+    @test vst1_ok(:(local _))
+    @test vst1_ok(:(local _::Int))
+end
