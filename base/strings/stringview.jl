@@ -36,8 +36,8 @@ indices in `reverse(s)` and vice-versa, and `graphemes` from module `Unicode` to
 operate on user-visible "characters" (graphemes) rather than codepoints.
 See also [`Iterators.reverse`](@ref) for
 reverse-order iteration without making a copy. Custom string types must implement the
-`reverse` function themselves and should typically return a string with the same type
-and encoding. If they return a string with a different encoding, they must also override
+`reverse` function themselves and should typically return a string with the same normalization
+and encoding, so that `reverseind` works; if they return a string with a different encoding, they must also override
 `reverseind` for that string type to satisfy `s[reverseind(s,i)] == reverse(s)[i]`.
 
 # Examples
