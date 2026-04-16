@@ -790,7 +790,11 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
     bool safepoint_on_entry = out.safepoint_on_entry;
     JL_GC_PUSH3(&out.temporary_roots, &method_roots.list, &method_roots.keyset);
     size_t i, l;
-    for (i = 0, l = jl_array_nrows(codeinfos); i < l; i++) {
+    { // NATIVE_Emit zone
+    JL_TIMING(NATIVE_AOT, NATIVE_Emit);
+    l = jl_array_nrows(codeinfos);
+    jl_timing_printf(JL_TIMING_DEFAULT_BLOCK, "%zu codeinfos", l);
+    for (i = 0; i < l; i++) {
         // each item in this list is either a CodeInstance followed by a CodeInfo indicating something
         // to compile, or a rettype followed by a sig describing a C-callable alias to create.
         jl_value_t *item = jl_array_ptr_ref(codeinfos, i);
@@ -811,6 +815,8 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
                 out.safepoint_on_entry = false; // ensure we don't block ExpandAtomicModifyPass from inlining this code if applicable
             if (out.ci_funcs.contains(codeinst))
                 continue;       // TODO: make this an error
+            JL_TIMING(NATIVE_AOT, NATIVE_EmitCodeinst);
+            jl_timing_printf(JL_TIMING_DEFAULT_BLOCK, "%s", name_from_method_instance(jl_get_ci_mi(codeinst)));
             if (!(out.params->force_emit_all) && jl_atomic_load_relaxed(&codeinst->invoke) == jl_fptr_const_return_addr)
                 out.ci_funcs[codeinst] = {JL_INVOKE_CONST};
             else
@@ -828,15 +834,33 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
             jl_generate_ccallable(out, nameval, rt, sig);
         }
     }
+    } // end NATIVE_Emit zone
 
-    emit_always_inline(out,
-                       [&ci_infos](jl_code_instance_t *ci) { return ci_infos.lookup(ci); });
-    emit_llvmcall_modules(out);
+    {
+        JL_TIMING(NATIVE_AOT, NATIVE_EmitAlwaysInline);
+        emit_always_inline(out,
+                           [&ci_infos](jl_code_instance_t *ci) { return ci_infos.lookup(ci); });
+    }
+    {
+        JL_TIMING(NATIVE_AOT, NATIVE_EmitLLVMCall);
+        emit_llvmcall_modules(out);
+    }
     // finally, make sure all referenced methods get fixed up, particularly if the user declined to compile them
-    aot_link_output(out);
+    {
+        JL_TIMING(NATIVE_AOT, NATIVE_Link);
+        jl_timing_printf(JL_TIMING_DEFAULT_BLOCK, "%zu call targets", out.call_targets.size());
+        aot_link_output(out);
+    }
     // including generating cfunction thunks
-    generate_cfunc_thunks(out);
-    aot_optimize_roots(out, method_roots);
+    {
+        JL_TIMING(NATIVE_AOT, NATIVE_CfuncThunks);
+        generate_cfunc_thunks(out);
+    }
+    {
+        JL_TIMING(NATIVE_AOT, NATIVE_OptRoots);
+        jl_timing_printf(JL_TIMING_DEFAULT_BLOCK, "%zu temporary roots", (size_t)jl_array_dim0(out.temporary_roots));
+        aot_optimize_roots(out, method_roots);
+    }
     out.temporary_roots = nullptr;
     out.temporary_roots_set.clear();
     ci_infos.clear();
