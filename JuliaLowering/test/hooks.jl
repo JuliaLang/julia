@@ -24,10 +24,9 @@
 
     function jeval(str)
         prog = parseall(Expr, str)
-        local out
         try
             JL.activate!()
-            out = Core.eval(test_mod, prog)
+            return Core.eval(test_mod, prog)
         finally
             JL.activate!(false)
         end

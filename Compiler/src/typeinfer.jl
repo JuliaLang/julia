@@ -727,7 +727,9 @@ function is_already_cached(interp::AbstractInterpreter, result::InferenceResult)
     cache = code_cache(interp, result.valid_worlds)
     if haskey(cache, mi)
         # n.b.: accurate edge representation might cause the CodeInstance for this to be constructed later
-        @assert isdefined(cache[mi], :inferred)
+        cached = cache[mi]
+        ci = cached isa InferenceResult ? cached.ci : cached
+        @assert isdefined(ci, :inferred)
         return true
     end
     return false
@@ -1157,7 +1159,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             inferred = nothing
         end
         if codeinst isa CodeInstance
-            need_inlineable_code = may_optimize(interp) && (force_inline || is_inlineable(inferred))
+            need_inlineable_code = may_optimize(interp) && (force_inline || is_inlineable(inferred) || use_const_api(codeinst))
             if need_inlineable_code
                 src = ci_get_source(interp, codeinst, inferred)
                 if src === nothing
@@ -1204,7 +1206,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             if codeinst isa CodeInstance # return existing rettype if the code is already inferred
                 engine_reject(interp, ci_from_engine)
                 ci_from_engine = nothing
-                need_inlineable_code = may_optimize(interp) && (force_inline || is_inlineable(inferred))
+                need_inlineable_code = may_optimize(interp) && (force_inline || is_inlineable(inferred) || use_const_api(codeinst))
                 if need_inlineable_code
                     src = ci_get_source(interp, codeinst, inferred)
                     if src === nothing

@@ -272,7 +272,7 @@ end
 
 function setindex!(A::Memory{T}, x, i1::Int, i2::Int, I::Int...) where {T}
     @inline
-    @boundscheck (i2 == 1 && all(==(1), I)) || throw_boundserror(A, (i1, i2, I...))
+    @boundscheck (i2 == 1 && all(==(1), I)) || throw_boundserror(A, i1, i2, I...)
     setindex!(A, x, i1)
 end
 

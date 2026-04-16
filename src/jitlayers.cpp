@@ -1125,37 +1125,12 @@ namespace {
         options.MCOptions.ABIName = "lp64";
 #endif
 #endif
-        uint32_t target_flags = 0;
-        auto target = jl_get_llvm_target(jl_options.cpu_target, jl_generating_output(), target_flags);
-        auto &TheCPU = target.first;
-        SmallVector<std::string, 10> targetFeatures(target.second.begin(), target.second.end());
+        auto [TheCPU, FeaturesStr] = jl_get_llvm_target(jl_options.cpu_target, jl_generating_output());
         std::string errorstr;
         const Target *TheTarget = TargetRegistry::lookupTarget("", TheTriple, errorstr);
         if (!TheTarget) {
             jl_errorf("Internal problem with process triple %s lookup: %s", TheTriple.str().c_str(), errorstr.c_str());
             return nullptr;
-        }
-        if (jl_processor_print_help || (target_flags & JL_TARGET_UNKNOWN_NAME)) {
-            std::unique_ptr<MCSubtargetInfo> MSTI(
-                TheTarget->createMCSubtargetInfo(TheTriple.str(), "", ""));
-            if (!MSTI->isCPUStringValid(TheCPU)) {
-                jl_errorf("Invalid CPU name \"%s\".", TheCPU.c_str());
-                return nullptr;
-            }
-            if (jl_processor_print_help) {
-                // This is the only way I can find to print the help message once.
-                // It'll be nice if we can iterate through the features and print our own help
-                // message...
-                MSTI->setDefaultFeatures("help", "", "");
-            }
-        }
-        // Package up features to be passed to target/subtarget
-        std::string FeaturesStr;
-        if (!targetFeatures.empty()) {
-            SubtargetFeatures Features;
-            for (unsigned i = 0; i != targetFeatures.size(); ++i)
-                Features.AddFeature(targetFeatures[i]);
-            FeaturesStr = Features.getString();
         }
         // Allocate a target...
         std::optional<CodeModel::Model> codemodel =

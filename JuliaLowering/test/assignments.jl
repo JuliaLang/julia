@@ -134,9 +134,9 @@ end
         end
         @testset let ex = Expr(:call, :collect_args, peq)
             @test fl_eval(test_mod, ex) == (:semicolon, :a=>1)
-            @test_broken jl_eval(test_mod, ex) == (:semicolon, :a=>1)
+            @test jl_eval(test_mod, ex) == (:semicolon, :a=>1)
             @test fl_eval(test_mod, outer_ab(ex)) == (0, 0)
-            @test_broken jl_eval(test_mod, outer_ab(ex)) == (0, 0)
+            @test jl_eval(test_mod, outer_ab(ex)) == (0, 0)
         end
         # `kw` always passes a kwarg and does not assign a value
         @testset let ex = Expr(:call, :collect_args, kw)
@@ -167,9 +167,9 @@ end
             end
             @testset let ex = Expr(:(.), :collect_args, Expr(:tuple, peq))
                 @test fl_eval(test_mod, ex) == (:semicolon, :a=>[1])
-                @test_broken jl_eval(test_mod, ex) == (:semicolon, :a=>[1])
+                @test jl_eval(test_mod, ex) == (:semicolon, :a=>[1])
                 @test fl_eval(test_mod, outer_ab(ex)) == (0, 0)
-                @test_broken jl_eval(test_mod, outer_ab(ex)) == (0, 0)
+                @test jl_eval(test_mod, outer_ab(ex)) == (0, 0)
             end
             @testset let ex = Expr(:(.), :collect_args, Expr(:tuple, kw))
                 @test fl_eval(test_mod, ex) == (:semicolon, :b=>2)
@@ -220,7 +220,7 @@ end
         end
         @testset let ex = Expr(:tuple, peq)
             @test fl_eval(test_mod, ex) == (a=1,)
-            @test_broken jl_eval(test_mod, ex) == (a=1,)
+            @test jl_eval(test_mod, ex) == (a=1,)
         end
         @testset let ex = Expr(:tuple, kw) # calls tuple constructor with kw
             @test_throws MethodError fl_eval(test_mod, ex)
@@ -277,7 +277,7 @@ end
             @test_throws ErrorException fl_eval(test_mod, ex)
             @test_throws LoweringError jl_eval(test_mod, ex)
         end
-        @testset let ex = Expr(:braces, kw) # calls braces constructor with kw
+        @testset let ex = Expr(:braces, kw)
             @test_throws ErrorException fl_eval(test_mod, ex)
             @test_throws LoweringError jl_eval(test_mod, ex)
         end
@@ -286,4 +286,28 @@ end
             @test_throws LoweringError jl_eval(test_mod, ex)
         end
     end
+end
+
+@testset "macros can have lhs-reserved or underscore names" begin
+    local m = Module()
+
+    @test JuliaLowering.include_string(m, """
+    module ShortForm
+        macro ccall end
+        macro cglobal end
+        macro _ end
+    end
+    """) isa Module
+    @test Base.isdefinedglobal(m.ShortForm, Symbol("@ccall"))
+    @test Base.isdefinedglobal(m.ShortForm, Symbol("@cglobal"))
+    @test Base.isdefinedglobal(m.ShortForm, Symbol("@_"))
+
+    @test JuliaLowering.include_string(m, """ macro ccall(x); x; end """) isa Function
+    @test JuliaLowering.include_string(m, "@ccall(1)") == 1
+
+    @test JuliaLowering.include_string(m, """ macro cglobal(x); x; end """) isa Function
+    @test JuliaLowering.include_string(m, "@cglobal(1)") == 1
+
+    @test JuliaLowering.include_string(m, """ macro _(x); x; end """) isa Function
+    @test JuliaLowering.include_string(m, "@_(3)") == 3
 end
