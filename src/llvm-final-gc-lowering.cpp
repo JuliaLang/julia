@@ -16,17 +16,22 @@ void FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
     assert(target->arg_size() == 1);
     unsigned nRoots = cast<ConstantInt>(target->getArgOperand(0))->getLimitedValue(INT_MAX);
 
-    // Create the GC frame.
-    IRBuilder<> builder(target);
-    auto gcframe_alloca = builder.CreateAlloca(T_prjlvalue, ConstantInt::get(Type::getInt32Ty(F.getContext()), nRoots + 2));
+    // Alloca always lives in the entry block — shrink-wrap may have sunk
+    // the intrinsic call but the backing allocation must stay static.
+    IRBuilder<> entryBuilder(&F.getEntryBlock(), F.getEntryBlock().begin());
+    auto gcframe_alloca = entryBuilder.CreateAlloca(T_prjlvalue, ConstantInt::get(Type::getInt32Ty(F.getContext()), nRoots + 2));
     gcframe_alloca->setAlignment(Align(16));
     // addrspacecast as needed for non-0 alloca addrspace
-    auto gcframe = cast<Instruction>(builder.CreateAddrSpaceCast(gcframe_alloca, PointerType::getUnqual(T_prjlvalue->getContext())));
+    auto gcframe = cast<Instruction>(entryBuilder.CreateAddrSpaceCast(gcframe_alloca, PointerType::getUnqual(T_prjlvalue->getContext())));
     gcframe->takeName(target);
 
-    // Zero out the GC frame.
+    // lifetime.start + zero-init at the (possibly sunk) call site, so the
+    // slot is marked live and zeroed only on paths that execute the push.
+    IRBuilder<> builder(target);
     auto ptrsize = F.getParent()->getDataLayout().getPointerSize();
-    builder.CreateMemSet(gcframe, Constant::getNullValue(Type::getInt8Ty(F.getContext())), ptrsize * (nRoots + 2), Align(16), tbaa_gcframe);
+    auto size = ptrsize * (nRoots + 2);
+    builder.CreateLifetimeStart(gcframe_alloca, ConstantInt::get(Type::getInt64Ty(F.getContext()), size));
+    builder.CreateMemSet(gcframe, Constant::getNullValue(Type::getInt8Ty(F.getContext())), size, Align(16), tbaa_gcframe);
 
     target->replaceAllUsesWith(gcframe);
     target->eraseFromParent();
@@ -76,6 +81,15 @@ void FinalLowerGC::lowerPopGCFrame(CallInst *target, Function &F)
         pgcstack,
         Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
+
+    // lifetime.end on the backing alloca, if we can recover it. gcframe is
+    // normally an AddrSpaceCastInst of the alloca produced by lowerNewGCFrame.
+    if (auto *AI = dyn_cast<AllocaInst>(gcframe->stripPointerCasts())) {
+        auto ptrsize = F.getParent()->getDataLayout().getPointerSize();
+        unsigned nSlots = cast<ConstantInt>(AI->getArraySize())->getLimitedValue(INT_MAX);
+        builder.CreateLifetimeEnd(AI, ConstantInt::get(Type::getInt64Ty(F.getContext()), ptrsize * nSlots));
+    }
+
     target->eraseFromParent();
 }
 

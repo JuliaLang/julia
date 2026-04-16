@@ -1,6 +1,9 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "llvm-gc-interface-passes.h"
+#include "llvm/ADT/SmallPtrSet.h"
+#include "llvm/Analysis/LoopInfo.h"
+#include "llvm/IR/CFG.h"
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/Support/Casting.h"
@@ -9,6 +12,29 @@
 
 static unsigned getValueAddrSpace(Value *V) {
     return V->getType()->getPointerAddressSpace();
+}
+
+// EH calls appear under either jl_* or ijl_* depending on the emission.
+static bool isRuntimeEHCall(StringRef Name) {
+    static const char *const Names[] = {
+        "jl_enter_handler",        "ijl_enter_handler",
+        "jl_pop_handler",          "ijl_pop_handler",
+        "jl_pop_handler_noexcept", "ijl_pop_handler_noexcept",
+    };
+    for (const char *N : Names)
+        if (Name == N)
+            return true;
+    return false;
+}
+
+static bool functionHasEH(Function &F) {
+    for (auto &BB : F)
+        for (auto &I : BB)
+            if (auto *CI = dyn_cast<CallBase>(&I))
+                if (Function *Callee = CI->getCalledFunction())
+                    if (isRuntimeEHCall(Callee->getName()))
+                        return true;
+    return false;
 }
 
 static bool isTrackedValue(Value *V) {
@@ -2401,7 +2427,7 @@ void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
 }
 
 void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAssignedColors, State &S,
-                                                std::map<Value *, std::pair<int, int>>) {
+                                                std::map<Value *, std::pair<int, int>>, bool *CFGModified) {
     auto F = S.F;
     auto T_int32 = Type::getInt32Ty(F->getContext());
     int MaxColor = -1;
@@ -2411,17 +2437,88 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
 
     // Insert instructions for the actual gc frame
     if (MaxColor != -1 || !S.ArrayAllocas.empty() || !S.TrackedStores.empty()) {
+        // Shrink-wrap: by default the frame goes in the entry block, but if all
+        // blocks that actually use the frame share a common dominator outside
+        // any loop, sink the alloc+push into that dominator so paths which
+        // never use the frame pay nothing. Modeled on LLVM's ShrinkWrap pass.
+        BasicBlock *EntryBB = &F->getEntryBlock();
+        BasicBlock *SaveBB = EntryBB;
+
+        // TODO: sink inside EH regions. For v1 we bail when the function
+        // has any runtime EH call, because a sunk push/pop must bracket the
+        // same set of jl_enter_handler / jl_pop_handler[_noexcept] calls
+        // (otherwise jl_eh_restore_state_noexcept's gcstack assertion fires).
+        if (!functionHasEH(*F)) {
+            if (!S.DT)
+                S.DT = &GetDT();
+            DominatorTree &DT = *S.DT;
+            LoopInfo LI(DT);
+
+            BasicBlock *NCD = nullptr;
+            auto addUser = [&](BasicBlock *BB) {
+                NCD = NCD ? DT.findNearestCommonDominator(NCD, BB) : BB;
+            };
+            for (auto &KV : S.BBStates) {
+                const BBState &BBS = KV.second;
+                if (!BBS.HasSafepoint)
+                    continue;
+                bool FrameLive = !BBS.LiveIn.empty();
+                if (!FrameLive) {
+                    for (int SP = BBS.LastSafepoint; SP <= BBS.FirstSafepoint; ++SP) {
+                        if (!S.LiveSets[SP].empty()) {
+                            FrameLive = true;
+                            break;
+                        }
+                    }
+                }
+                if (!FrameLive)
+                    continue;
+                addUser(const_cast<BasicBlock*>(KV.first));
+            }
+            // Every user of an ArrayAlloca (post-replacement, a user of the
+            // slot GEP) and every TrackedStore site must be dominated by
+            // SaveBB. Scattered users naturally pull NCD back to entry.
+            for (auto &KV : S.ArrayAllocas)
+                for (User *U : KV.first->users())
+                    if (auto *I = dyn_cast<Instruction>(U))
+                        addUser(I->getParent());
+            for (auto &Store : S.TrackedStores)
+                addUser(Store.first->getParent());
+
+            // Hoist out of any enclosing loop so Save executes at most once
+            // per function call; otherwise push would run per-iteration while
+            // pops (placed on loop-exit edges) run once, unbalancing the
+            // shadow stack.
+            while (NCD && LI.getLoopDepth(NCD) > 0) {
+                DomTreeNode *Node = DT.getNode(NCD);
+                if (!Node)
+                    break;
+                DomTreeNode *IdomNode = Node->getIDom();
+                if (!IdomNode)
+                    break;
+                NCD = IdomNode->getBlock();
+            }
+
+            if (NCD)
+                SaveBB = NCD;
+        }
+
+        bool SinkingFrame = (SaveBB != EntryBB);
+
         // Create and push a GC frame.
         auto gcframe = CallInst::Create(
             getOrDeclare(jl_intrinsics::newGCFrame),
             {ConstantInt::get(T_int32, 0)},
             "gcframe");
-        gcframe->insertBefore(F->getEntryBlock().begin());
+        if (SinkingFrame)
+            gcframe->insertBefore(SaveBB->getFirstInsertionPt());
+        else
+            gcframe->insertBefore(F->getEntryBlock().begin());
 
         auto pushGcframe = CallInst::Create(
             getOrDeclare(jl_intrinsics::pushGCFrame),
             {gcframe, ConstantInt::get(T_int32, 0)});
-        if (isa<Argument>(pgcstack))
+        if (SinkingFrame || isa<Argument>(pgcstack))
              pushGcframe->insertAfter(gcframe);
          else
              pushGcframe->insertAfter(cast<Instruction>(pgcstack));
@@ -2530,9 +2627,54 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
 
         // Insert GC frame stores
         PlaceGCFrameStores(S, AllocaSlot - 2, Colors, PreAssignedColors, gcframe);
-        // Insert GCFrame pops
-        for (auto &BB : *F) {
-            if (isa<ReturnInst>(BB.getTerminator())) {
+        // Insert GCFrame pops at two kinds of sites:
+        //   (1) ReturnInsts dominated by SaveBB — pop before the return.
+        //   (2) CFG edges U -> V where SaveBB dominates U but not V — split
+        //       the edge and pop in the new block.
+        // Unreachable terminators have no outgoing edges and aren't Returns,
+        // so they're naturally skipped; EH unwinding restores pgcstack.
+        if (SinkingFrame) {
+            DominatorTree &DT = *S.DT;
+            SmallVector<BasicBlock*, 4> InSinkReturns;
+            SmallVector<std::pair<BasicBlock*, BasicBlock*>, 4> ExitEdges;
+            for (auto &BB : *F) {
+                if (!DT.dominates(SaveBB, &BB))
+                    continue;
+                if (isa<ReturnInst>(BB.getTerminator()))
+                    InSinkReturns.push_back(&BB);
+                for (BasicBlock *Succ : successors(&BB)) {
+                    if (!DT.dominates(SaveBB, Succ))
+                        ExitEdges.push_back({&BB, Succ});
+                }
+            }
+            for (BasicBlock *BB : InSinkReturns) {
+                auto popGcframe = CallInst::Create(
+                    getOrDeclare(jl_intrinsics::popGCFrame),
+                    {gcframe});
+#if JL_LLVM_VERSION >= 200000
+                popGcframe->insertBefore(BB->getTerminator()->getIterator());
+#else
+                popGcframe->insertBefore(BB->getTerminator());
+#endif
+            }
+            for (auto &E : ExitEdges) {
+                BasicBlock *Split = SplitEdge(E.first, E.second, &DT);
+                auto popGcframe = CallInst::Create(
+                    getOrDeclare(jl_intrinsics::popGCFrame),
+                    {gcframe});
+#if JL_LLVM_VERSION >= 200000
+                popGcframe->insertBefore(Split->getTerminator()->getIterator());
+#else
+                popGcframe->insertBefore(Split->getTerminator());
+#endif
+                if (CFGModified)
+                    *CFGModified = true;
+            }
+        }
+        else {
+            for (auto &BB : *F) {
+                if (!isa<ReturnInst>(BB.getTerminator()))
+                    continue;
                 auto popGcframe = CallInst::Create(
                     getOrDeclare(jl_intrinsics::popGCFrame),
                     {gcframe});
@@ -2598,7 +2740,7 @@ bool LateLowerGCFrame::runOnFunction(Function &F, bool *CFGModified) {
         ComputeLiveness(S);
         auto Colors = ColorRoots(S);
         std::map<Value *, std::pair<int, int>> CallFrames; // = OptimizeCallFrames(S, Ordering);
-        PlaceRootsAndUpdateCalls(Colors.first, Colors.second, S, CallFrames);
+        PlaceRootsAndUpdateCalls(Colors.first, Colors.second, S, CallFrames, CFGModified);
       }
       CleanupIR(F, &S, CFGModified);
     }
