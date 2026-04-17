@@ -49,6 +49,12 @@ We rarely assign issues to contributors, especially not to new contributors. If 
 
 This policy exists to avoid ["cookie licking"](https://www.redhat.com/en/blog/dont-lick-cookie) (claiming an issue without following through), which can discourage others from contributing. If someone else is already working on the same issue, that's okay—multiple approaches can be valuable, and reviewers will help sort out which solution is best.
 
+### Reviewing pull requests
+
+Pull request reviews from all members of the community are welcomed and encouraged, even if you are not a committer or triager. Reading through someone else's PR can be a great way to learn the codebase, and thoughtful review with an explicit approval (or rejection) is a helpful signal to those with merge rights to accelerate a PR out of pending-review limbo.
+
+Similarly to other types of contribution, AI-assisted review is allowed so long as it is disclosed, but all humans remain responsible for the content they generate. Low-effort "LGTM" or unabridged walls of AI-generated text are not useful.
+
 ### Contributor Checklist
 
 * Create a [GitHub account](https://github.com/signup/free).
