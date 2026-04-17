@@ -137,3 +137,19 @@ end
 # COM: bailout path rather than missing EH detection)
 # CHECK: call {{.*}}@ijl_enter_handler
 emit(shrinkwrap_try_catch, Int)
+
+# COM: Test 6: slot-phi regression. A diamond where one branch allocates a
+# COM: rooted value and the merge block phi's it in must NOT sink — popping
+# COM: on the sink-exit edge would free the slot before the phi user reads
+# COM: it. Mirrors rem(BigFloat, BigFloat, RoundFromZero) which segfaulted
+# COM: in test/numbers.jl before the fix.
+function shrinkwrap_bigfloat_diamond(x::BigFloat, y::BigFloat)
+    return signbit(x) == signbit(y) ? rem(x, y, RoundUp) : rem(x, y, RoundDown)
+end
+
+# CHECK-LABEL: @julia_shrinkwrap_bigfloat_diamond
+# CHECK: top:
+# CHECK: %gcframe{{[0-9]*}} = alloca
+# COM: special-ptr phi in the merge block forces the frame to stay at entry
+# CHECK: store ptr %gcframe{{[0-9]*}}, ptr %pgcstack_arg
+emit(shrinkwrap_bigfloat_diamond, BigFloat, BigFloat)

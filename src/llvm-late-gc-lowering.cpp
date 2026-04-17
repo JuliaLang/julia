@@ -2462,7 +2462,9 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
                 const BBState &BBS = KV.second;
                 if (!BBS.HasSafepoint)
                     continue;
-                bool FrameLive = !BBS.LiveIn.empty();
+                // LiveOut matters too: a value produced here and phi'd into
+                // a successor may be slot-rooted.
+                bool FrameLive = !BBS.LiveIn.empty() || !BBS.LiveOut.empty();
                 if (!FrameLive) {
                     for (int SP = BBS.LastSafepoint; SP <= BBS.FirstSafepoint; ++SP) {
                         if (!S.LiveSets[SP].empty()) {
@@ -2475,9 +2477,18 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
                     continue;
                 addUser(const_cast<BasicBlock*>(KV.first));
             }
-            // Every user of an ArrayAlloca (post-replacement, a user of the
-            // slot GEP) and every TrackedStore site must be dominated by
-            // SaveBB. Scattered users naturally pull NCD back to entry.
+            // Special-ptr phis: the phi result can be a slot address carried
+            // from a sink predecessor into a non-sink block.
+            for (auto &BB : *F) {
+                for (auto &PN : BB.phis()) {
+                    if (isSpecialPtr(PN.getType())) {
+                        addUser(&BB);
+                        break;
+                    }
+                }
+            }
+            // ArrayAlloca users become users of the slot GEP; TrackedStore
+            // sites store into slots. Both must be dominated by SaveBB.
             for (auto &KV : S.ArrayAllocas)
                 for (User *U : KV.first->users())
                     if (auto *I = dyn_cast<Instruction>(U))
@@ -2485,10 +2496,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
             for (auto &Store : S.TrackedStores)
                 addUser(Store.first->getParent());
 
-            // Hoist out of any enclosing loop so Save executes at most once
-            // per function call; otherwise push would run per-iteration while
-            // pops (placed on loop-exit edges) run once, unbalancing the
-            // shadow stack.
+            // Hoist out of loops — push must execute at most once per call.
             while (NCD && LI.getLoopDepth(NCD) > 0) {
                 DomTreeNode *Node = DT.getNode(NCD);
                 if (!Node)
