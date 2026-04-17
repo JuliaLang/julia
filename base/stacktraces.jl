@@ -47,6 +47,14 @@ Stack information representing execution context, with the following fields:
 
   Representation of the pointer to the execution context as returned by `backtrace`.
 
+- `pc::Int`
+
+  1-based statement index within the frame's `CodeInfo`, recovered from the DWARF
+  column emitted by codegen. `0` when unavailable (e.g. for C frames or frames
+  without enriched debug info). Used internally by `StackTraces.lookup` to resolve
+  the `MethodInstance` for inlined frames; also surfaced in low-level safe
+  backtrace output (e.g. on segfault) but not in Julia's default `show` for
+  `StackFrame`.
 """
 struct StackFrame # this type should be kept platform-agnostic so that profiles can be dumped on one machine and read on another
     "the name of the function containing the execution context"
@@ -64,10 +72,14 @@ struct StackFrame # this type should be kept platform-agnostic so that profiles 
     inlined::Bool
     "representation of the pointer to the execution context as returned by `backtrace`"
     pointer::UInt64  # Large enough to be read losslessly on 32- and 64-bit machines.
+    "1-based statement index (PC) within the frame's CodeInfo, or 0 if unavailable"
+    pc::Int
 end
 
+StackFrame(func, file, line, linfo, from_c, inlined, pointer) =
+    StackFrame(func, file, line, linfo, from_c, inlined, pointer, 0)
 StackFrame(func, file, line) = StackFrame(Symbol(func), Symbol(file), line,
-                                          nothing, false, false, 0)
+                                          nothing, false, false, 0, 0)
 
 """
     StackTrace
@@ -99,55 +111,13 @@ function hash(frame::StackFrame, h::UInt)
     return h
 end
 
-function debuginfo_func_name(di::Core.DebugInfo)
-    def = di.def
-    if def isa Core.MethodInstance
-        m = def.def
-        return m isa Method ? m.name : nothing
-    elseif def isa Method
-        return def.name
-    elseif def isa Symbol
-        return def
-    end
-    return nothing
-end
-
-# Find a DebugInfo edge matching the inlined frame at `infos[frame_idx]` by function name.
-# When multiple edges match, uses inner frames (`frame_idx-1`, ..., `1`) and then
-# DWARF source location for disambiguation.
-function find_matching_edge(debuginfo::Core.DebugInfo, infos::Core.SimpleVector, frame_idx::Int)
-    edges = debuginfo.edges::Core.SimpleVector
-    func_name = (infos[frame_idx]::Core.SimpleVector)[1]::Symbol
-    candidates = Core.DebugInfo[]
-    for j in 1:length(edges)
-        edge = edges[j]::Core.DebugInfo
-        debuginfo_func_name(edge) === func_name || continue
-        if frame_idx > 1
-            find_matching_edge(edge, infos, frame_idx - 1) === nothing && continue
-        end
-        push!(candidates, edge)
-    end
-    length(candidates) <= 1 && return isempty(candidates) ? nothing : candidates[1]
-    # Multiple matches: disambiguate using DWARF source location.
-    # Different methods of the same generic function have distinct Method objects
-    # with different source file/line, so we match against the DWARF-reported location.
-    info = infos[frame_idx]::Core.SimpleVector
-    file = info[2]::Symbol
-    line = info[3]::Int
-    best = candidates[1]
-    best_line = 0
-    for edge in candidates
-        def = edge.def
-        def isa Core.MethodInstance || continue
-        m = def.def
-        m isa Method || continue
-        if m.file === file && m.line <= line && m.line > best_line
-            best = edge
-            best_line = m.line
-        end
-    end
-    return best
-end
+# Decode a single codeloc entry, advancing one level of inlining. Returns
+# `(line, to, next_pc)` where `to` is the 1-based index into `debuginfo.edges`
+# for the inlined call directly at `pc` (0 if none), and `next_pc` is the PC
+# within `debuginfo.edges[to]`'s CodeInfo. To traverse nested inlinings, the
+# caller must follow the edge and call this again with `(edges[to], next_pc)`.
+debuginfo_codeloc(debuginfo::Core.DebugInfo, pc::Integer) =
+    @ccall jl_uncompress1_codeloc(debuginfo.codelocs::Any, pc::Csize_t)::NTuple{3,Int32}
 
 """
     lookup(pointer::Ptr{Cvoid})::Vector{StackFrame}
@@ -163,13 +133,15 @@ Base.@constprop :none function lookup(pointer::Ptr{Cvoid})
     ninfos = length(infos)
     res = Vector{StackFrame}(undef, ninfos)
     local debuginfo = false
+    local parent_pc = 0
     for i = ninfos:-1:1
         info = infos[i]::Core.SimpleVector
-        @assert length(info) == 6 "corrupt return from jl_lookup_code_address"
+        @assert length(info) == 7 "corrupt return from jl_lookup_code_address"
         func = info[1]::Symbol
         file = info[2]::Symbol
         linenum = info[3]::Int
         linfo = info[4]
+        pc = info[7]::Int
         if linfo isa Core.CodeInstance
             if debuginfo === false
                 debuginfo = linfo.debuginfo
@@ -177,11 +149,13 @@ Base.@constprop :none function lookup(pointer::Ptr{Cvoid})
                 debuginfo = true
             end
             linfo = linfo.def
-        elseif debuginfo isa Core.DebugInfo
-            edge = find_matching_edge(debuginfo, infos, i)
-            if edge !== nothing
-                debuginfo = edge
-                def = edge.def
+        elseif debuginfo isa Core.DebugInfo && parent_pc > 0
+            # Use the parent frame's PC to look up which inlining edge of the
+            # current `debuginfo` corresponds to this frame's call site.
+            _, to::Int, _ = debuginfo_codeloc(debuginfo, parent_pc)
+            if to > 0 && to <= length(debuginfo.edges)
+                debuginfo = debuginfo.edges[to]::Core.DebugInfo
+                def = debuginfo.def
                 if !(def isa Symbol)
                     linfo = def
                 end
@@ -189,7 +163,8 @@ Base.@constprop :none function lookup(pointer::Ptr{Cvoid})
                 debuginfo = true
             end
         end
-        res[i] = StackFrame(func, file, linenum, linfo, info[5]::Bool, info[6]::Bool, pointer)
+        parent_pc = pc
+        res[i] = StackFrame(func, file, linenum, linfo, info[5]::Bool, info[6]::Bool, pointer, pc)
     end
     return res
 end

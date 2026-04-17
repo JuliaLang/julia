@@ -523,6 +523,7 @@ static int lookup_pointer(
             frame->fromC = 1;
 
         frame->line = info.Line;
+        frame->pc = info.Column;
         std::string file_name(info.FileName);
 
         if (file_name == "<invalid>")

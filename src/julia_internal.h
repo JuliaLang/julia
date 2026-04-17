@@ -1570,6 +1570,9 @@ typedef struct {
     char *func_name;
     char *file_name;
     int line;
+    // PC within the inlined frame's CodeInfo, or 0 if unavailable.
+    // Carried in the DWARF column field by codegen (see `update_lineinfo` in codegen.cpp).
+    int pc;
     jl_code_instance_t *ci;
     int fromC;
     int inlined;
