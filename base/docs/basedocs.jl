@@ -1012,8 +1012,11 @@ kw"while"
 [`begin`](@ref), [`let`](@ref), [`for`](@ref) etc.
 
 `end` may also be used when indexing with `[...]` to represent the last index of a
-collection or the last index of a dimension of an array, where it is lowered to
-a call to [`lastindex`](@ref) along the relevant dimension (as determined by the context).
+collection or the last index of a dimension of an array. For example, the expression
+`A[end-1]` becomes `A[lastindex(A)-1]` and `A[:, end]` becomes `A[:, lastindex(A, 2)]`.
+Every occurrence of `end` within the square bracket indexing syntax is lowered to a
+call to [`lastindex`](@ref), using the one argument `lastindex(A)` there's only one index
+argument and the two argument `lastindex(A, n)` for the n-th index argument.
 
 # Examples
 ```jldoctest
