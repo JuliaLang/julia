@@ -48,6 +48,7 @@ top:
 ; OPAQUE-NEXT: [[PREV_GCFRAME_PTR4:%.*]] = load ptr addrspace(10), ptr [[PREV_GCFRAME_PTR3]], align 8, !tbaa !0
 ; OPAQUE-NEXT: store ptr addrspace(10) [[PREV_GCFRAME_PTR4]], ptr [[GCFRAME_SLOT]], align 8, !tbaa !0
   call void @julia.pop_gc_frame({} addrspace(10)** %gcframe)
+; OPAQUE-NEXT: call void @llvm.lifetime.end{{.*}}(i64 {{[0-9]+}}, ptr %gcframe)
 ; CHECK-NEXT: ret void
   ret void
 }

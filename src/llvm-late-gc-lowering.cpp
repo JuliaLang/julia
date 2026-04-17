@@ -2488,11 +2488,19 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
                 }
             }
             // ArrayAlloca users become users of the slot GEP; TrackedStore
-            // sites store into slots. Both must be dominated by SaveBB.
-            for (auto &KV : S.ArrayAllocas)
-                for (User *U : KV.first->users())
-                    if (auto *I = dyn_cast<Instruction>(U))
+            // sites store into slots. Both must be dominated by SaveBB. For
+            // phi operands the relevant "user BB" is the incoming block,
+            // not the phi's parent (the phi operand must be dominated by
+            // the incoming predecessor's terminator).
+            for (auto &KV : S.ArrayAllocas) {
+                for (Use &U : KV.first->uses()) {
+                    if (auto *PN = dyn_cast<PHINode>(U.getUser())) {
+                        addUser(PN->getIncomingBlock(U));
+                    } else if (auto *I = dyn_cast<Instruction>(U.getUser())) {
                         addUser(I->getParent());
+                    }
+                }
+            }
             for (auto &Store : S.TrackedStores)
                 addUser(Store.first->getParent());
 
