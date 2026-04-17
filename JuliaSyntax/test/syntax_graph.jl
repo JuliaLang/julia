@@ -1,4 +1,18 @@
-using .JuliaSyntax: SyntaxGraph, SyntaxTree, SyntaxList, ensure_attributes, ensure_attributes!, delete_attributes, copy_ast, attrdefs, @stm, NodeId, SourceRef, SourceAttrType, Kind, syntax_graph, prov, mktree
+using .JuliaSyntax: SyntaxGraph, SyntaxTree, SyntaxList, ensure_attributes, ensure_attributes!, delete_attributes, copy_ast, attrdefs, @stm, NodeId, SourceRef, SourceAttrType, Kind, syntax_graph, prov, prov_end, provenance, flattened_provenance, sourceref, newleaf, mkleaf, mknode, mktree, setattr!
+
+"For filling required attrs in graphs created by hand"
+function testgraph(edge_ranges, edges, more_attrs...)
+    kinds = Dict{NodeId, Any}(map(i->(i=>K"block"), eachindex(edge_ranges)))
+    sources = Dict{NodeId, Any}(
+        map(i->(i=>LineNumberNode(i)), eachindex(edge_ranges)))
+    orig = Dict{NodeId, Any}(map(i->(i=>i), eachindex(edge_ranges)))
+    SyntaxGraph(
+        edge_ranges,
+        edges,
+        Dict{Symbol, Dict{NodeId, Any}}(
+            :kind => kinds, :source => sources,
+            :orig => orig, more_attrs...))
+end
 
 @testset "SyntaxGraph attrs" begin
     g_dict = SyntaxGraph()
@@ -62,23 +76,85 @@ end
     @test parsestmt(SyntaxTree, "'a b c'"; ignore_errors=true) isa SyntaxTree
 end
 
-@testset "SyntaxTree utils" begin
-    "For filling required attrs in graphs created by hand"
-    function testgraph(edge_ranges, edges, more_attrs...)
-        kinds = Dict{NodeId, Any}(map(i->(i=>K"block"), eachindex(edge_ranges)))
-        sources = Dict{NodeId, Any}(
-            map(i->(i=>LineNumberNode(i)), eachindex(edge_ranges)))
-        orig = Dict{NodeId, Any}(map(i->(i=>i), eachindex(edge_ranges)))
-        SyntaxGraph(
-            edge_ranges,
-            edges,
-            Dict{Symbol, Dict{NodeId, Any}}(
-                :kind => kinds, :source => sources,
-                :orig => orig, more_attrs...))
+@testset "SyntaxTree provenance accessors" begin
+
+    @testset "prov, prov_end, provenance, sourceref" begin
+        # 1 --> 2 --> 3     src(7-9) = line 7-9
+        # 4 --> 5 --> 6     src(i) = i + 3
+        # 7 --> 8 --> 9
+        g = testgraph([1:1, 2:2, 0:-1, 3:3, 4:4, 0:-1, 5:5, 6:6, 0:-1],
+                      [2, 3, 5, 6, 8, 9],
+                      :source => Dict{Int, SourceAttrType}(enumerate([
+                          map(i->i+3, 1:6)...
+                              map(LineNumberNode, 7:9)...])))
+        st = SyntaxTree(g, 1)
+        @test prov(st)._id == 4
+        @test prov(prov(st))._id == 7
+        @test prov(prov(prov(st)))._id == 7
+
+        @test prov_end(st)._id == 7
+        @test prov_end(prov_end(st))._id == 7
+
+        @test sourceref(st) == LineNumberNode(7)
+        @test sourceref(prov_end(st)) == LineNumberNode(7)
+
+        @test provenance(st).ids == NodeId[4, 7]
+        @test provenance(prov_end(st)).ids == NodeId[]
     end
+
+    @testset "flattened_provenance" begin
+        g = SyntaxGraph()
+        ensure_attributes!(g; macro_source=NodeId)
+        st1 = setattr!(newleaf(g, LineNumberNode(1), K"Identifier"), :name_val, "st1")
+        st2 = setattr!(mkleaf(st1), :name_val, "st2")
+        st3 = setattr!(mkleaf(st2), :name_val, "st3")
+
+        stm1 = setattr!(newleaf(g, LineNumberNode(1, :m), K"Identifier"), :name_val, "stm1")
+        stm2 = setattr!(mkleaf(stm1), :name_val, "stm2")
+        stm3 = setattr!(mkleaf(stm1), :name_val, "stm3")
+        stm_unused = setattr!(newleaf(g, LineNumberNode(0), K"Identifier"), :name_val, "m_unused")
+
+        stmm1 = setattr!(newleaf(g, LineNumberNode(1, :mm), K"Identifier"), :name_val, "stmm1")
+        stmm2 = setattr!(mkleaf(stmm1), :name_val, "stmm2")
+        stmm3 = setattr!(mkleaf(stmm2), :name_val, "stmm3")
+
+        setattr!(st1, :macro_source, stm_unused._id)
+        setattr!(st2, :macro_source, stm_unused._id)
+        setattr!(st3, :macro_source, stm3._id)
+        setattr!(stm3, :macro_source, stmm3._id)
+
+        # julia> JL._show_provtree(stdout, st3, "")
+        # st3
+        # ├─ st2
+        # │  ├─ st1
+        # │  │  ├─ @ nothing:1
+        # │  │  └─ m_unused
+        # │  │     └─ @ nothing:0
+        # │  └─ m_unused
+        # │     └─ @ nothing:0
+        # └─ stm3
+        #    ├─ stm1
+        #    │  └─ @ m:1
+        #    └─ stmm3
+        #       └─ stmm2
+        #          └─ stmm1
+        #             └─ @ mm:1
+
+        @test flattened_provenance(st3) == SyntaxList(stmm1, stm1, st1)
+        @test flattened_provenance(st2) == SyntaxList(stm_unused, st1)
+        @test flattened_provenance(st1) == SyntaxList(stm_unused, st1)
+        @test flattened_provenance(stm3) == SyntaxList(stmm1, stm1)
+        @test flattened_provenance(stm2) == SyntaxList(stm1)
+        @test flattened_provenance(stm1) == SyntaxList(stm1)
+        @test flattened_provenance(stmm3) == SyntaxList(stmm1)
+        @test flattened_provenance(stmm2) == SyntaxList(stmm1)
+        @test flattened_provenance(stmm1) == SyntaxList(stmm1)
+    end
+end
+
+@testset "SyntaxTree utils" begin
     mprov(st::SyntaxTree) = get(st, :macro_source, nothing) isa NodeId ?
         SyntaxTree(st._graph, st.macro_source) : nothing
-
 
     @testset "copy_ast, mktree" begin
         # 1 --> 2 --> 3     src(7-9) = line 7-9

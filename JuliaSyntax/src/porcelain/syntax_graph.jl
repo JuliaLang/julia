@@ -378,13 +378,13 @@ API.  As of writing this, the user has more freedom than they should have.
 """
 
 """
-SyntaxList of [ex.source, ex.source.source, ..., textref]
+SyntaxList of [st.source, st.source.source, ..., textref]
 """
-function provenance(ex::SyntaxTree)
-    prov = SyntaxList(ex._graph)
-    s = ex.source
+function provenance(st::SyntaxTree)
+    prov = SyntaxList(st._graph)
+    s = st.source
     while s isa NodeId
-        s_tree = SyntaxTree(ex._graph, s)
+        s_tree = SyntaxTree(st._graph, s)
         push!(prov, s_tree)
         s = s_tree.source
     end
@@ -392,50 +392,61 @@ function provenance(ex::SyntaxTree)
 end
 
 """
-provenance(ex)[1]
+`provenance(st)[1]`, or `st` if that's empty
 """
-function prov(ex::SyntaxTree)
-    ex.source isa NodeId ? SyntaxTree(ex._graph, ex.source) : ex.source
+function prov(st::SyntaxTree)
+    st.source isa NodeId ? SyntaxTree(st._graph, st.source) : st
 end
 
 """
-`ex`'s textref's `.source`, ignoring all `.macro_source`
+textref of st (possibly == st)
 """
-function sourceref(ex::SyntaxTree)
-    sources = ex._graph.source::Dict{Int, Any}
-    s = ex._id
-    while s isa NodeId
-        s = sources[s]
-    end
-    return s::Union{LineNumberNode, SourceRef}
-end
-
-"""
-A SyntaxList of every textref reachable by traversing both `source` and
-`macro_source`.  The number of returned trees should equal one plus the number
-of macro expansions `ex` was an input and output of (so syntax produced in a
-macro body should return just one.)
-"""
-function flattened_provenance(ex::SyntaxTree)
-    g = ex._graph
-    todo = NodeId[ex._id]
-    out = SyntaxList(g)
-    while !isempty(todo)
-        s_tree = SyntaxTree(g, pop!(todo))
-        src = s_tree.source
-        if src isa Union{LineNumberNode, SourceRef}
-            push!(out, s_tree)
-        else
-            push!(todo, src::NodeId)
-        end
-        let msrc = get(s_tree, :macro_source, nothing)
-            # macro source === source means `ex` is from the `msrc` macro body
-            if !isnothing(msrc) && msrc !== src
-                push!(todo, msrc)
-            end
-        end
+function prov_end(st::SyntaxTree)
+    out = st
+    while out.source isa NodeId
+        out = prov(out)
     end
     return out
+end
+
+"""
+`st`'s textref's `.source`, ignoring all `.macro_source`
+"""
+function sourceref(st::SyntaxTree)
+    prov_end(st).source::Union{LineNumberNode, SourceRef}
+end
+
+"""
+A SyntaxList of textrefs associated with `st`.  The number of returned trees
+should equal one plus the number of macro expansions `st` "went through":
+
+- For new macros, this is the number of macro expansions `st` was both an input
+  and output of, so if `st` was created in a macro body, `flattened_provenance`
+  returns a list of length 1.
+
+- For old macros, we can't determine whether expanded syntax is from the
+  macrocall args or macro body (it will have LineNumberNode .source), so all
+  expanded syntax counts as having "went through" the macrocall.
+
+The resulting list should be in the order
+`[outermost_macrocall, innermost_macrocall, ..., expression_textref]`.
+"""
+function flattened_provenance(st::SyntaxTree)
+    _flattened_provenance(st, SyntaxList(st._graph))
+end
+
+# Only recurse on the first .macro_source in any source chain
+function _flattened_provenance(st::SyntaxTree, out)
+    while !hasattr(st, :macro_source) && st.source isa NodeId
+        st = prov(st)
+    end
+    # macro_source === source means `st` is from the `msrc` macro body
+    msrc = get(st, :macro_source, nothing)
+    msrc isa NodeId && msrc !== st.source &&
+        _flattened_provenance(SyntaxTree(st._graph, msrc), out)
+
+    push!(out, prov_end(st))
+    out
 end
 
 function is_ancestor(ex, ancestor)
