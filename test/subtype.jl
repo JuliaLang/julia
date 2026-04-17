@@ -2525,6 +2525,14 @@ let T = Ref{NTuple{8, Ref{Union{Int, P}}}} where P,
     @test T <: Union{Int, S}
 end
 
+# issue #61602
+struct W61602{T, N}
+    x::Array{T, N}
+end
+v = W61602{T, 1} where T<:(Union{Missing, S} where S)
+t = W61602{Union{Missing, T}} where T
+@test W61602{Union{Missing, Int64}, 1} <: typeintersect(v, t)
+
 # try to fool a greedy algorithm that picks X=Int, Y=String here
 @test Tuple{Ref{Union{Int,String}}, Ref{Union{Int,String}}} <: Tuple{Ref{Union{X,Y}}, Ref{X}} where {X,Y}
 @test Tuple{Ref{Union{Int,String,Missing}}, Ref{Union{Int,String}}} <: Tuple{Ref{Union{X,Y}}, Ref{X}} where {X,Y}

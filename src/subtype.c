@@ -2889,6 +2889,9 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
             e->triangular++;
             ub = R ? intersect_aside(a, bb->ub, e, bb->depth0) : intersect_aside(bb->ub, a, e, bb->depth0);
             e->triangular--;
+            if (ub != a && jl_subtype(a, bb->ub)) {
+                ub = a;
+            }
             jl_savedenv_t se;
             save_env(e, &se, 1);
             int issub = subtype_in_env_existential(bb->lb, ub, e);
