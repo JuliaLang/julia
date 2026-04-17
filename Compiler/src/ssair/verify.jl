@@ -26,7 +26,6 @@ if !isdefined(@__MODULE__, Symbol("@verify_error"))
 end
 
 is_toplevel_expr_head(head::Symbol) = head === :method || head === :thunk
-is_value_pos_expr_head(head::Symbol) = head === :static_parameter
 function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, use_idx::Int, printed_use_idx::Int, print::Bool, isforeigncall::Bool, arg_idx::Int,
     allow_frontend_forms::Bool, @nospecialize(raise_error))
     if isa(op, SSAValue)
@@ -336,16 +335,14 @@ function verify_ir(ir::IRCode, print::Bool=true,
         end
 
         if is_phinode_block && !is_valid_phiblock_stmt(stmt)
-            if !isa(stmt, Expr) || !is_value_pos_expr_head(stmt.head)
-                # Go back and check that all non-PhiNodes are valid value-position
-                for validate_idx in firstidx:(lastphi-1)
-                    validate_stmt = ir[SSAValue(validate_idx)][:stmt]
-                    isa(validate_stmt, PhiNode) && continue
-                    check_op(ir, domtree, validate_stmt, bb, idx, idx, print, false, 0,
-                        allow_frontend_forms, raise_error)
-                end
-                is_phinode_block = false
+            # Go back and check that all non-PhiNodes are valid value-position
+            for validate_idx in firstidx:(lastphi-1)
+                validate_stmt = ir[SSAValue(validate_idx)][:stmt]
+                isa(validate_stmt, PhiNode) && continue
+                check_op(ir, domtree, validate_stmt, bb, idx, idx, print, false, 0,
+                         allow_frontend_forms, raise_error)
             end
+            is_phinode_block = false
         end
         if isa(stmt, PhiCNode)
             for i = 1:length(stmt.values)
