@@ -565,3 +565,21 @@ let interp = InvokeInterp()
     @test isa(result, String)
     @test contains(result, "[1] error(::Char, ::Char, ::Char, ::Char)")
 end
+
+# Test that is_already_cached handles OverlayCodeCache returning InferenceResult.
+# Regression test: OverlayCodeCache.getindex may return InferenceResult (from the
+# local inference cache) rather than CodeInstance, which lacks an :inferred field.
+using REPL.REPLCompletions: completions
+@newinterp OverlayCacheInterp true
+@test let
+    interp = OverlayCacheInterp()
+    # completions has a call graph deep enough that during inference the same
+    # MethodInstance is encountered through different callers, exercising the
+    # OverlayCodeCache local-cache path in is_already_cached.
+    f = completions
+    args = ("", 0)
+    mi = @ccall jl_method_lookup(Any[f, args...]::Ptr{Any}, (1+length(args))::Csize_t,
+        Base.tls_world_age()::Csize_t)::Ref{Core.MethodInstance}
+    Compiler.typeinf_ext_toplevel(interp, mi, Compiler.SOURCE_MODE_NOT_REQUIRED)
+    true
+end

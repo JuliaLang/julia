@@ -4666,8 +4666,7 @@ f(x) = yt(x)
 (define (valid-ir-argument? e)
   (or (simple-atom? e)
       (and (pair? e)
-           (memq (car e) '(quote inert top core
-                                 slot static_parameter)))))
+           (memq (car e) '(quote inert top core slot)))))
 
 (define (valid-ir-rvalue? lhs e)
   (or (ssavalue? lhs)

@@ -368,6 +368,11 @@ void JITDebugInfoRegistry::registerJITObject(
         if (it != sym_to_ci.end()) {
             codeinst = it->second;
         }
+        if (codeinst) {
+            JL_GC_PROMISE_ROOTED(codeinst);
+            if (jl_is_method(jl_get_ci_mi(codeinst)->def.method) && jl_get_ci_mi(codeinst)->def.method->is_for_opaque_closure)
+                codeinst = (jl_code_instance_t*)jl_as_global_root((jl_value_t*)codeinst, 1);
+        }
         jl_profile_atomic([&]() JL_NOTSAFEPOINT {
             if (codeinst)
                 cimap[Addr] = std::make_pair(Size, codeinst);
@@ -518,6 +523,7 @@ static int lookup_pointer(
             frame->fromC = 1;
 
         frame->line = info.Line;
+        frame->pc = info.Column;
         std::string file_name(info.FileName);
 
         if (file_name == "<invalid>")

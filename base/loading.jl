@@ -110,36 +110,39 @@ function isaccessiblepath(path)
     end
 end
 
-## SHA1 ##
-
-struct SHA1
-    bytes::NTuple{20, UInt8}
-end
-function SHA1(bytes::Vector{UInt8})
-    length(bytes) == 20 ||
-        throw(ArgumentError("wrong number of bytes for SHA1 hash: $(length(bytes))"))
-    return SHA1(ntuple(i->bytes[i], Val(20)))
-end
-SHA1(s::AbstractString) = SHA1(hex2bytes(s))
-parse(::Type{SHA1}, s::AbstractString) = SHA1(s)
-function tryparse(::Type{SHA1}, s::AbstractString)
-    try
-        return parse(SHA1, s)
-    catch e
-        if isa(e, ArgumentError)
-            return nothing
+## SHA1 and SHA256 ##
+for (name, namestr, numbytes) in [(:SHA1, "SHA1", 20), (:SHA256, "SHA256", 32)]
+    @eval begin
+        struct $name
+            bytes::NTuple{$numbytes, UInt8}
         end
-        rethrow(e)
+        function $name(bytes::Vector{UInt8})
+            length(bytes) == $numbytes ||
+                throw(ArgumentError("wrong number of bytes for " * string($namestr) * ": Expected " * string($numbytes) * " bytes, got $(length(bytes))"))
+            return $name(ntuple(i->bytes[i], Val($numbytes)))
+        end
+        $name(s::AbstractString) = $name(hex2bytes(s))
+        parse(::Type{$name}, s::AbstractString) = $name(s)
+        function tryparse(::Type{$name}, s::AbstractString)
+            try
+                return parse($name, s)
+            catch e
+                if isa(e, ArgumentError)
+                    return nothing
+                end
+                rethrow(e)
+            end
+        end
+
+        string(hash::$name) = bytes2hex(hash.bytes)
+        print(io::IO, hash::$name) = bytes2hex(io, hash.bytes)
+        show(io::IO, hash::$name) = print(io, $namestr * "(\"", hash, "\")")
+
+        isless(a::$name, b::$name) = isless(a.bytes, b.bytes)
+        hash(a::$name, h::UInt) = hash(($name, a.bytes), h)
+        ==(a::$name, b::$name) = a.bytes == b.bytes
     end
 end
-
-string(hash::SHA1) = bytes2hex(hash.bytes)
-print(io::IO, hash::SHA1) = bytes2hex(io, hash.bytes)
-show(io::IO, hash::SHA1) = print(io, "SHA1(\"", hash, "\")")
-
-isless(a::SHA1, b::SHA1) = isless(a.bytes, b.bytes)
-hash(a::SHA1, h::UInt) = hash((SHA1, a.bytes), h)
-==(a::SHA1, b::SHA1) = a.bytes == b.bytes
 
 # fake uuid5 function (for self-assigned UUIDs)
 # TODO: delete and use real uuid5 once it's in stdlib

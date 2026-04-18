@@ -399,6 +399,9 @@ See [`Project environments`](@ref project-environments) for details on the diffe
 options and their priority in package loading.
 
 See also [`Base.active_project`](@ref), [`Base.set_active_project`](@ref).
+
+!!! compat "Julia 1.13"
+    This function requires at least Julia 1.13.
 """
 function active_manifest(project_file::Union{AbstractString,Nothing}=nothing; search_load_path::Bool=true)
     # If `project_file` was specified, use that, otherwise get the active project:
