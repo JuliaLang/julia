@@ -151,8 +151,10 @@ function _register_kinds()
             # Pre-lowered SSA value reference from Expr(:ssavalue, N).
             # Translated to a BindingId during desugaring.
             "ssavalue"
-            # Token used by interpolate_ast to mark where `$` was
-            raw"_$"
+            # Wraps the first argument of a foreigncall when it should not be
+            # lowered (and should mostly be treated as :inert), but requires
+            # scope resolution and special conversion to Expr.
+            "foreigncall_arg1"
         "END_LOWERING_KINDS"
 
         # The following kinds are emitted by lowering and used in Julia's untyped IR

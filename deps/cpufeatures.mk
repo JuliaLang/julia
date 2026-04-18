@@ -1,26 +1,15 @@
-## CPUFEATURES - standalone CPU feature detection library ##
-include $(SRCDIR)/cpufeatures.version
+## CPUFEATURES ##
+CPUFEATURES_GIT_URL := https://github.com/gbaraldi/cpufeatures.git
+CPUFEATURES_TAR_URL = https://api.github.com/repos/gbaraldi/cpufeatures/tarball/$1
+$(eval $(call git-external,cpufeatures,CPUFEATURES,,,$(BUILDDIR)))
 
-CPUFEATURES_SRC_DIR := $(BUILDDIR)/cpufeatures-$(CPUFEATURES_VER)
+CPUFEATURES_CFLAGS  := -O2 -Wall -Wextra $(fPIC) $(SANITIZE_OPTS)
+CPUFEATURES_CXXFLAGS := -std=c++17 -O2 -Wall -Wextra -fno-exceptions -fno-rtti $(fPIC) $(SANITIZE_OPTS)
+CPUFEATURES_MFLAGS  := CC="$(CC)" CXX="$(CXX)" CFLAGS="$(CFLAGS) $(CPUFEATURES_CFLAGS)" CXXFLAGS="$(CXXFLAGS) $(CPUFEATURES_CXXFLAGS)" AR="$(AR)" ARCH=$(ARCH)
+CPUFEATURES_BUILDDIR := $(BUILDDIR)/$(CPUFEATURES_SRC_DIR)
 
-$(SRCCACHE)/cpufeatures-$(CPUFEATURES_VER).tar.gz: | $(SRCCACHE)
-	$(JLDOWNLOAD) $@ $(CPUFEATURES_TAR_URL)
-	touch -c $@
-
-$(CPUFEATURES_SRC_DIR)/source-extracted: $(SRCCACHE)/cpufeatures-$(CPUFEATURES_VER).tar.gz
-	rm -rf $(dir $@)
-	mkdir -p $(dir $@)
-	$(TAR) -C $(dir $@) --strip-components 1 -xf $<
-	echo 1 > $@
-
-checksum-cpufeatures: $(SRCCACHE)/cpufeatures-$(CPUFEATURES_VER).tar.gz
-	$(JLCHECKSUM) $<
-
-$(CPUFEATURES_SRC_DIR)/build-compiled: $(CPUFEATURES_SRC_DIR)/source-extracted
-	$(MAKE) -C $(CPUFEATURES_SRC_DIR) lib \
-		CXX="$(CXX)" \
-		CXXFLAGS="$(JCXXFLAGS) -O2" \
-		ARCH=$(ARCH)
+$(CPUFEATURES_BUILDDIR)/build-compiled: $(CPUFEATURES_BUILDDIR)/source-extracted
+	$(MAKE) -C $(dir $<) $(CPUFEATURES_MFLAGS) lib
 	echo 1 > $@
 
 define CPUFEATURES_INSTALL
@@ -31,18 +20,15 @@ define CPUFEATURES_INSTALL
 	cp $1/build/libtarget_parsing.a $2/$$(build_libdir)/
 endef
 $(eval $(call staged-install, \
-	cpufeatures,cpufeatures-$(CPUFEATURES_VER), \
-	CPUFEATURES_INSTALL,,,,))
+	cpufeatures,$(CPUFEATURES_SRC_DIR), \
+	CPUFEATURES_INSTALL,,,))
 
 clean-cpufeatures:
-	-rm -f $(CPUFEATURES_SRC_DIR)/build-compiled
+	-rm -f $(CPUFEATURES_BUILDDIR)/build-compiled
 
-distclean-cpufeatures:
-	rm -rf $(SRCCACHE)/cpufeatures*.tar.gz $(CPUFEATURES_SRC_DIR)
-
-get-cpufeatures: $(SRCCACHE)/cpufeatures-$(CPUFEATURES_VER).tar.gz
-extract-cpufeatures: $(CPUFEATURES_SRC_DIR)/source-extracted
+get-cpufeatures: $(CPUFEATURES_SRC_FILE)
+extract-cpufeatures: $(CPUFEATURES_BUILDDIR)/source-extracted
 configure-cpufeatures: extract-cpufeatures
-compile-cpufeatures: $(CPUFEATURES_SRC_DIR)/build-compiled
+compile-cpufeatures: $(CPUFEATURES_BUILDDIR)/build-compiled
 fastcheck-cpufeatures: check-cpufeatures
 check-cpufeatures: compile-cpufeatures

@@ -60,8 +60,6 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
         ident = newleaf(graph, src, K"Identifier")
         setattr!(ident, :name_val, String(e.args[1]::Symbol))
         setattr!(ident, :scope_layer, e.args[2])
-    elseif e isa Expr && e.head === :static_parameter
-        setattr!(newleaf(graph, src, K"Value"), :value, e)
     elseif e isa Expr && e.head === :lambda && length(e.args) == 2
         argnames = e.args[1]::Vector{Any}
         arg_cs = NodeId[]
@@ -458,8 +456,16 @@ function est_to_dst(st::SyntaxTree)
             @ast g st [k _dst_sink_parameters(children(st))...]
         (_, when=(k = kind(st); k in KSet"curly ref")) ->
             @ast g st [k _dst_separate_dotop(st[1])
-                       _dst_sink_parameters(children(st)[2:end])...
-            ]
+                       _dst_sink_parameters(children(st)[2:end])...]
+        # tuple arg should not be converted or desugared
+        [K"foreigncall" [K"tuple" _...] args...] ->
+            @ast g st [K"foreigncall" [K"foreigncall_arg1" st[1]] args...]
+        ([K"call" [K"Identifier"] sym args...],
+         when=st[1].name_val::String === "ccall") -> if kind(sym) === K"tuple"
+             @ast g st [K"call" st[1] [K"foreigncall_arg1" st[2]] mapsyntax(rec, args)...]
+         else
+             @ast g st [K"call" st[1] rec(sym) mapsyntax(rec, args)...]
+         end
         [K"call" f args...] -> let
             out_k, out_f = @stm _dst_separate_dotop(f) begin
                 [K"." op] -> (K"dotcall", op)
@@ -592,6 +598,7 @@ function est_to_dst(st::SyntaxTree)
         [K"inbounds" _] -> newleaf(g, st, K"TOMBSTONE")
         [K"core" x] -> setattr!(mkleaf(st), :name_val, x.name_val)
         [K"top" x] -> setattr!(mkleaf(st), :name_val, x.name_val)
+        [K"static_parameter" x] -> setattr!(mkleaf(st), :var_id, x.value::IdTag)
         [K"copyast" [K"inert" ex]] -> @ast g st [K"call"
             interpolate_ast::K"Value"
             Expr::K"Value"

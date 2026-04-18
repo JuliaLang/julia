@@ -422,7 +422,7 @@ end
 6   (call top.cconvert %₂ %₅)
 7   (call top.unsafe_convert %₁ %₄)
 8   (call top.unsafe_convert %₂ %₆)
-9   (foreigncall (static_eval (tuple :foo)) (static_eval TestMod.R) (static_eval (call core.svec TestMod.X TestMod.Y)) 0 (inert (:ccall, 0x0000, false)) %₇ %₈ %₄ %₆)
+9   (foreigncall (foreigncall_arg1 (tuple (inert foo))) (static_eval TestMod.R) (static_eval (call core.svec TestMod.X TestMod.Y)) 0 (inert (:ccall, 0x0000, false)) %₇ %₈ %₄ %₆)
 10  (return %₉)
 
 ########################################
@@ -437,7 +437,7 @@ end
 6   (call top.cconvert %₂ %₅)
 7   (call top.unsafe_convert %₁ %₄)
 8   (call top.unsafe_convert %₂ %₆)
-9   (foreigncall (static_eval (tuple :foo)) (static_eval TestMod.R) (static_eval (call core.svec TestMod.X TestMod.Y)) 1 (inert (:ccall, 0x0000, true)) %₇ %₈ %₄ %₆)
+9   (foreigncall (foreigncall_arg1 (tuple (inert foo))) (static_eval TestMod.R) (static_eval (call core.svec TestMod.X TestMod.Y)) 1 (inert (:ccall, 0x0000, true)) %₇ %₈ %₄ %₆)
 10  (return %₉)
 
 ########################################

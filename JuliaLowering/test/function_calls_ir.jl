@@ -356,7 +356,7 @@ ccall((:strlen, libc), Csize_t, (Cstring,), "asdfg")
 1   TestMod.Cstring
 2   (call top.cconvert %₁ "asdfg")
 3   (call top.unsafe_convert %₁ %₂)
-4   (foreigncall (static_eval (tuple :strlen TestMod.libc)) (static_eval TestMod.Csize_t) (static_eval (call core.svec TestMod.Cstring)) 0 :ccall %₃ %₂)
+4   (foreigncall (foreigncall_arg1 (tuple-p (inert strlen) TestMod.libc)) (static_eval TestMod.Csize_t) (static_eval (call core.svec TestMod.Cstring)) 0 :ccall %₃ %₂)
 5   (return %₄)
 
 ########################################
