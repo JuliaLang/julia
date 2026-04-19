@@ -238,10 +238,15 @@ function Base.Experimental.var"@opaque"(__context__::MacroContext, ex)
 end
 
 function _at_eval_code(ctx, srcref, mod, ex)
+    # Mark the synthetic `eval_result` local as internal — it only exists to
+    # plumb the return value of `JuliaLowering.eval(...)` out of the expansion
+    # and never corresponds to a user-written name.
+    eval_result = (@ast ctx srcref "eval_result"::K"Identifier")
+    eval_result_decl = setmeta(eval_result, :is_internal, true)
     @ast ctx srcref [K"block"
         [K"local"
             [K"="
-                "eval_result"::K"Identifier"
+                eval_result_decl
                 [K"call"
                     # TODO: Call "eval"::K"core" here
                     JuliaLowering.eval::K"Value"
