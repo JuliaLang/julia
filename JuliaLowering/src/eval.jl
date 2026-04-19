@@ -415,6 +415,19 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
     elseif k == K"static_eval"
         @jl_assert numchildren(ex) == 1 ex
         _to_lowered_expr(ex[1], stmt_offset)
+    elseif k == K"cfunction"
+        # For a scope-resolved callable (`K"static_eval"`), drop the module tag
+        # and emit a bare Symbol so `method.c` resolves it in the method's
+        # module at eval time, matching Base `@cfunction`'s runtime semantics.
+        ret = Expr(:cfunction)
+        for (i, e) in enumerate(children(ex))
+            if i == 2 && kind(e) == K"static_eval" && kind(e[1]) == K"globalref"
+                push!(ret.args, QuoteNode(Symbol(e[1].name_val::String)))
+            else
+                push!(ret.args, _to_lowered_expr(e, stmt_offset))
+            end
+        end
+        return ret
     else
         # Allowed forms according to https://docs.julialang.org/en/v1/devdocs/ast/
         #

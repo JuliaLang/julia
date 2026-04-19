@@ -93,9 +93,15 @@ function Base.var"@cfunction"(__context__::MacroContext, callable, return_type, 
         # Kinda weird semantics here - without `$`, the callable is a top level
         # expression evaluated within the module where the `@cfunction` is
         # expanded into.
-        fptr = @ast __context__ callable [K"inert"
-            callable
-        ]
+        #
+        # Identifier callables go through `K"static_eval"` so scope resolution
+        # produces a binding reference visible in the lowered IR. Other
+        # expressions (e.g. function definitions) stay inert.
+        fptr = if kind(callable) == K"Identifier"
+            @ast __context__ callable [K"static_eval" callable]
+        else
+            @ast __context__ callable [K"inert" callable]
+        end
         typ = Ptr{Cvoid}
     end
     @ast __context__ __context__.macrocall [K"cfunction"
