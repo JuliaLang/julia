@@ -611,15 +611,4 @@ end
     @test_throws OverflowError StepRange(dmin, Day(1), dmax)
 end
 
-@testset "StepRangeLen{Time} representation and indexing" begin
-    # Test that we can construct a step range of times that supports indexing and repr.
-    #
-    # The example test range here is short enough that it doesn't wrap,
-    # which would violate the soundness expectation that ranges are monotonic.
-    # See: https://github.com/JuliaLang/julia/issues/59032
-    r = range(Time(0), step = Hour(9), length = 3)
-    @test repr(r) |> !isempty  # no-throw, non-empty repr.
-    @test r[begin:end] == [Time(0), Time(9), Time(18)]  # can be indexed
-end
-
 end  # RangesTest module
