@@ -118,6 +118,9 @@ const latex_symbols = Dict(
     "\\to" => "→",
     "\\euler" => "ℯ",
     "\\ohm" => "Ω",
+    "\\lnot" => "¬",
+    "\\land" => "∧",
+    "\\lor" => "∨",
 
     # Music Symbols
     # Music Symbols - Accidentals
