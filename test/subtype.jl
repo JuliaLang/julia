@@ -2532,6 +2532,13 @@ let A = W61602{T, 1} where T<:(Union{Missing, S} where S),
     C = W61602{Union{Missing, Int64}, 1}
     @test C <: typeintersect(A, B)
     @test C <: typeintersect(B, A)
+
+    D = Tuple{W61602{T, 1}, X} where {T<:(Union{Missing, S} where S), X}
+    E = Tuple{W61602{Union{Missing, T}}, T} where T
+    @test Tuple{C, String} <: D
+    @test !(Tuple{C, String} <: E)
+    @test !(Tuple{C, String} <: typeintersect(D, E))
+    @test !(Tuple{C, String} <: typeintersect(E, D))
 end
 
 # try to fool a greedy algorithm that picks X=Int, Y=String here
