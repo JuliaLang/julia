@@ -1449,7 +1449,7 @@ static inline struct jl_codeloc_t unpack_codeloc(jl_string_t *cl, size_t pc, int
         memcpy(&int16, ptr, 2);
         codeloc.pc = int16;
         break;
-    case 3:
+    case 4:
         memcpy(&int32, ptr, 4);
         codeloc.pc = int32;
         break;
