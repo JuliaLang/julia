@@ -9300,7 +9300,7 @@ static jl_llvm_functions_t
             while (1) {
                 if (!jl_is_symbol(debuginfo->def)) // this is a path
                     func = debuginfo->def; // this is inlined
-                struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo->codelocs, pc);
+                struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, pc);
                 size_t i = lineidx.line;
                 if (i < 0) // pc out of range: broken debuginfo?
                     return false;
@@ -9322,7 +9322,7 @@ static jl_llvm_functions_t
                     info.line = i;
                     info.line0 = 0;
                     if (pc == 1) {
-                        struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo->codelocs, 0);
+                        struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, 0);
                         assert(lineidx.to == 0 && lineidx.pc == 0);
                         if (lineidx.line > 0 && info.line != lineidx.line)
                             info.line0 = lineidx.line;
@@ -9528,7 +9528,7 @@ static jl_llvm_functions_t
             bool is_tracked = in_tracked_path(file);
             if (do_coverage(is_user_code, is_tracked)) {
                 for (size_t pc = 0; 1; pc++) {
-                    struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo->codelocs, pc);
+                    struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, pc);
                     if (lineidx.line == -1)
                         break;
                     if (lineidx.line > 0)

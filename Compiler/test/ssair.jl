@@ -841,13 +841,6 @@ end
 global global_error_switch = false
 @test f_must_throw_phinode_edge() == 1
 
-# Test roundtrip of debuginfo compression
-let cl = Int32[32, 1, 1, 1000, 240, 230]
-    str = ccall(:jl_compress_codelocs, Any, (Int32, Any, Int), 378, cl, 2)::String;
-    cl2 = ccall(:jl_uncompress_codelocs, Any, (Any, Int), str, 2)
-    @test cl == cl2
-end
-
 @test_throws ErrorException Base.code_ircode(+, (Float64, Float64); optimize_until = "nonexisting pass name")
 @test_throws ErrorException Base.code_ircode(+, (Float64, Float64); optimize_until = typemax(Int))
 

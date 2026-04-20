@@ -1461,8 +1461,9 @@ static inline struct jl_codeloc_t unpack_codeloc(jl_string_t *cl, size_t pc, int
 
 static const struct jl_codeloc_t badloc = {-1, 0, 0};
 
-JL_DLLEXPORT struct jl_codeloc_t jl_uncompress1_codeloc(jl_string_t *cl, size_t pc) JL_NOTSAFEPOINT
+JL_DLLEXPORT struct jl_codeloc_t jl_uncompress1_codeloc(jl_debuginfo_t *di, size_t pc) JL_NOTSAFEPOINT
 {
+    jl_string_t *cl = di->codelocs;
     assert(jl_is_string(cl));
     int line_offset, line_bytes, to_bytes;
     size_t nstmts = codelocs_parseheader(cl, &line_offset, &line_bytes, &to_bytes);
@@ -1604,8 +1605,9 @@ JL_DLLEXPORT jl_string_t *jl_compress_codelocs(int32_t firstline, jl_value_t *co
     return cl;
 }
 
-JL_DLLEXPORT jl_value_t *jl_uncompress_codelocs(jl_string_t *cl, size_t nstmts) // Memory{UInt8} => Vector{Int32}
+JL_DLLEXPORT jl_value_t *jl_uncompress_codelocs(jl_debuginfo_t *di, size_t nstmts) // Memory{UInt8} => Vector{Int32}
 {
+    jl_string_t *cl = di->codelocs;
     assert(jl_is_string(cl));
     int line_offset, line_bytes, to_bytes;
     size_t nlocs = codelocs_parseheader(cl, &line_offset, &line_bytes, &to_bytes);

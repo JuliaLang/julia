@@ -879,7 +879,7 @@ const char *jl_debuginfo_firstline(jl_debuginfo_t *debuginfo, int* line)
         linetable = debuginfo->linetable;
     }
     if (line) {
-        struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo->codelocs, 0);
+        struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, 0);
         *line = lineidx.line;
     }
     return jl_debuginfo_file1(debuginfo);
@@ -917,7 +917,7 @@ static void jl_fprint_debugloc(ios_t *s, jl_debuginfo_t *debuginfo, jl_value_t *
 {
     if (!jl_is_symbol(debuginfo->def)) // this is a path or
         func = debuginfo->def; // this is inlined code
-    struct jl_codeloc_t stmt = jl_uncompress1_codeloc(debuginfo->codelocs, ip);
+    struct jl_codeloc_t stmt = jl_uncompress1_codeloc(debuginfo, ip);
     intptr_t edges_idx = stmt.to;
     if (edges_idx) {
         jl_debuginfo_t *edge = (jl_debuginfo_t*)jl_svecref(debuginfo->edges, edges_idx - 1);
