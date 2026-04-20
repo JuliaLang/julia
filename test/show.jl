@@ -32,6 +32,13 @@ end
 @test replstr(Array{Any}(undef, 2,2,2)) == "2×2×2 Array{Any, 3}:\n[:, :, 1] =\n #undef  #undef\n #undef  #undef\n\n[:, :, 2] =\n #undef  #undef\n #undef  #undef"
 @test replstr([1f10]) == "1-element Vector{Float32}:\n 1.0f10"
 
+# alignment of elided strings
+lens = length.(eachline(IOBuffer(replstr([" "^100 10;10 10]))))
+@test lens[2] == lens[3]
+# alignment of multiline items in arrays
+lens = length.(eachline(IOBuffer(replstr([[Array{Pair,0}(undef)] 10;10 10]))))
+@test lens[2] == lens[3]
+
 struct T5589
     names::Vector{String}
 end

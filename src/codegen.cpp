@@ -9329,8 +9329,12 @@ static jl_llvm_functions_t
                         info.is_user_code = in_user_mod(modu);
                     if (debug_enabled) {
                         StringRef fname = jl_debuginfo_name(func);
+                        // Encode the 1-based statement index into the DWARF column field so that
+                        // stacktraces can recover the exact PC that each inlined frame points at.
+                        // `pc` here is the 1-based statement index within `debuginfo`'s CodeInfo.
+                        unsigned col = (unsigned)pc;
                         if (new_lineinfo.empty() && info.file == ctx.file) { // if everything matches, emit a toplevel line number
-                            info.loc = DILocation::get(ctx.builder.getContext(), info.line, 0, SP, NULL);
+                            info.loc = DILocation::get(ctx.builder.getContext(), info.line, col, SP, NULL);
                         }
                         else { // otherwise, describe this as an inlining frame
                             DebugLoc inl_loc = new_lineinfo.empty() ? DebugLoc(DILocation::get(ctx.builder.getContext(), 0, 0, SP, NULL)) : new_lineinfo.back().loc;
@@ -9351,7 +9355,7 @@ static jl_llvm_functions_t
                                                              ,nullptr          // ThrownTypes
                                                              );
                             }
-                            info.loc = DILocation::get(ctx.builder.getContext(), info.line, 0, inl_SP, inl_loc);
+                            info.loc = DILocation::get(ctx.builder.getContext(), info.line, col, inl_SP, inl_loc);
                         }
                     }
                     new_lineinfo.push_back(info);

@@ -1570,6 +1570,9 @@ typedef struct {
     char *func_name;
     char *file_name;
     int line;
+    // PC within the inlined frame's CodeInfo, or 0 if unavailable.
+    // Carried in the DWARF column field by codegen (see `update_lineinfo` in codegen.cpp).
+    int pc;
     jl_code_instance_t *ci;
     int fromC;
     int inlined;
@@ -2194,7 +2197,7 @@ JL_DLLIMPORT void jl_get_llvm_external_fns(void *native_code, size_t *num_els,
 JL_DLLIMPORT void jl_get_function_id(void *native_code, jl_code_instance_t *ncode,
         int32_t *func_idx, int32_t *specfunc_idx);
 JL_DLLIMPORT void jl_register_fptrs(uint64_t image_base, const struct _jl_image_fptrs_t *fptrs,
-                                    jl_method_instance_t **linfos, size_t n);
+                                    jl_code_instance_t **linfos, size_t n);
 JL_DLLIMPORT void jl_get_llvm_cis(void *native_code, size_t *num_els,
                                   jl_code_instance_t **CIs);
 JL_DLLIMPORT void jl_init_codegen(void);

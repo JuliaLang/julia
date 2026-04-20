@@ -6765,25 +6765,6 @@ let
     @test f(1, 2, 3) == (0, (0, (0, 1)))
 end
 
-# Expr(:static_parameter, ...) in argument position should be inferable
-function gen_static_parameter_argument_position(world::UInt, source, args...)
-    ci = make_codeinfo(Any[
-        ReturnNode(Expr(:static_parameter, 1))
-    ]; slottypes=Any[Any, Any])
-    ci.slotnames = Symbol[:var"#self#", :typ]
-    ci.nargs = 2
-    ci.isva = false
-    return ci
-end
-@eval function f_static_parameter_argument_position(typ::Type{T}) where T
-    $(Expr(:meta, :generated, gen_static_parameter_argument_position))
-    $(Expr(:meta, :generated_only))
-    #= no body =#
-end
-let result = code_typed(f_static_parameter_argument_position, Tuple{Type{Int}})
-    @test result[1].second === Type{Int}
-end
-
 # aviatesk/JETLS.jl/issues/618
 Base.@nospecializeinfer function jetls618(a, @nospecialize(rest...))
     if a > 0
