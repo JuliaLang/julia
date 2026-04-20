@@ -27,6 +27,7 @@ include("utils.jl")
     @testset "modules" include("modules.jl")
     @testset "quoting" include("quoting.jl")
     @testset "scopes" include("scopes.jl")
+    @testset "synthetic_refs" include("synthetic_refs.jl")
     @testset "typedefs" include("typedefs.jl")
 
     @testset "compat" include("compat.jl")

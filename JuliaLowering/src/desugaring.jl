@@ -2425,7 +2425,7 @@ function method_def_expr(ctx, src, mtable, sparams, argl, body,
             [K"call" "svec"::K"core" mapindex(sparams, 1)...]
             ::K"SourceLocation"(src[1])]
         [K"method"
-            mtable
+            synthetic_ref(mtable)
             method_metadata
             [K"lambda"(body, is_toplevel_thunk=false, toplevel_pure=false)
                 [K"block" mapindex(argl, 1)...]
@@ -2461,7 +2461,7 @@ function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
 
     gen_mdef = let arg1_name = newsym(ctx, argl[1], "#self#"),
          gen_argl = SyntaxList(
-            @ast(ctx, src, [K"::" arg1_name [K"function_type" gen_name]]),
+            @ast(ctx, src, [K"::" arg1_name [K"function_type" synthetic_ref(gen_name)]]),
             @ast(ctx, src, [K"::"
                 # TODO: correct scope layer?
                 "__context__"::K"Identifier"(scope_layer=get(mtable, :scope_layer, 1))
@@ -2543,16 +2543,21 @@ function optional_positional_defs(ctx, src, mtable, sparams, argl, body, rett)
     methods = SyntaxList(ctx.graph)
     for i in eachindex(opt)
         @jl_assert i == length(passed)-length(req)+1 src
+        # Forwards into the self-recursive call are machinery, but
+        # `opt_defaults[i]` / `opt_defaults[end]` are user-written and must
+        # stay unwrapped (they can contain genuine user references, e.g. `y=x`
+        # in `f(x, y=x)`).
+        forwarded_names = mapsyntax(synthetic_ref, mapindex(passed, 1))
         wrapper_body = if all((<)(i), deps[i+1:end])
             # fill-all-defaults case.  note that the final default may be a
             # splat, and doesn't have further args referring to it by name, so
             # we put it directly in the call (see #50563 for some notes)
             @ast ctx src [K"block"
                 make_assigns(ctx, opt_names[i:end-1], opt_defaults[i:end-1])...
-                [K"call" mapindex(passed, 1)... opt_names[i:end-1]... opt_defaults[end]]]
+                [K"call" forwarded_names... mapsyntax(synthetic_ref, opt_names[i:end-1])... opt_defaults[end]]]
         else
             @ast ctx src [K"block"
-                [K"call" mapindex(passed, 1)... opt_defaults[i]]]
+                [K"call" forwarded_names... opt_defaults[i]]]
         end
         push!(methods, method_def_expr(
             ctx, src, mtable, used_typevars(passed, sparams),
@@ -2617,6 +2622,7 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, p
         pos_va && (l[end] = @ast ctx l[end] [K"..." l[end]])
         l
     end
+    synth_forward_pargl = mapsyntax(synthetic_ref, forward_pargl)
     (kw_decls, kw_names, kw_syms, kw_defaults, restkw) = expand_kw_args(ctx, kws)
     ordered_defaults = any(val->contains_identifier(val, kw_names), kw_defaults)
     positional_sparams = used_typevars(pargl, sparams)
@@ -2628,7 +2634,7 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, p
     # (1) Body method.  This contains the actual function body, and requires
     # every possible default to be filled.  `rett` is only passed here since it
     # can reference any argument.
-    mdefs1 = let arg1 = @ast ctx m1_name [K"::" m1_name [K"function_type" m1_name]]
+    mdefs1 = let arg1 = @ast ctx m1_name [K"::" m1_name [K"function_type" synthetic_ref(m1_name)]]
         nkw = @ast ctx kws [K"meta" "nkw"::K"Symbol" numchildren(kws)::K"Value"]
         method_def_expr(
             ctx, src, m1_name, sparams,
@@ -2642,10 +2648,10 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, p
             @ast ctx restkw[1] [K"call"
                 "pairs"::K"top" [K"call" "NamedTuple"::K"core"]]
         body2 = if !ordered_defaults
-            @ast ctx src [K"call" m1_name kw_defaults... rkw forward_pargl...]
+            @ast ctx src [K"call" synthetic_ref(m1_name) kw_defaults... rkw synth_forward_pargl...]
         else
             scope_nest(ctx, make_assigns(ctx, kw_names, kw_defaults),
-                @ast ctx src [K"call" m1_name kw_names... rkw forward_pargl...])
+                @ast ctx src [K"call" synthetic_ref(m1_name) mapsyntax(synthetic_ref, kw_names)... rkw synth_forward_pargl...])
         end
         method_def_expr(
             ctx, src, mtable, positional_sparams, pargl,
@@ -2709,13 +2715,13 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, p
                         [K"call" "keys"::K"top" arg2_name]
                         [K"tuple" kw_syms...]]]
                 (::K"nothing")
-                [K"call" "kwerr"::K"top" arg2_name forward_pargl...]]
+                [K"call" "kwerr"::K"top" synthetic_ref(arg2_name) synth_forward_pargl...]]
         end
         final_call = @ast ctx kws [K"call"
-            m1_name
+            synthetic_ref(m1_name)
             kw_temps...
             isempty(restkw) ? nothing : excess_kw
-            forward_pargl...]
+            synth_forward_pargl...]
         kwcall_body = if use_ssa_kw_temps
             for n in kw_names
                 # If not using slots for the keyword argument values, still
@@ -2747,7 +2753,7 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, p
         [K"method_defs" m1_name mdefs1]
         [K"method_defs" mtable mdefs2]
         [K"method_defs" mtable mdefs3]
-        mtable
+        synthetic_ref(mtable)
     ]
 end
 
@@ -2788,7 +2794,7 @@ function expand_function_arg1(ctx, arg)
     atype = @stm arg begin
         [K"::" t] -> t
         [K"::" _ t] -> t
-        _ -> @ast ctx arg [K"function_type" arg]
+        _ -> @ast ctx arg [K"function_type" synthetic_ref(arg)]
     end
     # first arg to Expr(:method)
     mt = @stm arg begin
@@ -2875,7 +2881,7 @@ function expand_function_def(ctx, src, raw_args, wheres, body, rett)
             [K"method_defs" mtable [K"block"
                 method_def_expr(ctx, src, mtable, sparams, argl, body, rett)]]
                 # TODO: overlay should return the method
-                [K"removable" mtable]]
+                [K"removable" synthetic_ref(mtable)]]
     end
 end
 
@@ -3125,7 +3131,7 @@ function expand_abstract_or_primitive_type(ctx, ex)
                 ]
                 [K"=" name newtype_var]
                 [K"call" "_setsuper!"::K"core" newtype_var supertype]
-                [K"call" "_typebody!"::K"core" false::K"Bool" name]
+                [K"call" "_typebody!"::K"core" false::K"Bool" synthetic_ref(name)]
             ]
         ]
         [K"assert" "toplevel_only"::K"Symbol" [K"inert_syntaxtree" ex] ]
@@ -3137,7 +3143,7 @@ function expand_abstract_or_primitive_type(ctx, ex)
                    ctx.mod::K"Value"
                    name=>K"Symbol"
                    false::K"Bool"]
-                [K"call" "_equiv_typedef"::K"core" name newtype_var]
+                [K"call" "_equiv_typedef"::K"core" synthetic_ref(name) newtype_var]
             ]
             nothing_(ctx, ex)
             [K"constdecl" name newtype_var]
@@ -3281,7 +3287,7 @@ function rewrite_ctor_sig(ctx, sig, tname, global_tname, struct_typevars, wheres
                 sig2 = @ast ctx sig [K"call"
                     [K"::" ctor_self
                         [K"curly" "Type"::K"core"
-                         [K"curly" global_tname curlyargs...]]]
+                         [K"curly" synthetic_ref(global_tname) curlyargs...]]]
                     args...]
             end
         end
@@ -3290,7 +3296,7 @@ function rewrite_ctor_sig(ctx, sig, tname, global_tname, struct_typevars, wheres
                 @jl_assert is_leaf(name) (sig, "didn't find ctor name in sig")
                 ctor_self = newsym(ctx, sig, "#ctor-self#")
                 sig2 = @ast ctx sig [K"call"
-                    [K"::" ctor_self [K"curly" "Type"::K"core" global_tname]]
+                    [K"::" ctor_self [K"curly" "Type"::K"core" synthetic_ref(global_tname)]]
                     args...]
             end
         end
@@ -3384,14 +3390,14 @@ function _rewrite_ctor_new_calls(ctx, ex, global_struct_name, ctor_sparams,
         elseif n_type_nonsplat > length(struct_typevars)
             throw(LoweringError(ex[1], "too many type parameters specified in `new{...}`"))
         end
-        @ast ctx ex[1] [K"curly" global_struct_name new_type_params...]
+        @ast ctx ex[1] [K"curly" synthetic_ref(global_struct_name) new_type_params...]
     elseif !isnothing(ctor_self)
         # new(...) in constructors
         ctor_self
     else
         # new(...) inside non-constructor inner functions
         if isempty(struct_typevars)
-            global_struct_name
+            synthetic_ref(global_struct_name)
         else
             throw(LoweringError(ex[1], "too few type parameters specified in `new`"))
         end
@@ -3652,19 +3658,21 @@ function expand_typegroup_def(ctx, ex)
         ])
     end
 
+    synthetic_struct_refs = mapsyntax(synthetic_ref, struct_names)
+
     # 2d. Call resolve_typegroup
     push!(stmts, @ast ctx ex [K"="
         [K"tuple" struct_names...]
         [K"call" "resolve_typegroup"::K"core"
             ctx.mod::K"Value"
-            [K"call" "svec"::K"core" struct_names...]
+            [K"call" "svec"::K"core" synthetic_struct_refs...]
             [K"call" "svec"::K"core" info_vars...]
         ]
     ])
 
     # 2e. Bind to global constants
     for i in 1:n
-        push!(stmts, @ast ctx entries[i].sdef [K"constdecl" global_names[i] struct_names[i]])
+        push!(stmts, @ast ctx entries[i].sdef [K"constdecl" global_names[i] synthetic_struct_refs[i]])
     end
 
     # 2f. latestworld
@@ -3679,7 +3687,7 @@ function expand_typegroup_def(ctx, ex)
         if isempty(e.inner_defs)
             push!(fdef_stmts, @ast ctx e.sdef [K"call"
                 "_defaultctors"::K"top"
-                global_names[i]
+                synthetic_ref(global_names[i])
                 ::K"SourceLocation"(e.sdef)
             ])
         else
@@ -3763,7 +3771,7 @@ function expand_struct_def(ctx, ex, docs)
     global_struct_name = adopt_scope(struct_name, layer)
     if !isempty(typevar_names)
         # Generate expression like `prev_struct.body.body.parameters`
-        prev_typevars = global_struct_name
+        prev_typevars = synthetic_ref(global_struct_name)
         for _ in 1:length(typevar_names)
             prev_typevars = @ast ctx type_sig [K"." prev_typevars "body"::K"Symbol"]
         end
@@ -3849,9 +3857,9 @@ function expand_struct_def(ctx, ex, docs)
                               ctx.mod::K"Value"
                               struct_name=>K"Symbol"
                               false::K"Bool"]
-                             [K"call" "_equiv_typedef"::K"core" global_struct_name newtype_var]
+                             [K"call" "_equiv_typedef"::K"core" synthetic_ref(global_struct_name) newtype_var]
                        ]]
-                [K"=" prev [K"if" hasprev global_struct_name false::K"Bool"]]
+                [K"=" prev [K"if" hasprev synthetic_ref(global_struct_name) false::K"Bool"]]
                 [K"if" hasprev
                    [K"block"
                     # if this is compatible with an old definition, use the old parameters, but the
@@ -3884,7 +3892,7 @@ function expand_struct_def(ctx, ex, docs)
             [K"block"
                 [K"call"
                     "_defaultctors"::K"top"
-                    global_struct_name
+                    synthetic_ref(global_struct_name)
                     ::K"SourceLocation"(ex)
                 ]
                 (::K"latestworld")
@@ -4252,7 +4260,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         expand_forms_2(ctx, expand_generator(ctx, ex))
     elseif k == K"function"
         if numchildren(ex) == 1
-            return @ast ctx ex [K"block" [K"function_decl" ex[1]] ex[1]]
+            return @ast ctx ex [K"block" [K"function_decl" ex[1]] synthetic_ref(ex[1])]
         end
         sig, wheres = flatten_wheres(ex[1])
         name, args, rett = @stm sig begin

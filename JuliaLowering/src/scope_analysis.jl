@@ -365,7 +365,14 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
         if getmeta(ex, :nospecialize, false) && b.kind === :argument
             b.is_nospecialize = true
         end
-        newleaf(ctx, ex, K"BindingId", b.id)
+        # Propagate the `:synthetic_ref` machinery-reference marker from the
+        # source Identifier so consumers walking the post-scope-resolution
+        # tree can observe it on the resulting BindingId.
+        new_leaf = newleaf(ctx, ex, K"BindingId", b.id)
+        if getmeta(ex, :synthetic_ref, false)
+            setmeta!(new_leaf, :synthetic_ref, true)
+        end
+        new_leaf
     elseif k === K"BindingId"
         ex
     elseif k == K"softscope"
