@@ -2537,6 +2537,8 @@ let A = W61602{T, 1} where T<:(Union{Missing, S} where S),
     E = Tuple{W61602{Union{Missing, T}}, T} where T
     @test Tuple{C, String} <: D
     @test !(Tuple{C, String} <: E)
+    @test Tuple{C, Int64} <: typeintersect(D, E)
+    @test Tuple{C, Int64} <: typeintersect(E, D)
     @test_broken !(Tuple{C, String} <: typeintersect(D, E))
     @test_broken !(Tuple{C, String} <: typeintersect(E, D))
 end
