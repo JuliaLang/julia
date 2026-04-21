@@ -1984,6 +1984,9 @@ function show(io::IO, it::ImageTarget)
     if !isempty(it.features_en)
         print(io, "; features_en=(", it.features_en, ")")
     end
+    if !isempty(it.features_dis)
+        print(io, "; features_dis=(", it.features_dis, ")")
+    end
 end
 
 # should sync with the types of arguments of `stale_cachefile`
