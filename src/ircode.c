@@ -1384,6 +1384,34 @@ JL_DLLEXPORT jl_value_t *jl_uncompress_argname_n(jl_value_t *syms, size_t i)
     return jl_nothing;
 }
 
+static inline uint32_t _take_u32(const char **ptr, int n_bytes)
+{
+    uint8_t int8;
+    uint16_t int16;
+    uint32_t out = 0;
+
+    switch (n_bytes) {
+    case 0:
+        out = 0;
+        break;
+    case 1:
+        memcpy(&int8, *ptr, 1);
+        out = int8;
+        break;
+    case 2:
+        memcpy(&int16, *ptr, 2);
+        out = int16;
+        break;
+    case 4:
+        memcpy(&out, *ptr, 4);
+        break;
+    default:
+        assert(0 && "bad codeloc size");
+    }
+    *ptr += n_bytes;
+    return out;
+}
+
 // codelocs are compressed as follows:
 // The input vector is a NTuple{3,UInt32} (struct jl_codeloc_t)
 // The vector is scanned for min and max of the values for each element
@@ -1395,69 +1423,16 @@ static inline struct jl_codeloc_t unpack_codeloc(jl_string_t *cl, size_t pc, int
         to_bytes = 0;
     else
         ptr += line_bytes + (pc - 1) * (line_bytes + to_bytes * 2);
-    uint8_t int8;
-    uint16_t int16;
-    uint32_t int32;
+
     struct jl_codeloc_t codeloc;
-    switch (line_bytes) {
-    case 0:
-        codeloc.line = 0;
-        break;
-    case 1:
-        memcpy(&int8, ptr, 1);
-        codeloc.line = int8;
-        break;
-    case 2:
-        memcpy(&int16, ptr, 2);
-        codeloc.line = int16;
-        break;
-    case 4:
-        memcpy(&int32, ptr, 4);
-        codeloc.line = int32;
-        break;
-    }
+    codeloc.line = _take_u32(&ptr, line_bytes);
     if (codeloc.line > 0)
         codeloc.line += line_offset - 1;
-    ptr += line_bytes;
-    switch (to_bytes) {
-    case 0:
-        codeloc.to = 0;
-        break;
-    case 1:
-        memcpy(&int8, ptr, 1);
-        codeloc.to = int8;
-        break;
-    case 2:
-        memcpy(&int16, ptr, 2);
-        codeloc.to = int16;
-        break;
-    case 4:
-        memcpy(&int32, ptr, 4);
-        codeloc.to = int32;
-        break;
-    }
-    ptr += to_bytes;
-    switch (to_bytes) {
-    case 0:
-        codeloc.pc = 0;
-        break;
-    case 1:
-        memcpy(&int8, ptr, 1);
-        codeloc.pc = int8;
-        break;
-    case 2:
-        memcpy(&int16, ptr, 2);
-        codeloc.pc = int16;
-        break;
-    case 4:
-        memcpy(&int32, ptr, 4);
-        codeloc.pc = int32;
-        break;
-    }
-    ptr += to_bytes;
+    codeloc.to = _take_u32(&ptr, to_bytes);
+    codeloc.pc = _take_u32(&ptr, to_bytes);
+
     return codeloc;
 }
-
 
 static const struct jl_codeloc_t badloc = {-1, 0, 0};
 
