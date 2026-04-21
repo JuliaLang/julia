@@ -14,9 +14,10 @@
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/PassTimingInfo.h>
 
+#include <llvm/ExecutionEngine/JITEventListener.h>
 #include <llvm/ExecutionEngine/Orc/IRCompileLayer.h>
 #include <llvm/ExecutionEngine/Orc/IRTransformLayer.h>
-#include <llvm/ExecutionEngine/JITEventListener.h>
+#include <llvm/ExecutionEngine/Orc/RedirectionManager.h>
 
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/Passes/PassPlugin.h>
@@ -29,6 +30,7 @@
 #include "platform.h"
 #include "llvm-codegen-shared.h"
 #include "llvm-version.h"
+#include "llvm-lazyreexports.h"
 #include <stack>
 #include <queue>
 #include <tuple>
@@ -383,11 +385,33 @@ private:
     StringMap<unsigned> counter;
 };
 
+struct jl_ccall_spec_t {
+    // func is an interned string:
+    const char *func;
+    // lib is one of the special library names or an interned string:
+    // JL_EXE_LIBNAME, JL_LIBJULIA_DL_LIBNAME, JL_LIBJULIA_INTERNAL_DL_LIBNAME
+    void *lib;
+};
+
+template<>
+struct llvm::DenseMapInfo<jl_ccall_spec_t> {
+    using T = std::pair<const char *, void *>;
+    using I = DenseMapInfo<T>;
+    static inline jl_ccall_spec_t from(T t) { return {t.first, t.second}; }
+    static inline T to(jl_ccall_spec_t t) { return {t.func, t.lib}; }
+
+    static inline jl_ccall_spec_t getEmptyKey() { return from(I::getEmptyKey()); }
+    static inline jl_ccall_spec_t getTombstoneKey() { return from(I::getTombstoneKey()); }
+    static unsigned getHashValue(const jl_ccall_spec_t &Val) { return I::getHashValue(to(Val)); }
+    static bool isEqual(const jl_ccall_spec_t &LHS, const jl_ccall_spec_t &RHS) { return I::isEqual(to(LHS), to(RHS)); }
+};
+
 struct jl_linker_info_t {
     DenseMap<jl_code_instance_t *, jl_codeinst_funcs_t<orc::SymbolStringPtr>> ci_funcs;
     DenseMap<std::pair<jl_code_instance_t *, jl_invoke_api_t>, orc::SymbolStringPtr>
         call_targets;
     DenseMap<void *, orc::SymbolStringPtr> global_targets;
+    DenseMap<jl_ccall_spec_t, orc::SymbolStringPtr> ccall_targets;
 };
 
 struct jl_emitted_output_t {
@@ -422,6 +446,7 @@ public:
     std::string make_name(StringRef orig_name);
 
     StringRef get_call_target(jl_code_instance_t *ci, bool specsig, bool always_inline);
+    Function *get_ccall_target(const char *f_name, void *f_lib);
 
     // Discard all the context that will be invalidated when we compile the
     // module.  The context and module will be moved to the jl_emitted_output_t.
@@ -435,6 +460,8 @@ public:
         call_targets;
     DenseMap<jl_code_instance_t *, jl_llvm_functions_t> ci_funcs;
     SmallVector<std::pair<jl_code_instance_t *, GlobalVariable *>, 0> external_fns;
+    // symbol, library name -> declaration
+    DenseMap<jl_ccall_spec_t, Function *> ccall_targets;
 
     SmallVector<cfunc_decl_t,0> cfuncs;
     std::map<void*, GlobalVariable*> global_targets;
@@ -882,6 +909,9 @@ protected:
                                         jl_code_instance_t *CI,
                                         jl_invoke_api_t API) JL_NOTSAFEPOINT;
 
+    orc::SymbolStringPtr linkCCall(orc::MaterializationResponsibility &MR,
+                                   jl_ccall_spec_t CCall);
+
     // If the provided CodeInstance is neither compiled nor has an ORC symbol in
     // CISymbols, look for a compatible CodeInstance in the MethodInstance's
     // cache that does.  Returns the original CodeInstance if none exists.
@@ -906,12 +936,13 @@ private:
     std::mutex SharedBytesMutex{};
     SharedBytesT SharedBytes;
 
-    // LinkerMutex protects CISymbols, Names
+    // LinkerMutex protects CISymbols, CCallSymbols, Names
     std::mutex LinkerMutex;
     // CISymbols maps CodeInstance pointers to their ORC symbols.  If a
     // CodeInstance is eligible for garbage collection, it must be removed from
     // this map first, with unregisterCI.
     CISymbolMap CISymbols;
+    DenseMap<jl_ccall_spec_t, orc::SymbolStringPtr> CCallSymbols;
     jl_name_counter_t Names;
 
     std::unique_ptr<DLSymOptimizer> DLSymOpt;
@@ -934,6 +965,8 @@ private:
     std::unique_ptr<OptimizerT> Optimizers;
     OptimizeLayerT OptimizeLayer;
     std::shared_ptr<JLDebuginfoPlugin> DebuginfoPlugin;
+    std::unique_ptr<julia::RedirectableSymbolManager> RedirMgr;
+    std::unique_ptr<julia::LazyReexportsManager> LazyMgr;
 };
 extern JuliaOJIT *jl_ExecutionEngine;
 

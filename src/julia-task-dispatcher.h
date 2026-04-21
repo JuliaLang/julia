@@ -26,6 +26,10 @@ struct JuliaTaskDispatcher : public TaskDispatcher {
     void shutdown() override;
     void work_until(future_base &F);
 
+    // True if dispatch() should immediately return after pushing the task to
+    // the queue.  Useful for ORC classes that use the blocking API.
+    bool defer = false;
+
 protected:
   void process_tasks(jl_unique_gcsafe_lock &Lock) JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE;
 
@@ -338,8 +342,12 @@ private:
 }; // class JuliaTaskDispatcher
 
 void JuliaTaskDispatcher::dispatch(std::unique_ptr<Task> T) {
-  std::unique_lock Lock{DispatchMutex};
-  TaskQueue.push_back(std::move(T));
+  if (defer) {
+    std::unique_lock Lock{DispatchMutex};
+    TaskQueue.push_back(std::move(T));
+  } else {
+    T->run();
+  }
 }
 
 void JuliaTaskDispatcher::shutdown() {

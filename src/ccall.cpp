@@ -2250,6 +2250,12 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             emit_error(ctx, "ccall: Had name expression, but symbol lookup was disabled");
         llvmf = jl_Module->getOrInsertFunction(symarg.f_name, functype).getCallee();
     }
+#ifdef _CPU_AARCH64_
+    else if (!ctx.emission_context.imaging_mode && symarg.f_name &&
+             (!symarg.f_lib_expr || symarg.f_lib)) {
+        llvmf = ctx.emission_context.get_ccall_target(symarg.f_name, (void *)symarg.f_lib);
+    }
+#endif
     else {
         ++DeferredCCallLookups;
         // vararg requires musttail,
