@@ -1083,9 +1083,9 @@ function frexp(x::T) where T<:IEEEFloat
     xu = reinterpret(Unsigned, x)
     xs = xu & ~sign_mask(T)
     xs >= exponent_mask(T) && return x, 0 # NaN or Inf
-    # Use rem instead of Int to avoid a spurious nothrow violation: after masking the sign
-    # bit, xs >> significand_bits(T) is at most 2^exponent_bits(T)-1, which always fits in Int.
-    k = rem(xs >> significand_bits(T), Int)
+    # use `% Int` instead of `Int(...)` to preserve `:nothrow` (after masking the sign
+    # bit, xs >> significand_bits(T) is at most 2^exponent_bits(T)-1, which always fits in Int)
+    k = (xs >> significand_bits(T)) % Int
     if k == 0 # x is subnormal
         xs == 0 && return x, 0 # +-0
         m = leading_zeros(xs) - exponent_bits(T)
