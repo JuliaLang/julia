@@ -2947,9 +2947,11 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
     if (bb->constraintkind == 1) {
         if (!jl_is_type_type(ub) && !jl_is_uniontype(ub) && !jl_is_unionall(ub)) {
             // this branch is a fast path if there are no `Type`s and not needed for correctness
+            JL_GC_PUSH1(&ub);
             set_bound(&bb->ub, ub, b, e);
             if (should_alias_to_env_typevar(b, bb, ub, e))
                 set_bound(&bb->lb, ub, b, e);
+            JL_GC_POP();
             return (jl_value_t*)b;
         }
         jl_value_t *ub2 = NULL;

@@ -2549,7 +2549,7 @@ let A = W61602{T, 1} where T<:(Union{Missing, S} where S),
     @test !(Tuple{C, String} <: typeintersect(F, G))
     @test !(Tuple{C, String} <: typeintersect(G, F))
 
-    H = Tuple{W61602{Union{Missing, T}}, T} where T<:Int
+    H = Tuple{W61602{Union{Missing, T}}, T} where T<:Int64
     K = Tuple{W61602{Union{Missing, Float64}, 1}, Float64}
     @test Tuple{C, Int64} <: typeintersect(F, H)
     @test Tuple{C, Int64} <: typeintersect(H, F)
