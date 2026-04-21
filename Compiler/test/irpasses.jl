@@ -1408,6 +1408,11 @@ end
 @testset "hypot($T, $T) removable if unused" for T in (Float16, Float32)
     @test Compiler.is_removable_if_unused(Base.infer_effects(hypot, (T, T)))
 end
+# unsafe_trunc(::Type{<:Integer}, ::Float64) is nothrow: the bit-shift result fits
+# within `Int` so `% Int` rather than `Int(...)` keeps the conversion non-throwing.
+@testset "unsafe_trunc($T, Float64) removable if unused" for T in (UInt128, Int128)
+    @test Compiler.is_removable_if_unused(Base.infer_effects(unsafe_trunc, (Type{T}, Float64)))
+end
 @test !Compiler.is_inlineable(code_typed1(exp, (Float64,)))
 @test fully_eliminated(; retval=Core.Argument(2)) do x::Float64
     return Core.ifelse(true, x, exp(x))

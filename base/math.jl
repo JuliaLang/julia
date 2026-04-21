@@ -968,7 +968,9 @@ function exponent(x::T) where T<:IEEEFloat
     @noinline throw2(x) = throw(DomainError(x, "Cannot be ±0.0."))
     xs = reinterpret(Unsigned, x) & ~sign_mask(T)
     xs >= exponent_mask(T) && throw1(x)
-    k = Int(xs >> significand_bits(T))
+    # use `% Int` instead of `Int(...)` to preserve `:nothrow` (the shifted value
+    # always fits in `exponent_bits(T)` bits, well below `typemax(Int)`)
+    k = (xs >> significand_bits(T)) % Int
     if k == 0 # x is subnormal
         xs == 0 && throw2(x)
         m = leading_zeros(xs) - exponent_bits(T)
