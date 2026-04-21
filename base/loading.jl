@@ -1870,7 +1870,9 @@ function show(io::IO, it::ImageTarget)
         end
     end
     print(io, ")")
-    # Is feature_dis useful?
+    if !isempty(it.features_dis)
+        print(io, "; features_dis=(", it.features_dis, ")")
+    end
 end
 
 # should sync with the types of arguments of `stale_cachefile`
