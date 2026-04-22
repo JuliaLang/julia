@@ -8783,3 +8783,7 @@ module AmbiguousUsing60659
     using .D, .A
     @test_throws UndefVarError X
 end
+
+# Behavior of TypeVar with lower bound
+f_def_typevar_with_lowerbound(x::T) where {T>:Int} = @isdefined(T) ? T : false
+@test f_def_typevar_with_lowerbound(1.0) == false

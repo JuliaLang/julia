@@ -632,18 +632,14 @@ function make_typealias(@nospecialize(x::Type))
     mods = modulesof!(Set{Module}(), x)
     replace!(mods, Core=>Base)
     aliases = Tuple{GlobalRef,SimpleVector}[]
-    xenv = UnionAll[]
-    for p in uniontypes(unwrap_unionall(x))
-        p isa UnionAll && push!(xenv, p)
-    end
-    x isa UnionAll && push!(xenv, x)
     for mod in mods
         for name in unsorted_names(mod)
             if isdefinedglobal(mod, name) && !isdeprecated(mod, name) && isconst(mod, name)
                 alias = getglobal(mod, name)
                 if alias isa Type && !has_free_typevars(alias) && !print_without_params(alias) && x <: alias
                     if alias isa UnionAll
-                        (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), x, alias)::SimpleVector
+                        free_before = find_free_typevars(x)
+                        (ti, env) = typeintersect_env(x, alias)
                         # ti === Union{} && continue # impossible, since we already checked that x <: alias
                         env = env::SimpleVector
                         # TODO: In some cases (such as the following), the `env` is over-approximated.
@@ -663,11 +659,9 @@ function make_typealias(@nospecialize(x::Type))
                                 ex isa TypeError || rethrow()
                                 continue
                             end
-                        for p in xenv
-                            applied = rewrap_unionall(applied, p)
-                        end
+                        applied = rewrap_free_typevars(applied, free_before)
                         has_free_typevars(applied) && continue
-                        applied === x || continue # it couldn't figure out the parameter matching
+                        applied == x || continue # it couldn't figure out the parameter matching
                     elseif alias === x
                         env = Core.svec()
                     else
@@ -846,7 +840,7 @@ function make_typealiases(@nospecialize(x::Type))
             if isdefinedglobal(mod, name) && !isdeprecated(mod, name) && isconst(mod, name)
                 alias = getglobal(mod, name)
                 if alias isa Type && !has_free_typevars(alias) && !print_without_params(alias) && !(alias <: Tuple)
-                    (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), x, alias)::SimpleVector
+                    (ti, env) = typeintersect_env(x, alias)
                     ti === Union{} && continue
                     # make sure this alias wasn't from an unrelated part of the Union
                     mod2 = modulesof!(Set{Module}(), alias)

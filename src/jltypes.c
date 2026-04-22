@@ -175,8 +175,19 @@ static void find_free_typevars(jl_value_t *v, jl_typeenv_t *env, jl_array_t *out
 {
     while (1) {
         if (jl_is_typevar(v)) {
-            if (!typeenv_has(env, (jl_tvar_t*)v))
+            jl_tvar_t *var = (jl_tvar_t*)v;
+            if (!typeenv_has(env, var)) {
+                jl_typeenv_t *newenv = (jl_typeenv_t*)alloca(sizeof(jl_typeenv_t));
+                newenv->var = var;
+                newenv->val = NULL;
+                newenv->prev = env;
+                env = newenv;
+                if (var->lb != jl_bottom_type)
+                    find_free_typevars(var->lb, env, out);
+                if (var->ub != (jl_value_t*)jl_any_type)
+                    find_free_typevars(var->ub, env, out);
                 jl_array_ptr_1d_push(out, v);
+            }
             return;
         }
         if (jl_is_typeapp(v)) {

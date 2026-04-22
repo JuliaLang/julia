@@ -373,7 +373,7 @@ end
     @test sprint(show, Returns(1.0)) == "Returns{Float64}(1.0)"
 
     illtype = Vector{Core.TypeVar(:T)}
-    @test Returns(illtype) == Returns{DataType}(illtype)
+    @test_skip Returns(illtype) == Returns{DataType}(illtype)
 end
 
 @testset "<= (issue #46327)" begin

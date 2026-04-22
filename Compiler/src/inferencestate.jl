@@ -728,54 +728,54 @@ function sptypes_from_meth_instance(mi::MethodInstance)
     sptypes = Vector{VarState}(undef, nvals)
     for i = 1:nvals
         v = spvals[i]
-        if v isa TypeVar
+        undef = true
+        if has_free_typevars(v)
+            ty = Any
             temp = sig
             for _ = 1:i-1
                 temp = temp.body
             end
             vᵢ = (temp::UnionAll).var
-            sigtypes = (unwrap_unionall(temp)::DataType).parameters
-            for j = 1:length(sigtypes)
-                sⱼ = sigtypes[j]
-                if isType(sⱼ) && sⱼ.parameters[1] === vᵢ
-                    # if this parameter came from `arg::Type{T}`,
-                    # then `arg` is more precise than `Type{T} where lb<:T<:ub`
-                    ty = fieldtype(mi.specTypes, j)
-                    @goto ty_computed
-                elseif (va = va_from_vatuple(sⱼ)) !== nothing
-                    # if this parameter came from `::Tuple{.., Vararg{T,vᵢ}}`,
-                    # then `vᵢ` is known to be `Int`
-                    if isdefined(va, :N) && va.N === vᵢ
-                        ty = Int
+            if isa(v, TypeVar)
+                sigtypes = (unwrap_unionall(temp)::DataType).parameters
+                for j = 1:length(sigtypes)
+                    sⱼ = sigtypes[j]
+                    if isType(sⱼ) && sⱼ.parameters[1] === vᵢ
+                        # if this parameter came from `arg::Type{T}`,
+                        # then `arg` is more precise than `Type{T} where lb<:T<:ub`
+                        ty = fieldtype(mi.specTypes, j)
                         @goto ty_computed
+                    elseif (va = va_from_vatuple(sⱼ)) !== nothing
+                        # if this parameter came from `::Tuple{.., Vararg{T,vᵢ}}`,
+                        # then `vᵢ` is known to be `Int`
+                        if isdefined(va, :N) && va.N === vᵢ
+                            ty = Int
+                            @goto ty_computed
+                        end
                     end
                 end
+                ub = unwraptv_ub(v)
+                if has_free_typevars(ub)
+                    ub = Any
+                end
+                lb = unwraptv_lb(v)
+                if has_free_typevars(lb)
+                    lb = Bottom
+                end
+                if Any === ub && lb === Bottom
+                    # `Bottom <: T <: Any` additionally allows non-Type tvars
+                    ty = Any
+                    @goto ty_computed
+                end
             end
-            ub = unwraptv_ub(v)
-            if has_free_typevars(ub)
-                ub = Any
-            end
-            lb = unwraptv_lb(v)
-            if has_free_typevars(lb)
-                lb = Bottom
-            end
-            if Any === ub && lb === Bottom
-                ty = Any
-            else
-                tv = TypeVar(v.name, lb, ub)
-                ty = UnionAll(tv, Type{tv})
-            end
+            ty = rewrap_free_typevars(Type{v}, find_free_typevars(mi.specTypes))
             @label ty_computed
             undef = !(let sig=sig
-                # if the specialized signature `linfo.specTypes` doesn't contain any free
-                # type variables, we can use it for a more accurate analysis of whether `v`
-                # is constrained or not, otherwise we should use `def.sig` which always
-                # doesn't contain any free type variables
-                if !has_free_typevars(mi.specTypes)
-                    sig = mi.specTypes
-                end
                 @assert !has_free_typevars(sig)
-                constrains_param(v, sig, #=covariant=#true)
+                vᵢ.lb === Bottom && constrains_param(vᵢ, sig, #=covariant=#true) || begin
+                    # TODO: This relies on the identity of typevars returned from intersection, which is not guaranteed.
+                    isa(v, TypeVar) && !has_free_typevars(mi.specTypes) && constrains_param(v, mi.specTypes, #=covariant=#true)
+                end
             end)
         elseif isvarargtype(v)
             # if this parameter came from `func(..., ::Vararg{T,v})`,
@@ -789,6 +789,14 @@ function sptypes_from_meth_instance(mi::MethodInstance)
         sptypes[i] = VarState(ty, typemin(Int), undef)
     end
     return sptypes
+end
+
+function sp_at_idx(sig::UnionAll, idx::Int)
+    while idx != 1
+        sig = sig.body::UnionAll
+        idx -= 1
+    end
+    return sig.var
 end
 
 function va_from_vatuple(@nospecialize(t))

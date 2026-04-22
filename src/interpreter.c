@@ -266,7 +266,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
             assert(n > 0);
             if (s->sparam_vals && n <= jl_svec_len(s->sparam_vals)) {
                 jl_value_t *sp = jl_svecref(s->sparam_vals, n - 1);
-                defined = !jl_is_typevar(sp);
+                defined = !jl_has_free_typevars(sp);
             }
             else {
                 // static parameter val unknown needs to be an error for ccall
@@ -324,7 +324,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         assert(n > 0);
         if (s->sparam_vals && n <= jl_svec_len(s->sparam_vals)) {
             jl_value_t *sp = jl_svecref(s->sparam_vals, n - 1);
-            if (jl_is_typevar(sp) && !s->preevaluation)
+            if (jl_has_free_typevars(sp) && !s->preevaluation)
                 jl_undefined_var_error(((jl_tvar_t*)sp)->name, (jl_value_t*)jl_static_parameter_sym);
             return sp;
         }
