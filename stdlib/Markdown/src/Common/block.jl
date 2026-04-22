@@ -416,7 +416,7 @@ const SPACES = "(?:[ \t]*(?:[ \t\n])[ \t]*)"
 
 # An unquoted attribute value is a nonempty string of characters not including
 # spaces, tabs, line endings, ", ', =, <, >, or `.
-const UNQUOTED_ATTRIBUTE_VALUE = "[^ \t\n\"'=<>`]"
+const UNQUOTED_ATTRIBUTE_VALUE = "[^ \t\n\"'=<>`]+"
 
 # A single-quoted attribute value consists of ', zero or more characters not
 # including ', and a final '.
@@ -429,6 +429,7 @@ const DOUBLE_QUOTED_ATTRIBUTE_VALUE = "\"[^\"]*\""
 # An attribute value consists of an unquoted attribute value, a single-quoted
 # attribute value, or a double-quoted attribute value.
 const ATTRIBUTE_VALUE = "(?:(?:$UNQUOTED_ATTRIBUTE_VALUE)|(?:$SINGLE_QUOTED_ATTRIBUTE_VALUE)|(?:$DOUBLE_QUOTED_ATTRIBUTE_VALUE))"
+const ATTRIBUTE_VALUE_REGEX = Regex("^$ATTRIBUTE_VALUE")
 
 # An attribute value specification consists of optional spaces, tabs, and up
 # to one line ending, a = character, optional spaces, tabs, and up to one line
@@ -439,6 +440,7 @@ const ATTRIBUTE_VALUE_SPEC = "$SPACES?=$SPACES?$ATTRIBUTE_VALUE"
 # more ASCII letters, digits, _, ., :, or -. (Note: This is the XML
 # specification restricted to ASCII. HTML5 is laxer.)
 const ATTRIBUTE_NAME = "[a-zA-Z_:][a-zA-Z0-9_.:-]*"
+const ATTRIBUTE_NAME_REGEX = Regex("^$ATTRIBUTE_NAME")
 
 # An attribute consists of spaces, tabs, and up to one line ending, an
 # attribute name, and an optional attribute value specification.
@@ -447,6 +449,7 @@ const ATTRIBUTE = "$SPACES$ATTRIBUTE_NAME(?:$ATTRIBUTE_VALUE_SPEC)?"
 # A tag name consists of an ASCII letter followed by zero or more ASCII
 # letters, digits, or hyphens (-).
 const TAG_NAME = "[a-zA-Z][a-zA-Z0-9-]*"
+const TAG_NAME_REGEX = Regex("^$TAG_NAME")
 
 # An open tag consists of a < character, a tag name, zero or more attributes,
 # optional spaces, tabs, and up to one line ending, an optional / character,

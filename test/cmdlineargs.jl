@@ -197,6 +197,13 @@ end
     wait(p)
     @test p.exitcode == 1
     @test occursin("empty CPU name", String(take!(io)))
+
+    # Test --cpu-target=help prints available targets and exits cleanly
+    let v = readchomperrors(`$(Base.julia_cmd(; cpu_target="help"))`)
+        @test v[1] == true  # exits with 0
+        @test occursin("Available CPU targets:", v[2])
+        @test occursin("Host CPU:", v[2])
+    end
 end
 
 let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`

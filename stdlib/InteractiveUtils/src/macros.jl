@@ -336,6 +336,9 @@ For source reflection macros (`@which`, `@edit`, `@less` etc):
 Type annotations may be used instead of concrete values for the callable or for any of the arguments. The generated code
 will directly use the right-hand side of the type annotation instead of extracting the type of a value at runtime.
 
+!!! compat "Julia 1.13"
+    Support for type annotations requires at least Julia 1.13.
+
 This is particularly useful for callable objects (notably, for those that are hard to construct by hand on the spot),
 or when wanting to provide a type that is not concrete. However, support for callable objects requires setting
 `use_signature_tuple` to true, which is not a default (see the corresponding section below).
@@ -830,5 +833,7 @@ macro activate(what)
     options = map(options) do opt
         Expr(:kw, opt, true)
     end
-    return :(Base.require($__module__, $(QuoteNode(Component))).activate!(; $(options...)))
+    return :(let M = Base.require($__module__, $(QuoteNode(Component)))
+                 @invokelatest M.activate!(; $(options...))
+             end)
 end

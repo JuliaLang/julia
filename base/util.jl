@@ -731,12 +731,3 @@ function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.EFFECTIVE_CPU_THR
         end
     end
 end
-
-"""
-    isdebugbuild()
-
-Return `true` if julia is a debug version.
-"""
-function isdebugbuild()
-    return ccall(:jl_is_debugbuild, Cint, ()) != 0
-end

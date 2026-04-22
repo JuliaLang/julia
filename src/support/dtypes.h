@@ -28,7 +28,7 @@
 #define WIN32_LEAN_AND_MEAN
 /* Clang does not like fvisibility=hidden with windows headers. This adds the visibility attribute there.
    Arguably this is a clang bug. */
-# ifndef _COMPILER_MICROSOFT_
+# if !defined(_COMPILER_MICROSOFT_) && !defined(DECLSPEC_IMPORT)
 #  define DECLSPEC_IMPORT __declspec(dllimport) __attribute__ ((visibility("default")))
 # endif
 #include <windows.h>

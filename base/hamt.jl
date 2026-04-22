@@ -199,7 +199,7 @@ or grows the HAMT by inserting a new trie instead.
         end
         set!(trie, bi)
     else
-        @assert present
+        @assert present "!found && !present"
         # collision -> grow
         leaf = @inbounds trie.data[i]::Leaf{K,V}
         leaf_h = HashState(h, leaf.key)
