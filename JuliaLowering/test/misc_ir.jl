@@ -18,7 +18,7 @@ x.a
 x."b"
 #---------------------
 1   TestMod.x
-2   (call top.getproperty %₁ "b")
+2   (call top.getproperty %₁ (inert "b"))
 3   (return %₂)
 
 ########################################
@@ -35,6 +35,10 @@ x."b"
 #---------------------
 LoweringError:
 #= line 1 =# - invalid syntax: unknown form `.` or number of arguments 3
+Expression:
+  (. x a 3)
+Containing expressions:
+  (. x a 3)
 
 ########################################
 # Error: Placeholder value used
@@ -253,6 +257,10 @@ LoweringError:
 #---------------------
 LoweringError:
 #= line 1 =# - expected (if cond body) or (if cond body else)
+Expression:
+  (if)
+Containing expressions:
+  (if)
 
 ########################################
 # Error: @atomic in wrong position
@@ -262,6 +270,10 @@ end
 #---------------------
 LoweringError:
 #= none:2 =# - unimplemented or unsupported `atomic` declaration
+Expression:
+  (atomic x)
+Containing expressions:
+  (let (block) (block (atomic x)))
 
 ########################################
 # GC.@preserve support
@@ -410,7 +422,7 @@ end
 6   (call top.cconvert %₂ %₅)
 7   (call top.unsafe_convert %₁ %₄)
 8   (call top.unsafe_convert %₂ %₆)
-9   (foreigncall (static_eval (tuple :foo)) (static_eval TestMod.R) (static_eval (call core.svec TestMod.X TestMod.Y)) 0 (inert (:ccall, 0x0000, false)) %₇ %₈ %₄ %₆)
+9   (foreigncall (foreigncall_arg1 (tuple (inert foo))) (static_eval TestMod.R) (static_eval (call core.svec TestMod.X TestMod.Y)) 0 (inert (:ccall, 0x0000, false)) %₇ %₈ %₄ %₆)
 10  (return %₉)
 
 ########################################
@@ -425,7 +437,7 @@ end
 6   (call top.cconvert %₂ %₅)
 7   (call top.unsafe_convert %₁ %₄)
 8   (call top.unsafe_convert %₂ %₆)
-9   (foreigncall (static_eval (tuple :foo)) (static_eval TestMod.R) (static_eval (call core.svec TestMod.X TestMod.Y)) 1 (inert (:ccall, 0x0000, true)) %₇ %₈ %₄ %₆)
+9   (foreigncall (foreigncall_arg1 (tuple (inert foo))) (static_eval TestMod.R) (static_eval (call core.svec TestMod.X TestMod.Y)) 1 (inert (:ccall, 0x0000, true)) %₇ %₈ %₄ %₆)
 10  (return %₉)
 
 ########################################

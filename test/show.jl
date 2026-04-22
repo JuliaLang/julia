@@ -32,6 +32,13 @@ end
 @test replstr(Array{Any}(undef, 2,2,2)) == "2×2×2 Array{Any, 3}:\n[:, :, 1] =\n #undef  #undef\n #undef  #undef\n\n[:, :, 2] =\n #undef  #undef\n #undef  #undef"
 @test replstr([1f10]) == "1-element Vector{Float32}:\n 1.0f10"
 
+# alignment of elided strings
+lens = length.(eachline(IOBuffer(replstr([" "^100 10;10 10]))))
+@test lens[2] == lens[3]
+# alignment of multiline items in arrays
+lens = length.(eachline(IOBuffer(replstr([[Array{Pair,0}(undef)] 10;10 10]))))
+@test lens[2] == lens[3]
+
 struct T5589
     names::Vector{String}
 end
@@ -1089,6 +1096,9 @@ test_mt(show_f5, "show_f5(A::AbstractArray{T, N}, indices::Vararg{$Int, N})")
 # Printing of :(function (x...) end)
 @test startswith(replstr(Meta.parse("function (x...) end")), ":(function (x...,)")
 
+# Printing of (x...) -> x
+@test startswith(replstr(Meta.parse("(x...) -> x")), ":((x...,)->")
+
 # Printing of macro definitions
 @test sprint(show, :(macro m end)) == ":(macro m end)"
 @test_repr "macro m end"
@@ -1644,6 +1654,24 @@ end
 
 # Test that static show prints something reasonable for `<:Function` types
 @test static_shown(:) == "Base.Colon()"
+
+# Test basic CodeInstance, MethodInstance printing in jl_static_show
+f_test_static_show_mi_ci() = nothing
+let
+    f = f_test_static_show_mi_ci
+    m = first(methods(f, Tuple{}))
+    mi = Base.specialize_method(m, Tuple{typeof(f)}, Core.svec())
+    Base.return_types(f, Tuple{}) # populate .cache
+    @test mi.cache isa Core.CodeInstance
+    ci = mi.cache
+
+    mi_s = static_shown(mi)
+    ci_s = static_shown(ci)
+    @test occursin("MethodInstance", mi_s)
+    @test occursin("CodeInstance", ci_s)
+    @test occursin("f_test_static_show_mi_ci", mi_s)
+    @test occursin("f_test_static_show_mi_ci", ci_s)
+end
 
 # Test @show
 let fname = tempname()

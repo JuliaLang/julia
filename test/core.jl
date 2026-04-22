@@ -4297,6 +4297,30 @@ let z1 = Z14477C()
     @test !isdefined(z1.fld, :fld)
 end
 
+# Test _defaultctors "lowering"
+mutable struct _CtorLoweredQualityTest
+    x::Int
+end
+let cis = code_lowered(_CtorLoweredQualityTest, (Any,))
+    # The generic inner constructor is the longer one (with fieldtype/convert)
+    ci = last(cis)
+    # fieldtype should appear exactly once (not duplicated)
+    ft_count = sum(s -> count("Core.fieldtype", sprint(show, s)), ci.code)
+    @test ft_count == 1
+end
+
+struct _CtorSlotNarrowVal end
+struct _CtorSlotNarrowVal2 end
+Base.convert(::Type{_CtorSlotNarrowVal}, ::Any) = _CtorSlotNarrowVal()
+Base.convert(::Type{_CtorSlotNarrowVal}, x::_CtorSlotNarrowVal) = x
+mutable struct _CtorSlotNarrowHolder
+    x::_CtorSlotNarrowVal
+end
+let effects = Base.infer_effects((Union{_CtorSlotNarrowVal, _CtorSlotNarrowVal2},)) do a
+        _CtorSlotNarrowHolder(a)
+    end
+    @test Core.Compiler.is_nothrow(effects)
+end
 
 # issue #8846, generic macros
 macro m8846(a, b=0)
@@ -8528,6 +8552,45 @@ let load_path = mktempdir()
         @test length(Bar.mt) == 0
         Baz = Base.require(Main, :Baz)
         @test length(Bar.mt) == 1
+    finally
+        filter!((≠)(load_path), LOAD_PATH)
+        filter!((≠)(depot_path), DEPOT_PATH)
+        rm(load_path, recursive=true, force=true)
+    end
+end
+
+# Deduplication of method tables in jl_foreach_reachable_mtable:
+# when a method table is imported, it should not be visited multiple times.
+let load_path = mktempdir()
+    depot_path = mkdepottempdir()
+    try
+        pushfirst!(LOAD_PATH, load_path)
+        pushfirst!(DEPOT_PATH, depot_path)
+
+        write(joinpath(load_path, "MtDef.jl"),
+            """
+            module MtDef
+            Base.Experimental.@MethodTable(mt)
+            end
+            """)
+
+        MtDef = Base.require(Main, :MtDef)
+        @test length(MtDef.mt) == 0
+
+        write(joinpath(load_path, "MtUser.jl"),
+            """
+            module MtUser
+            using MtDef: mt
+            Base.Experimental.@overlay mt sin(x::Int) = 42
+            end
+            """)
+
+        # MtUser imports mt from MtDef, making it reachable from both modules'
+        # bindings during precompilation. Without deduplication in
+        # jl_foreach_reachable_mtable, the overlay method would be serialized
+        # twice, causing an assertion failure when activating methods on load.
+        MtUser = Base.require(Main, :MtUser)
+        @test length(MtDef.mt) == 1
     finally
         filter!((≠)(load_path), LOAD_PATH)
         filter!((≠)(depot_path), DEPOT_PATH)

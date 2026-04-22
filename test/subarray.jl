@@ -1115,6 +1115,22 @@ end
     @test Base.mightalias(permutedims(V1), permutedims(V1))
 end
 
+@testset "aliasing with PermutedDimsArray" begin
+    A = rand(3, 3)
+    P = PermutedDimsArray(A, (2, 1))
+    B = rand(3, 3)
+    Q = PermutedDimsArray(B, (2, 1))
+    @test Base.mightalias(A, P)
+    @test Base.mightalias(P, A)
+    @test !Base.mightalias(A, Q)
+    @test !Base.mightalias(P, Q)
+
+    A = [1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0]
+    P = PermutedDimsArray(A, (2, 1))
+    expected = collect(P)
+    copyto!(A, P)
+    @test A == expected
+end
 
 @test @views quote var"begin" + var"end" end isa Expr
 
@@ -1211,4 +1227,10 @@ end
     test_strided_vs_getindex(MyStridedTestArray(rand(2, 3, 10)))
     test_strided_vs_getindex(view(MyStridedTestArray(rand(10, 10)), 2:2:6, 1:3:9))
     test_strided_vs_getindex(view(transpose(view(MyStridedTestArray(rand(10, 10)), 2:2:6, 1:3:9)), 2:3, 3:-1:1))
+end
+
+# issue #57003
+@testset "copyto! @inbounds propagation" begin
+    @test @inbounds(copyto!(Vector{Int}(undef, 10), 1, collect(1:10), 1, 10)) == 1:10
+    @test_throws BoundsError copyto!(Vector{Int}(undef, 5), 1, collect(1:10), 1, 10)
 end

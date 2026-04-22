@@ -602,21 +602,23 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
 
     assert(!v.isghost);
     Value *vx = NULL;
-    if (!v.ispointer())
+    if (v.inline_roots.empty() && !v.ispointer())
         vx = v.V;
     else if (v.constant)
         vx = julia_const_to_llvm(ctx, v.constant);
 
-    if (v.ispointer() && vx == NULL) {
+    if (vx == NULL) {
         // try to load as original Type, to preserve llvm optimizations
         // but if the v.typ is not well known, use llvmt
+        // also handles values in split representation (inline_roots):
+        // the dynamic checks above ensure only primitive types reach here
         if (isboxed)
             vxt = llvmt;
         auto storage_type = vxt->isIntegerTy(1) ? getInt8Ty(ctx.builder.getContext()) : vxt;
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, v.tbaa);
         vx = ai.decorateInst(ctx.builder.CreateLoad(
             storage_type,
-            data_pointer(ctx, v)));
+            maybe_decay_tracked(ctx, v.V)));
         setName(ctx.emission_context, vx, "bitcast");
     }
 
@@ -861,17 +863,17 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_data);
         ai.decorateInst(store);
     }
-    else if (!x.inline_roots.empty()) {
-        recombine_value(ctx, e, thePtr, jl_aliasinfo_t(), Align(align_nb), false);
-    }
-    else if (x.ispointer()) {
+    else if (!x.inline_roots.empty() || x.ispointer()) {
         uint64_t size = jl_datatype_size(ety);
         im1 = ctx.builder.CreateMul(im1, ConstantInt::get(ctx.types().T_size,
                     LLT_ALIGN(size, jl_datatype_align(ety))));
         setName(ctx.emission_context, im1, "pointerset_offset");
         auto gep = emit_ptrgep(ctx, thePtr, im1);
         setName(ctx.emission_context, gep, "pointerset_ptr");
-        emit_memcpy(ctx, gep, jl_aliasinfo_t::fromTBAA(ctx, nullptr), x, size, Align(align_nb), Align(julia_alignment(ety)));
+        if (!x.inline_roots.empty())
+            recombine_value(ctx, x, gep, jl_aliasinfo_t(), Align(align_nb), false);
+        else
+            emit_memcpy(ctx, gep, jl_aliasinfo_t::fromTBAA(ctx, nullptr), x, size, Align(align_nb), Align(julia_alignment(ety)));
     }
     else {
         bool isboxed;

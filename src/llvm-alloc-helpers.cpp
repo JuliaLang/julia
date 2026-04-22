@@ -90,7 +90,7 @@ bool AllocUseInfo::addMemOp(Instruction *inst, unsigned opno, uint32_t offset,
     auto &field = getField(offset, size, elty);
     field.second.hasunboxed |= !hasObjref(elty) || (hasObjref(elty) && !isa<PointerType>(elty));
 
-    if (field.second.hasobjref != memop.isobjref)
+    if (!field.second.accesses.empty() && field.second.hasobjref != memop.isobjref)
         field.second.multiloc = true; // can't split this field, since it contains a mix of references and bits
     if (!isstore)
         field.second.hasload = true;
@@ -318,7 +318,7 @@ void jl_alloc::runEscapeAnalysis(llvm::CallInst *I, EscapeAnalysisRequiredArgs r
         }
         if (isa<AtomicCmpXchgInst>(inst) || isa<AtomicRMWInst>(inst)) {
             // Only store value count
-            if (use->getOperandNo() != isa<AtomicCmpXchgInst>(inst) ? AtomicCmpXchgInst::getPointerOperandIndex() : AtomicRMWInst::getPointerOperandIndex()) {
+            if (use->getOperandNo() != (isa<AtomicCmpXchgInst>(inst) ? AtomicCmpXchgInst::getPointerOperandIndex() : AtomicRMWInst::getPointerOperandIndex())) {
                 LLVM_DEBUG(dbgs() << "Object address is cmpxchg/rmw-ed somewhere, marking escape\n");
                 REMARK([&]() {
                     std::string str;

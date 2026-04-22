@@ -151,8 +151,14 @@ end
     end
 
     (src, _) = only(code_typed(sum27403, Tuple{Vector{Int}}))
+    is_bounds_throw_invoke_target(@nospecialize(callee)) =
+        callee === Base.throw_boundserror ||
+        callee == Core.GlobalRef(Base, :throw_boundserror) ||
+        callee == Core.GlobalRef(Base, :_throw_boundserror_indices) ||
+        (callee isa Core.MethodInstance && (callee.def.def.name === :throw_boundserror ||
+                                            callee.def.def.name === :_throw_boundserror_indices))
     @test !any(src.code) do x
-        x isa Expr && x.head === :invoke && !(x.args[2] in (Core.GlobalRef(Base, :throw_boundserror), Base.throw_boundserror))
+        x isa Expr && x.head === :invoke && !is_bounds_throw_invoke_target(x.args[2])
     end
 end
 
@@ -2360,6 +2366,16 @@ let src = code_typed1(issue44428, (Any,))
     @test count(isinvoke(:_issue44428_2), src.code) == 1
     @test count(isinvoke(:_issue44428_3), src.code) == 1
     @test count(x->Meta.isexpr(x,:call), src.code) == 0
+end
+
+# issue #61552
+let mi = Compiler.specialize_method(only(methods(ndims, (Matrix{Float64},))),
+        Tuple{typeof(ndims), Matrix{Float64}}, Core.svec())
+    codeinst = getcacheci(mi)::Core.CodeInstance
+    @test Compiler.use_const_api(codeinst)
+    @test codeinst.inferred === nothing
+    interp = Compiler.NativeInterpreter()
+    @test Compiler.ci_get_source(interp, codeinst) isa Core.CodeInfo
 end
 
 end # module inline_tests
