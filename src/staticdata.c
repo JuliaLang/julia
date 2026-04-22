@@ -1723,14 +1723,14 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                     size_t nf = dt->layout->nfields;
                     size_t np = dt->layout->npointers;
                     size_t fieldsize = 0;
-                    uint8_t is_foreign_type = dt->layout->flags.fielddesc_type == 3;
+                    uint8_t is_foreign_type = dt->layout->flags.fielddesc_type == JL_FIELDDESC_FOREIGN;
                     if (!is_foreign_type) {
                         fieldsize = jl_fielddesc_size(dt->layout->flags.fielddesc_type);
                     }
                     char *flddesc = (char*)dt->layout;
                     size_t fldsize = sizeof(jl_datatype_layout_t) + nf * fieldsize;
                     if (!is_foreign_type && dt->layout->first_ptr != -1)
-                        fldsize += np << dt->layout->flags.fielddesc_type;
+                        fldsize += np * jl_fielddesc_ptr_size(dt->layout->flags.fielddesc_type);
                     uintptr_t layout = LLT_ALIGN(ios_pos(s->const_data), sizeof(void*));
                     write_padding(s->const_data, layout - ios_pos(s->const_data)); // realign stream
                     newdt->layout = NULL; // relocation offset
@@ -2175,7 +2175,7 @@ static void jl_update_all_fptrs(jl_serializer_state *s, jl_image_t *image)
     uintptr_t base = (uintptr_t)&s->s->buf[0];
     // These will become MethodInstance references, but they start out as a list of
     // offsets into `s` for CodeInstances
-    jl_method_instance_t **linfos = (jl_method_instance_t**)&s->fptr_record->buf[0];
+    jl_code_instance_t **linfos = (jl_code_instance_t**)&s->fptr_record->buf[0];
     uint32_t clone_idx = 0;
     for (i = 0; i < img_fvars_max; i++) {
         reloc_t offset = *(reloc_t*)&linfos[i];
@@ -2190,7 +2190,7 @@ static void jl_update_all_fptrs(jl_serializer_state *s, jl_image_t *image)
             jl_code_instance_t *codeinst = (jl_code_instance_t*)(base + offset);
             assert(jl_is_method(jl_get_ci_mi(codeinst)->def.method) && jl_atomic_load_relaxed(&codeinst->invoke) != jl_fptr_const_return);
             assert(specfunc ? jl_atomic_load_relaxed(&codeinst->invoke) != NULL : jl_atomic_load_relaxed(&codeinst->invoke) == NULL);
-            linfos[i] = jl_get_ci_mi(codeinst);     // now it's a MethodInstance
+            linfos[i] = codeinst;
             void *fptr = fvars.ptrs[i];
             for (; clone_idx < fvars.nclones; clone_idx++) {
                 uint32_t idx = fvars.clone_idxs[clone_idx] & jl_sysimg_val_mask;

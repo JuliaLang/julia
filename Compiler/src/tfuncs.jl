@@ -132,6 +132,14 @@ function instanceof_tfunc(@nospecialize(t), astag::Bool=false, @nospecialize(tro
                 isexact = true
             end
         end
+        # If this is a NamedTuple type with known names but an unknown tuple type
+        # parameter, use the length of the names to constrain the tuple type.
+        if t′′ isa DataType && t′′.name === _NAMEDTUPLE_NAME && t′′.parameters[1] isa Tuple && has_free_typevars(t′′)
+            names = t′′.parameters[1]::Tuple
+            n = length(names)
+            nt_bound = NamedTuple{names, T} where T<:NTuple{n, Any}
+            tr = typeintersect(tr, nt_bound)
+        end
         return tr, isexact, isconcrete, istype
     elseif isa(t, Union)
         ta, isexact_a, isconcrete_a, istype_a = instanceof_tfunc(unwraptv(t.a), astag, troot)

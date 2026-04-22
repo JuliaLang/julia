@@ -392,7 +392,7 @@
             (generator (if (expr-contains-p if-generated? body (lambda (x) (not (function-def? x))))
                            (let* ((gen    (generated-version body))
                                   (nongen (non-generated-version body))
-                                  (gname  (symbol (string (gensy) "#" (current-julia-module-counter '()))))
+                                  (gname  (symbol (string "#" (current-julia-module-counter '()) "#" (current-julia-module-counter '()))))
                                   (gf     (make-generator-function gname names anames gen)))
                              (set! body (insert-after-meta
                                          nongen
@@ -4666,8 +4666,7 @@ f(x) = yt(x)
 (define (valid-ir-argument? e)
   (or (simple-atom? e)
       (and (pair? e)
-           (memq (car e) '(quote inert top core
-                                 slot static_parameter)))))
+           (memq (car e) '(quote inert top core slot)))))
 
 (define (valid-ir-rvalue? lhs e)
   (or (ssavalue? lhs)

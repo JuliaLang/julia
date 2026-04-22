@@ -1741,9 +1741,16 @@ JuliaOJIT::JuliaOJIT()
         DL.getGlobalPrefix(),
         orc::DynamicLibrarySearchGenerator::SymbolPredicate()));
 
+#if defined(_COMPILER_GCC_) && __GNUC__ < 14
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
     GlobalJD.addGenerator(
       cantFail(orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(
         DL.getGlobalPrefix())));
+#if defined(_COMPILER_GCC_) && __GNUC__ < 14
+#pragma GCC diagnostic pop
+#endif
 
     // Resolve non-lock free atomic functions in the libatomic1 library.
     // This is the library that provides support for c11/c++11 atomic operations.

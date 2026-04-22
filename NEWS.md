@@ -34,6 +34,8 @@ Compiler/Runtime improvements
     effect tracking; for those, the recommended pattern remains storing the field value in
     a local variable before the check (e.g. `val = x.field; if !isnothing(val) ... end`)
     ([#41199], [#47574]).
+  - Stack traces now show full method signatures with argument types for inlined
+    frames, matching the display of non-inlined frames ([#53925]).
 
 Command-line option changes
 ---------------------------

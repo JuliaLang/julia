@@ -1724,10 +1724,6 @@ end
 # Expand the (sym,lib) argument to ccall
 function expand_C_library_symbol(ctx, ex)
     @stm ex begin
-        [K"tuple" _...] -> @ast ctx ex [K"static_eval"(
-            meta=name_hint("function name and library expression"))
-            mapchildren(e->expand_forms_2(ctx,e), ctx, ex)
-        ]
         [K"static_eval" _] -> ex # already done
         _ -> expand_forms_2(ctx, ex)
     end
@@ -4396,7 +4392,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
                 ]
             ]
         ]
-    elseif k == K"inert" || k == K"inert_syntaxtree"
+    elseif k == K"inert" || k == K"inert_syntaxtree" || k == K"foreigncall_arg1"
         ex
     elseif k == K"foreigncall"
         # Assume user macros may produce this, but static_eval means desugaring

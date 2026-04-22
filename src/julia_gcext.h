@@ -66,7 +66,7 @@ JL_DLLEXPORT size_t jl_gc_max_internal_obj_size(void) JL_NOTSAFEPOINT;
 
 // Field layout descriptor for custom types that do
 // not fit Julia layout conventions. This is associated with
-// jl_datatype_t instances where fielddesc_type == 3.
+// jl_datatype_t instances where fielddesc_type == JL_FIELDDESC_FOREIGN.
 
 typedef struct {
     jl_markfunc_t markfunc;

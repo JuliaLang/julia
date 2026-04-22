@@ -2,7 +2,7 @@
 EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/FileWatching/docs/src/index.md"
 ```
 
-# [File Events](@id lib-filewatching)
+# [FileWatching (File Events)](@id lib-filewatching)
 
 ```@docs
 poll_fd
