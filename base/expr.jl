@@ -202,6 +202,9 @@ julia> macroexpand(M, :(@m2()), recursive=true)
 julia> macroexpand(M, :(@m2()), recursive=false)
 :(#= REPL[1]:6 =# @m1)
 ```
+
+!!! compat "Julia 1.13"
+    The `legacyscope` keyword argument requires at least Julia 1.13.
 """
 function macroexpand(m::Module, @nospecialize(x); recursive=true, legacyscope=true)
     ccall(:jl_macroexpand, Any, (Any, Any, Cint, Cint, Cint), x, m, recursive, false, legacyscope)
@@ -222,6 +225,9 @@ for in-place expansion as it can be called separately if needed.
 !!! warning
     This function modifies the input expression `x` in place. Use `macroexpand` if you need
     to preserve the original expression.
+
+!!! compat "Julia 1.13"
+    This function requires at least Julia 1.13.
 """
 function macroexpand!(m::Module, @nospecialize(x); recursive=true, legacyscope=false)
     ccall(:jl_macroexpand, Any, (Any, Any, Cint, Cint, Cint), x, m, recursive, true, legacyscope)

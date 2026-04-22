@@ -162,7 +162,7 @@ function _reset_node_head(node, k, f)
     else
         f = flags(node)
     end
-    h = SyntaxHead(isnothing(k) ? kind(node) : k, f)
+    return SyntaxHead(isnothing(k) ? kind(node) : k, f)
 end
 
 Base.summary(node::RawGreenNode) = summary(node.head)
@@ -326,7 +326,7 @@ function ParseStream(io::IO; version=VERSION)
     ParseStream(textbuf, textbuf, 1, version)
 end
 
-function Base.show(io::IO, mime::MIME"text/plain", stream::ParseStream)
+function Base.show(io::IO, ::MIME"text/plain", stream::ParseStream)
     println(io, "ParseStream at position $(stream.next_byte)")
 end
 
@@ -601,7 +601,6 @@ function last_child_position(stream::ParseStream, pos::ParseStreamPosition)
     output = stream.output
     @assert pos.node_index > 0
     cursor = RedTreeCursor(GreenTreeCursor(output, pos.node_index), pos.byte_index-1)
-    candidate = nothing
     for child in reverse(cursor)
         is_trivia(child) && continue
         return ParseStreamPosition(child.byte_end+UInt32(1), child.green.position)

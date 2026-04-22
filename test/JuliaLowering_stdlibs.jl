@@ -1,12 +1,7 @@
 import Libdl
 
 # known precompilation failures under JL
-const INCOMPATIBLE_STDLIBS = String[
-    "SparseArrays", # closure static parameter bug (JuliaLang/JuliaLowering.jl#134)
-    "Pkg", # closure w/ kwarg bug (JuliaLang/JuliaLowering.jl#139)
-    "SuiteSparse", # depends on SparseArrays
-    "LazyArtifacts", # depends on Pkg
-]
+const INCOMPATIBLE_STDLIBS = String[]
 
 const JULIA_EXECUTABLE = Base.unsafe_string(Base.JLOptions().julia_bin)
 const JULIA_CPU_TARGET = get(ENV, "JULIA_CPU_TARGET", Base.unsafe_string(Base.JLOptions().cpu_target))
@@ -48,12 +43,15 @@ else
     compile_JL_sysimage(JL_sysimage)
 end
 stdlibs_to_test = filter(name -> !in(name, INCOMPATIBLE_STDLIBS), readdir(Sys.STDLIB))
+push!(stdlibs_to_test, "Compiler")
 
 configs = [
     ``=>Base.CacheFlags(check_bounds=0, debug_level=2, opt_level=3),
     ``=>Base.CacheFlags(check_bounds=1, debug_level=2, opt_level=3),
 ]
-setupproject_command = "using Pkg; Pkg.add($(stdlibs_to_test))"
+
+compiler_path = joinpath(Sys.STDLIB, "..", "..", "Compiler")
+setupproject_command = "using Pkg; Pkg.add($(stdlibs_to_test)); Pkg.develop(path=$(repr(compiler_path)))"
 compilecache_command = "using Base: CacheFlags; Base.Precompilation.precompilepkgs($(stdlibs_to_test); configs=$(configs))"
 
 # pre-compile stdlibs (into temporary depot)

@@ -24,6 +24,8 @@ extern "C" {
 typedef struct {
     size_t size;
     void **table;
+    size_t count; // # of occupied key slots (live + tombstone)
+    size_t live;  // # of live entries (value != HT_NOTFOUND)
     void *_space[HT_N_INLINE];
 } htable_t;
 

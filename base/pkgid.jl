@@ -38,7 +38,7 @@ end
 function binunpack(s::String)
     io = IOBuffer(s)
     z = read(io, UInt8)
-    @assert z === 0x00
+    @assert z === 0x00 "unexpected data"
     uuid = read(io, UInt128)
     name = read(io, String)
     return PkgId(UUID(uuid), name)

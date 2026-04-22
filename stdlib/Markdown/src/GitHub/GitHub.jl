@@ -31,9 +31,11 @@ end
 @flavor github [fencedcode, horizontalrule, list, indentcode, blockquote, admonition, footnote, hashheader,
                 html_block, html_block_type7, github_table, github_paragraph,
 
+                # Backslash escapes do not work in code blocks, code spans, autolinks, or raw HTML
+                inline_code, autolink, html_inline,
                 linebreak, escapes, entity,
-                en_or_em_dash, inline_code,
+                en_or_em_dash,
                 double_tilde_strikethrough, tilde_strikethrough,
                 asterisk_bold, underscore_bold,
                 asterisk_italic, underscore_italic,
-                image, footnote_link, link, autolink]
+                image, footnote_link, link]

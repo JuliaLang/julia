@@ -41,12 +41,9 @@ end
 # This holds even in the presence of invalid UTF8
 is_standalone_byte(x::UInt8) = (x < 0x80) | (x > 0xf7)
 
-last_byteindex(x::Union{String, SubString{String}}) = ncodeunits(x)
-last_byteindex(x::DenseUInt8OrInt8) = lastindex(x)
-
 # Internal type - lazy iterator over positions of char in string
 struct FwCharPosIter{S}
-    string::S # S is assumed to be either String or SubString{String}
+    string::S # S is assumed to be either String, StringView or SubString of those
     char::Char
     # Char searchers search for the last UTF8 byte, because this byte tends to
     # have the most variety in real texts, so any individual value is rarer.
@@ -54,7 +51,7 @@ struct FwCharPosIter{S}
     last_char_byte::UInt8
 end
 
-function FwCharPosIter(s::Union{String, SubString{String}}, c::AbstractChar)
+function FwCharPosIter(s::UTF8String, c::AbstractChar)
     char = Char(c)::Char
     byte = last_utf8_byte(char)
     FwCharPosIter{typeof(s)}(s, char, byte)
@@ -70,13 +67,13 @@ function Base.iterate(s::FwCharPosIter, i::Int=1)
     # Hence, we can simply search for the occurrence of the byte itself.
     if is_standalone_byte(s.last_char_byte)
         i > scu && return nothing
-        i = _search(s.string, s.last_char_byte, i)
+        i = findnext(==(s.last_char_byte), codeunits(s.string), i)
         i === nothing ? nothing : (i, i + 1)
     else
         ncu = ncodeunits(s.char)
         while true
             i > scu && return nothing
-            i = _search(s.string, s.last_char_byte, i)
+            i = findnext(==(s.last_char_byte), codeunits(s.string), i)
             i === nothing && return nothing
             # Increment i before the continue to avoid infinite loop.
             # Since we search for the last byte in the char, the index has an offset.
@@ -97,7 +94,7 @@ end
 
 # Internal type - lazy iterator over positions of char in string, in reverse order
 struct RvCharPosIter{S}
-    string::S # S is assumed to be either String or SubString{String}
+    string::S # S is assumed to be String, StringView or SubString of those
     char::Char
     last_char_byte::UInt8
 end
@@ -105,7 +102,7 @@ end
 IteratorSize(s::Type{<:Union{FwCharPosIter, RvCharPosIter}}) = SizeUnknown()
 eltype(::Type{<:Union{FwCharPosIter, RvCharPosIter}}) = Int
 
-function RvCharPosIter(s::Union{String, SubString{String}}, c::AbstractChar)
+function RvCharPosIter(s::UTF8String, c::AbstractChar)
     char = Char(c)::Char
     byte = last_utf8_byte(char)
     RvCharPosIter{typeof(s)}(s, char, byte)
@@ -121,13 +118,13 @@ function Base.iterate(s::RvCharPosIter, i::Int=ncodeunits(s.string))
     ncu = ncodeunits(s.char)
     if is_standalone_byte(s.last_char_byte)
         i < ncu && return nothing
-        i = _rsearch(s.string, s.last_char_byte, i)
+        i = findprev(==(s.last_char_byte), codeunits(s.string), i)
         i === nothing ? nothing : (i, i - 1)
     else
         i = min(ncodeunits(s.string), i + ncu - 1)
         while true
             i < ncu && return nothing
-            i = _rsearch(s.string, s.last_char_byte, i)
+            i = findprev(==(s.last_char_byte), codeunits(s.string), i)
             i === nothing && return nothing
             index = i - ncu + 1
             i -= 1
@@ -145,7 +142,7 @@ end
 
 function findnext(
     pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
-    s::Union{String, SubString{String}},
+    s::UTF8String,
     i::Integer,
 )
     # TODO: Redesign these strange rules for errors, see #54584
@@ -162,45 +159,56 @@ function findnext(
     i = Int(i)::Int
     isvalid(s, i) || string_index_err(s, i)
     return if is_standalone_byte(u)
-        _search(s, u, i)
+        findnext(==(u), codeunits(s), i)
     else
         try_next(FwCharPosIter(s, c, last_utf8_byte(c)), i)
     end
 end
 
-function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},UInt8}, a::DenseUInt8, i::Integer)
-    @boundscheck i < firstindex(a) && throw(BoundsError(a, i))
-    i > lastindex(a) && return nothing
-    _search(a, pred.x, i)
+function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},Int8}, a::DenseInt8, i::Integer)
+    i = Int(i)::Int
+    @boundscheck i < Int(firstindex(a))::Int && throw(BoundsError(a, i))
+    i > Int(lastindex(a))::Int && return nothing
+    return memchr(a, pred.x, i)
 end
 
-function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},Int8}, a::DenseInt8, i::Integer)
-    @boundscheck i < firstindex(a) && throw(BoundsError(a, i))
-    i > lastindex(a) && return nothing
-    _search(a, pred.x, i)
+function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},UInt8}, a::DenseUInt8, i::Integer)
+    i = Int(i)::Int
+    @boundscheck i < Int(firstindex(a))::Int && throw(BoundsError(a, i))
+    i > Int(lastindex(a))::Int && return nothing
+    return memchr(a, pred.x, i)
+end
+
+function memchr(a::DenseUInt8, b::UInt8, i::Int)
+    fst = Int(firstindex(a))::Int
+    GC.@preserve a begin
+        p = pointer(a)
+        q = ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p+i-fst, b, lastindex(a) - i + 1)
+    end
+    return q == C_NULL ? nothing : (q-p+fst) % Int
+end
+
+function memchr(a::DenseInt8, b::Int8, i::Int)
+    fst = Int(firstindex(a))::Int
+    GC.@preserve a begin
+        p = Ptr{UInt8}(pointer(a))
+        q = ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p+i-fst, b, lastindex(a) - i + 1)
+    end
+    return q == C_NULL ? nothing : (q-p+fst) % Int
 end
 
 # iszero is special, in that the bitpattern for zero for Int8 and UInt8 is the same,
 # so we can use memchr even if we search for an Int8 in an UInt8 array or vice versa
 function findnext(::typeof(iszero), a::DenseUInt8OrInt8, i::Integer)
-    @boundscheck i < firstindex(a) && throw(BoundsError(a, i))
-    i > lastindex(a) && return nothing
-    _search(a, zero(UInt8), i)
-end
-
-# This is essentially just a wrapper around memchr. i must be inbounds.
-function _search(a::Union{String,SubString{String},DenseUInt8OrInt8}, b::Union{Int8,UInt8}, i::Integer = firstindex(a))
-    fst = firstindex(a)
-    GC.@preserve a begin
-        p = pointer(a)
-        q = ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p+i-fst, b, last_byteindex(a) - i + 1)
-    end
-    return q == C_NULL ? nothing : (q-p+fst) % Int
+    i = Int(i)::Int
+    @boundscheck i < Int(firstindex(a))::Int && throw(BoundsError(a, i))
+    i > Int(lastindex(a))::Int && return nothing
+    return memchr(a, zero(eltype(a)), i)
 end
 
 function findprev(
     pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
-    s::Union{String, SubString{String}},
+    s::UTF8String,
     i::Integer,
 )
     # TODO: Redesign these strange rules for errors, see #54584
@@ -215,33 +223,27 @@ function findprev(
     u = (reinterpret(UInt32, c) >> 24) % UInt8
     i = Int(i)::Int
     return if is_standalone_byte(u)
-        _rsearch(s, u, i)
+        findprev(==(u), codeunits(s), i)
     else
         try_next(RvCharPosIter(s, c, last_utf8_byte(c)), i)
     end
 end
 
 function findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},Int8}, a::DenseInt8, i::Integer)
-    @boundscheck i > lastindex(a) && throw(BoundsError(a, i))
-    i < firstindex(a) && return nothing
-    _rsearch(a, pred.x, i)
+    i = Int(i)::Int
+    @boundscheck i > Int(lastindex(a))::Int && throw(BoundsError(a, i))
+    i < Int(firstindex(a))::Int && return nothing
+    memrchr(a, pred.x, i)
 end
 
 function findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},UInt8}, a::DenseUInt8, i::Integer)
-    @boundscheck i > lastindex(a) && throw(BoundsError(a, i))
-    i < firstindex(a) && return nothing
-    _rsearch(a, pred.x, i)
+    i = Int(i)::Int
+    @boundscheck i > Int(lastindex(a))::Int && throw(BoundsError(a, i))
+    i < Int(firstindex(a))::Int && return nothing
+    memrchr(a, pred.x, i)
 end
 
-# See comments above for findfirst(::typeof(iszero)) methods
-function findprev(::typeof(iszero), a::DenseUInt8OrInt8, i::Integer)
-    @boundscheck i > lastindex(a) && throw(BoundsError(a, i))
-    i < firstindex(a) && return nothing
-    _rsearch(a, zero(UInt8), i)
-end
-
-# This is essentially just a wrapper around memrchr. i must be inbounds.
-function _rsearch(a::Union{String,SubString{String},DenseUInt8OrInt8}, b::Union{Int8,UInt8}, i::Integer = last_byteindex(a))
+function memrchr(a::DenseUInt8, b::UInt8, i::Int)
     fst = firstindex(a)
     GC.@preserve a begin
         p = pointer(a)
@@ -250,9 +252,26 @@ function _rsearch(a::Union{String,SubString{String},DenseUInt8OrInt8}, b::Union{
     return q == C_NULL ? nothing : (q-p+fst) % Int
 end
 
+function memrchr(a::DenseInt8, b::Int8, i::Int)
+    fst = firstindex(a)
+    GC.@preserve a begin
+        p = Ptr{UInt8}(pointer(a))
+        q = ccall(:memrchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p, b, i-fst+1)
+    end
+    return q == C_NULL ? nothing : (q-p+fst) % Int
+end
+
+# See comments above for findfirst(::typeof(iszero)) methods
+function findprev(::typeof(iszero), a::DenseUInt8OrInt8, i::Integer)
+    i = Int(i)::Int
+    @boundscheck i > Int(lastindex(a))::Int && throw(BoundsError(a, i))
+    i < Int(firstindex(a))::Int && return nothing
+    memrchr(a, zero(eltype(a)), i)
+end
+
 function findall(
     pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
-    s::Union{String, SubString{String}},
+    s::UTF8String,
 )
     iter = FwCharPosIter(s, pred.x)
     return if is_standalone_byte(iter.last_char_byte)
@@ -363,10 +382,10 @@ function _search_bloom_mask(c)
     UInt64(1) << (c & 63)
 end
 
-_nthbyte(s::Union{String, SubString{String}}, i) = codeunit(s, i)
+_nthbyte(s::DenseUTF8String, i) = codeunit(s, i)
 _nthbyte(t::AbstractVector, index) = t[index + (firstindex(t)-1)]
 
-function _searchindex(s::Union{String, SubString{String}}, t::Union{String, SubString{String}}, i::Integer)
+function _searchindex(s::DenseUTF8String, t::DenseUTF8String, i::Integer)
     # Check for fast case of a single byte
     lastindex(t) == 1 && return something(findnext(isequal(t[1]), s, i), 0)
     _searchindex(codeunits(s), codeunits(t), i)
@@ -676,7 +695,7 @@ function _rsearchindex(s::AbstractString,
     end
 end
 
-function _rsearchindex(s::Union{String, SubString{String}}, t::Union{String, SubString{String}}, i::Integer)
+function _rsearchindex(s::DenseUTF8String, t::DenseUTF8String, i::Integer)
     # Check for fast case of a single byte
     if lastindex(t) == 1
         return something(findprev(isequal(t[1]), s, i), 0)

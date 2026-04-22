@@ -312,7 +312,9 @@ end
 ## API docs
 
 ```@docs
+Base.ScopedValues.AbstractScopedValue
 Base.ScopedValues.ScopedValue
+Base.ScopedValues.LazyScopedValue
 Base.ScopedValues.with
 Base.ScopedValues.@with
 Base.isassigned(::Base.ScopedValues.ScopedValue)

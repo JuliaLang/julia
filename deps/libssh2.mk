@@ -55,7 +55,7 @@ $(eval $(call staged-install, \
 
 clean-libssh2:
 	-rm -f $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-compiled
-	-$(MAKE) -C $(BUILDDIR)/$(LIBSSH2_SRC_DIR) clean
+	-if [ -d $(BUILDDIR)/$(LIBSSH2_SRC_DIR) ]; then $(MAKE) -C $(BUILDDIR)/$(LIBSSH2_SRC_DIR) clean; fi
 
 
 get-libssh2: $(LIBSSH2_SRC_FILE)
