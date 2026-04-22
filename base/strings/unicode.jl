@@ -369,8 +369,6 @@ titlecase(c::AnnotatedChar) = AnnotatedChar(titlecase(c.char), annotations(c))
 function category_code(c::AbstractChar)
     !ismalformed(c) ? category_code(UInt32(c)) : Cint(31)
 end
-# Char specialization so inference can prove :nothrow on the concrete type without
-# making the same promise for arbitrary AbstractChar subtypes.
 @assume_effects :nothrow function category_code(c::Char)
     !ismalformed(c) ? category_code(UInt32(c)) : Cint(31)
 end
@@ -392,7 +390,9 @@ end
 end
 
 category_string(c) = category_strings[category_code(c)+1]
-@assume_effects :nothrow category_string(c::Char) = category_strings[category_code(c)+1]
+# category_code(::Char) returns a value in 0:31 and category_strings has 32 entries
+# (asserted at the top of this file), so the index is always in bounds.
+@assume_effects :nothrow category_string(c::Char) = @inbounds category_strings[category_code(c)+1]
 
 isassigned(c) = UTF8PROC_CATEGORY_CN < category_code(c) <= UTF8PROC_CATEGORY_CO
 @assume_effects :nothrow isassigned(c::Char) = UTF8PROC_CATEGORY_CN < category_code(c) <= UTF8PROC_CATEGORY_CO
@@ -421,8 +421,6 @@ false
 """
 islowercase(c::AbstractChar) = ismalformed(c) ? false :
     Bool(@assume_effects :foldable @ccall utf8proc_islower(UInt32(c)::UInt32)::Cint)
-# Char specialization so inference can prove :nothrow on the concrete type without
-# making the same promise for arbitrary AbstractChar subtypes.
 @assume_effects :nothrow islowercase(c::Char) = ismalformed(c) ? false :
     Bool(@assume_effects :foldable @ccall utf8proc_islower(UInt32(c)::UInt32)::Cint)
 
@@ -450,8 +448,6 @@ false
 """
 isuppercase(c::AbstractChar) = ismalformed(c) ? false :
     Bool(@assume_effects :foldable @ccall utf8proc_isupper(UInt32(c)::UInt32)::Cint)
-# Char specialization so inference can prove :nothrow on the concrete type without
-# making the same promise for arbitrary AbstractChar subtypes.
 @assume_effects :nothrow isuppercase(c::Char) = ismalformed(c) ? false :
     Bool(@assume_effects :foldable @ccall utf8proc_isupper(UInt32(c)::UInt32)::Cint)
 
