@@ -90,6 +90,12 @@ $(foreach module, $(TOP_LEVEL_PKGS), $(eval $(call symlink_target,$$(JULIAHOME)/
 julia-deps: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia/test
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/deps
 
+ifeq ($(OS),Darwin)
+julia-deps: $(build_libdir)/libSystem.tbd
+$(build_libdir)/libSystem.tbd: $(JULIAHOME)/contrib/mac/libSystem.tbd | $(build_libdir)
+	$(INSTALL_M) $< $@
+endif
+
 # `julia-stdlib` depends on `julia-deps` so that the fake JLL stdlibs can copy in their Artifacts.toml files.
 .PHONY: julia-stdlib
 julia-stdlib: | $(DIRS) julia-deps
@@ -421,6 +427,11 @@ endif
 			fi \
 		done \
 	done
+ifeq ($(OS),Darwin)
+	# Linker inputs used by Base.Linking when linking sysimages/pkgimages on macOS
+	$(INSTALL_M) $(build_libdir)/libclang_rt.osx.a $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_libdir)/libSystem.tbd $(DESTDIR)$(private_libdir)/
+endif
 endif
 	for exe in $(JL_PRIVATE_EXES) ; do \
 		$(INSTALL_M) $(build_private_libexecdir)/$$exe $(DESTDIR)$(private_libexecdir) || exit 1; \

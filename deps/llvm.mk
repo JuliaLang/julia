@@ -48,6 +48,8 @@ LLVM_ENABLE_RUNTIMES :=
 ifeq ($(BUILD_LLVM_CLANG), 1)
 LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);clang
 LLVM_ENABLE_RUNTIMES := $(LLVM_ENABLE_RUNTIMES);compiler-rt
+else ifeq ($(OS),Darwin)
+LLVM_ENABLE_RUNTIMES := $(LLVM_ENABLE_RUNTIMES);compiler-rt
 endif
 ifeq ($(USE_POLLY), 1)
 LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);polly
@@ -323,6 +325,8 @@ endif
 ifeq ($(OS),Darwin)
 # https://github.com/JuliaLang/julia/issues/29981
 LLVM_INSTALL += && ln -s libLLVM.dylib $2$$(build_shlibdir)/libLLVM-$$(LLVM_VER_SHORT).dylib
+# compiler-rt is required for linking sysimages on Darwin
+LLVM_INSTALL += && install -m 0644 $2$$(build_prefix)/lib/clang/$$(LLVM_VER_MAJ)/lib/darwin/libclang_rt.osx.a $2$$(build_libdir)/libclang_rt.osx.a
 endif
 ifeq ($(BUILD_LLD), 1)
 LLVM_INSTALL += && cp $2$$(build_bindir)/lld$$(EXE) $2$$(build_depsbindir)
@@ -376,6 +380,16 @@ $(eval $(call bb-install,llvm-tools,LLVM_TOOLS,false,true))
 # work-around for Yggdrasil packaging bug (https://github.com/JuliaPackaging/Yggdrasil/pull/11231)
 $(build_prefix)/manifest/llvm-tools uninstall-llvm-tools: \
 	TAR:=$(TAR) --exclude=llvm-config.exe
+
+ifeq ($(OS),Darwin)
+# compiler-rt is required for linking sysimages on Darwin
+$(eval $(call bb-install,compilerrt,COMPILERRT,false,false))
+$(build_libdir)/libclang_rt.osx.a: $(build_prefix)/manifest/compilerrt
+	mv $(build_libdir)/darwin/libclang_rt.osx.a $@
+	rm -rf $(build_libdir)/darwin
+install-compilerrt: $(build_libdir)/libclang_rt.osx.a
+install-llvm: install-compilerrt
+endif
 
 endif # USE_BINARYBUILDER_LLVM
 
