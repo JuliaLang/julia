@@ -245,6 +245,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     #---------------------------------------------------------------------------
     # Forms not produced by the parser
     [K"ssavalue" [K"Value"]] -> pass()
+    [K"static_parameter" [K"Value"]] -> pass()
     [K"inert" _] -> pass()
     [K"inert_syntaxtree" _] -> pass()
     [K"core" [K"Identifier"]] -> pass()
@@ -1154,7 +1155,7 @@ function _assert_syntaxtree(st::SyntaxTree, parents::Vector{NodeId}, vr)
             [K"latestworld_if_toplevel"] -> ()
             (_, when=JuliaSyntax.is_literal(st)) -> (:value,)
             (_, when=JuliaSyntax.is_trivia(st)) -> () # green tree only
-            (_, when=JuliaSyntax.is_operator(st)) -> (:name_val) # TODO: remove
+            (_, when=JuliaSyntax.is_operator(st)) -> (:name_val,) # TODO: remove
             _ -> return vr & @fail(st, "unrecognized leaf kind")
         end
     else
@@ -1198,7 +1199,7 @@ end
 
 vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
     (_, when=is_leaf(st)) -> kind(st) in KSet"""
-    Identifier BindingId Placeholder nothing
+    Identifier BindingId Placeholder nothing static_parameter
     Bool Char Float Float32 BinInt OctInt HexInt Integer
     SourceLocation String Symbol Value core top
     latestworld latestworld_if_toplevel symbolicgoto oldsymbolicgoto symboliclabel TOMBSTONE

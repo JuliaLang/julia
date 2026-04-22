@@ -4000,7 +4000,7 @@ Base.donotdelete
 """
     Base.blackbox(x) -> x
 
-This function returns `x` unchanged, but treats the returned value as if it
+Return `x` unchanged but the returned value will be treated as if it
 came from an unknowable black-box source. The optimizer may not make any
 assumptions about the output: it cannot be constant-folded, common-subexpression
 eliminated (CSE'd), or treated as loop-invariant.
