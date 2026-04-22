@@ -1707,7 +1707,7 @@ jl_method_instance_t *cache_method(
                 int k, l;
                 for (k = 0, l = jl_svec_len(env); k < l; k++) {
                     jl_value_t *env_k = jl_svecref(env, k);
-                    if (jl_is_typevar(env_k) || jl_is_vararg(env_k)) {
+                    if (jl_has_free_typevars(env_k) || jl_is_vararg(env_k)) {
                         unmatched_tvars = 1;
                         break;
                     }

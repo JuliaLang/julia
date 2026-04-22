@@ -976,33 +976,6 @@ static jl_value_t *widen_Type_to_union(jl_value_t *t, jl_value_t *bound, jl_sten
     return t;
 }
 
-// convert a type with free variables to a typevar bounded by a UnionAll-wrapped
-// version of that type.
-// TODO: This loses some inference precision. For example in a case where a
-// variable bound is `Vector{_}`, we could potentially infer `Type{Vector{_}} where _`,
-// but this causes us to infer the larger `Type{T} where T<:Vector` instead.
-// However this is needed because many contexts check `isa(sp, TypeVar)` to determine
-// when a static parameter value is not known exactly.
-static jl_value_t *fix_inferred_var_bound(jl_tvar_t *var, jl_value_t *ty JL_MAYBE_UNROOTED)
-{
-    if (ty == NULL) // may happen if the user is intersecting with an incomplete type
-        return (jl_value_t*)var;
-    if (!jl_is_typevar(ty) && jl_has_free_typevars(ty)) {
-        jl_value_t *ans = ty;
-        jl_array_t *vs = NULL;
-        JL_GC_PUSH2(&ans, &vs);
-        vs = jl_find_free_typevars(ty);
-        int i;
-        for (i = 0; i < jl_array_nrows(vs); i++) {
-            ans = jl_type_unionall((jl_tvar_t*)jl_array_ptr_ref(vs, i), ans);
-        }
-        ans = (jl_value_t*)jl_new_typevar(var->name, jl_bottom_type, ans);
-        JL_GC_POP();
-        return ans;
-    }
-    return ty;
-}
-
 static int var_occurs_inside(jl_value_t *v, jl_tvar_t *var, int inside, int want_inv) JL_NOTSAFEPOINT;
 
 typedef int (*tvar_callback)(void*, int8_t, jl_stenv_t *, int);
@@ -2374,16 +2347,6 @@ JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env, 
     if (obvious_subtype == 0 || (obvious_subtype == 1 && envsz == 0))
         subtype = obvious_subtype; // this ensures that running in a debugger doesn't change the result
 #endif
-    if (env) {
-        jl_unionall_t *ub = (jl_unionall_t*)y;
-        int i;
-        for (i = 0; i < envsz; i++) {
-            assert(jl_is_unionall(ub));
-            jl_tvar_t *var = ub->var;
-            env[i] = fix_inferred_var_bound(var, env[i]);
-            ub = (jl_unionall_t*)ub->body;
-        }
-    }
     return subtype;
 }
 
