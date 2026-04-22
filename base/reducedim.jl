@@ -871,7 +871,7 @@ julia> all(i -> i > 0, A, dims=2)
  1
 ```
 """
-all(::Function, ::AbstractArray; dims)
+all(f, ::AbstractArray; dims)
 
 """
     all!(r, A)
@@ -945,7 +945,7 @@ julia> any(i -> i > 0, A, dims=2)
  1
 ```
 """
-any(::Function, ::AbstractArray; dims)
+any(f, ::AbstractArray; dims)
 
 """
     any!(r, A)
@@ -1002,7 +1002,7 @@ for (fname, op) in [(:sum, :add_sum), (:prod, :mul_prod),
     _fname = Symbol('_', fname)
     mapf = fname === :extrema ? :(ExtremaMap(f)) : :f
     @eval begin
-        $(fname!)(f::Function, r::AbstractArray, A::AbstractArray; init::Bool=true) =
+        $(fname!)(f, r::AbstractArray, A::AbstractArray; init::Bool=true) =
             mapreducedim!($mapf, $(op), initarray!(r, $mapf, $(op), init, A), A)
         $(fname!)(r::AbstractArray, A::AbstractArray; init::Bool=true) = $(fname!)(identity, r, A; init=init)
 

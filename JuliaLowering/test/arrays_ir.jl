@@ -42,7 +42,7 @@ LoweringError:
 #---------------------
 LoweringError:
 [a=20, 30]
-#└──┘ ── misplaced assignment statement in `[ ... ]`
+#└──┘ ── assignment is not allowed in array expression
 
 ########################################
 # hcat syntax
@@ -86,7 +86,7 @@ T[x xs...]
 #---------------------
 LoweringError:
 [10 20 a=40]
-#     └───┘ ── misplaced assignment statement in `[ ... ]`
+#     └───┘ ── assignment is not allowed in array expression
 
 ########################################
 # vcat syntax
@@ -131,7 +131,7 @@ LoweringError:
 #---------------------
 LoweringError:
 [a=20; 30]
-#└──┘ ── misplaced assignment statement in `[ ... ]`
+#└──┘ ── assignment is not allowed in array expression
 
 ########################################
 # typed_vcat syntax
@@ -269,6 +269,10 @@ LoweringError:
 #---------------------
 LoweringError:
 #= line 1 =# - invalid syntax: unknown form `nrow` or number of arguments 2
+Expression:
+  (nrow 1 1)
+Containing expressions:
+  (ncat 3 (nrow 1 (nrow 1 1)))
 
 ########################################
 # Error: bad nrow nesting
@@ -284,6 +288,10 @@ LoweringError:
 #---------------------
 LoweringError:
 #= line 1 =# - 2D `nrow` cannot be mixed with `row` in `ncat`
+Expression:
+  (nrow-2 (row 1))
+Containing expressions:
+  (ncat-3 (nrow-2 (row 1)))
 
 ########################################
 # Error: bad nrow nesting
@@ -298,6 +306,10 @@ LoweringError:
 #---------------------
 LoweringError:
 #= line 1 =# - Badly nested rows in `ncat`
+Expression:
+  (row 1)
+Containing expressions:
+  (ncat-3 (row (row 1)))
 
 ########################################
 # Simple getindex

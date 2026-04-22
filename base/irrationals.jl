@@ -200,6 +200,8 @@ for op in Symbol[:+, :-, :*, :/, :^]
 end
 *(x::Bool, y::AbstractIrrational) = ifelse(x, Float64(y), 0.0)
 
+^(x::AbstractIrrational, y::Integer) = float(x)^y
+
 round(x::Irrational, r::RoundingMode) = round(float(x), r)
 
 """

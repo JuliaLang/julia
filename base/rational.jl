@@ -266,14 +266,18 @@ function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
     while r > nt
         try
             ia = convert(T,a)
-
             np = checked_add(checked_mul(ia,p),pp)
             nq = checked_add(checked_mul(ia,q),qq)
             p, pp = np, p
             q, qq = nq, q
         catch e
             isa(e,InexactError) || isa(e,OverflowError) || rethrow()
-            return p // q
+            (a ≤ 2 || ((-p == p) && (p < 0))) && return p // q
+            # find best semiconvergent that fits in T
+            ia_p = iszero(p) ? typemax(T) : fld(typemax(T) - abs(pp), abs(p))
+            ia_q = iszero(q) ? typemax(T) : fld(typemax(T) - qq, q)
+            ia = min(ia_p, ia_q)
+            return ia > a/2 ? (ia*p + pp) // (ia*q + qq) : p // q
         end
 
         # naive approach of using
@@ -290,15 +294,19 @@ function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
 
     # find optimal semiconvergent
     # smallest a such that x-a*y < a*t+tt
-    a = cld(x-tt,y+t)
+    a_min = cld(x-tt,y+t)
     try
-        ia = convert(T,a)
+        ia = convert(T,a_min)
         np = checked_add(checked_mul(ia,p),pp)
         nq = checked_add(checked_mul(ia,q),qq)
         return np // nq
     catch e
         isa(e,InexactError) || isa(e,OverflowError) || rethrow()
-        return p // q
+        (a ≤ 2 || ((-p == p) && (p < 0))) && return p // q
+        ia_p = iszero(p) ? typemax(T) : fld(typemax(T) - abs(pp), abs(p))
+        ia_q = iszero(q) ? typemax(T) : fld(typemax(T) - qq, q)
+        ia = min(ia_p, ia_q)
+        return ia > a/2 ? (ia*p + pp) // (ia*q + qq) : p // q
     end
 end
 rationalize(::Type{T}, x::AbstractFloat; tol::Real = eps(x)) where {T<:Integer} = rationalize(T, x, tol)
@@ -320,6 +328,7 @@ function rationalize(::Type{T}, x::Rational, tol::Real) where {T<:Integer}
 end
 rationalize(x::Integer; kvs...) = Rational(x)
 function rationalize(::Type{T}, x::Integer; kvs...) where {T<:Integer}
+    T<:Unsigned && x < 0 && __throw_negate_unsigned()
     if Base.hastypemax(T) # BigInt doesn't
         x < typemin(T) && return unsafe_rational(-one(T), zero(T))
         x > typemax(T) && return unsafe_rational(one(T), zero(T))

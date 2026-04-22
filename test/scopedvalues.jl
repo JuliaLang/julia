@@ -268,3 +268,20 @@ end
 @testset "issue 59483" begin
     test_59483()
 end
+
+# issue #53584 - ScopedValue should not allocate when accessed
+const sv_53584 = ScopedValue([0])
+@noinline function access_scoped_53584()
+    v = sv_53584[]
+    v[1] += 1
+    return nothing
+end
+function run_53584()
+    @with sv_53584=>[0] for _ in 1:100_000
+        access_scoped_53584()
+    end
+end
+@testset "issue #53584" begin
+    run_53584() # warmup
+    @test (@allocated run_53584()) < 10_000
+end
