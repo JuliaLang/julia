@@ -1411,6 +1411,8 @@ else
   UTF8PROC_INC := $(build_includedir)
 endif
 
+LIBTARGET_PARSING := $(build_libdir)/libtarget_parsing.a
+
 # We need python for things like BB triplet recognition.  We don't really care
 # about version, generally, so just find something that works:
 PYTHON := $(shell which python 2>/dev/null || which python3 2>/dev/null || which python2 2>/dev/null || echo not found)
