@@ -1,3 +1,8 @@
+
+// Forward declarations for private staticdata.c methods
+static size_t n_linkage_blobs(void) JL_NOTSAFEPOINT;
+static size_t external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT;
+
 // inverse of backedges graph (caller=>callees hash)
 jl_array_t *internal_methods JL_GLOBALLY_ROOTED = NULL; // rooted for the duration of our uses of this
 
@@ -400,8 +405,8 @@ static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited,
                         continue;
                     }
 
-                    void **child_bp = ptrhash_bp(visited, child_mi);
-                    int child_found = (char*)*child_bp - (char*)HT_NOTFOUND;
+                    void *child_bpval = ptrhash_get(visited, child_mi);
+                    int child_found = (char*)child_bpval - (char*)HT_NOTFOUND;
                     if (child_found) {
                         int child_result = child_found - 1;
                         if (child_result == 1 || child_result == 2) {

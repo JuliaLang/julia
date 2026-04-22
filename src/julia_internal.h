@@ -516,11 +516,6 @@ extern tracer_cb jl_newmeth_tracer;
 void jl_call_tracer(tracer_cb callback, jl_value_t *tracee);
 void print_func_loc(JL_STREAM *s, jl_method_t *m);
 extern jl_array_t *_jl_debug_method_invalidation JL_GLOBALLY_ROOTED;
-JL_DLLEXPORT extern arraylist_t jl_linkage_blobs; // external linkage: sysimg/pkgimages
-JL_DLLEXPORT extern arraylist_t jl_image_relocs;  // external linkage: sysimg/pkgimages
-JL_DLLEXPORT extern arraylist_t jl_top_mods;  // external linkage: sysimg/pkgimages
-extern arraylist_t eytzinger_image_tree;
-extern arraylist_t eytzinger_idxs;
 
 extern JL_DLLEXPORT size_t jl_page_size;
 extern JL_DLLEXPORT size_t jl_hugepage_size;
@@ -805,10 +800,11 @@ typedef union {
 #define METHOD_SIG_LATEST_ONLY              0b0010
 #define METHOD_SIG_PRECOMPILE_MANY          0b0100
 
-JL_DLLEXPORT jl_code_instance_t *jl_engine_reserve(jl_method_instance_t *m, jl_value_t *owner);
-JL_DLLEXPORT void jl_engine_fulfill(jl_code_instance_t *ci, jl_code_info_t *src);
+void jl_init_engine(void);
 void jl_engine_sweep(jl_ptls_t *gc_all_tls_states) JL_NOTSAFEPOINT;
 int jl_engine_hasreserved(jl_method_instance_t *m, jl_value_t *owner) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_code_instance_t *jl_engine_reserve(jl_method_instance_t *m, jl_value_t *owner);
+JL_DLLEXPORT void jl_engine_fulfill(jl_code_instance_t *ci, jl_code_info_t *src);
 
 JL_DLLEXPORT jl_code_instance_t *jl_type_infer(jl_method_instance_t *li JL_PROPAGATES_ROOT, size_t world, uint8_t source_mode, uint8_t trim_mode);
 JL_DLLEXPORT jl_code_info_t *jl_gdbcodetyped1(jl_method_instance_t *mi, size_t world);
@@ -1324,6 +1320,7 @@ void jl_init_llvm(void);
 void jl_init_runtime_ccall(void);
 void jl_init_intrinsic_functions(void);
 void jl_init_intrinsic_properties(void);
+void jl_init_staticdata(void);
 // TypeApp: immutable struct with head::Any, param::Any
 // Represents a single lazy type application step (like UnionAll for where bindings).
 typedef struct {
@@ -1409,15 +1406,7 @@ JL_DLLEXPORT void jl_pgcstack_getkey(jl_get_pgcstack_func **f, jl_pgcstack_key_t
 extern pthread_mutex_t in_signal_lock;
 #endif
 
-void jl_set_gc_and_wait(jl_task_t *ct); // n.b. not used on _OS_DARWIN_
-
-// Query if a Julia object is if a permalloc region (due to part of a sys- pkg-image)
-STATIC_INLINE size_t n_linkage_blobs(void) JL_NOTSAFEPOINT
-{
-    return jl_image_relocs.len;
-}
-
-size_t external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT;
+void jl_set_gc_and_wait(jl_task_t *ct);
 
 // Query if this object is perm-allocated in an image.
 JL_DLLEXPORT uint8_t jl_object_in_image(jl_value_t* v) JL_NOTSAFEPOINT;
@@ -1581,6 +1570,9 @@ typedef struct {
     char *func_name;
     char *file_name;
     int line;
+    // PC within the inlined frame's CodeInfo, or 0 if unavailable.
+    // Carried in the DWARF column field by codegen (see `update_lineinfo` in codegen.cpp).
+    int pc;
     jl_code_instance_t *ci;
     int fromC;
     int inlined;
@@ -1892,11 +1884,6 @@ JL_DLLEXPORT float julia_half_to_float(uint16_t param) JL_NOTSAFEPOINT;
 extern jl_mutex_t typecache_lock;
 extern jl_mutex_t world_counter_lock;
 
-#if defined(__APPLE__)
-void jl_mach_gc_end(void) JL_NOTSAFEPOINT;
-void jl_safepoint_resume_thread_mach(jl_ptls_t ptls2, int16_t tid2) JL_NOTSAFEPOINT;
-#endif
-
 // -- smallintset.c -- //
 
 typedef uint_t (*smallintset_hash)(size_t val, jl_value_t *data);
@@ -2119,8 +2106,9 @@ JL_DLLEXPORT enum jl_memory_order jl_get_atomic_order_checked(jl_sym_t *order, c
 
 struct _jl_image_fptrs_t;
 
-JL_DLLEXPORT void jl_write_coverage_data(const char*);
+void jl_init_coverage(void);
 void jl_write_malloc_log(void);
+JL_DLLEXPORT void jl_write_coverage_data(const char*);
 
 extern uv_mutex_t symtab_lock;
 jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
@@ -2209,7 +2197,7 @@ JL_DLLIMPORT void jl_get_llvm_external_fns(void *native_code, size_t *num_els,
 JL_DLLIMPORT void jl_get_function_id(void *native_code, jl_code_instance_t *ncode,
         int32_t *func_idx, int32_t *specfunc_idx);
 JL_DLLIMPORT void jl_register_fptrs(uint64_t image_base, const struct _jl_image_fptrs_t *fptrs,
-                                    jl_method_instance_t **linfos, size_t n);
+                                    jl_code_instance_t **linfos, size_t n);
 JL_DLLIMPORT void jl_get_llvm_cis(void *native_code, size_t *num_els,
                                   jl_code_instance_t **CIs);
 JL_DLLIMPORT void jl_init_codegen(void);

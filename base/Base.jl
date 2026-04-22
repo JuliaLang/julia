@@ -64,6 +64,9 @@ include("osutils.jl")
 include("subarray.jl")
 include("views.jl")
 
+# String views
+include("strings/stringview.jl")
+
 # numeric operations
 include("div.jl")
 include("twiceprecision.jl")

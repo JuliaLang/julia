@@ -1080,7 +1080,7 @@ jl_value_t *jl_gc_permobj(jl_ptls_t ptls, size_t sz, void *ty, unsigned align) J
 JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
 {
     jl_ptls_t ptls = jl_current_task->ptls;
-    maybe_collect(ptls);
+    malloc_maybe_collect(ptls, sz);
     size_t allocsz = LLT_ALIGN(sz, JL_CACHE_BYTE_ALIGNMENT);
     if (allocsz < sz)  // overflow in adding offs, size was "negative"
         jl_throw(jl_memory_exception);
@@ -1097,9 +1097,7 @@ JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
         jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.allocd) + allocsz);
     jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.malloc,
         jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.malloc) + 1);
-    // FIXME: Should these be part of mmtk's heap?
-    // malloc_maybe_collect(ptls, sz);
-    // jl_atomic_fetch_add_relaxed(&JULIA_MALLOC_BYTES, allocsz);
+    jl_atomic_fetch_add_relaxed(&JULIA_MALLOC_BYTES, allocsz);
 #ifdef _OS_WINDOWS_
     SetLastError(last_error);
 #endif

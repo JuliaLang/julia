@@ -4,6 +4,9 @@ using Test
 using JuliaLowering
 using JuliaSyntax
 
+const JS = JuliaSyntax
+const JL = JuliaLowering
+
 import FileWatching
 
 # The following are for docstrings testing. We need to load the REPL module
@@ -12,17 +15,14 @@ import FileWatching
 using Markdown
 import REPL
 
-using .JuliaSyntax: SourceAttrType, sourcetext, set_numeric_flags
+using .JuliaSyntax: SourceAttrType, new_id!, set_numeric_flags, sourcetext
 
-using .JuliaLowering:
-    SyntaxGraph, new_id!,
-    Kind, SourceRef, SyntaxTree, NodeId,
-    setattr!, is_leaf, numchildren, children,
-    @ast, flattened_provenance, showprov, LoweringError, MacroExpansionError,
-    syntax_graph, Bindings, ScopeLayer, mapchildren
+using .JuliaLowering: @ast, Bindings, Kind, LoweringError, MacroExpansionError, NodeId,
+    ScopeLayer, SourceRef, SyntaxGraph, SyntaxTree, children, flattened_provenance,
+    is_leaf, mapchildren, numchildren, setattr!, showprov, syntax_graph
 
 function _ast_test_graph()
-    graph = JuliaLowering.ensure_desugaring_attributes!(
+    JuliaLowering.ensure_desugaring_attributes!(
         JuliaLowering.ensure_macro_attributes!(SyntaxGraph()))
 end
 
@@ -81,12 +81,6 @@ format_as_ast_macro(ex) = format_as_ast_macro(stdout, ex)
 #-------------------------------------------------------------------------------
 
 # Test tools
-
-function desugar(mod::Module, src::String)
-    ex = parsestmt(SyntaxTree, src, filename="foo.jl")
-    ctx = JuliaLowering.DesugaringContext(syntax_graph(ex), Bindings(), ScopeLayer[], mod)
-    JuliaLowering.expand_forms_2(ctx, ex)
-end
 
 function uncomment_description(desc)
     replace(desc, r"^# ?"m=>"")
@@ -371,10 +365,41 @@ function reduce_any_failing_toplevel(mod::Module, filename::AbstractString; do_e
     nothing
 end
 
-function reference_lower(mod::Module, x)
+function fl_macroexpand(mod::Module, x::Expr)
+    ccall(:jl_macroexpand, Any, (Any, Any, Cint, Cint, Cint), x, mod, true, false, true)
+end
+
+function fl_lower(mod::Module, x::Expr)
     Base.fl_lower(x, mod, @__FILE__, @__LINE__, Base.get_world_counter())[1]
 end
 
-function reference_eval(mod::Module, x)
-    Core.eval(mod, reference_lower(mod, x))
+function fl_eval(mod::Module, x::Expr)
+    Core.eval(mod, fl_lower(mod, x))
 end
+
+function jl_macroexpand(mod::Module, x::SyntaxTree; expr_compat_mode=false)
+    JuliaLowering.expand_forms_1(mod, x, expr_compat_mode, Base.get_world_counter())[2]
+end
+
+function jl_lower(mod::Module, st::SyntaxTree; expr_compat_mode=false)
+    JuliaLowering.lower(mod, st; expr_compat_mode)
+end
+
+function jl_eval(mod::Module, st::SyntaxTree; expr_compat_mode=false)
+    JuliaLowering.eval(mod, st; expr_compat_mode)
+end
+
+
+fl_macroexpand(mod::Module, st::SyntaxTree; kws...) =
+    fl_macroexpand(mod, JuliaLowering.est_to_expr(st); kws...)
+fl_lower(mod::Module, st::SyntaxTree; kws...) =
+    fl_lower(mod, JuliaLowering.est_to_expr(st); kws...)
+fl_eval(mod::Module, st::SyntaxTree; kws...) =
+    fl_eval(mod, JuliaLowering.est_to_expr(st); kws...)
+
+jl_macroexpand(mod::Module, ex::Expr; kws...) =
+    jl_macroexpand(mod, JuliaLowering.expr_to_est(ex); kws...)
+jl_lower(mod::Module, ex::Expr; kws...) =
+    jl_lower(mod, JuliaLowering.expr_to_est(ex); kws...)
+jl_eval(mod::Module, ex::Expr; kws...) =
+    jl_eval(mod, JuliaLowering.expr_to_est(ex); kws...)

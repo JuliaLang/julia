@@ -1696,6 +1696,9 @@ julia> stateful = Iterators.Stateful(1:10); Iterators.nth(stateful, 7)
 julia> first(stateful)
 8
 ```
+
+!!! compat "Julia 1.13"
+    This function requires at least Julia 1.13.
 """
 nth(itr, n::Integer) = _nth(IteratorSize(itr), itr, n)
 nth(itr::Cycle{I}, n::Integer) where I = _nth(IteratorSize(I), itr, n)

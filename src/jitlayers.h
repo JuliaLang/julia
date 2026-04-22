@@ -9,6 +9,7 @@
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Value.h>
+#include <llvm/IR/Attributes.h>
 #include <llvm/IR/PassManager.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/PassTimingInfo.h>
@@ -74,6 +75,70 @@ DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ThreadSafeModule, LLVMOrcThreadSafeModul
 void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIRAnalysis analysis) JL_NOTSAFEPOINT;
 GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M) JL_NOTSAFEPOINT;
 DataLayout jl_create_datalayout(TargetMachine &TM) JL_NOTSAFEPOINT;
+
+// Translate Julia's inferred ipo_purity_bits into LLVM function attributes.
+// Optimistic attrs (memory(argmem: read), readnone on gcstack) are added for
+// pre-GC passes; LateLowerGCFrame widens them before safepoint analysis.
+// Applied to the CallInst, and also to the callee declaration if present.
+inline void add_fn_attrs_for_effects(CallInst *CI, uint32_t effects) JL_NOTSAFEPOINT
+{
+    if (effects == 0)
+        return;
+    bool is_consistent   = (effects & 0x07u) == 0u;
+    bool is_effect_free  = ((effects >> 3) & 0x03u) == 0u;
+    bool is_nothrow      = (effects >> 5) & 0x01u;
+    bool is_terminates   = (effects >> 6) & 0x01u;
+    bool is_notaskstate  = (effects >> 7) & 0x01u;
+    AttrBuilder attrs(CI->getContext());
+    attrs.addAttribute("julia.safepoint");
+    if (is_nothrow)
+        attrs.addAttribute(Attribute::NoUnwind);
+    if (is_terminates)
+        attrs.addAttribute(Attribute::MustProgress);
+    if (is_nothrow && is_terminates)
+        attrs.addAttribute(Attribute::WillReturn);
+    // True if the signature contains a pointer that isn't a Julia-internal gcstack slot.
+    // Only when false can we safely emit memory(argmem: read).
+    bool has_user_ptr = true;
+    if (is_consistent && is_effect_free) {
+        FunctionType *ft = CI->getFunctionType();
+        has_user_ptr = ft->getReturnType()->isPointerTy();
+        if (!has_user_ptr) {
+            for (unsigned i = 0; i < ft->getNumParams(); i++) {
+                if (ft->getParamType(i)->isPointerTy()) {
+                    if (CI->getParamAttr(i, "gcstack").isValid()) {
+                        if (is_notaskstate)
+                            CI->addParamAttr(i, Attribute::ReadNone);
+                        continue;
+                    }
+                    has_user_ptr = true;
+                    break;
+                }
+            }
+        }
+        if (!has_user_ptr)
+            attrs.addMemoryAttr(MemoryEffects::argMemOnly(ModRefInfo::Ref));
+    }
+    CI->setAttributes(CI->getAttributes().addFnAttributes(CI->getContext(), attrs));
+    // Also apply to the callee declaration.
+    if (auto *F = dyn_cast_or_null<Function>(CI->getCalledFunction())) {
+        if (F->isDeclaration()) {
+            F->addFnAttrs(attrs);
+            // N.B. We do not emit `speculatable` here: it allows SimplifyCFG
+            // to hoist calls past branches unconditionally, which can cause
+            // regressions when pure-but-expensive functions (e.g. exp()) get
+            // speculated onto hot paths.
+            if (is_nothrow && !F->hasUWTable())
+                F->addFnAttr(Attribute::get(F->getContext(), Attribute::UWTable, uint64_t(llvm::UWTableKind::Async)));
+            if (!has_user_ptr && is_notaskstate) {
+                for (unsigned i = 0; i < F->arg_size(); i++) {
+                    if (F->hasParamAttribute(i, "gcstack"))
+                        F->addParamAttr(i, Attribute::ReadNone);
+                }
+            }
+        }
+    }
+}
 
 struct OptimizationOptions {
     bool lower_intrinsics;
@@ -272,6 +337,7 @@ struct jl_returninfo_t {
     size_t union_minalign;
     unsigned return_roots;
     bool all_roots;
+    uint32_t effects = 0;  // ipo_purity_bits, applied to CallInst and Function
 };
 
 struct jl_codegen_call_target_t {
@@ -325,7 +391,8 @@ struct jl_linker_info_t {
 };
 
 struct jl_emitted_output_t {
-    orc::ThreadSafeModule module;
+    std::unique_ptr<LLVMContext> ctx;
+    std::unique_ptr<Module> module;
     std::unique_ptr<jl_linker_info_t> linker_info;
 
     jl_emitted_output_t() JL_NOTSAFEPOINT = default;
@@ -334,23 +401,19 @@ struct jl_emitted_output_t {
     ~jl_emitted_output_t() JL_NOTSAFEPOINT = default;
 };
 
-// A jl_codegen_output_t is the target for LLVM IR generation, containing an
-// LLVM module and the metadata for linking it into the current session or a
-// system image.  Many code instances can be emitted to a single codegen output.
+// A jl_codegen_output_t is the target for LLVM IR generation, containing a
+// reference to the destination LLVM module and the metadata for linking it into
+// the current session or a system image.  Many code instances can be emitted to
+// a single codegen output.
 class jl_codegen_output_t {
 private:
-    orc::ThreadSafeModule owned_TSM;
-    orc::ThreadSafeModule *TSM;
-    orc::ThreadSafeContext::Lock tsctx_lock;
+    Module &M;
 
     jl_name_counter_t names;
 
 public:
-    LLVMContext &get_context() { return *get_tsm().getContext().getContext(); }
-    Module &get_module() { return *get_tsm().getModuleUnlocked(); }
-    orc::ThreadSafeModule &get_tsm() { return owned_TSM ? owned_TSM : *TSM; }
-    void lock() { tsctx_lock = get_tsm().getContext().getLock(); }
-    void unlock() { auto _ = std::move(tsctx_lock); }
+    LLVMContext &get_context() { return M.getContext(); }
+    Module &get_module() { return M; }
 
     StringRef strip_linux(StringRef name);
     std::string make_name(jl_symbol_prefix_t type, jl_invoke_api_t api,
@@ -361,8 +424,10 @@ public:
     StringRef get_call_target(jl_code_instance_t *ci, bool specsig, bool always_inline);
 
     // Discard all the context that will be invalidated when we compile the
-    // module.  Must hold the context lock.
-    jl_emitted_output_t finish(orc::SymbolStringPool &SSP) JL_NOTSAFEPOINT;
+    // module.  The context and module will be moved to the jl_emitted_output_t.
+    jl_emitted_output_t finish(std::unique_ptr<LLVMContext> ctx,
+                               std::unique_ptr<Module> mod,
+                               orc::SymbolStringPool &SSP) JL_NOTSAFEPOINT;
 
 public:
     // outputs
@@ -407,30 +472,8 @@ public:
     bool safepoint_on_entry = true;
     bool use_swiftcc = true;
 
-    jl_codegen_output_t(orc::ThreadSafeModule &TSM)
-      : TSM(&TSM),
-        tsctx_lock(TSM.getContext().getLock()),
-        DL(TSM.getModuleUnlocked()->getDataLayout()),
-        TargetTriple(TSM.getModuleUnlocked()->getTargetTriple())
-    {
-        if (TargetTriple.isRISCV())
-            use_swiftcc = false;
-    }
-
-    static orc::ThreadSafeModule create_ts_module(StringRef name, const DataLayout &DL,
-                                                  const Triple &triple)
-    {
-        auto ctx = std::make_unique<LLVMContext>();
-        auto M = jl_create_llvm_module(name, *ctx, DL, triple);
-        return orc::ThreadSafeModule(std::move(M), std::move(ctx));
-    }
-
-    jl_codegen_output_t(StringRef name, const DataLayout &DL, const Triple &triple)
-      : owned_TSM(create_ts_module(name, DL, triple)),
-        TSM(nullptr),
-        tsctx_lock(owned_TSM.getContext().getLock()),
-        DL(DL),
-        TargetTriple(triple)
+    jl_codegen_output_t(Module &M)
+      : M(M), DL(M.getDataLayout()), TargetTriple(M.getTargetTriple())
     {
         if (TargetTriple.isRISCV())
             use_swiftcc = false;
@@ -605,13 +648,18 @@ private:
     // any verification the user wants to do when adding an OwningResource to the pool
     template <typename AnyT>
     static void verifyResource(AnyT &resource) JL_NOTSAFEPOINT { }
-    static void verifyResource(orc::ThreadSafeContext &context) JL_NOTSAFEPOINT { assert(context.getContext()); }
+    static void verifyResource(orc::ThreadSafeContext &context) JL_NOTSAFEPOINT {
+#if JL_LLVM_VERSION < 210000
+        assert(context.getContext());
+#else
+        context.withContextDo([](LLVMContext *ctx) { assert(ctx); });
+#endif
+    }
 public:
     typedef orc::ObjectLinkingLayer ObjLayerT;
     typedef orc::IRCompileLayer CompileLayerT;
     typedef orc::IRTransformLayer JITPointersLayerT;
     typedef orc::IRTransformLayer OptimizeLayerT;
-    typedef orc::IRTransformLayer OptSelLayerT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
     template
     <typename ResourceT, size_t max = 0,
@@ -843,8 +891,8 @@ protected:
     // returning a pointer into CISymbols or NULL if the CI is not compiled.
     CISymbolPtr *linkCISymbol(jl_code_instance_t *CI) JL_NOTSAFEPOINT;
 
-    orc::ThreadSafeModule optimizeModule(orc::ThreadSafeModule TSM) JL_NOTSAFEPOINT;
-    std::unique_ptr<MemoryBuffer> compileModule(orc::ThreadSafeModule TSM) JL_NOTSAFEPOINT;
+    void optimizeModule(Module &M) JL_NOTSAFEPOINT;
+    std::unique_ptr<MemoryBuffer> compileModule(Module &M) JL_NOTSAFEPOINT;
 
 private:
 
@@ -885,19 +933,9 @@ private:
     JITPointersLayerT JITPointersLayer;
     std::unique_ptr<OptimizerT> Optimizers;
     OptimizeLayerT OptimizeLayer;
-    OptSelLayerT OptSelLayer;
     std::shared_ptr<JLDebuginfoPlugin> DebuginfoPlugin;
 };
 extern JuliaOJIT *jl_ExecutionEngine;
-
-inline orc::ThreadSafeModule jl_create_ts_module(StringRef name, orc::ThreadSafeContext ctx,
-                                                 const DataLayout &DL, const Triple &triple,
-                                                 Module *source = nullptr) JL_NOTSAFEPOINT
-{
-    auto lock = ctx.getLock();
-    return orc::ThreadSafeModule(
-        jl_create_llvm_module(name, *ctx.getContext(), DL, triple, source), ctx);
-}
 
 void fixupTM(TargetMachine &TM) JL_NOTSAFEPOINT;
 

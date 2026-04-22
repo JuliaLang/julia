@@ -498,8 +498,13 @@ void jl_strip_llvm_addrspaces(Module *m) JL_NOTSAFEPOINT
 extern "C" JL_DLLEXPORT_CODEGEN
 jl_value_t *jl_dump_function_ir_impl(jl_llvmf_dump_t *dump, char strip_ir_metadata, char dump_module, const char *debuginfo)
 {
+    if (!dump->F)
+        return jl_pchar_to_string("", 0);
+
     std::string code;
     raw_string_ostream stream(code);
+    //RAII will release the module
+    auto TSM = std::unique_ptr<orc::ThreadSafeModule>(unwrap(dump->TSM));
 
     // Prepend pass instrumentation output if present
     if (dump->pass_output) {
@@ -508,15 +513,7 @@ jl_value_t *jl_dump_function_ir_impl(jl_llvmf_dump_t *dump, char strip_ir_metada
         dump->pass_output = nullptr;
     }
 
-    if (dump->F) {
-        //RAII will release the module
-        auto TSM = std::unique_ptr<orc::ThreadSafeModule>(unwrap(dump->TSM));
-        //If TSM is not passed in, then the context MUST be locked externally.
-        //RAII will release the lock
-        std::optional<orc::ThreadSafeContext::Lock> lock;
-        if (TSM) {
-            lock.emplace(TSM->getContext().getLock());
-        }
+    auto go = [&]() {
         Function *llvmf = cast<Function>(unwrap(dump->F));
         if (!llvmf || (!llvmf->isDeclaration() && !llvmf->getParent()))
             jl_error("jl_dump_function_ir: Expected Function* in a temporary Module");
@@ -544,7 +541,13 @@ jl_value_t *jl_dump_function_ir_impl(jl_llvmf_dump_t *dump, char strip_ir_metada
                 llvmf->print(stream, &AAW);
             }
         }
-    }
+    };
+
+    // If TSM is not passed in, then the context MUST be locked externally.
+    if (TSM)
+        TSM->withModuleDo([&](Module &M) { go(); });
+    else
+        go();
 
     return jl_pchar_to_string(stream.str().data(), stream.str().size());
 }

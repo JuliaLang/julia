@@ -18,46 +18,9 @@ extern "C" {
 // Every image exports a `jl_image_pointers_t` as a global symbol `jl_image_pointers`.
 // This symbol acts as a root for all other code-related symbols in the image.
 
-enum {
-    JL_TARGET_VEC_CALL = 1 << 0,
-    // Clone all functions
-    JL_TARGET_CLONE_ALL = 1 << 1,
-    // Clone when there's scalar math operations that can benefit from target-specific
-    // optimizations. This includes `muladd`, `fma`, `fast`/`contract` flags.
-    JL_TARGET_CLONE_MATH = 1 << 2,
-    // Clone when the function has a loop
-    JL_TARGET_CLONE_LOOP = 1 << 3,
-    // Clone when the function uses any vectors
-    // When this is specified, the cloning pass should also record if any of the cloned functions
-    // used this in any function call (including the signature of the function itself)
-    JL_TARGET_CLONE_SIMD = 1 << 4,
-    // The CPU name is unknown
-    JL_TARGET_UNKNOWN_NAME = 1 << 5,
-    // Optimize for size for this target
-    JL_TARGET_OPTSIZE = 1 << 6,
-    // Only optimize for size for this target
-    JL_TARGET_MINSIZE = 1 << 7,
-    // Clone when the function queries CPU features
-    JL_TARGET_CLONE_CPU = 1 << 8,
-    // Clone when the function uses fp16
-    JL_TARGET_CLONE_FLOAT16 = 1 << 9,
-    // Clone when the function uses bf16
-    JL_TARGET_CLONE_BFLOAT16 = 1 << 10,
-};
-
-#define JL_FEATURE_DEF_NAME(name, bit, llvmver, str) JL_FEATURE_DEF(name, bit, llvmver)
-typedef enum {
-#define JL_FEATURE_DEF(name, bit, llvmver) JL_X86_##name = bit,
-#include "features_x86.h"
-#undef JL_FEATURE_DEF
-#define JL_FEATURE_DEF(name, bit, llvmver) JL_AArch32_##name = bit,
-#include "features_aarch32.h"
-#undef JL_FEATURE_DEF
-#define JL_FEATURE_DEF(name, bit, llvmver) JL_AArch64_##name = bit,
-#include "features_aarch64.h"
-#undef JL_FEATURE_DEF
-} jl_cpu_feature_t;
-#undef JL_FEATURE_DEF_NAME
+// Feature indices come from the cpufeatures library's generated tables.
+// The actual constants are defined in base/features_h.jl (auto-generated).
+typedef uint32_t jl_cpu_feature_t;
 
 JL_DLLEXPORT int jl_test_cpu_feature(jl_cpu_feature_t feature);
 
@@ -209,8 +172,9 @@ typedef struct {
  *
  * Return the data about the function pointers selected.
  */
-jl_image_t jl_init_processor_sysimg(jl_image_buf_t image, const char *cpu_target);
-jl_image_t jl_init_processor_pkgimg(jl_image_buf_t image);
+void jl_check_cpu_target(const char *cpu_target, int imaging);
+jl_image_t jl_load_sysimg(jl_image_buf_t image, const char *cpu_target);
+jl_image_t jl_load_pkgimg(jl_image_buf_t image);
 
 // Internal function to set the sysimage CPU target during initialization
 void jl_set_sysimage_cpu_target(const char *cpu_target);
@@ -250,7 +214,17 @@ extern jl_image_unpack_func_t *jl_image_unpack;
 #include <string>
 #include <vector>
 
-extern JL_DLLEXPORT bool jl_processor_print_help;
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
+#include <cpufeatures/target_tables_x86_64.h>
+#elif defined(__aarch64__) || defined(_M_ARM64)
+#include <cpufeatures/target_tables_aarch64.h>
+#elif defined(__riscv) && __riscv_xlen == 64
+#include <cpufeatures/target_tables_riscv64.h>
+#else
+#include <cpufeatures/target_tables_fallback.h>
+#endif
+#include <cpufeatures/target_parsing.h>
+
 // NOLINTBEGIN(clang-diagnostic-return-type-c-linkage)
 /**
  * Returns the CPU name and feature string to be used by LLVM JIT.
@@ -258,7 +232,7 @@ extern JL_DLLEXPORT bool jl_processor_print_help;
  * If the detected/specified CPU name is not available on the LLVM version specified,
  * a fallback CPU name will be used. Unsupported features will be ignored.
  */
-extern "C" JL_DLLEXPORT std::pair<std::string,llvm::SmallVector<std::string, 0>> jl_get_llvm_target(const char *cpu_target, bool imaging, uint32_t &flags) JL_NOTSAFEPOINT;
+extern "C" JL_DLLEXPORT std::pair<std::string,std::string> jl_get_llvm_target(const char *cpu_target, bool imaging) JL_NOTSAFEPOINT;
 
 /**
  * Returns the CPU name and feature string to be used by LLVM disassembler.
@@ -268,30 +242,28 @@ extern "C" JL_DLLEXPORT std::pair<std::string,llvm::SmallVector<std::string, 0>>
 extern "C" JL_DLLEXPORT const std::pair<std::string,std::string> &jl_get_llvm_disasm_target(void) JL_NOTSAFEPOINT;
 
 struct jl_target_spec_t {
-    // LLVM target name
     std::string cpu_name;
-    // LLVM feature string
     std::string cpu_features;
-    // serialized identification data
-    llvm::SmallVector<uint8_t, 0> data;
-    // Clone condition.
-    uint32_t flags;
-    // Base target index.
     int base;
-};
-/**
- * Return the list of targets to clone
- */
-extern "C" JL_DLLEXPORT llvm::SmallVector<jl_target_spec_t, 0> jl_get_llvm_clone_targets(const char *cpu_target) JL_NOTSAFEPOINT;
-// NOLINTEND(clang-diagnostic-return-type-c-linkage)
-struct FeatureName {
-    const char *name;
-    uint32_t bit; // bit index into a `uint32_t` array;
-    uint32_t llvmver; // 0 if it is available on the oldest LLVM version we support
+    bool clone_all = false;
+    bool opt_size = false;
+    bool min_size = false;
+    tp::FeatureDiff diff;
 };
 
+struct jl_clone_targets_t {
+    std::vector<jl_target_spec_t> specs;
+    std::vector<uint8_t> data; // serialized target identification blob
+};
+
+/**
+ * Return the list of targets to clone and their serialized identification data
+ */
+extern "C" JL_DLLEXPORT jl_clone_targets_t jl_get_llvm_clone_targets(const char *cpu_target) JL_NOTSAFEPOINT;
+// NOLINTEND(clang-diagnostic-return-type-c-linkage)
 extern "C" JL_DLLEXPORT jl_value_t* jl_reflect_clone_targets();
-extern "C" JL_DLLEXPORT void jl_reflect_feature_names(const FeatureName **feature_names, size_t *nfeatures);
+extern "C" JL_DLLEXPORT jl_value_t *jl_feature_bits_to_string(const uint8_t *bits, int32_t nwords);
+extern "C" JL_DLLEXPORT std::string jl_expand_sysimage_keyword(const char *cpu_target);
 #endif
 
 #endif

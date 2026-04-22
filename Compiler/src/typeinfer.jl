@@ -671,12 +671,14 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter, cycleid::
         # A parent may be cached still, but not this intermediate work:
         # we can throw everything else away now. Caching anything can confuse later
         # heuristics to consider it worth trying to pursue compiling this further and
-        # finding infinite work as a result. Avoiding caching helps to ensure there is only
-        # a finite amount of work that can be discovered later (although potentially still a
-        # large multiplier on it).
+        # finding infinite work as a result. Avoiding global caching helps to ensure there
+        # is only a finite amount of work that can be discovered later (although potentially
+        # still a large multiplier on it). We still allow local caching so that tombstoned
+        # entries can be found by `constprop_cache_lookup` to prevent re-attempting the same
+        # const-prop work that would hit the same limit.
         result.src = nothing
         result.tombstone = true
-        me.cache_mode = CACHE_MODE_NULL
+        me.cache_mode &= ~CACHE_MODE_GLOBAL
         set_inlineable!(src, false)
     else
         # annotate fulltree with type information,
@@ -725,7 +727,9 @@ function is_already_cached(interp::AbstractInterpreter, result::InferenceResult)
     cache = code_cache(interp, result.valid_worlds)
     if haskey(cache, mi)
         # n.b.: accurate edge representation might cause the CodeInstance for this to be constructed later
-        @assert isdefined(cache[mi], :inferred)
+        cached = cache[mi]
+        ci = cached isa InferenceResult ? cached.ci : cached
+        @assert isdefined(ci, :inferred)
         return true
     end
     return false
@@ -1155,7 +1159,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             inferred = nothing
         end
         if codeinst isa CodeInstance
-            need_inlineable_code = may_optimize(interp) && (force_inline || is_inlineable(inferred))
+            need_inlineable_code = may_optimize(interp) && (force_inline || is_inlineable(inferred) || use_const_api(codeinst))
             if need_inlineable_code
                 src = ci_get_source(interp, codeinst, inferred)
                 if src === nothing
@@ -1202,7 +1206,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             if codeinst isa CodeInstance # return existing rettype if the code is already inferred
                 engine_reject(interp, ci_from_engine)
                 ci_from_engine = nothing
-                need_inlineable_code = may_optimize(interp) && (force_inline || is_inlineable(inferred))
+                need_inlineable_code = may_optimize(interp) && (force_inline || is_inlineable(inferred) || use_const_api(codeinst))
                 if need_inlineable_code
                     src = ci_get_source(interp, codeinst, inferred)
                     if src === nothing
