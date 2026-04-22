@@ -2,7 +2,7 @@
 EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Test/docs/src/index.md"
 ```
 
-# Unit Testing
+# Test
 
 ```@meta
 DocTestSetup = :(using Test)
@@ -420,6 +420,8 @@ Test.GenericOrder
 Test.GenericSet
 Test.GenericString
 Test.detect_ambiguities
+Test.detect_closure_boxes
+Test.detect_closure_boxes_all_modules
 Test.detect_unbound_args
 ```
 

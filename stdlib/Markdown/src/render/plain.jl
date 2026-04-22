@@ -33,7 +33,7 @@ function plain(io::IO, p::Paragraph)
     println(io)
 end
 
-function plain(io::IO, md::HTML)
+function plain(io::IO, md::HTMLBlock)
     for line in md.content
         println(io, line)
     end
@@ -159,6 +159,8 @@ function plaininline(io::IO, md::Code)
 end
 
 plaininline(io::IO, br::LineBreak) = println(io, "\\")
+
+plaininline(io::IO, md::HTMLInline) = print(io, md.content)
 
 plaininline(io::IO, x) = show(io, MIME"text/plain"(), x)
 

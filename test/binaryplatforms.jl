@@ -5,6 +5,7 @@ using Test, Base.BinaryPlatforms, Base.BinaryPlatforms.CPUID
 @testset "CPUID" begin
     @test CPUID.cpu_isa() isa CPUID.ISA
 
+    # x86_64 tiers form a strict subset chain
     get_x86_64(n) = (CPUID.ISAs_by_family["x86_64"][n].second)
     @test get_x86_64(2) <  get_x86_64(4)
     @test get_x86_64(5) <= get_x86_64(5)
@@ -12,6 +13,83 @@ using Test, Base.BinaryPlatforms, Base.BinaryPlatforms.CPUID
     @test get_x86_64(7) >= get_x86_64(1)
     @test sort([get_x86_64(6), get_x86_64(4), get_x86_64(2), get_x86_64(4)]) ==
         [get_x86_64(2), get_x86_64(4), get_x86_64(4), get_x86_64(6)]
+
+    # Cross-arch queries return real feature data
+    @test length(CPUID._cross_lookup_cpu("x86_64", "haswell").features) > 10
+    @test length(CPUID._cross_lookup_cpu("aarch64", "cortex-a78").features) > 10
+    @test length(CPUID._cross_lookup_cpu("riscv64", "sifive-u74").features) > 0
+    @test isempty(CPUID._cross_lookup_cpu("x86_64", "nonexistent").features)
+    @test isempty(CPUID._cross_lookup_cpu("badarch", "haswell").features)
+
+    # Apple M-series aliases resolve to their A-series equivalents
+    let m1 = CPUID._cross_lookup_cpu("aarch64", "apple-m1"),
+        a14 = CPUID._cross_lookup_cpu("aarch64", "apple-a14")
+        @test m1.features == a14.features
+    end
+    @test !isempty(CPUID._cross_lookup_cpu("aarch64", "apple-m2").features)
+
+    # Arch name normalization (i686 → x86_64, arm64 → aarch64)
+    @test CPUID._cross_lookup_cpu("i686", "haswell").features ==
+          CPUID._cross_lookup_cpu("x86_64", "haswell").features
+    @test CPUID._cross_lookup_cpu("arm64", "cortex-a78").features ==
+          CPUID._cross_lookup_cpu("aarch64", "cortex-a78").features
+
+    # All families have non-empty ISA data (cross-arch works)
+    for (arch, isas) in CPUID.ISAs_by_family
+        @test length(isas) >= 1
+    end
+
+    # feature_names(arch, cpu) — query by CPU name
+    hsw = CPUID.feature_names("x86_64", "haswell")
+    @test "avx2" in hsw
+    @test "fma" in hsw
+    @test "sse4.2" in hsw
+    @test !("avx512f" in hsw)  # haswell doesn't have avx512
+
+    skx = CPUID.feature_names("x86_64", "skylake-avx512")
+    @test "avx512f" in skx
+    @test "avx512bw" in skx
+
+    # aarch64 cross-arch feature names
+    a78 = CPUID.feature_names("aarch64", "cortex-a78")
+    @test "lse" in a78
+    @test "neon" in a78
+
+    x925 = CPUID.feature_names("aarch64", "cortex-x925")
+    @test "sve2" in x925
+    @test "bf16" in x925
+    @test "dotprod" in x925
+
+    # Architecture version features present for ARM cores
+    @test "v8.1a" in x925
+    @test "v9a" in x925
+
+    # Unknown CPU returns empty
+    @test isempty(CPUID.feature_names("x86_64", "nonexistent"))
+
+    # feature_names(arch, isa) — query by ISA struct
+    names_from_isa = CPUID.feature_names("x86_64", get_x86_64(5))
+    @test "avx" in names_from_isa
+    @test "sse4.2" in names_from_isa
+
+    # feature_names(isa) — host arch default
+    host_names = CPUID.feature_names(CPUID.cpu_isa())
+    @test length(host_names) > 5
+
+    # feature_names() — full default (host arch + host ISA)
+    default_names = CPUID.feature_names()
+    @test default_names == host_names
+
+    # _build_bit_to_name returns a non-empty mapping with known features
+    mapping = CPUID._build_bit_to_name("x86_64")
+    @test length(mapping) > 50
+    @test "avx2" in values(mapping)
+    @test "sse4.2" in values(mapping)
+
+    mapping_aarch64 = CPUID._build_bit_to_name("aarch64")
+    @test length(mapping_aarch64) > 50
+    @test "neon" in values(mapping_aarch64)
+    @test "sve" in values(mapping_aarch64)
 end
 
 # Helper constructor to create a Platform with `validate_strict` set to `true`.

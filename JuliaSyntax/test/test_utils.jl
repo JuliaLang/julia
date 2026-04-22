@@ -65,9 +65,24 @@ function remove_macro_linenums!(ex)
     return ex
 end
 
-function remove_all_linenums!(ex)
+function remove_module_versions!(ex)
+    # In v1.14+, JuliaSyntax adds a version as the first argument to module expressions.
+    # Remove it for comparison with flisp output.
+    if Meta.isexpr(ex, :module) && length(ex.args) >= 1 && ex.args[1] isa VersionNumber
+        deleteat!(ex.args, 1)
+    end
+    if ex isa Expr
+        for arg in ex.args
+            remove_module_versions!(arg)
+        end
+    end
+    return ex
+end
+
+function remove_all_linenums_and_modvers!(ex)
     JuliaSyntax.remove_linenums!(ex)
     remove_macro_linenums!(ex)
+    remove_module_versions!(ex)
 end
 
 function kw_to_eq(ex)
@@ -97,7 +112,7 @@ function triple_string_roughly_equal(fl_str, str)
 end
 
 function exprs_equal_no_linenum(fl_ex, ex)
-    remove_all_linenums!(deepcopy(ex)) == remove_all_linenums!(deepcopy(fl_ex))
+    remove_all_linenums_and_modvers!(deepcopy(ex)) == remove_all_linenums_and_modvers!(deepcopy(fl_ex))
 end
 
 function is_eventually_call(ex)
@@ -172,6 +187,10 @@ function exprs_roughly_equal(fl_ex, ex)
         # The flisp parser adds an extra block around `w` in the following case
         # f(::g(z) = w) = 1
         fl_args[2] = fl_args[2].args[2]
+    elseif h == :module && length(args) == length(fl_args) + 1 && args[1] isa VersionNumber
+        # In v1.14+, JuliaSyntax adds a version as the first argument to module expressions.
+        # Skip the version when comparing.
+        args = args[2:end]
     end
     if length(fl_args) != length(args)
         return false
@@ -210,7 +229,7 @@ function parsers_agree_on_file(text, filename; exprs_equal=exprs_equal_no_linenu
         return true
     end
     try
-        stream = ParseStream(text; version=v"1.13")
+        stream = ParseStream(text; version=v"1.14")
         parse!(stream)
         ex = build_tree(Expr, stream, filename=filename)
         return !JuliaSyntax.any_error(stream) && exprs_equal(fl_ex, ex)

@@ -44,7 +44,7 @@ end
 # Functions to change parse state
 
 function normal_context(ps::ParseState)
-    ParseState(ps,
+    ParseState(ps;
                range_colon_enabled=true,
                space_sensitive=false,
                where_enabled=true,
@@ -239,13 +239,27 @@ function is_closer_or_newline(ps::ParseState, k)
     is_closing_token(ps,k) || k == K"NewlineWs"
 end
 
+# Closer for "Non-delimited reserved words" like `return` which aren't closed with an `end`
+function is_nd_resword_closer(ps::ParseState, k)
+    return is_closer_or_newline(ps, k) ||
+           (k == K":"   && !ps.range_colon_enabled)
+end
+
 function is_initial_reserved_word(ps::ParseState, k)
     k = kind(k)
     is_iresword = k in KSet"begin while if for try return break continue function
-                            macro quote let local global const do struct module
+                            macro quote let local global const do struct typegroup module
                             baremodule using import export"
     # `begin` means firstindex(a) inside a[...]
-    return is_iresword && !(k == K"begin" && ps.end_symbol)
+    if k == K"begin" && ps.end_symbol
+        return false
+    end
+    # `typegroup` is only a keyword in Julia >= 1.14
+    # N.B: In some cases, we parse as typegroup anyway for error recovery - see below
+    if k == K"typegroup" && ps.stream.version < (1, 14)
+        return false
+    end
+    return is_iresword
 end
 
 function is_reserved_word(k)
@@ -264,6 +278,12 @@ function peek_initial_reserved_words(ps::ParseState)
         return (k == K"mutable"   && k2 == K"struct") ||
                (k == K"primitive" && k2 == K"type")   ||
                (k == K"abstract"  && k2 == K"type")
+    elseif k == K"typegroup" && ps.stream.version < (1, 14)
+        # On older versions, typegroup is an identifier. But if followed by
+        # a type definition keyword (which would be a syntax error in old
+        # Julia due to juxtaposition), parse as typegroup for error recovery.
+        k2 = peek(ps, 2, skip_newlines=false)
+        return k2 in KSet"struct mutable abstract primitive @ \" \"\"\""
     else
         return false
     end
@@ -271,7 +291,7 @@ end
 
 function is_block_form(k)
     kind(k) in KSet"block quote if for while let function macro
-                    abstract primitive struct try module"
+                    abstract primitive struct typegroup try module"
 end
 
 function is_syntactic_unary_op(k)
@@ -1497,8 +1517,9 @@ function maybe_parsed_macro_name(ps, processing_macro_name, last_identifier_orig
 end
 
 function maybe_parsed_special_macro(ps, last_identifier_orig_kind)
-    is_syntax_version_macro = last_identifier_orig_kind == K"VERSION"
-    if is_syntax_version_macro && ps.stream.version >= (1, 14)
+    is_special = last_identifier_orig_kind == K"VERSION" ||
+                 last_identifier_orig_kind == K"goto"
+    if is_special && ps.stream.version >= (1, 14)
         # Encode the current parser version into an invisible token
         bump_invisible(ps, K"VERSION",
             set_numeric_flags(ps.stream.version[2] * 10))
@@ -1552,7 +1573,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             # A.@var"#" a ==> (macrocall (. A (macro_name (var #))) a)
             # @+x y       ==> (macrocall (macro_name +) x y)
             # A.@.x       ==> (macrocall (. A (macro_name .)) x)
-            processing_macro_name = maybe_parsed_macro_name(
+            maybe_parsed_macro_name(
                 ps, processing_macro_name, last_identifier_orig_kind, mark)
             let ps = with_space_sensitive(ps)
                 # Space separated macro arguments
@@ -1738,6 +1759,14 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 emit(ps, emark, K"error",
                      error="the .' operator for transpose is discontinued")
                 emit(ps, mark, K"dotcall", POSTFIX_OP_FLAG)
+            elseif k == K"[" || k == K"{"
+                # f.[x]  ==>  (error f x)
+                # f.{x}  ==>  (error f x)
+                # Parse as broadcasted brackets, then wrap in error
+                close = k == K"[" ? K"]" : K"}"
+                bump(ps, TRIVIA_FLAG)
+                parse_cat(ParseState(ps, end_symbol=true), close, ps.end_symbol)
+                emit(ps, mark, K"error", error="brackets are not allowed after `.`")
             else
                 if saw_misplaced_atsym
                     # If we saw a misplaced `@` earlier, this might be the place
@@ -1867,12 +1896,22 @@ end
 #
 # flisp: parse-resword
 function parse_resword(ps::ParseState)
-    # In normal_context
-    # begin f() where T = x end  ==>  (block (= (where (call f) T) x))
-    ps = normal_context(ps)
-    bump_trivia(ps)
-    mark = position(ps)
+    bump_trivia(ps, skip_newlines=true)
     word = peek(ps)
+    v_1_14_break_cont_ret = ps.stream.version >= (1,14)
+    if v_1_14_break_cont_ret && (word == K"break" || word == K"continue" || word == K"return")
+        # "Non-delimited" reserved words don't have an `end` delimiter and
+        # should preserve end_symbol and range_colon_enabled.
+        ps = ParseState(ps;
+                        space_sensitive=false,
+                        where_enabled=true,
+                        for_generator=false,
+                        whitespace_newline=false)
+    else
+        ps = normal_context(ps)
+    end
+
+    mark = position(ps)
     if word in KSet"begin quote"
         # begin end         ==>  (block)
         # begin a ; b end   ==>  (block a b)
@@ -2044,29 +2083,81 @@ function parse_resword(ps::ParseState)
         bump_semicolon_trivia(ps)
         bump_closing_token(ps, K"end")
         emit(ps, mark, K"primitive")
+    elseif word == K"typegroup"
+        # Grouped type definitions (mutually recursive)
+        # typegroup struct A ... end end  ==> (typegroup (block ...))
+        bump(ps, TRIVIA_FLAG)
+        parse_block(ps, parse_docstring)
+        bump_closing_token(ps, K"end")
+        emit(ps, mark, K"typegroup")
+        min_supported_version(v"1.14", ps, mark, "typegroup")
     elseif word == K"try"
         parse_try(ps)
     elseif word == K"return"
         bump(ps, TRIVIA_FLAG)
         k = peek(ps)
-        if k == K"NewlineWs" || is_closing_token(ps, k)
-            # return\nx   ==>  (return)
-            # return)     ==>  (return)
+        if v_1_14_break_cont_ret ? is_nd_resword_closer(ps, k) :
+                                   (k == K"NewlineWs" || is_closing_token(ps, k))
+            # return\nx   ==> (return)
+            # (return)    ==> (parens (return))
         else
             # return x    ==>  (return x)
             # return x,y  ==>  (return (tuple x y))
             parse_eq(ps)
         end
         emit(ps, mark, K"return")
-    elseif word in KSet"break continue"
-        # break     ==>  (break)
-        # continue  ==>  (continue)
+    elseif word == K"break" || word == K"continue"
         bump(ps, TRIVIA_FLAG)
-        emit(ps, mark, word)
         k = peek(ps)
-        if !(k in KSet"NewlineWs ; ) : EndMarker" || (k == K"end" && !ps.end_symbol))
-            recover(is_closer_or_newline, ps, TRIVIA_FLAG,
-                    error="unexpected token after $(untokenize(word))")
+        if v_1_14_break_cont_ret
+            if is_nd_resword_closer(ps, k)
+                # break            ==>  (break)
+                # continue         ==>  (continue)
+                emit(ps, mark, word)
+            else
+                # break label      ==>  (break label)           [1.14+]
+                # continue label   ==>  (continue label)        [1.14+]
+                bump_trivia(ps)
+                emark = position(ps)
+                parse_unary_prefix(ps)
+                b = peek_behind(ps)
+                if b.orig_kind == K"Identifier" || is_contextual_keyword(b.orig_kind) ||
+                        b.kind == K"$" || b.kind == K"var"
+                    # Label ok. Check for `break label value` syntax
+                    if word == K"break"
+                        t2 = peek_token(ps)
+                        if !is_nd_resword_closer(ps, kind(t2))
+                            # break label val  ==>  (break label val)       [1.14+]
+                            if !preceding_whitespace(t2)
+                                bump_invisible(ps, K"error", TRIVIA_FLAG,
+                                               error="expected space after break label")
+                            end
+                            parse_eq(ps)
+                        end
+                    end
+                else
+                    emit(ps, emark, K"error", TRIVIA_FLAG,
+                         error="expected identifier for break label")
+                end
+                emit(ps, mark, word)
+                if !is_nd_resword_closer(ps, peek(ps))
+                    recover(is_nd_resword_closer, ps, TRIVIA_FLAG,
+                            error="unexpected token after $(untokenize(word))")
+                end
+            end
+        else
+            if k in KSet"NewlineWs ; ) : EndMarker" || (k == K"end" && !ps.end_symbol)
+                # break  ==>  (break)
+                emit(ps, mark, word)
+            else
+                # break label ==> ERROR
+                recover(is_closer_or_newline, ps, TRIVIA_FLAG,
+                        error="unexpected token after $(untokenize(word))")
+                emit(ps, mark, word)
+                if k == K"Identifier" || is_contextual_keyword(k) || k == K"$" || k == K"var"
+                    min_supported_version(v"1.14", ps, mark, "labeled `break` and `continue`")
+                end
+            end
         end
     elseif word in KSet"module baremodule"
         # module A end  ==> (module A (block))
@@ -2123,7 +2214,6 @@ function parse_if_elseif(ps, is_elseif=false, is_elseif_whitespace_err=false)
     else
         bump(ps, TRIVIA_FLAG)
     end
-    cond_mark = position(ps)
     if peek(ps) in KSet"NewlineWs end"
         # if end      ==>  (if (error) (block))
         # if \n end   ==>  (if (error) (block))
@@ -2185,7 +2275,6 @@ end
 # Parse function and macro definitions
 function parse_function_signature(ps::ParseState, is_function::Bool)
     is_anon_func = false
-    parsed_call = false
     needs_parse_call = true
 
     mark = position(ps)
@@ -2245,7 +2334,6 @@ function parse_function_signature(ps::ParseState, is_function::Bool)
             end::NamedTuple{(:needs_parameters, :is_anon_func, :parsed_call, :needs_parse_call, :maybe_grouping_parens, :delim_flags),
                             Tuple{Bool, Bool, Bool, Bool, Bool, RawFlags}}
             is_anon_func = opts.is_anon_func
-            parsed_call = opts.parsed_call
             needs_parse_call = opts.needs_parse_call
             if is_anon_func
                 # function (x) body end ==>  (function (tuple-p x) (block body))
@@ -2716,7 +2804,6 @@ end
 # flisp: parse-iteration-spec
 function parse_iteration_spec(ps::ParseState)
     mark = position(ps)
-    k = peek(ps)
     # Handle `outer` contextual keyword
     parse_pipe_lt(with_space_sensitive(ps))
     if peek_behind(ps).orig_kind == K"outer"
@@ -2749,7 +2836,7 @@ end
 # generators
 function parse_iteration_specs(ps::ParseState)
     mark = position(ps)
-    n_iters = parse_comma_separated(ps, parse_iteration_spec)
+    _n_iters = parse_comma_separated(ps, parse_iteration_spec)
     emit(ps, mark, K"iteration")
 end
 
@@ -3120,8 +3207,7 @@ function parse_paren(ps::ParseState, check_identifiers=true, has_unary_prefix=fa
     mark = position(ps)
     @check peek(ps) == K"("
     bump(ps, TRIVIA_FLAG) # K"("
-    after_paren_mark = position(ps)
-    (isdot, tok) = peek_dotted_op_token(ps)
+    (_isdot, tok) = peek_dotted_op_token(ps)
     k = kind(tok)
     if k == K")"
         # ()  ==>  (tuple-p)
@@ -3210,7 +3296,6 @@ function parse_brackets(after_parse::F,
                     where_enabled=true,
                     whitespace_newline=true)
     params_positions = acquire_positions(ps.stream)
-    last_eq_before_semi = 0
     num_subexprs = 0
     num_semis = 0
     had_commas = false
@@ -3300,8 +3385,6 @@ function parse_string(ps::ParseState, raw::Bool)
     bump(ps, TRIVIA_FLAG)
     first_chunk = true
     n_nontrivia_chunks = 0
-    removed_initial_newline = false
-    had_interpolation = false
     prev_chunk_newline = false
     while true
         t = peek_full_token(ps)
@@ -3326,7 +3409,7 @@ function parse_string(ps::ParseState, raw::Bool)
                 # "hi$("ho")"     ==>  (string "hi" (parens (string "ho")))
                 m = position(ps)
                 bump(ps, TRIVIA_FLAG)
-                opts = parse_brackets(ps, K")") do had_commas, had_splat, num_semis, num_subexprs
+                opts = parse_brackets(ps, K")") do had_commas, _had_splat, num_semis, num_subexprs
                     return (needs_parameters=false,
                             simple_interp=!had_commas && num_semis == 0 && num_subexprs == 1)
                 end::NamedTuple{(:needs_parameters, :simple_interp, :delim_flags), Tuple{Bool, Bool, RawFlags}}
@@ -3350,7 +3433,6 @@ function parse_string(ps::ParseState, raw::Bool)
             end
             first_chunk = false
             n_nontrivia_chunks += 1
-            had_interpolation = true
             prev_chunk_newline = false
         elseif k == string_chunk_kind
             if triplestr && first_chunk && span(t) <= 2 &&

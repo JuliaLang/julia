@@ -208,6 +208,7 @@ int prev_sweep_full = 1;
 int current_sweep_full = 0;
 int next_sweep_full = 0;
 int under_pressure = 0;
+int gc_disable_auto_full_sweep = 0; // when set, automatic full collections are inhibited
 
 // Full collection heuristics
 static int64_t live_bytes = 0;
@@ -636,7 +637,7 @@ void jl_gc_reset_alloc_count(void) JL_NOTSAFEPOINT
 static void jl_gc_free_memory(jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPOINT
 {
     assert(jl_is_genericmemory(m));
-    assert(jl_genericmemory_how(m) == 1);
+    assert(jl_genericmemory_how(m) == JL_GENERICMEMORY_GCMANAGED);
     char *d = (char*)m->ptr;
     size_t freed_bytes = memory_block_usable_size(d, isaligned);
     assert(freed_bytes != 0);
@@ -1518,19 +1519,20 @@ void jl_gc_queue_multiroot(const jl_value_t *parent, const void *ptr, jl_datatyp
         jl_gc_wb_back(parent);
         return;
     }
+    assert(ly->flags.fielddesc_type != JL_FIELDDESC_FOREIGN);
     const uint8_t *ptrs8 = (const uint8_t *)jl_dt_layout_ptrs(ly);
     const uint16_t *ptrs16 = (const uint16_t *)jl_dt_layout_ptrs(ly);
     const uint32_t *ptrs32 = (const uint32_t*)jl_dt_layout_ptrs(ly);
     for (size_t i = 1; i < npointers; i++) {
         uint32_t fld;
-        if (ly->flags.fielddesc_type == 0) {
+        if (ly->flags.fielddesc_type == JL_FIELDDESC_8) {
             fld = ptrs8[i];
         }
-        else if (ly->flags.fielddesc_type == 1) {
+        else if (ly->flags.fielddesc_type == JL_FIELDDESC_16) {
             fld = ptrs16[i];
         }
         else {
-            assert(ly->flags.fielddesc_type == 2);
+            assert(ly->flags.fielddesc_type == JL_FIELDDESC_32);
             fld = ptrs32[i];
         }
         jl_value_t *ptrf = ((jl_value_t**)ptr)[fld];
@@ -2275,7 +2277,16 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
             vtag == (jl_unionall_tag << 4) ||
             vtag == (jl_uniontype_tag << 4) ||
             vtag == (jl_tvar_tag << 4) ||
-            vtag == (jl_vararg_tag << 4)) {
+            vtag == (jl_vararg_tag << 4) ||
+            vtag == (jl_globalref_tag << 4) ||
+            vtag == (jl_gotoifnot_tag << 4) ||
+            vtag == (jl_returnnode_tag << 4) ||
+            vtag == (jl_enternode_tag << 4) ||
+            vtag == (jl_pinode_tag << 4) ||
+            vtag == (jl_phinode_tag << 4) ||
+            vtag == (jl_phicnode_tag << 4) ||
+            vtag == (jl_upsilonnode_tag << 4) ||
+            vtag == (jl_quotenode_tag << 4)) {
             // these objects have pointers in them, but no other special handling
             // so we want these to fall through to the end
             vtag = (uintptr_t)ijl_small_typeof[vtag / sizeof(*ijl_small_typeof)];
@@ -2353,7 +2364,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                     gc_mark_excstack(ptls, excstack, itr);
                 }
                 const jl_datatype_layout_t *layout = jl_task_type->layout;
-                assert(layout->flags.fielddesc_type == 0);
+                assert(layout->flags.fielddesc_type == JL_FIELDDESC_8);
                 assert(layout->nfields > 0);
                 uint32_t npointers = layout->npointers;
                 char *obj8_parent = (char *)ta;
@@ -2398,13 +2409,13 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                     gc_setmark_big(ptls, o, bits);
             }
             int how = jl_genericmemory_how(m);
-            if (how == 0 || how == 2) {
-                gc_heap_snapshot_record_hidden_edge(new_obj, m->ptr, jl_genericmemory_nbytes(m), how == 0 ? 2 : 0);
+            if (how == JL_GENERICMEMORY_MALLOCD) {
+                gc_heap_snapshot_record_foreign_memory_edge(
+                    new_obj, m->ptr, jl_genericmemory_nbytes(m));
             }
-            else if (how == 1) {
+            else if (how == JL_GENERICMEMORY_GCMANAGED) {
                 if (update_meta || foreign_alloc) {
                     size_t nb = jl_genericmemory_nbytes(m);
-                    gc_heap_snapshot_record_hidden_edge(new_obj, m->ptr, nb, 0);
                     if (bits == GC_OLD_MARKED) {
                         ptls->gc_tls.gc_cache.perm_scanned_bytes += nb;
                     }
@@ -2413,7 +2424,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                     }
                 }
             }
-            else if (how == 3) {
+            else if (how == JL_GENERICMEMORY_STRINGOWNED) {
                 jl_value_t *owner = jl_genericmemory_data_owner_field(m);
                 uintptr_t nptr = (1 << 2) | (bits & GC_OLD);
                 gc_try_claim_and_push(mq, owner, &nptr);
@@ -2448,19 +2459,21 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                     objary_begin += layout->first_ptr;
                     gc_mark_objarray(ptls, objary_parent, objary_begin, objary_end, step, nptr);
                 }
-                else if (layout->flags.fielddesc_type == 0) {
+                else if (layout->flags.fielddesc_type == JL_FIELDDESC_8) {
                     uint8_t *obj8_begin = (uint8_t*)jl_dt_layout_ptrs(layout);
                     uint8_t *obj8_end = obj8_begin + npointers;
                     gc_mark_memory8(ptls, objary_parent, objary_begin, objary_end, obj8_begin, obj8_end,
                                    elsize, nptr);
                 }
-                else if (layout->flags.fielddesc_type == 1) {
+                else if (layout->flags.fielddesc_type == JL_FIELDDESC_16) {
                     uint16_t *obj16_begin = (uint16_t*)jl_dt_layout_ptrs(layout);
                     uint16_t *obj16_end = obj16_begin + npointers;
                     gc_mark_memory16(ptls, objary_parent, objary_begin, objary_end, obj16_begin, obj16_end,
                                     elsize, nptr);
                 }
                 else {
+                    assert(layout->flags.fielddesc_type != JL_FIELDDESC_FOREIGN);
+                    // Inline array scanning does not implement 32-bit or foreign descriptors.
                     assert(0 && "unimplemented");
                 }
             }
@@ -2476,9 +2489,9 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
         if (npointers == 0)
             return;
         uintptr_t nptr = (npointers << 2 | (bits & GC_OLD));
-        assert((layout->nfields > 0 || layout->flags.fielddesc_type == 3) &&
+        assert((layout->nfields > 0 || layout->flags.fielddesc_type == JL_FIELDDESC_FOREIGN) &&
                "opaque types should have been handled specially");
-        if (layout->flags.fielddesc_type == 0) {
+        if (layout->flags.fielddesc_type == JL_FIELDDESC_8) {
             char *obj8_parent = (char *)new_obj;
             uint8_t *obj8_begin = (uint8_t *)jl_dt_layout_ptrs(layout);
             uint8_t *obj8_end = obj8_begin + npointers;
@@ -2491,7 +2504,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                     gc_ptr_queue_push(mq, new_obj);
             }
         }
-        else if (layout->flags.fielddesc_type == 1) {
+        else if (layout->flags.fielddesc_type == JL_FIELDDESC_16) {
             char *obj16_parent = (char *)new_obj;
             uint16_t *obj16_begin = (uint16_t *)jl_dt_layout_ptrs(layout);
             uint16_t *obj16_end = obj16_begin + npointers;
@@ -2504,7 +2517,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                     gc_ptr_queue_push(mq, new_obj);
             }
         }
-        else if (layout->flags.fielddesc_type == 2) {
+        else if (layout->flags.fielddesc_type == JL_FIELDDESC_32) {
             // This is very uncommon
             // Do not do store to load forwarding to save some code size
             char *obj32_parent = (char *)new_obj;
@@ -2520,7 +2533,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
             }
         }
         else {
-            assert(layout->flags.fielddesc_type == 3);
+            assert(layout->flags.fielddesc_type == JL_FIELDDESC_FOREIGN);
             jl_fielddescdyn_t *desc = (jl_fielddescdyn_t *)jl_dt_layout_fields(layout);
             int old = jl_astaggedvalue(new_obj)->bits.gc & 2;
             uintptr_t young = desc->markfunc(ptls, new_obj);
@@ -3177,6 +3190,9 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
         recollect = 1;
         gc_record_full_sweep_reason(FULL_SWEEP_REASON_FORCED_FULL_SWEEP);
     }
+    if (gc_disable_auto_full_sweep && collection != JL_GC_FULL) {
+        sweep_full = 0;
+    }
     // 5. start sweeping
     uint64_t start_sweep_time = jl_hrtime();
     JL_PROBE_GC_SWEEP_BEGIN(sweep_full);
@@ -3243,7 +3259,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
         old_freed_diff = gc_mem;
         old_pause_time = gc_time;
         // thrashing estimator: if GC time more than 50% of the runtime
-        if (pause > mutator_time && !(thrash_counter < 4))
+        if (pause > mutator_time && thrash_counter <= 4)
             thrash_counter += 1;
         else if (thrash_counter > 0)
             thrash_counter -= 1;
@@ -4142,9 +4158,25 @@ void jl_gc_notify_image_load(const char* img_data, size_t len)
     // Do nothing
 }
 
-JL_DLLEXPORT const char* jl_gc_active_impl(void)
+void jl_gc_notify_image_alloc(const char* img_data, size_t len)
 {
+    // Do nothing
+}
+
+JL_DLLEXPORT const char* jl_gc_active_impl(void) {
     return "Built with stock GC";
+}
+
+JL_DLLEXPORT int jl_gc_enable_auto_full_collection(int on)
+{
+    int prev = !gc_disable_auto_full_sweep;
+    gc_disable_auto_full_sweep = (on == 0);
+    return prev;
+}
+
+JL_DLLEXPORT int jl_gc_auto_full_collection_is_enabled(void)
+{
+    return !gc_disable_auto_full_sweep;
 }
 
 #ifdef __cplusplus

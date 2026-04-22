@@ -94,7 +94,7 @@ function html(io::IO, md::Paragraph)
     end
 end
 
-function html(io::IO, md::HTML)
+function html(io::IO, md::HTMLBlock)
     for line in md.content[1:end-1]
         println(io, line)
     end
@@ -226,6 +226,8 @@ function htmlinline(io::IO, br::LineBreak)
     tag(io, :br)
     println(io)
 end
+
+htmlinline(io::IO, md::HTMLInline) = print(io, md.content)
 
 htmlinline(io::IO, x) = tohtml(io, x)
 

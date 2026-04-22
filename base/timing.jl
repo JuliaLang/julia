@@ -573,7 +573,7 @@ function _gen_allocation_measurer(ex, fname::Symbol)
             b1[] - b0[]
         end
     else
-        @assert fname === :allocations
+        @assert fname === :allocations "unexpected fname"
         return quote
             Experimental.@force_compile
             # Note this value is unused, but without it `allocated` and `allocations`
@@ -650,7 +650,7 @@ A macro to evaluate an expression, discard the resulting value, and instead retu
 total number of lock conflicts during evaluation, where a lock attempt on a [`ReentrantLock`](@ref)
 resulted in a wait because the lock was already held.
 
-See also [`@time`](@ref), [`@timev`](@ref) and [`@timed`](@ref).
+See also [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref).
 
 ```julia-repl
 julia> @lock_conflicts begin

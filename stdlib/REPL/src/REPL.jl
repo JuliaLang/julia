@@ -710,7 +710,7 @@ mutable struct BasicREPL <: AbstractREPL
 end
 
 outstream(r::BasicREPL) = r.terminal
-hascolor(r::BasicREPL) = hascolor(r.terminal)
+hascolor(r::BasicREPL) = Terminals.hascolor(r.terminal)
 
 function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
     repl.frontend_task = current_task()
@@ -1323,9 +1323,11 @@ function setup_interface(
         # and pass into Base.repl_cmd for processing (handles `ls` and `cd`
         # special)
         on_done = respond(repl, julia_prompt) do line
-            Expr(:call, :(Base.repl_cmd),
-                :(Base.cmd_gen($(Base.shell_parse(line::String)[1]))),
-                outstream(repl))
+            cmd_ex = Base.shell_parse(line::String)[1]
+            if Meta.isexpr(cmd_ex, :tuple)
+                cmd_ex = :(Base.cmd_gen($cmd_ex))
+            end
+            Expr(:call, :(Base.repl_cmd), cmd_ex, outstream(repl))
         end,
         sticky = true)
 
@@ -1625,19 +1627,20 @@ function setup_interface(
             linfos = repl.last_shown_line_infos
             str = String(take!(LineEdit.buffer(s)))
             n = tryparse(Int, str)
-            n === nothing && @goto writeback
-            if n <= 0 || n > length(linfos) || startswith(linfos[n][1], "REPL[")
-                @goto writeback
+            @label writeback begin
+                n === nothing && break writeback
+                if n <= 0 || n > length(linfos) || startswith(linfos[n][1], "REPL[")
+                    break writeback
+                end
+                try
+                    InteractiveUtils.edit(Base.fixup_stdlib_path(linfos[n][1]), linfos[n][2])
+                catch ex
+                    ex isa ProcessFailedException || ex isa Base.IOError || ex isa SystemError || rethrow()
+                    @info "edit failed" _exception=ex
+                end
+                LineEdit.refresh_line(s)
+                return
             end
-            try
-                InteractiveUtils.edit(Base.fixup_stdlib_path(linfos[n][1]), linfos[n][2])
-            catch ex
-                ex isa ProcessFailedException || ex isa Base.IOError || ex isa SystemError || rethrow()
-                @info "edit failed" _exception=ex
-            end
-            LineEdit.refresh_line(s)
-            return
-            @label writeback
             write(LineEdit.buffer(s), str)
             return
         end,

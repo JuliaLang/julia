@@ -65,7 +65,7 @@ SRCS := \
 	simplevector runtime_intrinsics precompile jloptions mtarraylist \
 	threading scheduler stackwalk null_sysimage \
 	method jlapi signal-handling safepoint timing subtype rtutils \
-	crc32c APInt-C processor ircode opaque_closure codegen-stubs coverage runtime_ccall engine \
+	crc32c APInt processor ircode opaque_closure codegen-stubs coverage runtime_ccall engine \
 	$(GC_SRCS)
 
 RT_LLVMLINK :=
@@ -76,9 +76,9 @@ ifeq ($(JULIACODEGEN),LLVM)
 GC_CODEGEN_SRCS := llvm-final-gc-lowering llvm-late-gc-lowering llvm-gc-invariant-verifier
 ifeq (${USE_THIRD_PARTY_GC},mmtk)
 FLAGS_COMMON += -I$(MMTK_API_INC)
-GC_CODEGEN_SRCS += llvm-late-gc-lowering-mmtk
+GC_CODEGEN_SRCS += llvm-final-gc-lowering-mmtk
 else
-GC_CODEGEN_SRCS += llvm-late-gc-lowering-stock
+GC_CODEGEN_SRCS += llvm-final-gc-lowering-stock
 endif
 CODEGEN_SRCS := codegen jitlayers aotcompile debuginfo disasm llvm-simdloop \
 	llvm-pass-helpers llvm-ptls llvm-propagate-addrspaces \
@@ -106,7 +106,7 @@ else
 # JULIACODEGEN != LLVM
 endif
 
-RT_LLVM_LIBS := support targetparser
+RT_LLVM_LIBS := support
 
 ifeq ($(OS),WINNT)
 SRCS += win32_ucontext
@@ -203,7 +203,7 @@ LIBJULIA_PATH_REL := libjulia
 endif
 
 COMMON_LIBPATHS := -L$(build_libdir) -L$(build_shlibdir)
-RT_LIBS := $(call whole_archive,$(LIBUV)) $(call whole_archive,$(LIBUTF8PROC)) $(LIBUNWIND) $(RT_LLVMLINK) $(OSLIBS) $(LIBTRACYCLIENT) $(LIBITTAPI) -lzstd
+RT_LIBS := $(call whole_archive,$(LIBUV)) $(call whole_archive,$(LIBUTF8PROC)) $(LIBUNWIND) $(RT_LLVMLINK) $(OSLIBS) $(LIBTRACYCLIENT) $(LIBITTAPI) -lzstd -L$(build_libdir) -ltarget_parsing
 # NB: CG needs uv_mutex_* symbols, but we expect to export them from libjulia-internal
 CG_LIBS := $(LIBUNWIND) $(CG_LLVMLINK) $(OSLIBS) $(LIBTRACYCLIENT) $(LIBITTAPI)
 
@@ -406,7 +406,7 @@ $(BUILDDIR)/gc-alloc-profiler.o $(BUILDDIR)/gc-alloc-profiler.dbg.obj: $(SRCDIR)
 $(BUILDDIR)/gc-page-profiler.o $(BUILDDIR)/gc-page-profiler.dbg.obj: $(SRCDIR)/gc-page-profiler.h
 $(BUILDDIR)/init.o $(BUILDDIR)/init.dbg.obj: $(SRCDIR)/builtin_proto.h
 $(BUILDDIR)/interpreter.o $(BUILDDIR)/interpreter.dbg.obj: $(SRCDIR)/builtin_proto.h
-$(BUILDDIR)/jitlayers.o $(BUILDDIR)/jitlayers.dbg.obj: $(SRCDIR)/jitlayers.h $(SRCDIR)/llvm-codegen-shared.h $(SRCDIR)/llvm-julia-task-dispatcher.h
+$(BUILDDIR)/jitlayers.o $(BUILDDIR)/jitlayers.dbg.obj: $(SRCDIR)/jitlayers.h $(SRCDIR)/llvm-codegen-shared.h $(SRCDIR)/julia-task-dispatcher.h
 $(BUILDDIR)/jltypes.o $(BUILDDIR)/jltypes.dbg.obj: $(SRCDIR)/builtin_proto.h
 $(build_shlibdir)/libllvmcalltest.$(SHLIB_EXT): $(SRCDIR)/llvm-codegen-shared.h $(BUILDDIR)/julia_version.h
 $(BUILDDIR)/llvm-alloc-helpers.o $(BUILDDIR)/llvm-alloc-helpers.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h $(SRCDIR)/llvm-pass-helpers.h $(SRCDIR)/llvm-alloc-helpers.h
@@ -422,7 +422,7 @@ $(BUILDDIR)/llvm-pass-helpers.o $(BUILDDIR)/llvm-pass-helpers.dbg.obj: $(SRCDIR)
 $(BUILDDIR)/llvm-propagate-addrspaces.o $(BUILDDIR)/llvm-propagate-addrspaces.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h
 $(BUILDDIR)/llvm-remove-addrspaces.o $(BUILDDIR)/llvm-remove-addrspaces.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h
 $(BUILDDIR)/llvm-ptls.o $(BUILDDIR)/llvm-ptls.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h
-$(BUILDDIR)/processor.o $(BUILDDIR)/processor.dbg.obj: $(addprefix $(SRCDIR)/,processor_*.cpp processor.h features_*.h)
+$(BUILDDIR)/processor.o $(BUILDDIR)/processor.dbg.obj: $(SRCDIR)/processor.h
 $(BUILDDIR)/signal-handling.o $(BUILDDIR)/signal-handling.dbg.obj: $(addprefix $(SRCDIR)/,signals-*.c)
 $(BUILDDIR)/staticdata.o $(BUILDDIR)/staticdata.dbg.obj: $(SRCDIR)/staticdata_utils.c $(SRCDIR)/precompile_utils.c $(SRCDIR)/processor.h $(SRCDIR)/builtin_proto.h
 $(BUILDDIR)/toplevel.o $(BUILDDIR)/toplevel.dbg.obj: $(SRCDIR)/builtin_proto.h
@@ -552,7 +552,7 @@ ADDITIONAL_C_HEADERS := builtin_proto.h common_symbols1.inc common_symbols2.inc 
 	support/htable.h support/htable.inc
 ADDITIONAL_CXX_HEADERS := debug-registry.h debuginfo.h intrinsics.h jitlayers.h llvm-alloc-helpers.h \
 	llvm-codegen-shared.h llvm-gc-interface-passes.h llvm-julia-passes.inc \
-	llvm-julia-task-dispatcher.h llvm-pass-helpers.h passes.h processor.h
+	julia-task-dispatcher.h llvm-pass-helpers.h passes.h processor.h
 
 # Included files that should be compiled using their including file's compiler settings
 INCLUDED_C_FILES := \
@@ -561,7 +561,7 @@ INCLUDED_C_FILES := \
 	crc32c.c:crc32c-tables.c \
 	signal-handling.c:signals-win.c \
 	signal-handling.c:signals-unix.c \
-	signal-handling.c:mach_excServer.c \
+	signal-handling.c:mig/mach_excServer.c \
 	signal-handling.c:signals-mach.c \
 	staticdata.c:staticdata_utils.c \
 	staticdata.c:precompile_utils.c
@@ -577,10 +577,7 @@ INCLUDED_CXX_FILES := \
 	codegen.cpp:abi_x86.cpp \
 	codegen.cpp:cgutils.cpp \
 	codegen.cpp:intrinsics.cpp \
-	codegen.cpp:ccall.cpp \
-	processor.cpp:processor_x86.cpp \
-	processor.cpp:processor_arm.cpp \
-	processor.cpp:processor_fallback.cpp
+	codegen.cpp:ccall.cpp
 
 .PHONY: clean
 clean:
@@ -612,7 +609,7 @@ $(build_shlibdir)/lib%Plugin.$(SHLIB_EXT): $(SRCDIR)/clangsa/%.cpp $(LLVM_CONFIG
 # before attempting this static analysis, so that all necessary headers
 # and dependencies are properly installed:
 #   make -C src install-analysis-deps
-ANALYSIS_DEPS := llvm clang llvm-tools libuv utf8proc zstd
+ANALYSIS_DEPS := llvm clang llvm-tools libuv utf8proc zstd cpufeatures
 ifeq ($(OS),Darwin)
 ANALYSIS_DEPS += llvmunwind
 else ifeq ($(OS),OpenBSD)

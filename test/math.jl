@@ -754,6 +754,14 @@ end
     end
 end
 
+@testset "accuracy of `sinpi`, `cospi` around the origin" begin
+    for f in (sinpi, cospi)
+        for t in (Float32, Float64)
+            @test ulp_error_maximum(f, range(start = t(-0.25), stop = t(0.25), length = 5000)) < (has_fma[t] ? 1.0 : 1.5)
+        end
+    end
+end
+
 @testset "Irrational args to sinpi/cospi/tanpi/sinc/cosc" begin
     for x in (pi, ℯ, Base.MathConstants.golden)
         for (sinpi, cospi) in ((sinpi, cospi), (x->sincospi(x)[1], x->sincospi(x)[2]))

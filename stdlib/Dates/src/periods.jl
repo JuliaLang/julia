@@ -204,9 +204,9 @@ CompoundPeriod(p::Period...) = CompoundPeriod(Period[p...])
 
 
 """
-    canonicalize(::CompoundPeriod)::CompoundPeriod
+    canonicalize(::Period)::CompoundPeriod
 
-Reduces the `CompoundPeriod` into its canonical form by applying the following rules:
+Reduces the `Period` into its canonical form by applying the following rules:
 
 * Any `Period` large enough be partially representable by a coarser `Period` will be broken
   into multiple `Period`s (eg. `Hour(30)` becomes `Day(1) + Hour(6)`)
@@ -215,7 +215,7 @@ Reduces the `CompoundPeriod` into its canonical form by applying the following r
 
 # Examples
 ```jldoctest
-julia> canonicalize(Dates.CompoundPeriod(Dates.Hour(12), Dates.Hour(13)))
+julia> canonicalize(Dates.Hour(25))
 1 day, 1 hour
 
 julia> canonicalize(Dates.CompoundPeriod(Dates.Hour(-1), Dates.Minute(1)))
@@ -224,9 +224,12 @@ julia> canonicalize(Dates.CompoundPeriod(Dates.Hour(-1), Dates.Minute(1)))
 julia> canonicalize(Dates.CompoundPeriod(Dates.Month(1), Dates.Week(-2)))
 1 month, -2 weeks
 
-julia> canonicalize(Dates.CompoundPeriod(Dates.Minute(50000)))
+julia> canonicalize(Dates.Minute(50000))
 4 weeks, 6 days, 17 hours, 20 minutes
 ```
+
+!!! compat "Julia 1.6"
+    Prior to Julia 1.6, the argument of `canonicalize` could only be a `CompoundPeriod`.
 """
 canonicalize(x::Period) = canonicalize(CompoundPeriod(x))
 function canonicalize(x::CompoundPeriod)
@@ -336,7 +339,7 @@ Base.convert(::Type{T}, x::CompoundPeriod) where T<:Period =
 # E.g. Year(1) - Month(1)
 (-)(x::Period, y::Period) = CompoundPeriod(Period[x, -y])
 (-)(x::CompoundPeriod, y::Period) = CompoundPeriod(vcat(x.periods, -y))
-(-)(x::CompoundPeriod) = CompoundPeriod(-x.periods)
+(-)(x::CompoundPeriod) = CompoundPeriod(Period[-p for p in x.periods])
 (-)(y::Union{Period, CompoundPeriod}, x::CompoundPeriod) = (-x) + y
 
 GeneralPeriod = Union{Period, CompoundPeriod}
@@ -368,6 +371,9 @@ function (-)(x::TimeType, y::CompoundPeriod)
     end
     return x
 end
+
+Base.iszero(x::CompoundPeriod) = isempty(canonicalize(x).periods)
+Base.zero(::Union{CompoundPeriod,Type{CompoundPeriod}}) = CompoundPeriod()
 
 # Fixed-value Periods (periods corresponding to a well-defined time interval,
 # as opposed to variable calendar intervals like Year).

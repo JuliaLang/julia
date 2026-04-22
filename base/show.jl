@@ -1,6 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using .Compiler: has_typevar
 using .Meta: isidentifier, isoperator, isunaryoperator, isbinaryoperator, ispostfixoperator,
             is_id_start_char, is_id_char, _isoperator, is_syntactic_operator, is_valid_identifier,
             is_unary_and_binary_operator
@@ -1265,7 +1264,7 @@ show_supertypes(typ::DataType) = show_supertypes(stdout, typ)
 
 Prints one or more expressions, and their results, to `stdout`, and returns the last result.
 
-See also: [`show`](@ref), [`@info`](@ref man-logging), [`println`](@ref).
+See also [`show`](@ref), [`@info`](@ref man-logging), [`println`](@ref).
 
 # Examples
 ```jldoctest
@@ -1399,6 +1398,9 @@ function show(io::IO, codeinst::Core.CodeInstance)
         print(io, " (ABI Overridden)")
     else
         show_mi(io, def::MethodInstance)
+    end
+    if codeinst.owner !== nothing
+        print(io, " (foreign)")
     end
 end
 
@@ -1950,6 +1952,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     elseif (head in expr_infix_any && nargs==2)
         func_prec = operator_precedence(head)
         head_ = head in expr_infix_wide ? " $head " : head
+        if head == :-> && is_expr(args[1], :...)
+            args = Any[Expr(:tuple, args[1]), args[2]]
+        end
         if func_prec <= prec
             show_enclosed_list(io, '(', args, head_, ')', indent, func_prec, quote_level, true)
         else
@@ -3029,6 +3034,8 @@ end
 nocolor(io::IO) = IOContext(io, :color => false)
 alignment_from_show(io::IO, x::Any) =
     textwidth(sprint(show, x, context=nocolor(io), sizehint=0))
+alignment_from_show(io::IO, x::AbstractString) =
+    textwidth(sprint(show, MIME"text/plain"(), x, context=nocolor(io), sizehint=0))
 
 """
 `alignment(io, X)` returns a tuple (left,right) showing how many characters are
@@ -3371,7 +3378,7 @@ function print_partition(io::IO, partition::Core.BindingPartition)
         print(io, "explicit `import` from ")
         print(io, partition_restriction(partition).globalref)
     else
-        @assert kind == PARTITION_KIND_GLOBAL
+        @assert kind == PARTITION_KIND_GLOBAL "unexpected partition kind"
         print(io, "global variable with type ")
         print(io, partition_restriction(partition))
     end

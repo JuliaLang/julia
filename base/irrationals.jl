@@ -222,6 +222,8 @@ for op in (:+, :-)
     end
 end
 
+^(x::AbstractIrrational, y::Integer) = float(x)^y
+
 round(x::Irrational, r::RoundingMode) = round(float(x), r)
 
 """

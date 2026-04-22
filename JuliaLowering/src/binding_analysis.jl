@@ -20,35 +20,24 @@
 # These variables may temporarily lose their status when considering uses /
 # captures in inner blocks, but this is restored later if dominated by an
 # outer assignment.
-#
-# XXX: This pass under-approximates the "is_always_defined" flag to mean something
-#      closer to "is_always_defined_and_not_modified_after_any_capture" (which is
-#      the real condition needed to apply unboxing safely)
 
 """
     analyze_def_and_use!(ctx, ex)
 
-Perform tree-based def-use analysis to find captured variables that are
-assigned before any closure captures them (never-undef) and not modified
-afterward. For such variables, as an abuse of binding flags we can mark them
-as `is_always_defined=true` to avoid unnecessary `Core.Box` allocations during
-closure conversion.
+Perform tree-based def-use analysis to find captured variables that are assigned
+before any closure captures them and not modified afterward. For such variables,
+as an abuse of binding flags we can mark them as `unboxed=true` to avoid
+unnecessary `Core.Box` allocations during closure conversion.
 
 This is called on the outermost lambda, and recursively processes nested lambdas.
 """
 function analyze_def_and_use!(ctx, ex)
-    k = kind(ex)
-    if k != K"lambda"
-        return
+    @stm ex begin
+        [K"lambda" _ _ body _...] -> begin
+            _analyze_nested_lambdas!(ctx, body)
+            _analyze_lambda_vars!(ctx, ex)
+        end
     end
-
-    # First, recursively analyze nested lambdas (depth-first)
-    if numchildren(ex) >= 3
-        _analyze_nested_lambdas!(ctx, ex[3])
-    end
-
-    # Now analyze this lambda
-    _analyze_lambda_vars!(ctx, ex)
 end
 
 function _analyze_nested_lambdas!(ctx, ex)
@@ -84,7 +73,7 @@ mutable struct DefUseState
     const args::Set{IdTag}
 
     function DefUseState(ctx, candidates)
-        unused = candidates
+        unused = copy(candidates)
         live = Set{IdTag}()
         seen = Set{IdTag}()
         decl = Set{IdTag}()
@@ -177,7 +166,7 @@ function du_declare!(state::DefUseState, var_id)
     end
 end
 
-# Returns whether e contained a symbolic_label
+# Returns whether e contained a symboliclabel
 function du_visit!(ctx, state::DefUseState, e)
     k = kind(e)
 
@@ -185,8 +174,8 @@ function du_visit!(ctx, state::DefUseState, e)
         du_mark_used!(state, e.var_id)
         return false
 
-    elseif k == K"symbolic_label"
-        # Must check BEFORE is_leaf since symbolic_label is a leaf node
+    elseif k == K"symboliclabel"
+        # Must check BEFORE is_leaf since symboliclabel is a leaf node
         du_kill!(state)
         return true
 
@@ -194,7 +183,7 @@ function du_visit!(ctx, state::DefUseState, e)
         du_kill!(state)
         return false
 
-    elseif k in KSet"break symbolic_goto"
+    elseif k in KSet"break symbolicgoto oldsymbolicgoto"
         # this kill!() is not required for soundness since these are branch points
         # not merge points, but it's here for parity with flisp
         du_kill!(state)
@@ -240,7 +229,23 @@ function du_visit!(ctx, state::DefUseState, e)
         end
         return false
 
-    elseif k == K"method_defs" || k == K"function_decl"
+    elseif k == K"function_decl"
+        # [function_decl] defines and instantiates the closure type and assigns
+        # it to its first argument (but only once per unique first argument).
+        func_id = e[1].var_id
+        @assert kind(e[1]) == K"BindingId"
+        func_id in state.seen && return false
+        if haskey(ctx.closure_bindings, func_id)
+            for lam in ctx.closure_bindings[func_id].lambdas
+                for (id, capt) in lam.locals_capt
+                    du_mark_captured!(state, id)
+                end
+            end
+        end
+        du_assign!(state, func_id)
+        return false
+
+    elseif k == K"method_defs"
         # Process nested lambdas within
         has_label = false
         for child in children(e)
@@ -285,7 +290,7 @@ function du_visit!(ctx, state::DefUseState, e)
             return false
         end
 
-    elseif k == K"break_block"
+    elseif k == K"symbolicblock"
         # Skip the first child (break target label) - it's not a @goto target
         # No save/restore needed: the body always executes (break just exits early)
         has_label = false
@@ -295,9 +300,9 @@ function du_visit!(ctx, state::DefUseState, e)
         return has_label
 
     elseif is_leaf(e) || is_quoted(e) ||
-        k in KSet"local meta inbounds boundscheck noinline loopinfo decl
-            with_static_parameters toplevel_butfirst global globalref
-            constdecl atomic isdefined toplevel module error
+        k in KSet"local always_defined meta inbounds boundscheck noinline
+            loopinfo decl with_static_parameters toplevel_butfirst global
+            globalref constdecl atomic isdefined toplevel module error
             gc_preserve_begin gc_preserve_end export public inline"
 
         # Forms that don't interact with locals or affect control flow (likely more than is necessary).
@@ -319,40 +324,42 @@ function _analyze_lambda_vars!(ctx, ex)
     # Collect candidate variables: captured and single-assigned
     candidates = Set{IdTag}()
     for (id, from_outer_lambda) in lambda_bindings.locals_capt
-        binfo = get_binding(ctx, id)
-        maybe_boxed = binfo.is_captured && binfo.kind in (:local, :argument)
-        safe_to_analyze = binfo.is_assigned_once
-        if !from_outer_lambda && maybe_boxed && safe_to_analyze
+        b = get_binding(ctx, id)
+        !b.is_captured && continue
+        from_outer_lambda && continue
+        if b.is_assigned_once && b.kind in (:local, :argument)
             push!(candidates, id)
-            # For arguments, reset is_always_defined so we can determine if the
-            # outer-scope assignment dominates the capture. Arguments start with
-            # is_always_defined=true, but if they're reassigned inside a closure
-            # (not in outer scope), we need the def-use analysis to decide.
-            if binfo.kind == :argument
-                binfo.is_always_defined = false
-            end
         end
     end
     isempty(candidates) && return
 
     state = DefUseState(ctx, candidates)
+    @stm ex begin
+        [K"lambda" _ _ body] -> du_visit!(ctx, state, body)
+        [K"lambda" _ _ body rett] -> (du_visit!(ctx, state, body);
+                                      du_visit!(ctx, state, rett))
+    end
 
-    # Visit the lambda body
-    if numchildren(ex) >= 3
-        body = ex[3]
-        if kind(body) == K"block"
-            for stmt in children(body)
-                du_visit!(ctx, state, stmt)
-            end
-        else
-            du_visit!(ctx, state, body)
+    for id in union(state.live, state.unused)
+        if id in state.seen
+            b = get_binding(ctx, id)
+            b.unboxed = true
+            b.is_always_defined = true
         end
     end
 
-    # Variables in live or unused (that were seen assigned) are never-undef
-    for id in union(state.live, state.unused)
-        if id in state.seen
-            get_binding(ctx, id).is_always_defined = true
+    # A single (scope-dominating) assignment implies unboxed even if we gave up above
+    for id in candidates
+        b = get_binding(ctx, id)
+        # XXX: This uses is-always-defined to imply that the assignment is defined
+        #      everywhere in its scope, which then implies that the one definition
+        #      executes only once dynamically.
+        #      (i.e. it forbids single-assignment to `x` in an inner loop)
+        #
+        #      If this flag becomes broader and only considers definedness-at-use
+        #      then this check (taken from `julia-syntax.scm`) becomes unsound.
+        if b.kind === :local && b.is_always_defined && b.is_assigned_once
+            b.unboxed = true
         end
     end
 end

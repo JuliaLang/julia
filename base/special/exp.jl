@@ -267,7 +267,7 @@ end
     r = muladd(N_float, LogBo256U(base, T), x)
     r = muladd(N_float, LogBo256L(base, T), r)
     k = N >> 8
-    jU = reinterpret(Float64, JU_CONST | (@inbounds J_TABLE[N&255 + 1] & JU_MASK))
+    jU, _ = table_unpack(N)
     small_part =  muladd(jU, expm1b_kernel(base, r), jU)
     twopk = Int64(k) << 52
     return reinterpret(T, twopk + reinterpret(Int64, small_part))
@@ -336,7 +336,7 @@ end
 
 Compute the natural base exponential of `x`, in other words ``ℯ^x``.
 
-See also [`exp2`](@ref), [`exp10`](@ref) and [`cis`](@ref).
+See also [`exp2`](@ref), [`exp10`](@ref), [`expm1`](@ref), [`cis`](@ref), [`log`](@ref).
 
 # Examples
 ```jldoctest
@@ -353,7 +353,7 @@ true
 
 Compute the base 2 exponential of `x`, in other words ``2^x``.
 
-See also [`ldexp`](@ref), [`<<`](@ref).
+See also [`exp`](@ref), [`log2`](@ref), [`ldexp`](@ref), [`<<`](@ref).
 
 # Examples
 ```jldoctest
@@ -373,6 +373,8 @@ exp2(x)
     exp10(x)
 
 Compute the base 10 exponential of `x`, in other words ``10^x``.
+
+See also, [`exp`](@ref), [`log10`](@ref).
 
 # Examples
 ```jldoctest
@@ -492,6 +494,9 @@ end
 
 Accurately compute ``e^x-1``. It avoids the loss of precision involved in the direct
 evaluation of exp(x) - 1 for small values of x.
+
+See also [`exp`](@ref), [`log1p`](@ref).
+
 # Examples
 ```jldoctest
 julia> expm1(1e-16)

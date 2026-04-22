@@ -240,11 +240,11 @@ alone is a matter of coding style.
 
 ## Operators Are Functions
 
-In Julia, most operators are just functions with support for special syntax. (The exceptions are
-operators with special evaluation semantics like `&&` and `||`. These operators cannot be functions
-since [Short-Circuit Evaluation](@ref) requires that their operands are not evaluated before evaluation
-of the operator.) Accordingly, you can also apply them using parenthesized argument lists, just
-as you would any other function:
+In Julia, most [operators](@ref Operator-Precedence-and-Associativity) are just functions with support
+for special syntax. (The exceptions are operators with special evaluation semantics like `&&` and `||`.
+These operators cannot be functions since [Short-Circuit Evaluation](@ref) requires that their operands
+are not evaluated before evaluation of the operator.) Accordingly, you can also apply them using
+parenthesized argument lists, just as you would any other function:
 
 ```jldoctest
 julia> 1 + 2 + 3
@@ -1131,7 +1131,7 @@ so that the left-hand side is updated in-place.
 
 Since adding dots to many operations and function calls in an expression
 can be tedious and lead to code that is difficult to read, the macro
-[`@.`](@ref @__dot__) is provided to convert *every* function call,
+[`@.`](@ref @__dot__) is provided to convert every function call,
 operation, and assignment in an expression into the "dotted" version.
 
 ```jldoctest

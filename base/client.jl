@@ -32,9 +32,17 @@ stackframe_lineinfo_color() = repl_color("JULIA_STACKFRAME_LINEINFO_COLOR", :bol
 stackframe_function_color() = repl_color("JULIA_STACKFRAME_FUNCTION_COLOR", :bold)
 
 function repl_cmd(cmd, out)
-    # Immediately expand all arguments, so that typing e.g. ~/bin/foo works.
-    cmd.exec .= expanduser.(cmd.exec)
-
+    if !(cmd isa Cmd)
+        # Pipelines and redirects: run directly without shell wrapping.
+        try
+            run(ignorestatus(cmd))
+        catch
+            lasterr = current_exceptions()
+            lasterr = ExceptionStack(NamedTuple[(exception = e[1], backtrace = [] ) for e in lasterr])
+            invokelatest(display_error, lasterr)
+        end
+        return nothing
+    end
     if isempty(cmd.exec)
         throw(ArgumentError("no cmd to execute"))
     elseif cmd.exec[1] == "cd"
@@ -174,7 +182,7 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
 end
 
 function _parse_input_line_core(s::String, filename::String, mod::Union{Module, Nothing})
-    ex = Meta.parseall(s; filename, mod)
+    ex = Meta.parseall(s; filename, _parse=invokelatest(Meta.parser_for_module, mod))
     if ex isa Expr && ex.head === :toplevel
         if isempty(ex.args)
             return nothing
@@ -553,7 +561,7 @@ The thrown errors are collected in a stack of exceptions.
 global err = nothing
 
 const main_parser = Base.ScopedValues.ScopedValue{Any}(Core._parse)
-function _internal_julia_parse(args...)
+function var"#_internal_julia_parse"(args...)
     main_parser[](args...)
 end
 
@@ -562,7 +570,7 @@ global InteractiveUtils::Module
 global Distributed::Module
 
 # weakly exposes ans and err variables to Main
-export ans, err, _internal_julia_parse
+export ans, err, var"#_internal_julia_parse"
 end
 
 function should_use_main_entrypoint()

@@ -659,7 +659,9 @@ function connect(rmt::GitRemote, direction::Consts.GIT_DIRECTION;
     return rmt
 end
 
-""" git reset [<committish>] [--] <pathspecs>... """
+"""
+Equivalent to `git reset [<committish>] [--] <pathspecs>...`.
+"""
 function reset!(repo::GitRepo, committish::AbstractString, pathspecs::AbstractString...)
     obj = GitObject(repo, isempty(committish) ? Consts.HEAD_FILE : committish)
     # do not remove entries in the index matching the provided pathspecs with empty target commit tree

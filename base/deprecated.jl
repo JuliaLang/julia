@@ -540,7 +540,7 @@ end
 
 Return whether the binding of a symbol in a module is resolved.
 
-See also: [`isexported`](@ref), [`ispublic`](@ref), [`isdeprecated`](@ref)
+See also [`isexported`](@ref), [`ispublic`](@ref), [`isdeprecated`](@ref).
 
 ```jldoctest
 julia> module Mod

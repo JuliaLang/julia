@@ -274,6 +274,10 @@
             Expr(:(=),
                  Expr(Symbol("'"), :x),
                  1)
+        @test parsestmt("x' = A * x") ==
+            Expr(:(=),
+                 Expr(Symbol("'"), :x),
+                 Expr(:call, :*, :A, :x))
 
         # `.=` doesn't introduce short form functions
         @test parsestmt("f() .= xs") ==
@@ -765,6 +769,12 @@
 
         @test parsestmt("struct A \n \"doc\" \n a end") ==
             Expr(:struct, false, :A, Expr(:block, LineNumberNode(2), "doc", :a))
+    end
+
+    @testset "typegroup" begin
+        @test parsestmt("typegroup\nstruct A\nend\nend", version=v"1.14") ==
+            Expr(:typegroup, Expr(:block, LineNumberNode(2),
+                Expr(:struct, false, :A, Expr(:block, LineNumberNode(2)))))
     end
 
     @testset "export" begin
