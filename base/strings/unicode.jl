@@ -127,6 +127,9 @@ const category_strings = [
     "Invalid, too high",
     "Malformed, bad data",
 ]
+# category_code returns a value in 0:31; keep category_strings sized to match so
+# `category_string` remains nothrow.
+@assert length(category_strings) == 32
 
 const UTF8PROC_STABLE    = (1<<1)
 const UTF8PROC_COMPAT    = (1<<2)
@@ -264,7 +267,9 @@ julia> textwidth('⛵')
 """
 textwidth(c::AbstractChar) = textwidth(Char(c)::Char)
 
-function textwidth(c::Char)
+# nothrow+foldable: ismalformed/is_overlong_enc guards return early before the ccall whose
+# result fits in Cint and so the Int conversion cannot throw InexactError.
+@assume_effects :nothrow :foldable function textwidth(c::Char)
     u = reinterpret(UInt32, c)
     b = bswap(u) # from isascii(c)
     b < 0x7f && return Int(b >= 0x20) # ASCII fast path
@@ -286,6 +291,8 @@ julia> textwidth("March")
 ```
 """
 textwidth(s::AbstractString) = mapreduce(textwidth, +, s; init=0)
+# foldable+nothrow: String iteration is total and textwidth(::Char) is nothrow.
+@assume_effects :nothrow :foldable textwidth(s::String) = mapreduce(textwidth, +, s; init=0)
 
 textwidth(s::AnnotatedString) = textwidth(s.string)
 
@@ -359,7 +366,9 @@ titlecase(c::AnnotatedChar) = AnnotatedChar(titlecase(c.char), annotations(c))
 ############################################################################
 
 # returns UTF8PROC_CATEGORY code in 0:30 giving Unicode category
-function category_code(c::AbstractChar)
+# nothrow: ismalformed guards UInt32(c::Char) which is the only throwing call;
+# AbstractChar subtypes contract requires UInt32 to not throw when ismalformed is false.
+@assume_effects :nothrow function category_code(c::AbstractChar)
     !ismalformed(c) ? category_code(UInt32(c)) : Cint(31)
 end
 
@@ -368,15 +377,21 @@ function category_code(x::Integer)
 end
 
 # more human-readable representations of the category code
-function category_abbrev(c::AbstractChar)
+# nothrow+foldable: the ismalformed guard makes UInt32(c)/Char(c) total per the AbstractChar
+# contract, and utf8proc_category_string returns a non-null Cstring for valid category codes.
+@assume_effects :nothrow :foldable function category_abbrev(c::AbstractChar)
     ismalformed(c) && return "Ma"
     c ≤ '\U10ffff' || return "In"
     unsafe_string(ccall(:utf8proc_category_string, Cstring, (UInt32,), c))
 end
 
-category_string(c) = category_strings[category_code(c)+1]
+# nothrow: category_code returns a value in 0:31 and category_strings has 32 entries.
+@assume_effects :nothrow category_string(c::AbstractChar) = category_strings[category_code(c)+1]
+@assume_effects :nothrow category_string(x::Integer) = category_strings[category_code(x)+1]
 
-isassigned(c) = UTF8PROC_CATEGORY_CN < category_code(c) <= UTF8PROC_CATEGORY_CO
+# nothrow: category_code(::AbstractChar) is nothrow and integer comparisons cannot throw.
+@assume_effects :nothrow isassigned(c::AbstractChar) = UTF8PROC_CATEGORY_CN < category_code(c) <= UTF8PROC_CATEGORY_CO
+@assume_effects :nothrow isassigned(x::Integer) = UTF8PROC_CATEGORY_CN < category_code(x) <= UTF8PROC_CATEGORY_CO
 
 ## libc character class predicates ##
 
@@ -400,7 +415,7 @@ julia> islowercase('❤')
 false
 ```
 """
-islowercase(c::AbstractChar) = ismalformed(c) ? false :
+@assume_effects :nothrow islowercase(c::AbstractChar) = ismalformed(c) ? false :
     Bool(@assume_effects :foldable @ccall utf8proc_islower(UInt32(c)::UInt32)::Cint)
 
 # true for Unicode upper and mixed case
@@ -425,7 +440,7 @@ julia> isuppercase('❤')
 false
 ```
 """
-isuppercase(c::AbstractChar) = ismalformed(c) ? false :
+@assume_effects :nothrow isuppercase(c::AbstractChar) = ismalformed(c) ? false :
     Bool(@assume_effects :foldable @ccall utf8proc_isupper(UInt32(c)::UInt32)::Cint)
 
 """
@@ -621,6 +636,13 @@ false
 ```
 """
 isxdigit(c::AbstractChar) = '0'<=c<='9' || 'a'<=c<='f' || 'A'<=c<='F'
+
+# String-specialized overrides: each Char predicate above is nothrow on Char, so the
+# byte-wise iteration `all(f, ::String)` is itself nothrow+foldable.
+for f in (:isletter, :isspace, :isuppercase, :islowercase, :isdigit, :isnumeric,
+          :iscntrl, :ispunct, :isprint, :isxdigit)
+    @eval @assume_effects :nothrow :foldable $f(s::String) = all($f, s)
+end
 
 ## uppercase, lowercase, and titlecase transformations ##
 
