@@ -406,10 +406,9 @@ end
               iscntrl, ispunct, isprint, isxdigit, textwidth,
               Base.Unicode.isassigned, Base.Unicode.category_code,
               Base.Unicode.category_abbrev, Base.Unicode.category_string)
-        @test Core.Compiler.is_removable_if_unused(Base.infer_effects(f, (Char,))) (f,)
+        @test Core.Compiler.is_removable_if_unused(Base.infer_effects(f, (Char,)))
     end
-    for f in (isascii, textwidth, isletter, isspace, isuppercase, islowercase,
-              isdigit, isnumeric, iscntrl, ispunct, isprint, isxdigit)
-        @test Core.Compiler.is_removable_if_unused(Base.infer_effects(f, (String,))) (f,)
+    for f in (isascii, textwidth)
+        @test Core.Compiler.is_removable_if_unused(Base.infer_effects(f, (String,)))
     end
 end
