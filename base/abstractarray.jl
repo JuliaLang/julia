@@ -1093,7 +1093,7 @@ end
 # temp to not break LinearAlgebra
 function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
     @_propagate_inbounds_meta
-    copyto!(deststyle, dest, srcstyle, src)
+    _copyto!(deststyle, dest, srcstyle, src)
 end
 
 function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray)
