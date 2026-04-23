@@ -441,7 +441,7 @@ add a chunk-read fast path when BitArray is the source (would require declaring
 struct BitArrayCopyToStyle <: CopyToStyle end
 CopyToStyle(::Type{<:BitArray}) = BitArrayCopyToStyle()
 
-function _copyto_styled!(::BitArrayCopyToStyle, dest::BitArray, src::AbstractArray)
+function _copyto!(::BitArrayCopyToStyle, dest::BitArray, src::AbstractArray)
     @_propagate_inbounds_meta
     sp, soff = _unwrap_with_offset(src)
     if sp isa Union{BitArray,Array}
@@ -451,7 +451,7 @@ function _copyto_styled!(::BitArrayCopyToStyle, dest::BitArray, src::AbstractArr
     end
     return dest
 end
-function _copyto_styled!(::BitArrayCopyToStyle, dest::BitArray, src::BitArray)
+function _copyto!(::BitArrayCopyToStyle, dest::BitArray, src::BitArray)
     destc = dest.chunks; srcc = src.chunks
     nc = min(length(destc), length(srcc))
     nc == 0 && return dest

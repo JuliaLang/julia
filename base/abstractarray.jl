@@ -1070,7 +1070,7 @@ function copyto!(dest::AbstractArray, src::AbstractArray)
     @_propagate_inbounds_meta
     isempty(src) && return dest
     @boundscheck length(src) <= length(dest) || throw(BoundsError(dest, LinearIndices(src)))
-    _copyto_styled!(CopyToStyle(CopyToStyle(dest), CopyToStyle(src)), dest, src)
+    _copyto!(CopyToStyle(CopyToStyle(typeof(dest)), CopyToStyle(typeof(src))), dest, src)
     return dest
 end
 
@@ -1087,10 +1087,36 @@ otherwise ambiguate with dest- or src-type methods from other packages.
   **LHS (dest) wins** — if your style should take precedence as a destination,
   no rule is needed. Override only when src should win over a default dest,
   or to resolve a specific pairwise conflict with another package's style.
-- `_copyto_styled!(::YourStyle, dest, src)` is the algorithm for that combined style.
+- `_copyto!(::YourStyle, dest, src)` is the algorithm for that combined style.
 
 The combination rule is the single place cross-type precedence lives, which keeps
 cross-package ambiguities out of `copyto!`'s public method table.
+
+Follows the same shape as [`Base.Broadcast.BroadcastStyle`](@ref): register on the
+type (`CopyToStyle(::Type{...})`), define combination rules between style values,
+and write the algorithm dispatched on the resolved style.
+
+# Style algorithm contract
+
+When a `_copyto!(::YourStyle, dest, src)` method is entered, the public `copyto!`
+caller above it guarantees only:
+
+- `!isempty(src)`
+- `length(src) <= length(dest)`
+
+Aliasing, axes checks, and SubArray unwrapping are NOT handled by the public entry.
+Your style method must handle them itself if its algorithm is sensitive to them:
+
+- **Aliasing**: either unalias explicitly (`src = unalias(dest, src)`) or delegate
+  to `DefaultCopyToStyle` (`_copyto!(DefaultCopyToStyle(), dest, src)`) which handles
+  aliasing in the generic IS-dispatched path.
+- **Axes match**: `@boundscheck checkbounds(dest, axes(src)...)` at the top, if your
+  algorithm writes based on `axes(src)`.
+- **SubArray unwrap**: call `_unwrap_with_offset(src)` explicitly if you want to
+  operate on a view's parent memory.
+
+Algorithms that are aliasing-safe by construction (e.g. `memmove`, chunk copies
+with internal direction detection) don't need unaliasing.
 """
 abstract type CopyToStyle end
 
@@ -1101,20 +1127,23 @@ Fallback style. Its algorithm is the generic IndexStyle-dispatched `copyto!`.
 """
 struct DefaultCopyToStyle <: CopyToStyle end
 
-CopyToStyle(x) = CopyToStyle(typeof(x))
 CopyToStyle(::Type{<:AbstractArray}) = DefaultCopyToStyle()
 # Combination rule: by default the LHS (dest-side) style wins. Override to declare
 # that your style should win as src over a default dest, or to resolve conflicts.
 CopyToStyle(a::CopyToStyle, ::CopyToStyle) = a
 
-_copyto_styled!(::DefaultCopyToStyle, dest::AbstractArray, src::AbstractArray) =
+_copyto!(::DefaultCopyToStyle, dest::AbstractArray, src::AbstractArray) =
     (@_propagate_inbounds_meta; _copyto!(IndexStyle(dest), dest, IndexStyle(src), src))
 
 function copyto!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
     @_propagate_inbounds_meta
     isempty(src) && return dest
     @boundscheck length(src) <= length(dest) || throw(BoundsError(dest, LinearIndices(src)))
-    _copyto!(deststyle, dest, srcstyle, src)
+    # Route through `CopyToStyle` so src-type specializations (e.g. LinearAlgebra's
+    # future `AdjOrTransCopyToStyle`) fire from direct 4-arg callers too. The user's
+    # IS hints become advisory: the default style's algorithm reuses them; other
+    # styles may ignore them in favor of their own algorithm.
+    _copyto!(CopyToStyle(CopyToStyle(typeof(dest)), CopyToStyle(typeof(src))), dest, src)
     return dest
 end
 
