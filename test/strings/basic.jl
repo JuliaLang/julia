@@ -1257,7 +1257,17 @@ end
                    (String, (Symbol,)),
                    (length, (String,)),
                    (hash, (String,UInt)),
-                   (hash, (Char,UInt)),]
+                   (hash, (Char,UInt)),
+                   (startswith, (String, String)),
+                   (startswith, (SubString{String}, String)),
+                   (startswith, (String, SubString{String})),
+                   (startswith, (SubString{String}, SubString{String})),
+                   (endswith, (String, String)),
+                   (endswith, (SubString{String}, String)),
+                   (endswith, (String, SubString{String})),
+                   (endswith, (SubString{String}, SubString{String})),
+                   (in, (Char, String)),
+                   (in, (Char, SubString{String})),]
         e = Base.infer_effects(f, Ts)
         @test Core.Compiler.is_foldable(e) context=(f, Ts)
         @test Core.Compiler.is_removable_if_unused(e) context=(f, Ts)
