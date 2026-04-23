@@ -355,6 +355,21 @@ end
     @test all(Base.ismalformed, overlong_chars)
     @test repr("text/plain", overlong_chars[1]) ==
         "'\\xc0': Malformed UTF-8 (category Ma: Malformed, bad data)"
+
+    # Predicates annotated `@assume_effects` must not throw on arbitrary Char bit-patterns.
+    # Skip 0x00000000 ('\0', well-formed); the rest must be malformed for this to test what we want.
+    for u in (0x80000000, 0xC0000000, 0xE0000000, 0xF0000000,
+              0xF8000000, 0xFF000000, 0xFFFFFFFF, 0x80808080)
+        c = reinterpret(Char, u)
+        @test Base.ismalformed(c)
+        @test textwidth(c) isa Int
+        @test Base.Unicode.category_code(c) isa Integer
+        @test Base.Unicode.category_abbrev(c) isa AbstractString
+        @test Base.Unicode.category_string(c) isa AbstractString
+        @test Base.Unicode.isassigned(c) isa Bool
+        @test islowercase(c) isa Bool
+        @test isuppercase(c) isa Bool
+    end
 end
 
 @testset "overlong, non-malformed chars" begin

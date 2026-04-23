@@ -1333,18 +1333,6 @@ end
             @test textwidth(a) isa Int
             @test textwidth(sa) isa Int
         end
-        # Char predicates must tolerate malformed Char bit-patterns.
-        for u in (0x00000000, 0x80000000, 0xC0000000, 0xE0000000, 0xF0000000,
-                  0xF8000000, 0xFF000000, 0xFFFFFFFF, 0x80808080)
-            c = reinterpret(Char, u)
-            @test textwidth(c) isa Int
-            @test Base.Unicode.category_code(c) isa Integer
-            @test Base.Unicode.category_abbrev(c) isa AbstractString
-            @test Base.Unicode.category_string(c) isa AbstractString
-            @test Base.Unicode.isassigned(c) isa Bool
-            @test islowercase(c) isa Bool
-            @test isuppercase(c) isa Bool
-        end
     end
 end
 
