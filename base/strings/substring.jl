@@ -104,8 +104,8 @@ function getindex(s::SubString, i::Integer)
     @inbounds return getindex(s.string, s.offset + i)
 end
 
-# nothrow+foldable: byte-wise scan over a contiguous range of valid UTF-8 codeunits.
-@assume_effects :nothrow :foldable isascii(ss::SubString{String}) = isascii(codeunits(ss))
+# `isascii(::AbstractVector)` reduces to `@inbounds codeunit(::SubString{String}, ::Int)`, total.
+isascii(ss::SubString{String}) = @assume_effects :nothrow :foldable isascii(codeunits(ss))
 
 function isvalid(s::SubString, i::Integer)
     ib = true
