@@ -241,6 +241,10 @@ typemin(::String) = typemin(String)
 
 @propagate_inbounds thisind(s::String, i::Int) = _thisind_str(s, i)
 
+# nothrow: i == ncodeunits(s) always satisfies the bounds check inside _thisind_str
+# (it short-circuits when i == 0, otherwise 1 ≤ i ≤ n).
+@assume_effects :nothrow lastindex(s::String) = thisind(s, ncodeunits(s)::Int)
+
 # s should be String, StringView, or SubString{String}
 @inline function _thisind_str(s, i::Int)
     i == 0 && return 0

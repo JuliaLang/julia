@@ -408,7 +408,7 @@ end
               Base.Unicode.category_abbrev, Base.Unicode.category_string)
         @test Core.Compiler.is_removable_if_unused(Base.infer_effects(f, (Char,)))
     end
-    for f in (isascii, textwidth)
+    for f in (isascii, textwidth, lastindex)
         @test Core.Compiler.is_removable_if_unused(Base.infer_effects(f, (String,)))
     end
 end
