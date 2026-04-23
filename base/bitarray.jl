@@ -434,9 +434,9 @@ function copyto!(dest::BitArray, src::AbstractArray)
     @_propagate_inbounds_meta
     isempty(src) && return dest
     @boundscheck length(src) <= length(dest) || throw(BoundsError(dest, LinearIndices(src)))
-    sp, _ = _unwrap_with_offset(src)
+    sp, soff = _unwrap_with_offset(src)
     if sp isa Union{BitArray,Array}
-        copyto!(dest, firstindex(dest), src, firstindex(src), length(src))
+        _copyto!(dest, firstindex(dest), sp, firstindex(src) + soff, length(src))
     else
         _copyto_bitarray!(dest, src)
     end

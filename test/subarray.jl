@@ -1259,4 +1259,14 @@ end
 
     A = reshape([1:20;], 4, 5)
     @test copyto!(similar(view(A,:,2:4)), view(A,:,2:4)) == view(A,:,2:4)
+
+    # bounds are validated in the view's index space, not the parent's —
+    # OOB on the view must throw even when the index maps in-bounds on the parent.
+    parent10 = collect(1:10)
+    vsrc5 = view(parent10, 1:5)        # sub is 5 long; parent has room at sub-index 6..10
+    @test_throws BoundsError copyto!(zeros(Int, 10), 1, vsrc5, 6, 1)
+    @test_throws BoundsError copyto!(zeros(Int, 10), 1, vsrc5, 1, 6)
+    vdest5 = view(zeros(Int, 10), 1:5)
+    @test_throws BoundsError copyto!(vdest5, 6, 1:10, 1, 1)
+    @test_throws BoundsError copyto!(vdest5, 1, 1:10, 1, 6)
 end

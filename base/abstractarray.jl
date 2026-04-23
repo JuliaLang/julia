@@ -1112,16 +1112,14 @@ function copyto!(dest::AbstractArray, dstart::Integer,
                  src::AbstractArray, sstart::Integer,
                  n::Integer)
     @_propagate_inbounds_meta
-    dp, doff = _unwrap_with_offset(dest)
-    sp, soff = _unwrap_with_offset(src)
-    _copyto!(dp, dstart + doff, sp, sstart + soff, n)
+    _copyto!(dest, dstart, src, sstart, n)
     return dest
 end
 
 function _copyto!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
     @_propagate_inbounds_meta
     if deststyle isa IndexLinear && srcstyle isa IndexLinear
-        copyto!(dest, firstindex(dest), src, firstindex(src), length(src))
+        _copyto!(dest, firstindex(dest), src, firstindex(src), length(src))
         return dest
     end
     src = unalias(dest, src)
@@ -1146,9 +1144,14 @@ function _copyto!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexSty
 end
 
 function _copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray, sstart::Integer, n::Integer)
-    @inline
+    @_propagate_inbounds_meta
     n == 0 && return dest
     _check_copyto_args(dest, dstart, src, sstart, n)
+    dp, doff = _unwrap_with_offset(dest)
+    sp, soff = _unwrap_with_offset(src)
+    if (dp !== dest) | (sp !== src)
+        return _copyto!(dp, dstart + doff, sp, sstart + soff, n)
+    end
     src = unalias(dest, src)
     @inbounds for i = 0:n-1
         dest[dstart+i] = src[sstart+i]
