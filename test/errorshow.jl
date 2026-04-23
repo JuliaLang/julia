@@ -1305,7 +1305,7 @@ end
 
 for (expr, errmsg) in
     [
-        (:(struct Foo <: 1 end),       "supertype must be a type, got a value of type `Int64`"),
+        (:(struct Foo <: 0x01 end),       "supertype must be a type, got a value of type `UInt8`"),
         (:(struct Foo <: Float64 end), "can only subtype abstract types"),
         (:(struct Foo <: Dict end), "can only subtype abstract types"),
         (:(struct Foo <: Foo end),     "a type cannot subtype itself"),
