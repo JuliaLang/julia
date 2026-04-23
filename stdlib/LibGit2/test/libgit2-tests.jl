@@ -3117,6 +3117,9 @@ mktempdir() do dir
                 end
                 run(`openssl x509 -in $cert -out $pem -outform PEM`)
 
+                # Make a fake Julia package and minimal HTTPS server with our generated
+                # certificate. The minimal server can't actually serve a Git repository.
+                mkdir(joinpath(root, "Example.jl"))
                 local pobj, port
                 for attempt in 1:10
                     # Find an available port by listening, but there's a race condition where
@@ -3124,17 +3127,17 @@ mktempdir() do dir
                     port, server = listenany(49052 + rand(1:100) + attempt*10)
                     close(server)
 
-                    # Make a fake Julia package and minimal HTTPS server with our generated
-                    # certificate. The minimal server can't actually serve a Git repository.
-                    mkdir(joinpath(root, "Example.jl"))
                     pobj = cd(root) do
-                        run(pipeline(`openssl s_server -key $key -cert $cert -WWW -accept $port`, stderr=RawFD(2)), wait=false)
+                        open(`openssl s_server -key $key -cert $cert -WWW -accept $port`)
                     end
-                    @test readuntil(pobj, "ACCEPT") == ""
 
                     # Two options: Either we reached "ACCEPT" and the process is running and ready
                     # or it failed to listen and exited, in which case we try again.
-                    process_running(pobj) && break
+                    if !contains(readuntil(pobj, "ACCEPT"; keep=true), "ACCEPT")
+                        close(pobj)
+                    else
+                        break
+                    end
                 end
 
                 @test process_running(pobj)

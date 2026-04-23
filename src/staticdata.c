@@ -448,11 +448,12 @@ static jl_value_t *get_replaceable_field(jl_value_t **addr, int mutabl) JL_GC_DI
 
 static uintptr_t jl_fptr_id(void *fptr)
 {
-    void **pbp = ptrhash_bp(&fptr_to_id, fptr);
-    if (*pbp == HT_NOTFOUND || fptr == NULL)
+    if (fptr == NULL)
         return 0;
-    else
-        return *(uintptr_t*)pbp;
+    void *val = ptrhash_get(&fptr_to_id, fptr);
+    if (val == HT_NOTFOUND)
+        return 0;
+    return (uintptr_t)val;
 }
 
 static int effects_foldable(uint32_t effects)
@@ -856,8 +857,8 @@ done_fields: ;
     // try to promote itself to be immediate)
     if (s->incremental && jl_is_datatype(v) && immediate && recursive) {
         jl_datatype_t *dt = (jl_datatype_t*)v;
-        void **bp = ptrhash_bp(&serialization_order, (void*)dt->super);
-        if (*bp != (void*)-2) {
+        void *bp = ptrhash_get(&serialization_order, (void*)dt->super);
+        if (bp != (void*)-2) {
             // if super is already on the stack of things to handle when this returns, do
             // not try to handle it now
             jl_queue_for_serialization_(s, (jl_value_t*)dt->super, 1, immediate);
@@ -899,7 +900,7 @@ static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, i
     // Items that require postorder traversal must visit their children prior to insertion into
     // the worklist/serialization_order (and also before their first use)
     if (s->incremental && !immediate) {
-        if (jl_is_datatype(t) && needs_uniquing(v, s->query_cache))
+        if (jl_is_datatype(v) && needs_uniquing(v, s->query_cache))
             immediate = 1;
         if (jl_is_datatype_singleton((jl_datatype_t*)t) && needs_uniquing(v, s->query_cache))
             immediate = 1;
@@ -1722,14 +1723,14 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                     size_t nf = dt->layout->nfields;
                     size_t np = dt->layout->npointers;
                     size_t fieldsize = 0;
-                    uint8_t is_foreign_type = dt->layout->flags.fielddesc_type == 3;
+                    uint8_t is_foreign_type = dt->layout->flags.fielddesc_type == JL_FIELDDESC_FOREIGN;
                     if (!is_foreign_type) {
                         fieldsize = jl_fielddesc_size(dt->layout->flags.fielddesc_type);
                     }
                     char *flddesc = (char*)dt->layout;
                     size_t fldsize = sizeof(jl_datatype_layout_t) + nf * fieldsize;
                     if (!is_foreign_type && dt->layout->first_ptr != -1)
-                        fldsize += np << dt->layout->flags.fielddesc_type;
+                        fldsize += np * jl_fielddesc_ptr_size(dt->layout->flags.fielddesc_type);
                     uintptr_t layout = LLT_ALIGN(ios_pos(s->const_data), sizeof(void*));
                     write_padding(s->const_data, layout - ios_pos(s->const_data)); // realign stream
                     newdt->layout = NULL; // relocation offset
@@ -2174,7 +2175,7 @@ static void jl_update_all_fptrs(jl_serializer_state *s, jl_image_t *image)
     uintptr_t base = (uintptr_t)&s->s->buf[0];
     // These will become MethodInstance references, but they start out as a list of
     // offsets into `s` for CodeInstances
-    jl_method_instance_t **linfos = (jl_method_instance_t**)&s->fptr_record->buf[0];
+    jl_code_instance_t **linfos = (jl_code_instance_t**)&s->fptr_record->buf[0];
     uint32_t clone_idx = 0;
     for (i = 0; i < img_fvars_max; i++) {
         reloc_t offset = *(reloc_t*)&linfos[i];
@@ -2189,7 +2190,7 @@ static void jl_update_all_fptrs(jl_serializer_state *s, jl_image_t *image)
             jl_code_instance_t *codeinst = (jl_code_instance_t*)(base + offset);
             assert(jl_is_method(jl_get_ci_mi(codeinst)->def.method) && jl_atomic_load_relaxed(&codeinst->invoke) != jl_fptr_const_return);
             assert(specfunc ? jl_atomic_load_relaxed(&codeinst->invoke) != NULL : jl_atomic_load_relaxed(&codeinst->invoke) == NULL);
-            linfos[i] = jl_get_ci_mi(codeinst);     // now it's a MethodInstance
+            linfos[i] = codeinst;
             void *fptr = fvars.ptrs[i];
             for (; clone_idx < fvars.nclones; clone_idx++) {
                 uint32_t idx = fvars.clone_idxs[clone_idx] & jl_sysimg_val_mask;
@@ -3455,20 +3456,26 @@ static void jl_prefetch_system_image(const char *data, size_t size)
 JL_DLLEXPORT void jl_image_unpack_uncomp(void *handle, jl_image_buf_t *image)
 {
     size_t *plen;
+    uint32_t *pchecksum;
     jl_dlsym(handle, "jl_system_image_size", (void **)&plen, 1, 0);
     jl_dlsym(handle, "jl_system_image_data", (void **)&image->data, 1, 0);
     jl_dlsym(handle, "jl_image_pointers", (void**)&image->pointers, 1, 0);
+    jl_dlsym(handle, "jl_system_image_checksum", (void **)&pchecksum, 1, 0);
     image->size = *plen;
+    image->checksum = *pchecksum;
     jl_prefetch_system_image(image->data, image->size);
 }
 
 JL_DLLEXPORT void jl_image_unpack_zstd(void *handle, jl_image_buf_t *image)
 {
     size_t *plen;
+    uint32_t *pchecksum;
     const char *data;
     jl_dlsym(handle, "jl_system_image_size", (void **)&plen, 1, 0);
     jl_dlsym(handle, "jl_system_image_data", (void **)&data, 1, 0);
     jl_dlsym(handle, "jl_image_pointers", (void **)&image->pointers, 1, 0);
+    jl_dlsym(handle, "jl_system_image_checksum", (void **)&pchecksum, 1, 0);
+    image->checksum = *pchecksum;
     jl_prefetch_system_image(data, *plen);
     image->size = ZSTD_getFrameContentSize(data, *plen);
     size_t page_size = jl_getpagesize(); /* jl_page_size is not set yet when loading sysimg */
@@ -4301,7 +4308,7 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
             sysimg = &f->buf[f->bpos];
         if (needs_permalloc)
             success = ios_readall(f, sysimg, len) == len;
-        if (!success || jl_crc32c(0, sysimg, len) != (uint32_t)checksum) {
+        if (!success) {
             restored = jl_get_exceptionf(jl_errorexception_type, "Error reading package image file.");
             JL_SIGATOMIC_END();
         }
@@ -4401,13 +4408,12 @@ JL_DLLEXPORT void jl_restore_system_image(jl_image_t *image, jl_image_buf_t buf)
         return;
 
     if (buf.kind == JL_IMAGE_KIND_SO)
-        assert(image->fptrs.ptrs); // jl_init_processor_sysimg should already be run
+        assert(image->fptrs.ptrs); // jl_load_sysimg should already be run
 
     JL_SIGATOMIC_BEGIN();
     ios_static_buffer(&f, (char *)buf.data, buf.size);
 
-    uint32_t checksum = jl_crc32c(0, buf.data, buf.size);
-    jl_restore_system_image_from_stream(&f, image, checksum);
+    jl_restore_system_image_from_stream(&f, image, buf.checksum);
 
     ios_close(&f);
     JL_SIGATOMIC_END();
@@ -4433,7 +4439,7 @@ JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, j
     jl_gc_notify_image_load(buf.data, buf.size);
 
     // Despite the name, this function actually parses the pkgimage
-    jl_image_t pkgimage = jl_init_processor_pkgimg(buf);
+    jl_image_t pkgimage = jl_load_pkgimg(buf);
 
     if (ignore_native) {
         // Must disable using native code in possible downstream users of this code:

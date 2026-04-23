@@ -9,6 +9,7 @@ function _value_string(ex)
           k == K"SSAValue"    ? "%"                   :
           k == K"BindingId"   ? "#"                   :
           k == K"label"       ? "label"               :
+          k == K"nothing"     ? "core.nothing"        :
           k == K"core"        ? "core.$(ex.name_val)" :
           k == K"top"         ? "top.$(ex.name_val)"  :
           k == K"Symbol"      ? ":$(ex.name_val)" :
@@ -18,6 +19,7 @@ function _value_string(ex)
           k == K"static_parameter" ? "static_parameter" :
           k == K"symboliclabel" ? "label:$(ex.name_val)" :
           k == K"symbolicgoto" ? "goto:$(ex.name_val)" :
+          k == K"oldsymbolicgoto" ? "goto:$(ex.name_val)" :
           k == K"SourceLocation" ?
               "SourceLocation:$(JuliaSyntax.filename(ex)):$(join(source_location(ex), ':'))" :
           k == K"Value" && ex.value isa SourceRef ?
@@ -319,7 +321,7 @@ function _print_ir(io::IO, ex, indent)
 end
 
 # Wrap a function body in Base.Compiler.@zone for profiling
-if isdefined(Base.Compiler, Symbol("@zone"))
+if isdefined(Base.Compiler, Symbol("@zone")) && DEBUG
     macro fzone(str, f)
         @assert(f isa Expr && f.head === :function && length(f.args) === 2 && str isa String,
                 "usage: @fzone name_string <function expression>")
@@ -442,7 +444,7 @@ function _flatten_blocks(st::SyntaxTree)
         # special case: an empty final block has value nothing
         if (length(children(st)) > 0 && kind(st[end]) === K"block" &&
             numchildren(st[end]) == 0)
-            push!(out, @ast st._graph st[end] "nothing"::K"core")
+            push!(out, @ast st._graph st[end] (::K"nothing"))
         end
         return out
     elseif is_quoted(st)

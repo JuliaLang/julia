@@ -6765,4 +6765,24 @@ let
     @test f(1, 2, 3) == (0, (0, (0, 1)))
 end
 
+# aviatesk/JETLS.jl/issues/618
+Base.@nospecializeinfer function jetls618(a, @nospecialize(rest...))
+    if a > 0
+        z = a + length(rest)
+    else
+        z = 0
+    end
+    println(z)
+    return z
+end
+@test Base.infer_return_type() do
+    jetls618(1,2,3), jetls618(1,2,3,4)
+end == Tuple{Int,Int}
+
+# issue #60252
+f60252(f, nt::NamedTuple) = NamedTuple{keys(nt)}(f(v) for v in values(nt))
+@inferred f60252(identity, (a=1, b=2))
+f60252_2(t::Tuple) = NamedTuple{(:a, :b), typeof(t)}(t)
+@test Base.infer_return_type(f60252_2, (Tuple{Vararg{Int64}},)) == @NamedTuple{a::Int64, b::Int64}
+
 end # module inference

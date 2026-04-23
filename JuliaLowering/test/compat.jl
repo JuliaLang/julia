@@ -100,9 +100,9 @@ end
     unused = JuliaSyntax.parsestmt(JuliaSyntax.SyntaxTree, "foo")
     JuliaLowering.ensure_macro_attributes!(unused._graph)
     local st_wrappers = Function[
-        x->(@assert(!isnothing(x)); @ast unused._graph unused (x::K"Value"))
-        x->(@assert(!isnothing(x)); @ast unused._graph unused [K"inert" x::K"Value"])
-        x->(@assert(!isnothing(x)); @ast unused._graph unused [K"function" x::K"Value"])
+        x->(@ast unused._graph unused (x::K"Value"))
+        x->(@ast unused._graph unused [K"inert" x::K"Value"])
+        x->(@ast unused._graph unused [K"function" x::K"Value"])
     ]
 
     @testset "every basic case" begin
@@ -112,7 +112,6 @@ end
         end
 
         for e in expr_syntax, st_w in st_wrappers, e_w in expr_wrappers
-            isnothing(e) && continue
             e_wrapped = st_w(e_w(e))
             @test roundtrip(e_wrapped) == e_wrapped
             e_wrapped = e_w(st_w(e))
@@ -421,6 +420,13 @@ test_programs = [
     "try x catch e; y finally z end",
     "try x catch e; y else z end",
     "try x catch e; y else z finally w end",
+    "..",
+    "a..b",
+    "..(a)",
+    "..(..,..)",
+    "@.",
+    "@..",
+    "@..."
 ]
 test_toplevel_programs = [
     "\"docstr\"\nthing_to_be_documented",

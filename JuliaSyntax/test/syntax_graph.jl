@@ -1,52 +1,55 @@
-using .JuliaSyntax: SyntaxGraph, SyntaxTree, SyntaxList, freeze_attrs, unfreeze_attrs, ensure_attributes, ensure_attributes!, delete_attributes, copy_ast, attrdefs, @stm, NodeId, SourceRef, SourceAttrType, Kind, syntax_graph
+using .JuliaSyntax: SyntaxGraph, SyntaxTree, SyntaxList, ensure_attributes, ensure_attributes!, delete_attributes, copy_ast, attrdefs, @stm, NodeId, SourceRef, SourceAttrType, Kind, syntax_graph
 
 @testset "SyntaxGraph attrs" begin
-    st = parsestmt(SyntaxTree, "function foo end")
-    g_init = unfreeze_attrs(st._graph)
-    gf1 = freeze_attrs(g_init)
-    gu1 = unfreeze_attrs(gf1)
+    g_dict = SyntaxGraph()
+    g_nt = ensure_attributes(
+        SyntaxGraph(Vector{UnitRange{Int}}(), Vector{NodeId}(), (;)),
+        kind=Kind,
+        source=SourceAttrType,
+        syntax_flags=UInt16,
+        value=Any,
+        name_val=String,
+        mod=Module)
 
     # Check that a default graph has required attrs
-    g_empty = SyntaxGraph()
-    @test (:kind=>Kind) in attrdefs(g_empty)
-    @test (:source=>SourceAttrType) in attrdefs(g_empty)
-    @test (:value=>Any) in attrdefs(g_empty)
-    @test (:name_val=>String) in attrdefs(g_empty)
-
-    # Check that freeze/unfreeze do their jobs
-    @test gf1.attributes isa NamedTuple
-    @test gu1.attributes isa Dict
-    @test Set(keys(gf1.attributes)) == Set(keys(gu1.attributes))
+    @test (:kind=>Any) in attrdefs(g_dict)
+    @test (:source=>Any) in attrdefs(g_dict)
+    @test (:value=>Any) in attrdefs(g_dict)
+    @test (:name_val=>Any) in attrdefs(g_dict)
+    @test (:kind=>Kind) in attrdefs(g_nt)
+    @test (:source=>SourceAttrType) in attrdefs(g_nt)
+    @test (:value=>Any) in attrdefs(g_nt)
+    @test (:name_val=>String) in attrdefs(g_nt)
 
     # ensure_attributes
-    gf2 = ensure_attributes(gf1, test_attr=Symbol, foo=Type)
-    gu2 = ensure_attributes(gu1, test_attr=Symbol, foo=Type)
+    g_nt2 = ensure_attributes(g_nt, test_attr=Symbol, foo=Type)
+    g_dict2 = ensure_attributes(g_dict, test_attr=Symbol, foo=Type)
     # returns a graph with the same attribute storage
-    @test gf2.attributes isa NamedTuple
-    @test gu2.attributes isa Dict
+    @test g_nt2.attributes isa NamedTuple
+    @test g_dict2.attributes isa Dict
     # does its job
-    @test (:test_attr=>Symbol) in attrdefs(gf2)
-    @test (:foo=>Type) in attrdefs(gf2)
-    @test Set(keys(gf2.attributes)) == Set(keys(gu2.attributes))
+    @test (:test_attr=>Symbol) in attrdefs(g_nt2)
+    @test (:foo=>Type) in attrdefs(g_nt2)
+    @test Set(keys(g_nt2.attributes)) == Set(keys(g_dict2.attributes))
     # no mutation
-    @test !((:test_attr=>Symbol) in attrdefs(gf1))
-    @test !((:foo=>Type) in attrdefs(gf1))
-    @test Set(keys(gf1.attributes)) == Set(keys(gu1.attributes))
+    @test !((:test_attr=>Symbol) in attrdefs(g_nt))
+    @test !((:foo=>Type) in attrdefs(g_nt))
+    @test Set(keys(g_nt.attributes)) == Set(keys(g_dict.attributes))
 
     # delete_attributes
-    gf3 = delete_attributes(gf2, :test_attr, :foo)
-    gu3 = delete_attributes(gu2, :test_attr, :foo)
+    g_nt3 = delete_attributes(g_nt2, :test_attr, :foo)
+    g_dict3 = delete_attributes(g_dict2, :test_attr, :foo)
     # returns a graph with the same attribute storage
-    @test gf3.attributes isa NamedTuple
-    @test gu3.attributes isa Dict
+    @test g_nt3.attributes isa NamedTuple
+    @test g_dict3.attributes isa Dict
     # does its job
-    @test !((:test_attr=>Symbol) in attrdefs(gf3))
-    @test !((:foo=>Type) in attrdefs(gf3))
-    @test Set(keys(gf3.attributes)) == Set(keys(gu3.attributes))
+    @test !((:test_attr=>Symbol) in attrdefs(g_nt3))
+    @test !((:foo=>Type) in attrdefs(g_nt3))
+    @test Set(keys(g_nt3.attributes)) == Set(keys(g_dict3.attributes))
     # no mutation
-    @test (:test_attr=>Symbol) in attrdefs(gf2)
-    @test (:foo=>Type) in attrdefs(gf2)
-    @test Set(keys(gf2.attributes)) == Set(keys(gu2.attributes))
+    @test (:test_attr=>Symbol) in attrdefs(g_nt2)
+    @test (:foo=>Type) in attrdefs(g_nt2)
+    @test Set(keys(g_nt2.attributes)) == Set(keys(g_dict2.attributes))
 end
 
 @testset "SyntaxTree parsing" begin
@@ -60,15 +63,16 @@ end
 @testset "SyntaxTree utils" begin
     "For filling required attrs in graphs created by hand"
     function testgraph(edge_ranges, edges, more_attrs...)
-        kinds = Dict(map(i->(i=>K"block"), eachindex(edge_ranges)))
-        sources = Dict{Int, SourceAttrType}(
+        kinds = Dict{NodeId, Any}(map(i->(i=>K"block"), eachindex(edge_ranges)))
+        sources = Dict{NodeId, Any}(
             map(i->(i=>LineNumberNode(i)), eachindex(edge_ranges)))
-        orig = Dict(map(i->(i=>i), eachindex(edge_ranges)))
+        orig = Dict{NodeId, Any}(map(i->(i=>i), eachindex(edge_ranges)))
         SyntaxGraph(
             edge_ranges,
             edges,
-            Dict(:kind => kinds, :source => sources,
-                 :orig => orig, more_attrs...))
+            Dict{Symbol, Dict{NodeId, Any}}(
+                :kind => kinds, :source => sources,
+                :orig => orig, more_attrs...))
     end
 
     @testset "copy_ast" begin
@@ -279,10 +283,6 @@ end
         #    |      |
         #    +-> 3 -+
         g = testgraph([1:2, 3:3, 4:4, 5:5, 0:-1], [2, 3, 4, 4, 5])
-        st = JuliaSyntax.annotate_parent!(SyntaxTree(g, 1))
-        @test chk_parent(st, nothing)
-        # NamedTuple-based attrs
-        g = JuliaSyntax.freeze_attrs(testgraph([1:2, 3:3, 4:4, 5:5, 0:-1], [2, 3, 4, 4, 5]))
         st = JuliaSyntax.annotate_parent!(SyntaxTree(g, 1))
         @test chk_parent(st, nothing)
     end

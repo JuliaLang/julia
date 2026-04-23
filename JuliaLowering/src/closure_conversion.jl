@@ -98,7 +98,7 @@ function convert_for_type_decl(ctx, srcref, ex, type, do_typeassert)
         [K"=" tmp ex]
         [K"if"
             [K"call" "isa"::K"core" tmp type_tmp]
-            "nothing"::K"core"
+            (::K"nothing")
             [K"="
                 tmp
                 if do_typeassert
@@ -125,7 +125,7 @@ function make_globaldecl(ctx, src_ex, mod, name, strong=false, type=nothing)
             type
         ]
         (::K"latestworld")
-        "nothing"::K"core"
+        (::K"nothing")
     ]
     ctx.toplevel_pure && return newleaf(ctx, decl, K"TOMBSTONE")
     if !ctx.is_toplevel_seq_point
@@ -477,7 +477,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         # method.  flisp might be messing up overlays when it does this, since
         # it removes all locals, not just closure ids.
         @ast ctx ex [K"method"
-            "nothing"::K"core"(ex[1])
+            (::K"nothing"(ex[1]))
             _convert_closures(ctx, ex[2])
             _convert_closures(ctx, ex[3])]
     elseif k == K"function_type"
@@ -487,7 +487,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
                        (ex, "function_type of local without known closure type"))
             ctx.closure_infos[func_name.var_id].type_name
         else
-            @ast ctx ex [K"call" "Typeof"::K"core" func_name]
+            @ast ctx ex [K"call" "Typeof"::K"core" _convert_closures(ctx, func_name)]
         end
     elseif k == K"method_defs"
         name = ex[1]
@@ -533,7 +533,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
             ex[4] # return_upper_bound
             ex[5] # allow_partial
             [K"opaque_closure_method"
-                "nothing"::K"core"
+                (::K"nothing")
                 ex[6] # nargs
                 ex[7] # is_va
                 ex[8] # functionloc

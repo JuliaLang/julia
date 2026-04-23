@@ -1,15 +1,14 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-// Processor feature detection
-
-#include "llvm-version.h"
-#include <llvm/ADT/StringRef.h>
-#include <llvm/ADT/ArrayRef.h>
-#include <llvm/ADT/SmallVector.h>
-#include <llvm/ADT/StringMap.h>
-#include <llvm/TargetParser/Host.h>
-#include <llvm/Support/MathExtras.h>
-#include <llvm/Support/raw_ostream.h>
+// Processor feature detection and dispatch using the cpufeatures library.
+// CPU/feature tables are generated from LLVM's TableGen data and committed
+// to https://github.com/gbaraldi/cpufeatures
+//
+// On LLVM version bump:
+//   1. cd cpufeatures && make -f Makefile.generate LLVM_VER=<new>
+//   2. Review and commit regenerated generated/ headers
+//   3. Update Julia's deps/cpufeatures.version with the new commit hash
+//   4. The static_assert below will catch major version mismatches
 
 #include "processor.h"
 
@@ -17,6 +16,8 @@
 #include "julia_internal.h"
 
 #include <algorithm>
+#include <vector>
+#include <string>
 
 #include "julia_assert.h"
 
@@ -24,617 +25,16 @@
 #include <dlfcn.h>
 #endif
 
-// CPU target string is a list of strings separated by `;` each string starts with a CPU
-// or architecture name and followed by an optional list of features separated by `,`.
-// A "generic" or empty CPU name means the basic required feature set of the target ISA
-// which is at least the architecture the C/C++ runtime is compiled with.
 
-// CPU dispatch needs to determine the version to be used by the sysimg as well as
-// the target and feature used by the JIT. Currently the only limitation on JIT target
-// and feature is matching register size between the sysimg and JIT so that SIMD vectors
-// can be passed correctly. This means disabling AVX and AVX2 if AVX was not enabled
-// in sysimg and disabling AVX512 if it was not enabled in sysimg.
-// This also possibly means that SVE needs to be disabled on AArch64 if sysimg doesn't have it
-// enabled.
-
-// CPU dispatch starts by first deciding the max feature set and CPU requested for JIT.
-// This is the host or the target specified on the command line with features unavailable
-// on the host disabled. All sysimg targets that require features not available in this set
-// will be ignored.
-
-// The next step is matching CPU name.
-// If exact name match with compatible feature set exists, all versions without name match
-// are ignored.
-// This step will query LLVM first so it can accept CPU names that is recognized by LLVM but
-// not by us (yet) when LLVM is enabled.
-
-// If there are still more than one candidates, a feature match is performed.
-// The ones with the largest register size will be used
-// (i.e. AVX512 > AVX2/AVX > SSE, SVE > ASIMD). If there's a tie, the one with the most features
-// enabled will be used. If there's still a tie the one that appears later in the list will be
-// used. (i.e. the order in the version list is significant in this case).
-
-// Features that are not recognized will be passed to LLVM directly during codegen
-// but ignored otherwise.
-
-// A few special features are supported:
-// 1. `clone_all`
-//
-//     This forces the target to have all functions in sysimg cloned.
-//     When used in negative form (i.e. `-clone_all`), this disables full clone that's
-//     enabled by default for certain targets.
-//
-// 2. `base([0-9]*)`
-//
-//     This specifies the (0-based) base target index. The base target is the target
-//     that the current target is based on, i.e. the functions that are not being cloned
-//     will use the version in the base target. This option causes the base target to be
-//     fully cloned (as if `clone_all` is specified for it) if it is not the default target (0).
-//     The index can only be smaller than the current index.
-//
-// 3. `opt_size`
-//
-//     Optimize for size with minimum performance impact. Clang/GCC's `-Os`.
-//
-// 4. `min_size`
-//
-//     Optimize only for size. Clang's `-Oz`.
-
-JL_DLLEXPORT bool jl_processor_print_help = false;
+// Forward declarations for sysimage CPU target storage
+static std::string sysimage_cpu_target;
+void jl_set_sysimage_cpu_target(const char *cpu_target);
 
 namespace {
 
-// Helper functions to test/set feature bits
-
-template<typename T1, typename T2, typename T3>
-static inline bool test_bits(T1 v, T2 mask, T3 test)
-{
-    return T3(v & mask) == test;
-}
-
-template<typename T1, typename T2>
-static inline bool test_all_bits(T1 v, T2 mask)
-{
-    return test_bits(v, mask, mask);
-}
-
-template<typename T1, typename T2>
-static inline bool test_nbit(const T1 &bits, T2 _bitidx)
-{
-    auto bitidx = static_cast<uint32_t>(_bitidx);
-    auto u32idx = bitidx / 32;
-    auto bit = bitidx % 32;
-    return (bits[u32idx] & (1 << bit)) != 0;
-}
-
-template<typename T>
-static inline void unset_bits(T &bits) JL_NOTSAFEPOINT
-{
-    (void)bits;
-}
-
-template<typename T, typename T1, typename... Rest>
-static inline void unset_bits(T &bits, T1 _bitidx, Rest... rest) JL_NOTSAFEPOINT
-{
-    auto bitidx = static_cast<uint32_t>(_bitidx);
-    auto u32idx = bitidx / 32;
-    auto bit = bitidx % 32;
-    bits[u32idx] = bits[u32idx] & ~uint32_t(1 << bit);
-    unset_bits(bits, rest...);
-}
-
-template<typename T, typename T1>
-static inline void set_bit(T &bits, T1 _bitidx, bool val)
-{
-    auto bitidx = static_cast<uint32_t>(_bitidx);
-    auto u32idx = bitidx / 32;
-    auto bit = bitidx % 32;
-    if (val) {
-        bits[u32idx] = bits[u32idx] | uint32_t(1 << bit);
-    }
-    else {
-        bits[u32idx] = bits[u32idx] & ~uint32_t(1 << bit);
-    }
-}
-
-// Helper functions to create feature masks
-
-// This can be `std::array<uint32_t,n>` on C++14
-template<size_t n>
-struct FeatureList {
-    uint32_t eles[n];
-    uint32_t &operator[](size_t pos) JL_NOTSAFEPOINT
-    {
-        return eles[pos];
-    }
-    constexpr const uint32_t &operator[](size_t pos) const
-    {
-        return eles[pos];
-    }
-    inline int nbits() const
-    {
-        int cnt = 0;
-        for (size_t i = 0; i < n; i++)
-            cnt += llvm::popcount(eles[i]);
-        return cnt;
-    }
-    inline bool empty() const
-    {
-        for (size_t i = 0; i < n; i++) {
-            if (eles[i]) {
-                return false;
-            }
-        }
-        return true;
-    }
-};
-
-static inline constexpr uint32_t add_feature_mask_u32(uint32_t mask, uint32_t u32idx)
-{
-    return mask;
-}
-
-template<typename T, typename... Rest>
-static inline constexpr uint32_t add_feature_mask_u32(uint32_t mask, uint32_t u32idx,
-                                                      T bit, Rest... args)
-{
-    return add_feature_mask_u32(mask | ((int(bit) >= 0 && int(bit) / 32 == (int)u32idx) ?
-                                        (1 << (int(bit) % 32)) : 0),
-                                u32idx, args...);
-}
-
-template<typename... Args>
-static inline constexpr uint32_t get_feature_mask_u32(uint32_t u32idx, Args... args)
-{
-    return add_feature_mask_u32(uint32_t(0), u32idx, args...);
-}
-
-template<uint32_t... Is> struct seq{};
-template<uint32_t N, uint32_t... Is>
-struct gen_seq : gen_seq<N-1, N-1, Is...>{};
-template<uint32_t... Is>
-struct gen_seq<0, Is...> : seq<Is...>{};
-
-template<size_t n, uint32_t... I, typename... Args>
-static inline constexpr FeatureList<n>
-_get_feature_mask(seq<I...>, Args... args)
-{
-    return FeatureList<n>{{get_feature_mask_u32(I, args...)...}};
-}
-
-template<size_t n, typename... Args>
-static inline constexpr FeatureList<n> get_feature_masks(Args... args)
-{
-    return _get_feature_mask<n>(gen_seq<n>(), args...);
-}
-
-template<size_t n, uint32_t... I>
-static inline constexpr FeatureList<n>
-_feature_mask_or(seq<I...>, const FeatureList<n> &a, const FeatureList<n> &b)
-{
-    return FeatureList<n>{{(a[I] | b[I])...}};
-}
-
-template<size_t n>
-static inline constexpr FeatureList<n> operator|(const FeatureList<n> &a, const FeatureList<n> &b)
-{
-    return _feature_mask_or<n>(gen_seq<n>(), a, b);
-}
-
-template<size_t n, uint32_t... I>
-static inline constexpr FeatureList<n>
-_feature_mask_and(seq<I...>, const FeatureList<n> &a, const FeatureList<n> &b)
-{
-    return FeatureList<n>{{(a[I] & b[I])...}};
-}
-
-template<size_t n>
-static inline constexpr FeatureList<n> operator&(const FeatureList<n> &a, const FeatureList<n> &b)
-{
-    return _feature_mask_and<n>(gen_seq<n>(), a, b);
-}
-
-template<size_t n, uint32_t... I>
-static inline constexpr FeatureList<n>
-_feature_mask_not(seq<I...>, const FeatureList<n> &a)
-{
-    return FeatureList<n>{{(~a[I])...}};
-}
-
-template<size_t n>
-static inline constexpr FeatureList<n> operator~(const FeatureList<n> &a)
-{
-    return _feature_mask_not<n>(gen_seq<n>(), a);
-}
-
-template<size_t n>
-static inline void mask_features(const FeatureList<n> masks, uint32_t *features)
-{
-    for (size_t i = 0; i < n; i++) {
-        features[i] = features[i] & masks[i];
-    }
-}
-
-// Turn feature list to a string the LLVM accept
-static inline std::string join_feature_strs(const llvm::ArrayRef<std::string> &strs)
-{
-    size_t nstr = strs.size();
-    if (!nstr)
-        return std::string("");
-    std::string str = strs[0];
-    for (size_t i = 1; i < nstr; i++)
-        str += ',' + strs[i];
-    return str;
-}
-
-static inline void append_ext_features(std::string &features, const std::string &ext_features)
-{
-    if (ext_features.empty())
-        return;
-    if (!features.empty())
-        features.push_back(',');
-    features.append(ext_features);
-}
-
-static inline void append_ext_features(llvm::SmallVectorImpl<std::string> &features,
-                                       const std::string &ext_features)
-{
-    if (ext_features.empty())
-        return;
-    const char *start = ext_features.c_str();
-    const char *p = start;
-    for (; *p; p++) {
-        if (*p == ',') {
-            features.emplace_back(start, p - start);
-            start = p + 1;
-        }
-    }
-    if (p > start) {
-        features.emplace_back(start, p - start);
-    }
-}
-
-/**
- * Target specific type/constant definitions, always enable.
- */
-
-template<typename CPU, size_t n>
-struct CPUSpec {
-    const char *name;
-    CPU cpu;
-    CPU fallback;
-    uint32_t llvmver;
-    FeatureList<n> features;
-};
-
-struct FeatureDep {
-    uint32_t feature;
-    uint32_t dep;
-};
-
-// Recursively enable all features that the current feature set depends on.
-template<size_t n>
-static inline void enable_depends(FeatureList<n> &features, const FeatureDep *deps, size_t ndeps)
-{
-    bool changed = true;
-    while (changed) {
-        changed = false;
-        for (ssize_t i = ndeps - 1; i >= 0; i--) {
-            auto &dep = deps[i];
-            if (!test_nbit(features, dep.feature) || test_nbit(features, dep.dep))
-                continue;
-            set_bit(features, dep.dep, true);
-            changed = true;
-        }
-    }
-}
-
-// Recursively disable all features that the current feature set does not provide.
-template<size_t n>
-static inline void disable_depends(FeatureList<n> &features, const FeatureDep *deps, size_t ndeps)
-{
-    bool changed = true;
-    while (changed) {
-        changed = false;
-        for (ssize_t i = ndeps - 1; i >= 0; i--) {
-            auto &dep = deps[i];
-            if (!test_nbit(features, dep.feature) || test_nbit(features, dep.dep))
-                continue;
-            unset_bits(features, dep.feature);
-            changed = true;
-        }
-    }
-}
-
-template<typename CPU, size_t n>
-static const CPUSpec<CPU,n> *find_cpu(uint32_t cpu, const CPUSpec<CPU,n> *cpus, uint32_t ncpus)
-{
-    for (uint32_t i = 0; i < ncpus; i++) {
-        if (cpu == uint32_t(cpus[i].cpu)) {
-            return &cpus[i];
-        }
-    }
-    return nullptr;
-}
-
-template<typename CPU, size_t n>
-static const CPUSpec<CPU,n> *find_cpu(llvm::StringRef name, const CPUSpec<CPU,n> *cpus,
-                                      uint32_t ncpus)
-{
-    for (uint32_t i = 0; i < ncpus; i++) {
-        if (name == cpus[i].name) {
-            return &cpus[i];
-        }
-    }
-    return nullptr;
-}
-
-template<typename CPU, size_t n>
-static const char *find_cpu_name(uint32_t cpu, const CPUSpec<CPU,n> *cpus, uint32_t ncpus)
-{
-    if (auto *spec = find_cpu(cpu, cpus, ncpus))
-        return spec->name;
-    return "generic";
-}
-
-JL_UNUSED static uint32_t find_feature_bit(const FeatureName *features, size_t nfeatures,
-                                           const char *str, size_t len)
-{
-    for (size_t i = 0; i < nfeatures; i++) {
-        auto &feature = features[i];
-        if (strncmp(feature.name, str, len) == 0 && feature.name[len] == 0) {
-            return feature.bit;
-        }
-    }
-    return UINT32_MAX;
-}
-
-// This is how we save the target identification.
-// CPU name is saved as string instead of binary data like features because
-// 1. CPU ID is less stable (they are not bound to hardware/OS API)
-// 2. We need to support CPU names that are not recognized by us and therefore doesn't have an ID
-// 3. CPU name is trivial to parse
-static inline llvm::SmallVector<uint8_t, 0>
-serialize_target_data(llvm::StringRef name, uint32_t nfeature, const uint32_t *features_en,
-                      const uint32_t *features_dis, llvm::StringRef ext_features)
-{
-    llvm::SmallVector<uint8_t, 0> res;
-    auto add_data = [&] (const void *data, size_t sz) {
-        if (sz == 0)
-            return;
-        size_t old_sz = res.size();
-        res.resize(old_sz + sz);
-        memcpy(&res[old_sz], data, sz);
-    };
-    add_data(&nfeature, 4);
-    add_data(features_en, 4 * nfeature);
-    add_data(features_dis, 4 * nfeature);
-    uint32_t namelen = name.size();
-    add_data(&namelen, 4);
-    add_data(name.data(), namelen);
-    uint32_t ext_features_len = ext_features.size();
-    add_data(&ext_features_len, 4);
-    add_data(ext_features.data(), ext_features_len);
-    return res;
-}
-
-template<size_t n>
-static inline llvm::SmallVector<uint8_t, 0>
-serialize_target_data(llvm::StringRef name, const FeatureList<n> &features_en,
-                      const FeatureList<n> &features_dis, llvm::StringRef ext_features)
-{
-    return serialize_target_data(name, n, &features_en[0], &features_dis[0], ext_features);
-}
-
-template<size_t n>
-struct TargetData {
-    std::string name;
-    std::string ext_features;
-    struct {
-        FeatureList<n> features;
-        uint32_t flags;
-    } en, dis;
-    int base;
-};
-
-// In addition to the serialized data, the first `uint32_t` gives the number of targets saved
-// and each target has a `uint32_t` flag before the serialized target data.
-template<size_t n>
-static inline llvm::SmallVector<TargetData<n>, 0> deserialize_target_data(const uint8_t *data)
-{
-    auto load_data = [&] (void *dest, size_t sz) {
-        memcpy(dest, data, sz);
-        data += sz;
-    };
-    auto load_string = [&] () {
-        uint32_t len;
-        load_data(&len, 4);
-        std::string res((const char*)data, len);
-        data += len;
-        return res;
-    };
-    uint32_t ntarget;
-    load_data(&ntarget, 4);
-    llvm::SmallVector<TargetData<n>, 0> res(ntarget);
-    for (uint32_t i = 0; i < ntarget; i++) {
-        auto &target = res[i];
-        load_data(&target.en.flags, 4);
-        target.dis.flags = 0;
-        // Starting serialized target data
-        uint32_t nfeature;
-        load_data(&nfeature, 4);
-        assert(nfeature == n);
-        load_data(&target.en.features[0], 4 * n);
-        load_data(&target.dis.features[0], 4 * n);
-        target.name = load_string();
-        target.ext_features = load_string();
-        target.base = 0;
-    }
-    return res;
-}
-
-// Try getting clone base argument. Return 1-based index. Return 0 if match failed.
-static inline int get_clone_base(const char *start, const char *end)
-{
-    const char *prefix = "base(";
-    const int prefix_len = strlen(prefix);
-    if (end - start <= prefix_len)
-        return 0;
-    if (memcmp(start, prefix, prefix_len) != 0)
-        return 0;
-    start += prefix_len;
-    if (*start > '9' || *start < '0')
-        return 0;
-    char *digit_end;
-    auto idx = strtol(start, &digit_end, 10);
-    if (idx < 0)
-        return 0;
-    if (*digit_end != ')' || digit_end + 1 != end)
-        return 0;
-    return (int)idx + 1;
-}
-
-// Parse cmdline string. This handles `clone_all` and `base` special features.
-// Other feature names will be passed to `feature_cb` for target dependent parsing.
-template<size_t n, typename F>
-static inline llvm::SmallVector<TargetData<n>, 0>
-parse_cmdline(const char *option, F &&feature_cb)
-{
-    if (!option)
-        abort();
-
-    // Preprocess the option string to expand "sysimage" keyword
-    std::string processed_option;
-    if (strncmp(option, "sysimage", 8) == 0 && (option[8] == '\0' || option[8] == ';')) {
-        // Replace "sysimage" with the actual sysimage CPU target
-        jl_value_t *target_str = jl_get_sysimage_cpu_target();
-        if (target_str != nullptr) {
-            processed_option = std::string(jl_string_data(target_str), jl_string_len(target_str));
-            if (option[8] == ';') {
-                processed_option += option + 8;  // append the rest after "sysimage"
-            }
-            option = processed_option.c_str();
-        }
-    }
-
-    llvm::SmallVector<TargetData<n>, 0> res;
-    TargetData<n> arg{};
-    auto reset_arg = [&] {
-        res.push_back(arg);
-        arg.name.clear();
-        arg.ext_features.clear();
-        memset(&arg.en.features[0], 0, 4 * n);
-        memset(&arg.dis.features[0], 0, 4 * n);
-        arg.en.flags = 0;
-        arg.dis.flags = 0;
-    };
-    const char *start = option;
-    for (const char *p = option; ; p++) {
-        switch (*p) {
-        case ',':
-        case ';':
-        case '\0': {
-            bool done = *p == '\0';
-            bool next_target = *p == ';' || done;
-            if (arg.name.empty()) {
-                if (p == start)
-                    jl_error("Invalid target option: empty CPU name");
-                arg.name.append(start, p - start);
-                if (arg.name == "help") {
-                    arg.name = "native";
-                    jl_processor_print_help = true;
-                }
-                start = p + 1;
-                if (next_target)
-                    reset_arg();
-                if (done)
-                    return res;
-                continue;
-            }
-            bool disable = false;
-            const char *full = start;
-            const char *fname = full;
-            start = p + 1;
-            if (*full == '-') {
-                disable = true;
-                fname++;
-            }
-            else if (*full == '+') {
-                fname++;
-            }
-            if (llvm::StringRef(fname, p - fname) == "clone_all") {
-                if (!disable) {
-                    arg.en.flags |= JL_TARGET_CLONE_ALL;
-                    arg.dis.flags &= ~JL_TARGET_CLONE_ALL;
-                }
-                else {
-                    arg.dis.flags |= JL_TARGET_CLONE_ALL;
-                    arg.en.flags &= ~JL_TARGET_CLONE_ALL;
-                }
-            }
-            else if (llvm::StringRef(fname, p - fname) == "opt_size") {
-                if (disable)
-                    jl_error("Invalid target option: disabled opt_size.");
-                if (arg.en.flags & JL_TARGET_MINSIZE)
-                    jl_error("Conflicting target option: both opt_size and min_size are specified.");
-                arg.en.flags |= JL_TARGET_OPTSIZE;
-            }
-            else if (llvm::StringRef(fname, p - fname) == "min_size") {
-                if (disable)
-                    jl_error("Invalid target option: disabled min_size.");
-                if (arg.en.flags & JL_TARGET_OPTSIZE)
-                    jl_error("Conflicting target option: both opt_size and min_size are specified.");
-                arg.en.flags |= JL_TARGET_MINSIZE;
-            }
-            else if (int base = get_clone_base(fname, p)) {
-                if (disable)
-                    jl_error("Invalid target option: disabled base index.");
-                base -= 1;
-                if (base >= (int)res.size())
-                    jl_error("Invalid target option: base index must refer to a previous target.");
-                if (res[base].dis.flags & JL_TARGET_CLONE_ALL ||
-                    !(res[base].en.flags & JL_TARGET_CLONE_ALL))
-                    jl_error("Invalid target option: base target must be clone_all.");
-                arg.base = base;
-            }
-            else if (llvm::StringRef(fname, p - fname) == "help") {
-                jl_processor_print_help = true;
-            }
-            else {
-                FeatureList<n> &list = disable ? arg.dis.features : arg.en.features;
-                if (!feature_cb(fname, p - fname, list)) {
-                    if (!arg.ext_features.empty())
-                        arg.ext_features += ',';
-                    arg.ext_features += disable ? '-' : '+';
-                    arg.ext_features.append(fname, p - fname);
-                }
-            }
-            if (next_target)
-                reset_arg();
-            if (done) {
-                return res;
-            }
-        }
-            JL_FALLTHROUGH;
-        default:
-            continue;
-        }
-    }
-}
-
-// Cached version of command line parsing
-template<size_t n, typename F>
-static inline llvm::SmallVector<TargetData<n>, 0> &get_cmdline_targets(const char *cpu_target, F &&feature_cb)
-{
-    static llvm::SmallVector<TargetData<n>, 0> targets =
-        parse_cmdline<n>(cpu_target, std::forward<F>(feature_cb));
-    return targets;
-}
-
-// Load sysimg, use the `callback` for dispatch and perform all relocations
-// for the selected target.
+// Load sysimg/pkgimg, use the callback for dispatch and perform all relocations
 template<typename F>
-static inline jl_image_t parse_sysimg(jl_image_buf_t image, F &&callback, void *ctx)
+static inline jl_image_t load_sysimg_target(jl_image_buf_t image, F &&callback, void *ctx)
 {
     JL_TIMING(LOAD_IMAGE, LOAD_Processor);
     jl_image_t res{};
@@ -662,10 +62,10 @@ static inline jl_image_t parse_sysimg(jl_image_buf_t image, F &&callback, void *
         jl_error("Image file is not compatible with this version of Julia");
     }
 
-    llvm::SmallVector<void*, 0> fvars(pointers->header->nfvars);
-    llvm::SmallVector<const char*, 0> gvars(pointers->header->ngvars);
+    std::vector<void*> fvars(pointers->header->nfvars);
+    std::vector<const char*> gvars(pointers->header->ngvars);
 
-    llvm::SmallVector<std::pair<uint32_t, void*>, 0> clones;
+    std::vector<std::pair<uint32_t, void*>> clones;
 
     for (unsigned i = 0; i < pointers->header->nshards; i++) {
         auto shard = pointers->shards[i];
@@ -682,7 +82,7 @@ static inline jl_image_t parse_sysimg(jl_image_buf_t image, F &&callback, void *
         clone_idxs++;
 
         assert(tag_len & jl_sysimg_tag_mask);
-        llvm::SmallVector<void**, 0> base_ptrs(0);
+        std::vector<void**> base_ptrs(0);
         base_ptrs.push_back(fvar_shard);
         // Find target
         for (uint32_t i = 0; i < target_idx; i++) {
@@ -826,188 +226,642 @@ static inline jl_image_t parse_sysimg(jl_image_buf_t image, F &&callback, void *
     return res;
 }
 
-template<typename T>
-static inline void check_cmdline(T &&cmdline, bool imaging)
+} // namespace
+
+// Unified processor detection and dispatch using the cpufeatures library.
+// Replaces processor_x86.cpp, processor_arm.cpp, and processor_fallback.cpp.
+// No hand-maintained CPU/feature tables — all data comes from LLVM TableGen
+// via generated headers committed to the cpufeatures repository.
+
+// Include cpufeatures generated tables (defines FeatureBits, feature_table, etc.)
+#if defined(_CPU_X86_64_) || defined(_CPU_X86_)
+#include <cpufeatures/target_tables_x86_64.h>
+#elif defined(_CPU_AARCH64_)
+#include <cpufeatures/target_tables_aarch64.h>
+#elif defined(__riscv) && __riscv_xlen == 64
+#include <cpufeatures/target_tables_riscv64.h>
+#else
+#include <cpufeatures/target_tables_fallback.h>
+#endif
+
+#include <cpufeatures/target_parsing.h>
+#include <cpufeatures/cross_arch.h>
+
+// Verify the cpufeatures tables were generated from a compatible LLVM version.
+#if defined(TARGET_TABLES_LLVM_VERSION_MAJOR) && defined(LLVM_VERSION_MAJOR)
+static_assert(TARGET_TABLES_LLVM_VERSION_MAJOR == LLVM_VERSION_MAJOR,
+    "cpufeatures tables were generated with a different LLVM major version than Julia uses");
+#endif
+
+// ============================================================================
+// Debug output
+// ============================================================================
+
+static bool cpufeatures_debug_enabled() {
+    static int enabled = -1;
+    if (enabled == -1) {
+        const char *debug_env = getenv("JULIA_DEBUG");
+        enabled = debug_env && (strstr(debug_env, "cpufeatures") || strstr(debug_env, "all"));
+    }
+    return enabled;
+}
+
+#define CF_DEBUG(...) do { if (cpufeatures_debug_enabled()) jl_safe_printf(__VA_ARGS__); } while (0)
+
+// ============================================================================
+// Convert feature bits to a comma-separated string of feature names.
+// Called from Julia's loading.jl to display ImageTarget features.
+JL_DLLEXPORT jl_value_t *jl_feature_bits_to_string(const uint8_t *bits, int32_t nwords)
 {
-    assert(cmdline.size() > 0);
-    // It's unclear what does specifying multiple target when not generating
-    // sysimg means. Make it an error for now.
-    if (!imaging) {
-        if (cmdline.size() > 1) {
-            jl_safe_printf("More than one command line CPU targets specified "
-                      "without a `--output-` flag specified");
-            exit(1);
+    FeatureBits fb{};
+    int copy_words = nwords < TARGET_FEATURE_WORDS ? nwords : TARGET_FEATURE_WORDS;
+    memcpy(fb.bits, bits, copy_words * sizeof(uint64_t));
+    auto str = tp::build_feature_string(fb);
+    return jl_pchar_to_string(str.data(), str.size());
+}
+
+// ============================================================================
+// Host CPU detection — thin wrappers around cpufeatures library
+// ============================================================================
+
+static inline const std::string &host_cpu_name()
+{
+    return tp::get_host_cpu_name();
+}
+
+static std::string get_host_feature_string()
+{
+    auto fb = tp::get_host_features();
+    return tp::build_feature_string(fb);
+}
+
+// ============================================================================
+// JIT target management
+// ============================================================================
+
+static std::vector<tp::LLVMTargetSpec> jit_targets;
+
+// If cpu_target starts with "sysimage", replace it with the target string
+// stored in the loaded sysimage. Otherwise return as-is.
+extern "C" std::string jl_expand_sysimage_keyword(const char *cpu_target) {
+    if (!cpu_target || !*cpu_target)
+        return "";
+    std::string option(cpu_target);
+    if (option.substr(0, 8) == "sysimage" && (option.size() == 8 || option[8] == ';')) {
+        jl_value_t *target_str = jl_get_sysimage_cpu_target();
+        if (target_str && jl_string_len(target_str) > 0) {
+            std::string expanded(jl_string_data(target_str), jl_string_len(target_str));
+            if (option.size() > 8)
+                expanded += option.substr(8);
+            CF_DEBUG("[cpufeatures] expanded 'sysimage' -> '%s'\n", expanded.c_str());
+            return expanded;
         }
-        if (cmdline[0].en.flags & JL_TARGET_CLONE_ALL) {
-            jl_safe_printf("\"clone_all\" feature specified "
-                      "without a `--output-` flag specified");
-            exit(1);
-        }
-        if (cmdline[0].en.flags & JL_TARGET_OPTSIZE) {
-            jl_safe_printf("\"opt_size\" feature specified "
-                      "without a `--output-` flag specified");
-            exit(1);
-        }
-        if (cmdline[0].en.flags & JL_TARGET_MINSIZE) {
-            jl_safe_printf("\"min_size\" feature specified "
-                      "without a `--output-` flag specified");
-            exit(1);
-        }
+        CF_DEBUG("[cpufeatures] WARNING: 'sysimage' keyword but no stored target, using 'native'\n");
+        return "native";
+    }
+    return option;
+}
+
+static void init_jit_targets(const char *cpu_target, bool imaging)
+{
+
+    if (!jit_targets.empty())
+        return;
+
+    auto target_str = jl_expand_sysimage_keyword(cpu_target);
+    CF_DEBUG("[cpufeatures] init_jit_targets: '%s' imaging=%d\n",
+             target_str.c_str(), imaging);
+
+    if (target_str.empty())
+        jl_error("Invalid target option: empty CPU name");
+
+    auto specs = tp::resolve_targets_for_llvm(target_str);
+
+    if (specs.empty())
+        jl_error("No targets specified");
+
+    for (auto &s : specs) {
+        CF_DEBUG("[cpufeatures]   target: name='%s' base=%d features=%s\n",
+                 s.cpu_name.c_str(), s.base, s.cpu_features.c_str());
+        jit_targets.push_back(std::move(s));
     }
 }
 
-struct SysimgMatch {
-    uint32_t best_idx{UINT32_MAX};
-    int vreg_size{0};
-};
+// ============================================================================
+// Sysimage / pkgimage target matching
+// ============================================================================
 
-// Find the best match in the sysimg.
-// Select the best one based on the largest vector register and largest compatible feature set.
-template<typename S, typename T, typename F>
-static inline SysimgMatch match_sysimg_targets(S &&sysimg, T &&target, F &&max_vector_size, jl_value_t **rejection_reason)
+// Shared: deserialize image targets, match against a resolved target.
+// Returns {target_index, vreg_size} or {UINT32_MAX, 0} on failure.
+static std::pair<uint32_t, int> match_image_targets(
+        const void *id, const tp::LLVMTargetSpec &target, jl_value_t **rejection_reason)
 {
-    SysimgMatch match;
-    bool match_name = false;
-    int feature_size = 0;
-    llvm::SmallVector<const char *, 0> rejection_reasons;
-    rejection_reasons.reserve(sysimg.size());
-    for (uint32_t i = 0; i < sysimg.size(); i++) {
-        auto &imgt = sysimg[i];
-        if (!(imgt.en.features & target.dis.features).empty()) {
-            // Check sysimg enabled features against runtime disabled features
-            // This is valid (and all what we can do)
-            // even if one or both of the targets are unknown.
-            rejection_reasons.push_back("Rejecting this target due to use of runtime-disabled features\n");
-            continue;
+    auto image_targets = tp::deserialize_targets((const uint8_t *)id);
+    CF_DEBUG("[cpufeatures]   image has %zu target(s)\n", image_targets.size());
+
+    auto match = tp::match_targets(image_targets, target);
+    if (match.best_idx < 0) {
+        CF_DEBUG("[cpufeatures]   NO compatible target found!\n");
+        if (rejection_reason) {
+            std::string msg = "Unable to find compatible target in cached code image.";
+            *rejection_reason = jl_pchar_to_string(msg.data(), msg.size());
         }
-        if (imgt.name == target.name) {
-            if (!match_name) {
-                match_name = true;
-                match.vreg_size = 0;
-                feature_size = 0;
+        return {UINT32_MAX, 0};
+    }
+
+    CF_DEBUG("[cpufeatures]   selected target %d '%s' (vreg_size=%d)\n",
+             match.best_idx, image_targets[match.best_idx].cpu_name.c_str(), match.vreg_size);
+    return {(uint32_t)match.best_idx, match.vreg_size};
+}
+
+static uint32_t match_sysimg_target(void *ctx, const void *id, jl_value_t **rejection_reason)
+{
+    const char *cpu_target = (const char *)ctx;
+    CF_DEBUG("[cpufeatures] match_sysimg_target: cpu_target='%s'\n",
+             cpu_target ? cpu_target : "(null)");
+
+    // For multi-target strings (sysimage building), use only the first
+    // target for matching against the image being loaded.
+    auto target_str = jl_expand_sysimage_keyword(cpu_target);
+    auto semi = target_str.find(';');
+    auto first = semi != std::string::npos ? target_str.substr(0, semi) : target_str;
+    auto host_specs = tp::resolve_targets_for_llvm(first);
+    if (host_specs.empty())
+        jl_error("No targets specified");
+
+    auto &target = host_specs[0];
+    CF_DEBUG("[cpufeatures]   JIT target: name='%s'\n", target.cpu_name.c_str());
+
+#if defined(_CPU_X86_64_)
+    // CX16 check: only error if sysimage requires it and host doesn't have it
+    {
+        auto sysimg_peek = tp::deserialize_targets((const uint8_t *)id);
+        bool sysimg_allows_no_cx16 = false;
+        for (auto &t : sysimg_peek)
+            sysimg_allows_no_cx16 |= !tp::has_feature(t.en_features, "cx16");
+        if (!sysimg_allows_no_cx16 && !tp::has_feature(target.en_features, "cx16")) {
+            jl_error("Your CPU does not support the CX16 instruction, which is required "
+                     "by this version of Julia!  This is often due to running inside of a "
+                     "virtualized environment.  Please read "
+                     "https://docs.julialang.org/en/v1/devdocs/sysimg/ for more.");
+        }
+    }
+#endif
+
+    // Match against image targets
+    auto match_result = match_image_targets(id, target, rejection_reason);
+    if (match_result.first == UINT32_MAX)
+        return UINT32_MAX;
+
+    // Clamp JIT vector features to match the sysimage target's vector width.
+    // On x86, AVX/AVX-512 change how VecElement tuples are passed in registers
+    // (FixedVectorType maps to xmm/ymm/zmm), so the JIT must not use wider
+    // vectors than the sysimage clone it calls into.
+    // TODO: aarch64 SVE uses scalable vectors which Julia doesn't generate
+    // (only FixedVectorType/NEON), so SVE clamping is not needed for ABI
+    // correctness. RISC-V V is similar. Revisit if Julia adds scalable vector
+    // support.
+    int matched_vreg = match_result.second;
+    int host_vreg = tp::max_vector_size(target.en_features);
+#if defined(_CPU_X86_64_) || defined(_CPU_X86_)
+    if (matched_vreg != host_vreg) {
+        if (matched_vreg < 64) {
+            static const char *avx512[] = {
+                "avx512f", "avx512dq", "avx512ifma", "avx512cd",
+                "avx512bw", "avx512vl", "avx512vbmi", "avx512vpopcntdq",
+                "avx512vbmi2", "avx512vnni", "avx512bitalg",
+                "avx512vp2intersect", "avx512bf16", "avx512fp16", nullptr
+            };
+            for (const char **f = avx512; *f; f++) {
+                const FeatureEntry *fe = find_feature(*f);
+                if (fe) feature_clear(&target.en_features, fe->bit);
             }
         }
-        else if (match_name) {
-            rejection_reasons.push_back("Rejecting this target since another target has a cpu name match\n");
-            continue;
+        if (matched_vreg < 32) {
+            static const char *avx[] = {
+                "avx", "avx2", "fma", "f16c", "fma4", "xop",
+                "vaes", "vpclmulqdq", nullptr
+            };
+            for (const char **f = avx; *f; f++) {
+                const FeatureEntry *fe = find_feature(*f);
+                if (fe) feature_clear(&target.en_features, fe->bit);
+            }
         }
-        int new_vsz = max_vector_size(imgt.en.features);
-        if (match.vreg_size > new_vsz) {
-            rejection_reasons.push_back("Rejecting this target since another target has a larger vector register size\n");
-            continue;
-        }
-        int new_feature_size = imgt.en.features.nbits();
-        if (match.vreg_size < new_vsz) {
-            match.best_idx = i;
-            match.vreg_size = new_vsz;
-            feature_size = new_feature_size;
-            rejection_reasons.push_back("Updating best match to this target due to larger vector register size\n");
-            continue;
-        }
-        if (new_feature_size < feature_size) {
-            rejection_reasons.push_back("Rejecting this target since another target has a larger feature set\n");
-            continue;
-        }
-        match.best_idx = i;
-        feature_size = new_feature_size;
-        rejection_reasons.push_back("Updating best match to this target\n");
+        for (int w = 0; w < TARGET_FEATURE_WORDS; w++)
+            target.dis_features.bits[w] = hw_feature_mask.bits[w] & ~target.en_features.bits[w];
+        target.cpu_features = tp::build_llvm_feature_string(target.en_features, target.dis_features);
     }
-    if (match.best_idx == UINT32_MAX) {
-        // Construct a nice error message for debugging purposes
-        std::string error_msg = "Unable to find compatible target in cached code image.\n";
-        for (size_t i = 0; i < rejection_reasons.size(); i++) {
-            error_msg += "Target ";
-            error_msg += std::to_string(i);
-            error_msg += " (";
-            error_msg += sysimg[i].name;
-            error_msg += "): ";
-            error_msg += rejection_reasons[i];
-        }
-        if (rejection_reason)
-            *rejection_reason = jl_pchar_to_string(error_msg.data(), error_msg.size());
-    }
-    return match;
+#else
+    (void)matched_vreg;
+    (void)host_vreg;
+#endif
+
+    jit_targets.push_back(std::move(target));
+    return match_result.first;
 }
 
-// Debug helper
-
-template<typename CPU, size_t n>
-static inline void dump_cpu_spec(uint32_t cpu, const FeatureList<n> &features,
-                                 const FeatureName *feature_names, uint32_t nfeature_names,
-                                 const CPUSpec<CPU,n> *cpus, uint32_t ncpus)
+static uint32_t match_pkgimg_target(void *ctx, const void *id, jl_value_t **rejection_reason)
 {
-    bool cpu_found = false;
-    for (uint32_t i = 0;i < ncpus;i++) {
-        if (cpu == uint32_t(cpus[i].cpu)) {
-            cpu_found = true;
-            jl_safe_printf("CPU: %s\n", cpus[i].name);
-            break;
-        }
-    }
-    if (!cpu_found)
-        jl_safe_printf("CPU: generic\n");
+    auto &target = jit_targets.front();
+    auto result = match_image_targets(id, target, rejection_reason);
+    return result.first;
+}
+
+// ============================================================================
+// Exported functions
+// ============================================================================
+
+#if defined(_CPU_X86_64_) || defined(_CPU_X86_)
+
+extern "C" JL_DLLEXPORT void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType)
+{
+    asm volatile (
+#if defined(__i386__) && defined(__PIC__)
+        "xchg %%ebx, %%esi;"
+        "cpuid;"
+        "xchg %%esi, %%ebx;" :
+        "=S" (CPUInfo[1]),
+#else
+        "cpuid" :
+        "=b" (CPUInfo[1]),
+#endif
+        "=a" (CPUInfo[0]),
+        "=c" (CPUInfo[2]),
+        "=d" (CPUInfo[3]) :
+        "a" (InfoType)
+    );
+}
+
+extern "C" JL_DLLEXPORT void jl_cpuidex(int32_t CPUInfo[4], int32_t InfoType, int32_t subInfoType)
+{
+    asm volatile (
+#if defined(__i386__) && defined(__PIC__)
+        "xchg %%ebx, %%esi;"
+        "cpuid;"
+        "xchg %%esi, %%ebx;" :
+        "=S" (CPUInfo[1]),
+#else
+        "cpuid" :
+        "=b" (CPUInfo[1]),
+#endif
+        "=a" (CPUInfo[0]),
+        "=c" (CPUInfo[2]),
+        "=d" (CPUInfo[3]) :
+        "a" (InfoType),
+        "c" (subInfoType)
+    );
+}
+
+#endif // x86
+
+JL_DLLEXPORT void jl_dump_host_cpu(void)
+{
+
+    jl_safe_printf("CPU: %s\n", host_cpu_name().c_str());
     jl_safe_printf("Features:");
+    auto host_feats = tp::get_host_features();
     bool first = true;
-    for (uint32_t i = 0;i < nfeature_names;i++) {
-        if (test_nbit(&features[0], feature_names[i].bit)) {
+    for (uint32_t i = 0; i < num_features; i++) {
+        if (feature_test(&host_feats, feature_table[i].bit)) {
             if (first) {
-                jl_safe_printf(" %s", feature_names[i].name);
+                jl_safe_printf(" %s", feature_table[i].name);
                 first = false;
-            }
-            else {
-                jl_safe_printf(", %s", feature_names[i].name);
+            } else {
+                jl_safe_printf(", %s", feature_table[i].name);
             }
         }
     }
     jl_safe_printf("\n");
 }
 
+JL_DLLEXPORT jl_value_t *jl_check_pkgimage_clones(char *data)
+{
+    jl_value_t *rejection_reason = NULL;
+    JL_GC_PUSH1(&rejection_reason);
+    uint32_t match_idx = match_pkgimg_target(NULL, data, &rejection_reason);
+    JL_GC_POP();
+    if (match_idx == UINT32_MAX)
+        return rejection_reason;
+    return jl_nothing;
 }
 
-static std::string jl_get_cpu_name_llvm(void)
+JL_DLLEXPORT jl_value_t *jl_cpu_has_fma(int bits)
 {
-    return llvm::sys::getHostCPUName().str();
-}
-
-static std::string jl_get_cpu_features_llvm(void)
-{
-#if JL_LLVM_VERSION >= 190000
-    auto HostFeatures = llvm::sys::getHostCPUFeatures();
-#else
-    llvm::StringMap<bool> HostFeatures;
-    llvm::sys::getHostCPUFeatures(HostFeatures);
+#if defined(_CPU_X86_64_) || defined(_CPU_X86_)
+    if ((bits == 32 || bits == 64) && !jit_targets.empty()) {
+        const auto &feats = jit_targets.front().en_features;
+        if (tp::has_feature(feats, "fma") || tp::has_feature(feats, "fma4"))
+            return jl_true;
+    }
+#elif defined(_CPU_AARCH64_)
+    if (bits == 32 || bits == 64)
+        return jl_true;
 #endif
-    std::string attr;
-    for (auto &ele: HostFeatures) {
-        if (ele.getValue()) {
-            if (!attr.empty()) {
-                attr.append(",+");
-            }
-            else {
-                attr.append("+");
-            }
-            attr.append(ele.getKey().str());
+    return jl_false;
+}
+
+// Validate cpu_target string before any processing.
+// Called from init.c early in startup.
+extern "C" JL_DLLEXPORT void jl_check_cpu_target(const char *cpu_target, int imaging)
+{
+
+    if (!cpu_target || !*cpu_target)
+        return; // NULL/empty handled elsewhere
+
+    auto target_str = jl_expand_sysimage_keyword(cpu_target);
+    if (target_str.empty())
+        return;
+
+    // Handle "help": print available CPU targets and exit
+    if (target_str == "help" || target_str.find(",help") != std::string::npos) {
+        tp::print_cpu_targets();
+        exit(0);
+    }
+
+    auto specs = tp::resolve_targets_for_llvm(target_str);
+
+    for (auto &s : specs) {
+        if (s.flags & tp::TF_UNKNOWN_NAME) {
+            jl_safe_printf("Unknown cpu target: \"%s\"\n", s.cpu_name.c_str());
+            exit(1);
         }
     }
-    return attr;
+
+    if (!imaging) {
+        if (specs.size() > 1) {
+            jl_safe_printf("More than one command line CPU targets specified "
+                      "without a `--output-` flag specified");
+            exit(1);
+        }
+        if (!specs.empty() && (specs[0].flags & tp::TF_CLONE_ALL)) {
+            jl_safe_printf("\"clone_all\" feature specified "
+                      "without a `--output-` flag specified");
+            exit(1);
+        }
+    }
 }
 
-#if defined(_CPU_X86_) || defined(_CPU_X86_64_)
+jl_image_t jl_load_sysimg(jl_image_buf_t image, const char *cpu_target)
+{
 
-#include "processor_x86.cpp"
+    if (!jit_targets.empty())
+        jl_error("JIT targets already initialized");
+    return load_sysimg_target(image, match_sysimg_target, (void *)cpu_target);
+}
 
-#elif defined(_CPU_AARCH64_) || defined(_CPU_ARM_)
+jl_image_t jl_load_pkgimg(jl_image_buf_t image)
+{
+    if (jit_targets.empty())
+        jl_error("JIT targets not initialized");
+    if (jit_targets.size() > 1)
+        jl_error("Expected only one JIT target");
+    return load_sysimg_target(image, match_pkgimg_target, NULL);
+}
 
-#include "processor_arm.cpp"
+#ifndef __clang_analyzer__
+std::pair<std::string, std::string>
+jl_get_llvm_target(const char *cpu_target, bool imaging)
+{
+    init_jit_targets(cpu_target, imaging);
+    auto &spec = jit_targets[0];
+    CF_DEBUG("[cpufeatures] jl_get_llvm_target: cpu='%s' features='%s'\n",
+             spec.cpu_name.c_str(), spec.cpu_features.c_str());
+    return {spec.cpu_name, spec.cpu_features};
+}
+#endif
+
+#ifndef __clang_analyzer__
+const std::pair<std::string, std::string> &jl_get_llvm_disasm_target(void)
+{
+    // Use generic CPU with all features enabled so the disassembler
+    // can decode any instruction (including sysimage clones compiled
+    // for targets beyond the current JIT target).
+    static const auto res = [] {
+        std::string features;
+        for (uint32_t i = 0; i < num_features; i++) {
+            if (feature_table[i].is_hw) {
+                if (!features.empty()) features += ',';
+                features += '+';
+                features += feature_table[i].name;
+            }
+        }
+        return std::make_pair(std::string("generic"), std::move(features));
+    }();
+    return res;
+}
+#endif
+
+#ifndef __clang_gcanalyzer__
+jl_clone_targets_t jl_get_llvm_clone_targets(const char *cpu_target)
+{
+    auto target_str = jl_expand_sysimage_keyword(cpu_target);
+    auto specs = tp::resolve_targets_for_llvm(target_str);
+
+    if (specs.empty())
+        jl_error("No targets specified");
+
+    jl_clone_targets_t result;
+
+    // Serialized blob for sysimage embedding
+    auto blob = tp::serialize_targets(specs);
+    result.data.assign(blob.begin(), blob.end());
+
+    // LLVM specs for codegen
+    for (auto &s : specs) {
+        jl_target_spec_t ele;
+        ele.cpu_name = s.cpu_name;
+        ele.cpu_features = s.cpu_features;
+        ele.base = s.base;
+        ele.clone_all = (s.flags & tp::TF_CLONE_ALL) != 0;
+        ele.opt_size = (s.flags & tp::TF_OPTSIZE) != 0;
+        ele.min_size = (s.flags & tp::TF_MINSIZE) != 0;
+        ele.diff = s.diff;
+        result.specs.push_back(std::move(ele));
+    }
+    return result;
+}
+#endif
+
+extern "C" int jl_test_cpu_feature(jl_cpu_feature_t feature)
+{
+    auto host_feats = tp::get_host_features();
+    if (feature >= TARGET_FEATURE_WORDS * 64)
+        return 0;
+    return feature_test(&host_feats, feature);
+}
+
+// ============================================================================
+// Cross-architecture CPU/feature queries
+// ============================================================================
+
+extern "C" JL_DLLEXPORT size_t jl_cpufeatures_nbytes(void)
+{
+    return sizeof(FeatureBits);
+}
+
+extern "C" JL_DLLEXPORT int jl_cpufeatures_lookup(const char *cpu_name,
+                                                    uint8_t *features_out,
+                                                    size_t bufsize)
+{
+    if (bufsize < sizeof(FeatureBits))
+        return -1;
+    const CPUEntry *entry = find_cpu(cpu_name);
+    if (!entry)
+        return -1;
+    FeatureBits hw;
+    for (int i = 0; i < TARGET_FEATURE_WORDS; i++)
+        hw.bits[i] = entry->features.bits[i] & hw_feature_mask.bits[i];
+    memcpy(features_out, &hw, sizeof(FeatureBits));
+    return 0;
+}
+
+extern "C" JL_DLLEXPORT void jl_cpufeatures_host(uint8_t *features_out, size_t bufsize)
+{
+    if (bufsize < sizeof(FeatureBits))
+        return;
+    auto fb = tp::get_host_features();
+    for (int i = 0; i < TARGET_FEATURE_WORDS; i++)
+        fb.bits[i] &= hw_feature_mask.bits[i];
+    memcpy(features_out, &fb, sizeof(FeatureBits));
+}
+
+extern "C" JL_DLLEXPORT size_t jl_cpufeatures_cross_lookup(
+        const char *arch, const char *cpu_name,
+        uint8_t *features_out, size_t bufsize)
+{
+    tp::CrossFeatureBits fb;
+    if (!tp::cross_lookup_cpu(arch, cpu_name, fb))
+        return 0;
+    size_t nbytes = fb.num_words * sizeof(uint64_t);
+    if (bufsize < nbytes)
+        return 0;
+    memcpy(features_out, fb.bits, nbytes);
+    return nbytes;
+}
+
+extern "C" JL_DLLEXPORT size_t jl_cpufeatures_cross_nbytes(const char *arch)
+{
+    return tp::cross_feature_words(arch) * sizeof(uint64_t);
+}
+
+extern "C" JL_DLLEXPORT unsigned jl_cpufeatures_cross_num_features(const char *arch)
+{
+    return tp::cross_num_features(arch);
+}
+
+extern "C" JL_DLLEXPORT unsigned jl_cpufeatures_cross_num_cpus(const char *arch)
+{
+    return tp::cross_num_cpus(arch);
+}
+
+extern "C" JL_DLLEXPORT const char *jl_cpufeatures_cross_feature_name(const char *arch, unsigned idx)
+{
+    return tp::cross_feature_name(arch, idx);
+}
+
+extern "C" JL_DLLEXPORT int jl_cpufeatures_cross_feature_bit(const char *arch, unsigned idx)
+{
+    return tp::cross_feature_bit_at(arch, idx);
+}
+
+extern "C" JL_DLLEXPORT const char *jl_cpufeatures_cross_cpu_name(const char *arch, unsigned idx)
+{
+    return tp::cross_cpu_name(arch, idx);
+}
+
+// ============================================================================
+// FPU control
+// ============================================================================
+
+#if defined(_CPU_X86_64_) || defined(_CPU_X86_)
+
+#include <xmmintrin.h>
+
+static uint32_t subnormal_flags = [] {
+    int32_t info[4];
+    jl_cpuid(info, 0);
+    if (info[0] >= 1) {
+        jl_cpuid(info, 1);
+        if (info[3] & (1 << 26)) {
+            return 0x00008040u;
+        }
+        else if (info[3] & (1 << 25)) {
+            return 0x00008000u;
+        }
+    }
+    return 0u;
+}();
+
+extern "C" JL_DLLEXPORT int32_t jl_get_zero_subnormals(void)
+{
+    return _mm_getcsr() & subnormal_flags;
+}
+
+extern "C" JL_DLLEXPORT int32_t jl_set_zero_subnormals(int8_t isZero)
+{
+    uint32_t flags = subnormal_flags;
+    if (flags) {
+        uint32_t state = _mm_getcsr();
+        if (isZero) state |= flags;
+        else state &= ~flags;
+        _mm_setcsr(state);
+        return 0;
+    }
+    return isZero;
+}
+
+extern "C" JL_DLLEXPORT int32_t jl_get_default_nans(void) { return 0; }
+extern "C" JL_DLLEXPORT int32_t jl_set_default_nans(int8_t isDefault) { return isDefault; }
+
+#elif defined(_CPU_AARCH64_)
+
+extern "C" JL_DLLEXPORT int32_t jl_get_zero_subnormals(void)
+{
+    uint64_t fpcr;
+    asm volatile ("mrs %0, fpcr" : "=r"(fpcr));
+    return (fpcr & (1 << 24)) != 0;
+}
+
+extern "C" JL_DLLEXPORT int32_t jl_set_zero_subnormals(int8_t isZero)
+{
+    uint64_t fpcr;
+    asm volatile ("mrs %0, fpcr" : "=r"(fpcr));
+    if (isZero) fpcr |= (1 << 24);
+    else fpcr &= ~(uint64_t)(1 << 24);
+    asm volatile ("msr fpcr, %0" :: "r"(fpcr));
+    return 0;
+}
+
+extern "C" JL_DLLEXPORT int32_t jl_get_default_nans(void)
+{
+    uint64_t fpcr;
+    asm volatile ("mrs %0, fpcr" : "=r"(fpcr));
+    return (fpcr & (1 << 25)) != 0;
+}
+
+extern "C" JL_DLLEXPORT int32_t jl_set_default_nans(int8_t isDefault)
+{
+    uint64_t fpcr;
+    asm volatile ("mrs %0, fpcr" : "=r"(fpcr));
+    if (isDefault) fpcr |= (1 << 25);
+    else fpcr &= ~(uint64_t)(1 << 25);
+    asm volatile ("msr fpcr, %0" :: "r"(fpcr));
+    return 0;
+}
 
 #else
 
-#include "processor_fallback.cpp"
+extern "C" JL_DLLEXPORT int32_t jl_get_zero_subnormals(void) { return 0; }
+extern "C" JL_DLLEXPORT int32_t jl_set_zero_subnormals(int8_t isZero) { return isZero; }
+extern "C" JL_DLLEXPORT int32_t jl_get_default_nans(void) { return 0; }
+extern "C" JL_DLLEXPORT int32_t jl_set_default_nans(int8_t isDefault) { return isDefault; }
 
 #endif
 
-// Global variable to store the CPU target string used for the sysimage
-static std::string sysimage_cpu_target;
+
+// ============================================================================
+// Global exports (defined after backend)
+// ============================================================================
 
 JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void)
 {
@@ -1016,35 +870,19 @@ JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void)
 
 JL_DLLEXPORT jl_value_t *jl_get_cpu_features(void)
 {
-    return jl_cstr_to_string(jl_get_cpu_features_llvm().c_str());
+    return jl_cstr_to_string(get_host_feature_string().c_str());
 }
 
+#ifndef __clang_analyzer__
 extern "C" JL_DLLEXPORT jl_value_t* jl_reflect_clone_targets() {
-    auto specs = jl_get_llvm_clone_targets(jl_options.cpu_target);
-    const uint32_t base_flags = 0;
-    llvm::SmallVector<uint8_t, 0> data;
-    auto push_i32 = [&] (uint32_t v) {
-        uint8_t buff[4];
-        memcpy(buff, &v, 4);
-        data.insert(data.end(), buff, buff + 4);
-    };
-    push_i32(specs.size());
-    for (uint32_t i = 0; i < specs.size(); i++) {
-        push_i32(base_flags | (specs[i].flags & JL_TARGET_UNKNOWN_NAME));
-        auto &specdata = specs[i].data;
-        data.insert(data.end(), specdata.begin(), specdata.end());
-    }
-
+    auto targets = jl_get_llvm_clone_targets(jl_options.cpu_target);
+    auto &data = targets.data;
     jl_value_t *arr = (jl_value_t*)jl_alloc_array_1d(jl_array_uint8_type, data.size());
     uint8_t *out = jl_array_data(arr, uint8_t);
     memcpy(out, data.data(), data.size());
     return arr;
 }
-
-extern "C" JL_DLLEXPORT void jl_reflect_feature_names(const FeatureName **fnames, size_t *nf) {
-    *fnames = feature_names;
-    *nf = nfeature_names;
-}
+#endif
 
 extern "C" JL_DLLEXPORT jl_value_t *jl_get_sysimage_cpu_target(void) {
     if (sysimage_cpu_target.empty()) {
@@ -1053,7 +891,6 @@ extern "C" JL_DLLEXPORT jl_value_t *jl_get_sysimage_cpu_target(void) {
     return jl_cstr_to_string(sysimage_cpu_target.c_str());
 }
 
-// Function to set the sysimage CPU target (called during initialization)
 void jl_set_sysimage_cpu_target(const char *cpu_target) {
     if (cpu_target) {
         sysimage_cpu_target = cpu_target;

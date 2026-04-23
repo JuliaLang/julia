@@ -7,28 +7,15 @@ one or several syntax trees.
 TODO: Global attributes!
 """
 mutable struct SyntaxGraph{Attrs}
-    edge_ranges::Vector{UnitRange{Int}}
-    edges::Vector{NodeId}
-    attributes::Attrs
+    const edge_ranges::Vector{UnitRange{Int}}
+    const edges::Vector{NodeId}
+    const attributes::Attrs
 end
 
 SyntaxGraph() = ensure_required_attributes!(
-    SyntaxGraph{Dict{Symbol,Any}}(
+    SyntaxGraph{Dict{Symbol,Dict{NodeId, Any}}}(
         Vector{UnitRange{Int}}(),
-        Vector{NodeId}(), Dict{Symbol,Any}()))
-
-# "Freeze" attribute names and types, encoding them in the type of the returned
-# SyntaxGraph.
-function freeze_attrs(graph::SyntaxGraph)
-    frozen_attrs = (; pairs(graph.attributes)...)
-    SyntaxGraph(graph.edge_ranges, graph.edges, frozen_attrs)
-end
-
-# Create a copy of `graph` where the attribute list is mutable
-function unfreeze_attrs(graph::SyntaxGraph)
-    unfrozen_attrs = Dict{Symbol,Any}(pairs(graph.attributes)...)
-    SyntaxGraph(graph.edge_ranges, graph.edges, unfrozen_attrs)
-end
+        Vector{NodeId}(), Dict{Symbol,Dict{NodeId, Any}}()))
 
 function _show_attrs(io, attributes::Dict)
     show(io, MIME("text/plain"), attributes)
@@ -53,33 +40,37 @@ function Base.show(io::IO, ::MIME"text/plain", graph::SyntaxGraph)
     _show_attrs(io, graph.attributes)
 end
 
-function ensure_attributes!(graph::SyntaxGraph; kws...)
-    for (k,v) in pairs(kws)
+function ensure_attributes!(graph::SyntaxGraph{Dict{Symbol,Dict{NodeId,Any}}}; kws...)
+    for (k,_) in pairs(kws)
         @assert k isa Symbol
-        @assert v isa Type
-        if haskey(graph.attributes, k)
-            v0 = valtype(graph.attributes[k])
-            v == v0 || throw(ErrorException("Attribute type mismatch $v != $v0"))
-        elseif graph.attributes isa NamedTuple
-            throw(ErrorException("""
-                ensure_attributes!: $k is not an existing attribute, and the graph's attributes are frozen. \
-                Consider calling non-mutating `ensure_attributes` instead."""))
-        else
-            graph.attributes[k] = Dict{NodeId,v}()
+        if !haskey(graph.attributes, k)
+            graph.attributes[k] = Dict{NodeId,Any}()
         end
     end
     graph
 end
 
-function ensure_attributes(graph::SyntaxGraph{<:Dict}; kws...)
+function ensure_attributes(graph::SyntaxGraph{Dict{Symbol,Dict{NodeId,Any}}}; kws...)
     g = copy_attrs(graph)
     ensure_attributes!(g; kws...)
 end
 
+function ensure_attributes!(graph::SyntaxGraph{<:NamedTuple}; kws...)
+    throw(ErrorException("""
+        ensure_attributes!: The graph's attributes are frozen. \
+        Consider calling non-mutating `ensure_attributes` instead."""))
+end
+
 function ensure_attributes(graph::SyntaxGraph{<:NamedTuple}; kws...)
-    g = unfreeze_attrs(graph)
-    ensure_attributes!(g; kws...)
-    freeze_attrs(g)
+    unfrozen_attrs = Dict{Symbol,Any}(pairs(graph.attributes)...)
+    for (k,v) in pairs(kws)
+        @assert k isa Symbol
+        @assert v isa Type
+        if !haskey(graph.attributes, k)
+            unfrozen_attrs[k] = Dict{NodeId,v}()
+        end
+    end
+    SyntaxGraph(graph.edge_ranges, graph.edges, (; pairs(unfrozen_attrs)...))
 end
 
 ensure_required_attributes!(g::SyntaxGraph) = ensure_attributes!(
@@ -91,20 +82,23 @@ ensure_required_attributes!(g::SyntaxGraph) = ensure_attributes!(
     name_val=String,
     mod=Module)
 
-function delete_attributes!(graph::SyntaxGraph{<:Dict}, attr_names::Symbol...)
+function delete_attributes!(graph::SyntaxGraph{Dict{Symbol,Dict{NodeId,Any}}}, attr_names::Symbol...)
     for name in attr_names
         delete!(graph.attributes, name)
     end
     graph
 end
 
-function delete_attributes(graph::SyntaxGraph{<:Dict}, attr_names::Symbol...)
-    delete_attributes!(unfreeze_attrs(graph), attr_names...)
+function delete_attributes(graph::SyntaxGraph{Dict{Symbol,Dict{NodeId,Any}}}, attr_names::Symbol...)
+    delete_attributes!(copy_attrs(graph), attr_names...)
 end
 
 function delete_attributes(graph::SyntaxGraph{<:NamedTuple}, attr_names::Symbol...)
-    g = delete_attributes!(unfreeze_attrs(graph), attr_names...)
-    freeze_attrs(g)
+    unfrozen_attrs = Dict{Symbol,Any}(pairs(graph.attributes)...)
+    for name in attr_names
+        delete!(unfrozen_attrs, name)
+    end
+    SyntaxGraph(graph.edge_ranges, graph.edges, (; pairs(unfrozen_attrs)...))
 end
 
 function new_id!(graph::SyntaxGraph)
@@ -139,7 +133,9 @@ function child(graph::SyntaxGraph, id::NodeId, i::Integer)
     graph.edges[graph.edge_ranges[id][i]]
 end
 
-function getattr(graph::SyntaxGraph{<:Dict}, name::Symbol)
+# XXX: the @noinline (and the one on setattr!) work around an issue where
+# codegen produces a trampoline for `getindex`
+@noinline function getattr(graph::SyntaxGraph{Dict{Symbol,Dict{NodeId,Any}}}, name::Symbol)
     getfield(graph, :attributes)[name]
 end
 
@@ -147,19 +143,17 @@ function getattr(graph::SyntaxGraph{<:NamedTuple}, name::Symbol)
     getfield(getfield(graph, :attributes), name)
 end
 
-function getattr(graph::SyntaxGraph, name::Symbol, default)
-    get(getfield(graph, :attributes), name, default)
+function hasattr(graph::SyntaxGraph{Dict{Symbol,Dict{NodeId,Any}}}, name::Symbol)
+    haskey(getfield(graph, :attributes), name)
 end
 
-function hasattr(graph::SyntaxGraph, name::Symbol)
-    getattr(graph, name, nothing) !== nothing
+function hasattr(graph::SyntaxGraph{<:NamedTuple}, name::Symbol)
+    haskey(getfield(graph, :attributes), name)
 end
 
 # TODO: Probably terribly non-inferable?
-function setattr!(graph::SyntaxGraph, id::NodeId, k::Symbol, @nospecialize(v))
-    if !isnothing(v)
-        getattr(graph, k)[id] = v
-    end
+@noinline function setattr!(graph::SyntaxGraph, id::NodeId, k::Symbol, @nospecialize(v))
+    getattr(graph, k)[id] = v
     id
 end
 
@@ -212,7 +206,7 @@ end
 # fallback printing
 function node_string(ex::SyntaxTree, depth=2)
     out = "(_id="*string(ex._id)
-    for n in sort!(attrnames(ex))
+    for n in sort!(collect(attrnames(ex)))
         out *= ", "*string(n)*"="*repr(getproperty(ex, n))
     end
     if is_leaf(ex)
@@ -231,10 +225,11 @@ end
 function Base.getproperty(ex::SyntaxTree, name::Symbol)
     name === :_graph && return getfield(ex, :_graph)
     name === :_id  && return getfield(ex, :_id)
-    _id = getfield(ex, :_id)
-    return get(getproperty(getfield(ex, :_graph), name), _id) do
+    graph = getfield(ex, :_graph)
+    val = get(getattr(graph, name), getfield(ex, :_id)) do
         error("Property `$name` not defined on node: $(node_string(ex))")
     end
+    return val
 end
 
 function Base.setproperty!(ex::SyntaxTree, name::Symbol, @nospecialize(val))
@@ -247,9 +242,9 @@ function Base.propertynames(ex::SyntaxTree)
 end
 
 function Base.get(ex::SyntaxTree, name::Symbol, default)
-    attr = getattr(getfield(ex, :_graph), name, nothing)
-    return isnothing(attr) ? default :
-           get(attr, getfield(ex, :_id), default)
+    graph = getfield(ex, :_graph)
+    !hasattr(graph, name) && return default
+    get(getattr(graph, name), getfield(ex, :_id), default)
 end
 
 function Base.getindex(ex::SyntaxTree, i::Integer)
@@ -268,7 +263,8 @@ function Base.:≈(ex1::SyntaxTree, ex2::SyntaxTree)
         return false
     end
     if is_leaf(ex1)
-        return get(ex1, :value,    nothing) == get(ex2, :value,    nothing) &&
+        return hasattr(ex1, :value) == hasattr(ex2, :value) &&
+               get(ex1, :value,    nothing) == get(ex2, :value,    nothing) &&
                get(ex1, :name_val, nothing) == get(ex2, :name_val, nothing)
     else
         if numchildren(ex1) != numchildren(ex2)
@@ -279,13 +275,14 @@ function Base.:≈(ex1::SyntaxTree, ex2::SyntaxTree)
 end
 
 function hasattr(ex::SyntaxTree, name::Symbol)
-    attr = getattr(ex._graph, name, nothing)
-    return !isnothing(attr) && haskey(attr, ex._id)
+    graph = ex._graph
+    !hasattr(graph, name) && return false
+    return haskey(getattr(graph, name), ex._id)
 end
 
 function attrnames(ex::SyntaxTree)
     attrs = ex._graph.attributes
-    [name for (name, value) in pairs(attrs) if haskey(value, ex._id)]
+    (name::Symbol for (name, value) in pairs(attrs) if haskey(value, ex._id))
 end
 
 function copy_node(ex::SyntaxTree)
@@ -402,7 +399,7 @@ function _sourceref(sources, id)
 end
 
 function sourceref(ex::SyntaxTree)
-    sources = ex._graph.source::Dict{NodeId,SourceAttrType}
+    sources = ex._graph.source::Dict{Int, Any}
     id = ex._id
     while true
         s, _ = _sourceref(sources, id)
@@ -432,7 +429,7 @@ end
 function flattened_provenance(ex::SyntaxTree)
     refs = SyntaxList(ex._graph)
     _flattened_provenance(refs, ex._graph, ex._graph.source, ex._id)
-    return reverse(refs)
+    return reverse!(refs)
 end
 
 
@@ -484,7 +481,7 @@ end
 
 #-------------------------------------------------------------------------------
 # Lightweight vector of nodes ids with associated pointer to graph stored separately.
-mutable struct SyntaxList{Attrs, NodeIdVecType} <: AbstractVector{SyntaxTree}
+struct SyntaxList{Attrs, NodeIdVecType} <: AbstractVector{SyntaxTree}
     graph::SyntaxGraph{Attrs}
     ids::NodeIdVecType
 end
@@ -673,10 +670,7 @@ function copy_attrs!(dest, src, all=false)
     for (name, attr) in pairs(src._graph.attributes)
         if (all || (name !== :source && name !== :kind && name !== :syntax_flags)) &&
                 haskey(attr, src._id)
-            dest_attr = getattr(dest._graph, name, nothing)
-            if !isnothing(dest_attr)
-                dest_attr[dest._id] = attr[src._id]
-            end
+            setattr!(dest, name, attr[src._id])
         end
     end
 end
@@ -688,14 +682,14 @@ function copy_attrs!(dest, head::Union{Kind,SyntaxHead}, all=false)
     end
 end
 
-function mapchildren(f::Function, ctx, ex::SyntaxTree, do_map_child::Function)
+function mapchildren(f::Function, ctx, ex::SyntaxTree)
     if is_leaf(ex)
         return ex
     end
     orig_children = children(ex)
     cs = nothing
     for (i,e) in enumerate(orig_children)
-        newchild = do_map_child(i) ? f(e) : e
+        newchild = f(e)
         if isnothing(cs)
             if newchild == e
                 continue
@@ -715,26 +709,6 @@ function mapchildren(f::Function, ctx, ex::SyntaxTree, do_map_child::Function)
     ex2 = mknode(ex, cs)
     return ex2
 end
-
-function mapchildren(f::Function, ctx, ex::SyntaxTree,
-                     mapped_children::AbstractVector{<:Integer})
-    j = Ref(firstindex(mapped_children))
-    function do_map_child(i)
-        ind = j[]
-        if ind <= lastindex(mapped_children) && mapped_children[ind] == i
-            j[] += 1
-            true
-        else
-            false
-        end
-    end
-    mapchildren(f, ctx, ex, do_map_child)
-end
-
-function mapchildren(f::Function, ctx, ex::SyntaxTree)
-    mapchildren(f, ctx, ex, _->true)
-end
-
 
 """
 Recursively copy AST `ex` into `ctx`.
@@ -872,14 +846,13 @@ function prune(graph1_a::SyntaxGraph, entrypoints_a::Vector{NodeId})
             push!(nodes1, c1)
         end
     end
-    graph2.edges = 1:length(nodes1) # our reward for unaliasing
+    append!(graph2.edges, 1:length(nodes1)) # our reward for unaliasing
 
     for attr in attrnames(graph1)
         attr === :source && continue
         for (n2, n1) in enumerate(nodes1)
-            attrval = get(graph1.attributes[attr], n1, nothing)
-            if !isnothing(attrval)
-                graph2.attributes[attr][n2] = attrval
+            if haskey(graph1.attributes[attr], n1)
+                graph2.attributes[attr][n2] = graph1.attributes[attr][n1]
             end
         end
     end
@@ -919,7 +892,7 @@ end
 Give each descendent of `st` a `parent::NodeId` attribute.
 """
 function annotate_parent!(st::SyntaxTree)
-    g = unfreeze_attrs(syntax_graph(st))
+    g = syntax_graph(st)
     st = unalias_nodes(SyntaxTree(g, st._id))
     ensure_attributes!(g; parent=NodeId)
     mapchildren(t->_annotate_parent!(t, st._id), syntax_graph(st), st)
@@ -1243,7 +1216,7 @@ function _insert_green(graph::SyntaxGraph, sf::Base.RefValue{SourceFile},
         for c in reverse(cursor)
             push!(cs, _insert_green(graph, sf, txtbuf, offset, c))
         end
-        setchildren!(graph, id, reverse(cs))
+        setchildren!(graph, id, reverse!(cs))
     else
         v = parse_julia_literal(txtbuf, head(cursor), byte_range(cursor) .+ offset)
         if v isa Symbol
@@ -1288,7 +1261,6 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
 
     graph = syntax_graph(st)
     k = kind(st)
-    coreref(s::String) = setattr!(newleaf(graph, st, K"core"), :name_val, s)
     symleaf(s::String) = setattr!(newleaf(graph, st, K"Identifier"), :name_val, s)
     core_globalref(s::String) = setattr!(symleaf(s), :mod, Core)
     valleaf(@nospecialize(v)) = setattr!(newleaf(graph, st, K"Value"), :value, v)
@@ -1306,9 +1278,9 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
                 v isa UInt128 ? "@uint128_str" : "@big_str"
             mac = core_globalref(macname)
             arg = valleaf(replace(sourcetext(st), '_'=>""))
-            ret_cids = tree_ids(mac, coreref("nothing"), arg)
+            ret_cids = tree_ids(mac, valleaf(nothing), arg)
             newnode(graph, st, K"macrocall", ret_cids)
-        elseif hasattr(st, :name_val) && !(kind(st) in KSet"Identifier core")
+        elseif hasattr(st, :name_val) && !(kind(st) in KSet"Identifier")
             # certain kinds should really be identifiers.  known: &, |, :
             symleaf(st.name_val)
         else
@@ -1607,7 +1579,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
             cs = preprocessed_green_children(cs[1])
         end
     elseif k === K"return" && n_cs === 0
-        push!(cs, coreref("nothing"))
+        push!(cs, valleaf(nothing))
     elseif k === K"juxtapose"
         ret_k = K"call"
         pushfirst!(cs, symleaf("*"))

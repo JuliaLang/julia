@@ -646,6 +646,14 @@ revargs(x, r...) = (revargs(r...)..., x)
 
 reverse(t::Tuple) = revargs(t...)
 
+"""
+    isassigned(v::Tuple, i::Integer) -> Bool
+
+Return `true` if index `i` is within the bounds of tuple `v`, i.e. `1 ≤ i ≤ length(v)`.
+
+!!! compat "Julia 1.13"
+    This method requires at least Julia 1.13.
+"""
 function isassigned(v::Tuple, i::Integer)
     @boundscheck 1 <= i <= length(v) || return false
     true

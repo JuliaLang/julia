@@ -84,11 +84,15 @@ struct ScopeResolutionContext{Attrs} <: AbstractLoweringContext
     soft_assignable_globals::Set{NameKey}
     enable_soft_scopes::Bool
     expr_compat_mode::Bool
+    world::UInt
 end
 
 function contains_softscope_marker(ex)
-    kind(ex) == K"softscope" ||
-        needs_resolution(ex) && any(contains_softscope_marker, children(ex))
+    kind(ex) == K"softscope"  && return true
+    needs_resolution(ex) && for c in children(ex)
+        contains_softscope_marker(c) && return true
+    end
+    return false
 end
 
 top_scope(ctx) = ctx.scopes[1]
@@ -147,13 +151,15 @@ function declare_in_scope!(ctx, scope::ScopeInfo, ex, bk::Symbol; kws...)
     nk = NameKey(ex)
     if bk === :global
         declaration_scope = top_scope(ctx)
-        mod = hasattr(ex, :mod) ? ex.mod : ctx.scope_layers[ex.scope_layer].mod
+        mod = hasattr(ex, :mod) ? ex.mod::Module :
+            ctx.scope_layers[ex.scope_layer::LayerId].mod
     else
         declaration_scope = scope
         mod = hasattr(ex, :mod) ?
             throw(LoweringError(ex, "cannot use GlobalRef as local identifier")) : nothing
     end
-    is_internal = ctx.scope_layers[nk.layer].is_internal || getmeta(ex, :is_internal, false)
+    is_internal = ctx.scope_layers[nk.layer].is_internal ||
+        getmeta(ex, :is_internal, false)::Bool
     b = _new_binding(ctx, ex, nk.name, bk; mod, is_internal, kws...)
     declaration_scope.vars[nk] = b.id
     scope.vars[nk] = b.id
@@ -197,7 +203,7 @@ end
 
 function resolve_name(ctx, ex; exclude_toplevel_globals=false)
     # TODO: probably want to cache these lookups
-    for sid in reverse(ctx.scope_stack)
+    for sid in Iterators.reverse(ctx.scope_stack)
         bid = get(ctx.scopes[sid].vars, NameKey(ex), nothing)
         isnothing(bid) && continue
         b = get_binding(ctx, bid)
@@ -299,7 +305,7 @@ function enter_scope!(ctx, ex)
                 push!(ctx.soft_assignable_globals, vk)
                 declare_in_scope!(ctx, top_scope(ctx), ex, :global)
             elseif scope.is_permeable && is_defined_and_owned_global(
-                ctx.scope_layers[vk.layer].mod, Symbol(vk.name))
+                ctx.scope_layers[vk.layer].mod, Symbol(vk.name), ctx.world)
                 # special soft scope rules: existing global variables are assigned to
                 if ctx.enable_soft_scopes
                     push!(ctx.soft_assignable_globals, vk)
@@ -320,7 +326,7 @@ function enter_scope!(ctx, ex)
                 # assign-existing-global if this is an explicit global that
                 # isn't at top level, or if the soft scope exception applies
             else
-                declare_in_scope!(ctx, scope, ex, :local)
+                declare_in_scope!(ctx, scope, ex, :local; is_ambiguous_local = scope.is_permeable)
             end
         elseif b.kind === :static_parameter
             throw(LoweringError(ex, "cannot overwrite a static parameter"))
@@ -370,7 +376,7 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
         # Local declarations have a value of `nothing` according to flisp
         # lowering.
         # TODO: Should local decls be disallowed in value position?
-        @ast ctx ex "nothing"::K"core"
+        @ast ctx ex (::K"nothing")
     elseif k == K"decl"
         ex_out = mapchildren(e->_resolve_scopes(ctx, e, scope), ctx, ex)
         name = ex_out[1]
@@ -631,7 +637,7 @@ end
 function analyze_variables!(ctx, ex)
     k = kind(ex)
     if k == K"BindingId"
-        b = get_binding(ctx, ex.var_id)
+        b = get_binding(ctx, ex)
         b.is_read = true
         # The type of typed locals is invisible in the previous pass,
         # but is filled in here.
@@ -649,10 +655,12 @@ function analyze_variables!(ctx, ex)
         return
     elseif !needs_resolution(ex)
         return
-    elseif k == K"static_eval"
+    elseif k == K"static_eval" || k == K"foreigncall_arg1"
         badvar = find_any_local_binding(ctx, ex[1])
         if !isnothing(badvar)
-            name_hint = getmeta(ex, :name_hint, "syntax")
+            default = k == K"foreigncall_arg1" ?
+                "function name and library expression" : "syntax"
+            name_hint = getmeta(ex, :name_hint, default)::String
             throw(LoweringError(badvar, "$(name_hint) cannot reference local variable"))
         end
         return
@@ -675,7 +683,7 @@ function analyze_variables!(ctx, ex)
         analyze_variables!(ctx, ex[2])
     elseif k == K"function_decl"
         name = ex[1]
-        b = get_binding(ctx, name.var_id)
+        b = get_binding(ctx, name)
         if b.kind === :local
             init_closure_bindings!(ctx, name)
         end
@@ -685,13 +693,13 @@ function analyze_variables!(ctx, ex)
             analyze_variables!(ctx, ex[1])
         end
     elseif k == K"constdecl"
-        b = get_binding(ctx, ex[1].var_id)
+        b = get_binding(ctx, ex[1])
         b.is_const = true
         add_assign!(b)
     elseif k == K"call"
         name = ex[1]
         if kind(name) == K"BindingId"
-            get_binding(ctx, name.var_id).is_called = true
+            get_binding(ctx, name).is_called = true
         end
         foreach(e->analyze_variables!(ctx, e), children(ex))
     elseif k == K"method_defs"
@@ -713,8 +721,8 @@ function analyze_variables!(ctx, ex)
             # Record all lambdas for the same closure type in one place
             func_name = last(ctx.method_def_stack)
             if kind(func_name) == K"BindingId"
-                func_name_id = func_name.var_id
-                if get_binding(ctx, func_name_id).kind === :local
+                func_name_id = func_name.var_id::IdTag
+                if get_binding(ctx, func_name).kind === :local
                     push!(ctx.closure_bindings[func_name_id].lambdas, lambda_bindings)
                 end
             end
@@ -756,14 +764,18 @@ metadata about each binding.
 This pass also records the set of binding IDs used locally within the
 enclosing lambda form and information about variables captured by closures.
 """
-@fzone "JL: resolve_scopes" function resolve_scopes(ctx::DesugaringContext, ex)
+@fzone "JL: resolve_scopes" function resolve_scopes(ctx::DesugaringContext, ex;
+                                                    soft_scope::Union{Nothing,Bool}=nothing,
+                                                    world::UInt=ctx.world)
     graph = ensure_scope_attributes!(copy_attrs(ctx.graph))
     ex = reparent(graph, ex)
+    enable_soft_scopes = soft_scope !== nothing ? soft_scope : contains_softscope_marker(ex)
     ctx2 = ScopeResolutionContext(graph, ctx.bindings, ctx.mod,
                                   Vector{ScopeInfo}(), Vector{ScopeId}(),
                                   ctx.scope_layers, Set{NameKey}(),
-                                  contains_softscope_marker(ex),
-                                  ctx.expr_compat_mode)
+                                  enable_soft_scopes,
+                                  ctx.expr_compat_mode,
+                                  world)
     ex2 = resolve_scopes(ctx2, ex)
     ctx3 = VariableAnalysisContext(graph, ctx2.bindings, ctx2.mod,
                                    ctx2.scopes, ex2.lambda_bindings,

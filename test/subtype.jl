@@ -2865,3 +2865,4 @@ let tt = Tuple{typeof(JETLS509f),
 end
 @test !(Tuple{Union{Int16,Int8},Ref{Int16},Ref{Int16}} <: Tuple{<:Union{S,T},Ref{S},Ref{T}} where {S,T})
 @test !(Tuple{Ref{Int16},Ref{Int16},Union{Int16,Int8}} <: Tuple{Ref{S},Ref{T},<:Union{S,T}} where {S,T})
+@test Tuple{NTuple{2,Int}, Int8} <: Tuple{<:Union{NTuple{2,T},Tuple{S,T}}, <:T} where {S,T>:Int}

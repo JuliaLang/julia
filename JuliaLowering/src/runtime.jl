@@ -53,7 +53,7 @@ _is_leaf(::Expr) = false
 _is_leaf(@nospecialize(_)) = true
 
 # Produce interpolated node for `$x` syntax
-function _interpolated_value(ctx::InterpolationContext, srcref, ex)
+function _interpolated_value(ctx::InterpolationContext, srcref, @nospecialize(ex))
     if ex isa SyntaxTree
         if !is_compatible_graph(ctx, ex)
             ex = copy_ast(ctx, ex)
@@ -69,7 +69,7 @@ function _interpolated_value(ctx::InterpolationContext, srcref, ex)
     end
 end
 
-function _interpolated_value(::ExprInterpolationContext, _, ex)
+function _interpolated_value(::ExprInterpolationContext, _, @nospecialize(ex))
     ex
 end
 
@@ -402,8 +402,8 @@ end
 # Has no side effects, unlike isdefined()
 #
 # (This should do what fl_defined_julia_global does for flisp lowering)
-function is_defined_and_owned_global(mod, name)
-    Base.binding_kind(mod, name) === Base.PARTITION_KIND_GLOBAL
+function is_defined_and_owned_global(mod, name, world::UInt=Base.get_world_counter())
+    return Base.invoke_in_world(world, Base.binding_kind, mod, name) === Base.PARTITION_KIND_GLOBAL
 end
 
 # "Reserve" a binding: create the binding if it doesn't exist but do not assign
@@ -414,7 +414,7 @@ function reserve_module_binding(mod, name)
     # lock is only accessible from C. See also the C code in
     # `fl_module_unique_name`.
     if _get_module_binding(mod, name; create=false) === nothing
-        _get_module_binding(mod, name; create=true) !== nothing
+        return _get_module_binding(mod, name; create=true) !== nothing
     else
         return false
     end

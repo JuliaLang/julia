@@ -1519,19 +1519,20 @@ void jl_gc_queue_multiroot(const jl_value_t *parent, const void *ptr, jl_datatyp
         jl_gc_wb_back(parent);
         return;
     }
+    assert(ly->flags.fielddesc_type != JL_FIELDDESC_FOREIGN);
     const uint8_t *ptrs8 = (const uint8_t *)jl_dt_layout_ptrs(ly);
     const uint16_t *ptrs16 = (const uint16_t *)jl_dt_layout_ptrs(ly);
     const uint32_t *ptrs32 = (const uint32_t*)jl_dt_layout_ptrs(ly);
     for (size_t i = 1; i < npointers; i++) {
         uint32_t fld;
-        if (ly->flags.fielddesc_type == 0) {
+        if (ly->flags.fielddesc_type == JL_FIELDDESC_8) {
             fld = ptrs8[i];
         }
-        else if (ly->flags.fielddesc_type == 1) {
+        else if (ly->flags.fielddesc_type == JL_FIELDDESC_16) {
             fld = ptrs16[i];
         }
         else {
-            assert(ly->flags.fielddesc_type == 2);
+            assert(ly->flags.fielddesc_type == JL_FIELDDESC_32);
             fld = ptrs32[i];
         }
         jl_value_t *ptrf = ((jl_value_t**)ptr)[fld];
@@ -2363,7 +2364,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                     gc_mark_excstack(ptls, excstack, itr);
                 }
                 const jl_datatype_layout_t *layout = jl_task_type->layout;
-                assert(layout->flags.fielddesc_type == 0);
+                assert(layout->flags.fielddesc_type == JL_FIELDDESC_8);
                 assert(layout->nfields > 0);
                 uint32_t npointers = layout->npointers;
                 char *obj8_parent = (char *)ta;
@@ -2458,19 +2459,21 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                     objary_begin += layout->first_ptr;
                     gc_mark_objarray(ptls, objary_parent, objary_begin, objary_end, step, nptr);
                 }
-                else if (layout->flags.fielddesc_type == 0) {
+                else if (layout->flags.fielddesc_type == JL_FIELDDESC_8) {
                     uint8_t *obj8_begin = (uint8_t*)jl_dt_layout_ptrs(layout);
                     uint8_t *obj8_end = obj8_begin + npointers;
                     gc_mark_memory8(ptls, objary_parent, objary_begin, objary_end, obj8_begin, obj8_end,
                                    elsize, nptr);
                 }
-                else if (layout->flags.fielddesc_type == 1) {
+                else if (layout->flags.fielddesc_type == JL_FIELDDESC_16) {
                     uint16_t *obj16_begin = (uint16_t*)jl_dt_layout_ptrs(layout);
                     uint16_t *obj16_end = obj16_begin + npointers;
                     gc_mark_memory16(ptls, objary_parent, objary_begin, objary_end, obj16_begin, obj16_end,
                                     elsize, nptr);
                 }
                 else {
+                    assert(layout->flags.fielddesc_type != JL_FIELDDESC_FOREIGN);
+                    // Inline array scanning does not implement 32-bit or foreign descriptors.
                     assert(0 && "unimplemented");
                 }
             }
@@ -2486,9 +2489,9 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
         if (npointers == 0)
             return;
         uintptr_t nptr = (npointers << 2 | (bits & GC_OLD));
-        assert((layout->nfields > 0 || layout->flags.fielddesc_type == 3) &&
+        assert((layout->nfields > 0 || layout->flags.fielddesc_type == JL_FIELDDESC_FOREIGN) &&
                "opaque types should have been handled specially");
-        if (layout->flags.fielddesc_type == 0) {
+        if (layout->flags.fielddesc_type == JL_FIELDDESC_8) {
             char *obj8_parent = (char *)new_obj;
             uint8_t *obj8_begin = (uint8_t *)jl_dt_layout_ptrs(layout);
             uint8_t *obj8_end = obj8_begin + npointers;
@@ -2501,7 +2504,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                     gc_ptr_queue_push(mq, new_obj);
             }
         }
-        else if (layout->flags.fielddesc_type == 1) {
+        else if (layout->flags.fielddesc_type == JL_FIELDDESC_16) {
             char *obj16_parent = (char *)new_obj;
             uint16_t *obj16_begin = (uint16_t *)jl_dt_layout_ptrs(layout);
             uint16_t *obj16_end = obj16_begin + npointers;
@@ -2514,7 +2517,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                     gc_ptr_queue_push(mq, new_obj);
             }
         }
-        else if (layout->flags.fielddesc_type == 2) {
+        else if (layout->flags.fielddesc_type == JL_FIELDDESC_32) {
             // This is very uncommon
             // Do not do store to load forwarding to save some code size
             char *obj32_parent = (char *)new_obj;
@@ -2530,7 +2533,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
             }
         }
         else {
-            assert(layout->flags.fielddesc_type == 3);
+            assert(layout->flags.fielddesc_type == JL_FIELDDESC_FOREIGN);
             jl_fielddescdyn_t *desc = (jl_fielddescdyn_t *)jl_dt_layout_fields(layout);
             int old = jl_astaggedvalue(new_obj)->bits.gc & 2;
             uintptr_t young = desc->markfunc(ptls, new_obj);

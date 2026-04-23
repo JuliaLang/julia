@@ -221,6 +221,33 @@ let v = Base.Vector{test_mod.S5}(test_mod.S5(1,1))
     @test v[1] === test_mod.S5(1,1)
 end
 
+@testset "inner ctor should always include (latestworld)" begin
+    @test fl_eval(
+        test_mod,
+        :(begin
+              struct fl_DefaultInnerCtorWorld; x::Int; end
+              fl_DefaultInnerCtorWorld(1)
+          end)).x == 1
+    @test jl_eval(
+        test_mod,
+        :(begin
+              struct jl_DefaultInnerCtorWorld; x::Int; end
+              jl_DefaultInnerCtorWorld(1)
+          end)).x == 1
+    @test fl_eval(
+        test_mod,
+        :(begin
+              struct fl_InnerCtorWorld; x::Int; fl_InnerCtorWorld() = new(1); end
+              fl_InnerCtorWorld()
+          end)).x == 1
+    @test jl_eval(
+        test_mod,
+        :(begin
+              struct jl_InnerCtorWorld; x::Int; jl_InnerCtorWorld() = new(1); end
+              jl_InnerCtorWorld()
+          end)).x == 1
+end
+
 # Likely not set in stone (the behaviour is odd here), but test to detect changes
 @testset "when default inner ctors are generated" begin
     local function test_has_inner_ctor(t)
@@ -447,6 +474,11 @@ JuliaLowering.include_string(test_mod, "primitive type P36104 8 end")
 JuliaLowering.include_string(test_mod, "const orig_P36104 = P36104")
 JuliaLowering.include_string(test_mod, "primitive type P36104 16 end")
 @test test_mod.P36104 !== test_mod.orig_P36104
+
+# Duplicate field names should be rejected
+@test_throws LoweringError JuliaLowering.include_string(test_mod, "struct DupField; x; x; end")
+@test_throws LoweringError JuliaLowering.include_string(test_mod, "struct DupField2; x::Int; x::String; end")
+@test_throws LoweringError JuliaLowering.include_string(test_mod, "mutable struct DupField3; x; y; x; end")
 
 # Struct with outer constructor where one typevar is constrained by the other
 # See https://github.com/JuliaLang/julia/issues/27269)

@@ -95,7 +95,7 @@ add_tfunc(Core.throw_methoderror, 1, INT_INF, @nospecs((𝕃::AbstractLattice, x
 # if isexact is false, the actual runtime type may (will) be a subtype of t
 # if isconcrete is true, the actual runtime type is definitely concrete (unreachable if not valid as a typeof)
 # if istype is true, the actual runtime value will definitely be a type (e.g. this is false for Union{Type{Int}, Int})
-function instanceof_tfunc(@nospecialize(t), astag::Bool=false, @nospecialize(troot) = t)
+function instanceof_tfunc(@nospecialize(t), astag::Bool=false, @nospecialize(troot = t))
     if isa(t, Const)
         if isa(t.val, Type) && valid_as_lattice(t.val, astag)
             return t.val, true, isconcretetype(t.val), true
@@ -131,6 +131,14 @@ function instanceof_tfunc(@nospecialize(t), astag::Bool=false, @nospecialize(tro
                 # uninhabited with any runtime T that exists)
                 isexact = true
             end
+        end
+        # If this is a NamedTuple type with known names but an unknown tuple type
+        # parameter, use the length of the names to constrain the tuple type.
+        if t′′ isa DataType && t′′.name === _NAMEDTUPLE_NAME && t′′.parameters[1] isa Tuple && has_free_typevars(t′′)
+            names = t′′.parameters[1]::Tuple
+            n = length(names)
+            nt_bound = NamedTuple{names, T} where T<:NTuple{n, Any}
+            tr = typeintersect(tr, nt_bound)
         end
         return tr, isexact, isconcrete, istype
     elseif isa(t, Union)
