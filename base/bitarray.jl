@@ -430,10 +430,8 @@ function unsafe_copyto!(dest::BitArray, doffs::Integer, src::Union{BitArray,Arra
     return dest
 end
 
-function copyto!(dest::BitArray, src::AbstractArray)
+function _copyto!(dest::BitArray, src::AbstractArray)
     @_propagate_inbounds_meta
-    isempty(src) && return dest
-    @boundscheck length(src) <= length(dest) || throw(BoundsError(dest, LinearIndices(src)))
     sp, soff = _unwrap_with_offset(src)
     if sp isa Union{BitArray,Array}
         _copyto!(dest, firstindex(dest), sp, firstindex(src) + soff, length(src))
@@ -442,10 +440,7 @@ function copyto!(dest::BitArray, src::AbstractArray)
     end
     return dest
 end
-function copyto!(dest::BitArray, src::BitArray)
-    @_propagate_inbounds_meta
-    isempty(src) && return dest
-    @boundscheck length(src) <= length(dest) || throw(BoundsError(dest, LinearIndices(src)))
+function _copyto!(dest::BitArray, src::BitArray)
     destc = dest.chunks; srcc = src.chunks
     nc = min(length(destc), length(srcc))
     nc == 0 && return dest

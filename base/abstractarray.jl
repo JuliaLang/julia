@@ -1070,6 +1070,14 @@ function copyto!(dest::AbstractArray, src::AbstractArray)
     @_propagate_inbounds_meta
     isempty(src) && return dest
     @boundscheck length(src) <= length(dest) || throw(BoundsError(dest, LinearIndices(src)))
+    _copyto!(dest, src)
+    return dest
+end
+
+# Internal 2-arg dest-specific routing (e.g. BitArray) — kept off public `copyto!`
+# to avoid ambiguity with packages that specialize `copyto!(::AbstractArray, ::TheirType)`.
+function _copyto!(dest::AbstractArray, src::AbstractArray)
+    @_propagate_inbounds_meta
     _copyto!(IndexStyle(dest), dest, IndexStyle(src), src)
     return dest
 end
