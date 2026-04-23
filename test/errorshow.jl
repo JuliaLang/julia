@@ -1305,14 +1305,21 @@ end
 
 for (expr, errmsg) in
     [
-        (:(struct Foo <: 1 end),       "can only subtype data types"),
+        (:(struct Foo <: 1 end),       "supertype must be a type, got a value of type `Int64`"),
         (:(struct Foo <: Float64 end), "can only subtype abstract types"),
+        (:(struct Foo <: Dict end), "can only subtype abstract types"),
         (:(struct Foo <: Foo end),     "a type cannot subtype itself"),
         (:(struct Foo <: Tuple{Float64} end), "cannot subtype a tuple type"),
+        (:(struct Foo <: (Tuple{T} where T) end), "cannot subtype a tuple type"),
         (:(struct Foo <: NamedTuple{(:a,), Tuple{Int64}} end), "cannot subtype a named tuple type"),
+        (:(struct Foo <: NamedTuple end), "cannot subtype a named tuple type"),
         (:(struct Foo <: Type{Float64} end), "cannot add subtypes to Type"),
         (:(struct Foo <: Type{Float64} end), "cannot add subtypes to Type"),
         (:(struct Foo <: typeof(Core.apply_type) end), "cannot add subtypes to Core.Builtin"),
+        (:(struct Foo <: AbstractArray end), "supertype `AbstractArray{T, N}` has unbound type parameters"),
+        (:(struct Foo{T} <: AbstractArray{T} end), "supertype `AbstractArray{T, N}` has unbound type parameters"),
+        (:(struct Foo <: (AbstractArray{T, N} where T <: Integer where N) end), "supertype `AbstractArray{T<:Integer, N}` has unbound type parameters"),
+        (:(struct Foo <: Union{Int, Float64} end), "cannot subtype a Union type"),
     ]
     err = try @eval $expr
     catch e
