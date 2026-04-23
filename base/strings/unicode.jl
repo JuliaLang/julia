@@ -293,6 +293,7 @@ julia> textwidth("March")
 textwidth(s::AbstractString) = mapreduce(textwidth, +, s; init=0)
 # foldable+nothrow: String iteration is total and textwidth(::Char) is nothrow.
 @assume_effects :nothrow :foldable textwidth(s::String) = mapreduce(textwidth, +, s; init=0)
+@assume_effects :nothrow :foldable textwidth(s::SubString{String}) = mapreduce(textwidth, +, s; init=0)
 
 textwidth(s::AnnotatedString) = textwidth(s.string)
 

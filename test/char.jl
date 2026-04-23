@@ -411,4 +411,7 @@ end
     for f in (isascii, textwidth, lastindex)
         @test Core.Compiler.is_removable_if_unused(Base.infer_effects(f, (String,)))
     end
+    for f in (length, isascii, textwidth, lastindex)
+        @test Core.Compiler.is_removable_if_unused(Base.infer_effects(f, (SubString{String},)))
+    end
 end
