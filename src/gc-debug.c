@@ -401,7 +401,7 @@ void gc_verify_tags(void)
 
 #ifdef GC_DEBUG_ENV
 JL_DLLEXPORT jl_gc_debug_env_t jl_gc_debug_env = {
-    0, 0,
+    0,
     {0, UINT64_MAX, 0, 0, 0, {0, 0, 0}},
     {0, UINT64_MAX, 0, 0, 0, {0, 0, 0}},
     {0, UINT64_MAX, 0, 0, 0, {0, 0, 0}}
