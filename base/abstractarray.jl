@@ -1070,17 +1070,45 @@ function copyto!(dest::AbstractArray, src::AbstractArray)
     @_propagate_inbounds_meta
     isempty(src) && return dest
     @boundscheck length(src) <= length(dest) || throw(BoundsError(dest, LinearIndices(src)))
-    _copyto!(dest, src)
+    _copyto_styled!(CopyToStyle(CopyToStyle(dest), CopyToStyle(src)), dest, src)
     return dest
 end
 
-# Internal 2-arg dest-specific routing (e.g. BitArray) — kept off public `copyto!`
-# to avoid ambiguity with packages that specialize `copyto!(::AbstractArray, ::TheirType)`.
-function _copyto!(dest::AbstractArray, src::AbstractArray)
-    @_propagate_inbounds_meta
-    _copyto!(IndexStyle(dest), dest, IndexStyle(src), src)
-    return dest
-end
+"""
+    CopyToStyle
+
+Abstract trait hub coordinating `copyto!(dest, src)` dispatch across wrapper and
+specialized array types. Use it when a `copyto!(dest, src)` specialization would
+otherwise ambiguate with dest- or src-type methods from other packages.
+
+- `CopyToStyle(::Type{<:YourArrayType}) = YourStyle()` registers a type under a style.
+- `CopyToStyle(::A, ::B)` is the combination rule: given the dest-side style and
+  src-side style, return the combined style that wins. The base default is
+  **LHS (dest) wins** — if your style should take precedence as a destination,
+  no rule is needed. Override only when src should win over a default dest,
+  or to resolve a specific pairwise conflict with another package's style.
+- `_copyto_styled!(::YourStyle, dest, src)` is the algorithm for that combined style.
+
+The combination rule is the single place cross-type precedence lives, which keeps
+cross-package ambiguities out of `copyto!`'s public method table.
+"""
+abstract type CopyToStyle end
+
+"""
+    DefaultCopyToStyle <: CopyToStyle
+
+Fallback style. Its algorithm is the generic IndexStyle-dispatched `copyto!`.
+"""
+struct DefaultCopyToStyle <: CopyToStyle end
+
+CopyToStyle(x) = CopyToStyle(typeof(x))
+CopyToStyle(::Type{<:AbstractArray}) = DefaultCopyToStyle()
+# Combination rule: by default the LHS (dest-side) style wins. Override to declare
+# that your style should win as src over a default dest, or to resolve conflicts.
+CopyToStyle(a::CopyToStyle, ::CopyToStyle) = a
+
+_copyto_styled!(::DefaultCopyToStyle, dest::AbstractArray, src::AbstractArray) =
+    (@_propagate_inbounds_meta; _copyto!(IndexStyle(dest), dest, IndexStyle(src), src))
 
 function copyto!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
     @_propagate_inbounds_meta
@@ -1090,7 +1118,10 @@ function copyto!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyl
     return dest
 end
 
-# temp to not break LinearAlgebra
+# Temporary shim: pre-refactor external callers of `copyto_unaliased!` still work,
+# and LinearAlgebra's master-era `Base.copyto_unaliased!` override on AdjOrTransAbsMat
+# loads without error (though it is unreachable from the new flow — LA will migrate
+# to a `CopyToStyle`-based specialization in a coordinated follow-up).
 function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
     @_propagate_inbounds_meta
     _copyto!(deststyle, dest, srcstyle, src)

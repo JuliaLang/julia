@@ -430,7 +430,18 @@ function unsafe_copyto!(dest::BitArray, doffs::Integer, src::Union{BitArray,Arra
     return dest
 end
 
-function _copyto!(dest::BitArray, src::AbstractArray)
+"""
+    BitArrayCopyToStyle <: CopyToStyle
+
+Style for `copyto!` specializations that exploit BitArray's chunk packing.
+Wins as dest via the base LHS-wins combination rule; a future expansion could
+add a chunk-read fast path when BitArray is the source (would require declaring
+`CopyToStyle(::DefaultCopyToStyle, ::BitArrayCopyToStyle) = BitArrayCopyToStyle()`).
+"""
+struct BitArrayCopyToStyle <: CopyToStyle end
+CopyToStyle(::Type{<:BitArray}) = BitArrayCopyToStyle()
+
+function _copyto_styled!(::BitArrayCopyToStyle, dest::BitArray, src::AbstractArray)
     @_propagate_inbounds_meta
     sp, soff = _unwrap_with_offset(src)
     if sp isa Union{BitArray,Array}
@@ -440,7 +451,7 @@ function _copyto!(dest::BitArray, src::AbstractArray)
     end
     return dest
 end
-function _copyto!(dest::BitArray, src::BitArray)
+function _copyto_styled!(::BitArrayCopyToStyle, dest::BitArray, src::BitArray)
     destc = dest.chunks; srcc = src.chunks
     nc = min(length(destc), length(srcc))
     nc == 0 && return dest
