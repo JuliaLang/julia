@@ -1146,14 +1146,14 @@ end
     msg(f) = sprint(Base.showerror, err(f))
 
     s = msg(() -> TestShadowedTypeHintA.f(TestShadowedTypeHintB.Foo()))
-    @test occursin("You may have intended to pass an instance of `", s)
+    @test occursin("You may have intended `", s)
     @test occursin("TestShadowedTypeHintA.Foo", s)
     @test occursin("TestShadowedTypeHintB.Foo", s)
 
-    @test !occursin("You may have intended to pass", msg(() -> sin("a")))
-    @test !occursin("You may have intended to pass",
+    @test !occursin("You may have intended", msg(() -> sin("a")))
+    @test !occursin("You may have intended",
                     msg(() -> TestShadowedTypeHintA.g(TestShadowedTypeHintB.Foo(), "not an int")))
-    @test_broken occursin("You may have intended to pass",
+    @test_broken occursin("You may have intended",
                           msg(() -> TestShadowedTypeHintA.h([TestShadowedTypeHintB.Foo()])))
 end
 
