@@ -1243,7 +1243,7 @@ Experimental.register_error_hint(fielderror_listfields_hint_handler, FieldError)
 
 function apply_type_unionall_hint_handler(io, ex)
     @nospecialize
-    if ex.expected === UnionAll && isa(ex.got, DataType)
+    if ex.func === :apply_type && ex.expected === UnionAll && isa(ex.got, DataType)
         print(io, "\nHint: `", ex.got, "` takes no type parameters.")
     end
 end

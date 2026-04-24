@@ -8794,6 +8794,7 @@ end
     @test occursin("Hint: `BitVector` takes no type parameters", sprint(showerror, try BitVector{1} catch e; e end))
     @test !occursin("Hint:", sprint(showerror, try Core.apply_type(5, 2) catch e; e end))
     @test !occursin("Hint:", sprint(showerror, try Union{Int64,Float64}{Int64} catch e; e end))
+    @test !occursin("Hint:", sprint(showerror, try typeassert(Int64, UnionAll) catch e; e end))
     @test_throws ErrorException("too many parameters for type `Array`: expected 2, got 4") Array{1,2,3,4}
     @test_throws ErrorException("too many parameters for type `BitArray`: expected 1, got 2") BitArray{1,2}
 end
