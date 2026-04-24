@@ -1132,8 +1132,7 @@ let ex = try
     @test occursin("may have intended to extend", sprint(Base.showerror, ex))
 end
 
-# Test hint when an argument's type is shadowed by a same-named type from
-# another module expected by the method (issue #41084).
+# issue #41084
 module TestShadowedTypeHint
     struct Foo end
     func(::Foo) = "hi"
@@ -1151,7 +1150,6 @@ let ex = try
     @test occursin("TestShadowedTypeHintOther.Foo", s)
     @test occursin("TestShadowedTypeHint.Foo", s)
 end
-# Negative: no hint when the call fails for unrelated reasons.
 let ex = try
         sin("a")
     catch e

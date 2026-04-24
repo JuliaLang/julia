@@ -360,9 +360,6 @@ function showerror(io::IO, ex::MethodError)
             end
         end
     end
-    # Check for arguments whose types share a name with a different type expected
-    # by some method of `f` — e.g. passing a `Main.Foo` where a `Bar.Foo` is expected
-    # (issue #41084). Surface this explicitly because both types print as plain `Foo`.
     if !is_arg_types && !(f isa Core.Builtin)
         show_shadowed_type_hint(io, f, san_arg_types_param)
     end
@@ -460,35 +457,21 @@ stacktrace_expand_basepaths()::Bool = Base.get_bool_env("JULIA_STACKTRACE_EXPAND
 stacktrace_contract_userdir()::Bool = Base.get_bool_env("JULIA_STACKTRACE_CONTRACT_HOMEDIR", true) === true
 stacktrace_linebreaks()::Bool = Base.get_bool_env("JULIA_STACKTRACE_LINEBREAKS", false) === true
 
-_shadow_datatype(@nospecialize(T)) = (T = unwrap_unionall(T); T isa DataType ? T : nothing)
+_datatype_or_nothing(@nospecialize(T)) = (T = unwrap_unionall(T); T isa DataType ? T : nothing)
 
-# For each argument of a failed dispatch, check whether any method of `f`
-# expects a different type that nonetheless shares the same short name
-# (e.g. the user passed `Main.Foo` where a method expected `Bar.Foo`).
-# Print a hint naming both types with their module prefixes.
 function show_shadowed_type_hint(io::IO, @nospecialize(f), san_arg_types_param::Vector{Any})
     reported = IdSet{Core.TypeName}()
-    ms = try
-        methods(f)
-    catch
-        return nothing
-    end
-    for method in ms
+    for method in methods(f)
         msig = unwrap_unionall(method.sig)
         isa(msig, DataType) || continue
         mparams = msig.parameters
-        # mparams[1] is the function type; argument types start at index 2
-        n = min(length(mparams) - 1, length(san_arg_types_param))
-        for i in 1:n
+        for i in 1:min(length(mparams) - 1, length(san_arg_types_param))
             expected = mparams[i + 1]
-            if isa(expected, Core.TypeofVararg)
-                expected = unwrapva(expected)
-            end
-            e_dt = _shadow_datatype(expected)
-            a_dt = _shadow_datatype(san_arg_types_param[i])
+            isa(expected, Core.TypeofVararg) && (expected = unwrapva(expected))
+            e_dt = _datatype_or_nothing(expected)
+            a_dt = _datatype_or_nothing(san_arg_types_param[i])
             (e_dt === nothing || a_dt === nothing) && continue
-            e_tn = e_dt.name
-            a_tn = a_dt.name
+            e_tn, a_tn = e_dt.name, a_dt.name
             e_tn === a_tn && continue
             e_tn.name === a_tn.name || continue
             (isdefined(e_tn, :module) && isdefined(a_tn, :module)) || continue
@@ -503,7 +486,6 @@ function show_shadowed_type_hint(io::IO, @nospecialize(f), san_arg_types_param::
                   "` but are distinct types defined in different modules.")
         end
     end
-    return nothing
 end
 
 function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
