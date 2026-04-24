@@ -290,6 +290,16 @@ function _check_copyto_args(dest, doffs, src, soffs, n)
     return nothing
 end
 
+# these methods are not necessary, but they help inference since we set max_methods=1 on copyto!
+copyto!(dest::Array, src::Array) =
+    (@_propagate_inbounds_meta; _copyto!(dest, firstindex(dest), src, firstindex(src), length(src)))
+copyto!(dest::Array, src::Memory) =
+    (@_propagate_inbounds_meta; _copyto!(dest, firstindex(dest), src, firstindex(src), length(src)))
+copyto!(dest::Memory, src::Array) =
+    (@_propagate_inbounds_meta; _copyto!(dest, firstindex(dest), src, firstindex(src), length(src)))
+copyto!(dest::Array{T}, src::Array{T}) where {T} =
+    (@_propagate_inbounds_meta; _copyto!(dest, firstindex(dest), src, firstindex(src), length(src)))
+
 # manual loop avoids memmove call overhead for small isbits non-overlapping copies
 function _copyto!(dest::Union{Array,Memory}, doffs::Integer, src::Union{Array,Memory}, soffs::Integer, n::Integer)
     @inline
