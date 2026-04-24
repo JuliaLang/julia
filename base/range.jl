@@ -457,6 +457,9 @@ end
     Base.AbstractOneTo
 
 Abstract type for ranges that start at 1 and have a step size of 1.
+
+!!! compat "Julia 1.13"
+    This type requires at least Julia 1.13.
 """
 abstract type AbstractOneTo{T} <: AbstractUnitRange{T} end
 
@@ -971,7 +974,7 @@ unsafe_getindex(v::OneTo{T}, i::Integer) where T = convert(T, i)
 unsafe_getindex(v::AbstractRange{T}, i::Integer) where T = convert(T, first(v) + (i - oneunit(i))*step_hp(v))
 function unsafe_getindex(r::StepRangeLen{T}, i::Integer) where T
     u = oftype(r.offset, i) - r.offset
-    T(r.ref + u*r.step)
+    convert(T, (r.ref + u*r.step))
 end
 unsafe_getindex(r::LinRange, i::Integer) = lerpi(i-oneunit(i), r.lendiv, r.start, r.stop)
 
@@ -1166,6 +1169,17 @@ function ==(r::AbstractRange, s::AbstractRange)
         yr, ys = iterate(r, yr[2]), iterate(s, ys[2])
     end
     return true
+end
+
+function cmp(r1::T, r2::T) where {T <: AbstractRange}
+    firstindex(r1) == firstindex(r2) || return cmp(firstindex(r1), firstindex(r2))
+    (isempty(r1) || isempty(r2)) && return cmp(isempty(r2), isempty(r1))
+    first(r1) != first(r2) && return cmp(first(r1), first(r2))
+    # Assume that ranges are monotonic and use the last shared element as a high precision proxy for step.
+    n = min(lastindex(r1), lastindex(r2))
+    x1, x2 = r1[n], r2[n]
+    x1 != x2 && return cmp(x1, x2)
+    cmp(length(r1), length(r2))
 end
 
 intersect(r::OneTo, s::OneTo) = OneTo(min(r.stop,s.stop))

@@ -17,7 +17,7 @@ If you follow the advice and hit `Ctrl-C`, you might see
 
   1 dependency had warnings during precompilation:
 ┌ Test1 [ac89d554-e2ba-40bc-bc5c-de68b658c982]
-│  [pid 2745] waiting for IO to finish:
+│  [pid 2745] Waiting for background task / IO / timer to finish:
 │   Handle type        uv_handle_t->data
 │   timer              0x55580decd1e0->0x7f94c3a4c340
 ```

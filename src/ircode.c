@@ -78,6 +78,7 @@ extern "C" {
 #define TAG_ENTERNODE          61
 
 #define LAST_TAG 61
+#define MAX_SMALL_INT32 20
 
 
 typedef struct {
@@ -370,7 +371,7 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal)
         }
         for (i = 0; i < l; i++) {
             int32_t e = jl_array_data(edges, int32_t)[i];
-            if (e <= 0 && e <= 20) { // 1-byte encodings
+            if (e >= 0 && e <= MAX_SMALL_INT32) { // 1-byte encodings
                 jl_value_t *ebox = jl_box_int32(e);
                 JL_GC_PROMISE_ROOTED(ebox);
                 jl_encode_value(s, ebox);
@@ -1238,7 +1239,10 @@ JL_DLLEXPORT uint8_t jl_ir_flag_has_image_globalref(jl_string_t *data)
 {
     if (jl_is_code_info(data))
         return ((jl_code_info_t*)data)->has_image_globalref;
-    assert(jl_is_string(data));
+    if (!jl_is_string(data)) {
+        // foreign CodeInstance with custom source/IR, doesn't track GlobalRef edges
+        return 0;
+    }
     jl_code_info_flags_t flags;
     flags.packed = jl_string_data(data)[ir_offset_flags];
     return flags.bits.has_image_globalref;
@@ -1631,6 +1635,7 @@ void jl_init_serializer(void)
                      // empirical list of very common symbols
                      #include "common_symbols1.inc"
 
+                     // keep in sync with MAX_SMALL_INT32
                      jl_box_int32(0), jl_box_int32(1), jl_box_int32(2),
                      jl_box_int32(3), jl_box_int32(4), jl_box_int32(5),
                      jl_box_int32(6), jl_box_int32(7), jl_box_int32(8),

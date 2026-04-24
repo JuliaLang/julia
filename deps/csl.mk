@@ -133,7 +133,7 @@ distclean-csl: clean-csl
 else
 $(eval $(call bb-install,csl,CSL,true))
 ifeq ($(OS),WINNT)
-GCC_VERSION = 14
+GCC_VERSION = 15
 install-csl:
 	mkdir -p $(build_private_libdir)/
 	cp -a $(build_shlibdir)/$(call versioned_libname,libstdc++,6) $(build_shlibdir)/libstdc++.$(SHLIB_EXT)

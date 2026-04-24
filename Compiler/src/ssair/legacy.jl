@@ -13,7 +13,7 @@ function inflate_ir!(ci::CodeInfo, mi::MethodInstance)
     if ci.slottypes === nothing
         argtypes = va_process_argtypes(fallback_lattice,
             matching_cache_argtypes(fallback_lattice, mi),
-            ci.nargs, ci.isva)
+            ci.nargs, ci.isva, mi)
     else
         argtypes = ci.slottypes[1:ci.nargs]
     end

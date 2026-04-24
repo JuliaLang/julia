@@ -2,6 +2,8 @@
 
 using Test, InteractiveUtils
 
+@test isempty(Test.detect_closure_boxes(InteractiveUtils))
+
 @testset "highlighting" begin
     include("highlighting.jl")
 end
@@ -58,7 +60,7 @@ for u in Any[
     Union{Tuple{Int, Int}, Tuple{Char, Int}, Nothing},
     Union{Missing, Nothing}
 ]
-    @test InteractiveUtils.is_expected_union(u)
+    @test Base.Compiler.IRShow.is_expected_union(u)
 end
 
 for u in Any[
@@ -66,7 +68,7 @@ for u in Any[
     Union{Missing, Array},
     Union{Int, Tuple{Any, Int}}
 ]
-    @test !InteractiveUtils.is_expected_union(u)
+    @test !Base.Compiler.IRShow.is_expected_union(u)
 end
 mutable struct Stable{T,N}
     A::Array{T,N}
@@ -574,16 +576,16 @@ let errf = tempname(),
             @test startswith(errstr, """start
                 Internal error: encountered unexpected error during compilation of f_broken_code:
                 ErrorException(\"unsupported or misplaced expression \\\"invalid\\\" in function f_broken_code\")
-                """) || errstr
+                """) context=errstr
             @test occursin("""\nmiddle
                 Internal error: encountered unexpected error during compilation of f_broken_code:
                 ErrorException(\"unsupported or misplaced expression \\\"invalid\\\" in function f_broken_code\")
-                """, errstr) || errstr
+                """, errstr) context=errstr
             @test occursin("""\nlater
                 Internal error: encountered unexpected error during compilation of f_broken_code:
                 ErrorException(\"unsupported or misplaced expression \\\"invalid\\\" in function f_broken_code\")
-                """, errstr) || errstr
-            @test endswith(errstr, "\nend\n") || errstr
+                """, errstr) context=errstr
+            @test endswith(errstr, "\nend\n") context=errstr
         end
         rm(errf)
     end
@@ -835,6 +837,10 @@ file, ln = functionloc(versioninfo, Tuple{})
 @test isfile(pathof(InteractiveUtils))
 @test isdir(pkgdir(InteractiveUtils))
 
+module ModuleWithoutPathForEdit
+end
+@test_throws ErrorException("could not find source file for module: $(ModuleWithoutPathForEdit)") edit(ModuleWithoutPathForEdit)
+
 # compiler stdlib path updating
 file, ln = functionloc(Core.Compiler.tmeet, Tuple{Int, Float64})
 @test isfile(file)
@@ -1054,3 +1060,25 @@ end # module
     using .OuterModule
     @test_nowarn subtypes(Integer);
 end
+
+let code = """
+        using InteractiveUtils
+        @activate Compiler[:codegen, :reflection]
+        println("done compiling")
+    """
+    orig_compiler = realpath(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "Compiler"))
+    mktempdir() do dir
+        new_compiler = joinpath(dir, "Compiler")
+        cp(orig_compiler, new_compiler)
+        output = read(`$(Base.julia_cmd()) -g0 -O0 --startup-file=no --project=$(new_compiler) -e $code`, String)
+        @test occursin("done compiling", output)
+    end
+end
+
+var_line = @__LINE__()+1
+"""
+    docs for a global variable
+"""
+const _interactiveutils_some_var_ = 0
+
+@test InteractiveUtils.varloc(@__MODULE__, :_interactiveutils_some_var_) == (@__FILE__, var_line)

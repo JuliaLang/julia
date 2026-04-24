@@ -99,6 +99,10 @@ function ld()
         flavor = "darwin"
         arch = Sys.ARCH == :aarch64 ? :arm64 : Sys.ARCH
         default_args = `-arch $arch -undefined dynamic_lookup -platform_version macos $(Base.MACOS_PRODUCT_VERSION) $(Base.MACOS_PLATFORM_VERSION)`
+        # due to an lld bug: https://github.com/llvm/llvm-project/issues/193646
+        # we must make sure the syslibroot does not point to the system or else
+        # it will not respect the provided `libSystem.tbd` file
+        default_args = `$default_args -syslibroot $(private_libdir())`
     else
         flavor = "gnu"
     end
@@ -116,6 +120,17 @@ const NO_WHOLE_ARCHIVE = if Sys.isapple()
     ""
 else
     "--no-whole-archive"
+end
+
+# Prefer whole_archive to WHOLE_ARCHIVE
+whole_archive(paths::String; is_cc=false) = whole_archive([paths]; is_cc)
+function whole_archive(paths::Vector{String}; is_cc=false)
+    cc_arg(a) = is_cc ? "-Wl,$a" : a
+    if Sys.isapple()
+        Cmd(collect(Iterators.flatmap(p -> (cc_arg("-force_load"), p), paths)))
+    else
+        `$(cc_arg("--whole-archive")) $paths $(cc_arg("--no-whole-archive"))`
+    end
 end
 
 const SHARED = if Sys.isapple()
@@ -139,6 +154,13 @@ function link_image_cmd(path, out)
     SHLIBDIR = "-L$(shlibdir())"
     LIBS = isdebugbuild() ? ("-ljulia-debug", "-ljulia-internal-debug") :
                         ("-ljulia", "-ljulia-internal")
+    function findlib(lib)
+        if isfile(joinpath(private_libdir(), lib))
+            return joinpath(private_libdir(), lib)
+        else
+            return joinpath(shlibdir(), lib)
+        end
+    end
     @static if Sys.iswindows()
         LIBS = (LIBS..., "-lopenlibm", "-lgcc_s", "-lgcc", "-lmsvcrt")
         if isdebugbuild()
@@ -149,10 +171,13 @@ function link_image_cmd(path, out)
                 LIBS = (LIBS..., "-lmingwex", "-lkernel32")
             end
         end
+    elseif Sys.isapple()
+        # required runtime libraries on macOS / LLVM
+        LIBS = (LIBS..., findlib("libclang_rt.osx.a"), findlib("libSystem.tbd"))
     end
 
     V = verbose_linking() ? "--verbose" : ""
-    `$(ld()) $V $SHARED -o $out $WHOLE_ARCHIVE $path $NO_WHOLE_ARCHIVE $PRIVATE_LIBDIR $SHLIBDIR $LIBS`
+    `$(ld()) $V $SHARED -o $out $(whole_archive(path)) $PRIVATE_LIBDIR $SHLIBDIR $LIBS`
 end
 
 function link_image(path, out, internal_stderr::IO=stderr, internal_stdout::IO=stdout)

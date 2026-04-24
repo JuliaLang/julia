@@ -64,6 +64,10 @@ LLVM_VER = 13.0.0
 Besides the LLVM release numerals, you can also use `DEPS_GIT = llvm` in combination with
 `USE_BINARYBUILDER_LLVM = 0` to build against the latest development version of LLVM.
 
+When changing the LLVM major version, the cpufeatures generated headers must also be
+regenerated to pick up new CPUs and features. See [Upgrading LLVM](@ref) in the
+system image documentation for the procedure.
+
 You can also specify to build a debug version of LLVM, by setting either `LLVM_DEBUG = 1` or
 `LLVM_DEBUG = Release` in your `Make.user` file. The former will be a fully unoptimized build
 of LLVM and the latter will produce an optimized build of LLVM. Depending on your needs the

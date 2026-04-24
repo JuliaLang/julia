@@ -225,7 +225,7 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
             //     pgcstack = getter();    // slow
             auto offset = builder.CreateLoad(T_size, pgcstack_offset);
             offset->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
-            offset->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(pgcstack->getContext(), None));
+            offset->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(pgcstack->getContext(), {}));
             auto cmp = builder.CreateICmpNE(offset, Constant::getNullValue(offset->getType()));
             MDBuilder MDB(pgcstack->getContext());
             SmallVector<uint32_t, 2> Weights{9, 1};
@@ -250,7 +250,7 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
             builder.SetInsertPoint(pgcstack);
             auto getter = builder.CreateLoad(T_pgcstack_getter, pgcstack_func_slot);
             getter->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
-            getter->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(pgcstack->getContext(), None));
+            getter->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(pgcstack->getContext(), {}));
             pgcstack->setCalledFunction(pgcstack->getFunctionType(), getter);
             set_pgcstack_attrs(pgcstack);
 
@@ -265,11 +265,11 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
         // since we may not know which getter function to use ahead of time.
         auto getter = builder.CreateLoad(T_pgcstack_getter, pgcstack_func_slot);
         getter->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
-        getter->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(pgcstack->getContext(), None));
+        getter->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(pgcstack->getContext(), {}));
         if (TargetTriple.isOSDarwin()) {
             auto key = builder.CreateLoad(T_size, pgcstack_key_slot);
             key->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
-            key->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(pgcstack->getContext(), None));
+            key->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(pgcstack->getContext(), {}));
             auto new_pgcstack = builder.CreateCall(FT_pgcstack_getter, getter, {key});
             new_pgcstack->takeName(pgcstack);
             pgcstack->replaceAllUsesWith(new_pgcstack);

@@ -1,6 +1,54 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
+    StringView{T <: AbstractVector{UInt8}} <: AbstractString
+
+An `AbstractString` representation of any `vector` of `UInt8` data,
+interpreted as UTF-8 encoded Unicode.
+Similar to `String`, the underlying data may be invalid UTF-8.
+
+`StringView(v::AbstractVector{UInt8})::StringView` does not make a copy of
+or modify the `v`. Use `codeunits` to get `v` from the `StringView`.
+After construction, `v` may be mutated, which will be reflected in
+the resulting `StringView`.
+
+!!! compat "Julia 1.14"
+    The `StringView` type requires at least Julia 1.14.
+
+# Examples
+```jldoctest
+julia> arr = [0x61, 0xf0, 0x63, 0x64];
+
+julia> s = StringView(arr)
+"a\\xf0cd"
+
+julia> codeunits(s) === arr
+true
+
+julia> arr[2] = Int('b'); s
+"abcd"
+```
+"""
+struct StringView{T <: AbstractVector{UInt8}} <: AbstractString
+    data::T
+
+    function StringView{T}(data::T) where {T <: AbstractVector{UInt8}}
+        # For now, StringViews code assumes one-based indexing
+        require_one_based_indexing(data)
+
+        # Prevent someone constructing e.g. a `StringView{AbstractVector{UInt8}}`,
+        # the existence of which will complicate the implementation and provide
+        # no usability benefit.
+        if !isconcretetype(T)
+            throw(ArgumentError("StringView must be parameterized with a concrete type"))
+        end
+
+        new{T}(data)
+    end
+end
+
+
+"""
     StringIndexError(str, i)
 
 An error occurred when trying to access `str` at index `i` that is not valid.
@@ -11,7 +59,7 @@ struct StringIndexError <: Exception
 end
 @noinline string_index_err((@nospecialize s::AbstractString), i::Integer) =
     throw(StringIndexError(s, Int(i)))
-function Base.showerror(io::IO, exc::StringIndexError)
+function showerror(io::IO, exc::StringIndexError)
     s = exc.string
     print(io, "StringIndexError: ", "invalid index [$(exc.index)]")
     if firstindex(s) <= exc.index <= ncodeunits(s)
@@ -193,7 +241,7 @@ typemin(::String) = typemin(String)
 
 @propagate_inbounds thisind(s::String, i::Int) = _thisind_str(s, i)
 
-# s should be String or SubString{String}
+# s should be String, StringView, or SubString{String}
 @inline function _thisind_str(s, i::Int)
     i == 0 && return 0
     n = ncodeunits(s)
@@ -451,7 +499,7 @@ is_valid_continuation(c) = c & 0xc0 == 0x80
 
 ## required core functionality ##
 
-@inline function iterate(s::String, i::Int=firstindex(s))
+@inline function iterate(s::Union{String, StringView}, i::Int=firstindex(s))
     (i % UInt) - 1 < ncodeunits(s) || return nothing
     b = @inbounds codeunit(s, i)
     u = UInt32(b) << 24
@@ -461,28 +509,29 @@ end
 
 # duck-type s so that external UTF-8 string packages like StringViews can hook in
 function iterate_continued(s, i::Int, u::UInt32)
-    u < 0xc0000000 && (i += 1; @goto ret)
-    n = ncodeunits(s)
-    # first continuation byte
-    (i += 1) > n && @goto ret
-    @inbounds b = codeunit(s, i)
-    b & 0xc0 == 0x80 || @goto ret
-    u |= UInt32(b) << 16
-    # second continuation byte
-    ((i += 1) > n) | (u < 0xe0000000) && @goto ret
-    @inbounds b = codeunit(s, i)
-    b & 0xc0 == 0x80 || @goto ret
-    u |= UInt32(b) << 8
-    # third continuation byte
-    ((i += 1) > n) | (u < 0xf0000000) && @goto ret
-    @inbounds b = codeunit(s, i)
-    b & 0xc0 == 0x80 || @goto ret
-    u |= UInt32(b); i += 1
-@label ret
+    @label begin
+        u < 0xc0000000 && (i += 1; break)
+        n = ncodeunits(s)
+        # first continuation byte
+        (i += 1) > n && break
+        @inbounds b = codeunit(s, i)
+        b & 0xc0 == 0x80 || break
+        u |= UInt32(b) << 16
+        # second continuation byte
+        ((i += 1) > n) | (u < 0xe0000000) && break
+        @inbounds b = codeunit(s, i)
+        b & 0xc0 == 0x80 || break
+        u |= UInt32(b) << 8
+        # third continuation byte
+        ((i += 1) > n) | (u < 0xf0000000) && break
+        @inbounds b = codeunit(s, i)
+        b & 0xc0 == 0x80 || break
+        u |= UInt32(b); i += 1
+    end
     return reinterpret(Char, u), i
 end
 
-@propagate_inbounds function getindex(s::String, i::Int)
+@propagate_inbounds function getindex(s::Union{String, StringView}, i::Int)
     b = codeunit(s, i)
     u = UInt32(b) << 24
     between(b, 0x80, 0xf7) || return reinterpret(Char, u)
@@ -491,32 +540,36 @@ end
 
 # duck-type s so that external UTF-8 string packages like StringViews can hook in
 function getindex_continued(s, i::Int, u::UInt32)
-    if u < 0xc0000000
-        # called from `getindex` which checks bounds
-        @inbounds isvalid(s, i) && @goto ret
-        string_index_err(s, i)
+    @label begin
+        if u < 0xc0000000
+            # called from `getindex` which checks bounds
+            @inbounds isvalid(s, i) && break
+            string_index_err(s, i)
+        end
+        n = ncodeunits(s)
+
+        (i += 1) > n && break
+        @inbounds b = codeunit(s, i) # cont byte 1
+        b & 0xc0 == 0x80 || break
+        u |= UInt32(b) << 16
+
+        ((i += 1) > n) | (u < 0xe0000000) && break
+        @inbounds b = codeunit(s, i) # cont byte 2
+        b & 0xc0 == 0x80 || break
+        u |= UInt32(b) << 8
+
+        ((i += 1) > n) | (u < 0xf0000000) && break
+        @inbounds b = codeunit(s, i) # cont byte 3
+        b & 0xc0 == 0x80 || break
+        u |= UInt32(b)
     end
-    n = ncodeunits(s)
-
-    (i += 1) > n && @goto ret
-    @inbounds b = codeunit(s, i) # cont byte 1
-    b & 0xc0 == 0x80 || @goto ret
-    u |= UInt32(b) << 16
-
-    ((i += 1) > n) | (u < 0xe0000000) && @goto ret
-    @inbounds b = codeunit(s, i) # cont byte 2
-    b & 0xc0 == 0x80 || @goto ret
-    u |= UInt32(b) << 8
-
-    ((i += 1) > n) | (u < 0xf0000000) && @goto ret
-    @inbounds b = codeunit(s, i) # cont byte 3
-    b & 0xc0 == 0x80 || @goto ret
-    u |= UInt32(b)
-@label ret
     return reinterpret(Char, u)
 end
 
-getindex(s::String, r::AbstractUnitRange{<:Integer}) = s[Int(first(r)):Int(last(r))]
+function getindex(s::Union{String, StringView}, r::AbstractUnitRange{<:Integer})
+    span = (Int(first(r))::Int):(Int(last(r)))::Int
+    return s[span]
+end
 
 @inline function getindex(s::String, r::UnitRange{Int})
     isempty(r) && return ""
@@ -534,10 +587,24 @@ getindex(s::String, r::AbstractUnitRange{<:Integer}) = s[Int(first(r)):Int(last(
 end
 
 # nothrow because we know the start and end indices are valid
-@assume_effects :nothrow length(s::String) = length_continued(s, 1, ncodeunits(s), ncodeunits(s))
+@assume_effects :nothrow function length(s::String)
+    return length_continued(s, 1, ncodeunits(s), ncodeunits(s))
+end
+
+function length(s::StringView)
+    return length_continued(s, 1, ncodeunits(s), ncodeunits(s))
+end
 
 # effects needed because @inbounds
 @assume_effects :consistent :effect_free @inline function length(s::String, i::Int, j::Int)
+    _length(s, i, j)
+end
+
+@inline function length(s::StringView, i::Int, j::Int)
+    _length(s, i, j)
+end
+
+@inline function _length(s::Union{String, StringView}, i::Int, j::Int)
     @boundscheck begin
         0 < i ≤ ncodeunits(s)+1 || throw(BoundsError(s, i))
         0 ≤ j < ncodeunits(s)+1 || throw(BoundsError(s, j))
@@ -548,7 +615,16 @@ end
     @inbounds length_continued(s, i, j, c)
 end
 
-@assume_effects :terminates_locally @inline @propagate_inbounds function length_continued(s::String, i::Int, n::Int, c::Int)
+@assume_effects :terminates_globally @propagate_inbounds function length_continued(s::String, i::Int, n::Int, c::Int)
+    _length_continued(s, i, n, c)
+end
+
+@propagate_inbounds function length_continued(s::StringView, i::Int, n::Int, c::Int)
+    _length_continued(s, i, n, c)
+end
+
+
+@propagate_inbounds function _length_continued(s::Union{String, StringView}, i::Int, n::Int, c::Int)
     i < n || return c
     b = codeunit(s, i)
     while true

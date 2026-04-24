@@ -275,7 +275,7 @@ end
         pkg = recurse_package(n...)
         @test pkg == PkgId(UUID(uuid), n[end])
         @test joinpath(@__DIR__, normpath(path)) == locate_package(pkg)
-        @test Base.compilecache_path(pkg, UInt64(0)) == Base.compilecache_path(pkg, UInt64(0))
+        @test Base.compilecache_path(pkg, "") == Base.compilecache_path(pkg, "")
     end
     @test identify_package("Baz") === nothing
     @test identify_package("Qux") === nothing
@@ -463,7 +463,7 @@ function make_env(flat, root, roots, graph, paths, dummies)
 end
 
 const depots = [mkdepottempdir() for _ = 1:3]
-const envs = Dict{String,Any}()
+const envs = Pair{String, Any}[]
 
 append!(empty!(DEPOT_PATH), depots)
 
@@ -557,7 +557,7 @@ for (flat, root, roots, graph) in graphs
         end
     end
 
-    envs[dir] = make_env(flat, root, roots, graph, paths, dummies)
+    push!(envs, dir => make_env(flat, root, roots, graph, paths, dummies))
 end
 
 # materialize dependency graphs as implicit environments (if possible)
@@ -590,7 +590,7 @@ for (flat, root, roots, graph) in graphs
         end
     end
 
-    envs[dir] = make_env(flat, root, roots, graph, paths, dummies)
+    push!(envs, dir => make_env(flat, root, roots, graph, paths, dummies))
 end
 
 ## use generated environments to test package loading ##
@@ -612,30 +612,38 @@ function test_find(
         where.uuid === nothing && continue
         deps = get(graph, where, Dict(where.name => where))
         for name in NAMES
-            id = identify_package(where, name)
-            @test id == get(deps, name, nothing)
-            path = id === nothing ? nothing : locate_package(id)
-            @test path == get(paths, id, nothing)
+            @testset let where=where, name=name
+                id = identify_package(where, name)
+                @test id == get(deps, name, nothing)
+                path = id === nothing ? nothing : locate_package(id)
+                @test path == get(paths, id, nothing)
+            end
         end
     end
 end
 
 @testset "find_package with one env in load path" begin
-    for (env, (_, _, roots, graph, paths)) in envs
-        push!(empty!(LOAD_PATH), env)
-        test_find(roots, graph, paths)
+    for idx in eachindex(envs)
+        @testset let idx=idx
+            (env, (_, _, roots, graph, paths)) = envs[idx]
+            push!(empty!(LOAD_PATH), env)
+            test_find(roots, graph, paths)
+        end
     end
 end
 
 @testset "find_package with two envs in load path" begin
-    for x = false:true,
-        (env1, (_, _, roots1, graph1, paths1)) in (x ? envs : rand(envs, 10)),
-        (env2, (_, _, roots2, graph2, paths2)) in (x ? rand(envs, 10) : envs)
-        push!(empty!(LOAD_PATH), env1, env2)
-        roots = merge(roots2, roots1)
-        graph = merge(graph2, graph1)
-        paths = merge(paths2, paths1)
-        test_find(roots, graph, paths)
+    for x = false:true, env1idx in (x ? (1:length(envs)) : rand(1:length(envs), 10)),
+                        env2idx in (x ? rand(1:length(envs), 10) : (1:length(envs)))
+        @testset let env1idx=env1idx, env2idx=env2idx
+            (env1, (_, _, roots1, graph1, paths1)) = envs[env1idx]
+            (env2, (_, _, roots2, graph2, paths2)) = envs[env2idx]
+            push!(empty!(LOAD_PATH), env1, env2)
+            roots = merge(roots2, roots1)
+            graph = merge(graph2, graph1)
+            paths = merge(paths2, paths1)
+            test_find(roots, graph, paths)
+        end
     end
 end
 
@@ -703,6 +711,112 @@ mktempdir() do dir
     @test success(cmd)
 end
 
+function _with_empty_load_path(f::Function)
+    old_load_path = copy(Base.LOAD_PATH)
+    try
+        empty!(Base.LOAD_PATH)
+        f()
+    finally
+        append!(Base.LOAD_PATH, old_load_path)
+    end
+end
+old_act_proj = Base.ACTIVE_PROJECT[]
+function _with_activate(f::Function, project_file::Union{AbstractString, Nothing})
+    try
+        Base.ACTIVE_PROJECT[] = project_file
+        f()
+    finally
+        Base.ACTIVE_PROJECT[] = old_act_proj
+    end
+end
+function _activate_and_get_active_manifest_noarg(project_file::Union{AbstractString, Nothing})
+    _with_activate(project_file) do
+        Base.active_manifest()
+    end
+end
+
+@testset "Base.active_manifest()" begin
+    test_dir = @__DIR__
+    test_cases = [
+        (joinpath(test_dir, "TestPkg", "Project.toml"), joinpath(test_dir, "TestPkg", "Manifest.toml")),
+        (joinpath(test_dir, "project", "Project.toml"), joinpath(test_dir, "project", "Manifest.toml")),
+    ]
+
+    @testset "active_manifest() - no argument passed" begin
+        for (proj, expected_man) in test_cases
+            @test _activate_and_get_active_manifest_noarg(proj) == expected_man
+            # Base.active_manifest() should never return a file that doesn't exist:
+            @test isfile(_activate_and_get_active_manifest_noarg(proj))
+        end
+        mktempdir() do dir
+            proj = joinpath(dir, "Project.toml")
+
+            # If the project file doesn't exist, active_manifest() should return `nothing`:
+            @test _activate_and_get_active_manifest_noarg(proj) === nothing
+
+            # If the project file exists but the manifest file does not, active_manifest() should still return `nothing`:
+            touch(proj)
+            @test _activate_and_get_active_manifest_noarg(proj) === nothing
+
+            # If the project and manifest files both exist, active_manifest() should return the path to the manifest:
+            manif = joinpath(dir, "Manifest.toml")
+            touch(manif)
+            @test _activate_and_get_active_manifest_noarg(proj) == manif
+            # Base.active_manifest() should never return a file that doesn't exist:
+            @test isfile(_activate_and_get_active_manifest_noarg(proj))
+
+            # If the manifest file exists but the project file does not, active_manifest() should return `nothing`:
+            rm(proj)
+            @test _activate_and_get_active_manifest_noarg(proj) == nothing
+        end
+    end
+
+    @testset "active_manifest(proj::AbstractString)" begin
+        Base.ACTIVE_PROJECT[] = old_act_proj
+        for (proj, expected_man) in test_cases
+            @test Base.active_manifest(proj) == expected_man
+            # Base.active_manifest() should never return a file that doesn't exist:
+            @test isfile(Base.active_manifest(proj))
+        end
+        mktempdir() do dir
+            proj = joinpath(dir, "Project.toml")
+
+            # If the project file doesn't exist, active_manifest(proj) should return `nothing`:
+            @test Base.active_manifest(proj) === nothing
+
+            # If the project file exists but the manifest file does not, active_manifest(proj) should still return `nothing`:
+            touch(proj)
+            @test Base.active_manifest(proj) === nothing
+
+            # If the project and manifest files both exist, active_manifest(proj) should return the path to the manifest:
+            manif = joinpath(dir, "Manifest.toml")
+            touch(manif)
+            @test Base.active_manifest(proj) == manif
+            # Base.active_manifest() should never return a file that doesn't exist:
+            @test isfile(Base.active_manifest(proj))
+
+            # If the manifest file exists but the project file does not, active_manifest(proj) should return `nothing`:
+            rm(proj)
+            @test Base.active_manifest(proj) === nothing
+        end
+    end
+
+    @testset "ACTIVE_PROJECT[] is `nothing` => active_manifest() is nothing" begin
+        _with_activate(nothing) do; _with_empty_load_path() do
+            @test Base.active_manifest() === nothing
+            @test Base.active_manifest(nothing) === nothing
+        end; end
+    end
+
+    @testset "Project file does not exist => active_manifest() is nothing" begin
+        mktempdir() do dir
+            proj = joinpath(dir, "Project.toml")
+            @test Base.active_manifest(proj) === nothing
+            @test _activate_and_get_active_manifest_noarg(proj) === nothing
+        end
+    end
+end
+
 @testset "expansion of JULIA_LOAD_PATH" begin
     s = Sys.iswindows() ? ';' : ':'
     tmp = "/this/does/not/exist"
@@ -753,7 +867,7 @@ end
 
 ## cleanup after tests ##
 
-for env in keys(envs)
+for (env, _) in envs
     rm(env, force=true, recursive=true)
 end
 
@@ -762,6 +876,34 @@ append!(empty!(DEPOT_PATH), saved_depot_path)
 pop!(Base.active_project_callbacks)
 Base.set_active_project(saved_active_project)
 @test watcher_counter[] == 3
+
+# pkgversion should return cached version even after source is deleted
+@testset "pkgversion after source deletion" begin
+    mktempdir() do tmp
+        pkg_dir = joinpath(tmp, "DeletedPkg")
+        src_dir = joinpath(pkg_dir, "src")
+        mkpath(src_dir)
+        write(joinpath(pkg_dir, "Project.toml"), """
+            name = "DeletedPkg"
+            uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+            version = "4.5.6"
+            """)
+        write(joinpath(src_dir, "DeletedPkg.jl"), "module DeletedPkg end")
+        old_act_proj = Base.ACTIVE_PROJECT[]
+        pushfirst!(LOAD_PATH, "@")
+        try
+            Base.set_active_project(pkg_dir)
+            @eval using DeletedPkg
+            m = @__MODULE__
+            @test pkgversion(@invokelatest(m.DeletedPkg)) == v"4.5.6"
+            rm(pkg_dir; recursive=true)
+            @test pkgversion(@invokelatest(m.DeletedPkg)) == v"4.5.6"
+        finally
+            Base.set_active_project(old_act_proj)
+            popfirst!(LOAD_PATH)
+        end
+    end
+end
 
 # issue #28190
 module Foo28190; import Libdl; end
@@ -966,6 +1108,190 @@ end
     end
 end
 
+@testset "Preferences blob" begin
+    # Tests for get_preferences_blob() and stale_prefs() - the serialization of
+    # compile-time preference observations into a TOML blob embedded in cache files.
+    pkg_uuid = uuid4()
+    pkg2_uuid = uuid4()
+    mktempdir() do dir
+        # Set up a project with preferences for two packages
+        write(joinpath(dir, "Project.toml"), """
+        [deps]
+        PkgA = "$(pkg_uuid)"
+        PkgB = "$(pkg2_uuid)"
+
+        [preferences.PkgA]
+        key1 = "val1"
+        key2 = 42
+
+        [preferences.PkgB]
+        flag = true
+        """)
+
+        old_load_path = copy(LOAD_PATH)
+        old_compiletime_prefs = Dict(k => copy(v) for (k, v) in Base.COMPILETIME_PREFERENCES)
+        try
+            copy!(LOAD_PATH, [joinpath(dir, "Project.toml")])
+            empty!(Base.COMPILETIME_PREFERENCES)
+
+            # Empty COMPILETIME_PREFERENCES → empty blob (fast-path)
+            @test Base.get_preferences_blob() == ""
+
+            # A queried+set preference appears in the main table
+            Base.record_compiletime_preference(pkg_uuid, "key1")
+            blob = Base.get_preferences_blob()
+            @test !isempty(blob)
+            parsed = Base.TOML.parse(Base.TOML.Parser{nothing}(blob))
+            @test parsed[string(pkg_uuid)]["key1"] == "val1"
+            @test !haskey(parsed, "unset")
+
+            # A queried+unset preference appears in the [unset] table
+            empty!(Base.COMPILETIME_PREFERENCES)
+            Base.record_compiletime_preference(pkg_uuid, "missing_key")
+            blob = Base.get_preferences_blob()
+            parsed = Base.TOML.parse(Base.TOML.Parser{nothing}(blob))
+            @test haskey(parsed, "unset")
+            @test "missing_key" in parsed["unset"][string(pkg_uuid)]
+            @test !haskey(get(parsed, string(pkg_uuid), Dict()), "missing_key")
+
+            # Mix of set and unset preferences for the same UUID
+            empty!(Base.COMPILETIME_PREFERENCES)
+            Base.record_compiletime_preference(pkg_uuid, "key1")
+            Base.record_compiletime_preference(pkg_uuid, "missing_key")
+            blob = Base.get_preferences_blob()
+            parsed = Base.TOML.parse(Base.TOML.Parser{nothing}(blob))
+            @test parsed[string(pkg_uuid)]["key1"] == "val1"
+            @test "missing_key" in parsed["unset"][string(pkg_uuid)]
+
+            # Multiple UUIDs are tracked independently
+            empty!(Base.COMPILETIME_PREFERENCES)
+            Base.record_compiletime_preference(pkg_uuid, "key1")
+            Base.record_compiletime_preference(pkg2_uuid, "flag")
+            blob = Base.get_preferences_blob()
+            parsed = Base.TOML.parse(Base.TOML.Parser{nothing}(blob))
+            @test parsed[string(pkg_uuid)]["key1"] == "val1"
+            @test parsed[string(pkg2_uuid)]["flag"] == true
+
+            # stale_prefs: empty blob is never stale
+            @test !Base.stale_prefs("")
+
+            # stale_prefs: set preference unchanged → not stale
+            empty!(Base.COMPILETIME_PREFERENCES)
+            Base.record_compiletime_preference(pkg_uuid, "key1")
+            blob = Base.get_preferences_blob()
+            @test !Base.stale_prefs(blob)
+
+            # stale_prefs: set preference value changed → stale
+            mktempdir() do dir2
+                write(joinpath(dir2, "Project.toml"), """
+                [deps]
+                PkgA = "$(pkg_uuid)"
+
+                [preferences.PkgA]
+                key1 = "different"
+                """)
+                copy!(LOAD_PATH, [joinpath(dir2, "Project.toml")])
+                @test Base.stale_prefs(blob)
+                copy!(LOAD_PATH, [joinpath(dir, "Project.toml")])
+            end
+
+            # stale_prefs: set preference becomes unset → stale
+            mktempdir() do dir2
+                write(joinpath(dir2, "Project.toml"), """
+                [deps]
+                PkgA = "$(pkg_uuid)"
+                """)
+                copy!(LOAD_PATH, [joinpath(dir2, "Project.toml")])
+                @test Base.stale_prefs(blob)
+                copy!(LOAD_PATH, [joinpath(dir, "Project.toml")])
+            end
+
+            # stale_prefs: unset preference still unset → not stale
+            empty!(Base.COMPILETIME_PREFERENCES)
+            Base.record_compiletime_preference(pkg_uuid, "missing_key")
+            blob_unset = Base.get_preferences_blob()
+            @test !Base.stale_prefs(blob_unset)
+
+            # stale_prefs: unset preference becomes set → stale
+            mktempdir() do dir2
+                write(joinpath(dir2, "Project.toml"), """
+                [deps]
+                PkgA = "$(pkg_uuid)"
+
+                [preferences.PkgA]
+                missing_key = "now_set"
+                """)
+                copy!(LOAD_PATH, [joinpath(dir2, "Project.toml")])
+                @test Base.stale_prefs(blob_unset)
+                copy!(LOAD_PATH, [joinpath(dir, "Project.toml")])
+            end
+
+            # hash collision test:
+            #   https://github.com/JuliaLang/julia/issues/59345#issue-3338450603
+            #
+            # `1`, `1.0`, and `true` are all `isequal` in Julia, so == / isequal / hash
+            # cannot distinguish these semantically distinct values, but the preferences
+            # system should distinguish them since they are clearly different objects
+            mktempdir() do dir_bool
+                write(joinpath(dir_bool, "Project.toml"), """
+                [deps]
+                PkgA = "$(pkg_uuid)"
+
+                [preferences.PkgA]
+                flag = true
+                """)
+                copy!(LOAD_PATH, [joinpath(dir_bool, "Project.toml")])
+                empty!(Base.COMPILETIME_PREFERENCES)
+                Base.record_compiletime_preference(pkg_uuid, "flag")
+                blob_bool = Base.get_preferences_blob()
+
+                mktempdir() do dir_int
+                    write(joinpath(dir_int, "Project.toml"), """
+                    [deps]
+                    PkgA = "$(pkg_uuid)"
+
+                    [preferences.PkgA]
+                    flag = 1
+                    """)
+                    copy!(LOAD_PATH, [joinpath(dir_int, "Project.toml")])
+                    @test Base.stale_prefs(blob_bool)
+                end
+                copy!(LOAD_PATH, [joinpath(dir, "Project.toml")])
+            end
+
+            # hash collision test (on ≥1.13, where hash(false, UInt(0)) == UInt(0))
+            #
+            # the old hash-based approach for preference invalidation would fail to detect
+            # the difference between `pref = false` and "no preference".
+            mktempdir() do dir2
+                write(joinpath(dir2, "Project.toml"), """
+                [deps]
+                PkgA = "$(pkg_uuid)"
+
+                [preferences.PkgA]
+                key1 = false
+                """)
+                copy!(LOAD_PATH, [joinpath(dir2, "Project.toml")])
+                empty!(Base.COMPILETIME_PREFERENCES)
+                Base.record_compiletime_preference(pkg_uuid, "key1")
+                blob_false = Base.get_preferences_blob()
+                mktempdir() do dir3
+                    write(joinpath(dir3, "Project.toml"), """
+                    [deps]
+                    PkgA = "$(pkg_uuid)"
+                    """)
+                    copy!(LOAD_PATH, [joinpath(dir3, "Project.toml")])
+                    @test Base.stale_prefs(blob_false)
+                end
+                copy!(LOAD_PATH, [joinpath(dir, "Project.toml")])
+            end
+        finally
+            copy!(LOAD_PATH, old_load_path)
+            empty!(Base.COMPILETIME_PREFERENCES)
+            merge!(Base.COMPILETIME_PREFERENCES, old_compiletime_prefs)
+        end
+    end
+end
 
 @testset "Loading with incomplete manifest/depot #45977" begin
     mktempdir() do tmp
@@ -1032,7 +1358,7 @@ end
         _ext = Base.get_extension(parent, ext)
         _ext isa Module || error("expected extension \$ext to be loaded")
         _pkgdir = pkgdir(_ext)
-        _pkgdir == pkgdir(parent) != nothing || error("unexpected extension \$ext pkgdir path: \$_pkgdir")
+        _pkgdir == pkgdir(parent) !== nothing || error("unexpected extension \$ext pkgdir path: \$_pkgdir")
         _pkgversion = pkgversion(_ext)
         _pkgversion == pkgversion(parent) || error("unexpected extension \$ext version: \$_pkgversion")
     end
@@ -1376,10 +1702,8 @@ end
             """)
         write(joinpath(foo_path, "Manifest.toml"),
             """
-            # This file is machine-generated - editing it directly is not advised
-            julia_version = "1.13.0-DEV"
+            julia_version = "1.13.0"
             manifest_format = "2.0"
-            project_hash = "8699765aeeac181c3e5ddbaeb9371968e1f84d6b"
 
             [[deps.Foo51989]]
             path = "."
@@ -1422,13 +1746,23 @@ end
 end
 
 @testset "Fallback for stdlib deps if manifest deps aren't found" begin
+    s = Sys.iswindows() ? ';' : ':'
     mktempdir() do depot
         # This manifest has a LibGit2 entry that is missing LibGit2_jll, which should be
         # handled by falling back to the stdlib Project.toml for dependency truth.
-        badmanifest_test_dir = joinpath(@__DIR__, "project", "deps", "BadStdlibDeps.jl")
+        badmanifest_test_dir = joinpath(@__DIR__, "project", "deps", "BadStdlibDeps")
         @test success(addenv(
             `$(Base.julia_cmd()) --project=$badmanifest_test_dir --startup-file=no -e 'using LibGit2'`,
-            "JULIA_DEPOT_PATH" => depot * Base.Filesystem.pathsep(),
+            "JULIA_DEPOT_PATH" => string(depot * Base.Filesystem.pathsep(), s),
+        ))
+    end
+    mktempdir() do depot
+        # This manifest has a LibGit2 entry that has a LibGit2_jll with a git-tree-hash1
+        # which simulates an old manifest where LibGit2_jll was not a stdlib
+        badmanifest_test_dir2 = joinpath(@__DIR__, "project", "deps", "BadStdlibDeps2")
+        @test success(addenv(
+            `$(Base.julia_cmd()) --project=$badmanifest_test_dir2 --startup-file=no -e 'using LibGit2'`,
+            "JULIA_DEPOT_PATH" => string(depot * Base.Filesystem.pathsep(), s),
         ))
     end
 end
@@ -1669,6 +2003,14 @@ end
        @test isfile(Base.locate_package(id_dev))
        @test Base.identify_package("Devved2") === nothing
 
+       # Test that workspace projects can be specified with subfolder paths
+       # and that base_project searches upward through multiple directory levels
+       empty!(LOAD_PATH)
+       push!(LOAD_PATH, joinpath(@__DIR__, "project", "SubProject", "nested", "deep"))
+       proj_file = joinpath(@__DIR__, "project", "SubProject", "nested", "deep", "Project.toml")
+       base_proj = Base.base_project(proj_file)
+       @test base_proj == joinpath(@__DIR__, "project", "SubProject", "Project.toml")
+
     finally
        copy!(LOAD_PATH, old_load_path)
     end
@@ -1710,8 +2052,8 @@ end
         Base64_key = Base.PkgId(Base.UUID("2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"), "Base64")
         oldBase64 = Base.unreference_module(Base64_key)
         cc = Base.compilecache(Base64_key)
-        sourcepath = Base.locate_package(Base64_key)
-        @test Base.stale_cachefile(Base64_key, UInt128(0), sourcepath, cc[1]) !== true
+        sourcespec = Base.locate_package_load_spec(Base64_key)
+        @test Base.stale_cachefile(Base64_key, UInt128(0), sourcespec, cc[1]) !== true
         empty!(DEPOT_PATH)
         Base.require_stdlib(Base64_key)
         push!(DEPOT_PATH, depot_path)
@@ -1748,3 +2090,78 @@ end
 module M58272_to end
 @eval M58272_to import ..M58272_1: M58272_2.y, x
 @test @eval M58272_to x === 1
+
+@testset "Syntax Versioning" begin
+    old_load_path = copy(LOAD_PATH)
+    try
+        # Test implicit environments (packages loaded from directories)
+        push!(LOAD_PATH, joinpath(@__DIR__, "project", "SyntaxVersioning", "implicit"))
+        # Explicit syntax.julia_version = "1.13"
+        @test invokelatest(getglobal, (@eval (using Versioned1; Versioned1)), :ver) == v"1.13"
+        # Explicit syntax.julia_version = "1.14"
+        @test invokelatest(getglobal, (@eval (using Versioned2; Versioned2)), :ver) == v"1.14"
+        # Inherited from compat.julia = "1.13-2"
+        @test invokelatest(getglobal, (@eval (using Versioned3; Versioned3)), :ver) == v"1.13"
+        # No syntax.julia_version, falls back to current VERSION
+        @test invokelatest(getglobal, (@eval (using Versioned4; Versioned4)), :ver) == VersionNumber(VERSION.major, VERSION.minor)
+        # Inherited from compat.julia = "1.14-2"
+        @test invokelatest(getglobal, (@eval (using Versioned5; Versioned5)), :ver) == v"1.14"
+    finally
+        copy!(LOAD_PATH, old_load_path)
+    end
+
+    # Test explicit environments (packages loaded from Manifest.toml)
+    old_load_path = copy(LOAD_PATH)
+    old_active_project = Base.ACTIVE_PROJECT[]
+    explicit_env = joinpath(@__DIR__, "project", "SyntaxVersioning", "explicit")
+    try
+        Base.ACTIVE_PROJECT[] = joinpath(explicit_env, "Project.toml")
+        empty!(LOAD_PATH)
+        push!(LOAD_PATH, "@")
+        # syntax.julia_version from Manifest = "1.13"
+        @test invokelatest(getglobal, (@eval (using VersionedDep1; VersionedDep1)), :ver) == v"1.13"
+        # syntax.julia_version from Manifest = "1.14"
+        @test invokelatest(getglobal, (@eval (using VersionedDep2; VersionedDep2)), :ver) == v"1.14"
+        # syntax.julia_version from Manifest = "1.0" should be clamped to "1.13"
+        @test invokelatest(getglobal, (@eval (using VersionedDep3; VersionedDep3)), :ver) == v"1.13"
+    finally
+        Base.ACTIVE_PROJECT[] = old_active_project
+        copy!(LOAD_PATH, old_load_path)
+    end
+
+    # Test that the selected project affects code evaluation in `Main` for both `-e` and scripts
+    @test parse(VersionNumber, read(`$(Base.julia_cmd()) --project=$(joinpath(explicit_env, "VersionedDep1")) -e 'print((Base.Experimental.@VERSION).syntax)'`, String)) == v"1.13"
+    @test parse(VersionNumber, read(`$(Base.julia_cmd()) --project=$(joinpath(explicit_env, "VersionedDep2")) -e 'print((Base.Experimental.@VERSION).syntax)'`, String)) == v"1.14"
+
+    syntax_version_script = joinpath(@__DIR__, "testhelpers", "print_syntax_version.jl")
+    @test parse(VersionNumber, read(`$(Base.julia_cmd()) --project=$(joinpath(explicit_env, "VersionedDep1")) $syntax_version_script`, String)) == v"1.13"
+    @test parse(VersionNumber, read(`$(Base.julia_cmd()) --project=$(joinpath(explicit_env, "VersionedDep2")) $syntax_version_script`, String)) == v"1.14"
+
+    function include_world_age()
+       m = @eval(module IncludeWorldAgeTest end)
+       @test_nowarn @test include_string(m, "Base.Experimental.@VERSION").syntax == (Base.Experimental.@VERSION).syntax
+       @test_nowarn @test Core.include(m, joinpath(@__DIR__, "testhelpers", "return_syntax_version.jl")) == (Base.Experimental.@VERSION).syntax
+       Base.set_syntax_version(m, v"1.13")
+       @test_nowarn @test include_string(m, "Base.Experimental.@VERSION").syntax == v"1.13"
+       @test_nowarn @test Core.include(m, joinpath(@__DIR__, "testhelpers", "return_syntax_version.jl")) == v"1.13"
+    end
+    include_world_age()
+end
+
+@testset "require_stdlib with isolated depot" begin
+    # Test that require_stdlib works with JULIA_DEPOT_PATH not including bundled depot
+    tmpdir = mktempdir()
+    try
+        script = "Base.require_stdlib(Base.PkgId(Base.UUID(\"2a0f44e3-6c83-55bd-87e4-b1978d98bd5f\"), \"Base64\")); println(\"SUCCESS\")"
+        cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -e $script`, "JULIA_DEPOT_PATH" => tmpdir, "JULIA_DEBUG" => "loading")
+        out = PipeBuffer()
+        run(pipeline(cmd, stdout=out, stderr=out))
+        output = read(out, String)
+        # Should not precompile since it loads from bundled depot
+        @test contains(output, "Loading object cache file")
+        @test !contains(output, "Precompiling")
+        @test contains(output, "SUCCESS")
+    finally
+        rm(tmpdir; recursive=true, force=true)
+    end
+end
