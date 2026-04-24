@@ -1131,9 +1131,9 @@ import Base.PersistentDict
 @testset "PersistentDict" begin
     @testset "HAMT HashState" begin
         key = :key
-        h = Base.HAMT.HashState(key)
-        h1 = Base.HAMT.HashState(key, objectid(key), 0, 0)
-        h2 = Base.HAMT.HashState(h, key) # reconstruct
+        h = Base.HAMT.HashState(objectid(key))
+        h1 = Base.HAMT.HashState(objectid(key), objectid(key), 0, 0)
+        h2 = Base.HAMT.HashState(h, objectid(key)) # reconstruct
         @test h.hash == h1.hash
         @test h.hash == h2.hash
 
@@ -1146,7 +1146,7 @@ import Base.PersistentDict
         end
         @test hs.depth == recompute_depth
         @test hs.shift == 0
-        hsr = Base.HAMT.HashState(hs, key)
+        hsr = Base.HAMT.HashState(hs, objectid(key))
         @test hs.hash == hsr.hash
         @test hs.depth == hsr.depth
         @test hs.shift == hsr.shift

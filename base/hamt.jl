@@ -75,7 +75,7 @@ end
 
 Base.@assume_effects :effect_free function HAMT{K,V}((k,v)::Pair{K,V}) where {K, V}
     trie = init_hamt(K, V, k, v)
-    bi = BitmapIndex(HashState(k))
+    bi = BitmapIndex(HashState(objectid(k)))
     set!(trie, bi)
     return trie
 end
@@ -84,16 +84,16 @@ HAMT{K,V}(kv::Pair) where {K, V} = HAMT{K,V}(convert(Pair{K,V}, kv))
 HAMT(pair::Pair{K,V}) where {K, V} = HAMT{K,V}(pair)
 
 # TODO: Parameterize by hash function
-struct HashState{K}
-    key::K
+struct HashState
+    initial_hash::UInt
     hash::UInt
     depth::Int
     shift::Int
 end
-HashState(key) = HashState(key, objectid(key), 0, 0)
+HashState(initial_hash) = HashState(initial_hash, initial_hash, 0, 0)
 # Reconstruct
-Base.@assume_effects :terminates_locally function HashState(other::HashState, key)
-    h = HashState(key)
+Base.@assume_effects :terminates_locally function HashState(other::HashState, initial_hash::UInt)
+    h = HashState(initial_hash)
     while h.depth !== other.depth
         h = next(h)
     end
@@ -108,12 +108,12 @@ function next(h::HashState)
     if shift > MAX_SHIFT
         # Note we use `UInt(depth ÷ BITS_PER_LEVEL)` to seed the hash function
         # the hash docs, do we need to hash `UInt(depth ÷ BITS_PER_LEVEL)` first?
-        h_hash = hash(objectid(h.key), UInt(depth ÷ BITS_PER_LEVEL))
+        h_hash = hash(h.initial_hash, UInt(depth ÷ BITS_PER_LEVEL))
         shift = 0
     else
         h_hash = h.hash
     end
-    return HashState(h.key, h_hash, depth, shift)
+    return HashState(h.initial_hash, h_hash, depth, shift)
 end
 
 struct BitmapIndex
@@ -168,7 +168,7 @@ new persistent tree.
             next = @inbounds trie.data[i]
             if next isa Leaf{K,V}
                 # Check if key match if not we will need to grow.
-                found = next.key === h.key
+                found = next.key === key
                 return found, true, trie, i, bi, top, h
             end
             if copy
@@ -189,20 +189,20 @@ end
 Internal function that given an obtained path, either set the value
 or grows the HAMT by inserting a new trie instead.
 """
-@inline @Base.assume_effects :terminates_locally function insert!(found, present, trie::HAMT{K,V}, i, bi, h, val) where {K,V}
+@inline @Base.assume_effects :terminates_locally function insert!(found, present, trie::HAMT{K,V}, key, i, bi, h, val) where {K,V}
     if found # we found a slot, just set it to the new leaf
         # replace or insert
         if present # replace
-            @inbounds trie.data[i] = Leaf{K, V}(h.key, val)
+            @inbounds trie.data[i] = Leaf{K, V}(key, val)
         else
-            Base.insert!(trie.data, i, Leaf{K, V}(h.key, val))
+            Base.insert!(trie.data, i, Leaf{K, V}(key, val))
         end
         set!(trie, bi)
     else
         @assert present "!found && !present"
         # collision -> grow
         leaf = @inbounds trie.data[i]::Leaf{K,V}
-        leaf_h = HashState(h, leaf.key)
+        leaf_h = HashState(h, objectid(leaf.key))
         if leaf_h.hash == h.hash
             error("Perfect hash collision")
         end
@@ -227,7 +227,7 @@ or grows the HAMT by inserting a new trie instead.
                 continue
             end
             i_new = entry_index(new_trie, bi_new)
-            Base.insert!(new_trie.data, i_new, Leaf{K, V}(h.key, val))
+            Base.insert!(new_trie.data, i_new, Leaf{K, V}(key, val))
             set!(new_trie, bi_new)
 
             i_old = entry_index(new_trie, bi_old)
