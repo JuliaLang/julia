@@ -102,4 +102,11 @@ function run_map_equivalence_tests(mapf)
     testmap_equivalence(mapf, x->x ? false : true, BitMatrix(undef, 10,10))
     testmap_equivalence(mapf, Returns("foobar"), BitMatrix(undef, 10,10))
     testmap_equivalence(mapf, (x,y,z)->string(x,y,z), BitVector(undef, 10), fill(1.0, 10), "1234567890")
+
+    let A = reshape(1:12, 3, 4)
+        testmap_equivalence(mapf, identity, (x^2 for x in A))
+    end
+
+    testmap_equivalence(mapf, +, [1,2,3], [4,5])
+    @test_throws DimensionMismatch mapf(+, rand(2,2), rand(3,3))
 end

@@ -67,6 +67,43 @@ let
     @test e.processed_bt[2][1].func === :f42105
 end
 
+# propagate errors from tasks
+let buffer = Vector{Any}(undef, 100)
+    e = try
+        asyncmap!(x -> x == 1 ? error("ouch") : (sleep(0.1); x), buffer, 1:100; ntasks=2)
+    catch e
+        e
+    end
+    @test e isa CapturedException
+    @test e.ex == ErrorException("ouch")
+end
+
+# issue #61440
+let buffer = Vector{Any}(undef, 5)
+    asyncmap!(batch -> map(x -> x[1]^2, batch), buffer, 1:5; batch_size=2)
+    @test buffer == [1, 4, 9, 16, 25]
+end
+@test asyncmap(batch -> map(x -> x[1]^2, batch), 1:5; batch_size=2) == [1, 4, 9, 16, 25]
+
+# issue #61441
+let buffer = Vector{Any}(undef, 5), N = Ref(0)
+    asyncmap!(x -> (sleep(0.01); x^2), buffer, 1:5;
+              ntasks = () -> (N[] += 1; N[] == 1 ? 1 : 2))
+    @test buffer == [1, 4, 9, 16, 25]
+end
+
+# issue #60304
+struct SnapshotVector{T} <: AbstractVector{T}
+    data::Vector{T}
+end
+Base.size(a::SnapshotVector) = size(a.data)
+Base.getindex(a::SnapshotVector, i::Int) = a.data[i]
+Base.setindex!(a::SnapshotVector, v, i::Int) = (a.data[i] = deepcopy(v))
+Base.similar(::SnapshotVector, ::Type{S}, dims::Dims{1}) where {S} = SnapshotVector(Vector{S}(undef, dims...))
+let a = SnapshotVector([1, 2, 3])
+    @test asyncmap(x -> (sleep(0.01); x^2), a) == [1, 4, 9]
+end
+
 include("generic_map_tests.jl")
 generic_map_tests(asyncmap, asyncmap!)
 
