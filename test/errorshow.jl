@@ -1132,6 +1132,34 @@ let ex = try
     @test occursin("may have intended to extend", sprint(Base.showerror, ex))
 end
 
+# Test hint when an argument's type is shadowed by a same-named type from
+# another module expected by the method (issue #41084).
+module TestShadowedTypeHint
+    struct Foo end
+    func(::Foo) = "hi"
+end
+module TestShadowedTypeHintOther
+    struct Foo end
+end
+let ex = try
+        TestShadowedTypeHint.func(TestShadowedTypeHintOther.Foo())
+    catch e
+        e
+    end::MethodError
+    s = sprint(Base.showerror, ex)
+    @test occursin("share the same name `Foo`", s)
+    @test occursin("TestShadowedTypeHintOther.Foo", s)
+    @test occursin("TestShadowedTypeHint.Foo", s)
+end
+# Negative: no hint when the call fails for unrelated reasons.
+let ex = try
+        sin("a")
+    catch e
+        e
+    end::MethodError
+    @test !occursin("share the same name", sprint(Base.showerror, ex))
+end
+
 # Test that implementation detail of include() is hidden from the user by default
 let bt = try
         @noinline include("testhelpers/include_error.jl")
