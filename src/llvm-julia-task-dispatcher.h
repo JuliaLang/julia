@@ -33,6 +33,10 @@ private:
   std::mutex DispatchMutex;
   std::condition_variable WorkFinishedCV;
   SmallVector<future_base *> WaitingFutures;
+  /// Track whether the current thread is inside work_until or dispatch's
+  /// inline run. When false, dispatch runs tasks inline to avoid deadlock
+  /// with callers that block on std::future (e.g. LocalTrampolinePool::reenter).
+  static inline thread_local bool InCooperativeContext = false;
 
 public:
 
@@ -337,6 +341,34 @@ private:
 thread_local SmallVector<std::pair<std::unique_ptr<Task>, JuliaTaskDispatcher *>> JuliaTaskDispatcher::TaskQueue;
 
 void JuliaTaskDispatcher::dispatch(std::unique_ptr<Task> T) {
+  if (!InCooperativeContext) {
+    // Not inside work_until — run inline to prevent deadlock with callers
+    // that block on std::future (e.g. LocalTrampolinePool::reenter).
+    // Mark the inline run as cooperative so any nested dispatch() queues
+    // instead of recursing on the C stack, then drain the queue so any
+    // continuations that fulfill the caller's std::future can fire before
+    // we return.
+    InCooperativeContext = true;
+    T->run();
+    // Drain any tasks queued during the inline run
+    while (!TaskQueue.empty()) {
+      auto TaskPair = std::move(TaskQueue.back());
+      TaskQueue.pop_back();
+      TaskPair.first->run();
+    }
+    // Notify any threads that might be waiting for work to complete
+    {
+      std::lock_guard<std::mutex> Lock(DispatchMutex);
+      bool ShouldNotify = llvm::any_of(
+          WaitingFutures, [](future_base *F) { return F->ready(); });
+      if (ShouldNotify) {
+        WaitingFutures.clear();
+        WorkFinishedCV.notify_all();
+      }
+    }
+    InCooperativeContext = false;
+    return;
+  }
   TaskQueue.push_back(std::pair(std::move(T), this));
 }
 
@@ -371,6 +403,8 @@ void JuliaTaskDispatcher::shutdown() {
 }
 
 void JuliaTaskDispatcher::work_until(future_base &F) {
+  bool WasCooperative = InCooperativeContext;
+  InCooperativeContext = true;
   while (!F.ready()) {
     // First, process any tasks in our local queue
     // Process in LIFO order (most recently added first) to avoid deadlocks
@@ -395,8 +429,11 @@ void JuliaTaskDispatcher::work_until(future_base &F) {
 
       // Check if our future is now ready
       if (F.ready())
-        return;
+        break;
     }
+
+    if (F.ready())
+      break;
 
     // If we get here, our queue is empty but the future isn't ready
     // We need to wait for other threads to finish work that should complete our
@@ -407,6 +444,7 @@ void JuliaTaskDispatcher::work_until(future_base &F) {
       WorkFinishedCV.wait(Lock, [&F]() { return F.ready(); });
     }
   }
+  InCooperativeContext = WasCooperative;
 }
 
 } // End namespace
