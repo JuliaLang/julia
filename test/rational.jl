@@ -898,12 +898,14 @@ end
 @testset "rationalize(Rational) (issue #60768)" begin
     x = float(pi)
     r = rationalize(x)
-    @test rationalize(Int32, r, tol=0.0) === Rational{Int32}(r) == r
-    @test rationalize(r) === rationalize(r, tol=0) === r
+    @test rationalize(r) === rationalize(r, tol=inv(typemax(Int))) === r
     @test rationalize(r, tol=eps(float(r))) === r
     @test rationalize(r, tol=0.1) == 16//5
     for n=1:10
-        @test rationalize(r, tol=1/10^n) == rationalize(float(r), tol=1/10^n)
+        @test rationalize(r, tol=inv(10^n)) == rationalize(float(r), tol=inv(10^n))
     end
+    @test rationalize(Int32, r, tol=0) === Rational{Int32}(r) == r
+    @test rationalize(Int32, r) == rationalize(r, tol=inv(typemax(Int32)))
+    @test_throws InexactError rationalize(Int16, r, tol=0)
     @test_throws OverflowError rationalize(UInt, -r)
 end
