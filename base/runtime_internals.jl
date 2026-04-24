@@ -1742,7 +1742,7 @@ function may_invoke_generator(method::Method, @nospecialize(atype), sparams::Sim
 
     firstarg = 1
     for i = 1:nsparams
-        if isa(sparams[i], TypeVar)
+        if isa(sparams[i], SimpleVector)
             if (ast_slotflag(code, firstarg + i) & SLOT_USED) != 0
                 return false
             end

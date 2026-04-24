@@ -2803,7 +2803,15 @@ jl_value_t *jl_instantiate_type_with(jl_value_t *t, jl_value_t **env, size_t n)
 
 static jl_value_t *_jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_t *env, jl_value_t **vals, jl_typeenv_t *prev, jl_typestack_t *stack)
 {
-    jl_typeenv_t en = { env->var, vals[0], prev };
+    // `svec(tvar, constrained)` is the marker for an uncertain TypeVar env
+    // entry (identity preserved). Substitute the TypeVar itself.
+    jl_value_t *val = vals[0];
+    if (jl_is_svec(val) && jl_svec_len((jl_svec_t*)val) >= 1) {
+        jl_value_t *inner = jl_svecref(val, 0);
+        if (jl_is_typevar(inner))
+            val = inner;
+    }
+    jl_typeenv_t en = { env->var, val, prev };
     if (jl_is_unionall(env->body))
         return _jl_instantiate_type_in_env(ty, (jl_unionall_t*)env->body, vals + 1, &en, stack);
     else

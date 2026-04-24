@@ -994,7 +994,7 @@ function test_intersection()
     # first union component sets N==0, but for the second N is unknown
     _, E = intersection_env(Tuple{Tuple{Vararg{Int}}, Any},
                             Tuple{Union{Base.DimsInteger{N},Base.Indices{N}}, Int} where N)
-    @test length(E)==1 && isa(E[1],TypeVar)
+    @test length(E)==1 && isa(E[1], Core.SimpleVector) && E[1][1] isa TypeVar
 
     @testintersect(Tuple{Dict{Int,Int}, Ref{Pair{K,V}}} where V where K,
                    Tuple{AbstractDict{Int,Int}, Ref{Pair{T,T}} where T},
@@ -1007,7 +1007,7 @@ function test_intersection()
 
     # issue #20998
     _, E = intersection_env(Tuple{Int,Any,Any}, Tuple{T,T,S} where {T,S})
-    @test length(E) == 2 && E[1] == Int && isa(E[2], TypeVar)
+    @test length(E) == 2 && E[1] == Int && isa(E[2], Core.SimpleVector) && E[2][1] isa TypeVar
     _, E = intersection_env(Tuple{Dict{Int,Type}, Type, Any},
                             Tuple{Dict{K,V}, Any, Int} where {K,V})
     @test E[2] == Type
@@ -1479,7 +1479,7 @@ end
 
 # PR #24399
 let (t, e) = intersection_env(Tuple{Union{Int,Int8}}, Tuple{T} where T)
-    @test e[1] isa TypeVar
+    @test e[1] isa Core.SimpleVector && e[1][1] isa TypeVar
 end
 
 # issue #25430
@@ -2283,6 +2283,9 @@ function equal_envs(env1, env2)
     for i = 1:length(env1)
         a = env1[i]
         b = env2[i]
+        # Unwrap `svec(tvar, constrained)` markers for equality comparison.
+        a isa Core.SimpleVector && (a = a[1])
+        b isa Core.SimpleVector && (b = b[1])
         if a isa TypeVar
             if !(b isa TypeVar && a.name == b.name && a.lb == b.lb && a.ub == b.ub)
                 return false
@@ -2299,10 +2302,10 @@ let
     env_tuple(@nospecialize(x), @nospecialize(y)) = intersection_env(x, y)[2]
     TT0 = Tuple{Type{T},Union{Real,Missing,Nothing}} where {T}
     TT1 = Union{Type{Int8},Type{Int16}}
-    @test env_tuple(Tuple{TT1,Missing}, TT0) ===
-          env_tuple(Tuple{TT1,Nothing}, TT0) ===
-          env_tuple(Tuple{TT1,Int}, TT0) ===
-          Core.svec(TT0.var)
+    e1 = env_tuple(Tuple{TT1,Missing}, TT0)
+    e2 = env_tuple(Tuple{TT1,Nothing}, TT0)
+    e3 = env_tuple(Tuple{TT1,Int}, TT0)
+    @test equal_envs(e1, e2) && equal_envs(e2, e3) && equal_envs(e3, Core.svec(TT0.var))
 
     TT0 = Tuple{T1,T2,Union{Real,Missing,Nothing}} where {T1,T2}
     TT1 = Tuple{T1,T2,Union{Real,Missing,Nothing}} where {T2,T1}
@@ -2354,7 +2357,9 @@ struct Z38497{T>:Int} <: Y38497{T} end
 @test Vector{Vector{Tuple{T,T}} where Int<:T<:Int} <: Vector{Vector{Tuple{S1,S1} where S<:S1<:S}} where S
 
 #issue #46970
-@test only(intersection_env(Union{S, Matrix{Int}} where S<:Matrix, Matrix)[2]) isa TypeVar
+let e = only(intersection_env(Union{S, Matrix{Int}} where S<:Matrix, Matrix)[2])
+    @test e isa Core.SimpleVector && e[1] isa TypeVar
+end
 T46784{B<:Val, M<:AbstractMatrix} = Tuple{<:Union{B, <:Val{<:B}}, M, Union{AbstractMatrix{B}, AbstractMatrix{<:Vector{<:B}}}}
 @testintersect(T46784{T,S} where {T,S}, T46784, !Union{})
 @test T46784 <: T46784{T,S} where {T,S}
@@ -2885,19 +2890,16 @@ end
 @test !(Tuple{Ref{Int16},Ref{Int16},Union{Int16,Int8}} <: Tuple{Ref{S},Ref{T},<:Union{S,T}} where {S,T})
 @test Tuple{NTuple{2,Int}, Int8} <: Tuple{<:Union{NTuple{2,T},Tuple{S,T}}, <:T} where {S,T>:Int}
 
-# issue #61634: an unused typevar in a method signature's `where` clause must be
-# reported in env at its declared index, not dropped or shifted. A naive walk of
-# `y`'s UnionAlls in `jl_subtype_env` is insufficient when an unalias-triggered
-# rebuild of `y` collapses the inner UnionAll: a used typevar that originally
-# sat at index k+1 then lands at index k, and the subsequent typevar's slot
-# stays empty.
+# An unused typevar in a method signature's `where` clause must be
+# reported in env at its declared index, not dropped or shifted.
 @test_warn "declares type variable pad but does not use it" @eval f61634(::Type{TW}, ::AbstractArray{T,N}) where {N, T, TW<:Real, pad} = T
 let sig = methods(f61634)[1].sig
     _, env = intersection_env(Tuple{typeof(f61634), Type, Vector}, sig)
+    unwrap(e) = e isa Core.SimpleVector ? e[1] : e
     @test env[1] === 1
-    @test env[2] isa TypeVar && env[2].name === :T
-    @test env[3] isa TypeVar && env[3].name === :TW
-    @test env[4] isa TypeVar && env[4].name === :pad
+    @test unwrap(env[2]) isa TypeVar && unwrap(env[2]).name === :T
+    @test unwrap(env[3]) isa TypeVar && unwrap(env[3]).name === :TW
+    @test unwrap(env[4]) isa TypeVar && unwrap(env[4]).name === :pad
 end
 # Same issue but with the unused typevar in the middle — exercises the wrong-index
 # case where dropping the inner UnionAll would shift later typevars to the wrong slot.
@@ -2908,21 +2910,20 @@ let sig = methods(g61634)[1].sig, N_var = sig.var
     # fix) drop the unused inner UnionAll for `pad`.
     x = UnionAll(N_var, Tuple{typeof(g61634), Type, AbstractArray{Int, N_var}})
     _, env = intersection_env(x, sig)
-    @test env[1] isa TypeVar && env[1].name === :N
-    @test env[2] isa TypeVar && env[2].name === :pad
-    @test env[3] isa TypeVar && env[3].name === :TW
+    unwrap(e) = e isa Core.SimpleVector ? e[1] : e
+    @test unwrap(env[1]) isa TypeVar && unwrap(env[1]).name === :N
+    @test unwrap(env[2]) isa TypeVar && unwrap(env[2]).name === :pad
+    @test unwrap(env[3]) isa TypeVar && unwrap(env[3]).name === :TW
     @test env[4] === Int
 end
 
-# issue #61634: when a method's typevar is bound by intersection to a value that
-# carries free typevars from inner UnionAll scopes, the static parameter is not
-# concretely determined. Accessing it must throw `UndefVarError` so that an
-# `@isdefined(sp)` guard correctly evaluates to `false`, and the leaky value
-# never reaches user code. Regressed `eltype(::Type{<:AbstractArray{E}}) where E`
-# on parametric subtypes hiding their element typevars (CategoricalArrays.CategoricalArray,
-# SuiteSparseGraphBLAS.GBMatrix, etc.).
 abstract type _Abs61634a{T,N,U} <: AbstractArray{Union{T,U}, N} end
 abstract type _Abs61634b{T,F,N} <: AbstractArray{Union{T,F}, N} end
 mutable struct _Sub61634b{T,F} <: _Abs61634b{T,F,2} end
 @test eltype(_Abs61634a) === Any
 @test eltype(_Sub61634b{Float64}) === Any
+
+# TypeVar constrainedness quality
+let e = only(intersection_env(Tuple{Ref}, Tuple{Ref{T}} where T)[2])
+    @test e isa Core.SimpleVector && e[1] isa TypeVar && e[2]
+end
