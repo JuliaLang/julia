@@ -40,6 +40,8 @@ Compiler/Runtime improvements
 Command-line option changes
 ---------------------------
 
+  - `-P <project>` is now a shorthand for `--project <project>` ([#59867]).
+
 Multi-threading changes
 -----------------------
 
