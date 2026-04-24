@@ -137,7 +137,21 @@ Base.show_method_candidates(buf, MethodError(method_c5,(Float64,)))
 @test occursin("\nClosest candidates are:\n  method_c5(::Type{Float64})$cmod$cfile$c5line", String(take!(buf)))
 
 Base.show_method_candidates(buf, MethodError(method_c5,(Int32,)))
-@test occursin("\nClosest candidates are:\n  method_c5(!Matched::Type{Float64})$cmod$cfile$c5line", String(take!(buf)))
+@test occursin("\nClosest candidates are:\n  method_c5(::Type{!Matched{Float64}})$cmod$cfile$c5line", String(take!(buf)))
+
+# Nested type mismatches highlight only the innermost differing subtree (issue #41061)
+method_c_nested(x::Vector{Vector{Float64}}) = 1
+Base.show_method_candidates(buf, MethodError(method_c_nested, ([[1,2,3]],)))
+@test occursin("::Array{Array{!Matched{Float64}, 1}, 1}", String(take!(buf)))
+# Independent differing parameter positions each highlight separately
+method_c_tuple(x::Tuple{Int,String}) = 1
+Base.show_method_candidates(buf, MethodError(method_c_tuple, ((1.0, :x),)))
+@test occursin("::Tuple{!Matched{Int64}, !Matched{String}}", String(take!(buf)))
+# Color mode wraps only the innermost differing subtree in error_color
+let io = IOContext(buf, :color => true)
+    Base.show_method_candidates(io, MethodError(method_c_nested, ([[1,2,3]],)))
+    @test occursin("::Array{Array{\e[91mFloat64\e[39m, 1}, 1}", String(take!(buf)))
+end
 
 mutable struct Test_type end
 test_type = Test_type()

@@ -454,6 +454,69 @@ stacktrace_expand_basepaths()::Bool = Base.get_bool_env("JULIA_STACKTRACE_EXPAND
 stacktrace_contract_userdir()::Bool = Base.get_bool_env("JULIA_STACKTRACE_CONTRACT_HOMEDIR", true) === true
 stacktrace_linebreaks()::Bool = Base.get_bool_env("JULIA_STACKTRACE_LINEBREAKS", false) === true
 
+# Print `::<sig>`, highlighting only the topmost subtree(s) that differ from
+# `called`. Bails to whole-type highlighting whenever either side isn't a bare
+# concrete `DataType` chain
+function show_type_diff(io::IO, @nospecialize(sig), @nospecialize(called), use_color::Bool)
+    if type_diff_can_descend(sig, called)
+        print(io, "::")
+        show_type_diff_body(io, sig, called, use_color)
+    else
+        show_type_mismatch(io, sig, use_color, #=top_level=#true)
+    end
+end
+
+function show_type_diff_body(io::IO, @nospecialize(sig), @nospecialize(called), use_color::Bool)
+    if !type_diff_can_descend(sig, called)
+        show_type_mismatch(io, sig, use_color, #=top_level=#false)
+        return
+    end
+    sig = sig::DataType
+    called = called::DataType
+    show_type_name(io, sig.name)
+    print(io, "{")
+    for k in 1:length(sig.parameters)
+        k > 1 && print(io, ", ")
+        sp = sig.parameters[k]
+        cp = called.parameters[k]
+        if isequal(sp, cp)
+            show(io, sp)
+        else
+            show_type_diff_body(io, sp, cp, use_color)
+        end
+    end
+    print(io, "}")
+end
+
+function show_type_mismatch(io::IO, @nospecialize(ty), use_color::Bool, top_level::Bool)
+    if use_color
+        with_output_color(error_color(), io) do io
+            top_level && print(io, "::")
+            show(io, ty)
+        end
+    elseif top_level
+        print(io, "!Matched::")
+        show(io, ty)
+    else
+        print(io, "!Matched{")
+        show(io, ty)
+        print(io, "}")
+    end
+end
+
+function type_diff_can_descend(@nospecialize(sig), @nospecialize(called))
+    sig isa DataType && called isa DataType || return false
+    sig.name === called.name || return false
+    n = length(sig.parameters)
+    n > 0 && n == length(called.parameters) || return false
+    sig.name === typename(NamedTuple) && return false
+    for i in 1:n
+        isvarargtype(sig.parameters[i]) && return false
+        isvarargtype(called.parameters[i]) && return false
+    end
+    return true
+end
+
 function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
     @nospecialize io
     is_arg_types = !isa(ex.args, Tuple)
@@ -527,14 +590,19 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
                 # the type of the first argument is not matched.
                 t_in === Union{} && special && i == 1 && break
                 if t_in === Union{}
-                    if get(io, :color, false)::Bool
-                        let sigstr=sigstr
-                            Base.with_output_color(Base.error_color(), iob) do iob
-                                print(iob, "::", sigstr...)
+                    use_color = get(io, :color, false)::Bool
+                    if Base.isvarargtype(sig[i])
+                        if use_color
+                            let sigstr=sigstr
+                                Base.with_output_color(Base.error_color(), iob) do iob
+                                    print(iob, "::", sigstr...)
+                                end
                             end
+                        else
+                            print(iob, "!Matched::", sigstr...)
                         end
                     else
-                        print(iob, "!Matched::", sigstr...)
+                        show_type_diff(iob, sig[i], t_i[i], use_color)
                     end
                     # If there is no typeintersect then the type signature from the method is
                     # inserted in t_i this ensures if the type at the next i matches the type
