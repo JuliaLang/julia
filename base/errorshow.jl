@@ -461,12 +461,20 @@ _datatype_or_nothing(@nospecialize(T)) = (T = unwrap_unionall(T); T isa DataType
 
 function show_shadowed_type_hint(io::IO, @nospecialize(f), san_arg_types_param::Vector{Any})
     reported = IdSet{Core.TypeName}()
+    ft = Core.Typeof(f)
     for method in methods(f)
         msig = unwrap_unionall(method.sig)
         isa(msig, DataType) || continue
         mparams = msig.parameters
-        for i in 1:min(length(mparams) - 1, length(san_arg_types_param))
-            expected = mparams[i + 1]
+        nargs = length(san_arg_types_param)
+        last_is_va = !isempty(mparams) && isa(mparams[end], Core.TypeofVararg)
+        if !last_is_va && nargs != length(mparams) - 1
+            continue
+        end
+        new_args = copy(san_arg_types_param)
+        shadows = Tuple{Core.TypeName,Core.TypeName}[]
+        for i in 1:nargs
+            expected = i + 1 <= length(mparams) ? mparams[i + 1] : mparams[end]
             isa(expected, Core.TypeofVararg) && (expected = unwrapva(expected))
             e_dt = _datatype_or_nothing(expected)
             a_dt = _datatype_or_nothing(san_arg_types_param[i])
@@ -476,14 +484,19 @@ function show_shadowed_type_hint(io::IO, @nospecialize(f), san_arg_types_param::
             e_tn.name === a_tn.name || continue
             (isdefined(e_tn, :module) && isdefined(a_tn, :module)) || continue
             e_tn.module === a_tn.module && continue
+            new_args[i] = rewrap_unionall(expected, method.sig)
+            push!(shadows, (a_tn, e_tn))
+        end
+        isempty(shadows) && continue
+        Tuple{ft, new_args...} <: method.sig || continue
+        for (a_tn, e_tn) in shadows
             a_tn in reported && continue
             push!(reported, a_tn)
-            print(io, "\nThe types `")
-            show_unquoted(io, a_tn.module); print(io, ".", a_tn.name)
-            print(io, "` and `")
+            print(io, "\nYou may have intended `")
             show_unquoted(io, e_tn.module); print(io, ".", e_tn.name)
-            print(io, "` share the same name `", a_tn.name,
-                  "` but are distinct types defined in different modules.")
+            print(io, "` rather than `")
+            show_unquoted(io, a_tn.module); print(io, ".", a_tn.name)
+            print(io, "`.")
         end
     end
 end

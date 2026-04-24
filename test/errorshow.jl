@@ -1132,30 +1132,29 @@ let ex = try
     @test occursin("may have intended to extend", sprint(Base.showerror, ex))
 end
 
-# issue #41084
-module TestShadowedTypeHint
+module TestShadowedTypeHintA
     struct Foo end
-    func(::Foo) = "hi"
+    f(::Foo) = 1
+    g(::Foo, ::Int) = 1
+    h(::Vector{Foo}) = 1
 end
-module TestShadowedTypeHintOther
+module TestShadowedTypeHintB
     struct Foo end
 end
-let ex = try
-        TestShadowedTypeHint.func(TestShadowedTypeHintOther.Foo())
-    catch e
-        e
-    end::MethodError
-    s = sprint(Base.showerror, ex)
-    @test occursin("share the same name `Foo`", s)
-    @test occursin("TestShadowedTypeHintOther.Foo", s)
-    @test occursin("TestShadowedTypeHint.Foo", s)
-end
-let ex = try
-        sin("a")
-    catch e
-        e
-    end::MethodError
-    @test !occursin("share the same name", sprint(Base.showerror, ex))
+@testset "shadowed-type hint #41084" begin
+    err(f) = try f(); catch e; e; end::MethodError
+    msg(f) = sprint(Base.showerror, err(f))
+
+    s = msg(() -> TestShadowedTypeHintA.f(TestShadowedTypeHintB.Foo()))
+    @test occursin("You may have intended to pass an instance of `", s)
+    @test occursin("TestShadowedTypeHintA.Foo", s)
+    @test occursin("TestShadowedTypeHintB.Foo", s)
+
+    @test !occursin("You may have intended to pass", msg(() -> sin("a")))
+    @test !occursin("You may have intended to pass",
+                    msg(() -> TestShadowedTypeHintA.g(TestShadowedTypeHintB.Foo(), "not an int")))
+    @test_broken occursin("You may have intended to pass",
+                          msg(() -> TestShadowedTypeHintA.h([TestShadowedTypeHintB.Foo()])))
 end
 
 # Test that implementation detail of include() is hidden from the user by default
