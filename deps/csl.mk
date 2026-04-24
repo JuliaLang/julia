@@ -54,11 +54,20 @@ $$(build_shlibdir)/$(1): | $$(build_shlibdir)
 	[ -n "$$$${SRC_LIB}" ] && cp "$$$${SRC_LIB}" '$$(build_shlibdir)'
 endef
 
-define copy_csl_static_lib
+define copy_csl_static
+install-csl: | $$(build_libdir) $$(build_libdir)/$(1)
+$$(build_libdir)/$(1): | $$(build_libdir)
+	-@SRC='$$(call pathsearch,$(1),$$(STD_LIB_PATH))'; \
+	[ -n "$$$${SRC}" ] && cp "$$$${SRC}" '$$(build_libdir)'
+endef
+
+# Like copy_csl_static, but stages into $(build_private_libdir) instead of
+# $(build_libdir). See JuliaLang/julia#51698.
+define copy_csl_static_private
 install-csl: | $$(build_private_libdir) $$(build_private_libdir)/$(1)
 $$(build_private_libdir)/$(1): | $$(build_private_libdir)
-	-@SRC_LIB='$$(call pathsearch,$(1),$$(STD_LIB_PATH))'; \
-	[ -n "$$$${SRC_LIB}" ] && cp "$$$${SRC_LIB}" '$$(build_private_libdir)'
+	-@SRC='$$(call pathsearch,$(1),$$(STD_LIB_PATH))'; \
+	[ -n "$$$${SRC}" ] && cp "$$$${SRC}" '$$(build_private_libdir)'
 endef
 
 # libgfortran has multiple names; we're just going to copy any version we can find
@@ -75,15 +84,23 @@ $(eval $(call copy_csl,$(call versioned_libname,libgomp,1)))
 
 # Configurable either a static or dynamic library depending on the system
 $(eval $(call copy_csl,$(call versioned_libname,libssp,0)))
-$(eval $(call copy_csl_static_lib,libssp.a))
 
 ifeq ($(OS),WINNT)
-# On windows we need the static gcc runtime libraries for linking pkgimages
-$(eval $(call copy_csl_static_lib,libgcc.a))
-$(eval $(call copy_csl_static_lib,libgcc_s.a))
-$(eval $(call copy_csl_static_lib,libmsvcrt.a))
-$(eval $(call copy_csl_static_lib,libmingwex.a))
-$(eval $(call copy_csl_static_lib,libkernel32.a))
+# These are static gcc runtime libraries / objects for linking pkgimages
+$(eval $(call copy_csl_static_private,libgcc.a))
+$(eval $(call copy_csl_static_private,libgcc_s.a))
+$(eval $(call copy_csl_static_private,libmsvcrt.a))
+$(eval $(call copy_csl_static_private,libmingwex.a))
+$(eval $(call copy_csl_static_private,libkernel32.a))
+$(eval $(call copy_csl_static_private,libmingw32.a))
+$(eval $(call copy_csl_static_private,libmoldname.a))
+$(eval $(call copy_csl_static_private,libadvapi32.a))
+$(eval $(call copy_csl_static_private,libshell32.a))
+$(eval $(call copy_csl_static_private,libuser32.a))
+$(eval $(call copy_csl_static_private,libpthread.dll.a))
+$(eval $(call copy_csl_static_private,dllcrt2.o))
+$(eval $(call copy_csl_static_private,crtbegin.o))
+$(eval $(call copy_csl_static_private,crtend.o))
 # Windows has special gcc_s names
 ifeq ($(ARCH),i686)
 $(eval $(call copy_csl,$(call versioned_libname,libgcc_s_sjlj,1)))
@@ -106,6 +123,18 @@ endif
 else
 # Other targets just use libgcc_s.1
 $(eval $(call copy_csl,$(call versioned_libname,libgcc_s,1)))
+install-csl: $(build_shlibdir)/libgcc_s.$(SHLIB_EXT)
+$(build_shlibdir)/libgcc_s.$(SHLIB_EXT): $(build_shlibdir)/$(call versioned_libname,libgcc_s,1)
+	ln -sf $(call versioned_libname,libgcc_s,1) $@
+# These are static gcc runtime libraries / objects for linking pkgimages
+$(eval $(call copy_csl_static,libgcc.a))
+$(eval $(call copy_csl_static,crti.o))
+$(eval $(call copy_csl_static,crtn.o))
+$(eval $(call copy_csl_static,crtbeginS.o))
+$(eval $(call copy_csl_static,crtendS.o))
+ifeq ($(OS),Linux) # glibc-specific
+$(eval $(call copy_csl_static,libc_nonshared.a))
+endif
 endif
 endif
 
@@ -132,16 +161,37 @@ distclean-csl: clean-csl
 
 else
 $(eval $(call bb-install,csl,CSL,true))
-ifeq ($(OS),WINNT)
 GCC_VERSION = 15
+ifeq ($(OS),WINNT)
 install-csl:
 	mkdir -p $(build_private_libdir)/
 	cp -a $(build_shlibdir)/$(call versioned_libname,libstdc++,6) $(build_shlibdir)/libstdc++.$(SHLIB_EXT)
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libgcc_s.a $(build_private_libdir)/
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libgcc.a $(build_private_libdir)/
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libmsvcrt.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libmingwex.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libkernel32.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libmingw32.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libmoldname.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libadvapi32.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libshell32.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libuser32.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libpthread.dll.a $(build_private_libdir)/
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libssp.dll.a $(build_private_libdir)/
-	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libssp.dll.a $(build_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/dllcrt2.o $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/crtbegin.o $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/crtend.o $(build_private_libdir)/
+else ifneq ($(OS),Darwin)
+install-csl:
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libgcc.a $(build_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/crti.o $(build_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/crtn.o $(build_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/crtbeginS.o $(build_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/crtendS.o $(build_libdir)/
+	ln -sf $(call versioned_libname,libgcc_s,1) $(build_shlibdir)/libgcc_s.$(SHLIB_EXT)
+ifeq ($(OS),Linux)
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libc_nonshared.a $(build_libdir)/
+endif
 endif
 endif
 
@@ -152,7 +202,28 @@ uninstall-gcc-libraries:
 	-rm -f $(build_private_libdir)/libgcc_s.a
 	-rm -f $(build_private_libdir)/libgcc.a
 	-rm -f $(build_private_libdir)/libmsvcrt.a
+	-rm -f $(build_private_libdir)/libmingwex.a
+	-rm -f $(build_private_libdir)/libkernel32.a
+	-rm -f $(build_private_libdir)/libmingw32.a
+	-rm -f $(build_private_libdir)/libmoldname.a
+	-rm -f $(build_private_libdir)/libadvapi32.a
+	-rm -f $(build_private_libdir)/libshell32.a
+	-rm -f $(build_private_libdir)/libuser32.a
+	-rm -f $(build_private_libdir)/libpthread.dll.a
 	-rm -f $(build_private_libdir)/libssp.dll.a
-	-rm -f $(build_libdir)/libssp.dll.a
+	-rm -f $(build_private_libdir)/dllcrt2.o
+	-rm -f $(build_private_libdir)/crtbegin.o
+	-rm -f $(build_private_libdir)/crtend.o
+.PHONY: uninstall-gcc-libraries
+else ifneq ($(OS),Darwin)
+uninstall-csl: uninstall-gcc-libraries
+uninstall-gcc-libraries:
+	-rm -f $(build_libdir)/libgcc.a
+	-rm -f $(build_libdir)/libc_nonshared.a
+	-rm -f $(build_shlibdir)/libgcc_s.$(SHLIB_EXT)
+	-rm -f $(build_libdir)/crti.o
+	-rm -f $(build_libdir)/crtn.o
+	-rm -f $(build_libdir)/crtbeginS.o
+	-rm -f $(build_libdir)/crtendS.o
 .PHONY: uninstall-gcc-libraries
 endif
