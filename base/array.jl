@@ -300,23 +300,10 @@ copyto!(dest::Memory, src::Array) =
 copyto!(dest::Array{T}, src::Array{T}) where {T} =
     (@_propagate_inbounds_meta; _copyto!(dest, firstindex(dest), src, firstindex(src), length(src)))
 
-# manual loop avoids memmove call overhead for small isbits non-overlapping copies
 function _copyto!(dest::Union{Array,Memory}, doffs::Integer, src::Union{Array,Memory}, soffs::Integer, n::Integer)
     @inline
-    @_terminates_locally_meta
     n == 0 && return dest
     _check_copyto_args(dest, doffs, src, soffs, n)
-    T = eltype(dest)
-    if isprimitivetype(T) && sizeof(T) <= 8 && T === eltype(src) && n * aligned_sizeof(T) < 65536
-        dm = dest isa Array ? getfield(dest, :ref).mem : dest
-        sm = src isa Array ? getfield(src, :ref).mem : src
-        if dm !== sm || doffs + n <= soffs || soffs + n <= doffs
-            @inbounds for i = 0:n-1
-                dest[doffs + i] = src[soffs + i]
-            end
-            return dest
-        end
-    end
     @inbounds let dref = memoryref(dest isa Array ? getfield(dest, :ref) : dest, doffs),
                   sref = memoryref(src isa Array ? getfield(src, :ref) : src, soffs)
         unsafe_copyto!(dref, sref, n)
