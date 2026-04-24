@@ -880,7 +880,7 @@ const char *jl_debuginfo_firstline(jl_debuginfo_t *debuginfo, int* line)
     }
     if (line) {
         struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, 0);
-        *line = lineidx.line;
+        *line = lineidx.loc;
     }
     return jl_debuginfo_file1(debuginfo);
 }
@@ -924,7 +924,7 @@ static void jl_fprint_debugloc(ios_t *s, jl_debuginfo_t *debuginfo, jl_value_t *
         assert(jl_typetagis(edge, jl_debuginfo_type));
         jl_fprint_debugloc(s, edge, NULL, stmt.pc, 1);
     }
-    intptr_t ip2 = stmt.line;
+    intptr_t ip2 = stmt.loc;
     if (ip2 >= 0 && ip > 0 && debuginfo->linetable != jl_nothing) {
         jl_fprint_debugloc(s, (jl_debuginfo_t*)debuginfo->linetable, func, ip2, 0);
     }

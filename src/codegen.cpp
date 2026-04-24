@@ -9301,7 +9301,7 @@ static jl_llvm_functions_t
                 if (!jl_is_symbol(debuginfo->def)) // this is a path
                     func = debuginfo->def; // this is inlined
                 struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, pc);
-                size_t i = lineidx.line;
+                size_t i = lineidx.loc;
                 if (i < 0) // pc out of range: broken debuginfo?
                     return false;
                 if (i == 0 && lineidx.to == 0) // no update
@@ -9325,8 +9325,8 @@ static jl_llvm_functions_t
                     if (pc == 1) {
                         struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, 0);
                         assert(lineidx.to == 0 && lineidx.pc == 0);
-                        if (lineidx.line > 0 && info.line != lineidx.line)
-                            info.line0 = lineidx.line;
+                        if (lineidx.loc > 0 && info.line != lineidx.loc)
+                            info.line0 = lineidx.loc;
                     }
                     if (info.file.empty())
                         info.file = "<missing>";
@@ -9530,10 +9530,10 @@ static jl_llvm_functions_t
             if (do_coverage(is_user_code, is_tracked)) {
                 for (size_t pc = 0; 1; pc++) {
                     struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, pc);
-                    if (lineidx.line == -1)
+                    if (lineidx.loc == -1)
                         break;
-                    if (lineidx.line > 0)
-                        jl_coverage_alloc_line(file.data(), lineidx.line);
+                    if (lineidx.loc > 0)
+                        jl_coverage_alloc_line(file.data(), lineidx.loc);
                 }
             }
         };
