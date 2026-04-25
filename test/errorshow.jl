@@ -19,6 +19,7 @@ _register_if_missing(Base.methods_on_iterable, MethodError)
 _register_if_missing(Base.nonsetable_type_hint_handler, MethodError)
 _register_if_missing(Base.fielderror_listfields_hint_handler, FieldError)
 _register_if_missing(Base.fielderror_dict_hint_handler, FieldError)
+_register_if_missing(Base.apply_type_unionall_hint_handler, TypeError)
 @testset "SystemError" begin
     err = try; systemerror("reason", Cint(0)); false; catch ex; ex; end::SystemError
     errs = sprint(Base.showerror, err)
@@ -1538,4 +1539,19 @@ end
     err_strA = @except_str memoryref(refA, 2) BoundsError
     @test occursin("AtomicMemoryRef", err_strA)
     @test occursin("1-element", err_strA)
+end
+
+# issue #4507
+@testset "apply_type TypeError hint for non-parameterizable types" begin
+    for expr in (:(Int{1}), :(Int{}), :(BitVector{1}), :(BitVector{}))
+        @test_throws TypeError eval(expr)
+    end
+    @test occursin("Hint: `Int64` takes no type parameters", sprint(showerror, try Int64{1} catch e; e end))
+    @test occursin("Hint: `Int64` takes no type parameters", sprint(showerror, try Int64{} catch e; e end))
+    @test occursin("Hint: `BitVector` takes no type parameters", sprint(showerror, try BitVector{1} catch e; e end))
+    @test !occursin("Hint:", sprint(showerror, try Core.apply_type(5, 2) catch e; e end))
+    @test !occursin("Hint:", sprint(showerror, try Union{Int64,Float64}{Int64} catch e; e end))
+    @test !occursin("Hint:", sprint(showerror, try typeassert(Int64, UnionAll) catch e; e end))
+    @test_throws ErrorException("too many parameters for type `Array`: expected 2, got 4") Array{1,2,3,4}
+    @test_throws ErrorException("too many parameters for type `BitArray`: expected 1, got 2") BitArray{1,2}
 end
