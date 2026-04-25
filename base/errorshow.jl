@@ -454,8 +454,19 @@ stacktrace_expand_basepaths()::Bool = Base.get_bool_env("JULIA_STACKTRACE_EXPAND
 stacktrace_contract_userdir()::Bool = Base.get_bool_env("JULIA_STACKTRACE_CONTRACT_HOMEDIR", true) === true
 stacktrace_linebreaks()::Bool = Base.get_bool_env("JULIA_STACKTRACE_LINEBREAKS", false) === true
 
-# Print `::<sig>`, highlighting only the topmost subtree(s) that differ from `called`
+# Print `::<sig>` in `error_color`, underlining
+# the topmost subtree(s) that differ from `called`.
 function show_type_diff(io::IO, @nospecialize(sig), @nospecialize(called), use_color::Bool, top_level::Bool=true)
+    if top_level && use_color
+        print(io, text_colors[error_color()])
+        _show_type_diff(io, sig, called, true, true)
+        print(io, text_colors[:default])
+        return nothing
+    end
+    return _show_type_diff(io, sig, called, use_color, top_level)
+end
+
+function _show_type_diff(io::IO, @nospecialize(sig), @nospecialize(called), use_color::Bool, top_level::Bool)
     show_namedtuple_diff(io, sig, called, use_color, top_level) && return nothing
     params = descend_params(io, sig, called)
     if params === nothing
@@ -544,10 +555,10 @@ end
 
 function show_type_mismatch(io::IO, @nospecialize(ty), use_color::Bool, top_level::Bool)
     if use_color
-        with_output_color(error_color(), io) do io
-            top_level && print(io, "::")
-            show(io, ty)
-        end
+        top_level && print(io, "::")
+        print(io, text_colors[:underline])
+        show(io, ty)
+        print(io, disable_text_style[:underline])
     elseif top_level
         print(io, "!Matched::")
         show(io, ty)

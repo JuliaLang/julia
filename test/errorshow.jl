@@ -79,7 +79,7 @@ Base.show_method_candidates(buf, Base.MethodError(method_c1,(1, 1, "")))
 Base.show_method_candidates(IOContext(buf, :color => true), Base.MethodError(method_c1,(1, 1, "")))
 
 mod_col = Base.text_colors[Base.STACKTRACE_FIXEDCOLORS[modul]]
-@test occursin("\n\n\e[0mClosest candidates are:\n\e[0m  method_c1(\e[91m::Float64\e[39m, \e[91m::AbstractString...\e[39m)\n\e[0m\e[90m   @\e[39m $mod_col$modul\e[39m \e[90m$dname$sep\e[39m\e[90m\e[4m$fname:$c1line\e[24m\e[39m\n", String(take!(buf)))
+@test occursin("\n\n\e[0mClosest candidates are:\n\e[0m  method_c1(\e[91m::\e[4mFloat64\e[24m\e[39m, \e[91m::AbstractString...\e[39m)\n\e[0m\e[90m   @\e[39m $mod_col$modul\e[39m \e[90m$dname$sep\e[39m\e[90m\e[4m$fname:$c1line\e[24m\e[39m\n", String(take!(buf)))
 Base.show_method_candidates(buf, Base.MethodError(method_c1,(1, "", "")))
 @test occursin("\n\nClosest candidates are:\n  method_c1(!Matched::Float64, ::AbstractString...)$cmod$cfile$c1line\n", String(take!(buf)))
 
@@ -157,10 +157,11 @@ end
     # Independent differing parameter positions each highlight separately
     Base.show_method_candidates(buf41061, MethodError(Issue41061.f_tuple, ((1.0, :x),)))
     @test occursin("::Tuple{!Matched{Int64}, !Matched{String}}", String(take!(buf41061)))
-    # Color mode wraps only the innermost differing subtree in error_color
+    # Color mode wraps the whole signature in error_color and underlines the
+    # innermost differing subtree
     let io = IOContext(buf41061, :color => true)
         Base.show_method_candidates(io, MethodError(Issue41061.f_nested, ([Int64[1,2,3]],)))
-        @test occursin("::Vector{Vector{\e[91mFloat64\e[39m}}", String(take!(buf41061)))
+        @test occursin("\e[91m::Vector{Vector{\e[4mFloat64\e[24m}}\e[39m", String(take!(buf41061)))
     end
     # Fully-specified NamedTuples with matching names diff per-field
     Base.show_method_candidates(buf41061, MethodError(Issue41061.f_nt, ((a=1.0, b=:x),)))
