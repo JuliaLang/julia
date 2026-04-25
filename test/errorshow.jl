@@ -1137,6 +1137,8 @@ module TestShadowedTypeHintA
     f(::Foo) = 1
     g(::Foo, ::Int) = 1
     h(::Vector{Foo}) = 1
+    k(::Type{Foo}) = 1
+    diag(::Foo, x::T, y::T) where T = 1
 end
 module TestShadowedTypeHintB
     struct Foo end
@@ -1153,8 +1155,14 @@ end
     @test !occursin("You may have intended", msg(() -> sin("a")))
     @test !occursin("You may have intended",
                     msg(() -> TestShadowedTypeHintA.g(TestShadowedTypeHintB.Foo(), "not an int")))
+    # Diagonal rule: substituting the shadow still leaves Int/String mismatched on T.
+    @test !occursin("You may have intended",
+                    msg(() -> TestShadowedTypeHintA.diag(TestShadowedTypeHintB.Foo(), 1, "x")))
+    # Outer-TypeName-only detection misses inner shadows.
     @test_broken occursin("You may have intended",
                           msg(() -> TestShadowedTypeHintA.h([TestShadowedTypeHintB.Foo()])))
+    @test_broken occursin("You may have intended",
+                          msg(() -> TestShadowedTypeHintA.k(TestShadowedTypeHintB.Foo)))
 end
 
 # Test that implementation detail of include() is hidden from the user by default
