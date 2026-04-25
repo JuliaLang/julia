@@ -457,8 +457,6 @@ stacktrace_expand_basepaths()::Bool = Base.get_bool_env("JULIA_STACKTRACE_EXPAND
 stacktrace_contract_userdir()::Bool = Base.get_bool_env("JULIA_STACKTRACE_CONTRACT_HOMEDIR", true) === true
 stacktrace_linebreaks()::Bool = Base.get_bool_env("JULIA_STACKTRACE_LINEBREAKS", false) === true
 
-_datatype_or_nothing(@nospecialize(T)) = (T = unwrap_unionall(T); T isa DataType ? T : nothing)
-
 function show_shadowed_type_hint(io::IO, @nospecialize(f), san_arg_types_param::Vector{Any})
     reported = IdSet{Core.TypeName}()
     ft = Core.Typeof(f)
@@ -467,22 +465,20 @@ function show_shadowed_type_hint(io::IO, @nospecialize(f), san_arg_types_param::
         isa(msig, DataType) || continue
         mparams = msig.parameters
         nargs = length(san_arg_types_param)
-        last_is_va = !isempty(mparams) && isa(mparams[end], Core.TypeofVararg)
-        if !last_is_va && nargs != length(mparams) - 1
-            continue
-        end
+        is_va = !isempty(mparams) && isa(mparams[end], Core.TypeofVararg)
+        is_va || nargs == length(mparams) - 1 || continue
         new_args = copy(san_arg_types_param)
         shadows = Tuple{Core.TypeName,Core.TypeName}[]
         for i in 1:nargs
-            expected = i + 1 <= length(mparams) ? mparams[i + 1] : mparams[end]
+            expected = mparams[min(i + 1, length(mparams))]
             isa(expected, Core.TypeofVararg) && (expected = unwrapva(expected))
-            e_dt = _datatype_or_nothing(expected)
-            a_dt = _datatype_or_nothing(san_arg_types_param[i])
-            (e_dt === nothing || a_dt === nothing) && continue
+            e_dt = unwrap_unionall(expected)
+            a_dt = unwrap_unionall(san_arg_types_param[i])
+            isa(e_dt, DataType) && isa(a_dt, DataType) || continue
             e_tn, a_tn = e_dt.name, a_dt.name
             e_tn === a_tn && continue
             e_tn.name === a_tn.name || continue
-            (isdefined(e_tn, :module) && isdefined(a_tn, :module)) || continue
+            isdefined(e_tn, :module) && isdefined(a_tn, :module) || continue
             e_tn.module === a_tn.module && continue
             new_args[i] = rewrap_unionall(expected, method.sig)
             push!(shadows, (a_tn, e_tn))
