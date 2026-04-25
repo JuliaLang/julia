@@ -2884,3 +2884,32 @@ end
 @test !(Tuple{Union{Int16,Int8},Ref{Int16},Ref{Int16}} <: Tuple{<:Union{S,T},Ref{S},Ref{T}} where {S,T})
 @test !(Tuple{Ref{Int16},Ref{Int16},Union{Int16,Int8}} <: Tuple{Ref{S},Ref{T},<:Union{S,T}} where {S,T})
 @test Tuple{NTuple{2,Int}, Int8} <: Tuple{<:Union{NTuple{2,T},Tuple{S,T}}, <:T} where {S,T>:Int}
+
+# issue #61634: an unused typevar in a method signature's `where` clause must be
+# reported in env at its declared index, not dropped or shifted. A naive walk of
+# `y`'s UnionAlls in `jl_subtype_env` is insufficient when an unalias-triggered
+# rebuild of `y` collapses the inner UnionAll: a used typevar that originally
+# sat at index k+1 then lands at index k, and the subsequent typevar's slot
+# stays empty.
+@test_warn "declares type variable pad but does not use it" @eval f61634(::Type{TW}, ::AbstractArray{T,N}) where {N, T, TW<:Real, pad} = T
+let sig = methods(f61634)[1].sig
+    _, env = intersection_env(Tuple{typeof(f61634), Type, Vector}, sig)
+    @test env[1] === 1
+    @test env[2] isa TypeVar && env[2].name === :T
+    @test env[3] isa TypeVar && env[3].name === :TW
+    @test env[4] isa TypeVar && env[4].name === :pad
+end
+# Same issue but with the unused typevar in the middle — exercises the wrong-index
+# case where dropping the inner UnionAll would shift later typevars to the wrong slot.
+@test_warn "declares type variable pad but does not use it" @eval g61634(::Type{TW}, ::AbstractArray{T,N}) where {N, pad, TW<:Real, T} = T
+let sig = methods(g61634)[1].sig, N_var = sig.var
+    # Force a rename of `b`'s outer typevar by sharing its identity with `x`,
+    # which is what causes `inst_type_w_` to rebuild the body and (without the
+    # fix) drop the unused inner UnionAll for `pad`.
+    x = UnionAll(N_var, Tuple{typeof(g61634), Type, AbstractArray{Int, N_var}})
+    _, env = intersection_env(x, sig)
+    @test env[1] isa TypeVar && env[1].name === :N
+    @test env[2] isa TypeVar && env[2].name === :pad
+    @test env[3] isa TypeVar && env[3].name === :TW
+    @test env[4] === Int
+end

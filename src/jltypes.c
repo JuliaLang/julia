@@ -2683,9 +2683,12 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
             if (newbody == NULL) {
                 t = NULL;
             }
-            else if (!jl_has_typevar(newbody, (jl_tvar_t *)var)) {
-                // inner instantiation might make a typevar disappear, e.g.
-                // NTuple{0,T} => Tuple{}
+            else if (!jl_has_typevar(newbody, (jl_tvar_t *)var) && jl_has_typevar(ua->body, ua->var)) {
+                // inner instantiation made a typevar disappear, e.g.
+                // NTuple{0,T} => Tuple{}; drop the now-vacuous UnionAll
+                // However, if the original body was degenerate and didn't have the typevar (special
+                // case in method signature creation, then we don't normalize it here either to avoid
+                // confusing subtyping).
                 t = newbody;
             }
             else if (newbody != ua->body || var != (jl_value_t*)ua->var) {
