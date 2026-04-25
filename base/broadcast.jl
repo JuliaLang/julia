@@ -1344,6 +1344,11 @@ julia> @. (10:10:30) + (1:4)'
 macro __dot__(x)
     esc(__dot__(x))
 end
+macro __dot__(xs...)
+    error("`@.` requires a single expression as argument. " *
+          "If you used spaces around an operator (e.g. `vec +1`), " *
+          "add spaces on both sides: `vec + 1`.")
+end
 
 @inline function broadcasted_kwsyntax(f, args...; kwargs...)
     if isempty(kwargs) # some BroadcastStyles dispatch on `f`, so try to preserve its type

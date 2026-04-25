@@ -1224,3 +1224,6 @@ end
     @test bc[1] == bc[CartesianIndex(1)] == bc[1, CartesianIndex()]
     @test a .+ [1 2] == a.a .+ [1 2]
 end
+
+# issue #49968: @. with spaces around operator gives helpful error
+@test_throws "add spaces on both sides" @macroexpand(@__dot__(a = a, +1))
