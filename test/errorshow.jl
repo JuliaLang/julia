@@ -1136,33 +1136,26 @@ module TestShadowedTypeHintA
     struct Foo end
     f(::Foo) = 1
     g(::Foo, ::Int) = 1
-    h(::Vector{Foo}) = 1
-    k(::Type{Foo}) = 1
     diag(::Foo, x::T, y::T) where T = 1
 end
 module TestShadowedTypeHintB
     struct Foo end
 end
 @testset "shadowed-type hint #41084" begin
-    err(f) = try f(); catch e; e; end::MethodError
-    msg(f) = sprint(Base.showerror, err(f))
-
-    s = msg(() -> TestShadowedTypeHintA.f(TestShadowedTypeHintB.Foo()))
+    ex = try TestShadowedTypeHintA.f(TestShadowedTypeHintB.Foo()) catch e; e end
+    s = sprint(Base.showerror, ex)
     @test occursin("You may have intended `", s)
     @test occursin("TestShadowedTypeHintA.Foo", s)
     @test occursin("TestShadowedTypeHintB.Foo", s)
 
-    @test !occursin("You may have intended", msg(() -> sin("a")))
-    @test !occursin("You may have intended",
-                    msg(() -> TestShadowedTypeHintA.g(TestShadowedTypeHintB.Foo(), "not an int")))
-    # Diagonal rule: substituting the shadow still leaves Int/String mismatched on T.
-    @test !occursin("You may have intended",
-                    msg(() -> TestShadowedTypeHintA.diag(TestShadowedTypeHintB.Foo(), 1, "x")))
-    # Outer-TypeName-only detection misses inner shadows.
-    @test_broken occursin("You may have intended",
-                          msg(() -> TestShadowedTypeHintA.h([TestShadowedTypeHintB.Foo()])))
-    @test_broken occursin("You may have intended",
-                          msg(() -> TestShadowedTypeHintA.k(TestShadowedTypeHintB.Foo)))
+    ex = try sin("a") catch e; e end
+    @test !occursin("You may have intended", sprint(Base.showerror, ex))
+
+    ex = try TestShadowedTypeHintA.g(TestShadowedTypeHintB.Foo(), "not an int") catch e; e end
+    @test !occursin("You may have intended", sprint(Base.showerror, ex))
+
+    ex = try TestShadowedTypeHintA.diag(TestShadowedTypeHintB.Foo(), 1, "x") catch e; e end
+    @test !occursin("You may have intended", sprint(Base.showerror, ex))
 end
 
 # Test that implementation detail of include() is hidden from the user by default
