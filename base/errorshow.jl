@@ -457,7 +457,7 @@ stacktrace_linebreaks()::Bool = Base.get_bool_env("JULIA_STACKTRACE_LINEBREAKS",
 # Print `::<sig>`, highlighting only the topmost subtree(s) that differ from `called`
 function show_type_diff(io::IO, @nospecialize(sig), @nospecialize(called), use_color::Bool, top_level::Bool=true)
     show_namedtuple_diff(io, sig, called, use_color, top_level) && return nothing
-    params = descend_params(sig, called)
+    params = descend_params(io, sig, called)
     if params === nothing
         return show_type_mismatch(io, sig, use_color, top_level)
     end
@@ -521,22 +521,21 @@ end
 
 # check if `sig` and `called` share an alias.
 # returns `nothing` to bail to full-subtree highlighting
-function descend_params(@nospecialize(sig), @nospecialize(called))
+function descend_params(io::IO, @nospecialize(sig), @nospecialize(called))
     sig isa DataType && called isa DataType || return nothing
     sig.name === called.name || return nothing
     n = length(sig.parameters)
     n > 0 && n == length(called.parameters) || return nothing
     sig.name === typename(NamedTuple) && return nothing
     (any(isvarargtype, sig.parameters) || any(isvarargtype, called.parameters)) && return nothing
-    sa = make_typealias(sig)
-    ca = make_typealias(called)
+    sa = make_typealias(makeproper(io, sig))
+    ca = make_typealias(makeproper(io, called))
     if sa === nothing && ca === nothing
         return sig.parameters, called.parameters, nothing
     elseif sa !== nothing && ca !== nothing && sa[1] === ca[1]
         se = sa[2]::SimpleVector
         ce = ca[2]::SimpleVector
         length(se) == length(ce) > 0 || return nothing
-        (any(t -> t isa TypeVar, se) || any(t -> t isa TypeVar, ce)) && return nothing
         return se, ce, sa[1]
     else
         return nothing

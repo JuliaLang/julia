@@ -144,29 +144,29 @@ module Issue41061
     export AliasT
     const AliasT{T} = InnerT{T,3}
     f_nested(x::Vector{Vector{Float64}}) = 1
-    f_tuple(x::Tuple{Int,String}) = 1
-    f_nt(x::@NamedTuple{a::Int, b::String}) = 1
-    f_nt_mismatched(x::@NamedTuple{a::Int}) = 1
-    f_alias(x::AliasT{Int}) = 1
+    f_tuple(x::Tuple{Int64,String}) = 1
+    f_nt(x::@NamedTuple{a::Int64, b::String}) = 1
+    f_nt_mismatched(x::@NamedTuple{a::Int64}) = 1
+    f_alias(x::AliasT{Int64}) = 1
 end
 @testset "type diff highlighting (#41061)" begin
     buf41061 = IOBuffer()
     # Nested type mismatches highlight only the innermost differing subtree
-    Base.show_method_candidates(buf41061, MethodError(Issue41061.f_nested, ([[1,2,3]],)))
+    Base.show_method_candidates(buf41061, MethodError(Issue41061.f_nested, ([Int64[1,2,3]],)))
     @test occursin("::Vector{Vector{!Matched{Float64}}}", String(take!(buf41061)))
     # Independent differing parameter positions each highlight separately
     Base.show_method_candidates(buf41061, MethodError(Issue41061.f_tuple, ((1.0, :x),)))
     @test occursin("::Tuple{!Matched{Int64}, !Matched{String}}", String(take!(buf41061)))
     # Color mode wraps only the innermost differing subtree in error_color
     let io = IOContext(buf41061, :color => true)
-        Base.show_method_candidates(io, MethodError(Issue41061.f_nested, ([[1,2,3]],)))
+        Base.show_method_candidates(io, MethodError(Issue41061.f_nested, ([Int64[1,2,3]],)))
         @test occursin("::Vector{Vector{\e[91mFloat64\e[39m}}", String(take!(buf41061)))
     end
     # Fully-specified NamedTuples with matching names diff per-field
     Base.show_method_candidates(buf41061, MethodError(Issue41061.f_nt, ((a=1.0, b=:x),)))
     @test occursin("::@NamedTuple{a::!Matched{Int64}, b::!Matched{String}}", String(take!(buf41061)))
     # NamedTuples with mismatched field names fall back to whole-arg highlight
-    Base.show_method_candidates(buf41061, MethodError(Issue41061.f_nt_mismatched, ((b=1,),)))
+    Base.show_method_candidates(buf41061, MethodError(Issue41061.f_nt_mismatched, ((b=Int64(1),),)))
     @test occursin("!Matched::@NamedTuple{a::Int64}", String(take!(buf41061)))
     # Aliases in modules not visible from the IO context get qualified
     Base.show_method_candidates(buf41061, MethodError(Issue41061.f_alias, (Issue41061.InnerT{Float64,3}(),)))
