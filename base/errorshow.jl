@@ -454,38 +454,93 @@ stacktrace_expand_basepaths()::Bool = Base.get_bool_env("JULIA_STACKTRACE_EXPAND
 stacktrace_contract_userdir()::Bool = Base.get_bool_env("JULIA_STACKTRACE_CONTRACT_HOMEDIR", true) === true
 stacktrace_linebreaks()::Bool = Base.get_bool_env("JULIA_STACKTRACE_LINEBREAKS", false) === true
 
-# Print `::<sig>`, highlighting only the topmost subtree(s) that differ from
-# `called`. Bails to whole-type highlighting whenever either side isn't a bare
-# concrete `DataType` chain
-function show_type_diff(io::IO, @nospecialize(sig), @nospecialize(called), use_color::Bool)
-    if type_diff_can_descend(sig, called)
-        print(io, "::")
-        show_type_diff_body(io, sig, called, use_color)
+# Print `::<sig>`, highlighting only the topmost subtree(s) that differ from `called`
+function show_type_diff(io::IO, @nospecialize(sig), @nospecialize(called), use_color::Bool, top_level::Bool=true)
+    show_namedtuple_diff(io, sig, called, use_color, top_level) && return nothing
+    params = descend_params(sig, called)
+    if params === nothing
+        return show_type_mismatch(io, sig, use_color, top_level)
+    end
+    top_level && print(io, "::")
+    sig_params, called_params, alias = params
+    if alias !== nothing
+        from = get(io, :module, Main)
+        if from === nothing || !isvisible(alias.name, alias.mod, from)
+            show(io, alias.mod)
+            print(io, ".")
+        end
+        print(io, alias.name)
     else
-        show_type_mismatch(io, sig, use_color, #=top_level=#true)
+        show_type_name(io, (sig::DataType).name)
     end
-end
-
-function show_type_diff_body(io::IO, @nospecialize(sig), @nospecialize(called), use_color::Bool)
-    if !type_diff_can_descend(sig, called)
-        show_type_mismatch(io, sig, use_color, #=top_level=#false)
-        return
-    end
-    sig = sig::DataType
-    called = called::DataType
-    show_type_name(io, sig.name)
     print(io, "{")
-    for k in 1:length(sig.parameters)
+    for k in 1:length(sig_params)
         k > 1 && print(io, ", ")
-        sp = sig.parameters[k]
-        cp = called.parameters[k]
+        sp = sig_params[k]
+        cp = called_params[k]
         if isequal(sp, cp)
             show(io, sp)
         else
-            show_type_diff_body(io, sp, cp, use_color)
+            show_type_diff(io, sp, cp, use_color, #=top_level=#false)
         end
     end
     print(io, "}")
+end
+
+function show_namedtuple_diff(io::IO, @nospecialize(sig), @nospecialize(called),
+                              use_color::Bool, top_level::Bool)
+    sig isa DataType && called isa DataType || return false
+    sig.name === typename(NamedTuple) && called.name === typename(NamedTuple) || return false
+    length(sig.parameters) == 2 && length(called.parameters) == 2 || return false
+    s_syms, s_types = sig.parameters
+    c_syms, c_types = called.parameters
+    s_syms isa Tuple && c_syms isa Tuple && s_syms == c_syms || return false
+    s_types isa DataType && c_types isa DataType || return false
+    n = length(s_syms)
+    length(s_types.parameters) == n == length(c_types.parameters) || return false
+    (isvatuple(s_types) || isvatuple(c_types)) && return false
+    top_level && print(io, "::")
+    print(io, "@NamedTuple{")
+    for i in 1:n
+        i > 1 && print(io, ", ")
+        show_sym(io, s_syms[i])
+        sp = s_types.parameters[i]
+        cp = c_types.parameters[i]
+        if isequal(sp, cp)
+            sp === Any && continue   # match `show_at_namedtuple` and don't print `::Any`
+            print(io, "::")
+            show(io, sp)
+        else
+            print(io, "::")
+            show_type_diff(io, sp, cp, use_color, #=top_level=#false)
+        end
+    end
+    print(io, "}")
+    return true
+end
+
+# check if `sig` and `called` share an alias.
+# returns `nothing` to bail to full-subtree highlighting
+function descend_params(@nospecialize(sig), @nospecialize(called))
+    sig isa DataType && called isa DataType || return nothing
+    sig.name === called.name || return nothing
+    n = length(sig.parameters)
+    n > 0 && n == length(called.parameters) || return nothing
+    sig.name === typename(NamedTuple) && return nothing
+    (any(isvarargtype, sig.parameters) || any(isvarargtype, called.parameters)) && return nothing
+    sa = make_typealias(sig)
+    ca = make_typealias(called)
+    if sa === nothing && ca === nothing
+        return sig.parameters, called.parameters, nothing
+    elseif sa !== nothing && ca !== nothing && sa[1] === ca[1]
+        se = sa[2]::SimpleVector
+        ce = ca[2]::SimpleVector
+        length(se) == length(ce) > 0 || return nothing
+        (any(t -> t isa TypeVar, se) || any(t -> t isa TypeVar, ce)) && return nothing
+        return se, ce, sa[1]
+    else
+        return nothing
+    end
 end
 
 function show_type_mismatch(io::IO, @nospecialize(ty), use_color::Bool, top_level::Bool)
@@ -502,19 +557,6 @@ function show_type_mismatch(io::IO, @nospecialize(ty), use_color::Bool, top_leve
         show(io, ty)
         print(io, "}")
     end
-end
-
-function type_diff_can_descend(@nospecialize(sig), @nospecialize(called))
-    sig isa DataType && called isa DataType || return false
-    sig.name === called.name || return false
-    n = length(sig.parameters)
-    n > 0 && n == length(called.parameters) || return false
-    sig.name === typename(NamedTuple) && return false
-    for i in 1:n
-        isvarargtype(sig.parameters[i]) && return false
-        isvarargtype(called.parameters[i]) && return false
-    end
-    return true
 end
 
 function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
