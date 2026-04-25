@@ -929,6 +929,16 @@ Base.methodloc_callback[] = nothing
     @test startswith(r, "50×2 Matrix{Any}:\n 0  …   \"look I'm wide! ---")
     @test endswith(r, "look I'm wide! --- \"\n 0     0\n 0     0\n 0     0\n 0     0\n 0  …  0\n 0     0\n 0     0\n 0     0\n 0     0\n ⋮  ⋱  \n 0     0\n 0     0\n 0     0\n 0     0\n 0  …  0\n 0     0\n 0     0\n 0     0\n 0     0")
 
+    let
+        struct UnsignedVec{T} <: AbstractVector{T}
+            data::Vector{T}
+        end
+        Base.IndexStyle(::Type{<:UnsignedVec}) = IndexLinear()
+        Base.size(x::UnsignedVec) = (UInt(length(x.data)),)
+        Base.@propagate_inbounds Base.getindex(x::UnsignedVec, i...) = getindex(x.data, i...)
+        @test occursin("⋮", replstr(UnsignedVec(fill(missing, 100))))
+    end
+
     # issue #34659
     @test replstr(Int32[]) == "Int32[]"
     @test replstr([Int32[]]) == "1-element Vector{Vector{Int32}}:\n []"

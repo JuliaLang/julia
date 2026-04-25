@@ -133,9 +133,9 @@ function print_matrix_vdots(io::IO, vdots::AbstractString,
                             A::Vector, sep::AbstractString, M::Integer, m::Integer,
                             pad_right::Bool = true)
     for k = 1:length(A)
-        w = A[k][1] + A[k][2]
+        w = Int(A[k][1]) + Int(A[k][2])
         if k % M == m
-            l = repeat(" ", max(0, A[k][1]-length(vdots)))
+            l = repeat(" ", max(0, Int(A[k][1])-length(vdots)))
             r = k == length(A) && !pad_right ?
                 "" :
                 repeat(" ", max(0, w-length(vdots)-length(l)))
