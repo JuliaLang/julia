@@ -961,11 +961,15 @@ end
 @testset "unary ops" begin
     let A = Diagonal(rand(1:5,5))
         @test +(A) == A
+        @test +(A) !== A
         @test *(A) == A
     end
-
-    # Unary addition is valid for Arrays over anything, not just numbers
     @test +[[1]] == [[1]]
+    let a = [1, 2, 3]
+        @test +a == a
+        @test +a !== a
+    end
+    @test eltype(+Bool[1, 0, 1]) == Int
 end
 
 @testset "reverse dim on empty" begin
