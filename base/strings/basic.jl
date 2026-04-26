@@ -643,6 +643,7 @@ Test whether all values in the vector belong to the ASCII character set (0x00 to
 This function is intended to be used by other string implementations that need a fast ASCII check.
 """
 function isascii(cu::AbstractVector{CU}) where {CU <: Integer}
+    # Note that String and SubString{String} assume this is :nothrow :foldable
     chunk_size = 1024
     chunk_threshold =  chunk_size + (chunk_size ÷ 2)
     first = firstindex(cu);   last = lastindex(cu)
