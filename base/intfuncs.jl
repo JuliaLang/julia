@@ -1444,7 +1444,7 @@ julia> clamp.([11, 8, 5], 10, 6)  # an example where lo > hi
 """
 function clamp(x::X, lo::L, hi::H) where {X,L,H}
     T = promote_type(X, L, H)
-    return (x > hi) ? convert(T, hi) : (x < lo) ? convert(T, lo) : convert(T, x)
+    return convert(T, min(max(x, lo), hi))
 end
 
 """
