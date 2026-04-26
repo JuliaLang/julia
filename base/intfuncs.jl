@@ -1437,14 +1437,14 @@ julia> clamp.([pi, 1.0, big(10)], 2.0, 9.0)
 
 julia> clamp.([11, 8, 5], 10, 6)  # an example where lo > hi
 3-element Vector{Int64}:
-  6
-  6
- 10
+ 6
+ 6
+ 6
 ```
 """
 function clamp(x::X, lo::L, hi::H) where {X,L,H}
     T = promote_type(X, L, H)
-    return convert(T, min(max(x, lo), hi))
+    return min(max(convert(T, x), convert(T, lo)), convert(T, hi))
 end
 
 """
