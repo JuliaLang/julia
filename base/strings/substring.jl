@@ -43,18 +43,6 @@ struct SubString{T<:AbstractString} <: AbstractString
     end
 end
 
-function check_codeunit_bounds(s::AbstractString, first_index::Int, n_codeunits::Int)
-    last_index = first_index + n_codeunits - 1
-    bad_index = if first_index < 1
-        first_index
-    elseif last_index > ncodeunits(s)
-        last_index
-    else
-        return nothing
-    end
-    throw(BoundsError(s, bad_index))
-end
-
 """
     unsafe_substring(s::AbstractString, first_index::Int, n_codeunits::Int)::SubString{typeof(s)}
     unsafe_substring(s::SubString{S}, first_index::Int, n_codeunits::Int)::SubString{S}
@@ -63,10 +51,14 @@ Create a substring of `s` spanning the codeunits `first_index:(first_index + n_c
 
 If `first_index` < 1, or `first_index + n_codeunits - 1 > ncodeunits(s)`, throw a `BoundsError`.
 
-This function does check bounds, but does not validate that the arguments corresponds to valid
+This function does check bounds, but does not validate that the arguments correspond to valid
 start and end indices in `s`, and so the resulting substring may contain truncated characters.
-The presence of truncated characters is safe and well-defined for `String` and `SubString{String}`,
-but may not be permitted for custom subtypes of `AbstractString`.
+The presence of truncated characters is safe and well-defined for `String`, `StringView`, and
+substrings of these, but may not be permitted for custom subtypes of `AbstractString`.
+
+!!! warning
+    For `AbstractString` other than `String`, `StringView` or substrings of those, callers should
+    ensure that the value of `n_codeunits` does not result in truncated codeunits.
 
 # Examples
 ```jldoctest
@@ -91,9 +83,8 @@ function unsafe_substring(s::AbstractString, first_index::Int, n_codeunits::Int)
 end
 
 function unsafe_substring(s::SubString, first_index::Int, n_codeunits::Int)
-    @boundscheck @inline check_codeunit_bounds(s, first_index, n_codeunits)
-    string = s.string
-    return _unsafe_substring(string, first_index + s.offset - 1, n_codeunits)
+    @boundscheck @inline checkbounds(codeunits(s), first_index:(first_index + n_codeunits - 1))
+    _unsafe_substring(s.string, first_index + s.offset - 1, n_codeunits)
 end
 
 @propagate_inbounds SubString(s::T, i::Int, j::Int) where {T<:AbstractString} = SubString{T}(s, i, j)
@@ -106,8 +97,12 @@ end
 end
 
 SubString(s::AbstractString) = @inbounds unsafe_substring(s, 1, Int(ncodeunits(s))::Int)
-SubString{T}(s::T) where {T<:AbstractString} = SubString(s)
 SubString(s::SubString) = s
+
+# Unlike the un-parameterized SubString constructor, this function must allow creating
+# e.g. a SubString{SubString{String}}, as this type is what the user may have explicitly
+# requested.
+SubString{T}(s::T) where {T<:AbstractString} = @inbounds _unsafe_substring(s, 0, ncodeunits(s))
 
 @propagate_inbounds view(s::AbstractString, r::AbstractUnitRange{<:Integer}) = SubString(s, r)
 @propagate_inbounds maybeview(s::AbstractString, r::AbstractUnitRange{<:Integer}) = view(s, r)
