@@ -335,7 +335,7 @@ end
 @everywhere function has_open_fd(name)
     for fd in readdir("/proc/self/fd")
         try
-            return basename(name) == Base.Filesystem.readlink("/proc/self/fd/$fd")
+            (basename(name) == basename(Base.Filesystem.readlink("/proc/self/fd/$fd"))) && return true
         catch
             # fd may close between listing and reading the link
         end
