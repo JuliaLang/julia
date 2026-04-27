@@ -461,21 +461,27 @@ function show_shadowed_type_hint(io::IO, @nospecialize(f), san_arg_types_param::
     reported = IdSet{Core.TypeName}()
     ft = Core.Typeof(f)
     for method in methods(f)
-        msig = unwrap_unionall(method.sig)
-        isa(msig, DataType) || continue
+        msig = unwrap_unionall(method.sig)::DataType
         mparams = msig.parameters
+
+        # skip methods where the arity can't match the call
         nargs = length(san_arg_types_param)
         is_va = !isempty(mparams) && isa(mparams[end], Core.TypeofVararg)
         is_va || nargs == length(mparams) - 1 || continue
+
+        # build a list of potential shadows, max one candidate per argument
         new_args = copy(san_arg_types_param)
         shadows = Tuple{Core.TypeName,Core.TypeName}[]
         for i in 1:nargs
+            # everything past nargs+1 hits vararg parameter
             expected = mparams[min(i + 1, length(mparams))]
             isa(expected, Core.TypeofVararg) && (expected = unwrapva(expected))
-            e_dt = unwrap_unionall(expected)
-            a_dt = unwrap_unionall(san_arg_types_param[i])
-            isa(e_dt, DataType) && isa(a_dt, DataType) || continue
+
+            e_dt = unwrap_unionall(expected); isa(e_dt, DataType) || continue
+            a_dt = unwrap_unionall(san_arg_types_param[i])::DataType
             e_tn, a_tn = e_dt.name, a_dt.name
+
+            # actual shadowing heuristics
             e_tn === a_tn && continue
             e_tn.name === a_tn.name || continue
             isdefined(e_tn, :module) && isdefined(a_tn, :module) || continue
@@ -484,8 +490,10 @@ function show_shadowed_type_hint(io::IO, @nospecialize(f), san_arg_types_param::
             push!(shadows, (a_tn, e_tn))
         end
         isempty(shadows) && continue
+        # make sure our suggestion hits an actual method
         Tuple{ft, new_args...} <: method.sig || continue
         for (a_tn, e_tn) in shadows
+            # don't print too many hints
             a_tn in reported && continue
             push!(reported, a_tn)
             print(io, "\nYou may have intended `")
