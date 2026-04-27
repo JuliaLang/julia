@@ -555,10 +555,14 @@ end
 
 function show_type_mismatch(io::IO, @nospecialize(ty), use_color::Bool, top_level::Bool)
     if use_color
-        top_level && print(io, "::")
-        print(io, text_colors[:underline])
-        show(io, ty)
-        print(io, disable_text_style[:underline])
+        if top_level
+            print(io, "::")
+            show(io, ty)
+        else
+            print(io, text_colors[:underline])
+            show(io, ty)
+            print(io, disable_text_style[:underline])
+        end
     elseif top_level
         print(io, "!Matched::")
         show(io, ty)

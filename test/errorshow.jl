@@ -79,7 +79,7 @@ Base.show_method_candidates(buf, Base.MethodError(method_c1,(1, 1, "")))
 Base.show_method_candidates(IOContext(buf, :color => true), Base.MethodError(method_c1,(1, 1, "")))
 
 mod_col = Base.text_colors[Base.STACKTRACE_FIXEDCOLORS[modul]]
-@test occursin("\n\n\e[0mClosest candidates are:\n\e[0m  method_c1(\e[91m::\e[4mFloat64\e[24m\e[39m, \e[91m::AbstractString...\e[39m)\n\e[0m\e[90m   @\e[39m $mod_col$modul\e[39m \e[90m$dname$sep\e[39m\e[90m\e[4m$fname:$c1line\e[24m\e[39m\n", String(take!(buf)))
+@test occursin("\n\n\e[0mClosest candidates are:\n\e[0m  method_c1(\e[91m::Float64\e[39m, \e[91m::AbstractString...\e[39m)\n\e[0m\e[90m   @\e[39m $mod_col$modul\e[39m \e[90m$dname$sep\e[39m\e[90m\e[4m$fname:$c1line\e[24m\e[39m\n", String(take!(buf)))
 Base.show_method_candidates(buf, Base.MethodError(method_c1,(1, "", "")))
 @test occursin("\n\nClosest candidates are:\n  method_c1(!Matched::Float64, ::AbstractString...)$cmod$cfile$c1line\n", String(take!(buf)))
 
@@ -148,6 +148,8 @@ module Issue41061
     f_nt(x::@NamedTuple{a::Int64, b::String}) = 1
     f_nt_mismatched(x::@NamedTuple{a::Int64}) = 1
     f_alias(x::AliasT{Int64}) = 1
+    struct ThreeParam{A,B,C} end
+    f_three(::ThreeParam{Tuple{Float64}}) = 1
 end
 @testset "type diff highlighting (#41061)" begin
     buf41061 = IOBuffer()
@@ -172,6 +174,14 @@ end
     # Aliases in modules not visible from the IO context get qualified
     Base.show_method_candidates(buf41061, MethodError(Issue41061.f_alias, (Issue41061.InnerT{Float64,3}(),)))
     @test occursin("Issue41061.AliasT{!Matched{Int64}}", String(take!(buf41061)))
+    # Don't underline at top level when the entire signature is wrong
+    let io = IOContext(buf41061, :color => true)
+        called = Issue41061.ThreeParam{Tuple{Char}, Dict{Int,Int}, Dict{Int,Int}}()
+        Base.show_method_candidates(io, MethodError(Issue41061.f_three, (called,)))
+        s = String(take!(buf41061))
+        @test occursin("\e[91m::", s)
+        @test !occursin("\e[91m::\e[4m", s)
+    end
 end
 
 mutable struct Test_type end
