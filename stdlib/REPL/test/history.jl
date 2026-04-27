@@ -6,7 +6,7 @@ using Dates
 
 using REPL.History
 using REPL.History: HistoryFile, HistEntry, update!,
-    ConditionSet, FilterSpec, filterchunkrev!, ismorestrict,
+    ConditionSet, FilterSpec, filterchunkrev!, ismorestrict, matchregions,
     SelectorState, componentrows, countlines_selected, hoveridx, ishover, gethover,
     candidates, movehover, toggleselection, fullselection, addcache!
 
@@ -399,6 +399,22 @@ end
                 @test results[1] == mode_entries[2]  # :shell ls
                 @test results[2] == mode_entries[3]  # :julia ls (most recent)
             end
+        end
+        @testset "matchregions with multibyte characters" begin
+            # Handle search for multi-byte characters (issue 61653)
+            spec_ab = FilterSpec(ConditionSet("=αβ"))
+            @test matchregions(spec_ab, "αβ") == [1:3]
+            # Two exact matches separated by a single space should merge, even when
+            # the boundary characters are multibyte
+            spec_two = FilterSpec(ConditionSet("=αβ;=γδ"))
+            @test matchregions(spec_two, "αβ γδ") == [1:8]
+            # Adjacent multibyte matches (no space) must not merge
+            @test matchregions(spec_two, "αβγδ") == [1:3, 5:7]
+            # Multi-character gap must not merge
+            @test matchregions(spec_two, "αβ  γδ") == [1:3, 7:9]
+            # ASCII sanity: single-space-separated matches still merge
+            spec_ascii = FilterSpec(ConditionSet("=foo;=bar"))
+            @test matchregions(spec_ascii, "foo bar") == [1:7]
         end
         @testset "Strictness comparison" begin
             c1 = ConditionSet("hello world")
