@@ -25,7 +25,7 @@ fail if a shared memory region with the same name already exists.
 SharedMemory size cannot be grown after creation, though smaller regions can be mmapped within it. Each SharedMemory may
 only be mmapped a single time.
 
-!!! note "MacOS"
+!!! warning "MacOS"
     On Windows and Linux, shared memory creation fails if the system does not have enough memory available. This is not
     possible on MacOS, which defers final allocation of memory until it is accessed. Therefore, on MacOS, creation of a
     large shared memory region will always succeed, but accessing it may trigger the system out-of-memory killer.
