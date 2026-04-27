@@ -701,6 +701,8 @@ Base.@propagate_inbounds _getindex(args::Tuple{}, I) = ()
 
 @inline _broadcast_getindex_evalf(f::Tf, args::Vararg{Any,N}) where {Tf,N} = f(args...)  # not propagate_inbounds
 
+const BroadcastScalars = Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing,Val,Ptr,AbstractPattern,Pair,IO,CartesianIndex}
+
 """
     Broadcast.broadcastable(x)
 
@@ -729,9 +731,6 @@ julia> Broadcast.broadcastable("hello") # Strings break convention of matching i
 Base.RefValue{String}("hello")
 ```
 """
-
-const BroadcastScalars = Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing,Val,Ptr,AbstractPattern,Pair,IO,CartesianIndex}
-
 broadcastable(x::BroadcastScalars) = Ref(x)
 broadcastable(::Type{T}) where {T} = Ref{Type{T}}(T)
 broadcastable(x::Union{AbstractArray,Number,AbstractChar,Ref,Tuple,Broadcasted}) = x
