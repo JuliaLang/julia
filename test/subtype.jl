@@ -2913,3 +2913,16 @@ let sig = methods(g61634)[1].sig, N_var = sig.var
     @test env[3] isa TypeVar && env[3].name === :TW
     @test env[4] === Int
 end
+
+# issue #61634: when a method's typevar is bound by intersection to a value that
+# carries free typevars from inner UnionAll scopes, the static parameter is not
+# concretely determined. Accessing it must throw `UndefVarError` so that an
+# `@isdefined(sp)` guard correctly evaluates to `false`, and the leaky value
+# never reaches user code. Regressed `eltype(::Type{<:AbstractArray{E}}) where E`
+# on parametric subtypes hiding their element typevars (CategoricalArrays.CategoricalArray,
+# SuiteSparseGraphBLAS.GBMatrix, etc.).
+abstract type _Abs61634a{T,N,U} <: AbstractArray{Union{T,U}, N} end
+abstract type _Abs61634b{T,F,N} <: AbstractArray{Union{T,F}, N} end
+mutable struct _Sub61634b{T,F} <: _Abs61634b{T,F,2} end
+@test eltype(_Abs61634a) === Any
+@test eltype(_Sub61634b{Float64}) === Any
