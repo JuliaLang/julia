@@ -1442,10 +1442,8 @@ julia> clamp.([11, 8, 5], 10, 6)  # an example where lo > hi
  6
 ```
 """
-function clamp(x::X, lo::L, hi::H) where {X,L,H}
-    T = promote_type(X, L, H)
-    return min(max(convert(T, x), convert(T, lo)), convert(T, hi))
-end
+clamp(x, lo, hi) = clamp(promote(x, lo, hi)...)
+clamp(x::T, lo::T, hi::T) where {T} = min(max(x, lo), hi)
 
 """
     clamp(x, T)::T
