@@ -4723,7 +4723,6 @@ jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t *
         // TODO: code dealing with method signatures is not able to handle unions, so if
         // `a` and `b` are both tuples, we need to be careful and may not return a union,
         // even if `intersect` produced one
-        int env_from_subtype = 1;
         if (jl_is_tuple_type(jl_unwrap_unionall(a)) && jl_is_tuple_type(jl_unwrap_unionall(b)) &&
             !jl_is_datatype(jl_unwrap_unionall(*ans))) {
             jl_value_t *ans_unwrapped = jl_unwrap_unionall(*ans);
@@ -4736,18 +4735,19 @@ jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t *
             }
             JL_GC_POP();
             if (!jl_is_datatype(jl_unwrap_unionall(*ans))) {
+                // Bail: caller can't handle a non-datatype here. The env computed
+                // by `intersect` is meaningless after this assignment, but the
+                // subtype call below recovers a usable env via the `x == y` fast
+                // path in `jl_subtype_env` (typevars from `b`).
                 *ans = b;
-                env_from_subtype = 0;
             }
         }
-        if (env_from_subtype) {
-            sz = szb;
-            // TODO: compute better `env` directly during intersection.
-            // for now, we attempt to compute env by using subtype on the intersection result
-            if (szb > 0 && !jl_types_equal(b, (jl_value_t*)jl_type_type)) {
-                if (!jl_subtype_env(*ans, b, env, szb)) {
-                    sz = 0;
-                }
+        sz = szb;
+        // TODO: compute better `env` directly during intersection.
+        // for now, we attempt to compute env by using subtype on the intersection result
+        if (szb > 0 && !jl_types_equal(b, (jl_value_t*)jl_type_type)) {
+            if (!jl_subtype_env(*ans, b, env, szb)) {
+                sz = 0;
             }
         }
     }
