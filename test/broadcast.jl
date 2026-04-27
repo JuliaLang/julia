@@ -1224,3 +1224,11 @@ end
     @test bc[1] == bc[CartesianIndex(1)] == bc[1, CartesianIndex()]
     @test a .+ [1 2] == a.a .+ [1 2]
 end
+
+@testset "issue #45086" begin
+    for x in (1, "Hello, World!", :foo, nothing, missing, 1=>2, CartesianIndex(1,2))
+        err = try; x .= x; catch e; e; end
+        @test err isa ArgumentError
+        @test occursin("cannot broadcast-assign", sprint(showerror, err))
+    end
+end
