@@ -430,7 +430,7 @@ function mmap(io::IO,
                 page_prot = readonly ? PAGE_READONLY : PAGE_READWRITE
                 handle = ccall(:CreateFileMappingW, stdcall, OS_HANDLE, (OS_HANDLE, Ref{SECURITY_ATTRIBUTES}, DWORD, DWORD, DWORD, Cwstring),
                     file_desc,                                       # File to map
-                    default_security_attrs(),                        # Default security, can be inherited
+                    C_NULL,                                          # Cannot be inherited
                     page_prot,                                       # Requested access mode
                     split_high_bits(szfile), split_low_bits(szfile), # High-order and low-order bits of size
                     ""                                               # Object name
