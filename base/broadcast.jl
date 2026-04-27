@@ -729,12 +729,17 @@ julia> Broadcast.broadcastable("hello") # Strings break convention of matching i
 Base.RefValue{String}("hello")
 ```
 """
-broadcastable(x::Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing,Val,Ptr,AbstractPattern,Pair,IO,CartesianIndex}) = Ref(x)
+
+const BroadcastScalars = Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing,Val,Ptr,AbstractPattern,Pair,IO,CartesianIndex}
+
+broadcastable(x::BroadcastScalars) = Ref(x)
 broadcastable(::Type{T}) where {T} = Ref{Type{T}}(T)
 broadcastable(x::Union{AbstractArray,Number,AbstractChar,Ref,Tuple,Broadcasted}) = x
 # Default to collecting iterables — which will error for non-iterables
 broadcastable(x) = collect(x)
 broadcastable(::Union{AbstractDict, NamedTuple}) = throw(ArgumentError("broadcasting over dictionaries and `NamedTuple`s is reserved"))
+
+BroadcastStyle(::Type{<:BroadcastScalars}) = DefaultArrayStyle{0}()
 
 ## Computation of inferred result type, for empty and concretely inferred cases only
 _broadcast_getindex_eltype(bc::Broadcasted) = combine_eltypes(bc.f, bc.args)
@@ -904,6 +909,11 @@ end
 @inline function materialize!(dest, bc::Broadcasted{<:Any})
     return materialize!(combine_styles(dest, bc), dest, bc)
 end
+
+@inline function materialize!(::AbstractArrayStyle{0}, dest, bc::Broadcasted{<:Any})
+    return copyto!(dest, instantiate(Broadcasted(bc.style, bc.f, bc.args, ())))
+end
+
 @inline function materialize!(::BroadcastStyle, dest, bc::Broadcasted{<:Any})
     return copyto!(dest, instantiate(Broadcasted(bc.style, bc.f, bc.args, axes(dest))))
 end
@@ -948,6 +958,11 @@ end
 # The most general method falls back to a method that replaces Style->Nothing
 # This permits specialization on typeof(dest) without introducing ambiguities
 @inline copyto!(dest::AbstractArray, bc::Broadcasted) = copyto!(dest, convert(Broadcasted{Nothing}, bc))
+
+copyto!(dest, bc::Broadcasted) = _throw_unwritable_dest(dest)
+@noinline function _throw_unwritable_dest(@nospecialize dest)
+    throw(ArgumentError(LazyString("cannot broadcast-assign (`.=`) into a value of type ", typeof(dest))))
+end
 
 # Performance optimization for the common identity scalar case: dest .= val
 @inline function copyto!(dest::AbstractArray, bc::Broadcasted{<:AbstractArrayStyle{0}})
