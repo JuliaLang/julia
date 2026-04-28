@@ -738,8 +738,6 @@ broadcastable(x::Union{AbstractArray,Number,AbstractChar,Ref,Tuple,Broadcasted})
 broadcastable(x) = collect(x)
 broadcastable(::Union{AbstractDict, NamedTuple}) = throw(ArgumentError("broadcasting over dictionaries and `NamedTuple`s is reserved"))
 
-BroadcastStyle(::Type{<:BroadcastScalars}) = DefaultArrayStyle{0}()
-
 ## Computation of inferred result type, for empty and concretely inferred cases only
 _broadcast_getindex_eltype(bc::Broadcasted) = combine_eltypes(bc.f, bc.args)
 _broadcast_getindex_eltype(A) = eltype(A)  # Tuple, Array, etc.
@@ -909,12 +907,13 @@ end
     return materialize!(combine_styles(dest, bc), dest, bc)
 end
 
-@inline function materialize!(::AbstractArrayStyle{0}, dest, bc::Broadcasted{<:Any})
-    return copyto!(dest, instantiate(Broadcasted(bc.style, bc.f, bc.args, ())))
-end
-
 @inline function materialize!(::BroadcastStyle, dest, bc::Broadcasted{<:Any})
     return copyto!(dest, instantiate(Broadcasted(bc.style, bc.f, bc.args, axes(dest))))
+end
+
+materialize!(dest::Union{BroadcastScalars,Number,AbstractChar}, bc::Broadcasted{<:Any}) = _throw_unwritable_dest(dest)
+@noinline function _throw_unwritable_dest(@nospecialize dest)
+    throw(ArgumentError(LazyString("cannot broadcast-assign (`.=`) into a value of type ", typeof(dest))))
 end
 
 ## general `copy` methods
@@ -957,11 +956,6 @@ end
 # The most general method falls back to a method that replaces Style->Nothing
 # This permits specialization on typeof(dest) without introducing ambiguities
 @inline copyto!(dest::AbstractArray, bc::Broadcasted) = copyto!(dest, convert(Broadcasted{Nothing}, bc))
-
-copyto!(dest, bc::Broadcasted) = _throw_unwritable_dest(dest)
-@noinline function _throw_unwritable_dest(@nospecialize dest)
-    throw(ArgumentError(LazyString("cannot broadcast-assign (`.=`) into a value of type ", typeof(dest))))
-end
 
 # Performance optimization for the common identity scalar case: dest .= val
 @inline function copyto!(dest::AbstractArray, bc::Broadcasted{<:AbstractArrayStyle{0}})

@@ -708,7 +708,7 @@ end
     A[1] .= 0
     @test A[1] == [0, 0, 0]
     @test_throws Base.CanonicalIndexError A[2] .= 0
-    @test_throws MethodError A[3] .= 0
+    @test_throws ArgumentError A[3] .= 0
     A = [[1, 2, 3], 4:5]
     A[1] .= 0
     @test A[1] isa Vector{Int}
