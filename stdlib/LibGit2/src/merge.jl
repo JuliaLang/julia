@@ -41,16 +41,10 @@ function GitAnnotated(repo::GitRepo, fh::FetchHead)
 end
 
 function GitAnnotated(repo::GitRepo, committish::AbstractString)
-    obj = GitObject(repo, committish)
-    try
-        cmt = peel(GitCommit, obj)
-        try
-            return GitAnnotated(repo, GitHash(cmt))
-        finally
-            close(cmt)
+    with(GitObject(repo, committish)) do obj
+        with(peel(GitCommit, obj)) do cmt
+            GitAnnotated(repo, GitHash(cmt))
         end
-    finally
-        close(obj)
     end
 end
 
@@ -112,8 +106,7 @@ referred to by `ann` is descended from the current HEAD (e.g. if pulling changes
 from a remote branch which is simply ahead of the local branch tip).
 """
 function ffmerge!(repo::GitRepo, ann::GitAnnotated)
-    cmt = GitCommit(repo, GitHash(ann))
-    try
+    with(GitCommit(repo, GitHash(ann))) do cmt
         checkout_tree(repo, cmt)
         with(head(repo)) do head_ref
             cmt_oid = GitHash(cmt)
@@ -125,8 +118,6 @@ function ffmerge!(repo::GitRepo, ann::GitAnnotated)
             end
             close(new_head_ref)
         end
-    finally
-        close(cmt)
     end
     return true
 end
