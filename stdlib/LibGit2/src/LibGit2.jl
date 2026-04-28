@@ -450,9 +450,11 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
             new_branch_ref = create_branch(repo, branch_name, cmt, force=force)
         finally
             close(cmt)
-            new_branch_ref === nothing && throw(GitError(Error.Object, Error.ERROR, "cannot create branch `$branch_name` with `$commit_id`"))
-            branch_ref = new_branch_ref
         end
+        if new_branch_ref === nothing
+            throw(GitError(Error.Object, Error.ERROR, "cannot create branch `$branch_name` with `$commit_id`"))
+        end
+        branch_ref = new_branch_ref
     end
 
     branch_ref′ = branch_ref # Avoids boxing `branch_ref`
