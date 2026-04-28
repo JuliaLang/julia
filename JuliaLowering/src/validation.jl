@@ -279,8 +279,6 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         vst1(vcx, at) &
         vst1(vcx, cconv) &
         all(vst1, vcx, roots_args)
-    [K"cfunction" [K"Value"] [K"static_eval" f] rt at [K"inert" [K"Identifier"]]] ->
-        vst1(vcx, f) & vst1(vcx, rt) & vst1(vcx, at)
     [K"cfunction" [K"Value"] f rt at [K"inert" [K"Identifier"]]] ->
         vst1(vcx, f) & vst1(vcx, rt) & vst1(vcx, at)
     [K"cconv" tup nreq] -> (get(tup, :value, nothing) isa Tuple &&
