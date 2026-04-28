@@ -1075,7 +1075,10 @@ mktempdir() do dir
                 @test te_str == ref_te_str
                 blob = LibGit2.GitBlob(tree_entry)
                 blob_str = sprint(show, blob)
-                @test blob_str == "GitBlob:\nBlob id: $(LibGit2.GitHash(blob))\nContents:\n$(LibGit2.content(blob))\n"
+                blob_lines = split(LibGit2.content(blob), "\n")
+                expected = "GitBlob:\nBlob id: $(LibGit2.GitHash(blob))\nContents:\n" *
+                           join([blob_lines[i] for i in 1:min(length(blob_lines), 3)], "\n") * "\n"
+                @test blob_str == expected
 
                 # tests for walking the tree and accessing objects
                 @test tree[""] == tree
