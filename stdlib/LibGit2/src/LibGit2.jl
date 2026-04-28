@@ -532,7 +532,7 @@ function checkout!(repo::GitRepo, commit::AbstractString = "";
     checkout_tree(repo, peeled, options = force ? CheckoutOptions(checkout_strategy = Consts.CHECKOUT_FORCE) : CheckoutOptions())
 
     GitReference(repo, obj_oid, force=force,
-                 msg="libgit2.checkout: moving from $(head_name[]) to $(obj_oid))")
+                 msg="libgit2.checkout: moving from $(head_name[]) to $(obj_oid)")
 
     return nothing
 end
