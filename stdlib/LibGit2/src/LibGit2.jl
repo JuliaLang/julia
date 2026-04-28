@@ -208,14 +208,17 @@ function diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractStr
     files = AbstractString[]
     try
         diff = diff_tree(repo, tree1, tree2)
-        for i in 1:count(diff)
-            delta = diff[i]
-            delta === nothing && break
-            if Consts.DELTA_STATUS(delta.status) in filter
-                Base.push!(files, unsafe_string(delta.new_file.path))
+        try
+            for i in 1:count(diff)
+                delta = diff[i]
+                delta === nothing && break
+                if Consts.DELTA_STATUS(delta.status) in filter
+                    Base.push!(files, unsafe_string(delta.new_file.path))
+                end
             end
+        finally
+            close(diff)
         end
-        close(diff)
     finally
         close(tree1)
         close(tree2)
