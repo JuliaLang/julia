@@ -83,7 +83,7 @@ Standard library changes
 ------------------------
 
 * `clamp(x, lo, hi)` now propagates `NaN` from any argument. Previously, `NaN` in `lo` or `hi`
-  was silently ignored ([#35942]).
+  was ignored ([#35942]).
 
 * `codepoint(c)` now succeeds for overlong encodings.  `Base.ismalformed`, `Base.isoverlong`, and
   `Base.show_invalid` are now `public` and documented (but not exported) ([#55152]).
