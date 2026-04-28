@@ -433,7 +433,7 @@ function mmap(io::IO,
 
             if !(io isa SharedMemory)
                 page_prot = readonly ? PAGE_READONLY : PAGE_READWRITE
-                handle = ccall(:CreateFileMappingW, stdcall, OS_HANDLE, (OS_HANDLE, Ref{SECURITY_ATTRIBUTES}, DWORD, DWORD, DWORD, Cwstring),
+                handle = ccall(:CreateFileMappingW, stdcall, OS_HANDLE, (OS_HANDLE, Ptr{Cvoid}, DWORD, DWORD, DWORD, Cwstring),
                     file_desc,                                       # File to map
                     C_NULL,                                          # Cannot be inherited
                     page_prot,                                       # Requested access mode
