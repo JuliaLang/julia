@@ -484,6 +484,41 @@ end
     # TODO: Test for validation in `mmap`, `shared` kwarg usage, sync method, size == 0 error
 end
 
+@testset "munmap!" begin
+    # File-backed Array: mapping is visible before munmap!, gone after
+    file = tempname()
+    write(file, fill(0x01, 100))
+    m = mmap(file)
+    @test m[1] == 0x01
+    @static if Sys.islinux()
+        @test any(line -> contains(line, file), readlines("/proc/self/maps"))
+    end
+    Mmap.munmap!(m)
+    @static if Sys.islinux()
+        @test !any(line -> contains(line, file), readlines("/proc/self/maps"))
+    end
+    rm(file)
+
+    # File-backed BitArray
+    file = tempname()
+    write(file, rand(UInt8, 16))
+    b = mmap(file, BitArray, 128)
+    @static if Sys.islinux()
+        @test any(line -> contains(line, file), readlines("/proc/self/maps"))
+    end
+    Mmap.munmap!(b)
+    @static if Sys.islinux()
+        @test !any(line -> contains(line, file), readlines("/proc/self/maps"))
+    end
+    rm(file)
+
+    # Anonymous Array and BitArray: should release without error
+    m = mmap(Vector{UInt8}, 12)
+    Mmap.munmap!(m)
+    b = mmap(BitVector, 12)
+    Mmap.munmap!(b)
+end
+
 # Can't do because deprecation warnings are errors and there's no way around that right now.
 #=@testset "Anonymous (deprecated)" begin
     m = @test_deprecated Mmap.Anonymous()

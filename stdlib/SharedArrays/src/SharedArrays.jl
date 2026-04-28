@@ -272,7 +272,7 @@ function finalize_refs(S::SharedArray{T,N}) where T where N
         empty!(S.pids)
         empty!(S.refs)
         init_loc_flds(S)
-        finalize(S.s)
+        Mmap.munmap!(S.s)
         S.s = Array{T}(undef, ntuple(d->0,N))
         delete!(sa_refs, S.id)
     end
@@ -626,7 +626,9 @@ function unshare!(S::SharedArray)
     if !isempty(S.pids)
         @sync begin
             for i in eachindex(S.pids)
-                @async remotecall_wait(finalize, S.pids[i], fetch(S.refs[i]))
+                @async remotecall_wait(S.pids[i], fetch(S.refs[i])) do A
+                    Mmap.munmap!(A)
+                end
             end
         end
         empty!(S.pids)

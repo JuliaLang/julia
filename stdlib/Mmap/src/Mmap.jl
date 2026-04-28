@@ -559,6 +559,18 @@ mmap(::Type{Array{T, N}}, dims::NTuple{N, Integer}; kwargs...) where {T, N} =
 mmap(::Type{BitArray{N}}, dims::NTuple{N, Integer}; kwargs...) where {N} =
     open(io -> mmap(io, BitArray{N}, dims; kwargs...), SharedMemory, "", Base.num_bit_chunks(prod(dims)) * sizeof(UInt64); readonly = false, create = true)
 
+
+"""                                                                                                                                                                                
+    Mmap.munmap!(A)
+
+Eagerly release the memory mapping backing `A` (an `Array` or `BitArray` returned
+by `mmap`). After this call, `A` must not be accessed. Equivalent to what happens                                                                                                  
+when `A` is garbage-collected, but deterministic.                                                                                                                                  
+"""
+munmap!(A::Array) = finalize(A.ref.mem)
+munmap!(B::BitArray) = finalize(B.chunks.ref.mem)
+
+
 # msync flags for unix
 const MS_ASYNC = 1
 const MS_INVALIDATE = 2

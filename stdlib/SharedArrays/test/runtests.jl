@@ -151,8 +151,7 @@ finalize(S)
 @test Base.elsize(S) == Base.elsize(typeof(S)) == Base.elsize(Vector{UInt8})
 S = nothing
 
-# release files so they can be deleted on Windows; requires multiple GC passes to be sure
-@everywhere GC.gc(true)
+# release files so they can be deleted on Windows
 @everywhere GC.gc(true)
 rm(fn); rm(fn2); rm(fn3)
 
@@ -399,20 +398,19 @@ end
         end
     end
 
-    @testset "`unshare!` allows remaining resources to be cleared in a single GC round." begin
+    @testset "`unshare!` immediately releases worker mmaps" begin
         S = SharedArray{Int64}(100, 100)
         segname = S.segname
         pids = procs(S)
         unshare!(S)
-        @everywhere GC.gc(true)
 
         @static if Sys.islinux()
 
-            # parent array still mapped
+            # parent array still mapped (unshare! does not unmap the parent)
             ismapped, _ = shmem_mapped(segname)
             @test ismapped
 
-            # worker arrays unmapped
+            # worker arrays unmapped immediately by munmap! — no GC round needed
             @test all(pids) do p
                 ismapped, _ = remotecall_fetch(shmem_mapped, p, segname)
                 return !ismapped
@@ -420,6 +418,24 @@ end
 
         else # Other platforms TODO, if possible
 
+        end
+    end
+
+    @testset "finalize eagerly releases local mmap on parent" begin
+        S = SharedArray{Int64}(100, 100)
+        segname = S.segname
+
+        @static if Sys.islinux()
+            ismapped, _ = shmem_mapped(segname)
+            @test ismapped
+        end
+
+        finalize(S)
+
+        @static if Sys.islinux()
+            # munmap! is called synchronously inside finalize_refs, so no GC needed
+            ismapped, _ = shmem_mapped(segname)
+            @test !ismapped
         end
     end
 
