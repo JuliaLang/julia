@@ -206,22 +206,18 @@ function diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractStr
     tree1 = GitTree(repo, b1_id)
     tree2 = GitTree(repo, b2_id)
     files = AbstractString[]
-    try
-        diff = diff_tree(repo, tree1, tree2)
-        try
-            for i in 1:count(diff)
-                delta = diff[i]
-                delta === nothing && break
-                if Consts.DELTA_STATUS(delta.status) in filter
-                    Base.push!(files, unsafe_string(delta.new_file.path))
+    with(tree1) do tree1
+        with(tree2) do tree2
+            with(diff_tree(repo, tree1, tree2)) do diff
+                for i in 1:count(diff)
+                    delta = diff[i]
+                    delta === nothing && break
+                    if Consts.DELTA_STATUS(delta.status) in filter
+                        Base.push!(files, unsafe_string(delta.new_file.path))
+                    end
                 end
             end
-        finally
-            close(diff)
         end
-    finally
-        close(tree1)
-        close(tree2)
     end
     return files
 end
@@ -529,23 +525,16 @@ function checkout!(repo::GitRepo, commit::AbstractString = "";
     end
 
     # search for commit to get a commit object
-    obj = GitObject(repo, GitHash(commit))
-    try
-        peeled = peel(GitCommit, obj)
-        try
+    with(GitObject(repo, GitHash(commit))) do obj
+        with(peel(GitCommit, obj)) do peeled
             obj_oid = GitHash(peeled)
 
             # checkout commit
             checkout_tree(repo, peeled, options = force ? CheckoutOptions(checkout_strategy = Consts.CHECKOUT_FORCE) : CheckoutOptions())
 
-            ref = GitReference(repo, obj_oid, force=force,
-                         msg="libgit2.checkout: moving from $(head_name[]) to $(obj_oid)")
-            close(ref)
-        finally
-            close(peeled)
+            with(GitReference(repo, obj_oid, force=force,
+                         msg="libgit2.checkout: moving from $(head_name[]) to $(obj_oid)")) do _ end
         end
-    finally
-        close(obj)
     end
 
     return nothing
