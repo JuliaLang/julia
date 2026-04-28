@@ -921,11 +921,16 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
     end
     eligibility = concrete_eval_eligible(interp, f, result, arginfo, sv)
     concrete_eval_result = nothing
+    always_nothrow = false
     if eligibility === :concrete_eval
         concrete_eval_result = concrete_eval_call(interp, f, result, arginfo, sv, invokecall)
         # allow external abstract interpreters to disable concrete evaluation ad-hoc
-        if concrete_eval_result !== nothing && use_concrete_eval_result(interp, concrete_eval_result)
-            return concrete_eval_result
+        if concrete_eval_result !== nothing
+            if use_concrete_eval_result(interp, concrete_eval_result)
+                return concrete_eval_result
+            elseif concrete_eval_result.rt !== Bottom
+                always_nothrow = true
+            end
         end
         # TODO allow semi-concrete interp for this call?
     end
@@ -944,7 +949,8 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
     end
     # try constant prop'
     new_result = const_prop_call(interp, mi, result, arginfo, sv, concrete_eval_result)
-    if eligibility === :none && new_result !== nothing
+    new_result === nothing && return nothing
+    if eligibility === :none
         # const-prop' may have refined effects to be foldable when the original
         # call was not; in that case, prefer concrete eval over the const-prop' result
         new_eligibility = _concrete_eval_eligible(
@@ -955,11 +961,18 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
             if new_concrete_eval_result !== nothing
                 if use_concrete_eval_result(interp, new_concrete_eval_result)
                     return ConstCallResult(new_concrete_eval_result; const_edge = new_result.const_edge)
+                elseif new_concrete_eval_result.rt !== Bottom
+                    always_nothrow = true
                 end
             end
         end
     end
-    return new_result
+    if always_nothrow
+        return ConstCallResult(new_result;
+            effects = Effects(new_result.effects; nothrow = true))
+    else
+        return new_result
+    end
 end
 
 function bail_out_const_call(interp::AbstractInterpreter, result::MethodCallResult,
