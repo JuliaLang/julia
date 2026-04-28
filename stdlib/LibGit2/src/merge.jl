@@ -42,8 +42,16 @@ end
 
 function GitAnnotated(repo::GitRepo, committish::AbstractString)
     obj = GitObject(repo, committish)
-    cmt = peel(GitCommit, obj)
-    return GitAnnotated(repo, GitHash(cmt))
+    try
+        cmt = peel(GitCommit, obj)
+        try
+            return GitAnnotated(repo, GitHash(cmt))
+        finally
+            close(cmt)
+        end
+    finally
+        close(obj)
+    end
 end
 
 function GitHash(ann::GitAnnotated)
