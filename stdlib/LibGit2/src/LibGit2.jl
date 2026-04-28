@@ -525,14 +525,23 @@ function checkout!(repo::GitRepo, commit::AbstractString = "";
 
     # search for commit to get a commit object
     obj = GitObject(repo, GitHash(commit))
-    peeled = peel(GitCommit, obj)
-    obj_oid = GitHash(peeled)
+    try
+        peeled = peel(GitCommit, obj)
+        try
+            obj_oid = GitHash(peeled)
 
-    # checkout commit
-    checkout_tree(repo, peeled, options = force ? CheckoutOptions(checkout_strategy = Consts.CHECKOUT_FORCE) : CheckoutOptions())
+            # checkout commit
+            checkout_tree(repo, peeled, options = force ? CheckoutOptions(checkout_strategy = Consts.CHECKOUT_FORCE) : CheckoutOptions())
 
-    GitReference(repo, obj_oid, force=force,
-                 msg="libgit2.checkout: moving from $(head_name[]) to $(obj_oid)")
+            ref = GitReference(repo, obj_oid, force=force,
+                         msg="libgit2.checkout: moving from $(head_name[]) to $(obj_oid)")
+            close(ref)
+        finally
+            close(peeled)
+        end
+    finally
+        close(obj)
+    end
 
     return nothing
 end
