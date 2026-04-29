@@ -215,11 +215,11 @@ constexpr auto cannonlake = skylake | get_feature_masks(avx512f, avx512cd, avx51
 constexpr auto icelake = cannonlake | get_feature_masks(avx512bitalg, vaes, avx512vbmi2,
                                                         vpclmulqdq, avx512vpopcntdq,
                                                         gfni, clwb, rdpid);
-constexpr auto icelake_server = icelake | get_feature_masks(pconfig, wbnoinvd);
+constexpr auto icelake_server = icelake; // pconfig (privileged), wbnoinvd (privileged)
 constexpr auto tigerlake = icelake | get_feature_masks(avx512vp2intersect, movdiri,
                                                        movdir64b, shstk);
-constexpr auto alderlake = skylake | get_feature_masks(clwb, sha, waitpkg, shstk, gfni, vaes, vpclmulqdq, pconfig,
-                                                       rdpid, movdiri, pku, movdir64b, serialize, ptwrite, avxvnni);
+constexpr auto alderlake = skylake | get_feature_masks(clwb, sha, waitpkg, shstk, gfni, vaes, vpclmulqdq,
+                                                       rdpid, movdiri, pku, movdir64b, serialize, ptwrite, avxvnni); // pconfig (privileged)
 constexpr auto sapphirerapids = icelake_server |
     get_feature_masks(amx_tile, amx_int8, amx_bf16, avx512bf16, avx512fp16, serialize, cldemote, waitpkg,
                       avxvnni, uintr, ptwrite, tsxldtrk, enqcmd, shstk, avx512vp2intersect, movdiri, movdir64b);
@@ -242,7 +242,7 @@ constexpr auto bdver4 = bdver3 | get_feature_masks(avx2, bmi2, mwaitx, movbe, rd
 // See: https://github.com/JuliaLang/julia/issues/50102
 constexpr auto znver1 = haswell | get_feature_masks(adx, aes, clflushopt, clzero, mwaitx, prfchw,
                                                     rdseed, sha, sse4a, xsavec);
-constexpr auto znver2 = znver1 | get_feature_masks(clwb, rdpid, wbnoinvd);
+constexpr auto znver2 = znver1 | get_feature_masks(clwb, rdpid); // wbnoinvd (privileged)
 constexpr auto znver3 = znver2 | get_feature_masks(shstk, pku, vaes, vpclmulqdq);
 constexpr auto znver4 = znver3 | get_feature_masks(avx512f, avx512cd, avx512dq, avx512bw, avx512vl, avx512ifma, avx512vbmi,
                                                    avx512vbmi2, avx512vnni, avx512bitalg, avx512vpopcntdq, avx512bf16, gfni, shstk, xsaves);
