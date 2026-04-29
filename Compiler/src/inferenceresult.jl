@@ -5,6 +5,25 @@ function matching_cache_argtypes(::AbstractLattice, mi::MethodInstance)
     return most_general_argtypes(isa(def, Method) ? def : nothing, specTypes)
 end
 
+# For `@nospecializeinfer` methods, widen the `@nospecialize`'d argument positions back to
+# `cache_argtypes` values to respect the `@nospecializeinfer` semantics.
+# This also ensures that the constprop `argtypes` have the same length as `cache_argtypes`.
+function get_nospecializeinfer_argtypes(argtypes::Vector{Any}, cache_argtypes::Vector{Any},
+                                        method::Method)
+    is_nospecializeinfer(method) || return argtypes
+    nargs = Int(method.nargs)
+    new_argtypes = Vector{Any}(undef, length(cache_argtypes))
+    for i = 1:length(cache_argtypes)
+        i_arg = min(i - 1, nargs - 1) # 0-indexed, 0 is the function slot
+        if i_arg > 0 && !iszero(method.nospecialize & (1 << (i_arg - 1)))
+            new_argtypes[i] = cache_argtypes[i]
+        else
+            new_argtypes[i] = argtypes[i]
+        end
+    end
+    return new_argtypes
+end
+
 struct SimpleArgtypes
     argtypes::Vector{Any}
 end

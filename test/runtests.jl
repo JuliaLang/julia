@@ -41,6 +41,7 @@ if use_revise
     push!(DEPOT_PATH, popfirst!(DEPOT_PATH))
     # Remote-eval the following to initialize Revise in workers
     const revise_init_expr = quote
+        ENV["JULIA_REVISE_WORKER_ONLY"] = "1"
         using Revise
         const STDLIBS = $STDLIBS
         union!(Revise.stdlib_names, Symbol.(STDLIBS))
@@ -239,6 +240,7 @@ cd(@__DIR__) do
         if !Sys.iswindows() && isa(stdin, Base.TTY)
             t = current_task()
             stdin_monitor = @async begin
+                trylock(stdin.raw_lock) || return
                 term = Base.Terminals.TTYTerminal("xterm", stdin, stdout, stderr)
                 try
                     Base.Terminals.raw!(term, true)
@@ -259,8 +261,10 @@ cd(@__DIR__) do
                     isa(e, InterruptException) || rethrow()
                 finally
                     Base.Terminals.raw!(term, false)
+                    unlock(stdin.raw_lock)
                 end
             end
+            Base.errormonitor(stdin_monitor)
         end
         o_ts_duration = @elapsed Experimental.@sync begin
             for p in workers()
@@ -392,7 +396,7 @@ cd(@__DIR__) do
         foreach(wait, all_tasks)
     finally
         if @isdefined stdin_monitor
-            schedule(stdin_monitor, InterruptException(); error=true)
+            istaskdone(stdin_monitor) || schedule(stdin_monitor, InterruptException(); error=true)
         end
         if @isdefined test_timers
             foreach(close, values(test_timers))

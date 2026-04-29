@@ -620,22 +620,12 @@ const arch_march_isa_mapping = let
             "avx2" => get_set("x86_64", "haswell"),
             "avx512" => get_set("x86_64", "skylake_avx512"),
         ],
-        "armv6l" => [
-            "arm1176jzfs" => get_set("armv6l", "arm1176jzfs"),
-        ],
-        "armv7l" => [
-            "armv7l" => get_set("armv7l", "armv7l"),
-            "neonvfpv4" => get_set("armv7l", "armv7l+neon+vfpv4"),
-        ],
         "aarch64" => [
             "armv8_0" => get_set("aarch64", "armv8.0-a"),
             "armv8_1" => get_set("aarch64", "armv8.1-a"),
             "armv8_2_crypto" => get_set("aarch64", "armv8.2-a+crypto"),
             "a64fx" => get_set("aarch64", "a64fx"),
             "apple_m1" => get_set("aarch64", "apple_m1"),
-        ],
-        "powerpc64le" => [
-            "power8" => get_set("powerpc64le", "power8"),
         ],
         "riscv64" => [
             "riscv64" => get_set("riscv64", "riscv64"),

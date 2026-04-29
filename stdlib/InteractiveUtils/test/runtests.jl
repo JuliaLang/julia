@@ -1074,3 +1074,11 @@ let code = """
         @test occursin("done compiling", output)
     end
 end
+
+var_line = @__LINE__()+1
+"""
+    docs for a global variable
+"""
+const _interactiveutils_some_var_ = 0
+
+@test InteractiveUtils.varloc(@__MODULE__, :_interactiveutils_some_var_) == (@__FILE__, var_line)

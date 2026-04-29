@@ -242,6 +242,7 @@ register_kinds!(JuliaSyntax, 0, [
             "abstract"
             "as"
             "doc"
+            "goto"
             "mutable"
             "outer"
             "primitive"
@@ -1066,7 +1067,6 @@ register_kinds!(JuliaSyntax, 0, [
         # A literal Julia value of any kind, as might be inserted into the
         # AST during macro expansion.  Only used in parsing to SyntaxTree.
         "Value"
-        "core"
         "unknown_head"
         "flatten"
         # QuoteNode; not quasiquote

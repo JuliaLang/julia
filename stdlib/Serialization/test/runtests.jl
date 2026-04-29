@@ -693,15 +693,18 @@ end
     for i in 1:10
         old_m[i] = i^2
     end
-    old_x = memoryref(old_m, 5)
-    @test old_x[] == 25
-    old_d = Dict(:x => old_x)
+    # Test roundtrip at every offset
+    for idx in 1:10
+        old_x = memoryref(old_m, idx)
+        @test old_x[] == idx^2
+        old_d = Dict(:x => old_x)
 
-    old_str = sprint(serialize, old_d)
-    new_d = deserialize(IOBuffer(old_str))
+        old_str = sprint(serialize, old_d)
+        new_d = deserialize(IOBuffer(old_str))
 
-    @test new_d[:x] isa MemoryRef
-    @test new_d[:x][] == 25
+        @test new_d[:x] isa MemoryRef
+        @test new_d[:x][] == idx^2
+    end
 end
 
 @testset "Memory" begin
