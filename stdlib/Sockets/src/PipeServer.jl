@@ -60,7 +60,7 @@ end
 
 function accept_nonblock(server::PipeServer)
     client = PipeEndpoint()
-    uv_error("accept", accept_nonblock(server, client) != 0)
+    uv_error("accept", accept_nonblock(server, client))
     return client
 end
 
