@@ -1442,9 +1442,145 @@ JL_DLLEXPORT struct jl_codeloc_t jl_uncompress1_codeloc(jl_debuginfo_t *di, size
     assert(jl_is_string(cl));
     int loc_offset, loc_bytes, to_bytes;
     size_t nstmts = codelocs_parseheader(cl, &loc_offset, &loc_bytes, &to_bytes);
-    if (pc > nstmts)
-        return badloc;
+    if (pc < 0 || pc > nstmts)
+        return badloc; // ideally an assertion, but currently happens too often
     return unpack_codeloc(cl, pc, loc_offset, loc_bytes, to_bytes);
+}
+
+static const char *sbt_parseheader(jl_string_t *str, jl_sourcebytetable_header_t *h) JL_NOTSAFEPOINT
+{
+    assert(jl_is_string(str));
+    const char *ptr = jl_string_data(str);
+    memcpy(h, ptr, SBT_HEADER_SIZE); // TODO assumes LE
+    return ptr + SBT_HEADER_SIZE;
+}
+
+/* `jl_cdi_*`: barebones non-allocating interface for reading compressed
+ * debuginfo.  Only `jl_cdi_firstxy` may be used on line-based DebugInfo.
+ * All byte positions, line numbers, column numbers, and program counters are
+ * 1-based, and all ranges are inclusive-inclusive. */
+
+/* traverse `di.linetable` (towards line/byte information, ignoring edges),
+ * returning new debuginfo in `p_di` and optionally pc in `p_pc`. */
+static void cdi_deref(jl_debuginfo_t **p_di, int32_t *p_pc, int recursive) JL_NOTSAFEPOINT
+{
+    jl_debuginfo_t *di = *p_di;
+    int32_t pc = 0;
+    if (!p_pc)
+        p_pc = &pc;
+    if (jl_typeof(di->linetable) == (jl_value_t *)jl_debuginfo_type) {
+        *p_pc = jl_uncompress1_codeloc(di, *p_pc).loc;
+        *p_di = (jl_debuginfo_t *)di->linetable;
+        if (recursive) {
+            cdi_deref(p_di, p_pc, recursive);
+        }
+    } else {
+        if (jl_is_string(di->linetable)) {jl_unreachable();} // TODO: remove when byte-precise
+        assert(jl_is_string(di->linetable) || jl_is_nothing(di->linetable));
+    }
+}
+
+JL_DLLEXPORT jl_locspan_t jl_cdi_bytespan(jl_debuginfo_t *di, int32_t pc) JL_NOTSAFEPOINT
+{
+    jl_unreachable(); // TODO: remove when byte-precise
+    cdi_deref(&di, &pc, 1);
+    pc = jl_uncompress1_codeloc(di, pc).loc;
+    jl_sourcebytetable_header_t h;
+    const char *ptr = sbt_parseheader(di->linetable, &h);
+    if (pc <= 0 || pc > h.nlocs) {
+        return (jl_locspan_t){-1, -1};
+    }
+    ptr += (pc-1)*(h.byte_encl+h.span_encl);
+    jl_locspan_t out;
+    out.first = _take_u32(&ptr, h.byte_encl) + h.byte_offset;
+    out.second = _take_u32(&ptr, h.span_encl) + out.first - 1;
+    return out;
+}
+
+/* O(line_starts); could binary search instead */
+JL_DLLEXPORT jl_locspan_t jl_cdi_byte_to_xy(jl_debuginfo_t *di, int32_t b) JL_NOTSAFEPOINT
+{
+    jl_unreachable(); // TODO: remove when byte-precise
+    cdi_deref(&di, NULL, 1);
+    jl_sourcebytetable_header_t h;
+    sbt_parseheader(di->linetable, &h);
+    size_t off = SBT_HEADER_SIZE + h.nlocs * (h.byte_encl + h.span_encl);
+    size_t n_lines = (jl_string_len(di->linetable) - off) / h.byte_encl;
+    jl_locspan_t out = {h.line_offset-1, -1};
+    const char *ptr = jl_string_data(di->linetable) + off;
+    for (int i = 0; i < n_lines; i++) {
+        int32_t line_start = _take_u32(&ptr, h.byte_encl);
+        if (line_start + h.byte_offset <= b) {
+            out.second = b - (line_start + h.byte_offset) + 1;
+            out.first++;
+        } else if (i == 0) { // b too small
+            return (jl_locspan_t){-1, -1};
+        } else {
+            break;
+        }
+    }
+    return out;
+}
+
+/* First (line, col) at the given pc, where col=-1 if unavailable */
+JL_DLLEXPORT jl_locspan_t jl_cdi_firstxy(jl_debuginfo_t *di, int32_t pc) JL_NOTSAFEPOINT
+{
+    assert(pc > 0);
+    cdi_deref(&di, &pc, 1);
+    jl_locspan_t out = {-1, -1};
+    if (jl_is_nothing(di->linetable)) {
+        out.first = jl_uncompress1_codeloc(di, pc).loc;
+    } else if (jl_is_string(di->linetable)) {
+        out = jl_cdi_byte_to_xy(di, jl_cdi_bytespan(di, pc).first);
+    }
+    return out;
+}
+
+/* Only when linetable==nothing, it's possible to have a separate first line not
+ * associated with any IR statement (the extra firstline argument to
+ * jl_compress_codelocs).  Coverage uses this.  -1 if not present.  Ideally the
+ * >-1 case will be deprecated, since this implementation doesn't allow a
+ * linetable to be shared between multiple owners */
+JL_DLLEXPORT int32_t jl_cdi_external_firstline(jl_debuginfo_t *di) JL_NOTSAFEPOINT
+{
+    int32_t pc = 0;
+    cdi_deref(&di, &pc, 1);
+    if (jl_is_nothing(di->linetable)) {
+        int32_t out = jl_uncompress1_codeloc(di, 0).loc;
+        return out > 0 ? out : -1;
+    } else if (jl_is_string(di->linetable)) {
+        return -1;
+    }
+    jl_unreachable();
+}
+
+JL_DLLEXPORT int32_t jl_cdi_firstline_all(jl_debuginfo_t *di) JL_NOTSAFEPOINT
+{
+    int32_t out = jl_cdi_external_firstline(di);
+    if (out == -1) {
+        /* TODO: not necessarily first, but a good enough guess for display */
+        cdi_deref(&di, NULL, 1);
+        out = jl_cdi_firstxy(di, 1).first;
+    }
+    return out;
+}
+
+JL_DLLEXPORT const char *jl_cdi_file(jl_debuginfo_t *di) JL_NOTSAFEPOINT
+{
+    cdi_deref(&di, NULL, 1);
+    if (jl_is_symbol(di->def)) {
+        return jl_symbol_name((jl_sym_t*)di->def);
+    } else if (jl_is_method_instance(di->def)) {
+        // reachable with hand-crafted CodeInstances in base tests
+        jl_value_t *m = ((jl_method_instance_t *)di->def)->def.value;
+        assert(jl_is_method(m));
+        return jl_symbol_name(((jl_method_t*)m)->file);
+    } else if (jl_is_nothing(di->def)) {
+        // reachable when linenumbernode.file is nothing (through method.c)
+        return "<unknown>";
+    } else {
+        jl_error("unexpected type for debuginfo.def");
+    }
 }
 
 static int allzero(jl_value_t *codelocs) JL_NOTSAFEPOINT

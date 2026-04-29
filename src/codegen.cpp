@@ -8531,8 +8531,8 @@ static jl_llvm_functions_t
     }
     else if ((jl_value_t*)src->debuginfo != jl_nothing) {
         // look for the file and line info of the original start of this block, as reported by lowering
-        ctx.file = jl_debuginfo_firstline(src->debuginfo, &toplineno);
-        toplineno = std::max(0, toplineno);
+        ctx.file = jl_cdi_file(src->debuginfo);
+        toplineno = std::max(0, jl_cdi_firstline_all(src->debuginfo));
     }
     if (ctx.file.empty())
         ctx.file = "<missing>";
@@ -9319,14 +9319,13 @@ static jl_llvm_functions_t
                     jl_module_t *modu = func ? jl_debuginfo_module1(func) : NULL;
                     if (modu == NULL)
                         modu = ctx.module;
-                    info.file = jl_debuginfo_file1(debuginfo);
+                    info.file = jl_cdi_file(debuginfo);
                     info.line = i;
                     info.line0 = 0;
                     if (pc == 1) {
-                        struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, 0);
-                        assert(lineidx.to == 0 && lineidx.pc == 0);
-                        if (lineidx.loc > 0 && info.line != lineidx.loc)
-                            info.line0 = lineidx.loc;
+                        int32_t line0 = jl_cdi_external_firstline(debuginfo);
+                        if (line0 > 0 && info.line != line0)
+                            info.line0 = line0;
                     }
                     if (info.file.empty())
                         info.file = "<missing>";
@@ -9518,7 +9517,7 @@ static jl_llvm_functions_t
             jl_module_t *modu = func ? jl_debuginfo_module1(func) : NULL;
             if (modu == NULL)
                 modu = ctx.module;
-            StringRef file = jl_debuginfo_file1(debuginfo);
+            StringRef file = jl_cdi_file(debuginfo);
             if (file.empty())
                 file = "<missing>";
             bool is_user_code;
@@ -9528,7 +9527,10 @@ static jl_llvm_functions_t
                 is_user_code = in_user_mod(modu);
             bool is_tracked = in_tracked_path(file);
             if (do_coverage(is_user_code, is_tracked)) {
-                for (size_t pc = 0; 1; pc++) {
+                int32_t extraline = jl_cdi_external_firstline(debuginfo);
+                if (extraline != -1)
+                    jl_coverage_alloc_line(file.data(), extraline);
+                for (size_t pc = 1; 1; pc++) {
                     struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, pc);
                     if (lineidx.loc == -1)
                         break;
