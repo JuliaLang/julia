@@ -256,8 +256,8 @@ function mmap(io::IO,
         @static if Sys.isunix()
             systemerror("munmap",  ccall(:munmap, Cint, (Ptr{Cvoid}, Int), ptr, mmaplen) != 0)
         else
-            status = ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Cvoid},), ptr)!=0
-            status |= ccall(:CloseHandle, stdcall, Cint, (Ptr{Cvoid},), handle)!=0
+            status = ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Cvoid},), ptr) != 0
+            status &= ccall(:CloseHandle, stdcall, Cint, (Ptr{Cvoid},), handle) != 0
             Base.windowserror(:UnmapViewOfFile, status == 0)
         end
     end
