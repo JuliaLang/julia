@@ -304,8 +304,10 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
     jl_expr_t *bodyex = (jl_expr_t*)jl_exprarg(ir, 2);
     jl_value_t *codelocs = jl_exprarg(ir, 3);
     li->linetable = jl_exprarg(ir, 4);
+    jl_gc_wb(li, li->linetable);
     size_t nlocs = jl_array_nrows(codelocs);
     li->codelocs = (jl_value_t*)jl_alloc_array_1d(jl_array_int32_type, nlocs);
+    jl_gc_wb(li, li->codelocs);
     size_t j;
     for (j = 0; j < nlocs; j++) {
         jl_array_uint32_set((jl_array_t*)li->codelocs, j, jl_unbox_long(jl_array_ptr_ref((jl_array_t*)codelocs, j)));
