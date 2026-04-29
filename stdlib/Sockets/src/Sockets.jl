@@ -670,7 +670,9 @@ function trylisten(sock::LibuvServer; backlog::Integer=BACKLOG_DEFAULT)
     check_open(sock)
     err = ccall(:uv_listen, Cint, (Ptr{Cvoid}, Cint, Ptr{Cvoid}),
                 sock, backlog, @cfunction(uv_connectioncb, Cvoid, (Ptr{Cvoid}, Cint)))
-    sock.status = StatusActive
+    if err == 0
+        sock.status = StatusActive
+    end
     iolock_end()
     return err
 end
