@@ -823,7 +823,7 @@ static void jl_safe_fprint_codeloc(ios_t *s, const char* func_name, const char* 
     const char *inlined_str = inlined ? " [inlined]" : "";
     if (line != -1) {
         if (pc > 0)
-            jl_safe_fprintf(s, "%s at %s:%d:%d%s\n", func_name, file_name, line, pc, inlined_str);
+            jl_safe_fprintf(s, "%s at %s:%d (pc: %d)%s\n", func_name, file_name, line, pc, inlined_str);
         else
             jl_safe_fprintf(s, "%s at %s:%d%s\n", func_name, file_name, line, inlined_str);
     }
