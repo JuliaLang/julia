@@ -9306,7 +9306,7 @@ static jl_llvm_functions_t
                     return false;
                 if (i == 0 && lineidx.to == 0) // no update
                     return false;
-                if (pc > 0 && debuginfo->linetable != jl_nothing) {
+                if (pc > 0 && jl_is_debuginfo(debuginfo->linetable)) {
                     // indirection node
                     if (!append_lineinfo((jl_debuginfo_t *)debuginfo->linetable,
                                          func, to, i))
@@ -9513,7 +9513,7 @@ static jl_llvm_functions_t
                 jl_debuginfo_t *edge = (jl_debuginfo_t*)jl_svecref(debuginfo->edges, i);
                 record_line_exists(edge, NULL);
             }
-            while (debuginfo->linetable != jl_nothing)
+            while (jl_is_debuginfo(debuginfo->linetable))
                 debuginfo = (jl_debuginfo_t*)debuginfo->linetable;
             jl_module_t *modu = func ? jl_debuginfo_module1(func) : NULL;
             if (modu == NULL)

@@ -873,10 +873,10 @@ const char *jl_debuginfo_file1(jl_debuginfo_t *debuginfo)
 // File name and line number of first line
 const char *jl_debuginfo_firstline(jl_debuginfo_t *debuginfo, int* line)
 {
-    jl_debuginfo_t *linetable = debuginfo;
-    while ((jl_value_t*)linetable != jl_nothing) {
-        debuginfo = linetable;
-        linetable = (jl_debuginfo_t*)debuginfo->linetable;
+    jl_value_t *linetable = (jl_value_t*)debuginfo;
+    while (jl_is_debuginfo(linetable)) {
+        debuginfo = (jl_debuginfo_t*)linetable;
+        linetable = debuginfo->linetable;
     }
     if (line) {
         struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, 0);
@@ -925,7 +925,7 @@ static void jl_fprint_debugloc(ios_t *s, jl_debuginfo_t *debuginfo, jl_value_t *
         jl_fprint_debugloc(s, edge, NULL, stmt.pc, 1);
     }
     intptr_t ip2 = stmt.loc;
-    if (ip2 >= 0 && ip > 0 && debuginfo->linetable != jl_nothing) {
+    if (ip2 >= 0 && ip > 0 && jl_is_debuginfo(debuginfo->linetable)) {
         jl_fprint_debugloc(s, (jl_debuginfo_t*)debuginfo->linetable, func, ip2, 0);
     }
     else {
