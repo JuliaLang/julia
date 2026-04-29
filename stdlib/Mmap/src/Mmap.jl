@@ -126,7 +126,7 @@ end # os-test
 # core implementation of mmap
 
 """
-    mmap(io::Union{IOStream,AbstractString,Mmap.AnonymousMmap}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
+    mmap(io::Union{IOStream,AbstractString,Mmap.Anonymous}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
     mmap(type::Type{Array{T,N}}, dims)
 
 Create an `Array` whose values are linked to a file, using memory-mapping. This provides a
