@@ -764,9 +764,8 @@ metadata about each binding.
 This pass also records the set of binding IDs used locally within the
 enclosing lambda form and information about variables captured by closures.
 """
-@fzone "JL: resolve_scopes" function resolve_scopes(ctx::DesugaringContext, ex;
-                                                    soft_scope::Union{Nothing,Bool}=nothing,
-                                                    world::UInt=ctx.world)
+@fzone "JL: resolve_scopes" function resolve_scopes(ctx::DesugaringContext, ex, world::UInt;
+                                                    soft_scope::Union{Nothing,Bool}=nothing)
     graph = ensure_scope_attributes!(copy_attrs(ctx.graph))
     ex = reparent(graph, ex)
     enable_soft_scopes = soft_scope !== nothing ? soft_scope : contains_softscope_marker(ex)

@@ -5,7 +5,7 @@ function lower(mod::Module, ex0::SyntaxTree; expr_compat_mode::Bool=false, world
                soft_scope::Union{Nothing,Bool}=nothing)
      ctx1, ex1 = expand_forms_1(  mod,  ex0, expr_compat_mode, world)
      ctx2, ex2 = expand_forms_2(  ctx1, ex1)
-     ctx3, ex3 = resolve_scopes(  ctx2, ex2; soft_scope)
+     ctx3, ex3 = resolve_scopes(  ctx2, ex2, world; soft_scope)
      ctx4, ex4 = convert_closures(ctx3, ex3)
     _ctx5, ex5 = linearize_ir(    ctx4, ex4)
     ex5
@@ -88,7 +88,7 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
         # Non macro expansion parts of lowering
         @assert @isdefined(ctx1) "Assertion to tell the compiler about the definedness of this variable"
          ctx2, ex2 = expand_forms_2(ctx1, ex)
-         ctx3, ex3 = resolve_scopes(ctx2, ex2; soft_scope)
+         ctx3, ex3 = resolve_scopes(ctx2, ex2, world; soft_scope)
          ctx4, ex4 = convert_closures(ctx3, ex3)
         _ctx5, ex5 = linearize_ir(ctx4, ex4)
         thunk = to_lowered_expr(ex5)

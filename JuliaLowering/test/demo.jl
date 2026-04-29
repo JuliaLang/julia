@@ -36,14 +36,15 @@ function formatsrc(ex; kws...)
 end
 
 function debug_lower(mod::Module, ex::SyntaxTree; expr_compat_mode::Bool=false, verbose::Bool=false, do_eval::Bool=false)
-    ctx1, ex_macroexpand = JuliaLowering.expand_forms_1(mod, ex, expr_compat_mode, Base.get_world_counter())
+    world = Base.get_world_counter()
+    ctx1, ex_macroexpand = JuliaLowering.expand_forms_1(mod, ex, expr_compat_mode, world)
 
     verbose && @info "Macro expanded" formatsrc(ex_macroexpand, color_by=:scope_layer)
 
     ctx2, ex_desugar = JuliaLowering.expand_forms_2(ctx1, ex_macroexpand)
     verbose && @info "Desugared" formatsrc(ex_desugar, color_by=:scope_layer)
 
-    ctx3, ex_scoped = JuliaLowering.resolve_scopes(ctx2, ex_desugar)
+    ctx3, ex_scoped = JuliaLowering.resolve_scopes(ctx2, ex_desugar, world)
     verbose && @info "Resolved scopes" formatsrc(ex_scoped, color_by=e->var_kind(ctx2,e))
 
     ctx4, ex_converted = JuliaLowering.convert_closures(ctx3, ex_scoped)

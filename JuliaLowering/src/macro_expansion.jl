@@ -195,7 +195,7 @@ function eval_macro_name(ctx::MacroExpansionContext, mctx::MacroContext, ex0::Sy
             # just `eval()` it, as it's already been partially lowered by this
             # point.  Instead, we repeat the latter parts of `lower()` here.
              ctx2, ex2 = expand_forms_2(ctx, ex)
-             ctx3, ex3 = resolve_scopes(ctx2, ex2)
+             ctx3, ex3 = resolve_scopes(ctx2, ex2, ctx.macro_world)
              ctx4, ex4 = convert_closures(ctx3, ex3)
             _ctx5, ex5 = linearize_ir(ctx4, ex4)
             expr_form  = to_lowered_expr(ex5)

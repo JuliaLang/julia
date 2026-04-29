@@ -406,7 +406,7 @@ function resolve_and_get_bindings(
     est = JuliaLowering.expr_to_est(ex)
     ctx1, ex1 = JuliaLowering.expand_forms_1(mod, est, false, world)
     ctx2, ex2 = JuliaLowering.expand_forms_2(ctx1, ex1)
-    ctx3, _ = JuliaLowering.resolve_scopes(ctx2, ex2; soft_scope)
+    ctx3, _ = JuliaLowering.resolve_scopes(ctx2, ex2, world; soft_scope)
     return ctx3.bindings.info
 end
 

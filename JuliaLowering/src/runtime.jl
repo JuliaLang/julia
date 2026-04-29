@@ -361,7 +361,7 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
         [K"block" _gen_args_from_syms(ctx2, ex0, layer, g.spnames)...]
         ex2
     ]
-    ctx3, ex3 = resolve_scopes(ctx2, ex2)
+    ctx3, ex3 = resolve_scopes(ctx2, ex2, macro_world)
 
     # Rest of lowering
     ctx4, ex4 = convert_closures(ctx3, ex3)
@@ -402,7 +402,7 @@ end
 # Has no side effects, unlike isdefined()
 #
 # (This should do what fl_defined_julia_global does for flisp lowering)
-function is_defined_and_owned_global(mod, name, world::UInt=Base.get_world_counter())
+function is_defined_and_owned_global(mod, name, world::UInt)
     return Base.invoke_in_world(world, Base.binding_kind, mod, name) === Base.PARTITION_KIND_GLOBAL
 end
 
