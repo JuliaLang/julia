@@ -94,6 +94,10 @@ precompile_test_harness() do load_path
         m = first(methods(ForeignIR.foreign_func))
         @test m.source isa ForeignIR.MyIR
         @test !Base.has_image_globalref(m)
+        # Invalidation scanning must tolerate non-standard sources rather than
+        # asserting on the `_uncompressed_ir(::Method)::CodeInfo` typeassert.
+        @test (Base.Compiler.ReinferUtils.scan_new_method!(m, false); true)
+        @test (Base.Compiler.ReinferUtils.scan_new_method!(m, true); true)
     end
 end
 
