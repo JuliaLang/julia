@@ -55,6 +55,10 @@ JL_DLLEXPORT jl_timing_event_t *_jl_timing_event_create(const char *subsystem, c
 JL_DLLEXPORT void _jl_timing_block_init(char *buf, size_t size, jl_timing_event_t *event);
 JL_DLLEXPORT void _jl_timing_block_start(jl_timing_block_t *cur_block);
 JL_DLLEXPORT void _jl_timing_block_end(jl_timing_block_t *cur_block);
+JL_DLLEXPORT int jl_tracy_enabled(void);
+JL_DLLEXPORT int jl_ittapi_enabled(void);
+JL_DLLEXPORT int jl_nvtx_enabled(void);
+
 
 #ifdef __cplusplus
 }

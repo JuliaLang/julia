@@ -188,7 +188,7 @@ mutable struct LazyGenericDomtree{IsPostDom}
 end
 function get!(x::LazyGenericDomtree{IsPostDom}) where {IsPostDom}
     isdefined(x, :domtree) && return x.domtree
-    return @timeit "domtree 2" x.domtree = IsPostDom ?
+    return @zone "CC: DOMTREE_2" x.domtree = IsPostDom ?
         construct_postdomtree(x.ir) :
         construct_domtree(x.ir)
 end

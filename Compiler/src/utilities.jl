@@ -4,7 +4,7 @@
 # generic #
 ###########
 
-if !@isdefined(var"@timeit")
+if !@isdefined(var"@zone")
     # This is designed to allow inserting timers when loading a second copy
     # of inference for performing performance experiments.
     macro timeit(args...)
