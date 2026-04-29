@@ -6727,4 +6727,19 @@ irinterp_scan_d2(t) = irinterp_scan_derivative(irinterp_scan_d1, t)
 @test Base.infer_return_type(irinterp_scan_d2, (Int,)) === Int
 @test irinterp_scan_d2(2) == 2
 
+# perform post const-prop' concrete evaluation when effects are further improved by const-prop'
+@noinline function concrete_eval_eligible_if_false(x::Float64, n::Int, y::Bool)
+    if y # this prevents initial concrete-evaluation
+        println("x = ", x)
+    end
+    s = 0.0
+    Base.@assume_effects :terminates_locally for i = 1:n
+        s += sin(x)
+    end
+    return s
+end
+@test Base.infer_return_type() do
+    Val(concrete_eval_eligible_if_false(42., 5, false) == 5sin(42.))
+end == Val{true}
+
 end # module inference
