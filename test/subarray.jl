@@ -1144,6 +1144,13 @@ end
     @test all(==(-1.0), M[:, 3:4])
 end
 
+@testset "issue #61554" begin
+    P = PermutedDimsArray(zeros(2, 2), (2, 1))
+    copyto!(P, [1.0, 2.0, 3.0, 4.0])
+    @test collect(P) == [1.0 3.0; 2.0 4.0]
+    @test_throws BoundsError copyto!(P, [1.0, 2.0, 3.0, 4.0, 5.0])
+end
+
 @test @views quote var"begin" + var"end" end isa Expr
 
 @testset "@views handling of assignment" begin

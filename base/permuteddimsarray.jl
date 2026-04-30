@@ -290,7 +290,7 @@ function permutedims!(dest, src::AbstractArray, perm)
     return dest
 end
 
-function Base.copyto!(dest::PermutedDimsArray, src::AbstractArray)
+function Base.copyto!(dest::PermutedDimsArray{<:Any,N}, src::AbstractArray{<:Any,N}) where {N}
     isempty(src) && return dest
     checkbounds(dest, axes(src)...)
     src′ = Base.unalias(dest, src)
