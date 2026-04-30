@@ -622,12 +622,26 @@ function est_to_dst(st::SyntaxTree)
             end
         end
         ([K"latestworld"], when=!is_leaf(st)) -> newleaf(g, st, K"latestworld")
-        [K"cfunction" typ fptr rt at sym] -> @ast g st [K"cfunction"
-            rec(typ) rec(fptr)
-            [K"static_eval"(rt, meta=name_hint("cfunction return type")) rec(rt)]
-            [K"static_eval"(at, meta=name_hint("cfunction argument type")) rec(at)]
-            rec(sym)
-        ]
+        [K"cfunction" typ fptr rt at sym] -> let
+            # Identifier callables are scope-resolved against the outermost
+            # lowering layer (which corresponds to the method module used by
+            # `method.c`'s `jl_toplevel_eval`), so the IR carries a binding
+            # reference matching `@cfunction`'s runtime resolution. Other
+            # forms (e.g. function definitions) stay inert.
+            out_fptr = if kind(fptr) == K"inert" && numchildren(fptr) == 1 &&
+                          kind(fptr[1]) == K"Identifier"
+                ident = setattr!(mkleaf(fptr[1]), :scope_layer, 1)
+                @ast g fptr [K"static_eval"(fptr) ident]
+            else
+                rec(fptr)
+            end
+            @ast g st [K"cfunction"
+                rec(typ) out_fptr
+                [K"static_eval"(rt, meta=name_hint("cfunction return type")) rec(rt)]
+                [K"static_eval"(at, meta=name_hint("cfunction argument type")) rec(at)]
+                rec(sym)
+            ]
+        end
 
         # avoid creating excess nodes
         _ -> let out_cs::Vector{NodeId} = map(x->rec(x)._id, children(st))

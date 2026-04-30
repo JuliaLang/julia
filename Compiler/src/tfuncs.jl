@@ -379,8 +379,8 @@ end
 @nospecs function egal_tfunc(𝕃::ConstsLattice, x, y)
     if isa(x, Const) && isa(y, Const)
         return Const(x.val === y.val)
-    elseif (isa(x, Const) && y === typeof(x.val) && issingletontype(x)) ||
-           (isa(y, Const) && x === typeof(y.val) && issingletontype(y))
+    elseif (isa(x, Const) && y === typeof(x.val) && issingletontype(y)) ||
+           (isa(y, Const) && x === typeof(y.val) && issingletontype(x))
         return Const(true)
     end
     return egal_tfunc(widenlattice(𝕃), x, y)
