@@ -531,7 +531,17 @@ static int lookup_pointer(
             frame->fromC = 1;
 
         frame->line = info.Line;
-        frame->pc = info.Column;
+        if (fromC) {
+            frame->pc = info.Column;
+        }
+        else if (info.Column > 0) {
+            // See "DWARF column" in codegen.cpp: If any frame has nonzero
+            // column, it is a PC into the first (non-inlined) frame.  Move it
+            // there for sanity.
+            jl_frame_t *frame0 = &(*frames)[n_frames - 1];
+            assert(frame0->pc == 0 || frame0->pc == info.Column && "please be true");
+            frame0->pc = info.Column;
+        }
         std::string file_name(info.FileName);
 
         if (file_name == "<invalid>")
