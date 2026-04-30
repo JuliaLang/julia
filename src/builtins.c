@@ -1691,6 +1691,9 @@ JL_CALLABLE(jl_f_apply_type)
         }
         return jl_apply_type(args[0], &args[1], nargs-1);
     }
+    else if (jl_is_datatype(args[0])) {
+        jl_type_error("apply_type", (jl_value_t*)jl_unionall_type, args[0]);
+    }
     jl_type_error("Type{...} expression", (jl_value_t*)jl_unionall_type, args[0]);
 }
 

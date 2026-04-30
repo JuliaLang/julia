@@ -9,6 +9,7 @@ function _value_string(ex)
           k == K"SSAValue"    ? "%"                   :
           k == K"BindingId"   ? "#"                   :
           k == K"label"       ? "label"               :
+          k == K"nothing"     ? "core.nothing"        :
           k == K"core"        ? "core.$(ex.name_val)" :
           k == K"top"         ? "top.$(ex.name_val)"  :
           k == K"Symbol"      ? ":$(ex.name_val)" :
@@ -443,7 +444,7 @@ function _flatten_blocks(st::SyntaxTree)
         # special case: an empty final block has value nothing
         if (length(children(st)) > 0 && kind(st[end]) === K"block" &&
             numchildren(st[end]) == 0)
-            push!(out, @ast st._graph st[end] "nothing"::K"core")
+            push!(out, @ast st._graph st[end] (::K"nothing"))
         end
         return out
     elseif is_quoted(st)

@@ -285,14 +285,17 @@ function expand_macro(ctx, ex)
     raw_args = ex[3:end]
     macro_loc = if kind(ex[2]) === K"Value"
         loc = ex[2].value
-        if loc isa LineNumberNode
-        # Some macros, e.g. @cmd, don't play nicely with file == nothing
-        isnothing(loc.file) ? LineNumberNode(loc.line, :none) : loc
-        elseif loc isa Core.MacroSource
-            loc.lno
+        if loc isa MacroSource
+            loc
+        elseif loc isa LineNumberNode
+            # Some macros, e.g. @cmd, don't play nicely with file == nothing
+            isnothing(loc.file) ? LineNumberNode(loc.line, :none) : loc
         else
             LineNumberNode(0, :none)
         end
+    elseif kind(ex[2]) === K"VERSION"
+        loc = source_location(LineNumberNode, ex)
+        isdefined(Core, :MacroSource) ? Core.MacroSource(loc, ex[2].value) : loc
     else
         LineNumberNode(0, :none)
     end
@@ -325,8 +328,6 @@ function expand_macro(ctx, ex)
                 # is the API for access to the macro expansion context?
                 expanded = copy_ast(ctx, expanded)
             end
-        elseif isnothing(expanded)
-            expanded = @ast ctx ex "nothing"::K"core"
         else
             expanded = @ast ctx ex expanded::K"Value"
         end
@@ -335,13 +336,8 @@ function expand_macro(ctx, ex)
         # method for new-style macro arguments.
         macro_args = Any[macro_loc, ctx.scope_layers[1].mod]
 
-        if length(raw_args) >= 1 && kind(raw_args[1]) === K"VERSION"
-            # Hack: see jl_invoke_julia_macro.  We may see an extra argument
-            # depending on who parsed this macrocall.
-            macro_args[1] = Core.MacroSource(macro_loc, raw_args[1].value)
-        end
-
         for arg in raw_args
+            @jl_assert kind(arg) !== K"VERSION" arg # handled in EST conversion
             # For hygiene in old-style macros, we omit any additional scope
             # layer information from macro arguments. Old-style macros will
             # handle that using manual escaping in the macro itself.
@@ -351,7 +347,7 @@ function expand_macro(ctx, ex)
             # new-style macros which call old-style macros. Instead of seeing
             # `Expr(:escape)` in such situations, old-style macros will now see
             # `Expr(:scope_layer)` inside `macro_args`.
-            kind(arg) !== K"VERSION" && push!(macro_args, est_to_expr(arg))
+            push!(macro_args, est_to_expr(arg))
         end
         expanded = try
             Base.invoke_in_world(ctx.macro_world, macfunc, macro_args...)
@@ -366,7 +362,8 @@ function expand_macro(ctx, ex)
             end
             rethrow(MacroExpansionError(mctx, ex, "Error expanding macro", :all, exc))
         end
-        expanded = expr_to_est(ex._graph, expanded, macro_loc)
+        macro_lnn = macro_loc isa MacroSource ? macro_loc.lno : macro_loc
+        expanded = expr_to_est(ex._graph, expanded, macro_lnn)
     end
 
     if kind(expanded) != K"Value"

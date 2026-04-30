@@ -6,6 +6,8 @@
 
 using Random, Sockets, SHA
 using Downloads: Downloads, download
+isdefined(Main, :samepath) || @eval Main include("testhelpers/samepath.jl")
+using Main: samepath
 
 valgrind_off = ccall(:jl_running_on_valgrind, Cint, ()) == 0
 
@@ -76,6 +78,16 @@ if Sys.iswindows()
         sleepcmd = `$busybox sleep`
         lscmd = `$busybox ls`
     end
+end
+
+# Simulate what the REPL shell mode does: parse the line, dispatch
+# simple commands through cmd_gen, and call repl_cmd.
+function shell_mode_run(line::String; stdout=nothing)
+    cmd_ex = Base.shell_parse(line)[1]
+    if Meta.isexpr(cmd_ex, :tuple)
+        cmd_ex = :(Base.cmd_gen($cmd_ex))
+    end
+    eval(:(Base.repl_cmd($cmd_ex, $(something(stdout, devnull)))))
 end
 
 #### Examples used in the manual ####
@@ -544,6 +556,130 @@ end
 
 @test Base.shell_split("\"\\\\\"") == ["\\"]
 
+# Tilde expansion in backtick commands
+@test samepath(only(`~`.exec), homedir())
+@test samepath(only(`~/foo`.exec), joinpath(homedir(), "foo"))
+@test samepath(`foo ~`.exec[2], homedir())
+@test samepath(`foo ~/bar`.exec[2], joinpath(homedir(), "bar"))
+@test `foo~bar` == Cmd(["foo~bar"])  # ~ mid-word: no expansion
+@test `foo~` == Cmd(["foo~"])        # ~ end-word: no expansion
+@test `'~'` == Cmd(["~"])            # ~ in single quotes: no expansion
+@test `"~"` == Cmd(["~"])            # ~ in double quotes: no expansion
+@test Base.shell_split("~/foo") == ["~/foo"]  # shell_split does not expand ~
+if !Sys.iswindows()
+    me = Sys.username()
+    # ~user expansion: use samepath since passwd home may differ from $HOME
+    @test samepath(only(`~$me`.exec), homedir(me))
+    @test samepath(only(`~$me/foo`.exec), joinpath(homedir(me), "foo"))
+    nouser = "nouser_" * randstring(12)
+    @test `~$nouser` == Cmd(["~$nouser"])
+    name = ""
+    @test `~$name` == Cmd(["~"])
+end
+
+# Tilde expansion in shell mode
+withenv("OLDPWD" => nothing) do
+    mktempdir() do dir
+        # cd \~ goes to a directory literally named "~", not home
+        cd(dir) do
+            mkdir("~") # literal tilde directory
+            shell_mode_run("cd \\~")
+            @test samefile(pwd(), joinpath(dir, "~"))
+        end
+        # cd ~ goes to home directory
+        cd(dir) do
+            shell_mode_run("cd ~")
+            @test samefile(pwd(), homedir())
+        end
+    end
+end
+
+# Pipeline and redirection operators in backtick command literals
+(!Sys.iswindows() || havebb) &&
+mktempdir() do dir
+    outfile = joinpath(dir, "out.txt")
+    infile  = joinpath(dir, "in.txt")
+
+    # Pipe: `cmd1 | cmd2` lowers to pipeline(cmd1, cmd2)
+    @test read(`$echocmd hello | $catcmd`, String) == "hello\n"
+    @test success(`$echocmd hello | $catcmd`)
+
+    # Three-stage pipe
+    @test read(`$echocmd hello | $catcmd | $catcmd`, String) == "hello\n"
+
+    # Stdout redirect: `cmd > file`
+    run(`$echocmd hello > $outfile`)
+    @test read(outfile, String) == "hello\n"
+
+    # Stdin redirect: `cmd < file`
+    @test read(`$catcmd < $outfile`, String) == "hello\n"
+
+    # Append redirect: `cmd >> file`
+    run(`$echocmd world >> $outfile`)
+    @test read(outfile, String) == "hello\nworld\n"
+
+    # Pipe with stdout redirect: `cmd1 | cmd2 > file`
+    run(`$echocmd piped | $catcmd > $outfile`)
+    @test read(outfile, String) == "piped\n"
+
+    # Interpolated filename in redirect
+    run(`$echocmd interp > $outfile`)
+    @test read(outfile, String) == "interp\n"
+
+    # Interpolated arg in pipe
+    word = "interp_arg"
+    @test read(`$echocmd $word | $catcmd`, String) == "interp_arg\n"
+
+    # Operators inside quotes are literal characters, not pipeline operators
+    @test `$echocmd '|'`  == Cmd([echocmd.exec..., "|"])
+    @test `$echocmd '>'`  == Cmd([echocmd.exec..., ">"])
+    @test `$echocmd '<'`  == Cmd([echocmd.exec..., "<"])
+    @test `$echocmd '>>'` == Cmd([echocmd.exec..., ">>"])
+
+    # No spacing around operators: cmd>file, cmd<file
+    run(`$echocmd nospace>$outfile`)
+    @test read(outfile, String) == "nospace\n"
+    write(infile, "nospace_in\n")
+    @test read(`$catcmd<$infile`, String) == "nospace_in\n"
+
+    # Explicit fd prefixes: 1> (stdout), 0< (stdin), 2> (stderr)
+    run(`$echocmd explicit1 1> $outfile`)
+    @test read(outfile, String) == "explicit1\n"
+    @test read(`$catcmd 0< $outfile`, String) == "explicit1\n"
+    errfile = joinpath(dir, "err.txt")
+    run(`$shcmd -c 'echo errout >&2' 2> $errfile`)
+    @test read(errfile, String) == "errout\n"
+    run(`$shcmd -c 'echo errout2 >&2' 2>> $errfile`)
+    @test read(errfile, String) == "errout\nerrout2\n"
+
+    # Quoted integer before > is not an fd specifier (stdout redirect, arg "2")
+    run(`$echocmd '2' > $outfile`)
+    @test read(outfile, String) == "2\n"
+
+    # simple commands still return Cmd (not wrapped in pipeline)
+    @test `$echocmd hello` isa Cmd
+    @test Meta.isexpr(Base.shell_parse("echo hello")[1], :tuple)
+
+    # Shell mode end-to-end tests
+    # Use shell-escaped commands and paths so that shell_parse handles
+    # Windows busybox paths and backslash-containing file paths correctly.
+    echostr = Base.shell_escape(echocmd)
+    catstr = Base.shell_escape(catcmd)
+    outstr = Base.shell_escape(outfile)
+    # pipe in shell mode
+    shell_mode_run("$echostr hello | $catstr > $outstr")
+    @test read(outfile, String) == "hello\n"
+    # redirect in shell mode
+    shell_mode_run("$echostr shell_mode > $outstr")
+    @test read(outfile, String) == "shell_mode\n"
+    # pipe + redirect in shell mode
+    shell_mode_run("$echostr shell_pipe | $catstr > $outstr")
+    @test read(outfile, String) == "shell_pipe\n"
+    # simple command in shell mode still works
+    shell_mode_run("$echostr simple > $outstr")
+    @test read(outfile, String) == "simple\n"
+end
+
 let roundtrip(s) = first(Base.shell_split(Base.shell_escape(s))) == s
     @test roundtrip("foo'bar\\\$baz")
     @test roundtrip("foo'bar\\\"baz")
@@ -604,6 +740,84 @@ if !Sys.iswindows()
     @test string(cmd_uid) == "setuid(`echo test`, 1001)"
     cmd_both = setuid(setgid(`echo test`, 1000), 1001)
     @test string(cmd_both) == "setgid(setuid(`echo test`, 1001), 1000)"
+end
+
+# test redaction of sensitive env vars in Cmd display
+@testset "Cmd env display redaction" begin
+    cmd = setenv(`echo`, "API_KEY" => "secret123", "PATH" => "/usr/bin",
+                 "DATABASE_PASSWORD" => "hunter2", "GITHUB_PAT" => "ghp_abc",
+                 "DB_PW" => "pass", "MY_JWT" => "eyJ", "MONKEY" => "banana")
+
+    # default :redact mode — sensitive keys only, non-sensitive with values
+    s = repr(cmd)
+    @test contains(s, "\"API_KEY\"")
+    @test contains(s, "\"DATABASE_PASSWORD\"")
+    @test contains(s, "\"GITHUB_PAT\"")
+    @test contains(s, "\"DB_PW\"")
+    @test contains(s, "\"MY_JWT\"")
+    @test !contains(s, "secret123")
+    @test !contains(s, "hunter2")
+    @test !contains(s, "ghp_abc")
+    @test contains(s, "PATH=/usr/bin")
+    @test contains(s, "MONKEY=banana")
+
+    # component matching avoids false positives
+    @test !Base.is_sensitive_env_name("PATH")
+    @test !Base.is_sensitive_env_name("MONKEY")
+    @test !Base.is_sensitive_env_name("SPAWN")
+    @test Base.is_sensitive_env_name("API_KEY")
+    @test Base.is_sensitive_env_name("GITHUB_PAT")
+    @test Base.is_sensitive_env_name("DB_PW")
+    @test Base.is_sensitive_env_name("AUTH_TOKEN")
+
+    # :all mode — show all values
+    s_all = repr(cmd, context=:show_env=>:all)
+    @test contains(s_all, "secret123")
+    @test contains(s_all, "hunter2")
+    @test contains(s_all, "ghp_abc")
+    @test contains(s_all, "PATH=/usr/bin")
+
+    # :keys mode — all vars show key only
+    s_keys = repr(cmd, context=:show_env=>:keys)
+    @test contains(s_keys, "\"API_KEY\"")
+    @test contains(s_keys, "\"PATH\"")
+    @test !contains(s_keys, "/usr/bin")
+    @test !contains(s_keys, "secret123")
+
+    # :none mode — no env block
+    s_none = repr(cmd, context=:show_env=>:none)
+    @test !contains(s_none, "setenv")
+    @test contains(s_none, "`echo`")
+
+    # :none mode with dir still shows dir
+    cmd_dir = setenv(`echo`, "API_KEY" => "secret"; dir="/tmp")
+    s_none_dir = repr(cmd_dir, context=:show_env=>:none)
+    @test contains(s_none_dir, "setenv")
+    @test contains(s_none_dir, "dir=")
+    @test !contains(s_none_dir, "API_KEY")
+
+    # JULIA_SHOW_ENV env var
+    withenv("JULIA_SHOW_ENV" => "all") do
+        s = repr(cmd)
+        @test contains(s, "secret123")
+        @test contains(s, "hunter2")
+    end
+    withenv("JULIA_SHOW_ENV" => "none") do
+        s = repr(cmd)
+        @test !contains(s, "setenv")
+    end
+    withenv("JULIA_SHOW_ENV" => "keys") do
+        s = repr(cmd)
+        @test !contains(s, "/usr/bin")
+        @test contains(s, "\"PATH\"")
+    end
+
+    # IOContext overrides env var
+    withenv("JULIA_SHOW_ENV" => "all") do
+        s = repr(cmd, context=:show_env=>:redact)
+        @test !contains(s, "secret123")
+        @test contains(s, "PATH=/usr/bin")
+    end
 end
 
 # test for interpolation of Cmd

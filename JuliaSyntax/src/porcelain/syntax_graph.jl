@@ -153,9 +153,7 @@ end
 
 # TODO: Probably terribly non-inferable?
 @noinline function setattr!(graph::SyntaxGraph, id::NodeId, k::Symbol, @nospecialize(v))
-    if !isnothing(v)
-        getattr(graph, k)[id] = v
-    end
+    getattr(graph, k)[id] = v
     id
 end
 
@@ -228,8 +226,9 @@ function Base.getproperty(ex::SyntaxTree, name::Symbol)
     name === :_graph && return getfield(ex, :_graph)
     name === :_id  && return getfield(ex, :_id)
     graph = getfield(ex, :_graph)
-    val = get(getattr(graph, name), getfield(ex, :_id), nothing)
-    isnothing(val) && error("Property `$name` not defined on node: $(node_string(ex))")
+    val = get(getattr(graph, name), getfield(ex, :_id)) do
+        error("Property `$name` not defined on node: $(node_string(ex))")
+    end
     return val
 end
 
@@ -264,7 +263,8 @@ function Base.:≈(ex1::SyntaxTree, ex2::SyntaxTree)
         return false
     end
     if is_leaf(ex1)
-        return get(ex1, :value,    nothing) == get(ex2, :value,    nothing) &&
+        return hasattr(ex1, :value) == hasattr(ex2, :value) &&
+               get(ex1, :value,    nothing) == get(ex2, :value,    nothing) &&
                get(ex1, :name_val, nothing) == get(ex2, :name_val, nothing)
     else
         if numchildren(ex1) != numchildren(ex2)
@@ -277,8 +277,7 @@ end
 function hasattr(ex::SyntaxTree, name::Symbol)
     graph = ex._graph
     !hasattr(graph, name) && return false
-    attr = getattr(graph, name)
-    return !isnothing(attr) && haskey(attr, ex._id)
+    return haskey(getattr(graph, name), ex._id)
 end
 
 function attrnames(ex::SyntaxTree)
@@ -852,9 +851,8 @@ function prune(graph1_a::SyntaxGraph, entrypoints_a::Vector{NodeId})
     for attr in attrnames(graph1)
         attr === :source && continue
         for (n2, n1) in enumerate(nodes1)
-            attrval = get(graph1.attributes[attr], n1, nothing)
-            if !isnothing(attrval)
-                graph2.attributes[attr][n2] = attrval
+            if haskey(graph1.attributes[attr], n1)
+                graph2.attributes[attr][n2] = graph1.attributes[attr][n1]
             end
         end
     end
@@ -1263,7 +1261,6 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
 
     graph = syntax_graph(st)
     k = kind(st)
-    coreref(s::String) = setattr!(newleaf(graph, st, K"core"), :name_val, s)
     symleaf(s::String) = setattr!(newleaf(graph, st, K"Identifier"), :name_val, s)
     core_globalref(s::String) = setattr!(symleaf(s), :mod, Core)
     valleaf(@nospecialize(v)) = setattr!(newleaf(graph, st, K"Value"), :value, v)
@@ -1281,9 +1278,9 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
                 v isa UInt128 ? "@uint128_str" : "@big_str"
             mac = core_globalref(macname)
             arg = valleaf(replace(sourcetext(st), '_'=>""))
-            ret_cids = tree_ids(mac, coreref("nothing"), arg)
+            ret_cids = tree_ids(mac, valleaf(nothing), arg)
             newnode(graph, st, K"macrocall", ret_cids)
-        elseif hasattr(st, :name_val) && !(kind(st) in KSet"Identifier core")
+        elseif hasattr(st, :name_val) && !(kind(st) in KSet"Identifier")
             # certain kinds should really be identifiers.  known: &, |, :
             symleaf(st.name_val)
         else
@@ -1582,7 +1579,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
             cs = preprocessed_green_children(cs[1])
         end
     elseif k === K"return" && n_cs === 0
-        push!(cs, coreref("nothing"))
+        push!(cs, valleaf(nothing))
     elseif k === K"juxtapose"
         ret_k = K"call"
         pushfirst!(cs, symleaf("*"))

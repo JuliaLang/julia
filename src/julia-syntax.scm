@@ -392,7 +392,7 @@
             (generator (if (expr-contains-p if-generated? body (lambda (x) (not (function-def? x))))
                            (let* ((gen    (generated-version body))
                                   (nongen (non-generated-version body))
-                                  (gname  (symbol (string (gensy) "#" (current-julia-module-counter '()))))
+                                  (gname  (symbol (string "#" (current-julia-module-counter '()) "#" (current-julia-module-counter '()))))
                                   (gf     (make-generator-function gname names anames gen)))
                              (set! body (insert-after-meta
                                          nongen
@@ -3522,9 +3522,7 @@
                             #f)))))
            (for-each (lambda (v)
                        (if (or (memq v locals-def) (memq v local-decls))
-                           (error (string "variable \"" v "\" declared both local and global")))
-                       (if (and (null? argnames) (memq (var-kind v scope) '(argument local)))
-                           (error (string "`global " v "`: " v " is a local variable in its enclosing scope"))))
+                           (error (string "variable \"" v "\" declared both local and global"))))
                      globals)
            (if (and (pair? argnames) (eq? e (lam:body lam)))
                (for-each (lambda (v)
@@ -4668,8 +4666,7 @@ f(x) = yt(x)
 (define (valid-ir-argument? e)
   (or (simple-atom? e)
       (and (pair? e)
-           (memq (car e) '(quote inert top core
-                                 slot static_parameter)))))
+           (memq (car e) '(quote inert top core slot)))))
 
 (define (valid-ir-rvalue? lhs e)
   (or (ssavalue? lhs)

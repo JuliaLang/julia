@@ -6,7 +6,7 @@ EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Libdl/docs/src/
 Libdl
 ```
 
-# Dynamic Linker
+# Libdl (Dynamic Linker)
 
 ```@docs
 Libdl.dlopen

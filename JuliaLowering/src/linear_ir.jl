@@ -1,19 +1,15 @@
 #-------------------------------------------------------------------------------
 # Lowering pass 5: Flatten to linear IR
 
+# Must outline anything that can throw, e.g. globalrefs, static params
 function is_valid_ir_argument(ctx, ex)
     k = kind(ex)
-    if is_simple_atom(ctx, ex) || k in KSet"inert inert_syntaxtree top core quote static_eval"
+    if is_simple_atom(ctx, ex) || k in KSet"inert inert_syntaxtree top core quote static_eval foreigncall_arg1"
         true
     elseif k == K"BindingId"
         binfo = get_binding(ctx, ex)
         bk = binfo.kind
         bk === :slot
-        # TODO: We should theoretically be able to allow `bk ===
-        # :static_parameter` for slightly more compact IR, but it's uncertain
-        # what the compiler is built to tolerate.  Notably, flisp allows
-        # static_parameter, but doesn't produce this form until a later pass, so
-        # it doesn't end up in the IR.
     else
         false
     end
@@ -115,7 +111,8 @@ function is_simple_arg(ctx, ex)
     k = kind(ex)
     return is_simple_atom(ctx, ex) || k == K"BindingId" || k == K"quote" ||
         k == K"inert" || k == K"inert_syntaxtree" || k == K"top" ||
-        k == K"core" || k == K"globalref" || k == K"static_eval"
+        k == K"core" || k == K"globalref" || k == K"static_eval" ||
+        k == K"foreigncall_arg1"
 end
 
 # flisp note: arguments are always counted as single-assign, so effects on
@@ -132,7 +129,7 @@ function is_const_read_arg(ctx, ex)
     # locals cannot be affected by them so we can inline them anyway.
     # TODO from flisp: "We could also allow const globals here"
     return k == K"inert" || k == K"inert_syntaxtree" || k == K"top" ||
-        k == K"core" || k == K"static_eval" ||
+        k == K"core" || k == K"static_eval" || k == K"foreigncall_arg1" ||
         is_simple_atom(ctx, ex) || is_single_assign_var(ctx, ex)
 end
 
@@ -619,10 +616,11 @@ end
 # the needed value.
 function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     k = kind(ex)
-    if k == K"BindingId" || is_literal(k) || k == K"quote" ||
+    if k == K"BindingId" || is_literal(k) || k == K"nothing" ||
             k == K"inert" || k == K"inert_syntaxtree" || k == K"top" ||
             k == K"core" || k == K"Value" || k == K"Symbol" ||
-            k == K"SourceLocation" || k == K"static_eval"
+            k == K"SourceLocation" || k == K"static_eval" ||
+            k == K"foreigncall_arg1" || k == K"static_parameter"
         ex1 = ex
         if kind(ex1) == K"BindingId"
             binfo = get_binding(ctx, ex1)
@@ -898,7 +896,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             emit(ctx, ex)
         end
         if needs_value
-            val = @ast ctx ex "nothing"::K"core"
+            val = @ast ctx ex (::K"nothing")
             if in_tail_pos
                 emit_return(ctx, val)
             else

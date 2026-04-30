@@ -425,7 +425,9 @@ end
 
 function unsafe_trunc(::Type{UInt128}, x::Float64)
     xu = reinterpret(UInt64,x)
-    k = Int(xu >> 52) & 0x07ff - 1075
+    # use `% Int` instead of `Int(...)` to preserve `:nothrow` (the shifted value
+    # fits in 11 bits, but `Int(::UInt64)` would otherwise add a bounds check)
+    k = ((xu >> 52) % Int) & 0x07ff - 1075
     xu = (xu & 0x000f_ffff_ffff_ffff) | 0x0010_0000_0000_0000
     if k <= 0
         UInt128(xu >> -k)

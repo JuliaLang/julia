@@ -1,6 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+using Random: randstring
+isdefined(Main, :samepath) || @eval Main include("testhelpers/samepath.jl")
+using Main: samepath
 
-@testset "basic path functions for string type $S" for S in (String, GenericString)
+@testset "basic path functions for $S" for S in (String, SubString, GenericString)
     dir = pwd()
     sep = Base.Filesystem.path_separator
     @testset "isabspath and abspath" begin
@@ -32,13 +35,38 @@
     @testset "expanduser" begin
         @test expanduser(S("")) == ""
         @test expanduser(S("x")) == "x"
-        @test expanduser(S("~")) == (Sys.iswindows() ? "~" : homedir())
+        @test expanduser(S("~")) == homedir()
+        @test expanduser(S("~$(Base.Filesystem.path_separator)foo")) == joinpath(homedir(), "foo")
+        if Sys.iswindows()
+            # expanduser preserves the separator from the input path
+            home = homedir()
+            @test expanduser(S("~/foo")) == replace(home, '\\' => '/') * "/foo"
+            @test expanduser(S("~\\foo")) == replace(home, '/' => '\\') * "\\foo"
+        end
+        if !Sys.iswindows()
+            # ~username expansion (Unix only)
+            me = Sys.username()
+            @test samepath(expanduser(S("~$me")), homedir(me))
+            @test samepath(expanduser(S("~$me/bar")), joinpath(homedir(me), "bar"))
+            # unknown user is left unexpanded
+            nouser = "nouser_" * randstring(12)
+            @test expanduser(S("~$nouser")) == "~$nouser"
+        end
     end
     @testset "contractuser" begin
-        @test contractuser(S(homedir())) == (Sys.iswindows() ? homedir() : "~")
-        @test contractuser(S(joinpath(homedir(), "x"))) ==
-              (Sys.iswindows() ? joinpath(homedir(), "x") : "~$(sep)x")
-        @test contractuser(S("/foo/bar")) == "/foo/bar"
+        # contractuser is left-inverse of expanduser
+        @test contractuser(S(homedir())) == "~"
+        @test contractuser(S(joinpath(homedir(), "x"))) == "~$(sep)x"
+        if !Sys.iswindows()
+            @test contractuser(S("/foo/bar")) == "/foo/bar"
+            me = Sys.username()
+            # current user's home contracts to ~ or ~username via stat
+            result = contractuser(S(homedir()))
+            @test result == "~" || result == "~$me"
+        end
+        # round-trip: expanduser(contractuser(p)) == p for home-relative paths
+        p = joinpath(homedir(), "some", "path")
+        @test expanduser(contractuser(S(p))) == p
     end
     @testset "isdirpath" begin
         @test !isdirpath(S("foo"))
@@ -288,12 +316,8 @@
         #@test isabspath(S("_:/")) == false # FIXME?
         #@test isabspath(S("AB:/")) == false # FIXME?
         @test isabspath(S("\\\\")) == Sys.iswindows()
-        if Sys.isunix()
-            @test isabspath(S(expanduser("~"))) == true
-            @test startswith(expanduser(S("~")), homedir())
-        else
-            @test expanduser(S("~")) == "~"
-        end
+        @test isabspath(S(expanduser("~"))) == true
+        @test startswith(expanduser(S("~")), homedir())
         if Sys.iswindows()
             @test isabspath(S("\\\\?\\C:\\"))
             # Current behavior is to allow anything starting with a separator,
@@ -459,4 +483,13 @@ end
         end == home
     end
     @test isabspath(withenv(homedir, var => nothing))
+    # homedir(username) returns a directory for the current user
+    me = Sys.username()
+    me_home = homedir(me)
+    @test me_home !== nothing
+    @test isdir(me_home)
+    @test isabspath(me_home)
+    # non-existent user returns nothing
+    nouser = "nouser_" * randstring(12)
+    @test homedir(nouser) === nothing
 end

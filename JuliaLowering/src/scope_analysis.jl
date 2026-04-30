@@ -376,7 +376,7 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
         # Local declarations have a value of `nothing` according to flisp
         # lowering.
         # TODO: Should local decls be disallowed in value position?
-        @ast ctx ex "nothing"::K"core"
+        @ast ctx ex (::K"nothing")
     elseif k == K"decl"
         ex_out = mapchildren(e->_resolve_scopes(ctx, e, scope), ctx, ex)
         name = ex_out[1]
@@ -655,10 +655,12 @@ function analyze_variables!(ctx, ex)
         return
     elseif !needs_resolution(ex)
         return
-    elseif k == K"static_eval"
+    elseif k == K"static_eval" || k == K"foreigncall_arg1"
         badvar = find_any_local_binding(ctx, ex[1])
         if !isnothing(badvar)
-            name_hint = getmeta(ex, :name_hint, "syntax")
+            default = k == K"foreigncall_arg1" ?
+                "function name and library expression" : "syntax"
+            name_hint = getmeta(ex, :name_hint, default)::String
             throw(LoweringError(badvar, "$(name_hint) cannot reference local variable"))
         end
         return

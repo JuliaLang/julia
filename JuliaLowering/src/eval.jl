@@ -1,16 +1,17 @@
 # Non-incremental lowering API for non-toplevel non-module expressions.
 # May be removed?
 
-function lower(mod::Module, ex0; expr_compat_mode=false, world=Base.get_world_counter())
+function lower(mod::Module, ex0::SyntaxTree; expr_compat_mode::Bool=false, world::UInt=Base.get_world_counter(),
+               soft_scope::Union{Nothing,Bool}=nothing)
      ctx1, ex1 = expand_forms_1(  mod,  ex0, expr_compat_mode, world)
      ctx2, ex2 = expand_forms_2(  ctx1, ex1)
-     ctx3, ex3 = resolve_scopes(  ctx2, ex2)
+     ctx3, ex3 = resolve_scopes(  ctx2, ex2; soft_scope)
      ctx4, ex4 = convert_closures(ctx3, ex3)
     _ctx5, ex5 = linearize_ir(    ctx4, ex4)
     ex5
 end
 
-function macroexpand(mod::Module, ex; expr_compat_mode=false, world=Base.get_world_counter())
+function macroexpand(mod::Module, ex::SyntaxTree; expr_compat_mode::Bool=false, world::UInt=Base.get_world_counter())
     _ctx1, ex1 = expand_forms_1(mod, ex, expr_compat_mode, world)
     ex1
 end
@@ -37,12 +38,12 @@ struct LoweringIterator{Attrs}
     todo::Vector{Tuple{SyntaxTree{Attrs}, Bool, Int}}
 end
 
-function lower_init(ex::SyntaxTree{T};
-                    expr_compat_mode::Bool=false) where {T}
+function lower_init(ex::SyntaxTree{T}; expr_compat_mode::Bool=false) where {T}
     LoweringIterator{T}(expr_compat_mode, [(ex, false, 0)])
 end
 
-function lower_step(iter, mod, world=Base.get_world_counter())
+function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
+                    soft_scope::Union{Nothing,Bool}=nothing)
     if isempty(iter.todo)
         return Core.svec(:done)
     end
@@ -55,7 +56,7 @@ function lower_step(iter, mod, world=Base.get_world_counter())
         elseif is_module_body
             return Core.svec(:end_module)
         else
-            return lower_step(iter, mod)
+            return lower_step(iter, mod, world; soft_scope)
         end
     else
         ex = top_ex
@@ -68,7 +69,7 @@ function lower_step(iter, mod, world=Base.get_world_counter())
     end
     if k == K"toplevel"
         push!(iter.todo, (ex, false, 1))
-        return lower_step(iter, mod)
+        return lower_step(iter, mod, world; soft_scope)
     elseif k == K"module"
         (version, notbare, name, body) = @stm ex begin
             [K"module" version nb_st name body] ->
@@ -87,7 +88,7 @@ function lower_step(iter, mod, world=Base.get_world_counter())
         # Non macro expansion parts of lowering
         @assert @isdefined(ctx1) "Assertion to tell the compiler about the definedness of this variable"
          ctx2, ex2 = expand_forms_2(ctx1, ex)
-         ctx3, ex3 = resolve_scopes(ctx2, ex2)
+         ctx3, ex3 = resolve_scopes(ctx2, ex2; soft_scope)
          ctx4, ex4 = convert_closures(ctx3, ex3)
         _ctx5, ex5 = linearize_ir(ctx4, ex4)
         thunk = to_lowered_expr(ex5)
@@ -108,8 +109,8 @@ function codeinfo_has_image_globalref(@nospecialize(e))
     end
 end
 
-_CodeInfo_need_ver = v"1.12.0-DEV.512"
-if VERSION < _CodeInfo_need_ver
+const _CodeInfo_need_ver = v"1.12.0-DEV.512"
+@static if VERSION < _CodeInfo_need_ver
     function _CodeInfo(args...)
         error("Constructing a CodeInfo using JuliaLowering currently requires Julia version $_CodeInfo_need_ver or greater")
     end
@@ -335,15 +336,10 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
     k = kind(ex)
     if is_literal(k)
         ex.value
+    elseif k == K"nothing"
+        nothing
     elseif k == K"core"
-        name = ex.name_val::String
-        if name === "nothing"
-            # Translate Core.nothing into literal `nothing`s (flisp uses a
-            # special form (null) for this during desugaring, etc)
-            nothing
-        else
-            GlobalRef(Core, Symbol(name))
-        end
+        GlobalRef(Core, Symbol(ex.name_val::String))
     elseif k == K"top"
         GlobalRef(Base, Symbol(ex.name_val::String))
     elseif k == K"globalref"
@@ -377,6 +373,9 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
             ir
         end
     elseif k == K"Value"
+        # TODO: we still do this in ccall, import
+        # @jl_assert !isa_lowering_ast_node(ex.value) (
+        #     ex, "smuggling AST through Value is asking for trouble; find a SyntaxTree representation")
         ex.value isa LineNumberNode ? QuoteNode(ex.value) : ex.value
     elseif k == K"goto"
         Core.GotoNode(ex[1].id + stmt_offset)
@@ -410,18 +409,25 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
         @jl_assert arg1 isa QuoteNode ex
         args[1] = arg1.value
         Expr(:meta, args...)
+    elseif k == K"foreigncall_arg1"
+        @jl_assert kind(ex[1]) == K"tuple" ex
+        _foreigncall_arg1_expr(ex[1], stmt_offset)
     elseif k == K"static_eval"
         @jl_assert numchildren(ex) == 1 ex
-        @stm ex[1] begin
-            # tuple should just be ccall library spec
-            [K"tuple" s lib] -> Expr(:tuple,
-                                     _to_lowered_expr(s, stmt_offset),
-                                     _to_lowered_expr(lib, stmt_offset))
-            [K"tuple" s] -> Expr(:tuple,
-                                 _to_lowered_expr(s, stmt_offset))
-            [K"function" _...] -> QuoteNode(est_to_expr(ex[1]))
-            _ -> _to_lowered_expr(ex[1], stmt_offset)
+        _to_lowered_expr(ex[1], stmt_offset)
+    elseif k == K"cfunction"
+        # For a scope-resolved callable (`K"static_eval"`), drop the module tag
+        # and emit a bare Symbol so `method.c` resolves it in the method's
+        # module at eval time, matching Base `@cfunction`'s runtime semantics.
+        ret = Expr(:cfunction)
+        for (i, e) in enumerate(children(ex))
+            if i == 2 && kind(e) == K"static_eval" && kind(e[1]) == K"globalref"
+                push!(ret.args, QuoteNode(Symbol(e[1].name_val::String)))
+            else
+                push!(ret.args, _to_lowered_expr(e, stmt_offset))
+            end
         end
+        return ret
     else
         # Allowed forms according to https://docs.julialang.org/en/v1/devdocs/ast/
         #
@@ -457,25 +463,37 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
     end
 end
 
+# ultra-permissive conversion allowing unlowered structure, but lowered leaves
+function _foreigncall_arg1_expr(ex, stmt_offset)
+    if is_leaf(ex) || kind(ex) == K"inert"
+        _to_lowered_expr(ex, stmt_offset)
+    else
+        k = kind(ex)
+        Expr(Symbol((k === K"unknown_head" ? st.name_val : untokenize(k))::String),
+             map(e->_foreigncall_arg1_expr(e, stmt_offset), children(ex))...)
+    end
+end
+
 #-------------------------------------------------------------------------------
 # Our version of eval - should be upstreamed though?
 @fzone "JL: eval" function eval(mod::Module, ex::SyntaxTree;
                                 macro_world::UInt=Base.get_world_counter(),
+                                soft_scope::Union{Nothing,Bool}=nothing,
                                 opts...)
     iter = lower_init(ex; opts...)
-    _eval(mod, iter)
+    _eval(mod, iter; soft_scope)
 end
 
 # Version of eval() taking `Expr` (or Expr tree leaves of any type)
-function eval(mod::Module, ex; opts...)
+function eval(mod::Module, @nospecialize(ex); opts...)
     eval(mod, expr_to_est(ex); opts...)
 end
 
-function _eval(mod, iter)
+function _eval(mod::Module, iter::LoweringIterator; soft_scope::Union{Nothing,Bool}=nothing)
     modules = Module[mod]
     result = nothing
     while true
-        thunk = lower_step(iter, modules[end])::Core.SimpleVector
+        thunk = lower_step(iter, modules[end], Base.get_world_counter(); soft_scope)::Core.SimpleVector
         type = thunk[1]::Symbol
         if type == :done
             break

@@ -2036,7 +2036,7 @@ end
     1   TestMod.generator_code
     2   (call %₁ slot₄/x slot₅/y)
     3   (call core.tuple %₂)
-    4   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree ($ (block (call generator_code x y)))) %₃)
+    4   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block ($ (block (call generator_code x y))))) %₃)
     5   (return %₄)
 14  latestworld
 15  TestMod.f_only_generated

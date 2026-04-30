@@ -46,15 +46,11 @@ isa_lowering_ast_node(@nospecialize(e)) =
 
 function is_expr_value(st::SyntaxTree)
     k = kind(st)
-    return JuliaSyntax.is_literal(k) || k === K"Value" ||
-        k === K"core" && get(st, :name_val, nothing) === "nothing"
+    return JuliaSyntax.is_literal(k) || k === K"Value"
 end
 
 function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
-    st = if e === Core.nothing
-        # e.value can't be nothing in `K"Value"`, so represent with K"core"
-        setattr!(newleaf(graph, src, K"core"), :name_val, "nothing")
-    elseif e isa Symbol
+    st = if e isa Symbol
         setattr!(newleaf(graph, src, K"Identifier"), :name_val, String(e))
     elseif e isa QuoteNode
         cid, _ = _expr_to_est(graph, e.value, src)
@@ -64,8 +60,6 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
         ident = newleaf(graph, src, K"Identifier")
         setattr!(ident, :name_val, String(e.args[1]::Symbol))
         setattr!(ident, :scope_layer, e.args[2])
-    elseif e isa Expr && e.head === :static_parameter
-        setattr!(newleaf(graph, src, K"Value"), :value, e)
     elseif e isa Expr && e.head === :lambda && length(e.args) == 2
         argnames = e.args[1]::Vector{Any}
         arg_cs = NodeId[]
@@ -123,9 +117,7 @@ end
 # children.
 function est_to_expr(st::SyntaxTree, suppress_linenodes=false)
     k = kind(st)
-    return if k === K"core" && numchildren(st) === 0 && st.name_val === "nothing"
-        nothing
-    elseif kind(st) === K"Identifier"
+    if kind(st) === K"Identifier"
         n = Symbol(st.name_val::String)
         mod = get(st, :mod, nothing)
         !isnothing(mod) ? GlobalRef(mod, n) :
@@ -422,6 +414,7 @@ function est_to_dst(st::SyntaxTree)
 
     return @stm st begin
         [K"Identifier"] -> _est_to_dst_ident(st)
+        [K"Value"] -> st.value === nothing ? newleaf(g, st, K"nothing") : st
         (_, when=is_leaf(st)) -> st
         ([K"unknown_head" l r],
          when=(s=st.name_val; Base.isoperator(s))) -> let
@@ -463,8 +456,16 @@ function est_to_dst(st::SyntaxTree)
             @ast g st [k _dst_sink_parameters(children(st))...]
         (_, when=(k = kind(st); k in KSet"curly ref")) ->
             @ast g st [k _dst_separate_dotop(st[1])
-                       _dst_sink_parameters(children(st)[2:end])...
-            ]
+                       _dst_sink_parameters(children(st)[2:end])...]
+        # tuple arg should not be converted or desugared
+        [K"foreigncall" [K"tuple" _...] args...] ->
+            @ast g st [K"foreigncall" [K"foreigncall_arg1" st[1]] args...]
+        ([K"call" [K"Identifier"] sym args...],
+         when=st[1].name_val::String === "ccall") -> if kind(sym) === K"tuple"
+             @ast g st [K"call" st[1] [K"foreigncall_arg1" st[2]] mapsyntax(rec, args)...]
+         else
+             @ast g st [K"call" st[1] rec(sym) mapsyntax(rec, args)...]
+         end
         [K"call" f args...] -> let
             out_k, out_f = @stm _dst_separate_dotop(f) begin
                 [K"." op] -> (K"dotcall", op)
@@ -585,7 +586,7 @@ function est_to_dst(st::SyntaxTree)
         ([K"meta" s vs...],
          when=(meta=get(s, :name_val, "")::String; meta in ("nospecialize", "specialize"))) ->
              # Should be handled in the function case
-             @ast g st "nothing"::K"core"
+             newleaf(g, st, K"nothing")
         [K"meta" syms...] ->
             @ast g st [K"meta" mapsyntax(
                 s->(kind(s) === K"Identifier" ? setattr(s, :kind, K"Symbol") : s),
@@ -597,6 +598,7 @@ function est_to_dst(st::SyntaxTree)
         [K"inbounds" _] -> newleaf(g, st, K"TOMBSTONE")
         [K"core" x] -> setattr!(mkleaf(st), :name_val, x.name_val)
         [K"top" x] -> setattr!(mkleaf(st), :name_val, x.name_val)
+        [K"static_parameter" x] -> setattr!(mkleaf(st), :var_id, x.value::IdTag)
         [K"copyast" [K"inert" ex]] -> @ast g st [K"call"
             interpolate_ast::K"Value"
             Expr::K"Value"
@@ -620,12 +622,26 @@ function est_to_dst(st::SyntaxTree)
             end
         end
         ([K"latestworld"], when=!is_leaf(st)) -> newleaf(g, st, K"latestworld")
-        [K"cfunction" typ fptr rt at sym] -> @ast g st [K"cfunction"
-            rec(typ) rec(fptr)
-            [K"static_eval"(rt, meta=name_hint("cfunction return type")) rec(rt)]
-            [K"static_eval"(at, meta=name_hint("cfunction argument type")) rec(at)]
-            rec(sym)
-        ]
+        [K"cfunction" typ fptr rt at sym] -> let
+            # Identifier callables are scope-resolved against the outermost
+            # lowering layer (which corresponds to the method module used by
+            # `method.c`'s `jl_toplevel_eval`), so the IR carries a binding
+            # reference matching `@cfunction`'s runtime resolution. Other
+            # forms (e.g. function definitions) stay inert.
+            out_fptr = if kind(fptr) == K"inert" && numchildren(fptr) == 1 &&
+                          kind(fptr[1]) == K"Identifier"
+                ident = setattr!(mkleaf(fptr[1]), :scope_layer, 1)
+                @ast g fptr [K"static_eval"(fptr) ident]
+            else
+                rec(fptr)
+            end
+            @ast g st [K"cfunction"
+                rec(typ) out_fptr
+                [K"static_eval"(rt, meta=name_hint("cfunction return type")) rec(rt)]
+                [K"static_eval"(at, meta=name_hint("cfunction argument type")) rec(at)]
+                rec(sym)
+            ]
+        end
 
         # avoid creating excess nodes
         _ -> let out_cs::Vector{NodeId} = map(x->rec(x)._id, children(st))
