@@ -1487,5 +1487,34 @@ end
     end
 end
 
+# Build and use a system image, exercising both split (--output-o together with
+# --output-ji, heap goes into the .ji) and non-split (--output-o only, heap goes
+# into the .so) layouts, with --compress-sysimage on and off in each.
+@testset "system image: split=$split compress=$compress" for split in (true, false), compress in (true, false)
+    mktempdir() do dir
+        o_file  = joinpath(dir, "sys.o.a")
+        ji_file = joinpath(dir, "sys.ji")
+        so_file = joinpath(dir, "sys.so")
+        cmd = `$(Base.julia_cmd()) --strip-metadata -t1,0
+               --compress-sysimage=$(compress ? "yes" : "no")
+               --output-o=$o_file`
+        if split
+            cmd = `$cmd --output-ji=$ji_file`
+        end
+        cmd = `$cmd -e 0`
+        success, out, err = readchomperrors(cmd)
+        @test success
+        @test out == ""
+        # Compression on/off must not trigger the non-split .ji warning here:
+        # a native output is being produced (and, when split, paired with --output-ji).
+        @test !occursin("--compress-sysimage=yes is unsupported", err)
+        if isfile(o_file)
+            @test isfile(ji_file) == split
+            Base.Linking.link_image(o_file, so_file)
+            @test readchomp(`$(Base.julia_cmd()) -t1,0 -J $so_file -E 'hasmethod(sort, (Vector{Int},), (:dims,))'`) == "true"
+        end
+    end
+end
+
 # https://github.com/JuliaLang/julia/issues/58229 Recursion in jitlinking with inline=no
 @test "" == test_read_success(`$(Base.julia_cmd()) --inline=no -e 'Base.compilecache(Base.identify_package("Pkg"))'`)
