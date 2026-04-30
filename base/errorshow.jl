@@ -481,6 +481,11 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
         end
     end
 
+    # helpful when a parameterized struct has an unparameterized inner constructor
+    if isa(f, DataType) && (f !== f.name.wrapper) && isempty(methods(f))
+        push!(funcs, (f.name.wrapper, arg_types_param))
+    end
+
     for (func, arg_types_param) in funcs
         for method in methods(func)
             buf = IOBuffer()

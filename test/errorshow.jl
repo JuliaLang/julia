@@ -729,6 +729,17 @@ using Base.Experimental: @opaque
     test_worldage_error(f)
 end
 
+# suggest candidate methods on typename wrapper when parameterized call has no methods
+struct ParametricOuterBareInner{T}
+    x::T
+    ParametricOuterBareInner(x) = ParametricOuterBareInner{typeof(x)}(x)
+end
+let err_str
+    err_str = @except_str ParametricOuterBareInner{String}("abc") MethodError
+    @test occursin("Closest candidates are", err_str)
+    @test occursin("ParametricOuterBareInner(::Any)", err_str)
+end
+
 # Custom hints
 struct HasNoOne end
 function recommend_oneunit(io, ex, arg_types, kwargs)
