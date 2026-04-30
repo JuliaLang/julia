@@ -65,7 +65,7 @@ end
 function invalidate_method_for_globalref!(gr::GlobalRef, method::Method, invalidated_bpart::Core.BindingPartition, new_max_world::UInt)
     invalidate_all = false
     binding = convert(Core.Binding, gr)
-    if isdefined(method, :source)
+    if isdefined(method, :source) && isa(method.source, Compiler.MaybeCompressed)
         src = _uncompressed_ir(method)
         invalidate_all = should_invalidate_code_for_globalref(gr, src)
     end
@@ -185,6 +185,7 @@ end
 
 function scan_new_method!(method::Method, image_backedges_only::Bool)
     isdefined(method, :source) || return
+    isa(method.source, Compiler.MaybeCompressed) || return
     if image_backedges_only && !has_image_globalref(method)
         return
     end
