@@ -391,16 +391,12 @@ function provenance(st::SyntaxTree)
     return prov
 end
 
-"""
-`provenance(st)[1]`, or `st` if that's empty
-"""
+"`provenance(st)[1]`, or `st` if that's empty"
 function prov(st::SyntaxTree)
     st.source isa NodeId ? SyntaxTree(st._graph, st.source) : st
 end
 
-"""
-textref of st (possibly == st)
-"""
+"textref of st (possibly == st)"
 function prov_end(st::SyntaxTree)
     out = st
     while out.source isa NodeId
@@ -409,11 +405,18 @@ function prov_end(st::SyntaxTree)
     return out
 end
 
-"""
-`st`'s textref's `.source`, ignoring all `.macro_source`
-"""
+"`st`'s textref's `.source`, ignoring all `.macro_source`"
 function sourceref(st::SyntaxTree)
     prov_end(st).source::Union{LineNumberNode, SourceRef}
+end
+
+"The last macro expansion `st` was involved in, or nothing"
+function macro_prov(st::SyntaxTree)
+    while !hasattr(st, :macro_source) && st.source isa NodeId
+        st = prov(st)
+    end
+    hasattr(st, :macro_source) && return SyntaxTree(st._graph, st.macro_source)
+    return nothing
 end
 
 """
@@ -437,14 +440,10 @@ end
 
 # Only recurse on the first .macro_source in any source chain
 function _flattened_provenance(st::SyntaxTree, out)
-    while !hasattr(st, :macro_source) && st.source isa NodeId
-        st = prov(st)
-    end
+    msrc = macro_prov(st)
     # macro_source === source means `st` is from the `msrc` macro body
-    msrc = get(st, :macro_source, nothing)
-    msrc isa NodeId && msrc !== st.source &&
-        _flattened_provenance(SyntaxTree(st._graph, msrc), out)
-
+    !isnothing(msrc) && msrc._id !== st.source &&
+        _flattened_provenance(msrc, out)
     push!(out, prov_end(st))
     out
 end
@@ -797,7 +796,7 @@ function _unalias_copy_tree(old::SyntaxTree)
         mknode(old, cs)
     end
     # difference from mktree: don't add to provenance chain
-    hasattr(out, :macro_source) && setattr!(out, :macro_source, old.macro_source)
+    hasattr(old, :macro_source) && setattr!(out, :macro_source, old.macro_source)
     setattr!(out, :source, old.source)
 end
 
@@ -883,11 +882,12 @@ function prune(graph1_a::SyntaxGraph, entrypoints_a::Vector{NodeId})
     resolved_sources = Dict{NodeId, SourceAttrType}() # graph1 id => graph2 src
 
     for (n2, n1) in enumerate(nodes1)
-        graph2.source[n2] = _prune_get_resolved!(n1, graph1, map12, resolved_sources, :source)
-        if hasattr(graph2, :macro_source) && haskey(graph2.macro_source, n1)
-            msrc = _prune_get_resolved!(n1, graph1, map12, resolved_sources, :macro_source)
-            if !isnothing(msrc)
-                graph.macro_source[n2] = msrc
+        graph2.source[n2] =
+            _prune_get_resolved!(n1, graph1, map12, resolved_sources, :source)
+        if hasattr(graph1, :macro_source) && haskey(graph1.macro_source, n1)
+            msrc1 = graph1.macro_source[n1]
+            if haskey(map12, msrc1)
+                graph2.macro_source[n2] = map12[msrc1]
             end
         end
     end
