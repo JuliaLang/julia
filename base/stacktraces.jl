@@ -49,12 +49,12 @@ Stack information representing execution context, with the following fields:
 
 - `pc::Int`
 
-  1-based statement index within the frame's `CodeInfo`, recovered from the DWARF
-  column emitted by codegen. `0` when unavailable (e.g. for C frames or frames
-  without enriched debug info). Used internally by `StackTraces.lookup` to resolve
-  the `MethodInstance` for inlined frames; also surfaced in low-level safe
-  backtrace output (e.g. on segfault) but not in Julia's default `show` for
-  `StackFrame`.
+  If `from_c`, this is a column number.  Otherwise, it is a 1-based statement
+  index within the frame's `linfo.debuginfo`, recovered from the DWARF column
+  emitted by codegen, or `0` when debuginfo is unavailable. Used internally by
+  `StackTraces.lookup` to resolve the `MethodInstance` for inlined frames; also
+  surfaced in low-level safe backtrace output (e.g. on segfault) but not in
+  Julia's default `show` for `StackFrame`.
 """
 struct StackFrame # this type should be kept platform-agnostic so that profiles can be dumped on one machine and read on another
     "the name of the function containing the execution context"
@@ -72,7 +72,7 @@ struct StackFrame # this type should be kept platform-agnostic so that profiles 
     inlined::Bool
     "representation of the pointer to the execution context as returned by `backtrace`"
     pointer::UInt64  # Large enough to be read losslessly on 32- and 64-bit machines.
-    "1-based statement index (PC) within the frame's CodeInfo, or 0 if unavailable"
+    "if !from_c, 1-based statement index (PC) within the frame's CodeInfo, or 0 if unavailable"
     pc::Int
 end
 
