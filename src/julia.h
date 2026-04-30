@@ -824,6 +824,8 @@ typedef struct _jl_module_t {
     int8_t infer;
     uint8_t istopmod;
     int8_t max_methods;
+    uint8_t disabled_julia_passes;  // bitfield of disabled Julia IR passes
+    uint32_t disabled_llvm_passes;  // bitfield of disabled LLVM passes
     // If cleared no binding partition in this module has PARTITION_FLAG_EXPORTED and min_world > jl_require_world.
     _Atomic(int8_t) export_set_changed_since_require_world;
     jl_mutex_t lock;
@@ -2116,6 +2118,46 @@ JL_DLLEXPORT void jl_set_module_infer(jl_module_t *self, int value);
 JL_DLLEXPORT int jl_get_module_infer(jl_module_t *m);
 JL_DLLEXPORT void jl_set_module_max_methods(jl_module_t *self, int value);
 JL_DLLEXPORT int jl_get_module_max_methods(jl_module_t *m);
+
+// Disabled Julia IR pass bits
+#define JL_JULIA_PASS_INLINING  (1 << 0)
+#define JL_JULIA_PASS_SROA      (1 << 1)
+#define JL_JULIA_PASS_ADCE      (1 << 2)
+
+// Disabled LLVM pass bits
+#define JL_LLVM_PASS_SLP_VECTORIZER     (1 << 0)
+#define JL_LLVM_PASS_LOOP_VECTORIZE     (1 << 1)
+#define JL_LLVM_PASS_GVN               (1 << 2)
+#define JL_LLVM_PASS_LICM              (1 << 3)
+#define JL_LLVM_PASS_LOOP_UNROLL       (1 << 4)
+#define JL_LLVM_PASS_INSTCOMBINE       (1 << 5)
+#define JL_LLVM_PASS_SROA              (1 << 6)
+#define JL_LLVM_PASS_SIMPLIFYCFG       (1 << 7)
+#define JL_LLVM_PASS_DSE               (1 << 8)
+#define JL_LLVM_PASS_SCCP              (1 << 9)
+#define JL_LLVM_PASS_JUMP_THREADING    (1 << 10)
+#define JL_LLVM_PASS_EARLY_CSE         (1 << 11)
+#define JL_LLVM_PASS_MEMCPYOPT         (1 << 12)
+#define JL_LLVM_PASS_LOOP_ROTATE       (1 << 13)
+#define JL_LLVM_PASS_LOOP_DELETION     (1 << 14)
+#define JL_LLVM_PASS_IRCE              (1 << 15)
+#define JL_LLVM_PASS_ADCE              (1 << 16)
+#define JL_LLVM_PASS_REASSOCIATE       (1 << 17)
+#define JL_LLVM_PASS_CORR_VALUE_PROP   (1 << 18)
+#define JL_LLVM_PASS_FLOAT2INT         (1 << 19)
+#define JL_LLVM_PASS_LOOP_DISTRIBUTE   (1 << 20)
+#define JL_LLVM_PASS_VECTOR_COMBINE    (1 << 21)
+#define JL_LLVM_PASS_DIV_REM_PAIRS     (1 << 22)
+#define JL_LLVM_PASS_ALLOC_OPT         (1 << 23)
+#define JL_LLVM_PASS_JULIA_LICM        (1 << 24)
+#define JL_LLVM_PASS_LOOP_IDIOM        (1 << 25)
+#define JL_LLVM_PASS_IND_VAR_SIMPLIFY  (1 << 26)
+
+JL_DLLEXPORT void jl_set_module_disabled_julia_passes(jl_module_t *self, uint8_t mask);
+JL_DLLEXPORT uint8_t jl_get_module_disabled_julia_passes(jl_module_t *m);
+JL_DLLEXPORT void jl_set_module_disabled_llvm_passes(jl_module_t *self, uint32_t mask);
+JL_DLLEXPORT uint32_t jl_get_module_disabled_llvm_passes(jl_module_t *m);
+
 JL_DLLEXPORT jl_value_t *jl_get_module_usings_backedges(jl_module_t *m);
 JL_DLLEXPORT jl_value_t *jl_get_module_scanned_methods(jl_module_t *m);
 JL_DLLEXPORT jl_value_t *jl_get_module_binding_or_nothing(jl_module_t *m, jl_sym_t *s);

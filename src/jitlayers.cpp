@@ -944,6 +944,7 @@ static constexpr size_t N_optlevels = 4;
 static orc::ThreadSafeModule selectOptLevel(orc::ThreadSafeModule TSM) JL_NOTSAFEPOINT {
     TSM.withModuleDo([](Module &M) JL_NOTSAFEPOINT {
         size_t opt_level = std::max(static_cast<int>(jl_options.opt_level), 0);
+        uint32_t disabled_llvm_passes = 0;
         do {
             if (jl_generating_output()) {
                 opt_level = 0;
@@ -959,6 +960,14 @@ static orc::ThreadSafeModule selectOptLevel(orc::ThreadSafeModule TSM) JL_NOTSAF
                         if (ol < opt_level)
                             opt_level = ol;
                     }
+                    // collect disabled LLVM passes (union across all functions)
+                    Attribute dattr = F.getFnAttribute("julia-disabled-llvm-passes");
+                    StringRef dval = dattr.getValueAsString();
+                    if (dval != "") {
+                        uint32_t mask;
+                        if (!dval.getAsInteger(10, mask))
+                            disabled_llvm_passes |= mask;
+                    }
                 }
             }
             if (opt_level < opt_level_min)
@@ -967,6 +976,10 @@ static orc::ThreadSafeModule selectOptLevel(orc::ThreadSafeModule TSM) JL_NOTSAF
         // currently -O3 is max
         opt_level = std::min(opt_level, N_optlevels - 1);
         M.addModuleFlag(Module::Warning, "julia.optlevel", opt_level);
+        if (disabled_llvm_passes != 0) {
+            M.addModuleFlag(Module::Warning, "julia.disabled_llvm_passes",
+                            disabled_llvm_passes);
+        }
     });
     return TSM;
 }

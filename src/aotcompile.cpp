@@ -2486,10 +2486,28 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
                 }
                 assert(!verifyLLVMIR(*m.getModuleUnlocked()));
                 if (optimize) {
+                    Module &M = *m.getModuleUnlocked();
+                    // Collect disabled LLVM passes from function attributes
+                    uint32_t disabled_llvm_passes = 0;
+                    for (auto &F : M) {
+                        if (!F.isDeclaration()) {
+                            Attribute dattr = F.getFnAttribute("julia-disabled-llvm-passes");
+                            StringRef dval = dattr.getValueAsString();
+                            if (dval != "") {
+                                uint32_t mask;
+                                if (!dval.getAsInteger(10, mask))
+                                    disabled_llvm_passes |= mask;
+                            }
+                        }
+                    }
+                    if (disabled_llvm_passes != 0) {
+                        M.addModuleFlag(Module::Warning, "julia.disabled_llvm_passes",
+                                        disabled_llvm_passes);
+                    }
                     NewPM PM{jl_ExecutionEngine->cloneTargetMachine(), getOptLevel(jl_options.opt_level)};
                     //Safe b/c context lock is held by output
-                    PM.run(*m.getModuleUnlocked());
-                    assert(!verifyLLVMIR(*m.getModuleUnlocked()));
+                    PM.run(M);
+                    assert(!verifyLLVMIR(M));
                 }
                 const std::string *fname;
                 if (decls.functionObject == "jl_fptr_args" || decls.functionObject == "jl_fptr_sparam")

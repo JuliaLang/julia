@@ -8389,6 +8389,12 @@ static jl_llvm_functions_t
         FnAttrs.addAttribute("julia-optimization-level", optLevelStrings[optlevel]);
     }
 
+    // add disabled LLVM passes for this module, if any
+    uint32_t disabled_llvm = jl_get_module_disabled_llvm_passes(ctx.module);
+    if (disabled_llvm != 0) {
+        FnAttrs.addAttribute("julia-disabled-llvm-passes", std::to_string(disabled_llvm));
+    }
+
     ctx.f = f;
 
     // Step 4b. determine debug info signature and other type info for locals

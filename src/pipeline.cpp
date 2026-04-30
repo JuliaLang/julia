@@ -716,6 +716,38 @@ AnalysisManagers::AnalysisManagers(PassBuilder &PB) : LAM(), FAM(), CGAM(), MAM(
 
 AnalysisManagers::~AnalysisManagers() = default;
 
+// Map from LLVM pass name to julia.h bit constant
+static const std::map<StringRef, uint32_t> llvmPassNameToBit = {
+    {"SLPVectorizerPass", JL_LLVM_PASS_SLP_VECTORIZER},
+    {"LoopVectorizePass", JL_LLVM_PASS_LOOP_VECTORIZE},
+    {"GVNPass", JL_LLVM_PASS_GVN},
+    {"LICMPass", JL_LLVM_PASS_LICM},
+    {"LoopUnrollPass", JL_LLVM_PASS_LOOP_UNROLL},
+    {"LoopFullUnrollPass", JL_LLVM_PASS_LOOP_UNROLL},
+    {"InstCombinePass", JL_LLVM_PASS_INSTCOMBINE},
+    {"SROAPass", JL_LLVM_PASS_SROA},
+    {"SimplifyCFGPass", JL_LLVM_PASS_SIMPLIFYCFG},
+    {"DSEPass", JL_LLVM_PASS_DSE},
+    {"SCCPPass", JL_LLVM_PASS_SCCP},
+    {"JumpThreadingPass", JL_LLVM_PASS_JUMP_THREADING},
+    {"EarlyCSEPass", JL_LLVM_PASS_EARLY_CSE},
+    {"MemCpyOptPass", JL_LLVM_PASS_MEMCPYOPT},
+    {"LoopRotatePass", JL_LLVM_PASS_LOOP_ROTATE},
+    {"LoopDeletionPass", JL_LLVM_PASS_LOOP_DELETION},
+    {"IRCEPass", JL_LLVM_PASS_IRCE},
+    {"ADCEPass", JL_LLVM_PASS_ADCE},
+    {"ReassociatePass", JL_LLVM_PASS_REASSOCIATE},
+    {"CorrelatedValuePropagationPass", JL_LLVM_PASS_CORR_VALUE_PROP},
+    {"Float2IntPass", JL_LLVM_PASS_FLOAT2INT},
+    {"LoopDistributePass", JL_LLVM_PASS_LOOP_DISTRIBUTE},
+    {"VectorCombinePass", JL_LLVM_PASS_VECTOR_COMBINE},
+    {"DivRemPairsPass", JL_LLVM_PASS_DIV_REM_PAIRS},
+    {"AllocOptPass", JL_LLVM_PASS_ALLOC_OPT},
+    {"JuliaLICMPass", JL_LLVM_PASS_JULIA_LICM},
+    {"LoopIdiomRecognizePass", JL_LLVM_PASS_LOOP_IDIOM},
+    {"IndVarSimplifyPass", JL_LLVM_PASS_IND_VAR_SIMPLIFY},
+};
+
 void NewPM::run(Module &M) {
     //We must recreate the analysis managers every time
     //so that analyses from previous runs of the pass manager
@@ -724,6 +756,24 @@ void NewPM::run(Module &M) {
     PassInstrumentationCallbacks PIC;
     adjustPIC(PIC);
     TimePasses.registerCallbacks(PIC);
+
+    // Register callback to skip disabled LLVM passes
+    uint32_t disabled_llvm_passes = 0;
+    if (auto *flag = M.getModuleFlag("julia.disabled_llvm_passes")) {
+        disabled_llvm_passes = cast<ConstantInt>(
+            cast<ConstantAsMetadata>(flag)->getValue())->getZExtValue();
+    }
+    if (disabled_llvm_passes != 0) {
+        PIC.registerShouldRunOptionalPassCallback(
+            [disabled_llvm_passes](StringRef Name, Any) JL_NOTSAFEPOINT -> bool {
+                auto it = llvmPassNameToBit.find(Name);
+                if (it != llvmPassNameToBit.end()) {
+                    if (disabled_llvm_passes & it->second)
+                        return false;
+                }
+                return true;
+            });
+    }
     FunctionAnalysisManager FAM(createFAM(O, *TM.get()));
     LoopAnalysisManager LAM;
     CGSCCAnalysisManager CGAM;

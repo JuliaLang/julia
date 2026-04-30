@@ -211,6 +211,8 @@
     XX(jl_get_module_infer) \
     XX(jl_get_module_of_binding) \
     XX(jl_get_module_optlevel) \
+    XX(jl_get_module_disabled_julia_passes) \
+    XX(jl_get_module_disabled_llvm_passes) \
     XX(jl_get_module_usings_backedges) \
     XX(jl_get_module_binding_or_nothing) \
     XX(jl_get_next_task) \
@@ -412,6 +414,8 @@
     XX(jl_set_module_infer) \
     XX(jl_set_module_nospecialize) \
     XX(jl_set_module_optlevel) \
+    XX(jl_set_module_disabled_julia_passes) \
+    XX(jl_set_module_disabled_llvm_passes) \
     XX(jl_set_module_uuid) \
     XX(jl_set_next_task) \
     XX(jl_set_nth_field) \

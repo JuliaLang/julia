@@ -1019,22 +1019,40 @@ matchpass(optimize_until::Int, stage, _) = optimize_until == stage
 matchpass(optimize_until::String, _, name) = optimize_until == name
 matchpass(::Nothing, _, _) = false
 
+# Julia IR pass name to bit mapping (must match JL_JULIA_PASS_* in julia.h)
+const _JULIA_PASS_INLINING = UInt8(1) << 0
+const _JULIA_PASS_SROA     = UInt8(1) << 1
+const _JULIA_PASS_ADCE     = UInt8(1) << 2
+
+function _get_disabled_julia_passes(mod::Module)
+    return ccall(:jl_get_module_disabled_julia_passes, UInt8, (Any,), mod)
+end
+
 function run_passes_ipo_safe(
     ci::CodeInfo,
     sv::OptimizationState,
     optimize_until = nothing,  # run all passes by default
 )
     __stage__ = 0  # used by @pass
+    disabled = _get_disabled_julia_passes(sv.mod)
     # NOTE: The pass name MUST be unique for `optimize_until::String` to work
     @pass "CC: CONVERT"   ir = convert_to_ircode(ci, sv)
     @pass "CC: SLOT2REG"  ir = slot2reg(ir, ci, sv)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
     @pass "CC: COMPACT_1" ir = compact!(ir)
-    @pass "CC: INLINING"  ir = ssa_inlining_pass!(ir, sv.inlining, ci.propagate_inbounds)
+    if disabled & _JULIA_PASS_INLINING == 0
+        @pass "CC: INLINING"  ir = ssa_inlining_pass!(ir, sv.inlining, ci.propagate_inbounds)
+    end
     # @zone "CC: VERIFY 2" verify_ir(ir)
     @pass "CC: COMPACT_2" ir = compact!(ir)
-    @pass "CC: SROA"      ir = sroa_pass!(ir, sv.inlining)
-    @pass "CC: ADCE"      (ir, made_changes) = adce_pass!(ir, sv.inlining)
+    if disabled & _JULIA_PASS_SROA == 0
+        @pass "CC: SROA"      ir = sroa_pass!(ir, sv.inlining)
+    end
+    if disabled & _JULIA_PASS_ADCE == 0
+        @pass "CC: ADCE"      (ir, made_changes) = adce_pass!(ir, sv.inlining)
+    else
+        made_changes = false
+    end
     if made_changes
         @pass "CC: COMPACT_3" ir = compact!(ir, true)
     end

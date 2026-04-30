@@ -163,7 +163,7 @@ macro max_methods(n::Int, fdef::Expr)
 end
 
 """
-    Experimental.@compiler_options optimize={0,1,2,3} compile={yes,no,all,min} infer={true,false} max_methods={default,1,2,3,4}
+    Experimental.@compiler_options optimize={0,1,2,3} compile={yes,no,all,min} infer={true,false} max_methods={default,1,2,3,4} disabled_julia_passes=(...) disabled_llvm_passes=(...)
 
 Set compiler options for code in the enclosing module. Options correspond directly to
 command-line options with the same name, where applicable. The following options
@@ -174,7 +174,95 @@ are currently supported:
     requests the minimum possible amount of compilation.
   * `infer`: Enable or disable type inference. If disabled, implies [`@nospecialize`](@ref).
   * `max_methods`: Maximum number of matching methods considered when running type inference.
+  * `disabled_julia_passes`: Tuple of Julia IR optimization pass names to disable.
+    These passes run during Julia's own IR optimization phase (before LLVM).
+    Valid names: `INLINING`, `SROA`, `ADCE`.
+  * `disabled_llvm_passes`: Tuple of LLVM optimization pass names to disable.
+    These are the standard LLVM passes that run after Julia IR optimization.
+    Valid names: `SLPVectorizerPass`, `LoopVectorizePass`, `GVNPass`, `LICMPass`,
+    `LoopUnrollPass`, `InstCombinePass`, `SROAPass`, `SimplifyCFGPass`, `DSEPass`,
+    `SCCPPass`, `JumpThreadingPass`, `EarlyCSEPass`, `MemCpyOptPass`, `LoopRotatePass`,
+    `LoopDeletionPass`, `IRCEPass`, `ADCEPass`, `ReassociatePass`,
+    `CorrelatedValuePropagationPass`, `Float2IntPass`, `LoopDistributePass`,
+    `VectorCombinePass`, `DivRemPairsPass`, `AllocOptPass`, `JuliaLICMPass`,
+    `LoopIdiomRecognizePass`, `IndVarSimplifyPass`.
+
+The pass disabling options only affect functions defined in the enclosing module.
+Functions from other modules (including dependencies) are not affected.
+
+# Examples
+```julia
+module MyModule
+
+using Base.Experimental: @compiler_options
+
+# Disable SLP vectorization for this module
+@compiler_options disabled_llvm_passes=(SLPVectorizerPass,)
+
+# Disable Julia-level inlining
+@compiler_options disabled_julia_passes=(INLINING,)
+
+# Multiple passes and options can be combined
+@compiler_options optimize=2 disabled_llvm_passes=(GVNPass, SLPVectorizerPass) disabled_julia_passes=(SROA, ADCE)
+
+end
+```
 """
+# Julia IR pass name to bit mapping
+const _julia_pass_bits = Dict{Symbol, Int}(
+    :INLINING => 1 << 0,
+    :SROA     => 1 << 1,
+    :ADCE     => 1 << 2,
+)
+
+# LLVM pass name to bit mapping (must match JL_LLVM_PASS_* in julia.h)
+const _llvm_pass_bits = Dict{Symbol, Int}(
+    :SLPVectorizerPass              => 1 << 0,
+    :LoopVectorizePass              => 1 << 1,
+    :GVNPass                        => 1 << 2,
+    :LICMPass                       => 1 << 3,
+    :LoopUnrollPass                 => 1 << 4,
+    :InstCombinePass                => 1 << 5,
+    :SROAPass                       => 1 << 6,
+    :SimplifyCFGPass                => 1 << 7,
+    :DSEPass                        => 1 << 8,
+    :SCCPPass                       => 1 << 9,
+    :JumpThreadingPass              => 1 << 10,
+    :EarlyCSEPass                   => 1 << 11,
+    :MemCpyOptPass                  => 1 << 12,
+    :LoopRotatePass                 => 1 << 13,
+    :LoopDeletionPass               => 1 << 14,
+    :IRCEPass                       => 1 << 15,
+    :ADCEPass                       => 1 << 16,
+    :ReassociatePass                => 1 << 17,
+    :CorrelatedValuePropagationPass => 1 << 18,
+    :Float2IntPass                  => 1 << 19,
+    :LoopDistributePass             => 1 << 20,
+    :VectorCombinePass              => 1 << 21,
+    :DivRemPairsPass                => 1 << 22,
+    :AllocOptPass                   => 1 << 23,
+    :JuliaLICMPass                  => 1 << 24,
+    :LoopIdiomRecognizePass         => 1 << 25,
+    :IndVarSimplifyPass             => 1 << 26,
+)
+
+function _parse_pass_tuple(ex, pass_bits::Dict{Symbol, Int}, option_name::String)
+    mask = 0
+    if ex isa Expr && ex.head === :tuple
+        for name in ex.args
+            name isa Symbol || error("pass names must be symbols in \"$option_name\"")
+            haskey(pass_bits, name) || error("unknown pass \"$name\" in \"$option_name\". Valid passes: $(join(sort(collect(keys(pass_bits))), ", "))")
+            mask |= pass_bits[name]
+        end
+    elseif ex isa Symbol
+        haskey(pass_bits, ex) || error("unknown pass \"$ex\" in \"$option_name\". Valid passes: $(join(sort(collect(keys(pass_bits))), ", "))")
+        mask |= pass_bits[ex]
+    else
+        error("invalid argument to \"$option_name\" option: expected a tuple of pass names")
+    end
+    return mask
+end
+
 macro compiler_options(args...)
     opts = Expr(:block)
     for ex in args
@@ -199,6 +287,12 @@ macro compiler_options(args...)
                   a isa Int ? ((1 <= a <= 4) ? a : error("We must have that `1 <= max_methods <= 4`, but `max_methods = $a`.")) :
                   error("invalid argument to \"max_methods\" option")
                 push!(opts.args, Expr(:meta, :max_methods, a))
+            elseif ex.args[1] === :disabled_julia_passes
+                mask = _parse_pass_tuple(ex.args[2], _julia_pass_bits, "disabled_julia_passes")
+                push!(opts.args, Expr(:meta, :disabled_julia_passes, mask))
+            elseif ex.args[1] === :disabled_llvm_passes
+                mask = _parse_pass_tuple(ex.args[2], _llvm_pass_bits, "disabled_llvm_passes")
+                push!(opts.args, Expr(:meta, :disabled_llvm_passes, mask))
             else
                 error("unknown option \"$(ex.args[1])\"")
             end

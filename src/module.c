@@ -521,6 +521,8 @@ static jl_module_t *jl_new_module__(jl_sym_t *name, jl_module_t *parent)
     m->compile = -1;
     m->infer = -1;
     m->max_methods = -1;
+    m->disabled_julia_passes = 0;
+    m->disabled_llvm_passes = 0;
     m->file = jl_empty_sym;
     m->line = 0;
     m->hash = parent == NULL ? bitmix(name->hash, jl_module_type->hash) :
@@ -736,6 +738,36 @@ JL_DLLEXPORT int jl_get_module_max_methods(jl_module_t *m)
     while (value == -1 && m->parent != m && m != jl_base_module) {
         m = m->parent;
         value = m->max_methods;
+    }
+    return value;
+}
+
+JL_DLLEXPORT void jl_set_module_disabled_julia_passes(jl_module_t *self, uint8_t mask)
+{
+    self->disabled_julia_passes = mask;
+}
+
+JL_DLLEXPORT uint8_t jl_get_module_disabled_julia_passes(jl_module_t *m)
+{
+    uint8_t value = m->disabled_julia_passes;
+    if (value == 0 && m->parent != m && m != jl_base_module) {
+        m = m->parent;
+        value = m->disabled_julia_passes;
+    }
+    return value;
+}
+
+JL_DLLEXPORT void jl_set_module_disabled_llvm_passes(jl_module_t *self, uint32_t mask)
+{
+    self->disabled_llvm_passes = mask;
+}
+
+JL_DLLEXPORT uint32_t jl_get_module_disabled_llvm_passes(jl_module_t *m)
+{
+    uint32_t value = m->disabled_llvm_passes;
+    if (value == 0 && m->parent != m && m != jl_base_module) {
+        m = m->parent;
+        value = m->disabled_llvm_passes;
     }
     return value;
 }
