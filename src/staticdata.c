@@ -72,6 +72,8 @@ External links:
 #include <stdio.h> // printf
 #include <inttypes.h> // PRIxPTR
 
+#include <zstd.h>
+
 #include "julia.h"
 #include "julia_internal.h"
 #include "julia_gcext.h"
@@ -79,8 +81,11 @@ External links:
 #include "processor.h"
 #include "serialize.h"
 
-#ifndef _OS_WINDOWS_
+#ifdef _OS_WINDOWS_
+#include <memoryapi.h>
+#else
 #include <dlfcn.h>
+#include <sys/mman.h>
 #endif
 
 #include "valgrind.h"
@@ -2314,41 +2319,15 @@ static void jl_read_arraylist(ios_t *s, arraylist_t *list)
     ios_read(s, (char*)list->items, list_len * sizeof(void*));
 }
 
-void gc_sweep_sysimg(void)
-{
-    size_t nblobs = n_linkage_blobs();
-    if (nblobs == 0)
-        return;
-    assert(jl_linkage_blobs.len == 2*nblobs);
-    assert(jl_image_relocs.len == nblobs);
-    for (size_t i = 0; i < 2*nblobs; i+=2) {
-        reloc_t *relocs = (reloc_t*)jl_image_relocs.items[i>>1];
-        if (!relocs)
-            continue;
-        uintptr_t base = (uintptr_t)jl_linkage_blobs.items[i];
-        uintptr_t last_pos = 0;
-        uint8_t *current = (uint8_t *)relocs;
-        while (1) {
-            // Read the offset of the next object
-            size_t pos_diff = 0;
-            size_t cnt = 0;
-            while (1) {
-                int8_t c = *current++;
-                pos_diff |= ((size_t)c & 0x7F) << (7 * cnt++);
-                if ((c >> 7) == 0)
-                    break;
-            }
-            if (pos_diff == 0)
-                break;
-
-            uintptr_t pos = last_pos + pos_diff;
-            last_pos = pos;
-            jl_taggedvalue_t *o = (jl_taggedvalue_t *)(base + pos);
-            o->bits.gc = GC_OLD;
-            assert(o->bits.in_image == 1);
-        }
-    }
-}
+// Persistent set of image objects that reference non-image objects.
+// Processed as additional GC roots at the start of each full mark phase.
+// Maintained incrementally by jl_gc_queue_root when image objects are mutated.
+// Note: cross-heap refs created during pkgimage uniquing (types, method instances,
+// bindings) don't need tracking here because the uniqued objects are always rooted
+// through type caches, method specializations, or module binding tables.
+htable_t image_remset;
+arraylist_t image_remset_list;
+jl_mutex_t image_remset_lock;
 
 // jl_write_value and jl_read_value are used for storing Julia objects that are adjuncts to
 // the image proper. For example, new methods added to external callables require
@@ -3642,14 +3621,88 @@ JL_DLLEXPORT jl_image_buf_t jl_preload_sysimg(const char *fname)
     }
 }
 
-// From a shared library handle, verify consistency and return a jl_image_buf_t
-static jl_image_buf_t get_image_buf(void *handle, int is_pkgimage)
+
+static void jl_prefetch_system_image(const char *data, size_t size)
+{
+    size_t page_size = jl_getpagesize(); /* jl_page_size is not set yet when loading sysimg */
+    void *start = (void *)((uintptr_t)data & ~(page_size - 1));
+    size_t size_aligned = LLT_ALIGN(size, page_size);
+#ifdef _OS_WINDOWS_
+    WIN32_MEMORY_RANGE_ENTRY entry = {start, size_aligned};
+    PrefetchVirtualMemory(GetCurrentProcess(), 1, &entry, 0);
+#else
+    madvise(start, size_aligned, MADV_WILLNEED);
+#endif
+}
+
+JL_DLLEXPORT void jl_image_unpack_uncomp(void *handle, jl_image_buf_t *image)
+{
+    size_t *plen;
+    jl_dlsym(handle, "jl_system_image_size", (void **)&plen, 1);
+    jl_dlsym(handle, "jl_system_image_data", (void **)&image->data, 1);
+    jl_dlsym(handle, "jl_image_pointers", (void**)&image->pointers, 1);
+    image->size = *plen;
+    jl_prefetch_system_image(image->data, image->size);
+}
+
+JL_DLLEXPORT void jl_image_unpack_zstd(void *handle, jl_image_buf_t *image)
 {
     size_t *plen;
     const char *data;
-    const void *pointers;
-    uint64_t base;
+    jl_dlsym(handle, "jl_system_image_size", (void **)&plen, 1);
+    jl_dlsym(handle, "jl_system_image_data", (void **)&data, 1);
+    jl_dlsym(handle, "jl_image_pointers", (void **)&image->pointers, 1);
+    jl_prefetch_system_image(data, *plen);
+    image->size = ZSTD_getFrameContentSize(data, *plen);
+    size_t page_size = jl_getpagesize(); /* jl_page_size is not set yet when loading sysimg */
+    size_t aligned_size = LLT_ALIGN(image->size, page_size);
+    int fail = 0;
+#if defined(_OS_WINDOWS_)
+    size_t large_page_size = GetLargePageMinimum();
+    image->data = NULL;
+    if (large_page_size > 0 && image->size > 4 * large_page_size) {
+        size_t aligned_size = LLT_ALIGN(image->size, large_page_size);
+        image->data = (char *)VirtualAlloc(
+            NULL, aligned_size, MEM_COMMIT | MEM_RESERVE | MEM_LARGE_PAGES, PAGE_READWRITE);
+    }
+    if (!image->data) {
+        /* Try small pages if large pages failed. */
+        image->data = (char *)VirtualAlloc(NULL, aligned_size, MEM_COMMIT | MEM_RESERVE,
+                                           PAGE_READWRITE);
+    }
+    fail = !image->data;
+#else
+    image->data = (char *)mmap(NULL, aligned_size, PROT_READ | PROT_WRITE,
+                               MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    fail = image->data == (void *)-1;
+#endif
+    if (fail) {
+        const char *err;
+#if defined(_OS_WINDOWS_)
+        char err_buf[256];
+        win32_formatmessage(GetLastError(), err_buf, sizeof(err_buf));
+        err = err_buf;
+#else
+        err = strerror(errno);
+#endif
+        jl_printf(JL_STDERR, "ERROR: failed to allocate memory for system image: %s\n",
+                  err);
+        jl_exit(1);
+    }
 
+    ZSTD_decompress((void *)image->data, image->size, data, *plen);
+    size_t len = (*plen) & ~(page_size - 1);
+#ifdef _OS_WINDOWS_
+    if (len)
+        VirtualFree((void *)data, len, MEM_RELEASE);
+#else
+    munmap((void *)data, len);
+#endif
+}
+
+// From a shared library handle, verify consistency and return a jl_image_buf_t
+static jl_image_buf_t get_image_buf(void *handle, int is_pkgimage)
+{
     // verify that the linker resolved the symbols in this image against ourselves (libjulia-internal)
     void** (*get_jl_RTLD_DEFAULT_handle_addr)(void) = NULL;
     if (handle != jl_RTLD_DEFAULT_handle) {
@@ -3658,39 +3711,39 @@ static jl_image_buf_t get_image_buf(void *handle, int is_pkgimage)
             jl_error("Image file failed consistency check: maybe opened the wrong version?");
     }
 
+    jl_image_unpack_func_t **unpack;
+    jl_image_buf_t image = {
+        .kind = JL_IMAGE_KIND_SO,
+        .pointers = NULL,
+        .data = NULL,
+        .size = 0,
+        .base = 0,
+    };
+
     // verification passed, lookup the buffer pointers
-    if (jl_system_image_size == 0 || is_pkgimage) {
+    if (jl_image_unpack == NULL || is_pkgimage) {
         // in the usual case, the sysimage was not statically linked to libjulia-internal
         // look up the external sysimage symbols via the dynamic linker
-        jl_dlsym(handle, "jl_system_image_size", (void **)&plen, 1);
-        jl_dlsym(handle, "jl_system_image_data", (void **)&data, 1);
-        jl_dlsym(handle, "jl_image_pointers", (void**)&pointers, 1);
-    } else {
+        jl_dlsym(handle, "jl_image_unpack", (void **)&unpack, 1);
+    }
+    else {
         // the sysimage was statically linked directly against libjulia-internal
         // use the internal symbols
-        plen = &jl_system_image_size;
-        pointers = &jl_image_pointers;
-        data = &jl_system_image_data;
+        unpack = &jl_image_unpack;
     }
+    (*unpack)(handle, &image);
 
 #ifdef _OS_WINDOWS_
-    base = (intptr_t)handle;
+    image.base = (intptr_t)handle;
 #else
     Dl_info dlinfo;
-    if (dladdr((void*)pointers, &dlinfo) != 0)
-        base = (intptr_t)dlinfo.dli_fbase;
+    if (dladdr((void*)image.pointers, &dlinfo) != 0)
+        image.base = (intptr_t)dlinfo.dli_fbase;
     else
-        base = 0;
+        image.base = 0;
 #endif
 
-    return (jl_image_buf_t) {
-        .kind = JL_IMAGE_KIND_SO,
-        .handle = handle,
-        .pointers = pointers,
-        .data = data,
-        .size = *plen,
-        .base = base,
-    };
+    return image;
 }
 
 // Allow passing in a module handle directly, rather than a path
@@ -3969,7 +4022,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     reloc_t *relocs_base = (reloc_t*)&relocs.buf[0];
 
     s.s = &sysimg;
-    jl_read_reloclist(&s, s.link_ids_gctags, GC_OLD | GC_IN_IMAGE); // gctags
+    jl_read_reloclist(&s, s.link_ids_gctags, GC_OLD_MARKED | GC_IN_IMAGE); // gctags
     size_t sizeof_tags = ios_pos(&relocs);
     (void)sizeof_tags;
     jl_read_reloclist(&s, s.link_ids_relocs, 0); // general relocs
@@ -4095,7 +4148,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
             arraylist_push(&cleanup_list, (void*)obj);
         }
         if (tag == 1)
-            *pfld = (uintptr_t)newobj | GC_OLD | GC_IN_IMAGE;
+            *pfld = (uintptr_t)newobj | GC_OLD_MARKED | GC_IN_IMAGE;
         else
             *pfld = (uintptr_t)newobj;
         assert(!(image_base < (char*)newobj && (char*)newobj <= image_base + sizeof_sysimg));
