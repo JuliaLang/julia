@@ -1384,7 +1384,7 @@ JL_DLLEXPORT jl_value_t *jl_uncompress_argname_n(jl_value_t *syms, size_t i)
     return jl_nothing;
 }
 
-static inline uint32_t _take_u32(const char **ptr, int n_bytes)
+static inline uint32_t _take_u32(const char **ptr, int n_bytes) JL_NOTSAFEPOINT
 {
     uint8_t int8;
     uint16_t int16;
