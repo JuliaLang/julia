@@ -66,6 +66,37 @@ External links:
 - location holds the offset
 - loc/0 in relocs_list
 
+Glossary
+
+  Julia image (or just "an image")
+    Can be a single `.ji` file, a dynamic library, or a split `.ji` and dynamic
+    library.  Includes a heap image and, optionally, native code.
+
+  Heap image
+    Every Julia image has a section containing the serialized heap written by
+    `jl_save_system_image_to_stream`, referred to as the "heap image".
+
+  Non-incremental image (also a "system image")
+    A non-incremental image contains a standalone serialized heap.  The `-J`
+    command line argument specifies the non-incremental system image used for
+    booting Julia.  Outside of the bootstrapping process using a system image is
+    mandatory, though a default path is searched.
+
+  Incremental image
+    An incremental image is designed to be loaded into a process already
+    containing a Julia heap, so it contains relocations that must be fixed up to
+    refer to objects in the existing heap.  They are used to sped up package
+    loading.
+
+  Native image
+    A Julia image that contain native code in addition to the heap image is
+    called a "native image".
+
+  Package image
+    Usually refers to any incremental Julia image
+    (e.g. jl_restore_package_image_from_stream), but can also denote only
+    incremental native images, as in the `--pkgimages` command line flag.
+
 */
 #include <stdlib.h>
 #include <string.h>
