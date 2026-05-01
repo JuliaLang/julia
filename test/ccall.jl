@@ -1899,11 +1899,11 @@ end
     function cglobal45187fn()
         return cglobal((:fn, fn45187))
     end
-    @test unsafe_load(cglobal33413_ptrvar()) == 1
-    @test unsafe_load(cglobal33413_ptrinline()) == 1
+    @test_throws TypeError cglobal33413_ptrvar()
+    @test_throws TypeError cglobal33413_ptrinline()
     @test unsafe_load(cglobal33413_tupleliteral()) == 1
-    @test unsafe_load(convert(Ptr{Cint}, cglobal33413_ptrvar_notype())) == 1
-    @test unsafe_load(convert(Ptr{Cint}, cglobal33413_ptrinline_notype())) == 1
+    @test_throws TypeError cglobal33413_ptrvar_notype()
+    @test_throws TypeError cglobal33413_ptrinline_notype()
     @test unsafe_load(convert(Ptr{Cint}, cglobal33413_tupleliteral_notype())) == 1
     @test cglobal33413_literal() != C_NULL
     @test cglobal33413_literal_notype() != C_NULL

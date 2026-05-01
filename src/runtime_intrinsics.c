@@ -659,9 +659,6 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
     if (!jl_is_concrete_type(rt))
         jl_error("cglobal: type argument not concrete");
 
-    if (jl_is_pointer(v))
-        return jl_bitcast(rt, v);
-
     if (jl_is_tuple(v) && jl_nfields(v) == 1)
         v = jl_fieldref(v, 0);
 

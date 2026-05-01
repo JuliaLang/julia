@@ -612,7 +612,6 @@ static Value *julia_to_native(
 // --- parse :sym or (:sym, :lib) argument into address info ---
 static void interpret_cglobal_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out, jl_value_t *arg)
 {
-    Value *&jl_ptr = out.jl_ptr;
     const char *&f_name = out.f_name;
     const char *&f_lib = out.f_lib;
     jl_value_t *ptr = static_eval(ctx, arg);
@@ -658,10 +657,6 @@ static void interpret_cglobal_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &ou
             f_lib = jl_dlfind(f_name);
             out.f_name_expr = jl_new_struct(jl_quotenode_type, ptr);
             out.gcroot[0] = out.f_name_expr;
-        }
-        else if (jl_is_cpointer_type(jl_typeof(ptr))) {
-            uint64_t fptr = (uintptr_t)*(void(**)(void))jl_data_ptr(ptr);
-            jl_ptr = ConstantExpr::getIntToPtr(ConstantInt::get(ctx.types().T_size, fptr), ctx.types().T_ptr);
         }
         else if (jl_is_tuple(ptr) && jl_nfields(ptr) == 2) {
             jl_value_t *t0 = jl_fieldref(ptr, 0);
@@ -805,10 +800,7 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
         rt = (jl_value_t*)jl_voidpointer_type;
     }
     interpret_cglobal_symbol_arg(ctx, sym, args[1]);
-    if (sym.jl_ptr != NULL) {
-        res = sym.jl_ptr;
-    }
-    else if (sym.f_name_expr != NULL) {
+    if (sym.f_name_expr != NULL) {
         res = runtime_sym_lookup(ctx, sym, ctx.f);
     }
     else {
@@ -818,10 +810,7 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
         argv[0] = emit_expr(ctx, args[1]);
         if (nargs == 2)
             argv[1] = emit_expr(ctx, args[2]);
-        if (!jl_is_cpointer_type(argv[0].typ))
-            return emit_runtime_call(ctx, nargs == 1 ? JL_I::cglobal_auto : JL_I::cglobal, argv, nargs);
-        sym.jl_ptr = emit_unbox(ctx, ctx.types().T_ptr, voidpointer_update(ctx, argv[0]));
-        res = sym.jl_ptr;
+        return emit_runtime_call(ctx, nargs == 1 ? JL_I::cglobal_auto : JL_I::cglobal, argv, nargs);
     }
 
     JL_GC_POP();
