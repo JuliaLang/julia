@@ -206,8 +206,14 @@ JL_PRIVATE_LIBS-0 += libjulia-internal libjulia-codegen
 else ifeq ($(JULIA_BUILD_MODE),debug)
 JL_PRIVATE_LIBS-0 += libjulia-internal-debug libjulia-codegen-debug
 endif
+
+# BSD-3-Clause
+JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBSUITESPARSE) += libamd libcamd libccolamd libcolamd libsuitesparseconfig
+# LGPL-2.1+
+JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBSUITESPARSE) += libbtf libklu libldl
 ifeq ($(USE_GPL_LIBS), 1)
-JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBSUITESPARSE) += libamd libbtf libcamd libccolamd libcholmod libcolamd libklu libldl librbio libspqr libsuitesparseconfig libumfpack
+# GPL-2.0+
+ JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBSUITESPARSE) += libcholmod librbio libspqr libumfpack
 endif
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBBLASTRAMPOLINE) += libblastrampoline
 JL_PRIVATE_LIBS-$(USE_SYSTEM_PCRE) += libpcre2-8
