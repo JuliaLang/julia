@@ -153,12 +153,13 @@ mutable struct BackgroundPrecompileState
     detachable::Bool  # whether the monitor can be detached
     confirming::Symbol  # :none, :cancel, or :info — action awaiting Enter to confirm
     confirm_deadline::Float64  # time() deadline for confirmation
+    key_listening::Bool  # whether a key listener task is currently consuming stdin
 end
 Base.lock(f, bg::BackgroundPrecompileState) = lock(f, bg.lock)
 Base.lock(bg::BackgroundPrecompileState) = lock(bg.lock)
 Base.unlock(bg::BackgroundPrecompileState) = unlock(bg.lock)
 
-const BG = BackgroundPrecompileState(nothing, false, false, false, nothing, nothing, nothing, nothing, ReentrantLock(), Threads.Condition(), Channel{Int32}[], Dict{PkgId, Int}(), Set{PkgId}(), Threads.Condition(), Channel{PrecompileRequest}(Inf), false, false, :none, 0.0)
+const BG = BackgroundPrecompileState(nothing, false, false, false, nothing, nothing, nothing, nothing, ReentrantLock(), Threads.Condition(), Channel{Int32}[], Dict{PkgId, Int}(), Set{PkgId}(), Threads.Condition(), Channel{PrecompileRequest}(Inf), false, false, :none, 0.0, false)
 
 ## Constants and formatting utilities
 
@@ -1028,6 +1029,7 @@ const _confirm_messages = Dict{Symbol, String}(
 
 function keyboard_tip(s::BackgroundPrecompileState)
     s.monitoring || return "", :default
+    s.key_listening || return "", :default
     if s.confirming !== :none
         remaining = max(0, ceil(Int, s.confirm_deadline - time()))
         msg = get(_confirm_messages, s.confirming, string(s.confirming))
@@ -1041,9 +1043,12 @@ function keyboard_tip(s::BackgroundPrecompileState)
 end
 
 function monitor_background_precompile(io::IO = stderr, detachable::Bool = true, wait_for_pkg::Union{Nothing, PkgId} = nothing;
-                                       # disable key controls when not on the main task to avoid
-                                       # stealing stdin from the REPL
-                                       key_controls::Bool = current_task() === Base.roottask)
+                                       # Only enable key controls when this task "owns" stdin:
+                                       # the root task, or a task that opted in via task-local
+                                       # `:precompile_key_controls => true` (e.g. Pkg's REPLExt
+                                       # command task). See #61563, #61698.
+                                       key_controls::Bool = (current_task() === Base.roottask) ||
+                                           (get(task_local_storage(), :precompile_key_controls, false)::Bool))
     local completed_at::Union{Nothing, Float64}
     local task
 
@@ -1090,6 +1095,7 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
             @lock BG begin
                 BG.detachable = detachable
                 BG.confirming = :none
+                BG.key_listening = true
             end
             buffered_input = UInt8[]
             try
@@ -1192,7 +1198,10 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
                     end
                 end
                 Base.reseteof(stdin)
-                @lock BG BG.confirming = :none
+                @lock BG begin
+                    BG.confirming = :none
+                    BG.key_listening = false
+                end
                 unlock(stdin.raw_lock)
             end
         finally
