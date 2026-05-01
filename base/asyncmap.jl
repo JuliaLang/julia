@@ -176,9 +176,9 @@ function start_worker_task!(worker_tasks, exec_func, chnl, batch_size=nothing)
                     exec_func(exec_data...)
                 end
             end
-        catch e
+        catch
             close(chnl)
-            retval = capture_exception(e, catch_backtrace())
+            retval = capture_exception(current_exceptions())
         end
         retval
     end
@@ -258,7 +258,7 @@ function wait_done(itr::AsyncCollector, state::AsyncCollectorState)
     close(state.chnl)
 
     # wait for all tasks to finish
-    foreach(x->(v=fetch(x); isa(v, Exception) && throw(v)), state.worker_tasks)
+    foreach(x->(v=fetch(x); isnothing(v) || throw(v)), state.worker_tasks)
     empty!(state.worker_tasks)
 end
 
@@ -282,7 +282,7 @@ function iterate(itr::AsyncCollector, state::AsyncCollectorState)
         # Prefer throwing a worker exception over the put! failure.
         for t in state.worker_tasks
             v = fetch(t)
-            isa(v, Exception) && throw(v)
+            isnothing(v) || throw(v)
         end
         rethrow()
     end
