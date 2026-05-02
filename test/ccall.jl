@@ -2392,6 +2392,98 @@ end
     end
 end
 
+@testset "ccall and cglobal target forms" begin
+    # no library
+    rtld_strlen(s::String) = ccall(:strlen, Csize_t, (Cstring,), s)
+    # static library and name, vararg
+    staticlib_vararg(x::Int64) =
+        ccall((:test_reg_32_va, libccalltest), Int64, (Cint, Int64...), 1, x)
+    # no library, vararg
+    rtld_sprintf(buf::Vector{UInt8}, x::Int32) =
+        ccall(:sprintf, Cint, (Ptr{UInt8}, Cstring, Cint...), buf, "%d", x)
+    # static library and name
+    staticlib_uchar(x) = ccall((:testUcharX, libccalltest), Int32, (UInt8,), x % UInt8)
+
+    @test rtld_strlen("abc") == 3
+    @test rtld_strlen("") == 0
+    @test staticlib_vararg(Int64(17)) == 17
+    let buf = zeros(UInt8, 64)
+        n = rtld_sprintf(buf, Int32(99))
+        @test n == 2 && unsafe_string(pointer(buf), n) == "99"
+    end
+    @test staticlib_uchar(3) == 1
+    @test staticlib_uchar(2) == 0
+
+
+    # dynamic name
+    global dyn_fn = :testUcharX
+    dynamic_uchar(x) = ccall((dyn_fn, libccalltest), Int32, (UInt8,), x % UInt8)
+    @test dynamic_uchar(3) == 1
+    @test dynamic_uchar(2) == 0
+
+    # a symbol of libjulia-internal
+    internal_world_counter() = ccall(:jl_get_world_counter, UInt, ())
+    @test internal_world_counter() == Base.get_world_counter()
+
+    # dynamic library
+    global dyn_lib = libccalltest
+    dynamic_lib_uchar(x) = ccall((:testUcharX, dyn_lib), Int32, (UInt8,), x % UInt8)
+    @test dynamic_lib_uchar(3) == 1
+
+    # pointer
+    let uchar_ptr = Libdl.dlsym(Libdl.dlopen(libccalltest), :testUcharX)
+        ccall_via_ptr(p::Ptr{Cvoid}, x) = ccall(p, Int32, (UInt8,), x % UInt8)
+        @test ccall_via_ptr(uchar_ptr, 3) == 1
+    end
+
+    # cglobal: static library and name
+    cglob_static() = cglobal((:abi_probe, libccalltest))
+    @test cglob_static() isa Ptr{Nothing}
+    @test cglob_static() != C_NULL
+    @test cglob_static() == Libdl.dlsym(Libdl.dlopen(libccalltest), :abi_probe)
+
+    # cglobal: dynamic library
+    cglob_dyn_lib() = cglobal((:abi_probe, dyn_lib))
+    @test cglob_dyn_lib() == cglob_static()
+
+    # cglobal: dynamic name
+    global dyn_cglobal_sym = :abi_probe
+    cglob_dyn_name() = cglobal((dyn_cglobal_sym, libccalltest))
+    @test cglob_dyn_name() == cglob_static()
+
+    # cglobal: pointer
+    let p = cglob_static()
+        cglob_via_ptr(p::Ptr{Nothing}) = cglobal(p)
+        @test cglob_via_ptr(p) == p
+    end
+
+    # the error of a symbol that is not found unwinds through the resolver
+    @noinline missing_symbol_caller() =
+        ccall((:definitely_not_a_ccalltest_symbol, libccalltest), Cint, ())
+    let bt = try
+            missing_symbol_caller()
+            nothing
+        catch
+            stacktrace(catch_backtrace())
+        end
+        @test bt !== nothing
+        @test any(frame -> frame.func === :missing_symbol_caller, bt)
+    end
+end
+
+@testset "resolving a foreign symbol leaves errno alone" begin
+    # The first call resolves the symbol, loading libccalltest by name: probing
+    # the (missing) first directory of the load path sets errno.
+    dir = dirname(Libdl.dlpath(libccalltest))
+    script = """
+        using Libdl
+        append!(Libdl.DL_LOAD_PATH, [$(repr(joinpath(dir, "nonexistent"))), $(repr(dir))])
+        f() = (Libc.errno(1234); ccall((:testUcharX, "libccalltest"), Int32, (UInt8,), 3); Libc.errno())
+        print(f())
+        """
+    @test read(`$(Base.julia_cmd()) --startup-file=no -e $script`, String) == "1234"
+end
+
 module Test57749
 using Test, Zstd_jll
 const prefix = "Zstd version: "
