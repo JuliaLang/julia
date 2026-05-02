@@ -1042,7 +1042,10 @@ function keyboard_tip(s::BackgroundPrecompileState)
     end
 end
 
-function monitor_background_precompile(io::IO = stderr, detachable::Bool = true, wait_for_pkg::Union{Nothing, PkgId} = nothing)
+function monitor_background_precompile(io::IO = stderr, detachable::Bool = true, wait_for_pkg::Union{Nothing, PkgId} = nothing;
+                                       key_controls::Union{Bool, Nothing} = nothing)
+    # By default only enable key controls in the foreground task (see #61563, #61698).
+    key_controls = @something key_controls current_task() === something(Base.foreground_task(), Base.roottask)
     local completed_at::Union{Nothing, Float64}
     local task
 
@@ -1082,9 +1085,8 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
     interrupt_requested = Ref(false)
 
     # Start a task to listen for keypresses. Skipped if another reader already holds
-    # raw mode on stdin (e.g. the REPL's LineEdit prompt loop, or runtests.jl's
-    # stdin_monitor) so we don't steal stdin from them.
-    key_task = if stdin isa Base.TTY
+    # raw mode on stdin (e.g. runtests.jl's stdin_monitor).
+    key_task = if key_controls && stdin isa Base.TTY
         Threads.@spawn :samepool try
             trylock(stdin.raw_lock) || return
             @lock BG begin

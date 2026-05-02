@@ -3027,12 +3027,6 @@ function prompt!(term::TextTerminal, prompt::ModalInterface, s::MIState = init_s
         end
         status ∈ (:ok, :ignore) || break
     end
-    # Take exclusive control of stdin's raw mode while the prompt is active so
-    # that other readers (e.g. the precompile keyboard menu listener) won't try
-    # to read from stdin concurrently. See JuliaLang/julia#61698.
-    in_stream = isdefined(term, :in_stream) ? term.in_stream : nothing
-    raw_lock = in_stream isa Base.TTY ? in_stream.raw_lock : nothing
-    raw_lock === nothing || lock(raw_lock)
     raw!(term, true)
     enable_bracketed_paste(term)
     try
@@ -3085,7 +3079,6 @@ function prompt!(term::TextTerminal, prompt::ModalInterface, s::MIState = init_s
         put!(s.async_channel, Returns(:done))
         wait(t1)
         raw!(term, false) && disable_bracketed_paste(term)
-        raw_lock === nothing || unlock(raw_lock)
     end
     # unreachable
 end
