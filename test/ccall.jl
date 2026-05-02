@@ -1911,6 +1911,19 @@ end
     @test_throws(TypeError, cglobal45187fn())
     @test_throws(TypeError, @eval cglobal(nothing))
     @test_throws(TypeError, @eval cglobal((:fn, fn45187)))
+
+    # method-definition-time validation of literal name tuples (#59165 follow-up)
+    @test_throws ErrorException @eval cglobal((:a, :b, :c))
+    @test_throws TypeError @eval cglobal(())
+    @test_throws TypeError @eval cglobal((1,))
+
+    # Runtime-resolved type argument: cglobal(name, T) lowers to bitcast(Ptr{T}, foreignglobal(name)),
+    # so T may be any runtime expression (including one that depends on local variables).
+    function cglobal_runtime_type(T)
+        return cglobal((:global_var, libccalltest), T)
+    end
+    @test cglobal_runtime_type(Cint) isa Ptr{Cint}
+    @test unsafe_load(cglobal_runtime_type(Cint)) == 1
 end
 
 @testset "ccall_effects" begin
@@ -1944,7 +1957,7 @@ end
 for A in (reinterpret(UInt, [0]), reshape([0, 0], 1, 2))
     @test pointer(A) == Base.unsafe_convert(Ptr{Cvoid}, A) == Base.unsafe_convert(Ptr{Int}, A)
 end
-# Cglobal with non-static symbols doesn't error
+# Cglobal with non-static symbols errors, just like ccall
 function cglobal_non_static1()
     sym = (:global_var, libccalltest)
     cglobal(sym)
@@ -1952,8 +1965,8 @@ end
 global the_sym = (:global_var, libccalltest)
 cglobal_non_static2() = cglobal(the_sym)
 
-@test isa(cglobal_non_static1(), Ptr)
-@test isa(cglobal_non_static2(), Ptr)
+@test_throws TypeError cglobal_non_static1()
+@test_throws TypeError cglobal_non_static2()
 
 @generated function generated_world_counter()
     return :($(Base.get_world_counter()))

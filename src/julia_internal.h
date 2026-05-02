@@ -2056,6 +2056,7 @@ JL_DLLEXPORT int jl_isabspath(const char *in) JL_NOTSAFEPOINT;
     XX(export_sym) \
     XX(force_compile_sym) \
     XX(foreigncall_sym) \
+    XX(foreignglobal_sym) \
     XX(gc_preserve_begin_sym) \
     XX(gc_preserve_end_sym) \
     XX(generated_only_sym) \

@@ -1025,7 +1025,6 @@ function call_sig(ir::IRCode, stmt::Expr)
     has_free_typevars(ft) && return nothing
     f = singleton_type(ft)
     f === Core.Intrinsics.llvmcall && return nothing
-    f === Core.Intrinsics.cglobal && return nothing
     argtypes = Vector{Any}(undef, length(stmt.args))
     argtypes[1] = ft
     for i = (offset+1):length(stmt.args)

@@ -6774,6 +6774,9 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
     else if (head == jl_foreigncall_sym) {
         return emit_ccall(ctx, args, jl_array_dim0(ex->args));
     }
+    else if (head == jl_foreignglobal_sym) {
+        return emit_cglobal(ctx, args, jl_array_dim0(ex->args));
+    }
     else if (head == jl_cfunction_sym) {
         assert(nargs == 5);
         jl_cgval_t fexpr_val = emit_expr(ctx, args[1]);

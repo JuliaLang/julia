@@ -170,11 +170,10 @@ let code = Any[
     @test Compiler.verify_ir(ir) === nothing
 end
 
-# Test that the verifier doesn't choke on cglobals (which aren't linearized)
+# Test that the verifier accepts a syntactic-tuple first argument to :foreignglobal (cglobal)
 let code = Any[
-        Expr(:call, GlobalRef(Main, :cglobal),
-                    Expr(:call, Core.tuple, :(:c)), Nothing),
-                    Compiler.ReturnNode()
+        Expr(:foreignglobal, Expr(:tuple, QuoteNode(:c))),
+        Compiler.ReturnNode()
     ]
     ir = make_ircode(code)
     @test Compiler.verify_ir(ir) === nothing

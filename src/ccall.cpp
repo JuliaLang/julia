@@ -609,82 +609,7 @@ static Value *julia_to_native(
     return slot;
 }
 
-// --- parse :sym or (:sym, :lib) argument into address info ---
-static void interpret_cglobal_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out, jl_value_t *arg)
-{
-    Value *&jl_ptr = out.jl_ptr;
-    const char *&f_name = out.f_name;
-    const char *&f_lib = out.f_lib;
-    jl_value_t *ptr = static_eval(ctx, arg);
-    if (ptr == NULL) {
-        if (jl_is_expr(arg) && ((jl_expr_t*)arg)->head == jl_call_sym && jl_expr_nargs(arg) == 3 &&
-            jl_is_globalref(jl_exprarg(arg,0)) && jl_globalref_mod(jl_exprarg(arg,0)) == jl_core_module &&
-            jl_globalref_name(jl_exprarg(arg,0)) == jl_symbol("tuple")) {
-            // attempt to interpret a non-constant 2-tuple expression as (func_name, lib_name)
-            out.f_name_expr = jl_exprarg(arg, 1);
-            out.f_lib_expr = jl_exprarg(arg, 2);
-            jl_value_t *name_val = static_eval(ctx, out.f_name_expr);
-            out.gcroot[0] = name_val;
-            if (name_val) {
-                if (jl_is_symbol(name_val))
-                    f_name = jl_symbol_name((jl_sym_t*)name_val);
-                else if (jl_is_string(name_val))
-                    f_name = jl_string_data(name_val);
-            }
-            jl_value_t *lib_val = static_eval(ctx, out.f_lib_expr);
-            out.gcroot[1] = lib_val;
-            if (lib_val) {
-                if (jl_is_symbol(lib_val))
-                    f_lib = jl_symbol_name((jl_sym_t*)lib_val);
-                else if (jl_is_string(lib_val))
-                    f_lib = jl_string_data(lib_val);
-            }
-        }
-    }
-    else {
-        if (jl_is_tuple(ptr) && jl_nfields(ptr) == 1) {
-            ptr = jl_fieldref(ptr, 0);
-            out.gcroot[0] = ptr;
-        }
-
-        if (jl_is_symbol(ptr))
-            f_name = jl_symbol_name((jl_sym_t*)ptr);
-        else if (jl_is_string(ptr))
-            f_name = jl_string_data(ptr);
-
-        if (f_name != NULL) {
-            // just symbol, default to JuliaDLHandle
-            // will look in process symbol table
-            f_lib = jl_dlfind(f_name);
-            out.f_name_expr = jl_new_struct(jl_quotenode_type, ptr);
-            out.gcroot[0] = out.f_name_expr;
-        }
-        else if (jl_is_cpointer_type(jl_typeof(ptr))) {
-            uint64_t fptr = (uintptr_t)*(void(**)(void))jl_data_ptr(ptr);
-            jl_ptr = ConstantExpr::getIntToPtr(ConstantInt::get(ctx.types().T_size, fptr), ctx.types().T_ptr);
-        }
-        else if (jl_is_tuple(ptr) && jl_nfields(ptr) == 2) {
-            jl_value_t *t0 = jl_fieldref(ptr, 0);
-            if (jl_is_symbol(t0))
-                f_name = jl_symbol_name((jl_sym_t*)t0);
-            else if (jl_is_string(t0))
-                f_name = jl_string_data(t0);
-
-            jl_value_t *t1 = jl_fieldref(ptr, 1);
-            if (jl_is_symbol(t1))
-                f_lib = jl_symbol_name((jl_sym_t*)t1);
-            else if (jl_is_string(t1))
-                f_lib = jl_string_data(t1);
-
-            out.f_name_expr = jl_new_struct(jl_quotenode_type, t0);
-            out.gcroot[0] = out.f_name_expr;
-            out.f_lib_expr = jl_new_struct(jl_quotenode_type, t1);
-            out.gcroot[1] = out.f_lib_expr;
-        }
-    }
-}
-
-static void interpret_ccall_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out, jl_value_t *arg)
+static void interpret_foreignsymbol(jl_codectx_t &ctx, native_sym_arg_t &out, jl_value_t *arg)
 {
     // Initialize all fields to safe defaults
     out.f_name = nullptr;
@@ -782,51 +707,23 @@ static jl_cgval_t emit_runtime_call(jl_codectx_t &ctx, JL_I::intrinsic f, ArrayR
 static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
 {
     ++EmittedCGlobals;
-    JL_NARGS(cglobal, 1, 2);
-    jl_value_t *rt = NULL;
-    Value *res;
-    native_sym_arg_t sym = {};
-    JL_GC_PUSH3(&rt, &sym.gcroot[0], &sym.gcroot[1]);
-
-    if (nargs == 2) {
-        rt = static_eval(ctx, args[2]);
-        if (rt == NULL) {
-            JL_GC_POP();
-            jl_cgval_t argv[2];
-            argv[0] = emit_expr(ctx, args[1]);
-            argv[1] = emit_expr(ctx, args[2]);
-            return emit_runtime_call(ctx, JL_I::cglobal, argv, nargs);
-        }
-
-        JL_TYPECHK(cglobal, type, rt);
-        rt = (jl_value_t*)jl_apply_type1((jl_value_t*)jl_pointer_type, rt);
+    assert(nargs == 1);
+    jl_value_t *arg = args[0];
+    if (jl_is_expr(arg) && ((jl_expr_t*)arg)->head == jl_symbol("tuple")) {
+        // Name lookup form
+        native_sym_arg_t sym = {};
+        JL_GC_PUSH2(&sym.gcroot[0], &sym.gcroot[1]);
+        interpret_foreignsymbol(ctx, sym, arg);
+        Value *res = runtime_sym_lookup(ctx, sym, ctx.f);
+        JL_GC_POP();
+        return mark_julia_type(ctx, res, false, (jl_value_t*)jl_voidpointer_type);
+    } else {
+        // Pointer expression form: typecheck as Ptr with a cglobal-specific error,
+        // then reinterpret to Ptr{Cvoid}.
+        jl_cgval_t pval = emit_expr(ctx, arg);
+        emit_cpointercheck(ctx, pval, "cglobal: first argument not a pointer or valid constant expression");
+        return voidpointer_update(ctx, pval);
     }
-    else {
-        rt = (jl_value_t*)jl_voidpointer_type;
-    }
-    interpret_cglobal_symbol_arg(ctx, sym, args[1]);
-    if (sym.jl_ptr != NULL) {
-        res = sym.jl_ptr;
-    }
-    else if (sym.f_name_expr != NULL) {
-        res = runtime_sym_lookup(ctx, sym, ctx.f);
-    }
-    else {
-        // Fall back to runtime intrinsic
-        jl_cgval_t argv[2];
-        argv[0] = emit_expr(ctx, args[1]);
-        if (nargs == 2)
-            argv[1] = emit_expr(ctx, args[2]);
-        if (!jl_is_cpointer_type(argv[0].typ)) {
-            JL_GC_POP();
-            return emit_runtime_call(ctx, nargs == 1 ? JL_I::cglobal_auto : JL_I::cglobal, argv, nargs);
-        }
-        sym.jl_ptr = emit_unbox(ctx, ctx.types().T_ptr, voidpointer_update(ctx, argv[0]));
-        res = sym.jl_ptr;
-    }
-
-    JL_GC_POP();
-    return mark_julia_type(ctx, res, false, rt);
 }
 
 // --- code generator for llvmcall ---
@@ -1563,7 +1460,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     bool llvmcall = false;
     std::tie(cc, llvmcall) = convert_cconv(cc_sym);
 
-    interpret_ccall_symbol_arg(ctx, symarg, args[1]);
+    interpret_foreignsymbol(ctx, symarg, args[1]);
     const char *&f_name = symarg.f_name;
     const char *&f_lib = symarg.f_lib;
 

@@ -664,10 +664,10 @@ function analyze_variables!(ctx, ex)
         return
     elseif !needs_resolution(ex)
         return
-    elseif k == K"static_eval" || k == K"foreigncall_arg1"
+    elseif k == K"static_eval" || k == K"foreignsymbol"
         badvar = find_any_local_binding(ctx, ex[1])
         if !isnothing(badvar)
-            default = k == K"foreigncall_arg1" ?
+            default = k == K"foreignsymbol" ?
                 "function name and library expression" : "syntax"
             name_hint = getmeta(ex, :name_hint, default)::String
             throw(LoweringError(badvar, "$(name_hint) cannot reference local variable"))

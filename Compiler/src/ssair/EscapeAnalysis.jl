@@ -13,7 +13,7 @@ export
 using Base: Base
 
 # imports
-import Base: ==, copy, getindex, setindex!
+import Base: ==, !=, copy, getindex, setindex!
 # usings
 using Core
 using Core: Builtin, IntrinsicFunction, SimpleVector, ifelse, sizeof
@@ -584,6 +584,8 @@ function analyze_escapes(ir::IRCode, nargs::Int, 𝕃ₒ::AbstractLattice, get_e
                     escape_new!(astate, pc, stmt.args)
                 elseif head === :foreigncall
                     escape_foreigncall!(astate, pc, stmt.args)
+                elseif head === :foreignglobal
+                    escape_foreignglobal!(astate, pc, stmt.args)
                 elseif head === :throw_undef_if_not # XXX when is this expression inserted ?
                     add_escape_change!(astate, stmt.args[1], ThrownEscape(pc))
                 elseif is_meta_expr_head(head)
@@ -1020,6 +1022,21 @@ function from_interprocedural(argescape::ArgEscapeInfo, pc::Int)
     AliasInfo = true
     Liveness = BitSet(pc)
     return EscapeInfo(#=Analyzed=#true, #=ReturnEscape=#false, ThrownEscape, AliasInfo, Liveness)
+end
+
+# the only possible 'escape' here is really just that it can return a
+# bitcast of its one (pointer) argument, but be conservative anyway
+function escape_foreignglobal!(astate::AnalysisState, pc::Int, args::Vector{Any})
+    nargs = length(args)
+    if nargs != 1
+        # invalid foreignglobal, no escape
+        return
+    end
+    name = args[1]
+    if !isexpr(name, :tuple)
+        add_escape_change!(astate, name, name_info)
+        add_liveness_change!(astate, name, pc)
+    end
 end
 
 # escape every argument `(args[6:5+length(args[3])])` and the name `args[1]`

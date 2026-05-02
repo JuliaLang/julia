@@ -357,6 +357,15 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
              head == jl_aliasscope_sym || head == jl_popaliasscope_sym || head == jl_inline_sym || head == jl_noinline_sym) {
         return jl_nothing;
     }
+    else if (head == jl_symbol("tuple")) {
+        jl_value_t **argv;
+        JL_GC_PUSHARGS(argv, nargs);
+        for (size_t i = 0; i < nargs; i++)
+            argv[i] = eval_value(args[i], s);
+        jl_value_t *v = jl_f_tuple(NULL, argv, nargs);
+        JL_GC_POP();
+        return v;
+    }
     else if (head == jl_gc_preserve_begin_sym || head == jl_gc_preserve_end_sym) {
         // The interpreter generally keeps values that were assigned in this scope
         // rooted. If the interpreter learns to be more aggressive here, we may
@@ -368,6 +377,14 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     }
     else if (head == jl_foreigncall_sym) {
         jl_error("`ccall` requires the compiler");
+    }
+    else if (head == jl_foreignglobal_sym) {
+        assert(nargs == 1);
+        jl_value_t *v = eval_value(jl_exprarg(ex, 0), s);
+        JL_GC_PUSH1(&v);
+        jl_value_t *r = jl_cglobal_auto(v);
+        JL_GC_POP();
+        return r;
     }
     else if (head == jl_cfunction_sym) {
         jl_error("`cfunction` requires the compiler");
