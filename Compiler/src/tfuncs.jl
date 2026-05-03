@@ -379,8 +379,8 @@ end
 @nospecs function egal_tfunc(𝕃::ConstsLattice, x, y)
     if isa(x, Const) && isa(y, Const)
         return Const(x.val === y.val)
-    elseif (isa(x, Const) && y === typeof(x.val) && issingletontype(x)) ||
-           (isa(y, Const) && x === typeof(y.val) && issingletontype(y))
+    elseif (isa(x, Const) && y === typeof(x.val) && issingletontype(y)) ||
+           (isa(y, Const) && x === typeof(y.val) && issingletontype(x))
         return Const(true)
     end
     return egal_tfunc(widenlattice(𝕃), x, y)
@@ -2532,6 +2532,20 @@ function isdefined_effects(𝕃::AbstractLattice, argtypes::Vector{Any})
     return Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly)
 end
 
+function is_relocatable_ptr_field(ty, fld)
+    # Special case: these fields are not mutated, but they are the only native pointer fields
+    # that have relocations in staticdata.c, so they can change between processes.
+    if hasintersect(widenconst(ty), Core.TypeName) &&
+        (Const(:constfields) ⊑ fld || Const(fieldindex(Core.TypeName, :constfields)) ⊑ fld ||
+        Const(:atomicfields) ⊑ fld || Const(fieldindex(Core.TypeName, :atomicfields)) ⊑ fld)
+        return true
+    elseif hasintersect(widenconst(ty), DataType) &&
+        (Const(:layout) ⊑ fld || Const(fieldindex(DataType, :layout)) ⊑ fld)
+        return true
+    end
+    return false
+end
+
 function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospecialize(rt))
     length(argtypes) < 2 && return EFFECTS_THROWS
     obj = argtypes[1]
@@ -2543,8 +2557,12 @@ function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospeci
             noub=ALWAYS_FALSE)
     end
     # :consistent if the argtype is immutable
-    consistent = (is_immutable_argtype(obj) || is_mutation_free_argtype(obj)) ?
-        ALWAYS_TRUE : CONSISTENT_IF_INACCESSIBLEMEMONLY
+    if is_relocatable_ptr_field(argtypes[1], argtypes[2])
+        consistent = ALWAYS_FALSE
+    else
+        consistent = (is_immutable_argtype(obj) || is_mutation_free_argtype(obj)) ?
+            ALWAYS_TRUE : CONSISTENT_IF_INACCESSIBLEMEMONLY
+    end
     noub = ALWAYS_TRUE
     bcheck = getfield_boundscheck(argtypes)
     nothrow = getfield_nothrow(𝕃, argtypes, bcheck)
@@ -2561,7 +2579,7 @@ function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospeci
             noub = ALWAYS_FALSE
         end
     end
-    if hasintersect(widenconst(obj), Module)
+    if hasintersect(widenconst(obj), Module) || is_relocatable_ptr_field(argtypes[1], argtypes[2])
         # Modeled more precisely in abstract_eval_getglobal
         inaccessiblememonly = ALWAYS_FALSE
     elseif is_mutation_free_argtype(obj)

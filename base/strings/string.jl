@@ -579,8 +579,10 @@ end
         @inbounds isvalid(s, i) || string_index_err(s, i)
         @inbounds isvalid(s, j) || string_index_err(s, j)
     end
-    j = nextind(s, j) - 1
-    n = j - i + 1
+    # Safety: The boundscheck checked r is inbounds in s,
+    # and since we also checked r is not empty, j must be inbounds in s
+    j = @inbounds nextind(s, j) - 1
+    n = (j - i + 1) % UInt
     ss = _string_n(n)
     GC.@preserve s ss unsafe_copyto!(pointer(ss), pointer(s, i), n)
     return ss
