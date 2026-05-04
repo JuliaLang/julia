@@ -558,7 +558,7 @@ julia> nextind("α", 1, 2)
 ```
 """
 nextind(s::AbstractString, i::Integer, n::Integer) = nextind(s, Int(i)::Int, Int(n)::Int)
-nextind(s::AbstractString, i::Integer)             = nextind(s, Int(i)::Int)
+nextind(s::AbstractString, i::Integer)             = nextind(s, Int(i)::Int, 1)
 nextind(s::AbstractString, i::Int)                 = nextind(s, i, 1)
 
 function nextind(s::AbstractString, i::Int, n::Int)

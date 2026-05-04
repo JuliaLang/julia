@@ -72,6 +72,10 @@ x^42.0
 #---------------------
 LoweringError:
 #= line 1 =# - malformed `call`
+Expression:
+  (call)
+Containing expressions:
+  (call)
 
 ########################################
 # Simple broadcast
@@ -352,7 +356,7 @@ ccall((:strlen, libc), Csize_t, (Cstring,), "asdfg")
 1   TestMod.Cstring
 2   (call top.cconvert %₁ "asdfg")
 3   (call top.unsafe_convert %₁ %₂)
-4   (foreigncall (static_eval (tuple :strlen TestMod.libc)) (static_eval TestMod.Csize_t) (static_eval (call core.svec TestMod.Cstring)) 0 :ccall %₃ %₂)
+4   (foreigncall (foreigncall_arg1 (tuple-p (inert strlen) TestMod.libc)) (static_eval TestMod.Csize_t) (static_eval (call core.svec TestMod.Cstring)) 0 :ccall %₃ %₂)
 5   (return %₄)
 
 ########################################
@@ -500,11 +504,15 @@ ccall(:foo, Csize_t, (Cstring..., Cstring...), "asdfg", "blah")
 
 ########################################
 # cglobal special support for (sym, lib) tuple
+# unlike flisp we outline the tuple and allow constant propagation to put it
+# back before codegen generates code for `cglobal`
 cglobal((:sym, lib), Int)
 #---------------------
-1   TestMod.Int
-2   (call core.cglobal (static_eval (tuple :sym TestMod.lib)) %₁)
-3   (return %₂)
+1   TestMod.lib
+2   (call core.tuple :sym %₁)
+3   TestMod.Int
+4   (call (static_eval TestMod.cglobal) %₂ %₃)
+5   (return %₄)
 
 ########################################
 # cglobal - non-tuple expressions in first arg are lowered as normal
@@ -513,20 +521,8 @@ cglobal(f(), Int)
 1   TestMod.f
 2   (call %₁)
 3   TestMod.Int
-4   (call core.cglobal %₂ %₃)
+4   (call (static_eval TestMod.cglobal) %₂ %₃)
 5   (return %₄)
-
-########################################
-# Error: cglobal with library name referencing local variable
-let func="myfunc"
-    cglobal((func, "somelib"), Int)
-end
-#---------------------
-LoweringError:
-let func="myfunc"
-    cglobal((func, "somelib"), Int)
-#            └──┘ ── function name and library expression cannot reference local variable
-end
 
 ########################################
 # Error: cglobal too many arguments
@@ -542,7 +538,7 @@ cglobal = 10
 #---------------------
 LoweringError:
 cglobal = 10
-└─────┘ ── invalid assignment location
+└─────┘ ── invalid syntax in left-hand side of assignment
 
 ########################################
 # Error: assigning to `ccall`
@@ -550,7 +546,7 @@ ccall = 10
 #---------------------
 LoweringError:
 ccall = 10
-└───┘ ── invalid assignment location
+└───┘ ── invalid syntax in left-hand side of assignment
 
 ########################################
 # Error: assigning to `var"ccall"`
@@ -558,7 +554,7 @@ var"ccall" = 10
 #---------------------
 LoweringError:
 var"ccall" = 10
-#   └───┘ ── invalid assignment location
+#   └───┘ ── invalid syntax in left-hand side of assignment
 
 ########################################
 # Error: Invalid function name ccall
@@ -567,7 +563,7 @@ end
 #---------------------
 LoweringError:
 function ccall()
-#        └───┘ ── Invalid function name
+#        └───┘ ── ccall is a reserved identifier
 end
 
 ########################################
@@ -577,7 +573,7 @@ end
 #---------------------
 LoweringError:
 function A.ccall()
-#        └─────┘ ── Invalid function name
+#          └───┘ ── ccall is a reserved identifier
 end
 
 ########################################
@@ -587,7 +583,7 @@ end
 #---------------------
 LoweringError:
 function ccall{<:T}()
-#        └───┘ ── Invalid function name
+#        └───┘ ── ccall is a reserved identifier
 end
 
 ########################################

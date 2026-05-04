@@ -905,7 +905,7 @@ bool GCChecker::isSafepoint(const CallEvent &Call, CheckerContext &C) const {
     while (DC) {
       // Anything in llvm or std is not a safepoint
       if (const NamespaceDecl *NDC = dyn_cast<NamespaceDecl>(DC))
-        if (NDC->getName() == "llvm" || NDC->getName() == "std")
+        if (NDC->getName() == "llvm" || NDC->getName() == "std" || NDC->getName() == "tp")
           return false;
       DC = DC->getParent();
     }

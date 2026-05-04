@@ -1202,6 +1202,19 @@ end
 (f::Fix{1})(arg; kws...) = f.f(f.x, arg; kws...)
 (f::Fix{2})(arg; kws...) = f.f(arg, f.x; kws...)
 
+function Base.show(io::IO, fix::Fix{N}) where {N}
+    constr = Fix{N}
+    callable = fix.f
+    fixed_argument = fix.x
+    show(io, constr)
+    print(io, '(')
+    show(io, callable)
+    print(io, ',')
+    print(io, ' ')
+    show(io, fixed_argument)
+    print(io, ')')
+end
+
 """
 Alias for `Fix{1}`. See [`Fix`](@ref Base.Fix).
 """
@@ -1369,23 +1382,18 @@ in(x, itr::Any) = any(==(x), itr)
 
 # Specialized variant of in for Tuple, which can generate typed comparisons for each element
 # of the tuple, skipping values that are statically known to be != at compile time.
-in(x, itr::Tuple) = _in_tuple(x, itr, false)
+in(x, itr::Tuple) = _in_tuple(x, itr)
+
 # This recursive function will be unrolled at compiletime, and will not generate separate
 # llvm-compiled specializations for each step of the recursion.
-function _in_tuple(x, @nospecialize(itr::Tuple), anymissing::Bool)
+function _in_tuple(x, @nospecialize(itr::Tuple), result = false)
     @inline
-    # Base case
-    if isempty(itr)
-        return anymissing ? missing : false
-    end
-    # Recursive case
+    isempty(itr) && return result
     v = (itr[1] == x)
-    if ismissing(v)
-        anymissing = true
-    elseif v
+    if v === true
         return true
     end
-    return _in_tuple(x, tail(itr), anymissing)
+    return _in_tuple(x, tail(itr), result | v)
 end
 
 # fallback to the loop implementation after some number of arguments to avoid inference blowup

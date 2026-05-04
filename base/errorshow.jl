@@ -1241,6 +1241,15 @@ end
 
 Experimental.register_error_hint(fielderror_listfields_hint_handler, FieldError)
 
+function apply_type_unionall_hint_handler(io, ex)
+    @nospecialize
+    if ex.func === :apply_type && ex.expected === UnionAll
+        print(io, "\nHint: `", ex.got, "` takes no type parameters.")
+    end
+end
+
+Experimental.register_error_hint(apply_type_unionall_hint_handler, TypeError)
+
 function UndefVarError_hint(io::IO, ex::UndefVarError)
     var = ex.var
     if isdefined(ex, :scope)

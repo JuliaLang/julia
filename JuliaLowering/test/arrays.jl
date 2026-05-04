@@ -1,7 +1,5 @@
 using Test, JuliaLowering
 
-@testset "Array syntax" begin
-
 test_mod = Module()
 
 # Test that two array element types are equal and that they are also equal
@@ -158,5 +156,3 @@ let var"end" = [1,2,3], y = [7,8,9]
     y[var"end"[var"end"]]
 end
 """) === 9
-
-end # @testset "Array syntax" begin

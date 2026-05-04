@@ -1,7 +1,7 @@
 function writeexp(buf, pos, v::T,
     precision=-1, plus=false, space=false, hash=false,
     expchar=UInt8('e'), decchar=UInt8('.'), trimtrailingzeros=false) where {T <: Base.IEEEFloat}
-    @assert 0 < pos <= length(buf)
+    @assert 0 < pos <= length(buf) "invalid pos"
     startpos = pos
     x = Float64(v)
     pos = append_sign(x, plus, space, buf, pos)

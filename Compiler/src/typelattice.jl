@@ -4,9 +4,9 @@
 # structs/constants #
 #####################
 
-# N.B.: Const/PartialStruct/InterConditional are defined in Core, to allow them to be used
-# inside the global code cache.
-import Core: Const, InterConditional, PartialStruct
+# N.B.: Const/PartialStruct/InterConditional/InterMustAlias are defined in Core,
+# to allow them to be used inside the global code cache.
+import Core: Const, InterConditional, PartialStruct, InterMustAlias
 
 function may_form_limited_typ(@nospecialize(aty), @nospecialize(bty), @nospecialize(xty))
     if aty isa LimitedAccuracy
@@ -110,32 +110,11 @@ end
 MustAlias(var::SlotNumber, ssadef::Int, @nospecialize(vartyp), fldidx::Int, @nospecialize(fldtyp)) =
     MustAlias(slot_id(var), ssadef, vartyp, fldidx, fldtyp)
 
-"""
-    alias::InterMustAlias
-
-This lattice element used in a very similar way as `InterConditional`, but corresponds to `MustAlias`.
-"""
-struct InterMustAlias
-    slot::Int
-    vartyp::Any
-    fldidx::Int
-    fldtyp::Any
-    function InterMustAlias(slot::Int, @nospecialize(vartyp), fldidx::Int, @nospecialize(fldtyp))
-        assert_nested_slotwrapper(vartyp)
-        assert_nested_slotwrapper(fldtyp)
-        # @assert !isalreadyconst(vartyp) "vartyp is already const"
-        # @assert !isalreadyconst(fldtyp) "fldtyp is already const"
-        limited = may_form_limited_typ(vartyp, fldtyp, fldtyp)
-        limited !== nothing && return limited
-        return new(slot, vartyp, fldidx, fldtyp)
-    end
-end
-InterMustAlias(var::SlotNumber, @nospecialize(vartyp), fldidx::Int, @nospecialize(fldtyp)) =
-    InterMustAlias(slot_id(var), vartyp, fldidx, fldtyp)
-
 const AnyMustAlias = Union{MustAlias,InterMustAlias}
 function InterMustAlias(alias::MustAlias)
     @assert alias.ssadef == 0
+    limited = may_form_limited_typ(alias.vartyp, alias.fldtyp, alias.fldtyp)
+    limited !== nothing && return limited
     InterMustAlias(alias.slot, alias.vartyp, alias.fldidx, alias.fldtyp)
 end
 
@@ -343,39 +322,35 @@ end
     return fldidx
 end
 
-@nospecializeinfer function form_mustalias_conditional(alias::MustAlias, @nospecialize(thentype), @nospecialize(elsetype))
-    (; slot, ssadef, vartyp, fldidx) = alias
+@nospecializeinfer function form_mustalias_refinement(alias::MustAlias, @nospecialize(newtyp))
+    newtyp === Union{} && return nothing
+    (; vartyp, fldidx) = alias
     if isa(vartyp, PartialStruct)
-        fields = vartyp.fields
-        thenfields = thentype === Bottom ? nothing : copy(fields)
-        elsefields = elsetype === Bottom ? nothing : copy(fields)
+        fields = copy(vartyp.fields)
         undefs = copy(_getundefs(vartyp))
         if 1 ≤ fldidx ≤ length(fields)
-            thenfields === nothing || (thenfields[fldidx] = thentype)
-            elsefields === nothing || (elsefields[fldidx] = elsetype)
+            fields[fldidx] = newtyp
             undefs[fldidx] = false
         end
-        return Conditional(slot, ssadef,
-            thenfields === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp.typ, undefs, thenfields),
-            elsefields === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp.typ, undefs, elsefields))
+        return PartialStruct(fallback_lattice, vartyp.typ, undefs, fields)
     else
         vartyp_widened = widenconst(vartyp)
-        thenfields = thentype === Bottom ? nothing : Any[]
-        elsefields = elsetype === Bottom ? nothing : Any[]
+        fields = Any[]
         for i in 1:fieldcount(vartyp_widened)
-            if i == fldidx
-                thenfields === nothing || push!(thenfields, thentype)
-                elsefields === nothing || push!(elsefields, elsetype)
-            else
-                t = fieldtype(vartyp_widened, i)
-                thenfields === nothing || push!(thenfields, t)
-                elsefields === nothing || push!(elsefields, t)
-            end
+            push!(fields, i == fldidx ? newtyp : fieldtype(vartyp_widened, i))
         end
-        return Conditional(slot, ssadef,
-            thenfields === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp_widened, thenfields),
-            elsefields === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp_widened, elsefields))
+        undefs = partialstruct_init_undefs(vartyp_widened, fields)
+        undefs === nothing && return nothing
+        return PartialStruct(fallback_lattice, vartyp_widened, undefs, fields)
     end
+end
+
+@nospecializeinfer function form_mustalias_conditional(alias::MustAlias, @nospecialize(thentype), @nospecialize(elsetype))
+    thentype_r = thentype === Bottom ? Bottom : form_mustalias_refinement(alias, thentype)
+    elsetype_r = elsetype === Bottom ? Bottom : form_mustalias_refinement(alias, elsetype)
+    thentype_r === nothing && (thentype_r = Bottom)
+    elsetype_r === nothing && (elsetype_r = Bottom)
+    return Conditional(alias.slot, alias.ssadef, thentype_r, elsetype_r)
 end
 
 function issubalias(a::AnyMustAlias, b::AnyMustAlias)

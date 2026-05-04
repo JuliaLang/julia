@@ -394,12 +394,19 @@ symbolic link. If `follow_symlinks=true` and `src` is a symbolic link, `dst` wil
 of the file or directory `src` refers to.
 Return `dst`.
 
+The timestamps, permissions, and ownership (if possible) of the destination file(s) are copied
+from those of the source file(s), similar to the Unix `cp -p` command.
+
 !!! note
     The `cp` function is different from the `cp` Unix command. The `cp` function always operates on
     the assumption that `dst` is a file, while the command does different things depending
     on whether `dst` is a directory or a file.
     Using `force=true` when `dst` is a directory will result in loss of all the contents present
     in the `dst` directory, and `dst` will become a file that has the contents of `src` instead.
+
+!!! compat "Julia 1.13"
+    Prior to Julia 1.13, the file permissions and other metadata were not necessarily
+    preserved (e.g. the permissions were modified by the current `umask` on Unix systems).
 """
 function cp(src::AbstractString, dst::AbstractString; force::Bool=false,
                                                       follow_symlinks::Bool=false)
@@ -409,7 +416,7 @@ function cp(src::AbstractString, dst::AbstractString; force::Bool=false,
     elseif isdir(src)
         cptree(src, dst; force=force, follow_symlinks=follow_symlinks)
     else
-        sendfile(src, dst)
+        sendfile(src, dst; force)
     end
     dst
 end
@@ -769,7 +776,7 @@ function _win_mkstemp(temppath::AbstractString)
                     tempp, temppfx, UInt32(0), tname)
     windowserror("GetTempFileName", uunique == 0)
     lentname = something(findfirst(iszero, tname))
-    @assert lentname > 0
+    @assert lentname > 0 "unexpected index"
     resize!(tname, lentname - 1)
     return transcode(String, tname)
 end
@@ -1261,23 +1268,15 @@ function rename(oldpath::AbstractString, newpath::AbstractString)
     newpath
 end
 
-function sendfile(src::AbstractString, dst::AbstractString)
-    src_file = nothing
-    dst_file = nothing
-    try
-        src_file = open(src, JL_O_RDONLY)
-        dst_file = open(dst, JL_O_CREAT | JL_O_TRUNC | JL_O_WRONLY, filemode(src_file))
+const UV_FS_COPYFILE_EXCL = 0x0001
+const UV_FS_COPYFILE_FICLONE = 0x0002
 
-        bytes = filesize(stat(src_file))
-        sendfile(dst_file, src_file, Int64(0), Int(bytes))
-    finally
-        if src_file !== nothing && isopen(src_file)
-            close(src_file)
-        end
-        if dst_file !== nothing && isopen(dst_file)
-            close(dst_file)
-        end
-    end
+function sendfile(src::AbstractString, dst::AbstractString; force::Bool=true)
+    flags = force ? UV_FS_COPYFILE_FICLONE : UV_FS_COPYFILE_FICLONE | UV_FS_COPYFILE_EXCL
+    result = ccall(:jl_fs_copyfile, Cint, (Cstring, Cstring, Cint),
+                    src, dst, flags % Cint)
+    uv_error("copyfile", result)
+    return nothing
 end
 
 if Sys.iswindows()
@@ -1396,7 +1395,7 @@ function readlink(path::AbstractString)
         if ret < 0
             uv_fs_req_cleanup(req)
             uv_error("readlink($(repr(path)))", ret)
-            @assert false
+            @assert false "unexpected uv readlink error"
         end
         tgt = unsafe_string(ccall(:jl_uv_fs_t_ptr, Cstring, (Ptr{Cvoid},), req))
         uv_fs_req_cleanup(req)

@@ -162,7 +162,7 @@ end
 AH_LN2(::Type{Float64}) = 6.93147180559945286227e-01
 AH_LN2(::Type{Float32}) = 6.9314718246f-01
 # asinh methods
-function asinh(x::T) where T <: Union{Float32, Float64}
+@assume_effects :nothrow function asinh(x::T) where T <: Union{Float32, Float64}
     # Method
     # mathematically asinh(x) = sign(x)*log(|x| + sqrt(x*x + 1))
     # is the principle value of the inverse hyperbolic sine
@@ -175,6 +175,8 @@ function asinh(x::T) where T <: Union{Float32, Float64}
     #        return sign(x)*log(2|x|+1/(|x|+sqrt(x*x+1)))
     #    d) |x| >= 2^28
     #        return sign(x)*(log(x)+ln2))
+    # Non-finite inputs are handled below; all log/log1p calls receive positive
+    # arguments, so this function never throws for Float32/Float64.
     if !isfinite(x)
         return x
     end

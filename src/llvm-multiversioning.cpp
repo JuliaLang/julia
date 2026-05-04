@@ -49,9 +49,17 @@ using namespace llvm;
 
 extern std::optional<bool> always_have_fma(Function&, const Triple &TT);
 
+// Per-function clone categories (set by IR analysis)
+enum {
+    JL_CLONE_LOOP     = 1 << 0,
+    JL_CLONE_SIMD     = 1 << 1,
+    JL_CLONE_MATH     = 1 << 2,
+    JL_CLONE_CPU      = 1 << 3,
+    JL_CLONE_FLOAT16  = 1 << 4,
+    JL_CLONE_BFLOAT16 = 1 << 5,
+};
+
 namespace {
-constexpr uint32_t clone_mask =
-    JL_TARGET_CLONE_LOOP | JL_TARGET_CLONE_SIMD | JL_TARGET_CLONE_MATH | JL_TARGET_CLONE_CPU | JL_TARGET_CLONE_FLOAT16 | JL_TARGET_CLONE_BFLOAT16;
 
 // Treat identical mapping as missing and return `def` in that case.
 // We mainly need this to identify cloned function using value map after LLVM cloning
@@ -83,9 +91,9 @@ static uint32_t collect_func_info(Function &F, const Triple &TT, bool &has_vecca
     LoopInfo LI(DT);
     uint32_t flag = 0;
     if (!LI.empty())
-        flag |= JL_TARGET_CLONE_LOOP;
+        flag |= JL_CLONE_LOOP;
     if (is_vector(F.getFunctionType())) {
-        flag |= JL_TARGET_CLONE_SIMD;
+        flag |= JL_CLONE_SIMD;
         has_veccall = true;
     }
     for (auto &bb: F) {
@@ -93,50 +101,47 @@ static uint32_t collect_func_info(Function &F, const Triple &TT, bool &has_vecca
             if (auto call = dyn_cast<CallInst>(&I)) {
                 if (is_vector(call->getFunctionType())) {
                     has_veccall = true;
-                    flag |= JL_TARGET_CLONE_SIMD;
+                    flag |= JL_CLONE_SIMD;
                 }
                 if (auto callee = call->getCalledFunction()) {
                     auto name = callee->getName();
                     if (name.starts_with("llvm.muladd.") || name.starts_with("llvm.fma.")) {
-                        flag |= JL_TARGET_CLONE_MATH;
+                        flag |= JL_CLONE_MATH;
                     }
                     else if (name.starts_with("julia.cpu.")) {
                         if (name.starts_with("julia.cpu.have_fma.")) {
-                            // for some platforms we know they always do (or don't) support
-                            // FMA. in those cases we don't need to clone the function.
-                            // always_have_fma returns an optional<bool>
                             if (!always_have_fma(*callee, TT))
-                                flag |= JL_TARGET_CLONE_CPU;
+                                flag |= JL_CLONE_CPU;
                         } else {
-                            flag |= JL_TARGET_CLONE_CPU;
+                            flag |= JL_CLONE_CPU;
                         }
                     }
                 }
             }
             else if (auto store = dyn_cast<StoreInst>(&I)) {
                 if (store->getValueOperand()->getType()->isVectorTy()) {
-                    flag |= JL_TARGET_CLONE_SIMD;
+                    flag |= JL_CLONE_SIMD;
                 }
             }
             else if (I.getType()->isVectorTy()) {
-                flag |= JL_TARGET_CLONE_SIMD;
+                flag |= JL_CLONE_SIMD;
             }
             if (auto mathOp = dyn_cast<FPMathOperator>(&I)) {
                 if (mathOp->getFastMathFlags().any()) {
-                    flag |= JL_TARGET_CLONE_MATH;
+                    flag |= JL_CLONE_MATH;
                 }
             }
 
             for (size_t i = 0; i < I.getNumOperands(); i++) {
                 if(I.getOperand(i)->getType()->isHalfTy()) {
-                    flag |= JL_TARGET_CLONE_FLOAT16;
+                    flag |= JL_CLONE_FLOAT16;
                 }
                 if(I.getOperand(i)->getType()->isBFloatTy()) {
-                    flag |= JL_TARGET_CLONE_BFLOAT16;
+                    flag |= JL_CLONE_BFLOAT16;
                 }
             }
-            uint32_t veccall_flags = JL_TARGET_CLONE_SIMD | JL_TARGET_CLONE_MATH | JL_TARGET_CLONE_CPU | JL_TARGET_CLONE_FLOAT16 | JL_TARGET_CLONE_BFLOAT16;
-            if (has_veccall && (flag & veccall_flags) == veccall_flags) {
+            constexpr uint32_t all_flags = JL_CLONE_SIMD | JL_CLONE_MATH | JL_CLONE_CPU | JL_CLONE_FLOAT16 | JL_CLONE_BFLOAT16;
+            if (has_veccall && (flag & all_flags) == all_flags) {
                 return flag;
             }
         }
@@ -148,7 +153,20 @@ struct TargetSpec {
     std::string cpu_name;
     std::string cpu_features;
     uint32_t base;
-    uint32_t flags;
+    bool clone_all = false;
+    bool opt_size = false;
+    bool min_size = false;
+    tp::FeatureDiff diff;
+
+    // Which per-function categories to clone for this target
+    uint32_t clone_flags() const {
+        uint32_t mask = JL_CLONE_LOOP | JL_CLONE_CPU;
+        if (diff.has_new_math)     mask |= JL_CLONE_MATH;
+        if (diff.has_new_simd)     mask |= JL_CLONE_SIMD;
+        if (diff.has_new_float16)  mask |= JL_CLONE_FLOAT16;
+        if (diff.has_new_bfloat16) mask |= JL_CLONE_BFLOAT16;
+        return mask;
+    }
 
     TargetSpec() = default;
 
@@ -157,8 +175,34 @@ struct TargetSpec {
         out.cpu_name = spec.cpu_name;
         out.cpu_features = spec.cpu_features;
         out.base = spec.base;
-        out.flags = spec.flags;
+        out.clone_all = spec.clone_all;
+        out.opt_size = spec.opt_size;
+        out.min_size = spec.min_size;
+        out.diff = spec.diff;
         return out;
+    }
+
+    // Pack/unpack for LLVM metadata serialization
+    uint32_t packed_flags() const {
+        uint32_t f = 0;
+        if (clone_all)             f |= 1 << 0;
+        if (opt_size)              f |= 1 << 1;
+        if (min_size)              f |= 1 << 2;
+        if (diff.has_new_math)     f |= 1 << 3;
+        if (diff.has_new_simd)     f |= 1 << 4;
+        if (diff.has_new_float16)  f |= 1 << 5;
+        if (diff.has_new_bfloat16) f |= 1 << 6;
+        return f;
+    }
+
+    void unpack_flags(uint32_t f) {
+        clone_all             = f & (1 << 0);
+        opt_size              = f & (1 << 1);
+        min_size              = f & (1 << 2);
+        diff.has_new_math     = f & (1 << 3);
+        diff.has_new_simd     = f & (1 << 4);
+        diff.has_new_float16  = f & (1 << 5);
+        diff.has_new_bfloat16 = f & (1 << 6);
     }
 
     static TargetSpec fromMD(MDTuple *tup) {
@@ -167,7 +211,7 @@ struct TargetSpec {
         out.cpu_name = cast<MDString>(tup->getOperand(0))->getString().str();
         out.cpu_features = cast<MDString>(tup->getOperand(1))->getString().str();
         out.base = cast<ConstantInt>(cast<ConstantAsMetadata>(tup->getOperand(2))->getValue())->getZExtValue();
-        out.flags = cast<ConstantInt>(cast<ConstantAsMetadata>(tup->getOperand(3))->getValue())->getZExtValue();
+        out.unpack_flags(cast<ConstantInt>(cast<ConstantAsMetadata>(tup->getOperand(3))->getValue())->getZExtValue());
         return out;
     }
 
@@ -176,7 +220,7 @@ struct TargetSpec {
             MDString::get(ctx, cpu_name),
             MDString::get(ctx, cpu_features),
             ConstantAsMetadata::get(ConstantInt::get(Type::getInt32Ty(ctx), base)),
-            ConstantAsMetadata::get(ConstantInt::get(Type::getInt32Ty(ctx), flags))
+            ConstantAsMetadata::get(ConstantInt::get(Type::getInt32Ty(ctx), packed_flags()))
         });
     }
 };
@@ -216,12 +260,14 @@ static void annotate_module_clones(Module &M) {
     if (auto maybe_specs = get_target_specs(M)) {
         specs = std::move(*maybe_specs);
     } else {
-        auto full_specs = jl_get_llvm_clone_targets(jl_options.cpu_target);
-        specs.reserve(full_specs.size());
-        for (auto &spec: full_specs) {
+#ifndef __clang_analyzer__
+        auto full = jl_get_llvm_clone_targets(jl_options.cpu_target);
+        specs.reserve(full.specs.size());
+        for (auto &spec: full.specs) {
             specs.push_back(TargetSpec::fromSpec(spec));
         }
         set_target_specs(M, specs);
+#endif
     }
     SmallVector<APInt, 0> clones(orig_funcs.size(), APInt(specs.size(), 0));
     BitVector subtarget_cloned(orig_funcs.size());
@@ -231,12 +277,12 @@ static void annotate_module_clones(Module &M) {
         func_infos[i] = collect_func_info(*orig_funcs[i], TT, has_veccall);
     }
     for (unsigned i = 1; i < specs.size(); i++) {
-        if (specs[i].flags & JL_TARGET_CLONE_ALL) {
+        if (specs[i].clone_all) {
             for (unsigned j = 0; j < orig_funcs.size(); j++) {
                 clones[j].setBit(i);
             }
         } else {
-            unsigned flag = specs[i].flags & clone_mask;
+            unsigned flag = specs[i].clone_flags();
             std::set<Function*> sets[2];
             for (unsigned j = 0; j < orig_funcs.size(); j++) {
                 if (!(func_infos[j] & flag)) {
@@ -455,7 +501,7 @@ CloneCtx::CloneCtx(Module &M, bool allow_bad_fvars)
     uint32_t ntargets = specs.size();
     for (uint32_t i = 1; i < ntargets; i++) {
         auto &spec = specs[i];
-        if (spec.flags & JL_TARGET_CLONE_ALL) {
+        if (spec.clone_all) {
             group_ids[i] = groups.size();
             groups.emplace_back(i);
         }
@@ -586,7 +632,7 @@ void CloneCtx::clone_decls()
             new_F->setVisibility(F->getVisibility());
             new_F->setDSOLocal(true);
             auto base_func = F;
-            if (!(specs[i].flags & JL_TARGET_CLONE_ALL))
+            if (!(specs[i].clone_all))
                 base_func = static_cast<Group*>(linearized[specs[i].base])->base_func(F);
             (*linearized[i]->vmap)[base_func] = new_F;
         }
@@ -619,10 +665,10 @@ static void add_features(Function *F, TargetSpec &spec)
     }
     F->addFnAttr("target-cpu", spec.cpu_name);
     if (!F->hasFnAttribute(Attribute::OptimizeNone)) {
-        if (spec.flags & JL_TARGET_OPTSIZE) {
+        if (spec.opt_size) {
             F->addFnAttr(Attribute::OptimizeForSize);
         }
-        else if (spec.flags & JL_TARGET_MINSIZE) {
+        else if (spec.min_size) {
             F->addFnAttr(Attribute::MinSize);
         }
     }
@@ -1012,7 +1058,7 @@ void CloneCtx::emit_metadata()
             uint32_t len_idx = idxs.size();
             idxs.push_back(0); // We will fill in the real value later.
             uint32_t count = 0;
-            if (i == 0 || spec.flags & JL_TARGET_CLONE_ALL) {
+            if (i == 0 || spec.clone_all) {
                 auto grp = static_cast<Group*>(tgt);
                 count = jl_sysimg_tag_mask;
                 for (uint32_t j = 0; j < nfvars; j++) {
