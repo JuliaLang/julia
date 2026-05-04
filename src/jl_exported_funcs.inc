@@ -554,10 +554,10 @@
     YY(jl_jit_unregister_ci) \
     YY(JLJITGetLLVMOrcExecutionSession) \
     YY(JLJITGetJuliaOJIT) \
-    YY(JLJITGetExternalJITDylib) \
+    YY(JLJITCreateJITDylib) \
     YY(JLJITAddObjectFile) \
     YY(JLJITAddLLVMIRModule) \
-    YY(JLJITLookup) \
+    YY(JLJITJDLookup) \
     YY(JLJITMangleAndIntern) \
     YY(JLJITGetTripleString) \
     YY(JLJITGetGlobalPrefix) \
