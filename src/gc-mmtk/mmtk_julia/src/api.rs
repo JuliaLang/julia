@@ -104,6 +104,11 @@ pub extern "C" fn mmtk_gc_init(
     // Make sure we initialize MMTk here
     lazy_static::initialize(&SINGLETON);
 
+    unsafe {
+        MMTK_SIDE_LOG_BIT_BASE_ADDRESS =
+            mmtk::util::metadata::side_metadata::global_side_metadata_vm_base_address();
+    }
+
     // Hijack the panic hook to make sure that if we crash in the GC threads, the process aborts.
     crate::set_panic_hook();
 
@@ -422,10 +427,9 @@ pub extern "C" fn mmtk_object_reference_write_slow(
     );
 }
 
-/// Side log bit is the first side metadata spec starting.
+/// Runtime base address for Julia's side log bit metadata fast path.
 #[no_mangle]
-pub static MMTK_SIDE_LOG_BIT_BASE_ADDRESS: Address =
-    mmtk::util::metadata::side_metadata::GLOBAL_SIDE_METADATA_VM_BASE_ADDRESS;
+pub static mut MMTK_SIDE_LOG_BIT_BASE_ADDRESS: Address = Address::ZERO;
 
 #[no_mangle]
 pub extern "C" fn mmtk_object_is_managed_by_mmtk(addr: usize) -> bool {
