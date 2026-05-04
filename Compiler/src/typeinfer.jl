@@ -270,12 +270,12 @@ function finish!(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInstan
     return nothing
 end
 
-function finish_nocycle(interp::AbstractInterpreter, frame::InferenceState, time_before::UInt64)
+function finish_nocycle(interp::I, frame::InferenceState, time_before::UInt64) where {I<:AbstractInterpreter}
     opt_cache = IdDict{MethodInstance,CodeInstance}()
     finishinfer!(frame, interp, frame.cycleid, opt_cache)
     opt = frame.result.src
     if opt isa OptimizationState # implies `may_optimize(interp) === true`
-        optimize(interp, opt, frame.result)
+        optimize(interp, opt::OptimizationState{I}, frame.result)
         # check the valid_worlds hasn't been narrowed by added :invoke edges
         valid_worlds = intersect(frame.valid_worlds, compute_recursive_worlds(opt.inlining.edges))
         update_valid_age!(frame, get_inference_world(interp), valid_worlds)
@@ -298,7 +298,7 @@ function finish_nocycle(interp::AbstractInterpreter, frame::InferenceState, time
     return nothing
 end
 
-function finish_cycle(interp::AbstractInterpreter, frames::Vector{AbsIntState}, cycleid::Int, time_before::UInt64)
+function finish_cycle(interp::I, frames::Vector{AbsIntState}, cycleid::Int, time_before::UInt64) where {I<:AbstractInterpreter}
     world = get_inference_world(interp)
     cycle_valid_worlds = WorldRange()
     cycle_valid_effects = EFFECTS_TOTAL
@@ -316,7 +316,7 @@ function finish_cycle(interp::AbstractInterpreter, frames::Vector{AbsIntState}, 
     for frameid = cycleid:length(frames)
         caller = frames[frameid]::InferenceState
         adjust_cycle_frame!(caller, world, cycle_valid_worlds, cycle_valid_effects)
-        finishinfer!(caller, caller.interp, cycleid, opt_cache)
+        finishinfer!(caller, caller.interp::I, cycleid, opt_cache)
         time_now = _time_ns()
         caller.time_self_ns += (time_now - time_before)
         time_before = time_now
@@ -327,7 +327,7 @@ function finish_cycle(interp::AbstractInterpreter, frames::Vector{AbsIntState}, 
         caller = frames[frameid]::InferenceState
         opt = caller.result.src
         if opt isa OptimizationState # implies `may_optimize(caller.interp) === true`
-            optimize(caller.interp, opt, caller.result)
+            optimize(caller.interp::I, opt::OptimizationState{I}, caller.result)
             cycle_valid_worlds = intersect(cycle_valid_worlds, compute_recursive_worlds(opt.inlining.edges))
             time_now = _time_ns()
             caller.time_self_ns += (time_now - time_before)
@@ -349,7 +349,7 @@ function finish_cycle(interp::AbstractInterpreter, frames::Vector{AbsIntState}, 
         caller.time_caches = time_caches
         caller.time_paused = time_paused
         update_valid_age!(caller, world, cycle_valid_worlds)
-        finish!(caller.interp, caller, validation_world, time_before)
+        finish!(caller.interp::I, caller, validation_world, time_before)
         if isdefined(caller.result, :ci)
             push!(cis, caller.result.ci)
         end
@@ -362,7 +362,7 @@ function finish_cycle(interp::AbstractInterpreter, frames::Vector{AbsIntState}, 
     # After everything is finished, promote the work into visible caches
     for frameid = cycleid:length(frames)
         caller = frames[frameid]::InferenceState
-        promotecache!(caller.interp, caller)
+        promotecache!(caller.interp::I, caller)
     end
     # After validation, under the world_counter_lock, set max_world to typemax(UInt) for all dependencies
     # (recursively). From that point onward the ordinary backedge mechanism is responsible for maintaining
@@ -708,7 +708,7 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter, cycleid::
         ci.analysis_results = result.analysis_results
         if !iszero(me.cache_mode & CACHE_MODE_GLOBAL)
             ci = result.ci
-            if is_already_cached(me.interp, result)
+            if is_already_cached(interp, result)
                 # convert to a local cache
                 engine_reject(interp, ci)
                 me.cache_mode = CACHE_MODE_LOCAL
@@ -963,8 +963,8 @@ function add_cycle_backedge!(caller::InferenceState, frame::InferenceState)
     return frame
 end
 
-function is_same_frame(interp::AbstractInterpreter, mi::MethodInstance, frame::InferenceState)
-    return mi === frame_instance(frame) && cache_owner(interp) === cache_owner(frame.interp)
+function is_same_frame(interp::I, mi::MethodInstance, frame::InferenceState) where {I<:AbstractInterpreter}
+    return mi === frame_instance(frame) && cache_owner(interp) === cache_owner(frame.interp::I)
 end
 
 function poison_callstack!(infstate::InferenceState, topmost::InferenceState)

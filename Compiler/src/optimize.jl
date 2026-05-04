@@ -1019,7 +1019,7 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, opt::OptimizationSt
 end
 
 # run the optimization work
-function optimize(interp::AbstractInterpreter, opt::OptimizationState, caller::InferenceResult)
+function optimize(interp::I, opt::OptimizationState{I}, caller::InferenceResult) where {I<:AbstractInterpreter}
     @zone "CC: OPTIMIZER" ir = run_passes_ipo_safe(opt.src, opt)
     ipo_dataflow_analysis!(interp, opt, ir, caller)
     finishopt!(interp, opt, ir)

@@ -767,9 +767,9 @@ function abstract_call_method(interp::AbstractInterpreter,
     return typeinf_edge(interp, method, sig, sparams, sv, edgecycle, edgelimited)
 end
 
-function edge_matches_sv(interp::AbstractInterpreter, frame::AbsIntState,
+function edge_matches_sv(interp::I, frame::AbsIntState,
                          method::Method, @nospecialize(sig), sparams::SimpleVector,
-                         hardlimit::Bool, sv::AbsIntState)
+                         hardlimit::Bool, sv::AbsIntState) where {I<:AbstractInterpreter}
     # The `method_for_inference_heuristics` will expand the given method's generator if
     # necessary in order to retrieve this field from the generated `CodeInfo`, if it exists.
     # The other `CodeInfo`s we inspect will already have this field inflated, so we just
@@ -780,8 +780,9 @@ function edge_matches_sv(interp::AbstractInterpreter, frame::AbsIntState,
     if callee_method2 !== inf_method2 # limit only if user token match
         return false
     end
-    if isa(frame, InferenceState) && cache_owner(frame.interp) !== cache_owner(interp)
-        # Don't assume that frames in different interpreters are the same
+    # Frames in one callstack share the same interpreter type (enforced by `::I`),
+    # but distinct instances of that type may still have different cache owners.
+    if isa(frame, InferenceState) && cache_owner(frame.interp::I) !== cache_owner(interp)
         return false
     end
     if !hardlimit || InferenceParams(interp).ignore_recursion_hardlimit
@@ -4825,7 +4826,7 @@ end
 
 # make as much progress on `frame` as possible (by handling cycles)
 warnlength::Int = 2500
-function typeinf(interp::AbstractInterpreter, frame::InferenceState)
+function typeinf(interp::I, frame::InferenceState) where {I<:AbstractInterpreter}
     time_before = _time_ns()
     callstack = frame.callstack::Vector{AbsIntState}
     nextstates = CurrentState[]
@@ -4846,7 +4847,7 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
                 takenext = length(callstack)
             end
         end
-        interp = callee.interp
+        interp = callee.interp::I
         nextstateid = takenext + 1 - frame.frameid
         while length(nextstates) < nextstateid
             push!(nextstates, CurrentState())
