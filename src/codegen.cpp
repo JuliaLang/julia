@@ -3025,7 +3025,7 @@ std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &conte
     else {
         // No source: set default Julia flags
         // According to clang darwin above 10.10 supports dwarfv4
-        m->addModuleFlag(llvm::Module::Warning, "Dwarf Version", 4);
+        m->addModuleFlag(llvm::Module::Warning, "Dwarf Version", 5);
         m->addModuleFlag(llvm::Module::Warning, "Debug Info Version",
                          llvm::DEBUG_METADATA_VERSION);
 
