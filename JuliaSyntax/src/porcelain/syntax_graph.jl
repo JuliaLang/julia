@@ -285,23 +285,12 @@ function attrnames(ex::SyntaxTree)
     (name::Symbol for (name, value) in pairs(attrs) if haskey(value, ex._id))
 end
 
-function copy_node(ex::SyntaxTree)
-    graph = syntax_graph(ex)
-    id = new_id!(graph)
-    if !is_leaf(ex)
-        setchildren!(graph, id, children(ex._graph, ex._id))
-    end
-    ex2 = SyntaxTree(graph, id)
-    copy_attrs!(ex2, ex, true)
-    ex2
-end
-
 function setattr!(ex::SyntaxTree, name::Symbol, @nospecialize(val))
     setattr!(ex._graph, ex._id, name, val)
     ex
 end
 setattr(ex::SyntaxTree, name::Symbol, @nospecialize(val)) =
-    setattr!(copy_node(ex), name, val)
+    setattr!(is_leaf(ex) ? mkleaf(ex) : mknode(ex, children(ex)), name, val)
 
 function deleteattr!(ex::SyntaxTree, name::Symbol)
     deleteattr!(ex._graph, ex._id, name)
@@ -373,65 +362,91 @@ function Base.show(io::IO, ::MIME"text/plain", src::SourceRef)
     highlight(io, src; note="these are the bytes you're looking for 😊", context_lines_inner=20)
 end
 
+"""
+Provenance notes: A SyntaxTree `st` has `.source` equal to one of:
+- NodeId (of the SyntaxTree `st` was transformed from)
+- a reference to source text (either SourceRef or LineNumberNode).
 
-function provenance(ex::SyntaxTree)
-    s = ex.source
-    if s isa NodeId
-        return (SyntaxTree(ex._graph, s),)
-    elseif s isa Tuple
-        return SyntaxTree.((ex._graph,), s)
-    else
-        return (s,)
+Let "textref" refer to a SyntaxTree with non-NodeId `.source`.  Every SyntaxTree
+is either a textref or has one at the end of its `.source` chain.
+
+`st` may also have `.macro_source`, which is the NodeId of a macrocall if `st`
+was returned from its expansion.
+
+All invariants noted in this section are awaiting the design of the "new macro"
+API.  As of writing this, the user has more freedom than they should have.
+"""
+
+"""
+SyntaxList of [st.source, st.source.source, ..., textref]
+"""
+function provenance(st::SyntaxTree)
+    prov = SyntaxList(st._graph)
+    s = st.source
+    while s isa NodeId
+        s_tree = SyntaxTree(st._graph, s)
+        push!(prov, s_tree)
+        s = s_tree.source
     end
+    return prov
 end
 
-function _sourceref(sources, id)
-    i = 1
-    while true
-        i += 1
-        s = sources[id]::SourceAttrType
-        if s isa NodeId
-            id = s
-        else
-            return s, id
-        end
+"`provenance(st)[1]`, or `st` if that's empty"
+function prov(st::SyntaxTree)
+    st.source isa NodeId ? SyntaxTree(st._graph, st.source) : st
+end
+
+"textref of st (possibly == st)"
+function prov_end(st::SyntaxTree)
+    out = st
+    while out.source isa NodeId
+        out = prov(out)
     end
+    return out
 end
 
-function sourceref(ex::SyntaxTree)
-    sources = ex._graph.source::Dict{Int, Any}
-    id = ex._id
-    while true
-        s, _ = _sourceref(sources, id)
-        if s isa Tuple
-            s = s[1]
-        end
-        if s isa NodeId
-            id = s
-        else
-            return s
-        end
+"`st`'s textref's `.source`, ignoring all `.macro_source`"
+function sourceref(st::SyntaxTree)
+    prov_end(st).source::Union{LineNumberNode, SourceRef}
+end
+
+"The last macro expansion `st` was involved in, or nothing"
+function macro_prov(st::SyntaxTree)
+    while !hasattr(st, :macro_source) && st.source isa NodeId
+        st = prov(st)
     end
+    hasattr(st, :macro_source) && return SyntaxTree(st._graph, st.macro_source)
+    return nothing
 end
 
-function _flattened_provenance(refs, graph, sources, id)
-    # TODO: Implement in terms of `provenance()`?
-    s, id2 = _sourceref(sources, id)
-    if s isa Tuple
-        for i in s
-            _flattened_provenance(refs, graph, sources, i)
-        end
-    else
-        push!(refs, SyntaxTree(graph, id2))
-    end
+"""
+A SyntaxList of textrefs associated with `st`.  The number of returned trees
+should equal one plus the number of macro expansions `st` "went through":
+
+- For new macros, this is the number of macro expansions `st` was both an input
+  and output of, so if `st` was created in a macro body, `flattened_provenance`
+  returns a list of length 1.
+
+- For old macros, we can't determine whether expanded syntax is from the
+  macrocall args or macro body (it will have LineNumberNode .source), so all
+  expanded syntax counts as having "went through" the macrocall.
+
+The resulting list should be in the order
+`[outermost_macrocall, innermost_macrocall, ..., expression_textref]`.
+"""
+function flattened_provenance(st::SyntaxTree)
+    _flattened_provenance(st, SyntaxList(st._graph))
 end
 
-function flattened_provenance(ex::SyntaxTree)
-    refs = SyntaxList(ex._graph)
-    _flattened_provenance(refs, ex._graph, ex._graph.source, ex._id)
-    return reverse!(refs)
+# Only recurse on the first .macro_source in any source chain
+function _flattened_provenance(st::SyntaxTree, out)
+    msrc = macro_prov(st)
+    # macro_source === source means `st` is from the `msrc` macro body
+    !isnothing(msrc) && msrc._id !== st.source &&
+        _flattened_provenance(msrc, out)
+    push!(out, prov_end(st))
+    out
 end
-
 
 function is_ancestor(ex, ancestor)
     if !is_compatible_graph(ex, ancestor)
@@ -452,7 +467,7 @@ function is_ancestor(ex, ancestor)
     end
 end
 
-const SourceAttrType = Union{SourceRef,LineNumberNode,NodeId,Tuple{Vararg{NodeId}}}
+const SourceAttrType = Union{SourceRef,LineNumberNode,NodeId}
 
 function reparent(ctx, ex::SyntaxTree)
     # Ensure `ex` has the same parent graph, in a somewhat loose sense.
@@ -659,26 +674,26 @@ end
 function mkleaf(old::SyntaxTree)
     graph = syntax_graph(old)
     st = SyntaxTree(graph, new_id!(graph))
-    copy_attrs!(st, old, true)
+    copy_attrs!(st, old)
     setattr!(st, :source, old._id)
+end
+function mktree(old::SyntaxTree)
+    if is_leaf(old)
+        mkleaf(old)
+    else
+        cs = mapsyntax(mktree, children(old))
+        mknode(old, cs)
+    end
 end
 
 #-------------------------------------------------------------------------------
 # Mapping and copying of AST nodes
-function copy_attrs!(dest, src, all=false)
+function copy_attrs!(dest, src)
     # TODO: Make this faster?
     for (name, attr) in pairs(src._graph.attributes)
-        if (all || (name !== :source && name !== :kind && name !== :syntax_flags)) &&
-                haskey(attr, src._id)
+        if (name !== :source && name !== :macro_source) && haskey(attr, src._id)
             setattr!(dest, name, attr[src._id])
         end
-    end
-end
-
-function copy_attrs!(dest, head::Union{Kind,SyntaxHead}, all=false)
-    if all
-        setattr!(dest._graph, dest._id, :kind, kind(head))
-        !(head isa Kind) && setattr!(dest._graph, dest._id, :syntax_flags, flags(head))
     end
 end
 
@@ -711,46 +726,40 @@ function mapchildren(f::Function, ctx, ex::SyntaxTree)
 end
 
 """
-Recursively copy AST `ex` into `ctx`.
-
-Special provenance handling: If `copy_source` is true, treat the `.source`
-attribute as a reference and recurse on its contents.  Otherwise, treat it like
-any other attribute.
+Recursively copy AST `ex` into `ctx`.  Every node in `ex` should be copied at
+most once.
 """
-function copy_ast(ctx, ex::SyntaxTree; copy_source=true)
+function copy_ast(ctx, ex::SyntaxTree)
     graph1 = syntax_graph(ex)
     graph2 = syntax_graph(ctx)
-    !copy_source && check_same_graph(graph1, graph2)
-    id2 = _copy_ast(graph2, graph1, ex._id, Dict{NodeId, NodeId}(), copy_source)
+    @assert graph1 !== graph2 "use mktree(ex) for this"
+    id2 = _copy_ast(graph2, graph1, ex._id, Dict{NodeId, NodeId}())
     return SyntaxTree(graph2, id2)
 end
 
-function _copy_ast(graph2::SyntaxGraph, graph1::SyntaxGraph,
-                   id1::NodeId, seen, copy_source)
+function _copy_ast(graph2::SyntaxGraph, graph1::SyntaxGraph, id1::NodeId, seen)
     let copied = get(seen, id1, nothing)
         isnothing(copied) || return copied
     end
     id2 = new_id!(graph2)
     seen[id1] = id2
-    src1 = get(SyntaxTree(graph1, id1), :source, nothing)
-    src2 = if !copy_source
-        src1
-    elseif src1 isa NodeId
-        _copy_ast(graph2, graph1, src1, seen, copy_source)
-    elseif src1 isa Tuple
-        map(i->_copy_ast(graph2, graph1, i, seen, copy_source), src1)
-    else
-        src1
-    end
-    copy_attrs!(SyntaxTree(graph2, id2), SyntaxTree(graph1, id1), true)
-    setattr!(graph2, id2, :source, src2)
     if !is_leaf(graph1, id1)
         cs = NodeId[]
         for cid in children(graph1, id1)
-            push!(cs, _copy_ast(graph2, graph1, cid, seen, copy_source))
+            push!(cs, _copy_ast(graph2, graph1, cid, seen))
         end
         setchildren!(graph2, id2, cs)
     end
+    for src_attr in (:source, :macro_source)
+        src1 = get(SyntaxTree(graph1, id1), src_attr, nothing)
+        if src1 isa NodeId
+            src2 =  _copy_ast(graph2, graph1, src1, seen)
+            setattr!(graph2, id2, src_attr, src2)
+        elseif src_attr == :source
+            setattr!(graph2, id2, src_attr, src1)
+        end
+    end
+    copy_attrs!(SyntaxTree(graph2, id2), SyntaxTree(graph1, id1))
     return id2
 end
 
@@ -779,12 +788,24 @@ function unalias_nodes(sl::SyntaxList)
                    sl.ids))
 end
 
+function _unalias_copy_tree(old::SyntaxTree)
+    out = if is_leaf(old)
+        mkleaf(old)
+    else
+        cs = mapsyntax(_unalias_copy_tree, children(old))
+        mknode(old, cs)
+    end
+    # difference from mktree: don't add to provenance chain
+    hasattr(old, :macro_source) && setattr!(out, :macro_source, old.macro_source)
+    setattr!(out, :source, old.source)
+end
+
 # Note that `seen_edges` is only needed for when edge ranges overlap, which is a
 # situation we don't produce yet.
 function _unalias_nodes(graph::SyntaxGraph, id::NodeId,
                         seen::Set{NodeId}, seen_edges::Set{Int})
     if id in seen
-        id = copy_ast(graph, SyntaxTree(graph, id); copy_source=false)._id
+        id = _unalias_copy_tree(SyntaxTree(graph, id))._id
     end
     # nodes may not share edges (SyntaxGraph invariant)
     @assert isempty(intersect(seen_edges, graph.edge_ranges[id]))
@@ -849,7 +870,7 @@ function prune(graph1_a::SyntaxGraph, entrypoints_a::Vector{NodeId})
     append!(graph2.edges, 1:length(nodes1)) # our reward for unaliasing
 
     for attr in attrnames(graph1)
-        attr === :source && continue
+        (attr === :source || attr === :macro_source) && continue
         for (n2, n1) in enumerate(nodes1)
             if haskey(graph1.attributes[attr], n1)
                 graph2.attributes[attr][n2] = graph1.attributes[attr][n1]
@@ -861,7 +882,14 @@ function prune(graph1_a::SyntaxGraph, entrypoints_a::Vector{NodeId})
     resolved_sources = Dict{NodeId, SourceAttrType}() # graph1 id => graph2 src
 
     for (n2, n1) in enumerate(nodes1)
-        graph2.source[n2] = _prune_get_resolved!(n1, graph1, map12, resolved_sources)
+        graph2.source[n2] =
+            _prune_get_resolved!(n1, graph1, map12, resolved_sources, :source)
+        if hasattr(graph1, :macro_source) && haskey(graph1.macro_source, n1)
+            msrc1 = graph1.macro_source[n1]
+            if haskey(map12, msrc1)
+                graph2.macro_source[n2] = map12[msrc1]
+            end
+        end
     end
 
     # The first n entries in nodes1 were our entrypoints, unique from unaliasing
@@ -870,16 +898,15 @@ end
 
 function _prune_get_resolved!(id1::NodeId, graph1::SyntaxGraph,
                               map12::Dict{NodeId, Int},
-                              resolved_sources::Dict{NodeId, SourceAttrType})
+                              resolved_sources::Dict{NodeId, SourceAttrType},
+                              attr::Symbol)
     out = get(resolved_sources, id1, nothing)
     if isnothing(out)
-        src1 = graph1.source[id1]
+        src1 = getattr(graph1, attr)[id1]
         out = if haskey(map12, src1)
             map12[src1]
         elseif src1 isa NodeId
-            _prune_get_resolved!(src1, graph1, map12, resolved_sources)
-        elseif src1 isa Tuple
-            map(s -> _prune_get_resolved!(s, graph1, map12, resolved_sources), src1)
+            _prune_get_resolved!(src1, graph1, map12, resolved_sources, attr)
         else
             src1
         end

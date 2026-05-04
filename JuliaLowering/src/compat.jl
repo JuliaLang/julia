@@ -423,8 +423,8 @@ function est_to_dst(st::SyntaxTree)
                  (s[1:prevind(s,end)], K"op=")
 
              op_leaf = newleaf(g, st, K"Identifier")
-             JS.copy_attrs!(op_leaf, st)
              setattr!(op_leaf, :name_val, op_s)
+             setattr!(op_leaf, :scope_layer, st.scope_layer)
              @ast g st [out_k rec(l) op_leaf rec(r)]
          end
         [K"comparison" cs0...] -> let cs = copy(cs0)

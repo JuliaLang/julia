@@ -213,7 +213,8 @@ end
 8   (call core.svec %₅ %₆ %₇)
 9   --- method TestMod.foo %₈
     slots: [slot₁/#self#(!read) slot₂/a(nospecialize,!read)]
-    1   (return core.nothing)
+    1   (meta :nospecialize)
+    2   (return core.nothing)
 10  latestworld
 11  TestMod.foo
 12  (return %₁₁)
@@ -235,9 +236,10 @@ end
 8   (call core.svec %₅ %₆ %₇)
 9   --- method TestMod.foo %₈
     slots: [slot₁/#self#(!read) slot₂/a(nospecialize) slot₃/b]
-    1   TestMod.+
-    2   (call %₁ slot₂/a slot₃/b)
-    3   (return %₂)
+    1   (meta :nospecialize slot₂/a)
+    2   TestMod.+
+    3   (call %₂ slot₂/a slot₃/b)
+    4   (return %₃)
 10  latestworld
 11  TestMod.foo
 12  (return %₁₁)
@@ -259,9 +261,10 @@ end
 8   (call core.svec %₅ %₆ %₇)
 9   --- method TestMod.foo %₈
     slots: [slot₁/#self#(!read) slot₂/x(nospecialize) slot₃/y slot₄/z(nospecialize)]
-    1   TestMod.+
-    2   (call %₁ slot₂/x slot₃/y slot₄/z)
-    3   (return %₂)
+    1   (meta :nospecialize slot₂/x slot₄/z)
+    2   TestMod.+
+    3   (call %₂ slot₂/x slot₃/y slot₄/z)
+    4   (return %₃)
 10  latestworld
 11  TestMod.foo
 12  (return %₁₁)
