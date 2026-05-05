@@ -291,7 +291,7 @@ function finish_nocycle(interp::I, frame::InferenceState{I}, time_before::UInt64
         ccall(:jl_promote_ci_to_current, Cvoid, (Any, UInt), frame.result.ci, validation_world)
     end
     if frame.cycleid != 0
-        frames = frame.callstack::Vector{AbsIntState{I}}
+        frames = frame.callstack
         @assert frames[end] === frame
         pop!(frames)
     end
@@ -508,9 +508,9 @@ function maybe_compress_codeinfo(interp::AbstractInterpreter, mi::MethodInstance
     return ci
 end
 
-function cycle_fix_limited(@nospecialize(typ), sv::InferenceState{I}, cycleid::Int) where {I<:AbstractInterpreter}
+function cycle_fix_limited(@nospecialize(typ), sv::InferenceState, cycleid::Int)
     if typ isa LimitedAccuracy
-        frames = sv.callstack::Vector{AbsIntState{I}}
+        frames = sv.callstack
         causes = typ.causes
         for frameid = cycleid:length(frames)
             caller = frames[frameid]::InferenceState
@@ -943,9 +943,9 @@ function type_annotate!(::AbstractInterpreter, sv::InferenceState)
     return nothing
 end
 
-function merge_call_chain!(::AbstractInterpreter, parent::InferenceState{I}, child::InferenceState{I}) where {I<:AbstractInterpreter}
+function merge_call_chain!(::AbstractInterpreter, parent::InferenceState, child::InferenceState)
     # update all cycleid to be in the same group
-    frames = parent.callstack::Vector{AbsIntState{I}}
+    frames = parent.callstack
     @assert child.callstack === frames
     ancestorid = child.cycleid
     # ensure that walking the callstack has the same cycleid (DAG)
@@ -978,12 +978,12 @@ end
 # we "resolve" it by merging the call chain, which entails updating each intermediary
 # frame's `cycleid` field. Finally, we return `mi`'s pre-existing frame.
 # If no cycles are found, `nothing` is returned instead.
-function resolve_call_cycle!(interp::I, mi::MethodInstance, parent::AbsIntState) where {I<:AbstractInterpreter}
+function resolve_call_cycle!(interp::AbstractInterpreter, mi::MethodInstance, parent::AbsIntState)
     # TODO (#48913) implement a proper recursion handling for irinterp:
     # This works most of the time currently just because the irinterp code doesn't get used much with
     # `@assume_effects`, so it never sees a cycle normally, but that may not be a sustainable solution.
     parent isa InferenceState || return false
-    frames = parent.callstack::Vector{AbsIntState{I}}
+    frames = parent.callstack
     uncached = false
     for frameid = reverse(1:length(frames))
         frame = frames[frameid]

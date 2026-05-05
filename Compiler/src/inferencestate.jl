@@ -270,7 +270,13 @@ end
 intersect(world::WorldWithRange, valid_worlds::WorldRange) =
     WorldWithRange(world.this, intersect(world.valid_worlds, valid_worlds))
 
-mutable struct InferenceState{I<:AbstractInterpreter}
+# Forward-declared abstract supertype of `InferenceState` and `IRInterpretationState`,
+# so each can reference `Vector{AbsIntState{I}}` in its own field types. The concrete
+# `AbsIntState{I}` is then `Union{InferenceState{I}, IRInterpretationState{I}}` for
+# all practical purposes — see the `Union` alias defined further below.
+abstract type AbsIntState{I<:AbstractInterpreter} end
+
+mutable struct InferenceState{I<:AbstractInterpreter} <: AbsIntState{I}
     #= information about this method instance =#
     linfo::MethodInstance
     valid_worlds::WorldRange
@@ -313,10 +319,10 @@ mutable struct InferenceState{I<:AbstractInterpreter}
     tasks::Vector{WorkThunk}
     pclimitations::IdSet{InferenceState} # causes of precision restrictions (LimitedAccuracy) on currpc ssavalue
     limitations::IdSet{InferenceState} # causes of precision restrictions (LimitedAccuracy) on return
-    cycle_backedges::Vector{Tuple{InferenceState, Int}} # call-graph backedges connecting from callee to caller
+    cycle_backedges::Vector{Tuple{InferenceState{I}, Int}} # call-graph backedges connecting from callee to caller
 
     # IPO tracking of in-process work, shared with all frames given AbstractInterpreter
-    callstack #::Vector{AbsIntState}
+    callstack::Vector{AbsIntState{I}}
     parentid::Int # index into callstack of the parent frame that originally added this frame (call cycle_parent to extract the current parent of the SCC)
     frameid::Int # index into callstack at which this object is found (or zero, if this is not a cached frame and has no parent)
     cycleid::Int # index into the callstack of the topmost frame in the cycle (all frames in the same cycle share the same cycleid)
@@ -392,7 +398,7 @@ mutable struct InferenceState{I<:AbstractInterpreter}
         unreachable = BitSet()
         pclimitations = IdSet{InferenceState}()
         limitations = IdSet{InferenceState}()
-        cycle_backedges = Tuple{InferenceState,Int}[]
+        cycle_backedges = Tuple{InferenceState{I},Int}[]
         callstack = AbsIntState{I}[]
         tasks = WorkThunk[]
 
@@ -882,7 +888,7 @@ end
 # =====================
 
 # TODO add `result::InferenceResult` and put the irinterp result into the inference cache?
-mutable struct IRInterpretationState{I<:AbstractInterpreter}
+mutable struct IRInterpretationState{I<:AbstractInterpreter} <: AbsIntState{I}
     const spec_info::SpecInfo
     const ir::IRCode
     const mi::MethodInstance
@@ -897,7 +903,7 @@ mutable struct IRInterpretationState{I<:AbstractInterpreter}
     const lazyreachability::LazyCFGReachability
     const tasks::Vector{WorkThunk}
     const edges::Vector{Any}
-    callstack #::Vector{AbsIntState{I}}
+    callstack::Vector{AbsIntState{I}}
     frameid::Int
     parentid::Int
     interp::I
@@ -959,11 +965,12 @@ end
 # AbsIntState
 # ===========
 
-const AbsIntState{I<:AbstractInterpreter} = Union{InferenceState{I},IRInterpretationState{I}}
+## `AbsIntState` is the abstract supertype declared above; the only concrete
+## subtypes are `InferenceState` and `IRInterpretationState`.
 
-function print_callstack(frame::AbsIntState{I}) where {I<:AbstractInterpreter}
+function print_callstack(frame::AbsIntState)
     print("=================== Callstack: ==================\n")
-    frames = frame.callstack::Vector{AbsIntState{I}}
+    frames = frame.callstack
     for idx = (frame.frameid == 0 ? 0 : 1):length(frames)
         sv = (idx == 0 ? frame : frames[idx])
         idx == frame.frameid && print("*")
@@ -994,13 +1001,12 @@ function frame_module(sv::AbsIntState)
     return def.module
 end
 
-frame_parent(sv::AbsIntState{I}) where {I<:AbstractInterpreter} =
-    sv.parentid == 0 ? nothing : (sv.callstack::Vector{AbsIntState{I}})[sv.parentid]
+frame_parent(sv::AbsIntState) = sv.parentid == 0 ? nothing : sv.callstack[sv.parentid]
 
-function cycle_parent(sv::InferenceState{I}) where {I<:AbstractInterpreter}
+function cycle_parent(sv::InferenceState)
     sv.parentid == 0 && return nothing
-    callstack = sv.callstack::Vector{AbsIntState{I}}
-    sv = callstack[sv.cycleid]::InferenceState{I}
+    callstack = sv.callstack
+    sv = callstack[sv.cycleid]::InferenceState
     sv.parentid == 0 && return nothing
     return callstack[sv.parentid]
 end
@@ -1010,7 +1016,7 @@ cycle_parent(sv::IRInterpretationState) = frame_parent(sv)
 # add the orphan child to the parent and the parent to the child
 function assign_parentchild!(child::InferenceState{I}, parent::AbsIntState{I}) where {I<:AbstractInterpreter}
     @assert child.frameid in (0, 1)
-    child.callstack = callstack = parent.callstack::Vector{AbsIntState{I}}
+    child.callstack = callstack = parent.callstack
     child.parentid = parent.frameid
     push!(callstack, child)
     child.cycleid = child.frameid = length(callstack)
@@ -1018,7 +1024,7 @@ function assign_parentchild!(child::InferenceState{I}, parent::AbsIntState{I}) w
 end
 function assign_parentchild!(child::IRInterpretationState{I}, parent::AbsIntState{I}) where {I<:AbstractInterpreter}
     @assert child.frameid in (0, 1)
-    child.callstack = callstack = parent.callstack::Vector{AbsIntState{I}}
+    child.callstack = callstack = parent.callstack
     child.parentid = parent.frameid
     push!(callstack, child)
     child.frameid = length(callstack)
@@ -1080,8 +1086,7 @@ Note that cycles may be visited in any order.
 """
 struct AbsIntStackUnwind{I<:AbstractInterpreter}
     callstack::Vector{AbsIntState{I}}
-    AbsIntStackUnwind(sv::AbsIntState{I}) where {I<:AbstractInterpreter} =
-        new{I}(sv.callstack::Vector{AbsIntState{I}})
+    AbsIntStackUnwind(sv::AbsIntState{I}) where {I<:AbstractInterpreter} = new{I}(sv.callstack)
 end
 function iterate(unw::AbsIntStackUnwind, frame::Int=length(unw.callstack))
     frame == 0 && return nothing
@@ -1106,8 +1111,8 @@ Iterate through all callers of the given `AbsIntState` in the abstract
 interpretation stack (including the given `AbsIntState` itself) that are part
 of the same cycle, only if it is part of a cycle with multiple frames.
 """
-function callers_in_cycle(sv::InferenceState{I}) where {I<:AbstractInterpreter}
-    callstack = sv.callstack::Vector{AbsIntState{I}}
+function callers_in_cycle(sv::InferenceState)
+    callstack = sv.callstack
     cycletop = cycleid = sv.cycleid
     while cycletop < length(callstack)
         frame = callstack[cycletop + 1]
@@ -1117,8 +1122,7 @@ function callers_in_cycle(sv::InferenceState{I}) where {I<:AbstractInterpreter}
     end
     return AbsIntCycle(callstack, cycletop == cycleid ? 0 : cycleid, cycletop)
 end
-callers_in_cycle(sv::IRInterpretationState{I}) where {I<:AbstractInterpreter} =
-    AbsIntCycle(sv.callstack::Vector{AbsIntState{I}}, 0, 0)
+callers_in_cycle(sv::IRInterpretationState) = AbsIntCycle(sv.callstack, 0, 0)
 
 get_curr_ssaflag(sv::InferenceState) = sv.ssaflags[sv.currpc]
 get_curr_ssaflag(sv::IRInterpretationState) = sv.ir.stmts[sv.curridx][:flag]

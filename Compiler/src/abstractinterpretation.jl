@@ -1407,9 +1407,9 @@ function compute_forwarded_argtypes(interp::AbstractInterpreter, arginfo::ArgInf
     return SimpleArgtypes(arginfo.argtypes)
 end
 
-function const_prop_call(interp::I,
+function const_prop_call(interp::AbstractInterpreter,
     mi::MethodInstance, result::MethodCallResult, arginfo::ArgInfo, sv::AbsIntState,
-    concrete_eval_result::Union{Nothing,ConstCallResult}=nothing) where {I<:AbstractInterpreter}
+    concrete_eval_result::Union{Nothing,ConstCallResult}=nothing)
     𝕃ᵢ = typeinf_lattice(interp)
     forwarded_argtypes = compute_forwarded_argtypes(interp, arginfo, sv)
     # use `cache_argtypes` that has been constructed for fresh regular inference if available
@@ -1459,7 +1459,7 @@ function const_prop_call(interp::I,
         sv.time_paused += frame.time_paused
         add_remark!(interp, sv, "[constprop] Fresh constant inference hit a cycle")
         @assert frame.frameid != 0 && frame.cycleid == frame.frameid
-        callstack = frame.callstack::Vector{AbsIntState{I}}
+        callstack = frame.callstack
         @assert callstack[end] === frame && length(callstack) == frame.frameid
         pop!(callstack)
         # add to the cache to record that this will always fail
@@ -4829,7 +4829,7 @@ end
 warnlength::Int = 2500
 function typeinf(interp::I, frame::InferenceState{I}) where {I<:AbstractInterpreter}
     time_before = _time_ns()
-    callstack = frame.callstack::Vector{AbsIntState{I}}
+    callstack = frame.callstack
     nextstates = CurrentState[]
     takenext = frame.frameid
     minwarn = warnlength
