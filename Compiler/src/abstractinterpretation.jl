@@ -3311,12 +3311,16 @@ function abstract_eval_new(interp::AbstractInterpreter, e::Expr, sstate::Stateme
         else
             consistent = ALWAYS_TRUE # immutable allocation is consistent
         end
-        if isconcretedispatch(rt)
-            nothrow = true
-            @assert fcount !== nothing && fcount ≥ nargs "malformed :new expression" # syntactically enforced by the front-end
+        # `:new` can carry `PartialStruct` even when `rt` isn't isconcretedispatch` —
+        # partially-instantiated parametric types (e.g. `Generator{Vector{Int}, F<:OC{Tuple{Int}, T} where T}`) still
+        # have well-defined field count, and field-level extended lattice elements carry
+        # information beyond the declared type.
+        if fcount !== nothing
+            nothrow = isconcretedispatch(rt)
+            @assert nargs ≤ fcount "malformed :new expression" # syntactically enforced by the front-end
             ats = Vector{Any}(undef, nargs)
             local anyrefine = false
-            local allconst = true
+            local allconst = isconcretedispatch(rt)
             for i = 1:nargs
                 at = widenslotwrapper(abstract_eval_value(interp, e.args[i+1], sstate, sv))
                 ft = fieldtype(rt, i)
@@ -3334,7 +3338,7 @@ function abstract_eval_new(interp::AbstractInterpreter, e::Expr, sstate::Stateme
                 end
                 ats[i] = at
             end
-            if fcount == nargs && consistent === ALWAYS_TRUE && allconst
+            if allconst && fcount == nargs && consistent === ALWAYS_TRUE
                 argvals = Vector{Any}(undef, nargs)
                 for j in 1:nargs
                     argvals[j] = (ats[j]::Const).val
@@ -3369,6 +3373,8 @@ function abstract_eval_new(interp::AbstractInterpreter, e::Expr, sstate::Stateme
                     end
                 end
                 rt = PartialStruct(𝕃ᵢ, rt, undefs, ats)
+            else
+                rt = refine_partial_type(rt)
             end
         else
             rt = refine_partial_type(rt)
