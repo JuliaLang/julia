@@ -767,9 +767,9 @@ function abstract_call_method(interp::AbstractInterpreter,
     return typeinf_edge(interp, method, sig, sparams, sv, edgecycle, edgelimited)
 end
 
-function edge_matches_sv(interp::I, frame::AbsIntState,
+function edge_matches_sv(interp::AbstractInterpreter, frame::AbsIntState,
                          method::Method, @nospecialize(sig), sparams::SimpleVector,
-                         hardlimit::Bool, sv::AbsIntState) where {I<:AbstractInterpreter}
+                         hardlimit::Bool, sv::AbsIntState)
     # The `method_for_inference_heuristics` will expand the given method's generator if
     # necessary in order to retrieve this field from the generated `CodeInfo`, if it exists.
     # The other `CodeInfo`s we inspect will already have this field inflated, so we just
@@ -780,9 +780,10 @@ function edge_matches_sv(interp::I, frame::AbsIntState,
     if callee_method2 !== inf_method2 # limit only if user token match
         return false
     end
-    # Frames in one callstack share the same interpreter type (enforced by `::I`),
-    # but distinct instances of that type may still have different cache owners.
-    if isa(frame, InferenceState) && cache_owner(frame.interp::I) !== cache_owner(interp)
+    # Frames in one callstack share the same interpreter type (enforced by the
+    # `AbsIntState{I}` parameter), but distinct instances of that type may still
+    # have different cache owners.
+    if isa(frame, InferenceState) && cache_owner(frame.interp) !== cache_owner(interp)
         return false
     end
     if !hardlimit || InferenceParams(interp).ignore_recursion_hardlimit
@@ -1406,9 +1407,9 @@ function compute_forwarded_argtypes(interp::AbstractInterpreter, arginfo::ArgInf
     return SimpleArgtypes(arginfo.argtypes)
 end
 
-function const_prop_call(interp::AbstractInterpreter,
+function const_prop_call(interp::I,
     mi::MethodInstance, result::MethodCallResult, arginfo::ArgInfo, sv::AbsIntState,
-    concrete_eval_result::Union{Nothing,ConstCallResult}=nothing)
+    concrete_eval_result::Union{Nothing,ConstCallResult}=nothing) where {I<:AbstractInterpreter}
     𝕃ᵢ = typeinf_lattice(interp)
     forwarded_argtypes = compute_forwarded_argtypes(interp, arginfo, sv)
     # use `cache_argtypes` that has been constructed for fresh regular inference if available
@@ -1458,7 +1459,7 @@ function const_prop_call(interp::AbstractInterpreter,
         sv.time_paused += frame.time_paused
         add_remark!(interp, sv, "[constprop] Fresh constant inference hit a cycle")
         @assert frame.frameid != 0 && frame.cycleid == frame.frameid
-        callstack = frame.callstack::Vector{AbsIntState}
+        callstack = frame.callstack::Vector{AbsIntState{I}}
         @assert callstack[end] === frame && length(callstack) == frame.frameid
         pop!(callstack)
         # add to the cache to record that this will always fail
@@ -4826,9 +4827,9 @@ end
 
 # make as much progress on `frame` as possible (by handling cycles)
 warnlength::Int = 2500
-function typeinf(interp::I, frame::InferenceState) where {I<:AbstractInterpreter}
+function typeinf(interp::I, frame::InferenceState{I}) where {I<:AbstractInterpreter}
     time_before = _time_ns()
-    callstack = frame.callstack::Vector{AbsIntState}
+    callstack = frame.callstack::Vector{AbsIntState{I}}
     nextstates = CurrentState[]
     takenext = frame.frameid
     minwarn = warnlength
@@ -4847,7 +4848,7 @@ function typeinf(interp::I, frame::InferenceState) where {I<:AbstractInterpreter
                 takenext = length(callstack)
             end
         end
-        interp = callee.interp::I
+        interp = callee.interp
         nextstateid = takenext + 1 - frame.frameid
         while length(nextstates) < nextstateid
             push!(nextstates, CurrentState())

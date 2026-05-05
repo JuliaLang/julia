@@ -316,8 +316,8 @@ function is_all_const_call(@nospecialize(stmt), interp::AbstractInterpreter, irs
     return true
 end
 
-function ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRInterpretationState;
-        externally_refined::Union{Nothing,BitSet} = nothing)
+function ir_abstract_constant_propagation(interp::I, irsv::IRInterpretationState{I};
+        externally_refined::Union{Nothing,BitSet} = nothing) where {I<:AbstractInterpreter}
     (; ir, tpdum, ssa_refined) = irsv
 
     @assert isempty(ir.new_nodes) "IRCode should be compacted before irinterp"
@@ -459,7 +459,7 @@ function ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRI
     end
 
     if irsv.frameid != 0
-        callstack = irsv.callstack::Vector{AbsIntState}
+        callstack = irsv.callstack::Vector{AbsIntState{I}}
         @assert callstack[end] === irsv && length(callstack) == irsv.frameid
         pop!(callstack)
     end

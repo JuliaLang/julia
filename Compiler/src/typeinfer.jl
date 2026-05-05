@@ -270,7 +270,7 @@ function finish!(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInstan
     return nothing
 end
 
-function finish_nocycle(interp::I, frame::InferenceState, time_before::UInt64) where {I<:AbstractInterpreter}
+function finish_nocycle(interp::I, frame::InferenceState{I}, time_before::UInt64) where {I<:AbstractInterpreter}
     opt_cache = IdDict{MethodInstance,CodeInstance}()
     finishinfer!(frame, interp, frame.cycleid, opt_cache)
     opt = frame.result.src
@@ -291,14 +291,14 @@ function finish_nocycle(interp::I, frame::InferenceState, time_before::UInt64) w
         ccall(:jl_promote_ci_to_current, Cvoid, (Any, UInt), frame.result.ci, validation_world)
     end
     if frame.cycleid != 0
-        frames = frame.callstack::Vector{AbsIntState}
+        frames = frame.callstack::Vector{AbsIntState{I}}
         @assert frames[end] === frame
         pop!(frames)
     end
     return nothing
 end
 
-function finish_cycle(interp::I, frames::Vector{AbsIntState}, cycleid::Int, time_before::UInt64) where {I<:AbstractInterpreter}
+function finish_cycle(interp::I, frames::Vector{AbsIntState{I}}, cycleid::Int, time_before::UInt64) where {I<:AbstractInterpreter}
     world = get_inference_world(interp)
     cycle_valid_worlds = WorldRange()
     cycle_valid_effects = EFFECTS_TOTAL
@@ -316,7 +316,7 @@ function finish_cycle(interp::I, frames::Vector{AbsIntState}, cycleid::Int, time
     for frameid = cycleid:length(frames)
         caller = frames[frameid]::InferenceState
         adjust_cycle_frame!(caller, world, cycle_valid_worlds, cycle_valid_effects)
-        finishinfer!(caller, caller.interp::I, cycleid, opt_cache)
+        finishinfer!(caller, caller.interp, cycleid, opt_cache)
         time_now = _time_ns()
         caller.time_self_ns += (time_now - time_before)
         time_before = time_now
@@ -327,7 +327,7 @@ function finish_cycle(interp::I, frames::Vector{AbsIntState}, cycleid::Int, time
         caller = frames[frameid]::InferenceState
         opt = caller.result.src
         if opt isa OptimizationState # implies `may_optimize(caller.interp) === true`
-            optimize(caller.interp::I, opt::OptimizationState{I}, caller.result)
+            optimize(caller.interp, opt::OptimizationState{I}, caller.result)
             cycle_valid_worlds = intersect(cycle_valid_worlds, compute_recursive_worlds(opt.inlining.edges))
             time_now = _time_ns()
             caller.time_self_ns += (time_now - time_before)
@@ -349,7 +349,7 @@ function finish_cycle(interp::I, frames::Vector{AbsIntState}, cycleid::Int, time
         caller.time_caches = time_caches
         caller.time_paused = time_paused
         update_valid_age!(caller, world, cycle_valid_worlds)
-        finish!(caller.interp::I, caller, validation_world, time_before)
+        finish!(caller.interp, caller, validation_world, time_before)
         if isdefined(caller.result, :ci)
             push!(cis, caller.result.ci)
         end
@@ -362,7 +362,7 @@ function finish_cycle(interp::I, frames::Vector{AbsIntState}, cycleid::Int, time
     # After everything is finished, promote the work into visible caches
     for frameid = cycleid:length(frames)
         caller = frames[frameid]::InferenceState
-        promotecache!(caller.interp::I, caller)
+        promotecache!(caller.interp, caller)
     end
     # After validation, under the world_counter_lock, set max_world to typemax(UInt) for all dependencies
     # (recursively). From that point onward the ordinary backedge mechanism is responsible for maintaining
@@ -508,9 +508,9 @@ function maybe_compress_codeinfo(interp::AbstractInterpreter, mi::MethodInstance
     return ci
 end
 
-function cycle_fix_limited(@nospecialize(typ), sv::InferenceState, cycleid::Int)
+function cycle_fix_limited(@nospecialize(typ), sv::InferenceState{I}, cycleid::Int) where {I<:AbstractInterpreter}
     if typ isa LimitedAccuracy
-        frames = sv.callstack::Vector{AbsIntState}
+        frames = sv.callstack::Vector{AbsIntState{I}}
         causes = typ.causes
         for frameid = cycleid:length(frames)
             caller = frames[frameid]::InferenceState
@@ -943,9 +943,9 @@ function type_annotate!(::AbstractInterpreter, sv::InferenceState)
     return nothing
 end
 
-function merge_call_chain!(::AbstractInterpreter, parent::InferenceState, child::InferenceState)
+function merge_call_chain!(::AbstractInterpreter, parent::InferenceState{I}, child::InferenceState{I}) where {I<:AbstractInterpreter}
     # update all cycleid to be in the same group
-    frames = parent.callstack::Vector{AbsIntState}
+    frames = parent.callstack::Vector{AbsIntState{I}}
     @assert child.callstack === frames
     ancestorid = child.cycleid
     # ensure that walking the callstack has the same cycleid (DAG)
@@ -963,8 +963,8 @@ function add_cycle_backedge!(caller::InferenceState, frame::InferenceState)
     return frame
 end
 
-function is_same_frame(interp::I, mi::MethodInstance, frame::InferenceState) where {I<:AbstractInterpreter}
-    return mi === frame_instance(frame) && cache_owner(interp) === cache_owner(frame.interp::I)
+function is_same_frame(interp::AbstractInterpreter, mi::MethodInstance, frame::InferenceState)
+    return mi === frame_instance(frame) && cache_owner(interp) === cache_owner(frame.interp)
 end
 
 function poison_callstack!(infstate::InferenceState, topmost::InferenceState)
@@ -978,12 +978,12 @@ end
 # we "resolve" it by merging the call chain, which entails updating each intermediary
 # frame's `cycleid` field. Finally, we return `mi`'s pre-existing frame.
 # If no cycles are found, `nothing` is returned instead.
-function resolve_call_cycle!(interp::AbstractInterpreter, mi::MethodInstance, parent::AbsIntState)
+function resolve_call_cycle!(interp::I, mi::MethodInstance, parent::AbsIntState) where {I<:AbstractInterpreter}
     # TODO (#48913) implement a proper recursion handling for irinterp:
     # This works most of the time currently just because the irinterp code doesn't get used much with
     # `@assume_effects`, so it never sees a cycle normally, but that may not be a sustainable solution.
     parent isa InferenceState || return false
-    frames = parent.callstack::Vector{AbsIntState}
+    frames = parent.callstack::Vector{AbsIntState{I}}
     uncached = false
     for frameid = reverse(1:length(frames))
         frame = frames[frameid]
