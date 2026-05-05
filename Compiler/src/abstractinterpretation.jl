@@ -3438,20 +3438,43 @@ function abstract_eval_new_opaque_closure(interp::AbstractInterpreter, e::Expr, 
                 # Propagation of PartialOpaque disabled
             end
             if isa(rt, PartialOpaque) && isa(sv, InferenceState) && !call_result_unused(sv, sv.currpc)
-                # Infer this now so that the specialization is available to
-                # optimization.
+                # Infer this now so that the specialization is available to optimization.
+                # Take the chance to refine `PartialOpaque.typ`'s rt parameter from the
+                # eager body inference's result.
                 argtypes = most_general_argtypes(rt)
                 pushfirst!(argtypes, rt.env)
                 callinfo = abstract_call_opaque_closure(interp, rt,
                     ArgInfo(nothing, argtypes), StmtInfo(true, false), sstate.vtypes, sv, #=check=#false)::Future
-                Future{Any}(callinfo, interp, sv) do callinfo, _, sv
+                local rt_for_future = rt
+                local effects_for_future = effects
+                return Future{RTEffects}(callinfo, interp, sv) do callinfo, _, sv
                     sv.stmt_info[sv.currpc] = OpaqueClosureCreateInfo(callinfo)
-                    nothing
+                    refined_rt = refine_partial_opaque_rt(rt_for_future, callinfo.rt)
+                    return RTEffects(refined_rt, Any, effects_for_future)
                 end
             end
         end
     end
     return Future(RTEffects(rt, Any, effects))
+end
+
+# Narrow `po.typ`'s rt parameter using the OC body's inferred return type when possible.
+# The OC type is shaped `OpaqueClosure{argt, T} where T<:rt_ub` (when `lb != ub`), and the
+# eager body inference yields a concrete `inferred_rt` that's a strict subtype of `rt_ub`.
+# Binding the outer `T` to that `inferred_rt` produces `OpaqueClosure{argt, inferred_rt}`.
+@nospecializeinfer function refine_partial_opaque_rt(po::PartialOpaque, @nospecialize(inferred_rt))
+    typ = po.typ
+    isa(typ, UnionAll) || return po
+    refined = widenconst(inferred_rt)
+    (refined === Any || refined === Union{}) && return po
+    tv = typ.var
+    tv.lb <: refined <: tv.ub || return po
+    refined_typ = try
+        typ{refined}
+    catch
+        return po
+    end
+    return PartialOpaque(refined_typ, po.env, po.parent, po.source)
 end
 
 function abstract_eval_copyast(interp::AbstractInterpreter, e::Expr, sstate::StatementState,

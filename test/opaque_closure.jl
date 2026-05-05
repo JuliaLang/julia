@@ -433,3 +433,19 @@ end
 
 # 49659: signature-scoped typevar shouldn't fail in lowering
 @test_throws "must be a tuple type" @opaque ((x::T,y::T) where {T}) -> 123
+
+# Refinement of return type information via eager inference:
+# Without this refinement, even if `PartialOpaque` is propagated through the `map` call stack,
+# the return type of the closure would be be lost at the `Core.Compiler._return_type` boundary
+# that `PartialOpaque` cannot cross. By storing the return type information known at eager
+# inference time in the type parameter of `Core.OpaqueClosure`, the following inference succeeds.
+@noinline print_oc_result(some) = @show some.value()
+@test Base.infer_return_type((Int,)) do x
+    oc = Base.Experimental.@opaque () -> 2x
+    some = Some(oc)
+    print_oc_result(some)
+end == Int
+@test Base.infer_return_type((Vector{Int},)) do xs
+    oc = Base.Experimental.@opaque x::Int -> 2x
+    return map(oc, xs)
+end == Vector{Int}
