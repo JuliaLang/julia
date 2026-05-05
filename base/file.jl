@@ -1064,7 +1064,7 @@ struct DirEntry
     name::String
     rawtype::Cint
 end
-path(obj::DirEntry) = joinpath(obj.dir, obj.name)
+path(obj::DirEntry) = joinpath(getfield(obj, :dir), getfield(obj, :name))
 Base.isless(a::DirEntry, b::DirEntry) = a.dir == b.dir ? isless(a.name, b.name) : isless(a.dir, b.dir)
 Base.hash(o::DirEntry, h::UInt) = hash(o.dir, hash(o.name, hash(o.rawtype, h)))
 Base.:(==)(a::DirEntry, b::DirEntry) = a.name == b.name && a.dir == b.dir && a.rawtype == b.rawtype
