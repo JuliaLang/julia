@@ -23,15 +23,16 @@ end
 @test sourcetext(ex[1][2]) == "\$(x+1)"
 @test sourcetext.(flattened_provenance(ex[1][3])) == ["\$y", "g(z)"]
 @test sprint(io->JuliaLowering._show_provtree(io, ex[1][3], "")) == raw"""
-    (call g z)
-    ├─ (call g z)
-    │  └─ (call g z)
-    │     └─ (call g ✘ z ✘)
-    │        └─ @ string:3
-    └─ ($ y)
-       └─ ($ ::K"$" y)
-          └─ @ string:5
-    """
+(call g z)
+├─ (call g z)
+│  └─ (call g z)
+│     └─ (call g ✘ z ✘)
+│        └─ @ string:3
+└─ ($ y)
+   └─ ($ y)
+      └─ ($ ::K"$" y)
+         └─ @ string:5
+"""
 @test sprint(io->showprov(io, ex[1][3])) == raw"""
     begin
         x = 10
