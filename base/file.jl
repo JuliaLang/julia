@@ -1064,9 +1064,10 @@ struct DirEntry
     name::String
     rawtype::Cint
 end
+path(obj::DirEntry) = joinpath(getfield(obj, :dir), getfield(obj, :name))
 function Base.getproperty(obj::DirEntry, p::Symbol)
     if p === :path
-        return joinpath(getfield(obj, :dir), getfield(obj, :name))
+        return path(obj)
     else
         return getfield(obj, p)
     end
