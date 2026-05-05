@@ -6321,3 +6321,25 @@ end
 @test Base.infer_return_type() do
     jetls618(1,2,3), jetls618(1,2,3,4)
 end == Tuple{Int,Int}
+
+# Const-prop' `PartialStruct` of well-formed types that are `!isconcretedispatch`:
+# Test with an example using `OpaqueClosure`, which would be represented as `PartialOpaque`,
+# which will be a field of `PartialStruct` representing `Some`. Here, since this `oc` has
+# untyped argument types, the return type cannot be derived by eager inference in the
+# current OC framework, so inference will fail unless `PartialOpaque` is propagated all the
+# way to `call_someoc`.
+call_someoc(some, x) = some.value(x)
+@test Base.infer_return_type() do
+    oc = Base.Experimental.@opaque x -> 2x
+    call_someoc(Some(oc), 1)
+end == Int
+# A somewhat artificial example, but a test case that exercises the above code path without
+# using `OpaqueClosure`
+struct UntypedBoxWithParam{T}
+    x::Some{Any}
+    UntypedBoxWithParam{T}(x) where T = new{T}(Some{Any}(x))
+end
+readbox(box::UntypedBoxWithParam) = box.x.value
+@test Base.infer_return_type((Type,Int)) do T, x
+    readbox(UntypedBoxWithParam{T}(x))
+end == Int
