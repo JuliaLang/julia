@@ -277,52 +277,39 @@ function unsafe_copyto!(dest::Array, doffs, src::Array, soffs, n)
     return dest
 end
 
-"""
-    copyto!(dest, doffs, src, soffs, n)
-
-Copy `n` elements from collection `src` starting at the linear index `soffs`, to array `dest` starting at
-the index `doffs`. Return `dest`.
-"""
-copyto!(dest::Array, doffs::Integer, src::Array, soffs::Integer, n::Integer) =
-    (@_propagate_inbounds_meta; _copyto_impl!(dest, doffs, src, soffs, n))
-copyto!(dest::Array, doffs::Integer, src::Memory, soffs::Integer, n::Integer) =
-    (@_propagate_inbounds_meta; _copyto_impl!(dest, doffs, src, soffs, n))
-copyto!(dest::Memory, doffs::Integer, src::Array, soffs::Integer, n::Integer) =
-    (@_propagate_inbounds_meta; _copyto_impl!(dest, doffs, src, soffs, n))
-
-# this is only needed to avoid possible ambiguities with methods added in some packages
-copyto!(dest::Array{T}, doffs::Integer, src::Array{T}, soffs::Integer, n::Integer) where {T} =
-    (@_propagate_inbounds_meta; _copyto_impl!(dest, doffs, src, soffs, n))
-
-function _copyto_impl!(dest::Union{Array,Memory}, doffs::Integer, src::Union{Array,Memory}, soffs::Integer, n::Integer)
-    @inline
-    n == 0 && return dest
-    n > 0 || _throw_argerror("Number of elements to copy must be non-negative.")
-    @boundscheck checkbounds(dest, doffs:doffs+n-1)
-    @boundscheck checkbounds(src, soffs:soffs+n-1)
-    @inbounds let dest = memoryref(dest isa Array ? getfield(dest, :ref) : dest, doffs),
-                  src = memoryref(src isa Array ? getfield(src, :ref) : src, soffs)
-        unsafe_copyto!(dest, src, n)
-    end
-    return dest
-end
-
-
 # Outlining this because otherwise a catastrophic inference slowdown
 # occurs, see discussion in #27874.
 # It is also mitigated by using a constant string.
 _throw_argerror(s) = (@noinline; throw(ArgumentError(s)))
 
-_copyto2arg!(dest, src) = copyto!(dest, firstindex(dest), src, firstindex(src), length(src))
+function _check_copyto_args(dest, doffs, src, soffs, n)
+    @inline
+    n > 0 || _throw_argerror("Number of elements to copy must be non-negative.")
+    @boundscheck checkbounds(dest, doffs:doffs+n-1)
+    @boundscheck checkbounds(src, soffs:soffs+n-1)
+    return nothing
+end
 
-copyto!(dest::Array, src::Array) = _copyto2arg!(dest, src)
-copyto!(dest::Array, src::Memory) = _copyto2arg!(dest, src)
-copyto!(dest::Memory, src::Array) = _copyto2arg!(dest, src)
+# these methods are not necessary, but they help inference since we set max_methods=1 on copyto!
+copyto!(dest::Array, src::Array) =
+    (@_propagate_inbounds_meta; _copyto!(dest, firstindex(dest), src, firstindex(src), length(src)))
+copyto!(dest::Array, src::Memory) =
+    (@_propagate_inbounds_meta; _copyto!(dest, firstindex(dest), src, firstindex(src), length(src)))
+copyto!(dest::Memory, src::Array) =
+    (@_propagate_inbounds_meta; _copyto!(dest, firstindex(dest), src, firstindex(src), length(src)))
+copyto!(dest::Array{T}, src::Array{T}) where {T} =
+    (@_propagate_inbounds_meta; _copyto!(dest, firstindex(dest), src, firstindex(src), length(src)))
 
-# also to avoid ambiguities in packages
-copyto!(dest::Array{T}, src::Array{T}) where {T} = _copyto2arg!(dest, src)
-copyto!(dest::Array{T}, src::Memory{T}) where {T} = _copyto2arg!(dest, src)
-copyto!(dest::Memory{T}, src::Array{T}) where {T} = _copyto2arg!(dest, src)
+function _copyto!(dest::Union{Array,Memory}, doffs::Integer, src::Union{Array,Memory}, soffs::Integer, n::Integer)
+    @inline
+    n == 0 && return dest
+    _check_copyto_args(dest, doffs, src, soffs, n)
+    @inbounds let dref = memoryref(dest isa Array ? getfield(dest, :ref) : dest, doffs),
+                  sref = memoryref(src isa Array ? getfield(src, :ref) : src, soffs)
+        unsafe_copyto!(dref, sref, n)
+    end
+    return dest
+end
 
 # N.B: This generic definition in for multidimensional arrays is here instead of
 # `multidimensional.jl` for bootstrapping purposes.
@@ -781,12 +768,14 @@ end
 function _collect_indices(::Tuple{}, A)
     dest = Array{eltype(A),0}(undef)
     isempty(A) && return dest
-    return copyto_unaliased!(IndexStyle(dest), dest, IndexStyle(A), A)
+    _copyto!(IndexStyle(dest), dest, IndexStyle(A), A)
+    return dest
 end
 function _collect_indices(indsA::Tuple{Vararg{OneTo}}, A)
     dest = Array{eltype(A)}(undef, length.(indsA))
     isempty(A) && return dest
-    return copyto_unaliased!(IndexStyle(dest), dest, IndexStyle(A), A)
+    _copyto!(IndexStyle(dest), dest, IndexStyle(A), A)
+    return dest
 end
 function _collect_indices(indsA, A)
     B = Array{eltype(A)}(undef, length.(indsA))

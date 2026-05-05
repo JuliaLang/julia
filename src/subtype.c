@@ -2801,6 +2801,20 @@ static void set_bound(jl_value_t **bound, jl_value_t *val, jl_tvar_t *v, jl_sten
     *bound = val;
 }
 
+// check if we can substitute `b` for `ub`, where the caller should have already identified
+// this slot with `ub` (via intersecting `b`'s declared upper bound with the other operand)
+static int should_alias_to_env_typevar(jl_tvar_t *b, jl_varbinding_t *bb, jl_value_t *ub, jl_stenv_t *e)
+{
+    if (bb->concrete)
+        return 0;
+    if (!jl_is_typevar(ub) || lookup(e, (jl_tvar_t*)ub) == NULL)
+        return 0;
+    if (b->lb == jl_bottom_type && b->ub == (jl_value_t*)jl_any_type)
+        return 1;
+    jl_tvar_t *ubvar = (jl_tvar_t*)ub;
+    return jl_subtype(b->lb, ubvar->lb) && jl_subtype(ubvar->ub, b->ub);
+}
+
 // subtype, treating all vars as existential
 static int subtype_in_env_existential(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 {
@@ -2894,9 +2908,14 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
             ub = a;
         }
         else {
-            e->triangular++;
-            ub = R ? intersect_aside(a, bb->ub, e, bb->depth0) : intersect_aside(bb->ub, a, e, bb->depth0);
-            e->triangular--;
+            if (jl_subtype(a, bb->ub)) {
+                ub = a;
+            }
+            else {
+                e->triangular++;
+                ub = R ? intersect_aside(a, bb->ub, e, bb->depth0) : intersect_aside(bb->ub, a, e, bb->depth0);
+                e->triangular--;
+            }
             jl_savedenv_t se;
             save_env(e, &se, 1);
             int issub = subtype_in_env_existential(bb->lb, ub, e);
@@ -2936,7 +2955,11 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
     if (bb->constraintkind == 1) {
         if (!jl_is_type_type(ub) && !jl_is_uniontype(ub) && !jl_is_unionall(ub)) {
             // this branch is a fast path if there are no `Type`s and not needed for correctness
+            JL_GC_PUSH1(&ub);
             set_bound(&bb->ub, ub, b, e);
+            if (should_alias_to_env_typevar(b, bb, ub, e))
+                set_bound(&bb->lb, ub, b, e);
+            JL_GC_POP();
             return (jl_value_t*)b;
         }
         jl_value_t *ub2 = NULL;
@@ -2960,6 +2983,12 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
     else if (bb->constraintkind == 0) {
         JL_GC_PUSH1(&ub);
         if (!jl_is_typevar(a) && try_subtype_in_env(bb->ub, a, e)) {
+            JL_GC_POP();
+            return (jl_value_t*)b;
+        }
+        if (should_alias_to_env_typevar(b, bb, ub, e)) {
+            set_bound(&bb->ub, ub, b, e);
+            set_bound(&bb->lb, ub, b, e);
             JL_GC_POP();
             return (jl_value_t*)b;
         }
@@ -3244,7 +3273,8 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
                     res = jl_bottom_type;
                 }
             }
-            else if (ilb == (jl_value_t*)vb->var) {
+            else if (ilb == (jl_value_t*)vb->var &&
+                     !(vb->lb == jl_bottom_type && vb->ub == (jl_value_t*)jl_any_type)) {
                 *btemp->lb = vb->lb;
             }
             else {
@@ -3268,11 +3298,11 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
                 else
                     *btemp->ub = iub;
             }
-            else if (iub == (jl_value_t*)vb->var) {
-                // TODO: this loses some constraints, such as in this test, where we replace T4<:S3 (e.g. T4==S3 since T4 only appears covariantly once) with T4<:Any
-                // a = Tuple{Float64,T3,T4} where T4 where T3
-                // b = Tuple{S2,Tuple{S3},S3} where S2 where S3
-                // Tuple{Float64, T3, T4} where {S3, T3<:Tuple{S3}, T4<:S3}
+            else if (iub == (jl_value_t*)vb->var &&
+                     !(vb->lb == jl_bottom_type && vb->ub == (jl_value_t*)jl_any_type)) {
+                // TODO: when vb has a non-trivial bound this still loses constraints,
+                // e.g. replacing T4<:S3 with T4<:S3.ub. The unrestricted case falls
+                // through to innerflag to preserve the typevar identity.
                 *btemp->ub = vb->ub;
             }
             else {

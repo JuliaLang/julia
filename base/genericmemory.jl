@@ -194,7 +194,6 @@ function copy(a::T) where {T<:Memory}
     @inbounds unsafe_copyto!(newmem, 1, a, 1, length(a))
 end
 
-copyto!(dest::Memory, src::Memory) = copyto!(dest, 1, src, 1, length(src))
 function copyto!(dest::Memory, doffs::Integer, src::Memory, soffs::Integer, n::Integer)
     n < 0 && _throw_argerror("Number of elements to copy must be non-negative.")
     unsafe_copyto!(dest, doffs, src, soffs, n)

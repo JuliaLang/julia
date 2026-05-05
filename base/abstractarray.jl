@@ -1067,50 +1067,142 @@ julia> y
 ```
 """
 function copyto!(dest::AbstractArray, src::AbstractArray)
+    @_propagate_inbounds_meta
     isempty(src) && return dest
-    if dest isa BitArray
-        # avoid ambiguities with other copyto!(::AbstractArray, ::SourceArray) methods
-        return _copyto_bitarray!(dest, src)
-    end
-    src′ = unalias(dest, src)
-    copyto_unaliased!(IndexStyle(dest), dest, IndexStyle(src′), src′)
+    @boundscheck length(src) <= length(dest) || throw(BoundsError(dest, LinearIndices(src)))
+    _copyto!(CopyToStyle(CopyToStyle(typeof(dest)), CopyToStyle(typeof(src))), dest, src)
+    return dest
 end
+
+"""
+    CopyToStyle
+
+Abstract trait hub coordinating `copyto!(dest, src)` dispatch across wrapper and
+specialized array types. Use it when a `copyto!(dest, src)` specialization would
+otherwise ambiguate with dest- or src-type methods from other packages.
+
+- `CopyToStyle(::Type{<:YourArrayType}) = YourStyle()` registers a type under a style.
+- `CopyToStyle(::A, ::B)` is the combination rule: given the dest-side style and
+  src-side style, return the combined style that wins. The base default is
+  **LHS (dest) wins** — if your style should take precedence as a destination,
+  no rule is needed. Override only when src should win over a default dest,
+  or to resolve a specific pairwise conflict with another package's style.
+- `_copyto!(::YourStyle, dest, src)` is the algorithm for that combined style.
+
+The combination rule is the single place cross-type precedence lives, which keeps
+cross-package ambiguities out of `copyto!`'s public method table.
+
+Follows the same shape as [`Base.Broadcast.BroadcastStyle`](@ref): register on the
+type (`CopyToStyle(::Type{...})`), define combination rules between style values,
+and write the algorithm dispatched on the resolved style.
+
+# Style algorithm contract
+
+When a `_copyto!(::YourStyle, dest, src)` method is entered, the public `copyto!`
+caller above it guarantees only:
+
+- `!isempty(src)`
+- `length(src) <= length(dest)`
+
+Aliasing, axes checks, and SubArray unwrapping are NOT handled by the public entry.
+Your style method must handle them itself if its algorithm is sensitive to them:
+
+- **Aliasing**: either unalias explicitly (`src = unalias(dest, src)`) or delegate
+  to `DefaultCopyToStyle` (`_copyto!(DefaultCopyToStyle(), dest, src)`) which handles
+  aliasing in the generic IS-dispatched path.
+- **Axes match**: `@boundscheck checkbounds(dest, axes(src)...)` at the top, if your
+  algorithm writes based on `axes(src)`.
+- **SubArray unwrap**: call `_unwrap_with_offset(src)` explicitly if you want to
+  operate on a view's parent memory.
+
+Algorithms that are aliasing-safe by construction (e.g. `memmove`, chunk copies
+with internal direction detection) don't need unaliasing.
+"""
+abstract type CopyToStyle end
+
+"""
+    DefaultCopyToStyle <: CopyToStyle
+
+Fallback style. Its algorithm is the generic IndexStyle-dispatched `copyto!`.
+"""
+struct DefaultCopyToStyle <: CopyToStyle end
+
+CopyToStyle(::Type{<:AbstractArray}) = DefaultCopyToStyle()
+# Combination rule: by default the LHS (dest-side) style wins. Override to declare
+# that your style should win as src over a default dest, or to resolve conflicts.
+CopyToStyle(a::CopyToStyle, ::CopyToStyle) = a
+
+_copyto!(::DefaultCopyToStyle, dest::AbstractArray, src::AbstractArray) =
+    (@_propagate_inbounds_meta; _copyto!(IndexStyle(dest), dest, IndexStyle(src), src))
 
 function copyto!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
+    @_propagate_inbounds_meta
     isempty(src) && return dest
-    src′ = unalias(dest, src)
-    copyto_unaliased!(deststyle, dest, srcstyle, src′)
+    @boundscheck length(src) <= length(dest) || throw(BoundsError(dest, LinearIndices(src)))
+    # Route through `CopyToStyle` so src-type specializations (e.g. LinearAlgebra's
+    # future `AdjOrTransCopyToStyle`) fire from direct 4-arg callers too. The user's
+    # IS hints become advisory: the default style's algorithm reuses them; other
+    # styles may ignore them in favor of their own algorithm.
+    _copyto!(CopyToStyle(CopyToStyle(typeof(dest)), CopyToStyle(typeof(src))), dest, src)
+    return dest
 end
 
+# Temporary shim: pre-refactor external callers of `copyto_unaliased!` still work,
+# and LinearAlgebra's master-era `Base.copyto_unaliased!` override on AdjOrTransAbsMat
+# loads without error (though it is unreachable from the new flow — LA will migrate
+# to a `CopyToStyle`-based specialization in a coordinated follow-up).
 function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
-    isempty(src) && return dest
-    destinds, srcinds = LinearIndices(dest), LinearIndices(src)
-    idf, isf = first(destinds), first(srcinds)
-    Δi = idf - isf
-    (checkbounds(Bool, destinds, isf+Δi) & checkbounds(Bool, destinds, last(srcinds)+Δi)) ||
-        throw(BoundsError(dest, srcinds))
+    @_propagate_inbounds_meta
+    _copyto!(deststyle, dest, srcstyle, src)
+end
+
+function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray)
+    @_propagate_inbounds_meta
+    copyto!(dest, dstart, src, first(LinearIndices(src)), length(src))
+end
+
+function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray, sstart::Integer)
+    @_propagate_inbounds_meta
+    srcinds = LinearIndices(src)
+    @boundscheck checkbounds(Bool, srcinds, sstart) || throw(BoundsError(src, sstart))
+    copyto!(dest, dstart, src, sstart, last(srcinds)-sstart+1)
+end
+
+_unwrap_with_offset(a::T) where {T<:AbstractArray} = (a::T, 0)
+
+"""
+    copyto!(dest, doffs, src, soffs, n)
+
+Copy `n` elements from collection `src` starting at the linear index `soffs`, to array `dest` starting at
+the index `doffs`. Return `dest`.
+"""
+function copyto!(dest::AbstractArray, dstart::Integer,
+                 src::AbstractArray, sstart::Integer,
+                 n::Integer)
+    @_propagate_inbounds_meta
+    _copyto!(dest, dstart, src, sstart, n)
+    return dest
+end
+
+function _copyto!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
+    @_propagate_inbounds_meta
+    if deststyle isa IndexLinear && srcstyle isa IndexLinear
+        _copyto!(dest, firstindex(dest), src, firstindex(src), length(src))
+        return dest
+    end
+    src = unalias(dest, src)
     if deststyle isa IndexLinear
-        if srcstyle isa IndexLinear
-            # Single-index implementation
-            @inbounds for i in srcinds
-                dest[i + Δi] = src[i]
-            end
-        else
-            # Dual-index implementation
-            i = idf - 1
-            @inbounds for a in src
-                dest[i+=1] = a
-            end
+        i = first(LinearIndices(dest)) - 1
+        @inbounds for a in src
+            dest[i+=1] = a
         end
     else
         iterdest, itersrc = eachindex(dest), eachindex(src)
         if iterdest == itersrc
-            # Shared-iterator implementation
             for I in iterdest
                 @inbounds dest[I] = src[I]
             end
         else
-            # Dual-iterator implementation
             for (Idest, Isrc) in zip(iterdest, itersrc)
                 @inbounds dest[Idest] = src[Isrc]
             end
@@ -1119,28 +1211,18 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
     return dest
 end
 
-function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray)
-    copyto!(dest, dstart, src, first(LinearIndices(src)), length(src))
-end
-
-function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray, sstart::Integer)
-    srcinds = LinearIndices(src)
-    checkbounds(Bool, srcinds, sstart) || throw(BoundsError(src, sstart))
-    copyto!(dest, dstart, src, sstart, last(srcinds)-sstart+1)
-end
-
-function copyto!(dest::AbstractArray, dstart::Integer,
-                 src::AbstractArray, sstart::Integer,
-                 n::Integer)
+function _copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray, sstart::Integer, n::Integer)
+    @_propagate_inbounds_meta
     n == 0 && return dest
-    n < 0 && throw(ArgumentError(LazyString("tried to copy n=",
-        n," elements, but n should be non-negative")))
-    destinds, srcinds = LinearIndices(dest), LinearIndices(src)
-    (checkbounds(Bool, destinds, dstart) && checkbounds(Bool, destinds, dstart+n-1)) || throw(BoundsError(dest, dstart:dstart+n-1))
-    (checkbounds(Bool, srcinds, sstart)  && checkbounds(Bool, srcinds, sstart+n-1))  || throw(BoundsError(src,  sstart:sstart+n-1))
-    src′ = unalias(dest, src)
+    _check_copyto_args(dest, dstart, src, sstart, n)
+    dp, doff = _unwrap_with_offset(dest)
+    sp, soff = _unwrap_with_offset(src)
+    if (dp !== dest) | (sp !== src)
+        return _copyto!(dp, dstart + doff, sp, sstart + soff, n)
+    end
+    src = unalias(dest, src)
     @inbounds for i = 0:n-1
-        dest[dstart+i] = src′[sstart+i]
+        dest[dstart+i] = src[sstart+i]
     end
     return dest
 end
