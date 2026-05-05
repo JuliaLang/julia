@@ -31,7 +31,7 @@ Return an exception suitable for serialization. Defaults to returning [`Captured
 Used in [`asyncmap`](@ref) and [`asyncmap!`](@ref) to capture exceptions thrown during
 the user-supplied function call.
 """
-capture_exception(ex, bt::Vector) = CapturedException(ex, bt)
+capture_exception(ex, bt) = CapturedException(ex, bt)
 
 function capture_exception(stk::ExceptionStack)
     isempty(stk) && throw(ArgumentError("cannot capture an empty exception stack"))
