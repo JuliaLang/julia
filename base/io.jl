@@ -159,7 +159,6 @@ typeof(readavailable).name.max_methods = UInt8(1)
 function isexecutable end
 typeof(isexecutable).name.max_methods = UInt8(1)
 
-
 """
     isreadable(io)::Bool
 
