@@ -211,6 +211,18 @@ create_serialization_stream() do s # immutable struct with 4 field
     @test invokelatest(deserialize, s) === utval
 end
 
+create_serialization_stream() do s # union types
+    serialize(s, Union{Int,Float64})
+    serialize(s, Union{Int,Missing})
+    serialize(s, Union{Int,Float64,String})
+    serialize(s, [Union{Int,Float64}, Union{String,Symbol}, Union{Int,Missing}])
+    seek(s, 0)
+    @test deserialize(s) === Union{Int,Float64}
+    @test deserialize(s) === Union{Int,Missing}
+    @test deserialize(s) === Union{Int,Float64,String}
+    @test deserialize(s) == Type[Union{Int,Float64}, Union{String,Symbol}, Union{Int,Missing}]
+end
+
 # Expression
 create_serialization_stream() do s
     expr = Meta.parse("a = 1")

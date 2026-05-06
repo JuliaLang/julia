@@ -493,6 +493,12 @@ function serialize(s::AbstractSerializer, linfo::Core.MethodInstance)
     nothing
 end
 
+function serialize(s::AbstractSerializer, @nospecialize(u::Union))
+    serialize_type(s, Union, false)
+    serialize(s, u.a)
+    serialize(s, u.b)
+end
+
 function serialize(s::AbstractSerializer, t::Task)
     serialize_cycle(s, t) && return
     if istaskstarted(t) && !istaskdone(t)
