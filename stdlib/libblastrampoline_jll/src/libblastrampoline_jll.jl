@@ -34,6 +34,15 @@ function __init__()
     push!(LIBPATH_list, LIBPATH[])
 end
 
+# Compatibility shim for the LazyLibrary-era `add_dependency!` API (used by
+# `LinearAlgebra.__init__` to register OpenBLAS with LBT). With the non-lazy
+# stub form, the dependency library is already eagerly loaded by its own JLL
+# stub by the time this is invoked, so we simply run the on-load callback
+# directly.
+function add_dependency!(mod::Module, lib::AbstractString, on_load_callback::Function = () -> nothing)
+    on_load_callback()
+end
+
 # JLLWrappers API compatibility shims.  Note that not all of these will really make sense.
 # For instance, `find_artifact_dir()` won't actually be the artifact directory, because
 # there isn't one.  It instead returns the overall Julia prefix.
