@@ -4,45 +4,39 @@
 
 baremodule LibUnwind_jll
 using Base, Libdl
-using Zlib_jll
-if !Sys.isfreebsd()
-    using CompilerSupportLibraries_jll
-end
+
+const PATH_list = String[]
+const LIBPATH_list = String[]
 
 export libunwind
 
 # These get calculated in __init__()
 const PATH = Ref("")
-const PATH_list = String[]
 const LIBPATH = Ref("")
-const LIBPATH_list = String[]
 artifact_dir::String = ""
-
+libunwind_handle::Ptr{Cvoid} = C_NULL
 libunwind_path::String = ""
-const libunwind = LazyLibrary(
-    BundledLazyLibraryPath("libunwind.so.8"),
-    dependencies = LazyLibrary[libz]
-)
 
-function eager_mode()
-    @static if @isdefined CompilerSupportLibraries_jll
-        CompilerSupportLibraries_jll.eager_mode()
-    end
-    Zlib_jll.eager_mode()
-    dlopen(libunwind)
-end
-is_available() = @static(Sys.islinux() || Sys.isfreebsd()) ? true : false
+const libunwind = "libunwind.so.8"
 
 function __init__()
-    global libunwind_path = string(libunwind.path)
-    global artifact_dir = dirname(Sys.BINDIR)
-    LIBPATH[] = dirname(libunwind_path)
-    push!(LIBPATH_list, LIBPATH[])
+    # We only do something on Linux/FreeBSD
+    @static if Sys.islinux() || Sys.isfreebsd()
+        global libunwind_handle = dlopen(libunwind)
+        global libunwind_path = dlpath(libunwind_handle)
+        global artifact_dir = dirname(Sys.BINDIR)
+        LIBPATH[] = dirname(libunwind_path)
+        push!(LIBPATH_list, LIBPATH[])
+    end
 end
 
-if Base.generating_output()
-    precompile(eager_mode, ())
-    precompile(is_available, ())
-end
+# JLLWrappers API compatibility shims.  Note that not all of these will really make sense.
+# For instance, `find_artifact_dir()` won't actually be the artifact directory, because
+# there isn't one.  It instead returns the overall Julia prefix.
+is_available() = @static (Sys.islinux() || Sys.isfreebsd()) ? true : false
+find_artifact_dir() = artifact_dir
+dev_jll() = error("stdlib JLLs cannot be dev'ed")
+best_wrapper = nothing
+get_libunwind_path() = libunwind_path
 
 end  # module LibUnwind_jll
