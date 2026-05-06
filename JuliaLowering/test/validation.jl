@@ -120,6 +120,10 @@ let
     end
 end
 
+@test !vst1_ok(Expr(:nothing))
+@test vst1_ok(Expr(:block, nothing))
+@test vst1_ok(Expr(:block, GlobalRef(Core, :nothing)))
+
 @test vst1_ok(Expr(:-->, 1))
 @test vst1_ok(Expr(:-->, 1, 2))
 @test vst1_ok(Expr(:-->, 1, 2, 3))

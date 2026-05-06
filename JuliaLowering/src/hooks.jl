@@ -1,11 +1,13 @@
+# TODO: Allow `soft_scope::Union{Nothing,Bool}` to be passed through `jl_lower` C API
+
 """
 Becomes `Core._lower()` upon activating JuliaLowering.
 
 Returns an svec with the lowered code (usually expr) as its first element, and
 (until integration is less experimental) whatever we want after it
 """
-function core_lowering_hook(@nospecialize(code), mod::Module,
-                            file="none", line=0, world=typemax(Csize_t), _warn=false)
+function core_lowering_hook(@nospecialize(code), mod::Module, file::Union{String,Ptr{UInt8}}="none",
+                            line::Integer=0, world::UInt=typemax(Csize_t), _warn::Bool=false)
     if !(code isa SyntaxTree || code isa Expr)
         # e.g. LineNumberNode, integer...
         return Core.svec(code)

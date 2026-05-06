@@ -2110,8 +2110,6 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
 
     // Reset the target triple to make sure it matches the new target machine
 
-    bool has_veccall = false;
-
     {
         JL_TIMING(NATIVE_AOT, NATIVE_Setup);
         dataM.setDataLayout(DL);
@@ -2190,7 +2188,6 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
             }
         }
 
-        has_veccall = !!dataM.getModuleFlag("julia.mv.veccall");
     };
 
     {
@@ -2250,20 +2247,8 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
             builder.CreateRet(ConstantInt::get(T_int32, 1));
         }
         if (imaging_mode) {
-            auto specs = jl_get_llvm_clone_targets(jl_options.cpu_target);
-            const uint32_t base_flags = has_veccall ? JL_TARGET_VEC_CALL : 0;
-            SmallVector<uint8_t, 0> data;
-            auto push_i32 = [&] (uint32_t v) {
-                uint8_t buff[4];
-                memcpy(buff, &v, 4);
-                data.insert(data.end(), buff, buff + 4);
-            };
-            push_i32(specs.size());
-            for (uint32_t i = 0; i < specs.size(); i++) {
-                push_i32(base_flags | (specs[i].flags & JL_TARGET_UNKNOWN_NAME));
-                auto &specdata = specs[i].data;
-                data.insert(data.end(), specdata.begin(), specdata.end());
-            }
+            auto targets = jl_get_llvm_clone_targets(jl_options.cpu_target);
+            auto &data = targets.data;
             auto value = ConstantDataArray::get(Context, data);
             auto target_ids = new GlobalVariable(metadataM, value->getType(), true,
                                         GlobalVariable::InternalLinkage,
@@ -2279,8 +2264,9 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
             jl_small_typeof_copy->setVisibility(GlobalValue::HiddenVisibility);
             jl_small_typeof_copy->setDSOLocal(true);
 
-            // Create CPU target string constant
-            auto cpu_target_str = jl_options.cpu_target ? jl_options.cpu_target : "native";
+            // Create CPU target string constant.
+            // Don't store "sysimage" keyword — store the actual resolved target string.
+            std::string cpu_target_str = jl_expand_sysimage_keyword(jl_options.cpu_target);
             auto cpu_target_data = ConstantDataArray::getString(Context, cpu_target_str, true);
             auto cpu_target_global = new GlobalVariable(metadataM, cpu_target_data->getType(), true,
                                                        GlobalVariable::InternalLinkage,

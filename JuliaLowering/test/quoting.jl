@@ -23,15 +23,16 @@ end
 @test sourcetext(ex[1][2]) == "\$(x+1)"
 @test sourcetext.(flattened_provenance(ex[1][3])) == ["\$y", "g(z)"]
 @test sprint(io->JuliaLowering._show_provtree(io, ex[1][3], "")) == raw"""
-    (call g z)
-    ├─ (call g z)
-    │  └─ (call g z)
-    │     └─ (call g ✘ z ✘)
-    │        └─ @ string:3
-    └─ ($ y)
-       └─ ($ ::K"$" y)
-          └─ @ string:5
-    """
+(call g z)
+├─ (call g z)
+│  └─ (call g z)
+│     └─ (call g ✘ z ✘)
+│        └─ @ string:3
+└─ ($ y)
+   └─ ($ y)
+      └─ ($ ::K"$" y)
+         └─ @ string:5
+"""
 @test sprint(io->showprov(io, ex[1][3])) == raw"""
     begin
         x = 10
@@ -282,6 +283,18 @@ end
 
     @test fl_eval(test_mod, Expr(:block, quoted)) == form
     @test jl_eval(test_mod, Expr(:block, quoted); expr_compat_mode) == form
+
+end
+
+@testset "self-quoting forms, interpolated into quote, expr compat" for
+    form in [1, true, "string", [], nothing, :symbol],
+    quoted in [Expr(:quote, form), Expr(:inert, form), QuoteNode(form)]
+
+    @test fl_eval(test_mod, Expr(:quote, Expr(:$, quoted))) == form
+    @test jl_eval(test_mod, Expr(:quote, Expr(:$, quoted)); expr_compat_mode=true) == form
+
+    # Just to track behaviour
+    @test jl_eval(test_mod, Expr(:quote, Expr(:$, quoted)); expr_compat_mode=false) isa SyntaxTree
 end
 
 # (. l r) should pass lowering only when r is one of:

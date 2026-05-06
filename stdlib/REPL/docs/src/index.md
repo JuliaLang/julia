@@ -2,7 +2,7 @@
 EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/REPL/docs/src/index.md"
 ```
 
-# The Julia REPL
+# REPL
 
 Julia comes with a full-featured interactive command-line REPL (read-eval-print loop) built into
 the `julia` executable. In addition to allowing quick and easy evaluation of Julia statements,

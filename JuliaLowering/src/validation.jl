@@ -245,10 +245,9 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     #---------------------------------------------------------------------------
     # Forms not produced by the parser
     [K"ssavalue" [K"Value"]] -> pass()
+    [K"static_parameter" [K"Value"]] -> pass()
     [K"inert" _] -> pass()
     [K"inert_syntaxtree" _] -> pass()
-    [K"core"] -> st.name_val === "nothing" ? pass() :
-        @fail(st, "zero-arg `core` is only used for `Core.nothing`")
     [K"core" [K"Identifier"]] -> pass()
     [K"top" [K"Identifier"]] -> pass()
     [K"meta" _...] -> pass() # TODO
@@ -1084,7 +1083,7 @@ vst0_macrocall(vcx, st) = @stm st begin
     (_, when=!vcx.unexpanded) ->
         @fail(st, "macrocall not valid in AST after macro expansion")
     ([K"macrocall" name [K"Value"] args...],
-     when=(typeof(st[2].value) in (LineNumberNode, Core.MacroSource))) ->
+     when=(typeof(st[2].value) in (LineNumberNode, MacroSource))) ->
          pass()
     [K"macrocall" _...] ->
         @fail(st, "expected (macrocall name linenode args...)")
@@ -1149,13 +1148,14 @@ function _assert_syntaxtree(st::SyntaxTree, parents::Vector{NodeId}, vr)
             [K"slot"] -> (:var_id,)
             [K"static_parameter"] -> (:var_id,)
             [K"SSAValue"] -> (:var_id,)
+            [K"nothing"] -> ()
             [K"TOMBSTONE"] -> ()
             [K"SourceLocation"] -> ()
             [K"latestworld"] -> ()
             [K"latestworld_if_toplevel"] -> ()
             (_, when=JuliaSyntax.is_literal(st)) -> (:value,)
             (_, when=JuliaSyntax.is_trivia(st)) -> () # green tree only
-            (_, when=JuliaSyntax.is_operator(st)) -> (:name_val) # TODO: remove
+            (_, when=JuliaSyntax.is_operator(st)) -> (:name_val,) # TODO: remove
             _ -> return vr & @fail(st, "unrecognized leaf kind")
         end
     else
@@ -1169,6 +1169,13 @@ function _assert_syntaxtree(st::SyntaxTree, parents::Vector{NodeId}, vr)
     for a in required_attrs
         vr &= hasattr(st, a) ? pass() : @fail(st, string("needs attribute ", a))
     end
+    # TODO: Proper traversal along .source and .macro_source (need to cache
+    # results to avoid exponential repeated lookups, and figure out how these
+    # edges may form cycles with child edges)
+    st.source === st._id && (vr &= @fail(st, ".source equal to self ID"))
+    get(st, :macro_source, nothing) === st._id &&
+        (vr &= @fail(st, ".macro_source equal to self ID"))
+
     push!(parents, st._id)
     for c in children(st)
         vr &= _assert_syntaxtree(c, parents, vr)
@@ -1199,7 +1206,7 @@ end
 
 vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
     (_, when=is_leaf(st)) -> kind(st) in KSet"""
-    Identifier BindingId Placeholder
+    Identifier BindingId Placeholder nothing static_parameter
     Bool Char Float Float32 BinInt OctInt HexInt Integer
     SourceLocation String Symbol Value core top
     latestworld latestworld_if_toplevel symbolicgoto oldsymbolicgoto symboliclabel TOMBSTONE
@@ -1240,9 +1247,11 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
     [K"function_type" x] -> vst2(vcx, x)
     [K"method" name meta lam] -> !vcx.in_method_defs ?
         @fail(st, "method outside of method_defs") :
-        vst2_ident_val(vcx, name) & vst2(vcx, meta) & vst2_lam(vcx, lam)
+        (kind(name) === K"nothing" ? pass() : vst2_ident_val(vcx, name)) &
+        vst2(vcx, meta) & vst2_lam(vcx, lam)
     [K"method_defs" id body] ->
-        vst2_ident_val(vcx, id) & vst2(with(vcx; in_method_defs=true), body)
+        (kind(id) === K"nothing" ? pass() : vst2_ident_val(vcx, id)) &
+        vst2(with(vcx; in_method_defs=true), body)
     [K"new" t args...] -> vst2(vcx, t) & all(vst2, vcx, args)
     [K"splatnew" t arg] -> vst2(vcx, t) & vst2(vcx, arg)
     [K"softscope"] -> pass()
@@ -1265,6 +1274,8 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
          vst2(vcx, at) &
          vst2(vcx, cconv) &
          all(vst2, vcx, roots_args)
+    [K"cfunction" [K"Value"] [K"static_eval" fptr] [K"static_eval" rt] [K"static_eval" at] [K"Symbol"]] ->
+         vst2(vcx, fptr) & vst2(vcx, rt) & vst2(vcx, at)
     [K"cfunction" [K"Value"] fptr [K"static_eval" rt] [K"static_eval" at] [K"Symbol"]] ->
          vst2(vcx, fptr) & vst2(vcx, rt) & vst2(vcx, at)
 

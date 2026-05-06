@@ -2487,18 +2487,18 @@ import ..@test_loweringerror
 using Test
 @testset "scope of global declarations" begin
 
-    # global declarations from the top level are not inherited by functions.
-    # don't allow such a declaration to override an outer local, since it's not
-    # clear what it should do.
-    @test_loweringerror(
-        :(let
-              x = 1
+    # issue 61543: global shadowing local not within a function
+    @test Core.eval(GlobalContainment,
+        :(begin
+              x = "global"
               let
-                  global x
+                  x = "local"
+                  let
+                      global x
+                      x
+                  end
               end
-          end),
-        "`global x`: x is a local variable in its enclosing scope"
-    )
+          end)) === "global"
 
     # a declared global can shadow a local in an outer scope
     @test let

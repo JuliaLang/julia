@@ -52,7 +52,7 @@ struct JuliaPassContext {
     // Intrinsics.
     llvm::Function *pgcstack_getter;
     llvm::Function *adoptthread_func;
-    llvm::Function *gc_flush_func;
+    llvm::Function *gcroot_flush_func;
     llvm::Function *gc_preserve_begin_func;
     llvm::Function *gc_preserve_end_func;
     llvm::Function *pointer_from_objref_func;

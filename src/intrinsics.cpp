@@ -1147,7 +1147,7 @@ static Value *emit_checked_srem_int(jl_codectx_t &ctx, Value *x, Value *den)
 struct math_builder {
     IRBuilder<> &ctxbuilder;
     FastMathFlags old_fmf;
-    math_builder(jl_codectx_t &ctx, bool always_fast = false, bool contract = false)
+    math_builder(jl_codectx_t &ctx, bool always_fast = false, bool contract_only = false)
       : ctxbuilder(ctx.builder),
         old_fmf(ctxbuilder.getFastMathFlags())
     {
@@ -1155,10 +1155,11 @@ struct math_builder {
         if (jl_options.fast_math != JL_OPTIONS_FAST_MATH_OFF &&
             (always_fast ||
              jl_options.fast_math == JL_OPTIONS_FAST_MATH_ON)) {
-            fmf.setFast();
+            if (contract_only)
+                fmf.setAllowContract(true);
+            else
+                fmf.setFast();
         }
-        if (contract)
-            fmf.setAllowContract(true);
         ctxbuilder.setFastMathFlags(fmf);
     }
     IRBuilder<>& operator()() const { return ctxbuilder; }
@@ -1621,7 +1622,7 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, ArrayRef<Va
         // LLVM 5.0 can create FMA in the backend for contractible fmul and fadd
         // Emitting fmul and fadd here since they are easier for other LLVM passes to
         // optimize.
-        auto mathb = math_builder(ctx, false, true);
+        auto mathb = math_builder(ctx, true, true);
         return mathb().CreateFAdd(mathb().CreateFMul(x, y), z);
     }
 
