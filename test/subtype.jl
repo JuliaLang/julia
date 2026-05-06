@@ -1237,11 +1237,11 @@ let a = Tuple{Float64,T3,T4} where T4 where T3,
     b = Tuple{S2,Tuple{S3},S3} where S2 where S3
     I1 = typeintersect(a, b)
     I2 = typeintersect(b, a)
-    @test_broken I1 <: I2
+    @test I1 <: I2
     @test I2 <: I1
     @test I1 <: a
     @test I2 <: a
-    @test_broken I1 <: b
+    @test I1 <: b
     @test I2 <: b
 end
 let a = Tuple{T1,Tuple{T1}} where T1,
@@ -1259,11 +1259,11 @@ let a = Tuple{5,T4,T5} where T4 where T5,
     b = Tuple{S2,S3,Tuple{S3}} where S2 where S3
     I1 = typeintersect(a, b)
     I2 = typeintersect(b, a)
-    @test_broken I1 <: I2
+    @test I1 <: I2
     @test I2 <: I1
     @test I1 <: a
     @test I2 <: a
-    @test_broken I1 <: b
+    @test I1 <: b
     @test I2 <: b
 end
 let a = Tuple{T2,Tuple{T4,T2}} where T4 where T2,
@@ -1274,11 +1274,11 @@ let a = Tuple{Tuple{T2,4},T6} where T2 where T6,
     b = Tuple{Tuple{S2,S3},Tuple{S2}} where S2 where S3
     I1 = typeintersect(a, b)
     I2 = typeintersect(b, a)
-    @test_broken I1 <: I2
+    @test I1 <: I2
     @test I2 <: I1
     @test I1 <: a
     @test I2 <: a
-    @test_broken I1 <: b
+    @test I1 <: b
     @test I2 <: b
 end
 let a = Tuple{T3,Int64,Tuple{T3}} where T3,
