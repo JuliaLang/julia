@@ -91,12 +91,14 @@ format_version(s::Serializer) = s.version
 # static lookup table of serializee value --> TAG index via objectid + linear probe
 # omit constant ints & reserved slots from the table as sertag doesn't return these
 const NSERTAG_KEYS = NTAGS - n_reserved_slots - 2*n_int_literals
-const SERTAG_TABLE_SIZE = 1<<8
+
+# keeps >50% sparse so linear probes hit in 1-2 steps. also allows :terminates
+const SERTAG_TABLE_SIZE = nextpow(2, 2 * NSERTAG_KEYS)
+
 struct SertagEmpty end
 const sertag_empty = SertagEmpty()
 const sertag_keys = Memory{Any}(undef, SERTAG_TABLE_SIZE)
 const sertag_vals = Memory{Int32}(undef, SERTAG_TABLE_SIZE)
-@assert SERTAG_TABLE_SIZE > NSERTAG_KEYS # allows :terminates
 
 function __init__()
     fill!(sertag_keys, sertag_empty)
