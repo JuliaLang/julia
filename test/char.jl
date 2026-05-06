@@ -355,6 +355,21 @@ end
     @test all(Base.ismalformed, overlong_chars)
     @test repr("text/plain", overlong_chars[1]) ==
         "'\\xc0': Malformed UTF-8 (category Ma: Malformed, bad data)"
+
+    # Predicates annotated `@assume_effects` must not throw on arbitrary Char bit-patterns.
+    # Skip 0x00000000 ('\0', well-formed); the rest must be malformed for this to test what we want.
+    for u in (0x80000000, 0xC0000000, 0xE0000000, 0xF0000000,
+              0xF8000000, 0xFF000000, 0xFFFFFFFF, 0x80808080)
+        c = reinterpret(Char, u)
+        @test Base.ismalformed(c)
+        @test textwidth(c) isa Int
+        @test Base.Unicode.category_code(c) isa Integer
+        @test Base.Unicode.category_abbrev(c) isa AbstractString
+        @test Base.Unicode.category_string(c) isa AbstractString
+        @test Base.Unicode.isassigned(c) isa Bool
+        @test islowercase(c) isa Bool
+        @test isuppercase(c) isa Bool
+    end
 end
 
 @testset "overlong, non-malformed chars" begin
@@ -401,4 +416,17 @@ end
     @test v isa Val{true}
     v = @inferred (() -> Val(isnumeric(MyChar('C'))))()
     @test v isa Val{false}
+
+    for f in (isletter, isspace, isuppercase, islowercase, isdigit, isnumeric,
+              iscntrl, ispunct, isprint, isxdigit, textwidth,
+              Base.Unicode.isassigned, Base.Unicode.category_code,
+              Base.Unicode.category_abbrev, Base.Unicode.category_string)
+        @test Core.Compiler.is_removable_if_unused(Base.infer_effects(f, (Char,)))
+    end
+    for f in (isascii, textwidth, lastindex)
+        @test Core.Compiler.is_removable_if_unused(Base.infer_effects(f, (String,)))
+    end
+    for f in (length, isascii, textwidth, lastindex)
+        @test Core.Compiler.is_removable_if_unused(Base.infer_effects(f, (SubString{String},)))
+    end
 end
