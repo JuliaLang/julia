@@ -172,6 +172,13 @@ Return the current user's home directory.
     (for example on how to specify the home directory via environment variables), see the
     [`uv_os_homedir` documentation](http://docs.libuv.org/en/v1.x/misc.html#c.uv_os_homedir).
 
+    homedir(username::AbstractString)::Union{String,Nothing}
+
+Return the home directory for the given `username`, or `nothing` if the user does not exist.
+On Unix, this performs a lookup via `getpwnam_r`. On Windows, the user's SID is resolved and
+the profile path is read from the registry; if that fails, the profile directory is inferred
+from the current user's home directory.
+
 See also [`Sys.username`](@ref).
 """
 function homedir()
@@ -672,50 +679,233 @@ function realpath(path::AbstractString)
 end
 
 if Sys.iswindows()
-# on windows, ~ means "temporary file"
-expanduser(path::AbstractString) = path
-contractuser(path::AbstractString) = path
-else
-function expanduser(path::AbstractString)
+
+function homedir(username::AbstractString)
+    # For the current user, just return homedir().
+    current_user = try
+        Sys.username()
+    catch
+        err isa IOError || rethrow()
+        nothing
+    end
+    if username == current_user
+        return homedir()
+    end
+    # Look up the user's SID, then query the registry for their profile path.
+    # This is the same approach Go uses (os/user.Lookup on Windows).
+    home = _win_profile_from_registry(username)
+    home !== nothing && return home
+    # Fallback: assume profiles are siblings in the same parent directory,
+    # but only if the current user's home follows the <parent>/<username>
+    # convention. If not, we can't guess reliably.
+    userhome = homedir()
+    if current_user !== nothing && basename(userhome) == current_user
+        home = joinpath(dirname(userhome), username)
+        isdir(home) && return home
+    end
+    return nothing
+end
+function _win_profile_from_registry(username::AbstractString)
+    # Step 1: Resolve username to a SID via LookupAccountNameW.
+    # First call with zero-length buffers to get required sizes.
+    wuser = cwstring(username)
+    sid_size = Ref{UInt32}(0)
+    domain_size = Ref{UInt32}(0)
+    use = Ref{Int32}(0)
+    ccall((:LookupAccountNameW, "advapi32"), stdcall, Cint,
+          (Ptr{UInt16}, Ptr{UInt16}, Ptr{Cvoid}, Ptr{UInt32},
+           Ptr{UInt16}, Ptr{UInt32}, Ptr{Int32}),
+          C_NULL, wuser, C_NULL, sid_size, C_NULL, domain_size, use)
+    sid_size[] == 0 && return nothing
+    sid_buf = Vector{UInt8}(undef, sid_size[])
+    domain_buf = Vector{UInt16}(undef, domain_size[])
+    ret = ccall((:LookupAccountNameW, "advapi32"), stdcall, Cint,
+                (Ptr{UInt16}, Ptr{UInt16}, Ptr{UInt8}, Ptr{UInt32},
+                 Ptr{UInt16}, Ptr{UInt32}, Ptr{Int32}),
+                C_NULL, wuser, sid_buf, sid_size, domain_buf, domain_size, use)
+    ret == 0 && return nothing
+    # Step 2: Convert SID to string form (e.g. "S-1-5-21-...").
+    str_sid_ptr = Ref{Ptr{UInt16}}(C_NULL)
+    ret = ccall((:ConvertSidToStringSidW, "advapi32"), stdcall, Cint,
+                (Ptr{UInt8}, Ref{Ptr{UInt16}}), sid_buf, str_sid_ptr)
+    ret == 0 && return nothing
+    len = ccall(:wcslen, Csize_t, (Ptr{UInt16},), str_sid_ptr[])
+    sid_str = transcode(String, unsafe_wrap(Array, str_sid_ptr[], len))
+    ccall((:LocalFree, "kernel32"), stdcall, Ptr{Cvoid}, (Ptr{Cvoid},), str_sid_ptr[])
+    # Step 3: Query the registry for the user's ProfileImagePath.
+    subkey = cwstring("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProfileList\\$sid_str")
+    value = cwstring("ProfileImagePath")
+    buf_size = Ref{UInt32}(0)
+    # RRF_RT_REG_SZ | RRF_RT_REG_EXPAND_SZ = 0x00000006
+    HKEY_LOCAL_MACHINE = 0x80000002 % UInt
+    ret = ccall((:RegGetValueW, "advapi32"), stdcall, Clong,
+                (UInt, Ptr{UInt16}, Ptr{UInt16}, UInt32, Ptr{UInt32}, Ptr{UInt16}, Ptr{UInt32}),
+                HKEY_LOCAL_MACHINE, subkey, value, 0x00000006, C_NULL, C_NULL, buf_size)
+    buf_size[] == 0 && return nothing
+    buf = Vector{UInt16}(undef, buf_size[] ÷ 2)
+    ret = ccall((:RegGetValueW, "advapi32"), stdcall, Clong,
+                (UInt, Ptr{UInt16}, Ptr{UInt16}, UInt32, Ptr{UInt32}, Ptr{UInt16}, Ptr{UInt32}),
+                HKEY_LOCAL_MACHINE, subkey, value, 0x00000006, C_NULL, buf, buf_size)
+    ret != 0 && return nothing
+    # Remove trailing null and convert to String.
+    n = buf_size[] ÷ 2
+    n > 0 && buf[n] == 0 && (n -= 1)
+    home = transcode(String, buf[1:n])
+    return isdir(home) ? home : nothing
+end
+function contractuser(path::Union{String, SubString{String}})::String
+    # Walk prefixes of path, checking if any matches homedir() via inode.
+    # Only checks the current user's home (no ~username on Windows).
+    # Preserves the original path string after the matched prefix verbatim.
+    home_st = stat(homedir())
+    ispath(home_st) || return path
+    # check the full path (home directory itself, no trailing separator)
+    samefile(stat(path), home_st) && return "~"
+    # scan for separators; start after the first one to skip the root
+    m = findnext(path_separator_re, path, firstindex(path))
+    m === nothing && return path
+    while true
+        m = findnext(path_separator_re, path, nextind(path, last(m)))
+        m === nothing && return path
+        prefix = SubString(path, 1, prevind(path, first(m)))
+        st = stat(prefix)
+        ispath(st) || return path
+        if samefile(st, home_st)
+            return "~" * SubString(path, first(m))
+        end
+    end
+end
+
+else # !Sys.iswindows()
+
+function homedir(username::AbstractString)
+    # Thread-safe user lookup via getpwnam_r.
+    # pwd_storage holds the struct passwd; 256 bytes is a generous upper bound
+    # for all supported platforms (Linux x86-64: ~56 bytes, macOS arm64: ~80 bytes).
+    pwd_storage = zeros(UInt8, 256)
+    # The string buffer holds the pointed-to strings (pw_name, pw_dir, etc.).
+    # Start at 1024 and double on ERANGE if any string is unusually long.
+    buflen = 1024
+    while buflen <= 65536
+        str_buf = Vector{UInt8}(undef, buflen)
+        result = Ref{Ptr{Cvoid}}(C_NULL)
+        ret = ccall(:getpwnam_r, Cint,
+                    (Cstring, Ptr{Cvoid}, Ptr{UInt8}, Csize_t, Ptr{Ptr{Cvoid}}),
+                    username, pwd_storage, str_buf, Csize_t(buflen), result)
+        if ret == 34  # ERANGE: string buffer too small, retry with more space
+            buflen *= 2
+        elseif ret == 0 && result[] != C_NULL
+            # pw_uid sits at offset 2*sizeof(Ptr) in struct passwd on all supported
+            # platforms (after pw_name and pw_passwd, which are both pointer-sized)
+            uid = unsafe_load(Ptr{Cuint}(pointer(pwd_storage) + 2 * sizeof(Ptr{Cvoid})))
+            pd = Libc.getpwuid(uid, false)
+            return pd !== nothing ? pd.homedir : nothing
+        else
+            return nothing  # user not found or error
+        end
+    end
+    return nothing
+end
+function contractuser(path::Union{String, SubString{String}})::String
+    # Walk path prefixes from shortest to longest. At each existing prefix,
+    # check against the current user's home first, then the directory owner's
+    # home via inode comparison. This handles symlinks transparently.
+    # Preserves the original path string after the matched prefix verbatim.
+    home_st = stat(homedir())
+    ispath(home_st) || return path
+    cache_uid = ccall(:getuid, Cuint, ())
+    cache_uname = nothing
+    cache_home_st = nothing
+    # Check the full path (home directory itself, no trailing separator)
+    samefile(stat(path), home_st) && return "~"
+    # Scan for separators; start after the first one to skip the root
+    m = findnext(path_separator_re, path, firstindex(path))
+    m === nothing && return path
+    while true
+        m = findnext(path_separator_re, path, nextind(path, last(m)))
+        m === nothing && return path
+        prefix = SubString(path, 1, prevind(path, first(m)))
+        st = stat(prefix)
+        ispath(st) || return path
+        rest = SubString(path, first(m))
+        if samefile(st, home_st)
+            return "~" * rest
+        end
+        uid = st.uid
+        if uid != cache_uid
+            cache_uid = uid
+            pd = Libc.getpwuid(uid, false)
+            cache_uname = pd !== nothing && !isempty(pd.username) ? pd.username : nothing
+            if cache_uname !== nothing
+                pw_home = homedir(cache_uname)
+                cache_home_st = pw_home !== nothing ? stat(pw_home) : nothing
+            else
+                cache_home_st = nothing
+            end
+        end
+        if cache_home_st !== nothing && ispath(cache_home_st) && samefile(st, cache_home_st)
+            return "~$(cache_uname)" * rest
+        end
+    end
+end
+
+end # if Sys.iswindows()
+
+function expanduser(path::Union{String, SubString{String}})::String
     y = iterate(path)
     y === nothing && return path
     c, i = y::Tuple{eltype(path),Int}
     c != '~' && return path
-    y = iterate(path, i)
-    y === nothing && return homedir()
-    y[1]::eltype(path) == '/' && return homedir() * path[i:end]
-    throw(ArgumentError("~user tilde expansion not yet implemented"))
-end
-function contractuser(path::AbstractString)
-    home = homedir()
-    if path == home
-        return "~"
-    elseif startswith(path, home)
-        return joinpath("~", relpath(path, home))
-    else
+    # collect username: everything after ~ up to separator or end
+    m = findnext(path_separator_re, path, i)
+    j = prevind(path, m === nothing ?
+        nextind(path, lastindex(path)) : first(m))
+    username = SubString(path, i, j)
+    # can't use a regex because of bootstrap order
+    if isempty(username)
+        home = homedir()
+    elseif Sys.iswindows() || # ~username not supported on Windows
+        !all(c -> isletter(c) || isdigit(c) || c in "._-", username) # invalid
         return path
+    else
+        home = homedir(username)
+        home === nothing && return path
     end
-end
+    # use first separator in the rest of path in home
+    if m !== nothing
+        if Sys.iswindows()
+            sep = path[first(m)]
+            home = replace(home, path_separator_re => sep)
+        end
+        return home * SubString(path, first(m))
+    end
+    return home
 end
 
 
 """
     expanduser(path::AbstractString)::AbstractString
 
-On Unix systems, replace a tilde character at the start of a path with the current user's home directory.
+Replace a tilde character at the start of a path with the current user's home directory.
+On Unix, `~username` at the start of a path is replaced with that user's home directory;
+if the user does not exist the path is returned unchanged. On Windows, only `~` expansion
+is supported (not `~username`).
 
 See also: [`contractuser`](@ref).
 """
-expanduser(path::AbstractString)
+expanduser(path::AbstractString) = expanduser(String(path))
 
 """
     contractuser(path::AbstractString)::AbstractString
 
-On Unix systems, if the path starts with `homedir()`, replace it with a tilde character.
+Replace a home directory prefix in `path` with a tilde. If the path starts with the
+current user's home directory it is replaced with `~`. On Unix, if it starts with
+another user's home directory it is replaced with `~username`. The path is returned
+unchanged if no home directory prefix is found.
 
 See also: [`expanduser`](@ref).
 """
-contractuser(path::AbstractString)
+contractuser(path::AbstractString) = contractuser(String(path))
 
 
 """

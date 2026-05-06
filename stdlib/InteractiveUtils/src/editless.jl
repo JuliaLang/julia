@@ -277,6 +277,7 @@ function edit(m::Module)
     path === nothing && error("could not find source file for module: $m")
     edit(path)
 end
+edit(m::Module, n::Symbol) = edit(varloc(m, n)...)
 
 # terminal pager
 
@@ -314,6 +315,30 @@ less(file::AbstractString) = less(file, 1)
 Show the definition of a function using the default pager, optionally specifying a tuple of
 types to indicate which method to see.
 """
-less(f)                   = less(functionloc(f)...)
-less(f, @nospecialize t)  = less(functionloc(f,t)...)
-less(file, line::Integer) = error("could not find source file for function")
+less(f)                    = less(functionloc(f)...)
+less(f, @nospecialize t)   = less(functionloc(f,t)...)
+less(file, line::Integer)  = error("could not find source file for function")
+less(m::Module, n::Symbol) = less(varloc(m, n)...)
+
+# find where a (documented) global is defined using the doc system
+function varloc(mod::Module, name::Symbol)
+    m = Base.Docs.meta(mod)
+    if m !== nothing
+        bnd = Base.Docs.Binding(mod, name)
+        if haskey(m, bnd)
+            docstr = m[bnd]
+            if docstr isa Base.Docs.MultiDoc
+                length(docstr.docs) != 1 && @goto err
+                docstr = only(docstr.docs).second
+            end
+            if docstr isa Base.Docs.DocStr
+                mm = docstr.data
+                if haskey(mm, :path) && haskey(mm, :linenumber)
+                    return (mm[:path], mm[:linenumber])
+                end
+            end
+        end
+    end
+    @label err
+    error("could not determine location of variable $mod.$name")
+end

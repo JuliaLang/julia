@@ -53,12 +53,12 @@ _is_leaf(::Expr) = false
 _is_leaf(@nospecialize(_)) = true
 
 # Produce interpolated node for `$x` syntax
-function _interpolated_value(ctx::InterpolationContext, srcref, ex)
+function _interpolated_value(ctx::InterpolationContext, srcref, @nospecialize(ex))
     if ex isa SyntaxTree
         if !is_compatible_graph(ctx, ex)
             ex = copy_ast(ctx, ex)
         end
-        append_sourceref(ctx, ex, srcref)
+        append_sourceref!(ctx, ex, srcref._id)
     elseif ex isa Symbol
         # Plain symbols become identifiers. This is an accommodation for
         # compatibility to allow `:x` (a Symbol) and `:(x)` (a SyntaxTree) to
@@ -69,7 +69,7 @@ function _interpolated_value(ctx::InterpolationContext, srcref, ex)
     end
 end
 
-function _interpolated_value(::ExprInterpolationContext, _, ex)
+function _interpolated_value(::ExprInterpolationContext, _, @nospecialize(ex))
     ex
 end
 
