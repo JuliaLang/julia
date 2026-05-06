@@ -42,23 +42,26 @@ if no task has been registered as foreground.
 foreground_task() = lock(getindex, _foreground_task)
 
 """
-    Base.as_foreground_task(f)
+    Base.@as_foreground_task expr
 
-Run `f()` with [`current_task()`](@ref) registered as the foreground task (see
-`foreground_task`), restoring the previous foreground task on exit. Used
-to mark the section of code where a particular task "owns" interactive stdin so
-that other components (e.g. the precompile keyboard menu) can defer to it.
+Evaluate `expr` with [`current_task()`](@ref) registered as the foreground task
+(see [`foreground_task`](@ref)), restoring the previous foreground task on exit.
+Used to mark the section of code where a particular task "owns" interactive stdin
+so that other components (e.g. the precompile keyboard menu) can defer to it.
 """
-function as_foreground_task(f)
-    prev = lock(_foreground_task) do ref
-        old = ref[]
-        ref[] = current_task()
-        old
-    end
-    try
-        f()
-    finally
-        lock(ref -> ref[] = prev, _foreground_task)
+macro as_foreground_task(expr)
+    quote
+        local ref = $(GlobalRef(@__MODULE__, :_foreground_task))
+        local prev = lock(ref) do r
+            local old = r[]
+            r[] = current_task()
+            old
+        end
+        try
+            $(esc(expr))
+        finally
+            lock(r -> r[] = prev, ref)
+        end
     end
 end
 

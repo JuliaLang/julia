@@ -1044,7 +1044,8 @@ end
 
 function monitor_background_precompile(io::IO = stderr, detachable::Bool = true, wait_for_pkg::Union{Nothing, PkgId} = nothing;
                                        key_controls::Union{Bool, Nothing} = nothing)
-    # By default only enable key controls in the foreground task (see #61563, #61698).
+    # By default only enable key controls when this task is the foreground task (see #61563, #61698).
+    # Falls back to roottask when no foreground task is registered (e.g. non-REPL interactive scripts).
     key_controls = @something key_controls current_task() === something(Base.foreground_task(), Base.roottask)
     local completed_at::Union{Nothing, Float64}
     local task
