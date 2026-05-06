@@ -153,7 +153,7 @@ end
 function is_valid_phiblock_stmt(@nospecialize(stmt))
     isa(stmt, PhiNode) && return true
     isa(stmt, Union{UpsilonNode, PhiCNode, SSAValue}) && return false
-    isa(stmt, Expr) && return is_value_pos_expr_head(stmt.head)
+    isa(stmt, Expr) && return false
     return true
 end
 

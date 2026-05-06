@@ -1386,7 +1386,33 @@ end
 @test foo(true, 1) == 2
 
 # ifelse folding
-@test Compiler.is_removable_if_unused(Base.infer_effects(exp, (Float64,)))
+# Math functions that should be removable if unused (nothrow + effect-free).
+# Test all IEEEFloat types for single-argument functions.
+@testset "math functions removable if unused: $f($T)" for (f, T) in Iterators.product(
+    (exp, exp2, exp10, expm1, sinh, cosh, tanh, cbrt, frexp, modf, significand, rad2deg, deg2rad),
+    (Float16, Float32, Float64),
+)
+    @test Compiler.is_removable_if_unused(Base.infer_effects(f, (T,)))
+end
+# ldexp takes (T, Int); test all float types
+@testset "ldexp($T, Int) removable if unused" for T in (Float16, Float32, Float64)
+    @test Compiler.is_removable_if_unused(Base.infer_effects(ldexp, (T, Int)))
+end
+# asinh is nothrow for Float32/Float64: non-finite inputs handled early; all log/log1p
+# calls receive positive arguments. Float16 promotes via a separate method.
+@testset "asinh($T) removable if unused" for T in (Float32, Float64)
+    @test Compiler.is_removable_if_unused(Base.infer_effects(asinh, (T,)))
+end
+# hypot(Float32/Float16): _hypot uses sqrt(muladd(x,x,y*y)); argument is always ≥ 0.
+# hypot(Float64) uses a more complex algorithm and is intentionally excluded here.
+@testset "hypot($T, $T) removable if unused" for T in (Float16, Float32)
+    @test Compiler.is_removable_if_unused(Base.infer_effects(hypot, (T, T)))
+end
+# unsafe_trunc(::Type{<:Integer}, ::Float64) is nothrow: the bit-shift result fits
+# within `Int` so `% Int` rather than `Int(...)` keeps the conversion non-throwing.
+@testset "unsafe_trunc($T, Float64) removable if unused" for T in (UInt128, Int128)
+    @test Compiler.is_removable_if_unused(Base.infer_effects(unsafe_trunc, (Type{T}, Float64)))
+end
 @test !Compiler.is_inlineable(code_typed1(exp, (Float64,)))
 @test fully_eliminated(; retval=Core.Argument(2)) do x::Float64
     return Core.ifelse(true, x, exp(x))

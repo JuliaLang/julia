@@ -1594,7 +1594,7 @@ STATIC_INLINE void gc_assert_parent_validity(jl_value_t *parent, jl_value_t *chi
         jl_safe_static_show((JL_STREAM*)s, (jl_value_t *)jl_typeof(parent));
         jl_safe_fprintf(s, "While marking child at %p\n", (void *)child);
         jl_safe_fprintf(s, "of type:\n");
-        jl_safe_static_show(s, (jl_value_t *)child_vtag);
+        jl_safe_static_show((JL_STREAM*)s, (jl_value_t *)child_vtag);
         jl_gc_debug_fprint_critical_error(s);
         abort();
     }

@@ -413,7 +413,7 @@ keys(s::IndexStyle, A::AbstractArray, B::AbstractArray...) = eachindex(s, A, B..
 Return the last index of `collection`. If `d` is given, return the last index of `collection` along dimension `d`.
 
 The syntaxes `A[end]` and `A[end, end]` lower to `A[lastindex(A)]` and
-`A[lastindex(A, 1), lastindex(A, 2)]`, respectively.
+`A[lastindex(A, 1), lastindex(A, 2)]`, respectively; see [`end`](@ref).
 
 See also [`axes`](@ref), [`firstindex`](@ref), [`eachindex`](@ref), [`prevind`](@ref).
 
@@ -436,7 +436,7 @@ lastindex(a, d) = (@inline; last(axes(a, d)))
 Return the first index of `collection`. If `d` is given, return the first index of `collection` along dimension `d`.
 
 The syntaxes `A[begin]` and `A[1, begin]` lower to `A[firstindex(A)]` and
-`A[1, firstindex(A, 2)]`, respectively.
+`A[1, firstindex(A, 2)]`, respectively; see [`begin`](@ref).
 
 See also [`first`](@ref), [`axes`](@ref), [`lastindex`](@ref), [`nextind`](@ref).
 
