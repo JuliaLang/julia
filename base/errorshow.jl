@@ -360,9 +360,6 @@ function showerror(io::IO, ex::MethodError)
             end
         end
     end
-    if !is_arg_types && !(f isa Core.Builtin)
-        show_shadowed_type_hint(io, f, san_arg_types_param)
-    end
     if ex.world == typemax(UInt) || hasmethod(f, arg_types, world=ex.world)
         if !isempty(kwargs)
             print(io, "\nThis method does not support all of the given keyword arguments (and may not support any).")
@@ -396,6 +393,9 @@ function showerror(io::IO, ex::MethodError)
                       "\nNote the difference between 1d column vector [1,2,3] and 2d row vector [1 2 3].",
                       "\nYou can convert to a column vector with the vec() function.")
         end
+    end
+    if !is_arg_types && !(f isa Core.Builtin)
+        show_shadowed_type_hint(io, f, san_arg_types_param)
     end
     Experimental.show_error_hints(io, ex, san_arg_types_param, kwargs)
     try
@@ -496,7 +496,7 @@ function show_shadowed_type_hint(io::IO, @nospecialize(f), san_arg_types_param::
             # don't print too many hints
             a_tn in reported && continue
             push!(reported, a_tn)
-            print(io, "\nYou may have intended `")
+            print(io, "\nHint: You may have intended `")
             show_unquoted(io, e_tn.module); print(io, ".", e_tn.name)
             print(io, "` rather than `")
             show_unquoted(io, a_tn.module); print(io, ".", a_tn.name)
