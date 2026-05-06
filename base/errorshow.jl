@@ -457,6 +457,17 @@ stacktrace_expand_basepaths()::Bool = Base.get_bool_env("JULIA_STACKTRACE_EXPAND
 stacktrace_contract_userdir()::Bool = Base.get_bool_env("JULIA_STACKTRACE_CONTRACT_HOMEDIR", true) === true
 stacktrace_linebreaks()::Bool = Base.get_bool_env("JULIA_STACKTRACE_LINEBREAKS", false) === true
 
+function _resolves_to_self(tn::Core.TypeName)
+    isdefined(tn, :module) || return true
+    m = tn.module
+    (isdefined(m, tn.name) && getglobal(m, tn.name) === tn.wrapper) || return false
+    while (p = parentmodule(m)) !== m
+        (isdefined(p, nameof(m)) && getglobal(p, nameof(m)) === m) || return false
+        m = p
+    end
+    return true
+end
+
 function show_shadowed_type_hint(io::IO, @nospecialize(f), san_arg_types_param::Vector{Any})
     reported = IdSet{Core.TypeName}()
     ft = Core.Typeof(f)
@@ -485,7 +496,6 @@ function show_shadowed_type_hint(io::IO, @nospecialize(f), san_arg_types_param::
             e_tn === a_tn && continue
             e_tn.name === a_tn.name || continue
             isdefined(e_tn, :module) && isdefined(a_tn, :module) || continue
-            e_tn.module === a_tn.module && continue
             new_args[i] = rewrap_unionall(expected, method.sig)
             push!(shadows, (a_tn, e_tn))
         end
@@ -496,11 +506,17 @@ function show_shadowed_type_hint(io::IO, @nospecialize(f), san_arg_types_param::
             # don't print too many hints
             a_tn in reported && continue
             push!(reported, a_tn)
-            print(io, "\nHint: You may have intended `")
-            show_unquoted(io, e_tn.module); print(io, ".", e_tn.name)
-            print(io, "` rather than `")
-            show_unquoted(io, a_tn.module); print(io, ".", a_tn.name)
-            print(io, "`.")
+            if !_resolves_to_self(e_tn) || !_resolves_to_self(a_tn)
+                print(io, "\nHint: `")
+                show_unquoted(io, a_tn.module); print(io, ".", a_tn.name)
+                print(io, "` appears to have been redefined, and methods refer to the older definition.")
+            else
+                print(io, "\nHint: You may have intended `")
+                show_unquoted(io, e_tn.module); print(io, ".", e_tn.name)
+                print(io, "` rather than `")
+                show_unquoted(io, a_tn.module); print(io, ".", a_tn.name)
+                print(io, "`.")
+            end
         end
     end
 end

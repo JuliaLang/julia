@@ -1141,6 +1141,20 @@ end
 module TestShadowedTypeHintB
     struct Foo end
 end
+module TestShadowRedefA
+    module Sub
+        struct X end
+    end
+    f(::Sub.X) = 1
+    module Sub
+        struct X end
+    end
+end
+module TestShadowRedefB
+    struct Y; x; end
+    g(::Y) = 1
+    struct Y end
+end
 @testset "shadowed-type hint #41084" begin
     ex = try TestShadowedTypeHintA.f(TestShadowedTypeHintB.Foo()) catch e; e end
     s = sprint(Base.showerror, ex)
@@ -1156,6 +1170,16 @@ end
 
     ex = try TestShadowedTypeHintA.diag(TestShadowedTypeHintB.Foo(), 1, "x") catch e; e end
     @test !occursin("You may have intended", sprint(Base.showerror, ex))
+
+    ex = try TestShadowRedefA.f(TestShadowRedefA.Sub.X()) catch e; e end
+    s = sprint(Base.showerror, ex)
+    @test occursin("appears to have been redefined", s)
+    @test !occursin("rather than", s)
+
+    ex = try TestShadowRedefB.g(TestShadowRedefB.Y()) catch e; e end
+    s = sprint(Base.showerror, ex)
+    @test occursin("appears to have been redefined", s)
+    @test !occursin("rather than", s)
 end
 
 # Test that implementation detail of include() is hidden from the user by default
