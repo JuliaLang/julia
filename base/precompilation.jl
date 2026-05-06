@@ -106,6 +106,7 @@ Base.@kwdef mutable struct PrecompileSession
     n_total::Int
     n_batches::Int                         = 1
     interrupted::Bool                      = false
+    canceled::Bool                         = false
     interrupted_or_done::Bool              = false
     printloop_should_exit::Bool
     target::String
@@ -1590,6 +1591,7 @@ function should_stop(s::PrecompileSession)
     if ir || cr
         @lock s.print_lock begin
             s.interrupted = s.interrupted || ir
+            s.canceled = s.canceled || cr
             if !s.interrupted_or_done
                 s.interrupted_or_done = true
                 foreach(notify, values(s.was_processed))
@@ -2146,7 +2148,7 @@ function report_precompile_results!(s::PrecompileSession)
     end
     notify(s.first_started) # in cases of no-op or !fancyprint
 
-    quick_exit = any(t -> !istaskdone(t) || istaskfailed(t), s.tasks) || s.interrupted
+    quick_exit = any(t -> !istaskdone(t) || istaskfailed(t), s.tasks) || s.interrupted || s.canceled
     seconds_elapsed = round(Int, (s.time_start > 0 ? (time_ns() - s.time_start) : 0) / 1e9)
     ndeps = count(j -> is_recompiled(j), values(s.jobs))
 
@@ -2157,7 +2159,7 @@ function report_precompile_results!(s::PrecompileSession)
             break
         end
     end
-    if !s.strict && !requested_errs && !s.interrupted
+    if !s.strict && !requested_errs && !s.interrupted && !s.canceled
         for (_, job) in s.jobs
             is_failed(job) && clear_failure!(job)
         end
@@ -2238,15 +2240,16 @@ function report_precompile_results!(s::PrecompileSession)
             BG.monitoring && @lock s.print_lock begin
                 println(s.logio, logstr)
             end
-        elseif s.interrupted
+        elseif s.interrupted || s.canceled
             istr = sprint(context=s.logio) do iostr
                 if s.fancyprint
-                    printpkgstyle(iostr, :Precompiling, "interrupted.")
+                    printpkgstyle(iostr, :Precompiling, s.canceled && !s.interrupted ? "canceled." : "interrupted.")
                 end
                 n_failed_i = n_failed
+                verb = s.canceled && !s.interrupted ? "canceled" : "interrupted"
                 print(iostr, "  $(ndeps) dependenc$(ndeps == 1 ? "y" : "ies") precompiled, ",
                       color_string("$(n_failed_i)", Base.error_color(), s.hascolor),
-                      " interrupted after $(seconds_elapsed) seconds")
+                      " $verb after $(seconds_elapsed) seconds")
             end
             @lock BG BG.result = istr
             BG.monitoring && @lock s.print_lock begin
