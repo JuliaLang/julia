@@ -1012,7 +1012,13 @@ function deserialize_symbol(s::AbstractSerializer, len::Int)
     return sym
 end
 
-deserialize_tuple(s::AbstractSerializer, len) = ntupleany(i->deserialize(s), len)
+function deserialize_tuple(s::AbstractSerializer, len)
+    len == 0 && return ()
+    Base.Cartesian.@nexprs 10 i -> begin
+        len == i && return (Base.Cartesian.@ntuple i _ -> deserialize(s))
+    end
+    return ntupleany(i -> deserialize(s), len)
+end
 
 function deserialize_svec(s::AbstractSerializer)
     n = read(s.io, Int32)
