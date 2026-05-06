@@ -51,7 +51,7 @@ struct ValueIterator{T<:AbstractDict}
 end
 
 function summary(io::IO, iter::T) where {T<:Union{KeySet,ValueIterator}}
-    print(io, T.name.name, " for a ")
+    print(io, nameof(T), " for a ")
     summary(io, iter.dict)
 end
 

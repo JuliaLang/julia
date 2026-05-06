@@ -221,7 +221,6 @@ function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
     slotnames = Vector{Symbol}(undef, length(slots))
     slot_rename_inds = Dict{String,Int}()
     slotflags = Vector{UInt8}(undef, length(slots))
-    nospecialize_slots = Core.SlotNumber[]
     for (i, slot) in enumerate(slots)
         name = slot.name
         # TODO: Do we actually want unique names here? The C code in
@@ -241,23 +240,10 @@ function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
             slot.is_single_assign << 4 | # SLOT_ASSIGNEDONCE  | -
             slot.is_maybe_undef   << 5 | # SLOT_USEDUNDEF     | jl_vinfo_usedundef
             slot.is_called        << 6   # SLOT_CALLED        | -
-        if slot.is_nospecialize
-            # Ideally this should be a slot flag instead
-            i > nargs && throw(LoweringError(
-                ex, "@nospecialize annotation applied to a non-argument"))
-            push!(nospecialize_slots, Core.SlotNumber(i))
-        end
-    end
-    if !isempty(nospecialize_slots)
-        add_ir_debug_info!(current_codelocs_stack, ex)
-        length(nospecialize_slots) == nargs - 1 ? # all args but self
-            push!(stmts, Expr(:meta, :nospecialize)) :
-            push!(stmts, Expr(:meta, :nospecialize, nospecialize_slots...))
     end
 
-    stmt_offset = length(stmts)
     for stmt in children(ex)
-        push!(stmts, _to_lowered_expr(stmt, stmt_offset))
+        push!(stmts, _to_lowered_expr(stmt))
         add_ir_debug_info!(current_codelocs_stack, stmt)
     end
 
@@ -301,6 +287,8 @@ function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
     inlining_cost       = 0xffff
     rettype             = Any
 
+    @jl_assert(length(stmts) == numchildren(ex), ex)
+
     _CodeInfo(
         stmts,
         debuginfo,
@@ -329,10 +317,10 @@ function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
 end
 
 @fzone "JL: to_lowered_expr" function to_lowered_expr(ex::SyntaxTree)
-    _to_lowered_expr(ex, 0)
+    _to_lowered_expr(ex)
 end
 
-function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
+function _to_lowered_expr(ex::SyntaxTree)
     k = kind(ex)
     if is_literal(k)
         ex.value
@@ -358,9 +346,9 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
     elseif k == K"static_parameter"
         Expr(:static_parameter, ex.var_id::IdTag)
     elseif k == K"SSAValue"
-        Core.SSAValue(ex.var_id::IdTag + stmt_offset)
+        Core.SSAValue(ex.var_id::IdTag)
     elseif k == K"return"
-        Core.ReturnNode(_to_lowered_expr(ex[1], stmt_offset))
+        Core.ReturnNode(_to_lowered_expr(ex[1]))
     elseif k == K"inert"
         est_to_expr(ex)
     elseif k == K"inert_syntaxtree"
@@ -378,24 +366,24 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
         #     ex, "smuggling AST through Value is asking for trouble; find a SyntaxTree representation")
         ex.value isa LineNumberNode ? QuoteNode(ex.value) : ex.value
     elseif k == K"goto"
-        Core.GotoNode(ex[1].id + stmt_offset)
+        Core.GotoNode(ex[1].id)
     elseif k == K"gotoifnot"
-        Core.GotoIfNot(_to_lowered_expr(ex[1], stmt_offset), ex[2].id + stmt_offset)
+        Core.GotoIfNot(_to_lowered_expr(ex[1]), ex[2].id)
     elseif k == K"enter"
-        catch_idx = ex[1].id + stmt_offset
+        catch_idx = ex[1].id
         numchildren(ex) == 1 ?
             Core.EnterNode(catch_idx) :
-            Core.EnterNode(catch_idx, _to_lowered_expr(ex[2], stmt_offset))
+            Core.EnterNode(catch_idx, _to_lowered_expr(ex[2]))
     elseif k == K"method"
-        cs = map(e->_to_lowered_expr(e, stmt_offset), children(ex))
+        cs = map(_to_lowered_expr, children(ex))
         # Ad-hoc unwrapping to satisfy `Expr(:method)` expectations
         cs1 = cs[1]
         c1 = cs1 isa QuoteNode ? cs1.value : cs1
         Expr(:method, c1, cs[2:end]...)
     elseif k == K"newvar"
-        Core.NewvarNode(_to_lowered_expr(ex[1], stmt_offset))
+        Core.NewvarNode(_to_lowered_expr(ex[1]))
     elseif k == K"opaque_closure_method"
-        args = map(e->_to_lowered_expr(e, stmt_offset), children(ex))
+        args = map(_to_lowered_expr, children(ex))
         # opaque_closure_method has special non-evaluated semantics for the
         # `functionloc` line number node so we need to undo a level of quoting
         arg4 = args[4]
@@ -403,7 +391,7 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
         args[4] = arg4.value
         Expr(:opaque_closure_method, args...)
     elseif k == K"meta"
-        args = Any[_to_lowered_expr(e, stmt_offset) for e in children(ex)]
+        args = Any[_to_lowered_expr(e) for e in children(ex)]
         # Unpack K"Symbol" QuoteNode as `Expr(:meta)` requires an identifier here.
         arg1 = args[1]
         @jl_assert arg1 isa QuoteNode ex
@@ -411,10 +399,10 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
         Expr(:meta, args...)
     elseif k == K"foreigncall_arg1"
         @jl_assert kind(ex[1]) == K"tuple" ex
-        _foreigncall_arg1_expr(ex[1], stmt_offset)
+        _foreigncall_arg1_expr(ex[1])
     elseif k == K"static_eval"
         @jl_assert numchildren(ex) == 1 ex
-        _to_lowered_expr(ex[1], stmt_offset)
+        _to_lowered_expr(ex[1])
     elseif k == K"cfunction"
         # For a scope-resolved callable (`K"static_eval"`), drop the module tag
         # and emit a bare Symbol so `method.c` resolves it in the method's
@@ -424,7 +412,7 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
             if i == 2 && kind(e) == K"static_eval" && kind(e[1]) == K"globalref"
                 push!(ret.args, QuoteNode(Symbol(e[1].name_val::String)))
             else
-                push!(ret.args, _to_lowered_expr(e, stmt_offset))
+                push!(ret.args, _to_lowered_expr(e))
             end
         end
         return ret
@@ -457,20 +445,20 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
         end
         ret = Expr(head)
         for e in children(ex)
-            push!(ret.args, _to_lowered_expr(e, stmt_offset))
+            push!(ret.args, _to_lowered_expr(e))
         end
         return ret
     end
 end
 
 # ultra-permissive conversion allowing unlowered structure, but lowered leaves
-function _foreigncall_arg1_expr(ex, stmt_offset)
+function _foreigncall_arg1_expr(ex)
     if is_leaf(ex) || kind(ex) == K"inert"
-        _to_lowered_expr(ex, stmt_offset)
+        _to_lowered_expr(ex)
     else
         k = kind(ex)
         Expr(Symbol((k === K"unknown_head" ? st.name_val : untokenize(k))::String),
-             map(e->_foreigncall_arg1_expr(e, stmt_offset), children(ex))...)
+             map(_foreigncall_arg1_expr, children(ex))...)
     end
 end
 
