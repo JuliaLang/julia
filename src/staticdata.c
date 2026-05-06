@@ -931,7 +931,8 @@ static void jl_serialize_reachable(jl_serializer_state *s) JL_GC_DISABLED
     while (object_worklist.len) {
         // reverse!(object_worklist.items, prevlen:end);
         // prevlen is the index of the first new object
-        for (i = prevlen; i < object_worklist.len; i++) {
+        size_t mid = prevlen + (object_worklist.len - prevlen) / 2;
+        for (i = prevlen; i < mid; i++) {
             size_t j = object_worklist.len - i + prevlen - 1;
             void *tmp = object_worklist.items[i];
             object_worklist.items[i] = object_worklist.items[j];
