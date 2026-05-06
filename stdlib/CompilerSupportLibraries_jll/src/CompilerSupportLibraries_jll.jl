@@ -14,6 +14,8 @@ export libgfortran, libstdcxx, libgomp
 const PATH = Ref("")
 const LIBPATH = Ref("")
 artifact_dir::String = ""
+libatomic_handle::Ptr{Cvoid} = C_NULL
+libatomic_path::String = ""
 libgcc_s_handle::Ptr{Cvoid} = C_NULL
 libgcc_s_path::String = ""
 libgfortran_handle::Ptr{Cvoid} = C_NULL
@@ -23,12 +25,19 @@ libstdcxx_path::String = ""
 libgomp_handle::Ptr{Cvoid} = C_NULL
 libgomp_path::String = ""
 
+if Sys.iswindows() || Sys.isapple() || arch(HostPlatform()) ∈ ("x86_64", "i686")
+    libquadmath_handle::Ptr{Cvoid} = C_NULL
+    libquadmath_path::String = ""
+end
+
 if Sys.iswindows()
     if arch(HostPlatform()) == "x86_64"
         const libgcc_s = "libgcc_s_seh-1.dll"
     else
         const libgcc_s = "libgcc_s_sjlj-1.dll"
     end
+    const libatomic = "libatomic-1.dll"
+    const libquadmath = "libquadmath-0.dll"
     const libgfortran = string("libgfortran-", libgfortran_version(HostPlatform()).major, ".dll")
     const libstdcxx = "libstdc++-6.dll"
     const libgomp = "libgomp-1.dll"
@@ -39,12 +48,18 @@ elseif Sys.isapple()
     else
         const libgcc_s = "@rpath/libgcc_s.1.dylib"
     end
+    const libatomic = "@rpath/libatomic.1.dylib"
+    const libquadmath = "@rpath/libquadmath.0.dylib"
     const libgfortran = string("@rpath/", "libgfortran.", libgfortran_version(HostPlatform()).major, ".dylib")
     const libstdcxx = "@rpath/libstdc++.6.dylib"
     const libgomp = "@rpath/libgomp.1.dylib"
     const libssp = "@rpath/libssp.0.dylib"
 else
     const libgcc_s = "libgcc_s.so.1"
+    const libatomic = Sys.isfreebsd() ? "libatomic.so.3" : "libatomic.so.1"
+    if arch(HostPlatform()) ∈ ("x86_64", "i686")
+        const libquadmath = "libquadmath.so.0"
+    end
     const libgfortran = string("libgfortran.so.", libgfortran_version(HostPlatform()).major)
     const libstdcxx = "libstdc++.so.6"
     const libgomp = "libgomp.so.1"
@@ -56,6 +71,17 @@ end
 function __init__()
     global libgcc_s_handle = dlopen(libgcc_s)
     global libgcc_s_path = dlpath(libgcc_s_handle)
+    # `libatomic` may not be present in stripped-down installations; tolerate failure.
+    global libatomic_handle = dlopen(libatomic; throw_error = false)
+    if libatomic_handle != C_NULL
+        global libatomic_path = dlpath(libatomic_handle)
+    end
+    @static if @isdefined(libquadmath)
+        global libquadmath_handle = dlopen(libquadmath; throw_error = false)
+        if libquadmath_handle != C_NULL
+            global libquadmath_path = dlpath(libquadmath_handle)
+        end
+    end
     global libgfortran_handle = dlopen(libgfortran)
     global libgfortran_path = dlpath(libgfortran_handle)
     global libstdcxx_handle = dlopen(libstdcxx)
