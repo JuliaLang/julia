@@ -97,34 +97,41 @@ const SERTAG_TABLE_SIZE = nextpow(2, 2 * NSERTAG_KEYS)
 
 struct SertagEmpty end
 const sertag_empty = SertagEmpty()
-const sertag_keys = Memory{Any}(undef, SERTAG_TABLE_SIZE)
-const sertag_vals = Memory{Int32}(undef, SERTAG_TABLE_SIZE)
 
-function __init__()
-    fill!(sertag_keys, sertag_empty)
+struct SertagTable
+    keys::Memory{Any}
+    vals::Memory{Int32}
+end
+
+const sertag_table = OncePerProcess{SertagTable}() do
+    keys = Memory{Any}(undef, SERTAG_TABLE_SIZE)
+    vals = Memory{Int32}(undef, SERTAG_TABLE_SIZE)
+    fill!(keys, sertag_empty)
     @assume_effects :terminates_locally :noub @inbounds for i in Iterators.reverse(1:NSERTAG_KEYS)
         key = TAGS[i]
         loc = mod1(objectid(key), SERTAG_TABLE_SIZE)
         while true
-            k = sertag_keys[loc]
+            k = keys[loc]
             if k === sertag_empty || k === key
-                sertag_keys[loc] = key
-                sertag_vals[loc] = Int32(i)
+                keys[loc] = key
+                vals[loc] = Int32(i)
                 break
             end
             loc = mod1(loc + 1, SERTAG_TABLE_SIZE)
         end
     end
+    return SertagTable(keys, vals)
 end
 
-# sertag must not be called before __init__, so use _static_sertag as needed
-_static_sertag(@nospecialize(v)) = something(findfirst(==(v), TAGS)) % Int32
 @inline function sertag(@nospecialize(v))
+    table = sertag_table()
+    keys = table.keys
+    vals = table.vals
     loc = mod1(objectid(v), SERTAG_TABLE_SIZE)
     @assume_effects :terminates_locally :noub @inbounds while true
-        @inbounds k = sertag_keys[loc]
+        @inbounds k = keys[loc]
         if k === v
-            return sertag_vals[loc]
+            return vals[loc]
         elseif k === sertag_empty
             return Int32(-1)
         else
@@ -135,31 +142,31 @@ end
 desertag(i::Int32) = @inbounds(TAGS[i])
 
 # tags >= this just represent themselves, their whole representation is 1 byte
-const VALUE_TAGS = _static_sertag(())
+const VALUE_TAGS = sertag(())
 const ZERO32_TAG = Int32(NTAGS-(2*n_int_literals-1))
 const ZERO64_TAG = Int64(NTAGS-(n_int_literals-1))
-const TRUE_TAG = _static_sertag(true)
-const FALSE_TAG = _static_sertag(false)
-const EMPTYTUPLE_TAG = _static_sertag(())
-const TUPLE_TAG = _static_sertag(Tuple)
-const SIMPLEVECTOR_TAG = _static_sertag(SimpleVector)
-const SYMBOL_TAG = _static_sertag(Symbol)
-const INT8_TAG = _static_sertag(Int8)
-const ARRAY_TAG = _static_sertag(Array)
-const EXPR_TAG = _static_sertag(Expr)
-const MODULE_TAG = _static_sertag(Module)
-const METHODINSTANCE_TAG = _static_sertag(Core.MethodInstance)
-const METHOD_TAG = _static_sertag(Method)
-const TASK_TAG = _static_sertag(Task)
-const DATATYPE_TAG = _static_sertag(DataType)
-const TYPENAME_TAG = _static_sertag(Core.TypeName)
-const INT32_TAG = _static_sertag(Int32)
-const INT64_TAG = _static_sertag(Int64)
-const GLOBALREF_TAG = _static_sertag(GlobalRef)
-const BOTTOM_TAG = _static_sertag(Bottom)
-const UNIONALL_TAG = _static_sertag(UnionAll)
-const STRING_TAG = _static_sertag(String)
-const o0 = _static_sertag(SSAValue)
+const TRUE_TAG = sertag(true)
+const FALSE_TAG = sertag(false)
+const EMPTYTUPLE_TAG = sertag(())
+const TUPLE_TAG = sertag(Tuple)
+const SIMPLEVECTOR_TAG = sertag(SimpleVector)
+const SYMBOL_TAG = sertag(Symbol)
+const INT8_TAG = sertag(Int8)
+const ARRAY_TAG = sertag(Array)
+const EXPR_TAG = sertag(Expr)
+const MODULE_TAG = sertag(Module)
+const METHODINSTANCE_TAG = sertag(Core.MethodInstance)
+const METHOD_TAG = sertag(Method)
+const TASK_TAG = sertag(Task)
+const DATATYPE_TAG = sertag(DataType)
+const TYPENAME_TAG = sertag(Core.TypeName)
+const INT32_TAG = sertag(Int32)
+const INT64_TAG = sertag(Int64)
+const GLOBALREF_TAG = sertag(GlobalRef)
+const BOTTOM_TAG = sertag(Bottom)
+const UNIONALL_TAG = sertag(UnionAll)
+const STRING_TAG = sertag(String)
+const o0 = sertag(SSAValue)
 const UNDEFREF_TAG         = Int32(o0+1)
 const BACKREF_TAG          = Int32(o0+2)
 const LONGBACKREF_TAG      = Int32(o0+3)
