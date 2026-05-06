@@ -741,7 +741,10 @@ static int subtype_ccheck(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
     if (obviously_in_union(y, x))
         return 1;
     jl_saved_unionstate_t oldLunions; push_unionstate(&oldLunions, &e->Lunions);
+    jl_savedenv_t se;
+    save_env(e, &se, 0);
     int sub = local_forall_exists_subtype(x, y, e, PARAM_NONE, 1);
+    restore_env(e, &se, 0);
     pop_unionstate(&e->Lunions, &oldLunions);
     return sub;
 }
@@ -2367,7 +2370,7 @@ JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env, 
         obvious_subtype = 3;
     }
     init_stenv(&e, env, envsz);
-    int subtype = forall_exists_subtype(x, y, &e, PARAM_NONE);
+    int subtype = forall_exists_subtype(x, y, &e, PARAM_COVARIANT);
     free_stenv(&e);
     assert(obvious_subtype == 3 || obvious_subtype == subtype || jl_has_free_typevars(x) || jl_has_free_typevars(y));
 #ifndef NDEBUG
@@ -2460,7 +2463,7 @@ JL_DLLEXPORT int jl_types_equal(jl_value_t *a, jl_value_t *b)
 #endif
     {
         init_stenv(&e, NULL, 0);
-        int subtype = forall_exists_subtype(a, b, &e, PARAM_NONE);
+        int subtype = forall_exists_subtype(a, b, &e, PARAM_COVARIANT);
         free_stenv(&e);
         assert(subtype_ab == 3 || subtype_ab == subtype || jl_has_free_typevars(a) || jl_has_free_typevars(b));
 #ifndef NDEBUG
@@ -2477,7 +2480,7 @@ JL_DLLEXPORT int jl_types_equal(jl_value_t *a, jl_value_t *b)
 #endif
     {
         init_stenv(&e, NULL, 0);
-        int subtype = forall_exists_subtype(b, a, &e, PARAM_NONE);
+        int subtype = forall_exists_subtype(b, a, &e, PARAM_COVARIANT);
         free_stenv(&e);
         assert(subtype_ba == 3 || subtype_ba == subtype || jl_has_free_typevars(a) || jl_has_free_typevars(b));
 #ifndef NDEBUG
