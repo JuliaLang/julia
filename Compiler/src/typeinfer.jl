@@ -122,7 +122,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
         uncompressed = result.src
         const_flag = is_result_constabi_eligible(result)
         debuginfo = nothing
-        discard_src = caller.cache_mode === CACHE_MODE_NULL || const_flag
+        discard_src = caller.cache_mode === CACHE_MODE_NULL || (const_flag && may_discard_trees(interp))
         if !discard_src
             inferred_result = transform_result_for_cache(interp, result, edges)
             if inferred_result !== nothing
@@ -400,7 +400,8 @@ function inline_cost_model(interp::AbstractInterpreter, result::InferenceResult,
 end
 
 function transform_result_for_local_cache(interp::AbstractInterpreter, result::InferenceResult, edges::SimpleVector)
-    if is_result_constabi_eligible(result)
+    ## XXX: this must perform the exact same operations as transform_result_for_cache to avoid introducing soundness bugs
+    if may_discard_trees(interp) && is_result_constabi_eligible(result)
         return nothing
     end
     src = result.src
