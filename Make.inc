@@ -964,12 +964,17 @@ endif
 # Linker garbage collection
 ifeq ($(USE_LINKER_GC), 1)
 ifeq ($(OS), Darwin)
-  JLDFLAGS += -Wl,-dead_strip
+  LINKER_GC_LDFLAGS := -Wl,-dead_strip
 else
-  JLDFLAGS += -Wl,--gc-sections
-  JCFLAGS += -ffunction-sections -fdata-sections
-  JCXXFLAGS += -ffunction-sections -fdata-sections
+  LINKER_GC_LDFLAGS := -Wl,--gc-sections
+  LINKER_GC_CFLAGS := -ffunction-sections -fdata-sections
+  LINKER_GC_CXXFLAGS := -ffunction-sections -fdata-sections
 endif
+
+JLDFLAGS += $(LINKER_GC_LDFLAGS)
+JCFLAGS += $(LINKER_GC_CFLAGS)
+JCXXFLAGS += $(LINKER_GC_CXXFLAGS)
+
 endif
 
 # ===========================================================================
