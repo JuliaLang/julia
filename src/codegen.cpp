@@ -10084,27 +10084,6 @@ static jl_llvm_functions_t
         ctx.topalloca = nullptr;
     }
 
-    // Mark conditional branches to unreachable blocks as cold
-    {
-        MDBuilder MDB(ctx.builder.getContext());
-        SmallVector<uint32_t, 2> ColdWeights{2000, 1};
-        SmallVector<uint32_t, 2> ColdWeightsSwapped{1, 2000};
-        for (auto &BB : *ctx.f) {
-            auto *TI = BB.getTerminator();
-            if (!TI || TI->getMetadata(LLVMContext::MD_prof))
-                continue;
-            auto *BI = dyn_cast<BranchInst>(TI);
-            if (!BI || !BI->isConditional())
-                continue;
-            bool succ0_unreachable = isa<UnreachableInst>(BI->getSuccessor(0)->getTerminator());
-            bool succ1_unreachable = isa<UnreachableInst>(BI->getSuccessor(1)->getTerminator());
-            if (succ0_unreachable && !succ1_unreachable)
-                BI->setMetadata(LLVMContext::MD_prof, MDB.createBranchWeights(ColdWeightsSwapped));
-            else if (!succ0_unreachable && succ1_unreachable)
-                BI->setMetadata(LLVMContext::MD_prof, MDB.createBranchWeights(ColdWeights));
-        }
-    }
-
     JL_GC_POP();
     return declarations;
 }

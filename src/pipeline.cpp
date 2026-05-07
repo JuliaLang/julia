@@ -349,6 +349,10 @@ static void buildEarlySimplificationPipeline(ModulePassManager &MPM, PassBuilder
       MPM.addPass(ConstantMergePass());
       {
           FunctionPassManager FPM;
+          // Mark branches whose successors split into a may-return side and an
+          // always-unreachable side as cold. Run before SimplifyCFG so that
+          // downstream layout/folding sees the cold weights.
+          JULIA_PASS(FPM.addPass(ColdUnreachableBranchesPass()));
           FPM.addPass(LowerExpectIntrinsicPass());
           if (O.getSpeedupLevel() >= 2) {
               JULIA_PASS(FPM.addPass(PropagateJuliaAddrspacesPass()));
