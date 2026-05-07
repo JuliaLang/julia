@@ -60,8 +60,6 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
         ident = newleaf(graph, src, K"Identifier")
         setattr!(ident, :name_val, String(e.args[1]::Symbol))
         setattr!(ident, :scope_layer, e.args[2])
-    elseif e isa Expr && e.head === :static_parameter
-        setattr!(newleaf(graph, src, K"Value"), :value, e)
     elseif e isa Expr && e.head === :lambda && length(e.args) == 2
         argnames = e.args[1]::Vector{Any}
         arg_cs = NodeId[]
@@ -425,8 +423,8 @@ function est_to_dst(st::SyntaxTree)
                  (s[1:prevind(s,end)], K"op=")
 
              op_leaf = newleaf(g, st, K"Identifier")
-             JS.copy_attrs!(op_leaf, st)
              setattr!(op_leaf, :name_val, op_s)
+             setattr!(op_leaf, :scope_layer, st.scope_layer)
              @ast g st [out_k rec(l) op_leaf rec(r)]
          end
         [K"comparison" cs0...] -> let cs = copy(cs0)
@@ -503,22 +501,6 @@ function est_to_dst(st::SyntaxTree)
         end
         [K"generator" body iters...] ->
             @ast g st [K"generator" rec(body) _dst_iterspec(st, iters)]
-        [K"ncat" dim xs...] -> let
-            out = mknode(st, mapsyntax(rec, xs))
-            setattr!(out, :syntax_flags,
-                     JS.flags(st) | JS.set_numeric_flags(dim.value))
-        end
-        [K"nrow" dim xs...] -> let
-            out = mknode(st, mapsyntax(rec, xs))
-            setattr!(out, :syntax_flags,
-                     JS.flags(st) | JS.set_numeric_flags(dim.value))
-        end
-        [K"typed_ncat" t dim xs...] -> let
-            out_cs = pushfirst!(mapsyntax(rec, xs), rec(t))
-            out = mknode(st, out_cs)
-            setattr!(out, :syntax_flags,
-                     JS.flags(st) | JS.set_numeric_flags(dim.value))
-        end
         ([K"=" l r], when=(is_eventually_call(l))) -> let
             # no fix_arglist needed, since this func can't be anonymous
             l = apply_arglist_meta(l, collect_body_arg_meta(r))
@@ -555,13 +537,6 @@ function est_to_dst(st::SyntaxTree)
         end
         ([K"let" binds body], when=(kind(binds) !== K"block")) ->
             @ast g st [K"let" [K"block"(binds) rec(binds)] rec(body)]
-        [K"struct" mut sig body] -> let
-            flags = JS.flags(st) | (_is_false(mut) ? 0x0000 : JS.MUTABLE_FLAG)
-            @ast g st [K"struct"(syntax_flags=flags)
-                rec(sig)
-                rec(body)
-            ]
-        end
         (_, when=(kind(st) in KSet"using import")) -> let
             # dot_importpath = (. _...)
             # as_or_dotip = dot_importpath | (as dot_importpath name)
@@ -600,6 +575,7 @@ function est_to_dst(st::SyntaxTree)
         [K"inbounds" _] -> newleaf(g, st, K"TOMBSTONE")
         [K"core" x] -> setattr!(mkleaf(st), :name_val, x.name_val)
         [K"top" x] -> setattr!(mkleaf(st), :name_val, x.name_val)
+        [K"static_parameter" x] -> setattr!(mkleaf(st), :var_id, x.value::IdTag)
         [K"copyast" [K"inert" ex]] -> @ast g st [K"call"
             interpolate_ast::K"Value"
             Expr::K"Value"
@@ -623,12 +599,26 @@ function est_to_dst(st::SyntaxTree)
             end
         end
         ([K"latestworld"], when=!is_leaf(st)) -> newleaf(g, st, K"latestworld")
-        [K"cfunction" typ fptr rt at sym] -> @ast g st [K"cfunction"
-            rec(typ) rec(fptr)
-            [K"static_eval"(rt, meta=name_hint("cfunction return type")) rec(rt)]
-            [K"static_eval"(at, meta=name_hint("cfunction argument type")) rec(at)]
-            rec(sym)
-        ]
+        [K"cfunction" typ fptr rt at sym] -> let
+            # Identifier callables are scope-resolved against the outermost
+            # lowering layer (which corresponds to the method module used by
+            # `method.c`'s `jl_toplevel_eval`), so the IR carries a binding
+            # reference matching `@cfunction`'s runtime resolution. Other
+            # forms (e.g. function definitions) stay inert.
+            out_fptr = if kind(fptr) == K"inert" && numchildren(fptr) == 1 &&
+                          kind(fptr[1]) == K"Identifier"
+                ident = setattr!(mkleaf(fptr[1]), :scope_layer, 1)
+                @ast g fptr [K"static_eval"(fptr) ident]
+            else
+                rec(fptr)
+            end
+            @ast g st [K"cfunction"
+                rec(typ) out_fptr
+                [K"static_eval"(rt, meta=name_hint("cfunction return type")) rec(rt)]
+                [K"static_eval"(at, meta=name_hint("cfunction argument type")) rec(at)]
+                rec(sym)
+            ]
+        end
 
         # avoid creating excess nodes
         _ -> let out_cs::Vector{NodeId} = map(x->rec(x)._id, children(st))

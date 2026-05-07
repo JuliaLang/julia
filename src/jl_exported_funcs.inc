@@ -517,7 +517,7 @@
 #define JL_CODEGEN_EXPORTED_FUNCS(YY) \
     YY(jl_dump_function_ir) \
     YY(jl_dump_method_asm) \
-    YY(jl_emit_codeinst_to_jit) \
+    YY(jl_emit_codeinsts_to_jit) \
     YY(jl_get_llvmf_defn) \
     YY(jl_get_llvm_function) \
     YY(jl_get_llvm_module) \

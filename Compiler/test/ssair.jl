@@ -190,6 +190,16 @@ let code = Any[
     @test_throws ["IR verification failed.", "Code location: "] Compiler.verify_ir(ir, false)
 end
 
+# Test that static_parameter in value position is non-canonical
+let code = Any[
+        Expr(:call, identity, Expr(:static_parameter, 1))
+        ReturnNode(SSAValue(1))
+    ]
+    ir = make_ircode(code; verify=false)
+    ir = Compiler.compact!(ir, true)
+    @test_throws ["IR verification failed.", "Code location: "] Compiler.verify_ir(ir, false)
+end
+
 # Issue #29107
 let code = Any[
         # Block 1

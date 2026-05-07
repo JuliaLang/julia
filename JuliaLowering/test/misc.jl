@@ -606,3 +606,36 @@ end
         end
     end
 end
+
+@testset "(static_parameter n) form as lowering input" begin
+    # function (::Type{T},) where T; return (sp 1); end
+    ex = Expr(:function,
+         Expr(:where,
+              Expr(:tuple, Expr(:(::), Expr(:curly, :Type, :T))),
+              :T),
+              Expr(:block, Expr(:return, Expr(:static_parameter, 1))))
+    local f
+    @test (f = fl_eval(test_mod, ex)) isa Function
+    @test f(String) == String
+    @test (f = jl_eval(test_mod, ex; expr_compat_mode=true)) isa Function
+    @test f(String) == String
+    @test (f = jl_eval(test_mod, ex; expr_compat_mode=false)) isa Function
+    @test f(String) == String
+
+    # function (x::T, y::U) where {T, U}; (x, y, (sp 1), (sp 2)); end
+    ex = Expr(:function,
+         Expr(:where,
+              Expr(:tuple, Expr(:(::), :x, :T), Expr(:(::), :y, :U)),
+              :T, :U),
+              Expr(:block,
+                   Expr(:return,
+                        Expr(:tuple, :x, :y,
+                             Expr(:static_parameter, 1),
+                             Expr(:static_parameter, 2)))))
+    @test (f = fl_eval(test_mod, ex)) isa Function
+    @test f(1, 'a') == (1, 'a', Int, Char)
+    @test (f = jl_eval(test_mod, ex; expr_compat_mode=true)) isa Function
+    @test f(1, 'a') == (1, 'a', Int, Char)
+    @test (f = jl_eval(test_mod, ex; expr_compat_mode=false)) isa Function
+    @test f(1, 'a') == (1, 'a', Int, Char)
+end

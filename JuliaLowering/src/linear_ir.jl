@@ -1,6 +1,7 @@
 #-------------------------------------------------------------------------------
 # Lowering pass 5: Flatten to linear IR
 
+# Must outline anything that can throw, e.g. globalrefs, static params
 function is_valid_ir_argument(ctx, ex)
     k = kind(ex)
     if is_simple_atom(ctx, ex) || k in KSet"inert inert_syntaxtree top core quote static_eval foreigncall_arg1"
@@ -9,11 +10,6 @@ function is_valid_ir_argument(ctx, ex)
         binfo = get_binding(ctx, ex)
         bk = binfo.kind
         bk === :slot
-        # TODO: We should theoretically be able to allow `bk ===
-        # :static_parameter` for slightly more compact IR, but it's uncertain
-        # what the compiler is built to tolerate.  Notably, flisp allows
-        # static_parameter, but doesn't produce this form until a later pass, so
-        # it doesn't end up in the IR.
     else
         false
     end
@@ -624,7 +620,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             k == K"inert" || k == K"inert_syntaxtree" || k == K"top" ||
             k == K"core" || k == K"Value" || k == K"Symbol" ||
             k == K"SourceLocation" || k == K"static_eval" ||
-            k == K"foreigncall_arg1"
+            k == K"foreigncall_arg1" || k == K"static_parameter"
         ex1 = ex
         if kind(ex1) == K"BindingId"
             binfo = get_binding(ctx, ex1)
@@ -1206,6 +1202,23 @@ function compile_lambda(outer_ctx, ex)
         info = get_binding(ctx.bindings, id)
         @jl_assert info.kind == :static_parameter arg
         slot_rewrites[id] = i
+    end
+    let ns_slots = SyntaxList(ctx)
+        for (i, s) in enumerate(slots)
+            if s.is_nospecialize
+                s.kind === :argument || throw(LoweringError(
+                    ex, "nospecialize on non-argument"))
+                push!(ns_slots, setattr!(newleaf(ctx, lambda_args[i], K"slot"), :var_id, i))
+            end
+        end
+        if !isempty(ns_slots)
+            nargs = numchildren(lambda_args)
+            @jl_assert(length(ns_slots) < nargs, ex)
+            # all args but self
+            length(ns_slots) == nargs - 1 && empty!(ns_slots)
+            pushfirst!(ctx.code,
+                  @ast ctx lambda_args [K"meta" "nospecialize"::K"Symbol" ns_slots...])
+        end
     end
     code = renumber_body(ctx, ctx.code, slot_rewrites)
     meta = CompileHints()
