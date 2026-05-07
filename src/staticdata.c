@@ -687,6 +687,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             if (jl_is_method(def)) { // don't delete toplevel code
                 int is_relocatable = !s->incremental || jl_is_code_info(inferred) ||
                     (jl_is_string(inferred) && jl_string_len(inferred) > 0 && jl_string_data(inferred)[jl_string_len(inferred) - 1]);
+                int may_discard_trees = !jl_get_type_infer_preserve_ir();
                 int discard = 0;
                 if (!is_relocatable) {
                     discard = 1;
@@ -694,11 +695,13 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                 else if (def->source == NULL) {
                     // don't delete code from optimized opaque closures that can't be reconstructed (and builtins)
                 }
-                else if (!codeinst_may_be_runnable(ci, s->incremental) || // delete all code that cannot run
-                         jl_atomic_load_relaxed(&ci->invoke) == jl_fptr_const_return) { // delete all code that just returns a constant
+                else if (may_discard_trees && // if allowed to delete
+                         (!codeinst_may_be_runnable(ci, s->incremental) || // delete all code that cannot run
+                          jl_atomic_load_relaxed(&ci->invoke) == jl_fptr_const_return)) { // delete all code that just returns a constant
                     discard = 1;
                 }
-                else if (native_functions && // don't delete any code if making a ji file
+                else if (may_discard_trees &&
+                         native_functions && // don't delete any code if making a ji file
                          (ci->owner == jl_nothing) && // don't delete code for external interpreters
                          !effects_foldable(jl_atomic_load_relaxed(&ci->ipo_purity_bits)) && // don't delete code we may want for irinterp
                          jl_ir_inlining_cost(inferred) == UINT16_MAX) { // don't delete inlineable code
