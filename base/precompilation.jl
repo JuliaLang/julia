@@ -2190,9 +2190,11 @@ function report_precompile_results!(s::PrecompileSession)
         # Drop captured stdout/stderr from jobs that didn't fail before cancel,
         # since their output is just truncated cancel-induced noise. If the user
         # asked for info (SIGINFO/SIGUSR1) at any point, keep the output so the
-        # profiling info gets surfaced in the cancel report.
+        # profiling info gets surfaced in the cancel report. Soft errors
+        # (e.g. `?` packages) are completed jobs whose captured output is the
+        # actual precompile error message, so preserve it as well.
         for (_, job) in s.jobs
-            is_failed(job) && continue
+            (is_failed(job) || is_soft_error(job)) && continue
             job.output.size > 0 && truncate(job.output, 0)
         end
     end
@@ -2280,14 +2282,23 @@ function report_precompile_results!(s::PrecompileSession)
                 # On cancel we don't mark in-flight jobs as failed (their subprocesses
                 # were killed by the cancel itself), so report them as the "canceled" count.
                 # Use the sticky `had_pid` flag so we count jobs that actually spawned a
-                # subprocess, not ones that were just past mark_started!.
+                # subprocess, not ones that were just past mark_started!. Soft errors are
+                # completed jobs that errored before cancel; report them separately.
+                n_soft_errors = count(j -> is_soft_error(j), values(s.jobs))
                 n_canceled_i = s.canceled && !s.interrupted ?
-                    count(j -> had_pid(j) && !is_recompiled(j), values(s.jobs)) :
+                    count(j -> had_pid(j) && !is_recompiled(j) && !is_soft_error(j), values(s.jobs)) :
                     n_failed
                 verb = s.canceled && !s.interrupted ? "canceled" : "interrupted"
                 print(iostr, "  $(ndeps) dependenc$(ndeps == 1 ? "y" : "ies") precompiled, ",
                       color_string("$(n_canceled_i)", Base.error_color(), s.hascolor),
                       " $verb after $(seconds_elapsed) seconds")
+                if n_soft_errors > 0
+                    pluralpc = length(s.configs) > 1 ? "dependency configurations" : n_soft_errors == 1 ? "dependency" : "dependencies"
+                    print(iostr, "\n  ",
+                        color_string(string(n_soft_errors), Base.warn_color(), s.hascolor),
+                        " $(pluralpc) failed but may be precompilable after restarting julia"
+                    )
+                end
             end
             @lock BG BG.result = istr
             BG.monitoring && @lock s.print_lock begin
