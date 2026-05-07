@@ -532,7 +532,7 @@
 (define (propagate-method-meta e)
   `(meta ,@(filter (lambda (x)
                      (or (method-meta-sym? x)
-                         (and (pair? x) (eq? (car x) 'purity))))
+                         (and (pair? x) (memq (car x) '(purity optlevel compile infer max_methods)))))
                    (cdr e))))
 
 (define (argwide-nospecialize-meta? e)

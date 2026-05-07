@@ -654,32 +654,42 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                     jl_toplevel_eval(s->module, stmt);
                 }
                 else if (head == jl_meta_sym) {
-                    if (jl_expr_nargs(stmt) == 1 && jl_exprarg(stmt, 0) == (jl_value_t*)jl_nospecialize_sym) {
-                        jl_set_module_nospecialize(s->module, 1);
+                    size_t nmeta = jl_expr_nargs(stmt);
+                    // flat form: Expr(:meta, :optlevel, n)
+                    if (nmeta == 2 && jl_is_symbol(jl_exprarg(stmt, 0)) && jl_is_long(jl_exprarg(stmt, 1))) {
+                        jl_sym_t *which = (jl_sym_t*)jl_exprarg(stmt, 0);
+                        long n = jl_unbox_long(jl_exprarg(stmt, 1));
+                        if (which == jl_optlevel_sym)
+                            jl_set_module_optlevel(s->module, n);
+                        else if (which == jl_compile_sym)
+                            jl_set_module_compile(s->module, n);
+                        else if (which == jl_infer_sym)
+                            jl_set_module_infer(s->module, n);
+                        else if (which == jl_max_methods_sym)
+                            jl_set_module_max_methods(s->module, n);
                     }
-                    if (jl_expr_nargs(stmt) == 1 && jl_exprarg(stmt, 0) == (jl_value_t*)jl_specialize_sym) {
-                        jl_set_module_nospecialize(s->module, 0);
-                    }
-                    if (jl_expr_nargs(stmt) == 2) {
-                        if (jl_exprarg(stmt, 0) == (jl_value_t*)jl_optlevel_sym) {
-                            if (jl_is_long(jl_exprarg(stmt, 1))) {
-                                int n = jl_unbox_long(jl_exprarg(stmt, 1));
-                                jl_set_module_optlevel(s->module, n);
+                    else {
+                        // one or more markers, e.g. Expr(:meta, :nospecialize) or
+                        // Expr(:meta, Expr(:compile, 0), Expr(:optlevel, n))
+                        for (size_t i = 0; i < nmeta; i++) {
+                            jl_value_t *ma = jl_exprarg(stmt, i);
+                            if (ma == (jl_value_t*)jl_nospecialize_sym) {
+                                jl_set_module_nospecialize(s->module, 1);
                             }
-                        }
-                        else if (jl_exprarg(stmt, 0) == (jl_value_t*)jl_compile_sym) {
-                            if (jl_is_long(jl_exprarg(stmt, 1))) {
-                                jl_set_module_compile(s->module, jl_unbox_long(jl_exprarg(stmt, 1)));
+                            else if (ma == (jl_value_t*)jl_specialize_sym) {
+                                jl_set_module_nospecialize(s->module, 0);
                             }
-                        }
-                        else if (jl_exprarg(stmt, 0) == (jl_value_t*)jl_infer_sym) {
-                            if (jl_is_long(jl_exprarg(stmt, 1))) {
-                                jl_set_module_infer(s->module, jl_unbox_long(jl_exprarg(stmt, 1)));
-                            }
-                        }
-                        else if (jl_exprarg(stmt, 0) == (jl_value_t*)jl_max_methods_sym) {
-                            if (jl_is_long(jl_exprarg(stmt, 1))) {
-                                jl_set_module_max_methods(s->module, jl_unbox_long(jl_exprarg(stmt, 1)));
+                            else if (jl_is_expr(ma) && jl_expr_nargs(ma) == 1 && jl_is_long(jl_exprarg(ma, 0))) {
+                                jl_sym_t *which = ((jl_expr_t*)ma)->head;
+                                long n = jl_unbox_long(jl_exprarg(ma, 0));
+                                if (which == jl_optlevel_sym)
+                                    jl_set_module_optlevel(s->module, n);
+                                else if (which == jl_compile_sym)
+                                    jl_set_module_compile(s->module, n);
+                                else if (which == jl_infer_sym)
+                                    jl_set_module_infer(s->module, n);
+                                else if (which == jl_max_methods_sym)
+                                    jl_set_module_max_methods(s->module, n);
                             }
                         }
                     }

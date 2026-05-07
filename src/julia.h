@@ -337,6 +337,11 @@ typedef struct _jl_code_info_t {
     uint8_t inlining; // 0 = default; 1 = @inline; 2 = @noinline
     uint8_t constprop; // 0 = use heuristic; 1 = aggressive; 2 = none
     _jl_purity_overrides_t purity;
+    // uint8 settings
+    uint8_t optlevel; // UINT8_MAX = inherit from module; 0-3 = explicit level
+    uint8_t compile; // UINT8_MAX = inherit from module; 0-3 = explicit level
+    uint8_t infer; // UINT8_MAX = inherit from module; 0 = off, 1 = on
+    uint8_t max_methods; // UINT8_MAX = inherit from module; 0+ = explicit limit
     // uint16 settings
     uint16_t inlining_cost;
 } jl_code_info_t;
@@ -411,6 +416,13 @@ typedef struct _jl_method_t {
     // Override the conclusions of inter-procedural effect analysis,
     // forcing the conclusion to always true.
     _jl_purity_overrides_t purity;
+
+    // Per-method compiler option overrides.
+    // UINT8_MAX = inherit from module (default).
+    uint8_t optlevel;
+    uint8_t compile;
+    uint8_t infer;
+    uint8_t max_methods;
 
 // hidden fields:
     jl_mutex_t writelock;
@@ -2091,6 +2103,10 @@ JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name, jl_module_t *parent);
 JL_DLLEXPORT void jl_set_module_nospecialize(jl_module_t *self, int on);
 JL_DLLEXPORT void jl_set_module_optlevel(jl_module_t *self, int lvl);
 JL_DLLEXPORT int jl_get_module_optlevel(jl_module_t *m);
+JL_DLLEXPORT int jl_get_method_optlevel(jl_method_t *m);
+JL_DLLEXPORT int jl_get_method_compile(jl_method_t *m);
+JL_DLLEXPORT int jl_get_method_infer(jl_method_t *m);
+JL_DLLEXPORT int jl_get_method_max_methods(jl_method_t *m);
 JL_DLLEXPORT void jl_set_module_compile(jl_module_t *self, int value);
 JL_DLLEXPORT int jl_get_module_compile(jl_module_t *m);
 JL_DLLEXPORT void jl_set_module_infer(jl_module_t *self, int value);

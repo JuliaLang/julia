@@ -8815,8 +8815,13 @@ static jl_llvm_functions_t
     if (JL_FEAT_TEST(ctx, sanitize_thread))
         FnAttrs.addAttribute(llvm::Attribute::SanitizeThread);
 
-    // add the optimization level specified for this module, if any
-    int optlevel = jl_get_module_optlevel(ctx.module);
+    // add the optimization level: CodeInfo overrides Method overrides Module
+    int optlevel = src->optlevel;
+    if (optlevel == UINT8_MAX) {
+        optlevel = jl_is_method(lam->def.method)
+            ? jl_get_method_optlevel(lam->def.method)
+            : jl_get_module_optlevel(ctx.module);
+    }
     if (optlevel >= 0 && optlevel <= 3) {
         static const char* const optLevelStrings[] = { "0", "1", "2", "3" };
         FnAttrs.addAttribute("julia-optimization-level", optLevelStrings[optlevel]);

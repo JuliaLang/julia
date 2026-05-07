@@ -557,6 +557,8 @@ function est_to_dst(st::SyntaxTree)
 
         #-----------------------------------------------------------------------
         # Heads not emitted from parsing
+        ([K"meta" inner], when=kind(st[1]) in KSet"optlevel compile infer max_methods") ->
+            @ast g st [K"meta" untokenize(kind(st[1]))::K"Symbol" st[1][1]]
         ([K"meta" s vs...],
          when=(meta=get(s, :name_val, "")::String; meta in ("nospecialize", "specialize"))) ->
              # Should be handled in the function case

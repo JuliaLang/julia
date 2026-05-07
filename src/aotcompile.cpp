@@ -2484,7 +2484,10 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
                         parseLLVMOptions(llvm_options, print_opts);
                         print_opts.out = &pass_output_stream;
                     }
-                    NewPM PM{jl_ExecutionEngine->cloneTargetMachine(), getOptLevel(jl_options.opt_level), opts, print_opts};
+                    // Use the lowest per-function optimization level requested,
+                    // matching the JIT's selectOptLevel logic.
+                    int fn_optlevel = jl_module_optlevel(output.get_module());
+                    NewPM PM{jl_ExecutionEngine->cloneTargetMachine(), getOptLevel(fn_optlevel), opts, print_opts};
                     //Safe b/c context lock is held by output
                     PM.run(output.get_module());
                     assert(!verifyLLVMIR(output.get_module()));
