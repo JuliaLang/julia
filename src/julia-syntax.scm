@@ -186,28 +186,64 @@
                        ,@(list-tail body (+ 1 (length meta))))))))))
 
 
-;; convert x<:T<:y etc. exprs into (name lower-bound upper-bound)
-;; a bound is #f if not specified
+;; UnionAll diag annotations at the lowering level. `auto` is the
+;; default (the C constructor picks CONCRETE or NEVER by static analysis);
+;; the explicit C values 1/2 map to forms produced by the `<<:` / `>>:`
+;; syntax. The C-level value 0 (DYNAMIC, "compute at subtype time") is
+;; intentionally distinct from `auto` and not produced by `<:`.
+(define diag-auto     'auto)
+(define diag-concrete 1)
+(define diag-never    2)
+
+;; relational operator decoding for typevar bounds. Returns (dir tight?)
+;; where dir is '< (subtype-style) or '> (supertype-style), and tight? is
+;; #t when the operator is the strict-concreteness form `<<:`/`>>:`.
+(define (typevar-rel op)
+  (cond ((eq? op '|<:|)  (cons '< #f))
+        ((eq? op '|>:|)  (cons '> #f))
+        ((eq? op '|<<:|) (cons '< #t))
+        ((eq? op '|>>:|) (cons '> #t))
+        (else #f)))
+
+;; convert x<:T<:y etc. exprs into (name lower-bound upper-bound diag)
+;; a bound is #f if not specified; diag is 0/1/2 as defined above.
 (define (analyze-typevar e)
   (define (check-sym s)
     (if (symbol? (unescape s)) ; unescape for macroexpand.scm use
         s
         (error (string "invalid type parameter name \"" (deparse s) "\""))))
-  (cond ((atom? e) (list (check-sym e) #f #f))
-        ((eq? (car e) 'var-bounds)  (cdr e))
+  (cond ((atom? e) (list (check-sym e) #f #f diag-auto))
+        ((eq? (car e) 'var-bounds)
+         (let ((b (cdr e)))
+           (if (length= b 3) (append b (list diag-auto)) b)))
         ((and (eq? (car e) 'comparison) (length= e 6))
-         (let* ((lhs (list-ref e 1))
-                (rel (list-ref e 2))
-                (t (check-sym (list-ref e 3)))
-                (rel-same (eq? rel (list-ref e 4)))
-                (rhs (list-ref e 5)))
-           (cond ((and rel-same (eq? rel '|<:|)) (list t lhs rhs))
-                 ((and rel-same (eq? rel '|>:|)) (list t rhs lhs))
-                 (else (error "invalid bounds in \"where\"")))))
+         (let* ((lhs   (list-ref e 1))
+                (rel1  (typevar-rel (list-ref e 2)))
+                (t     (check-sym (list-ref e 3)))
+                (rel2  (typevar-rel (list-ref e 4)))
+                (rhs   (list-ref e 5)))
+           (if (or (not rel1) (not rel2) (not (eq? (car rel1) (car rel2))))
+               (error "invalid bounds in \"where\""))
+           (if (and (cdr rel1) (cdr rel2))
+               (error "invalid bounds in \"where\": `<<:` (or `>>:`) may only appear once"))
+           (let ((lb (if (eq? (car rel1) '<) lhs rhs))
+                 (ub (if (eq? (car rel1) '<) rhs lhs))
+                 ;; from T's perspective: tight on the upper-bound side -> concrete;
+                 ;; tight on the lower-bound side -> never.
+                 (diag (cond ((and (eq? (car rel1) '<) (cdr rel1)) diag-never)
+                             ((and (eq? (car rel1) '<) (cdr rel2)) diag-concrete)
+                             ((and (eq? (car rel1) '>) (cdr rel1)) diag-concrete)
+                             ((and (eq? (car rel1) '>) (cdr rel2)) diag-never)
+                             (else diag-auto))))
+             (list t lb ub diag))))
         ((eq? (car e) '|<:|)
-         (list (check-sym (cadr e)) #f (caddr e)))
+         (list (check-sym (cadr e)) #f (caddr e) diag-auto))
         ((eq? (car e) '|>:|)
-         (list (check-sym (cadr e)) (caddr e) #f))
+         (list (check-sym (cadr e)) (caddr e) #f diag-auto))
+        ((eq? (car e) '|<<:|)
+         (list (check-sym (cadr e)) #f (caddr e) diag-concrete))
+        ((eq? (car e) '|>>:|)
+         (list (check-sym (cadr e)) (caddr e) #f diag-never))
         (else (error "invalid variable expression in \"where\""))))
 
 (define (sparam-name-bounds params)
@@ -2254,9 +2290,13 @@
 
 (define (expand-where body var)
   (let* ((bounds (analyze-typevar var))
-         (v  (car bounds)))
+         (v     (car bounds))
+         (diag  (if (length> bounds 3) (cadddr bounds) diag-auto)))
     `(let (= ,v ,(bounds-to-TypeVar bounds))
-       (call (core UnionAll) ,v ,body))))
+       (call (core UnionAll) ,v ,body
+             ,@(if (eq? diag diag-auto)
+                   '()
+                   (list `(call (core UInt8) ,diag)))))))
 
 (define (expand-wheres body vars)
   (if (null? vars)

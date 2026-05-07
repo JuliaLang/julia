@@ -948,6 +948,22 @@ JL_DLLEXPORT jl_value_t *jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_
 jl_value_t *jl_substitute_var(jl_value_t *t, jl_tvar_t *var, jl_value_t *val);
 jl_value_t *jl_substitute_var_nothrow(jl_value_t *t, jl_tvar_t *var, jl_value_t *val, int nothrow);
 jl_unionall_t *jl_rename_unionall(jl_unionall_t *u);
+
+// Diagonal-rule mode for the `diag` field of UnionAll.
+// 0 = dynamic (current behavior, evaluated during subtype check)
+// 1 = always concrete (force the diagonal rule to apply)
+// 2 = never concrete  (force the diagonal rule to NOT apply)
+#define JL_UNIONALL_DIAG_DYNAMIC  ((uint8_t)0)
+#define JL_UNIONALL_DIAG_CONCRETE ((uint8_t)1)
+#define JL_UNIONALL_DIAG_NEVER    ((uint8_t)2)
+
+// Allocate a UnionAll directly, setting all three fields. Bypasses jl_new_struct
+// because the `diag` field is an inline UInt8 and would otherwise require a
+// boxed UInt8 argument (and the box caches may not yet exist during early
+// bootstrap).
+JL_DLLEXPORT jl_value_t *jl_new_unionall(jl_tvar_t *var, jl_value_t *body, uint8_t diag);
+JL_DLLEXPORT jl_value_t *jl_type_unionall_diag(jl_tvar_t *v, jl_value_t *body, uint8_t diag);
+JL_DLLEXPORT uint8_t jl_unionall_diag_default(jl_tvar_t *var, jl_value_t *body) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_unwrap_unionall(jl_value_t *v JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_rewrap_unionall(jl_value_t *t, jl_value_t *u);
 JL_DLLEXPORT jl_value_t *jl_rewrap_unionall_(jl_value_t *t, jl_value_t *u);

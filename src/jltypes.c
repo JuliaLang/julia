@@ -929,6 +929,118 @@ jl_value_t *simple_intersect(jl_value_t *a, jl_value_t *b, int overesi)
 
 // unionall types -------------------------------------------------------------
 
+// --- static diagonal-rule analysis ---
+//
+// Given a UnionAll being constructed `body where var`, decide statically
+// whether the diagonal rule will apply to `var`. The dynamic check (in
+// subtype_unionall) marks `var` diagonal iff:
+//   - var occurs covariantly more than once in body, AND
+//   - var does not occur invariantly in body, AND
+//   - var is a leaf typevar (lower bound is leaf-bound)
+// The static analog walks the body once at construction time and counts
+// occurrences. Returns JL_UNIONALL_DIAG_CONCRETE if all three conditions
+// hold, otherwise JL_UNIONALL_DIAG_NEVER.
+
+typedef struct {
+    int cov;  // covariant occurrence count, saturated at 2
+    int inv;  // 1 if var occurs invariantly anywhere
+} _diag_count_t;
+
+static void diag_count_static(jl_value_t *t, jl_tvar_t *var, int param_cov,
+                              _diag_count_t *out) JL_NOTSAFEPOINT
+{
+    if (out->inv && out->cov >= 2)
+        return; // already saturated
+    if (jl_is_typevar(t)) {
+        if ((jl_tvar_t*)t == var) {
+            if (param_cov) {
+                if (out->cov < 2) out->cov++;
+            }
+            else {
+                out->inv = 1;
+            }
+        }
+        return;
+    }
+    if (jl_is_uniontype(t)) {
+        // Worst-case (max) across union branches for cov, OR for inv.
+        _diag_count_t a = {0, 0}, b = {0, 0};
+        diag_count_static(((jl_uniontype_t*)t)->a, var, param_cov, &a);
+        diag_count_static(((jl_uniontype_t*)t)->b, var, param_cov, &b);
+        int mc = (a.cov > b.cov) ? a.cov : b.cov;
+        if (mc > 2) mc = 2;
+        if (out->cov < mc) out->cov = mc;
+        if (out->cov > 2) out->cov = 2;
+        out->inv |= a.inv | b.inv;
+        return;
+    }
+    if (jl_is_unionall(t)) {
+        jl_unionall_t *ua = (jl_unionall_t*)t;
+        if (ua->var == var) // shadowed
+            return;
+        // Bounds of inner typevars are invariant positions
+        diag_count_static(ua->var->lb, var, 0, out);
+        diag_count_static(ua->var->ub, var, 0, out);
+        diag_count_static(ua->body, var, param_cov, out);
+        return;
+    }
+    if (jl_is_vararg(t)) {
+        jl_vararg_t *vm = (jl_vararg_t*)t;
+        if (vm->T) {
+            // Each value in a Vararg can be a separate value, so count twice
+            diag_count_static(vm->T, var, param_cov, out);
+            diag_count_static(vm->T, var, param_cov, out);
+        }
+        if (vm->N)
+            diag_count_static(vm->N, var, 0, out); // N is invariant
+        return;
+    }
+    if (jl_is_datatype(t)) {
+        int istuple = jl_is_tuple_type(t);
+        size_t np = jl_nparams(t);
+        for (size_t i = 0; i < np; i++) {
+            int child_cov = param_cov && istuple;
+            diag_count_static(jl_tparam(t, i), var, child_cov, out);
+        }
+        return;
+    }
+}
+
+static uint8_t compute_unionall_diag_static(jl_tvar_t *var, jl_value_t *body) JL_NOTSAFEPOINT
+{
+    _diag_count_t c = {0, 0};
+    diag_count_static(body, var, 1, &c);
+    if (!c.inv && c.cov > 1 && is_leaf_bound(var->lb))
+        return JL_UNIONALL_DIAG_CONCRETE;
+    return JL_UNIONALL_DIAG_NEVER;
+}
+
+// What the static auto rule would assign to a UnionAll with this var/body.
+// Used by printing to decide whether to emit `<:` (matches default) or `<<:`
+// (explicit override).
+JL_DLLEXPORT uint8_t jl_unionall_diag_default(jl_tvar_t *var, jl_value_t *body) JL_NOTSAFEPOINT
+{
+    return compute_unionall_diag_static(var, body);
+}
+
+// Allocate a UnionAll directly with all three fields. Avoids jl_new_struct
+// because the `diag` field is an inline UInt8 (1 byte) and set_nth_field
+// would expect a boxed UInt8 argument; we don't always have UInt8 boxes
+// available (early bootstrap) and the value is naturally a C uint8_t.
+JL_DLLEXPORT jl_value_t *jl_new_unionall(jl_tvar_t *var, jl_value_t *body, uint8_t diag)
+{
+    jl_task_t *ct = jl_current_task;
+    jl_unionall_t *u = (jl_unionall_t*)jl_gc_alloc(ct->ptls,
+                                                   jl_datatype_size(jl_unionall_type),
+                                                   jl_unionall_type);
+    if (jl_unionall_type->smalltag)
+        jl_set_typetagof(u, jl_unionall_type->smalltag, 0);
+    u->var = var;
+    u->body = body;
+    u->diag = diag;
+    return (jl_value_t*)u;
+}
+
 JL_DLLEXPORT jl_value_t *jl_type_unionall(jl_tvar_t *v, jl_value_t *body)
 {
     if (jl_is_vararg(body)) {
@@ -969,7 +1081,31 @@ JL_DLLEXPORT jl_value_t *jl_type_unionall(jl_tvar_t *v, jl_value_t *body)
         return body;
     //if (v->lb == v->ub)  // TODO maybe
     //    return jl_substitute_var(body, v, v->ub);
-    return jl_new_struct(jl_unionall_type, v, body);
+    return jl_new_unionall(v, body, compute_unionall_diag_static(v, body));
+}
+
+// Like jl_type_unionall, but uses an explicit `diag` value instead of the
+// statically-computed default. Used to implement the `<<:` / `>>:` syntax.
+//
+// When `diag == JL_UNIONALL_DIAG_CONCRETE` the typevar is forced to be diagonal,
+// so the `body == v` and `!jl_has_typevar(body, v)` simplifications that
+// `jl_type_unionall` performs are inappropriate -- they would silently drop the
+// concreteness constraint. Vararg handling and type-error checks still defer.
+JL_DLLEXPORT jl_value_t *jl_type_unionall_diag(jl_tvar_t *v, jl_value_t *body, uint8_t diag)
+{
+    if (diag > JL_UNIONALL_DIAG_NEVER)
+        jl_errorf("invalid UnionAll diag value: %u", (unsigned)diag);
+    if (jl_is_vararg(body))
+        return jl_type_unionall(v, body); // vararg wrapping is handled by the regular path
+    if (!jl_is_type(body) && !jl_is_typevar(body) && !jl_is_typeapp(body))
+        jl_type_error("UnionAll", (jl_value_t*)jl_type_type, body);
+    if (diag != JL_UNIONALL_DIAG_CONCRETE) {
+        if (body == (jl_value_t*)v)
+            return v->ub;
+        if (!jl_has_typevar(body, v))
+            return body;
+    }
+    return jl_new_unionall(v, body, diag);
 }
 
 // --- type instantiation and cache ---
@@ -1567,7 +1703,7 @@ jl_unionall_t *jl_rename_unionall(jl_unionall_t *u)
     JL_GC_PUSH2(&v, &t);
     jl_typeenv_t env = { u->var, (jl_value_t *)v, NULL };
     t = inst_type_w_(u->body, &env, NULL, 0, 0);
-    t = jl_new_struct(jl_unionall_type, v, t);
+    t = jl_new_unionall(v, t, u->diag);
     JL_GC_POP();
     return (jl_unionall_t*)t;
 }
@@ -1614,7 +1750,7 @@ jl_value_t *jl_rewrap_unionall(jl_value_t *t, jl_value_t *u)
     //if (v->lb == v->ub)  // TODO maybe
     //    t = jl_substitute_var(body, v, v->ub);
     //else
-    t = jl_new_struct(jl_unionall_type, v, t);
+    t = jl_new_unionall(v, t, ((jl_unionall_t*)u)->diag);
     JL_GC_POP();
     return t;
 }
@@ -1627,7 +1763,7 @@ jl_value_t *jl_rewrap_unionall_(jl_value_t *t, jl_value_t *u)
         return t;
     t = jl_rewrap_unionall_(t, ((jl_unionall_t*)u)->body);
     JL_GC_PUSH1(&t);
-    t = jl_new_struct(jl_unionall_type, ((jl_unionall_t*)u)->var, t);
+    t = jl_new_unionall(((jl_unionall_t*)u)->var, t, ((jl_unionall_t*)u)->diag);
     JL_GC_POP();
     return t;
 }
@@ -1705,11 +1841,11 @@ jl_value_t *jl_substitute_datatype(jl_value_t *t, jl_datatype_t * x, jl_datatype
             jl_tvar_t *newtvar = jl_new_typevar(ut->var->name, lb, ub);
             JL_GC_PUSH1(&newtvar);
             body = jl_substitute_var(body, ut->var, (jl_value_t*)newtvar);
-            t = jl_new_struct(jl_unionall_type, newtvar, body);
+            t = jl_new_unionall(newtvar, body, ut->diag);
             JL_GC_POP();
         }
         else if (body != ut->body) {
-            t = jl_new_struct(jl_unionall_type, ut->var, body);
+            t = jl_new_unionall(ut->var, body, ut->diag);
         }
         JL_GC_POP();
     }
@@ -2060,7 +2196,7 @@ static jl_value_t *normalize_unionalls(jl_value_t *t)
         jl_value_t *body = normalize_unionalls(u->body);
         JL_GC_PUSH2(&body, &t);
         if (body != u->body) {
-            t = jl_new_struct(jl_unionall_type, u->var, body);
+            t = jl_new_unionall(u->var, body, u->diag);
             u = (jl_unionall_t*)t;
         }
 
@@ -2679,7 +2815,7 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
             }
             else if (newbody != ua->body || var != (jl_value_t*)ua->var) {
                 // if t's parameters are not bound in the environment, return it uncopied (#9378)
-                t = jl_new_struct(jl_unionall_type, var, newbody);
+                t = jl_new_unionall((jl_tvar_t*)var, newbody, ua->diag);
             }
         }
         JL_GC_POP();
@@ -3148,9 +3284,15 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_set_typetagof(jl_bottom_type, jl_typeofbottom_tag, GC_OLD_MARKED);
     jl_typeofbottom_type->instance = jl_bottom_type;
 
+    // create UInt8 early so it can be used as the inline storage type for
+    // UnionAll's `diag` field. Its super is fixed up later (to Unsigned).
+    jl_uint8_type = jl_new_primitivetype((jl_value_t*)jl_symbol("UInt8"), core,
+                                         jl_any_type, jl_emptysvec, 8);
+    XX(uint8);
+
     jl_unionall_type = jl_new_datatype(jl_symbol("UnionAll"), core, type_type, jl_emptysvec,
-                                       jl_perm_symsvec(2, "var", "body"),
-                                       jl_svec(2, jl_tvar_type, jl_any_type),
+                                       jl_perm_symsvec(3, "var", "body", "diag"),
+                                       jl_svec(3, jl_tvar_type, jl_any_type, jl_uint8_type),
                                        jl_emptysvec, 0, 0, 2);
     XX(unionall);
     // It seems like we probably usually end up needing the box for kinds (often used in an Any context), so force it to exist
@@ -3169,7 +3311,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_precompute_memoized_dt(type_type, 0); // update the hash value ASAP
     type_type->hasfreetypevars = 1;
     type_type->ismutationfree = 1;
-    jl_type_typename->wrapper = jl_new_struct(jl_unionall_type, tttvar, (jl_value_t*)jl_type_type);
+    jl_type_typename->wrapper = jl_new_unionall(tttvar, (jl_value_t*)jl_type_type, JL_UNIONALL_DIAG_DYNAMIC);
     jl_type_type = (jl_unionall_t*)jl_type_typename->wrapper;
 
     jl_vararg_type = jl_new_datatype(jl_symbol("TypeofVararg"), core, jl_any_type, jl_emptysvec,
@@ -3210,9 +3352,8 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_uint64_type = jl_new_primitivetype((jl_value_t*)jl_symbol("UInt64"), core,
                                           jl_any_type, jl_emptysvec, 64);
     XX(uint64);
-    jl_uint8_type = jl_new_primitivetype((jl_value_t*)jl_symbol("UInt8"), core,
-                                         jl_any_type, jl_emptysvec, 8);
-    XX(uint8);
+    // jl_uint8_type was created earlier (so it could be used as the storage
+    // type of UnionAll's `diag` field); skip recreation here.
     jl_uint16_type = jl_new_primitivetype((jl_value_t*)jl_symbol("UInt16"), core,
                                           jl_any_type, jl_emptysvec, 16);
     XX(uint16);
@@ -3789,8 +3930,9 @@ void jl_init_types(void) JL_GC_DISABLED
     tttvar = jl_new_typevar(jl_symbol("T"),
                             (jl_value_t*)jl_bottom_type,
                             (jl_value_t*)jl_anytuple_type);
-    jl_anytuple_type_type = (jl_unionall_t*)jl_new_struct(jl_unionall_type,
-                                                          tttvar, (jl_value_t*)jl_wrap_Type((jl_value_t*)tttvar));
+    jl_anytuple_type_type = (jl_unionall_t*)jl_new_unionall(tttvar,
+                                                            (jl_value_t*)jl_wrap_Type((jl_value_t*)tttvar),
+                                                            JL_UNIONALL_DIAG_DYNAMIC);
 
     jl_tvar_t *ntval_var = jl_new_typevar(jl_symbol("T"), (jl_value_t*)jl_bottom_type,
                                           (jl_value_t*)jl_anytuple_type);

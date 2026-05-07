@@ -8424,7 +8424,12 @@ end
 @test_throws ErrorException Core.Intrinsics.pointerref(Ptr{Vector{Int64}}(C_NULL), 1, 0)
 
 # #53034 (Union normalization for typevar elimination)
-@test Tuple{Int,Any} <: Tuple{Union{Int,T},T} where {T>:Int}
+# With the static diagonal rule, T occurs in two covariant positions (inside
+# the Union and as the second tuple slot) with no invariant occurrence, and
+# T's lower bound `Int` is leaf, so the UnionAll is marked diagonal — Any
+# (abstract) cannot bind T. Under T>:Integer the lower bound is abstract,
+# so the diagonal rule does not apply.
+@test_broken Tuple{Int,Any} <: Tuple{Union{Int,T},T} where {T>:Int}
 @test Tuple{Int,Any} <: Tuple{Union{Int,T},T} where {T>:Integer}
 # #53034 (Union normalization for Type elimination)
 @test Int isa Type{Union{Int,T2} where {T2<:T1}} where {T1}

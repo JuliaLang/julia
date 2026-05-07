@@ -531,6 +531,12 @@ typedef struct {
     JL_DATA_TYPE
     jl_tvar_t *JL_NONNULL var;
     jl_value_t *JL_NONNULL body;
+    // 3-valued field controlling the diagonal rule for `var` in `body`.
+    // See JL_UNIONALL_DIAG_* in julia_internal.h:
+    //   0: dynamic semantics (current behavior; computed at subtype time)
+    //   1: always concrete (diagonal rule applies)
+    //   2: never concrete  (diagonal rule does not apply)
+    uint8_t diag;
 } jl_unionall_t;
 
 // represents the "name" part of a DataType, describing the syntactic structure

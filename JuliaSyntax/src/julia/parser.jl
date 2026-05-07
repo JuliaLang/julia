@@ -299,13 +299,13 @@ function is_syntactic_unary_op(k)
 end
 
 function is_type_operator(t, isdot)
-    kind(t) in KSet"<: >:" && !isdot
+    kind(t) in KSet"<: >: <<: >>:" && !isdot
 end
 
 function is_unary_op(t, isdot)
     k = kind(t)
     !is_suffixed(t) && (
-        (k in KSet"<: >:" && !isdot) ||
+        (k in KSet"<: >: <<: >>:" && !isdot) ||
         k in KSet"+ - ! ~ ¬ √ ∛ ∜ ⋆ ± ∓" # dotop allowed
     )
 end

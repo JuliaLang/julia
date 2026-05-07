@@ -776,6 +776,7 @@ end
 function make_wheres(io::IO, env::SimpleVector, @nospecialize(x::Type))
     seen = IdSet()
     wheres = TypeVar[]
+    diag_overrides = UInt8[]   # parallel to `wheres`; UInt8(0) = no override
     # record things printed by the context
     if io isa IOContext
         for (key, val) in io.dict
@@ -789,6 +790,7 @@ function make_wheres(io::IO, env::SimpleVector, @nospecialize(x::Type))
         if !(x.var in seen)
             push!(seen, x.var)
             push!(wheres, x.var)
+            push!(diag_overrides, _unionall_diag_override(x))
         end
         x = x.body
     end
@@ -798,22 +800,87 @@ function make_wheres(io::IO, env::SimpleVector, @nospecialize(x::Type))
         if p isa TypeVar && !(p in seen)
             push!(seen, p)
             pushfirst!(wheres, p)
+            pushfirst!(diag_overrides, UInt8(0))   # env-derived: no source UnionAll
         end
     end
-    return wheres
+    return wheres, diag_overrides
 end
 
-function show_wheres(io::IO, wheres::Vector{TypeVar})
+# If the UnionAll's diag matches the static-default rule, returns 0 (no override).
+# Otherwise returns the actual diag value (1=CONCRETE, 2=NEVER) so the caller
+# can render with `<<:` on the appropriate side.
+function _unionall_diag_override(u::UnionAll)
+    diag = getfield(u, :diag)
+    diag == 0 && return UInt8(0)
+    default = ccall(:jl_unionall_diag_default, UInt8, (Any, Any), u.var, u.body)
+    return diag == default ? UInt8(0) : diag
+end
+
+function show_wheres(io::IO, wheres::Vector{TypeVar}, diag_overrides::Vector{UInt8}=zeros(UInt8, length(wheres)))
     isempty(wheres) && return
     io = IOContext(io)
     n = length(wheres)
     for i = 1:n
         p = wheres[i]
         print(io, n == 1 ? " where " : i == 1 ? " where {" : ", ")
-        show(io, p)
+        d = i <= length(diag_overrides) ? diag_overrides[i] : UInt8(0)
+        if d == 0
+            show(io, p)
+        else
+            show_typevar_with_diag(io, p, d)
+        end
         io = IOContext(io, :unionall_env => p)
     end
     n > 1 && print(io, "}")
+    nothing
+end
+
+# Print a TypeVar binding when the UnionAll's diag is an explicit override of
+# the default static rule. `diag` is the actual UnionAll diag value:
+#   1 = CONCRETE: marker on the upper-bound side, rendered as `T<<:Ub`
+#   2 = NEVER:    marker on the lower-bound side, rendered as `Lb<<:T` (or `T>>:Lb`)
+# Bounds defaulted to Bottom/Any are made explicit so the marker can attach.
+function show_typevar_with_diag(io::IO, tv::TypeVar, diag::UInt8)
+    in_env = (:unionall_env => tv) in io
+    function show_bound(io::IO, @nospecialize(b))
+        parens = isa(b, UnionAll) && !print_without_params(b)
+        parens && print(io, "(")
+        show(io, b)
+        parens && print(io, ")")
+    end
+    if in_env
+        show_unquoted(io, tv.name)
+        return nothing
+    end
+    lb, ub = tv.lb, tv.ub
+    if diag == 1   # CONCRETE: place `<<:` on the upper side
+        # Always need an explicit upper bound; emit `Any` if ub === Any.
+        if lb !== Bottom
+            show_bound(io, lb)
+            print(io, "<:")
+            show_unquoted(io, tv.name)
+        else
+            show_unquoted(io, tv.name)
+        end
+        print(io, "<<:")
+        show_bound(io, ub)
+    else           # NEVER: place `<<:` on the lower side
+        if lb !== Bottom && ub === Any
+            # Mirror of `Lb<<:T`: write as `T>>:Lb` for parity with `T>:Lb`.
+            show_unquoted(io, tv.name)
+            print(io, ">>:")
+            show_bound(io, lb)
+        else
+            # Make the lower bound explicit (Union{} if defaulted).
+            show_bound(io, lb)
+            print(io, "<<:")
+            show_unquoted(io, tv.name)
+            if ub !== Any
+                print(io, "<:")
+                show_bound(io, ub)
+            end
+        end
+    end
     nothing
 end
 
@@ -821,9 +888,9 @@ function show_typealias(io::IO, @nospecialize(x::Type))
     properx = makeproper(io, x)
     alias = make_typealias(properx)
     alias === nothing && return false
-    wheres = make_wheres(io, alias[2], x)
+    wheres, diag_overrides = make_wheres(io, alias[2], x)
     show_typealias(io, alias[1], x, alias[2], wheres)
-    show_wheres(io, wheres)
+    show_wheres(io, wheres, diag_overrides)
     return true
 end
 
@@ -928,17 +995,17 @@ function show_unionaliases(io::IO, x::Union)
     if first && !tvar && length(aliases) == 1
         alias = aliases[1]
         env = alias[2]::SimpleVector
-        wheres = make_wheres(io, env, x)
+        wheres, diag_overrides = make_wheres(io, env, x)
         show_typealias(io, alias[1], x, env, wheres)
-        show_wheres(io, wheres)
+        show_wheres(io, wheres, diag_overrides)
     else
         for alias in aliases
             print(io, first ? "Union{" : ", ")
             first = false
             env = alias[2]::SimpleVector
-            wheres = make_wheres(io, env, x)
+            wheres, diag_overrides = make_wheres(io, env, x)
             show_typealias(io, alias[1], x, env, wheres)
-            show_wheres(io, wheres)
+            show_wheres(io, wheres, diag_overrides)
         end
         if tvar
             for typ in uniontypes(x)
@@ -1000,8 +1067,10 @@ function _show_type(io::IO, @nospecialize(x::Type))
 
     x = x::UnionAll
     wheres = TypeVar[]
+    diag_overrides = UInt8[]
     let io = IOContext(io)
         while x isa UnionAll
+            override = _unionall_diag_override(x)
             var = x.var
             if var.name === :_ || io_has_tvar_name(io, var.name, x)
                 counter = 1
@@ -1018,6 +1087,7 @@ function _show_type(io::IO, @nospecialize(x::Type))
                 x = x.body
             end
             push!(wheres, var)
+            push!(diag_overrides, override)
             io = IOContext(io, :unionall_env => var)
         end
         if x isa DataType
@@ -1026,7 +1096,7 @@ function _show_type(io::IO, @nospecialize(x::Type))
             show(io, x)
         end
     end
-    show_wheres(io, wheres)
+    show_wheres(io, wheres, diag_overrides)
 end
 
 # Check whether 'sym' (defined in module 'parent') is visible from module 'from'

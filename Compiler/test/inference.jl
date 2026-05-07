@@ -1564,7 +1564,7 @@ let nfields_tfunc(@nospecialize xs...) =
     @test nfields_tfunc(Int) === Const(0)
     @test nfields_tfunc(Complex) === Const(2)
     @test nfields_tfunc(Type{Type{Int}}) === Const(nfields(DataType))
-    @test nfields_tfunc(UnionAll) === Const(2)
+    @test nfields_tfunc(UnionAll) === Const(3)
     @test nfields_tfunc(DataType) === Const(nfields(DataType))
     @test nfields_tfunc(Type{Int}) === Const(nfields(DataType))
     @test nfields_tfunc(Type{Integer}) === Const(nfields(DataType))

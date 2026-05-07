@@ -1066,7 +1066,13 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     //  ( Tuple{Int, Int}    <: Tuple{T, T} where T) but
     // !( Tuple{Int, String} <: Tuple{T, T} where T)
     // Then check concreteness by checking that the lower bound is not an abstract type.
-    int diagonal = vb.occurs_cov > 1 && !var_occurs_invariant(u->body, u->var);
+    int diagonal;
+    if (u->diag == JL_UNIONALL_DIAG_CONCRETE)
+        diagonal = 1;
+    else if (u->diag == JL_UNIONALL_DIAG_NEVER)
+        diagonal = 0;
+    else
+        diagonal = vb.occurs_cov > 1 && !var_occurs_invariant(u->body, u->var);
     if (ans && (vb.concrete || (diagonal && is_leaf_typevar(u->var)))) {
         if (vb.concrete && !diagonal && !is_leaf_bound(vb.ub)) {
             // a non-diagonal var can only be a subtype of a diagonal var if its
@@ -3064,7 +3070,7 @@ static jl_value_t *omit_bad_union(jl_value_t *u, jl_tvar_t *t)
                     var = jl_new_typevar(var->name, var->lb, ub);
                     body = jl_substitute_var(body, ((jl_unionall_t *)u)->var, (jl_value_t *)var);
                 }
-                res = jl_new_struct(jl_unionall_type, var, body);
+                res = jl_new_unionall(var, body, ((jl_unionall_t *)u)->diag);
             }
         }
         JL_GC_POP();
@@ -3289,9 +3295,9 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
                     has_typevar_via_flatten_env(vb->lb, ivar, allvars, checked) ||
                     has_typevar_via_flatten_env(vb->ub, ivar, allvars, checked)) {
                     if (innerflag & 1)
-                        *btemp->lb = jl_new_struct(jl_unionall_type, vb->var, ilb);
+                        *btemp->lb = jl_new_unionall(vb->var, ilb, JL_UNIONALL_DIAG_DYNAMIC);
                     if (innerflag & 2)
-                        *btemp->ub = jl_new_struct(jl_unionall_type, vb->var, iub);
+                        *btemp->ub = jl_new_unionall(vb->var, iub, JL_UNIONALL_DIAG_DYNAMIC);
                 }
                 else {
                     assert(btemp->root != vb);
@@ -3497,8 +3503,11 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
     else {
         res = intersect(u->body, t, e, param);
     }
-    vb->concrete |= (vb->occurs_cov > 1 && is_leaf_typevar(u->var) &&
-                     !var_occurs_invariant(u->body, u->var));
+    if (u->diag == JL_UNIONALL_DIAG_CONCRETE)
+        vb->concrete = 1;
+    else if (u->diag == JL_UNIONALL_DIAG_DYNAMIC)
+        vb->concrete |= (vb->occurs_cov > 1 && is_leaf_typevar(u->var) &&
+                         !var_occurs_invariant(u->body, u->var));
 
     // handle the "diagonal dispatch" rule, which says that a type var occurring more
     // than once, and only in covariant position, is constrained to concrete types. E.g.
@@ -4930,7 +4939,7 @@ static jl_value_t *insert_nondiagonal(jl_value_t *type, jl_varbinding_t *troot, 
         JL_GC_PUSH3(&newbody, &newvar, &type);
         if (body == newbody || jl_has_typevar(newbody, var)) {
             if (body != newbody)
-                type = jl_new_struct(jl_unionall_type, var, newbody);
+                type = jl_new_unionall(var, newbody, ((jl_unionall_t*)type)->diag);
             // n.b. we do not widen lb, since that would be the wrong direction
             newvar = insert_nondiagonal(var->ub, troot, widen2ub);
             if (newvar != var->ub) {

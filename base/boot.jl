@@ -336,6 +336,7 @@ TypeVar(@nospecialize(n)) = _typevar(n::Symbol, Union{}, Any)
 TypeVar(@nospecialize(n), @nospecialize(ub)) = _typevar(n::Symbol, Union{}, ub)
 TypeVar(@nospecialize(n), @nospecialize(lb), @nospecialize(ub)) = _typevar(n::Symbol, lb, ub)
 UnionAll(@nospecialize(v), @nospecialize(t)) = ccall(:jl_type_unionall, Any, (Any, Any), v::TypeVar, t)
+UnionAll(@nospecialize(v), @nospecialize(t), diag::UInt8) = ccall(:jl_type_unionall_diag, Any, (Any, Any, UInt8), v::TypeVar, t, diag)
 
 const Memory{T} = GenericMemory{:not_atomic, T, CPU}
 const MemoryRef{T} = GenericMemoryRef{:not_atomic, T, CPU}

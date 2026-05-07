@@ -157,6 +157,8 @@ function optakessuffix(k)
         k == K"?"   ||
         k == K"<:"  ||
         k == K">:"  ||
+        k == K"<<:" ||
+        k == K">>:" ||
         k == K"&&"  ||
         k == K"||"  ||
         k == K"in"  ||
@@ -801,6 +803,8 @@ function lex_greater(l::Lexer)
             end
         elseif accept(l, '=')
             return emit(l, K"op=")
+        elseif accept(l, ':')
+            return emit(l, K">>:")
         else
             return emit(l, K">>")
         end
@@ -818,7 +822,9 @@ function lex_less(l::Lexer)
     if accept(l, '<')
         if accept(l, '=')
             return emit(l, K"op=")
-        else # '<<?', ? not =, ' '
+        elseif accept(l, ':')
+            return emit(l, K"<<:")
+        else # '<<?', ? not =, ' ', ':'
             return emit(l, K"<<")
         end
     elseif accept(l, '=')

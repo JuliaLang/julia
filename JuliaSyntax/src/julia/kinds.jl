@@ -489,6 +489,8 @@ register_kinds!(JuliaSyntax, 0, [
     "BEGIN_COMPARISON"
         "<:"
         ">:"
+        "<<:"
+        ">>:"
         ">"
         "<"
         ">="
