@@ -5,6 +5,10 @@
 baremodule libLLVM_jll
 using Base, Libdl, Zlib_jll, Zstd_jll
 
+if !Sys.isapple()
+    using CompilerSupportLibraries_jll
+end
+
 const PATH_list = String[]
 const LIBPATH_list = String[]
 

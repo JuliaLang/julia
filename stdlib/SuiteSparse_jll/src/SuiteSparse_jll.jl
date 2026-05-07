@@ -2,7 +2,11 @@
 
 ## dummy stub for https://github.com/JuliaBinaryWrappers/SuiteSparse_jll.jl
 baremodule SuiteSparse_jll
-using Base, Libdl, libblastrampoline_jll
+using Base, Libdl
+using libblastrampoline_jll
+if !(Sys.isfreebsd() || Sys.isapple())
+    using CompilerSupportLibraries_jll
+end
 
 const PATH_list = String[]
 const LIBPATH_list = String[]

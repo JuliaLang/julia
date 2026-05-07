@@ -4,6 +4,12 @@
 
 baremodule LibSSH2_jll
 using Base, Libdl
+if Sys.isfreebsd() || Sys.isapple()
+    using Zlib_jll
+end
+if Sys.iswindows() && Sys.WORD_SIZE == 32
+    using CompilerSupportLibraries_jll
+end
 if !Sys.iswindows()
     # On Windows we use system SSL/crypto libraries
     using OpenSSL_jll

@@ -3,6 +3,9 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/GMP_jll.jl
 baremodule GMP_jll
 using Base, Libdl
+if !Sys.isapple()
+    using CompilerSupportLibraries_jll
+end
 
 const PATH_list = String[]
 const LIBPATH_list = String[]

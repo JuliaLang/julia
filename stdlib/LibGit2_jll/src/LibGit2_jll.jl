@@ -8,6 +8,9 @@ if !(Sys.iswindows() || Sys.isapple())
     # On Windows and macOS we use system SSL/crypto libraries
     using OpenSSL_jll
 end
+if Sys.iswindows() && Sys.WORD_SIZE == 32
+    using CompilerSupportLibraries_jll
+end
 
 const PATH_list = String[]
 const LIBPATH_list = String[]

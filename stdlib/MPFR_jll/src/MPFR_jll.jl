@@ -3,6 +3,9 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/MPFR_jll.jl
 baremodule MPFR_jll
 using Base, Libdl, GMP_jll
+if Sys.iswindows()
+    using CompilerSupportLibraries_jll
+end
 
 const PATH_list = String[]
 const LIBPATH_list = String[]

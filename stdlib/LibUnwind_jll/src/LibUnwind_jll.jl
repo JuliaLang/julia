@@ -4,6 +4,10 @@
 
 baremodule LibUnwind_jll
 using Base, Libdl
+using Zlib_jll
+if !Sys.isfreebsd()
+    using CompilerSupportLibraries_jll
+end
 
 const PATH_list = String[]
 const LIBPATH_list = String[]

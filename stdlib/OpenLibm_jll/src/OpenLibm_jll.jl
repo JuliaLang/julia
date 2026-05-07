@@ -3,6 +3,9 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/OpenLibm_jll.jl
 baremodule OpenLibm_jll
 using Base, Libdl
+if Sys.iswindows()
+    using CompilerSupportLibraries_jll
+end
 
 const PATH_list = String[]
 const LIBPATH_list = String[]
