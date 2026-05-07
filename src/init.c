@@ -559,7 +559,6 @@ extern jl_mutex_t precomp_statement_out_lock;
 extern jl_mutex_t newly_inferred_mutex;
 extern jl_mutex_t global_roots_lock;
 extern jl_mutex_t profile_show_peek_cond_lock;
-extern jl_mutex_t jl_typeinf_lock;
 
 static void restore_fp_env(void)
 {
@@ -582,9 +581,14 @@ static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, j
 
     if (jl_options.cpu_target == NULL)
         jl_options.cpu_target = "native";
+    if (jl_options.cpu_target[0] == '\0')
+        jl_error("Invalid target option: empty CPU name");
+
+    // Validate CPU target: check for unknown names, multiple targets, clone_all
+    jl_check_cpu_target(jl_options.cpu_target, jl_generating_output());
 
     // Parse image, perform relocations, and init JIT targets, etc.
-    jl_image_t parsed_image = jl_init_processor_sysimg(sysimage, jl_options.cpu_target);
+    jl_image_t parsed_image = jl_load_sysimg(sysimage, jl_options.cpu_target);
 
     jl_init_codegen();
 
@@ -689,7 +693,6 @@ static void init_global_mutexes(void) {
     JL_MUTEX_INIT(&global_roots_lock, "global_roots_lock");
     JL_MUTEX_INIT(&typecache_lock, "typecache_lock");
     JL_MUTEX_INIT(&profile_show_peek_cond_lock, "profile_show_peek_cond_lock");
-    JL_MUTEX_INIT(&jl_typeinf_lock, "jl_typeinf_lock");
 }
 
 JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
@@ -767,22 +770,17 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
 #endif
 
     jl_init_rand();
+    jl_init_coverage();
+    jl_init_staticdata();
     jl_init_runtime_ccall();
     jl_init_tasks();
+    jl_init_engine();
     jl_init_threading();
     jl_init_threadinginfra();
     if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
         jl_install_default_signal_handlers();
 
     jl_gc_init();
-
-    arraylist_new(&jl_linkage_blobs, 0);
-    arraylist_new(&jl_image_relocs, 0);
-    arraylist_new(&jl_top_mods, 0);
-    arraylist_new(&eytzinger_image_tree, 0);
-    arraylist_new(&eytzinger_idxs, 0);
-    arraylist_push(&eytzinger_idxs, (void*)0);
-    arraylist_push(&eytzinger_image_tree, (void*)1); // outside image
 
     jl_ptls_t ptls = jl_init_threadtls(0);
 #pragma GCC diagnostic push

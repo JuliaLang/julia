@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "llvm-gc-interface-passes.h"
+#include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/Support/Casting.h"
 
@@ -1301,6 +1302,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         // Known functions emitted in codegen that are not safepoints
                         if (callee == pointer_from_objref_func || callee == gc_preserve_begin_func ||
                             callee == gc_preserve_end_func || callee == typeof_func ||
+                            callee == blackbox_func ||
                             callee == pgcstack_getter || callee->getName() == XSTR(jl_egal__unboxed) ||
                             callee->getName() == XSTR(jl_lock_value) || callee->getName() == XSTR(jl_unlock_value) ||
                             callee->getName() == XSTR(jl_lock_field) || callee->getName() == XSTR(jl_unlock_field) ||
@@ -1929,7 +1931,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 continue;
             }
 
-            if (callee && (callee == gc_flush_func || callee == gc_preserve_begin_func
+            if (callee && (callee == gcroot_flush_func || callee == gc_preserve_begin_func
                         || callee == gc_preserve_end_func)) {
                 /* No replacement */
             } else if (pointer_from_objref_func != nullptr && callee == pointer_from_objref_func) {
@@ -1952,6 +1954,27 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 ASCI->takeName(CI);
                 CI->replaceAllUsesWith(ASCI);
                 UpdatePtrNumbering(CI, ASCI, S);
+            } else if (blackbox_func != nullptr && callee == blackbox_func) {
+                // Lower julia.blackbox(ptr) to an "=r,0" inline asm on the raw
+                // untracked pointer. At this point GC frame lowering has already
+                // run, so there are no GC-tracked address spaces left and the
+                // register-tied asm is legal.
+                assert(CI->arg_size() == 1);
+                auto *input = CI->getOperand(0);
+                // Strip any remaining tracked/derived address space cast to get
+                // a plain pointer that the asm can accept.
+                auto *rawTy = llvm::PointerType::getUnqual(CI->getContext());
+                IRBuilder<> builder(CI);
+                builder.SetCurrentDebugLocation(CI->getDebugLoc());
+                Value *raw = builder.CreateAddrSpaceCast(input, rawTy);
+                FunctionType *AsmFTy = FunctionType::get(rawTy, {rawTy}, false);
+                InlineAsm *IA = InlineAsm::get(AsmFTy, "", "=r,0", /*hasSideEffects=*/false);
+                Value *result = builder.CreateCall(AsmFTy, IA, {raw});
+                // Cast back to the original output type
+                Value *out = builder.CreateAddrSpaceCast(result, CI->getType());
+                out->takeName(CI);
+                CI->replaceAllUsesWith(out);
+                UpdatePtrNumbering(CI, out, S);
             } else if (alloc_obj_func && callee == alloc_obj_func) {
                 assert(CI->arg_size() == 3);
 
@@ -2533,6 +2556,37 @@ bool LateLowerGCFrame::runOnFunction(Function &F, bool *CFGModified) {
 
     pgcstack = getPGCstack(F);
     if (pgcstack) {
+      // Strip optimistic memory attrs added by add_fn_attrs_for_effects.
+      // Must happen before LocalScan (which uses memory effects for
+      // safepoint identification) and before post-GC passes (DSE/GVN).
+      if (F.hasFnAttribute("julia.safepoint")) {
+          F.setMemoryEffects(MemoryEffects::unknown());
+          for (unsigned i = 0; i < F.arg_size(); i++) {
+              if (F.hasParamAttribute(i, "gcstack"))
+                  F.removeParamAttr(i, Attribute::ReadNone);
+          }
+      }
+      for (auto &BB : F) {
+          for (auto &I : BB) {
+              if (auto *CI = dyn_cast<CallInst>(&I)) {
+                  Function *Callee = CI->getCalledFunction();
+                  if (!Callee || Callee->hasFnAttribute("julia.safepoint")) {
+                      CI->setMemoryEffects(MemoryEffects::unknown());
+                      for (unsigned i = 0; i < CI->arg_size(); i++) {
+                          if (CI->getParamAttr(i, "gcstack").isValid())
+                              CI->removeParamAttr(i, Attribute::ReadNone);
+                      }
+                      if (Callee) {
+                          Callee->setMemoryEffects(MemoryEffects::unknown());
+                          for (unsigned i = 0; i < Callee->arg_size(); i++) {
+                              if (Callee->hasParamAttribute(i, "gcstack"))
+                                  Callee->removeParamAttr(i, Attribute::ReadNone);
+                          }
+                      }
+                  }
+              }
+          }
+      }
       State S = LocalScan(F);
       // If there is no safepoint after the first reachable def, then we don't need any roots (even those for allocas)
       if (std::any_of(S.BBStates.begin(), S.BBStates.end(),

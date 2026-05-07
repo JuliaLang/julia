@@ -211,6 +211,18 @@ create_serialization_stream() do s # immutable struct with 4 field
     @test invokelatest(deserialize, s) === utval
 end
 
+create_serialization_stream() do s # union types
+    serialize(s, Union{Int,Float64})
+    serialize(s, Union{Int,Missing})
+    serialize(s, Union{Int,Float64,String})
+    serialize(s, [Union{Int,Float64}, Union{String,Symbol}, Union{Int,Missing}])
+    seek(s, 0)
+    @test deserialize(s) === Union{Int,Float64}
+    @test deserialize(s) === Union{Int,Missing}
+    @test deserialize(s) === Union{Int,Float64,String}
+    @test deserialize(s) == Type[Union{Int,Float64}, Union{String,Symbol}, Union{Int,Missing}]
+end
+
 # Expression
 create_serialization_stream() do s
     expr = Meta.parse("a = 1")
@@ -693,15 +705,18 @@ end
     for i in 1:10
         old_m[i] = i^2
     end
-    old_x = memoryref(old_m, 5)
-    @test old_x[] == 25
-    old_d = Dict(:x => old_x)
+    # Test roundtrip at every offset
+    for idx in 1:10
+        old_x = memoryref(old_m, idx)
+        @test old_x[] == idx^2
+        old_d = Dict(:x => old_x)
 
-    old_str = sprint(serialize, old_d)
-    new_d = deserialize(IOBuffer(old_str))
+        old_str = sprint(serialize, old_d)
+        new_d = deserialize(IOBuffer(old_str))
 
-    @test new_d[:x] isa MemoryRef
-    @test new_d[:x][] == 25
+        @test new_d[:x] isa MemoryRef
+        @test new_d[:x][] == idx^2
+    end
 end
 
 @testset "Memory" begin

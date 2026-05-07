@@ -208,6 +208,9 @@ julia> bar() = nameof(@__FUNCTION__);
 julia> bar()
 :bar
 ```
+
+!!! compat "Julia 1.13"
+    This macro requires at least Julia 1.13.
 """
 macro __FUNCTION__()
     Expr(:thisfunction)
@@ -640,8 +643,8 @@ end
     Base.datatype_isbitsegal(dt::DataType)::Bool
 
 Return whether egality of the (non-padding bits of the) in-memory representation
-of an instance of this type implies semantic egality of the instance itself.
-This may not be the case if the type contains to other values whose egality is
+of an instance of this type is equivalent to semantic egality of the instance itself.
+This may not be the case if the type contains pointers to other values whose egality is
 independent of their identity (e.g. immutable structs, some types, etc.).
 """
 function datatype_isbitsegal(dt::DataType)
@@ -759,14 +762,13 @@ function getindex(dtfd::DataTypeFieldDesc, i::Int)
     fielddesc_type = (layout.flags >> 1) & 3
     nfields = layout.nfields
     @boundscheck ((1 <= i <= nfields) || throw(BoundsError(dtfd, i)))
-    if fielddesc_type == 0
+    if fielddesc_type == 0  # JL_FIELDDESC_8
         return FieldDesc(unsafe_load(Ptr{FieldDescStorage{UInt8}}(fd_ptr), i))
-    elseif fielddesc_type == 1
+    elseif fielddesc_type == 1  # JL_FIELDDESC_16
         return FieldDesc(unsafe_load(Ptr{FieldDescStorage{UInt16}}(fd_ptr), i))
-    elseif fielddesc_type == 2
+    elseif fielddesc_type == 2  # JL_FIELDDESC_32
         return FieldDesc(unsafe_load(Ptr{FieldDescStorage{UInt32}}(fd_ptr), i))
-    else
-        # fielddesc_type == 3
+    else # fielddesc_type == 3  # JL_FIELDDESC_FOREIGN
         return FieldDesc(true, true, 0, 0)
     end
 end
@@ -1542,6 +1544,10 @@ Return the method table for `f`.
 If `types` is specified, return an array of methods whose types match.
 If `module` is specified, return an array of methods defined in that module.
 A list of modules can also be specified as an array or set.
+
+The methods are ordered from most to least specific. The relative order of
+methods without a specificity relationship (i.e. ambiguous or incomparable)
+is unspecified.
 
 !!! compat "Julia 1.4"
     At least Julia 1.4 is required for specifying a module.

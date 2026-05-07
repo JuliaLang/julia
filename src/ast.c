@@ -1059,7 +1059,9 @@ lno_ok:
             jl_method_error(margs[0], &margs[1], nargs, ct->world_age);
             // unreachable
         }
-        jl_timing_show_macro(mfunc, margs[1], inmodule, JL_TIMING_DEFAULT_BLOCK);
+        // margs[1] may still be a MacroSource; timing wants the inner LineNumberNode
+        jl_timing_show_macro(mfunc, retry_lno != NULL ? retry_lno : margs[1],
+                             inmodule, JL_TIMING_DEFAULT_BLOCK);
         *ctx = mfunc->def.method->module;
         result = jl_invoke(margs[0], &margs[1], nargs - 1, mfunc);
     }

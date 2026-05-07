@@ -138,6 +138,7 @@ export
     StridedVector,
     SubArray,
     SubString,
+    StringView,
     SubstitutionString,
     Timer,
     UnitRange,

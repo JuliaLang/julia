@@ -814,7 +814,19 @@ let fieldtype_tfunc(@nospecialize args...) =
     @test fieldtype_nothrow(Type{Tuple{Vararg{Int}}}, Const(42))
     @test !fieldtype_nothrow(Type{<:Tuple{Vararg{Int}}}, Const(1))
     @test TypeVar <: fieldtype_tfunc(Any, Any)
+    # JuliaLang/julia#30807: malformed types like `NTuple{<:Any, 3}` should not crash `fieldtype_tfunc`
+    @test fieldtype_tfunc(Const(NTuple{<:Any, 3}), Const(1)) == Union{}
+    @test fieldtype_tfunc(Const(NTuple{<:Any, 3}), Int) == Union{}
 end
+
+# JuliaLang/julia#30807: malformed types like `NTuple{<:Any, 3}` should not crash `fieldtype_tfunc`
+struct Issue30807
+    xs::NTuple{<:Any, 3}
+    Issue30807(xs...) = new(xs)
+end
+@test Base.infer_return_type((Int,Int,Int)) do x, y, z
+    Issue30807(x, y, z)
+end === Union{}
 
 # issue #11480
 @noinline f11480(x,y) = x
@@ -4420,6 +4432,16 @@ end == Int
     callsig_backprop_invalidation_outer(a)
 end ≠ Int
 
+# MustAlias signature constraint propagation:
+# when a call like `f(x.value)` constrains `x.value` via the method signature,
+# the refinement should propagate back to the slot `x` as a PartialStruct
+check_int_positive(x::Int) = x > 0 || error("x must be positive")
+# basic case: field type should be narrowed after the call
+@test Base.infer_return_type((Some{Any},)) do x
+    check_int_positive(x.value)
+    return sin(x.value)
+end == Float64
+
 # https://github.com/JuliaLang/julia/issues/37866
 function issue37866(v::Vector{Union{Nothing,Float64}})
     for x in v
@@ -5228,6 +5250,22 @@ let 𝕃ᵢ = Compiler.fallback_lattice
     @test t.fields == Any[Const(42), Int]
 end
 
+# issue #60715
+let 𝕃 = Compiler.fallback_lattice
+    local fn, fn1, pn, pn1
+    F(n) = iszero(n) ? Union{} : Tuple{Int, Union{Int, F(n-1)}}
+    P(n) = (f = F(n); Compiler.PartialStruct(𝕃, f, [Const(0), fieldtype(f, 2)]))
+
+    n = 0
+    while Compiler.issimpleenoughtype(F(n+1))
+        n += 1
+        fn, fn1, pn, pn1 = F(n), F(n+1), P(n), P(n+1)
+        @test Compiler.:⊑(𝕃, pn, pn1)
+    end
+    @test !Compiler.issimplertype(𝕃, pn1, pn)
+    @test !isa(Compiler.tmerge(𝕃, pn, pn1), Compiler.PartialStruct)
+end
+
 foo_empty_vararg(i...) = i[2]
 bar_empty_vararg(i) = foo_empty_vararg(10, 20, 30, i...)
 @test bar_empty_vararg(Union{}[]) === 20
@@ -5264,7 +5302,7 @@ end)[2] == Union{}
 # compilerbarrier builtin
 import Core: compilerbarrier
 # runtime semantics
-for setting = (:type, :const, :conditional)
+for setting = (:type, :const, :conditional, :blackbox)
     @test compilerbarrier(setting, 42) == 42
     @test compilerbarrier(setting, :sym) == :sym
 end
@@ -5301,6 +5339,13 @@ for setting = (#=:type, :const,=# :conditional,)
         compilerbarrier($(QuoteNode(setting)), 42)
     end
 end
+# :blackbox preserves type information (unlike :type) but strips Const
+@test Base.return_types((Int,)) do a
+    compilerbarrier(:blackbox, a)
+end |> only === Int
+@test Base.return_types() do
+    compilerbarrier(:blackbox, 42)
+end |> only === Int  # must not be Const(42)
 
 # https://github.com/JuliaLang/julia/issues/46426
 @noinline typebarrier() = Base.inferencebarrier(0.0)
@@ -6713,5 +6758,68 @@ throwconditional(c, x) = c ? throw(x isa Int) : throw(x isa Float64)
 @test Base.infer_exception_type((Bool, Any)) do c, x
     throwconditional(c, x)
 end == Bool
+
+# issue #60715
+let
+    f() = 1; f(_, x...) = (0, f(x...))
+    @test f(1, 2, 3) == (0, (0, (0, 1)))
+end
+
+# aviatesk/JETLS.jl/issues/618
+Base.@nospecializeinfer function jetls618(a, @nospecialize(rest...))
+    if a > 0
+        z = a + length(rest)
+    else
+        z = 0
+    end
+    println(z)
+    return z
+end
+@test Base.infer_return_type() do
+    jetls618(1,2,3), jetls618(1,2,3,4)
+end == Tuple{Int,Int}
+
+# issue #60252
+f60252(f, nt::NamedTuple) = NamedTuple{keys(nt)}(f(v) for v in values(nt))
+@inferred f60252(identity, (a=1, b=2))
+f60252_2(t::Tuple) = NamedTuple{(:a, :b), typeof(t)}(t)
+@test Base.infer_return_type(f60252_2, (Tuple{Vararg{Int64}},)) == @NamedTuple{a::Int64, b::Int64}
+
+# perform post const-prop' concrete evaluation when effects are further improved by const-prop'
+@noinline function concrete_eval_eligible_if_false(x::Float64, n::Int, y::Bool)
+    if y # this prevents initial concrete-evaluation
+        println("x = ", x)
+    end
+    s = 0.0
+    Base.@assume_effects :terminates_locally for i = 1:n
+        s += sin(x)
+    end
+    return s
+end
+@test Base.infer_return_type() do
+    Val(concrete_eval_eligible_if_false(42., 5, false) == 5sin(42.))
+end == Val{true}
+
+# Const-prop' `PartialStruct` of well-formed types that are `!isconcretedispatch`:
+# Test with an example using `OpaqueClosure`, which would be represented as `PartialOpaque`,
+# which will be a field of `PartialStruct` representing `Some`. Here, since this `oc` has
+# untyped argument types, the return type cannot be derived by eager inference in the
+# current OC framework, so inference will fail unless `PartialOpaque` is propagated all the
+# way to `call_someoc`.
+call_someoc(some, x) = some.value(x)
+@test Base.infer_return_type() do
+    oc = Base.Experimental.@opaque x -> 2x
+    call_someoc(Some(oc), 1)
+end == Int
+# A somewhat artificial example, but a test case that exercises the above code path without
+# using `OpaqueClosure`
+struct UntypedBoxWithParam{T}
+    x::Some{Any}
+    UntypedBoxWithParam{T}(x) where T = new{T}(Some{Any}(x))
+end
+readbox(box::UntypedBoxWithParam) = box.x.value
+@test Base.infer_return_type((Type,Int)) do T, x
+    readbox(UntypedBoxWithParam{T}(x))
+end == Int
 
 end # module inference

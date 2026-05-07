@@ -1399,6 +1399,9 @@ function show(io::IO, codeinst::Core.CodeInstance)
     else
         show_mi(io, def::MethodInstance)
     end
+    if codeinst.owner !== nothing
+        print(io, " (foreign)")
+    end
 end
 
 function show_mi(io::IO, mi::Core.MethodInstance, from_stackframe::Bool=false)
@@ -3031,6 +3034,8 @@ end
 nocolor(io::IO) = IOContext(io, :color => false)
 alignment_from_show(io::IO, x::Any) =
     textwidth(sprint(show, x, context=nocolor(io), sizehint=0))
+alignment_from_show(io::IO, x::AbstractString) =
+    textwidth(sprint(show, MIME"text/plain"(), x, context=nocolor(io), sizehint=0))
 
 """
 `alignment(io, X)` returns a tuple (left,right) showing how many characters are

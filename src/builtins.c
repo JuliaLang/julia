@@ -1691,6 +1691,9 @@ JL_CALLABLE(jl_f_apply_type)
         }
         return jl_apply_type(args[0], &args[1], nargs-1);
     }
+    else if (jl_is_datatype(args[0])) {
+        jl_type_error("apply_type", (jl_value_t*)jl_unionall_type, args[0]);
+    }
     jl_type_error("Type{...} expression", (jl_value_t*)jl_unionall_type, args[0]);
 }
 
@@ -2177,8 +2180,9 @@ JL_CALLABLE(jl_f_compilerbarrier)
     jl_sym_t *setting = (jl_sym_t*)args[0];
     if (!(setting == jl_symbol("type") ||
           setting == jl_symbol("const") ||
-          setting == jl_symbol("conditional")))
-        jl_error("The first argument of `compilerbarrier` must be either of `:type`, `:const` or `:conditional`.");
+          setting == jl_symbol("conditional") ||
+          setting == jl_symbol("blackbox")))
+        jl_error("The first argument of `compilerbarrier` must be either of `:type`, `:const`, `:conditional` or `:blackbox`.");
     jl_value_t *val = args[1];
     return val;
 }
