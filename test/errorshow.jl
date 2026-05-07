@@ -1133,6 +1133,56 @@ let ex = try
     @test occursin("may have intended to extend", sprint(Base.showerror, ex))
 end
 
+module TestShadowedTypeHintA
+    struct Foo end
+    f(::Foo) = 1
+    g(::Foo, ::Int) = 1
+    diag(::Foo, x::T, y::T) where T = 1
+end
+module TestShadowedTypeHintB
+    struct Foo end
+end
+module TestShadowRedefA
+    module Sub
+        struct X end
+    end
+    f(::Sub.X) = 1
+    module Sub
+        struct X end
+    end
+end
+module TestShadowRedefB
+    struct Y; x; end
+    g(::Y) = 1
+    struct Y end
+end
+@testset "shadowed-type hint #41084" begin
+    ex = try TestShadowedTypeHintA.f(TestShadowedTypeHintB.Foo()) catch e; e end
+    s = sprint(Base.showerror, ex)
+    @test occursin("You may have intended `", s)
+    @test occursin("TestShadowedTypeHintA.Foo", s)
+    @test occursin("TestShadowedTypeHintB.Foo", s)
+
+    ex = try sin("a") catch e; e end
+    @test !occursin("You may have intended", sprint(Base.showerror, ex))
+
+    ex = try TestShadowedTypeHintA.g(TestShadowedTypeHintB.Foo(), "not an int") catch e; e end
+    @test !occursin("You may have intended", sprint(Base.showerror, ex))
+
+    ex = try TestShadowedTypeHintA.diag(TestShadowedTypeHintB.Foo(), 1, "x") catch e; e end
+    @test !occursin("You may have intended", sprint(Base.showerror, ex))
+
+    ex = try TestShadowRedefA.f(TestShadowRedefA.Sub.X()) catch e; e end
+    s = sprint(Base.showerror, ex)
+    @test occursin("appears to have been redefined", s)
+    @test !occursin("rather than", s)
+
+    ex = try TestShadowRedefB.g(TestShadowRedefB.Y()) catch e; e end
+    s = sprint(Base.showerror, ex)
+    @test occursin("appears to have been redefined", s)
+    @test !occursin("rather than", s)
+end
+
 # Test that implementation detail of include() is hidden from the user by default
 let bt = try
         @noinline include("testhelpers/include_error.jl")
