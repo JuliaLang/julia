@@ -370,10 +370,24 @@ else ifeq ($(JULIA_BUILD_MODE),debug)
 	$(INSTALL_M) $(build_libdir)/libjulia-debug.dll.a $(DESTDIR)$(libdir)/
 	$(INSTALL_M) $(build_libdir)/libjulia-internal-debug.dll.a $(DESTDIR)$(libdir)/
 endif
-	$(INSTALL_M) $(filter-out %-bc.a %-o.a,$(wildcard $(build_private_libdir)/lib*.a)) $(DESTDIR)$(private_libdir)/
+# Copy over C runtime files used by Base.Linking
+	$(INSTALL_M) $(build_private_libdir)/libgcc.a $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/libgcc_s.a $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/libmsvcrt.a $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/libmingwex.a $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/libkernel32.a $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/libmingw32.a $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/libmoldname.a $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/libadvapi32.a $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/libshell32.a $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/libuser32.a $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/dllcrt2.o $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/crtbegin.o $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/crtend.o $(DESTDIR)$(private_libdir)/
 
-	$(INSTALL_M) $(build_bindir)/libopenlibm.dll.a $(DESTDIR)$(libdir)/
-	$(INSTALL_M) $(build_libdir)/libssp.dll.a $(DESTDIR)$(libdir)/
+	$(INSTALL_M) $(build_shlibdir)/libopenlibm.dll.a $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/libssp.dll.a $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_private_libdir)/libpthread.dll.a $(DESTDIR)$(private_libdir)/
 else
 
 # Copy over .dSYM directories directly for Darwin
@@ -427,10 +441,20 @@ endif
 			fi \
 		done \
 	done
+
+# Copy over C runtime files used by Base.Linking
 ifeq ($(OS),Darwin)
-	# Linker inputs used by Base.Linking when linking sysimages/pkgimages on macOS
 	$(INSTALL_M) $(build_libdir)/libclang_rt.osx.a $(DESTDIR)$(private_libdir)/
 	$(INSTALL_M) $(build_libdir)/libSystem.tbd $(DESTDIR)$(private_libdir)/
+else
+	$(INSTALL_M) $(build_libdir)/libgcc.a $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_libdir)/crti.o $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_libdir)/crtn.o $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_libdir)/crtbeginS.o $(DESTDIR)$(private_libdir)/
+	$(INSTALL_M) $(build_libdir)/crtendS.o $(DESTDIR)$(private_libdir)/
+ifeq ($(OS),Linux)
+	$(INSTALL_M) $(build_libdir)/libc_nonshared.a $(DESTDIR)$(private_libdir)/
+endif
 endif
 endif
 	for exe in $(JL_PRIVATE_EXES) ; do \

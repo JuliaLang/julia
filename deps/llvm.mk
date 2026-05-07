@@ -386,6 +386,7 @@ ifeq ($(OS),Darwin)
 $(eval $(call bb-install,compilerrt,COMPILERRT,false,false))
 $(build_libdir)/libclang_rt.osx.a: $(build_prefix)/manifest/compilerrt
 	mv $(build_libdir)/darwin/libclang_rt.osx.a $@
+	touch $@
 	rm -rf $(build_libdir)/darwin
 install-compilerrt: $(build_libdir)/libclang_rt.osx.a
 install-llvm: install-compilerrt
