@@ -107,6 +107,9 @@ Base.@kwdef mutable struct PrecompileSession
     n_batches::Int                         = 1
     interrupted::Bool                      = false
     canceled::Bool                         = false
+    # Snapshot of jobs that had failed at the moment cancel was first observed.
+    # Used to suppress noise from SIGKILL'd subprocesses when reporting on cancel.
+    failed_before_cancel::Set{PkgConfig}   = Set{PkgConfig}()
     interrupted_or_done::Bool              = false
     printloop_should_exit::Bool
     target::String
@@ -1591,7 +1594,12 @@ function should_stop(s::PrecompileSession)
     if ir || cr
         @lock s.print_lock begin
             s.interrupted = s.interrupted || ir
-            s.canceled = s.canceled || cr
+            if cr && !s.canceled
+                s.canceled = true
+                for (pc, job) in s.jobs
+                    is_failed(job) && push!(s.failed_before_cancel, pc)
+                end
+            end
             if !s.interrupted_or_done
                 s.interrupted_or_done = true
                 foreach(notify, values(s.was_processed))
@@ -2162,6 +2170,16 @@ function report_precompile_results!(s::PrecompileSession)
     if !s.strict && !requested_errs && !s.interrupted && !s.canceled
         for (_, job) in s.jobs
             is_failed(job) && clear_failure!(job)
+        end
+    end
+    if s.canceled
+        # Suppress noise from subprocesses killed by the cancel itself: only keep
+        # failures and captured output from jobs that had already failed before
+        # the cancel was requested.
+        for (pc, job) in s.jobs
+            pc in s.failed_before_cancel && continue
+            is_failed(job) && clear_failure!(job)
+            job.output.size > 0 && truncate(job.output, 0)
         end
     end
     n_failed = count(j -> is_failed(j), values(s.jobs))
