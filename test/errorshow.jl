@@ -79,7 +79,7 @@ Base.show_method_candidates(buf, Base.MethodError(method_c1,(1, 1, "")))
 Base.show_method_candidates(IOContext(buf, :color => true), Base.MethodError(method_c1,(1, 1, "")))
 
 mod_col = Base.text_colors[Base.STACKTRACE_FIXEDCOLORS[modul]]
-@test occursin("\n\n\e[0mClosest candidates are:\n\e[0m  method_c1(\e[91m::Float64\e[39m, \e[91m::AbstractString...\e[39m)\n\e[0m\e[90m   @\e[39m $mod_col$modul\e[39m \e[90m$dname$sep\e[39m\e[90m\e[4m$fname:$c1line\e[24m\e[39m\n", String(take!(buf)))
+@test occursin("\n\n\e[0mClosest candidates are:\n\e[0m  method_c1(\e[91m::Float64\e[39m\e[90m, \e[39m\e[91m::AbstractString...\e[39m)\n\e[0m\e[90m   @\e[39m $mod_col$modul\e[39m \e[90m$dname$sep\e[39m\e[90m\e[4m$fname:$c1line\e[24m\e[39m\n", String(take!(buf)))
 Base.show_method_candidates(buf, Base.MethodError(method_c1,(1, "", "")))
 @test occursin("\n\nClosest candidates are:\n  method_c1(!Matched::Float64, ::AbstractString...)$cmod$cfile$c1line\n", String(take!(buf)))
 
@@ -144,10 +144,11 @@ module Issue41061
     export AliasT
     const AliasT{T} = InnerT{T,3}
     f_nested(x::Vector{Vector{Float64}}) = 1
-    f_tuple(x::Tuple{Int64,String}) = 1
     f_nt(x::@NamedTuple{a::Int64, b::String}) = 1
     f_nt_mismatched(x::@NamedTuple{a::Int64}) = 1
     f_alias(x::AliasT{Int64}) = 1
+    f_pair(x::Pair{Int64,Float64}) = 1
+    f_two(x::Dict{String,Vector{Int64}}, y::String) = 1
     struct ThreeParam{A,B,C} end
     f_three(::ThreeParam{Tuple{Float64}}) = 1
 end
@@ -156,16 +157,23 @@ end
     # Nested type mismatches highlight only the innermost differing subtree
     Base.show_method_candidates(buf41061, MethodError(Issue41061.f_nested, ([Int64[1,2,3]],)))
     @test occursin("::Vector{Vector{!Matched{Float64}}}", String(take!(buf41061)))
-    # Independent differing parameter positions each highlight separately
-    Base.show_method_candidates(buf41061, MethodError(Issue41061.f_tuple, ((1.0, :x),)))
-    @test occursin("::Tuple{!Matched{Int64}, !Matched{String}}", String(take!(buf41061)))
-    # Color mode wraps the whole signature in error_color and underlines the
-    # innermost differing subtree
+    # Matching siblings + commas in gray, mismatched leaf in red
     let io = IOContext(buf41061, :color => true)
-        Base.show_method_candidates(io, MethodError(Issue41061.f_nested, ([Int64[1,2,3]],)))
-        @test occursin("\e[91m::Vector{Vector{\e[4mFloat64\e[24m}}\e[39m", String(take!(buf41061)))
+        Base.show_method_candidates(io, MethodError(Issue41061.f_pair, (Pair{Int64,Int64}(1, 2),)))
+        s = String(take!(buf41061))
+        @test occursin("\e[90mInt64\e[39m", s)
+        @test occursin("\e[91mFloat64\e[39m", s)
+        @test occursin("\e[90m, \e[39m", s)
     end
-    # Fully-specified NamedTuples with matching names diff per-field
+    # Wholly-matching argument and the inter-arg comma render in gray
+    let io = IOContext(buf41061, :color => true)
+        Base.show_method_candidates(io, MethodError(Issue41061.f_two,
+            (Dict{Symbol,Vector{Int64}}(), "A")))
+        s = String(take!(buf41061))
+        @test occursin("\e[90m::String\e[39m", s)
+        @test occursin("\e[90m, \e[39m\e[90m::String\e[39m", s)
+    end
+    # NamedTuple with matching field names diffs per-field
     Base.show_method_candidates(buf41061, MethodError(Issue41061.f_nt, ((a=1.0, b=:x),)))
     @test occursin("::@NamedTuple{a::!Matched{Int64}, b::!Matched{String}}", String(take!(buf41061)))
     # NamedTuples with mismatched field names fall back to whole-arg highlight
@@ -174,13 +182,13 @@ end
     # Aliases in modules not visible from the IO context get qualified
     Base.show_method_candidates(buf41061, MethodError(Issue41061.f_alias, (Issue41061.InnerT{Float64,3}(),)))
     @test occursin("Issue41061.AliasT{!Matched{Int64}}", String(take!(buf41061)))
-    # Don't underline at top level when the entire signature is wrong
+    # Entire signature wrong: leaf bail wraps the entire `::Type` in error_color
     let io = IOContext(buf41061, :color => true)
         called = Issue41061.ThreeParam{Tuple{Char}, Dict{Int,Int}, Dict{Int,Int}}()
         Base.show_method_candidates(io, MethodError(Issue41061.f_three, (called,)))
         s = String(take!(buf41061))
         @test occursin("\e[91m::", s)
-        @test !occursin("\e[91m::\e[4m", s)
+        @test occursin("ThreeParam{Tuple{Float64}}\e[39m", s)
     end
 end
 

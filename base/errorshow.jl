@@ -454,19 +454,10 @@ stacktrace_expand_basepaths()::Bool = Base.get_bool_env("JULIA_STACKTRACE_EXPAND
 stacktrace_contract_userdir()::Bool = Base.get_bool_env("JULIA_STACKTRACE_CONTRACT_HOMEDIR", true) === true
 stacktrace_linebreaks()::Bool = Base.get_bool_env("JULIA_STACKTRACE_LINEBREAKS", false) === true
 
-# Print `::<sig>` in `error_color`, underlining
-# the topmost subtree(s) that differ from `called`.
+# Print `::<sig>` with structural framing (type names, braces) in the default
+# color, matching parameters and their separating commas in gray, and the
+# topmost differing subtree(s) in `error_color`.
 function show_type_diff(io::IO, @nospecialize(sig), @nospecialize(called), use_color::Bool, top_level::Bool=true)
-    if top_level && use_color
-        print(io, text_colors[error_color()])
-        _show_type_diff(io, sig, called, true, true)
-        print(io, text_colors[:default])
-        return nothing
-    end
-    return _show_type_diff(io, sig, called, use_color, top_level)
-end
-
-function _show_type_diff(io::IO, @nospecialize(sig), @nospecialize(called), use_color::Bool, top_level::Bool)
     show_namedtuple_diff(io, sig, called, use_color, top_level) && return nothing
     params = descend_params(io, sig, called)
     if params === nothing
@@ -486,16 +477,34 @@ function _show_type_diff(io::IO, @nospecialize(sig), @nospecialize(called), use_
     end
     print(io, "{")
     for k in 1:length(sig_params)
-        k > 1 && print(io, ", ")
+        k > 1 && show_separator(io, use_color)
         sp = sig_params[k]
         cp = called_params[k]
         if isequal(sp, cp)
-            show(io, sp)
+            show_type_match(io, sp, use_color)
         else
             show_type_diff(io, sp, cp, use_color, #=top_level=#false)
         end
     end
     print(io, "}")
+end
+
+function show_separator(io::IO, use_color::Bool)
+    if use_color
+        print(io, text_colors[:light_black], ", ", text_colors[:default])
+    else
+        print(io, ", ")
+    end
+end
+
+function show_type_match(io::IO, @nospecialize(ty), use_color::Bool)
+    if use_color
+        print(io, text_colors[:light_black])
+        show(io, ty)
+        print(io, text_colors[:default])
+    else
+        show(io, ty)
+    end
 end
 
 function show_namedtuple_diff(io::IO, @nospecialize(sig), @nospecialize(called),
@@ -513,14 +522,14 @@ function show_namedtuple_diff(io::IO, @nospecialize(sig), @nospecialize(called),
     top_level && print(io, "::")
     print(io, "@NamedTuple{")
     for i in 1:n
-        i > 1 && print(io, ", ")
+        i > 1 && show_separator(io, use_color)
         show_sym(io, s_syms[i])
         sp = s_types.parameters[i]
         cp = c_types.parameters[i]
         if isequal(sp, cp)
             sp === Any && continue   # match `show_at_namedtuple` and don't print `::Any`
             print(io, "::")
-            show(io, sp)
+            show_type_match(io, sp, use_color)
         else
             print(io, "::")
             show_type_diff(io, sp, cp, use_color, #=top_level=#false)
@@ -555,14 +564,10 @@ end
 
 function show_type_mismatch(io::IO, @nospecialize(ty), use_color::Bool, top_level::Bool)
     if use_color
-        if top_level
-            print(io, "::")
-            show(io, ty)
-        else
-            print(io, text_colors[:underline])
-            show(io, ty)
-            print(io, disable_text_style[:underline])
-        end
+        print(io, text_colors[error_color()])
+        top_level && print(io, "::")
+        show(io, ty)
+        print(io, text_colors[:default])
     elseif top_level
         print(io, "!Matched::")
         show(io, ty)
@@ -628,8 +633,9 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
             t_i = copy(arg_types_param)
             right_matches = 0
             sig = sig0.parameters[2:end]
+            use_color = get(io, :color, false)::Bool
             for i = 1 : min(length(t_i), length(sig))
-                i > 1 && print(iob, ", ")
+                i > 1 && show_separator(iob, use_color)
                 # If isvarargtype then it checks whether the rest of the input arguments matches
                 # the varargtype
                 if Base.isvarargtype(sig[i])
@@ -646,7 +652,6 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
                 # the type of the first argument is not matched.
                 t_in === Union{} && special && i == 1 && break
                 if t_in === Union{}
-                    use_color = get(io, :color, false)::Bool
                     if Base.isvarargtype(sig[i])
                         if use_color
                             let sigstr=sigstr
@@ -666,7 +671,11 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
                     t_i[i] = sig[i]
                 else
                     right_matches += j==i ? 1 : 0
-                    print(iob, "::", sigstr...)
+                    if use_color
+                        print(iob, text_colors[:light_black], "::", sigstr..., text_colors[:default])
+                    else
+                        print(iob, "::", sigstr...)
+                    end
                 end
             end
             special && right_matches == 0 && continue
