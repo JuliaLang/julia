@@ -1475,12 +1475,14 @@ static void cdi_deref(jl_debuginfo_t **p_di, int32_t *p_pc, int recursive) JL_NO
             cdi_deref(p_di, p_pc, recursive);
         }
     } else {
+        if (jl_is_string (di->linetable)) {jl_unreachable();} // TODO: remove when byte-precise
         assert(jl_is_string(di->linetable) || jl_is_nothing(di->linetable));
     }
 }
 
 JL_DLLEXPORT jl_locspan_t jl_cdi_bytespan(jl_debuginfo_t *di, int32_t pc) JL_NOTSAFEPOINT
 {
+    jl_unreachable(); // TODO: remove when byte-precise
     cdi_deref(&di, &pc, 1);
     pc = jl_uncompress1_codeloc(di, pc).loc;
     jl_sourcebytetable_header_t h;
@@ -1498,6 +1500,7 @@ JL_DLLEXPORT jl_locspan_t jl_cdi_bytespan(jl_debuginfo_t *di, int32_t pc) JL_NOT
 /* O(line_starts); could binary search instead */
 JL_DLLEXPORT jl_locspan_t jl_cdi_byte_to_xy(jl_debuginfo_t *di, int32_t b) JL_NOTSAFEPOINT
 {
+    jl_unreachable(); // TODO: remove when byte-precise
     cdi_deref(&di, NULL, 1);
     jl_sourcebytetable_header_t h;
     sbt_parseheader(di->linetable, &h);
