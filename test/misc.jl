@@ -1664,3 +1664,112 @@ end
         end
     end
 end
+
+# Per-method compiler options via @compiler_options and programmatic API
+@testset "per-method compiler options" begin
+    # Test @compiler_options applied to function definitions
+    Base.Experimental.@compiler_options optimize=0 function _test_opts_fn1(x)
+        x + 1
+    end
+    m = only(methods(_test_opts_fn1))
+    @test Base.Experimental.get_optlevel(m) == 0
+
+    Base.Experimental.@compiler_options compile=min function _test_opts_fn2(x)
+        x + 1
+    end
+    m = only(methods(_test_opts_fn2))
+    @test Base.Experimental.get_compile(m) == 3
+
+    Base.Experimental.@compiler_options infer=false function _test_opts_fn3(x)
+        x + 1
+    end
+    m = only(methods(_test_opts_fn3))
+    @test Base.Experimental.get_infer(m) == 0
+
+    Base.Experimental.@compiler_options max_methods=1 function _test_opts_fn4(x)
+        x + 1
+    end
+    m = only(methods(_test_opts_fn4))
+    @test Base.Experimental.get_max_methods(m) == 1
+
+    # Test multiple options at once
+    Base.Experimental.@compiler_options optimize=2 compile=min infer=true function _test_opts_fn5(x)
+        x + 1
+    end
+    m = only(methods(_test_opts_fn5))
+    @test Base.Experimental.get_optlevel(m) == 2
+    @test Base.Experimental.get_compile(m) == 3
+    @test Base.Experimental.get_infer(m) == 1
+
+    # Test @optlevel on function definition
+    Base.Experimental.@optlevel 1 function _test_opts_fn6(x)
+        x + 1
+    end
+    m = only(methods(_test_opts_fn6))
+    @test Base.Experimental.get_optlevel(m) == 1
+
+    # Test programmatic set/get
+    _test_opts_fn7(x) = x + 1
+    m = only(methods(_test_opts_fn7))
+
+    # Defaults inherit from module (returns -1 for module default)
+    @test Base.Experimental.get_compile(m) == -1
+    @test Base.Experimental.get_infer(m) == -1
+    @test Base.Experimental.get_max_methods(m) == -1
+
+    Base.Experimental.set_optlevel!(m, 3)
+    @test Base.Experimental.get_optlevel(m) == 3
+
+    Base.Experimental.set_compile!(m, 3)
+    @test Base.Experimental.get_compile(m) == 3
+
+    Base.Experimental.set_infer!(m, 0)
+    @test Base.Experimental.get_infer(m) == 0
+
+    Base.Experimental.set_max_methods!(m, 2)
+    @test Base.Experimental.get_max_methods(m) == 2
+
+    # Test reset to inherit
+    Base.Experimental.set_optlevel!(m, -1)
+    Base.Experimental.set_compile!(m, -1)
+    Base.Experimental.set_infer!(m, -1)
+    Base.Experimental.set_max_methods!(m, -1)
+    @test Base.Experimental.get_compile(m) == -1
+    @test Base.Experimental.get_infer(m) == -1
+    @test Base.Experimental.get_max_methods(m) == -1
+
+    # Test argument validation
+    @test_throws ArgumentError Base.Experimental.set_optlevel!(m, 5)
+    @test_throws ArgumentError Base.Experimental.set_compile!(m, 5)
+    @test_throws ArgumentError Base.Experimental.set_infer!(m, 2)
+    @test_throws ArgumentError Base.Experimental.set_max_methods!(m, 0)
+    @test_throws ArgumentError Base.Experimental.set_max_methods!(m, 5)
+
+    # Test generated functions can set compiler options via meta expressions
+    using InteractiveUtils: @code_lowered
+    struct _TestWrapper{P, F}
+        f::F
+    end
+
+    @generated function _test_call_wrapper(w::_TestWrapper{P}, x) where {P}
+        optlevel = P
+        optlevel_meta = optlevel != 0xFF ? Expr(:meta, Expr(:optlevel, optlevel)) : nothing
+        return quote
+            $optlevel_meta
+            w.f(x)
+        end
+    end
+
+    _test_wrapper_f(x) = x .+ (1.0, 2.0, 3.0, 4.0)
+    w0 = _TestWrapper{0, typeof(_test_wrapper_f)}(_test_wrapper_f)
+    w2 = _TestWrapper{2, typeof(_test_wrapper_f)}(_test_wrapper_f)
+    wdefault = _TestWrapper{0xFF, typeof(_test_wrapper_f)}(_test_wrapper_f)
+
+    ci0 = (@code_lowered _test_call_wrapper(w0, 1.0))
+    ci2 = (@code_lowered _test_call_wrapper(w2, 1.0))
+    cidef = (@code_lowered _test_call_wrapper(wdefault, 1.0))
+
+    @test ci0.optlevel == 0x00
+    @test ci2.optlevel == 0x02
+    @test cidef.optlevel == 0xFF
+end

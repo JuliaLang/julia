@@ -692,6 +692,58 @@ JL_DLLEXPORT int jl_get_module_optlevel(jl_module_t *m)
     return lvl;
 }
 
+JL_DLLEXPORT void jl_set_method_optlevel(jl_method_t *m, int lvl)
+{
+    m->optlevel = lvl;
+}
+
+JL_DLLEXPORT int jl_get_method_optlevel(jl_method_t *m)
+{
+    uint8_t lvl = m->optlevel;
+    if (lvl != UINT8_MAX)
+        return lvl;
+    return jl_get_module_optlevel(m->module);
+}
+
+JL_DLLEXPORT void jl_set_method_compile(jl_method_t *m, int value)
+{
+    m->compile = value;
+}
+
+JL_DLLEXPORT int jl_get_method_compile(jl_method_t *m)
+{
+    uint8_t value = m->compile;
+    if (value != UINT8_MAX)
+        return value;
+    return jl_get_module_compile(m->module);
+}
+
+JL_DLLEXPORT void jl_set_method_infer(jl_method_t *m, int value)
+{
+    m->infer = value;
+}
+
+JL_DLLEXPORT int jl_get_method_infer(jl_method_t *m)
+{
+    uint8_t value = m->infer;
+    if (value != UINT8_MAX)
+        return value;
+    return jl_get_module_infer(m->module);
+}
+
+JL_DLLEXPORT void jl_set_method_max_methods(jl_method_t *m, int value)
+{
+    m->max_methods = value;
+}
+
+JL_DLLEXPORT int jl_get_method_max_methods(jl_method_t *m)
+{
+    uint8_t value = m->max_methods;
+    if (value != UINT8_MAX)
+        return value;
+    return jl_get_module_max_methods(m->module);
+}
+
 JL_DLLEXPORT void jl_set_module_compile(jl_module_t *self, int value)
 {
     self->compile = value;

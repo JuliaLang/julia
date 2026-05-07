@@ -661,6 +661,17 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                     if (jl_expr_nargs(stmt) == 1 && jl_exprarg(stmt, 0) == (jl_value_t*)jl_specialize_sym) {
                         jl_set_module_nospecialize(s->module, 0);
                     }
+                    // handle nested form: Expr(:meta, Expr(:optlevel, n))
+                    if (jl_expr_nargs(stmt) == 1) {
+                        jl_value_t *ma = jl_exprarg(stmt, 0);
+                        if (jl_is_expr(ma) && ((jl_expr_t*)ma)->head == jl_optlevel_sym) {
+                            if (jl_expr_nargs(ma) == 1 && jl_is_long(jl_exprarg(ma, 0))) {
+                                int n = jl_unbox_long(jl_exprarg(ma, 0));
+                                jl_set_module_optlevel(s->module, n);
+                            }
+                        }
+                    }
+                    // handle flat form: Expr(:meta, :optlevel, n)
                     if (jl_expr_nargs(stmt) == 2) {
                         if (jl_exprarg(stmt, 0) == (jl_value_t*)jl_optlevel_sym) {
                             if (jl_is_long(jl_exprarg(stmt, 1))) {
