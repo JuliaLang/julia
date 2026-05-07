@@ -4059,7 +4059,7 @@ f(x) = yt(x)
          meta inbounds boundscheck loopinfo decl aliasscope popaliasscope
          thunk with-static-parameters toplevel-only
          global globalref global-if-global assign-const-if-global isglobal thismodule thisfunction
-         const atomic null true false ssavalue isdefined toplevel module lambda
+         const atomic null true false ssavalue toplevel module lambda
          error gc_preserve_begin gc_preserve_end export public inline noinline purity)))
 
 (define (local-in? s lam (tab #f))
@@ -4092,7 +4092,7 @@ f(x) = yt(x)
     ;; Collect candidate variables: those that are captured (and hence we want to optimize)
     ;; and only assigned once. This populates the initial `unused` table.
     (for-each (lambda (v)
-                (if (and (vinfo:capt v) (vinfo:sa v))
+                (if (vinfo:sa v)
                     (put! unused (car v) #t)))
               vi)
     ;; Initialize decl with arguments since they're implicitly declared outside any loop
@@ -4214,7 +4214,7 @@ f(x) = yt(x)
               (append (table.keys live) (table.keys unused)))
     (for-each (lambda (v)
                 (if (and (vinfo:sa v) (vinfo:never-undef v))
-                    (set-car! (cddr v) (logand (caddr v) (lognot 5)))))
+                    (vinfo:set-capt! v #f)))
               vi)
     lam))
 

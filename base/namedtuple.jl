@@ -256,7 +256,7 @@ same_names(::NamedTuple{names}...) where {names} = true
 same_names(::NamedTuple...) = false
 
 # NOTE: this method signature makes sure we don't define map(f)
-function map(f, nt::NamedTuple{names}, nts::NamedTuple...) where names
+function map(f::F, nt::NamedTuple{names}, nts::NamedTuple...) where {names, F}
     if !same_names(nt, nts...)
         throw(ArgumentError("Named tuple names do not match."))
     end

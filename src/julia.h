@@ -2351,11 +2351,11 @@ struct _jl_handler_t {
     jl_gcframe_t *gcstack;
     jl_value_t *scope;
     struct _jl_handler_t *prev;
-    int8_t gc_state;
     size_t locks_len;
-    sig_atomic_t defer_signal;
     jl_timing_block_t *timing_stack;
     size_t world_age;
+    sig_atomic_t defer_signal;
+    int8_t gc_state;
 };
 
 #define JL_TASK_STATE_RUNNABLE 0

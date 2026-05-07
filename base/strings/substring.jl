@@ -81,6 +81,9 @@ end
 ncodeunits(s::SubString) = s.ncodeunits
 codeunit(s::SubString) = codeunit(s.string)::CodeunitType
 length(s::SubString) = length(s.string, s.offset+1, s.offset+s.ncodeunits)
+# nothrow: SubString invariants guarantee 0 ≤ offset and offset+ncodeunits ≤ ncodeunits(string),
+# so the bounds-check inside the 3-arg `length(::String, i, j)` cannot fail.
+@assume_effects :nothrow length(s::SubString{String}) = length(s.string, s.offset+1, s.offset+s.ncodeunits)
 
 function codeunit(s::SubString, i::Integer)
     @boundscheck checkbounds(s, i)
@@ -101,7 +104,8 @@ function getindex(s::SubString, i::Integer)
     @inbounds return getindex(s.string, s.offset + i)
 end
 
-isascii(ss::SubString{String}) = isascii(codeunits(ss))
+# `isascii(::AbstractVector)` reduces to `@inbounds codeunit(::SubString{String}, ::Int)`, total.
+isascii(ss::SubString{String}) = @assume_effects :nothrow :foldable isascii(codeunits(ss))
 
 function isvalid(s::SubString, i::Integer)
     ib = true
@@ -111,6 +115,9 @@ end
 
 @propagate_inbounds thisind(s::SubString{String}, i::Int) = _thisind_str(s, i)
 @propagate_inbounds nextind(s::SubString{String}, i::Int) = _nextind_str(s, i)
+
+# nothrow: i == ncodeunits(s) always satisfies the bounds check inside _thisind_str.
+@assume_effects :nothrow lastindex(s::SubString{String}) = thisind(s, ncodeunits(s)::Int)
 
 parent(s::SubString) = s.string
 parentindices(s::SubString) = (s.offset + 1 : thisind(s.string, s.offset + s.ncodeunits),)

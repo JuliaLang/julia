@@ -361,7 +361,7 @@ static int emit_codeinst_and_edges(jl_code_instance_t *codeinst)
             if (jl_is_method(def))
                 code = (jl_value_t*)jl_uncompress_ir(def, codeinst, (jl_value_t*)code);
             if (jl_is_code_info(code)) {
-                jl_emit_codeinst_to_jit(codeinst, (jl_code_info_t*)code);
+                jl_emit_codeinsts_to_jit(&codeinst, (jl_code_info_t **)&code, 1);
                 if (0) {
                     // next emit all the invoke edges too (if this seems profitable)
                     jl_array_t *src = ((jl_code_info_t*)code)->code;
@@ -400,8 +400,6 @@ static jl_code_instance_t *jl_method_inferred_with_abi(jl_method_instance_t *mi 
     return NULL;
 }
 
-jl_mutex_t jl_typeinf_lock;
-
 // run type inference on lambda "mi" for given argument types.
 // returns the inferred source, and may cache the result in mi
 // if successful, also updates the mi argument to describe the validity of this src
@@ -430,7 +428,6 @@ jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, uint8_
         return NULL;
     JL_TIMING(INFERENCE, INFERENCE);
     jl_value_t **fargs;
-    JL_GC_PUSH1(&ci);
     JL_GC_PUSHARGS(fargs, 5);
     fargs[0] = (jl_value_t*)jl_typeinf_func;
     fargs[1] = (jl_value_t*)mi;
@@ -462,7 +459,6 @@ jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, uint8_
     // increase that limit, we'll need to
     // allocate another bit for the counter.
     ct->reentrant_timing += 0b10;
-    JL_LOCK(&jl_typeinf_lock);
     JL_TRY {
         ci = (jl_code_instance_t*)jl_apply(fargs, 5);
     }
@@ -486,7 +482,6 @@ jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, uint8_
         abort();
 #endif
     }
-    JL_UNLOCK(&jl_typeinf_lock);
     ct->world_age = last_age;
     ct->reentrant_timing -= 0b10;
     ct->ptls->in_pure_callback = last_pure;
@@ -501,10 +496,11 @@ jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, uint8_
 
     // Record inference entrance backtrace if enabled
     if (ci) {
+        JL_GC_PUSH1(&ci);
         jl_push_inference_entrance_backtraces((jl_value_t*)ci);
+        JL_GC_POP();
     }
 
-    JL_GC_POP();
     JL_GC_POP();
 #endif
 
@@ -1032,6 +1028,20 @@ cleanup:
 jl_value_t *jl_typeinf_func JL_GLOBALLY_ROOTED = NULL;
 jl_value_t *jl_compile_and_emit_func JL_GLOBALLY_ROOTED = NULL;
 JL_DLLEXPORT size_t jl_typeinf_world = 1;
+
+// Force Compiler (and staticdata serialization) not to throw away Julia IR,
+// even when it is not needed for inlining, etc. - intended for debugging only
+static _Atomic(int8_t) jl_type_infer_preserve_ir = 0;
+
+JL_DLLEXPORT int8_t jl_get_type_infer_preserve_ir(void)
+{
+    return jl_atomic_load_relaxed(&jl_type_infer_preserve_ir);
+}
+
+JL_DLLEXPORT void jl_set_type_infer_preserve_ir(int8_t v)
+{
+    jl_atomic_store_relaxed(&jl_type_infer_preserve_ir, v);
+}
 
 JL_DLLEXPORT void jl_set_typeinf_func(jl_value_t *f)
 {
@@ -3487,10 +3497,12 @@ void jl_read_codeinst_invoke(jl_code_instance_t *ci, uint8_t *specsigflags, jl_c
 
 jl_method_instance_t *jl_normalize_to_compilable_mi(jl_method_instance_t *mi JL_PROPAGATES_ROOT);
 
-JL_DLLEXPORT void jl_add_codeinst_to_jit(jl_code_instance_t *codeinst, jl_code_info_t *src)
+JL_DLLEXPORT void jl_add_codeinsts_to_jit(jl_array_t *codeinsts, jl_array_t *srcs)
 {
-    assert(jl_is_code_info(src));
-    jl_emit_codeinst_to_jit(codeinst, src);
+    assert(jl_array_dim0(codeinsts) == jl_array_dim0(srcs));
+    jl_emit_codeinsts_to_jit((jl_code_instance_t **)jl_array_ptr_data(codeinsts),
+                             (jl_code_info_t **)jl_array_ptr_data(srcs),
+                             jl_array_dim0(codeinsts));
 }
 
 JL_DLLEXPORT int jl_method_is_macro(jl_method_t *m)
