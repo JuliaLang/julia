@@ -84,7 +84,7 @@ end
         good = all(==(Bool), Base.return_types(isequal, Tuple{Any, Any}))
         if !good
             # Print some info to make the test failure easier to debug
-            for m in methods(f, Tuple{Any, Any})
+            for m in methods(isequal, Tuple{Any, Any})
                 sig = Base.unwrap_unionall(m.sig).parameters[2:end]
                 t = Core.Compiler.return_type(f, Tuple{sig...})
                 @info "" f m t
