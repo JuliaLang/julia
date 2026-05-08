@@ -347,15 +347,6 @@ struct cfuncdata_t {
     size_t flags;
 };
 
-JL_DLLEXPORT
-void *jl_jit_abi_converter_fallback(jl_task_t *ct, void *unspecialized, jl_value_t *declrt, jl_value_t *sigt, size_t nargs, int specsig,
-                                    jl_code_instance_t *codeinst, jl_callptr_t invoke, void *target, int target_specsig)
-{
-    if (unspecialized)
-        return unspecialized;
-    jl_errorf("cfunction not available in this build of Julia");
-}
-
 static inline const char *name_from_method_instance(jl_method_instance_t *mi) JL_NOTSAFEPOINT
 {
     assert(jl_is_method_instance(mi));
