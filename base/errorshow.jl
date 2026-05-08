@@ -469,12 +469,7 @@ function show_type_diff(io::IO, @nospecialize(sig), @nospecialize(called), use_c
     top_level && print(io, "::")
     sig_params, called_params, alias = params
     if alias !== nothing
-        from = get(io, :module, Main)
-        if from === nothing || !isvisible(alias.name, alias.mod, from)
-            show(io, alias.mod)
-            print(io, ".")
-        end
-        print(io, alias.name)
+        show_typealias_name(io, alias)
     else
         show_type_name(io, (sig::DataType).name)
     end
@@ -483,7 +478,7 @@ function show_type_diff(io::IO, @nospecialize(sig), @nospecialize(called), use_c
         k > 1 && show_separator(io, use_color)
         sp = sig_params[k]
         cp = called_params[k]
-        if isequal(sp, cp)
+        if sp === cp
             show_type_match(io, sp, use_color)
         else
             show_type_diff(io, sp, cp, use_color, #=top_level=#false)
@@ -529,7 +524,7 @@ function show_namedtuple_diff(io::IO, @nospecialize(sig), @nospecialize(called),
         show_sym(io, s_syms[i])
         sp = s_types.parameters[i]
         cp = c_types.parameters[i]
-        if isequal(sp, cp)
+        if sp === cp
             sp === Any && continue   # match `show_at_namedtuple` and don't print `::Any`
             print(io, "::")
             show_type_match(io, sp, use_color)
@@ -542,8 +537,11 @@ function show_namedtuple_diff(io::IO, @nospecialize(sig), @nospecialize(called),
     return true
 end
 
-# check if `sig` and `called` share an alias.
-# returns `nothing` to bail to full-subtree highlighting
+# Decide whether `sig` and `called` are pairwise-comparable at this level.
+# Returns one of:
+#   `(sig.parameters, called.parameters, nothing)` — same name, no alias to print
+#   `(sa_env, ca_env, alias::GlobalRef)`           — both resolve to the same alias
+#   `nothing`                                      — bail; caller falls back to whole-subtree highlighting
 function descend_params(io::IO, @nospecialize(sig), @nospecialize(called))
     sig isa DataType && called isa DataType || return nothing
     sig.name === called.name || return nothing
@@ -768,7 +766,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
                         sigstr = Core.svec(sigtype,)
                     end
                     if !((min(length(t_i), length(sig)) == 0) && k==1)
-                        print(iob, ", ")
+                        show_separator(iob, use_color)
                     end
                     if k == 1 && Base.isvarargtype(sigtype)
                         # There wasn't actually a mismatch - the method match failed for

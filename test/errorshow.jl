@@ -148,30 +148,23 @@ module Issue41061
     f_nt(x::@NamedTuple{a::Int64, b::String}) = 1
     f_nt_mismatched(x::@NamedTuple{a::Int64}) = 1
     f_alias(x::AliasT{Int64}) = 1
-    f_pair(x::Pair{Int64,Float64}) = 1
-    f_two(x::Dict{String,Vector{Int64}}, y::String) = 1
+    f_pair_str(x::Pair{Int64,Float64}, y::String) = 1
     struct ThreeParam{A,B,C} end
     f_three(::ThreeParam{Tuple{Float64}}) = 1
+    f_tup_tv(x::Tuple{Int, T, Float64}) where T<:Real = 1
+    f_two_int(a::Int, b::Int) = 1
 end
 @testset "type diff highlighting (#41061)" begin
     buf41061 = IOBuffer()
     # Nested type mismatches highlight only the innermost differing subtree
     Base.show_method_candidates(buf41061, MethodError(Issue41061.f_nested, ([Int64[1,2,3]],)))
     @test occursin("::Vector{Vector{!Matched{Float64}}}", String(take!(buf41061)))
-    # Matching siblings + commas in gray, mismatched leaf in red
+    # Color: gray inner match, red inner mismatch, gray inter-arg comma into a wholly-matched arg
     let io = IOContext(buf41061, :color => true)
-        Base.show_method_candidates(io, MethodError(Issue41061.f_pair, (Pair{Int64,Int64}(1, 2),)))
+        Base.show_method_candidates(io, MethodError(Issue41061.f_pair_str,
+            (Pair{Int64,Int64}(1, 2), "A")))
         s = String(take!(buf41061))
-        @test occursin("\e[90mInt64\e[39m", s)
-        @test occursin("\e[91mFloat64\e[39m", s)
-        @test occursin("\e[90m, \e[39m", s)
-    end
-    # Wholly-matching argument and the inter-arg comma render in gray
-    let io = IOContext(buf41061, :color => true)
-        Base.show_method_candidates(io, MethodError(Issue41061.f_two,
-            (Dict{Symbol,Vector{Int64}}(), "A")))
-        s = String(take!(buf41061))
-        @test occursin("\e[90m::String\e[39m", s)
+        @test occursin("\e[90mInt64\e[39m\e[90m, \e[39m\e[91mFloat64\e[39m", s)
         @test occursin("\e[90m, \e[39m\e[90m::String\e[39m", s)
     end
     # NamedTuple with matching field names diffs per-field
@@ -190,6 +183,15 @@ end
         s = String(take!(buf41061))
         @test occursin("\e[91m::", s)
         @test occursin("ThreeParam{Tuple{Float64}}\e[39m", s)
+    end
+    # mismatched concrete element and TypeVar element each highlighted independently
+    Base.show_method_candidates(buf41061, MethodError(Issue41061.f_tup_tv, ((1.0, "x", 2.0),)))
+    @test occursin("::Tuple{!Matched{Int64}, !Matched{T}, Float64}) where T<:Real", String(take!(buf41061)))
+    # Trailing missing-arg comma renders gray, matching the main-loop separator
+    let io = IOContext(buf41061, :color => true)
+        Base.show_method_candidates(io, MethodError(Issue41061.f_two_int, (1,)))
+        s = String(take!(buf41061))
+        @test occursin("\e[90m::Int64\e[39m\e[90m, \e[39m\e[91m::Int64\e[39m", s)
     end
 end
 
