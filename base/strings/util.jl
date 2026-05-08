@@ -77,6 +77,13 @@ function startswith(a::DenseUTF8String, b::DenseUTF8String)
     end
 end
 
+# nothrow+foldable: `String`/`SubString{String}` buffers are immutable, the
+# byte-wise `_memcmp` is bounded by `sizeof(b) ≤ ncodeunits(a)`, and
+# `nextind(a, cub)` operates on a valid index (`0 ≤ cub ≤ ncodeunits(a)`).
+@assume_effects :nothrow :foldable function startswith(a::Union{String,SubString{String}}, b::Union{String,SubString{String}})
+    @invoke startswith(a::DenseUTF8String, b::DenseUTF8String)
+end
+
 """
     startswith(io::IO, prefix::Union{AbstractString,Base.Chars})
 
@@ -106,6 +113,12 @@ function endswith(a::DenseUTF8String, b::DenseUTF8String)
     else
         false
     end
+end
+
+# nothrow+foldable: see `startswith` above; `pointer(a, astart)` is in bounds
+# (`1 ≤ astart ≤ ncodeunits(a)+1`), and `thisind(a, astart)` accepts the same range.
+@assume_effects :nothrow :foldable function endswith(a::Union{String,SubString{String}}, b::Union{String,SubString{String}})
+    @invoke endswith(a::DenseUTF8String, b::DenseUTF8String)
 end
 
 """

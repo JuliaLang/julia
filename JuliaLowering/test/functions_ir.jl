@@ -1162,10 +1162,11 @@ end
 8   (call core.svec %₅ %₆ %₇)
 9   --- method TestMod.f %₈
     slots: [slot₁/#self#(!read) slot₂/x(nospecialize,!read) slot₃/g(called) slot₄/y]
-    1   TestMod.+
-    2   (call slot₃/g)
-    3   (call %₁ %₂ slot₄/y)
-    4   (return %₃)
+    1   (meta :nospecialize slot₂/x)
+    2   TestMod.+
+    3   (call slot₃/g)
+    4   (call %₂ %₃ slot₄/y)
+    5   (return %₄)
 10  latestworld
 11  TestMod.f
 12  (return %₁₁)
@@ -1901,8 +1902,9 @@ end
 13  (call core.svec %₁₀ %₁₁ %₁₂)
 14  --- method TestMod.#kw_body#f_kw_slurp#1 %₁₃
     slots: [slot₁/#kw_body#f_kw_slurp#1(!read) slot₂/kw1(nospecialize,!read) slot₃/kw2(nospecialize,!read) slot₄/restkw(nospecialize,!read) slot₅/#self#(!read) slot₆/a(nospecialize,!read)]
-    1   (meta :nkw 3)
-    2   (return core.nothing)
+    1   (meta :nospecialize slot₂/kw1 slot₃/kw2 slot₄/restkw slot₆/a)
+    2   (meta :nkw 3)
+    3   (return core.nothing)
 15  latestworld
 16  TestMod.f_kw_slurp
 17  (call core.Typeof %₁₆)
@@ -1912,13 +1914,14 @@ end
 21  (call core.svec %₁₈ %₁₉ %₂₀)
 22  --- method TestMod.f_kw_slurp %₂₁
     slots: [slot₁/#self# slot₂/a(nospecialize)]
-    1   TestMod.#kw_body#f_kw_slurp#1
-    2   (call core.UndefKeywordError :kw1)
-    3   (call core.throw %₂)
-    4   (call core.NamedTuple)
-    5   (call top.pairs %₄)
-    6   (call %₁ %₃ 2 %₅ slot₁/#self# slot₂/a)
-    7   (return %₆)
+    1   (meta :nospecialize)
+    2   TestMod.#kw_body#f_kw_slurp#1
+    3   (call core.UndefKeywordError :kw1)
+    4   (call core.throw %₃)
+    5   (call core.NamedTuple)
+    6   (call top.pairs %₅)
+    7   (call %₂ %₄ 2 %₆ slot₁/#self# slot₂/a)
+    8   (return %₇)
 23  latestworld
 24  (call core.typeof core.kwcall)
 25  TestMod.f_kw_slurp
@@ -1929,29 +1932,30 @@ end
 30  (call core.svec %₂₇ %₂₈ %₂₉)
 31  --- method TestMod.f_kw_slurp %₃₀
     slots: [slot₁/#unused#(!read) slot₂/kws slot₃/#self# slot₄/a(nospecialize) slot₅/kw1(!read) slot₆/kw2(!read) slot₇/kwtmp]
-    1   (newvar slot₅/kw1)
-    2   (newvar slot₆/kw2)
-    3   (newvar slot₇/kwtmp)
-    4   (call core.isdefined slot₂/kws :kw1)
-    5   (gotoifnot %₄ label₈)
-    6   (= slot₇/kwtmp (call core.getfield slot₂/kws :kw1))
-    7   (goto label₁₀)
-    8   (call core.UndefKeywordError :kw1)
-    9   (= slot₇/kwtmp (call core.throw %₈))
-    10  slot₇/kwtmp
-    11  (call core.isdefined slot₂/kws :kw2)
-    12  (gotoifnot %₁₁ label₁₅)
-    13  (= slot₇/kwtmp (call core.getfield slot₂/kws :kw2))
-    14  (goto label₁₆)
-    15  (= slot₇/kwtmp 2)
-    16  slot₇/kwtmp
-    17  (call core.tuple :kw1 :kw2)
-    18  (call core.apply_type core.NamedTuple %₁₇)
-    19  (call top.structdiff slot₂/kws %₁₈)
-    20  (call top.pairs %₁₉)
-    21  TestMod.#kw_body#f_kw_slurp#1
-    22  (call %₂₁ %₁₀ %₁₆ %₂₀ slot₃/#self# slot₄/a)
-    23  (return %₂₂)
+    1   (meta :nospecialize slot₄/a)
+    2   (newvar slot₅/kw1)
+    3   (newvar slot₆/kw2)
+    4   (newvar slot₇/kwtmp)
+    5   (call core.isdefined slot₂/kws :kw1)
+    6   (gotoifnot %₅ label₉)
+    7   (= slot₇/kwtmp (call core.getfield slot₂/kws :kw1))
+    8   (goto label₁₁)
+    9   (call core.UndefKeywordError :kw1)
+    10  (= slot₇/kwtmp (call core.throw %₉))
+    11  slot₇/kwtmp
+    12  (call core.isdefined slot₂/kws :kw2)
+    13  (gotoifnot %₁₂ label₁₆)
+    14  (= slot₇/kwtmp (call core.getfield slot₂/kws :kw2))
+    15  (goto label₁₇)
+    16  (= slot₇/kwtmp 2)
+    17  slot₇/kwtmp
+    18  (call core.tuple :kw1 :kw2)
+    19  (call core.apply_type core.NamedTuple %₁₈)
+    20  (call top.structdiff slot₂/kws %₁₉)
+    21  (call top.pairs %₂₀)
+    22  TestMod.#kw_body#f_kw_slurp#1
+    23  (call %₂₂ %₁₁ %₁₇ %₂₁ slot₃/#self# slot₄/a)
+    24  (return %₂₃)
 32  latestworld
 33  TestMod.f_kw_slurp
 34  (return %₃₃)
@@ -2033,11 +2037,12 @@ end
 12  (call core.svec %₉ %₁₀ %₁₁)
 13  --- method TestMod.#f_only_generated@generator#0 %₁₂
     slots: [slot₁/#self#(!read) slot₂/__context__(!read) slot₃/#self#(nospecialize,!read) slot₄/x(nospecialize) slot₅/y(nospecialize)]
-    1   TestMod.generator_code
-    2   (call %₁ slot₄/x slot₅/y)
-    3   (call core.tuple %₂)
-    4   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block ($ (block (call generator_code x y))))) %₃)
-    5   (return %₄)
+    1   (meta :nospecialize slot₃/#self# slot₄/x slot₅/y)
+    2   TestMod.generator_code
+    3   (call %₂ slot₄/x slot₅/y)
+    4   (call core.tuple %₃)
+    5   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block ($ (block (call generator_code x y))))) %₄)
+    6   (return %₅)
 14  latestworld
 15  TestMod.f_only_generated
 16  (call core.Typeof %₁₅)
@@ -2082,10 +2087,11 @@ end
 12  (call core.svec %₉ %₁₀ %₁₁)
 13  --- method TestMod.#f_partially_generated@generator#0 %₁₂
     slots: [slot₁/#self#(!read) slot₂/__context__(!read) slot₃/#self#(nospecialize,!read) slot₄/x(nospecialize,!read) slot₅/y(nospecialize,!read)]
-    1   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (= maybe_gen_stuff (call some_gen_stuff x y)))))
-    2   (call core.tuple %₁)
-    3   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (= nongen_stuff (call bothgen x y)) ($ (block (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (= maybe_gen_stuff (call some_gen_stuff x y))))))) (tuple-p nongen_stuff maybe_gen_stuff))) %₂)
-    4   (return %₃)
+    1   (meta :nospecialize slot₃/#self# slot₄/x slot₅/y)
+    2   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (= maybe_gen_stuff (call some_gen_stuff x y)))))
+    3   (call core.tuple %₂)
+    4   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (= nongen_stuff (call bothgen x y)) ($ (block (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (= maybe_gen_stuff (call some_gen_stuff x y))))))) (tuple-p nongen_stuff maybe_gen_stuff))) %₃)
+    5   (return %₄)
 14  latestworld
 15  TestMod.f_partially_generated
 16  (call core.Typeof %₁₅)

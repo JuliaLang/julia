@@ -310,10 +310,10 @@ end
 haskey(v::Pairs, key) = key in keys(v)
 keys(v::Pairs) = getfield(v, :itr) === nothing ? keys(getfield(v, :data)) : getfield(v, :itr)
 values(v::Pairs) = getfield(v, :data) # TODO: this should be a view of data subset by itr
-getindex(v::Pairs, key) = getfield(v, :data)[key]
-setindex!(v::Pairs, value, key) = (getfield(v, :data)[key] = value; v)
-get(v::Pairs, key, default) = get(getfield(v, :data), key, default)
-get(f::Base.Callable, v::Pairs, key) = get(f, getfield(v, :data), key)
+getindex(v::Pairs, key) = values(v)[key]
+setindex!(v::Pairs, value, key) = (values(v)[key] = value; v)
+get(v::Pairs, key, default) = get(values(v), key, default)
+get(f::Base.Callable, v::Pairs, key) = get(f, values(v), key)
 
 # zip
 
@@ -1562,7 +1562,7 @@ convert(::Type{Stateful}, itr) = Stateful(itr)
         throw(Base.EOFError())
     else
         val, state = vs
-        Core.setfield!(s, :nextvalstate, iterate(s.itr, state))
+        setfield!(s, :nextvalstate, iterate(s.itr, state))
         return val
     end
 end

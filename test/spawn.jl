@@ -730,6 +730,11 @@ end
 @test Cmd(`foo`, env=["A"=>true]).env     == ["A=true"]
 @test Cmd(`foo`, env=nothing).env         === nothing
 
+# mixed value types in env pairs (#56780)
+@test Cmd(`foo`, env=("A"=>1, "B"=>"two")).env == ["A=1", "B=two"]
+@test Cmd(`foo`, env=["A"=>1, "B"=>"two"]).env == ["A=1", "B=two"]
+@test setenv(`foo`, "A"=>1, "B"=>"two").env    == ["A=1", "B=two"]
+
 # uid/gid - exercise code path with current effective ids (doesn't test privilege change)
 if !Sys.iswindows()
     @test success(setuid(setgid(`$(Base.julia_cmd()) -e "exit(0)"`, Libc.getegid()), Libc.geteuid()))
