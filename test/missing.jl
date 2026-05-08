@@ -87,7 +87,7 @@ end
             for m in methods(isequal, Tuple{Any, Any})
                 sig = Base.unwrap_unionall(m.sig).parameters[2:end]
                 t = Core.Compiler.return_type(isequal, Tuple{sig...})
-                @info "" f m t
+                t != Bool && @info "" m t
             end
         end
         @test good
