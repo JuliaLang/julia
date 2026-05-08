@@ -58,7 +58,7 @@ function _interpolated_value(ctx::InterpolationContext, srcref, @nospecialize(ex
         if !is_compatible_graph(ctx, ex)
             ex = copy_ast(ctx, ex)
         end
-        append_sourceref(ctx, ex, srcref)
+        append_sourceref!(ctx, ex, srcref._id)
     elseif ex isa Symbol
         # Plain symbols become identifiers. This is an accommodation for
         # compatibility to allow `:x` (a Symbol) and `:(x)` (a SyntaxTree) to

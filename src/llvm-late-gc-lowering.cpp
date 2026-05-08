@@ -2556,6 +2556,37 @@ bool LateLowerGCFrame::runOnFunction(Function &F, bool *CFGModified) {
 
     pgcstack = getPGCstack(F);
     if (pgcstack) {
+      // Strip optimistic memory attrs added by add_fn_attrs_for_effects.
+      // Must happen before LocalScan (which uses memory effects for
+      // safepoint identification) and before post-GC passes (DSE/GVN).
+      if (F.hasFnAttribute("julia.safepoint")) {
+          F.setMemoryEffects(MemoryEffects::unknown());
+          for (unsigned i = 0; i < F.arg_size(); i++) {
+              if (F.hasParamAttribute(i, "gcstack"))
+                  F.removeParamAttr(i, Attribute::ReadNone);
+          }
+      }
+      for (auto &BB : F) {
+          for (auto &I : BB) {
+              if (auto *CI = dyn_cast<CallInst>(&I)) {
+                  Function *Callee = CI->getCalledFunction();
+                  if (!Callee || Callee->hasFnAttribute("julia.safepoint")) {
+                      CI->setMemoryEffects(MemoryEffects::unknown());
+                      for (unsigned i = 0; i < CI->arg_size(); i++) {
+                          if (CI->getParamAttr(i, "gcstack").isValid())
+                              CI->removeParamAttr(i, Attribute::ReadNone);
+                      }
+                      if (Callee) {
+                          Callee->setMemoryEffects(MemoryEffects::unknown());
+                          for (unsigned i = 0; i < Callee->arg_size(); i++) {
+                              if (Callee->hasParamAttribute(i, "gcstack"))
+                                  Callee->removeParamAttr(i, Attribute::ReadNone);
+                          }
+                      }
+                  }
+              }
+          }
+      }
       State S = LocalScan(F);
       // If there is no safepoint after the first reachable def, then we don't need any roots (even those for allocas)
       if (std::any_of(S.BBStates.begin(), S.BBStates.end(),

@@ -409,7 +409,7 @@ function setmeta!(ex::SyntaxTree, key::Symbol, @nospecialize(val))
 end
 
 setmeta(ex::SyntaxTree, k::Symbol, @nospecialize(v)) =
-    setmeta!(copy_node(ex), k, v)
+    setmeta!(is_leaf(ex) ? mkleaf(ex) : mknode(ex, children(ex)), k, v)
 
 function getmeta(ex::SyntaxTree, name::Symbol, default)
     meta = get(ex, :meta, nothing)

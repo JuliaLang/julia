@@ -153,12 +153,13 @@ mutable struct BackgroundPrecompileState
     detachable::Bool  # whether the monitor can be detached
     confirming::Symbol  # :none, :cancel, or :info — action awaiting Enter to confirm
     confirm_deadline::Float64  # time() deadline for confirmation
+    key_listening::Bool  # whether a key listener task is currently consuming stdin
 end
 Base.lock(f, bg::BackgroundPrecompileState) = lock(f, bg.lock)
 Base.lock(bg::BackgroundPrecompileState) = lock(bg.lock)
 Base.unlock(bg::BackgroundPrecompileState) = unlock(bg.lock)
 
-const BG = BackgroundPrecompileState(nothing, false, false, false, nothing, nothing, nothing, nothing, ReentrantLock(), Threads.Condition(), Channel{Int32}[], Dict{PkgId, Int}(), Set{PkgId}(), Threads.Condition(), Channel{PrecompileRequest}(Inf), false, false, :none, 0.0)
+const BG = BackgroundPrecompileState(nothing, false, false, false, nothing, nothing, nothing, nothing, ReentrantLock(), Threads.Condition(), Channel{Int32}[], Dict{PkgId, Int}(), Set{PkgId}(), Threads.Condition(), Channel{PrecompileRequest}(Inf), false, false, :none, 0.0, false)
 
 ## Constants and formatting utilities
 
@@ -1028,6 +1029,7 @@ const _confirm_messages = Dict{Symbol, String}(
 
 function keyboard_tip(s::BackgroundPrecompileState)
     s.monitoring || return "", :default
+    s.key_listening || return "", :default
     if s.confirming !== :none
         remaining = max(0, ceil(Int, s.confirm_deadline - time()))
         msg = get(_confirm_messages, s.confirming, string(s.confirming))
@@ -1041,9 +1043,10 @@ function keyboard_tip(s::BackgroundPrecompileState)
 end
 
 function monitor_background_precompile(io::IO = stderr, detachable::Bool = true, wait_for_pkg::Union{Nothing, PkgId} = nothing;
-                                       # disable key controls when not on the main task to avoid
-                                       # stealing stdin from the REPL
-                                       key_controls::Bool = current_task() === Base.roottask)
+                                       key_controls::Union{Bool, Nothing} = nothing)
+    # By default only enable key controls when this task is the foreground task (see #61563, #61698).
+    # Falls back to roottask when no foreground task is registered (e.g. non-REPL interactive scripts).
+    key_controls = @something key_controls current_task() === something(Base.foreground_task(), Base.roottask)
     local completed_at::Union{Nothing, Float64}
     local task
 
@@ -1082,14 +1085,15 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
     cancel_requested = Ref(false)
     interrupt_requested = Ref(false)
 
-    # Start a task to listen for keypresses (only if stdin isn't already being
-    # consumed in raw mode by another reader, e.g. runtests.jl's stdin_monitor)
+    # Start a task to listen for keypresses. Skipped if another reader already holds
+    # raw mode on stdin (e.g. runtests.jl's stdin_monitor).
     key_task = if key_controls && stdin isa Base.TTY
         Threads.@spawn :samepool try
             trylock(stdin.raw_lock) || return
             @lock BG begin
                 BG.detachable = detachable
                 BG.confirming = :none
+                BG.key_listening = true
             end
             buffered_input = UInt8[]
             try
@@ -1192,7 +1196,10 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
                     end
                 end
                 Base.reseteof(stdin)
-                @lock BG BG.confirming = :none
+                @lock BG begin
+                    BG.confirming = :none
+                    BG.key_listening = false
+                end
                 unlock(stdin.raw_lock)
             end
         finally

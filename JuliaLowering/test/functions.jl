@@ -516,7 +516,8 @@ end
     test_arg_unspecialized(test_mod.f_body_nospecialize_nontrivial_sig2, 1)
     test_arg_specialized(test_mod.f_body_nospecialize_nontrivial_sig2, 2)
 
-    @testset "all positional arg forms" for arg0 in [:x, :(x::Type), :(::Type), :(_), :(_::Type)],
+    # all positional arg forms
+    @testset for arg0 in [:x, :(x::Type), :(::Type), :(_), :(_::Type)],
         arg1 in [arg0, Expr(:..., arg0)],
         arg2 in [arg1, Expr(:kw, arg1, :Int)],
         expander in [fl_macroexpand, jl_macroexpand]

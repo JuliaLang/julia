@@ -91,7 +91,7 @@ function showerror(io::IO, ex::TypeError)
         end
         if ex.context == ""
             ctx = "in $(ex.func)"
-        elseif isa(ex.context, Core.GlobalRef)
+        elseif isa(ex.context, GlobalRef)
             gr = ex.context
             ctx = "in $(ex.func) of global binding `$(gr.mod).$(gr.name)`"
         elseif ex.func === :var"keyword argument"
@@ -394,6 +394,9 @@ function showerror(io::IO, ex::MethodError)
                       "\nYou can convert to a column vector with the vec() function.")
         end
     end
+    if !is_arg_types && !(f isa Core.Builtin)
+        show_shadowed_type_hint(io, f, san_arg_types_param)
+    end
     Experimental.show_error_hints(io, ex, san_arg_types_param, kwargs)
     try
         show_method_candidates(io, ex, kwargs)
@@ -453,6 +456,70 @@ end
 stacktrace_expand_basepaths()::Bool = Base.get_bool_env("JULIA_STACKTRACE_EXPAND_BASEPATHS", false) === true
 stacktrace_contract_userdir()::Bool = Base.get_bool_env("JULIA_STACKTRACE_CONTRACT_HOMEDIR", true) === true
 stacktrace_linebreaks()::Bool = Base.get_bool_env("JULIA_STACKTRACE_LINEBREAKS", false) === true
+
+function _resolves_to_self(tn::Core.TypeName)
+    isdefined(tn, :module) || return true
+    m = tn.module
+    (isdefined(m, tn.name) && getglobal(m, tn.name) === tn.wrapper) || return false
+    while (p = parentmodule(m)) !== m
+        (isdefined(p, nameof(m)) && getglobal(p, nameof(m)) === m) || return false
+        m = p
+    end
+    return true
+end
+
+function show_shadowed_type_hint(io::IO, @nospecialize(f), san_arg_types_param::Vector{Any})
+    reported = IdSet{Core.TypeName}()
+    ft = Core.Typeof(f)
+    for method in methods(f)
+        msig = unwrap_unionall(method.sig)::DataType
+        mparams = msig.parameters
+
+        # skip methods where the arity can't match the call
+        nargs = length(san_arg_types_param)
+        is_va = !isempty(mparams) && isa(mparams[end], Core.TypeofVararg)
+        is_va || nargs == length(mparams) - 1 || continue
+
+        # build a list of potential shadows, max one candidate per argument
+        new_args = copy(san_arg_types_param)
+        shadows = Tuple{Core.TypeName,Core.TypeName}[]
+        for i in 1:nargs
+            # everything past nargs+1 hits vararg parameter
+            expected = mparams[min(i + 1, length(mparams))]
+            isa(expected, Core.TypeofVararg) && (expected = unwrapva(expected))
+
+            e_dt = unwrap_unionall(expected); isa(e_dt, DataType) || continue
+            a_dt = unwrap_unionall(san_arg_types_param[i])::DataType
+            e_tn, a_tn = e_dt.name, a_dt.name
+
+            # actual shadowing heuristics
+            e_tn === a_tn && continue
+            e_tn.name === a_tn.name || continue
+            isdefined(e_tn, :module) && isdefined(a_tn, :module) || continue
+            new_args[i] = rewrap_unionall(expected, method.sig)
+            push!(shadows, (a_tn, e_tn))
+        end
+        isempty(shadows) && continue
+        # make sure our suggestion hits an actual method
+        Tuple{ft, new_args...} <: method.sig || continue
+        for (a_tn, e_tn) in shadows
+            # don't print too many hints
+            a_tn in reported && continue
+            push!(reported, a_tn)
+            if !_resolves_to_self(e_tn) || !_resolves_to_self(a_tn)
+                print(io, "\nHint: `")
+                show_unquoted(io, a_tn.module); print(io, ".", a_tn.name)
+                print(io, "` appears to have been redefined, and methods refer to the older definition.")
+            else
+                print(io, "\nHint: You may have intended `")
+                show_unquoted(io, e_tn.module); print(io, ".", e_tn.name)
+                print(io, "` rather than `")
+                show_unquoted(io, a_tn.module); print(io, ".", a_tn.name)
+                print(io, "`.")
+            end
+        end
+    end
+end
 
 function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
     @nospecialize io
@@ -1240,6 +1307,15 @@ function _propertynames_bytype(T::Type)
 end
 
 Experimental.register_error_hint(fielderror_listfields_hint_handler, FieldError)
+
+function apply_type_unionall_hint_handler(io, ex)
+    @nospecialize
+    if ex.func === :apply_type && ex.expected === UnionAll
+        print(io, "\nHint: `", ex.got, "` takes no type parameters.")
+    end
+end
+
+Experimental.register_error_hint(apply_type_unionall_hint_handler, TypeError)
 
 function UndefVarError_hint(io::IO, ex::UndefVarError)
     var = ex.var

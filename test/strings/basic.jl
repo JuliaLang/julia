@@ -1257,7 +1257,17 @@ end
                    (String, (Symbol,)),
                    (length, (String,)),
                    (hash, (String,UInt)),
-                   (hash, (Char,UInt)),]
+                   (hash, (Char,UInt)),
+                   (startswith, (String, String)),
+                   (startswith, (SubString{String}, String)),
+                   (startswith, (String, SubString{String})),
+                   (startswith, (SubString{String}, SubString{String})),
+                   (endswith, (String, String)),
+                   (endswith, (SubString{String}, String)),
+                   (endswith, (String, SubString{String})),
+                   (endswith, (SubString{String}, SubString{String})),
+                   (in, (Char, String)),
+                   (in, (Char, SubString{String})),]
         e = Base.infer_effects(f, Ts)
         @test Core.Compiler.is_foldable(e) context=(f, Ts)
         @test Core.Compiler.is_removable_if_unused(e) context=(f, Ts)
@@ -1284,6 +1294,46 @@ end
     @test_throws ArgumentError Symbol("a\0a")
 
     @test Base._string_n_override == Base.encode_effects_override(Base.compute_assumed_settings((:total, :(!:consistent))))
+
+    # Stress-test that the annotations added in this PR (and follow-ups) hold
+    # even when strings contain arbitrary, malformed UTF-8 byte sequences.
+    let garbage = String[
+            String(UInt8[0x80]),                  # lone continuation
+            String(UInt8[0xC0]),                  # truncated 2-byte lead
+            String(UInt8[0xE0, 0x80]),            # truncated 3-byte
+            String(UInt8[0xF0, 0x80, 0x80]),      # truncated 4-byte
+            String(UInt8[0xFF, 0xFE]),            # invalid lead bytes
+            String(UInt8[0xC0, 0x80]),            # overlong NUL
+            String(UInt8[0xED, 0xA0, 0x80]),      # surrogate
+            String(UInt8[0xF8, 0x88, 0x80, 0x80, 0x80]), # 5-byte (invalid)
+            "",
+            "ascii",
+            "naïve",
+        ]
+        for a in garbage, b in garbage
+            @test startswith(a, b) isa Bool
+            @test endswith(a, b) isa Bool
+            @test startswith(SubString(a), b) isa Bool
+            @test endswith(SubString(a), b) isa Bool
+            @test startswith(a, SubString(b)) isa Bool
+            @test endswith(a, SubString(b)) isa Bool
+        end
+        for a in garbage, c in ('\0', '\xff', 'a', 'α', '🎉')
+            @test in(c, a) isa Bool
+            @test in(c, SubString(a)) isa Bool
+        end
+        for a in garbage
+            sa = SubString(a)
+            @test length(a) isa Int
+            @test length(sa) isa Int
+            @test lastindex(a) isa Int
+            @test lastindex(sa) isa Int
+            @test isascii(a) isa Bool
+            @test isascii(sa) isa Bool
+            @test textwidth(a) isa Int
+            @test textwidth(sa) isa Int
+        end
+    end
 end
 
 @testset "Ensure UTF-8 DFA can never leave invalid state" begin

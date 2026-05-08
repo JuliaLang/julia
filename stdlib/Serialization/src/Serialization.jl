@@ -493,6 +493,12 @@ function serialize(s::AbstractSerializer, linfo::Core.MethodInstance)
     nothing
 end
 
+function serialize(s::AbstractSerializer, @nospecialize(u::Union))
+    serialize_type(s, Union, false)
+    serialize(s, u.a)
+    serialize(s, u.b)
+end
+
 function serialize(s::AbstractSerializer, t::Task)
     serialize_cycle(s, t) && return
     if istaskstarted(t) && !istaskdone(t)
@@ -1012,7 +1018,13 @@ function deserialize_symbol(s::AbstractSerializer, len::Int)
     return sym
 end
 
-deserialize_tuple(s::AbstractSerializer, len) = ntupleany(i->deserialize(s), len)
+function deserialize_tuple(s::AbstractSerializer, len)
+    len == 0 && return ()
+    Base.Cartesian.@nexprs 10 i -> begin
+        len == i && return (Base.Cartesian.@ntuple i _ -> deserialize(s))
+    end
+    return ntupleany(i -> deserialize(s), len)
+end
 
 function deserialize_svec(s::AbstractSerializer)
     n = read(s.io, Int32)
@@ -1445,7 +1457,7 @@ end
 function deserialize(s::AbstractSerializer, X::Type{MemoryRef{T}} where T)
     x = Core.memoryref(deserialize(s))::X
     i = deserialize(s)::Int
-    i == 2 || (x = Core.memoryrefnew(x, i, true))
+    i == 1 || (x = Core.memoryrefnew(x, i, true))
     return x::X
 end
 
