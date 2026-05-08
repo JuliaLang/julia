@@ -2708,8 +2708,22 @@ std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &conte
         for (const auto &Flag : Flags) {
             m->addModuleFlag(Flag.Behavior, Flag.Key->getString(), Flag.Val);
         }
-        // Copy other module-level properties
-        m->setStackProtectorGuard(source->getStackProtectorGuard());
+        // Copy other module-level properties.
+        // Only copy StackProtectorGuard if the source has it set; otherwise apply the
+        // same default as the no-source path. Calling setStackProtectorGuard("") when
+        // source has no guard would add an Error="" flag that conflicts with modules
+        // created without a source (which get "global" on debug builds).
+        auto spg = source->getStackProtectorGuard();
+        if (!spg.empty()) {
+            // Already copied by the flags loop above; calling again would add a duplicate
+            // entry, but that's harmless since the linker map uses the last entry per key.
+            m->setStackProtectorGuard(spg);
+        }
+        else {
+#if defined(JL_DEBUG_BUILD)
+            m->setStackProtectorGuard("global");
+#endif
+        }
         m->setOverrideStackAlignment(source->getOverrideStackAlignment());
     }
     else {
