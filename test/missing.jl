@@ -86,7 +86,7 @@ end
             # Print some info to make the test failure easier to debug
             for m in methods(isequal, Tuple{Any, Any})
                 sig = Base.unwrap_unionall(m.sig).parameters[2:end]
-                t = Core.Compiler.return_type(f, Tuple{sig...})
+                t = Core.Compiler.return_type(isequal, Tuple{sig...})
                 @info "" f m t
             end
         end
