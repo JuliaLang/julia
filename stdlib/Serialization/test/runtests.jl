@@ -266,6 +266,36 @@ create_serialization_stream() do s # small 1d array
     @test result[2].v == arr5[2].v
 end
 
+# bits-union arrays and pointerfree-non-bitstype arrays (#30148)
+struct StructWithBitsUnion
+    x::Int
+    u::Union{Int8,Int16}
+end
+create_serialization_stream() do s
+    v1 = Union{Int,Missing}[1, missing, 2, 3, missing]
+    serialize(s, v1)
+    v2 = Union{Int,Missing}[]
+    serialize(s, v2)
+    m = Matrix{Union{Float64,Missing}}(undef, 4, 5)
+    for i in eachindex(m)
+        m[i] = isodd(i) ? Float64(i) : missing
+    end
+    serialize(s, m)
+    mem = Memory{Union{Int,Missing}}(undef, 5)
+    mem[1] = 1; mem[2] = missing; mem[3] = 3; mem[4] = missing; mem[5] = 5
+    serialize(s, mem)
+    sv = StructWithBitsUnion[StructWithBitsUnion(1, Int8(7)),
+                             StructWithBitsUnion(2, Int16(300)),
+                             StructWithBitsUnion(3, Int8(-1))]
+    serialize(s, sv)
+    seek(s, 0)
+    @test isequal(deserialize(s), v1)
+    @test deserialize(s) == v2
+    @test isequal(deserialize(s), m)
+    @test isequal(deserialize(s), mem)
+    @test deserialize(s) == sv
+end
+
 # SubArray
 create_serialization_stream() do s # slices
     slc1 = view(UInt8[1,1,1,1], 2:3)

@@ -83,7 +83,7 @@ const TAGS = Any[
 const NTAGS = length(TAGS)
 @assert NTAGS == 255
 
-const ser_version = 30 # do not make changes without bumping the version #!
+const ser_version = 31 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
@@ -237,13 +237,34 @@ function serialize(s::AbstractSerializer, x::Symbol)
     nothing
 end
 
+# can be serialized as blob-of-bytes (maybe with type tag region), rather than
+# as each element independently. see also: doc/src/devdocs/isbitsunionarrays.md
+function _can_blob_eltype(@nospecialize T::Type)
+    return Base.isbitsunion(T) ||
+        (T isa DataType && isconcretetype(T) && Base.datatype_pointerfree(T) && Base.allocatedinline(T))
+end
+
+function _bitsunion_pointers(a)
+    if isa(a, Array)
+        ref = getfield(a, :ref)
+        mem, elem_offset = ref.mem, Core.memoryrefoffset(ref) - 1
+    else
+        mem, elem_offset = a, 0
+    end
+    data_ptr = convert(Ptr{UInt8}, pointer(a))
+    tag_ptr = ccall(:jl_genericmemory_typetagdata, Ptr{UInt8}, (Any,), mem) + elem_offset
+    return data_ptr, tag_ptr
+end
+
 function serialize_array_data(s::IO, a)
     require_one_based_indexing(a)
     isempty(a) && return 0
-    if eltype(a) === Bool
+    n = length(a)
+    elty = eltype(a)
+    if elty === Bool
         last = a[1]::Bool
         count = 1
-        for i = 2:length(a)
+        for i = 2:n
             if a[i]::Bool != last || count == 127
                 write(s, UInt8((UInt8(last) << 7) | count))
                 last = a[i]::Bool
@@ -253,8 +274,16 @@ function serialize_array_data(s::IO, a)
             end
         end
         write(s, UInt8((UInt8(last) << 7) | count))
-    else
+    elseif Base.isbitsunion(elty)
+        data_ptr, tag_ptr = _bitsunion_pointers(a)
+        GC.@preserve a begin
+            unsafe_write(s, data_ptr, UInt(n * Base.elsize(a)))
+            unsafe_write(s, tag_ptr, UInt(n))
+        end
+    elseif isbitstype(elty)
         write(s, a)
+    else # isconcretetype && datatype_pointerfree && allocatedinline
+        GC.@preserve a unsafe_write(s, pointer(a), UInt(n * Base.elsize(a)))
     end
 end
 
@@ -270,7 +299,7 @@ function serialize(s::AbstractSerializer, a::Array)
     else
         serialize(s, length(a))
     end
-    if isbitstype(elty)
+    if _can_blob_eltype(elty)
         serialize_array_data(s.io, a)
     else
         sizehint!(s.table, div(length(a),4))  # prepare for lots of pointers
@@ -296,7 +325,7 @@ function serialize(s::AbstractSerializer, m::Memory)
     serialize_cycle_header(s, m) && return
     serialize(s, length(m))
     elty = eltype(m)
-    if isbitstype(elty)
+    if _can_blob_eltype(elty)
         serialize_array_data(s.io, m)
     else
         sizehint!(s.table, div(length(m),4))  # prepare for lots of pointers
@@ -1364,6 +1393,37 @@ else
 const OtherInt = Int64
 end
 
+function deserialize_array_data!(s::IO, a)
+    require_one_based_indexing(a)
+    isempty(a) && return a
+    n = length(a)
+    elty = eltype(a)
+    if elty === Bool
+        i = 1
+        while i <= n
+            b = read(s, UInt8)::UInt8
+            v = (b >> 7) != 0
+            count = b & 0x7f
+            nxt = i + count
+            while i < nxt
+                @inbounds a[i] = v
+                i += 1
+            end
+        end
+    elseif Base.isbitsunion(elty)
+        data_ptr, tag_ptr = _bitsunion_pointers(a)
+        GC.@preserve a begin
+            unsafe_read(s, data_ptr, UInt(n * Base.elsize(a)))
+            unsafe_read(s, tag_ptr, UInt(n))
+        end
+    elseif isbitstype(elty)
+        read!(s, a)
+    else # isconcretetype && datatype_pointerfree && allocatedinline
+        GC.@preserve a unsafe_read(s, pointer(a), UInt(n * Base.elsize(a)))
+    end
+    return a
+end
+
 function deserialize_array(s::AbstractSerializer)
     slot = s.counter; s.counter += 1
     d1 = deserialize(s)
@@ -1378,6 +1438,11 @@ function deserialize_array(s::AbstractSerializer)
             a = Vector{elty}(undef, d1)
             s.table[slot] = a
             return read!(s.io, a)
+        elseif _can_blob_eltype(elty) && (format_version(s) >= 31)
+            a = Vector{elty}(undef, d1)
+            s.table[slot] = a
+            deserialize_array_data!(s.io, a)
+            return a
         end
         dims = (Int(d1),)
     elseif d1 isa Dims
@@ -1385,25 +1450,10 @@ function deserialize_array(s::AbstractSerializer)
     else
         dims = convert(Dims, d1::Tuple{Vararg{OtherInt}})::Dims
     end
-    if isbitstype(elty)
-        n = prod(dims)::Int
-        if elty === Bool && n > 0
-            A = Array{Bool, length(dims)}(undef, dims)
-            i = 1
-            while i <= n
-                b = read(s.io, UInt8)::UInt8
-                v = (b >> 7) != 0
-                count = b & 0x7f
-                nxt = i + count
-                while i < nxt
-                    A[i] = v
-                    i += 1
-                end
-            end
-        else
-            A = read!(s.io, Array{elty}(undef, dims))
-        end
+    if isbitstype(elty) || (_can_blob_eltype(elty) && (format_version(s) >= 31))
+        A = Array{elty, length(dims)}(undef, dims)
         s.table[slot] = A
+        deserialize_array_data!(s.io, A)
         return A
     end
     A = Array{elty, length(dims)}(undef, dims)
@@ -1427,24 +1477,10 @@ function deserialize(s::AbstractSerializer, X::Type{Memory{T}} where T)
     slot = pop!(s.pending_refs) # e.g. deserialize_cycle
     n = deserialize(s)::Int
     elty = eltype(X)
-    if isbitstype(elty)
+    if isbitstype(elty) || (_can_blob_eltype(elty) && (format_version(s) >= 31))
         A = X(undef, n)
-        if X === Memory{Bool}
-            i = 1
-            while i <= n
-                b = read(s.io, UInt8)::UInt8
-                v = (b >> 7) != 0
-                count = b & 0x7f
-                nxt = i + count
-                while i < nxt
-                    A[i] = v
-                    i += 1
-                end
-            end
-        else
-            A = read!(s.io, A)::X
-        end
         s.table[slot] = A
+        deserialize_array_data!(s.io, A)
         return A
     end
     A = X(undef, n)
