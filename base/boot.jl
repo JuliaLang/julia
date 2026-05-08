@@ -600,7 +600,7 @@ eval(Core, quote
         isa(f, String) && (f = Symbol(f))
         return $(Expr(:new, :LineNumberNode, :l, :f))
     end
-    DebugInfo(def::Union{Method,MethodInstance,Symbol}, linetable::Union{Nothing,DebugInfo, String}, edges::SimpleVector, codelocs::String) =
+    DebugInfo(def::Union{Method,MethodInstance,Symbol}, linetable::Union{Nothing,DebugInfo,String}, edges::SimpleVector, codelocs::String) =
         $(Expr(:new, :DebugInfo, :def, :linetable, :edges, :codelocs))
     DebugInfo(def::Union{Method,MethodInstance,Symbol}) =
         $(Expr(:new, :DebugInfo, :def, nothing, Core.svec(), ""))
