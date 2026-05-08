@@ -151,8 +151,8 @@ module Issue41061
     f_pair_str(x::Pair{Int64,Float64}, y::String) = 1
     struct ThreeParam{A,B,C} end
     f_three(::ThreeParam{Tuple{Float64}}) = 1
-    f_tup_tv(x::Tuple{Int, T, Float64}) where T<:Real = 1
-    f_two_int(a::Int, b::Int) = 1
+    f_tup_tv(x::Tuple{Int64, T, Float64}) where T<:Real = 1
+    f_two_int(a::Int64, b::Int64) = 1
 end
 @testset "type diff highlighting (#41061)" begin
     buf41061 = IOBuffer()
@@ -178,7 +178,7 @@ end
     @test occursin("Issue41061.AliasT{!Matched{Int64}}", String(take!(buf41061)))
     # Entire signature wrong: leaf bail wraps the entire `::Type` in error_color
     let io = IOContext(buf41061, :color => true)
-        called = Issue41061.ThreeParam{Tuple{Char}, Dict{Int,Int}, Dict{Int,Int}}()
+        called = Issue41061.ThreeParam{Tuple{Char}, Dict{Int64,Int64}, Dict{Int64,Int64}}()
         Base.show_method_candidates(io, MethodError(Issue41061.f_three, (called,)))
         s = String(take!(buf41061))
         @test occursin("\e[91m::", s)
@@ -189,7 +189,7 @@ end
     @test occursin("::Tuple{!Matched{Int64}, !Matched{T}, Float64}) where T<:Real", String(take!(buf41061)))
     # Trailing missing-arg comma renders gray, matching the main-loop separator
     let io = IOContext(buf41061, :color => true)
-        Base.show_method_candidates(io, MethodError(Issue41061.f_two_int, (1,)))
+        Base.show_method_candidates(io, MethodError(Issue41061.f_two_int, (Int64(1),)))
         s = String(take!(buf41061))
         @test occursin("\e[90m::Int64\e[39m\e[90m, \e[39m\e[91m::Int64\e[39m", s)
     end
