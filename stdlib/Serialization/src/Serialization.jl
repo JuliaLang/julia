@@ -15,8 +15,19 @@ using Core.IR
 
 export serialize, deserialize, AbstractSerializer, Serializer
 
+"""
+    AbstractSerializer
+
+Abstract type for serializer objects used by the `Serialization` standard library.
+"""
 abstract type AbstractSerializer end
 
+"""
+    Serializer(io::IO)
+
+Concrete serializer used by the `Serialization` standard library to write
+serialized data to an IO stream.
+"""
 mutable struct Serializer{I<:IO} <: AbstractSerializer
     io::I
     counter::Int
