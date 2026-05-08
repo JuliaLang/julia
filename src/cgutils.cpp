@@ -39,6 +39,7 @@ STATISTIC(EmittedDeferSignal, "Number of deferred signals emitted");
 
 // Enum to represent field operation types, replacing multiple boolean parameters
 enum class StoreKind {
+    Unset,       // unsetfield!/unsetglobal!/memoryrefunset!
     Set,         // setfield!/setglobal!/memoryrefset!
     Swap,        // swapfield!/swapglobal!/memoryrefswap!
     Replace,     // replacefield!/replaceglobal!/memoryrefreplace!
@@ -48,6 +49,7 @@ enum class StoreKind {
 
 static const char *store_kind_name(StoreKind op, const char *suffix) {
     switch (op) {
+    case StoreKind::Unset:   return suffix[0] == 'g' ? "unsetglobal!" : suffix[0] == 'm' ? "memoryrefunset!" : "unsetfield!";
     case StoreKind::Set:     return suffix[0] == 'g' ? "setglobal!" : suffix[0] == 'm' ? "memoryrefset!" : "setfield!";
     case StoreKind::Swap:    return suffix[0] == 'g' ? "swapglobal!" : suffix[0] == 'm' ? "memoryrefswap!" : "swapfield!";
     case StoreKind::Replace: return suffix[0] == 'g' ? "replaceglobal!" : suffix[0] == 'm' ? "memoryrefreplace!" : "replacefield!";
@@ -2593,6 +2595,8 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             }
             case StoreKind::SetOnce:
                 return mark_julia_const(ctx, jl_false);
+            case StoreKind::Unset:
+                return rhs;
             }
         }
         // if FailOrder was inherited from Order, may need to remove Load-only effects now
@@ -3015,7 +3019,8 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         oldval = mark_julia_type(ctx, Success, false, jl_bool_type);
         break;
     case StoreKind::Set:
-        break; // oldval already set
+    case StoreKind::Unset:
+        break; // oldval already set (nothing for Unset)
     case StoreKind::Swap:
     case StoreKind::Replace:
         if (!is_union) {

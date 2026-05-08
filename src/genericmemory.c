@@ -406,6 +406,35 @@ JL_DLLEXPORT jl_value_t *jl_memoryref_isassigned(jl_genericmemoryref_t m, int is
     return _jl_memoryref_isassigned(m, isatomic) ? jl_true : jl_false;
 }
 
+JL_DLLEXPORT void jl_memoryrefunset(jl_genericmemoryref_t m, int isatomic)
+{
+    const jl_datatype_layout_t *layout = ((jl_datatype_t*)jl_typetagof(m.mem))->layout;
+    assert(isatomic == (layout->flags.arrayelem_isatomic || layout->flags.arrayelem_islocked));
+    if (layout->flags.arrayelem_isboxed) {
+        assert((char*)m.ptr_or_offset - (char*)m.mem->ptr < sizeof(jl_value_t*) * m.mem->length);
+        _Atomic(jl_value_t*) *p = (_Atomic(jl_value_t*)*)m.ptr_or_offset;
+        if (isatomic)
+            jl_atomic_store(p, (jl_value_t*)NULL);
+        else
+            jl_atomic_store_release(p, (jl_value_t*)NULL);
+        return;
+    }
+    if (layout->flags.arrayelem_isunion)
+        return;
+    if (layout->first_ptr < 0)
+        return;
+    jl_datatype_t *dt = (jl_datatype_t*)jl_tparam1(jl_typetagof(m.mem));
+    char *data = (char*)m.ptr_or_offset;
+    int needlock = layout->flags.arrayelem_islocked;
+    if (needlock) {
+        jl_lock_field((jl_mutex_t*)data);
+        data += LLT_ALIGN(sizeof(jl_mutex_t), JL_SMALL_BYTE_ALIGNMENT);
+    }
+    memset(data, 0, jl_datatype_size(dt));
+    if (needlock)
+        jl_unlock_field((jl_mutex_t*)m.ptr_or_offset);
+}
+
 JL_DLLEXPORT void jl_memoryrefset(jl_genericmemoryref_t m JL_ROOTING_ARGUMENT, jl_value_t *rhs JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, int isatomic)
 {
     const jl_datatype_layout_t *layout = ((jl_datatype_t*)jl_typetagof(m.mem))->layout;

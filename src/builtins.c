@@ -1947,6 +1947,32 @@ JL_CALLABLE(jl_f_memoryrefset)
     return args[1];
 }
 
+JL_CALLABLE(jl_f_memoryrefunset)
+{
+    enum jl_memory_order order = jl_memory_order_notatomic;
+    JL_NARGS(memoryrefunset!, 3, 3);
+    JL_TYPECHK(memoryrefunset!, genericmemoryref, args[0]);
+    JL_TYPECHK(memoryrefunset!, symbol, args[1]);
+    JL_TYPECHK(memoryrefunset!, bool, args[2]);
+    jl_genericmemoryref_t m = *(jl_genericmemoryref_t*)args[0];
+    jl_value_t *kind = jl_tparam0(jl_typetagof(m.mem));
+    if (kind == (jl_value_t*)jl_not_atomic_sym) {
+        if (args[1] != kind) {
+            order = jl_get_atomic_order_checked((jl_sym_t*)args[1], 0, 1);
+            jl_atomic_error("memoryrefunset!: non-atomic memory cannot be written atomically");
+        }
+    }
+    else if (kind == (jl_value_t*)jl_atomic_sym) {
+        order = jl_get_atomic_order_checked((jl_sym_t*)args[1], 0, 1);
+        if (order == jl_memory_order_notatomic)
+            jl_atomic_error("memoryrefunset!: atomic memory cannot be written non-atomically");
+    }
+    if (m.mem->length == 0)
+        jl_bounds_error_int((jl_value_t*)m.mem, 1);
+    jl_memoryrefunset(m, kind == (jl_value_t*)jl_atomic_sym);
+    return jl_nothing;
+}
+
 JL_CALLABLE(jl_f_memoryref_isassigned)
 {
     enum jl_memory_order order = jl_memory_order_notatomic;
