@@ -1262,10 +1262,20 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
                                         jl_code_info_t *f,
                                         jl_module_t *module)
 {
-    // argdata is svec(svec(types...), svec(typevars...), functionloc)
+    // argdata is svec(svec(types...), svec(typevars...), functionloc[, svec(diags...)]).
+    // The 4th slot is optional: when present it contains one UInt8 per typevar
+    // saying which UnionAll diag annotation to use for that binding (see jl_method_def
+    // diag handling below). Older lowering (and runtime callers via essentials.jl)
+    // emit only 3 slots and we fall back to JL_UNIONALL_DIAG_DYNAMIC.
     jl_svec_t *atypes = (jl_svec_t*)jl_svecref(argdata, 0);
     jl_svec_t *tvars = (jl_svec_t*)jl_svecref(argdata, 1);
     jl_value_t *functionloc = jl_svecref(argdata, 2);
+    jl_svec_t *tvar_diags = NULL;
+    if (jl_svec_len(argdata) >= 4) {
+        tvar_diags = (jl_svec_t*)jl_svecref(argdata, 3);
+        assert(jl_is_svec(tvar_diags));
+        assert(jl_svec_len(tvar_diags) == jl_svec_len(tvars));
+    }
     assert(jl_is_svec(atypes));
     assert(jl_is_svec(tvars));
     size_t nargs = jl_svec_len(atypes);
@@ -1360,7 +1370,26 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
                       jl_symbol_name(file),
                       line,
                       jl_symbol_name(((jl_tvar_t*)tv)->name));
-        argtype = jl_new_unionall((jl_tvar_t*)tv, argtype, JL_UNIONALL_DIAG_DYNAMIC);
+        // Apply per-tvar diag annotation. The encoding in tvar_diags is:
+        //   0xFF — "auto": pick the diag via static analysis of the body
+        //          (jl_unionall_diag_default); always wrap in a UnionAll even
+        //          when the var doesn't appear in the body, since the method's
+        //          source code may still reference it via static_parameter.
+        //   0/1/2 — explicit JL_UNIONALL_DIAG_DYNAMIC/CONCRETE/NEVER.
+        // 3-element argdata (no diag svec) — emitted by base/essentials.jl's
+        // _defaultctors when synthesizing default struct constructors — also
+        // gets the auto treatment, so default constructors pick up the static
+        // rule the same way regular `where` clauses do.
+        uint8_t encoded = 0xFF;
+        if (tvar_diags != NULL) {
+            jl_value_t *dv = jl_svecref(tvar_diags, i - 1);
+            assert(jl_is_uint8(dv));
+            encoded = *(uint8_t*)jl_data_ptr(dv);
+        }
+        uint8_t diag = (encoded == 0xFF)
+            ? jl_unionall_diag_default((jl_tvar_t*)tv, argtype)
+            : encoded;
+        argtype = jl_new_unionall((jl_tvar_t*)tv, argtype, diag);
     }
     if (jl_has_free_typevars(argtype)) {
         jl_exceptionf(jl_argumenterror_type,

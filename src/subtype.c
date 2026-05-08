@@ -74,6 +74,19 @@ typedef struct jl_varbinding_t {
     int8_t concrete;    // 1 if another variable has a constraint forcing this one to be concrete
     int8_t max_offset;  // record the maximum positive offset of the variable (up to 32)
                         // max_offset < 0 if this variable occurs outside VarargNum.
+    int8_t dynamic_uses; // # of dynamically-encountered uses (any position), saturated at 2.
+                         // Used at the usage site to detect when a statically-CONCRETE
+                         // typevar transitions from "first use" to "second use", at
+                         // which point we set diag_active.
+    int8_t diag_active;  // Set at the usage site (via record_var_occurrence) when a
+                         // CONCRETE-annotated typevar has been used dynamically more
+                         // than once — i.e. when the diagonal rule actually fires for
+                         // this subtype call. For DYNAMIC bindings the pop-time logic
+                         // still computes diagonality from occurs_cov; for NEVER it is
+                         // never set; for CONCRETE the pop site simply reads this flag
+                         // rather than re-deriving it from the use counter.
+    int8_t diag;        // Cached u->diag from the binding UnionAll, so use-site code
+                        // can dispatch on it without reaching back to the UnionAll.
     // constraintkind: in covariant position, we try three different ways to compute var ∩ type:
     // let ub = var.ub ∩ type
     // 0 - var.ub <: type ? var : ub
@@ -254,10 +267,17 @@ static int current_env_length(jl_stenv_t *e)
     return len;
 }
 
+// Each varbinding contributes 5 bytes to `buf` (occurs_inv, occurs_cov, max_offset,
+// dynamic_uses, diag_active) and 3 GC roots to `roots` (lb, ub, innervars). `concrete`
+// is intentionally not saved/restored: it is monotonic-on-set and represents an outside
+// constraint that should persist across union-arm retries. `diag_active` *is* saved so
+// that activation in one union arm does not falsely persist to a sibling arm where the
+// dynamic uses haven't yet reached 2 — matching the per-arm semantics master applied
+// via occurs_cov.
 typedef struct {
     int8_t *buf;
     int rdepth;
-    int8_t _space[24]; // == 8 * 3
+    int8_t _space[40]; // == 8 * 5
     jl_gcframe_t gcframe;
     jl_value_t *roots[24]; // == 8 * 3
 } jl_savedenv_t;
@@ -301,6 +321,8 @@ static void re_save_env(jl_stenv_t *e, jl_savedenv_t *se, int root)
         se->buf[j++] = v->occurs_inv;
         se->buf[j++] = v->occurs_cov;
         se->buf[j++] = v->max_offset;
+        se->buf[j++] = v->dynamic_uses;
+        se->buf[j++] = v->diag_active;
         v = v->prev;
     }
     assert(i == nroots); (void)nroots;
@@ -332,9 +354,9 @@ static void alloc_env(jl_stenv_t *e, jl_savedenv_t *se, int root)
             ct->gcstack = &se->gcframe;
         }
     }
-    se->buf = (len > 8 ? (int8_t*)malloc_s(len * 3) : se->_space);
+    se->buf = (len > 8 ? (int8_t*)malloc_s(len * 5) : se->_space);
 #ifdef __clang_gcanalyzer__
-    memset(se->buf, 0, len * 3);
+    memset(se->buf, 0, len * 5);
 #endif
 }
 
@@ -394,6 +416,8 @@ static void restore_env(jl_stenv_t *e, jl_savedenv_t *se, int root) JL_NOTSAFEPO
         v->occurs_inv = se->buf[j++];
         v->occurs_cov = se->buf[j++];
         v->max_offset = se->buf[j++];
+        v->dynamic_uses = se->buf[j++];
+        v->diag_active = se->buf[j++];
         v = v->prev;
     }
     assert(i == nroots); (void)nroots;
@@ -713,11 +737,24 @@ static int env_unchanged(jl_stenv_t *e, jl_savedenv_t *se) JL_NOTSAFEPOINT
         if (v->existential) {
             if (v->lb != roots[i] || v->ub != roots[i + 1])
                 return 0; // check if bounds changed
-            if (is_leaf_typevar(v->var) && v->occurs_inv == 0 && v->occurs_cov > 1 && se->buf[j] <= 1)
-                return 0; // check if a variable became digonal from non-diagonal
+            // For DYNAMIC bindings, diagonality keys off occurs_cov; for statically
+            // CONCRETE bindings it keys off diag_active (entry j+3 in the 5-byte
+            // group: occurs_inv, occurs_cov, max_offset, dynamic_uses, diag_active).
+            // diag_active is set at the use site when a CONCRETE typevar's dynamic
+            // uses cross the diagonal-rule threshold.
+            if (is_leaf_typevar(v->var)) {
+                if (v->diag == JL_UNIONALL_DIAG_CONCRETE) {
+                    if (v->diag_active && !se->buf[j + 3])
+                        return 0; // CONCRETE diagonal got activated this round
+                }
+                else if (v->diag != JL_UNIONALL_DIAG_NEVER) {
+                    if (v->occurs_inv == 0 && v->occurs_cov > 1 && se->buf[j] <= 1)
+                        return 0; // DYNAMIC became diagonal
+                }
+            }
         }
         i += 3; // lb, ub, innervars
-        j += 3;
+        j += 5;
         v = v->prev;
     }
     return 1;
@@ -763,11 +800,72 @@ static int subtype_left_var(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_para
     return subtype(x, y, e, param);
 }
 
-// use the current context to record where a variable occurred, for the purpose
-// of determining whether the variable is concrete.
-static void record_var_occurrence(jl_varbinding_t *vb, jl_stenv_t *e, jl_param_pos_t param) JL_NOTSAFEPOINT
+// Forward declarations; actual definitions below.
+int is_leaf_bound(jl_value_t *v) JL_NOTSAFEPOINT;
+static jl_value_t *widen_Type_if_concrete(jl_value_t *t JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
+
+// Apply the diagonal-rule effects for a CONCRETE-marked typevar at the usage
+// site. Must be called whenever:
+//  (a) `vb` just transitioned to "diagonally active" (its dynamic-use counter
+//      reached 2 inside `record_var_occurrence`),
+//  (b) `vb`'s lower bound was updated by a use that records into it (var_gt,
+//      equal_var),
+//  (c) `vb`'s upper bound was updated by a use (var_lt, equal_var) and the
+//      var is forced concrete by an outer constraint, or
+//  (d) `vb->concrete` was just set externally (the pop-time propagation
+//      `vlb->concrete = 1` in another var's pop).
+//
+// For DYNAMIC and NEVER bindings this is a no-op — those continue to be
+// handled at pop. For CONCRETE the entire effect of the diagonal rule lives
+// here, so the pop site does not need to re-derive anything from use counters.
+//
+// Returns 1 on success, 0 if the diagonal rule failed (lb not concrete, or
+// outer-forced concrete with non-concrete ub).
+static int apply_concrete_diagonal(jl_varbinding_t *vb, jl_stenv_t *e) JL_NOTSAFEPOINT
 {
-    if (vb != NULL && param != PARAM_NONE) {
+    if (vb->diag != JL_UNIONALL_DIAG_CONCRETE)
+        return 1;
+    if (!is_leaf_typevar(vb->var))
+        return 1;
+    if (!vb->concrete && !vb->diag_active)
+        return 1;
+    // outer forced this var concrete but our own diagonal isn't active:
+    // ub must be a leaf so the var truly ranges only over concrete types.
+    if (vb->concrete && !vb->diag_active && !is_leaf_bound(vb->ub))
+        return 0;
+    // For existential bindings (the typevar quantifier sits on the right of
+    // the subtype check, so the var is being solved), widen `Type{X}` to
+    // `typeof(X)` before the leaf-bound check. Master applies this same
+    // widening at pop just before its diagonal check; we apply it at the
+    // usage site so the outcome matches.
+    jl_value_t *lb = vb->lb;
+    if (vb->existential && !vb->occurs_inv)
+        lb = widen_Type_if_concrete(lb);
+    // lb work: if it's a typevar, propagate concreteness; if it's a non-leaf
+    // type, the diagonal rule says we can't satisfy the constraint.
+    if (jl_is_typevar(lb)) {
+        jl_varbinding_t *vlb = lookup(e, (jl_tvar_t*)lb);
+        if (vlb && !vlb->concrete) {
+            vlb->concrete = 1;
+            if (!apply_concrete_diagonal(vlb, e))
+                return 0;
+        }
+    }
+    else if (!is_leaf_bound(lb)) {
+        return 0;
+    }
+    return 1;
+}
+
+// use the current context to record where a variable occurred, for the purpose
+// of determining whether the variable is concrete. Returns 0 if the diagonal
+// rule fails as a result of the new occurrence (only possible for CONCRETE
+// bindings), 1 otherwise.
+static int record_var_occurrence(jl_varbinding_t *vb, jl_stenv_t *e, jl_param_pos_t param) JL_NOTSAFEPOINT
+{
+    if (vb == NULL)
+        return 1;
+    if (param != PARAM_NONE) {
         // saturate counters at 2; we don't need values bigger than that
         if (param == PARAM_INVARIANT && e->invdepth > vb->depth0) {
             if (vb->occurs_inv < 2)
@@ -781,6 +879,34 @@ static void record_var_occurrence(jl_varbinding_t *vb, jl_stenv_t *e, jl_param_p
         if (!vb->intersected)
             vb->max_offset = -1;
     }
+    // dynamic_uses counts every actual use of this var so far in the current
+    // subtype branch, INCLUDING uses through PARAM_NONE recursive calls (e.g.
+    // bound consistency checks via subtype_ccheck → var_gt / var_lt). Those
+    // also constrain the typevar's bounds, so they count toward the diagonal
+    // rule. When a CONCRETE-annotated binding is used a second time we
+    // activate its diagonal rule right here at the usage site.
+    if (vb->dynamic_uses < 2) {
+        vb->dynamic_uses++;
+        if (vb->dynamic_uses == 2 && vb->diag == JL_UNIONALL_DIAG_CONCRETE) {
+            vb->diag_active = 1;
+            // In intersection mode, master sets vb->concrete = 1 at
+            // intersect_unionall_'s pop for diagonally-active typevars, and
+            // a number of intersection helpers (constraintkind selection,
+            // the xx/yy concrete arbitration in `intersect`, etc.) consult
+            // vb->concrete. Mirror that here at the usage site.
+            //
+            // We deliberately don't set vb->concrete in subtype mode:
+            // vb->concrete is monotonic-on-set (not saved/restored across
+            // union arms), so setting it would falsely persist activation
+            // from a failed arm into a sibling arm's apply_concrete_diagonal
+            // and incorrectly trigger the !diag_active ub-leaf check.
+            if (e->intersection && is_leaf_typevar(vb->var))
+                vb->concrete = 1;
+            if (!apply_concrete_diagonal(vb, e))
+                return 0;
+        }
+    }
+    return 1;
 }
 
 // is var x's quantifier outside y's in nesting order
@@ -805,7 +931,8 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t par
     jl_varbinding_t *bb = lookup(e, b);
     if (bb == NULL)
         return e->ignore_free || subtype_left_var(b->ub, a, e, param);
-    record_var_occurrence(bb, e, param);
+    if (!record_var_occurrence(bb, e, param))
+        return 0;
     assert(!jl_is_long(a) || e->Loffset == 0);
     if (e->Loffset != 0 && !jl_is_typevar(a) &&
         a != jl_bottom_type && a != (jl_value_t *)jl_any_type)
@@ -829,6 +956,10 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t par
         bb->ub = simple_meet(bb->ub, a, 1);
     }
     assert(bb->ub != (jl_value_t*)b);
+    // ub just changed: if outer-forced concrete (vb.concrete) without being
+    // self-diagonal-active, the diagonal rule requires ub be a leaf bound.
+    if (!apply_concrete_diagonal(bb, e))
+        return 0;
     if (jl_is_typevar(a)) {
         jl_varbinding_t *aa = lookup(e, (jl_tvar_t*)a);
         if (aa && !aa->existential && in_union(bb->lb, a) && bb->depth0 != aa->depth0 && var_outside(e, b, (jl_tvar_t*)a)) {
@@ -846,7 +977,8 @@ static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t par
     jl_varbinding_t *bb = lookup(e, b);
     if (bb == NULL)
         return e->ignore_free || subtype_left_var(a, b->lb, e, param);
-    record_var_occurrence(bb, e, param);
+    if (!record_var_occurrence(bb, e, param))
+        return 0;
     assert(!jl_is_long(a) || e->Loffset == 0);
     if (e->Loffset != 0 && !jl_is_typevar(a) &&
         a != jl_bottom_type && a != (jl_value_t *)jl_any_type)
@@ -864,6 +996,9 @@ static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t par
     JL_GC_POP();
     // this bound should not be directly circular
     assert(bb->lb != (jl_value_t*)b);
+    // lb just changed: re-check the CONCRETE diagonal rule.
+    if (!apply_concrete_diagonal(bb, e))
+        return 0;
     if (jl_is_typevar(a)) {
         jl_varbinding_t *aa = lookup(e, (jl_tvar_t*)a);
         if (aa && !aa->existential && bb->depth0 != aa->depth0 && param == PARAM_INVARIANT && var_outside(e, b, (jl_tvar_t*)a))
@@ -1045,8 +1180,11 @@ static jl_unionall_t *unalias_unionall(jl_unionall_t *u, jl_stenv_t *e)
 static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, jl_param_pos_t param)
 {
     u = unalias_unionall(u, e);
-    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                           e->invdepth, NULL, e->vars };
+    // Field order: var, lb, ub, existential, occurs_inv, occurs_cov, concrete,
+    // max_offset, dynamic_uses, diag_active, diag, constraintkind, intvalued,
+    // limited, intersected, widened_to_kind, depth0, innervars, prev.
+    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, u->diag,
+                           0, 0, 0, 0, 0, e->invdepth, NULL, e->vars };
     JL_GC_PUSH4(&u, &vb.lb, &vb.ub, &vb.innervars);
     e->vars = &vb;
     int ans;
@@ -1061,32 +1199,41 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     else
         ans = subtype(u->body, t, e, param);
 
-    // handle the "diagonal dispatch" rule, which says that a type var occurring more
-    // than once, and only in covariant position, is constrained to concrete types. E.g.
-    //  ( Tuple{Int, Int}    <: Tuple{T, T} where T) but
-    // !( Tuple{Int, String} <: Tuple{T, T} where T)
-    // Then check concreteness by checking that the lower bound is not an abstract type.
-    int diagonal;
-    if (u->diag == JL_UNIONALL_DIAG_CONCRETE)
-        diagonal = 1;
-    else if (u->diag == JL_UNIONALL_DIAG_NEVER)
-        diagonal = 0;
-    else
-        diagonal = vb.occurs_cov > 1 && !var_occurs_invariant(u->body, u->var);
-    if (ans && (vb.concrete || (diagonal && is_leaf_typevar(u->var)))) {
-        if (vb.concrete && !diagonal && !is_leaf_bound(vb.ub)) {
-            // a non-diagonal var can only be a subtype of a diagonal var if its
-            // upper bound is concrete.
-            ans = 0;
-        }
-        else if (jl_is_typevar(vb.lb)) {
-            jl_tvar_t *v = (jl_tvar_t*)vb.lb;
-            jl_varbinding_t *vlb = lookup(e, v);
-            if (vlb)
-                vlb->concrete = 1;
-        }
-        else if (!is_leaf_bound(vb.lb)) {
-            ans = 0;
+    // Handle the "diagonal dispatch" rule for DYNAMIC and NEVER bindings here.
+    // E.g. ( Tuple{Int, Int}    <: Tuple{T, T} where T) but
+    //     !( Tuple{Int, String} <: Tuple{T, T} where T) — checked by examining
+    // the lower bound's concreteness.
+    //
+    // CONCRETE bindings (`<<:` or static-auto) handle this entirely at the usage
+    // site through apply_concrete_diagonal: the rule fires at the second use
+    // (and at every subsequent bound update / external concrete propagation),
+    // so by the time we reach the pop there is nothing diagonal-related left
+    // for us to do for those bindings.
+    if (ans && u->diag != JL_UNIONALL_DIAG_CONCRETE) {
+        int diagonal = (u->diag == JL_UNIONALL_DIAG_NEVER)
+            ? 0
+            : (vb.occurs_cov > 1 && !var_occurs_invariant(u->body, u->var));
+        if (vb.concrete || (diagonal && is_leaf_typevar(u->var))) {
+            if (vb.concrete && !diagonal && !is_leaf_bound(vb.ub)) {
+                // a non-diagonal var can only be a subtype of a diagonal var if its
+                // upper bound is concrete.
+                ans = 0;
+            }
+            else if (jl_is_typevar(vb.lb)) {
+                jl_tvar_t *v = (jl_tvar_t*)vb.lb;
+                jl_varbinding_t *vlb = lookup(e, v);
+                if (vlb) {
+                    vlb->concrete = 1;
+                    // Propagation has just forced vlb concrete from outside its
+                    // own usage chain. If vlb is CONCRETE, run its use-site
+                    // diagonal check now — there's no later opportunity.
+                    if (!apply_concrete_diagonal(vlb, e))
+                        ans = 0;
+                }
+            }
+            else if (!is_leaf_bound(vb.lb)) {
+                ans = 0;
+            }
         }
     }
 
@@ -1544,16 +1691,19 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
             int xr = xx && xx->existential;  // treat free variables as "forall" (left)
             int yr = yy && yy->existential;
             if (xr) {
-                if (yy) record_var_occurrence(yy, e, param);
+                if (yy && !record_var_occurrence(yy, e, param))
+                    return 0;
                 if (yr) {
-                    record_var_occurrence(xx, e, param);
+                    if (!record_var_occurrence(xx, e, param))
+                        return 0;
                     int trysub = e->intersection ? try_subtype_by_bounds(xx->lb, yy->ub, e) : 0;
                     return trysub || subtype(xx->lb, yy->ub, e, PARAM_NONE);
                 }
                 return var_lt((jl_tvar_t*)x, y, e, param);
             }
             else if (yr) {
-                if (xx) record_var_occurrence(xx, e, param);
+                if (xx && !record_var_occurrence(xx, e, param))
+                    return 0;
                 return var_gt((jl_tvar_t*)y, x, e, param);
             }
             // check ∀x,y . x<:y
@@ -1800,7 +1950,8 @@ static int equal_var(jl_tvar_t *v, jl_value_t *x, jl_stenv_t *e)
     jl_varbinding_t *vb = lookup(e, v);
     if (e->intersection && vb != NULL && vb->lb == vb->ub && jl_is_typevar(vb->lb))
         return equal_var((jl_tvar_t *)vb->lb, x, e);
-    record_var_occurrence(vb, e, PARAM_INVARIANT);
+    if (!record_var_occurrence(vb, e, PARAM_INVARIANT))
+        return 0;
     if (vb == NULL)
         return e->ignore_free || (
             local_forall_exists_subtype(x, v->lb, e, PARAM_INVARIANT, !jl_has_free_typevars(x)) &&
@@ -1817,6 +1968,8 @@ static int equal_var(jl_tvar_t *v, jl_value_t *x, jl_stenv_t *e)
     if (!e->intersection || !jl_is_typevar(lb) || !reachable_var(lb, v, e))
         vb->lb = lb;
     JL_GC_POP();
+    if (!apply_concrete_diagonal(vb, e))
+        return 0;
     if (vb->ub == x)
         return 1;
     if (!subtype_ccheck(vb->lb, x, e))
@@ -1824,6 +1977,8 @@ static int equal_var(jl_tvar_t *v, jl_value_t *x, jl_stenv_t *e)
     // skip `simple_meet` here as we have proven `x <: vb->ub`
     if (!e->intersection || !reachable_var(x, v, e))
         vb->ub = x;
+    if (!apply_concrete_diagonal(vb, e))
+        return 0;
     return 1;
 }
 
@@ -1982,6 +2137,55 @@ static int concrete_min(jl_value_t *t)
     }
     assert(!jl_is_kind(t));
     return 1; // a non-Type is also considered concrete
+}
+
+// Locate the UnionAll wrapper that binds `v` within `t`, or NULL if `v` is
+// free in `t`. Used to consult the diag annotation on a typevar's binding.
+static jl_unionall_t *find_var_unionall(jl_value_t *t, jl_tvar_t *v) JL_NOTSAFEPOINT
+{
+    if (jl_is_unionall(t)) {
+        jl_unionall_t *ua = (jl_unionall_t*)t;
+        if (ua->var == v)
+            return ua;
+        jl_unionall_t *r = find_var_unionall(ua->var->lb, v);
+        if (r) return r;
+        r = find_var_unionall(ua->var->ub, v);
+        if (r) return r;
+        return find_var_unionall(ua->body, v);
+    }
+    else if (jl_is_uniontype(t)) {
+        jl_unionall_t *r = find_var_unionall(((jl_uniontype_t*)t)->a, v);
+        if (r) return r;
+        return find_var_unionall(((jl_uniontype_t*)t)->b, v);
+    }
+    else if (jl_is_vararg(t)) {
+        jl_vararg_t *vm = (jl_vararg_t *)t;
+        if (vm->T) {
+            jl_unionall_t *r = find_var_unionall(vm->T, v);
+            if (r) return r;
+            if (vm->N)
+                return find_var_unionall(vm->N, v);
+        }
+        return NULL;
+    }
+    else if (jl_is_datatype(t)) {
+        size_t i, np = jl_nparams(t);
+        for (i = 0; i < np; i++) {
+            jl_unionall_t *r = find_var_unionall(jl_tparam(t, i), v);
+            if (r) return r;
+        }
+    }
+    return NULL;
+}
+
+// Returns 1 if the UnionAll binding `v` in `y0` has its diag annotation
+// say diagonal-rule does NOT apply (NEVER). Used to skip the dynamic-style
+// diagonal heuristic in obvious_subtype_ when the static rule has determined
+// the typevar isn't concrete-forced.
+static int diag_definitely_off(jl_value_t *y0, jl_tvar_t *v) JL_NOTSAFEPOINT
+{
+    jl_unionall_t *ua = find_var_unionall(y0, v);
+    return ua && ua->diag == JL_UNIONALL_DIAG_NEVER;
 }
 
 static jl_value_t *find_var_body(jl_value_t *t, jl_tvar_t *v)
@@ -2269,8 +2473,10 @@ static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *su
                     if (var_occurs_invariant(body, (jl_tvar_t*)b))
                         return 0;
                 }
-                if (nparams_expanded_x > npy && jl_is_typevar(b) && is_leaf_typevar((jl_tvar_t *)b) && concrete_min(a1) > 1) {
-                    // diagonal rule for 2 or more elements: they must all be concrete on the LHS
+                if (nparams_expanded_x > npy && jl_is_typevar(b) && is_leaf_typevar((jl_tvar_t *)b) && concrete_min(a1) > 1
+                    && !diag_definitely_off(y0, (jl_tvar_t *)b)) {
+                    // diagonal rule for 2 or more elements: they must all be concrete on the LHS.
+                    // Skipped when the static-rule annotation on b's binding says NEVER.
                     *subtype = 0;
                     return 1;
                 }
@@ -2280,8 +2486,10 @@ static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *su
                 }
                 for (; i < nparams_expanded_x; i++) {
                     jl_value_t *a = (vx != JL_VARARG_NONE && i >= npx - 1) ? vxt : jl_tparam(x, i);
-                    if (i > npy && jl_is_typevar(b) && is_leaf_typevar((jl_tvar_t *)b)) { // i == npy implies a == a1
-                        // diagonal rule: all the later parameters are also constrained to be type-equal to the first
+                    if (i > npy && jl_is_typevar(b) && is_leaf_typevar((jl_tvar_t *)b)
+                        && !diag_definitely_off(y0, (jl_tvar_t *)b)) { // i == npy implies a == a1
+                        // diagonal rule: all the later parameters are also constrained to be type-equal to the first.
+                        // Skipped when b's static diag says NEVER.
                         jl_value_t *a2 = a;
                         jl_value_t *au = jl_unwrap_unionall(a);
                         if (jl_is_type_type(au) && jl_is_type(jl_tparam0(au))) {
@@ -2733,8 +2941,10 @@ static jl_value_t *bound_var_below(jl_tvar_t *tv, jl_varbinding_t *bb, jl_stenv_
     if (bb->depth0 != e->invdepth)
         return jl_bottom_type;
     e->invdepth++;
-    record_var_occurrence(bb, e, PARAM_INVARIANT);
+    int recorded = record_var_occurrence(bb, e, PARAM_INVARIANT);
     e->invdepth--;
+    if (!recorded)
+        return jl_bottom_type;
     int offset = R ? -e->Loffset : e->Loffset;
     if (jl_is_long(bb->lb)) {
         ssize_t blb = jl_unbox_long(bb->lb);
@@ -3503,18 +3713,18 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
     else {
         res = intersect(u->body, t, e, param);
     }
-    if (u->diag == JL_UNIONALL_DIAG_CONCRETE)
-        vb->concrete = 1;
-    else if (u->diag == JL_UNIONALL_DIAG_DYNAMIC)
+    // For DYNAMIC bindings the diagonal rule is determined here from occurrence
+    // counts. CONCRETE bindings are handled entirely at the usage site by
+    // apply_concrete_diagonal — vb->concrete and the lb-leaf check have already
+    // been applied during recursion, so we don't touch CONCRETE here. NEVER
+    // bindings never engage.
+    if (u->diag == JL_UNIONALL_DIAG_DYNAMIC)
         vb->concrete |= (vb->occurs_cov > 1 && is_leaf_typevar(u->var) &&
                          !var_occurs_invariant(u->body, u->var));
 
-    // handle the "diagonal dispatch" rule, which says that a type var occurring more
-    // than once, and only in covariant position, is constrained to concrete types. E.g.
-    //  ( Tuple{Int, Int}    <: Tuple{T, T} where T) but
-    // !( Tuple{Int, String} <: Tuple{T, T} where T)
-    // Then check concreteness by checking that the lower bound is not an abstract type.
-    if (res != jl_bottom_type && vb->concrete) {
+    // For DYNAMIC/NEVER, do the pop-time lb leaf check; CONCRETE has handled
+    // it at the usage site.
+    if (res != jl_bottom_type && vb->concrete && u->diag != JL_UNIONALL_DIAG_CONCRETE) {
         if (jl_is_typevar(vb->lb)) {
         }
         else if (!is_leaf_bound(vb->lb)) {
@@ -3584,8 +3794,11 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
 {
     jl_value_t *res = NULL;
     jl_savedenv_t se;
-    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                           e->invdepth, NULL, e->vars };
+    // Field order: var, lb, ub, existential, occurs_inv, occurs_cov, concrete,
+    // max_offset, dynamic_uses, diag_active, diag, constraintkind, intvalued,
+    // limited, intersected, widened_to_kind, depth0, innervars, prev.
+    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, u->diag,
+                           0, 0, 0, 0, 0, e->invdepth, NULL, e->vars };
     JL_GC_PUSH4(&res, &vb.lb, &vb.ub, &vb.innervars);
     save_env(e, &se, 1);
     int noinv = !var_occurs_invariant(u->body, u->var);
@@ -3600,20 +3813,26 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
     }
     else if (res != jl_bottom_type) {
         int constraint1 = vb.constraintkind;
-        if (vb.concrete || vb.occurs_inv>1 || (vb.occurs_inv && vb.occurs_cov))
-            vb.constraintkind = vb.concrete ? 1 : 2;
+        // diag_active acts like vb.concrete for constraint-strength purposes:
+        // a CONCRETE-marked typevar that has been activated at the usage site
+        // must be tied tightly (constraintkind=1) and re-intersected so its
+        // bounds correlate across positions, matching what master does for
+        // diagonal vars at intersect_unionall_'s pop.
+        int forced_concrete = vb.concrete || vb.diag_active;
+        if (forced_concrete || vb.occurs_inv>1 || (vb.occurs_inv && vb.occurs_cov))
+            vb.constraintkind = forced_concrete ? 1 : 2;
         else if (u->var->lb != jl_bottom_type)
             vb.constraintkind = 2;
         else if (vb.occurs_cov && noinv)
             vb.constraintkind = 1;
-        int reintersection = constraint1 != vb.constraintkind || vb.concrete;
+        int reintersection = constraint1 != vb.constraintkind || forced_concrete;
         if (reintersection) {
             if (constraint1 == 1) {
                 vb.lb = vb.var->lb;
                 vb.ub = vb.var->ub;
             }
             restore_env(e, &se, vb.constraintkind == 1 ? 1 : 0);
-            vb.occurs_cov = vb.occurs_inv = 0;
+            vb.occurs_cov = vb.occurs_inv = vb.dynamic_uses = vb.diag_active = 0;
             res = intersect_unionall_(t, u, e, R, param, &vb);
         }
     }
@@ -3625,7 +3844,7 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
             if (is_leaf_bound(vb.ub)) {
                 restore_env(e, &se, 1);
                 vb.lb = vb.var->lb;
-                vb.occurs_cov = vb.occurs_inv = 0;
+                vb.occurs_cov = vb.occurs_inv = vb.dynamic_uses = 0;
                 res = intersect_unionall_(t, u, e, R, param, &vb);
             }
         }
@@ -3636,7 +3855,7 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
             vb.ub = vb.var->ub;
             vb.constraintkind = 0;
             vb.widened_to_kind = 0;
-            vb.occurs_cov = vb.occurs_inv = 0;
+            vb.occurs_cov = vb.occurs_inv = vb.dynamic_uses = 0;
             res = intersect_unionall_(t, u, e, R, param, &vb);
         }
     }
@@ -4146,14 +4365,17 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_par
                 jl_value_t *ylb = yy ? yy->lb : ((jl_tvar_t*)y)->lb;
                 jl_value_t *yub = yy ? yy->ub : ((jl_tvar_t*)y)->ub;
                 if (xx && yy && xx->depth0 != yy->depth0) {
-                    record_var_occurrence(xx, e, param);
-                    record_var_occurrence(yy, e, param);
+                    if (!record_var_occurrence(xx, e, param) ||
+                        !record_var_occurrence(yy, e, param))
+                        return jl_bottom_type;
                     return subtype_in_env(yy->ub, yy->lb, e) ? y : jl_bottom_type;
                 }
                 if (xub == xlb && jl_is_typevar(xub)) {
-                    record_var_occurrence(xx, e, param);
+                    if (!record_var_occurrence(xx, e, param))
+                        return jl_bottom_type;
                     if (y == xub) {
-                        record_var_occurrence(yy, e, param);
+                        if (!record_var_occurrence(yy, e, param))
+                            return jl_bottom_type;
                         return y;
                     }
                     if (R) flip_offset(e);
@@ -4162,14 +4384,16 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_par
                     return res;
                 }
                 if (yub == ylb && jl_is_typevar(yub)) {
-                    record_var_occurrence(yy, e, param);
+                    if (!record_var_occurrence(yy, e, param))
+                        return jl_bottom_type;
                     if (R) flip_offset(e);
                     jl_value_t *res = intersect(x, yub, e, param);
                     if (R) flip_offset(e);
                     return res;
                 }
-                record_var_occurrence(xx, e, param);
-                record_var_occurrence(yy, e, param);
+                if (!record_var_occurrence(xx, e, param) ||
+                    !record_var_occurrence(yy, e, param))
+                    return jl_bottom_type;
                 int xoffset = R ? -e->Loffset : e->Loffset;
                 if (!jl_is_type(ylb) && !jl_is_typevar(ylb)) {
                     if (xx)
@@ -4254,18 +4478,21 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_par
                 return xoffset < 0 ? x : y;
             }
             assert(e->Loffset == 0);
-            record_var_occurrence(xx, e, param);
-            record_var_occurrence(yy, e, param);
+            if (!record_var_occurrence(xx, e, param) ||
+                !record_var_occurrence(yy, e, param))
+                return jl_bottom_type;
             if (xx && yy && xx->concrete && !yy->concrete) {
                 return intersect_var((jl_tvar_t*)x, y, e, R, param);
             }
             return intersect_var((jl_tvar_t*)y, x, e, !R, param);
         }
-        record_var_occurrence(lookup(e, (jl_tvar_t*)x), e, param);
+        if (!record_var_occurrence(lookup(e, (jl_tvar_t*)x), e, param))
+            return jl_bottom_type;
         return intersect_var((jl_tvar_t*)x, y, e, 0, param);
     }
     if (jl_is_typevar(y)) {
-        record_var_occurrence(lookup(e, (jl_tvar_t*)y), e, param);
+        if (!record_var_occurrence(lookup(e, (jl_tvar_t*)y), e, param))
+            return jl_bottom_type;
         return intersect_var((jl_tvar_t*)y, x, e, 1, param);
     }
     if (e->Loffset == 0 && !jl_has_free_typevars(x) && !jl_has_free_typevars(y)) {
@@ -4458,7 +4685,12 @@ static int merge_env(jl_stenv_t *e, jl_savedenv_t *me, jl_savedenv_t *se, int co
         // merge max_offset by min
         if (!v->intersected && v->max_offset < me->buf[m+2])
             me->buf[m+2] = v->max_offset;
-        m = m + 3;
+        // merge dynamic_uses and diag_active by max (monotonic-on-set across union arms)
+        if (v->dynamic_uses > me->buf[m+3])
+            me->buf[m+3] = v->dynamic_uses;
+        if (v->diag_active > me->buf[m+4])
+            me->buf[m+4] = v->diag_active;
+        m = m + 5;
         n = n + 3;
         v = v->prev;
     }
@@ -5009,7 +5241,8 @@ static jl_value_t *_widen_diagonal(jl_value_t *t, jl_varbinding_t *troot) {
 
 static jl_value_t *widen_diagonal(jl_value_t *t, jl_unionall_t *u, jl_varbinding_t *troot)
 {
-    jl_varbinding_t vb = { u->var, NULL, NULL, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, NULL, troot };
+    jl_varbinding_t vb = { u->var, NULL, NULL, 1, 0, 0, 0, 0, 0, 0, u->diag,
+                           0, 0, 0, 0, 0, 0, NULL, troot };
     jl_value_t *nt = NULL;
     JL_GC_PUSH2(&vb.innervars, &nt);
     if (jl_is_unionall(u->body))

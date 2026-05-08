@@ -114,13 +114,8 @@ function test_diagonal()
     @test issub_strict(Tuple{String, Real, Ref{Number}},
                        (@UnionAll T Tuple{Union{T,String}, T, Ref{T}}))
 
-    # Under the static diagonal rule, T occurs in two covariant positions
-    # (inside the Union and as the second tuple slot) with no invariant
-    # occurrence, so the UnionAll is marked diagonal and Real (abstract)
-    # cannot bind T. Was previously accepted because dynamic counting only
-    # visits the actually-matched Union branch.
-    @test !issub(Tuple{String, Real},
-                 (@UnionAll T Tuple{Union{T,String}, T}))
+    @test issub_strict(Tuple{String, Real},
+                       (@UnionAll T Tuple{Union{T,String}, T}))
 
     @test !issub(      Tuple{Real, Real},
                        (@UnionAll T Tuple{Union{T,String}, T}))
@@ -1242,9 +1237,10 @@ let a = Tuple{Float64,T3,T4} where T4 where T3,
     b = Tuple{S2,Tuple{S3},S3} where S2 where S3
     I1 = typeintersect(a, b)
     I2 = typeintersect(b, a)
-    # Static diagonal rule treats S3 in `b` as concrete because it occurs in
-    # two covariant positions, so I2 (whose S3 is unconstrained) is no longer
-    # a subtype of b. The `I1 <: I2` previously broken case now succeeds.
+    # The static diagonal rule treats S3 in `b` as concrete because it
+    # occurs in two covariant positions, so I2 (whose S3 is unconstrained)
+    # is no longer a subtype of b. The `I1 <: I2` previously broken case
+    # now succeeds.
     @test I1 <: I2
     @test I2 <: I1
     @test I1 <: a

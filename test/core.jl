@@ -5466,6 +5466,25 @@ missing_tvar(::T...) where {T} = T
 @test missing_tvar(1, 2, 3) === Int
 @test_throws MethodError missing_tvar(1, 2, "3")
 
+# `<<:` forces a typevar diagonal at method dispatch, so a Union arm and a
+# bare-T occurrence cannot bind T to two different concrete types — the call
+# below must miss the method rather than match and fail at runtime with an
+# UndefVarError on the unbound static parameter.
+let
+    f_concrete(a::Union{Vector{T}, T}, b::T) where T <<: Any = T
+    @test_throws MethodError f_concrete(Int[1], "String")
+end
+
+# `<<:` also constrains nested where bindings via bound-consistency: when S
+# constrains T from below (S<:T) and T is forced concrete, the implicit Int<:T
+# check raised by validating S=Int counts toward T's diagonal-rule activation,
+# so T's lb gets joined with the outer y::T = String → Union{Int,String} (not
+# leaf), and dispatch must miss.
+let
+    g_concrete(x::S, y::T) where S <<: T where T <<: Any = T
+    @test_throws MethodError g_concrete(1, "string")
+end
+
 # issue #19059 - test for lowering of `let` with assignment not adding Box in simple cases
 contains_Box(e::GlobalRef) = (e.name === :Box)
 contains_Box(@nospecialize(e)) = false
@@ -8424,12 +8443,7 @@ end
 @test_throws ErrorException Core.Intrinsics.pointerref(Ptr{Vector{Int64}}(C_NULL), 1, 0)
 
 # #53034 (Union normalization for typevar elimination)
-# With the static diagonal rule, T occurs in two covariant positions (inside
-# the Union and as the second tuple slot) with no invariant occurrence, and
-# T's lower bound `Int` is leaf, so the UnionAll is marked diagonal — Any
-# (abstract) cannot bind T. Under T>:Integer the lower bound is abstract,
-# so the diagonal rule does not apply.
-@test_broken Tuple{Int,Any} <: Tuple{Union{Int,T},T} where {T>:Int}
+@test Tuple{Int,Any} <: Tuple{Union{Int,T},T} where {T>:Int}
 @test Tuple{Int,Any} <: Tuple{Union{Int,T},T} where {T>:Integer}
 # #53034 (Union normalization for Type elimination)
 @test Int isa Type{Union{Int,T2} where {T2<:T1}} where {T1}

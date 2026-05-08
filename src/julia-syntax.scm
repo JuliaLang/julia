@@ -467,13 +467,26 @@
                                          ;; each static param can see just the previous ones
                                          (cons (make-assignment (car t) (replace-vars (car sp) ren))
                                                assigns))))
+                           ;; 4-element argdata: types, sparams, location, diags.
+                           ;; The diag svec carries one UInt8 per sparam: 0xFF for
+                           ;; `auto` (use jl_type_unionall's static analysis), 1 for
+                           ;; `<<:` (CONCRETE), 2 for `>>:` (NEVER), 0 for explicit
+                           ;; DYNAMIC. jl_method_def consults this when wrapping
+                           ;; the argument tuple in UnionAlls so user-written
+                           ;; `<<:` / `>>:` annotations survive into the method
+                           ;; signature; auto runs the static rule.
                            (call (core svec) (call (core svec)
                                                    ,@(dots->vararg
                                                       (map (lambda (ty)
                                                              (replace-vars ty renames))
                                                            types)))
                                  (call (core svec) ,@temps)
-                                 (inert ,loc)))
+                                 (inert ,loc)
+                                 (call (core svec) ,@(map (lambda (sp)
+                                                            (let ((d (cadddr sp)))
+                                                              `(call (core UInt8)
+                                                                     ,(if (eq? d diag-auto) #xff d))))
+                                                          sparams))))
                           ,body))))
        (if (or (symbol? name) (globalref? name))
            `(block ,@generator (method ,name) (latestworld-if-toplevel) ,mdef (unnecessary ,name))  ;; return the function
@@ -4012,11 +4025,22 @@ f(x) = yt(x)
           (if iskw
               `(,(car types) ,(cadr types) ,closure-type ,@(cdddr types))
               `(,closure-type ,@(cdr types))))
-         (loc (caddddr te)))
+         (loc (caddddr te))
+         ;; Preserve the diag svec (5th argument of argdata svec, i.e. position
+         ;; 5 in the (call (core svec) types sparams loc diag) form) when it's
+         ;; present on `te`, and extend it with defaults for any newly-introduced
+         ;; closure-parameter sparams. Without this, `<<:` / `>>:` annotations
+         ;; on a method declared inside a closure would be silently dropped by
+         ;; closure-conversion.
+         (orig-diags (and (length> te 5) (cddr (list-ref te 5))))
+         (extra-diags (map (lambda (_) `(call (core UInt8) #xff)) type-sp)))
     `(call (core svec)
            (call (core svec) ,@newtypes)
            (call (core svec) ,@(append (cddr (cadddr te)) type-sp))
-           ,loc)))
+           ,loc
+           ,@(if orig-diags
+                 (list `(call (core svec) ,@orig-diags ,@extra-diags))
+                 '()))))
 
 ;; collect all toplevel-butfirst expressions inside `e`, and return
 ;; (ex . stmts), where `ex` is the expression to evaluated and
