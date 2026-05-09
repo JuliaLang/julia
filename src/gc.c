@@ -1441,7 +1441,12 @@ static jl_taggedvalue_t **gc_sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t **allo
             }
             v = (jl_taggedvalue_t*)((char*)v + osize);
         }
-        assert(!freedall);
+        // gc_scrub_range (active under WITH_GC_DEBUG_ENV) conservatively marks any
+        // pool object found on a task stack, including slots past lim_newpages on the
+        // currently-active bump-pointer page. Those slots are unconditionally treated
+        // as garbage by the sweep (line above: `(char*)v >= lim_newpages`), so
+        // freedall=1 is valid when this is the active newpages page.
+        assert(!freedall || lim_newpages < data + GC_PAGE_SZ);
         pg->has_marked = has_marked;
         pg->has_young = has_young;
         if (pfl_begin) {
