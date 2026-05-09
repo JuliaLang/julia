@@ -2146,15 +2146,12 @@ static void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
     // Check context-specific conditions first, before jl_check_valid_supertype
     // which calls jl_subtype and would crash walking the supertype chain of a
     // type with super == NULL.
-    const char *error = NULL;
+    const char *type_name = jl_symbol_name(tt->name->name);
     if (tt->super != NULL)
-        error = "type already has a supertype";
-    else if (jl_is_datatype(super) && tt->name == ((jl_datatype_t*)super)->name)
-        error = "a type cannot subtype itself";
-    if (!error)
-        error = jl_check_valid_supertype(super);
-    if (error)
-         jl_errorf("invalid subtyping in definition of %s: %s.", jl_symbol_name(tt->name->name), error);
+        jl_errorf("invalid subtyping in definition of %s: type already has a supertype.", type_name);
+    if (jl_is_datatype(super) && tt->name == ((jl_datatype_t*)super)->name)
+        jl_errorf("invalid subtyping in definition of %s: a type cannot subtype itself.", type_name);
+    jl_check_valid_supertype(super, type_name);
     tt->super = (jl_datatype_t*)super;
     jl_gc_wb(tt, tt->super);
 }

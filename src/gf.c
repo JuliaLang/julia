@@ -1029,6 +1029,20 @@ jl_value_t *jl_typeinf_func JL_GLOBALLY_ROOTED = NULL;
 jl_value_t *jl_compile_and_emit_func JL_GLOBALLY_ROOTED = NULL;
 JL_DLLEXPORT size_t jl_typeinf_world = 1;
 
+// Force Compiler (and staticdata serialization) not to throw away Julia IR,
+// even when it is not needed for inlining, etc. - intended for debugging only
+static _Atomic(int8_t) jl_type_infer_preserve_ir = 0;
+
+JL_DLLEXPORT int8_t jl_get_type_infer_preserve_ir(void)
+{
+    return jl_atomic_load_relaxed(&jl_type_infer_preserve_ir);
+}
+
+JL_DLLEXPORT void jl_set_type_infer_preserve_ir(int8_t v)
+{
+    jl_atomic_store_relaxed(&jl_type_infer_preserve_ir, v);
+}
+
 JL_DLLEXPORT void jl_set_typeinf_func(jl_value_t *f)
 {
     jl_typeinf_func = (jl_value_t*)f;

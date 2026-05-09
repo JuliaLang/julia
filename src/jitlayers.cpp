@@ -1733,8 +1733,9 @@ JuliaOJIT::JuliaOJIT()
     ObjectLayer.addPlugin(std::make_unique<EHFrameRegistrationPlugin>(
         ExecutorAddr::fromPtr(JLEHFrames::registerEHFrameSectionAllocAction),
         ExecutorAddr::fromPtr(JLEHFrames::deregisterEHFrameSectionAllocAction)));
-#endif
+# else
     ObjectLayer.addPlugin(cantFail(EHFrameRegistrationPlugin::Create(ES)));
+# endif
 #endif
 
     ObjectLayer.addPlugin(DebuginfoPlugin);

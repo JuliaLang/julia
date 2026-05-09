@@ -501,22 +501,6 @@ function est_to_dst(st::SyntaxTree)
         end
         [K"generator" body iters...] ->
             @ast g st [K"generator" rec(body) _dst_iterspec(st, iters)]
-        [K"ncat" dim xs...] -> let
-            out = mknode(st, mapsyntax(rec, xs))
-            setattr!(out, :syntax_flags,
-                     JS.flags(st) | JS.set_numeric_flags(dim.value))
-        end
-        [K"nrow" dim xs...] -> let
-            out = mknode(st, mapsyntax(rec, xs))
-            setattr!(out, :syntax_flags,
-                     JS.flags(st) | JS.set_numeric_flags(dim.value))
-        end
-        [K"typed_ncat" t dim xs...] -> let
-            out_cs = pushfirst!(mapsyntax(rec, xs), rec(t))
-            out = mknode(st, out_cs)
-            setattr!(out, :syntax_flags,
-                     JS.flags(st) | JS.set_numeric_flags(dim.value))
-        end
         ([K"=" l r], when=(is_eventually_call(l))) -> let
             # no fix_arglist needed, since this func can't be anonymous
             l = apply_arglist_meta(l, collect_body_arg_meta(r))
@@ -553,13 +537,6 @@ function est_to_dst(st::SyntaxTree)
         end
         ([K"let" binds body], when=(kind(binds) !== K"block")) ->
             @ast g st [K"let" [K"block"(binds) rec(binds)] rec(body)]
-        [K"struct" mut sig body] -> let
-            flags = JS.flags(st) | (_is_false(mut) ? 0x0000 : JS.MUTABLE_FLAG)
-            @ast g st [K"struct"(syntax_flags=flags)
-                rec(sig)
-                rec(body)
-            ]
-        end
         (_, when=(kind(st) in KSet"using import")) -> let
             # dot_importpath = (. _...)
             # as_or_dotip = dot_importpath | (as dot_importpath name)

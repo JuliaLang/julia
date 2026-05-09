@@ -1624,7 +1624,7 @@ AbstractIterationResult(cti::Vector{Any}, info::MaybeAbstractIterationInfo) =
 function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft), @nospecialize(typ),
                                 vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
     if isa(typ, PartialStruct)
-        widet = typ.typ
+        widet = unwrap_unionall(typ.typ)
         if isa(widet, DataType)
             if widet.name === Tuple.name
                 return Future(AbstractIterationResult(typ.fields, nothing))
