@@ -873,14 +873,14 @@ const char *jl_debuginfo_file1(jl_debuginfo_t *debuginfo)
 // File name and line number of first line
 const char *jl_debuginfo_firstline(jl_debuginfo_t *debuginfo, int* line)
 {
-    jl_debuginfo_t *linetable = debuginfo->linetable;
-    while ((jl_value_t*)linetable != jl_nothing) {
-        debuginfo = linetable;
+    jl_value_t *linetable = (jl_value_t*)debuginfo;
+    while (jl_is_debuginfo(linetable)) {
+        debuginfo = (jl_debuginfo_t*)linetable;
         linetable = debuginfo->linetable;
     }
     if (line) {
-        struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo->codelocs, 0);
-        *line = lineidx.line;
+        struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, 0);
+        *line = lineidx.loc;
     }
     return jl_debuginfo_file1(debuginfo);
 }
@@ -917,16 +917,16 @@ static void jl_fprint_debugloc(ios_t *s, jl_debuginfo_t *debuginfo, jl_value_t *
 {
     if (!jl_is_symbol(debuginfo->def)) // this is a path or
         func = debuginfo->def; // this is inlined code
-    struct jl_codeloc_t stmt = jl_uncompress1_codeloc(debuginfo->codelocs, ip);
+    struct jl_codeloc_t stmt = jl_uncompress1_codeloc(debuginfo, ip);
     intptr_t edges_idx = stmt.to;
     if (edges_idx) {
         jl_debuginfo_t *edge = (jl_debuginfo_t*)jl_svecref(debuginfo->edges, edges_idx - 1);
         assert(jl_typetagis(edge, jl_debuginfo_type));
         jl_fprint_debugloc(s, edge, NULL, stmt.pc, 1);
     }
-    intptr_t ip2 = stmt.line;
-    if (ip2 >= 0 && ip > 0 && (jl_value_t*)debuginfo->linetable != jl_nothing) {
-        jl_fprint_debugloc(s, debuginfo->linetable, func, ip2, 0);
+    intptr_t ip2 = stmt.loc;
+    if (ip2 >= 0 && ip > 0 && jl_is_debuginfo(debuginfo->linetable)) {
+        jl_fprint_debugloc(s, (jl_debuginfo_t*)debuginfo->linetable, func, ip2, 0);
     }
     else {
         if (ip2 < 0) // set broken debug info to ignored
