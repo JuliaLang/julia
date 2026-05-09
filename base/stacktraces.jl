@@ -117,7 +117,7 @@ end
 # within `debuginfo.edges[to]`'s CodeInfo. To traverse nested inlinings, the
 # caller must follow the edge and call this again with `(edges[to], next_pc)`.
 debuginfo_codeloc(debuginfo::Core.DebugInfo, pc::Integer) =
-    @ccall jl_uncompress1_codeloc(debuginfo.codelocs::Any, pc::Csize_t)::NTuple{3,Int32}
+    @ccall jl_uncompress1_codeloc(debuginfo::Any, pc::Csize_t)::NTuple{3,Int32}
 
 """
     lookup(pointer::Ptr{Cvoid})::Vector{StackFrame}

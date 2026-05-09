@@ -236,14 +236,14 @@ JL_DLLEXPORT extern const jl_callptr_t jl_f_opaque_closure_call_addr;
 JL_DLLEXPORT extern const jl_callptr_t jl_fptr_wait_for_compiled_addr;
 
 struct jl_codeloc_t {
-    int32_t line;
+    int32_t loc;
     int32_t to;
     int32_t pc;
 };
 
 typedef struct _jl_debuginfo_t {
     jl_value_t *def;
-    struct _jl_debuginfo_t *linetable; // or nothing
+    jl_value_t *linetable; // debuginfo or nothing
     jl_svec_t *edges; // Memory{DebugInfo}
     jl_value_t *codelocs; // String // Memory{UInt8} // compressed info
 } jl_debuginfo_t;
@@ -1649,6 +1649,7 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 #define jl_genericmemory_isatomic(a) (((jl_datatype_t*)jl_typetagof(a))->layout->flags.arrayelem_isatomic)
 #define jl_genericmemory_islocked(a) (((jl_datatype_t*)jl_typetagof(a))->layout->flags.arrayelem_islocked)
 #define jl_is_array_any(v)    jl_typetagis(v,jl_array_any_type)
+#define jl_is_debuginfo(v)    jl_typetagis(v,jl_debuginfo_type)
 
 JL_DLLEXPORT int jl_subtype(jl_value_t *a, jl_value_t *b);
 
@@ -2293,9 +2294,9 @@ JL_DLLEXPORT uint8_t jl_ir_slotflag(jl_value_t *data, size_t i) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_compress_argnames(jl_array_t *syms);
 JL_DLLEXPORT jl_array_t *jl_uncompress_argnames(jl_value_t *syms);
 JL_DLLEXPORT jl_value_t *jl_uncompress_argname_n(jl_value_t *syms, size_t i);
-JL_DLLEXPORT struct jl_codeloc_t jl_uncompress1_codeloc(jl_value_t *cl, size_t pc) JL_NOTSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_compress_codelocs(int32_t firstline, jl_value_t *codelocs, size_t nstmts);
-JL_DLLEXPORT jl_value_t *jl_uncompress_codelocs(jl_value_t *cl, size_t nstmts);
+JL_DLLEXPORT struct jl_codeloc_t jl_uncompress1_codeloc(jl_debuginfo_t *di, size_t pc) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_compress_codelocs(int32_t firstloc, jl_value_t *codelocs, size_t nstmts);
+JL_DLLEXPORT jl_value_t *jl_uncompress_codelocs(jl_debuginfo_t *di, size_t nstmts);
 JL_DLLEXPORT uint8_t jl_encode_inlining_cost(uint16_t inlining_cost) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint16_t jl_decode_inlining_cost(uint8_t inlining_cost) JL_NOTSAFEPOINT;
 
