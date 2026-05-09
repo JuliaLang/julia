@@ -237,26 +237,26 @@ function serialize(s::AbstractSerializer, x::Symbol)
     nothing
 end
 
-# can be serialized as blob-of-bytes (maybe with type tag region), rather than
-# as each element independently. see also: doc/src/devdocs/isbitsunionarrays.md
-function _can_blob_eltype(@nospecialize T::Type)
-    return Base.isbitsunion(T) ||
-        (T isa DataType && isconcretetype(T) && Base.datatype_pointerfree(T) && Base.allocatedinline(T))
+@generated function _serialize_bitsunion_tag(io::IO, ::T, ::Type{V}) where {T,V}
+    idx = findfirst(==(T), Base.uniontypes(V))
+    idx === nothing && return :(error("type ", $T, " is not a component of ", $V))
+    return :(write(io, UInt8($(idx - 1))); nothing)
 end
 
-function _bitsunion_pointers(a)
-    if isa(a, Array)
-        ref = getfield(a, :ref)
-        mem, elem_offset = ref.mem, Core.memoryrefoffset(ref) - 1
-    else
-        mem, elem_offset = a, 0
+function _serialize_bitsunion_array(s::AbstractSerializer, a)
+    U = eltype(a)
+    types = Base.uniontypes(U)
+    elsz = Base.elsize(a)
+    serialize(s, types)
+    serialize(s, elsz)
+    n = length(a)
+    GC.@preserve a unsafe_write(s.io, Ptr{UInt8}(pointer(a)), UInt(n * elsz))
+    for x in a
+        _serialize_bitsunion_tag(s.io, x, U)
     end
-    data_ptr = convert(Ptr{UInt8}, pointer(a))
-    tag_ptr = ccall(:jl_genericmemory_typetagdata, Ptr{UInt8}, (Any,), mem) + elem_offset
-    return data_ptr, tag_ptr
 end
 
-function serialize_array_data(s::IO, a)
+function _serialize_isbits_array(s::IO, a)
     require_one_based_indexing(a)
     isempty(a) && return 0
     n = length(a)
@@ -274,18 +274,13 @@ function serialize_array_data(s::IO, a)
             end
         end
         write(s, UInt8((UInt8(last) << 7) | count))
-    elseif Base.isbitsunion(elty)
-        data_ptr, tag_ptr = _bitsunion_pointers(a)
-        GC.@preserve a begin
-            unsafe_write(s, data_ptr, UInt(n * Base.elsize(a)))
-            unsafe_write(s, tag_ptr, UInt(n))
-        end
-    elseif isbitstype(elty)
+    else # isbits && !Bool
         write(s, a)
-    else # isconcretetype && datatype_pointerfree && allocatedinline
-        GC.@preserve a unsafe_write(s, pointer(a), UInt(n * Base.elsize(a)))
     end
 end
+
+serialize_array_data(s::AbstractSerializer, a) =
+    Base.isbitsunion(eltype(a)) ? _serialize_bitsunion_array(s, a) : _serialize_isbits_array(s.io, a)
 
 function serialize(s::AbstractSerializer, a::Array)
     serialize_cycle(s, a) && return
@@ -299,8 +294,8 @@ function serialize(s::AbstractSerializer, a::Array)
     else
         serialize(s, length(a))
     end
-    if _can_blob_eltype(elty)
-        serialize_array_data(s.io, a)
+    if isbitstype(elty) || Base.isbitsunion(elty)
+        serialize_array_data(s, a)
     else
         sizehint!(s.table, div(length(a),4))  # prepare for lots of pointers
         @inbounds for i in eachindex(a)
@@ -325,8 +320,8 @@ function serialize(s::AbstractSerializer, m::Memory)
     serialize_cycle_header(s, m) && return
     serialize(s, length(m))
     elty = eltype(m)
-    if _can_blob_eltype(elty)
-        serialize_array_data(s.io, m)
+    if isbitstype(elty) || Base.isbitsunion(elty)
+        serialize_array_data(s, m)
     else
         sizehint!(s.table, div(length(m),4))  # prepare for lots of pointers
         @inbounds for i in eachindex(m)
@@ -1393,7 +1388,7 @@ else
 const OtherInt = Int64
 end
 
-function deserialize_array_data!(s::IO, a)
+function _deserialize_isbits_array!(s::IO, a)
     require_one_based_indexing(a)
     isempty(a) && return a
     n = length(a)
@@ -1410,19 +1405,71 @@ function deserialize_array_data!(s::IO, a)
                 i += 1
             end
         end
-    elseif Base.isbitsunion(elty)
-        data_ptr, tag_ptr = _bitsunion_pointers(a)
-        GC.@preserve a begin
-            unsafe_read(s, data_ptr, UInt(n * Base.elsize(a)))
-            unsafe_read(s, tag_ptr, UInt(n))
-        end
-    elseif isbitstype(elty)
+    else # isbits && !Bool
         read!(s, a)
-    else # isconcretetype && datatype_pointerfree && allocatedinline
-        GC.@preserve a unsafe_read(s, pointer(a), UInt(n * Base.elsize(a)))
     end
     return a
 end
+
+function _deserialize_bitsunion_dynamic!(a, io::IO, src, src_stride::Int, n::Int, types_read::Vector)
+    @inbounds for i in 1:n
+        tag = read(io, UInt8)
+        Int(tag) < length(types_read) || error("invalid bits-union tag byte ", tag, " for eltype ", eltype(a))
+        T = types_read[Int(tag) + 1]::DataType
+        if sizeof(T) == 0
+            a[i] = T.instance
+        else
+            val = GC.@preserve src unsafe_load(Ptr{T}(pointer(src) + (i-1) * src_stride))
+            a[i] = val
+        end
+    end
+    nothing
+end
+
+@generated function _deserialize_bitsunion_ifelse!(a::AbstractArray{U}, io::IO, n::Int, elsz::Int) where {U}
+    types = Base.uniontypes(U)
+    length(types) > 32 && return :(error("unreachable"))
+    switch = :(error("invalid bits-union tag byte ", tag, " for eltype ", $U))
+    for (k, T) in Iterators.reverse(collect(enumerate(types)))
+        tag_val = UInt8(k - 1)
+        body = sizeof(T) == 0 ?
+            :(a[i] = $(T.instance)) :
+            :(a[i] = GC.@preserve a unsafe_load(Ptr{$T}(pointer(a) + (i-1) * elsz)))
+        switch = Expr(:elseif, :(tag == $tag_val), body, switch)
+    end
+    switch = Expr(:if, switch.args...)
+    quote
+        @inbounds for i in 1:n
+            tag = read(io, UInt8)
+            $switch
+        end
+    end
+end
+
+function _deserialize_bitsunion_array!(s::AbstractSerializer, a::AbstractArray{U}) where {U}
+    types_read = deserialize(s)::Vector
+    elsz_read = deserialize(s)::Int
+    elsz = Base.elsize(a)
+    n = length(a)
+    types_local = Base.uniontypes(U)
+    if elsz_read == elsz && types_read == types_local && length(types_local) <= 32
+        GC.@preserve a unsafe_read(s.io, Ptr{UInt8}(pointer(a)), UInt(n * elsz))
+        _deserialize_bitsunion_ifelse!(a, s.io, n, elsz)
+    elseif elsz_read == elsz
+        GC.@preserve a unsafe_read(s.io, Ptr{UInt8}(pointer(a)), UInt(n * elsz))
+        _deserialize_bitsunion_dynamic!(a, s.io, a, elsz, n, types_read)
+    else # would only be hit if bitsunion slot size changes, e.g. across Julia versions
+        buf = Vector{UInt8}(undef, n * elsz_read)
+        read!(s.io, buf)
+        tags = Vector{UInt8}(undef, n)
+        read!(s.io, tags)
+        _deserialize_bitsunion_dynamic!(a, IOBuffer(tags), buf, elsz_read, n, types_read)
+    end
+    return a
+end
+
+deserialize_array_data!(s::AbstractSerializer, a) =
+    (Base.isbitsunion(eltype(a)) ? _deserialize_bitsunion_array!(s, a) : _deserialize_isbits_array!(s.io, a); a)
 
 function deserialize_array(s::AbstractSerializer)
     slot = s.counter; s.counter += 1
@@ -1438,10 +1485,10 @@ function deserialize_array(s::AbstractSerializer)
             a = Vector{elty}(undef, d1)
             s.table[slot] = a
             return read!(s.io, a)
-        elseif _can_blob_eltype(elty) && (format_version(s) >= 31)
+        elseif Base.isbitsunion(elty) && (format_version(s) >= 31)
             a = Vector{elty}(undef, d1)
             s.table[slot] = a
-            deserialize_array_data!(s.io, a)
+            _deserialize_bitsunion_array!(s, a)
             return a
         end
         dims = (Int(d1),)
@@ -1450,10 +1497,10 @@ function deserialize_array(s::AbstractSerializer)
     else
         dims = convert(Dims, d1::Tuple{Vararg{OtherInt}})::Dims
     end
-    if isbitstype(elty) || (_can_blob_eltype(elty) && (format_version(s) >= 31))
+    if isbitstype(elty) || (Base.isbitsunion(elty) && format_version(s) >= 31)
         A = Array{elty, length(dims)}(undef, dims)
         s.table[slot] = A
-        deserialize_array_data!(s.io, A)
+        deserialize_array_data!(s, A)
         return A
     end
     A = Array{elty, length(dims)}(undef, dims)
@@ -1477,10 +1524,10 @@ function deserialize(s::AbstractSerializer, X::Type{Memory{T}} where T)
     slot = pop!(s.pending_refs) # e.g. deserialize_cycle
     n = deserialize(s)::Int
     elty = eltype(X)
-    if isbitstype(elty) || (_can_blob_eltype(elty) && (format_version(s) >= 31))
+    if isbitstype(elty) || (Base.isbitsunion(elty) && format_version(s) >= 31)
         A = X(undef, n)
         s.table[slot] = A
-        deserialize_array_data!(s.io, A)
+        deserialize_array_data!(s, A)
         return A
     end
     A = X(undef, n)

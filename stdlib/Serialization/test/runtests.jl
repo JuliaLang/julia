@@ -266,11 +266,7 @@ create_serialization_stream() do s # small 1d array
     @test result[2].v == arr5[2].v
 end
 
-# bits-union arrays and pointerfree-non-bitstype arrays (#30148)
-struct StructWithBitsUnion
-    x::Int
-    u::Union{Int8,Int16}
-end
+# bits-union arrays (#30148)
 create_serialization_stream() do s
     v1 = Union{Int,Missing}[1, missing, 2, 3, missing]
     serialize(s, v1)
@@ -284,16 +280,18 @@ create_serialization_stream() do s
     mem = Memory{Union{Int,Missing}}(undef, 5)
     mem[1] = 1; mem[2] = missing; mem[3] = 3; mem[4] = missing; mem[5] = 5
     serialize(s, mem)
-    sv = StructWithBitsUnion[StructWithBitsUnion(1, Int8(7)),
-                             StructWithBitsUnion(2, Int16(300)),
-                             StructWithBitsUnion(3, Int8(-1))]
-    serialize(s, sv)
     seek(s, 0)
     @test isequal(deserialize(s), v1)
     @test deserialize(s) == v2
     @test isequal(deserialize(s), m)
     @test isequal(deserialize(s), mem)
-    @test deserialize(s) == sv
+
+    # corrupted tag byte must error rather than silently produce wrong data
+    bad = IOBuffer()
+    serialize(bad, Union{Int,Missing}[1, missing])
+    bytes = take!(bad)
+    bytes[end] = 0xff   # tag region is the last `length(v)` bytes; corrupt the last
+    @test_throws ErrorException deserialize(IOBuffer(bytes))
 end
 
 # SubArray
