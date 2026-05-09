@@ -746,7 +746,7 @@ function show_typeparams(io::IO, env::SimpleVector, orig::SimpleVector, wheres::
     nothing
 end
 
-function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector, wheres::Vector)
+function show_typealias_name(io::IO, name::GlobalRef)
     if !(get(io, :compact, false)::Bool)
         # Print module prefix unless alias is visible from module passed to
         # IOContext. If :module is not set, default to Main.
@@ -758,6 +758,11 @@ function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector, whe
         end
     end
     print(io, name.name)
+    return nothing
+end
+
+function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector, wheres::Vector)
+    show_typealias_name(io, name)
     isempty(env) && return
     io = IOContext(io)
     for p in wheres
