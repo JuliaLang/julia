@@ -237,10 +237,10 @@ function serialize(s::AbstractSerializer, x::Symbol)
     nothing
 end
 
-@generated function _serialize_bitsunion_tag(io::IO, ::T, ::Type{V}) where {T,V}
+@generated function _bitsunion_tag(::T, ::Type{V}) where {T,V}
     idx = findfirst(==(T), Base.uniontypes(V))
     idx === nothing && return :(error("type ", $T, " is not a component of ", $V))
-    return :(write(io, UInt8($(idx - 1))); nothing)
+    return :(UInt8($(idx - 1)))
 end
 
 function _serialize_bitsunion_array(s::AbstractSerializer, a)
@@ -251,9 +251,9 @@ function _serialize_bitsunion_array(s::AbstractSerializer, a)
     serialize(s, elsz)
     n = length(a)
     GC.@preserve a unsafe_write(s.io, Ptr{UInt8}(pointer(a)), UInt(n * elsz))
-    for x in a
-        _serialize_bitsunion_tag(s.io, x, U)
-    end
+    tag_buf = Vector{UInt8}(undef, n)
+    map!(x -> _bitsunion_tag(x, U), tag_buf, a)
+    write(s.io, tag_buf)
 end
 
 function _serialize_isbits_array(s::IO, a)
@@ -1400,6 +1400,7 @@ function _deserialize_isbits_array!(s::IO, a)
             v = (b >> 7) != 0
             count = b & 0x7f
             nxt = i + count
+            nxt <= n + 1 || throw(BoundsError(a, nxt - 1))
             while i < nxt
                 @inbounds a[i] = v
                 i += 1
@@ -1411,9 +1412,14 @@ function _deserialize_isbits_array!(s::IO, a)
     return a
 end
 
-function _deserialize_bitsunion_dynamic!(a, io::IO, src, src_stride::Int, n::Int, types_read::Vector)
+function _deserialize_bitsunion_dynamic!(a, tags::Vector{UInt8}, src, src_stride::Int, n::Int, types_read::Vector)
+    for T in types_read
+        # only hit if T is redefined between ser - de, but we'd prefer an error than illegal `unsafe_load`
+        T isa DataType && isconcretetype(T) && sizeof(T)::Int <= src_stride ||
+            error("incompatible layout for serialized type ", T)
+    end
     @inbounds for i in 1:n
-        tag = read(io, UInt8)
+        tag = tags[i]
         Int(tag) < length(types_read) || error("invalid bits-union tag byte ", tag, " for eltype ", eltype(a))
         T = types_read[Int(tag) + 1]::DataType
         if sizeof(T) == 0
@@ -1426,7 +1432,7 @@ function _deserialize_bitsunion_dynamic!(a, io::IO, src, src_stride::Int, n::Int
     nothing
 end
 
-@generated function _deserialize_bitsunion_ifelse!(a::AbstractArray{U}, io::IO, n::Int, elsz::Int) where {U}
+@generated function _deserialize_bitsunion_ifelse!(a::AbstractArray{U}, tags::Vector{UInt8}, n::Int, elsz::Int) where {U}
     types = Base.uniontypes(U)
     length(types) > 32 && return :(error("unreachable"))
     switch = :(error("invalid bits-union tag byte ", tag, " for eltype ", $U))
@@ -1440,7 +1446,7 @@ end
     switch = Expr(:if, switch.args...)
     quote
         @inbounds for i in 1:n
-            tag = read(io, UInt8)
+            tag = tags[i]
             $switch
         end
     end
@@ -1452,18 +1458,21 @@ function _deserialize_bitsunion_array!(s::AbstractSerializer, a::AbstractArray{U
     elsz = Base.elsize(a)
     n = length(a)
     types_local = Base.uniontypes(U)
-    if elsz_read == elsz && types_read == types_local && length(types_local) <= 32
+    if elsz_read == elsz
         GC.@preserve a unsafe_read(s.io, Ptr{UInt8}(pointer(a)), UInt(n * elsz))
-        _deserialize_bitsunion_ifelse!(a, s.io, n, elsz)
-    elseif elsz_read == elsz
-        GC.@preserve a unsafe_read(s.io, Ptr{UInt8}(pointer(a)), UInt(n * elsz))
-        _deserialize_bitsunion_dynamic!(a, s.io, a, elsz, n, types_read)
-    else # would only be hit if bitsunion slot size changes, e.g. across Julia versions
+        tags = Vector{UInt8}(undef, n)
+        read!(s.io, tags)
+        if types_read == types_local && length(types_local) <= 32
+            _deserialize_bitsunion_ifelse!(a, tags, n, elsz)
+        else
+            _deserialize_bitsunion_dynamic!(a, tags, a, elsz, n, types_read)
+        end
+    else
         buf = Vector{UInt8}(undef, n * elsz_read)
         read!(s.io, buf)
         tags = Vector{UInt8}(undef, n)
         read!(s.io, tags)
-        _deserialize_bitsunion_dynamic!(a, IOBuffer(tags), buf, elsz_read, n, types_read)
+        _deserialize_bitsunion_dynamic!(a, tags, buf, elsz_read, n, types_read)
     end
     return a
 end
