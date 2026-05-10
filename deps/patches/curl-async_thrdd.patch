@@ -1,0 +1,28 @@
+From 210c20f6a9a5fd901e0b518cf5a416bf2304a3b3 Mon Sep 17 00:00:00 2001
+From: Stefan Eissing <stefan@eissing.org>
+Date: Thu, 30 Apr 2026 16:53:02 +0200
+Subject: [PATCH] asyn-thrdd: fix result processing without wakeup socketpair
+
+When building curl 8.20.0 with socketpair disabled, there is no
+wakeup socket and the resolve results are not processed.
+
+This fix performs result processing in the absence of a wakeup
+socket before checking the resolve result.
+---
+ lib/asyn-thrdd.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/lib/asyn-thrdd.c b/lib/asyn-thrdd.c
+index 90f055c2a159..477075590682 100644
+--- a/lib/asyn-thrdd.c
++++ b/lib/asyn-thrdd.c
+@@ -701,6 +701,9 @@ CURLcode Curl_async_take_result(struct Curl_easy *data,
+   if(thrdd->rr.channel)
+     (void)Curl_ares_perform(thrdd->rr.channel, 0);
+ #endif
++#ifndef ENABLE_WAKEUP
++  Curl_async_thrdd_multi_process(data->multi);
++#endif
+ 
+   if(!async->done)
+     return CURLE_AGAIN;
