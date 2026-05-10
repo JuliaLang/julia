@@ -2059,7 +2059,7 @@ static void method_overwrite(jl_typemap_entry_t *newentry, jl_method_t *oldvalue
         dt = jl_nth_argument_datatype(oldvalue->sig, 3);
     int anon = dt && is_anonfn_typename(jl_symbol_name(dt->name->name));
     if ((jl_options.warn_overwrite == JL_OPTIONS_WARN_OVERWRITE_ON) ||
-        (jl_options.warn_overwrite == JL_OPTIONS_WARN_OVERWRITE_AUTO && oldmod != newmod) ||
+        (jl_options.warn_overwrite == JL_OPTIONS_WARN_OVERWRITE_DEFAULT && oldmod != newmod) ||
         (jl_options.incremental && jl_generating_output()) || anon) {
         JL_STREAM *s = JL_STDERR;
         jl_printf(s, "WARNING: Method definition ");

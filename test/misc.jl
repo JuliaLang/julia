@@ -99,14 +99,14 @@ let
         WARNING: Method definition f() in module Main at none:2 overwritten at none:3.
         WARNING: Method definition g() in module Main at none:4 overwritten on the same line.
         """
-    # default (auto): warn on cross-module overwrites and anonymous functions
+    # default: warn on cross-module overwrites and anonymous functions
     warning_str = read(`$exename --startup-file=no -e $script`, String)
     @test warning_str == """
         WARNING: Method definition f() in module A at none:2 overwritten in module Main on the same line (check for duplicate calls to `include`).
         WARNING: Method definition g() in module Main at none:4 overwritten on the same line.
         """
-    # --warn-overwrite=auto: same as default
-    warning_str = read(`$exename --warn-overwrite=auto --startup-file=no -e $script`, String)
+    # --warn-overwrite=default: same as default
+    warning_str = read(`$exename --warn-overwrite=default --startup-file=no -e $script`, String)
     @test warning_str == """
         WARNING: Method definition f() in module A at none:2 overwritten in module Main on the same line (check for duplicate calls to `include`).
         WARNING: Method definition g() in module Main at none:4 overwritten on the same line.
@@ -116,7 +116,7 @@ let
     @test warning_str == """
         WARNING: Method definition g() in module Main at none:4 overwritten on the same line.
         """
-    # same-module overwrite: no warning with auto
+    # same-module overwrite: no warning with default
     same_mod_script = """
         $redir_err
         f(x) = 5*x
@@ -124,7 +124,7 @@ let
         """
     warning_str = read(`$exename --startup-file=no -e $same_mod_script`, String)
     @test warning_str == ""
-    # cross-module overwrite: warning with auto
+    # cross-module overwrite: warning with default
     cross_mod_script = """
         $redir_err
         module B; h(x) = 1; end

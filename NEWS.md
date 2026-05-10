@@ -41,9 +41,10 @@ Command-line option changes
 ---------------------------
 
   - `-P <project>` is now a shorthand for `--project <project>` ([#59867]).
-  - The `--warn-overwrite` option now accepts the new default `auto` in addition to `yes`
-    and `no`. In this mode, warnings are shown only when a method is overwritten by a
-    different module, which is the case that errors during precompilation ([#61388]).
+  - The `--warn-overwrite` option gains a new value `default` (now the default), in addition
+    to `yes` and `no`. Under `default`, warnings are emitted only for cross-module method
+    overwrites — typically unintentional cases such as method piracy or package conflicts
+    ([#61388]).
 
 Multi-threading changes
 -----------------------
