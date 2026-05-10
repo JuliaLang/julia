@@ -159,6 +159,16 @@ rand_generic(r::AbstractRNG, ::Type{Int64})  = rand(r, UInt64) % Int64
 rand(r::AbstractRNG, ::SamplerType{Complex{T}}) where {T<:Real} =
     complex(rand(r, T), rand(r, T))
 
+# Fast path: a packed Array{Complex{T}} has the same memory layout as a
+# length-2N Array{T}, so reuse the bulk rand! for T (which is typically SIMD
+# vectorized) instead of falling back to the per-element scalar method above.
+# `reinterpret` is the supported, alias-safe view; the bulk dispatches accept
+# `NonReshapedReinterpretArray` over a contiguous parent.
+function rand!(r::AbstractRNG, A::Array{Complex{T}}, ::SamplerType{Complex{T}}) where {T<:Base.HWReal}
+    rand!(r, reinterpret(T, A))
+    return A
+end
+
 ### random characters
 
 # returns a random valid Unicode scalar value (i.e. 0 - 0xd7ff, 0xe000 - # 0x10ffff)
