@@ -967,3 +967,21 @@ end
 
 mapreduce_impl(f::F, op::OP, A::AbstractArrayOrBroadcasted, ifirst::SCartesianIndex2, ilast::SCartesianIndex2) where {F,OP} =
     mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
+
+# Fast path for `NTuple{N,E}(::Union{Array,Memory})` with `N >= 32`. The default
+# All32 dispatch in tuple.jl `collect`s into an intermediate `Vector` and splats;
+# for an isbits eltype matching the input, the storage is layout-identical to
+# the tuple, so a single `reinterpret` view + scalar load suffices. The body is
+# O(1) in N (length check + one load), so it does not reintroduce the per-N
+# codegen blowup the All32 cap is designed to avoid. Lives here rather than in
+# tuple.jl because `reinterpret` on arrays is not yet defined that early.
+function _totuple(T::Type{All32{E,N}}, itr::Union{Array,Memory}) where {E,N}
+    len = N + 32
+    length(itr) >= len || _totuple_err(T)
+    if isbitstype(E) && eltype(itr) === E
+        v = length(itr) == len ? itr : view(itr, 1:len)
+        return @inbounds reinterpret(T, v)[1]
+    end
+    elts = collect(E, Iterators.take(itr, len))
+    return (elts...,)
+end

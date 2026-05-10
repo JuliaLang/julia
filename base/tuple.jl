@@ -482,6 +482,9 @@ function _totuple(T::Type{All32{E,N}}, itr) where {E,N}
     (elts...,)
 end
 
+# fast path on Array/Memory lives in reinterpretarray.jl, since `reinterpret`
+# on arrays is not yet defined at this load point.
+
 _totuple(::Type{Tuple{Vararg{E}}}, itr, s...) where {E} = (collect(E, Iterators.rest(itr,s...))...,)
 
 _totuple(::Type{Tuple}, itr, s...) = (collect(Iterators.rest(itr,s...))...,)
