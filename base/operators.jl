@@ -1363,6 +1363,27 @@ end
 (s::Splat)(args) = s.f(args...)
 show(io::IO, s::Splat) = (print(io, "splat("); show(io, s.f); print(io, ")"))
 
+"""
+    tap(f)
+
+Create a function that calls `f(x)` and returns `x`.
+
+# Examples
+```jldoctest
+julia> 2 |> sqrt |> tap(println) |> inv
+1.4142135623730951
+0.7071067811865475
+
+julia> "hello" |> uppercase |> tap(Base.Fix1(println, stderr)) |> length
+HELLO
+5
+```
+
+!!! compat "Julia 1.14"
+    `tap` requires at least Julia 1.14.
+"""
+tap(f) = x -> (f(x); x)
+
 ## in and related operators
 
 """
@@ -1382,23 +1403,18 @@ in(x, itr::Any) = any(==(x), itr)
 
 # Specialized variant of in for Tuple, which can generate typed comparisons for each element
 # of the tuple, skipping values that are statically known to be != at compile time.
-in(x, itr::Tuple) = _in_tuple(x, itr, false)
+in(x, itr::Tuple) = _in_tuple(x, itr)
+
 # This recursive function will be unrolled at compiletime, and will not generate separate
 # llvm-compiled specializations for each step of the recursion.
-function _in_tuple(x, @nospecialize(itr::Tuple), anymissing::Bool)
+function _in_tuple(x, @nospecialize(itr::Tuple), result = false)
     @inline
-    # Base case
-    if isempty(itr)
-        return anymissing ? missing : false
-    end
-    # Recursive case
+    isempty(itr) && return result
     v = (itr[1] == x)
-    if ismissing(v)
-        anymissing = true
-    elseif v
+    if v === true
         return true
     end
-    return _in_tuple(x, tail(itr), anymissing)
+    return _in_tuple(x, tail(itr), result | v)
 end
 
 # fallback to the loop implementation after some number of arguments to avoid inference blowup

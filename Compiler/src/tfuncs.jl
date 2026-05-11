@@ -95,7 +95,7 @@ add_tfunc(Core.throw_methoderror, 1, INT_INF, @nospecs((𝕃::AbstractLattice, x
 # if isexact is false, the actual runtime type may (will) be a subtype of t
 # if isconcrete is true, the actual runtime type is definitely concrete (unreachable if not valid as a typeof)
 # if istype is true, the actual runtime value will definitely be a type (e.g. this is false for Union{Type{Int}, Int})
-function instanceof_tfunc(@nospecialize(t), astag::Bool=false, @nospecialize(troot) = t)
+function instanceof_tfunc(@nospecialize(t), astag::Bool=false, @nospecialize(troot = t))
     if isa(t, Const)
         if isa(t.val, Type) && valid_as_lattice(t.val, astag)
             return t.val, true, isconcretetype(t.val), true
@@ -131,6 +131,14 @@ function instanceof_tfunc(@nospecialize(t), astag::Bool=false, @nospecialize(tro
                 # uninhabited with any runtime T that exists)
                 isexact = true
             end
+        end
+        # If this is a NamedTuple type with known names but an unknown tuple type
+        # parameter, use the length of the names to constrain the tuple type.
+        if t′′ isa DataType && t′′.name === _NAMEDTUPLE_NAME && t′′.parameters[1] isa Tuple && has_free_typevars(t′′)
+            names = t′′.parameters[1]::Tuple
+            n = length(names)
+            nt_bound = NamedTuple{names, T} where T<:NTuple{n, Any}
+            tr = typeintersect(tr, nt_bound)
         end
         return tr, isexact, isconcrete, istype
     elseif isa(t, Union)
@@ -371,8 +379,8 @@ end
 @nospecs function egal_tfunc(𝕃::ConstsLattice, x, y)
     if isa(x, Const) && isa(y, Const)
         return Const(x.val === y.val)
-    elseif (isa(x, Const) && y === typeof(x.val) && issingletontype(x)) ||
-           (isa(y, Const) && x === typeof(y.val) && issingletontype(y))
+    elseif (isa(x, Const) && y === typeof(x.val) && issingletontype(y)) ||
+           (isa(y, Const) && x === typeof(y.val) && issingletontype(x))
         return Const(true)
     end
     return egal_tfunc(widenlattice(𝕃), x, y)
@@ -776,6 +784,8 @@ add_tfunc(donotdelete, 0, INT_INF, @nospecs((𝕃::AbstractLattice, args...)->No
         return widenconditional(val)
     elseif setting === :type
         return Any
+    elseif setting === :blackbox
+        return widenconst(val)
     else
         return Bottom
     end
@@ -784,7 +794,7 @@ add_tfunc(compilerbarrier, 2, 2, compilerbarrier_tfunc, 5)
 add_tfunc(Core.finalizer, 2, 4, @nospecs((𝕃::AbstractLattice, args...)->Nothing), 5)
 
 @nospecs function compilerbarrier_nothrow(setting, val)
-    return isa(setting, Const) && contains_is((:type, :const, :conditional), setting.val)
+    return isa(setting, Const) && contains_is((:type, :const, :conditional, :blackbox), setting.val)
 end
 
 # more accurate typeof_tfunc for vararg tuples abstract only in length
@@ -2522,6 +2532,20 @@ function isdefined_effects(𝕃::AbstractLattice, argtypes::Vector{Any})
     return Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly)
 end
 
+function is_relocatable_ptr_field(ty, fld)
+    # Special case: these fields are not mutated, but they are the only native pointer fields
+    # that have relocations in staticdata.c, so they can change between processes.
+    if hasintersect(widenconst(ty), Core.TypeName) &&
+        (Const(:constfields) ⊑ fld || Const(fieldindex(Core.TypeName, :constfields)) ⊑ fld ||
+        Const(:atomicfields) ⊑ fld || Const(fieldindex(Core.TypeName, :atomicfields)) ⊑ fld)
+        return true
+    elseif hasintersect(widenconst(ty), DataType) &&
+        (Const(:layout) ⊑ fld || Const(fieldindex(DataType, :layout)) ⊑ fld)
+        return true
+    end
+    return false
+end
+
 function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospecialize(rt))
     length(argtypes) < 2 && return EFFECTS_THROWS
     obj = argtypes[1]
@@ -2533,8 +2557,12 @@ function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospeci
             noub=ALWAYS_FALSE)
     end
     # :consistent if the argtype is immutable
-    consistent = (is_immutable_argtype(obj) || is_mutation_free_argtype(obj)) ?
-        ALWAYS_TRUE : CONSISTENT_IF_INACCESSIBLEMEMONLY
+    if is_relocatable_ptr_field(argtypes[1], argtypes[2])
+        consistent = ALWAYS_FALSE
+    else
+        consistent = (is_immutable_argtype(obj) || is_mutation_free_argtype(obj)) ?
+            ALWAYS_TRUE : CONSISTENT_IF_INACCESSIBLEMEMONLY
+    end
     noub = ALWAYS_TRUE
     bcheck = getfield_boundscheck(argtypes)
     nothrow = getfield_nothrow(𝕃, argtypes, bcheck)
@@ -2551,7 +2579,7 @@ function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospeci
             noub = ALWAYS_FALSE
         end
     end
-    if hasintersect(widenconst(obj), Module)
+    if hasintersect(widenconst(obj), Module) || is_relocatable_ptr_field(argtypes[1], argtypes[2])
         # Modeled more precisely in abstract_eval_getglobal
         inaccessiblememonly = ALWAYS_FALSE
     elseif is_mutation_free_argtype(obj)

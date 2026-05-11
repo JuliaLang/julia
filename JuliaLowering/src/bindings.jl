@@ -98,13 +98,13 @@ function add_binding(bindings::Bindings, binding)
     push!(bindings.info, binding)
 end
 
-function _binding_id(id::Integer)
+function _binding_id(id::IdTag)
     id
 end
 
 function _binding_id(ex::SyntaxTree)
     @jl_assert kind(ex) == K"BindingId" ex
-    ex.var_id
+    ex.var_id::IdTag
 end
 
 function get_binding(bindings::Bindings, x)::BindingInfo
@@ -112,7 +112,7 @@ function get_binding(bindings::Bindings, x)::BindingInfo
 end
 
 function get_binding(ctx::AbstractLoweringContext, x)::BindingInfo
-    get_binding(ctx.bindings, x)
+    get_binding(ctx.bindings::Bindings, x)
 end
 
 function _new_binding(ctx::AbstractLoweringContext, srcref::SyntaxTree,
@@ -128,8 +128,7 @@ end
 
 # Create a new SSA binding
 function ssavar(ctx::AbstractLoweringContext, srcref, name="tmp")
-    nameref = newleaf(ctx, srcref, K"Identifier", name)
-    binding_ex(ctx, _new_binding(ctx, nameref, name, :local;
+    binding_ex(ctx, _new_binding(ctx, srcref, name, :local;
                                  is_ssa=true, is_internal=true))
 end
 

@@ -746,7 +746,7 @@ function show_typeparams(io::IO, env::SimpleVector, orig::SimpleVector, wheres::
     nothing
 end
 
-function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector, wheres::Vector)
+function show_typealias_name(io::IO, name::GlobalRef)
     if !(get(io, :compact, false)::Bool)
         # Print module prefix unless alias is visible from module passed to
         # IOContext. If :module is not set, default to Main.
@@ -758,6 +758,11 @@ function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector, whe
         end
     end
     print(io, name.name)
+    return nothing
+end
+
+function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector, wheres::Vector)
+    show_typealias_name(io, name)
     isempty(env) && return
     io = IOContext(io)
     for p in wheres
@@ -3034,6 +3039,8 @@ end
 nocolor(io::IO) = IOContext(io, :color => false)
 alignment_from_show(io::IO, x::Any) =
     textwidth(sprint(show, x, context=nocolor(io), sizehint=0))
+alignment_from_show(io::IO, x::AbstractString) =
+    textwidth(sprint(show, MIME"text/plain"(), x, context=nocolor(io), sizehint=0))
 
 """
 `alignment(io, X)` returns a tuple (left,right) showing how many characters are

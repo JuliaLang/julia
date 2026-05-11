@@ -83,6 +83,14 @@ module AbstractIrrationalExamples
     )
 end
 
+macro big_expr(n, x)
+    x = esc(x)
+    for _ in 1:n
+        x = :($x + 1 - 1)
+    end
+    x
+end
+
 @testset """threads_exec.jl with JULIA_NUM_THREADS == $(ENV["JULIA_NUM_THREADS"])""" begin
 
 @test Threads.threadid() == 1
@@ -1715,5 +1723,52 @@ end
 end
 
 include("threads_comprehensions.jl")
+
+# This test is designed to trigger the performance regression from #60241:
+#   Thread 1                           Thread 2
+#   --------                           --------
+#   call f()
+#     infer f(), g()
+#     emit LLVM IR f()
+#       set f() invoke
+#     emit LLVM IR g() (slow!)         call f()
+#       ...                              materialize f()
+#       ...                                emit trampoline for g()
+#                                        run f()
+#                                          tojlinvoke trampoline for g()
+#     call f()
+#       f() already materialized
+#
+# We can tell the trampoline was generated if calling f() with a large integer
+# allocates (the trampoline will box the integer).
+
+@testset "Race invoke trampolines" begin
+    for i=1:10
+        @eval begin
+            @noinline function g(x)
+                x = @big_expr(4000, x)
+                if x > 0
+                    f(x-1)
+                else
+                    0
+                end
+            end
+
+            @noinline function f(x)
+                if x > 0
+                    g(x-1)
+                else
+                    0
+                end
+            end
+
+            t = Threads.@spawn f(10)
+            f(10)
+            wait(t)
+        end
+
+        @test @eval @allocations(f(10000)) == 0
+    end
+end
 
 end # main testset

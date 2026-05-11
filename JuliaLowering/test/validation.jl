@@ -120,18 +120,25 @@ let
     end
 end
 
+@test !vst1_ok(Expr(:nothing))
+@test vst1_ok(Expr(:block, nothing))
+@test vst1_ok(Expr(:block, GlobalRef(Core, :nothing)))
+
 @test vst1_ok(Expr(:-->, 1))
 @test vst1_ok(Expr(:-->, 1, 2))
 @test vst1_ok(Expr(:-->, 1, 2, 3))
 
 @test vst1_ok(Expr(:const, :a, 1))
 
-# vst1_dot_rhs allows usually-invalid forms
-@testset "dot rhs forms" for rhs in [:_, :__, Symbol("#unused#"), :ccall, :cglobal]
+# vst1_dot_getproperty_rhs allows usually-invalid forms
+@testset "dot rhs forms" for rhs in [:_, :__, Symbol("#unused#"), :ccall, :cglobal, 1]
     @test vst1_ok(Expr(:., :Mod, rhs))
     @test vst1_ok(Expr(:., :Mod, Expr(:inert, rhs)))
     @test vst1_ok(Expr(:., :Mod, QuoteNode(rhs)))
+
     @test vst1_ok(Expr(:., :Mod, string(rhs)))
+    @test vst1_ok(Expr(:., :Mod, Expr(:inert, string(rhs))))
+    @test vst1_ok(Expr(:., :Mod, QuoteNode(string(rhs))))
 end
 
 @test vst1_ok(:(using Mod: cglobal))

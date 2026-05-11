@@ -128,12 +128,15 @@ function printvalue(f::Function, io::IO, value::Integer, sorted::Bool)
 end
 
 function printvalue(f::Function, io::IO, value::AbstractFloat, sorted::Bool)
+    # The early conversion here avoids invalidations from isnan/isinf
+    value = Float64(value)
+
     if isnan(value)
         Base.print(io, "nan")
     elseif isinf(value)
         Base.print(io, value > 0 ? "+inf" : "-inf")
     else
-        Base.print(io, Float64(value)) # TOML specifies IEEE 754 binary64 for float
+        Base.print(io, value) # TOML specifies IEEE 754 binary64 for float
     end
 end
 

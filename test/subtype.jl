@@ -1351,7 +1351,7 @@ end
 
 # Issue #19414
 let ex = try struct A19414 <: Base.AbstractSet end catch e; e end
-    @test isa(ex, ErrorException) && ex.msg == "invalid subtyping in definition of A19414: can only subtype data types."
+    @test isa(ex, ErrorException) && ex.msg == "invalid subtyping in definition of A19414: supertype `Base.AbstractSet{T}` has unbound type parameters."
 end
 
 # issue #20103, OP and comments
@@ -2525,6 +2525,24 @@ let T = Ref{NTuple{8, Ref{Union{Int, P}}}} where P,
     @test T <: Union{Int, S}
 end
 
+# issue #61602
+struct W61602{T, N} x::Array{T, N} end
+let A = W61602{T, 1} where T<:(Union{Missing, S} where S),
+    B = W61602{Union{Missing, T}} where T
+    C = W61602{Union{Missing, Int64}, 1}
+    @test C <: typeintersect(A, B)
+    @test C <: typeintersect(B, A)
+
+    D = Tuple{W61602{T, 1}, X} where {T<:(Union{Missing, S} where S), X}
+    E = Tuple{W61602{Union{Missing, T}}, T} where T
+    @test Tuple{C, String} <: D
+    @test !(Tuple{C, String} <: E)
+    @test Tuple{C, Int64} <: typeintersect(D, E)
+    @test Tuple{C, Int64} <: typeintersect(E, D)
+    @test_broken !(Tuple{C, String} <: typeintersect(D, E))
+    @test_broken !(Tuple{C, String} <: typeintersect(E, D))
+end
+
 # try to fool a greedy algorithm that picks X=Int, Y=String here
 @test Tuple{Ref{Union{Int,String}}, Ref{Union{Int,String}}} <: Tuple{Ref{Union{X,Y}}, Ref{X}} where {X,Y}
 @test Tuple{Ref{Union{Int,String,Missing}}, Ref{Union{Int,String}}} <: Tuple{Ref{Union{X,Y}}, Ref{X}} where {X,Y}
@@ -2865,3 +2883,4 @@ let tt = Tuple{typeof(JETLS509f),
 end
 @test !(Tuple{Union{Int16,Int8},Ref{Int16},Ref{Int16}} <: Tuple{<:Union{S,T},Ref{S},Ref{T}} where {S,T})
 @test !(Tuple{Ref{Int16},Ref{Int16},Union{Int16,Int8}} <: Tuple{Ref{S},Ref{T},<:Union{S,T}} where {S,T})
+@test Tuple{NTuple{2,Int}, Int8} <: Tuple{<:Union{NTuple{2,T},Tuple{S,T}}, <:T} where {S,T>:Int}
