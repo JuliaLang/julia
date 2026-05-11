@@ -580,6 +580,12 @@ struct DataTypeLayout
     # padding : 8;
 end
 
+function DataTypeLayout(dt::DataType)
+    layout = dt.layout::Ptr{Cvoid}
+    layout == C_NULL && throw(UndefRefError())
+    return unsafe_load(convert(Ptr{DataTypeLayout}, layout))
+end
+
 """
     Base.datatype_alignment(dt::DataType)::Int
 
@@ -587,13 +593,8 @@ Memory allocation minimum alignment for instances of this type.
 Can be called on any `isconcretetype`, although for Memory it will give the
 alignment of the elements, not the whole object.
 """
-function datatype_alignment(dt::DataType)
-    @_foldable_meta
-    layout = dt.layout::Ptr{Cvoid}
-    layout == C_NULL && throw(UndefRefError())
-    alignment = unsafe_load(convert(Ptr{DataTypeLayout}, layout)).alignment
-    return Int(alignment)
-end
+datatype_alignment(dt::DataType) = (@_foldable_meta; datatype_alignment(DataTypeLayout(dt)))
+datatype_alignment(dtl::DataTypeLayout) = Int(dtl.alignment)
 
 function uniontype_layout(@nospecialize T::Type)
     sz = RefValue{Csize_t}(0)
@@ -632,12 +633,8 @@ with no intervening padding bits (defined as bits whose value does not impact
 the semantic value of the instance itself).
 Can be called on any `isconcretetype`.
 """
-function datatype_haspadding(dt::DataType)
-    @_foldable_meta
-    dt.layout == C_NULL && throw(UndefRefError())
-    flags = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).flags
-    return flags & 1 == 1
-end
+datatype_haspadding(dt::DataType) = (@_foldable_meta; datatype_haspadding(DataTypeLayout(dt)))
+datatype_haspadding(dtl::DataTypeLayout) = dtl.flags & 1 == 1
 
 """
     Base.datatype_isbitsegal(dt::DataType)::Bool
@@ -647,12 +644,8 @@ of an instance of this type is equivalent to semantic egality of the instance it
 This may not be the case if the type contains pointers to other values whose egality is
 independent of their identity (e.g. immutable structs, some types, etc.).
 """
-function datatype_isbitsegal(dt::DataType)
-    @_foldable_meta
-    dt.layout == C_NULL && throw(UndefRefError())
-    flags = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).flags
-    return (flags & (1<<7)) != 0
-end
+datatype_isbitsegal(dt::DataType) = (@_foldable_meta; datatype_isbitsegal(DataTypeLayout(dt)))
+datatype_isbitsegal(dtl::DataTypeLayout) = (dtl.flags & (1<<7)) != 0
 
 """
     Base.datatype_nfields(dt::DataType)::UInt32
@@ -661,23 +654,16 @@ Return the number of fields known to this datatype's layout. This may be
 different from the number of actual fields of the type for opaque types.
 Can be called on any `isconcretetype`.
 """
-function datatype_nfields(dt::DataType)
-    @_foldable_meta
-    dt.layout == C_NULL && throw(UndefRefError())
-    return unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).nfields
-end
+datatype_nfields(dt::DataType) = (@_foldable_meta; datatype_nfields(DataTypeLayout(dt)))
+datatype_nfields(dtl::DataTypeLayout) = dtl.nfields
 
 """
     Base.datatype_npointers(dt::DataType)::Int
 
 Return the number of pointers in the layout of a datatype.
 """
-function datatype_npointers(dt::DataType)
-    @_foldable_meta
-    layout = dt.layout::Ptr{Cvoid}
-    layout == C_NULL && throw(UndefRefError())
-    return unsafe_load(convert(Ptr{DataTypeLayout}, layout)).npointers
-end
+datatype_npointers(dt::DataType) = (@_foldable_meta; datatype_npointers(DataTypeLayout(dt)))
+datatype_npointers(dtl::DataTypeLayout) = dtl.npointers
 
 """
     Base.datatype_pointerfree(dt::DataType)::Bool
@@ -699,12 +685,8 @@ Can be called on any `isconcretetype`.
 
 See also [`fieldoffset`](@ref).
 """
-function datatype_fielddesc_type(dt::DataType)
-    @_foldable_meta
-    dt.layout == C_NULL && throw(UndefRefError())
-    flags = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).flags
-    return (flags >> 1) & 3
-end
+datatype_fielddesc_type(dt::DataType) = (@_foldable_meta; datatype_fielddesc_type(DataTypeLayout(dt)))
+datatype_fielddesc_type(dtl::DataTypeLayout) = (dtl.flags >> 1) & 3
 
 """
     Base.datatype_arrayelem(dt::DataType)::Int
@@ -716,19 +698,11 @@ Can be called on any `isconcretetype`, but only meaningful on `Memory`.
 1 = isboxed
 2 = isbitsunion
 """
-function datatype_arrayelem(dt::DataType)
-    @_foldable_meta
-    dt.layout == C_NULL && throw(UndefRefError())
-    flags = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).flags
-    return (flags >> 3) & 3
-end
+datatype_arrayelem(dt::DataType) = (@_foldable_meta; datatype_arrayelem(DataTypeLayout(dt)))
+datatype_arrayelem(dtl::DataTypeLayout) = (dtl.flags >> 3) & 3
 
-function datatype_layoutsize(dt::DataType)
-    @_foldable_meta
-    dt.layout == C_NULL && throw(UndefRefError())
-    size = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).size
-    return size % Int
-end
+datatype_layoutsize(dt::DataType) = (@_foldable_meta; datatype_layoutsize(DataTypeLayout(dt)))
+datatype_layoutsize(dtl::DataTypeLayout) = dtl.size % Int
 
 
 # For type stability, we only expose a single struct that describes everything
