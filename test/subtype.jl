@@ -2927,6 +2927,12 @@ mutable struct _Sub61634b{T,F} <: _Abs61634b{T,F,2} end
 let e = only(intersection_env(Tuple{Ref}, Tuple{Ref{T}} where T)[2])
     @test e isa Core.SimpleVector && e[1] isa TypeVar && e[2]
 end
+let e = only(intersection_env(Tuple{Real}, Tuple{T} where T)[2])
+    @test e isa Core.SimpleVector && e[1] isa TypeVar && e[2]
+end
+let e = only(intersection_env(Tuple{Real}, Tuple{T} where T >: Int)[2])
+    @test e isa Core.SimpleVector && e[1] isa TypeVar && !e[2]
+end
 
 # This one is tricky - because the `E` is outside the `<:` and the diagonal rule applies,
 # the RHS quantifies over varargs of concrete types and `Tuple{Vararg{T}}` is not one of those.

@@ -84,8 +84,6 @@ typedef struct jl_varbinding_t {
     int8_t limited;
     int8_t intersected; // whether this variable has been intersected
     int8_t widened_to_kind;   // Type{X} was widened to a union of kinds
-    int8_t constrained; // 1 if every concrete subtype of the enclosing RHS type must
-                        // pin this var to a definite value (may be conservatively 0)
     int8_t tainted_inner; // 1 if this var's bounds reference a TypeVar from a vb that
                           // was pushed at depth0 *strictly greater* than this var's
                           // depth0 and has since been popped. Such "inner" tvars
@@ -780,13 +778,9 @@ static void record_var_occurrence(jl_varbinding_t *vb, jl_stenv_t *e, jl_param_p
         if (param == PARAM_INVARIANT && e->invdepth > vb->depth0) {
             if (vb->occurs_inv < 2)
                 vb->occurs_inv++;
-            if (vb->constrained == 0)
-                vb->constrained = 1;
         }
         else if (vb->occurs_cov < 2) {
             vb->occurs_cov++;
-            if (e->Runions.depth == 0 && vb->constrained)
-                vb->constrained = 1;
         }
         // Always set `max_offset` to `-1` during the 1st round intersection.
         // Would be recovered in `intersect_varargs`/`subtype_tuple_varargs` if needed.
@@ -1136,7 +1130,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
 {
     u = unalias_unionall(u, e);
     jl_value_t *new_tvar = NULL;
-    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                            e->invdepth, NULL, e->vars };
     JL_GC_PUSH5(&u, &vb.lb, &vb.ub, &vb.innervars, &new_tvar);
     e->vars = &vb;
@@ -1236,14 +1230,14 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
         jl_value_t *eff_ub = vb.ub;
         while (jl_is_typevar(eff_ub))
             eff_ub = ((jl_tvar_t*)eff_ub)->ub;
-        int eff_constrained = (vb.constrained == 1);
+        int eff_constrained = (vb.occurs_inv || (vb.occurs_cov && u->var->lb == jl_bottom_type));
         if (vb.intvalued && vb.lb == (jl_value_t*)jl_any_type)
             val = (jl_value_t*)jl_wrap_vararg(NULL, NULL, 0, 0); // special token result that represents N::Int in the envout
         else if (!vb.occurs_inv && vb.lb != jl_bottom_type) {
             if (is_leaf_bound(vb.lb)) {
                 val = vb.lb;
             } else {
-                val = wrap_tvar_env((jl_value_t*)jl_new_typevar(u->var->name, jl_bottom_type, vb.lb), 0);
+                val = wrap_tvar_env((jl_value_t*)jl_new_typevar(u->var->name, jl_bottom_type, vb.lb), eff_constrained);
             }
         }
         else if (vb.lb == vb.ub || vb.lb != jl_bottom_type)
@@ -3738,7 +3732,7 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
 {
     jl_value_t *res = NULL;
     jl_savedenv_t se;
-    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                            e->invdepth, NULL, e->vars };
     JL_GC_PUSH4(&res, &vb.lb, &vb.ub, &vb.innervars);
     save_env(e, &se, 1);
@@ -5164,7 +5158,7 @@ static jl_value_t *_widen_diagonal(jl_value_t *t, jl_varbinding_t *troot) {
 
 static jl_value_t *widen_diagonal(jl_value_t *t, jl_unionall_t *u, jl_varbinding_t *troot)
 {
-    jl_varbinding_t vb = { u->var, NULL, NULL, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, NULL, troot };
+    jl_varbinding_t vb = { u->var, NULL, NULL, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, NULL, troot };
     jl_value_t *nt = NULL;
     JL_GC_PUSH2(&vb.innervars, &nt);
     if (jl_is_unionall(u->body))
