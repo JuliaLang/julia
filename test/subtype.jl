@@ -144,9 +144,9 @@ function test_diagonal()
     @test  issub(Vector{Tuple{T, T} where Number<:T<:Number},
                  Vector{Tuple{Number, Number}})
 
-    @test !issub(Type{Tuple{T,Any} where T},   Type{Tuple{T,T}} where T)
+    @test  issub(Type{Tuple{T,Any} where T},   Type{Tuple{T,T}} where T)
     @test !issub(Type{Tuple{T,Any,T} where T}, Type{Tuple{T,T,T}} where T)
-    @test_broken issub(Type{Tuple{T} where T},       Type{Tuple{T}} where T)
+    @test  issub(Type{Tuple{T} where T},       Type{Tuple{T}} where T)
     @test  issub(Ref{Tuple{T} where T},        Ref{Tuple{T}} where T)
     @test !issub(Type{Tuple{T,T} where T},     Type{Tuple{T,T}} where T)
     @test !issub(Type{Tuple{T,T,T} where T},   Type{Tuple{T,T,T}} where T)
@@ -302,12 +302,12 @@ function test_3()
     @test issub_strict((@UnionAll T Tuple{Ref{T}, T}),
                        (@UnionAll T @UnionAll S>:T Tuple{Ref{T}, S}))
 
-    A = @UnionAll T Tuple{T,Ptr{T}}
-    B = @UnionAll T Tuple{Ptr{T},T}
+    A = Tuple{T,Ptr{T}} where T
+    B = Tuple{Ptr{T},T} where T
 
-    C = @UnionAll T>:Ptr @UnionAll S>:Ptr    Tuple{Ptr{T},Ptr{S}}
-    D = @UnionAll T>:Ptr @UnionAll S>:Ptr{T} Tuple{Ptr{T},Ptr{S}}
-    E = @UnionAll T>:Ptr @UnionAll S>:Ptr{T} Tuple{Ptr{S},Ptr{T}}
+    C = Tuple{Ptr{T},Ptr{S}} where {T>:Ptr, S>:Ptr}
+    D = Tuple{Ptr{T},Ptr{S}} where {T>:Ptr, S>:Ptr{T}}
+    E = Tuple{Ptr{S},Ptr{T}} where {T>:Ptr, S>:Ptr{T}}
 
     @test !issub(A, B)
     @test !issub(B, A)
@@ -2935,4 +2935,4 @@ end
 
 # TypeVar matching needs to distinguish these two cases
 @test Type{Ref{A} where A} <: Type{Ref{B} where B<:U} where U
-@test !(Type{Ref{A} where A} where L <: Type{Ref{A}}) where A
+@test !((Type{Ref{A} where A} where L) <: (Type{Ref{A}} where A))

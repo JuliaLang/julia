@@ -1683,24 +1683,51 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
                 jl_value_t *xlb = xx ? xx->lb : ((jl_tvar_t*)x)->lb;
                 jl_value_t *yub = yy ? yy->ub : ((jl_tvar_t*)y)->ub;
                 // find equivalence class for typevars during intersection
-                if (xub == xlb && jl_is_typevar(xub))
+                if ((jl_is_typevar(xub) && xub == xlb) ||
+                    !jl_is_type(xub))
                     return subtype(xub, y, e, param);
-                if (yub == ylb && jl_is_typevar(yub))
+                if ((jl_is_typevar(yub) && xub == xlb) ||
+                    !jl_is_type(yub))
                     return subtype(x, yub, e, param);
             }
             int xr = xx && xx->existential;  // treat free variables as "forall" (left)
             int yr = yy && yy->existential;
             if (xr) {
-                if (yy) record_var_occurrence(yy, e, param);
                 if (yr) {
-                    record_var_occurrence(xx, e, param);
-                    int trysub = e->intersection ? try_subtype_by_bounds(xx->lb, yy->ub, e) : 0;
-                    return trysub || subtype(xx->lb, yy->ub, e, PARAM_NONE);
+                    // TODO: Why is this sound?
+                    if (e->intersection && try_subtype_by_bounds(xx->lb, yy->ub, e))
+                        return 1;
+
+                    // Both variables are existential. We need to annotate the constraint
+                    // on the inner-most variable, so check which one that is.
+                    if (var_outside(e, (jl_tvar_t*)x, (jl_tvar_t*)y)) {
+                        record_var_occurrence(xx, e, param);
+                        return var_gt((jl_tvar_t*)y, x, e, param);
+                    }
                 }
+                if (yy) record_var_occurrence(yy, e, param);
                 return var_lt((jl_tvar_t*)x, y, e, param);
             }
             else if (yr) {
-                if (xx) record_var_occurrence(xx, e, param);
+                if (xx) {
+                    record_var_occurrence(xx, e, param);
+                    // This encodes the following:
+                    //
+                    // When we have `∀A ∃B, A <: B`, then the existence of
+                    // `B` depends on every particular choice of `A`
+                    // (in particular each choice of `A` may have a different
+                    // choice of `B`. We encode this as `B->lb = A`.
+                    //
+                    // However, `∃B ∀A` is different: This requires a single `B`
+                    // that works for all `A`. We encode this as `B->lb = A->ub`
+                    // (note that A's ub cannot change during the course of the
+                    // algorithm). Semantically, at each invariant depth, we push
+                    // all universal quantifiers before all existential qualifiers,
+                    // so asking which of these cases we're in is equivalent to
+                    // asking whether `B`'s depth is greater than `A`'s depth.
+                    if (yy && yy->depth0 < xx->depth0)
+                        return var_gt((jl_tvar_t*)y, xx->ub, e, param);
+                }
                 return var_gt((jl_tvar_t*)y, x, e, param);
             }
             // check ∀x,y . x<:y
