@@ -57,7 +57,7 @@ extern void* mmtk_alloc(void* mutator, size_t size, size_t align, size_t offset,
 extern void mmtk_post_alloc(void* mutator, void* refer, size_t bytes, int allocator);
 extern void mmtk_store_obj_size_c(void* obj, size_t size);
 extern void* MMTK_SIDE_LOG_BIT_BASE_ADDRESS;
-extern const void* MMTK_SIDE_VO_BIT_BASE_ADDRESS;
+extern void* MMTK_SIDE_VO_BIT_BASE_ADDRESS;
 
 // ========================================================================= //
 // GC Initialization and Control
