@@ -727,11 +727,11 @@ function sptype_for_tvar(vᵢ::TypeVar, output_tvar::TypeVar, sigtypes::Core.Sim
             end
         end
     end
-    ub = output_tvar.ub
+    ub = unwraptv_ub(output_tvar.ub)
     if has_free_typevars(ub)
         ub = Any
     end
-    lb = output_tvar.lb
+    lb = unwraptv_lb(output_tvar.lb)
     if has_free_typevars(lb)
         lb = Bottom
     end
