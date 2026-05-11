@@ -284,7 +284,7 @@ attributes #2 = { inaccessiblemem_or_argmemonly }
 
 
 ; COM: InstSimplify/InstCombine should kill this zext-trunc pair
-; AFTEREARLYSIMPLIFICATION: [[ZEXT:%.*]] = zext i1 {{%.*}} to i8
+; AFTEREARLYSIMPLIFICATION-NOT: [[ZEXT:%.*]] = zext i1 {{%.*}} to i8
 
 ; AFTEREARLYOPTIMIZATION-NOT: zext i1 {{%.*}} to i8
 

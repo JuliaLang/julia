@@ -160,6 +160,7 @@ wrap_func(e...) = Expr(:call,
 wrap_hard(e...) = Expr(:let, Expr(:block), Expr(:block, e...))
 
 decls(e...) = Expr(:block,
+                   :(name = false),
                    :(local lname = false),
                    :(global gname = false),
                    e...)
@@ -167,101 +168,148 @@ decls(e...) = Expr(:block,
 decls_none(e...) = decls(e...)
 decls_neutral(e...) = wrap_neutral(decls(), e...)
 decls_hard(e...) = :(let lname = false # takes a different code path in flisp
-                      global gname = false
-                      $(e...)
-                  end)
+                         name = false
+                         global gname = false
+                         $(e...)
+                     end)
 decls_func(e...) = :((function (argname::spname = false) where spname
+                          name = false
                           local lname = false
                           global gname = false
                           $(e...)
                       end)(#=called=#))
 
-lhs_names = (:lname, :gname, :argname, :spname)
+lhs_names = (:name, :lname, :gname, :argname, :spname)
+
+#=
+simple test that
+```
+distraction_scope_begin
+    local_scope_begin
+        lhs = "resolve me"
+        lhs *= '!'
+        lhs
+    local_scope_end
+distraction_scope_end === "resolve me!"
+```
+=#
+@testset "explicit locals and globals in local scope shadowing outer vars" begin
+    local jl_mod = Module()
+    local fl_mod = Module()
+
+    @testset for soft_mode in (false, true),
+        decls_s in (decls_func, decls_hard, decls_neutral, decls_none),
+        local_s in (wrap_func, wrap_hard, wrap_neutral),
+        lhs in lhs_names,
+        assign_ex in (:(local $lhs = "resolve me"; $lhs *= '!'; $lhs),
+                      :(global $lhs = "resolve me"; $lhs *= '!'; $lhs))
+
+        ex = decls_s(local_s(assign_ex))
+        soft_mode && (ex = enable_softscope(ex))
+
+        if lhs == :spname && decls_s == decls_func && assign_ex.args[1].head === :local
+            # flisp specifically disallows locals shadowing sparams; why?
+            @test_broken fl_eval(fl_mod, ex) === "resolve me!"
+        elseif lhs in (:spname, :argname) && decls_s != decls_func
+            continue
+        else
+            reference_ok = fl_eval(fl_mod, ex) === "resolve me!"
+            !reference_ok &&
+                @error("shadow test failed: flisp produced unexpected result; fix that or JL scope tests:\n", ex)
+            @test reference_ok
+        end
+
+        ok = expr_eval(jl_mod, ex) === "resolve me!"
+        !ok && @error("shadow test failed:\n", ex)
+        @test ok
+    end
+
+end
 
 # For each distinct outer scope, declaration scope, and assignment scope, and
 # each kind of variable (lhs_names) in the declaration scope, set the same name
 # to true from the inner scope
 @testset "Behaviour of `=` in local scope (shadow or assign-existing)" begin
     expected_outer_vals = Dict{Tuple{Bool, Function, Function, Function}, Tuple}(
-        (false, decls_func,    wrap_hard,    wrap_func   ) => (true,true,true),
-        (false, decls_func,    wrap_hard,    wrap_hard   ) => (true,true,true),
-        (false, decls_func,    wrap_hard,    wrap_neutral) => (true,true,true),
-        (false, decls_func,    wrap_neutral, wrap_func   ) => (true,true,true),
-        (false, decls_func,    wrap_neutral, wrap_hard   ) => (true,true,true),
-        (false, decls_func,    wrap_neutral, wrap_neutral) => (true,true,true),
-        (false, decls_func,    wrap_none,    wrap_func   ) => (true,true,true),
-        (false, decls_func,    wrap_none,    wrap_hard   ) => (true,true,true),
-        (false, decls_func,    wrap_none,    wrap_neutral) => (true,true,true),
-        (false, decls_hard,    wrap_hard,    wrap_func   ) => (true,true),
-        (false, decls_hard,    wrap_hard,    wrap_hard   ) => (true,true),
-        (false, decls_hard,    wrap_hard,    wrap_neutral) => (true,true),
-        (false, decls_hard,    wrap_neutral, wrap_func   ) => (true,true),
-        (false, decls_hard,    wrap_neutral, wrap_hard   ) => (true,true),
-        (false, decls_hard,    wrap_neutral, wrap_neutral) => (true,true),
-        (false, decls_hard,    wrap_none,    wrap_func   ) => (true,true),
-        (false, decls_hard,    wrap_none,    wrap_hard   ) => (true,true),
-        (false, decls_hard,    wrap_none,    wrap_neutral) => (true,true),
-        (false, decls_neutral, wrap_hard,    wrap_func   ) => (true,true),
-        (false, decls_neutral, wrap_hard,    wrap_hard   ) => (true,true),
-        (false, decls_neutral, wrap_hard,    wrap_neutral) => (true,true),
-        (false, decls_neutral, wrap_neutral, wrap_func   ) => (true,true),
-        (false, decls_neutral, wrap_neutral, wrap_hard   ) => (true,true),
-        (false, decls_neutral, wrap_neutral, wrap_neutral) => (true,true),
-        (false, decls_neutral, wrap_none,    wrap_func   ) => (true,true),
-        (false, decls_neutral, wrap_none,    wrap_hard   ) => (true,true),
-        (false, decls_neutral, wrap_none,    wrap_neutral) => (true,true),
-        (false, decls_none,    wrap_hard,    wrap_func   ) => (true,false),
-        (false, decls_none,    wrap_hard,    wrap_hard   ) => (true,false),
-        (false, decls_none,    wrap_hard,    wrap_neutral) => (true,false),
-        (false, decls_none,    wrap_neutral, wrap_func   ) => (true,false),
-        (false, decls_none,    wrap_neutral, wrap_hard   ) => (true,false),
-        (false, decls_none,    wrap_neutral, wrap_neutral) => (true,false),
-        (false, decls_none,    wrap_none,    wrap_func   ) => (true,false),
-        (false, decls_none,    wrap_none,    wrap_hard   ) => (true,false),
-        (false, decls_none,    wrap_none,    wrap_neutral) => (true,false),
-        (true,  decls_func,    wrap_hard,    wrap_func   ) => (true,true,true),
-        (true,  decls_func,    wrap_hard,    wrap_hard   ) => (true,true,true),
-        (true,  decls_func,    wrap_hard,    wrap_neutral) => (true,true,true),
-        (true,  decls_func,    wrap_neutral, wrap_func   ) => (true,true,true),
-        (true,  decls_func,    wrap_neutral, wrap_hard   ) => (true,true,true),
-        (true,  decls_func,    wrap_neutral, wrap_neutral) => (true,true,true),
-        (true,  decls_func,    wrap_none,    wrap_func   ) => (true,true,true),
-        (true,  decls_func,    wrap_none,    wrap_hard   ) => (true,true,true),
-        (true,  decls_func,    wrap_none,    wrap_neutral) => (true,true,true),
-        (true,  decls_hard,    wrap_hard,    wrap_func   ) => (true,true),
-        (true,  decls_hard,    wrap_hard,    wrap_hard   ) => (true,true),
-        (true,  decls_hard,    wrap_hard,    wrap_neutral) => (true,true),
-        (true,  decls_hard,    wrap_neutral, wrap_func   ) => (true,true),
-        (true,  decls_hard,    wrap_neutral, wrap_hard   ) => (true,true),
-        (true,  decls_hard,    wrap_neutral, wrap_neutral) => (true,true),
-        (true,  decls_hard,    wrap_none,    wrap_func   ) => (true,true),
-        (true,  decls_hard,    wrap_none,    wrap_hard   ) => (true,true),
-        (true,  decls_hard,    wrap_none,    wrap_neutral) => (true,true),
-        (true,  decls_neutral, wrap_hard,    wrap_func   ) => (true,true),
-        (true,  decls_neutral, wrap_hard,    wrap_hard   ) => (true,true),
-        (true,  decls_neutral, wrap_hard,    wrap_neutral) => (true,true),
-        (true,  decls_neutral, wrap_neutral, wrap_func   ) => (true,true),
-        (true,  decls_neutral, wrap_neutral, wrap_hard   ) => (true,true),
-        (true,  decls_neutral, wrap_neutral, wrap_neutral) => (true,true),
-        (true,  decls_neutral, wrap_none,    wrap_func   ) => (true,true),
-        (true,  decls_neutral, wrap_none,    wrap_hard   ) => (true,true),
-        (true,  decls_neutral, wrap_none,    wrap_neutral) => (true,true),
-        (true,  decls_none,    wrap_hard,    wrap_func   ) => (true,false),
-        (true,  decls_none,    wrap_hard,    wrap_hard   ) => (true,false),
-        (true,  decls_none,    wrap_hard,    wrap_neutral) => (true,false),
-        (true,  decls_none,    wrap_neutral, wrap_func   ) => (true,false),
-        (true,  decls_none,    wrap_neutral, wrap_hard   ) => (true,false),
-        (true,  decls_none,    wrap_neutral, wrap_neutral) => (true,true),
-        (true,  decls_none,    wrap_none,    wrap_func   ) => (true,false),
-        (true,  decls_none,    wrap_none,    wrap_hard   ) => (true,false),
-        (true,  decls_none,    wrap_none,    wrap_neutral) => (true,true),
+        (false, decls_func,    wrap_hard,    wrap_func   ) => (true,true,true,true),
+        (false, decls_func,    wrap_hard,    wrap_hard   ) => (true,true,true,true),
+        (false, decls_func,    wrap_hard,    wrap_neutral) => (true,true,true,true),
+        (false, decls_func,    wrap_neutral, wrap_func   ) => (true,true,true,true),
+        (false, decls_func,    wrap_neutral, wrap_hard   ) => (true,true,true,true),
+        (false, decls_func,    wrap_neutral, wrap_neutral) => (true,true,true,true),
+        (false, decls_func,    wrap_none,    wrap_func   ) => (true,true,true,true),
+        (false, decls_func,    wrap_none,    wrap_hard   ) => (true,true,true,true),
+        (false, decls_func,    wrap_none,    wrap_neutral) => (true,true,true,true),
+        (false, decls_hard,    wrap_hard,    wrap_func   ) => (true,true,true),
+        (false, decls_hard,    wrap_hard,    wrap_hard   ) => (true,true,true),
+        (false, decls_hard,    wrap_hard,    wrap_neutral) => (true,true,true),
+        (false, decls_hard,    wrap_neutral, wrap_func   ) => (true,true,true),
+        (false, decls_hard,    wrap_neutral, wrap_hard   ) => (true,true,true),
+        (false, decls_hard,    wrap_neutral, wrap_neutral) => (true,true,true),
+        (false, decls_hard,    wrap_none,    wrap_func   ) => (true,true,true),
+        (false, decls_hard,    wrap_none,    wrap_hard   ) => (true,true,true),
+        (false, decls_hard,    wrap_none,    wrap_neutral) => (true,true,true),
+        (false, decls_neutral, wrap_hard,    wrap_func   ) => (true,true,true),
+        (false, decls_neutral, wrap_hard,    wrap_hard   ) => (true,true,true),
+        (false, decls_neutral, wrap_hard,    wrap_neutral) => (true,true,true),
+        (false, decls_neutral, wrap_neutral, wrap_func   ) => (true,true,true),
+        (false, decls_neutral, wrap_neutral, wrap_hard   ) => (true,true,true),
+        (false, decls_neutral, wrap_neutral, wrap_neutral) => (true,true,true),
+        (false, decls_neutral, wrap_none,    wrap_func   ) => (true,true,true),
+        (false, decls_neutral, wrap_none,    wrap_hard   ) => (true,true,true),
+        (false, decls_neutral, wrap_none,    wrap_neutral) => (true,true,true),
+        (false, decls_none,    wrap_hard,    wrap_func   ) => (false,true,false),
+        (false, decls_none,    wrap_hard,    wrap_hard   ) => (false,true,false),
+        (false, decls_none,    wrap_hard,    wrap_neutral) => (false,true,false),
+        (false, decls_none,    wrap_neutral, wrap_func   ) => (false,true,false),
+        (false, decls_none,    wrap_neutral, wrap_hard   ) => (false,true,false),
+        (false, decls_none,    wrap_neutral, wrap_neutral) => (false,true,false),
+        (false, decls_none,    wrap_none,    wrap_func   ) => (false,true,false),
+        (false, decls_none,    wrap_none,    wrap_hard   ) => (false,true,false),
+        (false, decls_none,    wrap_none,    wrap_neutral) => (false,true,false),
+        (true,  decls_func,    wrap_hard,    wrap_func   ) => (true,true,true,true),
+        (true,  decls_func,    wrap_hard,    wrap_hard   ) => (true,true,true,true),
+        (true,  decls_func,    wrap_hard,    wrap_neutral) => (true,true,true,true),
+        (true,  decls_func,    wrap_neutral, wrap_func   ) => (true,true,true,true),
+        (true,  decls_func,    wrap_neutral, wrap_hard   ) => (true,true,true,true),
+        (true,  decls_func,    wrap_neutral, wrap_neutral) => (true,true,true,true),
+        (true,  decls_func,    wrap_none,    wrap_func   ) => (true,true,true,true),
+        (true,  decls_func,    wrap_none,    wrap_hard   ) => (true,true,true,true),
+        (true,  decls_func,    wrap_none,    wrap_neutral) => (true,true,true,true),
+        (true,  decls_hard,    wrap_hard,    wrap_func   ) => (true,true,true),
+        (true,  decls_hard,    wrap_hard,    wrap_hard   ) => (true,true,true),
+        (true,  decls_hard,    wrap_hard,    wrap_neutral) => (true,true,true),
+        (true,  decls_hard,    wrap_neutral, wrap_func   ) => (true,true,true),
+        (true,  decls_hard,    wrap_neutral, wrap_hard   ) => (true,true,true),
+        (true,  decls_hard,    wrap_neutral, wrap_neutral) => (true,true,true),
+        (true,  decls_hard,    wrap_none,    wrap_func   ) => (true,true,true),
+        (true,  decls_hard,    wrap_none,    wrap_hard   ) => (true,true,true),
+        (true,  decls_hard,    wrap_none,    wrap_neutral) => (true,true,true),
+        (true,  decls_neutral, wrap_hard,    wrap_func   ) => (true,true,true),
+        (true,  decls_neutral, wrap_hard,    wrap_hard   ) => (true,true,true),
+        (true,  decls_neutral, wrap_hard,    wrap_neutral) => (true,true,true),
+        (true,  decls_neutral, wrap_neutral, wrap_func   ) => (true,true,true),
+        (true,  decls_neutral, wrap_neutral, wrap_hard   ) => (true,true,true),
+        (true,  decls_neutral, wrap_neutral, wrap_neutral) => (true,true,true),
+        (true,  decls_neutral, wrap_none,    wrap_func   ) => (true,true,true),
+        (true,  decls_neutral, wrap_none,    wrap_hard   ) => (true,true,true),
+        (true,  decls_neutral, wrap_none,    wrap_neutral) => (true,true,true),
+        (true,  decls_none,    wrap_hard,    wrap_func   ) => (false,true,false),
+        (true,  decls_none,    wrap_hard,    wrap_hard   ) => (false,true,false),
+        (true,  decls_none,    wrap_hard,    wrap_neutral) => (false,true,false),
+        (true,  decls_none,    wrap_neutral, wrap_func   ) => (false,true,false),
+        (true,  decls_none,    wrap_neutral, wrap_hard   ) => (false,true,false),
+        (true,  decls_none,    wrap_neutral, wrap_neutral) => (true,true,true),
+        (true,  decls_none,    wrap_none,    wrap_func   ) => (false,true,false),
+        (true,  decls_none,    wrap_none,    wrap_hard   ) => (false,true,false),
+        (true,  decls_none,    wrap_none,    wrap_neutral) => (true,true,true),
     )
     expected_s(b::Bool) = b ? "assignment to outer var" : "brand-new var"
 
-    tmp_test_mod = Module()
-    tmp_test_mod_2 = Module()
+    local jl_mod = Module()
+    local fl_mod = Module()
 
-    for ((soft_mode, decls_s, middle_s, assign_s), results) in expected_outer_vals,
+    @testset for ((soft_mode, decls_s, middle_s, assign_s), results) in expected_outer_vals,
             (lhs_i, lhs) in enumerate(lhs_names)
 
         ex = decls_s(middle_s(assign_s(:($lhs = true))), lhs)
@@ -270,21 +318,24 @@ lhs_names = (:lname, :gname, :argname, :spname)
         if lhs in (:argname, :spname) && decls_s !== decls_func
             continue
         elseif lhs === :spname
-            @test_throws LoweringError expr_eval(tmp_test_mod, ex)
+            @test_throws LoweringError expr_eval(jl_mod, ex)
         else
+            @assert !isdefined(jl_mod, lhs) && !isdefined(fl_mod, lhs)
             expected = results[lhs_i]
-            reference_ok = fl_eval(tmp_test_mod_2, ex) === expected
+            reference_ok = fl_eval(fl_mod, ex) === expected
             !reference_ok && @error("flisp produced unexpected result; fix that or JL scope tests:\n",
                                    "expected $(expected_s(expected)), got $(expected_s(!expected))\n", ex)
-            ok = expr_eval(tmp_test_mod, ex) === expected
+            @test reference_ok
+            ok = expr_eval(jl_mod, ex) === expected
             !ok && @error("expected $(expected_s(expected)), got $(expected_s(!expected))\n", ex)
             @test ok
         end
 
-        if lhs === :gname
-            Base.delete_binding(tmp_test_mod, :gname)
-            Base.delete_binding(tmp_test_mod_2, :gname)
+        Core.@latestworld
+        for mod in (jl_mod, fl_mod), n in (:gname, :name)
+            isdefined(mod, n) && Base.delete_binding(mod, n)
         end
+        Core.@latestworld
     end
 end
 

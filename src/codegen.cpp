@@ -1489,6 +1489,10 @@ static const auto jldnd_func = new JuliaFunction<>{
 };
 
 // placeholder functions
+
+// The `julia.gcroot_flush` intrinsic is a marker function to flush all current
+// GC roots, to the shadow stack. It is used in the codegen of `GC.safepoint`/`jl_gc_safepoint`
+// and `jl_sigatomic_{begin,end}`. It is removed in late-gc-lowering (no-effect).
 static const auto gcroot_flush_func = new JuliaFunction<>{
     "julia.gcroot_flush",
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C), false); },
@@ -3000,13 +3004,6 @@ std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &conte
     m->setTargetTriple(triple);
 #endif
 
-    if (triple.isOSWindows() && triple.getArch() == Triple::x86) {
-        // tell Win32 to assume the stack is always 16-byte aligned,
-        // and to ensure that it is 16-byte aligned for out-going calls,
-        // to ensure compatibility with GCC codes
-        m->setOverrideStackAlignment(16);
-    }
-
     if (source) {
         // Copy module flags from source module
         SmallVector<Module::ModuleFlagEntry, 8> Flags;
@@ -3014,21 +3011,27 @@ std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &conte
         for (const auto &Flag : Flags) {
             m->addModuleFlag(Flag.Behavior, Flag.Key->getString(), Flag.Val);
         }
-        // Copy other module-level properties
-        m->setStackProtectorGuard(source->getStackProtectorGuard());
-        m->setOverrideStackAlignment(source->getOverrideStackAlignment());
     }
-    else {
-        // No source: set default Julia flags
-        // According to clang darwin above 10.10 supports dwarfv4
+
+    // Set default Julia flags
+    // According to clang darwin above 10.10 supports dwarfv4
+    if (m->getDwarfVersion() == 0) {
         m->addModuleFlag(llvm::Module::Warning, "Dwarf Version", 4);
         m->addModuleFlag(llvm::Module::Warning, "Debug Info Version",
                          llvm::DEBUG_METADATA_VERSION);
+    }
 
+    if (triple.isOSWindows() && triple.getArch() == Triple::x86) {
+        // tell Win32 to assume the stack is always 16-byte aligned,
+        // and to ensure that it is 16-byte aligned for out-going calls,
+        // to ensure compatibility with GCC codes
+        if (m->getOverrideStackAlignment() == 0)
+            m->setOverrideStackAlignment(16);
+    }
 #if defined(JL_DEBUG_BUILD)
+    if (m->getStackProtectorGuard().empty())
         m->setStackProtectorGuard("global");
 #endif
-    }
 
     return m;
 }
@@ -5464,6 +5467,8 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
     call->setAttributes(returninfo.attrs);
     if (gcstack_arg && ctx.emission_context.use_swiftcc)
         call->setCallingConv(CallingConv::Swift);
+    if (returninfo.effects != 0)
+        add_fn_attrs_for_effects(call, returninfo.effects);
 
     jl_cgval_t retval;
     switch (returninfo.cc) {
@@ -5507,13 +5512,16 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
 }
 
 static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_closure, jl_value_t *specTypes, jl_value_t *jlretty, llvm::Value *callee, StringRef specFunctionObject,
-                                          ArrayRef<jl_cgval_t> argv, size_t nargs, jl_returninfo_t::CallingConv *cc, unsigned *nreturn_roots, jl_value_t *inferred_retty)
+                                          ArrayRef<jl_cgval_t> argv, size_t nargs, jl_returninfo_t::CallingConv *cc, unsigned *nreturn_roots, jl_value_t *inferred_retty,
+                                          std::optional<uint32_t> effects = std::nullopt)
 {
     ++EmittedSpecfunCalls;
     // emit specialized call site
     jl_returninfo_t returninfo = get_specsig_function(ctx.emission_context, jl_Module, callee, specFunctionObject, specTypes, jlretty, is_opaque_closure);
     *cc = returninfo.cc;
     *nreturn_roots = returninfo.return_roots;
+    if (effects.has_value())
+        returninfo.effects = *effects;
     jl_cgval_t retval = emit_call_specfun_other(ctx, is_opaque_closure, specTypes, jlretty, returninfo, argv, nargs);
     // see if inference has a different / better type for the call than the lambda
     return update_julia_type(ctx, retval, inferred_retty);
@@ -5533,7 +5541,8 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_code_instance_t 
     jl_method_instance_t *mi = jl_get_ci_mi(ci);
     bool is_opaque_closure = jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure;
     return emit_call_specfun_other(ctx, is_opaque_closure, get_ci_abi(ci), ci->rettype, NULL,
-        specFunctionObject, argv, nargs, cc, return_roots, inferred_retty);
+        specFunctionObject, argv, nargs, cc, return_roots, inferred_retty,
+        jl_atomic_load_relaxed(&ci->ipo_purity_bits));
 }
 
 static jl_cgval_t emit_call_specfun_boxed(jl_codectx_t &ctx, jl_value_t *jlretty, StringRef specFunctionObject,
@@ -9290,15 +9299,16 @@ static jl_llvm_functions_t
             while (1) {
                 if (!jl_is_symbol(debuginfo->def)) // this is a path
                     func = debuginfo->def; // this is inlined
-                struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo->codelocs, pc);
-                size_t i = lineidx.line;
+                struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, pc);
+                size_t i = lineidx.loc;
                 if (i < 0) // pc out of range: broken debuginfo?
                     return false;
                 if (i == 0 && lineidx.to == 0) // no update
                     return false;
-                if (pc > 0 && (jl_value_t*)debuginfo->linetable != jl_nothing) {
+                if (pc > 0 && jl_is_debuginfo(debuginfo->linetable)) {
                     // indirection node
-                    if (!append_lineinfo(debuginfo->linetable, func, to, i))
+                    if (!append_lineinfo((jl_debuginfo_t *)debuginfo->linetable,
+                                         func, to, i))
                         return false; // no update
                 }
                 else {
@@ -9312,10 +9322,10 @@ static jl_llvm_functions_t
                     info.line = i;
                     info.line0 = 0;
                     if (pc == 1) {
-                        struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo->codelocs, 0);
+                        struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, 0);
                         assert(lineidx.to == 0 && lineidx.pc == 0);
-                        if (lineidx.line > 0 && info.line != lineidx.line)
-                            info.line0 = lineidx.line;
+                        if (lineidx.loc > 0 && info.line != lineidx.loc)
+                            info.line0 = lineidx.loc;
                     }
                     if (info.file.empty())
                         info.file = "<missing>";
@@ -9325,8 +9335,12 @@ static jl_llvm_functions_t
                         info.is_user_code = in_user_mod(modu);
                     if (debug_enabled) {
                         StringRef fname = jl_debuginfo_name(func);
+                        // Encode the 1-based statement index into the DWARF column field so that
+                        // stacktraces can recover the exact PC that each inlined frame points at.
+                        // `pc` here is the 1-based statement index within `debuginfo`'s CodeInfo.
+                        unsigned col = (unsigned)pc;
                         if (new_lineinfo.empty() && info.file == ctx.file) { // if everything matches, emit a toplevel line number
-                            info.loc = DILocation::get(ctx.builder.getContext(), info.line, 0, SP, NULL);
+                            info.loc = DILocation::get(ctx.builder.getContext(), info.line, col, SP, NULL);
                         }
                         else { // otherwise, describe this as an inlining frame
                             DebugLoc inl_loc = new_lineinfo.empty() ? DebugLoc(DILocation::get(ctx.builder.getContext(), 0, 0, SP, NULL)) : new_lineinfo.back().loc;
@@ -9347,7 +9361,7 @@ static jl_llvm_functions_t
                                                              ,nullptr          // ThrownTypes
                                                              );
                             }
-                            info.loc = DILocation::get(ctx.builder.getContext(), info.line, 0, inl_SP, inl_loc);
+                            info.loc = DILocation::get(ctx.builder.getContext(), info.line, col, inl_SP, inl_loc);
                         }
                     }
                     new_lineinfo.push_back(info);
@@ -9498,8 +9512,8 @@ static jl_llvm_functions_t
                 jl_debuginfo_t *edge = (jl_debuginfo_t*)jl_svecref(debuginfo->edges, i);
                 record_line_exists(edge, NULL);
             }
-            while ((jl_value_t*)debuginfo->linetable != jl_nothing)
-                debuginfo = debuginfo->linetable;
+            while (jl_is_debuginfo(debuginfo->linetable))
+                debuginfo = (jl_debuginfo_t*)debuginfo->linetable;
             jl_module_t *modu = func ? jl_debuginfo_module1(func) : NULL;
             if (modu == NULL)
                 modu = ctx.module;
@@ -9514,11 +9528,11 @@ static jl_llvm_functions_t
             bool is_tracked = in_tracked_path(file);
             if (do_coverage(is_user_code, is_tracked)) {
                 for (size_t pc = 0; 1; pc++) {
-                    struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo->codelocs, pc);
-                    if (lineidx.line == -1)
+                    struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, pc);
+                    if (lineidx.loc == -1)
                         break;
-                    if (lineidx.line > 0)
-                        jl_coverage_alloc_line(file.data(), lineidx.line);
+                    if (lineidx.loc > 0)
+                        jl_coverage_alloc_line(file.data(), lineidx.loc);
                 }
             }
         };

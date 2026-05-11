@@ -1351,7 +1351,7 @@ end
 
 # Issue #19414
 let ex = try struct A19414 <: Base.AbstractSet end catch e; e end
-    @test isa(ex, ErrorException) && ex.msg == "invalid subtyping in definition of A19414: can only subtype data types."
+    @test isa(ex, ErrorException) && ex.msg == "invalid subtyping in definition of A19414: supertype `Base.AbstractSet{T}` has unbound type parameters."
 end
 
 # issue #20103, OP and comments
@@ -2523,6 +2523,24 @@ let T = Ref{NTuple{8, Ref{Union{Int, P}}}} where P,
     S = Ref{NTuple{8, Ref{Union{Int, P}}}} where P
     # note T and S are identical but we need 2 copies to avoid being fooled by pointer equality
     @test T <: Union{Int, S}
+end
+
+# issue #61602
+struct W61602{T, N} x::Array{T, N} end
+let A = W61602{T, 1} where T<:(Union{Missing, S} where S),
+    B = W61602{Union{Missing, T}} where T
+    C = W61602{Union{Missing, Int64}, 1}
+    @test C <: typeintersect(A, B)
+    @test C <: typeintersect(B, A)
+
+    D = Tuple{W61602{T, 1}, X} where {T<:(Union{Missing, S} where S), X}
+    E = Tuple{W61602{Union{Missing, T}}, T} where T
+    @test Tuple{C, String} <: D
+    @test !(Tuple{C, String} <: E)
+    @test Tuple{C, Int64} <: typeintersect(D, E)
+    @test Tuple{C, Int64} <: typeintersect(E, D)
+    @test_broken !(Tuple{C, String} <: typeintersect(D, E))
+    @test_broken !(Tuple{C, String} <: typeintersect(E, D))
 end
 
 # try to fool a greedy algorithm that picks X=Int, Y=String here

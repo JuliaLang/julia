@@ -95,6 +95,8 @@ ifeq ($(USE_SYSTEM_DSFMT), 0)
 DEP_LIBS += dsfmt
 endif
 
+DEP_LIBS += cpufeatures
+
 ifeq ($(USE_SYSTEM_LLVM), 0)
 DEP_LIBS += llvm
 endif
@@ -211,7 +213,7 @@ DEP_LIBS_STAGED_ALL := llvm llvm-tools clang llvmunwind unwind libuv pcre \
 	openlibm dsfmt blastrampoline openblas lapack gmp mpfr patchelf utf8proc \
 	objconv openssl libssh2 nghttp2 curl libgit2 libwhich zlib zstd p7zip csl \
 	sanitizers libsuitesparse lld libtracyclient ittapi nvtx \
-	terminfo mmtk_julia
+	terminfo mmtk_julia cpufeatures
 DEP_LIBS_ALL := $(DEP_LIBS_STAGED_ALL)
 
 ifneq ($(USE_BINARYBUILDER_OPENBLAS),0)
@@ -282,6 +284,7 @@ include $(SRCDIR)/unwind.mk
 include $(SRCDIR)/gmp.mk
 include $(SRCDIR)/mpfr.mk
 include $(SRCDIR)/patchelf.mk
+include $(SRCDIR)/cpufeatures.mk
 include $(SRCDIR)/openssl.mk
 include $(SRCDIR)/libssh2.mk
 include $(SRCDIR)/nghttp2.mk

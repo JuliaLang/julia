@@ -602,22 +602,19 @@ end
 30  (call top._defaultctors %₂₈ %₂₉)
 31  latestworld
 32  (= slot₁/val core.nothing)
-33  (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree X))
-34  (call Base.Docs.Binding TestMod %₃₃)
-35  (call Core.svec "X docs\n")
-36  (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree a))
-37  (call Pair{Symbol, Any} %₃₆ "field a docs")
-38  (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree b))
-39  (call Pair{Symbol, Any} %₃₈ "field b docs")
-40  (call Dict{Symbol, Any} %₃₇ %₃₉)
-41  (call Pair :fields %₄₀)
-42  (call Dict{Symbol, Any} :path => "none" :linenumber => 1 :module => TestMod %₄₁)
-43  (call Base.Docs.docstr %₃₅ %₄₂)
-44  TestMod.Union
-45  (call core.apply_type %₄₄)
-46  (call Base.Docs.doc! TestMod %₃₄ %₄₃ %₄₅)
-47  slot₁/val
-48  (return %₄₇)
+33  (call Base.Docs.Binding TestMod :X)
+34  (call Core.svec "X docs\n")
+35  (call Pair{Symbol, Any} :a "field a docs")
+36  (call Pair{Symbol, Any} :b "field b docs")
+37  (call Dict{Symbol, Any} %₃₅ %₃₆)
+38  (call Pair :fields %₃₇)
+39  (call Dict{Symbol, Any} :path => "none" :linenumber => 1 :module => TestMod %₃₈)
+40  (call Base.Docs.docstr %₃₄ %₃₉)
+41  TestMod.Union
+42  (call core.apply_type %₄₁)
+43  (call Base.Docs.doc! TestMod %₃₃ %₄₀ %₄₂)
+44  slot₁/val
+45  (return %₄₄)
 
 ########################################
 # Struct with outer constructor

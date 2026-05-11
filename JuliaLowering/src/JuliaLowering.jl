@@ -14,13 +14,17 @@ end
 
 using .JuliaSyntax: @KSet_str, @stm, Kind, NodeId, SourceAttrType, SourceRef, SyntaxGraph,
     SyntaxList, SyntaxTree, byte_range, check_compatible_graph, children, copy_ast,
-    copy_attrs, copy_node, delete_attributes, ensure_attributes!, filename, first_byte,
-    flags, flattened_provenance, has_flags, hasattr, head, highlight, is_compatible_graph,
+    copy_attrs, delete_attributes, ensure_attributes!, filename, first_byte,
+    flattened_provenance, hasattr, head, highlight, is_compatible_graph,
     is_leaf, is_literal, kind, last_byte, mapchildren, mapsyntax, mkleaf, mknode, newleaf,
     newnode, node_string, numchildren, provenance, reparent, setattr, setattr!,
-    source_location, sourcefile, sourceref, syntax_graph, tree_ids, mapindex
+    source_location, sourcefile, sourceref, syntax_graph, tree_ids, mapindex, mktree
 
 const DEBUG = true
+
+# Falls back to `Union{}` so that `loc isa MacroSource` is always false on Julia < 1.14
+# where `Core.MacroSource` is not defined.
+const MacroSource = isdefined(Core, :MacroSource) ? Core.MacroSource : Union{}
 
 _include("kinds.jl")
 _register_kinds()

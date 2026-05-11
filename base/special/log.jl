@@ -273,11 +273,12 @@ end
 
         # Step 3
         xu = reinterpret(UInt64,x)
-        m = Int(xu >> 52) & 0x07ff
+        # `% Int` rather than `Int(...)` to preserve `:nothrow` (the shifted value fits in 11 bits)
+        m = ((xu >> 52) % Int) & 0x07ff
         if m == 0 # x is subnormal
             x *= 1.8014398509481984e16 # 0x1p54, normalise significand
             xu = reinterpret(UInt64,x)
-            m = Int(xu >> 52) & 0x07ff - 54
+            m = ((xu >> 52) % Int) & 0x07ff - 54
         end
         m -= 1023
         y = reinterpret(Float64,(xu & 0x000f_ffff_ffff_ffff) | 0x3ff0_0000_0000_0000)
@@ -347,7 +348,8 @@ function log1p(x::Float64)
         z = 1.0 + x
         zu = reinterpret(UInt64,z)
         s = reinterpret(Float64,0x7fe0_0000_0000_0000 - (zu & 0xfff0_0000_0000_0000)) # 2^-m
-        m = Int(zu >> 52) & 0x07ff - 1023 # z cannot be subnormal
+        # `% Int` rather than `Int(...)` to preserve `:nothrow` (the shifted value fits in 11 bits)
+        m = ((zu >> 52) % Int) & 0x07ff - 1023 # z cannot be subnormal
         c = m > 0 ? 1.0-(z-x) : x-(z-1.0) # 1+x = z+c exactly
         y = reinterpret(Float64,(zu & 0x000f_ffff_ffff_ffff) | 0x3ff0_0000_0000_0000)
 

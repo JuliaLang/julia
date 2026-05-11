@@ -368,6 +368,7 @@ static void buildEarlySimplificationPipeline(ModulePassManager &MPM, PassBuilder
             MPM.addPass(GlobalOptPass());
             GlobalFPM.addPass(PromotePass());
             GlobalFPM.addPass(InstCombinePass());
+            MPM.addPass(createModuleToFunctionPassAdaptor(std::move(GlobalFPM)));
         }
       }
       invokeEarlySimplificationCallbacks(MPM, PB, O);

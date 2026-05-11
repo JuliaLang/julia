@@ -392,7 +392,7 @@
             (generator (if (expr-contains-p if-generated? body (lambda (x) (not (function-def? x))))
                            (let* ((gen    (generated-version body))
                                   (nongen (non-generated-version body))
-                                  (gname  (symbol (string (gensy) "#" (current-julia-module-counter '()))))
+                                  (gname  (symbol (string "#" (current-julia-module-counter '()) "#" (current-julia-module-counter '()))))
                                   (gf     (make-generator-function gname names anames gen)))
                              (set! body (insert-after-meta
                                          nongen
@@ -3522,9 +3522,7 @@
                             #f)))))
            (for-each (lambda (v)
                        (if (or (memq v locals-def) (memq v local-decls))
-                           (error (string "variable \"" v "\" declared both local and global")))
-                       (if (and (null? argnames) (memq (var-kind v scope) '(argument local)))
-                           (error (string "`global " v "`: " v " is a local variable in its enclosing scope"))))
+                           (error (string "variable \"" v "\" declared both local and global"))))
                      globals)
            (if (and (pair? argnames) (eq? e (lam:body lam)))
                (for-each (lambda (v)
@@ -4061,7 +4059,7 @@ f(x) = yt(x)
          meta inbounds boundscheck loopinfo decl aliasscope popaliasscope
          thunk with-static-parameters toplevel-only
          global globalref global-if-global assign-const-if-global isglobal thismodule thisfunction
-         const atomic null true false ssavalue isdefined toplevel module lambda
+         const atomic null true false ssavalue toplevel module lambda
          error gc_preserve_begin gc_preserve_end export public inline noinline purity)))
 
 (define (local-in? s lam (tab #f))
@@ -4094,7 +4092,7 @@ f(x) = yt(x)
     ;; Collect candidate variables: those that are captured (and hence we want to optimize)
     ;; and only assigned once. This populates the initial `unused` table.
     (for-each (lambda (v)
-                (if (and (vinfo:capt v) (vinfo:sa v))
+                (if (vinfo:sa v)
                     (put! unused (car v) #t)))
               vi)
     ;; Initialize decl with arguments since they're implicitly declared outside any loop
@@ -4216,7 +4214,7 @@ f(x) = yt(x)
               (append (table.keys live) (table.keys unused)))
     (for-each (lambda (v)
                 (if (and (vinfo:sa v) (vinfo:never-undef v))
-                    (set-car! (cddr v) (logand (caddr v) (lognot 5)))))
+                    (vinfo:set-capt! v #f)))
               vi)
     lam))
 
@@ -4668,8 +4666,7 @@ f(x) = yt(x)
 (define (valid-ir-argument? e)
   (or (simple-atom? e)
       (and (pair? e)
-           (memq (car e) '(quote inert top core
-                                 slot static_parameter)))))
+           (memq (car e) '(quote inert top core slot)))))
 
 (define (valid-ir-rvalue? lhs e)
   (or (ssavalue? lhs)

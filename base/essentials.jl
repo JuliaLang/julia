@@ -12,7 +12,11 @@ blackbox(x) = compilerbarrier(:blackbox, x)
 size(a::Array) = getfield(a, :size)
 length(t::AbstractArray) = (@inline; prod(size(t)))
 size(a::GenericMemory) = (getfield(a, :length),)
+throw_boundserror(A) = (@noinline; throw(BoundsError(A, ())))
 throw_boundserror(A, I) = (@noinline; throw(BoundsError(A, I)))
+throw_boundserror(A, i1, i2, I...) = (@noinline; throw(BoundsError(A, (i1, i2, I...))))
+_throw_boundserror_indices(A) = (@noinline; throw(BoundsError(A, ())))
+_throw_boundserror_indices(A, i1, I...) = (@noinline; throw(BoundsError(A, (i1, I...))))
 
 # multidimensional getindex will be defined later on
 
@@ -384,7 +388,7 @@ function checkbounds(::Type{Bool}, A::Union{Array, Memory}, i::Int)
 end
 function checkbounds(A::AbstractArray, I...)
     @inline
-    checkbounds(Bool, A, I...) || throw_boundserror(A, I)
+    checkbounds(Bool, A, I...) || _throw_boundserror_indices(A, I...)
     nothing
 end
 

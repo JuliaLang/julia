@@ -41,6 +41,7 @@ if use_revise
     push!(DEPOT_PATH, popfirst!(DEPOT_PATH))
     # Remote-eval the following to initialize Revise in workers
     const revise_init_expr = quote
+        ENV["JULIA_REVISE_WORKER_ONLY"] = "1"
         using Revise
         const STDLIBS = $STDLIBS
         union!(Revise.stdlib_names, Symbol.(STDLIBS))
