@@ -2932,3 +2932,7 @@ end
 # the RHS quantifies over varargs of concrete types and `Tuple{Vararg{T}}` is not one of those.
 @test !isa(Tuple{Vararg{T}} where T <: Integer,
            Type{X} where X<:Tuple{Vararg{E}} where E)
+
+# TypeVar matching needs to distinguish these two cases
+@test Type{Ref{A} where A} <: Type{Ref{B} where B<:U} where U
+@test !(Type{Ref{A} where A} where L <: Type{Ref{A}}) where A

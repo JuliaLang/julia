@@ -2803,13 +2803,15 @@ jl_value_t *jl_instantiate_type_with(jl_value_t *t, jl_value_t **env, size_t n)
 
 static jl_value_t *_jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_t *env, jl_value_t **vals, jl_typeenv_t *prev, jl_typestack_t *stack)
 {
-    // `svec(tvar, constrained)` is the marker for an uncertain TypeVar env
-    // entry (identity preserved). Substitute the TypeVar itself.
+    // `svec(inner, constrained::Bool)` is the env-entry marker for an uncertain
+    // sparam value produced by subtyping/intersection. `inner` is either the
+    // TypeVar itself (identity preserved) or a DataType that still contains
+    // free typevars; either way it is the value to substitute here.
     jl_value_t *val = vals[0];
-    if (jl_is_svec(val) && jl_svec_len((jl_svec_t*)val) >= 1) {
-        jl_value_t *inner = jl_svecref(val, 0);
-        if (jl_is_typevar(inner))
-            val = inner;
+    if (jl_is_svec(val) && jl_svec_len((jl_svec_t*)val) == 2) {
+        jl_value_t *second = jl_svecref((jl_svec_t*)val, 1);
+        if (second == jl_true || second == jl_false)
+            val = jl_svecref((jl_svec_t*)val, 0);
     }
     jl_typeenv_t en = { env->var, val, prev };
     if (jl_is_unionall(env->body))
