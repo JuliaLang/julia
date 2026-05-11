@@ -132,7 +132,7 @@ void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
         if (INLINE_WRITE_BARRIER) {
             auto i8_ty = Type::getInt8Ty(F.getContext());
             auto intptr_ty = T_size;
-            auto i8_ptr_ty = PointerType::get(i8_ty, 0);
+            auto i8_ptr_ty = PointerType::getUnqual(F.getContext());
 
             // intptr_t addr = (intptr_t) (void*) src;
             // uint8_t* meta_addr = (uint8_t*) (SIDE_METADATA_BASE_ADDRESS + (addr >> 6));
@@ -154,7 +154,7 @@ void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
             } else {
                 intptr_t metadata_base_address = reinterpret_cast<intptr_t>(MMTK_SIDE_LOG_BIT_BASE_ADDRESS);
                 auto metadata_base_val = ConstantInt::get(intptr_ty, metadata_base_address);
-                metadata_base_ptr = ConstantExpr::getIntToPtr(metadata_base_val, PointerType::get(i8_ty, 0));
+                metadata_base_ptr = ConstantExpr::getIntToPtr(metadata_base_val, PointerType::getUnqual(F.getContext()));
             }
 
             auto parent_val = builder.CreatePtrToInt(parent, intptr_ty);
