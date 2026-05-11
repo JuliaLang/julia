@@ -727,15 +727,7 @@ function sptype_for_tvar(vᵢ::TypeVar, output_tvar::TypeVar, sigtypes::Core.Sim
             end
         end
     end
-    ub = unwraptv_ub(output_tvar.ub)
-    if has_free_typevars(ub)
-        ub = Any
-    end
-    lb = unwraptv_lb(output_tvar.lb)
-    if has_free_typevars(lb)
-        lb = Bottom
-    end
-    if Any === ub && lb === Bottom
+    if Any === output_tvar.ub && Bottom === output_tvar.lb
         # `Bottom <: T <: Any` additionally allows non-Type tvars
         return Any
     end
