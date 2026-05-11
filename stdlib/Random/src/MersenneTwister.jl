@@ -2,8 +2,8 @@
 
 ## MersenneTwister
 
-# Non-reshaped, contiguous reinterpret view, suitable for the bulk pointer-based
-# fill paths below (`pointer` forwards to the parent's storage).
+# Contiguous reinterpret view; `pointer` forwards to the parent's storage,
+# so it is safe in the bulk pointer-based fill paths below.
 const ContigReinterpretArray{T} =
     Base.NonReshapedReinterpretArray{T,N,S,<:Base.MutableDenseArrayType{S}} where {N,S}
 const BulkArray{T} = Union{Array{T}, ContigReinterpretArray{T}}
