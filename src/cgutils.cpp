@@ -2596,7 +2596,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             case StoreKind::SetOnce:
                 return mark_julia_const(ctx, jl_false);
             case StoreKind::Unset:
-                return rhs;
+                return mark_julia_const(ctx, jl_nothing);
             }
         }
         // if FailOrder was inherited from Order, may need to remove Load-only effects now
@@ -2644,7 +2644,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         emit_lockstate_value(ctx, needlock, true);
     jl_cgval_t oldval = rhs;
     // TODO: we should do Release ordering for anything with CountTrackedPointers(elty).count > 0, instead of just isboxed
-    if (op == StoreKind::Set || (Order == AtomicOrdering::NotAtomic && op == StoreKind::Swap)) {
+    if (op == StoreKind::Set || op == StoreKind::Unset || (Order == AtomicOrdering::NotAtomic && op == StoreKind::Swap)) {
         if (op == StoreKind::Swap) {
             if (is_union) {
                 oldval = load_union();
@@ -2981,7 +2981,11 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             ctx.builder.CreateCondBr(Success, BB, DoneBB);
             ctx.builder.SetInsertPoint(BB);
         }
-        if (r) {
+        if (op == StoreKind::Unset) {
+            // Clearing a GC-tracked slot: no write barrier needed for standard GC.
+            // TODO: emit MMTK deletion barrier here when adding concurrent GC support.
+        }
+        else if (r) {
             if (realelty != elty)
                 r = ctx.builder.Insert(CastInst::Create(Instruction::Trunc, r, realelty));
             if (intcast) {
@@ -3019,8 +3023,10 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         oldval = mark_julia_type(ctx, Success, false, jl_bool_type);
         break;
     case StoreKind::Set:
+        break; // oldval already set to rhs
     case StoreKind::Unset:
-        break; // oldval already set (nothing for Unset)
+        oldval = mark_julia_const(ctx, jl_nothing);
+        break;
     case StoreKind::Swap:
     case StoreKind::Replace:
         if (!is_union) {

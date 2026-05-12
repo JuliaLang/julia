@@ -4163,8 +4163,51 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
 
     const jl_cgval_t undefval;
     const jl_cgval_t &ref = argv[1];
-
     jl_value_t *mty_dt = jl_unwrap_unionall(ref.typ);
+    // Handle boxed Unset early before emitting any IR
+    // This version of memoryrefunset works
+    if (op == StoreKind::Unset) {
+        const jl_datatype_layout_t *early_layout = ((jl_datatype_t*)mty_dt)->layout;
+        if (early_layout->flags.arrayelem_isboxed && !early_layout->flags.arrayelem_islocked) {
+            const jl_cgval_t &ord = argv[2];
+            if (!ord.constant)
+                return false;
+            enum jl_memory_order order = jl_get_atomic_order((jl_sym_t*)ord.constant, false, true);
+            if (order == jl_memory_order_invalid)
+                return false;
+            bool isatomic = early_layout->flags.arrayelem_isatomic;
+            if (isatomic == (order == jl_memory_order_notatomic))
+                return false; // ordering mismatch, let runtime handle
+            size_t al = early_layout->alignment;
+            if (al > JL_HEAP_ALIGNMENT)
+                al = JL_HEAP_ALIGNMENT;
+            jl_value_t *boundscheck = argv[nargs].constant;
+            Value *mem = emit_memoryref_mem(ctx, ref, early_layout);
+            Value *mlen = emit_genericmemorylen(ctx, mem, ref.typ);
+            if (bounds_check_enabled(ctx, boundscheck)) {
+                BasicBlock *failBB = BasicBlock::Create(ctx.builder.getContext(), "oob");
+                BasicBlock *endBB = BasicBlock::Create(ctx.builder.getContext(), "store");
+                ctx.builder.CreateCondBr(ctx.builder.CreateIsNull(mlen), failBB, endBB);
+                failBB->insertInto(ctx.f);
+                ctx.builder.SetInsertPoint(failBB);
+                ctx.builder.CreateCall(prepare_call(jlboundserror_func), { mark_callee_rooted(ctx, mem), ConstantInt::get(ctx.types().T_size, 1) });
+                ctx.builder.CreateUnreachable();
+                endBB->insertInto(ctx.f);
+                ctx.builder.SetInsertPoint(endBB);
+            }
+            Value *ptr = emit_memoryref_ptr(ctx, ref, early_layout);
+            Value *null_val = Constant::getNullValue(ctx.types().T_prjlvalue);
+            AtomicOrdering storeOrder = order <= jl_memory_order_notatomic
+                                         ? AtomicOrdering::Release
+                                         : get_llvm_atomic_order(order);
+            emit_aliased_store(ctx, null_val, ptr, Align(al),
+                               ctx.tbaa().tbaa_ptrarraybuf,
+                               ctx.noalias().aliasscope.current, storeOrder);
+            // TODO: emit MMTK deletion barrier here for concurrent GC
+            *ret = mark_julia_const(ctx, jl_nothing);
+            return true;
+        }
+    }
     if (!jl_is_genericmemoryref_type(mty_dt) || !jl_is_concrete_type(mty_dt))
         return false;
 
@@ -4247,14 +4290,32 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             *ret = mark_julia_const(ctx, jl_nothing);
             return true;
         }
-        Type *llvm_ty = isboxed ? ctx.types().T_prjlvalue : julia_type_to_llvm(ctx, ety);
-        val = mark_julia_type(ctx, Constant::getNullValue(llvm_ty), isboxed, ety);
-        op = StoreKind::Set;
-    } else {
+        if (isboxed) { 
+            // This version of memoryrefunset doesnt works
+            assert(!needlock); // boxed slots are pointer-sized and never need a mutex
+            // Boxed slot: store null directly. null is not a valid Julia value so we
+            // cannot represent it as a jl_cgval_t and route it through typed_store.
+            AtomicOrdering storeOrder = order <= jl_memory_order_notatomic
+                                         ? AtomicOrdering::Release
+                                         : get_llvm_atomic_order(order);
+            Value *ptr = emit_memoryref_ptr(ctx, ref, layout);
+            emit_aliased_store(ctx, Constant::getNullValue(ctx.types().T_prjlvalue),
+                               ptr, Align(al), ctx.tbaa().tbaa_ptrarraybuf,
+                               ctx.noalias().aliasscope.current, storeOrder);
+            // TODO: emit MMTK deletion barrier here for concurrent GC
+            *ret = mark_julia_const(ctx, jl_nothing);
+            return true;
+        }
+        // Non-boxed with GC-tracked pointer fields: zero the whole element.
+        Type *llvm_ty = julia_type_to_llvm(ctx, ety);
+        val = mark_julia_type(ctx, Constant::getNullValue(llvm_ty), false, ety);
+    }
+    else {
         val = argv[has_cmp ? 3 : 2];
     }
     if (op != StoreKind::Modify) {
-        emit_typecheck(ctx, val, ety, fname);
+        if (op != StoreKind::Unset)
+            emit_typecheck(ctx, val, ety, fname);
         val = update_julia_type(ctx, val, ety);
         if (val.typ == jl_bottom_type)
             return true;
@@ -4300,7 +4361,7 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             // ptr += sizeof(lock);
             ptr = emit_ptrgep(ctx, ptr, LLT_ALIGN(sizeof(jl_mutex_t), JL_SMALL_BYTE_ALIGNMENT));
         }
-        if ((isboxed || layout->first_ptr >= 0)) { // if elements are just bits, don't need a write barrier
+        if (isboxed || layout->first_ptr >= 0) { // if elements are just bits, don't need a write barrier
             data_owner = emit_memoryref_mem(ctx, ref, layout);
         }
     }
