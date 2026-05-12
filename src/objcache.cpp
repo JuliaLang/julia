@@ -154,7 +154,7 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
         return Compile();
     }
 
-    MDB_val Key{ModHash.size() * sizeof ModHash[0], ModHash.data()};
+    MDB_val Key{sizeof ModHash, ModHash.data()};
     MDB_val Data;
     if (int Err = mdb_get(Txn, Dbi, &Key, &Data)) {
         if (Err != MDB_NOTFOUND)
@@ -232,7 +232,7 @@ void ObjCache::writerThread()
             llvm::toHex({(uint8_t *)&ModHash[0], sizeof ModHash}, true, KeyBuf);
             KeyBuf[KeyBuf.size() - 1] = 0;
 
-            MDB_val Key{ModHash.size(), ModHash.data()};
+            MDB_val Key{sizeof ModHash, ModHash.data()};
             MDB_val Data{Obj->getBufferSize(), (void *)Obj->getBufferStart()};
             auto WriteStart = Clock::now();
             if (int Err = mdb_put(Txn, Dbi, &Key, &Data, 0))
