@@ -80,13 +80,13 @@ void ObjCache::initDB()
     }
     checkMDB(mdb_env_set_maxreaders(Env, 510));
     checkMDB(mdb_env_set_maxdbs(Env, 128));
+    checkMDB(mdb_env_set_mapsize(Env, (size_t)1 << 30)); // 1 GiB maximum
     llvm::sys::fs::create_directories(*CachePath);
     if (checkMDB(mdb_env_open(Env, CachePath->c_str(), MDB_NOTLS, 0640))) {
         mdb_env_close(Env);
         Env = nullptr;
         goto cleanup;
     }
-    checkMDB(mdb_env_set_mapsize(Env, (size_t)1 << 30)); // 1 GiB maximum
 
     MDB_txn *Txn;
     MDB_dbi Dbi;
