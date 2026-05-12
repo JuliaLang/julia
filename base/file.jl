@@ -1057,8 +1057,7 @@ const UV_DIRENT_BLOCK = Cint(7)
     DirEntry
 
 A type representing a filesystem entry that contains the name of the entry, the directory, and
-the raw type of the entry. The full path of the entry can be obtained lazily via [`path`](@ref Base.Filesystem.path)
-or [`joinpath`](@ref).
+the raw type of the entry. The full path of the entry can be obtained lazily via [`joinpath(entry)`](@ref).
 
 Public fields:
 - `dir::String`: The directory containing the entry.
