@@ -45,11 +45,12 @@ mutable struct SyntaxTree
     # TODO: this is almost never populated and semantically irrelevant after
     # parsing
     syntax_flags::UInt16
+    lowering_flags::UInt8
 end
 
 function SyntaxTree(kind::Kind, children, @nospecialize(value), source, context)
     SyntaxTree(kind, children, value, source, context,
-               nothing, nothing, nothing, UInt16(0))
+               nothing, nothing, nothing, UInt16(0), UInt8(0))
 end
 
 const SourceAttrType = Union{SyntaxTree,SourceRef,LineNumberNode}
@@ -464,11 +465,13 @@ end
 
 function mknode(old::SyntaxTree, children)
     SyntaxTree(old.kind, children, old.value, old, old.context,
-               old.jl_source, old.meta, old.mod, old.syntax_flags)
+               old.jl_source, old.meta, old.mod, old.syntax_flags,
+               old.lowering_flags)
 end
 function mkleaf(old::SyntaxTree)
     SyntaxTree(old.kind, nothing, old.value, old, old.context,
-               old.jl_source, old.meta, old.mod, old.syntax_flags)
+               old.jl_source, old.meta, old.mod, old.syntax_flags,
+               old.lowering_flags)
 end
 function mktree(old::SyntaxTree)
     if is_leaf(old)

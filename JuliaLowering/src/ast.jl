@@ -53,6 +53,30 @@ const ScopeId = Int
 const DEFAULT_NODE = SyntaxTree(
     K"None", nothing, nothing, LineNumberNode(0), nothing)
 
+const LOWERING_FLAG_SYNTHESIZED = UInt8(0x01)
+
+function _mark_synthesized!(node::SyntaxTree)
+    setfield!(node, :lowering_flags, node.lowering_flags | LOWERING_FLAG_SYNTHESIZED)
+    return node
+end
+
+function _inherit_synthesized!(node::SyntaxTree, @nospecialize(srcref))
+    srcref isa SyntaxTree || return node
+    is_synthesized(srcref) && _mark_synthesized!(node)
+    return node
+end
+
+_inherit_synthesized!(node::SyntaxTree) =
+    _inherit_synthesized!(node, node.source)
+
+function JuliaSyntax.newleaf(prov::SyntaxTree, k::Kind)
+    _inherit_synthesized!(SyntaxTree(k, nothing, nothing, prov, prov.context), prov)
+end
+
+function JuliaSyntax.newnode(prov::SyntaxTree, k::Kind, cs)
+    _inherit_synthesized!(SyntaxTree(k, cs, nothing, prov, prov.context), prov)
+end
+
 """
     @mknode(old; attr=val...)
 
@@ -94,6 +118,7 @@ macro mknode(attrs, old)
     out = Expr(:let,
                Expr(:block, Expr(:(=), old_gs, old)),
                Expr(:block, Expr(:call, SyntaxTree, out_args...)))
+    out.args[end] = Expr(:call, _inherit_synthesized!, out.args[end])
     DEBUG && (out.args[end] = Expr(:call, _debug_check_attrs, out.args[end]))
     esc(out)
 end
@@ -165,6 +190,23 @@ function emit_assign_tmp(stmts::SyntaxList, ctx, ex, name="tmp")
     push!(stmts, newnode(ex, K"=", SyntaxList(var, ex)))
     var
 end
+
+"""
+    is_synthesized(ex::SyntaxTree) -> Bool
+
+Return `true` if `ex` was introduced by lowering rather than written by the
+user. Lowering passes set the synthesized lowering flag on nodes they emit to
+implement source-level constructs (currently: the per-property assignments
+in named-tuple destructure like `(; a, b) = rhs`). Consumers that walk the
+EST against user source ranges — editor features answering "what's at this
+byte range" — use this to skip synthetic nodes that would otherwise shadow
+the user's expressions.
+
+The flag set at the initial emission site automatically propagates to nodes
+the same site (or any later pass) creates from that srcref via [`@ast`](@ref),
+so individual passes don't have to hand-propagate through every recreation.
+"""
+is_synthesized(ex::SyntaxTree) = !iszero(ex.lowering_flags & LOWERING_FLAG_SYNTHESIZED)
 
 #-------------------------------------------------------------------------------
 # @ast macro
