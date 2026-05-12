@@ -1090,6 +1090,7 @@ realpath(obj::DirEntry) = realpath(path(obj))
 """
     readdir(::Type{DirEntry}, dir::Union{AbstractString,DirEntry}=pwd(); sort::Bool = true) -> Vector{DirEntry}
     readdir(entry::DirEntry; sort::Bool=true) -> Vector{DirEntry}
+    readdir(::Type{String}, entry::DirEntry; join::Bool=false, sort::Bool=true) -> Vector{String}
 
 Return a vector of [`DirEntry`](@ref) objects representing the contents of the directory `dir`,
 or the current working directory if not given. If `sort` is true, the returned vector is
@@ -1120,6 +1121,7 @@ end
 readdir(::Type{DirEntry}, dir::AbstractString=pwd(); sort::Bool=true) = _readdir(dir; return_objects=true, sort)::Vector{DirEntry}
 readdir(::Type{DirEntry}, entry::DirEntry; sort::Bool=true) = readdir(entry; sort)::Vector{DirEntry}
 readdir(entry::DirEntry; sort::Bool=true) = readdir(DirEntry, path(entry); sort)::Vector{DirEntry}
+readdir(::Type{String}, entry::DirEntry; kwargs...) = readdir(path(entry); kwargs...)::Vector{String}
 
 function _readdir(dir::AbstractString; return_objects::Bool=false, join::Bool=false, sort::Bool=true)
     # Allocate space for uv_fs_t struct
