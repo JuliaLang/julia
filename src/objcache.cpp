@@ -72,11 +72,11 @@ void ObjCache::initDB()
     const char *Enable = getenv("JULIA_OBJCACHE");
     auto CachePath = getCachePath();
     if (!CachePath || !Enable || strcmp(Enable, "1"))
-        goto done;
+        goto cleanup;
 
     if (checkMDB(mdb_env_create(&Env))) {
         Env = nullptr;
-        goto done;
+        goto cleanup;
     }
     checkMDB(mdb_env_set_maxreaders(Env, 510));
     checkMDB(mdb_env_set_maxdbs(Env, 128));
@@ -84,26 +84,28 @@ void ObjCache::initDB()
     if (checkMDB(mdb_env_open(Env, CachePath->c_str(), MDB_NOTLS, 0640))) {
         mdb_env_close(Env);
         Env = nullptr;
-        goto done;
+        goto cleanup;
     }
     checkMDB(mdb_env_set_mapsize(Env, (size_t)1 << 30)); // 1 GiB maximum
 
     MDB_txn *Txn;
     MDB_dbi Dbi;
     if (checkMDB(mdb_txn_begin(Env, nullptr, 0, &Txn)))
-        goto done;
+        goto cleanup;
     if (checkMDB(mdb_dbi_open(Txn, "objcache", MDB_CREATE, &Dbi)))
-        goto done;
+        goto cleanup_txn;
     if (checkMDB(mdb_txn_commit(Txn)))
-        goto done;
+        goto cleanup_txn;
 
     uv_thread_create(
         &WriterThread, [](void *arg) { static_cast<ObjCache *>(arg)->writerThread(); },
         this);
+    goto cleanup;
 
-done:
+cleanup_txn:
+    mdb_txn_abort(Txn);
+cleanup:
     Initialized.store(true, memory_order_release);
-    return;
 }
 
 static size_t NWrite = 0, NRead = 0, NMiss = 0, NHit = 0;
