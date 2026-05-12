@@ -108,7 +108,9 @@ cleanup:
     Initialized.store(true, memory_order_release);
 }
 
-static size_t NWrite = 0, NRead = 0, NMiss = 0, NHit = 0;
+// NWrite has a single reader and writer
+static size_t NWrite = 0;
+static std::atomic<size_t> NRead = 0, NMiss = 0, NHit = 0;
 
 __attribute__((destructor)) static void dump_stats()
 {
@@ -116,7 +118,7 @@ __attribute__((destructor)) static void dump_stats()
         jl_printf(
             JL_STDERR,
             "cache read : %zu\ncache write: %zu\ncache hit  : %zu\ncache miss : %zu\n",
-            NRead, NWrite, NHit, NMiss);
+                  NRead.load(memory_order_relaxed), NWrite, NHit.load(memory_order_relaxed), NMiss.load(memory_order_relaxed));
 }
 
 std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Compile)
@@ -169,7 +171,7 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
         double LookupMs =
             std::chrono::duration<double, std::milli>(Clock::now() - LookupStart).count();
 
-        ++NMiss;
+        NMiss.fetch_add(1, memory_order_relaxed);
         auto CompileStart = Clock::now();
         auto Obj = Compile();
         double CompileMs =
@@ -191,8 +193,8 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
 
     auto Buf = std::make_unique<MDBMemoryBuffer>(
         Txn, llvm::StringRef{(const char *)Data.mv_data, Data.mv_size});
-    ++NHit;
-    NRead += Buf->getBufferSize();
+    NHit.fetch_add(1, memory_order_relaxed);
+    NRead.fetch_add(Buf->getBufferSize(), memory_order_relaxed);
 
     double LookupMs =
         std::chrono::duration<double, std::milli>(Clock::now() - LookupStart).count();
