@@ -1734,6 +1734,37 @@ static void raise_exception(jl_codectx_t &ctx, Value *exc,
     ctx.builder.SetInsertPoint(contBB);
 }
 
+// Lazily create (per-function) a single block that throws UndefRefError, so
+// repeated array/field undef checks share one throw site instead of emitting
+// an identical fail block at every call site.
+static BasicBlock *get_undefref_throw_block(jl_codectx_t &ctx)
+{
+    if (ctx.undefref_throw_block)
+        return ctx.undefref_throw_block;
+    auto savedBB = ctx.builder.GetInsertBlock();
+    auto savedIP = ctx.builder.GetInsertPoint();
+    BasicBlock *failBB = BasicBlock::Create(ctx.builder.getContext(), "undefref_throw", ctx.f);
+    ctx.builder.SetInsertPoint(failBB);
+    ctx.builder.CreateCall(prepare_call(jlthrow_func),
+        { mark_callee_rooted(ctx, literal_pointer_val(ctx, jl_undefref_exception)) });
+    ctx.builder.CreateUnreachable();
+    if (savedBB)
+        ctx.builder.SetInsertPoint(savedBB, savedIP);
+    ctx.undefref_throw_block = failBB;
+    return failBB;
+}
+
+// Emit a conditional branch to the shared UndefRefError throw block.
+// `notnull` should be true when the value is defined (non-null).
+static void emit_undefref_check(jl_codectx_t &ctx, Value *notnull)
+{
+    ++EmittedConditionalExceptions;
+    BasicBlock *failBB = get_undefref_throw_block(ctx);
+    BasicBlock *passBB = BasicBlock::Create(ctx.builder.getContext(), "pass", ctx.f);
+    ctx.builder.CreateCondBr(notnull, passBB, failBB);
+    ctx.builder.SetInsertPoint(passBB);
+}
+
 // DO NOT PASS IN A CONST CONDITION!
 static void raise_exception_unless(jl_codectx_t &ctx, Value *cond, Value *exc)
 {
@@ -1795,8 +1826,7 @@ static void null_pointer_check(jl_codectx_t &ctx, Value *v, Value **nullcheck)
         *nullcheck = v;
         return;
     }
-    raise_exception_unless(ctx, null_pointer_cmp(ctx, v),
-            literal_pointer_val(ctx, jl_undefref_exception));
+    emit_undefref_check(ctx, null_pointer_cmp(ctx, v));
 }
 
 
@@ -1806,7 +1836,7 @@ static void null_load_check(jl_codectx_t &ctx, Value *v, jl_module_t *scope, jl_
     if (name && scope)
         undef_var_error_ifnot(ctx, notnull, name, (jl_value_t*)scope);
     else
-        raise_exception_unless(ctx, notnull, literal_pointer_val(ctx, jl_undefref_exception));
+        emit_undefref_check(ctx, notnull);
 }
 
 // ifnot == nullptr && return func()
@@ -3390,7 +3420,10 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
         order = isatomic ? jl_memory_order_unordered : jl_memory_order_notatomic;
     }
     if (jfty == jl_bottom_type) {
-        raise_exception(ctx, literal_pointer_val(ctx, jl_undefref_exception));
+        ++EmittedExceptions;
+        ctx.builder.CreateBr(get_undefref_throw_block(ctx));
+        BasicBlock *contBB = BasicBlock::Create(ctx.builder.getContext(), "after_throw", ctx.f);
+        ctx.builder.SetInsertPoint(contBB);
         return jl_cgval_t(); // unreachable
     }
     if (type_is_ghost(julia_type_to_llvm(ctx, jfty)))

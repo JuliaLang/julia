@@ -644,7 +644,7 @@ static AttributeList get_func_attrs(LLVMContext &C)
 static AttributeList get_attrs_noreturn(LLVMContext &C)
 {
     return AttributeList::get(C,
-                Attributes(C, {Attribute::NoReturn}),
+                Attributes(C, {Attribute::NoReturn, Attribute::Cold}),
                 AttributeSet(),
                 {});
 }
@@ -2089,6 +2089,7 @@ public:
     Value *pgcstack = NULL;
     Instruction *topalloca = NULL;
     Value *world_age_at_entry = NULL;
+    llvm::BasicBlock *undefref_throw_block = NULL;
 
     bool external_linkage = false;
     const jl_cgparams_t *params = NULL;
@@ -6643,8 +6644,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         jl_sym_t *var = (jl_sym_t*)args[0];
         Value *cond = emit_unbox(ctx, getInt1Ty(ctx.builder.getContext()), update_julia_type(ctx, emit_expr(ctx, args[1]), (jl_value_t*)jl_bool_type));
         if (var == jl_getfield_undefref_sym) {
-            raise_exception_unless(ctx, cond,
-                literal_pointer_val(ctx, jl_undefref_exception));
+            emit_undefref_check(ctx, cond);
         }
         else {
             undef_var_error_ifnot(ctx, cond, var, (jl_value_t*)jl_local_sym);
