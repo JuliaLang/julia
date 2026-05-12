@@ -47,9 +47,10 @@ end
             end
         end
         for e in readdir(DirEntry, dir)
-            if isdir(e) || continue
+            if isdir(e)
                 @test only(readdir(e)).name == "bfile.txt"
                 @test only(readdir(DirEntry, e)).name == "bfile.txt"
+                @test only(readdir(String, e)) == "bfile.txt"
             else
                 @test isfile(e)
                 @test e.name == "afile.txt"
@@ -63,8 +64,8 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     symlink(subdir, dirlink)
     @test stat(dirlink) == stat(subdir)
     @test readdir(dirlink) == readdir(subdir)
-    @test isempty(readdir(DirEntry, dirlink))
-    @test isempty(readdir(DirEntry, subdir))
+    @test map(e->e.name, readdir(DirEntry, dirlink)) == map(e->e.name, readdir(DirEntry, subdir))
+    @test realpath.(readdir(DirEntry, dirlink)) == realpath.(readdir(DirEntry, subdir))
 
     # relative link
     relsubdirlink = joinpath(subdir, "rel_subdirlink")
@@ -72,8 +73,8 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     symlink(reldir, relsubdirlink)
     @test stat(relsubdirlink) == stat(subdir2)
     @test readdir(relsubdirlink) == readdir(subdir2)
-    @test isempty(readdir(DirEntry, relsubdirlink))
-    @test isempty(readdir(DirEntry, subdir2))
+    @test map(e->e.name, readdir(DirEntry, relsubdirlink)) == map(e->e.name, readdir(DirEntry, subdir2))
+    @test realpath.(readdir(DirEntry, relsubdirlink)) == realpath.(readdir(DirEntry, subdir2))
 
     # creation of symlink to directory that does not yet exist
     new_dir = joinpath(subdir, "new_dir")
