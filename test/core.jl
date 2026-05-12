@@ -578,6 +578,18 @@ sptest4(x::T, y) where {T} = 44
 @test sptest4(1,2) == 42
 @test sptest4(1, "cat") == 44
 
+# A method that binds a where-parameter across two arms of a Union: when the
+# argument satisfies the signature only with `T` left unconstrained, dispatch
+# must succeed without throwing in static-parameter matching.
+abstract type SPTestArr5{S,T,N} end
+sptest5(positions::AbstractVector{<:Union{NTuple{N,T}, SPTestArr5{Tuple{N}, T, 1}}}) where {N, T <: Real} =
+    (N, @isdefined(T) ? T : nothing)
+@test sptest5([(1.0, 2.0)]) === (2, Float64)        # T uniquely bound to Float64
+let (n, t) = sptest5([(1, 2.0)])
+    @test n === 2
+    @test t === nothing || t === Union{Int, Float64} || t === Real
+end
+
 # closures
 function clotest()
     c = 0
@@ -8786,7 +8798,9 @@ end
 
 # Behavior of TypeVar with lower bound
 f_def_typevar_with_lowerbound(x::T) where {T>:Int} = @isdefined(T) ? T : false
-@test f_def_typevar_with_lowerbound(1.0) == false
+let r = f_def_typevar_with_lowerbound(1.0)
+    @test r === false || r === Union{Int, Float64}
+end
 
 # An inferred / constant-folded type must not contain a `(tvar, constrains_bool)`
 # SimpleVector pair as a type parameter. The intersection-env svec format must

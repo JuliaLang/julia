@@ -1236,6 +1236,23 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
         else if (!vb.occurs_inv && vb.lb != jl_bottom_type) {
             if (is_leaf_bound(vb.lb)) {
                 val = vb.lb;
+            } else if (eff_constrained && !jl_has_free_typevars(t) && !jl_has_free_typevars(vb.lb) &&
+                       (jl_is_concrete_type(t) ||
+                        (jl_is_datatype(t) && ((jl_datatype_t*)t)->isdispatchtuple))) {
+                // If the LHS is concrete, e.g. Type{Tuple{Ref}} vs Type{Tuple{S}} where {S<:T}, we'd like to still
+                // choose the least solution like below, so that our `eff_constrained` logic below is correct.
+                // Also accept dispatchtuples, which cover singleton-like LHSes such as
+                // `Tuple{typeof(f), Type{X}}` where the Type{} parameter pins to one runtime value.
+                // Refuse when `vb.lb` references universally-quantified vars from the
+                // current subtype environment: exposing it directly would leak sibling
+                // `where`-bound typevars (e.g. `where {S, T>:S}` would expose `S`).
+                val = vb.lb;
+            } else if (jl_is_typevar(vb.lb)) {
+                // The path below would produce `T_new <: T`. This is redundant for bounds purposes,
+                // although it could affect diagonality in downstream uses. However, it is problematic
+                // to introduce a new tvar for safety here, because intersection can blow up on that
+                // pattern.
+                val = wrap_tvar_env(vb.lb, eff_constrained);
             } else {
                 val = wrap_tvar_env((jl_value_t*)jl_new_typevar(u->var->name, jl_bottom_type, vb.lb), eff_constrained);
             }

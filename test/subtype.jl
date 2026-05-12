@@ -2934,6 +2934,24 @@ let e = only(intersection_env(Tuple{Real}, Tuple{T} where T >: Int)[2])
     @test e isa Core.SimpleVector && e[1] isa TypeVar && !e[2]
 end
 
+# Env entries must not introduce a fresh `newvar<:vb.lb` wrapper when `vb.lb`
+# is already a TypeVar. The doubled `where T<:T_outer where T_outer` pattern
+# that wrapper would produce accumulates across nested intersections and
+# triggers exponential-time substitution in `inst_type_w_`. Instead, the env
+# entry should reference the existing TypeVar directly.
+let (_, env) = intersection_env(Tuple{P, P} where P,
+                                Tuple{P, Q} where {Q, P})
+    for e in env
+        if e isa Core.SimpleVector
+            inner = e[1]
+            if inner isa TypeVar
+                # Inner's ub must not be a TypeVar (no doubled bound chain).
+                @test !(inner.ub isa TypeVar)
+            end
+        end
+    end
+end
+
 # This one is tricky - because the `E` is outside the `<:` and the diagonal rule applies,
 # the RHS quantifies over varargs of concrete types and `Tuple{Vararg{T}}` is not one of those.
 @test !isa(Tuple{Vararg{T}} where T <: Integer,
