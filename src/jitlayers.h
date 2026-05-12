@@ -797,18 +797,14 @@ public:
     void addGlobalMapping(StringRef Name, uint64_t Addr) JL_NOTSAFEPOINT;
     void addOutput(jl_emitted_output_t O) JL_NOTSAFEPOINT;
 
-    //Methods for the C API
-    Error addExternalModule(orc::JITDylib &JD, orc::ThreadSafeModule TSM,
-                            bool ShouldOptimize = false) JL_NOTSAFEPOINT;
-    Error addObjectFile(orc::JITDylib &JD,
-                        std::unique_ptr<MemoryBuffer> Obj) JL_NOTSAFEPOINT;
+    // Methods mainly for the C API
+    Error addExternalModule(orc::JITDylib &JD, orc::ThreadSafeModule TSM, bool ShouldOptimize = false) JL_NOTSAFEPOINT;
+    Error addObjectFile(orc::JITDylib &JD, std::unique_ptr<MemoryBuffer> Obj) JL_NOTSAFEPOINT;
     orc::IRCompileLayer &getIRCompileLayer() JL_NOTSAFEPOINT { return CompileLayer; };
     orc::ExecutionSession &getExecutionSession() JL_NOTSAFEPOINT { return ES; }
-    orc::JITDylib &getExternalJITDylib() JL_NOTSAFEPOINT { return ExternalJD; }
+    orc::JITDylib &createJITDylib(StringRef NamePrefix) JL_NOTSAFEPOINT;
 
-    Expected<llvm::orc::ExecutorSymbolDef> findSymbol(StringRef Name, bool ExportedSymbolsOnly);
-    Expected<llvm::orc::ExecutorSymbolDef> findUnmangledSymbol(StringRef Name);
-    Expected<llvm::orc::ExecutorSymbolDef> findExternalJDSymbol(StringRef Name, bool ExternalJDOnly);
+    Expected<llvm::orc::ExecutorSymbolDef> findJDSymbol(orc::JITDylib &JD, StringRef Name, bool ExportedSymbolsOnly);
     SmallVector<uint64_t> findSymbols(ArrayRef<StringRef> Names);
     uint64_t getGlobalValueAddress(StringRef Name);
     uint64_t getFunctionAddress(StringRef Name);
@@ -900,9 +896,9 @@ private:
     const DataLayout DL;
 
     orc::ExecutionSession ES;
+    orc::JITDylib &SessionJD;
     orc::JITDylib &GlobalJD;
     orc::JITDylib &JD;
-    orc::JITDylib &ExternalJD;
     std::mutex SharedBytesMutex{};
     SharedBytesT SharedBytes;
 
