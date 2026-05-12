@@ -1065,7 +1065,16 @@ Public fields:
 
 The type of the entry can be checked for by calling [`isfile`](@ref), [`isdir`](@ref),
 [`islink`](@ref), [`isfifo`](@ref), [`issocket`](@ref), [`ischardev`](@ref), and [`isblockdev`](@ref)
-on the entry object.
+on the entry object. These predicates use the raw type cached at scan time when available; on
+filesystems that report `UV_DIRENT_UNKNOWN` (some network/FUSE mounts) and for symlinks they fall
+through to a `stat` syscall on each call. Callers in tight loops that need multiple predicates for
+the same entry should call [`stat`](@ref) once and reuse the result.
+
+!!! warning "Staleness"
+    A `DirEntry` is a snapshot from when the directory was scanned. The underlying filesystem may
+    have changed in the meantime: the entry may no longer exist, may have been replaced by a
+    different type, or the cached `rawtype` may be wrong. Treat `DirEntry` values as advisory
+    and re-`stat` if up-to-date information is required.
 """
 struct DirEntry
     dir::String
