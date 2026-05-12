@@ -63,6 +63,13 @@ extern void* MMTK_SIDE_VO_BIT_BASE_ADDRESS;
 // GC Initialization and Control
 // ========================================================================= //
 
+// JIT code needs to reference the global variable of MMTK_SIDE_LOG_BIT_BASE_ADDRESS.
+// We avoid directly reference the global variable from the binding. Otherwise, we have to tell
+// the linker about the binding library.
+// So we just keep a copy of MMTK_SIDE_LOG_BIT_BASE_ADDRESS and
+// this copy will be referenced by JIT code
+void* MMTK_SIDE_LOG_BIT_BASE_ADDRESS_JIT;
+
 void jl_gc_init(void) {
     // TODO: use jl_options.heap_size_hint to set MMTk's fixed heap size? (see issue: https://github.com/mmtk/mmtk-julia/issues/167)
     JL_MUTEX_INIT(&finalizers_lock, "finalizers_lock");
@@ -157,6 +164,9 @@ void jl_gc_init(void) {
     } else {
         mmtk_gc_init(min_heap_size, max_heap_size, gcthreads, (sizeof(jl_taggedvalue_t)), jl_buff_tag);
     }
+
+    // MMTk is initialized. Set the global variable for JIT code to reference.
+    MMTK_SIDE_LOG_BIT_BASE_ADDRESS_JIT = MMTK_SIDE_LOG_BIT_BASE_ADDRESS;
 }
 
 void jl_start_gc_threads(void) {

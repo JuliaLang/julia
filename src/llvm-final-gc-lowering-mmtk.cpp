@@ -138,8 +138,8 @@ void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
             // uint8_t* meta_addr = (uint8_t*) (SIDE_METADATA_BASE_ADDRESS + (addr >> 6));
             Value *metadata_base_ptr;
             if (jl_generating_output()) {
-                F.getParent()->getOrInsertGlobal("MMTK_SIDE_LOG_BIT_BASE_ADDRESS", i8_ptr_ty);
-                auto metadata_base_global = F.getParent()->getNamedGlobal("MMTK_SIDE_LOG_BIT_BASE_ADDRESS");
+                F.getParent()->getOrInsertGlobal("MMTK_SIDE_LOG_BIT_BASE_ADDRESS_JIT", i8_ptr_ty);
+                auto metadata_base_global = F.getParent()->getNamedGlobal("MMTK_SIDE_LOG_BIT_BASE_ADDRESS_JIT");
                 assert(metadata_base_global != nullptr);
                 auto metadata_base_load = builder.CreateAlignedLoad(
                     i8_ptr_ty, metadata_base_global, Align(sizeof(void *)), "mmtk_side_log_bit_base");
