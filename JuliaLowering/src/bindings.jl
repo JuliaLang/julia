@@ -124,6 +124,13 @@ function _new_binding(bindings::Bindings, srcref::SyntaxTree,
     bid = next_binding_id(bindings)
     ex = @ast _ srcref bid::K"BindingId"
     b = BindingInfo(bindings, name, kind, ex; kws...)
+    # Compiler-introduced bindings (`emit_assign_tmp`'s ssa, destructure
+    # `iterstate`, …) share the user's RHS source position, so their slot
+    # references would otherwise leak into source-range queries against the
+    # RHS. Mark the shared `K"BindingId"` node so leaves derived from it
+    # via `newleaf` inherit the synthesized flag (and linearization's `K"slot"` /
+    # `K"SSAValue"` leaves at every use site follow suit).
+    b.is_internal && _mark_synthesized!(ex)
     return b
 end
 

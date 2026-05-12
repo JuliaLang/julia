@@ -525,7 +525,15 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
                 @ast ctx ex [K"call" "apply_type"::K"core" ci.type_name tvs...]
             end
         else
-            @ast ctx ex [K"call" TypeEqOf::K"core" _convert_closures(ctx, func_name)]
+            # Mark the lowering-introduced `Core.Typeof(funcname)` call that
+            # builds the argtype svec for method defs as synthetic. Its source
+            # position overlaps the function-name identifier, so source-range queries
+            # without this mark would conflate the function value's `Const(T)`
+            # with the `Const(Type{T})` produced here.
+            @ast ctx ex [K"call"(;lowering_flags=LOWERING_FLAG_SYNTHESIZED)
+                TypeEqOf::K"core"
+                _convert_closures(ctx, func_name)
+            ]
         end
     elseif k == K"method_defs"
         name = ex[1]
