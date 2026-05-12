@@ -302,7 +302,11 @@ function lower_tuple_assignment(ctx, assignment_srcref, lhss, rhs)
     stmts = SyntaxList()
     tmp = emit_assign_tmp(stmts, ctx, rhs, "rhs_tmp")
     for (i, lh) in enumerate(lhss)
-        push!(stmts, @ast ctx assignment_srcref [K"="
+        # The synthesized flag marks lowering-introduced
+        # `slot_i = getfield(tmp, i)` assignments that share the user's
+        # `(a, b) = rhs` byte range.
+        push!(stmts, @ast ctx assignment_srcref [
+            K"="(;lowering_flags=LOWERING_FLAG_SYNTHESIZED)
             lh
             [K"call" "getfield"::K"core" tmp i::K"Integer"]
         ])
@@ -430,7 +434,12 @@ function expand_property_destruct(ctx, ex)
         propname = kind(prop) == K"Identifier"                           ? prop    :
                    kind(prop) == K"::" && kind(prop[1]) == K"Identifier" ? prop[1] :
                    throw(LoweringError(prop, "invalid assignment location"))
-        push!(stmts, expand_forms_2(ctx, @ast ctx rhs1 [K"="
+        # The user wrote `(; prop, ...) = rhs`, not
+        # `prop = getproperty(rhs, :prop)`, so mark this `K"="` as synthetic.
+        # This prevents its annotations from shadowing the user's RHS and
+        # destructured binding ranges in source-range queries.
+        push!(stmts, expand_forms_2(ctx, @ast ctx rhs1 [
+            K"="(;lowering_flags=LOWERING_FLAG_SYNTHESIZED)
             prop
             [K"call"
                 "getproperty"::K"top"
