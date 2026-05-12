@@ -825,7 +825,7 @@ end
 ## Memory
 
 using InteractiveUtils
-using Core: memoryrefget, memoryrefset!, memoryrefswap!, memoryrefreplace!, memoryrefmodify!, memoryrefsetonce!, memoryref_isassigned
+using Core: memoryrefget, memoryrefset!, memoryrefunset!, memoryrefswap!, memoryrefreplace!, memoryrefmodify!, memoryrefsetonce!, memoryref_isassigned
 
 @noinline function _test_memory_operators(r)
     r = r[]
@@ -1081,6 +1081,138 @@ test_memory_undef(Any)
 test_memory_undef(Union{Nothing,Integer})
 test_memory_undef(UndefComplex{Any})
 test_memory_undef(UndefComplex{UndefComplex{Any}})
+
+# memoryrefunset! on undefable element types: slot becomes undefined after clearing
+@noinline function _test_memory_unset(r)
+    r = r[]
+    @test memoryref_isassigned(r, :sequentially_consistent, true)
+    @test memoryrefunset!(r, :sequentially_consistent, true) === nothing
+    @test !memoryref_isassigned(r, :sequentially_consistent, true)
+    @test_throws UndefRefError memoryrefget(r, :sequentially_consistent, true)
+    # repeated unset on an already-cleared slot is a no-op
+    @test memoryrefunset!(r, :sequentially_consistent, true) === nothing
+    @test !memoryref_isassigned(r, :sequentially_consistent, true)
+    nothing
+end
+@noinline function test_memory_unset(T::Type)
+    x = convert(T, 12345_10)
+    r = GenericMemoryRef(AtomicMemory{T}(undef, 1))
+    memoryrefset!(r, x, :unordered, true)
+    _test_memory_unset(Ref(r))
+    r = GenericMemoryRef(AtomicMemory{T}(undef, 1))
+    memoryrefset!(r, x, :unordered, true)
+    _test_memory_unset(Ref{Any}(r))
+    nothing
+end
+test_memory_unset(Any)
+test_memory_unset(BigInt)
+test_memory_unset(Union{Nothing,Integer})
+test_memory_unset(UndefComplex{Any})
+test_memory_unset(UndefComplex{UndefComplex{Any}})
+
+# memoryrefunset! on non-atomic memory
+@noinline function _test_memory_unset_notatomic(r)
+    r = r[]
+    @test memoryref_isassigned(r, :not_atomic, true)
+    @test memoryrefunset!(r, :not_atomic, true) === nothing
+    @test !memoryref_isassigned(r, :not_atomic, true)
+    @test_throws UndefRefError memoryrefget(r, :not_atomic, true)
+    nothing
+end
+@noinline function test_memory_unset_notatomic(T::Type)
+    x = convert(T, 12345_10)
+    r = GenericMemoryRef(Memory{T}(undef, 1))
+    memoryrefset!(r, x, :not_atomic, true)
+    _test_memory_unset_notatomic(Ref(r))
+    r = GenericMemoryRef(Memory{T}(undef, 1))
+    memoryrefset!(r, x, :not_atomic, true)
+    _test_memory_unset_notatomic(Ref{Any}(r))
+    nothing
+end
+test_memory_unset_notatomic(Any)
+test_memory_unset_notatomic(BigInt)
+test_memory_unset_notatomic(UndefComplex{Any})
+test_memory_unset_notatomic(UndefComplex{UndefComplex{Any}})
+
+# memoryrefunset! on bits-only memory: no-op, the slot stays assigned
+@noinline function test_memory_unset_bits(T::Type, val)
+    @nospecialize val
+    r = GenericMemoryRef(Memory{T}(undef, 1))
+    r[] = val
+    @test memoryref_isassigned(r, :not_atomic, true)
+    @test memoryrefunset!(r, :not_atomic, true) === nothing
+    @test memoryref_isassigned(r, :not_atomic, true)
+    @test r[] === val
+    nothing
+end
+test_memory_unset_bits(Int, 42)
+test_memory_unset_bits(Float64, 3.14)
+test_memory_unset_bits(Complex{Int32}, Complex{Int32}(1, 2))
+
+# memoryrefunset! on isbits union memory: no-op (no GC pointers to clear)
+let r = GenericMemoryRef(Memory{Union{Int8,Float64}}(undef, 1))
+    r[] = 1.5
+    @test memoryref_isassigned(r, :not_atomic, true)
+    @test memoryrefunset!(r, :not_atomic, true) === nothing
+    @test memoryref_isassigned(r, :not_atomic, true)
+    @test r[] === 1.5
+end
+
+# memoryrefunset! ordering validation, mirroring the memoryrefset! patterns
+@noinline function _test_memory_unset_orderings(xr, yr)
+    xr = xr[]
+    yr = yr[]
+    # atomic memory: invalid orderings and non-atomic order should error
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefunset!(xr, :u, true)
+    @test_throws ConcurrencyViolationError("memoryrefunset!: atomic memory cannot be written non-atomically") memoryrefunset!(xr, :not_atomic, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefunset!(xr, :acquire, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefunset!(xr, :acquire_release, true)
+    # atomic memory: valid store orderings clear the slot
+    @test memoryref_isassigned(xr, :unordered, true)
+    @test memoryrefunset!(xr, :unordered, true) === nothing
+    @test !memoryref_isassigned(xr, :unordered, true)
+    @test memoryrefunset!(xr, :monotonic, true) === nothing
+    @test memoryrefunset!(xr, :release, true) === nothing
+    @test memoryrefunset!(xr, :sequentially_consistent, true) === nothing
+
+    # non-atomic memory: invalid orderings and atomic orders should error
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefunset!(yr, :u, true)
+    @test_throws ConcurrencyViolationError("memoryrefunset!: non-atomic memory cannot be written atomically") memoryrefunset!(yr, :unordered, true)
+    @test_throws ConcurrencyViolationError("memoryrefunset!: non-atomic memory cannot be written atomically") memoryrefunset!(yr, :monotonic, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefunset!(yr, :acquire, true)
+    @test_throws ConcurrencyViolationError("memoryrefunset!: non-atomic memory cannot be written atomically") memoryrefunset!(yr, :release, true)
+    @test_throws ConcurrencyViolationError("invalid atomic ordering") memoryrefunset!(yr, :acquire_release, true)
+    @test_throws ConcurrencyViolationError("memoryrefunset!: non-atomic memory cannot be written atomically") memoryrefunset!(yr, :sequentially_consistent, true)
+    # non-atomic memory: :not_atomic is the only valid ordering
+    @test memoryref_isassigned(yr, :not_atomic, true)
+    @test memoryrefunset!(yr, :not_atomic, true) === nothing
+    @test !memoryref_isassigned(yr, :not_atomic, true)
+    nothing
+end
+@noinline function test_memory_unset_orderings(T::Type, x)
+    @nospecialize x
+    xr = GenericMemoryRef(AtomicMemory{T}(undef, 1))
+    memoryrefset!(xr, x, :unordered, true)
+    yr = GenericMemoryRef(Memory{T}(undef, 1))
+    yr[] = x
+    GC.gc(false)
+    _test_memory_unset_orderings(Ref(xr), Ref(yr))
+    xr = GenericMemoryRef(AtomicMemory{T}(undef, 1))
+    memoryrefset!(xr, x, :unordered, true)
+    yr = GenericMemoryRef(Memory{T}(undef, 1))
+    yr[] = x
+    GC.gc(false)
+    _test_memory_unset_orderings(Ref{Any}(xr), Ref{Any}(yr))
+    nothing
+end
+test_memory_unset_orderings(Any, 12345_10)
+test_memory_unset_orderings(BigInt, big(12345_10))
+test_memory_unset_orderings(Union{Nothing,Integer}, 12345_10)
+
+# memoryrefunset! out-of-bounds: must throw BoundsError on empty memory unless @inbounds
+let r = GenericMemoryRef(Memory{Any}(undef, 0))
+    @test_throws BoundsError memoryrefunset!(r, :not_atomic, true)
+end
 
 @noinline function _test_once_undef(r)
     r = r[]
