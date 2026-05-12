@@ -139,7 +139,7 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
     BW.writeSymtab();
     BW.writeStrtab();
     llvm::toHex({(uint8_t *)&ModHash[0], sizeof ModHash}, true, KeyBuf);
-    KeyBuf[KeyBuf.size() - 1] = 0;
+    KeyBuf.push_back(0);
 
     MDB_txn *Txn;
     if (int Err = mdb_txn_begin(Env, nullptr, MDB_RDONLY | MDB_NOSYNC, &Txn)) {
