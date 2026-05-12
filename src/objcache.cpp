@@ -20,17 +20,24 @@ static FILE *getLogFile()
 
 static FILE *LogFile = getLogFile();
 
-static const char *getCachePath()
+static std::optional<std::string> getCachePath()
 {
+    // Useful to be able to override the objcache path for testing, or to use
+    // the cache during bootstrapping.
+    if (const char *P = getenv("JULIA_OBJCACHE_PATH"))
+        return {P};
     if (jl_base_module == nullptr)
-        return nullptr;
+        return {};
     jl_value_t *DepotPath = jl_get_global(jl_base_module, jl_symbol("DEPOT_PATH"));
     if (!DepotPath || !jl_is_array(DepotPath) || jl_array_len(DepotPath) < 1)
-        return nullptr;
+        return {};
     jl_value_t *DepotStr = jl_array_ptr_ref(DepotPath, 0);
     if (!jl_is_string(DepotStr))
-        return nullptr;
-    return jl_string_ptr(DepotStr);
+        return {};
+
+    return (llvm::Twine(jl_string_ptr(DepotStr)) + "/cache/v" +
+            llvm::Twine(JULIA_VERSION_MAJOR) + "." + llvm::Twine(JULIA_VERSION_MINOR))
+        .str();
 }
 
 class MDBMemoryBuffer : public llvm::MemoryBuffer {
@@ -59,8 +66,8 @@ void ObjCache::initDB()
         return;
 
     const char *Enable = getenv("JULIA_OBJCACHE");
-    const char *DepotPath = getCachePath();
-    if (!DepotPath || !Enable || strcmp(Enable, "1"))
+    auto CachePath = getCachePath();
+    if (!CachePath || !Enable || strcmp(Enable, "1"))
         goto done;
 
     if (checkMDB(mdb_env_create(&Env))) {
@@ -69,11 +76,8 @@ void ObjCache::initDB()
     }
     checkMDB(mdb_env_set_maxreaders(Env, 510));
     checkMDB(mdb_env_set_maxdbs(Env, 128));
-    Path = (llvm::Twine(DepotPath) + "/cache/v" + llvm::Twine(JULIA_VERSION_MAJOR) + "." +
-            llvm::Twine(JULIA_VERSION_MINOR))
-               .str();
-    llvm::sys::fs::create_directories(Path);
-    if (checkMDB(mdb_env_open(Env, Path.c_str(), 0, 0640))) {
+    llvm::sys::fs::create_directories(*CachePath);
+    if (checkMDB(mdb_env_open(Env, CachePath->c_str(), 0, 0640))) {
         mdb_env_close(Env);
         Env = nullptr;
         goto done;
