@@ -1254,8 +1254,8 @@ cleanup happens at end-of-iteration, on [`close`](@ref), or via a finalizer.
 
 See also [`readdir`](@ref), [`DirEntry`](@ref), [`walkdir`](@ref).
 
-!!! compat "Julia 1.13"
-    `scandir` requires Julia 1.13 or later.
+!!! compat "Julia 1.14"
+    `scandir` requires Julia 1.14 or later.
 
 # Examples
 ```julia
