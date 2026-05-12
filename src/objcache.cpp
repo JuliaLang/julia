@@ -43,12 +43,15 @@ static std::optional<std::string> getCachePath()
 
 class MDBMemoryBuffer : public llvm::MemoryBuffer {
 public:
-    MDBMemoryBuffer(MDB_txn *Txn, llvm::StringRef Data) : Txn(Txn), Data(Data) {}
+    MDBMemoryBuffer(MDB_txn *Txn, llvm::StringRef Data) : Txn(Txn)
+    {
+        init(Data.begin(), Data.end(), false);
+    }
     ~MDBMemoryBuffer() override { mdb_txn_abort(Txn); }
+    BufferKind getBufferKind() const override { return MemoryBuffer_MMap; }
 
 private:
     MDB_txn *Txn;
-    llvm::StringRef Data;
 };
 
 static int checkMDB(int Err)
@@ -78,7 +81,7 @@ void ObjCache::initDB()
     checkMDB(mdb_env_set_maxreaders(Env, 510));
     checkMDB(mdb_env_set_maxdbs(Env, 128));
     llvm::sys::fs::create_directories(*CachePath);
-    if (checkMDB(mdb_env_open(Env, CachePath->c_str(), 0, 0640))) {
+    if (checkMDB(mdb_env_open(Env, CachePath->c_str(), MDB_NOTLS, 0640))) {
         mdb_env_close(Env);
         Env = nullptr;
         goto done;
@@ -184,12 +187,10 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
         return Obj;
     }
 
-    auto Buf = llvm::MemoryBuffer::getMemBuffer(
-        llvm::StringRef((const char *)Data.mv_data, Data.mv_size), "", false);
+    auto Buf = std::make_unique<MDBMemoryBuffer>(
+        Txn, llvm::StringRef{(const char *)Data.mv_data, Data.mv_size});
     ++NHit;
     NRead += Buf->getBufferSize();
-
-    mdb_txn_abort(Txn);
 
     double LookupMs =
         std::chrono::duration<double, std::milli>(Clock::now() - LookupStart).count();
