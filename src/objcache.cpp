@@ -62,7 +62,7 @@ void ObjCache::initDB()
 {
     std::unique_lock<std::mutex> Lock{Mutex};
     std::string Path;
-    if (Initialized.load(memory_order_relaxed))
+    if (Initialized.load(memory_order_acquire))
         return;
 
     const char *Enable = getenv("JULIA_OBJCACHE");
@@ -98,7 +98,7 @@ void ObjCache::initDB()
         this);
 
 done:
-    Initialized.store(true, memory_order_relaxed);
+    Initialized.store(true, memory_order_release);
     return;
 }
 
@@ -115,7 +115,7 @@ __attribute__((destructor)) static void dump_stats()
 
 std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Compile)
 {
-    if (!Initialized.load(memory_order_relaxed))
+    if (!Initialized.load(memory_order_acquire))
         initDB();
 
     if (!Env)
