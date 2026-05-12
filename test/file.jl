@@ -48,9 +48,8 @@ end
         end
         for e in readdir(DirEntry, dir)
             if isdir(e)
-                @test only(readdir(e)).name == "bfile.txt"
+                @test only(readdir(e)) == "bfile.txt"
                 @test only(readdir(DirEntry, e)).name == "bfile.txt"
-                @test only(readdir(String, e)) == "bfile.txt"
             else
                 @test isfile(e)
                 @test e.name == "afile.txt"
@@ -59,23 +58,27 @@ end
     end
 end
 
-# scandir: lazy single-pass iteration of DirEntry objects
+# scandir: lazy single-pass iteration; default String, opt into DirEntry
 @testset "scandir" begin
     @test_throws Base.IOError iterate(scandir("does/not/exist"))
+    @test_throws Base.IOError iterate(scandir(DirEntry, "does/not/exist"))
 
     mktempdir() do dir
         touch(joinpath(dir, "afile.txt"))
         mkdir(joinpath(dir, "adir"))
         touch(joinpath(dir, "adir", "bfile.txt"))
 
-        # Same contents as readdir(DirEntry, …) modulo order
-        names = sort!(map(e -> e.name, collect(scandir(dir))))
-        @test names == sort!(readdir(dir))
+        # Default yields String names matching readdir
+        @test sort!(collect(scandir(dir))) == sort!(readdir(dir))
+        # DirEntry form yields DirEntry objects matching readdir(DirEntry, ...)
+        @test sort!(map(e -> e.name, collect(scandir(DirEntry, dir)))) == sort!(readdir(dir))
 
         # Iterator type and traits
         it = scandir(dir)
-        @test eltype(it) === Base.Filesystem.DirEntry
+        @test eltype(it) === String
         @test Base.IteratorSize(it) === Base.SizeUnknown()
+        itD = scandir(DirEntry, dir)
+        @test eltype(itD) === Base.Filesystem.DirEntry
 
         # Single-pass: once consumed, cannot iterate again
         for _ in it; end
@@ -85,6 +88,9 @@ end
         for e in scandir(dir)
             break
         end
+        for e in scandir(DirEntry, dir)
+            break
+        end
 
         # Explicit close is idempotent and disallows further iteration
         it2 = scandir(dir)
@@ -92,15 +98,20 @@ end
         close(it2)
         @test_throws ArgumentError iterate(it2)
 
-        # do-block form runs and cleans up
-        seen = scandir(dir) do entries
-            collect(e.name for e in entries)
+        # do-block forms run and clean up
+        seen = scandir(dir) do names
+            collect(names)
         end
         @test sort!(seen) == sort!(readdir(dir))
+        seenD = scandir(DirEntry, dir) do entries
+            collect(e.name for e in entries)
+        end
+        @test sort!(seenD) == sort!(readdir(dir))
 
         # Accepts a DirEntry as input
         sub = only(e for e in readdir(DirEntry, dir) if isdir(e))
-        @test sort!(map(e -> e.name, collect(scandir(sub)))) == ["bfile.txt"]
+        @test sort!(collect(scandir(sub))) == ["bfile.txt"]
+        @test sort!(map(e -> e.name, collect(scandir(DirEntry, sub)))) == ["bfile.txt"]
     end
 end
 

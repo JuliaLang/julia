@@ -1097,21 +1097,22 @@ isblockdev(obj::DirEntry) = (isunknown(obj) || islink(obj)) ? isblockdev(path(ob
 realpath(obj::DirEntry) = realpath(path(obj))
 
 """
-    readdir(::Type{DirEntry}, dir::Union{AbstractString,DirEntry}=pwd(); sort::Bool = true) -> Vector{DirEntry}
-    readdir(entry::DirEntry; sort::Bool=true) -> Vector{DirEntry}
-    readdir(::Type{String}, entry::DirEntry; join::Bool=false, sort::Bool=true) -> Vector{String}
+    readdir(::Type{DirEntry}, dir::AbstractString=pwd(); sort::Bool = true) -> Vector{DirEntry}
+    readdir(::Type{DirEntry}, entry::DirEntry; sort::Bool=true) -> Vector{DirEntry}
+    readdir(entry::DirEntry; join::Bool=false, sort::Bool=true) -> Vector{String}
 
 Return a vector of [`DirEntry`](@ref) objects representing the contents of the directory `dir`,
 or the current working directory if not given. If `sort` is true, the returned vector is
 sorted by name.
 
-The [`DirEntry`](@ref) objects that are returned contain the name of the
-file, the directory it is in, and the type of the file which is determined during the
-directory scan. This means that calls to [`isfile`](@ref), [`isdir`](@ref), [`islink`](@ref), [`isfifo`](@ref),
-[`issocket`](@ref), [`ischardev`](@ref), and [`isblockdev`](@ref) can be made on the
-returned objects without further stat calls. However, for some filesystems, the type of the file
-cannot be determined without a stat call. In these cases the `rawtype` field of the [`DirEntry`](@ref))
-object will be 0 (`UV_DIRENT_UNKNOWN`) and [`isfile`](@ref) etc. will fall back to a `stat` call.
+The element type is selected by the leading type argument: pass `DirEntry` to get
+[`DirEntry`](@ref) objects (which carry the type of each entry as determined during the
+directory scan, so [`isfile`](@ref), [`isdir`](@ref), etc. can be called without further
+`stat` calls), or omit it to get a `Vector{String}` of names — independent of whether the
+directory was specified as an `AbstractString` or a `DirEntry`. For some filesystems the
+type of the entry cannot be determined without a `stat` call; in those cases the `rawtype`
+field of the [`DirEntry`](@ref) is 0 (`UV_DIRENT_UNKNOWN`) and the predicates fall back to
+a `stat` call.
 
 # Examples
 ```julia
@@ -1121,16 +1122,15 @@ for entry in readdir(DirEntry, ".")
         continue
     end
     isdir(entry) || continue
-    for entry2 in readdir(entry)
+    for entry2 in readdir(DirEntry, entry)
         ...
     end
 end
 ```
 """
 readdir(::Type{DirEntry}, dir::AbstractString=pwd(); sort::Bool=true) = _readdir(dir; return_objects=true, sort)::Vector{DirEntry}
-readdir(::Type{DirEntry}, entry::DirEntry; sort::Bool=true) = readdir(entry; sort)::Vector{DirEntry}
-readdir(entry::DirEntry; sort::Bool=true) = readdir(DirEntry, path(entry); sort)::Vector{DirEntry}
-readdir(::Type{String}, entry::DirEntry; kwargs...) = readdir(path(entry); kwargs...)::Vector{String}
+readdir(::Type{DirEntry}, entry::DirEntry; sort::Bool=true) = readdir(DirEntry, path(entry); sort)::Vector{DirEntry}
+readdir(entry::DirEntry; kwargs...) = readdir(path(entry); kwargs...)::Vector{String}
 
 function _readdir(dir::AbstractString; return_objects::Bool=false, join::Bool=false, sort::Bool=true)
     # Allocate space for uv_fs_t struct
@@ -1166,21 +1166,25 @@ function _readdir(dir::AbstractString; return_objects::Bool=false, join::Bool=fa
 end
 
 """
-    DirEntryIterator
+    DirEntryIterator{T}
 
 A stateful, single-pass iterator over the entries of a directory, yielding
-[`DirEntry`](@ref) objects. Created by [`scandir`](@ref).
+either filename `String`s or [`DirEntry`](@ref) objects depending on the
+element type `T`. Created by [`scandir`](@ref).
 
 The underlying `uv_fs_t` request is opened lazily on the first call to
 `iterate` and is released when iteration reaches end-of-directory, when
 [`close`](@ref) is called, or by a finalizer. For deterministic cleanup
 on very large directories, prefer the do-block form of `scandir`.
 """
-mutable struct DirEntryIterator
+mutable struct DirEntryIterator{T}
     const dir::String
     req::Ptr{Cvoid}     # uv_fs_t, C_NULL until opened, C_NULL again after close
     closed::Bool
-    DirEntryIterator(dir::AbstractString) = finalizer(close, new(String(dir), C_NULL, false))
+    function DirEntryIterator{T}(dir::AbstractString) where {T}
+        T === String || T === DirEntry || throw(ArgumentError("element type must be String or DirEntry"))
+        finalizer(close, new{T}(String(dir), C_NULL, false))
+    end
 end
 
 function _scandir_open!(it::DirEntryIterator)
@@ -1209,11 +1213,11 @@ function Base.close(it::DirEntryIterator)
     return
 end
 
-Base.IteratorSize(::Type{DirEntryIterator}) = Base.SizeUnknown()
-Base.eltype(::Type{DirEntryIterator}) = DirEntry
+Base.IteratorSize(::Type{<:DirEntryIterator}) = Base.SizeUnknown()
+Base.eltype(::Type{DirEntryIterator{T}}) where {T} = T
 Base.isdone(it::DirEntryIterator, _=nothing) = it.closed
 
-function Base.iterate(it::DirEntryIterator, _=nothing)
+function Base.iterate(it::DirEntryIterator{T}, _=nothing) where {T}
     _scandir_open!(it)
     ent = Ref{uv_dirent_t}()
     rc = ccall(:uv_fs_scandir_next, Cint, (Ptr{Cvoid}, Ptr{uv_dirent_t}), it.req, ent)
@@ -1221,19 +1225,27 @@ function Base.iterate(it::DirEntryIterator, _=nothing)
         close(it)
         return nothing
     end
-    return DirEntry(it.dir, unsafe_string(ent[].name), ent[].typ), nothing
+    name = unsafe_string(ent[].name)
+    value = T === DirEntry ? DirEntry(it.dir, name, ent[].typ) : name
+    return value, nothing
 end
 
 """
-    scandir(dir::AbstractString=pwd()) -> DirEntryIterator
-    scandir(entry::DirEntry)           -> DirEntryIterator
-    scandir(f, dir)                    -> f(::DirEntryIterator)
+    scandir(dir::AbstractString=pwd())                     -> DirEntryIterator{String}
+    scandir(entry::DirEntry)                               -> DirEntryIterator{String}
+    scandir(::Type{DirEntry}, dir::AbstractString=pwd())   -> DirEntryIterator{DirEntry}
+    scandir(::Type{DirEntry}, entry::DirEntry)             -> DirEntryIterator{DirEntry}
+    scandir(f, [::Type{DirEntry},] dir)                    -> f(::DirEntryIterator)
 
-Return a stateful, single-pass iterator yielding [`DirEntry`](@ref) objects for
-the contents of the directory `dir` (or the current working directory if not
-given), without first materializing the full listing. Useful for very large
-directories or when iteration may be short-circuited (e.g. with `break` or
-[`Iterators.take`](@ref)).
+Return a stateful, single-pass iterator over the contents of the directory `dir`
+(or the current working directory if not given), without first materializing the
+full listing. Useful for very large directories or when iteration may be
+short-circuited (e.g. with `break` or [`Iterators.take`](@ref)).
+
+By default the iterator yields filename `String`s, matching [`readdir`](@ref).
+Pass `DirEntry` as the leading type argument to yield [`DirEntry`](@ref)
+objects, which carry the entry type as cached at scan time so [`isfile`](@ref),
+[`isdir`](@ref), etc. can be checked without further `stat` calls.
 
 Unlike [`readdir`](@ref), the entries are returned in filesystem order (not
 sorted) and the iterator can only be traversed once. The do-block form ensures
@@ -1248,22 +1260,32 @@ See also [`readdir`](@ref), [`DirEntry`](@ref), [`walkdir`](@ref).
 # Examples
 ```julia
 # short-circuit a huge directory
-for entry in scandir("/very/large/dir")
+for entry in scandir(DirEntry, "/very/large/dir")
     isfile(entry) && entry.name == "needle.txt" && break
 end
 
 # deterministic cleanup
-scandir("/very/large/dir") do entries
-    for entry in entries
+scandir("/very/large/dir") do names
+    for name in names
         ...
     end
 end
 ```
 """
-scandir(dir::AbstractString=pwd()) = DirEntryIterator(dir)
-scandir(entry::DirEntry) = DirEntryIterator(path(entry))
+scandir(dir::AbstractString=pwd()) = DirEntryIterator{String}(dir)
+scandir(entry::DirEntry) = DirEntryIterator{String}(path(entry))
+scandir(::Type{DirEntry}, dir::AbstractString=pwd()) = DirEntryIterator{DirEntry}(dir)
+scandir(::Type{DirEntry}, entry::DirEntry) = DirEntryIterator{DirEntry}(path(entry))
 function scandir(f, dir)
     it = scandir(dir)
+    try
+        return f(it)
+    finally
+        close(it)
+    end
+end
+function scandir(f, ::Type{DirEntry}, dir)
+    it = scandir(DirEntry, dir)
     try
         return f(it)
     finally

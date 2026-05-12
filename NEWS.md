@@ -84,12 +84,14 @@ New library features
   `c` to cleanly cancel immediately, `d` to detach, `i` for a profile peek,
   `v` to toggle verbose mode showing elapsed time, CPU%, and memory usage, and `?` for help. ([#60943]).
 * Instances of an `Enum` can now be given their own docstrings within the `@enum` definition ([#61955]).
-* New methods `readdir(DirEntry, path::String)` and `readdir(e::DirEntry)` will now return directory contents
+* New methods `readdir(DirEntry, path)` and `readdir(DirEntry, ::DirEntry)` return directory contents
   along with the type of the entries in a vector of new `DirEntry` objects to provide more efficient `isfile`
-  etc. checks ([#55358]).
-* New function `scandir(dir)` returns a stateful, single-pass iterator yielding `DirEntry` objects without
-  first materializing the full listing. Useful for very large directories or when iteration may be
-  short-circuited. A do-block form `scandir(f, dir)` ensures deterministic resource cleanup ([#55358]).
+  etc. checks. `readdir(::DirEntry)` accepts a `DirEntry` as input and, like `readdir(::AbstractString)`,
+  returns a `Vector{String}` of names ([#55358]).
+* New function `scandir(dir)` returns a stateful, single-pass iterator yielding filename `String`s
+  without first materializing the full listing. `scandir(DirEntry, dir)` yields `DirEntry` objects
+  instead. Useful for very large directories or when iteration may be short-circuited. A do-block form
+  `scandir(f, [DirEntry,] dir)` ensures deterministic resource cleanup ([#55358]).
 
 Standard library changes
 ------------------------
