@@ -109,6 +109,21 @@ let cfg = CFG(BasicBlock[
     @test length(compact.cfg_transform.result_bbs) == 4 && 0 in compact.cfg_transform.result_bbs[3].preds
 end
 
+# Test that removing a self-edge during compaction only scans compacted phi statements.
+let code = Any[
+        # Block 1
+        Compiler.GotoNode(2),
+        # Block 2
+        Core.PhiNode(Int32[1, 3], Any[1, 2]),
+        Compiler.GotoIfNot(true, 2),
+        # Block 3
+        Compiler.ReturnNode(0),
+    ]
+    ir = make_ircode(code)
+    ir = Compiler.compact!(ir, true)
+    @test Compiler.verify_ir(ir) === nothing
+end
+
 # Issue #32579 - Optimizer bug involving type constraints
 function f32579(x::Int, b::Bool)
     if b
@@ -168,6 +183,16 @@ end
 # Test that GlobalRef in value position is non-canonical
 let code = Any[
         Expr(:call, GlobalRef(Main, :something_not_defined_please))
+        ReturnNode(SSAValue(1))
+    ]
+    ir = make_ircode(code; verify=false)
+    ir = Compiler.compact!(ir, true)
+    @test_throws ["IR verification failed.", "Code location: "] Compiler.verify_ir(ir, false)
+end
+
+# Test that static_parameter in value position is non-canonical
+let code = Any[
+        Expr(:call, identity, Expr(:static_parameter, 1))
         ReturnNode(SSAValue(1))
     ]
     ir = make_ircode(code; verify=false)
@@ -816,11 +841,20 @@ end
 global global_error_switch = false
 @test f_must_throw_phinode_edge() == 1
 
+function roundtrip_di(codelocs, firstline, nstmts)
+    str = ccall(:jl_compress_codelocs,
+                Any, (Int32, Any, Int), firstline, codelocs, nstmts)::String;
+    di = Core.DebugInfo(:foo, nothing, Core.svec(), str)
+    return ccall(:jl_uncompress_codelocs, Any, (Any, Int), di, nstmts)
+end
+
 # Test roundtrip of debuginfo compression
-let cl = Int32[32, 1, 1, 1000, 240, 230]
-    str = ccall(:jl_compress_codelocs, Any, (Int32, Any, Int), 378, cl, 2)::String;
-    cl2 = ccall(:jl_uncompress_codelocs, Any, (Any, Int), str, 2)
-    @test cl == cl2
+let cl = Int32[32, 1, 1, 1000, 240, 230, 0, 0, 0]
+    @test roundtrip_di(cl, -1, 3) == cl
+    @test roundtrip_di(cl, 0, 3) == cl
+    @test roundtrip_di(cl, 1, 3) == cl
+    @test roundtrip_di(cl, 32, 3) == cl
+    @test roundtrip_di(cl, 33, 3) == cl
 end
 
 @test_throws ErrorException Base.code_ircode(+, (Float64, Float64); optimize_until = "nonexisting pass name")
@@ -845,3 +879,19 @@ end
 let ir = Base.code_ircode(_worker_task57153, (), optimize_until="CC: COMPACT_2")[1].first
     @test findfirst(x->x==0, ir.cfg.blocks[1].preds) !== nothing
 end
+
+# Tests that CFG edge cleanup during compaction doesn't corrupt iteration codegen.
+Trips_60660 = let
+    Ts = (Float64, Float32)
+    [(Ta, Tb, Tc) for Ta in Ts for Tb in Ts for Tc in Ts]
+end
+@test Trips_60660 == [
+    (Float64, Float64, Float64),
+    (Float64, Float64, Float32),
+    (Float64, Float32, Float64),
+    (Float64, Float32, Float32),
+    (Float32, Float64, Float64),
+    (Float32, Float64, Float32),
+    (Float32, Float32, Float64),
+    (Float32, Float32, Float32),
+]

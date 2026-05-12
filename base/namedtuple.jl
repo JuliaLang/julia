@@ -159,7 +159,7 @@ end
 length(t::NamedTuple) = nfields(t)
 iterate(t::NamedTuple, iter=1) = iter > nfields(t) ? nothing : (getfield(t, iter), iter + 1)
 rest(t::NamedTuple) = t
-@inline rest(t::NamedTuple{names}, i::Int) where {names} = NamedTuple{rest(names,i)}(t)
+@inline rest(t::NamedTuple{names}, i) where {names} = NamedTuple{rest(names,i::Int)}(t)
 firstindex(t::NamedTuple) = 1
 lastindex(t::NamedTuple) = nfields(t)
 getindex(t::NamedTuple, i::Int) = getfield(t, i)
@@ -256,7 +256,7 @@ same_names(::NamedTuple{names}...) where {names} = true
 same_names(::NamedTuple...) = false
 
 # NOTE: this method signature makes sure we don't define map(f)
-function map(f, nt::NamedTuple{names}, nts::NamedTuple...) where names
+function map(f::F, nt::NamedTuple{names}, nts::NamedTuple...) where {names, F}
     if !same_names(nt, nts...)
         throw(ArgumentError("Named tuple names do not match."))
     end

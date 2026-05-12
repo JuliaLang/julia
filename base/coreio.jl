@@ -12,7 +12,9 @@ println(io::IO) = print(io, "\n")
 function show end
 function repr end
 
-struct DevNull <: IO end
+struct DevNull <: IO
+    DevNull() = new()
+end
 const devnull = DevNull()
 write(::DevNull, ::UInt8) = 1
 unsafe_write(::DevNull, ::Ptr{UInt8}, n::UInt)::Int = n

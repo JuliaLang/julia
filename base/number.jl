@@ -11,6 +11,8 @@ convert(::Type{T}, x::Number) where {T<:Number} = T(x)::T
 
 Test whether `x` is numerically equal to some integer.
 
+See also [`iszero`](@ref), [`isone`](@ref), [`isfinite`](@ref), [`isnan`](@ref).
+
 # Examples
 ```jldoctest
 julia> isinteger(4.0)
@@ -25,7 +27,7 @@ isinteger(x::Integer) = true
 Return `true` if `x == zero(x)`; if `x` is an array, this checks whether
 all of the elements of `x` are zero.
 
-See also: [`isone`](@ref), [`isinteger`](@ref), [`isfinite`](@ref), [`isnan`](@ref).
+See also [`isone`](@ref), [`isinteger`](@ref), [`isfinite`](@ref), [`isnan`](@ref).
 
 # Examples
 ```jldoctest
@@ -47,6 +49,8 @@ iszero(x) = x == zero(x) # fallback method
 Return `true` if `x == one(x)`; if `x` is an array, this checks whether
 `x` is an identity matrix.
 
+See also [`iszero`](@ref), [`isinteger`](@ref), [`isfinite`](@ref), [`isnan`](@ref).
+
 # Examples
 ```jldoctest
 julia> isone(1.0)
@@ -65,6 +69,8 @@ isone(x) = x == one(x) # fallback method
     isfinite(f)::Bool
 
 Test whether a number is finite.
+
+See also [`iszero`](@ref), [`isone`](@ref), [`isinteger`](@ref), [`isnan`](@ref).
 
 # Examples
 ```jldoctest
@@ -117,7 +123,7 @@ copy(x::Number) = x # some code treats numbers as collection-like
 
 Return `true` if the value of the sign of `x` is negative, otherwise `false`.
 
-See also [`sign`](@ref) and [`copysign`](@ref).
+See also [`sign`](@ref), [`copysign`](@ref).
 
 # Examples
 ```jldoctest

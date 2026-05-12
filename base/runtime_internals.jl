@@ -7,7 +7,7 @@
 
 Get a module's enclosing `Module`. `Main` is its own parent.
 
-See also: [`names`](@ref), [`nameof`](@ref), [`fullname`](@ref), [`@__MODULE__`](@ref).
+See also [`names`](@ref), [`nameof`](@ref), [`fullname`](@ref), [`@__MODULE__`](@ref).
 
 # Examples
 ```jldoctest
@@ -113,7 +113,7 @@ since it is not idiomatic to explicitly mark names from `Main` as public.
 !!! compat "Julia 1.12"
     The `usings` argument requires Julia 1.12 or later.
 
-See also: [`Base.isexported`](@ref), [`Base.ispublic`](@ref), [`Base.@locals`](@ref), [`@__MODULE__`](@ref).
+See also [`Base.isexported`](@ref), [`Base.ispublic`](@ref), [`Base.@locals`](@ref), [`@__MODULE__`](@ref).
 """
 names(m::Module; kwargs...) = sort!(unsorted_names(m; kwargs...))
 unsorted_names(m::Module; all::Bool=false, imported::Bool=false, usings::Bool=false) =
@@ -124,7 +124,7 @@ unsorted_names(m::Module; all::Bool=false, imported::Bool=false, usings::Bool=fa
 
 Return whether a symbol is exported from a module.
 
-See also: [`ispublic`](@ref), [`names`](@ref)
+See also [`ispublic`](@ref), [`names`](@ref).
 
 ```jldoctest
 julia> module Mod
@@ -155,7 +155,7 @@ Exported symbols are considered public.
 !!! compat "Julia 1.11"
     This function and the notion of publicity were added in Julia 1.11.
 
-See also: [`isexported`](@ref), [`names`](@ref)
+See also [`isexported`](@ref), [`names`](@ref).
 
 ```jldoctest
 julia> module Mod
@@ -208,6 +208,9 @@ julia> bar() = nameof(@__FUNCTION__);
 julia> bar()
 :bar
 ```
+
+!!! compat "Julia 1.13"
+    This macro requires at least Julia 1.13.
 """
 macro __FUNCTION__()
     Expr(:thisfunction)
@@ -293,7 +296,7 @@ end
 
 partition_restriction(bpart::Core.BindingPartition) = ccall(:jl_bpart_get_restriction_value, Any, (Any,), bpart)
 
-binding_kind(bpart::Core.BindingPartition) = ccall(:jl_bpart_get_kind, UInt8, (Any,), bpart)
+binding_kind(bpart::Core.BindingPartition) = UInt8(bpart.kind & PARTITION_MASK_KIND)
 binding_kind(m::Module, s::Symbol) = binding_kind(lookup_binding_partition(tls_world_age(), GlobalRef(m, s)))
 
 """
@@ -640,8 +643,8 @@ end
     Base.datatype_isbitsegal(dt::DataType)::Bool
 
 Return whether egality of the (non-padding bits of the) in-memory representation
-of an instance of this type implies semantic egality of the instance itself.
-This may not be the case if the type contains to other values whose egality is
+of an instance of this type is equivalent to semantic egality of the instance itself.
+This may not be the case if the type contains pointers to other values whose egality is
 independent of their identity (e.g. immutable structs, some types, etc.).
 """
 function datatype_isbitsegal(dt::DataType)
@@ -759,14 +762,13 @@ function getindex(dtfd::DataTypeFieldDesc, i::Int)
     fielddesc_type = (layout.flags >> 1) & 3
     nfields = layout.nfields
     @boundscheck ((1 <= i <= nfields) || throw(BoundsError(dtfd, i)))
-    if fielddesc_type == 0
+    if fielddesc_type == 0  # JL_FIELDDESC_8
         return FieldDesc(unsafe_load(Ptr{FieldDescStorage{UInt8}}(fd_ptr), i))
-    elseif fielddesc_type == 1
+    elseif fielddesc_type == 1  # JL_FIELDDESC_16
         return FieldDesc(unsafe_load(Ptr{FieldDescStorage{UInt16}}(fd_ptr), i))
-    elseif fielddesc_type == 2
+    elseif fielddesc_type == 2  # JL_FIELDDESC_32
         return FieldDesc(unsafe_load(Ptr{FieldDescStorage{UInt32}}(fd_ptr), i))
-    else
-        # fielddesc_type == 3
+    else # fielddesc_type == 3  # JL_FIELDDESC_FOREIGN
         return FieldDesc(true, true, 0, 0)
     end
 end
@@ -1001,7 +1003,7 @@ iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union |
 Return true if `T` is a [concrete type](@ref isconcretetype) that could appear
 as an element of a [dispatch tuple](@ref isdispatchtuple).
 
-See also: [`isdispatchtuple`](@ref).
+See also [`isdispatchtuple`](@ref).
 
 # Examples
 ```jldoctest
@@ -1050,7 +1052,7 @@ If `T` is not a type, then return `false`.
     possible for a type `U` to exist such that `T == U`, `isconcretetype(T)`,
     but `!isconcretetype(U)`.
 
-See also: [`isbits`](@ref), [`isabstracttype`](@ref), [`issingletontype`](@ref).
+See also [`isbits`](@ref), [`isabstracttype`](@ref), [`issingletontype`](@ref).
 
 # Examples
 ```jldoctest
@@ -1093,7 +1095,7 @@ If `T` is not a type, then return `false`.
     vice versa, types can be neither concrete nor abstract (for example,
     `Vector` (a [`UnionAll`](@ref))).
 
-See also: [`isconcretetype`](@ref).
+See also [`isconcretetype`](@ref).
 
 # Examples
 ```jldoctest
@@ -1366,7 +1368,7 @@ julia> fieldtypes(Foo)
 (Int64, String)
 ```
 """
-fieldtypes(T::Type) = (@_foldable_meta; ntupleany(i -> fieldtype(T, i), fieldcount(T)))
+fieldtypes(@nospecialize T::Type) = (@_foldable_meta; ntupleany(i -> fieldtype(T, i), fieldcount(T)))
 
 # return all instances, for types that can be enumerated
 
@@ -1478,7 +1480,7 @@ of the documented interface of `x`.   If you want it to also return "private"
 property names intended for internal use, pass `true` for the optional second argument.
 REPL tab completion on `x.` shows only the `private=false` properties.
 
-See also: [`hasproperty`](@ref), [`hasfield`](@ref).
+See also [`hasproperty`](@ref), [`hasfield`](@ref).
 """
 propertynames(x) = fieldnames(typeof(x))
 propertynames(m::Module) = names(m)
@@ -1493,7 +1495,7 @@ Return a boolean indicating whether the object `x` has `s` as one of its own pro
 !!! compat "Julia 1.2"
      This function requires at least Julia 1.2.
 
-See also: [`propertynames`](@ref), [`hasfield`](@ref).
+See also [`propertynames`](@ref), [`hasfield`](@ref).
 """
 hasproperty(x, s::Symbol) = s in propertynames(x)
 
@@ -1543,10 +1545,14 @@ If `types` is specified, return an array of methods whose types match.
 If `module` is specified, return an array of methods defined in that module.
 A list of modules can also be specified as an array or set.
 
+The methods are ordered from most to least specific. The relative order of
+methods without a specificity relationship (i.e. ambiguous or incomparable)
+is unspecified.
+
 !!! compat "Julia 1.4"
     At least Julia 1.4 is required for specifying a module.
 
-See also: [`which`](@ref), [`@which`](@ref Main.InteractiveUtils.@which) and [`methodswith`](@ref Main.InteractiveUtils.methodswith).
+See also [`which`](@ref), [`@which`](@ref Main.InteractiveUtils.@which), [`methodswith`](@ref Main.InteractiveUtils.methodswith).
 """
 function methods(@nospecialize(f), @nospecialize(t),
                  mod::Union{Tuple{Module},AbstractArray{Module},AbstractSet{Module},Nothing}=nothing)

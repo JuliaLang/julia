@@ -66,8 +66,7 @@ function endswith(a::AbstractString, b::AbstractString)
 end
 endswith(str::AbstractString, chars::Chars) = !isempty(str) && last(str) in chars
 
-function startswith(a::Union{String, SubString{String}},
-                    b::Union{String, SubString{String}})
+function startswith(a::DenseUTF8String, b::DenseUTF8String)
     cub = ncodeunits(b)
     if ncodeunits(a) < cub
         false
@@ -78,28 +77,34 @@ function startswith(a::Union{String, SubString{String}},
     end
 end
 
+# nothrow+foldable: `String`/`SubString{String}` buffers are immutable, the
+# byte-wise `_memcmp` is bounded by `sizeof(b) ≤ ncodeunits(a)`, and
+# `nextind(a, cub)` operates on a valid index (`0 ≤ cub ≤ ncodeunits(a)`).
+@assume_effects :nothrow :foldable function startswith(a::Union{String,SubString{String}}, b::Union{String,SubString{String}})
+    @invoke startswith(a::DenseUTF8String, b::DenseUTF8String)
+end
+
 """
     startswith(io::IO, prefix::Union{AbstractString,Base.Chars})
 
 Check if an `IO` object starts with a prefix, which can be either a string, a
 character, or a tuple/vector/set of characters.  See also [`peek`](@ref).
 """
-function Base.startswith(io::IO, prefix::Base.Chars)
+function startswith(io::IO, prefix::Base.Chars)
     mark(io)
     c = read(io, Char)
     reset(io)
     return c in prefix
 end
-function Base.startswith(io::IO, prefix::Union{String,SubString{String}})
+function startswith(io::IO, prefix::UTF8String)
     mark(io)
     s = read(io, ncodeunits(prefix))
     reset(io)
     return s == codeunits(prefix)
 end
-Base.startswith(io::IO, prefix::AbstractString) = startswith(io, String(prefix)::String)
+startswith(io::IO, prefix::AbstractString) = startswith(io, String(prefix)::String)
 
-function endswith(a::Union{String, SubString{String}},
-                  b::Union{String, SubString{String}})
+function endswith(a::DenseUTF8String, b::DenseUTF8String)
     astart = ncodeunits(a) - ncodeunits(b) + 1
     if astart < 1
         false
@@ -108,6 +113,12 @@ function endswith(a::Union{String, SubString{String}},
     else
         false
     end
+end
+
+# nothrow+foldable: see `startswith` above; `pointer(a, astart)` is in bounds
+# (`1 ≤ astart ≤ ncodeunits(a)+1`), and `thisind(a, astart)` accepts the same range.
+@assume_effects :nothrow :foldable function endswith(a::Union{String,SubString{String}}, b::Union{String,SubString{String}})
+    @invoke endswith(a::DenseUTF8String, b::DenseUTF8String)
 end
 
 """
@@ -392,7 +403,7 @@ The default behaviour is to remove leading whitespace and delimiters: see
 The optional `chars` argument specifies which characters to remove: it can be a single
 character, or a vector or set of characters.
 
-See also [`strip`](@ref) and [`rstrip`](@ref).
+See also [`strip`](@ref), [`rstrip`](@ref).
 
 # Examples
 ```jldoctest
@@ -427,7 +438,7 @@ The default behaviour is to remove trailing whitespace and delimiters: see
 The optional `chars` argument specifies which characters to remove: it can be a single
 character, or a vector or set of characters.
 
-See also [`strip`](@ref) and [`lstrip`](@ref).
+See also [`strip`](@ref), [`lstrip`](@ref).
 
 # Examples
 ```jldoctest
@@ -462,10 +473,10 @@ The default behaviour is to remove leading and trailing whitespace and delimiter
 The optional `chars` argument specifies which characters to remove: it can be a single
 character, vector or set of characters.
 
-See also [`lstrip`](@ref) and [`rstrip`](@ref).
-
 !!! compat "Julia 1.2"
     The method which accepts a predicate function requires Julia 1.2 or later.
+
+See also [`lstrip`](@ref), [`rstrip`](@ref).
 
 # Examples
 ```jldoctest
@@ -487,13 +498,16 @@ Stringify `s` and pad the resulting string on the left with `p` to make it `n`
 characters (in [`textwidth`](@ref)) long. If `s` is already `n` characters long, an equal
 string is returned. Pad with spaces by default.
 
+!!! compat "Julia 1.7"
+    In Julia 1.7, this function was changed to use `textwidth` rather than a raw character (codepoint) count.
+
+See also [`rpad`](@ref).
+
 # Examples
 ```jldoctest
 julia> lpad("March", 10)
 "     March"
 ```
-!!! compat "Julia 1.7"
-    In Julia 1.7, this function was changed to use `textwidth` rather than a raw character (codepoint) count.
 """
 lpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ') = lpad(string(s)::AbstractString, n, string(p))
 
@@ -524,13 +538,16 @@ Stringify `s` and pad the resulting string on the right with `p` to make it `n`
 characters (in [`textwidth`](@ref)) long. If `s` is already `n` characters long, an equal
 string is returned. Pad with spaces by default.
 
+!!! compat "Julia 1.7"
+    In Julia 1.7, this function was changed to use `textwidth` rather than a raw character (codepoint) count.
+
+See also [`lpad`](@ref).
+
 # Examples
 ```jldoctest
 julia> rpad("March", 20)
 "March               "
 ```
-!!! compat "Julia 1.7"
-    In Julia 1.7, this function was changed to use `textwidth` rather than a raw character (codepoint) count.
 """
 rpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ') = rpad(string(s)::AbstractString, n, string(p))
 
@@ -560,6 +577,11 @@ end
 Truncate `str` to at most `maxwidth` columns (as estimated by [`textwidth`](@ref)), replacing the last characters
 with `replacement` if necessary. The default replacement string is "…".
 
+!!! compat "Julia 1.12"
+    This function was added in Julia 1.12.
+
+See also [`ltruncate`](@ref), [`ctruncate`](@ref).
+
 # Examples
 ```jldoctest
 julia> s = rtruncate("🍕🍕 I love 🍕", 10)
@@ -571,11 +593,6 @@ julia> textwidth(s)
 julia> rtruncate("foo", 3)
 "foo"
 ```
-
-!!! compat "Julia 1.12"
-    This function was added in Julia 1.12.
-
-See also [`ltruncate`](@ref) and [`ctruncate`](@ref).
 """
 function rtruncate(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…')
     ret = string_truncate_boundaries(str, Int(maxwidth), replacement, Val(:right))
@@ -593,6 +610,11 @@ end
 Truncate `str` to at most `maxwidth` columns (as estimated by [`textwidth`](@ref)), replacing the first characters
 with `replacement` if necessary. The default replacement string is "…".
 
+!!! compat "Julia 1.12"
+    This function was added in Julia 1.12.
+
+See also [`rtruncate`](@ref), [`ctruncate`](@ref).
+
 # Examples
 ```jldoctest
 julia> s = ltruncate("🍕🍕 I love 🍕", 10)
@@ -604,11 +626,6 @@ julia> textwidth(s)
 julia> ltruncate("foo", 3)
 "foo"
 ```
-
-!!! compat "Julia 1.12"
-    This function was added in Julia 1.12.
-
-See also [`rtruncate`](@ref) and [`ctruncate`](@ref).
 """
 function ltruncate(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…')
     ret = string_truncate_boundaries(str, Int(maxwidth), replacement, Val(:left))
@@ -627,6 +644,11 @@ Truncate `str` to at most `maxwidth` columns (as estimated by [`textwidth`](@ref
 with `replacement` if necessary. The default replacement string is "…". By default, the truncation
 prefers keeping chars on the left, but this can be changed by setting `prefer_left` to `false`.
 
+!!! compat "Julia 1.12"
+    This function was added in Julia 1.12.
+
+See also [`ltruncate`](@ref), [`rtruncate`](@ref).
+
 # Examples
 ```jldoctest
 julia> s = ctruncate("🍕🍕 I love 🍕", 10)
@@ -638,11 +660,6 @@ julia> textwidth(s)
 julia> ctruncate("foo", 3)
 "foo"
 ```
-
-!!! compat "Julia 1.12"
-    This function was added in Julia 1.12.
-
-See also [`ltruncate`](@ref) and [`rtruncate`](@ref).
 """
 function ctruncate(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…'; prefer_left::Bool = true)
     ret = string_truncate_boundaries(str, Int(maxwidth), replacement, Val(:center), prefer_left)
@@ -721,10 +738,10 @@ The optional keyword arguments are:
  - `keepempty`: whether empty fields should be kept in the result. Default is `false` without
    a `dlm` argument, `true` with a `dlm` argument.
 
-See also [`split`](@ref).
-
 !!! compat "Julia 1.8"
     The `eachsplit` function requires at least Julia 1.8.
+
+See also [`split`](@ref).
 
 # Examples
 ```jldoctest
@@ -822,10 +839,10 @@ The optional keyword arguments are:
 Note that unlike [`split`](@ref), [`rsplit`](@ref) and [`eachsplit`](@ref), this
 function iterates the substrings right to left as they occur in the input.
 
-See also [`eachsplit`](@ref), [`rsplit`](@ref).
-
 !!! compat "Julia 1.11"
     This function requires Julia 1.11 or later.
+
+See also [`eachsplit`](@ref), [`rsplit`](@ref).
 
 # Examples
 ```jldoctest
@@ -1221,6 +1238,8 @@ to `dest`. The length of `dest` must be half the length of `itr`.
     Calling hex2bytes! with iterators producing UInt8 requires
     version 1.7. In earlier versions, you can collect the iterable
     before calling instead.
+
+See also [`hex2bytes`](@ref), [`bytes2hex`](@ref).
 """
 function hex2bytes!(dest::AbstractArray{UInt8}, itr)
     isodd(length(itr)) && throw(ArgumentError("length of iterable must be even"))
@@ -1259,6 +1278,8 @@ via `bytes2hex(io, itr)`.  The hexadecimal characters are all lowercase.
     Calling `bytes2hex` with arbitrary iterators producing `UInt8` values requires
     Julia 1.7 or later. In earlier versions, you can `collect` the iterator
     before calling `bytes2hex`.
+
+See also [`hex2bytes`](@ref), [`hex2bytes!`](@ref).
 
 # Examples
 ```jldoctest
@@ -1311,7 +1332,7 @@ end
 Convert a string to `String` type and check that it contains only ASCII data, otherwise
 throwing an `ArgumentError` indicating the position of the first non-ASCII byte.
 
-See also the [`isascii`](@ref) predicate to filter or replace non-ASCII characters.
+See also [`isascii`](@ref).
 
 # Examples
 ```jldoctest

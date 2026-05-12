@@ -16,6 +16,7 @@
 #ifdef _OS_WINDOWS_
 #include <winternl.h>
 uv_mutex_t jl_in_stackwalk;
+uv_mutex_t jl_dll_notify_lock;
 #define jl_unw_get(context) (RtlCaptureContext(context), 0)
 #elif !defined(JL_DISABLE_LIBUNWIND)
 #define jl_unw_get(context) unw_getcontext(context)
@@ -494,6 +495,16 @@ typedef const LDR_DLL_NOTIFICATION_DATA *PCLDR_DLL_NOTIFICATION_DATA;
 #define LDR_DLL_NOTIFICATION_REASON_LOADED   1
 #define LDR_DLL_NOTIFICATION_REASON_UNLOADED 2
 
+typedef struct dll_notification_event {
+    ULONG      NotificationReason;
+    wchar_t   *FullDllName;
+    wchar_t   *BaseDllName;
+    uintptr_t  DllBase;
+    ULONG      SizeOfImage;
+    struct dll_notification_event *next;
+} dll_notification_event_t;
+static dll_notification_event_t *dll_notify_queue = NULL;
+
 // Forward declarations for ntdll functions
 typedef VOID CALLBACK (*PLDR_DLL_NOTIFICATION_FUNCTION)(
   ULONG                       NotificationReason,
@@ -503,6 +514,56 @@ typedef VOID CALLBACK (*PLDR_DLL_NOTIFICATION_FUNCTION)(
 NTSTATUS NTAPI LdrRegisterDllNotification(ULONG Flags, PLDR_DLL_NOTIFICATION_FUNCTION NotificationFunction, PVOID Context, PVOID *Cookie);
 NTSTATUS NTAPI LdrUnregisterDllNotification(PVOID Cookie);
 
+// caller should hold jl_in_stackwalk and jl_dll_notify_lock locks
+void jl_profile_process_dll_events(void) JL_NOTSAFEPOINT
+{
+    dll_notification_event_t *event = dll_notify_queue;
+    while (event) {
+        if (event->NotificationReason == LDR_DLL_NOTIFICATION_REASON_LOADED) {
+            SymLoadModuleExW(GetCurrentProcess(), NULL,
+                             event->FullDllName,
+                             event->BaseDllName,
+                             event->DllBase,
+                             event->SizeOfImage,
+                             NULL,
+                             0);
+            free(event->FullDllName);
+            free(event->BaseDllName);
+        }
+        else if (event->NotificationReason == LDR_DLL_NOTIFICATION_REASON_UNLOADED) {
+            // if this unload event has an earlier load event in the queue, process neither
+            //
+            // this ensures that we do not try to process DLL symbols for a module that was
+            // already unloaded, or which is concurrently unloading
+            int prior_enqueued_load_of_same_module = 0;
+            dll_notification_event_t *prior_event = event;
+            while (prior_event->next) {
+                if (prior_event->next->DllBase == event->DllBase) {
+                    assert(prior_event->next->NotificationReason == LDR_DLL_NOTIFICATION_REASON_LOADED);
+                    prior_enqueued_load_of_same_module = 1;
+                    break;
+                }
+                prior_event = prior_event->next;
+            }
+            if (prior_enqueued_load_of_same_module) {
+                // skip processing for the prior load event and this unload event
+                dll_notification_event_t *load_event = prior_event->next;
+                prior_event->next = load_event->next;
+                free(load_event->FullDllName);
+                free(load_event->BaseDllName);
+                free(load_event);
+            } else {
+                SymUnloadModule64(GetCurrentProcess(), event->DllBase);
+            }
+        }
+
+        dll_notification_event_t *next = event->next;
+        free(event);
+        event = next;
+    }
+    dll_notify_queue = NULL;
+}
+
 // Callback for LdrRegisterDllNotification
 static VOID CALLBACK dll_notification_callback(
     ULONG NotificationReason,
@@ -510,29 +571,37 @@ static VOID CALLBACK dll_notification_callback(
     PVOID Context)
 {
     (void)Context;
-    uv_mutex_lock(&jl_in_stackwalk);
-    // Store DLL information and update symbol handler based on notification reason
+
+    dll_notification_event_t *event = (dll_notification_event_t*)malloc(sizeof(dll_notification_event_t));
     if (NotificationReason == LDR_DLL_NOTIFICATION_REASON_LOADED) {
         const LDR_DLL_LOADED_NOTIFICATION_DATA *data = &NotificationData->Loaded;
-        SymLoadModuleExW(GetCurrentProcess(), NULL,
-                         data->FullDllName->Buffer,
-                         data->BaseDllName->Buffer,
-                         (uintptr_t)data->DllBase,
-                         data->SizeOfImage,
-                         NULL,
-                         0);
+        event->FullDllName = _wcsdup(data->FullDllName->Buffer);
+        event->BaseDllName = _wcsdup(data->BaseDllName->Buffer);
+        event->DllBase = (uintptr_t)data->DllBase;
+        event->SizeOfImage = data->SizeOfImage;
     }
     else if (NotificationReason == LDR_DLL_NOTIFICATION_REASON_UNLOADED) {
-        const LDR_DLL_UNLOADED_NOTIFICATION_DATA *data = &NotificationData->Unloaded;
-        SymUnloadModule64(GetCurrentProcess(), (uintptr_t)data->DllBase);
+        event->DllBase = (uintptr_t)NotificationData->Unloaded.DllBase;
     }
-    uv_mutex_unlock(&jl_in_stackwalk);
+
+    // This lock guards both the data structure, as well as the possibility
+    // that a DLL is about to unloaded that is concurrently being processed
+    // by `SymLoadModuleExW`
+    uv_mutex_lock(&jl_dll_notify_lock);
+
+    event->NotificationReason = NotificationReason;
+    event->next = dll_notify_queue;
+    dll_notify_queue = event;
+
+    uv_mutex_unlock(&jl_dll_notify_lock);
+    return; // process later
 }
 
 // Initialize stackwalk infrastructure (DLL tracking and profiling)
 void jl_init_stackwalk(void)
 {
     uv_mutex_init(&jl_in_stackwalk);
+    uv_mutex_init(&jl_dll_notify_lock);
     SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES | SYMOPT_IGNORE_CVREC);
     if (!SymInitialize(GetCurrentProcess(), "", 1))
         jl_safe_printf("WARNING: failed to initialize stack walk info\n");
@@ -542,6 +611,10 @@ void jl_init_stackwalk(void)
 // Finalize stackwalk infrastructure
 void jl_fin_stackwalk(void)
 {
+    // To avoid deadlocks (due to suspending the main thread during `ExitProcess()`)
+    // and other misbehavior (due to missed DLL notifications during exit), take the
+    // profile lock here to effectively disable any active profiling threads.
+    jl_lock_profile_wr();
     if (dll_notification_cookie) {
         LdrUnregisterDllNotification(dll_notification_cookie);
         dll_notification_cookie = NULL;
@@ -559,6 +632,7 @@ JL_DLLEXPORT void jl_set_profile_abort_ptr(_Atomic(int) *abort_ptr) JL_NOTSAFEPO
 static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *Context)
 {
     int result;
+
 #if !defined(_CPU_X86_64_)
     memset(&cursor->stackframe, 0, sizeof(cursor->stackframe));
     cursor->stackframe.AddrPC.Offset = Context->Eip;
@@ -720,7 +794,7 @@ JL_DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
     JL_GC_PUSH1(&rs);
     for (int i = 0; i < n; i++) {
         jl_frame_t frame = frames[i];
-        jl_value_t *r = (jl_value_t*)jl_alloc_svec(6);
+        jl_value_t *r = (jl_value_t*)jl_alloc_svec(7);
         jl_svecset(rs, i, r);
         if (frame.func_name)
             jl_svecset(r, 0, jl_symbol(frame.func_name));
@@ -736,6 +810,7 @@ JL_DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
         jl_svecset(r, 3, frame.ci != NULL ? (jl_value_t*)frame.ci : jl_nothing);
         jl_svecset(r, 4, jl_box_bool(frame.fromC));
         jl_svecset(r, 5, jl_box_bool(frame.inlined));
+        jl_svecset(r, 6, jl_box_long(frame.pc));
     }
     free(frames);
     JL_GC_POP();
@@ -743,11 +818,14 @@ JL_DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
 }
 
 static void jl_safe_fprint_codeloc(ios_t *s, const char* func_name, const char* file_name,
-                                   int line, int inlined) JL_NOTSAFEPOINT
+                                   int line, int pc, int inlined) JL_NOTSAFEPOINT
 {
     const char *inlined_str = inlined ? " [inlined]" : "";
     if (line != -1) {
-        jl_safe_fprintf(s, "%s at %s:%d%s\n", func_name, file_name, line, inlined_str);
+        if (pc > 0)
+            jl_safe_fprintf(s, "%s at %s:%d:%d%s\n", func_name, file_name, line, pc, inlined_str);
+        else
+            jl_safe_fprintf(s, "%s at %s:%d%s\n", func_name, file_name, line, inlined_str);
     }
     else {
         jl_safe_fprintf(s, "%s at %s (unknown line)%s\n", func_name, file_name, inlined_str);
@@ -772,7 +850,7 @@ void jl_fprint_native_codeloc(ios_t *s, uintptr_t ip) JL_NOTSAFEPOINT
             jl_safe_fprintf(s, "unknown function (ip: %p) at %s\n", (void*)ip, frame.file_name ? frame.file_name : "(unknown file)");
         }
         else {
-            jl_safe_fprint_codeloc(s, frame.func_name, frame.file_name, frame.line, frame.inlined);
+            jl_safe_fprint_codeloc(s, frame.func_name, frame.file_name, frame.line, frame.pc, frame.inlined);
             free(frame.func_name);
         }
         free(frame.file_name);
@@ -795,14 +873,14 @@ const char *jl_debuginfo_file1(jl_debuginfo_t *debuginfo)
 // File name and line number of first line
 const char *jl_debuginfo_firstline(jl_debuginfo_t *debuginfo, int* line)
 {
-    jl_debuginfo_t *linetable = debuginfo->linetable;
-    while ((jl_value_t*)linetable != jl_nothing) {
-        debuginfo = linetable;
+    jl_value_t *linetable = (jl_value_t*)debuginfo;
+    while (jl_is_debuginfo(linetable)) {
+        debuginfo = (jl_debuginfo_t*)linetable;
         linetable = debuginfo->linetable;
     }
     if (line) {
-        struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo->codelocs, 0);
-        *line = lineidx.line;
+        struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, 0);
+        *line = lineidx.loc;
     }
     return jl_debuginfo_file1(debuginfo);
 }
@@ -839,23 +917,23 @@ static void jl_fprint_debugloc(ios_t *s, jl_debuginfo_t *debuginfo, jl_value_t *
 {
     if (!jl_is_symbol(debuginfo->def)) // this is a path or
         func = debuginfo->def; // this is inlined code
-    struct jl_codeloc_t stmt = jl_uncompress1_codeloc(debuginfo->codelocs, ip);
+    struct jl_codeloc_t stmt = jl_uncompress1_codeloc(debuginfo, ip);
     intptr_t edges_idx = stmt.to;
     if (edges_idx) {
         jl_debuginfo_t *edge = (jl_debuginfo_t*)jl_svecref(debuginfo->edges, edges_idx - 1);
         assert(jl_typetagis(edge, jl_debuginfo_type));
         jl_fprint_debugloc(s, edge, NULL, stmt.pc, 1);
     }
-    intptr_t ip2 = stmt.line;
-    if (ip2 >= 0 && ip > 0 && (jl_value_t*)debuginfo->linetable != jl_nothing) {
-        jl_fprint_debugloc(s, debuginfo->linetable, func, ip2, 0);
+    intptr_t ip2 = stmt.loc;
+    if (ip2 >= 0 && ip > 0 && jl_is_debuginfo(debuginfo->linetable)) {
+        jl_fprint_debugloc(s, (jl_debuginfo_t*)debuginfo->linetable, func, ip2, 0);
     }
     else {
         if (ip2 < 0) // set broken debug info to ignored
             ip2 = 0;
         const char *func_name = jl_debuginfo_name(func);
         const char *file = jl_debuginfo_firstline(debuginfo, NULL);
-        jl_safe_fprint_codeloc(s, func_name, file, ip2, inlined);
+        jl_safe_fprint_codeloc(s, func_name, file, ip2, (int)ip, inlined);
     }
 }
 

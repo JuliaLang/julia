@@ -105,7 +105,7 @@ UInt8
 See also [`ncodeunits`](@ref), [`checkbounds`](@ref).
 """
 @propagate_inbounds codeunit(s::AbstractString, i::Integer) = i isa Int ?
-    throw(MethodError(codeunit, (s, i))) : codeunit(s, Int(i))
+    throw(MethodError(codeunit, (s, i))) : codeunit(s, Int(i)::Int)
 
 """
     isvalid(s::AbstractString, i::Integer)::Bool
@@ -141,7 +141,7 @@ Stacktrace:
 ```
 """
 @propagate_inbounds isvalid(s::AbstractString, i::Integer) = i isa Int ?
-    throw(MethodError(isvalid, (s, i))) : isvalid(s, Int(i))
+    throw(MethodError(isvalid, (s, i))) : isvalid(s, Int(i)::Int)
 
 """
     iterate(s::AbstractString, i::Integer)::Union{Tuple{<:AbstractChar, Int}, Nothing}
@@ -154,7 +154,7 @@ of the iteration protocol may assume that `i` is the start of a character in `s`
 See also [`getindex`](@ref), [`checkbounds`](@ref).
 """
 @propagate_inbounds iterate(s::AbstractString, i::Integer) = i isa Int ?
-    throw(MethodError(iterate, (s, i))) : iterate(s, Int(i))
+    throw(MethodError(iterate, (s, i))) : iterate(s, Int(i)::Int)
 
 ## basic generic definitions ##
 
@@ -558,7 +558,7 @@ julia> nextind("α", 1, 2)
 ```
 """
 nextind(s::AbstractString, i::Integer, n::Integer) = nextind(s, Int(i)::Int, Int(n)::Int)
-nextind(s::AbstractString, i::Integer)             = nextind(s, Int(i)::Int)
+nextind(s::AbstractString, i::Integer)             = nextind(s, Int(i)::Int, 1)
 nextind(s::AbstractString, i::Int)                 = nextind(s, i, 1)
 
 function nextind(s::AbstractString, i::Int, n::Int)
@@ -643,6 +643,7 @@ Test whether all values in the vector belong to the ASCII character set (0x00 to
 This function is intended to be used by other string implementations that need a fast ASCII check.
 """
 function isascii(cu::AbstractVector{CU}) where {CU <: Integer}
+    # Note that String and SubString{String} assume this is :nothrow :foldable
     chunk_size = 1024
     chunk_threshold =  chunk_size + (chunk_size ÷ 2)
     first = firstindex(cu);   last = lastindex(cu)

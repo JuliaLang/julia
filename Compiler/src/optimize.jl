@@ -209,7 +209,7 @@ mutable struct OptimizationState{Interp<:AbstractInterpreter}
     inlining::InliningState{Interp}
     cfg::CFG
     unreachable::BitSet
-    bb_vartables::Vector{Union{Nothing,VarTable}}
+    bb_states::Vector{Union{Nothing,BBEntryState}}
     insert_coverage::Bool
 end
 function OptimizationState(sv::InferenceState, interp::AbstractInterpreter,
@@ -217,7 +217,7 @@ function OptimizationState(sv::InferenceState, interp::AbstractInterpreter,
     inlining = InliningState(sv, interp, opt_cache)
     return OptimizationState(sv.linfo, sv.src, nothing, sv.stmt_info, sv.mod,
                              sv.sptypes, sv.slottypes, inlining, sv.cfg,
-                             sv.unreachable, sv.bb_vartables, sv.insert_coverage)
+                             sv.unreachable, sv.bb_states, sv.insert_coverage)
 end
 function OptimizationState(mi::MethodInstance, src::CodeInfo, interp::AbstractInterpreter,
                            opt_cache::IdDict{MethodInstance,CodeInstance}=IdDict{MethodInstance,CodeInstance}())
@@ -243,14 +243,14 @@ function OptimizationState(mi::MethodInstance, src::CodeInfo, interp::AbstractIn
     inlining = InliningState(interp, opt_cache)
     cfg = compute_basic_blocks(src.code)
     unreachable = BitSet()
-    bb_vartables = Union{VarTable,Nothing}[]
-    for _ = 1:length(cfg.blocks)
-        push!(bb_vartables, VarState[
+    nbbstate = zeros(Int, nslots)
+    bb_states = Union{BBEntryState,Nothing}[
+        BBEntryState(VarState[
             VarState(slottypes[slot], typemin(Int), src.slotflags[slot] & SLOT_USEDUNDEF != 0)
             for slot = 1:nslots
-        ])
-    end
-    return OptimizationState(mi, src, nothing, stmt_info, mod, sptypes, slottypes, inlining, cfg, unreachable, bb_vartables, false)
+        ], nbbstate)
+        for _ = 1:length(cfg.blocks)]
+    return OptimizationState(mi, src, nothing, stmt_info, mod, sptypes, slottypes, inlining, cfg, unreachable, bb_states, false)
 end
 function OptimizationState(mi::MethodInstance, interp::AbstractInterpreter)
     world = get_inference_world(interp)

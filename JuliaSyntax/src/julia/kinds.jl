@@ -227,6 +227,7 @@ register_kinds!(JuliaSyntax, 0, [
         "return"
         "struct"
         "try"
+        "typegroup"
         "using"
         "while"
         "BEGIN_BLOCK_CONTINUATION_KEYWORDS"
@@ -241,6 +242,7 @@ register_kinds!(JuliaSyntax, 0, [
             "abstract"
             "as"
             "doc"
+            "goto"
             "mutable"
             "outer"
             "primitive"
@@ -1053,6 +1055,7 @@ register_kinds!(JuliaSyntax, 0, [
         "comprehension"
         "typed_comprehension"
         "macro_name"
+        # typegroup is a keyword (see above in keywords section)
         # Container for a single statement/atom plus any trivia and errors
         "wrapper"
     "END_SYNTAX_KINDS"
@@ -1064,7 +1067,6 @@ register_kinds!(JuliaSyntax, 0, [
         # A literal Julia value of any kind, as might be inserted into the
         # AST during macro expansion.  Only used in parsing to SyntaxTree.
         "Value"
-        "core"
         "unknown_head"
         "flatten"
         # QuoteNode; not quasiquote

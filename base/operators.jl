@@ -573,7 +573,7 @@ minmax(x,y) = isless(y, x) ? (y, x) : (x, y)
 
 The identity function. Returns its argument.
 
-See also: [`one`](@ref), [`oneunit`](@ref), and [`LinearAlgebra`](@ref man-linalg)'s `I`.
+See also [`one`](@ref), [`oneunit`](@ref), [`LinearAlgebra.I`](@ref).
 
 # Examples
 ```jldoctest
@@ -816,7 +816,7 @@ end
 Remainder from Euclidean division, returning a value of the same sign as `x`, and smaller in
 magnitude than `y`. This value is always exact.
 
-See also: [`div`](@ref), [`mod`](@ref), [`mod1`](@ref), [`divrem`](@ref).
+See also [`div`](@ref), [`mod`](@ref), [`mod1`](@ref), [`divrem`](@ref).
 
 # Examples
 ```jldoctest
@@ -843,7 +843,7 @@ const % = rem
 The quotient from Euclidean (integer) division. Generally equivalent
 to a mathematical operation x/y without a fractional part.
 
-See also: [`cld`](@ref), [`fld`](@ref), [`rem`](@ref), [`divrem`](@ref).
+See also [`cld`](@ref), [`fld`](@ref), [`rem`](@ref), [`divrem`](@ref).
 
 # Examples
 ```jldoctest
@@ -1202,6 +1202,19 @@ end
 (f::Fix{1})(arg; kws...) = f.f(f.x, arg; kws...)
 (f::Fix{2})(arg; kws...) = f.f(arg, f.x; kws...)
 
+function Base.show(io::IO, fix::Fix{N}) where {N}
+    constr = Fix{N}
+    callable = fix.f
+    fixed_argument = fix.x
+    show(io, constr)
+    print(io, '(')
+    show(io, callable)
+    print(io, ',')
+    print(io, ' ')
+    show(io, fixed_argument)
+    print(io, ')')
+end
+
 """
 Alias for `Fix{1}`. See [`Fix`](@ref Base.Fix).
 """
@@ -1350,6 +1363,27 @@ end
 (s::Splat)(args) = s.f(args...)
 show(io::IO, s::Splat) = (print(io, "splat("); show(io, s.f); print(io, ")"))
 
+"""
+    tap(f)
+
+Create a function that calls `f(x)` and returns `x`.
+
+# Examples
+```jldoctest
+julia> 2 |> sqrt |> tap(println) |> inv
+1.4142135623730951
+0.7071067811865475
+
+julia> "hello" |> uppercase |> tap(Base.Fix1(println, stderr)) |> length
+HELLO
+5
+```
+
+!!! compat "Julia 1.14"
+    `tap` requires at least Julia 1.14.
+"""
+tap(f) = x -> (f(x); x)
+
 ## in and related operators
 
 """
@@ -1369,23 +1403,18 @@ in(x, itr::Any) = any(==(x), itr)
 
 # Specialized variant of in for Tuple, which can generate typed comparisons for each element
 # of the tuple, skipping values that are statically known to be != at compile time.
-in(x, itr::Tuple) = _in_tuple(x, itr, false)
+in(x, itr::Tuple) = _in_tuple(x, itr)
+
 # This recursive function will be unrolled at compiletime, and will not generate separate
 # llvm-compiled specializations for each step of the recursion.
-function _in_tuple(x, @nospecialize(itr::Tuple), anymissing::Bool)
+function _in_tuple(x, @nospecialize(itr::Tuple), result = false)
     @inline
-    # Base case
-    if isempty(itr)
-        return anymissing ? missing : false
-    end
-    # Recursive case
+    isempty(itr) && return result
     v = (itr[1] == x)
-    if ismissing(v)
-        anymissing = true
-    elseif v
+    if v === true
         return true
     end
-    return _in_tuple(x, tail(itr), anymissing)
+    return _in_tuple(x, tail(itr), result | v)
 end
 
 # fallback to the loop implementation after some number of arguments to avoid inference blowup
@@ -1449,7 +1478,7 @@ corresponding position in `collection`. To get a vector indicating whether each 
 in `items` is in `collection`, wrap `collection` in a tuple or a `Ref` like this:
 `in.(items, Ref(collection))` or `items .∈ Ref(collection)`.
 
-See also: [`∉`](@ref), [`insorted`](@ref), [`contains`](@ref), [`occursin`](@ref), [`issubset`](@ref).
+See also [`∉`](@ref), [`insorted`](@ref), [`contains`](@ref), [`occursin`](@ref), [`issubset`](@ref).
 
 # Examples
 ```jldoctest

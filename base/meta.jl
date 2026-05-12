@@ -530,7 +530,7 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
             end
             return x
         elseif head === :cfunction
-            @assert !isa(type_signature, UnionAll) || !isempty(spvals)
+            @assert !isa(type_signature, UnionAll) || !isempty(static_param_values)
             if !isa(x.args[2], QuoteNode) # very common no-op
                 x.args[2] = _partially_inline!(x.args[2], slot_replacements, type_signature,
                                                static_param_values, slot_offset,

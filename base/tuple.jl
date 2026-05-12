@@ -206,8 +206,12 @@ julia> first, Base.rest(a, state)
 """
 function rest end
 rest(t::Tuple) = t
-rest(t::Tuple, i::Int) = ntuple(x -> getfield(t, x+i-1), length(t)-i+1)
-rest(a::Union{Array,Memory,Core.SimpleVector}, i::Int=1) = a[i:end]
+function rest(t::Tuple, i)
+    let i = i::Int
+        ntuple(x -> getfield(t, x+i-1), length(t)-i+1)
+    end
+end
+rest(a::Union{Array,Memory,Core.SimpleVector}, i=1) = a[(i::Int):end]
 rest(itr, state...) = Iterators.rest(itr, state...)
 
 """
@@ -641,6 +645,19 @@ revargs() = ()
 revargs(x, r...) = (revargs(r...)..., x)
 
 reverse(t::Tuple) = revargs(t...)
+
+"""
+    isassigned(v::Tuple, i::Integer) -> Bool
+
+Return `true` if index `i` is within the bounds of tuple `v`, i.e. `1 ≤ i ≤ length(v)`.
+
+!!! compat "Julia 1.13"
+    This method requires at least Julia 1.13.
+"""
+function isassigned(v::Tuple, i::Integer)
+    @boundscheck 1 <= i <= length(v) || return false
+    true
+end
 
 ## specialized reduction ##
 

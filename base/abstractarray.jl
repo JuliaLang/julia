@@ -9,7 +9,7 @@ Supertype for `N`-dimensional arrays (or array-like types) with elements of type
 [`Array`](@ref) and other types are subtypes of this. See the manual section on the
 [`AbstractArray` interface](@ref man-interface-array).
 
-See also: [`AbstractVector`](@ref), [`AbstractMatrix`](@ref), [`eltype`](@ref), [`ndims`](@ref).
+See also [`AbstractVector`](@ref), [`AbstractMatrix`](@ref), [`eltype`](@ref), [`ndims`](@ref).
 """
 AbstractArray
 
@@ -26,7 +26,7 @@ dimension to just get the length of that dimension.
 Note that `size` may not be defined for arrays with non-standard indices, in which case [`axes`](@ref)
 may be useful. See the manual chapter on [arrays with custom indices](@ref man-custom-indices).
 
-See also: [`length`](@ref), [`ndims`](@ref), [`eachindex`](@ref), [`sizeof`](@ref).
+See also [`length`](@ref), [`ndims`](@ref), [`eachindex`](@ref), [`sizeof`](@ref).
 
 # Examples
 ```jldoctest
@@ -86,7 +86,7 @@ end
 
 Return the tuple of valid indices for array `A`.
 
-See also: [`size`](@ref), [`keys`](@ref), [`eachindex`](@ref).
+See also [`size`](@ref), [`keys`](@ref), [`eachindex`](@ref).
 
 # Examples
 
@@ -229,7 +229,7 @@ For dictionary types, this will be a `Pair{KeyType,ValType}`. The definition
 instead of types. However the form that accepts a type argument should be defined for new
 types.
 
-See also: [`keytype`](@ref), [`typeof`](@ref).
+See also [`keytype`](@ref), [`typeof`](@ref).
 
 # Examples
 ```jldoctest
@@ -265,7 +265,7 @@ elsize(A::AbstractArray) = elsize(typeof(A))
 
 Return the number of dimensions of `A`.
 
-See also: [`size`](@ref), [`axes`](@ref).
+See also [`size`](@ref), [`axes`](@ref).
 
 # Examples
 ```jldoctest
@@ -286,7 +286,7 @@ Return the number of elements in the collection.
 
 Use [`lastindex`](@ref) to get the last valid index of an indexable collection.
 
-See also: [`size`](@ref), [`ndims`](@ref), [`eachindex`](@ref).
+See also [`size`](@ref), [`ndims`](@ref), [`eachindex`](@ref).
 
 # Examples
 ```jldoctest
@@ -413,9 +413,9 @@ keys(s::IndexStyle, A::AbstractArray, B::AbstractArray...) = eachindex(s, A, B..
 Return the last index of `collection`. If `d` is given, return the last index of `collection` along dimension `d`.
 
 The syntaxes `A[end]` and `A[end, end]` lower to `A[lastindex(A)]` and
-`A[lastindex(A, 1), lastindex(A, 2)]`, respectively.
+`A[lastindex(A, 1), lastindex(A, 2)]`, respectively; see [`end`](@ref).
 
-See also: [`axes`](@ref), [`firstindex`](@ref), [`eachindex`](@ref), [`prevind`](@ref).
+See also [`axes`](@ref), [`firstindex`](@ref), [`eachindex`](@ref), [`prevind`](@ref).
 
 # Examples
 ```jldoctest
@@ -436,9 +436,9 @@ lastindex(a, d) = (@inline; last(axes(a, d)))
 Return the first index of `collection`. If `d` is given, return the first index of `collection` along dimension `d`.
 
 The syntaxes `A[begin]` and `A[1, begin]` lower to `A[firstindex(A)]` and
-`A[1, firstindex(A, 2)]`, respectively.
+`A[1, firstindex(A, 2)]`, respectively; see [`begin`](@ref).
 
-See also: [`first`](@ref), [`axes`](@ref), [`lastindex`](@ref), [`nextind`](@ref).
+See also [`first`](@ref), [`axes`](@ref), [`lastindex`](@ref), [`nextind`](@ref).
 
 # Examples
 ```jldoctest
@@ -460,7 +460,7 @@ firstindex(a, d) = (@inline; first(axes(a, d)))
 Get the first element of an iterable collection. Return the start point of an
 [`AbstractRange`](@ref) even if it is empty.
 
-See also: [`only`](@ref), [`firstindex`](@ref), [`last`](@ref).
+See also [`only`](@ref), [`firstindex`](@ref), [`last`](@ref).
 
 # Examples
 ```jldoctest
@@ -483,10 +483,10 @@ end
 Get the first `n` elements of the iterable collection `itr`, or fewer elements if `itr` is not
 long enough.
 
-See also: [`startswith`](@ref), [`Iterators.take`](@ref).
-
 !!! compat "Julia 1.6"
     This method requires at least Julia 1.6.
+
+See also [`startswith`](@ref), [`Iterators.take`](@ref).
 
 # Examples
 ```jldoctest
@@ -564,7 +564,7 @@ end
 
 Return a tuple of the memory strides in each dimension.
 
-See also: [`stride`](@ref).
+See also [`stride`](@ref).
 
 # Examples
 ```jldoctest
@@ -581,7 +581,7 @@ function strides end
 
 Return the distance in memory (in number of elements) between adjacent elements in dimension `k`.
 
-See also: [`strides`](@ref).
+See also [`strides`](@ref).
 
 # Examples
 ```jldoctest
@@ -697,11 +697,7 @@ end
 
 Throw an error if the specified indices `I` are not in bounds for the given array `A`.
 """
-function checkbounds(A::AbstractArray, I...)
-    @inline
-    checkbounds(Bool, A, I...) || throw_boundserror(A, I)
-    nothing
-end
+checkbounds(A::AbstractArray, I...)
 
 """
     checkbounds_indices(Bool, IA, I)
@@ -725,7 +721,7 @@ See also [`checkbounds`](@ref).
 """
 function checkbounds_indices(::Type{Bool}, inds::Tuple, I::Tuple{Any, Vararg})
     @inline
-    return checkindex(Bool, get(inds, 1, OneTo(1)), I[1])::Bool &
+    return checkindex(Bool, get(inds, 1, OneTo(1)), I[1])::Bool &&
         checkbounds_indices(Bool, safe_tail(inds), tail(I))
 end
 
@@ -818,7 +814,7 @@ julia> similar(falses(10), Float64, 2, 4)
  2.18425e-314  2.18425e-314  2.18425e-314  2.18425e-314
 ```
 
-See also: [`undef`](@ref), [`isassigned`](@ref).
+See also [`undef`](@ref), [`isassigned`](@ref).
 """
 similar(a::AbstractArray{T}) where {T}                             = similar(a, T)
 similar(a::AbstractArray, ::Type{T}) where {T}                     = similar(a, T, axes(a))
@@ -881,7 +877,7 @@ similar(::Type{T}, dims::Dims) where {T<:AbstractArray} = T(undef, dims)
 
 Create an empty vector similar to `v`, optionally changing the `eltype`.
 
-See also: [`empty!`](@ref), [`isempty`](@ref), [`isassigned`](@ref).
+See also [`empty!`](@ref), [`isempty`](@ref), [`isassigned`](@ref).
 
 # Examples
 
@@ -1211,6 +1207,7 @@ function copymutable(a::AbstractArray)
     copyto!(similar(a), a)
 end
 copymutable(itr) = collect(itr)
+copymutable(a::Array) = copy(a)
 
 zero(x::AbstractArray{T}) where {T<:Number} = fill!(similar(x, typeof(zero(T))), zero(T))
 zero(x::AbstractArray{S}) where {S<:Union{Missing, Number}} = fill!(similar(x, typeof(zero(S))), zero(S))
@@ -2394,9 +2391,7 @@ end
 function _typed_hvncat(T::Type, ::Val{N}, xs::Number...) where N
     N < 0 &&
         throw(ArgumentError("concatenation dimension must be non-negative"))
-    A = cat_similar(xs[1], T, (ntuple(Returns(1), Val(N - 1))..., length(xs)))
-    hvncat_fill!(A, false, xs)
-    return A
+    return reshape(T[xs...], (ntuple(Returns(1), Val(N - 1))..., length(xs)))
 end
 
 function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
@@ -2720,12 +2715,13 @@ function _typed_hvncat_shape(::Type{T}, shape::NTuple{N, Tuple}, row_first, as::
 
     # copy into final array
     A = cat_similar(as[1], T, ntuple(i -> outdims[i], nd))
-    hvncat_fill!(A, currentdims, blockcounts, d1, d2, as)
+    if !any(iszero, outdims)
+        hvncat_fill!(A, currentdims, blockcounts, d1, d2, as)
+    end
     return A
 end
 
-function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::Vector{Int},
-                              d1::Int, d2::Int, as::Tuple) where {T, N}
+function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::Vector{Int}, d1::Int, d2::Int, as::Tuple) where {T, N}
     N > 1 || throw(ArgumentError("dimensions of the destination array must be at least 2"))
     length(scratch1) == length(scratch2) == N ||
         throw(ArgumentError("scratch vectors must have as many elements as the destination array has dimensions"))
@@ -2733,42 +2729,46 @@ function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::V
     0 < d2 < 3 &&
     d1 != d2 ||
         throw(ArgumentError("d1 and d2 must be either 1 or 2, exclusive."))
-    outdims = size(A)
+    outdimsprod = cumprod(size(A))
     offsets = scratch1
     inneroffsets = scratch2
     for a ∈ as
+        startindex = CartesianIndex(ntuple(i -> offsets[i] + 1, Val(N)))
         if isa(a, AbstractArray)
-            for ai ∈ a
-                @inbounds Ai = hvncat_calcindex(offsets, inneroffsets, outdims, N)
-                A[Ai] = ai
-
-                @inbounds for j ∈ 1:N
-                    inneroffsets[j] += 1
-                    inneroffsets[j] < cat_size(a, j) && break
-                    inneroffsets[j] = 0
+            if !isempty(a)
+                if length(a) > 4
+                    endindex = CartesianIndex(ntuple(i -> offsets[i] + cat_size(a, i), Val(N)))
+                    @inbounds A[startindex:endindex] = a
+                else
+                    for ai ∈ a
+                        @inbounds Ai = hvncat_calcindex(offsets, inneroffsets, outdimsprod, N)
+                        @inbounds A[Ai] = ai
+                        @inbounds for j ∈ 1:N
+                            inneroffsets[j] += 1
+                            inneroffsets[j] < cat_size(a, j) && break
+                            inneroffsets[j] = 0
+                        end
+                    end
                 end
             end
         else
-            @inbounds Ai = hvncat_calcindex(offsets, inneroffsets, outdims, N)
-            A[Ai] = a
+            @inbounds A[startindex] = a
         end
 
-        @inbounds for j ∈ (d1, d2, 3:N...)
-            offsets[j] += cat_size(a, j)
-            offsets[j] < outdims[j] && break
-            offsets[j] = 0
+        @inbounds for i ∈ (d1, d2, 3:N...)
+            offsets[i] += cat_size(a, i)
+            offsets[i] < cat_size(A, i) && break
+            offsets[i] = 0
         end
     end
 end
 
 @propagate_inbounds function hvncat_calcindex(offsets::Vector{Int}, inneroffsets::Vector{Int},
-                                              outdims::Tuple{Vararg{Int}}, nd::Int)
+                                                outdimsprod::NTuple{N, Int}, nd::Int) where {N}
     Ai = inneroffsets[1] + offsets[1] + 1
     for j ∈ 2:nd
         increment = inneroffsets[j] + offsets[j]
-        for k ∈ 1:j-1
-            increment *= outdims[k]
-        end
+        increment *= outdimsprod[j - 1]
         Ai += increment
     end
     Ai
@@ -3466,7 +3466,7 @@ collection. `destination` must be at least as large as the smallest collection.
 
 $(_DOCS_ALIASING_WARNING)
 
-See also: [`map`](@ref), [`foreach`](@ref), [`zip`](@ref), [`copyto!`](@ref).
+See also [`map`](@ref), [`foreach`](@ref), [`zip`](@ref), [`copyto!`](@ref).
 
 # Examples
 ```jldoctest
@@ -3490,7 +3490,7 @@ julia> map!(+, zeros(Int, 5), 100:999, 1:3)
 ```
 """
 function map!(f::F, dest::AbstractArray, As::AbstractArray...) where {F}
-    @assert !isempty(As) # should dispatch to map!(f, A)
+    @assert !isempty(As) "should dispatch to map!(f, A)"
     map_n!(f, dest, As)
 end
 

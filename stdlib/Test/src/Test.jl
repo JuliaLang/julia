@@ -26,7 +26,7 @@ export @test, @test_throws, @test_broken, @test_skip,
 
 export @testset
 export @inferred
-export detect_ambiguities, detect_unbound_args
+export detect_ambiguities, detect_unbound_args, detect_closure_boxes, detect_closure_boxes_all_modules
 export GenericString, GenericSet, GenericDict, GenericArray, GenericOrder
 export TestSetException
 export TestLogger, LogRecord
@@ -34,7 +34,7 @@ export TestLogger, LogRecord
 using Random
 using Random: AbstractRNG, default_rng
 using InteractiveUtils: gen_call_with_extracted_types
-using Base: typesplit, remove_linenums!
+using Base: typesplit, remove_linenums!, mapany, quoted
 using Serialization: Serialization
 using Base.ScopedValues: LazyScopedValue, ScopedValue, @with
 
@@ -299,6 +299,9 @@ function Base.show(io::IO, t::Error)
         # A test that was expected to fail did not
         println(io, " Unexpected Pass")
         println(io, " Expression: ", t.orig_expr)
+        if t.context !== nothing
+            println(io, "    Context: ", t.context)
+        end
         print(io, " Got correct result, please change to @test if no longer broken.")
     elseif t.test_type === :nontest_error
         # we had an error outside of a @test
@@ -306,7 +309,7 @@ function Base.show(io::IO, t::Error)
         # Capture error message and indent to match
         join(io, ("  " * line for line in filter!(!isempty, split(t.backtrace, "\n"))), "\n")
     end
-    if t.context !== nothing
+    if t.context !== nothing && t.test_type !== :test_unbroken
         print(io, "\n     Context: ", t.context)
     end
 end
@@ -368,33 +371,35 @@ struct Threw <: ExecutionResult
     source::LineNumberNode
 end
 
-function eval_test_comparison(comparison::Expr, quoted::Expr, source::LineNumberNode, negate::Bool=false)
+function eval_test_comparison(comparison::Expr, ops::Vector{Any}, source::LineNumberNode, negate::Bool=false)
     comparison.head === :comparison || throw(ArgumentError("$comparison is not a comparison expression"))
     comparison_args = comparison.args
-    quoted_args = quoted.args
     n = length(comparison_args)
     kw_suffix = ""
 
     res = true
-    i = 1
-    while i < n
+    for i = 1:2:n - 2
         a, op, b = comparison_args[i], comparison_args[i+1], comparison_args[i+2]
         if res
+            # chained comparisons stop running at the first `false`
             res = op(a, b)
         end
-        quoted_args[i] = a
-        quoted_args[i+2] = b
-        i += 2
     end
 
+    for i = 1:2:n
+        comparison_args[i] = quoted(comparison_args[i])
+    end
+    for i = 2:2:n
+        comparison_args[i] = ops[i]
+    end
     if negate
         res = !res
-        quoted = Expr(:call, :!, quoted)
+        comparison = Expr(:call, :!, comparison)
     end
 
     Returned(res,
              # stringify arguments in case of failure, for easy remote printing
-             res === true ? quoted : sprint(print, quoted, context=(:limit => true)) * kw_suffix,
+             res === true ? comparison : sprint(print, comparison, context=(:limit => true)) * kw_suffix,
              source)
 end
 
@@ -404,18 +409,16 @@ function eval_test_function(func, args, kwargs, quoted_func::Union{Expr,Symbol},
     # Create "Evaluated" expression which looks like the original call but has all of
     # the arguments evaluated
     kw_suffix = ""
+    quoted_args = mapany(quoted, args)
     if quoted_func === :≈ && !res
         kw_suffix = " ($(join(["$k=$v" for (k, v) in kwargs], ", ")))"
-        quoted_args = args
-    elseif isempty(kwargs)
-        quoted_args = args
-    else
-        kwargs_expr = Expr(:parameters, [Expr(:kw, k, v) for (k, v) in kwargs]...)
-        quoted_args = [kwargs_expr, args...]
+    elseif !isempty(kwargs)
+        kwargs_expr = Expr(:parameters, Any[Expr(:kw, k, quoted(v)) for (k, v) in kwargs]...)
+        pushfirst!(quoted_args, kwargs_expr)
     end
 
     # Properly render broadcast function call syntax, e.g. `(==).(1, 2)` or `Base.:(==).(1, 2)`.
-    quoted = if isa(quoted_func, Expr) && quoted_func.head === :. && length(quoted_func.args) == 1
+    callexpr = if isa(quoted_func, Expr) && quoted_func.head === :. && length(quoted_func.args) == 1
         Expr(:., quoted_func.args[1], Expr(:tuple, quoted_args...))
     else
         Expr(:call, quoted_func, quoted_args...)
@@ -423,12 +426,12 @@ function eval_test_function(func, args, kwargs, quoted_func::Union{Expr,Symbol},
 
     if negate
         res = !res
-        quoted = Expr(:call, :!, quoted)
+        callexpr = Expr(:call, :!, callexpr)
     end
 
     Returned(res,
              # stringify arguments in case of failure, for easy remote printing
-             res === true ? quoted : sprint(print, quoted, context=(:limit => true)) * kw_suffix,
+             res === true ? callexpr : sprint(print, callexpr, context=(:limit => true)) * kw_suffix,
              source)
 end
 
@@ -730,11 +733,11 @@ end
 # evaluate each term in the comparison individually so the results
 # can be displayed nicely.
 function get_test_result(ex, source)
-    negate = QuoteNode(false)
+    negate = false
     orig_ex = ex
     # Evaluate `not` wrapped functions separately for pretty-printing failures
     if isa(ex, Expr) && ex.head === :call && length(ex.args) == 2 && ex.args[1] === :!
-        negate = QuoteNode(true)
+        negate = true
         ex = ex.args[2]
     end
     # Normalize non-dot comparison operator calls to :comparison expressions
@@ -751,12 +754,11 @@ function get_test_result(ex, source)
         ex = Expr(:comparison, ex.args[1], ex.head, ex.args[2])
     end
     if isa(ex, Expr) && ex.head === :comparison
-        # pass all terms of the comparison to `eval_test_comparison`, as a tuple
-        escaped_terms = [esc(arg) for arg in ex.args]
-        quoted_terms = [QuoteNode(arg) for arg in ex.args]
+        # pass all terms of the comparison to `eval_test_comparison`, as a list
+        escaped_terms = Any[esc(arg) for arg in ex.args]
         testret = :(eval_test_comparison(
             Expr(:comparison, $(escaped_terms...)),
-            Expr(:comparison, $(quoted_terms...)),
+            $(ex.args),
             $(QuoteNode(source)),
             $negate,
         ))
@@ -904,7 +906,7 @@ a matching function, or a value.
     The ability to specify anything other than a type or a value as `exception` requires Julia v1.8 or later.
 
 !!! compat "Julia 1.13"
-    The three-argument form `@test_throws extype pattern expr` requires Julia v1.12 or later.
+    The three-argument form `@test_throws extype pattern expr` requires Julia v1.13 or later.
 
 !!! compat "Julia 1.14"
     The `context` keyword argument requires at least Julia 1.14.
@@ -1357,9 +1359,9 @@ function _remove_linenums(ex::Expr)
         if length(args) == 1
             return _remove_linenums(args[1])
         end
-        return Expr(ex.head, map(_remove_linenums, args)...)
+        return Expr(ex.head, mapany(_remove_linenums, args)...)
     end
-    return Expr(ex.head, map(_remove_linenums, ex.args)...)
+    return Expr(ex.head, mapany(_remove_linenums, ex.args)...)
 end
 
 #-----------------------------------------------------------------------
@@ -2615,7 +2617,7 @@ function detect_ambiguities(mods::Module...;
                             allowed_undefineds = nothing)
     @nospecialize
     ambs = Set{Tuple{Method,Method}}()
-    mods = collect(mods)::Vector{Module}
+    mods = Module[mods...]
     function sortdefs(m1::Method, m2::Method)
         ord12 = cmp(m1.file, m2.file)
         if ord12 == 0
@@ -2646,6 +2648,100 @@ function detect_ambiguities(mods::Module...;
 end
 
 """
+    detect_closure_boxes(mod1, mod2...)
+
+Return a sorted `Vector{Pair{Method, Vector{Symbol}}}` of methods defined in the
+specified modules (or their submodules) that allocate `Core.Box` in their lowered
+code, paired with the boxed variable names. Variable names are `:unknown` when a
+slot name cannot be resolved.
+
+See also [`detect_closure_boxes_all_modules`](@ref) to check all loaded modules.
+
+!!! compat "Julia 1.14"
+    This method requires Julia 1.14 or later.
+"""
+function detect_closure_boxes(mods::Module...)
+    @nospecialize
+    boxes = Dict{Method, Vector{Symbol}}()
+    mods = Module[mods...]
+    isempty(mods) && return Pair{Method, Vector{Symbol}}[]
+
+    function is_box_call(@nospecialize expr)
+        if !(expr isa Expr)
+            return false
+        end
+        if expr.head === :call || expr.head === :new
+            callee = expr.args[1]
+            return callee === Core.Box || (callee isa GlobalRef && callee.mod === Core && callee.name === :Box)
+        end
+        return false
+    end
+
+    function slot_name(ci, slot)::Symbol
+        if slot isa Core.SlotNumber
+            idx = Int(slot.id)
+            if 1 <= idx <= length(ci.slotnames)
+                return ci.slotnames[idx]
+            end
+        end
+        return Symbol(string(slot))
+    end
+
+    function matches_module(mod::Module)
+        return is_in_mods(mod, true, mods)
+    end
+
+    world = Base.get_world_counter()
+    matches = Any[]
+    function is_active_method(m::Method)
+        minworld, maxworld = Core.Compiler.ReinferUtils.verify_invokesig(m.sig, m, world, matches)
+        return minworld <= world <= maxworld
+    end
+
+    function scan_method!(m::Method)
+        is_active_method(m) || return
+        matches_module(parentmodule(m)) || return
+        ci = try
+            Base.uncompressed_ast(m)
+        catch
+            return
+        end
+        for stmt in ci.code
+            if stmt isa Expr && stmt.head === :(=)
+                lhs = stmt.args[1]
+                rhs = stmt.args[2]
+                if is_box_call(rhs)
+                    push!(get!(Vector{Symbol}, boxes, m), slot_name(ci, lhs))
+                end
+            elseif is_box_call(stmt)
+                push!(get!(Vector{Symbol}, boxes, m), :unknown)
+            end
+        end
+    end
+
+    Base.visit(Core.methodtable) do m
+        scan_method!(m)
+    end
+
+    result = collect(boxes)
+    sort!(result, by = entry -> (entry.first.file, entry.first.line, entry.first.name))
+    return result
+end
+
+"""
+    detect_closure_boxes_all_modules()
+
+Return a sorted `Vector{Pair{Method, Vector{Symbol}}}` of all methods in currently
+loaded modules that allocate `Core.Box` in their lowered code.
+
+See also [`detect_closure_boxes`](@ref) to check specific modules.
+
+!!! compat "Julia 1.14"
+    This method requires Julia 1.14 or later.
+"""
+detect_closure_boxes_all_modules() = detect_closure_boxes(Base.loaded_modules_array()...)
+
+"""
     detect_unbound_args(mod1, mod2...; recursive=false, allowed_undefineds=nothing)
 
 Return a vector of `Method`s which may have unbound type parameters.
@@ -2671,7 +2767,7 @@ function detect_unbound_args(mods...;
                              allowed_undefineds=nothing)
     @nospecialize mods
     ambs = Set{Method}()
-    mods = collect(mods)::Vector{Module}
+    mods = Module[mods...]
     function examine(mt::Core.MethodTable)
         for m in Base.MethodList(mt)
             is_in_mods(parentmodule(m), recursive, mods) || continue

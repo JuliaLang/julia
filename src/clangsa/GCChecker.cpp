@@ -179,6 +179,8 @@ public:
 private:
   template <typename callback>
   static bool isJuliaType(callback f, QualType QT) {
+    if (QT->isReferenceType())
+      return isJuliaType(f, QT->getPointeeType().getUnqualifiedType());
     if (QT->isPointerType() || QT->isArrayType())
       return isJuliaType(
           f, clang::QualType(QT->getPointeeOrArrayElementType(), 0));
@@ -390,12 +392,12 @@ PDP GCChecker::SafepointBugVisitor::VisitNode(const ExplodedNode *N,
     if (OldSafepointDisabled == (unsigned)-1) {
       if (Ann) {
         Pos = PathDiagnosticLocation{Ann->getLoc(), BRC.getSourceManager()};
-        return MakePDP(Pos, "Tracking JL_NOT_SAFEPOINT annotation here.");
+        return MakePDP(Pos, "Tracking JL_NOTSAFEPOINT annotation here.");
       } else {
         PathDiagnosticLocation Pos = PathDiagnosticLocation::createDeclBegin(
             N->getLocationContext(), BRC.getSourceManager());
         if (Pos.isValid())
-          return MakePDP(Pos, "Tracking JL_NOT_SAFEPOINT annotation here.");
+          return MakePDP(Pos, "Tracking JL_NOTSAFEPOINT annotation here.");
         //N->getLocation().dump();
       }
     } else if (NewSafepointDisabled == (unsigned)-1) {
@@ -857,7 +859,9 @@ bool GCChecker::isGCTrackedType(QualType QT) {
                    Name.ends_with_insensitive("jl_stenv_t") ||
                    Name.ends_with_insensitive("jl_varbinding_t") ||
                    Name.ends_with_insensitive("set_world") ||
-                   Name.ends_with_insensitive("jl_codectx_t")) {
+                   Name.ends_with_insensitive("jl_codectx_t") ||
+                   Name.ends_with_insensitive("jl_codegen_params_t") ||
+                   Name.ends_with_insensitive("egal_set")) {
                  return true;
                }
                return false;
@@ -901,7 +905,7 @@ bool GCChecker::isSafepoint(const CallEvent &Call, CheckerContext &C) const {
     while (DC) {
       // Anything in llvm or std is not a safepoint
       if (const NamespaceDecl *NDC = dyn_cast<NamespaceDecl>(DC))
-        if (NDC->getName() == "llvm" || NDC->getName() == "std")
+        if (NDC->getName() == "llvm" || NDC->getName() == "std" || NDC->getName() == "tp")
           return false;
       DC = DC->getParent();
     }
@@ -1046,7 +1050,7 @@ bool GCChecker::processAllocationOfResult(const CallEvent &Call,
   SymbolRef Sym = Call.getReturnValue().getAsSymbol();
   if (!Sym) {
     SVal S = C.getSValBuilder().conjureSymbolVal(
-        Call.getOriginExpr(), C.getLocationContext(), QT, C.blockCount());
+        C.getCFGElementRef(), C.getLocationContext(), QT, C.blockCount());
     State = State->BindExpr(Call.getOriginExpr(), C.getLocationContext(), S);
     Sym = S.getAsSymbol();
   }
@@ -1142,8 +1146,8 @@ SymbolRef GCChecker::getSymbolForResult(const Expr *Result,
   if (Loaded.isUnknown() || !Loaded.getAsSymbol()) {
     if (OldValS || GCChecker::isGCTracked(Result)) {
       Loaded = C.getSValBuilder().conjureSymbolVal(
-          nullptr, Result, C.getLocationContext(), Result->getType(),
-          C.blockCount());
+          nullptr, C.getCFGElementRef(), C.getLocationContext(),
+          Result->getType(), C.blockCount());
       State = State->bindLoc(*ValLoc, Loaded, C.getLocationContext());
       // State = State->BindExpr(Result, C.getLocationContext(),
       // State->getSVal(*ValLoc));
@@ -1197,7 +1201,7 @@ void GCChecker::checkDerivingExpr(const Expr *Result, const Expr *Parent,
       return;
     }
     ResultVal = C.getSValBuilder().conjureSymbolVal(
-        Result, C.getLocationContext(), Result->getType(),
+        C.getCFGElementRef(), C.getLocationContext(), Result->getType(),
         C.blockCount());
     State = State->BindExpr(Result, C.getLocationContext(), ResultVal);
   }
@@ -1421,10 +1425,8 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
   // These checks should have no effect on the surrounding environment
   // (globals should not be invalidated, etc), hence the use of evalCall.
   const CallExpr *CE = dyn_cast<CallExpr>(Call.getOriginExpr());
-  if (!CE)
-    return false;
   unsigned CurrentDepth = C.getState()->get<GCDepth>();
-  auto name = C.getCalleeName(CE);
+  auto name = CE ? C.getCalleeName(CE) : "";
   if (name == "JL_GC_POP") {
     if (CurrentDepth == 0) {
       report_error(C, "JL_GC_POP without corresponding push");
@@ -1542,7 +1544,8 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
       SVal Items = State->getSVal(ItemsLoc);
       if (Items.isUnknown()) {
         Items = C.getSValBuilder().conjureSymbolVal(
-            CE, C.getLocationContext(), FD->getType(), C.blockCount());
+            C.getCFGElementRef(), C.getLocationContext(), FD->getType(),
+            C.blockCount());
         State = State->bindLoc(ItemsLoc, Items, C.getLocationContext());
       }
       assert(Items.getAsRegion());

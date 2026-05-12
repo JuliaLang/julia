@@ -26,7 +26,7 @@ NATIVE_BUILDDIR := $(BUILDDIR)
 LLT_BUILDDIR := $(BUILDDIR)/$(LLTDIR)
 endif
 
-HEADERS := $(wildcard *.h) $(LIBUV_INC)/uv.h $(wildcard $(LLTDIR)/*.h)
+HEADERS := $(wildcard *.h) $(LIBUV_INC)/uv.h $(wildcard $(LLTDIR)/*.h) $(wildcard $(LLTDIR)/*.inc)
 
 OBJS := $(SRCS:%.c=$(BUILDDIR)/%.o)
 DOBJS := $(SRCS:%.c=$(BUILDDIR)/%.dbg.obj)

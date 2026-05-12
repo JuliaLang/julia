@@ -4,6 +4,8 @@ using Test, Markdown, StyledStrings
 import Markdown: MD, Paragraph, Header, Italic, Bold, Strikethrough, LineBreak, Table, Code, LaTeX, Footnote
 import Base: show
 
+@test isempty(Test.detect_closure_boxes(Markdown))
+
 # Basics
 # Equality is checked by making sure the HTML output is
 # the same – the structure itself may be different.
@@ -1736,6 +1738,24 @@ end
     @test str == "  abc\n   | def"
     # non-breaking version: four leading spaces got preserved
     @test str_nbsp == "  abc\n  $nbsp| def"
+end
+
+@testset "Hack for handling <br>" begin
+    md = Markdown.parse("""
+    1<br>
+    2<br >
+    3<br/>
+    4<br />
+    5<BR>
+    6<BR >
+    7<BR/>
+    8<BR />
+    """)
+
+    @test length(md[1].content) == 16
+    @test all(i -> md[1].content[i] isa LineBreak, 2:2:16)
+    @test all(i -> md[1].content[i] isa String, 1:2:15)
+
 end
 
 include("test_spec_roundtrip_common.jl")

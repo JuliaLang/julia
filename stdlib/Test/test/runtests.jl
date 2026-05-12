@@ -7,6 +7,8 @@ using Distributed: RemoteException
 
 import Logging: Debug, Info, Warn, with_logger
 
+@test isempty(Test.detect_closure_boxes(Test))
+
 @testset "@test" begin
     atol = 1
     a = (; atol=2)
@@ -29,6 +31,59 @@ import Logging: Debug, Info, Warn, with_logger
     @test 'a' .. 'a'
     @test !('a' .. 'b')
 end
+
+
+module ClosureBoxTest
+    function boxed()
+        x = 1
+        inner() = (x += 1)
+        inner()
+    end
+
+    module Sub
+        function boxed_sub()
+            x = 0
+            inner() = (x += 1)
+            inner()
+        end
+    end
+end
+
+module ClosureBoxRedefTest
+    function boxed()
+        x = 1
+        inner() = (x += 1)
+        inner()
+    end
+end
+
+@testset "detect_closure_boxes" begin
+    boxes = Test.detect_closure_boxes(ClosureBoxTest)
+    @test any(p -> p.first.name === :boxed, boxes)
+    @test any(p -> p.first.name === :boxed_sub, boxes)
+
+    sub_boxes = Test.detect_closure_boxes(ClosureBoxTest.Sub)
+    @test any(p -> p.first.name === :boxed_sub, sub_boxes)
+    @test all(p -> parentmodule(p.first) === ClosureBoxTest.Sub, sub_boxes)
+
+    @test isempty(Test.detect_closure_boxes())
+
+    # _all version checks all loaded modules
+    all_boxes = Test.detect_closure_boxes_all_modules()
+    @test any(p -> p.first.name === :boxed, all_boxes)
+
+    # Redefinition should drop closure boxes from shadowed methods.
+    @test !isempty(Test.detect_closure_boxes(ClosureBoxRedefTest))
+    @eval ClosureBoxRedefTest begin
+        function boxed()
+            x = 1
+            inner() = x + 1
+            inner()
+        end
+    end
+    @test isempty(Test.detect_closure_boxes(ClosureBoxRedefTest))
+end
+
 @testset "@test with skip/broken kwargs" begin
     # Make sure the local variables can be used in conditions
     a = 1
@@ -367,7 +422,11 @@ let fails = @testset NoThrowTestSet begin
         @test typeof(1) <: typeof("julia")
         # 29 - Fail - assignment
         @test (i = length([1, 2])) == 3
-        # 30 - 33 - Fail - wrong message
+        # 30 - Fail - symbol comparison
+        @test 1 + 2 == :sym
+        # 31 - Fail - symbol in function call
+        @test isequal(1 + 2, :sym)
+        # 32 - 35 - Fail - wrong message
         @test_throws "A test" error("a test")
         @test_throws r"sqrt\([Cc]omplx" sqrt(-1)
         @test_throws str->occursin("a T", str) error("a test")
@@ -522,22 +581,31 @@ let fails = @testset NoThrowTestSet begin
         @test occursin("Evaluated: 2 == 3", str)
     end
 
+    # Test that symbols are printed with : prefix
     let str = sprint(show, fails[30])
+        @test occursin("Evaluated: 3 == :sym", str)
+    end
+
+    let str = sprint(show, fails[31])
+        @test occursin("Evaluated: isequal(3, :sym)", str)
+    end
+
+    let str = sprint(show, fails[32])
         @test occursin("Expected: \"A test\"", str)
         @test occursin("Message: \"a test\"", str)
     end
 
-    let str = sprint(show, fails[31])
+    let str = sprint(show, fails[33])
         @test occursin("Expected: r\"sqrt\\([Cc]omplx\"", str)
         @test occursin(r"Message: .*Try sqrt\(Complex", str)
     end
 
-    let str = sprint(show, fails[32])
+    let str = sprint(show, fails[34])
         @test occursin("Expected: < match function >", str)
         @test occursin("Message: \"a test\"", str)
     end
 
-    let str = sprint(show, fails[33])
+    let str = sprint(show, fails[35])
         @test occursin("Expected: [\"BoundsError\", \"acquire\", \"1-element\", \"at index [2]\"]", str)
         @test occursin(r"Message: \"BoundsError.* 1-element.*at index \[2\]", str)
     end
@@ -1084,8 +1152,7 @@ end
 end
 
 @testset "provide informative location in backtrace for test failures" begin
-    win2unix(filename) = replace(filename, "\\" => '/')
-    utils = win2unix(tempname())
+    utils = tempname()
     write(utils,
     """
     function test_properties2(value)
@@ -1093,7 +1160,7 @@ end
     end
     """)
 
-    included = win2unix(tempname())
+    included = tempname()
     write(included,
     """
     @testset "Other tests" begin
@@ -1110,12 +1177,12 @@ end
     end))
     """)
 
-    runtests = win2unix(tempname())
+    runtests = tempname()
     write(runtests,
     """
     using Test
 
-    include("$utils")
+    include($(repr(utils)))
 
     function test_properties(value)
         @test isodd(value)
@@ -1126,11 +1193,13 @@ end
         @noinline test_properties(8)
         test_properties2(8)
 
-        include("$included")
+        include($(repr(included)))
     end
     """)
-    msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $runtests`), stderr=devnull), String)
-    msg = win2unix(msg)
+    # Disable homedir contraction in stack traces so paths match tempname() output
+    msg = withenv("JULIA_STACKTRACE_CONTRACT_HOMEDIR" => "0") do
+        read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $runtests`), stderr=devnull), String)
+    end
     regex = r"((?:Tests|Other tests|Testset without source): Test Failed (?:.|\n)*?)\n  Stacktrace:(?:.|\n)*?(?=\n(?:Tests|Other tests))"
     failures = map(eachmatch(regex, msg)) do m
         m = match(r"(Tests|Other tests|Testset without source): .*? at (.*?)\n  Expression: (.*)(?:.|\n)*\n  Stacktrace:\n((?:.|\n)*)", m.match)
@@ -2333,6 +2402,30 @@ end
         @test recorded_error2 isa Test.Error
         @test recorded_error2.context !== nothing
         @test occursin("(x, y) = (42, \"hello\")", recorded_error2.context)
+    end
+
+    # Unexpected pass (broken=true) should show context before "Got correct result" message
+    @testset "context shown for unexpected pass in context testset" begin
+        mock_parent4 = MockParentTestSet()
+        ctx_ts4 = Test.ContextTestSet(mock_parent4, :x, 42)
+
+        unbroken_result = Test.Error(:test_unbroken, "x != 99", "true", "", nothing, LineNumberNode(1, :test))
+        Test.record(ctx_ts4, unbroken_result)
+
+        @test length(mock_parent4.results) == 1
+        recorded = mock_parent4.results[1]
+        @test recorded isa Test.Error
+        @test recorded.context !== nothing
+        @test occursin("x = 42", recorded.context)
+
+        str = sprint(show, recorded)
+        @test occursin("Unexpected Pass", str)
+        @test occursin("Context:", str)
+        @test occursin("x = 42", str)
+        # Context should appear before "Got correct result"
+        ctx_pos = findfirst("Context:", str)
+        got_pos = findfirst("Got correct result", str)
+        @test first(ctx_pos) < first(got_pos)
     end
 end
 

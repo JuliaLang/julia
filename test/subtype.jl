@@ -554,6 +554,13 @@ function test_Type()
 
     @test isequal_type(Core.TypeofBottom, Type{Union{}})
     @test issub(Core.TypeofBottom, Type{T} where T<:Real)
+
+    for b in (Type{T} where T, Type{Union{T,S}} where {T,S})
+        for a in (Type{Union{}}, Core.TypeofBottom)
+            @test issub(a, b)
+        end
+        @test isa(Union{}, b)
+    end
 end
 
 # old subtyping tests from test/core.jl
@@ -1344,7 +1351,7 @@ end
 
 # Issue #19414
 let ex = try struct A19414 <: Base.AbstractSet end catch e; e end
-    @test isa(ex, ErrorException) && ex.msg == "invalid subtyping in definition of A19414: can only subtype data types."
+    @test isa(ex, ErrorException) && ex.msg == "invalid subtyping in definition of A19414: supertype `Base.AbstractSet{T}` has unbound type parameters."
 end
 
 # issue #20103, OP and comments
@@ -2518,6 +2525,24 @@ let T = Ref{NTuple{8, Ref{Union{Int, P}}}} where P,
     @test T <: Union{Int, S}
 end
 
+# issue #61602
+struct W61602{T, N} x::Array{T, N} end
+let A = W61602{T, 1} where T<:(Union{Missing, S} where S),
+    B = W61602{Union{Missing, T}} where T
+    C = W61602{Union{Missing, Int64}, 1}
+    @test C <: typeintersect(A, B)
+    @test C <: typeintersect(B, A)
+
+    D = Tuple{W61602{T, 1}, X} where {T<:(Union{Missing, S} where S), X}
+    E = Tuple{W61602{Union{Missing, T}}, T} where T
+    @test Tuple{C, String} <: D
+    @test !(Tuple{C, String} <: E)
+    @test Tuple{C, Int64} <: typeintersect(D, E)
+    @test Tuple{C, Int64} <: typeintersect(E, D)
+    @test_broken !(Tuple{C, String} <: typeintersect(D, E))
+    @test_broken !(Tuple{C, String} <: typeintersect(E, D))
+end
+
 # try to fool a greedy algorithm that picks X=Int, Y=String here
 @test Tuple{Ref{Union{Int,String}}, Ref{Union{Int,String}}} <: Tuple{Ref{Union{X,Y}}, Ref{X}} where {X,Y}
 @test Tuple{Ref{Union{Int,String,Missing}}, Ref{Union{Int,String}}} <: Tuple{Ref{Union{X,Y}}, Ref{X}} where {X,Y}
@@ -2793,3 +2818,69 @@ end
 #issue 58115
 @test Tuple{Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{             Union{Tuple{}, Tuple{Tuple{}}}}}}}}}}}}}  , Tuple{}} <:
       Tuple{Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Union{Tuple{}, Tuple{Tuple{}}}}}}}}}}}}}}}, Tuple{}}
+
+# issue 59490
+@test typeintersect(Tuple{DataType, Type{UnitRange{Int64}}, Type{Int64}},
+                    Tuple{Type{T}, S, S} where {T<:AbstractArray, S<:Type{<:Any}}) !== Union{}
+@test typeintersect(Tuple{DataType, Type{UnitRange{Int64}}, Type{Int64}},
+                    Tuple{Type{T}, Vararg{S, N}} where {N, eT, T<:AbstractArray{eT, N}, S<:Type{<:Any}}) !== Union{}
+@test typeintersect(Tuple{Union{DataType, UnionAll, Union}, Type{UnitRange{Int64}}, Type{Int64}},
+                    Tuple{Type{T}, Vararg{S, N}} where {N, eT, T<:AbstractArray{eT, N}, S<:Type{<:Any}}) !== Union{}
+@test typeintersect(Tuple{Int64, String}, Tuple{T, T} where T) === Union{}
+@test typeintersect(Tuple{Any, Union{Type{Vector},Type{Int64}}, Type{Int8}},
+                    Tuple{Int64, S, S} where {S}) === Tuple{Int64, Type{Int64}, Type{Int8}}
+@test typeintersect(Tuple{Ref{DataType}, Type{Int64}, Type{Float64}, Union{Int64,String}},
+                    (Tuple{Ref{T}, S, S, Int64} where {S<:T}) where T) === Tuple{Ref{DataType}, Type{Int64}, Type{Float64}, Int64}
+@test typeintersect(Tuple{Type{Int64}, Type{String}},
+                    Tuple{S, S} where S<:Type{<:Number}) === Union{}
+@test typeintersect(Tuple{Type{Vector{T}} where T, Type{Int64}},
+                    Tuple{S, S} where S) === Tuple{Type{Vector{T}} where T, Type{Int64}}
+@test Tuple{Union{Type{Vector{T}} where T, Type{Int64}}, Type{Int8}} <: Tuple{S, S} where S
+@test typeintersect(Tuple{Union{Type{Int64}, Ref{Int64}}, Ref{Int64}},
+                    Tuple{S, S} where S) === Tuple{S, S} where S<:Ref{Int64}
+@test typeintersect(Tuple{Union{Type{Val},Type{Int64}}, Type{Vector}},
+                    Tuple{T, T} where T<:Union{UnionAll,Type{<:Number}}) === Tuple{Type{Val}, Type{Vector}}
+@test typeintersect(Tuple{Union{Type{Val}, Type{Int8}}, Union{Type{Val}, Type{Int64}}},
+                    NTuple{2,<:Union{Type{<:Val}, DataType}}) == (Tuple{S, S} where S <: Union{Type{Val}, DataType})
+@test typeintersect(Tuple{Union{Type{Val}, Type{Int64}}, DataType},
+                    Tuple{S, S} where S) === Tuple{Type{Int64}, DataType}
+
+let
+    A = Tuple{Union{Type{Vector}, Type{Int64}}, Union{Type{Matrix}, Type{Float64}}}
+    B = (Tuple{S, S} where S)
+    r = typeintersect(A, B)
+    @test Tuple{Type{Vector}, Type{Matrix}} <: r
+    @test Tuple{Type{Int64}, Type{Float64}} <: r
+    @test r <: B
+
+    A = Tuple{Union{Type{Vector}, Type{Int64}}, Union{Type{Int64}, Type{Float64}}, Union{Type{Matrix}, Type{Float64}}}
+    B = (Tuple{S, S, T} where S) where T
+    r = typeintersect(A, B)
+    @test (r <: A) && (r <: B)
+    @test r !== Union{}
+end
+
+# JETLS#509 — inference hang with Union-bounded parametric types
+# subtype_ccheck leaked right-side Union choices into the shared
+# Runions statestack, causing exponential state iteration when
+# multiple Union-bounded parameters share a common variable.
+struct JETLS509S{F, A<:Union{Ref{F},Val{F}}, B<:Union{Ref{F},Val{F}},
+                    C<:Union{Ref{F},Val{F}}, D<:Union{Ref{F},Val{F}},
+                    E<:Union{Ref{F},Val{F}}, G<:Union{Ref{F},Val{F}}}
+end
+JETLS509f(a::JETLS509S{F}, b::JETLS509S{F}, s::Union{Nothing,Ref{F}}=nothing) where {F} = 1
+let tt = Tuple{typeof(JETLS509f),
+        JETLS509S{F,A,B,C,D,E,G} where {
+            A<:Union{Ref{F},Val{F}}, B<:Union{Ref{F},Val{F}},
+            C<:Union{Ref{F},Val{F}}, D<:Union{Ref{F},Val{F}},
+            E<:Union{Ref{F},Val{F}}, G<:Union{Ref{F},Val{F}}},
+        JETLS509S{F,A,B,C,D,E,G} where {
+            A<:Union{Ref{F},Val{F}}, B<:Union{Ref{F},Val{F}},
+            C<:Union{Ref{F},Val{F}}, D<:Union{Ref{F},Val{F}},
+            E<:Union{Ref{F},Val{F}}, G<:Union{Ref{F},Val{F}}},
+    } where F
+    @test Base.code_typed_by_type(tt) isa Vector
+end
+@test !(Tuple{Union{Int16,Int8},Ref{Int16},Ref{Int16}} <: Tuple{<:Union{S,T},Ref{S},Ref{T}} where {S,T})
+@test !(Tuple{Ref{Int16},Ref{Int16},Union{Int16,Int8}} <: Tuple{Ref{S},Ref{T},<:Union{S,T}} where {S,T})
+@test Tuple{NTuple{2,Int}, Int8} <: Tuple{<:Union{NTuple{2,T},Tuple{S,T}}, <:T} where {S,T>:Int}
