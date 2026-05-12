@@ -87,6 +87,9 @@ New library features
 * New methods `readdir(DirEntry, path::String)` and `readdir(e::DirEntry)` will now return directory contents
   along with the type of the entries in a vector of new `DirEntry` objects to provide more efficient `isfile`
   etc. checks ([#55358]).
+* New function `scandir(dir)` returns a stateful, single-pass iterator yielding `DirEntry` objects without
+  first materializing the full listing. Useful for very large directories or when iteration may be
+  short-circuited. A do-block form `scandir(f, dir)` ensures deterministic resource cleanup ([#55358]).
 
 Standard library changes
 ------------------------

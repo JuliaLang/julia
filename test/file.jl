@@ -59,6 +59,51 @@ end
     end
 end
 
+# scandir: lazy single-pass iteration of DirEntry objects
+@testset "scandir" begin
+    @test_throws Base.IOError iterate(scandir("does/not/exist"))
+
+    mktempdir() do dir
+        touch(joinpath(dir, "afile.txt"))
+        mkdir(joinpath(dir, "adir"))
+        touch(joinpath(dir, "adir", "bfile.txt"))
+
+        # Same contents as readdir(DirEntry, …) modulo order
+        names = sort!(map(e -> e.name, collect(scandir(dir))))
+        @test names == sort!(readdir(dir))
+
+        # Iterator type and traits
+        it = scandir(dir)
+        @test eltype(it) === Base.Filesystem.DirEntry
+        @test Base.IteratorSize(it) === Base.SizeUnknown()
+
+        # Single-pass: once consumed, cannot iterate again
+        for _ in it; end
+        @test_throws ArgumentError iterate(it)
+
+        # Short-circuit via break does not error and frees resources via finalizer/close
+        for e in scandir(dir)
+            break
+        end
+
+        # Explicit close is idempotent and disallows further iteration
+        it2 = scandir(dir)
+        close(it2)
+        close(it2)
+        @test_throws ArgumentError iterate(it2)
+
+        # do-block form runs and cleans up
+        seen = scandir(dir) do entries
+            collect(e.name for e in entries)
+        end
+        @test sort!(seen) == sort!(readdir(dir))
+
+        # Accepts a DirEntry as input
+        sub = only(e for e in readdir(DirEntry, dir) if isdir(e))
+        @test sort!(map(e -> e.name, collect(scandir(sub)))) == ["bfile.txt"]
+    end
+end
+
 if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     dirlink = joinpath(dir, "dirlink")
     symlink(subdir, dirlink)

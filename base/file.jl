@@ -22,6 +22,7 @@ export
     readdir,
     rm,
     samefile,
+    scandir,
     sendfile,
     symlink,
     tempdir,
@@ -1153,6 +1154,112 @@ function _readdir(dir::AbstractString; return_objects::Bool=false, join::Bool=fa
         return entries
     finally
         Libc.free(req)
+    end
+end
+
+"""
+    DirEntryIterator
+
+A stateful, single-pass iterator over the entries of a directory, yielding
+[`DirEntry`](@ref) objects. Created by [`scandir`](@ref).
+
+The underlying `uv_fs_t` request is opened lazily on the first call to
+`iterate` and is released when iteration reaches end-of-directory, when
+[`close`](@ref) is called, or by a finalizer. For deterministic cleanup
+on very large directories, prefer the do-block form of `scandir`.
+"""
+mutable struct DirEntryIterator
+    const dir::String
+    req::Ptr{Cvoid}     # uv_fs_t, C_NULL until opened, C_NULL again after close
+    closed::Bool
+    DirEntryIterator(dir::AbstractString) = finalizer(close, new(String(dir), C_NULL, false))
+end
+
+function _scandir_open!(it::DirEntryIterator)
+    it.req == C_NULL || return
+    it.closed && throw(ArgumentError("DirEntryIterator has already been consumed"))
+    req = Libc.malloc(_sizeof_uv_fs)
+    err = ccall(:uv_fs_scandir, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Cint, Ptr{Cvoid}),
+                C_NULL, req, it.dir, 0, C_NULL)
+    if err < 0
+        Libc.free(req)
+        it.closed = true
+        uv_error("scandir($(repr(it.dir)))", err)
+    end
+    it.req = req
+    return
+end
+
+function Base.close(it::DirEntryIterator)
+    req = it.req
+    if req != C_NULL
+        it.req = C_NULL
+        uv_fs_req_cleanup(req)
+        Libc.free(req)
+    end
+    it.closed = true
+    return
+end
+
+Base.IteratorSize(::Type{DirEntryIterator}) = Base.SizeUnknown()
+Base.eltype(::Type{DirEntryIterator}) = DirEntry
+Base.isdone(it::DirEntryIterator, _=nothing) = it.closed
+
+function Base.iterate(it::DirEntryIterator, _=nothing)
+    _scandir_open!(it)
+    ent = Ref{uv_dirent_t}()
+    rc = ccall(:uv_fs_scandir_next, Cint, (Ptr{Cvoid}, Ptr{uv_dirent_t}), it.req, ent)
+    if rc == Base.UV_EOF
+        close(it)
+        return nothing
+    end
+    return DirEntry(it.dir, unsafe_string(ent[].name), ent[].typ), nothing
+end
+
+"""
+    scandir(dir::AbstractString=pwd()) -> DirEntryIterator
+    scandir(entry::DirEntry)           -> DirEntryIterator
+    scandir(f, dir)                    -> f(::DirEntryIterator)
+
+Return a stateful, single-pass iterator yielding [`DirEntry`](@ref) objects for
+the contents of the directory `dir` (or the current working directory if not
+given), without first materializing the full listing. Useful for very large
+directories or when iteration may be short-circuited (e.g. with `break` or
+[`Iterators.take`](@ref)).
+
+Unlike [`readdir`](@ref), the entries are returned in filesystem order (not
+sorted) and the iterator can only be traversed once. The do-block form ensures
+the underlying `uv_fs_t` resource is released as soon as `f` returns; otherwise
+cleanup happens at end-of-iteration, on [`close`](@ref), or via a finalizer.
+
+See also [`readdir`](@ref), [`DirEntry`](@ref), [`walkdir`](@ref).
+
+!!! compat "Julia 1.13"
+    `scandir` requires Julia 1.13 or later.
+
+# Examples
+```julia
+# short-circuit a huge directory
+for entry in scandir("/very/large/dir")
+    isfile(entry) && entry.name == "needle.txt" && break
+end
+
+# deterministic cleanup
+scandir("/very/large/dir") do entries
+    for entry in entries
+        ...
+    end
+end
+```
+"""
+scandir(dir::AbstractString=pwd()) = DirEntryIterator(dir)
+scandir(entry::DirEntry) = DirEntryIterator(path(entry))
+function scandir(f, dir)
+    it = scandir(dir)
+    try
+        return f(it)
+    finally
+        close(it)
     end
 end
 
