@@ -247,7 +247,7 @@ function compiler_frontend(mod::Module)
     end
 end
 
-function compiler_frontend(mod_and_world::Tuple{Module, UInt})
+function compiler_frontend(mod_and_world::Tuple{Union{Module,Nothing},UInt})
     # This invoke is required for looking up the const binding in the
     # appropriate world
     Base.invoke_in_world(mod_and_world[2], compiler_frontend, mod_and_world[1])
