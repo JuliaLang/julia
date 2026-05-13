@@ -831,11 +831,32 @@ function test_intersection()
     @testintersect((@UnionAll T Pair{T,Ptr{T}}), (@UnionAll S Pair{Ptr{S},S}), Bottom)
     let A = Tuple{T,Ptr{T}} where T,
         B = Tuple{Ptr{S},S} where S,
-        correct = Union{Tuple{Ptr{T},Ptr{S}} where S>:Ptr{T} where T>:Ptr,
-                        Tuple{Ptr{S},Ptr{T}} where S>:Ptr{T} where T>:Ptr}
-        # TODO: get the correct answer. for now check that `typeintersect`
-        # at least gives a conservative answer.
-        @test typeintersect(B, A) == typeintersect(A, B) >: correct
+        # The precise A∩B is `Tuple{Ptr{S},Ptr{T}} where S>:Ptr{T} where T>:Ptr{S}`, but the
+        # mutually-forward-referencing bounds make it inexpressible as a Julia type. ILB is a
+        # representable strict subset of A∩B; W is a witness inhabitant of A∩B not in ILB.
+        ILB = Union{Tuple{Ptr{T},Ptr{S}} where S>:Ptr{T} where T>:Ptr,
+                        Tuple{Ptr{S},Ptr{T}} where S>:Ptr{T} where T>:Ptr},
+        Bptr = Ptr{<:Ptr},
+        W = Tuple{Ptr{Bptr}, Ptr{Bptr}}
+
+        let IActual1 = typeintersect(B, A),
+            IActual2 = typeintersect(A, B)
+
+            @test W <: A && W <: B
+            @test !(W <: ILB)
+            @test IActual1 == IActual2
+            @test IActual2 >: ILB
+            @test IActual2 >: W
+        end
+
+        let A1 = (Tuple{Ptr{Z}, Ptr{Y}} where Y>:Ptr{Z}) where Z,
+            A2 = (Tuple{Ptr{Z}, Ptr{Y}} where Z>:Ptr{Y}) where Y,
+            I = typeintersect(A1, A2),
+            X = Tuple{Ptr{Bptr}, Ptr{Ptr{Bptr}}}
+
+            @test X <: A1 && X <: A2
+            @test_broken X <: I
+        end
     end
 
     @testintersect((@UnionAll N Tuple{NTuple{N,Integer},NTuple{N,Integer}}),
