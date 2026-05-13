@@ -13,6 +13,8 @@
 #include <lmdb.h>
 #include <uv.h>
 
+#include "analyzer_annotations.h"
+
 /*
  * Environment variable knobs:
  *
@@ -30,9 +32,10 @@ using CompileFn = llvm::unique_function<std::unique_ptr<llvm::MemoryBuffer>()>;
 class ObjCache {
 public:
     ObjCache() = default;
+    ~ObjCache() JL_NOTSAFEPOINT = default;
     std::unique_ptr<llvm::MemoryBuffer> get(llvm::Module &M, CompileFn Compile);
-    bool isEnabled();
-    void shutdown();
+    bool isEnabled() JL_NOTSAFEPOINT;
+    void shutdown() JL_NOTSAFEPOINT;
 
     using Hash = std::array<uint8_t, 20>;
 

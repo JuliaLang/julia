@@ -212,8 +212,7 @@ void ObjCache::shutdown()
     uv_thread_join(&WriterThread);
 
     if (LogFile)
-        jl_printf(
-            JL_STDERR,
+        jl_safe_printf(
             "cache read : %zu\ncache write: %zu\ncache hit  : %zu\ncache miss : %zu\n",
             NRead.load(memory_order_relaxed), NWrite, NHit.load(memory_order_relaxed),
             NMiss.load(memory_order_relaxed));
