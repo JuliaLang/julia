@@ -622,7 +622,7 @@ $(build_shlibdir)/lib%Plugin.$(SHLIB_EXT): $(SRCDIR)/clangsa/%.cpp $(LLVM_CONFIG
 # before attempting this static analysis, so that all necessary headers
 # and dependencies are properly installed:
 #   make -C src install-analysis-deps
-ANALYSIS_DEPS := llvm clang llvm-tools libuv utf8proc zstd cpufeatures
+ANALYSIS_DEPS := llvm clang llvm-tools libuv utf8proc zstd cpufeatures lmdb
 ifeq ($(OS),Darwin)
 ANALYSIS_DEPS += llvmunwind
 else ifeq ($(OS),OpenBSD)
@@ -635,7 +635,7 @@ install-analysis-deps:
 	$(MAKE) -C $(JULIAHOME)/deps $(addprefix install-,$(ANALYSIS_DEPS))
 
 .PHONY: analyzegc-deps-check
-analyzegc-deps-check: $(addprefix $(BUILDDIR)/,julia_version.h julia_flisp.boot.inc jl_internal_funcs.inc jl_data_globals_defs.inc)
+analyzegc-deps-check: $(addprefix $(BUILDDIR)/,julia_version.h julia_flisp.boot.inc jl_internal_funcs.inc jl_data_globals_defs.inc jl_codegen_hash.inc)
 ifeq ($(USE_BINARYBUILDER_LLVM),0)
 ifneq ($(BUILD_LLVM_CLANG),1)
 	$(error Clang must be available to use the clang analyzer. Either build it (BUILD_LLVM_CLANG=1) or use BinaryBuilder)
