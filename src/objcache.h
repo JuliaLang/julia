@@ -32,6 +32,8 @@ public:
     ObjCache() = default;
     std::unique_ptr<llvm::MemoryBuffer> get(llvm::Module &M, CompileFn Compile);
 
+    using Hash = std::array<uint8_t, 20>;
+
 protected:
     void writerThread();
     void initDB();
@@ -40,7 +42,7 @@ private:
     std::atomic<bool> Initialized = false;
     MDB_env *Env = nullptr;
     uv_thread_t WriterThread;
-    std::vector<std::pair<llvm::ModuleHash, std::unique_ptr<llvm::MemoryBuffer>>> ObjQueue;
+    std::vector<std::pair<Hash, std::unique_ptr<llvm::MemoryBuffer>>> ObjQueue;
     std::mutex Mutex;
     std::condition_variable QueueCond;
 };

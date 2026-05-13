@@ -3,6 +3,7 @@
 
 #include <chrono>
 #include <llvm/Support/FileSystem.h>
+#include <llvm/Support/SHA1.h>
 
 #include "julia.h"
 
@@ -145,7 +146,10 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
     BW.writeModule(M, false, nullptr, true, &ModHash);
     BW.writeSymtab();
     BW.writeStrtab();
-    llvm::toHex({(uint8_t *)&ModHash[0], sizeof ModHash}, true, KeyBuf);
+    llvm::SHA1 Hasher;
+    Hasher.update({(uint8_t *)&ModHash[0], sizeof ModHash});
+    Hash H = Hasher.final();
+    llvm::toHex(H, true, KeyBuf);
     KeyBuf.push_back(0);
 
     MDB_txn *Txn;
@@ -161,7 +165,7 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
         return Compile();
     }
 
-    MDB_val Key{sizeof ModHash, ModHash.data()};
+    MDB_val Key{sizeof H, H.data()};
     MDB_val Data;
     if (int Err = mdb_get(Txn, Dbi, &Key, &Data)) {
         if (Err != MDB_NOTFOUND)
@@ -184,7 +188,7 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
         auto ObjCopy = llvm::MemoryBuffer::getMemBufferCopy(Obj->getBuffer());
         {
             std::unique_lock<std::mutex> Lock{Mutex};
-            ObjQueue.push_back({ModHash, std::move(ObjCopy)});
+            ObjQueue.push_back({H, std::move(ObjCopy)});
         }
         QueueCond.notify_one();
 
@@ -207,8 +211,7 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
 
 void ObjCache::writerThread()
 {
-    std::vector<std::pair<llvm::ModuleHash, std::unique_ptr<llvm::MemoryBuffer>>>
-        LocalQueue;
+    std::vector<std::pair<Hash, std::unique_ptr<llvm::MemoryBuffer>>> LocalQueue;
     while (1) {
         LocalQueue.clear();
         {
@@ -232,12 +235,12 @@ void ObjCache::writerThread()
 
         using Clock = std::chrono::steady_clock;
 
-        for (auto &[ModHash, Obj] : LocalQueue) {
-            llvm::SmallVector<char, 2 * sizeof ModHash + 1> KeyBuf;
-            llvm::toHex({(uint8_t *)&ModHash[0], sizeof ModHash}, true, KeyBuf);
+        for (auto &[Hash, Obj] : LocalQueue) {
+            llvm::SmallVector<char, 2 * sizeof Hash + 1> KeyBuf;
+            llvm::toHex({(uint8_t *)&Hash[0], sizeof Hash}, true, KeyBuf);
             KeyBuf[KeyBuf.size() - 1] = 0;
 
-            MDB_val Key{sizeof ModHash, ModHash.data()};
+            MDB_val Key{sizeof Hash, Hash.data()};
             MDB_val Data{Obj->getBufferSize(), (void *)Obj->getBufferStart()};
             auto WriteStart = Clock::now();
             if (int Err = mdb_put(Txn, Dbi, &Key, &Data, 0))
