@@ -572,6 +572,41 @@ void _gc_heap_snapshot_record_array_edge(jl_value_t *from, jl_value_t *to, size_
     _record_gc_edge("element", from, to, index);
 }
 
+void _gc_heap_snapshot_record_array_edge_field(jl_value_t *from, jl_value_t *to, size_t index ,size_t field_index, jl_datatype_t *el_type) JL_NOTSAFEPOINT
+{
+    ios_t name;
+    ios_mem(&name, 64);
+    if (el_type != NULL && jl_is_datatype(el_type)) {
+	jl_svec_t *field_names = jl_field_names(el_type);
+    	size_t nfields = jl_svec_len(field_names);
+    	size_t ptr_count = 0;
+    	size_t actual_field = field_index;
+    	for(size_t i = 0; i < nfields; i++) {
+       	    if (jl_field_isptr(el_type, i)) {
+                if (ptr_count == field_index) {
+             	    actual_field = i;
+             	    break;
+                }
+                ptr_count++;
+            }
+        }
+    	if (nfields > 0 && jl_svecref(field_names, actual_field) != jl_nothing) {
+           jl_sym_t *fname = (jl_sym_t*)jl_svecref(field_names, actual_field);
+           ios_printf(&name, "[%zu].%s", index, jl_symbol_name(fname));
+    	}
+    	else{
+            ios_printf(&name, "[%zu].%zu", index, field_index);
+    	}
+    }
+    else {
+          ios_printf(&name, "[%zu].%zu", index, field_index);
+    }
+    ios_putc('\0', &name);
+    size_t name_idx = st_find_or_serialize(&g_snapshot->names, g_snapshot->strings, (const char *)name.buf);
+    ios_close(&name);
+    _record_gc_edge("element", from, to, name_idx);
+}
+
 void _gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, void *slot) JL_NOTSAFEPOINT
 {
     ios_t path;

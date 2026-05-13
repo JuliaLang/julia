@@ -1882,7 +1882,7 @@ STATIC_INLINE void gc_mark_objarray(jl_ptls_t ptls, jl_value_t *obj_parent, jl_v
 // Mark array with 8bit field descriptors
 STATIC_INLINE void gc_mark_memory8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_value_t **ary8_begin,
                     jl_value_t **ary8_end, uint8_t *elem_begin, uint8_t *elem_end, uintptr_t elsize,
-                    uintptr_t nptr) JL_NOTSAFEPOINT
+                    uintptr_t nptr, jl_datatype_t *el_type) JL_NOTSAFEPOINT
 {
     jl_gc_markqueue_t *mq = &ptls->gc_tls.mark_queue;
     jl_value_t *new_obj;
@@ -1908,7 +1908,7 @@ STATIC_INLINE void gc_mark_memory8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_v
                         early_end = 1;
                         break;
                     }
-                    gc_heap_snapshot_record_array_edge(ary8_parent, slot);
+                    gc_heap_snapshot_record_array_edge_field(ary8_parent, *slot, gc_slot_to_arrayidx(ary8_parent, ary8_begin), pindex - elem_begin, el_type);
                 }
             }
             if (early_end)
@@ -1941,7 +1941,7 @@ STATIC_INLINE void gc_mark_memory8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_v
                                gc_slot_to_arrayidx(ary8_parent, ary8_begin));
                 gc_assert_parent_validity(ary8_parent, new_obj);
                 gc_try_claim_and_push(mq, new_obj, &nptr);
-                gc_heap_snapshot_record_array_edge(ary8_parent, slot);
+                gc_heap_snapshot_record_array_edge_field(ary8_parent, *slot, gc_slot_to_arrayidx(ary8_parent, ary8_begin), pindex - elem_begin, el_type);
             }
         }
     }
@@ -1959,7 +1959,7 @@ STATIC_INLINE void gc_mark_memory8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_v
 // Mark array with 16bit field descriptors
 STATIC_INLINE void gc_mark_memory16(jl_ptls_t ptls, jl_value_t *ary16_parent, jl_value_t **ary16_begin,
                      jl_value_t **ary16_end, uint16_t *elem_begin, uint16_t *elem_end, size_t elsize,
-                     uintptr_t nptr) JL_NOTSAFEPOINT
+                     uintptr_t nptr, jl_datatype_t *el_type) JL_NOTSAFEPOINT
 {
     jl_gc_markqueue_t *mq = &ptls->gc_tls.mark_queue;
     jl_value_t *new_obj;
@@ -1985,7 +1985,7 @@ STATIC_INLINE void gc_mark_memory16(jl_ptls_t ptls, jl_value_t *ary16_parent, jl
                         early_end = 1;
                         break;
                     }
-                    gc_heap_snapshot_record_array_edge(ary16_parent, slot);
+                    gc_heap_snapshot_record_array_edge_field(ary16_parent, *slot, gc_slot_to_arrayidx(ary16_parent, ary16_begin), pindex - elem_begin, el_type);
                 }
             }
             if (early_end)
@@ -2018,7 +2018,7 @@ STATIC_INLINE void gc_mark_memory16(jl_ptls_t ptls, jl_value_t *ary16_parent, jl
                                gc_slot_to_arrayidx(ary16_parent, ary16_begin));
                 gc_assert_parent_validity(ary16_parent, new_obj);
                 gc_try_claim_and_push(mq, new_obj, &nptr);
-                gc_heap_snapshot_record_array_edge(ary16_parent, slot);
+                gc_heap_snapshot_record_array_edge_field(ary16_parent, *slot, gc_slot_to_arrayidx(ary16_parent, ary16_begin), pindex - elem_begin, el_type);
             }
         }
     }
@@ -2215,7 +2215,7 @@ STATIC_INLINE void gc_mark_chunk(jl_ptls_t ptls, jl_gc_markqueue_t *mq, jl_gc_ch
             size_t elsize = c->step;
             uintptr_t nptr = c->nptr;
             gc_mark_memory8(ptls, ary8_parent, ary8_begin, ary8_end, elem_begin, elem_end,
-                           elsize, nptr);
+                           elsize, nptr, (jl_datatype_t*)jl_tparam0(jl_typeof(ary8_parent)));
             break;
         }
         case GC_ary16_chunk: {
@@ -2227,7 +2227,7 @@ STATIC_INLINE void gc_mark_chunk(jl_ptls_t ptls, jl_gc_markqueue_t *mq, jl_gc_ch
             size_t elsize = c->step;
             uintptr_t nptr = c->nptr;
             gc_mark_memory16(ptls, ary16_parent, ary16_begin, ary16_end, elem_begin, elem_end,
-                            elsize, nptr);
+                            elsize, nptr, (jl_datatype_t*)jl_tparam0(jl_typeof(ary16_parent)));
             break;
         }
         case GC_finlist_chunk: {
@@ -2468,13 +2468,13 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                     uint8_t *obj8_begin = (uint8_t*)jl_dt_layout_ptrs(layout);
                     uint8_t *obj8_end = obj8_begin + npointers;
                     gc_mark_memory8(ptls, objary_parent, objary_begin, objary_end, obj8_begin, obj8_end,
-                                   elsize, nptr);
+                                   elsize, nptr, (jl_datatype_t*)jl_tparam0(vt));
                 }
                 else if (layout->flags.fielddesc_type == JL_FIELDDESC_16) {
                     uint16_t *obj16_begin = (uint16_t*)jl_dt_layout_ptrs(layout);
                     uint16_t *obj16_end = obj16_begin + npointers;
                     gc_mark_memory16(ptls, objary_parent, objary_begin, objary_end, obj16_begin, obj16_end,
-                                    elsize, nptr);
+                                    elsize, nptr, (jl_datatype_t*)jl_tparam0(vt));
                 }
                 else {
                     assert(layout->flags.fielddesc_type != JL_FIELDDESC_FOREIGN);
