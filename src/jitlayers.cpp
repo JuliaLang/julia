@@ -1882,6 +1882,17 @@ JuliaOJIT::JuliaOJIT()
     asan_crt[mangle("___asan_globals_registered")] = {ExecutorAddr::fromPtr(&jl___asan_globals_registered), JITSymbolFlags::Common | JITSymbolFlags::Exported};
     cantFail(JD.define(orc::absoluteSymbols(asan_crt)));
 #endif
+#ifdef WITH_THIRD_PARTY_HEAP
+#if WITH_THIRD_PARTY_HEAP == 1 // MMTk
+    {
+        void *mmtk_log_bit_base = sys::DynamicLibrary::SearchForAddressOfSymbol("MMTK_SIDE_LOG_BIT_BASE_ADDRESS_JIT");
+        assert(mmtk_log_bit_base && "MMTK_SIDE_LOG_BIT_BASE_ADDRESS_JIT not found in process");
+        orc::SymbolMap mmtk_crt;
+        mmtk_crt[mangle("MMTK_SIDE_LOG_BIT_BASE_ADDRESS_JIT")] = {ExecutorAddr::fromPtr(mmtk_log_bit_base), JITSymbolFlags::Exported};
+        cantFail(GlobalJD.define(orc::absoluteSymbols(mmtk_crt)));
+    }
+#endif
+#endif
 
 #if defined(_COMPILER_GCC_) && __GNUC__ < 14
 #pragma GCC diagnostic push
