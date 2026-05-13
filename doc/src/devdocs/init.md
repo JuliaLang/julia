@@ -44,8 +44,8 @@ which eventually reaches the top-level `main()` function which uses it as its ex
 This function initializes a bunch of things, and also calls `libsupport_init()`
 again (it does nothing the second time).
 
-[`restore_signals()`](https://github.com/JuliaLang/julia/blob/master/src/signals-unix.c) is called
-to zero the signal handler mask.
+[`install_signal_listener()`](https://github.com/JuliaLang/julia/blob/master/src/signals-unix.c) is called
+to zero the signal handler mask and setup a thread to `sigwait()` a set of signals.
 
 [`jl_init_tasks()`](https://github.com/JuliaLang/julia/blob/master/src/task.c) creates the `jl_datatype_t* jl_task_type`
 object; initializes the global `jl_root_task` struct; and sets `jl_current_task` to the root task.

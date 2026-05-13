@@ -30,14 +30,17 @@ DEBUGFLAGS += -g
 
 #=============================================================================
 
-release: $(BIN)/embedding$(EXE) $(BIN)/libdl-embedding$(EXE)
-debug:   $(BIN)/embedding-debug$(EXE) $(BIN)/libdl-embedding$(EXE)
+release: $(BIN)/embedding$(EXE) $(BIN)/libdl-embedding$(EXE) $(BIN)/embedding-signals$(EXE)
+debug:   $(BIN)/embedding-debug$(EXE) $(BIN)/libdl-embedding$(EXE) $(BIN)/embedding-signals$(EXE)
 
 $(BIN)/embedding$(EXE): $(SRCDIR)/embedding.c
 	$(CC) $^ -o $@ $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS) $(LDFLAGS_ADD) $(LDFLAGS)
 
 $(BIN)/embedding-debug$(EXE): $(SRCDIR)/embedding.c
 	$(CC) $^ -o $@ $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS) $(LDFLAGS_ADD) $(LDFLAGS) $(DEBUGFLAGS)
+
+$(BIN)/embedding-signals$(EXE): $(SRCDIR)/embedding_signals.c
+	$(CC) $^ -o $@ $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS) $(LDFLAGS_ADD) $(LDFLAGS) -lpthread
 
 $(BIN)/libdl-embedding$(EXE): $(SRCDIR)/libdl_embedding.c
 	$(CC) $^ -o $@ $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -ldl -DLIBJULIA_PATH=\"$(JULIA_LIBDIR)/libjulia.so\"
@@ -52,13 +55,14 @@ $(BIN)/LocalModule.jl: $(SRCDIR)/LocalModule.jl
 	cp $< $@
 endif
 
-check: $(BIN)/embedding$(EXE) $(BIN)/libdl-embedding$(EXE) $(BIN)/LocalModule.jl
+check: $(BIN)/embedding$(EXE) $(BIN)/libdl-embedding$(EXE) $(BIN)/embedding-signals$(EXE) $(BIN)/LocalModule.jl
 	$(BIN)/libdl-embedding$(EXE) # run w/o error
-	$(JULIA) --depwarn=error $(SRCDIR)/embedding-test.jl $<
+	$(JULIA) --depwarn=error $(SRCDIR)/embedding-test.jl $(BIN)/embedding$(EXE)
+	$(JULIA) --depwarn=error $(SRCDIR)/embedding-signals-test.jl $(BIN)/embedding-signals$(EXE)
 	@echo SUCCESS
 
 clean:
-	-rm -f $(BIN)/embedding-debug$(EXE) $(BIN)/embedding$(EXE)
+	-rm -f $(BIN)/embedding-debug$(EXE) $(BIN)/embedding$(EXE) $(BIN)/embedding-signals$(EXE)
 
 .PHONY: release debug clean check
 
