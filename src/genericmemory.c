@@ -429,6 +429,7 @@ JL_DLLEXPORT void jl_memoryrefunset(jl_genericmemoryref_t m, int isatomic)
     int needlock = layout->flags.arrayelem_islocked;
     if (isatomic && !needlock) {
         _Alignas(MAX_POINTERATOMIC_SIZE) char zero_buf[MAX_POINTERATOMIC_SIZE] = {0};
+        assert(fsz <= MAX_POINTERATOMIC_SIZE);
         jl_atomic_store_bits(data, (jl_value_t*)zero_buf, fsz);
     }
     else if (needlock) {
