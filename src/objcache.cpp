@@ -6,6 +6,7 @@
 #include <llvm/Support/SHA1.h>
 
 #include "julia.h"
+#include "jl_codegen_hash.inc"
 
 static FILE *getLogFile()
 {
@@ -147,6 +148,8 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
     BW.writeSymtab();
     BW.writeStrtab();
     llvm::SHA1 Hasher;
+    Hasher.update(LLVM_VERSION_STRING);
+    Hasher.update(JL_CODEGEN_SRC_HASH);
     Hasher.update({(uint8_t *)&ModHash[0], sizeof ModHash});
     Hash H = Hasher.final();
     llvm::toHex(H, true, KeyBuf);
