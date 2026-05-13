@@ -376,7 +376,7 @@ static void buildEarlySimplificationPipeline(ModulePassManager &MPM, PassBuilder
     MPM.addPass(AfterEarlySimplificationMarkerPass());
 }
 
-static void buildEarlyOptimizerPipeline(ModulePassManager &MPM, PassBuilder *PB, OptimizationLevel O, const OptimizationOptions &options) JL_NOTSAFEPOINT {
+static void buildEarlyOptimizerPipeline(ModulePassManager &MPM, PassBuilder *PB, OptimizationLevel O, const OptimizationOptions &options, const TargetMachine *TM) JL_NOTSAFEPOINT {
     MPM.addPass(BeforeEarlyOptimizationMarkerPass());
     if (options.enable_early_optimizations) {
       invokeOptimizerEarlyCallbacks(MPM, PB, O);
@@ -400,7 +400,7 @@ static void buildEarlyOptimizerPipeline(ModulePassManager &MPM, PassBuilder *PB,
           MPM.addPass(StripDeadPrototypesPass());
           JULIA_PASS(MPM.addPass(MultiVersioningPass(options.external_use)));
       }
-      JULIA_PASS(MPM.addPass(CPUFeaturesPass()));
+      JULIA_PASS(MPM.addPass(CPUFeaturesPass(TM)));
       if (O.getSpeedupLevel() >= 1) {
           FunctionPassManager FPM;
           if (O.getSpeedupLevel() >= 2) {
@@ -621,12 +621,12 @@ static void buildCleanupPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimi
     MPM.addPass(AfterCleanupMarkerPass());
 }
 
-static void buildPipeline(ModulePassManager &MPM, PassBuilder *PB, OptimizationLevel O, const OptimizationOptions &options) JL_NOTSAFEPOINT {
+static void buildPipeline(ModulePassManager &MPM, PassBuilder *PB, OptimizationLevel O, const OptimizationOptions &options, const TargetMachine *TM = nullptr) JL_NOTSAFEPOINT {
     MPM.addPass(BeforeOptimizationMarkerPass());
     buildEarlySimplificationPipeline(MPM, PB, O, options);
     if (options.always_inline)
         MPM.addPass(AlwaysInlinerPass());
-    buildEarlyOptimizerPipeline(MPM, PB, O, options);
+    buildEarlyOptimizerPipeline(MPM, PB, O, options, TM);
     {
         FunctionPassManager FPM;
         buildLoopOptimizerPipeline(FPM, PB, O, options);
@@ -735,9 +735,9 @@ PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
         return FAM;
     }
 
-    ModulePassManager createMPM(PassBuilder &PB, OptimizationLevel O, OptimizationOptions options) JL_NOTSAFEPOINT {
+    ModulePassManager createMPM(PassBuilder &PB, OptimizationLevel O, OptimizationOptions options, const TargetMachine *TM = nullptr) JL_NOTSAFEPOINT {
         ModulePassManager MPM;
-        buildPipeline(MPM, &PB, O, options);
+        buildPipeline(MPM, &PB, O, options, TM);
         return MPM;
     }
 }
@@ -972,7 +972,7 @@ void NewPM::run(Module &M) {
     PB.registerCGSCCAnalyses(CGAM);
     PB.registerModuleAnalyses(MAM);
     PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
-    ModulePassManager MPM = createMPM(PB, O, options);
+    ModulePassManager MPM = createMPM(PB, O, options, TM.get());
 #ifndef __clang_gcanalyzer__ /* the analyzer cannot prove we have not added instrumentation callbacks with safepoints */
     MPM.run(M, MAM);
 #endif
