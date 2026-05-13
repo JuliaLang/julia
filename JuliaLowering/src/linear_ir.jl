@@ -885,13 +885,14 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         nothing
     elseif k == K"meta"
         @jl_assert numchildren(ex) >= 1 ex
-        if ex[1].name_val in ("inline", "noinline", "propagate_inbounds",
+        if kind(ex[1]) === K"purity"
+            @jl_assert numchildren(ex) == 1 ex
+            ctx.meta[:purity] = purity_expr_to_flags(ex[1])
+        elseif ex[1].name_val in ("inline", "noinline", "propagate_inbounds",
                               "nospecializeinfer", "aggressive_constprop", "no_constprop")
             for c in children(ex)
                 ctx.meta[Symbol(c.name_val)] = true
             end
-        elseif ex[1].name_val === "purity"
-            ctx.meta[Symbol(ex[1].name_val)] = ex[2].value::Base.EffectsOverride
         else
             emit(ctx, ex)
         end
@@ -902,6 +903,13 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             else
                 val
             end
+        end
+    elseif k == K"inbounds" || k == K"inbounds_pop" ||
+        k == K"inline" || k == K"noinline" || k == K"purity"
+        if in_tail_pos
+            emit_return(ctx, ex)
+        else
+            emit(ctx, ex) # converted to nothing later
         end
     elseif k == K"_while"
         end_label = make_label(ctx, ex)
@@ -923,8 +931,8 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         if needs_value
             compile(ctx, nothing_(ctx, ex), needs_value, in_tail_pos)
         end
-    elseif k == K"isdefined" || k == K"captured_local" || k == K"throw_undef_if_not" ||
-            k == K"boundscheck"
+    elseif k == K"isdefined" || k == K"captured_local" ||
+        k == K"throw_undef_if_not" || k == K"boundscheck"
         if in_tail_pos
             emit_return(ctx, ex)
         elseif needs_value
