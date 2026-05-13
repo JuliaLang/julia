@@ -1456,11 +1456,6 @@ struct JuliaOJIT::JITPointersT {
                 GV.eraseFromParent();
             }
         }
-
-        // Windows needs some inline asm to help
-        // build unwind tables, if they have any functions to decorate
-        if (!M.functions().empty())
-            jl_decorate_module(M);
     }
     void operator()(Module &M, orc::MaterializationResponsibility &R) JL_NOTSAFEPOINT {
         return operator()(M);
@@ -2381,6 +2376,12 @@ CISymbolPtr *JuliaOJIT::linkCISymbol(jl_code_instance_t *CI)
 void JuliaOJIT::optimizeModule(Module &M)
 {
     (*Optimizers)(M);
+    if (!OCache.isEnabled())
+        (*JITPointers)(M);
+    // Windows needs some inline asm to help
+    // build unwind tables, if they have any functions to decorate
+    if (!M.functions().empty())
+        jl_decorate_module(M);
 }
 
 std::unique_ptr<MemoryBuffer> JuliaOJIT::compileModule(Module &M)

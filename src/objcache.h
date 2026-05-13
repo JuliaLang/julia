@@ -31,6 +31,7 @@ class ObjCache {
 public:
     ObjCache() = default;
     std::unique_ptr<llvm::MemoryBuffer> get(llvm::Module &M, CompileFn Compile);
+    bool isEnabled();
 
     using Hash = std::array<uint8_t, 20>;
 

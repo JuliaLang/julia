@@ -214,6 +214,11 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
     return Buf;
 }
 
+bool ObjCache::isEnabled()
+{
+    return Env;
+}
+
 void ObjCache::writerThread()
 {
     std::vector<std::pair<Hash, std::unique_ptr<llvm::MemoryBuffer>>> LocalQueue;
