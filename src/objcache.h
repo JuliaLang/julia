@@ -53,7 +53,6 @@ private:
     std::vector<std::pair<Hash, std::unique_ptr<llvm::MemoryBuffer>>> ObjQueue;
     std::mutex Mutex;
     std::condition_variable QueueCond;
-    std::condition_variable ExitCond;
 };
 
 #endif // JL_OBJCACHE_H
