@@ -183,6 +183,8 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
         auto Obj = Compile();
         double CompileMs =
             std::chrono::duration<double, std::milli>(Clock::now() - CompileStart).count();
+        if (!Obj)
+            return nullptr;
 
         if (LogFile)
             fprintf(LogFile, "lookup,%s,%.3f,miss,%.3f,%zu,%zu\n", KeyBuf.begin(), LookupMs,
