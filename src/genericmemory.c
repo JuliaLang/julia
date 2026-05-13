@@ -424,6 +424,7 @@ JL_DLLEXPORT void jl_memoryrefunset(jl_genericmemoryref_t m, int isatomic)
     if (layout->first_ptr < 0)
         return;
     jl_datatype_t *dt = (jl_datatype_t*)jl_tparam1(jl_typetagof(m.mem));
+    assert(jl_is_datatype(dt)); // implied by !isboxed && !isunion
     size_t fsz = jl_datatype_size(dt);
     char *data = (char*)m.ptr_or_offset;
     int needlock = layout->flags.arrayelem_islocked;
