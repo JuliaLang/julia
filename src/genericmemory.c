@@ -424,15 +424,21 @@ JL_DLLEXPORT void jl_memoryrefunset(jl_genericmemoryref_t m, int isatomic)
     if (layout->first_ptr < 0)
         return;
     jl_datatype_t *dt = (jl_datatype_t*)jl_tparam1(jl_typetagof(m.mem));
+    size_t fsz = jl_datatype_size(dt);
     char *data = (char*)m.ptr_or_offset;
     int needlock = layout->flags.arrayelem_islocked;
-    if (needlock) {
-        jl_lock_field((jl_mutex_t*)data);
-        data += LLT_ALIGN(sizeof(jl_mutex_t), JL_SMALL_BYTE_ALIGNMENT);
+    if (isatomic && !needlock) {
+        _Alignas(MAX_POINTERATOMIC_SIZE) char zero_buf[MAX_POINTERATOMIC_SIZE] = {0};
+        jl_atomic_store_bits(data, (jl_value_t*)zero_buf, fsz);
     }
-    memset(data, 0, jl_datatype_size(dt));
-    if (needlock)
-        jl_unlock_field((jl_mutex_t*)m.ptr_or_offset);
+    else if (needlock) {
+        jl_lock_field((jl_mutex_t*)data);
+        memset(data + LLT_ALIGN(sizeof(jl_mutex_t), JL_SMALL_BYTE_ALIGNMENT), 0, fsz);
+        jl_unlock_field((jl_mutex_t*)data);
+    }
+    else {
+        memset(data, 0, fsz);
+    }
 }
 
 JL_DLLEXPORT void jl_memoryrefset(jl_genericmemoryref_t m JL_ROOTING_ARGUMENT, jl_value_t *rhs JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, int isatomic)

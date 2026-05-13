@@ -2578,7 +2578,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             switch (op) {
             case StoreKind::Unset:
                 assert(false && "Unset should not go through typed_store");
-                return rhs;
+                jl_unreachable();
             case StoreKind::Set:
                 return rhs;
             case StoreKind::Replace: {
@@ -3023,7 +3023,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         break; // oldval already set to rhs
     case StoreKind::Unset:
         assert(false && "Unset should not go through typed_store");
-        break;
+        jl_unreachable();;
     case StoreKind::Swap:
     case StoreKind::Replace:
         if (!is_union) {

@@ -1214,6 +1214,36 @@ let r = GenericMemoryRef(Memory{Any}(undef, 0))
     @test_throws BoundsError memoryrefunset!(r, :not_atomic, true)
 end
 
+# memoryrefunset! on a struct with multiple inline-allocated pointers must clear
+# *every* pointer in the slot, not just the one checked by memoryref_isassigned
+# (which only inspects first_ptr). Read the raw memory directly to verify.
+struct TwoInlinePtr;   a::Any; b::Any;         end
+struct ThreeInlinePtr; a::Any; b::Any; c::Any; end
+function raw_element_ptrs(mem::GenericMemory)
+    nptrs = sizeof(eltype(mem)) ÷ sizeof(Ptr{Cvoid})
+    base = Ptr{UInt}(pointer(mem))
+    return ntuple(i -> unsafe_load(base, i), nptrs)
+end
+@noinline function test_memory_unset_multiptr(::Type{T}, mem, ordering) where {T}
+    objs = Any[Ref(i) for i in 1:fieldcount(T)]
+    r = GenericMemoryRef(mem)
+    memoryrefset!(r, T(objs...), ordering, true)
+    GC.@preserve objs begin
+        @test all(!iszero, raw_element_ptrs(mem))
+        @test memoryref_isassigned(r, ordering, true)
+        @test memoryrefunset!(r, ordering, true) === nothing
+        @test !memoryref_isassigned(r, ordering, true)
+        @test_throws UndefRefError memoryrefget(r, ordering, true)
+        @test all(iszero, raw_element_ptrs(mem))
+    end
+    nothing
+end
+# non-atomic memory: clears via memset
+test_memory_unset_multiptr(TwoInlinePtr, Memory{TwoInlinePtr}(undef, 1), :not_atomic)
+test_memory_unset_multiptr(ThreeInlinePtr, Memory{ThreeInlinePtr}(undef, 1), :not_atomic)
+# atomic memory with element size <= MAX_POINTERATOMIC_SIZE: clears via jl_atomic_store_bits
+test_memory_unset_multiptr(TwoInlinePtr, AtomicMemory{TwoInlinePtr}(undef, 1), :unordered)
+
 @noinline function _test_once_undef(r)
     r = r[]
     TT = eltype(r)
