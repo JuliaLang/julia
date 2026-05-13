@@ -48,6 +48,7 @@ private:
     MDB_env *Env = nullptr;
     MDB_dbi ObjCacheDbi;
     uv_thread_t WriterThread;
+    bool Started = false;
     bool Exiting = false;
     std::vector<std::pair<Hash, std::unique_ptr<llvm::MemoryBuffer>>> ObjQueue;
     std::mutex Mutex;

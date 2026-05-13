@@ -101,6 +101,7 @@ void ObjCache::initDB()
     uv_thread_create(
         &WriterThread, [](void *arg) { static_cast<ObjCache *>(arg)->writerThread(); },
         this);
+    Started = true;
     goto cleanup;
 
 cleanup_txn:
@@ -204,12 +205,14 @@ bool ObjCache::isEnabled()
 
 void ObjCache::shutdown()
 {
-    {
-        std::unique_lock<std::mutex> Lock{Mutex};
-        Exiting = true;
+    if (Started) {
+        {
+            std::unique_lock<std::mutex> Lock{Mutex};
+            Exiting = true;
+        }
+        QueueCond.notify_one();
+        uv_thread_join(&WriterThread);
     }
-    QueueCond.notify_one();
-    uv_thread_join(&WriterThread);
 
     if (LogFile)
         jl_safe_printf(
