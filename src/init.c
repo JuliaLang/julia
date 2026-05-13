@@ -736,7 +736,7 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
     init_stdio();
     restore_fp_env();
     if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
-        restore_signals();
+        allocate_signal_listener();
 
     jl_init_intrinsic_properties();
 
@@ -777,7 +777,7 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
     jl_init_engine();
     jl_init_threading();
     jl_init_threadinginfra();
-    if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
+    if (jl_options.handle_signals != JL_OPTIONS_HANDLE_SIGNALS_OFF)
         jl_install_default_signal_handlers();
 
     jl_gc_init();

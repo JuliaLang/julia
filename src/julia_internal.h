@@ -902,7 +902,7 @@ JL_DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t);
 
 JL_CALLABLE(jl_f_tuple);
 void jl_install_default_signal_handlers(void);
-void restore_signals(void);
+void allocate_signal_listener(void);
 void jl_install_thread_signal_handler(jl_ptls_t ptls);
 
 extern uv_loop_t *jl_io_loop;

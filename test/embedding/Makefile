@@ -24,25 +24,47 @@ JULIA_CONFIG := $(JULIA) -e 'include(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "jul
 JULIA_LIBDIR := $(shell $(JULIA) -e 'println(joinpath(Sys.BINDIR, "..", "lib"))' --)
 CPPFLAGS_ADD :=
 CFLAGS_ADD = $(shell $(JULIA_CONFIG) --cflags)
-LDFLAGS_ADD = -lm $(shell $(JULIA_CONFIG) --ldflags --ldlibs)
+LDFLAGS_ADD = -lm -lpthread $(shell $(JULIA_CONFIG) --ldflags --ldlibs)
 
 DEBUGFLAGS += -g
 
+# Path conversion for passing paths to Julia on Windows (MSYS2/Cygwin)
+ifeq ($(OS),Windows_NT)
+cygpath_w = `cygpath -w $(1)`
+else
+cygpath_w = $(1)
+endif
+
 #=============================================================================
+# Test list: each entry has a matching .c source and -test.jl script
 
-release: $(BIN)/embedding$(EXE) $(BIN)/libdl-embedding$(EXE)
-debug:   $(BIN)/embedding-debug$(EXE) $(BIN)/libdl-embedding$(EXE)
+TESTS := embedding
 
-$(BIN)/embedding$(EXE): $(SRCDIR)/embedding.c
+ifeq ($(OS),Windows_NT)
+TESTS += embedding-signals-win
+else
+TESTS += embedding-signals-unix libdl-embedding
+endif
+
+TARGETS       := $(addprefix $(BIN)/,$(addsuffix $(EXE),$(TESTS)))
+DEBUG_TARGETS := $(addprefix $(BIN)/,$(addsuffix -debug$(EXE),$(TESTS)))
+
+release: $(TARGETS)
+debug:   $(DEBUG_TARGETS)
+
+#=============================================================================
+# Build rules
+
+$(BIN)/%$(EXE): $(SRCDIR)/%.c
 	$(CC) $^ -o $@ $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS) $(LDFLAGS_ADD) $(LDFLAGS)
 
-$(BIN)/embedding-debug$(EXE): $(SRCDIR)/embedding.c
+$(BIN)/%-debug$(EXE): $(SRCDIR)/%.c
 	$(CC) $^ -o $@ $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS) $(LDFLAGS_ADD) $(LDFLAGS) $(DEBUGFLAGS)
 
-$(BIN)/libdl-embedding$(EXE): $(SRCDIR)/libdl_embedding.c
+$(BIN)/libdl-embedding$(EXE): $(SRCDIR)/libdl-embedding.c
 	$(CC) $^ -o $@ $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -ldl -DLIBJULIA_PATH=\"$(JULIA_LIBDIR)/libjulia.so\"
 
-$(BIN)/libdl-embedding-debug$(EXE): $(SRCDIR)/libdl_embedding.c
+$(BIN)/libdl-embedding-debug$(EXE): $(SRCDIR)/libdl-embedding.c
 	$(CC) $^ -o $@ $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(DEBUGFLAGS) -ldl -DLIBJULIA_PATH=\"$(JULIA_LIBDIR)/libjulia.so\"
 
 ifneq ($(abspath $(BIN)),$(abspath $(SRCDIR)))
@@ -52,13 +74,12 @@ $(BIN)/LocalModule.jl: $(SRCDIR)/LocalModule.jl
 	cp $< $@
 endif
 
-check: $(BIN)/embedding$(EXE) $(BIN)/libdl-embedding$(EXE) $(BIN)/LocalModule.jl
-	$(BIN)/libdl-embedding$(EXE) # run w/o error
-	$(JULIA) --depwarn=error $(SRCDIR)/embedding-test.jl $<
+check: $(TARGETS) $(BIN)/LocalModule.jl
+	$(foreach test,$(TESTS),$(JULIA) --depwarn=error $(call cygpath_w,$(SRCDIR)/$(test)-test.jl) $(call cygpath_w,$(BIN)/$(test)$(EXE)) &&) true
 	@echo SUCCESS
 
 clean:
-	-rm -f $(BIN)/embedding-debug$(EXE) $(BIN)/embedding$(EXE)
+	-rm -f $(TARGETS) $(DEBUG_TARGETS)
 
 .PHONY: release debug clean check
 
