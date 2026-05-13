@@ -480,7 +480,7 @@ end
 
 @test_throws "syntax: expression too large" code_lowered(ntuple, (Returns{Nothing}, Val{1000000}))
 
-# test that generated methods also have reasonable line numbers
+# test that generator methods also have reasonable line numbers
 f_generated_lno1_lower_bound = @__LINE__()
 function f_generated_lno1(x)
     if @generated
