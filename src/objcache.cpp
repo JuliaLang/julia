@@ -219,6 +219,16 @@ bool ObjCache::isEnabled()
     return Env;
 }
 
+void ObjCache::shutdown()
+{
+    {
+        std::unique_lock<std::mutex> Lock{Mutex};
+        Exiting = true;
+    }
+    QueueCond.notify_one();
+    uv_thread_join(&WriterThread);
+}
+
 void ObjCache::writerThread()
 {
     std::vector<std::pair<Hash, std::unique_ptr<llvm::MemoryBuffer>>> LocalQueue;
@@ -226,9 +236,11 @@ void ObjCache::writerThread()
         LocalQueue.clear();
         {
             std::unique_lock Lock{Mutex};
-            QueueCond.wait(Lock, [this]() { return !ObjQueue.empty(); });
+            QueueCond.wait(Lock, [this]() { return Exiting || !ObjQueue.empty(); });
             std::swap(LocalQueue, ObjQueue);
         }
+        if (LocalQueue.empty())
+            return;
 
         MDB_txn *Txn;
         if (int Err = mdb_txn_begin(Env, nullptr, 0, &Txn)) {

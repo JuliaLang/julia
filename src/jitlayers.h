@@ -850,6 +850,8 @@ public:
     // but may be called from inside safe-regions due to jit compilation locks
     void optimizeDLSyms(Module &M) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER;
 
+    void shutdown() JL_NOTSAFEPOINT;
+
 protected:
     // Choose globally unique names for the functions defined by the given CI
     // and register the mapping in CISymbols.

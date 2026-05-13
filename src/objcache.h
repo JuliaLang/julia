@@ -32,6 +32,7 @@ public:
     ObjCache() = default;
     std::unique_ptr<llvm::MemoryBuffer> get(llvm::Module &M, CompileFn Compile);
     bool isEnabled();
+    void shutdown();
 
     using Hash = std::array<uint8_t, 20>;
 
@@ -43,9 +44,11 @@ private:
     std::atomic<bool> Initialized = false;
     MDB_env *Env = nullptr;
     uv_thread_t WriterThread;
+    bool Exiting = false;
     std::vector<std::pair<Hash, std::unique_ptr<llvm::MemoryBuffer>>> ObjQueue;
     std::mutex Mutex;
     std::condition_variable QueueCond;
+    std::condition_variable ExitCond;
 };
 
 #endif // JL_OBJCACHE_H

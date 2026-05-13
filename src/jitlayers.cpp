@@ -2423,6 +2423,11 @@ void JuliaOJIT::optimizeDLSyms(Module &M) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_
     (*DLSymOpt)(M);
 }
 
+void JuliaOJIT::shutdown()
+{
+    OCache.shutdown();
+}
+
 JuliaOJIT *jl_ExecutionEngine;
 
 //TargetMachine pass-through methods
