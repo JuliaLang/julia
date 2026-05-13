@@ -113,15 +113,6 @@ cleanup:
 static size_t NWrite = 0;
 static std::atomic<size_t> NRead = 0, NMiss = 0, NHit = 0;
 
-__attribute__((destructor)) static void dump_stats()
-{
-    if (LogFile)
-        jl_printf(
-            JL_STDERR,
-            "cache read : %zu\ncache write: %zu\ncache hit  : %zu\ncache miss : %zu\n",
-                  NRead.load(memory_order_relaxed), NWrite, NHit.load(memory_order_relaxed), NMiss.load(memory_order_relaxed));
-}
-
 std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Compile)
 {
     if (!Initialized.load(memory_order_acquire))
@@ -219,6 +210,13 @@ void ObjCache::shutdown()
     }
     QueueCond.notify_one();
     uv_thread_join(&WriterThread);
+
+    if (LogFile)
+        jl_printf(
+            JL_STDERR,
+            "cache read : %zu\ncache write: %zu\ncache hit  : %zu\ncache miss : %zu\n",
+            NRead.load(memory_order_relaxed), NWrite, NHit.load(memory_order_relaxed),
+            NMiss.load(memory_order_relaxed));
 }
 
 void ObjCache::writerThread()
