@@ -1413,6 +1413,47 @@ has_bottom_parameter(t::Union) = has_bottom_parameter(t.a) & has_bottom_paramete
 has_bottom_parameter(t::TypeVar) = has_bottom_parameter(t.ub)
 has_bottom_parameter(::Any) = false
 
+function find_free_typevars(@nospecialize(t))
+    return ccall(:jl_find_free_typevars, Array{Any, 1}, (Any,), t)
+end
+
+"""
+    rewrap_free_typevars(@nospecialize(t), pre=Core.svec())
+
+Wrap `t` in `UnionAll` for each `TypeVar` that is free in `t` but not referenced
+in `pre` (the typevars that were free in the consumer's input before an env was
+applied).
+
+This is the consumer-side complement to `jl_type_intersection_env` /
+`jl_subtype_env`: the env svec may contain entries whose typevar identity is
+shared across slots. Rather than wrapping each slot independently (which breaks
+that identity), callers that build a new type from the env should apply this
+helper once to the final reconstructed type.
+"""
+function rewrap_free_typevars(@nospecialize(t), pre=Core.svec())
+    has_free_typevars(t) || return t
+    # UnionAll cannot directly wrap a Vararg; the caller must wrap it in Tuple first
+    isvarargtype(t) && return t
+    fv = find_free_typevars(t)
+    for i in length(fv):-1:1
+        v = fv[i]::TypeVar
+        wrap = true
+        for p in pre
+            if p === v
+                wrap = false
+                break
+            end
+        end
+        wrap && (t = UnionAll(v, t))
+    end
+    return t
+end
+
+function typeintersect_env(@nospecialize(a), @nospecialize(b))
+    (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), a, b)::SimpleVector
+    Pair{Any, SimpleVector}(ti, env)
+end
+
 min_world(m::Core.CodeInstance) = m.min_world
 max_world(m::Core.CodeInstance) = m.max_world
 min_world(m::Core.CodeInfo) = m.min_world
@@ -1675,7 +1716,7 @@ function may_invoke_generator(method::Method, @nospecialize(atype), sparams::Sim
 
     firstarg = 1
     for i = 1:nsparams
-        if isa(sparams[i], TypeVar)
+        if isa(sparams[i], SimpleVector)
             if (ast_slotflag(code, firstarg + i) & SLOT_USED) != 0
                 return false
             end
@@ -1734,8 +1775,7 @@ function normalize_typevars(method::Method, @nospecialize(atype), sparams::Simpl
     at2 = subst_trivial_bounds(atype)
     if at2 !== atype && at2 == atype
         atype = at2
-        sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), at2, method.sig)::SimpleVector
-        sparams = sp_[2]::SimpleVector
+        (_, sparams) = typeintersect_env(at2, method.sig)
     end
     return Pair{Any,SimpleVector}(atype, sparams)
 end
