@@ -894,8 +894,14 @@ public:
         uint64_t start_time = jl_hrtime();
         {
             TimeTraceScope CompileScope("JIT Compile", Out.module->getModuleIdentifier());
-            // Embeds the optimization level into the module IR, so it is cached.
+            // Embeds the optlevel, CPU, and features into the module, so they form part of
+            // the cache key.
             selectOptLevel(*Out.module);
+            Out.module->addModuleFlag(Module::Warning, "julia.cpu",
+                                      MDString::get(*Out.ctx, JIT.getTargetCPU()));
+            Out.module->addModuleFlag(Module::Warning, "julia.cpu.features",
+                                      MDString::get(*Out.ctx,
+                                                    JIT.getTargetFeatureString()));
             Obj = JIT.OCache.get(*Out.module, [this](){
                 JIT.optimizeModule(*Out.module);
                 return JIT.compileModule(*Out.module);
