@@ -2,7 +2,7 @@
 
 // Processor feature detection and dispatch using the cpufeatures library.
 // CPU/feature tables are generated from LLVM's TableGen data and committed
-// to https://github.com/gbaraldi/cpufeatures
+// to https://github.com/JuliaLang/cpufeatures
 //
 // On LLVM version bump:
 //   1. cd cpufeatures && make -f Makefile.generate LLVM_VER=<new>
