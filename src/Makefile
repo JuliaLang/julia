@@ -82,15 +82,19 @@ GC_CODEGEN_SRCS += llvm-final-gc-lowering-mmtk
 else
 GC_CODEGEN_SRCS += llvm-final-gc-lowering-stock
 endif
-# We'll use these sources to compute the hash that ensures the objcache is
-# invalidated when codegen changes.
-CODEGEN_SRCS_NOCACHE := codegen jitlayers aotcompile debuginfo disasm llvm-simdloop \
+CODEGEN_SRCS_HASH := codegen jitlayers aotcompile debuginfo disasm llvm-simdloop \
 	llvm-pass-helpers llvm-ptls llvm-propagate-addrspaces \
 	llvm-multiversioning llvm-alloc-opt llvm-alloc-helpers cgmemmgr llvm-remove-addrspaces \
 	llvm-remove-ni llvm-julia-licm llvm-demote-float16 llvm-cpufeatures llvm-expand-atomic-modify \
 	pipeline llvm_api \
+	cgutils intrinsics ccall \
 	$(GC_CODEGEN_SRCS)
-CODEGEN_SRCS := $(CODEGEN_SRCS_NOCACHE) objcache
+CODEGEN_SRCS := codegen jitlayers aotcompile debuginfo disasm llvm-simdloop \
+	llvm-pass-helpers llvm-ptls llvm-propagate-addrspaces \
+	llvm-multiversioning llvm-alloc-opt llvm-alloc-helpers cgmemmgr llvm-remove-addrspaces \
+	llvm-remove-ni llvm-julia-licm llvm-demote-float16 llvm-cpufeatures llvm-expand-atomic-modify \
+	pipeline llvm_api objcache \
+	$(GC_CODEGEN_SRCS)
 FLAGS_COMMON += -I$(shell $(LLVM_CONFIG_HOST) --includedir)
 CG_LLVM_LIBS := all
 ifeq ($(USE_POLLY),1)
@@ -309,7 +313,7 @@ $(BUILDDIR)/jl_data_globals_defs.inc: $(SRCDIR)/jl_exported_data.inc
 	} > $$TMPFILE; \
 	mv $$TMPFILE $@
 
-$(BUILDDIR)/jl_codegen_hash.inc: $(CODEGEN_SRCS_NOCACHE:%=$(BUILDDIR)/%.cpp)
+$(BUILDDIR)/jl_codegen_hash.inc: $(CODEGEN_SRCS_HASH:%=$(BUILDDIR)/%.cpp)
 	cat $^ | sha1sum | sed -E 's/^([0-9a-f]+).*/#define JL_CODEGEN_SRC_HASH "\1"/g' > $@
 
 # source file rules
