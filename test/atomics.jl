@@ -1243,6 +1243,7 @@ test_memory_unset_multiptr(TwoInlinePtr, Memory{TwoInlinePtr}(undef, 1), :not_at
 test_memory_unset_multiptr(ThreeInlinePtr, Memory{ThreeInlinePtr}(undef, 1), :not_atomic)
 # atomic memory with element size <= MAX_POINTERATOMIC_SIZE: clears via jl_atomic_store_bits
 test_memory_unset_multiptr(TwoInlinePtr, AtomicMemory{TwoInlinePtr}(undef, 1), :unordered)
+test_memory_unset_multiptr(ThreeInlinePtr, AtomicMemory{ThreeInlinePtr}(undef, 1), :unordered)
 
 @noinline function _test_once_undef(r)
     r = r[]
