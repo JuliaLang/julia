@@ -9344,7 +9344,8 @@ static jl_llvm_functions_t
                             info.loc = DILocation::get(ctx.builder.getContext(), info.line, col, SP, NULL);
                         }
                         else { // otherwise, describe this as an inlining frame
-                            DebugLoc inl_loc = new_lineinfo.empty() ? DebugLoc(DILocation::get(ctx.builder.getContext(), 0, 0, SP, NULL)) : new_lineinfo.back().loc;
+                            assert(!new_lineinfo.empty());
+                            DebugLoc inl_loc = new_lineinfo.back().loc;
                             DISubprogram *&inl_SP = subprograms[std::make_tuple(fname, info.file)];
                             if (inl_SP == NULL) {
                                 DIFile *difile = dbuilder.createFile(info.file, ".");
