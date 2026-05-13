@@ -894,6 +894,8 @@ public:
         uint64_t start_time = jl_hrtime();
         {
             TimeTraceScope CompileScope("JIT Compile", Out.module->getModuleIdentifier());
+            // Embeds the optimization level into the module IR, so it is cached.
+            selectOptLevel(*Out.module);
             Obj = JIT.OCache.get(*Out.module, [this](){
                 JIT.optimizeModule(*Out.module);
                 return JIT.compileModule(*Out.module);
@@ -2372,7 +2374,6 @@ CISymbolPtr *JuliaOJIT::linkCISymbol(jl_code_instance_t *CI)
 
 void JuliaOJIT::optimizeModule(Module &M)
 {
-    selectOptLevel(M);
     (*Optimizers)(M);
 }
 
