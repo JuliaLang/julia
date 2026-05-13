@@ -91,10 +91,9 @@ void ObjCache::initDB()
     }
 
     MDB_txn *Txn;
-    MDB_dbi Dbi;
     if (checkMDB(mdb_txn_begin(Env, nullptr, 0, &Txn)))
         goto cleanup;
-    if (checkMDB(mdb_dbi_open(Txn, "objcache", MDB_CREATE, &Dbi)))
+    if (checkMDB(mdb_dbi_open(Txn, "objcache", MDB_CREATE, &ObjCacheDbi)))
         goto cleanup_txn;
     if (checkMDB(mdb_txn_commit(Txn)))
         goto cleanup_txn;
@@ -161,16 +160,9 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
         return Compile();
     }
 
-    MDB_dbi Dbi;
-    if (int Err = mdb_dbi_open(Txn, "objcache", 0, &Dbi)) {
-        checkMDB(Err);
-        mdb_txn_abort(Txn);
-        return Compile();
-    }
-
     MDB_val Key{sizeof H, H.data()};
     MDB_val Data;
-    if (int Err = mdb_get(Txn, Dbi, &Key, &Data)) {
+    if (int Err = mdb_get(Txn, ObjCacheDbi, &Key, &Data)) {
         if (Err != MDB_NOTFOUND)
             checkMDB(Err);
         mdb_txn_abort(Txn);
@@ -248,13 +240,6 @@ void ObjCache::writerThread()
             continue;
         }
 
-        MDB_dbi Dbi;
-        if (int Err = mdb_dbi_open(Txn, "objcache", 0, &Dbi)) {
-            checkMDB(Err);
-            mdb_txn_abort(Txn);
-            continue;
-        }
-
         using Clock = std::chrono::steady_clock;
 
         for (auto &[Hash, Obj] : LocalQueue) {
@@ -265,7 +250,7 @@ void ObjCache::writerThread()
             MDB_val Key{sizeof Hash, Hash.data()};
             MDB_val Data{Obj->getBufferSize(), (void *)Obj->getBufferStart()};
             auto WriteStart = Clock::now();
-            if (int Err = mdb_put(Txn, Dbi, &Key, &Data, 0))
+            if (int Err = mdb_put(Txn, ObjCacheDbi, &Key, &Data, 0))
                 checkMDB(Err);
             NWrite += Obj->getBufferSize();
             double WriteMs =

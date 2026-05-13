@@ -43,6 +43,7 @@ protected:
 private:
     std::atomic<bool> Initialized = false;
     MDB_env *Env = nullptr;
+    MDB_dbi ObjCacheDbi;
     uv_thread_t WriterThread;
     bool Exiting = false;
     std::vector<std::pair<Hash, std::unique_ptr<llvm::MemoryBuffer>>> ObjQueue;
