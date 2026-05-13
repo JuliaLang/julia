@@ -96,7 +96,7 @@ void ObjCache::initDB()
     if (checkMDB(mdb_dbi_open(Txn, "objcache", MDB_CREATE, &ObjCacheDbi)))
         goto cleanup_txn;
     if (checkMDB(mdb_txn_commit(Txn)))
-        goto cleanup_txn;
+        goto cleanup;
 
     uv_thread_create(
         &WriterThread, [](void *arg) { static_cast<ObjCache *>(arg)->writerThread(); },
