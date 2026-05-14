@@ -103,7 +103,7 @@ struct SertagTable
     vals::Memory{Int32}
 end
 
-const sertag_table = OncePerProcess{SertagTable}() do
+const sertag_table = let
     keys = Memory{Any}(undef, SERTAG_TABLE_SIZE)
     vals = Memory{Int32}(undef, SERTAG_TABLE_SIZE)
     fill!(keys, sertag_empty)
@@ -120,13 +120,11 @@ const sertag_table = OncePerProcess{SertagTable}() do
             loc = mod1(loc + 1, SERTAG_TABLE_SIZE)
         end
     end
-    return SertagTable(keys, vals)
+    SertagTable(keys, vals)
 end
 
 @inline function sertag(@nospecialize(v))
-    table = sertag_table()
-    keys = table.keys
-    vals = table.vals
+    (; keys, vals) = sertag_table
     loc = mod1(objectid(v), SERTAG_TABLE_SIZE)
     @assume_effects :terminates_locally :noub @inbounds while true
         @inbounds k = keys[loc]
