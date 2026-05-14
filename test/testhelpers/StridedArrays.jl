@@ -7,9 +7,12 @@
 
 module StridedArrays
 
+using Test: @test_throws
+
 export strided_ptr
 export check_strided_get
 export check_strided_set
+export check_strides_throws
 export Strider
 export NonMemStridedArray
 
@@ -19,6 +22,10 @@ function strided_ptr(f, a::AbstractArray{T}) where {T}
     GC.@preserve a_cconv begin
         f(Base.unsafe_convert(Ptr{T}, a_cconv))
     end
+end
+
+function check_strides_throws(err, a)
+    @test_throws err strides(a)
 end
 
 """

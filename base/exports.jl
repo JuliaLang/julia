@@ -138,6 +138,7 @@ export
     StridedVector,
     SubArray,
     SubString,
+    StringView,
     SubstitutionString,
     Timer,
     UnitRange,
@@ -885,6 +886,7 @@ export
     exit,
     ntuple,
     splat,
+    tap,
 
 # I/O and events
     close,

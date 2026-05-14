@@ -28,12 +28,19 @@ function Base.show(io::IO, b::Binding)
     if b.mod === Base.active_module()
         print(io, b.var)
     else
-        print(io, b.mod, '.', Base.isoperator(b.var) ? ":" : "", b.var)
+        print(io, b.mod, '.')
+        if Base.isoperator(b.var)
+            # ensures symbols are quoted right, so e.g.  :(==), :(:), :+ or :-
+            show(io, b.var)
+        else
+            # print ordinary identifiers without any quoting
+            print(io, b.var)
+        end
     end
 end
 
 aliasof(b::Binding)     = defined(b) ? (a = aliasof(resolve(b), b); defined(a) ? a : b) : b
-aliasof(d::DataType, b) = Binding(d.name.module, d.name.name)
-aliasof(λ::Function, b) = (m = typeof(λ).name; Binding(m.module, m.singletonname))
+aliasof(d::DataType, b) = Binding(parentmodule(d), nameof(d))
+aliasof(λ::Function, b) = Binding(parentmodule(λ), nameof(λ))
 aliasof(m::Module,   b) = Binding(m, nameof(m))
 aliasof(other,       b) = b

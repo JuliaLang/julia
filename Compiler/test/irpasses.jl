@@ -1337,6 +1337,19 @@ end
 @test wrap1_wrap1_wrapper(true, 1, 1.0) === 1.0
 @test wrap1_wrap1_wrapper(false, 1, 1.0) === 1
 
+# Regression test for #61740: `sroa_mutables!` previously asserted
+# `widenconst(:type)::DataType`, which broke after #61719 extended
+# `PartialStruct` to wrap parametric (UnionAll) types from `:new`.
+mutable struct MutBox61740{T}
+    const x::Some{Any}
+    y::Int
+    MutBox61740{T}(x, y) where T = new{T}(Some{Any}(x), y)
+end
+read_mutbox61740(box::MutBox61740) = box.x.value
+@test Base.infer_return_type((Type, Int)) do T, x
+    read_mutbox61740(MutBox61740{T}(x, 0))
+end === Int
+
 # Test unswitching-union optimization within SRO Apass
 function sroaunswitchuniontuple(c, x1, x2)
     t = c ? (x1,) : (x2,)
@@ -1386,7 +1399,33 @@ end
 @test foo(true, 1) == 2
 
 # ifelse folding
-@test Compiler.is_removable_if_unused(Base.infer_effects(exp, (Float64,)))
+# Math functions that should be removable if unused (nothrow + effect-free).
+# Test all IEEEFloat types for single-argument functions.
+@testset "math functions removable if unused: $f($T)" for (f, T) in Iterators.product(
+    (exp, exp2, exp10, expm1, sinh, cosh, tanh, cbrt, frexp, modf, significand, rad2deg, deg2rad),
+    (Float16, Float32, Float64),
+)
+    @test Compiler.is_removable_if_unused(Base.infer_effects(f, (T,)))
+end
+# ldexp takes (T, Int); test all float types
+@testset "ldexp($T, Int) removable if unused" for T in (Float16, Float32, Float64)
+    @test Compiler.is_removable_if_unused(Base.infer_effects(ldexp, (T, Int)))
+end
+# asinh is nothrow for Float32/Float64: non-finite inputs handled early; all log/log1p
+# calls receive positive arguments. Float16 promotes via a separate method.
+@testset "asinh($T) removable if unused" for T in (Float32, Float64)
+    @test Compiler.is_removable_if_unused(Base.infer_effects(asinh, (T,)))
+end
+# hypot(Float32/Float16): _hypot uses sqrt(muladd(x,x,y*y)); argument is always ≥ 0.
+# hypot(Float64) uses a more complex algorithm and is intentionally excluded here.
+@testset "hypot($T, $T) removable if unused" for T in (Float16, Float32)
+    @test Compiler.is_removable_if_unused(Base.infer_effects(hypot, (T, T)))
+end
+# unsafe_trunc(::Type{<:Integer}, ::Float64) is nothrow: the bit-shift result fits
+# within `Int` so `% Int` rather than `Int(...)` keeps the conversion non-throwing.
+@testset "unsafe_trunc($T, Float64) removable if unused" for T in (UInt128, Int128)
+    @test Compiler.is_removable_if_unused(Base.infer_effects(unsafe_trunc, (Type{T}, Float64)))
+end
 @test !Compiler.is_inlineable(code_typed1(exp, (Float64,)))
 @test fully_eliminated(; retval=Core.Argument(2)) do x::Float64
     return Core.ifelse(true, x, exp(x))
@@ -1500,9 +1539,9 @@ let code = Any[
     interp = Compiler.NativeInterpreter()
     sv = Compiler.OptimizationState(mi, src, interp)
     # (_4 !== nothing) conditional narrows the type, triggering PiNodes
-    sv.bb_vartables[#= block_id =# 3][#= slot_id =# 4] = VarState(Bool, #= def =# 5, #= maybe_undef =# false)
-    sv.bb_vartables[#= block_id =# 4][#= slot_id =# 4] = VarState(Bool, #= def =# 7, #= maybe_undef =# false)
-    sv.bb_vartables[#= block_id =# 5][#= slot_id =# 4] = VarState(Bool, #= def =# 7, #= maybe_undef =# false)
+    sv.bb_states[#=block_id=#3].vartable[#=slot_id=#4] = VarState(Bool, #=def=#5, #=maybe_undef=#false)
+    sv.bb_states[#=block_id=#4].vartable[#=slot_id=#4] = VarState(Bool, #=def=#7, #=maybe_undef=#false)
+    sv.bb_states[#=block_id=#5].vartable[#=slot_id=#4] = VarState(Bool, #=def=#7, #=maybe_undef=#false)
 
     ir = Compiler.convert_to_ircode(src, sv)
     ir = Compiler.slot2reg(ir, src, sv)
@@ -2149,4 +2188,20 @@ let rf = (acc, x) -> ifelse(x > acc[1], (x,), (acc[1],))
     @test f_57827(rf, (0.0,), 1) === (1,)
     ir = first(only(Base.code_ircode(f_57827, (typeof(rf), Tuple{Float64}, Int64); optimize_until="CC: SROA")))
     @test ir isa Compiler.IRCode
+end
+
+# Test that SROA lifting cache deduplicates phi nodes when multiple
+# getfield calls access the same field of the same phi node.
+struct LiftCachePoint
+    x::Float64
+    y::Float64
+end
+let src = code_typed1((Bool,)) do cond
+        p = cond ? LiftCachePoint(1.0, 2.0) : LiftCachePoint(3.0, 4.0)
+        return abs(p.x) + p.x * 2.0
+    end
+    @test count(isnew, src.code) == 0
+    @test !any(iscall((src, getfield)), src.code)
+    # the lifting cache should deduplicate: only 1 phi for `p.x`, not 2
+    @test count(x -> isa(x, Core.PhiNode), src.code) == 1
 end

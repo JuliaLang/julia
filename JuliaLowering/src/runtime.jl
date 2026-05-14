@@ -43,22 +43,22 @@ _numchildren(ex::SyntaxTree) = numchildren(ex)
 _numchildren(@nospecialize(ex)) = ex isa Expr ? length(ex.args) : 0
 
 _syntax_list(ctx::InterpolationContext) = SyntaxList(ctx)
-_syntax_list(ctx::ExprInterpolationContext) = Any[]
+_syntax_list(::ExprInterpolationContext) = Any[]
 
-_interp_makenode(ctx::InterpolationContext, ex, args) = mknode(ex, args)
-_interp_makenode(ctx::ExprInterpolationContext, ex, args) = Expr((ex::Expr).head, args...)
+_interp_makenode(::InterpolationContext, ex, args) = mknode(ex, args)
+_interp_makenode(::ExprInterpolationContext, ex, args) = Expr((ex::Expr).head, args...)
 
 _is_leaf(ex::SyntaxTree) = is_leaf(ex)
-_is_leaf(ex::Expr) = false
-_is_leaf(@nospecialize(ex)) = true
+_is_leaf(::Expr) = false
+_is_leaf(@nospecialize(_)) = true
 
 # Produce interpolated node for `$x` syntax
-function _interpolated_value(ctx::InterpolationContext, srcref, ex)
+function _interpolated_value(ctx::InterpolationContext, srcref, @nospecialize(ex))
     if ex isa SyntaxTree
         if !is_compatible_graph(ctx, ex)
             ex = copy_ast(ctx, ex)
         end
-        append_sourceref(ctx, ex, srcref)
+        append_sourceref!(ctx, ex, srcref._id)
     elseif ex isa Symbol
         # Plain symbols become identifiers. This is an accommodation for
         # compatibility to allow `:x` (a Symbol) and `:(x)` (a SyntaxTree) to
@@ -69,7 +69,7 @@ function _interpolated_value(ctx::InterpolationContext, srcref, ex)
     end
 end
 
-function _interpolated_value(::ExprInterpolationContext, _, ex)
+function _interpolated_value(::ExprInterpolationContext, _, @nospecialize(ex))
     ex
 end
 
@@ -122,9 +122,7 @@ function interpolate_ast(::Type{SyntaxTree}, ex::SyntaxTree, values...)
         end
     end
     if isnothing(graph)
-        graph = ensure_attributes(
-            SyntaxGraph(), kind=Kind, syntax_flags=UInt16, source=SourceAttrType,
-            value=Any, name_val=String, scope_layer=LayerId)
+        graph = ensure_macro_attributes!(SyntaxGraph())
     end
     ctx = InterpolationContext(graph, values, Ref(1))
 
@@ -297,6 +295,16 @@ struct GeneratedFunctionStub
     spnames::Core.SimpleVector
 end
 
+function _gen_args_from_syms(ctx, src, layer, args)
+    out = SyntaxList(ctx.graph)
+    for a in args
+        id = newleaf(syntax_graph(ctx), src, K"Identifier", string(a))
+        id = _est_to_dst_ident(id) # support placeholders
+        push!(out, adopt_scope(id, layer))
+    end
+    out
+end
+
 # Call the `@generated` code generator function and wrap the results of the
 # expression into a CodeInfo.
 #
@@ -308,17 +316,7 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
     #
     # TODO: Reduce duplication where possible.
 
-    # Attributes from parsing
-    graph = ensure_attributes(SyntaxGraph(), kind=Kind, syntax_flags=UInt16, source=SourceAttrType,
-                              value=Any, name_val=String)
-    # Attributes for macro expansion
-    graph = ensure_attributes(ensure_macro_attributes(graph),
-                              # Additional attribute for resolve_scopes, for
-                              # adding our custom lambda below
-                              is_toplevel_thunk=Bool,
-                              toplevel_pure=Bool,
-                              )
-
+    graph = ensure_desugaring_attributes!(SyntaxGraph())
     __module__ = source.module
 
     # Macro expansion. Note that we expand in `tls_world_age()` (see
@@ -359,19 +357,15 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
 
     # Wrap expansion in a non-toplevel lambda and run scope resolution
     ex2 = @ast ctx2 ex0 [K"lambda"(is_toplevel_thunk=false, toplevel_pure=true)
-        [K"block"
-            (adopt_scope(string(n)::K"Identifier", layer) for n in g.argnames)...
-        ]
-        [K"block"
-            (adopt_scope(string(n)::K"Identifier", layer) for n in g.spnames)...
-        ]
+        [K"block" _gen_args_from_syms(ctx2, ex0, layer, g.argnames)...]
+        [K"block" _gen_args_from_syms(ctx2, ex0, layer, g.spnames)...]
         ex2
     ]
     ctx3, ex3 = resolve_scopes(ctx2, ex2)
 
     # Rest of lowering
     ctx4, ex4 = convert_closures(ctx3, ex3)
-    ctx5, ex5 = linearize_ir(ctx4, ex4)
+    _ctx5, ex5 = linearize_ir(ctx4, ex4)
     ci = to_lowered_expr(ex5)
     @assert ci isa Core.CodeInfo
 
@@ -408,8 +402,8 @@ end
 # Has no side effects, unlike isdefined()
 #
 # (This should do what fl_defined_julia_global does for flisp lowering)
-function is_defined_and_owned_global(mod, name)
-    Base.binding_kind(mod, name) === Base.PARTITION_KIND_GLOBAL
+function is_defined_and_owned_global(mod, name, world::UInt=Base.get_world_counter())
+    return Base.invoke_in_world(world, Base.binding_kind, mod, name) === Base.PARTITION_KIND_GLOBAL
 end
 
 # "Reserve" a binding: create the binding if it doesn't exist but do not assign
@@ -420,7 +414,7 @@ function reserve_module_binding(mod, name)
     # lock is only accessible from C. See also the C code in
     # `fl_module_unique_name`.
     if _get_module_binding(mod, name; create=false) === nothing
-        _get_module_binding(mod, name; create=true) !== nothing
+        return _get_module_binding(mod, name; create=true) !== nothing
     else
         return false
     end

@@ -230,6 +230,18 @@ end
     @test eltype(Tuple{Int, Missing}) === Union{Missing, Int}
     @test eltype(Tuple{Int, Nothing}) === Union{Nothing, Int}
 
+    # Single-element tuple with a non-concrete element type must return the type
+    # itself, not the internal where-binding env entry (svec(E<:T, ::Bool))
+    let Abs = Integer
+        @test eltype(Tuple{Abs}) === Abs
+        @test eltype(Tuple{Vector{T} where T<:Integer}) === Vector{T} where T<:Integer
+        @test eltype(Tuple{Any}) === Any
+        # downstream: pairs over a NamedTuple whose field type is a UnionAll
+        local NT = @NamedTuple{x::(Vector{T} where T<:Integer)}
+        @test eltype(NT) === Vector{T} where T<:Integer
+        @test pairs(NT(([1],))) isa Base.Pairs
+    end
+
     @test valtype((1,2,3)) === eltype((1,2,3))
     @test valtype(Tuple{Int, Missing}) === eltype(Tuple{Int, Missing})
     @test keytype((1,2,3)) === Int
@@ -880,6 +892,14 @@ end
             @test circshift(v, shift) == collect(circshift(t, shift))
         end
     end
+end
+
+@testset "isassigned" begin
+    t = (1, 2, 3)
+    @test isassigned(t, 0) === false
+    @test isassigned(t, 1) === true
+    @test isassigned(t, 3) === true
+    @test isassigned(t, 4) === false
 end
 
 @test NTuple == Base.infer_return_type(reverse, Tuple{NTuple})

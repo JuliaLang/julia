@@ -251,34 +251,22 @@ end
         if mod(step(viewax2), 2) == 0
             check_strided_get(reinterpret(Int64, view(A, 1:8, viewax2)))
         else
-            let x = reinterpret(Int64, view(A, 1:8, viewax2))
-                @test_throws "Parent's strides" strides(x)
-                @test isnothing(try_strides(x))
-            end
+            check_strides_throws("Parent's strides", reinterpret(Int64, view(A, 1:8, viewax2)))
         end
         # non-integer-multiplied classified
         if mod(step(viewax2), 3) == 0
             check_strided_get(reinterpret(NTuple{3,Int16}, view(A, 2:7, viewax2)))
         else
-            let x = reinterpret(NTuple{3,Int16}, view(A, 2:7, viewax2))
-                @test_throws "Parent's strides" strides(x)
-                @test isnothing(try_strides(x))
-            end
+            check_strides_throws("Parent's strides", reinterpret(NTuple{3,Int16}, view(A, 2:7, viewax2)))
         end
         if mod(step(viewax2), 5) == 0
             check_strided_get(reinterpret(NTuple{5,Int16}, view(A, 2:11, viewax2)))
         else
-            let x = reinterpret(NTuple{5,Int16}, view(A, 2:11, viewax2))
-                @test_throws "Parent's strides" strides(x)
-                @test isnothing(try_strides(x))
-            end
+            check_strides_throws("Parent's strides", reinterpret(NTuple{5,Int16}, view(A, 2:11, viewax2)))
         end
         # dim1 is not contiguous
         for T in (Int16, Int64)
-            let x = reinterpret(T, view(A, 8:-1:1, viewax2))
-                @test_throws "Parent must" strides(x)
-                @test isnothing(try_strides(x))
-            end
+            check_strides_throws("Parent must", reinterpret(T, view(A, 8:-1:1, viewax2)))
         end
         check_strided_get(reinterpret(Float32, view(A, 8:-1:1, viewax2)))
     end

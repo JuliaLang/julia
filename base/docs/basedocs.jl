@@ -1011,8 +1011,12 @@ kw"while"
 [`module`](@ref), [`struct`](@ref), [`mutable struct`](@ref),
 [`begin`](@ref), [`let`](@ref), [`for`](@ref) etc.
 
-`end` may also be used when indexing to represent the last index of a
-collection or the last index of a dimension of an array.
+`end` may also be used when indexing with `[...]` to represent the last index of a
+collection or the last index of a dimension of an array. For example, the expression
+`A[end-1]` becomes `A[lastindex(A)-1]` and `A[:, end]` becomes `A[:, lastindex(A, 2)]`.
+Every occurrence of `end` within the square bracket indexing syntax is lowered to a
+call to [`lastindex`](@ref), using the one argument `lastindex(A)` there's only one index
+argument and the two argument `lastindex(A, n)` for the n-th index argument.
 
 # Examples
 ```jldoctest
@@ -1172,7 +1176,10 @@ kw"finally"
 """
     break
 
-Break out of a loop immediately.
+Break out of the innermost loop or [`@label`](@ref) block immediately.
+
+`break` exits the innermost breakable scope, which may be a `for` or `while` loop, or
+an `@label` block.
 
 # Examples
 ```jldoctest
@@ -1190,6 +1197,23 @@ julia> while true
 4
 5
 ```
+
+Labeled break can be used to exit early from a labeled block created with [`@label`](@ref).
+
+```jldoctest
+julia> result = @label myblock begin
+           for i in 1:10
+               if i > 5
+                   break myblock i * 2
+               end
+           end
+           0
+       end
+12
+```
+
+!!! compat "Julia 1.14"
+    Labeled `break` requires Julia 1.14.
 """
 kw"break"
 
@@ -1208,6 +1232,28 @@ julia> for i = 1:6
 3
 5
 ```
+
+Labeled continue can be used to skip to the next iteration of a labeled loop created with [`@label`](@ref).
+
+```jldoctest
+julia> for i in 1:3
+           @label inner for j in 1:3
+               if j == 2
+                   continue inner
+               end
+               println((i, j))
+           end
+       end
+(1, 1)
+(1, 3)
+(2, 1)
+(2, 3)
+(3, 1)
+(3, 3)
+```
+
+!!! compat "Julia 1.14"
+    Labeled `continue` requires Julia 1.14.
 """
 kw"continue"
 
@@ -1465,9 +1511,9 @@ end
 Usually `begin` will not be necessary, since keywords such as [`function`](@ref) and [`let`](@ref)
 implicitly begin blocks of code. See also [`;`](@ref).
 
-`begin` may also be used when indexing to represent the first index of a
-collection or the first index of a dimension of an array. For example,
-`a[begin]` is the first element of an array `a`.
+`begin` may also be used when indexing with `[...]` to represent the first index of a
+collection or the first index of a dimension of an array, where it is lowered to
+a call to [`firstindex`](@ref) along the relevant dimension (as determined by the context).  For example, `a[begin]` is the first element of an array `a`.
 
 !!! compat "Julia 1.4"
     Use of `begin` as an index requires Julia 1.4 or later.
@@ -3924,6 +3970,8 @@ This is intended for use in benchmarks that want to guarantee that `args` are
 actually computed. (Otherwise DCE may see that the result of the benchmark is
 unused and delete the entire benchmark code).
 
+For a stronger compiler barrier, see [`Base.blackbox`](@ref).
+
 !!! note
     `donotdelete` does not affect constant folding. For example, in
     `donotdelete(1+1)`, no add instruction needs to be executed at runtime and
@@ -3956,6 +4004,39 @@ end
 Base.donotdelete
 
 """
+    Base.blackbox(x) -> x
+
+Return `x` unchanged but the returned value will be treated as if it
+came from an unknowable black-box source. The optimizer may not make any
+assumptions about the output: it cannot be constant-folded, common-subexpression
+eliminated (CSE'd), or treated as loop-invariant.
+This is equivalent to `compilerbarrier(:blackbox, x)`.
+
+This is useful in benchmarking to prevent loop-invariant computations from being
+hoisted out of benchmark loops. The output of `blackbox(x)` is opaque, so
+any function call that depends on it must be re-executed each iteration.
+For preventing deletion of results, see [`donotdelete`](@ref).
+
+!!! compat "Julia 1.14"
+    This method was added in Julia 1.14.
+
+# Examples
+
+```julia
+function benchmark_loop(x, n)
+    for i in 1:n
+        # Without blackbox, the compiler may compute cbrt(x) once
+        # and reuse the result for all iterations.
+        y = blackbox(x)
+        z = cbrt(y)
+        donotdelete(z)
+    end
+end
+```
+"""
+Base.blackbox
+
+"""
     Base.compilerbarrier(setting::Symbol, val)
 
 This function acts a compiler barrier at a specified compilation phase.
@@ -3970,7 +4051,10 @@ Currently either of the following `setting`s is allowed:
     constant information on `val`
   * `:conditional`: the return type of this function call will be inferred with widening
     conditional information on `val` (see the example below)
-- Any barriers on optimization aren't implemented yet
+- Barriers on optimization:
+  * `:blackbox`: treat the returned value as if it came from an unknowable black-box
+    source, preventing common-subexpression elimination (CSE) and loop-invariant code motion on any computation that
+    depends on it. See [`blackbox`](@ref) for a convenience wrapper.
 
 !!! note
     This function is expected to be used with `setting` known precisely at compile-time.

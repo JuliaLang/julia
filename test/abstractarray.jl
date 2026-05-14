@@ -966,6 +966,9 @@ end
         @test +(A) == A
         @test *(A) == A
     end
+
+    # Unary addition is valid for Arrays over anything, not just numbers
+    @test +[[1]] == [[1]]
 end
 
 @testset "reverse dim on empty" begin
@@ -1317,14 +1320,13 @@ end
         perm = (2, 1)
         P = permutedims(A, perm)
         Pv = view(P, idxs[collect(perm)]...)
-check_strided_get(Pv)
+        check_strided_get(Pv)
         for equivalent_array in [
                 Base.PermutedDimsArray(A, perm),
-                # TODO: enable these tests when transpose and adjoint have Base.has_strided_get defined
-                # transpose(A),
-                # adjoint(A),
-                # transpose(S),
-                # adjoint(S),
+                transpose(A),
+                adjoint(A),
+                transpose(S),
+                adjoint(S),
                 Base.PermutedDimsArray(S, perm),
             ]
             @test P == equivalent_array
@@ -1336,11 +1338,10 @@ check_strided_get(Pv)
         Vp = permutedims(Av, perm)
         for equivalent_array in [
                 Base.PermutedDimsArray(Av, perm),
-                # TODO: enable these tests when transpose and adjoint have Base.has_strided_get defined
-                # transpose(Av),
-                # adjoint(Av),
-                # transpose(Sv),
-                # adjoint(Sv),
+                transpose(Av),
+                adjoint(Av),
+                transpose(Sv),
+                adjoint(Sv),
                 Base.PermutedDimsArray(Sv, perm),
             ]
             @test Vp == equivalent_array
@@ -1351,6 +1352,10 @@ check_strided_get(Pv)
         check_strided_get(view(NonMemStridedArray(rand(10, 10)), 2:2:6, 1:3:9))
         check_strided_get(view(Base.PermutedDimsArray(view(NonMemStridedArray(rand(10, 10)), 2:2:6, 1:3:9), (2,1)), 2:3, 3:-1:1))
     end
+    check_strided_get(view(Base.PermutedDimsArray(view(rand(10, 10), 2:2:6, 1:3:9), (2,1)), 2:3, 3:-1:1))
+    check_strided_get(NonMemStridedArray(rand(3, 10)))
+    check_strided_get(view(NonMemStridedArray(rand(10, 10)), 2:2:6, 1:3:9))
+    check_strided_get(view(Base.PermutedDimsArray(view(NonMemStridedArray(rand(10, 10)), 2:2:6, 1:3:9), (2,1)), 2:3, 3:-1:1))
 end
 
 @testset "first/last n elements of $(typeof(itr))" for itr in (collect(1:9),
@@ -1932,8 +1937,7 @@ end
     a = view(rand(10,10), 1:10, 1:10)
     check_strided_get(vec(a))
     b = view(parent(a), 1:9, 1:10)
-    @test isnothing(Base.try_strides(vec(b)))
-    @test_throws "Input is not strided." strides(vec(b))
+    check_strides_throws("Input is not strided.", vec(b))
     # StridedVector parent
     for n in 1:3
         a = view(collect(1:60n), 1:n:60n)
@@ -1955,14 +1959,10 @@ end
     check_strided_get(reshape(a,3,3,10))
     check_strided_get(reshape(a,1,3,1,3,1,5,1,2))
     check_strided_get(reshape(a,3,3,5,1,1,2,1,1))
-    @test_throws "Input is not strided." strides(reshape(a,3,6,5))
-    @test isnothing(try_strides(reshape(a,3,6,5)))
-    @test_throws "Input is not strided." strides(reshape(a,3,2,3,5))
-    @test isnothing(try_strides(reshape(a,3,2,3,5)))
-    @test_throws "Input is not strided." strides(reshape(a,3,5,3,2))
-    @test isnothing(try_strides(reshape(a,3,5,3,2)))
-    @test_throws "Input is not strided." strides(reshape(a,5,3,3,2))
-    @test isnothing(try_strides(reshape(a,5,3,3,2)))
+    check_strides_throws("Input is not strided.", reshape(a,3,6,5))
+    check_strides_throws("Input is not strided.", reshape(a,3,2,3,5))
+    check_strides_throws("Input is not strided.", reshape(a,3,5,3,2))
+    check_strides_throws("Input is not strided.", reshape(a,5,3,3,2))
     # Zero dimensional parent
     struct FakeZeroDimArray <: AbstractArray{Int, 0} end
     Base.strides(::FakeZeroDimArray) = ()
