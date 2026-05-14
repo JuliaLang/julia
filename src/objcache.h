@@ -31,7 +31,7 @@ using CompileFn = llvm::unique_function<std::unique_ptr<llvm::MemoryBuffer>()>;
 class ObjCache {
 public:
     ObjCache() = default;
-    ~ObjCache() JL_NOTSAFEPOINT = default;
+    ~ObjCache() JL_NOTSAFEPOINT;
     std::unique_ptr<llvm::MemoryBuffer> get(llvm::Module &M, CompileFn Compile);
     bool isEnabled() const JL_NOTSAFEPOINT;
     void shutdown() JL_NOTSAFEPOINT;
@@ -41,14 +41,18 @@ public:
 protected:
     void writerThread();
     void initDB();
+    void updateATime(MDB_txn *Txn, const Hash &H, uint64_t Time, bool Fresh);
 
 private:
     std::atomic<bool> Initialized = false;
     MDB_env *Env = nullptr;
     MDB_dbi ObjCacheDbi;
+    MDB_dbi ObjMetaDbi;
     uv_thread_t WriterThread;
     bool Started = false;
     bool Exiting = false;
+    // Non-null MemoryBuffer -> cache miss, want to write new entry
+    // Null MemoryBuffer     -> cache hit, want to update atime
     std::vector<std::pair<Hash, std::unique_ptr<llvm::MemoryBuffer>>> ObjQueue;
     std::mutex Mutex;
     std::mutex LogMutex;

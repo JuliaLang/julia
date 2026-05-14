@@ -1,12 +1,16 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 #include "objcache.h"
 
-#include <chrono>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/SHA1.h>
 
 #include "jl_codegen_hash.inc"
 #include "julia.h"
+#include "julia_internal.h"
+
+// Skip atime refreshes when the existing access time is within this many
+// nanoseconds of the new one, to avoid excessive LRU bookkeeping writes.
+static constexpr uint64_t OBJCACHE_ATIME_GRANULARITY = (uint64_t)300 * 1000000000;
 
 static FILE *getLogFile()
 {
@@ -96,6 +100,8 @@ void ObjCache::initDB()
         goto cleanup;
     if (checkMDB(mdb_dbi_open(Txn, "objcache", MDB_CREATE, &ObjCacheDbi)))
         goto cleanup_txn;
+    if (checkMDB(mdb_dbi_open(Txn, "objmeta", MDB_CREATE, &ObjMetaDbi)))
+        goto cleanup_txn;
     if (checkMDB(mdb_txn_commit(Txn)))
         goto cleanup;
 
@@ -109,6 +115,15 @@ cleanup_txn:
     mdb_txn_abort(Txn);
 cleanup:
     Initialized.store(true, memory_order_release);
+}
+
+ObjCache::~ObjCache()
+{
+    if (!Env)
+        return;
+    mdb_dbi_close(Env, ObjCacheDbi);
+    mdb_dbi_close(Env, ObjMetaDbi);
+    mdb_env_close(Env);
 }
 
 static std::atomic<size_t> NWrite = 0, NRead = 0, NMiss = 0, NHit = 0;
@@ -130,14 +145,31 @@ static ObjCache::Hash hashModule(const llvm::Module &M)
     return Hasher.final();
 }
 
-static MDB_val hashToKey(ObjCache::Hash H, llvm::SmallVectorImpl<char> &Out)
+constexpr size_t OBJKEY_SIZE = 1 + sizeof(ObjCache::Hash);
+constexpr size_t METAKEY_SIZE = 1 + sizeof(uint64_t) + sizeof(ObjCache::Hash);
+
+std::array<uint8_t, OBJKEY_SIZE> toObjKey(const ObjCache::Hash &Hash)
 {
-    llvm::StringRef Prefix = "obj-";
-    Out.append(Prefix.begin(), Prefix.end());
-    llvm::toHex(H, true, Out);
-    Out.push_back(0);
-    // Add null terminator for convenient printing, but don't include it in the key.
-    return {Out.size_in_bytes() - 1, Out.data()};
+    std::array<uint8_t, OBJKEY_SIZE> Ret;
+    Ret[0] = 'O';
+    memcpy(Ret.begin() + 1, Hash.begin(), Hash.size());
+    return Ret;
+}
+
+std::array<uint8_t, METAKEY_SIZE> toMetaKey(uint64_t Time, const ObjCache::Hash &Hash)
+{
+    std::array<uint8_t, METAKEY_SIZE> Ret;
+    Ret[0] = 'M';
+    uint64_t TimeH = htonll(Time);
+    memcpy(Ret.begin() + 1, (char *)&TimeH, sizeof TimeH);
+    memcpy(Ret.begin() + 1 + sizeof TimeH, Hash.begin(), Hash.size());
+    return Ret;
+}
+
+template<typename T>
+MDB_val mdbVal(T &x)
+{
+    return {sizeof x, (void *)&x};
 }
 
 std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Compile)
@@ -153,13 +185,10 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
         for (auto &BB : F)
             Weight += BB.size();
 
-    using Clock = std::chrono::steady_clock;
+    uint64_t LookupStart = jl_hrtime();
 
-    auto LookupStart = Clock::now();
-
-    Hash H = hashModule(M);
-    llvm::SmallVector<char, 4 + 2 * sizeof(llvm::ModuleHash) + 1> KeyBuf;
-    MDB_val Key = hashToKey(H, KeyBuf);
+    auto Hash = hashModule(M);
+    auto ObjKey = toObjKey(Hash);
 
     MDB_txn *Txn;
     if (int Err = mdb_txn_begin(Env, nullptr, MDB_RDONLY, &Txn)) {
@@ -168,49 +197,54 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
     }
 
     MDB_val Data;
+    MDB_val Key = mdbVal(ObjKey);
     if (int Err = mdb_get(Txn, ObjCacheDbi, &Key, &Data)) {
         if (Err != MDB_NOTFOUND)
             checkMDB(Err);
         mdb_txn_abort(Txn);
 
-        double LookupMs =
-            std::chrono::duration<double, std::milli>(Clock::now() - LookupStart).count();
+        double LookupMs = (jl_hrtime() - LookupStart) / 1.0e6;
 
         NMiss.fetch_add(1, memory_order_relaxed);
-        auto CompileStart = Clock::now();
+        uint64_t CompileStart = jl_hrtime();
         auto Obj = Compile();
-        double CompileMs =
-            std::chrono::duration<double, std::milli>(Clock::now() - CompileStart).count();
+        double CompileMs = (jl_hrtime() - CompileStart) / 1.0e6;
         if (!Obj)
             return nullptr;
 
         if (LogFile) {
             std::unique_lock<std::mutex> Lock{LogMutex};
-            fprintf(LogFile, "lookup,%s,%.3f,miss,%.3f,%zu,%zu\n", KeyBuf.begin(), LookupMs,
-                    CompileMs, Obj->getBufferSize(), Weight);
+            fprintf(LogFile, "lookup,%s,%.3f,miss,%.3f,%zu,%zu\n",
+                    llvm::toHex(Hash, true).c_str(), LookupMs, CompileMs,
+                    Obj->getBufferSize(), Weight);
         }
 
         auto ObjCopy = llvm::MemoryBuffer::getMemBufferCopy(Obj->getBuffer());
         {
             std::unique_lock<std::mutex> Lock{Mutex};
-            ObjQueue.push_back({H, std::move(ObjCopy)});
+            ObjQueue.push_back({Hash, std::move(ObjCopy)});
         }
         QueueCond.notify_one();
 
         return Obj;
     }
 
+    {
+        std::unique_lock<std::mutex> Lock{Mutex};
+        ObjQueue.push_back({Hash, nullptr});
+    }
+    QueueCond.notify_one();
+
     auto Buf = std::make_unique<MDBMemoryBuffer>(
         Txn, llvm::StringRef{(const char *)Data.mv_data, Data.mv_size});
     NHit.fetch_add(1, memory_order_relaxed);
     NRead.fetch_add(Buf->getBufferSize(), memory_order_relaxed);
 
-    double LookupMs =
-        std::chrono::duration<double, std::milli>(Clock::now() - LookupStart).count();
+    double LookupMs = (jl_hrtime() - LookupStart) / 1.0e6;
     if (LogFile) {
         std::unique_lock<std::mutex> Lock{LogMutex};
-        fprintf(LogFile, "lookup,%s,%.3f,hit,%zu,%zu\n", KeyBuf.begin(), LookupMs,
-                Buf->getBufferSize(), Weight);
+        fprintf(LogFile, "lookup,%s,%.3f,hit,%zu,%zu\n", llvm::toHex(Hash, true).c_str(),
+                LookupMs, Buf->getBufferSize(), Weight);
     }
 
     return Buf;
@@ -260,29 +294,28 @@ void ObjCache::writerThread()
             continue;
         }
 
-        using Clock = std::chrono::steady_clock;
-
+        uint64_t ATime = jl_hrtime();
         bool Abort = false;
         for (auto &[H, Obj] : LocalQueue) {
-            llvm::SmallVector<char, 4 + 2 * sizeof(llvm::ModuleHash) + 1> KeyBuf;
-            MDB_val Key = hashToKey(H, KeyBuf);
-            MDB_val Data{Obj->getBufferSize(), (void *)Obj->getBufferStart()};
-            auto WriteStart = Clock::now();
-            if (int Err = mdb_put(Txn, ObjCacheDbi, &Key, &Data, 0)) {
-                checkMDB(Err);
-                Abort = true;
-                break;
+            auto ObjKey = toObjKey(H);
+            MDB_val Key = mdbVal(ObjKey);
+
+            if (Obj) {
+                // Cache miss - write object
+                MDB_val Data{Obj->getBufferSize(), (void *)Obj->getBufferStart()};
+                if (int Err = mdb_put(Txn, ObjCacheDbi, &Key, &Data, 0)) {
+                    checkMDB(Err);
+                    Abort = true;
+                    break;
+                }
+                NWrite.fetch_add(Obj->getBufferSize(), memory_order_relaxed);
+                auto _ = std::move(Obj);
+                updateATime(Txn, H, ATime, true);
             }
-            NWrite.fetch_add(Obj->getBufferSize(), memory_order_relaxed);
-            double WriteMs =
-                std::chrono::duration<double, std::milli>(Clock::now() - WriteStart)
-                    .count();
-            if (LogFile) {
-                std::unique_lock<std::mutex> Lock{LogMutex};
-                fprintf(LogFile, "write,%s,%.3f,%zu\n", KeyBuf.begin(), WriteMs,
-                        Obj->getBufferSize());
+            else {
+                // Cache hit - update use time
+                updateATime(Txn, H, ATime, false);
             }
-            auto _ = std::move(Obj);
         }
 
         if (Abort)
@@ -290,4 +323,40 @@ void ObjCache::writerThread()
         else
             checkMDB(mdb_txn_commit(Txn));
     }
+}
+
+void ObjCache::updateATime(MDB_txn *Txn, const Hash &Hash, uint64_t Time, bool Fresh)
+{
+    auto ObjKey = toObjKey(Hash);
+    MDB_val Key = mdbVal(ObjKey);
+    if (!Fresh) {
+        MDB_val OldData;
+        int Err = mdb_get(Txn, ObjMetaDbi, &Key, &OldData);
+        if (Err == MDB_NOTFOUND)
+            return;
+        if (checkMDB(Err))
+            return;
+        assert(OldData.mv_size == sizeof(uint64_t));
+        uint64_t OldTime;
+        memcpy(&OldTime, OldData.mv_data, sizeof(uint64_t));
+        if (Time < OldTime + OBJCACHE_ATIME_GRANULARITY)
+            return;
+
+        auto MetaKey = toMetaKey(OldTime, Hash);
+        MDB_val Key2 = mdbVal(MetaKey);
+        if (int E = mdb_del(Txn, ObjMetaDbi, &Key2, nullptr))
+            checkMDB(E);
+    }
+
+    MDB_val TimeData{sizeof Time, &Time};
+    if (int E = mdb_put(Txn, ObjMetaDbi, &Key, &TimeData, 0)) {
+        checkMDB(E);
+        return;
+    }
+
+    auto MetaKey = toMetaKey(Time, Hash);
+    MDB_val Key2 = mdbVal(MetaKey);
+    MDB_val EmptyData{0, nullptr};
+    if (int E = mdb_put(Txn, ObjMetaDbi, &Key2, &EmptyData, 0))
+        checkMDB(E);
 }
