@@ -82,7 +82,7 @@ end
 @test GC.enable(true)
 
 # modified PR #10984
-# --warn-overwrite: test yes/no/auto modes
+# --warn-overwrite: test yes/no/default modes
 let
     redir_err = "redirect_stderr(stdout)"
     exename = Base.julia_cmd()
@@ -99,16 +99,15 @@ let
         WARNING: Method definition f() in module Main at none:2 overwritten at none:3.
         WARNING: Method definition g() in module Main at none:4 overwritten on the same line.
         """
-    # default: warn on cross-module overwrites and anonymous functions
+    # default: warn for overwrites between unrelated modules and anonymous functions.
+    # `A` is related to `Main` as it is its submodule, so the `A.f` overwrite is silent.
     warning_str = read(`$exename --startup-file=no -e $script`, String)
     @test warning_str == """
-        WARNING: Method definition f() in module A at none:2 overwritten in module Main on the same line (check for duplicate calls to `include`).
         WARNING: Method definition g() in module Main at none:4 overwritten on the same line.
         """
     # --warn-overwrite=default: same as default
     warning_str = read(`$exename --warn-overwrite=default --startup-file=no -e $script`, String)
     @test warning_str == """
-        WARNING: Method definition f() in module A at none:2 overwritten in module Main on the same line (check for duplicate calls to `include`).
         WARNING: Method definition g() in module Main at none:4 overwritten on the same line.
         """
     # --warn-overwrite=no: only anonymous function overwrites are warned
@@ -124,16 +123,58 @@ let
         """
     warning_str = read(`$exename --startup-file=no -e $same_mod_script`, String)
     @test warning_str == ""
-    # cross-module overwrite: warning with default
-    cross_mod_script = """
+    # parent/child overwrite: no warning with default (one module is on the
+    # other's parent chain, so they are considered the same logical unit)
+    parent_child_script = """
         $redir_err
         module B; h(x) = 1; end
         B.h(x) = 2
         """
+    warning_str = read(`$exename --startup-file=no -e $parent_child_script`, String)
+    @test warning_str == ""
+    # cross-module overwrite between unrelated modules: warning with default
+    cross_mod_script = """
+        $redir_err
+        module D; k(x) = 1; end
+        module E; Main.D.k(x) = 2; end
+        """
     warning_str = read(`$exename --startup-file=no -e $cross_mod_script`, String)
-    @test contains(warning_str, "WARNING: Method definition h(")
-    @test contains(warning_str, "module B")
-    @test contains(warning_str, "module Main")
+    @test contains(warning_str, "WARNING: Method definition k(")
+    @test contains(warning_str, "module D")
+    @test contains(warning_str, "module E")
+    # FQN with a shared component but no prefix relation: warning with default.
+    # `Main.A1.Test` and `Main.Test.B1` both contain `Test`, but neither FQN
+    # is a prefix of the other, so they are unrelated.
+    crossed_name_script = """
+        $redir_err
+        module A1; module Test; p(x) = 1; end; end
+        module Test1; module B1; Main.A1.Test.p(x) = 2; end; end
+        """
+    warning_str = read(`$exename --startup-file=no -e $crossed_name_script`, String)
+    @test contains(warning_str, "WARNING: Method definition p(")
+    # Same leaf names under different roots: warning with default.
+    # `Main.X.Leaf` and `Main.Y.Leaf` share the leaf name but differ at the
+    # root component, so neither FQN is a prefix of the other.
+    same_leaf_script = """
+        $redir_err
+        module X; module Leaf; q(x) = 1; end; end
+        module Y; module Leaf; Main.X.Leaf.q(x) = 2; end; end
+        """
+    warning_str = read(`$exename --startup-file=no -e $same_leaf_script`, String)
+    @test contains(warning_str, "WARNING: Method definition q(")
+    # same-named modules are treated as re-declarations: no warning with default,
+    # even when both define methods on the same external function (e.g. method piracy)
+    same_name_script = """
+        $redir_err
+        struct Marker end
+        module C; Base.length(::Main.Marker) = 1; end
+        module C; Base.length(::Main.Marker) = 2; end
+        """
+    warning_str = read(`$exename --startup-file=no -e $same_name_script`, String)
+    @test warning_str == ""
+    # but `--warn-overwrite=yes` still warns for same-named modules
+    warning_str = read(`$exename --warn-overwrite=yes --startup-file=no -e $same_name_script`, String)
+    @test contains(warning_str, "WARNING: Method definition length(")
 end
 
 # Debugging tool: return the current state of the enable_finalizers counter.

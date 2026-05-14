@@ -246,8 +246,8 @@ static const char opts[]  =
     " --depwarn={yes|no*|error}                     Enable or disable syntax and method deprecation\n"
     "                                               warnings (`error` turns warnings into errors)\n"
     " --warn-overwrite={yes|no|default*}            Enable or disable method overwrite warnings\n"
-    "                                               (`default` warns for likely-unintentional overwrites,\n"
-    "                                               currently: cross-module overwrites)\n"
+    "                                               (`default` warns only when one module's FQN is\n"
+    "                                               not a prefix of the other's)\n"
     " --warn-scope={yes*|no}                        Enable or disable warning for ambiguous top-level\n"
     "                                               scope\n\n"
 

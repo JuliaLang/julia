@@ -172,7 +172,7 @@ Enable or disable syntax and method deprecation warnings (`error` turns warnings
 
 .TP
 --warn-overwrite={yes|no|default*}
-Enable or disable method overwrite warnings (`default` warns for likely-unintentional overwrites, currently: cross-module overwrites)
+Enable or disable method overwrite warnings (`default` warns only when one module's FQN is not a prefix of the other's)
 
 .TP
 --warn-scope={yes*|no}

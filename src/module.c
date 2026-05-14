@@ -2197,6 +2197,47 @@ int jl_is_submodule(jl_module_t *child, jl_module_t *parent) JL_NOTSAFEPOINT
     }
 }
 
+// Returns 1 iff the fully qualified name of one module is a prefix
+// (component-wise) of the other's. Names are compared by interned symbol
+// identity, which makes the check stable across module redefinition cycles
+// (e.g. a user re-evaluating `module Foo ... end` in the REPL produces a
+// fresh module identity but the same name).
+//
+// Returns 0 if either argument is NULL, or if either parent chain contains a
+// NULL (indicating a partially-constructed or otherwise inconsistent module).
+int jl_modules_share_fqn_prefix(jl_module_t *a, jl_module_t *b) JL_NOTSAFEPOINT
+{
+    if (a == NULL || b == NULL)
+        return 0;
+    // Compute depths from the root. Top-level modules satisfy `m->parent == m`.
+    int da = 0;
+    for (jl_module_t *m = a; m != m->parent; m = m->parent) {
+        if (m->parent == NULL)
+            return 0;
+        da++;
+    }
+    int db = 0;
+    for (jl_module_t *m = b; m != m->parent; m = m->parent) {
+        if (m->parent == NULL)
+            return 0;
+        db++;
+    }
+    // Align the deeper chain so both are at the same depth.
+    for (int i = da - db; i > 0; i--)
+        a = a->parent;
+    for (int i = db - da; i > 0; i--)
+        b = b->parent;
+    // Walk both chains in lockstep, requiring names to match at every level.
+    int common = da < db ? da : db;
+    for (int i = common; i >= 0; i--) {
+        if (a->name != b->name)
+            return 0;
+        a = a->parent;
+        b = b->parent;
+    }
+    return 1;
+}
+
 // Remove implicitly imported identifiers, effectively resetting all the binding
 // resolution decisions for a module. This is dangerous, and should only be
 // done for modules that are essentially empty anyway. The only use case for this

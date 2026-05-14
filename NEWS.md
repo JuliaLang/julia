@@ -42,9 +42,11 @@ Command-line option changes
 
   - `-P <project>` is now a shorthand for `--project <project>` ([#59867]).
   - The `--warn-overwrite` option gains a new value `default` (now the default), in addition
-    to `yes` and `no`. Under `default`, warnings are emitted only for cross-module method
-    overwrites — typically unintentional cases such as method piracy or package conflicts
-    ([#61388]).
+    to `yes` and `no`. Under `default`, a warning is emitted only when one module's fully
+    qualified name is not a prefix of the other's. This catches typically unintentional
+    cases such as method piracy or package conflicts, while staying silent for in-tree
+    re-declarations (e.g. re-`include`-ing a file containing `module Foo ... end`, or a
+    parent module overriding a submodule's method via `@deprecate Sub.f()`) ([#61388]).
 
 Multi-threading changes
 -----------------------
