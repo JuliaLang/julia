@@ -779,4 +779,14 @@ let A=[1;;]
 end
 
 # issue #61805
-@test foldr(*, Iterators.flatten([["a", "b"], ["c", "d"]])) == "abcd"
+@testset "foldr iteraction with flatten" begin
+    @test foldr(*, Iterators.flatten([["a", "b"], ["c", "d"]])) == "abcd"
+
+    #Non-reversable collections inside the flatten should either error, or produce the right answer
+    res = try
+        foldr(tuple, Iterators.flatten((Iterators.take(1:3, 2), (3,))))
+    catch e
+        e
+    end
+    @test (res isa Exception) || res == (1, (2, 3))
+end
