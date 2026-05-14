@@ -51,6 +51,7 @@ private:
     bool Exiting = false;
     std::vector<std::pair<Hash, std::unique_ptr<llvm::MemoryBuffer>>> ObjQueue;
     std::mutex Mutex;
+    std::mutex LogMutex;
     std::condition_variable QueueCond;
 };
 

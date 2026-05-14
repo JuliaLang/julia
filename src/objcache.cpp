@@ -184,9 +184,11 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
         if (!Obj)
             return nullptr;
 
-        if (LogFile)
+        if (LogFile) {
+            std::unique_lock<std::mutex> Lock{LogMutex};
             fprintf(LogFile, "lookup,%s,%.3f,miss,%.3f,%zu,%zu\n", KeyBuf.begin(), LookupMs,
                     CompileMs, Obj->getBufferSize(), Weight);
+        }
 
         auto ObjCopy = llvm::MemoryBuffer::getMemBufferCopy(Obj->getBuffer());
         {
@@ -205,9 +207,11 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
 
     double LookupMs =
         std::chrono::duration<double, std::milli>(Clock::now() - LookupStart).count();
-    if (LogFile)
+    if (LogFile) {
+        std::unique_lock<std::mutex> Lock{LogMutex};
         fprintf(LogFile, "lookup,%s,%.3f,hit,%zu,%zu\n", KeyBuf.begin(), LookupMs,
                 Buf->getBufferSize(), Weight);
+    }
 
     return Buf;
 }
@@ -228,11 +232,13 @@ void ObjCache::shutdown()
         uv_thread_join(&WriterThread);
     }
 
-    if (LogFile)
+    if (LogFile) {
+        std::unique_lock<std::mutex> Lock{LogMutex};
         jl_safe_printf(
             "cache read : %zu\ncache write: %zu\ncache hit  : %zu\ncache miss : %zu\n",
             NRead.load(memory_order_relaxed), NWrite.load(memory_order_relaxed),
             NHit.load(memory_order_relaxed), NMiss.load(memory_order_relaxed));
+    }
 }
 
 void ObjCache::writerThread()
@@ -271,9 +277,11 @@ void ObjCache::writerThread()
             double WriteMs =
                 std::chrono::duration<double, std::milli>(Clock::now() - WriteStart)
                     .count();
-            if (LogFile)
+            if (LogFile) {
+                std::unique_lock<std::mutex> Lock{LogMutex};
                 fprintf(LogFile, "write,%s,%.3f,%zu\n", KeyBuf.begin(), WriteMs,
                         Obj->getBufferSize());
+            }
             auto _ = std::move(Obj);
         }
 
