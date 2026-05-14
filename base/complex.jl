@@ -843,14 +843,16 @@ function _cpow(z::Union{T,Complex{T}}, p::Union{T,Complex{T}}) where T
         else
             r = -zᵣ
             θ = copysign(Tf(π),imag(z))
-            rᵖ = r^pᵣ * exp(-pᵢ*θ)
+            # compute |z|^p in log space to avoid Inf*0 NaNs when
+            # r^pᵣ overflows and exp(-pᵢ*θ) underflows (or vice versa)
+            rᵖ = exp(pᵣ*log(r) - pᵢ*θ)
             ϕ = pᵣ*θ + pᵢ*log(r)
         end
     else
         pᵣ, pᵢ = reim(p)
         r = abs(z)
         θ = angle(z)
-        rᵖ = r^pᵣ * exp(-pᵢ*θ)
+        rᵖ = exp(pᵣ*log(r) - pᵢ*θ)
         ϕ = pᵣ*θ + pᵢ*log(r)
     end
 

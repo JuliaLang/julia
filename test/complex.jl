@@ -1203,6 +1203,17 @@ end
     @test_broken (Inf + 1im)^3 === (Inf + 1im)^3.0 === (Inf + 1im)^(3+0im) === Inf + Inf*im
     @test_broken (Inf + 1im)^3.1 === (Inf + 1im)^(3.1+0im) === Inf + Inf*im
 
+    # issue #54692: r^pᵣ * exp(-pᵢ*θ) could combine overflow with underflow
+    # and yield NaN where the true magnitude exp(pᵣ*log(r) - pᵢ*θ) is finite.
+    let a = exp(1+im), b = 1e5*(1+im)
+        @test a^b ≈ cis(2e5)
+        @test abs(a^b) ≈ 1
+        @test a^b * a^(-b) ≈ 1
+    end
+    # negative real z, complex p hits the same formula
+    @test isfinite((-2.0+0.0im)^(1e5*(1+im)))
+    @test iszero((-2.0+0.0im)^(1e5*(1+im)))
+
     # cases where phase angle is non-finite yield NaN + NaN*im:
     @test NaN + NaN*im ≟ Inf ^ (2 + 3im) ≟ (Inf + 1im) ^ (2 + 3im) ≟ (Inf*im) ^ (2 + 3im) ≟
           3^(Inf*im) ≟ (-3)^(Inf + 0im) ≟ (-3)^(Inf + 1im) ≟ (3+1im)^Inf ≟
