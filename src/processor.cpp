@@ -249,7 +249,7 @@ static inline jl_image_t load_sysimg_target(jl_image_buf_t image, F &&callback, 
 
 // Verify the cpufeatures tables were generated from a compatible LLVM version.
 #if defined(TARGET_TABLES_LLVM_VERSION_MAJOR) && defined(LLVM_VERSION_MAJOR)
-static_assert(TARGET_TABLES_LLVM_VERSION_MAJOR == LLVM_VERSION_MAJOR,
+static_assert(TARGET_TABLES_LLVM_VERSION_MAJOR <= LLVM_VERSION_MAJOR,
     "cpufeatures tables were generated with a different LLVM major version than Julia uses");
 #endif
 

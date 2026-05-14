@@ -6,7 +6,7 @@ module Unicode
 import Base: show, ==, hash, string, Symbol, isless, length, eltype,
              convert, isvalid, ismalformed, isoverlong, iterate,
              AnnotatedString, AnnotatedChar, annotated_chartransform,
-             @assume_effects, annotations, is_overlong_enc
+             @assume_effects, annotations, is_overlong_enc, unsafe_codepoint
 
 # whether codepoints are valid Unicode scalar values, i.e. 0-0xd7ff, 0xe000-0x10ffff
 
@@ -127,6 +127,9 @@ const category_strings = [
     "Invalid, too high",
     "Malformed, bad data",
 ]
+# category_code returns a value in 0:31; keep category_strings sized to match so
+# `category_string` remains nothrow.
+@assert length(category_strings) == 32
 
 const UTF8PROC_STABLE    = (1<<1)
 const UTF8PROC_COMPAT    = (1<<2)
@@ -271,7 +274,9 @@ function textwidth(c::Char)
     # We can't know a priori how terminals will render invalid UTF8 chars,
     # so we conservatively decide a width of 1.
     (ismalformed(c) || is_overlong_enc(u)) && return 1
-    Int(ccall(:utf8proc_charwidth, Cint, (UInt32,), c))
+    # `unsafe_codepoint` is sound here because both malformed-encoding cases
+    # have been ruled out above; this lets the compiler infer `:nothrow`.
+    Int(@assume_effects :foldable :nothrow @ccall utf8proc_charwidth(unsafe_codepoint(c)::UInt32)::Cint)
 end
 
 """
@@ -286,6 +291,9 @@ julia> textwidth("March")
 ```
 """
 textwidth(s::AbstractString) = mapreduce(textwidth, +, s; init=0)
+# foldable+nothrow: String iteration is total and textwidth(::Char) is nothrow.
+@assume_effects :nothrow :foldable textwidth(s::String) = mapreduce(textwidth, +, s; init=0)
+@assume_effects :nothrow :foldable textwidth(s::SubString{String}) = mapreduce(textwidth, +, s; init=0)
 
 textwidth(s::AnnotatedString) = textwidth(s.string)
 
@@ -360,21 +368,37 @@ titlecase(c::AnnotatedChar) = AnnotatedChar(titlecase(c.char), annotations(c))
 
 # returns UTF8PROC_CATEGORY code in 0:30 giving Unicode category
 function category_code(c::AbstractChar)
-    !ismalformed(c) ? category_code(UInt32(c)) : Cint(31)
+    # `unsafe_codepoint` is sound here because the `ismalformed` guard has ruled
+    # out the throwing path of `UInt32(::Char)`, allowing the compiler to infer
+    # `:nothrow` for `category_code(::Char)`.
+    !ismalformed(c) ? category_code(unsafe_codepoint(c)) : Cint(31)
 end
 
 function category_code(x::Integer)
-    x ≤ 0x10ffff ? (@assume_effects :foldable @ccall utf8proc_category(UInt32(x)::UInt32)::Cint) : Cint(30)
+    x ≤ 0x10ffff ? (@assume_effects :foldable :nothrow @ccall utf8proc_category(UInt32(x)::UInt32)::Cint) : Cint(30)
 end
 
 # more human-readable representations of the category code
 function category_abbrev(c::AbstractChar)
     ismalformed(c) && return "Ma"
     c ≤ '\U10ffff' || return "In"
-    unsafe_string(ccall(:utf8proc_category_string, Cstring, (UInt32,), c))
+    unsafe_string(@ccall utf8proc_category_string(UInt32(c)::UInt32)::Cstring)
+end
+# `unsafe_string` over a `utf8proc` cstring is not inferred as `:nothrow`/`:foldable`,
+# but the cstring is a static table entry inside utf8proc, and `unsafe_codepoint`
+# is sound here because of the `ismalformed` guard above.
+@assume_effects :nothrow :foldable function category_abbrev(c::Char)
+    ismalformed(c) && return "Ma"
+    c ≤ '\U10ffff' || return "In"
+    unsafe_string(@ccall utf8proc_category_string(unsafe_codepoint(c)::UInt32)::Cstring)
 end
 
+# category_code(c) returns a value in 0:31 and category_strings has 32 entries
+# (asserted at the top of this file), so the index is always in bounds for `Char`.
 category_string(c) = category_strings[category_code(c)+1]
+# `getindex` on a `const` `Vector{String}` is not inferred as `:nothrow` even with
+# `@inbounds`, but the bounds are guaranteed by the assert above.
+@assume_effects :nothrow :foldable category_string(c::Char) = @inbounds category_strings[category_code(c)+1]
 
 isassigned(c) = UTF8PROC_CATEGORY_CN < category_code(c) <= UTF8PROC_CATEGORY_CO
 
@@ -400,8 +424,12 @@ julia> islowercase('❤')
 false
 ```
 """
-islowercase(c::AbstractChar) = ismalformed(c) ? false :
-    Bool(@assume_effects :foldable @ccall utf8proc_islower(UInt32(c)::UInt32)::Cint)
+function islowercase(c::AbstractChar)
+    # `unsafe_codepoint` is sound here because of the `ismalformed` guard;
+    # this lets the compiler infer `:nothrow` for `islowercase(::Char)`.
+    ismalformed(c) ? false :
+        !iszero(@assume_effects :foldable :nothrow @ccall utf8proc_islower(unsafe_codepoint(c)::UInt32)::Cint)
+end
 
 # true for Unicode upper and mixed case
 
@@ -425,8 +453,12 @@ julia> isuppercase('❤')
 false
 ```
 """
-isuppercase(c::AbstractChar) = ismalformed(c) ? false :
-    Bool(@assume_effects :foldable @ccall utf8proc_isupper(UInt32(c)::UInt32)::Cint)
+function isuppercase(c::AbstractChar)
+    # `unsafe_codepoint` is sound here because of the `ismalformed` guard;
+    # this lets the compiler infer `:nothrow` for `isuppercase(::Char)`.
+    ismalformed(c) ? false :
+        !iszero(@assume_effects :foldable :nothrow @ccall utf8proc_isupper(unsafe_codepoint(c)::UInt32)::Cint)
+end
 
 """
     iscased(c::AbstractChar)::Bool

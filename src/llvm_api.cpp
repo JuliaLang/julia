@@ -71,9 +71,9 @@ JLJITGetLLVMOrcExecutionSession_impl(JuliaOJITRef JIT)
 }
 
 JL_DLLEXPORT_CODEGEN LLVMOrcJITDylibRef
-JLJITGetExternalJITDylib_impl(JuliaOJITRef JIT)
+JLJITCreateJITDylib_impl(JuliaOJITRef JIT, const char *Name)
 {
-    return wrap(&unwrap(JIT)->getExternalJITDylib());
+    return wrap(&unwrap(JIT)->createJITDylib(Name));
 }
 
 JL_DLLEXPORT_CODEGEN LLVMErrorRef JLJITAddObjectFile_impl(
@@ -91,10 +91,9 @@ JL_DLLEXPORT_CODEGEN LLVMErrorRef JLJITAddLLVMIRModule_impl(
 }
 
 JL_DLLEXPORT_CODEGEN LLVMErrorRef
-JLJITLookup_impl(JuliaOJITRef JIT, LLVMOrcExecutorAddress *Result,
-                                   const char *Name, int ExternalJDOnly)
+JLJITJDLookup_impl(JuliaOJITRef JIT, LLVMOrcJITDylibRef JD, LLVMOrcExecutorAddress *Result, const char *Name, int ExternalJDOnly)
 {
-    auto Sym = unwrap(JIT)->findExternalJDSymbol(Name, ExternalJDOnly);
+    auto Sym = unwrap(JIT)->findJDSymbol(*unwrap(JD), Name, ExternalJDOnly);
     if (Sym) {
         auto addr = Sym->getAddress();
         *Result = orc::ExecutorAddr(addr).getValue();
@@ -107,8 +106,7 @@ JLJITLookup_impl(JuliaOJITRef JIT, LLVMOrcExecutorAddress *Result,
 }
 
 JL_DLLEXPORT_CODEGEN LLVMOrcSymbolStringPoolEntryRef
-JLJITMangleAndIntern_impl(JuliaOJITRef JIT,
-                                            const char *Name)
+JLJITMangleAndIntern_impl(JuliaOJITRef JIT, const char *Name)
 {
 #if JL_LLVM_VERSION >= 180000
     return wrap(orc::SymbolStringPoolEntryUnsafe::take(unwrap(JIT)->mangle(Name)).rawPtr());

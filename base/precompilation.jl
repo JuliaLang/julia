@@ -24,9 +24,10 @@ mutable struct PrecompileJob
     error_msg::String
     output::IOBuffer
     pid::Int32
+    had_pid::Bool  # sticky: true once a subprocess was actually spawned for this job
     lock_holder::String
     waiting_for_bg::Bool
-    PrecompileJob() = new(JOB_PENDING, 0.0, "", IOBuffer(), Int32(0), "", false)
+    PrecompileJob() = new(JOB_PENDING, 0.0, "", IOBuffer(), Int32(0), false, "", false)
 end
 
 is_pending(j::PrecompileJob)    = j.status == JOB_PENDING
@@ -35,6 +36,7 @@ is_recompiled(j::PrecompileJob) = j.status == JOB_RECOMPILED
 is_soft_error(j::PrecompileJob) = j.status == JOB_SOFT_ERROR
 is_failed(j::PrecompileJob)     = j.status == JOB_FAILED
 has_pid(j::PrecompileJob)       = j.pid > 0
+had_pid(j::PrecompileJob)       = j.had_pid
 is_locked(j::PrecompileJob)     = !isempty(j.lock_holder)
 is_waiting(j::PrecompileJob)    = j.waiting_for_bg
 
@@ -42,7 +44,7 @@ mark_started!(j::PrecompileJob, t::Float64=time()) = (j.status = JOB_STARTED; j.
 mark_recompiled!(j::PrecompileJob) = (j.status = JOB_RECOMPILED)
 mark_soft_error!(j::PrecompileJob) = (j.status = JOB_SOFT_ERROR)
 mark_failed!(j::PrecompileJob, msg::String) = (j.status = JOB_FAILED; j.error_msg = msg)
-set_pid!(j::PrecompileJob, pid::Int32) = (j.pid = pid)
+set_pid!(j::PrecompileJob, pid::Int32) = (j.pid = pid; j.had_pid = true)
 clear_pid!(j::PrecompileJob) = (j.pid = Int32(0))
 
 function clear_failure!(j::PrecompileJob)
@@ -106,6 +108,7 @@ Base.@kwdef mutable struct PrecompileSession
     n_total::Int
     n_batches::Int                         = 1
     interrupted::Bool                      = false
+    canceled::Bool                         = false
     interrupted_or_done::Bool              = false
     printloop_should_exit::Bool
     target::String
@@ -153,12 +156,14 @@ mutable struct BackgroundPrecompileState
     detachable::Bool  # whether the monitor can be detached
     confirming::Symbol  # :none, :cancel, or :info — action awaiting Enter to confirm
     confirm_deadline::Float64  # time() deadline for confirmation
+    info_requested::Bool  # whether SIGINFO/SIGUSR1 has been broadcast at least once
+    key_listening::Bool  # whether a key listener task is currently consuming stdin
 end
 Base.lock(f, bg::BackgroundPrecompileState) = lock(f, bg.lock)
 Base.lock(bg::BackgroundPrecompileState) = lock(bg.lock)
 Base.unlock(bg::BackgroundPrecompileState) = unlock(bg.lock)
 
-const BG = BackgroundPrecompileState(nothing, false, false, false, nothing, nothing, nothing, nothing, ReentrantLock(), Threads.Condition(), Channel{Int32}[], Dict{PkgId, Int}(), Set{PkgId}(), Threads.Condition(), Channel{PrecompileRequest}(Inf), false, false, :none, 0.0)
+const BG = BackgroundPrecompileState(nothing, false, false, false, nothing, nothing, nothing, nothing, ReentrantLock(), Threads.Condition(), Channel{Int32}[], Dict{PkgId, Int}(), Set{PkgId}(), Threads.Condition(), Channel{PrecompileRequest}(Inf), false, false, :none, 0.0, false, false)
 
 ## Constants and formatting utilities
 
@@ -1028,6 +1033,7 @@ const _confirm_messages = Dict{Symbol, String}(
 
 function keyboard_tip(s::BackgroundPrecompileState)
     s.monitoring || return "", :default
+    s.key_listening || return "", :default
     if s.confirming !== :none
         remaining = max(0, ceil(Int, s.confirm_deadline - time()))
         msg = get(_confirm_messages, s.confirming, string(s.confirming))
@@ -1041,9 +1047,10 @@ function keyboard_tip(s::BackgroundPrecompileState)
 end
 
 function monitor_background_precompile(io::IO = stderr, detachable::Bool = true, wait_for_pkg::Union{Nothing, PkgId} = nothing;
-                                       # disable key controls when not on the main task to avoid
-                                       # stealing stdin from the REPL
-                                       key_controls::Bool = current_task() === Base.roottask)
+                                       key_controls::Union{Bool, Nothing} = nothing)
+    # By default only enable key controls when this task is the foreground task (see #61563, #61698).
+    # Falls back to roottask when no foreground task is registered (e.g. non-REPL interactive scripts).
+    key_controls = @something key_controls current_task() === something(Base.foreground_task(), Base.roottask)
     local completed_at::Union{Nothing, Float64}
     local task
 
@@ -1082,14 +1089,15 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
     cancel_requested = Ref(false)
     interrupt_requested = Ref(false)
 
-    # Start a task to listen for keypresses (only if stdin isn't already being
-    # consumed in raw mode by another reader, e.g. runtests.jl's stdin_monitor)
+    # Start a task to listen for keypresses. Skipped if another reader already holds
+    # raw mode on stdin (e.g. runtests.jl's stdin_monitor).
     key_task = if key_controls && stdin isa Base.TTY
         Threads.@spawn :samepool try
             trylock(stdin.raw_lock) || return
             @lock BG begin
                 BG.detachable = detachable
                 BG.confirming = :none
+                BG.key_listening = true
             end
             buffered_input = UInt8[]
             try
@@ -1132,6 +1140,7 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
                             broadcast_signal(Base.SIGKILL)
                             break
                         elseif confirmed_action == :info
+                            @lock BG BG.info_requested = true
                             broadcast_signal(Sys.isapple() ? Base.SIGINFO : Base.SIGUSR1)
                             continue
                         end
@@ -1192,7 +1201,10 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
                     end
                 end
                 Base.reseteof(stdin)
-                @lock BG BG.confirming = :none
+                @lock BG begin
+                    BG.confirming = :none
+                    BG.key_listening = false
+                end
                 unlock(stdin.raw_lock)
             end
         finally
@@ -1250,11 +1262,13 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
 
         # If user requested cancel, stop the background task
         if cancel_requested[]
-            @lock BG BG.monitoring = false
             key_task !== nothing && wait(key_task)
             print(io, ansi_enablecursor, ansi_cleartoend)
             printpkgstyle(io, :Info, "Canceling precompilation...$(ansi_cleartoend)", color = Base.info_color())
+            # Wait for the task to emit its final report before clearing
+            # `BG.monitoring`, which gates that report's output.
             wait(task; throw=false)
+            @lock BG BG.monitoring = false
             return
         end
 
@@ -1340,6 +1354,7 @@ function launch_background_precompile(pkgs::Union{Vector{String}, Vector{PkgId}}
     @lock BG begin
         BG.interrupt_requested = false
         BG.cancel_requested = false
+        BG.info_requested = false
         empty!(BG.signal_channels)
         BG.monitoring = true
         BG.completed_at = nothing
@@ -1389,6 +1404,7 @@ function launch_background_precompile(pkgs::Union{Vector{String}, Vector{PkgId}}
                     BG.task = nothing
                     BG.interrupt_requested = false
                     BG.cancel_requested = false
+                    BG.info_requested = false
                     foreach(close, BG.signal_channels)
                     empty!(BG.signal_channels)
                     @lock BG.pkg_done begin
@@ -1583,6 +1599,7 @@ function should_stop(s::PrecompileSession)
     if ir || cr
         @lock s.print_lock begin
             s.interrupted = s.interrupted || ir
+            s.canceled = s.canceled || cr
             if !s.interrupted_or_done
                 s.interrupted_or_done = true
                 foreach(notify, values(s.was_processed))
@@ -1640,6 +1657,8 @@ function spawn_print_loop!(s::PrecompileSession)
             cpu_pcts = Dict{Int32, Float64}()
             rss_bytes = Dict{Int32, UInt64}()
             while !s.printloop_should_exit
+                # Propagate cancel/interrupt requested via BG into the session so the loop exits.
+                should_stop(s)
                 @lock s.print_lock begin
                     verbose = BG.verbose
                     now_time = time()
@@ -1700,6 +1719,13 @@ function spawn_print_loop!(s::PrecompileSession)
                                     @lock s.print_lock filter!(!isequal(pkg_config), s.pkg_queue)
                                 end)
                                 string(color_string("  ✓ ", loaded ? Base.warn_color() : :green, s.hascolor), name)
+                            elseif is_started(job) && s.interrupted_or_done
+                                # Cancel/interrupt: show a static marker for jobs that actually had
+                                # a subprocess running, so the user sees what was in flight without
+                                # it looking still-running. Skip jobs that hadn't reached subprocess
+                                # spawn yet (e.g. still acquiring the parallel_limiter).
+                                had_pid(job) || continue
+                                string(color_string("  - ", :light_black, s.hascolor), name)
                             elseif is_started(job)
                                 anim_char = anim_chars[(i_local + Int(dep.name[1])) % length(anim_chars) + 1]
                                 anim_char_colored = dep in s.project_deps ? anim_char : color_string(anim_char, :light_black, s.hascolor)
@@ -1979,9 +2005,14 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                         close(std_pipe.in)
                         wait(t_monitor)
                         err isa InterruptException && rethrow()
-                        mark_failed!(s.jobs[pkg_config], sprint(showerror, err))
-                        !s.fancyprint && BG.monitoring && @lock s.print_lock begin
-                            println(s.logio, " "^12, color_string("  ✗ ", Base.error_color(), s.hascolor), name)
+                        # If cancel was requested, this failure is almost certainly the
+                        # subprocess being SIGKILL'd by the cancel; don't report it as
+                        # a precompile failure.
+                        if !(@lock BG BG.cancel_requested)
+                            mark_failed!(s.jobs[pkg_config], sprint(showerror, err))
+                            !s.fancyprint && BG.monitoring && @lock s.print_lock begin
+                                println(s.logio, " "^12, color_string("  ✗ ", Base.error_color(), s.hascolor), name)
+                            end
                         end
                     finally
                         isopen(std_pipe.in) && close(std_pipe.in)
@@ -2139,7 +2170,7 @@ function report_precompile_results!(s::PrecompileSession)
     end
     notify(s.first_started) # in cases of no-op or !fancyprint
 
-    quick_exit = any(t -> !istaskdone(t) || istaskfailed(t), s.tasks) || s.interrupted
+    quick_exit = any(t -> !istaskdone(t) || istaskfailed(t), s.tasks) || s.interrupted || s.canceled
     seconds_elapsed = round(Int, (s.time_start > 0 ? (time_ns() - s.time_start) : 0) / 1e9)
     ndeps = count(j -> is_recompiled(j), values(s.jobs))
 
@@ -2150,9 +2181,21 @@ function report_precompile_results!(s::PrecompileSession)
             break
         end
     end
-    if !s.strict && !requested_errs && !s.interrupted
+    if !s.strict && !requested_errs && !s.interrupted && !s.canceled
         for (_, job) in s.jobs
             is_failed(job) && clear_failure!(job)
+        end
+    end
+    if s.canceled && !(@lock BG BG.info_requested)
+        # Drop captured stdout/stderr from jobs that didn't fail before cancel,
+        # since their output is just truncated cancel-induced noise. If the user
+        # asked for info (SIGINFO/SIGUSR1) at any point, keep the output so the
+        # profiling info gets surfaced in the cancel report. Soft errors
+        # (e.g. `?` packages) are completed jobs whose captured output is the
+        # actual precompile error message, so preserve it as well.
+        for (_, job) in s.jobs
+            (is_failed(job) || is_soft_error(job)) && continue
+            job.output.size > 0 && truncate(job.output, 0)
         end
     end
     n_failed = count(j -> is_failed(j), values(s.jobs))
@@ -2231,15 +2274,31 @@ function report_precompile_results!(s::PrecompileSession)
             BG.monitoring && @lock s.print_lock begin
                 println(s.logio, logstr)
             end
-        elseif s.interrupted
+        elseif s.interrupted || s.canceled
             istr = sprint(context=s.logio) do iostr
                 if s.fancyprint
-                    printpkgstyle(iostr, :Precompiling, "interrupted.")
+                    printpkgstyle(iostr, :Precompiling, s.canceled && !s.interrupted ? "canceled." : "interrupted.")
                 end
-                n_failed_i = n_failed
+                # On cancel we don't mark in-flight jobs as failed (their subprocesses
+                # were killed by the cancel itself), so report them as the "canceled" count.
+                # Use the sticky `had_pid` flag so we count jobs that actually spawned a
+                # subprocess, not ones that were just past mark_started!. Soft errors are
+                # completed jobs that errored before cancel; report them separately.
+                n_soft_errors = count(j -> is_soft_error(j), values(s.jobs))
+                n_canceled_i = s.canceled && !s.interrupted ?
+                    count(j -> had_pid(j) && !is_recompiled(j) && !is_soft_error(j), values(s.jobs)) :
+                    n_failed
+                verb = s.canceled && !s.interrupted ? "canceled" : "interrupted"
                 print(iostr, "  $(ndeps) dependenc$(ndeps == 1 ? "y" : "ies") precompiled, ",
-                      color_string("$(n_failed_i)", Base.error_color(), s.hascolor),
-                      " interrupted after $(seconds_elapsed) seconds")
+                      color_string("$(n_canceled_i)", Base.error_color(), s.hascolor),
+                      " $verb after $(seconds_elapsed) seconds")
+                if n_soft_errors > 0
+                    pluralpc = length(s.configs) > 1 ? "dependency configurations" : n_soft_errors == 1 ? "dependency" : "dependencies"
+                    print(iostr, "\n  ",
+                        color_string(string(n_soft_errors), Base.warn_color(), s.hascolor),
+                        " $(pluralpc) failed but may be precompilable after restarting julia"
+                    )
+                end
             end
             @lock BG BG.result = istr
             BG.monitoring && @lock s.print_lock begin

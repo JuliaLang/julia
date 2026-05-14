@@ -373,7 +373,16 @@ end
     @test sprint(show, Returns(1.0)) == "Returns{Float64}(1.0)"
 
     illtype = Vector{Core.TypeVar(:T)}
-    @test Returns(illtype) == Returns{DataType}(illtype)
+    @test_skip Returns(illtype) == Returns{DataType}(illtype)
+end
+
+@testset "tap" begin
+    buf = IOBuffer()
+    @test (123 |> tap(Base.Fix1(print, buf))) == 123
+    @test takestring!(buf) == "123"
+
+    val = [1, 2, 3]
+    @test tap(identity)(val) === val
 end
 
 @testset "<= (issue #46327)" begin

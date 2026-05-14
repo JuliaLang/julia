@@ -320,8 +320,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                         csig = get_compileable_sig(method, sig, match.sparams)
                         if csig !== nothing && (!seenall || csig !== sig) # corresponds to whether the first look already looked at this, so repeating abstract_call_method is not useful
                             #println(sig, " changed to ", csig, " for ", method)
-                            sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), csig, method.sig)::SimpleVector
-                            sparams = sp_[2]::SimpleVector
+                            (_, sparams) = typeintersect_env(csig, method.sig)
                             mresult = abstract_call_method(interp, method, csig, sparams, multiple_matches, StmtInfo(false, false), sv)::Future
                             isready(mresult) || return false # wait for mresult Future to resolve off the callstack before continuing
                         end
@@ -742,7 +741,7 @@ function abstract_call_method(interp::AbstractInterpreter,
 
     # if sig changed, may need to recompute the sparams environment
     if isa(method.sig, UnionAll) && isempty(sparams)
-        recomputed = ccall(:jl_type_intersection_with_env, Any, (Any, Any), sig, method.sig)::SimpleVector
+        (_, sparams) = typeintersect_env(sig, method.sig)
         #@assert recomputed[1] !== Bottom
         # We must not use `sig` here, since that may re-introduce structural complexity that
         # our limiting heuristic sought to eliminate. The alternative would be to not increment depth over covariant contexts,
@@ -763,7 +762,6 @@ function abstract_call_method(interp::AbstractInterpreter,
         #         newsig = recomputed[2]
         #     end
         #     sig = ?
-        sparams = recomputed[2]::SimpleVector
     end
 
     return typeinf_edge(interp, method, sig, sparams, sv, edgecycle, edgelimited)
@@ -1624,7 +1622,7 @@ AbstractIterationResult(cti::Vector{Any}, info::MaybeAbstractIterationInfo) =
 function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft), @nospecialize(typ),
                                 vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
     if isa(typ, PartialStruct)
-        widet = typ.typ
+        widet = unwrap_unionall(typ.typ)
         if isa(widet, DataType)
             if widet.name === Tuple.name
                 return Future(AbstractIterationResult(typ.fields, nothing))
@@ -3128,19 +3126,10 @@ function sp_type_rewrap(@nospecialize(T), mi::MethodInstance, isreturn::Bool)
             if !isempty(mi.sparam_vals)
                 sparam_vals = Any[isvarargtype(v) ? TypeVar(:N, Union{}, Any) :
                                   v for v in  mi.sparam_vals]
+                free_sps_before = find_free_typevars(mi.specTypes)
                 T = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), T, spsig, sparam_vals)
                 isref && isreturn && T === Any && return Bottom # catch invalid return Ref{T} where T = Any
-                for v in sparam_vals
-                    if isa(v, TypeVar)
-                        T = UnionAll(v, T)
-                    end
-                end
-                if has_free_typevars(T)
-                    fv = ccall(:jl_find_free_typevars, Vector{Any}, (Any,), T)
-                    for v in fv
-                        T = UnionAll(v, T)
-                    end
-                end
+                T = rewrap_free_typevars(T, free_sps_before)
             else
                 T = rewrap_unionall(T, spsig)
             end
@@ -3311,12 +3300,16 @@ function abstract_eval_new(interp::AbstractInterpreter, e::Expr, sstate::Stateme
         else
             consistent = ALWAYS_TRUE # immutable allocation is consistent
         end
-        if isconcretedispatch(rt)
-            nothrow = true
-            @assert fcount !== nothing && fcount ≥ nargs "malformed :new expression" # syntactically enforced by the front-end
+        # `:new` can carry `PartialStruct` even when `rt` isn't isconcretedispatch` —
+        # partially-instantiated parametric types (e.g. `Generator{Vector{Int}, F<:OC{Tuple{Int}, T} where T}`) still
+        # have well-defined field count, and field-level extended lattice elements carry
+        # information beyond the declared type.
+        if fcount !== nothing
+            nothrow = isconcretedispatch(rt)
+            @assert nargs ≤ fcount "malformed :new expression" # syntactically enforced by the front-end
             ats = Vector{Any}(undef, nargs)
             local anyrefine = false
-            local allconst = true
+            local allconst = isconcretedispatch(rt)
             for i = 1:nargs
                 at = widenslotwrapper(abstract_eval_value(interp, e.args[i+1], sstate, sv))
                 ft = fieldtype(rt, i)
@@ -3334,7 +3327,7 @@ function abstract_eval_new(interp::AbstractInterpreter, e::Expr, sstate::Stateme
                 end
                 ats[i] = at
             end
-            if fcount == nargs && consistent === ALWAYS_TRUE && allconst
+            if allconst && fcount == nargs && consistent === ALWAYS_TRUE
                 argvals = Vector{Any}(undef, nargs)
                 for j in 1:nargs
                     argvals[j] = (ats[j]::Const).val
@@ -3369,6 +3362,8 @@ function abstract_eval_new(interp::AbstractInterpreter, e::Expr, sstate::Stateme
                     end
                 end
                 rt = PartialStruct(𝕃ᵢ, rt, undefs, ats)
+            else
+                rt = refine_partial_type(rt)
             end
         else
             rt = refine_partial_type(rt)
