@@ -659,6 +659,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
     special = f === convert || f === getindex || f === setindex!
     f isa Core.Builtin && return # `methods` isn't very useful for a builtin
     funcs = Tuple{Any,Vector{Any}}[(f, arg_types_param)]
+    show_constructor_hint = false
 
     # An incorrect call method produces a MethodError for convert.
     # It also happens that users type convert when they mean call. So
@@ -673,6 +674,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
     # helpful when a parameterized struct has an unparameterized inner constructor
     if isa(f, DataType) && (f !== f.name.wrapper) && isempty(methods(f))
         push!(funcs, (f.name.wrapper, arg_types_param))
+        show_constructor_hint = true
     end
 
     for (func, arg_types_param) in funcs
@@ -832,7 +834,12 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
 
     if !isempty(lines) # Display up to three closest candidates
         Base.with_output_color(:normal, io) do io
-            print(io, "\n\nClosest candidates are:")
+            if show_constructor_hint
+                print(io, "\n\nHint: constructors are defined for `", f.name.wrapper,
+                    "`, but not for `", f, "`:")
+            else
+                print(io, "\n\nClosest candidates are:")
+            end
             permute!(lines, sortperm(line_score))
             i = 0
             for line in lines

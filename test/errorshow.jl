@@ -791,7 +791,11 @@ struct ParametricOuterBareInner{T}
 end
 let err_str
     err_str = @except_str ParametricOuterBareInner{String}("abc") MethodError
-    @test occursin("Closest candidates are", err_str)
+    @test occursin(
+        "Hint: constructors are defined for `$(curmod_prefix)ParametricOuterBareInner`, " *
+            "but not for `$(curmod_prefix)ParametricOuterBareInner{String}`",
+        err_str,
+    )
     @test occursin("ParametricOuterBareInner(::Any)", err_str)
 end
 
