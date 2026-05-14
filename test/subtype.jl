@@ -2889,6 +2889,10 @@ end
 @test !(Tuple{Union{Int16,Int8},Ref{Int16},Ref{Int16}} <: Tuple{<:Union{S,T},Ref{S},Ref{T}} where {S,T})
 @test !(Tuple{Ref{Int16},Ref{Int16},Union{Int16,Int8}} <: Tuple{Ref{S},Ref{T},<:Union{S,T}} where {S,T})
 @test Tuple{NTuple{2,Int}, Int8} <: Tuple{<:Union{NTuple{2,T},Tuple{S,T}}, <:T} where {S,T>:Int}
+# Variant of the above where T also appears in a non-traversed (inactive) Union
+# branch — body_occurs_inv(T) is structurally 1 even though dynamic occurs_inv
+# stays 0, exercising the static-`body_occurs_inv` check in env_unchanged.
+@test Tuple{NTuple{2,Int}, Int8} <: Tuple{<:Union{NTuple{2,T},Tuple{S,T},Ref{T}}, <:T} where {S,T>:Int}
 
 # An unused typevar in a method signature's `where` clause must be
 # reported in env at its declared index, not dropped or shifted.
