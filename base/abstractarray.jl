@@ -560,9 +560,11 @@ function last(v::AbstractVector, n::Integer)
 end
 
 """
-    strides(A)
+    strides(A)::Union{Nothing, Dims}
 
-Return a tuple of the memory strides in each dimension.
+Return a tuple of the memory strides in each dimension, for an `AbstractArray` with a
+strided memory layout. For arrays with a non-strided layout (such as sparse arrays), return
+`nothing`.
 
 See also [`stride`](@ref).
 
@@ -573,13 +575,19 @@ julia> A = fill(1, (3,4,5));
 julia> strides(A)
 (1, 3, 12)
 ```
+
+!!! compat "Julia 1.14"
+    The fallback returning `nothing` for non-strided arrays was added in Julia 1.14.
 """
-function strides end
+function strides(::AbstractArray)
+    nothing
+end
 
 """
     stride(A, k::Integer)
 
-Return the distance in memory (in number of elements) between adjacent elements in dimension `k`.
+Return the distance in memory (in number of elements) between adjacent elements in dimension `k`. For arrays with a non-strided layout (such as sparse arrays), return
+`nothing`.
 
 See also [`strides`](@ref).
 
@@ -593,21 +601,28 @@ julia> stride(A,2)
 julia> stride(A,3)
 12
 ```
+
+!!! compat "Julia 1.14"
+    The fallback returning `nothing` for non-strided arrays was added in Julia 1.14.
 """
 function stride(A::AbstractArray, k::Integer)
     st = strides(A)
-    k ≤ ndims(A) && return st[k]
-    ndims(A) == 0 && return 1
-    sz = size(A)
-    s = st[1] * sz[1]
-    for i in 2:ndims(A)
-        s += st[i] * sz[i]
+    if st === nothing
+        return nothing
+    else
+        k ≤ ndims(A) && return st[k]
+        ndims(A) == 0 && return 1
+        sz = size(A)
+        s = st[1] * Int(sz[1])
+        for i in 2:ndims(A)
+            s += st[i] * Int(sz[i])
+        end
+        return s
     end
-    return s
 end
 
-@inline size_to_strides(s, d, sz...) = (s, size_to_strides(s * d, sz...)...)
-size_to_strides(s, d) = (s,)
+@inline size_to_strides(s, d, sz...)::Dims = (Int(s), size_to_strides(Int(s) * Int(d), sz...)...)
+size_to_strides(s, d)::Dims = (Int(s),)
 size_to_strides(s) = ()
 
 function isstored(A::AbstractArray{<:Any,N}, I::Vararg{Integer,N}) where {N}

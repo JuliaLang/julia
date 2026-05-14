@@ -426,16 +426,33 @@ IndexStyle(::Type{<:FastSubArray}) = IndexLinear()
 
 # Strides are the distance in memory between adjacent elements in a given dimension
 # which we determine from the strides of the parent
-strides(V::SubArray) = substrides(strides(V.parent), V.indices)
+strides(V::SubArray) = try_substrides(strides(V.parent), V.indices)
 
-substrides(strds::Tuple{}, ::Tuple{}) = ()
-substrides(strds::NTuple{N,Int}, I::Tuple{ScalarIndex, Vararg{Any}}) where N = (substrides(tail(strds), tail(I))...,)
-substrides(strds::NTuple{N,Int}, I::Tuple{Slice, Vararg{Any}}) where N = (first(strds), substrides(tail(strds), tail(I))...)
-substrides(strds::NTuple{N,Int}, I::Tuple{AbstractRange, Vararg{Any}}) where N = (first(strds)*step(I[1]), substrides(tail(strds), tail(I))...)
-substrides(strds, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError(
-    LazyString("strides is invalid for SubArrays with indices of type ", typeof(I[1]))))
+# Recursively try to calculate the strides
+try_substrides(::Any, ::Any) = nothing
+try_substrides(strds::Tuple{}, ::Tuple{}) = ()
+function try_substrides(strds::Tuple{Int, Vararg{Int}}, I::Tuple{ScalarIndex, Vararg{Any}})
+    try_substrides(tail(strds), tail(I))
+end
+function try_substrides(strds::Tuple{Int, Vararg{Int}}, I::Tuple{Slice, Vararg{Any}})
+    rest = try_substrides(tail(strds), tail(I))
+    isnothing(rest) && return nothing
+    (first(strds), rest...)
+end
+function try_substrides(strds::Tuple{Int, Vararg{Int}}, I::Tuple{AbstractRange, Vararg{Any}})
+    rest = try_substrides(tail(strds), tail(I))
+    isnothing(rest) && return nothing
+    (first(strds)*Int(step(first(I))), rest...)
+end
 
-stride(V::SubArray, d::Integer) = d <= ndims(V) ? strides(V)[d] : strides(V)[end] * size(V)[end]
+function stride(V::SubArray, d::Integer)
+    st = strides(V)
+    if st === nothing
+        nothing
+    else
+        d <= ndims(V) ? st[d] : st[end] * Int(size(V)[end])
+    end
+end
 
 compute_stride1(parent::AbstractArray, I::NTuple{N,Any}) where {N} =
     (@inline; compute_stride1(1, fill_to_length(axes(parent), OneTo(1), Val(N)), I))

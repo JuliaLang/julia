@@ -1933,7 +1933,7 @@ end
     a = view(rand(10,10), 1:10, 1:10)
     check_strided_get(vec(a))
     b = view(parent(a), 1:9, 1:10)
-    check_strides_throws("Input is not strided.", vec(b))
+    @test isnothing(strides(vec(b)))
     # StridedVector parent
     for n in 1:3
         a = view(collect(1:60n), 1:n:60n)
@@ -1955,10 +1955,10 @@ end
     check_strided_get(reshape(a,3,3,10))
     check_strided_get(reshape(a,1,3,1,3,1,5,1,2))
     check_strided_get(reshape(a,3,3,5,1,1,2,1,1))
-    check_strides_throws("Input is not strided.", reshape(a,3,6,5))
-    check_strides_throws("Input is not strided.", reshape(a,3,2,3,5))
-    check_strides_throws("Input is not strided.", reshape(a,3,5,3,2))
-    check_strides_throws("Input is not strided.", reshape(a,5,3,3,2))
+    @test isnothing(strides(reshape(a,3,6,5)))
+    @test isnothing(strides(reshape(a,3,2,3,5)))
+    @test isnothing(strides(reshape(a,3,5,3,2)))
+    @test isnothing(strides(reshape(a,5,3,3,2)))
     # Zero dimensional parent
     struct FakeZeroDimArray <: AbstractArray{Int, 0} end
     Base.strides(::FakeZeroDimArray) = ()
@@ -1981,8 +1981,8 @@ end
     struct Fill44087 <: AbstractArray{Int,0}
         a::Int
     end
-    # `stride` shouldn't work if `strides` is not defined.
-    @test_throws MethodError stride(Fill44087(1), 1)
+    # `stride` should return nothing if `strides` is not defined.
+    @test isnothing(stride(Fill44087(1), 1))
     # It is intentionally to only check the return type. (The value is somehow arbitrary)
     @test stride(fill(1), 1) isa Int
     check_strided_get(fill(1))

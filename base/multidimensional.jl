@@ -1140,7 +1140,9 @@ end
 # Test if two arrays are backed by exactly the same memory in exactly the same order
 _parentsmatch(A::AbstractArray, B::AbstractArray) = A === B
 _parentsmatch(A::DenseArray, B::DenseArray) = elsize(A) == elsize(B) && pointer(A) == pointer(B) && size(A) == size(B)
-_parentsmatch(A::StridedArray, B::StridedArray) = elsize(A) == elsize(B) && pointer(A) == pointer(B) && strides(A) == strides(B)
+function _parentsmatch(A::StridedArray, B::StridedArray)
+    elsize(A) == elsize(B) && pointer(A) == pointer(B) && strides(A) == strides(B) != nothing
+end
 
 # Given two SubArrays with the same parent, check if the indices might overlap (returning true if unsure)
 _indicesmightoverlap(A::Tuple{}, B::Tuple{}) = true

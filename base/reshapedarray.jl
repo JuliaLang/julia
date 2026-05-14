@@ -357,8 +357,11 @@ viewindexing(I::Tuple{ReshapedRange, Vararg{ScalarIndex}}) = IndexLinear()
 compute_stride1(s, inds, I::Tuple{ReshapedRange, Vararg{Any}}) = s*step(I[1].parent)
 compute_offset1(parent::AbstractVector, stride1::Integer, I::Tuple{ReshapedRange}) =
     (@inline; first(I[1]) - first(axes1(I[1]))*stride1)
-substrides(strds::NTuple{N,Int}, I::Tuple{ReshapedUnitRange, Vararg{Any}}) where N =
-    (size_to_strides(strds[1], size(I[1])...)..., substrides(tail(strds), tail(I))...)
+function try_substrides(strds::Tuple{Int, Vararg{Int}}, I::Tuple{ReshapedUnitRange, Vararg{Any}})
+    rest = try_substrides(tail(strds), tail(I))
+    isnothing(rest) && return nothing
+    (size_to_strides(first(strds), size(first(I))...)..., rest...)
+end
 
 # This exists for backwards compatibility, normally the cconvert method below will be used
 function unsafe_convert(::Type{Ptr{S}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}}) where {S,T,N,P}
@@ -419,26 +422,37 @@ _checkcontiguous(::Type{Bool}, A::FastContiguousSubArray) = _checkcontiguous(Boo
 
 function strides(a::ReshapedArray)
     _checkcontiguous(Bool, a) && return size_to_strides(1, size(a)...)
+    apst = strides(a.parent)
+    isnothing(apst) && return nothing
     apsz::Dims = size(a.parent)
-    apst::Dims = strides(a.parent)
     msz, mst, n = merge_adjacent_dim(apsz, apst) # Try to perform "lazy" reshape
-    n == ndims(a.parent) && return size_to_strides(mst, size(a)...) # Parent is stridevector like
-    return _reshaped_strides(size(a), 1, msz, mst, n, apsz, apst)
+    if n == ndims(a.parent)
+        size_to_strides(mst, size(a)...) # Parent is stridevector like
+    else
+        _try_reshaped_strides(size(a), 1, msz, mst, n, apsz, apst)
+    end
 end
 
-function _reshaped_strides(::Dims{0}, reshaped::Int, msz::Int, ::Int, ::Int, ::Dims, ::Dims)
-    reshaped == msz && return ()
-    throw(ArgumentError("Input is not strided."))
+function _try_reshaped_strides(::Dims{0}, reshaped::Int, msz::Int, ::Int, ::Int, ::Dims, ::Dims)
+    if reshaped == msz
+        ()
+    else
+        nothing
+    end
 end
-function _reshaped_strides(sz::Dims, reshaped::Int, msz::Int, mst::Int, n::Int, apsz::Dims, apst::Dims)
+function _try_reshaped_strides(sz::Dims, reshaped::Int, msz::Int, mst::Int, n::Int, apsz::Dims, apst::Dims)
     st = reshaped * mst
     reshaped = reshaped * sz[1]
     if length(sz) > 1 && reshaped == msz && sz[2] != 1
         msz, mst, n = merge_adjacent_dim(apsz, apst, n + 1)
         reshaped = 1
     end
-    sts = _reshaped_strides(tail(sz), reshaped, msz, mst, n, apsz, apst)
-    return (st, sts...)
+    sts = _try_reshaped_strides(tail(sz), reshaped, msz, mst, n, apsz, apst)
+    if isnothing(sts)
+        nothing
+    else
+        (st, sts...)
+    end
 end
 
 merge_adjacent_dim(::Dims{0}, ::Dims{0}) = 1, 1, 0

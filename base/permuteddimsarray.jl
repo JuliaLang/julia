@@ -62,7 +62,7 @@ Base.cconvert(::Type{Ptr{T}}, A::PermutedDimsArray{T}) where {T} = Base.cconvert
 Base.pointer(A::PermutedDimsArray, i::Integer) = throw(ArgumentError("pointer(A, i) is deliberately unsupported for PermutedDimsArray"))
 
 function Base.strides(A::PermutedDimsArray{T,N,perm}) where {T,N,perm}
-    s = strides(parent(A))
+    s = @something strides(parent(A)) return nothing
     ntuple(d->s[perm[d]], Val(N))
 end
 Base.elsize(::Type{<:PermutedDimsArray{<:Any, <:Any, <:Any, <:Any, P}}) where {P} = Base.elsize(P)

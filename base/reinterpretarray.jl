@@ -199,23 +199,36 @@ stride(A::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}, k::Int
 function strides(a::ReinterpretArray{T,<:Any,S,<:AbstractArray{S},IsReshaped}) where {T,S,IsReshaped}
     _checkcontiguous(Bool, a) && return size_to_strides(1, size(a)...)
     stp = strides(parent(a))
-    els, elp = sizeof(T), sizeof(S)
+    isnothing(stp) && return nothing
+    els::Int, elp::Int = sizeof(T), sizeof(S)
     els == elp && return stp # 0dim parent is also handled here.
-    IsReshaped && els < elp && return (1, _checked_strides(stp, els, elp)...)
-    stp[1] == 1 || throw(ArgumentError("Parent must be contiguous in the 1st dimension!"))
-    st′ = _checked_strides(tail(stp), els, elp)
-    return IsReshaped ? st′ : (1, st′...)
+    if IsReshaped && els < elp
+        x = _try_checked_strides(stp, els, elp)
+        if isnothing(x)
+            return nothing
+        else
+            return (1, x...)
+        end
+    end
+    stp[1] == 1 || return nothing # Parent must be contiguous in the 1st dimension!
+    st′ = _try_checked_strides(tail(stp), els, elp)
+    if isnothing(st′)
+        return nothing
+    else
+        return IsReshaped ? st′ : (1, st′...)
+    end
 end
 
-@inline function _checked_strides(stp::Tuple, els::Integer, elp::Integer)
+@inline function _try_checked_strides(stp::Tuple, els::Integer, elp::Integer)
     if elp > els && rem(elp, els) == 0
         N = div(elp, els)
         return map(i -> N * i, stp)
     end
     drs = map(i -> divrem(elp * i, els), stp)
-    all(i->iszero(i[2]), drs) ||
-        throw(ArgumentError("Parent's strides could not be exactly divided!"))
-    map(first, drs)
+    if !all(i->iszero(i[2]), drs)
+        return nothing # Parent's strides could not be exactly divided!
+    end
+    return map(first, drs)
 end
 
 _checkcontiguous(::Type{Bool}, A::ReinterpretArray) = _checkcontiguous(Bool, parent(A))
