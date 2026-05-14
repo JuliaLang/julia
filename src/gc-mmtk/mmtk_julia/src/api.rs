@@ -2,6 +2,7 @@
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 use crate::JuliaVM;
 use crate::JULIA_HEADER_SIZE;
+use crate::MMTK_SIDE_LOG_BIT_BASE_ADDRESS;
 use crate::SINGLETON;
 use crate::{BUILDER, DISABLED_GC, MUTATORS, USER_TRIGGERED_GC};
 
@@ -426,10 +427,6 @@ pub extern "C" fn mmtk_object_reference_write_slow(
         target.into(),
     );
 }
-
-/// Runtime base address for Julia's side log bit metadata fast path.
-#[no_mangle]
-pub static mut MMTK_SIDE_LOG_BIT_BASE_ADDRESS: Address = Address::ZERO;
 
 #[no_mangle]
 pub extern "C" fn mmtk_object_is_managed_by_mmtk(addr: usize) -> bool {
