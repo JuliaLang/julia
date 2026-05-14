@@ -875,8 +875,16 @@ JL_DLLEXPORT jl_value_t *jl_get_cpu_features(void)
 
 #ifndef __clang_analyzer__
 extern "C" JL_DLLEXPORT jl_value_t* jl_reflect_clone_targets() {
-    auto targets = jl_get_llvm_clone_targets(jl_options.cpu_target);
-    auto &data = targets.data;
+    // Return the actual JIT target(s) chosen after sysimage matching, so that
+    // debug output reflects what pkgimage clones are compared against rather
+    // than the unmatched targets parsed from `jl_options.cpu_target`.
+    std::vector<uint8_t> data;
+    if (!jit_targets.empty()) {
+        data = tp::serialize_targets(jit_targets);
+    } else {
+        auto targets = jl_get_llvm_clone_targets(jl_options.cpu_target);
+        data = std::move(targets.data);
+    }
     jl_value_t *arr = (jl_value_t*)jl_alloc_array_1d(jl_array_uint8_type, data.size());
     uint8_t *out = jl_array_data(arr, uint8_t);
     memcpy(out, data.data(), data.size());
