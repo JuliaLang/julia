@@ -27,8 +27,8 @@ let err = nothing
 end
 
 @testset "readdir" begin
-    @test ispath("does/not/exist") == false
-    @test isdir("does/not/exist") == false
+    @test !ispath("does/not/exist")
+    @test !isdir("does/not/exist")
     @test_throws Base.IOError readdir("does/not/exist")
     @test_throws Base.IOError readdir(DirEntry, "does/not/exist")
 
@@ -37,7 +37,7 @@ end
         mkdir(joinpath(dir, "adir"))
         touch(joinpath(dir, "adir", "bfile.txt"))
         @test length(readdir(dir)) == 2
-        @test readdir(dir) == map(e->e.name, readdir(DirEntry, dir))
+        @test readdir(dir) == basename.(readdir(DirEntry, dir))
         for p in readdir(dir, join=true)
             if isdir(p)
                 @test only(readdir(p)) == "bfile.txt"

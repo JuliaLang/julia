@@ -1059,9 +1059,8 @@ const UV_DIRENT_BLOCK = Cint(7)
 A type representing a filesystem entry that contains the name of the entry, the directory, and
 the raw type of the entry. The full path of the entry can be obtained lazily via [`joinpath(entry)`](@ref).
 
-Public fields:
-- `dir::String`: The directory containing the entry.
-- `name::String`: The name of the entry.
+The directory and name components are accessed via [`dirname`](@ref) and [`basename`](@ref),
+respectively, mirroring the behavior of the corresponding string-returning functions.
 
 The type of the entry can be checked for by calling [`isfile`](@ref), [`isdir`](@ref),
 [`islink`](@ref), [`isfifo`](@ref), [`issocket`](@ref), [`ischardev`](@ref), and [`isblockdev`](@ref)
@@ -1081,20 +1080,21 @@ struct DirEntry
     name::String
     rawtype::Cint
 end
-path(obj::DirEntry) = joinpath(getfield(obj, :dir), getfield(obj, :name))
-Base.isless(a::DirEntry, b::DirEntry) = a.dir == b.dir ? isless(a.name, b.name) : isless(a.dir, b.dir)
-Base.hash(o::DirEntry, h::UInt) = hash(o.dir, hash(o.name, hash(o.rawtype, h)))
-Base.:(==)(a::DirEntry, b::DirEntry) = a.name == b.name && a.dir == b.dir && a.rawtype == b.rawtype
-joinpath(obj::DirEntry, args...) = joinpath(path(obj), args...)
+basename(obj::DirEntry) = getfield(obj, :name)
+dirname(obj::DirEntry) = getfield(obj, :dir)
+joinpath(obj::DirEntry, args...) = joinpath(dirname(obj), basename(obj), args...)
+Base.isless(a::DirEntry, b::DirEntry) = dirname(a) == dirname(b) ? isless(basename(a), basename(b)) : isless(dirname(a), dirname(b))
+Base.hash(o::DirEntry, h::UInt) = hash(dirname(o), hash(basename(o), hash(o.rawtype, h)))
+Base.:(==)(a::DirEntry, b::DirEntry) = basename(a) == basename(b) && dirname(a) == dirname(b) && a.rawtype == b.rawtype
 isunknown(obj::DirEntry) =  obj.rawtype == UV_DIRENT_UNKNOWN
-islink(obj::DirEntry) =     isunknown(obj) ? islink(path(obj)) : obj.rawtype == UV_DIRENT_LINK
-isfile(obj::DirEntry) =     (isunknown(obj) || islink(obj)) ? isfile(path(obj))      : obj.rawtype == UV_DIRENT_FILE
-isdir(obj::DirEntry) =      (isunknown(obj) || islink(obj)) ? isdir(path(obj))       : obj.rawtype == UV_DIRENT_DIR
-isfifo(obj::DirEntry) =     (isunknown(obj) || islink(obj)) ? isfifo(path(obj))      : obj.rawtype == UV_DIRENT_FIFO
-issocket(obj::DirEntry) =   (isunknown(obj) || islink(obj)) ? issocket(path(obj))    : obj.rawtype == UV_DIRENT_SOCKET
-ischardev(obj::DirEntry) =  (isunknown(obj) || islink(obj)) ? ischardev(path(obj))   : obj.rawtype == UV_DIRENT_CHAR
-isblockdev(obj::DirEntry) = (isunknown(obj) || islink(obj)) ? isblockdev(path(obj))  : obj.rawtype == UV_DIRENT_BLOCK
-realpath(obj::DirEntry) = realpath(path(obj))
+islink(obj::DirEntry) =     isunknown(obj) ? islink(joinpath(obj)) : obj.rawtype == UV_DIRENT_LINK
+isfile(obj::DirEntry) =     (isunknown(obj) || islink(obj)) ? isfile(joinpath(obj))      : obj.rawtype == UV_DIRENT_FILE
+isdir(obj::DirEntry) =      (isunknown(obj) || islink(obj)) ? isdir(joinpath(obj))       : obj.rawtype == UV_DIRENT_DIR
+isfifo(obj::DirEntry) =     (isunknown(obj) || islink(obj)) ? isfifo(joinpath(obj))      : obj.rawtype == UV_DIRENT_FIFO
+issocket(obj::DirEntry) =   (isunknown(obj) || islink(obj)) ? issocket(joinpath(obj))    : obj.rawtype == UV_DIRENT_SOCKET
+ischardev(obj::DirEntry) =  (isunknown(obj) || islink(obj)) ? ischardev(joinpath(obj))   : obj.rawtype == UV_DIRENT_CHAR
+isblockdev(obj::DirEntry) = (isunknown(obj) || islink(obj)) ? isblockdev(joinpath(obj))  : obj.rawtype == UV_DIRENT_BLOCK
+realpath(obj::DirEntry) = realpath(joinpath(obj))
 
 """
     readdir(::Type{DirEntry}, dir::AbstractString=pwd(); sort::Bool = true) -> Vector{DirEntry}
@@ -1118,7 +1118,7 @@ a `stat` call.
 ```julia
 for entry in readdir(DirEntry, ".")
     if isfile(entry)
-        println("\$(entry.name) is a file with path \$(path(entry))")
+        println("\$(basename(entry)) is a file with path \$(joinpath(entry))")
         continue
     end
     isdir(entry) || continue
@@ -1129,8 +1129,8 @@ end
 ```
 """
 readdir(::Type{DirEntry}, dir::AbstractString=pwd(); sort::Bool=true) = _readdir(dir; return_objects=true, sort)::Vector{DirEntry}
-readdir(::Type{DirEntry}, entry::DirEntry; sort::Bool=true) = readdir(DirEntry, path(entry); sort)::Vector{DirEntry}
-readdir(entry::DirEntry; kwargs...) = readdir(path(entry); kwargs...)::Vector{String}
+readdir(::Type{DirEntry}, entry::DirEntry; sort::Bool=true) = readdir(DirEntry, joinpath(entry); sort)::Vector{DirEntry}
+readdir(entry::DirEntry; kwargs...) = readdir(joinpath(entry); kwargs...)::Vector{String}
 
 function _readdir(dir::AbstractString; return_objects::Bool=false, join::Bool=false, sort::Bool=true)
     # Allocate space for uv_fs_t struct
@@ -1273,9 +1273,9 @@ end
 ```
 """
 scandir(dir::AbstractString=pwd()) = DirEntryIterator{String}(dir)
-scandir(entry::DirEntry) = DirEntryIterator{String}(path(entry))
+scandir(entry::DirEntry) = DirEntryIterator{String}(joinpath(entry))
 scandir(::Type{DirEntry}, dir::AbstractString=pwd()) = DirEntryIterator{DirEntry}(dir)
-scandir(::Type{DirEntry}, entry::DirEntry) = DirEntryIterator{DirEntry}(path(entry))
+scandir(::Type{DirEntry}, entry::DirEntry) = DirEntryIterator{DirEntry}(joinpath(entry))
 function scandir(f, dir)
     it = scandir(dir)
     try
