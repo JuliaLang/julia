@@ -779,7 +779,7 @@ let A=[1;;]
 end
 
 # issue #61805
-@testset "foldr iteraction with flatten" begin
+@testset "foldr interaction with flatten" begin
     @test foldr(*, Iterators.flatten([["a", "b"], ["c", "d"]])) == "abcd"
 
     #Non-reversable collections inside the flatten should either error, or produce the right answer
