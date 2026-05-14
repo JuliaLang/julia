@@ -782,9 +782,10 @@ end
 @testset "foldr interaction with flatten" begin
     @test foldr(*, Iterators.flatten([["a", "b"], ["c", "d"]])) == "abcd"
 
-    #Non-reversable collections inside the flatten should either error, or produce the right answer
+    # Ideally, foldr would always get the right answer, but that currently requires that the iterator supports Iterators.reverse
+    # This tests a stateful iterator that cannot implement Iterators.reverse, ensuring it either errors or gets the right answer
     res = try
-        foldr(tuple, Iterators.flatten((Iterators.take(1:3, 2), (3,))))
+        foldr(tuple, Iterators.flatten((Iterators.Stateful(1:2), (3,))))
     catch e
         e
     end
