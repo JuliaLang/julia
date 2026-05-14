@@ -527,8 +527,36 @@ struct StepRangeLen{T,R,S,L<:Integer} <: AbstractRange{T}
         offset = convert(L, offset)
         L1 = oneunit(typeof(len))
         L1 <= offset <= max(L1, len) || throw(ArgumentError("StepRangeLen: offset must be in [1,$len], got $offset"))
+        _rangecheck(T, ref, step, len, offset)
         return new(ref, step, len, offset)
     end
+end
+
+# Detect silent integer wraparound when constructing a StepRangeLen. The element at
+# index `i` is computed as `ref + (i - offset) * step`, with the final result
+# converted to the element type `T`. When `T == typeof(ref) == typeof(step)` is a
+# hardware signed integer, that arithmetic runs entirely in `T` and can wrap
+# silently, so we use checked arithmetic on both endpoints. For other type
+# combinations (mixed widths, wider `T` than `ref`/`step`, user numeric types,
+# BigInt, unsigned moduli, floats) we silently no-op and leave existing behavior
+# unchanged.
+_rangecheck(::Type, ref, step, len::Integer, offset::Integer) = nothing
+function _rangecheck(::Type{T}, ref::T, step::T, len::Integer, offset::Integer) where {T<:Union{Int8,Int16,Int32,Int64,Int128}}
+    iszero(len) && return nothing
+    Tlen = T(len)
+    Toff = T(offset)
+    u_lo, of1 = Base.Checked.sub_with_overflow(one(T), Toff)
+    u_hi, of2 = Base.Checked.sub_with_overflow(Tlen, Toff)
+    p_lo, of3 = Base.Checked.mul_with_overflow(u_lo, step)
+    p_hi, of4 = Base.Checked.mul_with_overflow(u_hi, step)
+    _,    of5 = Base.Checked.add_with_overflow(p_lo, ref)
+    _,    of6 = Base.Checked.add_with_overflow(p_hi, ref)
+    if of1 | of2 | of3 | of4 | of5 | of6
+        @noinline
+        throw(ArgumentError(LazyString("StepRangeLen: arithmetic overflow constructing range with ref=",
+                                       ref, ", step=", step, ", len=", len)))
+    end
+    return nothing
 end
 
 StepRangeLen{T,R,S}(ref::R, step::S, len::Integer, offset::Integer = 1) where {T,R,S} =
