@@ -9280,6 +9280,10 @@ static jl_llvm_functions_t
         ssize_t line0; // if this represents pc=1, then also cover the entry to the function (pc=0)
         bool is_user_code;
         int32_t edgeid;
+        // TODO: unused.  A statment may have line 0, which means it should have
+        // approximately the same location as the previous statement, but if
+        // executed, should not count toward that location's code coverage.
+        bool no_coverage;
         bool sameframe(const DebugLineTable &other) const {
             // detect if the line info for this frame is unchanged (equivalent to loc == other.loc ignoring the inlined_at field)
             return other.edgeid == edgeid && other.line == line;
@@ -9294,94 +9298,37 @@ static jl_llvm_functions_t
     topinfo.edgeid = 0;
     std::map<std::tuple<StringRef, StringRef>, DISubprogram*> subprograms;
     SmallVector<DebugLineTable, 0> prev_lineinfo, new_lineinfo;
-    auto update_lineinfo = [&] (size_t pc) {
-        std::function<bool(jl_debuginfo_t*, jl_value_t*, size_t, size_t)> append_lineinfo =
-                [&] (jl_debuginfo_t *debuginfo, jl_value_t *func, size_t to, size_t pc) -> bool {
-            while (1) {
-                if (!jl_is_symbol(debuginfo->def)) // this is a path
-                    func = debuginfo->def; // this is inlined
-                struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, pc);
-                size_t i = lineidx.loc;
-                if (i < 0) // pc out of range: broken debuginfo?
-                    return false;
-                if (i == 0 && lineidx.to == 0) // no update
-                    return false;
-                if (pc > 0 && jl_is_debuginfo(debuginfo->linetable)) {
-                    // indirection node
-                    if (!append_lineinfo((jl_debuginfo_t *)debuginfo->linetable,
-                                         func, to, i))
-                        return false; // no update
-                }
-                else {
-                    // actual node
-                    DebugLineTable info;
-                    info.edgeid = to;
-                    jl_module_t *modu = func ? jl_debuginfo_module1(func) : NULL;
-                    if (modu == NULL)
-                        modu = ctx.module;
-                    info.file = jl_cdi_file(debuginfo);
-                    info.line = i;
-                    info.line0 = 0;
-                    if (pc == 1) {
-                        int32_t line0 = jl_cdi_external_firstline(debuginfo);
-                        if (line0 > 0 && info.line != line0)
-                            info.line0 = line0;
-                    }
-                    if (info.file.empty())
-                        info.file = "<missing>";
-                    if (modu == ctx.module)
-                        info.is_user_code = mod_is_user_mod;
-                    else
-                        info.is_user_code = in_user_mod(modu);
-                    if (debug_enabled) {
-                        StringRef fname = jl_debuginfo_name(func);
-                        // Encode the 1-based statement index into the DWARF column field so that
-                        // stacktraces can recover the exact PC that each inlined frame points at.
-                        // `pc` here is the 1-based statement index within `debuginfo`'s CodeInfo.
-                        unsigned col = (unsigned)pc;
-                        if (new_lineinfo.empty() && info.file == ctx.file) { // if everything matches, emit a toplevel line number
-                            info.loc = DILocation::get(ctx.builder.getContext(), info.line, col, SP, NULL);
-                        }
-                        else { // otherwise, describe this as an inlining frame
-                            DebugLoc inl_loc = new_lineinfo.empty() ? DebugLoc(DILocation::get(ctx.builder.getContext(), 0, 0, SP, NULL)) : new_lineinfo.back().loc;
-                            DISubprogram *&inl_SP = subprograms[std::make_tuple(fname, info.file)];
-                            if (inl_SP == NULL) {
-                                DIFile *difile = dbuilder.createFile(info.file, ".");
-                                inl_SP = dbuilder.createFunction(difile
-                                                             ,std::string(fname) + ";" // Name
-                                                             ,fname            // LinkageName
-                                                             ,difile           // File
-                                                             ,0                // LineNo
-                                                             ,debugcache.jl_di_func_null_sig // Ty
-                                                             ,0                // ScopeLine
-                                                             ,DINode::FlagZero // Flags
-                                                             ,DISubprogram::SPFlagDefinition | DISubprogram::SPFlagOptimized // SPFlags
-                                                             ,nullptr          // Template Parameters
-                                                             ,nullptr          // Template Declaration
-                                                             ,nullptr          // ThrownTypes
-                                                             );
-                            }
-                            info.loc = DILocation::get(ctx.builder.getContext(), info.line, col, inl_SP, inl_loc);
-                        }
-                    }
-                    new_lineinfo.push_back(info);
-                }
-                to = lineidx.to;
-                if (to == 0)
-                    return true;
-                pc = lineidx.pc;
-                debuginfo = (jl_debuginfo_t*)jl_svecref(debuginfo->edges, to - 1);
-                func = NULL;
-            }
-        };
-        prev_lineinfo.truncate(0);
-        std::swap(prev_lineinfo, new_lineinfo);
-        bool updated = append_lineinfo(src->debuginfo, (jl_value_t*)lam, 0, pc + 1);
-        if (!updated)
-            std::swap(prev_lineinfo, new_lineinfo);
-        else
-            assert(new_lineinfo.size() > 0);
-        return updated;
+
+    size_t lastpc = 0;
+    DebugLineTable dl(topinfo); // updated with each update_lineinfo call
+    auto update_lineinfo = [&](size_t pc) {
+        if (pc < 1) {
+            jl_safe_printf(
+                "update_lineinfo:small pc???: ctx.file=%s, pc=%d",
+                ctx.file.str().c_str(), pc);
+            jl_(lam);
+            return false;
+        }
+        int32_t line = jl_cdi_firstxy(src->debuginfo, pc).first;
+        if (dl.line == line && lastpc == pc) {
+            jl_safe_printf(
+                "update_lineinfo:same pc??: ctx.file=%s, pc=%d, line=%d",
+                ctx.file.str().c_str(), pc, line);
+            jl_(lam);
+        }
+
+        if (line < 0) {
+            return false;
+        } else if (line == 0) {
+            dl.no_coverage = true;
+            line = dl.line;
+        }
+        lastpc = pc;
+        // Stash the 1-based `pc` in the DWARF column field so that stacktraces
+        // can recover it.
+        dl.line = line;
+        dl.loc = DILocation::get(ctx.builder.getContext(), line, pc, SP, NULL);
+        return true;
     };
 
     SmallVector<MDNode*, 0> aliasscopes;
@@ -9479,6 +9426,7 @@ static jl_llvm_functions_t
     auto coverageVisitStmt = [&] () {
         // Visit frames which differ from previous statement as tracked in
         // prev_lineinfo (tracked outer frame first).
+        // TODO: new_lineinfo length is 1, so inlined lines are missed.
         size_t dbg;
         for (dbg = 0; dbg < new_lineinfo.size(); dbg++) {
             if (dbg >= prev_lineinfo.size() || !new_lineinfo[dbg].sameframe(prev_lineinfo[dbg]))
@@ -9559,10 +9507,10 @@ static jl_llvm_functions_t
 
     find_next_stmt(0);
     while (cursor != -1) {
-        bool have_dbg_update = update_lineinfo(cursor);
+        bool have_dbg_update = update_lineinfo(cursor + 1);
         if (have_dbg_update) {
             if (debug_enabled)
-                ctx.builder.SetCurrentDebugLocation(new_lineinfo.back().loc);
+                ctx.builder.SetCurrentDebugLocation(dl.loc);
             coverageVisitStmt();
         }
         ctx.noalias().aliasscope.current = aliasscopes[cursor];

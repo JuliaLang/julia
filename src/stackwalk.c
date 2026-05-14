@@ -794,7 +794,7 @@ JL_DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
     JL_GC_PUSH1(&rs);
     for (int i = 0; i < n; i++) {
         jl_frame_t frame = frames[i];
-        jl_value_t *r = (jl_value_t*)jl_alloc_svec(7);
+        jl_value_t *r = (jl_value_t*)jl_alloc_svec(8);
         jl_svecset(rs, i, r);
         if (frame.func_name)
             jl_svecset(r, 0, jl_symbol(frame.func_name));
@@ -808,9 +808,11 @@ JL_DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
         free(frame.file_name);
         jl_svecset(r, 2, jl_box_long(frame.line));
         jl_svecset(r, 3, frame.ci != NULL ? (jl_value_t*)frame.ci : jl_nothing);
-        jl_svecset(r, 4, jl_box_bool(frame.fromC));
+        jl_svecset(r, 4, jl_box_bool(frame.from_c));
         jl_svecset(r, 5, jl_box_bool(frame.inlined));
         jl_svecset(r, 6, jl_box_long(frame.pc));
+        jl_value_t *di = (jl_value_t*)frame.debuginfo;
+        jl_svecset(r, 7, di != NULL ? di : jl_nothing);
     }
     free(frames);
     JL_GC_POP();

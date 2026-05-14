@@ -1571,12 +1571,14 @@ STATIC_INLINE size_t jl_bt_entry_size(jl_bt_element_t *bt_entry) JL_NOTSAFEPOINT
 typedef struct {
     char *func_name;
     char *file_name;
+    jl_debuginfo_t *debuginfo;
     int line;
-    // PC within the inlined frame's CodeInfo, or 0 if unavailable.
-    // Carried in the DWARF column field by codegen (see `update_lineinfo` in codegen.cpp).
+    // PC within debuginfo if !from_c, or just a column if from_c, or 0 if
+    // unavailable.  Carried in the DWARF column field by codegen (see
+    // `update_lineinfo` in codegen.cpp).
     int pc;
-    jl_code_instance_t *ci;
-    int fromC;
+    jl_code_instance_t *ci; // redundant if debuginfo.def becomes codeinstance
+    int from_c;
     int inlined;
 } jl_frame_t;
 

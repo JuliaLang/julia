@@ -437,13 +437,36 @@ done:
     return std::make_pair(strdup(name), false);
 }
 
-// *frames is a one element array containing whatever we could come up
-// with for the current frame. here we'll try to expand it using debug info
-// func_name and file_name are either NULL or malloc'd pointers
+static void fill_frame_from_di(jl_frame_t *frame, const DILineInfo &info,
+                               int inlined, jl_code_instance_t *ci)
+{
+    std::string file_name(info.FileName);
+    std::string func_name(info.FunctionName);
+    if (func_name == "<invalid>")
+        frame->func_name = NULL;
+    else
+        jl_copy_str(&frame->func_name, func_name.c_str());
+    if (!frame->func_name)
+        frame->from_c = 1;
+
+    if (file_name == "<invalid>")
+        frame->file_name = NULL;
+    else
+        jl_copy_str(&frame->file_name, file_name.c_str());
+    frame->line = info.Line;
+    frame->pc = info.Column;
+    frame->inlined = inlined;
+    frame->ci = ci;
+    assert(frame->pc > 0 && "negative frame->pc");
+}
+
+// *frames is a one element array with, where frames[0] has at least `ci` and
+// `from_c` initialized.  Given this, expand frames at `pointer`.  The resulting
+// array is ordered inlinees-first, the last result being !inlined.
 static int lookup_pointer(
         object::SectionRef Section, DIContext *context,
         jl_frame_t **frames, size_t pointer, uint64_t slide,
-        bool demangle, bool noInline) JL_NOTSAFEPOINT
+        bool demangle, bool ignore_inlined) JL_NOTSAFEPOINT
 {
     // This function is not allowed to reference any TLS variables
     // since it can be called from an unmanaged thread on OSX.
@@ -453,7 +476,7 @@ static int lookup_pointer(
             if (oldname != NULL) {
                 std::pair<char *, bool> demangled = jl_demangle(oldname);
                 (*frames)[0].func_name = demangled.first;
-                (*frames)[0].fromC = !demangled.second;
+                (*frames)[0].from_c = !demangled.second;
                 free(oldname);
             }
             else {
@@ -461,7 +484,7 @@ static int lookup_pointer(
                 // but it is still good to have them for regular lookup of C frames.
                 // Technically not true, but we don't want them
                 // in julia backtraces, so close enough
-                (*frames)[0].fromC = 1;
+                (*frames)[0].from_c = 1;
             }
         }
         return 1;
@@ -471,73 +494,90 @@ static int lookup_pointer(
 
     // DWARFContext/DWARFUnit update some internal tables during these queries, so
     // a lock is needed.
-    if (!jl_lock_profile_wr())
-        return lookup_pointer(object::SectionRef(), NULL, frames, pointer, slide, demangle, noInline);
-    auto inlineInfo = context->getInliningInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
+    if (!jl_lock_profile_wr()) {
+        return lookup_pointer(object::SectionRef(), NULL, frames, pointer,
+                              slide, demangle, ignore_inlined);
+    }
+
+    auto inlineInfo = context->getInliningInfoForAddress(
+        makeAddress(Section, pointer + slide), infoSpec);
     jl_unlock_profile_wr();
 
-    int fromC = (*frames)[0].fromC;
+    jl_frame_t *lastf = &(*frames)[0];
     int n_frames = inlineInfo.getNumberOfFrames();
+    assert(n_frames == 0 || n_frames == 1 || lastf->from_c);
+
+    // no line number info available in the context, return without the context
     if (n_frames == 0) {
-        // no line number info available in the context, return without the context
-        return lookup_pointer(object::SectionRef(), NULL, frames, pointer, slide, demangle, noInline);
+        return lookup_pointer(object::SectionRef(), NULL, frames, pointer,
+                              slide, demangle, ignore_inlined);
     }
-    if (noInline)
-        n_frames = 1;
-    if (n_frames > 1) {
-        jl_frame_t *new_frames = (jl_frame_t*)calloc(n_frames, sizeof(jl_frame_t));
-        memcpy(&new_frames[n_frames - 1], *frames, sizeof(jl_frame_t));
+    fill_frame_from_di(lastf, inlineInfo.getFrame(n_frames-1), 0, lastf->ci);
+
+    // fill inlining frames, moving lastf to end of array
+    // TODO: inlining frames in .linetable are ignored (currently just macro linenodes)
+    if (lastf->from_c) {
+        if (n_frames == 1) {
+            return 1;
+        }
+        jl_frame_t *new_frames =
+            (jl_frame_t *)calloc(n_frames, sizeof(jl_frame_t));
+        memcpy(&new_frames[n_frames - 1], lastf, sizeof(jl_frame_t));
         free(*frames);
         *frames = new_frames;
+        for (int i = 0; i < n_frames-1; i++) {
+            jl_frame_t *frame = &(*frames)[i];
+            fill_frame_from_di(frame, inlineInfo.getFrame(i), 1, NULL);
+            frame->from_c = 1;
+            frame->debuginfo = NULL;
+        }
     }
-    for (int i = 0; i < n_frames; i++) {
-        bool inlined_frame = i != n_frames - 1;
-        DILineInfo info;
-        if (!noInline) {
-            info = inlineInfo.getFrame(i);
+    else {
+        if (ignore_inlined || !lastf->ci || !lastf->ci->debuginfo) {
+            return 1;
         }
-        else {
-            int havelock = jl_lock_profile_wr();
-            assert(havelock); (void)havelock;
-            auto lineinfo = context->getLineInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
-            jl_unlock_profile_wr();
-#if JL_LLVM_VERSION < 210000
-            info = std::move(lineinfo);
-#else
-            info = std::move(lineinfo.value());
-#endif
+        lastf->debuginfo = lastf->ci->debuginfo;
+        jl_debuginfo_t *di = lastf->debuginfo;
+        jl_codeloc_t loc0 = jl_uncompress1_codeloc(lastf->debuginfo, lastf->pc);
+        jl_codeloc_t loc = loc0;
+        while (loc.to > 0) { // just to count frames for calloc
+            n_frames++;
+            di = (jl_debuginfo_t *)jl_svecref(di->edges, loc.to-1);
+            loc = jl_uncompress1_codeloc(di, loc.pc);
         }
-
-        jl_frame_t *frame = &(*frames)[i];
-        std::string func_name(info.FunctionName);
-
-        if (inlined_frame) {
-            frame->inlined = 1;
-            frame->fromC = fromC;
-            if (!fromC) {
-                std::size_t semi_pos = func_name.find(';');
-                if (semi_pos != std::string::npos) {
-                    func_name = func_name.substr(0, semi_pos);
-                    frame->ci = NULL; // Looked up on Julia side
-                }
+        if (n_frames > 1) {
+            jl_frame_t *new_frames =
+                (jl_frame_t *)calloc(n_frames, sizeof(jl_frame_t));
+            memcpy(&new_frames[n_frames - 1], lastf, sizeof(jl_frame_t));
+            free(*frames);
+            *frames = new_frames;
+            lastf = &(*frames)[n_frames - 1];
+            di = lastf->debuginfo;
+            loc = loc0;
+            for (int i = n_frames-2; i >= 0; i--) {
+                di = (jl_debuginfo_t*)jl_svecref(di->edges, loc.to-1);
+                loc = jl_uncompress1_codeloc(di, loc.pc);
+                jl_frame_t *frame = &(*frames)[i];
+                jl_copy_str(&frame->func_name, jl_debuginfo_name(di->def));
+                jl_copy_str(&frame->file_name, jl_cdi_file(di));
+                frame->debuginfo = di;
+                if (loc.pc > 0)
+                    frame->line = jl_cdi_firstxy(di, loc.pc).first;
+                else
+                    frame->line = jl_cdi_firstline_all(di);
+                frame->pc = loc.pc;
+                frame->ci = NULL;
+                frame->from_c = !frame->func_name ? 1 : 0;
+                frame->inlined = 1;
+                // if (!from_c) {
+                //     std::size_t semi_pos = func_name.find(';');
+                //     if (semi_pos != std::string::npos) {
+                //         func_name = func_name.substr(0, semi_pos);
+                //         frame->ci = NULL; // Looked up on Julia side
+                //     }
+                // }
             }
         }
-
-        if (func_name == "<invalid>")
-            frame->func_name = NULL;
-        else
-            jl_copy_str(&frame->func_name, func_name.c_str());
-        if (!frame->func_name)
-            frame->fromC = 1;
-
-        frame->line = info.Line;
-        frame->pc = info.Column;
-        std::string file_name(info.FileName);
-
-        if (file_name == "<invalid>")
-            frame->file_name = NULL;
-        else
-            jl_copy_str(&frame->file_name, file_name.c_str());
     }
     return n_frames;
 }
@@ -1039,6 +1079,7 @@ static jl_object_file_entry_t find_object_file(uint64_t fbase, StringRef fname) 
 }
 
 // from llvm::SymbolizableObjectFile
+// XXX: on macOS, `Sec.getSize()` may return a too-small value
 static object::SectionRef getModuleSectionForAddress(const object::ObjectFile *obj, uint64_t Address) JL_NOTSAFEPOINT
 {
   for (object::SectionRef Sec : obj->sections()) {
@@ -1049,7 +1090,6 @@ static object::SectionRef getModuleSectionForAddress(const object::ObjectFile *o
   }
   return object::SectionRef();
 }
-
 
 bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, uint64_t *slide, llvm::DIContext **context,
     bool onlyImage, bool *isImage, uint64_t *_fbase, void **saddr, char **name, char **filename) JL_NOTSAFEPOINT
@@ -1200,11 +1240,12 @@ static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skip
     bool isImage;
     void *saddr;
     uint64_t fbase;
-    if (!jl_dylib_DI_for_fptr(pointer, &Section, &slide, &context, skipC, &isImage, &fbase, &saddr, &frame0->func_name, &frame0->file_name)) {
-        frame0->fromC = 1;
+    if (!jl_dylib_DI_for_fptr(pointer, &Section, &slide, &context, skipC, &isImage, &fbase,
+                              &saddr, &frame0->func_name, &frame0->file_name)) {
+        frame0->from_c = 1;
         return 1;
     }
-    frame0->fromC = !isImage;
+    frame0->from_c = !isImage;
     {
         JITDebugInfoRegistry::image_info_t image;
         bool inimage = getJITDebugRegistry().get_image_info(fbase, &image);
@@ -1232,8 +1273,9 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, uint64_t *slide,
         object::SectionRef *Section, llvm::DIContext **context) JL_NOTSAFEPOINT
 {
     int found = 0;
-    if (!jl_lock_profile_wr())
+    if (!jl_lock_profile_wr()) {
         return 0;
+    }
 
     if (symsize)
         *symsize = 0;
@@ -1277,7 +1319,6 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, uint64_t *slide,
     return found;
 }
 
-// Set *name and *filename to either NULL or malloc'd string
 extern "C" JL_DLLEXPORT_CODEGEN int jl_getFunctionInfo_impl(jl_frame_t **frames_out, size_t pointer, int skipC, int noInline) JL_NOTSAFEPOINT
 {
     // This function is not allowed to reference any TLS variables if noInline
@@ -1293,6 +1334,7 @@ extern "C" JL_DLLEXPORT_CODEGEN int jl_getFunctionInfo_impl(jl_frame_t **frames_
     uint64_t symsize;
     if (jl_DI_for_fptr(pointer, &symsize, &slide, &Section, &context)) {
         frames[0].ci = getJITDebugRegistry().lookupCodeInstance(pointer);
+        frames[0].from_c = false;
         int nf = lookup_pointer(Section, context, frames_out, pointer, slide, true, noInline);
         return nf;
     }

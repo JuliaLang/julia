@@ -127,48 +127,33 @@ up stack frame context information. Returns an array of frame information for al
 inlined at that point, innermost function first.
 """
 Base.@constprop :none function lookup(pointer::Ptr{Cvoid})
-    infos = @ccall jl_lookup_code_address(pointer::Ptr{Cvoid}, false::Cint)::Core.SimpleVector
+    frames = @ccall jl_lookup_code_address(pointer::Ptr{Cvoid}, false::Cint)::Core.SimpleVector
     pointer = convert(UInt64, pointer)
-    isempty(infos) && return [StackFrame(empty_sym, empty_sym, -1, nothing, true, false, pointer)] # this is equal to UNKNOWN
-    ninfos = length(infos)
-    res = Vector{StackFrame}(undef, ninfos)
-    local debuginfo = false
-    local parent_pc = 0
-    for i = ninfos:-1:1
-        info = infos[i]::Core.SimpleVector
-        @assert length(info) == 7 "corrupt return from jl_lookup_code_address"
-        func = info[1]::Symbol
-        file = info[2]::Symbol
-        linenum = info[3]::Int
-        linfo = info[4]
-        pc = info[7]::Int
-        if linfo isa Core.CodeInstance
-            if debuginfo === false
-                debuginfo = linfo.debuginfo
-            else
-                debuginfo = true
-            end
-            linfo = linfo.def
-        elseif debuginfo isa Core.DebugInfo && parent_pc > 0
-            # Use the parent frame's PC to look up which inlining edge of the
-            # current `debuginfo` corresponds to this frame's call site.
-            _, to::Int, _ = debuginfo_codeloc(debuginfo, parent_pc)
-            if to > 0 && to <= length(debuginfo.edges)
-                debuginfo = debuginfo.edges[to]::Core.DebugInfo
-                def = debuginfo.def
-                if !(def isa Symbol)
-                    linfo = def
-                end
-            else
-                debuginfo = true
-            end
-        end
-        parent_pc = pc
-        res[i] = StackFrame(func, file, linenum, linfo, info[5]::Bool, info[6]::Bool, pointer, pc)
-    end
-    return res
-end
+    isempty(frames) && return [StackFrame(empty_sym, empty_sym, -1, nothing, true, false, pointer)] # this is equal to UNKNOWN
 
+    out = Vector{StackFrame}(undef, length(frames))
+    for i in eachindex(frames)
+        f = frames[i]
+        @assert length(f) == 8 "corrupt return from jl_lookup_code_address"
+        func = f[1]::Symbol
+        file = f[2]::Symbol
+        linenum = f[3]::Int
+        linfo = f[4]
+        from_c = f[5]::Bool
+        inlined = f[6]::Bool
+        pc = f[7]::Int
+        debuginfo = f[8]
+        # TODO: make linfo consistently CI instead of MI
+        if (debuginfo isa Core.DebugInfo && debuginfo.def isa Core.MethodInstance)
+            linfo = debuginfo.def
+        elseif linfo isa Core.CodeInstance
+            linfo = linfo.def::Core.MethodInstance
+        end
+        out[i] = StackFrame(
+            func, file, linenum, linfo, from_c, inlined, pointer, pc)
+    end
+    return out
+end
 const top_level_scope_sym = Symbol("top-level scope")
 
 function lookup(ip::Base.InterpreterIP)
