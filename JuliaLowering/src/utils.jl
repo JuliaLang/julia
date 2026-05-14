@@ -9,6 +9,7 @@ function _value_string(ex)
           k == K"SSAValue"    ? "%"                   :
           k == K"BindingId"   ? "#"                   :
           k == K"label"       ? "label"               :
+          k == K"nothing"     ? "core.nothing"        :
           k == K"core"        ? "core.$(ex.name_val)" :
           k == K"top"         ? "top.$(ex.name_val)"  :
           k == K"Symbol"      ? ":$(ex.name_val)" :
@@ -18,6 +19,7 @@ function _value_string(ex)
           k == K"static_parameter" ? "static_parameter" :
           k == K"symboliclabel" ? "label:$(ex.name_val)" :
           k == K"symbolicgoto" ? "goto:$(ex.name_val)" :
+          k == K"oldsymbolicgoto" ? "goto:$(ex.name_val)" :
           k == K"SourceLocation" ?
               "SourceLocation:$(JuliaSyntax.filename(ex)):$(join(source_location(ex), ':'))" :
           k == K"Value" && ex.value isa SourceRef ?
@@ -32,13 +34,11 @@ function _value_string(ex)
         str = "$(str)$idstr"
     end
     if k == K"slot" || k == K"BindingId"
-        p = provenance(ex)[1]
-        while p isa SyntaxTree
+        for p in provenance(ex)
             if kind(p) == K"Identifier"
                 str = "$(str)/$(p.name_val)"
                 break
             end
-            p = provenance(p)[1]
         end
     end
     return str
@@ -178,20 +178,28 @@ function _show_provtree(io::IO, ex::SyntaxTree, indent)
     if hasattr(ex, :jl_source)
         printstyled(io, " @$(ex.jl_source)", color=:light_black)
     end
-    print(io, "\n")
     prov = provenance(ex)
-    for (i, e) in enumerate(prov)
-        islast = i == length(prov)
-        printstyled(io, "$indent$(islast ? "└─ " : "├─ ")", color=:light_black)
-        inner_indent = indent * (islast ? "   " : "│  ")
-        _show_provtree(io, e, inner_indent)
-    end
-end
 
-function _show_provtree(io::IO, prov, _indent)
-    fn = filename(prov)
-    line, _ = source_location(prov)
-    printstyled(io, "@ $fn:$line\n", color=:light_black)
+    print(io, "\n")
+
+    src = ex.source
+    msrc = get(ex, :macro_source, nothing)
+    printstyled(io, string(
+        indent, msrc === nothing ? "└─ " : "├─ "); color=:light_black)
+    if src isa NodeId
+        _show_provtree(io, SyntaxTree(ex._graph, src),
+                       string(indent, msrc === nothing ? "   " : "│  "))
+    else
+        @jl_assert ex.source isa Union{LineNumberNode, SourceRef} ex
+        src = sourceref(ex)
+        fn = filename(src)
+        line, _ = source_location(src)
+        printstyled(io, "@ $fn:$line\n", color=:light_black)
+    end
+    if msrc isa NodeId
+        printstyled(io, string(indent, "└─ "); color=:light_black)
+        _show_provtree(io, SyntaxTree(ex._graph, msrc), indent*"   ")
+    end
 end
 
 function showprov(io::IO, exs::AbstractVector;
@@ -319,7 +327,7 @@ function _print_ir(io::IO, ex, indent)
 end
 
 # Wrap a function body in Base.Compiler.@zone for profiling
-if isdefined(Base.Compiler, Symbol("@zone"))
+if isdefined(Base.Compiler, Symbol("@zone")) && DEBUG
     macro fzone(str, f)
         @assert(f isa Expr && f.head === :function && length(f.args) === 2 && str isa String,
                 "usage: @fzone name_string <function expression>")
@@ -442,7 +450,7 @@ function _flatten_blocks(st::SyntaxTree)
         # special case: an empty final block has value nothing
         if (length(children(st)) > 0 && kind(st[end]) === K"block" &&
             numchildren(st[end]) == 0)
-            push!(out, @ast st._graph st[end] "nothing"::K"core")
+            push!(out, @ast st._graph st[end] (::K"nothing"))
         end
         return out
     elseif is_quoted(st)

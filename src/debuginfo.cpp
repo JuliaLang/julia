@@ -368,6 +368,11 @@ void JITDebugInfoRegistry::registerJITObject(
         if (it != sym_to_ci.end()) {
             codeinst = it->second;
         }
+        if (codeinst) {
+            JL_GC_PROMISE_ROOTED(codeinst);
+            // opaque-closure code instances are pre-promoted to global roots
+            // by jl_register_jit_object before this JL_NOTSAFEPOINT region runs.
+        }
         jl_profile_atomic([&]() JL_NOTSAFEPOINT {
             if (codeinst)
                 cimap[Addr] = std::make_pair(Size, codeinst);
@@ -388,6 +393,14 @@ void jl_register_jit_object(const object::ObjectFile &Object,
                             std::function<uint64_t(const StringRef &)> getLoadAddress,
                             const jl_linker_info_t &Info)
 {
+    // Opaque-closure code instances are not otherwise reachable through their
+    // method, so promote them to global roots here, before entering the
+    // JL_NOTSAFEPOINT registerJITObject body.
+    for (auto &[ci, funcs] : Info.ci_funcs) {
+        jl_method_instance_t *mi = jl_get_ci_mi(ci);
+        if (jl_is_method(mi->def.method) && mi->def.method->is_for_opaque_closure)
+            jl_as_global_root((jl_value_t*)ci, 1);
+    }
     getJITDebugRegistry().registerJITObject(Object, getLoadAddress, Info);
 }
 
@@ -518,6 +531,7 @@ static int lookup_pointer(
             frame->fromC = 1;
 
         frame->line = info.Line;
+        frame->pc = info.Column;
         std::string file_name(info.FileName);
 
         if (file_name == "<invalid>")

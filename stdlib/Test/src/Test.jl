@@ -299,6 +299,9 @@ function Base.show(io::IO, t::Error)
         # A test that was expected to fail did not
         println(io, " Unexpected Pass")
         println(io, " Expression: ", t.orig_expr)
+        if t.context !== nothing
+            println(io, "    Context: ", t.context)
+        end
         print(io, " Got correct result, please change to @test if no longer broken.")
     elseif t.test_type === :nontest_error
         # we had an error outside of a @test
@@ -306,7 +309,7 @@ function Base.show(io::IO, t::Error)
         # Capture error message and indent to match
         join(io, ("  " * line for line in filter!(!isempty, split(t.backtrace, "\n"))), "\n")
     end
-    if t.context !== nothing
+    if t.context !== nothing && t.test_type !== :test_unbroken
         print(io, "\n     Context: ", t.context)
     end
 end
@@ -903,7 +906,7 @@ a matching function, or a value.
     The ability to specify anything other than a type or a value as `exception` requires Julia v1.8 or later.
 
 !!! compat "Julia 1.13"
-    The three-argument form `@test_throws extype pattern expr` requires Julia v1.12 or later.
+    The three-argument form `@test_throws extype pattern expr` requires Julia v1.13 or later.
 
 !!! compat "Julia 1.14"
     The `context` keyword argument requires at least Julia 1.14.

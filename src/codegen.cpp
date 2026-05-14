@@ -1211,6 +1211,29 @@ static const auto jl_typeof_func = new JuliaFunction<>{
             {}); },
 };
 
+// `julia.blackbox` is an optimization barrier for GC-tracked pointer values.
+// It returns its argument unchanged, but is opaque to the optimizer: it cannot
+// be CSE'd, constant-folded, or treated as loop-invariant. Lowered to inline
+// asm after GC frame lowering (when the pointer is a raw non-tracked pointer).
+static const auto jl_blackbox_func = new JuliaFunction<>{
+    "julia.blackbox",
+    [](LLVMContext &C) {
+        auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
+        return FunctionType::get(T_prjlvalue, {T_prjlvalue}, false);
+    },
+    [](LLVMContext &C) {
+        AttrBuilder FnAttrs(C);
+        FnAttrs.addMemoryAttr(MemoryEffects::none());
+        FnAttrs.addAttribute(Attribute::NoUnwind);
+        FnAttrs.addAttribute(Attribute::NoRecurse);
+        FnAttrs.addAttribute(Attribute::WillReturn);
+        FnAttrs.addAttribute(Attribute::NoSync);
+        return AttributeList::get(C,
+            AttributeSet::get(C, FnAttrs),
+            Attributes(C, {Attribute::NonNull}),
+            {}); },
+};
+
 static const auto jl_write_barrier_func = new JuliaFunction<>{
     "julia.write_barrier",
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
@@ -1466,6 +1489,10 @@ static const auto jldnd_func = new JuliaFunction<>{
 };
 
 // placeholder functions
+
+// The `julia.gcroot_flush` intrinsic is a marker function to flush all current
+// GC roots, to the shadow stack. It is used in the codegen of `GC.safepoint`/`jl_gc_safepoint`
+// and `jl_sigatomic_{begin,end}`. It is removed in late-gc-lowering (no-effect).
 static const auto gcroot_flush_func = new JuliaFunction<>{
     "julia.gcroot_flush",
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C), false); },
@@ -2977,13 +3004,6 @@ std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &conte
     m->setTargetTriple(triple);
 #endif
 
-    if (triple.isOSWindows() && triple.getArch() == Triple::x86) {
-        // tell Win32 to assume the stack is always 16-byte aligned,
-        // and to ensure that it is 16-byte aligned for out-going calls,
-        // to ensure compatibility with GCC codes
-        m->setOverrideStackAlignment(16);
-    }
-
     if (source) {
         // Copy module flags from source module
         SmallVector<Module::ModuleFlagEntry, 8> Flags;
@@ -2991,21 +3011,27 @@ std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &conte
         for (const auto &Flag : Flags) {
             m->addModuleFlag(Flag.Behavior, Flag.Key->getString(), Flag.Val);
         }
-        // Copy other module-level properties
-        m->setStackProtectorGuard(source->getStackProtectorGuard());
-        m->setOverrideStackAlignment(source->getOverrideStackAlignment());
     }
-    else {
-        // No source: set default Julia flags
-        // According to clang darwin above 10.10 supports dwarfv4
+
+    // Set default Julia flags
+    // According to clang darwin above 10.10 supports dwarfv4
+    if (m->getDwarfVersion() == 0) {
         m->addModuleFlag(llvm::Module::Warning, "Dwarf Version", 4);
         m->addModuleFlag(llvm::Module::Warning, "Debug Info Version",
                          llvm::DEBUG_METADATA_VERSION);
+    }
 
+    if (triple.isOSWindows() && triple.getArch() == Triple::x86) {
+        // tell Win32 to assume the stack is always 16-byte aligned,
+        // and to ensure that it is 16-byte aligned for out-going calls,
+        // to ensure compatibility with GCC codes
+        if (m->getOverrideStackAlignment() == 0)
+            m->setOverrideStackAlignment(16);
+    }
 #if defined(JL_DEBUG_BUILD)
+    if (m->getStackProtectorGuard().empty())
         m->setStackProtectorGuard("global");
 #endif
-    }
 
     return m;
 }
@@ -3106,7 +3132,8 @@ static std::pair<bool, bool> uses_specsig(jl_value_t *abi, jl_method_instance_t 
         if ((size_t)jl_subtype_env_size(lam->def.method->sig) != jl_svec_len(lam->sparam_vals))
             needsparams = true;
         for (size_t i = 0; i < jl_svec_len(lam->sparam_vals); ++i) {
-            if (jl_is_typevar(jl_svecref(lam->sparam_vals, i)))
+            jl_value_t *sp = jl_svecref(lam->sparam_vals, i);
+            if (jl_is_svec(sp) || jl_has_free_typevars(sp))
                 needsparams = true;
         }
     }
@@ -3290,7 +3317,7 @@ static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex)
             size_t idx = jl_unbox_long(jl_exprarg(e, 0));
             if (idx <= jl_svec_len(ctx.linfo->sparam_vals)) {
                 jl_value_t *e = jl_svecref(ctx.linfo->sparam_vals, idx - 1);
-                if (jl_is_typevar(e))
+                if (jl_is_svec(e) || jl_has_free_typevars(e))
                     return NULL;
                 return e;
             }
@@ -5257,7 +5284,40 @@ isdefined_unknown_idx:
 
     else if (f == BUILTIN(compilerbarrier) && (nargs == 2)) {
         emit_typecheck(ctx, argv[1], (jl_value_t*)jl_symbol_type, "compilerbarrier");
-        *ret = argv[2];
+        const jl_cgval_t &setting = argv[1];
+        if (setting.constant && setting.constant == (jl_value_t*)jl_symbol("blackbox")) {
+            const jl_cgval_t &obj = argv[2];
+            if (obj.V) {
+                Value *V = obj.V;
+                Type *Ty = V->getType();
+                if (obj.isboxed) {
+                    // Boxed GC-tracked pointer: emit julia.blackbox intrinsic,
+                    // lowered to inline asm after GC frame expansion.
+                    Function *BB = prepare_call(jl_blackbox_func);
+                    Value *result = ctx.builder.CreateCall(BB, {boxed(ctx, obj)});
+                    *ret = mark_julia_type(ctx, result, true, obj.typ);
+                } else if (Ty->isSingleValueType() && !Ty->isPointerTy()) {
+                    // Non-pointer scalar (int, float): fits in a register, use "=r,0".
+                    FunctionType *AsmFTy = FunctionType::get(Ty, {Ty}, false);
+                    InlineAsm *IA = InlineAsm::get(AsmFTy, "", "=r,0", /*hasSideEffects=*/false);
+                    Value *result = ctx.builder.CreateCall(AsmFTy, IA, {V});
+                    *ret = mark_julia_type(ctx, result, false, obj.typ);
+                } else {
+                    // Unboxed struct, or unboxed pointer (e.g. Ptr{T} passed
+                    // as addrspace(11)): clobber memory so LLVM can't assume
+                    // the value is invariant.
+                    FunctionType *VoidFTy = FunctionType::get(getVoidTy(ctx.builder.getContext()), false);
+                    InlineAsm *IA = InlineAsm::get(VoidFTy, "", "~{memory}", /*hasSideEffects=*/true);
+                    ctx.builder.CreateCall(VoidFTy, IA);
+                    *ret = obj;
+                }
+            } else {
+                // Ghost type (e.g. Nothing) — pass through
+                *ret = obj;
+            }
+        } else {
+            *ret = argv[2];
+        }
         return true;
     }
 
@@ -5408,6 +5468,8 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
     call->setAttributes(returninfo.attrs);
     if (gcstack_arg && ctx.emission_context.use_swiftcc)
         call->setCallingConv(CallingConv::Swift);
+    if (returninfo.effects != 0)
+        add_fn_attrs_for_effects(call, returninfo.effects);
 
     jl_cgval_t retval;
     switch (returninfo.cc) {
@@ -5451,13 +5513,16 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
 }
 
 static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_closure, jl_value_t *specTypes, jl_value_t *jlretty, llvm::Value *callee, StringRef specFunctionObject,
-                                          ArrayRef<jl_cgval_t> argv, size_t nargs, jl_returninfo_t::CallingConv *cc, unsigned *nreturn_roots, jl_value_t *inferred_retty)
+                                          ArrayRef<jl_cgval_t> argv, size_t nargs, jl_returninfo_t::CallingConv *cc, unsigned *nreturn_roots, jl_value_t *inferred_retty,
+                                          std::optional<uint32_t> effects = std::nullopt)
 {
     ++EmittedSpecfunCalls;
     // emit specialized call site
     jl_returninfo_t returninfo = get_specsig_function(ctx.emission_context, jl_Module, callee, specFunctionObject, specTypes, jlretty, is_opaque_closure);
     *cc = returninfo.cc;
     *nreturn_roots = returninfo.return_roots;
+    if (effects.has_value())
+        returninfo.effects = *effects;
     jl_cgval_t retval = emit_call_specfun_other(ctx, is_opaque_closure, specTypes, jlretty, returninfo, argv, nargs);
     // see if inference has a different / better type for the call than the lambda
     return update_julia_type(ctx, retval, inferred_retty);
@@ -5477,7 +5542,8 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_code_instance_t 
     jl_method_instance_t *mi = jl_get_ci_mi(ci);
     bool is_opaque_closure = jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure;
     return emit_call_specfun_other(ctx, is_opaque_closure, get_ci_abi(ci), ci->rettype, NULL,
-        specFunctionObject, argv, nargs, cc, return_roots, inferred_retty);
+        specFunctionObject, argv, nargs, cc, return_roots, inferred_retty,
+        jl_atomic_load_relaxed(&ci->ipo_purity_bits));
 }
 
 static jl_cgval_t emit_call_specfun_boxed(jl_codectx_t &ctx, jl_value_t *jlretty, StringRef specFunctionObject,
@@ -5773,7 +5839,7 @@ static jl_cgval_t emit_sparam(jl_codectx_t &ctx, size_t i)
 {
     if (jl_svec_len(ctx.linfo->sparam_vals) > 0) {
         jl_value_t *e = jl_svecref(ctx.linfo->sparam_vals, i);
-        if (!jl_is_typevar(e)) {
+        if (!jl_is_svec(e) && !jl_has_free_typevars(e)) {
             return mark_julia_const(ctx, e);
         }
     }
@@ -5781,7 +5847,7 @@ static jl_cgval_t emit_sparam(jl_codectx_t &ctx, size_t i)
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
     Value *sp = ai.decorateInst(ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bp, Align(sizeof(void*))));
     setName(ctx.emission_context, sp, "sparam");
-    Value *isnull = ctx.builder.CreateICmpNE(emit_typeof(ctx, sp, false, true), emit_tagfrom(ctx, jl_tvar_type));
+    Value *isnull = ctx.builder.CreateICmpNE(emit_typeof(ctx, sp, false, true), emit_tagfrom(ctx, jl_simplevector_type));
     jl_unionall_t *sparam = (jl_unionall_t*)ctx.linfo->def.method->sig;
     for (size_t j = 0; j < i; j++) {
         sparam = (jl_unionall_t*)sparam->body;
@@ -5825,14 +5891,14 @@ static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym, int allow_i
         size_t i = jl_unbox_long(jl_exprarg(sym, 0)) - 1;
         if (jl_svec_len(ctx.linfo->sparam_vals) > 0) {
             jl_value_t *e = jl_svecref(ctx.linfo->sparam_vals, i);
-            if (!jl_is_typevar(e)) {
+            if (!jl_is_svec(e) && !jl_has_free_typevars(e)) {
                 return mark_julia_const(ctx, jl_true);
             }
         }
         Value *bp = emit_ptrgep(ctx, maybe_decay_tracked(ctx, ctx.spvals_ptr), i * sizeof(jl_value_t*) + sizeof(jl_svec_t));
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
         Value *sp = ai.decorateInst(ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bp, Align(sizeof(void*))));
-        isnull = ctx.builder.CreateICmpNE(emit_typeof(ctx, sp, false, true), emit_tagfrom(ctx, jl_tvar_type));
+        isnull = ctx.builder.CreateICmpNE(emit_typeof(ctx, sp, false, true), emit_tagfrom(ctx, jl_simplevector_type));
     }
     else {
         assert(false && "malformed expression");
@@ -9234,15 +9300,16 @@ static jl_llvm_functions_t
             while (1) {
                 if (!jl_is_symbol(debuginfo->def)) // this is a path
                     func = debuginfo->def; // this is inlined
-                struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo->codelocs, pc);
-                size_t i = lineidx.line;
+                struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, pc);
+                size_t i = lineidx.loc;
                 if (i < 0) // pc out of range: broken debuginfo?
                     return false;
                 if (i == 0 && lineidx.to == 0) // no update
                     return false;
-                if (pc > 0 && (jl_value_t*)debuginfo->linetable != jl_nothing) {
+                if (pc > 0 && jl_is_debuginfo(debuginfo->linetable)) {
                     // indirection node
-                    if (!append_lineinfo(debuginfo->linetable, func, to, i))
+                    if (!append_lineinfo((jl_debuginfo_t *)debuginfo->linetable,
+                                         func, to, i))
                         return false; // no update
                 }
                 else {
@@ -9256,10 +9323,10 @@ static jl_llvm_functions_t
                     info.line = i;
                     info.line0 = 0;
                     if (pc == 1) {
-                        struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo->codelocs, 0);
+                        struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, 0);
                         assert(lineidx.to == 0 && lineidx.pc == 0);
-                        if (lineidx.line > 0 && info.line != lineidx.line)
-                            info.line0 = lineidx.line;
+                        if (lineidx.loc > 0 && info.line != lineidx.loc)
+                            info.line0 = lineidx.loc;
                     }
                     if (info.file.empty())
                         info.file = "<missing>";
@@ -9269,8 +9336,12 @@ static jl_llvm_functions_t
                         info.is_user_code = in_user_mod(modu);
                     if (debug_enabled) {
                         StringRef fname = jl_debuginfo_name(func);
+                        // Encode the 1-based statement index into the DWARF column field so that
+                        // stacktraces can recover the exact PC that each inlined frame points at.
+                        // `pc` here is the 1-based statement index within `debuginfo`'s CodeInfo.
+                        unsigned col = (unsigned)pc;
                         if (new_lineinfo.empty() && info.file == ctx.file) { // if everything matches, emit a toplevel line number
-                            info.loc = DILocation::get(ctx.builder.getContext(), info.line, 0, SP, NULL);
+                            info.loc = DILocation::get(ctx.builder.getContext(), info.line, col, SP, NULL);
                         }
                         else { // otherwise, describe this as an inlining frame
                             DebugLoc inl_loc = new_lineinfo.empty() ? DebugLoc(DILocation::get(ctx.builder.getContext(), 0, 0, SP, NULL)) : new_lineinfo.back().loc;
@@ -9291,7 +9362,7 @@ static jl_llvm_functions_t
                                                              ,nullptr          // ThrownTypes
                                                              );
                             }
-                            info.loc = DILocation::get(ctx.builder.getContext(), info.line, 0, inl_SP, inl_loc);
+                            info.loc = DILocation::get(ctx.builder.getContext(), info.line, col, inl_SP, inl_loc);
                         }
                     }
                     new_lineinfo.push_back(info);
@@ -9442,8 +9513,8 @@ static jl_llvm_functions_t
                 jl_debuginfo_t *edge = (jl_debuginfo_t*)jl_svecref(debuginfo->edges, i);
                 record_line_exists(edge, NULL);
             }
-            while ((jl_value_t*)debuginfo->linetable != jl_nothing)
-                debuginfo = debuginfo->linetable;
+            while (jl_is_debuginfo(debuginfo->linetable))
+                debuginfo = (jl_debuginfo_t*)debuginfo->linetable;
             jl_module_t *modu = func ? jl_debuginfo_module1(func) : NULL;
             if (modu == NULL)
                 modu = ctx.module;
@@ -9458,11 +9529,11 @@ static jl_llvm_functions_t
             bool is_tracked = in_tracked_path(file);
             if (do_coverage(is_user_code, is_tracked)) {
                 for (size_t pc = 0; 1; pc++) {
-                    struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo->codelocs, pc);
-                    if (lineidx.line == -1)
+                    struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, pc);
+                    if (lineidx.loc == -1)
                         break;
-                    if (lineidx.line > 0)
-                        jl_coverage_alloc_line(file.data(), lineidx.line);
+                    if (lineidx.loc > 0)
+                        jl_coverage_alloc_line(file.data(), lineidx.loc);
                 }
             }
         };
@@ -10434,6 +10505,18 @@ extern "C" void jl_init_llvm(void)
     clopt = llvmopts.lookup("combiner-store-merge-dependence-limit");
     if (clopt && clopt->getNumOccurrences() == 0)
         cl::ProvidePositionalOption(clopt, "4", 1);
+
+    // compiler-rt/libgcc only provide FP conversion libcalls (e.g. __floattidf,
+    // __fixdfti) up to the widest integer type the platform supports natively
+    // in C (_BitInt excluded). Wider FP conversions must be expanded inline.
+    clopt = llvmopts.lookup("expand-fp-convert-bits");
+    if (clopt && clopt->getNumOccurrences() == 0) {
+#ifdef _HAS_INT128_
+        cl::ProvidePositionalOption(clopt, "128", 1);
+#else
+        cl::ProvidePositionalOption(clopt, "64", 1);
+#endif
+    }
 
     clopt = llvmopts.lookup("time-passes");
     if (clopt && clopt->getNumOccurrences() > 0)

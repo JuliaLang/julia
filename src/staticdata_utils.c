@@ -405,8 +405,8 @@ static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited,
                         continue;
                     }
 
-                    void **child_bp = ptrhash_bp(visited, child_mi);
-                    int child_found = (char*)*child_bp - (char*)HT_NOTFOUND;
+                    void *child_bpval = ptrhash_get(visited, child_mi);
+                    int child_found = (char*)child_bpval - (char*)HT_NOTFOUND;
                     if (child_found) {
                         int child_result = child_found - 1;
                         if (child_result == 1 || child_result == 2) {

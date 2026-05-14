@@ -287,3 +287,27 @@ end
         end
     end
 end
+
+@testset "macros can have lhs-reserved or underscore names" begin
+    local m = Module()
+
+    @test JuliaLowering.include_string(m, """
+    module ShortForm
+        macro ccall end
+        macro cglobal end
+        macro _ end
+    end
+    """) isa Module
+    @test Base.isdefinedglobal(m.ShortForm, Symbol("@ccall"))
+    @test Base.isdefinedglobal(m.ShortForm, Symbol("@cglobal"))
+    @test Base.isdefinedglobal(m.ShortForm, Symbol("@_"))
+
+    @test JuliaLowering.include_string(m, """ macro ccall(x); x; end """) isa Function
+    @test JuliaLowering.include_string(m, "@ccall(1)") == 1
+
+    @test JuliaLowering.include_string(m, """ macro cglobal(x); x; end """) isa Function
+    @test JuliaLowering.include_string(m, "@cglobal(1)") == 1
+
+    @test JuliaLowering.include_string(m, """ macro _(x); x; end """) isa Function
+    @test JuliaLowering.include_string(m, "@_(3)") == 3
+end

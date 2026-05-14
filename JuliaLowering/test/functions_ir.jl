@@ -392,6 +392,35 @@ function (.+)(x,y)
 end
 
 ########################################
+# Error: Invalid dotop function name
+function var".+"(x,y)
+end
+#---------------------
+LoweringError:
+function var".+"(x,y)
+#            └┘ ── dotted operator is not a valid function name
+end
+
+########################################
+# dotted normal name is fine
+function var".f"(); end
+#---------------------
+1   (method TestMod..f)
+2   latestworld
+3   TestMod..f
+4   (call core.Typeof %₃)
+5   (call core.svec %₄)
+6   (call core.svec)
+7   SourceLocation::1:10
+8   (call core.svec %₅ %₆ %₇)
+9   --- method TestMod..f %₈
+    slots: [slot₁/#self#(!read)]
+    1   (return core.nothing)
+10  latestworld
+11  TestMod..f
+12  (return %₁₁)
+
+########################################
 # Error: Invalid function name
 function f[](x,y)
 end
@@ -936,7 +965,7 @@ function (_,((a,b)...)::Int); end
 #---------------------
 LoweringError:
 function (_,((a,b)...)::Int); end
-#           └─────────────┘ ── expected identifier or `identifier::type`
+#            └──────┘ ── expected identifier
 
 ########################################
 # Error: destructured arg with kw
@@ -1133,13 +1162,62 @@ end
 8   (call core.svec %₅ %₆ %₇)
 9   --- method TestMod.f %₈
     slots: [slot₁/#self#(!read) slot₂/x(nospecialize,!read) slot₃/g(called) slot₄/y]
-    1   TestMod.+
-    2   (call slot₃/g)
-    3   (call %₁ %₂ slot₄/y)
-    4   (return %₃)
+    1   (meta :nospecialize slot₂/x)
+    2   TestMod.+
+    3   (call slot₃/g)
+    4   (call %₂ %₃ slot₄/y)
+    5   (return %₄)
 10  latestworld
 11  TestMod.f
 12  (return %₁₁)
+
+########################################
+# Error: nospecialize should be outermost expr in arg
+function f_bad_nospecialize(@nospecialize(x)=1); end
+#---------------------
+LoweringError:
+function f_bad_nospecialize(@nospecialize(x)=1); end
+#                           └──────────────┘ ── expected identifier or `identifier::type`
+
+########################################
+# Error: nospecialize should be outermost expr in arg
+function f_bad_nospecialize(;@nospecialize(x)=1); end
+#---------------------
+LoweringError:
+function f_bad_nospecialize(;@nospecialize(x)=1); end
+#                            └──────────────┘ ── expected identifier or `identifier::type`
+
+########################################
+# Error: nospecialize should be outermost expr in arg
+function f_bad_nospecialize(@nospecialize(x)...); end
+#---------------------
+LoweringError:
+function f_bad_nospecialize(@nospecialize(x)...); end
+#                           └──────────────┘ ── expected identifier or `identifier::type`
+
+########################################
+# Error: nospecialize should be outermost expr in arg
+function f_bad_nospecialize(;@nospecialize(x)...); end
+#---------------------
+LoweringError:
+function f_bad_nospecialize(;@nospecialize(x)...); end
+#                            └──────────────┘ ── expected identifier
+
+########################################
+# Error: nospecialize should be outermost expr in arg
+function f_bad_nospecialize(@nospecialize(x)::T); end
+#---------------------
+LoweringError:
+function f_bad_nospecialize(@nospecialize(x)::T); end
+#                           └──────────────┘ ── expected identifier
+
+########################################
+# Error: nospecialize should be outermost expr in arg
+function f_bad_nospecialize(;@nospecialize(x)::T); end
+#---------------------
+LoweringError:
+function f_bad_nospecialize(;@nospecialize(x)::T); end
+#                            └──────────────┘ ── expected identifier
 
 ########################################
 # Function return without arguments
@@ -1209,18 +1287,17 @@ end
 10  latestworld
 11  TestMod.f
 12  (= slot₁/val %₁₁)
-13  (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree f))
-14  (call Base.Docs.Binding TestMod %₁₃)
-15  (call Core.svec "some docs\n")
-16  (call Dict{Symbol, Any} :path => "none" :linenumber => 1 :module => TestMod)
-17  (call Base.Docs.docstr %₁₅ %₁₆)
-18  TestMod.Union
-19  TestMod.Tuple
-20  (call core.apply_type %₁₉)
-21  (call core.apply_type %₁₈ %₂₀)
-22  (call Base.Docs.doc! TestMod %₁₄ %₁₇ %₂₁)
-23  slot₁/val
-24  (return %₂₃)
+13  (call Base.Docs.Binding TestMod :f)
+14  (call Core.svec "some docs\n")
+15  (call Dict{Symbol, Any} :path => "none" :linenumber => 1 :module => TestMod)
+16  (call Base.Docs.docstr %₁₄ %₁₅)
+17  TestMod.Union
+18  TestMod.Tuple
+19  (call core.apply_type %₁₈)
+20  (call core.apply_type %₁₇ %₁₉)
+21  (call Base.Docs.doc! TestMod %₁₃ %₁₆ %₂₀)
+22  slot₁/val
+23  (return %₂₂)
 
 ########################################
 # Binding docs to callable type
@@ -1240,18 +1317,17 @@ end
     1   (return core.nothing)
 7   latestworld
 8   (= slot₁/val core.nothing)
-9   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree T))
-10  (call Base.Docs.Binding TestMod %₉)
-11  (call Core.svec "some docs\n")
-12  (call Dict{Symbol, Any} :path => "none" :linenumber => 1 :module => TestMod)
-13  (call Base.Docs.docstr %₁₁ %₁₂)
-14  TestMod.Union
-15  TestMod.Tuple
-16  (call core.apply_type %₁₅)
-17  (call core.apply_type %₁₄ %₁₆)
-18  (call Base.Docs.doc! TestMod %₁₀ %₁₃ %₁₇)
-19  slot₁/val
-20  (return %₁₉)
+9   (call Base.Docs.Binding TestMod :T)
+10  (call Core.svec "some docs\n")
+11  (call Dict{Symbol, Any} :path => "none" :linenumber => 1 :module => TestMod)
+12  (call Base.Docs.docstr %₁₀ %₁₁)
+13  TestMod.Union
+14  TestMod.Tuple
+15  (call core.apply_type %₁₄)
+16  (call core.apply_type %₁₃ %₁₅)
+17  (call Base.Docs.doc! TestMod %₉ %₁₂ %₁₆)
+18  slot₁/val
+19  (return %₁₈)
 
 ########################################
 # Keyword function with defaults.
@@ -1267,9 +1343,9 @@ function f_kw_simple(a::Int=1, b::Float64=1.0; x::Char='a', y::Bool=true)
     (a, b, x, y)
 end
 #---------------------
-1   (method TestMod.f_kw_simple)
+1   (method TestMod.#kw_body#f_kw_simple#0)
 2   latestworld
-3   (method TestMod.#kw_body#f_kw_simple#0)
+3   (method TestMod.f_kw_simple)
 4   latestworld
 5   TestMod.#kw_body#f_kw_simple#0
 6   (call core.Typeof %₅)
@@ -1416,9 +1492,9 @@ end
 # underscore kwargs apart from `_...` are probably not intended to work anyway
 function f_kw_placeholders(; _=1, _=2); end
 #---------------------
-1   (method TestMod.f_kw_placeholders)
+1   (method TestMod.#kw_body#f_kw_placeholders#0)
 2   latestworld
-3   (method TestMod.#kw_body#f_kw_placeholders#0)
+3   (method TestMod.f_kw_placeholders)
 4   latestworld
 5   TestMod.#kw_body#f_kw_placeholders#0
 6   (call core.Typeof %₅)
@@ -1487,9 +1563,9 @@ function f_kw_slurp_simple(; all_kws...)
     all_kws
 end
 #---------------------
-1   (method TestMod.f_kw_slurp_simple)
+1   (method TestMod.#kw_body#f_kw_slurp_simple#0)
 2   latestworld
-3   (method TestMod.#kw_body#f_kw_slurp_simple#0)
+3   (method TestMod.f_kw_slurp_simple)
 4   latestworld
 5   TestMod.#kw_body#f_kw_slurp_simple#0
 6   (call core.Typeof %₅)
@@ -1543,9 +1619,9 @@ function f_kw_slurp(; x=x_default, non_x_kws...)
     all_kws
 end
 #---------------------
-1   (method TestMod.f_kw_slurp)
+1   (method TestMod.#kw_body#f_kw_slurp#0)
 2   latestworld
-3   (method TestMod.#kw_body#f_kw_slurp#0)
+3   (method TestMod.f_kw_slurp)
 4   latestworld
 5   TestMod.#kw_body#f_kw_slurp#0
 6   (call core.Typeof %₅)
@@ -1615,9 +1691,9 @@ function f_kw_slurp_dep(; a=1, b=a, kws...)
     (a, b, kws)
 end
 #---------------------
-1   (method TestMod.f_kw_slurp_dep)
+1   (method TestMod.#kw_body#f_kw_slurp_dep#0)
 2   latestworld
-3   (method TestMod.#kw_body#f_kw_slurp_dep#0)
+3   (method TestMod.f_kw_slurp_dep)
 4   latestworld
 5   TestMod.#kw_body#f_kw_slurp_dep#0
 6   (call core.Typeof %₅)
@@ -1698,9 +1774,9 @@ function f_kw_sparams(x::X; a::A=a_def, b::X=b_def) where {X,A}
     (X,A)
 end
 #---------------------
-1   (method TestMod.f_kw_sparams)
+1   (method TestMod.#kw_body#f_kw_sparams#0)
 2   latestworld
-3   (method TestMod.#kw_body#f_kw_sparams#0)
+3   (method TestMod.f_kw_sparams)
 4   latestworld
 5   (= slot₁/X (call core.TypeVar :X))
 6   (= slot₂/A (call core.TypeVar :A))
@@ -1806,6 +1882,85 @@ function f_kw_sparams(x::X; a::A) where {X,Y,A}
 end
 
 ########################################
+# Keyword @nospecialize
+function f_kw_slurp(a,;kw1,kw2=2,restkw...)
+    @nospecialize
+end
+#---------------------
+1   (method TestMod.#kw_body#f_kw_slurp#1)
+2   latestworld
+3   (method TestMod.f_kw_slurp)
+4   latestworld
+5   TestMod.#kw_body#f_kw_slurp#1
+6   (call core.Typeof %₅)
+7   (call top.pairs core.NamedTuple)
+8   TestMod.f_kw_slurp
+9   (call core.Typeof %₈)
+10  (call core.svec %₆ core.Any core.Any %₇ %₉ core.Any)
+11  (call core.svec)
+12  SourceLocation::1:10
+13  (call core.svec %₁₀ %₁₁ %₁₂)
+14  --- method TestMod.#kw_body#f_kw_slurp#1 %₁₃
+    slots: [slot₁/#kw_body#f_kw_slurp#1(!read) slot₂/kw1(nospecialize,!read) slot₃/kw2(nospecialize,!read) slot₄/restkw(nospecialize,!read) slot₅/#self#(!read) slot₆/a(nospecialize,!read)]
+    1   (meta :nospecialize slot₂/kw1 slot₃/kw2 slot₄/restkw slot₆/a)
+    2   (meta :nkw 3)
+    3   (return core.nothing)
+15  latestworld
+16  TestMod.f_kw_slurp
+17  (call core.Typeof %₁₆)
+18  (call core.svec %₁₇ core.Any)
+19  (call core.svec)
+20  SourceLocation::1:10
+21  (call core.svec %₁₈ %₁₉ %₂₀)
+22  --- method TestMod.f_kw_slurp %₂₁
+    slots: [slot₁/#self# slot₂/a(nospecialize)]
+    1   (meta :nospecialize)
+    2   TestMod.#kw_body#f_kw_slurp#1
+    3   (call core.UndefKeywordError :kw1)
+    4   (call core.throw %₃)
+    5   (call core.NamedTuple)
+    6   (call top.pairs %₅)
+    7   (call %₂ %₄ 2 %₆ slot₁/#self# slot₂/a)
+    8   (return %₇)
+23  latestworld
+24  (call core.typeof core.kwcall)
+25  TestMod.f_kw_slurp
+26  (call core.Typeof %₂₅)
+27  (call core.svec %₂₄ core.NamedTuple %₂₆ core.Any)
+28  (call core.svec)
+29  SourceLocation::1:10
+30  (call core.svec %₂₇ %₂₈ %₂₉)
+31  --- method TestMod.f_kw_slurp %₃₀
+    slots: [slot₁/#unused#(!read) slot₂/kws slot₃/#self# slot₄/a(nospecialize) slot₅/kw1(!read) slot₆/kw2(!read) slot₇/kwtmp]
+    1   (meta :nospecialize slot₄/a)
+    2   (newvar slot₅/kw1)
+    3   (newvar slot₆/kw2)
+    4   (newvar slot₇/kwtmp)
+    5   (call core.isdefined slot₂/kws :kw1)
+    6   (gotoifnot %₅ label₉)
+    7   (= slot₇/kwtmp (call core.getfield slot₂/kws :kw1))
+    8   (goto label₁₁)
+    9   (call core.UndefKeywordError :kw1)
+    10  (= slot₇/kwtmp (call core.throw %₉))
+    11  slot₇/kwtmp
+    12  (call core.isdefined slot₂/kws :kw2)
+    13  (gotoifnot %₁₂ label₁₆)
+    14  (= slot₇/kwtmp (call core.getfield slot₂/kws :kw2))
+    15  (goto label₁₇)
+    16  (= slot₇/kwtmp 2)
+    17  slot₇/kwtmp
+    18  (call core.tuple :kw1 :kw2)
+    19  (call core.apply_type core.NamedTuple %₁₈)
+    20  (call top.structdiff slot₂/kws %₁₉)
+    21  (call top.pairs %₂₀)
+    22  TestMod.#kw_body#f_kw_slurp#1
+    23  (call %₂₂ %₁₁ %₁₇ %₂₁ slot₃/#self# slot₄/a)
+    24  (return %₂₃)
+32  latestworld
+33  TestMod.f_kw_slurp
+34  (return %₃₃)
+
+########################################
 # Error: argument unpacking in keywords
 function f_kw_destruct(; (x,y)=10)
 end
@@ -1882,11 +2037,12 @@ end
 12  (call core.svec %₉ %₁₀ %₁₁)
 13  --- method TestMod.#f_only_generated@generator#0 %₁₂
     slots: [slot₁/#self#(!read) slot₂/__context__(!read) slot₃/#self#(nospecialize,!read) slot₄/x(nospecialize) slot₅/y(nospecialize)]
-    1   TestMod.generator_code
-    2   (call %₁ slot₄/x slot₅/y)
-    3   (call core.tuple %₂)
-    4   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree ($ (block (call generator_code x y)))) %₃)
-    5   (return %₄)
+    1   (meta :nospecialize slot₃/#self# slot₄/x slot₅/y)
+    2   TestMod.generator_code
+    3   (call %₂ slot₄/x slot₅/y)
+    4   (call core.tuple %₃)
+    5   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block ($ (block (call generator_code x y))))) %₄)
+    6   (return %₅)
 14  latestworld
 15  TestMod.f_only_generated
 16  (call core.Typeof %₁₅)
@@ -1931,10 +2087,11 @@ end
 12  (call core.svec %₉ %₁₀ %₁₁)
 13  --- method TestMod.#f_partially_generated@generator#0 %₁₂
     slots: [slot₁/#self#(!read) slot₂/__context__(!read) slot₃/#self#(nospecialize,!read) slot₄/x(nospecialize,!read) slot₅/y(nospecialize,!read)]
-    1   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (= maybe_gen_stuff (call some_gen_stuff x y)))))
-    2   (call core.tuple %₁)
-    3   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (= nongen_stuff (call bothgen x y)) ($ (block (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (= maybe_gen_stuff (call some_gen_stuff x y))))))) (tuple-p nongen_stuff maybe_gen_stuff))) %₂)
-    4   (return %₃)
+    1   (meta :nospecialize slot₃/#self# slot₄/x slot₅/y)
+    2   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (= maybe_gen_stuff (call some_gen_stuff x y)))))
+    3   (call core.tuple %₂)
+    4   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (= nongen_stuff (call bothgen x y)) ($ (block (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (= maybe_gen_stuff (call some_gen_stuff x y))))))) (tuple-p nongen_stuff maybe_gen_stuff))) %₃)
+    5   (return %₄)
 14  latestworld
 15  TestMod.f_partially_generated
 16  (call core.Typeof %₁₅)

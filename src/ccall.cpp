@@ -813,13 +813,14 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
     }
     else {
         // Fall back to runtime intrinsic
-        JL_GC_POP();
         jl_cgval_t argv[2];
         argv[0] = emit_expr(ctx, args[1]);
         if (nargs == 2)
             argv[1] = emit_expr(ctx, args[2]);
-        if (!jl_is_cpointer_type(argv[0].typ))
+        if (!jl_is_cpointer_type(argv[0].typ)) {
+            JL_GC_POP();
             return emit_runtime_call(ctx, nargs == 1 ? JL_I::cglobal_auto : JL_I::cglobal, argv, nargs);
+        }
         sym.jl_ptr = emit_unbox(ctx, ctx.types().T_ptr, voidpointer_update(ctx, argv[0]));
         res = sym.jl_ptr;
     }

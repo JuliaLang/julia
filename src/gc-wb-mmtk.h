@@ -13,7 +13,7 @@ extern "C" {
 
 extern void mmtk_object_reference_write_post(void* mutator, const void* parent, const void* ptr);
 extern void mmtk_object_reference_write_slow(void* mutator, const void* parent, const void* ptr);
-extern const void* MMTK_SIDE_LOG_BIT_BASE_ADDRESS;
+extern void* MMTK_SIDE_LOG_BIT_BASE_ADDRESS;
 
 #define MMTK_OBJECT_BARRIER (1)
 // Stickyimmix needs write barrier. Immix does not need write barrier.

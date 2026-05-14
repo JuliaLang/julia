@@ -160,6 +160,7 @@ wrap_func(e...) = Expr(:call,
 wrap_hard(e...) = Expr(:let, Expr(:block), Expr(:block, e...))
 
 decls(e...) = Expr(:block,
+                   :(name = false),
                    :(local lname = false),
                    :(global gname = false),
                    e...)
@@ -167,101 +168,148 @@ decls(e...) = Expr(:block,
 decls_none(e...) = decls(e...)
 decls_neutral(e...) = wrap_neutral(decls(), e...)
 decls_hard(e...) = :(let lname = false # takes a different code path in flisp
-                      global gname = false
-                      $(e...)
-                  end)
+                         name = false
+                         global gname = false
+                         $(e...)
+                     end)
 decls_func(e...) = :((function (argname::spname = false) where spname
+                          name = false
                           local lname = false
                           global gname = false
                           $(e...)
                       end)(#=called=#))
 
-lhs_names = (:lname, :gname, :argname, :spname)
+lhs_names = (:name, :lname, :gname, :argname, :spname)
+
+#=
+simple test that
+```
+distraction_scope_begin
+    local_scope_begin
+        lhs = "resolve me"
+        lhs *= '!'
+        lhs
+    local_scope_end
+distraction_scope_end === "resolve me!"
+```
+=#
+@testset "explicit locals and globals in local scope shadowing outer vars" begin
+    local jl_mod = Module()
+    local fl_mod = Module()
+
+    @testset for soft_mode in (false, true),
+        decls_s in (decls_func, decls_hard, decls_neutral, decls_none),
+        local_s in (wrap_func, wrap_hard, wrap_neutral),
+        lhs in lhs_names,
+        assign_ex in (:(local $lhs = "resolve me"; $lhs *= '!'; $lhs),
+                      :(global $lhs = "resolve me"; $lhs *= '!'; $lhs))
+
+        ex = decls_s(local_s(assign_ex))
+        soft_mode && (ex = enable_softscope(ex))
+
+        if lhs == :spname && decls_s == decls_func && assign_ex.args[1].head === :local
+            # flisp specifically disallows locals shadowing sparams; why?
+            @test_broken fl_eval(fl_mod, ex) === "resolve me!"
+        elseif lhs in (:spname, :argname) && decls_s != decls_func
+            continue
+        else
+            reference_ok = fl_eval(fl_mod, ex) === "resolve me!"
+            !reference_ok &&
+                @error("shadow test failed: flisp produced unexpected result; fix that or JL scope tests:\n", ex)
+            @test reference_ok
+        end
+
+        ok = expr_eval(jl_mod, ex) === "resolve me!"
+        !ok && @error("shadow test failed:\n", ex)
+        @test ok
+    end
+
+end
 
 # For each distinct outer scope, declaration scope, and assignment scope, and
 # each kind of variable (lhs_names) in the declaration scope, set the same name
 # to true from the inner scope
 @testset "Behaviour of `=` in local scope (shadow or assign-existing)" begin
     expected_outer_vals = Dict{Tuple{Bool, Function, Function, Function}, Tuple}(
-        (false, decls_func,    wrap_hard,    wrap_func   ) => (true,true,true),
-        (false, decls_func,    wrap_hard,    wrap_hard   ) => (true,true,true),
-        (false, decls_func,    wrap_hard,    wrap_neutral) => (true,true,true),
-        (false, decls_func,    wrap_neutral, wrap_func   ) => (true,true,true),
-        (false, decls_func,    wrap_neutral, wrap_hard   ) => (true,true,true),
-        (false, decls_func,    wrap_neutral, wrap_neutral) => (true,true,true),
-        (false, decls_func,    wrap_none,    wrap_func   ) => (true,true,true),
-        (false, decls_func,    wrap_none,    wrap_hard   ) => (true,true,true),
-        (false, decls_func,    wrap_none,    wrap_neutral) => (true,true,true),
-        (false, decls_hard,    wrap_hard,    wrap_func   ) => (true,true),
-        (false, decls_hard,    wrap_hard,    wrap_hard   ) => (true,true),
-        (false, decls_hard,    wrap_hard,    wrap_neutral) => (true,true),
-        (false, decls_hard,    wrap_neutral, wrap_func   ) => (true,true),
-        (false, decls_hard,    wrap_neutral, wrap_hard   ) => (true,true),
-        (false, decls_hard,    wrap_neutral, wrap_neutral) => (true,true),
-        (false, decls_hard,    wrap_none,    wrap_func   ) => (true,true),
-        (false, decls_hard,    wrap_none,    wrap_hard   ) => (true,true),
-        (false, decls_hard,    wrap_none,    wrap_neutral) => (true,true),
-        (false, decls_neutral, wrap_hard,    wrap_func   ) => (true,true),
-        (false, decls_neutral, wrap_hard,    wrap_hard   ) => (true,true),
-        (false, decls_neutral, wrap_hard,    wrap_neutral) => (true,true),
-        (false, decls_neutral, wrap_neutral, wrap_func   ) => (true,true),
-        (false, decls_neutral, wrap_neutral, wrap_hard   ) => (true,true),
-        (false, decls_neutral, wrap_neutral, wrap_neutral) => (true,true),
-        (false, decls_neutral, wrap_none,    wrap_func   ) => (true,true),
-        (false, decls_neutral, wrap_none,    wrap_hard   ) => (true,true),
-        (false, decls_neutral, wrap_none,    wrap_neutral) => (true,true),
-        (false, decls_none,    wrap_hard,    wrap_func   ) => (true,false),
-        (false, decls_none,    wrap_hard,    wrap_hard   ) => (true,false),
-        (false, decls_none,    wrap_hard,    wrap_neutral) => (true,false),
-        (false, decls_none,    wrap_neutral, wrap_func   ) => (true,false),
-        (false, decls_none,    wrap_neutral, wrap_hard   ) => (true,false),
-        (false, decls_none,    wrap_neutral, wrap_neutral) => (true,false),
-        (false, decls_none,    wrap_none,    wrap_func   ) => (true,false),
-        (false, decls_none,    wrap_none,    wrap_hard   ) => (true,false),
-        (false, decls_none,    wrap_none,    wrap_neutral) => (true,false),
-        (true,  decls_func,    wrap_hard,    wrap_func   ) => (true,true,true),
-        (true,  decls_func,    wrap_hard,    wrap_hard   ) => (true,true,true),
-        (true,  decls_func,    wrap_hard,    wrap_neutral) => (true,true,true),
-        (true,  decls_func,    wrap_neutral, wrap_func   ) => (true,true,true),
-        (true,  decls_func,    wrap_neutral, wrap_hard   ) => (true,true,true),
-        (true,  decls_func,    wrap_neutral, wrap_neutral) => (true,true,true),
-        (true,  decls_func,    wrap_none,    wrap_func   ) => (true,true,true),
-        (true,  decls_func,    wrap_none,    wrap_hard   ) => (true,true,true),
-        (true,  decls_func,    wrap_none,    wrap_neutral) => (true,true,true),
-        (true,  decls_hard,    wrap_hard,    wrap_func   ) => (true,true),
-        (true,  decls_hard,    wrap_hard,    wrap_hard   ) => (true,true),
-        (true,  decls_hard,    wrap_hard,    wrap_neutral) => (true,true),
-        (true,  decls_hard,    wrap_neutral, wrap_func   ) => (true,true),
-        (true,  decls_hard,    wrap_neutral, wrap_hard   ) => (true,true),
-        (true,  decls_hard,    wrap_neutral, wrap_neutral) => (true,true),
-        (true,  decls_hard,    wrap_none,    wrap_func   ) => (true,true),
-        (true,  decls_hard,    wrap_none,    wrap_hard   ) => (true,true),
-        (true,  decls_hard,    wrap_none,    wrap_neutral) => (true,true),
-        (true,  decls_neutral, wrap_hard,    wrap_func   ) => (true,true),
-        (true,  decls_neutral, wrap_hard,    wrap_hard   ) => (true,true),
-        (true,  decls_neutral, wrap_hard,    wrap_neutral) => (true,true),
-        (true,  decls_neutral, wrap_neutral, wrap_func   ) => (true,true),
-        (true,  decls_neutral, wrap_neutral, wrap_hard   ) => (true,true),
-        (true,  decls_neutral, wrap_neutral, wrap_neutral) => (true,true),
-        (true,  decls_neutral, wrap_none,    wrap_func   ) => (true,true),
-        (true,  decls_neutral, wrap_none,    wrap_hard   ) => (true,true),
-        (true,  decls_neutral, wrap_none,    wrap_neutral) => (true,true),
-        (true,  decls_none,    wrap_hard,    wrap_func   ) => (true,false),
-        (true,  decls_none,    wrap_hard,    wrap_hard   ) => (true,false),
-        (true,  decls_none,    wrap_hard,    wrap_neutral) => (true,false),
-        (true,  decls_none,    wrap_neutral, wrap_func   ) => (true,false),
-        (true,  decls_none,    wrap_neutral, wrap_hard   ) => (true,false),
-        (true,  decls_none,    wrap_neutral, wrap_neutral) => (true,true),
-        (true,  decls_none,    wrap_none,    wrap_func   ) => (true,false),
-        (true,  decls_none,    wrap_none,    wrap_hard   ) => (true,false),
-        (true,  decls_none,    wrap_none,    wrap_neutral) => (true,true),
+        (false, decls_func,    wrap_hard,    wrap_func   ) => (true,true,true,true),
+        (false, decls_func,    wrap_hard,    wrap_hard   ) => (true,true,true,true),
+        (false, decls_func,    wrap_hard,    wrap_neutral) => (true,true,true,true),
+        (false, decls_func,    wrap_neutral, wrap_func   ) => (true,true,true,true),
+        (false, decls_func,    wrap_neutral, wrap_hard   ) => (true,true,true,true),
+        (false, decls_func,    wrap_neutral, wrap_neutral) => (true,true,true,true),
+        (false, decls_func,    wrap_none,    wrap_func   ) => (true,true,true,true),
+        (false, decls_func,    wrap_none,    wrap_hard   ) => (true,true,true,true),
+        (false, decls_func,    wrap_none,    wrap_neutral) => (true,true,true,true),
+        (false, decls_hard,    wrap_hard,    wrap_func   ) => (true,true,true),
+        (false, decls_hard,    wrap_hard,    wrap_hard   ) => (true,true,true),
+        (false, decls_hard,    wrap_hard,    wrap_neutral) => (true,true,true),
+        (false, decls_hard,    wrap_neutral, wrap_func   ) => (true,true,true),
+        (false, decls_hard,    wrap_neutral, wrap_hard   ) => (true,true,true),
+        (false, decls_hard,    wrap_neutral, wrap_neutral) => (true,true,true),
+        (false, decls_hard,    wrap_none,    wrap_func   ) => (true,true,true),
+        (false, decls_hard,    wrap_none,    wrap_hard   ) => (true,true,true),
+        (false, decls_hard,    wrap_none,    wrap_neutral) => (true,true,true),
+        (false, decls_neutral, wrap_hard,    wrap_func   ) => (true,true,true),
+        (false, decls_neutral, wrap_hard,    wrap_hard   ) => (true,true,true),
+        (false, decls_neutral, wrap_hard,    wrap_neutral) => (true,true,true),
+        (false, decls_neutral, wrap_neutral, wrap_func   ) => (true,true,true),
+        (false, decls_neutral, wrap_neutral, wrap_hard   ) => (true,true,true),
+        (false, decls_neutral, wrap_neutral, wrap_neutral) => (true,true,true),
+        (false, decls_neutral, wrap_none,    wrap_func   ) => (true,true,true),
+        (false, decls_neutral, wrap_none,    wrap_hard   ) => (true,true,true),
+        (false, decls_neutral, wrap_none,    wrap_neutral) => (true,true,true),
+        (false, decls_none,    wrap_hard,    wrap_func   ) => (false,true,false),
+        (false, decls_none,    wrap_hard,    wrap_hard   ) => (false,true,false),
+        (false, decls_none,    wrap_hard,    wrap_neutral) => (false,true,false),
+        (false, decls_none,    wrap_neutral, wrap_func   ) => (false,true,false),
+        (false, decls_none,    wrap_neutral, wrap_hard   ) => (false,true,false),
+        (false, decls_none,    wrap_neutral, wrap_neutral) => (false,true,false),
+        (false, decls_none,    wrap_none,    wrap_func   ) => (false,true,false),
+        (false, decls_none,    wrap_none,    wrap_hard   ) => (false,true,false),
+        (false, decls_none,    wrap_none,    wrap_neutral) => (false,true,false),
+        (true,  decls_func,    wrap_hard,    wrap_func   ) => (true,true,true,true),
+        (true,  decls_func,    wrap_hard,    wrap_hard   ) => (true,true,true,true),
+        (true,  decls_func,    wrap_hard,    wrap_neutral) => (true,true,true,true),
+        (true,  decls_func,    wrap_neutral, wrap_func   ) => (true,true,true,true),
+        (true,  decls_func,    wrap_neutral, wrap_hard   ) => (true,true,true,true),
+        (true,  decls_func,    wrap_neutral, wrap_neutral) => (true,true,true,true),
+        (true,  decls_func,    wrap_none,    wrap_func   ) => (true,true,true,true),
+        (true,  decls_func,    wrap_none,    wrap_hard   ) => (true,true,true,true),
+        (true,  decls_func,    wrap_none,    wrap_neutral) => (true,true,true,true),
+        (true,  decls_hard,    wrap_hard,    wrap_func   ) => (true,true,true),
+        (true,  decls_hard,    wrap_hard,    wrap_hard   ) => (true,true,true),
+        (true,  decls_hard,    wrap_hard,    wrap_neutral) => (true,true,true),
+        (true,  decls_hard,    wrap_neutral, wrap_func   ) => (true,true,true),
+        (true,  decls_hard,    wrap_neutral, wrap_hard   ) => (true,true,true),
+        (true,  decls_hard,    wrap_neutral, wrap_neutral) => (true,true,true),
+        (true,  decls_hard,    wrap_none,    wrap_func   ) => (true,true,true),
+        (true,  decls_hard,    wrap_none,    wrap_hard   ) => (true,true,true),
+        (true,  decls_hard,    wrap_none,    wrap_neutral) => (true,true,true),
+        (true,  decls_neutral, wrap_hard,    wrap_func   ) => (true,true,true),
+        (true,  decls_neutral, wrap_hard,    wrap_hard   ) => (true,true,true),
+        (true,  decls_neutral, wrap_hard,    wrap_neutral) => (true,true,true),
+        (true,  decls_neutral, wrap_neutral, wrap_func   ) => (true,true,true),
+        (true,  decls_neutral, wrap_neutral, wrap_hard   ) => (true,true,true),
+        (true,  decls_neutral, wrap_neutral, wrap_neutral) => (true,true,true),
+        (true,  decls_neutral, wrap_none,    wrap_func   ) => (true,true,true),
+        (true,  decls_neutral, wrap_none,    wrap_hard   ) => (true,true,true),
+        (true,  decls_neutral, wrap_none,    wrap_neutral) => (true,true,true),
+        (true,  decls_none,    wrap_hard,    wrap_func   ) => (false,true,false),
+        (true,  decls_none,    wrap_hard,    wrap_hard   ) => (false,true,false),
+        (true,  decls_none,    wrap_hard,    wrap_neutral) => (false,true,false),
+        (true,  decls_none,    wrap_neutral, wrap_func   ) => (false,true,false),
+        (true,  decls_none,    wrap_neutral, wrap_hard   ) => (false,true,false),
+        (true,  decls_none,    wrap_neutral, wrap_neutral) => (true,true,true),
+        (true,  decls_none,    wrap_none,    wrap_func   ) => (false,true,false),
+        (true,  decls_none,    wrap_none,    wrap_hard   ) => (false,true,false),
+        (true,  decls_none,    wrap_none,    wrap_neutral) => (true,true,true),
     )
     expected_s(b::Bool) = b ? "assignment to outer var" : "brand-new var"
 
-    tmp_test_mod = Module()
-    tmp_test_mod_2 = Module()
+    local jl_mod = Module()
+    local fl_mod = Module()
 
-    for ((soft_mode, decls_s, middle_s, assign_s), results) in expected_outer_vals,
+    @testset for ((soft_mode, decls_s, middle_s, assign_s), results) in expected_outer_vals,
             (lhs_i, lhs) in enumerate(lhs_names)
 
         ex = decls_s(middle_s(assign_s(:($lhs = true))), lhs)
@@ -270,21 +318,24 @@ lhs_names = (:lname, :gname, :argname, :spname)
         if lhs in (:argname, :spname) && decls_s !== decls_func
             continue
         elseif lhs === :spname
-            @test_throws LoweringError expr_eval(tmp_test_mod, ex)
+            @test_throws LoweringError expr_eval(jl_mod, ex)
         else
+            @assert !isdefined(jl_mod, lhs) && !isdefined(fl_mod, lhs)
             expected = results[lhs_i]
-            reference_ok = fl_eval(tmp_test_mod_2, ex) === expected
+            reference_ok = fl_eval(fl_mod, ex) === expected
             !reference_ok && @error("flisp produced unexpected result; fix that or JL scope tests:\n",
                                    "expected $(expected_s(expected)), got $(expected_s(!expected))\n", ex)
-            ok = expr_eval(tmp_test_mod, ex) === expected
+            @test reference_ok
+            ok = expr_eval(jl_mod, ex) === expected
             !ok && @error("expected $(expected_s(expected)), got $(expected_s(!expected))\n", ex)
             @test ok
         end
 
-        if lhs === :gname
-            Base.delete_binding(tmp_test_mod, :gname)
-            Base.delete_binding(tmp_test_mod_2, :gname)
+        Core.@latestworld
+        for mod in (jl_mod, fl_mod), n in (:gname, :name)
+            isdefined(mod, n) && Base.delete_binding(mod, n)
         end
+        Core.@latestworld
     end
 end
 
@@ -339,6 +390,148 @@ end
                 @test ok
             end
             Base.delete_binding(test_mod, :assigned_global)
+        end
+    end
+end
+
+module ambiguous_local
+    global x::Int = 0
+end
+
+function resolve_and_get_bindings(
+        mod::Module, ex;
+        world::UInt = Base.get_world_counter(),
+        soft_scope::Union{Nothing,Bool} = nothing,
+    )
+    est = JuliaLowering.expr_to_est(ex)
+    ctx1, ex1 = JuliaLowering.expand_forms_1(mod, est, false, world)
+    ctx2, ex2 = JuliaLowering.expand_forms_2(ctx1, ex1)
+    ctx3, _ = JuliaLowering.resolve_scopes(ctx2, ex2; soft_scope)
+    return ctx3.bindings.info
+end
+
+@testset "is_ambiguous_local" begin
+    # Assignment in for loop within begin block after toplevel assignment
+    let bindings = resolve_and_get_bindings(ambiguous_local, :(for _ = 1:10; x = 1; end))
+        binfo = only(filter(b->b.name=="x", bindings))
+        @test binfo.kind === :local
+        @test binfo.is_ambiguous_local
+    end
+
+    # while loop
+    let bindings = resolve_and_get_bindings(ambiguous_local, :(while x < 5; x += 1; break; end))
+        binfos = filter(b->b.name=="x", bindings)
+        @test length(binfos) == 2
+        binfo = only(filter(b->b.kind==:local, binfos))
+        @test binfo.is_ambiguous_local
+        @test count(b->b.kind==:global, binfos) == 1
+    end
+
+    # No ambiguity inside a function (hard scope)
+    let bindings = resolve_and_get_bindings(ambiguous_local, :(function f()
+            for _ = 1:10
+                x = 1
+            end
+        end))
+        binfo = only(filter(b->b.name=="x", bindings))
+        @test binfo.kind === :local
+        @test !binfo.is_ambiguous_local
+    end
+
+    # No ambiguity when shadowing global variable does not exist
+    let bindings = resolve_and_get_bindings(ambiguous_local, :(for _ = 1:10; y = 1; end))
+        binfo = only(filter(b->b.name=="y", bindings))
+        @test binfo.kind === :local
+        @test !binfo.is_ambiguous_local
+    end
+
+    # Explicit `global` should not produce ambiguous local
+    let bindings = resolve_and_get_bindings(ambiguous_local, :(for _ = 1:10; global x = 1; end))
+        binfo = only(filter(b->b.name=="x", bindings))
+        @test binfo.kind === :global
+    end
+
+    # Block containing a toplevel assignment preceding a permeable scope
+    let bindings = resolve_and_get_bindings(Module(), quote
+            x = 0
+            for _ = 1:10
+                x = 1
+            end
+        end)
+        binfos = filter(b->b.name=="x", bindings)
+        @test length(binfos) == 2
+        binfo = only(filter(b->b.kind==:local, binfos))
+        @test binfo.is_ambiguous_local
+        @test count(b->b.kind==:global, binfos) == 1
+    end
+    # Block containing a permeable scope followed by a toplevel assignment
+    let bindings = resolve_and_get_bindings(Module(), quote
+            for _ = 1:10
+                x = 1
+            end
+            x = 0
+        end)
+        binfos = filter(b->b.name=="x", bindings)
+        @test length(binfos) == 2
+        binfo = only(filter(b->b.kind==:local, binfos))
+        @test binfo.is_ambiguous_local
+        @test count(b->b.kind==:global, binfos) == 1
+    end
+
+    # For some reason, flisp can avoid ambiguity when there is an additional `global` annotation.
+    # JuliaLowering may want to follow suit, but it would be better to first decide on the details of this behaviour.
+    let bindings = resolve_and_get_bindings(Module(), quote
+            global x = 0
+            for _ = 1:10
+                x = 1
+            end
+        end)
+        binfos = filter(b->b.name=="x", bindings)
+        @test length(binfos) == 2
+        binfo = only(filter(b->b.kind==:local, binfos))
+        @test_broken !binfo.is_ambiguous_local
+        @test count(b->b.kind==:global, binfos) == 1
+    end
+    let bindings = resolve_and_get_bindings(Module(), quote
+            for _ = 1:10
+                x = 1
+            end
+            global x = 0
+        end)
+        binfos = filter(b->b.name=="x", bindings)
+        @test length(binfos) == 2
+        binfo = only(filter(b->b.kind==:local, binfos))
+        @test_broken !binfo.is_ambiguous_local
+        @test count(b->b.kind==:global, binfos) == 1
+    end
+
+    @testset "soft_scope kwarg override" begin
+        # Without soft_scope, x becomes an ambiguous local
+        let bindings = resolve_and_get_bindings(ambiguous_local, :(for _ = 1:10; x = 1; end))
+            binfo = only(filter(b->b.name=="x", bindings))
+            @test binfo.kind === :local
+            @test binfo.is_ambiguous_local
+        end
+        # With soft_scope=true, x stays global (no local created)
+        let bindings = resolve_and_get_bindings(ambiguous_local, :(for _ = 1:10; x = 1; end); soft_scope=true)
+            binfo = only(filter(b->b.name=="x", bindings))
+            @test binfo.kind === :global
+        end
+    end
+
+    @testset "world-age propagation" begin
+        let m = Module()
+            Core.eval(m, :(global x = 0))
+            bindings = resolve_and_get_bindings(m, :(for _ = 1:10; x = 1; end); world=Base.get_world_counter())
+            binfo = only(filter(b->b.name=="x", bindings))
+            @test binfo.kind === :local
+            @test binfo.is_ambiguous_local
+        end
+        let m = Module()
+            Core.eval(m, :(global x = 0))
+            bindings = resolve_and_get_bindings(m, :(for _ = 1:10; x = 1; end); world=Base.get_world_counter(), soft_scope=true)
+            binfo = only(filter(b->b.name=="x", bindings))
+            @test binfo.kind === :global
         end
     end
 end
