@@ -2243,7 +2243,9 @@ static Value *emit_bounds_check(jl_codectx_t &ctx, const jl_cgval_t &ainfo, jl_v
         setName(ctx.emission_context, ok, "boundscheck");
         BasicBlock *failBB = BasicBlock::Create(ctx.builder.getContext(), "fail", ctx.f);
         BasicBlock *passBB = BasicBlock::Create(ctx.builder.getContext(), "pass");
-        ctx.builder.CreateCondBr(ok, passBB, failBB);
+        MDBuilder MDB(ctx.builder.getContext());
+        SmallVector<uint32_t, 2> Weights{2000, 1};
+        ctx.builder.CreateCondBr(ok, passBB, failBB, MDB.createBranchWeights(Weights));
         ctx.builder.SetInsertPoint(failBB);
         if (!ty) { // jl_value_t** tuple (e.g. the vararg)
             ctx.builder.CreateCall(prepare_call(jlvboundserror_func), { ainfo.V, len, i });
@@ -4945,7 +4947,9 @@ static jl_cgval_t emit_memoryref_direct(jl_codectx_t &ctx, const jl_cgval_t &mem
         Value *mlen = emit_genericmemorylen(ctx, boxmem, typ);
         Value *inbound = ctx.builder.CreateICmpULT(idx0, mlen);
         setName(ctx.emission_context, inbound, "memoryref_isinbounds");
-        ctx.builder.CreateCondBr(inbound, endBB, failBB);
+        MDBuilder MDB(ctx.builder.getContext());
+        SmallVector<uint32_t, 2> Weights{2000, 1};
+        ctx.builder.CreateCondBr(inbound, endBB, failBB, MDB.createBranchWeights(Weights));
         failBB->insertInto(ctx.f);
         ctx.builder.SetInsertPoint(failBB);
         ctx.builder.CreateCall(prepare_call(jlboundserror_func),
@@ -5031,7 +5035,9 @@ static jl_cgval_t emit_memoryref(jl_codectx_t &ctx, const jl_cgval_t &ref, jl_cg
             Value *mlen = emit_genericmemorylen(ctx, mem, ref.typ);
             Value *inbound = ctx.builder.CreateICmpULT(newdata, mlen);
             setName(ctx.emission_context, offset, "memoryref_isinbounds");
-            ctx.builder.CreateCondBr(inbound, endBB, failBB);
+            MDBuilder MDB(ctx.builder.getContext());
+            SmallVector<uint32_t, 2> Weights{2000, 1};
+            ctx.builder.CreateCondBr(inbound, endBB, failBB, MDB.createBranchWeights(Weights));
             failBB->insertInto(ctx.f);
             ctx.builder.SetInsertPoint(failBB);
             ctx.builder.CreateCall(prepare_call(jlboundserror_func),
@@ -5076,26 +5082,34 @@ static jl_cgval_t emit_memoryref(jl_codectx_t &ctx, const jl_cgval_t &ref, jl_cg
             endBB = BasicBlock::Create(ctx.builder.getContext(), "idxend");
             Value *mlen = emit_genericmemorylen(ctx, mem, ref.typ);
             Value *mptr = emit_genericmemoryptr(ctx, mem, layout, 0);
+            MDBuilder MDB(ctx.builder.getContext());
+            SmallVector<uint32_t, 2> Weights{2000, 1};
 #if 0
             Value *mend = mptr;
             Value *blen = ctx.builder.CreateMul(mlen, elsz, "", true, true);
             mend = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), mptr, blen);
+            Value *notovflw = ctx.builder.CreateNot(ovflw);
+            BasicBlock *boundscheckBB = BasicBlock::Create(ctx.builder.getContext(), "boundscheck");
+            ctx.builder.CreateCondBr(notovflw, boundscheckBB, failBB, MDB.createBranchWeights(Weights));
+            boundscheckBB->insertInto(ctx.f);
+            ctx.builder.SetInsertPoint(boundscheckBB);
             Value *inbound = ctx.builder.CreateAnd(
                     ctx.builder.CreateICmpULE(mptr, newdata),
                     ctx.builder.CreateICmpULT(newdata, mend));
-            inbound = ctx.builder.CreateAnd(
-                    ctx.builder.CreateNot(ovflw),
-                    inbound);
 #elif 1
             Value *bidx0 = ctx.builder.CreateSub(
                 ctx.builder.CreatePtrToInt(newdata, ctx.types().T_size),
                 ctx.builder.CreatePtrToInt(mptr, ctx.types().T_size));
             Value *blen = ctx.builder.CreateMul(mlen, elsz, "", true, true);
             setName(ctx.emission_context, blen, "memoryref_bytelen");
+            Value *notovflw = ctx.builder.CreateNot(ovflw);
+            setName(ctx.emission_context, notovflw, "memoryref_notovflw");
+            BasicBlock *boundscheckBB = BasicBlock::Create(ctx.builder.getContext(), "boundscheck");
+            ctx.builder.CreateCondBr(notovflw, boundscheckBB, failBB, MDB.createBranchWeights(Weights));
+            boundscheckBB->insertInto(ctx.f);
+            ctx.builder.SetInsertPoint(boundscheckBB);
             Value *inbound = ctx.builder.CreateICmpULT(bidx0, blen);
             setName(ctx.emission_context, inbound, "memoryref_isinbounds");
-            inbound = ctx.builder.CreateAnd(ctx.builder.CreateNot(ovflw), inbound);
-            setName(ctx.emission_context, inbound, "memoryref_isinbounds&notovflw");
 #else
             Value *idx0; // (newdata - mptr) / elsz
             idx0 = ctx.builder.CreateSub(
@@ -5104,7 +5118,7 @@ static jl_cgval_t emit_memoryref(jl_codectx_t &ctx, const jl_cgval_t &ref, jl_cg
             idx0 = ctx.builder.CreateExactUDiv(idx0, elsz);
             Value *inbound = ctx.builder.CreateICmpULT(idx0, mlen);
 #endif
-            ctx.builder.CreateCondBr(inbound, endBB, failBB);
+            ctx.builder.CreateCondBr(inbound, endBB, failBB, MDB.createBranchWeights(Weights));
             failBB->insertInto(ctx.f);
             ctx.builder.SetInsertPoint(failBB);
             ctx.builder.CreateCall(prepare_call(jlboundserror_func),

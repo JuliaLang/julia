@@ -66,8 +66,7 @@ function endswith(a::AbstractString, b::AbstractString)
 end
 endswith(str::AbstractString, chars::Chars) = !isempty(str) && last(str) in chars
 
-function startswith(a::Union{String, SubString{String}},
-                    b::Union{String, SubString{String}})
+function startswith(a::DenseUTF8String, b::DenseUTF8String)
     cub = ncodeunits(b)
     if ncodeunits(a) < cub
         false
@@ -78,28 +77,34 @@ function startswith(a::Union{String, SubString{String}},
     end
 end
 
+# nothrow+foldable: `String`/`SubString{String}` buffers are immutable, the
+# byte-wise `_memcmp` is bounded by `sizeof(b) ≤ ncodeunits(a)`, and
+# `nextind(a, cub)` operates on a valid index (`0 ≤ cub ≤ ncodeunits(a)`).
+@assume_effects :nothrow :foldable function startswith(a::Union{String,SubString{String}}, b::Union{String,SubString{String}})
+    @invoke startswith(a::DenseUTF8String, b::DenseUTF8String)
+end
+
 """
     startswith(io::IO, prefix::Union{AbstractString,Base.Chars})
 
 Check if an `IO` object starts with a prefix, which can be either a string, a
 character, or a tuple/vector/set of characters.  See also [`peek`](@ref).
 """
-function Base.startswith(io::IO, prefix::Base.Chars)
+function startswith(io::IO, prefix::Base.Chars)
     mark(io)
     c = read(io, Char)
     reset(io)
     return c in prefix
 end
-function Base.startswith(io::IO, prefix::Union{String,SubString{String}})
+function startswith(io::IO, prefix::UTF8String)
     mark(io)
     s = read(io, ncodeunits(prefix))
     reset(io)
     return s == codeunits(prefix)
 end
-Base.startswith(io::IO, prefix::AbstractString) = startswith(io, String(prefix)::String)
+startswith(io::IO, prefix::AbstractString) = startswith(io, String(prefix)::String)
 
-function endswith(a::Union{String, SubString{String}},
-                  b::Union{String, SubString{String}})
+function endswith(a::DenseUTF8String, b::DenseUTF8String)
     astart = ncodeunits(a) - ncodeunits(b) + 1
     if astart < 1
         false
@@ -108,6 +113,12 @@ function endswith(a::Union{String, SubString{String}},
     else
         false
     end
+end
+
+# nothrow+foldable: see `startswith` above; `pointer(a, astart)` is in bounds
+# (`1 ≤ astart ≤ ncodeunits(a)+1`), and `thisind(a, astart)` accepts the same range.
+@assume_effects :nothrow :foldable function endswith(a::Union{String,SubString{String}}, b::Union{String,SubString{String}})
+    @invoke endswith(a::DenseUTF8String, b::DenseUTF8String)
 end
 
 """

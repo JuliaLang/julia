@@ -646,6 +646,42 @@ gr_mod = Module()
                   Expr(:function, Expr(:call, GlobalRef(gr_mod, sym)),
                        Expr(:block)))))
 
+    # macro gr end
+    @gensym sym
+    mac_sym = Symbol("@"*string(sym))
+    @test jl_eval(test_mod, Expr(:macro, GlobalRef(gr_mod, sym))) isa Function
+    @test Base.isdefinedglobal(gr_mod, mac_sym)
+    @test !Base.isdefinedglobal(test_mod, mac_sym)
+
+    # macro gr(x); (x, @__MODULE__); end
+    #
+    # should define the symbol in gr_mod, but the method (and expansion) are
+    # attributed to test_mod, where the macro expression was evaluated.
+    @gensym sym
+    mac_sym = Symbol("@"*string(sym))
+    @test jl_eval(test_mod, Expr(:macro, Expr(:call, GlobalRef(gr_mod, sym), :x),
+                                 Expr(:block,
+                                      Expr(:tuple, :x, :(@__MODULE__()))));
+                  expr_compat_mode=true) isa Function
+    @test Base.isdefinedglobal(gr_mod, mac_sym)
+    @test !Base.isdefinedglobal(test_mod, mac_sym)
+    @test jl_eval(gr_mod, :(@($mac_sym)(1))) == (1, test_mod)
+    @testset "globalref as macrocall name" begin
+        @test (1, test_mod) == jl_eval(
+            test_mod,
+            Expr(:macrocall, GlobalRef(gr_mod, mac_sym), LineNumberNode(1, :none), 1))
+        @test (1, test_mod) == jl_eval(
+            gr_mod,
+            Expr(:macrocall, GlobalRef(gr_mod, mac_sym), LineNumberNode(1, :none), 1))
+        # globalref(test_mod, mac_sym) should fail
+        @test_throws MacroExpansionError jl_eval(
+            test_mod,
+            Expr(:macrocall, GlobalRef(test_mod, mac_sym), LineNumberNode(1, :none), 1))
+        @test_throws MacroExpansionError jl_eval(
+            gr_mod,
+            Expr(:macrocall, GlobalRef(test_mod, mac_sym), LineNumberNode(1, :none), 1))
+    end
+
     # error: begin; local gr = 1; end
     # (note: flisp allows this)
     @gensym sym

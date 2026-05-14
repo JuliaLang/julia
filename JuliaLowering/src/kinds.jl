@@ -41,6 +41,8 @@ function _register_kinds()
             "symboliclabel"
             # Goto named label
             "symbolicgoto"
+            # Goto named label (old syntax version, no try/finally check)
+            "oldsymbolicgoto"
             # Labeled block for `@label name expr` (block break)
             "symbolicblock"
             # Internal initializer for struct types, for inner constructors/functions
@@ -96,7 +98,10 @@ function _register_kinds()
             # to occur before the methods are created
             "_generated_body"
             "with_static_parameters"
+            # converted from nothing::K"Value" into desugaring.  flisp: (null)
+            "nothing"
             "top"
+            "core"
             "lambda"
             # "A source location literal" - a node which exists only to record
             # a sourceref
@@ -146,8 +151,10 @@ function _register_kinds()
             # Pre-lowered SSA value reference from Expr(:ssavalue, N).
             # Translated to a BindingId during desugaring.
             "ssavalue"
-            # Token used by interpolate_ast to mark where `$` was
-            raw"_$"
+            # Wraps the first argument of a foreigncall when it should not be
+            # lowered (and should mostly be treated as :inert), but requires
+            # scope resolution and special conversion to Expr.
+            "foreigncall_arg1"
         "END_LOWERING_KINDS"
 
         # The following kinds are emitted by lowering and used in Julia's untyped IR

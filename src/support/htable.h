@@ -18,13 +18,14 @@ extern "C" {
 //   key   = table[2*i]
 //   value = table[2*i+1]
 // where `2*i < size`. An empty slot at index `i` is indicated with
-// `value == HT_NOTFOUND`. `count` is the number of live entries.
+// `value == HT_NOTFOUND`.
 //
 // `_space` is reserved space for efficiently allocating small tables.
 typedef struct {
     size_t size;
     void **table;
-    size_t count;
+    size_t count; // # of occupied key slots (live + tombstone)
+    size_t live;  // # of live entries (value != HT_NOTFOUND)
     void *_space[HT_N_INLINE];
 } htable_t;
 

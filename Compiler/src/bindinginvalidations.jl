@@ -3,7 +3,8 @@
 using ..Compiler: _uncompressed_ir, specializations, get_ci_mi, convert, unsafe_load, cglobal, generating_output, has_image_globalref,
     PARTITION_MASK_KIND, PARTITION_KIND_GUARD, PARTITION_FLAG_EXPORTED, PARTITION_FLAG_DEPRECATED,
     BINDING_FLAG_ANY_IMPLICIT_EDGES, binding_kind, partition_restriction, is_some_imported,
-    is_some_binding_imported, is_some_implicit, SizeUnknown, maybe_add_binding_backedge!, walk_binding_partition, abstract_eval_partition_load, userefs
+    is_some_binding_imported, is_some_implicit, SizeUnknown, maybe_add_binding_backedge!, walk_binding_partition, abstract_eval_partition_load, userefs,
+    MaybeCompressed
 using .Core: SimpleVector, CodeInfo
 
 function foreachgr(visit, src::CodeInfo)
@@ -56,7 +57,7 @@ end
 function invalidate_method_for_globalref!(gr::GlobalRef, method::Method, invalidated_bpart::Core.BindingPartition, new_max_world::UInt)
     invalidate_all = false
     binding = convert(Core.Binding, gr)
-    if isdefined(method, :source)
+    if isdefined(method, :source) && isa(method.source, MaybeCompressed)
         src = _uncompressed_ir(method)
         invalidate_all = should_invalidate_code_for_globalref(gr, src)
     end
@@ -170,6 +171,7 @@ end
 
 function scan_new_method!(method::Method, image_backedges_only::Bool)
     isdefined(method, :source) || return
+    isa(method.source, MaybeCompressed) || return
     if image_backedges_only && !has_image_globalref(method)
         return
     end

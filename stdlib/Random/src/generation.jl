@@ -518,14 +518,8 @@ _Sampler(RNG::Type{<:AbstractRNG}, t::Union{AbstractDict,AbstractSet}, n::Val{In
 _Sampler(::Type{<:AbstractRNG}, t::Union{AbstractDict,AbstractSet}, ::Val{1}) =
     SamplerTrivial(t)
 
-function nth(iter, n::Integer)::eltype(iter)
-    for (i, x) in enumerate(iter)
-        i == n && return x
-    end
-end
-
 rand(rng::AbstractRNG, sp::SamplerTrivial{<:Union{AbstractDict,AbstractSet}}) =
-    nth(sp[], rand(rng, 1:length(sp[])))
+    @inbounds Iterators.nth(sp[], rand(rng, 1:length(sp[])))
 
 
 ## random characters from a string

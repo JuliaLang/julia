@@ -171,6 +171,27 @@ isoverlong(c::AbstractChar) = false
 end
 
 """
+    Base.unsafe_codepoint(c::AbstractChar)::UInt32
+
+Like [`codepoint(c)`](@ref), but assumes `!`[`Base.ismalformed(c)`](@ref): for
+`Char`, the result is unspecified when `c` is malformed. Intended as a low-level
+helper for code that has already verified well-formedness, so that the compiler
+can prove the result is `:nothrow`. Prefer `codepoint(c)` otherwise.
+
+For non-`Char` `AbstractChar` subtypes this falls back to `UInt32(c)`.
+"""
+unsafe_codepoint(c::AbstractChar) = UInt32(c)::UInt32
+@constprop :aggressive @assume_effects :nothrow :foldable function unsafe_codepoint(c::Char)
+    u = bitcast(UInt32, c)
+    u < 0x80000000 && return u >> 24
+    l1 = leading_ones(u)
+    t0 = trailing_zeros(u) & 56
+    u &= 0xffffffff >> l1
+    u >>= t0
+    return ((u & 0x0000007f) >> 0) | ((u & 0x00007f00) >> 2) | ((u & 0x007f0000) >> 4) | ((u & 0x7f000000) >> 6)
+end
+
+"""
     decode_overlong(c::AbstractChar)::Integer
 
 When [`isoverlong(c)`](@ref) is `true`, `decode_overlong(c)` returns

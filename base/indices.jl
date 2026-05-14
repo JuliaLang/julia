@@ -224,6 +224,7 @@ _shapes_match(::Bool, ::Tuple{}) = true
 _shapes_match(isfirstdim::Bool, sz) = _shapes_match(isfirstdim, (), sz...)
 _shapes_match(isfirstdim::Bool, sz::Tuple{}, i::Integer, I::Integer...) =
     isone(abs(i)) && _shapes_match(isfirstdim, sz, I...)
+
 function _shapes_match(isfirstdim, sz, i::Integer, I::Integer...)
     if i == -1
         return _shapes_match(isfirstdim, sz, I...)

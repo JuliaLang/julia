@@ -273,7 +273,7 @@ PreservedAnalyses FinalLowerGCPass::run(Function &F, FunctionAnalysisManager &AM
 #ifdef JL_VERIFY_PASSES
         assert(!verifyLLVMIR(F));
 #endif
-        return PreservedAnalyses::allInSet<CFGAnalyses>();
+        return PreservedAnalyses::none();
     }
     return PreservedAnalyses::all();
 }
