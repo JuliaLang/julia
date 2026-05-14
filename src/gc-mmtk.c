@@ -56,13 +56,8 @@ extern void mmtk_object_reference_write_slow(void* mutator, const void* parent, 
 extern void* mmtk_alloc(void* mutator, size_t size, size_t align, size_t offset, int allocator);
 extern void mmtk_post_alloc(void* mutator, void* refer, size_t bytes, int allocator);
 extern void mmtk_store_obj_size_c(void* obj, size_t size);
-extern void* MMTK_SIDE_LOG_BIT_BASE_ADDRESS;
-extern void* MMTK_SIDE_VO_BIT_BASE_ADDRESS;
-
-// MMTK_SIDE_LOG_BIT_BASE_ADDRESS lives in libmmtk_julia.so and cannot be
-// referenced by symbol name from precompiled .o files (lld won't find it).
-// This copy lives in the Julia runtime and is used by AOT-compiled code.
-JL_DLLEXPORT void* MMTK_SIDE_LOG_BIT_BASE_ADDRESS_JIT;
+JL_DLLEXPORT void* MMTK_SIDE_LOG_BIT_BASE_ADDRESS;
+JL_DLLEXPORT void* MMTK_SIDE_VO_BIT_BASE_ADDRESS;
 
 // ========================================================================= //
 // GC Initialization and Control
@@ -163,7 +158,6 @@ void jl_gc_init(void) {
         mmtk_gc_init(min_heap_size, max_heap_size, gcthreads, (sizeof(jl_taggedvalue_t)), jl_buff_tag);
     }
 
-    MMTK_SIDE_LOG_BIT_BASE_ADDRESS_JIT = MMTK_SIDE_LOG_BIT_BASE_ADDRESS;
 }
 
 void jl_start_gc_threads(void) {

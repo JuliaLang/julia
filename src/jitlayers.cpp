@@ -1885,10 +1885,9 @@ JuliaOJIT::JuliaOJIT()
 #ifdef WITH_THIRD_PARTY_HEAP
 #if WITH_THIRD_PARTY_HEAP == 1 // MMTk
     {
-        void *mmtk_log_bit_base = sys::DynamicLibrary::SearchForAddressOfSymbol("MMTK_SIDE_LOG_BIT_BASE_ADDRESS_JIT");
-        assert(mmtk_log_bit_base && "MMTK_SIDE_LOG_BIT_BASE_ADDRESS_JIT not found in process");
+        extern void* MMTK_SIDE_LOG_BIT_BASE_ADDRESS;
         orc::SymbolMap mmtk_crt;
-        mmtk_crt[mangle("MMTK_SIDE_LOG_BIT_BASE_ADDRESS_JIT")] = {ExecutorAddr::fromPtr(mmtk_log_bit_base), JITSymbolFlags::Exported};
+        mmtk_crt[mangle("MMTK_SIDE_LOG_BIT_BASE_ADDRESS")] = {ExecutorAddr::fromPtr(&MMTK_SIDE_LOG_BIT_BASE_ADDRESS), JITSymbolFlags::Exported};
         cantFail(GlobalJD.define(orc::absoluteSymbols(mmtk_crt)));
     }
 #endif

@@ -460,7 +460,6 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
         jl_stack_context_t copy_ctx;
     } lasttstate;
 
-    jl_gc_wb_back_pre(lastt);
     if (killed) {
         *pt = NULL; // can't fail after here: clear the gc-root for the target task now
         lastt->gcstack = NULL;
