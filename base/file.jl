@@ -1179,7 +1179,7 @@ on very large directories, prefer the do-block form of `scandir`.
 """
 mutable struct DirEntryIterator{T}
     const dir::String
-    req::Ptr{Cvoid}     # uv_fs_t, C_NULL until opened, C_NULL again after close
+    @atomic req::Ptr{Cvoid}     # uv_fs_t, C_NULL until opened, C_NULL again after close
     closed::Bool
     function DirEntryIterator{T}(dir::AbstractString) where {T}
         T === String || T === DirEntry || throw(ArgumentError("element type must be String or DirEntry"))
@@ -1198,14 +1198,14 @@ function _scandir_open!(it::DirEntryIterator)
         it.closed = true
         uv_error("scandir($(repr(it.dir)))", err)
     end
-    it.req = req
+    @atomic it.req = req
     return
 end
 
 function Base.close(it::DirEntryIterator)
-    req = it.req
+    # Atomically claim the request pointer so a concurrent finalizer cannot double-free.
+    req = @atomicswap it.req = C_NULL
     if req != C_NULL
-        it.req = C_NULL
         uv_fs_req_cleanup(req)
         Libc.free(req)
     end
