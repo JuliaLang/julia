@@ -448,7 +448,7 @@ static uint32_t match_sysimg_target(void *ctx, const void *id, jl_value_t **reje
             }
         }
         for (int w = 0; w < TARGET_FEATURE_WORDS; w++)
-            target.dis_features.bits[w] = hw_feature_mask.bits[w] & ~target.en_features.bits[w];
+            target.dis_features.bits[w] = llvm_feature_mask.bits[w] & ~target.en_features.bits[w];
         target.cpu_features = tp::build_llvm_feature_string(target.en_features, target.dis_features);
     }
 #else
@@ -710,7 +710,7 @@ extern "C" JL_DLLEXPORT int jl_cpufeatures_lookup(const char *cpu_name,
         return -1;
     FeatureBits hw;
     for (int i = 0; i < TARGET_FEATURE_WORDS; i++)
-        hw.bits[i] = entry->features.bits[i] & hw_feature_mask.bits[i];
+        hw.bits[i] = entry->features.bits[i] & llvm_feature_mask.bits[i];
     memcpy(features_out, &hw, sizeof(FeatureBits));
     return 0;
 }
@@ -721,7 +721,7 @@ extern "C" JL_DLLEXPORT void jl_cpufeatures_host(uint8_t *features_out, size_t b
         return;
     auto fb = tp::get_host_features();
     for (int i = 0; i < TARGET_FEATURE_WORDS; i++)
-        fb.bits[i] &= hw_feature_mask.bits[i];
+        fb.bits[i] &= llvm_feature_mask.bits[i];
     memcpy(features_out, &fb, sizeof(FeatureBits));
 }
 
