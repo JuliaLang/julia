@@ -49,10 +49,10 @@ end
         for e in readdir(DirEntry, dir)
             if isdir(e)
                 @test only(readdir(e)) == "bfile.txt"
-                @test only(readdir(DirEntry, e)).name == "bfile.txt"
+                @test basename(only(readdir(DirEntry, e))) == "bfile.txt"
             else
                 @test isfile(e)
-                @test e.name == "afile.txt"
+                @test basename(e) == "afile.txt"
             end
         end
     end
@@ -71,7 +71,7 @@ end
         # Default yields String names matching readdir
         @test sort!(collect(scandir(dir))) == sort!(readdir(dir))
         # DirEntry form yields DirEntry objects matching readdir(DirEntry, ...)
-        @test sort!(map(e -> e.name, collect(scandir(DirEntry, dir)))) == sort!(readdir(dir))
+        @test sort!(basename.(collect(scandir(DirEntry, dir)))) == sort!(readdir(dir))
 
         # Iterator type and traits
         it = scandir(dir)
