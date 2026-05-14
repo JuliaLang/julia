@@ -1476,7 +1476,7 @@ end
     types = Base.uniontypes(U)
     length(types) > 32 && return :(error("unreachable"))
     switch = :(error("invalid bits-union tag byte ", tag, " for eltype ", $U))
-    for (k, T) in Iterators.reverse(collect(enumerate(types)))
+    for (k, T) in Iterators.reverse(Iterators.enumerate(types))
         tag_val = UInt8(k - 1)
         body = sizeof(T) == 0 ?
             :(a[i] = $(T.instance)) :
