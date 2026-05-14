@@ -777,3 +777,6 @@ let A=[1;;]
     @test reduce(vcat, Any[A]) !== A
     @test reduce(hcat, Any[A]) !== A
 end
+
+# correct interation between `foldr` and `Iterators.flatten`
+@test foldr(*, Iterators.flatten([["a", "b"], ["c", "d"]])) == "abcd"
