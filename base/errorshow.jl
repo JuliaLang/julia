@@ -659,7 +659,6 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
     special = f === convert || f === getindex || f === setindex!
     f isa Core.Builtin && return # `methods` isn't very useful for a builtin
     funcs = Tuple{Any,Vector{Any}}[(f, arg_types_param)]
-    show_constructor_hint = false
 
     # An incorrect call method produces a MethodError for convert.
     # It also happens that users type convert when they mean call. So
@@ -672,9 +671,9 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
     end
 
     # helpful when a parameterized struct has an unparameterized inner constructor
-    if isa(f, DataType) && (f !== f.name.wrapper) && isempty(methods(f))
+    show_constructor_hint = isa(f, DataType) && (f !== f.name.wrapper) && isempty(methods(f))
+    if show_constructor_hint
         push!(funcs, (f.name.wrapper, arg_types_param))
-        show_constructor_hint = true
     end
 
     for (func, arg_types_param) in funcs
