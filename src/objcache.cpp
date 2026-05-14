@@ -5,8 +5,8 @@
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/SHA1.h>
 
-#include "julia.h"
 #include "jl_codegen_hash.inc"
+#include "julia.h"
 
 static FILE *getLogFile()
 {
@@ -68,6 +68,8 @@ void ObjCache::initDB()
 {
     std::unique_lock<std::mutex> Lock{Mutex};
     std::string Path;
+    MDB_txn *Txn;
+
     if (Initialized.load(memory_order_acquire))
         return;
 
@@ -90,7 +92,6 @@ void ObjCache::initDB()
         goto cleanup;
     }
 
-    MDB_txn *Txn;
     if (checkMDB(mdb_txn_begin(Env, nullptr, 0, &Txn)))
         goto cleanup;
     if (checkMDB(mdb_dbi_open(Txn, "objcache", MDB_CREATE, &ObjCacheDbi)))
@@ -110,9 +111,34 @@ cleanup:
     Initialized.store(true, memory_order_release);
 }
 
-// NWrite has a single reader and writer
-static size_t NWrite = 0;
-static std::atomic<size_t> NRead = 0, NMiss = 0, NHit = 0;
+static std::atomic<size_t> NWrite = 0, NRead = 0, NMiss = 0, NHit = 0;
+
+static ObjCache::Hash hashModule(const llvm::Module &M)
+{
+    llvm::raw_null_ostream OS;
+    llvm::BitcodeWriter BW{OS};
+    llvm::ModuleHash ModHash;
+    llvm::SHA1 Hasher;
+
+    BW.writeModule(M, false, nullptr, true, &ModHash);
+    BW.writeSymtab();
+    BW.writeStrtab();
+
+    Hasher.update(LLVM_VERSION_STRING);
+    Hasher.update(JL_CODEGEN_SRC_HASH);
+    Hasher.update({(uint8_t *)&ModHash[0], sizeof ModHash});
+    return Hasher.final();
+}
+
+static MDB_val hashToKey(ObjCache::Hash H, llvm::SmallVectorImpl<char> &Out)
+{
+    llvm::StringRef Prefix = "obj-";
+    Out.append(Prefix.begin(), Prefix.end());
+    llvm::toHex(H, true, Out);
+    Out.push_back(0);
+    // Add null terminator for convenient printing, but don't include it in the key.
+    return {Out.size_in_bytes() - 1, Out.data()};
+}
 
 std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Compile)
 {
@@ -131,20 +157,9 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
 
     auto LookupStart = Clock::now();
 
-    llvm::raw_null_ostream OS;
-    llvm::BitcodeWriter BW{OS};
-    llvm::ModuleHash ModHash;
-    llvm::SmallVector<char, 2 * sizeof ModHash + 1> KeyBuf;
-    BW.writeModule(M, false, nullptr, true, &ModHash);
-    BW.writeSymtab();
-    BW.writeStrtab();
-    llvm::SHA1 Hasher;
-    Hasher.update(LLVM_VERSION_STRING);
-    Hasher.update(JL_CODEGEN_SRC_HASH);
-    Hasher.update({(uint8_t *)&ModHash[0], sizeof ModHash});
-    Hash H = Hasher.final();
-    llvm::toHex(H, true, KeyBuf);
-    KeyBuf.push_back(0);
+    Hash H = hashModule(M);
+    llvm::SmallVector<char, 4 + 2 * sizeof(llvm::ModuleHash) + 1> KeyBuf;
+    MDB_val Key = hashToKey(H, KeyBuf);
 
     MDB_txn *Txn;
     if (int Err = mdb_txn_begin(Env, nullptr, MDB_RDONLY, &Txn)) {
@@ -152,7 +167,6 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
         return Compile();
     }
 
-    MDB_val Key{sizeof H, H.data()};
     MDB_val Data;
     if (int Err = mdb_get(Txn, ObjCacheDbi, &Key, &Data)) {
         if (Err != MDB_NOTFOUND)
@@ -198,7 +212,7 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
     return Buf;
 }
 
-bool ObjCache::isEnabled()
+bool ObjCache::isEnabled() const
 {
     return Env;
 }
@@ -217,8 +231,8 @@ void ObjCache::shutdown()
     if (LogFile)
         jl_safe_printf(
             "cache read : %zu\ncache write: %zu\ncache hit  : %zu\ncache miss : %zu\n",
-            NRead.load(memory_order_relaxed), NWrite, NHit.load(memory_order_relaxed),
-            NMiss.load(memory_order_relaxed));
+            NRead.load(memory_order_relaxed), NWrite.load(memory_order_relaxed),
+            NHit.load(memory_order_relaxed), NMiss.load(memory_order_relaxed));
 }
 
 void ObjCache::writerThread()
@@ -242,17 +256,18 @@ void ObjCache::writerThread()
 
         using Clock = std::chrono::steady_clock;
 
-        for (auto &[Hash, Obj] : LocalQueue) {
-            llvm::SmallVector<char, 2 * sizeof Hash + 1> KeyBuf;
-            llvm::toHex({(uint8_t *)&Hash[0], sizeof Hash}, true, KeyBuf);
-            KeyBuf[KeyBuf.size() - 1] = 0;
-
-            MDB_val Key{sizeof Hash, Hash.data()};
+        bool Abort = false;
+        for (auto &[H, Obj] : LocalQueue) {
+            llvm::SmallVector<char, 4 + 2 * sizeof(llvm::ModuleHash) + 1> KeyBuf;
+            MDB_val Key = hashToKey(H, KeyBuf);
             MDB_val Data{Obj->getBufferSize(), (void *)Obj->getBufferStart()};
             auto WriteStart = Clock::now();
-            if (int Err = mdb_put(Txn, ObjCacheDbi, &Key, &Data, 0))
+            if (int Err = mdb_put(Txn, ObjCacheDbi, &Key, &Data, 0)) {
                 checkMDB(Err);
-            NWrite += Obj->getBufferSize();
+                Abort = true;
+                break;
+            }
+            NWrite.fetch_add(Obj->getBufferSize(), memory_order_relaxed);
             double WriteMs =
                 std::chrono::duration<double, std::milli>(Clock::now() - WriteStart)
                     .count();
@@ -262,6 +277,9 @@ void ObjCache::writerThread()
             auto _ = std::move(Obj);
         }
 
-        checkMDB(mdb_txn_commit(Txn));
+        if (Abort)
+            mdb_txn_abort(Txn);
+        else
+            checkMDB(mdb_txn_commit(Txn));
     }
 }

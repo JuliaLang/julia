@@ -33,7 +33,7 @@ public:
     ObjCache() = default;
     ~ObjCache() JL_NOTSAFEPOINT = default;
     std::unique_ptr<llvm::MemoryBuffer> get(llvm::Module &M, CompileFn Compile);
-    bool isEnabled() JL_NOTSAFEPOINT;
+    bool isEnabled() const JL_NOTSAFEPOINT;
     void shutdown() JL_NOTSAFEPOINT;
 
     using Hash = std::array<uint8_t, 20>;
