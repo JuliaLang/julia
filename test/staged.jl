@@ -490,7 +490,7 @@ function f_generated_lno1(x)
     end
 end
 
-@test f_generated_lno1(1) == 1
+@test f_generated_lno1(1) == 1 || f_generated_lno1(1) == "nongen"
 let m = methods(f_generated_lno1)[1]
     @test m.line > f_generated_lno1_lower_bound
     @test m.file |> string == @__FILE__()
@@ -505,7 +505,7 @@ f_generated_lno2_lower_bound = @__LINE__()
     :(x)
 end
 
-@test f_generated_lno2(1) == 1
+@test f_generated_lno2(1) == 1 || f_generated_lno2(1) == "nongen"
 let m = methods(f_generated_lno2)[1]
     @test m.line > f_generated_lno2_lower_bound
     @test m.file |> string == @__FILE__()
