@@ -1108,9 +1108,11 @@ function flatten_ncat_rows!(flat_elems, nrow_spans, row_major, parent_layout_dim
     k = kind(ex)
     if k == K"row"
         layout_dim = 1
+        elems = children(ex)
         parent_layout_dim != 1 || throw(LoweringError(ex,"Badly nested rows in `ncat`"))
     elseif k == K"nrow"
-        dim = JuliaSyntax.numeric_flags(ex)
+        dim = ex[1].value::Int
+        elems = children(ex)[2:end]
         dim > 0                || throw(LoweringError(ex,"Unsupported dimension $dim in ncat"))
         !row_major || dim != 2 || throw(LoweringError(ex,"2D `nrow` cannot be mixed with `row` in `ncat`"))
         layout_dim = nrow_flipdim(row_major, dim)
@@ -1125,7 +1127,7 @@ function flatten_ncat_rows!(flat_elems, nrow_spans, row_major, parent_layout_dim
     end
     row_start = length(flat_elems)
     parent_layout_dim > layout_dim || throw(LoweringError(ex, "Badly nested rows in `ncat`"))
-    for e in children(ex)
+    for e in elems
         if layout_dim == 1
             kind(e) ∉ KSet"nrow row" || throw(LoweringError(e,"Badly nested rows in `ncat`"))
         end
@@ -1143,11 +1145,11 @@ end
 # - ragged column first or row first
 function expand_ncat(ctx, ex)
     is_typed = kind(ex) == K"typed_ncat"
-    outer_dim = JuliaSyntax.numeric_flags(ex)
-    @jl_assert outer_dim > 0 (ex,"Unsupported dimension in ncat")
     eltype      = is_typed ? ex[1]     : nothing
-    elements    = is_typed ? ex[2:end] : ex[1:end]
+    outer_dim   = is_typed ? ex[2].value::Int : ex[1].value::Int
+    elements    = is_typed ? ex[3:end] : ex[2:end]
     hvncat_name = is_typed ? "typed_hvncat" : "hvncat"
+    @jl_assert outer_dim > 0 (ex,"Unsupported dimension in ncat")
     if !any(kind(e) in KSet"row nrow" for e in elements)
         # One-dimensional ncat along some dimension
         #   [a ;;; b ;;; c]
@@ -3559,9 +3561,10 @@ function expand_typegroup_def(ctx, ex)
             throw(LoweringError(child, "`typegroup` only supports `struct` definitions"))
         end
 
-        @jl_assert numchildren(sdef) == 2 sdef
-        type_sig = sdef[1]
-        type_body = sdef[2]
+        @jl_assert numchildren(sdef) == 3 sdef
+        is_mutable = sdef[1].value::Bool
+        type_sig = sdef[2]
+        type_body = sdef[3]
         if kind(type_body) != K"block"
             throw(LoweringError(type_body, "expected block for `struct` fields"))
         end
@@ -3575,7 +3578,6 @@ function expand_typegroup_def(ctx, ex)
         _collect_struct_fields(ctx, field_names, field_types, field_attrs, field_docs,
                                inner_defs, children(type_body))
 
-        is_mutable = has_flags(sdef, JuliaSyntax.MUTABLE_FLAG)
         min_initialized = minimum((_constructor_min_initialized(e) for e in inner_defs),
                                   init=length(field_names))
 
@@ -3735,9 +3737,10 @@ function expand_typegroup_def(ctx, ex)
 end
 
 function expand_struct_def(ctx, ex, docs)
-    @jl_assert numchildren(ex) == 2 ex
-    type_sig = ex[1]
-    type_body = ex[2]
+    @jl_assert numchildren(ex) == 3 ex
+    is_mutable = ex[1].value::Bool
+    type_sig = ex[2]
+    type_body = ex[3]
     if kind(type_body) != K"block"
         throw(LoweringError(type_body, "expected block for `struct` fields"))
     end
@@ -3750,7 +3753,6 @@ function expand_struct_def(ctx, ex, docs)
     inner_defs = SyntaxList(ctx)
     _collect_struct_fields(ctx, field_names, field_types, field_attrs, field_docs,
                            inner_defs, children(type_body))
-    is_mutable = has_flags(ex, JuliaSyntax.MUTABLE_FLAG)
     min_initialized = minimum((_constructor_min_initialized(e) for e in inner_defs),
                               init=length(field_names))
     newtype_var = ssavar(ctx, ex, "struct_type")

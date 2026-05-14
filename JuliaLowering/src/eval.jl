@@ -127,18 +127,13 @@ else
 
         expected_fns = (:code, :debuginfo, :ssavaluetypes, :ssaflags, :slotnames, :slotflags, :slottypes, :rettype, :parent, :edges, :min_world, :max_world, :method_for_inference_limit_heuristics, :nargs, :propagate_inbounds, :has_fcall, :has_image_globalref, :nospecializeinfer, :isva, :inlining, :constprop, :purity, :inlining_cost)
         expected_fts = (Vector{Any}, Core.DebugInfo, Any, Vector{UInt32}, Vector{Symbol}, Vector{UInt8}, Any, Any, Any, Any, UInt, UInt, Any, UInt, Bool, Bool, Bool, Bool, Bool, UInt8, UInt8, UInt16, UInt16)
-
-        code = if fns != expected_fns
-            unexpected_fns = collect(setdiff(Set(fns), Set(expected_fns)))
-            missing_fns = collect(setdiff(Set(expected_fns), Set(fns)))
+        code = if fns != expected_fns || fts != expected_fts
             :(function _CodeInfo(args...)
-                  error("Unrecognized CodeInfo fields: Maybe version $VERSION is too new for this version of JuliaLowering?"
-                         * isempty(unexpected_fns) ? "" : "\nUnexpected fields found: $($unexpected_fns)"
-                         * isempty(missing_fns)    ? "" : "\nMissing fields:          $($missing_fns)")
-              end)
-        elseif fts != expected_fts
-            :(function _CodeInfo(args...)
-                  error("Unrecognized CodeInfo field types: Maybe version $VERSION is too new for this version of JuliaLowering?")
+                  error(string(
+                      "JuliaLowering didn't recognize Core.CodeInfo's fields; ",
+                      "it may need updating to match Core.CodeInfo.\n",
+                      "expected field names: $($expected_fns)\n",
+                      "expected field types: $($expected_fts)\n"))
               end)
         else
             :(function _CodeInfo($(fns...))

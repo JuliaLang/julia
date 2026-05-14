@@ -62,7 +62,8 @@ Build system changes
 New library functions
 ---------------------
 
-- `Base.generating_output()` has been made `public` (but not exported) to allow
+* `tap(f)` creates a function that calls `f(x)` for side effects and returns `x`. ([#61340]).
+* `Base.generating_output()` has been made `public` (but not exported) to allow
   checking whether the current process is performing compilation for a
   pkgimage/sysimage ([#61224]).
 

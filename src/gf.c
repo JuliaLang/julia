@@ -1029,6 +1029,20 @@ jl_value_t *jl_typeinf_func JL_GLOBALLY_ROOTED = NULL;
 jl_value_t *jl_compile_and_emit_func JL_GLOBALLY_ROOTED = NULL;
 JL_DLLEXPORT size_t jl_typeinf_world = 1;
 
+// Force Compiler (and staticdata serialization) not to throw away Julia IR,
+// even when it is not needed for inlining, etc. - intended for debugging only
+static _Atomic(int8_t) jl_type_infer_preserve_ir = 0;
+
+JL_DLLEXPORT int8_t jl_get_type_infer_preserve_ir(void)
+{
+    return jl_atomic_load_relaxed(&jl_type_infer_preserve_ir);
+}
+
+JL_DLLEXPORT void jl_set_type_infer_preserve_ir(int8_t v)
+{
+    jl_atomic_store_relaxed(&jl_type_infer_preserve_ir, v);
+}
+
 JL_DLLEXPORT void jl_set_typeinf_func(jl_value_t *f)
 {
     jl_typeinf_func = (jl_value_t*)f;
@@ -1091,8 +1105,10 @@ static jl_value_t *inst_varargp_in_env(jl_value_t *decl, jl_svec_t *sparams)
         // and the user called it with `Tuple{Vararg{Union{Nothing,Int},N}}`, then T is unbound
         jl_value_t **sp = jl_svec_data(sparams);
         while (jl_is_unionall(decl)) {
-            jl_tvar_t *v = (jl_tvar_t*)*sp;
-            if (jl_is_typevar(v)) {
+            jl_tvar_t *v = NULL;
+            if (jl_is_svec(*sp))
+                v = (jl_tvar_t*)jl_svecref(*sp, 0);
+            if (v && jl_is_typevar(v)) {
                 // must unwrap and re-wrap Vararg object explicitly here since jl_type_unionall handles it differently
                 jl_value_t *T = ((jl_vararg_t*)vm)->T;
                 jl_value_t *N = ((jl_vararg_t*)vm)->N;
@@ -1693,7 +1709,7 @@ jl_method_instance_t *cache_method(
                 int k, l;
                 for (k = 0, l = jl_svec_len(env); k < l; k++) {
                     jl_value_t *env_k = jl_svecref(env, k);
-                    if (jl_is_typevar(env_k) || jl_is_vararg(env_k)) {
+                    if (jl_is_svec(env_k) || jl_has_free_typevars(env_k) || jl_is_vararg(env_k)) {
                         unmatched_tvars = 1;
                         break;
                     }

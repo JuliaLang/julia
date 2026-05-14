@@ -980,7 +980,7 @@ julia> [0 1; 2 3] .|> (x -> x^2) |> sum
 |>(x, f) = f(x)
 
 _stable_typeof(x) = typeof(x)
-_stable_typeof(::Type{T}) where {T} = @isdefined(T) ? Type{T} : DataType
+_stable_typeof(::Type{T}) where {T} = @isdefined(T) && !Core.has_free_typevars(T) ? Type{T} : DataType
 
 """
     f = Returns(value)
@@ -1362,6 +1362,27 @@ struct Splat{F} <: Function
 end
 (s::Splat)(args) = s.f(args...)
 show(io::IO, s::Splat) = (print(io, "splat("); show(io, s.f); print(io, ")"))
+
+"""
+    tap(f)
+
+Create a function that calls `f(x)` and returns `x`.
+
+# Examples
+```jldoctest
+julia> 2 |> sqrt |> tap(println) |> inv
+1.4142135623730951
+0.7071067811865475
+
+julia> "hello" |> uppercase |> tap(Base.Fix1(println, stderr)) |> length
+HELLO
+5
+```
+
+!!! compat "Julia 1.14"
+    `tap` requires at least Julia 1.14.
+"""
+tap(f) = x -> (f(x); x)
 
 ## in and related operators
 

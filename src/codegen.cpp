@@ -3004,13 +3004,6 @@ std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &conte
     m->setTargetTriple(triple);
 #endif
 
-    if (triple.isOSWindows() && triple.getArch() == Triple::x86) {
-        // tell Win32 to assume the stack is always 16-byte aligned,
-        // and to ensure that it is 16-byte aligned for out-going calls,
-        // to ensure compatibility with GCC codes
-        m->setOverrideStackAlignment(16);
-    }
-
     if (source) {
         // Copy module flags from source module
         SmallVector<Module::ModuleFlagEntry, 8> Flags;
@@ -3018,21 +3011,27 @@ std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &conte
         for (const auto &Flag : Flags) {
             m->addModuleFlag(Flag.Behavior, Flag.Key->getString(), Flag.Val);
         }
-        // Copy other module-level properties
-        m->setStackProtectorGuard(source->getStackProtectorGuard());
-        m->setOverrideStackAlignment(source->getOverrideStackAlignment());
     }
-    else {
-        // No source: set default Julia flags
-        // According to clang darwin above 10.10 supports dwarfv4
+
+    // Set default Julia flags
+    // According to clang darwin above 10.10 supports dwarfv4
+    if (m->getDwarfVersion() == 0) {
         m->addModuleFlag(llvm::Module::Warning, "Dwarf Version", 4);
         m->addModuleFlag(llvm::Module::Warning, "Debug Info Version",
                          llvm::DEBUG_METADATA_VERSION);
+    }
 
+    if (triple.isOSWindows() && triple.getArch() == Triple::x86) {
+        // tell Win32 to assume the stack is always 16-byte aligned,
+        // and to ensure that it is 16-byte aligned for out-going calls,
+        // to ensure compatibility with GCC codes
+        if (m->getOverrideStackAlignment() == 0)
+            m->setOverrideStackAlignment(16);
+    }
 #if defined(JL_DEBUG_BUILD)
+    if (m->getStackProtectorGuard().empty())
         m->setStackProtectorGuard("global");
 #endif
-    }
 
     return m;
 }
@@ -3133,7 +3132,8 @@ static std::pair<bool, bool> uses_specsig(jl_value_t *abi, jl_method_instance_t 
         if ((size_t)jl_subtype_env_size(lam->def.method->sig) != jl_svec_len(lam->sparam_vals))
             needsparams = true;
         for (size_t i = 0; i < jl_svec_len(lam->sparam_vals); ++i) {
-            if (jl_is_typevar(jl_svecref(lam->sparam_vals, i)))
+            jl_value_t *sp = jl_svecref(lam->sparam_vals, i);
+            if (jl_is_svec(sp) || jl_has_free_typevars(sp))
                 needsparams = true;
         }
     }
@@ -3317,7 +3317,7 @@ static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex)
             size_t idx = jl_unbox_long(jl_exprarg(e, 0));
             if (idx <= jl_svec_len(ctx.linfo->sparam_vals)) {
                 jl_value_t *e = jl_svecref(ctx.linfo->sparam_vals, idx - 1);
-                if (jl_is_typevar(e))
+                if (jl_is_svec(e) || jl_has_free_typevars(e))
                     return NULL;
                 return e;
             }
@@ -5839,7 +5839,7 @@ static jl_cgval_t emit_sparam(jl_codectx_t &ctx, size_t i)
 {
     if (jl_svec_len(ctx.linfo->sparam_vals) > 0) {
         jl_value_t *e = jl_svecref(ctx.linfo->sparam_vals, i);
-        if (!jl_is_typevar(e)) {
+        if (!jl_is_svec(e) && !jl_has_free_typevars(e)) {
             return mark_julia_const(ctx, e);
         }
     }
@@ -5847,7 +5847,7 @@ static jl_cgval_t emit_sparam(jl_codectx_t &ctx, size_t i)
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
     Value *sp = ai.decorateInst(ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bp, Align(sizeof(void*))));
     setName(ctx.emission_context, sp, "sparam");
-    Value *isnull = ctx.builder.CreateICmpNE(emit_typeof(ctx, sp, false, true), emit_tagfrom(ctx, jl_tvar_type));
+    Value *isnull = ctx.builder.CreateICmpNE(emit_typeof(ctx, sp, false, true), emit_tagfrom(ctx, jl_simplevector_type));
     jl_unionall_t *sparam = (jl_unionall_t*)ctx.linfo->def.method->sig;
     for (size_t j = 0; j < i; j++) {
         sparam = (jl_unionall_t*)sparam->body;
@@ -5891,14 +5891,14 @@ static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym, int allow_i
         size_t i = jl_unbox_long(jl_exprarg(sym, 0)) - 1;
         if (jl_svec_len(ctx.linfo->sparam_vals) > 0) {
             jl_value_t *e = jl_svecref(ctx.linfo->sparam_vals, i);
-            if (!jl_is_typevar(e)) {
+            if (!jl_is_svec(e) && !jl_has_free_typevars(e)) {
                 return mark_julia_const(ctx, jl_true);
             }
         }
         Value *bp = emit_ptrgep(ctx, maybe_decay_tracked(ctx, ctx.spvals_ptr), i * sizeof(jl_value_t*) + sizeof(jl_svec_t));
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
         Value *sp = ai.decorateInst(ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bp, Align(sizeof(void*))));
-        isnull = ctx.builder.CreateICmpNE(emit_typeof(ctx, sp, false, true), emit_tagfrom(ctx, jl_tvar_type));
+        isnull = ctx.builder.CreateICmpNE(emit_typeof(ctx, sp, false, true), emit_tagfrom(ctx, jl_simplevector_type));
     }
     else {
         assert(false && "malformed expression");
@@ -9300,15 +9300,16 @@ static jl_llvm_functions_t
             while (1) {
                 if (!jl_is_symbol(debuginfo->def)) // this is a path
                     func = debuginfo->def; // this is inlined
-                struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo->codelocs, pc);
-                size_t i = lineidx.line;
+                struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, pc);
+                size_t i = lineidx.loc;
                 if (i < 0) // pc out of range: broken debuginfo?
                     return false;
                 if (i == 0 && lineidx.to == 0) // no update
                     return false;
-                if (pc > 0 && (jl_value_t*)debuginfo->linetable != jl_nothing) {
+                if (pc > 0 && jl_is_debuginfo(debuginfo->linetable)) {
                     // indirection node
-                    if (!append_lineinfo(debuginfo->linetable, func, to, i))
+                    if (!append_lineinfo((jl_debuginfo_t *)debuginfo->linetable,
+                                         func, to, i))
                         return false; // no update
                 }
                 else {
@@ -9322,10 +9323,10 @@ static jl_llvm_functions_t
                     info.line = i;
                     info.line0 = 0;
                     if (pc == 1) {
-                        struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo->codelocs, 0);
+                        struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, 0);
                         assert(lineidx.to == 0 && lineidx.pc == 0);
-                        if (lineidx.line > 0 && info.line != lineidx.line)
-                            info.line0 = lineidx.line;
+                        if (lineidx.loc > 0 && info.line != lineidx.loc)
+                            info.line0 = lineidx.loc;
                     }
                     if (info.file.empty())
                         info.file = "<missing>";
@@ -9512,8 +9513,8 @@ static jl_llvm_functions_t
                 jl_debuginfo_t *edge = (jl_debuginfo_t*)jl_svecref(debuginfo->edges, i);
                 record_line_exists(edge, NULL);
             }
-            while ((jl_value_t*)debuginfo->linetable != jl_nothing)
-                debuginfo = debuginfo->linetable;
+            while (jl_is_debuginfo(debuginfo->linetable))
+                debuginfo = (jl_debuginfo_t*)debuginfo->linetable;
             jl_module_t *modu = func ? jl_debuginfo_module1(func) : NULL;
             if (modu == NULL)
                 modu = ctx.module;
@@ -9528,11 +9529,11 @@ static jl_llvm_functions_t
             bool is_tracked = in_tracked_path(file);
             if (do_coverage(is_user_code, is_tracked)) {
                 for (size_t pc = 0; 1; pc++) {
-                    struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo->codelocs, pc);
-                    if (lineidx.line == -1)
+                    struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, pc);
+                    if (lineidx.loc == -1)
                         break;
-                    if (lineidx.line > 0)
-                        jl_coverage_alloc_line(file.data(), lineidx.line);
+                    if (lineidx.loc > 0)
+                        jl_coverage_alloc_line(file.data(), lineidx.loc);
                 }
             }
         };

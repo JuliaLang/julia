@@ -140,7 +140,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
         inferred_result = nothing
         debuginfo = nothing
         const_flag = is_result_constabi_eligible(result)
-        discard_src = caller.cache_mode === CACHE_MODE_NULL || const_flag
+        discard_src = caller.cache_mode === CACHE_MODE_NULL || (const_flag && may_discard_trees(interp))
         if !discard_src
             inferred_result = transform_result_for_cache(interp, result, edges)
             if inferred_result !== nothing
@@ -460,7 +460,7 @@ end
 
 function transform_result_for_local_cache(interp::AbstractInterpreter, result::InferenceResult)
     ## XXX: this must perform the exact same operations as transform_result_for_cache to avoid introducing soundness bugs
-    if is_result_constabi_eligible(result)
+    if may_discard_trees(interp) && is_result_constabi_eligible(result)
         return nothing
     end
     src = result.src
@@ -1579,8 +1579,7 @@ function compileable_specialization_for_call(interp::AbstractInterpreter, @nospe
     compileable_atype = get_compileable_sig(match.method, match.spec_types, match.sparams)
     compileable_atype === nothing && return nothing
     if match.spec_types !== compileable_atype
-        sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), compileable_atype, match.method.sig)::SimpleVector
-        sparams = sp_[2]::SimpleVector
+        (_, sparams) = typeintersect_env(compileable_atype, match.method.sig)
         mi = specialize_method(match.method, compileable_atype, sparams)
     else
         mi = specialize_method(match.method, compileable_atype, match.sparams)
