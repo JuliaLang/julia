@@ -18,8 +18,7 @@
 /*
  * Environment variable knobs:
  *
- * JULIA_OBJCACHE       Set to 1 to enable the objcache. 0, or any other value
- *                      disables the cache.
+ * JULIA_OBJCACHE       Set to 0 to disable the objcache.
  * JULIA_OBJCACHE_LOG   When set, logs cache hits/misses to the provided path.
  * JULIA_OBJCACHE_PATH  When unset, the cache is stored in the depot, under
  *                      /cache/<Julia version>.  It is useful to set this when
