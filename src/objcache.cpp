@@ -14,7 +14,12 @@ using endianness = llvm::endianness;
 
 // Skip atime refreshes when the existing access time is within this many
 // nanoseconds of the new one, to avoid excessive LRU bookkeeping writes.
-static constexpr uint64_t OBJCACHE_ATIME_GRANULARITY = (uint64_t)300 * 1000000000;
+static constexpr uint64_t OBJCACHE_ATIME_GRANULARITY = 300;
+static constexpr size_t OBJCACHE_CAPACITY = 128 << 20; // 1 MiB (temp)
+// When the map is full, evict down to OBJCACHE_EVICT_TO/2^31 capacity.
+static constexpr uint32_t OBJCACHE_EVICT_TO = 536870912 /* 1073741824 */; // 50%
+// Evict when we reach OBJCACHE_EVICT_FROM/2^31 of capacity.
+static constexpr uint32_t OBJCACHE_EVICT_FROM = 1073741824 /* 1610612736 */; // 75%
 
 static FILE *getLogFile()
 {
@@ -90,7 +95,7 @@ public:
         Txn = nullptr;
         return Ret;
     }
-    MDB_txn *Txn;
+    MDB_txn *Txn{};
 };
 
 class MDBMemoryBuffer : public llvm::MemoryBuffer {
@@ -123,7 +128,7 @@ void ObjCache::initDB()
     }
     checkMDB(mdb_env_set_maxreaders(Env, 510));
     checkMDB(mdb_env_set_maxdbs(Env, 128));
-    checkMDB(mdb_env_set_mapsize(Env, (size_t)1 << 20));
+    checkMDB(mdb_env_set_mapsize(Env, OBJCACHE_CAPACITY));
     llvm::sys::fs::create_directories(*CachePath);
     if (checkMDB(mdb_env_open(Env, CachePath->c_str(), MDB_NOSYNC | MDB_NOTLS, 0640))) {
         mdb_env_close(Env);
@@ -185,23 +190,35 @@ static ObjCache::Hash hashModule(const llvm::Module &M)
 }
 
 constexpr size_t OBJKEY_SIZE = 1 + sizeof(ObjCache::Hash);
-constexpr size_t METAKEY_SIZE = 1 + sizeof(uint64_t) + sizeof(ObjCache::Hash);
+constexpr size_t METAKEY_SIZE = 1 + sizeof(int64_t) + sizeof(ObjCache::Hash);
+
+constexpr char OBJKEY_TAG = 'O';
+constexpr char METAKEY_TAG = 'M';
 
 std::array<uint8_t, OBJKEY_SIZE> toObjKey(const ObjCache::Hash &Hash)
 {
     std::array<uint8_t, OBJKEY_SIZE> Ret;
-    Ret[0] = 'O';
+    Ret[0] = OBJKEY_TAG;
     memcpy(Ret.begin() + 1, Hash.begin(), Hash.size());
     return Ret;
 }
 
-std::array<uint8_t, METAKEY_SIZE> toMetaKey(uint64_t Time, const ObjCache::Hash &Hash)
+std::array<uint8_t, METAKEY_SIZE> toMetaKey(int64_t Time, const ObjCache::Hash &Hash)
 {
     std::array<uint8_t, METAKEY_SIZE> Ret;
-    Ret[0] = 'M';
+    Ret[0] = METAKEY_TAG;
     endian::write(Ret.begin() + 1, Time, endianness::big);
     memcpy(Ret.begin() + 1 + sizeof Time, Hash.begin(), Hash.size());
     return Ret;
+}
+
+std::pair<int64_t, ObjCache::Hash> fromMetaKey(const char *Key)
+{
+    assert(Key[0] == OBJKEY_TAG);
+    ObjCache::Hash Hash;
+    auto Time = endian::read<int64_t>(Key + 1, endianness::big);
+    memcpy(Hash.begin(), Key + 1 + sizeof Time, sizeof Hash);
+    return {Time, Hash};
 }
 
 template<typename T>
@@ -239,7 +256,7 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
             checkMDB(Err);
             return Compile();
         }
-        auto _ = std::move(Txn);
+        Txn.abort();
 
         double LookupMs = (jl_hrtime() - LookupStart) / 1.0e6;
 
@@ -316,6 +333,7 @@ void ObjCache::shutdown()
 void ObjCache::writerThread()
 {
     std::vector<std::pair<Hash, std::unique_ptr<llvm::MemoryBuffer>>> LocalQueue;
+    bool Evict = false;
     while (1) {
         LocalQueue.clear();
         {
@@ -330,58 +348,84 @@ void ObjCache::writerThread()
         if (!Txn.Txn)
             continue;
 
-        uint64_t ATime = jl_hrtime();
+        MDB_stat Stat;
+        checkMDB(mdb_stat(Txn.Txn, ObjCacheDbi, &Stat));
+        uint64_t ApproxUsedPages =
+            Stat.ms_leaf_pages + Stat.ms_branch_pages + Stat.ms_overflow_pages ;
+        uint64_t EvictUsedPages =
+            ((OBJCACHE_CAPACITY / Stat.ms_psize) * OBJCACHE_EVICT_FROM) >> 31;
+        // jl_safe_printf("approx used pgs: %llu / %llu\n", ApproxUsedPages, EvictUsedPages);
+        if (ApproxUsedPages > EvictUsedPages || Evict) {
+            if (!evictLRU(Txn))
+                goto abort;
+
+            // Start a new transaction to release our lock on all the pages that
+            // are now free.
+            Txn.commit();
+            Txn = MDBTxn{Env};
+        }
+        Evict = false;
+
+        uv_timeval_t Tv;
+        uv_gettimeofday(&Tv);
         for (auto &[H, Obj] : LocalQueue) {
             auto ObjKey = toObjKey(H);
             MDB_val Key = mdbVal(ObjKey);
-
             if (Obj) {
                 // Cache miss - write object
                 MDB_val Data{Obj->getBufferSize(), (void *)Obj->getBufferStart()};
                 if (int Err = mdb_put(Txn.Txn, ObjCacheDbi, &Key, &Data, 0)) {
-                    checkMDB(Err);
+                    // If this fails because of MDB_MAP_FULL, we can't find
+                    // enough contiguous pages in the database.  Abort this
+                    // cache write, but evict on the next iteration.
+                    if (Err == MDB_MAP_FULL)
+                        Evict = true;
+                    else
+                        checkMDB(Err);
                     goto abort;
                 }
                 NWrite.fetch_add(Obj->getBufferSize(), memory_order_relaxed);
                 auto _ = std::move(Obj);
-                updateATime(Txn.Txn, H, ATime, true);
+                updateATime(Txn, H, Tv.tv_sec, true);
             }
             else {
-                // Cache hit - update use time
-                updateATime(Txn.Txn, H, ATime, false);
+                // Cache hit - update use time.  We set bit 62 to sort entries
+                // that have been hit at least once after entries that have only
+                // been written, so never-read entries will always be evicted
+                // first.
+                updateATime(Txn, H, Tv.tv_sec | (1LL << 62), false);
             }
         }
-
         Txn.commit();
 abort:;
     }
 }
 
-void ObjCache::updateATime(MDB_txn *Txn, const Hash &Hash, uint64_t Time, bool Fresh)
+void ObjCache::updateATime(MDBTxn &Txn, const Hash &Hash, int64_t Time, bool Fresh)
 {
     auto ObjKey = toObjKey(Hash);
     MDB_val Key = mdbVal(ObjKey);
     if (!Fresh) {
         MDB_val OldData;
-        int Err = mdb_get(Txn, ObjMetaDbi, &Key, &OldData);
+        int Err = mdb_get(Txn.Txn, ObjMetaDbi, &Key, &OldData);
         if (Err == MDB_NOTFOUND)
             return;
         if (checkMDB(Err))
             return;
-        assert(OldData.mv_size == sizeof(uint64_t));
-        uint64_t OldTime;
-        memcpy(&OldTime, OldData.mv_data, sizeof(uint64_t));
+        assert(OldData.mv_size == sizeof(int64_t));
+        int64_t OldTime;
+        memcpy(&OldTime, OldData.mv_data, sizeof OldTime);
         if (Time < OldTime + OBJCACHE_ATIME_GRANULARITY)
             return;
 
         auto MetaKey = toMetaKey(OldTime, Hash);
         MDB_val Key2 = mdbVal(MetaKey);
-        if (int E = mdb_del(Txn, ObjMetaDbi, &Key2, nullptr))
+        if (int E = mdb_del(Txn.Txn, ObjMetaDbi, &Key2, nullptr))
             checkMDB(E);
     }
 
     MDB_val TimeData{sizeof Time, &Time};
-    if (int E = mdb_put(Txn, ObjMetaDbi, &Key, &TimeData, 0)) {
+    if (int E = mdb_put(Txn.Txn, ObjMetaDbi, &Key, &TimeData, 0)) {
         checkMDB(E);
         return;
     }
@@ -389,6 +433,42 @@ void ObjCache::updateATime(MDB_txn *Txn, const Hash &Hash, uint64_t Time, bool F
     auto MetaKey = toMetaKey(Time, Hash);
     MDB_val Key2 = mdbVal(MetaKey);
     MDB_val EmptyData{0, nullptr};
-    if (int E = mdb_put(Txn, ObjMetaDbi, &Key2, &EmptyData, 0))
+    if (int E = mdb_put(Txn.Txn, ObjMetaDbi, &Key2, &EmptyData, 0))
         checkMDB(E);
+}
+
+bool ObjCache::evictLRU(MDBTxn &Txn)
+{
+    MDB_cursor *MetaCur;
+    MDB_cursor *ObjCur;
+    checkMDB(mdb_cursor_open(Txn.Txn, ObjMetaDbi, &MetaCur));
+    checkMDB(mdb_cursor_open(Txn.Txn, ObjCacheDbi, &ObjCur));
+
+    // TODO: track this better
+    size_t NumEvicted = 0, SizeEvicted = 0;
+    size_t GoalEvicted = (OBJCACHE_CAPACITY * OBJCACHE_EVICT_TO) >> 31;
+
+    auto LowMeta = toMetaKey(0, {});
+    MDB_val MetaKey = mdbVal(LowMeta);
+    int Ret = mdb_cursor_get(MetaCur, &MetaKey, nullptr, MDB_SET_RANGE);
+    while (SizeEvicted < GoalEvicted && !Ret &&
+           ((const char *)MetaKey.mv_data)[0] == METAKEY_TAG) {
+        auto [Time, Hash] = fromMetaKey((const char *)MetaKey.mv_data);
+        MDB_val Data;
+        auto ObjKey = toObjKey(Hash);
+        MDB_val Key = mdbVal(ObjKey);
+        checkMDB(mdb_cursor_get(ObjCur, &Key, &Data, MDB_SET_KEY));
+        ++NumEvicted;
+        SizeEvicted += Data.mv_size;
+        checkMDB(mdb_cursor_del(ObjCur, 0));
+
+        Key = mdbVal(ObjKey);
+        checkMDB(mdb_del(Txn.Txn, ObjMetaDbi, &Key, nullptr));
+
+        checkMDB(mdb_cursor_del(MetaCur, 0));
+        Ret = mdb_cursor_get(MetaCur, &MetaKey, nullptr, MDB_NEXT);
+        checkMDB(Ret);
+    }
+
+    return true;
 }

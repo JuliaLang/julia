@@ -28,6 +28,8 @@
 
 using CompileFn = llvm::unique_function<std::unique_ptr<llvm::MemoryBuffer>()>;
 
+class MDBTxn;
+
 class ObjCache {
 public:
     ObjCache() = default;
@@ -41,7 +43,8 @@ public:
 protected:
     void writerThread();
     void initDB();
-    void updateATime(MDB_txn *Txn, const Hash &H, uint64_t Time, bool Fresh);
+    void updateATime(MDBTxn &Txn, const Hash &H, int64_t Time, bool Fresh);
+    bool evictLRU(MDBTxn &Txn);
 
 private:
     std::atomic<bool> Initialized = false;
