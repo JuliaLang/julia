@@ -1,12 +1,16 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 #include "objcache.h"
 
+#include <llvm/Support/Endian.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/SHA1.h>
 
 #include "jl_codegen_hash.inc"
 #include "julia.h"
 #include "julia_internal.h"
+
+namespace endian = llvm::support::endian;
+using endianness = llvm::endianness;
 
 // Skip atime refreshes when the existing access time is within this many
 // nanoseconds of the new one, to avoid excessive LRU bookkeeping writes.
@@ -47,6 +51,36 @@ static std::optional<std::string> getCachePath()
         .str();
 }
 
+static int checkMDB(int Err)
+{
+    if (Err == 0)
+        return Err;
+    jl_printf(JL_STDERR, "objcache error: %s\n", mdb_strerror(Err));
+    return Err;
+}
+
+class MDBTxn {
+public:
+    MDBTxn(MDB_env *Env, unsigned Flags = 0) {
+        checkMDB(mdb_txn_begin(Env, nullptr, Flags, &Txn));
+    }
+    ~MDBTxn() {
+        if (!Committed)
+            mdb_txn_abort(Txn);
+    }
+    MDBTxn(const MDBTxn &) = delete;
+    MDBTxn &operator=(const MDBTxn &) = delete;
+    int commit() {
+        int Ret = mdb_txn_commit(Txn);
+        if (!Ret)
+            Committed = true;
+        return Ret;
+    }
+    MDB_txn *Txn;
+private:
+    bool Committed = false;
+};
+
 class MDBMemoryBuffer : public llvm::MemoryBuffer {
 public:
     MDBMemoryBuffer(MDB_txn *Txn, llvm::StringRef Data) : Txn(Txn)
@@ -60,19 +94,9 @@ private:
     MDB_txn *Txn;
 };
 
-static int checkMDB(int Err)
-{
-    if (Err == 0)
-        return Err;
-    jl_printf(JL_STDERR, "objcache error: %s\n", mdb_strerror(Err));
-    return Err;
-}
-
 void ObjCache::initDB()
 {
     std::unique_lock<std::mutex> Lock{Mutex};
-    std::string Path;
-    MDB_txn *Txn;
 
     if (Initialized.load(memory_order_acquire))
         return;
@@ -80,11 +104,11 @@ void ObjCache::initDB()
     const char *Enable = getenv("JULIA_OBJCACHE");
     auto CachePath = getCachePath();
     if (!CachePath || !Enable || !strcmp(Enable, "0"))
-        goto cleanup;
+        goto done;
 
     if (checkMDB(mdb_env_create(&Env))) {
         Env = nullptr;
-        goto cleanup;
+        goto done;
     }
     checkMDB(mdb_env_set_maxreaders(Env, 510));
     checkMDB(mdb_env_set_maxdbs(Env, 128));
@@ -92,28 +116,29 @@ void ObjCache::initDB()
     llvm::sys::fs::create_directories(*CachePath);
     if (checkMDB(mdb_env_open(Env, CachePath->c_str(), MDB_NOSYNC | MDB_NOTLS, 0640))) {
         mdb_env_close(Env);
-        Env = nullptr;
         goto cleanup;
     }
 
-    if (checkMDB(mdb_txn_begin(Env, nullptr, 0, &Txn)))
-        goto cleanup;
-    if (checkMDB(mdb_dbi_open(Txn, "objcache", MDB_CREATE, &ObjCacheDbi)))
-        goto cleanup_txn;
-    if (checkMDB(mdb_dbi_open(Txn, "objmeta", MDB_CREATE, &ObjMetaDbi)))
-        goto cleanup_txn;
-    if (checkMDB(mdb_txn_commit(Txn)))
-        goto cleanup;
+    {
+        MDBTxn Txn{Env};
+        if (checkMDB(mdb_dbi_open(Txn.Txn, "objcache", MDB_CREATE, &ObjCacheDbi)))
+            goto cleanup_env;
+        if (checkMDB(mdb_dbi_open(Txn.Txn, "objmeta", MDB_CREATE, &ObjMetaDbi)))
+            goto cleanup_env;
+        checkMDB(Txn.commit());
+    }
 
     uv_thread_create(
         &WriterThread, [](void *arg) { static_cast<ObjCache *>(arg)->writerThread(); },
         this);
     Started = true;
-    goto cleanup;
+    goto done;
 
-cleanup_txn:
-    mdb_txn_abort(Txn);
+cleanup_env:
+    mdb_env_close(Env);
 cleanup:
+    Env = nullptr;
+done:
     Initialized.store(true, memory_order_release);
 }
 
@@ -136,6 +161,7 @@ static ObjCache::Hash hashModule(const llvm::Module &M)
     llvm::SHA1 Hasher;
 
     BW.writeModule(M, false, nullptr, true, &ModHash);
+    // These are mandatory to get a valid hash.
     BW.writeSymtab();
     BW.writeStrtab();
 
@@ -160,9 +186,8 @@ std::array<uint8_t, METAKEY_SIZE> toMetaKey(uint64_t Time, const ObjCache::Hash 
 {
     std::array<uint8_t, METAKEY_SIZE> Ret;
     Ret[0] = 'M';
-    uint64_t TimeH = htonll(Time);
-    memcpy(Ret.begin() + 1, (char *)&TimeH, sizeof TimeH);
-    memcpy(Ret.begin() + 1 + sizeof TimeH, Hash.begin(), Hash.size());
+    endian::write(Ret.begin() + 1, Time, endianness::big);
+    memcpy(Ret.begin() + 1 + sizeof Time, Hash.begin(), Hash.size());
     return Ret;
 }
 
