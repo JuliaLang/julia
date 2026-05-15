@@ -104,14 +104,14 @@ end
         end
         @test sort!(seen) == sort!(readdir(dir))
         seenD = scandir(DirEntry, dir) do entries
-            collect(e.name for e in entries)
+            collect(basename(e) for e in entries)
         end
         @test sort!(seenD) == sort!(readdir(dir))
 
         # Accepts a DirEntry as input
         sub = only(e for e in readdir(DirEntry, dir) if isdir(e))
         @test sort!(collect(scandir(sub))) == ["bfile.txt"]
-        @test sort!(map(e -> e.name, collect(scandir(DirEntry, sub)))) == ["bfile.txt"]
+        @test sort!(basename.(collect(scandir(DirEntry, sub)))) == ["bfile.txt"]
     end
 end
 
@@ -120,7 +120,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     symlink(subdir, dirlink)
     @test stat(dirlink) == stat(subdir)
     @test readdir(dirlink) == readdir(subdir)
-    @test map(e->e.name, readdir(DirEntry, dirlink)) == map(e->e.name, readdir(DirEntry, subdir))
+    @test basename.(readdir(DirEntry, dirlink)) == basename.(readdir(DirEntry, subdir))
     @test realpath.(readdir(DirEntry, dirlink)) == realpath.(readdir(DirEntry, subdir))
 
     # relative link
@@ -129,7 +129,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     symlink(reldir, relsubdirlink)
     @test stat(relsubdirlink) == stat(subdir2)
     @test readdir(relsubdirlink) == readdir(subdir2)
-    @test map(e->e.name, readdir(DirEntry, relsubdirlink)) == map(e->e.name, readdir(DirEntry, subdir2))
+    @test basename.(readdir(DirEntry, relsubdirlink)) == basename.(readdir(DirEntry, subdir2))
     @test realpath.(readdir(DirEntry, relsubdirlink)) == realpath.(readdir(DirEntry, subdir2))
 
     # creation of symlink to directory that does not yet exist
@@ -1864,8 +1864,8 @@ rm(dirwalk, recursive=true)
             end
             @test issorted(readdir())
             @test issorted(readdir(DirEntry))
-            @test map(o->o.name, readdir(DirEntry)) == readdir()
-            @test map(Base.Filesystem.path, readdir(DirEntry)) == readdir(join=true)
+            @test basename.(readdir(DirEntry)) == readdir()
+            @test joinpath.(readdir(DirEntry)) == readdir(join=true)
             @test count(isfile, readdir(join=true)) == count(isfile, readdir(DirEntry))
         end
     end
