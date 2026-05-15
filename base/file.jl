@@ -1172,42 +1172,55 @@ A stateful, single-pass iterator over the entries of a directory, yielding
 either filename `String`s or [`DirEntry`](@ref) objects depending on the
 element type `T`. Created by [`scandir`](@ref).
 
-The underlying `uv_fs_t` request is opened lazily on the first call to
-`iterate` and is released when iteration reaches end-of-directory, when
-[`close`](@ref) is called, or by a finalizer. For deterministic cleanup
-on very large directories, prefer the do-block form of `scandir`.
+The underlying directory handle is opened lazily on the first call to
+`iterate` (via `uv_fs_opendir`) and is released when iteration reaches
+end-of-directory, when [`close`](@ref) is called, or by a finalizer.
+Entries are streamed one at a time from the operating system; the full
+listing is never materialized in memory. For deterministic cleanup on
+very large directories, prefer the do-block form of `scandir`.
+
+A `DirEntryIterator` is single-consumer: do not iterate or close it from
+multiple tasks concurrently. Calling `close` from a finalizer while the
+owning task has finished iterating is safe.
 """
 mutable struct DirEntryIterator{T}
     const dir::String
-    @atomic req::Ptr{Cvoid}     # uv_fs_t, C_NULL until opened, C_NULL again after close
+    # Opaque uv_dir_t* returned by jl_uv_fs_opendir; C_NULL until opened and
+    # C_NULL again after close. Acts as the ownership gate: the thread that
+    # atomically swaps it to C_NULL is the sole owner of the resources below
+    # and is responsible for cleanup.
+    @atomic uvdir::Ptr{Cvoid}
+    # Single-entry uv_dirent_t buffer that libuv writes into via uv_fs_readdir.
+    # Must outlive `uvdir`; held here so its address remains valid for the
+    # lifetime of the iterator.
+    ent::Base.RefValue{uv_dirent_t}
     closed::Bool
     function DirEntryIterator{T}(dir::AbstractString) where {T}
         T === String || T === DirEntry || throw(ArgumentError("element type must be String or DirEntry"))
-        finalizer(close, new{T}(String(dir), C_NULL, false))
+        finalizer(close, new{T}(String(dir), C_NULL, Ref{uv_dirent_t}(), false))
     end
 end
 
 function _scandir_open!(it::DirEntryIterator)
-    it.req == C_NULL || return
+    it.uvdir == C_NULL || return
     it.closed && throw(ArgumentError("DirEntryIterator has already been consumed"))
-    req = Libc.malloc(_sizeof_uv_fs)
-    err = ccall(:uv_fs_scandir, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Cint, Ptr{Cvoid}),
-                C_NULL, req, it.dir, 0, C_NULL)
+    dir_out = Ref{Ptr{Cvoid}}(C_NULL)
+    err = ccall(:jl_uv_fs_opendir, Cint,
+                (Cstring, Ptr{Ptr{Cvoid}}, Ptr{uv_dirent_t}),
+                it.dir, dir_out, it.ent)
     if err < 0
-        Libc.free(req)
         it.closed = true
         uv_error("scandir($(repr(it.dir)))", err)
     end
-    @atomic it.req = req
+    @atomic it.uvdir = dir_out[]
     return
 end
 
 function Base.close(it::DirEntryIterator)
-    # Atomically claim the request pointer so a concurrent finalizer cannot double-free.
-    req = @atomicswap it.req = C_NULL
-    if req != C_NULL
-        uv_fs_req_cleanup(req)
-        Libc.free(req)
+    # Atomically claim the dir pointer so a concurrent finalizer cannot double-free.
+    uvdir = @atomicswap it.uvdir = C_NULL
+    if uvdir != C_NULL
+        ccall(:jl_uv_fs_closedir, Cint, (Ptr{Cvoid},), uvdir)
     end
     it.closed = true
     return
@@ -1219,14 +1232,25 @@ Base.isdone(it::DirEntryIterator, _=nothing) = it.closed
 
 function Base.iterate(it::DirEntryIterator{T}, _=nothing) where {T}
     _scandir_open!(it)
-    ent = Ref{uv_dirent_t}()
-    rc = ccall(:uv_fs_scandir_next, Cint, (Ptr{Cvoid}, Ptr{uv_dirent_t}), it.req, ent)
-    if rc == Base.UV_EOF
+    name_out = Ref{Ptr{UInt8}}(C_NULL)
+    type_out = Ref{Cint}(0)
+    rc = ccall(:jl_uv_fs_readdir, Cssize_t,
+               (Ptr{Cvoid}, Ptr{Ptr{UInt8}}, Ptr{Cint}),
+               it.uvdir, name_out, type_out)
+    if rc <= 0
+        if rc < 0
+            err = rc
+            close(it)
+            uv_error("scandir($(repr(it.dir)))", err)
+        end
         close(it)
         return nothing
     end
-    name = unsafe_string(ent[].name)
-    value = T === DirEntry ? DirEntry(it.dir, name, ent[].typ) : name
+    name_ptr = name_out[]
+    name = unsafe_string(name_ptr)
+    Libc.free(name_ptr)
+    rawtype = type_out[]
+    value = T === DirEntry ? DirEntry(it.dir, name, rawtype) : name
     return value, nothing
 end
 
@@ -1249,7 +1273,7 @@ objects, which carry the entry type as cached at scan time so [`isfile`](@ref),
 
 Unlike [`readdir`](@ref), the entries are returned in filesystem order (not
 sorted) and the iterator can only be traversed once. The do-block form ensures
-the underlying `uv_fs_t` resource is released as soon as `f` returns; otherwise
+the underlying directory handle is released as soon as `f` returns; otherwise
 cleanup happens at end-of-iteration, on [`close`](@ref), or via a finalizer.
 
 See also [`readdir`](@ref), [`DirEntry`](@ref), [`walkdir`](@ref).
