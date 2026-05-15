@@ -52,7 +52,7 @@ void print_str_escape_json(ios_t *stream, StringRef s)
 // mimicking https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/src/profiler/heap-snapshot-generator.cc#L2598-L2601
 
 struct Edge {
-    uint8_t type; // These *must* match the Enums on the JS side; control interpretation of name_or_index.
+    uint32_t type; // These *must* match the Enums on the JS side; control interpretation of name_or_index.
     size_t name_or_index; // name of the field (for objects/modules) or index of array
     size_t from_node;  // This is a deviation from the .heapsnapshot format to support streaming.
     size_t to_node;
@@ -64,7 +64,7 @@ struct Edge {
 // mimicking https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/src/profiler/heap-snapshot-generator.cc#L2568-L2575
 
 struct Node {
-    uint8_t type; // index into snapshot->node_types
+    uint32_t type; // index into snapshot->node_types
     size_t name;
     size_t id; // This should be a globally-unique counter, but we use the memory address
     size_t self_size;
@@ -256,7 +256,7 @@ void _add_synthetic_root_entries(HeapSnapshot *snapshot) JL_NOTSAFEPOINT
     // adds a node at id 0 which is the "uber root":
     // a synthetic node which points to all the GC roots.
     Node internal_root{
-        (uint8_t)snapshot->node_types.find_or_create_string_id("synthetic"),
+        (uint32_t)snapshot->node_types.find_or_create_string_id("synthetic"),
         snapshot->names.serialize_if_necessary(snapshot->strings, ""), // name
         0, // id
         0, // size
@@ -268,7 +268,7 @@ void _add_synthetic_root_entries(HeapSnapshot *snapshot) JL_NOTSAFEPOINT
     // Add a node for the GC roots
     snapshot->_gc_root_idx = snapshot->internal_root_idx + 1;
     Node gc_roots{
-        (uint8_t)snapshot->node_types.find_or_create_string_id("synthetic"),
+        (uint32_t)snapshot->node_types.find_or_create_string_id("synthetic"),
         snapshot->names.serialize_if_necessary(snapshot->strings, "GC roots"), // name
         snapshot->_gc_root_idx, // id
         0, // size
@@ -277,7 +277,7 @@ void _add_synthetic_root_entries(HeapSnapshot *snapshot) JL_NOTSAFEPOINT
     };
     serialize_node(snapshot, gc_roots);
     Edge root_to_gc_roots{
-        (uint8_t)snapshot->edge_types.find_or_create_string_id("internal"),
+        (uint32_t)snapshot->edge_types.find_or_create_string_id("internal"),
         snapshot->names.serialize_if_necessary(snapshot->strings, "GC roots"), // edge label
         snapshot->internal_root_idx, // from
         snapshot->_gc_root_idx // to
@@ -287,7 +287,7 @@ void _add_synthetic_root_entries(HeapSnapshot *snapshot) JL_NOTSAFEPOINT
     // add a node for the gc finalizer list roots
     snapshot->_gc_finlist_root_idx = snapshot->internal_root_idx + 2;
     Node gc_finlist_roots{
-        (uint8_t)snapshot->node_types.find_or_create_string_id("synthetic"),
+        (uint32_t)snapshot->node_types.find_or_create_string_id("synthetic"),
         snapshot->names.serialize_if_necessary(snapshot->strings, "GC finalizer list roots"), // name
         snapshot->_gc_finlist_root_idx, // id
         0, // size
@@ -296,7 +296,7 @@ void _add_synthetic_root_entries(HeapSnapshot *snapshot) JL_NOTSAFEPOINT
     };
     serialize_node(snapshot, gc_finlist_roots);
     Edge root_to_gc_finlist_roots{
-        (uint8_t)snapshot->edge_types.find_or_create_string_id("internal"),
+        (uint32_t)snapshot->edge_types.find_or_create_string_id("internal"),
         snapshot->names.serialize_if_necessary(snapshot->strings, "GC finalizer list roots"), // edge label
         snapshot->internal_root_idx, // from
         snapshot->_gc_finlist_root_idx // to
@@ -389,7 +389,7 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
     }
 
     auto node = Node{
-        (uint8_t)g_snapshot->node_types.find_or_create_string_id(node_type), // size_t type;
+        (uint32_t)g_snapshot->node_types.find_or_create_string_id(node_type), // size_t type;
         g_snapshot->names.serialize(g_snapshot->strings, name), // size_t name;
         (size_t)a,     // size_t id;
         // We add 1 to self-size for the type tag that all heap-allocated objects have.
@@ -414,7 +414,7 @@ static size_t record_pointer_to_gc_snapshot(void *a, size_t bytes, StringRef nam
     }
 
     auto node = Node{
-        (uint8_t)g_snapshot->node_types.find_or_create_string_id( "object"), // size_t type;
+        (uint32_t)g_snapshot->node_types.find_or_create_string_id( "object"), // size_t type;
         g_snapshot->names.serialize(g_snapshot->strings, name), // size_t name;
         (size_t)a,     // size_t id;
         bytes,         // size_t self_size;
@@ -491,7 +491,7 @@ size_t _record_stack_frame_node(HeapSnapshot *snapshot, void *frame) JL_NOTSAFEP
     }
 
     auto node = Node{
-        (uint8_t)snapshot->node_types.find_or_create_string_id("synthetic"),
+        (uint32_t)snapshot->node_types.find_or_create_string_id("synthetic"),
         snapshot->names.serialize_if_necessary(snapshot->strings, "(stack frame)"), // name
         (size_t)frame, // id
         1, // size
@@ -592,7 +592,7 @@ static inline void _record_gc_edge(const char *edge_type, jl_value_t *a,
 void _record_gc_just_edge(const char *edge_type, size_t from_idx, size_t to_idx, size_t name_or_idx) JL_NOTSAFEPOINT
 {
     auto edge = Edge{
-        (uint8_t)g_snapshot->edge_types.find_or_create_string_id(edge_type),
+        (uint32_t)g_snapshot->edge_types.find_or_create_string_id(edge_type),
         name_or_idx, // edge label
         from_idx, // from
         to_idx // to
