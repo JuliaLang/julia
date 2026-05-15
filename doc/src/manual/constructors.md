@@ -417,7 +417,7 @@ defining sophisticated behavior is typically quite simple.
 ### How `new` works in parametric constructors
 
 In the inner constructor of `Point`, `new(x,y)` is shorthand for `new{T}(x,y)`.
-**Inside the body of an inner constructor, the type parameters are implicitly forwarded to `new`**.
+**Inside the body of an inner constructor, the type parameters listed in the curly braces on the constructor name (e.g. the `T` parameter in `Point{T}(...)`) are implicitly forwarded to `new`**.
 You can also write the type parameters explicitly, which is equivalent:
 
 ```jldoctest parametric2
