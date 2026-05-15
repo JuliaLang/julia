@@ -61,37 +61,48 @@ static int checkMDB(int Err)
 
 class MDBTxn {
 public:
-    MDBTxn(MDB_env *Env, unsigned Flags = 0) {
-        checkMDB(mdb_txn_begin(Env, nullptr, Flags, &Txn));
+    MDBTxn(MDB_env *Env, unsigned Flags = 0)
+    {
+        if (checkMDB(mdb_txn_begin(Env, nullptr, Flags, &Txn)))
+            Txn = nullptr;
     }
-    ~MDBTxn() {
-        if (!Committed)
+    ~MDBTxn()
+    {
+        if (Txn)
             mdb_txn_abort(Txn);
     }
     MDBTxn(const MDBTxn &) = delete;
     MDBTxn &operator=(const MDBTxn &) = delete;
-    int commit() {
+    MDBTxn(MDBTxn &&RHS) : Txn(std::exchange(RHS.Txn, nullptr)) {}
+    MDBTxn &operator=(MDBTxn &&RHS)
+    {
+        std::swap(Txn, RHS.Txn);
+        return *this;
+    }
+    void abort()
+    {
+        mdb_txn_abort(Txn);
+        Txn = nullptr;
+    }
+    int commit()
+    {
         int Ret = mdb_txn_commit(Txn);
-        if (!Ret)
-            Committed = true;
+        Txn = nullptr;
         return Ret;
     }
     MDB_txn *Txn;
-private:
-    bool Committed = false;
 };
 
 class MDBMemoryBuffer : public llvm::MemoryBuffer {
 public:
-    MDBMemoryBuffer(MDB_txn *Txn, llvm::StringRef Data) : Txn(Txn)
+    MDBMemoryBuffer(MDBTxn Txn, llvm::StringRef Data) : Txn(std::move(Txn))
     {
         init(Data.begin(), Data.end(), false);
     }
-    ~MDBMemoryBuffer() override { mdb_txn_abort(Txn); }
     BufferKind getBufferKind() const override { return MemoryBuffer_MMap; }
 
 private:
-    MDB_txn *Txn;
+    MDBTxn Txn;
 };
 
 void ObjCache::initDB()
@@ -112,7 +123,7 @@ void ObjCache::initDB()
     }
     checkMDB(mdb_env_set_maxreaders(Env, 510));
     checkMDB(mdb_env_set_maxdbs(Env, 128));
-    checkMDB(mdb_env_set_mapsize(Env, (size_t)1 << 30)); // 1 GiB maximum
+    checkMDB(mdb_env_set_mapsize(Env, (size_t)1 << 20));
     llvm::sys::fs::create_directories(*CachePath);
     if (checkMDB(mdb_env_open(Env, CachePath->c_str(), MDB_NOSYNC | MDB_NOTLS, 0640))) {
         mdb_env_close(Env);
@@ -121,6 +132,8 @@ void ObjCache::initDB()
 
     {
         MDBTxn Txn{Env};
+        if (!Txn.Txn)
+            goto cleanup_env;
         if (checkMDB(mdb_dbi_open(Txn.Txn, "objcache", MDB_CREATE, &ObjCacheDbi)))
             goto cleanup_env;
         if (checkMDB(mdb_dbi_open(Txn.Txn, "objmeta", MDB_CREATE, &ObjMetaDbi)))
@@ -215,18 +228,18 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
     auto Hash = hashModule(M);
     auto ObjKey = toObjKey(Hash);
 
-    MDB_txn *Txn;
-    if (int Err = mdb_txn_begin(Env, nullptr, MDB_RDONLY, &Txn)) {
-        checkMDB(Err);
+    MDBTxn Txn{Env, MDB_RDONLY};
+    if (!Txn.Txn)
         return Compile();
-    }
 
     MDB_val Data;
     MDB_val Key = mdbVal(ObjKey);
-    if (int Err = mdb_get(Txn, ObjCacheDbi, &Key, &Data)) {
-        if (Err != MDB_NOTFOUND)
+    if (int Err = mdb_get(Txn.Txn, ObjCacheDbi, &Key, &Data)) {
+        if (Err != MDB_NOTFOUND) {
             checkMDB(Err);
-        mdb_txn_abort(Txn);
+            return Compile();
+        }
+        auto _ = std::move(Txn);
 
         double LookupMs = (jl_hrtime() - LookupStart) / 1.0e6;
 
@@ -261,7 +274,7 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
     QueueCond.notify_one();
 
     auto Buf = std::make_unique<MDBMemoryBuffer>(
-        Txn, llvm::StringRef{(const char *)Data.mv_data, Data.mv_size});
+        std::move(Txn), llvm::StringRef{(const char *)Data.mv_data, Data.mv_size});
     NHit.fetch_add(1, memory_order_relaxed);
     NRead.fetch_add(Buf->getBufferSize(), memory_order_relaxed);
 
@@ -313,14 +326,11 @@ void ObjCache::writerThread()
         if (LocalQueue.empty())
             return;
 
-        MDB_txn *Txn;
-        if (int Err = mdb_txn_begin(Env, nullptr, 0, &Txn)) {
-            checkMDB(Err);
+        MDBTxn Txn{Env};
+        if (!Txn.Txn)
             continue;
-        }
 
         uint64_t ATime = jl_hrtime();
-        bool Abort = false;
         for (auto &[H, Obj] : LocalQueue) {
             auto ObjKey = toObjKey(H);
             MDB_val Key = mdbVal(ObjKey);
@@ -328,25 +338,22 @@ void ObjCache::writerThread()
             if (Obj) {
                 // Cache miss - write object
                 MDB_val Data{Obj->getBufferSize(), (void *)Obj->getBufferStart()};
-                if (int Err = mdb_put(Txn, ObjCacheDbi, &Key, &Data, 0)) {
+                if (int Err = mdb_put(Txn.Txn, ObjCacheDbi, &Key, &Data, 0)) {
                     checkMDB(Err);
-                    Abort = true;
-                    break;
+                    goto abort;
                 }
                 NWrite.fetch_add(Obj->getBufferSize(), memory_order_relaxed);
                 auto _ = std::move(Obj);
-                updateATime(Txn, H, ATime, true);
+                updateATime(Txn.Txn, H, ATime, true);
             }
             else {
                 // Cache hit - update use time
-                updateATime(Txn, H, ATime, false);
+                updateATime(Txn.Txn, H, ATime, false);
             }
         }
 
-        if (Abort)
-            mdb_txn_abort(Txn);
-        else
-            checkMDB(mdb_txn_commit(Txn));
+        Txn.commit();
+abort:;
     }
 }
 
