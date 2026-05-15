@@ -157,7 +157,6 @@ void jl_gc_init(void) {
     } else {
         mmtk_gc_init(min_heap_size, max_heap_size, gcthreads, (sizeof(jl_taggedvalue_t)), jl_buff_tag);
     }
-
 }
 
 void jl_start_gc_threads(void) {
