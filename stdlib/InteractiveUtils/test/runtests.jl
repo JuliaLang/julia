@@ -1054,3 +1054,27 @@ end # module
     using .OuterModule
     @test_nowarn subtypes(Integer);
 end
+
+@testset "world argument for varinfo and subtypes" begin
+    # varinfo: a non-const binding added after the recorded world should not
+    # appear when querying that older world (its partition does not yet exist
+    # at world_no_var, so `isdefined` in that world returns false).
+    M_varinfo = @eval module $(gensym()) end
+    world_no_var = Base.get_world_counter()
+    @eval M_varinfo begin
+        export tracked_var
+        tracked_var = 42
+    end
+    @test occursin("tracked_var", repr(varinfo(M_varinfo)))
+    @test !occursin("tracked_var", repr(varinfo(M_varinfo; world=world_no_var)))
+
+    # subtypes: subtype added after the recorded world should not appear when
+    # querying that older world.
+    M_sub = @eval module $(gensym())
+        abstract type MyAbstractParent end
+    end
+    world_no_subtype = Base.get_world_counter()
+    @eval M_sub struct MyConcreteChild <: MyAbstractParent end
+    @test length(subtypes(M_sub, M_sub.MyAbstractParent)) == 1
+    @test isempty(subtypes(M_sub, M_sub.MyAbstractParent; world=world_no_subtype))
+end
