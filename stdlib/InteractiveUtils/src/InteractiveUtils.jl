@@ -102,32 +102,40 @@ See also: [`VERSION`](@ref).
 """
 function versioninfo(io::IO=stdout; verbose::Bool=false)
     println(io, "Julia Version $VERSION")
+    println(io, "Build Info:")
+    if Base.isdebugbuild()
+        println(io, "  DEBUG build")
+    end
+    if !isempty(Base.TAGGED_RELEASE_BANNER)
+        println(io, "  ", Base.TAGGED_RELEASE_BANNER)
+    end
     if !isempty(Base.GIT_VERSION_INFO.commit_short_raw)
-        println(io, "Commit $(Base.GIT_VERSION_INFO.commit_short) ($(Base.GIT_VERSION_INFO.date_string))")
+        println(io, "  Commit $(Base.GIT_VERSION_INFO.commit_short) ($(Base.GIT_VERSION_INFO.date_string))")
+    end
+    println(io, "  GC: ", unsafe_string(ccall(:jl_gc_active_impl, Ptr{UInt8}, ())))
+    if verbose
+        println(io, "  Sysimage: ", Sys.sysimage_target(), " (", Sys.MACHINE, ")")
     end
     official_release = Base.TAGGED_RELEASE_BANNER == "Official https://julialang.org release"
-    if Base.isdebugbuild() || !isempty(Base.TAGGED_RELEASE_BANNER) || (Base.GIT_VERSION_INFO.tagged_commit && !official_release)
-        println(io, "Build Info:")
-        if Base.isdebugbuild()
-            println(io, "  DEBUG build")
-        end
-        if !isempty(Base.TAGGED_RELEASE_BANNER)
-            println(io, "  ", Base.TAGGED_RELEASE_BANNER)
-        end
-        if Base.GIT_VERSION_INFO.tagged_commit && !official_release
-            println(io,
-                """
+    if Base.GIT_VERSION_INFO.tagged_commit && !official_release
+        println(io,
+            """
 
-                    Note: This is an unofficial build, please report bugs to the project
-                    responsible for this build and not to the Julia project unless you can
-                    reproduce the issue using official builds available at https://julialang.org
-                """
-            )
-        end
+                Note: This is an unofficial build, please report bugs to the project
+                responsible for this build and not to the Julia project unless you can
+                reproduce the issue using official builds available at https://julialang.org
+            """
+        )
     end
+
+    jit_triple = let _jit = ccall(:JLJITGetJuliaOJIT, Ptr{Cvoid}, ())
+        unsafe_string(ccall(:JLJITGetTripleString, Cstring, (Ptr{Cvoid},), _jit))
+    end
+    jit_cpu = first(Base.current_image_targets()).name
+
     println(io, "Platform Info:")
     println(io, "  OS: ", Sys.iswindows() ? "Windows" : Sys.isapple() ?
-        "macOS" : Sys.KERNEL, " (", Sys.MACHINE, ")")
+        "macOS" : Sys.KERNEL, " (", jit_triple, ")")
 
     if verbose
         lsb = ""
@@ -148,25 +156,29 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     if verbose
         cpuio = IOBuffer() # print cpu_summary with correct alignment
         Sys.cpu_summary(cpuio)
-        for (i, line) in enumerate(split(chomp(takestring!(cpuio)), "\n"))
+        for (i, _line) in enumerate(split(chomp(takestring!(cpuio)), "\n"))
             prefix = i == 1 ? "  CPU: " : "       "
+            line = if i == 1
+                strip(x -> isspace(x) || x == ':', _line) * " (" * Sys.CPU_NAME * "):"
+            else
+                _line
+            end
             println(io, prefix, line)
         end
     else
         cpu = Sys.cpu_info()
-        println(io, "  CPU: ", length(cpu), " × ", cpu[1].model)
+        println(io, "  CPU: ", length(cpu), " × ", cpu[1].model, " (", Sys.CPU_NAME, ")")
     end
 
     if verbose
-        println(io, "  Memory: $(Sys.total_memory()/2^30) GB ($(Sys.free_memory()/2^20) MB free)")
+        println(io, "  Memory: $(Sys.total_memory()/2^30) GiB ($(Sys.free_memory()/2^20) MiB free)")
         try println(io, "  Uptime: $(Sys.uptime()) sec"); catch; end
         print(io, "  Load Avg: ")
         Base.print_matrix(io, Sys.loadavg()')
         println(io)
     end
     println(io, "  WORD_SIZE: ", Sys.WORD_SIZE)
-    println(io, "  LLVM: libLLVM-",Base.libllvm_version," (", Sys.JIT, ", ", Sys.CPU_NAME, ")")
-    println(io, "  GC: ", unsafe_string(ccall(:jl_gc_active_impl, Ptr{UInt8}, ())))
+    println(io, "  LLVM: libLLVM-", Base.libllvm_version, " (", Sys.JIT, ", ", jit_cpu, ")")
     println(io, """Threads: $(Threads.nthreads(:default)) default, $(Threads.nthreads(:interactive)) interactive, \
       $(Threads.ngcthreads()) GC (on $(Sys.CPU_THREADS) virtual cores)""")
 
