@@ -352,7 +352,7 @@ file = tempname()
 rdat = [fill(0x00, 8); fill(typemax(UInt8), 8); 0x00]
 open(f->write(f, rdat), file, "w+")
 for T in (Int32, UInt32, UInt64, Int64)
-    b = Mmap.mmap(file, BitVector, (64), T(8))
+    local b = Mmap.mmap(file, BitVector, (64), T(8))
     @test b isa BitVector
     @test all(b)
     @test length(b) == 64
