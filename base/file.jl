@@ -1190,9 +1190,9 @@ mutable struct DirEntryIterator{T}
     # atomically swaps it to C_NULL is the sole owner of the resources below
     # and is responsible for cleanup.
     @atomic uvdir::Ptr{Cvoid}
-    # Single-entry uv_dirent_t buffer that libuv writes into via uv_fs_readdir.
-    # Must outlive `uvdir`; held here so its address remains valid for the
-    # lifetime of the iterator.
+    # Single-entry uv_dirent_t buffer passed to jl_uv_fs_readdir; libuv writes
+    # the name pointer and type into it. Held here so its address remains
+    # valid for the lifetime of the iterator.
     ent::Base.RefValue{uv_dirent_t}
     closed::Bool
     function DirEntryIterator{T}(dir::AbstractString) where {T}
@@ -1206,8 +1206,8 @@ function _scandir_open!(it::DirEntryIterator)
     it.closed && throw(ArgumentError("DirEntryIterator has already been consumed"))
     dir_out = Ref{Ptr{Cvoid}}(C_NULL)
     err = ccall(:jl_uv_fs_opendir, Cint,
-                (Cstring, Ptr{Ptr{Cvoid}}, Ptr{uv_dirent_t}),
-                it.dir, dir_out, it.ent)
+                (Cstring, Ptr{Ptr{Cvoid}}),
+                it.dir, dir_out)
     if err < 0
         it.closed = true
         uv_error("scandir($(repr(it.dir)))", err)
@@ -1232,11 +1232,9 @@ Base.isdone(it::DirEntryIterator, _=nothing) = it.closed
 
 function Base.iterate(it::DirEntryIterator{T}, _=nothing) where {T}
     _scandir_open!(it)
-    name_out = Ref{Ptr{UInt8}}(C_NULL)
-    type_out = Ref{Cint}(0)
     rc = ccall(:jl_uv_fs_readdir, Cssize_t,
-               (Ptr{Cvoid}, Ptr{Ptr{UInt8}}, Ptr{Cint}),
-               it.uvdir, name_out, type_out)
+               (Ptr{Cvoid}, Ptr{uv_dirent_t}, Csize_t),
+               it.uvdir, it.ent, 1)
     if rc <= 0
         if rc < 0
             err = rc
@@ -1246,11 +1244,10 @@ function Base.iterate(it::DirEntryIterator{T}, _=nothing) where {T}
         close(it)
         return nothing
     end
-    name_ptr = name_out[]
-    name = unsafe_string(name_ptr)
-    Libc.free(name_ptr)
-    rawtype = type_out[]
-    value = T === DirEntry ? DirEntry(it.dir, name, rawtype) : name
+    ent = it.ent[]
+    name = unsafe_string(ent.name)
+    Libc.free(ent.name)
+    value = T === DirEntry ? DirEntry(it.dir, name, ent.typ) : name
     return value, nothing
 end
 

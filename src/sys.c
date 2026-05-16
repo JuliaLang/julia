@@ -113,7 +113,7 @@ JL_DLLEXPORT char *jl_uv_fs_t_path(uv_fs_t *req) { return (char*)req->path; }
 // and cleans it up before returning, so callers only need to keep the opaque
 // uv_dir_t* alive between calls.
 
-JL_DLLEXPORT int jl_uv_fs_opendir(const char *path, uv_dir_t **dir_out, uv_dirent_t *ent_buf)
+JL_DLLEXPORT int jl_uv_fs_opendir(const char *path, uv_dir_t **dir_out)
 {
     uv_fs_t req;
     int ret = uv_fs_opendir(unused_uv_loop_arg, &req, path, NULL);
@@ -123,34 +123,35 @@ JL_DLLEXPORT int jl_uv_fs_opendir(const char *path, uv_dir_t **dir_out, uv_diren
         return ret;
     }
     uv_dir_t *dir = (uv_dir_t*)req.ptr;
-    // Configure libuv to read one entry per uv_fs_readdir call into the
-    // caller-provided buffer.
-    dir->dirents = ent_buf;
-    dir->nentries = 1;
+    // The dirents buffer is configured per-call in jl_uv_fs_readdir.
+    dir->dirents = NULL;
+    dir->nentries = 0;
     *dir_out = dir;
     uv_fs_req_cleanup(&req);
     return 0;
 }
 
-// Reads the next directory entry. Returns 1 on success, 0 on end-of-directory,
-// or a negative libuv error code. On success, *name_out receives the strdup'd
-// entry name (caller takes ownership and must free() it) and *type_out receives
-// the entry type (a uv_dirent_type_t).
-JL_DLLEXPORT ssize_t jl_uv_fs_readdir(uv_dir_t *dir, char **name_out, int *type_out)
+// Reads up to `nentries` directory entries into the caller-provided `entries`
+// buffer. Returns the number of entries read on success, 0 on end-of-directory,
+// or a negative libuv error code. On success, each filled `entries[i].name` is
+// a strdup'd entry name owned by the caller, which must free() it. The caller
+// also owns the `entries` buffer itself.
+JL_DLLEXPORT ssize_t jl_uv_fs_readdir(uv_dir_t *dir, uv_dirent_t *entries, size_t nentries)
 {
     uv_fs_t req;
+    // Clear caller's slots so a partial/failed read leaves no stale name
+    // pointers, and so we can safely skip them when detaching ownership below.
+    for (size_t i = 0; i < nentries; ++i) {
+        entries[i].name = NULL;
+        entries[i].type = UV_DIRENT_UNKNOWN;
+    }
+    dir->dirents = entries;
+    dir->nentries = nentries;
     ssize_t r = uv_fs_readdir(unused_uv_loop_arg, &req, dir, NULL);
-    if (r > 0) {
-        uv_dirent_t *ent = &dir->dirents[0];
-        // Transfer ownership of the strdup'd name to the caller and detach it
-        // from libuv's bookkeeping so uv_fs_req_cleanup doesn't free it.
-        *name_out = (char*)ent->name;
-        ent->name = NULL;
-        *type_out = (int)ent->type;
-    }
-    else {
-        *name_out = NULL;
-    }
+    // Detach the entries from libuv's bookkeeping so uv_fs_req_cleanup
+    // doesn't free the strdup'd names; ownership now belongs to the caller.
+    dir->dirents = NULL;
+    dir->nentries = 0;
     uv_fs_req_cleanup(&req);
     return r;
 }
