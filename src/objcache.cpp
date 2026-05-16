@@ -469,6 +469,7 @@ bool ObjCache::evictLRU(MDBTxn &Txn)
         Ret = mdb_cursor_get(MetaCur, &MetaKey, nullptr, MDB_NEXT);
         checkMDB(Ret);
     }
+    (void)NumEvicted;
 
     return true;
 }
