@@ -69,7 +69,7 @@ New library functions
 * `Base.generating_output()` has been made `public` (but not exported) to allow
   checking whether the current process is performing compilation for a
   pkgimage/sysimage ([#61224]).
-- `Base.unsafe_substring` is an unexported, public constructor to build a `SubString`
+- `Base.raw_substring` is an unexported, public constructor to build a `SubString`
   without checking for valid string indices.
 
 New library features

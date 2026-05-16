@@ -145,7 +145,7 @@ function chomp(s::StringViewAndSub)
         has_cr = has_lf & two_bytes & (cu[ncu - two_bytes] == 0x0d)
         ncu - (has_lf + has_cr)
     end
-    @inbounds unsafe_substring(s, 1, len)
+    @inbounds raw_substring(s, 1, len)
 end
 
 function replace(io::IO, s::DenseStringViewAndSub, pat_f::Pair...; count = typemax(Int))

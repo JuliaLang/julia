@@ -180,7 +180,7 @@ unannotate(s::AnnotatedString) = s.string
 
 function unannotate(s::SubString{<:AnnotatedString})
     start_index = first(parentindices(s)[1])
-    @inbounds unsafe_substring(parent(s).string, start_index, ncodeunits(s))
+    @inbounds raw_substring(parent(s).string, start_index, ncodeunits(s))
 end
 
 

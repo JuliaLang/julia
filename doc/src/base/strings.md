@@ -23,7 +23,7 @@ Base.ispunct
 Base.isspace
 Base.isuppercase
 Base.isxdigit
-Base.unsafe_substring
+Base.raw_substring
 ```
 
 ## String Basics

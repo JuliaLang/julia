@@ -113,7 +113,7 @@ public
 
 # Strings
     escape_raw_string,
-    unsafe_substring,
+    raw_substring,
     unannotate,
 
 # Chars
