@@ -60,6 +60,8 @@ This function does check bounds, but does not validate that the arguments corres
 start and end indices in `s`, and so the resulting substring may contain truncated characters.
 The presence of truncated characters is safe and well-defined for `String`, `StringView`, and
 substrings of these, but may not be permitted for custom subtypes of `AbstractString`.
+Note that accessing characters that are whole in the parent string but truncated by the `SubString`
+may throw a `StringIndexError`.
 
 !!! warning
     For `AbstractString` other than `String`, `StringView` or substrings of those, callers should
@@ -80,6 +82,10 @@ julia> ss2 = raw_substring(ss, 2, 6)
 
 julia> typeof(ss2)
 SubString{String}
+
+julia> ss3 = raw_substring(s, 11, 4); ss3[1]
+ERROR: StringIndexError:
+[...]
 ```
 """
 function raw_substring end
