@@ -1300,6 +1300,40 @@ function intersect(r::StepRange{<:Integer}, s::StepRange{<:Integer})
     start1, step1, stop1 = first_step_last_ascending(r)
     start2, step2, stop2 = first_step_last_ascending(s)
     rev = step(r) < zero(step(r)) && !(S <: Unsigned)
+    # Signed types with native widening (Int64→Int128) take a fast path that
+    # stays in T for the CRT, falling back to the wide path on overflow.
+    # Smaller signed and all unsigned types go straight to the wide path,
+    # since their widen is cheap (or, for UInt, the with_overflow ladder
+    # interacts badly with `gcdx` Bezout coefficients).
+    if T <: Signed && sizeof(T) >= 8
+        g, x, _ = gcdx(step1, step2)
+        d, ovf = Base.Checked.sub_with_overflow(start1, start2)
+        if !ovf
+            if !iszero(rem(d, g))
+                return rev ? _empty_steprange(T, S, last(r), step(r)) :
+                             _empty_steprange(T, S, first(r), step(r))
+            end
+            zq, ovf = Base.Checked.mul_with_overflow(div(d, g), x)
+            if !ovf
+                p, ovf = Base.Checked.mul_with_overflow(step1, step2)
+                if !ovf
+                    W = widen(T)
+                    i = mod(zq, div(step2, g))
+                    # |i| < step2÷g and step1*step2 fits T, so
+                    # i*step1 < step1*step2÷g ≤ typemax(T).
+                    return _intersect_steprange_bounds(T, S, r,
+                        W(start1), W(stop1), W(start2), W(stop2),
+                        W(p ÷ g), W(start1) - W(i * step1), rev)
+                end
+            end
+        end
+    end
+    return _intersect_steprange_wide(T, S, r, start1, step1, stop1, start2, step2, stop2, rev)
+end
+
+function _intersect_steprange_wide(::Type{T}, ::Type{S}, r,
+        start1, step1, stop1, start2, step2, stop2, rev) where {T,S}
+    @noinline
     W = T <: Unsigned ? signed(widen(T)) : widen(T)
     ws1, ws2 = W(start1), W(start2)
     wst1, wst2 = W(step1), W(step2)
@@ -1310,19 +1344,20 @@ function intersect(r::StepRange{<:Integer}, s::StepRange{<:Integer})
                      _empty_steprange(T, S, first(r), step(r))
     end
     a = (wst1 * wst2) ÷ g
-    # Reduce CRT coefficient mod step2÷g so |i*step1| < a; b stays bounded.
     i = mod(div(d, g) * x, div(wst2, g))
     b = ws1 - i * wst1
-    m = max(ws1 + mod(b - ws1, a), ws2 + mod(b - ws2, a))
-    n = min(W(stop1) - mod(W(stop1) - b, a), W(stop2) - mod(W(stop2) - b, a))
+    return _intersect_steprange_bounds(T, S, r, ws1, W(stop1), ws2, W(stop2), a, b, rev)
+end
+
+function _intersect_steprange_bounds(::Type{T}, ::Type{S}, r,
+        start1, stop1, start2, stop2, a, b, rev) where {T,S}
+    m = max(start1 + mod(b - start1, a), start2 + mod(b - start2, a))
+    n = min(stop1 - mod(stop1 - b, a), stop2 - mod(stop2 - b, a))
     if m > n
         return rev ? _empty_steprange(T, S, last(r), step(r)) :
                      _empty_steprange(T, S, first(r), step(r))
     end
     if m == n && !(typemin(S) <= a <= typemax(S))
-        # Single-point intersection whose nominal step (lcm) doesn't fit `S`.
-        # The result is representable as a one-element range; fall back to
-        # `oneunit(S)` rather than throwing `InexactError` from the constructor.
         sa = oneunit(S)
         return StepRange{T,S}(T(m), rev ? -sa : sa, T(m))
     end

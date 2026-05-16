@@ -640,6 +640,16 @@ end
             @test step(intersect(reverse(u), v)) == Int8(-1)
         end
 
+        @testset "Int64 fast-path wide fallback" begin
+            # `step1 * step2` overflows Int64 (~2^66), so the fast path bails to
+            # the widened (Int128) fallback. The two ranges are aligned mod
+            # gcd(step1, step2) only at a single point: 0 mod 2^33 and 0 mod
+            # (2^32 * 5) coincide only at 0, but neither range contains 0.
+            big_a = Int64(2)^32 * 3
+            big_b = Int64(2)^32 * 5
+            @test isempty(intersect(Int64(1):big_a:Int64(2)^60, Int64(2):big_b:Int64(2)^60))
+        end
+
         @testset "Two AbstractRanges" begin
             struct DummyRange{T} <: AbstractRange{T}
                 r
