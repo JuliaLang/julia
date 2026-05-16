@@ -36,10 +36,15 @@ struct SubString{T<:AbstractString} <: AbstractString
         end
         return new(s, i-1, nextind(s,j)-i)
     end
-    # We don't expose this, because the exposed constructor needs to avoid constructing
-    # a SubString{SubString{T}} when passed a substring.
-    global function _unsafe_substring(s::T, offset::Int, ncodeunits::Int) where {T <: AbstractString}
-        new{T}(s, offset, ncodeunits)
+
+    global function unsafe_substring(s::T, first_index::Int, ncodeunits::Int) where {T <: AbstractString}
+        @boundscheck @inline checkbounds(codeunits(s), first_index:(first_index + n_codeunits - 1))
+        new{T}(s, first_index - 1, ncodeunits)
+    end
+
+    global function unsafe_substring(s::SubString{T}, first_index::Int, ncodeunits::Int) where {T <: AbstractString}
+        @boundscheck @inline checkbounds(codeunits(s), first_index:(first_index + n_codeunits - 1))
+        new{T}(s.string, first_index + s.offset - 1, n_codeunits)
     end
 end
 
@@ -77,14 +82,12 @@ julia> typeof(ss2)
 SubString{String}
 ```
 """
+function unsafe_substring end
+
+
 function unsafe_substring(s::AbstractString, first_index::Int, n_codeunits::Int)
     @boundscheck @inline checkbounds(codeunits(s), first_index:(first_index + n_codeunits - 1))
-    return _unsafe_substring(s, first_index - 1, n_codeunits)
-end
-
-function unsafe_substring(s::SubString, first_index::Int, n_codeunits::Int)
-    @boundscheck @inline checkbounds(codeunits(s), first_index:(first_index + n_codeunits - 1))
-    _unsafe_substring(s.string, first_index + s.offset - 1, n_codeunits)
+    return @inbounds unsafe_substring(s, first_index, n_codeunits)
 end
 
 @propagate_inbounds SubString(s::T, i::Int, j::Int) where {T<:AbstractString} = SubString{T}(s, i, j)
@@ -102,7 +105,7 @@ SubString(s::SubString) = s
 # Unlike the un-parameterized SubString constructor, this function must allow creating
 # e.g. a SubString{SubString{String}}, as this type is what the user may have explicitly
 # requested.
-SubString{T}(s::T) where {T<:AbstractString} = @inbounds _unsafe_substring(s, 0, ncodeunits(s))
+SubString{T}(s::T) where {T<:AbstractString} = @inbounds unsafe_substring(s, 1, ncodeunits(s))
 
 @propagate_inbounds view(s::AbstractString, r::AbstractUnitRange{<:Integer}) = SubString(s, r)
 @propagate_inbounds maybeview(s::AbstractString, r::AbstractUnitRange{<:Integer}) = view(s, r)
