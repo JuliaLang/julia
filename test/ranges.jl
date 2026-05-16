@@ -626,6 +626,20 @@ end
                   UInt[0,2,4,6,8,10,12,14,16,18,20]
         end
 
+        @testset "single-point intersection with lcm > typemax(S)" begin
+            # `lcm(125, 127) == 15875` doesn't fit `Int8`; the result is still a
+            # one-element range, so the step falls back to `oneunit(S)` rather
+            # than throwing `InexactError` from the StepRange constructor.
+            u = StepRange{Int8, Int8}(Int8(0):Int8(125):Int8(125))
+            v = StepRange{Int8, Int8}(Int8(0):Int8(127):Int8(127))
+            @test intersect(u, v) == [Int8(0)]
+            @test intersect(v, u) == [Int8(0)]
+            @test step(intersect(u, v)) == Int8(1)
+            # Reverse-step variant uses `-oneunit(S)`.
+            @test intersect(reverse(u), v) == [Int8(0)]
+            @test step(intersect(reverse(u), v)) == Int8(-1)
+        end
+
         @testset "Two AbstractRanges" begin
             struct DummyRange{T} <: AbstractRange{T}
                 r

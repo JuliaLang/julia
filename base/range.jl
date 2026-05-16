@@ -1319,6 +1319,13 @@ function intersect(r::StepRange{<:Integer}, s::StepRange{<:Integer})
         return rev ? _empty_steprange(T, S, last(r), step(r)) :
                      _empty_steprange(T, S, first(r), step(r))
     end
+    if m == n && !(typemin(S) <= a <= typemax(S))
+        # Single-point intersection whose nominal step (lcm) doesn't fit `S`.
+        # The result is representable as a one-element range; fall back to
+        # `oneunit(S)` rather than throwing `InexactError` from the constructor.
+        sa = oneunit(S)
+        return StepRange{T,S}(T(m), rev ? -sa : sa, T(m))
+    end
     rev ? StepRange{T,S}(T(n), -S(a), T(m)) : StepRange{T,S}(T(m), S(a), T(n))
 end
 
