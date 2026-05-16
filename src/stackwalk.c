@@ -854,7 +854,10 @@ void jl_fprint_native_codeloc(ios_t *s, uintptr_t ip) JL_NOTSAFEPOINT
             jl_safe_fprintf(s, "unknown function (ip: %p) at %s\n", (void*)ip, frame.file_name ? frame.file_name : "(unknown file)");
         }
         else {
-            jl_safe_fprint_codeloc(s, frame.func_name, frame.file_name, frame.line, 0, frame.pc, frame.inlined);
+            int col = frame.fromC ? frame.pc : 0;
+            int pc = frame.fromC ? 0 : frame.pc;
+            jl_safe_fprint_codeloc(
+                s, frame.func_name, frame.file_name, frame.line, col, pc, frame.inlined);
             free(frame.func_name);
         }
         free(frame.file_name);

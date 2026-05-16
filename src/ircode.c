@@ -1475,7 +1475,7 @@ static void cdi_deref(jl_debuginfo_t **p_di, int32_t *p_pc, int recursive) JL_NO
             cdi_deref(p_di, p_pc, recursive);
         }
     } else {
-        if (jl_is_string (di->linetable)) {jl_unreachable();} // TODO: remove when byte-precise
+        if (jl_is_string(di->linetable)) {jl_unreachable();} // TODO: remove when byte-precise
         assert(jl_is_string(di->linetable) || jl_is_nothing(di->linetable));
     }
 }
@@ -1568,8 +1568,19 @@ JL_DLLEXPORT int32_t jl_cdi_firstline_all(jl_debuginfo_t *di) JL_NOTSAFEPOINT
 JL_DLLEXPORT const char *jl_cdi_file(jl_debuginfo_t *di) JL_NOTSAFEPOINT
 {
     cdi_deref(&di, NULL, 1);
-    assert(jl_is_symbol(di->def));
-    return jl_symbol_name((jl_sym_t*)di->def);
+    if (jl_is_symbol(di->def)) {
+        return jl_symbol_name((jl_sym_t*)di->def);
+    } else if (jl_is_method_instance(di->def)) {
+        // reachable with hand-crafted CodeInstances in base tests
+        jl_value_t *m = ((jl_method_instance_t *)di->def)->def.value;
+        assert(jl_is_method(m));
+        return jl_symbol_name(((jl_method_t*)m)->file);
+    } else if (jl_is_nothing(di->def)) {
+        // reachable when linenumbernode.file is nothing (through method.c)
+        return "<unknown>";
+    } else {
+        jl_error("unexpected type for debuginfo.def");
+    }
 }
 
 static int allzero(jl_value_t *codelocs) JL_NOTSAFEPOINT
