@@ -14,7 +14,7 @@ using endianness = llvm::endianness;
 
 // Skip atime refreshes when the existing access time is within this many
 // nanoseconds of the new one, to avoid excessive LRU bookkeeping writes.
-static constexpr uint64_t OBJCACHE_ATIME_GRANULARITY = 300;
+static constexpr int64_t OBJCACHE_ATIME_GRANULARITY = 300;
 static constexpr size_t OBJCACHE_CAPACITY = 128 << 20; // 1 MiB (temp)
 // When the map is full, evict down to OBJCACHE_EVICT_TO/2^31 capacity.
 static constexpr uint32_t OBJCACHE_EVICT_TO = 536870912 /* 1073741824 */; // 50%
