@@ -440,7 +440,7 @@ end
 
 # Don't serialize s (it is the complete array) and
 # pidx, which is relevant to the current process only
-function serialize(s::AbstractSerializer, S::SharedArray)
+function serialize(s::AbstractJuliaSerializer, S::SharedArray)
     serialize_cycle_header(s, S) && return
 
     destpid = worker_id_from_socket(s.io)
@@ -471,7 +471,7 @@ function serialize(s::AbstractSerializer, S::SharedArray)
     end
 end
 
-function deserialize(s::AbstractSerializer, t::Type{<:SharedArray})
+function deserialize(s::AbstractJuliaSerializer, t::Type{<:SharedArray})
     ref_exists = deserialize(s)
     if ref_exists
         sref = sa_refs[RRID(deserialize(s), deserialize(s))]
@@ -481,7 +481,7 @@ function deserialize(s::AbstractSerializer, t::Type{<:SharedArray})
         error("Expected reference to shared array instance not found")
     end
 
-    S = invoke(deserialize, Tuple{AbstractSerializer,DataType}, s, t)
+    S = invoke(deserialize, Tuple{AbstractJuliaSerializer,DataType}, s, t)
     init_loc_flds(S, true)
     return S
 end

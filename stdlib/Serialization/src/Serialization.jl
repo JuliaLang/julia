@@ -13,16 +13,32 @@ import Core: svec, SimpleVector
 using Base: unaliascopy, unwrap_unionall, require_one_based_indexing, ntupleany
 using Core.IR
 
-export serialize, deserialize, AbstractSerializer, Serializer
+export serialize, deserialize, AbstractSerializer, AbstractJuliaSerializer, Serializer
 
+"""
+    AbstractSerializer
+
+Format-agnostic contract for a serializer. Subtypes implement
+`serialize(s, value)` and `deserialize(s, ::Type{T})`.
+"""
 abstract type AbstractSerializer end
+
+"""
+    AbstractJuliaSerializer <: AbstractSerializer
+
+Parent type for serializers implementing Julia's serialization format
+(tag table, cycle/back-ref tracking, header). The default `Serializer`
+is one implementation; subtypes share its state shape and helpers while
+varying specific behaviors.
+"""
+abstract type AbstractJuliaSerializer <: AbstractSerializer end
 
 # Dict is generally a much better dictionary than IdDict, but we want objectid comparison
 struct IdKey val::Any end
 Base.hash(k::IdKey, h::UInt) = hash(objectid(k.val), h)
 Base.isequal(a::IdKey, b::IdKey) = a.val === b.val
 
-mutable struct Serializer{I<:IO} <: AbstractSerializer
+mutable struct Serializer{I<:IO} <: AbstractJuliaSerializer
     const io::I
     counter::Int
     const cycle_table::Dict{IdKey,Int}
@@ -91,7 +107,7 @@ const NTAGS = length(TAGS)
 
 const ser_version = 30 # do not make changes without bumping the version #!
 
-format_version(::AbstractSerializer) = ser_version
+format_version(::AbstractJuliaSerializer) = ser_version
 format_version(s::Serializer) = s.version
 
 function sertag(@nospecialize(v))
@@ -160,12 +176,12 @@ function write_as_tag(s::IO, tag)
 end
 
 # cycle handling
-_getcycle(s::AbstractSerializer, @nospecialize(x)) = get(s.table, x, -1)::Int
+_getcycle(s::AbstractJuliaSerializer, @nospecialize(x)) = get(s.table, x, -1)::Int
 _getcycle(s::Serializer, @nospecialize(x)) = get(s.cycle_table, IdKey(x), -1)
-_setcycle!(s::AbstractSerializer, @nospecialize(x), v::Int) = (s.table[x] = v; nothing)
+_setcycle!(s::AbstractJuliaSerializer, @nospecialize(x), v::Int) = (s.table[x] = v; nothing)
 _setcycle!(s::Serializer, @nospecialize(x), v::Int) = (s.cycle_table[IdKey(x)] = v; nothing)
 
-_setbackref!(s::AbstractSerializer, slot::Int, @nospecialize(x)) = (s.table[slot] = x; nothing)
+_setbackref!(s::AbstractJuliaSerializer, slot::Int, @nospecialize(x)) = (s.table[slot] = x; nothing)
 function _setbackref!(s::Serializer, slot::Int, @nospecialize(x))
     bt = s.backref_table
     i = slot + 1
@@ -184,7 +200,7 @@ end
         """)
 end
 
-_getbackref(s::AbstractSerializer, id::Int) = get(() -> __getbackref_error(id), s.table, id)
+_getbackref(s::AbstractJuliaSerializer, id::Int) = get(() -> __getbackref_error(id), s.table, id)
 function _getbackref(s::Serializer, id::Int)
     bt = s.backref_table
     i = id + 1
@@ -192,10 +208,10 @@ function _getbackref(s::Serializer, id::Int)
     @inbounds return bt[i]
 end
 
-_sizehint_cycle!(s::AbstractSerializer, n::Integer) = (sizehint!(s.table, n); nothing)
+_sizehint_cycle!(s::AbstractJuliaSerializer, n::Integer) = (sizehint!(s.table, n); nothing)
 _sizehint_cycle!(s::Serializer, n::Integer) = (sizehint!(s.cycle_table, n); nothing)
 
-_sizehint_backref!(s::AbstractSerializer, n::Integer) = (sizehint!(s.table, n); nothing)
+_sizehint_backref!(s::AbstractJuliaSerializer, n::Integer) = (sizehint!(s.table, n); nothing)
 _sizehint_backref!(s::Serializer, n::Integer) = (sizehint!(s.backref_table, n; shrink=false); nothing)
 
 function _emit_backref(io::IO, offs::Int)
@@ -212,7 +228,7 @@ function _emit_backref(io::IO, offs::Int)
     nothing
 end
 
-function serialize_cycle(s::AbstractSerializer, @nospecialize(x))
+function serialize_cycle(s::AbstractJuliaSerializer, @nospecialize(x))
     offs = _getcycle(s, x)
     if offs != -1
         _emit_backref(s.io, offs)
@@ -223,13 +239,13 @@ function serialize_cycle(s::AbstractSerializer, @nospecialize(x))
     return false
 end
 
-function serialize_cycle_header(s::AbstractSerializer, @nospecialize(x))
+function serialize_cycle_header(s::AbstractJuliaSerializer, @nospecialize(x))
     serialize_cycle(s, x) && return true
     serialize_type(s, typeof(x), true)
     return false
 end
 
-function reset_state(s::AbstractSerializer)
+function reset_state(s::AbstractJuliaSerializer)
     s.counter = 0
     empty!(s.table)
     empty!(s.pending_refs)
@@ -243,14 +259,14 @@ function reset_state(s::Serializer)
     s
 end
 
-serialize(s::AbstractSerializer, x::Bool) = x ? writetag(s.io, TRUE_TAG) :
+serialize(s::AbstractJuliaSerializer, x::Bool) = x ? writetag(s.io, TRUE_TAG) :
                                                 writetag(s.io, FALSE_TAG)
 
-serialize(s::AbstractSerializer, p::Ptr) = serialize_any(s, oftype(p, C_NULL))
+serialize(s::AbstractJuliaSerializer, p::Ptr) = serialize_any(s, oftype(p, C_NULL))
 
-serialize(s::AbstractSerializer, ::Tuple{}) = writetag(s.io, EMPTYTUPLE_TAG)
+serialize(s::AbstractJuliaSerializer, ::Tuple{}) = writetag(s.io, EMPTYTUPLE_TAG)
 
-function serialize(s::AbstractSerializer, t::Tuple)
+function serialize(s::AbstractJuliaSerializer, t::Tuple)
     l = length(t)
     if l <= NTAGS
         writetag(s.io, TUPLE_TAG)
@@ -264,7 +280,7 @@ function serialize(s::AbstractSerializer, t::Tuple)
     end
 end
 
-function serialize(s::AbstractSerializer, v::SimpleVector)
+function serialize(s::AbstractJuliaSerializer, v::SimpleVector)
     writetag(s.io, SIMPLEVECTOR_TAG)
     write(s.io, Int32(length(v)))
     for x in v
@@ -272,7 +288,7 @@ function serialize(s::AbstractSerializer, v::SimpleVector)
     end
 end
 
-function serialize(s::AbstractSerializer, x::Symbol)
+function serialize(s::AbstractJuliaSerializer, x::Symbol)
     tag = sertag(x)
     if tag > 0
         return write_as_tag(s.io, tag)
@@ -314,7 +330,7 @@ function serialize_array_data(s::IO, a)
     end
 end
 
-function _serialize_non_bits_elements!(s::AbstractSerializer, a)
+function _serialize_non_bits_elements!(s::AbstractJuliaSerializer, a)
     _sizehint_cycle!(s, div(length(a), 4))  # prepare for lots of pointers
     @inbounds for i in eachindex(a)
         if isassigned(a, i)
@@ -325,7 +341,7 @@ function _serialize_non_bits_elements!(s::AbstractSerializer, a)
     end
 end
 
-function serialize(s::AbstractSerializer, a::Array)
+function serialize(s::AbstractJuliaSerializer, a::Array)
     serialize_cycle(s, a) && return
     elty = eltype(a)
     writetag(s.io, ARRAY_TAG)
@@ -344,15 +360,15 @@ function serialize(s::AbstractSerializer, a::Array)
     end
 end
 
-function serialize(s::AbstractSerializer, a::SubArray{T,N,A}) where {T,N,A<:Array}
+function serialize(s::AbstractJuliaSerializer, a::SubArray{T,N,A}) where {T,N,A<:Array}
     # SubArray's copy only selects the relevant data (and reduces the size) but does not
     # preserve the type of the argument. This internal function does both:
     b = unaliascopy(a)
     serialize_any(s, b)
 end
 
-serialize(s::AbstractSerializer, m::GenericMemory) = error("GenericMemory{:atomic} currently cannot be serialized")
-function serialize(s::AbstractSerializer, m::Memory)
+serialize(s::AbstractJuliaSerializer, m::GenericMemory) = error("GenericMemory{:atomic} currently cannot be serialized")
+function serialize(s::AbstractJuliaSerializer, m::Memory)
     serialize_cycle_header(s, m) && return
     serialize(s, length(m))
     elty = eltype(m)
@@ -363,13 +379,13 @@ function serialize(s::AbstractSerializer, m::Memory)
     end
 end
 
-function serialize(s::AbstractSerializer, x::GenericMemoryRef)
+function serialize(s::AbstractJuliaSerializer, x::GenericMemoryRef)
     serialize_type(s, typeof(x))
     serialize(s, getfield(x, :mem))
     serialize(s, Base.memoryrefoffset(x))
 end
 
-function serialize(s::AbstractSerializer, ss::String)
+function serialize(s::AbstractJuliaSerializer, ss::String)
     len = sizeof(ss)
     if len > 7
         serialize_cycle(s, ss) && return
@@ -386,25 +402,25 @@ function serialize(s::AbstractSerializer, ss::String)
     nothing
 end
 
-function serialize(s::AbstractSerializer, ss::SubString{String})
+function serialize(s::AbstractJuliaSerializer, ss::SubString{String})
     # avoid saving a copy of the parent string, keeping the type of ss
     serialize_any(s, SubString(String(ss)))
 end
 
 # Don't serialize the pointers
-function serialize(s::AbstractSerializer, r::Regex)
+function serialize(s::AbstractJuliaSerializer, r::Regex)
     serialize_type(s, typeof(r))
     serialize(s, r.pattern)
     serialize(s, r.compile_options)
     serialize(s, r.match_options)
 end
 
-function serialize(s::AbstractSerializer, n::BigInt)
+function serialize(s::AbstractJuliaSerializer, n::BigInt)
     serialize_type(s, BigInt)
     serialize(s, string(n, base = 62))
 end
 
-function serialize(s::AbstractSerializer, ex::Expr)
+function serialize(s::AbstractJuliaSerializer, ex::Expr)
     serialize_cycle(s, ex) && return
     l = length(ex.args)
     if l <= NTAGS
@@ -420,7 +436,7 @@ function serialize(s::AbstractSerializer, ex::Expr)
     end
 end
 
-function serialize_dict_data(s::AbstractSerializer, d::AbstractDict)
+function serialize_dict_data(s::AbstractJuliaSerializer, d::AbstractDict)
     write(s.io, Int32(length(d)))
     for (k,v) in d
         serialize(s, k)
@@ -428,19 +444,19 @@ function serialize_dict_data(s::AbstractSerializer, d::AbstractDict)
     end
 end
 
-function serialize(s::AbstractSerializer, d::Dict)
+function serialize(s::AbstractJuliaSerializer, d::Dict)
     serialize_cycle_header(s, d) && return
     serialize_dict_data(s, d)
 end
 
-function serialize(s::AbstractSerializer, d::IdDict)
+function serialize(s::AbstractJuliaSerializer, d::IdDict)
     serialize_cycle(s, d) && return
     writetag(s.io, IDDICT_TAG)
     serialize_type_data(s, typeof(d))
     serialize_dict_data(s, d)
 end
 
-function serialize_mod_names(s::AbstractSerializer, m::Module)
+function serialize_mod_names(s::AbstractJuliaSerializer, m::Module)
     p = parentmodule(m)
     if p === m || m === Base
         key = Base.root_module_key(m)
@@ -453,7 +469,7 @@ function serialize_mod_names(s::AbstractSerializer, m::Module)
     end
 end
 
-function serialize(s::AbstractSerializer, m::Module)
+function serialize(s::AbstractJuliaSerializer, m::Module)
     writetag(s.io, MODULE_TAG)
     serialize_mod_names(s, m)
     writetag(s.io, EMPTYTUPLE_TAG)
@@ -462,7 +478,7 @@ end
 # TODO: make this bidirectional, so objects can be sent back via the same key
 const object_numbers = WeakKeyDict()
 const obj_number_salt = Ref{UInt64}(0)
-function object_number(s::AbstractSerializer, @nospecialize(l))
+function object_number(s::AbstractJuliaSerializer, @nospecialize(l))
     global obj_number_salt, object_numbers
     if haskey(object_numbers, l)
         return object_numbers[l]
@@ -473,9 +489,9 @@ function object_number(s::AbstractSerializer, @nospecialize(l))
     return ln::UInt64
 end
 
-lookup_object_number(s::AbstractSerializer, n::UInt64) = nothing
+lookup_object_number(s::AbstractJuliaSerializer, n::UInt64) = nothing
 
-remember_object(s::AbstractSerializer, @nospecialize(o), n::UInt64) = nothing
+remember_object(s::AbstractJuliaSerializer, @nospecialize(o), n::UInt64) = nothing
 
 function lookup_object_number(s::Serializer, n::UInt64)
     return get(s.known_object_data, n, nothing)
@@ -486,7 +502,7 @@ function remember_object(s::Serializer, @nospecialize(o), n::UInt64)
     return nothing
 end
 
-function serialize(s::AbstractSerializer, meth::Method)
+function serialize(s::AbstractJuliaSerializer, meth::Method)
     serialize_cycle(s, meth) && return
     writetag(s.io, METHOD_TAG)
     write(s.io, object_number(s, meth))
@@ -523,19 +539,19 @@ function serialize(s::AbstractSerializer, meth::Method)
     nothing
 end
 
-function serialize(s::AbstractSerializer, mt::Core.MethodTable)
+function serialize(s::AbstractJuliaSerializer, mt::Core.MethodTable)
     serialize_type(s, typeof(mt))
     serialize(s, mt.name)
     serialize(s, mt.module)
     nothing
 end
 
-function serialize(s::AbstractSerializer, mc::Core.MethodCache)
+function serialize(s::AbstractJuliaSerializer, mc::Core.MethodCache)
     error("cannot serialize MethodCache objects")
 end
 
 
-function serialize(s::AbstractSerializer, linfo::Core.MethodInstance)
+function serialize(s::AbstractJuliaSerializer, linfo::Core.MethodInstance)
     serialize_cycle(s, linfo) && return
     writetag(s.io, METHODINSTANCE_TAG)
     serialize(s, nothing)  # for backwards compat
@@ -546,13 +562,13 @@ function serialize(s::AbstractSerializer, linfo::Core.MethodInstance)
     nothing
 end
 
-function serialize(s::AbstractSerializer, @nospecialize(u::Union))
+function serialize(s::AbstractJuliaSerializer, @nospecialize(u::Union))
     serialize_type(s, Union, false)
     serialize(s, u.a)
     serialize(s, u.b)
 end
 
-function serialize(s::AbstractSerializer, t::Task)
+function serialize(s::AbstractJuliaSerializer, t::Task)
     serialize_cycle(s, t) && return
     if istaskstarted(t) && !istaskdone(t)
         error("cannot serialize a running Task")
@@ -572,7 +588,7 @@ function serialize(s::AbstractSerializer, t::Task)
     serialize(s, t._isexception)
 end
 
-function serialize(s::AbstractSerializer, g::GlobalRef)
+function serialize(s::AbstractJuliaSerializer, g::GlobalRef)
     if (g.mod === __deserialized_types__ ) ||
         (g.mod === Main && isdefined(g.mod, g.name) && isconst(g.mod, g.name))
 
@@ -591,14 +607,14 @@ function serialize(s::AbstractSerializer, g::GlobalRef)
     serialize(s, g.name)
 end
 
-function serialize(s::AbstractSerializer, t::Core.TypeName)
+function serialize(s::AbstractJuliaSerializer, t::Core.TypeName)
     serialize_cycle(s, t) && return
     writetag(s.io, TYPENAME_TAG)
     write(s.io, object_number(s, t))
     serialize_typename(s, t)
 end
 
-function serialize_typename(s::AbstractSerializer, t::Core.TypeName)
+function serialize_typename(s::AbstractJuliaSerializer, t::Core.TypeName)
     serialize(s, t.name)
     serialize(s, t.names)
     primary = unwrap_unionall(t.wrapper)
@@ -673,7 +689,7 @@ function serialize_type_data(s, @nospecialize(t::DataType))
     nothing
 end
 
-function serialize(s::AbstractSerializer, t::DataType)
+function serialize(s::AbstractJuliaSerializer, t::DataType)
     tag = sertag(t)
     tag > 0 && return write_as_tag(s.io, tag)
     if t === Tuple
@@ -686,14 +702,14 @@ function serialize(s::AbstractSerializer, t::DataType)
     serialize_type_data(s, t)
 end
 
-function serialize_type(s::AbstractSerializer, @nospecialize(t::DataType), ref::Bool = false)
+function serialize_type(s::AbstractJuliaSerializer, @nospecialize(t::DataType), ref::Bool = false)
     tag = sertag(t)
     tag > 0 && return writetag(s.io, tag)
     writetag(s.io, ref ? REF_OBJECT_TAG : OBJECT_TAG)
     serialize_type_data(s, t)
 end
 
-function serialize(s::AbstractSerializer, n::Int32)
+function serialize(s::AbstractJuliaSerializer, n::Int32)
     if 0 <= n <= (n_int_literals-1)
         write(s.io, UInt8(ZERO32_TAG+n))
     else
@@ -703,7 +719,7 @@ function serialize(s::AbstractSerializer, n::Int32)
     nothing
 end
 
-function serialize(s::AbstractSerializer, n::Int64)
+function serialize(s::AbstractJuliaSerializer, n::Int64)
     if 0 <= n <= (n_int_literals-1)
         write(s.io, UInt8(ZERO64_TAG+n))
     elseif typemin(Int32) <= n <= typemax(Int32)
@@ -720,12 +736,12 @@ for i in 0:13
     tag = Int32(INT8_TAG + i)
     ty = TAGS[tag]
     (ty === Int32 || ty === Int64) && continue
-    @eval serialize(s::AbstractSerializer, n::$ty) = (writetag(s.io, $tag); write(s.io, n); nothing)
+    @eval serialize(s::AbstractJuliaSerializer, n::$ty) = (writetag(s.io, $tag); write(s.io, n); nothing)
 end
 
-serialize(s::AbstractSerializer, ::Type{Bottom}) = write_as_tag(s.io, BOTTOM_TAG)
+serialize(s::AbstractJuliaSerializer, ::Type{Bottom}) = write_as_tag(s.io, BOTTOM_TAG)
 
-function serialize(s::AbstractSerializer, u::UnionAll)
+function serialize(s::AbstractJuliaSerializer, u::UnionAll)
     writetag(s.io, UNIONALL_TAG)
     n = 0; t = u
     while isa(t, UnionAll)
@@ -743,19 +759,19 @@ function serialize(s::AbstractSerializer, u::UnionAll)
     end
 end
 
-serialize(s::AbstractSerializer, @nospecialize(x)) = serialize_any(s, x)
+serialize(s::AbstractJuliaSerializer, @nospecialize(x)) = serialize_any(s, x)
 
-function serialize(s::AbstractSerializer, x::Core.AddrSpace)
+function serialize(s::AbstractJuliaSerializer, x::Core.AddrSpace)
     serialize_type(s, typeof(x))
     write(s.io, Core.bitcast(UInt8, x))
 end
 
-function serialize(s::AbstractSerializer, x::Core.IntrinsicFunction)
+function serialize(s::AbstractJuliaSerializer, x::Core.IntrinsicFunction)
     serialize_type(s, typeof(x))
     serialize(s, nameof(x))
 end
 
-function serialize_any(s::AbstractSerializer, @nospecialize(x))
+function serialize_any(s::AbstractJuliaSerializer, @nospecialize(x))
     tag = sertag(x)
     if tag > 0
         return write_as_tag(s.io, tag)
@@ -784,7 +800,7 @@ function serialize_any(s::AbstractSerializer, @nospecialize(x))
 end
 
 """
-    Serialization.writeheader(s::AbstractSerializer)
+    Serialization.writeheader(s::AbstractJuliaSerializer)
 
 Write an identifying header to the specified serializer. The header consists of
 8 bytes as follows:
@@ -798,7 +814,7 @@ Write an identifying header to the specified serializer. The header consists of
 |   4    | bits 2-3: platform: 0 = 32-bit, 1 = 64-bit      |
 |   5-7  | reserved                                        |
 """
-function writeheader(s::AbstractSerializer)
+function writeheader(s::AbstractJuliaSerializer)
     io = s.io
     writetag(io, HEADER_TAG)
     write(io, "JL")  # magic bytes
@@ -814,7 +830,7 @@ function writeheader(s::AbstractSerializer)
     nothing
 end
 
-function readheader(s::AbstractSerializer)
+function readheader(s::AbstractJuliaSerializer)
     # Tag already read
     io = s.io
     m1 = read(io, UInt8)
@@ -888,6 +904,15 @@ Open a file and serialize the given value to it.
 """
 serialize(filename::AbstractString, x) = open(io->serialize(io, x), filename, "w")
 
+"""
+    serialize(io::IO, ::Type{S}, value) where S<:AbstractSerializer
+
+Serialize `value` to `io` using serializer type `S`, equivalent to
+`serialize(S(io), value)`. Use to route through a non-default
+[`AbstractSerializer`](@ref) subtype.
+"""
+serialize(io::IO, ::Type{S}, x) where S<:AbstractSerializer = serialize(S(io), x)
+
 ## deserializing values ##
 
 """
@@ -911,11 +936,20 @@ Open a file and deserialize its contents.
 """
 deserialize(filename::AbstractString) = open(deserialize, filename)
 
-function deserialize(s::AbstractSerializer)
+"""
+    deserialize(io::IO, ::Type{S}, ::Type{T}) where {S<:AbstractSerializer, T}
+
+Deserialize a value of type `T` from `io` using serializer type `S`, equivalent
+to `deserialize(S(io), T)`. Use to route through a non-default
+[`AbstractSerializer`](@ref) subtype.
+"""
+deserialize(io::IO, ::Type{S}, ::Type{T}) where {S<:AbstractSerializer, T} = deserialize(S(io), T)
+
+function deserialize(s::AbstractJuliaSerializer)
     handle_deserialize(s, Int32(read(s.io, UInt8)::UInt8))
 end
 
-function deserialize_cycle(s::AbstractSerializer, @nospecialize(x))
+function deserialize_cycle(s::AbstractJuliaSerializer, @nospecialize(x))
     slot = pop!(s.pending_refs)
     _setbackref!(s, slot, x)
     nothing
@@ -926,7 +960,7 @@ end
 #     push!(s.pending_refs, slot)
 #     slot = pop!(s.pending_refs)
 #     _setbackref!(s, slot, x)
-function resolve_ref_immediately(s::AbstractSerializer, @nospecialize(x))
+function resolve_ref_immediately(s::AbstractJuliaSerializer, @nospecialize(x))
     _setbackref!(s, s.counter, x)
     s.counter += 1
     nothing
@@ -935,7 +969,7 @@ end
 # deserialize_ is an internal function to dispatch on the tag
 # describing the serialized representation. the number of
 # representations is fixed, so deserialize_ does not get extended.
-function handle_deserialize(s::AbstractSerializer, b::Int32)
+function handle_deserialize(s::AbstractJuliaSerializer, b::Int32)
     if b == 0
         return desertag(Int32(read(s.io, UInt8)::UInt8))
     end
@@ -1048,7 +1082,7 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
     return deserialize(s, t)
 end
 
-function deserialize_symbol(s::AbstractSerializer, len::Int)
+function deserialize_symbol(s::AbstractJuliaSerializer, len::Int)
     str = Base._string_n(len)
     unsafe_read(s.io, pointer(str), len)
     sym = Symbol(str)
@@ -1058,7 +1092,7 @@ function deserialize_symbol(s::AbstractSerializer, len::Int)
     return sym
 end
 
-function deserialize_tuple(s::AbstractSerializer, len)
+function deserialize_tuple(s::AbstractJuliaSerializer, len)
     len == 0 && return ()
     Base.Cartesian.@nexprs 10 i -> begin
         len == i && return (Base.Cartesian.@ntuple i _ -> deserialize(s))
@@ -1066,12 +1100,12 @@ function deserialize_tuple(s::AbstractSerializer, len)
     return ntupleany(i -> deserialize(s), len)
 end
 
-function deserialize_svec(s::AbstractSerializer)
+function deserialize_svec(s::AbstractJuliaSerializer)
     n = read(s.io, Int32)
     svec(Any[ deserialize(s) for i=1:n ]...)
 end
 
-function deserialize_module(s::AbstractSerializer)
+function deserialize_module(s::AbstractJuliaSerializer)
     mkey = deserialize(s)
     if isa(mkey, Tuple)
         # old version, TODO: remove
@@ -1095,7 +1129,7 @@ function deserialize_module(s::AbstractSerializer)
     return m
 end
 
-function deserialize(s::AbstractSerializer, ::Type{Method})
+function deserialize(s::AbstractJuliaSerializer, ::Type{Method})
     lnumber = read(s.io, UInt64)
     meth = lookup_object_number(s, lnumber)
     if meth !== nothing
@@ -1195,13 +1229,13 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     return meth
 end
 
-function deserialize(s::AbstractSerializer, ::Type{Core.MethodTable})
+function deserialize(s::AbstractJuliaSerializer, ::Type{Core.MethodTable})
     name = deserialize(s)::Symbol
     mod = deserialize(s)::Module
     return getglobal(mod, name)::Core.MethodTable
 end
 
-function deserialize(s::AbstractSerializer, ::Type{Core.MethodInstance})
+function deserialize(s::AbstractJuliaSerializer, ::Type{Core.MethodInstance})
     linfo = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, (Ptr{Cvoid},), C_NULL)
     deserialize_cycle(s, linfo)
     if format_version(s) < 28
@@ -1224,7 +1258,7 @@ function deserialize(s::AbstractSerializer, ::Type{Core.MethodInstance})
     return linfo
 end
 
-function deserialize(s::AbstractSerializer, ::Type{Core.LineInfoNode})
+function deserialize(s::AbstractJuliaSerializer, ::Type{Core.LineInfoNode})
     mod = deserialize(s)
     if mod isa Module
         method = deserialize(s)
@@ -1237,7 +1271,7 @@ function deserialize(s::AbstractSerializer, ::Type{Core.LineInfoNode})
 end
 
 
-function deserialize(s::AbstractSerializer, ::Type{PhiNode})
+function deserialize(s::AbstractJuliaSerializer, ::Type{PhiNode})
     edges = deserialize(s)
     if edges isa Vector{Any}
         edges = Vector{Int32}(edges)
@@ -1262,7 +1296,7 @@ function symbol_to_globalref(@nospecialize(x), m::Module)
     end
 end
 
-function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
+function deserialize(s::AbstractJuliaSerializer, ::Type{CodeInfo})
     ci = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
     deserialize_cycle(s, ci)
     code = deserialize(s)::Vector{Any}
@@ -1404,7 +1438,7 @@ else
 const OtherInt = Int64
 end
 
-function deserialize_array(s::AbstractSerializer)
+function deserialize_array(s::AbstractJuliaSerializer)
     slot = s.counter; s.counter += 1
     d1 = deserialize(s)
     if isa(d1, Type)
@@ -1453,7 +1487,7 @@ function deserialize_array(s::AbstractSerializer)
     return A
 end
 
-function deserialize_fillarray!(A::Union{Array{T},Memory{T}}, s::AbstractSerializer) where {T}
+function deserialize_fillarray!(A::Union{Array{T},Memory{T}}, s::AbstractJuliaSerializer) where {T}
     for i = eachindex(A)
         tag = Int32(read(s.io, UInt8)::UInt8)
         if tag != UNDEFREF_TAG
@@ -1463,7 +1497,7 @@ function deserialize_fillarray!(A::Union{Array{T},Memory{T}}, s::AbstractSeriali
     return A
 end
 
-function deserialize(s::AbstractSerializer, X::Type{Memory{T}} where T)
+function deserialize(s::AbstractJuliaSerializer, X::Type{Memory{T}} where T)
     slot = pop!(s.pending_refs) # e.g. deserialize_cycle
     n = deserialize(s)::Int
     elty = eltype(X)
@@ -1494,23 +1528,23 @@ function deserialize(s::AbstractSerializer, X::Type{Memory{T}} where T)
     return A
 end
 
-function deserialize(s::AbstractSerializer, X::Type{MemoryRef{T}} where T)
+function deserialize(s::AbstractJuliaSerializer, X::Type{MemoryRef{T}} where T)
     x = Core.memoryref(deserialize(s))::X
     i = deserialize(s)::Int
     i == 1 || (x = Core.memoryrefnew(x, i, true))
     return x::X
 end
 
-function deserialize(s::AbstractSerializer, X::Type{Core.AddrSpace{M}} where M)
+function deserialize(s::AbstractJuliaSerializer, X::Type{Core.AddrSpace{M}} where M)
     Core.bitcast(X, read(s.io, UInt8))
 end
 
-function deserialize(s::AbstractSerializer, ::Type{Core.IntrinsicFunction})
+function deserialize(s::AbstractJuliaSerializer, ::Type{Core.IntrinsicFunction})
     name = deserialize(s)::Symbol
     return getfield(Core.Intrinsics, name)::Core.IntrinsicFunction
 end
 
-function deserialize_expr(s::AbstractSerializer, len)
+function deserialize_expr(s::AbstractJuliaSerializer, len)
     e = Expr(:temp)
     resolve_ref_immediately(s, e)
     e.head = deserialize(s)::Symbol
@@ -1520,12 +1554,12 @@ end
 
 module __deserialized_types__ end
 
-function deserialize(s::AbstractSerializer, ::Type{Core.TypeName})
+function deserialize(s::AbstractJuliaSerializer, ::Type{Core.TypeName})
     number = read(s.io, UInt64)
     return deserialize_typename(s, number)
 end
 
-function deserialize_typename(s::AbstractSerializer, number)
+function deserialize_typename(s::AbstractJuliaSerializer, number)
     name = deserialize(s)::Symbol
     tn = lookup_object_number(s, number)
     if tn !== nothing
@@ -1594,7 +1628,7 @@ function deserialize_typename(s::AbstractSerializer, number)
     return tn
 end
 
-function deserialize_datatype(s::AbstractSerializer, full::Bool)
+function deserialize_datatype(s::AbstractJuliaSerializer, full::Bool)
     slot = s.counter; s.counter += 1
     if full
         tname = deserialize(s)::Core.TypeName
@@ -1634,7 +1668,7 @@ function deserialize_datatype(s::AbstractSerializer, full::Bool)
     return t
 end
 
-function deserialize(s::AbstractSerializer, ::Type{UnionAll})
+function deserialize(s::AbstractJuliaSerializer, ::Type{UnionAll})
     form = read(s.io, UInt8)
     if form == 0
         var = deserialize(s)
@@ -1659,7 +1693,7 @@ function deserialize(s::AbstractSerializer, ::Type{UnionAll})
     end
 end
 
-function deserialize(s::AbstractSerializer, ::Type{Task})
+function deserialize(s::AbstractJuliaSerializer, ::Type{Task})
     t = Task(()->nothing)
     deserialize_cycle(s, t)
     t.code = deserialize(s)
@@ -1687,14 +1721,14 @@ function deserialize(s::AbstractSerializer, ::Type{Task})
     t
 end
 
-function deserialize_string(s::AbstractSerializer, len::Int)
+function deserialize_string(s::AbstractJuliaSerializer, len::Int)
     out = ccall(:jl_alloc_string, Ref{String}, (Csize_t,), len)
     unsafe_read(s.io, pointer(out), len)
     return out
 end
 
 # default DataType deserializer
-function deserialize(s::AbstractSerializer, t::DataType)
+function deserialize(s::AbstractJuliaSerializer, t::DataType)
     nf = length(t.types)
     if isprimitivetype(t)
         return read(s.io, t)
@@ -1726,7 +1760,7 @@ function deserialize(s::AbstractSerializer, t::DataType)
     end
 end
 
-function deserialize_dict(s::AbstractSerializer, T::Type{<:AbstractDict})
+function deserialize_dict(s::AbstractJuliaSerializer, T::Type{<:AbstractDict})
     n = read(s.io, Int32)
     t = T(); sizehint!(t, n)
     deserialize_cycle(s, t)
@@ -1738,13 +1772,13 @@ function deserialize_dict(s::AbstractSerializer, T::Type{<:AbstractDict})
     return t
 end
 
-function deserialize(s::AbstractSerializer, T::Type{Dict{K,V}}) where {K,V}
+function deserialize(s::AbstractJuliaSerializer, T::Type{Dict{K,V}}) where {K,V}
     return deserialize_dict(s, T)
 end
 
-deserialize(s::AbstractSerializer, ::Type{BigInt}) = parse(BigInt, deserialize(s), base = 62)
+deserialize(s::AbstractJuliaSerializer, ::Type{BigInt}) = parse(BigInt, deserialize(s), base = 62)
 
-function deserialize(s::AbstractSerializer, t::Type{Regex})
+function deserialize(s::AbstractJuliaSerializer, t::Type{Regex})
     pattern = deserialize(s)
     compile_options = deserialize(s)
     match_options = deserialize(s)
@@ -1756,7 +1790,7 @@ end
 # provide a custom serializer that skips attempting to serialize the `outer_linfo`
 # which is likely to contain complex references, types, and module references
 # that may not exist on the receiver end
-function serialize(s::AbstractSerializer, frame::Base.StackTraces.StackFrame)
+function serialize(s::AbstractJuliaSerializer, frame::Base.StackTraces.StackFrame)
     serialize_type(s, typeof(frame))
     serialize(s, frame.func)
     serialize(s, frame.file)
@@ -1767,7 +1801,7 @@ function serialize(s::AbstractSerializer, frame::Base.StackTraces.StackFrame)
     nothing
 end
 
-function deserialize(s::AbstractSerializer, ::Type{Base.StackTraces.StackFrame})
+function deserialize(s::AbstractJuliaSerializer, ::Type{Base.StackTraces.StackFrame})
     func = deserialize(s)
     file = deserialize(s)
     line = read(s.io, Int)
@@ -1777,32 +1811,32 @@ function deserialize(s::AbstractSerializer, ::Type{Base.StackTraces.StackFrame})
     return Base.StackTraces.StackFrame(func, file, line, nothing, from_c, inlined, pointer)
 end
 
-function serialize(s::AbstractSerializer, lock::Base.AbstractLock)
+function serialize(s::AbstractJuliaSerializer, lock::Base.AbstractLock)
     # assert_havelock(lock)
     serialize_cycle_header(s, lock)
     nothing
 end
 
-function deserialize(s::AbstractSerializer, ::Type{T}) where T<:Base.AbstractLock
+function deserialize(s::AbstractJuliaSerializer, ::Type{T}) where T<:Base.AbstractLock
     lock = T()
     deserialize_cycle(s, lock)
     return lock
 end
 
-function serialize(s::AbstractSerializer, cond::Base.GenericCondition)
+function serialize(s::AbstractJuliaSerializer, cond::Base.GenericCondition)
     serialize_cycle_header(s, cond) && return
     serialize(s, cond.lock)
     nothing
 end
 
-function deserialize(s::AbstractSerializer, ::Type{T}) where T<:Base.GenericCondition
+function deserialize(s::AbstractJuliaSerializer, ::Type{T}) where T<:Base.GenericCondition
     lock = deserialize(s)
     cond = T(lock)
     deserialize_cycle(s, cond)
     return cond
 end
 
-serialize(s::AbstractSerializer, l::LazyString) =
-    invoke(serialize, Tuple{AbstractSerializer,Any}, s, Base._LazyString((), string(l)))
+serialize(s::AbstractJuliaSerializer, l::LazyString) =
+    invoke(serialize, Tuple{AbstractJuliaSerializer,Any}, s, Base._LazyString((), string(l)))
 
 end
