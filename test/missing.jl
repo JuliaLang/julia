@@ -442,6 +442,20 @@ end
     @test collect(x) == [1, 2, 4]
     @test collect(x) isa Vector{Int}
 
+    @testset "length" begin
+        allmiss = Vector{Union{Int,Missing}}(missing, 10)
+        @test (length∘skipmissing)(allmiss) == 0
+
+        somemiss = [1, missing, 2, 3, 4, missing, 5, 6, 7, 8, 9, 10]
+        @test (length∘skipmissing)(somemiss) == 10
+
+        nomiss = rand(1:10, 10)
+        @test (length∘skipmissing)(nomiss) == 10
+
+        itr = Iterators.Stateful([missing, 1, missing, 1])
+        @test_throws MethodError (length∘skipmissing)(itr)
+    end
+
     @testset "indexing" begin
         x = skipmissing([1, missing, 2, missing, missing])
         @test collect(eachindex(x)) == collect(keys(x)) == [1, 3]
