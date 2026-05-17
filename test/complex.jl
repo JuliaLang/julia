@@ -1213,6 +1213,12 @@ end
     # negative real z, complex p hits the same formula
     @test isfinite((-2.0+0.0im)^(1e5*(1+im)))
     @test iszero((-2.0+0.0im)^(1e5*(1+im)))
+    # safe path keeps r^pᵣ's extra precision that exp(pᵣ*log(r)) loses
+    @test abs((2.0+1.0im)^(100.0+0.001im)) ≈ Float64(abs(big(2.0+1.0im)^big(100.0+0.001im))) rtol=40*eps()
+    @test abs((-3.0+0.0im)^(200.0+1e-6im)) ≈ Float64(abs(big(-3.0+0.0im)^big(200.0+1e-6im))) rtol=10*eps()
+    # type-aware threshold: a Float64-sized lim would re-introduce #54692 on Float32
+    @test isfinite(Complex{Float32}(1, 1) ^ Complex{Float32}(300, 300))
+    @test isfinite(Complex{Float32}(-2, 0) ^ Complex{Float32}(130, 40))
 
     # cases where phase angle is non-finite yield NaN + NaN*im:
     @test NaN + NaN*im ≟ Inf ^ (2 + 3im) ≟ (Inf + 1im) ^ (2 + 3im) ≟ (Inf*im) ^ (2 + 3im) ≟

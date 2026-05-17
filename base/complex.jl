@@ -843,17 +843,23 @@ function _cpow(z::Union{T,Complex{T}}, p::Union{T,Complex{T}}) where T
         else
             r = -zᵣ
             θ = copysign(Tf(π),imag(z))
-            # compute |z|^p in log space to avoid Inf*0 NaNs when
-            # r^pᵣ overflows and exp(-pᵢ*θ) underflows (or vice versa)
-            rᵖ = exp(pᵣ*log(r) - pᵢ*θ)
-            ϕ = pᵣ*θ + pᵢ*log(r)
+            logr = log(r)
+            re_log, im_phase = pᵣ*logr, pᵢ*θ
+            lim = log(floatmax(Tf)) - one(Tf)
+            rᵖ = (abs(re_log) < lim && abs(im_phase) < lim) ?
+                r^pᵣ * exp(-im_phase) : exp(re_log - im_phase)
+            ϕ = pᵣ*θ + pᵢ*logr
         end
     else
         pᵣ, pᵢ = reim(p)
         r = abs(z)
         θ = angle(z)
-        rᵖ = exp(pᵣ*log(r) - pᵢ*θ)
-        ϕ = pᵣ*θ + pᵢ*log(r)
+        logr = log(r)
+        re_log, im_phase = pᵣ*logr, pᵢ*θ
+        lim = log(floatmax(Tf)) - one(Tf)
+        rᵖ = (abs(re_log) < lim && abs(im_phase) < lim) ?
+            r^pᵣ * exp(-im_phase) : exp(re_log - im_phase)
+        ϕ = pᵣ*θ + pᵢ*logr
     end
 
     if isfinite(ϕ)
