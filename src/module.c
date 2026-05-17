@@ -1183,6 +1183,8 @@ static void jl_binding_dep_message(jl_binding_t *b)
     jl_sym_t *name = b->globalref->name;
     size_t prefix_len = strlen(dep_message_prefix);
     size_t name_len = strlen(jl_symbol_name(name));
+    if (name_len > SIZE_MAX - prefix_len - 1)
+        return;
     char *dep_binding_name = (char*)alloca(prefix_len+name_len+1);
     memcpy(dep_binding_name, dep_message_prefix, prefix_len);
     memcpy(dep_binding_name + prefix_len, jl_symbol_name(name), name_len);
