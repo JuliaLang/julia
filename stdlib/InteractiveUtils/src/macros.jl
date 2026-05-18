@@ -336,6 +336,9 @@ For source reflection macros (`@which`, `@edit`, `@less` etc):
 Type annotations may be used instead of concrete values for the callable or for any of the arguments. The generated code
 will directly use the right-hand side of the type annotation instead of extracting the type of a value at runtime.
 
+!!! compat "Julia 1.13"
+    Support for type annotations requires at least Julia 1.13.
+
 This is particularly useful for callable objects (notably, for those that are hard to construct by hand on the spot),
 or when wanting to provide a type that is not concrete. However, support for callable objects requires setting
 `use_signature_tuple` to true, which is not a default (see the corresponding section below).
@@ -387,6 +390,9 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
     # Ignore assignments (e.g. `@edit a = f(x)` gets turned into `@edit f(x)`)
     if isa(ex0, Expr) && ex0.head === :(=) && isa(ex0.args[1], Symbol)
         return gen_call_with_extracted_types(__module__, fcn, ex0.args[2], kws; is_source_reflection, supports_binding_reflection, use_signature_tuple)
+    end
+    if isa(ex0, Symbol) && (fcn === :which || fcn === :less || fcn === :edit)
+        return Expr(:call, fcn, __module__, QuoteNode(ex0))
     end
     _where_params = nothing
     if isa(ex0, Expr)
@@ -560,15 +566,10 @@ for fname in [:which, :less, :edit, :functionloc]
         macro ($fname)(ex0)
             gen_call_with_extracted_types(__module__, $(Expr(:quote, fname)), ex0, Expr[];
                                           is_source_reflection = true,
-                                          supports_binding_reflection = $(fname === :which),
+                                          supports_binding_reflection = $(fname in (:which,:less,:edit)),
                                           use_signature_tuple = true)
         end
     end
-end
-
-macro which(ex0::Symbol)
-    ex0 = QuoteNode(ex0)
-    return :(which($__module__, $ex0))
 end
 
 for fname in [:code_warntype, :code_llvm, :code_native,

@@ -555,9 +555,12 @@ The location `i_1, i_2, i_3, ..., i_{n+1}` contains the value at `A[I_1[i_1, i_2
 All dimensions indexed with scalars are dropped. For example, if `J` is an array of indices, then the result of `A[2, J, 3]` is an
 array with size `size(J)`. Its `j`th element is populated by `A[2, J[j], 3]`.
 
-As a special part of this syntax, the `end` keyword may be used to represent the last index of
-each dimension within the indexing brackets, as determined by the size of the innermost array
-being indexed. Indexing syntax without the `end` keyword is equivalent to a call to [`getindex`](@ref):
+As a special part of the `[...]` indexing syntax, the [`end`](@ref) keyword may be used to represent the last index of
+a dimension; specifically, it is "lowered" by the compiler to a call to [`lastindex`](@ref) for that
+dimension of the array for the innermost enclosing brackets.  Similarly, [`begin`](@ref) within `[...]` indexing is
+lowered to a call to [`firstindex`](@ref) (which always returns `1` for built-in types like `Array` and `String`, but
+external packages may implement containers with indices that start at `0` or elsewhere).
+Otherwise, the bracket indexing syntax is equivalent to a call to [`getindex`](@ref):
 
 ```
 X = getindex(A, I_1, I_2, ..., I_n)
@@ -582,6 +585,13 @@ julia> x[1, [2 3; 4 1]]
 2×2 Matrix{Int64}:
   5  9
  13  1
+
+julia> x[:, div(begin + end, 2)]
+4-element Vector{Int64}:
+ 5
+ 6
+ 7
+ 8
 ```
 
 ## [Indexed Assignment](@id man-indexed-assignment)

@@ -67,6 +67,7 @@ any_ambig(info::MethodMatchInfo) = any_ambig(info.results)
 any_ambig(m::MethodMatches) = any_ambig(m.info)
 fully_covering(info::MethodMatchInfo) = info.fullmatch
 fully_covering(m::MethodMatches) = fully_covering(m.info)
+multiple_methods(m::MethodMatches) = length(m.applicable) > 1
 
 struct UnionSplitMethodMatches
     applicable::Vector{MethodMatchTarget}
@@ -78,6 +79,17 @@ any_ambig(info::UnionSplitInfo) = any(any_ambig, info.split)
 any_ambig(m::UnionSplitMethodMatches) = any_ambig(m.info)
 fully_covering(info::UnionSplitInfo) = all(fully_covering, info.split)
 fully_covering(m::UnionSplitMethodMatches) = fully_covering(m.info)
+function multiple_methods(m::UnionSplitMethodMatches)
+    first_method = nothing
+    for target in m.applicable
+        if first_method === nothing
+            first_method = target.match.method
+        elseif target.match.method !== first_method
+            return true
+        end
+    end
+    return false
+end
 
 nmatches(info::MethodMatchInfo) = length(info.results)
 function nmatches(info::UnionSplitInfo)
@@ -143,7 +155,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
     # split the for loop off into a function, so that we can pause and restart it at will
     function infercalls(interp, sv)
         local napplicable = length(applicable)
-        local multiple_matches = napplicable > 1
+        local multiple_matches = multiple_methods(matches)
         while state.inferidx <= napplicable
             (; match, edges, call_results, edge_idx) = applicable[state.inferidx]
             local method = match.method
@@ -296,7 +308,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
             inferidx = SafeBox{Int}(1)
             function infercalls2(interp, sv)
                 local napplicable = length(applicable)
-                local multiple_matches = napplicable > 1
+                local multiple_matches = multiple_methods(matches)
                 while inferidx[] <= napplicable
                     (; match, call_results, edge_idx) = applicable[inferidx[]]
                     inferidx[] += 1
@@ -308,8 +320,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                         csig = get_compileable_sig(method, sig, match.sparams)
                         if csig !== nothing && (!seenall || csig !== sig) # corresponds to whether the first look already looked at this, so repeating abstract_call_method is not useful
                             #println(sig, " changed to ", csig, " for ", method)
-                            sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), csig, method.sig)::SimpleVector
-                            sparams = sp_[2]::SimpleVector
+                            (_, sparams) = typeintersect_env(csig, method.sig)
                             mresult = abstract_call_method(interp, method, csig, sparams, multiple_matches, StmtInfo(false, false), sv)::Future
                             isready(mresult) || return false # wait for mresult Future to resolve off the callstack before continuing
                         end
@@ -730,7 +741,7 @@ function abstract_call_method(interp::AbstractInterpreter,
 
     # if sig changed, may need to recompute the sparams environment
     if isa(method.sig, UnionAll) && isempty(sparams)
-        recomputed = ccall(:jl_type_intersection_with_env, Any, (Any, Any), sig, method.sig)::SimpleVector
+        (_, sparams) = typeintersect_env(sig, method.sig)
         #@assert recomputed[1] !== Bottom
         # We must not use `sig` here, since that may re-introduce structural complexity that
         # our limiting heuristic sought to eliminate. The alternative would be to not increment depth over covariant contexts,
@@ -751,7 +762,6 @@ function abstract_call_method(interp::AbstractInterpreter,
         #         newsig = recomputed[2]
         #     end
         #     sig = ?
-        sparams = recomputed[2]::SimpleVector
     end
 
     return typeinf_edge(interp, method, sig, sparams, sv, edgecycle, edgelimited)
@@ -882,6 +892,23 @@ struct ConstCallResult
         const_edge::Union{Nothing,CodeInstance})
         return new(rt, exct, const_result, effects, const_edge)
     end
+    function ConstCallResult(
+            result::ConstCallResult;
+            effects::Effects = result.effects,
+            const_edge::Union{Nothing,CodeInstance} = result.const_edge
+        )
+        return new(result.rt, result.exct, result.const_result, effects, const_edge)
+    end
+end
+
+function use_concrete_eval_result(
+        interp::AbstractInterpreter, concrete_eval_result::ConstCallResult
+    )
+    # if we don't inline the result of this concrete evaluation,
+    # give const-prop' a chance to inline a better method body
+    return !may_optimize(interp) ||
+        may_inline_concrete_result(concrete_eval_result.const_result::ConcreteResult) ||
+        concrete_eval_result.rt === Bottom # unless this call deterministically throws and thus is non-inlineable
 end
 
 function abstract_call_method_with_const_args(interp::AbstractInterpreter,
@@ -892,15 +919,16 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
     end
     eligibility = concrete_eval_eligible(interp, f, result, arginfo, sv)
     concrete_eval_result = nothing
+    always_nothrow = false
     if eligibility === :concrete_eval
         concrete_eval_result = concrete_eval_call(interp, f, result, arginfo, sv, invokecall)
-        if (concrete_eval_result !== nothing &&  # allow external abstract interpreters to disable concrete evaluation ad-hoc
-            # if we don't inline the result of this concrete evaluation,
-            # give const-prop' a chance to inline a better method body
-            (!may_optimize(interp) ||
-             may_inline_concrete_result(concrete_eval_result.const_result::ConcreteResult) ||
-             concrete_eval_result.rt === Bottom)) # unless this call deterministically throws and thus is non-inlineable
-            return concrete_eval_result
+        # allow external abstract interpreters to disable concrete evaluation ad-hoc
+        if concrete_eval_result !== nothing
+            if use_concrete_eval_result(interp, concrete_eval_result)
+                return concrete_eval_result
+            elseif concrete_eval_result.rt !== Bottom
+                always_nothrow = true
+            end
         end
         # TODO allow semi-concrete interp for this call?
     end
@@ -918,7 +946,31 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
         end
     end
     # try constant prop'
-    return const_prop_call(interp, mi, result, arginfo, sv, concrete_eval_result)
+    new_result = const_prop_call(interp, mi, result, arginfo, sv, concrete_eval_result)
+    new_result === nothing && return nothing
+    if eligibility === :none
+        # const-prop' may have refined effects to be foldable when the original
+        # call was not; in that case, prefer concrete eval over the const-prop' result
+        new_eligibility = _concrete_eval_eligible(
+            interp, f, new_result.effects, new_result.const_edge, arginfo, sv)
+        if new_eligibility === :concrete_eval
+            new_concrete_eval_result = _concrete_eval_call(
+                interp, f, new_result.const_edge::CodeInstance, new_result.effects, arginfo, sv, invokecall)
+            if new_concrete_eval_result !== nothing
+                if use_concrete_eval_result(interp, new_concrete_eval_result)
+                    return ConstCallResult(new_concrete_eval_result; const_edge = new_result.const_edge)
+                elseif new_concrete_eval_result.rt !== Bottom
+                    always_nothrow = true
+                end
+            end
+        end
+    end
+    if always_nothrow
+        return ConstCallResult(new_result;
+            effects = Effects(new_result.effects; nothrow = true))
+    else
+        return new_result
+    end
 end
 
 function bail_out_const_call(interp::AbstractInterpreter, result::MethodCallResult,
@@ -954,9 +1006,17 @@ function bail_out_const_call(interp::AbstractInterpreter, result::MethodCallResu
     return false
 end
 
-function concrete_eval_eligible(interp::AbstractInterpreter,
-    @nospecialize(f), result::MethodCallResult, arginfo::ArgInfo, sv::AbsIntState)
-    (;effects) = result
+function concrete_eval_eligible(
+        interp::AbstractInterpreter, @nospecialize(f), result::MethodCallResult,
+        arginfo::ArgInfo, sv::AbsIntState
+    )
+    return _concrete_eval_eligible(interp, f, result.effects, result.edge, arginfo, sv)
+end
+
+function _concrete_eval_eligible(
+        interp::AbstractInterpreter, @nospecialize(f), effects::Effects,
+        edge::Union{Nothing,CodeInstance}, arginfo::ArgInfo, sv::AbsIntState
+    )
     if inbounds_option() === :off
         if !is_nothrow(effects)
             # Disable concrete evaluation in `--check-bounds=no` mode,
@@ -964,7 +1024,7 @@ function concrete_eval_eligible(interp::AbstractInterpreter,
             return :none
         end
     end
-    if result.edge !== nothing && is_foldable(effects, #=check_rtcall=#true)
+    if edge !== nothing && is_foldable(effects, #=check_rtcall=#true)
         if f !== nothing && is_all_const_arg(arginfo, #=start=#2)
             if (is_nonoverlayed(interp) || is_nonoverlayed(effects) ||
                 # Even if overlay methods are involved, when `:consistent_overlay` is
@@ -1022,9 +1082,18 @@ function collect_const_args(argtypes::Vector{Any}, start::Int)
                 end for i = start:length(argtypes) ]
 end
 
-function concrete_eval_call(interp::AbstractInterpreter,
-    @nospecialize(f), result::MethodCallResult, arginfo::ArgInfo, ::AbsIntState,
-    invokecall::Union{InvokeCall,Nothing}=nothing)
+function concrete_eval_call(
+        interp::AbstractInterpreter, @nospecialize(f), result::MethodCallResult,
+        arginfo::ArgInfo, sv::AbsIntState, invokecall::Union{InvokeCall,Nothing} = nothing
+    )
+    return _concrete_eval_call(
+        interp, f, result.edge::CodeInstance, result.effects, arginfo, sv, invokecall)
+end
+
+function _concrete_eval_call(
+        interp::AbstractInterpreter, @nospecialize(f), edge::CodeInstance, effects::Effects,
+        arginfo::ArgInfo, ::AbsIntState, invokecall::Union{InvokeCall,Nothing} = nothing
+    )
     args = collect_const_args(arginfo, #=start=#2)
     if invokecall !== nothing
         # this call should be `invoke`d, rewrite `args` back now
@@ -1032,14 +1101,13 @@ function concrete_eval_call(interp::AbstractInterpreter,
         f = invoke
     end
     world = get_inference_world(interp)
-    edge = result.edge::CodeInstance
     value = try
         Core._call_in_world_total(world, f, args...)
     catch
         # The evaluation threw. By :consistent-cy, we're guaranteed this would have happened at runtime.
         # Howevever, at present, :consistency does not mandate the type of the exception
-        concrete_result = ConcreteResult(edge, result.effects)
-        return ConstCallResult(Bottom, Any, concrete_result, result.effects, #=const_edge=#nothing)
+        concrete_result = ConcreteResult(edge, effects)
+        return ConstCallResult(Bottom, Any, concrete_result, effects, #=const_edge=#nothing)
     end
     concrete_result = ConcreteResult(edge, EFFECTS_TOTAL, value)
     return ConstCallResult(Const(value), Bottom, concrete_result, EFFECTS_TOTAL, #=const_edge=#nothing)
@@ -1350,6 +1418,7 @@ function const_prop_call(interp::AbstractInterpreter,
         cache_argtypes = matching_cache_argtypes(𝕃ᵢ, mi)
     end
     argtypes = matching_cache_argtypes(𝕃ᵢ, mi, forwarded_argtypes, cache_argtypes)
+    argtypes = get_nospecializeinfer_argtypes(argtypes, cache_argtypes, mi.def::Method)
     inf_result = constprop_cache_lookup(𝕃ᵢ, mi, argtypes, get_inference_cache(interp))
     if inf_result === missing
         # a previous const-prop attempt hit a cycle and produced a limited result;
@@ -1553,7 +1622,7 @@ AbstractIterationResult(cti::Vector{Any}, info::MaybeAbstractIterationInfo) =
 function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft), @nospecialize(typ),
                                 vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
     if isa(typ, PartialStruct)
-        widet = typ.typ
+        widet = unwrap_unionall(typ.typ)
         if isa(widet, DataType)
             if widet.name === Tuple.name
                 return Future(AbstractIterationResult(typ.fields, nothing))
@@ -3057,19 +3126,10 @@ function sp_type_rewrap(@nospecialize(T), mi::MethodInstance, isreturn::Bool)
             if !isempty(mi.sparam_vals)
                 sparam_vals = Any[isvarargtype(v) ? TypeVar(:N, Union{}, Any) :
                                   v for v in  mi.sparam_vals]
+                free_sps_before = find_free_typevars(mi.specTypes)
                 T = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), T, spsig, sparam_vals)
                 isref && isreturn && T === Any && return Bottom # catch invalid return Ref{T} where T = Any
-                for v in sparam_vals
-                    if isa(v, TypeVar)
-                        T = UnionAll(v, T)
-                    end
-                end
-                if has_free_typevars(T)
-                    fv = ccall(:jl_find_free_typevars, Vector{Any}, (Any,), T)
-                    for v in fv
-                        T = UnionAll(v, T)
-                    end
-                end
+                T = rewrap_free_typevars(T, free_sps_before)
             else
                 T = rewrap_unionall(T, spsig)
             end
@@ -3240,12 +3300,16 @@ function abstract_eval_new(interp::AbstractInterpreter, e::Expr, sstate::Stateme
         else
             consistent = ALWAYS_TRUE # immutable allocation is consistent
         end
-        if isconcretedispatch(rt)
-            nothrow = true
-            @assert fcount !== nothing && fcount ≥ nargs "malformed :new expression" # syntactically enforced by the front-end
+        # `:new` can carry `PartialStruct` even when `rt` isn't isconcretedispatch` —
+        # partially-instantiated parametric types (e.g. `Generator{Vector{Int}, F<:OC{Tuple{Int}, T} where T}`) still
+        # have well-defined field count, and field-level extended lattice elements carry
+        # information beyond the declared type.
+        if fcount !== nothing
+            nothrow = isconcretedispatch(rt)
+            @assert nargs ≤ fcount "malformed :new expression" # syntactically enforced by the front-end
             ats = Vector{Any}(undef, nargs)
             local anyrefine = false
-            local allconst = true
+            local allconst = isconcretedispatch(rt)
             for i = 1:nargs
                 at = widenslotwrapper(abstract_eval_value(interp, e.args[i+1], sstate, sv))
                 ft = fieldtype(rt, i)
@@ -3263,7 +3327,7 @@ function abstract_eval_new(interp::AbstractInterpreter, e::Expr, sstate::Stateme
                 end
                 ats[i] = at
             end
-            if fcount == nargs && consistent === ALWAYS_TRUE && allconst
+            if allconst && fcount == nargs && consistent === ALWAYS_TRUE
                 argvals = Vector{Any}(undef, nargs)
                 for j in 1:nargs
                     argvals[j] = (ats[j]::Const).val
@@ -3298,6 +3362,8 @@ function abstract_eval_new(interp::AbstractInterpreter, e::Expr, sstate::Stateme
                     end
                 end
                 rt = PartialStruct(𝕃ᵢ, rt, undefs, ats)
+            else
+                rt = refine_partial_type(rt)
             end
         else
             rt = refine_partial_type(rt)

@@ -153,7 +153,7 @@ end
 function is_valid_phiblock_stmt(@nospecialize(stmt))
     isa(stmt, PhiNode) && return true
     isa(stmt, Union{UpsilonNode, PhiCNode, SSAValue}) && return false
-    isa(stmt, Expr) && return is_value_pos_expr_head(stmt.head)
+    isa(stmt, Expr) && return false
     return true
 end
 
@@ -192,7 +192,7 @@ mutable struct DebugInfoStream
     # DebugInfoStream(def::Union{MethodInstance,Nothing}, di::DebugInfo, nstmts::Int) =
     #     if debuginfo_file1(di.def) === debuginfo_file1(di.def)
     #         new(def, di.linetable, Core.svec(di.edges...), getdebugidx(di, 0),
-    #             ccall(:jl_uncompress_codelocs, Any, (Any, Int), di.codelocs, nstmts)::Vector{Int32})
+    #             ccall(:jl_uncompress_codelocs, Any, (Any, Int), di, nstmts)::Vector{Int32})
     #     else
     function DebugInfoStream(def::Union{MethodInstance,Nothing}, di::DebugInfo, nstmts::Int)
         codelocs = zeros(Int32, nstmts * 3)
@@ -209,7 +209,7 @@ Core.DebugInfo(di::DebugInfoStream, nstmts::Int) =
         ccall(:jl_compress_codelocs, Any, (Int32, Any, Int), di.firstline, di.codelocs, nstmts)::String)
 
 getdebugidx(debuginfo::DebugInfo, pc::Int) =
-    ccall(:jl_uncompress1_codeloc, NTuple{3,Int32}, (Any, Int), debuginfo.codelocs, pc)
+    ccall(:jl_uncompress1_codeloc, NTuple{3,Int32}, (Any, Int), debuginfo, pc)
 
 function getdebugidx(debuginfo::DebugInfoStream, pc::Int)
     if 3 <= 3pc <= length(debuginfo.codelocs)

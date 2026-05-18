@@ -338,10 +338,15 @@ public:
     egal_set() = default;
     void insert(jl_value_t *val)
     {
+        // list/keyset are GC-rooted by the caller via JL_GC_PUSH
+        JL_GC_PROMISE_ROOTED(val);
+        JL_GC_PROMISE_ROOTED(list);
+        JL_GC_PROMISE_ROOTED(keyset);
         jl_value_t *rval = jl_idset_get(list, keyset, val);
         if (rval == NULL) {
             ssize_t idx;
             list = jl_idset_put_key(list, val, &idx);
+            JL_GC_PROMISE_ROOTED(list);
             keyset = jl_idset_put_idx(list, keyset, idx);
         }
     }
@@ -2047,6 +2052,7 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
         sysimgM.setOverrideStackAlignment(OverrideStackAlignment);
 
         int compression = jl_options.compress_sysimage ? 15 : 0;
+        uint32_t sysimg_checksum = jl_crc32c(0, z->buf, z->size);
         ArrayRef<char> sysimg_data{z->buf, (size_t)z->size};
         SmallVector<char, 0> compressed_data;
         if (compression) {
@@ -2075,6 +2081,10 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
         addComdat(new GlobalVariable(sysimgM, len->getType(), true,
                                      GlobalVariable::ExternalLinkage,
                                      len, "jl_system_image_size"), TheTriple);
+        Constant *checksum_val = ConstantInt::get(Type::getInt32Ty(Context), sysimg_checksum);
+        addComdat(new GlobalVariable(sysimgM, checksum_val->getType(), true,
+                                     GlobalVariable::ExternalLinkage,
+                                     checksum_val, "jl_system_image_checksum"), TheTriple);
 
         const char *unpack_func = compression ? "jl_image_unpack_zstd" : "jl_image_unpack_uncomp";
         auto unpack = new GlobalVariable(sysimgM, DL.getIntPtrType(Context), true,
@@ -2104,8 +2114,6 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
     unsigned ngvars = 0;
 
     // Reset the target triple to make sure it matches the new target machine
-
-    bool has_veccall = false;
 
     {
         JL_TIMING(NATIVE_AOT, NATIVE_Setup);
@@ -2185,7 +2193,6 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
             }
         }
 
-        has_veccall = !!dataM.getModuleFlag("julia.mv.veccall");
     };
 
     {
@@ -2245,20 +2252,8 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
             builder.CreateRet(ConstantInt::get(T_int32, 1));
         }
         if (imaging_mode) {
-            auto specs = jl_get_llvm_clone_targets(jl_options.cpu_target);
-            const uint32_t base_flags = has_veccall ? JL_TARGET_VEC_CALL : 0;
-            SmallVector<uint8_t, 0> data;
-            auto push_i32 = [&] (uint32_t v) {
-                uint8_t buff[4];
-                memcpy(buff, &v, 4);
-                data.insert(data.end(), buff, buff + 4);
-            };
-            push_i32(specs.size());
-            for (uint32_t i = 0; i < specs.size(); i++) {
-                push_i32(base_flags | (specs[i].flags & JL_TARGET_UNKNOWN_NAME));
-                auto &specdata = specs[i].data;
-                data.insert(data.end(), specdata.begin(), specdata.end());
-            }
+            auto targets = jl_get_llvm_clone_targets(jl_options.cpu_target);
+            auto &data = targets.data;
             auto value = ConstantDataArray::get(Context, data);
             auto target_ids = new GlobalVariable(metadataM, value->getType(), true,
                                         GlobalVariable::InternalLinkage,
@@ -2274,8 +2269,9 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
             jl_small_typeof_copy->setVisibility(GlobalValue::HiddenVisibility);
             jl_small_typeof_copy->setDSOLocal(true);
 
-            // Create CPU target string constant
-            auto cpu_target_str = jl_options.cpu_target ? jl_options.cpu_target : "native";
+            // Create CPU target string constant.
+            // Don't store "sysimage" keyword — store the actual resolved target string.
+            std::string cpu_target_str = jl_expand_sysimage_keyword(jl_options.cpu_target);
             auto cpu_target_data = ConstantDataArray::getString(Context, cpu_target_str, true);
             auto cpu_target_global = new GlobalVariable(metadataM, cpu_target_data->getType(), true,
                                                        GlobalVariable::InternalLinkage,

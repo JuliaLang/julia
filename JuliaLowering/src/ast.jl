@@ -1,7 +1,7 @@
 #-------------------------------------------------------------------------------
 # @jl_assert: Produce an internal error that surfaces one or more trees.
 # Example: `@jl_assert 1 === 1 (tree1, "message1"), tree2, (tree3, "message3")`
-if DEBUG
+@static if DEBUG
     macro jl_assert(cond, args...)
         usage = "usage: @jl_assert(condition, tree|(tree, message)...)"
         @assert(!isempty(args), usage)
@@ -24,8 +24,9 @@ if DEBUG
           end)
     end
 else
+    # allow @jl_assert false in value position to not change rettype
     macro jl_assert(cond, args...)
-        nothing
+        cond === false ? :(throw("@jl_assert false")) : nothing
     end
 end
 
@@ -38,7 +39,7 @@ Bindings for the current lambda being processed.
 Lowering passes prior to scope resolution return `nothing` and bindings are
 collected later.
 """
-current_lambda_bindings(ctx::AbstractLoweringContext) = nothing
+current_lambda_bindings(::AbstractLoweringContext) = nothing
 
 function JuliaSyntax.syntax_graph(ctx::AbstractLoweringContext)
     ctx.graph
@@ -84,6 +85,7 @@ function JuliaSyntax.newleaf(ctx::AbstractLoweringContext,
 end
 
 function JuliaSyntax.newleaf(ctx, prov, k, @nospecialize(value))
+    @jl_assert k === K"Value" || value !== nothing (prov, "only Value may contain nothing")
     leaf = newleaf(ctx, prov, k)
     if k == K"Identifier" || k == K"core" || k == K"top" || k == K"Symbol" ||
             k == K"globalref" || k == K"Placeholder"
@@ -95,7 +97,7 @@ function JuliaSyntax.newleaf(ctx, prov, k, @nospecialize(value))
     elseif k == K"symboliclabel" || k == K"symbolicgoto"
         setattr!(leaf._graph, leaf._id, :name_val, value)
     elseif k in KSet"TOMBSTONE SourceLocation latestworld latestworld_if_toplevel
-                     softscope"
+                     softscope nothing"
         # no attributes
     else
         val = k == K"Integer" ? convert(Int,     value) :
@@ -118,8 +120,7 @@ JuliaSyntax.newnode(ctx::AbstractLoweringContext,
 
 # Convenience functions to create leaf nodes referring to identifiers within
 # the Core and Top modules.
-core_ref(ctx, ex, name) = newleaf(ctx, ex, K"core", name)
-nothing_(ctx, ex) = core_ref(ctx, ex, "nothing")
+nothing_(ctx, ex) = newleaf(ctx, ex, K"nothing")
 
 # Assign `ex` to an SSA variable.
 # Return (variable, assignment_node)
@@ -143,7 +144,7 @@ end
 
 _node_id(graph::SyntaxGraph, ex::SyntaxTree) = (check_compatible_graph(graph, ex); ex._id)
 
-_node_ids(graph::SyntaxGraph) = ()
+_node_ids(::SyntaxGraph) = ()
 _node_ids(graph::SyntaxGraph, ::Nothing, cs...) = _node_ids(graph, cs...)
 _node_ids(graph::SyntaxGraph, c, cs...) = (_node_id(graph, c), _node_ids(graph, cs...)...)
 _node_ids(graph::SyntaxGraph, cs::SyntaxList, cs1...) = (_node_ids(graph, cs...)..., _node_ids(graph, cs1...)...)
@@ -152,11 +153,11 @@ function _node_ids(graph::SyntaxGraph, cs::SyntaxList)
     cs.ids
 end
 
-function _node_id(graph::SyntaxGraph, ex)
+function _node_id(::SyntaxGraph, ex)
     # Fallback to give a comprehensible error message for use with the @ast macro
     error("Attempt to use `$(repr(ex))` of type `$(typeof(ex))` as an AST node. Try annotating with `::K\"your_intended_kind\"?`")
 end
-function _node_id(graph::SyntaxGraph, ex::AbstractVector{<:SyntaxTree})
+function _node_id(::SyntaxGraph, ex::AbstractVector{<:SyntaxTree})
     # Fallback to give a comprehensible error message for use with the @ast macro
     error("Attempt to use vector as an AST node. Did you mean to splat this? (content: `$(repr(ex))`)")
 end
@@ -164,7 +165,7 @@ end
 function _push_nodeid!(graph::SyntaxGraph, ids::Vector{NodeId}, val)
     push!(ids, _node_id(graph, val))
 end
-function _push_nodeid!(graph::SyntaxGraph, ids::Vector{NodeId}, val::Nothing)
+function _push_nodeid!(::SyntaxGraph, ::Vector{NodeId}, ::Nothing)
     nothing
 end
 function _append_nodeids!(graph::SyntaxGraph, ids::Vector{NodeId}, vals)
@@ -208,7 +209,6 @@ function _match_kind(srcref, ex)
             pushfirst!(kws, _kw_to_pair(pop!(args)))
         end
         if length(args) == 1
-            srcref_tmp = gensym("srcref")
             return (kind, _match_srcref(args[1]), kws)
         elseif length(args) > 1
             error("Unexpected: extra srcref argument in `$ex`?")
@@ -230,7 +230,8 @@ function _expand_ast_tree(ctx, srcref, tree, jl_line::QuoteNode)
             kindspec = tree.args[1]
         end
         let (kind, srcref, kws) = _match_kind(srcref, kindspec)
-            n = :(newleaf($ctx, $srcref, $kind, $val))
+            n = isnothing(val) ? :(newleaf($ctx, $srcref, $kind)) :
+                :(newleaf($ctx, $srcref, $kind, $val))
             for (attr, val) in kws
                 n = :(setattr!($n, $attr, $val))
             end
@@ -343,7 +344,7 @@ to indicate that the "primary" location of the source is the location where
 macro ast(ctx, srcref, tree)
     quote
         ctx = $(esc(ctx))
-        srcref::$SyntaxTree = $(_match_srcref(srcref))
+        srcref = $(_match_srcref(srcref))::$SyntaxTree
         $(_expand_ast_tree(:ctx, :srcref, tree, QuoteNode(__source__)))
     end
 end
@@ -355,7 +356,7 @@ function set_scope_layer(ctx, ex, layer_id, force)
 
     ex2 = if k == K"module" || k == K"toplevel" || k == K"inert" || k == K"inert_syntaxtree"
         mknode(ex, children(ex))
-    elseif k == K"."
+    elseif k == K"." && numchildren(ex) == 2
         cs = tree_ids(set_scope_layer(ctx, ex[1], layer_id, force), ex[2])
         mknode(ex, cs)
     elseif !is_leaf(ex)
@@ -408,7 +409,7 @@ function setmeta!(ex::SyntaxTree, key::Symbol, @nospecialize(val))
 end
 
 setmeta(ex::SyntaxTree, k::Symbol, @nospecialize(v)) =
-    setmeta!(copy_node(ex), k, v)
+    setmeta!(is_leaf(ex) ? mkleaf(ex) : mknode(ex, children(ex)), k, v)
 
 function getmeta(ex::SyntaxTree, name::Symbol, default)
     meta = get(ex, :meta, nothing)
@@ -419,13 +420,6 @@ name_hint(name) = CompileHints(:name_hint, name)
 
 #-------------------------------------------------------------------------------
 # Predicates and accessors working on expression trees
-
-# For historical reasons, `cglobal` and `ccall` are their own special
-# quasi-identifier-like syntax but with special handling inside lowering which
-# means they can't be used as normal identifiers.
-function is_ccall_or_cglobal(name::AbstractString)
-    return name == "ccall" || name == "cglobal"
-end
 
 function is_quoted(ex)
     kind(ex) in KSet"Symbol quote top core globalref break inert
@@ -480,22 +474,15 @@ function is_valid_modref(ex)
            (kind(ex[1]) == K"Identifier" || is_valid_modref(ex[1]))
 end
 
-function is_core_ref(ex, name)
-    kind(ex) == K"core" && ex.name_val == name
-end
-
-function is_core_nothing(ex)
-    is_core_ref(ex, "nothing")
-end
-
 function is_core_Any(ex)
-    is_core_ref(ex, "Any")
+    kind(ex) === K"core" && ex.name_val::String === "Any"
 end
 
 function is_simple_atom(ctx, ex)
     k = kind(ex)
     # TODO thismodule
-    is_literal(k) || k == K"Symbol" || k == K"Value" || is_ssa(ctx, ex) || is_core_nothing(ex)
+    is_literal(k) || k == K"Symbol" || k == K"Value" || is_ssa(ctx, ex) ||
+        k == K"nothing"
 end
 
 function is_identifier_like(ex)
@@ -551,7 +538,7 @@ function to_symbol(ctx, ex)
 end
 
 function new_scope_layer(ctx, mod_ref::Module=ctx.mod)
-    new_layer = ScopeLayer(length(ctx.scope_layers)+1, ctx.mod, 0, false, true)
+    new_layer = ScopeLayer(length(ctx.scope_layers)+1, mod_ref, 0, false, true)
     push!(ctx.scope_layers, new_layer)
     new_layer.id
 end

@@ -32,7 +32,15 @@ endif
 
 LIBSSH2_SRC_PATH := $(SRCCACHE)/$(LIBSSH2_SRC_DIR)
 
-$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: $(LIBSSH2_SRC_PATH)/source-extracted
+$(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-CVE-2026-7598-256d04b60d80bf1190e96b0ad1e91b2174d744b1.patch-applied: $(SRCCACHE)/libssh2-$(LIBSSH2_VER)/source-extracted
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-7598-256d04b60d80bf1190e96b0ad1e91b2174d744b1.patch-applied
+	echo 1 > $@
+
+$(SRCCACHE)/libssh2-$(LIBSSH2_VER)/source-patched: $(SRCCACHE)/libssh2-$(LIBSSH2_VER)/libssh2-CVE-2026-7598-256d04b60d80bf1190e96b0ad1e91b2174d744b1.patch-applied
+	echo 1 > $@
+
+$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: $(SRCCACHE)/libssh2-$(LIBSSH2_VER)/source-patched
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(CMAKE) $(CMAKE_GENERATOR_COMMAND) $(dir $<) $(LIBSSH2_OPTS)
