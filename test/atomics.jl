@@ -1082,6 +1082,14 @@ test_memory_undef(Union{Nothing,Integer})
 test_memory_undef(UndefComplex{Any})
 test_memory_undef(UndefComplex{UndefComplex{Any}})
 
+# memoryrefunset! — every scenario below is exercised twice: once with `Ref(r)`
+# (the memref's type stays concrete, so emit_f_opmemory in src/codegen.cpp lowers
+# the call inline), and once with `Ref{Any}(r)` (the memref's static type is Any,
+# so codegen bails and the call falls through to jl_f_memoryrefunset in
+# src/builtins.c → jl_memoryrefunset in src/genericmemory.c). The two paths share
+# their per-layout logic; running both ensures they stay in lockstep across every
+# supported Memory layout.
+
 # memoryrefunset! on undefable element types: slot becomes undefined after clearing
 @noinline function _test_memory_unset(r)
     r = r[]
@@ -1134,29 +1142,31 @@ test_memory_unset_notatomic(BigInt)
 test_memory_unset_notatomic(UndefComplex{Any})
 test_memory_unset_notatomic(UndefComplex{UndefComplex{Any}})
 
-# memoryrefunset! on bits-only memory: no-op, the slot stays assigned
-@noinline function test_memory_unset_bits(T::Type, val)
+# memoryrefunset! on bits-only memory or isbits-union memory: no-op since the
+# slot has no GC pointers to clear (first_ptr < 0 for plain bits, isunion for the
+# union case). Both layouts hit the early-return branches in jl_memoryrefunset
+# and the matching `isunion || layout->first_ptr < 0` short-circuit in codegen.
+@noinline function _test_memory_unset_noop(r, val)
     @nospecialize val
-    r = GenericMemoryRef(Memory{T}(undef, 1))
-    r[] = val
+    r = r[]
     @test memoryref_isassigned(r, :not_atomic, true)
     @test memoryrefunset!(r, :not_atomic, true) === nothing
     @test memoryref_isassigned(r, :not_atomic, true)
-    @test r[] === val
+    @test memoryrefget(r, :not_atomic, true) === val
     nothing
 end
-test_memory_unset_bits(Int, 42)
-test_memory_unset_bits(Float64, 3.14)
-test_memory_unset_bits(Complex{Int32}, Complex{Int32}(1, 2))
-
-# memoryrefunset! on isbits union memory: no-op (no GC pointers to clear)
-let r = GenericMemoryRef(Memory{Union{Int8,Float64}}(undef, 1))
-    r[] = 1.5
-    @test memoryref_isassigned(r, :not_atomic, true)
-    @test memoryrefunset!(r, :not_atomic, true) === nothing
-    @test memoryref_isassigned(r, :not_atomic, true)
-    @test r[] === 1.5
+@noinline function test_memory_unset_noop(T::Type, val)
+    @nospecialize val
+    r = GenericMemoryRef(Memory{T}(undef, 1)); r[] = val
+    _test_memory_unset_noop(Ref(r), val)
+    r = GenericMemoryRef(Memory{T}(undef, 1)); r[] = val
+    _test_memory_unset_noop(Ref{Any}(r), val)
+    nothing
 end
+test_memory_unset_noop(Int, 42)
+test_memory_unset_noop(Float64, 3.14)
+test_memory_unset_noop(Complex{Int32}, Complex{Int32}(1, 2))
+test_memory_unset_noop(Union{Int8,Float64}, 1.5)
 
 # memoryrefunset! ordering validation, mirroring the memoryrefset! patterns
 @noinline function _test_memory_unset_orderings(xr, yr)
@@ -1210,8 +1220,14 @@ test_memory_unset_orderings(BigInt, big(12345_10))
 test_memory_unset_orderings(Union{Nothing,Integer}, 12345_10)
 
 # memoryrefunset! out-of-bounds: must throw BoundsError on empty memory unless @inbounds
-let r = GenericMemoryRef(Memory{Any}(undef, 0))
+@noinline function _test_memory_unset_oob(r)
+    r = r[]
     @test_throws BoundsError memoryrefunset!(r, :not_atomic, true)
+    nothing
+end
+let r = GenericMemoryRef(Memory{Any}(undef, 0))
+    _test_memory_unset_oob(Ref(r))
+    _test_memory_unset_oob(Ref{Any}(r))
 end
 
 # memoryrefunset! on a struct with multiple inline-allocated pointers must clear
@@ -1220,30 +1236,46 @@ end
 struct TwoInlinePtr;   a::Any; b::Any;         end
 struct ThreeInlinePtr; a::Any; b::Any; c::Any; end
 function raw_element_ptrs(mem::GenericMemory)
-    nptrs = sizeof(eltype(mem)) ÷ sizeof(Ptr{Cvoid})
-    base = Ptr{UInt}(pointer(mem))
+    elsz = sizeof(eltype(mem))
+    nptrs = elsz ÷ sizeof(Ptr{Cvoid})
+    # Locked AtomicMemory slots are larger than sizeof(eltype): each slot is prefixed
+    # by a mutex word padded to JL_SMALL_BYTE_ALIGNMENT. Skip that prefix.
+    slot_overhead = length(mem) > 0 ? (sizeof(mem) ÷ length(mem) - elsz) : 0
+    base = Ptr{UInt}(pointer(mem)) + slot_overhead
     return ntuple(i -> unsafe_load(base, i), nptrs)
 end
-@noinline function test_memory_unset_multiptr(::Type{T}, mem, ordering) where {T}
+# Ordering is passed via Val so the codegen path still sees a constant symbol
+# (emit_f_opmemory requires `ord.constant` to be set).
+@noinline function _test_memory_unset_multiptr(rref, mem, ::Val{ordering}) where {ordering}
+    r = rref[]
+    @test all(!iszero, raw_element_ptrs(mem))
+    @test memoryref_isassigned(r, ordering, true)
+    @test memoryrefunset!(r, ordering, true) === nothing
+    @test !memoryref_isassigned(r, ordering, true)
+    @test_throws UndefRefError memoryrefget(r, ordering, true)
+    @test all(iszero, raw_element_ptrs(mem))
+    nothing
+end
+function test_memory_unset_multiptr(::Type{T}, ::Type{MemT}, ::Val{ordering}) where {T, MemT<:GenericMemory{<:Any,T}, ordering}
+    mem = MemT(undef, 1)
     objs = Any[Ref(i) for i in 1:fieldcount(T)]
     r = GenericMemoryRef(mem)
     memoryrefset!(r, T(objs...), ordering, true)
-    GC.@preserve objs begin
-        @test all(!iszero, raw_element_ptrs(mem))
-        @test memoryref_isassigned(r, ordering, true)
-        @test memoryrefunset!(r, ordering, true) === nothing
-        @test !memoryref_isassigned(r, ordering, true)
-        @test_throws UndefRefError memoryrefget(r, ordering, true)
-        @test all(iszero, raw_element_ptrs(mem))
-    end
+    GC.@preserve objs _test_memory_unset_multiptr(Ref(r), mem, Val(ordering))
+    mem = MemT(undef, 1)
+    objs = Any[Ref(i) for i in 1:fieldcount(T)]
+    r = GenericMemoryRef(mem)
+    memoryrefset!(r, T(objs...), ordering, true)
+    GC.@preserve objs _test_memory_unset_multiptr(Ref{Any}(r), mem, Val(ordering))
     nothing
 end
 # non-atomic memory: clears via memset
-test_memory_unset_multiptr(TwoInlinePtr, Memory{TwoInlinePtr}(undef, 1), :not_atomic)
-test_memory_unset_multiptr(ThreeInlinePtr, Memory{ThreeInlinePtr}(undef, 1), :not_atomic)
+test_memory_unset_multiptr(TwoInlinePtr,   Memory{TwoInlinePtr},         Val(:not_atomic))
+test_memory_unset_multiptr(ThreeInlinePtr, Memory{ThreeInlinePtr},       Val(:not_atomic))
 # atomic memory with element size <= MAX_POINTERATOMIC_SIZE: clears via jl_atomic_store_bits
-test_memory_unset_multiptr(TwoInlinePtr, AtomicMemory{TwoInlinePtr}(undef, 1), :unordered)
-test_memory_unset_multiptr(ThreeInlinePtr, AtomicMemory{ThreeInlinePtr}(undef, 1), :unordered)
+test_memory_unset_multiptr(TwoInlinePtr,   AtomicMemory{TwoInlinePtr},   Val(:unordered))
+# atomic memory with element size > MAX_POINTERATOMIC_SIZE: clears via lock + memset
+test_memory_unset_multiptr(ThreeInlinePtr, AtomicMemory{ThreeInlinePtr}, Val(:unordered))
 
 @noinline function _test_once_undef(r)
     r = r[]
