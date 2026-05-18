@@ -4282,8 +4282,7 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     jl_cgval_t val = argv[has_cmp ? 3 : 2];
 
     if (op != StoreKind::Modify) {
-        if (op != StoreKind::Unset)
-            emit_typecheck(ctx, val, ety, fname);
+        emit_typecheck(ctx, val, ety, fname);
         val = update_julia_type(ctx, val, ety);
         if (val.typ == jl_bottom_type)
             return true;
