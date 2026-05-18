@@ -145,4 +145,16 @@ end
     @test r.data ≈ 5.0
 end
 
+# ordering of compositions
+@testset "givens compositions ordering" begin
+    R1, R2 = givens(1.,1.,1,2)[1], givens(1.,1.,2,3)[1]
+    R = R1 * R2
+    I3 = I(3)
+    @test R1 * (R2 * I3) ≈ R * I3
+    @test R2' * (R1' * I3) ≈ R' * I3
+    @test (I3 * R1) * R2 ≈ I3 * R
+    @test (I3 * R2') * R1' ≈ I3 * R'
+    @test R' * (R * I3) ≈ R * (R' * I3) ≈ I
+end
+
 end # module TestGivens
