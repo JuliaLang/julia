@@ -211,18 +211,18 @@ function try_strides(a::ReinterpretArray{T,<:Any,S,<:AbstractArray{S},IsReshaped
     isnothing(stp) && return nothing
     els::Int, elp::Int = sizeof(T), sizeof(S)
     els == elp && return stp # 0dim parent is also handled here.
-    if IsReshaped && elp > els
+    if IsReshaped && els < elp
         x = _try_checked_strides(stp, els, elp)
         if isnothing(x)
-            return nothing
+            return nothing # Parent's strides could not be exactly divided!
         else
             return (1, x...)
         end
     end
-    stp[1] == 1 || return nothing
+    stp[1] == 1 || return nothing  # Parent must be contiguous in the 1st dimension!
     st′ = _try_checked_strides(tail(stp), els, elp)
     if isnothing(st′)
-        return nothing
+        return nothing # Parent's strides could not be exactly divided!
     else
         return IsReshaped ? st′ : (1, st′...)
     end
@@ -232,7 +232,7 @@ function strides(a::ReinterpretArray{T,<:Any,S,<:AbstractArray{S},IsReshaped}) w
     stp = strides(parent(a))
     els, elp = sizeof(T), sizeof(S)
     els == elp && return stp # 0dim parent is also handled here.
-    if IsReshaped && elp > els
+    if IsReshaped && els < elp
         x = _try_checked_strides(stp, els, elp)
         if isnothing(x)
             throw(ArgumentError("Parent's strides could not be exactly divided!"))
@@ -256,7 +256,7 @@ end
     end
     drs = map(i -> divrem(elp * i, els), stp)
     if !all(i->iszero(i[2]), drs)
-        return nothing
+        return nothing # Parent's strides could not be exactly divided!
     end
     return map(first, drs)
 end

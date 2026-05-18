@@ -7,7 +7,7 @@
 
 module StridedArrays
 
-using Test: @test_throws
+using Test: @test_throws, @test
 
 export strided_ptr
 export check_strided_get
@@ -26,6 +26,7 @@ end
 
 function check_strides_throws(err, a)
     @test_throws err strides(a)
+    @test isnothing(try_strides(a))
 end
 
 """
@@ -144,7 +145,7 @@ function Base.getindex(S::Strider{<:Any,N}, I::Vararg{Int,N}) where {N}
     S.data[sum(S.strides .* (I .- 1)) + S.offset]
 end
 function Base.setindex!(S::Strider{<:Any,N}, x, I::Vararg{Int,N}) where {N}
-    S.data[sum(S.strides .* (I .- 1)) + S.offset]
+    S.data[sum(S.strides .* (I .- 1)) + S.offset] = x
     S
 end
 function Base.try_strides(S::Strider)

@@ -1323,10 +1323,11 @@ end
         check_strided_get(Pv)
         for equivalent_array in [
                 Base.PermutedDimsArray(A, perm),
-                transpose(A),
-                adjoint(A),
-                transpose(S),
-                adjoint(S),
+                # Uncomment when support added to LinearAlgebra.jl
+                # transpose(A),
+                # adjoint(A),
+                # transpose(S),
+                # adjoint(S),
                 Base.PermutedDimsArray(S, perm),
             ]
             @test P == equivalent_array
@@ -1338,19 +1339,16 @@ end
         Vp = permutedims(Av, perm)
         for equivalent_array in [
                 Base.PermutedDimsArray(Av, perm),
-                transpose(Av),
-                adjoint(Av),
-                transpose(Sv),
-                adjoint(Sv),
+                # Uncomment when support added to LinearAlgebra.jl
+                # transpose(Av),
+                # adjoint(Av),
+                # transpose(Sv),
+                # adjoint(Sv),
                 Base.PermutedDimsArray(Sv, perm),
             ]
             @test Vp == equivalent_array
             check_strided_get(equivalent_array)
         end
-        check_strided_get(view(Base.PermutedDimsArray(view(rand(10, 10), 2:2:6, 1:3:9), (2,1)), 2:3, 3:-1:1))
-        check_strided_get(NonMemStridedArray(rand(3, 10)))
-        check_strided_get(view(NonMemStridedArray(rand(10, 10)), 2:2:6, 1:3:9))
-        check_strided_get(view(Base.PermutedDimsArray(view(NonMemStridedArray(rand(10, 10)), 2:2:6, 1:3:9), (2,1)), 2:3, 3:-1:1))
     end
     check_strided_get(view(Base.PermutedDimsArray(view(rand(10, 10), 2:2:6, 1:3:9), (2,1)), 2:3, 3:-1:1))
     check_strided_get(NonMemStridedArray(rand(3, 10)))

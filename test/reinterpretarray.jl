@@ -285,15 +285,9 @@ end
         if mod(step(viewax1), 2) == 0
             check_strided_get(reinterpret(reshape, Int64, view(A, 1:2, viewax1, viewax2)))
         else
-            let x = reinterpret(reshape, Int64, view(A, 1:2, viewax1, viewax2))
-                @test_throws "Parent's strides" strides(x)
-                @test isnothing(try_strides(x))
-            end
+            check_strides_throws("Parent's strides", reinterpret(reshape, Int64, view(A, 1:2, viewax1, viewax2)))
         end
-        let x = reinterpret(reshape, Int64, view(A, 1:2:3, viewax1, viewax2))
-            @test_throws "Parent must" strides(x)
-            @test isnothing(try_strides(x))
-        end
+        check_strides_throws("Parent must", reinterpret(reshape, Int64, view(A, 1:2:3, viewax1, viewax2)))
     end
 end
 
