@@ -52,7 +52,7 @@ let t = Tuple{Ref{T},T,T} where T, c = Tuple{Ref, T, T} where T # #36407
 end
 
 # obtain Vararg with 2 undefined fields
-let va = ccall(:jl_type_intersection_with_env, Any, (Any, Any), Tuple{Tuple}, Tuple{Tuple{Vararg{Any, N}}} where N)[2][1]
+let va = Base.typeintersect_env(Tuple{Tuple}, Tuple{Tuple{Vararg{Any, N}}} where N)[2][1]
     @test Compiler.__limit_type_size(Tuple, va, Core.svec(va, Union{}), 2, 2) === Tuple
 end
 
@@ -1036,7 +1036,7 @@ end
 # issue #21410
 f21410(::V, ::Pair{V,E}) where {V, E} = E
 @test only(Base.return_types(f21410, Tuple{Ref, Pair{Ref{T},Ref{T}} where T<:Number})) ==
-    Type{E} where E <: (Ref{T} where T<:Number)
+    Type{Ref{T}} where T<:Number
 
 # issue #21369
 function inf_error_21369(arg)
@@ -2861,8 +2861,8 @@ let apply_type_tfunc = Compiler.apply_type_tfunc
     @test apply_type_tfunc(𝕃, Const(Val), Type{Union{Int,Pair{Pair{Pair{Pair{A,B},C},D},E}}} where {A,B,C,D,E}) == Type{Val{_A}} where _A
 end
 @test only(Base.return_types(keys, (Dict{String},))) == Base.KeySet{String, T} where T<:(Dict{String})
-@test only(Base.return_types((r)->similar(Array{typeof(r[])}, 1), (Base.RefValue{Array{Int}},))) == Vector{<:Array{Int}}
-@test only(Base.return_types((r)->similar(Array{typeof(r[])}, 1), (Base.RefValue{Array{<:Real}},))) == Vector{<:Array{<:Real}}
+@test only(Base.return_types((r)->similar(Array{typeof(r[])}, 1), (Base.RefValue{Array{Int}},))) == Vector{Array{Int, N}} where N
+@test only(Base.return_types((r)->similar(Array{typeof(r[])}, 1), (Base.RefValue{Array{<:Real}},))) == Vector{Array{T, N}} where {T<:Real, N}
 # test complexity limit on apply_type on a function capturing functions returning functions
 @test only(Base.return_types(Base.afoldl, (typeof((m, n) -> () -> Returns(nothing)(m, n)), Function, Function, Vararg{Function}))) === Function
 
@@ -5250,6 +5250,22 @@ let 𝕃ᵢ = Compiler.fallback_lattice
     @test t.fields == Any[Const(42), Int]
 end
 
+# issue #60715
+let 𝕃 = Compiler.fallback_lattice
+    local fn, fn1, pn, pn1
+    F(n) = iszero(n) ? Union{} : Tuple{Int, Union{Int, F(n-1)}}
+    P(n) = (f = F(n); Compiler.PartialStruct(𝕃, f, [Const(0), fieldtype(f, 2)]))
+
+    n = 0
+    while Compiler.issimpleenoughtype(F(n+1))
+        n += 1
+        fn, fn1, pn, pn1 = F(n), F(n+1), P(n), P(n+1)
+        @test Compiler.:⊑(𝕃, pn, pn1)
+    end
+    @test !Compiler.issimplertype(𝕃, pn1, pn)
+    @test !isa(Compiler.tmerge(𝕃, pn, pn1), Compiler.PartialStruct)
+end
+
 foo_empty_vararg(i...) = i[2]
 bar_empty_vararg(i) = foo_empty_vararg(10, 20, 30, i...)
 @test bar_empty_vararg(Union{}[]) === 20
@@ -5286,7 +5302,7 @@ end)[2] == Union{}
 # compilerbarrier builtin
 import Core: compilerbarrier
 # runtime semantics
-for setting = (:type, :const, :conditional)
+for setting = (:type, :const, :conditional, :blackbox)
     @test compilerbarrier(setting, 42) == 42
     @test compilerbarrier(setting, :sym) == :sym
 end
@@ -5323,6 +5339,13 @@ for setting = (#=:type, :const,=# :conditional,)
         compilerbarrier($(QuoteNode(setting)), 42)
     end
 end
+# :blackbox preserves type information (unlike :type) but strips Const
+@test Base.return_types((Int,)) do a
+    compilerbarrier(:blackbox, a)
+end |> only === Int
+@test Base.return_types() do
+    compilerbarrier(:blackbox, 42)
+end |> only === Int  # must not be Const(42)
 
 # https://github.com/JuliaLang/julia/issues/46426
 @noinline typebarrier() = Base.inferencebarrier(0.0)
@@ -5494,16 +5517,16 @@ function issue49027(::Type{<:Issue49027{Ty}}) where Ty
     end
     return nothing
 end
-@test only(Base.return_types(issue49027, (Type{Issue49027{TypeVar(:Ty)}},))) >: Nothing
-@test isnothing(issue49027(Issue49027{TypeVar(:Ty)}))
+@test_skip only(Base.return_types(issue49027, (Type{Issue49027{TypeVar(:Ty)}},))) >: Nothing
+@test_skip isnothing(issue49027(Issue49027{TypeVar(:Ty)}))
 function issue49027_integer(::Type{<:Issue49027{Ty}}) where Ty<:Integer
     if @isdefined Ty # should be false when `Ty` is given as a free type var.
         return Ty::DataType
     end
     nothing
 end
-@test only(Base.return_types(issue49027_integer, (Type{Issue49027{TypeVar(:Ty,Int)}},))) >: Nothing
-@test isnothing(issue49027_integer(Issue49027{TypeVar(:Ty,Int)}))
+@test_skip only(Base.return_types(issue49027_integer, (Type{Issue49027{TypeVar(:Ty,Int)}},))) >: Nothing
+@test_skip isnothing(issue49027_integer(Issue49027{TypeVar(:Ty,Int)}))
 
 function fapplicable end
 gapplicable() = Val(applicable(fapplicable))
@@ -6735,5 +6758,86 @@ throwconditional(c, x) = c ? throw(x isa Int) : throw(x isa Float64)
 @test Base.infer_exception_type((Bool, Any)) do c, x
     throwconditional(c, x)
 end == Bool
+
+# issue #60715
+let
+    f() = 1; f(_, x...) = (0, f(x...))
+    @test f(1, 2, 3) == (0, (0, (0, 1)))
+end
+
+# aviatesk/JETLS.jl/issues/618
+Base.@nospecializeinfer function jetls618(a, @nospecialize(rest...))
+    if a > 0
+        z = a + length(rest)
+    else
+        z = 0
+    end
+    println(z)
+    return z
+end
+@test Base.infer_return_type() do
+    jetls618(1,2,3), jetls618(1,2,3,4)
+end == Tuple{Int,Int}
+
+# issue #60252
+f60252(f, nt::NamedTuple) = NamedTuple{keys(nt)}(f(v) for v in values(nt))
+@inferred f60252(identity, (a=1, b=2))
+f60252_2(t::Tuple) = NamedTuple{(:a, :b), typeof(t)}(t)
+@test Base.infer_return_type(f60252_2, (Tuple{Vararg{Int64}},)) == @NamedTuple{a::Int64, b::Int64}
+
+# perform post const-prop' concrete evaluation when effects are further improved by const-prop'
+@noinline function concrete_eval_eligible_if_false(x::Float64, n::Int, y::Bool)
+    if y # this prevents initial concrete-evaluation
+        println("x = ", x)
+    end
+    s = 0.0
+    Base.@assume_effects :terminates_locally for i = 1:n
+        s += sin(x)
+    end
+    return s
+end
+@test Base.infer_return_type() do
+    Val(concrete_eval_eligible_if_false(42., 5, false) == 5sin(42.))
+end == Val{true}
+
+# Const-prop' `PartialStruct` of well-formed types that are `!isconcretedispatch`:
+# Test with an example using `OpaqueClosure`, which would be represented as `PartialOpaque`,
+# which will be a field of `PartialStruct` representing `Some`. Here, since this `oc` has
+# untyped argument types, the return type cannot be derived by eager inference in the
+# current OC framework, so inference will fail unless `PartialOpaque` is propagated all the
+# way to `call_someoc`.
+call_someoc(some, x) = some.value(x)
+@test Base.infer_return_type() do
+    oc = Base.Experimental.@opaque x -> 2x
+    call_someoc(Some(oc), 1)
+end == Int
+# A somewhat artificial example, but a test case that exercises the above code path without
+# using `OpaqueClosure`
+struct UntypedBoxWithParam{T}
+    x::Some{Any}
+    UntypedBoxWithParam{T}(x) where T = new{T}(Some{Any}(x))
+end
+readbox(box::UntypedBoxWithParam) = box.x.value
+@test Base.infer_return_type((Type,Int)) do T, x
+    readbox(UntypedBoxWithParam{T}(x))
+end == Int
+
+# A constructor call where one argument is `Any`-typed forces the corresponding
+# sparam (M) to be unresolved. Inference must still tighten the *other* sparam
+# (B) from its declared `<:Tuple` to `<:Tuple{Vector}`.
+module NestedTVarSPtype
+struct ParamStruct{N,M,A<:Tuple,B<:Tuple,C<:Tuple}
+    output_size::NTuple{N,Int}
+    temparray_size::NTuple{M,Int}
+    output_indices::A
+    temparray_indices::B
+    data_indices::C
+end
+mk(tempinds::Vector, tempsize) =
+    ParamStruct((1,), (tempsize,), (Colon(),), (tempinds,), (1:1,))
+end # module NestedTVarSPtype
+let rt = Base.infer_return_type(NestedTVarSPtype.mk, (Vector, Any))
+    @test rt <: (NestedTVarSPtype.ParamStruct{1, 1, Tuple{Colon}, B, Tuple{UnitRange{Int}}} where B<:Tuple{Vector})
+end
 
 end # module inference

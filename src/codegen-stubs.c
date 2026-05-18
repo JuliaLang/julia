@@ -34,7 +34,7 @@ JL_DLLEXPORT int jl_getFunctionInfo_fallback(jl_frame_t **frames, uintptr_t poin
 }
 
 JL_DLLEXPORT void jl_register_fptrs_fallback(uint64_t image_base, const struct _jl_image_fptrs_t *fptrs,
-                       jl_method_instance_t **linfos, size_t n)
+                       jl_code_instance_t **linfos, size_t n)
 {
     (void)image_base; (void)fptrs; (void)linfos; (void)n;
 }
@@ -51,19 +51,23 @@ JL_DLLEXPORT int jl_compile_codeinst_fallback(jl_code_instance_t *unspec)
     return 0;
 }
 
-JL_DLLEXPORT void jl_emit_codeinst_to_jit_fallback(jl_code_instance_t *codeinst, jl_code_info_t *src)
+JL_DLLEXPORT void jl_emit_codeinsts_to_jit_fallback(jl_code_instance_t **codeinsts, jl_code_info_t **srcs, int len)
 {
-    jl_value_t *inferred = jl_atomic_load_relaxed(&codeinst->inferred);
-    if (jl_is_code_info(inferred))
-        return;
-    if (jl_is_svec(src->edges)) {
-        jl_atomic_store_release(&codeinst->inferred, (jl_value_t*)src->edges);
-        jl_gc_wb(codeinst, src->edges);
+    for (int i = 0; i < len; ++i) {
+        jl_code_instance_t *codeinst = codeinsts[i];
+        jl_code_info_t *src = srcs[i];
+        jl_value_t *inferred = jl_atomic_load_relaxed(&codeinst->inferred);
+        if (jl_is_code_info(inferred))
+            continue;
+        if (jl_is_svec(src->edges)) {
+            jl_atomic_store_release(&codeinst->inferred, (jl_value_t*)src->edges);
+            jl_gc_wb(codeinst, src->edges);
+        }
+        jl_atomic_store_release(&codeinst->debuginfo, src->debuginfo);
+        jl_gc_wb(codeinst, src->debuginfo);
+        jl_atomic_store_release(&codeinst->inferred, (jl_value_t*)src);
+        jl_gc_wb(codeinst, src);
     }
-    jl_atomic_store_release(&codeinst->debuginfo, src->debuginfo);
-    jl_gc_wb(codeinst, src->debuginfo);
-    jl_atomic_store_release(&codeinst->inferred, (jl_value_t*)src);
-    jl_gc_wb(codeinst, src);
 }
 
 JL_DLLEXPORT uint32_t jl_get_LLVM_VERSION_fallback(void)
@@ -144,13 +148,13 @@ JL_DLLEXPORT void* JLJITGetLLVMOrcExecutionSession_fallback(void* JIT) UNAVAILAB
 
 JL_DLLEXPORT void* JLJITGetJuliaOJIT_fallback(void) UNAVAILABLE
 
-JL_DLLEXPORT void* JLJITGetExternalJITDylib_fallback(void* JIT) UNAVAILABLE
+JL_DLLEXPORT void* JLJITCreateJITDylib_fallback(void* JIT, const char *Name) UNAVAILABLE
 
 JL_DLLEXPORT void* JLJITAddObjectFile_fallback(void* JIT, void* JD, void* ObjBuffer) UNAVAILABLE
 
 JL_DLLEXPORT void* JLJITAddLLVMIRModule_fallback(void* JIT, void* JD, void* TSM) UNAVAILABLE
 
-JL_DLLEXPORT void* JLJITLookup_fallback(void* JIT, void* Result, const char *Name) UNAVAILABLE
+JL_DLLEXPORT void* JLJITJDLookup_fallback(void* JIT, void* JD, void* Result, const char *Name, int ExternalJDOnly) UNAVAILABLE
 
 JL_DLLEXPORT void* JLJITMangleAndIntern_fallback(void* JIT, const char *Name) UNAVAILABLE
 
