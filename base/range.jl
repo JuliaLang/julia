@@ -1333,7 +1333,6 @@ end
 
 function _intersect_steprange_wide(::Type{T}, ::Type{S}, r,
         start1, step1, stop1, start2, step2, stop2, rev) where {T,S}
-    @noinline
     W = T <: Unsigned ? signed(widen(T)) : widen(T)
     ws1, ws2 = W(start1), W(start2)
     wst1, wst2 = W(step1), W(step2)
