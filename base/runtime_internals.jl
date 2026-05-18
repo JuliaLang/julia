@@ -1503,21 +1503,27 @@ REPL tab completion on `x.` shows only the `private=false` properties.
 See also [`hasproperty`](@ref), [`hasfield`](@ref).
 """
 propertynames(x) = fieldnames(typeof(x))
-propertynames(m::Module) = names(m)
+propertynames(m::Module, private::Bool=false) = names(m; all=private)
 propertynames(x, private::Bool) = propertynames(x) # ignore private flag by default
 propertynames(x::Array) = () # hide the fields from tab completion to discourage calling `x.size` instead of `size(x)`, even though they are equivalent
 
 """
-    hasproperty(x, s::Symbol)
+    hasproperty(x, s::Symbol, private::Bool=false)
 
 Return a boolean indicating whether the object `x` has `s` as one of its own properties.
+
+If `private` is `true`, also check for "private" property names intended for internal use,
+as described in [`propertynames`](@ref).
 
 !!! compat "Julia 1.2"
      This function requires at least Julia 1.2.
 
+!!! compat "Julia 1.14"
+    The `private` argument was added in Julia 1.14.
+
 See also [`propertynames`](@ref), [`hasfield`](@ref).
 """
-hasproperty(x, s::Symbol) = s in propertynames(x)
+hasproperty(x, s::Symbol, private::Bool=false) = s in propertynames(x, private)
 
 """
     delete_method(m::Method)
