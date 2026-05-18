@@ -144,7 +144,7 @@ millisecond(t::Time) = mod(fld(value(t), Int64(1000000)), Int64(1000))
 microsecond(t::Time) = mod(fld(value(t), Int64(1000)), Int64(1000))
 nanosecond(t::Time) = mod(value(t), Int64(1000))
 
-function _time_components(t::Time)
+@inline function _time_components(t::Time)
     ns = value(t)
     rest, nanosecond = divrem(ns, Int64(1000))
     rest, microsecond = divrem(rest, Int64(1000))
