@@ -913,7 +913,7 @@ static void jl_fprint_debugloc(ios_t *s, jl_debuginfo_t *debuginfo, jl_value_t *
             ip2 = 0;
         const char *func_name = jl_debuginfo_name(func);
         const char *file = jl_cdi_file(debuginfo);
-        jl_locspan_t xy = jl_cdi_firstxy(debuginfo, ip2);
+        jl_locspan_t xy = jl_cdi_firstxy(debuginfo, ip);
         jl_safe_fprint_codeloc(s, func_name, file, xy.first, xy.second, (int)ip, inlined);
     }
 }
