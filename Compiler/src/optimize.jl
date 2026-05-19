@@ -271,8 +271,8 @@ include("ssair/EscapeAnalysis.jl")
 include("ssair/passes.jl")
 include("ssair/irinterp.jl")
 
-function ir_to_codeinf!(opt::OptimizationState, frame::InferenceState, edges::SimpleVector)
-    ir_to_codeinf!(opt, edges, compute_inlining_cost(frame.interp, frame.result, opt.optresult))
+function ir_to_codeinf!(opt::OptimizationState{I}, frame::InferenceState{I}, edges::SimpleVector) where {I<:AbstractInterpreter}
+    ir_to_codeinf!(opt, edges, compute_inlining_cost(frame.interp::I, frame.result, opt.optresult))
 end
 
 function ir_to_codeinf!(opt::OptimizationState, edges::SimpleVector, inlining_cost::InlineCostType)
@@ -1019,7 +1019,7 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, opt::OptimizationSt
 end
 
 # run the optimization work
-function optimize(interp::I, opt::OptimizationState{I}, caller::InferenceResult) where {I<:AbstractInterpreter}
+function optimize(interp::AbstractInterpreter, opt::OptimizationState{I}, caller::InferenceResult) where {I<:AbstractInterpreter}
     @zone "CC: OPTIMIZER" ir = run_passes_ipo_safe(opt.src, opt)
     ipo_dataflow_analysis!(interp, opt, ir, caller)
     finishopt!(interp, opt, ir)

@@ -346,8 +346,12 @@ mutable struct InferenceState{I<:AbstractInterpreter} <: AbsIntState{I}
     insert_coverage::Bool
 
     # The interpreter that created this inference state. Not looked at by
-    # NativeInterpreter. But other interpreters may use this to detect cycles
-    interp::I
+    # NativeInterpreter. But other interpreters may use this to detect cycles.
+    # Stored as the abstract supertype to keep reads boxed (the type parameter
+    # `I` lets callers narrow with `frame.interp::I` only at the specific call
+    # sites that need concrete dispatch, without propagating concrete unboxed
+    # values through every method that takes `interp`).
+    interp::AbstractInterpreter
 
     # src is assumed to be a newly-allocated CodeInfo, that can be modified in-place to contain intermediate results
     function InferenceState{I}(result::InferenceResult, src::CodeInfo, cache_mode::UInt8,
@@ -906,7 +910,7 @@ mutable struct IRInterpretationState{I<:AbstractInterpreter} <: AbsIntState{I}
     callstack::Vector{AbsIntState{I}}
     frameid::Int
     parentid::Int
-    interp::I
+    interp::AbstractInterpreter # see comment on `InferenceState.interp`
 
     function IRInterpretationState{I}(
             interp::I, spec_info::SpecInfo, ir::IRCode,
