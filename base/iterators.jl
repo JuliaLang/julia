@@ -114,7 +114,8 @@ reverse(itr) = Reverse(itr)
     Iterators.Reverse{T}
 
 A type representing a reverse-order iterator for an iterator of type `T`, which
-is stored in the `itr` field.  Typically returned by [`Iterators.reverse(itr)`](@ref).
+is stored in the `itr` field.  Typically returned by [`Iterators.reverse(itr::T)`](@ref),
+which constructs an `Iterators.Reverse{T}` wrapper by default.
 
 To support lazy reverse-order iteration, a type `T` should either implement an [`iterate`](@ref)
 method for `Iterators.Reverse{T}` or overload `Iterators.reverse` to return a different type.
