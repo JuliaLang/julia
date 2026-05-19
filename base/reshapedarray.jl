@@ -483,11 +483,7 @@ function strides(a::ReshapedArray)
 end
 
 function _try_reshaped_strides(::Dims{0}, reshaped::Int, msz::Int, ::Int, ::Int, ::Dims, ::Dims)
-    if reshaped == msz
-        ()
-    else
-        nothing
-    end
+    return reshaped == msz ? () : nothing
 end
 function _try_reshaped_strides(sz::Dims, reshaped::Int, msz::Int, mst::Int, n::Int, apsz::Dims, apst::Dims)
     st = reshaped * mst
