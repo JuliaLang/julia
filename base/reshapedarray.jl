@@ -494,10 +494,6 @@ function _try_reshaped_strides(sz::Dims, reshaped::Int, msz::Int, mst::Int, n::I
     end
     sts = _try_reshaped_strides(tail(sz), reshaped, msz, mst, n, apsz, apst)
     return isnothing(sts) ? nothing : (st, sts...)
-        nothing
-    else
-        (st, sts...)
-    end
 end
 
 merge_adjacent_dim(::Dims{0}, ::Dims{0}) = 1, 1, 0
