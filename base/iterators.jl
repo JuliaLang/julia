@@ -116,8 +116,8 @@ reverse(itr) = Reverse(itr)
 A type representing a reverse-order iterator for an iterator of type `T`, which
 is stored in the `itr` field.  Typically returned by [`Iterators.reverse(itr)`](@ref).
 
-To support reverse-order iteration, a type `T` must implement an [`iterate`](@ref)
-method for `Iterators.Reverse{T}`.
+To support lazy reverse-order iteration, a type `T` should either implement an [`iterate`](@ref)
+method for `Iterators.Reverse{T}` or overload `Iterators.reverse` to return a different type.
 """
 struct Reverse{T}
     itr::T
