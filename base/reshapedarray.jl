@@ -436,12 +436,12 @@ function try_substrides(strds::Tuple{Int, Vararg{Int}}, I::Tuple{ReshapedUnitRan
     (size_to_strides(first(strds), convert(Dims, size(first(I)))...)..., rest...)
 end
 
-function can_ptr_load(V::SubArray)
-    can_ptr_load(V.parent)
+function is_ptr_loadable(V::SubArray)
+    is_ptr_loadable(V.parent)
 end
 
-function can_ptr_store(V::SubArray)
-    can_ptr_store(V.parent)
+function is_ptr_storeable(V::SubArray)
+    is_ptr_storeable(V.parent)
 end
 
 _checkcontiguous(::Type{Bool}, A::AbstractArray) = false
@@ -451,12 +451,12 @@ _checkcontiguous(::Type{Bool}, A::DenseArray) = true
 _checkcontiguous(::Type{Bool}, A::ReshapedArray) = _checkcontiguous(Bool, parent(A))
 _checkcontiguous(::Type{Bool}, A::FastContiguousSubArray) = _checkcontiguous(Bool, parent(A))
 
-function can_ptr_load(a::ReshapedArray)
-    can_ptr_load(a.parent)
+function is_ptr_loadable(a::ReshapedArray)
+    is_ptr_loadable(a.parent)
 end
 
-function can_ptr_store(a::ReshapedArray)::Bool
-    can_ptr_store(a.parent)
+function is_ptr_storeable(a::ReshapedArray)::Bool
+    is_ptr_storeable(a.parent)
 end
 
 function try_strides(a::ReshapedArray)

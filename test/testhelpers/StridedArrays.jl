@@ -39,8 +39,8 @@ function check_strided_get(a::AbstractArray{T,N})::Nothing where {T, N}
     if !isbitstype(eltype(a))
         error("a doesn't have isbits elements")
     end
-    if !can_ptr_load(a)
-        error("can_ptr_load(a) is false")
+    if !is_ptr_loadable(a)
+        error("is_ptr_loadable(a) is false")
     end
     if isnothing(try_strides(a))
         error("try_strides(a) is nothing")
@@ -85,8 +85,8 @@ function check_strided_set(a::AbstractArray{T,N}, b::AbstractArray{T,N}, c::Abst
     if !isbitstype(eltype(a))
         error("a doesn't have isbits elements")
     end
-    if !can_ptr_store(a)
-        error("can_ptr_store(a) is false")
+    if !is_ptr_storeable(a)
+        error("is_ptr_storeable(a) is false")
     end
     if isnothing(try_strides(a))
         error("try_strides(a) is nothing")
@@ -160,10 +160,10 @@ end
 function Base.cconvert(::Type{Ptr{T}}, S::Strider{T}) where {T}
     memoryref(S.data, S.offset)
 end
-function Base.can_ptr_load(::Strider)
+function Base.is_ptr_loadable(::Strider)
     true
 end
-function Base.can_ptr_store(::Strider)
+function Base.is_ptr_storeable(::Strider)
     true
 end
 
@@ -190,6 +190,6 @@ function Base.elsize(::Type{NonMemStridedArray{T, N}}) where {T, N}
 end
 Base.strides(A::NonMemStridedArray) = strides(A.a)
 Base.try_strides(A::NonMemStridedArray) = try_strides(A.a)
-Base.can_ptr_load(::NonMemStridedArray) = true
+Base.is_ptr_loadable(::NonMemStridedArray) = true
 
 end # module StridedArrays

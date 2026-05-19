@@ -118,7 +118,7 @@ function test_cartesian(@nospecialize(A), @nospecialize(B))
             @test v1 == v2 == B[IB]
         end
     end
-    if !isnothing(try_strides(A)) && can_ptr_load(A)
+    if !isnothing(try_strides(A)) && is_ptr_loadable(A)
         check_strided_get(A)
     end
 end

@@ -199,10 +199,10 @@ stride(A::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}, k::Int
 function try_strides(a::Union{Array, Memory, CodeUnits{UInt8, <:Union{String, SubString{String}}}})::Dims
     size_to_strides(1, size(a)...)
 end
-function can_ptr_load(::Union{Array, Memory, CodeUnits{UInt8, <:Union{String, SubString{String}}}})
+function is_ptr_loadable(::Union{Array, Memory, CodeUnits{UInt8, <:Union{String, SubString{String}}}})
     true
 end
-function can_ptr_store(::Union{Array, Memory})
+function is_ptr_storeable(::Union{Array, Memory})
     true
 end
 
@@ -261,12 +261,12 @@ end
     return map(first, drs)
 end
 
-function can_ptr_load(a::ReinterpretArray{T,N,S} where N) where {T,S}
-    can_ptr_load(parent(a)) && (a.readable || array_subpadding(T, S))
+function is_ptr_loadable(a::ReinterpretArray{T,N,S} where N) where {T,S}
+    is_ptr_loadable(parent(a)) && (a.readable || array_subpadding(T, S))
 end
 
-function can_ptr_store(a::ReinterpretArray{T,N,S} where N) where {T,S}
-    can_ptr_store(parent(a)) && (a.writable || array_subpadding(S, T))
+function is_ptr_storeable(a::ReinterpretArray{T,N,S} where N) where {T,S}
+    is_ptr_storeable(parent(a)) && (a.writable || array_subpadding(S, T))
 end
 
 _checkcontiguous(::Type{Bool}, A::ReinterpretArray) = _checkcontiguous(Bool, parent(A))

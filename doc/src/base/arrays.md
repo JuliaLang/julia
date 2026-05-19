@@ -69,8 +69,8 @@ Base.conj!
 Base.stride
 Base.strides
 Base.try_strides
-Base.can_ptr_load
-Base.can_ptr_store
+Base.is_ptr_loadable
+Base.is_ptr_storeable
 ```
 
 ## Broadcast and vectorization

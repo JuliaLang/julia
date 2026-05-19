@@ -70,11 +70,11 @@ function Base.strides(A::PermutedDimsArray{T,N,perm}) where {T,N,perm}
     ntuple(d->s[perm[d]], Val(N))
 end
 Base.elsize(::Type{<:PermutedDimsArray{<:Any, <:Any, <:Any, <:Any, P}}) where {P} = Base.elsize(P)
-function Base.can_ptr_load(A::PermutedDimsArray)
-    can_ptr_load(parent(A))
+function Base.is_ptr_loadable(A::PermutedDimsArray)
+    is_ptr_loadable(parent(A))
 end
-function Base.can_ptr_store(A::PermutedDimsArray)
-    can_ptr_store(parent(A))
+function Base.is_ptr_storeable(A::PermutedDimsArray)
+    is_ptr_storeable(parent(A))
 end
 
 @inline function Base.getindex(A::PermutedDimsArray{T,N,perm,iperm}, I::Vararg{Int,N}) where {T,N,perm,iperm}

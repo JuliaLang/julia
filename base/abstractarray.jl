@@ -635,34 +635,34 @@ true
 try_strides(A::AbstractArray) = nothing
 
 """
-    can_ptr_load(A::AbstractArray)::Bool
+    is_ptr_loadable(A::AbstractArray)::Bool
 
 Return `true` if a pointer to an `isbits` element in `A` can be used to load that element. Otherwise return `false`.
 
-Do not assume `can_ptr_load` arrays are strided.
+Do not assume `is_ptr_loadable` arrays are strided.
 
-See also: [`can_ptr_store`](@ref) and [`try_strides`](@ref).
+See also: [`is_ptr_storeable`](@ref) and [`try_strides`](@ref).
 
 !!! compat "Julia 1.14"
     This function requires at least Julia 1.14.
 """
-function can_ptr_load(A::AbstractArray)
+function is_ptr_loadable(A::AbstractArray)
     false
 end
 
 """
-    can_ptr_store(A::AbstractArray)::Bool
+    is_ptr_storeable(A::AbstractArray)::Bool
 
 Return `true` if a pointer to an `isbits` element in `A` can be used to store a new element. Otherwise return `false`.
 
-Do not assume `can_ptr_store` arrays are strided.
+Do not assume `is_ptr_storeable` arrays are strided.
 
-See also: [`can_ptr_load`](@ref) and [`try_strides`](@ref).
+See also: [`is_ptr_loadable`](@ref) and [`try_strides`](@ref).
 
 !!! compat "Julia 1.14"
     This function requires at least Julia 1.14.
 """
-function can_ptr_store(A::AbstractArray)
+function is_ptr_storeable(A::AbstractArray)
     false
 end
 
