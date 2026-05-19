@@ -9335,9 +9335,10 @@ static jl_llvm_functions_t
                         info.is_user_code = in_user_mod(modu);
                     if (debug_enabled) {
                         StringRef fname = jl_debuginfo_name(func);
-                        // Encode the 1-based statement index into the DWARF column field so that
-                        // stacktraces can recover the exact PC that each inlined frame points at.
-                        // `pc` here is the 1-based statement index within `debuginfo`'s CodeInfo.
+                        // Smuggle IR index through DWARF column field.  Note
+                        // `debuginfo` here is lowered, not optimized; optimized
+                        // would give us better provenance for inlined frames,
+                        // but produces too many unique DILocations.
                         unsigned col = (unsigned)pc;
                         if (new_lineinfo.empty() && info.file == ctx.file) { // if everything matches, emit a toplevel line number
                             info.loc = DILocation::get(ctx.builder.getContext(), info.line, col, SP, NULL);
