@@ -7848,9 +7848,33 @@ using Test
 struct T36104
     v::Vector{M36104.T36104}
 end
+const orig_T36104 = T36104
 struct T36104   # check that redefining it works, issue #21816
     v::Vector{T36104}
 end
+@test T36104 === orig_T36104
+# issue #61789: self-referential struct redefinition must reuse the binding
+struct R61789
+    x
+    next::R61789
+end
+const orig_R61789 = R61789
+struct R61789
+    x
+    next::R61789
+end
+@test R61789 === orig_R61789
+# negative case: a field type that genuinely differs must produce a new type
+struct R61789neg
+    x
+    next::R61789neg
+end
+const orig_R61789neg = R61789neg
+struct R61789neg
+    x::Int
+    next::R61789neg
+end
+@test R61789neg !== orig_R61789neg
 struct S36104{K,V}
     v::S36104{K,V}
     S36104{K,V}() where {K,V} = new()

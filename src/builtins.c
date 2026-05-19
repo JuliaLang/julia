@@ -2335,19 +2335,36 @@ JL_CALLABLE(jl_f__typebody)
         } else {
             jl_datatype_t *prev_dt = (jl_datatype_t*)jl_unwrap_unionall(prev);
             JL_TYPECHK(_typebody!, datatype, (jl_value_t*)prev_dt);
-            if (equiv_field_types((jl_value_t*)prev_dt->types, ft)) {
+            // Field types in `ft` reference the new stub `dt`; substitute them
+            // with references to `prev_dt` before comparing, so self-referential
+            // structs (e.g. `next::R`) and types whose fields embed the type as
+            // a parameter (e.g. `v::Vector{T}`) are recognized as equivalent.
+            jl_svec_t *ft_subst = (jl_svec_t*)ft;
+            jl_value_t *sub = NULL;
+            JL_GC_PUSH2(&ft_subst, &sub);
+            for (size_t i = 0; i < nf; i++) {
+                jl_value_t *fld = jl_svecref(ft, i);
+                sub = jl_substitute_datatype(fld, dt, prev_dt);
+                if (sub != fld) {
+                    if (ft_subst == (jl_svec_t*)ft)
+                        ft_subst = jl_svec_copy((jl_svec_t*)ft);
+                    jl_svecset(ft_subst, i, sub);
+                }
+            }
+            int eq = equiv_field_types((jl_value_t*)prev_dt->types, (jl_value_t*)ft_subst);
+            JL_GC_POP();
+            if (eq) {
                 tret = prev;
                 goto have_type;
-            } else {
-                if (jl_svec_len(prev_dt->parameters) != jl_svec_len(dt->parameters))
-                    jl_errorf("Internal Error: Types should not have been considered equivalent");
-                for (size_t i = 0; i < nf; i++) {
-                    jl_value_t *elt = jl_svecref(ft, i);
-                    for (int j = 0; j < jl_svec_len(prev_dt->parameters); ++j) {
-                        // Only the last svecset matters for semantics, but we re-use the GC root
-                        elt = jl_substitute_var(elt, (jl_tvar_t *)jl_svecref(prev_dt->parameters, j), jl_svecref(dt->parameters, j));
-                        jl_svecset(ft, i, elt);
-                    }
+            }
+            if (jl_svec_len(prev_dt->parameters) != jl_svec_len(dt->parameters))
+                jl_errorf("Internal Error: Types should not have been considered equivalent");
+            for (size_t i = 0; i < nf; i++) {
+                jl_value_t *elt = jl_svecref(ft, i);
+                for (int j = 0; j < jl_svec_len(prev_dt->parameters); ++j) {
+                    // Only the last svecset matters for semantics, but we re-use the GC root
+                    elt = jl_substitute_var(elt, (jl_tvar_t *)jl_svecref(prev_dt->parameters, j), jl_svecref(dt->parameters, j));
+                    jl_svecset(ft, i, elt);
                 }
             }
         }
