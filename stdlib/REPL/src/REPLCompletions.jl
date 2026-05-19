@@ -735,6 +735,35 @@ function construct_toplevel_mi(src::Core.CodeInfo, context_module::Module)
     return @ccall jl_method_instance_for_thunk(src::Any, context_module::Any)::Ref{Core.MethodInstance}
 end
 
+function try_eval_global(@nospecialize(ex), mod::Module)
+    if ex isa Symbol
+        !isdefinedglobal(mod, ex) && return nothing
+        return Const(getglobal(mod, ex))
+    elseif ex isa GlobalRef
+        !isdefinedglobal(ex.mod, ex.name) && return nothing
+        return Const(getglobal(ex.mod, ex.name))
+    elseif isexpr(ex, :., 2)
+        rhs = ex.args[2]
+        rhs isa QuoteNode || return nothing
+        s = rhs.value
+        s isa Symbol || return nothing
+        parent = try_eval_global(ex.args[1], mod)
+        parent isa Const || return nothing
+        mod = parent.val
+        mod isa Module || return nothing
+        isdefinedglobal(mod, s) || return nothing
+        return Const(getglobal(mod, s))
+    end
+    return nothing
+end
+
+# Lowering can misbehave with nested error expressions.
+function expr_has_error(@nospecialize(e))
+    e isa Expr || return false
+    e.head === :error &&  return true
+    any(expr_has_error, e.args)
+end
+
 # lower `ex` and run type inference on the resulting top-level expression
 function repl_eval_ex(@nospecialize(ex), context_module::Module; limit_aggressive_inference::Bool=false)
     expr_has_error(ex) && return nothing
@@ -742,6 +771,8 @@ function repl_eval_ex(@nospecialize(ex), context_module::Module; limit_aggressiv
         # get the inference result for the last expression
         ex = ex.args[end]
     end
+    global_value = try_eval_global(ex, context_module)
+    global_value === nothing || return global_value
     lwr = try
         Meta.lower(context_module, ex)
     catch # macro expansion failed, etc.
@@ -770,7 +801,7 @@ end
 
 # `COMPLETION_WORLD[]` will be initialized within `__init__`
 # (to allow us to potentially remove REPL from the sysimage in the future).
-# Note that inference from the `code_typed` call below will use the current world age
+# Note that inference from the warmup calls below will use the current world age
 # rather than `typemax(UInt)`, since `Base.invoke_in_world` uses the current world age
 # when the given world age is higher than the current one.
 const COMPLETION_WORLD = Ref{UInt}(typemax(UInt))
@@ -779,7 +810,10 @@ const COMPLETION_WORLD = Ref{UInt}(typemax(UInt))
 # This code cache will be available at the world of `COMPLETION_WORLD`,
 # assuming no invalidation will happen before initializing REPL.
 # Once REPL is loaded, `REPLInterpreter` will be resilient against future invalidations.
+# Eval an end-to-end example so that the full compiler pipeline is exercised.
 code_typed(CC.typeinf, (REPLInterpreter, CC.InferenceState))
+repl_eval_ex(:(1 + 1), @__MODULE__)
+repl_eval_ex(:((1, 2).first), @__MODULE__)
 
 # Method completion on function call expression that look like :(max(1))
 MAX_METHOD_COMPLETIONS::Int = 40
@@ -1245,13 +1279,6 @@ function close_path_completion(path)
     path = expanduser(path)
     path = do_string_unescape(path)
     !Base.isaccessibledir(path)
-end
-
-# Lowering can misbehave with nested error expressions.
-function expr_has_error(@nospecialize(e))
-    e isa Expr || return false
-    e.head === :error &&  return true
-    any(expr_has_error, e.args)
 end
 
 # Is the cursor inside the square brackets of a ref expression?  If so, returns:
