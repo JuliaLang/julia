@@ -389,7 +389,7 @@ test_many_wrappers((A1, A2), (identity, wrapper)) do (A1_, A2_)
     A1, A2 = deepcopy(A1_), deepcopy(A2_)
     @test reinterpret(S1, A2)[1] == S1(0, 0)
     @test_throws Base.PaddingError (reinterpret(S1, A2)[1] = S1(1, 2))
-    @test !is_ptr_storeable(reinterpret(S1, A2))
+    @test !is_ptr_storable(reinterpret(S1, A2))
     check_strided_get(reinterpret(S1, A2))
     @test_throws Base.PaddingError reinterpret(S2, A1)[1]
     @test !is_ptr_loadable(reinterpret(S2, A1))

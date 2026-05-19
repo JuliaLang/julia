@@ -85,8 +85,8 @@ function check_strided_set(a::AbstractArray{T,N}, b::AbstractArray{T,N}, c::Abst
     if !isbitstype(eltype(a))
         error("a doesn't have isbits elements")
     end
-    if !is_ptr_storeable(a)
-        error("is_ptr_storeable(a) is false")
+    if !is_ptr_storable(a)
+        error("is_ptr_storable(a) is false")
     end
     if isnothing(try_strides(a))
         error("try_strides(a) is nothing")
@@ -163,7 +163,7 @@ end
 function Base.is_ptr_loadable(::Strider)
     true
 end
-function Base.is_ptr_storeable(::Strider)
+function Base.is_ptr_storable(::Strider)
     true
 end
 

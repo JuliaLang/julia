@@ -73,8 +73,8 @@ Base.elsize(::Type{<:PermutedDimsArray{<:Any, <:Any, <:Any, <:Any, P}}) where {P
 function Base.is_ptr_loadable(A::PermutedDimsArray)
     is_ptr_loadable(parent(A))
 end
-function Base.is_ptr_storeable(A::PermutedDimsArray)
-    is_ptr_storeable(parent(A))
+function Base.is_ptr_storable(A::PermutedDimsArray)
+    is_ptr_storable(parent(A))
 end
 
 @inline function Base.getindex(A::PermutedDimsArray{T,N,perm,iperm}, I::Vararg{Int,N}) where {T,N,perm,iperm}

@@ -503,7 +503,7 @@ export
     strides,
     try_strides,
     is_ptr_loadable,
-    is_ptr_storeable,
+    is_ptr_storable,
     sum!,
     sum,
     to_indices,

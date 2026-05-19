@@ -440,8 +440,8 @@ function is_ptr_loadable(V::SubArray)
     is_ptr_loadable(V.parent)
 end
 
-function is_ptr_storeable(V::SubArray)
-    is_ptr_storeable(V.parent)
+function is_ptr_storable(V::SubArray)
+    is_ptr_storable(V.parent)
 end
 
 _checkcontiguous(::Type{Bool}, A::AbstractArray) = false
@@ -455,8 +455,8 @@ function is_ptr_loadable(a::ReshapedArray)
     is_ptr_loadable(a.parent)
 end
 
-function is_ptr_storeable(a::ReshapedArray)::Bool
-    is_ptr_storeable(a.parent)
+function is_ptr_storable(a::ReshapedArray)::Bool
+    is_ptr_storable(a.parent)
 end
 
 function try_strides(a::ReshapedArray)

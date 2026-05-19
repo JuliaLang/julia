@@ -641,7 +641,7 @@ Return `true` if a pointer to an `isbits` element in `A` can be used to load tha
 
 Do not assume `is_ptr_loadable` arrays are strided.
 
-See also: [`is_ptr_storeable`](@ref) and [`try_strides`](@ref).
+See also: [`is_ptr_storable`](@ref) and [`try_strides`](@ref).
 
 !!! compat "Julia 1.14"
     This function requires at least Julia 1.14.
@@ -651,18 +651,18 @@ function is_ptr_loadable(A::AbstractArray)
 end
 
 """
-    is_ptr_storeable(A::AbstractArray)::Bool
+    is_ptr_storable(A::AbstractArray)::Bool
 
 Return `true` if a pointer to an `isbits` element in `A` can be used to store a new element. Otherwise return `false`.
 
-Do not assume `is_ptr_storeable` arrays are strided.
+Do not assume `is_ptr_storable` arrays are strided.
 
 See also: [`is_ptr_loadable`](@ref) and [`try_strides`](@ref).
 
 !!! compat "Julia 1.14"
     This function requires at least Julia 1.14.
 """
-function is_ptr_storeable(A::AbstractArray)
+function is_ptr_storable(A::AbstractArray)
     false
 end
 

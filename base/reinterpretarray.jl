@@ -202,7 +202,7 @@ end
 function is_ptr_loadable(::Union{Array, Memory, CodeUnits{UInt8, <:Union{String, SubString{String}}}})
     true
 end
-function is_ptr_storeable(::Union{Array, Memory})
+function is_ptr_storable(::Union{Array, Memory})
     true
 end
 
@@ -265,8 +265,8 @@ function is_ptr_loadable(a::ReinterpretArray{T,N,S} where N) where {T,S}
     is_ptr_loadable(parent(a)) && (a.readable || array_subpadding(T, S))
 end
 
-function is_ptr_storeable(a::ReinterpretArray{T,N,S} where N) where {T,S}
-    is_ptr_storeable(parent(a)) && (a.writable || array_subpadding(S, T))
+function is_ptr_storable(a::ReinterpretArray{T,N,S} where N) where {T,S}
+    is_ptr_storable(parent(a)) && (a.writable || array_subpadding(S, T))
 end
 
 _checkcontiguous(::Type{Bool}, A::ReinterpretArray) = _checkcontiguous(Bool, parent(A))
