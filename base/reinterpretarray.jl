@@ -206,6 +206,28 @@ function is_ptr_storable(::Union{Array, Memory})
     true
 end
 
+function strides(a::ReinterpretArray{T,<:Any,S,<:AbstractArray{S},IsReshaped}) where {T,S,IsReshaped}
+    _checkcontiguous(Bool, a) && return size_to_strides(1, size(a)...)
+    stp = strides(parent(a))
+    els, elp = sizeof(T), sizeof(S)
+    els == elp && return stp # 0dim parent is also handled here.
+    IsReshaped && els < elp && return (1, _checked_strides(stp, els, elp)...)
+    stp[1] == 1 || throw(ArgumentError("Parent must be contiguous in the 1st dimension!"))
+    st′ = _checked_strides(tail(stp), els, elp)
+    return IsReshaped ? st′ : (1, st′...)
+end
+
+@inline function _checked_strides(stp::Tuple, els::Integer, elp::Integer)
+    if elp > els && rem(elp, els) == 0
+        N = div(elp, els)
+        return map(i -> N * i, stp)
+    end
+    drs = map(i -> divrem(elp * i, els), stp)
+    all(i->iszero(i[2]), drs) ||
+        throw(ArgumentError("Parent's strides could not be exactly divided!"))
+    map(first, drs)
+end
+
 function try_strides(a::ReinterpretArray{T,<:Any,S,<:AbstractArray{S},IsReshaped}) where {T,S,IsReshaped}
     stp = try_strides(parent(a))
     isnothing(stp) && return nothing
@@ -223,27 +245,6 @@ function try_strides(a::ReinterpretArray{T,<:Any,S,<:AbstractArray{S},IsReshaped
     st′ = _try_checked_strides(tail(stp), els, elp)
     if isnothing(st′)
         return nothing # Parent's strides could not be exactly divided!
-    else
-        return IsReshaped ? st′ : (1, st′...)
-    end
-end
-function strides(a::ReinterpretArray{T,<:Any,S,<:AbstractArray{S},IsReshaped}) where {T,S,IsReshaped}
-    _checkcontiguous(Bool, a) && return size_to_strides(1, size(a)...)
-    stp = strides(parent(a))
-    els, elp = sizeof(T), sizeof(S)
-    els == elp && return stp # 0dim parent is also handled here.
-    if IsReshaped && els < elp
-        x = _try_checked_strides(stp, els, elp)
-        if isnothing(x)
-            throw(ArgumentError("Parent's strides could not be exactly divided!"))
-        else
-            return (1, x...)
-        end
-    end
-    stp[1] == 1 || throw(ArgumentError("Parent must be contiguous in the 1st dimension!"))
-    st′ = _try_checked_strides(tail(stp), els, elp)
-    if isnothing(st′)
-        throw(ArgumentError("Parent's strides could not be exactly divided!"))
     else
         return IsReshaped ? st′ : (1, st′...)
     end

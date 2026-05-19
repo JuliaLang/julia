@@ -451,35 +451,28 @@ _checkcontiguous(::Type{Bool}, A::DenseArray) = true
 _checkcontiguous(::Type{Bool}, A::ReshapedArray) = _checkcontiguous(Bool, parent(A))
 _checkcontiguous(::Type{Bool}, A::FastContiguousSubArray) = _checkcontiguous(Bool, parent(A))
 
-function is_ptr_loadable(a::ReshapedArray)
-    is_ptr_loadable(a.parent)
-end
-
-function is_ptr_storable(a::ReshapedArray)::Bool
-    is_ptr_storable(a.parent)
-end
-
-function try_strides(a::ReshapedArray)
-    apst = try_strides(a.parent)
-    isnothing(apst) && return nothing
-    apsz::Dims = size(a.parent)
-    msz, mst, n = merge_adjacent_dim(apsz, apst) # Try to perform "lazy" reshape
-    if n == ndims(a.parent)
-        size_to_strides(mst, size(a)...)::Dims # Parent is stridevector like
-    else
-        _try_reshaped_strides(size(a), 1, msz, mst, n, apsz, apst)
-    end
-end
-
 function strides(a::ReshapedArray)
     _checkcontiguous(Bool, a) && return size_to_strides(1, size(a)...)
     apsz::Dims = size(a.parent)
     apst::Dims = strides(a.parent)
     msz, mst, n = merge_adjacent_dim(apsz, apst) # Try to perform "lazy" reshape
     n == ndims(a.parent) && return size_to_strides(mst, size(a)...) # Parent is stridevector like
-    ret = _try_reshaped_strides(size(a), 1, msz, mst, n, apsz, apst)
-    isnothing(ret) && throw(ArgumentError("Input is not strided."))
-    ret
+    return _reshaped_strides(size(a), 1, msz, mst, n, apsz, apst)
+end
+
+function _reshaped_strides(::Dims{0}, reshaped::Int, msz::Int, ::Int, ::Int, ::Dims, ::Dims)
+    reshaped == msz && return ()
+    throw(ArgumentError("Input is not strided."))
+end
+function _reshaped_strides(sz::Dims, reshaped::Int, msz::Int, mst::Int, n::Int, apsz::Dims, apst::Dims)
+    st = reshaped * mst
+    reshaped = reshaped * sz[1]
+    if length(sz) > 1 && reshaped == msz && sz[2] != 1
+        msz, mst, n = merge_adjacent_dim(apsz, apst, n + 1)
+        reshaped = 1
+    end
+    sts = _reshaped_strides(tail(sz), reshaped, msz, mst, n, apsz, apst)
+    return (st, sts...)
 end
 
 function _try_reshaped_strides(::Dims{0}, reshaped::Int, msz::Int, ::Int, ::Int, ::Dims, ::Dims)
@@ -494,6 +487,26 @@ function _try_reshaped_strides(sz::Dims, reshaped::Int, msz::Int, mst::Int, n::I
     end
     sts = _try_reshaped_strides(tail(sz), reshaped, msz, mst, n, apsz, apst)
     return isnothing(sts) ? nothing : (st, sts...)
+end
+
+function try_strides(a::ReshapedArray)
+    apst = try_strides(a.parent)
+    isnothing(apst) && return nothing
+    apsz::Dims = size(a.parent)
+    msz, mst, n = merge_adjacent_dim(apsz, apst) # Try to perform "lazy" reshape
+    if n == ndims(a.parent)
+        size_to_strides(mst, size(a)...)::Dims # Parent is stridevector like
+    else
+        _try_reshaped_strides(size(a), 1, msz, mst, n, apsz, apst)
+    end
+end
+
+function is_ptr_loadable(a::ReshapedArray)
+    is_ptr_loadable(a.parent)
+end
+
+function is_ptr_storable(a::ReshapedArray)::Bool
+    is_ptr_storable(a.parent)
 end
 
 merge_adjacent_dim(::Dims{0}, ::Dims{0}) = 1, 1, 0
