@@ -405,7 +405,7 @@ perhaps range-types `Ind` of your own design. For more information, see
 | **Optional methods**                            | **Default definition**                 | **Brief description**                                                                                |
 | `stride(A, i::Int)`                             |     `strides(A)[i]`                    | Return the distance in memory (in number of elements) between adjacent elements in dimension i.      |
 | `Base.cconvert(::Type{Ptr{T}}, A)`              |     `A`                                | Return an object that can be converted to the native address of the array with [`Base.unsafe_convert`](@ref) |
-| `try_strides(A)`                                |     `nothing`                          | Return a tuple of `Int` equal to `strides(A)` to indicate `A` is a strided array. Otherwise return `nothing` instead of erroring. |
+| `try_strides(A)`                                |     `nothing`                          | Return a tuple of `Int` equal to `strides(A)` to indicate `A` is a strided array. Otherwise return `nothing`. |
 | `can_ptr_load(A)`                               |     `false`                            | Return `true` to indicate the element pointer can be used to load elements. |
 | `can_ptr_store(A)`                              |     `false`                            | Return `true` to indicate the element pointer can be used to store elements. |
 

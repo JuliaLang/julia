@@ -261,11 +261,11 @@ end
     return map(first, drs)
 end
 
-function can_ptr_load(a::ReinterpretArray{T, N, S} where N) where {T,S}
+function can_ptr_load(a::ReinterpretArray{T,N,S} where N) where {T,S}
     can_ptr_load(parent(a)) && (a.readable || array_subpadding(T, S))
 end
 
-function can_ptr_store(a::ReinterpretArray{T, N, S} where N) where {T,S}
+function can_ptr_store(a::ReinterpretArray{T,N,S} where N) where {T,S}
     can_ptr_store(parent(a)) && (a.writable || array_subpadding(S, T))
 end
 

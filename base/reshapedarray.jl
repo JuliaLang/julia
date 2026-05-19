@@ -451,7 +451,7 @@ _checkcontiguous(::Type{Bool}, A::DenseArray) = true
 _checkcontiguous(::Type{Bool}, A::ReshapedArray) = _checkcontiguous(Bool, parent(A))
 _checkcontiguous(::Type{Bool}, A::FastContiguousSubArray) = _checkcontiguous(Bool, parent(A))
 
-function can_ptr_load(a::ReshapedArray)::Bool
+function can_ptr_load(a::ReshapedArray)
     can_ptr_load(a.parent)
 end
 
@@ -497,7 +497,7 @@ function _try_reshaped_strides(sz::Dims, reshaped::Int, msz::Int, mst::Int, n::I
         reshaped = 1
     end
     sts = _try_reshaped_strides(tail(sz), reshaped, msz, mst, n, apsz, apst)
-    if isnothing(sts)
+    return isnothing(sts) ? nothing : (st, sts...)
         nothing
     else
         (st, sts...)
