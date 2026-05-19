@@ -1773,9 +1773,7 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
             invokelatest_queue === nothing && continue
             (rt::Type, sig::Type) = item
             # make a best-effort attempt to enqueue the relevant code for the ccallable
-            mi = ccall(:jl_get_specialization1, Any,
-                        (Any, Csize_t, Cint),
-                        sig, world, #= mt_cache =# 0)
+            mi = ccall(:jl_get_specialization1, Any, (Any, Csize_t), sig, world)
             if mi !== nothing
                 mi = mi::MethodInstance
                 ci = typeinf_ext(interp, mi, SOURCE_MODE_GET_SOURCE)

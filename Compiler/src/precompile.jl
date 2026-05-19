@@ -438,8 +438,8 @@ function process_method_instance_for_compilation(mi::Core.MethodInstance, world:
     if !(isdefined(method, :unspecialized) && mi === method.unspecialized)
         if !isa_compileable_sig(mi.specTypes, mi.sparam_vals, method)
             # Try to get a compileable specialization
-            mi = ccall(:jl_get_specialization1, Any, (Any, Csize_t, Cint),
-                         mi.specTypes, world, #= mt_cache =# 0)::Union{Nothing,MethodInstance}
+            mi = ccall(:jl_get_specialization1, Any, (Any, Csize_t),
+                         mi.specTypes, world)::Union{Nothing,MethodInstance}
         end
     end
     return mi
