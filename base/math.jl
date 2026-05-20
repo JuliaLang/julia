@@ -813,14 +813,16 @@ function _hypot(x, y)
     end
     return h*scale*oneunit(axu)
 end
-@inline function _hypot(x::Float32, y::Float32)
+# @assume_effects :nothrow: isinf guards handle Inf inputs; muladd(x,x,y*y) is always ≥ 0
+# so the sqrt call never throws.
+@assume_effects :nothrow @inline function _hypot(x::Float32, y::Float32)
     if isinf(x) || isinf(y)
         return Inf32
     end
     _x, _y = Float64(x), Float64(y)
     return Float32(sqrt(muladd(_x, _x, _y*_y)))
 end
-@inline function _hypot(x::Float16, y::Float16)
+@assume_effects :nothrow @inline function _hypot(x::Float16, y::Float16)
     if isinf(x) || isinf(y)
         return Inf16
     end
@@ -966,7 +968,9 @@ function exponent(x::T) where T<:IEEEFloat
     @noinline throw2(x) = throw(DomainError(x, "Cannot be ±0.0."))
     xs = reinterpret(Unsigned, x) & ~sign_mask(T)
     xs >= exponent_mask(T) && throw1(x)
-    k = Int(xs >> significand_bits(T))
+    # use `% Int` instead of `Int(...)` to preserve `:nothrow` (the shifted value
+    # always fits in `exponent_bits(T)` bits, well below `typemax(Int)`)
+    k = (xs >> significand_bits(T)) % Int
     if k == 0 # x is subnormal
         xs == 0 && throw2(x)
         m = leading_zeros(xs) - exponent_bits(T)
@@ -1079,7 +1083,9 @@ function frexp(x::T) where T<:IEEEFloat
     xu = reinterpret(Unsigned, x)
     xs = xu & ~sign_mask(T)
     xs >= exponent_mask(T) && return x, 0 # NaN or Inf
-    k = Int(xs >> significand_bits(T))
+    # use `% Int` instead of `Int(...)` to preserve `:nothrow` (after masking the sign
+    # bit, xs >> significand_bits(T) is at most 2^exponent_bits(T)-1, which always fits in Int)
+    k = (xs >> significand_bits(T)) % Int
     if k == 0 # x is subnormal
         xs == 0 && return x, 0 # +-0
         m = leading_zeros(xs) - exponent_bits(T)

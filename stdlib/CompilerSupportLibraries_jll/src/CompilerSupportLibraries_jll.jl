@@ -134,15 +134,13 @@ end
 
 # Conform to LazyJLLWrappers API
 function eager_mode()
-    if @isdefined(libatomic)
-        dlopen(libatomic)
-    end
+    dlopen(libatomic)
     dlopen(libgcc_s)
     dlopen(libgomp)
-    if @isdefined libquadmath
+    @static if @isdefined libquadmath
         dlopen(libquadmath)
     end
-    if @isdefined libssp
+    @static if @isdefined libssp
         dlopen(libssp)
     end
     dlopen(libgfortran)
@@ -154,10 +152,10 @@ function __init__()
     global libatomic_path = string(libatomic.path)
     global libgcc_s_path = string(libgcc_s.path)
     global libgomp_path = string(libgomp.path)
-    if @isdefined libquadmath_path
+    @static if @isdefined libquadmath_path
         global libquadmath_path = string(libquadmath.path)
     end
-    if @isdefined libssp_path
+    @static if @isdefined libssp_path
         global libssp_path = string(libssp.path)
     end
     global libgfortran_path = string(libgfortran.path)

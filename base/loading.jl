@@ -110,36 +110,39 @@ function isaccessiblepath(path)
     end
 end
 
-## SHA1 ##
-
-struct SHA1
-    bytes::NTuple{20, UInt8}
-end
-function SHA1(bytes::Vector{UInt8})
-    length(bytes) == 20 ||
-        throw(ArgumentError("wrong number of bytes for SHA1 hash: $(length(bytes))"))
-    return SHA1(ntuple(i->bytes[i], Val(20)))
-end
-SHA1(s::AbstractString) = SHA1(hex2bytes(s))
-parse(::Type{SHA1}, s::AbstractString) = SHA1(s)
-function tryparse(::Type{SHA1}, s::AbstractString)
-    try
-        return parse(SHA1, s)
-    catch e
-        if isa(e, ArgumentError)
-            return nothing
+## SHA1 and SHA256 ##
+for (name, namestr, numbytes) in [(:SHA1, "SHA1", 20), (:SHA256, "SHA256", 32)]
+    @eval begin
+        struct $name
+            bytes::NTuple{$numbytes, UInt8}
         end
-        rethrow(e)
+        function $name(bytes::Vector{UInt8})
+            length(bytes) == $numbytes ||
+                throw(ArgumentError("wrong number of bytes for " * string($namestr) * ": Expected " * string($numbytes) * " bytes, got $(length(bytes))"))
+            return $name(ntuple(i->bytes[i], Val($numbytes)))
+        end
+        $name(s::AbstractString) = $name(hex2bytes(s))
+        parse(::Type{$name}, s::AbstractString) = $name(s)
+        function tryparse(::Type{$name}, s::AbstractString)
+            try
+                return parse($name, s)
+            catch e
+                if isa(e, ArgumentError)
+                    return nothing
+                end
+                rethrow(e)
+            end
+        end
+
+        string(hash::$name) = bytes2hex(hash.bytes)
+        print(io::IO, hash::$name) = bytes2hex(io, hash.bytes)
+        show(io::IO, hash::$name) = print(io, $namestr * "(\"", hash, "\")")
+
+        isless(a::$name, b::$name) = isless(a.bytes, b.bytes)
+        hash(a::$name, h::UInt) = hash(($name, a.bytes), h)
+        ==(a::$name, b::$name) = a.bytes == b.bytes
     end
 end
-
-string(hash::SHA1) = bytes2hex(hash.bytes)
-print(io::IO, hash::SHA1) = bytes2hex(io, hash.bytes)
-show(io::IO, hash::SHA1) = print(io, "SHA1(\"", hash, "\")")
-
-isless(a::SHA1, b::SHA1) = isless(a.bytes, b.bytes)
-hash(a::SHA1, h::UInt) = hash((SHA1, a.bytes), h)
-==(a::SHA1, b::SHA1) = a.bytes == b.bytes
 
 # fake uuid5 function (for self-assigned UUIDs)
 # TODO: delete and use real uuid5 once it's in stdlib
@@ -1933,21 +1936,25 @@ end
 struct ImageTarget
     name::String
     flags::Int32
+    base::Int32
     ext_features::String
-    features_en::Vector{UInt8}
-    features_dis::Vector{UInt8}
+    features_en::String
+    features_dis::String
 end
 
 function parse_image_target(io::IO)
     flags = read(io, Int32)
-    nfeature = read(io, Int32)
-    feature_en = read(io, 4*nfeature)
-    feature_dis = read(io, 4*nfeature)
+    base = read(io, Int32)
+    nwords = read(io, Int32)  # number of uint64_t feature words
+    feature_en_raw = read(io, 8*nwords)
+    feature_dis_raw = read(io, 8*nwords)
     name_len = read(io, Int32)
     name = String(read(io, name_len))
     ext_features_len = read(io, Int32)
     ext_features = String(read(io, ext_features_len))
-    ImageTarget(name, flags, ext_features, feature_en, feature_dis)
+    features_en = @ccall jl_feature_bits_to_string(feature_en_raw::Ptr{UInt8}, nwords::Int32)::Ref{String}
+    features_dis = @ccall jl_feature_bits_to_string(feature_dis_raw::Ptr{UInt8}, nwords::Int32)::Ref{String}
+    ImageTarget(name, flags, base, ext_features, features_en, features_dis)
 end
 
 function parse_image_targets(targets::Vector{UInt8})
@@ -1965,51 +1972,21 @@ function current_image_targets()
     return parse_image_targets(targets)
 end
 
-struct FeatureName
-    name::Cstring
-    bit::UInt32 # bit index into a `uint32_t` array;
-    llvmver::UInt32 # 0 if it is available on the oldest LLVM version we support
-end
-
-function feature_names()
-    fnames = Ref{Ptr{FeatureName}}()
-    nf = Ref{Csize_t}()
-    @ccall jl_reflect_feature_names(fnames::Ptr{Ptr{FeatureName}}, nf::Ptr{Csize_t})::Cvoid
-    if fnames[] == C_NULL
-        @assert nf[] == 0
-        return Vector{FeatureName}(undef, 0)
-    end
-    Base.unsafe_wrap(Array, fnames[], nf[], own=false)
-end
-
-function test_feature(features::Vector{UInt8}, feat::FeatureName)
-    bitidx = feat.bit
-    u8idx = div(bitidx, 8) + 1
-    bit = bitidx % 8
-    return (features[u8idx] & (1 << bit)) != 0
-end
-
 function show(io::IO, it::ImageTarget)
     print(io, it.name)
     if !isempty(it.ext_features)
         print(io, ",", it.ext_features)
     end
-    print(io, "; flags=", it.flags)
-    print(io, "; features_en=(")
-    first = true
-    for feat in feature_names()
-        if test_feature(it.features_en, feat)
-            name = Base.unsafe_string(feat.name)
-            if first
-                first = false
-                print(io, name)
-            else
-                print(io, ", ", name)
-            end
-        end
+    if it.base >= 0
+        print(io, "; base=", it.base)
     end
-    print(io, ")")
-    # Is feature_dis useful?
+    print(io, "; flags=", it.flags)
+    if !isempty(it.features_en)
+        print(io, "; features_en=(", it.features_en, ")")
+    end
+    if !isempty(it.features_dis)
+        print(io, "; features_dis=(", it.features_dis, ")")
+    end
 end
 
 # should sync with the types of arguments of `stale_cachefile`
@@ -4619,7 +4596,7 @@ function precompile(@nospecialize(f), @nospecialize(argtypes::Tuple), m::Method)
 end
 
 function precompile(@nospecialize(argt::Type), m::Method)
-    atype, sparams = ccall(:jl_type_intersection_with_env, Any, (Any, Any), argt, m.sig)::SimpleVector
+    atype, sparams = typeintersect_env(argt, m.sig)
     mi = Base.Compiler.specialize_method(m, atype, sparams)
     return precompile(mi)
 end

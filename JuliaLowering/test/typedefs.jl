@@ -221,6 +221,33 @@ let v = Base.Vector{test_mod.S5}(test_mod.S5(1,1))
     @test v[1] === test_mod.S5(1,1)
 end
 
+@testset "inner ctor should always include (latestworld)" begin
+    @test fl_eval(
+        test_mod,
+        :(begin
+              struct fl_DefaultInnerCtorWorld; x::Int; end
+              fl_DefaultInnerCtorWorld(1)
+          end)).x == 1
+    @test jl_eval(
+        test_mod,
+        :(begin
+              struct jl_DefaultInnerCtorWorld; x::Int; end
+              jl_DefaultInnerCtorWorld(1)
+          end)).x == 1
+    @test fl_eval(
+        test_mod,
+        :(begin
+              struct fl_InnerCtorWorld; x::Int; fl_InnerCtorWorld() = new(1); end
+              fl_InnerCtorWorld()
+          end)).x == 1
+    @test jl_eval(
+        test_mod,
+        :(begin
+              struct jl_InnerCtorWorld; x::Int; jl_InnerCtorWorld() = new(1); end
+              jl_InnerCtorWorld()
+          end)).x == 1
+end
+
 # Likely not set in stone (the behaviour is odd here), but test to detect changes
 @testset "when default inner ctors are generated" begin
     local function test_has_inner_ctor(t)

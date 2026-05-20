@@ -6,11 +6,18 @@
 
 #define hash_size(h) ((h)->size/2)
 
+#define _HTIMPL_IDENTITY_KEYALLOC(key,ctx) (key)
+#define _HTIMPL_NOOP_KEYFREE(key,ctx)      (void)key
+
 // compute empirical max-probe for a given size
 #define max_probe(size) ((size)<=(HT_N_INLINE*2) ? (HT_N_INLINE/2) : (size)>>3)
 
-#define _HTIMPL_EX(HTNAME, HFUNC, EQFUNC, _STATIC)                      \
-static void **HTNAME##_lookup_bp_r(htable_t *h, void *key, void *ctx)   \
+#define _HTIMPL_EX(HTNAME, HFUNC, EQFUNC, KEYALLOC, KEYFREE, _STATIC)   \
+                                                                        \
+/* key_owned: if true, the key is already owned by the table */         \
+/*            if false, KEYALLOC is called on insert. */                \
+static void **HTNAME##_lookup_bp_r_impl(htable_t *h, void *key,         \
+                                        void *ctx, int key_owned)       \
 {                                                                       \
     uint_t hv;                                                          \
     size_t i, orig, index, iter, empty_slot;                            \
@@ -38,8 +45,11 @@ static void **HTNAME##_lookup_bp_r(htable_t *h, void *key, void *ctx)   \
                     empty_slot = index;                                 \
             }                                                           \
                                                                         \
-            if (EQFUNC(key, tab[index], ctx))                           \
+            if (EQFUNC(key, tab[index], ctx)) {                         \
+                if (tab[index+1] == HT_NOTFOUND)                        \
+                    h->live++; /* reviving a tombstone */               \
                 return &tab[index+1];                                   \
+            }                                                           \
                                                                         \
             iter++;                                                     \
             index = (index + iter*2) & (sz-1);                          \
@@ -47,18 +57,36 @@ static void **HTNAME##_lookup_bp_r(htable_t *h, void *key, void *ctx)   \
                 break; /* grow if probe took too long */                \
         } while (index != orig);                                        \
                                                                         \
+        /* grow if live entries >= 75% of slots */                      \
         if (empty_slot != -1) {                                         \
-            tab[empty_slot] = key;                                      \
+            if (h->live * 4 >= hash_size(h) * 3)                        \
+                empty_slot = -1;                                        \
+        }                                                               \
+        /* rehash if too many tombstones (>= 87.5% slots occupied) */   \
+        int grow = (empty_slot == -1);                                  \
+        if (empty_slot != -1) {                                         \
+            if (8 * (hash_size(h) - h->count) <= hash_size(h))          \
+                empty_slot = -1;                                        \
+        }                                                               \
+                                                                        \
+        if (empty_slot != -1) {                                         \
+            if (tab[empty_slot] == HT_NOTFOUND)                         \
+                h->count++;                                             \
+            else                                                        \
+                KEYFREE(tab[empty_slot], ctx); /* free tombstone key */ \
+            h->live++;                                                  \
+            tab[empty_slot] = key_owned ? key : KEYALLOC(key, ctx);     \
             return &tab[empty_slot+1];                                  \
         }                                                               \
                                                                         \
-        /* table full */                                                \
         /* quadruple size, rehash, retry the insert */                  \
         /* it's important to grow the table really fast; otherwise we waste */ \
         /* lots of time rehashing all the keys over and over. */        \
         sz = h->size;                                                   \
         ol = h->table;                                                  \
-        if (sz < HT_N_INLINE)                                           \
+        if (!grow)                                                      \
+            newsz = sz; /* just rehash to clean tombstones */           \
+        else if (sz < HT_N_INLINE)                                      \
             newsz = HT_N_INLINE;                                        \
         else if (sz >= (1<<19) || (sz <= (1<<8)))                       \
             newsz = sz<<1;                                              \
@@ -72,9 +100,15 @@ static void **HTNAME##_lookup_bp_r(htable_t *h, void *key, void *ctx)   \
             tab[i] = HT_NOTFOUND;                                       \
         h->table = tab;                                                 \
         h->size = newsz;                                                \
+        h->count = 0;                                                   \
+        h->live = 0;                                                    \
         for (i = 0; i < sz; i += 2) {                                   \
             if (ol[i+1] != HT_NOTFOUND) {                               \
-                (*HTNAME##_lookup_bp_r(h, ol[i], ctx)) = ol[i+1];       \
+                (*HTNAME##_lookup_bp_r_impl(h, ol[i], ctx, 1)) =        \
+                    ol[i+1];                                            \
+            }                                                           \
+            else if (ol[i] != HT_NOTFOUND) {                            \
+                KEYFREE(ol[i], ctx); /* free tombstone key */           \
             }                                                           \
         }                                                               \
         if (ol != &h->_space[0])                                        \
@@ -86,6 +120,11 @@ static void **HTNAME##_lookup_bp_r(htable_t *h, void *key, void *ctx)   \
     }                                                                   \
                                                                         \
     return NULL;                                                        \
+}                                                                       \
+                                                                        \
+static void **HTNAME##_lookup_bp_r(htable_t *h, void *key, void *ctx)   \
+{                                                                       \
+    return HTNAME##_lookup_bp_r_impl(h, key, ctx, /* key_owned */ 0);   \
 }                                                                       \
                                                                         \
 _STATIC void HTNAME##_put_r(htable_t *h, void *key, void *val, void *ctx) \
@@ -144,8 +183,9 @@ _STATIC int HTNAME##_has_r(htable_t *h, void *key, void *ctx)           \
 _STATIC int HTNAME##_remove_r(htable_t *h, void *key, void *ctx)        \
 {                                                                       \
     void **bp = HTNAME##_peek_bp_r(h, key, ctx);                        \
-    if (bp != NULL) {                                                   \
+    if (bp != NULL && *bp != HT_NOTFOUND) {                             \
         *bp = HT_NOTFOUND;                                              \
+        h->live--;                                                      \
         return 1;                                                       \
     }                                                                   \
     return 0;                                                           \
@@ -171,7 +211,8 @@ static uint_t HTNAME##_eqfunc_wrapper(void *key1, void *key2, void *ctx) \
     return EQFUNC(key1, key2);                                          \
 }                                                                       \
                                                                         \
-_HTIMPL_EX(HTNAME, HTNAME##_hfunc_wrapper, HTNAME##_eqfunc_wrapper, static) \
+_HTIMPL_EX(HTNAME, HTNAME##_hfunc_wrapper, HTNAME##_eqfunc_wrapper,     \
+           _HTIMPL_IDENTITY_KEYALLOC, _HTIMPL_NOOP_KEYFREE, static)     \
                                                                         \
 void HTNAME##_put(htable_t *h, void *key, void *val)                    \
 {                                                                       \
@@ -203,4 +244,4 @@ void HTNAME##_adjoin(htable_t *h, void *key, void *val)                 \
     HTNAME##_adjoin_r(h, key, val, NULL);                               \
 }
 
-#define HTIMPL_R(HTNAME, HFUNC, EQFUNC) _HTIMPL_EX(HTNAME, HFUNC, EQFUNC, )
+#define HTIMPL_R(HTNAME, HFUNC, EQFUNC, KEYALLOC, KEYFREE) _HTIMPL_EX(HTNAME, HFUNC, EQFUNC, KEYALLOC, KEYFREE, )

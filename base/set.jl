@@ -64,7 +64,7 @@ function _Set(itr, ::EltypeUnknown)
     return Set{T}(itr)
 end
 
-empty(s::AbstractSet{T}, ::Type{U}=T) where {T,U} = Set{U}()
+empty(s::AbstractSet{T}, ::Type{U}=T) where {T,U} = emptymutable(s, U)
 
 # return an empty set with eltype T, which is mutable (can be grown)
 # by default, a Set is returned
@@ -669,7 +669,7 @@ function allequal(f, xs::Tuple)
         n = fieldcount(xs)
         if n <= 32
             n <= 1 && return true
-            checks = [:(isequal(val, f(getfield(xs, $i)))) for i in 2:n]
+            checks = Expr[:(isequal(val, f(getfield(xs, $i)))) for i in 2:n]
             expr = foldr((a, b) -> :($a && $b), checks)
             return quote
                 val = f(getfield(xs, 1))

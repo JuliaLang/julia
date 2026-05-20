@@ -24,7 +24,7 @@ end
 macro opaque(ty, ex)
     if Base.isexpr(ty, :->)
         (AT, body) = ty.args
-        filter!((n)->!isa(n, Core.LineNumberNode), body.args)
+        filter!((n)->!isa(n, LineNumberNode), body.args)
         if !Base.isexpr(body, :block) || length(body.args) != 1
             error("Opaque closure type must be specified in the form Tuple{T,U...}->RT")
         end
