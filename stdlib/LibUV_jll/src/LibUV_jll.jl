@@ -6,6 +6,5 @@ baremodule LibUV_jll
 using Base, Libdl
 
 # NOTE: This file is currently empty, as we link libuv statically for now.
-is_available() = true
 
 end  # module LibUV_jll
