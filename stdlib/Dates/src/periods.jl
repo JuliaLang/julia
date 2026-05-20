@@ -354,8 +354,12 @@ Base.isequal(x::Period, y::CompoundPeriod) = isequal(y, x)
 Base.isequal(x::CompoundPeriod, y::CompoundPeriod) = isequal(x.periods, y.periods)
 
 # Capture TimeType+-Period methods
-(+)(a::TimeType, b::Period, c::Period) = (+)(a, b + c)
-(+)(a::TimeType, b::Period, c::Period, d::Period...) = (+)((+)(a, b + c), d...)
+# Fold left as `(a + b) + c` rather than going through a CompoundPeriod
+# intermediate with `a + (b + c)`, which would allocate and make the result
+# type-unstable since `CompoundPeriod` iterates over an abstract
+# `Vector{Period}`.
+(+)(a::TimeType, b::Period, c::Period) = (a + b) + c
+(+)(a::TimeType, b::Period, c::Period, d::Period...) = (+)((a + b) + c, d...)
 
 function (+)(x::TimeType, y::CompoundPeriod)
     for p in y.periods
