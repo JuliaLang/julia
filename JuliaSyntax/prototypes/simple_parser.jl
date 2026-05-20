@@ -158,8 +158,7 @@ parse_and_show(parse_toplevel,
                function f(x, y)
                    z = x - y
                    begin
-                       a
-                       b
+                       a * b
                    end
                    z * z
                end
