@@ -1619,11 +1619,14 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, ArrayRef<Va
         return ctx.builder.CreateCall(fmaintr, {x, y, z});
     }
     case muladd_float: {
-        // LLVM 5.0 can create FMA in the backend for contractible fmul and fadd
-        // Emitting fmul and fadd here since they are easier for other LLVM passes to
-        // optimize.
-        auto mathb = math_builder(ctx, true, true);
-        return mathb().CreateFAdd(mathb().CreateFMul(x, y), z);
+        assert(y->getType() == x->getType());
+        assert(z->getType() == y->getType());
+#if JL_LLVM_VERSION >= 200000
+        FunctionCallee fmuladdintr = Intrinsic::getOrInsertDeclaration(jl_Module, Intrinsic::fmuladd, ArrayRef<Type*>(t));
+#else
+        FunctionCallee fmuladdintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::fmuladd, ArrayRef<Type*>(t));
+#endif
+        return ctx.builder.CreateCall(fmuladdintr, {x, y, z});
     }
 
     case checked_sadd_int:
