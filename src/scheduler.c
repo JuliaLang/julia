@@ -318,17 +318,12 @@ static pool_wake_hint_t pool_wake_hints[POOL_WAKE_HINT_STRIPES];
 // naturally wake additional consumers across successive per-insert calls.
 JL_DLLEXPORT void jl_wakeup_threadpool(int8_t tpid) JL_NOTSAFEPOINT
 {
+    assert(tpid >= 0 && tpid < jl_n_threadpools);
     jl_task_t *ct = jl_current_task;
     int16_t self = jl_atomic_load_relaxed(&ct->tid);
     jl_fence(); // [^store_buffering_1]
     jl_task_t *uvlock = jl_atomic_load_relaxed(&jl_uv_mutex.owner);
     JULIA_DEBUG_SLEEPWAKE( wakeup_enter = cycleclock() );
-
-    if (tpid < 0 || tpid >= jl_n_threadpools) {
-        // unknown pool: fall back to legacy broadcast
-        wakeup_thread(ct, -1);
-        return;
-    }
 
     // defensively ensure self exits any partial sleep transition
     jl_ptls_t ptls = ct->ptls;
