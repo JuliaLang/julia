@@ -70,7 +70,18 @@ typedef struct jl_varbinding_t {
     jl_value_t *JL_NONNULL ub;
     int8_t existential; // whether this variable should be treated as existential
     int8_t occurs_inv;  // occurs in invariant position
-    int8_t occurs_cov;  // # of occurrences in covariant position
+    int8_t occurs_cov;  // # of occurrences in covariant position within the
+                        // current consistency-check scope (reset on entry to
+                        // `subtype_ccheck` / `intersect_aside`, restored on
+                        // exit). Saturates at 2. Covariant occurrences inside
+                        // nested Tuple{} accumulate into this counter as long
+                        // as no consistency check is entered.
+    int8_t cov_diag;    // max value `occurs_cov` reached in any (already-closed)
+                        // consistency-check scope. The diagonal-rule test is
+                        // `max(occurs_cov, cov_diag) > 1`, so a variable is
+                        // diagonal iff it occurred >= 2 times in some single
+                        // scope (the outer scope or any consistency check),
+                        // rather than summed across consistency checks.
     int8_t concrete;    // 1 if another variable has a constraint forcing this one to be concrete
     int8_t max_offset;  // record the maximum positive offset of the variable (up to 32)
                         // max_offset < 0 if this variable occurs outside VarargNum.
@@ -265,12 +276,24 @@ static int current_env_length(jl_stenv_t *e)
     return len;
 }
 
+// Per-var saved env layout: [occurs_inv, occurs_cov, cov_diag, max_offset].
+#define JL_SAVEDENV_BYTES_PER_VAR 4
+
+// Combined covariance count used for diagonal-rule decisions: the max of the
+// counter for the current consistency-check scope and the largest count
+// observed in any already-closed scope. A variable is diagonal iff
+// `cov_count(vb) > 1`.
+static inline int8_t cov_count(const jl_varbinding_t *vb) JL_NOTSAFEPOINT
+{
+    return vb->occurs_cov > vb->cov_diag ? vb->occurs_cov : vb->cov_diag;
+}
+
 typedef struct {
     int8_t *buf;
     int rdepth;
-    int8_t _space[24]; // == 8 * 3
+    int8_t _space[32]; // == 8 * JL_SAVEDENV_BYTES_PER_VAR
     jl_gcframe_t gcframe;
-    jl_value_t *roots[24]; // == 8 * 3
+    jl_value_t *roots[24]; // == 8 * 3 (lb, ub, innervars)
 } jl_savedenv_t;
 
 // Position of a subtype/intersect call within a type's structure. Determines
@@ -311,6 +334,7 @@ static void re_save_env(jl_stenv_t *e, jl_savedenv_t *se, int root)
         }
         se->buf[j++] = v->occurs_inv;
         se->buf[j++] = v->occurs_cov;
+        se->buf[j++] = v->cov_diag;
         se->buf[j++] = v->max_offset;
         v = v->prev;
     }
@@ -343,9 +367,9 @@ static void alloc_env(jl_stenv_t *e, jl_savedenv_t *se, int root)
             ct->gcstack = &se->gcframe;
         }
     }
-    se->buf = (len > 8 ? (int8_t*)malloc_s(len * 3) : se->_space);
+    se->buf = (len > 8 ? (int8_t*)malloc_s(len * JL_SAVEDENV_BYTES_PER_VAR) : se->_space);
 #ifdef __clang_gcanalyzer__
-    memset(se->buf, 0, len * 3);
+    memset(se->buf, 0, len * JL_SAVEDENV_BYTES_PER_VAR);
 #endif
 }
 
@@ -404,6 +428,7 @@ static void restore_env(jl_stenv_t *e, jl_savedenv_t *se, int root) JL_NOTSAFEPO
         }
         v->occurs_inv = se->buf[j++];
         v->occurs_cov = se->buf[j++];
+        v->cov_diag = se->buf[j++];
         v->max_offset = se->buf[j++];
         v = v->prev;
     }
@@ -724,15 +749,21 @@ static int env_unchanged(jl_stenv_t *e, jl_savedenv_t *se) JL_NOTSAFEPOINT
         if (v->existential) {
             if (v->lb != roots[i] || v->ub != roots[i + 1])
                 return 0; // check if bounds changed
-            if (is_leaf_typevar(v->var) && v->body_occurs_inv == 0 && v->occurs_cov > 1 && se->buf[j] <= 1)
-                return 0; // check if a variable became diagonal from non-diagonal
+            int8_t saved_cov = se->buf[j];     // saved occurs_cov
+            int8_t saved_diag = se->buf[j+1];  // saved cov_diag
+            int8_t saved_max = saved_cov > saved_diag ? saved_cov : saved_diag;
+            if (is_leaf_typevar(v->var) && v->body_occurs_inv == 0 && cov_count(v) > 1 && saved_max <= 1)
+                return 0; // check if a variable became digonal from non-diagonal
         }
         i += 3; // lb, ub, innervars
-        j += 3;
+        j += JL_SAVEDENV_BYTES_PER_VAR;
         v = v->prev;
     }
     return 1;
 }
+
+static int push_consistency_scope(jl_stenv_t *e, int8_t *saved) JL_NOTSAFEPOINT;
+static void pop_consistency_scope(jl_stenv_t *e, const int8_t *saved, int nsaved) JL_NOTSAFEPOINT;
 
 // subtype for variable bounds consistency check. needs its own forall/exists environment.
 static int subtype_ccheck(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
@@ -752,7 +783,14 @@ static int subtype_ccheck(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
     if (obviously_in_union(y, x))
         return 1;
     jl_saved_unionstate_t oldLunions; push_unionstate(&oldLunions, &e->Lunions);
+    // Consistency check for a typevar bound: covariant occurrences inside this
+    // call should not accumulate into the surrounding scope's diagonality
+    // counter. Save & reset the counters, then fold the local max into
+    // cov_diag on exit.
+    int8_t *saved_cov = (int8_t*)alloca(current_env_length(e));
+    int nsaved_cov = push_consistency_scope(e, saved_cov);
     int sub = local_forall_exists_subtype(x, y, e, PARAM_NONE, 1);
+    pop_consistency_scope(e, saved_cov, nsaved_cov);
     pop_unionstate(&e->Lunions, &oldLunions);
     return sub;
 }
@@ -791,6 +829,43 @@ static void record_var_occurrence(jl_varbinding_t *vb, jl_stenv_t *e, jl_param_p
         // Would be recovered in `intersect_varargs`/`subtype_tuple_varargs` if needed.
         if (!vb->intersected)
             vb->max_offset = -1;
+    }
+}
+
+// Scope the diagonal-rule's covariance counter to the surrounding
+// covariant-position context, so that occurrences inside a consistency check
+// (`subtype_ccheck` / `intersect_aside`) of a typevar's bound do not
+// contaminate the outer covariance count. Covariant positions in covariant
+// position tuples within the same scope still accumulate as before.
+//
+// `push_consistency_scope` saves the current `occurs_cov` of every live var
+// into `saved` and resets it to 0; `pop_consistency_scope` folds the in-scope
+// value into `cov_diag` (via max) and restores `occurs_cov` from `saved`.
+// The diagonal-rule test then becomes `max(occurs_cov, cov_diag) > 1`: a
+// variable is diagonal iff it occurred >= 2 times in some single scope (the
+// outer scope or any consistency check), rather than summed across all
+// consistency checks.
+static int push_consistency_scope(jl_stenv_t *e, int8_t *saved) JL_NOTSAFEPOINT
+{
+    jl_varbinding_t *v = e->vars;
+    int i = 0;
+    while (v != NULL) {
+        saved[i++] = v->occurs_cov;
+        v->occurs_cov = 0;
+        v = v->prev;
+    }
+    return i;
+}
+
+static void pop_consistency_scope(jl_stenv_t *e, const int8_t *saved, int nsaved) JL_NOTSAFEPOINT
+{
+    jl_varbinding_t *v = e->vars;
+    int i = 0;
+    while (v != NULL && i < nsaved) {
+        if (v->occurs_cov > v->cov_diag)
+            v->cov_diag = v->occurs_cov;
+        v->occurs_cov = saved[i++];
+        v = v->prev;
     }
 }
 
@@ -1136,7 +1211,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     u = unalias_unionall(u, e);
     jl_value_t *new_tvar = NULL;
     int body_occurs_inv = var_occurs_invariant(u->body, u->var);
-    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, body_occurs_inv,
+    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, body_occurs_inv,
                            e->invdepth, NULL, e->vars };
     JL_GC_PUSH5(&u, &vb.lb, &vb.ub, &vb.innervars, &new_tvar);
     e->vars = &vb;
@@ -1157,7 +1232,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     //  ( Tuple{Int, Int}    <: Tuple{T, T} where T) but
     // !( Tuple{Int, String} <: Tuple{T, T} where T)
     // Then check concreteness by checking that the lower bound is not an abstract type.
-    int diagonal = vb.occurs_cov > 1 && !vb.body_occurs_inv;
+    int diagonal = cov_count(&vb) > 1 && !vb.body_occurs_inv;
     if (ans && (vb.concrete || (diagonal && is_leaf_typevar(u->var)))) {
         if (vb.concrete && !diagonal && !is_leaf_bound(vb.ub)) {
             // a non-diagonal var can only be a subtype of a diagonal var if its
@@ -2812,6 +2887,13 @@ static jl_value_t *intersect_aside(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, 
     if (obviously_in_union(y, x))
         return x;
 
+    // Consistency check for a typevar bound: covariant occurrences inside this
+    // call should not accumulate into the surrounding scope's diagonality
+    // counter. Save & reset the counters before any env truncation so all
+    // vars are captured, and restore after the env is put back.
+    int8_t *saved_cov = (int8_t*)alloca(current_env_length(e));
+    int nsaved_cov = push_consistency_scope(e, saved_cov);
+
     jl_varbinding_t *vars = NULL;
     jl_varbinding_t *bbprev = NULL;
     jl_varbinding_t *xb = jl_is_typevar(x) ? lookup(e, (jl_tvar_t *)x) : NULL;
@@ -2834,6 +2916,8 @@ static jl_value_t *intersect_aside(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, 
     pop_unionstate(&e->Runions, &oldRunions);
     if (bbprev) e->vars->prev = bbprev;
     if (vars) e->vars = vars;
+
+    pop_consistency_scope(e, saved_cov, nsaved_cov);
     return res;
 }
 
@@ -3316,7 +3400,7 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
     }
     // TODO: `vb.occurs_cov == 1`, we could also substitute Tuple{<:X} => Tuple{X},
     // but it may change some ambiguity errors so we don't need to do it yet.
-    else if (vb->occurs_cov && is_leaf_bound(vb->ub) && !jl_has_free_typevars(vb->ub)) {
+    else if (cov_count(vb) && is_leaf_bound(vb->ub) && !jl_has_free_typevars(vb->ub)) {
         // replace T<:x with x in covariant position when possible
         varval = vb->ub;
     }
@@ -3668,7 +3752,7 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
     else {
         res = intersect(u->body, t, e, param);
     }
-    vb->concrete |= (vb->occurs_cov > 1 && is_leaf_typevar(u->var) &&
+    vb->concrete |= (cov_count(vb) > 1 && is_leaf_typevar(u->var) &&
                      !vb->body_occurs_inv);
 
     // handle the "diagonal dispatch" rule, which says that a type var occurring more
@@ -3696,7 +3780,7 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
     e->vars = vb->prev;
 
     if (res != jl_bottom_type) {
-        if (vb->ub == jl_bottom_type && vb->occurs_cov) {
+        if (vb->ub == jl_bottom_type && cov_count(vb)) {
             // T=Bottom in covariant position
             res = jl_bottom_type;
         }
@@ -3756,7 +3840,7 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
     jl_value_t *res = NULL;
     jl_savedenv_t se;
     int body_occurs_inv = var_occurs_invariant(u->body, u->var);
-    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, body_occurs_inv,
+    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, body_occurs_inv,
                            e->invdepth, NULL, e->vars };
     JL_GC_PUSH4(&res, &vb.lb, &vb.ub, &vb.innervars);
     save_env(e, &se, 1);
@@ -3772,11 +3856,11 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
     }
     else if (res != jl_bottom_type) {
         int constraint1 = vb.constraintkind;
-        if (vb.concrete || vb.occurs_inv>1 || (vb.occurs_inv && vb.occurs_cov))
+        if (vb.concrete || vb.occurs_inv>1 || (vb.occurs_inv && cov_count(&vb)))
             vb.constraintkind = vb.concrete ? 1 : 2;
         else if (u->var->lb != jl_bottom_type)
             vb.constraintkind = 2;
-        else if (vb.occurs_cov && noinv)
+        else if (cov_count(&vb) && noinv)
             vb.constraintkind = 1;
         int reintersection = constraint1 != vb.constraintkind || vb.concrete;
         if (reintersection) {
@@ -3785,19 +3869,19 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
                 vb.ub = vb.var->ub;
             }
             restore_env(e, &se, vb.constraintkind == 1 ? 1 : 0);
-            vb.occurs_cov = vb.occurs_inv = 0;
+            vb.occurs_cov = vb.occurs_inv = vb.cov_diag = 0;
             res = intersect_unionall_(t, u, e, R, param, &vb);
         }
     }
     if (res != jl_bottom_type && vb.constraintkind == 1 && vb.widened_to_kind == 1) {
         // a `Type` was widened to a non-concrete kind union during intersection
-        if (vb.occurs_cov > 1) {
+        if (cov_count(&vb) > 1) {
             // diagonal: reintersect if able to narrow across positions to a leaf bound
             // otherwise use original (possibly non-precise) bound
             if (is_leaf_bound(vb.ub)) {
                 restore_env(e, &se, 1);
                 vb.lb = vb.var->lb;
-                vb.occurs_cov = vb.occurs_inv = 0;
+                vb.occurs_cov = vb.occurs_inv = vb.cov_diag = 0;
                 res = intersect_unionall_(t, u, e, R, param, &vb);
             }
         }
@@ -3808,7 +3892,7 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
             vb.ub = vb.var->ub;
             vb.constraintkind = 0;
             vb.widened_to_kind = 0;
-            vb.occurs_cov = vb.occurs_inv = 0;
+            vb.occurs_cov = vb.occurs_inv = vb.cov_diag = 0;
             res = intersect_unionall_(t, u, e, R, param, &vb);
         }
     }
@@ -4622,15 +4706,17 @@ static int merge_env(jl_stenv_t *e, jl_savedenv_t *me, jl_savedenv_t *se, int co
             else
                 merged[n+2] = b2;
         }
-        // merge occurs_inv/cov by max (never decrease)
+        // merge occurs_inv/cov/cov_diag by max (never decrease)
         if (v->occurs_inv > me->buf[m])
             me->buf[m] = v->occurs_inv;
         if (v->occurs_cov > me->buf[m+1])
             me->buf[m+1] = v->occurs_cov;
+        if (v->cov_diag > me->buf[m+2])
+            me->buf[m+2] = v->cov_diag;
         // merge max_offset by min
-        if (!v->intersected && v->max_offset < me->buf[m+2])
-            me->buf[m+2] = v->max_offset;
-        m = m + 3;
+        if (!v->intersected && v->max_offset < me->buf[m+3])
+            me->buf[m+3] = v->max_offset;
+        m = m + JL_SAVEDENV_BYTES_PER_VAR;
         n = n + 3;
         v = v->prev;
     }
@@ -5006,23 +5092,33 @@ static void check_diagonal(jl_value_t *t, jl_varbinding_t *troot, jl_param_pos_t
         jl_varbinding_t *v;
         for (v = troot; v != NULL; v = v->prev)
             len++;
-        int8_t *occurs = (int8_t *)alloca(len);
-        for (v = troot, i = 0; v != NULL; v = v->prev, i++)
-            occurs[i] = v->occurs_inv | (v->occurs_cov << 2);
+        // 3 bytes per var: [occurs_inv, occurs_cov, cov_diag].
+        int8_t *occurs = (int8_t *)alloca(len * 3);
+        for (v = troot, i = 0; v != NULL; v = v->prev, i++) {
+            occurs[i*3]   = v->occurs_inv;
+            occurs[i*3+1] = v->occurs_cov;
+            occurs[i*3+2] = v->cov_diag;
+        }
         check_diagonal(((jl_uniontype_t *)t)->a, troot, param);
         for (v = troot, i = 0; v != NULL; v = v->prev, i++) {
-            int8_t occurs_inv = occurs[i] & 3;
-            int8_t occurs_cov = occurs[i] >> 2;
-            occurs[i] = v->occurs_inv | (v->occurs_cov << 2);
-            v->occurs_inv = occurs_inv;
-            v->occurs_cov = occurs_cov;
+            int8_t a_inv = v->occurs_inv;
+            int8_t a_cov = v->occurs_cov;
+            int8_t a_diag = v->cov_diag;
+            v->occurs_inv = occurs[i*3];
+            v->occurs_cov = occurs[i*3+1];
+            v->cov_diag   = occurs[i*3+2];
+            occurs[i*3]   = a_inv;
+            occurs[i*3+1] = a_cov;
+            occurs[i*3+2] = a_diag;
         }
         check_diagonal(((jl_uniontype_t *)t)->b, troot, param);
         for (v = troot, i = 0; v != NULL; v = v->prev, i++) {
-            if (v->occurs_inv < (occurs[i] & 3))
-                v->occurs_inv = occurs[i] & 3;
-            if (v->occurs_cov < (occurs[i] >> 2))
-                v->occurs_cov = occurs[i] >> 2;
+            if (v->occurs_inv < occurs[i*3])
+                v->occurs_inv = occurs[i*3];
+            if (v->occurs_cov < occurs[i*3+1])
+                v->occurs_cov = occurs[i*3+1];
+            if (v->cov_diag  < occurs[i*3+2])
+                v->cov_diag  = occurs[i*3+2];
         }
     }
     else if (jl_is_unionall(t)) {
@@ -5075,7 +5171,7 @@ static jl_value_t *insert_nondiagonal(jl_value_t *type, jl_varbinding_t *troot, 
         jl_varbinding_t *v = troot;
         for (; v != NULL; v = v->prev) {
             if (v->occurs_inv == 0 &&
-                v->occurs_cov > concretekind &&
+                cov_count(v) > concretekind &&
                 v->var == (jl_tvar_t *)type)
                 break;
         }
@@ -5174,7 +5270,7 @@ static jl_value_t *_widen_diagonal(jl_value_t *t, jl_varbinding_t *troot) {
     check_diagonal(t, troot, PARAM_NONE);
     int any_concrete = 0;
     for (jl_varbinding_t *v = troot; v != NULL; v = v->prev)
-        any_concrete |= v->occurs_cov > 1 && v->occurs_inv == 0;
+        any_concrete |= cov_count(v) > 1 && v->occurs_inv == 0;
     if (!any_concrete)
         return t; // no diagonal
     return insert_nondiagonal(t, troot, 0);
@@ -5182,7 +5278,7 @@ static jl_value_t *_widen_diagonal(jl_value_t *t, jl_varbinding_t *troot) {
 
 static jl_value_t *widen_diagonal(jl_value_t *t, jl_unionall_t *u, jl_varbinding_t *troot)
 {
-    jl_varbinding_t vb = { u->var, NULL, NULL, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, NULL, troot };
+    jl_varbinding_t vb = { u->var, NULL, NULL, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, NULL, troot };
     jl_value_t *nt = NULL;
     JL_GC_PUSH2(&vb.innervars, &nt);
     if (jl_is_unionall(u->body))
