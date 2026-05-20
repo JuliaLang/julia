@@ -62,7 +62,7 @@ void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
     // optimization does not apply so we can only check whether the parent
     // is already in the relevant remset or not.
     auto parInImage = builder.CreateAnd(parTag, ConstantInt::get(T_size, GC_IN_IMAGE | GC_IN_IMAGE_REMSET), "parent_in_image");
-    auto parIsImage = builder.CreateICmpEQ(parInImage, ConstantInt::get(T_size, GC_IN_IMAGE), "parent_is_image");
+    auto parIsImage = builder.CreateICmpEQ(parInImage, ConstantInt::get(T_size, GC_IN_IMAGE_NOT_REMSET), "parent_is_image");
     Value *anyChldNotMarked = NULL;
     for (unsigned i = 1; i < target->arg_size(); i++) {
         Value *child = target->getArgOperand(i);
