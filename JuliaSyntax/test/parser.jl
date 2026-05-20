@@ -370,7 +370,7 @@ tests = [
         # When @foo is on the RHS of a binary op, it does not eat newline args;
         # y becomes an unexpected token (error) since it has no comma before it.
         "(1 + @foo x\n y)"                         => "(parens (call-i 1 + (macrocall (macro_name foo) x)) (error-t y))"
-        # The main regression: (1 + @foo x\n + 2) must parse as (+ 1 (@foo x) 2)
+        # For backwards compatibility (1 + @foo x\n + 2) must parse as (+ 1 (@foo x) 2)
         "(1 + @foo x\n + 2)"                        => "(parens (call-i 1 + (macrocall (macro_name foo) x) 2))"
         "(1 +\n @foo x\n + 2)"                      => "(parens (call-i 1 + (macrocall (macro_name foo) x) 2))"
         "(@foo function bar()\n @baz \n x \n end)" => "(parens (macrocall (macro_name foo) (function (call bar) (block (macrocall (macro_name baz)) x))))"
