@@ -2077,13 +2077,9 @@ static void jl_read_arraylist(ios_t *s, arraylist_t *list)
 }
 
 // Persistent set of image objects that reference non-image objects.
-// Processed as additional GC roots at the start of each full mark phase.
-// Maintained incrementally by jl_gc_queue_root when image objects are mutated.
-// Note: cross-heap refs created during pkgimage uniquing (types, method instances,
-// bindings) don't need tracking here because the uniqued objects are always rooted
-// through type caches, method specializations, or module binding tables.
-htable_t image_remset;
-arraylist_t image_remset_list;
+// Used to track GC reachability for mutable objects in the images,
+// treating them as a third, "permanent" GC generation.
+arraylist_t image_remset;
 jl_mutex_t image_remset_lock;
 
 // jl_write_value and jl_read_value are used for storing Julia objects that are adjuncts to

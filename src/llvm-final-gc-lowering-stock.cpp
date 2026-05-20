@@ -58,10 +58,11 @@ void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
     auto mayTrigTerm = SplitBlockAndInsertIfThen(parOldMarked, target, false);
     builder.SetInsertPoint(mayTrigTerm);
     mayTrigTerm->getParent()->setName("may_trigger_wb");
-    // Image parents are never fully traced by the mark phase, so we must
-    // always trigger the write barrier regardless of the child's mark bits.
-    auto parInImage = builder.CreateAnd(parTag, ConstantInt::get(T_size, GC_IN_IMAGE), "parent_in_image");
-    auto parIsImage = builder.CreateICmpNE(parInImage, ConstantInt::get(T_size, 0), "parent_is_image");
+    // At every generational boundary above the youngest, the "child marked"
+    // optimization does not apply so we can only check whether the parent
+    // is already in the relevant remset or not.
+    auto parInImage = builder.CreateAnd(parTag, ConstantInt::get(T_size, GC_IN_IMAGE | GC_IN_IMAGE_REMSET), "parent_in_image");
+    auto parIsImage = builder.CreateICmpEQ(parInImage, ConstantInt::get(T_size, GC_IN_IMAGE), "parent_is_image");
     Value *anyChldNotMarked = NULL;
     for (unsigned i = 1; i < target->arg_size(); i++) {
         Value *child = target->getArgOperand(i);

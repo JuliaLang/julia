@@ -1502,19 +1502,15 @@ JL_DLLEXPORT void jl_gc_queue_root(const jl_value_t *ptr)
     if (header & GC_OLD) { // write barrier has not been triggered in this object yet
         arraylist_push(&ptls->gc_tls.heap.remset, (jl_value_t*)ptr);
         ptls->gc_tls.heap.remset_nptr++; // conservative
-        // Permanently-marked image objects that are mutated need to be
-        // persistently tracked, since they would otherwise be skipped
-        // during the mark phase. The image_remset is append-only, so
-        // this object will be re-scanned every GC cycle hereafter.
-        // Deduplication via image_remset prevents unbounded growth
-        // from repeated mutations of the same image object.
-        if (__unlikely(o->bits.in_image)) {
-            JL_LOCK_NOGC(&image_remset_lock);
-            if (ptrhash_get(&image_remset, (void*)ptr) == HT_NOTFOUND) {
-                ptrhash_put(&image_remset, (void*)ptr, (void*)ptr);
-                arraylist_push(&image_remset_list, (void*)ptr);
+        // Image objects are analogous to a third "permanent" GC
+        // generation, so here we maintain the remset for them.
+        if (__unlikely((header & GC_IN_IMAGE) && !(header & GC_IN_IMAGE_REMSET))) {
+            header = jl_atomic_fetch_or_relaxed((_Atomic(uintptr_t) *)&o->header, GC_IN_IMAGE_REMSET);
+            if (!(header & GC_IN_IMAGE_REMSET)) {
+                JL_LOCK_NOGC(&image_remset_lock);
+                arraylist_push(&image_remset, (void*)ptr);
+                JL_UNLOCK_NOGC(&image_remset_lock);
             }
-            JL_UNLOCK_NOGC(&image_remset_lock);
         }
     }
 }
@@ -2842,17 +2838,12 @@ static void gc_queue_remset(jl_gc_markqueue_t *mq, jl_ptls_t ptls2) JL_NOTSAFEPO
     ptls2->gc_tls.heap.remset_nptr = 0;
 }
 
-// Queue image objects with cross-heap references for marking.
-// These are persistent (never cleared) so that image objects that reference
-// non-image objects are always re-scanned, even though the image objects
-// themselves are permanently marked and would otherwise be skipped.
 static void gc_queue_image_remset(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 {
-    size_t len = image_remset_list.len;
-    void **items = image_remset_list.items;
+    size_t len = image_remset.len;
+    void **items = image_remset.items;
     for (size_t i = 0; i < len; i++) {
         void *_v = items[i];
-        jl_astaggedvalue(_v)->bits.gc = GC_OLD_MARKED;
         jl_value_t *v = (jl_value_t *)((uintptr_t)_v | GC_REMSET_PTR_TAG);
         gc_ptr_queue_push(mq, v);
     }
@@ -3117,10 +3108,8 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
             }
         }
         gc_check_all_remsets_are_empty();
-        // 1.4. queue image objects with cross-heap references.
-        // Only needed after a full sweep (which clears non-image objects'
-        // mark bits). After quick sweeps, old objects retain their marks,
-        // so children of image_remset entries survive without re-tracing.
+        // 1.4. in a full sweep, enqueue image remset
+        // (image objects are a third, "permanent" GC generation)
         if (prev_sweep_full)
             gc_queue_image_remset(mq);
 
@@ -3773,8 +3762,7 @@ void jl_gc_init(void)
     JL_MUTEX_INIT(&heapsnapshot_lock, "heapsnapshot_lock");
     JL_MUTEX_INIT(&finalizers_lock, "finalizers_lock");
     JL_MUTEX_INIT(&image_remset_lock, "image_remset_lock");
-    htable_new(&image_remset, 0);
-    arraylist_new(&image_remset_list, 0);
+    arraylist_new(&image_remset, 0);
     uv_mutex_init(&page_profile_lock);
     uv_mutex_init(&gc_perm_lock);
     uv_mutex_init(&gc_pages_lock);
