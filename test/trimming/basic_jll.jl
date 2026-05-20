@@ -1,5 +1,5 @@
 using Libdl
-using Zstd_jll # Note this uses the vendored older non-LazyLibrary version of Zstd_jll
+using Zstd_jll
 
 # JLL usage at build-time should function as expected
 Zstd_jll.__init__()
