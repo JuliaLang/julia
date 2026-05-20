@@ -293,10 +293,19 @@ function serialize(s::AbstractSerializer, x::Symbol)
     nothing
 end
 
-@generated function _bitsunion_tag(::T, ::Type{V}) where {T,V}
-    idx = findfirst(==(T), Base.uniontypes(V))
-    idx === nothing && return :(error("type ", $T, " is not a component of ", $V))
-    return :(UInt8($(idx - 1)))
+_bitsunion_tag(::T, ::Type{Ts}) where {T,Ts} = _bitsunion_tag(T, Ts, Val(fieldcount(Ts)))
+_bitsunion_tag(::Type{T}, ::Type{Ts}, ::Val{0}) where {T,Ts} = error("type ", T, " is not a serialized bits-union component")
+
+function _bitsunion_tag(::Type{T}, ::Type{Ts}, ::Val{N}) where {T,Ts,N}
+    T === fieldtype(Ts, N) && return UInt8(N - 1)
+    return _bitsunion_tag(T, Ts, Val(N - 1))
+end
+
+function _bitsunion_tags!(tag_buf::Vector{UInt8}, a, ::Type{Ts}) where {Ts}
+    @inbounds for i in 1:length(a)
+        tag_buf[i] = _bitsunion_tag(a[i], Ts)
+    end
+    return tag_buf
 end
 
 function _serialize_bitsunion_array(s::AbstractSerializer, a)
@@ -308,7 +317,7 @@ function _serialize_bitsunion_array(s::AbstractSerializer, a)
     n = length(a)
     GC.@preserve a unsafe_write(s.io, Ptr{UInt8}(pointer(a)), UInt(n * elsz))
     tag_buf = Vector{UInt8}(undef, n)
-    map!(x -> _bitsunion_tag(x, U), tag_buf, a)
+    _bitsunion_tags!(tag_buf, a, Tuple{types...})
     write(s.io, tag_buf)
 end
 
@@ -1472,24 +1481,29 @@ function _deserialize_bitsunion_dynamic!(a, tags::Vector{UInt8}, src, src_stride
     nothing
 end
 
-@generated function _deserialize_bitsunion_ifelse!(a::AbstractArray{U}, tags::Vector{UInt8}, n::Int, elsz::Int) where {U}
-    types = Base.uniontypes(U)
-    length(types) > 32 && return :(error("unreachable"))
-    switch = :(error("invalid bits-union tag byte ", tag, " for eltype ", $U))
-    for (k, T) in Iterators.reverse(Iterators.enumerate(types))
-        tag_val = UInt8(k - 1)
-        body = sizeof(T) == 0 ?
-            :(a[i] = $(T.instance)) :
-            :(a[i] = GC.@preserve a unsafe_load(Ptr{$T}(pointer(a) + (i-1) * elsz)))
-        switch = Expr(:elseif, :(tag == $tag_val), body, switch)
+function _deserialize_bitsunion_ifelse!(a::AbstractArray, tags::Vector{UInt8}, n::Int, elsz::Int, ::Type{Ts}) where {Ts}
+    @inbounds for i in 1:n
+        tag = tags[i]
+        _deserialize_bitsunion_ifelse!(a, tag, i, elsz, Ts, Val(fieldcount(Ts)))
     end
-    switch = Expr(:if, switch.args...)
-    quote
-        @inbounds for i in 1:n
-            tag = tags[i]
-            $switch
+    return nothing
+end
+
+_deserialize_bitsunion_ifelse!(a::AbstractArray, tag::UInt8, i::Int, elsz::Int, ::Type{Ts}, ::Val{0}) where {Ts} =
+    error("invalid bits-union tag byte ", tag, " for eltype ", eltype(a))
+
+function _deserialize_bitsunion_ifelse!(a::AbstractArray, tag::UInt8, i::Int, elsz::Int, ::Type{Ts}, ::Val{N}) where {Ts,N}
+    if tag == UInt8(N - 1)
+        T = fieldtype(Ts, N)
+        if sizeof(T) == 0
+            a[i] = T.instance
+        else
+            a[i] = GC.@preserve a unsafe_load(Ptr{T}(pointer(a) + (i-1) * elsz))
         end
+    else
+        _deserialize_bitsunion_ifelse!(a, tag, i, elsz, Ts, Val(N - 1))
     end
+    return nothing
 end
 
 function _deserialize_bitsunion_array!(s::AbstractSerializer, a::AbstractArray{U}) where {U}
@@ -1503,7 +1517,7 @@ function _deserialize_bitsunion_array!(s::AbstractSerializer, a::AbstractArray{U
         tags = Vector{UInt8}(undef, n)
         read!(s.io, tags)
         if types_read == types_local && length(types_local) <= 32
-            _deserialize_bitsunion_ifelse!(a, tags, n, elsz)
+            _deserialize_bitsunion_ifelse!(a, tags, n, elsz, Tuple{types_local...})
         else
             _deserialize_bitsunion_dynamic!(a, tags, a, elsz, n, types_read)
         end
