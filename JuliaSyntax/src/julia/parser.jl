@@ -33,7 +33,7 @@ end
 function ParseState(ps::ParseState; range_colon_enabled=nothing,
                     space_sensitive=nothing, for_generator=nothing,
                     end_symbol=nothing, whitespace_newline=nothing,
-                    where_enabled=nothing, macro_whitespace_newline=nothing)
+                    where_enabled=nothing, macro_whitespace_newline=false)
     ParseState(ps.stream,
         range_colon_enabled === nothing ? ps.range_colon_enabled : range_colon_enabled,
         space_sensitive === nothing ? ps.space_sensitive : space_sensitive,
@@ -41,7 +41,7 @@ function ParseState(ps::ParseState; range_colon_enabled=nothing,
         end_symbol === nothing ? ps.end_symbol : end_symbol,
         whitespace_newline === nothing ? ps.whitespace_newline : whitespace_newline,
         where_enabled === nothing ? ps.where_enabled : where_enabled,
-        macro_whitespace_newline === nothing ? ps.macro_whitespace_newline : macro_whitespace_newline)
+        macro_whitespace_newline)
 end
 
 # Functions to change parse state
@@ -60,7 +60,8 @@ end
 function with_space_sensitive(ps::ParseState)
     ParseState(ps,
                space_sensitive=true,
-               whitespace_newline=false)
+               whitespace_newline=false,
+               macro_whitespace_newline=ps.macro_whitespace_newline)
 end
 
 # Convenient wrappers for ParseStream
@@ -381,7 +382,7 @@ function parse_LtoR(ps::ParseState, down, is_op)
         is_op(tk) || break
         isdot && bump(ps, TRIVIA_FLAG) # TODO: NOTATION_FLAG
         bump(ps, remap_kind=K"Identifier")
-        down(ps)
+        down(ParseState(ps))
         emit(ps, mark, isdot ? K"dotcall" : K"call", INFIX_FLAG)
     end
 end
@@ -396,7 +397,7 @@ function parse_RtoL(ps::ParseState, down, is_op, self)
     isdot, tk = peek_dotted_op_token(ps)
     if is_op(tk)
         bump_dotted(ps, isdot, remap_kind=K"Identifier")
-        self(ps)
+        self(ParseState(ps))
         emit(ps, mark, isdot ? K"dotcall" : K"call", INFIX_FLAG)
     end
 end
@@ -624,7 +625,7 @@ function parse_assignment_with_initial_ex(ps::ParseState, mark, down::T) where {
         # [a~b]      ==>  (vect (call-i a ~ b))
         bump_dotted(ps, isdot, remap_kind=K"Identifier")
         bump_trivia(ps)
-        parse_assignment(ps, down)
+        parse_assignment(ParseState(ps), down)
         emit(ps, mark, isdot ? K"dotcall" : K"call", INFIX_FLAG)
     else
         # f() = 1  ==>  (function-= (call f) 1)
@@ -646,7 +647,7 @@ function parse_assignment_with_initial_ex(ps::ParseState, mark, down::T) where {
         bump_trivia(ps)
         # Syntax Edition TODO: We'd like to call `down` here when
         # is_short_form_func is true, to prevent `f() = 1 = 2` from parsing.
-        parse_assignment(ps, down)
+        parse_assignment(ParseState(ps), down)
         emit(ps, mark,
              is_short_form_func ? K"function" : (isdot ? dotted(k) : k),
              is_short_form_func ? SHORT_FORM_FUNCTION_FLAG : flags(t))
@@ -744,7 +745,7 @@ function parse_cond(ps::ParseState)
     else
         # A[x ? y : end] ==> (ref A (? x y end))
     end
-    parse_eq_star(ps)
+    parse_eq_star(ParseState(ps))
     emit(ps, mark, K"?")
 end
 
@@ -760,7 +761,7 @@ function parse_arrow(ps::ParseState)
         if kind(t) == K"-->" && !isdot && !is_suffixed(t)
             # x --> y   ==>  (--> x y)           # The only syntactic arrow
             bump(ps, TRIVIA_FLAG)
-            parse_arrow(ps)
+            parse_arrow(ParseState(ps))
             emit(ps, mark, k, flags(t))
         else
             # x → y     ==>  (call-i x → y)
@@ -768,7 +769,7 @@ function parse_arrow(ps::ParseState)
             # x .--> y  ==>  (dotcall-i x --> y)
             # x -->₁ y  ==>  (call-i x -->₁ y)
             bump_dotted(ps, isdot, remap_kind=K"Identifier")
-            parse_arrow(ps)
+            parse_arrow(ParseState(ps))
             emit(ps, mark, isdot ? K"dotcall" : K"call", INFIX_FLAG)
         end
     end
@@ -796,7 +797,7 @@ function parse_lazy_cond(ps::ParseState, down, is_op, self)
     k = kind(t)
     if is_op(k)
         bump_dotted(ps, isdot, TRIVIA_FLAG)
-        self(ps)
+        self(ParseState(ps))
         emit(ps, mark, isdot ? dotted(k) : k, flags(t))
         if isdot
             min_supported_version(v"1.7", ps, mark, "dotted operators `.||` and `.&&`")
@@ -844,7 +845,7 @@ function parse_comparison(ps::ParseState, subtype_comparison=false)
         n_comparisons += 1
         op_dotted = isdot
         op_pos = bump_dotted(ps, isdot, emit_dot_node=true, remap_kind=K"Identifier")
-        parse_pipe_lt(ps)
+        parse_pipe_lt(ParseState(ps))
     end
     if n_comparisons == 1
         if is_type_operator(initial_tok, initial_dot)
@@ -1031,11 +1032,11 @@ function parse_with_chains(ps::ParseState, down, is_op, chain_ops)
             break
         end
         bump_dotted(ps, isdot, remap_kind=K"Identifier")
-        down(ps)
+        down(ParseState(ps))
         if kind(t) in chain_ops && !is_suffixed(t) && !isdot
             # a + b + c    ==>  (call-i a + b c)
             # a + b .+ c   ==>  (dotcall-i (call-i a + b) + c)
-            parse_chain(ps, down, kind(t))
+            parse_chain(ParseState(ps), down, kind(t))
         end
         # a +₁ b +₁ c  ==>  (call-i (call-i a +₁ b) +₁ c)
         # a .+ b .+ c  ==>  (dotcall-i (dotcall-i a + b) + c)
@@ -1059,7 +1060,7 @@ function parse_chain(ps::ParseState, down, op_kind)
             break
         end
         bump(ps, TRIVIA_FLAG)
-        down(ps)
+        down(ParseState(ps))
     end
 end
 
@@ -1129,7 +1130,7 @@ function parse_where_chain(ps0::ParseState, mark)
             # x where T     ==>  (where x T)
             # x where \n T  ==>  (where x T)
             # x where T<:S  ==>  (where x (<: T S))
-            parse_comparison(ps)
+            parse_comparison(ParseState(ps))
             emit(ps, mark, K"where")
         end
     end
@@ -1432,7 +1433,7 @@ function parse_decl_with_initial_ex(ps::ParseState, mark)
     while peek(ps) == K"::"
         # a::b::c   ==>   (::-i (::-i a b) c)
         bump(ps, TRIVIA_FLAG)
-        parse_where(ps, parse_call)
+        parse_where(ParseState(ps), parse_call)
         emit(ps, mark, K"::", INFIX_FLAG)
     end
     if peek(ps) == K"->"
@@ -1453,7 +1454,7 @@ function parse_decl_with_initial_ex(ps::ParseState, mark)
         end
         bump(ps, TRIVIA_FLAG)
         # -> is unusual: it binds tightly on the left and loosely on the right.
-        parse_eq_star(ps)
+        parse_eq_star(ParseState(ps))
         emit(ps, mark, K"->")
     end
 end
@@ -2864,7 +2865,7 @@ function parse_space_separated_exprs(ps::ParseState)
         # Disable macro_whitespace_newline for sub-expressions so that only the
         # outermost macro in a parenthesized context eats newline-separated args.
         # E.g. in (@foo @bar x y\nz), z should be an arg of @foo not @bar.
-        parse_eq(ParseState(ps, macro_whitespace_newline=false))
+        parse_eq(ParseState(ps))
         n_sep += 1
     end
     return n_sep
