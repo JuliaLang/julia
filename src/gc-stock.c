@@ -2971,6 +2971,9 @@ JL_DLLEXPORT jl_gc_num_t jl_gc_num(void)
 {
     jl_gc_num_t num = gc_num;
     combine_thread_gc_counts(&num, 0);
+    JL_LOCK_NOGC(&image_remset_lock);
+    num.image_remset_size = image_remset.len;
+    JL_UNLOCK_NOGC(&image_remset_lock);
     return num;
 }
 
