@@ -89,7 +89,7 @@ memoryindex(ref::GenericMemoryRef) = memoryrefoffset(ref)
 pointer(mem::GenericMemoryRef) = unsafe_convert(Ptr{Cvoid}, mem) # no bounds check, even for empty array
 
 _unsetindex!(A::Memory, i::Int) = (@_propagate_inbounds_meta; _unsetindex!(memoryref(A, i)); A)
-_unsetindex!(A::MemoryRef) = (@_propagate_inbounds_meta; Core.memoryrefunset!(A, default_access_order(A.mem), @_boundscheck); A)
+_unsetindex!(A::MemoryRef) = (@_propagate_inbounds_meta; Core.memoryrefunset!(A, :not_atomic, @_boundscheck); A)
 
 elsize(@nospecialize _::Type{A}) where {T,A<:GenericMemory{<:Any,T}} = aligned_sizeof(T) # XXX: probably supposed to be the stride?
 sizeof(a::GenericMemory) = Core.sizeof(a)
