@@ -2982,7 +2982,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             ctx.builder.CreateCondBr(Success, BB, DoneBB);
             ctx.builder.SetInsertPoint(BB);
         }
-        else if (r) {
+        if (r) {
             if (realelty != elty)
                 r = ctx.builder.Insert(CastInst::Create(Instruction::Trunc, r, realelty));
             if (intcast) {
