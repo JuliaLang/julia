@@ -723,6 +723,8 @@ function iscall_with_boundscheck(@nospecialize(stmt), sv::PostOptAnalysisState)
         nargs = 4
     elseif f === memoryrefset!
         nargs = 5
+    elseif f === memoryrefunset!
+        nargs = 4
     else
         return false
     end
@@ -1408,6 +1410,9 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
                 atyp = argextype(ex.args[2], src, sptypes)
                 return isknowntype(atyp) ? 1 : params.inline_nonleaf_penalty
             elseif f === Core.memoryrefset! && length(ex.args) >= 3
+                atyp = argextype(ex.args[2], src, sptypes)
+                return isknowntype(atyp) ? 5 : params.inline_nonleaf_penalty
+            elseif f === Core.memoryrefunset! && length(ex.args) >= 3
                 atyp = argextype(ex.args[2], src, sptypes)
                 return isknowntype(atyp) ? 5 : params.inline_nonleaf_penalty
             elseif f === typeassert && isconstType(widenconst(argextype(ex.args[3], src, sptypes)))

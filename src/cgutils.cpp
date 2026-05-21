@@ -39,6 +39,7 @@ STATISTIC(EmittedDeferSignal, "Number of deferred signals emitted");
 
 // Enum to represent field operation types, replacing multiple boolean parameters
 enum class StoreKind {
+    Unset,       // unsetfield!/unsetglobal!/memoryrefunset!
     Set,         // setfield!/setglobal!/memoryrefset!
     Swap,        // swapfield!/swapglobal!/memoryrefswap!
     Replace,     // replacefield!/replaceglobal!/memoryrefreplace!
@@ -48,6 +49,7 @@ enum class StoreKind {
 
 static const char *store_kind_name(StoreKind op, const char *suffix) {
     switch (op) {
+    case StoreKind::Unset:   return suffix[0] == 'g' ? "unsetglobal!" : suffix[0] == 'm' ? "memoryrefunset!" : "unsetfield!";
     case StoreKind::Set:     return suffix[0] == 'g' ? "setglobal!" : suffix[0] == 'm' ? "memoryrefset!" : "setfield!";
     case StoreKind::Swap:    return suffix[0] == 'g' ? "swapglobal!" : suffix[0] == 'm' ? "memoryrefswap!" : "swapfield!";
     case StoreKind::Replace: return suffix[0] == 'g' ? "replaceglobal!" : suffix[0] == 'm' ? "memoryrefreplace!" : "replacefield!";
@@ -2574,6 +2576,9 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             if (isStrongerThanMonotonic(Order))
                 ctx.builder.CreateFence(Order);
             switch (op) {
+            case StoreKind::Unset:
+                assert(false && "Unset should not go through typed_store");
+                jl_unreachable();
             case StoreKind::Set:
                 return rhs;
             case StoreKind::Replace: {
@@ -2977,7 +2982,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             ctx.builder.CreateCondBr(Success, BB, DoneBB);
             ctx.builder.SetInsertPoint(BB);
         }
-        if (r) {
+        else if (r) {
             if (realelty != elty)
                 r = ctx.builder.Insert(CastInst::Create(Instruction::Trunc, r, realelty));
             if (intcast) {
@@ -3015,7 +3020,10 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         oldval = mark_julia_type(ctx, Success, false, jl_bool_type);
         break;
     case StoreKind::Set:
-        break; // oldval already set
+        break; // oldval already set to rhs
+    case StoreKind::Unset:
+        assert(false && "Unset should not go through typed_store");
+        jl_unreachable();;
     case StoreKind::Swap:
     case StoreKind::Replace:
         if (!is_union) {
