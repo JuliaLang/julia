@@ -869,6 +869,42 @@ static void pop_consistency_scope(jl_stenv_t *e, const int8_t *saved, int nsaved
     }
 }
 
+// When expanding a universal variable's declared upper/lower bound during
+// `var_lt` / `var_gt`, occurrences contributed by the expanded bound (which
+// can only mention forall-side vars) must not combine with occurrences in the
+// enclosing tuple body. We push a separate evidence frame for forall vars
+// only: their counts are reset before the recursive subtype call and folded
+// into `cov_diag` afterward, while exists-side vars continue accumulating in
+// the current scope (their occurrences in the call's right-hand structure are
+// still part of the surrounding pattern).
+static int push_forall_bound_scope(jl_stenv_t *e, int8_t *saved) JL_NOTSAFEPOINT
+{
+    jl_varbinding_t *v = e->vars;
+    int i = 0;
+    while (v != NULL) {
+        saved[i++] = v->occurs_cov;
+        if (!v->existential)
+            v->occurs_cov = 0;
+        v = v->prev;
+    }
+    return i;
+}
+
+static void pop_forall_bound_scope(jl_stenv_t *e, const int8_t *saved, int nsaved) JL_NOTSAFEPOINT
+{
+    jl_varbinding_t *v = e->vars;
+    int i = 0;
+    while (v != NULL && i < nsaved) {
+        if (!v->existential) {
+            if (v->occurs_cov > v->cov_diag)
+                v->cov_diag = v->occurs_cov;
+            v->occurs_cov = saved[i];
+        }
+        i++;
+        v = v->prev;
+    }
+}
+
 // is var x's quantifier outside y's in nesting order
 static int var_outside(jl_stenv_t *e, jl_tvar_t *x, jl_tvar_t *y)
 {
@@ -896,8 +932,16 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t par
     if (e->Loffset != 0 && !jl_is_typevar(a) &&
         a != jl_bottom_type && a != (jl_value_t *)jl_any_type)
         return 0;
-    if (!bb->existential)  // check ∀b . b<:a
-        return subtype_left_var(bb->ub, a, e, param);
+    if (!bb->existential) {  // check ∀b . b<:a
+        // The expanded bound `bb->ub` lives in the forall-side context;
+        // its covariant typevar occurrences must not combine with the
+        // surrounding tuple body's occurrences.
+        int8_t *saved_fb = (int8_t*)alloca(current_env_length(e));
+        int nsaved_fb = push_forall_bound_scope(e, saved_fb);
+        int sub = subtype_left_var(bb->ub, a, e, param);
+        pop_forall_bound_scope(e, saved_fb, nsaved_fb);
+        return sub;
+    }
     if (bb->ub == a)
         return 1;
     if (!((bb->lb == jl_bottom_type && !jl_is_type(a) && !jl_is_typevar(a)) || subtype_ccheck(bb->lb, a, e)))
@@ -937,8 +981,15 @@ static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t par
     if (e->Loffset != 0 && !jl_is_typevar(a) &&
         a != jl_bottom_type && a != (jl_value_t *)jl_any_type)
         return 0;
-    if (!bb->existential)  // check ∀b . b>:a
-        return subtype_left_var(a, bb->lb, e, param);
+    if (!bb->existential) {  // check ∀b . b>:a
+        // Symmetric to var_lt: scope forall-side occurrences from the expanded
+        // lower bound away from the enclosing tuple body.
+        int8_t *saved_fb = (int8_t*)alloca(current_env_length(e));
+        int nsaved_fb = push_forall_bound_scope(e, saved_fb);
+        int sub = subtype_left_var(a, bb->lb, e, param);
+        pop_forall_bound_scope(e, saved_fb, nsaved_fb);
+        return sub;
+    }
     if (bb->lb == a)
         return 1;
     if (!((bb->ub == (jl_value_t*)jl_any_type && !jl_is_type(a) && !jl_is_typevar(a)) || subtype_ccheck(a, bb->ub, e)))
