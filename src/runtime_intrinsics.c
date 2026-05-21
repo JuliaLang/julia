@@ -1238,7 +1238,7 @@ static inline jl_value_t *jl_intrinsiclambda_checked(jl_value_t *ty, void *pa, v
     intrinsic_checked_t op = select_intrinsic_checked(sz2, (const intrinsic_checked_t*)voidlist);
     int ovflw = op(sz * host_char_bit, pa, pb, jl_data_ptr(newv));
 
-    char *ao = (char*)jl_data_ptr(newv) + sz;
+    char *ao = (char*)jl_data_ptr(newv) + jl_field_offset(tuptyp, 1);
     *ao = (char)ovflw;
     return newv;
 }
@@ -1346,21 +1346,21 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b, jl_value_t *c) 
 // arithmetic
 #define neg(a) -a
 #define neg_float(ty, pr, a) *pr = -a
-un_iintrinsic_fast(LLVMNeg, neg, neg_int, u)
+un_iintrinsic_fast(APInt_neg, neg, neg_int, u)
 #define add(a,b) a + b
-bi_iintrinsic_fast(LLVMAdd, add, add_int, u)
+bi_iintrinsic_fast(APInt_add, add, add_int, u)
 #define sub(a,b) a - b
-bi_iintrinsic_fast(LLVMSub, sub, sub_int, u)
+bi_iintrinsic_fast(APInt_sub, sub, sub_int, u)
 #define mul(a,b) a * b
-bi_iintrinsic_fast(LLVMMul, mul, mul_int, u)
+bi_iintrinsic_fast(APInt_mul, mul, mul_int, u)
 #define div(a,b) a / b
-bi_iintrinsic_fast(LLVMSDiv, div, sdiv_int,  )
-bi_iintrinsic_fast(LLVMUDiv, div, udiv_int, u)
+bi_iintrinsic_fast(APInt_sdiv, div, sdiv_int,  )
+bi_iintrinsic_fast(APInt_udiv, div, udiv_int, u)
 #define rem(a,b) a % b
-bi_iintrinsic_fast(LLVMSRem, rem, srem_int,  )
-bi_iintrinsic_fast(LLVMURem, rem, urem_int, u)
+bi_iintrinsic_fast(APInt_srem, rem, srem_int,  )
+bi_iintrinsic_fast(APInt_urem, rem, urem_int, u)
 #define smod(a,b) ((a < 0) == (b < 0)) ? a % b : (b + (a % b)) % b
-bi_iintrinsic_fast(jl_LLVMSMod, smod, smod_int,  )
+// smod_int was removed — it is not a Core.Intrinsic
 #define frem(a, b) \
     fp_select2(a, b, fmod)
 un_fintrinsic(neg_float,neg_float)
@@ -1520,15 +1520,15 @@ ter_fintrinsic(muladd,muladd_float)
 
 // same-type comparisons
 #define eq(a,b) a == b
-bool_iintrinsic_fast(LLVMICmpEQ, eq, eq_int, u)
+bool_iintrinsic_fast(APInt_eq, eq, eq_int, u)
 #define ne(a,b) a != b
-bool_iintrinsic_fast(LLVMICmpNE, ne, ne_int, u)
+bool_iintrinsic_fast(APInt_ne, ne, ne_int, u)
 #define lt(a,b) a < b
-bool_iintrinsic_fast(LLVMICmpSLT, lt, slt_int,  )
-bool_iintrinsic_fast(LLVMICmpULT, lt, ult_int, u)
+bool_iintrinsic_fast(APInt_slt, lt, slt_int,  )
+bool_iintrinsic_fast(APInt_ult, lt, ult_int, u)
 #define le(a,b) a <= b
-bool_iintrinsic_fast(LLVMICmpSLE, le, sle_int,  )
-bool_iintrinsic_fast(LLVMICmpULE, le, ule_int, u)
+bool_iintrinsic_fast(APInt_sle, le, sle_int,  )
+bool_iintrinsic_fast(APInt_ule, le, ule_int, u)
 
 typedef union {
     float f;
@@ -1561,40 +1561,40 @@ bool_fintrinsic(fpiseq,fpiseq)
 
 // bitwise operators
 #define and_op(a,b) a & b
-bi_iintrinsic_fast(LLVMAnd, and_op, and_int, u)
+bi_iintrinsic_fast(APInt_and, and_op, and_int, u)
 #define or_op(a,b) a | b
-bi_iintrinsic_fast(LLVMOr, or_op, or_int, u)
+bi_iintrinsic_fast(APInt_or, or_op, or_int, u)
 #define xor_op(a,b) a ^ b
-bi_iintrinsic_fast(LLVMXor, xor_op, xor_int, u)
+bi_iintrinsic_fast(APInt_xor, xor_op, xor_int, u)
 #define shl_op(a,b) b >= 8 * sizeof(a) ? 0 : a << b
-bi_iintrinsic_cnvtb_fast(LLVMShl, shl_op, shl_int, u, 1)
+bi_iintrinsic_cnvtb_fast(APInt_shl, shl_op, shl_int, u, 1)
 #define lshr_op(a,b) (b >= 8 * sizeof(a)) ? 0 : a >> b
-bi_iintrinsic_cnvtb_fast(LLVMLShr, lshr_op, lshr_int, u, 1)
+bi_iintrinsic_cnvtb_fast(APInt_lshr, lshr_op, lshr_int, u, 1)
 #define ashr_op(a,b) ((b < 0 || b >= 8 * sizeof(a)) ? a >> (8 * sizeof(a) - 1) : a >> b)
-bi_iintrinsic_cnvtb_fast(LLVMAShr, ashr_op, ashr_int, , 1)
+bi_iintrinsic_cnvtb_fast(APInt_ashr, ashr_op, ashr_int, , 1)
 //#define bswap_op(a) __builtin_bswap(a)
-//un_iintrinsic_fast(LLVMByteSwap, bswap_op, bswap_int, u)
-un_iintrinsic_slow(LLVMByteSwap, bswap_int, u)
+//un_iintrinsic_fast(APInt_bswap, bswap_op, bswap_int, u)
+un_iintrinsic_slow(APInt_bswap, bswap_int, u)
 //#define ctpop_op(a) __builtin_ctpop(a)
-//uu_iintrinsic_fast(LLVMPopcount, ctpop_op, ctpop_int, u)
-uu_iintrinsic_slow(LLVMPopcount, ctpop_int, u)
+//uu_iintrinsic_fast(APInt_popcount, ctpop_op, ctpop_int, u)
+uu_iintrinsic_slow(APInt_popcount, ctpop_int, u)
 //#define ctlz_op(a) __builtin_ctlz(a)
-//uu_iintrinsic_fast(LLVMCountl_zero, ctlz_op, ctlz_int, u)
-uu_iintrinsic_slow(LLVMCountl_zero, ctlz_int, u)
+//uu_iintrinsic_fast(APInt_countl_zero, ctlz_op, ctlz_int, u)
+uu_iintrinsic_slow(APInt_countl_zero, ctlz_int, u)
 //#define cttz_op(a) __builtin_cttz(a)
-//uu_iintrinsic_fast(LLVMCountr_zero, cttz_op, cttz_int, u)
-uu_iintrinsic_slow(LLVMCountr_zero, cttz_int, u)
+//uu_iintrinsic_fast(APInt_countr_zero, cttz_op, cttz_int, u)
+uu_iintrinsic_slow(APInt_countr_zero, cttz_int, u)
 #define not_op(a) ~a
-un_iintrinsic_fast(LLVMFlipAllBits, not_op, not_int, u)
+un_iintrinsic_fast(APInt_not, not_op, not_int, u)
 
 // conversions
-cvt_iintrinsic(LLVMTrunc, trunc_int)
-cvt_iintrinsic(LLVMSExt, sext_int)
-cvt_iintrinsic(LLVMZExt, zext_int)
-cvt_iintrinsic(LLVMSItoFP, sitofp)
-cvt_iintrinsic(LLVMUItoFP, uitofp)
-cvt_iintrinsic(LLVMFPtoSI, fptosi)
-cvt_iintrinsic(LLVMFPtoUI, fptoui)
+cvt_iintrinsic(APInt_trunc, trunc_int)
+cvt_iintrinsic(APInt_sext, sext_int)
+cvt_iintrinsic(APInt_zext, zext_int)
+cvt_iintrinsic(APInt_sitofp, sitofp)
+cvt_iintrinsic(APInt_uitofp, uitofp)
+cvt_iintrinsic(APInt_fptosi, fptosi)
+cvt_iintrinsic(APInt_fptoui, fptoui)
 
 #define fintrinsic_read_float16(p)   half_to_float(*(uint16_t *)p)
 #define fintrinsic_read_bfloat16(p)  bfloat_to_float(*(uint16_t *)p)
@@ -1685,31 +1685,31 @@ cvt_iintrinsic(fpext, fpext)
 #define check_sadd_int(t, a, b)                                         \
         /* this test checks for (b >= 0) ? (a + b > typemax) : (a + b < typemin) ==> overflow */ \
         (b >= 0) ? (a > sTYPEMAX(t) - b) : (a < sTYPEMIN(t) - b)
-checked_iintrinsic_fast(LLVMAdd_sov, check_sadd_int, add, checked_sadd_int,  )
+checked_iintrinsic_fast(APInt_add_sov, check_sadd_int, add, checked_sadd_int,  )
 #define check_uadd_int(t, a, b)                                       \
     /* this test checks for (a + b) > typemax(a) ==> overflow */      \
     a > uTYPEMAX(t) - b
-checked_iintrinsic_fast(LLVMAdd_uov, check_uadd_int, add, checked_uadd_int, u)
+checked_iintrinsic_fast(APInt_add_uov, check_uadd_int, add, checked_uadd_int, u)
 #define check_ssub_int(t, a, b)                                         \
     /* this test checks for (b >= 0) ? (a - b < typemin) : (a - b > typemax) ==> overflow */ \
     (b >= 0) ? (a < sTYPEMIN(t) + b) : (a > sTYPEMAX(t) + b)
-checked_iintrinsic_fast(LLVMSub_sov, check_ssub_int, sub, checked_ssub_int,  )
+checked_iintrinsic_fast(APInt_sub_sov, check_ssub_int, sub, checked_ssub_int,  )
 #define check_usub_int(t, a, b)                                   \
     /* this test checks for (a - b) < typemin ==> overflow */     \
     a < uTYPEMIN(t) + b
-checked_iintrinsic_fast(LLVMSub_uov, check_usub_int, sub, checked_usub_int, u)
-checked_iintrinsic_slow(LLVMMul_sov, checked_smul_int,  )
-checked_iintrinsic_slow(LLVMMul_uov, checked_umul_int, u)
+checked_iintrinsic_fast(APInt_sub_uov, check_usub_int, sub, checked_usub_int, u)
+checked_iintrinsic_slow(APInt_mul_sov, checked_smul_int,  )
+checked_iintrinsic_slow(APInt_mul_uov, checked_umul_int, u)
 
-checked_iintrinsic_div(LLVMDiv_sov, checked_sdiv_int,  )
-checked_iintrinsic_div(LLVMDiv_uov, checked_udiv_int, u)
-checked_iintrinsic_div(LLVMRem_sov, checked_srem_int,  )
-checked_iintrinsic_div(LLVMRem_uov, checked_urem_int, u)
+checked_iintrinsic_div(APInt_div_sov, checked_sdiv_int,  )
+checked_iintrinsic_div(APInt_div_uov, checked_udiv_int, u)
+checked_iintrinsic_div(APInt_rem_sov, checked_srem_int,  )
+checked_iintrinsic_div(APInt_rem_uov, checked_urem_int, u)
 
 // functions
 #define flipsign(a, b) \
         (b >= 0) ? a : -a
-bi_iintrinsic_fast(jl_LLVMFlipSign, flipsign, flipsign_int,  )
+bi_iintrinsic_fast(APInt_flipsign, flipsign, flipsign_int,  )
 #define abs_float(ty, pr, a)      *pr = fp_select(a, fabs)
 #define ceil_float(ty, pr, a)     *pr = fp_select(a, ceil)
 #define floor_float(ty, pr, a)    *pr = fp_select(a, floor)

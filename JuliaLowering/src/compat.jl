@@ -5,9 +5,10 @@ function find_kind(s::String)
     return isnothing(out) ? nothing : JS.Kind(out)
 end
 
+# flisp: dot-operators
 function is_dotted_operator(s::AbstractString)
     return length(s) >= 2 &&
-        s[1] === '.' &&
+        s[1] === '.' && s[2] !== '.' &&
         JS.is_operator(something(find_kind(s[2:end]), K"None"))
 end
 
@@ -18,7 +19,7 @@ end
 
 function expr_to_est(@nospecialize(e),
                      lnn::LineNumberNode=LineNumberNode(0, :none))
-    graph = ensure_macro_attributes!(SyntaxGraph())
+    graph = ensure_desugaring_attributes!(SyntaxGraph())
     expr_to_est(graph, e, lnn)
 end
 
@@ -30,28 +31,26 @@ function _get_inner_lnn(e::Expr, default::LineNumberNode)
     e.head in (:function, :macro, :module, :(=)) || return default
     length(e.args) >= 2 || return default
     b = e.args[end]
-    b isa Expr && b.head === :block || return default
-    length(b.args) >= 1 && b.args[1] isa LineNumberNode || return default
-    return b.args[1]
+    b isa Expr || return default
+    b.head === :block || return default
+    length(b.args) >= 1 || return default
+    b_lnn = b.args[1]
+    return b_lnn isa LineNumberNode ? b_lnn : default
 end
 
 # List of Expr-AST forms that are always converted to some SyntaxTree form and
 # never inserted as an opaque `K"Value"`. Note no LineNumberNode, which appears
 # unwrapped in a macrocall (possibly generated functions too, TODO check)
 isa_lowering_ast_node(@nospecialize(e)) =
-    e isa Symbol || e isa QuoteNode || e isa Expr # || e isa GlobalRef
+    e isa Symbol || e isa QuoteNode || e isa Expr || e isa GlobalRef
 
 function is_expr_value(st::SyntaxTree)
     k = kind(st)
-    return JuliaSyntax.is_literal(k) || k === K"Value" ||
-        k === K"core" && get(st, :name_val, nothing) === "nothing"
+    return JuliaSyntax.is_literal(k) || k === K"Value"
 end
 
 function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
-    st = if e === Core.nothing
-        # e.value can't be nothing in `K"Value"`, so represent with K"core"
-        setattr!(newleaf(graph, src, K"core"), :name_val, "nothing")
-    elseif e isa Symbol
+    st = if e isa Symbol
         setattr!(newleaf(graph, src, K"Identifier"), :name_val, String(e))
     elseif e isa QuoteNode
         cid, _ = _expr_to_est(graph, e.value, src)
@@ -59,12 +58,9 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
     elseif e isa Expr && e.head === :scope_layer
         @assert length(e.args) === 2 && e.args[1] isa Symbol
         ident = newleaf(graph, src, K"Identifier")
-        setattr!(ident, :name_val, String(e.args[1]))
+        setattr!(ident, :name_val, String(e.args[1]::Symbol))
         setattr!(ident, :scope_layer, e.args[2])
-    elseif e isa Expr && e.head === :static_parameter
-        setattr!(newleaf(graph, src, K"Value"), :value, e)
-    elseif e isa Expr && e.head === :lambda
-        ensure_desugaring_attributes!(graph)
+    elseif e isa Expr && e.head === :lambda && length(e.args) == 2
         argnames = e.args[1]::Vector{Any}
         arg_cs = NodeId[]
         for name in argnames
@@ -98,8 +94,9 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
         else
             newnode(graph, old_src, st_k, cs)
         end
-    # elseif e isa GlobalRef
-        # TODO: Better-behaved as K"globalref", but lowering doesn't know this
+    elseif e isa GlobalRef
+        # Represent globalref as K"Identifier" with :mod attribute
+        setattr!(newleaf(graph, src, K"Identifier", string(e.name)), :mod, e.mod)
     else
         # We may want additional special cases for other types where
         # `Base.isa_ast_node(e)`, but `K"Value"` should be fine for most, since
@@ -120,11 +117,12 @@ end
 # children.
 function est_to_expr(st::SyntaxTree, suppress_linenodes=false)
     k = kind(st)
-    return if k === K"core" && numchildren(st) === 0 && st.name_val === "nothing"
-        nothing
-    elseif is_leaf(st) && hasattr(st, :name_val)
-        n = Symbol(st.name_val)
-        hasattr(st, :scope_layer) ? Expr(:scope_layer, n, st.scope_layer) : n
+    if kind(st) === K"Identifier"
+        n = Symbol(st.name_val::String)
+        mod = get(st, :mod, nothing)
+        !isnothing(mod) ? GlobalRef(mod, n) :
+            hasattr(st, :scope_layer) ? Expr(:scope_layer, n, st.scope_layer) :
+            n
     elseif is_leaf(st) && is_expr_value(st)
         v = st.value
         # Let `st.value isa Symbol` (or other AST node).  Since we enforce that
@@ -141,7 +139,7 @@ function est_to_expr(st::SyntaxTree, suppress_linenodes=false)
         @jl_assert !is_leaf(st) (st, "est_to_expr should only be used pre-desugaring")
         # In a partially-expanded or quoted AST, there may be heads with no
         # corresponding kind
-        head = Symbol(k === K"unknown_head" ? st.name_val : untokenize(k))
+        head = Symbol((k === K"unknown_head" ? st.name_val : untokenize(k))::String)
         out = Expr(head)
 
         # (Move the following assumptions to the docs if they turn out accurate)
@@ -160,22 +158,19 @@ function est_to_expr(st::SyntaxTree, suppress_linenodes=false)
             end
         end
         # Add extra linenodes to some blocks for better provenance
-        @stm st begin
-            ([K"block"], when=!suppress_linenodes) ->
-                push!(out.args, source_location(LineNumberNode, st))
-            [K"module" _... [K"block" _...]] ->
-                pushfirst!(out.args[end].args, source_location(LineNumberNode, st))
-            [K"function" _ [K"block" _...]] ->
-                pushfirst!(out.args[end].args, source_location(LineNumberNode, st))
-            [K"macro" _ [K"block" _...]] ->
-                pushfirst!(out.args[end].args, source_location(LineNumberNode, st))
-            [K"for" _ [K"block" _...]] ->
-                push!(out.args[end].args, source_location(
-                    LineNumberNode, sourcefile(st), last_byte(st)))
-            [K"while" _ [K"block" _...]] ->
-                push!(out.args[end].args, source_location(
-                    LineNumberNode, sourcefile(st), last_byte(st)))
-            _ -> nothing
+        if head === :block && length(out.args) == 0 && !suppress_linenodes
+            push!(out.args, source_location(LineNumberNode, st))
+        elseif head in (:module, :function, :macro) && length(out.args) > 0
+            let b = out.args[end]
+                b isa Expr && b.head === :block && pushfirst!(
+                    b.args, source_location(LineNumberNode, st))
+            end
+        elseif head in (:for, :while) && length(out.args) > 0
+            let b = out.args[end]
+                b isa Expr && b.head === :block && push!(
+                    b.args, source_location(
+                        LineNumberNode, sourcefile(st), last_byte(st)))
+            end
         end
         out
     end
@@ -187,8 +182,9 @@ end
 # .op => (. op)
 function _dst_separate_dotop(st::SyntaxTree)
     k = kind(st)
-    if k === K"Identifier" && is_dotted_operator(st.name_val)
-        dotop_s = st.name_val
+    if k === K"Identifier"
+        dotop_s = st.name_val::String
+        !is_dotted_operator(dotop_s) && return est_to_dst(st)
         op_s = dotop_s[nextind(dotop_s,1):end]
         op_leaf = setattr(mkleaf(st), :name_val, op_s)
         return @ast st._graph st [K"." op_leaf]
@@ -240,6 +236,41 @@ function _dst_importpath(st::SyntaxTree)
     end
 end
 
+_dst_eq_to_kw(st::SyntaxTree) = @stm st begin
+    [K"=" l r] -> @ast st._graph st [K"kw" l r]
+    x -> x
+end
+
+# flisp: tuple-to-arglist.  Fix parsing mistakes where anon function arglist is
+# parsed as a block instead of a tuple, or uses `=` instead of `kw`.  Note
+# return type annotations are not possible on an anonymous function.
+# (a::T)->1
+# (::T)->1
+# (a...)->1
+# (a=1)->1
+# (a=1;)->1
+# (a=1;b=1)->1
+function _dst_fix_arglist(st::SyntaxTree)
+    g = st._graph
+    @stm st begin
+        [K"::" [K"call" _...] _] -> st
+        [K"call" _...] -> st
+        [K"tuple" xs...] -> let fixed = mapsyntax(_dst_eq_to_kw, xs)
+            fixed == xs ? st : @ast g st [K"tuple" fixed...]
+        end
+        [K"where" x tvs...] -> let fixed = _dst_fix_arglist(x)
+            fixed == x ? st : @ast g st [K"where" fixed tvs...]
+        end
+        [K"block" x1 x2] ->
+            @ast g st [K"tuple" _dst_eq_to_kw(x1)
+                       [K"parameters" _dst_eq_to_kw(x2)]]
+        [K"block" x] -> @ast g st [K"tuple" _dst_eq_to_kw(x)]
+        [K"block"] -> @ast g st [K"tuple"]
+        [K"block" _...] -> @jl_assert false st
+        x -> @ast g st [K"tuple" _dst_eq_to_kw(x)]
+    end
+end
+
 _is_false(st::SyntaxTree) = kind(st) === K"Value" && st.value === false
 
 function _expand_literal_pow(st::SyntaxTree)
@@ -253,6 +284,112 @@ function _expand_literal_pow(st::SyntaxTree)
         st[1] st[2]
         [K"call" [K"call" "apply_type"::K"core" "Val"::K"top" st[3]]]
     ]
+end
+
+function _est_to_dst_ident(st::SyntaxTree)
+    s = st.name_val::String
+    if all(==('_'), s) || s == UNUSED
+        setattr!(mkleaf(st), :kind, K"Placeholder")
+    else
+        st
+    end
+end
+
+has_if_generated(st::SyntaxTree) = @stm st begin
+    (_, when=is_leaf(st)||is_quoted(st)) -> false
+    [K"function" _...] -> false
+    ([K"=" call _], when=is_eventually_call(call)) -> false
+    [K"->" _...] -> false
+    [K"if" [K"generated"] _ _] -> true
+    _ -> any(has_if_generated, children(st))
+end
+
+# The (if (generated) gen nongen) form is troublesome because everything
+# surrounding it is implicitly quoted (with `gen` interpolated into it), so
+# converting the function's AST before proper quoting is incorrect.
+split_generated(st::SyntaxTree, gen_part) = @stm st begin
+    (_, when=is_leaf(st)||is_quoted(st)) -> st
+    [K"if" [K"generated"] gen nongen] -> if gen_part
+        @ast(st._graph, st, [K"$" gen])
+    else
+        nongen
+    end
+    _ -> mapchildren(x->split_generated(x, gen_part), st._graph, st)
+end
+
+# Set [no]specialize on a function parameter's identifier.  `meta` is a symbol
+# if we should set this arg's meta unconditionally, or a map identifier-string
+# to symbol if we should only do it for some identifiers (function body >0 arg
+# nospecialize), or nothing if we should just recurse to find meta forms.
+# Exceptions with unconditional meta: set meta on the tuple for a destructuring
+# arg, and the whole expression for (::T).
+function apply_arg_meta(st, meta::Union{Nothing, Symbol, Dict{String, Symbol}})
+    g = st._graph
+    k = kind(st)
+    if k == K"Identifier"
+        if meta isa Symbol
+            setmeta(st, meta, true)
+        elseif isnothing(meta)
+            st
+        else
+            sym = get(meta, st.name_val::String, nothing)
+            !isnothing(sym) ? setmeta(st, sym, true) : st
+        end
+    elseif k == K"Placeholder" || k == K"tuple" || k == K"::" && numchildren(st) == 1
+        meta isa Symbol ? setmeta(st, meta, true) : st
+    elseif k == K"..." || k == K"::" || k == K"=" || k == K"kw"
+        c1 = st[1]
+        out1 = apply_arg_meta(c1, meta)
+        c1 == out1 ? st : @ast g st [k out1 st[2:end]...]
+    elseif k == K"meta"
+        # not specified what to do here if we get conflicting
+        # specialize/nospecialize
+        meta2 = Symbol(st[1].name_val::String)
+        @jl_assert meta2 in (:specialize, :nospecialize) st
+        apply_arg_meta(st[2], meta2)
+    elseif k == K"parameters"
+        mapchildren(x->apply_arg_meta(x, meta), st._graph, st)
+    else
+        @jl_assert false st
+    end
+end
+
+function apply_arglist_meta(st, meta::Union{Nothing, Symbol, Dict{String, Symbol}})
+    g = st._graph
+    @stm st begin
+        [K"where" x tvs...] -> let fixed = apply_arglist_meta(x, meta)
+            fixed == x ? st : @ast g st [K"where" fixed tvs...]
+        end
+        [K"::" x t] ->  let fixed = apply_arglist_meta(x, meta)
+            fixed == x ? st : @ast g st [K"::" fixed t]
+        end
+        [K"call" f args...] -> mapchildren(x->
+            x == f ? f : apply_arg_meta(x, meta), st._graph, st)
+        [K"tuple" _...] -> mapchildren(x->apply_arg_meta(x, meta), st._graph, st)
+    end
+end
+
+# nothing if not found, or symbol if 0-arg [no]specialize, or dict arg->meta
+function collect_body_arg_meta(st)
+    out = nothing
+    for c in children(st)
+        k = kind(c)
+        @stm c begin
+            [K"meta" [K"Identifier"] idents...] -> begin
+                meta = Symbol(c[1].name_val::String)
+                meta in (:specialize, :nospecialize) || continue
+                length(idents) == 0 && return meta
+                isnothing(out) && (out = Dict{String, Symbol}())
+                for id in idents
+                    kind(id) === K"Identifier" && (out[id.name_val] = meta)
+                end
+            end
+            # Only leading meta statements are recognized in lowering.  Ideally
+            # meta after non-meta statements would be an error.
+            _ -> break
+        end
+    end
+    out
 end
 
 """
@@ -271,20 +408,13 @@ We may drop cases from this conversion, for example, if...
 We can assume `st` has passed `valid_st1`.  Errors arising from invalid AST
 (including finding `macrocall/escape/quote` forms) should be handled there.
 """
-function est_to_dst(st::SyntaxTree; all_expanded=true)
-    g = st._graph
+function est_to_dst(st::SyntaxTree)
+    g = ensure_macro_attributes!(st._graph)
     rec = var"#self#"
 
     return @stm st begin
-        [K"Identifier"] -> let s = st.name_val
-            if s in ("ccall", "cglobal")
-                setattr!(newleaf(g, st, K"core"), :name_val, st.name_val)
-            elseif all(==('_'), s)
-                setattr!(mkleaf(st), :kind, K"Placeholder")
-            else
-                st
-            end
-        end
+        [K"Identifier"] -> _est_to_dst_ident(st)
+        [K"Value"] -> st.value === nothing ? newleaf(g, st, K"nothing") : st
         (_, when=is_leaf(st)) -> st
         ([K"unknown_head" l r],
          when=(s=st.name_val; Base.isoperator(s))) -> let
@@ -293,8 +423,8 @@ function est_to_dst(st::SyntaxTree; all_expanded=true)
                  (s[1:prevind(s,end)], K"op=")
 
              op_leaf = newleaf(g, st, K"Identifier")
-             JS.copy_attrs!(op_leaf, st)
              setattr!(op_leaf, :name_val, op_s)
+             setattr!(op_leaf, :scope_layer, st.scope_layer)
              @ast g st [out_k rec(l) op_leaf rec(r)]
          end
         [K"comparison" cs0...] -> let cs = copy(cs0)
@@ -307,14 +437,10 @@ function est_to_dst(st::SyntaxTree; all_expanded=true)
             @ast g st [K"call" "'"::K"Identifier"(scope_layer=st.scope_layer) rec(x)]
         [K"." f [K"tuple" args...]] -> _expand_literal_pow(
             @ast g st [K"dotcall" rec(f) _dst_sink_parameters(args)...])
-        [K"." l r] -> let r2 = rec(r)
-            @stm r2 begin
-                [K"inert" r3] -> @ast g st [K"." rec(l) r3]
-                r3 -> @ast g st [K"." rec(l) r3]
-            end
-        end
-        [K"inert" [K"Identifier"]] -> @ast g st st[1]=>K"Symbol"
-        # [K"quote" [K"Identifier"]] -> @ast g st st[1]=>K"Symbol"
+        ([K"inert" [K"Identifier"]], when=!hasattr(st[1], :mod)) ->
+            @ast g st st[1]=>K"Symbol"
+        ([K"inert_syntaxtree" [K"Identifier"]], when=!hasattr(st[1], :mod)) ->
+            @ast g st st[1]=>K"Symbol"
         [K"inert" _] -> st
         [K"inert_syntaxtree" _] -> st
         [K"module" _...] -> st
@@ -326,15 +452,20 @@ function est_to_dst(st::SyntaxTree; all_expanded=true)
                 [K"iteration"(st[1]) mapsyntax(_dst_eq_to_in, iters)...]
                 rec(body)
             ]
-        ([K"where" t tds...],
-         when=!(length(tds) === 1 && kind(tds[1]) === K"braces")) ->
-             @ast g st [K"where" rec(t) [K"braces" mapsyntax(rec, tds)...]]
         (_, when=(k = kind(st); k in KSet"tuple vect braces")) ->
             @ast g st [k _dst_sink_parameters(children(st))...]
         (_, when=(k = kind(st); k in KSet"curly ref")) ->
             @ast g st [k _dst_separate_dotop(st[1])
-                       _dst_sink_parameters(children(st)[2:end])...
-            ]
+                       _dst_sink_parameters(children(st)[2:end])...]
+        # tuple arg should not be converted or desugared
+        [K"foreigncall" [K"tuple" _...] args...] ->
+            @ast g st [K"foreigncall" [K"foreigncall_arg1" st[1]] args...]
+        ([K"call" [K"Identifier"] sym args...],
+         when=st[1].name_val::String === "ccall") -> if kind(sym) === K"tuple"
+             @ast g st [K"call" st[1] [K"foreigncall_arg1" st[2]] mapsyntax(rec, args)...]
+         else
+             @ast g st [K"call" st[1] rec(sym) mapsyntax(rec, args)...]
+         end
         [K"call" f args...] -> let
             out_k, out_f = @stm _dst_separate_dotop(f) begin
                 [K"." op] -> (K"dotcall", op)
@@ -370,56 +501,42 @@ function est_to_dst(st::SyntaxTree; all_expanded=true)
         end
         [K"generator" body iters...] ->
             @ast g st [K"generator" rec(body) _dst_iterspec(st, iters)]
-        [K"ncat" dim xs...] -> let
-            out = mknode(st, mapsyntax(rec, xs))
-            setattr!(out, :syntax_flags,
-                     JS.flags(st) | JS.set_numeric_flags(dim.value))
-        end
-        [K"nrow" dim xs...] -> let
-            out = mknode(st, mapsyntax(rec, xs))
-            setattr!(out, :syntax_flags,
-                     JS.flags(st) | JS.set_numeric_flags(dim.value))
-        end
-        [K"typed_ncat" t dim xs...] -> let
-            out_cs = pushfirst!(mapsyntax(rec, xs), rec(t))
-            out = mknode(st, out_cs)
-            setattr!(out, :syntax_flags,
-                     JS.flags(st) | JS.set_numeric_flags(dim.value))
-        end
-        ([K"=" l r], when=(is_eventually_call(l))) -> if has_if_generated(r)
-            gen, nongen = split_generated(r, true), split_generated(r, false)
-            @ast g st [K"generated_function" rec(l) gen nongen]
-        else
-            @ast g st [K"function" rec(l) rec(r)]
-        end
-        [K"function" l r] -> let
-            if kind(l) === K"..."
-                l = @ast g l [K"tuple" l]
-            end
+        ([K"=" l r], when=(is_eventually_call(l))) -> let
+            # no fix_arglist needed, since this func can't be anonymous
+            l = apply_arglist_meta(l, collect_body_arg_meta(r))
             if has_if_generated(r)
                 gen, nongen = split_generated(r, true), split_generated(r, false)
-                @ast g st [K"generated_function" rec(l) gen nongen]
+                r2 = @ast g st [K"_generated_body" [K"quote" gen] rec(nongen)]
             else
-                @ast g st [K"function" rec(l) rec(r)]
+                r2 = rec(r)
             end
+            @ast g st [K"function" rec(l) r2]
         end
-        [K"do" [K"call" f args...] [K"->" do_args do_body]] -> let
-            # Note desugaring expects first-arg do-expression, unlike RawGreenNode
-            @ast g st [K"call"
-                rec(f)
-                @ast g st[end] [K"do" rec(do_args) rec(do_body)]
-                _dst_sink_parameters(args)...
-            ]
+        [K"function" l r] -> let
+            l = apply_arglist_meta(_dst_fix_arglist(l), collect_body_arg_meta(r))
+            if has_if_generated(r)
+                gen, nongen = split_generated(r, true), split_generated(r, false)
+                r2 = @ast g st [K"_generated_body" [K"quote" gen] rec(nongen)]
+            else
+                r2 = rec(r)
+            end
+            @ast g st [K"function" rec(l) r2]
+        end
+        [K"->" l r] -> let
+            l = apply_arglist_meta(_dst_fix_arglist(l), collect_body_arg_meta(r))
+            if has_if_generated(r)
+                gen, nongen = split_generated(r, true), split_generated(r, false)
+                r2 = @ast g st [K"_generated_body" [K"quote" gen] rec(nongen)]
+            else
+                r2 = rec(r)
+            end
+            @ast g st [K"->" rec(l) r2]
+        end
+        [K"do" [K"call" f args...] lam] -> let
+            @ast g st [K"call" rec(f) rec(lam) _dst_sink_parameters(args)...]
         end
         ([K"let" binds body], when=(kind(binds) !== K"block")) ->
             @ast g st [K"let" [K"block"(binds) rec(binds)] rec(body)]
-        [K"struct" mut sig body] -> let
-            flags = JS.flags(st) | (_is_false(mut) ? 0 : JS.MUTABLE_FLAG)
-            @ast g st [K"struct"(syntax_flags=flags)
-                rec(sig)
-                rec(body)
-            ]
-        end
         (_, when=(kind(st) in KSet"using import")) -> let
             # dot_importpath = (. _...)
             # as_or_dotip = dot_importpath | (as dot_importpath name)
@@ -439,26 +556,14 @@ function est_to_dst(st::SyntaxTree; all_expanded=true)
         end
 
         #-----------------------------------------------------------------------
-        # Heads are not emitted from parsing
+        # Heads not emitted from parsing
         ([K"meta" [K"unknown_head" ps...]], when=st[1].name_val === "purity") ->
             @ast g st [K"meta" "purity"::K"Symbol"
                 Base.EffectsOverride([x.value for x in ps]...)::K"Value"]
         ([K"meta" s vs...],
-         when=(get(s, :name_val, "") in ("nospecialize", "specialize"))) -> let
-            if length(vs) === 0
-                @ast g st [K"meta" s=>K"Symbol"]
-            elseif length(vs) === 1
-                out = est_to_dst(vs[1])
-                setmeta(out, Symbol(s), true)
-            else
-                # Kick the can down the road (should only be simple atoms?)
-                out_cs = SyntaxList(g)
-                for v in vs
-                    push!(out_cs, @ast g v [K"meta" s=>K"Symbol" v])
-                end
-                @ast g st [K"block" out_cs...]
-            end
-        end
+         when=(meta=get(s, :name_val, "")::String; meta in ("nospecialize", "specialize"))) ->
+             # Should be handled in the function case
+             newleaf(g, st, K"nothing")
         [K"meta" syms...] ->
             @ast g st [K"meta" mapsyntax(
                 s->(kind(s) === K"Identifier" ? setattr(s, :kind, K"Symbol") : s),
@@ -470,12 +575,14 @@ function est_to_dst(st::SyntaxTree; all_expanded=true)
         [K"inbounds" _] -> newleaf(g, st, K"TOMBSTONE")
         [K"core" x] -> setattr!(mkleaf(st), :name_val, x.name_val)
         [K"top" x] -> setattr!(mkleaf(st), :name_val, x.name_val)
+        [K"static_parameter" x] -> setattr!(mkleaf(st), :var_id, x.value::IdTag)
         [K"copyast" [K"inert" ex]] -> @ast g st [K"call"
             interpolate_ast::K"Value"
             Expr::K"Value"
             [K"inert"(st[1]) ex]
         ]
         [K"symbolicgoto" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
+        [K"oldsymbolicgoto" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
         [K"symboliclabel" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
         [K"symbolicblock" id body] -> if all(==('_'), id.name_val)
             @ast g st [K"symbolicblock" id=>K"Placeholder" rec(body)]
@@ -491,12 +598,27 @@ function est_to_dst(st::SyntaxTree; all_expanded=true)
                     "macro-expansion and desugaring: ")))
             end
         end
-        [K"cfunction" typ fptr rt at sym] -> @ast g st [K"cfunction"
-            rec(typ) rec(fptr)
-            [K"static_eval"(rt, meta=name_hint("cfunction return type")) rec(rt)]
-            [K"static_eval"(at, meta=name_hint("cfunction argument type")) rec(at)]
-            rec(sym)
-        ]
+        ([K"latestworld"], when=!is_leaf(st)) -> newleaf(g, st, K"latestworld")
+        [K"cfunction" typ fptr rt at sym] -> let
+            # Identifier callables are scope-resolved against the outermost
+            # lowering layer (which corresponds to the method module used by
+            # `method.c`'s `jl_toplevel_eval`), so the IR carries a binding
+            # reference matching `@cfunction`'s runtime resolution. Other
+            # forms (e.g. function definitions) stay inert.
+            out_fptr = if kind(fptr) == K"inert" && numchildren(fptr) == 1 &&
+                          kind(fptr[1]) == K"Identifier"
+                ident = setattr!(mkleaf(fptr[1]), :scope_layer, 1)
+                @ast g fptr [K"static_eval"(fptr) ident]
+            else
+                rec(fptr)
+            end
+            @ast g st [K"cfunction"
+                rec(typ) out_fptr
+                [K"static_eval"(rt, meta=name_hint("cfunction return type")) rec(rt)]
+                [K"static_eval"(at, meta=name_hint("cfunction argument type")) rec(at)]
+                rec(sym)
+            ]
+        end
 
         # avoid creating excess nodes
         _ -> let out_cs::Vector{NodeId} = map(x->rec(x)._id, children(st))

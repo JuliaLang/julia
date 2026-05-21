@@ -21,7 +21,6 @@ end
 # within its parent and the node itself.
 function first_tree_error(c::RedTreeCursor, error_cursor::GreenTreeCursor)
     @assert !is_leaf(c) && !is_error(c)
-    first_child = first_error = nothing
     it = reverse_nontrivia_children(c)
     r = iterate(it)
     local child

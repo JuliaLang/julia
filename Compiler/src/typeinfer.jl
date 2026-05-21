@@ -140,7 +140,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
         inferred_result = nothing
         debuginfo = nothing
         const_flag = is_result_constabi_eligible(result)
-        discard_src = caller.cache_mode === CACHE_MODE_NULL || const_flag
+        discard_src = caller.cache_mode === CACHE_MODE_NULL || (const_flag && may_discard_trees(interp))
         if !discard_src
             inferred_result = transform_result_for_cache(interp, result, edges)
             if inferred_result !== nothing
@@ -226,7 +226,7 @@ function promotecache!(interp::AbstractInterpreter, caller::InferenceState)
                     # when compiling the compiler to inject everything eagerly
                     # where codegen can start finding and using it right away
                     if mi.def isa Method && isa_compileable_sig(mi) && is_cached(caller)
-                        ccall(:jl_add_codeinst_to_jit, Cvoid, (Any, Any), ci, uncompressed)
+                        ccall(:jl_add_codeinsts_to_jit, Cvoid, (Any, Any), Any[ci], Any[uncompressed])
                     end
                 end
             end
@@ -460,7 +460,7 @@ end
 
 function transform_result_for_local_cache(interp::AbstractInterpreter, result::InferenceResult)
     ## XXX: this must perform the exact same operations as transform_result_for_cache to avoid introducing soundness bugs
-    if is_result_constabi_eligible(result)
+    if may_discard_trees(interp) && is_result_constabi_eligible(result)
         return nothing
     end
     src = result.src
@@ -671,12 +671,14 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter, cycleid::
         # A parent may be cached still, but not this intermediate work:
         # we can throw everything else away now. Caching anything can confuse later
         # heuristics to consider it worth trying to pursue compiling this further and
-        # finding infinite work as a result. Avoiding caching helps to ensure there is only
-        # a finite amount of work that can be discovered later (although potentially still a
-        # large multiplier on it).
+        # finding infinite work as a result. Avoiding global caching helps to ensure there
+        # is only a finite amount of work that can be discovered later (although potentially
+        # still a large multiplier on it). We still allow local caching so that tombstoned
+        # entries can be found by `constprop_cache_lookup` to prevent re-attempting the same
+        # const-prop work that would hit the same limit.
         result.src = nothing
         result.tombstone = true
-        me.cache_mode = CACHE_MODE_NULL
+        me.cache_mode &= ~CACHE_MODE_GLOBAL
         set_inlineable!(src, false)
     else
         # annotate fulltree with type information,
@@ -725,7 +727,9 @@ function is_already_cached(interp::AbstractInterpreter, result::InferenceResult)
     cache = code_cache(interp, result.valid_worlds)
     if haskey(cache, mi)
         # n.b.: accurate edge representation might cause the CodeInstance for this to be constructed later
-        @assert isdefined(cache[mi], :inferred)
+        cached = cache[mi]
+        ci = cached isa InferenceResult ? cached.ci : cached
+        @assert isdefined(ci, :inferred)
         return true
     end
     return false
@@ -1155,7 +1159,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             inferred = nothing
         end
         if codeinst isa CodeInstance
-            need_inlineable_code = may_optimize(interp) && (force_inline || is_inlineable(inferred))
+            need_inlineable_code = may_optimize(interp) && (force_inline || is_inlineable(inferred) || use_const_api(codeinst))
             if need_inlineable_code
                 src = ci_get_source(interp, codeinst, inferred)
                 if src === nothing
@@ -1202,7 +1206,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             if codeinst isa CodeInstance # return existing rettype if the code is already inferred
                 engine_reject(interp, ci_from_engine)
                 ci_from_engine = nothing
-                need_inlineable_code = may_optimize(interp) && (force_inline || is_inlineable(inferred))
+                need_inlineable_code = may_optimize(interp) && (force_inline || is_inlineable(inferred) || use_const_api(codeinst))
                 if need_inlineable_code
                     src = ci_get_source(interp, codeinst, inferred)
                     if src === nothing
@@ -1575,8 +1579,7 @@ function compileable_specialization_for_call(interp::AbstractInterpreter, @nospe
     compileable_atype = get_compileable_sig(match.method, match.spec_types, match.sparams)
     compileable_atype === nothing && return nothing
     if match.spec_types !== compileable_atype
-        sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), compileable_atype, match.method.sig)::SimpleVector
-        sparams = sp_[2]::SimpleVector
+        (_, sparams) = typeintersect_env(compileable_atype, match.method.sig)
         mi = specialize_method(match.method, compileable_atype, sparams)
     else
         mi = specialize_method(match.method, compileable_atype, match.sparams)
@@ -1675,6 +1678,7 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
     codegen === nothing && return ci
     workqueue = CompilationQueue(; interp)
     push!(workqueue, ci)
+    codeinsts, srcs = Any[], Any[]
     while !isempty(workqueue)
         # ci_has_real_invoke(ci) && return ci # optimization: cease looping if ci happens to get compiled (not just jl_fptr_wait_for_compiled, but fully jl_is_compiled_codeinst)
         callee = pop!(workqueue)
@@ -1699,7 +1703,7 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
         if iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), mi, callee))
             cached = ccall(:jl_get_ci_equiv, Any, (Any, UInt), callee, get_inference_world(workqueue.interp))::CodeInstance
             if cached === callee
-                # make sure callee is gc-rooted and cached, as required by jl_add_codeinst_to_jit
+                # make sure callee is gc-rooted and cached, as required by jl_add_codeinsts_to_jit
                 code_cache(workqueue.interp)[mi] = callee
             else
                 # use an existing CI from the cache, if there is available one that is compatible
@@ -1707,8 +1711,10 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
                 callee = cached
             end
         end
-        ccall(:jl_add_codeinst_to_jit, Cvoid, (Any, Any), callee, src)
+        push!(codeinsts, callee)
+        push!(srcs, src)
     end
+    ccall(:jl_add_codeinsts_to_jit, Cvoid, (Any, Any), codeinsts, srcs)
     return ci
 end
 

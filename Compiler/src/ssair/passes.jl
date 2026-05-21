@@ -1815,10 +1815,9 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int,Tuple{SPCSet,SSADefUse}}
         # Find the type for this allocation
         defexpr = ir[SSAValue(defidx)][:stmt]
         isexpr(defexpr, :new) || continue
-        typ = unwrap_unionall(ir.stmts[defidx][:type])
         # Could still end up here if we tried to setfield! on an immutable, which would
         # error at runtime, but is not illegal to have in the IR.
-        typ = widenconst(typ)
+        typ = unwrap_unionall(widenconst(ir.stmts[defidx][:type]))
         ismutabletype(typ) || continue
         typ = typ::DataType
         # Check if there are any uses we did not account for. If so, the variable

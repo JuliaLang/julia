@@ -525,6 +525,12 @@ end
     @test rand(mta,Bool) == rand(mtb,Bool)
     @test bitrand(mta,10) == bitrand(mtb,10)
 
+    # rand! fast path for Array{Complex{T}} must be reproducible across equal RNGs.
+    for T in Base.uniontypes(Base.HWReal)
+        a, b = Vector{Complex{T}}(undef, 10), Vector{Complex{T}}(undef, 10)
+        @test rand!(mta, a) == rand!(mtb, b)
+    end
+
     @test randstring(mta) == randstring(mtb)
     @test randstring(mta,10) == randstring(mtb,10)
 

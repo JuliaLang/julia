@@ -29,6 +29,8 @@ FLAGS_GCC += -Wno-unused-result
 # GCC is throwing warnings like `warning: 'int __builtin_memcmp_eq(const void*, const void*, long unsigned int)' specified bound 18446744073709551615 exceeds maximum object size 9223372036854775807` in llvm's StringRef.h == seemingly because it doesn't realise the size can't be 0.
 FLAGS_GCC += -Wno-stringop-overflow
 FLAGS_GCC += -Wno-stringop-overread
+# LLVM 21 causes maybe uninitialized warnings in include/llvm/ADT/DenseMap.h
+FLAGS_GCC += -Wno-maybe-uninitialized
 
 # Required to be allowed to use nullability extension and not be required to annotate all of everything
 JCFLAGS_CLANG += -Wno-atomic-alignment -Wno-nullability-extension -Wno-nullability-completeness
@@ -65,7 +67,7 @@ SRCS := \
 	simplevector runtime_intrinsics precompile jloptions mtarraylist \
 	threading scheduler stackwalk null_sysimage \
 	method jlapi signal-handling safepoint timing subtype rtutils \
-	crc32c APInt-C processor ircode opaque_closure codegen-stubs coverage runtime_ccall engine \
+	crc32c APInt processor ircode opaque_closure codegen-stubs coverage runtime_ccall engine \
 	$(GC_SRCS)
 
 RT_LLVMLINK :=
@@ -106,7 +108,7 @@ else
 # JULIACODEGEN != LLVM
 endif
 
-RT_LLVM_LIBS := support targetparser
+RT_LLVM_LIBS := support
 
 ifeq ($(OS),WINNT)
 SRCS += win32_ucontext
@@ -203,7 +205,7 @@ LIBJULIA_PATH_REL := libjulia
 endif
 
 COMMON_LIBPATHS := -L$(build_libdir) -L$(build_shlibdir)
-RT_LIBS := $(call whole_archive,$(LIBUV)) $(call whole_archive,$(LIBUTF8PROC)) $(LIBUNWIND) $(RT_LLVMLINK) $(OSLIBS) $(LIBTRACYCLIENT) $(LIBITTAPI) -lzstd
+RT_LIBS := $(call whole_archive,$(LIBUV)) $(call whole_archive,$(LIBUTF8PROC)) $(LIBUNWIND) $(RT_LLVMLINK) $(OSLIBS) $(LIBTRACYCLIENT) $(LIBITTAPI) -lzstd -L$(build_libdir) $(LIBTARGET_PARSING)
 # NB: CG needs uv_mutex_* symbols, but we expect to export them from libjulia-internal
 CG_LIBS := $(LIBUNWIND) $(CG_LLVMLINK) $(OSLIBS) $(LIBTRACYCLIENT) $(LIBITTAPI)
 
@@ -422,7 +424,7 @@ $(BUILDDIR)/llvm-pass-helpers.o $(BUILDDIR)/llvm-pass-helpers.dbg.obj: $(SRCDIR)
 $(BUILDDIR)/llvm-propagate-addrspaces.o $(BUILDDIR)/llvm-propagate-addrspaces.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h
 $(BUILDDIR)/llvm-remove-addrspaces.o $(BUILDDIR)/llvm-remove-addrspaces.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h
 $(BUILDDIR)/llvm-ptls.o $(BUILDDIR)/llvm-ptls.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h
-$(BUILDDIR)/processor.o $(BUILDDIR)/processor.dbg.obj: $(addprefix $(SRCDIR)/,processor_*.cpp processor.h features_*.h)
+$(BUILDDIR)/processor.o $(BUILDDIR)/processor.dbg.obj: $(SRCDIR)/processor.h
 $(BUILDDIR)/signal-handling.o $(BUILDDIR)/signal-handling.dbg.obj: $(addprefix $(SRCDIR)/,signals-*.c)
 $(BUILDDIR)/staticdata.o $(BUILDDIR)/staticdata.dbg.obj: $(SRCDIR)/staticdata_utils.c $(SRCDIR)/precompile_utils.c $(SRCDIR)/processor.h $(SRCDIR)/builtin_proto.h
 $(BUILDDIR)/toplevel.o $(BUILDDIR)/toplevel.dbg.obj: $(SRCDIR)/builtin_proto.h
@@ -476,13 +478,13 @@ $(BUILDDIR)/julia.expmap: $(SRCDIR)/julia.expmap.in $(JULIAHOME)/VERSION $(LLVM_
 		        -e "s/@LLVM_SHLIB_SYMBOL_VERSION@/$(LLVM_SHLIB_SYMBOL_VERSION)/"; \
 	mv $$TMPFILE $@
 
-$(build_shlibdir)/libjulia-internal.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDIR)/julia.expmap $(OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(LIBUV)
+$(build_shlibdir)/libjulia-internal.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDIR)/julia.expmap $(OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(LIBUV) $(LIBTARGET_PARSING)
 	@$(call PRINT_LINK, $(CXXLD) $(call IMPLIB_FLAGS,$@) $(SHIPFLAGS) $(JCXXFLAGS) $(CXXLDFLAGS) $(OBJS) $(RPATH_LIB) -o $@ \
 		$(JLDFLAGS) $(BOLT_LDFLAGS) $(JLIBLDFLAGS) $(RT_RELEASE_LIBS) $(call SONAME_FLAGS,libjulia-internal.$(JL_MAJOR_SHLIB_EXT)))
 	@$(INSTALL_NAME_CMD)libjulia-internal.$(SHLIB_EXT) $@
 	$(DSYMUTIL) $@
 
-$(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDIR)/julia.expmap $(DOBJS) $(BUILDDIR)/flisp/libflisp-debug.a $(BUILDDIR)/support/libsupport-debug.a $(LIBUV)
+$(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDIR)/julia.expmap $(DOBJS) $(BUILDDIR)/flisp/libflisp-debug.a $(BUILDDIR)/support/libsupport-debug.a $(LIBUV) $(LIBTARGET_PARSING)
 	@$(call PRINT_LINK, $(CXXLD) $(call IMPLIB_FLAGS,$@) $(DEBUGFLAGS) $(JCXXFLAGS) $(CXXLDFLAGS) $(DOBJS) $(RPATH_LIB) -o $@ \
 		$(JLDFLAGS) $(JLIBLDFLAGS) $(RT_DEBUG_LIBS) $(call SONAME_FLAGS,libjulia-internal-debug.$(JL_MAJOR_SHLIB_EXT)))
 	@$(INSTALL_NAME_CMD)libjulia-internal-debug.$(SHLIB_EXT) $@
@@ -561,7 +563,7 @@ INCLUDED_C_FILES := \
 	crc32c.c:crc32c-tables.c \
 	signal-handling.c:signals-win.c \
 	signal-handling.c:signals-unix.c \
-	signal-handling.c:mach_excServer.c \
+	signal-handling.c:mig/mach_excServer.c \
 	signal-handling.c:signals-mach.c \
 	staticdata.c:staticdata_utils.c \
 	staticdata.c:precompile_utils.c
@@ -577,10 +579,7 @@ INCLUDED_CXX_FILES := \
 	codegen.cpp:abi_x86.cpp \
 	codegen.cpp:cgutils.cpp \
 	codegen.cpp:intrinsics.cpp \
-	codegen.cpp:ccall.cpp \
-	processor.cpp:processor_x86.cpp \
-	processor.cpp:processor_arm.cpp \
-	processor.cpp:processor_fallback.cpp
+	codegen.cpp:ccall.cpp
 
 .PHONY: clean
 clean:
@@ -612,7 +611,7 @@ $(build_shlibdir)/lib%Plugin.$(SHLIB_EXT): $(SRCDIR)/clangsa/%.cpp $(LLVM_CONFIG
 # before attempting this static analysis, so that all necessary headers
 # and dependencies are properly installed:
 #   make -C src install-analysis-deps
-ANALYSIS_DEPS := llvm clang llvm-tools libuv utf8proc zstd
+ANALYSIS_DEPS := llvm clang llvm-tools libuv utf8proc zstd cpufeatures
 ifeq ($(OS),Darwin)
 ANALYSIS_DEPS += llvmunwind
 else ifeq ($(OS),OpenBSD)
@@ -640,6 +639,9 @@ SA_EXCEPTIONS-jloptions.c                   := -Xanalyzer -analyzer-config -Xana
  # clang doesn't understand that e->vars has the same value in save_env (NULL) and restore_env (assumed non-NULL)
 SA_EXCEPTIONS-subtype.c                     := -Xanalyzer -analyzer-config -Xanalyzer silence-checkers="core.uninitialized.Assign;core.UndefinedBinaryOperatorResult"
 SA_EXCEPTIONS-codegen.c                     := -Xanalyzer -analyzer-config -Xanalyzer silence-checkers="core"
+ # core.FixedAddressDereference is new in clang 21 and false-positives on LLVM ilist headers and gc_read_stack
+SA_EXCEPTIONS-llvm-alloc-opt.cpp            := -Xanalyzer -analyzer-config -Xanalyzer silence-checkers="core.FixedAddressDereference"
+SA_EXCEPTIONS-gc-stock.c                    := -Xanalyzer -analyzer-config -Xanalyzer silence-checkers="core.FixedAddressDereference"
  # these need to be annotated (and possibly fixed)
 SKIP_GC_CHECK := codegen.cpp rtutils.c
 

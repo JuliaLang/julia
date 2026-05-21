@@ -288,7 +288,7 @@ ccall(:jl_toplevel_eval_in, Any, (Any, Any),
 function iterate end
 
 macro nospecialize(x)
-    _expr(:meta, :nospecialize, x)
+    _expr(:escape, _expr(:meta, :nospecialize, x))
 end
 Expr(@nospecialize args...) = _expr(args...)
 
@@ -600,7 +600,7 @@ eval(Core, quote
         isa(f, String) && (f = Symbol(f))
         return $(Expr(:new, :LineNumberNode, :l, :f))
     end
-    DebugInfo(def::Union{Method,MethodInstance,Symbol}, linetable::Union{Nothing,DebugInfo}, edges::SimpleVector, codelocs::String) =
+    DebugInfo(def::Union{Method,MethodInstance,Symbol}, linetable::Union{Nothing,DebugInfo,String}, edges::SimpleVector, codelocs::String) =
         $(Expr(:new, :DebugInfo, :def, :linetable, :edges, :codelocs))
     DebugInfo(def::Union{Method,MethodInstance,Symbol}) =
         $(Expr(:new, :DebugInfo, :def, nothing, Core.svec(), ""))

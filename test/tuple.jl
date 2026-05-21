@@ -89,6 +89,19 @@ end
     @test NTuple{20,Float64}(Iterators.countfrom(2)) === (2.,3.,4.,5.,6.,7.,8.,9.,10.,11.,12.,13.,14.,15.,16.,17.,18.,19.,20.,21.)
     @test_throws ArgumentError NTuple{20,Int}([1,2])
 
+    # long tuples (>=32 elements) constructed from indexable inputs hit a fast path
+    let v = collect(1.0:40.0)
+        @test NTuple{40,Float64}(v) === ntuple(i -> Float64(i), Val(40))
+        @test NTuple{40,Int}(v) === ntuple(i -> i, Val(40))
+        # over-long input is silently truncated to match the iterator-based fallback
+        @test NTuple{40,Float64}(collect(1.0:41.0)) === ntuple(i -> Float64(i), Val(40))
+        @test_throws ArgumentError NTuple{40,Float64}(collect(1.0:39.0))
+    end
+    let m = Memory{Float64}(undef, 40); m .= 1.0:40.0
+        @test NTuple{40,Float64}(m) === ntuple(i -> Float64(i), Val(40))
+        @test_throws ArgumentError NTuple{40,Float64}(Memory{Float64}(undef, 39))
+    end
+
     @test Tuple{Vararg{Float32}}(Float64[1,2,3]) === (1.0f0, 2.0f0, 3.0f0)
     @test Tuple{Int,Vararg{Float32}}(Float64[1,2,3]) === (1, 2.0f0, 3.0f0)
     @test Tuple{Int,Vararg{Any}}(Float64[1,2,3]) === (1, 2.0, 3.0)
@@ -229,6 +242,18 @@ end
         typejoin(Int, Float64, Bool)
     @test eltype(Tuple{Int, Missing}) === Union{Missing, Int}
     @test eltype(Tuple{Int, Nothing}) === Union{Nothing, Int}
+
+    # Single-element tuple with a non-concrete element type must return the type
+    # itself, not the internal where-binding env entry (svec(E<:T, ::Bool))
+    let Abs = Integer
+        @test eltype(Tuple{Abs}) === Abs
+        @test eltype(Tuple{Vector{T} where T<:Integer}) === Vector{T} where T<:Integer
+        @test eltype(Tuple{Any}) === Any
+        # downstream: pairs over a NamedTuple whose field type is a UnionAll
+        local NT = @NamedTuple{x::(Vector{T} where T<:Integer)}
+        @test eltype(NT) === Vector{T} where T<:Integer
+        @test pairs(NT(([1],))) isa Base.Pairs
+    end
 
     @test valtype((1,2,3)) === eltype((1,2,3))
     @test valtype(Tuple{Int, Missing}) === eltype(Tuple{Int, Missing})
@@ -880,6 +905,14 @@ end
             @test circshift(v, shift) == collect(circshift(t, shift))
         end
     end
+end
+
+@testset "isassigned" begin
+    t = (1, 2, 3)
+    @test isassigned(t, 0) === false
+    @test isassigned(t, 1) === true
+    @test isassigned(t, 3) === true
+    @test isassigned(t, 4) === false
 end
 
 @test NTuple == Base.infer_return_type(reverse, Tuple{NTuple})

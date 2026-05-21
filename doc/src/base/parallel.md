@@ -45,6 +45,7 @@ Base.reset(::Base.Threads.Event)
 
 Base.Semaphore
 Base.acquire
+Base.@acquire
 Base.release
 
 Base.AbstractLock

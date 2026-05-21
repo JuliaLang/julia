@@ -18,9 +18,9 @@ import A.B.C: b, c.d as e
 # Imports without `from` module need separating with latestworld
 import A, B
 #---------------------
-1   (call JuliaLowering.eval_import true TestMod top.nothing :($(QuoteNode(:($(Expr(:., :A)))))))
+1   (call JuliaLowering.eval_import true TestMod core.nothing :($(QuoteNode(:($(Expr(:., :A)))))))
 2   latestworld
-3   (call JuliaLowering.eval_import true TestMod top.nothing :($(QuoteNode(:($(Expr(:., :B)))))))
+3   (call JuliaLowering.eval_import true TestMod core.nothing :($(QuoteNode(:($(Expr(:., :B)))))))
 4   latestworld
 5   (return core.nothing)
 

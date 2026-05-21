@@ -32,12 +32,12 @@ function failval(s, v)
 end
 
 @testset "Numbers" begin
-    @test failval("00"                   , Internals.ErrParsingDateTime)
-    @test failval("-00"                  , Internals.ErrParsingDateTime)
-    @test failval("+00"                  , Internals.ErrParsingDateTime)
-    @test failval("00.0"                 , Internals.ErrParsingDateTime)
-    @test failval("-00.0"                , Internals.ErrParsingDateTime)
-    @test failval("+00.0"                , Internals.ErrParsingDateTime)
+    @test failval("00"                   , Internals.ErrLeadingZeroNotAllowedInteger)
+    @test failval("-00"                  , Internals.ErrLeadingZeroNotAllowedInteger)
+    @test failval("+00"                  , Internals.ErrLeadingZeroNotAllowedInteger)
+    @test failval("00.0"                 , Internals.ErrLeadingZeroNotAllowedInteger)
+    @test failval("-00.0"                , Internals.ErrLeadingZeroNotAllowedInteger)
+    @test failval("+00.0"                , Internals.ErrLeadingZeroNotAllowedInteger)
 
     @test failval("0."        , Internals.ErrNoTrailingDigitAfterDot)
     @test failval("0.e"       , Internals.ErrNoTrailingDigitAfterDot)
@@ -46,8 +46,8 @@ end
     @test failval("0.0e"      , Internals.ErrGenericValueError)
     @test failval("0.0e-"     , Internals.ErrGenericValueError)
     @test failval("0.0e+"     , Internals.ErrGenericValueError)
-    @test_broken failval("0.0e+00" , Internals.ErrGenericValueError)
 
+    @test testval("0.0e+00"     , 0.0)
     @test testval("1.0"         , 1.0)
     @test testval("1.0e0"       , 1.0)
     @test testval("1.0e+0"      , 1.0)

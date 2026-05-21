@@ -303,7 +303,7 @@ end
 
 # just wait for a task to be done, no error propagation
 function _wait(t::Task)
-    t === current_task() && Core.throw(ConcurrencyViolationError("deadlock detected: cannot wait on current task"))
+    t === current_task() && throw(ConcurrencyViolationError("deadlock detected: cannot wait on current task"))
     if !istaskdone(t)
         donenotify = t.donenotify::ThreadSynchronizer
         lock(donenotify)

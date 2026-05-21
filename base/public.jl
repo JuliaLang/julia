@@ -69,6 +69,7 @@ public
     isexported,
     ispublic,
     remove_linenums!,
+    generating_output,
 
 # AST handling
     IR,
@@ -142,4 +143,5 @@ public
     runtests,
     text_colors,
     depwarn,
+    blackbox,
     donotdelete
