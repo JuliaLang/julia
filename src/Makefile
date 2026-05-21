@@ -313,8 +313,13 @@ $(BUILDDIR)/jl_data_globals_defs.inc: $(SRCDIR)/jl_exported_data.inc
 	} > $$TMPFILE; \
 	mv $$TMPFILE $@
 
+SHA256SUM := $(shell command -v sha256sum 2>/dev/null)
+ifeq ($(SHA256SUM),)
+SHA256SUM := shasum -a 256
+endif
+
 $(BUILDDIR)/jl_codegen_hash.inc: $(CODEGEN_SRCS_HASH:%=$(SRCDIR)/%.cpp)
-	cat $^ | shasum -a 1 | sed -E 's/^([0-9a-f]+).*/#define JL_CODEGEN_SRC_HASH "\1"/g' > $@
+	cat $^ | $(SHA256SUM) | sed -E 's/^([0-9a-f]+).*/#define JL_CODEGEN_SRC_HASH "\1"/g' > $@
 
 # source file rules
 $(BUILDDIR)/%.o: $(SRCDIR)/%.c $(HEADERS) | $(BUILDDIR)
