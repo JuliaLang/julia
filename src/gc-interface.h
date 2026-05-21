@@ -55,6 +55,8 @@ typedef struct {
     uint64_t total_stack_pool_sweep_time;
     uint64_t last_full_sweep;
     uint64_t last_incremental_sweep;
+    // Number of tracked image objects referencing non-image objects
+    uint64_t image_remset_size;
 } jl_gc_num_t;
 
 // ========================================================================= //

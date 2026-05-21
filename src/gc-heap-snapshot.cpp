@@ -171,6 +171,7 @@ struct HeapSnapshot {
     size_t internal_root_idx = 0; // node index of the internal root node
     size_t _gc_root_idx = 1; // node index of the GC roots node
     size_t _gc_finlist_root_idx = 2; // node index of the GC finlist roots node
+    size_t _gc_image_node_idx = 3; // node index of the combined [image] node
 };
 
 // global heap snapshot, mutated by garbage collector
@@ -302,6 +303,28 @@ void _add_synthetic_root_entries(HeapSnapshot *snapshot) JL_NOTSAFEPOINT
         snapshot->_gc_finlist_root_idx // to
     };
     serialize_edge(snapshot, root_to_gc_finlist_roots);
+
+    // Add a synthetic node representing all sysimage/pkgimage objects.
+    // Image objects are permanently marked and never traced by the GC mark
+    // phase, so we collapse them into a single node rather than recording
+    // their internal structure.
+    snapshot->_gc_image_node_idx = snapshot->num_nodes;
+    Node gc_image_node{
+        (uint32_t)snapshot->node_types.find_or_create_string_id("synthetic"),
+        snapshot->names.serialize_if_necessary(snapshot->strings, "[image]"), // name
+        snapshot->_gc_image_node_idx, // id
+        0, // size (image memory is not GC-managed)
+        0, // size_t trace_node_id (unused)
+        0 // int detachedness;  // 0 - unknown,  1 - attached;  2 - detached
+    };
+    serialize_node(snapshot, gc_image_node);
+    Edge root_to_image{
+        (uint32_t)snapshot->edge_types.find_or_create_string_id("internal"),
+        snapshot->names.serialize_if_necessary(snapshot->strings, "[image]"), // edge label
+        snapshot->internal_root_idx, // from
+        snapshot->_gc_image_node_idx // to
+    };
+    serialize_edge(snapshot, root_to_image);
 }
 
 // mimicking https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/src/profiler/heap-snapshot-generator.cc#L597-L597
@@ -402,6 +425,18 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
 
     if (ios_need_close)
         ios_close(&str_);
+
+    // Image objects are permanently marked and never traced by the GC mark
+    // phase, so they would otherwise appear as orphan nodes. Root them under
+    // the synthetic [image] node with a label indicating which image they belong to.
+    if (jl_astaggedvalue(a)->bits.in_image) {
+        jl_value_t *top_mod = jl_object_top_module(a);
+        const char *label = "[image]";
+        if (top_mod != (jl_value_t*)jl_nothing && jl_is_module((jl_module_t*)top_mod))
+            label = jl_symbol_name_(((_jl_module_t*)top_mod)->name);
+        _record_gc_just_edge("internal", g_snapshot->_gc_image_node_idx, val.first->second,
+                             g_snapshot->names.serialize_if_necessary(g_snapshot->strings, label));
+    }
 
     return val.first->second;
 }
