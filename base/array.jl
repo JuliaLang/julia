@@ -365,7 +365,7 @@ function fill!(A::AbstractArray{T}, x) where T
 end
 function _fill!(A::AbstractArray{T}, x::T) where T
     for i in eachindex(A)
-        A[i] = x
+       @inbounds A[i] = x
     end
     return A
 end
