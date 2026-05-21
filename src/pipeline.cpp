@@ -535,6 +535,7 @@ static void buildVectorPipeline(FunctionPassManager &FPM, PassBuilder *PB, Optim
         // Rerotate loops that might have been unrotated in the simplification
         LoopPassManager LPM;
         LPM.addPass(LoopRotatePass());
+        LPM.addPass(LoopIdiomRecognizePass());
         LPM.addPass(LoopDeletionPass());
         FPM.addPass(createFunctionToLoopPassAdaptor(std::move(LPM), /*UseMemorySSA=*/false, /*UseBlockFrequencyInfo=*/false));
         FPM.addPass(LoopDistributePass());
@@ -542,8 +543,6 @@ static void buildVectorPipeline(FunctionPassManager &FPM, PassBuilder *PB, Optim
         FPM.addPass(LoopVectorizePass());
         FPM.addPass(LoopLoadEliminationPass());
         FPM.addPass(SimplifyCFGPass(aggressiveSimplifyCFGOptions()));
-        FPM.addPass(createFunctionToLoopPassAdaptor(LoopIdiomRecognizePass(), /*UseMemorySSA=*/true, /*UseBlockFrequencyInfo=*/false));
-        FPM.addPass(createFunctionToLoopPassAdaptor(LoopDeletionPass(), /*UseMemorySSA=*/true, /*UseBlockFrequencyInfo=*/false));
         FPM.addPass(createFunctionToLoopPassAdaptor(LICMPass(LICMOptions()), /*UseMemorySSA=*/true, /*UseBlockFrequencyInfo=*/false));
         FPM.addPass(EarlyCSEPass());
         FPM.addPass(CorrelatedValuePropagationPass());
