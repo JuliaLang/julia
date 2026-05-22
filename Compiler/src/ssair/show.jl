@@ -48,6 +48,20 @@ end
 
 const inlined_apply_iterate_types = Union{Array,Memory,Tuple,NamedTuple,Core.SimpleVector}
 
+@enum SSAWarnTypeClass::UInt8 begin
+    SSA_WARN_TYPE_STABLE
+    SSA_WARN_TYPE_MILD
+    SSA_WARN_TYPE_STRONG
+end
+
+function ssa_warn_type_class(io::IO, idx::Int)
+    levels = get(io, :ssa_warn_levels, nothing)
+    if levels isa AbstractVector{SSAWarnTypeClass} && isassigned(levels, idx)
+        return levels[idx]
+    end
+    return SSA_WARN_TYPE_STABLE
+end
+
 function builtin_call_has_dispatch(
     @nospecialize(f),
     args::Vector{Any},
@@ -77,12 +91,14 @@ end
 
 function print_stmt(io::IO, idx::Int, @nospecialize(stmt), code::Union{IRCode,CodeInfo,IncrementalCompact},
                     sptypes::Vector{VarState}, used::BitSet, maxlength_idx::Int, color::Bool, show_type::Bool, label_dynamic_calls::Bool)
-    unstable_ssa = get(io, :unstable_ssa, nothing)
     if idx in used
         idx_s = string(idx)
         pad = " "^(maxlength_idx - length(idx_s) + 1)
-        if color && unstable_ssa isa BitSet && idx in unstable_ssa
+        cls = ssa_warn_type_class(io, idx)
+        if color && cls === SSA_WARN_TYPE_STRONG
             printstyled(io, "%", idx_s; color=:light_red, bold=true)
+        elseif color && cls === SSA_WARN_TYPE_MILD
+            printstyled(io, "%", idx_s; color=Base.warn_color(), bold=true)
         else
             print(io, "%", idx_s)
         end
@@ -971,12 +987,21 @@ function show_ir(io::IO, ir::IRCode, config::IRShowConfig=default_config(io, ir)
     finish_show_ir(io, cfg, config)
 end
 
-function is_unstable_ssa(code::CodeInfo, idx::Int)
+function warntype_type_class(@nospecialize(type))
+    if type isa Union && is_expected_union(type)
+        return SSA_WARN_TYPE_MILD
+    elseif type isa Type && (!Base.isdispatchelem(type) || type == Core.Box)
+        return SSA_WARN_TYPE_STRONG
+    else
+        return SSA_WARN_TYPE_STABLE
+    end
+end
+
+function ssa_warntype_class(code::CodeInfo, idx::Int)
     types = code.ssavaluetypes
-    types isa Vector{Any} || return false
-    isassigned(types, idx) || return false
-    type = types[idx]
-    return type === Any
+    types isa Vector || return SSA_WARN_TYPE_STABLE
+    isassigned(types, idx) || return SSA_WARN_TYPE_STABLE
+    return warntype_type_class(types[idx])
 end
 
 function show_ir(io::IO, ci::CodeInfo, config::IRShowConfig=default_config(io, ci);
@@ -987,8 +1012,11 @@ function show_ir(io::IO, ci::CodeInfo, config::IRShowConfig=default_config(io, c
     sptypes = if parent isa MethodInstance
         sptypes_from_meth_instance(parent)
     else EMPTY_SPTYPES end
-    unstable_ssa = filter(idx -> is_unstable_ssa(ci, idx), used)
-    let io = IOContext(io, :maxssaid=>length(ci.code), :unstable_ssa=>unstable_ssa)
+    ssa_warn_levels = fill(SSA_WARN_TYPE_STABLE, length(ci.code))
+    for idx in used
+        ssa_warn_levels[idx] = ssa_warntype_class(ci, idx)
+    end
+    let io = IOContext(io, :maxssaid=>length(ci.code), :ssa_warn_levels=>ssa_warn_levels)
         show_ir_stmts(io, ci, 1:length(ci.code), config, sptypes, used, cfg, 1; pop_new_node!)
     end
     finish_show_ir(io, cfg, config)

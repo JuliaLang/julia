@@ -52,11 +52,12 @@ end
 function warntype_type_printer(io::IO; @nospecialize(type), used::Bool, show_type::Bool=true, _...)
     (show_type && used) || return nothing
     str = "::$type"
+    cls = Base.Compiler.IRShow.warntype_type_class(type)
     if !highlighting[:warntype]
         print(io, str)
-    elseif type isa Union && Base.Compiler.IRShow.is_expected_union(type)
+    elseif cls === Base.Compiler.IRShow.SSA_WARN_TYPE_MILD
         Base.emphasize(io, str, Base.warn_color()) # more mild user notification
-    elseif type isa Type && (!Base.isdispatchelem(type) || type == Core.Box)
+    elseif cls === Base.Compiler.IRShow.SSA_WARN_TYPE_STRONG
         Base.emphasize(io, str)
     else
         Base.printstyled(io, str, color=:cyan) # show the "good" type
