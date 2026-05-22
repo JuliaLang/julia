@@ -204,9 +204,20 @@ function seekend(s::IOStream)
     return s
 end
 function seekend(s::IOStream, n::Integer)
-    # Non-atomic: if skip errors (e.g. n more negative than the file size), the stream
-    # is left at EOF rather than its original position.
-    return skip(seekend(s), n)
+    n == 0 && return seekend(s)
+    # Save the original position so callers observe either success or a no-op: if the
+    # seek pair fails (e.g. `skip` with `n` more negative than the file size), restore
+    # the stream before rethrowing rather than leaving it at EOF. Not thread-atomic;
+    # concurrent operations on `s` may still interleave between the two ccalls.
+    pos = position(s)
+    try
+        seekend(s)
+        skip(s, n)
+    catch
+        seek(s, pos)
+        rethrow()
+    end
+    return s
 end
 
 """
