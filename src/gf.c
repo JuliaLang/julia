@@ -3030,6 +3030,9 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
                     continue;
                 jl_array_ptr_1d_push(oldmi, (jl_value_t*)mi);
             }
+            jl_method_instance_t *unspec = jl_atomic_load_relaxed(&m->unspecialized);
+            if (unspec)
+                jl_array_ptr_1d_push(oldmi, (jl_value_t*)unspec);
             d = NULL;
             n = 0;
         }
@@ -3068,6 +3071,9 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
                     continue;
 
                 // Now examine if this caused any invalidations.
+                jl_method_instance_t *unspec = jl_atomic_load_relaxed(&m->unspecialized);
+                if (unspec)
+                    jl_array_ptr_1d_push(oldmi, (jl_value_t*)unspec);
                 loctag = jl_atomic_load_relaxed(&m->specializations); // use loctag for a gcroot
                 _Atomic(jl_method_instance_t*) *data;
                 size_t l;
