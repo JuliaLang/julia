@@ -232,6 +232,17 @@ h11840(::Type{T}) where {T<:Tuple} = '4'
 @test h11840(Tuple) == '4'
 @test h11840(TT11840) == '4'
 
+# issue #61242: free-TypeVar bodies and their enclosing UnionAlls bind as
+# distinct type objects.
+let f61242(::Type{T}) where T = T
+    @test f61242(Vector.body) === Vector.body
+    @test f61242(Vector) === Vector
+end
+let g61242(::Type{T}) where T = T
+    @test g61242(Vector) === Vector
+    @test g61242(Vector.body) === Vector.body
+end
+
 # show that we don't make the cache confused by using alternative representations
 # when specificity is reversed
 j11840(::DataType) = '1'
