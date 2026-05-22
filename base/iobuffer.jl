@@ -524,6 +524,9 @@ function seek(io::GenericIOBuffer, n::Int)
 end
 
 function seekend(io::GenericIOBuffer, n::Integer=0)
+    if !io.seekable && n != 0
+        throw(ArgumentError("seek failed, IOBuffer is not seekable and n != 0"))
+    end
     io.ptr = io.size+1+n
     return io
 end
