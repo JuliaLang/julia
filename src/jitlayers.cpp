@@ -844,25 +844,44 @@ public:
         Interface I;
         auto &Syms = I.SymbolFlags;
         SmallSet<SymbolStringPtr, 2> CISyms;
+        SmallVector<
+            std::pair<jl_code_instance_t *, jl_codeinst_funcs_t<orc::SymbolStringPtr>>, 2>
+            DeadCIs;
         for (auto &[CI, Funcs] : Out.linker_info->ci_funcs) {
+            jl_callptr_t Expected = NULL;
+            CISymbolPtr Unique{};
+
+            // If we lose the race to register a symbol for this CI, we must
+            // avoid defining a symbol in the ORC interface for this
+            // MaterializationUnit, lest we raise a UnexpectedSymbolDefinitions
+            // error.
+            if (jl_atomic_cmpswap_relaxed(&CI->invoke, &Expected,
+                                          jl_fptr_wait_for_compiled_addr)) {
+                Unique = JIT.makeUniqueCIName(CI, Funcs);
+            }
+            else {
+                DeadCIs.push_back({CI, Funcs});
+                continue;
+            }
+
             if (Funcs.invoke)
                 CISyms.insert(Funcs.invoke);
             if (Funcs.specptr)
                 CISyms.insert(Funcs.specptr);
 
-            // If we discover that another thread added this CI to the JIT
-            // first, we'll still add the original symbols to CISyms (so they
-            // will be filtered out of the MU Interface), but we won't register them in
-            // CISymbols.
-            jl_callptr_t Expected = NULL;
-            CISymbolPtr Unique{};
-            if (jl_atomic_cmpswap_relaxed(&CI->invoke, &Expected,
-                                          jl_fptr_wait_for_compiled_addr))
-                Unique = JIT.makeUniqueCIName(CI, Funcs);
             if (Unique.invoke)
                 Syms[Unique.invoke] = JITSymbolFlags::Callable | JITSymbolFlags::Exported;
             if (Unique.specptr)
                 Syms[Unique.specptr] = JITSymbolFlags::Callable | JITSymbolFlags::Exported;
+        }
+
+        for (auto &[CI, Funcs] : DeadCIs) {
+            Function *F;
+            Out.linker_info->ci_funcs.erase(CI);
+            if (Funcs.invoke && (F = Out.module->getFunction(*Funcs.invoke)))
+                F->setLinkage(Function::PrivateLinkage);
+            if (Funcs.specptr && (F = Out.module->getFunction(*Funcs.specptr)))
+                F->setLinkage(Function::PrivateLinkage);
         }
 
         // Tell ORC about all the other definition in this module.  When
