@@ -205,17 +205,26 @@ function seekend(s::IOStream)
 end
 function seekend(s::IOStream, n::Integer)
     n == 0 && return seekend(s)
-    # Save the original position so callers observe either success or a no-op: if the
-    # seek pair fails (e.g. `skip` with `n` more negative than the file size), restore
-    # the stream before rethrowing rather than leaving it at EOF. Not thread-atomic;
-    # concurrent operations on `s` may still interleave between the two ccalls.
-    pos = position(s)
+    # Hold the stream's reentrant lock across position/seekend/skip/restore so a
+    # concurrent task on the same `IOStream` cannot observe the intermediate EOF
+    # state, and so an error in the seek pair restores the original position before
+    # rethrowing. The outer try/finally guarantees the lock is released even on
+    # throw — `@_lock_ios` does not wrap its body in try/finally, so we acquire and
+    # release explicitly here. The inner Julia-level calls each reacquire the same
+    # `ReentrantLock` as no-ops.
+    locked = s._dolock
+    locked && lock(s.lock)
     try
-        seekend(s)
-        skip(s, n)
-    catch
-        seek(s, pos)
-        rethrow()
+        pos = position(s)
+        try
+            seekend(s)
+            skip(s, n)
+        catch
+            seek(s, pos)
+            rethrow()
+        end
+    finally
+        locked && unlock(s.lock)
     end
     return s
 end
