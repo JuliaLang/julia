@@ -28,7 +28,7 @@ You like the following fruits:
 
 """
 mutable struct MultiSelectMenu{C} <: _ConfiguredMenu{C}
-    options::Array{String,1}
+    options::Vector{<:AbstractString}
     pagesize::Int
     pageoffset::Int
     selected::Set{Int}
@@ -38,7 +38,7 @@ end
 
 """
 
-    MultiSelectMenu(options::Vector{String}; pagesize::Int=10, selected=[], kwargs...)
+    MultiSelectMenu(options::Vector{<:AbstractString}; pagesize::Int=10, selected=[], kwargs...)
 
 Create a MultiSelectMenu object. Use `request(menu::MultiSelectMenu)` to get
 user input. It returns a `Set` containing the indices of options that
@@ -46,7 +46,7 @@ were selected by the user.
 
 # Arguments
 
-  - `options::Vector{String}`: Options to be displayed
+  - `options::Vector{<:AbstractString}`: Options to be displayed
   - `pagesize::Int=10`: The number of options to be displayed at one time, the menu will scroll if length(options) > pagesize
   - `selected=[]`: pre-selected items. `i ∈ selected` means that `options[i]` is preselected.
 
@@ -55,7 +55,7 @@ Any additional keyword arguments will be passed to [`TerminalMenus.MultiSelectCo
 !!! compat "Julia 1.6"
     The `selected` argument requires Julia 1.6 or later.
 """
-function MultiSelectMenu(options::Array{String,1}; pagesize::Int=10, selected=Int[], warn::Bool=true, kwargs...)
+function MultiSelectMenu(options::Vector{<:AbstractString}; pagesize::Int=10, selected=Int[], warn::Bool=true, kwargs...)
     length(options) < 1 && error("MultiSelectMenu must have at least one option")
 
     # if pagesize is -1, use automatic paging
@@ -103,7 +103,7 @@ function pick(menu::MultiSelectMenu, cursor::Int)
     return false #break out of the menu
 end
 
-function writeline(buf::IOBuffer, menu::MultiSelectMenu{MultiSelectConfig}, idx::Int, iscursor::Bool)
+function writeline(buf::IO, menu::MultiSelectMenu{MultiSelectConfig}, idx::Int, iscursor::Bool)
     if idx in menu.selected
         print(buf, menu.config.checked, " ")
     else
@@ -129,7 +129,7 @@ end
 
 
 ## Legacy interface
-function TerminalMenus.writeLine(buf::IOBuffer, menu::MultiSelectMenu{<:Dict}, idx::Int, cursor::Bool)
+function TerminalMenus.writeLine(buf::IO, menu::MultiSelectMenu{<:Dict}, idx::Int, cursor::Bool)
     # print a ">" on the selected entry
     cursor ? print(buf, menu.config[:cursor]," ") : print(buf, "  ")
     if idx in menu.selected

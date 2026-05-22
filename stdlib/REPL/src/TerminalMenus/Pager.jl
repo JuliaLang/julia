@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 mutable struct Pager{C} <: _ConfiguredMenu{C}
-    lines::Vector{String}
+    lines::Vector{<:AbstractString}
     pagesize::Int
     pageoffset::Int
     selected::Nothing
@@ -9,7 +9,8 @@ mutable struct Pager{C} <: _ConfiguredMenu{C}
 end
 
 function Pager(text::AbstractString; pagesize::Int=10, kwargs...)
-    lines = readlines(IOBuffer(text))
+    lines = text isa String ? readlines(IOBuffer(text)) : split(text, '\n')
+    # TODO: remove trailing '\r' and empty last line for AbstractString?
     return Pager(lines, pagesize, 0, nothing, Config(; kwargs...))
 end
 
@@ -26,7 +27,7 @@ cancel(::Pager) = nothing
 
 pick(::Pager, ::Int) = true
 
-function writeline(buf::IOBuffer, pager::Pager{Config}, idx::Int, iscursor::Bool)
+function writeline(buf::IO, pager::Pager{Config}, idx::Int, iscursor::Bool)
     print(buf, pager.lines[idx])
 end
 
