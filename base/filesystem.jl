@@ -335,6 +335,9 @@ function seek(f::File, n::Integer)
 end
 
 function seekend(f::File, n::Integer=0)
+    # jl_lseek (POSIX lseek) validates the absolute offset: an EOF+n that would land
+    # before the start of the file returns -1/EINVAL and is reported via systemerror
+    # below. Past-EOF positioning is allowed by POSIX (sparse-file semantics).
     ret = ccall(:jl_lseek, Int64, (OS_HANDLE, Int64, Int32), f.handle, n, SEEK_END)
     ret == -1 && (@static Sys.iswindows() ? windowserror : systemerror)("seekend")
     return f
