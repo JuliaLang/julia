@@ -318,6 +318,7 @@ false
 ```
 """
 !=(x, y) = !(x == y)
+typeof(!=).name.max_methods = UInt8(1)
 const ≠ = !=
 
 """
@@ -422,6 +423,7 @@ true
 ```
 """
 >(x, y) = y < x
+typeof(>).name.max_methods = UInt8(1)
 
 """
     <=(x, y)
@@ -477,6 +479,7 @@ true
 ```
 """
 >=(x, y) = (y <= x)
+typeof(>=).name.max_methods = UInt8(1)
 const ≥ = >=
 
 # this definition allows Number types to implement < instead of isless,
