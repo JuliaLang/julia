@@ -187,7 +187,16 @@ seekstart(s::IO) = seek(s,0)
 """
     seekend(s, n=0)
 
-Seek a stream to `n` bytes relative to its end.
+Seek a stream to `n` bytes relative to its end. With the default `n == 0`,
+the stream is positioned at its end (equivalent to the legacy
+single-argument form `seekend(s)`).
+
+`n` may be negative to position the stream that many bytes before the end.
+Behavior at the boundaries depends on the underlying stream: file-backed
+streams permit positioning past end-of-file (POSIX `lseek`/`SEEK_END`
+semantics), while in-memory buffers clamp the resulting position to the
+buffer's writable range. A non-seekable in-memory buffer rejects calls
+with `n != 0` by throwing an `ArgumentError`.
 """
 function seekend(s::IOStream)
     err = @_lock_ios s ccall(:ios_seek_end, Int64, (Ptr{Cvoid},), s.ios) != 0
@@ -195,6 +204,8 @@ function seekend(s::IOStream)
     return s
 end
 function seekend(s::IOStream, n::Integer)
+    # Non-atomic: if skip errors (e.g. n more negative than the file size), the stream
+    # is left at EOF rather than its original position.
     return skip(seekend(s), n)
 end
 
