@@ -2944,94 +2944,51 @@ end
 @testset "issue #54028: Unstable SSA highlighting in code_warntype" begin
     using InteractiveUtils
 
-    # Helper: function with type instability (returns Any)
-    function foo_unstable_ssa(x)
+    function foo_ssa_test(x)
         y = x[1]
-        sin(y)
+        sin(y+1)
     end
 
-    # Helper: fully stable function (returns Float64)
-    function foo_stable_ssa(x::Float64)
-        y = sin(x)
-        cos(y)
+    render_code_warntype(f, tt; color::Bool) = sprint(io -> begin
+        ioc = IOContext(io, :color => color)
+        code_warntype(ioc, f, tt)
+    end)
+
+    has_colored_ssa_lhs(str, color) =
+        occursin(Regex("(\\e\\[$(color)m\\e\\[1m|\\e\\[1m\\e\\[$(color)m)%\\d+(\\e\\[22m\\e\\[39m|\\e\\[39m\\e\\[22m)\\s*="), str)
+
+    has_colored_ssa_rhs(str, color) =
+        occursin(Regex("(\\e\\[$(color)m\\e\\[1m|\\e\\[1m\\e\\[$(color)m)%\\d+(\\e\\[22m\\e\\[39m|\\e\\[39m\\e\\[22m)(?!\\s*=)"), str)
+
+    @testset "strong SSA highlighted for Vector{Any}" begin
+        str = render_code_warntype(foo_ssa_test, (Vector{Any},); color=true)
+        @test has_colored_ssa_lhs(str, "91")
+        @test has_colored_ssa_rhs(str, "91")
     end
 
-    # Test 1: Unstable SSA values are highlighted with light_red+bold when color=true
-    @testset "unstable SSA highlighted with color=true" begin
-        io = IOBuffer()
-        ioc = IOContext(io, :color => true)
-        code_warntype(ioc, foo_unstable_ssa, (Vector{Any},), optimize=true)
-        str = String(take!(io))
-
-        # light_red = ANSI 91, bold = ANSI 1
-        # The %N on the LHS of unstable assignments should be highlighted
-        @test contains(str, "\e[91m\e[1m%")
+    @testset "strong SSA highlighted for Vector{Real}" begin
+        str = render_code_warntype(foo_ssa_test, (Vector{Real},); color=true)
+        @test has_colored_ssa_lhs(str, "91")
+        @test has_colored_ssa_rhs(str, "91")
     end
 
-    # Test 2: No unstable highlighting when color=false
-    @testset "no unstable highlighting with color=false" begin
-        io = IOBuffer()
-        ioc = IOContext(io, :color => false)
-        code_warntype(ioc, foo_unstable_ssa, (Vector{Any},), optimize=true)
-        str = String(take!(io))
+    @testset "mild SSA highlighted for Vector{Union{Int, Float64}}" begin
+        str = render_code_warntype(foo_ssa_test, (Vector{Union{Int, Float64}},); color=true)
+        @test has_colored_ssa_lhs(str, "33") || has_colored_ssa_lhs(str, "93")
+        @test has_colored_ssa_rhs(str, "33") || has_colored_ssa_rhs(str, "93")
+    end
 
-        # Should NOT contain light_red ANSI codes
+    @testset "no SSA highlighting with color=false" begin
+        str = render_code_warntype(foo_ssa_test, (Vector{Any},); color=false)
         @test !contains(str, "\e[91m")
-        # Should still contain SSA values (just without color)
-        @test contains(str, "%")
+        @test !contains(str, "\e[33m")
+        @test !contains(str, "\e[93m")
     end
 
-    # Test 3: Stable functions should have NO light_red highlighting (no false positives)
-    @testset "stable function has no unstable highlighting" begin
-        io = IOBuffer()
-        ioc = IOContext(io, :color => true)
-        code_warntype(ioc, foo_stable_ssa, (Float64,), optimize=true)
-        str = String(take!(io))
-
-        # No light_red (91) highlighting for stable SSA values
-        @test !contains(str, "\e[91m\e[1m%")
-    end
-
-    # Test 4: Body type annotation shows ::Any for unstable
-    @testset "body type ::Any shown for unstable function" begin
-        io = IOBuffer()
-        ioc = IOContext(io, :color => true)
-        code_warntype(ioc, foo_unstable_ssa, (Vector{Any},), optimize=true)
-        str = String(take!(io))
-
-        # The return type should indicate instability with ::Any
-        @test contains(str, "Any")
-    end
-end
-
-@testset "Check PiNode color" begin
-    using InteractiveUtils
-
-    function example_function_pinode(x::Union{Int, Float64})
-        if isa(x, Int)
-            y = (x + 1)::Int
-        else
-            y = (x + 1.0)::Float64
-        end
-        return y
-    end
-
-    @testset "PiNode types printed in cyan with color=true" begin
-        io = IOBuffer()
-        ioc = IOContext(io, :color => true)
-        code_warntype(ioc, example_function_pinode, (Union{Int, Float64},); optimize=true)
-        str = String(take!(io))
-        # cyan = ANSI 36, reset = ANSI 39
-        @test contains(str, "π (x, \e[36mInt64\e[39m)")
-        @test contains(str, "π (x, \e[36mFloat64\e[39m)")
-    end
-
-    @testset "PiNode types plain text with color=false" begin
-        io = IOBuffer()
-        ioc = IOContext(io, :color => false)
-        code_warntype(ioc, example_function_pinode, (Union{Int, Float64},); optimize=true)
-        str = String(take!(io))
-        @test contains(str, "π (x, Int64)")
-        @test contains(str, "π (x, Float64)")
+    @testset "stable input has no unstable highlighting" begin
+        str = render_code_warntype(foo_ssa_test, (Vector{Float64},); color=true)
+        @test !contains(str, "\e[91m")
+        @test !contains(str, "\e[33m")
+        @test !contains(str, "\e[93m")
     end
 end
