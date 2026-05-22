@@ -40,9 +40,11 @@ macro _lock_ios(s, expr)
         l = ($s)._dolock
         temp = ($s).lock
         l && lock(temp)
-        val = $(esc(expr))
-        l && unlock(temp)
-        val
+        try
+            $(esc(expr))
+        finally
+            l && unlock(temp)
+        end
     end
 end
 
@@ -208,13 +210,9 @@ function seekend(s::IOStream, n::Integer)
     # Hold the stream's reentrant lock across position/seekend/skip/restore so a
     # concurrent task on the same `IOStream` cannot observe the intermediate EOF
     # state, and so an error in the seek pair restores the original position before
-    # rethrowing. The outer try/finally guarantees the lock is released even on
-    # throw — `@_lock_ios` does not wrap its body in try/finally, so we acquire and
-    # release explicitly here. The inner Julia-level calls each reacquire the same
-    # `ReentrantLock` as no-ops.
-    locked = s._dolock
-    locked && lock(s.lock)
-    try
+    # rethrowing. The inner Julia-level calls each reacquire the same `ReentrantLock`
+    # as no-ops.
+    @_lock_ios s begin
         pos = position(s)
         try
             seekend(s)
@@ -223,8 +221,6 @@ function seekend(s::IOStream, n::Integer)
             seek(s, pos)
             rethrow()
         end
-    finally
-        locked && unlock(s.lock)
     end
     return s
 end
