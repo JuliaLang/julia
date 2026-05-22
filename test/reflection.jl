@@ -365,6 +365,34 @@ let defaultset = Set((:A,))
     @test Set(names(TestMod54609.A, all=true, imported=true, usings=true)) == allset ∪ imported ∪ usings
 end
 
+module _TestModNamesNoMaterialize
+    export foo, bar, baz
+    foo() = 1
+    bar() = 2
+    baz() = 3
+end
+module _TestModNamesNoMaterializeUser
+    using .._TestModNamesNoMaterialize
+end
+@testset "names does not materialize binding partitions" begin
+    # names(m) should not materialize binding partitions for implicit imports,
+    # as doing so can trigger unnecessary invalidation cascades during
+    # subsequent `using` statements.
+    B = _TestModNamesNoMaterializeUser
+    # Create bindings in B for the using'd exports without materializing partitions
+    for sym in (:foo, :bar, :baz)
+        ccall(:jl_get_module_binding, Ref{Core.Binding}, (Any, Any, Cint), B, sym, Cint(1))
+    end
+    names(B)
+    # Verify partitions were not materialized as a side effect
+    for sym in (:foo, :bar, :baz)
+        b = ccall(:jl_get_module_binding_or_nothing, Any, (Any, Any), B, sym)
+        @test b !== nothing
+        has_partition = try (@atomic b.partitions; true) catch e; e isa UndefRefError ? false : rethrow(); end
+        @test !has_partition
+    end
+end
+
 @testset "names world argument" begin
     # `names(M; all=true)` walks bindings and filters by partition kind at the
     # given world. A binding that doesn't yet have a GLOBAL/CONST/DECLARED
