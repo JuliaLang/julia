@@ -2111,7 +2111,23 @@ void append_module_names(jl_array_t* a, jl_module_t *m, int all, int imported, i
         jl_sym_t *asname = b->globalref->name;
         int hidden = jl_symbol_name(asname)[0]=='#';
         int main_public = (m == jl_main_module && !(asname == jl_eval_sym || asname == jl_include_sym));
-        jl_binding_partition_t *bpart = jl_get_binding_partition(b, world);
+        // Use non-materializing read to avoid creating binding partitions as a
+        // side effect. Fall back to materializing if we need the kind to
+        // determine visibility (e.g. for `all`, `imported`, or `usings`).
+        struct implicit_search_gap gap;
+        jl_binding_partition_t *bpart = jl_get_binding_partition_if_present(b, world, &gap);
+        if (!bpart) {
+            if (all || imported || usings) {
+                bpart = jl_get_binding_partition(b, world);
+            } else {
+                // We only need public/exported status. Public is on the binding
+                // itself; exported bindings were already materialized above.
+                if ((jl_atomic_load_relaxed(&b->flags) & BINDING_FLAG_PUBLICP) &&
+                    (!(gap.inherited_flags & PARTITION_FLAG_DEPRECATED) && !hidden))
+                    _append_symbol_to_bindings_array(a, asname);
+                continue;
+            }
+        }
         enum jl_partition_kind kind = jl_binding_kind(bpart);
         if (((jl_atomic_load_relaxed(&b->flags) & BINDING_FLAG_PUBLICP) ||
              jl_bpart_is_exported(bpart->kind) ||
@@ -2137,7 +2153,10 @@ void append_exported_names(jl_array_t* a, jl_module_t *m, int all, size_t world)
         jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
         if ((void*)b == jl_nothing)
             break;
-        jl_binding_partition_t *bpart = jl_get_binding_partition(b, world);
+        struct implicit_search_gap gap;
+        jl_binding_partition_t *bpart = jl_get_binding_partition_if_present(b, world, &gap);
+        if (!bpart)
+            continue;
         if (jl_bpart_is_exported(bpart->kind) && (all || !(bpart->kind & PARTITION_FLAG_DEPRECATED)))
             _append_symbol_to_bindings_array(a, b->globalref->name);
     }
