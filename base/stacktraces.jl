@@ -111,13 +111,36 @@ function hash(frame::StackFrame, h::UInt)
     return h
 end
 
-# Decode a single codeloc entry, advancing one level of inlining. Returns
-# `(line, to, next_pc)` where `to` is the 1-based index into `debuginfo.edges`
-# for the inlined call directly at `pc` (0 if none), and `next_pc` is the PC
-# within `debuginfo.edges[to]`'s CodeInfo. To traverse nested inlinings, the
-# caller must follow the edge and call this again with `(edges[to], next_pc)`.
-debuginfo_codeloc(debuginfo::Core.DebugInfo, pc::Integer) =
-    @ccall jl_uncompress1_codeloc(debuginfo::Any, pc::Csize_t)::NTuple{3,Int32}
+function _add_linetable_frames!(frames, pointer, di::Core.DebugInfo, pc::Int)
+    lt = di.linetable
+    if lt isa Core.DebugInfo
+        ltpc::Int, _, _ = Base.Compiler.getdebugidx(di, pc)
+        _add_linetable_frames!(frames, pointer, lt, ltpc)
+        _, eid::Int, epc::Int = Base.Compiler.getdebugidx(lt, ltpc)
+        eid != 0 && _add_di_frames!(frames, pointer, lt.edges[eid], epc)
+    end
+    nothing
+end
+
+# 1. Push our own frame
+# 2. If there is a linetable, recurse on edges there (and not the linetable)
+# 3. Recurse on any of our own edges
+function _add_di_frames!(frames, pointer, di::Core.DebugInfo, pc::Int)
+    _, eid::Int, epc::Int = Base.Compiler.getdebugidx(di, pc)
+    @assert pc > 0 "invalid pc for $di.def"
+    push!(frames, StackFrame(
+        di.def isa Symbol ? Symbol("macro expansion") : IRShow.method_name(di.def),
+        IRShow.debuginfo_file1(di),
+        @ccall(jl_cdi_firstxy(di::Core.DebugInfo, pc::Int32)::NTuple{2, Int32})[1],
+        di.def isa Core.MethodInstance ? di.def : nothing,
+        false, # we can assume C frames aren't inlined into julia
+        !isempty(frames),
+        pointer,
+        pc))
+    _add_linetable_frames!(frames, pointer, di, pc)
+    eid != 0 && _add_di_frames!(frames, pointer, di.edges[eid], epc)
+    nothing
+end
 
 """
     lookup(pointer::Ptr{Cvoid})::Vector{StackFrame}
@@ -127,46 +150,42 @@ up stack frame context information. Returns an array of frame information for al
 inlined at that point, innermost function first.
 """
 Base.@constprop :none function lookup(pointer::Ptr{Cvoid})
-    infos = @ccall jl_lookup_code_address(pointer::Ptr{Cvoid}, false::Cint)::Core.SimpleVector
+    frames = @ccall jl_lookup_code_address(pointer::Ptr{Cvoid}, false::Cint)::Core.SimpleVector
     pointer = convert(UInt64, pointer)
-    isempty(infos) && return [StackFrame(empty_sym, empty_sym, -1, nothing, true, false, pointer)] # this is equal to UNKNOWN
-    ninfos = length(infos)
-    res = Vector{StackFrame}(undef, ninfos)
-    local debuginfo = false
-    local parent_pc = 0
-    for i = ninfos:-1:1
-        info = infos[i]::Core.SimpleVector
-        @assert length(info) == 7 "corrupt return from jl_lookup_code_address"
-        func = info[1]::Symbol
-        file = info[2]::Symbol
-        linenum = info[3]::Int
-        linfo = info[4]
-        pc = info[7]::Int
-        if linfo isa Core.CodeInstance
-            if debuginfo === false
-                debuginfo = linfo.debuginfo
-            else
-                debuginfo = true
-            end
-            linfo = linfo.def
-        elseif debuginfo isa Core.DebugInfo && parent_pc > 0
-            # Use the parent frame's PC to look up which inlining edge of the
-            # current `debuginfo` corresponds to this frame's call site.
-            _, to::Int, _ = debuginfo_codeloc(debuginfo, parent_pc)
-            if to > 0 && to <= length(debuginfo.edges)
-                debuginfo = debuginfo.edges[to]::Core.DebugInfo
-                def = debuginfo.def
-                if !(def isa Symbol)
-                    linfo = def
-                end
-            else
-                debuginfo = true
-            end
-        end
-        parent_pc = pc
-        res[i] = StackFrame(func, file, linenum, linfo, info[5]::Bool, info[6]::Bool, pointer, pc)
+
+    # this is equal to UNKNOWN
+    isempty(frames) && return [StackFrame(
+        empty_sym, empty_sym, -1, nothing, true, false, pointer)]
+
+    # If we aren't given a PC and CodeInstance for the last (non-inlined) frame,
+    # we can't recover any more information than `frames`, so use those.
+    # Otherwise, DebugInfo lets us recover `linfo` for inlined frames too, so
+    # ignore `frames` and construct them by traversing the DebugInfo tree
+    # instead.  This is a separate code path since attempting to enhance
+    # existing `frames` would require matching them to our tree traversal.
+    pc = frames[end][5]::Bool ? 0 : frames[end][7]::Int
+    di = let x = frames[end][4]
+        x isa Core.CodeInstance ? x.debuginfo : nothing
     end
-    return res
+    if pc <= 0 || !(di isa Core.DebugInfo)
+        out = Vector{StackFrame}(undef, length(frames))
+        for i in 1:length(frames)
+            f = frames[i]
+            @assert length(f) == 7 "corrupt return from jl_lookup_code_address"
+            func = f[1]::Symbol
+            file = f[2]::Symbol
+            linenum = f[3]::Int
+            linfo = f[4]
+            from_c = f[5]::Bool
+            inlined = f[6]::Bool
+            out[i] = StackFrame(func, file, linenum, linfo, from_c, inlined, pointer, 0)
+        end
+    else
+        out = Vector{StackFrame}()
+        _add_di_frames!(out, pointer, di, pc)
+        reverse!(out)
+    end
+    return out
 end
 
 const top_level_scope_sym = Symbol("top-level scope")

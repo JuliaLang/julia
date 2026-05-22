@@ -1468,7 +1468,8 @@ static void cdi_deref(jl_debuginfo_t **p_di, int32_t *p_pc, int recursive) JL_NO
     int32_t pc = 0;
     if (!p_pc)
         p_pc = &pc;
-    if (jl_typeof(di->linetable) == (jl_value_t *)jl_debuginfo_type) {
+    if (jl_is_debuginfo(di->linetable)) {
+        assert(*p_pc >= 0);
         *p_pc = jl_uncompress1_codeloc(di, *p_pc).loc;
         *p_di = (jl_debuginfo_t *)di->linetable;
         if (recursive) {
