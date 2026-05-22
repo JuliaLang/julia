@@ -4281,7 +4281,7 @@ function stale_prefs(prefs_blob::String)
     if haskey(prefs_data, "unset")
         for (uuid, observed) in prefs_data["unset"]::Dict{String,Any}
             curr = get_preferences(UUID(uuid))
-            for key in observed::Vector{Any}
+            for key in observed::Vector{String}
                 # any unset preferences should still be unset
                 haskey(curr, key::String) && return true
             end
