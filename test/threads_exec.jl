@@ -1771,4 +1771,27 @@ include("threads_comprehensions.jl")
     end
 end
 
+# Issue #61847: when threads race to compile related CodeInstances, the thread
+# that loses the addOutput race must skip installing its symbol definitions.
+@testset "Race addOutput in JIT compilation" begin
+    M = @__MODULE__
+    N = 20
+    for i in 1:N
+        @eval @noinline $(Symbol("race_leaf_", i))(x) = @big_expr(300, x)
+    end
+    for i in 1:N
+        j = mod1(i+1, N); k = mod1(i+2, N)
+        @eval @noinline $(Symbol("race_top_", i))(x) =
+            $(Symbol("race_leaf_", i))(x) + $(Symbol("race_leaf_", j))(x) - $(Symbol("race_leaf_", k))(x)
+    end
+    race_worker(offset) = for i in 1:N
+        f = getfield(M, Symbol("race_top_", mod1(i + offset, N)))
+        Base.invokelatest(f, 1)
+    end
+    t = Threads.@spawn race_worker(0)
+    race_worker(N ÷ 2)
+    wait(t)
+    @test true
+end
+
 end # main testset
