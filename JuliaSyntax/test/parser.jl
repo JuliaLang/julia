@@ -29,6 +29,7 @@ end
 
 PARSE_ERROR = r"\(error"
 
+
 with_version(v::VersionNumber, (i,o)::Pair) = ((;v=v), i) => o
 
 # TODO:
@@ -346,7 +347,6 @@ tests = [
         # parse_call_chain
         "f(a).g(b)" => "(call (. (call f a) g) b)"
         "\$A.@x"    =>  "(macrocall (. (\$ A) (macro_name x)))"
-
         # non-errors in space sensitive contexts
         "[f (x)]"    =>  "(hcat f (parens x))"
         "[f x]"      =>  "(hcat f x)"
@@ -364,6 +364,37 @@ tests = [
         "A.@var\"#\" a"=>  "(macrocall (. A (macro_name (var #))) a)"
         "@+x y"        =>  "(macrocall (macro_name +) x y)"
         "A.@.x"        =>  "(macrocall (. A (macro_name .)) x)"
+
+        # newline macro calls: only apply when macrocall is the immediate content of ()
+        "(@foo x\n y)"                             => "(parens (macrocall (macro_name foo) x y))"
+        # When @foo is on the RHS of a binary op, it does not eat newline args;
+        # y becomes an unexpected token (error) since it has no comma before it.
+        "(1 + @foo x\n y)"                         => "(parens (call-i 1 + (macrocall (macro_name foo) x)) (error-t y))"
+        # For backwards compatibility (1 + @foo x\n + 2) must parse as (+ 1 (@foo x) 2)
+        "(1 + @foo x\n + 2)"                        => "(parens (call-i 1 + (macrocall (macro_name foo) x) 2))"
+        "(1 +\n @foo x\n + 2)"                      => "(parens (call-i 1 + (macrocall (macro_name foo) x) 2))"
+        "(@foo function bar()\n @baz \n x \n end)" => "(parens (macrocall (macro_name foo) (function (call bar) (block (macrocall (macro_name baz)) x))))"
+        "(@foo \n (@bar \n x))"                    => "(parens (macrocall (macro_name foo) (parens (macrocall (macro_name bar) x))))"
+        # Don't change parsing rules for [] and {} cases!
+        "[x, @foo y\n z]" => "(vect x (macrocall (macro_name foo) y) (error-t z))"
+        "{@foo x\n y}"    => "(bracescat (macrocall (macro_name foo) x) y)"
+        # Nested macros: newline args belong to outer macro, not inner
+        "(@foo @bar x\n y)"     => "(parens (macrocall (macro_name foo) (macrocall (macro_name bar) x) y))"
+        "(@foo @bar x y\n z)"   => "(parens (macrocall (macro_name foo) (macrocall (macro_name bar) x y) z))"
+        # Commas in call args with macro on previous line still parse correctly
+        "f(a, b, @bar 1\n, 2)"  => "(call f a b (macrocall (macro_name bar) 1) 2)"
+        # In function call brackets, @foo IS the direct child so it eats newline args
+        "f(@foo x\n y)"         => "(call f (macrocall (macro_name foo) x y))"
+        # When @foo is the direct content (LHS of nothing), it can eat unary across newline
+        "(@foo x\n + 2)"        => "(parens (macrocall (macro_name foo) x (call-pre + 2)))"
+        # All binary/logical/comparison/arrow operators block newline eating on their RHS
+        "(a || @foo x\n y)"     => "(parens (|| a (macrocall (macro_name foo) x)) (error-t y))"
+        "(a && @foo x\n y)"     => "(parens (&& a (macrocall (macro_name foo) x)) (error-t y))"
+        "(a == @foo x\n y)"     => "(parens (call-i a == (macrocall (macro_name foo) x)) (error-t y))"
+        "(a <: @foo x\n y)"     => "(parens (<: a (macrocall (macro_name foo) x)) (error-t y))"
+        "(a --> @foo x\n y)"    => "(parens (--> a (macrocall (macro_name foo) x)) (error-t y))"
+        "(a = @foo x\n y)"      => "(parens (= a (macrocall (macro_name foo) x)) (error-t y))"
+
         # Macro names
         "@! x"  => "(macrocall (macro_name !) x)"
         "@.. x" => "(macrocall (macro_name ..) x)"
