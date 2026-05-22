@@ -523,12 +523,19 @@ function seek(io::GenericIOBuffer, n::Int)
     return io
 end
 
-function seekend(io::GenericIOBuffer, n::Integer=0)
-    if !io.seekable && n != 0
-        throw(ArgumentError("seek failed, IOBuffer is not seekable and n != 0"))
-    end
-    io.ptr = io.size+1+n
+function seekend(io::GenericIOBuffer)
+    io.ptr = io.size+1
     return io
+end
+
+function seekend(io::GenericIOBuffer, n::Integer)
+    n == 0 && return seekend(io)
+    io.seekable || throw(ArgumentError("seek failed, IOBuffer is not seekable and n != 0"))
+    # Delegate to seek to inherit the [get_offset(io)+1, io.size+1] clamping and the
+    # widen-based overflow handling in translate_seek_position above. The user-visible end
+    # position is io.size - io.offset_or_compacted (correct for both offset > 0 and
+    # compacted < 0 states).
+    return seek(io, widen(io.size) - widen(io.offset_or_compacted) + widen(n))
 end
 
 # Resize the io's data to `new_size`, which must not be > io.maxsize.
