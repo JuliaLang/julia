@@ -79,6 +79,18 @@ julia> `echo "foo bar"`[2]
 "foo bar"
 ```
 
+You can also pass a `IOBuffer`, and later read from it:
+
+```jldoctest
+julia> io = PipeBuffer(); # PipeBuffer is a type of IOBuffer
+
+julia> run(`echo world`, devnull, io, stderr);
+
+julia> readlines(io)
+1-element Vector{String}:
+ "world"
+```
+
 ## [Interpolation](@id command-interpolation)
 
 Suppose you want to do something a bit more complicated and use the name of a file in the variable
@@ -320,8 +332,8 @@ will attempt to store the data in the kernel's buffers while waiting for a reade
 Another common solution is to separate the reader and writer of the pipeline into separate [`Task`](@ref)s:
 
 ```julia
-writer = @async write(process, "data")
-reader = @async do_compute(read(process, String))
+writer = Threads.@spawn write(process, "data")
+reader = Threads.@spawn do_compute(read(process, String))
 wait(writer)
 fetch(reader)
 ```
@@ -381,7 +393,7 @@ an existing `Cmd` or list of arguments:
 
 ```julia
 run(Cmd(`pwd`, dir=".."))
-run(Cmd(["pwd"], detach=true, ignorestatus=true))
+run(Cmd(Cmd(["pwd"]), detach=true, ignorestatus=true))
 ```
 
 This allows you to specify several aspects of the `Cmd`'s execution environment via keyword arguments. For

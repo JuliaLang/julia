@@ -1,49 +1,48 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#define hash_size(h) (jl_array_len(h) / 2)
+#define hash_size(h) (h->length / 2)
 
 // compute empirical max-probe for a given size
 #define max_probe(size) ((size) <= 1024 ? 16 : (size) >> 6)
 
-#define keyhash(k) jl_object_id_(jl_typeof(k), k)
+#define keyhash(k) jl_object_id_(jl_typetagof(k), k)
 #define h2index(hv, sz) (size_t)(((hv) & ((sz)-1)) * 2)
 
-static inline int jl_table_assign_bp(jl_array_t **pa, jl_value_t *key, jl_value_t *val);
+static inline int jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, jl_value_t *val);
 
-JL_DLLEXPORT jl_array_t *jl_idtable_rehash(jl_array_t *a, size_t newsz)
+JL_DLLEXPORT jl_genericmemory_t *jl_idtable_rehash(jl_genericmemory_t *a, size_t newsz)
 {
-    size_t sz = jl_array_len(a);
+    size_t sz = a->length;
     size_t i;
-    jl_value_t **ol = (jl_value_t **)a->data;
-    jl_array_t *newa = jl_alloc_vec_any(newsz);
-    // keep the original array in the original slot since we need `ol`
+    jl_value_t **ol = (jl_value_t **) a->ptr;
+    jl_genericmemory_t *newa = NULL;
+    // keep the original memory in the original slot since we need `ol`
     // to be valid in the loop below.
     JL_GC_PUSH2(&newa, &a);
+    newa = jl_alloc_memory_any(newsz);
     for (i = 0; i < sz; i += 2) {
         if (ol[i + 1] != NULL) {
             jl_table_assign_bp(&newa, ol[i], ol[i + 1]);
-            // it is however necessary here because allocation
-            // can (and will) occur in a recursive call inside table_lookup_bp
         }
     }
     JL_GC_POP();
     return newa;
 }
 
-static inline int jl_table_assign_bp(jl_array_t **pa, jl_value_t *key, jl_value_t *val)
+static inline int jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, jl_value_t *val)
 {
     // pa points to a **un**rooted address
     uint_t hv;
-    jl_array_t *a = *pa;
+    jl_genericmemory_t *a = *pa;
     size_t orig, index, iter, empty_slot;
     size_t newsz, sz = hash_size(a);
     if (sz == 0) {
-        a = jl_alloc_vec_any(HT_N_INLINE);
+        a = jl_alloc_memory_any(HT_N_INLINE);
         sz = hash_size(a);
         *pa = a;
     }
     size_t maxprobe = max_probe(sz);
-    _Atomic(jl_value_t*) *tab = (_Atomic(jl_value_t*)*)a->data;
+    _Atomic(jl_value_t*) *tab = (_Atomic(jl_value_t*)*) a->ptr;
 
     hv = keyhash(key);
     while (1) {
@@ -92,7 +91,7 @@ static inline int jl_table_assign_bp(jl_array_t **pa, jl_value_t *key, jl_value_
         /* quadruple size, rehash, retry the insert */
         /* it's important to grow the table really fast; otherwise we waste */
         /* lots of time rehashing all the keys over and over. */
-        sz = jl_array_len(a);
+        sz = a -> length;
         if (sz < HT_N_INLINE)
             newsz = HT_N_INLINE;
         else if (sz >= (1 << 19) || (sz <= (1 << 8)))
@@ -102,20 +101,20 @@ static inline int jl_table_assign_bp(jl_array_t **pa, jl_value_t *key, jl_value_
         *pa = jl_idtable_rehash(*pa, newsz);
 
         a = *pa;
-        tab = (_Atomic(jl_value_t*)*)a->data;
+        tab =  (_Atomic(jl_value_t*)*) a->ptr;
         sz = hash_size(a);
         maxprobe = max_probe(sz);
     }
 }
 
 /* returns bp if key is in hash, otherwise NULL */
-inline _Atomic(jl_value_t*) *jl_table_peek_bp(jl_array_t *a, jl_value_t *key) JL_NOTSAFEPOINT
+inline _Atomic(jl_value_t*) *jl_table_peek_bp(jl_genericmemory_t *a, jl_value_t *key) JL_NOTSAFEPOINT
 {
     size_t sz = hash_size(a);
     if (sz == 0)
         return NULL;
     size_t maxprobe = max_probe(sz);
-    _Atomic(jl_value_t*) *tab = (_Atomic(jl_value_t*)*)a->data;
+    _Atomic(jl_value_t*) *tab = (_Atomic(jl_value_t*)*) a->ptr;
     uint_t hv = keyhash(key);
     size_t index = h2index(hv, sz);
     sz *= 2;
@@ -142,7 +141,7 @@ inline _Atomic(jl_value_t*) *jl_table_peek_bp(jl_array_t *a, jl_value_t *key) JL
 }
 
 JL_DLLEXPORT
-jl_array_t *jl_eqtable_put(jl_array_t *h, jl_value_t *key, jl_value_t *val, int *p_inserted)
+jl_genericmemory_t *jl_eqtable_put(jl_genericmemory_t *h, jl_value_t *key, jl_value_t *val, int *p_inserted)
 {
     int inserted = jl_table_assign_bp(&h, key, val);
     if (p_inserted)
@@ -153,20 +152,20 @@ jl_array_t *jl_eqtable_put(jl_array_t *h, jl_value_t *key, jl_value_t *val, int 
 // Note: lookup in the IdDict is permitted concurrently, if you avoid deletions,
 // and assuming you do use an external lock around all insertions
 JL_DLLEXPORT
-jl_value_t *jl_eqtable_get(jl_array_t *h, jl_value_t *key, jl_value_t *deflt) JL_NOTSAFEPOINT
+jl_value_t *jl_eqtable_get(jl_genericmemory_t *h, jl_value_t *key, jl_value_t *deflt) JL_NOTSAFEPOINT
 {
     _Atomic(jl_value_t*) *bp = jl_table_peek_bp(h, key);
     return (bp == NULL) ? deflt : jl_atomic_load_relaxed(bp);
 }
 
-jl_value_t *jl_eqtable_getkey(jl_array_t *h, jl_value_t *key, jl_value_t *deflt) JL_NOTSAFEPOINT
+jl_value_t *jl_eqtable_getkey(jl_genericmemory_t *h, jl_value_t *key, jl_value_t *deflt) JL_NOTSAFEPOINT
 {
     _Atomic(jl_value_t*) *bp = jl_table_peek_bp(h, key);
     return (bp == NULL) ? deflt : jl_atomic_load_relaxed(bp - 1);
 }
 
 JL_DLLEXPORT
-jl_value_t *jl_eqtable_pop(jl_array_t *h, jl_value_t *key, jl_value_t *deflt, int *found)
+jl_value_t *jl_eqtable_pop(jl_genericmemory_t *h, jl_value_t *key, jl_value_t *deflt, int *found)
 {
     _Atomic(jl_value_t*) *bp = jl_table_peek_bp(h, key);
     if (found)
@@ -180,12 +179,12 @@ jl_value_t *jl_eqtable_pop(jl_array_t *h, jl_value_t *key, jl_value_t *deflt, in
 }
 
 JL_DLLEXPORT
-size_t jl_eqtable_nextind(jl_array_t *t, size_t i)
+size_t jl_eqtable_nextind(jl_genericmemory_t *t, size_t i)
 {
     if (i & 1)
         i++;
-    size_t alen = jl_array_dim0(t);
-    while (i < alen && ((void **)t->data)[i + 1] == NULL)
+    size_t alen = t->length;
+    while (i < alen && ((void**) t->ptr)[i + 1] == NULL)
         i += 2;
     if (i >= alen)
         return (size_t)-1;
@@ -194,3 +193,4 @@ size_t jl_eqtable_nextind(jl_array_t *t, size_t i)
 
 #undef hash_size
 #undef max_probe
+#undef h2index

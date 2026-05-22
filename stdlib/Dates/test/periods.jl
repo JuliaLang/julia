@@ -30,6 +30,9 @@ using Test
     @test sign(t) == sign(t2) == 1
     @test sign(-t) == sign(-t2) == -1
     @test sign(Dates.Year(0)) == 0
+    @test signbit(t) == signbit(t2) == false
+    @test signbit(-t) == signbit(-t2) == true
+    @test signbit(Dates.Year(0)) == false
 end
 @testset "div/mod/gcd/lcm/rem" begin
     @test Dates.Year(10) % Dates.Year(4) == Dates.Year(2)
@@ -152,6 +155,9 @@ emptyperiod = ((y + d) - d) - y
     @test typeof(y + ms) <: Dates.CompoundPeriod
     @test typeof(y + us) <: Dates.CompoundPeriod
     @test typeof(y + ns) <: Dates.CompoundPeriod
+    @test zero(Dates.CompoundPeriod) == Dates.CompoundPeriod() == zero(y + ns)
+    @test iszero(Dates.CompoundPeriod())
+    @test iszero(Minute(1) - Second(60))
     @test y > m
     @test d < w
     @test mi < h
@@ -382,6 +388,9 @@ end
     @test sprint(show, y + m) == string(y + m)
     @test convert(Dates.CompoundPeriod, y) + m == y + m
     @test Dates.periods(convert(Dates.CompoundPeriod, y)) == convert(Dates.CompoundPeriod, y).periods
+    @test -Dates.CompoundPeriod() == Dates.CompoundPeriod()
+    @test -(d - h) == -23h
+    @test (d - h) - (d - h) == Dates.CompoundPeriod()
 end
 @testset "compound period simplification" begin
     # reduce compound periods into the most basic form

@@ -8,6 +8,17 @@ using Random
     @test String("abc!") == "abc!"
     @test String(0x61:0x63) == "abc"
 
+    # reinterpret arrays
+    v = [0x61,0x62,0x63,0x21]
+    v32 = copy(reinterpret(UInt32, v))
+    @test String(reinterpret(UInt8, v32)) == "abc!" && !isempty(v32)
+    @test 1 == @allocations String(reinterpret(UInt8, v32))
+    m32 = v32.ref.mem
+    @test String(reinterpret(UInt8, m32)) == "abc!" && !isempty(m32)
+    @test 1 == @allocations String(reinterpret(UInt8, m32))
+    @test String(reinterpret(UInt8, Tuple{UInt8, UInt64}[])) == ""
+    @test_throws Base.PaddingError String(reinterpret(UInt8, [(0x41, 0x4141414141414141)]))
+
     # Check that resizing empty source vector does not corrupt string
     b = IOBuffer()
     @inferred write(b, "ab")
@@ -46,6 +57,24 @@ using Random
         for x in strs, y in strs
             @test (x === y) == (objectid(x) == objectid(y))
         end
+    end
+end
+
+@testset "takestring!" begin
+    v = [0x61, 0x62, 0x63]
+    old_mem = v.ref.mem
+    @test takestring!(v) == "abc"
+    @test isempty(v)
+    @test v.ref.mem !== old_mem # memory is changed
+    for v in [
+        UInt8[],
+        [0x01, 0x02, 0x03],
+        collect(codeunits("æøå"))
+    ]
+        cp = copy(v)
+        s = takestring!(v)
+        @test isempty(v)
+        @test codeunits(s) == cp
     end
 end
 
@@ -203,6 +232,12 @@ end
         @test (@views (x[3], x[1:2], x[[1,4]])) isa Tuple{Char, SubString, String}
         @test (@views (x[3], x[1:2], x[[1,4]])) == ('c', "ab", "ad")
     end
+
+    @testset ":noshift constructor" begin
+        @test SubString("", 0, 0, Val(:noshift)) == ""
+        @test SubString("abcd", 0, 1, Val(:noshift)) == "a"
+        @test SubString("abcd", 0, 4, Val(:noshift)) == "abcd"
+    end
 end
 
 
@@ -337,9 +372,7 @@ end
     @test_throws StringIndexError get(utf8_str, 2, 'X')
 end
 
-#=
-# issue #7764
-let
+@testset "issue #7764" begin
     srep = repeat("Σβ",2)
     s="Σβ"
     ss=SubString(s,1,lastindex(s))
@@ -352,16 +385,15 @@ let
     @test iterate(srep, 7) == ('β',9)
 
     @test srep[7] == 'β'
-    @test_throws BoundsError srep[8]
+    @test_throws StringIndexError srep[8]
 end
-=#
 
 # This caused JuliaLang/JSON.jl#82
 @test first('\x00':'\x7f') === '\x00'
 @test last('\x00':'\x7f') === '\x7f'
 
-# make sure substrings do not accept code unit if it is not start of codepoint
-let s = "x\u0302"
+@testset "make sure substrings do not accept code unit if it is not start of codepoint" begin
+    s = "x\u0302"
     @test s[1:2] == s
     @test_throws BoundsError s[0:3]
     @test_throws BoundsError s[1:4]
@@ -381,7 +413,7 @@ end
 end
 # test AbstractString functions at beginning of string.jl
 struct tstStringType <: AbstractString
-    data::Array{UInt8,1}
+    data::Vector{UInt8}
 end
 @testset "AbstractString functions" begin
     tstr = tstStringType(unsafe_wrap(Vector{UInt8},"12"))
@@ -427,6 +459,8 @@ end
 
     @test Symbol(gstr) === Symbol("12")
 
+    @test eltype(gstr) == Char
+    @test firstindex(gstr) == 1
     @test sizeof(gstr) == 2
     @test ncodeunits(gstr) == 2
     @test length(gstr) == 2
@@ -872,6 +906,11 @@ end
             end
         end
     end
+
+    @testset "return type infers to `Int`" begin
+        @test Int === Base.infer_return_type(prevind, Tuple{AbstractString, Vararg})
+        @test Int === Base.infer_return_type(nextind, Tuple{AbstractString, Vararg})
+    end
 end
 
 @testset "first and last" begin
@@ -1068,10 +1107,11 @@ let s = "∀x∃y", u = codeunits(s)
     @test_throws Base.CanonicalIndexError (u[1] = 0x00)
     @test collect(u) == b"∀x∃y"
     @test Base.elsize(u) == Base.elsize(typeof(u)) == 1
+    @test similar(typeof(u), 3) isa Vector{UInt8}
 end
 
-# issue #24388
-let v = unsafe_wrap(Vector{UInt8}, "abc")
+@testset "issue #24388" begin
+    v = unsafe_wrap(Vector{UInt8}, "abc")
     s = String(v)
     @test_throws BoundsError v[1]
     push!(v, UInt8('x'))
@@ -1087,6 +1127,17 @@ let v = [0x40,0x41,0x42]
     @test String(view(v, 2:3)) == "AB"
 end
 
+@testset "issue #54369" begin
+    v = Base.StringMemory(3)
+    v .= [0x41,0x42,0x43]
+    s = String(v)
+    @test s == "ABC"
+    @test v == [0x41,0x42,0x43]
+    v[1] = 0x43
+    @test s == "ABC"
+    @test v == [0x43,0x42,0x43]
+end
+
 # make sure length for identical String and AbstractString return the same value, PR #25533
 let rng = MersenneTwister(1), strs = ["∀εa∀aε"*String(rand(rng, UInt8, 100))*"∀εa∀aε",
                                    String(rand(rng, UInt8, 200))]
@@ -1099,8 +1150,8 @@ let rng = MersenneTwister(1), strs = ["∀εa∀aε"*String(rand(rng, UInt8, 100
     end
 end
 
-# conversion of SubString to the same type, issue #25525
-let x = SubString("ab", 1, 1)
+@testset "conversion of SubString to the same type, issue #25525" begin
+    x = SubString("ab", 1, 1)
     y = convert(SubString{String}, x)
     @test y === x
     chop("ab") === chop.(["ab"])[1]
@@ -1153,9 +1204,10 @@ end
     apple_uint8 = Vector{UInt8}("Apple")
     @test apple_uint8 == [0x41, 0x70, 0x70, 0x6c, 0x65]
 
-    Base.String(::tstStringType) = "Test"
+    Base.codeunit(::tstStringType) = UInt8
+    Base.codeunits(t::tstStringType) = t.data
     abstract_apple = tstStringType(apple_uint8)
-    @test hash(abstract_apple, UInt(1)) == hash("Test", UInt(1))
+    @test hash(abstract_apple, UInt(1)) == hash("Apple", UInt(1))
 
     @test length("abc", 1, 3) == length("abc", UInt(1), UInt(3))
 
@@ -1164,7 +1216,7 @@ end
     code_units = Base.CodeUnits("abc")
     @test Base.IndexStyle(Base.CodeUnits) == IndexLinear()
     @test Base.elsize(code_units) == sizeof(UInt8)
-    @test Base.unsafe_convert(Ptr{Int8}, code_units) == Base.unsafe_convert(Ptr{Int8}, code_units.s)
+    @test Base.unsafe_convert(Ptr{Int8}, Base.cconvert(Ptr{UInt8}, code_units)) == Base.unsafe_convert(Ptr{Int8}, Base.cconvert(Ptr{Int8}, code_units.s))
 end
 
 @testset "LazyString" begin
@@ -1178,6 +1230,7 @@ end
     @test codeunit(l) == UInt8
     @test codeunit(l,2) == 0x2b
     @test isvalid(l, 1)
+    @test lastindex(l) == lastindex("1+2")
     @test Base.infer_effects((Any,)) do a
         throw(lazy"a is $a")
     end |> Core.Compiler.is_foldable
@@ -1204,18 +1257,28 @@ end
                    (String, (Symbol,)),
                    (length, (String,)),
                    (hash, (String,UInt)),
-                   (hash, (Char,UInt)),]
+                   (hash, (Char,UInt)),
+                   (startswith, (String, String)),
+                   (startswith, (SubString{String}, String)),
+                   (startswith, (String, SubString{String})),
+                   (startswith, (SubString{String}, SubString{String})),
+                   (endswith, (String, String)),
+                   (endswith, (SubString{String}, String)),
+                   (endswith, (String, SubString{String})),
+                   (endswith, (SubString{String}, SubString{String})),
+                   (in, (Char, String)),
+                   (in, (Char, SubString{String})),]
         e = Base.infer_effects(f, Ts)
-        @test Core.Compiler.is_foldable(e) || (f, Ts)
-        @test Core.Compiler.is_removable_if_unused(e) || (f, Ts)
+        @test Core.Compiler.is_foldable(e) context=(f, Ts)
+        @test Core.Compiler.is_removable_if_unused(e) context=(f, Ts)
     end
     for (f, Ts) in [(^, (String, Int)),
                    (^, (Char, Int)),
                    (codeunit, (String, Int)),
                    ]
         e = Base.infer_effects(f, Ts)
-        @test Core.Compiler.is_foldable(e) || (f, Ts)
-        @test !Core.Compiler.is_removable_if_unused(e) || (f, Ts)
+        @test Core.Compiler.is_foldable(e) context=(f, Ts)
+        @test !Core.Compiler.is_removable_if_unused(e) context=(f, Ts)
     end
     # Substrings don't have any nice effects because the compiler can
     # invent fake indices leading to out of bounds
@@ -1225,10 +1288,52 @@ end
                    (hash, (SubString{String},UInt)),
                    ]
         e = Base.infer_effects(f, Ts)
-        @test !Core.Compiler.is_foldable(e) || (f, Ts)
-        @test !Core.Compiler.is_removable_if_unused(e) || (f, Ts)
+        @test !Core.Compiler.is_foldable(e) context=(f, Ts)
+        @test !Core.Compiler.is_removable_if_unused(e) context=(f, Ts)
     end
     @test_throws ArgumentError Symbol("a\0a")
+
+    @test Base._string_n_override == Base.encode_effects_override(Base.compute_assumed_settings((:total, :(!:consistent))))
+
+    # Stress-test that the annotations added in this PR (and follow-ups) hold
+    # even when strings contain arbitrary, malformed UTF-8 byte sequences.
+    let garbage = String[
+            String(UInt8[0x80]),                  # lone continuation
+            String(UInt8[0xC0]),                  # truncated 2-byte lead
+            String(UInt8[0xE0, 0x80]),            # truncated 3-byte
+            String(UInt8[0xF0, 0x80, 0x80]),      # truncated 4-byte
+            String(UInt8[0xFF, 0xFE]),            # invalid lead bytes
+            String(UInt8[0xC0, 0x80]),            # overlong NUL
+            String(UInt8[0xED, 0xA0, 0x80]),      # surrogate
+            String(UInt8[0xF8, 0x88, 0x80, 0x80, 0x80]), # 5-byte (invalid)
+            "",
+            "ascii",
+            "naïve",
+        ]
+        for a in garbage, b in garbage
+            @test startswith(a, b) isa Bool
+            @test endswith(a, b) isa Bool
+            @test startswith(SubString(a), b) isa Bool
+            @test endswith(SubString(a), b) isa Bool
+            @test startswith(a, SubString(b)) isa Bool
+            @test endswith(a, SubString(b)) isa Bool
+        end
+        for a in garbage, c in ('\0', '\xff', 'a', 'α', '🎉')
+            @test in(c, a) isa Bool
+            @test in(c, SubString(a)) isa Bool
+        end
+        for a in garbage
+            sa = SubString(a)
+            @test length(a) isa Int
+            @test length(sa) isa Int
+            @test lastindex(a) isa Int
+            @test lastindex(sa) isa Int
+            @test isascii(a) isa Bool
+            @test isascii(sa) isa Bool
+            @test textwidth(a) isa Int
+            @test textwidth(sa) isa Int
+        end
+    end
 end
 
 @testset "Ensure UTF-8 DFA can never leave invalid state" begin
@@ -1381,4 +1486,49 @@ end
             @test Base._UTF8_DFA_INVALID == Base._isvalid_utf8_dfa(state3,[b4],1,1)
         end
     end
+end
+
+@testset "transcode" begin
+    # string starting with an ASCII character
+    str_1 = "zβγ"
+    # string starting with a 2 byte UTF-8 character
+    str_2 = "αβγ"
+    # string starting with a 3 byte UTF-8 character
+    str_3 = "आख"
+    # string starting with a 4 byte UTF-8 character
+    str_4 = "𒃵𒃰"
+    @testset for str in (str_1, str_2, str_3, str_4)
+        @test transcode(String, str) === str
+        @test transcode(String, transcode(UInt16, str)) == str
+        @test transcode(String, transcode(UInt16, transcode(UInt8, str))) == str
+        @test transcode(String, transcode(Int32, transcode(UInt8, str))) == str
+        @test transcode(String, transcode(UInt32, transcode(UInt8, str))) == str
+        @test transcode(String, transcode(UInt8, transcode(UInt16, str))) == str
+    end
+end
+
+if Sys.iswindows()
+    @testset "cwstring" begin
+        # empty string
+        str_0 = ""
+        # string with embedded NUL character
+        str_1 = "Au\000B"
+        # string with terminating NUL character
+        str_2 = "Wordu\000"
+        # "Regular" string with UTF-8 characters of differing byte counts
+        str_3 = "aܣ𒀀"
+        @test Base.cwstring(str_0) == UInt16[0x0000]
+        @test_throws ArgumentError Base.cwstring(str_1)
+        @test_throws ArgumentError Base.cwstring(str_2)
+        @test Base.cwstring(str_3) == UInt16[0x0061, 0x0723, 0xd808, 0xdc00, 0x0000]
+    end
+end
+
+
+@testset "eltype for AbstractString subtypes" begin
+    @test eltype(String) == Char
+    @test eltype(SubString{String}) == Char
+
+    u = b"hello"
+    @test eltype(u) === UInt8
 end

@@ -1,4 +1,8 @@
-# Shared Arrays
+```@meta
+EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/SharedArrays/docs/src/index.md"
+```
+
+# SharedArrays
 
 `SharedArray` represents an array, which is shared across multiple processes, on a single machine.
 

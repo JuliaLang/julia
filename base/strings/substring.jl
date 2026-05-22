@@ -36,10 +36,19 @@ struct SubString{T<:AbstractString} <: AbstractString
         end
         return new(s, i-1, nextind(s,j)-i)
     end
+    function SubString{T}(s::T, i::Int, j::Int, ::Val{:noshift}) where T<:AbstractString
+        @boundscheck if !(i == j == 0)
+            si, sj = i + 1, prevind(s, j + i + 1)
+            @inbounds isvalid(s, si) || string_index_err(s, si)
+            @inbounds isvalid(s, sj) || string_index_err(s, sj)
+        end
+        new(s, i, j)
+    end
 end
 
 @propagate_inbounds SubString(s::T, i::Int, j::Int) where {T<:AbstractString} = SubString{T}(s, i, j)
-@propagate_inbounds SubString(s::AbstractString, i::Integer, j::Integer=lastindex(s)) = SubString(s, Int(i), Int(j))
+@propagate_inbounds SubString(s::T, i::Int, j::Int, v::Val{:noshift}) where {T<:AbstractString} = SubString{T}(s, i, j, v)
+@propagate_inbounds SubString(s::AbstractString, i::Integer, j::Integer=lastindex(s)) = SubString(s, Int(i)::Int, Int(j)::Int)
 @propagate_inbounds SubString(s::AbstractString, r::AbstractUnitRange{<:Integer}) = SubString(s, first(r), last(r))
 
 @propagate_inbounds function SubString(s::SubString, i::Int, j::Int)
@@ -72,6 +81,9 @@ end
 ncodeunits(s::SubString) = s.ncodeunits
 codeunit(s::SubString) = codeunit(s.string)::CodeunitType
 length(s::SubString) = length(s.string, s.offset+1, s.offset+s.ncodeunits)
+# nothrow: SubString invariants guarantee 0 ≤ offset and offset+ncodeunits ≤ ncodeunits(string),
+# so the bounds-check inside the 3-arg `length(::String, i, j)` cannot fail.
+@assume_effects :nothrow length(s::SubString{String}) = length(s.string, s.offset+1, s.offset+s.ncodeunits)
 
 function codeunit(s::SubString, i::Integer)
     @boundscheck checkbounds(s, i)
@@ -92,7 +104,8 @@ function getindex(s::SubString, i::Integer)
     @inbounds return getindex(s.string, s.offset + i)
 end
 
-isascii(ss::SubString{String}) = isascii(codeunits(ss))
+# `isascii(::AbstractVector)` reduces to `@inbounds codeunit(::SubString{String}, ::Int)`, total.
+isascii(ss::SubString{String}) = @assume_effects :nothrow :foldable isascii(codeunits(ss))
 
 function isvalid(s::SubString, i::Integer)
     ib = true
@@ -100,8 +113,11 @@ function isvalid(s::SubString, i::Integer)
     @inbounds return ib && isvalid(s.string, s.offset + i)::Bool
 end
 
-thisind(s::SubString{String}, i::Int) = _thisind_str(s, i)
-nextind(s::SubString{String}, i::Int) = _nextind_str(s, i)
+@propagate_inbounds thisind(s::SubString{String}, i::Int) = _thisind_str(s, i)
+@propagate_inbounds nextind(s::SubString{String}, i::Int) = _nextind_str(s, i)
+
+# nothrow: i == ncodeunits(s) always satisfies the bounds check inside _thisind_str.
+@assume_effects :nothrow lastindex(s::SubString{String}) = thisind(s, ncodeunits(s)::Int)
 
 parent(s::SubString) = s.string
 parentindices(s::SubString) = (s.offset + 1 : thisind(s.string, s.offset + s.ncodeunits),)
@@ -126,57 +142,10 @@ end
 pointer(x::SubString{String}) = pointer(x.string) + x.offset
 pointer(x::SubString{String}, i::Integer) = pointer(x.string) + x.offset + (i-1)
 
-function hash(s::SubString{String}, h::UInt)
-    h += memhash_seed
-    ccall(memhash, UInt, (Ptr{UInt8}, Csize_t, UInt32), s, sizeof(s), h % UInt32) + h
-end
+hash(data::SubString{String}, h::UInt) =
+    GC.@preserve data hash_bytes(pointer(data), sizeof(data), UInt64(h), HASH_SECRET) % UInt
 
-"""
-    reverse(s::AbstractString) -> AbstractString
-
-Reverses a string. Technically, this function reverses the codepoints in a string and its
-main utility is for reversed-order string processing, especially for reversed
-regular-expression searches. See also [`reverseind`](@ref) to convert indices in `s` to
-indices in `reverse(s)` and vice-versa, and `graphemes` from module `Unicode` to
-operate on user-visible "characters" (graphemes) rather than codepoints.
-See also [`Iterators.reverse`](@ref) for
-reverse-order iteration without making a copy. Custom string types must implement the
-`reverse` function themselves and should typically return a string with the same type
-and encoding. If they return a string with a different encoding, they must also override
-`reverseind` for that string type to satisfy `s[reverseind(s,i)] == reverse(s)[i]`.
-
-# Examples
-```jldoctest
-julia> reverse("JuliaLang")
-"gnaLailuJ"
-```
-
-!!! note
-    The examples below may be rendered differently on different systems.
-    The comments indicate how they're supposed to be rendered
-
-Combining characters can lead to surprising results:
-
-```jldoctest
-julia> reverse("ax̂e") # hat is above x in the input, above e in the output
-"êxa"
-
-julia> using Unicode
-
-julia> join(reverse(collect(graphemes("ax̂e")))) # reverses graphemes; hat is above x in both in- and output
-"ex̂a"
-```
-"""
-function reverse(s::Union{String,SubString{String}})::String
-    # Read characters forwards from `s` and write backwards to `out`
-    out = _string_n(sizeof(s))
-    offs = sizeof(s) + 1
-    for c in s
-        offs -= ncodeunits(c)
-        __unsafe_string!(out, c, offs)
-    end
-    return out
-end
+_isannotated(::SubString{T}) where {T} = _isannotated(T)
 
 string(a::String)            = String(a)
 string(a::SubString{String}) = String(a)
@@ -261,6 +230,7 @@ end
 
 function repeat(s::Union{String, SubString{String}}, r::Integer)
     r < 0 && throw(ArgumentError("can't repeat a string $r times"))
+    r = UInt(r)::UInt
     r == 0 && return ""
     r == 1 && return String(s)
     n = sizeof(s)

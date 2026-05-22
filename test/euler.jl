@@ -2,7 +2,7 @@
 
 ## Project Euler
 #
-#  problems: http://projecteuler.net/problems
+#  problems: https://projecteuler.net/problems
 #  solutions: https://code.google.com/p/projecteuler-solutions/wiki/ProjectEulerSolutions
 
 #1: 233168

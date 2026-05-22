@@ -1,11 +1,21 @@
-# [File Events](@id lib-filewatching)
+```@meta
+EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/FileWatching/docs/src/index.md"
+```
+
+# [FileWatching (File Events)](@id lib-filewatching)
 
 ```@docs
-FileWatching.poll_fd
-FileWatching.poll_file
-FileWatching.watch_file
-FileWatching.watch_folder
-FileWatching.unwatch_folder
+poll_fd
+poll_file
+watch_file
+watch_folder
+unwatch_folder
+```
+```@docs
+FileMonitor
+FolderMonitor
+PollingFileWatcher
+FDWatcher
 ```
 
 # Pidfile

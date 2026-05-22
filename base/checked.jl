@@ -13,15 +13,16 @@ return both the unchecked results and a boolean value denoting the presence of a
 module Checked
 
 export checked_neg, checked_abs, checked_add, checked_sub, checked_mul,
-       checked_div, checked_rem, checked_fld, checked_mod, checked_cld,
+       checked_div, checked_rem, checked_fld, checked_mod, checked_cld, checked_pow,
        checked_length, add_with_overflow, sub_with_overflow, mul_with_overflow
 
-import Core.Intrinsics:
+import Core: Intrinsics
+import .Intrinsics:
        checked_sadd_int, checked_ssub_int, checked_smul_int, checked_sdiv_int,
        checked_srem_int,
        checked_uadd_int, checked_usub_int, checked_umul_int, checked_udiv_int,
        checked_urem_int
-import ..no_op_err, ..@inline, ..@noinline, ..checked_length
+import Base: no_op_err, @inline, @noinline, checked_length
 
 # define promotion behavior for checked operations
 checked_add(x::Integer, y::Integer) = checked_add(promote(x,y)...)
@@ -357,6 +358,19 @@ Calculates `cld(x,y)`, checking for overflow errors where applicable.
 The overflow protection may impose a perceptible performance penalty.
 """
 checked_cld(x::T, y::T) where {T<:Integer} = cld(x, y) # Base.cld already checks
+
+"""
+    Base.checked_pow(x, y)
+
+Calculates `^(x,y)`, checking for overflow errors where applicable.
+
+The overflow protection may impose a perceptible performance penalty.
+"""
+checked_pow(x::Integer, y::Integer) = checked_power_by_squaring(x, y)
+
+checked_power_by_squaring(x_, p::Integer) = Base.power_by_squaring(x_, p; mul = checked_mul)
+# For Booleans, the default implementation covers all cases.
+checked_power_by_squaring(x::Bool, p::Integer) = Base.power_by_squaring(x, p)
 
 """
     Base.checked_length(r)

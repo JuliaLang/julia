@@ -131,16 +131,6 @@ end
         @goto outofcatch
     end
     @label outofcatch
-    try
-        error("A")
-    catch
-        @test length(current_exceptions()) == 1
-        @goto outofcatch2
-    finally
-        @test length(current_exceptions()) == 0
-    end
-    @label outofcatch2
-    @test length(current_exceptions()) == 0
 
     # Exiting from a try block in various ways should not affect the exception
     # stack state.
@@ -239,6 +229,18 @@ end
             # At this point err1 is dealt with
             @test length(Base.current_exceptions()) == 0
         end
+    end)()
+    @test length(Base.current_exceptions()) == 0
+
+    (()-> begin
+        while true
+            try
+                error("foo")
+            finally
+                break
+            end
+        end
+        @test length(Base.current_exceptions()) == 0
     end)()
     @test length(Base.current_exceptions()) == 0
 end

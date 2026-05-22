@@ -156,6 +156,20 @@
         @test "aaa \\g \\n" == unescape_string(str, ['g', 'n'])
     end
     @test Base.escape_raw_string(raw"\"\\\"\\-\\") == "\\\"\\\\\\\"\\\\-\\\\"
+    @test Base.escape_raw_string(raw"`\`\\-\\") == "\`\\\`\\\\-\\\\"
+    @test Base.escape_raw_string(raw"\"\\\"\\-\\", '`') == "\"\\\"\\\\-\\\\"
+    @test Base.escape_raw_string(raw"`\`\\-\\", '`') == "\\\`\\\\\\\`\\\\-\\\\"
+    @test Base.escape_raw_string(raw"some`string") == "some`string"
+    @test Base.escape_raw_string(raw"some\"string", '`') == "some\"string"
+    @test Base.escape_raw_string(raw"some`string\\") == "some`string\\\\"
+    @test Base.escape_raw_string(raw"some\"string\\", '`') == "some\"string\\\\"
+    @test Base.escape_raw_string(raw"some\"string") == "some\\\"string"
+    @test Base.escape_raw_string(raw"some`string", '`') == "some\\`string"
+
+    # ascii and fullhex flags:
+    @test escape_string("\u00e4\u00f6\u00fc") == "\u00e4\u00f6\u00fc"
+    @test escape_string("\u00e4\u00f6\u00fc", ascii=true) == "\\ue4\\uf6\\ufc"
+    @test escape_string("\u00e4\u00f6\u00fc", ascii=true, fullhex=true) == "\\u00e4\\u00f6\\u00fc"
 end
 @testset "join()" begin
     @test join([]) == join([],",") == ""
@@ -320,4 +334,18 @@ end
     @test string(2.f0, 2.0) == "2.02.0"
     # test empty args
     @test string() == ""
+end
+
+module StringsIOStringReturnTypesTestModule
+    struct S end
+    Base.joinpath(::S) = S()
+end
+
+@testset "`string` return types" begin
+    @test all(T -> T <: AbstractString, Base.return_types(string))
+end
+
+@testset "type stable `join` (#55389)" begin
+    itr = ("foo" for _ in 1:100)
+    @test Base.return_types(join, (typeof(itr),))[] == String
 end

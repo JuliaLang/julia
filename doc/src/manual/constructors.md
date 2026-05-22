@@ -293,6 +293,8 @@ Point{Float64}(1.0, 2.5)
 
 julia> Point(1,2.5) ## implicit T ##
 ERROR: MethodError: no method matching Point(::Int64, ::Float64)
+The type `Point` exists, but no method is defined for this combination of argument types when trying to construct it.
+
 Closest candidates are:
   Point(::T, ::T) where T<:Real at none:2
 
@@ -372,9 +374,12 @@ However, other similar calls still don't work:
 ```jldoctest parametric2
 julia> Point(1.5,2)
 ERROR: MethodError: no method matching Point(::Float64, ::Int64)
+The type `Point` exists, but no method is defined for this combination of argument types when trying to construct it.
 
 Closest candidates are:
   Point(::T, !Matched::T) where T<:Real
+   @ Main none:1
+  Point(!Matched::Int64, !Matched::Float64)
    @ Main none:1
 
 Stacktrace:
@@ -408,6 +413,29 @@ Thus, while the implicit type parameter constructors provided by default in Juli
 it is possible to make them behave in a more relaxed but sensible manner quite easily. Moreover,
 since constructors can leverage all of the power of the type system, methods, and multiple dispatch,
 defining sophisticated behavior is typically quite simple.
+
+### How `new` works in parametric constructors
+
+In the inner constructor of `Point`, `new(x,y)` is shorthand for `new{T}(x,y)`.
+**Inside the body of an inner constructor, the type parameters listed in the curly braces on the constructor name (e.g. the `T` parameter in `Point{T}(...)`) are implicitly forwarded to `new`**.
+You can also write the type parameters explicitly, which is equivalent:
+
+```jldoctest parametric2
+julia> struct Point2{T<:Real}
+           x::T
+           y::T
+           Point2{T}(x,y) where {T<:Real} = new{T}(x,y)  # explicit, same as new(x,y)
+       end
+
+julia> Point2{Float64}(1,2)
+Point2{Float64}(1.0, 2.0)
+```
+The explicit form becomes necessary when the type parameters for `new`
+differ from those of the enclosing inner constructor.
+For instance, if a type has two parameters like `MyType{T,S}` but the inner constructor is
+defined as `MyType{T}(...)`, then `new` would only receive `{T}` — not enough to
+determine the concrete type. In such cases you must write `new{T,S}(...)` explicitly.
+We will see an example of this in the [Outer-only constructors](@ref) section below.
 
 ## Case Study: Rational
 
@@ -491,6 +519,7 @@ operator, which provides a syntax for writing rationals (e.g. `1 ⊘ 2`). Julia'
 type uses the [`//`](@ref) operator for this purpose. Before these definitions, `⊘`
 is a completely undefined operator with only syntax and no meaning. Afterwards, it behaves just
 as described in [Rational Numbers](@ref) -- its entire behavior is defined in these few lines.
+Note that the infix use of `⊘` works because Julia has a set of symbols that are recognized to be infix operators.
 The first and most basic definition just makes `a ⊘ b` construct a `OurRational` by applying the
 `OurRational` constructor to `a` and `b` when they are integers. When one of the operands of `⊘`
 is already a rational number, we construct a new rational for the resulting ratio slightly differently;
@@ -555,6 +584,7 @@ julia> struct SummedArray{T<:Number,S<:Number}
 
 julia> SummedArray(Int32[1; 2; 3], Int32(6))
 ERROR: MethodError: no method matching SummedArray(::Vector{Int32}, ::Int32)
+The type `SummedArray` exists, but no method is defined for this combination of argument types when trying to construct it.
 
 Closest candidates are:
   SummedArray(::Vector{T}) where T
@@ -564,7 +594,38 @@ Stacktrace:
 [...]
 ```
 
-This constructor will be invoked by the syntax `SummedArray(a)`. The syntax `new{T,S}` allows
-specifying parameters for the type to be constructed, i.e. this call will return a `SummedArray{T,S}`.
-`new{T,S}` can be used in any constructor definition, but for convenience the parameters
-to `new{}` are automatically derived from the type being constructed when possible.
+This is the case where explicit type parameters on `new` are essential:
+the inner constructor name is bare `SummedArray` with no curly braces,
+so `new` has no type parameters to inherit (see
+[How `new` works in parametric constructors](@ref) above).
+The explicit `new{T,S}` tells Julia to construct a `SummedArray{T,S}`,
+where `T` comes from the element type of the input vector and `S` is computed as `widen(T)`.
+
+## Constructors are just callable objects
+
+An object of any type may be [made callable](@ref "Function-like objects") by defining a
+method. This includes types, i.e., objects of type [`Type`](@ref); and constructors may,
+in fact, be viewed as just callable type objects. For example, there are many methods
+defined on `Bool` and various supertypes of it:
+
+```@repl
+methods(Bool)
+```
+
+The usual constructor syntax is exactly equivalent to the function-like object
+syntax, so trying to define a method with each syntax will cause the first method
+to be overwritten by the next one:
+
+```jldoctest
+julia> struct S
+           f::Int
+       end
+
+julia> S() = S(7)
+S
+
+julia> (::Type{S})() = S(8)  # overwrites the previous constructor method
+
+julia> S()
+S(8)
+```

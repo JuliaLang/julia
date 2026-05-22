@@ -57,7 +57,7 @@ code base to make things work.
 
 ## GC Invariants
 
-There is two simple invariants correctness:
+There are two simple invariants for correctness:
 - All `GC_PUSH` calls need to be followed by an appropriate `GC_POP` (in practice we enforce this
   at the function level)
 - If a value was previously not rooted at any safepoint, it may no longer be referenced
@@ -101,7 +101,7 @@ we place on a given function are indeed correct given the implementation of said
 ## The analyzer annotations
 
 These annotations are found in src/support/analyzer_annotations.h.
-The are only active when the analyzer is being used and expand either
+They are only active when the analyzer is being used and expand either
 to nothing (for prototype annotations) or to no-ops (for function like annotations).
 
 ### `JL_NOTSAFEPOINT`

@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-    memcpy(dst::Ptr, src::Ptr, n::Integer) -> Ptr{Cvoid}
+    memcpy(dst::Ptr, src::Ptr, n::Integer)::Ptr{Cvoid}
 
 Call `memcpy` from the C standard library.
 
@@ -10,11 +10,12 @@ Call `memcpy` from the C standard library.
 
 """
 function memcpy(dst::Ptr, src::Ptr, n::Integer)
+    @_terminates_globally_meta
     ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), dst, src, n)
 end
 
 """
-    memmove(dst::Ptr, src::Ptr, n::Integer) -> Ptr{Cvoid}
+    memmove(dst::Ptr, src::Ptr, n::Integer)::Ptr{Cvoid}
 
 Call `memmove` from the C standard library.
 
@@ -23,11 +24,12 @@ Call `memmove` from the C standard library.
 
 """
 function memmove(dst::Ptr, src::Ptr, n::Integer)
+    @_terminates_globally_meta
     ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), dst, src, n)
 end
 
 """
-    memset(dst::Ptr, val, n::Integer) -> Ptr{Cvoid}
+    memset(dst::Ptr, val, n::Integer)::Ptr{Cvoid}
 
 Call `memset` from the C standard library.
 
@@ -36,11 +38,12 @@ Call `memset` from the C standard library.
 
 """
 function memset(p::Ptr, val, n::Integer)
+    @_terminates_globally_meta
     ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), p, val, n)
 end
 
 """
-    memcmp(a::Ptr, b::Ptr, n::Integer) -> Int
+    memcmp(a::Ptr, b::Ptr, n::Integer)::Int
 
 Call `memcmp` from the C standard library.
 
@@ -49,5 +52,6 @@ Call `memcmp` from the C standard library.
 
 """
 function memcmp(a::Ptr, b::Ptr, n::Integer)
+    @_terminates_globally_meta
     ccall(:memcmp, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), a, b, n % Csize_t) % Int
 end

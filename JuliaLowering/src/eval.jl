@@ -1,0 +1,539 @@
+# Non-incremental lowering API for non-toplevel non-module expressions.
+# May be removed?
+
+function lower(mod::Module, ex0::SyntaxTree; expr_compat_mode::Bool=false, world::UInt=Base.get_world_counter(),
+               soft_scope::Union{Nothing,Bool}=nothing)
+     ctx1, ex1 = expand_forms_1(  mod,  ex0, expr_compat_mode, world)
+     ctx2, ex2 = expand_forms_2(  ctx1, ex1)
+     ctx3, ex3 = resolve_scopes(  ctx2, ex2; soft_scope)
+     ctx4, ex4 = convert_closures(ctx3, ex3)
+    _ctx5, ex5 = linearize_ir(    ctx4, ex4)
+    ex5
+end
+
+function macroexpand(mod::Module, ex::SyntaxTree; expr_compat_mode::Bool=false, world::UInt=Base.get_world_counter())
+    _ctx1, ex1 = expand_forms_1(mod, ex, expr_compat_mode, world)
+    ex1
+end
+
+# Incremental lowering API which can manage toplevel and module expressions.
+#
+# This iteration API is oddly bespoke and arguably somewhat non-Julian for two
+# reasons:
+#
+# * Lowering knows when new modules are required, and may request them with
+#   `:begin_module`. However `eval()` generates those modules so they need to
+#   be passed back into lowering. So we can't just use `Base.iterate()`. (Put a
+#   different way, we have a situation which is suited to coroutines but we
+#   don't want to use full Julia `Task`s for this.)
+# * We might want to implement this `eval()` in Julia's C runtime code or early
+#   in bootstrap. Hence using SimpleVector and Symbol as the return values of
+#   `lower_step()`
+#
+# We might consider changing at least the second of these choices, depending on
+# how we end up putting this into Base.
+
+struct LoweringIterator{Attrs}
+    expr_compat_mode::Bool # later stored in module?
+    todo::Vector{Tuple{SyntaxTree{Attrs}, Bool, Int}}
+end
+
+function lower_init(ex::SyntaxTree{T}; expr_compat_mode::Bool=false) where {T}
+    LoweringIterator{T}(expr_compat_mode, [(ex, false, 0)])
+end
+
+function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
+                    soft_scope::Union{Nothing,Bool}=nothing)
+    if isempty(iter.todo)
+        return Core.svec(:done)
+    end
+
+    top_ex, is_module_body, child_idx = pop!(iter.todo)
+    if child_idx > 0
+        if child_idx <= numchildren(top_ex)
+            push!(iter.todo, (top_ex, is_module_body, child_idx + 1))
+            ex = top_ex[child_idx]
+        elseif is_module_body
+            return Core.svec(:end_module)
+        else
+            return lower_step(iter, mod, world; soft_scope)
+        end
+    else
+        ex = top_ex
+    end
+
+    k = kind(ex)
+    if !(k in KSet"toplevel module")
+        ctx1, ex = expand_forms_1(mod, ex, iter.expr_compat_mode, world)
+        k = kind(ex)
+    end
+    if k == K"toplevel"
+        push!(iter.todo, (ex, false, 1))
+        return lower_step(iter, mod, world; soft_scope)
+    elseif k == K"module"
+        (version, notbare, name, body) = @stm ex begin
+            [K"module" version nb_st name body] ->
+                (version.value, nb_st.value, name, body)
+            [K"module" nb_st name body] ->
+                (nothing, nb_st.value, name, body)
+        end
+        if kind(name) != K"Identifier"
+            throw(LoweringError(name, "Expected module name"))
+        end
+        newmod_name = Symbol(name.name_val)
+        loc = source_location(LineNumberNode, ex)
+        push!(iter.todo, (body, true, 1))
+        return Core.svec(:begin_module, version, newmod_name, notbare, loc)
+    else
+        # Non macro expansion parts of lowering
+        @assert @isdefined(ctx1) "Assertion to tell the compiler about the definedness of this variable"
+         ctx2, ex2 = expand_forms_2(ctx1, ex)
+         ctx3, ex3 = resolve_scopes(ctx2, ex2; soft_scope)
+         ctx4, ex4 = convert_closures(ctx3, ex3)
+        _ctx5, ex5 = linearize_ir(ctx4, ex4)
+        thunk = to_lowered_expr(ex5)
+        return Core.svec(:thunk, thunk)
+    end
+end
+
+
+#-------------------------------------------------------------------------------
+
+function codeinfo_has_image_globalref(@nospecialize(e))
+    if e isa GlobalRef
+        return 0x00 !== @ccall jl_object_in_image(e.mod::Any)::UInt8
+    elseif e isa Core.CodeInfo
+        return any(codeinfo_has_image_globalref, e.code)
+    else
+        return false
+    end
+end
+
+const _CodeInfo_need_ver = v"1.12.0-DEV.512"
+@static if VERSION < _CodeInfo_need_ver
+    function _CodeInfo(args...)
+        error("Constructing a CodeInfo using JuliaLowering currently requires Julia version $_CodeInfo_need_ver or greater")
+    end
+else
+    # debuginfo changed completely as of https://github.com/JuliaLang/julia/pull/52415
+    # nargs / isva was added as of       https://github.com/JuliaLang/julia/pull/54341
+    # field rettype added in             https://github.com/JuliaLang/julia/pull/54655
+    # field has_image_globalref added in https://github.com/JuliaLang/julia/pull/57433
+    # CodeInfo constructor. TODO: Should be in Core
+    let
+        fns = fieldnames(Core.CodeInfo)
+        fts = fieldtypes(Core.CodeInfo)
+        conversions = [:(convert($t, $n)) for (t,n) in zip(fts, fns)]
+
+        expected_fns = (:code, :debuginfo, :ssavaluetypes, :ssaflags, :slotnames, :slotflags, :slottypes, :rettype, :parent, :edges, :min_world, :max_world, :method_for_inference_limit_heuristics, :nargs, :propagate_inbounds, :has_fcall, :has_image_globalref, :nospecializeinfer, :isva, :inlining, :constprop, :purity, :inlining_cost)
+        expected_fts = (Vector{Any}, Core.DebugInfo, Any, Vector{UInt32}, Vector{Symbol}, Vector{UInt8}, Any, Any, Any, Any, UInt, UInt, Any, UInt, Bool, Bool, Bool, Bool, Bool, UInt8, UInt8, UInt16, UInt16)
+        code = if fns != expected_fns || fts != expected_fts
+            :(function _CodeInfo(args...)
+                  error(string(
+                      "JuliaLowering didn't recognize Core.CodeInfo's fields; ",
+                      "it may need updating to match Core.CodeInfo.\n",
+                      "expected field names: $($expected_fns)\n",
+                      "expected field types: $($expected_fts)\n"))
+              end)
+        else
+            :(function _CodeInfo($(fns...))
+                $(Expr(:new, :(Core.CodeInfo), conversions...))
+            end)
+        end
+
+        Core.eval(@__MODULE__, code)
+    end
+end
+
+function _compress_debuginfo(info)
+    filename, edges, codelocs = info
+    edges = Core.svec(map(_compress_debuginfo, edges)...)
+    codelocs = @ccall jl_compress_codelocs((-1)::Int32, codelocs::Any,
+                                           div(length(codelocs),3)::Csize_t)::String
+    Core.DebugInfo(Symbol(filename), nothing, edges, codelocs)
+end
+
+function ir_debug_info_state(ex)
+    e1 = first(flattened_provenance(ex))
+    topfile = filename(e1)
+    Tuple{String, Vector{Any}, Vector{Int32}}[(topfile, [], Vector{Int32}())]
+end
+
+function add_ir_debug_info!(current_codelocs_stack, stmt)
+    locstk = Tuple{String, Int32}[(filename(e), source_location(e)[1]) for e in flattened_provenance(stmt)]
+    for j in 1:length(locstk)
+        if j === 1 && current_codelocs_stack[j][1] != locstk[j][1]
+            # dilemma: the filename stack here shares no prefix with that of the
+            # previous statement, where differing filenames usually (j > 1) mean
+            # a different macro expansion has started at this statement.  guess
+            # that both files are the same, and inherit the previous filename.
+            locstk[j] = (current_codelocs_stack[j][1], locstk[j][2])
+        end
+        if j < length(current_codelocs_stack) && (j === length(locstk) ||
+                current_codelocs_stack[j+1][1] != locstk[j+1][1])
+            while j < length(current_codelocs_stack)
+                info = pop!(current_codelocs_stack)
+                push!(last(current_codelocs_stack)[2], info)
+            end
+        elseif j > length(current_codelocs_stack)
+            push!(current_codelocs_stack, (locstk[j][1], [], Vector{Int32}()))
+        end
+    end
+    @jl_assert length(locstk) === length(current_codelocs_stack) stmt
+    for (j, (file,line)) in enumerate(locstk)
+        fn, edges, codelocs = current_codelocs_stack[j]
+        @jl_assert fn == file stmt
+        if j < length(locstk)
+            edge_index = length(edges) + 1
+            edge_codeloc_index = fld1(length(current_codelocs_stack[j+1][3]) + 1, 3)
+        else
+            edge_index = 0
+            edge_codeloc_index = 0
+        end
+        push!(codelocs, line)
+        push!(codelocs, edge_index)
+        push!(codelocs, edge_codeloc_index)
+    end
+end
+
+function finish_ir_debug_info!(current_codelocs_stack)
+    while length(current_codelocs_stack) > 1
+        info = pop!(current_codelocs_stack)
+        push!(last(current_codelocs_stack)[2], info)
+    end
+
+    _compress_debuginfo(only(current_codelocs_stack))
+end
+
+# Convert SyntaxTree to the CodeInfo+Expr data structures understood by the
+# Julia runtime
+function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
+    stmts = Any[]
+
+    current_codelocs_stack = ir_debug_info_state(ex)
+
+    nargs = sum((s.kind==:argument for s in slots), init=0)
+    slotnames = Vector{Symbol}(undef, length(slots))
+    slot_rename_inds = Dict{String,Int}()
+    slotflags = Vector{UInt8}(undef, length(slots))
+    for (i, slot) in enumerate(slots)
+        name = slot.name
+        # TODO: Do we actually want unique names here? The C code in
+        # `jl_new_code_info_from_ir` has logic to simplify gensym'd names and
+        # use the empty string for compiler-generated bindings.
+        if name !== UNUSED
+            ni = get(slot_rename_inds, name, 0)
+            slot_rename_inds[name] = ni + 1
+            if ni > 0
+                name = "$name@$ni"
+            end
+        end
+        sname = Symbol(name)
+        slotnames[i] = sname
+        slotflags[i] =                   # Inference          | Codegen
+            slot.is_read          << 3 | # SLOT_USED          | jl_vinfo_sa
+            slot.is_single_assign << 4 | # SLOT_ASSIGNEDONCE  | -
+            slot.is_maybe_undef   << 5 | # SLOT_USEDUNDEF     | jl_vinfo_usedundef
+            slot.is_called        << 6   # SLOT_CALLED        | -
+    end
+
+    for stmt in children(ex)
+        push!(stmts, _to_lowered_expr(stmt))
+        add_ir_debug_info!(current_codelocs_stack, stmt)
+    end
+
+    debuginfo = finish_ir_debug_info!(current_codelocs_stack)
+
+    has_image_globalref = any(codeinfo_has_image_globalref, stmts)
+
+    # TODO: Set ssaflags based on call site annotations:
+    # - @inbounds annotations
+    # - call site @inline / @noinline
+    # - call site @assume_effects
+    ssaflags = zeros(UInt32, length(stmts))
+
+    propagate_inbounds =
+        get(meta, :propagate_inbounds, false)
+    # TODO: Set true if there's a foreigncall
+    has_fcall = false
+    nospecializeinfer =
+        get(meta, :nospecializeinfer, false)
+    inlining =
+        get(meta, :inline, false) ? 0x01 :
+        get(meta, :noinline, false) ? 0x02 : 0x00
+    constprop =
+        get(meta, :aggressive_constprop, false) ? 0x01 :
+        get(meta, :no_constprop, false) ? 0x02 : 0x00
+    purity =
+        let eo = get(meta, :purity, nothing)
+            isnothing(eo) ? 0x0000 : Base.encode_effects_override(eo)
+        end
+
+    # The following CodeInfo fields always get their default values for
+    # uninferred code.
+    ssavaluetypes      = length(stmts) # Why does the runtime code do this?
+    slottypes          = nothing
+    parent             = nothing
+    method_for_inference_limit_heuristics = nothing
+    edges               = nothing
+    min_world           = Csize_t(1)
+    max_world           = typemax(Csize_t)
+    isva                = false
+    inlining_cost       = 0xffff
+    rettype             = Any
+
+    @jl_assert(length(stmts) == numchildren(ex), ex)
+
+    _CodeInfo(
+        stmts,
+        debuginfo,
+        ssavaluetypes,
+        ssaflags,
+        slotnames,
+        slotflags,
+        slottypes,
+        rettype,
+        parent,
+        edges,
+        min_world,
+        max_world,
+        method_for_inference_limit_heuristics,
+        nargs,
+        propagate_inbounds,
+        has_fcall,
+        has_image_globalref,
+        nospecializeinfer,
+        isva,
+        inlining,
+        constprop,
+        purity,
+        inlining_cost
+    )
+end
+
+@fzone "JL: to_lowered_expr" function to_lowered_expr(ex::SyntaxTree)
+    _to_lowered_expr(ex)
+end
+
+function _to_lowered_expr(ex::SyntaxTree)
+    k = kind(ex)
+    if is_literal(k)
+        ex.value
+    elseif k == K"nothing"
+        nothing
+    elseif k == K"core"
+        GlobalRef(Core, Symbol(ex.name_val::String))
+    elseif k == K"top"
+        GlobalRef(Base, Symbol(ex.name_val::String))
+    elseif k == K"globalref"
+        GlobalRef(ex.mod::Module, Symbol(ex.name_val::String))
+    elseif k == K"Identifier"
+        # Implicitly refers to name in parent module
+        # TODO: Should we even have plain identifiers at this point or should
+        # they all effectively be resolved into GlobalRef earlier?
+        Symbol(ex.name_val::String)
+    elseif k == K"SourceLocation"
+        QuoteNode(source_location(LineNumberNode, ex))
+    elseif k == K"Symbol"
+        QuoteNode(Symbol(ex.name_val::String))
+    elseif k == K"slot"
+        Core.SlotNumber(ex.var_id::IdTag)
+    elseif k == K"static_parameter"
+        Expr(:static_parameter, ex.var_id::IdTag)
+    elseif k == K"SSAValue"
+        Core.SSAValue(ex.var_id::IdTag)
+    elseif k == K"return"
+        Core.ReturnNode(_to_lowered_expr(ex[1]))
+    elseif k == K"inert"
+        est_to_expr(ex)
+    elseif k == K"inert_syntaxtree"
+        ex[1]
+    elseif k == K"code_info"
+        ir = to_code_info(ex[1], ex.slots, ex.meta)
+        if ex.is_toplevel_thunk
+            Expr(:thunk, ir) # TODO: Maybe nice to just return a CodeInfo here?
+        else
+            ir
+        end
+    elseif k == K"Value"
+        # TODO: we still do this in ccall, import
+        # @jl_assert !isa_lowering_ast_node(ex.value) (
+        #     ex, "smuggling AST through Value is asking for trouble; find a SyntaxTree representation")
+        ex.value isa LineNumberNode ? QuoteNode(ex.value) : ex.value
+    elseif k == K"goto"
+        Core.GotoNode(ex[1].id)
+    elseif k == K"gotoifnot"
+        Core.GotoIfNot(_to_lowered_expr(ex[1]), ex[2].id)
+    elseif k == K"enter"
+        catch_idx = ex[1].id
+        numchildren(ex) == 1 ?
+            Core.EnterNode(catch_idx) :
+            Core.EnterNode(catch_idx, _to_lowered_expr(ex[2]))
+    elseif k == K"method"
+        cs = map(_to_lowered_expr, children(ex))
+        # Ad-hoc unwrapping to satisfy `Expr(:method)` expectations
+        cs1 = cs[1]
+        c1 = cs1 isa QuoteNode ? cs1.value : cs1
+        Expr(:method, c1, cs[2:end]...)
+    elseif k == K"newvar"
+        Core.NewvarNode(_to_lowered_expr(ex[1]))
+    elseif k == K"opaque_closure_method"
+        args = map(_to_lowered_expr, children(ex))
+        # opaque_closure_method has special non-evaluated semantics for the
+        # `functionloc` line number node so we need to undo a level of quoting
+        arg4 = args[4]
+        @jl_assert arg4 isa QuoteNode ex
+        args[4] = arg4.value
+        Expr(:opaque_closure_method, args...)
+    elseif k == K"meta"
+        args = Any[_to_lowered_expr(e) for e in children(ex)]
+        # Unpack K"Symbol" QuoteNode as `Expr(:meta)` requires an identifier here.
+        arg1 = args[1]
+        @jl_assert arg1 isa QuoteNode ex
+        args[1] = arg1.value
+        Expr(:meta, args...)
+    elseif k == K"foreigncall_arg1"
+        @jl_assert kind(ex[1]) == K"tuple" ex
+        _foreigncall_arg1_expr(ex[1])
+    elseif k == K"static_eval"
+        @jl_assert numchildren(ex) == 1 ex
+        _to_lowered_expr(ex[1])
+    elseif k == K"cfunction"
+        # For a scope-resolved callable (`K"static_eval"`), drop the module tag
+        # and emit a bare Symbol so `method.c` resolves it in the method's
+        # module at eval time, matching Base `@cfunction`'s runtime semantics.
+        ret = Expr(:cfunction)
+        for (i, e) in enumerate(children(ex))
+            if i == 2 && kind(e) == K"static_eval" && kind(e[1]) == K"globalref"
+                push!(ret.args, QuoteNode(Symbol(e[1].name_val::String)))
+            else
+                push!(ret.args, _to_lowered_expr(e))
+            end
+        end
+        return ret
+    else
+        # Allowed forms according to https://docs.julialang.org/en/v1/devdocs/ast/
+        #
+        # call invoke static_parameter `=` method struct_type abstract_type
+        # primitive_type global const new splatnew isdefined
+        # enter leave pop_exception inbounds boundscheck loopinfo copyast meta
+        # lambda
+        head = k == K"call"      ? :call       :
+               k == K"new"       ? :new        :
+               k == K"splatnew"  ? :splatnew   :
+               k == K"="         ? :(=)        :
+               k == K"leave"     ? :leave      :
+               k == K"isdefined" ? :isdefined  :
+               k == K"loopinfo"  ? :loopinfo   :
+               k == K"boundscheck"       ? :boundscheck       :
+               k == K"latestworld"       ? :latestworld       :
+               k == K"pop_exception"     ? :pop_exception     :
+               k == K"captured_local"    ? :captured_local    :
+               k == K"gc_preserve_begin" ? :gc_preserve_begin :
+               k == K"gc_preserve_end"   ? :gc_preserve_end   :
+               k == K"foreigncall"       ? :foreigncall       :
+               k == K"cfunction"         ? :cfunction         :
+               k == K"new_opaque_closure" ? :new_opaque_closure :
+               nothing
+        if isnothing(head)
+            throw(LoweringError(ex, "Unhandled form for kind $k"))
+        end
+        ret = Expr(head)
+        for e in children(ex)
+            push!(ret.args, _to_lowered_expr(e))
+        end
+        return ret
+    end
+end
+
+# ultra-permissive conversion allowing unlowered structure, but lowered leaves
+function _foreigncall_arg1_expr(ex)
+    if is_leaf(ex) || kind(ex) == K"inert"
+        _to_lowered_expr(ex)
+    else
+        k = kind(ex)
+        Expr(Symbol((k === K"unknown_head" ? st.name_val : untokenize(k))::String),
+             map(_foreigncall_arg1_expr, children(ex))...)
+    end
+end
+
+#-------------------------------------------------------------------------------
+# Our version of eval - should be upstreamed though?
+@fzone "JL: eval" function eval(mod::Module, ex::SyntaxTree;
+                                macro_world::UInt=Base.get_world_counter(),
+                                soft_scope::Union{Nothing,Bool}=nothing,
+                                opts...)
+    iter = lower_init(ex; opts...)
+    _eval(mod, iter; soft_scope)
+end
+
+# Version of eval() taking `Expr` (or Expr tree leaves of any type)
+function eval(mod::Module, @nospecialize(ex); opts...)
+    eval(mod, expr_to_est(ex); opts...)
+end
+
+function _eval(mod::Module, iter::LoweringIterator; soft_scope::Union{Nothing,Bool}=nothing)
+    modules = Module[mod]
+    result = nothing
+    while true
+        thunk = lower_step(iter, modules[end], Base.get_world_counter(); soft_scope)::Core.SimpleVector
+        type = thunk[1]::Symbol
+        if type == :done
+            break
+        elseif type == :begin_module
+            filename = something(thunk[5].file, :none)
+            mod = @ccall jl_begin_new_module(
+                modules[end]::Any, thunk[3]::Symbol, thunk[2]::Any, thunk[4]::Cint,
+                filename::Cstring, thunk[5].line::Cint)::Module
+            push!(modules, mod)
+        elseif type == :end_module
+            @ccall jl_end_new_module(modules[end]::Module)::Cvoid
+            result = pop!(modules)
+        else
+            @assert type == :thunk
+            result = Core.eval(modules[end], thunk[2])
+        end
+    end
+    @assert length(modules) === 1
+    return result
+end
+
+"""
+    include(mod::Module, path::AbstractString)
+
+Evaluate the contents of the input source file in the global scope of module
+`mod`. Every module (except those defined with baremodule) has its own
+definition of `include()` omitting the `mod` argument, which evaluates the file
+in that module. Returns the result of the last evaluated expression of the
+input file. During including, a task-local include path is set to the directory
+containing the file. Nested calls to include will search relative to that path.
+This function is typically used to load source interactively, or to combine
+files in packages that are broken into multiple source files.
+"""
+function include(mod::Module, path::AbstractString)
+    path, prev = Base._include_dependency(mod, path)
+    code = read(path, String)
+    tls = task_local_storage()
+    tls[:SOURCE_PATH] = path
+    try
+        return include_string(mod, code, path)
+    finally
+        if prev === nothing
+            delete!(tls, :SOURCE_PATH)
+        else
+            tls[:SOURCE_PATH] = prev
+        end
+    end
+end
+
+"""
+    include_string(mod::Module, code::AbstractString, filename::AbstractString="string")
+
+Like `include`, except reads code from the given string rather than from a file.
+"""
+function include_string(mod::Module, code::AbstractString, filename::AbstractString="string";
+                        expr_compat_mode=false, version::VersionNumber=VERSION)
+    eval(mod, parseall(SyntaxTree, code; filename=filename, version=version); expr_compat_mode)
+end
+
+include(path::AbstractString) = include(JuliaLowering, path)

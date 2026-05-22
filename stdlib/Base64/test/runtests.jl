@@ -1,12 +1,15 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, Random
-import Base64:
+using Base64:
+    Base64,
     Base64EncodePipe,
     base64encode,
     Base64DecodePipe,
     base64decode,
     stringmime
+
+@test isempty(Test.detect_closure_boxes(Base64))
 
 const inputText = "Man is distinguished, not only by his reason, but by this singular passion from other animals, which is a lust of the mind, that by a perseverance of delight in the continued and indefatigable generation of knowledge, exceeds the short vehemence of any carnal pleasure."
 const encodedMaxLine76 = """
@@ -141,4 +144,8 @@ end
     for _ in 1:1000
         @test String(base64decode(splace(longEncodedText))) == longDecodedText
     end
+end
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(Base64))
 end

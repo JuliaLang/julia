@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using InteractiveUtils: code_llvm
+using libLLVM_jll
 
 function declared_floor(x::Float64)
     return ccall("llvm.floor.f64", llvmcall, Float64, (Float64,), x)
@@ -61,6 +62,7 @@ let err = ErrorException("llvmcall only supports intrinsic calls")
     @test_throws err (@eval ccall("llvm.floor", llvmcall, Float64, (Float64, Float64...,), 0.0)) === 0.0
 end
 
+# Test basic JIT access and info functions
 @testset "JLJIT API" begin
     function JLJITGetJuliaOJIT()
         ccall(:JLJITGetJuliaOJIT, Ptr{Cvoid}, ())
@@ -68,8 +70,68 @@ end
     function JLJITGetTripleString(JIT)
         ccall(:JLJITGetTripleString, Cstring, (Ptr{Cvoid},), JIT)
     end
+    function JLJITGetDataLayoutString(JIT)
+        ccall(:JLJITGetDataLayoutString, Cstring, (Ptr{Cvoid},), JIT)
+    end
+    function JLJITGetGlobalPrefix(JIT)
+        ccall(:JLJITGetGlobalPrefix, Cchar, (Ptr{Cvoid},), JIT)
+    end
+    function JLJITMangleAndIntern(JIT, name)
+        ccall(:JLJITMangleAndIntern, Ptr{Cvoid}, (Ptr{Cvoid}, Cstring), JIT, name)
+    end
+    function JLJITCreateJITDylib(JIT, name)
+        ccall(:JLJITCreateJITDylib, Ptr{Cvoid}, (Ptr{Cvoid}, Cstring), JIT, name)
+    end
+    function JLJITJDLookup(JIT, JD, result_ptr, name, external_jd_only)
+        ccall(:JLJITJDLookup, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{UInt64}, Cstring, Cint),
+              JIT, JD, result_ptr, name, external_jd_only)
+    end
+    function LLVMGetErrorMessage(err)
+        errp = ccall((:LLVMGetErrorMessage, libLLVM_jll.libLLVM), Cstring, (Ptr{Cvoid},), err)
+        errs = unsafe_string(errp)
+        ccall((:LLVMDisposeErrorMessage, libLLVM_jll.libLLVM), Cvoid, (Cstring,), errp)
+        return errs
+    end
+
     jit = JLJITGetJuliaOJIT()
+    @test jit != C_NULL
+
     str = JLJITGetTripleString(jit)
     jl_str = unsafe_string(str)
     @test length(jl_str) > 4
+    @test 2 <= count("-", jl_str) <= 4
+
+    dl_str = JLJITGetDataLayoutString(jit)
+    jl_dl_str = unsafe_string(dl_str)
+    @test length(jl_dl_str) > 1
+    @test occursin("-", jl_dl_str)
+    @test occursin(":", jl_dl_str)
+
+    prefix = Char(JLJITGetGlobalPrefix(jit))
+    @test prefix == '\0' || prefix == '_'  # Common prefixes are no prefix or underscore
+
+    mangled = JLJITMangleAndIntern(jit, "my_symbol")
+    @test mangled != C_NULL
+
+    jd = JLJITCreateJITDylib(jit, "TestJITDylib")
+    @test jd != C_NULL
+
+    # look up a symbol from GlobalJD via JD
+    result = Ref{UInt64}(0)
+    err = JLJITJDLookup(jit, jd, result, "jl_get_ptls_states", 0)
+    @test err == C_NULL
+    @test result[] != 0  # Should find the symbol
+    err = JLJITJDLookup(jit, jd, result, "jl_get_ptls_states", 1)
+    @test err != C_NULL
+    @test LLVMGetErrorMessage(err) ∈ ("Symbols not found: [ jl_get_ptls_states ]",
+                                      "Symbols not found: [ _jl_get_ptls_states ]")
 end
+
+
+# boolean structs
+const NT4I = NTuple{4, VecElement{Int}}
+const NT4B = NTuple{4, VecElement{Bool}}
+f_nt4b(x, y) = ccall("llvm.sadd.with.overflow", llvmcall, Pair{NT4B, NT4B}, (NT4B, NT4B), x, y)
+f_nt4i(x, y) = ccall("llvm.sadd.with.overflow", llvmcall, Pair{NT4I, NT4B}, (NT4I, NT4I), x, y)
+@test f_nt4b((false, true, false, true), (false, false, true, true)) === (NT4B((false, true, true, false)) => NT4B((false, false, false, true)))
+@test f_nt4i((typemin(Int), 0, typemax(Int), typemax(Int)), (-1, typemax(Int),-1, 1)) === (NT4I((typemax(Int), typemax(Int), typemax(Int)-1, typemin(Int))) => NT4B((true, false, false, true)))

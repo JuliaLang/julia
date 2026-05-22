@@ -41,11 +41,16 @@ useful.
 
 ## Useful Julia functions for Inspecting those variables
 
-  * `jl_gdblookup($rip)` :: For looking up the current function and line. (use `$eip` on i686 platforms)
+  * `jl_print_task_backtraces(0)` :: Similar to gdb's `thread apply all bt` or lldb's `thread backtrace
+    all`. Runs all threads while printing backtraces for all existing tasks.
+  * `jl_gdblookup($pc)` :: For looking up the current function and line.
+  * `jl_gdblookupinfo($pc)` :: For looking up the current method instance object.
+  * `jl_gdbdumpcode(mi)` :: For dumping all of `code_typed/code_llvm/code_asm` when the REPL is not working right.
   * `jlbacktrace()` :: For dumping the current Julia backtrace stack to stderr. Only usable after
     `record_backtrace()` has been called.
   * `jl_dump_llvm_value(Value*)` :: For invoking `Value->dump()` in gdb, where it doesn't work natively.
     For example, `f->linfo->functionObject`, `f->linfo->specFunctionObject`, and `to_function(f->linfo)`.
+  * `jl_dump_llvm_module(Module*)` :: For invoking `Module->dump()` in gdb, where it doesn't work natively.
   * `Type->dump()` :: only works in lldb. Note: add something like `;1` to prevent lldb from printing
     its prompt over the output
   * `jl_eval_string("expr")` :: for invoking side-effects to modify the current state or to lookup
@@ -123,7 +128,7 @@ The corresponding LLDB command is (after the process is started):
 (lldb) pro hand -p true -s false -n false SIGSEGV
 ```
 
-If you are debugging a segfault with threaded code, you can set a breakpoint on `jl_critical_error`
+If you are debugging a segfault with threaded code, you can set a breakpoint on `jl_fprint_critical_error`
 (`sigdie_handler` should also work on Linux and BSD) in order to only catch the actual segfault
 rather than the GC synchronization points.
 
@@ -172,7 +177,7 @@ $2 = void
 
 The most recent `jl_apply` is at frame #3, so we can go back there and look at the AST for the
 function `julia_convert_16886`. This is the uniqued name for some method of `convert`. `f` in
-this frame is a `jl_function_t*`, so we can look at the type signature, if any, from the `specTypes`
+this frame is a `jl_value_t*`, so we can look at the type signature, if any, from the `specTypes`
 field:
 
 ```
@@ -195,7 +200,7 @@ Expr(:return, Expr(:call, :box, :Float32, Expr(:call, :fptrunc, :Float32, :x)::A
 ```
 
 Finally, and perhaps most usefully, we can force the function to be recompiled in order to step
-through the codegen process. To do this, clear the cached `functionObject` from the `jl_lamdbda_info_t*`:
+through the codegen process. To do this, clear the cached `functionObject` from the `jl_lambda_info_t*`:
 
 ```
 (gdb) p f->linfo->functionObject
@@ -236,7 +241,7 @@ process)
 
 Julia now works out of the box with [rr](https://rr-project.org/), the lightweight recording and
 deterministic debugging framework from Mozilla. This allows you to replay the trace of an execution
-deterministically.  The replayed execution's address spaces, register contents, syscall data etc
+deterministically. The replayed execution's address spaces, register contents, syscall data etc
 are exactly the same in every run.
 
 A recent version of rr (3.1.0 or higher) is required.

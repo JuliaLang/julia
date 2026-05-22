@@ -1,0 +1,12 @@
+name = "CrossPackageExtToExtDependency"
+uuid = "30f07f2e-c47e-40db-93a2-cbc4d1b301cc"
+version = "0.1.0"
+
+[deps]
+CyclicExtensions = "17d4f0df-b55c-4714-ac4b-55fa23f7355c"
+
+[weakdeps]
+SomePackage = "678608ae-7bb3-42c7-98b1-82102067a3d8"
+
+[extensions]
+ExtAB = ["CyclicExtensions", "SomePackage"]

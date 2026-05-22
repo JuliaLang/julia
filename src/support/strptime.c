@@ -134,7 +134,7 @@ static const char * const nadt[5] = {
 
 /*
  * Table to determine the ordinal date for the start of a month.
- * Ref: http://en.wikipedia.org/wiki/ISO_week_date
+ * Ref: https://en.wikipedia.org/wiki/ISO_week_date
  */
 static const int start_of_month[2][13] = {
 	/* non-leap year */
@@ -147,7 +147,7 @@ static const int start_of_month[2][13] = {
  * Calculate the week day of the first day of a year. Valid for
  * the Gregorian calendar, which began Sept 14, 1752 in the UK
  * and its colonies. Ref:
- * http://en.wikipedia.org/wiki/Determination_of_the_day_of_the_week
+ * https://en.wikipedia.org/wiki/Determination_of_the_day_of_the_week
  */
 
 static int

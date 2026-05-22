@@ -77,7 +77,7 @@ already work:
 - pycharm
 - bbedit
 
-# Example:
+# Examples
 
 The following defines the usage of terminal-based `emacs`:
 
@@ -223,7 +223,10 @@ Edit a file or directory optionally providing a line number to edit the file at.
 Return to the `julia` prompt when you quit the editor. The editor can be changed
 by setting `JULIA_EDITOR`, `VISUAL` or `EDITOR` as an environment variable.
 
-See also [`define_editor`](@ref).
+!!! compat "Julia 1.9"
+    The `column` argument requires at least Julia 1.9.
+
+See also [`InteractiveUtils.define_editor`](@ref).
 """
 function edit(path::AbstractString, line::Integer=0, column::Integer=0)
     path isa String || (path = convert(String, path))
@@ -255,7 +258,7 @@ method to edit. For modules, open the main source file. The module needs to be l
     `edit` on modules requires at least Julia 1.1.
 
 To ensure that the file can be opened at the given line, you may need to call
-`define_editor` first.
+`InteractiveUtils.define_editor` first.
 """
 function edit(@nospecialize f)
     ms = methods(f).ms
@@ -266,9 +269,15 @@ function edit(@nospecialize f)
 end
 edit(m::Method) = edit(functionloc(m)...)
 edit(@nospecialize(f), idx::Integer) = edit(methods(f).ms[idx])
-edit(f, t)  = (@nospecialize; edit(functionloc(f, t)...))
+edit(f, t) = (@nospecialize; edit(functionloc(f, t)...))
+edit(@nospecialize argtypes::Union{Tuple, Type{<:Tuple}}) = edit(functionloc(argtypes)...)
 edit(file::Nothing, line::Integer) = error("could not find source file for function")
-edit(m::Module) = edit(pathof(m))
+function edit(m::Module)
+    path = pathof(m)
+    path === nothing && error("could not find source file for module: $m")
+    edit(path)
+end
+edit(m::Module, n::Symbol) = edit(varloc(m, n)...)
 
 # terminal pager
 
@@ -306,6 +315,30 @@ less(file::AbstractString) = less(file, 1)
 Show the definition of a function using the default pager, optionally specifying a tuple of
 types to indicate which method to see.
 """
-less(f)                   = less(functionloc(f)...)
-less(f, @nospecialize t)  = less(functionloc(f,t)...)
-less(file, line::Integer) = error("could not find source file for function")
+less(f)                    = less(functionloc(f)...)
+less(f, @nospecialize t)   = less(functionloc(f,t)...)
+less(file, line::Integer)  = error("could not find source file for function")
+less(m::Module, n::Symbol) = less(varloc(m, n)...)
+
+# find where a (documented) global is defined using the doc system
+function varloc(mod::Module, name::Symbol)
+    m = Base.Docs.meta(mod)
+    if m !== nothing
+        bnd = Base.Docs.Binding(mod, name)
+        if haskey(m, bnd)
+            docstr = m[bnd]
+            if docstr isa Base.Docs.MultiDoc
+                length(docstr.docs) != 1 && @goto err
+                docstr = only(docstr.docs).second
+            end
+            if docstr isa Base.Docs.DocStr
+                mm = docstr.data
+                if haskey(mm, :path) && haskey(mm, :linenumber)
+                    return (mm[:path], mm[:linenumber])
+                end
+            end
+        end
+    end
+    @label err
+    error("could not determine location of variable $mod.$name")
+end

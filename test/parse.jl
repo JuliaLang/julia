@@ -24,11 +24,19 @@
     @test parse(Int64,"3830974272") == 3830974272
     @test parse(Int64,"-3830974272") == -3830974272
 
+    @test parse(Int32,'1',base=2)==1
+    @test parse(Int32,'c',base=58) == 38
+    @test parse(Int32,'d',base=62)==39
+    @test parse(Int32,'8') == 8
     @test parse(Int,'3') == 3
     @test parse(Int,'3', base = 8) == 3
     @test parse(Int, 'a', base=16) == 10
     @test_throws ArgumentError parse(Int, 'a')
     @test_throws ArgumentError parse(Int,typemax(Char))
+    @test_throws ArgumentError parse(Int8,'A',base=64)
+    @test_throws ArgumentError parse(Int8,'B',base=1)
+    @test_throws ArgumentError parse(Int8,'φ',base=20)
+    @test_throws ArgumentError parse(Int32,'A',base=10)
 end
 
 # Issue 29451
@@ -296,6 +304,8 @@ end
         @test_throws ArgumentError parse(Complex{T}, bad)
     end
     @test_throws ArgumentError parse(Complex{Int}, "3 + 4.2im")
+    @test_throws ArgumentError parse(ComplexF64, "3 β+ 4im")
+    @test_throws ArgumentError parse(ComplexF64, "3 + 4αm")
 end
 
 @testset "parse and tryparse type inference" begin

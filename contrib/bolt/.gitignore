@@ -1,0 +1,10 @@
+profiles-bolt*
+optimized.build
+toolchain
+
+bolt
+bolt_instrument
+merge_data
+copy_originals
+stage0
+stage1

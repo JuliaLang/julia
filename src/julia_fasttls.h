@@ -22,14 +22,9 @@ extern "C" {
 
 typedef struct _jl_gcframe_t jl_gcframe_t;
 
-#if defined(_OS_DARWIN_)
-#include <pthread.h>
-typedef void *(jl_get_pgcstack_func)(pthread_key_t); // aka typeof(pthread_getspecific)
-#else
 typedef jl_gcframe_t **(jl_get_pgcstack_func)(void);
-#endif
 
-#if !defined(_OS_DARWIN_) && !defined(_OS_WINDOWS_)
+#if !defined(_OS_WINDOWS_)
 #define JULIA_DEFINE_FAST_TLS                                                                   \
 static __attribute__((tls_model("local-exec"))) __thread jl_gcframe_t **jl_pgcstack_localexec;  \
 JL_DLLEXPORT _Atomic(char) jl_pgcstack_static_semaphore;                                        \

@@ -10,7 +10,7 @@
 ;; comma - higher than assignment outside parentheses, lower when inside
 (define prec-pair (add-dots '(=>)))
 (define prec-conditional '(?))
-(define prec-arrow       (add-dots '(← → ↔ ↚ ↛ ↞ ↠ ↢ ↣ ↦ ↤ ↮ ⇎ ⇍ ⇏ ⇐ ⇒ ⇔ ⇴ ⇶ ⇷ ⇸ ⇹ ⇺ ⇻ ⇼ ⇽ ⇾ ⇿ ⟵ ⟶ ⟷ ⟹ ⟺ ⟻ ⟼ ⟽ ⟾ ⟿ ⤀ ⤁ ⤂ ⤃ ⤄ ⤅ ⤆ ⤇ ⤌ ⤍ ⤎ ⤏ ⤐ ⤑ ⤔ ⤕ ⤖ ⤗ ⤘ ⤝ ⤞ ⤟ ⤠ ⥄ ⥅ ⥆ ⥇ ⥈ ⥊ ⥋ ⥎ ⥐ ⥒ ⥓ ⥖ ⥗ ⥚ ⥛ ⥞ ⥟ ⥢ ⥤ ⥦ ⥧ ⥨ ⥩ ⥪ ⥫ ⥬ ⥭ ⥰ ⧴ ⬱ ⬰ ⬲ ⬳ ⬴ ⬵ ⬶ ⬷ ⬸ ⬹ ⬺ ⬻ ⬼ ⬽ ⬾ ⬿ ⭀ ⭁ ⭂ ⭃ ⥷ ⭄ ⥺ ⭇ ⭈ ⭉ ⭊ ⭋ ⭌ ￩ ￫ ⇜ ⇝ ↜ ↝ ↩ ↪ ↫ ↬ ↼ ↽ ⇀ ⇁ ⇄ ⇆ ⇇ ⇉ ⇋ ⇌ ⇚ ⇛ ⇠ ⇢ ↷ ↶ ↺ ↻ --> <-- <-->)))
+(define prec-arrow       (add-dots '(← → ↔ ↚ ↛ ↞ ↠ ↢ ↣ ↦ ↤ ↮ ⇎ ⇍ ⇏ ⇐ ⇒ ⇔ ⇴ ⇶ ⇷ ⇸ ⇹ ⇺ ⇻ ⇼ ⇽ ⇾ ⇿ ⟵ ⟶ ⟷ ⟹ ⟺ ⟻ ⟼ ⟽ ⟾ ⟿ ⤀ ⤁ ⤂ ⤃ ⤄ ⤅ ⤆ ⤇ ⤌ ⤍ ⤎ ⤏ ⤐ ⤑ ⤔ ⤕ ⤖ ⤗ ⤘ ⤝ ⤞ ⤟ ⤠ ⥄ ⥅ ⥆ ⥇ ⥈ ⥊ ⥋ ⥎ ⥐ ⥒ ⥓ ⥖ ⥗ ⥚ ⥛ ⥞ ⥟ ⥢ ⥤ ⥦ ⥧ ⥨ ⥩ ⥪ ⥫ ⥬ ⥭ ⥰ ⧴ ⬱ ⬰ ⬲ ⬳ ⬴ ⬵ ⬶ ⬷ ⬸ ⬹ ⬺ ⬻ ⬼ ⬽ ⬾ ⬿ ⭀ ⭁ ⭂ ⭃ ⥷ ⭄ ⥺ ⭇ ⭈ ⭉ ⭊ ⭋ ⭌ ￩ ￫ ⇜ ⇝ ↜ ↝ ↩ ↪ ↫ ↬ ↼ ↽ ⇀ ⇁ ⇄ ⇆ ⇇ ⇉ ⇋ ⇌ ⇚ ⇛ ⇠ ⇢ ↷ ↶ ↺ ↻ --> <-- <--> 🢲)))
 (define prec-lazy-or     (add-dots '(|\|\||)))
 (define prec-lazy-and    (add-dots '(&&)))
 (define prec-comparison
@@ -155,7 +155,7 @@
 
 (define initial-reserved-words '(begin while if for try return break continue
                          function macro quote let local global const do
-                         struct
+                         struct typegroup
                          module baremodule using import export))
 
 (define initial-reserved-word?
@@ -716,7 +716,7 @@
 
 ;; ";" at the top level produces a sequence of top level expressions
 (define (parse-stmts s)
-  (let ((ex (parse-Nary s (lambda (s) (parse-docstring s parse-eq))
+  (let ((ex (parse-Nary s (lambda (s) (parse-public s parse-eq))
                         '(#\;) 'toplevel (lambda (x) (eqv? x #\newline)) #f)))
     ;; check for unparsed junk after an expression
     (let ((t (peek-token s)))
@@ -1094,7 +1094,7 @@
              (fix-syntactic-unary (list op arg)))))))
 
 (define block-form? (Set '(block quote if for while let function macro abstract primitive struct
-                                 try module)))
+                                 try module typegroup)))
 
 ;; handle ^ and .^
 ;; -2^3 is parsed as -(2^3), so call parse-decl for the first argument,
@@ -1329,13 +1329,13 @@
 
 (define (valid-func-sig? paren sig)
   (and (pair? sig)
-       (or (eq? (car sig) 'call)
-           (eq? (car sig) 'tuple)
+       (or (memq (car sig) '(call tuple))
+           (and (not paren) (eq? (car sig) 'macrocall))
            (and paren (eq? (car sig) 'block))
            (and paren (eq? (car sig) '...))
            (and (eq? (car sig) '|::|)
                 (pair? (cadr sig))
-                (eq? (car (cadr sig)) 'call))
+                (memq (car (cadr sig)) '(call macrocall)))
            (and (eq? (car sig) 'where)
                 (valid-func-sig? paren (cadr sig))))))
 
@@ -1523,6 +1523,13 @@
                      (begin0 (list 'primitive spec nb)
                              (expect-end (take-lineendings s) "primitive type"))))))
 
+       ((typegroup)
+        ;; Grouped type definitions (mutually recursive)
+        ;; typegroup struct A ... end end  ==>  (typegroup (block ...))
+        (let ((body (parse-block s (lambda (s) (parse-docstring s parse-eq)))))
+          (begin0 (list 'typegroup body)
+                  (expect-end s "typegroup"))))
+
        ((try)
         (let ((try-block (if (memq (peek-token s) '(catch finally))
                              '(block)
@@ -1597,29 +1604,76 @@
                             (if (or (eqv? t #\newline) (closing-token? t))
                                 (list 'return '(null))
                                 (list 'return (parse-eq s)))))
-       ((break continue)
+       ((continue)
         (let ((t (peek-token s)))
-          (if (or (eof-object? t)
-                  (and (eq? t 'end) (not end-symbol))
-                  (memv t '(#\newline #\; #\) :)))
-              (list word)
-              (error (string "unexpected \"" t "\" after " word)))))
+          (cond ((or (eof-object? t)
+                     (and (eq? t 'end) (not end-symbol))
+                     (memv t '(#\newline #\; #\))))
+                 ;; continue with no arguments
+                 (list word))
+                ((and range-colon-enabled (eq? t ':))
+                 ;; Could be :label or ternary. Take : and check if immediately followed by identifier.
+                 (take-token s)
+                 (let ((nxt (peek-token s)))
+                   (if (or (closing-token? nxt) (newline? nxt) (ts:space? s))
+                       ;; Space after : or closer - this is ternary, put back :
+                       (begin (ts:put-back! s ': #t)  ;; had space before :
+                              (list word))
+                       ;; No space after :, parse as atom (label validated in lowering)
+                       (begin
+                         (ts:put-back! s ': #f)  ;; put back : with no preceding space
+                         (list word (parse-atom s))))))
+                (else
+                 ;; Parse label as atom (validated in lowering)
+                 (list word (parse-atom s))))))
+
+       ((break)
+        (let ((t (peek-token s)))
+          (define (parse-break-value lbl)
+            (let ((t2 (peek-token s)))
+              (if (or (eof-object? t2)
+                      (and (eq? t2 'end) (not end-symbol))
+                      (memv t2 '(#\newline #\; #\) :)))
+                  ;; break label
+                  (list word lbl)
+                  ;; break label value
+                  (list word lbl (parse-eq s)))))
+          (cond ((or (eof-object? t)
+                     (and (eq? t 'end) (not end-symbol))
+                     (memv t '(#\newline #\; #\))))
+                 ;; break with no arguments
+                 (list word))
+                ((and range-colon-enabled (eq? t ':))
+                 ;; Could be :label or ternary. Take : and check if immediately followed by identifier.
+                 (take-token s)
+                 (let ((nxt (peek-token s)))
+                   (if (or (closing-token? nxt) (newline? nxt) (ts:space? s))
+                       ;; Space after : or closer - this is ternary, put back :
+                       (begin (ts:put-back! s ': #t)  ;; had space before :
+                              (list word))
+                       ;; No space after :, parse as atom (label validated in lowering)
+                       (begin
+                         (ts:put-back! s ': #f)  ;; put back : with no preceding space
+                         (parse-break-value (parse-atom s))))))
+                (else
+                 ;; Parse label as atom (validated in lowering)
+                 (parse-break-value (parse-atom s))))))
 
        ((module baremodule)
         (let* ((name (parse-unary-prefix s))
                (loc  (line-number-node s))
-               (body (parse-block s (lambda (s) (parse-docstring s parse-eq)))))
+               (body (parse-block s (lambda (s) (parse-public s parse-eq)))))
           (if (reserved-word? name)
               (error (string "invalid module name \"" name "\"")))
           (expect-end s word)
           (list 'module (if (eq? word 'module) '(true) '(false)) name
                 `(block ,loc ,@(cdr body)))))
-       ((export)
+       ((export public)
         (let ((es (map macrocall-to-atsym
                        (parse-comma-separated s parse-unary-prefix))))
           (if (not (every symbol-or-interpolate? es))
-              (error "invalid \"export\" statement"))
-          `(export ,@es)))
+              (error (string "invalid \"" word "\" statement")))
+          `(,word ,@es)))
        ((import using)
         (parse-imports s word))
        ((do)
@@ -2610,15 +2664,23 @@
 
 (define (valid-modref? e)
   (and (length= e 3) (eq? (car e) '|.|) (pair? (caddr e))
-       (eq? (car (caddr e)) 'quote) (symbol? (cadr (caddr e)))
+       (or (eq? (car (caddr e)) 'quote)
+           (eq? (car (caddr e)) 'inert))
+       (symbol? (cadr (caddr e)))
        (or (symbol? (cadr e))
            (valid-modref? (cadr e)))))
 
 (define (macroify-name e . suffixes)
   (cond ((symbol? e) (symbol (apply string #\@ e suffixes)))
+        ((and (pair? e) (eq? (car e) 'quote))
+         `(quote ,(apply macroify-name (cadr e) suffixes)))
+        ((and (pair? e) (eq? (car e) 'inert))
+         `(inert ,(apply macroify-name (cadr e) suffixes)))
+        ((globalref? e)
+         `(globalref ,(cadr e) ,(apply macroify-name (caddr e) suffixes)))
         ((valid-modref? e)
          `(|.| ,(cadr e)
-               (quote ,(apply macroify-name (cadr (caddr e)) suffixes))))
+               ,(apply macroify-name (caddr e) suffixes)))
         (else (error (string "invalid macro usage \"@(" (deparse e) ")\"" )))))
 
 (define (macroify-call s call startloc)
@@ -2663,6 +2725,17 @@
       (and (pair? e)
            ;; string interpolation
            (eq? (car e) 'string))))
+
+(define (parse-public s production)
+  (if (eq? (peek-token s) 'public)
+      (let ((spc (ts:space? s)))
+        (take-token s)
+        (if (memv (peek-token s) '(#\( = #\[))
+            (begin ;; TODO: deprecation warning here
+                   (ts:put-back! s 'public spc)
+                   (parse-docstring s production))
+            (parse-resword s 'public)))
+      (parse-docstring s production)))
 
 (define (parse-docstring s production)
   (let ((startloc (line-number-node s)) ; be sure to use the line number from the head of the docstring
