@@ -42,6 +42,15 @@ const global_fail_fast = OncePerProcess{Bool}() do
     return Base.get_bool_env("JULIA_TEST_FAILFAST", false)
 end
 
+const global_failure_count = Threads.Atomic{Int}(0)
+const global_failure_limit = OncePerProcess{Union{Nothing,Int}}() do
+    val = get(ENV, "JULIA_TEST_MAXFAILURES", "")
+    isempty(val) && return nothing
+    n = tryparse(Int, val)
+    (n === nothing || n < 0) && return nothing
+    return n
+end
+
 #-----------------------------------------------------------------------
 
 # Backtrace utility functions
@@ -1547,6 +1556,11 @@ extract_file(::Nothing) = nothing
 
 struct FailFastError <: Exception end
 
+struct MaxFailuresError <: Exception
+    limit::Int
+    count::Int
+end
+
 # For a broken result, simply store the result
 record(ts::DefaultTestSet, t::Broken) = ((@lock ts.results_lock push!(ts.results, t)); t)
 # For a passed result, do not store the result since it uses a lot of memory, unless
@@ -1580,6 +1594,11 @@ function record(ts::DefaultTestSet, t::Union{Fail, Error}; print_result::Bool=TE
     end
     @lock ts.results_lock push!(ts.results, t)
     ts.failfast && throw(FailFastError())
+    limit = global_failure_limit()
+    if limit !== nothing
+        count = Threads.atomic_add!(global_failure_count, 1) + 1
+        count >= limit && throw(MaxFailuresError(limit, count))
+    end
     return t
 end
 
@@ -2144,6 +2163,7 @@ trigger_test_failure_break(@nospecialize(err)) =
     ccall(:jl_test_failure_breakpoint, Cvoid, (Any,), err)
 
 is_failfast_error(err::FailFastError) = true
+is_failfast_error(err::MaxFailuresError) = true
 is_failfast_error(err::LoadError) = is_failfast_error(err.error) # handle `include` barrier
 is_failfast_error(err) = false
 
@@ -2251,8 +2271,9 @@ function testset_beginend_call(args, tests, source)
             # something in the test block threw an error. Count that as an
             # error in this test set
             trigger_test_failure_break(err)
-            if is_failfast_error(err)
-                get_testset_depth() > 0 ? rethrow() : failfast_print()
+            real_err = err isa LoadError ? err.error : err
+            if is_failfast_error(real_err)
+                get_testset_depth() > 0 ? rethrow() : (real_err isa MaxFailuresError ? maxfailures_print(real_err) : failfast_print())
             else
                 record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source)), nothing))
             end
@@ -2273,6 +2294,11 @@ end
 function failfast_print()
     printstyled("\nFail-fast enabled:"; color = Base.error_color(), bold=true)
     printstyled(" Fail or Error occurred\n\n"; color = Base.error_color())
+end
+
+function maxfailures_print(err::MaxFailuresError)
+    printstyled("\nMax failures reached:"; color = Base.error_color(), bold=true)
+    printstyled(" $(err.count) failures (limit=$(err.limit))\n\n"; color = Base.error_color())
 end
 
 """
@@ -2331,8 +2357,9 @@ function testset_forloop(args, testloop, source)
             # Something in the test block threw an error. Count that as an
             # error in this test set
             trigger_test_failure_break(err)
-            if is_failfast_error(err)
-                get_testset_depth() > 0 ? rethrow() : failfast_print()
+            real_err = err isa LoadError ? err.error : err
+            if is_failfast_error(real_err)
+                get_testset_depth() > 0 ? rethrow() : (real_err isa MaxFailuresError ? maxfailures_print(real_err) : failfast_print())
             else
                 record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source)), nothing))
             end

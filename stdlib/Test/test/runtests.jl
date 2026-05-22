@@ -1952,6 +1952,119 @@ end
     end
 end
 
+@testset "maxfailures option" begin
+    @testset "default (no limit)" begin
+        mktemp() do f, _
+            write(f,
+            """
+            using Test
+            Test.global_failure_count[] = 0
+            @testset "outer" begin
+                @testset "First" begin
+                    @test false
+                    @test false
+                end
+                @testset "Second" begin
+                    @test true
+                end
+            end
+            """)
+            cmd = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
+            result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
+            @test occursin("Test Summary:", result)
+            @test occursin("First", result)
+            @test occursin("Second", result)
+        end
+    end
+    @testset "stop after 1 failure" begin
+        mktemp() do f, _
+            write(f,
+            """
+            using Test
+            Test.global_failure_count[] = 0
+            Test.global_failure_limit = 1
+            @testset "outer" begin
+                @testset "First" begin
+                    @test false
+                end
+                @testset "Second" begin
+                    @test true
+                end
+            end
+            """)
+            cmd = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
+            result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
+            @test occursin("Max failures reached: 1", result)
+            @test occursin("First", result)
+            @test !occursin(r"Test Summary:.*\n.*Second", result)
+        end
+    end
+    @testset "stop after N failures" begin
+        mktemp() do f, _
+            write(f,
+            """
+            using Test
+            Test.global_failure_count[] = 0
+            Test.global_failure_limit = 2
+            @testset "outer" begin
+                @testset "First" begin
+                    @test false
+                    @test false
+                end
+                @testset "Second" begin
+                    @test true
+                end
+            end
+            """)
+            cmd = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
+            result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
+            @test occursin("Max failures reached: 2", result)
+            @test occursin("First", result)
+            @test !occursin(r"Test Summary:.*\n.*Second", result)
+        end
+    end
+    @testset "errors count toward limit" begin
+        mktemp() do f, _
+            write(f,
+            """
+            using Test
+            Test.global_failure_count[] = 0
+            Test.global_failure_limit = 1
+            @testset "outer" begin
+                @testset "First" begin
+                    @test error("oops")
+                end
+                @testset "Second" begin
+                    @test true
+                end
+            end
+            """)
+            cmd = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
+            result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
+            @test occursin("Max failures reached: 1", result)
+            @test occursin("First", result)
+            @test !occursin(r"Test Summary:.*\n.*Second", result)
+        end
+    end
+    @testset "process exits with failure" begin
+        mktemp() do f, _
+            write(f,
+            """
+            using Test
+            Test.global_failure_count[] = 0
+            Test.global_failure_limit = 1
+            @testset "outer" begin
+                @testset "First" begin
+                    @test false
+                end
+            end
+            """)
+            cmd = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
+            @test !success(ignorestatus(cmd))
+        end
+    end
+end
+
 # Non-booleans in @test (#35888)
 struct T35888 end
 Base.isequal(::T35888, ::T35888) = T35888()
