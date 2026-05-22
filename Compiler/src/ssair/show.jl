@@ -48,11 +48,11 @@ end
 
 const inlined_apply_iterate_types = Union{Array,Memory,Tuple,NamedTuple,Core.SimpleVector}
 
-@enum SSAWarnTypeClass::UInt8 begin
-    SSA_WARN_TYPE_STABLE
-    SSA_WARN_TYPE_MILD
-    SSA_WARN_TYPE_STRONG
-end
+# There is no @enum at this level of bootstrapping yet, so we use plain constants instead.
+const SSAWarnTypeClass = UInt8
+const SSA_WARN_TYPE_STABLE = SSAWarnTypeClass(0)
+const SSA_WARN_TYPE_MILD = SSAWarnTypeClass(1)
+const SSA_WARN_TYPE_STRONG = SSAWarnTypeClass(2)
 
 function ssa_warn_type_class(io::IO, idx::Int)
     levels = get(io, :ssa_warn_levels, nothing)
