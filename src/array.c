@@ -323,15 +323,7 @@ JL_DLLEXPORT void jl_arrayunset(jl_array_t *a, size_t i)
 {
     if (i >= jl_array_len(a))
         jl_bounds_error_int((jl_value_t*)a, i + 1);
-    const jl_datatype_layout_t *layout = ((jl_datatype_t*)jl_typetagof(a->ref.mem))->layout;
-    if (layout->flags.arrayelem_isboxed) {
-        jl_atomic_store_relaxed(jl_array_data(a,_Atomic(jl_value_t*)) + i, NULL);
-    }
-    else if (layout->first_ptr >= 0) {
-        size_t elsize = layout->size;
-        jl_assume(elsize >= sizeof(void*) && elsize % sizeof(void*) == 0);
-        memset(jl_array_data(a,char) + elsize * i, 0, elsize);
-    }
+    jl_memoryrefunset(jl_memoryrefindex(a->ref, i), 0);
 }
 
 #ifdef __cplusplus
