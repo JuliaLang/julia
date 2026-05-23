@@ -72,6 +72,8 @@ New library features
 
 * `IOContext` supports a new boolean `hexunsigned` option that allows for
   printing unsigned integers in decimal instead of hexadecimal ([#60267]).
+* `lazy"..."` strings now support a flag `lazy"..."c` that adds `compact` and `limit` flags
+  to the `IOContext` for final output-string generation ([#61887]).
 * The `StringView` type wraps an `AbstractVector{UInt8}` and interprets it as a UTF-8 encoded string,
   superseding the [StringViews.jl](https://github.com/JuliaStrings/StringViews.jl) package ([#60526]).
 
