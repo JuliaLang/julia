@@ -520,7 +520,10 @@ end
     @testset for arg0 in [:x, :(x::Type), :(::Type), :(_), :(_::Type)],
         arg1 in [arg0, Expr(:..., arg0)],
         arg2 in [arg1, Expr(:kw, arg1, :Int)],
-        expander in [fl_macroexpand, jl_macroexpand]
+        expander in [fl_macroexpand, (_,x)->x]
+        # TODO: would use jl_macroexpand, but that cannot be done as a separate
+        # step due to MacroExpansionContext, and we must use jl_eval.
+        @test_broken false
 
         @testset let expanded = expander(
             test_mod, :(function (specialized, @nospecialize($arg2))
@@ -540,7 +543,7 @@ end
         end
     end
 
-    @testset "kwargs" for expander in [fl_macroexpand, jl_macroexpand]
+    @testset "kwargs" for expander in [fl_macroexpand, (_,x)->x]
         local f
         @test (f = jl_eval(test_mod, expander(
             test_mod, quote

@@ -301,7 +301,7 @@ function enter_scope!(ctx, ex)
         local ex = SyntaxTree(ctx.graph, node_id)
         b = resolve_name(ctx, ex)
         if b === nothing
-            if is_toplevel_thunk && !ctx.scope_layers[vk.layer].is_macro_expansion
+            if is_toplevel_thunk && is_base_layer(ctx.scope_layers[vk.layer])
                 push!(ctx.soft_assignable_globals, vk)
                 declare_in_scope!(ctx, top_scope(ctx), ex, :global)
             elseif scope.is_permeable && is_defined_and_owned_global(

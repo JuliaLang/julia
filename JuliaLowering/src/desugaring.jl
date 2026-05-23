@@ -87,7 +87,7 @@ end
 function newsym(ctx, src::SyntaxTree, name::String; unused=false)
     out = newleaf(ctx, src, unused ? K"Placeholder" : K"Identifier", name)
     hasattr(src, :meta) && setattr!(out, :meta, src.meta)
-    setattr!(out, :scope_layer, new_scope_layer(ctx))
+    setattr!(out, :scope_layer, new_internal_scope_layer(ctx))
 end
 
 #-------------------------------------------------------------------------------
@@ -3586,7 +3586,7 @@ function expand_typegroup_def(ctx, ex)
                                       supertype, is_mutable, min_initialized,
                                       inner_defs, field_docs))
         push!(struct_names, struct_name)
-        layer = new_scope_layer(ctx, struct_name)
+        layer = new_internal_scope_layer(ctx, struct_name)
         push!(global_names, adopt_scope(struct_name, layer))
         push!(info_vars, ssavar(ctx, sdef, "struct_info"))
     end
@@ -3759,7 +3759,7 @@ function expand_struct_def(ctx, ex, docs)
     hasprev = ssavar(ctx, ex, "hasprev")
     prev = ssavar(ctx, ex, "prev")
     newdef = ssavar(ctx, ex, "newdef")
-    layer = new_scope_layer(ctx, struct_name)
+    layer = new_internal_scope_layer(ctx, struct_name)
     global_struct_name = adopt_scope(struct_name, layer)
     if !isempty(typevar_names)
         # Generate expression like `prev_struct.body.body.parameters`
@@ -4459,7 +4459,7 @@ ensure_desugaring_attributes!(graph) = ensure_attributes!(
     graph = ensure_desugaring_attributes!(copy_attrs(ctx.graph))
     ex = reparent(graph, ex)
     ctx_out = DesugaringContext(graph, ctx.bindings, ctx.scope_layers,
-                                current_layer(ctx).mod, ctx.expr_compat_mode,
+                                ctx.scope_layers[1].mod, ctx.expr_compat_mode,
                                 Dict{Int, IdTag}(), ctx.macro_world)
     vr = valid_st1(ex)
     # surface only one error until we have pretty-printing for multiple
