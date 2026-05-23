@@ -1665,6 +1665,17 @@ timesofar("cat")
         @check_bit_operation findmin(b1)
         @check_bit_operation findmax(b1)
     end
+
+    b2 = BitArray([1 0; 0 1])
+    @check_bit_operation findmin(b2, dims=1)
+    @check_bit_operation findmin(b2, dims=2)
+    @check_bit_operation findmax(b2, dims=1)
+    @check_bit_operation findmax(b2, dims=2)
+
+    @test_throws ArgumentError findmax(falses(0, 2), dims=1)
+    @test isequal(findmax(falses(0, 2), dims=2), findmax(zeros(Bool, 0, 2), dims=2))
+    @test isequal(findmin(falses(2, 0), dims=1), findmin(zeros(Bool, 2, 0), dims=1))
+    @test_throws ArgumentError findmin(falses(2, 0), dims=2)
 end
 
 @testset "I/O" begin
