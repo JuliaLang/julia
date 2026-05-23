@@ -2121,10 +2121,10 @@ void append_module_names(jl_array_t* a, jl_module_t *m, int all, int imported, i
         if (!bpart && usings)
             bpart = jl_get_binding_partition(b, world);
         if (!bpart) {
-            // No partition — can only check the public flag on the binding.
-            // Exported bindings already have partitions from
-            // _materialize_reexported_bindings above.
-            if (!(jl_atomic_load_relaxed(&b->flags) & BINDING_FLAG_PUBLICP))
+            // No partition — check public flag on the binding and exported
+            // flag from adjacent partitions.
+            if (!(jl_atomic_load_relaxed(&b->flags) & BINDING_FLAG_PUBLICP) &&
+                !jl_bpart_is_exported(gap.inherited_flags))
                 continue;
             if (!all && ((gap.inherited_flags & PARTITION_FLAG_DEPRECATED) || hidden))
                 continue;
@@ -2159,8 +2159,11 @@ void append_exported_names(jl_array_t* a, jl_module_t *m, int all, size_t world)
             break;
         struct implicit_search_gap gap;
         jl_binding_partition_t *bpart = jl_get_binding_partition_if_present(b, world, &gap);
-        if (!bpart)
+        if (!bpart) {
+            if (jl_bpart_is_exported(gap.inherited_flags) && (all || !(gap.inherited_flags & PARTITION_FLAG_DEPRECATED)))
+                _append_symbol_to_bindings_array(a, b->globalref->name);
             continue;
+        }
         if (jl_bpart_is_exported(bpart->kind) && (all || !(bpart->kind & PARTITION_FLAG_DEPRECATED)))
             _append_symbol_to_bindings_array(a, b->globalref->name);
     }

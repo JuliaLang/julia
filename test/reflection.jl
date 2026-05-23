@@ -388,8 +388,7 @@ end
     for sym in (:foo, :bar, :baz)
         b = ccall(:jl_get_module_binding_or_nothing, Any, (Any, Any), B, sym)
         @test b !== nothing
-        has_partition = try (@atomic b.partitions; true) catch e; e isa UndefRefError ? false : rethrow(); end
-        @test !has_partition
+        @test !isdefined(b, :partitions)
     end
 end
 
