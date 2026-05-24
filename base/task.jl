@@ -160,7 +160,7 @@ const task_state_failed   = UInt8(2)
         elseif st === task_state_failed
             return :failed
         else
-            @assert false
+            @assert false "unexpected state"
         end
     elseif field === :backtrace
         # TODO: this field name should be deprecated in 2.0
@@ -303,7 +303,7 @@ end
 
 # just wait for a task to be done, no error propagation
 function _wait(t::Task)
-    t === current_task() && Core.throw(ConcurrencyViolationError("deadlock detected: cannot wait on current task"))
+    t === current_task() && throw(ConcurrencyViolationError("deadlock detected: cannot wait on current task"))
     if !istaskdone(t)
         donenotify = t.donenotify::ThreadSynchronizer
         lock(donenotify)

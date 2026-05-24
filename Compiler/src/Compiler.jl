@@ -40,7 +40,7 @@ using Core.Intrinsics, Core.IR
 using Core: ABIOverride, Builtin, CodeInstance, IntrinsicFunction, MethodInstance, MethodMatch,
     MethodTable, MethodCache, PartialOpaque, SimpleVector, TypeofVararg,
     _apply_iterate, apply_type, compilerbarrier, donotdelete, memoryref_isassigned,
-    memoryrefget, memoryrefnew, memoryrefoffset, memoryrefset!, print, println, show, svec,
+    memoryrefget, memoryrefnew, memoryrefoffset, memoryrefset!, memoryrefunset!, print, println, show, svec,
     typename, unsafe_write, write, stdout, stderr
 
 using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospecializeinfer,
@@ -49,11 +49,11 @@ using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospeciali
     Base, BitVector, Bottom, Callable, DataTypeFieldDesc,
     EffectsOverride, Filter, Generator, NUM_EFFECTS_OVERRIDES,
     OneTo, Ordering, RefValue, _NAMEDTUPLE_NAME,
-    _array_for, _bits_findnext, _methods_by_ftype, _uniontypes, all, allocatedinline, any,
+    _array_for, _bits_findnext, _defaultctors, _methods_by_ftype, _uniontypes, all, allocatedinline, any,
     argument_datatype, binding_kind, cconvert, copy_exprargs, datatype_arrayelem,
     datatype_fieldcount, datatype_fieldtypes, datatype_layoutsize, datatype_nfields,
     datatype_pointerfree, decode_effects_override, diff_names, fieldindex, visit,
-    generating_output, get_nospecializeinfer_sig, get_world_counter, has_free_typevars,
+    generating_output, get_nospecializeinfer_sig, get_world_counter, has_free_typevars, has_typevar,
     hasgenerator, hasintersect, indexed_iterate, isType, is_file_tracked, is_function_def,
     is_meta_expr, is_meta_expr_head, is_nospecialized, is_nospecializeinfer, is_defined_const_binding,
     is_some_const_binding, is_some_guard, is_some_imported, is_some_explicit_imported, is_some_binding_imported, is_valid_intrinsic_elptr,
@@ -66,6 +66,7 @@ using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospeciali
     _uncompressed_ir, datatype_min_ninitialized,
     partialstruct_init_undefs, fieldcount_noerror, _eval_import, _eval_using,
     get_ci_mi, get_methodtable, morespecific, specializations, has_image_globalref,
+    rewrap_free_typevars, find_free_typevars, typeintersect_env,
     PARTITION_MASK_KIND, PARTITION_KIND_GUARD, PARTITION_FLAG_EXPORTED, PARTITION_FLAG_DEPRECATED,
     BINDING_FLAG_ANY_IMPLICIT_EDGES, is_some_implicit, IteratorSize, SizeUnknown, get_require_world, JLOptions,
     devnull, devnull as stdin

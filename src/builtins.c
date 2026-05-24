@@ -263,7 +263,28 @@ JL_DLLEXPORT int jl_egal__bitstag(const jl_value_t *a JL_MAYBE_UNROOTED, const j
             return *(uint64_t*)a == *(uint64_t*)b;
         case jl_ssavalue_tag:
         case jl_slotnumber_tag:
+        case jl_argument_tag:
             return *(size_t*)a == *(size_t*)b;
+        case jl_gotoifnot_tag:
+            return compare_fields(a, b, jl_gotoifnot_type);
+        case jl_returnnode_tag:
+            return compare_fields(a, b, jl_returnnode_type);
+        case jl_enternode_tag:
+            return compare_fields(a, b, jl_enternode_type);
+        case jl_pinode_tag:
+            return compare_fields(a, b, jl_pinode_type);
+        case jl_phinode_tag:
+            return compare_fields(a, b, jl_phinode_type);
+        case jl_phicnode_tag:
+            return compare_fields(a, b, jl_phicnode_type);
+        case jl_upsilonnode_tag:
+            return compare_fields(a, b, jl_upsilonnode_type);
+        case jl_globalref_tag:
+            return compare_fields(a, b, jl_globalref_type);
+        case jl_gotonode_tag:
+            return *(size_t*)a == *(size_t*)b;
+        case jl_quotenode_tag:
+            return compare_fields(a, b, jl_quotenode_type);
         case jl_unionall_tag:
             return egal_types(a, b, NULL, 1);
         case jl_uniontype_tag:
@@ -1670,6 +1691,9 @@ JL_CALLABLE(jl_f_apply_type)
         }
         return jl_apply_type(args[0], &args[1], nargs-1);
     }
+    else if (jl_is_datatype(args[0])) {
+        jl_type_error("apply_type", (jl_value_t*)jl_unionall_type, args[0]);
+    }
     jl_type_error("Type{...} expression", (jl_value_t*)jl_unionall_type, args[0]);
 }
 
@@ -1721,7 +1745,7 @@ JL_CALLABLE(jl_f_invoke)
             if (codeinst->owner != jl_nothing) {
                 jl_error("Failed to invoke or compile external codeinst");
             }
-            return jl_invoke(args[0], &args[2], nargs - 1, mi);
+            return jl_invoke(args[0], &args[2], nargs - 2, mi);
         }
     }
     if (!jl_is_tuple_type(jl_unwrap_unionall(argtypes)))
@@ -1923,6 +1947,32 @@ JL_CALLABLE(jl_f_memoryrefset)
     return args[1];
 }
 
+JL_CALLABLE(jl_f_memoryrefunset)
+{
+    enum jl_memory_order order = jl_memory_order_notatomic;
+    JL_NARGS(memoryrefunset!, 3, 3);
+    JL_TYPECHK(memoryrefunset!, genericmemoryref, args[0]);
+    JL_TYPECHK(memoryrefunset!, symbol, args[1]);
+    JL_TYPECHK(memoryrefunset!, bool, args[2]);
+    jl_genericmemoryref_t m = *(jl_genericmemoryref_t*)args[0];
+    jl_value_t *kind = jl_tparam0(jl_typetagof(m.mem));
+    if (kind == (jl_value_t*)jl_not_atomic_sym) {
+        if (args[1] != kind) {
+            order = jl_get_atomic_order_checked((jl_sym_t*)args[1], 0, 1);
+            jl_atomic_error("memoryrefunset!: non-atomic memory cannot be written atomically");
+        }
+    }
+    else if (kind == (jl_value_t*)jl_atomic_sym) {
+        order = jl_get_atomic_order_checked((jl_sym_t*)args[1], 0, 1);
+        if (order == jl_memory_order_notatomic)
+            jl_atomic_error("memoryrefunset!: atomic memory cannot be written non-atomically");
+    }
+    if (m.mem->length == 0)
+        jl_bounds_error_int((jl_value_t*)m.mem, 1);
+    jl_memoryrefunset(m, kind == (jl_value_t*)jl_atomic_sym);
+    return jl_nothing;
+}
+
 JL_CALLABLE(jl_f_memoryref_isassigned)
 {
     enum jl_memory_order order = jl_memory_order_notatomic;
@@ -2119,25 +2169,15 @@ JL_CALLABLE(jl_f__primitivetype)
 
 static void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
 {
-    const char *error = NULL;
-    if (!jl_is_datatype(super))
-        error = "can only subtype data types";
-    else if (tt->super != NULL)
-        error = "type already has a supertype";
-    else if (tt->name == ((jl_datatype_t*)super)->name)
-        error = "a type cannot subtype itself";
-    else if (jl_is_tuple_type(super))
-        error = "cannot subtype a tuple type";
-    else if (jl_is_namedtuple_type(super))
-        error = "cannot subtype a named tuple type";
-    else if (jl_subtype(super, (jl_value_t*)jl_type_type))
-        error = "cannot add subtypes to Type";
-    else if (jl_subtype(super, (jl_value_t*)jl_builtin_type))
-        error = "cannot add subtypes to Core.Builtin";
-    else if (!jl_is_abstracttype(super))
-        error = "can only subtype abstract types";
-    if (error)
-         jl_errorf("invalid subtyping in definition of %s: %s.", jl_symbol_name(tt->name->name), error);
+    // Check context-specific conditions first, before jl_check_valid_supertype
+    // which calls jl_subtype and would crash walking the supertype chain of a
+    // type with super == NULL.
+    const char *type_name = jl_symbol_name(tt->name->name);
+    if (tt->super != NULL)
+        jl_errorf("invalid subtyping in definition of %s: type already has a supertype.", type_name);
+    if (jl_is_datatype(super) && tt->name == ((jl_datatype_t*)super)->name)
+        jl_errorf("invalid subtyping in definition of %s: a type cannot subtype itself.", type_name);
+    jl_check_valid_supertype(super, type_name);
     tt->super = (jl_datatype_t*)super;
     jl_gc_wb(tt, tt->super);
 }
@@ -2163,8 +2203,9 @@ JL_CALLABLE(jl_f_compilerbarrier)
     jl_sym_t *setting = (jl_sym_t*)args[0];
     if (!(setting == jl_symbol("type") ||
           setting == jl_symbol("const") ||
-          setting == jl_symbol("conditional")))
-        jl_error("The first argument of `compilerbarrier` must be either of `:type`, `:const` or `:conditional`.");
+          setting == jl_symbol("conditional") ||
+          setting == jl_symbol("blackbox")))
+        jl_error("The first argument of `compilerbarrier` must be either of `:type`, `:const`, `:conditional` or `:blackbox`.");
     jl_value_t *val = args[1];
     return val;
 }
@@ -2306,14 +2347,7 @@ JL_CALLABLE(jl_f__typebody)
         jl_value_t *ft = args[2];
         JL_TYPECHK(_typebody!, simplevector, ft);
         size_t nf = jl_svec_len(ft);
-        for (size_t i = 0; i < nf; i++) {
-            jl_value_t *elt = jl_svecref(ft, i);
-            if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
-                jl_type_error_rt(jl_symbol_name(dt->name->name),
-                                 "type definition",
-                                 (jl_value_t*)jl_type_type, elt);
-            }
-        }
+        jl_check_field_types((jl_svec_t*)ft, dt->name->name);
         // Optimization: To avoid lots of unnecessary churning, lowering contains an optimization
         // that re-uses the typevars of an existing definition (if any exists) for compute the field
         // types. If such a previous type exists, there are two possibilities:
@@ -2327,19 +2361,36 @@ JL_CALLABLE(jl_f__typebody)
         } else {
             jl_datatype_t *prev_dt = (jl_datatype_t*)jl_unwrap_unionall(prev);
             JL_TYPECHK(_typebody!, datatype, (jl_value_t*)prev_dt);
-            if (equiv_field_types((jl_value_t*)prev_dt->types, ft)) {
+            // Field types in `ft` reference the new stub `dt`; substitute them
+            // with references to `prev_dt` before comparing, so self-referential
+            // structs (e.g. `next::R`) and types whose fields embed the type as
+            // a parameter (e.g. `v::Vector{T}`) are recognized as equivalent.
+            jl_svec_t *ft_subst = (jl_svec_t*)ft;
+            jl_value_t *sub = NULL;
+            JL_GC_PUSH2(&ft_subst, &sub);
+            for (size_t i = 0; i < nf; i++) {
+                jl_value_t *fld = jl_svecref(ft, i);
+                sub = jl_substitute_datatype(fld, dt, prev_dt);
+                if (sub != fld) {
+                    if (ft_subst == (jl_svec_t*)ft)
+                        ft_subst = jl_svec_copy((jl_svec_t*)ft);
+                    jl_svecset(ft_subst, i, sub);
+                }
+            }
+            int eq = equiv_field_types((jl_value_t*)prev_dt->types, (jl_value_t*)ft_subst);
+            JL_GC_POP();
+            if (eq) {
                 tret = prev;
                 goto have_type;
-            } else {
-                if (jl_svec_len(prev_dt->parameters) != jl_svec_len(dt->parameters))
-                    jl_errorf("Internal Error: Types should not have been considered equivalent");
-                for (size_t i = 0; i < nf; i++) {
-                    jl_value_t *elt = jl_svecref(ft, i);
-                    for (int j = 0; j < jl_svec_len(prev_dt->parameters); ++j) {
-                        // Only the last svecset matters for semantics, but we re-use the GC root
-                        elt = jl_substitute_var(elt, (jl_tvar_t *)jl_svecref(prev_dt->parameters, j), jl_svecref(dt->parameters, j));
-                        jl_svecset(ft, i, elt);
-                    }
+            }
+            if (jl_svec_len(prev_dt->parameters) != jl_svec_len(dt->parameters))
+                jl_errorf("Internal Error: Types should not have been considered equivalent");
+            for (size_t i = 0; i < nf; i++) {
+                jl_value_t *elt = jl_svecref(ft, i);
+                for (int j = 0; j < jl_svec_len(prev_dt->parameters); ++j) {
+                    // Only the last svecset matters for semantics, but we re-use the GC root
+                    elt = jl_substitute_var(elt, (jl_tvar_t *)jl_svecref(prev_dt->parameters, j), jl_svecref(dt->parameters, j));
+                    jl_svecset(ft, i, elt);
                 }
             }
         }
@@ -2445,13 +2496,6 @@ JL_CALLABLE(jl_f__equiv_typedef)
 {
     JL_NARGS(_equiv_typedef, 2, 2);
     return equiv_type(args[0], args[1]) ? jl_true : jl_false;
-}
-
-JL_CALLABLE(jl_f__defaultctors)
-{
-    JL_NARGS(_defaultctors, 2, 2);
-    jl_ctor_def(args[0], args[1]);
-    return jl_nothing;
 }
 
 // IntrinsicFunctions ---------------------------------------------------------

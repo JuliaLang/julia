@@ -96,6 +96,8 @@ typedef struct {
     uint64_t last_full_sweep;
     // Timestamp of the last incremental GC sweep in nanoseconds
     uint64_t last_incremental_sweep;
+    // Number of tracked image objects referencing non-image objects
+    uint64_t image_remset_size;
 } jl_gc_num_t;
 
 // ========================================================================= //
@@ -142,8 +144,15 @@ JL_DLLEXPORT void jl_gc_set_max_memory(uint64_t max_mem);
 JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection);
 // Returns whether the thread with `tid` is a collector thread
 JL_DLLEXPORT int gc_is_collector_thread(int tid) JL_NOTSAFEPOINT;
+// Enables or disables automatic full (non-generational) collections.
+// When disabled (on == 0), automatic collections will only be incremental
+// (young generation only). Explicit full collections via jl_gc_collect(JL_GC_FULL)
+// are still honored. Returns whether automatic full collections were previously enabled.
+JL_DLLEXPORT int jl_gc_enable_auto_full_collection(int on);
+// Returns whether automatic full (non-generational) collections are enabled.
+JL_DLLEXPORT int jl_gc_auto_full_collection_is_enabled(void);
 // Returns which GC implementation is being used and possibly its version according to the list of supported GCs
-// NB: it should clearly identify the GC by including e.g. ‘stock’ or ‘mmtk’ as a substring.
+// NB: it should clearly identify the GC by including e.g. 'stock' or 'mmtk' as a substring.
 JL_DLLEXPORT const char* jl_gc_active_impl(void);
 // Sweep Julia's stack pools and mtarray buffers. Note that this function has been added to the interface as
 // each GC should implement it but it will most likely not be used by other code in the runtime.

@@ -90,8 +90,7 @@ extern "C" {
 
 struct _jl_taggedvalue_bits {
     uintptr_t gc:2;
-    uintptr_t in_image:1;
-    uintptr_t unused:1;
+    uintptr_t in_image:2;
 #ifdef _P64
     uintptr_t tag:60;
 #else
@@ -235,15 +234,40 @@ JL_DLLEXPORT extern const jl_callptr_t jl_f_opaque_closure_call_addr;
 
 JL_DLLEXPORT extern const jl_callptr_t jl_fptr_wait_for_compiled_addr;
 
+typedef struct _jl_locspan_t {
+    int32_t first;
+    int32_t second;
+} jl_locspan_t;
+
 struct jl_codeloc_t {
-    int32_t line;
+    int32_t loc;
     int32_t to;
     int32_t pc;
 };
 
+// In a compressed jl_debuginfo_t linetable string, this header is followed by
+// (with byte_offest subtracted from all raw byte positions):
+//
+// bytespans: (byte_encl+span_encl)*nlocs bytes
+// line_starts: byte_encl*rest bytes
+typedef struct _jl_sourcebytetable_header_t {
+    // (>0) minimum byte
+    int32_t byte_offset;
+    // (>0) minimum line, where line_starts[0] is the byte position of this
+    // line's first character
+    int32_t line_offset;
+    // (>=0) number of (byte, len) bytespans
+    int32_t nlocs;
+    // (0,1,2,4) compressed lengths
+    uint8_t byte_encl;
+    uint8_t span_encl;
+} jl_sourcebytetable_header_t;
+// packed size
+#define SBT_HEADER_SIZE 14
+
 typedef struct _jl_debuginfo_t {
     jl_value_t *def;
-    struct _jl_debuginfo_t *linetable; // or nothing
+    jl_value_t *linetable; // debuginfo, compressed string, or nothing
     jl_svec_t *edges; // Memory{DebugInfo}
     jl_value_t *codelocs; // String // Memory{UInt8} // compressed info
 } jl_debuginfo_t;
@@ -589,6 +613,13 @@ typedef struct {
     uint32_t offset;   // offset relative to data start, excluding type tag
 } jl_fielddesc32_t;
 
+typedef enum {
+    JL_FIELDDESC_8 = 0,
+    JL_FIELDDESC_16 = 1,
+    JL_FIELDDESC_32 = 2,
+    JL_FIELDDESC_FOREIGN = 3,
+} jl_fielddesc_type_t;
+
 typedef struct {
     uint32_t size;
     uint32_t nfields;
@@ -597,7 +628,7 @@ typedef struct {
     uint16_t alignment; // strictest alignment over all fields
     struct { // combine these fields into a struct so that we can take addressof them
         uint16_t haspadding : 1; // has internal undefined bytes
-        uint16_t fielddesc_type : 2; // 0 -> 8, 1 -> 16, 2 -> 32, 3 -> foreign type
+        uint16_t fielddesc_type : 2; // jl_fielddesc_type_t
         // metadata bit only for GenericMemory eltype layout
         uint16_t arrayelem_isboxed : 1;
         uint16_t arrayelem_isunion : 1;
@@ -992,10 +1023,20 @@ typedef struct {
     XX(addrspacecore) \
     XX(intrinsic) \
     /* AST objects */ \
-    /* XX(argument) */ \
+    XX(argument) \
     /* XX(newvarnode) */ \
     XX(slotnumber) \
     XX(ssavalue) \
+    XX(gotoifnot) \
+    XX(returnnode) \
+    XX(enternode) \
+    XX(pinode) \
+    XX(phinode) \
+    XX(phicnode) \
+    XX(upsilonnode) \
+    XX(globalref) \
+    XX(gotonode) \
+    XX(quotenode) \
     /* end of JL_SMALL_TYPEOF */
 enum jl_small_typeof_tags {
     jl_null_tag = 0,
@@ -1254,16 +1295,21 @@ STATIC_INLINE jl_value_t *jl_genericmemory_owner(jl_genericmemory_t *m JL_PROPAG
   2 = malloc-allocated pointer (does not own it)
   3 = has a pointer to the String object that owns the data pointer (m must be isbits)
 */
+#define JL_GENERICMEMORY_INLINED     0
+#define JL_GENERICMEMORY_GCMANAGED   1
+#define JL_GENERICMEMORY_MALLOCD     2
+#define JL_GENERICMEMORY_STRINGOWNED 3
+
 STATIC_INLINE int jl_genericmemory_how(jl_genericmemory_t *m) JL_NOTSAFEPOINT
 {
     if (m->ptr == (void*)((char*)m + 16)) // JL_SMALL_BYTE_ALIGNMENT (from julia_internal.h)
-        return 0;
+        return JL_GENERICMEMORY_INLINED;
     jl_value_t *owner = jl_genericmemory_data_owner_field(m);
     if (owner == (jl_value_t*)m)
-        return 1;
+        return JL_GENERICMEMORY_GCMANAGED;
     if (owner == NULL)
-        return 2;
-    return 3;
+        return JL_GENERICMEMORY_MALLOCD;
+    return JL_GENERICMEMORY_STRINGOWNED;
 }
 
 STATIC_INLINE jl_value_t *jl_genericmemory_owner(jl_genericmemory_t *m JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
@@ -1454,22 +1500,40 @@ STATIC_INLINE const char *jl_module_debug_name(jl_module_t *mod) JL_NOTSAFEPOINT
 
 static inline uint32_t jl_fielddesc_size(int8_t fielddesc_type) JL_NOTSAFEPOINT
 {
-    assert(fielddesc_type >= 0 && fielddesc_type <= 2);
-    return 2 << fielddesc_type;
-    //if (fielddesc_type == 0) {
-    //    return sizeof(jl_fielddesc8_t);
-    //}
-    //else if (fielddesc_type == 1) {
-    //    return sizeof(jl_fielddesc16_t);
-    //}
-    //else {
-    //    return sizeof(jl_fielddesc32_t);
-    //}
+    switch ((jl_fielddesc_type_t)fielddesc_type) {
+    case JL_FIELDDESC_8:
+        return sizeof(jl_fielddesc8_t);
+    case JL_FIELDDESC_16:
+        return sizeof(jl_fielddesc16_t);
+    case JL_FIELDDESC_32:
+        return sizeof(jl_fielddesc32_t);
+    case JL_FIELDDESC_FOREIGN:
+        break;
+    }
+    assert(0 && "foreign field descriptors do not have inline layout entries");
+    return 0;
+}
+
+static inline uint32_t jl_fielddesc_ptr_size(int8_t fielddesc_type) JL_NOTSAFEPOINT
+{
+    switch ((jl_fielddesc_type_t)fielddesc_type) {
+    case JL_FIELDDESC_8:
+        return sizeof(uint8_t);
+    case JL_FIELDDESC_16:
+        return sizeof(uint16_t);
+    case JL_FIELDDESC_32:
+        return sizeof(uint32_t);
+    case JL_FIELDDESC_FOREIGN:
+        break;
+    }
+    assert(0 && "foreign field descriptors do not have inline pointer tables");
+    return 0;
 }
 
 #define jl_dt_layout_fields(d) ((const char*)(d) + sizeof(jl_datatype_layout_t))
 static inline const char *jl_dt_layout_ptrs(const jl_datatype_layout_t *l) JL_NOTSAFEPOINT
 {
+    assert(l->flags.fielddesc_type != JL_FIELDDESC_FOREIGN);
     return jl_dt_layout_fields(l) + jl_fielddesc_size(l->flags.fielddesc_type) * l->nfields;
 }
 
@@ -1479,14 +1543,14 @@ static inline const char *jl_dt_layout_ptrs(const jl_datatype_layout_t *l) JL_NO
     {                                                                         \
         const jl_datatype_layout_t *ly = jl_datatype_layout(st);              \
         assert(i >= 0 && (size_t)i < ly->nfields);                            \
-        if (ly->flags.fielddesc_type == 0) {                                  \
+        if (ly->flags.fielddesc_type == JL_FIELDDESC_8) {                     \
             return ((const jl_fielddesc8_t*)jl_dt_layout_fields(ly))[i].f;    \
         }                                                                     \
-        else if (ly->flags.fielddesc_type == 1) {                             \
+        else if (ly->flags.fielddesc_type == JL_FIELDDESC_16) {               \
             return ((const jl_fielddesc16_t*)jl_dt_layout_fields(ly))[i].f;   \
         }                                                                     \
         else {                                                                \
-            assert(ly->flags.fielddesc_type == 2);                            \
+            assert(ly->flags.fielddesc_type == JL_FIELDDESC_32);              \
             return ((const jl_fielddesc32_t*)jl_dt_layout_fields(ly))[i].f;   \
         }                                                                     \
     }                                                                         \
@@ -1499,6 +1563,7 @@ static inline int jl_field_isptr(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 {
     const jl_datatype_layout_t *ly = jl_datatype_layout(st);
     assert(i >= 0 && (size_t)i < ly->nfields);
+    assert(ly->flags.fielddesc_type != JL_FIELDDESC_FOREIGN);
     return ((const jl_fielddesc8_t*)(jl_dt_layout_fields(ly) + jl_fielddesc_size(ly->flags.fielddesc_type) * i))->isptr;
 }
 
@@ -1507,14 +1572,14 @@ static inline uint32_t jl_ptr_offset(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
     const jl_datatype_layout_t *ly = st->layout; // NOT jl_datatype_layout(st)
     assert(i >= 0 && (size_t)i < ly->npointers);
     const void *ptrs = jl_dt_layout_ptrs(ly);
-    if (ly->flags.fielddesc_type == 0) {
+    if (ly->flags.fielddesc_type == JL_FIELDDESC_8) {
         return ((const uint8_t*)ptrs)[i];
     }
-    else if (ly->flags.fielddesc_type == 1) {
+    else if (ly->flags.fielddesc_type == JL_FIELDDESC_16) {
         return ((const uint16_t*)ptrs)[i];
     }
     else {
-        assert(ly->flags.fielddesc_type == 2);
+        assert(ly->flags.fielddesc_type == JL_FIELDDESC_32);
         return ((const uint32_t*)ptrs)[i];
     }
 }
@@ -1574,17 +1639,17 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 #define jl_is_expr(v)        jl_typetagis(v,jl_expr_type)
 #define jl_is_binding(v)     jl_typetagis(v,jl_binding_type)
 #define jl_is_binding_partition(v) jl_typetagis(v,jl_binding_partition_type)
-#define jl_is_globalref(v)   jl_typetagis(v,jl_globalref_type)
-#define jl_is_gotonode(v)    jl_typetagis(v,jl_gotonode_type)
-#define jl_is_gotoifnot(v)   jl_typetagis(v,jl_gotoifnot_type)
-#define jl_is_returnnode(v)  jl_typetagis(v,jl_returnnode_type)
-#define jl_is_enternode(v)   jl_typetagis(v,jl_enternode_type)
-#define jl_is_argument(v)    jl_typetagis(v,jl_argument_type)
-#define jl_is_pinode(v)      jl_typetagis(v,jl_pinode_type)
-#define jl_is_phinode(v)     jl_typetagis(v,jl_phinode_type)
-#define jl_is_phicnode(v)    jl_typetagis(v,jl_phicnode_type)
-#define jl_is_upsilonnode(v) jl_typetagis(v,jl_upsilonnode_type)
-#define jl_is_quotenode(v)   jl_typetagis(v,jl_quotenode_type)
+#define jl_is_globalref(v)   jl_typetagis(v,jl_globalref_tag<<4)
+#define jl_is_gotonode(v)    jl_typetagis(v,jl_gotonode_tag<<4)
+#define jl_is_gotoifnot(v)   jl_typetagis(v,jl_gotoifnot_tag<<4)
+#define jl_is_returnnode(v)  jl_typetagis(v,jl_returnnode_tag<<4)
+#define jl_is_enternode(v)   jl_typetagis(v,jl_enternode_tag<<4)
+#define jl_is_argument(v)    jl_typetagis(v,jl_argument_tag<<4)
+#define jl_is_pinode(v)      jl_typetagis(v,jl_pinode_tag<<4)
+#define jl_is_phinode(v)     jl_typetagis(v,jl_phinode_tag<<4)
+#define jl_is_phicnode(v)    jl_typetagis(v,jl_phicnode_tag<<4)
+#define jl_is_upsilonnode(v) jl_typetagis(v,jl_upsilonnode_tag<<4)
+#define jl_is_quotenode(v)   jl_typetagis(v,jl_quotenode_tag<<4)
 #define jl_is_newvarnode(v)  jl_typetagis(v,jl_newvarnode_type)
 #define jl_is_linenode(v)    jl_typetagis(v,jl_linenumbernode_type)
 #define jl_is_linenumbernode(v) jl_typetagis(v,jl_linenumbernode_type)
@@ -1608,6 +1673,7 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 #define jl_genericmemory_isatomic(a) (((jl_datatype_t*)jl_typetagof(a))->layout->flags.arrayelem_isatomic)
 #define jl_genericmemory_islocked(a) (((jl_datatype_t*)jl_typetagof(a))->layout->flags.arrayelem_islocked)
 #define jl_is_array_any(v)    jl_typetagis(v,jl_array_any_type)
+#define jl_is_debuginfo(v)    jl_typetagis(v,jl_debuginfo_type)
 
 JL_DLLEXPORT int jl_subtype(jl_value_t *a, jl_value_t *b);
 
@@ -2000,6 +2066,7 @@ JL_DLLEXPORT jl_value_t *jl_ptrmemoryrefget(jl_genericmemoryref_t m JL_PROPAGATE
 JL_DLLEXPORT jl_value_t *jl_memoryref_isassigned(jl_genericmemoryref_t m, int isatomic) JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_genericmemoryref_t jl_memoryrefindex(jl_genericmemoryref_t m JL_PROPAGATES_ROOT, size_t idx) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_memoryrefset(jl_genericmemoryref_t m JL_ROOTING_ARGUMENT, jl_value_t *v JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, int isatomic);
+JL_DLLEXPORT void jl_memoryrefunset(jl_genericmemoryref_t m, int isatomic);
 JL_DLLEXPORT jl_value_t *jl_memoryrefswap(jl_genericmemoryref_t m, jl_value_t *v, int isatomic);
 JL_DLLEXPORT jl_value_t *jl_memoryrefmodify(jl_genericmemoryref_t m, jl_value_t *op, jl_value_t *v, int isatomic);
 JL_DLLEXPORT jl_value_t *jl_memoryrefreplace(jl_genericmemoryref_t m, jl_value_t *expected, jl_value_t *v, int isatomic);
@@ -2152,6 +2219,7 @@ typedef struct {
     const char *data;
     size_t size;
     uint64_t base;
+    uint32_t checksum;
 } jl_image_buf_t;
 
 struct _jl_image_t;
@@ -2251,9 +2319,15 @@ JL_DLLEXPORT uint8_t jl_ir_slotflag(jl_value_t *data, size_t i) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_compress_argnames(jl_array_t *syms);
 JL_DLLEXPORT jl_array_t *jl_uncompress_argnames(jl_value_t *syms);
 JL_DLLEXPORT jl_value_t *jl_uncompress_argname_n(jl_value_t *syms, size_t i);
-JL_DLLEXPORT struct jl_codeloc_t jl_uncompress1_codeloc(jl_value_t *cl, size_t pc) JL_NOTSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_compress_codelocs(int32_t firstline, jl_value_t *codelocs, size_t nstmts);
-JL_DLLEXPORT jl_value_t *jl_uncompress_codelocs(jl_value_t *cl, size_t nstmts);
+JL_DLLEXPORT struct jl_codeloc_t jl_uncompress1_codeloc(jl_debuginfo_t *di, size_t pc) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_compress_codelocs(int32_t firstloc, jl_value_t *codelocs, size_t nstmts);
+JL_DLLEXPORT jl_value_t *jl_uncompress_codelocs(jl_debuginfo_t *di, size_t nstmts);
+JL_DLLEXPORT jl_locspan_t jl_cdi_bytespan(jl_debuginfo_t *di, int32_t pc) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_locspan_t jl_cdi_byte_to_xy(jl_debuginfo_t *di, int32_t b) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_locspan_t jl_cdi_firstxy(jl_debuginfo_t *di, int32_t pc) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int32_t jl_cdi_external_firstline(jl_debuginfo_t *di) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int32_t jl_cdi_firstline_all(jl_debuginfo_t *di) JL_NOTSAFEPOINT;
+JL_DLLEXPORT const char *jl_cdi_file(jl_debuginfo_t *di) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint8_t jl_encode_inlining_cost(uint16_t inlining_cost) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint16_t jl_decode_inlining_cost(uint8_t inlining_cost) JL_NOTSAFEPOINT;
 
@@ -2309,11 +2383,11 @@ struct _jl_handler_t {
     jl_gcframe_t *gcstack;
     jl_value_t *scope;
     struct _jl_handler_t *prev;
-    int8_t gc_state;
     size_t locks_len;
-    sig_atomic_t defer_signal;
     jl_timing_block_t *timing_stack;
     size_t world_age;
+    sig_atomic_t defer_signal;
+    int8_t gc_state;
 };
 
 #define JL_TASK_STATE_RUNNABLE 0
@@ -2512,6 +2586,8 @@ JL_DLLEXPORT void jl_fprint_backtrace(ios_t *s) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jlbacktrace(void) JL_NOTSAFEPOINT; // deprecated
 // Mainly for debugging, use `void*` so that no type cast is needed in C++.
 JL_DLLEXPORT void jl_(void *jl_value) JL_NOTSAFEPOINT;
+// Mainly for debugging, a high-verbosity version of `jl_`
+JL_DLLEXPORT void jl__(void *jl_value) JL_NOTSAFEPOINT;
 
 // julia options -----------------------------------------------------------
 
@@ -2663,6 +2739,8 @@ typedef struct {
     int sanitize_memory;
     int sanitize_thread;
     int sanitize_address;
+
+    int unique_names;   // Emit globally unique names
 } jl_cgparams_t;
 extern JL_DLLEXPORT int jl_default_debug_info_kind;
 extern JL_DLLEXPORT jl_cgparams_t jl_default_cgparams;

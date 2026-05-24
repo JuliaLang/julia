@@ -110,5 +110,42 @@ When a snippet needs to preserve its result for later examples, give it a label
 and reuse that label. This avoids repeating setup code and mirrors a REPL
 session more closely.
 
+## Syntax versioning
+
+When documenting features that use new Julia syntax, you can specify the required
+syntax version for a doctest block using the `syntax =` option:
+
+````
+```jldoctest; syntax = v"1.14"
+julia> result = @label myblock begin
+           for i in 1:10
+               i > 5 && break myblock i * 2
+           end
+           0
+       end
+12
+```
+````
+
+This ensures the code block is parsed using the specified Julia syntax version,
+allowing doctests for new language features to pass even when the documentation
+is built with an older default syntax.
+
+For modules that predominantly use new syntax, you can set a global default
+using `DocTestSyntax` in a meta block:
+
+````
+```@meta
+DocTestSyntax = v"1.14"
+```
+````
+
+Per-block `syntax =` settings override the global `DocTestSyntax` setting.
+
+!!! compat "Julia 1.14"
+    Syntax versioning for doctests requires Julia 1.14 or later.
+    When running doctests on older Julia versions, blocks with `syntax = v"1.14"`
+    or higher will be skipped with a warning.
+
 ## Further reading
 For a complete reference of doctest syntax, see the [corresponding Documenter.jl docs](https://documenter.juliadocs.org/stable/man/doctests/).

@@ -578,6 +578,18 @@ sptest4(x::T, y) where {T} = 44
 @test sptest4(1,2) == 42
 @test sptest4(1, "cat") == 44
 
+# A method that binds a where-parameter across two arms of a Union: when the
+# argument satisfies the signature only with `T` left unconstrained, dispatch
+# must succeed without throwing in static-parameter matching.
+abstract type SPTestArr5{S,T,N} end
+sptest5(positions::AbstractVector{<:Union{NTuple{N,T}, SPTestArr5{Tuple{N}, T, 1}}}) where {N, T <: Real} =
+    (N, @isdefined(T) ? T : nothing)
+@test sptest5([(1.0, 2.0)]) === (2, Float64)        # T uniquely bound to Float64
+let (n, t) = sptest5([(1, 2.0)])
+    @test n === 2
+    @test t === nothing || t === Union{Int, Float64} || t === Real
+end
+
 # closures
 function clotest()
     c = 0
@@ -4297,6 +4309,30 @@ let z1 = Z14477C()
     @test !isdefined(z1.fld, :fld)
 end
 
+# Test _defaultctors "lowering"
+mutable struct _CtorLoweredQualityTest
+    x::Int
+end
+let cis = code_lowered(_CtorLoweredQualityTest, (Any,))
+    # The generic inner constructor is the longer one (with fieldtype/convert)
+    ci = last(cis)
+    # fieldtype should appear exactly once (not duplicated)
+    ft_count = sum(s -> count("Core.fieldtype", sprint(show, s)), ci.code)
+    @test ft_count == 1
+end
+
+struct _CtorSlotNarrowVal end
+struct _CtorSlotNarrowVal2 end
+Base.convert(::Type{_CtorSlotNarrowVal}, ::Any) = _CtorSlotNarrowVal()
+Base.convert(::Type{_CtorSlotNarrowVal}, x::_CtorSlotNarrowVal) = x
+mutable struct _CtorSlotNarrowHolder
+    x::_CtorSlotNarrowVal
+end
+let effects = Base.infer_effects((Union{_CtorSlotNarrowVal, _CtorSlotNarrowVal2},)) do a
+        _CtorSlotNarrowHolder(a)
+    end
+    @test Core.Compiler.is_nothrow(effects)
+end
 
 # issue #8846, generic macros
 macro m8846(a, b=0)
@@ -7114,7 +7150,7 @@ end
 # issue #21004
 const PTuple_21004{N,T} = NTuple{N,VecElement{T}}
 @test_throws ArgumentError("too few elements for tuple type $PTuple_21004") PTuple_21004(1)
-@test_throws UndefVarError(:T, :static_parameter) PTuple_21004_2{N,T} = NTuple{N, VecElement{T}}(1)
+@test_throws MethodError PTuple_21004_2{N,T} = NTuple{N, VecElement{T}}(1)
 
 #issue #22792
 foo_22792(::Type{<:Union{Int8,Int,UInt}}) = 1;
@@ -7812,9 +7848,33 @@ using Test
 struct T36104
     v::Vector{M36104.T36104}
 end
+const orig_T36104 = T36104
 struct T36104   # check that redefining it works, issue #21816
     v::Vector{T36104}
 end
+@test T36104 === orig_T36104
+# issue #61789: self-referential struct redefinition must reuse the binding
+struct R61789
+    x
+    next::R61789
+end
+const orig_R61789 = R61789
+struct R61789
+    x
+    next::R61789
+end
+@test R61789 === orig_R61789
+# negative case: a field type that genuinely differs must produce a new type
+struct R61789neg
+    x
+    next::R61789neg
+end
+const orig_R61789neg = R61789neg
+struct R61789neg
+    x::Int
+    next::R61789neg
+end
+@test R61789neg !== orig_R61789neg
 struct S36104{K,V}
     v::S36104{K,V}
     S36104{K,V}() where {K,V} = new()
@@ -8535,6 +8595,45 @@ let load_path = mktempdir()
     end
 end
 
+# Deduplication of method tables in jl_foreach_reachable_mtable:
+# when a method table is imported, it should not be visited multiple times.
+let load_path = mktempdir()
+    depot_path = mkdepottempdir()
+    try
+        pushfirst!(LOAD_PATH, load_path)
+        pushfirst!(DEPOT_PATH, depot_path)
+
+        write(joinpath(load_path, "MtDef.jl"),
+            """
+            module MtDef
+            Base.Experimental.@MethodTable(mt)
+            end
+            """)
+
+        MtDef = Base.require(Main, :MtDef)
+        @test length(MtDef.mt) == 0
+
+        write(joinpath(load_path, "MtUser.jl"),
+            """
+            module MtUser
+            using MtDef: mt
+            Base.Experimental.@overlay mt sin(x::Int) = 42
+            end
+            """)
+
+        # MtUser imports mt from MtDef, making it reachable from both modules'
+        # bindings during precompilation. Without deduplication in
+        # jl_foreach_reachable_mtable, the overlay method would be serialized
+        # twice, causing an assertion failure when activating methods on load.
+        MtUser = Base.require(Main, :MtUser)
+        @test length(MtDef.mt) == 1
+    finally
+        filter!((≠)(load_path), LOAD_PATH)
+        filter!((≠)(depot_path), DEPOT_PATH)
+        rm(load_path, recursive=true, force=true)
+    end
+end
+
 # merging va tuple unions
 @test Tuple === Union{Tuple{},Tuple{Any,Vararg}}
 @test Tuple{Any,Vararg} === Union{Tuple{Any},Tuple{Any,Any,Vararg}}
@@ -8720,3 +8819,22 @@ module AmbiguousUsing60659
     using .D, .A
     @test_throws UndefVarError X
 end
+
+# Behavior of TypeVar with lower bound
+f_def_typevar_with_lowerbound(x::T) where {T>:Int} = @isdefined(T) ? T : false
+let r = f_def_typevar_with_lowerbound(1.0)
+    @test r === false || r === Union{Int, Float64}
+end
+
+# An inferred / constant-folded type must not contain a `(tvar, constrains_bool)`
+# SimpleVector pair as a type parameter. The intersection-env svec format must
+# stay confined to env entries; downstream consumers of intersection results
+# (apply_type, return_type inference) must unwrap before using values as types.
+struct _EnvLeak_Foo{N} end
+function _envleak_build(n::Int)
+    VD = Vector{_EnvLeak_Foo{n}}
+    a = VD(undef, 1)
+    b = unsafe_wrap(VD, pointer(a), 1)
+    return typeof(b)
+end
+@test _envleak_build(3) === Vector{_EnvLeak_Foo{3}}

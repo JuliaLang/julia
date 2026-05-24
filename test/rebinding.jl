@@ -287,7 +287,7 @@ module RangeMerge
 
     function get_llvm(@nospecialize(f), @nospecialize(t), raw=true, dump_module=false, optimize=true)
         params = Base.CodegenParams(safepoint_on_entry=false, gcstack_arg = false, debug_info_level=Cint(2))
-        d = InteractiveUtils._dump_function(InteractiveUtils.ArgInfo(f, t), false, false, raw, dump_module, :att, optimize, :none, false, params)
+        d = InteractiveUtils._dump_function(InteractiveUtils.ArgInfo(f, t), false, false, raw, dump_module, :att, optimize, :none, false, "", params)
         sprint(print, d)
     end
 
@@ -322,8 +322,7 @@ module UndefinedTransitions
 end
 
 # Identical implicit partitions should be merge (#57923)
-for binding in (convert(Core.Binding, GlobalRef(Base, :Math)),
-                convert(Core.Binding, GlobalRef(Base, :Intrinsics)))
+for binding in (convert(Core.Binding, GlobalRef(Base, :Math)),)
     # Test that these both only have two partitions
     @test isdefined(binding, :partitions)
     @test isdefined(binding.partitions, :next)

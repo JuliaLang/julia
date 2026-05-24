@@ -393,6 +393,8 @@ JL_DLLEXPORT void jl_update_loaded_bpart(jl_binding_t *b, jl_binding_partition_t
     jl_atomic_store_relaxed(&bpart->min_world, resolution.min_world);
     jl_atomic_store_relaxed(&bpart->max_world, resolution.max_world);
     bpart->restriction = resolution.binding_or_const;
+    if (resolution.binding_or_const)
+        jl_gc_wb(bpart, resolution.binding_or_const);
     bpart->kind = resolution.ultimate_kind;
 }
 
@@ -540,6 +542,7 @@ static jl_module_t *jl_new_module__(jl_sym_t *name, jl_module_t *parent)
     m->infer = -1;
     m->max_methods = -1;
     jl_atomic_store_relaxed(&m->has_reexports, 0);
+    jl_atomic_store_relaxed(&m->export_set_changed_since_require_world, 0);
     m->file = jl_empty_sym;
     m->line = 0;
     m->hash = parent == NULL ? bitmix(name->hash, jl_module_type->hash) :
@@ -776,6 +779,7 @@ static jl_globalref_t *jl_new_globalref(jl_module_t *mod, jl_sym_t *name, jl_bin
 {
     jl_task_t *ct = jl_current_task;
     jl_globalref_t *g = (jl_globalref_t*)jl_gc_alloc(ct->ptls, sizeof(jl_globalref_t), jl_globalref_type);
+    jl_set_typetagof(g, jl_globalref_tag, 0);
     g->mod = mod;
     jl_gc_wb_fresh(g, g->mod);
     g->name = name;
@@ -1792,6 +1796,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b,
             new_bpart->kind |= PARTITION_FLAG_IMPLICITLY_EXPORTED;
         }
         new_bpart->restriction = resolution.binding_or_const;
+        jl_gc_wb_fresh(new_bpart, resolution.binding_or_const);
         assert(resolution.min_world <= new_world && resolution.max_world == ~(size_t)0);
         if (new_bpart->kind == old_bpart->kind && new_bpart->restriction == old_bpart->restriction) {
             JL_GC_POP();
@@ -2090,10 +2095,9 @@ static void _materialize_reexported_bindings(jl_module_t *m, size_t world, jl_ar
     }
 }
 
-void append_module_names(jl_array_t* a, jl_module_t *m, int all, int imported, int usings)
+void append_module_names(jl_array_t* a, jl_module_t *m, int all, int imported, int usings, size_t world)
 {
     // Materialize reexported bindings first
-    size_t world = jl_current_task->world_age;
     jl_array_t *visited_modules = jl_alloc_vec_any(0);
     JL_GC_PUSH1(&visited_modules);
     _materialize_reexported_bindings(m, world, visited_modules);
@@ -2107,7 +2111,7 @@ void append_module_names(jl_array_t* a, jl_module_t *m, int all, int imported, i
         jl_sym_t *asname = b->globalref->name;
         int hidden = jl_symbol_name(asname)[0]=='#';
         int main_public = (m == jl_main_module && !(asname == jl_eval_sym || asname == jl_include_sym));
-        jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
+        jl_binding_partition_t *bpart = jl_get_binding_partition(b, world);
         enum jl_partition_kind kind = jl_binding_kind(bpart);
         if (((jl_atomic_load_relaxed(&b->flags) & BINDING_FLAG_PUBLICP) ||
              jl_bpart_is_exported(bpart->kind) ||
@@ -2119,10 +2123,8 @@ void append_module_names(jl_array_t* a, jl_module_t *m, int all, int imported, i
     }
 }
 
-void append_exported_names(jl_array_t* a, jl_module_t *m, int all)
+void append_exported_names(jl_array_t* a, jl_module_t *m, int all, size_t world)
 {
-    size_t world = jl_current_task->world_age;
-
     // First, materialize all reexported bindings
     jl_array_t *visited_modules = jl_alloc_vec_any(0);
     JL_GC_PUSH1(&visited_modules);
@@ -2141,16 +2143,16 @@ void append_exported_names(jl_array_t* a, jl_module_t *m, int all)
     }
 }
 
-JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported, int usings)
+JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported, int usings, size_t world)
 {
     jl_array_t *a = jl_alloc_array_1d(jl_array_symbol_type, 0);
     JL_GC_PUSH1(&a);
-    append_module_names(a, m, all, imported, usings);
+    append_module_names(a, m, all, imported, usings, world);
     if (usings) {
         // If `usings` is specified, traverse the list of `using`-ed modules and incorporate
         // the names exported by those modules into the list.
         for (int i = module_usings_length(m)-1; i >= 0; i--)
-            append_exported_names(a, module_usings_getmod(m, i), all);
+            append_exported_names(a, module_usings_getmod(m, i), all, world);
     }
     JL_GC_POP();
     return (jl_value_t*)a;

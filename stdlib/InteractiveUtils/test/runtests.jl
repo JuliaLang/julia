@@ -837,6 +837,10 @@ file, ln = functionloc(versioninfo, Tuple{})
 @test isfile(pathof(InteractiveUtils))
 @test isdir(pkgdir(InteractiveUtils))
 
+module ModuleWithoutPathForEdit
+end
+@test_throws ErrorException("could not find source file for module: $(ModuleWithoutPathForEdit)") edit(ModuleWithoutPathForEdit)
+
 # compiler stdlib path updating
 file, ln = functionloc(Core.Compiler.tmeet, Tuple{Int, Float64})
 @test isfile(file)
@@ -1055,4 +1059,50 @@ end # module
 @testset "Subtypes and deprecations" begin
     using .OuterModule
     @test_nowarn subtypes(Integer);
+end
+
+let code = """
+        using InteractiveUtils
+        @activate Compiler[:codegen, :reflection]
+        println("done compiling")
+    """
+    orig_compiler = realpath(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "Compiler"))
+    mktempdir() do dir
+        new_compiler = joinpath(dir, "Compiler")
+        cp(orig_compiler, new_compiler)
+        output = read(`$(Base.julia_cmd()) -g0 -O0 --startup-file=no --project=$(new_compiler) -e $code`, String)
+        @test occursin("done compiling", output)
+    end
+end
+
+var_line = @__LINE__()+1
+"""
+    docs for a global variable
+"""
+const _interactiveutils_some_var_ = 0
+
+@test InteractiveUtils.varloc(@__MODULE__, :_interactiveutils_some_var_) == (@__FILE__, var_line)
+
+@testset "world argument for varinfo and subtypes" begin
+    # varinfo: a non-const binding added after the recorded world should not
+    # appear when querying that older world (its partition does not yet exist
+    # at world_no_var, so `isdefined` in that world returns false).
+    M_varinfo = @eval module $(gensym()) end
+    world_no_var = Base.get_world_counter()
+    @eval M_varinfo begin
+        export tracked_var
+        tracked_var = 42
+    end
+    @test occursin("tracked_var", repr(varinfo(M_varinfo)))
+    @test !occursin("tracked_var", repr(varinfo(M_varinfo; world=world_no_var)))
+
+    # subtypes: subtype added after the recorded world should not appear when
+    # querying that older world.
+    M_sub = @eval module $(gensym())
+        abstract type MyAbstractParent end
+    end
+    world_no_subtype = Base.get_world_counter()
+    @eval M_sub struct MyConcreteChild <: MyAbstractParent end
+    @test length(subtypes(M_sub, M_sub.MyAbstractParent)) == 1
+    @test isempty(subtypes(M_sub, M_sub.MyAbstractParent; world=world_no_subtype))
 end

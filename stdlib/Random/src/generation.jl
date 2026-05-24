@@ -159,6 +159,13 @@ rand_generic(r::AbstractRNG, ::Type{Int64})  = rand(r, UInt64) % Int64
 rand(r::AbstractRNG, ::SamplerType{Complex{T}}) where {T<:Real} =
     complex(rand(r, T), rand(r, T))
 
+# Reuse the bulk (SIMD) rand! for T on a reinterpreted view, instead of the
+# per-element scalar fallback above.
+function rand!(r::AbstractRNG, A::Array{Complex{T}}, ::SamplerType{Complex{T}}) where {T<:Base.HWReal}
+    rand!(r, reinterpret(T, A))
+    return A
+end
+
 ### random characters
 
 # returns a random valid Unicode scalar value (i.e. 0 - 0xd7ff, 0xe000 - # 0x10ffff)
@@ -518,14 +525,8 @@ _Sampler(RNG::Type{<:AbstractRNG}, t::Union{AbstractDict,AbstractSet}, n::Val{In
 _Sampler(::Type{<:AbstractRNG}, t::Union{AbstractDict,AbstractSet}, ::Val{1}) =
     SamplerTrivial(t)
 
-function nth(iter, n::Integer)::eltype(iter)
-    for (i, x) in enumerate(iter)
-        i == n && return x
-    end
-end
-
 rand(rng::AbstractRNG, sp::SamplerTrivial{<:Union{AbstractDict,AbstractSet}}) =
-    nth(sp[], rand(rng, 1:length(sp[])))
+    @inbounds Iterators.nth(sp[], rand(rng, 1:length(sp[])))
 
 
 ## random characters from a string

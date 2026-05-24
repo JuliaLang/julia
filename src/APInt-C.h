@@ -5,79 +5,68 @@
 
 #include "julia.h"
 #include "dtypes.h"
-#include "llvm-version.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#if defined(__cplusplus) && defined(LLVM_VERSION_MAJOR)
-using integerPart = llvm::APInt::WordType;
-#else
 typedef void integerPart;
-#endif
 
-JL_DLLEXPORT void LLVMNeg(unsigned numbits, integerPart *pa, integerPart *pr);
-JL_DLLEXPORT void LLVMByteSwap(unsigned numbits, integerPart *pa, integerPart *pr);
+JL_DLLEXPORT void APInt_neg(unsigned numbits, integerPart *pa, integerPart *pr);
+JL_DLLEXPORT void APInt_bswap(unsigned numbits, integerPart *pa, integerPart *pr);
 
-JL_DLLEXPORT void LLVMAdd(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
-JL_DLLEXPORT void LLVMSub(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
-JL_DLLEXPORT void LLVMMul(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
-JL_DLLEXPORT void LLVMSDiv(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
-JL_DLLEXPORT void LLVMUDiv(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
-JL_DLLEXPORT void LLVMSRem(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
-JL_DLLEXPORT void LLVMURem(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
+JL_DLLEXPORT void APInt_add(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
+JL_DLLEXPORT void APInt_sub(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
+JL_DLLEXPORT void APInt_mul(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
+JL_DLLEXPORT void APInt_sdiv(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
+JL_DLLEXPORT void APInt_udiv(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
+JL_DLLEXPORT void APInt_srem(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
+JL_DLLEXPORT void APInt_urem(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
 
-JL_DLLEXPORT void LLVMAnd(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
-JL_DLLEXPORT void LLVMOr(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
-JL_DLLEXPORT void LLVMXor(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
-JL_DLLEXPORT void LLVMShl(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
-JL_DLLEXPORT void LLVMLShr(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
-JL_DLLEXPORT void LLVMAShr(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
-JL_DLLEXPORT void LLVMFlipAllBits(unsigned numbits, integerPart *pa, integerPart *pr);
+JL_DLLEXPORT void APInt_and(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
+JL_DLLEXPORT void APInt_or(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
+JL_DLLEXPORT void APInt_xor(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
+JL_DLLEXPORT void APInt_shl(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
+JL_DLLEXPORT void APInt_lshr(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
+JL_DLLEXPORT void APInt_ashr(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
+JL_DLLEXPORT void APInt_not(unsigned numbits, integerPart *pa, integerPart *pr);
 
-JL_DLLEXPORT int LLVMICmpEQ(unsigned numbits, integerPart *pa, integerPart *pr);
-JL_DLLEXPORT int LLVMICmpNE(unsigned numbits, integerPart *pa, integerPart *pb);
-JL_DLLEXPORT int LLVMICmpSLT(unsigned numbits, integerPart *pa, integerPart *pb);
-JL_DLLEXPORT int LLVMICmpULT(unsigned numbits, integerPart *pa, integerPart *pb);
-JL_DLLEXPORT int LLVMICmpSLE(unsigned numbits, integerPart *pa, integerPart *pb);
-JL_DLLEXPORT int LLVMICmpULE(unsigned numbits, integerPart *pa, integerPart *pb);
+JL_DLLEXPORT int APInt_eq(unsigned numbits, integerPart *pa, integerPart *pr);
+JL_DLLEXPORT int APInt_ne(unsigned numbits, integerPart *pa, integerPart *pb);
+JL_DLLEXPORT int APInt_slt(unsigned numbits, integerPart *pa, integerPart *pb);
+JL_DLLEXPORT int APInt_ult(unsigned numbits, integerPart *pa, integerPart *pb);
+JL_DLLEXPORT int APInt_sle(unsigned numbits, integerPart *pa, integerPart *pb);
+JL_DLLEXPORT int APInt_ule(unsigned numbits, integerPart *pa, integerPart *pb);
 
-JL_DLLEXPORT int LLVMAdd_uov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
-JL_DLLEXPORT int LLVMAdd_sov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
-JL_DLLEXPORT int LLVMSub_uov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
-JL_DLLEXPORT int LLVMSub_sov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
-JL_DLLEXPORT int LLVMMul_sov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
-JL_DLLEXPORT int LLVMMul_uov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
-JL_DLLEXPORT int LLVMDiv_sov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
-JL_DLLEXPORT int LLVMDiv_uov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
-JL_DLLEXPORT int LLVMRem_sov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
-JL_DLLEXPORT int LLVMRem_uov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
+JL_DLLEXPORT int APInt_add_uov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
+JL_DLLEXPORT int APInt_add_sov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
+JL_DLLEXPORT int APInt_sub_uov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
+JL_DLLEXPORT int APInt_sub_sov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
+JL_DLLEXPORT int APInt_mul_sov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
+JL_DLLEXPORT int APInt_mul_uov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
+JL_DLLEXPORT int APInt_div_sov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
+JL_DLLEXPORT int APInt_div_uov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
+JL_DLLEXPORT int APInt_rem_sov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
+JL_DLLEXPORT int APInt_rem_uov(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
 
-JL_DLLEXPORT unsigned LLVMPopcount(unsigned numbits, integerPart *pa);
-JL_DLLEXPORT unsigned LLVMCountr_one(unsigned numbits, integerPart *pa);
-JL_DLLEXPORT unsigned LLVMCountr_zero(unsigned numbits, integerPart *pa);
-JL_DLLEXPORT unsigned LLVMCountl_one(unsigned numbits, integerPart *pa);
-JL_DLLEXPORT unsigned LLVMCountl_zero(unsigned numbits, integerPart *pa);
+JL_DLLEXPORT unsigned APInt_popcount(unsigned numbits, integerPart *pa);
+JL_DLLEXPORT unsigned APInt_countr_one(unsigned numbits, integerPart *pa);
+JL_DLLEXPORT unsigned APInt_countr_zero(unsigned numbits, integerPart *pa);
+JL_DLLEXPORT unsigned APInt_countl_one(unsigned numbits, integerPart *pa);
+JL_DLLEXPORT unsigned APInt_countl_zero(unsigned numbits, integerPart *pa);
 
-JL_DLLEXPORT void LLVMFPtoSI(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr);
-JL_DLLEXPORT void LLVMFPtoUI(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr);
-JL_DLLEXPORT void LLVMSItoFP(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr);
-JL_DLLEXPORT void LLVMUItoFP(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr);
-JL_DLLEXPORT void LLVMSExt(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr);
-JL_DLLEXPORT void LLVMZExt(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr);
-JL_DLLEXPORT void LLVMTrunc(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr);
+JL_DLLEXPORT void APInt_fptosi(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr);
+JL_DLLEXPORT void APInt_fptoui(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr);
+JL_DLLEXPORT void APInt_sitofp(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr);
+JL_DLLEXPORT void APInt_uitofp(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr);
+JL_DLLEXPORT void APInt_sext(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr);
+JL_DLLEXPORT void APInt_zext(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr);
+JL_DLLEXPORT void APInt_trunc(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr);
 
-JL_DLLEXPORT int LLVMFPtoSI_exact(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr);
-JL_DLLEXPORT int LLVMFPtoUI_exact(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr);
+JL_DLLEXPORT int APInt_fptosi_exact(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr);
+JL_DLLEXPORT int APInt_fptoui_exact(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr);
 
-JL_DLLEXPORT void jl_LLVMSMod(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
-JL_DLLEXPORT void jl_LLVMFlipSign(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
-
-JL_DLLEXPORT unsigned countr_zero_8(uint8_t Val);
-JL_DLLEXPORT unsigned countr_zero_16(uint16_t Val);
-JL_DLLEXPORT unsigned countr_zero_32(uint32_t Val);
-JL_DLLEXPORT unsigned countr_zero_64(uint64_t Val);
+JL_DLLEXPORT void APInt_flipsign(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
 
 //uint8_t getSwappedBytes_8(uint8_t Value); // no-op
 //uint16_t getSwappedBytes_16(uint16_t Value);

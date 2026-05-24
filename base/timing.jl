@@ -72,6 +72,8 @@ struct GC_Num
     last_full_sweep::Int64
     # Timestamp of the last incremental GC sweep in nanoseconds
     last_incremental_sweep::Int64
+    # Number of tracked image objects referencing non-image objects
+    image_remset_size::Int64
 end
 
 gc_num() = ccall(:jl_gc_num, GC_Num, ())
@@ -573,7 +575,7 @@ function _gen_allocation_measurer(ex, fname::Symbol)
             b1[] - b0[]
         end
     else
-        @assert fname === :allocations
+        @assert fname === :allocations "unexpected fname"
         return quote
             Experimental.@force_compile
             # Note this value is unused, but without it `allocated` and `allocations`

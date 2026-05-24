@@ -8,6 +8,20 @@ struct Binding
         # Normalise the binding module for module symbols so that:
         #   Binding(Base, :Base) === Binding(Main, :Base)
         m = nameof(m) === v ? parentmodule(m) : m
+        # For renamed imports (`using X: y as z` / `import X: y as z`), the
+        # local symbol `v` doesn't exist on the canonical owner module.
+        # Inspect the binding partition: if it's an explicit by-name import
+        # (the only kinds where `as`-rename is syntactically possible), the
+        # partition's restriction is the underlying `Core.Binding` whose
+        # globalref carries the canonical `(mod, name)` pair.
+        world = Base.get_world_counter()
+        if Base.invoke_in_world(world, isdefinedglobal, m, v)
+            bpart = Base.lookup_binding_partition(world, GlobalRef(m, v))
+            if Base.is_some_explicit_imported(Base.binding_kind(bpart))
+                imported = Base.partition_restriction(bpart)::Core.Binding
+                return new(imported.globalref.mod, imported.globalref.name)
+            end
+        end
         new(Base.binding_module(m, v), v)
     end
 end
@@ -28,12 +42,19 @@ function Base.show(io::IO, b::Binding)
     if b.mod === Base.active_module()
         print(io, b.var)
     else
-        print(io, b.mod, '.', Base.isoperator(b.var) ? ":" : "", b.var)
+        print(io, b.mod, '.')
+        if Base.isoperator(b.var)
+            # ensures symbols are quoted right, so e.g.  :(==), :(:), :+ or :-
+            show(io, b.var)
+        else
+            # print ordinary identifiers without any quoting
+            print(io, b.var)
+        end
     end
 end
 
 aliasof(b::Binding)     = defined(b) ? (a = aliasof(resolve(b), b); defined(a) ? a : b) : b
-aliasof(d::DataType, b) = Binding(d.name.module, d.name.name)
-aliasof(λ::Function, b) = (m = typeof(λ).name; Binding(m.module, m.singletonname))
+aliasof(d::DataType, b) = Binding(parentmodule(d), nameof(d))
+aliasof(λ::Function, b) = Binding(parentmodule(λ), nameof(λ))
 aliasof(m::Module,   b) = Binding(m, nameof(m))
 aliasof(other,       b) = b

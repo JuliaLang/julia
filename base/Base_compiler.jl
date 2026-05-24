@@ -30,6 +30,7 @@ include(path::String) = include(Base, path)
 
 struct IncludeInto <: Function
     m::Module
+    IncludeInto(m::Module) = new(m)
 end
 (this::IncludeInto)(fname::AbstractString) = include(this.m, fname)
 
@@ -61,7 +62,7 @@ function setproperty!(x, f::Symbol, v)
     return setfield!(x, f, val)
 end
 
-typeof(function getproperty end).name.constprop_heuristic = Core.FORCE_CONST_PROP
+typeof(function getproperty end).name.constprop_heuristic = or_int(Core.FORCE_CONST_PROP, Core.DISABLE_SEMI_CONCRETE_EVAL)
 typeof(function setproperty! end).name.constprop_heuristic = Core.FORCE_CONST_PROP
 
 dotgetproperty(x, f) = getproperty(x, f)
@@ -338,16 +339,16 @@ using .Checked
 include("indices.jl")
 include("genericmemory.jl")
 include("array.jl")
+include("abstractset.jl")
+include("abstractdict.jl")
+include("iddict.jl")
+include("idset.jl")
 include("abstractarray.jl")
 include("baseext.jl")
 
 include("c.jl")
-include("abstractset.jl")
 include("bitarray.jl")
 include("bitset.jl")
-include("abstractdict.jl")
-include("iddict.jl")
-include("idset.jl")
 include("ntuple.jl")
 include("iterators.jl")
 using .Iterators: zip, enumerate, only
