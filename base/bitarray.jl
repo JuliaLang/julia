@@ -1758,13 +1758,20 @@ for (T, f) in ((:(Union{typeof(&), typeof(*), typeof(min)}), :(&)),
                (:(typeof(==)),                               :((p, q) -> ~xor(p, q))),
                (:(typeof(<)),                                :((p, q) -> ~p & q)),
                (:(typeof(>)),                                :((p, q) -> p & ~q)))
-    @eval map(::$T, A::BitArray, B::BitArray) = bit_map!($f, similar(A), A, B)
+    @eval map(::$T, A::BitArray, B::BitArray) = bit_map($f, A, B)
     @eval map!(::$T, dest::BitArray, A::BitArray, B::BitArray) = bit_map!($f, dest, A, B)
 end
 
 # If we were able to specialize the function to a known bitwise operation,
 # map across the chunks. Otherwise, fall-back to the AbstractArray method that
 # iterates bit-by-bit.
+function bit_map(f::F, A::BitArray, B::BitArray) where F
+    AB = zip(A, B)
+    isz = IteratorSize(AB)
+    dest = _similar_for(A, Bool, AB, isz, _similar_shape(AB, isz))
+    bit_map!(f, dest, A, B)
+end
+
 function bit_map!(f::F, dest::BitArray, A::BitArray) where F
     length(A) <= length(dest) || throw(DimensionMismatch("length of destination must be >= length of collection"))
     isempty(A) && return dest
@@ -1801,9 +1808,9 @@ function bit_map!(f::F, dest::BitArray, A::BitArray, B::BitArray) where F
     _msk = _msk_end(min_bitlen)
     # first zero out the bits mask is going to change
     # then update bits by `or`ing with a masked RHS
-    # DO NOT SEPARATE ONTO TO LINES.
+    # DO NOT SEPARATE ONTO TWO LINES.
     # Otherwise there will be bugs when Ac or Bc aliases destc
-    destc[len_Ac] = (dest_last & ~(_msk)) | f(Ac[end], Bc[end]) & _msk
+    destc[len_Ac] = (dest_last & ~(_msk)) | f(Ac[len_Ac], Bc[len_Ac]) & _msk
     dest
 end
 
