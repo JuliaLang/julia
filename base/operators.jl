@@ -1463,12 +1463,12 @@ contains `missing` but not `item`, in which case `missing` is returned
 matching the behavior of [`any`](@ref) and [`==`](@ref)).
 Some collections follow a slightly different definition. For example,
 [`Set`](@ref)s check whether the item [`isequal`](@ref) to one of the elements;
-[`Dict`](@ref)s look for `key=>value` pairs, and the `key` is compared using
-[`isequal`](@ref).
+[`Dict`](@ref)s look for `key=>value` pairs, where the `key` is compared using
+[`isequal`](@ref) and the `value` is compared using [`==`](@ref).
 
 To test for the presence of a key in a dictionary, use [`haskey`](@ref)
 or `k in keys(dict)`. For the collections mentioned above,
-the result is always a `Bool`.
+the result of `haskey(dict, k)` or `k in keys(dict)` is always a `Bool`.
 
 When broadcasting with `in.(items, collection)` or `items .∈ collection`, both
 `items` and `collection` are broadcasted over, which is often not what is intended.
