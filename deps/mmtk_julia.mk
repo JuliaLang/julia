@@ -111,6 +111,10 @@ ifeq (${MMTK_PLAN},Immix)
 LIB_PATH_PLAN = immix
 else ifeq (${MMTK_PLAN},StickyImmix)
 LIB_PATH_PLAN = sticky
+else ifeq (${MMTK_PLAN},ConcurrentImmix)
+LIB_PATH_PLAN = concurrent
+else ifeq (${MMTK_PLAN},StickyImmixPreWrite)
+LIB_PATH_PLAN = sticky_prewrite
 endif
 
 ifeq ($(MMTK_MOVING), 0)

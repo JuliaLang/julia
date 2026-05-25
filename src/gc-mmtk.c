@@ -51,6 +51,7 @@ static memsize_t max_total_memory = (memsize_t) MAX32HEAP;
 
 extern void mmtk_julia_copy_stack_check(int copy_stack);
 extern void mmtk_gc_init(uintptr_t min_heap_size, uintptr_t max_heap_size, uintptr_t n_gcthreads, uintptr_t header_size, uintptr_t tag);
+extern void mmtk_set_concurrent_marking_enabled(bool enabled);
 extern void mmtk_object_reference_write_post(void* mutator, const void* parent, const void* ptr);
 extern void mmtk_object_reference_write_slow(void* mutator, const void* parent, const void* ptr);
 extern void* mmtk_alloc(void* mutator, size_t size, size_t align, size_t offset, int allocator);
@@ -148,6 +149,9 @@ void jl_gc_init(void) {
 
     mmtk_julia_copy_stack_check(copy_stacks);
 
+    // Disable concurrent marking during build to avoid issues
+    // mmtk_set_concurrent_marking_enabled(0);
+
     // if only max size is specified initialize MMTk with a fixed size heap
     // TODO: We just assume mark threads means GC threads, and ignore the number of concurrent sweep threads.
     // If the two values are the same, we can use either. Otherwise, we need to be careful.
@@ -168,6 +172,7 @@ void jl_init_thread_heap(struct _jl_tls_states_t *ptls) JL_NOTSAFEPOINT {
     jl_thread_heap_common_t *heap = &ptls->gc_tls_common.heap;
     small_arraylist_new(&heap->weak_refs, 0);
     small_arraylist_new(&heap->live_tasks, 0);
+    small_arraylist_new(&heap->all_tasks, 0);
     for (int i = 0; i < JL_N_STACK_POOLS; i++)
         small_arraylist_new(&heap->free_stacks[i], 0);
     small_arraylist_new(&heap->mallocarrays, 0);
@@ -713,12 +718,37 @@ JL_DLLEXPORT void jl_gc_mmtk_sweep_stack_pools(void)
         if (jl_atomic_load_relaxed(&ptls2->current_task) == NULL) {
             small_arraylist_free(ptls2->gc_tls_common.heap.free_stacks);
         }
-
-        small_arraylist_t *live_tasks = &ptls2->gc_tls_common.heap.live_tasks;
+        // sweep list of all tasks
+        small_arraylist_t *all_tasks = &ptls2->gc_tls_common.heap.all_tasks;
         size_t n = 0;
         size_t ndel = 0;
-        size_t l = live_tasks->len;
-        void **lst = live_tasks->items;
+        size_t l = all_tasks->len;
+        void **lst = all_tasks->items;
+        if (l != 0) {
+            while (1) {
+                jl_task_t *t = (jl_task_t*)lst[n];
+                assert(jl_is_task(t));
+                if (mmtk_is_live_object(t)) {
+                    // tasks should be non moving
+                    assert(mmtk_get_possibly_forwarded(t) == t);
+                    n++;
+                } else {
+                    ndel++;
+                }
+                if (n >= l - ndel)
+                    break;
+                void *tmp = lst[n];
+                lst[n] = lst[n + ndel];
+                lst[n + ndel] = tmp;
+            }
+            all_tasks->len -= ndel;
+        }
+
+        small_arraylist_t *live_tasks = &ptls2->gc_tls_common.heap.live_tasks;
+        n = 0;
+        ndel = 0;
+        l = live_tasks->len;
+        lst = live_tasks->items;
         if (l == 0)
             continue;
         while (1) {
@@ -896,7 +926,7 @@ inline void mmtk_set_side_metadata(const void* side_metadata_base, void* obj) {
 }
 
 STATIC_INLINE void mmtk_immortal_post_alloc_fast(MMTkMutatorContext* mutator, void* obj, size_t size) {
-    if (MMTK_NEEDS_WRITE_BARRIER == MMTK_OBJECT_BARRIER) {
+    if (MMTK_NEEDS_WRITE_BARRIER == MMTK_OBJECT_POST_WRITE_BARRIER) {
         mmtk_set_side_metadata(MMTK_SIDE_LOG_BIT_BASE_ADDRESS, obj);
     }
 }
@@ -1167,6 +1197,14 @@ JL_DLLEXPORT void jl_gc_queue_root(const struct _jl_value_t *ptr) JL_NOTSAFEPOIN
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
     mmtk_object_reference_write_slow(&ptls->gc_tls.mmtk_mutator, ptr, (const void*) 0);
+}
+
+// SATB pre-barrier: log old_val before it is overwritten in parent
+JL_DLLEXPORT void jl_gc_wb_pre_slow(const struct _jl_value_t *parent, const struct _jl_value_t *old_val) JL_NOTSAFEPOINT
+{
+    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = ct->ptls;
+    mmtk_object_reference_write_pre(&ptls->gc_tls.mmtk_mutator, parent, old_val);
 }
 
 JL_DLLEXPORT void jl_gc_queue_multiroot(const struct _jl_value_t *root, const void *stored,
