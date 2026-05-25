@@ -1123,7 +1123,15 @@ extern bt_context_t *jl_to_bt_context(void *sigctx) JL_NOTSAFEPOINT;
 // it and attempting to return normally.
 int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c) JL_NOTSAFEPOINT
 {
-#if (defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_))
+#if defined(JL_DISABLE_LIBUNWIND)
+    // With libunwind disabled, `bt_context_t` is typedef'd to `int`
+    // (julia_internal.h, in the #else of the bt_context_t selection block),
+    // so the platform-specific code below that dereferences `c->uc_mcontext`,
+    // `c->Rsp`, etc. cannot compile. Bail out instead — callers handle a
+    // `0` return by falling back to a path that records no backtrace.
+    (void)mctx; (void)c;
+    return 0;
+#elif (defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_))
     // https://github.com/llvm/llvm-project/blob/main/compiler-rt/lib/hwasan/hwasan_interceptors.cpp
     return 0;
 #elif defined(_OS_WINDOWS_)
