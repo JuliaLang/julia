@@ -105,6 +105,11 @@ make sure to take them into account.
 - Do not `ccall` runtime C functions directly if there are existing wrappers for the function.
 - Do not explicitly add a module prefix if the code you're adding is in the same module. E.g. do not use `Base.` for code in Base unless required.
 
+## Reviewing Buildkite CI logs
+
+If you do not have the Buildkite MCP available, see `doc/src/devdocs/agents/buildkite-logs.md` for the
+recipe to fetch raw job logs without web sign-in.
+
 ## Commit messages and pull requests
 
 When writing commit messages, follow the format "component: Brief summary" for
