@@ -1234,8 +1234,24 @@ static const auto jl_blackbox_func = new JuliaFunction<>{
             {}); },
 };
 
-static const auto jl_write_barrier_func = new JuliaFunction<>{
-    "julia.write_barrier",
+static const auto jl_write_barrier_pre_func = new JuliaFunction<>{
+    "julia.write_barrier_pre",
+    [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
+            {JuliaType::get_prjlvalue_ty(C)}, true); },
+    [](LLVMContext &C) {
+        AttrBuilder FnAttrs(C);
+        FnAttrs.addMemoryAttr(MemoryEffects::inaccessibleMemOnly());
+        FnAttrs.addAttribute(Attribute::NoUnwind);
+        FnAttrs.addAttribute(Attribute::NoRecurse);
+        return AttributeList::get(C,
+            AttributeSet::get(C, FnAttrs),
+            AttributeSet(),
+            {Attributes(C, {Attribute::ReadOnly})});
+    },
+};
+
+static const auto jl_write_barrier_post_func = new JuliaFunction<>{
+    "julia.write_barrier_post",
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
             {JuliaType::get_prjlvalue_ty(C)}, true); },
     [](LLVMContext &C) {
@@ -4271,7 +4287,7 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
         if (lock)
             emit_lockstate_value(ctx, lock, true);
-        // TODO: emit MMTK deletion barrier here for concurrent GC
+        emit_write_barrier_pre(ctx, mem, Constant::getNullValue(ctx.types().T_prjlvalue));
         emit_aliased_store(ctx, Constant::getNullValue(elty), ptr, Align(al),
                            isboxed ? ctx.tbaa().tbaa_ptrarraybuf : ctx.tbaa().tbaa_arraybuf,
                            ctx.noalias().aliasscope.current, storeOrder);
@@ -4497,9 +4513,10 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         for (size_t i = 0; i < nargs; i++) {
             Value *elem = boxed(ctx, argv[i + 1]);
             Value *elem_ptr = emit_ptrgep(ctx, svec_derived, ctx.types().sizeof_ptr * (i + 1));
+            // No pre-barrier needed: svec was just allocated, old values are all NULL
             auto *store = ctx.builder.CreateAlignedStore(elem, elem_ptr, Align(ctx.types().sizeof_ptr));
             store->setOrdering(AtomicOrdering::Release);
-            emit_write_barrier(ctx, svec, elem);
+            emit_write_barrier_post(ctx, svec, elem);
         }
         *ret = mark_julia_type(ctx, svec, true, jl_simplevector_type);
         return true;
@@ -6525,9 +6542,10 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
         }
         if (scope_to_restore) {
             Value *scope_ptr = get_scope_field(ctx);
+            emit_write_barrier_pre(ctx, get_current_task(ctx), scope_to_restore);
             jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe).decorateInst(
                 ctx.builder.CreateAlignedStore(scope_to_restore, scope_ptr, ctx.types().alignof_ptr));
-            // NOTE: wb not needed here, due to store to current_task (see jl_gc_wb_current_task)
+            // NOTE: post-wb not needed here, due to store to current_task (see jl_gc_wb_current_task)
         }
     }
     else if (head == jl_pop_exception_sym) {
@@ -9820,9 +9838,10 @@ static jl_llvm_functions_t
                 Value *scope_boxed = boxed(ctx, scope);
                 Value *scope_ptr = get_scope_field(ctx);
                 LoadInst *current_scope = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, scope_ptr, ctx.types().alignof_ptr);
-                StoreInst *scope_store = ctx.builder.CreateAlignedStore(scope_boxed, scope_ptr, ctx.types().alignof_ptr);
-                // NOTE: wb not needed here, due to store to current_task (see jl_gc_wb_current_task)
                 jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe).decorateInst(current_scope);
+                emit_write_barrier_pre(ctx, get_current_task(ctx), scope_boxed);
+                StoreInst *scope_store = ctx.builder.CreateAlignedStore(scope_boxed, scope_ptr, ctx.types().alignof_ptr);
+                // NOTE: post-wb not needed here, due to store to current_task (see jl_gc_wb_current_task)
                 jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe).decorateInst(scope_store);
                 // GC preserve the current_scope, since it is not rooted in the `jl_handler_t *`,
                 // the newly entered scope is preserved through the current_task.
@@ -10433,7 +10452,8 @@ static void init_jit_functions(void)
     add_named_global(jl_alloc_obj_func, (void*)NULL);
     add_named_global(jl_newbits_func, (void*)jl_new_bits);
     add_named_global(jl_typeof_func, (void*)NULL);
-    add_named_global(jl_write_barrier_func, (void*)NULL);
+    add_named_global(jl_write_barrier_pre_func, (void*)NULL);
+    add_named_global(jl_write_barrier_post_func, (void*)NULL);
     add_named_global(jldlsym_func, &jl_load_and_lookup);
     add_named_global("jl_adopt_thread", &jl_adopt_thread);
     add_named_global(jlgetcfunctiontrampoline_func, &jl_get_cfunction_trampoline);

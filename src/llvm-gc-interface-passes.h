@@ -382,6 +382,7 @@ struct FinalLowerGC: private JuliaPassContext {
 
 private:
     Function *queueRootFunc;
+    Function *wbPreSlowFunc;
     Function *smallAllocFunc;
     Function *bigAllocFunc;
     Function *allocTypedFunc;
@@ -409,8 +410,11 @@ private:
     // Lowers a `julia.safepoint` intrinsic.
     void lowerSafepoint(CallInst *target, Function &F);
 
-    // Lowers a `julia.write_barrier` function.
-    void lowerWriteBarrier(CallInst *target, Function &F);
+    // Lowers a `julia.write_barrier_pre` function.
+    void lowerWriteBarrierPre(CallInst *target, Function &F);
+
+    // Lowers a `julia.write_barrier_post` function.
+    void lowerWriteBarrierPost(CallInst *target, Function &F);
 
     // Check if the pass should be run
     bool shouldRunFinalGC();

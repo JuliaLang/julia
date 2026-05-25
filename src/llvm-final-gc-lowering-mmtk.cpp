@@ -119,7 +119,71 @@ Value* FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
 }
 
 
-void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
+void FinalLowerGC::lowerWriteBarrierPre(CallInst *target, Function &F) {
+    if (MMTK_NEEDS_WRITE_BARRIER != MMTK_OBJECT_PRE_WRITE_BARRIER)
+        return;
+
+    auto parent = target->getArgOperand(0);
+    IRBuilder<> builder(target);
+    builder.SetCurrentDebugLocation(target->getDebugLoc());
+    // // Call jl_gc_wb_pre_slow(parent, old_val) for each old value operand
+    // for (unsigned i = 1; i < target->arg_size(); i++) {
+    //     builder.CreateCall(wbPreSlowFunc, { parent, target->getArgOperand(i) });
+    // }
+    const bool INLINE_WRITE_BARRIER = true;
+    if (INLINE_WRITE_BARRIER) {
+        auto i8_ty = Type::getInt8Ty(F.getContext());
+        auto intptr_ty = T_size;
+        auto i8_ptr_ty = PointerType::getUnqual(F.getContext());
+
+        // intptr_t addr = (intptr_t) (void*) src;
+        // uint8_t* meta_addr = (uint8_t*) (SIDE_METADATA_BASE_ADDRESS + (addr >> 6));
+        Value *metadata_base_ptr;
+        if (jl_generating_output()) {
+            F.getParent()->getOrInsertGlobal("MMTK_SIDE_LOG_BIT_BASE_ADDRESS", i8_ptr_ty);
+            auto metadata_base_global = F.getParent()->getNamedGlobal("MMTK_SIDE_LOG_BIT_BASE_ADDRESS");
+            assert(metadata_base_global != nullptr);
+            metadata_base_ptr = builder.CreateAlignedLoad(
+                i8_ptr_ty, metadata_base_global, Align(sizeof(void *)), "mmtk_side_log_bit_base");
+            cast<LoadInst>(metadata_base_ptr)->setMetadata(llvm::LLVMContext::MD_tbaa, get_tbaa_const(F.getContext()));
+            cast<LoadInst>(metadata_base_ptr)->setMetadata(llvm::LLVMContext::MD_invariant_load,
+                                                           llvm::MDNode::get(F.getContext(), {}));
+        } else {
+            intptr_t metadata_base_address = reinterpret_cast<intptr_t>(MMTK_SIDE_LOG_BIT_BASE_ADDRESS);
+            auto metadata_base_val = ConstantInt::get(intptr_ty, metadata_base_address);
+            metadata_base_ptr = ConstantExpr::getIntToPtr(metadata_base_val, PointerType::getUnqual(F.getContext()));
+        }
+
+        auto parent_val = builder.CreatePtrToInt(parent, intptr_ty);
+        auto shr = builder.CreateLShr(parent_val, ConstantInt::get(intptr_ty, 6));
+        auto metadata_ptr = builder.CreateGEP(i8_ty, metadata_base_ptr, shr);
+
+        // intptr_t shift = (addr >> 3) & 0b111;
+        auto shift = builder.CreateAnd(builder.CreateLShr(parent_val, ConstantInt::get(intptr_ty, 3)), ConstantInt::get(intptr_ty, 7));
+        auto shift_i8 = builder.CreateTruncOrBitCast(shift, i8_ty);
+
+        // uint8_t byte_val = *meta_addr;
+        auto load_i8 = builder.CreateAlignedLoad(i8_ty, metadata_ptr, Align());
+
+        // if (((byte_val >> shift) & 1) == 1) {
+        auto shifted_load_i8 = builder.CreateLShr(load_i8, shift_i8);
+        auto masked = builder.CreateAnd(shifted_load_i8, ConstantInt::get(i8_ty, 1));
+        auto is_unlogged = builder.CreateICmpEQ(masked, ConstantInt::get(i8_ty, 1));
+
+        // SATB barriers must log each overwritten value, not just the parent.
+        MDBuilder MDB(F.getContext());
+        SmallVector<uint32_t, 2> Weights{1, 9};
+
+        auto mayTriggerSlowpath = SplitBlockAndInsertIfThen(is_unlogged, target, false, MDB.createBranchWeights(Weights));
+        builder.SetInsertPoint(mayTriggerSlowpath);
+        builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCRoot), { parent });
+    } else {
+        Function *wb_func = getOrDeclare(jl_intrinsics::queueGCRoot);
+        builder.CreateCall(wb_func, { parent });
+    }
+}
+
+void FinalLowerGC::lowerWriteBarrierPost(CallInst *target, Function &F) {
     auto parent = target->getArgOperand(0);
     IRBuilder<> builder(target);
     builder.SetCurrentDebugLocation(target->getDebugLoc());
@@ -128,7 +192,7 @@ void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
     // This works fine for object barrier for generational plans (such as stickyimmix), which does not use the target object at all.
     // But for other MMTk plans, we need to be careful.
     const bool INLINE_WRITE_BARRIER = true;
-    if (MMTK_NEEDS_WRITE_BARRIER == MMTK_OBJECT_BARRIER) {
+    if (MMTK_NEEDS_WRITE_BARRIER == MMTK_OBJECT_POST_WRITE_BARRIER) {
         if (INLINE_WRITE_BARRIER) {
             auto i8_ty = Type::getInt8Ty(F.getContext());
             auto intptr_ty = T_size;
@@ -141,16 +205,11 @@ void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
                 F.getParent()->getOrInsertGlobal("MMTK_SIDE_LOG_BIT_BASE_ADDRESS", i8_ptr_ty);
                 auto metadata_base_global = F.getParent()->getNamedGlobal("MMTK_SIDE_LOG_BIT_BASE_ADDRESS");
                 assert(metadata_base_global != nullptr);
-                auto metadata_base_load = builder.CreateAlignedLoad(
-                    i8_ptr_ty, metadata_base_global, Align(sizeof(void *)), "mmtk_side_log_bit_base");
-                metadata_base_load->setMetadata(llvm::LLVMContext::MD_tbaa, get_tbaa_const(F.getContext()));
-                metadata_base_load->setMetadata(llvm::LLVMContext::MD_invariant_load,
-                                                llvm::MDNode::get(F.getContext(), {}));
                 metadata_base_ptr = builder.CreateAlignedLoad(
-                    i8_ptr_ty,
-                    metadata_base_global,
-                    Align(sizeof(void *)),
-                    "mmtk_side_log_bit_base");
+                    i8_ptr_ty, metadata_base_global, Align(sizeof(void *)), "mmtk_side_log_bit_base");
+                cast<LoadInst>(metadata_base_ptr)->setMetadata(llvm::LLVMContext::MD_tbaa, get_tbaa_const(F.getContext()));
+                cast<LoadInst>(metadata_base_ptr)->setMetadata(llvm::LLVMContext::MD_invariant_load,
+                                                               llvm::MDNode::get(F.getContext(), {}));
             } else {
                 intptr_t metadata_base_address = reinterpret_cast<intptr_t>(MMTK_SIDE_LOG_BIT_BASE_ADDRESS);
                 auto metadata_base_val = ConstantInt::get(intptr_ty, metadata_base_address);
@@ -185,6 +244,6 @@ void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
             builder.CreateCall(wb_func, { parent });
         }
     } else {
-        // Using a plan that does not need write barriers
+        // Using a plan that does not need post_write barriers
     }
 }

@@ -60,7 +60,8 @@ struct JuliaPassContext {
     llvm::Function *alloc_obj_func;
     llvm::Function *typeof_func;
     llvm::Function *blackbox_func;
-    llvm::Function *write_barrier_func;
+    llvm::Function *write_barrier_pre_func;
+    llvm::Function *write_barrier_post_func;
     llvm::Function *pop_handler_noexcept_func;
     llvm::Function *call_func;
     llvm::Function *call2_func;
@@ -154,6 +155,9 @@ namespace jl_well_known {
 
     // `jl_gc_queue_root`: queues a GC root.
     extern const WellKnownFunctionDescription GCQueueRoot;
+
+    // `jl_gc_wb_pre_slow`: SATB pre-barrier slow path (parent, old_val).
+    extern const WellKnownFunctionDescription GCWBPreSlow;
 
     // `jl_gc_alloc_typed`: allocates bytes.
     extern const WellKnownFunctionDescription GCAllocTyped;
