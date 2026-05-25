@@ -826,8 +826,11 @@ function write(io::IO, x1, xs...)
     return written
 end
 
-@noinline unsafe_write(s::IO, p::Ref{T}, n::Integer) where {T} =
-    unsafe_write(s, unsafe_convert(Ref{T}, p)::Ptr, n) # mark noinline to ensure ref is gc-rooted somewhere (by the caller)
+function unsafe_write(s::IO, p::Ref{T}, n::Integer) where {T}
+    GC.@preserve p begin
+        unsafe_write(s, unsafe_convert(Ref{T}, p)::Ptr, n)
+    end
+end
 unsafe_write(s::IO, p::Ptr, n::Integer) = unsafe_write(s, convert(Ptr{UInt8}, p), convert(UInt, n))
 function write(s::IO, x::Ref{T}) where {T}
     x isa Ptr && error("write cannot copy from a Ptr")
@@ -853,7 +856,7 @@ function write(s::IO, A::AbstractArray)
     r = Ref{eltype(A)}()
     for a in A
         r[] = a
-        nb += @noinline unsafe_write(s, r, Core.sizeof(r)) # r must be heap-allocated
+        nb += unsafe_write(s, r, Core.sizeof(r))
     end
     return nb
 end
@@ -914,7 +917,11 @@ function write(to::IO, from::IO)
     return n
 end
 
-@noinline unsafe_read(s::IO, p::Ref{T}, n::Integer) where {T} = unsafe_read(s, unsafe_convert(Ref{T}, p)::Ptr, n) # mark noinline to ensure ref is gc-rooted somewhere (by the caller)
+function unsafe_read(s::IO, p::Ref{T}, n::Integer) where {T}
+    GC.@preserve p begin
+        unsafe_read(s, unsafe_convert(Ref{T}, p)::Ptr, n)
+    end
+end
 unsafe_read(s::IO, p::Ptr, n::Integer) = unsafe_read(s, convert(Ptr{UInt8}, p), convert(UInt, n))
 function read!(s::IO, x::Ref{T}) where {T}
     x isa Ptr && error("read! cannot copy into a Ptr")
@@ -943,7 +950,7 @@ function read!(s::IO, A::AbstractArray{T}) where {T}
         if isbitstype(T)
             r = Ref{T}()
             for i in eachindex(A)
-                @noinline unsafe_read(s, r, Core.sizeof(r)) # r must be heap-allocated
+                unsafe_read(s, r, Core.sizeof(r))
                 A[i] = r[]
             end
         else
