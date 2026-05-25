@@ -417,6 +417,20 @@ static inline void memassign_safe(int hasptr, char *dst, const jl_value_t *src, 
     memcpy(dst, jl_assume_aligned(src, sizeof(void*)), nb);
 }
 
+// Like memassign_safe but also performs pre and post write barriers.
+// `parent` is the GC-tracked owner of `dst`.
+// `dt` is the datatype of the inline value being stored.
+static inline void memassign_safe_wb(jl_value_t *parent, char *dst, const jl_value_t *src,
+                                     size_t nb, jl_datatype_t *dt) JL_NOTSAFEPOINT
+{
+    int hasptr = dt->layout->first_ptr >= 0;
+    if (hasptr)
+        jl_gc_multi_wb_pre(parent, src);
+    memassign_safe(hasptr, dst, src, nb);
+    if (hasptr)
+        jl_gc_multi_wb_post(parent, src);
+}
+
 // -- GC -- //
 
 #define GC_CLEAN  0 // freshly allocated

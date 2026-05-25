@@ -1089,11 +1089,35 @@ void sweep_stack_pool_loop(void) JL_NOTSAFEPOINT
             small_arraylist_free(ptls2->gc_tls_common.heap.free_stacks);
         }
 
-        small_arraylist_t *live_tasks = &ptls2->gc_tls_common.heap.live_tasks;
+        // sweep list of all tasks
+        small_arraylist_t *all_tasks = &ptls2->gc_tls_common.heap.all_tasks;
         size_t n = 0;
         size_t ndel = 0;
-        size_t l = live_tasks->len;
-        void **lst = live_tasks->items;
+        size_t l = all_tasks->len;
+        void **lst = all_tasks->items;
+        if (l != 0) {
+            while (1) {
+                jl_task_t *t = (jl_task_t*)lst[n];
+                assert(jl_is_task(t));
+                if (gc_marked(jl_astaggedvalue(t)->bits.gc)) {
+                    n++;
+                } else {
+                    ndel++;
+                }
+                if (n >= l - ndel)
+                    break;
+                void *tmp = lst[n];
+                lst[n] = lst[n + ndel];
+                lst[n + ndel] = tmp;
+            }
+            all_tasks->len -= ndel;
+        }
+
+        small_arraylist_t *live_tasks = &ptls2->gc_tls_common.heap.live_tasks;
+        n = 0;
+        ndel = 0;
+        l = live_tasks->len;
+        lst = live_tasks->items;
         if (l == 0)
             continue;
         while (1) {
@@ -1515,6 +1539,11 @@ JL_DLLEXPORT void jl_gc_queue_root(const jl_value_t *ptr)
     }
 }
 
+// SATB pre-barrier stub - no-op for stock GC
+JL_DLLEXPORT void jl_gc_wb_pre_slow(const jl_value_t *parent, const jl_value_t *old_val) JL_NOTSAFEPOINT
+{
+}
+
 void jl_gc_queue_multiroot(const jl_value_t *parent, const void *ptr, jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
     const jl_datatype_layout_t *ly = dt->layout;
@@ -1524,7 +1553,7 @@ void jl_gc_queue_multiroot(const jl_value_t *parent, const void *ptr, jl_datatyp
     jl_value_t *ptrf = ((jl_value_t**)ptr)[ly->first_ptr];
     if (ptrf && (jl_astaggedvalue(ptrf)->bits.gc & 1) == 0) {
         // this pointer was young, move the barrier back now
-        jl_gc_wb_back(parent);
+        jl_gc_wb_back_post(parent);
         return;
     }
     assert(ly->flags.fielddesc_type != JL_FIELDDESC_FOREIGN);
@@ -1546,7 +1575,7 @@ void jl_gc_queue_multiroot(const jl_value_t *parent, const void *ptr, jl_datatyp
         jl_value_t *ptrf = ((jl_value_t**)ptr)[fld];
         if (ptrf && (jl_astaggedvalue(ptrf)->bits.gc & 1) == 0) {
             // this pointer was young, move the barrier back now
-            jl_gc_wb_back(parent);
+            jl_gc_wb_back_post(parent);
             return;
         }
     }
@@ -3425,6 +3454,8 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
                 small_arraylist_free(&common_heap->weak_refs);
             if (common_heap->live_tasks.len == 0)
                 small_arraylist_free(&common_heap->live_tasks);
+            if (common_heap->all_tasks.len == 0)
+                small_arraylist_free(&common_heap->all_tasks);
             if (heap->remset.len == 0)
                 arraylist_free(&heap->remset);
             if (ptls2->finalizers.len == 0)
@@ -3609,6 +3640,7 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     }
     small_arraylist_new(&common_heap->weak_refs, 0);
     small_arraylist_new(&common_heap->live_tasks, 0);
+    small_arraylist_new(&common_heap->all_tasks, 0);
     for (int i = 0; i < JL_N_STACK_POOLS; i++)
         small_arraylist_new(&common_heap->free_stacks[i], 0);
     small_arraylist_new(&common_heap->mallocarrays, 0);

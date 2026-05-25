@@ -138,7 +138,7 @@ JL_DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a)
         str = jl_genericmemory_to_string(a->ref.mem, len);
     else
         str = jl_pchar_to_string(jl_array_data(a, char), len);
-    a->ref.mem = (jl_genericmemory_t*)((jl_datatype_t*)jl_memory_uint8_type)->instance;
+    jl_gc_write(a, a->ref.mem, (jl_genericmemory_t*)((jl_datatype_t*)jl_memory_uint8_type)->instance);
     a->ref.ptr_or_offset = a->ref.mem->ptr;
     a->dimsize[0] = 0;
     return str;
@@ -198,8 +198,7 @@ JL_DLLEXPORT void jl_array_grow_end(jl_array_t *a, size_t inc)
     size_t newnrows = n + inc;
     if (!isbitsunion && elsz == 0) {
         jl_genericmemory_t *newmem = jl_alloc_genericmemory(mtype, MAXINTVAL - 2);
-        a->ref.mem = newmem;
-        jl_gc_wb(a, newmem);
+        jl_gc_write(a, a->ref.mem, newmem);
         a->dimsize[0] = newnrows;
         return;
     }
@@ -227,8 +226,7 @@ JL_DLLEXPORT void jl_array_grow_end(jl_array_t *a, size_t inc)
             char *newtypetagdata = (char*)newmem->ptr + newmaxsize * elsz + oldoffset;
             memcpy(newtypetagdata, typetagdata, n);
         }
-        a->ref.mem = newmem;
-        jl_gc_wb(a, newmem);
+        jl_gc_write(a, a->ref.mem, newmem);
         if (isbitsunion)
             a->ref.ptr_or_offset = (void*)oldoffset;
         else
@@ -250,7 +248,18 @@ JL_DLLEXPORT void jl_array_del_end(jl_array_t *a, size_t dec)
     // don't leave behind deleted data
     if (jl_is_genericmemory_zeroinit(a->ref.mem) && !jl_genericmemory_isbitsunion(a->ref.mem)) {
         size_t elsz = jl_array_elsize(a);
-        memset(jl_array_data(a,char) + n * elsz, 0, elsz * dec);
+        char *ptr = jl_array_data(a,char) + n * elsz;
+        const jl_datatype_layout_t *layout = ((jl_datatype_t*)jl_typetagof(a->ref.mem))->layout;
+        if (layout->first_ptr >= 0) {
+            // pre-barrier for each pointer field being zeroed; new value is NULL
+            jl_value_t *owner = (jl_value_t*)jl_genericmemory_owner(a->ref.mem);
+            for (size_t i = 0; i < dec; i++) {
+                for (uint32_t j = 0; j < layout->npointers; j++) {
+                    jl_gc_wb_pre(owner, NULL);
+                }
+            }
+        }
+        memset(ptr, 0, elsz * dec);
     }
 }
 

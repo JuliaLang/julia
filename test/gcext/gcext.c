@@ -403,18 +403,21 @@ void stk_push(jl_value_t *s, jl_value_t *v)
     check_stack("push", s);
     dynstack_t *stk = *(dynstack_t **)s;
     if (stk->size < stk->capacity) {
+        jl_gc_wb_pre((jl_value_t *)stk, v);
         stk->data[stk->size++] = v;
-        jl_gc_wb((jl_value_t *)stk, v);
+        jl_gc_wb_post((jl_value_t *)stk, v);
     }
     else {
         dynstack_t *newstk = allocate_stack_mem(stk->capacity * 3 / 2 + 1);
+        jl_gc_wb_back_pre((jl_value_t *)newstk);
         newstk->size = stk->size;
         memcpy(newstk->data, stk->data, sizeof(jl_value_t *) * stk->size);
+        jl_gc_wb_pre(s, (jl_value_t *)newstk);
         *(dynstack_t **)s = newstk;
         newstk->data[newstk->size++] = v;
         jl_gc_schedule_foreign_sweepfunc(ptls, (jl_value_t *)(newstk));
-        jl_gc_wb_back((jl_value_t *)newstk);
-        jl_gc_wb(s, (jl_value_t *)newstk);
+        jl_gc_wb_back_post((jl_value_t *)newstk);
+        jl_gc_wb_post(s, (jl_value_t *)newstk);
     }
 }
 

@@ -200,6 +200,7 @@ private:
                               const MemRegion *Region);
 
   static bool isGCTrackedType(QualType Type);
+  static bool isGCHeapAllocatedType(QualType Type);
   static bool isGCTracked(const Expr *E);
   bool isGloballyRootedType(QualType Type) const;
   static void dumpState(const ProgramStateRef &State);
@@ -223,6 +224,7 @@ private:
   bool gcEnabledHere(ProgramStateRef State) const;
   bool safepointEnabledHere(CheckerContext &C) const;
   bool safepointEnabledHere(ProgramStateRef State) const;
+  static SymbolRef getGCHeapParentForFieldStore(SVal LVal);
   bool propagateArgumentRootedness(CheckerContext &C,
                                    ProgramStateRef &State) const;
   SymbolRef getSymbolForResult(const Expr *Result, const ValueState *OldValS,
@@ -300,6 +302,12 @@ REGISTER_TRAIT_WITH_PROGRAMSTATE(MayCallSafepoint, bool)
 REGISTER_MAP_WITH_PROGRAMSTATE(GCValueMap, SymbolRef, GCChecker::ValueState)
 REGISTER_MAP_WITH_PROGRAMSTATE(GCRootMap, const MemRegion *,
                                GCChecker::RootState)
+REGISTER_SET_WITH_PROGRAMSTATE(PreBarrierSet, SymbolRef)
+// Cumulative set of parent objects that have been write-barriered since the
+// last safepoint. Includes objects with explicit barriers (jl_gc_wb_pre,
+// jl_gc_wb_back, jl_gc_wb_fresh, etc.) and freshly allocated objects.
+// Cleared at safepoints when the GC takes a new snapshot.
+REGISTER_SET_WITH_PROGRAMSTATE(WriteBarrieredSet, SymbolRef)
 
 template <typename callback>
 SymbolRef GCChecker::walkToRoot(callback f, const ProgramStateRef &State,
@@ -869,6 +877,54 @@ bool GCChecker::isGCTrackedType(QualType QT) {
              QT);
 }
 
+// Like isGCTrackedType, but only includes types that are actually heap-allocated
+// by the GC. Excludes stack-allocated structs that happen to contain GC pointers
+// (e.g., typemap_intersection_env, jl_cgval_t). Used for write barrier checking
+// since only stores into heap-allocated GC objects need barriers.
+bool GCChecker::isGCHeapAllocatedType(QualType QT) {
+  return isJuliaType(
+             [](StringRef Name) {
+               if (Name.ends_with_insensitive("jl_value_t") ||
+                   Name.ends_with_insensitive("jl_svec_t") ||
+                   Name.ends_with_insensitive("jl_sym_t") ||
+                   Name.ends_with_insensitive("jl_expr_t") ||
+                   Name.ends_with_insensitive("jl_code_info_t") ||
+                   Name.ends_with_insensitive("jl_array_t") ||
+                   Name.ends_with_insensitive("jl_genericmemory_t") ||
+                   Name.ends_with_insensitive("jl_method_t") ||
+                   Name.ends_with_insensitive("jl_method_instance_t") ||
+                   Name.ends_with_insensitive("jl_debuginfo_t") ||
+                   Name.ends_with_insensitive("jl_tupletype_t") ||
+                   Name.ends_with_insensitive("jl_datatype_t") ||
+                   Name.ends_with_insensitive("jl_typemap_entry_t") ||
+                   Name.ends_with_insensitive("jl_typemap_level_t") ||
+                   Name.ends_with_insensitive("jl_typename_t") ||
+                   Name.ends_with_insensitive("jl_module_t") ||
+                   Name.ends_with_insensitive("jl_gc_tracked_buffer_t") ||
+                   Name.ends_with_insensitive("jl_binding_t") ||
+                   Name.ends_with_insensitive("jl_binding_partition_t") ||
+                   Name.ends_with_insensitive("jl_ordereddict_t") ||
+                   Name.ends_with_insensitive("jl_tvar_t") ||
+                   Name.ends_with_insensitive("jl_typemap_t") ||
+                   Name.ends_with_insensitive("jl_unionall_t") ||
+                   Name.ends_with_insensitive("jl_methtable_t") ||
+                   Name.ends_with_insensitive("jl_methcache_t") ||
+                   Name.ends_with_insensitive("jl_code_instance_t") ||
+                   Name.ends_with_insensitive("jl_excstack_t") ||
+                   Name.ends_with_insensitive("jl_task_t") ||
+                   Name.ends_with_insensitive("jl_uniontype_t") ||
+                   Name.ends_with_insensitive("jl_method_match_t") ||
+                   Name.ends_with_insensitive("jl_vararg_t") ||
+                   Name.ends_with_insensitive("jl_opaque_closure_t") ||
+                   Name.ends_with_insensitive("jl_globalref_t") ||
+                   Name.ends_with_insensitive("jl_abi_override_t")) {
+                 return true;
+               }
+               return false;
+             },
+             QT);
+}
+
 bool GCChecker::isGCTracked(const Expr *E) {
   while (1) {
     if (isGCTrackedType(E->getType()))
@@ -885,6 +941,47 @@ bool GCChecker::isGCTracked(const Expr *E) {
 bool GCChecker::isGloballyRootedType(QualType QT) const {
   return isJuliaType(
       [](StringRef Name) { return Name.ends_with("jl_sym_t"); }, QT);
+}
+
+// Returns the SymbolRef for the GC heap-allocated parent object if LVal
+// represents a store to a GC-tracked pointer field of a heap-allocated GC
+// object. Returns nullptr if the store target is not such a field (e.g.,
+// stores to stack-local structs, non-GC objects, or non-pointer fields).
+SymbolRef GCChecker::getGCHeapParentForFieldStore(SVal LVal) {
+  const MemRegion *R = LVal.getAsRegion();
+  if (!R)
+    return nullptr;
+  // Walk past ElementRegion (e.g., array[i] within a field)
+  if (const ElementRegion *ER = R->getAs<ElementRegion>())
+    R = ER->getSuperRegion();
+  const FieldRegion *FR = R->getAs<FieldRegion>();
+  if (!FR)
+    return nullptr;
+  // Check if the field type is a GC-tracked pointer type
+  QualType FieldType = FR->getDecl()->getType();
+  if (!isGCTrackedType(FieldType))
+    return nullptr;
+  // Walk up to find the heap-allocated GC parent object
+  const MemRegion *ParentRegion = FR->getSuperRegion();
+  while (ParentRegion) {
+    if (const SymbolicRegion *SR = ParentRegion->getAs<SymbolicRegion>()) {
+      SymbolRef Sym = SR->getSymbol();
+      // Only require write barriers for parents that are actually
+      // heap-allocated GC objects, not stack-allocated structs that
+      // happen to contain GC pointers.
+      if (isGCHeapAllocatedType(Sym->getType()))
+        return Sym;
+      return nullptr;
+    }
+    // Walk through nested FieldRegions (e.g., container->substruct.field)
+    if (const FieldRegion *PFR = ParentRegion->getAs<FieldRegion>())
+      ParentRegion = PFR->getSuperRegion();
+    else if (const ElementRegion *PER = ParentRegion->getAs<ElementRegion>())
+      ParentRegion = PER->getSuperRegion();
+    else
+      break;
+  }
+  return nullptr;
 }
 
 bool GCChecker::isSafepoint(const CallEvent &Call, CheckerContext &C) const {
@@ -993,6 +1090,19 @@ bool GCChecker::processPotentialSafepoint(const CallEvent &Call,
       State = State->set<GCValueMap>(I.getKey(), ValueState::getFreed());
       DidChange = true;
     }
+  }
+  // Clear write barrier tracking at safepoints. After a safepoint the GC
+  // may have taken a new heap snapshot, so all previous barrier state is
+  // stale and subsequent stores need fresh barriers.
+  PreBarrierSetTy PBSet = State->get<PreBarrierSet>();
+  for (auto I = PBSet.begin(), PBE = PBSet.end(); I != PBE; ++I) {
+    State = State->remove<PreBarrierSet>(*I);
+    DidChange = true;
+  }
+  WriteBarrieredSetTy WBSet = State->get<WriteBarrieredSet>();
+  for (auto I = WBSet.begin(), WBE = WBSet.end(); I != WBE; ++I) {
+    State = State->remove<WriteBarrieredSet>(*I);
+    DidChange = true;
   }
   return DidChange;
 }
@@ -1106,6 +1216,11 @@ bool GCChecker::processAllocationOfResult(const CallEvent &Call,
       }
     }
     State = State->set<GCValueMap>(Sym, NewVState);
+    // Freshly allocated objects don't need write barriers for initial stores
+    // since the GC hasn't seen them yet. Mark them as write-barriered.
+    if (NewVState.isJustAllocated()) {
+      State = State->add<WriteBarrieredSet>(Sym);
+    }
   }
   return true;
 }
@@ -1588,6 +1703,79 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
     SVal Result = C.getSValBuilder().makeTruthVal(EnabledNow, CE->getType());
     C.addTransition(State->BindExpr(CE, C.getLocationContext(), Result));
     return true;
+  } else if (name == "jl_gc_wb_pre") {
+    // Pre-barrier: record that a pre-barrier was issued for this parent.
+    // This must be called before overwriting a GC-tracked pointer field.
+    // The 2nd argument is the NEW value being stored.
+    ProgramStateRef State = C.getState();
+    SVal ParentArg = C.getSVal(CE->getArg(0));
+    SymbolRef ParentSym = ParentArg.getAsSymbol();
+    if (ParentSym) {
+      State = State->add<PreBarrierSet>(ParentSym);
+      State = State->add<WriteBarrieredSet>(ParentSym);
+    }
+    C.addTransition(State);
+    return true;
+  } else if (name == "jl_gc_wb_post") {
+    // Post-barrier: check that a corresponding jl_gc_wb_pre was called
+    // for this parent before the store.
+    ProgramStateRef State = C.getState();
+    SVal ParentArg = C.getSVal(CE->getArg(0));
+    SymbolRef ParentSym = ParentArg.getAsSymbol();
+    if (ParentSym && !State->contains<PreBarrierSet>(ParentSym)) {
+      report_error(C, "jl_gc_wb_post called without a matching "
+                       "jl_gc_wb_pre for the same parent object");
+    }
+    if (ParentSym) {
+      State = State->remove<PreBarrierSet>(ParentSym);
+    }
+    C.addTransition(State);
+    return true;
+  } else if (name == "jl_gc_wb_fresh_pre") {
+    // Fresh pre-barrier: like jl_gc_wb_pre but for freshly allocated objects.
+    // Must be matched by a subsequent jl_gc_wb_fresh_post.
+    ProgramStateRef State = C.getState();
+    SVal ParentArg = C.getSVal(CE->getArg(0));
+    SymbolRef ParentSym = ParentArg.getAsSymbol();
+    if (ParentSym) {
+      State = State->add<PreBarrierSet>(ParentSym);
+      State = State->add<WriteBarrieredSet>(ParentSym);
+    }
+    C.addTransition(State);
+    return true;
+  } else if (name == "jl_gc_wb_fresh_post") {
+    // Fresh post-barrier: like jl_gc_wb_post but for freshly allocated objects.
+    // Must be preceded by a jl_gc_wb_fresh_pre.
+    ProgramStateRef State = C.getState();
+    SVal ParentArg = C.getSVal(CE->getArg(0));
+    SymbolRef ParentSym = ParentArg.getAsSymbol();
+    if (ParentSym && !State->contains<PreBarrierSet>(ParentSym)) {
+      report_error(C, "jl_gc_wb_fresh_post called without a matching "
+                       "jl_gc_wb_fresh_pre for the same parent object");
+    }
+    if (ParentSym) {
+      State = State->remove<PreBarrierSet>(ParentSym);
+    }
+    C.addTransition(State);
+    return true;
+  } else if (name == "jl_gc_wb_back" ||
+             name == "jl_gc_multi_wb_post" ||
+             name == "jl_gc_wb_current_task" ||
+             name == "jl_gc_wb_knownold" ||
+             name == "jl_gc_wb_genericmemory_copy_ptr_pre" ||
+             name == "jl_gc_wb_genericmemory_copy_ptr_post" ||
+             name == "jl_gc_wb_genericmemory_copy_boxed") {
+    // These barrier functions mark the parent as write-barriered.
+    // They don't use the pre/post SATB pattern in the same way,
+    // but they do satisfy the write barrier requirement.
+    ProgramStateRef State = C.getState();
+    SVal ParentArg = C.getSVal(CE->getArg(0));
+    SymbolRef ParentSym = ParentArg.getAsSymbol();
+    if (ParentSym) {
+      State = State->add<WriteBarrieredSet>(ParentSym);
+    }
+    C.addTransition(State);
+    return true;
   }
   {
       auto *Decl = Call.getDecl();
@@ -1606,6 +1794,24 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
 void GCChecker::checkBind(SVal LVal, SVal RVal, const clang::Stmt *S,
                           CheckerContext &C) const {
   auto State = C.getState();
+  // Check for stores to GC-tracked fields that are missing write barriers.
+  // The invariant is: at any safepoint, the set of GC-tracked values that
+  // have been overwritten must be a subset of the values that have been
+  // write-barriered since the previous safepoint.
+  if (gcEnabledHere(C)) {
+    SymbolRef ParentSym = getGCHeapParentForFieldStore(LVal);
+    if (ParentSym && !State->contains<WriteBarrieredSet>(ParentSym)) {
+      // Skip the check for globally rooted types (e.g., jl_sym_t).
+      // These are permanent objects that never need write barriers.
+      if (!isGloballyRootedType(ParentSym->getType())) {
+        report_error(C,
+            "Store to GC-tracked field without a write barrier "
+            "(use jl_gc_write, or jl_gc_wb_pre/jl_gc_wb_post, "
+            "or jl_gc_wb_fresh_pre/jl_gc_wb_fresh_post for freshly "
+            "allocated objects)");
+      }
+    }
+  }
   const MemRegion *R = LVal.getAsRegion();
   if (!R) {
     return;

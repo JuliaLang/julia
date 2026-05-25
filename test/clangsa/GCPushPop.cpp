@@ -36,6 +36,48 @@ void jl_gc_run_finalizers_in_list(jl_ptls_t ptls, arraylist_t *list)
     JL_GC_POP();
 }
 
+// Write barrier tests
+
+// Store to GC-tracked field without a write barrier should warn.
+void missing_write_barrier(jl_datatype_t *dt, jl_datatype_t *super) {
+    dt->super = super; // expected-warning{{Store to GC-tracked field without a write barrier}}
+                        // expected-note@-1{{Store to GC-tracked field without a write barrier}}
+}
+
+// Using jl_gc_write should not warn.
+void correct_write_barrier_macro(jl_datatype_t *dt, jl_datatype_t *super) {
+    jl_gc_write(dt, dt->super, super); // no warning
+}
+
+// Using jl_gc_wb_pre/post manually should not warn.
+void correct_write_barrier_manual(jl_datatype_t *dt, jl_datatype_t *super) {
+    jl_gc_wb_pre(dt, dt->super);
+    dt->super = super; // no warning
+    jl_gc_wb_post(dt, super);
+}
+
+// Using jl_gc_wb_fresh_pre for freshly allocated objects should not warn.
+extern jl_datatype_t *allocate_datatype(void);
+void fresh_allocation_wb(jl_datatype_t *super) {
+    jl_datatype_t *dt = allocate_datatype();
+    jl_gc_wb_fresh_pre(dt, super);
+    dt->super = super; // no warning
+    jl_gc_wb_fresh_post(dt, super);
+}
+
+// Freshly allocated objects should not need a write barrier.
+void fresh_allocation_no_wb(jl_datatype_t *super) {
+    jl_datatype_t *dt = allocate_datatype();
+    dt->super = super; // no warning (freshly allocated)
+}
+
+// jl_gc_wb_fresh_post without matching jl_gc_wb_fresh_pre should warn.
+void fresh_post_without_pre(jl_datatype_t *dt, jl_datatype_t *super) {
+    dt->super = super;
+    jl_gc_wb_fresh_post(dt, super); // expected-warning{{jl_gc_wb_fresh_post called without a matching jl_gc_wb_fresh_pre}}
+                                     // expected-note@-1{{jl_gc_wb_fresh_post called without a matching jl_gc_wb_fresh_pre}}
+}
+
 bool testfunc1() JL_NOTSAFEPOINT
 {
     struct implied_struct1 { // expected-note{{Tried to call method defined here}}

@@ -1248,8 +1248,9 @@ STATIC_INLINE jl_value_t *jl_svecset(
     // while svec is supposedly immutable, in practice we sometimes publish it
     // first and set the values lazily. Those users occasionally might need to
     // instead use jl_atomic_store_release here.
+    jl_gc_wb_pre(t, x);
     jl_atomic_store_relaxed((_Atomic(jl_value_t*)*)jl_svec_data(t) + i, (jl_value_t*)x);
-    jl_gc_wb(t, x);
+    jl_gc_wb_post(t, x);
     return (jl_value_t*)x;
 }
 #endif
@@ -1275,6 +1276,13 @@ JL_DLLEXPORT JL_CONST_FUNC jl_gcframe_t **(jl_get_pgcstack)(void) JL_GLOBALLY_RO
 
 STATIC_INLINE jl_value_t *jl_genericmemory_owner(jl_genericmemory_t *m JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 
+// Layout helper functions needed by write barriers
+
+static inline uint32_t jl_fielddesc_size(int8_t fielddesc_type) JL_NOTSAFEPOINT;
+#define jl_dt_layout_fields(d) ((const char*)(d) + sizeof(jl_datatype_layout_t))
+static inline const char *jl_dt_layout_ptrs(const jl_datatype_layout_t *l) JL_NOTSAFEPOINT;
+static inline uint32_t jl_ptr_offset(jl_datatype_t *st, int i) JL_NOTSAFEPOINT;
+
 // write barriers
 
 #ifndef WITH_THIRD_PARTY_HEAP
@@ -1287,6 +1295,25 @@ STATIC_INLINE jl_value_t *jl_genericmemory_owner(jl_genericmemory_t *m JL_PROPAG
 #endif
 #endif
 #endif
+// Utility for doing a basic write with appropriate barriers.
+// `parent` is the GC-tracked owner, `field` is an lvalue (e.g. obj->member),
+// and `val` is the new value to store.
+#define jl_gc_write(parent, field, val) do { \
+    void *_jl_write_val = (void*)(val); \
+    jl_gc_wb_pre((parent), _jl_write_val); \
+    (field) = (__typeof__(field))_jl_write_val; \
+    if (_jl_write_val) \
+        jl_gc_wb_post((parent), _jl_write_val); \
+} while (0)
+
+// Atomic variant: `field` must be an _Atomic lvalue, `order` is relaxed or release.
+#define jl_gc_write_atomic(parent, field, val, order) do { \
+    __typeof__(jl_atomic_load_relaxed(&(field))) _jl_write_val = (__typeof__(jl_atomic_load_relaxed(&(field))))(val); \
+    jl_gc_wb_pre((parent), (const void *)_jl_write_val); \
+    jl_atomic_store_##order(&(field), _jl_write_val); \
+    if (_jl_write_val) \
+        jl_gc_wb_post((parent), (const void *)_jl_write_val); \
+} while (0)
 
 /*
   how - allocation style
@@ -1341,9 +1368,10 @@ STATIC_INLINE jl_value_t *jl_genericmemory_ptr_set(
     jl_genericmemory_t *m_ = (jl_genericmemory_t*)m;
     assert(((jl_datatype_t*)jl_typetagof(m_))->layout->flags.arrayelem_isboxed);
     assert(i < m_->length);
+    jl_gc_wb_pre(m, x);
     jl_atomic_store_release(((_Atomic(jl_value_t*)*)(m_->ptr)) + i, (jl_value_t*)x);
     if (x) {
-        jl_gc_wb(m, x);
+        jl_gc_wb_post(m, x);
     }
     return (jl_value_t*)x;
 }
@@ -1389,9 +1417,10 @@ STATIC_INLINE jl_value_t *jl_array_ptr_set(
 {
     assert(((jl_datatype_t*)jl_typetagof(((jl_array_t*)a)->ref.mem))->layout->flags.arrayelem_isboxed);
     assert(i < jl_array_len(a));
+    jl_gc_wb_pre(jl_array_owner((jl_array_t*)a), x);
     jl_atomic_store_release(jl_array_data(a, _Atomic(jl_value_t*)) + i, (jl_value_t*)x);
     if (x) {
-        jl_gc_wb(jl_array_owner((jl_array_t*)a), x);
+        jl_gc_wb_post(jl_array_owner((jl_array_t*)a), x);
     }
     return (jl_value_t*)x;
 }

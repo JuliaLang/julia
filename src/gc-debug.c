@@ -80,7 +80,7 @@ void add_lostval_parent(jl_value_t *parent)
  is rare enough this may not be straightforward. If the backtracking goes well you should know
  which object and which of its slots was written to without being caught by the write
  barrier. Most times this allows you to take a guess. If this type of object is modified
- by C code directly, look for missing jl_gc_wb() on pointer updates. Be aware that there are
+ by C code directly, look for missing jl_gc_wb_pre()/jl_gc_wb_post() on pointer updates. Be aware that there are
  innocent looking functions which allocate (and thus trigger marking) only on special cases.
 
  If you can't find it, you can try the following :

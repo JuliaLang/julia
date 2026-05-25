@@ -357,7 +357,7 @@ STATIC_INLINE void jl_maybe_allocate_singleton_instance(jl_datatype_t *st) JL_NO
         return;
     if (jl_is_datatype_make_singleton(st)) {
         jl_task_t *ct = jl_current_task;
-        st->instance = jl_gc_permobj(ct->ptls, 0, st, 0);
+        jl_gc_write(st, st->instance, jl_gc_permobj(ct->ptls, 0, st, 0));
     }
 }
 
@@ -629,7 +629,7 @@ void jl_get_genericmemory_layout(jl_datatype_t *st)
             zeroinst->ptr = (char*)zeroinst + JL_SMALL_BYTE_ALIGNMENT;
             memset(zeroinst->ptr, 0, elsz ? elsz : isunion);
             assert(!st->instance);
-            st->instance = (jl_value_t*)zeroinst;
+            jl_gc_write(st, st->instance, (jl_value_t*)zeroinst);
         }
     }
 }
@@ -927,13 +927,11 @@ static void jl_process_field_attrs(jl_svec_t *fattrs, jl_svec_t *fnames, int mut
 // Caller must handle GC rooting of wrapper across this call
 static void jl_setup_type_wrapper(jl_typename_t *tn, jl_svec_t *parameters, jl_value_t **wrapper)
 {
-    tn->wrapper = *wrapper;
-    jl_gc_wb(tn, *wrapper);
+    jl_gc_write(tn, tn->wrapper, *wrapper);
     int np = jl_svec_len(parameters);
     for (int i = np - 1; i >= 0; i--) {
         *wrapper = jl_new_struct(jl_unionall_type, jl_svecref(parameters, i), *wrapper);
-        tn->wrapper = *wrapper;
-        jl_gc_wb(tn, *wrapper);
+        jl_gc_write(tn, tn->wrapper, *wrapper);
     }
 }
 
@@ -956,13 +954,17 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
 
     // init enough before possibly calling jl_new_typename_in
     t = jl_new_uninitialized_datatype();
-    t->super = super;
-    if (super != NULL) jl_gc_wb(t, t->super);
-    t->parameters = parameters;
-    jl_gc_wb(t, t->parameters);
-    t->types = ftypes;
-    if (ftypes != NULL) jl_gc_wb(t, t->types);
 
+    if (super != NULL)
+        jl_gc_write(t, t->super, super);
+    else
+        t->super = super;
+    jl_gc_write(t, t->parameters, parameters);
+
+    if (ftypes != NULL)
+        jl_gc_write(t, t->types, ftypes);
+    else
+        t->types = ftypes;
     t->name = NULL;
     if (jl_is_typename(name)) {
         // This code-path is used by the Serialization module to bypass normal expectations
@@ -973,10 +975,8 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
     else {
         tn = jl_new_typename_in((jl_sym_t*)name, module, abstract, mutabl);
     }
-    t->name = tn;
-    jl_gc_wb(t, t->name);
-    t->name->names = fnames;
-    jl_gc_wb(t->name, t->name->names);
+    jl_gc_write(t, t->name, tn);
+    jl_gc_write(t->name, t->name->names, fnames);
     tn->n_uninitialized = jl_svec_len(fnames) - ninitialized;
 
     uint32_t *atomicfields = NULL;
@@ -1064,7 +1064,7 @@ JL_DLLEXPORT jl_datatype_t * jl_new_foreign_type(jl_sym_t *name,
     desc->markfunc = markfunc;
     desc->sweepfunc = sweepfunc;
     bt->layout = layout;
-    bt->instance = NULL;
+    jl_gc_write(bt, bt->instance, NULL);
     return bt;
 }
 
@@ -1915,8 +1915,7 @@ inline void set_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t
         return;
     }
     if (jl_field_isptr(st, i)) {
-        jl_atomic_store_release((_Atomic(jl_value_t*)*)((char*)v + offs), rhs);
-        jl_gc_wb(v, rhs);
+        jl_gc_write_atomic(v, ((_Atomic(jl_value_t*)*)((char*)v + offs))[0], rhs, release);
     }
     else {
         jl_value_t *ty = jl_field_type_concrete(st, i);
@@ -1942,18 +1941,23 @@ inline void set_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t
         assert(!isatomic || jl_typeis(rhs, ty));
         int needlock = (isatomic && fsz > MAX_ATOMIC_SIZE);
         if (isatomic && !needlock) {
+            if (hasptr)
+                jl_gc_multi_wb_pre(v, rhs);
             jl_atomic_store_bits((char*)v + offs, rhs, fsz);
+            if (hasptr)
+                jl_gc_multi_wb_post(v, rhs);
         }
         else if (needlock) {
             jl_lock_value((jl_mutex_t*)v);
-            memcpy((char*)v + offs, (char*)rhs, fsz);
+            memassign_safe_wb(v, (char*)v + offs, rhs, fsz, (jl_datatype_t*)ty);
             jl_unlock_value((jl_mutex_t*)v);
         }
         else {
-            memassign_safe(hasptr, (char*)v + offs, rhs, fsz);
+            if (isunion)
+                memcpy((char*)v + offs, (char*)rhs, fsz);
+            else
+                memassign_safe_wb(v, (char*)v + offs, rhs, fsz, (jl_datatype_t*)ty);
         }
-        if (hasptr)
-            jl_gc_multi_wb(v, rhs); // rhs is immutable
     }
 }
 
@@ -1974,34 +1978,37 @@ inline jl_value_t *swap_bits(jl_value_t *ty, char *v, uint8_t *psel, jl_value_t 
     assert(!isatomic || jl_typeis(rhs, ty));
     jl_value_t *r;
     if (isatomic && !needlock) {
+        if (hasptr)
+            jl_gc_multi_wb_pre(parent, rhs);
         r = jl_atomic_swap_bits(rty, v, rhs, fsz);
+        if (hasptr)
+            jl_gc_multi_wb_post(parent, rhs);
+    }
+    else if (needlock) {
+        jl_task_t *ct = jl_current_task;
+        r = jl_gc_alloc(ct->ptls, fsz, ty);
+        char *px = lock(v, parent, needlock, isatomic);
+        memcpy((char*)r, px, fsz);
+        memassign_safe_wb(parent, px, rhs, fsz, (jl_datatype_t*)ty);
+        unlock(v, parent, needlock, isatomic);
     }
     else {
-        if (needlock) {
-            jl_task_t *ct = jl_current_task;
-            r = jl_gc_alloc(ct->ptls, fsz, ty);
-            char *px = lock(v, parent, needlock, isatomic);
-            memcpy((char*)r, px, fsz);
-            memcpy(px, (char*)rhs, fsz);
-            unlock(v, parent, needlock, isatomic);
+        r = jl_new_bits(isunion ? jl_nth_union_component(ty, *psel) : ty, v);
+        if (isunion) {
+            unsigned nth = 0;
+            if (!jl_find_union_component(ty, rty, &nth))
+                assert(0 && "invalid field assignment to isbits union");
+            *psel = nth;
+            if (jl_is_datatype_singleton((jl_datatype_t*)rty))
+                return r;
         }
-        else {
-            r = jl_new_bits(isunion ? jl_nth_union_component(ty, *psel) : ty, v);
-            if (isunion) {
-                unsigned nth = 0;
-                if (!jl_find_union_component(ty, rty, &nth))
-                    assert(0 && "invalid field assignment to isbits union");
-                *psel = nth;
-                if (jl_is_datatype_singleton((jl_datatype_t*)rty))
-                    return r;
-            }
-            memassign_safe(hasptr, v, rhs, fsz);
-        }
+        if (isunion)
+            memcpy(v, (char*)rhs, fsz);
+        else
+            memassign_safe_wb(parent, v, rhs, fsz, (jl_datatype_t*)ty);
     }
     if (!isunion)
         r = undefref_check((jl_datatype_t*)ty, r);
-    if (hasptr)
-        jl_gc_multi_wb(parent, rhs); // rhs is immutable
     if (__unlikely(r == NULL))
         jl_throw(jl_undefref_exception);
     return r;
@@ -2016,11 +2023,12 @@ jl_value_t *swap_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_
     jl_value_t *r;
     char *p = (char*)v + offs;
     if (jl_field_isptr(st, i)) {
+        jl_gc_wb_pre(v, rhs);
         if (isatomic)
             r = jl_atomic_exchange((_Atomic(jl_value_t*)*)p, rhs);
         else
             r = jl_atomic_exchange_release((_Atomic(jl_value_t*)*)p, rhs);
-        jl_gc_wb(v, rhs);
+        jl_gc_wb_post(v, rhs);
         if (__unlikely(r == NULL))
             jl_throw(jl_undefref_exception);
         return r;
@@ -2050,8 +2058,9 @@ inline jl_value_t *modify_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_valu
             jl_check_binding_assign_value(b, mod, name, y, "modifyglobal!");
         else if (!jl_isa(y, ty))
             jl_type_error(jl_is_genericmemory(parent) ? "memoryrefmodify!" : "modifyfield!", ty, y);
+        jl_gc_wb_pre(parent, y);
         if (isatomic ? jl_atomic_cmpswap(p, &r, y) : jl_atomic_cmpswap_release(p, &r, y)) {
-            jl_gc_wb(parent, y);
+            jl_gc_wb_post(parent, y);
             break;
         }
         args[0] = r;
@@ -2110,9 +2119,11 @@ inline jl_value_t *modify_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_
         jl_value_t *yty = jl_typeof(y);
         if (isatomic && !needlock) {
             assert(yty == rty);
+            if (hasptr)
+                jl_gc_multi_wb_pre(parent, y);
             if (jl_atomic_bool_cmpswap_bits(p, r, y, fsz)) {
                 if (hasptr)
-                    jl_gc_multi_wb(parent, y); // y is immutable
+                    jl_gc_multi_wb_post(parent, y); // y is immutable
                 break;
             }
         }
@@ -2137,12 +2148,10 @@ inline jl_value_t *modify_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_
                 else {
                     assert(yty == ty && rty == ty);
                 }
-                memassign_safe(hasptr, px, y, fsz);
+                memassign_safe_wb(parent, px, y, fsz, (jl_datatype_t*)rty);
             }
             unlock(p, parent, needlock, isatomic);
             if (success) {
-                if (hasptr)
-                    jl_gc_multi_wb(parent, y); // y is immutable
                 break;
             }
         }
@@ -2178,9 +2187,10 @@ inline jl_value_t *replace_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_val
     jl_value_t *r = expected;
     int success;
     while (1) {
+        jl_gc_wb_pre(parent, rhs);
         success = isatomic ? jl_atomic_cmpswap(p, &r, rhs) : jl_atomic_cmpswap_release(p, &r, rhs);
         if (success)
-            jl_gc_wb(parent, rhs);
+            jl_gc_wb_post(parent, rhs);
         if (__unlikely(r == NULL)) {
             if (mod && name)
                 jl_undefined_var_error(name, (jl_value_t*)mod);
@@ -2219,6 +2229,8 @@ inline jl_value_t *replace_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value
     assert(!jl_field_isptr(rettyp, 0));
     jl_value_t *r = jl_gc_alloc(ct->ptls, jl_datatype_size(rettyp), rettyp);
     if (isatomic && !needlock) {
+        if (hasptr)
+            jl_gc_multi_wb_pre(parent, rhs);
         size_t rsz = jl_datatype_size((jl_datatype_t*)rty); // need to shrink-wrap the compare
         success = jl_atomic_cmpswap_bits((jl_datatype_t*)rty, r, p, expected, rhs, rsz);
         *((uint8_t*)r + fsz) = success ? 1 : 0;
@@ -2249,12 +2261,10 @@ inline jl_value_t *replace_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value
                 if (jl_is_datatype_singleton((jl_datatype_t*)rty))
                     return r;
             }
-            memassign_safe(hasptr, px, rhs, rsz);
+            memassign_safe_wb(parent, px, rhs, rsz, (jl_datatype_t*)jl_typeof(rhs));
         }
         unlock(p, parent, needlock, isatomic);
     }
-    if (success && hasptr)
-        jl_gc_multi_wb(parent, rhs); // rhs is immutable
     if (!isunion) {
         r = undefref_check((jl_datatype_t*)rty, r);
         if (__unlikely(r == NULL))
@@ -2285,21 +2295,19 @@ inline int setonce_bits(jl_datatype_t *rty, char *p, jl_value_t *parent, jl_valu
 {
     size_t fsz = jl_datatype_size((jl_datatype_t*)rty); // need to shrink-wrap the final copy
     assert(rty->layout->first_ptr >= 0);
-    int hasptr = 1;
     int needlock = (isatomic && fsz > MAX_ATOMIC_SIZE);
     int success;
     if (isatomic && !needlock) {
+        jl_gc_multi_wb_pre(parent, rhs);
         success = jl_atomic_storeonce_bits(rty, p, rhs, fsz);
     }
     else {
         char *px = lock(p, parent, needlock, isatomic);
         success = undefref_check(rty, (jl_value_t*)px) == NULL;
         if (success)
-            memassign_safe(hasptr, px, rhs, fsz);
+            memassign_safe_wb(parent, px, rhs, fsz, rty);
         unlock(p, parent, needlock, isatomic);
     }
-    if (success)
-        jl_gc_multi_wb(parent, rhs); // rhs is immutable
     return success;
 }
 
@@ -2314,9 +2322,11 @@ int set_nth_fieldonce(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *rh
     if (jl_field_isptr(st, i)) {
         _Atomic(jl_value_t*) *px = (_Atomic(jl_value_t*)*)p;
         jl_value_t *r = NULL;
+
+        jl_gc_wb_pre(v, rhs);
         success = isatomic ? jl_atomic_cmpswap(px, &r, rhs) : jl_atomic_cmpswap_release(px, &r, rhs);
         if (success)
-            jl_gc_wb(v, rhs);
+            jl_gc_wb_post(v, rhs);
     }
     else {
         int isunion = jl_is_uniontype(ty);
@@ -2695,10 +2705,8 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
 
             // Create typename
             jl_typename_t *tn = jl_new_typename_in(name, module, abstract, mutabl);
-            datatypes[i]->name = tn;
-            jl_gc_wb(datatypes[i], tn);
-            tn->names = fieldnames;
-            jl_gc_wb(tn, fieldnames);
+            jl_gc_write(datatypes[i], datatypes[i]->name, tn);
+            jl_gc_write(tn, tn->names, fieldnames);
             tn->n_uninitialized = (int32_t)(jl_svec_len(fieldnames) - min_initialized);
 
             // Set up initial values
@@ -2717,8 +2725,7 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
             jl_svec_t *info = (jl_svec_t*)jl_svecref(struct_infos, i);
             jl_svec_t *params = (jl_svec_t*)jl_svecref(info, 0);
 
-            datatypes[i]->parameters = params;
-            jl_gc_wb(datatypes[i], params);
+            jl_gc_write(datatypes[i], datatypes[i]->parameters, params);
 
             // Create wrapper UnionAll chain
             if (datatypes[i]->name->wrapper == NULL) {
@@ -2753,8 +2760,7 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
                     datatypes[i]->name == ((jl_datatype_t*)resolved_super)->name)
                     jl_errorf("invalid subtyping in definition of %s: a type cannot subtype itself.", type_name);
                 jl_check_valid_supertype(resolved_super, type_name);
-                datatypes[i]->super = (jl_datatype_t*)resolved_super;
-                jl_gc_wb(datatypes[i], datatypes[i]->super);
+                jl_gc_write(datatypes[i], datatypes[i]->super, (jl_datatype_t*)resolved_super);
                 JL_GC_POP();
             }
         }
@@ -2789,8 +2795,7 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
             jl_tvar_t *tv = (jl_tvar_t*)jl_svecref(typevars, i);
             jl_check_field_types(ftypes, tv->name);
             jl_datatype_t *dt = unwrap_to_datatype(results[i]);
-            dt->types = ftypes;
-            jl_gc_wb(dt, ftypes);
+            jl_gc_write(dt, dt->types, ftypes);
             JL_GC_POP();
         }
     }

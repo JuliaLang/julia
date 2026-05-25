@@ -806,9 +806,12 @@ JL_CALLABLE(jl_f__apply_iterate)
             assert(newargs != NULL); // inform GCChecker that we didn't write a NULL here
             for (j = 0; j < al; j++) {
                 // jl_fieldref may allocate.
-                newargs[n++] = jl_fieldref(ai, j);
+                jl_value_t *val = jl_fieldref(ai, j);
                 if (arg_heap)
-                    jl_gc_wb(arg_heap, newargs[n - 1]);
+                    jl_gc_write(arg_heap, newargs[n], val);
+                else
+                    newargs[n] = val;
+                n++;
             }
         }
         else if (jl_is_genericmemory(ai)) {
@@ -824,16 +827,21 @@ JL_CALLABLE(jl_f__apply_iterate)
                     // apply with array splatting may have embedded NULL value (#11772)
                     if (__unlikely(arg == NULL))
                         jl_throw(jl_undefref_exception);
-                    newargs[n++] = arg;
                     if (arg_heap)
-                        jl_gc_wb(arg_heap, arg);
+                        jl_gc_write(arg_heap, newargs[n], arg);
+                    else
+                        newargs[n] = arg;
+                    n++;
                 }
             }
             else {
                 for (j = 0; j < al; j++) {
-                    newargs[n++] = jl_genericmemoryref(mem, j);
+                    jl_value_t *val = jl_genericmemoryref(mem, j);
                     if (arg_heap)
-                        jl_gc_wb(arg_heap, newargs[n - 1]);
+                        jl_gc_write(arg_heap, newargs[n], val);
+                    else
+                        newargs[n] = val;
+                    n++;
                 }
             }
         }
@@ -850,16 +858,21 @@ JL_CALLABLE(jl_f__apply_iterate)
                     // apply with array splatting may have embedded NULL value (#11772)
                     if (__unlikely(arg == NULL))
                         jl_throw(jl_undefref_exception);
-                    newargs[n++] = arg;
                     if (arg_heap)
-                        jl_gc_wb(arg_heap, arg);
+                        jl_gc_write(arg_heap, newargs[n], arg);
+                    else
+                        newargs[n] = arg;
+                    n++;
                 }
             }
             else {
                 for (j = 0; j < al; j++) {
-                    newargs[n++] = jl_arrayref(aai, j);
+                    jl_value_t *val = jl_arrayref(aai, j);
                     if (arg_heap)
-                        jl_gc_wb(arg_heap, newargs[n - 1]);
+                        jl_gc_write(arg_heap, newargs[n], val);
+                    else
+                        newargs[n] = val;
+                    n++;
                 }
             }
         }
@@ -876,9 +889,11 @@ JL_CALLABLE(jl_f__apply_iterate)
                 roots[stackalloc] = state;
                 _grow_to(&roots[0], &newargs, &arg_heap, &n_alloc, n + precount + 1, extra);
                 JL_GC_ASSERT_LIVE(value);
+                if (arg_heap)
+                    jl_gc_wb_pre(arg_heap, value);
                 newargs[n++] = value;
                 if (arg_heap)
-                    jl_gc_wb(arg_heap, value);
+                    jl_gc_wb_post(arg_heap, value);
                 roots[stackalloc + 1] = NULL;
                 JL_GC_ASSERT_LIVE(state);
                 args[1] = state;
@@ -2178,8 +2193,7 @@ static void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
     if (jl_is_datatype(super) && tt->name == ((jl_datatype_t*)super)->name)
         jl_errorf("invalid subtyping in definition of %s: a type cannot subtype itself.", type_name);
     jl_check_valid_supertype(super, type_name);
-    tt->super = (jl_datatype_t*)super;
-    jl_gc_wb(tt, tt->super);
+    jl_gc_write(tt, tt->super, super);
 }
 
 JL_CALLABLE(jl_f__setsuper)
@@ -2394,8 +2408,7 @@ JL_CALLABLE(jl_f__typebody)
                 }
             }
         }
-        dt->types = (jl_svec_t*)ft;
-        jl_gc_wb(dt, ft);
+        jl_gc_write(dt, dt->types, ft);
         // If a supertype can reference the same type, then we may not be
         // able to compute the layout of the object before needing to
         // publish it, so we must assume it cannot be inlined, if that
@@ -2418,7 +2431,7 @@ JL_CALLABLE(jl_f__typebody)
             jl_reinstantiate_inner_types(dt);
         }
         JL_CATCH {
-            dt->name->partial = NULL;
+            jl_gc_write(dt->name, dt->name->partial, NULL);
             jl_rethrow();
         }
     }

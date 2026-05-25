@@ -20,6 +20,9 @@ typedef struct {
     // live tasks started on this thread
     // that are holding onto a stack from the pool
     small_arraylist_t live_tasks;
+    // all tasks that are allocated in this thread
+    // these will be used when doing conservative stack scanning
+    small_arraylist_t all_tasks;
 
     // variable for tracking malloc'd arrays
     small_arraylist_t mallocarrays;

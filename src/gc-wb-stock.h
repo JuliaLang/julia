@@ -11,7 +11,10 @@
 extern "C" {
 #endif
 
-STATIC_INLINE void jl_gc_wb(const void *parent, const void *ptr) JL_NOTSAFEPOINT
+STATIC_INLINE void jl_gc_wb_pre(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT
+{}
+
+STATIC_INLINE void jl_gc_wb_post(const void *parent, const void *ptr) JL_NOTSAFEPOINT
 {
     // parent and ptr isa jl_value_t*
     if (__unlikely(jl_astaggedvalue(parent)->bits.gc == 3 /* GC_OLD_MARKED */ && // parent is old and not in remset
@@ -20,7 +23,7 @@ STATIC_INLINE void jl_gc_wb(const void *parent, const void *ptr) JL_NOTSAFEPOINT
         jl_gc_queue_root((jl_value_t*)parent);
 }
 
-STATIC_INLINE void jl_gc_wb_back(const void *ptr) JL_NOTSAFEPOINT // ptr isa jl_value_t*
+STATIC_INLINE void jl_gc_wb_back_post(const void *ptr) JL_NOTSAFEPOINT // ptr isa jl_value_t*
 {
     // if ptr is old
     if (__unlikely(jl_astaggedvalue(ptr)->bits.gc == 3 /* GC_OLD_MARKED */)) {
@@ -28,7 +31,14 @@ STATIC_INLINE void jl_gc_wb_back(const void *ptr) JL_NOTSAFEPOINT // ptr isa jl_
     }
 }
 
-STATIC_INLINE void jl_gc_multi_wb(const void *parent, const jl_value_t *ptr) JL_NOTSAFEPOINT
+STATIC_INLINE void jl_gc_wb_back_pre(const void *ptr JL_UNUSED) JL_NOTSAFEPOINT
+{}
+
+STATIC_INLINE void jl_gc_multi_wb_pre(const void *parent JL_UNUSED, const jl_value_t *ptr JL_UNUSED) JL_NOTSAFEPOINT
+{
+}
+
+STATIC_INLINE void jl_gc_multi_wb_post(const void *parent, const jl_value_t *ptr) JL_NOTSAFEPOINT
 {
     // ptr is an immutable object
     if (__likely(jl_astaggedvalue(parent)->bits.gc != 3 /* GC_OLD_MARKED */))
@@ -46,7 +56,22 @@ STATIC_INLINE void jl_gc_multi_wb(const void *parent, const jl_value_t *ptr) JL_
         jl_gc_queue_multiroot((jl_value_t*)parent, ptr, dt);
 }
 
-STATIC_INLINE void jl_gc_wb_genericmemory_copy_boxed(const jl_value_t *dest_owner, _Atomic(void*) * dest_p,
+STATIC_INLINE void jl_gc_wb_fresh_pre(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT
+{}
+
+STATIC_INLINE void jl_gc_wb_fresh_post(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT
+{}
+
+STATIC_INLINE void jl_gc_wb_current_task_post(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT
+{}
+
+STATIC_INLINE void jl_gc_wb_current_task_pre(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT
+{}
+
+STATIC_INLINE void jl_gc_wb_knownold(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT
+{}
+
+STATIC_INLINE void jl_gc_wb_genericmemory_copy_boxed_pre(const jl_value_t *dest_owner, _Atomic(void*) * dest_p,
                                           jl_genericmemory_t *src, _Atomic(void*) * src_p,
                                           size_t* n) JL_NOTSAFEPOINT
 {
@@ -88,7 +113,18 @@ STATIC_INLINE void jl_gc_wb_genericmemory_copy_boxed(const jl_value_t *dest_owne
     }
 }
 
-STATIC_INLINE void jl_gc_wb_genericmemory_copy_ptr(const jl_value_t *owner, jl_genericmemory_t *src, char* src_p,
+STATIC_INLINE void jl_gc_wb_genericmemory_copy_boxed_post(const jl_value_t *dest_owner, _Atomic(void*) * dest_p,
+                                          jl_genericmemory_t *src, _Atomic(void*) * src_p,
+                                          size_t* n) JL_NOTSAFEPOINT
+{
+}
+
+STATIC_INLINE void jl_gc_wb_genericmemory_copy_ptr_pre(const jl_value_t *owner JL_UNUSED, char* srcdata JL_UNUSED,
+                                          size_t n JL_UNUSED, jl_datatype_t *dt JL_UNUSED) JL_NOTSAFEPOINT
+{
+}
+
+STATIC_INLINE void jl_gc_wb_genericmemory_copy_ptr_post(const jl_value_t *owner, jl_genericmemory_t *src, char* src_p,
                                           size_t n, jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
     if (__unlikely(jl_astaggedvalue(owner)->bits.gc == 3 /* GC_OLD_MARKED */)) {
