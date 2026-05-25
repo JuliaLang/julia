@@ -3703,30 +3703,30 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
             else {
                 innerflag |= 2;
             }
-            if (innerflag) {
-                memset(checked, 0, vcount);
-                if (bdepth0 != vb->depth0 ||
-                    has_typevar_via_flatten_env(vb->lb, ivar, allvars, checked) ||
-                    has_typevar_via_flatten_env(vb->ub, ivar, allvars, checked)) {
+        }
+        if (innerflag) {
+            memset(checked, 0, vcount);
+            if (btemp->root == vb || bdepth0 != vb->depth0 ||
+                has_typevar_via_flatten_env(vb->lb, ivar, allvars, checked) ||
+                has_typevar_via_flatten_env(vb->ub, ivar, allvars, checked)) {
+                if (innerflag & 1)
+                    *btemp->lb = jl_new_struct(jl_unionall_type, vb->var, ilb);
+                if (innerflag & 2)
+                    *btemp->ub = jl_new_struct(jl_unionall_type, vb->var, iub);
+            }
+            else {
+                assert(btemp->root != vb);
+                // if our variable is T, and some outer variable has constraint S = Ref{T},
+                // move the `where T` outside `where S` instead of putting it here. issue #21243.
+                if (newvar != vb->var) {
                     if (innerflag & 1)
-                        *btemp->lb = jl_new_struct(jl_unionall_type, vb->var, ilb);
+                        *btemp->lb = jl_substitute_var(ilb, vb->var, (jl_value_t*)newvar);
                     if (innerflag & 2)
-                        *btemp->ub = jl_new_struct(jl_unionall_type, vb->var, iub);
+                        *btemp->ub = jl_substitute_var(iub, vb->var, (jl_value_t*)newvar);
                 }
-                else {
-                    assert(btemp->root != vb);
-                    // if our variable is T, and some outer variable has constraint S = Ref{T},
-                    // move the `where T` outside `where S` instead of putting it here. issue #21243.
-                    if (newvar != vb->var) {
-                        if (innerflag & 1)
-                            *btemp->lb = jl_substitute_var(ilb, vb->var, (jl_value_t*)newvar);
-                        if (innerflag & 2)
-                            *btemp->ub = jl_substitute_var(iub, vb->var, (jl_value_t*)newvar);
-                    }
-                    if (!wrapped)
-                        pwrap = pbtemp;
-                    wrapped = 1;
-                }
+                if (!wrapped)
+                    pwrap = pbtemp;
+                wrapped = 1;
             }
             assert((jl_value_t*)ivar != *btemp->lb);
             assert((jl_value_t*)ivar != *btemp->ub);

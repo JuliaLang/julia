@@ -357,6 +357,15 @@ end
 @test typejoin(Tuple{Tuple{T, T, Any}} where T, Tuple{T, T, Vector{T}} where T) == Tuple{Any,Vararg{Any}}
 @test typejoin(Tuple{T, T, T} where T, Tuple{T, T, Vector{T}} where T) == Tuple{Any,Any,Any}
 
+# issue #61876: a UnionAll operand over a bounded type parameter must still join
+# to the common wrapper rather than collapsing to Any (a free TypeVar parameter
+# no longer subtypes a bounded wrapper var, so typejoin detects shared families
+# by type name).
+abstract type AbstractCfg61876{O<:Integer} end
+struct Cfg61876{O<:Integer, T} <: AbstractCfg61876{O} end
+@test typejoin(Cfg61876{<:Integer, Tuple{Int,Int}}, Cfg61876{Int, Tuple{Int}}) === Cfg61876
+@test typejoin(Cfg61876{<:Integer, Int}, AbstractCfg61876{Int}) === AbstractCfg61876
+
 # issue #26321
 struct T26321{N,S<:NTuple{N}}
     t::S
