@@ -149,8 +149,11 @@ void jl_gc_init(void) {
 
     mmtk_julia_copy_stack_check(copy_stacks);
 
-    // Disable concurrent marking during build to avoid issues
-    // mmtk_set_concurrent_marking_enabled(0);
+    // Disable concurrent marking when generating output to verify the task
+    // init fix; remove this once all concurrent-marking issues are confirmed
+    // fixed.
+    if (jl_generating_output())
+        mmtk_set_concurrent_marking_enabled(0);
 
     // if only max size is specified initialize MMTk with a fixed size heap
     // TODO: We just assume mark threads means GC threads, and ignore the number of concurrent sweep threads.
