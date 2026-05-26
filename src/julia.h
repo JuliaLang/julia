@@ -246,7 +246,7 @@ struct jl_codeloc_t {
 };
 
 // In a compressed jl_debuginfo_t linetable string, this header is followed by
-// (with byte_offest subtracted from all raw byte positions):
+// (with byte_offset subtracted from all raw byte positions):
 //
 // bytespans: (byte_encl+span_encl)*nlocs bytes
 // line_starts: byte_encl*rest bytes
