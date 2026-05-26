@@ -58,6 +58,7 @@ STATIC_INLINE void jl_gc_wb_genericmemory_copy_boxed(const jl_value_t *dest_owne
                     // `val` is young or old-unmarked
                     if (val && !(jl_astaggedvalue(val)->bits.gc & 1 /* GC_MARKED */)) {
                         jl_gc_queue_root(dest_owner);
+                        ++done;
                         break;
                     }
                 }
@@ -74,6 +75,7 @@ STATIC_INLINE void jl_gc_wb_genericmemory_copy_boxed(const jl_value_t *dest_owne
                     // `val` is young or old-unmarked
                     if (val && !(jl_astaggedvalue(val)->bits.gc & 1 /* GC_MARKED */)) {
                         jl_gc_queue_root(dest_owner);
+                        ++done;
                         break;
                     }
                 }
