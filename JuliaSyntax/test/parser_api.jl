@@ -95,6 +95,17 @@
             (Expr(:block, LineNumberNode(2), :a), 12)
         @test JuliaSyntax.parsestmt(Expr, "begin\na\nend\nbegin\nb\nend", 12) ==
             (Expr(:block, LineNumberNode(3), :b), 24)
+
+        # Test that parsing statements in incremental mode works and stops
+        # after whitespace / comment trivia
+        @test JuliaSyntax.parsestmt(Expr, "x + 1\n(y)\n", 1, incremental=true) == (:(x + 1), 7)
+        @test JuliaSyntax.parsestmt(Expr, "x + 1\n(y)\n", 7, incremental=true) == (:y, 11)
+        @test JuliaSyntax.parsestmt(Expr, " x#==#", 1, incremental=true) == (:x, 7)
+        let ps = JuliaSyntax.ParseStream(" #==# ")
+            JuliaSyntax.parse!(ps, rule=:statement, incremental=true)
+            @test JuliaSyntax.all_trivia(ps)
+            @test JuliaSyntax.last_byte(ps) == 6
+        end
     end
 
     @testset "error/warning handling" begin

@@ -290,7 +290,6 @@
     XX(jl_load_dynamic_library) \
     XX(jl_load_file_string) \
     XX(jl_lookup_code_address) \
-    XX(jl_lower) \
     XX(jl_lseek) \
     XX(jl_lstat) \
     XX(jl_macroexpand) \

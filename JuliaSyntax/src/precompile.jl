@@ -3,7 +3,7 @@ let filename = joinpath(@__DIR__, "julia/literal_parsing.jl")
     text = read(filename, String)
     parseall(Expr, text)
     parseall(SyntaxNode, text)
-    if _has_v1_6_hooks
+    if _has_v1_6_hooks || _has_v1_14_hooks
         enable_in_core!()
         Meta.parse("1 + 2")
         Meta.parse(SubString("1 + 2"))
