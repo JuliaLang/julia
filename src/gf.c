@@ -1799,6 +1799,7 @@ jl_method_instance_t *cache_method(
         if (entry && jl_egal((jl_value_t*)entry->simplesig, simplett ? (jl_value_t*)simplett : jl_nothing) &&
                 jl_egal((jl_value_t*)guardsigs, (jl_value_t*)entry->guardsigs)) {
             JL_GC_POP();
+            if (mc) JL_UNLOCK(&mc->writelock);
             return entry->func.linfo;
         }
     }
