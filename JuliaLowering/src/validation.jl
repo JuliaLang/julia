@@ -530,7 +530,7 @@ vst1_ident(vcx, st; lhs=false) = @stm st begin
     _ -> @fail(st, "expected identifier")
 end
 function _ident_str(vcx, st, s::String; lhs=false)
-    if !lhs && all(==('_'), s) && !vcx.readable_underscore
+    if !lhs && all(==('_'), s) && !vcx.readable_underscore && length(s) > 0
         @fail(st, "all-underscore identifiers are write-only and their values cannot be used in expressions")
     elseif lhs && s in ("ccall", "cglobal")
         @fail(st, string(s, " is a reserved identifier"))

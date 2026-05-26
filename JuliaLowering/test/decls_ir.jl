@@ -344,6 +344,26 @@ let const a = 1
 end
 
 ########################################
+# Error: function-stub in let first arg
+let function foo end
+end
+#---------------------
+LoweringError:
+let function foo end
+#   └──────────────┘ ── expected identifier or assignment
+end
+
+########################################
+# Error: function in let first arg
+let function foo(x); x; end
+end
+#---------------------
+LoweringError:
+let function foo(x); x; end
+#   └─────────────────────┘ ── expected identifier or assignment
+end
+
+########################################
 # Error: Const not supported in function scope
 function (); global g; const g = 1; end
 #---------------------

@@ -288,7 +288,7 @@ end
 
 function _est_to_dst_ident(st::SyntaxTree)
     s = st.name_val::String
-    if all(==('_'), s) || s == UNUSED
+    if (all(==('_'), s) || s == UNUSED) && length(s) > 0
         setattr!(mkleaf(st), :kind, K"Placeholder")
     else
         st
@@ -584,10 +584,12 @@ function est_to_dst(st::SyntaxTree)
         [K"symbolicgoto" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
         [K"oldsymbolicgoto" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
         [K"symboliclabel" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
-        [K"symbolicblock" id body] -> if all(==('_'), id.name_val)
-            @ast g st [K"symbolicblock" id=>K"Placeholder" rec(body)]
-        else
-            @ast g st [K"symbolicblock" id=>K"symboliclabel" rec(body)]
+        [K"symbolicblock" id body] -> let s = id.name_val::String
+            if all(==('_'), s) && length(s) > 0
+                @ast g st [K"symbolicblock" id=>K"Placeholder" rec(body)]
+            else
+                @ast g st [K"symbolicblock" id=>K"symboliclabel" rec(body)]
+            end
         end
         [K"unknown_head" cs...] -> let head = st.name_val
             if head === "latestworld-if-toplevel"
