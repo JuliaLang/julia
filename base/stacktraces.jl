@@ -131,7 +131,7 @@ function _add_di_frames!(frames, pointer, di::Core.DebugInfo, pc::Int)
     push!(frames, StackFrame(
         di.def isa Symbol ? Symbol("macro expansion") : IRShow.method_name(di.def),
         IRShow.debuginfo_file1(di),
-        @ccall(jl_cdi_firstxy(di::Core.DebugInfo, pc::Int32)::NTuple{2, Int32})[1],
+        @ccall(jl_cdi_firstxy(di::Any, pc::Int32)::NTuple{2, Int32})[1],
         di.def isa Core.MethodInstance ? di.def : nothing,
         false, # we can assume C frames aren't inlined into julia
         !isempty(frames),
