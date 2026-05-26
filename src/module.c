@@ -2111,15 +2111,35 @@ void append_module_names(jl_array_t* a, jl_module_t *m, int all, int imported, i
         jl_sym_t *asname = b->globalref->name;
         int hidden = jl_symbol_name(asname)[0]=='#';
         int main_public = (m == jl_main_module && !(asname == jl_eval_sym || asname == jl_include_sym));
-        jl_binding_partition_t *bpart = jl_get_binding_partition(b, world);
-        enum jl_partition_kind kind = jl_binding_kind(bpart);
-        if (((jl_atomic_load_relaxed(&b->flags) & BINDING_FLAG_PUBLICP) ||
-             jl_bpart_is_exported(bpart->kind) ||
-             (imported && (kind == PARTITION_KIND_CONST_IMPORT || kind == PARTITION_KIND_IMPORTED)) ||
-             (usings && kind == PARTITION_KIND_EXPLICIT) ||
-             ((kind == PARTITION_KIND_GLOBAL || kind == PARTITION_KIND_CONST || kind == PARTITION_KIND_DECLARED) && (all || main_public))) &&
-            (all || (!(bpart->kind & PARTITION_FLAG_DEPRECATED) && !hidden)))
-            _append_symbol_to_bindings_array(a, asname);
+        // Use non-materializing read to avoid creating binding partitions as a
+        // side effect. Only fall back to materializing for `usings`, since
+        // using'd bindings may not have partitions yet. Non-using'd bindings
+        // (imported, global, const, etc.) will already have been materialized
+        // by their definition.
+        struct implicit_search_gap gap;
+        jl_binding_partition_t *bpart = jl_get_binding_partition_if_present(b, world, &gap);
+        if (!bpart && usings)
+            bpart = jl_get_binding_partition(b, world);
+        if (!bpart) {
+            // No partition — check public flag on the binding and exported
+            // flag from adjacent partitions.
+            if (!(jl_atomic_load_relaxed(&b->flags) & BINDING_FLAG_PUBLICP) &&
+                !jl_bpart_is_exported(gap.inherited_flags))
+                continue;
+            if (!all && ((gap.inherited_flags & PARTITION_FLAG_DEPRECATED) || hidden))
+                continue;
+        } else {
+            enum jl_partition_kind kind = jl_binding_kind(bpart);
+            if (!(jl_atomic_load_relaxed(&b->flags) & BINDING_FLAG_PUBLICP) &&
+                !jl_bpart_is_exported(bpart->kind) &&
+                !(imported && (kind == PARTITION_KIND_CONST_IMPORT || kind == PARTITION_KIND_IMPORTED)) &&
+                !(usings && kind == PARTITION_KIND_EXPLICIT) &&
+                !((kind == PARTITION_KIND_GLOBAL || kind == PARTITION_KIND_CONST || kind == PARTITION_KIND_DECLARED) && (all || main_public)))
+                continue;
+            if (!all && ((bpart->kind & PARTITION_FLAG_DEPRECATED) || hidden))
+                continue;
+        }
+        _append_symbol_to_bindings_array(a, asname);
     }
 }
 
@@ -2137,7 +2157,13 @@ void append_exported_names(jl_array_t* a, jl_module_t *m, int all, size_t world)
         jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
         if ((void*)b == jl_nothing)
             break;
-        jl_binding_partition_t *bpart = jl_get_binding_partition(b, world);
+        struct implicit_search_gap gap;
+        jl_binding_partition_t *bpart = jl_get_binding_partition_if_present(b, world, &gap);
+        if (!bpart) {
+            if (jl_bpart_is_exported(gap.inherited_flags) && (all || !(gap.inherited_flags & PARTITION_FLAG_DEPRECATED)))
+                _append_symbol_to_bindings_array(a, b->globalref->name);
+            continue;
+        }
         if (jl_bpart_is_exported(bpart->kind) && (all || !(bpart->kind & PARTITION_FLAG_DEPRECATED)))
             _append_symbol_to_bindings_array(a, b->globalref->name);
     }

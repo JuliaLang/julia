@@ -301,6 +301,9 @@ DevDocs = [
         "devdocs/contributing/formatting.md",
         "devdocs/contributing/git-workflow.md",
         "devdocs/contributing/aiagents.md"
+    ],
+    "Agentic Devdocs" => [
+        "devdocs/agents/buildkite-logs.md"
     ]
 ]
 

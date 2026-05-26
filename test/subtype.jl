@@ -123,6 +123,20 @@ function test_diagonal()
     @test issub_strict(Tuple{Int, Int},
                        (@UnionAll T Tuple{Union{T,String}, T}))
 
+    # Diagonal counter is scoped per consistency check, so occurrences of T in
+    # a typevar bound do not combine with occurrences in the outer body.
+    # `Tuple{S, T} where S<:Tuple{T} where T` is no longer diagonal in T:
+    @test  issub(Tuple{Tuple{String}, Int},
+                 Tuple{S, T} where {T, S<:Tuple{T}})
+    @test  issub(Tuple{Tuple{Int}, Int},
+                 Tuple{S, T} where {T, S<:Tuple{T}})
+    # ...but `Tuple{S, T} where S<:Tuple{T, T}` still is — both T occurrences
+    # are in the same Tuple{} frame inside the consistency check.
+    @test !issub(Tuple{Tuple{Int, Int}, String},
+                 Tuple{S, T} where {T, S<:Tuple{T, T}})
+    @test  issub(Tuple{Tuple{Int, Int}, Int},
+                 Tuple{S, T} where {T, S<:Tuple{T, T}})
+
     # don't consider a diagonal variable concrete if it already has an abstract lower bound
     @test isequal_type(Tuple{Vararg{A}} where A>:Integer,
                        Tuple{Vararg{A}} where A>:Integer)
@@ -1153,6 +1167,95 @@ test_properties()
 test_intersection_properties()
 
 
+@testset "bound-expanded non-diagonal form is not equal to diagonal tuple form" begin
+    A = Tuple{S,T} where {T, S<:Tuple{T}}
+    B = Tuple{Tuple{T},T} where T
+
+    @test Tuple{Tuple{Int}, Real} <: A
+    @test !(Tuple{Tuple{Int}, Real} <: B)
+
+    @test B <: A
+    @test !(A <: B)
+    @test A != B
+
+    A′ = Tuple{T,S} where {T, S<:Tuple{T}}
+    B′ = Tuple{T,Tuple{T}} where T
+
+    @test Tuple{Real, Tuple{Int}} <: A′
+    @test !(Tuple{Real, Tuple{Int}} <: B′)
+
+    @test B′ <: A′
+    @test !(A′ <: B′)
+    @test A′ != B′
+end
+
+@testset "diagonal counting through active bound frames" begin
+    # A single T occurrence in an active upper-bound frame should not combine
+    # with the body occurrence of T.
+    R1 = (Tuple{Union{Nothing, X}, T} where {X <: Tuple{T}}) where {T <: Real}
+
+    @test Tuple{Nothing, Real} <: R1
+    @test Tuple{Tuple{Int}, Real} <: R1
+    @test Tuple{Tuple{Real}, Real} <: R1
+    @test Tuple{Tuple{Int}, Int} <: R1
+
+
+    # A bound that is syntactically diagonal should matter only when the X arm
+    # is active. If it is active, abstract T should fail and concrete T should pass.
+    R2 = (Tuple{Union{Nothing, X}, T} where {X <: Tuple{T, T}}) where {T <: Real}
+
+    @test Tuple{Nothing, Real} <: R2
+    @test Tuple{Tuple{Int, Int}, Int} <: R2
+    @test !(Tuple{Tuple{Int, Real}, Real} <: R2)
+    @test !(Tuple{Tuple{Real, Real}, Real} <: R2)
+
+
+    # The bound itself has branch-dependent diagonality:
+    #
+    #   Tuple{Union{Nothing, T}, T}
+    #
+    # is non-diagonal on the Tuple{Nothing, T} branch, but diagonal on the
+    # Tuple{T, T} branch.
+    R3 = (Tuple{Union{Nothing, X}, T}
+            where {X <: Tuple{Union{Nothing, T}, T}}) where {T <: Real}
+
+    @test Tuple{Nothing, Real} <: R3
+    @test Tuple{Tuple{Nothing, Real}, Real} <: R3
+    @test !(Tuple{Tuple{Int, Real}, Real} <: R3)
+    @test Tuple{Tuple{Int, Int}, Int} <: R3
+
+
+    # Same branch-dependent bound shape, but with the union exposed at the top
+    # level of the bound.
+    R4 = (Tuple{X, T}
+            where {X <: Union{Tuple{Nothing, T}, Tuple{T, T}}}) where {T <: Real}
+
+    @test Tuple{Tuple{Nothing, Real}, Real} <: R4
+    @test !(Tuple{Tuple{Int, Real}, Real} <: R4)
+    @test Tuple{Tuple{Int, Int}, Int} <: R4
+
+
+    # Overlapping bound arms: the existence of a successful non-diagonal arm
+    # should be enough. The diagonal arm should not poison the whole bound.
+    R5 = (Tuple{X, T}
+            where {X <: Union{Tuple{Int, T}, Tuple{T, T}}}) where {T <: Real}
+
+    @test Tuple{Tuple{Int, Real}, Real} <: R5
+    @test !(Tuple{Tuple{Bool, Real}, Real} <: R5)
+    @test Tuple{Tuple{Bool, Bool}, Bool} <: R5
+
+
+    # Combination of an outer inactive X branch and overlapping bound arms.
+    R6 = (Tuple{Union{Nothing, X}, T}
+            where {X <: Union{Tuple{Int, T}, Tuple{T, T}}}) where {T <: Real}
+
+    @test Tuple{Nothing, Real} <: R6
+    @test Tuple{Tuple{Int, Real}, Real} <: R6
+    @test !(Tuple{Tuple{Bool, Real}, Real} <: R6)
+    @test Tuple{Tuple{Bool, Bool}, Bool} <: R6
+end
+
+
 let S = ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), UnionAll, [TypeVar(:T), Any], 2),
     VS = TypeVar(:T),
     T = ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), UnionAll, [VS, VS], 2)
@@ -1258,12 +1361,12 @@ let a = Tuple{Float64,T3,T4} where T4 where T3,
     b = Tuple{S2,Tuple{S3},S3} where S2 where S3
     I1 = typeintersect(a, b)
     I2 = typeintersect(b, a)
-    @test_broken I1 <: I2
+    @test I1 <: I2
     @test I2 <: I1
     @test I1 <: a
     @test I2 <: a
     @test_broken I1 <: b
-    @test I2 <: b
+    @test_broken I2 <: b
 end
 let a = Tuple{T1,Tuple{T1}} where T1,
     b = Tuple{Float64,S3} where S3
@@ -1280,12 +1383,12 @@ let a = Tuple{5,T4,T5} where T4 where T5,
     b = Tuple{S2,S3,Tuple{S3}} where S2 where S3
     I1 = typeintersect(a, b)
     I2 = typeintersect(b, a)
-    @test_broken I1 <: I2
+    @test I1 <: I2
     @test I2 <: I1
     @test I1 <: a
     @test I2 <: a
     @test_broken I1 <: b
-    @test I2 <: b
+    @test_broken I2 <: b
 end
 let a = Tuple{T2,Tuple{T4,T2}} where T4 where T2,
     b = Tuple{Float64,Tuple{Tuple{S3},S3}} where S3
@@ -1295,12 +1398,12 @@ let a = Tuple{Tuple{T2,4},T6} where T2 where T6,
     b = Tuple{Tuple{S2,S3},Tuple{S2}} where S2 where S3
     I1 = typeintersect(a, b)
     I2 = typeintersect(b, a)
-    @test_broken I1 <: I2
+    @test I1 <: I2
     @test I2 <: I1
     @test I1 <: a
     @test I2 <: a
     @test_broken I1 <: b
-    @test I2 <: b
+    @test_broken I2 <: b
 end
 let a = Tuple{T3,Int64,Tuple{T3}} where T3,
     b = Tuple{S3,S3,S4} where S4 where S3
@@ -2397,9 +2500,7 @@ end
 #issue 46736
 let S = Tuple{Val{T}, T} where {S1,T<:Val{Union{Nothing,S1}}},
     T = Tuple{Val{Val{Union{Nothing, S2}}}, Any} where S2
-    @testintersect(S, T, !Union{})
-    # not ideal (`S1` should be unbounded)
-    @test_broken testintersect(S, T) == Tuple{Val{Val{Union{Nothing, S1}}}, Val{Union{Nothing, S1}}} where S1<:(Union{Nothing, S2} where S2)
+    @testintersect(S, T, Tuple{Val{Val{Union{Nothing, S1}}}, Val{Union{Nothing, S1}}} where S1)
 end
 
 #issue #47874:case1
@@ -2985,3 +3086,35 @@ end
 # TypeVar matching needs to distinguish these two cases
 @test Type{Ref{A} where A} <: Type{Ref{B} where B<:U} where U
 @test !((Type{Ref{A} where A} where L) <: (Type{Ref{A}} where A))
+
+# issue #61242: free TypeVars are singleton-like by identity, not stand-ins for
+# their bounds or their enclosing UnionAll.
+@test Vector.body != Vector
+@test Vector.body <: Vector
+@test !(Vector <: Vector.body)
+@test typeintersect(Vector.body, Vector) == Vector.body
+@test typeintersect(Vector.body, Vector{Int}) === Union{}
+let S = TypeVar(:S, Union{}, Number)
+    @test typeintersect(Union{S, String}, Number) === Union{}
+    @test typeintersect(Union{S, Int}, Number) === Int
+end
+
+# issue #61876: a DataType with a bounded free TypeVar in a bounded parameter
+# slot is not a subtype of the wrapper. The unrestricted `<:Any` wrapper case is
+# accepted by convention, but bounded wrappers require an actual type parameter.
+abstract type Wrapper61876{X<:Real} end
+struct Sub61876A{T<:Real} <: Wrapper61876{T} end
+struct Sub61876B{T<:Real} <: Wrapper61876{T} end
+@test !(Sub61876A.body <: Wrapper61876)
+@test typejoin(Sub61876A, Sub61876B) <: Wrapper61876
+
+# issue #61876: typeintersect with an innervar whose bound references the
+# outer var previously triggered `assert(btemp->root != vb)` in finish_unionall.
+struct B61876{T,N,R} <: AbstractArray{T,N} end
+struct N61876{T,F} end
+typeintersect(Tuple{typeof(convert),
+                    Type{<:AbstractArray{<:N61876{T,N}} where N where T},
+                    Vector},
+              Tuple{typeof(convert),
+                    Type{B61876{T1,N,R} where {N, R<:(AbstractArray{<:AbstractArray{T1,N},N})}},
+                    AbstractArray{T2,N}} where {T1,T2,N})
