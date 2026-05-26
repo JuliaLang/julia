@@ -37,8 +37,9 @@ else
 
 using Core.Intrinsics, Core.IR
 
-using Core: ABIOverride, Builtin, CodeInstance, IntrinsicFunction, MethodInstance, MethodMatch,
+using Core: ABIOverride, Builtin, CodeInstance, IntrinsicFunction, Kind, MethodInstance, MethodMatch,
     MethodTable, MethodCache, PartialOpaque, SimpleVector, TypeofVararg,
+    TypeEq,
     _apply_iterate, apply_type, compilerbarrier, donotdelete, memoryref_isassigned,
     memoryrefget, memoryrefnew, memoryrefoffset, memoryrefset!, memoryrefunset!, print, println, show, svec,
     typename, unsafe_write, write, stdout, stderr
@@ -61,7 +62,7 @@ using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospeciali
     iskindtype, ismutabletypename, ismutationfree, issingletontype, isvarargtype, isvatuple,
     kwerr, lookup_binding_partition, may_invoke_generator, methods, midpoint, moduleroot,
     partition_restriction, quoted, rename_unionall, rewrap_unionall, specialize_method,
-    structdiff, tls_world_age, unconstrain_vararg_length, unionlen, uniontype_layout,
+    structdiff, tls_world_age, type_parameter, unconstrain_vararg_length, unionlen, uniontype_layout,
     uniontypes, unsafe_convert, unwrap_unionall, unwrapva, vect, widen_diagonal,
     _uncompressed_ir, datatype_min_ninitialized,
     partialstruct_init_undefs, fieldcount_noerror, _eval_import, _eval_using,

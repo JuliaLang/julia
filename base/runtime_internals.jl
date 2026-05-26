@@ -232,6 +232,7 @@ function binding_module(m::Module, s::Symbol)
 end
 
 const _NAMEDTUPLE_NAME = NamedTuple.body.body.name
+const _TYPE_NAME = TypeEq.name
 
 function _fieldnames(@nospecialize t)
     if t.name === _NAMEDTUPLE_NAME
@@ -938,6 +939,9 @@ function ismutationfree(@nospecialize(t))
     t = unwrap_unionall(t)
     if isa(t, DataType)
         return datatype_ismutationfree(t)
+    elseif isa(t, TypeEq)
+        T = type_parameter(t)
+        return isa(T, Type) && ismutationfree(typeof(T))
     elseif isa(t, Union)
         return ismutationfree(t.a) && ismutationfree(t.b)
     end
@@ -958,6 +962,9 @@ function isidentityfree(@nospecialize(t))
     t = unwrap_unionall(t)
     if isa(t, DataType)
         return datatype_isidentityfree(t)
+    elseif isa(t, TypeEq)
+        T = type_parameter(t)
+        return isa(T, Type) && isidentityfree(typeof(T))
     elseif isa(t, Union)
         return isidentityfree(t.a) && isidentityfree(t.b)
     end
@@ -974,7 +981,7 @@ or [`Core.TypeofBottom`](@ref).
 
 All kinds are [concrete](@ref isconcretetype) because types are Julia values.
 """
-iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union || t === typeof(Bottom))
+iskindtype(@nospecialize t) = (t === Kind || t === DataType || t === UnionAll || t === Union || t === TypeEq || t === typeof(Bottom))
 
 """
     Base.isconcretedispatch(T)
@@ -1010,8 +1017,8 @@ function isdispatchelem(@nospecialize v)
         (isType(v) && !has_free_typevars(v))
 end
 
-const _TYPE_NAME = Type.body.name
-isType(@nospecialize t) = isa(t, DataType) && t.name === _TYPE_NAME
+isType(@nospecialize t) = isa(t, TypeEq)
+type_parameter(@nospecialize t) = getfield(t, :T)
 
 """
     isconcretetype(T)
@@ -1151,7 +1158,7 @@ We can use it to summarize information about a struct:
 julia> structinfo(T) = [(fieldoffset(T,i), fieldname(T,i), fieldtype(T,i)) for i = 1:fieldcount(T)];
 
 julia> structinfo(Base.Filesystem.StatStruct)
-14-element Vector{Tuple{UInt64, Symbol, Type}}:
+14-element Vector{Tuple{UInt64, Symbol, Kind}}:
  (0x0000000000000000, :desc, Union{RawFD, String})
  (0x0000000000000008, :device, UInt64)
  (0x0000000000000010, :inode, UInt64)
@@ -1376,7 +1383,7 @@ function to_tuple_type(@nospecialize(t))
             if isa(p, Core.TypeofVararg)
                 p = unwrapva(p)
             end
-            if !(isa(p, Type) || isa(p, TypeVar))
+            if !(isa(p, Kind) || isa(p, TypeVar))
                 error("argument tuple type must contain only types")
             end
         end
@@ -1406,15 +1413,22 @@ end
 
 Determine whether `t` is a Type for which one or more of its parameters is `Union{}`.
 """
-function has_bottom_parameter(t::DataType)
-    for p in t.parameters
-        has_bottom_parameter(p) && return true
+function has_bottom_parameter(@nospecialize(t::Kind))
+    t === Bottom && return true
+    ty = typeof(t)
+    if ty === DataType
+        for p in getfield(t, :parameters)
+            has_bottom_parameter(p) && return true
+        end
+    elseif ty === TypeEq
+        return has_bottom_parameter(type_parameter(t))
+    elseif ty === UnionAll
+        return has_bottom_parameter(unwrap_unionall(t))
+    elseif ty === Union
+        return has_bottom_parameter(getfield(t, :a)) & has_bottom_parameter(getfield(t, :b))
     end
     return false
 end
-has_bottom_parameter(t::typeof(Bottom)) = true
-has_bottom_parameter(t::UnionAll) = has_bottom_parameter(unwrap_unionall(t))
-has_bottom_parameter(t::Union) = has_bottom_parameter(t.a) & has_bottom_parameter(t.b)
 has_bottom_parameter(t::TypeVar) = has_bottom_parameter(t.ub)
 has_bottom_parameter(::Any) = false
 

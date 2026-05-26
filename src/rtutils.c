@@ -651,6 +651,18 @@ static jl_datatype_t *nth_arg_datatype(jl_value_t *a JL_PROPAGATES_ROOT, int n) 
         }
         return NULL;
     }
+    else if (jl_is_type_type(a)) {
+        if (n != 0)
+            return NULL;
+        jl_value_t *T = jl_typeeq_T(a);
+        if (T == jl_bottom_type)
+            return jl_typeofbottom_type;
+        if (jl_is_datatype(T))
+            return (jl_datatype_t*)T;
+        if (jl_is_typevar(T))
+            return nth_arg_datatype(((jl_tvar_t*)T)->ub, 0);
+        return NULL;
+    }
     else if (jl_is_typevar(a)) {
         return nth_arg_datatype(((jl_tvar_t*)a)->ub, n);
     }
@@ -1148,6 +1160,11 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_static_show_x(out, ua->body, depth, ctx);
         n += jl_printf(out, " where ");
         n += jl_static_show_x(out, (jl_value_t*)ua->var, depth->prev, ctx);
+    }
+    else if (vt == jl_typeeq_type) {
+        n += jl_printf(out, "Type{");
+        n += jl_static_show_x(out, ((jl_typeeq_t*)v)->T, depth, ctx);
+        n += jl_printf(out, "}");
     }
     else if (vt == jl_typename_type) {
         n += jl_printf(out, "typename(");

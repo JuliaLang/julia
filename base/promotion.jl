@@ -58,6 +58,8 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         return typejoin(typejoin(a.a, a.b), b)
     elseif isa(b, Union)
         return typejoin(a, typejoin(b.a, b.b))
+    elseif isa(a, TypeEq) || isa(b, TypeEq)
+        return Type
     end
     # a and b are DataTypes
     # We have to hide Constant info from inference, see #44390
@@ -114,15 +116,6 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         if _has_ancestor_typename(a, b.name)
             while !(a.name === b.name)
                 a = supertype(a)::DataType
-            end
-            if a.name === Type.body.name
-                ap = a.parameters[1]
-                bp = b.parameters[1]
-                if ((isa(ap,TypeVar) && ap.lb === Bottom && ap.ub === Any) ||
-                    (isa(bp,TypeVar) && bp.lb === Bottom && bp.ub === Any))
-                    # handle special Type{T} supertype
-                    return Type
-                end
             end
             aprimary = a.name.wrapper
             # join on parameters
@@ -191,7 +184,7 @@ Float64
 """
 function promote_typejoin(@nospecialize(a), @nospecialize(b))
     c = typejoin(_promote_typesubtract(a), _promote_typesubtract(b))
-    return Union{a, b, c}::Type
+    return Union{a, b, c}
 end
 _promote_typesubtract(@nospecialize(a)) =
     a === Any ? a :

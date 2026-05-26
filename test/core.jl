@@ -195,7 +195,7 @@ f11840(::DataType) = "DataType"
 f11840(::UnionAll) = "UnionAll"
 f11840(::Type{T}) where {T<:Tuple} = "Tuple"
 @test f11840(Type) == "UnionAll"
-@test f11840(Type.body) == "DataType"
+@test f11840(Type.body) == "Type"
 @test f11840(Union{Int,Int8}) == "Type"
 @test f11840(Tuple) == "Tuple"
 @test f11840(TT11840) == "Tuple"
@@ -3645,6 +3645,12 @@ function f11355(sig::Type{T}) where T<:Tuple
 end
 function f11355(arg::DataType)
     if arg <: Tuple
+        return 200
+    end
+    return 100
+end
+function f11355(arg::TypeEq)
+    if Base.type_parameter(arg) <: Tuple
         return 200
     end
     return 100

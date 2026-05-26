@@ -583,4 +583,18 @@ function explicit_manifest_entry_path(args...)
     return spec.path
 end
 
+@noinline function getproperty(x::TypeEq, s::Symbol)
+    if s === :parameters
+        depwarn("accessing `Type.parameters` is deprecated; use `Base.type_parameter(x)` instead", :getproperty)
+        return Core.svec(type_parameter(x))
+    elseif s === :name
+        depwarn("accessing `Type.name` is deprecated without replacement. Examine the callsite.", :getproperty)
+        return TypeEq.name
+    elseif s === :hash
+        depwarn("accessing `Type.hash` is deprecated; use `Base._jl_type_cache_hash(x)` instead", :getproperty)
+        return reinterpret(Int32, UInt32(_jl_type_cache_hash(x)))
+    end
+    return getfield(x, s)
+end
+
 # END 1.14 deprecations
