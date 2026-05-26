@@ -478,6 +478,19 @@ but `AbstractInterpreter` doesn't provide a specific interface for configuring i
 function bail_out_toplevel_call end, function bail_out_call end, function bail_out_apply end
 
 """
+    widen_call_result(interp::AbstractInterpreter, si::StmtInfo, state::CallInferenceState,
+                      sv::AbsIntState) -> Bool
+
+Decide whether to widen `state.rettype` of the currently-inferred call to `Any` before
+returning the result to the enclosing frame. By default this returns
+`call_result_unused(si) && !(state.rettype === Bottom)`: when the call has no SSA consumer,
+precise return type information is locally useless, so widening lets downstream `=== Any`
+short-circuits (e.g. the cycle backedge revisit filter in `update_cycle_worklists!`) elide
+redundant work; `Bottom` is preserved so that always-throw behavior remains observable.
+"""
+function widen_call_result end
+
+"""
     infer_compilation_signature(::AbstractInterpreter)::Bool
 
 For some call sites (for example calls to varargs methods), the signature to be compiled
