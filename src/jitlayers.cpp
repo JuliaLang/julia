@@ -875,13 +875,15 @@ public:
                 Syms[Unique.specptr] = JITSymbolFlags::Callable | JITSymbolFlags::Exported;
         }
 
-        for (auto &[CI, Funcs] : DeadCIs) {
+        auto Privatize = [&](const orc::SymbolStringPtr &S) JL_NOTSAFEPOINT {
             Function *F;
+            if (S && (F = Out.module->getFunction(JIT.demangle(*S))))
+                F->setLinkage(Function::PrivateLinkage);
+        };
+        for (auto &[CI, Funcs] : DeadCIs) {
             Out.linker_info->ci_funcs.erase(CI);
-            if (Funcs.invoke && (F = Out.module->getFunction(*Funcs.invoke)))
-                F->setLinkage(Function::PrivateLinkage);
-            if (Funcs.specptr && (F = Out.module->getFunction(*Funcs.specptr)))
-                F->setLinkage(Function::PrivateLinkage);
+            Privatize(Funcs.invoke);
+            Privatize(Funcs.specptr);
         }
 
         // Tell ORC about all the other definition in this module.  When
@@ -1941,6 +1943,15 @@ orc::SymbolStringPtr JuliaOJIT::mangle(StringRef Name)
 {
     std::string MangleName = getMangledName(Name);
     return ES.intern(MangleName);
+}
+
+StringRef JuliaOJIT::demangle(StringRef Name)
+{
+#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_) || defined(_OS_DARWIN_)
+    if (Name.size() > 0 && Name[0] == '_')
+        return Name.drop_front();
+#endif
+    return Name;
 }
 
 void JuliaOJIT::addGlobalMapping(StringRef Name, uint64_t Addr)

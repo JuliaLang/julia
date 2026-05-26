@@ -794,6 +794,7 @@ public:
     void enablePerfJITEventListener() JL_NOTSAFEPOINT;
 
     orc::SymbolStringPtr mangle(StringRef Name) JL_NOTSAFEPOINT;
+    StringRef demangle(StringRef Name) JL_NOTSAFEPOINT;
     void addGlobalMapping(StringRef Name, uint64_t Addr) JL_NOTSAFEPOINT;
     void addOutput(jl_emitted_output_t O) JL_NOTSAFEPOINT;
 
