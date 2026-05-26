@@ -353,7 +353,9 @@ function expand_macro(ctx, ex)
             Base.invoke_in_world(ctx.macro_world, macfunc, macro_args...)
         catch exc
             if exc isa MethodError && exc.f === macfunc
-                if !isempty(methods_in_world(macfunc, Tuple{typeof(mctx), Vararg{Any}}, ctx.macro_world))
+                if !isempty(methods_in_world(
+                    macfunc, Tuple{typeof(mctx), Vararg{Any}},
+                    ctx.macro_world, ex))
                     # If the macro has at least some methods implemented in the
                     # new style, assume the user meant to call one of those
                     # rather than any old-style macro methods which might exist
