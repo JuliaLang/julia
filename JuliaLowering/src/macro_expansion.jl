@@ -462,6 +462,16 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
                 :scope_layer, layerid)
     elseif is_leaf(ex)
         ex
+    elseif (k == K"do" && numchildren(ex) == 2 && kind(ex[1]) == K"macrocall" &&
+        kind(ex[2]) == K"->")
+        mac_ex = @ast ctx ex [
+            K"macrocall"
+            ex[1][1] # mac name
+            ex[1][2] # loc
+            ex[2]    # do-lambda
+            children(ex[1])[3:end]...
+        ]
+        expand_macro(ctx, mac_ex)
     else
         mapchildren(e->expand_forms_1(ctx,e), ctx, ex)
     end

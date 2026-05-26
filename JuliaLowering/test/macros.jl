@@ -121,6 +121,19 @@ ctx, expanded = JuliaLowering.expand_forms_1(test_mod, ex, false, Base.get_world
     "(y, z)"
 ]
 
+@testset "expansion special case: macrocall in do expression" for expr_compat_mode in [true, false]
+    @test JuliaLowering.include_string(test_mod, raw"""
+    macro mac_called_in_do_expression(dofunc, arg)
+        :($dofunc($arg))
+    end
+    """; expr_compat_mode) isa Function
+    @test JuliaLowering.include_string(test_mod, raw"""
+    @mac_called_in_do_expression(9) do x
+        x * 10
+    end
+    """; expr_compat_mode) == 90
+end
+
 @test JuliaLowering.include_string(test_mod, raw"""
 v"1.14"
 """) isa VersionNumber
