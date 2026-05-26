@@ -1768,7 +1768,7 @@ end
 function bit_map(f::F, A::BitArray, B::BitArray) where F
     AB = zip(A, B)
     isz = IteratorSize(AB)
-    dest = _similar_for(A, Bool, AB, isz, _similar_shape(AB, isz))
+    dest = similar(BitArray, _similar_shape(AB, isz))
     bit_map!(f, dest, A, B)
 end
 
