@@ -369,13 +369,13 @@ end
 let (bt, did_gc) = make_oc_and_collect_bt()
     GC.gc(true); GC.gc(true); GC.gc(true);
     @test did_gc[]
-    @test any(stacktrace(bt)) do frame
+    @test all(stacktrace(bt)) do frame
+        frame.from_c && return true
         li = frame.linfo
         isa(li, Core.CodeInstance) && (li = li.def)
         isa(li, Core.ABIOverride) && (li = li.def)
-        isa(li, Core.MethodInstance) || return false
-        isa(li.def, Method) || return false
-        return li.def.is_for_opaque_closure
+        isa(li, Core.MethodInstance) && (li = li.def)
+        return isa(li, Method) || isa(li, Core.CodeInfo) || li === nothing
     end
 end
 
