@@ -2,6 +2,12 @@ name = "Compiler"
 uuid = "807dbc54-b67e-4c79-8afb-eafe4df6f2e1"
 version = "0.1.1"
 
+# `typegroup` (used in inferencestate.jl) is a keyword only from syntax version
+# 1.14 onwards, so opt into it explicitly rather than inheriting the older default
+# derived from the `compat` floor below.
+[syntax]
+julia_version = "1.14"
+
 [compat]
 julia = "1.10"
 

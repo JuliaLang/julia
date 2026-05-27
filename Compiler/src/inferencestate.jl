@@ -270,13 +270,13 @@ end
 intersect(world::WorldWithRange, valid_worlds::WorldRange) =
     WorldWithRange(world.this, intersect(world.valid_worlds, valid_worlds))
 
-# Forward-declared abstract supertype of `InferenceState` and `IRInterpretationState`,
-# so each can reference `Vector{AbsIntState{I}}` in its own field types. The concrete
-# `AbsIntState{I}` is then `Union{InferenceState{I}, IRInterpretationState{I}}` for
-# all practical purposes — see the `Union` alias defined further below.
-abstract type AbsIntState{I<:AbstractInterpreter} end
+# `InferenceState` and `IRInterpretationState` are defined together in a `typegroup`
+# block so each can reference the other in its `callstack` field type. They are not
+# meant to be subtyped from outside, so rather than introducing an abstract supertype
+# the shared `AbsIntState{I}` is a `Union` type alias (defined further below).
+typegroup
 
-mutable struct InferenceState{I<:AbstractInterpreter} <: AbsIntState{I}
+mutable struct InferenceState{I<:AbstractInterpreter}
     #= information about this method instance =#
     linfo::MethodInstance
     valid_worlds::WorldRange
@@ -322,7 +322,7 @@ mutable struct InferenceState{I<:AbstractInterpreter} <: AbsIntState{I}
     cycle_backedges::Vector{Tuple{InferenceState{I}, Int}} # call-graph backedges connecting from callee to caller
 
     # IPO tracking of in-process work, shared with all frames given AbstractInterpreter
-    callstack::Vector{AbsIntState{I}}
+    callstack::Vector{Union{InferenceState{I},IRInterpretationState{I}}}
     parentid::Int # index into callstack of the parent frame that originally added this frame (call cycle_parent to extract the current parent of the SCC)
     frameid::Int # index into callstack at which this object is found (or zero, if this is not a cached frame and has no parent)
     cycleid::Int # index into the callstack of the topmost frame in the cycle (all frames in the same cycle share the same cycleid)
@@ -403,7 +403,7 @@ mutable struct InferenceState{I<:AbstractInterpreter} <: AbsIntState{I}
         pclimitations = IdSet{InferenceState}()
         limitations = IdSet{InferenceState}()
         cycle_backedges = Tuple{InferenceState{I},Int}[]
-        callstack = AbsIntState{I}[]
+        callstack = Union{InferenceState{I},IRInterpretationState{I}}[]
         tasks = WorkThunk[]
 
         valid_worlds = WorldRange(1, get_world_counter())
@@ -451,6 +451,62 @@ mutable struct InferenceState{I<:AbstractInterpreter} <: AbsIntState{I}
         return this
     end
 end
+
+# TODO add `result::InferenceResult` and put the irinterp result into the inference cache?
+mutable struct IRInterpretationState{I<:AbstractInterpreter}
+    const spec_info::SpecInfo
+    const ir::IRCode
+    const mi::MethodInstance
+    valid_worlds::WorldRange
+    curridx::Int
+    time_caches::Float64
+    time_paused::UInt64
+    const argtypes_refined::Vector{Bool}
+    const sptypes::Vector{VarState}
+    const tpdum::TwoPhaseDefUseMap
+    const ssa_refined::BitSet
+    const lazyreachability::LazyCFGReachability
+    const tasks::Vector{WorkThunk}
+    const edges::Vector{Any}
+    callstack::Vector{Union{InferenceState{I},IRInterpretationState{I}}}
+    frameid::Int
+    parentid::Int
+    interp::AbstractInterpreter # see comment on `InferenceState.interp`
+
+    function IRInterpretationState{I}(
+            interp::I, spec_info::SpecInfo, ir::IRCode,
+            mi::MethodInstance, argtypes::Vector{Any}, min_world::UInt, max_world::UInt
+        ) where {I<:AbstractInterpreter}
+        curridx = 1
+        given_argtypes = Vector{Any}(undef, length(argtypes))
+        for i = 1:length(given_argtypes)
+            given_argtypes[i] = widenslotwrapper(argtypes[i])
+        end
+        if isa(mi.def, Method)
+            argtypes_refined = Bool[!⊑(optimizer_lattice(interp), ir.argtypes[i], given_argtypes[i])
+                for i = 1:length(given_argtypes)]
+        else
+            argtypes_refined = Bool[false for _ = 1:length(given_argtypes)]
+        end
+        empty!(ir.argtypes)
+        append!(ir.argtypes, given_argtypes)
+        tpdum = TwoPhaseDefUseMap(length(ir.stmts))
+        ssa_refined = BitSet()
+        lazyreachability = LazyCFGReachability(ir)
+        valid_worlds = WorldRange(min_world, max_world == typemax(UInt) ? get_world_counter() : max_world)
+        if !(get_inference_world(interp) in valid_worlds)
+            error("invalid age range update")
+        end
+        tasks = WorkThunk[]
+        edges = Any[]
+        callstack = Union{InferenceState{I},IRInterpretationState{I}}[]
+        return new{I}(spec_info, ir, mi, valid_worlds,
+                curridx, 0.0, 0, argtypes_refined, ir.sptypes, tpdum,
+                ssa_refined, lazyreachability, tasks, edges, callstack, 0, 0, interp)
+    end
+end
+
+end # typegroup
 
 gethandler(frame::InferenceState, pc::Int=frame.currpc) = gethandler(frame.handler_info, pc)
 gethandler(::Nothing, ::Int) = nothing
@@ -890,60 +946,8 @@ end
 
 # IRInterpretationState
 # =====================
+# (the struct itself is defined in the `typegroup` block alongside `InferenceState`)
 
-# TODO add `result::InferenceResult` and put the irinterp result into the inference cache?
-mutable struct IRInterpretationState{I<:AbstractInterpreter} <: AbsIntState{I}
-    const spec_info::SpecInfo
-    const ir::IRCode
-    const mi::MethodInstance
-    valid_worlds::WorldRange
-    curridx::Int
-    time_caches::Float64
-    time_paused::UInt64
-    const argtypes_refined::Vector{Bool}
-    const sptypes::Vector{VarState}
-    const tpdum::TwoPhaseDefUseMap
-    const ssa_refined::BitSet
-    const lazyreachability::LazyCFGReachability
-    const tasks::Vector{WorkThunk}
-    const edges::Vector{Any}
-    callstack::Vector{AbsIntState{I}}
-    frameid::Int
-    parentid::Int
-    interp::AbstractInterpreter # see comment on `InferenceState.interp`
-
-    function IRInterpretationState{I}(
-            interp::I, spec_info::SpecInfo, ir::IRCode,
-            mi::MethodInstance, argtypes::Vector{Any}, min_world::UInt, max_world::UInt
-        ) where {I<:AbstractInterpreter}
-        curridx = 1
-        given_argtypes = Vector{Any}(undef, length(argtypes))
-        for i = 1:length(given_argtypes)
-            given_argtypes[i] = widenslotwrapper(argtypes[i])
-        end
-        if isa(mi.def, Method)
-            argtypes_refined = Bool[!⊑(optimizer_lattice(interp), ir.argtypes[i], given_argtypes[i])
-                for i = 1:length(given_argtypes)]
-        else
-            argtypes_refined = Bool[false for _ = 1:length(given_argtypes)]
-        end
-        empty!(ir.argtypes)
-        append!(ir.argtypes, given_argtypes)
-        tpdum = TwoPhaseDefUseMap(length(ir.stmts))
-        ssa_refined = BitSet()
-        lazyreachability = LazyCFGReachability(ir)
-        valid_worlds = WorldRange(min_world, max_world == typemax(UInt) ? get_world_counter() : max_world)
-        if !(get_inference_world(interp) in valid_worlds)
-            error("invalid age range update")
-        end
-        tasks = WorkThunk[]
-        edges = Any[]
-        callstack = AbsIntState{I}[]
-        return new{I}(spec_info, ir, mi, valid_worlds,
-                curridx, 0.0, 0, argtypes_refined, ir.sptypes, tpdum,
-                ssa_refined, lazyreachability, tasks, edges, callstack, 0, 0, interp)
-    end
-end
 IRInterpretationState(interp::I, spec_info::SpecInfo, ir::IRCode,
                       mi::MethodInstance, argtypes::Vector{Any},
                       min_world::UInt, max_world::UInt) where {I<:AbstractInterpreter} =
@@ -969,8 +973,7 @@ end
 # AbsIntState
 # ===========
 
-## `AbsIntState` is the abstract supertype declared above; the only concrete
-## subtypes are `InferenceState` and `IRInterpretationState`.
+const AbsIntState{I<:AbstractInterpreter} = Union{InferenceState{I}, IRInterpretationState{I}}
 
 function print_callstack(frame::AbsIntState)
     print("=================== Callstack: ==================\n")
