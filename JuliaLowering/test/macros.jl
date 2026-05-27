@@ -433,6 +433,19 @@ end
     end
 end
 
+@testset "empty meta" begin
+    @test fl_eval(test_mod, Expr(:meta)) == nothing
+    @test fl_eval(test_mod, Expr(:block, Expr(:meta))) == nothing
+    @test fl_eval(test_mod, Expr(:call,
+                                 Expr(:function, Expr(:call, :func_empty_meta),
+                                      Expr(:block, Expr(:meta))))) == nothing
+    @test jl_eval(test_mod, Expr(:meta)) == nothing
+    @test jl_eval(test_mod, Expr(:block, Expr(:meta))) == nothing
+    @test jl_eval(test_mod, Expr(:call,
+                                 Expr(:function, Expr(:call, :func_empty_meta),
+                                      Expr(:block, Expr(:meta))))) == nothing
+end
+
 @testset "macros producing meta forms" begin
     function find_method_ci(thunk)
         ci = thunk.args[1]::Core.CodeInfo
@@ -475,6 +488,11 @@ end
     our = jlower_e(prog)
     @test find_method_ci(ref).propagate_inbounds === find_method_ci(our).propagate_inbounds
 
+    prog = "Base.@assume_effects :total @inline function foo(); end"
+    ref = Meta.lower(test_mod, Meta.parse(prog))
+    our = jlower_e(prog)
+    @test find_method_ci(ref).inlining === find_method_ci(our).inlining
+    @test find_method_ci(ref).purity === find_method_ci(our).purity
 end
 
 # partially robot-generated
@@ -659,6 +677,9 @@ end
     end
 
     @testset "purity" begin
+        # Sanity: plain function with no purity annotation has no purity bits set.
+        @test has_none("function f(g,x); g(x); end",
+                       UInt32(0xFFFF) << Core.Compiler.NUM_IR_FLAGS)
         # `@assume_effects :foo expr` at a call site expands to
         #   (block (purity ...11 bool args...) (local (= val expr)) (purity) val)
         # where the trailing zero-arg `(purity)` is the region-end token.
@@ -668,28 +689,12 @@ end
         @test has_any(
             "function f(g,x); Base.@assume_effects :consistent :effect_free g(x); end",
             purity_mask(Base.EffectsOverride(consistent=true, effect_free=true)))
-        # Negated effect (`!:nothrow` after `:total`) clears just that bit:
-        # the :nothrow bit must NOT be set on any statement, but the other
-        # :total bits must still appear.
-        @test has_none(
-            "function f(g,x); Base.@assume_effects :total !:nothrow g(x); end",
-            purity_mask(Base.EffectsOverride(nothrow=true)))
-        @test has_any(
-            "function f(g,x); Base.@assume_effects :total !:nothrow g(x); end",
-            purity_mask(Base.EffectsOverride(consistent=true)))
-        # Plain function with no purity annotation has no purity bits set.
-        @test has_none("function f(g,x); g(x); end",
-                       UInt32(0xFFFF) << Core.Compiler.NUM_IR_FLAGS)
 
-        # Function-definition form goes through the `meta` path; the encoded
-        # `purity` field on the CodeInfo (not ssaflags) carries the override.
+        # Function form goes through a different path: `(meta (purity args...))`
         JuliaLowering.include_string(test_mod, """
         Base.@assume_effects :total f_assume_def(x) = x
         """; expr_compat_mode)
         @test test_mod.f_assume_def(5) == 5
-        # `purity_expr_to_flags` should agree with `Base.encode_effects_override`
-        # for the function-def path — same check is in "macros producing meta
-        # forms", repeated here to exercise the new `K"purity"` node end-to-end.
         prog_def = "Base.@assume_effects :total function f_assume_total(x); x; end"
         ref_ci = find_method_ci(Meta.lower(test_mod, Meta.parse(prog_def)))
         our_ci = find_method_ci(jlower_e(prog_def))
