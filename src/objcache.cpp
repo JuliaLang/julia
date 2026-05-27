@@ -205,8 +205,8 @@ static ObjCache::Hash hashModule(const llvm::Module &M)
     return Hasher.final();
 }
 
-constexpr size_t OBJKEY_SIZE = 1 + sizeof(ObjCache::Hash);
-constexpr size_t METAKEY_SIZE = 1 + sizeof(int64_t) + sizeof(ObjCache::Hash);
+constexpr size_t OBJKEY_SIZE = 2 + sizeof(ObjCache::Hash);
+constexpr size_t METAKEY_SIZE = 2 + sizeof(int64_t) + sizeof(ObjCache::Hash);
 
 constexpr char OBJKEY_TAG = 'O';
 constexpr char METAKEY_TAG = 'M';
@@ -215,7 +215,8 @@ std::array<uint8_t, OBJKEY_SIZE> toObjKey(const ObjCache::Hash &Hash)
 {
     std::array<uint8_t, OBJKEY_SIZE> Ret;
     Ret[0] = OBJKEY_TAG;
-    memcpy(Ret.begin() + 1, Hash.begin(), Hash.size());
+    Ret[1] = 0;
+    memcpy(Ret.begin() + 2, Hash.begin(), Hash.size());
     return Ret;
 }
 
@@ -223,17 +224,18 @@ std::array<uint8_t, METAKEY_SIZE> toMetaKey(int64_t Time, const ObjCache::Hash &
 {
     std::array<uint8_t, METAKEY_SIZE> Ret;
     Ret[0] = METAKEY_TAG;
-    endian::write(Ret.begin() + 1, Time, endianness::big);
-    memcpy(Ret.begin() + 1 + sizeof Time, Hash.begin(), Hash.size());
+    Ret[1] = 0;
+    endian::write(Ret.begin() + 2, Time, endianness::big);
+    memcpy(Ret.begin() + 2 + sizeof Time, Hash.begin(), Hash.size());
     return Ret;
 }
 
 std::pair<int64_t, ObjCache::Hash> fromMetaKey(const char *Key)
 {
-    assert(Key[0] == OBJKEY_TAG);
+    assert(Key[0] == OBJKEY_TAG && Key[1] == 0);
     ObjCache::Hash Hash;
-    auto Time = endian::read<int64_t>(Key + 1, endianness::big);
-    memcpy(Hash.begin(), Key + 1 + sizeof Time, sizeof Hash);
+    auto Time = endian::read<int64_t>(Key + 2, endianness::big);
+    memcpy(Hash.begin(), Key + 2 + sizeof Time, sizeof Hash);
     return {Time, Hash};
 }
 
