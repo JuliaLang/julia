@@ -3267,6 +3267,12 @@ function include_package_for_output(pkg::PkgId, input::String, syntax_version::V
     __toplevel__.var"#_internal_julia_parse" = VersionedParse(syntax_version)
     # This one is the compatibility marker for cache loading
     __toplevel__._internal_syntax_version = cache_syntax_version(syntax_version)
+    # Keep inferred IR on CodeInstances during include so the subsequent
+    # compile_and_emit_native step (called from C after we return) can reuse
+    # it instead of re-inferring. Reset before returning so staticdata save
+    # can still discard `.inferred` per its usual rules.
+    preserve_ir = JLOptions().outputo != C_NULL
+    preserve_ir && ccall(:jl_set_type_infer_preserve_ir, Cvoid, (Int8,), 1)
     try
         Base.include(Base.__toplevel__, input)
     catch ex
@@ -3275,6 +3281,7 @@ function include_package_for_output(pkg::PkgId, input::String, syntax_version::V
         exit(125) # we define status = 125 means PrecompileableError
     finally
         ccall(:jl_set_newly_inferred, Cvoid, (Any,), nothing)
+        preserve_ir && ccall(:jl_set_type_infer_preserve_ir, Cvoid, (Int8,), 0)
     end
     # check that the package defined the expected module so we can give a nice error message if not
     m = maybe_root_module(pkg)
