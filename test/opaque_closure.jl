@@ -343,6 +343,46 @@ for f in (const_int, const_int_barrier)
     end
 end
 
+@testset "OC stacktraces" begin
+    local oc = (@opaque (x::Bool, y::String)->throw(y))
+    let buf = IOBuffer()
+        try
+            oc(true, "foo")
+            @test false
+        catch e
+            @test e == "foo"
+            Base.show_backtrace(buf, catch_backtrace())
+        end
+        s = String(take!(buf))
+        @test occursin("(x::Bool, y::String)", s)
+    end
+
+    local function calls_oc(); oc(true, "bar"); end
+    let buf = IOBuffer()
+        try
+            calls_oc()
+            @test false
+        catch e
+            @test e == "bar"
+            Base.show_backtrace(buf, catch_backtrace())
+        end
+        s = String(take!(buf))
+        @test occursin("(x::Bool, y::String)", s)
+    end
+
+    local oc_calls_oc = (@opaque ()->oc(true, "baz"))
+    let buf = IOBuffer()
+        try
+            oc_calls_oc()
+            @test false
+        catch e
+            @test e == "baz"
+            Base.show_backtrace(buf, catch_backtrace())
+        end
+        s = String(take!(buf))
+        @test occursin("(x::Bool, y::String)", s)
+    end
+end
 
 # Attempting to construct an opaque closure backtrace after the oc is GC'ed
 f_oc_throws() = error("oops")
