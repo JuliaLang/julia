@@ -826,7 +826,8 @@ function write(io::IO, x1, xs...)
     return written
 end
 
-function unsafe_write(s::IO, p::Ref{T}, n::Integer) where {T}
+function unsafe_write(s::IO, _p::Ref{T}, n::Integer) where {T}
+    p::typeof(_p) = blackbox(_p) # Introduce an optimization barrier here to force heap allocation of `_p`. This is needed in order to support task-switch in cases where JULIA_COPY_STACKS is enabled
     GC.@preserve p begin
         unsafe_write(s, unsafe_convert(Ref{T}, p)::Ptr, n)
     end
@@ -917,7 +918,8 @@ function write(to::IO, from::IO)
     return n
 end
 
-function unsafe_read(s::IO, p::Ref{T}, n::Integer) where {T}
+function unsafe_read(s::IO, _p::Ref{T}, n::Integer) where {T}
+    p::typeof(_p) = blackbox(_p) # Introduce an optimization barrier here to force heap allocation of `_p`. This is needed in order to support task-switch in cases where JULIA_COPY_STACKS is enabled
     GC.@preserve p begin
         unsafe_read(s, unsafe_convert(Ref{T}, p)::Ptr, n)
     end
