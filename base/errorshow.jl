@@ -670,6 +670,12 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
         end
     end
 
+    # helpful when a parameterized struct has an unparameterized inner constructor
+    show_constructor_hint = isa(f, DataType) && (f !== f.name.wrapper) && isempty(methods(f))
+    if show_constructor_hint
+        push!(funcs, (f.name.wrapper, arg_types_param))
+    end
+
     for (func, arg_types_param) in funcs
         for method in methods(func)
             buf = IOBuffer()
@@ -827,7 +833,12 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
 
     if !isempty(lines) # Display up to three closest candidates
         Base.with_output_color(:normal, io) do io
-            print(io, "\n\nClosest candidates are:")
+            if show_constructor_hint
+                print(io, "\n\nHint: constructors are defined for `", f.name.wrapper,
+                    "`, but not for `", f, "`:")
+            else
+                print(io, "\n\nClosest candidates are:")
+            end
             permute!(lines, sortperm(line_score))
             i = 0
             for line in lines

@@ -31,7 +31,7 @@ answer_color() = text_colors[repl_color("JULIA_ANSWER_COLOR", default_color_answ
 stackframe_lineinfo_color() = repl_color("JULIA_STACKFRAME_LINEINFO_COLOR", :bold)
 stackframe_function_color() = repl_color("JULIA_STACKFRAME_FUNCTION_COLOR", :bold)
 
-function repl_cmd(cmd, out)
+function repl_cmd(cmd::AbstractCmd, out)
     if !(cmd isa Cmd)
         # Pipelines and redirects: run directly without shell wrapping.
         try
@@ -85,6 +85,9 @@ function repl_cmd(cmd, out)
     end
     nothing
 end
+
+repl_cmd(@nospecialize(cmd), out) =
+    throw(ArgumentError("repl_cmd: expected an `AbstractCmd`, got $(typeof(cmd))"))
 
 # deprecated function--preserved for DocTests.jl
 function ip_matches_func(ip, func::Symbol)

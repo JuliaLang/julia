@@ -2271,7 +2271,7 @@ end
 # - `typevar_stmts` are a list of statements to define a `TypeVar` for each parameter
 #   name in `typevar_names`, with exactly one per `typevar_name`. Some of these
 #   may already have been emitted.
-# - `new_typevar_stmts` is the list of statements which needs to to be emitted
+# - `new_typevar_stmts` is the list of statements which needs to be emitted
 #   prior to uses of `typevar_names`.
 
 # (where (where x a b) c d) -> (x, [c d a b])

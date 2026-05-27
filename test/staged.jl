@@ -479,3 +479,38 @@ module GeneratedScope57417
 end
 
 @test_throws "syntax: expression too large" code_lowered(ntuple, (Returns{Nothing}, Val{1000000}))
+
+# test that generator methods also have reasonable line numbers
+f_generated_lno1_lower_bound = @__LINE__()
+function f_generated_lno1(x)
+    if @generated
+        :(x)
+    else
+        "nongen"
+    end
+end
+
+@test f_generated_lno1(1) == 1 || f_generated_lno1(1) == "nongen"
+let m = methods(f_generated_lno1)[1]
+    @test m.line > f_generated_lno1_lower_bound
+    @test m.file |> string == @__FILE__()
+    let mgen = methods(m.generator.gen)[1]
+        @test mgen.line > f_generated_lno1_lower_bound
+        @test mgen.file |> string == @__FILE__()
+    end
+end
+
+f_generated_lno2_lower_bound = @__LINE__()
+@generated function f_generated_lno2(x)
+    :(x)
+end
+
+@test f_generated_lno2(1) == 1 || f_generated_lno2(1) == "nongen"
+let m = methods(f_generated_lno2)[1]
+    @test m.line > f_generated_lno2_lower_bound
+    @test m.file |> string == @__FILE__()
+    let mgen = methods(m.generator.gen)[1]
+        @test mgen.line > f_generated_lno2_lower_bound
+        @test mgen.file |> string == @__FILE__()
+    end
+end
