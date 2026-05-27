@@ -1,9 +1,9 @@
 use crate::julia_types::*;
 use crate::JuliaVM;
-use mmtk::scheduler::ProcessEdgesWork;
 use mmtk::util::opaque_pointer::*;
 use mmtk::util::{Address, ObjectReference};
 use mmtk::vm::Finalizable;
+use mmtk::vm::ObjectTracer;
 use mmtk::vm::ReferenceGlue;
 
 extern "C" {
@@ -22,7 +22,7 @@ impl Finalizable for JuliaFinalizableObject {
     fn set_reference(&mut self, object: ObjectReference) {
         self.0 = object;
     }
-    fn keep_alive<E: ProcessEdgesWork>(&mut self, trace: &mut E) {
+    fn keep_alive<T: ObjectTracer>(&mut self, trace: &mut T) {
         self.set_reference(trace.trace_object(self.get_reference()));
         if !self.2 {
             // not a void pointer
