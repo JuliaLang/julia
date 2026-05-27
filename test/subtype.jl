@@ -3086,3 +3086,35 @@ end
 # TypeVar matching needs to distinguish these two cases
 @test Type{Ref{A} where A} <: Type{Ref{B} where B<:U} where U
 @test !((Type{Ref{A} where A} where L) <: (Type{Ref{A}} where A))
+
+# issue #61242: free TypeVars are singleton-like by identity, not stand-ins for
+# their bounds or their enclosing UnionAll.
+@test Vector.body != Vector
+@test Vector.body <: Vector
+@test !(Vector <: Vector.body)
+@test typeintersect(Vector.body, Vector) == Vector.body
+@test typeintersect(Vector.body, Vector{Int}) === Union{}
+let S = TypeVar(:S, Union{}, Number)
+    @test typeintersect(Union{S, String}, Number) === Union{}
+    @test typeintersect(Union{S, Int}, Number) === Int
+end
+
+# issue #61876: a DataType with a bounded free TypeVar in a bounded parameter
+# slot is not a subtype of the wrapper. The unrestricted `<:Any` wrapper case is
+# accepted by convention, but bounded wrappers require an actual type parameter.
+abstract type Wrapper61876{X<:Real} end
+struct Sub61876A{T<:Real} <: Wrapper61876{T} end
+struct Sub61876B{T<:Real} <: Wrapper61876{T} end
+@test !(Sub61876A.body <: Wrapper61876)
+@test typejoin(Sub61876A, Sub61876B) <: Wrapper61876
+
+# issue #61876: typeintersect with an innervar whose bound references the
+# outer var previously triggered `assert(btemp->root != vb)` in finish_unionall.
+struct B61876{T,N,R} <: AbstractArray{T,N} end
+struct N61876{T,F} end
+typeintersect(Tuple{typeof(convert),
+                    Type{<:AbstractArray{<:N61876{T,N}} where N where T},
+                    Vector},
+              Tuple{typeof(convert),
+                    Type{B61876{T1,N,R} where {N, R<:(AbstractArray{<:AbstractArray{T1,N},N})}},
+                    AbstractArray{T2,N}} where {T1,T2,N})
