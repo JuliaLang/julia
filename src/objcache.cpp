@@ -12,6 +12,8 @@
 namespace endian = llvm::support::endian;
 using endianness = llvm::endianness;
 
+static constexpr int OBJCACHE_SCHEMA = 1;
+
 // Skip atime refreshes when the existing access time is within this many
 // nanoseconds of the new one, to avoid excessive LRU bookkeeping writes.
 static constexpr int64_t OBJCACHE_ATIME_GRANULARITY = 300;
@@ -98,6 +100,12 @@ public:
     MDB_txn *Txn{};
 };
 
+template<typename T>
+MDB_val mdbVal(T &x)
+{
+    return {sizeof x, (void *)&x};
+}
+
 class MDBMemoryBuffer : public llvm::MemoryBuffer {
 public:
     MDBMemoryBuffer(MDBTxn Txn, llvm::StringRef Data) : Txn(std::move(Txn))
@@ -143,6 +151,14 @@ void ObjCache::initDB()
             goto cleanup_env;
         if (checkMDB(mdb_dbi_open(Txn.Txn, "objmeta", MDB_CREATE, &ObjMetaDbi)))
             goto cleanup_env;
+
+        int Version = OBJCACHE_SCHEMA;
+        MDB_val Key = mdbVal("schema");
+        MDB_val Ver = mdbVal(Version);
+        int Err = mdb_put(Txn.Txn, ObjMetaDbi, &Key, &Ver, MDB_NOOVERWRITE);
+        if (Err == MDB_KEYEXIST && *static_cast<int *>(Ver.mv_data) != OBJCACHE_SCHEMA)
+            goto cleanup_env;
+
         checkMDB(Txn.commit());
     }
 
@@ -219,12 +235,6 @@ std::pair<int64_t, ObjCache::Hash> fromMetaKey(const char *Key)
     auto Time = endian::read<int64_t>(Key + 1, endianness::big);
     memcpy(Hash.begin(), Key + 1 + sizeof Time, sizeof Hash);
     return {Time, Hash};
-}
-
-template<typename T>
-MDB_val mdbVal(T &x)
-{
-    return {sizeof x, (void *)&x};
 }
 
 std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Compile)
