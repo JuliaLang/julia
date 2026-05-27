@@ -232,7 +232,7 @@ std::array<uint8_t, METAKEY_SIZE> toMetaKey(int64_t Time, const ObjCache::Hash &
 
 std::pair<int64_t, ObjCache::Hash> fromMetaKey(const char *Key)
 {
-    assert(Key[0] == OBJKEY_TAG && Key[1] == 0);
+    assert(Key[0] == METAKEY_TAG && Key[1] == 0);
     ObjCache::Hash Hash;
     auto Time = endian::read<int64_t>(Key + 2, endianness::big);
     memcpy(Hash.begin(), Key + 2 + sizeof Time, sizeof Hash);
