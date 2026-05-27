@@ -58,11 +58,13 @@ static std::optional<std::string> getCachePath()
         .str();
 }
 
-static int checkMDB(int Err)
+#define checkMDB(Err) (checkMDB_(Err, __LINE__))
+
+static int checkMDB_(int Err, int Line)
 {
     if (Err == 0)
         return Err;
-    jl_printf(JL_STDERR, "objcache error: %s\n", mdb_strerror(Err));
+    jl_printf(JL_STDERR, "objcache error (%d): %s\n", Line, mdb_strerror(Err));
     return Err;
 }
 
