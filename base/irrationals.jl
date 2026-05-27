@@ -191,17 +191,8 @@ function <(x::Rational{T}, y::AbstractIrrational) where T
         return x < ry
     end
 end
-function <(x::AbstractIrrational, y::Rational{BigInt})
-    Float64(x) != Float64(y) && return Float64(x) < Float64(y)
-    p = precision(BigFloat) + 32
-    more_p = max(32, exponent(x) + exponent(y.den))
-    while true
-        xf, yf = BigFloat.((x, y), precision=p)
-        xf != yf && return xf < yf
-        p += more_p
-    end
-end
-<(x::Rational{BigInt}, y::AbstractIrrational) = !(y < x)
+<(x::AbstractIrrational, y::Rational{BigInt}) = big(x) < y
+<(x::Rational{BigInt}, y::AbstractIrrational) = x < big(y)
 
 <=(x::AbstractIrrational, y::Rational) = x < y
 <=(x::Rational, y::AbstractIrrational) = x < y
