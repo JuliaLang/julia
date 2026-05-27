@@ -43,7 +43,7 @@ public:
 protected:
     void writerThread();
     void initDB();
-    void updateATime(MDBTxn &Txn, const Hash &H, int64_t Time, bool Fresh);
+    bool updateATime(MDBTxn &Txn, const Hash &H, int64_t Time, bool Fresh);
     bool evictLRU(MDBTxn &Txn);
 
 private:

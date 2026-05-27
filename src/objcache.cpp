@@ -396,14 +396,16 @@ void ObjCache::writerThread()
                 }
                 NWrite.fetch_add(Obj->getBufferSize(), memory_order_relaxed);
                 auto _ = std::move(Obj);
-                updateATime(Txn, H, Tv.tv_sec, true);
+                if (!updateATime(Txn, H, Tv.tv_sec, true))
+                    goto abort;
             }
             else {
                 // Cache hit - update use time.  We set bit 62 to sort entries
                 // that have been hit at least once after entries that have only
                 // been written, so never-read entries will always be evicted
                 // first.
-                updateATime(Txn, H, Tv.tv_sec | (1LL << 62), false);
+                if (!updateATime(Txn, H, Tv.tv_sec | (1LL << 62), false))
+                    goto abort;
             }
         }
         Txn.commit();
@@ -411,40 +413,45 @@ abort:;
     }
 }
 
-void ObjCache::updateATime(MDBTxn &Txn, const Hash &Hash, int64_t Time, bool Fresh)
+bool ObjCache::updateATime(MDBTxn &Txn, const Hash &Hash, int64_t Time, bool Fresh)
 {
     auto ObjKey = toObjKey(Hash);
     MDB_val Key = mdbVal(ObjKey);
     if (!Fresh) {
         MDB_val OldData;
-        int Err = mdb_get(Txn.Txn, ObjMetaDbi, &Key, &OldData);
-        if (Err == MDB_NOTFOUND)
-            return;
-        if (checkMDB(Err))
-            return;
+        if (checkMDB(mdb_get(Txn.Txn, ObjMetaDbi, &Key, &OldData)))
+            return false;
         assert(OldData.mv_size == sizeof(int64_t));
         int64_t OldTime;
         memcpy(&OldTime, OldData.mv_data, sizeof OldTime);
         if (Time < OldTime + OBJCACHE_ATIME_GRANULARITY)
-            return;
+            return false;
 
         auto MetaKey = toMetaKey(OldTime, Hash);
         MDB_val Key2 = mdbVal(MetaKey);
-        if (int E = mdb_del(Txn.Txn, ObjMetaDbi, &Key2, nullptr))
-            checkMDB(E);
+        if (int Err = mdb_del(Txn.Txn, ObjMetaDbi, &Key2, nullptr)) {
+            if (Err != MDB_MAP_FULL)
+                checkMDB(Err);
+            return false;
+        }
     }
 
     MDB_val TimeData{sizeof Time, &Time};
-    if (int E = mdb_put(Txn.Txn, ObjMetaDbi, &Key, &TimeData, 0)) {
-        checkMDB(E);
-        return;
+    if (int Err = mdb_put(Txn.Txn, ObjMetaDbi, &Key, &TimeData, 0)) {
+        if (Err != MDB_MAP_FULL)
+            checkMDB(Err);
+        return false;
     }
 
     auto MetaKey = toMetaKey(Time, Hash);
     MDB_val Key2 = mdbVal(MetaKey);
     MDB_val EmptyData{0, nullptr};
-    if (int E = mdb_put(Txn.Txn, ObjMetaDbi, &Key2, &EmptyData, 0))
-        checkMDB(E);
+    if (int Err = mdb_put(Txn.Txn, ObjMetaDbi, &Key2, &EmptyData, 0)) {
+        if (Err != MDB_MAP_FULL)
+            checkMDB(Err);
+        return false;
+    }
+    return true;
 }
 
 bool ObjCache::evictLRU(MDBTxn &Txn)
