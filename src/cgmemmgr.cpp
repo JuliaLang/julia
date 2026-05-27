@@ -1002,8 +1002,7 @@ public:
     InFlightAlloc(JLJITLinkMemoryManager &MM, jitlink::LinkGraph &G) : MM(MM), G(G) {}
 
     void abandon(OnAbandonedFunction OnAbandoned) override {
-        // This shouldn't be reachable, but we will get a better error message
-        // from JITLink if we leak this allocation and fail elsewhere.
+        OnAbandoned(Error::success());
     }
 
     void finalize(OnFinalizedFunction OnFinalized) override
