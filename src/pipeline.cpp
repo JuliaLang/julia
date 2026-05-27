@@ -535,6 +535,7 @@ static void buildVectorPipeline(FunctionPassManager &FPM, PassBuilder *PB, Optim
         // Rerotate loops that might have been unrotated in the simplification
         LoopPassManager LPM;
         LPM.addPass(LoopRotatePass());
+        LPM.addPass(LoopIdiomRecognizePass());
         LPM.addPass(LoopDeletionPass());
         FPM.addPass(createFunctionToLoopPassAdaptor(std::move(LPM), /*UseMemorySSA=*/false, /*UseBlockFrequencyInfo=*/false));
         FPM.addPass(LoopDistributePass());

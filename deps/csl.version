@@ -1,2 +1,4 @@
+# -*- makefile -*-
+
 ## jll artifact
 CSL_JLL_NAME := CompilerSupportLibraries

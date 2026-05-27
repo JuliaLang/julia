@@ -30,6 +30,41 @@ exit() = exit(0)
 
 const roottask = current_task()
 
+const _foreground_task = Lockable(Ref{Union{Task, Nothing}}(nothing))
+
+"""
+    Base.foreground_task() -> Union{Task, Nothing}
+
+Return the task currently designated as the "foreground" task — typically the task
+that owns interactive stdin (e.g. a REPL command-execution task). Returns `nothing`
+if no task has been registered as foreground.
+"""
+foreground_task() = lock(getindex, _foreground_task)
+
+"""
+    Base.@as_foreground_task expr
+
+Evaluate `expr` with [`current_task()`](@ref) registered as the foreground task
+(see [`foreground_task`](@ref)), restoring the previous foreground task on exit.
+Used to mark the section of code where a particular task "owns" interactive stdin
+so that other components (e.g. the precompile keyboard menu) can defer to it.
+"""
+macro as_foreground_task(expr)
+    quote
+        local ref = $(GlobalRef(@__MODULE__, :_foreground_task))
+        local prev = lock(ref) do r
+            local old = r[]
+            r[] = current_task()
+            old
+        end
+        try
+            $(esc(expr))
+        finally
+            lock(r -> r[] = prev, ref)
+        end
+    end
+end
+
 is_interactive::Bool = false
 
 """

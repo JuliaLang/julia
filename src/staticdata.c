@@ -687,6 +687,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             if (jl_is_method(def)) { // don't delete toplevel code
                 int is_relocatable = !s->incremental || jl_is_code_info(inferred) ||
                     (jl_is_string(inferred) && jl_string_len(inferred) > 0 && jl_string_data(inferred)[jl_string_len(inferred) - 1]);
+                int may_discard_trees = !jl_get_type_infer_preserve_ir();
                 int discard = 0;
                 if (!is_relocatable) {
                     discard = 1;
@@ -694,11 +695,13 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                 else if (def->source == NULL) {
                     // don't delete code from optimized opaque closures that can't be reconstructed (and builtins)
                 }
-                else if (!codeinst_may_be_runnable(ci, s->incremental) || // delete all code that cannot run
-                         jl_atomic_load_relaxed(&ci->invoke) == jl_fptr_const_return) { // delete all code that just returns a constant
+                else if (may_discard_trees && // if allowed to delete
+                         (!codeinst_may_be_runnable(ci, s->incremental) || // delete all code that cannot run
+                          jl_atomic_load_relaxed(&ci->invoke) == jl_fptr_const_return)) { // delete all code that just returns a constant
                     discard = 1;
                 }
-                else if (native_functions && // don't delete any code if making a ji file
+                else if (may_discard_trees &&
+                         native_functions && // don't delete any code if making a ji file
                          (ci->owner == jl_nothing) && // don't delete code for external interpreters
                          !effects_foldable(jl_atomic_load_relaxed(&ci->ipo_purity_bits)) && // don't delete code we may want for irinterp
                          jl_ir_inlining_cost(inferred) == UINT16_MAX) { // don't delete inlineable code
@@ -931,7 +934,8 @@ static void jl_serialize_reachable(jl_serializer_state *s) JL_GC_DISABLED
     while (object_worklist.len) {
         // reverse!(object_worklist.items, prevlen:end);
         // prevlen is the index of the first new object
-        for (i = prevlen; i < object_worklist.len; i++) {
+        size_t mid = prevlen + (object_worklist.len - prevlen) / 2;
+        for (i = prevlen; i < mid; i++) {
             size_t j = object_worklist.len - i + prevlen - 1;
             void *tmp = object_worklist.items[i];
             object_worklist.items[i] = object_worklist.items[j];
@@ -2072,40 +2076,11 @@ static void jl_read_arraylist(ios_t *s, arraylist_t *list)
     ios_read(s, (char*)list->items, list_len * sizeof(void*));
 }
 
-void gc_sweep_sysimg(void) JL_NOTSAFEPOINT
-{
-    size_t nblobs = n_linkage_blobs();
-    if (nblobs == 0)
-        return;
-    for (size_t i = 0; i < nblobs; i++) {
-        image_metadata_t *meta = (image_metadata_t*)image_tree.ranges[i].data;
-        reloc_t *relocs = (reloc_t*)meta->relocs_base;
-        if (!relocs)
-            continue;
-        uintptr_t base = meta->base;
-        uintptr_t last_pos = 0;
-        uint8_t *current = (uint8_t *)relocs;
-        while (1) {
-            // Read the offset of the next object
-            size_t pos_diff = 0;
-            size_t cnt = 0;
-            while (1) {
-                int8_t c = *current++;
-                pos_diff |= ((size_t)c & 0x7F) << (7 * cnt++);
-                if ((c >> 7) == 0)
-                    break;
-            }
-            if (pos_diff == 0)
-                break;
-
-            uintptr_t pos = last_pos + pos_diff;
-            last_pos = pos;
-            jl_taggedvalue_t *o = (jl_taggedvalue_t *)(base + pos);
-            o->bits.gc = GC_OLD;
-            assert(o->bits.in_image == 1);
-        }
-    }
-}
+// Persistent set of image objects that reference non-image objects.
+// Used to track GC reachability for mutable objects in the images,
+// treating them as a third, "permanent" GC generation.
+arraylist_t image_remset;
+jl_mutex_t image_remset_lock;
 
 // jl_write_value and jl_read_value are used for storing Julia objects that are adjuncts to
 // the image proper. For example, new methods added to external callables require
@@ -3847,7 +3822,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     reloc_t *relocs_base = (reloc_t*)&relocs.buf[0];
 
     s.s = &sysimg;
-    jl_read_reloclist(&s, s.link_ids_gctags, GC_OLD | GC_IN_IMAGE); // gctags
+    jl_read_reloclist(&s, s.link_ids_gctags, GC_OLD_MARKED | GC_IN_IMAGE); // gctags
     size_t sizeof_tags = ios_pos(&relocs);
     (void)sizeof_tags;
     jl_read_reloclist(&s, s.link_ids_relocs, 0); // general relocs
@@ -3973,7 +3948,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
             arraylist_push(&cleanup_list, (void*)obj);
         }
         if (tag == 1)
-            *pfld = (uintptr_t)newobj | GC_OLD | GC_IN_IMAGE;
+            *pfld = (uintptr_t)newobj | GC_OLD_MARKED | GC_IN_IMAGE;
         else
             *pfld = (uintptr_t)newobj;
         assert(!(image_base < (char*)newobj && (char*)newobj <= image_base + sizeof_sysimg));

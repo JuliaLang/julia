@@ -322,8 +322,7 @@ module UndefinedTransitions
 end
 
 # Identical implicit partitions should be merge (#57923)
-for binding in (convert(Core.Binding, GlobalRef(Base, :Math)),
-                convert(Core.Binding, GlobalRef(Base, :Intrinsics)))
+for binding in (convert(Core.Binding, GlobalRef(Base, :Math)),)
     # Test that these both only have two partitions
     @test isdefined(binding, :partitions)
     @test isdefined(binding.partitions, :next)

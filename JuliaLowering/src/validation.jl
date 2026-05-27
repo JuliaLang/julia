@@ -1169,6 +1169,13 @@ function _assert_syntaxtree(st::SyntaxTree, parents::Vector{NodeId}, vr)
     for a in required_attrs
         vr &= hasattr(st, a) ? pass() : @fail(st, string("needs attribute ", a))
     end
+    # TODO: Proper traversal along .source and .macro_source (need to cache
+    # results to avoid exponential repeated lookups, and figure out how these
+    # edges may form cycles with child edges)
+    st.source === st._id && (vr &= @fail(st, ".source equal to self ID"))
+    get(st, :macro_source, nothing) === st._id &&
+        (vr &= @fail(st, ".macro_source equal to self ID"))
+
     push!(parents, st._id)
     for c in children(st)
         vr &= _assert_syntaxtree(c, parents, vr)
@@ -1267,6 +1274,8 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
          vst2(vcx, at) &
          vst2(vcx, cconv) &
          all(vst2, vcx, roots_args)
+    [K"cfunction" [K"Value"] [K"static_eval" fptr] [K"static_eval" rt] [K"static_eval" at] [K"Symbol"]] ->
+         vst2(vcx, fptr) & vst2(vcx, rt) & vst2(vcx, at)
     [K"cfunction" [K"Value"] fptr [K"static_eval" rt] [K"static_eval" at] [K"Symbol"]] ->
          vst2(vcx, fptr) & vst2(vcx, rt) & vst2(vcx, at)
 

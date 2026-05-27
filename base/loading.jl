@@ -4272,16 +4272,16 @@ function stale_prefs(prefs_blob::String)
     for (uuid, observed) in prefs_data
         uuid == "unset" && continue
         curr = get_preferences(UUID(uuid))
-        for (key, val) in observed
+        for (key, val) in observed::Dict{String,Any}
             # any set preferences should have the same value
             !haskey(curr, key) && return true
             !toml_egal(curr[key], val) && return true
         end
     end
     if haskey(prefs_data, "unset")
-        for (uuid, observed) in prefs_data["unset"]
+        for (uuid, observed) in prefs_data["unset"]::Dict{String,Any}
             curr = get_preferences(UUID(uuid))
-            for key in observed
+            for key in observed::Vector{String}
                 # any unset preferences should still be unset
                 haskey(curr, key) && return true
             end
@@ -4596,7 +4596,7 @@ function precompile(@nospecialize(f), @nospecialize(argtypes::Tuple), m::Method)
 end
 
 function precompile(@nospecialize(argt::Type), m::Method)
-    atype, sparams = ccall(:jl_type_intersection_with_env, Any, (Any, Any), argt, m.sig)::SimpleVector
+    atype, sparams = typeintersect_env(argt, m.sig)
     mi = Base.Compiler.specialize_method(m, atype, sparams)
     return precompile(mi)
 end

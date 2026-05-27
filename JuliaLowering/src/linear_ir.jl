@@ -1203,6 +1203,23 @@ function compile_lambda(outer_ctx, ex)
         @jl_assert info.kind == :static_parameter arg
         slot_rewrites[id] = i
     end
+    let ns_slots = SyntaxList(ctx)
+        for (i, s) in enumerate(slots)
+            if s.is_nospecialize
+                s.kind === :argument || throw(LoweringError(
+                    ex, "nospecialize on non-argument"))
+                push!(ns_slots, setattr!(newleaf(ctx, lambda_args[i], K"slot"), :var_id, i))
+            end
+        end
+        if !isempty(ns_slots)
+            nargs = numchildren(lambda_args)
+            @jl_assert(length(ns_slots) < nargs, ex)
+            # all args but self
+            length(ns_slots) == nargs - 1 && empty!(ns_slots)
+            pushfirst!(ctx.code,
+                  @ast ctx lambda_args [K"meta" "nospecialize"::K"Symbol" ns_slots...])
+        end
+    end
     code = renumber_body(ctx, ctx.code, slot_rewrites)
     meta = CompileHints()
     for (k, v) in ctx.meta
