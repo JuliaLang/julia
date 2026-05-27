@@ -884,17 +884,20 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         emit(ctx, ex)
         nothing
     elseif k == K"meta"
-        @jl_assert numchildren(ex) >= 1 ex
-        if kind(ex[1]) === K"purity"
-            @jl_assert numchildren(ex) == 1 ex
-            ctx.meta[:purity] = purity_expr_to_flags(ex[1])
-        elseif ex[1].name_val in ("inline", "noinline", "propagate_inbounds",
-                              "nospecializeinfer", "aggressive_constprop", "no_constprop")
-            for c in children(ex)
-                ctx.meta[Symbol(c.name_val)] = true
-            end
-        else
+        numchildren(ex) >= 1 && if kind(ex[1]) === K"Symbol" &&
+            ex[1].name_val::String in (
+                "nkw", "generated", "generated_only")
             emit(ctx, ex)
+        else
+            for c in children(ex)
+                if kind(c) === K"purity"
+                    ctx.meta[:purity] = purity_expr_to_flags(c)
+                else
+                    # ("inline", "noinline", "propagate_inbounds",
+                    # "nospecializeinfer", "aggressive_constprop", "no_constprop")
+                    ctx.meta[Symbol(c.name_val::String)] = true
+                end
+            end
         end
         if needs_value
             val = @ast ctx ex (::K"nothing")
