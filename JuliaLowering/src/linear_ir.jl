@@ -884,20 +884,22 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         emit(ctx, ex)
         nothing
     elseif k == K"meta"
-        numchildren(ex) >= 1 && if kind(ex[1]) === K"Symbol" &&
-            ex[1].name_val::String in (
-                "nkw", "generated", "generated_only")
-            emit(ctx, ex)
-        else
+        numchildren(ex) >= 1 && if kind(ex[1]) === K"purity" ||
+            kind(ex[1]) === K"Symbol" && ex[1].name_val::String in (
+                "inline", "noinline", "propagate_inbounds",
+                "nospecializeinfer", "aggressive_constprop", "no_constprop")
             for c in children(ex)
                 if kind(c) === K"purity"
-                    ctx.meta[:purity] = purity_expr_to_flags(c)
-                else
-                    # ("inline", "noinline", "propagate_inbounds",
-                    # "nospecializeinfer", "aggressive_constprop", "no_constprop")
+                    old = get(ctx.meta, :purity, UInt16(0))
+                    ctx.meta[:purity] = (old | purity_expr_to_flags(c))::UInt16
+                elseif kind(c) === K"Symbol"
                     ctx.meta[Symbol(c.name_val::String)] = true
+                else
+                    @jl_assert false c
                 end
             end
+        else
+            emit(ctx, ex)
         end
         if needs_value
             val = @ast ctx ex (::K"nothing")
@@ -909,10 +911,14 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         end
     elseif k == K"inbounds" || k == K"inbounds_pop" ||
         k == K"inline" || k == K"noinline" || k == K"purity"
-        if in_tail_pos
-            emit_return(ctx, ex)
-        else
-            emit(ctx, ex) # converted to nothing later
+        emit(ctx, ex) # converted to nothing later
+        if needs_value
+            val = @ast ctx ex (::K"nothing")
+            if in_tail_pos
+                emit_return(ctx, val)
+            else
+                val
+            end
         end
     elseif k == K"_while"
         end_label = make_label(ctx, ex)

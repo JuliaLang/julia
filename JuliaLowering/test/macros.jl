@@ -446,7 +446,7 @@ end
                                       Expr(:block, Expr(:meta))))) == nothing
 end
 
-@testset "macros producing meta forms" begin
+@testset "macros producing meta forms" for expr_compat_mode in [true, false]
     function find_method_ci(thunk)
         ci = thunk.args[1]::Core.CodeInfo
         m = findfirst(x->(x isa Expr && x.head === :method && length(x.args) === 3), ci.code)
@@ -456,7 +456,7 @@ end
         JuliaLowering.lower(
             test_mod, JuliaLowering.parsestmt(
                 JuliaLowering.SyntaxTree, s);
-            expr_compat_mode=true))
+            expr_compat_mode))
 
     prog = "Base.@assume_effects :foldable function foo(); end"
     ref = Meta.lower(test_mod, Meta.parse(prog))
@@ -492,6 +492,11 @@ end
     ref = Meta.lower(test_mod, Meta.parse(prog))
     our = jlower_e(prog)
     @test find_method_ci(ref).inlining === find_method_ci(our).inlining
+    @test find_method_ci(ref).purity === find_method_ci(our).purity
+
+    prog = "Base.@assume_effects :consistent Base.@assume_effects :nothrow function foo(); end"
+    ref = Meta.lower(test_mod, Meta.parse(prog))
+    our = jlower_e(prog)
     @test find_method_ci(ref).purity === find_method_ci(our).purity
 end
 
