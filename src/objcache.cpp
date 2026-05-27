@@ -119,7 +119,7 @@ void ObjCache::initDB()
 
     const char *Enable = getenv("JULIA_OBJCACHE");
     auto CachePath = getCachePath();
-    if (!CachePath || !Enable || !strcmp(Enable, "0"))
+    if (!CachePath || (Enable && !strcmp(Enable, "0")))
         goto done;
 
     if (checkMDB(mdb_env_create(&Env))) {
