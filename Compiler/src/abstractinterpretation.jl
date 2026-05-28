@@ -3807,8 +3807,7 @@ end
     (is_some_guard(kind) || kind == PARTITION_KIND_DECLARED) && return Any
     if is_defined_const_binding(kind)
         kind == PARTITION_KIND_BACKDATED_CONST && return Any
-        v = partition_restriction(partition)
-        return isa(v, Type) ? Type{v} : typeof(v)
+        return Core.Typeof(partition_restriction(partition))
     end
     return partition_restriction(partition)
 end
