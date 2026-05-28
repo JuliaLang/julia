@@ -381,7 +381,7 @@ function collect_body_arg_meta(st)
                 length(idents) == 0 && return meta
                 isnothing(out) && (out = Dict{String, Symbol}())
                 for id in idents
-                    kind(id) === K"Identifier" && (out[id.name_val] = meta)
+                    (kind(id) === K"Identifier" || kind(id) === K"Placeholder") && (out[id.name_val] = meta)
                 end
             end
             # Only leading meta statements are recognized in lowering.  Ideally

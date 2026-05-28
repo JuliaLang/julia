@@ -588,6 +588,19 @@ end
         Core.@latestworld
         @test f(1, kw=2, a=3) == (1,:kw=>2,:a=>3)
         test_arg_specialized(f, 1)
+
+        # @nospecialize with underscore argument (Placeholder node handling)
+        JuliaLowering.include_string(test_mod, """
+        begin
+            function f_nospec_underscore(@nospecialize _)
+                1
+            end
+            f_nospec_underscore(1)
+            f_nospec_underscore("test")
+        end
+        """)
+        # One single method instance rather than an svec
+        @test only(methods(test_mod.f_nospec_underscore)).specializations isa Core.MethodInstance
     end
 end
 
