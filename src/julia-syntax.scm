@@ -2150,7 +2150,7 @@
                          `(let (block ,@(map (lambda (v) `(= ,v ,v)) (filter-not-underscore outervars)))
                             ,expr))
                         (else expr))))
-        `(-> ,argname (block ,@splat ,expr)))))))
+        `(-> ,argname (block ,*current-desugar-loc* ,@splat ,expr)))))))
 
 (define (expand-generator e flat outervars)
   (let* ((expr  (cadr e))

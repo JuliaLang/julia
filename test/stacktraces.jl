@@ -256,6 +256,32 @@ struct F49231{a,b,c,d,e,f,g} end
     @test contains(str, "[2] \e[0m\e[1m(::$F49231{Vector, Val{…}, Vector{…}, NTuple{…}, $Int, $Int, $Int})\e[22m\e[0m\e[1m(\e[22m\e[90ma\e[39m::\e[0m$Int, \e[90mb\e[39m::\e[0m$Int, \e[90mc\e[39m::\e[0m$Int\e[0m\e[1m)\e[22m\n")
 end
 
+# 33457: generator/comprehension lambda should, at the very least, not surface a
+# nonsense frame
+let st = nothing
+    try
+        [undef_var for _ in 1:10]
+    catch _
+        st = stacktrace(catch_backtrace())
+    end
+    @testset for frame in st
+        @test frame.line > 0
+        @test frame.file != :none
+    end
+end
+
+let st = nothing
+    try
+        collect(undef_var for _ in 1:10)
+    catch _
+        st = stacktrace(catch_backtrace())
+    end
+    @testset for frame in st
+        @test frame.line > 0
+        @test frame.file != :none
+    end
+end
+
 @testset "Base.StackTraces docstrings" begin
     @test isempty(Docs.undocumented_names(StackTraces))
 end
