@@ -127,7 +127,7 @@ end
 # 3. Recurse on any of our own edges
 function _add_di_frames!(frames, pointer, di::Core.DebugInfo, pc::Int)
     _, eid::Int, epc::Int = Base.Compiler.getdebugidx(di, pc)
-    @assert pc > 0 "invalid pc for $di.def"
+    @assert pc > 0 "invalid pc"
     push!(frames, StackFrame(
         di.def isa Symbol ? Symbol("macro expansion") : IRShow.method_name(di.def),
         IRShow.debuginfo_file1(di),
@@ -138,7 +138,7 @@ function _add_di_frames!(frames, pointer, di::Core.DebugInfo, pc::Int)
         pointer,
         pc))
     _add_linetable_frames!(frames, pointer, di, pc)
-    eid != 0 && _add_di_frames!(frames, pointer, di.edges[eid], epc)
+    eid != 0 && epc != 0 && _add_di_frames!(frames, pointer, di.edges[eid], epc)
     nothing
 end
 
@@ -178,7 +178,9 @@ Base.@constprop :none function lookup(pointer::Ptr{Cvoid})
             linfo = f[4]
             from_c = f[5]::Bool
             inlined = f[6]::Bool
-            out[i] = StackFrame(func, file, linenum, linfo, from_c, inlined, pointer, 0)
+            sv_pc = from_c ? f[7]::Int : 0
+            out[i] = StackFrame(
+                func, file, linenum, linfo, from_c, inlined, pointer, sv_pc)
         end
     else
         out = Vector{StackFrame}()
