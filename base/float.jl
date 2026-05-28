@@ -933,7 +933,7 @@ end
 """
     issubnormal(f)::Bool
 
-Test whether a floating point number is subnormal.
+Test whether a number is subnormal.
 
 An IEEE floating point number is [subnormal](https://en.wikipedia.org/wiki/Subnormal_number)
 when its exponent bits are zero and its significand is not zero.
@@ -950,6 +950,7 @@ julia> issubnormal(1.0f-38)
 true
 ```
 """
+issubnormal(x::Number) = false
 function issubnormal(x::T) where {T<:IEEEFloat}
     y = reinterpret(Unsigned, x)
     (y & exponent_mask(T) == 0) & (y & significand_mask(T) != 0)
