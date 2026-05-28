@@ -353,7 +353,9 @@ function expand_macro(ctx, ex)
             Base.invoke_in_world(ctx.macro_world, macfunc, macro_args...)
         catch exc
             if exc isa MethodError && exc.f === macfunc
-                if !isempty(methods_in_world(macfunc, Tuple{typeof(mctx), Vararg{Any}}, ctx.macro_world))
+                if !isempty(methods_in_world(
+                    macfunc, Tuple{typeof(mctx), Vararg{Any}},
+                    ctx.macro_world, ex))
                     # If the macro has at least some methods implemented in the
                     # new style, assume the user meant to call one of those
                     # rather than any old-style macro methods which might exist
@@ -462,6 +464,16 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
                 :scope_layer, layerid)
     elseif is_leaf(ex)
         ex
+    elseif (k == K"do" && numchildren(ex) == 2 && kind(ex[1]) == K"macrocall" &&
+        kind(ex[2]) == K"->")
+        mac_ex = @ast ctx ex [
+            K"macrocall"
+            ex[1][1] # mac name
+            ex[1][2] # loc
+            ex[2]    # do-lambda
+            children(ex[1])[3:end]...
+        ]
+        expand_macro(ctx, mac_ex)
     else
         mapchildren(e->expand_forms_1(ctx,e), ctx, ex)
     end
