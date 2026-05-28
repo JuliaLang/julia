@@ -2543,6 +2543,20 @@ let S = TypeVar(:S, Union{}, Integer)
     @test string(UnionAll(S, Union{MBoundedAlias.A{S}, MBoundedAlias.B{S}})) == "$(curmod_prefix)MBoundedAlias.U"
 end
 
+# Alias printing should also recover the binders for an alias with several
+# bounded parameters, including when an inner binder is bounded by an outer one
+# and the printed type carries the matching typevars as free variables.
+module MBoundedAlias2
+export A, B, U
+struct A{T<:Integer, S<:T} end
+struct B{T<:Integer, S<:T} end
+const U{T<:Integer, S<:T} = Union{A{T,S}, B{T,S}}
+end
+let T = TypeVar(:T, Union{}, Integer), S = TypeVar(:S, Union{}, T)
+    @test string(Union{MBoundedAlias2.A{T,S}, MBoundedAlias2.B{T,S}}) ==
+        "$(curmod_prefix)MBoundedAlias2.U{T, S} where {T<:Integer, S<:T}"
+end
+
 @test sprint(show, :(./)) == ":((./))"
 @test sprint(show, :((.|).(.&, b))) == ":((.|).((.&), b))"
 
