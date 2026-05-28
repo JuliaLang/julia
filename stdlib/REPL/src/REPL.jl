@@ -810,7 +810,7 @@ LineEditREPL(t::TextTerminal, hascolor::Bool, envcolors::Bool=false) =
         hascolor ? Base.input_color() : "",
         hascolor ? Base.answer_color() : "",
         hascolor ? Base.text_colors[:red] : "",
-        hascolor ? Base.text_colors[:yellow] : "",
+        hascolor ? Base.text_colors[:magenta] : "",
         hascolor ? Base.text_colors[:blue] : "",
         false, false, false, envcolors
     )
