@@ -11,7 +11,7 @@ using ..Compiler:
      NamedTuple, Pair, PhiCNode, PhiNode, PiNode, QuoteNode, SSAValue, SimpleVector, String,
      Tuple, VarState, Vector,
      # functions
-     argextype_widened, empty!, error, get, get_ci_mi, get_world_counter, getglobal, getindex, getproperty,
+     argextype, argextype_widened, empty!, error, get, get_ci_mi, get_world_counter, getglobal, getindex, getproperty,
      hasintersect, haskey, in, isdefinedglobal, isdispatchelem, isempty, isexpr, iterate, length, map!, max,
      pop!, popfirst!, push!, pushfirst!, reinterpret, reverse!, reverse, setindex!,
      setproperty!, similar, singleton_type, sptypes_from_meth_instance, sp_type_rewrap,
