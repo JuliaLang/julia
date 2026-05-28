@@ -950,7 +950,6 @@ julia> issubnormal(1.0f-38)
 true
 ```
 """
-issubnormal(x::BigFloat) = false
 function issubnormal(x::T) where {T<:IEEEFloat}
     y = reinterpret(Unsigned, x)
     (y & exponent_mask(T) == 0) & (y & significand_mask(T) != 0)
