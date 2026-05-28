@@ -976,6 +976,7 @@ end
     @test 0 < f19872b(2.0) < 1e-300
     @test issubnormal(2.0 ^ (-1024))
     @test !issubnormal(big(2.0 ^ (-1024)))
+    @test !issubnormal(nextfloat(BigFloat(0)))
     @test issubnormal(f19872b(2.0))
     @test !issubnormal(f19872b(0.0))
     @test f19872a(2.0) === 32.0
