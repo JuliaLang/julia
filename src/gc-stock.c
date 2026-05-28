@@ -209,6 +209,7 @@ int current_sweep_full = 0;
 int next_sweep_full = 0;
 int under_pressure = 0;
 int gc_disable_auto_full_sweep = 0; // when set, automatic full collections are inhibited
+int gc_mark_image_subgraph = 0;
 
 // Full collection heuristics
 static int64_t live_bytes = 0;
@@ -243,8 +244,11 @@ FORCE_INLINE int gc_try_setmark_tag(jl_taggedvalue_t *o, uint8_t mark_mode) JL_N
 {
     assert(gc_marked(mark_mode));
     uintptr_t tag = o->header;
-    if (gc_marked(tag))
+    if (gc_marked(tag)) {
+        if (__unlikely(gc_mark_image_subgraph) && (tag & GC_IN_IMAGE))
+            return _gc_heap_snapshot_try_claim_image(jl_valueof(o));
         return 0;
+    }
     if (mark_reset_age) {
         // Reset the object as if it was just allocated
         mark_mode = GC_MARKED;
@@ -1614,6 +1618,12 @@ STATIC_INLINE void gc_assert_parent_validity(jl_value_t *parent, jl_value_t *chi
 STATIC_INLINE void gc_mark_push_remset(jl_ptls_t ptls, jl_value_t *obj,
                                        uintptr_t nptr) JL_NOTSAFEPOINT
 {
+    // While descending into the image subgraph for an `:immortal` snapshot we
+    // trace permanently-marked image objects that the GC normally never visits.
+    // Their writes are tracked separately (the image_remset), so they must not
+    // be added to the regular young remset here.
+    if (__unlikely(gc_mark_image_subgraph) && jl_astaggedvalue(obj)->bits.in_image)
+        return;
     if (__unlikely((nptr & 0x3) == 0x3)) {
         ptls->gc_tls.heap.remset_nptr += nptr >> 2;
         arraylist_t *remset = &ptls->gc_tls.heap.remset;
@@ -2830,6 +2840,9 @@ static void gc_queue_remset(jl_gc_markqueue_t *mq, jl_ptls_t ptls2) JL_NOTSAFEPO
     for (size_t i = 0; i < len; i++) {
         void *_v = items[i];
         jl_astaggedvalue(_v)->bits.gc = GC_OLD_MARKED;
+        // Surface the old -> young frontier under the synthetic `[remset]` node.
+        if (__unlikely(gc_heap_snapshot_recording))
+            _gc_heap_snapshot_record_remset_entry((jl_value_t *)_v);
         jl_value_t *v = (jl_value_t *)((uintptr_t)_v | GC_REMSET_PTR_TAG);
         gc_ptr_queue_push(mq, v);
     }
@@ -2844,6 +2857,9 @@ static void gc_queue_image_remset(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
     void **items = image_remset.items;
     for (size_t i = 0; i < len; i++) {
         void *_v = items[i];
+        // Surface the immortal -> old frontier under the synthetic `[image]` node.
+        if (__unlikely(gc_heap_snapshot_recording))
+            _gc_heap_snapshot_record_image_remset_entry((jl_value_t *)_v);
         jl_value_t *v = (jl_value_t *)((uintptr_t)_v | GC_REMSET_PTR_TAG);
         gc_ptr_queue_push(mq, v);
     }
@@ -3087,6 +3103,15 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
     uint64_t before_free_heap_size = jl_atomic_load_relaxed(&gc_heap_stats.heap_size);
     uint64_t start_mark_time = jl_hrtime();
     JL_PROBE_GC_MARK_BEGIN();
+    if (__unlikely(gc_heap_snapshot_enabled)) {
+        gc_heap_snapshot_recording = prev_sweep_full;
+        gc_mark_image_subgraph = gc_heap_snapshot_recording &&
+            (gc_heap_snapshot_max_generation == JL_SNAPSHOT_GENERATION_IMMORTAL);
+    }
+    else {
+        gc_heap_snapshot_recording = 0;
+        gc_mark_image_subgraph = 0;
+    }
     {
         JL_TIMING(GC, GC_Mark);
         assert(gc_n_threads != 0);
@@ -3168,6 +3193,11 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
         gc_mark_finlist(mq, &to_finalize, 0);
         gc_mark_and_steal(ptls);
         mark_reset_age = 0;
+    }
+
+    if (__unlikely(gc_heap_snapshot_recording)) {
+        gc_heap_snapshot_enabled = 0;
+        gc_mark_image_subgraph = 0;
     }
 
     JL_PROBE_GC_MARK_END(scanned_bytes, perm_scanned_bytes);

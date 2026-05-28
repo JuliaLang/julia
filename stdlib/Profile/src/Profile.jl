@@ -1374,9 +1374,11 @@ end
 
 """
     Profile.take_heap_snapshot(filepath::String, all_one::Bool=false;
-                               redact_data::Bool=true, streaming::Bool=false)
+                               redact_data::Bool=true, streaming::Bool=false,
+                               max_generation::Symbol=:immortal)
     Profile.take_heap_snapshot(all_one::Bool=false; redact_data:Bool=true,
-                               dir::String=nothing, streaming::Bool=false)
+                               dir::String=nothing, streaming::Bool=false,
+                               max_generation::Symbol=:immortal)
 
 Write a snapshot of the heap, in the JSON format expected by the Chrome
 Devtools Heap Snapshot viewer (.heapsnapshot extension) to a file
@@ -1388,6 +1390,14 @@ If `all_one` is true, then report the size of every object as one so they can be
 counted. Otherwise, report the actual size.
 
 If `redact_data` is true (default), then do not emit the contents of any object.
+
+`max_generation` controls how much of the generational heap is recorded:
+- `:young` records only young-generation objects, with old objects that reference them
+  collapsed into a synthetic `[remset]` node.
+- `:old` additionally records old-generation objects, with sysimage/pkgimage objects
+  collapsed into a synthetic `[image]` node.
+- `:immortal` (the default) additionally records the sysimage/pkgimage ("permalloc")
+  objects, i.e. the entire heap.
 
 If `streaming` is true, we will stream the snapshot data out into four files, using filepath
 as the prefix, to avoid having to hold the entire snapshot in memory. This option should be
@@ -1404,28 +1414,36 @@ backwards-compatibility) and your process is killed, note that this will always 
 parts in the same directory as your provided filepath, so you can still reconstruct the
 snapshot after the fact, via `assemble_snapshot()`.
 """
-function take_heap_snapshot(filepath::AbstractString, all_one::Bool=false; redact_data::Bool=true, streaming::Bool=false)
+function take_heap_snapshot(filepath::AbstractString, all_one::Bool=false; redact_data::Bool=true, streaming::Bool=false, max_generation::Symbol=:immortal)
     if streaming
-        _stream_heap_snapshot(filepath, all_one, redact_data)
+        _stream_heap_snapshot(filepath, all_one, redact_data, max_generation)
     else
         # Support the legacy, non-streaming mode, by first streaming the parts, then
         # reassembling it after we're done.
         prefix = filepath
-        _stream_heap_snapshot(prefix, all_one, redact_data)
+        _stream_heap_snapshot(prefix, all_one, redact_data, max_generation)
         Profile.HeapSnapshot.assemble_snapshot(prefix, filepath)
         Profile.HeapSnapshot.cleanup_streamed_files(prefix)
     end
     return filepath
 end
-function take_heap_snapshot(io::IO, all_one::Bool=false; redact_data::Bool=true)
+function take_heap_snapshot(io::IO, all_one::Bool=false; redact_data::Bool=true, max_generation::Symbol=:immortal)
     # Support the legacy, non-streaming mode, by first streaming the parts to a tempdir,
     # then reassembling it after we're done.
     dir = tempdir()
     prefix = joinpath(dir, "snapshot")
-    _stream_heap_snapshot(prefix, all_one, redact_data)
+    _stream_heap_snapshot(prefix, all_one, redact_data, max_generation)
     Profile.HeapSnapshot.assemble_snapshot(prefix, io)
 end
-function _stream_heap_snapshot(prefix::AbstractString, all_one::Bool, redact_data::Bool)
+# Map the `max_generation` symbol to the integer the runtime expects (youngest to oldest)
+function _max_generation_to_int(max_generation::Symbol)
+    max_generation === :young && return Cchar(0)
+    max_generation === :old && return Cchar(1)
+    max_generation === :immortal && return Cchar(2)
+    throw(ArgumentError("max_generation must be one of :young, :old, or :immortal, got :$(max_generation)"))
+end
+function _stream_heap_snapshot(prefix::AbstractString, all_one::Bool, redact_data::Bool, max_generation::Symbol=:immortal)
+    max_gen = _max_generation_to_int(max_generation)
     # Nodes and edges are binary files
     open("$prefix.nodes", "w") do nodes
         open("$prefix.edges", "w") do edges
@@ -1438,9 +1456,9 @@ function _stream_heap_snapshot(prefix::AbstractString, all_one::Bool, redact_dat
                     Base.@_lock_ios(json,
                         ccall(:jl_gc_take_heap_snapshot,
                             Cvoid,
-                            (Ptr{Cvoid},Ptr{Cvoid},Ptr{Cvoid},Ptr{Cvoid}, Cchar, Cchar),
+                            (Ptr{Cvoid},Ptr{Cvoid},Ptr{Cvoid},Ptr{Cvoid}, Cchar, Cchar, Cchar),
                             nodes.handle, edges.handle, strings.handle, json.handle,
-                            Cchar(all_one), Cchar(redact_data))
+                            Cchar(all_one), Cchar(redact_data), max_gen)
                     )
                     )
                     )
