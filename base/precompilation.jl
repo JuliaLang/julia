@@ -202,7 +202,7 @@ timing_string(t) = string(lpad(round(t, digits = 1), 6), " s")
 # cache file size and cached method count) appended to the per-package timing
 # line in verbose mode. Column labels are emitted once via
 # `format_verbose_timing_header`. Returns an empty string if the payload is
-# missing or unparseable.
+# missing or unparsable.
 function format_verbose_timing(payload::AbstractString, total_seconds::Float64, cache_bytes::Int, peak_rss_bytes::UInt64, hascolor::Bool)
     isempty(payload) && return ""
     include_ns = compilation_ns = deps_ns = UInt64(0)
