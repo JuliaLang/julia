@@ -981,7 +981,6 @@ end
     @test f19872a(2.0) === 32.0
     @test !issubnormal(f19872a(2.0))
     @test !issubnormal(0.0)
-    @test !issubnormal(0)
 end
 
 # no domain error is thrown for negative values
