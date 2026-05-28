@@ -322,7 +322,7 @@
 
 (define (arg-name v)
   (cond ((and (symbol? v) (valid-name? v))
-         v)
+         (if (underscore-symbol? v) (gensy) v))
         ((not (pair? v))
          (bad-formal-argument v))
         (else

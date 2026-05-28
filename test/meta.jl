@@ -161,6 +161,11 @@ end
 @test _nospec_with_default() == 2
 @test _nospec_with_default(10) == 20
 
+# @nospecialize with underscore argument (issue with placeholder nodes)
+_nospec_underscore(@nospecialize _) = 1
+@test _nospec_underscore(1) == 1
+@test _nospec_underscore("a") == 1
+@test only(methods(_nospec_underscore)).nospecialize == 1
 
 let oldout = stdout
     ex = Meta.@lower @dump x + y
