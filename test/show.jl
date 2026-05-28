@@ -2532,6 +2532,17 @@ end
 @test string(Union{AbstractVector, T} where T) == "Union{AbstractVector, T} where T"
 @test string(Union{Array, Memory}) == "Union{Array, Memory}"
 
+# Alias printing should recover the source binder for bounded alias parameters.
+module MBoundedAlias
+export A, B, U
+struct A{T<:Integer} end
+struct B{T<:Integer} end
+const U{T<:Integer} = Union{A{T}, B{T}}
+end
+let S = TypeVar(:S, Union{}, Integer)
+    @test string(UnionAll(S, Union{MBoundedAlias.A{S}, MBoundedAlias.B{S}})) == "$(curmod_prefix)MBoundedAlias.U"
+end
+
 @test sprint(show, :(./)) == ":((./))"
 @test sprint(show, :((.|).(.&, b))) == ":((.|).((.&), b))"
 

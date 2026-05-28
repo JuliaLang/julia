@@ -549,8 +549,8 @@ function descend_params(io::IO, @nospecialize(sig), @nospecialize(called))
     n > 0 && n == length(called.parameters) || return nothing
     sig.name === typename(NamedTuple) && return nothing
     (any(isvarargtype, sig.parameters) || any(isvarargtype, called.parameters)) && return nothing
-    sa = make_typealias(makeproper(io, sig))
-    ca = make_typealias(makeproper(io, called))
+    sa = make_typealias(sig)
+    ca = make_typealias(called)
     if sa === nothing && ca === nothing
         return sig.parameters, called.parameters, nothing
     elseif sa !== nothing && ca !== nothing && sa[1] === ca[1]
