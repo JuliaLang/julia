@@ -3782,15 +3782,72 @@ world_range(ci::CodeInfo) = WorldRange(ci.min_world, ci.max_world)
 world_range(ci::CodeInstance) = WorldRange(ci.min_world, ci.max_world)
 world_range(compact::IncrementalCompact) = world_range(compact.ir)
 
-# n.b. this function is not part of abstract eval (where it would be unsound) but rather
-# for the optimizer to observe the result of abstract eval. Inference already guaranteed
-# consistency across the world range, so we just look up the partition at max_world.
-function abstract_eval_globalref_type(g::GlobalRef, src::Union{CodeInfo, IRCode, IncrementalCompact})
-    worlds = world_range(src)
+# Flat leaf-only walk used by the optimizer entry points below. Skips the WorldRange
+# tracking that `walk_binding_partition` performs for inference's validity bookkeeping.
+@inline function walk_to_leaf_partition(binding::Core.Binding, partition::Core.BindingPartition, world::UInt)
+    while is_some_binding_imported(binding_kind(partition))
+        binding = partition_restriction(partition)::Core.Binding
+        partition = lookup_binding_partition(world, binding)
+    end
+    return (binding, partition)
+end
+
+@inline function partition_rt(partition::Core.BindingPartition)
+    kind = binding_kind(partition)
+    (is_some_guard(kind) || kind == PARTITION_KIND_DECLARED) && return Any
+    if is_defined_const_binding(kind)
+        kind == PARTITION_KIND_BACKDATED_CONST && return Any
+        return Const(partition_restriction(partition))
+    end
+    return partition_restriction(partition)
+end
+
+@inline function partition_rt_widened(partition::Core.BindingPartition)
+    kind = binding_kind(partition)
+    (is_some_guard(kind) || kind == PARTITION_KIND_DECLARED) && return Any
+    if is_defined_const_binding(kind)
+        kind == PARTITION_KIND_BACKDATED_CONST && return Any
+        v = partition_restriction(partition)
+        return isa(v, Type) ? Type{v} : typeof(v)
+    end
+    return partition_restriction(partition)
+end
+
+# n.b. the helpers below are not part of abstract eval (where they would be unsound) but
+# IR-level queries for the optimizer to observe the result of abstract eval. Inference
+# already guaranteed consistency across the world range, so we just look up the partition
+# at max_world.
+@inline function globalref_leaf_partition(g::GlobalRef, src::Union{CodeInfo, IRCode, IncrementalCompact})
+    world = max_world(world_range(src))
     binding = convert(Core.Binding, g)
-    partition = lookup_binding_partition(max_world(worlds), binding)
-    (_, (leaf_binding, leaf_partition)) = walk_binding_partition(binding, partition, max_world(worlds))
-    return abstract_eval_partition_load(nothing, leaf_binding, leaf_partition).rt
+    partition = lookup_binding_partition(world, binding)
+    _, leaf_partition = walk_to_leaf_partition(binding, partition, world)
+    return leaf_partition
+end
+
+globalref_rt(g::GlobalRef, src::Union{CodeInfo, IRCode, IncrementalCompact}) =
+    partition_rt(globalref_leaf_partition(g, src))
+
+# Same as `globalref_rt` but returns the widened type directly, skipping the `Const(...)`
+# boxing on defined-const bindings. Use this when the caller is going to call `widenconst`
+# on the result anyway.
+globalref_rt_widened(g::GlobalRef, src::Union{CodeInfo, IRCode, IncrementalCompact}) =
+    partition_rt_widened(globalref_leaf_partition(g, src))
+
+# Equivalent to `singleton_type(globalref_rt(g, src))` but skips the intermediate
+# `Const(...)` boxing on defined-const bindings. Returns the singleton value (or `nothing`).
+# Like `singleton_type`, this also recognizes typed globals whose restriction is itself a
+# singleton type (e.g. `typeof(getfield)`) or a `Type{T}`.
+function globalref_singleton(g::GlobalRef, src::Union{CodeInfo, IRCode, IncrementalCompact})
+    partition = globalref_leaf_partition(g, src)
+    kind = binding_kind(partition)
+    (is_some_guard(kind) || kind == PARTITION_KIND_DECLARED) && return nothing
+    if is_defined_const_binding(kind)
+        kind == PARTITION_KIND_BACKDATED_CONST && return nothing
+        return partition_restriction(partition)
+    end
+    # Typed global: restriction is a type — recognize `Type{T}` and singleton types.
+    return singleton_type(partition_restriction(partition))
 end
 
 function lookup_binding_partition!(interp::AbstractInterpreter, g::Union{GlobalRef, Core.Binding}, sv::AbsIntState)
