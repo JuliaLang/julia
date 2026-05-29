@@ -526,9 +526,7 @@ function argextype(
     end
 end
 
-# Like `widenconst(argextype(x, src, ...))` but avoids constructing a `Const` only to
-# widen it away when `x` is a `GlobalRef` to a defined-const binding. Non-GlobalRef args
-# fall through to `argextype`, which already handles the SSAValue/Argument/Slot dispatch.
+# `widenconst(argextype(x, src, ...))` without the throwaway `Const` for GlobalRef args.
 @inline function argextype_widened(@nospecialize(x),
         src::Union{IRCode,IncrementalCompact,CodeInfo}, sptypes::Vector{VarState})
     isa(x, GlobalRef) && return globalref_rt_widened(x, src)

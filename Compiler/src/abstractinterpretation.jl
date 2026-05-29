@@ -3782,8 +3782,8 @@ world_range(ci::CodeInfo) = WorldRange(ci.min_world, ci.max_world)
 world_range(ci::CodeInstance) = WorldRange(ci.min_world, ci.max_world)
 world_range(compact::IncrementalCompact) = world_range(compact.ir)
 
-# Flat leaf-only walk used by the optimizer entry points below. Skips the WorldRange
-# tracking that `walk_binding_partition` performs for inference's validity bookkeeping.
+# Like `walk_binding_partition` but drops the WorldRange tracking — IR-only callers
+# don't use it.
 @inline function walk_to_leaf_partition(binding::Core.Binding, partition::Core.BindingPartition, world::UInt)
     while is_some_binding_imported(binding_kind(partition))
         binding = partition_restriction(partition)::Core.Binding
@@ -3812,10 +3812,8 @@ end
     return partition_restriction(partition)
 end
 
-# n.b. the helpers below are not part of abstract eval (where they would be unsound) but
-# IR-level queries for the optimizer to observe the result of abstract eval. Inference
-# already guaranteed consistency across the world range, so we just look up the partition
-# at max_world.
+# IR-level GlobalRef queries. Not abstract eval (unsound there): inference already
+# guarantees consistency across the world range, so we just look up at max_world.
 @inline function globalref_leaf_partition(g::GlobalRef, src::Union{CodeInfo, IRCode, IncrementalCompact})
     world = max_world(world_range(src))
     binding = convert(Core.Binding, g)
@@ -3827,16 +3825,12 @@ end
 globalref_rt(g::GlobalRef, src::Union{CodeInfo, IRCode, IncrementalCompact}) =
     partition_rt(globalref_leaf_partition(g, src))
 
-# Same as `globalref_rt` but returns the widened type directly, skipping the `Const(...)`
-# boxing on defined-const bindings. Use this when the caller is going to call `widenconst`
-# on the result anyway.
+# `widenconst`-compatible variant — skips the `Const(...)` box on defined-const bindings.
 globalref_rt_widened(g::GlobalRef, src::Union{CodeInfo, IRCode, IncrementalCompact}) =
     partition_rt_widened(globalref_leaf_partition(g, src))
 
-# Equivalent to `singleton_type(globalref_rt(g, src))` but skips the intermediate
-# `Const(...)` boxing on defined-const bindings. Returns the singleton value (or `nothing`).
-# Like `singleton_type`, this also recognizes typed globals whose restriction is itself a
-# singleton type (e.g. `typeof(getfield)`) or a `Type{T}`.
+# `singleton_type`-compatible variant — skips the `Const(...)` box on defined-const
+# bindings, and (like `singleton_type`) also unwraps `Type{T}` / singleton restrictions.
 function globalref_singleton(g::GlobalRef, src::Union{CodeInfo, IRCode, IncrementalCompact})
     partition = globalref_leaf_partition(g, src)
     kind = binding_kind(partition)
@@ -3845,7 +3839,6 @@ function globalref_singleton(g::GlobalRef, src::Union{CodeInfo, IRCode, Incremen
         kind == PARTITION_KIND_BACKDATED_CONST && return nothing
         return partition_restriction(partition)
     end
-    # Typed global: restriction is a type — recognize `Type{T}` and singleton types.
     return singleton_type(partition_restriction(partition))
 end
 
