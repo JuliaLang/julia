@@ -4156,6 +4156,17 @@ end
         @test Compiler.unionsplitcost(𝕃, argtypes; fargs) == 4
         @test length(Compiler.switchtupleunion(𝕃, argtypes; fargs)) == 4
     end
+
+    # unionsplitcost must not allocate alias groups when no aliasing is possible
+    let 𝕃 = Compiler.fallback_lattice
+        argtypes = Any[typeof(+), Union{Int,Float64}, Union{Int,Float64}]
+        fargs = Any[SSAValue(1), SlotNumber(2), SlotNumber(3)]
+        cost_kw(𝕃, argtypes, fargs) = Compiler.unionsplitcost(𝕃, argtypes; fargs)
+        cost(𝕃, argtypes) = Compiler.unionsplitcost(𝕃, argtypes)
+        cost_kw(𝕃, argtypes, fargs); cost(𝕃, argtypes) # compile
+        @test (@allocated cost_kw(𝕃, argtypes, fargs)) == 0
+        @test (@allocated cost(𝕃, argtypes)) == 0
+    end
 end
 
 # Integration test: alias-aware splitting eliminates impossible cross-type methods

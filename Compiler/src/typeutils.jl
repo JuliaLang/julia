@@ -193,9 +193,10 @@ function tuple_tail_elem(𝕃::AbstractLattice, @nospecialize(init), ct::Vector{
 end
 
 # Given `fargs` from `ArgInfo` and optionally `argtypes`, compute alias groups
-# for argument positions. Returns `nothing` if `fargs === nothing`, otherwise a
-# `Vector{Int}` where `groups[i]` is the index of the leader for position `i`.
-# `groups[i] == i` means leader (or non-aliased); `groups[i] < i` means follower.
+# for argument positions. Returns `nothing` when no aliasing is possible (both
+# callers treat this as the identity grouping), otherwise a `Vector{Int}` where
+# `groups[i]` is the index of the leader for position `i`. `groups[i] == i` means
+# leader (or non-aliased); `groups[i] < i` means follower.
 #
 # Aliasing is detected from two sources:
 # 1. IR identity: same `SlotNumber`/`SSAValue` in `fargs`
@@ -205,6 +206,9 @@ function compute_alias_groups(
         fargs::Union{Nothing,Vector{Any}},
         argtypes::Union{Nothing,Vector{Any}}
     )
+    # Fast path: skip the allocation when no aliasing is possible (the common
+    # case on the inference hot path).
+    any_alias_candidate(na, fargs, argtypes) || return nothing
     groups = Vector{Int}(undef, na)
     for i = 1:na
         groups[i] = i
@@ -212,6 +216,36 @@ function compute_alias_groups(
     fargs !== nothing && merge_fargs_alias_groups!(groups, fargs)
     argtypes !== nothing && merge_mustalias_groups!(groups, argtypes)
     return groups
+end
+
+# Cheap, non-allocating necessary condition for a non-identity grouping: a shared
+# `SlotNumber`/`SSAValue` in `fargs`, or at least two `MustAlias` in `argtypes`.
+# Over-approximating only costs a needless allocation, never correctness.
+function any_alias_candidate(
+        na::Int,
+        fargs::Union{Nothing,Vector{Any}},
+        argtypes::Union{Nothing,Vector{Any}}
+    )
+    if fargs !== nothing
+        for i = 1:na
+            arg_i = fargs[i]
+            if arg_i isa SlotNumber || arg_i isa SSAValue
+                for j in 1:i-1
+                    fargs[j] === arg_i && return true
+                end
+            end
+        end
+    end
+    if argtypes !== nothing
+        nmustalias = 0
+        for i = 1:na
+            if argtypes[i] isa MustAlias
+                nmustalias += 1
+                nmustalias == 2 && return true
+            end
+        end
+    end
+    return false
 end
 
 # Detect aliasing from IR identity: same `SlotNumber`/`SSAValue` in `fargs`.
