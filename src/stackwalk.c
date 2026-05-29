@@ -818,14 +818,18 @@ JL_DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
 }
 
 static void jl_safe_fprint_codeloc(ios_t *s, const char* func_name, const char* file_name,
-                                   int line, int pc, int inlined) JL_NOTSAFEPOINT
+                                   int line, int col, int pc, int inlined) JL_NOTSAFEPOINT
 {
     const char *inlined_str = inlined ? " [inlined]" : "";
+    if (col == -1) {
+        col = 0;
+    }
     if (line != -1) {
         if (pc > 0)
-            jl_safe_fprintf(s, "%s at %s:%d:%d%s\n", func_name, file_name, line, pc, inlined_str);
+            jl_safe_fprintf(s, "%s at %s:%d:%d (pc: %d)%s\n",
+                            func_name, file_name, line, col, pc, inlined_str);
         else
-            jl_safe_fprintf(s, "%s at %s:%d%s\n", func_name, file_name, line, inlined_str);
+            jl_safe_fprintf(s, "%s at %s:%d:%d%s\n", func_name, file_name, line, col, inlined_str);
     }
     else {
         jl_safe_fprintf(s, "%s at %s (unknown line)%s\n", func_name, file_name, inlined_str);
@@ -850,39 +854,15 @@ void jl_fprint_native_codeloc(ios_t *s, uintptr_t ip) JL_NOTSAFEPOINT
             jl_safe_fprintf(s, "unknown function (ip: %p) at %s\n", (void*)ip, frame.file_name ? frame.file_name : "(unknown file)");
         }
         else {
-            jl_safe_fprint_codeloc(s, frame.func_name, frame.file_name, frame.line, frame.pc, frame.inlined);
+            int col = frame.fromC ? frame.pc : 0;
+            int pc = frame.fromC ? 0 : frame.pc;
+            jl_safe_fprint_codeloc(
+                s, frame.func_name, frame.file_name, frame.line, col, pc, frame.inlined);
             free(frame.func_name);
         }
         free(frame.file_name);
     }
     free(frames);
-}
-
-const char *jl_debuginfo_file1(jl_debuginfo_t *debuginfo)
-{
-    jl_value_t *def = debuginfo->def;
-    if (jl_is_method_instance(def))
-        def = ((jl_method_instance_t*)def)->def.value;
-    if (jl_is_method(def))
-        def = (jl_value_t*)((jl_method_t*)def)->file;
-    if (jl_is_symbol(def))
-        return jl_symbol_name((jl_sym_t*)def);
-    return "<unknown>";
-}
-
-// File name and line number of first line
-const char *jl_debuginfo_firstline(jl_debuginfo_t *debuginfo, int* line)
-{
-    jl_value_t *linetable = (jl_value_t*)debuginfo;
-    while (jl_is_debuginfo(linetable)) {
-        debuginfo = (jl_debuginfo_t*)linetable;
-        linetable = debuginfo->linetable;
-    }
-    if (line) {
-        struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, 0);
-        *line = lineidx.loc;
-    }
-    return jl_debuginfo_file1(debuginfo);
 }
 
 jl_module_t *jl_debuginfo_module1(jl_value_t *debuginfo_def)
@@ -932,8 +912,9 @@ static void jl_fprint_debugloc(ios_t *s, jl_debuginfo_t *debuginfo, jl_value_t *
         if (ip2 < 0) // set broken debug info to ignored
             ip2 = 0;
         const char *func_name = jl_debuginfo_name(func);
-        const char *file = jl_debuginfo_firstline(debuginfo, NULL);
-        jl_safe_fprint_codeloc(s, func_name, file, ip2, (int)ip, inlined);
+        const char *file = jl_cdi_file(debuginfo);
+        jl_locspan_t xy = jl_cdi_firstxy(debuginfo, ip);
+        jl_safe_fprint_codeloc(s, func_name, file, xy.first, xy.second, (int)ip, inlined);
     }
 }
 

@@ -40,7 +40,7 @@ using Core.Intrinsics, Core.IR
 using Core: ABIOverride, Builtin, CodeInstance, IntrinsicFunction, MethodInstance, MethodMatch,
     MethodTable, MethodCache, PartialOpaque, SimpleVector, TypeofVararg,
     _apply_iterate, apply_type, compilerbarrier, donotdelete, memoryref_isassigned,
-    memoryrefget, memoryrefnew, memoryrefoffset, memoryrefset!, print, println, show, svec,
+    memoryrefget, memoryrefnew, memoryrefoffset, memoryrefset!, memoryrefunset!, print, println, show, svec,
     typename, unsafe_write, write, stdout, stderr
 
 using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospecializeinfer,
@@ -160,6 +160,12 @@ if !isdefined(Base, :end_base_include)
     end
 else
     using Base: @show
+end
+
+# JuliaSyntax doesn't support syntax evolution in bare modules via Project.toml
+# This surfaces only when Compiler.jl is loaded as a standalone package.
+if isdefined(Base, :end_base_include) && isdefined(Base, :set_syntax_version)
+    Base.set_syntax_version(Compiler, Base.VersionNumber(1, 14))
 end
 
 include("cicache.jl")
