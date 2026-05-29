@@ -504,7 +504,7 @@ static int obviously_egal(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT
         }
         return 1;
     }
-    if (jl_is_uniontype(a)) {
+    if (jl_is_uniontype(a) || jl_is_intersecttype(a)) {
         return obviously_egal(((jl_uniontype_t*)a)->a, ((jl_uniontype_t*)b)->a) &&
             obviously_egal(((jl_uniontype_t*)a)->b, ((jl_uniontype_t*)b)->b);
     }
@@ -749,6 +749,11 @@ static jl_value_t *simple_meet(jl_value_t *a, jl_value_t *b, int overesi)
         return b;
     if (b == (jl_value_t*)jl_any_type || a == jl_bottom_type)
         return a;
+    if (overesi && (jl_is_intersecttype(a) || jl_is_intersecttype(b)))
+        // one operand is already an internal `Intersect` meet node (see #61917):
+        // `Intersect` is not a `jl_is_type`, so it would otherwise fall through
+        // to `Union{}` below. Represent the combined meet exactly by nesting.
+        return jl_new_struct(jl_intersect_type, a, b);
     if (!(jl_is_type(a) || jl_is_typevar(a)) || !(jl_is_type(b) || jl_is_typevar(b)))
         return jl_bottom_type;
     if (jl_is_kind(a) && jl_is_type_type(b) && jl_typeof(jl_tparam0(b)) == a)
@@ -1022,6 +1027,12 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t par
         JL_GC_POP();
     }
     else {
+        // `simple_meet` resolves the greatest-lower-bound of `bb->ub` and `a`
+        // precisely when one operand subsumes the other (or they are disjoint);
+        // otherwise it now returns an exact `Intersect{bb->ub, a}` meet node
+        // rather than over-approximating to one side, which would let `b` escape
+        // its declared range (e.g. equating `∃b<:Foo` with an outer `∀a<:Bar`
+        // even though `Bar ⊄ Foo`). See #61917.
         bb->ub = simple_meet(bb->ub, a, 1);
     }
     assert(bb->ub != (jl_value_t*)b);
@@ -1113,6 +1124,8 @@ int is_leaf_bound(jl_value_t *v) JL_NOTSAFEPOINT
 {
     if (v == jl_bottom_type)
         return 1;
+    if (jl_is_intersecttype(v)) // internal meet node (see #61917), not a concrete leaf
+        return 0;
     if (jl_is_datatype(v)) {
         if (((jl_datatype_t*)v)->name->abstract) {
             if (jl_is_type_type(v))
@@ -1495,6 +1508,12 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
         else if (vb.lb == u->var->lb && vb.ub == u->var->ub && !new_tvar)
             val = wrap_tvar_env((jl_value_t*)u->var, eff_constrained);
         else {
+            // The internal `Intersect` meet node (see #61917) must never escape
+            // here as the upper bound of a static-parameter typevar. We could
+            // not construct a case that hits this; if it ever fires, that is the
+            // test case needed to justify widening `vb.ub` to its
+            // over-approximation before building the typevar.
+            assert(!jl_is_intersecttype(vb.ub) && "Intersect leaked into envout");
             if (!new_tvar)
                 new_tvar = (jl_value_t*)jl_new_typevar(u->var->name, vb.lb, vb.ub);
             val = wrap_tvar_env(new_tvar, eff_constrained);
@@ -1908,6 +1927,16 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
         }
         if (ui == 1)
             y = pick_union_element(y, e, 1);
+    }
+    // An internal `Intersect` meet node is only ever produced as an existential
+    // upper bound, so it can appear on the right (`x <: a ∩ b`) but never on the
+    // left. Handling the left case (`a ∩ b <: y`) precisely needs the
+    // intersection machinery, so for now we assert it does not arise.
+    assert(!jl_is_intersecttype(x));
+    if (jl_is_intersecttype(y)) {
+        // `x <: a ∩ b`  iff  `x <: a` and `x <: b` (dual to `Union` on the left).
+        jl_intersecttype_t *iy = (jl_intersecttype_t*)y;
+        return subtype(x, iy->a, e, param) && subtype(x, iy->b, e, param);
     }
     if (jl_is_typevar(x)) {
         if (jl_is_typevar(y)) {
@@ -3237,7 +3266,7 @@ static int _reachable_var(jl_value_t *x, jl_tvar_t *y, jl_stenv_t *e, jl_typeenv
 {
     if (in_union(x, (jl_value_t*)y))
         return 1;
-    if (jl_is_uniontype(x))
+    if (jl_is_uniontype(x) || jl_is_intersecttype(x))
         return _reachable_var(((jl_uniontype_t *)x)->a, y, e, log) ||
                _reachable_var(((jl_uniontype_t *)x)->b, y, e, log);
     if (!jl_is_typevar(x))
@@ -3420,7 +3449,7 @@ static int var_occurs_inside(jl_value_t *v, jl_tvar_t *var, int inside, int want
     if (v == (jl_value_t*)var) {
         return inside;
     }
-    else if (jl_is_uniontype(v)) {
+    else if (jl_is_uniontype(v) || jl_is_intersecttype(v)) {
         return var_occurs_inside(((jl_uniontype_t*)v)->a, var, inside, want_inv) ||
             var_occurs_inside(((jl_uniontype_t*)v)->b, var, inside, want_inv);
     }

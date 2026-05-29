@@ -3118,3 +3118,19 @@ typeintersect(Tuple{typeof(convert),
               Tuple{typeof(convert),
                     Type{B61876{T1,N,R} where {N, R<:(AbstractArray{<:AbstractArray{T1,N},N})}},
                     AbstractArray{T2,N}} where {T1,T2,N})
+
+# issue #61917: an existential var inside an invariant constructor must not be
+# equated with an outer universal var whose bound is disjoint, e.g. `Ref{Ref{Bar}}`
+# inhabits the LHS but not the RHS, so the `UnionAll`s are not in a subtype relation.
+struct Foo61917; end
+struct Bar61917; end
+@test !((Ref{Ref{U}} where U<:Bar61917) <: (Ref{Union{Ref{T}, Ref{U}}} where {T<:Foo61917, U<:Bar61917}))
+@test !((Ref{Ref{U}} where U<:Integer) <: (Ref{Union{Ref{T}, Ref{U}}} where {T<:AbstractString, U<:Integer}))
+# a collapsible union is still a supertype
+@test (Ref{Ref{U}} where U<:Bar61917) <: (Ref{Union{Ref{T}, Ref{U}}} where {T<:Bar61917, U<:Bar61917})
+# the internal `Intersect` meet node used to fix this must never escape into a
+# user-visible result type
+let r = typeintersect((Ref{Ref{U}} where U<:Bar61917), (Ref{Union{Ref{T}, Ref{U}}} where {T<:Foo61917, U<:Bar61917}))
+    @test !occursin("Intersect", string(r))
+    @test r == Ref{Ref{Union{}}}
+end
