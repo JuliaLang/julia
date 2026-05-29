@@ -884,22 +884,26 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         emit(ctx, ex)
         nothing
     elseif k == K"meta"
-        numchildren(ex) >= 1 && if kind(ex[1]) === K"purity" ||
-            kind(ex[1]) === K"Symbol" && ex[1].name_val::String in (
-                "inline", "noinline", "propagate_inbounds",
-                "nospecializeinfer", "aggressive_constprop", "no_constprop")
-            for c in children(ex)
-                if kind(c) === K"purity"
-                    old = get(ctx.meta, :purity, UInt16(0))
-                    ctx.meta[:purity] = (old | purity_expr_to_flags(c))::UInt16
-                elseif kind(c) === K"Symbol"
-                    ctx.meta[Symbol(c.name_val::String)] = true
-                else
-                    @jl_assert false c
+        if numchildren(ex) >= 1
+            # Certain blessed forms are allowed to share a meta expression;
+            # others (nkw, optlevel) treat ex[1] as head and ex[2:end] as args
+            if kind(ex[1]) === K"purity" ||
+                kind(ex[1]) === K"Symbol" && ex[1].name_val::String in (
+                    "inline", "noinline", "propagate_inbounds",
+                    "nospecializeinfer", "aggressive_constprop", "no_constprop")
+                for c in children(ex)
+                    if kind(c) === K"purity"
+                        old = get(ctx.meta, :purity, UInt16(0))
+                        ctx.meta[:purity] = (old | purity_expr_to_flags(c))::UInt16
+                    elseif kind(c) === K"Symbol"
+                        ctx.meta[Symbol(c.name_val::String)] = true
+                    else
+                        @jl_assert false c
+                    end
                 end
+            else
+                emit(ctx, ex)
             end
-        else
-            emit(ctx, ex)
         end
         if needs_value
             val = @ast ctx ex (::K"nothing")

@@ -498,6 +498,14 @@ end
     ref = Meta.lower(test_mod, Meta.parse(prog))
     our = jlower_e(prog)
     @test find_method_ci(ref).purity === find_method_ci(our).purity
+
+    # TODO: no api for option retrieval, just check that it compiles
+    let options_mod = Module()
+        @test fl_eval(options_mod, :(Base.Experimental.@optlevel 1)) == nothing
+        @test jl_eval(options_mod, :(Base.Experimental.@optlevel 1)) == nothing
+        @test fl_eval(options_mod, :(Base.Experimental.@max_methods 1)) == nothing
+        @test jl_eval(options_mod, :(Base.Experimental.@max_methods 1)) == nothing
+    end
 end
 
 # partially robot-generated
