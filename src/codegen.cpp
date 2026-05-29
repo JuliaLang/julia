@@ -6518,10 +6518,8 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
             }
         }
         ctx.builder.CreateCall(prepare_call(jlleave_noexcept_func), {get_current_task(ctx), ConstantInt::get(getInt32Ty(ctx.builder.getContext()), handler_to_end.size())});
-        auto *handler_sz64 = ConstantInt::get(Type::getInt64Ty(ctx.builder.getContext()),
-                  sizeof(jl_handler_t));
         for (AllocaInst *handler : handler_to_end) {
-            ctx.builder.CreateLifetimeEnd(handler, handler_sz64);
+            ctx.builder.CreateLifetimeEnd(handler);
         }
         if (scope_to_restore) {
             Value *scope_ptr = get_scope_field(ctx);
@@ -9774,12 +9772,10 @@ static jl_llvm_functions_t
                 ctx.ssavalue_assigned[cursor] = true;
                 // Actually enter the exception frame
                 auto ct = get_current_task(ctx);
-                auto *handler_sz64 = ConstantInt::get(Type::getInt64Ty(ctx.builder.getContext()),
-                  sizeof(jl_handler_t));
                 AllocaInst* ehbuff = emit_static_alloca(ctx, sizeof(jl_handler_t), Align(16));
                 setName(ctx.emission_context, ehbuff, "exception_handler");
                 ctx.eh_buffers[stmt] = ehbuff;
-                ctx.builder.CreateLifetimeStart(ehbuff, handler_sz64);
+                ctx.builder.CreateLifetimeStart(ehbuff);
                 ctx.builder.CreateCall(prepare_call(jlenter_func), {ct, ehbuff});
                 CallInst *sj;
                 if (ctx.emission_context.TargetTriple.isOSWindows())
@@ -9799,7 +9795,7 @@ static jl_llvm_functions_t
                 ctx.builder.SetInsertPoint(catchpop);
                 {
                     ctx.builder.CreateCall(prepare_call(jlleave_func), {get_current_task(ctx), ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 1)});
-                    ctx.builder.CreateLifetimeEnd(ehbuff, handler_sz64);
+                    ctx.builder.CreateLifetimeEnd(ehbuff);
                     ctx.builder.CreateBr(handlr);
                 }
                 ctx.builder.SetInsertPoint(tryblk);
