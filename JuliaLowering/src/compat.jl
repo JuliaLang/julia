@@ -288,7 +288,7 @@ end
 
 function _est_to_dst_ident(st::SyntaxTree)
     s = st.name_val::String
-    if (all(==('_'), s) || s == UNUSED) && length(s) > 0
+    if is_writeonly_est_name(s)
         setattr!(mkleaf(st), :kind, K"Placeholder")
     else
         st
@@ -585,7 +585,7 @@ function est_to_dst(st::SyntaxTree)
         [K"oldsymbolicgoto" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
         [K"symboliclabel" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
         [K"symbolicblock" id body] -> let s = id.name_val::String
-            if all(==('_'), s) && length(s) > 0
+            if is_writeonly_est_name(s)
                 @ast g st [K"symbolicblock" id=>K"Placeholder" rec(body)]
             else
                 @ast g st [K"symbolicblock" id=>K"symboliclabel" rec(body)]
