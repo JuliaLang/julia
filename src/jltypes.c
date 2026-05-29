@@ -685,7 +685,7 @@ JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n)
         jl_value_t *pi = ts[i];
         // reject the internal `Intersect` meet node (see #61917): it must not
         // be embedded into a user-visible `Union`.
-        if (!(jl_is_type(pi) || jl_is_typevar(pi)) || jl_is_intersecttype(pi))
+        if (!(jl_is_type(pi) || jl_is_typevar(pi)))
             jl_type_error("Union", (jl_value_t*)jl_type_type, pi);
     }
     if (n == 1)

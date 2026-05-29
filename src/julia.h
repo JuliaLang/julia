@@ -597,8 +597,7 @@ typedef struct {
 // Internal-use-only "meet" of two types, dual to Union: `Intersect{a, b}`
 // denotes `a ∩ b`. It is created transiently inside the subtyping algorithm to
 // represent a greatest-lower-bound that cannot be expressed precisely as a
-// single existing type, and never escapes into user-visible types. Same layout
-// as jl_uniontype_t so the two share traversal code. See #61917.
+// single existing type, and never escapes into user-visible types.
 typedef struct {
     JL_DATA_TYPE
     jl_value_t *JL_NONNULL a;

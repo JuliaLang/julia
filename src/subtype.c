@@ -750,9 +750,8 @@ static jl_value_t *simple_meet(jl_value_t *a, jl_value_t *b, int overesi)
     if (b == (jl_value_t*)jl_any_type || a == jl_bottom_type)
         return a;
     if (overesi == 1 && (jl_is_intersecttype(a) || jl_is_intersecttype(b)))
-        // one operand is already an internal `Intersect` meet node (see #61917):
-        // `Intersect` is not a `jl_is_type`, so it would otherwise fall through
-        // to `Union{}` below. Represent the combined meet exactly by nesting.
+        // one operand is already an internal `Intersect` meet node.
+        // Represent the combined meet exactly by nesting.
         return jl_new_struct(jl_intersect_type, a, b);
     if (!(jl_is_type(a) || jl_is_typevar(a)) || !(jl_is_type(b) || jl_is_typevar(b)))
         return jl_bottom_type;
@@ -3604,11 +3603,10 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
     jl_value_t *varval = NULL, *ilb = NULL, *iub = NULL, *nivar = NULL;
     jl_tvar_t *newvar = vb->var, *ivar = NULL;
     JL_GC_PUSH6(&res, &newvar, &ivar, &nivar, &ilb, &iub);
-    // An internal `Intersect` meet node (see #61917) is exact for subtyping but
-    // must not appear in the result type (it is not a real type). It only ever
-    // occurs as the top layer of `vb->ub`; over-approximate it before it is used
-    // as a substituted value or typevar bound below.
-    vb->ub = widen_intersect(vb->ub);
+    // Note: `Intersect` is subtype accounting only and is widened away before
+    // it leaves the subtype path (see `subtype_unionall`), so the intersection
+    // result here never contains one.
+    assert(!jl_is_intersecttype(vb->ub));
     // try to reduce var to a single value
     if (jl_is_long(vb->ub) && jl_is_typevar(vb->lb)) {
         varval = vb->ub;
