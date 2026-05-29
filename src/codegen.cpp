@@ -10515,7 +10515,7 @@ extern "C" void jl_init_llvm(void)
 #endif
 
     // Parse command line flags after initialization
-    StringMap<cl::Option*> &llvmopts = cl::getRegisteredOptions();
+    auto &llvmopts = cl::getRegisteredOptions();
 
     // Register time-trace options if not already present (e.g., when loaded as plugin by opt)
     if (!llvmopts.lookup("time-trace")) {
