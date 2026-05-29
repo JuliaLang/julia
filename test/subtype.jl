@@ -3134,3 +3134,10 @@ let r = typeintersect((Ref{Ref{U}} where U<:Bar61917), (Ref{Union{Ref{T}, Ref{U}
     @test !occursin("Intersect", string(r))
     @test r == Ref{Ref{Union{}}}
 end
+# issue #61917: the `Intersect` meet node can also reach the intersection result
+# (via a `where S>:T` lower bound); it must be over-approximated, not leaked.
+let A = AbstractVector{<:Signed}, B = AbstractArray{Int}
+    r = typeintersect(Ref{B}, (Ref{S} where S>:T) where T<:A)
+    @test !occursin("Intersect", string(r))
+    @test Ref{AbstractArray{Int}} <: r   # sound over-approximation of the meet
+end

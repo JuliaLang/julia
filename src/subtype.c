@@ -749,7 +749,7 @@ static jl_value_t *simple_meet(jl_value_t *a, jl_value_t *b, int overesi)
         return b;
     if (b == (jl_value_t*)jl_any_type || a == jl_bottom_type)
         return a;
-    if (overesi && (jl_is_intersecttype(a) || jl_is_intersecttype(b)))
+    if (overesi == 1 && (jl_is_intersecttype(a) || jl_is_intersecttype(b)))
         // one operand is already an internal `Intersect` meet node (see #61917):
         // `Intersect` is not a `jl_is_type`, so it would otherwise fall through
         // to `Union{}` below. Represent the combined meet exactly by nesting.
@@ -765,6 +765,26 @@ static jl_value_t *simple_meet(jl_value_t *a, jl_value_t *b, int overesi)
     if (jl_is_typevar(b) && obviously_egal(a, ((jl_tvar_t*)b)->ub))
         return b;
     return simple_intersect(a, b, overesi);
+}
+
+// Over-approximate an internal `Intersect` meet node (see #61917) by a real
+// type, so it cannot escape subtyping into a result type or static parameter.
+// An `Intersect` only ever occurs as the top layer of a varbinding's `ub`
+// (possibly as a spine of nested `Intersect`s, but never under another type
+// constructor), so it suffices to peel that spine here. `Intersect{a, b}`
+// denotes `a ∩ b`, which `simple_meet` with `overesi==2` over-approximates by a
+// real supertype. `typeintersect` may over-approximate, so this is sound.
+static jl_value_t *widen_intersect(jl_value_t *t)
+{
+    if (t == NULL || !jl_is_intersecttype(t))
+        return t;
+    jl_value_t *a = NULL, *b = NULL, *res = NULL;
+    JL_GC_PUSH2(&a, &b);
+    a = widen_intersect(((jl_intersecttype_t*)t)->a);
+    b = widen_intersect(((jl_intersecttype_t*)t)->b);
+    res = simple_meet(a, b, 2);
+    JL_GC_POP();
+    return res;
 }
 
 // main subtyping algorithm
@@ -1408,6 +1428,12 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
         return 0;
     }
 
+    // An internal `Intersect` meet node (see #61917) is exact for subtyping but
+    // must not appear in a result type or static parameter (it is not a real
+    // type). It only ever occurs as the top layer of `vb.ub`; over-approximate
+    // it now, before `vb.ub` is used to build any result typevar below.
+    vb.ub = widen_intersect(vb.ub);
+
     // If this variable was resolved to something concrete, just use that value for the
     // substitution below.
     if (vb.lb == vb.ub) {
@@ -1508,12 +1534,6 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
         else if (vb.lb == u->var->lb && vb.ub == u->var->ub && !new_tvar)
             val = wrap_tvar_env((jl_value_t*)u->var, eff_constrained);
         else {
-            // The internal `Intersect` meet node (see #61917) must never escape
-            // here as the upper bound of a static-parameter typevar. We could
-            // not construct a case that hits this; if it ever fires, that is the
-            // test case needed to justify widening `vb.ub` to its
-            // over-approximation before building the typevar.
-            assert(!jl_is_intersecttype(vb.ub) && "Intersect leaked into envout");
             if (!new_tvar)
                 new_tvar = (jl_value_t*)jl_new_typevar(u->var->name, vb.lb, vb.ub);
             val = wrap_tvar_env(new_tvar, eff_constrained);
@@ -3584,6 +3604,11 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
     jl_value_t *varval = NULL, *ilb = NULL, *iub = NULL, *nivar = NULL;
     jl_tvar_t *newvar = vb->var, *ivar = NULL;
     JL_GC_PUSH6(&res, &newvar, &ivar, &nivar, &ilb, &iub);
+    // An internal `Intersect` meet node (see #61917) is exact for subtyping but
+    // must not appear in the result type (it is not a real type). It only ever
+    // occurs as the top layer of `vb->ub`; over-approximate it before it is used
+    // as a substituted value or typevar bound below.
+    vb->ub = widen_intersect(vb->ub);
     // try to reduce var to a single value
     if (jl_is_long(vb->ub) && jl_is_typevar(vb->lb)) {
         varval = vb->ub;

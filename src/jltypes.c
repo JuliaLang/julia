@@ -912,19 +912,27 @@ jl_value_t *simple_intersect(jl_value_t *a, jl_value_t *b, int overesi)
         JL_GC_POP();
         return jl_bottom_type;
     }
-    if (!subs[0] && !subs[1]) {
+    if (!subs[0] && !subs[1] && overesi == 1) {
         // Neither operand subsumes the other and they are not disjoint, so the
-        // meet is not expressible as a single existing type. On the subtype
-        // path (overesi=1; the only path that reaches here, since overesi=0
-        // returned `Union{}` above) return it exactly as an internal
-        // `Intersect{a, b}` node rather than over-approximating to one side's
-        // components, which would silently drop the other side. See #61917.
+        // meet is not expressible as a single existing type. With `overesi==1`
+        // (exact-meet mode, used on the subtype path) keep it as an internal
+        // `Intersect{a, b}` node rather than over-approximating to one side,
+        // which would silently drop the other. `overesi==2` falls through to
+        // the legacy over-approximation below (used to widen an `Intersect`
+        // before it could escape into a static parameter). See #61917.
         JL_GC_POP();
         return jl_new_struct(jl_intersect_type, a, b);
     }
-    nt = subs[0] ? nta : nt;
-    i  = subs[0] ? 0   : nta;
+    nt = subs[0] ? nta : subs[1] ? nt  : nt;
+    i  = subs[0] ? 0   : subs[1] ? nta : 0;
     count = nt - i;
+    if (!subs[0] && !subs[1]) {
+        // over-approximate (`overesi==2`): keep only `a` components with strict
+        // `<:` and all of `b`, then union them.
+        for (j = 0; j < nt; j++)
+            if (stemp[j] < (j < nta ? 2 : 0))
+                temp[j] = NULL;
+    }
     isort_union(&temp[i], count);
     temp[nt] = jl_bottom_type;
     size_t k;
