@@ -452,7 +452,7 @@ function _foreigncall_arg1_expr(ex)
         _to_lowered_expr(ex)
     else
         k = kind(ex)
-        Expr(Symbol((k === K"unknown_head" ? st.name_val : untokenize(k))::String),
+        Expr(Symbol((k === K"unknown_head" ? ex.name_val : untokenize(k))::String),
              map(_foreigncall_arg1_expr, children(ex))...)
     end
 end

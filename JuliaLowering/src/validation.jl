@@ -582,7 +582,7 @@ vst1_call_kwarg(vcx, st) = @stm st begin
     [K"." x [K"inert_syntaxtree" id]] -> vst1(vcx, x) & vst1_ident(vcx, id; lhs=true)
     ([K"call" [K"Identifier"] symval v], when=(st[1].name_val==="=>")) ->
         vst1(vcx, symval) & vst1(vcx, v)
-    _ -> @fail(st, "expected identifier, `=`, or, `...` after semicolon")
+    _ -> @fail(st, "expected identifier, `=`, or `...` after semicolon")
 end
 
 vst1_lam(vcx, st) = let
@@ -1237,7 +1237,9 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
     [K"tryfinally" t f] -> vst2(vcx, t) & vst2(vcx, f)
     [K"tryfinally" t f scope] -> vst2(vcx, t) & vst2(vcx, f) & vst2(vcx, scope)
     [K"_opaque_closure" id argt lb ub partial nargs isva src lam] ->
-        all(vst2, vcx, children(st)[2:end]) & vst2_lam(vcx, lam)
+        vst2_ident(vcx, id) &
+        all(vst2, vcx, children(st)[2:end-1]) &
+        vst2_lam(vcx, lam)
     [K"_do_while" body cond] -> vst2(vcx, body) & vst2(vcx, cond)
     [K"_while" cond body] -> vst2(vcx, cond) & vst2(vcx, body)
     [K"inert" _] -> pass()

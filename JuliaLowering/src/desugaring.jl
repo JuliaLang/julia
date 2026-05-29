@@ -1624,7 +1624,7 @@ function expand_named_tuple(ctx, ex, kws; field_name="named tuple field",
         k = kind(kw)
         appended_nt = nothing
         name = value = nothing
-        if kind(k) == K"Identifier"
+        if k == K"Identifier"
             # x  ==>  x = x
             name = to_symbol(ctx, kw)
             value = kw
@@ -4093,7 +4093,6 @@ function expand_public(ctx, ex)
         @jl_assert kind(e) == K"Identifier" (ex, "Expected identifier")
         push!(identifiers, e.name_val)
     end
-    (e.name_val::K"String" for e in children(ex))
     @ast ctx ex [K"call"
         eval_public::K"Value"
         ctx.mod::K"Value"
