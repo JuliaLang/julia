@@ -90,7 +90,7 @@ Standard library changes
 
 #### LinearAlgebra
 
-* `eigvals`, `eigvecs`, and `eigen` now accept the `sortby` keyword argument for all matrix types, and is set to sort by default ([#1608](https://github.com/JuliaLang/LinearAlgebra.jl/pull/1608)).
+* `eigvals`, `eigvecs`, and `eigen` now accept the `sortby` keyword argument for all matrix types, and now sort by default ([#1608](https://github.com/JuliaLang/LinearAlgebra.jl/pull/1608)).
 
 #### Markdown
 
