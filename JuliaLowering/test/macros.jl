@@ -433,7 +433,20 @@ end
     end
 end
 
-@testset "macros producing meta forms" begin
+@testset "empty meta" begin
+    @test fl_eval(test_mod, Expr(:meta)) == nothing
+    @test fl_eval(test_mod, Expr(:block, Expr(:meta))) == nothing
+    @test fl_eval(test_mod, Expr(:call,
+                                 Expr(:function, Expr(:call, :func_empty_meta),
+                                      Expr(:block, Expr(:meta))))) == nothing
+    @test jl_eval(test_mod, Expr(:meta)) == nothing
+    @test jl_eval(test_mod, Expr(:block, Expr(:meta))) == nothing
+    @test jl_eval(test_mod, Expr(:call,
+                                 Expr(:function, Expr(:call, :func_empty_meta),
+                                      Expr(:block, Expr(:meta))))) == nothing
+end
+
+@testset "macros producing meta forms" for expr_compat_mode in [true, false]
     function find_method_ci(thunk)
         ci = thunk.args[1]::Core.CodeInfo
         m = findfirst(x->(x isa Expr && x.head === :method && length(x.args) === 3), ci.code)
@@ -443,7 +456,7 @@ end
         JuliaLowering.lower(
             test_mod, JuliaLowering.parsestmt(
                 JuliaLowering.SyntaxTree, s);
-            expr_compat_mode=true))
+            expr_compat_mode))
 
     prog = "Base.@assume_effects :foldable function foo(); end"
     ref = Meta.lower(test_mod, Meta.parse(prog))
@@ -475,6 +488,231 @@ end
     our = jlower_e(prog)
     @test find_method_ci(ref).propagate_inbounds === find_method_ci(our).propagate_inbounds
 
+    prog = "Base.@assume_effects :total @inline function foo(); end"
+    ref = Meta.lower(test_mod, Meta.parse(prog))
+    our = jlower_e(prog)
+    @test find_method_ci(ref).inlining === find_method_ci(our).inlining
+    @test find_method_ci(ref).purity === find_method_ci(our).purity
+
+    prog = "Base.@assume_effects :consistent Base.@assume_effects :nothrow function foo(); end"
+    ref = Meta.lower(test_mod, Meta.parse(prog))
+    our = jlower_e(prog)
+    @test find_method_ci(ref).purity === find_method_ci(our).purity
+
+    # TODO: no api for option retrieval, just check that it compiles
+    let options_mod = Module()
+        @test fl_eval(options_mod, :(Base.Experimental.@optlevel 1)) == nothing
+        @test jl_eval(options_mod, :(Base.Experimental.@optlevel 1)) == nothing
+        @test fl_eval(options_mod, :(Base.Experimental.@max_methods 1)) == nothing
+        @test jl_eval(options_mod, :(Base.Experimental.@max_methods 1)) == nothing
+    end
+end
+
+# partially robot-generated
+@testset "meta-like forms not using the `meta` expression" for expr_compat_mode in (true,false)
+    @testset "in value position" begin
+        @test fl_eval(test_mod, Expr(:boundscheck)) isa Bool
+        @test jl_eval(test_mod, Expr(:boundscheck); expr_compat_mode) isa Bool
+
+        @test fl_eval(test_mod, Expr(:inbounds, true)) === nothing
+        @test fl_eval(test_mod, Expr(:inbounds, false)) === nothing
+        @test fl_eval(test_mod, Expr(:inbounds, :pop)) === nothing
+        @test jl_eval(test_mod, Expr(:inbounds, true); expr_compat_mode) === nothing
+        @test jl_eval(test_mod, Expr(:inbounds, false); expr_compat_mode) === nothing
+        @test jl_eval(test_mod, Expr(:inbounds, :pop); expr_compat_mode) === nothing
+
+        @testset for inline in (:inline, :noinline)
+            @testset let ex = Expr(:block,
+                                   Expr(inline, true),
+                                   Expr(inline, false))
+                @test fl_eval(test_mod, ex) === nothing
+                @test jl_eval(test_mod, ex; expr_compat_mode) === nothing
+            end
+            @testset let ex = Expr(:function, Expr(:tuple),
+                                   Expr(:block,
+                                        Expr(inline, true),
+                                        Expr(inline, false)))
+                local f
+                f = fl_eval(test_mod, ex)
+                Core.@latestworld
+                @test f() === nothing
+
+                f = jl_eval(test_mod, ex; expr_compat_mode)
+                Core.@latestworld
+                @test f() === nothing
+            end
+        end
+    end
+
+    function find_method_ci(thunk)
+        ci = thunk.args[1]::Core.CodeInfo
+        m = findfirst(x->(x isa Expr && x.head === :method && length(x.args) === 3), ci.code)
+        ci.code[m].args[3]
+    end
+    jlower_e(s) = JuliaLowering.to_lowered_expr(
+        JuliaLowering.lower(
+            test_mod, JuliaLowering.parsestmt(
+                JuliaLowering.SyntaxTree, s);
+            expr_compat_mode))
+    our_ssaflags(prog) = find_method_ci(jlower_e(prog)).ssaflags
+
+    local INBOUNDS = Core.Compiler.IR_FLAG_INBOUNDS
+    local INLINE   = Core.Compiler.IR_FLAG_INLINE
+    local NOINLINE = Core.Compiler.IR_FLAG_NOINLINE
+
+    # `compute_ssaflags` shifts the encoded purity overrides up by NUM_IR_FLAGS.
+    purity_mask(eo::Base.EffectsOverride) =
+        UInt32(Base.encode_effects_override(eo)) << Core.Compiler.NUM_IR_FLAGS
+
+    # check any IR statement in `prog` has `flags`
+    has_any(prog, flags) = any(f -> (f & flags) == flags, our_ssaflags(prog))
+    has_none(prog, flags) = all(f -> (f & flags) == 0,    our_ssaflags(prog))
+
+    @testset "boundscheck" begin
+        JuliaLowering.include_string(test_mod, """
+        @inline function g_boundscheck(A, i)
+            @boundscheck checkbounds(A, i)
+            return A[i]
+        end
+        """; expr_compat_mode)
+        @test test_mod.g_boundscheck(1:2, 2) == 2
+        @test_throws BoundsError test_mod.g_boundscheck(1:2, 3)
+
+        # The boundscheck marker itself does not set IR_FLAG_INBOUNDS — it is
+        # a separate runtime predicate, not an annotation.
+        @test has_none("function f(A,i); @boundscheck checkbounds(A,i); A[i]; end",
+                       INBOUNDS)
+        # `Expr(:boundscheck)` should survive lowering as a top-level
+        # statement (it gets rewritten by inlining/codegen, not lowering).
+        let our = find_method_ci(jlower_e(
+                "function f(A,i); @boundscheck checkbounds(A,i); A[i]; end"))
+            @test any(s -> s isa Expr && s.head === :boundscheck, our.code)
+        end
+    end
+
+    @testset "inbounds" begin
+        JuliaLowering.include_string(test_mod, """
+        function sum_inbounds(A::AbstractArray)
+            r = zero(eltype(A))
+            for i in eachindex(A)
+                @inbounds r += A[i]
+            end
+            return r
+        end
+        """; expr_compat_mode)
+        @test test_mod.sum_inbounds([1,2,3]) == 6
+
+        @test has_none("function f(A,i); A[i]; end", INBOUNDS)
+        @test has_any("function f(A,i); @inbounds A[i]; end", INBOUNDS)
+        @test has_any("""
+            function f(A)
+                s = zero(eltype(A))
+                @inbounds for i in eachindex(A)
+                    s += A[i]
+                end
+                s
+            end
+        """, INBOUNDS)
+        let flags = our_ssaflags("""
+                function f(A, i, j)
+                    z = @inbounds A[i]
+                    A[j]
+                end
+            """)
+            @test any(f -> (f & INBOUNDS) != 0, flags)  # inside @inbounds
+            @test any(f -> (f & INBOUNDS) == 0, flags)  # outside
+        end
+    end
+
+    @testset "inline" begin
+        @test has_any("function f(g,x); @inline g(x); end", INLINE)
+        @test has_none("function f(g,x); g(x); end", INLINE)
+        @test has_none("function f(g,x); @inline g(x); end", NOINLINE)
+        @test has_any("function f(g,x); @inline g(x) + g(x); end", INLINE)
+
+        # Bare `@inline` inside a function body (1.8+) emits
+        # `Expr(:meta, :inline)`; no statement gets a call-site IR_FLAG_INLINE.
+        JuliaLowering.include_string(test_mod, """
+        function bare_inline(x)
+            @inline
+            x * 2
+        end
+        """; expr_compat_mode)
+        @test test_mod.bare_inline(3) == 6
+        @test has_none("function f(x); @inline; x * 2; end", INLINE)
+
+        # `@inline` on a definition is handled by the meta-expression path
+        # (covered in "macros producing meta forms"); confirm it still runs
+        # and that no call-site INLINE bit leaks into the body.
+        JuliaLowering.include_string(test_mod, """
+        @inline f_inline_def(x) = x + 1
+        """; expr_compat_mode)
+        @test test_mod.f_inline_def(2) == 3
+        @test has_none("@inline f(x) = x + 1", INLINE)
+    end
+
+    @testset "noinline" begin
+        # Analogous to `@inline` but pushes IR_FLAG_NOINLINE.
+        @test has_any("function f(g,x); @noinline g(x); end", NOINLINE)
+        @test has_none("function f(g,x); g(x); end", NOINLINE)
+        @test has_none("function f(g,x); @noinline g(x); end", INLINE)
+        @test has_any("function f(g,x); @noinline g(x) + g(x); end", NOINLINE)
+
+        JuliaLowering.include_string(test_mod, """
+        function bare_noinline(x)
+            @noinline
+            x * 2
+        end
+        """; expr_compat_mode)
+        @test test_mod.bare_noinline(3) == 6
+        @test has_none("function f(x); @noinline; x * 2; end", NOINLINE)
+
+        JuliaLowering.include_string(test_mod, """
+        @noinline f_noinline_def(x) = x + 1
+        """; expr_compat_mode)
+        @test test_mod.f_noinline_def(2) == 3
+
+        # Innermost annotation wins when @inline / @noinline nest: the inner
+        # call gets IR_FLAG_INLINE; the outer @noinline still applies to
+        # statements outside the inner region.
+        let flags = our_ssaflags("""
+                function f(g, x)
+                    @noinline let
+                        a = @inline g(x)
+                        b = g(x)
+                        (a, b)
+                    end
+                end
+            """)
+            @test any(f -> (f & INLINE)   != 0, flags)
+            @test any(f -> (f & NOINLINE) != 0, flags)
+        end
+    end
+
+    @testset "purity" begin
+        # Sanity: plain function with no purity annotation has no purity bits set.
+        @test has_none("function f(g,x); g(x); end",
+                       UInt32(0xFFFF) << Core.Compiler.NUM_IR_FLAGS)
+        # `@assume_effects :foo expr` at a call site expands to
+        #   (block (purity ...11 bool args...) (local (= val expr)) (purity) val)
+        # where the trailing zero-arg `(purity)` is the region-end token.
+        @test has_any("function f(g,x); Base.@assume_effects :nothrow g(x); end",
+                      purity_mask(Base.EffectsOverride(nothrow=true)))
+        # Multiple atomic settings combine to set both bits at once.
+        @test has_any(
+            "function f(g,x); Base.@assume_effects :consistent :effect_free g(x); end",
+            purity_mask(Base.EffectsOverride(consistent=true, effect_free=true)))
+
+        # Function form goes through a different path: `(meta (purity args...))`
+        JuliaLowering.include_string(test_mod, """
+        Base.@assume_effects :total f_assume_def(x) = x
+        """; expr_compat_mode)
+        @test test_mod.f_assume_def(5) == 5
+        prog_def = "Base.@assume_effects :total function f_assume_total(x); x; end"
+        ref_ci = find_method_ci(Meta.lower(test_mod, Meta.parse(prog_def)))
+        our_ci = find_method_ci(jlower_e(prog_def))
+        @test ref_ci.purity === our_ci.purity
+    end
 end
 
 @testset "scope layers for normally-inert ASTs" begin
@@ -654,27 +892,6 @@ end
 
     @test test_mod.inner([1,2,3], [1,2,3]) == 14
     @test test_mod.innersimd([1,2,3], [1,2,3]) == 14
-end
-
-@testset "@boundscheck / @inbounds" begin
-    JuliaLowering.include_string(test_mod, """
-    function sum_inbounds(A::AbstractArray)
-        r = zero(eltype(A))
-        for i in eachindex(A)
-            @inbounds r += A[i]
-        end
-        return r
-    end
-    """; expr_compat_mode=true)
-    @test test_mod.sum_inbounds([1,2,3]) == 6
-
-    JuliaLowering.include_string(test_mod, """
-    @inline function g_boundscheck(A, i)
-        @boundscheck checkbounds(A, i)
-        return A[i]
-    end
-    """; expr_compat_mode=true)
-    @test test_mod.g_boundscheck(1:2, 2) == 2
 end
 
 @testset "@__FUNCTION__ and Expr(:thisfunction)" begin
