@@ -15,7 +15,7 @@ import FileWatching
 using Markdown
 import REPL
 
-using .JuliaSyntax: SourceAttrType, new_id!, set_numeric_flags, sourcetext
+using .JuliaSyntax: SourceAttrType, new_id!, sourcetext
 
 using .JuliaLowering: @ast, Bindings, Kind, LoweringError, MacroExpansionError, NodeId,
     ScopeLayer, SourceRef, SyntaxGraph, SyntaxTree, children, flattened_provenance,

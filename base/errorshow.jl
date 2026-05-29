@@ -91,7 +91,7 @@ function showerror(io::IO, ex::TypeError)
         end
         if ex.context == ""
             ctx = "in $(ex.func)"
-        elseif isa(ex.context, Core.GlobalRef)
+        elseif isa(ex.context, GlobalRef)
             gr = ex.context
             ctx = "in $(ex.func) of global binding `$(gr.mod).$(gr.name)`"
         elseif ex.func === :var"keyword argument"
@@ -394,6 +394,9 @@ function showerror(io::IO, ex::MethodError)
                       "\nYou can convert to a column vector with the vec() function.")
         end
     end
+    if !is_arg_types && !(f isa Core.Builtin)
+        show_shadowed_type_hint(io, f, san_arg_types_param)
+    end
     Experimental.show_error_hints(io, ex, san_arg_types_param, kwargs)
     try
         show_method_candidates(io, ex, kwargs)
@@ -454,6 +457,192 @@ stacktrace_expand_basepaths()::Bool = Base.get_bool_env("JULIA_STACKTRACE_EXPAND
 stacktrace_contract_userdir()::Bool = Base.get_bool_env("JULIA_STACKTRACE_CONTRACT_HOMEDIR", true) === true
 stacktrace_linebreaks()::Bool = Base.get_bool_env("JULIA_STACKTRACE_LINEBREAKS", false) === true
 
+# Print `::<sig>` with structural framing (type names, braces) in the default
+# color, matching parameters and their separating commas in gray, and the
+# topmost differing subtree(s) in `error_color`.
+function show_type_diff(io::IO, @nospecialize(sig), @nospecialize(called), use_color::Bool, top_level::Bool=true)
+    show_namedtuple_diff(io, sig, called, use_color, top_level) && return nothing
+    params = descend_params(io, sig, called)
+    if params === nothing
+        return show_type_mismatch(io, sig, use_color, top_level)
+    end
+    top_level && print(io, "::")
+    sig_params, called_params, alias = params
+    if alias !== nothing
+        show_typealias_name(io, alias)
+    else
+        show_type_name(io, (sig::DataType).name)
+    end
+    print(io, "{")
+    for k in 1:length(sig_params)
+        k > 1 && show_separator(io, use_color)
+        sp = sig_params[k]
+        cp = called_params[k]
+        if sp === cp
+            show_type_match(io, sp, use_color)
+        else
+            show_type_diff(io, sp, cp, use_color, #=top_level=#false)
+        end
+    end
+    print(io, "}")
+end
+
+function show_separator(io::IO, use_color::Bool)
+    if use_color
+        print(io, text_colors[:light_black], ", ", text_colors[:default])
+    else
+        print(io, ", ")
+    end
+end
+
+function show_type_match(io::IO, @nospecialize(ty), use_color::Bool)
+    if use_color
+        print(io, text_colors[:light_black])
+        show(io, ty)
+        print(io, text_colors[:default])
+    else
+        show(io, ty)
+    end
+end
+
+function show_namedtuple_diff(io::IO, @nospecialize(sig), @nospecialize(called),
+                              use_color::Bool, top_level::Bool)
+    sig isa DataType && called isa DataType || return false
+    sig.name === typename(NamedTuple) && called.name === typename(NamedTuple) || return false
+    length(sig.parameters) == 2 && length(called.parameters) == 2 || return false
+    s_syms, s_types = sig.parameters
+    c_syms, c_types = called.parameters
+    s_syms isa Tuple && c_syms isa Tuple && s_syms == c_syms || return false
+    s_types isa DataType && c_types isa DataType || return false
+    n = length(s_syms)
+    length(s_types.parameters) == n == length(c_types.parameters) || return false
+    (isvatuple(s_types) || isvatuple(c_types)) && return false
+    top_level && print(io, "::")
+    print(io, "@NamedTuple{")
+    for i in 1:n
+        i > 1 && show_separator(io, use_color)
+        show_sym(io, s_syms[i])
+        sp = s_types.parameters[i]
+        cp = c_types.parameters[i]
+        if sp === cp
+            sp === Any && continue   # match `show_at_namedtuple` and don't print `::Any`
+            print(io, "::")
+            show_type_match(io, sp, use_color)
+        else
+            print(io, "::")
+            show_type_diff(io, sp, cp, use_color, #=top_level=#false)
+        end
+    end
+    print(io, "}")
+    return true
+end
+
+# Decide whether `sig` and `called` are pairwise-comparable at this level.
+# Returns one of:
+#   `(sig.parameters, called.parameters, nothing)` — same name, no alias to print
+#   `(sa_env, ca_env, alias::GlobalRef)`           — both resolve to the same alias
+#   `nothing`                                      — bail; caller falls back to whole-subtree highlighting
+function descend_params(io::IO, @nospecialize(sig), @nospecialize(called))
+    sig isa DataType && called isa DataType || return nothing
+    sig.name === called.name || return nothing
+    n = length(sig.parameters)
+    n > 0 && n == length(called.parameters) || return nothing
+    sig.name === typename(NamedTuple) && return nothing
+    (any(isvarargtype, sig.parameters) || any(isvarargtype, called.parameters)) && return nothing
+    sa = make_typealias(sig, io)
+    ca = make_typealias(called, io)
+    if sa === nothing && ca === nothing
+        return sig.parameters, called.parameters, nothing
+    elseif sa !== nothing && ca !== nothing && sa[1] === ca[1]
+        se = sa[2]::SimpleVector
+        ce = ca[2]::SimpleVector
+        length(se) == length(ce) > 0 || return nothing
+        return se, ce, sa[1]
+    else
+        return nothing
+    end
+end
+
+function show_type_mismatch(io::IO, @nospecialize(ty), use_color::Bool, top_level::Bool)
+    if use_color
+        print(io, text_colors[error_color()])
+        top_level && print(io, "::")
+        show(io, ty)
+        print(io, text_colors[:default])
+    elseif top_level
+        print(io, "!Matched::")
+        show(io, ty)
+    else
+        print(io, "!Matched{")
+        show(io, ty)
+        print(io, "}")
+    end
+end
+
+function _resolves_to_self(tn::Core.TypeName)
+    isdefined(tn, :module) || return true
+    m = tn.module
+    (isdefined(m, tn.name) && getglobal(m, tn.name) === tn.wrapper) || return false
+    while (p = parentmodule(m)) !== m
+        (isdefined(p, nameof(m)) && getglobal(p, nameof(m)) === m) || return false
+        m = p
+    end
+    return true
+end
+
+function show_shadowed_type_hint(io::IO, @nospecialize(f), san_arg_types_param::Vector{Any})
+    reported = IdSet{Core.TypeName}()
+    ft = Core.Typeof(f)
+    for method in methods(f)
+        msig = unwrap_unionall(method.sig)::DataType
+        mparams = msig.parameters
+
+        # skip methods where the arity can't match the call
+        nargs = length(san_arg_types_param)
+        is_va = !isempty(mparams) && isa(mparams[end], Core.TypeofVararg)
+        is_va || nargs == length(mparams) - 1 || continue
+
+        # build a list of potential shadows, max one candidate per argument
+        new_args = copy(san_arg_types_param)
+        shadows = Tuple{Core.TypeName,Core.TypeName}[]
+        for i in 1:nargs
+            # everything past nargs+1 hits vararg parameter
+            expected = mparams[min(i + 1, length(mparams))]
+            isa(expected, Core.TypeofVararg) && (expected = unwrapva(expected))
+
+            e_dt = unwrap_unionall(expected); isa(e_dt, DataType) || continue
+            a_dt = unwrap_unionall(san_arg_types_param[i])::DataType
+            e_tn, a_tn = e_dt.name, a_dt.name
+
+            # actual shadowing heuristics
+            e_tn === a_tn && continue
+            e_tn.name === a_tn.name || continue
+            isdefined(e_tn, :module) && isdefined(a_tn, :module) || continue
+            new_args[i] = rewrap_unionall(expected, method.sig)
+            push!(shadows, (a_tn, e_tn))
+        end
+        isempty(shadows) && continue
+        # make sure our suggestion hits an actual method
+        Tuple{ft, new_args...} <: method.sig || continue
+        for (a_tn, e_tn) in shadows
+            # don't print too many hints
+            a_tn in reported && continue
+            push!(reported, a_tn)
+            if !_resolves_to_self(e_tn) || !_resolves_to_self(a_tn)
+                print(io, "\nHint: `")
+                show_unquoted(io, a_tn.module); print(io, ".", a_tn.name)
+                print(io, "` appears to have been redefined, and methods refer to the older definition.")
+            else
+                print(io, "\nHint: You may have intended `")
+                show_unquoted(io, e_tn.module); print(io, ".", e_tn.name)
+                print(io, "` rather than `")
+                show_unquoted(io, a_tn.module); print(io, ".", a_tn.name)
+                print(io, "`.")
+            end
+        end
+    end
+end
+
 function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
     @nospecialize io
     is_arg_types = !isa(ex.args, Tuple)
@@ -479,6 +668,12 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
         if isType(at1) && !has_free_typevars(at1) && at1.parameters[1] isa Type
             push!(funcs, (at1.parameters[1], arg_types_param[2:end]))
         end
+    end
+
+    # helpful when a parameterized struct has an unparameterized inner constructor
+    show_constructor_hint = isa(f, DataType) && (f !== f.name.wrapper) && isempty(methods(f))
+    if show_constructor_hint
+        push!(funcs, (f.name.wrapper, arg_types_param))
     end
 
     for (func, arg_types_param) in funcs
@@ -509,8 +704,9 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
             t_i = copy(arg_types_param)
             right_matches = 0
             sig = sig0.parameters[2:end]
+            use_color = get(io, :color, false)::Bool
             for i = 1 : min(length(t_i), length(sig))
-                i > 1 && print(iob, ", ")
+                i > 1 && show_separator(iob, use_color)
                 # If isvarargtype then it checks whether the rest of the input arguments matches
                 # the varargtype
                 if Base.isvarargtype(sig[i])
@@ -527,14 +723,18 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
                 # the type of the first argument is not matched.
                 t_in === Union{} && special && i == 1 && break
                 if t_in === Union{}
-                    if get(io, :color, false)::Bool
-                        let sigstr=sigstr
-                            Base.with_output_color(Base.error_color(), iob) do iob
-                                print(iob, "::", sigstr...)
+                    if Base.isvarargtype(sig[i])
+                        if use_color
+                            let sigstr=sigstr
+                                Base.with_output_color(Base.error_color(), iob) do iob
+                                    print(iob, "::", sigstr...)
+                                end
                             end
+                        else
+                            print(iob, "!Matched::", sigstr...)
                         end
                     else
-                        print(iob, "!Matched::", sigstr...)
+                        show_type_diff(iob, sig[i], t_i[i], use_color)
                     end
                     # If there is no typeintersect then the type signature from the method is
                     # inserted in t_i this ensures if the type at the next i matches the type
@@ -542,7 +742,11 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
                     t_i[i] = sig[i]
                 else
                     right_matches += j==i ? 1 : 0
-                    print(iob, "::", sigstr...)
+                    if use_color
+                        print(iob, text_colors[:light_black], "::", sigstr..., text_colors[:default])
+                    else
+                        print(iob, "::", sigstr...)
+                    end
                 end
             end
             special && right_matches == 0 && continue
@@ -568,7 +772,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
                         sigstr = Core.svec(sigtype,)
                     end
                     if !((min(length(t_i), length(sig)) == 0) && k==1)
-                        print(iob, ", ")
+                        show_separator(iob, use_color)
                     end
                     if k == 1 && Base.isvarargtype(sigtype)
                         # There wasn't actually a mismatch - the method match failed for
@@ -629,7 +833,12 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
 
     if !isempty(lines) # Display up to three closest candidates
         Base.with_output_color(:normal, io) do io
-            print(io, "\n\nClosest candidates are:")
+            if show_constructor_hint
+                print(io, "\n\nHint: constructors are defined for `", f.name.wrapper,
+                    "`, but not for `", f, "`:")
+            else
+                print(io, "\n\nClosest candidates are:")
+            end
             permute!(lines, sortperm(line_score))
             i = 0
             for line in lines
@@ -1240,6 +1449,15 @@ function _propertynames_bytype(T::Type)
 end
 
 Experimental.register_error_hint(fielderror_listfields_hint_handler, FieldError)
+
+function apply_type_unionall_hint_handler(io, ex)
+    @nospecialize
+    if ex.func === :apply_type && ex.expected === UnionAll
+        print(io, "\nHint: `", ex.got, "` takes no type parameters.")
+    end
+end
+
+Experimental.register_error_hint(apply_type_unionall_hint_handler, TypeError)
 
 function UndefVarError_hint(io::IO, ex::UndefVarError)
     var = ex.var

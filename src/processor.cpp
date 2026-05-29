@@ -2,7 +2,7 @@
 
 // Processor feature detection and dispatch using the cpufeatures library.
 // CPU/feature tables are generated from LLVM's TableGen data and committed
-// to https://github.com/gbaraldi/cpufeatures
+// to https://github.com/JuliaLang/cpufeatures
 //
 // On LLVM version bump:
 //   1. cd cpufeatures && make -f Makefile.generate LLVM_VER=<new>
@@ -249,7 +249,7 @@ static inline jl_image_t load_sysimg_target(jl_image_buf_t image, F &&callback, 
 
 // Verify the cpufeatures tables were generated from a compatible LLVM version.
 #if defined(TARGET_TABLES_LLVM_VERSION_MAJOR) && defined(LLVM_VERSION_MAJOR)
-static_assert(TARGET_TABLES_LLVM_VERSION_MAJOR == LLVM_VERSION_MAJOR,
+static_assert(TARGET_TABLES_LLVM_VERSION_MAJOR <= LLVM_VERSION_MAJOR,
     "cpufeatures tables were generated with a different LLVM major version than Julia uses");
 #endif
 
@@ -448,7 +448,7 @@ static uint32_t match_sysimg_target(void *ctx, const void *id, jl_value_t **reje
             }
         }
         for (int w = 0; w < TARGET_FEATURE_WORDS; w++)
-            target.dis_features.bits[w] = hw_feature_mask.bits[w] & ~target.en_features.bits[w];
+            target.dis_features.bits[w] = llvm_feature_mask.bits[w] & ~target.en_features.bits[w];
         target.cpu_features = tp::build_llvm_feature_string(target.en_features, target.dis_features);
     }
 #else
@@ -710,7 +710,7 @@ extern "C" JL_DLLEXPORT int jl_cpufeatures_lookup(const char *cpu_name,
         return -1;
     FeatureBits hw;
     for (int i = 0; i < TARGET_FEATURE_WORDS; i++)
-        hw.bits[i] = entry->features.bits[i] & hw_feature_mask.bits[i];
+        hw.bits[i] = entry->features.bits[i] & llvm_feature_mask.bits[i];
     memcpy(features_out, &hw, sizeof(FeatureBits));
     return 0;
 }
@@ -721,7 +721,7 @@ extern "C" JL_DLLEXPORT void jl_cpufeatures_host(uint8_t *features_out, size_t b
         return;
     auto fb = tp::get_host_features();
     for (int i = 0; i < TARGET_FEATURE_WORDS; i++)
-        fb.bits[i] &= hw_feature_mask.bits[i];
+        fb.bits[i] &= llvm_feature_mask.bits[i];
     memcpy(features_out, &fb, sizeof(FeatureBits));
 }
 
@@ -875,8 +875,16 @@ JL_DLLEXPORT jl_value_t *jl_get_cpu_features(void)
 
 #ifndef __clang_analyzer__
 extern "C" JL_DLLEXPORT jl_value_t* jl_reflect_clone_targets() {
-    auto targets = jl_get_llvm_clone_targets(jl_options.cpu_target);
-    auto &data = targets.data;
+    // Return the actual JIT target(s) chosen after sysimage matching, so that
+    // debug output reflects what pkgimage clones are compared against rather
+    // than the unmatched targets parsed from `jl_options.cpu_target`.
+    std::vector<uint8_t> data;
+    if (!jit_targets.empty()) {
+        data = tp::serialize_targets(jit_targets);
+    } else {
+        auto targets = jl_get_llvm_clone_targets(jl_options.cpu_target);
+        data = std::move(targets.data);
+    }
     jl_value_t *arr = (jl_value_t*)jl_alloc_array_1d(jl_array_uint8_type, data.size());
     uint8_t *out = jl_array_data(arr, uint8_t);
     memcpy(out, data.data(), data.size());

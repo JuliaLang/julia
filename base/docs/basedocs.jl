@@ -1011,8 +1011,12 @@ kw"while"
 [`module`](@ref), [`struct`](@ref), [`mutable struct`](@ref),
 [`begin`](@ref), [`let`](@ref), [`for`](@ref) etc.
 
-`end` may also be used when indexing to represent the last index of a
-collection or the last index of a dimension of an array.
+`end` may also be used when indexing with `[...]` to represent the last index of a
+collection or the last index of a dimension of an array. For example, the expression
+`A[end-1]` becomes `A[lastindex(A)-1]` and `A[:, end]` becomes `A[:, lastindex(A, 2)]`.
+Every occurrence of `end` within the square bracket indexing syntax is lowered to a
+call to [`lastindex`](@ref), using the one argument `lastindex(A)` there's only one index
+argument and the two argument `lastindex(A, n)` for the n-th index argument.
 
 # Examples
 ```jldoctest
@@ -1507,9 +1511,9 @@ end
 Usually `begin` will not be necessary, since keywords such as [`function`](@ref) and [`let`](@ref)
 implicitly begin blocks of code. See also [`;`](@ref).
 
-`begin` may also be used when indexing to represent the first index of a
-collection or the first index of a dimension of an array. For example,
-`a[begin]` is the first element of an array `a`.
+`begin` may also be used when indexing with `[...]` to represent the first index of a
+collection or the first index of a dimension of an array, where it is lowered to
+a call to [`firstindex`](@ref) along the relevant dimension (as determined by the context).  For example, `a[begin]` is the first element of an array `a`.
 
 !!! compat "Julia 1.4"
     Use of `begin` as an index requires Julia 1.4 or later.
@@ -1589,6 +1593,38 @@ end
 See the manual section on [Composite Types](@ref) for more information.
 """
 kw"mutable struct"
+
+"""
+    typegroup
+
+`typegroup` introduces a block in which mutually recursive [`struct`](@ref) and
+[`mutable struct`](@ref) definitions can refer to each other in their field types.
+All types declared inside the block are atomically defined together at the end of
+the block.
+
+```julia
+typegroup
+    struct Node
+        edges::Vector{Edge}
+    end
+    struct Edge
+        from::Node
+        to::Node
+    end
+end
+```
+
+Only `struct` or `mutable struct` definitions are allowed inside a `typegroup` block;
+other declarations, including method definitions, are disallowed. Inner constructor
+definitions are allowed inside the `struct` definitions and will semantically run
+after all types have been atomically instantiated.
+
+!!! compat "Julia 1.14"
+    The `typegroup` keyword requires at least Julia 1.14.
+
+See the manual section on [Mutually Recursive Types](@ref) for more details.
+"""
+kw"typegroup"
 
 """
     new, or new{A,B,...}
@@ -3966,6 +4002,8 @@ This is intended for use in benchmarks that want to guarantee that `args` are
 actually computed. (Otherwise DCE may see that the result of the benchmark is
 unused and delete the entire benchmark code).
 
+For a stronger compiler barrier, see [`Base.blackbox`](@ref).
+
 !!! note
     `donotdelete` does not affect constant folding. For example, in
     `donotdelete(1+1)`, no add instruction needs to be executed at runtime and
@@ -4000,7 +4038,7 @@ Base.donotdelete
 """
     Base.blackbox(x) -> x
 
-This function returns `x` unchanged, but treats the returned value as if it
+Return `x` unchanged but the returned value will be treated as if it
 came from an unknowable black-box source. The optimizer may not make any
 assumptions about the output: it cannot be constant-folded, common-subexpression
 eliminated (CSE'd), or treated as loop-invariant.

@@ -232,6 +232,17 @@ h11840(::Type{T}) where {T<:Tuple} = '4'
 @test h11840(Tuple) == '4'
 @test h11840(TT11840) == '4'
 
+# issue #61242: free-TypeVar bodies and their enclosing UnionAlls bind as
+# distinct type objects.
+let f61242(::Type{T}) where T = T
+    @test f61242(Vector.body) === Vector.body
+    @test f61242(Vector) === Vector
+end
+let g61242(::Type{T}) where T = T
+    @test g61242(Vector) === Vector
+    @test g61242(Vector.body) === Vector.body
+end
+
 # show that we don't make the cache confused by using alternative representations
 # when specificity is reversed
 j11840(::DataType) = '1'
@@ -345,6 +356,15 @@ end
 @test typejoin(NTuple{3,Tuple}, NTuple{2,T} where T) == Tuple{Any,Any,Vararg{Tuple}}
 @test typejoin(Tuple{Tuple{T, T, Any}} where T, Tuple{T, T, Vector{T}} where T) == Tuple{Any,Vararg{Any}}
 @test typejoin(Tuple{T, T, T} where T, Tuple{T, T, Vector{T}} where T) == Tuple{Any,Any,Any}
+
+# issue #61876: a UnionAll operand over a bounded type parameter must still join
+# to the common wrapper rather than collapsing to Any (a free TypeVar parameter
+# no longer subtypes a bounded wrapper var, so typejoin detects shared families
+# by type name).
+abstract type AbstractCfg61876{O<:Integer} end
+struct Cfg61876{O<:Integer, T} <: AbstractCfg61876{O} end
+@test typejoin(Cfg61876{<:Integer, Tuple{Int,Int}}, Cfg61876{Int, Tuple{Int}}) === Cfg61876
+@test typejoin(Cfg61876{<:Integer, Int}, AbstractCfg61876{Int}) === AbstractCfg61876
 
 # issue #26321
 struct T26321{N,S<:NTuple{N}}
@@ -577,6 +597,18 @@ sptest4(x::T, y::T) where {T} = 42
 sptest4(x::T, y) where {T} = 44
 @test sptest4(1,2) == 42
 @test sptest4(1, "cat") == 44
+
+# A method that binds a where-parameter across two arms of a Union: when the
+# argument satisfies the signature only with `T` left unconstrained, dispatch
+# must succeed without throwing in static-parameter matching.
+abstract type SPTestArr5{S,T,N} end
+sptest5(positions::AbstractVector{<:Union{NTuple{N,T}, SPTestArr5{Tuple{N}, T, 1}}}) where {N, T <: Real} =
+    (N, @isdefined(T) ? T : nothing)
+@test sptest5([(1.0, 2.0)]) === (2, Float64)        # T uniquely bound to Float64
+let (n, t) = sptest5([(1, 2.0)])
+    @test n === 2
+    @test t === nothing || t === Union{Int, Float64} || t === Real
+end
 
 # closures
 function clotest()
@@ -7138,7 +7170,7 @@ end
 # issue #21004
 const PTuple_21004{N,T} = NTuple{N,VecElement{T}}
 @test_throws ArgumentError("too few elements for tuple type $PTuple_21004") PTuple_21004(1)
-@test_throws UndefVarError(:T, :static_parameter) PTuple_21004_2{N,T} = NTuple{N, VecElement{T}}(1)
+@test_throws MethodError PTuple_21004_2{N,T} = NTuple{N, VecElement{T}}(1)
 
 #issue #22792
 foo_22792(::Type{<:Union{Int8,Int,UInt}}) = 1;
@@ -7836,9 +7868,33 @@ using Test
 struct T36104
     v::Vector{M36104.T36104}
 end
+const orig_T36104 = T36104
 struct T36104   # check that redefining it works, issue #21816
     v::Vector{T36104}
 end
+@test T36104 === orig_T36104
+# issue #61789: self-referential struct redefinition must reuse the binding
+struct R61789
+    x
+    next::R61789
+end
+const orig_R61789 = R61789
+struct R61789
+    x
+    next::R61789
+end
+@test R61789 === orig_R61789
+# negative case: a field type that genuinely differs must produce a new type
+struct R61789neg
+    x
+    next::R61789neg
+end
+const orig_R61789neg = R61789neg
+struct R61789neg
+    x::Int
+    next::R61789neg
+end
+@test R61789neg !== orig_R61789neg
 struct S36104{K,V}
     v::S36104{K,V}
     S36104{K,V}() where {K,V} = new()
@@ -8783,3 +8839,22 @@ module AmbiguousUsing60659
     using .D, .A
     @test_throws UndefVarError X
 end
+
+# Behavior of TypeVar with lower bound
+f_def_typevar_with_lowerbound(x::T) where {T>:Int} = @isdefined(T) ? T : false
+let r = f_def_typevar_with_lowerbound(1.0)
+    @test r === false || r === Union{Int, Float64}
+end
+
+# An inferred / constant-folded type must not contain a `(tvar, constrains_bool)`
+# SimpleVector pair as a type parameter. The intersection-env svec format must
+# stay confined to env entries; downstream consumers of intersection results
+# (apply_type, return_type inference) must unwrap before using values as types.
+struct _EnvLeak_Foo{N} end
+function _envleak_build(n::Int)
+    VD = Vector{_EnvLeak_Foo{n}}
+    a = VD(undef, 1)
+    b = unsafe_wrap(VD, pointer(a), 1)
+    return typeof(b)
+end
+@test _envleak_build(3) === Vector{_EnvLeak_Foo{3}}

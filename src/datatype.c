@@ -2593,22 +2593,45 @@ static jl_datatype_t *unwrap_to_datatype(jl_value_t *v) JL_NOTSAFEPOINT
 }
 
 // Check if `super` is a valid supertype for subtyping.
-// Returns an error message string, or NULL if valid.
-const char *jl_check_valid_supertype(jl_value_t *super)
+// Throws when invalid; returns otherwise.
+void jl_check_valid_supertype(jl_value_t *super, const char *type_name)
 {
-    if (!jl_is_datatype(super))
-        return "can only subtype data types";
+    if (jl_is_unionall(super)) {
+        // delegate to the body first for a more accurate error
+        // when parameterizing would not salvage the definition
+        jl_value_t *body = super;
+        while (jl_is_unionall(body))
+            body = ((jl_unionall_t*)body)->body;
+        jl_check_valid_supertype(body, type_name);
+        ios_t buf;
+        ios_mem(&buf, 64);
+        jl_static_show((JL_STREAM*)&buf, body);
+        ios_putc('\0', &buf);
+        jl_errorf("invalid subtyping in definition of %s: supertype `%s` has unbound type parameters.",
+                  type_name, buf.buf);
+    }
+    if (jl_is_uniontype(super))
+        jl_errorf("invalid subtyping in definition of %s: cannot subtype a Union type.", type_name);
+    if (jl_is_typevar(super))
+        jl_errorf("invalid subtyping in definition of %s: cannot subtype a type variable.", type_name);
+    if (!jl_is_datatype(super)) {
+        ios_t buf;
+        ios_mem(&buf, 64);
+        jl_static_show((JL_STREAM*)&buf, jl_typeof(super));
+        ios_putc('\0', &buf);
+        jl_errorf("invalid subtyping in definition of %s: supertype must be a type, got a value of type `%s`.",
+                  type_name, buf.buf);
+    }
     if (jl_is_tuple_type(super))
-        return "cannot subtype a tuple type";
+        jl_errorf("invalid subtyping in definition of %s: cannot subtype a tuple type.", type_name);
     if (jl_is_namedtuple_type(super))
-        return "cannot subtype a named tuple type";
+        jl_errorf("invalid subtyping in definition of %s: cannot subtype a named tuple type.", type_name);
     if (jl_subtype(super, (jl_value_t*)jl_type_type))
-        return "cannot add subtypes to Type";
+        jl_errorf("invalid subtyping in definition of %s: cannot add subtypes to Type.", type_name);
     if (jl_subtype(super, (jl_value_t*)jl_builtin_type))
-        return "cannot add subtypes to Core.Builtin";
+        jl_errorf("invalid subtyping in definition of %s: cannot add subtypes to Core.Builtin.", type_name);
     if (!jl_is_abstracttype(super))
-        return "can only subtype abstract types";
-    return NULL;
+        jl_errorf("invalid subtyping in definition of %s: can only subtype abstract types.", type_name);
 }
 
 // Check that all elements of `ftypes` are types or typevars.
@@ -2729,9 +2752,7 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
                 if (jl_is_datatype(resolved_super) &&
                     datatypes[i]->name == ((jl_datatype_t*)resolved_super)->name)
                     jl_errorf("invalid subtyping in definition of %s: a type cannot subtype itself.", type_name);
-                const char *error = jl_check_valid_supertype(resolved_super);
-                if (error)
-                    jl_errorf("invalid subtyping in definition of %s: %s.", type_name, error);
+                jl_check_valid_supertype(resolved_super, type_name);
                 datatypes[i]->super = (jl_datatype_t*)resolved_super;
                 jl_gc_wb(datatypes[i], datatypes[i]->super);
                 JL_GC_POP();

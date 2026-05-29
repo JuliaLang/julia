@@ -91,12 +91,9 @@ trace = (try; f(3); catch; stacktrace(catch_backtrace()); end)[1:3]
 can_inline = Bool(Base.JLOptions().can_inline)
 for (frame, func, inlined) in zip(trace, [g,h,f], (can_inline, can_inline, false))
     @test frame.func === typeof(func).name.singletonname
-    # broken until #50082 can be addressed
-    mi = isa(frame.linfo, Core.CodeInstance) ? frame.linfo.def : frame.linfo
-    @test mi.def.module === which(func, (Any,)).module broken=inlined
-    @test mi.def === which(func, (Any,)) broken=inlined
-    @test mi.specTypes === Tuple{typeof(func), Int} broken=inlined
-    # line
+    @test frame.linfo.def.module === which(func, (Any,)).module
+    @test frame.linfo.def === which(func, (Any,))
+    @test frame.linfo.specTypes === Tuple{typeof(func), Int}
     @test frame.file === Symbol(@__FILE__)
     @test !frame.from_c
     @test frame.inlined === inlined
@@ -259,10 +256,35 @@ struct F49231{a,b,c,d,e,f,g} end
     @test contains(str, "[2] \e[0m\e[1m(::$F49231{Vector, Val{…}, Vector{…}, NTuple{…}, $Int, $Int, $Int})\e[22m\e[0m\e[1m(\e[22m\e[90ma\e[39m::\e[0m$Int, \e[90mb\e[39m::\e[0m$Int, \e[90mc\e[39m::\e[0m$Int\e[0m\e[1m)\e[22m\n")
 end
 
+# 33457: generator/comprehension lambda should, at the very least, not surface a
+# nonsense frame
+let st = nothing
+    try
+        [undef_var for _ in 1:10]
+    catch _
+        st = stacktrace(catch_backtrace())
+    end
+    @testset for frame in st
+        @test frame.line > 0
+        @test frame.file != :none
+    end
+end
+
+let st = nothing
+    try
+        collect(undef_var for _ in 1:10)
+    catch _
+        st = stacktrace(catch_backtrace())
+    end
+    @testset for frame in st
+        @test frame.line > 0
+        @test frame.file != :none
+    end
+end
+
 @testset "Base.StackTraces docstrings" begin
     @test isempty(Docs.undocumented_names(StackTraces))
 end
-
 
 @testset "Dispatch backtraces" begin
     # Check that it's possible to capture a backtrace upon entrance to inference
@@ -296,5 +318,63 @@ end
         ci.def.def === mcaller && any(stacktrace(bt)) do sf
             sf.file == fl && sf.line == ln
         end
+    end
+end
+
+global f_parent1_line::Int, f_inner1_line::Int, f_innermost1_line::Int
+function f_parent1(a)
+    x = a
+    return begin
+        @inline f_inner1(x)
+    end
+end; f_parent1_line = (@__LINE__) - 2
+function f_inner1(a)
+    x = a
+    return @inline f_innermost1(x)
+end; f_inner1_line = (@__LINE__) - 1
+f_innermost1(x) = x > 0 ? @noinline(sin(x)) : error("x is negative")
+f_innermost1_line = (@__LINE__) - 1
+let st = try
+        f_parent1(-1)
+    catch err
+        stacktrace(catch_backtrace())
+    end
+    @test any(st) do sf
+        sf.func === :f_parent1 && sf.line == f_parent1_line && sf.linfo isa Core.MethodInstance
+    end
+    @test any(st) do sf
+        sf.func === :f_inner1 && sf.line == f_inner1_line && sf.linfo isa Core.MethodInstance && sf.inlined
+    end
+    @test any(st) do sf
+        sf.func === :f_innermost1 && sf.line == f_innermost1_line && sf.linfo isa Core.MethodInstance && sf.inlined
+    end
+end
+
+global f_parent2_line::Int, f_inner2_line::Int, f_innermost2_line::Int
+function f_parent2(a)
+    x = identity(a)
+    return begin
+        @inline f_inner2(x)
+    end
+end; f_parent2_line = (@__LINE__) - 2
+function f_inner2(a)
+    x = identity(a)
+    return @inline f_innermost2(x)
+end; f_inner2_line = (@__LINE__) - 1
+f_innermost2(x) = x > 0 ? @noinline(sin(x)) : error("x is negative")
+f_innermost2_line = (@__LINE__) - 1
+let st = try
+        f_parent2(-1)
+    catch err
+        stacktrace(catch_backtrace())
+    end
+    @test any(st) do sf
+        sf.func === :f_parent2 && sf.line == f_parent2_line && sf.linfo isa Core.MethodInstance
+    end
+    @test any(st) do sf
+        sf.func === :f_inner2 && sf.line == f_inner2_line && sf.linfo isa Core.MethodInstance && sf.inlined
+    end
+    @test any(st) do sf
+        sf.func === :f_innermost2 && sf.line == f_innermost2_line && sf.linfo isa Core.MethodInstance && sf.inlined
     end
 end

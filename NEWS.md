@@ -34,9 +34,13 @@ Compiler/Runtime improvements
     effect tracking; for those, the recommended pattern remains storing the field value in
     a local variable before the check (e.g. `val = x.field; if !isnothing(val) ... end`)
     ([#41199], [#47574]).
+  - Stack traces now show full method signatures with argument types for inlined
+    frames, matching the display of non-inlined frames ([#53925]).
 
 Command-line option changes
 ---------------------------
+
+  - `-P <project>` is now a shorthand for `--project <project>` ([#59867]).
 
 Multi-threading changes
 -----------------------
@@ -58,7 +62,8 @@ Build system changes
 New library functions
 ---------------------
 
-- `Base.generating_output()` has been made `public` (but not exported) to allow
+* `tap(f)` creates a function that calls `f(x)` for side effects and returns `x`. ([#61340]).
+* `Base.generating_output()` has been made `public` (but not exported) to allow
   checking whether the current process is performing compilation for a
   pkgimage/sysimage ([#61224]).
 
@@ -117,6 +122,8 @@ Standard library changes
 * `unix2datetime` now accepts a keyword argument `localtime=true` to use the host system's local time zone instead of UTC ([#50296]).
 
 #### InteractiveUtils
+
+* `less`/`@less` and `edit`/`@edit` are now supported for documented variables ([#53539]).
 
 #### Dates
 

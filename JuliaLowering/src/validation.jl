@@ -245,6 +245,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     #---------------------------------------------------------------------------
     # Forms not produced by the parser
     [K"ssavalue" [K"Value"]] -> pass()
+    [K"static_parameter" [K"Value"]] -> pass()
     [K"inert" _] -> pass()
     [K"inert_syntaxtree" _] -> pass()
     [K"core" [K"Identifier"]] -> pass()
@@ -1154,7 +1155,7 @@ function _assert_syntaxtree(st::SyntaxTree, parents::Vector{NodeId}, vr)
             [K"latestworld_if_toplevel"] -> ()
             (_, when=JuliaSyntax.is_literal(st)) -> (:value,)
             (_, when=JuliaSyntax.is_trivia(st)) -> () # green tree only
-            (_, when=JuliaSyntax.is_operator(st)) -> (:name_val) # TODO: remove
+            (_, when=JuliaSyntax.is_operator(st)) -> (:name_val,) # TODO: remove
             _ -> return vr & @fail(st, "unrecognized leaf kind")
         end
     else
@@ -1168,6 +1169,13 @@ function _assert_syntaxtree(st::SyntaxTree, parents::Vector{NodeId}, vr)
     for a in required_attrs
         vr &= hasattr(st, a) ? pass() : @fail(st, string("needs attribute ", a))
     end
+    # TODO: Proper traversal along .source and .macro_source (need to cache
+    # results to avoid exponential repeated lookups, and figure out how these
+    # edges may form cycles with child edges)
+    st.source === st._id && (vr &= @fail(st, ".source equal to self ID"))
+    get(st, :macro_source, nothing) === st._id &&
+        (vr &= @fail(st, ".macro_source equal to self ID"))
+
     push!(parents, st._id)
     for c in children(st)
         vr &= _assert_syntaxtree(c, parents, vr)
@@ -1198,7 +1206,7 @@ end
 
 vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
     (_, when=is_leaf(st)) -> kind(st) in KSet"""
-    Identifier BindingId Placeholder nothing
+    Identifier BindingId Placeholder nothing static_parameter
     Bool Char Float Float32 BinInt OctInt HexInt Integer
     SourceLocation String Symbol Value core top
     latestworld latestworld_if_toplevel symbolicgoto oldsymbolicgoto symboliclabel TOMBSTONE
@@ -1266,6 +1274,8 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
          vst2(vcx, at) &
          vst2(vcx, cconv) &
          all(vst2, vcx, roots_args)
+    [K"cfunction" [K"Value"] [K"static_eval" fptr] [K"static_eval" rt] [K"static_eval" at] [K"Symbol"]] ->
+         vst2(vcx, fptr) & vst2(vcx, rt) & vst2(vcx, at)
     [K"cfunction" [K"Value"] fptr [K"static_eval" rt] [K"static_eval" at] [K"Symbol"]] ->
          vst2(vcx, fptr) & vst2(vcx, rt) & vst2(vcx, at)
 

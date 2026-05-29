@@ -397,9 +397,10 @@ function mmap(io::IO,
     isbitstype(T)  || throw(ArgumentError("unable to mmap $T; must satisfy isbitstype(T) == true"))
 
     len = Base.aligned_sizeof(T)
+    orig_len = len
     for l in dims
         len, overflow = Base.Checked.mul_with_overflow(promote(len, l)...)
-        overflow && throw(ArgumentError("requested size prod($((len, dims...))) too large, would overflow typeof(size(T)) == $(typeof(len))"))
+        overflow && throw(ArgumentError("requested size prod($dims) * $orig_len too large, would overflow typeof(size(T)) == $(typeof(len))"))
     end
     len >= 0 || throw(ArgumentError("requested size must be ≥ 0, got $len"))
     len == 0 && return Array{T}(undef, dims)
@@ -569,7 +570,6 @@ when `A` is garbage-collected, but deterministic.
 """
 munmap!(A::Array) = finalize(A.ref.mem)
 munmap!(B::BitArray) = finalize(B.chunks.ref.mem)
-
 
 # msync flags for unix
 const MS_ASYNC = 1

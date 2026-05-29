@@ -166,7 +166,7 @@ void jl_dump_llvm_opt_impl(void *s)
 static void jl_decorate_module(Module &M) JL_NOTSAFEPOINT;
 
 // convert local roots into global roots, if they are needed
-static void jl_promote_method_roots(jl_codegen_output_t &out, jl_method_instance_t *mi, Module &M)
+static void jl_promote_method_roots(jl_codegen_output_t &out, jl_method_instance_t *mi)
 {
     JL_GC_PROMISE_ROOTED(out.temporary_roots); // rooted by caller
     if (jl_array_dim0(out.temporary_roots) == 0)
@@ -443,14 +443,13 @@ static void jl_do_dump_compile(jl_code_instance_t *codeinst, uint64_t time)
 }
 
 extern "C" JL_DLLEXPORT_CODEGEN void
-jl_emit_codeinst_to_jit_impl(jl_code_instance_t *codeinst, jl_code_info_t *src)
+jl_emit_codeinsts_to_jit_impl(jl_code_instance_t **codeinsts, jl_code_info_t **srcs, int len)
 {
-    if (jl_atomic_load_relaxed(&codeinst->invoke))
+    if (len == 0)
         return;
 
     JL_TIMING(CODEINST_COMPILE, CODEINST_COMPILE);
-    jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
-    const char *name = name_from_method_instance(mi);
+    const char *name = name_from_method_instance(jl_get_ci_mi(codeinsts[len - 1]));
     auto ctx = std::make_unique<LLVMContext>();
     auto &dl = jl_ExecutionEngine->getDataLayout();
     auto &tt = jl_ExecutionEngine->getTargetTriple();
@@ -458,27 +457,42 @@ jl_emit_codeinst_to_jit_impl(jl_code_instance_t *codeinst, jl_code_info_t *src)
     jl_codegen_output_t out{*mod};
     out.get_context().setDiscardValueNames(true);
     out.imaging_mode = false;
-    out.temporary_roots = jl_alloc_array_1d(jl_array_any_type, 0);
     JL_GC_PUSH1(&out.temporary_roots);
 
-    if (!jl_emit_codeinst(out, codeinst, src)) { // contains safepoints
-        JL_GC_POP();
-        return;
+    for (int i = 0; i < len; ++i) {
+        jl_code_instance_t *codeinst = codeinsts[i];
+        jl_code_info_t *src = srcs[i];
+        jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
+
+        if (jl_atomic_load_relaxed(&codeinst->invoke))
+            continue;
+
+        out.temporary_roots = jl_alloc_array_1d(jl_array_any_type, 0);
+        out.temporary_roots_set.clear();
+        if (!jl_emit_codeinst(out, codeinst, src)) { // contains safepoints
+            JL_GC_POP();
+            return;
+        }
+
+        // contains safepoints
+        jl_promote_method_roots(out, mi);
+        emit_always_inline(out, jl_get_method_ir); // contains safepoints
+
+        // Non-opaque-closure MethodInstances are considered globally rooted
+        // through their methods, but for OC, we need to create a global root
+        // here.
+        if (jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure)
+            jl_as_global_root((jl_value_t*)mi, 1);
     }
 
-    // contains safepoints
-    jl_promote_method_roots(out, mi, out.get_module());
-    emit_always_inline(out, jl_get_method_ir); // contains safepoints
-    emit_llvmcall_modules(out);
     out.temporary_roots = nullptr;
     out.temporary_roots_set.clear();
     JL_GC_POP();
 
-    // Non-opaque-closure MethodInstances are considered globally rooted
-    // through their methods, but for OC, we need to create a global root
-    // here.
-    if (jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure)
-        jl_as_global_root((jl_value_t*)mi, 1);
+    if (out.ci_funcs.empty())
+        return;
+
+    emit_llvmcall_modules(out);
 
     auto &ES = jl_ExecutionEngine->getExecutionSession();
     jl_emitted_output_t emitted =
@@ -543,7 +557,7 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
             jl_debuginfo_t *debuginfo = src->debuginfo;
             jl_atomic_store_release(&unspec->debuginfo, debuginfo); // n.b. this assumes the field was previously NULL, which is not entirely true
             jl_gc_wb(unspec, debuginfo);
-            jl_emit_codeinst_to_jit(unspec, src);
+            jl_emit_codeinsts_to_jit(&unspec, &src, 1);
             jl_ExecutionEngine->publishCIs(unspec, true);
         }
         JL_UNLOCK(&jitlock); // Might GC
@@ -831,16 +845,24 @@ public:
         auto &Syms = I.SymbolFlags;
         SmallSet<SymbolStringPtr, 2> CISyms;
         for (auto &[CI, Funcs] : Out.linker_info->ci_funcs) {
-            auto Unique = JIT.makeUniqueCIName(CI, Funcs);
-            if (Funcs.invoke) {
-                assert(Funcs.invoke_api == JL_INVOKE_SPECSIG);
-                Syms[Unique.invoke] = JITSymbolFlags::Callable | JITSymbolFlags::Exported;
+            if (Funcs.invoke)
                 CISyms.insert(Funcs.invoke);
-            }
-            if (Funcs.specptr) {
-                Syms[Unique.specptr] = JITSymbolFlags::Callable | JITSymbolFlags::Exported;
+            if (Funcs.specptr)
                 CISyms.insert(Funcs.specptr);
-            }
+
+            // If we discover that another thread added this CI to the JIT
+            // first, we'll still add the original symbols to CISyms (so they
+            // will be filtered out of the MU Interface), but we won't register them in
+            // CISymbols.
+            jl_callptr_t Expected = NULL;
+            CISymbolPtr Unique{};
+            if (jl_atomic_cmpswap_relaxed(&CI->invoke, &Expected,
+                                          jl_fptr_wait_for_compiled_addr))
+                Unique = JIT.makeUniqueCIName(CI, Funcs);
+            if (Unique.invoke)
+                Syms[Unique.invoke] = JITSymbolFlags::Callable | JITSymbolFlags::Exported;
+            if (Unique.specptr)
+                Syms[Unique.specptr] = JITSymbolFlags::Callable | JITSymbolFlags::Exported;
         }
 
         // Tell ORC about all the other definition in this module.  When
@@ -1663,7 +1685,17 @@ void optimizeDLSyms(Module &M) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER {
 void fixupTM(TargetMachine &TM) {
     auto TheTriple = TM.getTargetTriple();
     if (jl_options.opt_level < 2) {
-        if (!TheTriple.isARM() && !TheTriple.isPPC64() && !TheTriple.isAArch64())
+        // Try GlobalISel on AArch64 - it's the default in LLVM at -O0 and
+        // is apparently generally faster than SelectionDAG while producing good code.
+        // Use fallback mode so unsupported patterns fall back to SelectionDAG.
+        // Note: Requires RemoveJuliaAddrspacesPass to run before codegen
+        // because GlobalISel doesn't handle Julia's custom address spaces.
+        if (TheTriple.isAArch64()) {
+            TM.setGlobalISel(true);
+            TM.setGlobalISelAbort(GlobalISelAbortMode::Disable);
+            TM.setFastISel(false);
+        }
+        else if (!TheTriple.isARM() && !TheTriple.isPPC64())
             TM.setFastISel(true);
         else    // FastISel seems to be buggy Ref #13321
             TM.setFastISel(false);
@@ -1681,9 +1713,9 @@ JuliaOJIT::JuliaOJIT()
   : TM(createTargetMachine()),
     DL(jl_create_datalayout(*TM)),
     ES(cantFail(orc::SelfExecutorProcessControl::Create(nullptr, std::make_unique<::JuliaTaskDispatcher>()))),
+    SessionJD(ES.createBareJITDylib("JuliaSession")),
     GlobalJD(ES.createBareJITDylib("JuliaGlobals")),
     JD(ES.createBareJITDylib("JuliaOJIT")),
-    ExternalJD(ES.createBareJITDylib("JuliaExternal")),
     DLSymOpt(std::make_unique<DLSymOptimizer>(false)),
     MemMgr(createJITLinkMemoryManager()),
     ObjectLayer(ES, *MemMgr),
@@ -1711,39 +1743,51 @@ JuliaOJIT::JuliaOJIT()
     ObjectLayer.addPlugin(std::make_unique<EHFrameRegistrationPlugin>(
         ExecutorAddr::fromPtr(JLEHFrames::registerEHFrameSectionAllocAction),
         ExecutorAddr::fromPtr(JLEHFrames::deregisterEHFrameSectionAllocAction)));
-#endif
+# else
     ObjectLayer.addPlugin(cantFail(EHFrameRegistrationPlugin::Create(ES)));
+# endif
 #endif
 
     ObjectLayer.addPlugin(DebuginfoPlugin);
     ObjectLayer.addPlugin(std::make_unique<JLMemoryUsagePlugin>(&jit_bytes_size));
 
-    std::string ErrorStr;
-
+    SetVector<void*> libhandles;
     // Make sure that libjulia-internal is loaded and placed first in the
     // DynamicLibrary order so that calls to runtime intrinsics are resolved
     // to the correct library when multiple libjulia-*'s have been loaded
     // (e.g. when we `ccall` into a PackageCompiler.jl-created shared library)
-    sys::DynamicLibrary libjulia_internal_dylib = sys::DynamicLibrary::addPermanentLibrary(
-      jl_libjulia_internal_handle, &ErrorStr);
-    if(!ErrorStr.empty())
-        report_fatal_error(llvm::Twine("FATAL: unable to dlopen libjulia-internal\n") + ErrorStr);
-
+    libhandles.insert(jl_libjulia_internal_handle);
+    libhandles.insert(jl_libjulia_handle);
     // Make sure SectionMemoryManager::getSymbolAddressInProcess can resolve
     // symbols in the program as well. The nullptr argument to the function
-    // tells DynamicLibrary to load the program, not a library.
-    if (sys::DynamicLibrary::LoadLibraryPermanently(nullptr, &ErrorStr))
-        report_fatal_error(llvm::Twine("FATAL: unable to dlopen self\n") + ErrorStr);
-
-    GlobalJD.addGenerator(
-      std::make_unique<orc::DynamicLibrarySearchGenerator>(
-        libjulia_internal_dylib,
-        DL.getGlobalPrefix(),
-        orc::DynamicLibrarySearchGenerator::SymbolPredicate()));
-
-    GlobalJD.addGenerator(
-      cantFail(orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(
-        DL.getGlobalPrefix())));
+    // tells DynamicLibrary to load the program); not a library.
+    libhandles.insert(jl_exe_handle);
+#ifdef _OS_WINDOWS_
+    // Find where compiler symbols (assumed by LLVM) are linked from
+    // by looking for an exported data symbol, or by typical name.
+    // libgcc_s_seh-1 doesn't export any data, so we have to hard-code a name.
+    // libwinpthreads-1 exports a single symbol: the pthread_key_dest table.
+    libhandles.insert(jl_dlopen("libgcc_s_seh-1.dll", JL_RTLD_NOLOAD));
+    libhandles.insert(jl_find_dynamic_library_by_addr((void*)&_pthread_key_dest, /* throw_err */ 1, 0));
+    // Add system C libraries explicitly too.
+    // Unlike posix, these aren't automatically handled by recursive search from libjulia-internal.
+    libhandles.insert(jl_ntdll_handle);
+    libhandles.insert(jl_kernel32_handle);
+    libhandles.insert(jl_crtdll_handle);
+    libhandles.insert(jl_winsock_handle);
+#endif
+    for (void *h : libhandles) {
+        if (h == nullptr)
+            continue;
+        std::string ErrorStr;
+        sys::DynamicLibrary dylib = sys::DynamicLibrary::addPermanentLibrary(h, &ErrorStr);
+        if (!ErrorStr.empty())
+            report_fatal_error(llvm::Twine("FATAL: unable to dlopen libjulia dependency\n") + ErrorStr);
+        GlobalJD.addGenerator(
+            std::make_unique<orc::DynamicLibrarySearchGenerator>(
+            dylib,
+            DL.getGlobalPrefix()));
+    }
 
     // Resolve non-lock free atomic functions in the libatomic1 library.
     // This is the library that provides support for c11/c++11 atomic operations.
@@ -1754,21 +1798,26 @@ JuliaOJIT::JuliaOJIT()
     if (libatomic) {
         static void *atomic_hdl = jl_load_dynamic_library(libatomic, JL_RTLD_LOCAL, 0);
         if (atomic_hdl != NULL) {
+            std::string ErrorStr;
+            sys::DynamicLibrary dylib = sys::DynamicLibrary::addPermanentLibrary(atomic_hdl, &ErrorStr);
+            if (!ErrorStr.empty())
+                report_fatal_error(llvm::Twine("FATAL: unable to dlopen libjulia dependency\n") + ErrorStr);
             GlobalJD.addGenerator(
-              cantFail(orc::DynamicLibrarySearchGenerator::Load(
-                  libatomic,
+              std::make_unique<orc::DynamicLibrarySearchGenerator>(
+                  dylib,
                   DL.getGlobalPrefix(),
                   [&](const orc::SymbolStringPtr &S) {
                         const char *const atomic_prefix = "__atomic_";
                         return (*S).starts_with(atomic_prefix);
-                  })));
+                  }));
         }
     }
 
     JD.addToLinkOrder(GlobalJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly);
-    JD.addToLinkOrder(ExternalJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly);
-    ExternalJD.addToLinkOrder(GlobalJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly);
-    ExternalJD.addToLinkOrder(JD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly);
+#if defined(_OS_WINDOWS_)
+    // TODO: why does Windows CI hang without this?
+    JD.addToLinkOrder(SessionJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly);
+#endif
 
     orc::SymbolAliasMap jl_crt = {
         // Float16 conversion routines
@@ -1834,6 +1883,17 @@ JuliaOJIT::JuliaOJIT()
     cantFail(JD.define(orc::absoluteSymbols(asan_crt)));
 #endif
 
+#if defined(_COMPILER_GCC_) && __GNUC__ < 14
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
+    SessionJD.addGenerator(
+      cantFail(orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(
+        DL.getGlobalPrefix())));
+#if defined(_COMPILER_GCC_) && __GNUC__ < 14
+#pragma GCC diagnostic pop
+#endif
+
     if (jl_is_timing_trace) {
         PrintLLVMTimers.push_back([]() JL_NOTSAFEPOINT {
             if (timeTraceProfilerEnabled()) {
@@ -1890,22 +1950,20 @@ void JuliaOJIT::addOutput(jl_emitted_output_t O)
     timing_print_module_names(JL_TIMING_DEFAULT_BLOCK, *O.module);
 #endif
     std::unique_lock Lock{LinkerMutex};
-
-    // If another thread beat us to compiling this CodeInstance, don't define it
-    // with this output.
-    for (auto It = O.linker_info->ci_funcs.begin(); It != O.linker_info->ci_funcs.end();
-         ++It) {
-        jl_callptr_t Expected = NULL;
-        // DenseMap never rehashes on deletion, so we can erase while iterating.
-        if (!jl_atomic_cmpswap_relaxed(&It->first->invoke, &Expected,
-                                       jl_fptr_wait_for_compiled_addr))
-            O.linker_info->ci_funcs.erase(It);
-    }
-
     auto MU = std::make_unique<JLMaterializationUnit>(
         JLMaterializationUnit::Create(*this, ObjectLayer, std::move(O)));
     ExitOnError check{"Failed to add objectfile to JIT!"};
     check(JD.define(MU, JD.getDefaultResourceTracker()));
+}
+
+orc::JITDylib& JuliaOJIT::createJITDylib(StringRef NamePrefix)
+{
+    // Create a new JITDylib with unique name
+    std::string dylib_name = (NamePrefix + "_" + Twine(jl_atomic_fetch_add_relaxed(&jitcounter, 1))).str();
+    JITDylib &NewJD = ES.createBareJITDylib(dylib_name);
+    NewJD.addToLinkOrder(GlobalJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly);
+    NewJD.addToLinkOrder(SessionJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly);
+    return NewJD;
 }
 
 Error JuliaOJIT::addExternalModule(orc::JITDylib &JD, orc::ThreadSafeModule TSM, bool ShouldOptimize)
@@ -1925,6 +1983,7 @@ Error JuliaOJIT::addExternalModule(orc::JITDylib &JD, orc::ThreadSafeModule TSM,
             return Error::success();
         }))
         return Err;
+
     //if (ShouldOptimize)
     //    return OptimizeLayer.add(JD, std::move(TSM));
     return CompileLayer.add(JD.getDefaultResourceTracker(), std::move(TSM));
@@ -1953,30 +2012,17 @@ SmallVector<uint64_t> JuliaOJIT::findSymbols(ArrayRef<StringRef> Names)
     return Addrs;
 }
 
-Expected<ExecutorSymbolDef> JuliaOJIT::findSymbol(StringRef Name, bool ExportedSymbolsOnly)
+Expected<ExecutorSymbolDef> JuliaOJIT::findJDSymbol(JITDylib &JD, StringRef Name, bool ExternalJDOnly)
 {
-    orc::JITDylib* SearchOrders[3] = {&JD, &GlobalJD, &ExternalJD};
-    ArrayRef<orc::JITDylib*> SearchOrder = ArrayRef<orc::JITDylib*>(&SearchOrders[0], ExportedSymbolsOnly ? 3 : 1);
-    auto Sym = ::safelookup(ES, SearchOrder, Name);
-    return Sym;
-}
-
-Expected<ExecutorSymbolDef> JuliaOJIT::findUnmangledSymbol(StringRef Name)
-{
-    return findSymbol(getMangledName(Name), true);
-}
-
-Expected<ExecutorSymbolDef> JuliaOJIT::findExternalJDSymbol(StringRef Name, bool ExternalJDOnly)
-{
-    orc::JITDylib* SearchOrders[3] = {&ExternalJD, &GlobalJD, &JD};
-    ArrayRef<orc::JITDylib*> SearchOrder = ArrayRef<orc::JITDylib*>(&SearchOrders[0], ExternalJDOnly ? 1 : 3);
+    orc::JITDylib *SearchOrders[2] = {&JD, &GlobalJD};
+    ArrayRef<orc::JITDylib*> SearchOrder = ArrayRef<orc::JITDylib*>(&SearchOrders[0], ExternalJDOnly ? 1 : 2);
     auto Sym = ::safelookup(ES, SearchOrder, getMangledName(Name));
     return Sym;
 }
 
 uint64_t JuliaOJIT::getGlobalValueAddress(StringRef Name)
 {
-    auto addr = findSymbol(getMangledName(Name), false);
+    auto addr = findJDSymbol(JD, Name, true);
     if (!addr) {
         consumeError(addr.takeError());
         return 0;
@@ -1986,7 +2032,7 @@ uint64_t JuliaOJIT::getGlobalValueAddress(StringRef Name)
 
 uint64_t JuliaOJIT::getFunctionAddress(StringRef Name)
 {
-    auto addr = findSymbol(getMangledName(Name), false);
+    auto addr = findJDSymbol(JD, Name, true);
     if (!addr) {
         consumeError(addr.takeError());
         return 0;
@@ -2233,9 +2279,12 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
 orc::SymbolStringPtr JuliaOJIT::linkCallTarget(orc::MaterializationResponsibility &MR,
                                                jl_code_instance_t *CI, jl_invoke_api_t API)
 {
+    // This condition should match that in jl_add_codeinst_to_jit!, which will
+    // add a different, compatible CodeInstance to the JIT but not update the
+    // invoke statement.
+    if (!jl_mi_cache_has_ci(jl_get_ci_mi(CI), CI))
+        CI = findCompatibleCI(CI);
     auto It = CISymbols.find(CI);
-    if (It == CISymbols.end())
-        It = CISymbols.find(findCompatibleCI(CI));
     if (It != CISymbols.end() && It->second.invoke_api == API)
         return It->second.specptr;
 

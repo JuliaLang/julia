@@ -338,10 +338,15 @@ public:
     egal_set() = default;
     void insert(jl_value_t *val)
     {
+        // list/keyset are GC-rooted by the caller via JL_GC_PUSH
+        JL_GC_PROMISE_ROOTED(val);
+        JL_GC_PROMISE_ROOTED(list);
+        JL_GC_PROMISE_ROOTED(keyset);
         jl_value_t *rval = jl_idset_get(list, keyset, val);
         if (rval == NULL) {
             ssize_t idx;
             list = jl_idset_put_key(list, val, &idx);
+            JL_GC_PROMISE_ROOTED(list);
             keyset = jl_idset_put_idx(list, keyset, idx);
         }
     }
