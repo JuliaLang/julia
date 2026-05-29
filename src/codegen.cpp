@@ -10531,7 +10531,12 @@ extern "C" void jl_init_llvm(void)
     }
 
     const char *const argv[1] = {"julia"};
-    cl::ParseCommandLineOptions(1, argv, "", nullptr, "JULIA_LLVM_ARGS");
+    cl::ParseCommandLineOptions(1, argv, "",
+                                /*Errs=*/nullptr,
+#if JL_LLVM_VERSION >= 220000
+                                /*VFS=*/nullptr,
+#endif
+                                "JULIA_LLVM_ARGS");
 
     // Set preferred non-default options
     cl::Option *clopt;
