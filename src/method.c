@@ -1310,7 +1310,7 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     // if we have a kwcall, try to derive the name from the callee argument method table
     jl_datatype_t *dtname = (jl_datatype_t*)jl_argument_datatype(jl_kwcall_type && ft == (jl_value_t*)jl_kwcall_type && nargs >= 3 ? jl_svecref(atypes, 2) : ft);
     name = (jl_value_t*)dtname != jl_nothing ? dtname->name->singletonname : jl_any_type->name->singletonname;
-    if (jl_is_type_type((jl_value_t*)dtname)) {
+    if (jl_is_typeeq((jl_value_t*)dtname)) {
         dtname = (jl_datatype_t*)jl_argument_datatype(jl_typeeq_T((jl_value_t*)dtname));
         if ((jl_value_t*)dtname != jl_nothing) {
             name = dtname->name->singletonname;

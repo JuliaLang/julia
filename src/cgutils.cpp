@@ -817,7 +817,7 @@ static bool is_typeofbottom_typealias(jl_value_t *jt)
         return false;
     return jt == (jl_value_t*)jl_bottom_type ||
            jt == (jl_value_t*)jl_typeofbottom_type ||
-           (jl_is_type_type(jt) && jl_typeeq_T(jt) == jl_bottom_type);
+           (jl_is_typeeq(jt) && jl_typeeq_T(jt) == jl_bottom_type);
 }
 
 static Type *_julia_type_to_llvm(jl_codegen_output_t *ctx, LLVMContext &ctxt, jl_value_t *jt, bool *isboxed, bool no_boxing)
@@ -1975,7 +1975,7 @@ static bool _can_optimize_isa(jl_value_t *type, int &counter)
     }
     if (type == (jl_value_t*)jl_type_type)
         return true;
-    if (jl_is_type_type(type) && jl_pointer_egal(type))
+    if (jl_is_typeeq(type) && jl_pointer_egal(type))
         return true;
     if (jl_has_intersect_type_not_kind(type))
         return false;
@@ -2101,7 +2101,7 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
         return std::make_pair(ConstantInt::get(getInt1Ty(ctx.builder.getContext()), *known_isa), true);
     }
 
-    if (jl_is_type_type(intersected_type) && jl_pointer_egal(intersected_type)) {
+    if (jl_is_typeeq(intersected_type) && jl_pointer_egal(intersected_type)) {
         // Use the check in `jl_pointer_egal` to see if the type enclosed
         // has unique pointer value.
         auto ptr = track_pjlvalue(ctx, literal_pointer_val(ctx, jl_typeeq_T(intersected_type)));

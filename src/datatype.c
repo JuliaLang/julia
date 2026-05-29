@@ -394,7 +394,7 @@ int jl_datatype_isinlinealloc(jl_datatype_t *ty, int pointerfree)
 
 static jl_value_t *normalize_typeofbottom_layout_alias(jl_value_t *ty JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
-    if (jl_typeofbottom_type != NULL && jl_is_type_type(ty) && jl_typeeq_T(ty) == jl_bottom_type)
+    if (jl_typeofbottom_type != NULL && jl_is_typeeq(ty) && jl_typeeq_T(ty) == jl_bottom_type)
         return (jl_value_t*)jl_typeofbottom_type;
     return ty;
 }
@@ -448,7 +448,7 @@ JL_DLLEXPORT int jl_stored_inline(jl_value_t *eltype)
 int jl_pointer_egal(jl_value_t *t)
 {
     if (t == (jl_value_t*)jl_any_type)
-        return 0; // when setting up the initial types, jl_is_type_type gets confused about this
+        return 0; // when setting up the initial types, jl_is_typeeq gets confused about this
     if (t == (jl_value_t*)jl_symbol_type)
         return 1;
     if (t == (jl_value_t*)jl_bool_type)
@@ -459,9 +459,9 @@ int jl_pointer_egal(jl_value_t *t)
         !jl_is_kind(t))
         return 1;
     if ((jl_is_datatype(t) && jl_is_datatype_singleton((jl_datatype_t*)t)) ||
-        (jl_is_type_type(t) && jl_typeeq_T(t) == jl_bottom_type))
+        (jl_is_typeeq(t) && jl_typeeq_T(t) == jl_bottom_type))
         return 1;
-    if (jl_is_type_type(t) && jl_is_datatype(jl_typeeq_T(t))) {
+    if (jl_is_typeeq(t) && jl_is_datatype(jl_typeeq_T(t))) {
         // need to use typeseq for most types
         // but can compare some types by pointer
         jl_datatype_t *dt = (jl_datatype_t*)jl_typeeq_T(t);
@@ -2629,7 +2629,7 @@ void jl_check_valid_supertype(jl_value_t *super, const char *type_name)
         jl_errorf("invalid subtyping in definition of %s: cannot subtype a Union type.", type_name);
     if (jl_is_typevar(super))
         jl_errorf("invalid subtyping in definition of %s: cannot subtype a type variable.", type_name);
-    if (jl_is_type_type(super))
+    if (jl_is_typeeq(super))
         jl_errorf("invalid subtyping in definition of %s: cannot add subtypes to Type.", type_name);
     if (!jl_is_datatype(super)) {
         ios_t buf;

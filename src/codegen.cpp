@@ -505,7 +505,7 @@ static bool type_has_unique_rep(jl_value_t *t)
 
 static bool is_uniquerep_Type(jl_value_t *t)
 {
-    return jl_is_type_type(t) && type_has_unique_rep(jl_typeeq_T(t));
+    return jl_is_typeeq(t) && type_has_unique_rep(jl_typeeq_T(t));
 }
 
 class jl_codectx_t;
@@ -1627,7 +1627,7 @@ static _Atomic(uint64_t) globalUniqueGeneratedNames{1};
 static MDNode *best_tbaa(jl_tbaacache_t &tbaa_cache, jl_value_t *jt) {
     jt = jl_unwrap_unionall(jt);
     if (jt == (jl_value_t*)jl_datatype_type ||
-        (jl_is_type_type(jt) && jl_is_datatype(jl_typeeq_T(jt))))
+        (jl_is_typeeq(jt) && jl_is_datatype(jl_typeeq_T(jt))))
         return tbaa_cache.tbaa_datatype;
     if (!jl_is_datatype(jt))
         return tbaa_cache.tbaa_value;
@@ -2371,7 +2371,7 @@ static inline jl_cgval_t ghostValue(jl_codectx_t &ctx, jl_value_t *typ)
         // normalize TypeofBottom to Type{Union{}}
         typ = jl_atomic_load_relaxed(&jl_typeofbottom_type->name->Typeofwrapper);
     }
-    if (jl_is_type_type(typ)) {
+    if (jl_is_typeeq(typ)) {
         assert(is_uniquerep_Type(typ));
         // replace T::Type{T} with T, by assuming that T must be a leaftype of some sort
         jl_cgval_t constant(NULL, true, typ, NULL, best_tbaa(ctx.tbaa(), typ), jl_gc_roots_t());
@@ -2485,7 +2485,7 @@ static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, const jl_cgval_t &v
 
 static inline jl_cgval_t mark_julia_type(jl_codectx_t &ctx, Value *v, bool isboxed, jl_value_t *typ)
 {
-    if (jl_is_type_type(typ)) {
+    if (jl_is_typeeq(typ)) {
         if (is_uniquerep_Type(typ)) {
             // replace T::Type{T} with T
             return ghostValue(ctx, typ);
@@ -4399,7 +4399,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     else if (f == BUILTIN(typeassert) && nargs == 2) {
         const jl_cgval_t &arg = argv[1];
         const jl_cgval_t &ty = argv[2];
-        if (jl_is_type_type(ty.typ) && !jl_has_free_typevars(ty.typ)) {
+        if (jl_is_typeeq(ty.typ) && !jl_has_free_typevars(ty.typ)) {
             jl_value_t *tp0 = jl_typeeq_T(ty.typ);
             emit_typecheck(ctx, arg, tp0, "typeassert");
             *ret = update_julia_type(ctx, arg, tp0);
@@ -4417,7 +4417,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     else if (f == BUILTIN(isa) && nargs == 2) {
         const jl_cgval_t &arg = argv[1];
         const jl_cgval_t &ty = argv[2];
-        if (jl_is_type_type(ty.typ) && !jl_has_free_typevars(ty.typ)) {
+        if (jl_is_typeeq(ty.typ) && !jl_has_free_typevars(ty.typ)) {
             jl_value_t *tp0 = jl_typeeq_T(ty.typ);
             Value *isa_result = emit_isa(ctx, arg, tp0, Twine()).first;
             *ret = mark_julia_type(ctx, isa_result, false, jl_bool_type);
@@ -4428,8 +4428,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     else if (f == BUILTIN(issubtype) && nargs == 2) {
         const jl_cgval_t &ta = argv[1];
         const jl_cgval_t &tb = argv[2];
-        if (jl_is_type_type(ta.typ) && !jl_has_free_typevars(ta.typ) &&
-            jl_is_type_type(tb.typ) && !jl_has_free_typevars(tb.typ)) {
+        if (jl_is_typeeq(ta.typ) && !jl_has_free_typevars(ta.typ) &&
+            jl_is_typeeq(tb.typ) && !jl_has_free_typevars(tb.typ)) {
             int issub = jl_subtype(jl_typeeq_T(ta.typ), jl_typeeq_T(tb.typ));
             *ret = mark_julia_type(ctx, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), issub), false, jl_bool_type);
             return true;
@@ -4838,7 +4838,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
 
         jl_datatype_t *utt = (jl_datatype_t*)jl_unwrap_unionall(obj.typ);
-        if (jl_is_type_type((jl_value_t*)utt) && jl_is_concrete_type(jl_typeeq_T((jl_value_t*)utt)))
+        if (jl_is_typeeq((jl_value_t*)utt) && jl_is_concrete_type(jl_typeeq_T((jl_value_t*)utt)))
             utt = (jl_datatype_t*)jl_typeof(jl_typeeq_T((jl_value_t*)utt));
 
         if (fld.constant && jl_is_symbol(fld.constant)) {
@@ -5042,7 +5042,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         if (obj.constant) {
             nf = jl_datatype_nfields(jl_typeof(obj.constant));
         }
-        else if (jl_is_type_type(obj.typ)) {
+        else if (jl_is_typeeq(obj.typ)) {
             jl_value_t *tp0 = jl_typeeq_T(obj.typ);
             if (jl_is_datatype(tp0) && jl_is_datatype_singleton((jl_datatype_t*)tp0))
                 nf = jl_datatype_nfields((jl_value_t*)jl_datatype_type);
@@ -5062,7 +5062,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     else if (f == BUILTIN(fieldtype) && (nargs == 2 || nargs == 3)) {
         const jl_cgval_t &typ = argv[1];
         const jl_cgval_t &fld = argv[2];
-        if ((jl_is_type_type(typ.typ) && jl_is_concrete_type(jl_typeeq_T(typ.typ))) ||
+        if ((jl_is_typeeq(typ.typ) && jl_is_concrete_type(jl_typeeq_T(typ.typ))) ||
                 (typ.constant && jl_is_concrete_type(typ.constant))) {
             if (fld.typ == (jl_value_t*)jl_long_type) {
                 assert(typ.isboxed);
@@ -5184,7 +5184,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         const jl_cgval_t &fld = argv[2];
         jl_datatype_t *stt = (jl_datatype_t*)obj.typ;
         ssize_t fieldidx = -1;
-        if (jl_is_type_type((jl_value_t*)stt)) {
+        if (jl_is_typeeq((jl_value_t*)stt)) {
             // the representation type of Type{T} is either typeof(T), or unknown
             // TODO: could use `issingletontype` predicate here, providing better type knowledge
             // than only handling DataType
@@ -6803,7 +6803,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
             argv[i] = emit_expr(ctx, args[i]);
         }
         jl_value_t *ty = argv[0].typ;
-        if (jl_is_type_type(ty) &&
+        if (jl_is_typeeq(ty) &&
                 jl_is_datatype(jl_typeeq_T(ty)) &&
                 jl_is_concrete_type(jl_typeeq_T(ty))) {
             jl_value_t *tp0 = jl_typeeq_T(ty);
@@ -7959,7 +7959,7 @@ static const char *derive_sigt_name(jl_value_t *jargty)
     if ((jl_value_t*)dt == jl_nothing)
         return NULL;
     jl_sym_t *name = dt->name->singletonname;
-    if (jl_is_type_type((jl_value_t*)dt)) {
+    if (jl_is_typeeq((jl_value_t*)dt)) {
         dt = (jl_datatype_t*)jl_argument_datatype(jl_typeeq_T((jl_value_t*)dt));
         if ((jl_value_t*)dt != jl_nothing) {
             name = dt->name->singletonname;

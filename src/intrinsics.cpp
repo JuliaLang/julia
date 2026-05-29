@@ -531,7 +531,7 @@ static jl_datatype_t *staticeval_bitstype(const jl_cgval_t &targ)
 {
     // evaluate an argument at compile time to determine what type it is
     jl_value_t *unw = jl_unwrap_unionall(targ.typ);
-    if (jl_is_type_type(unw)) {
+    if (jl_is_typeeq(unw)) {
         jl_value_t *bt = jl_typeeq_T(unw);
         if (jl_is_primitivetype(bt))
             return (jl_datatype_t*)bt;

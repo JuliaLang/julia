@@ -1638,7 +1638,6 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 #define jl_is_uniontype(v)   jl_typetagis(v,jl_uniontype_tag<<4)
 #define jl_is_intersecttype(v) jl_typetagis(v,jl_intersect_type)
 #define jl_is_typeeq(v)      jl_typetagis(v,jl_typeeq_tag<<4)
-#define jl_is_type_type(v)   jl_is_typeeq(v)
 #define jl_is_typevar(v)     jl_typetagis(v,jl_tvar_tag<<4)
 #define jl_is_unionall(v)    jl_typetagis(v,jl_unionall_tag<<4)
 #define jl_is_vararg(v)      jl_typetagis(v,jl_vararg_tag<<4)

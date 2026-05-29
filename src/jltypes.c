@@ -104,7 +104,7 @@ static int layout_uses_free_typevars(jl_value_t *v, jl_typeenv_t *env)
                 return 1;
            v = ((jl_uniontype_t*)v)->b;
         }
-        else if (jl_is_type_type(v)) {
+        else if (jl_is_typeeq(v)) {
             v = jl_typeeq_T(v);
         }
         else if (jl_is_vararg(v)) {
@@ -160,7 +160,7 @@ static int has_free_typevars(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT
                 return 1;
            v = ((jl_uniontype_t*)v)->b;
         }
-        else if (jl_is_type_type(v)) {
+        else if (jl_is_typeeq(v)) {
             v = jl_typeeq_T(v);
         }
         else if (jl_is_vararg(v)) {
@@ -234,7 +234,7 @@ static void find_free_typevars(jl_value_t *v, jl_typeenv_t *env, jl_array_t *out
             find_free_typevars(((jl_uniontype_t*)v)->a, env, out);
             v = ((jl_uniontype_t*)v)->b;
         }
-        else if (jl_is_type_type(v)) {
+        else if (jl_is_typeeq(v)) {
             v = jl_typeeq_T(v);
         }
         else if (jl_is_vararg(v)) {
@@ -308,7 +308,7 @@ int jl_has_bound_typevars(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT
                 return 1;
            v = ((jl_uniontype_t*)v)->b;
         }
-        else if (jl_is_type_type(v)) {
+        else if (jl_is_typeeq(v)) {
             v = jl_typeeq_T(v);
         }
         else if (jl_is_vararg(v)) {
@@ -629,7 +629,7 @@ static int simple_subtype(jl_value_t *a, jl_value_t *b, int hasfree, int isUnion
     if (hasfree == 0) {
         int mergeable = isUnion;
         if (!mergeable) // issue #24521: don't merge Type{T} where typeof(T) varies
-            mergeable = !(jl_is_type_type(a) && jl_is_type_type(b) &&
+            mergeable = !(jl_is_typeeq(a) && jl_is_typeeq(b) &&
              jl_typeof(jl_typeeq_T(a)) != jl_typeof(jl_typeeq_T(b)));
         return mergeable && jl_subtype(a, b);
     }
@@ -652,7 +652,7 @@ static int simple_subtype(jl_value_t *a, jl_value_t *b, int hasfree, int isUnion
         // This branch is not valid for `Union`/`UnionAll`, e.g.
         // (Type{Union{Int,T2} where {T2<:T1}} where {T1}){Int} == Type{Int64}
         // (Type{Union{Int,T1}} where {T1}){Int} == Type{Int64}
-        return jl_is_type_type(a) && jl_typeof(jl_typeeq_T(a)) == b;
+        return jl_is_typeeq(a) && jl_typeof(jl_typeeq_T(a)) == b;
     }
     return 0;
 }
@@ -771,7 +771,7 @@ static int simple_subtype2(jl_value_t *a, jl_value_t *b, int hasfree, int isUnio
         subab = simple_subtype(a, b, hasfree, isUnion);
         subba = simple_subtype(b, a, ((hasfree & 2) >> 1) | ((hasfree & 1) << 1), isUnion);
     }
-    else if (jl_is_type_type(a) && jl_is_type_type(b) &&
+    else if (jl_is_typeeq(a) && jl_is_typeeq(b) &&
              jl_typeof(jl_typeeq_T(a)) != jl_typeof(jl_typeeq_T(b))) {
         // issue #24521: don't merge Type{T} where typeof(T) varies
     }
@@ -1015,7 +1015,7 @@ JL_DLLEXPORT jl_value_t *jl_type_unionall(jl_tvar_t *v, jl_value_t *body)
     if (body == (jl_value_t*)v)
         return v->ub;
     // where var doesn't occur in body just return body
-    if (jl_is_type_type(body) && v->ub != (jl_value_t*)jl_any_type) {
+    if (jl_is_typeeq(body) && v->ub != (jl_value_t*)jl_any_type) {
         if (!jl_has_typevar(body, v))
             return body;
     }
@@ -1044,7 +1044,7 @@ static int typekey_eq(jl_datatype_t *tt, jl_value_t **key, size_t n)
                 // require exact same Type{T} in covariant context. see e.g. issue #22842
                 // this should work because `Tuple{Type}`s don't need unique pointers, and aren't the
                 // direct tags of values (concrete) so we don't rely on pointer equality.
-                if (jl_is_type_type(tj) || jl_is_type_type(kj))
+                if (jl_is_typeeq(tj) || jl_is_typeeq(kj))
                     return 0;
             }
             if (jl_type_equality_is_identity(tj, kj))
@@ -1069,7 +1069,7 @@ static int typekeyvalue_eq(jl_datatype_t *tt, jl_value_t *key1, jl_value_t **key
     for (j = 0; j < n; j++) {
         jl_value_t *kj = j == 0 ? key1 : key[j - 1];
         jl_value_t *tj = jl_svecref(tt->parameters, j);
-        if (leaf && jl_is_type_type(tj)) {
+        if (leaf && jl_is_typeeq(tj)) {
             jl_value_t *tp0 = jl_typeeq_T(tj);
             if (!(kj == tp0 || (jl_typeof(tp0) == jl_typeof(kj) && jl_types_equal(tp0, kj))))
                 return 0;
@@ -1403,7 +1403,7 @@ static int has_concrete_supertype(jl_value_t *kj) JL_NOTSAFEPOINT
         int cb = has_concrete_supertype(((jl_uniontype_t*)uw)->b);
         return ca && cb;
     }
-    else if (jl_is_type_type(uw)) {
+    else if (jl_is_typeeq(uw)) {
         return 1;
     }
     else if (uw == jl_bottom_type) {
@@ -1774,7 +1774,7 @@ jl_value_t *jl_substitute_datatype(jl_value_t *t, jl_datatype_t * x, jl_datatype
         }
         JL_GC_POP();
     }
-    else if (jl_is_type_type(t)) {
+    else if (jl_is_typeeq(t)) {
         jl_typeeq_t *te = (jl_typeeq_t*)t;
         jl_value_t *T = NULL;
         JL_GC_PUSH1(&T);
@@ -1854,7 +1854,7 @@ static unsigned type_hash(jl_value_t *kj, int *failed) JL_NOTSAFEPOINT
         // since Union is associative
         return hasha + hashb;
     }
-    else if (jl_is_type_type(uw)) {
+    else if (jl_is_typeeq(uw)) {
         jl_value_t *T = jl_typeeq_T(uw);
         if (T == jl_bottom_type)
             return jl_typeofbottom_type->hash;
@@ -1886,7 +1886,7 @@ JL_DLLEXPORT uintptr_t jl_type_cache_hash(jl_value_t *v) JL_NOTSAFEPOINT
     uintptr_t hash = type_hash(v, &failed);
     if (!failed)
         return hash;
-    if (jl_is_type_type(v)) {
+    if (jl_is_typeeq(v)) {
         jl_value_t *T = jl_typeeq_T(v);
         if (!jl_has_free_typevars(T)) {
             jl_value_t *tw = extract_wrapper(T);
@@ -1972,7 +1972,7 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt, int cacheable)
                     (jl_is_datatype(p) && ((!jl_is_kind(p) && ((jl_datatype_t*)p)->isconcretetype) ||
                      (p == (jl_value_t*)jl_typeofbottom_type) || // == Type{Union{}}, so needs to be consistent
                      (((jl_datatype_t*)p)->name == jl_type_typename && !((jl_datatype_t*)p)->hasfreetypevars))) ||
-                    (jl_is_type_type(p) && !jl_has_free_typevars(p));
+                    (jl_is_typeeq(p) && !jl_has_free_typevars(p));
             }
         }
         if (jl_is_vararg(p))
@@ -2119,7 +2119,7 @@ static int _may_substitute_ub(jl_value_t *v, jl_tvar_t *var, int inside_inv, int
                 inside_inv = 1; // treat as invariant inside vararg, for the sake of this algorithm
             v = va->T;
         }
-        else if (jl_is_type_type(v)) {
+        else if (jl_is_typeeq(v)) {
             inside_inv = 1;
             v = jl_typeeq_T(v);
         }
@@ -2154,7 +2154,7 @@ static jl_value_t *normalize_unionalls(jl_value_t *t)
         }
         JL_GC_POP();
     }
-    else if (jl_is_type_type(t)) {
+    else if (jl_is_typeeq(t)) {
         jl_typeeq_t *te = (jl_typeeq_t*)t;
         jl_value_t *T = normalize_unionalls(te->T);
         JL_GC_PUSH1(&T);
@@ -2294,7 +2294,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
                 if (p) jl_gc_wb(p, tw);
             }
         }
-        if (tn == jl_type_typename && jl_is_type_type(iparams[0]) &&
+        if (tn == jl_type_typename && jl_is_typeeq(iparams[0]) &&
             jl_typeeq_T(iparams[0]) == jl_bottom_type) {
             // normalize Type{Type{Union{}}} to Type{TypeofBottom}
             iparams[0] = (jl_value_t*)jl_typeofbottom_type;
@@ -2826,7 +2826,7 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
         JL_GC_POP();
         return t;
     }
-    if (jl_is_type_type(t)) {
+    if (jl_is_typeeq(t)) {
         jl_typeeq_t *te = (jl_typeeq_t*)t;
         jl_value_t *T = inst_type_w_(te->T, env, stack, check, nothrow ? 1 : 0);
         JL_GC_PUSH1(&T);
@@ -2946,7 +2946,7 @@ JL_DLLEXPORT jl_value_t *jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_
 
 jl_typeeq_t *jl_wrap_Type(jl_value_t *t)
 {
-    if (jl_is_type_type(t) && jl_typeeq_T(t) == jl_bottom_type)
+    if (jl_is_typeeq(t) && jl_typeeq_T(t) == jl_bottom_type)
         t = (jl_value_t*)jl_typeofbottom_type;
     jl_value_t *tw = extract_wrapper(t);
     if (tw && tw != t && jl_typeof(t) == jl_typeof(tw) &&

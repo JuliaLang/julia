@@ -652,7 +652,7 @@ void module_member(jl_module_t *m)
 }
 
 int type_type(jl_value_t *v) {
-    return jl_is_type_type(jl_typeof(v));
+    return jl_is_typeeq(jl_typeof(v));
 }
 
 /* TODO: BROKEN
