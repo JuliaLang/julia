@@ -24,7 +24,11 @@
 #include <llvm/IR/Verifier.h>
 #include <llvm/Transforms/IPO/InferFunctionAttrs.h>
 #include <llvm/Passes/PassBuilder.h>
-#include <llvm/Passes/PassPlugin.h>
+#if JL_LLVM_VERSION >= 220000
+#  include <llvm/Plugins/PassPlugin.h>
+#else
+#  include <llvm/Passes/PassPlugin.h>
+#endif
 
 // NewPM needs to manually include all the pass headers
 #include <llvm/Transforms/AggressiveInstCombine/AggressiveInstCombine.h>
