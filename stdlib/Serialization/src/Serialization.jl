@@ -308,16 +308,18 @@ function _bitsunion_tags!(tag_buf::Vector{UInt8}, a, ::Type{Ts}) where {Ts}
     return tag_buf
 end
 
+_cat_tuptype(::Type{A}, ::Type{B}) where {A<:Tuple,B<:Tuple} = Tuple{fieldtypes(A)..., fieldtypes(B)...}
+_uniontuple(::Type{U}) where {U} = U isa Union ? _cat_tuptype(_uniontuple(U.a), _uniontuple(U.b)) : Tuple{U}
+
 function _serialize_bitsunion_array(s::AbstractSerializer, a)
-    U = eltype(a)
-    types = Base.uniontypes(U)
+    Ts = _uniontuple(eltype(a))
     elsz = Base.elsize(a)
-    serialize(s, types)
+    serialize(s, DataType[fieldtypes(Ts)...])
     serialize(s, elsz)
     n = length(a)
     GC.@preserve a unsafe_write(s.io, Ptr{UInt8}(pointer(a)), UInt(n * elsz))
     tag_buf = Vector{UInt8}(undef, n)
-    _bitsunion_tags!(tag_buf, a, Tuple{types...})
+    _bitsunion_tags!(tag_buf, a, Ts)
     write(s.io, tag_buf)
 end
 
@@ -1516,8 +1518,9 @@ function _deserialize_bitsunion_array!(s::AbstractSerializer, a::AbstractArray{U
         GC.@preserve a unsafe_read(s.io, Ptr{UInt8}(pointer(a)), UInt(n * elsz))
         tags = Vector{UInt8}(undef, n)
         read!(s.io, tags)
-        if types_read == types_local && length(types_local) <= 32
-            _deserialize_bitsunion_ifelse!(a, tags, n, elsz, Tuple{types_local...})
+        _ut = _uniontuple(U)
+        if fieldcount(_ut) <= 32 && types_read == types_local
+            _deserialize_bitsunion_ifelse!(a, tags, n, elsz, _ut)
         else
             _deserialize_bitsunion_dynamic!(a, tags, a, elsz, n, types_read)
         end
