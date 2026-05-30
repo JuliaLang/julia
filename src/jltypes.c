@@ -3320,6 +3320,11 @@ void jl_init_types(void) JL_GC_DISABLED
     // It seems like we probably usually end up needing the box for kinds (often used in an Any context), so force it to exist
     jl_uniontype_type->name->mayinlinealloc = 0;
 
+    jl_value_t *kind_or_typevar_types[2] = { (jl_value_t*)jl_kind_type, (jl_value_t*)jl_tvar_type };
+    jl_value_t *kind_or_typevar_type = jl_type_union(kind_or_typevar_types, 2);
+    jl_svecset(jl_tvar_type->types, 1, kind_or_typevar_type);
+    jl_svecset(jl_tvar_type->types, 2, kind_or_typevar_type);
+
     // Internal-use-only kind dual to Union (see #61917). Not registered as a
     // small_typeof tag: it is recognized by identity (jl_is_intersecttype) and
     // only ever lives transiently inside the subtyping algorithm.
@@ -3331,7 +3336,7 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_typeeq_type = jl_new_datatype(jl_symbol("TypeEq"), core, jl_kind_type, jl_emptysvec,
                                      jl_perm_symsvec(1, "T"),
-                                     jl_svec(1, jl_any_type),
+                                     jl_svec(1, kind_or_typevar_type),
                                      jl_emptysvec, 0, 0, 1);
     XX(typeeq);
     // It seems like we probably usually end up needing the box for kinds (often used in an Any context), so force it to exist
