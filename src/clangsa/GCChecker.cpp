@@ -16,9 +16,11 @@
 #include "clang/StaticAnalyzer/Frontend/CheckerRegistry.h"
 #include "clang/Lex/Lexer.h"
 
+#include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/Support/Debug.h"
 #include <iostream>
 #include <memory>
+#include <optional>
 
 #if defined(__GNUC__)
 #define USED_FUNC __attribute__((used))
@@ -221,8 +223,88 @@ public:
     static RootState getPermanentRoot() {
       return RootState(Root, RootLifetime::getPermanent());
     }
+    static RootState getPermanentRootArray() {
+      return RootState(RootArray, RootLifetime::getPermanent());
+    }
     static RootState getRootArray(unsigned Depth) {
       return RootState(RootArray, RootLifetime::getGCFrame(Depth));
+    }
+  };
+
+  struct GCCell {
+    enum Kind { RegionCell, HeapField, HeapArrayElement } K;
+
+    const MemRegion *Region;
+    SymbolRef Owner;
+    const FieldDecl *Field;
+    int64_t Index;
+    bool Summary;
+
+    GCCell()
+        : K(RegionCell), Region(nullptr), Owner(nullptr), Field(nullptr),
+          Index(0), Summary(false) {}
+
+    bool operator==(const GCCell &Other) const {
+      return K == Other.K && Region == Other.Region && Owner == Other.Owner &&
+             Field == Other.Field && Index == Other.Index &&
+             Summary == Other.Summary;
+    }
+    bool operator!=(const GCCell &Other) const { return !(*this == Other); }
+    bool operator<(const GCCell &Other) const {
+      std::less<const void *> Less;
+      if (K != Other.K)
+        return K < Other.K;
+      if (Region != Other.Region)
+        return Less(Region, Other.Region);
+      if (Owner != Other.Owner)
+        return Less(Owner, Other.Owner);
+      if (Field != Other.Field)
+        return Less(Field, Other.Field);
+      if (Index != Other.Index)
+        return Index < Other.Index;
+      return Summary < Other.Summary;
+    }
+
+    bool isHeapCell() const { return K == HeapField || K == HeapArrayElement; }
+    bool isRegionCell() const { return K == RegionCell; }
+    bool isSummaryCell() const { return K == HeapArrayElement && Summary; }
+
+    void Profile(llvm::FoldingSetNodeID &ID) const {
+      ID.AddInteger(K);
+      ID.AddPointer(Region);
+      ID.AddPointer(Owner);
+      ID.AddPointer(Field);
+      ID.AddInteger(Index);
+      ID.AddBoolean(Summary);
+    }
+
+    static GCCell forRegion(const MemRegion *Region) {
+      GCCell Cell;
+      Cell.K = RegionCell;
+      Cell.Region = Region;
+      return Cell;
+    }
+    static GCCell forHeapField(SymbolRef Owner, const FieldDecl *Field) {
+      GCCell Cell;
+      Cell.K = HeapField;
+      Cell.Owner = Owner;
+      Cell.Field = Field;
+      return Cell;
+    }
+    static GCCell forHeapArrayElement(SymbolRef Owner, int64_t Index) {
+      GCCell Cell;
+      Cell.K = HeapArrayElement;
+      Cell.Owner = Owner;
+      Cell.Index = Index;
+      Cell.Summary = false;
+      return Cell;
+    }
+    static GCCell forHeapArraySummary(SymbolRef Owner) {
+      GCCell Cell;
+      Cell.K = HeapArrayElement;
+      Cell.Owner = Owner;
+      Cell.Summary = true;
+      return Cell;
     }
   };
 
@@ -279,6 +361,8 @@ private:
                                  ProgramStateRef &State) const;
   bool processArgumentRooting(const CallEvent &Call, CheckerContext &C,
                               ProgramStateRef &State) const;
+  bool processHeapEffects(const CallEvent &Call, CheckerContext &C,
+                          ProgramStateRef &State) const;
   bool rootRegionIfGlobal(const MemRegion *R, ProgramStateRef &,
                           CheckerContext &C, ValueState *ValS = nullptr,
                           bool *IsRooted = nullptr) const;
@@ -288,6 +372,33 @@ private:
   static bool lookupRootRegion(const ProgramStateRef &State,
                                const MemRegion *R,
                                RootLookupResult *Result);
+  static std::optional<GCCell> resolveCell(const ProgramStateRef &State,
+                                           const MemRegion *R);
+  static std::optional<GCCell> resolveCell(const ProgramStateRef &State,
+                                           SVal V);
+  static bool lookupRootCell(const ProgramStateRef &State, const GCCell &Cell,
+                             RootLookupResult *Result = nullptr);
+  static ProgramStateRef setCellContent(ProgramStateRef State,
+                                        const GCCell &Cell, SymbolRef Sym);
+  static ProgramStateRef addObjectChild(ProgramStateRef State, SymbolRef Owner,
+                                        const GCCell &Child);
+  static ProgramStateRef addObjectSymbolChild(ProgramStateRef State,
+                                              SymbolRef Owner,
+                                              SymbolRef Child);
+  static ProgramStateRef setObjectChildContent(ProgramStateRef State,
+                                               SymbolRef Owner,
+                                               const GCCell &Child,
+                                               SymbolRef ChildSym);
+  static bool getConcreteIndex(SVal V, int64_t &Index);
+  static bool traceReachableSymbols(const ProgramStateRef &State,
+                                    llvm::SmallPtrSetImpl<SymbolRef> &Reachable,
+                                    SymbolRef Target = nullptr,
+                                    const MemRegion **RootRegion = nullptr,
+                                    int *RootDepth = nullptr);
+  static ProgramStateRef runGCSafepoint(ProgramStateRef State,
+                                        SymbolRef SpeciallyRootedSymbol,
+                                        SymbolRef RetSym,
+                                        bool &DidChange);
   static bool getBestRoot(const ProgramStateRef &State, SymbolRef Sym,
                           const MemRegion **RootRegion = nullptr,
                           int *RootDepth = nullptr);
@@ -401,8 +512,18 @@ REGISTER_MAP_WITH_PROGRAMSTATE(GCValueRootMap, SymbolRef, GCValueRootSet)
 // Root slot writes should use setRootSlotContent; direct updates must maintain
 // both maps.
 REGISTER_MAP_WITH_PROGRAMSTATE(GCRootContentMap, const MemRegion *, SymbolRef)
+REGISTER_MAP_WITH_PROGRAMSTATE(GCRootRegistry, GCChecker::GCCell,
+                               GCChecker::RootState)
+REGISTER_MAP_WITH_PROGRAMSTATE(GCCellContentMap, GCChecker::GCCell, SymbolRef)
+REGISTER_SET_FACTORY_WITH_PROGRAMSTATE(GCCellSet, GCChecker::GCCell)
+REGISTER_MAP_WITH_PROGRAMSTATE(GCObjectChildrenMap, SymbolRef, GCCellSet)
+REGISTER_SET_FACTORY_WITH_PROGRAMSTATE(GCSymbolSet, SymbolRef)
+REGISTER_MAP_WITH_PROGRAMSTATE(GCObjectSymbolChildrenMap, SymbolRef,
+                               GCSymbolSet)
 
 const MemRegion *GCChecker::getOriginRegion(SymbolRef Sym) {
+  if (const SymbolCast *SC = dyn_cast<SymbolCast>(Sym))
+    return getOriginRegion(SC->getOperand());
   if (const SymbolRegionValue *SRV = dyn_cast<SymbolRegionValue>(Sym))
     return SRV->getRegion();
   if (const SymbolDerived *SD = dyn_cast<SymbolDerived>(Sym))
@@ -467,6 +588,22 @@ bool GCChecker::lookupRootRegion(const ProgramStateRef &State,
       return true;
     }
 
+    if (const FieldRegion *FR = Region->getAs<FieldRegion>()) {
+      const MemRegion *Super = FR->getSuperRegion()->StripCasts();
+      if (const auto *SR = Super->getAs<SymbolicRegion>()) {
+        if (const MemRegion *Origin = getOriginRegion(SR->getSymbol())) {
+          if (const auto *OriginSuper =
+                  dyn_cast<SubRegion>(Origin->StripCasts())) {
+            Region =
+                Region->getMemRegionManager().getFieldRegionWithSuper(FR,
+                                                                       OriginSuper);
+            SawAlias = true;
+            continue;
+          }
+        }
+      }
+    }
+
     if (const ElementRegion *ER = Region->getAs<ElementRegion>()) {
       const MemRegion *Base = ER->getBaseRegion()->StripCasts();
       if (const RootState *RS = State->get<GCRootMap>(Base)) {
@@ -477,6 +614,18 @@ bool GCChecker::lookupRootRegion(const ProgramStateRef &State,
                 SawAlias ? RootLookupResult::AliasToRootSlot
                          : RootLookupResult::RootArrayElement);
           return true;
+        }
+      }
+      if (const auto *SR = Base->getAs<SymbolicRegion>()) {
+        if (const MemRegion *Origin = getOriginRegion(SR->getSymbol())) {
+          if (const auto *OriginBase =
+                  dyn_cast<SubRegion>(Origin->StripCasts())) {
+            Region =
+                Region->getMemRegionManager().getElementRegionWithSuper(ER,
+                                                                         OriginBase);
+            SawAlias = true;
+            continue;
+          }
         }
       }
       const auto Index = ER->getIndex().getAs<nonloc::ConcreteInt>();
@@ -497,6 +646,277 @@ bool GCChecker::lookupRootRegion(const ProgramStateRef &State,
     break;
   }
   return false;
+}
+
+bool GCChecker::getConcreteIndex(SVal V, int64_t &Index) {
+  auto CI = V.getAs<nonloc::ConcreteInt>();
+  if (!CI)
+    return false;
+  const llvm::APSInt &Value = CI->getValue();
+  if (!Value.isSigned() && Value.getActiveBits() > 63)
+    return false;
+  Index = Value.getSExtValue();
+  return true;
+}
+
+std::optional<GCChecker::GCCell>
+GCChecker::resolveCell(const ProgramStateRef &State, SVal V) {
+  return resolveCell(State, V.getAsRegion());
+}
+
+std::optional<GCChecker::GCCell>
+GCChecker::resolveCell(const ProgramStateRef &State, const MemRegion *Region) {
+  if (!Region)
+    return std::nullopt;
+
+  for (unsigned I = 0; I < 16 && Region; ++I) {
+    Region = Region->StripCasts();
+
+    RootLookupResult Lookup;
+    if (lookupRootRegion(State, Region, &Lookup) && Lookup.SlotRegion)
+      return GCCell::forRegion(Lookup.SlotRegion);
+
+    if (const SymbolicRegion *SR = Region->getAs<SymbolicRegion>()) {
+      if (const MemRegion *Origin = getOriginRegion(SR->getSymbol())) {
+        Region = Origin;
+        continue;
+      }
+    }
+
+    if (const FieldRegion *FR = Region->getAs<FieldRegion>()) {
+      const MemRegion *Super = FR->getSuperRegion()->StripCasts();
+      SymbolRef Owner = walkToRoot(
+          [](SymbolRef Sym, const ValueState *OldVState) {
+            return !OldVState;
+          },
+          State, Super);
+      if (Owner)
+        return GCCell::forHeapField(Owner, FR->getDecl());
+      return GCCell::forRegion(Region);
+    }
+
+    if (const ElementRegion *ER = Region->getAs<ElementRegion>()) {
+      const MemRegion *Base = ER->getBaseRegion()->StripCasts();
+      RootLookupResult BaseLookup;
+      if (lookupRootRegion(State, Base, &BaseLookup))
+        return GCCell::forRegion(Region);
+
+      SymbolRef Owner = walkToRoot(
+          [](SymbolRef Sym, const ValueState *OldVState) {
+            return !OldVState;
+          },
+          State, Base);
+      if (Owner) {
+        int64_t Index = 0;
+        if (getConcreteIndex(ER->getIndex(), Index))
+          return GCCell::forHeapArrayElement(Owner, Index);
+        return GCCell::forHeapArraySummary(Owner);
+      }
+
+      // Do not collapse non-root array element zero to its super-region here:
+      // cell identity should describe the actual location being assigned.
+      return GCCell::forRegion(Region);
+    }
+
+    return GCCell::forRegion(Region);
+  }
+
+  return std::nullopt;
+}
+
+bool GCChecker::lookupRootCell(const ProgramStateRef &State,
+                               const GCCell &Cell,
+                               RootLookupResult *Result) {
+  if (Result)
+    *Result = RootLookupResult();
+  if (!Cell.isRegionCell())
+    return false;
+
+  if (const RootState *RS = State->get<GCRootRegistry>(Cell)) {
+    if (Result)
+      *Result =
+          RootLookupResult(RS, Cell.Region, RS->isRootArray() ? nullptr
+                                                              : Cell.Region,
+                           RootLookupResult::ExactRoot);
+    return true;
+  }
+
+  return lookupRootRegion(State, Cell.Region, Result);
+}
+
+ProgramStateRef GCChecker::setCellContent(ProgramStateRef State,
+                                          const GCCell &Cell, SymbolRef Sym) {
+  if (!Sym)
+    return State->remove<GCCellContentMap>(Cell);
+  return State->set<GCCellContentMap>(Cell, Sym);
+}
+
+ProgramStateRef GCChecker::addObjectChild(ProgramStateRef State,
+                                          SymbolRef Owner,
+                                          const GCCell &Child) {
+  if (!Owner || !Child.isHeapCell())
+    return State;
+
+  auto &Factory = State->get_context<GCCellSet>();
+  const GCCellSet *CurrentChildren = State->get<GCObjectChildrenMap>(Owner);
+  GCCellSet Children =
+      CurrentChildren ? *CurrentChildren : Factory.getEmptySet();
+  Children = Factory.add(Children, Child);
+  return State->set<GCObjectChildrenMap>(Owner, Children);
+}
+
+ProgramStateRef GCChecker::addObjectSymbolChild(ProgramStateRef State,
+                                                SymbolRef Owner,
+                                                SymbolRef Child) {
+  if (!Owner || !Child)
+    return State;
+
+  auto &Factory = State->get_context<GCSymbolSet>();
+  const GCSymbolSet *CurrentChildren =
+      State->get<GCObjectSymbolChildrenMap>(Owner);
+  GCSymbolSet Children =
+      CurrentChildren ? *CurrentChildren : Factory.getEmptySet();
+  Children = Factory.add(Children, Child);
+  return State->set<GCObjectSymbolChildrenMap>(Owner, Children);
+}
+
+ProgramStateRef GCChecker::setObjectChildContent(ProgramStateRef State,
+                                                 SymbolRef Owner,
+                                                 const GCCell &Child,
+                                                 SymbolRef ChildSym) {
+  State = addObjectChild(State, Owner, Child);
+  return setCellContent(State, Child, ChildSym);
+}
+
+bool GCChecker::traceReachableSymbols(
+    const ProgramStateRef &State, llvm::SmallPtrSetImpl<SymbolRef> &Reachable,
+    SymbolRef Target, const MemRegion **RootRegion, int *RootDepth) {
+  if (RootRegion)
+    *RootRegion = nullptr;
+  if (RootDepth)
+    *RootDepth = 0;
+
+  SmallVector<GCCell, 32> CellWorklist;
+  SmallVector<SymbolRef, 32> ObjectWorklist;
+
+  for (SymbolRef Sym : State->get<GCValuePermanentRoots>()) {
+    if (Reachable.insert(Sym).second)
+      ObjectWorklist.push_back(Sym);
+    if (Target && Sym == Target) {
+      if (RootDepth)
+        *RootDepth = -1;
+      return true;
+    }
+  }
+
+  GCCellContentMapTy ContentMap = State->get<GCCellContentMap>();
+  for (auto I = ContentMap.begin(), E = ContentMap.end(); I != E; ++I) {
+    RootLookupResult Lookup;
+    if (!lookupRootCell(State, I.getKey(), &Lookup))
+      continue;
+    if (Lookup.RS && Lookup.RS->isRootArray() && !Lookup.SlotRegion)
+      continue;
+    CellWorklist.push_back(I.getKey());
+  }
+
+  // Keep the older root-slot content map as a compatibility cache while the
+  // checker is migrated to GCCellContentMap.
+  GCRootContentMapTy RootContentMap = State->get<GCRootContentMap>();
+  for (auto I = RootContentMap.begin(), E = RootContentMap.end(); I != E; ++I) {
+    RootLookupResult Lookup;
+    if (!lookupRootRegion(State, I.getKey(), &Lookup) || !Lookup.SlotRegion)
+      continue;
+    CellWorklist.push_back(GCCell::forRegion(Lookup.SlotRegion));
+  }
+
+  // Transitional compatibility: legacy propagation records root slots directly
+  // on derived symbols. Treat those entries as a derived reachability cache
+  // while exact cell provenance is still being expanded.
+  GCValueRootMapTy LegacyRootMap = State->get<GCValueRootMap>();
+  for (auto I = LegacyRootMap.begin(), E = LegacyRootMap.end(); I != E; ++I) {
+    const GCValueRootSet &Roots = I.getData();
+    for (auto RI = Roots.begin(), RE = Roots.end(); RI != RE; ++RI) {
+      RootLookupResult Lookup;
+      if (!lookupRootRegion(State, *RI, &Lookup) || !Lookup.RootRegion)
+        continue;
+      if (Reachable.insert(I.getKey()).second)
+        ObjectWorklist.push_back(I.getKey());
+      if (Target && I.getKey() == Target) {
+        if (RootRegion)
+          *RootRegion = Lookup.RootRegion;
+        if (RootDepth && Lookup.RS)
+          *RootDepth = Lookup.RS->Lifetime.diagnosticDepth();
+        return true;
+      }
+      break;
+    }
+  }
+
+  while (!CellWorklist.empty() || !ObjectWorklist.empty()) {
+    while (!CellWorklist.empty()) {
+      GCCell Cell = CellWorklist.pop_back_val();
+      const SymbolRef *Sym = State->get<GCCellContentMap>(Cell);
+      if (!Sym && Cell.isRegionCell())
+        Sym = State->get<GCRootContentMap>(Cell.Region);
+      if (!Sym)
+        continue;
+
+      if (Reachable.insert(*Sym).second)
+        ObjectWorklist.push_back(*Sym);
+      if (Target && *Sym == Target) {
+        RootLookupResult Lookup;
+        if (RootRegion && lookupRootCell(State, Cell, &Lookup))
+          *RootRegion = Lookup.RootRegion;
+        if (RootDepth && lookupRootCell(State, Cell, &Lookup) && Lookup.RS)
+          *RootDepth = Lookup.RS->Lifetime.diagnosticDepth();
+        return true;
+      }
+    }
+
+    while (!ObjectWorklist.empty()) {
+      SymbolRef Obj = ObjectWorklist.pop_back_val();
+      if (const GCCellSet *Children = State->get<GCObjectChildrenMap>(Obj)) {
+        for (auto I = Children->begin(), E = Children->end(); I != E; ++I)
+          CellWorklist.push_back(*I);
+      }
+      if (const GCSymbolSet *Children =
+              State->get<GCObjectSymbolChildrenMap>(Obj)) {
+        for (auto I = Children->begin(), E = Children->end(); I != E; ++I) {
+          if (Reachable.insert(*I).second)
+            ObjectWorklist.push_back(*I);
+          if (Target && *I == Target)
+            return true;
+        }
+      }
+    }
+  }
+
+  return Target ? Reachable.count(Target) : false;
+}
+
+ProgramStateRef GCChecker::runGCSafepoint(ProgramStateRef State,
+                                          SymbolRef SpeciallyRootedSymbol,
+                                          SymbolRef RetSym,
+                                          bool &DidChange) {
+  llvm::SmallPtrSet<SymbolRef, 32> Reachable;
+  traceReachableSymbols(State, Reachable);
+  if (SpeciallyRootedSymbol)
+    Reachable.insert(SpeciallyRootedSymbol);
+  if (RetSym)
+    Reachable.insert(RetSym);
+
+  GCValueMapTy AMap = State->get<GCValueMap>();
+  for (auto I = AMap.begin(), E = AMap.end(); I != E; ++I) {
+    if (!I.getData().isJustAllocated())
+      continue;
+    if (Reachable.count(I.getKey()))
+      continue;
+    if (isSymbolOrOriginRooted(State, I.getKey()))
+      continue;
+    State = State->set<GCValueMap>(I.getKey(), ValueState::getFreed());
+    DidChange = true;
+  }
+  return State;
 }
 
 bool GCChecker::getBestRoot(const ProgramStateRef &State, SymbolRef Sym,
@@ -526,8 +946,10 @@ bool GCChecker::getBestRoot(const ProgramStateRef &State, SymbolRef Sym,
     }
   }
 
-  if (!BestRS)
-    return false;
+  if (!BestRS) {
+    llvm::SmallPtrSet<SymbolRef, 32> Reachable;
+    return traceReachableSymbols(State, Reachable, Sym, RootRegion, RootDepth);
+  }
   if (RootRegion)
     *RootRegion = BestRootRegion;
   if (RootDepth)
@@ -542,6 +964,9 @@ bool GCChecker::isSymbolRooted(const ProgramStateRef &State, SymbolRef Sym) {
 bool GCChecker::isSymbolOrOriginRooted(const ProgramStateRef &State,
                                        SymbolRef Sym) {
   if (isSymbolRooted(State, Sym))
+    return true;
+  llvm::SmallPtrSet<SymbolRef, 32> Reachable;
+  if (traceReachableSymbols(State, Reachable, Sym))
     return true;
   const MemRegion *Origin = getOriginRegion(Sym);
   return Origin && getRootedSymbolForRegion(State, Origin);
@@ -664,9 +1089,21 @@ ProgramStateRef GCChecker::setRootSlotContent(ProgramStateRef State,
     return State;
 
   const SymbolRef *Current = State->get<GCRootContentMap>(Lookup.SlotRegion);
-  if (!Sym && !Current)
-    return State;
-  if (Sym && Current && *Current == Sym) {
+  if (!Sym) {
+    State = setCellContent(State, GCCell::forRegion(Lookup.SlotRegion),
+                           nullptr);
+    if (!Current)
+      return State;
+    State = removeRootSlotFromValues(State, Lookup.SlotRegion);
+    return State->remove<GCRootContentMap>(Lookup.SlotRegion);
+  }
+  if (!Current) {
+    State = setCellContent(State, GCCell::forRegion(Lookup.SlotRegion), Sym);
+    State = State->set<GCRootContentMap>(Lookup.SlotRegion, Sym);
+    return markSymbolRooted(State, Sym, Lookup.SlotRegion);
+  }
+  if (Current && *Current == Sym) {
+    State = setCellContent(State, GCCell::forRegion(Lookup.SlotRegion), Sym);
     if (const GCValueRootSet *Roots = State->get<GCValueRootMap>(Sym)) {
       if (Roots->contains(Lookup.SlotRegion))
         return State;
@@ -675,9 +1112,7 @@ ProgramStateRef GCChecker::setRootSlotContent(ProgramStateRef State,
   }
 
   State = removeRootSlotFromValues(State, Lookup.SlotRegion);
-  if (!Sym)
-    return State->remove<GCRootContentMap>(Lookup.SlotRegion);
-
+  State = setCellContent(State, GCCell::forRegion(Lookup.SlotRegion), Sym);
   State = State->set<GCRootContentMap>(Lookup.SlotRegion, Sym);
   return markSymbolRooted(State, Sym, Lookup.SlotRegion);
 }
@@ -994,15 +1429,62 @@ bool GCChecker::propagateArgumentRootedness(CheckerContext &C,
 
   bool Change = false;
   int idx = 0;
+  auto hasCopyableRoots = [&](SymbolRef Sym) {
+    return Sym && (State->contains<GCValuePermanentRoots>(Sym) ||
+                   State->get<GCValueRootMap>(Sym));
+  };
+  auto stripCasts = [](const Expr *E) {
+    while (E) {
+      E = E->IgnoreParens();
+      if (const auto *Cast = dyn_cast<CastExpr>(E)) {
+        E = Cast->getSubExpr();
+        continue;
+      }
+      return E;
+    }
+    return E;
+  };
+  auto symbolForExprValue = [&](const Expr *E,
+                                const LocationContext *ArgLCtx) -> SymbolRef {
+    E = stripCasts(E);
+    SVal V = State->getSVal(E, ArgLCtx);
+    if (SymbolRef Sym = V.getAsSymbol())
+      return Sym;
+    if (const MemRegion *R = V.getAsRegion())
+      return State->getSVal(R).getAsSymbol();
+    if (const auto *DRE = dyn_cast_or_null<DeclRefExpr>(E)) {
+      if (const auto *VD = dyn_cast<VarDecl>(DRE->getDecl()))
+        return State->getSVal(State->getLValue(VD, ArgLCtx)).getAsSymbol();
+    }
+    return nullptr;
+  };
+  auto rootedBaseFromArgExpr = [&](const Expr *ArgExpr,
+                                   const LocationContext *ArgLCtx) -> SymbolRef {
+    ArgExpr = stripCasts(ArgExpr);
+    if (const auto *ME = dyn_cast_or_null<MemberExpr>(ArgExpr)) {
+      SymbolRef BaseSym = symbolForExprValue(ME->getBase(), ArgLCtx);
+      if (hasCopyableRoots(BaseSym))
+        return BaseSym;
+    }
+    return nullptr;
+  };
   for (const auto P : FD->parameters()) {
     if (!isGCTrackedType(P->getType())) {
       continue;
     }
-    auto Arg = State->getSVal(CE->getArg(idx++), LCtx->getParent());
+    const Expr *ArgExpr = CE->getArg(idx++);
+    const LocationContext *ArgLCtx = LCtx->getParent();
+    auto Arg = State->getSVal(ArgExpr, ArgLCtx);
     SymbolRef ArgSym = getTrackedSymbolForSVal(State, Arg);
+    SymbolRef BaseRootSym = rootedBaseFromArgExpr(ArgExpr, ArgLCtx);
+    if (!ArgSym && BaseRootSym)
+      ArgSym = BaseRootSym;
     if (!ArgSym) {
       continue;
     }
+    SymbolRef RootSourceSym = ArgSym;
+    if (!hasCopyableRoots(RootSourceSym) && BaseRootSym)
+      RootSourceSym = BaseRootSym;
     const ValueState *ValS = State->get<GCValueMap>(ArgSym);
     if (!ValS) {
       report_error(
@@ -1026,7 +1508,13 @@ bool GCChecker::propagateArgumentRootedness(CheckerContext &C,
       continue;
     }
     State = State->set<GCValueMap>(ParamSym, *ValS);
-    State = copySymbolRoots(State, ParamSym, ArgSym);
+    bool RootSourceReachable = isSymbolOrOriginRooted(State, RootSourceSym);
+    State = copySymbolRoots(State, ParamSym, RootSourceSym);
+    if (RootSourceReachable && !isSymbolOrOriginRooted(State, ParamSym)) {
+      State = setObjectChildContent(State, RootSourceSym,
+                                    GCCell::forHeapArraySummary(RootSourceSym),
+                                    ParamSym);
+    }
     Change = true;
   }
   return Change;
@@ -1066,6 +1554,17 @@ void GCChecker::checkBeginFunction(CheckerContext &C) const {
       auto Param = State->getLValue(P, LCtx);
       const MemRegion *Root = State->getSVal(Param).getAsRegion();
       State = State->set<GCRootMap>(Root, RootState::getPermanentRoot());
+      State = State->set<GCRootRegistry>(GCCell::forRegion(Root),
+                                         RootState::getPermanentRoot());
+    } else if (P->getName() == "args" && P->getType()->isPointerType() &&
+               P->getType()->getPointeeType()->isPointerType() &&
+               isGCTrackedType(P->getType()->getPointeeType())) {
+      auto Param = State->getLValue(P, LCtx);
+      const MemRegion *Root = State->getSVal(Param).getAsRegion();
+      State = State->set<GCRootMap>(Root, RootState::getPermanentRootArray());
+      State = State->set<GCRootRegistry>(GCCell::forRegion(Root),
+                                         RootState::getPermanentRootArray());
+      Change = true;
     } else if (isGCTrackedType(P->getType())) {
       auto Param = State->getLValue(P, LCtx);
       SymbolRef AssignedSym = State->getSVal(Param).getAsSymbol();
@@ -1345,20 +1844,7 @@ bool GCChecker::processPotentialSafepoint(const CallEvent &Call,
   // Don't free the return value
   SymbolRef RetSym = Call.getReturnValue().getAsSymbol();
 
-  // Symbolically free all unrooted values.
-  GCValueMapTy AMap = State->get<GCValueMap>();
-  for (auto I = AMap.begin(), E = AMap.end(); I != E; ++I) {
-    if (I.getData().isJustAllocated()) {
-      if (isSymbolOrOriginRooted(State, I.getKey()))
-        continue;
-      if (SpeciallyRootedSymbol == I.getKey())
-        continue;
-      if (RetSym == I.getKey())
-        continue;
-      State = State->set<GCValueMap>(I.getKey(), ValueState::getFreed());
-      DidChange = true;
-    }
-  }
+  State = runGCSafepoint(State, SpeciallyRootedSymbol, RetSym, DidChange);
   return DidChange;
 }
 
@@ -1388,26 +1874,257 @@ bool GCChecker::processArgumentRooting(const CallEvent &Call, CheckerContext &C,
   const FunctionDecl *FD = Decl ? Decl->getAsFunction() : nullptr;
   if (!FD)
     return false;
-  const MemRegion *RootingRegion = nullptr;
+  if (FD->getDeclName().isIdentifier()) {
+    StringRef Name = FD->getName();
+    if (Name == "jl_svecset" || Name == "jl_array_ptr_set")
+      return false;
+  }
+  SVal RootingVal;
+  bool SawRootingVal = false;
   SymbolRef RootedSymbol = nullptr;
   for (unsigned i = 0; i < FD->getNumParams(); ++i) {
     if (declHasAnnotation(FD->getParamDecl(i), "julia_rooting_argument")) {
-      RootingRegion = Call.getArgSVal(i).getAsRegion();
+      RootingVal = Call.getArgSVal(i);
+      SawRootingVal = true;
     } else if (declHasAnnotation(FD->getParamDecl(i),
                                  "julia_rooted_argument")) {
       RootedSymbol = Call.getArgSVal(i).getAsSymbol();
     }
   }
-  if (!RootingRegion || !RootedSymbol)
+  if (!SawRootingVal || !RootedSymbol)
     return false;
-  SymbolRef RootingSym = getRootedSymbolForRegion(State, RootingRegion);
+  SymbolRef RootingSym = getTrackedSymbolForSVal(State, RootingVal);
   const ValueState *OldVState =
       RootingSym ? State->get<GCValueMap>(RootingSym) : nullptr;
   if (!OldVState)
     return false;
-  State = State->set<GCValueMap>(RootedSymbol, *OldVState);
-  State = copySymbolRoots(State, RootedSymbol, RootingSym);
+  if (!State->get<GCValueMap>(RootedSymbol)) {
+    State = State->set<GCValueMap>(RootedSymbol, ValueState::getAllocated());
+  }
+  State = setObjectChildContent(State, RootingSym,
+                                GCCell::forHeapArraySummary(RootingSym),
+                                RootedSymbol);
+  State = addSymbolRoots(State, RootedSymbol, RootingSym);
   return true;
+}
+
+bool GCChecker::processHeapEffects(const CallEvent &Call, CheckerContext &C,
+                                   ProgramStateRef &State) const {
+  auto *Decl = Call.getDecl();
+  const FunctionDecl *FD = Decl ? Decl->getAsFunction() : nullptr;
+  if (!FD || !FD->getDeclName().isIdentifier())
+    return false;
+
+  StringRef Name = FD->getName();
+  bool Changed = false;
+
+  auto indexedChild = [&](SymbolRef Owner, unsigned IndexArg) {
+    int64_t Index = 0;
+    if (IndexArg < Call.getNumArgs() &&
+        getConcreteIndex(Call.getArgSVal(IndexArg), Index))
+      return GCCell::forHeapArrayElement(Owner, Index);
+    return GCCell::forHeapArraySummary(Owner);
+  };
+
+  auto ensureTracked = [&](SymbolRef Sym) {
+    if (Sym && !State->get<GCValueMap>(Sym))
+      State = State->set<GCValueMap>(Sym, ValueState::getAllocated());
+  };
+
+  auto hasCopyableRoots = [&](SymbolRef Sym) {
+    return Sym && (State->contains<GCValuePermanentRoots>(Sym) ||
+                   State->get<GCValueRootMap>(Sym));
+  };
+
+  auto stripCasts = [](const Expr *E) {
+    while (E) {
+      E = E->IgnoreParens();
+      if (const auto *Cast = dyn_cast<CastExpr>(E)) {
+        E = Cast->getSubExpr();
+        continue;
+      }
+      return E;
+    }
+    return E;
+  };
+
+  auto symbolForExprValue = [&](const Expr *E) -> SymbolRef {
+    E = stripCasts(E);
+    SVal V = C.getSVal(E);
+    if (SymbolRef Sym = V.getAsSymbol())
+      return Sym;
+    if (const MemRegion *R = V.getAsRegion())
+      return State->getSVal(R).getAsSymbol();
+    if (const auto *DRE = dyn_cast_or_null<DeclRefExpr>(E)) {
+      if (const auto *VD = dyn_cast<VarDecl>(DRE->getDecl()))
+        return State->getSVal(State->getLValue(VD, C.getLocationContext()))
+            .getAsSymbol();
+    }
+    return nullptr;
+  };
+
+  auto rootedBaseFromArgExpr = [&](unsigned ArgIdx) -> SymbolRef {
+    if (ArgIdx >= Call.getNumArgs())
+      return nullptr;
+    const Expr *ArgExpr = stripCasts(Call.getArgExpr(ArgIdx));
+    const auto *ME = dyn_cast_or_null<MemberExpr>(ArgExpr);
+    if (!ME)
+      return nullptr;
+    SymbolRef BaseSym = symbolForExprValue(ME->getBase());
+    return hasCopyableRoots(BaseSym) ? BaseSym : nullptr;
+  };
+
+  auto canonicalizeSymbol = [&](SymbolRef Sym) -> SymbolRef {
+    if (!Sym)
+      return nullptr;
+    if (const MemRegion *Origin = getOriginRegion(Sym)) {
+      SymbolRef OriginSym = State->getSVal(Origin).getAsSymbol();
+      if (OriginSym && State->get<GCValueMap>(OriginSym))
+        return OriginSym;
+    }
+    return Sym;
+  };
+
+  auto rootSourceForOrigin = [&](SymbolRef Sym) -> SymbolRef {
+    if (!Sym)
+      return nullptr;
+    const MemRegion *Origin = getOriginRegion(Sym);
+    if (!Origin)
+      return nullptr;
+    if (SymbolRef RootSource = getRootedSymbolForRegion(State, Origin))
+      return RootSource;
+    SymbolRef OriginSym = State->getSVal(Origin).getAsSymbol();
+    if (OriginSym && OriginSym != Sym && isSymbolOrOriginRooted(State, OriginSym))
+      return OriginSym;
+    return nullptr;
+  };
+
+  auto materializeOriginReachability = [&](SymbolRef Sym) {
+    for (unsigned I = 0; I < 4 && Sym && !isSymbolRooted(State, Sym); ++I) {
+      SymbolRef RootSource = rootSourceForOrigin(Sym);
+      if (!RootSource || RootSource == Sym)
+        return;
+      State = addObjectSymbolChild(State, RootSource, Sym);
+      State = addSymbolRoots(State, Sym, RootSource);
+      Sym = RootSource;
+    }
+  };
+
+  if (Name == "jl_gc_wb" || Name == "jl_gc_wb_fresh" ||
+      Name == "jl_gc_wb_current_task" || Name == "jl_gc_wb_knownold") {
+    if (Call.getNumArgs() < 2)
+      return false;
+    SymbolRef Owner =
+        canonicalizeSymbol(getTrackedSymbolForSVal(State, Call.getArgSVal(0)));
+    SymbolRef ChildSym = Call.getArgSVal(1).getAsSymbol();
+    if (!ChildSym)
+      ChildSym = getTrackedSymbolForSVal(State, Call.getArgSVal(1));
+    ChildSym = canonicalizeSymbol(ChildSym);
+    if (!Owner || !ChildSym)
+      return false;
+    ensureTracked(ChildSym);
+    materializeOriginReachability(Owner);
+    State = addObjectSymbolChild(State, Owner, ChildSym);
+    State = setObjectChildContent(State, Owner,
+                                  GCCell::forHeapArraySummary(Owner),
+                                  ChildSym);
+    if (hasCopyableRoots(Owner))
+      State = addSymbolRoots(State, ChildSym, Owner);
+    return true;
+  }
+
+  if (Name == "jl_svecset" || Name == "jl_array_ptr_set") {
+    if (Call.getNumArgs() < 3)
+      return false;
+    SymbolRef Owner =
+        canonicalizeSymbol(getTrackedSymbolForSVal(State, Call.getArgSVal(0)));
+    if (!Owner)
+      return false;
+    materializeOriginReachability(Owner);
+    SymbolRef ChildSym = Call.getArgSVal(2).getAsSymbol();
+    if (!ChildSym)
+      ChildSym = getTrackedSymbolForSVal(State, Call.getArgSVal(2));
+    ChildSym = canonicalizeSymbol(ChildSym);
+    ensureTracked(ChildSym);
+    State = setObjectChildContent(State, Owner, indexedChild(Owner, 1),
+                                  ChildSym);
+    SymbolRef RootingOwner = hasCopyableRoots(Owner) ? Owner
+                                                     : rootedBaseFromArgExpr(0);
+    if (RootingOwner) {
+      State = setObjectChildContent(State, RootingOwner,
+                                    GCCell::forHeapArraySummary(RootingOwner),
+                                    ChildSym);
+      State = addSymbolRoots(State, ChildSym, RootingOwner);
+    }
+    return true;
+  }
+
+  if (Name == "jl_svecref" || Name == "jl_array_ptr_ref" ||
+      Name == "jl_get_nth_field_checked") {
+    if (Call.getNumArgs() < 2)
+      return false;
+    SymbolRef Owner =
+        canonicalizeSymbol(getTrackedSymbolForSVal(State, Call.getArgSVal(0)));
+    SymbolRef RetSym = Call.getReturnValue().getAsSymbol();
+    if (!Owner || !RetSym)
+      return false;
+    materializeOriginReachability(Owner);
+    SymbolRef RootingOwner = hasCopyableRoots(Owner) ? Owner
+                                                     : rootedBaseFromArgExpr(0);
+    auto markReadFromRootedOwner = [&](SymbolRef Sym) {
+      if (!Sym)
+        return;
+      ensureTracked(Sym);
+      if (!RootingOwner)
+        return;
+      if (const ValueState *VS = State->get<GCValueMap>(Sym)) {
+        if (VS->isPotentiallyFreed())
+          State = State->set<GCValueMap>(Sym, ValueState::getAllocated());
+      }
+      State = addSymbolRoots(State, Sym, RootingOwner);
+    };
+
+    GCCell Child = indexedChild(Owner, 1);
+    State = addObjectChild(State, Owner, Child);
+    if (!Child.isSummaryCell() &&
+        State->get<GCCellContentMap>(Child)) {
+      const SymbolRef *Existing = State->get<GCCellContentMap>(Child);
+      markReadFromRootedOwner(*Existing);
+      if (Call.getOriginExpr())
+        State = State->BindExpr(Call.getOriginExpr(), C.getLocationContext(),
+                                C.getSValBuilder().makeSymbolVal(*Existing));
+      Changed = true;
+    } else {
+      markReadFromRootedOwner(RetSym);
+      if (!Child.isSummaryCell())
+        State = setCellContent(State, Child, RetSym);
+      Changed = true;
+    }
+    return Changed;
+  }
+
+  bool IsSVecConstructor =
+      Name == "jl_svec1" || Name == "jl_svec2" || Name == "jl_svec3" ||
+      Name == "jl_svec" || Name == "ijl_svec";
+  if (!IsSVecConstructor)
+    return false;
+
+  SymbolRef Owner = Call.getReturnValue().getAsSymbol();
+  if (!Owner)
+    return false;
+
+  unsigned FirstValueArg =
+      (Name == "jl_svec" || Name == "ijl_svec") ? 1 : 0;
+  for (unsigned I = FirstValueArg; I < Call.getNumArgs(); ++I) {
+    SymbolRef ChildSym = Call.getArgSVal(I).getAsSymbol();
+    if (!ChildSym || !State->get<GCValueMap>(ChildSym))
+      continue;
+    GCCell Child = GCCell::forHeapArrayElement(Owner, I - FirstValueArg);
+    State = setObjectChildContent(State, Owner, Child, ChildSym);
+    Changed = true;
+  }
+
+  return Changed;
 }
 
 bool GCChecker::processAllocationOfResult(const CallEvent &Call,
@@ -1495,6 +2212,7 @@ void GCChecker::checkPostCall(const CallEvent &Call, CheckerContext &C) const {
   if (!C.wasInlined)
     didChange |= processPotentialSafepoint(Call, C, State);
   didChange |= processAllocationOfResult(Call, C, State);
+  didChange |= processHeapEffects(Call, C, State);
   if (didChange)
     C.addTransition(State);
 }
@@ -1605,6 +2323,22 @@ void GCChecker::checkDerivingExpr(const Expr *Result, const Expr *Parent,
   }
   // NewSym might already have a better root
   const ValueState *NewValS = State->get<GCValueMap>(NewSym);
+  if (ParentIsLoc) {
+    if (std::optional<GCCell> SourceCell = resolveCell(State, Region)) {
+      if (SourceCell->isHeapCell()) {
+        SymbolRef Owner = SourceCell->Owner;
+        const ValueState *OwnerState =
+            Owner ? State->get<GCValueMap>(Owner) : nullptr;
+        if (OwnerState && isSymbolOrOriginRooted(State, Owner)) {
+          State = State->set<GCValueMap>(NewSym, ValueState::getAllocated());
+          State = setObjectChildContent(State, Owner, *SourceCell, NewSym);
+          State = addSymbolRoots(State, NewSym, Owner);
+          C.addTransition(State);
+          return;
+        }
+      }
+    }
+  }
   if (Region) {
     const VarRegion *VR = Region->getAs<VarRegion>();
     bool inheritedState = false;
@@ -1666,6 +2400,18 @@ void GCChecker::checkDerivingExpr(const Expr *Result, const Expr *Parent,
                        "Creating derivative of value that may have been GCed");
   } else if (ResultTracked) {
     State = State->set<GCValueMap>(NewSym, *OldValS);
+    GCCell Child = GCCell::forHeapArraySummary(OldSym);
+    const Expr *CellExpr = ParentIsLoc ? Parent : Result;
+    if (const auto *ME = dyn_cast<MemberExpr>(CellExpr->IgnoreParenCasts())) {
+      if (const auto *FD = dyn_cast<FieldDecl>(ME->getMemberDecl()))
+        Child = GCCell::forHeapField(OldSym, FD);
+    } else if (const auto *ASE =
+                   dyn_cast<ArraySubscriptExpr>(CellExpr->IgnoreParenCasts())) {
+      int64_t Index = 0;
+      if (getConcreteIndex(C.getSVal(ASE->getIdx()), Index))
+        Child = GCCell::forHeapArrayElement(OldSym, Index);
+    }
+    State = setObjectChildContent(State, OldSym, Child, NewSym);
     State = addSymbolRoots(State, NewSym, OldSym);
     C.addTransition(State);
     return;
@@ -1853,7 +2599,7 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
       }
     }
     for (const MemRegion *R : PoppedRoots) {
-      State = removeRootSlotsForRoot(State, R);
+      State = State->remove<GCRootRegistry>(GCCell::forRegion(R));
       State = State->remove<GCRootMap>(R);
     }
     C.addTransition(State);
@@ -1875,19 +2621,22 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
       }
       const MemRegion *Region = MRV->getRegion();
       State = State->set<GCRootMap>(Region, RootState::getRoot(CurrentDepth));
+      State = State->set<GCRootRegistry>(GCCell::forRegion(Region),
+                                         RootState::getRoot(CurrentDepth));
       // Now for the value
       SVal Value = State->getSVal(Region);
       SymbolRef Sym = Value.getAsSymbol();
-      if (!Sym)
+      if (!Sym) {
+        State = setRootSlotContent(State, Region, nullptr);
         continue;
+      }
       const ValueState *ValState = State->get<GCValueMap>(Sym);
       if (!ValState)
         continue;
       if (ValState->isPotentiallyFreed())
         report_value_error(C, Sym,
                            "Trying to root value which may have been GCed");
-      State = State->set<GCRootContentMap>(Region, Sym);
-      State = markSymbolRooted(State, Sym, Region);
+      State = setRootSlotContent(State, Region, Sym);
     }
     CurrentDepth += 1;
     State = State->set<GCDepth>(CurrentDepth);
@@ -1904,6 +2653,8 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
     const MemRegion *Region = MRV->getRegion()->StripCasts();
     State =
         State->set<GCRootMap>(Region, RootState::getRootArray(CurrentDepth));
+    State = State->set<GCRootRegistry>(GCCell::forRegion(Region),
+                                       RootState::getRootArray(CurrentDepth));
     CurrentDepth += 1;
     State = State->set<GCDepth>(CurrentDepth);
     C.addTransition(State);
@@ -1911,6 +2662,12 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
   } else if (name == "JL_GC_PROMISE_ROOTED") {
     SVal Arg = C.getSVal(CE->getArg(0));
     SymbolRef Sym = Arg.getAsSymbol();
+    if (!Sym)
+      Sym = getTrackedSymbolForSVal(C.getState(), Arg);
+    if (!Sym) {
+      if (const MemRegion *Region = Arg.getAsRegion())
+        Sym = C.getState()->getSVal(Region).getAsSymbol();
+    }
     if (!Sym) {
       report_error(C, "Can not understand this promise.");
       return true;
@@ -1949,6 +2706,8 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
       // The items list is now rooted
       State = State->set<GCRootMap>(Items.getAsRegion(),
                                     RootState::getRootArray(CurrentDepth));
+      State = State->set<GCRootRegistry>(GCCell::forRegion(Items.getAsRegion()),
+                                         RootState::getRootArray(CurrentDepth));
     }
     C.addTransition(State);
     return true;
@@ -2008,11 +2767,61 @@ void GCChecker::checkBind(SVal LVal, SVal RVal, const clang::Stmt *S,
   if (!R) {
     return;
   }
+  std::optional<GCCell> Cell = resolveCell(State, R);
   RootLookupResult RootLookup;
   bool shouldBeRootArray = R->getAs<ElementRegion>();
   bool HasRoot = lookupRootRegion(State, R, &RootLookup);
   SymbolRef Sym = RVal.getAsSymbol();
+  const auto *TrackedRValState = Sym ? State->get<GCValueMap>(Sym) : nullptr;
+  auto hasCopyableRoots = [&](SymbolRef RootSym) {
+    return RootSym && (State->contains<GCValuePermanentRoots>(RootSym) ||
+                       State->get<GCValueRootMap>(RootSym));
+  };
+  if (!TrackedRValState && Sym) {
+    bool LHSCanHoldGC = false;
+    if (const auto *TVR = R->getAs<TypedValueRegion>())
+      LHSCanHoldGC = isGCTrackedType(TVR->getValueType());
+    if (LHSCanHoldGC) {
+      if (const MemRegion *Origin = getOriginRegion(Sym)) {
+        std::optional<GCCell> SourceCell = resolveCell(State, Origin);
+        if (SourceCell && SourceCell->isHeapCell()) {
+          SymbolRef Owner = SourceCell->Owner;
+          const ValueState *OwnerState =
+              Owner ? State->get<GCValueMap>(Owner) : nullptr;
+          if (OwnerState && isSymbolOrOriginRooted(State, Owner)) {
+            State = State->set<GCValueMap>(Sym, *OwnerState);
+            State = setObjectChildContent(State, Owner, *SourceCell, Sym);
+            if (hasCopyableRoots(Owner))
+              State = addSymbolRoots(State, Sym, Owner);
+            TrackedRValState = State->get<GCValueMap>(Sym);
+          }
+        }
+      }
+    }
+  }
+  bool DidCellUpdate = false;
+  if (Cell && (TrackedRValState || State->get<GCCellContentMap>(*Cell))) {
+    State = setCellContent(State, *Cell, TrackedRValState ? Sym : nullptr);
+    DidCellUpdate = true;
+  }
+  if (Cell && Cell->isHeapCell()) {
+    if (TrackedRValState) {
+      if (TrackedRValState->isPotentiallyFreed())
+        report_value_error(C, Sym,
+                           "Trying to store value which may have been GCed");
+      State = setObjectChildContent(State, Cell->Owner, *Cell, Sym);
+      if (hasCopyableRoots(Cell->Owner))
+        State = addSymbolRoots(State, Sym, Cell->Owner);
+      C.addTransition(State);
+      return;
+    }
+    if (DidCellUpdate)
+      C.addTransition(State);
+    return;
+  }
   if (!Sym && !HasRoot) {
+    if (DidCellUpdate)
+      C.addTransition(State);
     return;
   }
   if (!HasRoot) {
@@ -2035,10 +2844,17 @@ void GCChecker::checkBind(SVal LVal, SVal RVal, const clang::Stmt *S,
               RootSource ? State->get<GCValueMap>(RootSource) : nullptr)
         ValS = *RootSourceState;
     }
-    if (!LHSRooted)
+    if (!LHSRooted) {
+      if (DidCellUpdate)
+        C.addTransition(State);
       return;
+    }
 
     State = State->set<GCValueMap>(Sym, ValS);
+    if (RootSource)
+      State = setObjectChildContent(State, RootSource,
+                                    GCCell::forHeapArraySummary(RootSource),
+                                    Sym);
     if (RootSource)
       State = addSymbolRoots(State, Sym, RootSource);
     else
@@ -2101,6 +2917,8 @@ bool GCChecker::rootRegionIfGlobal(const MemRegion *R, ProgramStateRef &State,
   if (declHasAnnotation(VD, "julia_globally_rooted") ||
       isGloballyRootedType(VD->getType())) {
     State = State->set<GCRootMap>(R, RootState::getPermanentRoot());
+    State = State->set<GCRootRegistry>(GCCell::forRegion(R),
+                                       RootState::getPermanentRoot());
     isGlobalRoot = true;
     if (IsRooted)
       *IsRooted = true;
@@ -2115,6 +2933,7 @@ bool GCChecker::rootRegionIfGlobal(const MemRegion *R, ProgramStateRef &State,
     if (!GVState)
       State = State->set<GCValueMap>(Sym, TheValS);
     if (isGlobalRoot) {
+      State = setCellContent(State, GCCell::forRegion(R), Sym);
       State = State->set<GCRootContentMap>(R, Sym);
       State = markSymbolRooted(State, Sym, R);
     }
@@ -2138,8 +2957,11 @@ void GCChecker::checkLocation(SVal SLoc, bool IsLoad, const Stmt *S,
         State = State->set<GCValueMap>(LoadedSym, ValueState::getAllocated());
       if (Lookup.SlotRegion) {
         DidChange = true;
-        if (!State->get<GCRootContentMap>(Lookup.SlotRegion))
+        if (!State->get<GCRootContentMap>(Lookup.SlotRegion)) {
+          State = setCellContent(State, GCCell::forRegion(Lookup.SlotRegion),
+                                 LoadedSym);
           State = State->set<GCRootContentMap>(Lookup.SlotRegion, LoadedSym);
+        }
         State = markSymbolRooted(State, LoadedSym, Lookup.SlotRegion);
       } else if (!isSymbolOrOriginRooted(State, LoadedSym)) {
         DidChange = true;
