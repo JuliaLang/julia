@@ -11,11 +11,15 @@ using Logging
 module DeprecationTests # to test @deprecate
     f() = true
 
+    const source_file = Symbol(@__FILE__)
+
     # test the Symbol path of @deprecate
+    const f1_method_line = @__LINE__() + 1
     @deprecate f1 f
     @deprecate f2 f false # test that f2 is not exported
 
     # test the Expr path of @deprecate
+    const f3_method_line = @__LINE__() + 1
     @deprecate f3() f()
     @deprecate f4() f() false # test that f4 is not exported
     @deprecate f5(x::T) where T f()
@@ -32,6 +36,7 @@ module DeprecationTests # to test @deprecate
     @deprecate Sub.f2 f false
 
     # test that @deprecate_moved can be overridden by an import
+    const foo1234_method_line = @__LINE__() + 1
     Base.@deprecate_moved foo1234 "Foo"
     Base.@deprecate_moved bar "Bar" false
 
@@ -86,6 +91,20 @@ begin # @deprecate
     @test @test_warn "`A{T}(x::S) where {T, S}` is deprecated, use `f()` instead." A{Int}(1.)
 
     @test @test_warn "`Sub.f1()` is deprecated, use `f()` instead." DeprecationTests.Sub.f1()
+
+    # @deprecate-generated methods should report the macro call site.
+    let m = only(methods(DeprecationTests.f1))
+        @test m.file == DeprecationTests.source_file
+        @test m.line == DeprecationTests.f1_method_line
+    end
+    let m = only(methods(DeprecationTests.f3))
+        @test m.file == DeprecationTests.source_file
+        @test m.line == DeprecationTests.f3_method_line
+    end
+    let m = only(methods(DeprecationTests.foo1234))
+        @test m.file == DeprecationTests.source_file
+        @test m.line == DeprecationTests.foo1234_method_line
+    end
 
     redirect_stderr(devnull) do
         @test call(f1)
