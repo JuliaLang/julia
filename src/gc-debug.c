@@ -694,6 +694,7 @@ void jl_print_gc_stats(JL_STREAM *s)
                    p2, p2 * 100.0 / REGION2_PG_COUNT,
                    p1, p1 * 100.0 / REGION1_PG_COUNT / p2,
                    p0, p0 * 100.0 / REGION0_PG_COUNT / p1);
+    jl_safe_printf("image remset\t%zu entries\n", image_remset.len);
 #ifdef _OS_LINUX_
     double gct = gc_num.total_time / 1e9;
     struct mallinfo mi = mallinfo();
@@ -743,13 +744,6 @@ void gc_time_pool_end(int sweep_full)
                    total_pages, total_pages - skipped_pages,
                    freed_pages,
                    sweep_full ? "full" : "quick");
-}
-
-void gc_time_sysimg_end(uint64_t t0)
-{
-    double sweep_pool_sec = (jl_hrtime() - t0) / 1e9;
-    jl_safe_printf("GC sweep sysimg end %.2f ms\n",
-                   sweep_pool_sec * 1000);
 }
 
 static int64_t big_total;

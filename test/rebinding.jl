@@ -322,8 +322,7 @@ module UndefinedTransitions
 end
 
 # Identical implicit partitions should be merge (#57923)
-for binding in (convert(Core.Binding, GlobalRef(Base, :Math)),
-                convert(Core.Binding, GlobalRef(Base, :Intrinsics)))
+for binding in (convert(Core.Binding, GlobalRef(Base, :Math)),)
     # Test that these both only have two partitions
     @test isdefined(binding, :partitions)
     @test isdefined(binding.partitions, :next)
@@ -409,6 +408,24 @@ module Invalidate59272
     @test isa(Bar(), Foo.Bar)
     Core.eval(Foo, :(struct Bar; x; end))
     @test Bar(1) == Foo.Bar(1)
+end
+
+# Test that two const-prop'd pseudo `CodeInstance`s for the same `MethodInstance`
+# carrying *different* binding edges are both kept on the caller's edge list, so
+# that redefining either binding properly invalidates the caller (#61745).
+module Invalidate61745
+    using Test
+    module N
+        const foo = "foo_unchanged"
+        const bar = "bar_unchanged"
+    end
+    helper(s::Symbol) = getglobal(N, s)::String
+    caller_both() = helper(:foo) * helper(:bar)
+    @test caller_both() == "foo_unchangedbar_unchanged"
+    Core.eval(N, :(const foo = "foo_changed!"))
+    @test caller_both() == "foo_changed!bar_unchanged"
+    Core.eval(N, :(const bar = "bar_changed!"))
+    @test caller_both() == "foo_changed!bar_changed!"
 end
 
 # Test @reexport

@@ -233,7 +233,7 @@ macro enum(T::Union{Symbol,Expr}, syms...)
     end
     push!(blk.args, :nothing)
     blk.head = :toplevel
-    return blk
+    return Base.replace_linenums!(blk, __source__)
 end
 
 end # module

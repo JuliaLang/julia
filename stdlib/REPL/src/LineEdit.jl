@@ -304,7 +304,7 @@ for f in Union{Symbol,Expr}[
 end
 
 for f in [:edit_insert, :edit_insert_newline, :edit_backspace, :edit_move_left,
-          :edit_move_right, :edit_move_word_left, :edit_move_word_right]
+          :edit_move_word_left, :edit_move_word_right]  # :edit_move_right is handled separately
     @eval function ($f)(s::MIState, args...)
         set_action!(s, $(Expr(:quote, f)))
         $(f)(state(s), args...)
@@ -911,6 +911,7 @@ function edit_move_right(buf::IOBuffer)
     return false
 end
 function edit_move_right(m::MIState)
+    set_action!(m, :edit_move_right)
     s = state(m)
     buf = s.input_buffer
     if edit_move_right(s.input_buffer)

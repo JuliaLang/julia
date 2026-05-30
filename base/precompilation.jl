@@ -27,7 +27,9 @@ mutable struct PrecompileJob
     had_pid::Bool  # sticky: true once a subprocess was actually spawned for this job
     lock_holder::String
     waiting_for_bg::Bool
-    PrecompileJob() = new(JOB_PENDING, 0.0, "", IOBuffer(), Int32(0), false, "", false)
+    verbose_timing::String  # raw payload from the worker subprocess; surfaced in verbose mode
+    peak_rss_bytes::UInt64  # max RSS observed by `poll_process_stats!`; 0 on unsupported platforms
+    PrecompileJob() = new(JOB_PENDING, 0.0, "", IOBuffer(), Int32(0), false, "", false, "", UInt64(0))
 end
 
 is_pending(j::PrecompileJob)    = j.status == JOB_PENDING
@@ -194,6 +196,79 @@ function printpkgstyle(io, header, msg; color=:green)
 end
 
 timing_string(t) = string(lpad(round(t, digits = 1), 6), " s")
+
+# Parse the marker payload emitted by `Base.include_package_for_output` and
+# format an inline breakdown (include / compilation / image-gen seconds,
+# cache file size and cached method count) appended to the per-package timing
+# line in verbose mode. Column labels are emitted once via
+# `format_verbose_timing_header`. Returns an empty string if the payload is
+# missing or unparsable.
+function format_verbose_timing(payload::AbstractString, total_seconds::Float64, cache_bytes::Int, peak_rss_bytes::UInt64, hascolor::Bool)
+    isempty(payload) && return ""
+    include_ns = compilation_ns = deps_ns = UInt64(0)
+    methods = 0
+    seen = false
+    for tok in split(payload)
+        m = match(r"^(include|compilation|deps)_ns=(\d+)$", tok)
+        if m !== nothing
+            v = parse(UInt64, m.captures[2])
+            tag = m.captures[1]
+            if tag == "include"
+                include_ns = v; seen = true
+            elseif tag == "compilation"
+                compilation_ns = v
+            else
+                deps_ns = v
+            end
+            continue
+        end
+        m = match(r"^methods=(\d+)$", tok)
+        m === nothing || (methods = parse(Int, m.captures[1]))
+    end
+    seen || return ""
+    inc_s = include_ns / 1e9
+    comp_s = compilation_ns / 1e9
+    deps_s = deps_ns / 1e9
+    img_s = max(total_seconds - inc_s, 0.0)
+    dim(s, isz) = isz ? color_string(s, :light_black, hascolor) : s
+    function col(x)
+        s = string(round(x, digits = 2))
+        dot = findfirst('.', s)
+        if dot === nothing
+            s *= ".00"
+        elseif length(s) - dot == 1
+            s *= "0"
+        end
+        dim(string(lpad(s, 6), "s"), x < 0.005)
+    end
+    cache_mb = cache_bytes / 1024^2
+    cache_str = cache_bytes <= 0 ? dim(lpad("-", 8), true) :
+                                   string(lpad(round(cache_mb, digits = 1), 6), "MB")
+    peak_mb = peak_rss_bytes / 1024^2
+    peak_str = peak_rss_bytes == 0 ? dim(lpad("-", 7), true) :
+                                     string(lpad(round(Int, peak_mb), 5), "MB")
+    methods_str = dim(lpad(methods, 7), methods == 0)
+    bar = " │ "
+    return string(bar, col(inc_s), "  ", col(deps_s), "  ", col(comp_s),
+                  bar, methods_str, "  ", col(img_s), "  ", cache_str, "  ", peak_str)
+end
+
+# Header that labels the columns produced by `format_verbose_timing`. The leading
+# 8 spaces account for `timing_string`'s width so columns line up.
+format_verbose_timing_header() = "   total │ include   (deps)   (comp) │ methods  img-gen     cache  ~pk-rss"
+
+# Sum the on-disk size of the `.ji` cache file and (optionally) its companion
+# pkgimage (`.so`/`.dylib`/`.dll`). Returns 0 if files are missing.
+function _precompile_cache_bytes(cf_jl::AbstractString, cf_so::Union{Nothing,AbstractString})
+    total = 0
+    try
+        isfile(cf_jl) && (total += filesize(cf_jl))
+        cf_so === nothing || (isfile(cf_so) && (total += filesize(cf_so)))
+    catch
+    end
+    return total
+end
+
 
 
 function color_string(cstr::String, col::Union{Int64, Symbol}, hascolor)
@@ -880,6 +955,25 @@ precompiles only the given packages and their dependencies (unless
   each package compilation, but only if compilation might have succeeded.
   Disables fancy progress bar output (timing is shown in simple text mode).
 
+- `verbose::Bool`: When `true` (not default), enables verbose timing mode: implies
+  `timing=true` and appends a per-package breakdown to each completion line with
+  these columns:
+    * `total`   — total wall-clock time for the worker subprocess.
+    * `include` — time spent in `Base.include` of the package source.
+    * `(deps)`  — subset of `include`: time spent loading already-precompiled
+                  dependencies from disk (via `require`).
+    * `(comp)`  — subset of `include`: cumulative compile time (type inference
+                  and code generation) reported by `cumulative_compile_time_ns`.
+    * `methods` — number of newly-inferred methods cached for this package.
+    * `img-gen` — `total - include`: post-include work (native-code generation,
+                  serialization, writing the `.ji` and pkgimage to disk).
+    * `cache`   — combined on-disk size of the `.ji` cache and any pkgimage.
+    * `~pk-rss` — approximate peak resident set size of the worker subprocess.
+                  The leading `~` indicates the value is sampled (every ~0.5 s)
+                  rather than observed continuously, so transient peaks between
+                  samples may be missed. Linux/macOS only, `-` elsewhere.
+  Values under 5 ms and zero counts are dimmed for readability.
+
 - `_from_loading::Bool`: Internal flag indicating the call originated from the
   package loading system. When `true` (not default): returns early instead of
   throwing when packages are not found; suppresses progress messages when not
@@ -948,15 +1042,21 @@ function precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}}=String[];
                         strict::Bool = false,
                         warn_loaded::Bool = true,
                         timing::Bool = false,
+                        verbose::Bool = false,
                         _from_loading::Bool=false,
                         configs::Union{Config,Vector{Config}}=(``=>Base.CacheFlags()),
                         io::IO=stderr,
-                        # asking for timing disables fancy mode, as timing is shown in non-fancy mode
-                        fancyprint::Bool = can_fancyprint(io) && !timing,
+                        # asking for timing disables fancy mode, as timing is shown in non-fancy mode;
+                        # verbose implies timing (see below), so also disables fancy mode
+                        fancyprint::Bool = can_fancyprint(io) && !timing && !verbose,
                         manifest::Bool=false,
                         ignore_loaded::Bool=true,
                         detachable::Bool=false)
-    @debug "precompilepkgs called with" pkgs internal_call strict warn_loaded timing _from_loading configs fancyprint manifest ignore_loaded detachable
+    # verbose timing mode requires timing to be enabled (per-package breakdown
+    # is only shown alongside timing lines in non-fancy mode)
+    verbose && (timing = true)
+    @debug "precompilepkgs called with" pkgs internal_call strict warn_loaded timing verbose _from_loading configs fancyprint manifest ignore_loaded detachable
+    verbose && (@lock BG BG.verbose = true)
     # monomorphize this to avoid latency problems
     _precompilepkgs(pkgs, internal_call, strict, warn_loaded, timing, _from_loading,
                    configs isa Vector{Config} ? configs : [configs],
@@ -1583,11 +1683,35 @@ function poll_process_stats!(cpu_pcts::Dict{Int32, Float64}, rss::Dict{Int32, UI
         prev_cpu_times[pid] = stats.cpu_ns
         pct = dt > 0 ? (delta / 1.0e9) / dt * 100.0 : 0.0
         cpu_pcts[pid] = min(pct, 999.9)
-        stats.rss_bytes > 0 && (rss[pid] = stats.rss_bytes)
+        if stats.rss_bytes > 0
+            rss[pid] = stats.rss_bytes
+            stats.rss_bytes > job.peak_rss_bytes && (job.peak_rss_bytes = stats.rss_bytes)
+        end
     end
     pids_set = Set(job.pid for (_, job) in jobs if has_pid(job))
     for pid in keys(prev_cpu_times)
         pid in pids_set || delete!(prev_cpu_times, pid)
+    end
+    return
+end
+
+# Lightweight peak-RSS-only sampler used in non-fancy verbose timing mode,
+# where the live progress UI (which would otherwise drive `poll_process_stats!`)
+# is not running but the per-package verbose timing column still wants peak RSS.
+function sample_peak_rss!(jobs::Dict{PkgConfig, PrecompileJob})
+    @static if !(Sys.islinux() || Sys.isapple())
+        return
+    end
+    seen = Set{Int32}()
+    for (_, job) in jobs
+        has_pid(job) || continue
+        pid = job.pid
+        pid in seen && continue
+        push!(seen, pid)
+        stats = process_stats(pid)
+        if stats.rss_bytes > job.peak_rss_bytes
+            job.peak_rss_bytes = stats.rss_bytes
+        end
     end
     return
 end
@@ -1643,6 +1767,7 @@ function spawn_print_loop!(s::PrecompileSession)
             @lock s.print_lock begin
                 if BG.monitoring
                     printpkgstyle(s.logio, :Precompiling, s.target)
+                    BG.verbose && println(s.logio, format_verbose_timing_header())
                 end
             end
             t = Timer(0; interval=1/10)
@@ -1789,6 +1914,10 @@ function precompilepkgs_monitor_std(s::PrecompileSession, pkg_config, pipe, sing
     thistaskwaiting = false
     while !eof(pipe)
         str = readline(pipe, keep=true)
+        if startswith(str, Base.PRECOMPILE_VERBOSE_TIMING_MARKER)
+            s.jobs[pkg_config].verbose_timing = strip(str)
+            continue
+        end
         if single_requested_pkg && (liveprinting || !isempty(str))
             BG.monitoring && @lock s.print_lock begin
                 if !liveprinting
@@ -1918,6 +2047,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                         @lock s.print_lock begin
                             if !s.fancyprint && isempty(s.pkg_queue) && BG.monitoring
                                 printpkgstyle(s.logio, :Precompiling, s.target)
+                                BG.verbose && println(s.logio, format_verbose_timing_header())
                             end
                             push!(s.pkg_queue, pkg_config)
                         end
@@ -1977,8 +2107,14 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                                 println(s.logio, timing_string(t), color_string("  ? ", Base.warn_color(), s.hascolor), name)
                             end
                         else
+                            cache_bytes = 0
+                            if ret !== nothing
+                                cf_jl, cf_so = ret::Tuple{String, Union{Nothing, String}}
+                                cache_bytes = _precompile_cache_bytes(cf_jl, cf_so)
+                            end
                             !s.fancyprint && BG.monitoring && @lock s.print_lock begin
-                                println(s.logio, timing_string(t), color_string("  ✓ ", loaded ? Base.warn_color() : :green, s.hascolor), name)
+                                verbose_prefix = BG.verbose ? format_verbose_timing(s.jobs[pkg_config].verbose_timing, t, cache_bytes, s.jobs[pkg_config].peak_rss_bytes, s.hascolor) : ""
+                                println(s.logio, timing_string(t), verbose_prefix, color_string("  ✓ ", loaded ? Base.warn_color() : :green, s.hascolor), name)
                             end
                             if ret !== nothing
                                 mark_recompiled!(s.jobs[pkg_config])
@@ -2461,6 +2597,16 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
 
     # Start print loop
     t_print = spawn_print_loop!(s)
+    # In non-fancy verbose timing mode, the print loop exits immediately and so
+    # `poll_process_stats!` never runs; spawn a lightweight peak-RSS sampler so
+    # the `~pk-rss` column in the verbose timing line can be populated.
+    peak_rss_timer = if !fancyprint && (@lock BG BG.verbose)
+        Timer(0.1; interval=0.5, spawn=true) do _
+            @lock s.print_lock sample_peak_rss!(s.jobs)
+        end
+    else
+        nothing
+    end
 
     try
         if !_from_loading
@@ -2495,6 +2641,7 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
         # Ensure print loop exits even on exception
         s.interrupted_or_done = true
         notify(s.first_started)
+        peak_rss_timer === nothing || close(peak_rss_timer)
     end
 end
 
