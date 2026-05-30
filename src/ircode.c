@@ -727,7 +727,7 @@ static jl_value_t *jl_decode_value_phic(jl_ircode_state *s, uint8_t tag)
         len = read_int32(s->s);
     jl_array_t *v = jl_alloc_vec_any(len);
     jl_value_t *phic = (jl_value_t*)v;
-    JL_GC_PUSH1(&phic);
+    JL_GC_PUSH2(&phic, &v);
     phic = jl_new_struct(jl_phicnode_type, v);
     jl_value_t **data = jl_array_ptr_data(v);
     for (i = 0; i < len; i++) {

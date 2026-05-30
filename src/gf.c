@@ -1118,7 +1118,9 @@ static jl_value_t *inst_varargp_in_env(jl_value_t *decl, jl_svec_t *sparams)
                 vm = T_has_tv ? jl_type_unionall(v, T) : T;
                 if (N_has_tv)
                     N = NULL;
+                JL_GC_PUSH1(&N);
                 vm = (jl_value_t*)jl_wrap_vararg(vm, N, 1, 0); // this cannot throw for these inputs
+                JL_GC_POP();
             }
             sp++;
             decl = ((jl_unionall_t*)decl)->body;
@@ -2250,6 +2252,8 @@ static int jl_type_intersection2(jl_value_t *t1, jl_value_t *t2, jl_value_t **is
 // check if `type` is replacing `m` with an ambiguity here, given other methods in `d` that already match it
 static int is_replacing(char ambig, jl_value_t *type, jl_method_t *m, jl_method_t *const *d, size_t n, jl_value_t *isect, jl_value_t *isect2, char *morespec)
 {
+    int ret = 1;
+    JL_GC_PUSH2(&isect, &isect2);
     size_t k;
     for (k = 0; k < n; k++) {
         jl_method_t *m2 = d[k];
@@ -2258,7 +2262,7 @@ static int is_replacing(char ambig, jl_value_t *type, jl_method_t *m, jl_method_
             continue;
         if (morespec[k])
             // not actually shadowing this--m2 will still be better
-            return 0;
+            goto not_replacing;
         // if type is not more specific than m (thus now dominating it)
         // then there is a new ambiguity here,
         // since m2 was also a previous match over isect,
@@ -2266,10 +2270,15 @@ static int is_replacing(char ambig, jl_value_t *type, jl_method_t *m, jl_method_
         // or if this was already ambiguous before
         if (ambig && !jl_type_morespecific(m->sig, m2->sig)) {
             // m and m2 were previously ambiguous over the full intersection of mi with type, and will still be ambiguous with addition of type
-            return 0;
+            goto not_replacing;
         }
     }
-    return 1;
+    goto done;
+not_replacing:
+    ret = 0;
+done:
+    JL_GC_POP();
+    return ret;
 }
 
 static int _invalidate_dispatch_backedges(jl_method_instance_t *mi, jl_value_t *type, jl_method_t *m,
@@ -2726,7 +2735,7 @@ jl_typemap_entry_t *jl_method_table_add(jl_methtable_t *mt, jl_method_t *method,
     return newentry;
 }
 
-static int has_key(jl_genericmemory_t *keys, jl_value_t *key)
+static int has_key(jl_genericmemory_t *keys, jl_value_t *key) JL_NOTSAFEPOINT
 {
     for (size_t l = keys->length, i = 0; i < l; i++) {
         jl_value_t *k = jl_genericmemory_ptr_ref(keys, i);
@@ -2739,7 +2748,7 @@ static int has_key(jl_genericmemory_t *keys, jl_value_t *key)
 }
 
 // Check if m2 is in m1's interferences set, which means !morespecific(m1, m2)
-static int method_in_interferences(jl_method_t *m2, jl_method_t *m1)
+static int method_in_interferences(jl_method_t *m2, jl_method_t *m1) JL_NOTSAFEPOINT
 {
     return has_key(jl_atomic_load_relaxed(&m1->interferences), (jl_value_t*)m2);
 }
@@ -2902,8 +2911,9 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
     jl_value_t *loctag = NULL;  // debug info for invalidation
     jl_value_t *isect = NULL;
     jl_value_t *isect2 = NULL;
+    jl_value_t *replaced_root = NULL;
     jl_genericmemory_t *interferences = NULL;
-    JL_GC_PUSH6(&oldvalue, &oldmi, &loctag, &isect, &isect2, &interferences);
+    JL_GC_PUSH9(&oldvalue, &oldmi, &loctag, &isect, &isect2, &replaced_root, &interferences, &type, &method);
     jl_typemap_entry_t *replaced = NULL;
     // Check what entries this intersects with in the prior world.
     oldvalue = get_intersect_matches(jl_atomic_load_relaxed(&mt->defs), newentry, &replaced, max_world);
@@ -2936,7 +2946,7 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
     if (oldvalue) {
         assert(n > 0);
         if (replaced) {
-            oldvalue = (jl_value_t*)replaced;
+            replaced_root = (jl_value_t*)replaced;
             jl_method_t *m = replaced->func.method;
             invalidated = 1;
             method_overwrite(newentry, m);

@@ -146,6 +146,103 @@ int pushargs_roots() {
   return val->length == 1;
 }
 
+// Root array slots remain roots when accessed through saved slot pointers.
+int pushargs_slot_pointer_roots() {
+  jl_value_t **margs;
+  jl_svec_t *val = jl_svec1(NULL);
+  JL_GC_PUSHARGS(margs, 2);
+  margs[1] = (jl_value_t*)val;
+  jl_value_t **slot = &margs[1];
+  jl_gc_safepoint();
+  look_at_value(*slot);
+  JL_GC_POP();
+  return 0;
+}
+
+int pushargs_slot_pointer_assignment_roots() {
+  jl_value_t **margs;
+  jl_svec_t *val = jl_svec1(NULL);
+  JL_GC_PUSHARGS(margs, 2);
+  jl_value_t **slot = &margs[1];
+  *slot = (jl_value_t*)val;
+  jl_gc_safepoint();
+  look_at_value(val);
+  JL_GC_POP();
+  return 0;
+}
+
+int pushargs_slot_pointer_after_pop_freed() {
+  jl_value_t **margs;
+  jl_svec_t *val = jl_svec1(NULL); // expected-note{{Started tracking value here}}
+  JL_GC_PUSHARGS(margs, 1); // expected-note{{GC frame changed here}}
+  jl_value_t **slot = &margs[0];
+  *slot = (jl_value_t*)val; // expected-note{{Value was rooted here}}
+  JL_GC_POP(); // expected-note{{GC frame changed here}}
+               // expected-note@-1{{Root was released here}}
+  jl_gc_safepoint(); // expected-note{{Value may have been GCed here}}
+  return val->length == 1; // expected-warning{{Trying to access value which may have been GCed}}
+                           // expected-note@-1{{Trying to access value which may have been GCed}}
+}
+
+int scalar_root_slot_pointer_assignment_roots() {
+  jl_svec_t *val = jl_svec1(NULL);
+  jl_value_t *root = NULL;
+  JL_GC_PUSH1(&root);
+  jl_value_t **slot = &root;
+  *slot = (jl_value_t*)val;
+  jl_gc_safepoint();
+  look_at_value((jl_value_t*)val);
+  JL_GC_POP();
+  return 0;
+}
+
+int scalar_root_overwrite_releases_old_value() {
+  jl_svec_t *root = jl_svec1(NULL); // expected-note{{Started tracking value here}}
+  jl_svec_t *alias = root;
+  JL_GC_PUSH1(&root); // expected-note{{GC frame changed here}}
+                      // expected-note@-1{{Value was rooted here}}
+  root = NULL; // expected-note{{Root was released here}}
+  jl_gc_safepoint(); // expected-note{{Value may have been GCed here}}
+  return alias->length == 1; // expected-warning{{Trying to access value which may have been GCed}}
+                             // expected-note@-1{{Trying to access value which may have been GCed}}
+}
+
+int permanent_root_slot_overwrite_releases_old_value(jl_value_t **slot JL_REQUIRE_ROOTED_SLOT) {
+  jl_svec_t *val = jl_svec1(NULL); // expected-note{{Started tracking value here}}
+  jl_svec_t *alias = val;
+  *slot = (jl_value_t*)val; // expected-note{{Value was rooted here}}
+  *slot = NULL; // expected-note{{Root was released here}}
+  jl_gc_safepoint(); // expected-note{{Value may have been GCed here}}
+  return alias->length == 1; // expected-warning{{Trying to access value which may have been GCed}}
+                             // expected-note@-1{{Trying to access value which may have been GCed}}
+}
+
+int multiple_root_overwrite_keeps_value_rooted() {
+  jl_svec_t *val = jl_svec1(NULL);
+  jl_value_t *root1 = NULL;
+  jl_value_t *root2 = NULL;
+  JL_GC_PUSH2(&root1, &root2);
+  root1 = (jl_value_t*)val;
+  root2 = (jl_value_t*)val;
+  root1 = NULL;
+  jl_gc_safepoint();
+  look_at_value((jl_value_t*)val);
+  JL_GC_POP();
+  return 0;
+}
+
+// Storing an already rooted value into a rooted object should not replace the
+// value's existing longer-lived root.
+void rooted_field_store_preserves_existing_root(jl_typename_t *tn) {
+  jl_datatype_t *dt = NULL;
+  JL_GC_PUSH1(&dt);
+  dt = (jl_datatype_t*)jl_svec1(NULL);
+  dt->name = tn;
+  JL_GC_POP();
+  jl_gc_safepoint();
+  look_at_value((jl_value_t*)tn);
+}
+
 int pushargs_roots_freed() {
   jl_value_t **margs;
   jl_svec_t *val = jl_svec1(NULL); // expected-note{{Started tracking value here}}
@@ -181,10 +278,107 @@ void globally_rooted() {
 }
 
 extern jl_value_t *first_array_elem(jl_array_t *a JL_PROPAGATES_ROOT);
+extern jl_expr_t *new_expr_for_analyzer(void);
 void root_propagation(jl_expr_t *expr) {
   jl_value_t *val = first_array_elem(expr->args);
   jl_gc_safepoint();
   look_at_value(val);
+}
+
+void rooted_argument_derivatives_keep_roots(jl_value_t *v) {
+  jl_value_t **data = (jl_value_t**)v;
+  jl_value_t *first = data[0];
+  jl_value_t *second = data[1];
+  jl_gc_safepoint();
+  look_at_value(first);
+  look_at_value(second);
+}
+
+void rooted_argument_cast_derivative_keeps_root(jl_value_t *v) {
+  jl_sym_t **data = (jl_sym_t**)v;
+  jl_sym_t *sym = data[0];
+  jl_gc_safepoint();
+  look_at_value((jl_value_t*)sym);
+}
+
+void rooted_svec_data_pointer_arithmetic_keeps_root(jl_svec_t *cache) {
+  jl_value_t **data = jl_svec_data(cache);
+  jl_value_t *val = data[0];
+  jl_gc_safepoint();
+  look_at_value(val);
+}
+
+static jl_value_t *rooted_svec_data_inlined_helper(jl_svec_t *cache) {
+  jl_value_t **data = jl_svec_data(cache);
+  return data[0];
+}
+
+void rooted_svec_data_inlined_call_keeps_root(jl_svec_t *cache) {
+  jl_svec_t *local = cache;
+  jl_value_t *val = rooted_svec_data_inlined_helper(local);
+  jl_gc_safepoint();
+  look_at_value(val);
+}
+
+void rooted_exprarg_siblings_keep_roots(jl_expr_t *warning) {
+  JL_GC_PUSH1(&warning);
+  jl_value_t *level = jl_exprarg(warning, 0);
+  jl_value_t *group = jl_exprarg(warning, 1);
+  (void)group;
+  jl_value_t *kwargs = jl_alloc_vec_any(0);
+  (void)kwargs;
+  look_at_value(level);
+  JL_GC_POP();
+}
+
+void rooted_returned_exprarg_siblings_keep_roots(void) {
+  jl_expr_t *warning = new_expr_for_analyzer();
+  JL_GC_PUSH1(&warning);
+  jl_value_t *level = jl_exprarg(warning, 0);
+  jl_value_t *group = jl_exprarg(warning, 1);
+  (void)group;
+  jl_value_t *kwargs = jl_alloc_vec_any(0);
+  (void)kwargs;
+  look_at_value(level);
+  JL_GC_POP();
+}
+
+static inline jl_value_t *root_array_outparam_value(jl_value_t **out) {
+  jl_value_t **margs;
+  JL_GC_PUSHARGS(margs, 1);
+  margs[0] = (jl_value_t*)new_expr_for_analyzer();
+  *out = margs[0];
+  JL_GC_POP();
+  return margs[0];
+}
+
+void root_outparam_after_safepointing_call(void) {
+  jl_value_t *out = NULL;
+  jl_value_t *result = root_array_outparam_value(&out);
+  (void)result;
+  JL_GC_PUSH1(&out);
+  JL_GC_POP();
+}
+
+static inline void rooted_outparam_value(jl_value_t **out) {
+  jl_svec_t *v = jl_svec1(NULL);
+  JL_GC_PUSH1(&v);
+  *out = (jl_value_t*)v;
+  JL_GC_POP();
+}
+
+void root_outparam_after_inlined_call(void) {
+  jl_value_t *out = NULL;
+  rooted_outparam_value(&out);
+  JL_GC_PUSH1(&out);
+  JL_GC_POP();
+}
+
+void apply_single_rooted_value(void) {
+  jl_value_t *f = jl_svec1(NULL);
+  JL_GC_PUSH1(&f);
+  (void)jl_apply(&f, 1);
+  JL_GC_POP();
 }
 
 void argument_propagation(jl_value_t *a) {

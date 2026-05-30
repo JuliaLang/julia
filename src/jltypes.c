@@ -1089,8 +1089,14 @@ static jl_datatype_t *lookup_type_set(jl_svec_t *cache, jl_value_t **key, size_t
         jl_datatype_t *val = jl_atomic_load_relaxed(&tab[index]);
         if ((jl_value_t*)val == jl_nothing)
             return NULL;
-        if (val->hash == hv && typekey_eq(val, key, n))
-            return val;
+        if (val->hash == hv) {
+            int eq;
+            JL_GC_PUSH1(&val);
+            eq = typekey_eq(val, key, n);
+            JL_GC_POP();
+            if (eq)
+                return val;
+        }
         index = (index + 1) & (sz - 1);
         iter++;
     } while (iter <= maxprobe && index != orig);
@@ -1112,8 +1118,14 @@ static jl_datatype_t *lookup_type_setvalue(jl_svec_t *cache, jl_value_t *key1, j
         jl_datatype_t *val = jl_atomic_load_relaxed(&tab[index]);
         if ((jl_value_t*)val == jl_nothing)
             return NULL;
-        if (val->hash == hv && typekeyvalue_eq(val, key1, key, n, leaf))
-            return val;
+        if (val->hash == hv) {
+            int eq;
+            JL_GC_PUSH1(&val);
+            eq = typekeyvalue_eq(val, key1, key, n, leaf);
+            JL_GC_POP();
+            if (eq)
+                return val;
+        }
         index = (index + 1) & (sz - 1);
         iter++;
     } while (iter <= maxprobe && index != orig);
@@ -1134,7 +1146,11 @@ static ssize_t lookup_type_idx_linear(jl_svec_t *cache, jl_value_t **key, size_t
         jl_datatype_t *tt = jl_atomic_load_relaxed(&data[i]);
         if ((jl_value_t*)tt == jl_nothing)
             return ~i;
-        if (typekey_eq(tt, key, n))
+        int eq;
+        JL_GC_PUSH1(&tt);
+        eq = typekey_eq(tt, key, n);
+        JL_GC_POP();
+        if (eq)
             return i;
     }
     return ~cl;
@@ -1151,7 +1167,11 @@ static ssize_t lookup_type_idx_linearvalue(jl_svec_t *cache, jl_value_t *key1, j
         jl_datatype_t *tt = jl_atomic_load_relaxed(&data[i]);
         if ((jl_value_t*)tt == jl_nothing)
             return ~i;
-        if (typekeyvalue_eq(tt, key1, key, n, 1))
+        int eq;
+        JL_GC_PUSH1(&tt);
+        eq = typekeyvalue_eq(tt, key1, key, n, 1);
+        JL_GC_POP();
+        if (eq)
             return i;
     }
     return ~cl;

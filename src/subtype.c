@@ -522,7 +522,7 @@ static int obviously_egal(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT
     return !jl_is_type(a) && jl_egal(a,b);
 }
 
-static int obviously_unequal(jl_value_t *a, jl_value_t *b)
+static int obviously_unequal(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT
 {
     if (a == (jl_value_t*)jl_typeofbottom_type->super)
         a = (jl_value_t*)jl_typeofbottom_type; // supertype(typeof(Union{})) is equal to, although distinct from, itself
@@ -593,7 +593,7 @@ static int obviously_unequal(jl_value_t *a, jl_value_t *b)
     return 0;
 }
 
-int jl_obviously_unequal(jl_value_t *a, jl_value_t *b)
+int jl_obviously_unequal(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT
 {
     return obviously_unequal(a, b);
 }
