@@ -205,6 +205,61 @@ function finish_ir_debug_info!(current_codelocs_stack)
     _compress_debuginfo(only(current_codelocs_stack))
 end
 
+# flisp: jl_new_code_info_from_ir (method.c)
+function compute_ssaflags(st::SyntaxTree)
+    @jl_assert kind(st) == K"block" st
+    stmts = children(st)
+    out = zeros(UInt32, length(stmts))
+    inline_flags = Vector{Bool}()
+    inbounds_depth = 0
+    purity_flags = Vector{UInt32}()
+
+    # Note this should probably go in validation or be a user-facing
+    # loweringerror, but method.c only checks this in asserts builds, so we may
+    # need to allow these to be unbalanced
+    function checked_pop!(stk)
+        @jl_assert(!isempty(stk), (st, "ssaflags pop without push"))
+        pop!(stk)
+    end
+    for (i, stmt) in enumerate(stmts)
+        is_flag_stmt = true
+        @stm stmt begin
+            [K"inbounds" [K"Value"]] -> stmt[1].value::Bool ?
+                (inbounds_depth += 1) : # push
+                (inbounds_depth = 0)    # clear
+            [K"inbounds_pop"] -> (inbounds_depth = max(0, inbounds_depth-1))
+            [K"boundscheck" _...] -> nothing
+            [K"inline" [K"Value"]] -> stmt[1].value::Bool ?
+                push!(inline_flags, true) : checked_pop!(inline_flags)
+            [K"noinline" [K"Value"]] -> stmt[1].value::Bool ?
+                push!(inline_flags, false) : checked_pop!(inline_flags)
+            [K"purity"] -> checked_pop!(purity_flags)
+            [K"purity" _ _...] -> push!(
+                purity_flags,
+                UInt32(purity_expr_to_flags(stmt)) << Core.Compiler.NUM_IR_FLAGS)
+            _ -> is_flag_stmt = false
+        end
+        flag = UInt32(0)
+        if !isempty(inline_flags)
+            flag |= (inline_flags[end] ?
+                Core.Compiler.IR_FLAG_INLINE : Core.Compiler.IR_FLAG_NOINLINE)
+        end
+        if inbounds_depth != 0
+            flag |= Core.Compiler.IR_FLAG_INBOUNDS
+        end
+        if !isempty(purity_flags)
+            for pf in purity_flags
+                flag |= pf
+            end
+        end
+        out[i] = is_flag_stmt ? UInt32(0) : flag
+    end
+    @jl_assert length(out) == length(stmts) st
+    @jl_assert length(inline_flags) == 0 st
+    @jl_assert length(purity_flags) == 0 st
+    out
+end
+
 # Convert SyntaxTree to the CodeInfo+Expr data structures understood by the
 # Julia runtime
 function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
@@ -243,15 +298,8 @@ function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
     end
 
     debuginfo = finish_ir_debug_info!(current_codelocs_stack)
-
     has_image_globalref = any(codeinfo_has_image_globalref, stmts)
-
-    # TODO: Set ssaflags based on call site annotations:
-    # - @inbounds annotations
-    # - call site @inline / @noinline
-    # - call site @assume_effects
-    ssaflags = zeros(UInt32, length(stmts))
-
+    ssaflags = compute_ssaflags(ex)
     propagate_inbounds =
         get(meta, :propagate_inbounds, false)
     # TODO: Set true if there's a foreigncall
@@ -266,7 +314,7 @@ function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
         get(meta, :no_constprop, false) ? 0x02 : 0x00
     purity =
         let eo = get(meta, :purity, nothing)
-            isnothing(eo) ? 0x0000 : Base.encode_effects_override(eo)
+            isnothing(eo) ? 0x0000 : eo::UInt16
         end
 
     # The following CodeInfo fields always get their default values for
@@ -389,7 +437,7 @@ function _to_lowered_expr(ex::SyntaxTree)
         args = Any[_to_lowered_expr(e) for e in children(ex)]
         # Unpack K"Symbol" QuoteNode as `Expr(:meta)` requires an identifier here.
         arg1 = args[1]
-        @jl_assert arg1 isa QuoteNode ex
+        @jl_assert (arg1 isa QuoteNode) ex
         args[1] = arg1.value
         Expr(:meta, args...)
     elseif k == K"foreigncall_arg1"
@@ -411,6 +459,9 @@ function _to_lowered_expr(ex::SyntaxTree)
             end
         end
         return ret
+    elseif k in KSet"inline noinline inbounds inbounds_pop purity"
+        # only used in compute_ssaflags (see method.c)
+        nothing
     else
         # Allowed forms according to https://docs.julialang.org/en/v1/devdocs/ast/
         #

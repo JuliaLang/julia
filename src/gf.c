@@ -1630,7 +1630,7 @@ jl_method_instance_t *cache_method(
     }
 
     jl_method_instance_t *newmeth = NULL;
-    if (definition->sig == (jl_value_t*)jl_anytuple_type && definition != jl_opaque_closure_method && !definition->is_for_opaque_closure) {
+    if (definition->source == NULL && definition->generator == NULL && !definition->is_for_opaque_closure) {
         newmeth = jl_atomic_load_relaxed(&definition->unspecialized);
         if (newmeth != NULL) { // handle builtin methods de-specialization (for invoke, or if the global cache entry somehow gets lost)
             jl_tupletype_t *cachett = (jl_tupletype_t*)newmeth->specTypes;
@@ -1799,6 +1799,7 @@ jl_method_instance_t *cache_method(
         if (entry && jl_egal((jl_value_t*)entry->simplesig, simplett ? (jl_value_t*)simplett : jl_nothing) &&
                 jl_egal((jl_value_t*)guardsigs, (jl_value_t*)entry->guardsigs)) {
             JL_GC_POP();
+            if (mc) JL_UNLOCK(&mc->writelock);
             return entry->func.linfo;
         }
     }

@@ -433,3 +433,16 @@ end
 
 # 49659: signature-scoped typevar shouldn't fail in lowering
 @test_throws "must be a tuple type" @opaque ((x::T,y::T) where {T}) -> 123
+
+@testset "invoke OC" begin
+    let oc = @opaque (x::Int) -> x + 1
+        @test invoke(oc, Tuple{Int}, 5) == 6
+    end
+    let oc = @opaque (a::Int, b::Int) -> a * b
+        @test invoke(oc, Tuple{Int, Int}, 3, 4) == 12
+    end
+    let c = 10
+        oc = @opaque (x::Int) -> x + c
+        @test invoke(oc, Tuple{Int}, 5) == 15
+    end
+end

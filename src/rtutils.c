@@ -1132,6 +1132,17 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_static_show_x(out, v, depth, ctx);
         n += jl_printf(out, "}");
     }
+    else if (vt == jl_intersect_type) {
+        // internal-use-only meet node (see #61917); shown for debugging only
+        n += jl_printf(out, "Intersect{");
+        while (jl_is_intersecttype(v)) {
+            n += jl_static_show_x(out, ((jl_intersecttype_t*)v)->a, depth, ctx);
+            n += jl_printf(out, ", ");
+            v = ((jl_intersecttype_t*)v)->b;
+        }
+        n += jl_static_show_x(out, v, depth, ctx);
+        n += jl_printf(out, "}");
+    }
     else if (vt == jl_unionall_type) {
         jl_unionall_t *ua = (jl_unionall_t*)v;
         n += jl_static_show_x(out, ua->body, depth, ctx);

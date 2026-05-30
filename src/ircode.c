@@ -1575,9 +1575,6 @@ JL_DLLEXPORT const char *jl_cdi_file(jl_debuginfo_t *di) JL_NOTSAFEPOINT
         jl_value_t *m = ((jl_method_instance_t *)di->def)->def.value;
         assert(jl_is_method(m) && "unimplemented");
         return jl_symbol_name(((jl_method_t*)m)->file);
-    } else if (jl_is_nothing(di->def)) {
-        // reachable when linenumbernode.file is nothing (through method.c)
-        return "<unknown>";
     } else {
         assert(0 && "unexpected type for debuginfo.def");
         return "<unknown>";

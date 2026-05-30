@@ -3086,3 +3086,72 @@ end
 # TypeVar matching needs to distinguish these two cases
 @test Type{Ref{A} where A} <: Type{Ref{B} where B<:U} where U
 @test !((Type{Ref{A} where A} where L) <: (Type{Ref{A}} where A))
+
+# issue #61242: free TypeVars are singleton-like by identity, not stand-ins for
+# their bounds or their enclosing UnionAll.
+@test Vector.body != Vector
+@test Vector.body <: Vector
+@test !(Vector <: Vector.body)
+@test typeintersect(Vector.body, Vector) == Vector.body
+@test typeintersect(Vector.body, Vector{Int}) === Union{}
+let S = TypeVar(:S, Union{}, Number)
+    @test typeintersect(Union{S, String}, Number) === Union{}
+    @test typeintersect(Union{S, Int}, Number) === Int
+end
+
+# issue #61876: a DataType with a bounded free TypeVar in a bounded parameter
+# slot is not a subtype of the wrapper. The unrestricted `<:Any` wrapper case is
+# accepted by convention, but bounded wrappers require an actual type parameter.
+abstract type Wrapper61876{X<:Real} end
+struct Sub61876A{T<:Real} <: Wrapper61876{T} end
+struct Sub61876B{T<:Real} <: Wrapper61876{T} end
+@test !(Sub61876A.body <: Wrapper61876)
+@test typejoin(Sub61876A, Sub61876B) <: Wrapper61876
+
+# issue #61876: typeintersect with an innervar whose bound references the
+# outer var previously triggered `assert(btemp->root != vb)` in finish_unionall.
+struct B61876{T,N,R} <: AbstractArray{T,N} end
+struct N61876{T,F} end
+typeintersect(Tuple{typeof(convert),
+                    Type{<:AbstractArray{<:N61876{T,N}} where N where T},
+                    Vector},
+              Tuple{typeof(convert),
+                    Type{B61876{T1,N,R} where {N, R<:(AbstractArray{<:AbstractArray{T1,N},N})}},
+                    AbstractArray{T2,N}} where {T1,T2,N})
+
+# issue #61917: an existential var inside an invariant constructor must not be
+# equated with an outer universal var whose bound is disjoint, e.g. `Ref{Ref{Bar}}`
+# inhabits the LHS but not the RHS, so the `UnionAll`s are not in a subtype relation.
+struct Foo61917; end
+struct Bar61917; end
+@test !((Ref{Ref{U}} where U<:Bar61917) <: (Ref{Union{Ref{T}, Ref{U}}} where {T<:Foo61917, U<:Bar61917}))
+@test !((Ref{Ref{U}} where U<:Integer) <: (Ref{Union{Ref{T}, Ref{U}}} where {T<:AbstractString, U<:Integer}))
+# a collapsible union is still a supertype
+@test (Ref{Ref{U}} where U<:Bar61917) <: (Ref{Union{Ref{T}, Ref{U}}} where {T<:Bar61917, U<:Bar61917})
+# the internal `Intersect` meet node used to fix this must never escape into a
+# user-visible result type
+let r = typeintersect((Ref{Ref{U}} where U<:Bar61917), (Ref{Union{Ref{T}, Ref{U}}} where {T<:Foo61917, U<:Bar61917}))
+    @test !occursin("Intersect", string(r))
+    @test r == Ref{Ref{Union{}}}
+end
+# issue #61917: the `Intersect` meet node can also reach the intersection result
+# (via a `where S>:T` lower bound); it must be over-approximated, not leaked.
+let A = AbstractVector{<:Signed}, B = AbstractArray{Int}
+    r = typeintersect(Ref{B}, (Ref{S} where S>:T) where T<:A)
+    @test !occursin("Intersect", string(r))
+    @test Ref{AbstractArray{Int}} <: r   # sound over-approximation of the meet
+end
+# The `Intersect` meet node must be respected by subtype queries that take the
+# no-free-typevars fast path.
+let
+    A = Tuple{T,T} where T <: Real
+    B = Tuple{Integer,Integer}
+    C = Tuple{Int,Int}
+
+    X = Tuple{Ref{B}, Ref{C}}
+    Y = Tuple{Ref{S}, Ref{T}} where {T <: A, S >: T}
+
+    @test C <: A
+    @test C <: B
+    @test X <: Y
+end

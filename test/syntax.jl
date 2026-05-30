@@ -789,6 +789,17 @@ end"""))
     @test !any(x->(x == Expr(:meta, :push_loc, :none)), ex.args)
 end
 
+# LineNumberNode with file=nothing
+let ex = Expr(:toplevel,
+              LineNumberNode(1),
+              Expr(:->, Expr(:tuple),
+                   Expr(:block,
+                        LineNumberNode(2),
+                        Expr(:call, throw, 1))))
+    f = Core.eval(@__MODULE__, ex)
+    @test only(methods(f)).debuginfo.def isa Symbol
+end
+
 # Check qualified string macros
 Base.r"regex" == r"regex"
 
