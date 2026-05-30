@@ -230,3 +230,25 @@ let b = IOBuffer()
     p = string(@__MODULE__)
     @test str == "Union{$p.Alphabet, $p.BritishFood}" || str == "Union{$p.BritishFood, $p.Alphabet}"
 end
+
+"""
+Ancestral species of citrus
+"""
+@enum Citrus begin
+    "C. reticulata"
+    mandarin
+    "C. maxima"
+    pomelo = 8
+    "C. medica"
+    citron
+    "C. japonica"
+    kumquat
+end
+
+_gimmedoc(x::Enum) = _gimmedoc(Symbol(x))
+_gimmedoc(T::Type) = _gimmedoc(nameof(T))
+_gimmedoc(x) = strip(sprint(show, MIME"text/plain"(), Docs.doc(Docs.Binding(@__MODULE__, x))))
+
+@test Int.(instances(Citrus)) == (0, 8, 9, 10)
+@test _gimmedoc.(instances(Citrus)) == "C. " .* ("reticulata", "maxima", "medica", "japonica")
+@test _gimmedoc(Citrus) == "Ancestral species of citrus"
