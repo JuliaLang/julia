@@ -232,6 +232,17 @@ h11840(::Type{T}) where {T<:Tuple} = '4'
 @test h11840(Tuple) == '4'
 @test h11840(TT11840) == '4'
 
+# issue #61242: free-TypeVar bodies and their enclosing UnionAlls bind as
+# distinct type objects.
+let f61242(::Type{T}) where T = T
+    @test f61242(Vector.body) === Vector.body
+    @test f61242(Vector) === Vector
+end
+let g61242(::Type{T}) where T = T
+    @test g61242(Vector) === Vector
+    @test g61242(Vector.body) === Vector.body
+end
+
 # show that we don't make the cache confused by using alternative representations
 # when specificity is reversed
 j11840(::DataType) = '1'
@@ -345,6 +356,15 @@ end
 @test typejoin(NTuple{3,Tuple}, NTuple{2,T} where T) == Tuple{Any,Any,Vararg{Tuple}}
 @test typejoin(Tuple{Tuple{T, T, Any}} where T, Tuple{T, T, Vector{T}} where T) == Tuple{Any,Vararg{Any}}
 @test typejoin(Tuple{T, T, T} where T, Tuple{T, T, Vector{T}} where T) == Tuple{Any,Any,Any}
+
+# issue #61876: a UnionAll operand over a bounded type parameter must still join
+# to the common wrapper rather than collapsing to Any (a free TypeVar parameter
+# no longer subtypes a bounded wrapper var, so typejoin detects shared families
+# by type name).
+abstract type AbstractCfg61876{O<:Integer} end
+struct Cfg61876{O<:Integer, T} <: AbstractCfg61876{O} end
+@test typejoin(Cfg61876{<:Integer, Tuple{Int,Int}}, Cfg61876{Int, Tuple{Int}}) === Cfg61876
+@test typejoin(Cfg61876{<:Integer, Int}, AbstractCfg61876{Int}) === AbstractCfg61876
 
 # issue #26321
 struct T26321{N,S<:NTuple{N}}
@@ -7848,9 +7868,33 @@ using Test
 struct T36104
     v::Vector{M36104.T36104}
 end
+const orig_T36104 = T36104
 struct T36104   # check that redefining it works, issue #21816
     v::Vector{T36104}
 end
+@test T36104 === orig_T36104
+# issue #61789: self-referential struct redefinition must reuse the binding
+struct R61789
+    x
+    next::R61789
+end
+const orig_R61789 = R61789
+struct R61789
+    x
+    next::R61789
+end
+@test R61789 === orig_R61789
+# negative case: a field type that genuinely differs must produce a new type
+struct R61789neg
+    x
+    next::R61789neg
+end
+const orig_R61789neg = R61789neg
+struct R61789neg
+    x::Int
+    next::R61789neg
+end
+@test R61789neg !== orig_R61789neg
 struct S36104{K,V}
     v::S36104{K,V}
     S36104{K,V}() where {K,V} = new()

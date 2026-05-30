@@ -3629,6 +3629,8 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
                 { bp, m, s, mark_callee_rooted(ctx, boxed(ctx, rval)) });
         return mark_julia_type(ctx, r, true, jl_bool_type);
     }
+    case StoreKind::Unset:
+        abort(); // Unset is not a valid operation for globals
     }
     abort(); // unreachable
 }
@@ -4144,7 +4146,9 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                             ArrayRef<jl_cgval_t> argv, size_t nargs, const jl_cgval_t *modifyop)
 {
     StoreKind op;
-    if (f == BUILTIN(memoryrefset))
+    if (f == BUILTIN(memoryrefunset))
+        op = StoreKind::Unset;
+    else if (f == BUILTIN(memoryrefset))
         op = StoreKind::Set;
     else if (f == BUILTIN(memoryrefreplace))
         op = StoreKind::Replace;
@@ -4160,7 +4164,6 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
 
     const jl_cgval_t undefval;
     const jl_cgval_t &ref = argv[1];
-    jl_cgval_t val = argv[has_cmp ? 3 : 2];
     jl_value_t *mty_dt = jl_unwrap_unionall(ref.typ);
     if (!jl_is_genericmemoryref_type(mty_dt) || !jl_is_concrete_type(mty_dt))
         return false;
@@ -4176,11 +4179,11 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     enum jl_memory_order order = jl_memory_order_notatomic;
     const char *fname = store_kind_name(op, "memory");
     {
-        const jl_cgval_t &ord = argv[has_cmp ? 4 : 3];
+        const jl_cgval_t &ord = argv[has_cmp ? 4 : (op != StoreKind::Unset ? 3 : 2)];
         emit_typecheck(ctx, ord, (jl_value_t*)jl_symbol_type, fname);
         if (!ord.constant)
             return false;
-        order = jl_get_atomic_order((jl_sym_t*)ord.constant, op != StoreKind::Set, true);
+        order = jl_get_atomic_order((jl_sym_t*)ord.constant, op != StoreKind::Set && op != StoreKind::Unset, true);
     }
     enum jl_memory_order fail_order = order;
     bool has_fail_order = op == StoreKind::Replace || op == StoreKind::SetOnce;
@@ -4238,6 +4241,47 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         endBB->insertInto(ctx.f);
         ctx.builder.SetInsertPoint(endBB);
     }
+    if (op == StoreKind::Unset) {
+        // If there are no GC pointer slots to clear, unset is a no-op.
+        // For boxed (reference) memory, layout->first_ptr is -1 since the layout
+        // is just a pointer slot — but we still need to null the slot.
+        if (!isboxed && (isunion || layout->first_ptr < 0)) {
+            *ret = mark_julia_const(ctx, jl_nothing);
+            return true;
+        }
+        Value *ptr = emit_memoryref_ptr(ctx, ref, layout);
+        Value *lock = nullptr;
+        if (needlock) {
+            assert(!isboxed); // boxed slots are pointer-sized and never need a mutex
+            lock = ptr;
+            ptr = emit_ptrgep(ctx, ptr, LLT_ALIGN(sizeof(jl_mutex_t), JL_SMALL_BYTE_ALIGNMENT));
+        }
+        AtomicOrdering Order = (needlock || order <= jl_memory_order_notatomic)
+                                ? AtomicOrdering::NotAtomic
+                                : get_llvm_atomic_order(order);
+        // Use Release ordering for boxed non-atomic stores so the GC sees a fully-formed pointer
+        AtomicOrdering storeOrder = (Order == AtomicOrdering::NotAtomic && isboxed)
+                                     ? AtomicOrdering::Release : Order;
+        Type *elty = isboxed ? ctx.types().T_prjlvalue : julia_type_to_llvm(ctx, ety);
+        // Atomic stores require an integer or pointer scalar type; cast aggregates to iN
+        if (Order != AtomicOrdering::NotAtomic && !elty->isIntOrPtrTy()) {
+            unsigned nb = jl_datatype_size(ety);
+            unsigned nb2 = PowerOf2Ceil(nb);
+            elty = Type::getIntNTy(ctx.builder.getContext(), 8 * nb2);
+        }
+        if (lock)
+            emit_lockstate_value(ctx, lock, true);
+        // TODO: emit MMTK deletion barrier here for concurrent GC
+        emit_aliased_store(ctx, Constant::getNullValue(elty), ptr, Align(al),
+                           isboxed ? ctx.tbaa().tbaa_ptrarraybuf : ctx.tbaa().tbaa_arraybuf,
+                           ctx.noalias().aliasscope.current, storeOrder);
+        if (lock)
+            emit_lockstate_value(ctx, lock, false);
+        *ret = mark_julia_const(ctx, jl_nothing);
+        return true;
+    }
+    jl_cgval_t val = argv[has_cmp ? 3 : 2];
+
     if (op != StoreKind::Modify) {
         emit_typecheck(ctx, val, ety, fname);
         val = update_julia_type(ctx, val, ety);
@@ -4651,14 +4695,14 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
     }
 
-    else if ((f == BUILTIN(memoryrefset) && nargs == 4) ||
+    else if ((f == BUILTIN(memoryrefunset) && nargs == 3) ||
+             (f == BUILTIN(memoryrefset) && nargs == 4) ||
              (f == BUILTIN(memoryrefswap) && nargs == 4) ||
              (f == BUILTIN(memoryrefreplace) && nargs == 6) ||
              (f == BUILTIN(memoryrefmodify) && nargs == 5) ||
              (f == BUILTIN(memoryrefsetonce) && nargs == 5)) {
         return emit_f_opmemory(ctx, ret, f, argv, nargs, nullptr);
     }
-
 
     else if (f == BUILTIN(memoryref_isassigned) && nargs == 3) {
         const jl_cgval_t &ref = argv[1];
@@ -8531,8 +8575,8 @@ static jl_llvm_functions_t
     }
     else if ((jl_value_t*)src->debuginfo != jl_nothing) {
         // look for the file and line info of the original start of this block, as reported by lowering
-        ctx.file = jl_debuginfo_firstline(src->debuginfo, &toplineno);
-        toplineno = std::max(0, toplineno);
+        ctx.file = jl_cdi_file(src->debuginfo);
+        toplineno = std::max(0, jl_cdi_firstline_all(src->debuginfo));
     }
     if (ctx.file.empty())
         ctx.file = "<missing>";
@@ -9319,14 +9363,13 @@ static jl_llvm_functions_t
                     jl_module_t *modu = func ? jl_debuginfo_module1(func) : NULL;
                     if (modu == NULL)
                         modu = ctx.module;
-                    info.file = jl_debuginfo_file1(debuginfo);
+                    info.file = jl_cdi_file(debuginfo);
                     info.line = i;
                     info.line0 = 0;
                     if (pc == 1) {
-                        struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, 0);
-                        assert(lineidx.to == 0 && lineidx.pc == 0);
-                        if (lineidx.loc > 0 && info.line != lineidx.loc)
-                            info.line0 = lineidx.loc;
+                        int32_t line0 = jl_cdi_external_firstline(debuginfo);
+                        if (line0 > 0 && info.line != line0)
+                            info.line0 = line0;
                     }
                     if (info.file.empty())
                         info.file = "<missing>";
@@ -9518,7 +9561,7 @@ static jl_llvm_functions_t
             jl_module_t *modu = func ? jl_debuginfo_module1(func) : NULL;
             if (modu == NULL)
                 modu = ctx.module;
-            StringRef file = jl_debuginfo_file1(debuginfo);
+            StringRef file = jl_cdi_file(debuginfo);
             if (file.empty())
                 file = "<missing>";
             bool is_user_code;
@@ -9528,7 +9571,10 @@ static jl_llvm_functions_t
                 is_user_code = in_user_mod(modu);
             bool is_tracked = in_tracked_path(file);
             if (do_coverage(is_user_code, is_tracked)) {
-                for (size_t pc = 0; 1; pc++) {
+                int32_t extraline = jl_cdi_external_firstline(debuginfo);
+                if (extraline != -1)
+                    jl_coverage_alloc_line(file.data(), extraline);
+                for (size_t pc = 1; 1; pc++) {
                     struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, pc);
                     if (lineidx.loc == -1)
                         break;

@@ -90,8 +90,7 @@ extern "C" {
 
 struct _jl_taggedvalue_bits {
     uintptr_t gc:2;
-    uintptr_t in_image:1;
-    uintptr_t unused:1;
+    uintptr_t in_image:2;
 #ifdef _P64
     uintptr_t tag:60;
 #else
@@ -235,15 +234,40 @@ JL_DLLEXPORT extern const jl_callptr_t jl_f_opaque_closure_call_addr;
 
 JL_DLLEXPORT extern const jl_callptr_t jl_fptr_wait_for_compiled_addr;
 
+typedef struct _jl_locspan_t {
+    int32_t first;
+    int32_t second;
+} jl_locspan_t;
+
 struct jl_codeloc_t {
     int32_t loc;
     int32_t to;
     int32_t pc;
 };
 
+// In a compressed jl_debuginfo_t linetable string, this header is followed by
+// (with byte_offset subtracted from all raw byte positions):
+//
+// bytespans: (byte_encl+span_encl)*nlocs bytes
+// line_starts: byte_encl*rest bytes
+typedef struct _jl_sourcebytetable_header_t {
+    // (>0) minimum byte
+    int32_t byte_offset;
+    // (>0) minimum line, where line_starts[0] is the byte position of this
+    // line's first character
+    int32_t line_offset;
+    // (>=0) number of (byte, len) bytespans
+    int32_t nlocs;
+    // (0,1,2,4) compressed lengths
+    uint8_t byte_encl;
+    uint8_t span_encl;
+} jl_sourcebytetable_header_t;
+// packed size
+#define SBT_HEADER_SIZE 14
+
 typedef struct _jl_debuginfo_t {
     jl_value_t *def;
-    jl_value_t *linetable; // debuginfo or nothing
+    jl_value_t *linetable; // debuginfo, compressed string, or nothing
     jl_svec_t *edges; // Memory{DebugInfo}
     jl_value_t *codelocs; // String // Memory{UInt8} // compressed info
 } jl_debuginfo_t;
@@ -569,6 +593,16 @@ typedef struct {
     jl_value_t *JL_NONNULL a;
     jl_value_t *JL_NONNULL b;
 } jl_uniontype_t;
+
+// Internal-use-only "meet" of two types, dual to Union: `Intersect{a, b}`
+// denotes `a ∩ b`. It is created transiently inside the subtyping algorithm to
+// represent a greatest-lower-bound that cannot be expressed precisely as a
+// single existing type, and never escapes into user-visible types.
+typedef struct {
+    JL_DATA_TYPE
+    jl_value_t *JL_NONNULL a;
+    jl_value_t *JL_NONNULL b;
+} jl_intersecttype_t;
 
 // in little-endian, isptr is always the first bit, avoiding the need for a branch in computing isptr
 typedef struct {
@@ -1596,6 +1630,7 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 #define jl_is_immutable(t)   (!((jl_datatype_t*)t)->name->mutabl)
 #define jl_may_be_immutable_datatype(t) (jl_is_datatype(t) && (!((jl_datatype_t*)t)->name->mutabl))
 #define jl_is_uniontype(v)   jl_typetagis(v,jl_uniontype_tag<<4)
+#define jl_is_intersecttype(v) jl_typetagis(v,jl_intersect_type)
 #define jl_is_typevar(v)     jl_typetagis(v,jl_tvar_tag<<4)
 #define jl_is_unionall(v)    jl_typetagis(v,jl_unionall_tag<<4)
 #define jl_is_vararg(v)      jl_typetagis(v,jl_vararg_tag<<4)
@@ -2042,6 +2077,7 @@ JL_DLLEXPORT jl_value_t *jl_ptrmemoryrefget(jl_genericmemoryref_t m JL_PROPAGATE
 JL_DLLEXPORT jl_value_t *jl_memoryref_isassigned(jl_genericmemoryref_t m, int isatomic) JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_genericmemoryref_t jl_memoryrefindex(jl_genericmemoryref_t m JL_PROPAGATES_ROOT, size_t idx) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_memoryrefset(jl_genericmemoryref_t m JL_ROOTING_ARGUMENT, jl_value_t *v JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, int isatomic);
+JL_DLLEXPORT void jl_memoryrefunset(jl_genericmemoryref_t m, int isatomic);
 JL_DLLEXPORT jl_value_t *jl_memoryrefswap(jl_genericmemoryref_t m, jl_value_t *v, int isatomic);
 JL_DLLEXPORT jl_value_t *jl_memoryrefmodify(jl_genericmemoryref_t m, jl_value_t *op, jl_value_t *v, int isatomic);
 JL_DLLEXPORT jl_value_t *jl_memoryrefreplace(jl_genericmemoryref_t m, jl_value_t *expected, jl_value_t *v, int isatomic);
@@ -2297,6 +2333,12 @@ JL_DLLEXPORT jl_value_t *jl_uncompress_argname_n(jl_value_t *syms, size_t i);
 JL_DLLEXPORT struct jl_codeloc_t jl_uncompress1_codeloc(jl_debuginfo_t *di, size_t pc) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_compress_codelocs(int32_t firstloc, jl_value_t *codelocs, size_t nstmts);
 JL_DLLEXPORT jl_value_t *jl_uncompress_codelocs(jl_debuginfo_t *di, size_t nstmts);
+JL_DLLEXPORT jl_locspan_t jl_cdi_bytespan(jl_debuginfo_t *di, int32_t pc) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_locspan_t jl_cdi_byte_to_xy(jl_debuginfo_t *di, int32_t b) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_locspan_t jl_cdi_firstxy(jl_debuginfo_t *di, int32_t pc) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int32_t jl_cdi_external_firstline(jl_debuginfo_t *di) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int32_t jl_cdi_firstline_all(jl_debuginfo_t *di) JL_NOTSAFEPOINT;
+JL_DLLEXPORT const char *jl_cdi_file(jl_debuginfo_t *di) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint8_t jl_encode_inlining_cost(uint16_t inlining_cost) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint16_t jl_decode_inlining_cost(uint8_t inlining_cost) JL_NOTSAFEPOINT;
 

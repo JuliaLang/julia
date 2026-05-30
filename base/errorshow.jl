@@ -549,8 +549,8 @@ function descend_params(io::IO, @nospecialize(sig), @nospecialize(called))
     n > 0 && n == length(called.parameters) || return nothing
     sig.name === typename(NamedTuple) && return nothing
     (any(isvarargtype, sig.parameters) || any(isvarargtype, called.parameters)) && return nothing
-    sa = make_typealias(makeproper(io, sig))
-    ca = make_typealias(makeproper(io, called))
+    sa = make_typealias(sig, io)
+    ca = make_typealias(called, io)
     if sa === nothing && ca === nothing
         return sig.parameters, called.parameters, nothing
     elseif sa !== nothing && ca !== nothing && sa[1] === ca[1]
@@ -668,6 +668,12 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
         if isType(at1) && !has_free_typevars(at1) && at1.parameters[1] isa Type
             push!(funcs, (at1.parameters[1], arg_types_param[2:end]))
         end
+    end
+
+    # helpful when a parameterized struct has an unparameterized inner constructor
+    show_constructor_hint = isa(f, DataType) && (f !== f.name.wrapper) && isempty(methods(f))
+    if show_constructor_hint
+        push!(funcs, (f.name.wrapper, arg_types_param))
     end
 
     for (func, arg_types_param) in funcs
@@ -827,7 +833,12 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
 
     if !isempty(lines) # Display up to three closest candidates
         Base.with_output_color(:normal, io) do io
-            print(io, "\n\nClosest candidates are:")
+            if show_constructor_hint
+                print(io, "\n\nHint: constructors are defined for `", f.name.wrapper,
+                    "`, but not for `", f, "`:")
+            else
+                print(io, "\n\nClosest candidates are:")
+            end
             permute!(lines, sortperm(line_score))
             i = 0
             for line in lines

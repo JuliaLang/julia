@@ -481,6 +481,7 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
             JL_GC_PUSH3(&file, &linenum, &inlinedat);
             value_t lst = e;
             file = scm_to_julia_(fl_ctx, car_(lst), mod);
+            assert(jl_is_symbol(file));
             lst = cdr_(lst);
             linenum = scm_to_julia_(fl_ctx, car_(lst), mod);
             lst = cdr_(lst);

@@ -89,6 +89,19 @@ end
     @test NTuple{20,Float64}(Iterators.countfrom(2)) === (2.,3.,4.,5.,6.,7.,8.,9.,10.,11.,12.,13.,14.,15.,16.,17.,18.,19.,20.,21.)
     @test_throws ArgumentError NTuple{20,Int}([1,2])
 
+    # long tuples (>=32 elements) constructed from indexable inputs hit a fast path
+    let v = collect(1.0:40.0)
+        @test NTuple{40,Float64}(v) === ntuple(i -> Float64(i), Val(40))
+        @test NTuple{40,Int}(v) === ntuple(i -> i, Val(40))
+        # over-long input is silently truncated to match the iterator-based fallback
+        @test NTuple{40,Float64}(collect(1.0:41.0)) === ntuple(i -> Float64(i), Val(40))
+        @test_throws ArgumentError NTuple{40,Float64}(collect(1.0:39.0))
+    end
+    let m = Memory{Float64}(undef, 40); m .= 1.0:40.0
+        @test NTuple{40,Float64}(m) === ntuple(i -> Float64(i), Val(40))
+        @test_throws ArgumentError NTuple{40,Float64}(Memory{Float64}(undef, 39))
+    end
+
     @test Tuple{Vararg{Float32}}(Float64[1,2,3]) === (1.0f0, 2.0f0, 3.0f0)
     @test Tuple{Int,Vararg{Float32}}(Float64[1,2,3]) === (1, 2.0f0, 3.0f0)
     @test Tuple{Int,Vararg{Any}}(Float64[1,2,3]) === (1, 2.0, 3.0)
