@@ -10,7 +10,7 @@ module Serialization
 import Base: Bottom, unsafe_convert
 import Base.ScopedValues: ScopedValue, with
 import Core: svec, SimpleVector
-using Base: unaliascopy, unwrap_unionall, require_one_based_indexing, ntupleany
+using Base: @assume_effects, unaliascopy, unwrap_unionall, require_one_based_indexing, ntupleany
 using Core.IR
 
 export serialize, deserialize, AbstractSerializer, Serializer
@@ -94,16 +94,54 @@ const ser_version = 31 # do not make changes without bumping the version #!
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
 
-function sertag(@nospecialize(v))
-    # NOTE: we use jl_value_ptr directly since we know at least one of the arguments
-    # in the comparison below is a singleton.
-    ptr = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), v)
-    ptags = convert(Ptr{Ptr{Cvoid}}, pointer(TAGS))
-    # note: constant ints & reserved slots never returned here
-    @inbounds for i in 1:(NTAGS-(n_reserved_slots+2*n_int_literals))
-        ptr == unsafe_load(ptags,i) && return i%Int32
+# static lookup table of serializee value --> TAG index via objectid + linear probe
+# omit constant ints & reserved slots from the table as sertag doesn't return these
+const NSERTAG_KEYS = NTAGS - n_reserved_slots - 2*n_int_literals
+
+# keeps >50% sparse so linear probes hit in 1-2 steps. also allows :terminates
+const SERTAG_TABLE_SIZE = nextpow(2, 2 * NSERTAG_KEYS)
+
+struct SertagEmpty end
+const sertag_empty = SertagEmpty()
+
+struct SertagTable
+    keys::Memory{Any}
+    vals::Memory{Int32}
+end
+
+const sertag_table = let
+    keys = Memory{Any}(undef, SERTAG_TABLE_SIZE)
+    vals = Memory{Int32}(undef, SERTAG_TABLE_SIZE)
+    fill!(keys, sertag_empty)
+    @assume_effects :terminates_locally :noub @inbounds for i in Iterators.reverse(1:NSERTAG_KEYS)
+        key = TAGS[i]
+        loc = mod1(objectid(key), SERTAG_TABLE_SIZE)
+        while true
+            k = keys[loc]
+            if k === sertag_empty || k === key
+                keys[loc] = key
+                vals[loc] = Int32(i)
+                break
+            end
+            loc = mod1(loc + 1, SERTAG_TABLE_SIZE)
+        end
     end
-    return Int32(-1)
+    SertagTable(keys, vals)
+end
+
+@inline function sertag(@nospecialize(v))
+    (; keys, vals) = sertag_table
+    loc = mod1(objectid(v), SERTAG_TABLE_SIZE)
+    @assume_effects :terminates_locally :noub @inbounds while true
+        @inbounds k = keys[loc]
+        if k === v
+            return vals[loc]
+        elseif k === sertag_empty
+            return Int32(-1)
+        else
+            loc = mod1(loc + 1, SERTAG_TABLE_SIZE)
+        end
+    end
 end
 desertag(i::Int32) = @inbounds(TAGS[i])
 
@@ -118,7 +156,7 @@ const TUPLE_TAG = sertag(Tuple)
 const SIMPLEVECTOR_TAG = sertag(SimpleVector)
 const SYMBOL_TAG = sertag(Symbol)
 const INT8_TAG = sertag(Int8)
-const ARRAY_TAG = findfirst(==(Array), TAGS)%Int32
+const ARRAY_TAG = sertag(Array)
 const EXPR_TAG = sertag(Expr)
 const MODULE_TAG = sertag(Module)
 const METHODINSTANCE_TAG = sertag(Core.MethodInstance)
