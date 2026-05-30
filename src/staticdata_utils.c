@@ -382,8 +382,6 @@ static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited,
                     current->edge_index = get_next_edge(current->backedges, current->edge_index, NULL, &be);
                     if (!be)
                         continue;
-                    JL_GC_PROMISE_ROOTED(be); // get_next_edge propagates the edge for us here
-
                     jl_method_instance_t *child_mi = jl_get_ci_mi(be);
 
                     // Check if we need to recurse (push new frame) or handle result

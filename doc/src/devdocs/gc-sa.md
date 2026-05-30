@@ -189,22 +189,31 @@ size_t example(jl_svec_t *svec) {
 }
 ```
 
-### `JL_ROOTING_ARGUMENT`/`JL_ROOTED_ARGUMENT`
+### `JL_ROOTED_BY_ARG(n)`/`JL_OUT_ROOTED_BY_ARG(n)`/`JL_ROOTED_BY_RETURN`
 
-This is essentially the assignment counterpart to `JL_PROPAGATES_ROOT`.
+These are essentially the assignment counterpart to `JL_PROPAGATES_ROOT`.
 When assigning a value to a field of another value that is already rooted,
 the assigned value will inherit the root of the value it is assigned into.
 
+Use `JL_ROOTED_BY_ARG(n)` on the argument that is being assigned, where `n`
+is the zero-based argument index of the rooting argument. Use
+`JL_OUT_ROOTED_BY_ARG(n)` on an out argument when the value written through
+the out argument is rooted by argument `n`. Use `JL_ROOTED_BY_RETURN` on
+arguments that are rooted by the returned value. Variadic arguments cannot be
+annotated individually, so functions whose variadic arguments are rooted by the
+return value use `JL_ROOTED_VARARGS` on the function declaration.
+
 Usage Example:
 ```c
-void jl_svecset(void *t JL_ROOTING_ARGUMENT, size_t i, void *x JL_ROOTED_ARGUMENT) JL_NOTSAFEPOINT
+void jl_svecset(void *t, size_t i, void *x JL_ROOTED_BY_ARG(0)) JL_NOTSAFEPOINT;
+jl_svec_t *jl_svec1(void *a JL_ROOTED_BY_RETURN);
 
 
 size_t example(jl_svec_t *svec) {
   jl_value_t *val = jl_box_long(10000);
-  jl_svecset(svec, val);
-  // This is valid, because the annotations imply that the
-  // jl_svecset propagates the rooted-ness from `svec` to `val`
+  jl_svecset(svec, 0, val);
+  // This is valid, because the annotation implies that jl_svecset
+  // propagates the rooted-ness from `svec` to `val`
   jl_gc_safepoint();
   return jl_unbox_long(val);
 }

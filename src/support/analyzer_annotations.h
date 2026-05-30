@@ -16,8 +16,10 @@
 #define JL_NOTSAFEPOINT_LEAVE __attribute__((annotate("julia_notsafepoint_leave")))
 #define JL_MAYBE_UNROOTED __attribute__((annotate("julia_maybe_unrooted")))
 #define JL_GLOBALLY_ROOTED __attribute__((annotate("julia_globally_rooted")))
-#define JL_ROOTING_ARGUMENT __attribute__((annotate("julia_rooting_argument")))
-#define JL_ROOTED_ARGUMENT __attribute__((annotate("julia_rooted_argument")))
+#define JL_ROOTED_VARARGS __attribute__((annotate("julia_rooted_varargs")))
+#define JL_ROOTED_BY_ARG(n) __attribute__((annotate("julia_rooted_by_arg:" #n)))
+#define JL_OUT_ROOTED_BY_ARG(n) __attribute__((annotate("julia_out_rooted_by_arg:" #n)))
+#define JL_ROOTED_BY_RETURN __attribute__((annotate("julia_rooted_by_return")))
 #define JL_GC_DISABLED __attribute__((annotate("julia_gc_disabled")))
 #define JL_ALWAYS_LEAFTYPE JL_GLOBALLY_ROOTED
 #define JL_ROOTS_TEMPORARILY __attribute__((annotate("julia_temporarily_roots")))
@@ -39,8 +41,10 @@ extern "C" {
 #define JL_NOTSAFEPOINT_LEAVE
 #define JL_MAYBE_UNROOTED
 #define JL_GLOBALLY_ROOTED
-#define JL_ROOTING_ARGUMENT
-#define JL_ROOTED_ARGUMENT
+#define JL_ROOTED_VARARGS
+#define JL_ROOTED_BY_ARG(n)
+#define JL_OUT_ROOTED_BY_ARG(n)
+#define JL_ROOTED_BY_RETURN
 #define JL_GC_DISABLED
 #define JL_ALWAYS_LEAFTYPE
 #define JL_ROOTS_TEMPORARILY
