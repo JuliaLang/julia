@@ -231,6 +231,8 @@ let b = IOBuffer()
     @test str == "Union{$p.Alphabet, $p.BritishFood}" || str == "Union{$p.BritishFood, $p.Alphabet}"
 end
 
+module TestDocumentedEnums
+using REPL, Test  # REPL is needed for retrieving docstrings
 """
 Ancestral species of citrus
 """
@@ -252,3 +254,4 @@ _gimmedoc(x) = strip(sprint(show, MIME"text/plain"(), Docs.doc(Docs.Binding(@__M
 @test Int.(instances(Citrus)) == (0, 8, 9, 10)
 @test _gimmedoc.(instances(Citrus)) == "C. " .* ("reticulata", "maxima", "medica", "japonica")
 @test _gimmedoc(Citrus) == "Ancestral species of citrus"
+end
