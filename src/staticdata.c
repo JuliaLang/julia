@@ -4451,7 +4451,11 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
                 jl_svecset(cachesizes_sv, 4, jl_box_long(cachesizes.reloclist));
                 jl_svecset(cachesizes_sv, 5, jl_box_long(cachesizes.gvarlist));
                 jl_svecset(cachesizes_sv, 6, jl_box_long(cachesizes.fptrlist));
-                restored = (jl_value_t*)jl_svec(5, restored, init_order, internal_methods, method_roots_list, cachesizes_sv);
+                // Surface extext_methods and new_ext_cis to external inspectors (e.g. PkgCacheInspector.jl).
+                // With the single global jl_method_table, `extext_methods` contains *all* worklist methods
+                // (not just externally-extending ones); `internal_methods` overlaps it and exists only for
+                // per-object world-stamp updates during the fixup walk.
+                restored = (jl_value_t*)jl_svec(7, restored, init_order, internal_methods, extext_methods, new_ext_cis, method_roots_list, cachesizes_sv);
             }
             else {
                 restored = (jl_value_t*)jl_svec(3, restored, init_order, internal_methods);
