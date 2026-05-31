@@ -41,6 +41,9 @@ A typical Tracy session might look like this:
 
 To enable Tracy integration, build Julia with the extra option `WITH_TRACY=1` in the `Make.user` file.
 
+!!! note
+    Julia currently bundles Tracy 0.13.1. The Tracy client and the profile viewer must use the same protocol version, so make sure the viewer (e.g. from `TracyProfiler_jll`) matches this version.
+
 ### Installing the Tracy Profile Viewer
 
 The easiest way to obtain the profile viewer is by adding the `TracyProfiler_jll` package and launching the profiler with:
@@ -96,6 +99,19 @@ The `TracyCZoneColor` function can be used to set the color of a certain zone. S
 Visit https://topolarity.github.io/trace-viewer/ for an (experimental) web viewer for Tracy traces.
 
 You can open a local `.tracy` file or provide a URL from the web (e.g. a file in a Github repo). If you load a trace file from the web, you can also share the page URL directly with others, enabling them to view the same trace.
+
+### Exporting trace data to CSV
+
+Since `.tracy` files are binary, it is often useful to export aggregated zone statistics to CSV for scripting or quick analysis. The `tracy_csvexport` tool from `TracyProfiler_jll` does this:
+
+```julia
+using TracyProfiler_jll
+run(`$(TracyProfiler_jll.tracy_csvexport()) -e mytracefile.tracy`)
+```
+
+The output columns are `name, src_file, src_line, total_ns, total_perc, counts, mean_ns, min_ns, max_ns, std_ns`. The `-e` flag reports self time (time spent in a zone excluding its children), which is usually what you want for finding where time is actually spent. The `counts` column is helpful for spotting zones that are entered many times with small durations.
+
+Useful flags include `-f <name>` to filter by zone name, `-u` to report each zone event individually (unwrapped), `-p` to include plot data (with `-u`), `-m` to report only messages, and `-t <percentile>` to report a truncated mean. Run with `--help` for the full list.
 
 ### Enabling stack trace samples
 
