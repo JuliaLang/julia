@@ -74,11 +74,11 @@ New library features
   printing unsigned integers in decimal instead of hexadecimal ([#60267]).
 * The `StringView` type wraps an `AbstractVector{UInt8}` and interprets it as a UTF-8 encoded string,
   superseding the [StringViews.jl](https://github.com/JuliaStrings/StringViews.jl) package ([#60526]).
-
 * Package precompilation now supports running precompilation in
   a background task and has new interactive keyboard controls:
   `c` to cleanly cancel immediately, `d` to detach, `i` for a profile peek,
   `v` to toggle verbose mode showing elapsed time, CPU%, and memory usage, and `?` for help. ([#60943]).
+* Instances of an `Enum` can now be given their own docstrings within the `@enum` definition ([#61955]).
 
 Standard library changes
 ------------------------
