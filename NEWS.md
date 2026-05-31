@@ -79,6 +79,8 @@ New library features
   `c` to cleanly cancel immediately, `d` to detach, `i` for a profile peek,
   `v` to toggle verbose mode showing elapsed time, CPU%, and memory usage, and `?` for help. ([#60943]).
 * Instances of an `Enum` can now be given their own docstrings within the `@enum` definition ([#61955]).
+* The expression defining a given `Enum` instance within `@enum` may now refer to preceding instances ([#61966]).
+* `@static` conditions are now expanded within `@enum` ([#61966]).
 
 Standard library changes
 ------------------------
