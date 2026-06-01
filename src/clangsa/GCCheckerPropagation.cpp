@@ -952,6 +952,7 @@ bool GCChecker::processAllocationOfResult(const CallEvent &Call,
   LivenessState NewVState = LivenessState::getAllocated();
   GCObjectSet RootPropagatingObjects = emptyObjectSet(State);
   std::optional<unsigned> RootPropagatingParam;
+  std::optional<NonLoc> RootPropagatingIndex;
   bool ResultIsPermanentRoot = isGloballyRootedType(QT);
   if (!ResultIsPermanentRoot) {
     std::optional<LivenessState> ValS = getStateForSymbol(State, Sym);
@@ -981,6 +982,42 @@ bool GCChecker::processAllocationOfResult(const CallEvent &Call,
             }
             if (GloballyRooted) {
               ResultIsPermanentRoot = true;
+            }
+          }
+        } else if (auto IndexedRooter = declHasIndexedPairAnnotation(
+                       FD, "julia_propagates_root_indexed:")) {
+          if (IndexedRooter->first < Call.getNumArgs()) {
+            SVal Test = Call.getArgSVal(IndexedRooter->first);
+            GCObjectSet TestObjects = getObjectsForRootPropagatingArgument(
+                Call, IndexedRooter->first, State, C);
+            if (TestObjects.isEmpty()) {
+              const MemRegion *Region = Test.getAsRegion();
+              TestObjects = getObjectsForRegionOrParents(State, Region);
+            }
+            if (!TestObjects.isEmpty()) {
+              RootPropagatingObjects = TestObjects;
+              RootPropagatingParam = IndexedRooter->first;
+              NewVState = aggregateObjectState(State, TestObjects);
+              if (IndexedRooter->second < Call.getNumArgs()) {
+                SVal Converted =
+                    C.getSValBuilder().convertToArrayIndex(
+                        Call.getArgSVal(IndexedRooter->second));
+                if (auto ConvertedIndex = Converted.getAs<NonLoc>()) {
+                  const Expr *IndexExpr =
+                      Call.getArgExpr(IndexedRooter->second);
+                  IndexExpr =
+                      IndexExpr ? IndexExpr->IgnoreParenImpCasts() : nullptr;
+                  // Treat only literal indexed reads as replaceable object
+                  // slots. Loop variables can be concrete on one analyzer
+                  // path, while nearby expressions such as i and i+1 may
+                  // still collapse to the same symbolic region. Keep those as
+                  // opaque ownership edges so the over-approximation errs
+                  // toward retaining roots.
+                  if (isa_and_nonnull<IntegerLiteral>(IndexExpr) &&
+                      ConvertedIndex->getAs<nonloc::ConcreteInt>())
+                    RootPropagatingIndex = *ConvertedIndex;
+                }
+              }
             }
           }
         } else {
@@ -1018,19 +1055,9 @@ bool GCChecker::processAllocationOfResult(const CallEvent &Call,
     GCObjectSet ResultObjects = singletonObjectSet(State, Object);
     if (!RootPropagatingObjects.isEmpty()) {
       State = State->set<GCObjectStateMap>(Object, NewVState);
-      State = addObjectOwnershipEdges(State, RootPropagatingObjects,
-                                      ResultObjects);
-      std::optional<NonLoc> Index;
-      for (unsigned j = 0; j < Call.getNumArgs(); ++j) {
-        if (!Call.getArgSVal(j).getAs<NonLoc>())
-          continue;
-        SVal Converted =
-            C.getSValBuilder().convertToArrayIndex(Call.getArgSVal(j));
-        if (auto ConvertedIndex = Converted.getAs<NonLoc>()) {
-          Index = *ConvertedIndex;
-          break;
-        }
-      }
+      if (!RootPropagatingIndex)
+        State = addObjectOwnershipEdges(State, RootPropagatingObjects,
+                                        ResultObjects);
       auto resultMayAliasExplicitRootedArgument = [&]() {
         if (!RootPropagatingParam)
           return false;
@@ -1052,10 +1079,10 @@ bool GCChecker::processAllocationOfResult(const CallEvent &Call,
         }
         return false;
       };
-      if (Index && !resultMayAliasExplicitRootedArgument()) {
+      if (RootPropagatingIndex && !resultMayAliasExplicitRootedArgument()) {
         for (GCObject ParentObject : RootPropagatingObjects) {
           const MemRegion *ChildRegion =
-              getIndexedObjectRegion(ParentObject, *Index, C);
+              getIndexedObjectRegion(ParentObject, *RootPropagatingIndex, C);
           State = addObjectRegionEdge(State, ParentObject, ChildRegion);
           State = bindRegionToObjects(State, ChildRegion, ResultObjects, C);
         }

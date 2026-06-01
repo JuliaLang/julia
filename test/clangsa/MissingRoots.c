@@ -452,6 +452,21 @@ void rooted_svec_clear_releases_child(void) {
   JL_GC_POP();
 }
 
+void rooted_svecref_alias_clear_releases_child(void) {
+  jl_value_t *child = (jl_value_t*)new_expr_for_analyzer();
+  jl_value_t *alias = NULL;
+  jl_svec_t *parent = NULL;
+  JL_GC_PUSH2(&child, &parent); // expected-note{{GC frame changed here}}
+  parent = jl_svec1(child);
+  alias = jl_svecref(parent, 0); // expected-note{{Started tracking value here (root was inherited)}}
+  child = NULL;
+  jl_svecset(parent, 0, NULL); // expected-note{{Root was released here}}
+  jl_gc_safepoint(); // expected-note{{Value may have been GCed here}}
+  look_at_value(alias); // expected-warning{{Argument value may have been GCed}}
+                        // expected-note@-1{{Argument value may have been GCed}}
+  JL_GC_POP();
+}
+
 void rooted_svec_replace_releases_old_child(void) {
   jl_value_t *old_child = (jl_value_t*)new_expr_for_analyzer(); // expected-note{{Started tracking value here}}
   jl_value_t *old_alias = old_child;

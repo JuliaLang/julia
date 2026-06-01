@@ -169,16 +169,23 @@ void example() {
 }
 ```
 
-### `JL_PROPAGATES_ROOT`
+### `JL_PROPAGATES_ROOT`/`JL_PROPAGATES_ROOT_INDEXED(root, index)`
 
 This annotation is commonly found on accessor functions that return one rootable
 object stored within another. When annotated on a function argument, it tells
 the analyzer that the root for that argument also applies to the value returned
 by the function.
+Use `JL_PROPAGATES_ROOT_INDEXED(root, index)` when the return value is loaded
+from a specific indexed child of the rooting argument, where `root` and `index`
+are zero-based argument indices. The indexed form lets the analyzer model later
+overwrites or clears of that indexed child precisely.
+Non-literal indices conservatively fall back to ordinary root propagation,
+because distinct symbolic index expressions can alias in the analyzer.
 
 Usage Example:
 ```c
-jl_value_t *jl_svecref(jl_svec_t *t JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
+jl_value_t *jl_svecref(jl_svec_t *t JL_PROPAGATES_ROOT, size_t i)
+    JL_PROPAGATES_ROOT_INDEXED(0, 1) JL_NOTSAFEPOINT;
 
 size_t example(jl_svec_t *svec) {
   jl_value_t *val = jl_svecref(svec, 1)
