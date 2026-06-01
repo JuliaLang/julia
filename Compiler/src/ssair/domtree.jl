@@ -230,12 +230,21 @@ struct GenericDomTree{IsPostDom}
 
     # The nodes in the tree (ordered by BB indices)
     nodes::Vector{DomTreeNode}
+
+    # Scratch buffers reused across (re)computations to avoid reallocating on
+    # every dynamic update. `worklist` is shared between `SNCA!` and
+    # `compute_domtree_nodes!`, which never run concurrently (both
+    # `PreNumber` and `BBNumber` are `Int`).
+    snca_ancestors::Vector{PreNumber}
+    snca_idoms_pre::Vector{PreNumber}
+    worklist::Vector{Tuple{Int, Int}}
 end
 const DomTree = GenericDomTree{false}
 const PostDomTree = GenericDomTree{true}
 
 function (T::Type{<:GenericDomTree})()
-    return T(DFSTree(0), SNCAData[], BBNumber[], DomTreeNode[])
+    return T(DFSTree(0), SNCAData[], BBNumber[], DomTreeNode[],
+             PreNumber[], PreNumber[], Tuple{Int, Int}[])
 end
 
 function construct_domtree(blocks::Vector{BasicBlock})
@@ -262,28 +271,43 @@ function update_domtree!(blocks::Vector{BasicBlock}, domtree::GenericDomTree{IsP
 end
 
 function compute_domtree_nodes!(domtree::GenericDomTree{IsPostDom}) where {IsPostDom}
-    # Compute children
-    copy!(domtree.nodes,
-          DomTreeNode[DomTreeNode() for _ in 1:length(domtree.idoms_bb)])
+    # Compute children. Reuse any existing `children` vectors (e.g. when
+    # recomputing the domtree during a dynamic update) to avoid reallocating
+    # them, and reset the levels to the default of 1.
+    nodes = domtree.nodes
+    new_len = length(domtree.idoms_bb)
+    old_len = length(nodes)
+    for i in 1:min(old_len, new_len)
+        children = nodes[i].children
+        empty!(children)
+        nodes[i] = DomTreeNode(1, children)
+    end
+    resize!(nodes, new_len)
+    for i in (old_len+1):new_len
+        nodes[i] = DomTreeNode()
+    end
     for (idx, idom) in Iterators.enumerate(domtree.idoms_bb)
         ((!IsPostDom && idx == 1) || idom == 0) && continue
-        push!(domtree.nodes[idom].children, idx)
+        push!(nodes[idom].children, idx)
     end
     # n.b. now issorted(domtree.nodes[*].children) since idx is sorted above
     # Recursively set level
+    worklist = domtree.worklist
     if IsPostDom
         for (node, idom) in enumerate(domtree.idoms_bb)
             idom == 0 || continue
-            update_level!(domtree.nodes, node, 1)
+            update_level!(domtree.nodes, node, 1, worklist)
         end
     else
-        update_level!(domtree.nodes, 1, 1)
+        update_level!(domtree.nodes, 1, 1, worklist)
     end
     return domtree.nodes
 end
 
-function update_level!(nodes::Vector{DomTreeNode}, node::BBNumber, level::Int)
-    worklist = Tuple{BBNumber, Int}[(node, level)]
+function update_level!(nodes::Vector{DomTreeNode}, node::BBNumber, level::Int,
+                       worklist::Vector{Tuple{BBNumber, Int}})
+    empty!(worklist)
+    push!(worklist, (node, level))
     while !isempty(worklist)
         (node, level) = pop!(worklist)
         nodes[node] = DomTreeNode(level, nodes[node].children)
@@ -342,7 +366,8 @@ function SNCA!(domtree::GenericDomTree{IsPostDom}, blocks::Vector{BasicBlock}, m
 
     # Calculate semidominators, but only for blocks with preorder number up to
     # max_pre
-    ancestors = copy(D.to_parent_pre)
+    ancestors = domtree.snca_ancestors
+    copy!(ancestors, D.to_parent_pre)
     relevant_blocks = IsPostDom ? (1:max_pre) : (2:max_pre)
     for w::PreNumber in reverse(relevant_blocks)
         semi_w = ancestors[w]
@@ -368,7 +393,8 @@ function SNCA!(domtree::GenericDomTree{IsPostDom}, blocks::Vector{BasicBlock}, m
                 if length(ancestors) <= 32
                     snca_compress!(state, ancestors, v_pre, last_linked)
                 else
-                    snca_compress_worklist!(state, ancestors, v_pre, last_linked)
+                    snca_compress_worklist!(state, ancestors, v_pre, last_linked,
+                                            domtree.worklist)
                 end
             end
 
@@ -382,7 +408,8 @@ function SNCA!(domtree::GenericDomTree{IsPostDom}, blocks::Vector{BasicBlock}, m
     # Compute immediate dominators, which for a node must be the nearest common
     # ancestor in the (immediate) dominator tree between its semidominator and
     # its parent (see Lemma 2.6 in [LG05]).
-    idoms_pre = copy(D.to_parent_pre)
+    idoms_pre = domtree.snca_idoms_pre
+    copy!(idoms_pre, D.to_parent_pre)
     for v in (IsPostDom ? (1:n_nodes) : (2:n_nodes))
         idom = idoms_pre[v]
         vsemi = state[v].semi
@@ -425,11 +452,13 @@ end
 
 function snca_compress_worklist!(
         state::Vector{SNCAData}, ancestors::Vector{PreNumber},
-        v::PreNumber, last_linked::PreNumber)
+        v::PreNumber, last_linked::PreNumber,
+        worklist::Vector{Tuple{PreNumber, PreNumber}})
     # TODO: There is a smarter way to do this
     u = ancestors[v]
-    worklist = Tuple{PreNumber, PreNumber}[(u,v)]
     @assert u < v
+    empty!(worklist)
+    push!(worklist, (u, v))
     while !isempty(worklist)
         u, v = last(worklist)
         if u >= last_linked
