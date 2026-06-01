@@ -19,9 +19,19 @@ uv_mutex_t jl_in_stackwalk;
 uv_mutex_t jl_dll_notify_lock;
 #define jl_unw_get(context) (RtlCaptureContext(context), 0)
 #elif !defined(JL_DISABLE_LIBUNWIND)
+// Also used under JL_USE_FRAMEHOP: libunwind stays linked and unw_getcontext fills a
+// bt_context_t (== ucontext_t) that jl_unw_init converts to framehop registers.
 #define jl_unw_get(context) unw_getcontext(context)
 #else
 int jl_unw_get(void *context) { return -1; }
+#endif
+
+// Release the cursor's resources when stepping is finished. framehop cursors own a pooled
+// cache/slot that must be returned; other unwinders need nothing here.
+#if defined(JL_USE_FRAMEHOP)
+#define jl_unw_fini(cursor) fh_cursor_fini(cursor)
+#else
+#define jl_unw_fini(cursor) ((void)0)
 #endif
 
 #ifdef __cplusplus
@@ -207,6 +217,7 @@ NOINLINE size_t rec_backtrace_ctx(jl_bt_element_t *bt_data, size_t maxsize,
         return 0;
     size_t bt_size = 0;
     jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, 0, &pgcstack, 1);
+    jl_unw_fini(&cursor);
     return bt_size;
 }
 
@@ -228,6 +239,7 @@ NOINLINE size_t rec_backtrace(jl_bt_element_t *bt_data, size_t maxsize, int skip
     jl_gcframe_t *pgcstack = jl_pgcstack;
     size_t bt_size = 0;
     jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, skip + 1, &pgcstack, 0);
+    jl_unw_fini(&cursor);
     return bt_size;
 }
 
@@ -294,6 +306,10 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp, int skip)
             skip = 0;
             offset += size_incr;
         }
+        // Release the cursor's pooled slot as soon as stepping is done, before the
+        // (allocating, hence possibly-throwing) GC-value harvest below — otherwise an
+        // OutOfMemoryError there would longjmp past the fini and permanently leak the slot.
+        jl_unw_fini(&cursor);
         jl_array_del_end(ip, jl_array_nrows(ip) - offset);
         if (returnsp)
             jl_array_del_end(sp, jl_array_nrows(sp) - offset);
@@ -734,6 +750,32 @@ static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *
     }
     return cursor->Rip != 0;
 #endif
+}
+
+#elif defined(JL_USE_FRAMEHOP)
+// stacktrace using framehop (async-signal-safe; no dl_iterate_phdr / malloc / locks)
+
+static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context)
+{
+    fh_context c;
+#ifdef _OS_DARWIN_
+    // On macOS bt_context_t holds a mach thread state (not a ucontext_t).
+    fh_context_from_thread_state(&c, (const void*)context);
+#else
+    // On Linux/FreeBSD bt_context_t is a ucontext_t (== unw_context_t).
+    fh_context_from_ucontext(&c, (const void*)context);
+#endif
+    return fh_cursor_init(cursor, &c) == 0;
+}
+
+static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *ip, uintptr_t *sp)
+{
+    (void)from_signal_handler; // framehop reports the current frame, then advances
+    uint64_t i = 0, s = 0;
+    int r = fh_step(cursor, &i, &s);
+    *ip = (uintptr_t)i;
+    *sp = (uintptr_t)s;
+    return r > 0;
 }
 
 #elif !defined(JL_DISABLE_LIBUNWIND)

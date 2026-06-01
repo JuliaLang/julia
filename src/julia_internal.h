@@ -1583,6 +1583,15 @@ typedef struct {
     int inlined;
 } jl_frame_t;
 
+// framehop-backed unwinding (opt-in). The build defines JL_ENABLE_FRAMEHOP to turn this
+// on; JL_USE_FRAMEHOP is then derived for the (os, arch) combinations framehop supports.
+// When off, everything below is byte-for-byte the existing libunwind/dbghelp path.
+#if !defined(JL_USE_FRAMEHOP) && defined(JL_ENABLE_FRAMEHOP)
+#  if (defined(_OS_LINUX_) || defined(_OS_FREEBSD_)) && (defined(_CPU_X86_64_) || defined(_CPU_AARCH64_))
+#    define JL_USE_FRAMEHOP 1
+#  endif
+#endif
+
 #ifdef _OS_WINDOWS_
 #include <dbghelp.h>
 JL_DLLEXPORT EXCEPTION_DISPOSITION NTAPI __julia_personality(
@@ -1607,7 +1616,20 @@ void jl_profile_process_dll_events(void) JL_NOTSAFEPOINT;
 #  include <libunwind.h>
 #pragma GCC visibility pop
 typedef unw_context_t bt_context_t;
+// framehop integration is additive: libunwind stays linked (task.c context switching and
+// proc-info lookup still use it), but the *backtrace* cursor is framehop's. On
+// Linux/FreeBSD unw_context_t == ucontext_t, so jl_unw_init can extract framehop's
+// registers straight from a bt_context_t.
+#  ifdef JL_USE_FRAMEHOP
+// Default visibility so the fh_* references bind to the shared libframehopunwind
+// (Julia builds with -fvisibility=hidden; same treatment as libunwind.h above).
+#    pragma GCC visibility push(default)
+#    include "framehopunwind.h"
+#    pragma GCC visibility pop
+typedef fh_cursor bt_cursor_t;
+#  else
 typedef unw_cursor_t bt_cursor_t;
+#  endif
 #  if (!defined(SYSTEM_LIBUNWIND) || UNW_VERSION_MAJOR > 1 ||   \
        (UNW_VERSION_MAJOR == 1 && UNW_VERSION_MINOR != 0 && UNW_VERSION_MINOR != 1))
 // Enable our memory manager only for libunwind with our patch or

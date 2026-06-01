@@ -216,6 +216,11 @@ JL_DLLEXPORT JL_NO_SANITIZE void *jl_dlopen(const char *filename, unsigned flags
     if (filename && map)
       ForEachMappedRegion(map, __msan_unpoison);
 #endif
+#ifdef JL_USE_FRAMEHOP
+    // A newly-loaded object means new modules to unwind through; re-scan (off-signal).
+    if (hnd && !(flags & JL_RTLD_NOLOAD))
+        fh_modules_refresh();
+#endif
     return hnd;
 }
 #endif

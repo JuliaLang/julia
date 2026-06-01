@@ -1288,6 +1288,22 @@ JCPPFLAGS+=-DSYSTEM_LIBUNWIND
 endif
 endif
 
+# framehop-backed unwinder (opt-in via USE_FRAMEHOP=1). When enabled on a supported
+# (os, arch), this defines JL_ENABLE_FRAMEHOP (so stackwalk.c routes the backtrace cursor
+# to framehop) and links the libframehopunwind built by deps/framehopunwind.mk. libunwind
+# stays linked (task.c context switching + proc-info still use it). The arch is further
+# gated by the JL_USE_FRAMEHOP predicate in julia_internal.h (x86_64/aarch64 only).
+USE_FRAMEHOP ?= 0
+FRAMEHOPUNWIND :=
+ifeq ($(USE_FRAMEHOP), 1)
+ifneq ($(findstring $(OS),Linux FreeBSD Darwin),)
+ifneq ($(filter $(ARCH),x86_64 aarch64),)
+FRAMEHOPUNWIND := -lframehopunwind
+JCPPFLAGS += -DJL_ENABLE_FRAMEHOP
+endif
+endif
+endif
+
 ifeq ($(origin LLVM_CONFIG), undefined)
 ifeq ($(USE_SYSTEM_LLVM), 1)
 LLVM_CONFIG := llvm-config$(EXE)

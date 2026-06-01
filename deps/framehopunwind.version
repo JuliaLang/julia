@@ -1,0 +1,8 @@
+# -*- makefile -*-
+
+## jll artifact (for a future LibFramehopUnwind_jll; unused by the source build) ##
+# FRAMEHOPUNWIND_JLL_NAME := LibFramehopUnwind
+
+## source build ##
+FRAMEHOPUNWIND_BRANCH=main
+FRAMEHOPUNWIND_SHA1=88850c5c6c38424f699130f18e814142c8644d05

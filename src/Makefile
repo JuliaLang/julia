@@ -209,6 +209,14 @@ RT_LIBS := $(call whole_archive,$(LIBUV)) $(call whole_archive,$(LIBUTF8PROC)) $
 # NB: CG needs uv_mutex_* symbols, but we expect to export them from libjulia-internal
 CG_LIBS := $(LIBUNWIND) $(CG_LLVMLINK) $(OSLIBS) $(LIBTRACYCLIENT) $(LIBITTAPI)
 
+# framehop-backed unwinder: link the deps-built libframehopunwind into both
+# libjulia-internal (stackwalk.c) and libjulia-codegen (debuginfo.cpp register_eh_frames),
+# which both call into framehop and so must share its single loaded instance. The header
+# is found via -I$(build_includedir) and the .so via COMMON_LIBPATHS. $(FRAMEHOPUNWIND) is
+# set by Make.inc (empty unless USE_FRAMEHOP=1 on a supported os/arch).
+RT_LIBS += $(FRAMEHOPUNWIND)
+CG_LIBS += $(FRAMEHOPUNWIND)
+
 ifeq ($(USEGCC),1)
 ifeq ($(USE_RT_STATIC_LIBGCC),1)
 RT_LIBS += -static-libgcc
