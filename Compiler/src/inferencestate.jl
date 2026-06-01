@@ -344,6 +344,10 @@ mutable struct InferenceState{I<:AbstractInterpreter}
     restrict_abstract_call_sites::Bool
     cache_mode::UInt8 # TODO move this to InferenceResult?
     insert_coverage::Bool
+    # Sparse `pc => override_bits` snapshot of per-statement `@assume_effects` overrides
+    # (`nothing` if none). `ssaflags` aliases `src.ssaflags`, whose override bits inference
+    # clobbers, so `decode_statement_effects_override` reads them back from here.
+    stmt_effect_overrides::Union{Nothing,Vector{Pair{Int,UInt16}}}
 
     # The interpreter that created this inference state. Not looked at by
     # NativeInterpreter. But other interpreters may use this to detect cycles.
@@ -397,7 +401,20 @@ mutable struct InferenceState{I<:AbstractInterpreter}
             bb_vartable1[i] = VarState(argtyp, #= ssadef =# 0, i > nargtypes)
         end
         src.ssavaluetypes = ssavaluetypes = Any[ NOT_FOUND for _ = 1:nssavalues ]
-        ssaflags = copy(src.ssaflags)
+        # Inference writes inferred effect flags into `ssaflags`, overwriting the overlapping
+        # `@assume_effects` override bits. Instead of a dense copy to preserve them, alias
+        # `src.ssaflags` (a private CodeInfo) and snapshot only the overrides sparsely.
+        ssaflags = src.ssaflags
+        stmt_effect_overrides = nothing
+        for i = 1:length(ssaflags)
+            override = stmt_effects_override_bits(ssaflags[i])
+            if override != 0
+                if stmt_effect_overrides === nothing
+                    stmt_effect_overrides = Pair{Int,UInt16}[]
+                end
+                push!(stmt_effect_overrides, i => override)
+            end
+        end
 
         unreachable = BitSet()
         pclimitations = IdSet{InferenceState}()
@@ -434,6 +451,7 @@ mutable struct InferenceState{I<:AbstractInterpreter}
             result, unreachable, bestguess, exc_bestguess, ipo_effects,
             _time_ns(), 0.0, 0, 0,
             restrict_abstract_call_sites, cache_mode, insert_coverage,
+            stmt_effect_overrides,
             interp)
 
         # some more setups
@@ -1159,7 +1177,16 @@ function merge_effects!(::AbstractInterpreter, caller::InferenceState, effects::
 end
 merge_effects!(::AbstractInterpreter, ::IRInterpretationState, ::Effects) = return
 
-decode_statement_effects_override(sv::InferenceState) = decode_statement_effects_override(sv.src.ssaflags[sv.currpc])
+function decode_statement_effects_override(sv::InferenceState)
+    overrides = sv.stmt_effect_overrides
+    if overrides !== nothing
+        pc = sv.currpc
+        for (i, override) in overrides
+            i == pc && return decode_effects_override(override)
+        end
+    end
+    return decode_effects_override(UInt16(0))
+end
 decode_statement_effects_override(::IRInterpretationState) = decode_statement_effects_override(UInt32(0))
 
 struct InferenceLoopState

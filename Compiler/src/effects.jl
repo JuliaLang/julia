@@ -361,5 +361,9 @@ function decode_effects(e::UInt32)
         Bool((e >> 14) & 0x01))
 end
 
+# Raw per-statement `@assume_effects` override bits (0 if none).
+stmt_effects_override_bits(ssaflag::UInt32) =
+    UInt16((ssaflag >> NUM_IR_FLAGS) & (1 << NUM_EFFECTS_OVERRIDES - 1))
+
 decode_statement_effects_override(ssaflag::UInt32) =
-    decode_effects_override(UInt16((ssaflag >> NUM_IR_FLAGS) & (1 << NUM_EFFECTS_OVERRIDES - 1)))
+    decode_effects_override(stmt_effects_override_bits(ssaflag))
