@@ -276,11 +276,12 @@ first(t::Tuple) = t[1]
 
 # the <: here makes the runtime a bit more complicated (needing to check isdefined), but really helps inference
 _eltype_ntuple(t::Type{<:Tuple{Vararg{E}}}) where {E} = @isdefined(E) ? (E isa Type ? E : Union{}) : _compute_eltype(t)
+const _eltype_ntuple_sig_condition = (Type{<:Tuple{Vararg{E}}} where E)
 # We'd like to be able to infer eltype(::Tuple), so keep the number of eltype(::Type{<:Tuple}) methods at max_methods!
 function eltype(t::Type{<:Tuple})
     if t <: Tuple{}
         Bottom
-    elseif t <: NTuple
+    elseif isa(t, _eltype_ntuple_sig_condition)
         _eltype_ntuple(t)
     else
         _compute_eltype(t)
@@ -481,6 +482,8 @@ function _totuple(T::Type{All32{E,N}}, itr) where {E,N}
     end
     (elts...,)
 end
+
+# fast path for Array/Memory lives in reinterpretarray.jl
 
 _totuple(::Type{Tuple{Vararg{E}}}, itr, s...) where {E} = (collect(E, Iterators.rest(itr,s...))...,)
 

@@ -1711,7 +1711,14 @@ function apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospe
                 end
             else
                 istype || return false
-                if isa(u.var.ub, TypeVar) || !(T <: u.var.ub)
+                if isa(u.var.ub, TypeVar)
+                    return false
+                end
+                Tub = T
+                while isa(Tub, TypeVar)
+                    Tub = Tub.ub
+                end
+                if !(Tub <: u.var.ub)
                     return false
                 end
                 if exact ? !(u.var.lb <: T) : !(u.var.lb === Bottom)
@@ -2041,6 +2048,10 @@ end
     hasintersect(widenconst(item), memoryrefget_tfunc(𝕃, mem, order, boundscheck)) || return Bottom
     return item
 end
+@nospecs function memoryrefunset!_tfunc(𝕃::AbstractLattice, mem, order, boundscheck)
+    memoryref_builtin_common_errorcheck(mem, order, boundscheck) || return Bottom
+    return Nothing
+end
 @nospecs function memoryrefswap!_tfunc(𝕃::AbstractLattice, mem, v, order, boundscheck)
     memoryrefset!_tfunc(𝕃, mem, v, order, boundscheck) === Bottom && return Bottom
     return memoryrefget_tfunc(𝕃, mem, order, boundscheck)
@@ -2068,6 +2079,7 @@ end
 
 add_tfunc(Core.memoryrefget, 3, 3, memoryrefget_tfunc, 20)
 add_tfunc(Core.memoryrefset!, 4, 4, memoryrefset!_tfunc, 20)
+add_tfunc(Core.memoryrefunset!, 3, 3, memoryrefunset!_tfunc, 20)
 add_tfunc(Core.memoryrefswap!, 4, 4, memoryrefswap!_tfunc, 20)
 add_tfunc(Core.memoryrefmodify!, 5, 5, memoryrefmodify!_tfunc, 20)
 add_tfunc(Core.memoryrefreplace!, 6, 6, memoryrefreplace!_tfunc, 20)
@@ -2240,6 +2252,8 @@ function memoryrefop_builtin_common_nothrow(𝕃::AbstractLattice, argtypes::Vec
         # If we could potentially throw undef ref errors, bail out now.
         array_type_undefable(memtype) && return false
     end
+    # memoryrefunset! has no value-typed arg to check; element type is always
+    # compatible with `nothing` since we are only zeroing pointer slots.
     # If we have @inbounds (last argument is false), we're allowed to assume
     # we don't throw bounds errors.
     if isa(boundscheck, Const)
@@ -2287,6 +2301,8 @@ function _builtin_nothrow(𝕃::AbstractLattice, @nospecialize(f::Builtin), argt
         memtype = widenconst(argtypes[1])
         return memtype ⊑ GenericMemoryRef
     elseif f === memoryrefset!
+        return memoryrefop_builtin_common_nothrow(𝕃, argtypes, f)
+    elseif f === memoryrefunset!
         return memoryrefop_builtin_common_nothrow(𝕃, argtypes, f)
     elseif f === memoryrefget
         return memoryrefop_builtin_common_nothrow(𝕃, argtypes, f)
@@ -2439,6 +2455,7 @@ const _ARGMEM_BUILTINS = Any[
     memoryrefget,
     memoryref_isassigned,
     memoryrefset!,
+    memoryrefunset!,
     modifyfield!,
     replacefield!,
     setfield!,
@@ -2532,6 +2549,20 @@ function isdefined_effects(𝕃::AbstractLattice, argtypes::Vector{Any})
     return Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly)
 end
 
+function is_relocatable_ptr_field(ty, fld)
+    # Special case: these fields are not mutated, but they are the only native pointer fields
+    # that have relocations in staticdata.c, so they can change between processes.
+    if hasintersect(widenconst(ty), Core.TypeName) &&
+        (Const(:constfields) ⊑ fld || Const(fieldindex(Core.TypeName, :constfields)) ⊑ fld ||
+        Const(:atomicfields) ⊑ fld || Const(fieldindex(Core.TypeName, :atomicfields)) ⊑ fld)
+        return true
+    elseif hasintersect(widenconst(ty), DataType) &&
+        (Const(:layout) ⊑ fld || Const(fieldindex(DataType, :layout)) ⊑ fld)
+        return true
+    end
+    return false
+end
+
 function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospecialize(rt))
     length(argtypes) < 2 && return EFFECTS_THROWS
     obj = argtypes[1]
@@ -2543,8 +2574,12 @@ function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospeci
             noub=ALWAYS_FALSE)
     end
     # :consistent if the argtype is immutable
-    consistent = (is_immutable_argtype(obj) || is_mutation_free_argtype(obj)) ?
-        ALWAYS_TRUE : CONSISTENT_IF_INACCESSIBLEMEMONLY
+    if is_relocatable_ptr_field(argtypes[1], argtypes[2])
+        consistent = ALWAYS_FALSE
+    else
+        consistent = (is_immutable_argtype(obj) || is_mutation_free_argtype(obj)) ?
+            ALWAYS_TRUE : CONSISTENT_IF_INACCESSIBLEMEMONLY
+    end
     noub = ALWAYS_TRUE
     bcheck = getfield_boundscheck(argtypes)
     nothrow = getfield_nothrow(𝕃, argtypes, bcheck)
@@ -2561,7 +2596,7 @@ function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospeci
             noub = ALWAYS_FALSE
         end
     end
-    if hasintersect(widenconst(obj), Module)
+    if hasintersect(widenconst(obj), Module) || is_relocatable_ptr_field(argtypes[1], argtypes[2])
         # Modeled more precisely in abstract_eval_getglobal
         inaccessiblememonly = ALWAYS_FALSE
     elseif is_mutation_free_argtype(obj)
@@ -2609,6 +2644,7 @@ const _EFFECTS_KNOWN_BUILTINS = Any[
     memoryrefset!,
     # Core.memoryrefsetonce!,
     # Core.memoryrefswap!,
+    memoryrefunset!,
     Core.sizeof,
     svec,
     Core.throw_methoderror,
@@ -2691,14 +2727,14 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
     else
         if contains_is(_CONSISTENT_BUILTINS, f)
             consistent = ALWAYS_TRUE
-        elseif f === memoryrefget || f === memoryrefset! || f === memoryref_isassigned || f === Core._svec_len || f === Core._svec_ref
+        elseif f === memoryrefget || f === memoryrefset! || f === memoryrefunset! || f === memoryref_isassigned || f === Core._svec_len || f === Core._svec_ref
             consistent = CONSISTENT_IF_INACCESSIBLEMEMONLY
         elseif f === Core._typevar || f === Core.memorynew
             consistent = CONSISTENT_IF_NOTRETURNED
         else
             consistent = ALWAYS_FALSE
         end
-        if f === setfield! || f === memoryrefset!
+        if f === setfield! || f === memoryrefset! || f === memoryrefunset!
             effect_free = EFFECT_FREE_IF_INACCESSIBLEMEMONLY
         elseif contains_is(_EFFECT_FREE_BUILTINS, f) || contains_is(_PURE_BUILTINS, f)
             effect_free = ALWAYS_TRUE
@@ -2713,7 +2749,7 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
         else
             inaccessiblememonly = ALWAYS_FALSE
         end
-        if f === memoryrefnew || f === memoryrefget || f === memoryrefset! || f === memoryref_isassigned
+        if f === memoryrefnew || f === memoryrefget || f === memoryrefset! || f === memoryrefunset! || f === memoryref_isassigned
             noub = memoryop_noub(f, argtypes) ? ALWAYS_TRUE : ALWAYS_FALSE
         else
             noub = ALWAYS_TRUE
@@ -2734,7 +2770,7 @@ function memoryop_noub(@nospecialize(f), argtypes::Vector{Any})
             return true
         end
         expected_nargs = 3
-    elseif f === memoryrefget || f === memoryref_isassigned
+    elseif f === memoryrefget || f === memoryref_isassigned || f === memoryrefunset!
         expected_nargs = 3
     else
         @assert f === memoryrefset! "unexpected memoryop is given"

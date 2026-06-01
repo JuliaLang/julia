@@ -423,8 +423,8 @@ function est_to_dst(st::SyntaxTree)
                  (s[1:prevind(s,end)], K"op=")
 
              op_leaf = newleaf(g, st, K"Identifier")
-             JS.copy_attrs!(op_leaf, st)
              setattr!(op_leaf, :name_val, op_s)
+             setattr!(op_leaf, :scope_layer, st.scope_layer)
              @ast g st [out_k rec(l) op_leaf rec(r)]
          end
         [K"comparison" cs0...] -> let cs = copy(cs0)
@@ -501,22 +501,6 @@ function est_to_dst(st::SyntaxTree)
         end
         [K"generator" body iters...] ->
             @ast g st [K"generator" rec(body) _dst_iterspec(st, iters)]
-        [K"ncat" dim xs...] -> let
-            out = mknode(st, mapsyntax(rec, xs))
-            setattr!(out, :syntax_flags,
-                     JS.flags(st) | JS.set_numeric_flags(dim.value))
-        end
-        [K"nrow" dim xs...] -> let
-            out = mknode(st, mapsyntax(rec, xs))
-            setattr!(out, :syntax_flags,
-                     JS.flags(st) | JS.set_numeric_flags(dim.value))
-        end
-        [K"typed_ncat" t dim xs...] -> let
-            out_cs = pushfirst!(mapsyntax(rec, xs), rec(t))
-            out = mknode(st, out_cs)
-            setattr!(out, :syntax_flags,
-                     JS.flags(st) | JS.set_numeric_flags(dim.value))
-        end
         ([K"=" l r], when=(is_eventually_call(l))) -> let
             # no fix_arglist needed, since this func can't be anonymous
             l = apply_arglist_meta(l, collect_body_arg_meta(r))
@@ -553,13 +537,6 @@ function est_to_dst(st::SyntaxTree)
         end
         ([K"let" binds body], when=(kind(binds) !== K"block")) ->
             @ast g st [K"let" [K"block"(binds) rec(binds)] rec(body)]
-        [K"struct" mut sig body] -> let
-            flags = JS.flags(st) | (_is_false(mut) ? 0x0000 : JS.MUTABLE_FLAG)
-            @ast g st [K"struct"(syntax_flags=flags)
-                rec(sig)
-                rec(body)
-            ]
-        end
         (_, when=(kind(st) in KSet"using import")) -> let
             # dot_importpath = (. _...)
             # as_or_dotip = dot_importpath | (as dot_importpath name)
@@ -580,9 +557,6 @@ function est_to_dst(st::SyntaxTree)
 
         #-----------------------------------------------------------------------
         # Heads not emitted from parsing
-        ([K"meta" [K"unknown_head" ps...]], when=st[1].name_val === "purity") ->
-            @ast g st [K"meta" "purity"::K"Symbol"
-                Base.EffectsOverride([x.value for x in ps]...)::K"Value"]
         ([K"meta" s vs...],
          when=(meta=get(s, :name_val, "")::String; meta in ("nospecialize", "specialize"))) ->
              # Should be handled in the function case
@@ -592,10 +566,8 @@ function est_to_dst(st::SyntaxTree)
                 s->(kind(s) === K"Identifier" ? setattr(s, :kind, K"Symbol") : s),
                 syms)...
            ]
-        # TODO: JL doesn't support inline/noinline/inbounds
-        [K"inline" _] -> newleaf(g, st, K"TOMBSTONE")
-        [K"noinline" _] -> newleaf(g, st, K"TOMBSTONE")
-        [K"inbounds" _] -> newleaf(g, st, K"TOMBSTONE")
+        [K"boundscheck" x] -> mknode(st, SyntaxList(g))
+        [K"inbounds" [K"Identifier"]] -> newnode(g, st, K"inbounds_pop", SyntaxList(g))
         [K"core" x] -> setattr!(mkleaf(st), :name_val, x.name_val)
         [K"top" x] -> setattr!(mkleaf(st), :name_val, x.name_val)
         [K"static_parameter" x] -> setattr!(mkleaf(st), :var_id, x.value::IdTag)
@@ -648,4 +620,13 @@ function est_to_dst(st::SyntaxTree)
             out_cs == children(st) ? st : mknode(st, out_cs)
         end
     end
+end
+
+#-------------------------------------------------------------------------------
+# misc
+
+function purity_expr_to_flags(st::SyntaxTree)
+    @jl_assert kind(st) === K"purity" st
+    args = Bool[x.value for x in children(st)]
+    Base.encode_effects_override(Base.EffectsOverride(args...))
 end

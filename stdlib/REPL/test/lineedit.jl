@@ -525,6 +525,24 @@ end
     @test LineEdit.region(s) == (0=>9)
     @inferred Union{Bool, LineEdit.InputAreaState} LineEdit.edit_shift_move(s, LineEdit.edit_move_right)
     @test LineEdit.region(s) == (2=>9)
+
+    # issue #61377
+    for edit_move in [LineEdit.edit_insert_newline, LineEdit.edit_backspace,
+            LineEdit.edit_move_left, LineEdit.edit_move_right,
+            LineEdit.edit_move_word_left, LineEdit.edit_move_word_right,
+            LineEdit.edit_move_up, LineEdit.edit_move_down]
+        s = new_state()
+        edit_insert(s, "abcd\nefgh\nijkl")
+        s.current_action = :unknown
+        LineEdit.edit_move_up(s)
+        s.current_action = :unknown
+        LineEdit.edit_shift_move(s, LineEdit.edit_move_left)
+        s.current_action = :unknown
+        LineEdit.edit_shift_move(s, LineEdit.edit_move_left)
+        s.current_action = :unknown
+        edit_move(s)
+        @test !LineEdit.is_region_active(s)
+    end
 end
 
 @testset "tab/backspace alignment feature" begin

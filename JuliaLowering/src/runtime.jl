@@ -58,7 +58,7 @@ function _interpolated_value(ctx::InterpolationContext, srcref, @nospecialize(ex
         if !is_compatible_graph(ctx, ex)
             ex = copy_ast(ctx, ex)
         end
-        append_sourceref(ctx, ex, srcref)
+        append_sourceref!(ctx, ex, srcref._id)
     elseif ex isa Symbol
         # Plain symbols become identifiers. This is an accommodation for
         # compatibility to allow `:x` (a Symbol) and `:(x)` (a SyntaxTree) to
@@ -449,6 +449,11 @@ function lookup_method_instance(func, args, world::Integer)
 end
 
 # Like `Base.methods()` but with world age support
-function methods_in_world(func, arg_sig, world)
-    Base._methods(func, arg_sig, -1, world)
+function methods_in_world(func, arg_sig, world, err_ex)
+    out = Base._methods(func, arg_sig, -1, world)
+    @jl_assert(out isa Vector{Any},
+               (err_ex, string(
+                   "Base._methods returned non-vector;",
+                   " bad world age provided? (", world, ")")))
+    out::Vector{Any}
 end

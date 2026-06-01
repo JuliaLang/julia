@@ -481,6 +481,7 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
             JL_GC_PUSH3(&file, &linenum, &inlinedat);
             value_t lst = e;
             file = scm_to_julia_(fl_ctx, car_(lst), mod);
+            assert(jl_is_symbol(file));
             lst = cdr_(lst);
             linenum = scm_to_julia_(fl_ctx, car_(lst), mod);
             lst = cdr_(lst);
@@ -1059,7 +1060,9 @@ lno_ok:
             jl_method_error(margs[0], &margs[1], nargs, ct->world_age);
             // unreachable
         }
-        jl_timing_show_macro(mfunc, margs[1], inmodule, JL_TIMING_DEFAULT_BLOCK);
+        // margs[1] may still be a MacroSource; timing wants the inner LineNumberNode
+        jl_timing_show_macro(mfunc, retry_lno != NULL ? retry_lno : margs[1],
+                             inmodule, JL_TIMING_DEFAULT_BLOCK);
         *ctx = mfunc->def.method->module;
         result = jl_invoke(margs[0], &margs[1], nargs - 1, mfunc);
     }

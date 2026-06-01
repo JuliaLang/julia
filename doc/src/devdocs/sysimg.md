@@ -94,7 +94,7 @@ performance and stability problems in some code.
 
 ### Implementation overview
 
-CPU and feature tables come from the [cpufeatures](https://github.com/gbaraldi/cpufeatures)
+CPU and feature tables come from the [cpufeatures](https://github.com/JuliaLang/cpufeatures)
 library. A build-time generator extracts tables from LLVM's TableGen data and emits
 standalone C headers (`generated/target_tables_{x86_64,aarch64,riscv64}.h`).
 

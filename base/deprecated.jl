@@ -28,6 +28,7 @@ const __internal_changes_list = (
     :ocnopartial,
     :printcodeinfocalls,
     :syntacticccall, #59165
+    :svectvar, #61645
     # Add new change names above this line
 )
 
@@ -208,24 +209,24 @@ macro deprecate(old, new, export_old=true)
         else
             error("invalid usage of @deprecate")
         end
-        Expr(:toplevel,
-            maybe_export,
-            :($(esc(old)) = begin
-                  $meta
-                  depwarn($"`$oldcall` is deprecated, use `$newcall` instead.", Core.Typeof($(esc(fnexpr))).name.singletonname)
-                  $(esc(new))
-              end))
+        ex = :($(esc(old)) = begin
+            $meta
+            depwarn($"`$oldcall` is deprecated, use `$newcall` instead.", Core.Typeof($(esc(fnexpr))).name.singletonname)
+            $(esc(new))
+        end)
+        Expr(:toplevel, maybe_export, replace_linenums!(ex, __source__))
     else
         if export_old && !(old isa Symbol)
             cannot_export_nonsymbol()
         end
+        ex = :(function $(esc(old))(args...; kwargs...)
+            $meta
+            depwarn($"`$old` is deprecated, use `$new` instead.", Core.Typeof($(esc(old))).name.singletonname)
+            $(esc(new))(args...; kwargs...)
+        end)
         Expr(:toplevel,
             export_old ? Expr(:export, esc(old)) : nothing,
-            :(function $(esc(old))(args...; kwargs...)
-                  $meta
-                  depwarn($"`$old` is deprecated, use `$new` instead.", Core.Typeof($(esc(old))).name.singletonname)
-                  $(esc(new))(args...; kwargs...)
-              end))
+            replace_linenums!(ex, __source__))
     end
 end
 
@@ -344,7 +345,7 @@ macro deprecate_moved(old, new, export_old=true)
         "Run `Pkg.add(\"", new, "\")` to install it, restart Julia,\n",
         "and then run `using ", new, "` to load it.")
     return Expr(:toplevel,
-        :($eold(args...; kwargs...) = error($emsg)),
+        replace_linenums!(:($eold(args...; kwargs...) = error($emsg)), __source__),
         export_old ? Expr(:export, eold) : nothing,
         Expr(:call, :deprecate, __module__, Expr(:quote, old), 2))
 end

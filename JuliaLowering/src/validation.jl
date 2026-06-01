@@ -286,12 +286,16 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         @fail(st, "expected (cconv convention_tuple n_req_args)")
     [K"tryfinally" t f] -> vst1(vcx, t) & vst1(vcx, f)
     [K"tryfinally" t f scope] -> vst1(vcx, t) & vst1(vcx, f) & vst1(vcx, scope)
-    [K"inline" _] -> pass()
-    [K"noinline" _] -> pass()
-    [K"inbounds" _] -> pass()
-    [K"boundscheck"] -> pass()
-    [K"boundscheck" _] -> pass()
-    [K"loopinfo" _...] -> pass()
+    [K"loopinfo" _...] -> pass() # TODO
+    [K"boundscheck"] -> pass() # optional bool arg does nothing
+    ([K"boundscheck" [K"Value"]], when=(st[1].value isa Bool)) -> pass()
+    ([K"inbounds" [K"Value"]], when=(st[1].value isa Bool)) -> pass()
+    ([K"inbounds" [K"Identifier"]], when=(st[1].name_val == "pop")) -> pass()
+    ([K"inline" [K"Value"]], when=(st[1].value isa Bool)) -> pass()
+    ([K"noinline" [K"Value"]], when=(st[1].value isa Bool)) -> pass()
+    [K"purity"] -> pass()
+    [K"purity" _ _...] -> numchildren(st) == fieldcount(Base.EffectsOverride) ?
+        pass() : @fail(st, "wrong number of args to `purity` expression")
     [K"locals"] -> pass()
     [K"islocal" _] -> pass()
     [K"isglobal" _] -> pass()
@@ -1169,6 +1173,13 @@ function _assert_syntaxtree(st::SyntaxTree, parents::Vector{NodeId}, vr)
     for a in required_attrs
         vr &= hasattr(st, a) ? pass() : @fail(st, string("needs attribute ", a))
     end
+    # TODO: Proper traversal along .source and .macro_source (need to cache
+    # results to avoid exponential repeated lookups, and figure out how these
+    # edges may form cycles with child edges)
+    st.source === st._id && (vr &= @fail(st, ".source equal to self ID"))
+    get(st, :macro_source, nothing) === st._id &&
+        (vr &= @fail(st, ".macro_source equal to self ID"))
+
     push!(parents, st._id)
     for c in children(st)
         vr &= _assert_syntaxtree(c, parents, vr)
@@ -1255,7 +1266,14 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
 
     [K"meta" xs...] -> all(vst2, vcx, xs) # TODO
     [K"loopinfo" xs...] -> all(vst2, vcx, xs) # TODO
-    [K"boundscheck" xs...] -> all(vst2, vcx, xs) # TODO
+    [K"boundscheck"] -> pass()
+    [K"inbounds_pop"] -> pass()
+    ([K"inbounds" [K"Value"]], when=(st[1].value isa Bool)) -> pass()
+    ([K"inline" [K"Value"]], when=(st[1].value isa Bool)) -> pass()
+    ([K"noinline" [K"Value"]], when=(st[1].value isa Bool)) -> pass()
+    [K"purity"] -> pass()
+    [K"purity" _ _...] -> numchildren(st) == fieldcount(Base.EffectsOverride) ?
+        pass() : @fail(st, "wrong number of args to `purity` expression")
 
     [K"always_defined" x] -> vst2_ident(vcx, x)
     [K"assert" [K"Symbol"] x] -> vst2(vcx, x)

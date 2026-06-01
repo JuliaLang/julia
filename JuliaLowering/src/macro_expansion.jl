@@ -49,7 +49,7 @@ end
 function expand_quote(ctx, ex)
     unquoted = SyntaxList(ctx)
     collect_unquoted!(ctx, unquoted, ex, 0)
-    # Unlike user-defined macro expansion, we don't call append_sourceref for
+    # Unlike user-defined macro expansion, we don't call append_sourceref! for
     # the entire expression produced by `quote` expansion. We could, but it
     # seems unnecessary for `quote` because the surface syntax is a transparent
     # representation of the expansion process. However, it's useful to add the
@@ -215,7 +215,7 @@ function set_macro_arg_hygiene(ctx, ex, layer_ids, layer_idx)
     k = kind(ex)
     scope_layer = get(ex, :scope_layer, layer_ids[layer_idx])
     if is_leaf(ex)
-        setattr!(copy_node(ex), :scope_layer, scope_layer)
+        setattr!(mkleaf(ex), :scope_layer, scope_layer)
     else
         inner_layer_idx = k == K"escape" ? layer_idx - 1 : layer_idx
         if k == K"escape" && inner_layer_idx < 1
@@ -353,7 +353,9 @@ function expand_macro(ctx, ex)
             Base.invoke_in_world(ctx.macro_world, macfunc, macro_args...)
         catch exc
             if exc isa MethodError && exc.f === macfunc
-                if !isempty(methods_in_world(macfunc, Tuple{typeof(mctx), Vararg{Any}}, ctx.macro_world))
+                if !isempty(methods_in_world(
+                    macfunc, Tuple{typeof(mctx), Vararg{Any}},
+                    ctx.macro_world, ex))
                     # If the macro has at least some methods implemented in the
                     # new style, assume the user meant to call one of those
                     # rather than any old-style macro methods which might exist
@@ -367,7 +369,7 @@ function expand_macro(ctx, ex)
     end
 
     if kind(expanded) != K"Value"
-        expanded = append_sourceref(ctx, expanded, ex)
+        expanded = append_sourceref!(ctx, expanded, ex._id)
         # Module scope for the returned AST is the module where this particular
         # method was defined (may be different from `parentmodule(macfunc)`)
         mod_for_ast = lookup_method_instance(macfunc, macro_args,
@@ -379,24 +381,13 @@ function expand_macro(ctx, ex)
     return expanded
 end
 
-_unpack_srcref(graph, srcref::SyntaxTree) = _node_id(graph, srcref)
-_unpack_srcref(graph, srcref::Tuple)      = _node_ids(graph, srcref...)
-_unpack_srcref(_graph, srcref)            = srcref
-
-# Add a secondary source of provenance to each expression in the tree `ex`.
-function append_sourceref(ctx, ex, secondary_prov)
-    srcref = (ex, secondary_prov)
-    out = if !is_leaf(ex)
-        if kind(ex) == K"macrocall"
-            copy_node(ex)
-        else
-            cs = mapsyntax(e->append_sourceref(ctx, e, secondary_prov)._id, children(ex))
-            mknode(ex, cs)
-        end
-    else
-        copy_node(ex)
+function append_sourceref!(ctx, ex, id::NodeId)
+    @jl_assert ex._id != id ex
+    setattr!(ex, :macro_source, id)
+    for c in children(ex)
+        append_sourceref!(ctx, c, id)
     end
-    setattr!(out, :source, _unpack_srcref(syntax_graph(ctx), srcref))
+    ex
 end
 
 function remove_scope_layer!(ex)
@@ -410,7 +401,7 @@ function remove_scope_layer!(ex)
 end
 
 function remove_scope_layer(ctx, ex)
-    remove_scope_layer!(copy_ast(ctx, ex; copy_source=false))
+    remove_scope_layer!(mktree(ex))
 end
 
 """
@@ -473,6 +464,16 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
                 :scope_layer, layerid)
     elseif is_leaf(ex)
         ex
+    elseif (k == K"do" && numchildren(ex) == 2 && kind(ex[1]) == K"macrocall" &&
+        kind(ex[2]) == K"->")
+        mac_ex = @ast ctx ex [
+            K"macrocall"
+            ex[1][1] # mac name
+            ex[1][2] # loc
+            ex[2]    # do-lambda
+            children(ex[1])[3:end]...
+        ]
+        expand_macro(ctx, mac_ex)
     else
         mapchildren(e->expand_forms_1(ctx,e), ctx, ex)
     end
@@ -483,6 +484,7 @@ function ensure_macro_attributes!(graph)
         graph;
         var_id=IdTag,
         scope_layer=LayerId,
+        macro_source=NodeId,
         __macro_ctx__=Nothing,
         meta=CompileHints)
     DEBUG ? ensure_attributes!(g2; jl_source=LineNumberNode) : g2

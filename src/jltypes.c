@@ -96,7 +96,7 @@ static int layout_uses_free_typevars(jl_value_t *v, jl_typeenv_t *env)
             }
             return 0;
         }
-        else if (jl_is_uniontype(v)) {
+        else if (jl_is_uniontype(v) || jl_is_intersecttype(v)) {
             if (layout_uses_free_typevars(((jl_uniontype_t*)v)->a, env))
                 return 1;
            v = ((jl_uniontype_t*)v)->b;
@@ -147,7 +147,7 @@ static int has_free_typevars(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT
             }
             return 0;
         }
-        else if (jl_is_uniontype(v)) {
+        else if (jl_is_uniontype(v) || jl_is_intersecttype(v)) {
             if (has_free_typevars(((jl_uniontype_t*)v)->a, env))
                 return 1;
            v = ((jl_uniontype_t*)v)->b;
@@ -175,8 +175,19 @@ static void find_free_typevars(jl_value_t *v, jl_typeenv_t *env, jl_array_t *out
 {
     while (1) {
         if (jl_is_typevar(v)) {
-            if (!typeenv_has(env, (jl_tvar_t*)v))
+            jl_tvar_t *var = (jl_tvar_t*)v;
+            if (!typeenv_has(env, var)) {
+                jl_typeenv_t *newenv = (jl_typeenv_t*)alloca(sizeof(jl_typeenv_t));
+                newenv->var = var;
+                newenv->val = NULL;
+                newenv->prev = env;
+                env = newenv;
+                if (var->lb != jl_bottom_type)
+                    find_free_typevars(var->lb, env, out);
+                if (var->ub != (jl_value_t*)jl_any_type)
+                    find_free_typevars(var->ub, env, out);
                 jl_array_ptr_1d_push(out, v);
+            }
             return;
         }
         if (jl_is_typeapp(v)) {
@@ -204,7 +215,7 @@ static void find_free_typevars(jl_value_t *v, jl_typeenv_t *env, jl_array_t *out
                 find_free_typevars(jl_tparam(v, i), env, out);
             return;
         }
-        else if (jl_is_uniontype(v)) {
+        else if (jl_is_uniontype(v) || jl_is_intersecttype(v)) {
             find_free_typevars(((jl_uniontype_t*)v)->a, env, out);
             v = ((jl_uniontype_t*)v)->b;
         }
@@ -273,7 +284,7 @@ int jl_has_bound_typevars(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT
             }
             return 0;
         }
-        else if (jl_is_uniontype(v)) {
+        else if (jl_is_uniontype(v) || jl_is_intersecttype(v)) {
             if (jl_has_bound_typevars(((jl_uniontype_t*)v)->a, env))
                 return 1;
            v = ((jl_uniontype_t*)v)->b;
@@ -672,6 +683,8 @@ JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n)
     size_t i;
     for (i = 0; i < n; i++) {
         jl_value_t *pi = ts[i];
+        // reject the internal `Intersect` meet node (see #61917): it must not
+        // be embedded into a user-visible `Union`.
         if (!(jl_is_type(pi) || jl_is_typevar(pi)))
             jl_type_error("Union", (jl_value_t*)jl_type_type, pi);
     }
@@ -899,16 +912,26 @@ jl_value_t *simple_intersect(jl_value_t *a, jl_value_t *b, int overesi)
         JL_GC_POP();
         return jl_bottom_type;
     }
+    if (!subs[0] && !subs[1] && overesi == 1) {
+        // Neither operand subsumes the other and they are not disjoint, so the
+        // meet is not expressible as a single existing type. With `overesi==1`
+        // (exact-meet mode, used on the subtype path) keep it as an internal
+        // `Intersect{a, b}` node rather than over-approximating to one side,
+        // which would silently drop the other. `overesi==2` falls through to
+        // the legacy over-approximation below (used to widen an `Intersect`
+        // before it could escape into a static parameter). See #61917.
+        JL_GC_POP();
+        return jl_new_struct(jl_intersect_type, a, b);
+    }
     nt = subs[0] ? nta : subs[1] ? nt  : nt;
     i  = subs[0] ? 0   : subs[1] ? nta : 0;
     count = nt - i;
     if (!subs[0] && !subs[1]) {
-        // prepare for over estimation
-        // only preserve `a` with strict <:, but preserve `b` without strict >:
-        for (j = 0; j < nt; j++) {
+        // over-approximate (`overesi==2`): keep only `a` components with strict
+        // `<:` and all of `b`, then union them.
+        for (j = 0; j < nt; j++)
             if (stemp[j] < (j < nta ? 2 : 0))
                 temp[j] = NULL;
-        }
     }
     isort_union(&temp[i], count);
     temp[nt] = jl_bottom_type;
@@ -2672,9 +2695,12 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
             if (newbody == NULL) {
                 t = NULL;
             }
-            else if (!jl_has_typevar(newbody, (jl_tvar_t *)var)) {
-                // inner instantiation might make a typevar disappear, e.g.
-                // NTuple{0,T} => Tuple{}
+            else if (!jl_has_typevar(newbody, (jl_tvar_t *)var) && jl_has_typevar(ua->body, ua->var)) {
+                // inner instantiation made a typevar disappear, e.g.
+                // NTuple{0,T} => Tuple{}; drop the now-vacuous UnionAll
+                // However, if the original body was degenerate and didn't have the typevar (special
+                // case in method signature creation, then we don't normalize it here either to avoid
+                // confusing subtyping).
                 t = newbody;
             }
             else if (newbody != ua->body || var != (jl_value_t*)ua->var) {
@@ -2789,7 +2815,17 @@ jl_value_t *jl_instantiate_type_with(jl_value_t *t, jl_value_t **env, size_t n)
 
 static jl_value_t *_jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_t *env, jl_value_t **vals, jl_typeenv_t *prev, jl_typestack_t *stack)
 {
-    jl_typeenv_t en = { env->var, vals[0], prev };
+    // `svec(inner, constrained::Bool)` is the env-entry marker for an uncertain
+    // sparam value produced by subtyping/intersection. `inner` is either the
+    // TypeVar itself (identity preserved) or a DataType that still contains
+    // free typevars; either way it is the value to substitute here.
+    jl_value_t *val = vals[0];
+    if (jl_is_svec(val) && jl_svec_len((jl_svec_t*)val) == 2) {
+        jl_value_t *second = jl_svecref((jl_svec_t*)val, 1);
+        if (second == jl_true || second == jl_false)
+            val = jl_svecref((jl_svec_t*)val, 0);
+    }
+    jl_typeenv_t en = { env->var, val, prev };
     if (jl_is_unionall(env->body))
         return _jl_instantiate_type_in_env(ty, (jl_unionall_t*)env->body, vals + 1, &en, stack);
     else
@@ -3163,6 +3199,15 @@ void jl_init_types(void) JL_GC_DISABLED
     XX(uniontype);
     // It seems like we probably usually end up needing the box for kinds (often used in an Any context), so force it to exist
     jl_uniontype_type->name->mayinlinealloc = 0;
+
+    // Internal-use-only kind dual to Union (see #61917). Not registered as a
+    // small_typeof tag: it is recognized by identity (jl_is_intersecttype) and
+    // only ever lives transiently inside the subtyping algorithm.
+    jl_intersect_type = jl_new_datatype(jl_symbol("Intersect"), core, type_type, jl_emptysvec,
+                                        jl_perm_symsvec(2, "a", "b"),
+                                        jl_svec(2, jl_any_type, jl_any_type),
+                                        jl_emptysvec, 0, 0, 2);
+    jl_intersect_type->name->mayinlinealloc = 0;
 
     jl_tvar_t *tttvar = tvar("T");
     type_type->parameters = jl_svec(1, tttvar);
@@ -3916,6 +3961,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_compute_field_offsets(jl_datatype_type);
     jl_compute_field_offsets(jl_typename_type);
     jl_compute_field_offsets(jl_uniontype_type);
+    jl_compute_field_offsets(jl_intersect_type);
     jl_compute_field_offsets(jl_tvar_type);
     jl_compute_field_offsets(jl_methtable_type);
     jl_compute_field_offsets(jl_methcache_type);
@@ -3933,6 +3979,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_typename_type->ismutationfree = 1;
     jl_datatype_type->ismutationfree = 1;
     jl_uniontype_type->ismutationfree = 1;
+    jl_intersect_type->ismutationfree = 1;
     jl_unionall_type->ismutationfree = 1;
     assert(((jl_datatype_t*)jl_array_any_type)->ismutationfree == 0);
     assert(((jl_datatype_t*)jl_array_uint8_type)->ismutationfree == 0);
