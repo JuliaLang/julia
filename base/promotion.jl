@@ -496,6 +496,10 @@ true
 
 fma(x::Number, y::Number, z::Number) = fma(promote(x,y,z)...)
 muladd(x::Number, y::Number, z::Number) = muladd(promote(x,y,z)...)
+# no promotion to not loose strong zero property of `false`
+muladd(x::Number, y::Bool, z::Number) = x*y+z
+muladd(x::Bool, y::Number, z::Number) = x*y+z
+muladd(x::Bool, y::Bool, z::Number) = x*y+z
 
 ==(x::Number, y::Number) = (==)(promote(x,y)...)
 <( x::Real, y::Real)     = (< )(promote(x,y)...)
