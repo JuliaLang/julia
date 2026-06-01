@@ -378,3 +378,17 @@ let st = try
         sf.func === :f_innermost2 && sf.line == f_innermost2_line && sf.linfo isa Core.MethodInstance && sf.inlined
     end
 end
+
+@inline f_inner3(x) = x > 0 ? x : error("neg: $x")
+function f_parent3(a, b, c, d)
+    s = 0
+    @noinline begin   # keep `+` as invokes so codelocs has `to=0` entries
+        s += a; s += b; s += c; s += d
+    end
+    return f_inner3(s)
+end
+let st = try f_parent3(1, 2, 3, -10) catch; stacktrace(catch_backtrace()) end
+    sf = only(filter(sf -> sf.func === :f_inner3 && sf.inlined, st))
+    @test sf.linfo isa Core.MethodInstance
+    @test sf.linfo.def === which(f_inner3, (Int,))
+end

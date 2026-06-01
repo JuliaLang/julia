@@ -1464,11 +1464,13 @@ static const char *sbt_parseheader(jl_string_t *str, jl_sourcebytetable_header_t
  * returning new debuginfo in `p_di` and optionally pc in `p_pc`. */
 static void cdi_deref(jl_debuginfo_t **p_di, int32_t *p_pc, int recursive) JL_NOTSAFEPOINT
 {
+    assert(jl_is_debuginfo(*p_di));
     jl_debuginfo_t *di = *p_di;
     int32_t pc = 0;
     if (!p_pc)
         p_pc = &pc;
-    if (jl_typeof(di->linetable) == (jl_value_t *)jl_debuginfo_type) {
+    if (jl_is_debuginfo(di->linetable)) {
+        assert(*p_pc >= 0);
         *p_pc = jl_uncompress1_codeloc(di, *p_pc).loc;
         *p_di = (jl_debuginfo_t *)di->linetable;
         if (recursive) {
