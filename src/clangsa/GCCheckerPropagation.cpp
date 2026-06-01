@@ -78,21 +78,9 @@ bool GCChecker::propagateArgumentRootedness(CheckerContext &C,
       continue;
     }
 
-    GCObjectSet ArgObjects = getObjectsForSVal(State, Arg);
     const Expr *ArgExpr = CE->getArg(ArgIdx);
     const Expr *ValueExpr = ignoreOuterPointerCasts(ArgExpr);
-    if (ArgObjects.isEmpty()) {
-      if (const MemRegion *ArgRegion = Arg.getAsRegion())
-        ArgObjects = getTrackedParentObjects(State, ArgRegion);
-    }
-    if (ArgObjects.isEmpty()) {
-      if (const MemRegion *StorageRegion =
-              getStorageRegionForExpr(ValueExpr, State, C)) {
-        ArgObjects = getObjectsForRegion(State, StorageRegion);
-        if (ArgObjects.isEmpty())
-          ArgObjects = getTrackedParentObjects(State, StorageRegion);
-      }
-    }
+    GCObjectSet ArgObjects = getObjectsForExprValue(ValueExpr, Arg, State, C);
     if (ArgObjects.isEmpty()) {
       if (const MemRegion *RootRegion =
               getRootingRegionForExpr(ValueExpr, State, C)) {
@@ -286,6 +274,25 @@ GCChecker::declHasIndexedAnnotation(const clang::Decl *D, StringRef Prefix) {
     unsigned Index = 0;
     if (!Annotation.getAsInteger(10, Index))
       return Index;
+  }
+  return std::nullopt;
+}
+
+std::optional<std::pair<unsigned, unsigned>>
+GCChecker::declHasIndexedPairAnnotation(const clang::Decl *D,
+                                        StringRef Prefix) {
+  if (!D)
+    return std::nullopt;
+  for (const auto *Ann : D->specific_attrs<AnnotateAttr>()) {
+    StringRef Annotation = Ann->getAnnotation();
+    if (!Annotation.consume_front(Prefix))
+      continue;
+    auto Parts = Annotation.split(':');
+    unsigned First = 0;
+    unsigned Second = 0;
+    if (!Parts.first.getAsInteger(10, First) &&
+        !Parts.second.getAsInteger(10, Second))
+      return std::make_pair(First, Second);
   }
   return std::nullopt;
 }
@@ -624,15 +631,9 @@ bool GCChecker::processArgumentRooting(const CallEvent &Call, CheckerContext &C,
     if (RooterIdx >= Call.getNumArgs())
       return emptyObjectSet(State);
     SVal RootingSVal = Call.getArgSVal(RooterIdx);
-    GCObjectSet Objects = getObjectsForSVal(State, RootingSVal);
-    if (Objects.isEmpty()) {
-      if (SymbolRef RootingSym = RootingSVal.getAsSymbol(true))
-        Objects = getDerivedParentObjectsForSymbol(State, RootingSym);
-    }
-    if (Objects.isEmpty()) {
-      if (const MemRegion *RootingRegion = RootingSVal.getAsRegion())
-        Objects = getTrackedParentObjects(State, RootingRegion);
-    }
+    GCObjectSet Objects =
+        getObjectsForExprValue(Call.getArgExpr(RooterIdx), RootingSVal, State,
+                               C);
     if (Objects.isEmpty() && RooterIdx < FD->getNumParams()) {
       Objects = getObjectsForGenericMemoryRef(
           Call.getArgExpr(RooterIdx), RootingSVal,
@@ -655,23 +656,7 @@ bool GCChecker::processArgumentRooting(const CallEvent &Call, CheckerContext &C,
               continue;
             const Expr *InnerArg = CE->getArg(i);
             SVal InnerSVal = C.getSVal(InnerArg);
-            Objects = getObjectsForSVal(State, InnerSVal);
-            if (Objects.isEmpty()) {
-              if (SymbolRef InnerSym = InnerSVal.getAsSymbol(true))
-                Objects = getDerivedParentObjectsForSymbol(State, InnerSym);
-            }
-            if (Objects.isEmpty()) {
-              if (const MemRegion *InnerRegion = InnerSVal.getAsRegion())
-                Objects = getTrackedParentObjects(State, InnerRegion);
-            }
-            if (Objects.isEmpty()) {
-              if (const MemRegion *InnerStorage =
-                      getStorageRegionForExpr(InnerArg, State, C)) {
-                Objects = getObjectsForRegion(State, InnerStorage);
-                if (Objects.isEmpty())
-                  Objects = getTrackedParentObjects(State, InnerStorage);
-              }
-            }
+            Objects = getObjectsForExprValue(InnerArg, InnerSVal, State, C);
             break;
           }
         }
@@ -707,9 +692,7 @@ bool GCChecker::processArgumentRooting(const CallEvent &Call, CheckerContext &C,
     RootedExpr = ignoreOuterPointerCasts(RootedExpr);
     if (const MemRegion *StorageRegion =
             getStorageRegionForExpr(RootedExpr, State, C)) {
-      GCObjectSet Objects = getObjectsForRegion(State, StorageRegion);
-      if (Objects.isEmpty())
-        Objects = getTrackedParentObjects(State, StorageRegion);
+      GCObjectSet Objects = getObjectsForRegionOrParents(State, StorageRegion);
       if (!Objects.isEmpty())
         return Objects;
     }
@@ -725,22 +708,6 @@ bool GCChecker::processArgumentRooting(const CallEvent &Call, CheckerContext &C,
   };
 
   bool Changed = false;
-
-  auto getRootedByArgIndex = [&](unsigned RooterIdx,
-                                 unsigned RootedIdx) -> std::optional<NonLoc> {
-    if (RooterIdx >= RootedIdx)
-      return std::nullopt;
-    for (unsigned i = RooterIdx + 1; i < RootedIdx && i < Call.getNumArgs();
-         ++i) {
-      if (!Call.getArgSVal(i).getAs<NonLoc>())
-        continue;
-      SVal Converted =
-          C.getSValBuilder().convertToArrayIndex(Call.getArgSVal(i));
-      if (auto ConvertedIndex = Converted.getAs<NonLoc>())
-        return *ConvertedIndex;
-    }
-    return std::nullopt;
-  };
 
   auto rooterUsesIndex = [&](unsigned RooterIdx,
                              std::optional<NonLoc> Index) {
@@ -787,12 +754,29 @@ bool GCChecker::processArgumentRooting(const CallEvent &Call, CheckerContext &C,
   for (unsigned i = 0; i < FD->getNumParams(); ++i) {
     if (i >= Call.getNumArgs())
       break;
-    std::optional<unsigned> Rooter =
-        declHasIndexedAnnotation(FD->getParamDecl(i), "julia_rooted_by_arg:");
+    // Plain JL_ROOTED_BY_ARG models ownership by the rooter object. Indexed
+    // replacement precision is opt-in so unrelated integer arguments are not
+    // mistaken for storage indices.
+    std::optional<std::pair<unsigned, unsigned>> IndexedRooter =
+        declHasIndexedPairAnnotation(FD->getParamDecl(i),
+                                     "julia_rooted_by_arg_indexed:");
+    std::optional<unsigned> Rooter;
+    if (IndexedRooter)
+      Rooter = IndexedRooter->first;
+    else
+      Rooter =
+          declHasIndexedAnnotation(FD->getParamDecl(i), "julia_rooted_by_arg:");
     if (!Rooter)
       continue;
     GCObjectSet RootedObjects = getRootedObjects(i);
-    std::optional<NonLoc> Index = getRootedByArgIndex(*Rooter, i);
+    std::optional<NonLoc> Index;
+    if (IndexedRooter && IndexedRooter->second < Call.getNumArgs()) {
+      SVal Converted =
+          C.getSValBuilder().convertToArrayIndex(
+              Call.getArgSVal(IndexedRooter->second));
+      if (auto ConvertedIndex = Converted.getAs<NonLoc>())
+        Index = *ConvertedIndex;
+    }
     bool Found = false;
     for (auto &Entry : RootedByRooter) {
       if (Entry.Rooter != *Rooter || Entry.Index != Index)
@@ -902,7 +886,7 @@ bool GCChecker::processRootPropagatingRegionResult(
     ParentObjects = getObjectsForRootPropagatingArgument(Call, i, State, C);
     if (ParentObjects.isEmpty()) {
       if (const MemRegion *ArgRegion = Arg.getAsRegion())
-        ParentObjects = getTrackedParentObjects(State, ArgRegion);
+        ParentObjects = getObjectsForRegionOrParents(State, ArgRegion);
     }
     break;
   }
@@ -1014,9 +998,7 @@ bool GCChecker::processAllocationOfResult(const CallEvent &Call,
               }
               // Walk backwards to find the tracked region that owns this value.
               const MemRegion *Region = Test.getAsRegion();
-              TestObjects = getObjectsForRegion(State, Region);
-              if (TestObjects.isEmpty())
-                TestObjects = getTrackedParentObjects(State, Region);
+              TestObjects = getObjectsForRegionOrParents(State, Region);
               if (!TestObjects.isEmpty()) {
                 RootPropagatingObjects = TestObjects;
                 RootPropagatingParam = i;
@@ -1058,6 +1040,12 @@ bool GCChecker::processAllocationOfResult(const CallEvent &Call,
         for (unsigned i = 0; i < FD->getNumParams(); ++i) {
           std::optional<unsigned> Rooter = declHasIndexedAnnotation(
               FD->getParamDecl(i), "julia_rooted_by_arg:");
+          if (!Rooter) {
+            if (auto IndexedRooter = declHasIndexedPairAnnotation(
+                    FD->getParamDecl(i),
+                    "julia_rooted_by_arg_indexed:"))
+              Rooter = IndexedRooter->first;
+          }
           if (!Rooter || *Rooter != *RootPropagatingParam)
             continue;
           return true;
@@ -1209,18 +1197,15 @@ void GCChecker::checkDerivingExpr(const Expr *Result, const Expr *Parent,
       getStorageRegionForExpr(Result, State, C);
   SVal ParentVal = C.getSVal(Parent);
   SymbolRef OldSym = ParentVal.getAsSymbol(true);
-  const MemRegion *ParentRegion = C.getSVal(Parent).getAsRegion();
+  const MemRegion *ParentRegion = ParentVal.getAsRegion();
   const MemRegion *ParentStorageRegion =
       getStorageRegionForExpr(Parent, State, C);
   std::optional<LivenessState> OldValS = getStateForSymbol(State, OldSym);
-  GCObjectSet ParentObjects = getObjectsForSVal(State, ParentVal);
-  if (ParentObjects.isEmpty() && OldSym)
-    ParentObjects = getDerivedParentObjectsForSymbol(State, OldSym);
-  if (ParentObjects.isEmpty() && ParentRegion)
-    ParentObjects = getTrackedParentObjects(State, ParentRegion);
-  if (ParentObjects.isEmpty() && ParentStorageRegion)
-    ParentObjects = getTrackedParentObjects(State, ParentStorageRegion);
-  if (!ParentObjects.isEmpty() && objectsMayBeFreed(State, ParentObjects)) {
+  GCObjectSet ParentObjects =
+      getObjectsForExprValue(Parent, ParentVal, State, C);
+  GCObjectSet Reachable = computeReachableObjects(State);
+  if (!ParentObjects.isEmpty() &&
+      objectsMayBeFreed(State, ParentObjects, Reachable)) {
     report_value_error(C, *ParentObjects.begin(),
                        "Creating derivative of value that may have been GCed");
     return;
@@ -1326,7 +1311,8 @@ void GCChecker::checkDerivingExpr(const Expr *Result, const Expr *Parent,
       return;
     }
   }
-  if (NewValS && objectsAreReachable(State, NewObjects)) {
+  if (NewValS &&
+      objectsAreReachable(NewObjects, computeReachableObjects(State))) {
     return;
   }
   if (!OldValS) {
@@ -1395,6 +1381,12 @@ void GCChecker::checkPreCall(const CallEvent &Call, CheckerContext &C) const {
   unsigned NumArgs = Call.getNumArgs();
   ProgramStateRef State = C.getState();
   bool DidChange = false;
+  std::optional<GCObjectSet> Reachable;
+  auto getReachable = [&]() {
+    if (!Reachable)
+      Reachable = computeReachableObjects(State);
+    return *Reachable;
+  };
   bool isCalleeSafepoint = isSafepoint(Call, C);
   auto *Decl = Call.getDecl();
   const FunctionDecl *FD = Decl ? Decl->getAsFunction() : nullptr;
@@ -1452,26 +1444,16 @@ void GCChecker::checkPreCall(const CallEvent &Call, CheckerContext &C) const {
         }
       }
     }
-    if (Sym)
-      DidChange |= rootRegionIfGlobal(Sym->getOriginRegion(), State, C);
+    const Expr *ArgExpr = Call.getArgExpr(idx);
+    if (Sym) {
+      bool RootedGlobal = rootRegionIfGlobal(Sym->getOriginRegion(), State, C);
+      DidChange |= RootedGlobal;
+      if (RootedGlobal)
+        Reachable.reset();
+    }
     GCObjectSet ArgObjects = getObjectsForSymbol(State, Sym);
     if (ArgObjects.isEmpty())
-      ArgObjects = getObjectsForSVal(State, Arg);
-    if (ArgObjects.isEmpty() && Sym)
-      ArgObjects = getDerivedParentObjectsForSymbol(State, Sym);
-    if (ArgObjects.isEmpty()) {
-      if (const MemRegion *ArgRegion = Arg.getAsRegion())
-        ArgObjects = getTrackedParentObjects(State, ArgRegion);
-    }
-    const Expr *ArgExpr = Call.getArgExpr(idx);
-    if (ArgObjects.isEmpty() && ArgExpr) {
-      if (const MemRegion *StorageRegion =
-              getStorageRegionForExpr(ArgExpr, State, C)) {
-        ArgObjects = getObjectsForRegion(State, StorageRegion);
-        if (ArgObjects.isEmpty())
-          ArgObjects = getTrackedParentObjects(State, StorageRegion);
-      }
-    }
+      ArgObjects = getObjectsForExprValue(ArgExpr, Arg, State, C);
     SymbolRef ReportSym =
         Sym ? Sym : (ArgObjects.isEmpty() ? nullptr : *ArgObjects.begin());
     if (!ReportSym)
@@ -1487,7 +1469,8 @@ void GCChecker::checkPreCall(const CallEvent &Call, CheckerContext &C) const {
       if (!isGCObjectType(ArgExpr->IgnoreParenCasts()->getType()))
         continue;
     }
-    if (objectsAreReachable(State, ArgObjects))
+    GCObjectSet CurrentReachable = getReachable();
+    if (objectsAreReachable(ArgObjects, CurrentReachable))
       continue;
     bool ReportedFreedArgument = false;
     if (ValState->isPotentiallyFreed()) {
@@ -1495,7 +1478,8 @@ void GCChecker::checkPreCall(const CallEvent &Call, CheckerContext &C) const {
                          range);
       ReportedFreedArgument = true;
     }
-    if (!ReportedFreedArgument && objectsMayBeFreed(State, ArgObjects)) {
+    if (!ReportedFreedArgument &&
+        objectsMayBeFreed(State, ArgObjects, CurrentReachable)) {
       report_value_error(C, *ArgObjects.begin(),
                          "Argument value may have been GCed", range);
       ReportedFreedArgument = true;
@@ -1641,6 +1625,11 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
     return true;
   } else if (name == "jl_gc_push_arraylist") {
     ProgramStateRef State = C.getState();
+    auto FinishPush = [&]() {
+      State = State->set<GCDepth>(CurrentDepth + 1);
+      C.addTransition(State);
+      return true;
+    };
     SVal ArrayList = C.getSVal(CE->getArg(1));
     // Try to find the items field
     FieldDecl *FD = NULL;
@@ -1656,10 +1645,8 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
     }
     if (FD) {
       auto ItemsLocOpt = State->getLValue(FD, ArrayList).getAs<Loc>();
-      if (!ItemsLocOpt) {
-        C.addTransition(State);
-        return true;
-      }
+      if (!ItemsLocOpt)
+        return FinishPush();
       Loc ItemsLoc = *ItemsLocOpt;
       SVal Items = State->getSVal(ItemsLoc);
       if (Items.isUnknown()) {
@@ -1679,10 +1666,7 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
         State = addFrameRoot(State, CurrentDepth, ItemsRegion, C);
       }
     }
-    CurrentDepth += 1;
-    State = State->set<GCDepth>(CurrentDepth);
-    C.addTransition(State);
-    return true;
+    return FinishPush();
   } else if (name == "jl_ast_preserve") {
     // TODO: Maybe bind the rooting to the context. For now, the second
     //       argument gets unconditionally rooted
@@ -1990,10 +1974,18 @@ void GCChecker::checkLocation(SVal SLoc, bool IsLoad, const Stmt *S,
       }
     }
   }
+  std::optional<GCObjectSet> Reachable;
+  auto getReachable = [&]() {
+    if (!Reachable)
+      Reachable = computeReachableObjects(State);
+    return *Reachable;
+  };
   if (IsLoad && AccessesGCTrackedValue) {
     GCObjectSet OwnerObjects =
         getTrackedParentObjects(State, SLoc.getAsRegion());
-    if (!OwnerObjects.isEmpty() && objectsMayBeFreed(State, OwnerObjects)) {
+    GCObjectSet CurrentReachable = getReachable();
+    if (!OwnerObjects.isEmpty() &&
+        objectsMayBeFreed(State, OwnerObjects, CurrentReachable)) {
       GCObjectSet DirectObjects = emptyObjectSet(State);
       for (const MemRegion *Cur =
                SLoc.getAsRegion() ? SLoc.getAsRegion()->StripCasts() : nullptr;
@@ -2010,7 +2002,7 @@ void GCChecker::checkLocation(SVal SLoc, bool IsLoad, const Stmt *S,
         Cur = SR->getSuperRegion()->StripCasts();
       }
       if (!DirectObjects.isEmpty() &&
-          !objectsMayBeFreed(State, DirectObjects)) {
+          !objectsMayBeFreed(State, DirectObjects, CurrentReachable)) {
         DidChange &&C.addTransition(State);
         return;
       }
@@ -2048,7 +2040,7 @@ void GCChecker::checkLocation(SVal SLoc, bool IsLoad, const Stmt *S,
                        "Trying to access value which may have been GCed");
   } else if (!VState->isUntracked()) {
     GCObjectSet Objects = getObjectsForSymbol(State, Sym);
-    if (objectsMayBeFreed(State, Objects)) {
+    if (objectsMayBeFreed(State, Objects, getReachable())) {
       report_value_error(C, Sym,
                          "Trying to access value which may have been GCed");
     }

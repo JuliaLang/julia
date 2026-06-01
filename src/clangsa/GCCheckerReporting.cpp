@@ -6,6 +6,10 @@
 
 namespace jl_gc_checker {
 
+static PDP makePDP(PathDiagnosticLocation Pos, StringRef Message) {
+  return std::make_unique<PathDiagnosticEventPiece>(Pos, Message);
+}
+
 PDP GCChecker::GCBugVisitor::VisitNode(const ExplodedNode *N,
                                        BugReporterContext &BRC, PathSensitiveBugReport &BR) {
   const ExplodedNode *PrevN = N->getFirstPred();
@@ -14,14 +18,14 @@ PDP GCChecker::GCBugVisitor::VisitNode(const ExplodedNode *N,
   if (NewGCDepth != OldGCDepth) {
     PathDiagnosticLocation Pos(getStmtForDiagnostics(N),
                                BRC.getSourceManager(), N->getLocationContext());
-    return MakePDP(Pos, "GC frame changed here.");
+    return makePDP(Pos, "GC frame changed here.");
   }
   unsigned NewGCState = N->getState()->get<GCDisabledAt>();
   unsigned OldGCState = PrevN->getState()->get<GCDisabledAt>();
   if (false /*NewGCState != OldGCState*/) {
     PathDiagnosticLocation Pos(getStmtForDiagnostics(N),
                                BRC.getSourceManager(), N->getLocationContext());
-    return MakePDP(Pos, "GC enabledness changed here.");
+    return makePDP(Pos, "GC enabledness changed here.");
   }
   return nullptr;
 }
@@ -38,19 +42,19 @@ PDP GCChecker::SafepointBugVisitor::VisitNode(const ExplodedNode *N,
     if (OldSafepointDisabled == (unsigned)-1) {
       if (Ann) {
         Pos = PathDiagnosticLocation{Ann->getLoc(), BRC.getSourceManager()};
-        return MakePDP(Pos, "Tracking JL_NOTSAFEPOINT annotation here.");
+        return makePDP(Pos, "Tracking JL_NOTSAFEPOINT annotation here.");
       } else {
         PathDiagnosticLocation Pos = PathDiagnosticLocation::createDeclBegin(
             N->getLocationContext(), BRC.getSourceManager());
         if (Pos.isValid())
-          return MakePDP(Pos, "Tracking JL_NOTSAFEPOINT annotation here.");
+          return makePDP(Pos, "Tracking JL_NOTSAFEPOINT annotation here.");
         //N->getLocation().dump();
       }
     } else if (NewSafepointDisabled == (unsigned)-1) {
       PathDiagnosticLocation Pos = PathDiagnosticLocation::createDeclBegin(
           N->getLocationContext(), BRC.getSourceManager());
       if (Pos.isValid())
-        return MakePDP(Pos, "Safepoints re-enabled here");
+        return makePDP(Pos, "Safepoints re-enabled here");
       //N->getLocation().dump();
     }
     // n.b. there may be no position here to report if they were disabled by julia_notsafepoint_enter/leave
@@ -81,36 +85,36 @@ PDP GCChecker::GCValueBugVisitor::ExplainNoPropagationFromExpr(
       const VarDecl *VD = VR->getDecl();
       if (VD) {
         if (!declHasAnnotation(VD, "julia_globally_rooted")) {
-          return MakePDP(Pos, "Argument value was derived from unrooted "
+          return makePDP(Pos, "Argument value was derived from unrooted "
                               "global. May need GLOBALLY_ROOTED annotation.");
         } else if (!isGCTrackedType(VD->getType())) {
-          return MakePDP(
+          return makePDP(
               Pos, "Argument value was derived global with untracked type. You "
                    "may want to update the checker's type list");
         }
       }
-      return MakePDP(Pos,
+      return makePDP(Pos,
                      "Argument value was derived from global, but the checker "
                      "did not propagate the root. This may be a bug");
     }
-    return MakePDP(Pos,
+    return makePDP(Pos,
                    "Could not propagate root. Argument value was untracked.");
   }
   std::optional<LivenessState> ValS = getStateForSymbol(N->getState(), Parent);
   assert(ValS);
   if (ValS->isPotentiallyFreed()) {
     BR.addVisitor(make_unique<GCValueBugVisitor>(Parent));
-    return MakePDP(
+    return makePDP(
         Pos, "Root not propagated because it may have been freed. Tracking.");
   } else if (GCChecker::objectsAreReachable(
-                 N->getState(),
-                 GCChecker::getObjectsForSymbol(N->getState(), Parent))) {
+                 GCChecker::getObjectsForSymbol(N->getState(), Parent),
+                 GCChecker::computeReachableObjects(N->getState()))) {
     BR.addVisitor(make_unique<GCValueBugVisitor>(Parent));
-    return MakePDP(
+    return makePDP(
         Pos, "Root was not propagated due to a bug. Tracking base value.");
   } else {
     BR.addVisitor(make_unique<GCValueBugVisitor>(Parent));
-    return MakePDP(Pos, "No Root to propagate. Tracking.");
+    return makePDP(Pos, "No Root to propagate. Tracking.");
   }
 }
 
@@ -150,12 +154,16 @@ PDP GCChecker::GCValueBugVisitor::VisitNode(const ExplodedNode *N,
       getStateForSymbol(PrevN->getState(), Sym);
   GCObjectSet NewObjects = GCChecker::getObjectsForSymbol(N->getState(), Sym);
   GCObjectSet OldObjects = GCChecker::getObjectsForSymbol(PrevN->getState(), Sym);
+  GCObjectSet NewReachableObjects =
+      GCChecker::computeReachableObjects(N->getState());
+  GCObjectSet OldReachableObjects =
+      GCChecker::computeReachableObjects(PrevN->getState());
   bool NewReachable =
       !NewObjects.isEmpty() &&
-      GCChecker::objectsAreReachable(N->getState(), NewObjects);
+      GCChecker::objectsAreReachable(NewObjects, NewReachableObjects);
   bool OldReachable =
       !OldObjects.isEmpty() &&
-      GCChecker::objectsAreReachable(PrevN->getState(), OldObjects);
+      GCChecker::objectsAreReachable(OldObjects, OldReachableObjects);
   const Stmt *Stmt = getStmtForDiagnostics(N);
 
   PathDiagnosticLocation Pos;
@@ -169,7 +177,7 @@ PDP GCChecker::GCValueBugVisitor::VisitNode(const ExplodedNode *N,
     return nullptr;
   if (!OldSymbolState) {
     if (NewReachable) {
-      return MakePDP(Pos, "Started tracking value here (root was inherited).");
+      return makePDP(Pos, "Started tracking value here (root was inherited).");
     } else {
       if (NewSymbolState->FD) {
         bool isFunctionSafepoint =
@@ -181,15 +189,15 @@ PDP GCChecker::GCValueBugVisitor::VisitNode(const ExplodedNode *N,
         Pos =
             PathDiagnosticLocation{NewSymbolState->PVD, BRC.getSourceManager()};
         if (!isFunctionSafepoint)
-          return MakePDP(Pos, "Argument not rooted, because function was "
+          return makePDP(Pos, "Argument not rooted, because function was "
                               "annotated as not a safepoint");
         else
-          return MakePDP(Pos, "Argument was annotated as MAYBE_UNROOTED.");
+          return makePDP(Pos, "Argument was annotated as MAYBE_UNROOTED.");
       } else {
         PDP Diag = ExplainNoPropagation(N, Pos, BRC, BR);
         if (Diag)
           return Diag;
-        return MakePDP(Pos, "Started tracking value here.");
+        return makePDP(Pos, "Started tracking value here.");
       }
     }
   }
@@ -197,22 +205,22 @@ PDP GCChecker::GCValueBugVisitor::VisitNode(const ExplodedNode *N,
     PDP Diag = ExplainNoPropagation(N, Pos, BRC, BR);
     if (Diag)
       return Diag;
-    return MakePDP(Pos, "Created untracked derivative.");
+    return makePDP(Pos, "Created untracked derivative.");
   } else if (NewSymbolState->isPotentiallyFreed() &&
              OldSymbolState->isJustAllocated()) {
     // std::make_shared< in later LLVM
-    return MakePDP(Pos, "Value may have been GCed here.");
+    return makePDP(Pos, "Value may have been GCed here.");
   } else if (NewSymbolState->isPotentiallyFreed() &&
              !OldSymbolState->isPotentiallyFreed()) {
     // std::make_shared< in later LLVM
-    return MakePDP(Pos,
+    return makePDP(Pos,
                    "Value may have been GCed here (though I don't know why).");
   } else if (!OldReachable && NewReachable && !OldObjects.isEmpty() &&
              !NewObjects.isEmpty()) {
-    return MakePDP(Pos, "Value was rooted here.");
+    return makePDP(Pos, "Value was rooted here.");
   } else if (OldReachable && !NewReachable && !OldObjects.isEmpty() &&
              !NewObjects.isEmpty()) {
-    return MakePDP(Pos, "Root was released here.");
+    return makePDP(Pos, "Root was released here.");
   }
   return nullptr;
 }

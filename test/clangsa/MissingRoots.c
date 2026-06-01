@@ -694,14 +694,14 @@ void foo_out_arg()
 
 // Rooted-by annotations create graph edges from the configured rooting argument.
 extern void test_rooted_by_arg_store(jl_svec_t *holder JL_PROPAGATES_ROOT,
-                                     size_t i, jl_value_t *value JL_ROOTED_BY_ARG(0)) JL_NOTSAFEPOINT;
+                                     size_t i, jl_value_t *value JL_ROOTED_BY_ARG_INDEXED(0, 1)) JL_NOTSAFEPOINT;
 extern void test_rooted_by_arg_store_pair(jl_svec_t *holder JL_PROPAGATES_ROOT,
-                                          size_t i, jl_value_t *first JL_ROOTED_BY_ARG(0),
-                                          jl_value_t *second JL_ROOTED_BY_ARG(0)) JL_NOTSAFEPOINT;
+                                          size_t i, jl_value_t *first JL_ROOTED_BY_ARG_INDEXED(0, 1),
+                                          jl_value_t *second JL_ROOTED_BY_ARG_INDEXED(0, 1)) JL_NOTSAFEPOINT;
 extern void test_rooted_by_arg_store_with_flag(jl_svec_t *holder JL_PROPAGATES_ROOT,
-                                               jl_sym_t *key,
+                                               int flag,
                                                jl_value_t *value JL_ROOTED_BY_ARG(0),
-                                               int flag) JL_NOTSAFEPOINT;
+                                               jl_sym_t *key) JL_NOTSAFEPOINT;
 extern void test_out_rooted_by_arg(jl_method_instance_t *mi JL_PROPAGATES_ROOT,
                                    jl_code_instance_t **out JL_OUT_ROOTED_BY_ARG(0)) JL_NOTSAFEPOINT;
 extern jl_genericmemoryref_t test_memoryref_from_memory(jl_genericmemory_t *mem JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
@@ -749,7 +749,7 @@ void rooted_by_arg_unrelated_integer_does_not_replace_field(void)
     holder = jl_svec1(old_child);
     jl_value_t *old_alias = old_child;
     old_child = NULL;
-    test_rooted_by_arg_store_with_flag(holder, NULL, new_child, 0);
+    test_rooted_by_arg_store_with_flag(holder, 0, new_child, NULL);
     jl_gc_safepoint();
     look_at_value(old_alias);
     JL_GC_POP();
@@ -825,6 +825,12 @@ void unannotated_argument_buffer_store_does_not_root(jl_value_t **slot)
     jl_gc_safepoint(); // expected-note{{Value may have been GCed here}}
     look_at_value(v); // expected-warning{{Argument value may have been GCed}}
                       // expected-note@-1{{Argument value may have been GCed}}
+}
+
+void annotated_argument_root_slot_accepts_null(jl_value_t **slot JL_REQUIRE_ROOTED_SLOT)
+{
+    *slot = NULL;
+    jl_gc_safepoint();
 }
 
 void dynamic_root_array_element_keeps_value_live(size_t n)

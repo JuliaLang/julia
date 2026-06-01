@@ -5,28 +5,19 @@
 
 #include "clang/AST/ParentMapContext.h"
 #include "clang/AST/Type.h"
-#include "clang/Frontend/FrontendActions.h"
-#include "clang/StaticAnalyzer/Checkers/SValExplainer.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/BugType.h"
-#include "clang/StaticAnalyzer/Core/BugReporter/CommonBugCategories.h"
 #include "clang/StaticAnalyzer/Core/Checker.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/CallEvent.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/CheckerContext.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/ProgramStateTrait.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/SVals.h"
-#include "clang/StaticAnalyzer/Frontend/AnalysisConsumer.h"
-#include "clang/StaticAnalyzer/Frontend/FrontendActions.h"
-#include "clang/Tooling/CompilationDatabase.h"
-#include "clang/Tooling/Tooling.h"
 
 #include "llvm/ADT/ImmutableList.h"
 #include "llvm/ADT/ImmutableMap.h"
 #include "llvm/ADT/ImmutableSet.h"
-#include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/Debug.h"
 
-#include <iostream>
 #include <memory>
 #include <optional>
 #include <utility>
@@ -43,7 +34,6 @@ using namespace ento;
 using std::make_unique;
 
 typedef std::shared_ptr<PathDiagnosticPiece> PDP;
-#define MakePDP make_unique<PathDiagnosticEventPiece>
 
 inline const Stmt *getStmtForDiagnostics(const ExplodedNode *N)
 {
@@ -204,6 +194,12 @@ private:
                                             const MemRegion *Region);
   static GCObjectSet getTrackedParentObjects(const ProgramStateRef &State,
                                              const MemRegion *Region);
+  static GCObjectSet
+  getObjectsForRegionOrParents(const ProgramStateRef &State,
+                               const MemRegion *Region);
+  GCObjectSet getObjectsForExprValue(const Expr *E, SVal V,
+                                     ProgramStateRef State,
+                                     CheckerContext &C) const;
   ProgramStateRef setObjectsForSymbol(ProgramStateRef State, SymbolRef Sym,
                                       GCObjectSet Objects,
                                       CheckerContext &C) const;
@@ -277,8 +273,12 @@ private:
                                           CheckerContext &C) const;
   const MemRegion *getTrackedParentRegion(const MemRegion *Region) const;
   static GCObjectSet computeReachableObjects(const ProgramStateRef &State);
+  static bool objectsAreReachable(GCObjectSet Objects, GCObjectSet Reachable);
   static bool objectsAreReachable(const ProgramStateRef &State,
                                   GCObjectSet Objects);
+  static bool objectsMayBeFreed(const ProgramStateRef &State,
+                                GCObjectSet Objects,
+                                GCObjectSet Reachable);
   static bool objectsMayBeFreed(const ProgramStateRef &State,
                                 GCObjectSet Objects);
   static LivenessState aggregateObjectState(const ProgramStateRef &State,
@@ -297,6 +297,8 @@ private:
   static const AnnotateAttr *declHasAnnotation(const clang::Decl *D, const char *which);
   static std::optional<unsigned> declHasIndexedAnnotation(const clang::Decl *D,
                                                           StringRef Prefix);
+  static std::optional<std::pair<unsigned, unsigned>>
+  declHasIndexedPairAnnotation(const clang::Decl *D, StringRef Prefix);
   static bool isFDAnnotatedNotSafepoint(const clang::FunctionDecl *FD,
                                         const SourceManager &SM);
   static const SourceManager &getSM(CheckerContext &C) { return C.getSourceManager(); }

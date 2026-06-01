@@ -1239,7 +1239,7 @@ void mtarraylist_push(small_arraylist_t *_a, void *elt) JL_NOTSAFEPOINT;
 STATIC_INLINE jl_value_t *jl_svecref(void *t JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
 STATIC_INLINE jl_value_t *jl_svecset(
     void *t JL_PROPAGATES_ROOT,
-    size_t i, void *x JL_ROOTED_BY_ARG(0)) JL_NOTSAFEPOINT;
+    size_t i, void *x JL_ROOTED_BY_ARG_INDEXED(0, 1)) JL_NOTSAFEPOINT;
 #else
 STATIC_INLINE jl_value_t *jl_svecref(void *t JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT
 {
@@ -1251,7 +1251,7 @@ STATIC_INLINE jl_value_t *jl_svecref(void *t JL_PROPAGATES_ROOT, size_t i) JL_NO
 }
 STATIC_INLINE jl_value_t *jl_svecset(
     void *t JL_PROPAGATES_ROOT,
-    size_t i, void *x JL_ROOTED_BY_ARG(0)) JL_NOTSAFEPOINT
+    size_t i, void *x JL_ROOTED_BY_ARG_INDEXED(0, 1)) JL_NOTSAFEPOINT
 {
     assert(jl_typetagis(t,jl_simplevector_tag << 4));
     assert(i < jl_svec_len(t));
@@ -1334,7 +1334,7 @@ jl_value_t **jl_genericmemory_ptr_data(jl_genericmemory_t *m JL_PROPAGATES_ROOT)
 STATIC_INLINE jl_value_t *jl_genericmemory_ptr_ref(void *m JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
 STATIC_INLINE jl_value_t *jl_genericmemory_ptr_set(
     void *m, size_t i,
-    void *x JL_ROOTED_BY_ARG(0)) JL_NOTSAFEPOINT;
+    void *x JL_ROOTED_BY_ARG_INDEXED(0, 1)) JL_NOTSAFEPOINT;
 #else
 #define jl_genericmemory_ptr_data(a)  ((jl_value_t**)((jl_genericmemory_t*)(a))->ptr)
 STATIC_INLINE jl_value_t *jl_genericmemory_ptr_ref(void *m JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT
@@ -1346,7 +1346,7 @@ STATIC_INLINE jl_value_t *jl_genericmemory_ptr_ref(void *m JL_PROPAGATES_ROOT, s
 }
 STATIC_INLINE jl_value_t *jl_genericmemory_ptr_set(
     void *m, size_t i,
-    void *x JL_ROOTED_BY_ARG(0)) JL_NOTSAFEPOINT
+    void *x JL_ROOTED_BY_ARG_INDEXED(0, 1)) JL_NOTSAFEPOINT
 {
     jl_genericmemory_t *m_ = (jl_genericmemory_t*)m;
     assert(((jl_datatype_t*)jl_typetagof(m_))->layout->flags.arrayelem_isboxed);
@@ -1384,7 +1384,7 @@ jl_value_t **jl_array_ptr_data(jl_array_t *a JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 STATIC_INLINE jl_value_t *jl_array_ptr_ref(void *a JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
 STATIC_INLINE jl_value_t *jl_array_ptr_set(
     void *a, size_t i,
-    void *x JL_ROOTED_BY_ARG(0)) JL_NOTSAFEPOINT;
+    void *x JL_ROOTED_BY_ARG_INDEXED(0, 1)) JL_NOTSAFEPOINT;
 #else
 #define jl_array_ptr_data(a) (jl_array_data(a, jl_value_t*))
 STATIC_INLINE jl_value_t *jl_array_ptr_ref(void *a JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT
@@ -1395,7 +1395,7 @@ STATIC_INLINE jl_value_t *jl_array_ptr_ref(void *a JL_PROPAGATES_ROOT, size_t i)
 }
 STATIC_INLINE jl_value_t *jl_array_ptr_set(
     void *a, size_t i,
-    void *x JL_ROOTED_BY_ARG(0)) JL_NOTSAFEPOINT
+    void *x JL_ROOTED_BY_ARG_INDEXED(0, 1)) JL_NOTSAFEPOINT
 {
     assert(((jl_datatype_t*)jl_typetagof(((jl_array_t*)a)->ref.mem))->layout->flags.arrayelem_isboxed);
     assert(i < jl_array_len(a));

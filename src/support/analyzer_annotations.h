@@ -18,6 +18,7 @@
 #define JL_GLOBALLY_ROOTED __attribute__((annotate("julia_globally_rooted")))
 #define JL_ROOTED_VARARGS __attribute__((annotate("julia_rooted_varargs")))
 #define JL_ROOTED_BY_ARG(n) __attribute__((annotate("julia_rooted_by_arg:" #n)))
+#define JL_ROOTED_BY_ARG_INDEXED(root, index) __attribute__((annotate("julia_rooted_by_arg_indexed:" #root ":" #index)))
 #define JL_OUT_ROOTED_BY_ARG(n) __attribute__((annotate("julia_out_rooted_by_arg:" #n)))
 #define JL_ROOTED_BY_RETURN __attribute__((annotate("julia_rooted_by_return")))
 #define JL_GC_DISABLED __attribute__((annotate("julia_gc_disabled")))
@@ -43,6 +44,7 @@ extern "C" {
 #define JL_GLOBALLY_ROOTED
 #define JL_ROOTED_VARARGS
 #define JL_ROOTED_BY_ARG(n)
+#define JL_ROOTED_BY_ARG_INDEXED(root, index)
 #define JL_OUT_ROOTED_BY_ARG(n)
 #define JL_ROOTED_BY_RETURN
 #define JL_GC_DISABLED

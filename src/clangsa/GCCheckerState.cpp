@@ -2,6 +2,8 @@
 
 #include "GCChecker.h"
 
+#include "llvm/ADT/SmallPtrSet.h"
+
 // GCChecker program-state definitions and graph/state manipulation helpers.
 
 namespace clang {
@@ -435,6 +437,36 @@ GCChecker::getTrackedParentObjects(const ProgramStateRef &State,
   return Objects;
 }
 
+GCChecker::GCObjectSet
+GCChecker::getObjectsForRegionOrParents(const ProgramStateRef &State,
+                                         const MemRegion *Region) {
+  GCObjectSet Objects = getObjectsForRegion(State, Region);
+  if (Objects.isEmpty())
+    Objects = getTrackedParentObjects(State, Region);
+  return Objects;
+}
+
+GCChecker::GCObjectSet
+GCChecker::getObjectsForExprValue(const Expr *E, SVal V,
+                                  ProgramStateRef State,
+                                  CheckerContext &C) const {
+  GCObjectSet Objects = getObjectsForSVal(State, V);
+  if (Objects.isEmpty()) {
+    if (SymbolRef Sym = V.getAsSymbol(true))
+      Objects = getDerivedParentObjectsForSymbol(State, Sym);
+  }
+  if (Objects.isEmpty()) {
+    if (const MemRegion *Region = V.getAsRegion())
+      Objects = getTrackedParentObjects(State, Region);
+  }
+  if (Objects.isEmpty() && E) {
+    if (const MemRegion *StorageRegion =
+            getStorageRegionForExpr(ignoreOuterPointerCasts(E), State, C))
+      Objects = getObjectsForRegionOrParents(State, StorageRegion);
+  }
+  return Objects;
+}
+
 ProgramStateRef
 GCChecker::setObjectsForSymbol(ProgramStateRef State, SymbolRef Sym,
                                GCObjectSet Objects,
@@ -762,11 +794,8 @@ GCChecker::GCObjectSet GCChecker::getObjectsForRootPropagatingArgument(
   SymbolRef ArgSym = Arg.getAsSymbol(true);
   if (Objects.isEmpty() && ValueExpr) {
     if (const MemRegion *StorageRegion =
-            getStorageRegionForExpr(ValueExpr, State, C)) {
-      Objects = getObjectsForRegion(State, StorageRegion);
-      if (Objects.isEmpty())
-        Objects = getTrackedParentObjects(State, StorageRegion);
-    }
+            getStorageRegionForExpr(ValueExpr, State, C))
+      Objects = getObjectsForRegionOrParents(State, StorageRegion);
   }
   if (!RootRegion) {
     if (ArgSym) {
@@ -818,16 +847,14 @@ GCChecker::GCObjectSet GCChecker::getObjectsForGenericMemoryRef(
   SVal Base = loc::MemRegionVal(BaseRegion);
   const MemRegion *MemFieldRegion =
       State->getLValue(MemField, Base).getAsRegion();
-  GCObjectSet CarrierObjects = getObjectsForRegion(State, BaseRegion);
-  if (CarrierObjects.isEmpty())
-    CarrierObjects = getTrackedParentObjects(State, BaseRegion);
+  GCObjectSet CarrierObjects = getObjectsForRegionOrParents(State, BaseRegion);
   if (MemFieldRegion) {
     MemFieldRegion = MemFieldRegion->StripCasts();
     SVal MemValue = State->getSVal(MemFieldRegion);
     Objects = getObjectsForSVal(State, MemValue);
     if (Objects.isEmpty()) {
       if (const MemRegion *MemValueRegion = MemValue.getAsRegion())
-        Objects = getTrackedParentObjects(State, MemValueRegion);
+        Objects = getObjectsForRegionOrParents(State, MemValueRegion);
     }
     if (Objects.isEmpty())
       Objects = CarrierObjects;
@@ -1012,6 +1039,13 @@ bool GCChecker::objectsAreReachable(const ProgramStateRef &State,
   if (Objects.isEmpty())
     return false;
   GCObjectSet Reachable = computeReachableObjects(State);
+  return objectsAreReachable(Objects, Reachable);
+}
+
+bool GCChecker::objectsAreReachable(GCObjectSet Objects,
+                                    GCObjectSet Reachable) {
+  if (Objects.isEmpty())
+    return false;
   for (GCObject Object : Objects) {
     if (!Reachable.contains(Object))
       return false;
@@ -1020,8 +1054,9 @@ bool GCChecker::objectsAreReachable(const ProgramStateRef &State,
 }
 
 bool GCChecker::objectsMayBeFreed(const ProgramStateRef &State,
-                                  GCObjectSet Objects) {
-  if (!Objects.isEmpty() && objectsAreReachable(State, Objects))
+                                  GCObjectSet Objects,
+                                  GCObjectSet Reachable) {
+  if (!Objects.isEmpty() && objectsAreReachable(Objects, Reachable))
     return false;
   for (GCObject Object : Objects) {
     const LivenessState *VS = State->get<GCObjectStateMap>(Object);
@@ -1029,6 +1064,12 @@ bool GCChecker::objectsMayBeFreed(const ProgramStateRef &State,
       return true;
   }
   return false;
+}
+
+bool GCChecker::objectsMayBeFreed(const ProgramStateRef &State,
+                                  GCObjectSet Objects) {
+  GCObjectSet Reachable = computeReachableObjects(State);
+  return objectsMayBeFreed(State, Objects, Reachable);
 }
 
 GCChecker::LivenessState
