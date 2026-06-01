@@ -14,6 +14,7 @@ using Main.MacroCalls
 @test_throws ArgumentError("no arguments given for Enum Foo") @macrocall(@enum Foo)
 @test_throws ArgumentError("invalid base type for Enum Foo2, Foo2::Float64=::Float64; base type must be an integer primitive type") @macrocall(@enum Foo2::Float64 apple=1.)
 
+const fruit_enum_line = @__LINE__() + 1
 @enum Fruit apple orange kiwi
 @test typeof(Fruit) == DataType
 @test isbitstype(Fruit)
@@ -37,6 +38,10 @@ using Main.MacroCalls
 @test Fruit(2) == kiwi
 @test_throws ArgumentError Fruit(3)
 @test_throws ArgumentError Fruit(-1)
+let m = only(methods(Fruit))
+    @test m.file == Symbol(@__FILE__)
+    @test m.line == fruit_enum_line
+end
 @test UInt8(apple) === 0x00
 @test UInt16(orange) === 0x0001
 @test UInt128(kiwi) === 0x00000000000000000000000000000002
