@@ -256,14 +256,37 @@ void jl_safepoint_wait_gc(jl_task_t *ct) JL_NOTSAFEPOINT
     // Use normal volatile load in the loop for speed until GC finishes.
     // Then use an acquire load to make sure the GC result is visible on this thread.
     while (jl_atomic_load_relaxed(&jl_gc_running) || jl_atomic_load_acquire(&jl_gc_running)) {
+        // Per-thread early release: if the GC has signaled this specific thread
+        // it may resume (e.g. ConcurrentImmix InitialMark has finished scanning
+        // this thread's stack), exit the wait without waiting for jl_gc_running.
+        if (ct && jl_atomic_load_acquire(&ct->ptls->gc_early_release)) {
+            jl_atomic_store_release(&ct->ptls->gc_early_release, 0);
+            return;
+        }
         // Use system mutexes rather than spin locking to minimize wasted CPU
         // time on the idle cores while we wait for the GC to finish.
         // This is particularly important when run under rr.
         uv_mutex_lock(&safepoint_lock);
-        if (jl_atomic_load_relaxed(&jl_gc_running))
+        if (jl_atomic_load_relaxed(&jl_gc_running)) {
+            // Recheck early-release under the lock to avoid a missed wakeup
+            // race with jl_gc_mmtk_release_mutator (which broadcasts under
+            // the same lock).
+            if (ct && jl_atomic_load_acquire(&ct->ptls->gc_early_release)) {
+                jl_atomic_store_release(&ct->ptls->gc_early_release, 0);
+                uv_mutex_unlock(&safepoint_lock);
+                return;
+            }
             uv_cond_wait(&safepoint_cond_end, &safepoint_lock);
+        }
         uv_mutex_unlock(&safepoint_lock);
     }
+    // Defensive: clear any stale early-release flag set during this cycle.
+    // The flag may have been set by the GC just as jl_gc_running was being
+    // cleared by the normal end-of-GC path; without this clear, the next
+    // call to jl_safepoint_wait_gc on this thread would escape immediately
+    // without actually waiting.
+    if (ct)
+        jl_atomic_store_release(&ct->ptls->gc_early_release, 0);
 }
 
 // equivalent to jl_set_gc_and_wait, but waiting on resume-thread lock instead

@@ -624,6 +624,24 @@ static void jl_gc_free_memory(jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPO
     gc_num.freecall++;
 }
 
+// Set the per-thread early-release flag on a given ptls and wake any thread
+// blocked in jl_safepoint_wait_gc for it. Called by the mmtk-julia binding
+// from scan_roots_in_mutator_thread when incremental stack snapshots are on.
+// The target thread observes the flag on its next condvar wakeup and exits
+// jl_safepoint_wait_gc independently of jl_gc_running.
+JL_DLLEXPORT void jl_gc_mmtk_release_mutator(jl_ptls_t ptls) JL_NOTSAFEPOINT
+{
+    extern uv_cond_t safepoint_cond_end;
+    if (ptls == NULL)
+        return;
+    // Take the safepoint_lock around the store+broadcast so we cannot lose
+    // the wakeup race against a thread about to call uv_cond_wait.
+    uv_mutex_lock(&safepoint_lock);
+    jl_atomic_store_release(&ptls->gc_early_release, 1);
+    uv_cond_broadcast(&safepoint_cond_end);
+    uv_mutex_unlock(&safepoint_lock);
+}
+
 JL_DLLEXPORT void jl_gc_mmtk_sweep_malloced_memory(void) JL_NOTSAFEPOINT
 {
     void* iter = mmtk_new_mutator_iterator();

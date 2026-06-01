@@ -207,6 +207,12 @@ typedef struct _jl_tls_states_t {
     // currently-held locks, to be released when an exception is thrown
     small_arraylist_t locks;
     size_t engine_nqueued;
+    // Per-thread flag set by the GC to indicate this thread may exit
+    // jl_safepoint_wait_gc independently of the global jl_gc_running flag.
+    // Used by ConcurrentImmix incremental stack snapshots. Placed after the
+    // last bindgen-tracked field so it does not perturb offsets the
+    // mmtk-julia Rust binding compiles against.
+    _Atomic(int8_t) gc_early_release;
 
     JULIA_DEBUG_SLEEPWAKE(
         uint64_t uv_run_enter;

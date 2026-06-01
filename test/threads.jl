@@ -587,3 +587,25 @@ let once = OncePerTask{Int}(() -> error("expected"))
     @test_throws ErrorException("expected") once()
     @test_throws ErrorException("expected") once()
 end
+
+@testset "ConcurrentImmix incremental stack snapshots" begin
+    # Only meaningful when built with mmtk. Probe for an mmtk symbol; if it
+    # isn't present, the build isn't an mmtk build and we skip.
+    using Libdl
+    handle = Libdl.dlopen_e(Libdl.dlpath("libjulia-internal"))
+    if handle == C_NULL || Libdl.dlsym_e(handle, :mmtk_gc_init) == C_NULL
+        @test_skip "not an mmtk build"
+    else
+        # Allocate heavily from many threads and force several GC cycles.
+        # If per-mutator early release deadlocks or races with SATB, we
+        # expect to either hang here or see a crash on heap consistency.
+        Threads.@threads for _ in 1:Threads.nthreads()
+            local data = Vector{Vector{Int}}()
+            for _ in 1:1000
+                push!(data, rand(Int, 64))
+            end
+            GC.gc()
+        end
+        @test true
+    end
+end
