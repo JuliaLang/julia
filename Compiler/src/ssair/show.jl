@@ -10,7 +10,7 @@ import Base: show
 using Base: isexpr, prec_decl, show_unquoted, with_output_color
 using .Compiler: ALWAYS_FALSE, ALWAYS_TRUE, argextype, BasicBlock, block_for_inst,
     CachedMethodTable, CFG, compute_basic_blocks, DebugInfoStream, Effects,
-    EMPTY_SPTYPES, getdebugidx, IncrementalCompact, InferenceResult, InferenceState,
+    EMPTY_SPTYPES, IncrementalCompact, InferenceResult, InferenceState,
     InvalidIRError, IRCode, LimitedAccuracy, NativeInterpreter, scan_ssa_use!,
     singleton_type, sptypes_from_meth_instance, StmtRange, Timings, VarState, widenconst,
     get_ci_mi, get_ci_abi
@@ -378,14 +378,18 @@ function debuginfo_file1(debuginfo::Union{DebugInfo,DebugInfoStream})
 end
 
 # utility function to extract the first line number and file of a block of code
-function debuginfo_firstline(debuginfo::Union{DebugInfo,DebugInfoStream})
-    linetable = debuginfo.linetable
-    while linetable !== nothing
-        debuginfo = linetable
-        linetable = debuginfo.linetable
+function debuginfo_firstline(di::DebugInfoStream)
+    if di.linetable isa DebugInfo
+        di = di.linetable
+        debuginfo_firstline(di)
+    else
+        # likely doesn't contain any usable provenance
+        debuginfo_file1(debuginfo), di.firstline
     end
-    codeloc = getdebugidx(debuginfo, 0)
-    return debuginfo_file1(debuginfo), codeloc[1]
+end
+function debuginfo_firstline(di::DebugInfo)
+    firstline = ccall(:jl_cdi_firstline_all, Int32, (Any,), di)
+    debuginfo_file1(di), firstline
 end
 
 struct LineInfoNode
@@ -399,25 +403,26 @@ end
 # Returns `false` if the line info should not be updated with this info because this
 # statement has no effect on the line numbers. The `scopes` will still be populated however
 # with as much information as was available about the inlining at that statement.
-function append_scopes!(scopes::Vector{LineInfoNode}, pc::Int, debuginfo, @nospecialize(def))
+function append_scopes!(scopes::Vector{LineInfoNode}, pc::Int, di, @nospecialize(def))
     doupdate = true
-    while true
-        debuginfo.def isa Symbol || (def = debuginfo.def)
-        codeloc = getdebugidx(debuginfo, pc)
-        line::Int = codeloc[1]
-        inl_to::Int = codeloc[2]
-        doupdate &= line != 0 || inl_to != 0 # disabled debug info--no update
-        if debuginfo.linetable === nothing || pc <= 0 || line < 0
-            line < 0 && (doupdate = false; line = 0) # broken debug info
-            push!(scopes, LineInfoNode(def, debuginfo_file1(debuginfo), Int32(line)))
+    while di !== nothing
+        di.def isa Symbol || (def = di.def)
+        if pc <= 0
+            push!(scopes, LineInfoNode(def, debuginfo_file1(di), Int32(0)))
+            return false
+        elseif !Base.Compiler.has_prev_debuginfo(di, pc)
+            line = Base.Compiler.source_location(di, pc).line # TODO: column ignored here
+            (line < 0) && (doupdate = false; line = 0) # broken debug info
+            push!(scopes, LineInfoNode(def, debuginfo_file1(di), Int32(line)))
         else
-            doupdate = append_scopes!(scopes, line, debuginfo.linetable::DebugInfo, def) && doupdate
+            di2, pc2 = Base.Compiler.prev_debuginfo(di, pc)
+            doupdate &= append_scopes!(scopes, pc2, di2, def)
         end
-        inl_to == 0 && return doupdate
         def = :var"macro expansion"
-        debuginfo = debuginfo.edges[inl_to]
-        pc::Int = codeloc[3]
+        di, pc = Base.Compiler.edge_debuginfo(di, pc)
+        doupdate |= di !== nothing
     end
+    return doupdate
 end
 
 # utility wrapper around `append_scopes!` that returns an empty list instead of false
