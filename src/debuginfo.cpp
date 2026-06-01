@@ -539,7 +539,7 @@ static int lookup_pointer(
             // column, it is a PC into the first (non-inlined) frame.  Move it
             // there for sanity.
             jl_frame_t *frame0 = &(*frames)[n_frames - 1];
-            assert((frame0->pc == 0 || frame0->pc == (int)info.Column) && "please be true");
+            assert((frame0->pc == 0 || frame0->pc == (int)info.Column) && "conflicting pcs");
             frame0->pc = info.Column;
         }
         std::string file_name(info.FileName);
