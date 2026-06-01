@@ -8,6 +8,7 @@
 extern void look_at_value(jl_value_t *v);
 extern void process_unrooted(jl_value_t *maybe_unrooted JL_MAYBE_UNROOTED);
 extern void jl_gc_safepoint();
+extern void jl_gc_push_arraylist(jl_ptls_t ptls, arraylist_t *list) JL_NOTSAFEPOINT;
 
 void unrooted_argument() {
     look_at_value((jl_value_t*)jl_svec1(NULL)); // expected-warning{{Passing non-rooted value as argument to function that may GC}}
@@ -253,6 +254,20 @@ int pushargs_roots_freed() {
   jl_svec_t *val = jl_svec1(NULL); // expected-note{{Started tracking value here}}
   JL_GC_PUSHARGS(margs, 1); // expected-note{{GC frame changed here}}
   margs[0] = (jl_value_t*)val; // expected-note{{Value was rooted here}}
+  JL_GC_POP(); // expected-note{{GC frame changed here}}
+               // expected-note@-1{{Root was released here}}
+  jl_gc_safepoint(); // expected-note{{Value may have been GCed here}}
+  return val->length == 1; // expected-warning{{Trying to access value which may have been GCed}}
+                           // expected-note@-1{{Trying to access value which may have been GCed}}
+}
+
+int arraylist_push_pop_releases_items(jl_ptls_t ptls) {
+  jl_svec_t *val = jl_svec1(NULL); // expected-note{{Started tracking value here}}
+  arraylist_t list = {3, 3, (void**)&val, {NULL}};
+  jl_gc_push_arraylist(ptls, &list); // expected-note{{GC frame changed here}}
+                                     // expected-note@-1{{Value was rooted here}}
+  jl_gc_safepoint();
+  look_at_value((jl_value_t*)val);
   JL_GC_POP(); // expected-note{{GC frame changed here}}
                // expected-note@-1{{Root was released here}}
   jl_gc_safepoint(); // expected-note{{Value may have been GCed here}}
@@ -683,6 +698,10 @@ extern void test_rooted_by_arg_store(jl_svec_t *holder JL_PROPAGATES_ROOT,
 extern void test_rooted_by_arg_store_pair(jl_svec_t *holder JL_PROPAGATES_ROOT,
                                           size_t i, jl_value_t *first JL_ROOTED_BY_ARG(0),
                                           jl_value_t *second JL_ROOTED_BY_ARG(0)) JL_NOTSAFEPOINT;
+extern void test_rooted_by_arg_store_with_flag(jl_svec_t *holder JL_PROPAGATES_ROOT,
+                                               jl_sym_t *key,
+                                               jl_value_t *value JL_ROOTED_BY_ARG(0),
+                                               int flag) JL_NOTSAFEPOINT;
 extern void test_out_rooted_by_arg(jl_method_instance_t *mi JL_PROPAGATES_ROOT,
                                    jl_code_instance_t **out JL_OUT_ROOTED_BY_ARG(0)) JL_NOTSAFEPOINT;
 extern jl_genericmemoryref_t test_memoryref_from_memory(jl_genericmemory_t *mem JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
@@ -716,6 +735,23 @@ void rooted_by_arg_indexed_pair_keeps_both_values_live(void)
     jl_gc_safepoint();
     look_at_value(first_alias);
     look_at_value(second_alias);
+    JL_GC_POP();
+}
+
+void rooted_by_arg_unrelated_integer_does_not_replace_field(void)
+{
+    jl_svec_t *holder = NULL;
+    jl_value_t *old_child = NULL;
+    jl_value_t *new_child = NULL;
+    JL_GC_PUSH3(&holder, &old_child, &new_child);
+    old_child = (jl_value_t*)jl_svec1(NULL);
+    new_child = (jl_value_t*)jl_svec1(NULL);
+    holder = jl_svec1(old_child);
+    jl_value_t *old_alias = old_child;
+    old_child = NULL;
+    test_rooted_by_arg_store_with_flag(holder, NULL, new_child, 0);
+    jl_gc_safepoint();
+    look_at_value(old_alias);
     JL_GC_POP();
 }
 
@@ -774,12 +810,21 @@ void stack_rooted(jl_value_t *lb JL_MAYBE_UNROOTED, jl_value_t *ub JL_MAYBE_UNRO
 }
 
 // These cover graph-root edges that are easy to lose during GCChecker refactors.
-void argument_root_slot_store_keeps_value_live(jl_value_t **slot)
+void argument_root_slot_store_keeps_value_live(jl_value_t **slot JL_REQUIRE_ROOTED_SLOT)
 {
     jl_value_t *v = (jl_value_t*)jl_svec1(NULL);
     *slot = v;
     jl_gc_safepoint();
     look_at_value(v);
+}
+
+void unannotated_argument_buffer_store_does_not_root(jl_value_t **slot)
+{
+    jl_value_t *v = (jl_value_t*)jl_svec1(NULL); // expected-note{{Started tracking value here}}
+    *slot = v;
+    jl_gc_safepoint(); // expected-note{{Value may have been GCed here}}
+    look_at_value(v); // expected-warning{{Argument value may have been GCed}}
+                      // expected-note@-1{{Argument value may have been GCed}}
 }
 
 void dynamic_root_array_element_keeps_value_live(size_t n)
@@ -919,6 +964,14 @@ void globally_rooted_atomic_array_entry_keeps_value_live(size_t i)
     jl_typemap_entry_t *entry = jl_atomic_load_relaxed(&test_atomic_call_cache[i & 7]);
     if (entry && test_maybe_safepoint_match((jl_typemap_entry_t*)jl_svec_data(entry->sig->parameters)))
         (void)jl_atomic_load_relaxed(&entry->min_world);
+}
+
+void module_arraylist_carrier_reports_freed_parent(jl_module_t *m JL_MAYBE_UNROOTED) // expected-note{{Argument was annotated as MAYBE_UNROOTED}}
+{
+    arraylist_t *usings = &m->usings;
+    jl_gc_safepoint(); // expected-note{{Value may have been GCed here}}
+    (void)usings->len; // expected-warning{{Trying to access value which may have been GCed}}
+                       // expected-note@-1{{Trying to access value which may have been GCed}}
 }
 
 typedef struct {

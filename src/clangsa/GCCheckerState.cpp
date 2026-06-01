@@ -588,7 +588,7 @@ GCChecker::bindRegionToSVal(ProgramStateRef State, const MemRegion *Region,
 
 ProgramStateRef GCChecker::bindRootRegionToCurrentValue(
     ProgramStateRef State, const MemRegion *Region, QualType ValueType,
-    CheckerContext &C) const {
+    CheckerContext &C, RootValueBinding Binding) const {
   if (!Region)
     return State;
   if (ValueType.isNull()) {
@@ -596,10 +596,16 @@ ProgramStateRef GCChecker::bindRootRegionToCurrentValue(
       ValueType = TVR->getValueType();
   }
   SVal Value = State->getSVal(Region);
-  SymbolRef ValueSym = Value.getAsSymbol(true);
   GCObjectSet ValueObjects = getObjectsForSVal(State, Value);
   bool HasGCObjectValue = !ValueObjects.isEmpty();
-  if ((Value.isUnknown() || !HasGCObjectValue) && !ValueType.isNull() &&
+  bool MayBeUnknownObject =
+      Value.isUnknown() || Value.getAsSymbol(true) || Value.getAsRegion();
+  bool ShouldConjure =
+      (Binding == RootValueBinding::ConjureUnknownOnly &&
+       MayBeUnknownObject && !Value.isZeroConstant() && !HasGCObjectValue) ||
+      (Binding == RootValueBinding::ConjurePossibleOutValue &&
+       !HasGCObjectValue);
+  if (ShouldConjure && !ValueType.isNull() &&
       isGCTrackedType(ValueType)) {
     Value = C.getSValBuilder().conjureSymbolVal(
         nullptr, C.getCFGElementRef(), C.getLocationContext(), ValueType,
@@ -869,15 +875,11 @@ bool GCChecker::isRootingRegion(const ProgramStateRef &State,
   Region = Region->StripCasts();
   if (State->contains<GCPermanentRootRegions>(Region))
     return true;
+  if (State->get<GCRootMap>(Region))
+    return true;
   if (const auto *ER = Region->getAs<ElementRegion>()) {
     if (isRootingRegion(State, ER->getSuperRegion()))
       return true;
-  }
-  GCRootFrameMapTy Frames = State->get<GCRootFrameMap>();
-  for (auto I = Frames.begin(), E = Frames.end(); I != E; ++I) {
-    for (const MemRegion *Root : I.getData())
-      if (Root && Root->StripCasts() == Region)
-        return true;
   }
   return false;
 }

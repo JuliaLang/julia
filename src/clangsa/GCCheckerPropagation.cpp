@@ -47,9 +47,7 @@ bool GCChecker::propagateArgumentRootedness(CheckerContext &C,
   for (const auto P : FD->parameters()) {
     unsigned ArgIdx = idx++;
     bool IsRootSlotParam =
-        P->getType()->isPointerType() &&
-        P->getType()->getPointeeType()->isPointerType() &&
-        isGCTrackedType(P->getType()->getPointeeType());
+        declHasAnnotation(P, "julia_require_rooted_slot");
     if (!IsRootSlotParam && !isGCObjectType(P->getType()))
       continue;
 
@@ -191,20 +189,6 @@ void GCChecker::checkBeginFunction(CheckerContext &C) const {
             State, Root, P->getType()->getPointeeType(), C);
         Change = true;
       }
-    } else if (P->getType()->isPointerType() &&
-               P->getType()->getPointeeType()->isPointerType() &&
-               isGCTrackedType(P->getType()->getPointeeType())) {
-      auto Param = State->getLValue(P, LCtx);
-      SVal ParamValue =
-          getOrConjurePointerValue(Param, P->getType(), State, C);
-      const MemRegion *Root = getRegionForPointerValue(ParamValue, C);
-      if (Root) {
-        Root = Root->StripCasts();
-        State = State->set<GCRootMap>(Root, -1);
-        State = addPermanentRoot(State, Root);
-        State = State->add<GCConservativeRootRegions>(Root);
-        Change = true;
-      }
     } else if (isGCObjectType(P->getType())) {
       auto Param = State->getLValue(P, LCtx);
       SVal AssignedValue = State->getSVal(Param);
@@ -307,6 +291,8 @@ GCChecker::declHasIndexedAnnotation(const clang::Decl *D, StringRef Prefix) {
 }
 
 bool GCChecker::isFDAnnotatedNotSafepoint(const clang::FunctionDecl *FD, const SourceManager &SM) {
+  if (!FD)
+      return false;
   if (declHasAnnotation(FD, "julia_not_safepoint"))
       return true;
   SourceLocation Loc = FD->getLocation();
@@ -633,15 +619,6 @@ bool GCChecker::processArgumentRooting(const CallEvent &Call, CheckerContext &C,
   const FunctionDecl *FD = Decl ? Decl->getAsFunction() : nullptr;
   if (!FD)
     return false;
-  std::optional<NonLoc> Index;
-  for (unsigned i = 0; i < FD->getNumParams(); ++i) {
-    if (!Index && i < Call.getNumArgs() &&
-        Call.getArgSVal(i).getAs<NonLoc>()) {
-      SVal Converted = C.getSValBuilder().convertToArrayIndex(Call.getArgSVal(i));
-      if (auto ConvertedIndex = Converted.getAs<NonLoc>())
-        Index = *ConvertedIndex;
-    }
-  }
 
   auto getRooterObjects = [&](unsigned RooterIdx) {
     if (RooterIdx >= Call.getNumArgs())
@@ -749,17 +726,36 @@ bool GCChecker::processArgumentRooting(const CallEvent &Call, CheckerContext &C,
 
   bool Changed = false;
 
-  auto rooterUsesIndex = [&](unsigned RooterIdx) {
+  auto getRootedByArgIndex = [&](unsigned RooterIdx,
+                                 unsigned RootedIdx) -> std::optional<NonLoc> {
+    if (RooterIdx >= RootedIdx)
+      return std::nullopt;
+    for (unsigned i = RooterIdx + 1; i < RootedIdx && i < Call.getNumArgs();
+         ++i) {
+      if (!Call.getArgSVal(i).getAs<NonLoc>())
+        continue;
+      SVal Converted =
+          C.getSValBuilder().convertToArrayIndex(Call.getArgSVal(i));
+      if (auto ConvertedIndex = Converted.getAs<NonLoc>())
+        return *ConvertedIndex;
+    }
+    return std::nullopt;
+  };
+
+  auto rooterUsesIndex = [&](unsigned RooterIdx,
+                             std::optional<NonLoc> Index) {
     if (!Index)
       return false;
     return RooterIdx >= FD->getNumParams() ||
            !isGenericMemoryRefType(FD->getParamDecl(RooterIdx)->getType());
   };
 
-  auto addRootingEdges = [&](unsigned RooterIdx, GCObjectSet RootedObjects) {
+  auto addRootingEdges = [&](unsigned RooterIdx,
+                             std::optional<NonLoc> Index,
+                             GCObjectSet RootedObjects) {
     GCObjectSet ParentObjects = getRooterObjects(RooterIdx);
     if (!ParentObjects.isEmpty()) {
-      if (rooterUsesIndex(RooterIdx)) {
+      if (rooterUsesIndex(RooterIdx, Index)) {
         for (GCObject ParentObject : ParentObjects) {
           const MemRegion *ChildRegion =
               getIndexedObjectRegion(ParentObject, *Index, C);
@@ -782,7 +778,12 @@ bool GCChecker::processArgumentRooting(const CallEvent &Call, CheckerContext &C,
     return false;
   };
 
-  llvm::SmallVector<std::pair<unsigned, GCObjectSet>, 4> RootedByRooter;
+  struct RootedByArgEntry {
+    unsigned Rooter;
+    std::optional<NonLoc> Index;
+    GCObjectSet Objects;
+  };
+  llvm::SmallVector<RootedByArgEntry, 4> RootedByRooter;
   for (unsigned i = 0; i < FD->getNumParams(); ++i) {
     if (i >= Call.getNumArgs())
       break;
@@ -791,21 +792,22 @@ bool GCChecker::processArgumentRooting(const CallEvent &Call, CheckerContext &C,
     if (!Rooter)
       continue;
     GCObjectSet RootedObjects = getRootedObjects(i);
+    std::optional<NonLoc> Index = getRootedByArgIndex(*Rooter, i);
     bool Found = false;
     for (auto &Entry : RootedByRooter) {
-      if (Entry.first != *Rooter)
+      if (Entry.Rooter != *Rooter || Entry.Index != Index)
         continue;
       for (GCObject Object : RootedObjects)
-        Entry.second = State->get_context<GCObjectSet>().add(Entry.second,
+        Entry.Objects = State->get_context<GCObjectSet>().add(Entry.Objects,
                                                              Object);
       Found = true;
       break;
     }
     if (!Found)
-      RootedByRooter.push_back({*Rooter, RootedObjects});
+      RootedByRooter.push_back({*Rooter, Index, RootedObjects});
   }
   for (const auto &Entry : RootedByRooter)
-    Changed |= addRootingEdges(Entry.first, Entry.second);
+    Changed |= addRootingEdges(Entry.Rooter, Entry.Index, Entry.Objects);
 
   for (unsigned i = 0; i < FD->getNumParams(); ++i) {
     if (i >= Call.getNumArgs())
@@ -847,7 +849,9 @@ bool GCChecker::processArgumentRooting(const CallEvent &Call, CheckerContext &C,
     QualType ParamType = FD->getParamDecl(i)->getType();
     if (ParamType->isPointerType())
       OutType = ParamType->getPointeeType();
-    State = bindRootRegionToCurrentValue(State, OutRegion, OutType, C);
+    State = bindRootRegionToCurrentValue(
+        State, OutRegion, OutType, C,
+        RootValueBinding::ConjurePossibleOutValue);
     GCObjectSet OutObjects = getObjectsForRegion(State, OutRegion);
     SVal OutValue = State->getSVal(OutRegion);
     if (OutObjects.isEmpty()) {
@@ -1361,9 +1365,18 @@ void GCChecker::checkPostStmt(const ArraySubscriptExpr *ASE,
 void GCChecker::checkPostStmt(const MemberExpr *ME, CheckerContext &C) const {
   if (isAssignmentLHS(ME, C))
     return;
-  if (!isGCTracked(ME))
-    return;
   clang::Expr *Base = ME->getBase();
+  if (!isGCTracked(ME)) {
+    // Keep non-GC carrier fields that are known to expose GC-owned storage.
+    bool ParentIsModule = isJuliaType(
+        [](StringRef Name) { return Name.ends_with("jl_module_t"); },
+        Base->getType());
+    bool ResultIsArrayList = isJuliaType(
+        [](StringRef Name) { return Name.ends_with("arraylist_t"); },
+        ME->getType());
+    if (!(ParentIsModule && ResultIsArrayList))
+      return;
+  }
   checkDerivingExpr(ME, Base, C);
 }
 
@@ -1381,6 +1394,7 @@ void GCChecker::checkPreCall(const CallEvent &Call, CheckerContext &C) const {
     return;
   unsigned NumArgs = Call.getNumArgs();
   ProgramStateRef State = C.getState();
+  bool DidChange = false;
   bool isCalleeSafepoint = isSafepoint(Call, C);
   auto *Decl = Call.getDecl();
   const FunctionDecl *FD = Decl ? Decl->getAsFunction() : nullptr;
@@ -1439,7 +1453,7 @@ void GCChecker::checkPreCall(const CallEvent &Call, CheckerContext &C) const {
       }
     }
     if (Sym)
-      rootRegionIfGlobal(Sym->getOriginRegion(), State, C);
+      DidChange |= rootRegionIfGlobal(Sym->getOriginRegion(), State, C);
     GCObjectSet ArgObjects = getObjectsForSymbol(State, Sym);
     if (ArgObjects.isEmpty())
       ArgObjects = getObjectsForSVal(State, Arg);
@@ -1500,6 +1514,8 @@ void GCChecker::checkPreCall(const CallEvent &Call, CheckerContext &C) const {
           range);
     }
   }
+  if (DidChange)
+    C.addTransition(State);
 }
 
 bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
@@ -1624,8 +1640,7 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
     C.addTransition(State);
     return true;
   } else if (name == "jl_gc_push_arraylist") {
-    CurrentDepth += 1;
-    ProgramStateRef State = C.getState()->set<GCDepth>(CurrentDepth);
+    ProgramStateRef State = C.getState();
     SVal ArrayList = C.getSVal(CE->getArg(1));
     // Try to find the items field
     FieldDecl *FD = NULL;
@@ -1640,7 +1655,12 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
       }
     }
     if (FD) {
-      Loc ItemsLoc = *(State->getLValue(FD, ArrayList).getAs<Loc>());
+      auto ItemsLocOpt = State->getLValue(FD, ArrayList).getAs<Loc>();
+      if (!ItemsLocOpt) {
+        C.addTransition(State);
+        return true;
+      }
+      Loc ItemsLoc = *ItemsLocOpt;
       SVal Items = State->getSVal(ItemsLoc);
       if (Items.isUnknown()) {
         Items = C.getSValBuilder().conjureSymbolVal(
@@ -1650,9 +1670,17 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
       }
       assert(Items.getAsRegion());
       // The items list is now rooted
-      State = State->set<GCRootMap>(Items.getAsRegion(), (int)CurrentDepth);
-      State = addFrameRoot(State, CurrentDepth, Items.getAsRegion(), C);
+      if (const MemRegion *ItemsFieldRegion = ItemsLoc.getAsRegion()) {
+        State = State->set<GCRootMap>(ItemsFieldRegion, (int)CurrentDepth);
+        State = addFrameRoot(State, CurrentDepth, ItemsFieldRegion, C);
+      }
+      if (const MemRegion *ItemsRegion = Items.getAsRegion()) {
+        State = State->set<GCRootMap>(ItemsRegion, (int)CurrentDepth);
+        State = addFrameRoot(State, CurrentDepth, ItemsRegion, C);
+      }
     }
+    CurrentDepth += 1;
+    State = State->set<GCDepth>(CurrentDepth);
     C.addTransition(State);
     return true;
   } else if (name == "jl_ast_preserve") {

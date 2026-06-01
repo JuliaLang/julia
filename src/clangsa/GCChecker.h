@@ -93,6 +93,10 @@ public:
   using GCObjectSet = llvm::ImmutableSet<GCObject>;
   using GCRegionSet = llvm::ImmutableSet<const MemRegion *>;
   using GCRootList = llvm::ImmutableList<const MemRegion *>;
+  enum class RootValueBinding {
+    ConjureUnknownOnly,
+    ConjurePossibleOutValue,
+  };
 
   struct LivenessState {
     enum State { Allocated, PotentiallyFreed, Untracked } S;
@@ -230,7 +234,10 @@ private:
   ProgramStateRef bindRootRegionToCurrentValue(ProgramStateRef State,
                                                const MemRegion *Region,
                                                QualType ValueType,
-                                               CheckerContext &C) const;
+                                               CheckerContext &C,
+                                               RootValueBinding Binding =
+                                                   RootValueBinding::
+                                                       ConjureUnknownOnly) const;
   const MemRegion *getStorageRegionForExpr(const Expr *E,
                                            ProgramStateRef State,
                                            CheckerContext &C) const;
