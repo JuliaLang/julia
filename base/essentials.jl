@@ -540,6 +540,7 @@ ERROR: ArgumentError: Cannot call tail on an empty tuple.
 """
 tail(x::Tuple) = argtail(x...)
 tail(::Tuple{}) = throw(ArgumentError("Cannot call tail on an empty tuple."))
+typeof(tail).name.max_methods = UInt8(1)
 
 function unwrap_unionall(@nospecialize(a))
     @_foldable_meta
