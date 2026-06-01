@@ -2893,6 +2893,187 @@ end
     end
 end
 
+# Ensure TypeEq objects that refer to newly-created DataType-like values are
+# retained correctly across package image save/restore.
+@testset "precompile TypeEq references to new datatypes" begin
+    mkdepottempdir() do depot
+        project_path = joinpath(depot, "testenv")
+        dev_path = joinpath(depot, "dev")
+        mkpath(project_path)
+        mkpath(dev_path)
+
+        trigger_uuid     = "10000000-0000-0000-0000-000000000103"
+        parent_uuid      = "10000000-0000-0000-0000-000000000104"
+
+        trigger_dir = joinpath(dev_path, "TypeEqTrigger")
+        mkpath(joinpath(trigger_dir, "src"))
+        write(joinpath(trigger_dir, "Project.toml"), """
+            name = "TypeEqTrigger"
+            uuid = "$trigger_uuid"
+            version = "0.1.0"
+            """)
+        write(joinpath(trigger_dir, "src", "TypeEqTrigger.jl"), """
+            module TypeEqTrigger
+            macro latestworld_if_toplevel()
+                Expr(Symbol("latestworld-if-toplevel"))
+            end
+            workload() = tuple(values(Dict(:a => 1))...)
+            if ccall(:jl_generating_output, Cint, ()) == 1
+                ccall(:jl_tag_newly_inferred_enable, Cvoid, ())
+                try
+                    @latestworld_if_toplevel
+                    workload()
+                finally
+                    ccall(:jl_tag_newly_inferred_disable, Cvoid, ())
+                end
+            end
+            end
+            """)
+
+        parent_dir = joinpath(dev_path, "TypeEqParent")
+        mkpath(joinpath(parent_dir, "src"))
+        mkpath(joinpath(parent_dir, "ext"))
+        write(joinpath(parent_dir, "Project.toml"), """
+            name = "TypeEqParent"
+            uuid = "$parent_uuid"
+            version = "0.1.0"
+
+            [weakdeps]
+            TypeEqTrigger = "$trigger_uuid"
+
+            [extensions]
+            TypeEqTriggerExt = "TypeEqTrigger"
+            """)
+        write(joinpath(parent_dir, "src", "TypeEqParent.jl"), """
+            module TypeEqParent
+            import Base: range
+
+            abstract type Colorant{T,N} end
+            abstract type Color{T,N} <: Colorant{T,N} end
+            abstract type TransparentColor{C<:Color,T,N} <: Colorant{T,N} end
+            abstract type AlphaColor{C<:Color,T,N} <: TransparentColor{C,T,N} end
+            abstract type ColorAlpha{C<:Color,T,N} <: TransparentColor{C,T,N} end
+            ColorantN{N,T} = Colorant{T,N}
+
+            struct HSV{T<:AbstractFloat} <: Color{T,3}
+                h::T
+                s::T
+                v::T
+            end
+            struct AHSV{T<:AbstractFloat} <: AlphaColor{HSV{T},T,4}
+                alpha::T
+                h::T
+                s::T
+                v::T
+            end
+            struct HSVA{T<:AbstractFloat} <: ColorAlpha{HSV{T},T,4}
+                h::T
+                s::T
+                v::T
+                alpha::T
+            end
+
+            struct ComponentIterator{C<:Colorant}
+                c::C
+            end
+            Base.eltype(::Type{ComponentIterator{C}}) where {T, C <: Colorant{T}} = T
+            Base.length(::ComponentIterator{C}) where {N, C <: ColorantN{N}} = N
+            Base.iterate(itr::ComponentIterator{C}, state::Int=0) where {N, C <: ColorantN{N}} =
+                state >= N ? nothing : (itr[state + 1], state + 1)
+            Base.getindex(itr::ComponentIterator{C}, i::Integer) where {N, C <: ColorantN{N}} =
+                i == 1 ? getfield(itr.c, 1) :
+                i == 2 ? getfield(itr.c, 2) :
+                i == 3 ? getfield(itr.c, 3) :
+                         getfield(itr.c, 4)
+            Base.getindex(itr::ComponentIterator, r::AbstractRange) = Tuple(itr[i] for i in r)
+            Base.getindex(itr::ComponentIterator, ::Colon) = itr
+            Base.firstindex(::ComponentIterator) = 1
+            Base.lastindex(itr::ComponentIterator) = length(itr)
+            Base.BroadcastStyle(::Type{<:ComponentIterator{C}}) where {T, N, C <: Colorant{T,N}} =
+                Base.BroadcastStyle(NTuple{N,T})
+            Base.axes(::ComponentIterator{C}) where {N, C <: ColorantN{N}} = (Base.OneTo(N),)
+            Base.ndims(::Type{ComponentIterator{C}}) where {C} = 1
+            Base.broadcastable(itr::ComponentIterator{C}) where {T, N, C <: Colorant{T,N}} =
+                (itr...,)::NTuple{N,T}
+
+            comps(c::Colorant) = ComponentIterator(c)
+            base_colorant_type(::Type{C}) where {C<:Colorant} = Base.typename(C).wrapper
+            base_colorant_type(c::Colorant) = base_colorant_type(typeof(c))
+            mapc(f::F, x, y) where {F} = base_colorant_type(x)(f.(comps(x), comps(y))...)
+
+            weighted_color_mean(w1::Real, c1::C, c2::C) where
+                {Cb<:HSV, C<:Union{AlphaColor{Cb},ColorAlpha{Cb}}} =
+                    mapc((x, y) -> x, c1, c2)
+
+            range(start::T; stop::T, length::Integer=100) where T<:Colorant =
+                T[weighted_color_mean(w1, start, stop) for w1 in range(1.0, stop=0.0, length=length)]
+            range(start::T, stop::T; kwargs...) where T<:Colorant = range(start; stop=stop, kwargs...)
+
+            macro latestworld_if_toplevel()
+                Expr(Symbol("latestworld-if-toplevel"))
+            end
+            function workload()
+                for T in (Float64, Int)
+                    range(one(T), T(2); length=2)
+                end
+            end
+            if ccall(:jl_generating_output, Cint, ()) == 1
+                ccall(:jl_tag_newly_inferred_enable, Cvoid, ())
+                try
+                    @latestworld_if_toplevel
+                    workload()
+                finally
+                    ccall(:jl_tag_newly_inferred_disable, Cvoid, ())
+                end
+            end
+            end
+            """)
+        write(joinpath(parent_dir, "ext", "TypeEqTriggerExt.jl"), """
+            module TypeEqTriggerExt
+            import TypeEqParent
+            end
+            """)
+
+        write(joinpath(project_path, "Project.toml"), """
+            [deps]
+            TypeEqParent = "$parent_uuid"
+            TypeEqTrigger = "$trigger_uuid"
+            """)
+        write(joinpath(project_path, "Manifest.toml"), """
+            manifest_format = "2.0"
+
+            [[deps.TypeEqParent]]
+            path = "../dev/TypeEqParent"
+            uuid = "$parent_uuid"
+            version = "0.1.0"
+
+            [deps.TypeEqParent.weakdeps]
+            TypeEqTrigger = "$trigger_uuid"
+
+            [deps.TypeEqParent.extensions]
+            TypeEqTriggerExt = "TypeEqTrigger"
+
+            [[deps.TypeEqTrigger]]
+            path = "../dev/TypeEqTrigger"
+            uuid = "$trigger_uuid"
+            version = "0.1.0"
+            """)
+
+        original_depot_path = copy(Base.DEPOT_PATH)
+        old_proj = Base.active_project()
+        try
+            push!(empty!(DEPOT_PATH), depot)
+            Base.set_active_project(project_path)
+            Base.Precompilation.precompilepkgs(; io=IOBuffer(), fancyprint=false)
+            @test Base.require(Main, :TypeEqParent) isa Module
+            @test Base.require(Main, :TypeEqTrigger) isa Module
+        finally
+            Base.set_active_project(old_proj)
+            append!(empty!(DEPOT_PATH), original_depot_path)
+        end
+    end
+end
+
 # Issue #61198 - extensions with superset triggers must be in the precompilation dep graph
 @testset "precompilation dep graph includes transitively-triggered extensions" begin
     mkdepottempdir() do depot

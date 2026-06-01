@@ -597,4 +597,19 @@ end
     return getfield(x, s)
 end
 
+@noinline function typename(x::TypeEq)
+    depwarn("calling `typename` on `Type` is deprecated; use `Base.isType(x)` instead", :typename)
+    return TypeEq.name
+end
+
+@noinline function nameof(x::TypeEq)
+    depwarn("calling `nameof` on `Type` is deprecated; use `Base.isType(x)` instead", :nameof)
+    return :Type
+end
+
+@noinline function parentmodule(x::TypeEq)
+    depwarn("calling `parentmodule` on `Type` is deprecated; use `Base.isType(x)` instead", :parentmodule)
+    return Core
+end
+
 # END 1.14 deprecations

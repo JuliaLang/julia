@@ -189,6 +189,7 @@ function _typename(a::Union)
 end
 _typename(union::UnionAll) = _typename(union.body)
 _typename(a::DataType) = Const(a.name)
+_typename(a::TypeEq) = Core.TypeName
 
 function tuple_tail_elem(𝕃::AbstractLattice, @nospecialize(init), ct::Vector{Any})
     t = init
