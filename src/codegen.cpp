@@ -9381,12 +9381,16 @@ static jl_llvm_functions_t
     topinfo.is_user_code = mod_is_user_mod;
     topinfo.loc = topdebugloc;
     topinfo.edgeid = 0;
-    std::map<std::tuple<StringRef, StringRef>, DISubprogram*> subprograms;
+    // fname/file are interned symbols or string literals, so pointer identity == content
+    // identity: safe to key on the pointer pair.
+    DenseMap<std::pair<const char*, const char*>, DISubprogram*> subprograms;
     SmallVector<DebugLineTable, 0> prev_lineinfo, new_lineinfo;
+    // jl_cdi_file walks the linetable chain per call; cache its result per debuginfo.
+    DenseMap<jl_debuginfo_t*, const char*> file_cache;
     auto update_lineinfo = [&](size_t outerpc) {
-        std::function<bool(jl_debuginfo_t *, jl_value_t *, size_t, size_t, bool)>
-            append_lineinfo = [&](jl_debuginfo_t *debuginfo, jl_value_t *func, size_t to,
-                                  size_t pc, bool innermost) -> bool {
+        // `self`: recursive call (a generic lambda can't name itself). Nested to capture outerpc.
+        auto append_lineinfo = [&](auto &&self, jl_debuginfo_t *debuginfo, jl_value_t *func,
+                                   size_t to, size_t pc, bool innermost) -> bool {
             while (1) {
                 if (!jl_is_symbol(debuginfo->def)) // this is a path
                     func = debuginfo->def; // this is inlined
@@ -9398,8 +9402,8 @@ static jl_llvm_functions_t
                     return false;
                 if (pc > 0 && jl_is_debuginfo(debuginfo->linetable)) {
                     // indirection node
-                    if (!append_lineinfo((jl_debuginfo_t *)debuginfo->linetable,
-                                         func, to, i, lineidx.to == 0))
+                    if (!self(self, (jl_debuginfo_t *)debuginfo->linetable,
+                              func, to, i, lineidx.to == 0))
                         return false; // no update
                 }
                 else {
@@ -9409,7 +9413,10 @@ static jl_llvm_functions_t
                     jl_module_t *modu = func ? jl_debuginfo_module1(func) : NULL;
                     if (modu == NULL)
                         modu = ctx.module;
-                    info.file = jl_cdi_file(debuginfo);
+                    const char *&cached_file = file_cache[debuginfo];
+                    if (cached_file == NULL)
+                        cached_file = jl_cdi_file(debuginfo);
+                    info.file = cached_file;
                     info.line = i;
                     info.line0 = 0;
                     if (pc == 1) {
@@ -9447,7 +9454,7 @@ static jl_llvm_functions_t
                         }
                         else { // otherwise, describe this as an inlining frame
                             DebugLoc inl_loc = new_lineinfo.empty() ? DebugLoc(DILocation::get(ctx.builder.getContext(), 0, 0, SP, NULL)) : new_lineinfo.back().loc;
-                            DISubprogram *&inl_SP = subprograms[std::make_tuple(fname, info.file)];
+                            DISubprogram *&inl_SP = subprograms[{fname.data(), info.file.data()}];
                             if (inl_SP == NULL) {
                                 DIFile *difile = dbuilder.createFile(info.file, ".");
                                 inl_SP = dbuilder.createFunction(difile
@@ -9479,7 +9486,7 @@ static jl_llvm_functions_t
         };
         prev_lineinfo.truncate(0);
         std::swap(prev_lineinfo, new_lineinfo);
-        bool updated = append_lineinfo(src->debuginfo, (jl_value_t*)lam, 0, outerpc, true);
+        bool updated = append_lineinfo(append_lineinfo, src->debuginfo, (jl_value_t*)lam, 0, outerpc, true);
         if (!updated)
             std::swap(prev_lineinfo, new_lineinfo);
         else
@@ -9773,8 +9780,11 @@ static jl_llvm_functions_t
             mallocVisitStmt(sync_bytes, have_dbg_update);
             // N.B.: For toplevel thunks, we expect world age restore to be handled
             // by the interpreter which invokes us.
-            if (ctx.is_opaque_closure)
+            if (ctx.is_opaque_closure) {
+                // both set under the same is_opaque_closure guard above; assert for the analyzer.
+                assert(last_age && world_age_field);
                 ctx.builder.CreateStore(last_age, world_age_field);
+            }
             assert(type_is_ghost(retty) || returninfo.cc == jl_returninfo_t::SRet ||
                 retval->getType() == ctx.f->getReturnType());
             ctx.builder.CreateRet(retval);
