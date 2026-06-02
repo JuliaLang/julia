@@ -1302,6 +1302,16 @@ STATIC_INLINE int jl_is_va_tuple(jl_datatype_t *t) JL_NOTSAFEPOINT
     return (l>0 && jl_is_vararg(jl_tparam(t,l-1)));
 }
 
+// `Type{Union{}}` (a `TypeEq`) is laid out as the singleton `typeof(Union{})`
+// `DataType`. Code that inspects a field's declared type for layout purposes
+// must use this normalized form, otherwise it sees a non-`DataType` kind.
+STATIC_INLINE jl_value_t *normalize_typeofbottom_layout_alias(jl_value_t *ty JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    if (jl_typeofbottom_type != NULL && jl_is_typeeq(ty) && jl_typeeq_T(ty) == jl_bottom_type)
+        return (jl_value_t*)jl_typeofbottom_type;
+    return ty;
+}
+
 STATIC_INLINE size_t jl_vararg_length(jl_value_t *v) JL_NOTSAFEPOINT
 {
     assert(jl_is_vararg(v));
