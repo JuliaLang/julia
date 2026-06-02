@@ -328,6 +328,7 @@ void jl_init_common_symbols(void)
     jl_sequentially_consistent_sym = jl_symbol("sequentially_consistent");
     jl_uninferred_sym = jl_symbol("uninferred");
     jl_latestworld_sym = jl_symbol("latestworld");
+    jl_trim_sym = jl_symbol("trim");
 }
 
 JL_DLLEXPORT void jl_lisp_prompt(void)

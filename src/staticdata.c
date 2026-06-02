@@ -585,6 +585,27 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             // prevent this from happening, so we do not need to detect that user
             // error now.
         }
+        else if (jl_options.trim) {
+            // Rebuild the `mi->cache` list with any non-:trim-owned CodeInstances removed.
+            jl_code_instance_t *first = NULL;
+            jl_code_instance_t *prev = NULL;
+            jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mi->cache);
+            while (codeinst) {
+                jl_code_instance_t *next = jl_atomic_load_relaxed(&codeinst->next);
+                if (codeinst->owner == (jl_value_t *)jl_trim_sym) {
+                    record_field_change((jl_value_t**)&codeinst->owner, jl_nothing);
+                    if (prev == NULL)
+                        first = codeinst;
+                    else
+                        record_field_change((jl_value_t**)&prev->next, (jl_value_t*)codeinst);
+                    prev = codeinst;
+                }
+                codeinst = next;
+            }
+            if (prev != NULL)
+                record_field_change((jl_value_t**)&prev->next, NULL);
+            record_field_change((jl_value_t**)&mi->cache, (jl_value_t*)first);
+        }
         // don't recurse into all backedges memory (yet)
         jl_value_t *backedges = get_replaceable_field((jl_value_t**)&mi->backedges, 1);
         if (backedges) {
@@ -702,7 +723,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                 }
                 else if (may_discard_trees &&
                          native_functions && // don't delete any code if making a ji file
-                         (ci->owner == jl_nothing) && // don't delete code for external interpreters
+                         (ci->owner == jl_nothing || ci->owner == (jl_value_t*)jl_trim_sym) && // don't delete code for external interpreters
                          !effects_foldable(jl_atomic_load_relaxed(&ci->ipo_purity_bits)) && // don't delete code we may want for irinterp
                          jl_ir_inlining_cost(inferred) == UINT16_MAX) { // don't delete inlineable code
                     // delete the code now: if we thought it was worth keeping, it would have been converted to object code

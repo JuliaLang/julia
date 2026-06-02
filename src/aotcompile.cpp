@@ -449,7 +449,8 @@ static void generate_cfunc_thunks(jl_codegen_output_t &out)
     DenseMap<jl_method_instance_t*, jl_code_instance_t*> compiled_mi;
     for (auto &[ci, _] : out.ci_funcs) {
         jl_method_instance_t *mi = jl_get_ci_mi(ci);
-        if (ci->owner == jl_nothing && jl_atomic_load_relaxed(&ci->max_world) == ~(size_t)0 && ci->def == (jl_value_t*)mi)
+        if ((ci->owner == jl_nothing || ci->owner == (jl_value_t*)jl_trim_sym) &&
+            jl_atomic_load_relaxed(&ci->max_world) == ~(size_t)0 && ci->def == (jl_value_t*)mi)
             compiled_mi[mi] = ci;
     }
     size_t latestworld = jl_atomic_load_acquire(&jl_world_counter);
