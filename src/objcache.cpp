@@ -477,17 +477,19 @@ bool ObjCache::updateATime(MDBTxn &Txn, const Hash &Hash, int64_t Time, bool Fre
 {
     auto ObjKey = toObjKey(Hash);
     MDB_val Key = mdbVal(ObjKey);
-    if (!Fresh) {
-        MDB_val OldData;
-        if (int Err = mdb_get(Txn.Txn, ObjMetaDbi, &Key, &OldData)) {
-            // This is possible if the atime update was queued, but we have
-            // evicted the cache entry in the meantime.  We should not abort the
-            // transaction in that case.
-            if (Err == MDB_NOTFOUND)
-                return true;
+    MDB_val OldData;
+    if (int Err = mdb_get(Txn.Txn, ObjMetaDbi, &Key, &OldData)) {
+        if (Err != MDB_NOTFOUND) {
             checkMDB(Err);
             return false;
         }
+        // This is possible if the atime update was queued, but we have
+        // evicted the cache entry in the meantime.  We should not abort the
+        // transaction in that case.
+        if (!Fresh)
+            return true;
+    }
+    else {
         assert(OldData.mv_size == sizeof(int64_t));
         int64_t OldTime;
         memcpy(&OldTime, OldData.mv_data, sizeof OldTime);
