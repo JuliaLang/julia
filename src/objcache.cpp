@@ -53,8 +53,16 @@ static uint32_t parseEnvFrac31(const char *Name, double Default)
     return (uint32_t)(V * (double)(1ULL << 31));
 }
 
+// We'll use a smaller default cache size on 32 bit, since we have a lot less
+// address space to spare.
+#ifdef _P64
+static constexpr size_t OBJCACHE_DEFAULT_CAPACITY = 512 << 20;
+#else
+static constexpr size_t OBJCACHE_DEFAULT_CAPACITY = 32 << 20;
+#endif
 static const size_t OBJCACHE_CAPACITY =
-    parseEnvU64("JULIA_OBJCACHE_CAPACITY", 128ULL << 20);
+    parseEnvU64("JULIA_OBJCACHE_CAPACITY", OBJCACHE_DEFAULT_CAPACITY);
+
 // When the map is full, evict down to OBJCACHE_EVICT_TO/2^31 capacity.
 static const uint32_t OBJCACHE_EVICT_TO =
     parseEnvFrac31("JULIA_OBJCACHE_EVICT_TO", 0.5);
