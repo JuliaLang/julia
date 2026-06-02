@@ -1870,7 +1870,9 @@ function show(io::IO, it::ImageTarget)
         end
     end
     print(io, ")")
-    # Is feature_dis useful?
+    if !isempty(it.features_dis)
+        print(io, "; features_dis=(", it.features_dis, ")")
+    end
 end
 
 # should sync with the types of arguments of `stale_cachefile`
@@ -4114,16 +4116,16 @@ function stale_prefs(prefs_blob::String)
     for (uuid, observed) in prefs_data
         uuid == "unset" && continue
         curr = get_preferences(UUID(uuid))
-        for (key, val) in observed
+        for (key, val) in observed::Dict{String,Any}
             # any set preferences should have the same value
             !haskey(curr, key) && return true
             !toml_egal(curr[key], val) && return true
         end
     end
     if haskey(prefs_data, "unset")
-        for (uuid, observed) in prefs_data["unset"]
+        for (uuid, observed) in prefs_data["unset"]::Dict{String,Any}
             curr = get_preferences(UUID(uuid))
-            for key in observed
+            for key in observed::Vector{String}
                 # any unset preferences should still be unset
                 haskey(curr, key) && return true
             end

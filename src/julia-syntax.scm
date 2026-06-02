@@ -392,7 +392,7 @@
             (generator (if (expr-contains-p if-generated? body (lambda (x) (not (function-def? x))))
                            (let* ((gen    (generated-version body))
                                   (nongen (non-generated-version body))
-                                  (gname  (symbol (string (gensy) "#" (current-julia-module-counter '()))))
+                                  (gname  (symbol (string "#" (current-julia-module-counter '()) "#" (current-julia-module-counter '()))))
                                   (gf     (make-generator-function gname names anames gen)))
                              (set! body (insert-after-meta
                                          nongen

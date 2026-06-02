@@ -2694,13 +2694,6 @@ std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &conte
     m->setDataLayout(DL);
     m->setTargetTriple(triple.str());
 
-    if (triple.isOSWindows() && triple.getArch() == Triple::x86) {
-        // tell Win32 to assume the stack is always 16-byte aligned,
-        // and to ensure that it is 16-byte aligned for out-going calls,
-        // to ensure compatibility with GCC codes
-        m->setOverrideStackAlignment(16);
-    }
-
     if (source) {
         // Copy module flags from source module
         SmallVector<Module::ModuleFlagEntry, 8> Flags;
@@ -2708,21 +2701,27 @@ std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &conte
         for (const auto &Flag : Flags) {
             m->addModuleFlag(Flag.Behavior, Flag.Key->getString(), Flag.Val);
         }
-        // Copy other module-level properties
-        m->setStackProtectorGuard(source->getStackProtectorGuard());
-        m->setOverrideStackAlignment(source->getOverrideStackAlignment());
     }
-    else {
-        // No source: set default Julia flags
-        // According to clang darwin above 10.10 supports dwarfv4
+
+    // Set default Julia flags
+    // According to clang darwin above 10.10 supports dwarfv4
+    if (m->getDwarfVersion() == 0) {
         m->addModuleFlag(llvm::Module::Warning, "Dwarf Version", 4);
         m->addModuleFlag(llvm::Module::Warning, "Debug Info Version",
                          llvm::DEBUG_METADATA_VERSION);
+    }
 
+    if (triple.isOSWindows() && triple.getArch() == Triple::x86) {
+        // tell Win32 to assume the stack is always 16-byte aligned,
+        // and to ensure that it is 16-byte aligned for out-going calls,
+        // to ensure compatibility with GCC codes
+        if (m->getOverrideStackAlignment() == 0)
+            m->setOverrideStackAlignment(16);
+    }
 #if defined(JL_DEBUG_BUILD)
+    if (m->getStackProtectorGuard().empty())
         m->setStackProtectorGuard("global");
 #endif
-    }
 
     return m;
 }
@@ -5031,7 +5030,11 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
     AllocaInst *result = nullptr;
 
     if (returninfo.cc == jl_returninfo_t::SRet || returninfo.cc == jl_returninfo_t::Union) {
-        result = emit_static_alloca(ctx, returninfo.union_bytes, Align(returninfo.union_align));
+        if (returninfo.all_roots) {
+            result = emit_static_roots(ctx, returninfo.union_bytes / sizeof(void *));
+        } else {
+            result = emit_static_alloca(ctx, returninfo.union_bytes, Align(returninfo.union_align));
+        }
         setName(ctx.emission_context, result, "sret_box");
         argvals[idx] = result;
         idx++;
@@ -7915,6 +7918,7 @@ static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module 
     Type *rt = NULL;
     Type *srt = NULL;
     Type *T_prjlvalue = PointerType::get(M->getContext(), AddressSpace::Tracked);
+    uint64_t tracked_count = 0;
     if (jlrettype == (jl_value_t*)jl_bottom_type) {
         rt = getVoidTy(M->getContext());
         props.cc = jl_returninfo_t::Register;
@@ -7948,6 +7952,7 @@ static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module 
         if (rt != getVoidTy(M->getContext()) && deserves_sret(jlrettype, rt)) {
             auto tracked = CountTrackedPointers(rt, true);
             assert(!tracked.derived);
+            tracked_count = tracked.count;
             if (tracked.count && !tracked.all) {
                 props.return_roots = tracked.count;
                 assert(props.return_roots == ((jl_datatype_t*)jlrettype)->layout->npointers);
@@ -7955,6 +7960,7 @@ static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module 
             props.cc = jl_returninfo_t::SRet;
             props.union_bytes = jl_datatype_size(jlrettype);
             props.union_align = props.union_minalign = julia_alignment(jlrettype);
+            props.all_roots = tracked.all;
             // sret is always passed from alloca
             assert(M);
             fsig.push_back(PointerType::get(M->getContext(), M->getDataLayout().getAllocaAddrSpace()));
@@ -7975,6 +7981,10 @@ static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module 
         assert(srt);
         AttrBuilder param(M->getContext());
         param.addStructRetAttr(srt);
+        if (props.all_roots) {
+            assert(!props.return_roots);
+            param.addAttribute("julia.return_roots", std::to_string(tracked_count));
+        }
         param.addAttribute(Attribute::NoAlias);
         param.addAttribute(Attribute::NoCapture);
         param.addAttribute(Attribute::NoUndef);
@@ -7984,6 +7994,10 @@ static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module 
     }
     if (props.cc == jl_returninfo_t::Union) {
         AttrBuilder param(M->getContext());
+        if (props.all_roots) {
+            assert(!props.return_roots);
+            param.addAttribute("julia.return_roots", std::to_string(tracked_count));
+        }
         param.addAttribute(Attribute::NoAlias);
         param.addAttribute(Attribute::NoCapture);
         param.addAttribute(Attribute::NoUndef);

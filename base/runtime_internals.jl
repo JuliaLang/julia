@@ -88,7 +88,7 @@ function moduleloc(m::Module)
 end
 
 """
-    names(x::Module; all::Bool=false, imported::Bool=false, usings::Bool=false)::Vector{Symbol}
+    names(x::Module; all::Bool=false, imported::Bool=false, usings::Bool=false, world::UInt=Base.tls_world_age())::Vector{Symbol}
 
 Get a vector of the public names of a `Module`, excluding deprecated names.
 If `all` is true, then the list also includes non-public names defined in the module,
@@ -100,6 +100,10 @@ Names are returned in sorted order.
 
 As a special case, all names defined in `Main` are considered \"public\",
 since it is not idiomatic to explicitly mark names from `Main` as public.
+
+The `world` argument controls the world age used to look up binding partitions, defaulting
+to the current task's world age. Pass `world=Base.get_world_counter()` to include names
+from the latest world.
 
 !!! note
     `sym ∈ names(SomeModule)` does *not* imply `isdefined(SomeModule, sym)`.
@@ -116,8 +120,9 @@ since it is not idiomatic to explicitly mark names from `Main` as public.
 See also: [`Base.isexported`](@ref), [`Base.ispublic`](@ref), [`Base.@locals`](@ref), [`@__MODULE__`](@ref).
 """
 names(m::Module; kwargs...) = sort!(unsorted_names(m; kwargs...))
-unsorted_names(m::Module; all::Bool=false, imported::Bool=false, usings::Bool=false) =
-    ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint, Cint), m, all, imported, usings)
+unsorted_names(m::Module; all::Bool=false, imported::Bool=false, usings::Bool=false,
+               world::UInt=tls_world_age()) =
+    ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint, Cint, UInt), m, all, imported, usings, world)
 
 """
     isexported(m::Module, s::Symbol)::Bool
@@ -208,6 +213,9 @@ julia> bar() = nameof(@__FUNCTION__);
 julia> bar()
 :bar
 ```
+
+!!! compat "Julia 1.13"
+    This macro requires at least Julia 1.13.
 """
 macro __FUNCTION__()
     Expr(:thisfunction)
@@ -756,14 +764,13 @@ function getindex(dtfd::DataTypeFieldDesc, i::Int)
     fielddesc_type = (layout.flags >> 1) & 3
     nfields = layout.nfields
     @boundscheck ((1 <= i <= nfields) || throw(BoundsError(dtfd, i)))
-    if fielddesc_type == 0
+    if fielddesc_type == 0  # JL_FIELDDESC_8
         return FieldDesc(unsafe_load(Ptr{FieldDescStorage{UInt8}}(fd_ptr), i))
-    elseif fielddesc_type == 1
+    elseif fielddesc_type == 1  # JL_FIELDDESC_16
         return FieldDesc(unsafe_load(Ptr{FieldDescStorage{UInt16}}(fd_ptr), i))
-    elseif fielddesc_type == 2
+    elseif fielddesc_type == 2  # JL_FIELDDESC_32
         return FieldDesc(unsafe_load(Ptr{FieldDescStorage{UInt32}}(fd_ptr), i))
-    else
-        # fielddesc_type == 3
+    else # fielddesc_type == 3  # JL_FIELDDESC_FOREIGN
         return FieldDesc(true, true, 0, 0)
     end
 end
