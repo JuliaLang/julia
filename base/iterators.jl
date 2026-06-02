@@ -33,7 +33,7 @@ import Base:
     popfirst!, isdone, peek, intersect
 
 export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, flatmap, partition, nth, findeach
-public accumulate, filter, map, peel, reverse, Stateful
+public accumulate, filter, map, peel, reverse, Reverse, Stateful
 
 """
     Iterators.map(f, iterators...)
@@ -112,6 +112,16 @@ julia> foreach(println, Iterators.reverse(1:5))
 """
 reverse(itr) = Reverse(itr)
 
+"""
+    Iterators.Reverse{T}
+
+A type representing a reverse-order iterator for an iterator of type `T`, which
+is stored in the `itr` field.  Typically returned by [`Iterators.reverse(itr::T)`](@ref),
+which constructs an `Iterators.Reverse{T}` wrapper around `itr` by default.
+
+To support lazy reverse-order iteration, a type `T` should either implement an [`iterate`](@ref)
+method for `Iterators.Reverse{T}` or overload `Iterators.reverse` to return a different type.
+"""
 struct Reverse{T}
     itr::T
 end
