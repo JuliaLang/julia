@@ -275,8 +275,7 @@ void wakeup_thread(jl_task_t *ct, int16_t tid) JL_NOTSAFEPOINT { // Pass in ptls
         }
     }
     if (tid == -1) {
-        // Legacy broadcast wake. Prefer jl_wakeup_threadpool, which wakes
-        // only one thread in the target pool and lets consumers cascade.
+        // Legacy broadcast wake; prefer jl_wakeup_threadpool.
         int anysleep = 0;
         int nthreads = jl_atomic_load_acquire(&jl_n_threads);
         for (tid = 0; tid < nthreads; tid++) {
@@ -300,9 +299,8 @@ JL_DLLEXPORT void jl_wakeup_thread(int16_t tid) JL_NOTSAFEPOINT
     wakeup_thread(ct, tid);
 }
 
-// Round-robin start hint for jl_wakeup_threadpool, sharded across cache-line-
-// padded stripes to avoid contention between concurrent producers (a single
-// global counter becomes a bottleneck across CCDs/sockets at high thread counts).
+// Round-robin start hint for jl_wakeup_threadpool, sharded across cache-line-padded
+// stripes so concurrent producers don't contend on a single global counter.
 #define POOL_WAKE_HINT_STRIPES 64
 typedef struct {
     _Atomic(uint32_t) v;
@@ -311,11 +309,9 @@ typedef struct {
 static pool_wake_hint_t pool_wake_hints[POOL_WAKE_HINT_STRIPES];
 
 // Wake at most one sleeping thread in threadpool `tpid`, replacing the
-// O(jl_n_threads) broadcast of jl_wakeup_thread(-1) (#61820, #50425).
-// Iteration is restricted to the task's own pool since workers only consume
-// tasks from their own pool (see Partr.multiq_deletemin). Workers re-check
-// the queue before sleeping ([^store_buffering_1]), so bursty inserts
-// naturally wake additional consumers across successive per-insert calls.
+// O(jl_n_threads) broadcast of jl_wakeup_thread(-1) (#61820, #50425). Workers
+// only consume tasks from their own pool, and re-check the queue before sleeping
+// ([^store_buffering_1]), so bursty inserts cascade to wake more consumers.
 JL_DLLEXPORT void jl_wakeup_threadpool(int8_t tpid) JL_NOTSAFEPOINT
 {
     assert(tpid >= 0 && tpid < jl_n_threadpools);
@@ -325,7 +321,7 @@ JL_DLLEXPORT void jl_wakeup_threadpool(int8_t tpid) JL_NOTSAFEPOINT
     jl_task_t *uvlock = jl_atomic_load_relaxed(&jl_uv_mutex.owner);
     JULIA_DEBUG_SLEEPWAKE( wakeup_enter = cycleclock() );
 
-    // defensively ensure self exits any partial sleep transition
+    // ensure self exits any partial sleep transition
     jl_ptls_t ptls = ct->ptls;
     if (jl_atomic_load_relaxed(&ptls->sleep_check_state) != not_sleeping) {
         if (jl_atomic_exchange_relaxed(&ptls->sleep_check_state, not_sleeping) != not_sleeping) {
@@ -337,14 +333,13 @@ JL_DLLEXPORT void jl_wakeup_threadpool(int8_t tpid) JL_NOTSAFEPOINT
     if (uvlock == ct)
         uv_stop(jl_global_event_loop());
 
-    // compute [lo, hi) tid range of the target pool
+    // [lo, lo+n) tid range of the target pool
     int16_t lo = 0;
     for (int8_t i = 0; i < tpid; i++)
         lo += (int16_t)jl_n_threads_per_pool[i];
     int16_t n = (int16_t)jl_n_threads_per_pool[tpid];
 
-    // Steady state: if every thread is already running, no one is parked
-    // and the wake_thread loop is pure overhead. Skip it.
+    // if every thread is already running, nothing is parked: skip the wake loop
     if (jl_atomic_load_relaxed(&n_threads_running) >= jl_atomic_load_relaxed(&jl_n_threads)) {
         JULIA_DEBUG_SLEEPWAKE( wakeup_leave = cycleclock() );
         return;
