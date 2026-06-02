@@ -234,7 +234,7 @@ JL_DLLEXPORT void jl_genericmemory_copyto(jl_genericmemory_t *dest, char* destda
         _Atomic(void*) * dest_p = (_Atomic(void*)*)destdata;
         _Atomic(void*) * src_p = (_Atomic(void*)*)srcdata;
         jl_value_t *owner = jl_genericmemory_owner(dest);
-        jl_gc_wb_genericmemory_copy_boxed(owner, dest_p, src, src_p, &n);
+        jl_gc_wb_genericmemory_copy_boxed(owner, &dest_p, src, &src_p, &n);
         return memmove_refs(dest_p, src_p, n);
     }
     size_t elsz = layout->size;

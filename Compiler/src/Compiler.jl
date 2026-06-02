@@ -162,6 +162,12 @@ else
     using Base: @show
 end
 
+# JuliaSyntax doesn't support syntax evolution in bare modules via Project.toml
+# This surfaces only when Compiler.jl is loaded as a standalone package.
+if isdefined(Base, :end_base_include) && isdefined(Base, :set_syntax_version)
+    Base.set_syntax_version(Compiler, Base.VersionNumber(1, 14))
+end
+
 include("cicache.jl")
 include("methodtable.jl")
 include("effects.jl")

@@ -504,7 +504,7 @@ static int obviously_egal(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT
         }
         return 1;
     }
-    if (jl_is_uniontype(a)) {
+    if (jl_is_uniontype(a) || jl_is_intersecttype(a)) {
         return obviously_egal(((jl_uniontype_t*)a)->a, ((jl_uniontype_t*)b)->a) &&
             obviously_egal(((jl_uniontype_t*)a)->b, ((jl_uniontype_t*)b)->b);
     }
@@ -749,6 +749,10 @@ static jl_value_t *simple_meet(jl_value_t *a, jl_value_t *b, int overesi)
         return b;
     if (b == (jl_value_t*)jl_any_type || a == jl_bottom_type)
         return a;
+    if (overesi == 1 && (jl_is_intersecttype(a) || jl_is_intersecttype(b)))
+        // one operand is already an internal `Intersect` meet node.
+        // Represent the combined meet exactly by nesting.
+        return jl_new_struct(jl_intersect_type, a, b);
     if (!(jl_is_type(a) || jl_is_typevar(a)) || !(jl_is_type(b) || jl_is_typevar(b)))
         return jl_bottom_type;
     if (jl_is_kind(a) && jl_is_type_type(b) && jl_typeof(jl_tparam0(b)) == a)
@@ -760,6 +764,26 @@ static jl_value_t *simple_meet(jl_value_t *a, jl_value_t *b, int overesi)
     if (jl_is_typevar(b) && obviously_egal(a, ((jl_tvar_t*)b)->ub))
         return b;
     return simple_intersect(a, b, overesi);
+}
+
+// Over-approximate an internal `Intersect` meet node (see #61917) by a real
+// type, so it cannot escape subtyping into a result type or static parameter.
+// An `Intersect` only ever occurs as the top layer of a varbinding's `ub`
+// (possibly as a spine of nested `Intersect`s, but never under another type
+// constructor), so it suffices to peel that spine here. `Intersect{a, b}`
+// denotes `a ∩ b`, which `simple_meet` with `overesi==2` over-approximates by a
+// real supertype. `typeintersect` may over-approximate, so this is sound.
+static jl_value_t *widen_intersect(jl_value_t *t)
+{
+    if (t == NULL || !jl_is_intersecttype(t))
+        return t;
+    jl_value_t *a = NULL, *b = NULL, *res = NULL;
+    JL_GC_PUSH2(&a, &b);
+    a = widen_intersect(((jl_intersecttype_t*)t)->a);
+    b = widen_intersect(((jl_intersecttype_t*)t)->b);
+    res = simple_meet(a, b, 2);
+    JL_GC_POP();
+    return res;
 }
 
 // main subtyping algorithm
@@ -982,10 +1006,8 @@ static int subtype_singleton_typevar(jl_value_t *a, jl_tvar_t *v) JL_NOTSAFEPOIN
 }
 
 // check that type var `b` is <: `a`, and update b's upper bound.
-static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t param)
+static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t param, jl_varbinding_t *bb, int innervar)
 {
-    int innervar = 0;
-    jl_varbinding_t *bb = lookup_binding(e, b, &innervar);
     if (bb == NULL) {
         if (innervar && e->intersection)
             return 1;
@@ -1022,25 +1044,21 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t par
         JL_GC_POP();
     }
     else {
+        // `simple_meet` resolves the greatest-lower-bound of `bb->ub` and `a`
+        // precisely when one operand subsumes the other (or they are disjoint);
+        // otherwise it now returns an exact `Intersect{bb->ub, a}` meet node
+        // rather than over-approximating to one side, which would let `b` escape
+        // its declared range (e.g. equating `∃b<:Foo` with an outer `∀a<:Bar`
+        // even though `Bar ⊄ Foo`). See #61917.
         bb->ub = simple_meet(bb->ub, a, 1);
     }
     assert(bb->ub != (jl_value_t*)b);
-    if (jl_is_typevar(a)) {
-        jl_varbinding_t *aa = lookup(e, (jl_tvar_t*)a);
-        if (aa && !aa->existential && in_union(bb->lb, a) && bb->depth0 != aa->depth0 && var_outside(e, b, (jl_tvar_t*)a)) {
-            // an "exists" var cannot equal a "forall" var inside it unless the forall
-            // var has equal bounds.
-            return subtype_left_var(aa->ub, aa->lb, e, param);
-        }
-    }
     return 1;
 }
 
 // check that type var `b` is >: `a`, and update b's lower bound.
-static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t param)
+static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t param, jl_varbinding_t *bb, int innervar)
 {
-    int innervar = 0;
-    jl_varbinding_t *bb = lookup_binding(e, b, &innervar);
     if (bb == NULL) {
         if (innervar && e->intersection)
             return 1;
@@ -1073,23 +1091,18 @@ static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t par
     JL_GC_POP();
     // this bound should not be directly circular
     assert(bb->lb != (jl_value_t*)b);
-    if (jl_is_typevar(a)) {
-        jl_varbinding_t *aa = lookup(e, (jl_tvar_t*)a);
-        if (aa && !aa->existential && bb->depth0 != aa->depth0 && param == PARAM_INVARIANT && var_outside(e, b, (jl_tvar_t*)a))
-            return subtype_left_var(aa->ub, aa->lb, e, param);
-    }
     return 1;
 }
 
-static int subtype_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int R, jl_param_pos_t param)
+static int subtype_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int R, jl_param_pos_t param, jl_varbinding_t *bb, int innervar)
 {
     if (e->intersection) {
-        int innervar = 0;
-        jl_varbinding_t *bb = lookup_binding(e, (jl_tvar_t*)b, &innervar);
         jl_value_t *bub = bb ? bb->ub : innervar ? ((jl_tvar_t*)b)->ub : (jl_value_t*)b;
         jl_value_t *blb = bb ? bb->lb : innervar ? ((jl_tvar_t*)b)->lb : (jl_value_t*)b;
         if (bub == blb && jl_is_typevar(bub) && bub != (jl_value_t*)b) {
-            int sub = subtype_var((jl_tvar_t *)bub, a, e, R, param);
+            int bubinner = 0;
+            jl_varbinding_t *bubb = lookup_binding(e, (jl_tvar_t*)bub, &bubinner);
+            int sub = subtype_var((jl_tvar_t *)bub, a, e, R, param, bubb, bubinner);
             return sub;
         }
     }
@@ -1098,12 +1111,12 @@ static int subtype_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int R, jl_par
         jl_value_t *na = jl_box_long(jl_unbox_long(a) + old_offset);
         JL_GC_PUSH1(&na);
         e->Loffset = 0;
-        int sub = R ? var_gt(b, na, e, param) : var_lt(b, na, e, param);
+        int sub = R ? var_gt(b, na, e, param, bb, innervar) : var_lt(b, na, e, param, bb, innervar);
         e->Loffset = R ? -old_offset : old_offset;
         JL_GC_POP();
         return sub;
     }
-    return R ? var_gt(b, a, e, param) : var_lt(b, a, e, param);
+    return R ? var_gt(b, a, e, param, bb, innervar) : var_lt(b, a, e, param, bb, innervar);
 }
 
 // check that a type is concrete or quasi-concrete (Type{T}).
@@ -1113,6 +1126,8 @@ int is_leaf_bound(jl_value_t *v) JL_NOTSAFEPOINT
 {
     if (v == jl_bottom_type)
         return 1;
+    if (jl_is_intersecttype(v)) // internal meet node (see #61917), not a concrete leaf
+        return 0;
     if (jl_is_datatype(v)) {
         if (((jl_datatype_t*)v)->name->abstract) {
             if (jl_is_type_type(v))
@@ -1394,6 +1409,12 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
         JL_GC_POP();
         return 0;
     }
+
+    // An internal `Intersect` meet node (see #61917) is exact for subtyping but
+    // must not appear in a result type or static parameter (it is not a real
+    // type). It only ever occurs as the top layer of `vb.ub`; over-approximate
+    // it now, before `vb.ub` is used to build any result typevar below.
+    vb.ub = widen_intersect(vb.ub);
 
     // If this variable was resolved to something concrete, just use that value for the
     // substitution below.
@@ -1878,16 +1899,17 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
             // getting eliminated (omit_bad_union) or degenerate (Union{Ptr{T}, Ptr}) or
             // combined (Union{T, S} where {T, S <: T}).
             jl_tvar_t *yvar = (jl_tvar_t *)y;
-            jl_varbinding_t *yb = lookup(e, yvar);
+            int yinner = 0;
+            jl_varbinding_t *yb = lookup_binding(e, yvar, &yinner);
             while (e->intersection && yb != NULL && yb->lb == yb->ub && jl_is_typevar(yb->lb)) {
                 yvar = (jl_tvar_t *)yb->lb;
-                yb = lookup(e, yvar);
+                yb = lookup_binding(e, yvar, &yinner);
             }
             // Note: `x <: ∃y` performs a local ∀-∃ check between `x` and `yb->ub`.
             // We need to ensure that there's no ∃ typevar as otherwise that check
             // might cause false alarm due to the accumulated env change.
             if (yb == NULL || !yb->existential || !has_existential_typevar(yb->ub, e))
-                return subtype_var(yvar, x, e, 1, param);
+                return subtype_var(yvar, x, e, 1, param, yb, yinner);
         }
         x = pick_union_element(x, e, 0);
     }
@@ -1908,6 +1930,16 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
         }
         if (ui == 1)
             y = pick_union_element(y, e, 1);
+    }
+    // An internal `Intersect` meet node is only ever produced as an existential
+    // upper bound, so it can appear on the right (`x <: a ∩ b`) but never on the
+    // left. Handling the left case (`a ∩ b <: y`) precisely needs the
+    // intersection machinery, so for now we assert it does not arise.
+    assert(!jl_is_intersecttype(x));
+    if (jl_is_intersecttype(y)) {
+        // `x <: a ∩ b`  iff  `x <: a` and `x <: b` (dual to `Union` on the left).
+        jl_intersecttype_t *iy = (jl_intersecttype_t*)y;
+        return subtype(x, iy->a, e, param) && subtype(x, iy->b, e, param);
     }
     if (jl_is_typevar(x)) {
         if (jl_is_typevar(y)) {
@@ -1944,11 +1976,11 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
                     // on the inner-most variable, so check which one that is.
                     if (var_outside(e, (jl_tvar_t*)x, (jl_tvar_t*)y)) {
                         record_var_occurrence(xx, e, param);
-                        return var_gt((jl_tvar_t*)y, x, e, param);
+                        return var_gt((jl_tvar_t*)y, x, e, param, yy, yinner);
                     }
                 }
                 if (yy) record_var_occurrence(yy, e, param);
-                return var_lt((jl_tvar_t*)x, y, e, param);
+                return var_lt((jl_tvar_t*)x, y, e, param, xx, xinner);
             }
             else if (yr) {
                 if (xx) {
@@ -1968,9 +2000,9 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
                     // so asking which of these cases we're in is equivalent to
                     // asking whether `B`'s depth is greater than `A`'s depth.
                     if (yy && yy->depth0 < xx->depth0)
-                        return var_gt((jl_tvar_t*)y, xx->ub, e, param);
+                        return var_gt((jl_tvar_t*)y, xx->ub, e, param, yy, yinner);
                 }
-                return var_gt((jl_tvar_t*)y, x, e, param);
+                return var_gt((jl_tvar_t*)y, x, e, param, yy, yinner);
             }
             // check ∀x,y . x<:y
             // the bounds of left-side variables never change, and can only lead
@@ -1981,9 +2013,9 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
                 return subtype_singleton_typevar(xub, (jl_tvar_t*)y);
             return subtype(xub, y, e, param) || subtype(x, ylb, e, param);
         }
+        int xinner = 0;
+        jl_varbinding_t *xb = lookup_binding(e, (jl_tvar_t*)x, &xinner);
         if (jl_is_unionall(y)) {
-            int xinner = 0;
-            jl_varbinding_t *xb = lookup_binding(e, (jl_tvar_t*)x, &xinner);
             jl_value_t *xub = xb == NULL ? (xinner ? ((jl_tvar_t *)x)->ub : x) : xb->ub;
             if ((xb == NULL ? !xinner || !e->intersection : !xb->existential) && xub != y) {
                 // We'd better unwrap `y::UnionAll` eagerly if `x` isa ∀-var.
@@ -1995,10 +2027,13 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
                 return subtype_unionall(x, (jl_unionall_t*)y, e, 1, param);
             }
         }
-        return subtype_var((jl_tvar_t*)x, y, e, 0, param);
+        return subtype_var((jl_tvar_t*)x, y, e, 0, param, xb, xinner);
     }
-    if (jl_is_typevar(y))
-        return subtype_var((jl_tvar_t*)y, x, e, 1, param);
+    if (jl_is_typevar(y)) {
+        int yinner = 0;
+        jl_varbinding_t *yb = lookup_binding(e, (jl_tvar_t*)y, &yinner);
+        return subtype_var((jl_tvar_t*)y, x, e, 1, param, yb, yinner);
+    }
     if (y == (jl_value_t*)jl_any_type && !jl_has_free_typevars(x))
         return 1;
     if (x == jl_bottom_type && !jl_has_free_typevars(y))
@@ -2218,7 +2253,7 @@ static int equal_var(jl_tvar_t *v, jl_value_t *x, jl_stenv_t *e)
         return local_forall_exists_subtype(x, vb->lb, e, PARAM_INVARIANT, !jl_has_free_typevars(x)) &&
                local_forall_exists_subtype(vb->ub, x, e, PARAM_NONE, 0);
     if (vb->lb == x)
-        return var_lt(v, x, e, PARAM_NONE);
+        return var_lt(v, x, e, PARAM_NONE, vb, innervar);
     if (!subtype_ccheck(x, vb->ub, e))
         return 0;
     jl_value_t *lb = simple_join(vb->lb, x);
@@ -2480,6 +2515,29 @@ static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *su
         }
         return 0;
     }
+    // `Intersect` is an internal meet node, not a real type tag. Handle it
+    // before the non-type fallback, which would otherwise treat it as egal-only.
+    if (jl_is_intersecttype(y)) {
+        jl_intersecttype_t *iy = (jl_intersecttype_t*)y;
+        int sub_a, sub_b;
+        int known_a = obvious_subtype(x, iy->a, y0, &sub_a);
+        if (known_a && !sub_a) {
+            *subtype = 0;
+            return 1;
+        }
+        int known_b = obvious_subtype(x, iy->b, y0, &sub_b);
+        if (known_b && !sub_b) {
+            *subtype = 0;
+            return 1;
+        }
+        if (known_a && sub_a && known_b && sub_b) {
+            *subtype = 1;
+            return 1;
+        }
+        return 0;
+    }
+    if (jl_is_intersecttype(x))
+        return 0;
     if (!jl_is_type(x) || !jl_is_type(y)) {
         *subtype = jl_egal(x, y);
         return 1;
@@ -3237,7 +3295,7 @@ static int _reachable_var(jl_value_t *x, jl_tvar_t *y, jl_stenv_t *e, jl_typeenv
 {
     if (in_union(x, (jl_value_t*)y))
         return 1;
-    if (jl_is_uniontype(x))
+    if (jl_is_uniontype(x) || jl_is_intersecttype(x))
         return _reachable_var(((jl_uniontype_t *)x)->a, y, e, log) ||
                _reachable_var(((jl_uniontype_t *)x)->b, y, e, log);
     if (!jl_is_typevar(x))
@@ -3420,7 +3478,7 @@ static int var_occurs_inside(jl_value_t *v, jl_tvar_t *var, int inside, int want
     if (v == (jl_value_t*)var) {
         return inside;
     }
-    else if (jl_is_uniontype(v)) {
+    else if (jl_is_uniontype(v) || jl_is_intersecttype(v)) {
         return var_occurs_inside(((jl_uniontype_t*)v)->a, var, inside, want_inv) ||
             var_occurs_inside(((jl_uniontype_t*)v)->b, var, inside, want_inv);
     }
@@ -3555,6 +3613,10 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
     jl_value_t *varval = NULL, *ilb = NULL, *iub = NULL, *nivar = NULL;
     jl_tvar_t *newvar = vb->var, *ivar = NULL;
     JL_GC_PUSH6(&res, &newvar, &ivar, &nivar, &ilb, &iub);
+    // Note: `Intersect` is subtype accounting only and is widened away before
+    // it leaves the subtype path (see `subtype_unionall`), so the intersection
+    // result here never contains one.
+    assert(!jl_is_intersecttype(vb->ub));
     // try to reduce var to a single value
     if (jl_is_long(vb->ub) && jl_is_typevar(vb->lb)) {
         varval = vb->ub;
