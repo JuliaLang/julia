@@ -408,11 +408,11 @@ function append_scopes!(scopes::Vector{LineInfoNode}, pc::Int, di, @nospecialize
     while di !== nothing
         di.def isa Symbol || (def = di.def)
         if pc <= 0
-            push!(scopes, LineInfoNode(def, debuginfo_file1(di), Int32(0)))
+            # TODO: assert false
             return false
         elseif !Base.Compiler.has_prev_debuginfo(di, pc)
             line = Base.Compiler.source_location(di, pc).line # TODO: column ignored here
-            (line < 0) && (doupdate = false; line = 0) # broken debug info
+            (line <= 0) && (doupdate = false; line = 0) # broken debug info
             push!(scopes, LineInfoNode(def, debuginfo_file1(di), Int32(line)))
         else
             di2, pc2 = Base.Compiler.prev_debuginfo(di, pc)
