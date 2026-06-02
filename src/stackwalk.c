@@ -778,6 +778,15 @@ static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *
     return r > 0;
 }
 
+// framehop has no separate compact-vs-DWARF unwind path (it always uses CFI / .eh_frame
+// and is async-signal-safe), so the macOS mach profiler's DWARF-retry entry point just
+// reuses the regular framehop cursor.
+NOINLINE size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t maxsize,
+                                        bt_context_t *context, jl_gcframe_t *pgcstack)
+{
+    return rec_backtrace_ctx(bt_data, maxsize, context, pgcstack);
+}
+
 #elif !defined(JL_DISABLE_LIBUNWIND)
 // stacktrace using libunwind
 

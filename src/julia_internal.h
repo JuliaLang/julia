@@ -1587,7 +1587,7 @@ typedef struct {
 // on; JL_USE_FRAMEHOP is then derived for the (os, arch) combinations framehop supports.
 // When off, everything below is byte-for-byte the existing libunwind/dbghelp path.
 #if !defined(JL_USE_FRAMEHOP) && defined(JL_ENABLE_FRAMEHOP)
-#  if (defined(_OS_LINUX_) || defined(_OS_FREEBSD_)) && (defined(_CPU_X86_64_) || defined(_CPU_AARCH64_))
+#  if (defined(_OS_LINUX_) || defined(_OS_FREEBSD_) || defined(_OS_DARWIN_)) && (defined(_CPU_X86_64_) || defined(_CPU_AARCH64_))
 #    define JL_USE_FRAMEHOP 1
 #  endif
 #endif
@@ -1646,7 +1646,7 @@ size_t rec_backtrace(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTS
 // which was asynchronously interrupted.
 size_t rec_backtrace_ctx(jl_bt_element_t *bt_data, size_t maxsize, bt_context_t *ctx,
                          jl_gcframe_t *pgcstack) JL_NOTSAFEPOINT;
-#ifdef LLVMLIBUNWIND
+#if defined(LLVMLIBUNWIND) || defined(JL_USE_FRAMEHOP)
 size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t maxsize, bt_context_t *ctx, jl_gcframe_t *pgcstack) JL_NOTSAFEPOINT;
 #endif
 JL_DLLEXPORT jl_value_t *jl_get_backtrace(void);
