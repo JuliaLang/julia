@@ -494,7 +494,7 @@ bool ObjCache::updateATime(MDBTxn &Txn, const Hash &Hash, int64_t Time, bool Fre
         int64_t OldTime;
         memcpy(&OldTime, OldData.mv_data, sizeof OldTime);
         if (Time < OldTime + OBJCACHE_ATIME_GRANULARITY)
-            return false;
+            return true;
 
         auto MetaKey = toMetaKey(OldTime, Hash);
         MDB_val Key2 = mdbVal(MetaKey);
