@@ -43,18 +43,19 @@ define the following method:
 ```julia
 Base.RangeStepStyle(::Type{<:AbstractRange{<:T}}) = Base.RangeStepRegular()
 ```
-This will allow [`hash`](@ref) to use an O(1) algorithm for `AbstractRange{T}`
-objects instead of the default O(N) algorithm (with N the length of the range).
-
 In some cases, whether the step will be regular depends not only on the
 element type `T`, but also on the type of the step `S`. In that case, more
 specific methods should be defined:
 ```julia
 Base.RangeStepStyle(::Type{<:OrdinalRange{<:T, <:S}}) = Base.RangeStepRegular()
 ```
+It is expected that intervals between elements can be converted to type `S`,
+and that `div` and `rem` are defined for this type.
 
 By default, all range types are assumed to be `RangeStepIrregular`, except
 ranges with an element type which is a subtype of `Integer`.
+The module `Dates` also defines ranges whose step is a `FixedPeriod` to be regular,
+for example steps of a `Day(1)` but not `Month(1)`.
 """
 abstract type RangeStepStyle end
 struct RangeStepRegular   <: RangeStepStyle end # range with regular step
