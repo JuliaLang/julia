@@ -138,7 +138,7 @@ function is_valid_ir_rvalue(ctx, lhs, rhs)
            is_valid_ir_argument(ctx, rhs) ||
            (kind(lhs) == K"BindingId" &&
             # FIXME: add: invoke ?
-            kind(rhs) in KSet"new splatnew cfunction isdefined call foreigncall gc_preserve_begin foreigncall new_opaque_closure")
+            kind(rhs) in KSet"new splatnew cfunction isdefined call foreigncall gc_preserve_begin new_opaque_closure")
 end
 
 function check_no_local_bindings(ctx, ex, msg)
@@ -569,7 +569,6 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             next_action_label = !in_tail_pos || tag != 1 || on_exit != :return ?
                 make_label(ctx, srcref) : nothing
             if !isnothing(next_action_label)
-                next_action_label = make_label(ctx, srcref)
                 tmp = ssavar(ctx, srcref, "do_finally_action")
                 emit(ctx, @ast ctx srcref [K"=" tmp
                     [K"call"
@@ -961,7 +960,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         end
     elseif k == K"latestworld"
         if needs_value
-            throw(LoweringError(ex, "misplaced latestsworld"))
+            throw(LoweringError(ex, "misplaced latestworld"))
         end
         emit_latestworld(ctx, ex)
     elseif k == K"latestworld_if_toplevel"

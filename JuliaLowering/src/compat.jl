@@ -590,7 +590,7 @@ function est_to_dst(st::SyntaxTree)
             else
                 @jl_assert(false, (st, string(
                     "unknown expr head (corresponding to no kind) between",
-                    "macro-expansion and desugaring: ")))
+                    " macro-expansion and desugaring: ")))
             end
         end
         ([K"latestworld"], when=!is_leaf(st)) -> newleaf(g, st, K"latestworld")
@@ -617,7 +617,7 @@ function est_to_dst(st::SyntaxTree)
 
         # avoid creating excess nodes
         _ -> let out_cs::Vector{NodeId} = map(x->rec(x)._id, children(st))
-            out_cs == children(st) ? st : mknode(st, out_cs)
+            out_cs == children(st).ids ? st : mknode(st, out_cs)
         end
     end
 end

@@ -246,7 +246,7 @@ function _find_method_lambda(ex, name)
     # Heuristic search through outer thunk for the method in question.
     stmts = children(ex[1])
     for e in stmts
-        if kind(e) == K"method" && numchildren(e) >= 2
+        if kind(e) == K"method" && numchildren(e) >= 3
             sig = _deref_ssa(stmts, e[2])
             @jl_assert kind(sig) == K"call" ex
             arg_types = _deref_ssa(stmts, sig[2])
