@@ -360,8 +360,8 @@ function expand_macro(ctx, ex, outer_sl)
         expanded = expr_to_est(ex._graph, expanded, macro_lnn)
     end
 
+    expanded = append_sourceref!(ctx, expanded, ex._id)
     if kind(expanded) != K"Value"
-        expanded = append_sourceref!(ctx, expanded, ex._id)
         # Module scope for the returned AST is the module where this particular
         # method was defined (may be different from `parentmodule(macfunc)`)
         mod_for_ast = lookup_method_instance(macfunc, macro_args,
