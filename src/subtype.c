@@ -2105,10 +2105,20 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
     }
     if (jl_is_datatype(x) && jl_is_typeeq(y) && x != (jl_value_t*)jl_typeofbottom_type) {
         jl_value_t *tp0 = jl_typeeq_T(y);
-        if (!jl_is_typevar(tp0) || !jl_is_kind(x))
-            return 0;
-        int issub = subtype((jl_value_t*)jl_type_type, y, e, param);
-        return issub;
+        if (jl_is_typevar(tp0)) {
+            if (!jl_is_kind(x))
+                return 0;
+            return subtype((jl_value_t*)jl_type_type, y, e, param);
+        }
+        // `Type{Type{T}}` with an unbounded `T` denotes the same set as the bare
+        // `TypeEq` (every `Type{X}` value), so a kind contained in `TypeEq` is a subtype
+        if (jl_is_typeeq(tp0)) {
+            jl_value_t *inner = jl_typeeq_T(tp0);
+            if (jl_is_typevar(inner) && ((jl_tvar_t*)inner)->lb == jl_bottom_type &&
+                    ((jl_tvar_t*)inner)->ub == (jl_value_t*)jl_any_type)
+                return subtype(x, (jl_value_t*)jl_typeeq_type, e, param);
+        }
+        return 0;
     }
     if (jl_is_datatype(x) && jl_is_datatype(y)) {
         if (x == y) return 1;

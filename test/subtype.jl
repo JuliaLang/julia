@@ -612,6 +612,12 @@ function test_old()
     @test (Type{T} where T<:Real) != Core.AnyType
     @test (Type{T} where T<:Real) <: Core.AnyType
     @test !(Core.AnyType <: (Type{T} where T<:Real))
+    # `Type{Type{T}} where T` (unbounded `T`) denotes the same set as the bare
+    # `TypeEq` (every `Type{X}` value), so they are equal
+    @test Core.TypeEq <: (Type{Type{T}} where T)
+    @test Core.TypeEq == (Type{Type{T}} where T)
+    @test (Type{Type{T}} where T) <: Core.TypeEq
+    @test !(DataType <: (Type{Type{T}} where T))
     # a `Type{X}` with a non-typevar parameter still dispatches as the singleton
     # `typeof(X)` (e.g. every `Ref{T}` is a `DataType`)
     @test (Type{Ref{T}} where T<:Real) <: DataType
