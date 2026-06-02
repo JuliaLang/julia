@@ -626,4 +626,9 @@ end
     return Core
 end
 
+@noinline function isabstracttype(x::TypeEq)
+    depwarn_if_not_pure("calling `isabstracttype` on a `Type{...}` is deprecated; `Type{}` is now a kind. If for detection, use `Base.isType(x)`.", :isabstracttype)
+    return true
+end
+
 # END 1.14 deprecations

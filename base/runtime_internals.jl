@@ -981,7 +981,7 @@ or [`Core.TypeofBottom`](@ref).
 
 All kinds are [concrete](@ref isconcretetype) because types are Julia values.
 """
-iskindtype(@nospecialize t) = (t === Kind || t === DataType || t === UnionAll || t === Union || t === TypeEq || t === typeof(Bottom))
+iskindtype(@nospecialize t) = (t === Core.Kind || t === DataType || t === UnionAll || t === Union || t === TypeEq || t === typeof(Bottom))
 
 """
     Base.isconcretedispatch(T)
@@ -1095,6 +1095,7 @@ false
 function isabstracttype(@nospecialize(t))
     @_total_meta
     t = unwrap_unionall(t)
+    isType(t) && return true
     # TODO: what to do for `Union`?
     return isa(t, DataType) && (t.name.flags & 0x1) == 0x1
 end
@@ -1383,7 +1384,7 @@ function to_tuple_type(@nospecialize(t))
             if isa(p, Core.TypeofVararg)
                 p = unwrapva(p)
             end
-            if !(isa(p, Kind) || isa(p, TypeVar))
+            if !(isa(p, Core.Kind) || isa(p, TypeVar))
                 error("argument tuple type must contain only types")
             end
         end
@@ -1413,7 +1414,7 @@ end
 
 Determine whether `t` is a Type for which one or more of its parameters is `Union{}`.
 """
-function has_bottom_parameter(@nospecialize(t::Kind))
+function has_bottom_parameter(@nospecialize(t::Core.Kind))
     t === Bottom && return true
     ty = typeof(t)
     if ty === DataType

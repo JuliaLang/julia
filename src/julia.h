@@ -1010,7 +1010,6 @@ typedef struct {
     XX(datatype) \
     XX(unionall) \
     XX(uniontype) \
-    XX(typeeq) \
     /* type parameter objects */ \
     XX(vararg) \
     XX(tvar) \
@@ -1053,6 +1052,9 @@ typedef struct {
     XX(globalref) \
     XX(gotonode) \
     XX(quotenode) \
+    XX(typeeq) \
+    /* Add new tags here to keep existing builds ABI stable - we don't guarantee ABI \
+       stability, but it'll help PkgEval to not break it unnecessarily */ \
     /* end of JL_SMALL_TYPEOF */
 enum jl_small_typeof_tags {
     jl_null_tag = 0,

@@ -1820,6 +1820,8 @@ static jl_value_t *lookup_type_stack(jl_typestack_t *stack, jl_datatype_t *tt, s
     return NULL;
 }
 
+static unsigned typeeq_hash(jl_value_t *T, int *failed) JL_NOTSAFEPOINT;
+
 // stable numbering for types--starts with name->hash, then falls back to objectid
 // sets *failed if the hash value isn't stable (if this param not set on entry)
 static unsigned type_hash(jl_value_t *kj, int *failed) JL_NOTSAFEPOINT
@@ -1855,21 +1857,28 @@ static unsigned type_hash(jl_value_t *kj, int *failed) JL_NOTSAFEPOINT
         return hasha + hashb;
     }
     else if (jl_is_typeeq(uw)) {
-        jl_value_t *T = jl_typeeq_T(uw);
-        if (T == jl_bottom_type)
-            return jl_typeofbottom_type->hash;
-        if (jl_is_typevar(T) && ((jl_tvar_t*)T)->lb == jl_bottom_type &&
-                ((jl_tvar_t*)T)->ub == (jl_value_t*)jl_any_type)
-            // the unbounded `Type{T} where T` is `=== Kind`; hash it as such so
-            // that e.g. `Vector{Type}` and `Vector{Kind}` land in the same cache
-            // bucket (they are equal per `typekey_eq`/`jl_types_equal`).
-            return type_hash((jl_value_t*)jl_kind_type, failed);
-        unsigned hashT = type_hash(T, failed);
-        return bitmix(~jl_type_typename->hash, hashT);
+        return typeeq_hash(jl_typeeq_T(uw), failed);
     }
     else {
         return jl_object_id(uw);
     }
+}
+
+// hash of `Type{T}`. Shared between hashing by type (`type_hash`, e.g. type-cache
+// insertion) and by value (`typekeyvalue_hash`, e.g. argument-tuple dispatch
+// caching) so the two cannot diverge.
+static unsigned typeeq_hash(jl_value_t *T, int *failed) JL_NOTSAFEPOINT
+{
+    if (T == jl_bottom_type)
+        return jl_typeofbottom_type->hash;
+    if (jl_is_typevar(T) && ((jl_tvar_t*)T)->lb == jl_bottom_type &&
+            ((jl_tvar_t*)T)->ub == (jl_value_t*)jl_any_type)
+        // the unbounded `Type{T} where T` is `=== Kind`; hash it as such so that
+        // e.g. `Vector{Type}` and `Vector{Kind}` land in the same cache bucket
+        // (they are equal per `typekey_eq`/`jl_types_equal`).
+        return type_hash((jl_value_t*)jl_kind_type, failed);
+    unsigned hashT = type_hash(T, failed);
+    return bitmix(~jl_type_typename->hash, hashT);
 }
 
 JL_DLLEXPORT uintptr_t jl_type_hash(jl_value_t *v) JL_NOTSAFEPOINT
@@ -1935,8 +1944,9 @@ static unsigned typekeyvalue_hash(jl_typename_t *tn, jl_value_t *key1, jl_value_
         jl_value_t *kj = j == 0 ? key1 : key[j - 1];
         uint_t hj;
         if (leaf && jl_is_kind(jl_typeof(kj))) {
-            hj = typekey_hash(jl_type_typename, &kj, 1, 0);
-            if (hj == 0)
+            int failed = 0;
+            hj = typeeq_hash(kj, &failed);
+            if (failed)
                 return 0;
         }
         else {

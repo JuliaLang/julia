@@ -6136,6 +6136,13 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_v
         return 0;
     }
 
+    if (jl_is_kind(a) && jl_is_typeeq(b) && !invariant) {
+        // a kind (e.g. `DataType`) is more specific than an unbounded `Type{T}`
+        jl_value_t *tp0b = jl_typeeq_T(b);
+        if (jl_is_typevar(tp0b) && sub_msp((jl_value_t*)jl_any_type, ((jl_tvar_t*)tp0b)->ub, b0, env))
+            return 1;
+    }
+
     if (jl_is_datatype(a) && jl_is_datatype(b)) {
         jl_datatype_t *tta = (jl_datatype_t*)a, *ttb = (jl_datatype_t*)b;
         // Type{Union{}} is more specific than other types, so TypeofBottom must be too

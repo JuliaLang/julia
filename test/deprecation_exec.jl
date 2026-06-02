@@ -135,10 +135,12 @@ begin # @deprecate
     @noinline deprecated_typename(T) = Base.typename(T)
     @noinline deprecated_nameof(T) = nameof(T)
     @noinline deprecated_parentmodule(T) = parentmodule(T)
+    @noinline deprecated_isabstracttype(T) = isabstracttype(T)
     deprecated_type_ref = Ref{Any}(Type{Int})
     @test @test_warn "calling `typename` on `Type` is deprecated" deprecated_typename(deprecated_type_ref[]) === TypeEq.name
     @test @test_warn "calling `nameof` on `Type` is deprecated" deprecated_nameof(deprecated_type_ref[]) === :Type
     @test @test_warn "calling `parentmodule` on `Type` is deprecated" deprecated_parentmodule(deprecated_type_ref[]) === Core
+    @test @test_warn "calling `isabstracttype` on a `Type{...}` is deprecated" deprecated_isabstracttype(deprecated_type_ref[]) === true
 
     # test that positional and keyword arguments are forwarded when
     # there is no explicit type annotation

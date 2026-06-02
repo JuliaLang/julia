@@ -210,7 +210,7 @@
 
 export
     # key types
-    Any, Kind, TypeEq, Type, DataType, Vararg, NTuple,
+    Any, TypeEq, Type, DataType, Vararg, NTuple,
     Tuple, UnionAll, TypeVar, Union, Nothing, Cvoid,
     AbstractArray, DenseArray, NamedTuple, Pair,
     # special objects

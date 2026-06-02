@@ -416,6 +416,12 @@ for T in (Nothing, Missing)
     @test Base.promote_typejoin(Union{}, T) === T
 end
 
+# PR #61915: `promote_typejoin_union` must handle `Type{X}` (a `TypeEq` kind), not error
+@test Base.promote_typejoin_union(Type{Int}) === Type{Int}
+@test Base.promote_typejoin_union(Union{Type{Int}, Type{String}}) === Type
+@test fieldtype.(Tuple{Int,Float32,Int}, [1, 2, 3]) == [Int, Float32, Int]
+@test typeof.(Any[Int, "x", 1.0]) == [DataType, String, Float64]
+
 @test promote_type(Bool,Bottom) === Bool
 
 # type declarations

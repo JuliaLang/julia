@@ -317,6 +317,14 @@ end
 @test args_morespecific(Tuple{Type{Union{}}, Type{Union{}}, Any}, Tuple{Type{Union{}}, Any, Type{Union{}}})
 @test args_morespecific(Tuple{Type{Union{}}, Type{Union{}}, Any, Type{Union{}}}, Tuple{Type{Union{}}, Any, Type{Union{}}, Type{Union{}}})
 
+# PR #61915: a kind (e.g. `DataType`) is more specific than an unbounded `Type{T}`
+@test  args_morespecific(Tuple{DataType}, Tuple{Type{T}} where T)
+@test  args_morespecific(Tuple{Vararg{DataType}}, Tuple{Type{T}} where T)
+@test  args_morespecific(Tuple{UnionAll}, Tuple{Type{T}} where T)
+@test !args_morespecific(Tuple{DataType}, Tuple{Type{T}} where T<:Integer)
+@test  args_morespecific(Tuple{Type{T}} where T<:Integer, Tuple{DataType})
+@test  args_morespecific(Tuple{Type{Int}}, Tuple{DataType})
+
 # requires assertions enabled
 let root = NTuple
     N = root.var

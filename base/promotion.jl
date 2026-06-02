@@ -203,6 +203,8 @@ function promote_typejoin_union(::Type{T}) where T
     elseif T isa DataType
         T <: Tuple && return typejoin_union_tuple(T)
         return T
+    elseif isType(T)
+        return T
     else
         error("unreachable") # not a type??
     end
