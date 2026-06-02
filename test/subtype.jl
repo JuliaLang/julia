@@ -3173,3 +3173,20 @@ let
     @test C <: B
     @test X <: Y
 end
+
+# PR #61915: `concrete_min` must treat a `Type{T}` (`TypeEq`) element as
+# contributing no fixed concrete type, so the covariant-tuple diagonal rule in
+# `obvious_subtype` does not wrongly reject a `Tuple` of `Type{}`s against a
+# diagonal `Vararg`. Previously `obvious_subtype` returned a definitive
+# not-subtype that disagreed with full subtyping, tripping `assert` in subtype.c.
+let X = Tuple{Union{Type{Int}, Type{Vector{T}} where T}, Type{Int}},
+    Y = (Tuple{Vararg{T}} where T)
+    @test X <: Y
+    @test typeintersect(X, Y) == X
+    @test typeintersect(Y, X) == X
+end
+let X = Tuple{Union{Type{Int}, Type{Vector{T}} where T}, Union{Type{Int}, Type{Vector{T}} where T}},
+    Y = (Tuple{Vararg{T}} where T)
+    @test X <: Y
+    @test typeintersect(X, Y) == X
+end

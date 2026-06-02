@@ -2435,9 +2435,9 @@ static int concrete_min(jl_value_t *t)
         t = jl_unwrap_unionall(t);
     if (t == (jl_value_t*)jl_bottom_type)
         return 1;
+    if (jl_is_typeeq(t))
+        return 0; // Type{T} may have the concrete supertype `typeof(T)`, so don't try to handle them here
     if (jl_is_datatype(t)) {
-        if (jl_is_typeeq(t))
-            return 0; // Type{T} may have the concrete supertype `typeof(T)`, so don't try to handle them here
         return jl_is_concrete_type(t) ? 1 : 2;
     }
     if (jl_is_vararg(t))
