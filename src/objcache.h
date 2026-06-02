@@ -44,7 +44,8 @@ protected:
     void writerThread();
     void initDB();
     bool updateATime(MDBTxn &Txn, const Hash &H, int64_t Time, bool Fresh);
-    bool evictLRU(MDBTxn &Txn);
+    bool maybeEvictLRU(MDBTxn &Txn, bool Force);
+    size_t dbiSize(MDBTxn &Txn, MDB_dbi Dbi);
 
 private:
     std::atomic<bool> Initialized = false;

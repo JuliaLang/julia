@@ -64,8 +64,7 @@ static const size_t OBJCACHE_CAPACITY =
     parseEnvU64("JULIA_OBJCACHE_CAPACITY", OBJCACHE_DEFAULT_CAPACITY);
 
 // When the map is full, evict down to OBJCACHE_EVICT_TO/2^31 capacity.
-static const uint32_t OBJCACHE_EVICT_TO =
-    parseEnvFrac31("JULIA_OBJCACHE_EVICT_TO", 0.5);
+static const uint32_t OBJCACHE_EVICT_TO = parseEnvFrac31("JULIA_OBJCACHE_EVICT_TO", 0.5);
 // Evict when we reach OBJCACHE_EVICT_FROM/2^31 of capacity.
 static const uint32_t OBJCACHE_EVICT_FROM =
     parseEnvFrac31("JULIA_OBJCACHE_EVICT_FROM", 0.875);
@@ -409,22 +408,8 @@ void ObjCache::writerThread()
         if (!Txn.Txn)
             continue;
 
-        MDB_stat Stat;
-        checkMDB(mdb_stat(Txn.Txn, ObjCacheDbi, &Stat));
-        uint64_t ApproxUsedPages =
-            Stat.ms_leaf_pages + Stat.ms_branch_pages + Stat.ms_overflow_pages ;
-        uint64_t EvictUsedPages =
-            ((OBJCACHE_CAPACITY / Stat.ms_psize) * OBJCACHE_EVICT_FROM) >> 31;
-        // jl_safe_printf("approx used pgs: %llu / %llu\n", ApproxUsedPages, EvictUsedPages);
-        if (ApproxUsedPages > EvictUsedPages || Evict) {
-            if (!evictLRU(Txn))
-                goto abort;
-
-            // Start a new transaction to release our lock on all the pages that
-            // are now free.
-            Txn.commit();
-            Txn = MDBTxn{Env};
-        }
+        if (!maybeEvictLRU(Txn, Evict))
+            goto abort;
         Evict = false;
 
         uv_timeval_t Tv;
@@ -512,39 +497,50 @@ bool ObjCache::updateATime(MDBTxn &Txn, const Hash &Hash, int64_t Time, bool Fre
     return true;
 }
 
-bool ObjCache::evictLRU(MDBTxn &Txn)
+bool ObjCache::maybeEvictLRU(MDBTxn &Txn, bool Force)
 {
-    MDB_cursor *MetaCur;
-    MDB_cursor *ObjCur;
-    checkMDB(mdb_cursor_open(Txn.Txn, ObjMetaDbi, &MetaCur));
-    checkMDB(mdb_cursor_open(Txn.Txn, ObjCacheDbi, &ObjCur));
+    size_t EvictFromSize = (OBJCACHE_CAPACITY * OBJCACHE_EVICT_FROM) >> 31;
+    auto ShouldEvict = [&]() {
+        return Force ||
+               dbiSize(Txn, ObjCacheDbi) + dbiSize(Txn, ObjMetaDbi) >= EvictFromSize;
+    };
+    if (!ShouldEvict())
+        return true;
+    jl_safe_printf("evicting: %zu / %zu\n",
+                   dbiSize(Txn, ObjCacheDbi) + dbiSize(Txn, ObjMetaDbi), EvictFromSize);
 
-    // TODO: track this better
-    size_t NumEvicted = 0, SizeEvicted = 0;
-    size_t GoalEvicted = (OBJCACHE_CAPACITY * OBJCACHE_EVICT_TO) >> 31;
+    MDB_cursor *MetaCur;
+    checkMDB(mdb_cursor_open(Txn.Txn, ObjMetaDbi, &MetaCur));
 
     auto LowMeta = toMetaKey(0, {});
     MDB_val MetaKey = mdbVal(LowMeta);
     int Ret = mdb_cursor_get(MetaCur, &MetaKey, nullptr, MDB_SET_RANGE);
-    while (SizeEvicted < GoalEvicted && !Ret &&
-           ((const char *)MetaKey.mv_data)[0] == METAKEY_TAG) {
+    while (!Ret && ShouldEvict() && ((const char *)MetaKey.mv_data)[0] == METAKEY_TAG) {
+        Force = false;
         auto [Time, Hash] = fromMetaKey((const char *)MetaKey.mv_data);
-        MDB_val Data;
         auto ObjKey = toObjKey(Hash);
         MDB_val Key = mdbVal(ObjKey);
-        checkMDB(mdb_cursor_get(ObjCur, &Key, &Data, MDB_SET_KEY));
-        ++NumEvicted;
-        SizeEvicted += Data.mv_size;
-        checkMDB(mdb_cursor_del(ObjCur, 0));
-
+        checkMDB(mdb_del(Txn.Txn, ObjCacheDbi, &Key, nullptr));
         Key = mdbVal(ObjKey);
         checkMDB(mdb_del(Txn.Txn, ObjMetaDbi, &Key, nullptr));
-
         checkMDB(mdb_cursor_del(MetaCur, 0));
         Ret = mdb_cursor_get(MetaCur, &MetaKey, nullptr, MDB_NEXT);
-        checkMDB(Ret);
+        if (Ret != MDB_NOTFOUND)
+            checkMDB(Ret);
     }
-    (void)NumEvicted;
+
+    // Start a new transaction to release our lock on all the pages that
+    // are now free.
+    Txn.commit();
+    Txn = MDBTxn{Env};
 
     return true;
+}
+
+size_t ObjCache::dbiSize(MDBTxn &Txn, MDB_dbi Dbi)
+{
+    MDB_stat Stat;
+    mdb_stat(Txn.Txn, ObjCacheDbi, &Stat);
+    return (Stat.ms_leaf_pages + Stat.ms_branch_pages + Stat.ms_overflow_pages) *
+           Stat.ms_psize;
 }
