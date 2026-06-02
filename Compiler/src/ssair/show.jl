@@ -106,8 +106,8 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), code::Union{IRCode,Co
     else
         print(io, " "^(maxlength_idx + 4))
     end
-    # TODO: `indent` is supposed to be the full indent including `"│  "` prefixes
-    indent = 2
+    # TODO: `indent` is supposed to be the full width of the leader for correct alignment
+    indent = 16
     if !color && stmt isa PiNode
         # when the outer context is already colored (green, for pending nodes), don't use the usual coloring printer
         print(io, "π (")
