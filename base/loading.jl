@@ -3343,7 +3343,8 @@ const PRECOMPILE_TRACE_COMPILE = Ref{String}()
 const PRECOMPILE_VERBOSE_TIMING_MARKER = "__JL_PRECOMP_VERBOSE_TIMING__"
 function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, output_o::Union{Nothing, String},
                            concrete_deps::typeof(_concrete_dependencies), flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(),
-                           internal_stderr::IO = stderr, internal_stdout::IO = stdout, loadable_exts::Union{Vector{PkgId},Nothing}=nothing)
+                           internal_stderr::IO = stderr, internal_stdout::IO = stdout, loadable_exts::Union{Vector{PkgId},Nothing}=nothing;
+                           report_timing::Bool=false)
     @nospecialize internal_stderr internal_stdout
     rm(output, force=true)   # Remove file if it exists
     output_o === nothing || rm(output_o, force=true)
@@ -3390,17 +3391,18 @@ function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, outpu
         push!(opts, "--trace-compile-timing")
     end
 
-    io = open(pipeline(addenv(`$(julia_cmd(;cpu_target)::Cmd)
-                               $(flags)
-                               $(opts)
-                               --output-incremental=yes
-                               --startup-file=no --history-file=no --warn-overwrite=yes
-                               $(have_color === nothing ? "--color=auto" : have_color ? "--color=yes" : "--color=no")
-                               -`,
-                              "OPENBLAS_NUM_THREADS" => 1,
-                              "JULIA_NUM_THREADS" => 1,
-                              "JULIA_PRECOMP_REPORT_TIMING" => 1),
-                       stderr = internal_stderr, stdout = internal_stdout),
+    cmd = `$(julia_cmd(;cpu_target)::Cmd)
+           $(flags)
+           $(opts)
+           --output-incremental=yes
+           --startup-file=no --history-file=no --warn-overwrite=yes
+           $(have_color === nothing ? "--color=auto" : have_color ? "--color=yes" : "--color=no")
+           -`
+    cmd = addenv(cmd, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1)
+    # Only request per-package timing reports when explicitly asked for (e.g. by
+    # precompilepkgs), so that the marker lines don't leak into normal load logs.
+    report_timing && (cmd = addenv(cmd, "JULIA_PRECOMP_REPORT_TIMING" => 1))
+    io = open(pipeline(cmd, stderr = internal_stderr, stdout = internal_stdout),
               "w", stdout)
     # write data over stdin to avoid the (unlikely) case of exceeding max command line size
     write(io.in, """
@@ -3463,11 +3465,11 @@ This can be used to reduce package load times. Cache files are stored in
 `DEPOT_PATH[1]/compiled`. See [Module initialization and precompilation](@ref)
 for important notes.
 """
-function compilecache(pkg::PkgId, internal_stderr::IO = stderr, internal_stdout::IO = stdout; flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(), loadable_exts::Union{Vector{PkgId},Nothing}=nothing, signal_channel::Union{Channel{Int32},Nothing}=nothing)
+function compilecache(pkg::PkgId, internal_stderr::IO = stderr, internal_stdout::IO = stdout; flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(), loadable_exts::Union{Vector{PkgId},Nothing}=nothing, signal_channel::Union{Channel{Int32},Nothing}=nothing, report_timing::Bool=false)
     @nospecialize internal_stderr internal_stdout
     spec = locate_package_load_spec(pkg)
     spec === nothing && throw(ArgumentError("$(repr("text/plain", pkg)) not found during precompilation"))
-    return compilecache(pkg, spec, internal_stderr, internal_stdout; flags, cacheflags, loadable_exts, signal_channel)
+    return compilecache(pkg, spec, internal_stderr, internal_stdout; flags, cacheflags, loadable_exts, signal_channel, report_timing)
 end
 
 const MAX_NUM_PRECOMPILE_FILES = Ref(10)
@@ -3475,7 +3477,7 @@ const MAX_NUM_PRECOMPILE_FILES = Ref(10)
 function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stderr, internal_stdout::IO = stdout,
                       keep_loaded_modules::Bool = true; flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(),
                       loadable_exts::Union{Vector{PkgId},Nothing}=nothing, signal_channel::Union{Channel{Int32},Nothing}=nothing,
-                      pid_channel::Union{Channel{Int32},Nothing}=nothing)
+                      pid_channel::Union{Channel{Int32},Nothing}=nothing, report_timing::Bool=false)
 
     @nospecialize internal_stderr internal_stdout
     # decide where to put the resulting cache file
@@ -3513,7 +3515,7 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
             close(tmpio_o)
             close(tmpio_so)
         end
-        p = create_expr_cache(pkg, spec, tmppath, tmppath_o, concrete_deps, flags, cacheflags, internal_stderr, internal_stdout, loadable_exts)
+        p = create_expr_cache(pkg, spec, tmppath, tmppath_o, concrete_deps, flags, cacheflags, internal_stderr, internal_stdout, loadable_exts; report_timing)
 
         # Report the PID of the compilation subprocess
         if pid_channel !== nothing
