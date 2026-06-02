@@ -303,6 +303,19 @@ function resize!(stmts::InstructionStream, len)
     return stmts
 end
 
+# Reset a recycled, no-longer-referenced stream to the state of a fresh
+# `InstructionStream(len)`, reusing the backing buffers when their capacity allows.
+# Used by the optimizer's per-pipeline stream pool to recycle a prior pass's dead
+# result stream instead of allocating fresh compaction buffers.
+function reinit_stream!(stmts::InstructionStream, len::Int)
+    empty!(stmts.stmt); resize!(stmts.stmt, len)   # leaves all slots #undef, as in InstructionStream(len)
+    empty!(stmts.type); resize!(stmts.type, len)   # leaves all slots #undef
+    resize!(stmts.info, len); fill!(stmts.info, NoCallInfo())
+    resize!(stmts.line, 3len); fill!(stmts.line, Int32(0))
+    resize!(stmts.flag, len); fill!(stmts.flag, IR_FLAG_NULL)
+    return stmts
+end
+
 struct Instruction
     data::InstructionStream
     idx::Int
@@ -793,12 +806,20 @@ mutable struct IncrementalCompact
     active_result_bb::Int
     renamed_new_nodes::Bool
 
-    function IncrementalCompact(code::IRCode, cfg_transform::CFGTransformState)
+    # Optional free-list of dead `InstructionStream`s (from earlier passes of the same
+    # optimize() pipeline) to recycle the `result` stream from instead of allocating.
+    # When non-`nothing`, this compaction's own (now-dead) input stream is returned to the
+    # pool by `complete`. `nothing` for nested/standalone compactions that don't pool.
+    stream_pool::Union{Nothing,Vector{InstructionStream}}
+
+    function IncrementalCompact(code::IRCode, cfg_transform::CFGTransformState,
+                                stream_pool::Union{Nothing,Vector{InstructionStream}}=nothing)
         # Sort by position with attach after nodes after regular ones
         info = code.new_nodes.info
         perm = sort!(collect(eachindex(info)); by=i::Int->(2info[i].pos+info[i].attach_after, i))
         new_len = length(code.stmts) + length(info)
-        result = InstructionStream(new_len)
+        result = stream_pool !== nothing && !isempty(stream_pool) ?
+            reinit_stream!(pop!(stream_pool), new_len) : InstructionStream(new_len)
         code.debuginfo.codelocs = result.line
         used_ssas = fill(0, new_len)
         new_new_used_ssas = Vector{Int}()
@@ -810,7 +831,7 @@ mutable struct IncrementalCompact
         pending_perm = Int[]
         return new(code, result, cfg_transform, ssa_rename, used_ssas, late_fixup, perm, 1,
             new_new_nodes, new_new_used_ssas, pending_nodes, pending_perm,
-            1, 1, 1, 1, false)
+            1, 1, 1, 1, false, stream_pool)
     end
 
     # For inlining
@@ -826,12 +847,13 @@ mutable struct IncrementalCompact
             ssa_rename, parent.used_ssas,
             parent.late_fixup, perm, 1,
             parent.new_new_nodes, parent.new_new_used_ssas, pending_nodes, pending_perm,
-            1, result_offset, 1, parent.active_result_bb, false)
+            1, result_offset, 1, parent.active_result_bb, false, nothing)
     end
 end
 
-function IncrementalCompact(code::IRCode, allow_cfg_transforms::Bool=false)
-    return IncrementalCompact(code, CFGTransformState!(code.cfg.blocks, allow_cfg_transforms))
+function IncrementalCompact(code::IRCode, allow_cfg_transforms::Bool=false,
+                            stream_pool::Union{Nothing,Vector{InstructionStream}}=nothing)
+    return IncrementalCompact(code, CFGTransformState!(code.cfg.blocks, allow_cfg_transforms), stream_pool)
 end
 
 struct TypesView{T}
@@ -2181,11 +2203,21 @@ function complete(compact::IncrementalCompact)
         resize!(compact.result, length(compact.result) - nundef)
     end
 
+    # The input stream is dead once we hand back the new IRCode (which wraps the freshly
+    # built `result`, not `compact.ir.stmts`). Return it to the pool for a later pass to
+    # recycle. Only reached for pooled (top-level run_passes) compactions, whose inputs are
+    # private post-slot2reg streams — never aliased to the CodeInfo's arrays.
+    pool = compact.stream_pool
+    if pool !== nothing
+        push!(pool, compact.ir.stmts)
+    end
+
     return IRCode(compact.ir, compact.result, cfg, compact.new_new_nodes)
 end
 
-function compact!(code::IRCode, allow_cfg_transforms::Bool=false)
-    compact = IncrementalCompact(code, allow_cfg_transforms)
+function compact!(code::IRCode, allow_cfg_transforms::Bool=false,
+                  stream_pool::Union{Nothing,Vector{InstructionStream}}=nothing)
+    compact = IncrementalCompact(code, allow_cfg_transforms, stream_pool)
     # Just run through the iterator without any processing
     for _ in compact; end # _ isa Pair{Int, Any}
     return finish(compact)

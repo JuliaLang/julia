@@ -1054,18 +1054,22 @@ function run_passes_ipo_safe(
     end
 
     __stage__ = 0  # used by @pass
+    # Free-list of dead `InstructionStream`s, recycled across the sequential top-level
+    # compactions below (each pass's now-dead input stream feeds the next pass's result),
+    # avoiding a fresh per-pass allocation of the result buffers.
+    stream_pool = InstructionStream[]
     # NOTE: The pass name MUST be unique for `optimize_until::String` to work
     @pass "CC: CONVERT"   ir = convert_to_ircode(ci, sv)
     @pass "CC: SLOT2REG"  ir = slot2reg(ir, ci, sv)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
-    @pass "CC: COMPACT_1" ir = compact!(ir)
+    @pass "CC: COMPACT_1" ir = compact!(ir, false, stream_pool)
     @pass "CC: INLINING"  ir = ssa_inlining_pass!(ir, sv.inlining, ci.propagate_inbounds)
     # @zone "CC: VERIFY 2" verify_ir(ir)
-    @pass "CC: COMPACT_2" ir = compact!(ir)
+    @pass "CC: COMPACT_2" ir = compact!(ir, false, stream_pool)
     @pass "CC: SROA"      ir = sroa_pass!(ir, sv.inlining)
     @pass "CC: ADCE"      (ir, made_changes) = adce_pass!(ir, sv.inlining)
     if made_changes
-        @pass "CC: COMPACT_3" ir = compact!(ir, true)
+        @pass "CC: COMPACT_3" ir = compact!(ir, true, stream_pool)
     end
     if is_asserts()
         @zone "CC: VERIFY_3" begin
