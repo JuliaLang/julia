@@ -17,11 +17,50 @@ static constexpr int OBJCACHE_SCHEMA = 1;
 // Skip atime refreshes when the existing access time is within this many
 // nanoseconds of the new one, to avoid excessive LRU bookkeeping writes.
 static constexpr int64_t OBJCACHE_ATIME_GRANULARITY = 300;
-static constexpr size_t OBJCACHE_CAPACITY = 128 << 20; // 1 MiB (temp)
+
+static uint64_t parseEnvU64(const char *Name, uint64_t Default)
+{
+    const char *S = getenv(Name);
+    if (!S || !*S)
+        return Default;
+    char *End;
+    unsigned long long V = strtoull(S, &End, 0);
+    if (*End != '\0') {
+        jl_printf(JL_STDERR, "objcache: invalid value for %s: %s\n", Name, S);
+        return Default;
+    }
+    return (uint64_t)V;
+}
+
+// Parse an env var as a real number in [0, 1] and convert to a fixed-point
+// fraction of 2^31.
+static uint32_t parseEnvFrac31(const char *Name, double Default)
+{
+    const char *S = getenv(Name);
+    double V = Default;
+    if (S && *S) {
+        char *End;
+        V = strtod(S, &End);
+        if (*End != '\0') {
+            jl_printf(JL_STDERR, "objcache: invalid value for %s: %s\n", Name, S);
+            V = Default;
+        }
+    }
+    if (V < 0.0)
+        V = 0.0;
+    if (V > 1.0)
+        V = 1.0;
+    return (uint32_t)(V * (double)(1ULL << 31));
+}
+
+static const size_t OBJCACHE_CAPACITY =
+    parseEnvU64("JULIA_OBJCACHE_CAPACITY", 128ULL << 20);
 // When the map is full, evict down to OBJCACHE_EVICT_TO/2^31 capacity.
-static constexpr uint32_t OBJCACHE_EVICT_TO = 536870912 /* 1073741824 */; // 50%
+static const uint32_t OBJCACHE_EVICT_TO =
+    parseEnvFrac31("JULIA_OBJCACHE_EVICT_TO", 0.5);
 // Evict when we reach OBJCACHE_EVICT_FROM/2^31 of capacity.
-static constexpr uint32_t OBJCACHE_EVICT_FROM = 1073741824 /* 1610612736 */; // 75%
+static const uint32_t OBJCACHE_EVICT_FROM =
+    parseEnvFrac31("JULIA_OBJCACHE_EVICT_FROM", 0.875);
 
 static FILE *getLogFile()
 {
