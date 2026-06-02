@@ -583,32 +583,46 @@ function explicit_manifest_entry_path(args...)
     return spec.path
 end
 
+# These functions get called from generated functions a lot where printing causes errors. We have the following options:
+# 1. Use ordinary depwarn. This breaks generated functions that use these deprecations, defeating the point.
+# 2. Always error in generated functions. This would probably be best (the depwarn would run at expansion time),
+#    but it completely breaks inference of these generated functions and some of them are important.
+# 3. Never print a warning in generated functions (but do throw the error if --depwarn=error).
+#
+# We choose option 3. It's not ideal, because users that never use --depawarn=error will never see the warning,
+# but it's the least bad tradeoff among the lot.
+function depwarn_if_not_pure(args...)
+    opts = JLOptions()
+    opts.depwarn != 2 && ccall(:jl_is_in_pure_context, Bool, ()) && return
+    depwarn(args...)
+end
+
 @noinline function getproperty(x::TypeEq, s::Symbol)
     if s === :parameters
-        depwarn("accessing `Type.parameters` is deprecated; use `Base.type_parameter(x)` instead", :getproperty)
+        depwarn_if_not_pure("accessing `Type.parameters` is deprecated; use `Base.type_parameter(x)` instead", :getproperty)
         return Core.svec(type_parameter(x))
     elseif s === :name
-        depwarn("accessing `Type.name` is deprecated without replacement. Examine the callsite.", :getproperty)
+        depwarn_if_not_pure("accessing `Type.name` is deprecated without replacement. If for detection, use `Base.isType(x)`.", :getproperty)
         return TypeEq.name
     elseif s === :hash
-        depwarn("accessing `Type.hash` is deprecated; use `Base._jl_type_cache_hash(x)` instead", :getproperty)
+        depwarn_if_not_pure("accessing `Type.hash` is deprecated; use `Base._jl_type_cache_hash(x)` instead", :getproperty)
         return reinterpret(Int32, UInt32(_jl_type_cache_hash(x)))
     end
     return getfield(x, s)
 end
 
 @noinline function typename(x::TypeEq)
-    depwarn("calling `typename` on `Type` is deprecated; use `Base.isType(x)` instead", :typename)
+    depwarn_if_not_pure("calling `typename` on `Type` is deprecated. If for detection, use `Base.isType(x)`.", :typename)
     return TypeEq.name
 end
 
 @noinline function nameof(x::TypeEq)
-    depwarn("calling `nameof` on `Type` is deprecated; use `Base.isType(x)` instead", :nameof)
+    depwarn_if_not_pure("calling `nameof` on `Type` is deprecated. If for detection, use `Base.isType(x)`.", :nameof)
     return :Type
 end
 
 @noinline function parentmodule(x::TypeEq)
-    depwarn("calling `parentmodule` on `Type` is deprecated; use `Base.isType(x)` instead", :parentmodule)
+    depwarn_if_not_pure("calling `parentmodule` on `Type` is deprecated. If for detection, use `Base.isType(x)`.", :parentmodule)
     return Core
 end
 

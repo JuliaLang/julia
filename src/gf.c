@@ -1810,8 +1810,6 @@ jl_method_instance_t *cache_method(
         jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(jl_atomic_load_relaxed(cache), &search, offs, /*subtype*/1);
         if (entry && jl_egal((jl_value_t*)entry->simplesig, simplett ? (jl_value_t*)simplett : jl_nothing) &&
                 jl_egal((jl_value_t*)guardsigs, (jl_value_t*)entry->guardsigs)) {
-            if (mc)
-                JL_UNLOCK(&mc->writelock);
             JL_GC_POP();
             if (mc) JL_UNLOCK(&mc->writelock);
             return entry->func.linfo;
