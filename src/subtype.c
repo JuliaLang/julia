@@ -2101,7 +2101,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
         // `TypeEq(T)` for a free typevar `T` is the kind of all types matching
         // `T`'s bounds; every such instance is itself a type, i.e. a `Kind`. So
         // `Type{T} <: y` reduces to `Kind <: y` (in particular `Type === Kind`).
-        return subtype((jl_value_t*)jl_kind_type, y, e, param);
+        return subtype((jl_value_t*)jl_anytype_type, y, e, param);
     }
     if (jl_is_datatype(x) && jl_is_typeeq(y) && x != (jl_value_t*)jl_typeofbottom_type) {
         jl_value_t *tp0 = jl_typeeq_T(y);

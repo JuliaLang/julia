@@ -66,7 +66,7 @@
     XX(interrupt_exception, jl_value_t*) \
     XX(intersect_type, jl_datatype_t*) \
     XX(intrinsic_type, jl_datatype_t*) \
-    XX(kind_type, jl_datatype_t*) \
+    XX(anytype_type, jl_datatype_t*) \
     XX(kwcall_type, jl_datatype_t*) \
     XX(lineinfonode_type, jl_datatype_t*) \
     XX(linenumbernode_type, jl_datatype_t*) \

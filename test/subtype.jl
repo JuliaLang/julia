@@ -602,16 +602,16 @@ function test_old()
     @test Type{Complex} <: UnionAll
     @test isa(Complex,Type{Complex})
 
-    # `Type` (i.e. `Type{T} where T`) and `Kind` denote the same set of all
+    # `Type` (i.e. `Type{T} where T`) and `AnyType` denote the same set of all
     # types, so they are equal; the type cache canonicalizes them as parameters.
-    @test Type <: Core.Kind
-    @test Core.Kind <: Type
-    @test Type == Core.Kind
-    @test Vector{Type} === Vector{Core.Kind}
-    # bounded `Type{}`s are strict subtypes of `Kind`, not equal to it
-    @test (Type{T} where T<:Real) != Core.Kind
-    @test (Type{T} where T<:Real) <: Core.Kind
-    @test !(Core.Kind <: (Type{T} where T<:Real))
+    @test Type <: Core.AnyType
+    @test Core.AnyType <: Type
+    @test Type == Core.AnyType
+    @test Vector{Type} === Vector{Core.AnyType}
+    # bounded `Type{}`s are strict subtypes of `AnyType`, not equal to it
+    @test (Type{T} where T<:Real) != Core.AnyType
+    @test (Type{T} where T<:Real) <: Core.AnyType
+    @test !(Core.AnyType <: (Type{T} where T<:Real))
     # a `Type{X}` with a non-typevar parameter still dispatches as the singleton
     # `typeof(X)` (e.g. every `Ref{T}` is a `DataType`)
     @test (Type{Ref{T}} where T<:Real) <: DataType

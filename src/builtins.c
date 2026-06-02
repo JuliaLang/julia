@@ -2647,7 +2647,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);
-    add_builtin("Kind", (jl_value_t*)jl_kind_type);
+    add_builtin("AnyType", (jl_value_t*)jl_anytype_type);
     add_builtin("TypeEq", (jl_value_t*)jl_typeeq_type);
     add_builtin("Type", (jl_value_t*)jl_type_type);
     add_builtin("Nothing", (jl_value_t*)jl_nothing_type);

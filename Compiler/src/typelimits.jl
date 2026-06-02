@@ -86,7 +86,7 @@ end
 # The goal of this function is to return a type of greater "size" and less "complexity" than
 # both `t` or `c` over the lattice defined by `sources`, `depth`, and `allowed_tuplelen`.
 function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVector, depth::Int, allowed_tuplelen::Int)
-    @assert isa(t, Kind) && isa(c, Kind) "unhandled TypeVar / Vararg"
+    @assert isa(t, AnyType) && isa(c, AnyType) "unhandled TypeVar / Vararg"
     if t === c
         return t # quick egal test
     elseif t === Union{}
@@ -105,12 +105,12 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
     # then unwrap `t`
     # NOTE that `TypeVar` / `Vararg` are handled separately to catch the logic errors
     if isa(c, UnionAll)
-        return __limit_type_size(t, c.body, sources, depth, allowed_tuplelen)::Kind
+        return __limit_type_size(t, c.body, sources, depth, allowed_tuplelen)::AnyType
     end
     if isa(t, UnionAll)
         tbody = __limit_type_size(t.body, c, sources, depth, allowed_tuplelen)
         tbody === t.body && return t
-        return UnionAll(t.var, tbody)::Kind
+        return UnionAll(t.var, tbody)::AnyType
     elseif isa(t, Union)
         if isa(c, Union)
             a = __limit_type_size(t.a, c.a, sources, depth, allowed_tuplelen)
@@ -739,7 +739,7 @@ end
     return tmerge(wl, typea, typeb)
 end
 
-@nospecializeinfer function tmerge(lattice::JLTypeLattice, @nospecialize(typea::Kind), @nospecialize(typeb::Kind))
+@nospecializeinfer function tmerge(lattice::JLTypeLattice, @nospecialize(typea::AnyType), @nospecialize(typeb::AnyType))
     # it's always ok to form a Union of two concrete types
     act = isconcretetype(typea)
     bct = isconcretetype(typeb)
@@ -782,7 +782,7 @@ end
     return a.name === bname ? bname : nothing
 end
 
-@nospecializeinfer @noinline function tmerge_types_slow(@nospecialize(typea::Kind), @nospecialize(typeb::Kind))
+@nospecializeinfer @noinline function tmerge_types_slow(@nospecialize(typea::AnyType), @nospecialize(typeb::AnyType))
     # collect the list of types from past tmerge calls returning Union
     # and then reduce over that list
     types = Any[]

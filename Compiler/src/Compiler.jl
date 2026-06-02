@@ -37,7 +37,7 @@ else
 
 using Core.Intrinsics, Core.IR
 
-using Core: ABIOverride, Builtin, CodeInstance, IntrinsicFunction, Kind, MethodInstance, MethodMatch,
+using Core: ABIOverride, Builtin, CodeInstance, IntrinsicFunction, AnyType, MethodInstance, MethodMatch,
     MethodTable, MethodCache, PartialOpaque, SimpleVector, TypeofVararg,
     TypeEq,
     _apply_iterate, apply_type, compilerbarrier, donotdelete, memoryref_isassigned,

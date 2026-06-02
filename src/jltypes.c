@@ -1876,7 +1876,7 @@ static unsigned typeeq_hash(jl_value_t *T, int *failed) JL_NOTSAFEPOINT
         // the unbounded `Type{T} where T` is `=== Kind`; hash it as such so that
         // e.g. `Vector{Type}` and `Vector{Kind}` land in the same cache bucket
         // (they are equal per `typekey_eq`/`jl_types_equal`).
-        return type_hash((jl_value_t*)jl_kind_type, failed);
+        return type_hash((jl_value_t*)jl_anytype_type, failed);
     unsigned hashT = type_hash(T, failed);
     return bitmix(~jl_type_typename->hash, hashT);
 }
@@ -3187,7 +3187,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_any_type = (jl_datatype_t*)jl_new_abstracttype((jl_value_t*)jl_symbol("Any"), core, NULL, jl_emptysvec);
     jl_any_type->super = jl_any_type;
 
-    jl_kind_type = jl_new_abstracttype((jl_value_t*)jl_symbol("Kind"), core, jl_any_type, jl_emptysvec);
+    jl_anytype_type = jl_new_abstracttype((jl_value_t*)jl_symbol("AnyType"), core, jl_any_type, jl_emptysvec);
     jl_type_type = (jl_unionall_t*)jl_any_type; // replaced with TypeEq(T) where T below
     jl_type_typename = NULL;
 
@@ -3195,7 +3195,7 @@ void jl_init_types(void) JL_GC_DISABLED
     // NOTE: types are not actually mutable, but we want to ensure they are heap-allocated with stable addresses
     jl_datatype_type->name = jl_new_typename_in(jl_symbol("DataType"), core, 0, 1);
     jl_datatype_type->name->wrapper = (jl_value_t*)jl_datatype_type;
-    jl_datatype_type->super = jl_kind_type;
+    jl_datatype_type->super = jl_anytype_type;
     jl_datatype_type->parameters = jl_emptysvec;
     jl_datatype_type->name->n_uninitialized = 8 - 3;
     jl_datatype_type->name->names = jl_perm_symsvec(8,
@@ -3307,14 +3307,14 @@ void jl_init_types(void) JL_GC_DISABLED
     const static uint32_t tvar_constfields[1] = { 0x00000007 }; // all fields are constant, even though TypeVar itself has identity
     jl_tvar_type->name->constfields = tvar_constfields;
 
-    jl_typeofbottom_type = jl_new_datatype(jl_symbol("TypeofBottom"), core, jl_kind_type, jl_emptysvec,
+    jl_typeofbottom_type = jl_new_datatype(jl_symbol("TypeofBottom"), core, jl_anytype_type, jl_emptysvec,
                                            jl_emptysvec, jl_emptysvec, jl_emptysvec, 0, 0, 0);
     XX(typeofbottom);
     jl_bottom_type = jl_gc_permobj(ct->ptls, 0, jl_typeofbottom_type, 0);
     jl_set_typetagof(jl_bottom_type, jl_typeofbottom_tag, GC_OLD_MARKED);
     jl_typeofbottom_type->instance = jl_bottom_type;
 
-    jl_unionall_type = jl_new_datatype(jl_symbol("UnionAll"), core, jl_kind_type, jl_emptysvec,
+    jl_unionall_type = jl_new_datatype(jl_symbol("UnionAll"), core, jl_anytype_type, jl_emptysvec,
                                        jl_perm_symsvec(2, "var", "body"),
                                        jl_svec(2, jl_tvar_type, jl_any_type),
                                        jl_emptysvec, 0, 0, 2);
@@ -3322,7 +3322,7 @@ void jl_init_types(void) JL_GC_DISABLED
     // It seems like we probably usually end up needing the box for kinds (often used in an Any context), so force it to exist
     jl_unionall_type->name->mayinlinealloc = 0;
 
-    jl_uniontype_type = jl_new_datatype(jl_symbol("Union"), core, jl_kind_type, jl_emptysvec,
+    jl_uniontype_type = jl_new_datatype(jl_symbol("Union"), core, jl_anytype_type, jl_emptysvec,
                                         jl_perm_symsvec(2, "a", "b"),
                                         jl_svec(2, jl_any_type, jl_any_type),
                                         jl_emptysvec, 0, 0, 2);
@@ -3330,21 +3330,21 @@ void jl_init_types(void) JL_GC_DISABLED
     // It seems like we probably usually end up needing the box for kinds (often used in an Any context), so force it to exist
     jl_uniontype_type->name->mayinlinealloc = 0;
 
-    jl_value_t *kind_or_typevar_types[2] = { (jl_value_t*)jl_kind_type, (jl_value_t*)jl_tvar_type };
-    jl_value_t *kind_or_typevar_type = jl_type_union(kind_or_typevar_types, 2);
+    jl_value_t *anytype_or_typevar_types[2] = { (jl_value_t*)jl_anytype_type, (jl_value_t*)jl_tvar_type };
+    jl_value_t *kind_or_typevar_type = jl_type_union(anytype_or_typevar_types, 2);
     jl_svecset(jl_tvar_type->types, 1, kind_or_typevar_type);
     jl_svecset(jl_tvar_type->types, 2, kind_or_typevar_type);
 
     // Internal-use-only kind dual to Union (see #61917). Not registered as a
     // small_typeof tag: it is recognized by identity (jl_is_intersecttype) and
     // only ever lives transiently inside the subtyping algorithm.
-    jl_intersect_type = jl_new_datatype(jl_symbol("Intersect"), core, jl_kind_type, jl_emptysvec,
+    jl_intersect_type = jl_new_datatype(jl_symbol("Intersect"), core, jl_anytype_type, jl_emptysvec,
                                         jl_perm_symsvec(2, "a", "b"),
                                         jl_svec(2, jl_any_type, jl_any_type),
                                         jl_emptysvec, 0, 0, 2);
     jl_intersect_type->name->mayinlinealloc = 0;
 
-    jl_typeeq_type = jl_new_datatype(jl_symbol("TypeEq"), core, jl_kind_type, jl_emptysvec,
+    jl_typeeq_type = jl_new_datatype(jl_symbol("TypeEq"), core, jl_anytype_type, jl_emptysvec,
                                      jl_perm_symsvec(1, "T"),
                                      jl_svec(1, kind_or_typevar_type),
                                      jl_emptysvec, 0, 0, 1);
@@ -3380,7 +3380,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_anytuple_type->maybe_subtype_of_cache = 0;
     jl_anytuple_type->layout = NULL;
 
-    jl_typeofbottom_type->super = jl_kind_type;
+    jl_typeofbottom_type->super = jl_anytype_type;
     jl_emptytuple_type = (jl_datatype_t*)jl_apply_tuple_type(jl_emptysvec, 0);
     jl_emptytuple = jl_gc_permobj(ct->ptls, 0, jl_emptytuple_type, 0);
     jl_emptytuple_type->instance = jl_emptytuple;

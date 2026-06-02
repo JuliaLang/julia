@@ -96,7 +96,7 @@ widenlattice(𝕃::InferenceLattice) = 𝕃.parent
 is_valid_lattice_norec(::InferenceLattice, @nospecialize(elem)) = isa(elem, LimitedAccuracy)
 
 """
-    tmeet(𝕃::AbstractLattice, a, b::Kind)
+    tmeet(𝕃::AbstractLattice, a, b::AnyType)
 
 Compute the lattice meet of lattice elements `a` and `b` over the lattice `𝕃`,
 dropping any results that will not be inhabited at runtime.
@@ -107,7 +107,7 @@ Note that currently `b` is restricted to being a type
 """
 function tmeet end
 
-function tmeet(::JLTypeLattice, @nospecialize(a::Kind), @nospecialize(b::Kind))
+function tmeet(::JLTypeLattice, @nospecialize(a::AnyType), @nospecialize(b::AnyType))
     ti = typeintersect(a, b)
     valid_as_lattice(ti, true) || return Bottom
     return ti
@@ -150,7 +150,7 @@ If `𝕃` is `JLTypeLattice`, this is equivalent to subtyping.
 """
 function ⊑ end
 
-@nospecializeinfer ⊑(::JLTypeLattice, @nospecialize(a::Kind), @nospecialize(b::Kind)) = a <: b
+@nospecializeinfer ⊑(::JLTypeLattice, @nospecialize(a::AnyType), @nospecialize(b::AnyType)) = a <: b
 
 """
     ⊏(𝕃::AbstractLattice, a, b)::Bool

@@ -1678,7 +1678,7 @@ function typeeq_apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any})
     isType(ai) && return true
     isa(ai, PartialTypeVar) && return true
     ai = widenconst(ai)
-    return (⊑(𝕃, ai, Kind) || ⊑(𝕃, ai, TypeVar) ||
+    return (⊑(𝕃, ai, AnyType) || ⊑(𝕃, ai, TypeVar) ||
             (isa(ai, Type) && valid_tparam_type(ai)))
 end
 
@@ -1698,7 +1698,7 @@ function typeeq_apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
         return Type{TypeEq{ai.tv}}
     end
     ai = widenconst(ai)
-    if ⊑(𝕃, ai, Kind) || ⊑(𝕃, ai, TypeVar) || (isa(ai, Type) && valid_tparam_type(ai))
+    if ⊑(𝕃, ai, AnyType) || ⊑(𝕃, ai, TypeVar) || (isa(ai, Type) && valid_tparam_type(ai))
         return TypeEq
     end
     if isa(ai, Type) && isconcretetype(ai)

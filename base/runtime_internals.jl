@@ -981,7 +981,7 @@ or [`Core.TypeofBottom`](@ref).
 
 All kinds are [concrete](@ref isconcretetype) because types are Julia values.
 """
-iskindtype(@nospecialize t) = (t === Core.Kind || t === DataType || t === UnionAll || t === Union || t === TypeEq || t === typeof(Bottom))
+iskindtype(@nospecialize t) = (t === Core.AnyType || t === DataType || t === UnionAll || t === Union || t === TypeEq || t === typeof(Bottom))
 
 """
     Base.isconcretedispatch(T)
@@ -1159,7 +1159,7 @@ We can use it to summarize information about a struct:
 julia> structinfo(T) = [(fieldoffset(T,i), fieldname(T,i), fieldtype(T,i)) for i = 1:fieldcount(T)];
 
 julia> structinfo(Base.Filesystem.StatStruct)
-14-element Vector{Tuple{UInt64, Symbol, Kind}}:
+14-element Vector{Tuple{UInt64, Symbol, AnyType}}:
  (0x0000000000000000, :desc, Union{RawFD, String})
  (0x0000000000000008, :device, UInt64)
  (0x0000000000000010, :inode, UInt64)
@@ -1384,7 +1384,7 @@ function to_tuple_type(@nospecialize(t))
             if isa(p, Core.TypeofVararg)
                 p = unwrapva(p)
             end
-            if !(isa(p, Core.Kind) || isa(p, TypeVar))
+            if !(isa(p, Core.AnyType) || isa(p, TypeVar))
                 error("argument tuple type must contain only types")
             end
         end
@@ -1414,7 +1414,7 @@ end
 
 Determine whether `t` is a Type for which one or more of its parameters is `Union{}`.
 """
-function has_bottom_parameter(@nospecialize(t::Core.Kind))
+function has_bottom_parameter(@nospecialize(t::Core.AnyType))
     t === Bottom && return true
     ty = typeof(t)
     if ty === DataType

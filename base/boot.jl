@@ -3,8 +3,8 @@
 # commented-out definitions are implemented in C
 
 #abstract type Any <: Any end
-#abstract type Kind end
-#struct TypeEq <: Kind
+#abstract type AnyType end
+#struct TypeEq <: AnyType
 #    T
 #end
 #const Type = TypeEq(T) where T
@@ -19,7 +19,7 @@
 #    name::Symbol
 #end
 
-#mutable struct DataType <: Kind
+#mutable struct DataType <: AnyType
 #    name::TypeName
 #    super::Type
 #    parameters::Tuple
@@ -33,7 +33,7 @@
 #    pointerfree::Bool
 #end
 
-#struct Union <: Kind
+#struct Union <: AnyType
 #    a
 #    b
 #end
@@ -44,7 +44,7 @@
 #    ub::Type
 #end
 
-#struct UnionAll <: Kind
+#struct UnionAll <: AnyType
 #    var::TypeVar
 #    body
 #end
