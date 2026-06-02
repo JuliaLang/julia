@@ -350,6 +350,7 @@ include("c.jl")
 include("bitarray.jl")
 include("bitset.jl")
 include("ntuple.jl")
+include("subarray.jl")
 include("iterators.jl")
 using .Iterators: zip, enumerate, only
 using .Iterators: Flatten, Filter, product  # for generators
