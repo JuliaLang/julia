@@ -233,7 +233,7 @@ ObjCache::~ObjCache()
     mdb_env_close(Env);
 }
 
-static std::atomic<size_t> NWrite = 0, NRead = 0, NMiss = 0, NHit = 0;
+static std::atomic<size_t> NWrite = 0, NRead = 0, NMiss = 0, NHit = 0, NEvicted = 0;
 
 static ObjCache::Hash hashModule(const llvm::Module &M)
 {
@@ -384,9 +384,10 @@ void ObjCache::shutdown()
     if (LogFile) {
         std::unique_lock<std::mutex> Lock{LogMutex};
         jl_safe_printf(
-            "cache read : %zu\ncache write: %zu\ncache hit  : %zu\ncache miss : %zu\n",
+            "cache read:  %zu\ncache write: %zu\ncache hit:   %zu\ncache miss:  %zu\ncache evict: %zu\n",
             NRead.load(memory_order_relaxed), NWrite.load(memory_order_relaxed),
-            NHit.load(memory_order_relaxed), NMiss.load(memory_order_relaxed));
+            NHit.load(memory_order_relaxed), NMiss.load(memory_order_relaxed),
+            NEvicted.load(memory_order_relaxed));
     }
 }
 
@@ -506,8 +507,6 @@ bool ObjCache::maybeEvictLRU(MDBTxn &Txn, bool Force)
     };
     if (!ShouldEvict())
         return true;
-    jl_safe_printf("evicting: %zu / %zu\n",
-                   dbiSize(Txn, ObjCacheDbi) + dbiSize(Txn, ObjMetaDbi), EvictFromSize);
 
     MDB_cursor *MetaCur;
     checkMDB(mdb_cursor_open(Txn.Txn, ObjMetaDbi, &MetaCur));
@@ -518,6 +517,12 @@ bool ObjCache::maybeEvictLRU(MDBTxn &Txn, bool Force)
     while (!Ret && ShouldEvict() && ((const char *)MetaKey.mv_data)[0] == METAKEY_TAG) {
         Force = false;
         auto [Time, Hash] = fromMetaKey((const char *)MetaKey.mv_data);
+        NEvicted.fetch_add(1, memory_order_relaxed);
+        if (LogFile) {
+            std::unique_lock<std::mutex> Lock{LogMutex};
+            fprintf(LogFile, "evict,%s,,,,,\n", llvm::toHex(Hash, true).c_str());
+        }
+
         auto ObjKey = toObjKey(Hash);
         MDB_val Key = mdbVal(ObjKey);
         checkMDB(mdb_del(Txn.Txn, ObjCacheDbi, &Key, nullptr));
