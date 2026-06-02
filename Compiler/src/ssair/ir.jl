@@ -257,7 +257,6 @@ struct SourceLocation
 end
 
 function source_location(di::Union{DebugInfo,DebugInfoStream}, pc::Int)
-    @assert pc > 0 "no source for pc=0"
     while has_prev_debuginfo(di, pc)
         di, pc = prev_debuginfo(di, pc)
     end
@@ -266,6 +265,7 @@ function source_location(di::Union{DebugInfo,DebugInfoStream}, pc::Int)
         # information on its own.
         return SourceLocation(0,0,0,0,0,0)
     end
+    @assert pc > 0 "no source for pc<=0"
     (l1, c1) = ccall(:jl_cdi_firstxy, NTuple{2, Int32}, (Any, Int32), di, pc)
     if c1 <= 0
         return SourceLocation(0,0,0,0,l1,0)
