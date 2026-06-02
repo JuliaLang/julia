@@ -2,8 +2,9 @@
 
 function is_known_call(@nospecialize(x), @nospecialize(func), ir::Union{IRCode,IncrementalCompact})
     isexpr(x, :call) || return false
-    ft = argextype(x.args[1], ir)
-    return singleton_type(ft) === func
+    arg = x.args[1]
+    isa(arg, GlobalRef) && return globalref_singleton(arg, ir) === func
+    return singleton_type(argextype(arg, ir)) === func
 end
 
 function is_known_invoke_or_call(@nospecialize(x), @nospecialize(func), ir::Union{IRCode,IncrementalCompact})
@@ -11,8 +12,9 @@ function is_known_invoke_or_call(@nospecialize(x), @nospecialize(func), ir::Unio
     (isinvoke || isexpr(x, :call)) || return false
     narg = isinvoke ? 2 : 1
     length(x.args) < narg && return false
-    ft = argextype(x.args[narg], ir)
-    return singleton_type(ft) === func
+    arg = x.args[narg]
+    isa(arg, GlobalRef) && return globalref_singleton(arg, ir) === func
+    return singleton_type(argextype(arg, ir)) === func
 end
 
 struct SSAUse
@@ -304,7 +306,7 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
                 if is_old(compact, defssa) && isa(val, SSAValue)
                     val = OldSSAValue(val.id)
                 end
-                edge_typ = widenconst(argextype(val, compact))
+                edge_typ = argextype_widened(val, compact)
                 hasintersect(edge_typ, typeconstraint) || continue
                 push!(possible_predecessors, n)
             end
@@ -351,7 +353,7 @@ function record_immutable_preserve!(new_preserves::Vector{Any}, def::Expr, compa
     args = isexpr(def, :new) ? def.args : def.args[2:end]
     for i = 1:length(args)
         arg = args[i]
-        if !isbitstype(widenconst(argextype(arg, compact)))
+        if !isbitstype(argextype_widened(arg, compact))
             push!(new_preserves, arg)
         end
     end
@@ -606,7 +608,7 @@ end
 function lift_comparison_leaves!(@specialize(tfunc),
     compact::IncrementalCompact, @nospecialize(val), @nospecialize(cmp),
     idx::Int, 𝕃ₒ::AbstractLattice)
-    typeconstraint = widenconst(argextype(val, compact))
+    typeconstraint = argextype_widened(val, compact)
     if isa(val, Union{OldSSAValue, SSAValue})
         val, typeconstraint = simple_walk_constraint(compact, val, typeconstraint)
     end
@@ -910,7 +912,7 @@ function lift_apply_args!(compact::IncrementalCompact, idx::Int, stmt::Expr)
     compact[idx] = nothing
     for i in 4:length(stmt.args) # Skip `_apply_iterate`, `iterate`, and the function
         arg = stmt.args[i]
-        arg_type = widenconst(argextype(arg, compact))
+        arg_type = argextype_widened(arg, compact)
         if isa(arg_type, DataType) && arg_type.name === Tuple.name
             svec_args = nothing
             if isa(arg, SSAValue)
@@ -1415,7 +1417,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
                         push!(preserved, preserved_arg.id)
                         continue
                     elseif isexpr(def, :new)
-                        typ = unwrap_unionall(widenconst(argextype(SSAValue(defidx), compact)))
+                        typ = unwrap_unionall(argextype_widened(SSAValue(defidx), compact))
                         if typ isa DataType && !ismutabletype(typ)
                             record_immutable_preserve!(new_preserves, def, compact)
                             push!(preserved, preserved_arg.id)
@@ -1475,7 +1477,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             # analyze `getfield` / `isdefined` / `setfield!` call
             val = stmt.args[2]
         end
-        struct_typ = widenconst(argextype(val, compact))
+        struct_typ = argextype_widened(val, compact)
         struct_argtyp = argument_datatype(struct_typ)
         if struct_argtyp === nothing
             if isa(struct_typ, Union) && is_isdefined
@@ -1970,7 +1972,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int,Tuple{SPCSet,SSADefUse}}
                     elseif use.kind === :preserve
                         newval = compute_value_for_use(ir, domtree, allblocks,
                             du, phinodes, fidx, use.idx)
-                        if !isbitstype(widenconst(argextype(newval, ir)))
+                        if !isbitstype(argextype_widened(newval, ir))
                             if preserve_uses === nothing
                                 preserve_uses = IdDict{Int, Vector{Any}}()
                             end
@@ -2241,7 +2243,7 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             if !isassigned(stmt.values, i)
                 # Should be impossible to have something used only by PiNodes that's undef
                 push!(to_drop, i)
-            elseif !hasintersect(widenconst(argextype(stmt.values[i], compact)),
+            elseif !hasintersect(argextype_widened(stmt.values[i], compact),
                                  widenconst(t))
                 push!(to_drop, i)
             end
