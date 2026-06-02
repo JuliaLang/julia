@@ -100,6 +100,7 @@ function print(io::IO, v::VersionNumber)
     print(io, v.patch)
     if !isempty(v.prerelease)
         print(io, '-')
+        # inline join to make call resolvable for juliaC
         @inline join(io, v.prerelease,'.')
     end
     if !isempty(v.build)
