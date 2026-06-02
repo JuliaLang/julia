@@ -389,6 +389,7 @@ void *jl_get_abi_converter(jl_task_t *ct, void *data)
         size_t last_world_v = jl_atomic_load_relaxed(&cfuncdata->last_world);
         void *f = jl_atomic_load_relaxed(&cfuncdata->fptr);
         jl_code_instance_t *last_ci = cfuncdata->plast_codeinst ? *cfuncdata->plast_codeinst : NULL;
+        JL_GC_PROMISE_ROOTED(last_ci); // cached CI is retained by the MI cache or by an image literal root slot
         world = jl_atomic_load_acquire(&jl_world_counter);
         ct->world_age = world;
         if (world == last_world_v) {

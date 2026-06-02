@@ -368,11 +368,10 @@ void JITDebugInfoRegistry::registerJITObject(
         if (it != sym_to_ci.end()) {
             codeinst = it->second;
         }
-        if (codeinst) {
-            JL_GC_PROMISE_ROOTED(codeinst);
-            // opaque-closure code instances are pre-promoted to global roots
-            // by jl_register_jit_object before this JL_NOTSAFEPOINT region runs.
-        }
+        // opaque-closure code instances are pre-promoted to global roots
+        // by jl_register_jit_object before this JL_NOTSAFEPOINT region runs.
+        // All other codeinstances are rooted by the cache.
+        JL_GC_PROMISE_ROOTED(codeinst);
         jl_profile_atomic([&]() JL_NOTSAFEPOINT {
             if (codeinst)
                 cimap[Addr] = std::make_pair(Size, codeinst);
@@ -398,8 +397,12 @@ void jl_register_jit_object(const object::ObjectFile &Object,
     // JL_NOTSAFEPOINT registerJITObject body.
     for (auto &[ci, funcs] : Info.ci_funcs) {
         jl_method_instance_t *mi = jl_get_ci_mi(ci);
-        if (jl_is_method(mi->def.method) && mi->def.method->is_for_opaque_closure)
-            jl_as_global_root((jl_value_t*)ci, 1);
+        if (jl_is_method(mi->def.method) && mi->def.method->is_for_opaque_closure) {
+            jl_code_instance_t *ci_root = ci;
+            JL_GC_PUSH1(&ci_root);
+            jl_as_global_root((jl_value_t*)ci_root, 1);
+            JL_GC_POP();
+        }
     }
     getJITDebugRegistry().registerJITObject(Object, getLoadAddress, Info);
 }
