@@ -46,8 +46,8 @@ STATIC_INLINE void jl_gc_multi_wb(const void *parent, const jl_value_t *ptr) JL_
         jl_gc_queue_multiroot((jl_value_t*)parent, ptr, dt);
 }
 
-STATIC_INLINE void jl_gc_wb_genericmemory_copy_boxed(const jl_value_t *dest_owner, _Atomic(void*) * dest_p,
-                                          jl_genericmemory_t *src, _Atomic(void*) * src_p,
+STATIC_INLINE void jl_gc_wb_genericmemory_copy_boxed(const jl_value_t *dest_owner, _Atomic(void*) ** dest_pp,
+                                          jl_genericmemory_t *src, _Atomic(void*) ** src_pp,
                                           size_t* n) JL_NOTSAFEPOINT
 {
     if (__unlikely(jl_astaggedvalue(dest_owner)->bits.gc == 3 /* GC_OLD_MARKED */ )) {
@@ -59,6 +59,8 @@ STATIC_INLINE void jl_gc_wb_genericmemory_copy_boxed(const jl_value_t *dest_owne
             return;
         }
         if (jl_astaggedvalue(src_owner)->bits.gc != 3 /* GC_OLD_MARKED */) {
+            _Atomic(void*) *dest_p = *dest_pp;
+            _Atomic(void*) *src_p = *src_pp;
             if (dest_p < src_p || dest_p > src_p + (*n)) {
                 for (; done < (*n); done++) { // copy forwards
                     void *val = jl_atomic_load_relaxed(src_p + done);
@@ -66,11 +68,15 @@ STATIC_INLINE void jl_gc_wb_genericmemory_copy_boxed(const jl_value_t *dest_owne
                     // `val` is young or old-unmarked (or dest is image and val is non-image)
                     if (val && !(jl_astaggedvalue(val)->bits.gc & 1 /* GC_MARKED */)) {
                         jl_gc_queue_root(dest_owner);
+                        ++done;
                         break;
                     }
                 }
-                src_p += done;
-                dest_p += done;
+                // advance caller's pointers past the elements we just
+                // copied so the trailing memmove_refs picks up where we
+                // left off
+                *src_pp = src_p + done;
+                *dest_pp = dest_p + done;
             }
             else {
                 for (; done < (*n); done++) { // copy backwards
@@ -79,6 +85,7 @@ STATIC_INLINE void jl_gc_wb_genericmemory_copy_boxed(const jl_value_t *dest_owne
                     // `val` is young or old-unmarked (or dest is image and val is non-image)
                     if (val && !(jl_astaggedvalue(val)->bits.gc & 1 /* GC_MARKED */)) {
                         jl_gc_queue_root(dest_owner);
+                        ++done;
                         break;
                     }
                 }

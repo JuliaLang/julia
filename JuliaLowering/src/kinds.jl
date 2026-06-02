@@ -16,12 +16,13 @@ function _register_kinds()
             "gc_preserve_end"
             # A (quoted) `Symbol`
             "Symbol"
-            # TODO: Use `meta` for inbounds and loopinfo etc?
             "inbounds"
+            "inbounds_pop" # expr: (inbounds pop) with identifier "pop"
             "boundscheck"
             "inline"
             "noinline"
             "loopinfo"
+            "purity"
             # Call into foreign code
             "foreigncall"
             # ccall convention

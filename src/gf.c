@@ -746,8 +746,8 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst_uninit(jl_method_instance_t *mi
     return codeinst;
 }
 
-JL_DLLEXPORT void jl_mi_cache_insert(jl_method_instance_t *mi JL_ROOTING_ARGUMENT,
-                                     jl_code_instance_t *ci JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED)
+JL_DLLEXPORT void jl_mi_cache_insert(jl_method_instance_t *mi,
+                                     jl_code_instance_t *ci JL_ROOTED_BY_ARG(0) JL_MAYBE_UNROOTED)
 {
     JL_GC_PUSH1(&ci);
     if (jl_is_method(mi->def.method))
@@ -809,9 +809,9 @@ JL_DLLEXPORT void jl_mi_cache_insert(jl_method_instance_t *mi JL_ROOTING_ARGUMEN
     return;
 }
 
-JL_DLLEXPORT int jl_mi_try_insert(jl_method_instance_t *mi JL_ROOTING_ARGUMENT,
+JL_DLLEXPORT int jl_mi_try_insert(jl_method_instance_t *mi,
                                    jl_code_instance_t *expected_ci,
-                                   jl_code_instance_t *ci JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED)
+                                   jl_code_instance_t *ci JL_ROOTED_BY_ARG(0) JL_MAYBE_UNROOTED)
 {
     JL_GC_PUSH1(&ci);
     if (jl_is_method(mi->def.method))
@@ -1096,7 +1096,8 @@ static jl_value_t *inst_varargp_in_env(jl_value_t *decl, jl_svec_t *sparams)
     assert(jl_is_vararg(vm));
     int nsp = jl_svec_len(sparams);
     if (nsp > 0 && jl_has_free_typevars(vm)) {
-        JL_GC_PUSH1(&vm);
+        jl_value_t *Nroot = NULL;
+        JL_GC_PUSH2(&vm, &Nroot);
         assert(jl_subtype_env_size(decl) == nsp);
         vm = jl_instantiate_type_in_env(vm, (jl_unionall_t*)decl, jl_svec_data(sparams));
         assert(jl_is_vararg(vm));
@@ -1111,14 +1112,16 @@ static jl_value_t *inst_varargp_in_env(jl_value_t *decl, jl_svec_t *sparams)
             if (v && jl_is_typevar(v)) {
                 // must unwrap and re-wrap Vararg object explicitly here since jl_type_unionall handles it differently
                 jl_value_t *T = ((jl_vararg_t*)vm)->T;
-                jl_value_t *N = ((jl_vararg_t*)vm)->N;
+                Nroot = ((jl_vararg_t*)vm)->N;
                 int T_has_tv = T && jl_has_typevar(T, v);
-                int N_has_tv = N && jl_has_typevar(N, v); // n.b. JL_VARARG_UNBOUND check means this should be false
-                assert(!N_has_tv || N == (jl_value_t*)v);
+                // n.b. JL_VARARG_UNBOUND check means this should be false
+                int N_has_tv = Nroot && jl_has_typevar(Nroot, v);
+                assert(!N_has_tv || Nroot == (jl_value_t*)v);
                 vm = T_has_tv ? jl_type_unionall(v, T) : T;
                 if (N_has_tv)
-                    N = NULL;
-                vm = (jl_value_t*)jl_wrap_vararg(vm, N, 1, 0); // this cannot throw for these inputs
+                    Nroot = NULL;
+                vm = (jl_value_t*)jl_wrap_vararg(vm, Nroot, 1, 0); // this cannot throw for these inputs
+                Nroot = NULL;
             }
             sp++;
             decl = ((jl_unionall_t*)decl)->body;
@@ -1630,7 +1633,7 @@ jl_method_instance_t *cache_method(
     }
 
     jl_method_instance_t *newmeth = NULL;
-    if (definition->sig == (jl_value_t*)jl_anytuple_type && definition != jl_opaque_closure_method && !definition->is_for_opaque_closure) {
+    if (definition->source == NULL && definition->generator == NULL && !definition->is_for_opaque_closure) {
         newmeth = jl_atomic_load_relaxed(&definition->unspecialized);
         if (newmeth != NULL) { // handle builtin methods de-specialization (for invoke, or if the global cache entry somehow gets lost)
             jl_tupletype_t *cachett = (jl_tupletype_t*)newmeth->specTypes;
@@ -1648,7 +1651,8 @@ jl_method_instance_t *cache_method(
     jl_value_t *temp2 = NULL;
     jl_value_t *temp3 = NULL;
     jl_svec_t *newparams = NULL;
-    JL_GC_PUSH5(&temp, &temp2, &temp3, &newmeth, &newparams);
+    jl_tupletype_t *cachett = tt;
+    JL_GC_PUSH6(&temp, &temp2, &temp3, &newmeth, &newparams, &cachett);
 
     // Consider if we can cache with the preferred compile signature
     // so that we can minimize the number of required cache entries.
@@ -1687,7 +1691,6 @@ jl_method_instance_t *cache_method(
     // Capture world counter at start to detect races
     size_t current_world = mc ? jl_atomic_load_acquire(&jl_world_counter) : ~(size_t)0;
 
-    jl_tupletype_t *cachett = tt;
     jl_svec_t *guardsigs = jl_emptysvec;
     if (!cache_with_orig && mt) {
         // now examine what will happen if we chose to use this sig in the cache
@@ -1799,6 +1802,7 @@ jl_method_instance_t *cache_method(
         if (entry && jl_egal((jl_value_t*)entry->simplesig, simplett ? (jl_value_t*)simplett : jl_nothing) &&
                 jl_egal((jl_value_t*)guardsigs, (jl_value_t*)entry->guardsigs)) {
             JL_GC_POP();
+            if (mc) JL_UNLOCK(&mc->writelock);
             return entry->func.linfo;
         }
     }
@@ -2189,7 +2193,6 @@ static void _invalidate_backedges(jl_method_instance_t *replaced_mi, jl_code_ins
             ins = i;
             continue;
         }
-        JL_GC_PROMISE_ROOTED(replaced); // propagated by get_next_edge from backedges
         if (replaced_ci) {
             // If we're invalidating a particular codeinstance, only invalidate
             // this backedge it actually has an edge for our codeinstance.
@@ -2289,7 +2292,6 @@ static int _invalidate_dispatch_backedges(jl_method_instance_t *mi, jl_value_t *
             insb = ib;
             continue;
         }
-        JL_GC_PROMISE_ROOTED(caller); // propagated by get_next_edge from backedges
         int replaced_edge;
         if (invokeTypes) {
             // n.b. normally we must have mi.specTypes <: invokeTypes <: m.sig (though it might not strictly hold), so we only need to check the other subtypes
