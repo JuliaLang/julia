@@ -1141,10 +1141,7 @@ end
 function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     # Update control-flow to reflect any unreachable branches.
     ssavaluetypes = ci.ssavaluetypes::Vector{Any}
-    # `ci` is a private, freshly-materialized CodeInfo whose statements are not shared
-    # (`retrieve_code_info` either uncompresses to fresh IR or copies an in-memory source),
-    # so the optimizer may rewrite its statements in place. The previous defensive
-    # `copy_exprargs` of every statement here was therefore a redundant deep copy.
+    # ci is always a fresh private copy so we can reuse it here.
     code = ci.code
     di = DebugInfoStream(sv.linfo, ci.debuginfo, length(code))
     codelocs = di.codelocs
