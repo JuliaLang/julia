@@ -253,6 +253,29 @@ static ObjCache::Hash hashModule(const llvm::Module &M)
     return Hasher.final();
 }
 
+/*
+ * The objcache is stored using two LMDB database.  The "objcache" database
+ * contains an entry for every cached object, with the key being an objkey
+ * (O\0<hash>) and the value being the object file contents.  The "objmeta"
+ * database contains two entries for every cached object, an objkey with the
+ * access time (up-to-date to within OBJCACHE_ATIME_GRANULARITY seconds), and a
+ * metakey (M\0<big endian time><hash>) with an empty value.  The purpose of
+ * having two types of keys in the objmeta database is to make the two
+ * fundamental operations fast:
+ * - Given an hash, update or delete the access time.
+ * - Retrieve the hashes of the N least recently used cache entries.
+ *
+ * objcache
+ *   ObjKey(Hash1) => <data>
+ *   ObjKey(Hash2) => <data>
+ *
+ * objmeta
+ *   MetaKey(ATime2, Hash2)
+ *   MetaKey(ATime1, Hash1)
+ *   ObjKey(Hash1)          => ATime1
+ *   ObjKey(Hash2)          => ATime2
+ */
+
 constexpr size_t OBJKEY_SIZE = 2 + sizeof(ObjCache::Hash);
 constexpr size_t METAKEY_SIZE = 2 + sizeof(int64_t) + sizeof(ObjCache::Hash);
 
