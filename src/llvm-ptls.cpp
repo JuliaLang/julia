@@ -285,28 +285,6 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
         pgcstack->eraseFromParent();
     }
     else {
-        // use the address of the actual getter function directly
-//         jl_get_pgcstack_func *f;
-//         jl_pgcstack_key_t k;
-//         jl_pgcstack_getkey(&f, &k);
-//         Constant *val = ConstantInt::get(T_size, (uintptr_t)f);
-//         val = ConstantExpr::getIntToPtr(val, T_pgcstack_getter);
-//         if (TargetTriple.isOSDarwin()) {
-//             assert(sizeof(k) == sizeof(uintptr_t));
-//             Constant *key = ConstantInt::get(T_size, (uintptr_t)k);
-// #if JL_LLVM_VERSION >= 200000
-//             auto new_pgcstack = CallInst::Create(FT_pgcstack_getter, val, {key}, "", pgcstack->getIterator());
-// #else
-//             auto new_pgcstack = CallInst::Create(FT_pgcstack_getter, val, {key}, "", pgcstack);
-// #endif
-//             new_pgcstack->takeName(pgcstack);
-//             pgcstack->replaceAllUsesWith(new_pgcstack);
-//             pgcstack->eraseFromParent();
-//             pgcstack = new_pgcstack;
-//         } else {
-//             pgcstack->setCalledFunction(pgcstack->getFunctionType(), val);
-//         }
-
         auto FT = FunctionType::get(Type::getVoidTy(pgcstack->getContext()), false);
         auto F = M->getOrInsertFunction("jl_get_pgcstack", FT).getCallee();
         pgcstack->setCalledFunction(pgcstack->getFunctionType(), F);
