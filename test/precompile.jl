@@ -2893,8 +2893,8 @@ end
     end
 end
 
-# Ensure TypeEq objects that refer to newly-created DataType-like values are
-# retained correctly across package image save/restore.
+# TypeEq payloads that mention package-image datatypes must be restored as new
+# before restore-side type-cache lookup compares them to cached types.
 @testset "precompile TypeEq references to new datatypes" begin
     mkdepottempdir() do depot
         project_path = joinpath(depot, "testenv")
@@ -2902,8 +2902,8 @@ end
         mkpath(project_path)
         mkpath(dev_path)
 
-        trigger_uuid     = "10000000-0000-0000-0000-000000000103"
-        parent_uuid      = "10000000-0000-0000-0000-000000000104"
+        trigger_uuid = "10000000-0000-0000-0000-000000000103"
+        parent_uuid = "10000000-0000-0000-0000-000000000104"
 
         trigger_dir = joinpath(dev_path, "TypeEqTrigger")
         mkpath(joinpath(trigger_dir, "src"))
@@ -2932,82 +2932,38 @@ end
 
         parent_dir = joinpath(dev_path, "TypeEqParent")
         mkpath(joinpath(parent_dir, "src"))
-        mkpath(joinpath(parent_dir, "ext"))
         write(joinpath(parent_dir, "Project.toml"), """
             name = "TypeEqParent"
             uuid = "$parent_uuid"
             version = "0.1.0"
-
-            [weakdeps]
-            TypeEqTrigger = "$trigger_uuid"
-
-            [extensions]
-            TypeEqTriggerExt = "TypeEqTrigger"
             """)
         write(joinpath(parent_dir, "src", "TypeEqParent.jl"), """
             module TypeEqParent
             import Base: range
 
-            abstract type Colorant{T,N} end
-            abstract type Color{T,N} <: Colorant{T,N} end
-            abstract type TransparentColor{C<:Color,T,N} <: Colorant{T,N} end
-            abstract type AlphaColor{C<:Color,T,N} <: TransparentColor{C,T,N} end
-            abstract type ColorAlpha{C<:Color,T,N} <: TransparentColor{C,T,N} end
-            ColorantN{N,T} = Colorant{T,N}
-
-            struct HSV{T<:AbstractFloat} <: Color{T,3}
-                h::T
-                s::T
-                v::T
-            end
-            struct AHSV{T<:AbstractFloat} <: AlphaColor{HSV{T},T,4}
-                alpha::T
-                h::T
-                s::T
-                v::T
-            end
-            struct HSVA{T<:AbstractFloat} <: ColorAlpha{HSV{T},T,4}
-                h::T
-                s::T
-                v::T
-                alpha::T
-            end
-
-            struct ComponentIterator{C<:Colorant}
+            abstract type Left{N} end
+            abstract type Right{N} end
+            struct Iter{C}
                 c::C
             end
-            Base.eltype(::Type{ComponentIterator{C}}) where {T, C <: Colorant{T}} = T
-            Base.length(::ComponentIterator{C}) where {N, C <: ColorantN{N}} = N
-            Base.iterate(itr::ComponentIterator{C}, state::Int=0) where {N, C <: ColorantN{N}} =
-                state >= N ? nothing : (itr[state + 1], state + 1)
-            Base.getindex(itr::ComponentIterator{C}, i::Integer) where {N, C <: ColorantN{N}} =
-                i == 1 ? getfield(itr.c, 1) :
-                i == 2 ? getfield(itr.c, 2) :
-                i == 3 ? getfield(itr.c, 3) :
-                         getfield(itr.c, 4)
-            Base.getindex(itr::ComponentIterator, r::AbstractRange) = Tuple(itr[i] for i in r)
-            Base.getindex(itr::ComponentIterator, ::Colon) = itr
-            Base.firstindex(::ComponentIterator) = 1
-            Base.lastindex(itr::ComponentIterator) = length(itr)
-            Base.BroadcastStyle(::Type{<:ComponentIterator{C}}) where {T, N, C <: Colorant{T,N}} =
-                Base.BroadcastStyle(NTuple{N,T})
-            Base.axes(::ComponentIterator{C}) where {N, C <: ColorantN{N}} = (Base.OneTo(N),)
-            Base.ndims(::Type{ComponentIterator{C}}) where {C} = 1
-            Base.broadcastable(itr::ComponentIterator{C}) where {T, N, C <: Colorant{T,N}} =
-                (itr...,)::NTuple{N,T}
 
-            comps(c::Colorant) = ComponentIterator(c)
-            base_colorant_type(::Type{C}) where {C<:Colorant} = Base.typename(C).wrapper
-            base_colorant_type(c::Colorant) = base_colorant_type(typeof(c))
-            mapc(f::F, x, y) where {F} = base_colorant_type(x)(f.(comps(x), comps(y))...)
+            Base.iterate(itr::Iter{C}, state::Int=0) where
+                {N, C <: Union{Left{N},Right{N}}} =
+                    state >= N ? nothing : (0, state + 1)
+            Base.BroadcastStyle(::Type{<:Iter{C}}) where
+                {N, C <: Union{Left{N},Right{N}}} =
+                    Base.BroadcastStyle(NTuple{N,Int})
+            Base.broadcastable(itr::Iter{C}) where
+                {N, C <: Union{Left{N},Right{N}}} =
+                    (itr...,)::NTuple{N,Int}
 
-            weighted_color_mean(w1::Real, c1::C, c2::C) where
-                {Cb<:HSV, C<:Union{AlphaColor{Cb},ColorAlpha{Cb}}} =
-                    mapc((x, y) -> x, c1, c2)
-
-            range(start::T; stop::T, length::Integer=100) where T<:Colorant =
-                T[weighted_color_mean(w1, start, stop) for w1 in range(1.0, stop=0.0, length=length)]
-            range(start::T, stop::T; kwargs...) where T<:Colorant = range(start; stop=stop, kwargs...)
+            comps(c::C) where {N, C <: Union{Left{N},Right{N}}} = Iter(c)
+            range(start::T; stop::T, length::Integer=100) where
+                {N, T <: Union{Left{N},Right{N}}} =
+                    comps(start) .+ comps(stop)
+            range(start::T, stop::T; kwargs...) where
+                {N, T <: Union{Left{N},Right{N}}} =
+                    range(start; stop=stop, kwargs...)
 
             macro latestworld_if_toplevel()
                 Expr(Symbol("latestworld-if-toplevel"))
@@ -3028,11 +2984,6 @@ end
             end
             end
             """)
-        write(joinpath(parent_dir, "ext", "TypeEqTriggerExt.jl"), """
-            module TypeEqTriggerExt
-            import TypeEqParent
-            end
-            """)
 
         write(joinpath(project_path, "Project.toml"), """
             [deps]
@@ -3046,12 +2997,6 @@ end
             path = "../dev/TypeEqParent"
             uuid = "$parent_uuid"
             version = "0.1.0"
-
-            [deps.TypeEqParent.weakdeps]
-            TypeEqTrigger = "$trigger_uuid"
-
-            [deps.TypeEqParent.extensions]
-            TypeEqTriggerExt = "TypeEqTrigger"
 
             [[deps.TypeEqTrigger]]
             path = "../dev/TypeEqTrigger"
