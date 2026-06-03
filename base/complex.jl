@@ -343,6 +343,12 @@ muladd(x::Real, y::Real, z::Complex) = Complex(muladd(x,y,real(z)), imag(z))
 muladd(z::Complex, w::Complex, x::Real) =
     Complex(muladd(real(z), real(w), -_mulsub(imag(z), imag(w), x)),
             muladd(real(z), imag(w), imag(z) * real(w)))
+# disambiguation with promotion.jl
+muladd(x::Bool, z::Complex, y::Union{Real,Complex}) = @invoke muladd(x::Real, z::Complex, y::Union{Real,Complex})
+muladd(z::Complex, x::Bool, y::Real) = @invoke muladd(z::Complex, x::Real, y::Real)
+muladd(z::Complex, x::Bool, w::Complex) = @invoke muladd(z::Complex, x::Real, w::Complex)
+muladd(x::Bool, y::Real, z::Complex) = @invoke muladd(x::Real, y::Real, z::Complex)
+muladd(x::Real, y::Bool, z::Complex) = @invoke muladd(x::Real, y::Real, z::Complex)
 
 /(a::R, z::S) where {R<:Real,S<:Complex} = (T = promote_type(R,S); a*inv(T(z)))
 /(z::Complex, x::Real) = Complex(real(z)/x, imag(z)/x)
