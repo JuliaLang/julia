@@ -4064,34 +4064,34 @@ function collect_preferences(project_toml::String, uuid::Union{UUID,Nothing})
 end
 
 """
-    recursive_prefs_merge(base::Dict, overrides::Dict...)
+    recursive_prefs_merge(base::Dict{String, Any}, overrides::Vector{Dict{String, Any}})
 
 Helper function to merge preference dicts recursively, honoring overrides in nested
 dictionaries properly.
 """
-function recursive_prefs_merge(base::Dict{String, Any}, overrides::Dict{String, Any}...)
-    new_base = Base._typeddict(base, overrides...)
+function recursive_prefs_merge(base::Dict{String, Any}, overrides::Vector{Dict{String, Any}})
+    merged = copy(base)
 
     for override in overrides
         # Clear entries are keys that should be deleted from any previous setting.
         override_clear = get(override, "__clear__", nothing)
         if override_clear isa Vector{String}
             for k in override_clear
-                delete!(new_base, k)
+                delete!(merged, k)
             end
         end
 
         for (k, override_k) in override
             # Note that if `base` has a mapping that is _not_ a `Dict`, and `override`
-            new_base_k = get(new_base, k, nothing)
-            if new_base_k isa Dict{String, Any} && override_k isa Dict{String, Any}
-                new_base[k] = recursive_prefs_merge(new_base_k, override_k)
+            merged_k = get(merged, k, nothing)
+            if merged_k isa Dict{String, Any} && override_k isa Dict{String, Any}
+                merged[k] = recursive_prefs_merge(merged_k, Dict{String,Any}[override_k])
             else
-                new_base[k] = override_k
+                merged[k] = override_k
             end
         end
     end
-    return new_base
+    return merged
 end
 
 function get_projects_workspace_to_root(project_file)
@@ -4122,7 +4122,7 @@ function get_preferences(uuid::Union{UUID,Nothing} = nothing)
 
         # Collect all dictionaries from the current point in the load path, then merge them in
         dicts = collect_preferences(project_toml, uuid)
-        merged_prefs = recursive_prefs_merge(merged_prefs, dicts...)
+        merged_prefs = recursive_prefs_merge(merged_prefs, dicts)
     end
     return merged_prefs
 end
