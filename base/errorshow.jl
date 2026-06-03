@@ -208,7 +208,11 @@ function showerror(io::IO, ex::CanonicalIndexError)
     print(io, "CanonicalIndexError: ", ex.func, " not defined for ", ex.type)
 end
 
-typesof(@nospecialize args...) = Tuple{Any[Core.Typeof(arg) for arg in args]...}
+# the dispatch type of an argument value, mirroring `jl_inst_arg_tuple_type`, so
+# reflection through `typesof` agrees with actual dispatch
+_dispatch_typeof(@nospecialize a) =
+    (isa(a, Type) && !has_free_typevars(a)) ? Core.TypeEgal{a} : Core.Typeof(a)
+typesof(@nospecialize args...) = Tuple{Any[_dispatch_typeof(arg) for arg in args]...}
 
 function print_with_compare(io::IO, @nospecialize(a::DataType), @nospecialize(b::DataType), color::Symbol)
     if a.name === b.name
@@ -545,7 +549,7 @@ end
 #   `(sa_env, ca_env, alias::GlobalRef)`           — both resolve to the same alias
 #   `nothing`                                      — bail; caller falls back to whole-subtree highlighting
 function descend_params(io::IO, @nospecialize(sig), @nospecialize(called))
-    if sig isa TypeEq && called isa TypeEq
+    if sig isa TypeEq && (called isa TypeEq || called isa Core.TypeEgal)
         return Core.svec(type_parameter(sig)), Core.svec(type_parameter(called)), nothing
     end
     sig isa DataType && called isa DataType || return nothing
@@ -670,7 +674,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
     # pool MethodErrors for these two functions.
     if f === convert && !isempty(arg_types_param)
         at1 = arg_types_param[1]
-        if isType(at1) && !has_free_typevars(at1)
+        if (isType(at1) || isa(at1, Core.TypeEgal)) && !has_free_typevars(at1)
             at1p = type_parameter(at1)
             if at1p isa Type
                 push!(funcs, (at1p, arg_types_param[2:end]))
@@ -1371,7 +1375,7 @@ function nonsetable_type_hint_handler(io, ex, arg_types, kwargs)
             print(io, "\nAre you trying to index into an array? For multi-dimensional arrays, separate the indices with commas: ")
             printstyled(io, "a[1, 2]", color=:cyan)
             print(io, " rather than a[1][2]")
-        elseif isType(T)
+        elseif isType(T) || isa(T, Core.TypeEgal)
             Tx = type_parameter(T)
             print(io, "\nYou attempted to index the type $Tx, rather than an instance of the type. Make sure you create the type using its constructor: ")
             printstyled(io, "d = $Tx([...])", color=:cyan)

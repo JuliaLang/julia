@@ -8,6 +8,12 @@
 #    T
 #end
 #const Type = TypeEq(T) where T
+# TypeEgal{T} is the egality-based dual of TypeEq{T}: its only instance is `T`
+# itself (matched by `===`), used internally for dispatch-cache specialization.
+# Free typevars are disallowed inside TypeEgal.
+#struct TypeEgal <: AnyType
+#    T
+#end
 
 #abstract type Vararg{T} end
 

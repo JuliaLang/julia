@@ -532,8 +532,8 @@ static int obviously_egal(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT
         return obviously_egal(jl_unwrap_vararg(vma), jl_unwrap_vararg(vmb)) &&
             ((!vma->N && !vmb->N) || (vma->N && vmb->N && obviously_egal(vma->N, vmb->N)));
     }
-    if (jl_is_typeeq(a))
-        return obviously_egal(jl_typeeq_T(a), jl_typeeq_T(b));
+    if (jl_is_some_typeeq(a))
+        return obviously_egal(jl_some_typeeq_T(a), jl_some_typeeq_T(b));
     if (jl_is_typevar(a)) return 0;
     return !jl_is_type(a) && jl_egal(a,b);
 }
@@ -595,6 +595,8 @@ static int obviously_unequal(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT
     else if (a == jl_bottom_type && jl_is_datatype(b)) {
         return 1;
     }
+    if (jl_is_typeegal(a) && jl_is_typeegal(b))
+        return obviously_unequal(jl_typeegal_T(a), jl_typeegal_T(b));
     if (jl_is_typevar(a) && jl_is_typevar(b) && obviously_unequal(((jl_tvar_t*)a)->ub, ((jl_tvar_t*)b)->ub))
         return 1;
     if (jl_is_long(a)) {
@@ -751,9 +753,9 @@ static jl_value_t *simple_join(jl_value_t *a, jl_value_t *b)
         return a;
     if (!(jl_is_type(a) || jl_is_typevar(a)) || !(jl_is_type(b) || jl_is_typevar(b)))
         return (jl_value_t*)jl_any_type;
-    if (jl_is_kind(a) && jl_is_typeeq(b) && jl_typeof(jl_typeeq_T(b)) == a)
+    if (jl_is_kind(a) && jl_is_some_typeeq(b) && jl_typeof(jl_some_typeeq_T(b)) == a)
         return a;
-    if (jl_is_kind(b) && jl_is_typeeq(a) && jl_typeof(jl_typeeq_T(a)) == b)
+    if (jl_is_kind(b) && jl_is_some_typeeq(a) && jl_typeof(jl_some_typeeq_T(a)) == b)
         return b;
     if (jl_is_typevar(a) && obviously_egal(b, ((jl_tvar_t*)a)->lb))
         return a;
@@ -778,9 +780,9 @@ static jl_value_t *simple_meet(jl_value_t *a, jl_value_t *b, int overesi)
         return jl_new_struct(jl_intersect_type, a, b);
     if (!(jl_is_type(a) || jl_is_typevar(a)) || !(jl_is_type(b) || jl_is_typevar(b)))
         return jl_bottom_type;
-    if (jl_is_kind(a) && jl_is_typeeq(b) && jl_typeof(jl_typeeq_T(b)) == a)
+    if (jl_is_kind(a) && jl_is_some_typeeq(b) && jl_typeof(jl_some_typeeq_T(b)) == a)
         return b;
-    if (jl_is_kind(b) && jl_is_typeeq(a) && jl_typeof(jl_typeeq_T(a)) == b)
+    if (jl_is_kind(b) && jl_is_some_typeeq(a) && jl_typeof(jl_some_typeeq_T(a)) == b)
         return a;
     if (jl_is_typevar(a) && obviously_egal(b, ((jl_tvar_t*)a)->ub))
         return a;
@@ -1151,7 +1153,7 @@ int is_leaf_bound(jl_value_t *v) JL_NOTSAFEPOINT
         return 1;
     if (jl_is_intersecttype(v)) // internal meet node (see #61917), not a concrete leaf
         return 0;
-    if (jl_is_typeeq(v))
+    if (jl_is_some_typeeq(v))
         return 1;
     if (jl_is_datatype(v)) {
         if (((jl_datatype_t*)v)->name->abstract) {
@@ -1169,8 +1171,8 @@ static int is_leaf_typevar(jl_tvar_t *v) JL_NOTSAFEPOINT
 
 static jl_value_t *widen_Type_if_concrete(jl_value_t *t JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
-    if (jl_is_typeeq(t) && !jl_is_typevar(jl_typeeq_T(t)))
-        return jl_typeof(jl_typeeq_T(t));
+    if (jl_is_some_typeeq(t) && !jl_is_typevar(jl_some_typeeq_T(t)))
+        return jl_typeof(jl_some_typeeq_T(t));
     if (jl_is_uniontype(t)) {
         jl_value_t *a = widen_Type_if_concrete(((jl_uniontype_t*)t)->a);
         jl_value_t *b = widen_Type_if_concrete(((jl_uniontype_t*)t)->b);
@@ -1192,8 +1194,8 @@ static int try_subtype_in_env(jl_value_t *a, jl_value_t *b, jl_stenv_t *e);
 // only if the widened kind satisfies `bound` , otherwise leave unchanged
 static jl_value_t *widen_Type_to_union(jl_value_t *t, jl_value_t *bound, jl_stenv_t *e)
 {
-    if (jl_is_typeeq(t) && !jl_is_typevar(jl_typeeq_T(t))) {
-        jl_value_t *T = jl_typeeq_T(t);
+    if (jl_is_some_typeeq(t) && !jl_is_typevar(jl_some_typeeq_T(t))) {
+        jl_value_t *T = jl_some_typeeq_T(t);
         jl_value_t *w = jl_typeof(T);
         if (!try_subtype_in_env(w, bound, e))
             return t;
@@ -1256,8 +1258,8 @@ static int constrains_param_static(jl_tvar_t *var, jl_value_t *typ, int covarian
         return constrains_param_static(var, ((jl_uniontype_t*)typ)->a, covariant) &&
                constrains_param_static(var, ((jl_uniontype_t*)typ)->b, covariant);
     }
-    else if (jl_is_typeeq(typ)) {
-        jl_value_t *T = jl_typeeq_T(typ);
+    else if (jl_is_some_typeeq(typ)) {
+        jl_value_t *T = jl_some_typeeq_T(typ);
         if (T == (jl_value_t*)var && var->ub == (jl_value_t*)jl_any_type) {
             return 0;
         }
@@ -2173,6 +2175,25 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
     }
     if (jl_is_unionall(y))
         return subtype_unionall(x, (jl_unionall_t*)y, e, 1, param);
+    if (jl_is_typeegal(x)) {
+        // the sole (closed) instance `A` lies in `y` iff `A === B` for `TypeEgal{B}`,
+        // iff `A == B` for `Type{B}` (egal implies equal), and otherwise iff the
+        // singleton `typeof(A)` is a subtype of `y`
+        jl_value_t *A = jl_typeegal_T(x);
+        if (jl_is_typeegal(y))
+            return jl_types_egal(A, jl_typeegal_T(y));
+        if (jl_is_typeeq(y)) {
+            e->invdepth++;
+            int ans = forall_exists_equal(A, jl_typeeq_T(y), e);
+            e->invdepth--;
+            return ans;
+        }
+        return subtype(jl_typeof(A), y, e, param);
+    }
+    if (jl_is_typeegal(y)) {
+        // nothing else (besides `Union{}`, already handled) is a subset of `{B}`
+        return 0;
+    }
     if (x == (jl_value_t*)jl_typeofbottom_type && jl_is_typeeq(y)) {
         jl_value_t *tp0 = jl_typeeq_T(y);
         e->invdepth++;
@@ -2544,8 +2565,8 @@ static int concrete_min(jl_value_t *t)
         t = jl_unwrap_unionall(t);
     if (t == (jl_value_t*)jl_bottom_type)
         return 1;
-    if (jl_is_typeeq(t))
-        return 0; // Type{T} may have the concrete supertype `typeof(T)`, so don't try to handle them here
+    if (jl_is_some_typeeq(t))
+        return 0; // Type{T}/TypeEgal{T} may have the concrete supertype `typeof(T)`, so don't try to handle them here
     if (jl_is_datatype(t)) {
         return jl_is_concrete_type(t) ? 1 : 2;
     }
@@ -2676,6 +2697,22 @@ static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *su
         return 0;
     if (!jl_is_type(x) || !jl_is_type(y)) {
         *subtype = jl_egal(x, y);
+        return 1;
+    }
+    if (jl_is_typeegal(x)) {
+        jl_value_t *A = jl_typeegal_T(x);
+        if (jl_is_typeegal(y)) {
+            *subtype = jl_types_egal(A, jl_typeegal_T(y));
+            return 1;
+        }
+        // `Type{B}` (equality) and unions are left for the full subtype check
+        if (jl_is_datatype(y) && !jl_is_some_typeeq(y))
+            return obvious_subtype(jl_typeof(A), y, y0, subtype);
+        return 0;
+    }
+    if (jl_is_typeegal(y)) {
+        // nothing but `Union{}` (handled above) and egal `TypeEgal`s is a subtype
+        *subtype = 0;
         return 1;
     }
     if (jl_is_uniontype(x)) {
@@ -2888,8 +2925,8 @@ static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *su
                     return 1;
                 }
                 jl_value_t *a1u = jl_unwrap_unionall(a1);
-                if (jl_is_typeeq(a1u) && jl_is_type(jl_typeeq_T(a1u))) {
-                    a1 = jl_typeof(jl_typeeq_T(a1u));
+                if (jl_is_some_typeeq(a1u) && jl_is_type(jl_some_typeeq_T(a1u))) {
+                    a1 = jl_typeof(jl_some_typeeq_T(a1u));
                 }
                 for (; i < nparams_expanded_x; i++) {
                     jl_value_t *a = (vx != JL_VARARG_NONE && i >= npx - 1) ? vxt : jl_tparam(x, i);
@@ -2897,9 +2934,9 @@ static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *su
                         // diagonal rule: all the later parameters are also constrained to be type-equal to the first
                         jl_value_t *a2 = a;
                         jl_value_t *au = jl_unwrap_unionall(a);
-                        if (jl_is_typeeq(au) && jl_is_type(jl_typeeq_T(au))) {
-                            // if a is exactly Type{T}, then use the concrete typeof(T) instead here
-                            a2 = jl_typeof(jl_typeeq_T(au));
+                        if (jl_is_some_typeeq(au) && jl_is_type(jl_some_typeeq_T(au))) {
+                            // if a is exactly Type{T}/TypeEgal{T}, use the concrete typeof(T) instead here
+                            a2 = jl_typeof(jl_some_typeeq_T(au));
                         }
                         if (!obviously_egal(a1, a2)) {
                             if (obvious_subtype(a2, a1, y0, subtype)) {
@@ -2958,7 +2995,7 @@ JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env, 
         return 1;
     if (x == y ||
         (jl_typeof(x) == jl_typeof(y) &&
-         (jl_is_unionall(y) || jl_is_uniontype(y) || jl_is_typeeq(y)) &&
+         (jl_is_unionall(y) || jl_is_uniontype(y) || jl_is_some_typeeq(y)) &&
          jl_types_egal(x, y))) {
         if (envsz != 0) { // quickly copy env from x
             jl_unionall_t *ua = (jl_unionall_t*)x;
@@ -3102,7 +3139,7 @@ JL_DLLEXPORT int jl_is_not_broken_subtype(jl_value_t *a, jl_value_t *b)
 {
     // TODO: the final commented out check here isn't correct; it should be closer to the
     // `issingletype` check used by `isnotbrokensubtype` in `base/compiler/typeutils.jl`
-    return !jl_is_kind(b) || !jl_is_typeeq(a); // || jl_is_datatype_singleton((jl_datatype_t*)jl_tparam0(a));
+    return !jl_is_kind(b) || !jl_is_some_typeeq(a); // || jl_is_datatype_singleton((jl_datatype_t*)jl_tparam0(a));
 }
 
 int jl_tuple1_isa(jl_value_t *child1, jl_value_t **child, size_t cl, jl_datatype_t *pdt)
@@ -3150,8 +3187,8 @@ int jl_has_intersect_type_not_kind(jl_value_t *t)
     if (jl_is_uniontype(t))
         return jl_has_intersect_type_not_kind(((jl_uniontype_t*)t)->a) ||
                jl_has_intersect_type_not_kind(((jl_uniontype_t*)t)->b);
-    if (jl_is_typeeq(t)) {
-        jl_value_t *T = jl_typeeq_T(t);
+    if (jl_is_some_typeeq(t)) {
+        jl_value_t *T = jl_some_typeeq_T(t);
         return jl_is_typevar(T) || !is_kind_or_anytype(T);
     }
     if (jl_is_typevar(t))
@@ -3172,8 +3209,8 @@ int jl_has_intersect_kind_not_type(jl_value_t *t)
     if (jl_is_uniontype(t))
         return jl_has_intersect_kind_not_type(((jl_uniontype_t*)t)->a) ||
                jl_has_intersect_kind_not_type(((jl_uniontype_t*)t)->b);
-    if (jl_is_typeeq(t)) {
-        jl_value_t *T = jl_typeeq_T(t);
+    if (jl_is_some_typeeq(t)) {
+        jl_value_t *T = jl_some_typeeq_T(t);
         return jl_is_typevar(T) || is_kind_or_anytype(T);
     }
     if (jl_is_typevar(t))
@@ -3198,6 +3235,8 @@ JL_DLLEXPORT int jl_isa(jl_value_t *x, jl_value_t *t)
                 return 0;
             if (jl_is_typeeq(t))
                 return jl_types_equal(x, jl_typeeq_T(t));
+            if (jl_is_typeegal(t))
+                return jl_egal(x, jl_typeegal_T(t));
             jl_value_t *t2 = jl_unwrap_unionall(t);
             if (jl_is_typeeq(t2)) {
                 jl_value_t *tp = jl_typeeq_T(t2);
@@ -3578,7 +3617,7 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
         return (jl_value_t*)b;
     }
     if (bb->constraintkind == 1) {
-        if (!jl_is_typeeq(ub) && !jl_is_uniontype(ub) && !jl_is_unionall(ub)) {
+        if (!jl_is_some_typeeq(ub) && !jl_is_uniontype(ub) && !jl_is_unionall(ub)) {
             // this branch is a fast path if there are no `Type`s and not needed for correctness
             set_bound(&bb->ub, ub, b, e);
             return (jl_value_t*)b;
@@ -3659,8 +3698,8 @@ static int var_occurs_inside(jl_value_t *v, jl_tvar_t *var, int inside, int want
             return vm->N && var_occurs_inside(vm->N, var, 1, want_inv);
         }
     }
-    else if (jl_is_typeeq(v)) {
-        return var_occurs_inside(jl_typeeq_T(v), var, 1, want_inv);
+    else if (jl_is_some_typeeq(v)) {
+        return var_occurs_inside(jl_some_typeeq_T(v), var, 1, want_inv);
     }
     else if (jl_is_datatype(v)) {
         size_t i;
@@ -4219,8 +4258,8 @@ static int always_occurs_cov(jl_value_t *v, jl_tvar_t *var, jl_param_pos_t param
         jl_vararg_t *vm = (jl_vararg_t*)v;
         return vm->T && always_occurs_cov(vm->T, var, param);
     }
-    else if (jl_is_typeeq(v)) {
-        return always_occurs_cov(jl_typeeq_T(v), var, PARAM_INVARIANT);
+    else if (jl_is_some_typeeq(v)) {
+        return always_occurs_cov(jl_some_typeeq_T(v), var, PARAM_INVARIANT);
     }
     else if (jl_is_datatype(v)) {
         jl_param_pos_t nparam = jl_is_tuple_type(v) ? PARAM_COVARIANT : param;
@@ -4980,6 +5019,23 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_par
     }
     if (jl_is_unionall(y))
         return intersect_unionall(x, (jl_unionall_t*)y, e, 1, param);
+    if (jl_is_typeegal(x) || jl_is_typeegal(y)) {
+        // the intersection is `TypeEgal{A}` itself when `A` lies in the other
+        // operand (binding its typevars), else `Bottom`
+        int8_t R = 0;
+        if (!jl_is_typeegal(x)) { jl_value_t *t = x; x = y; y = t; R = 1; }
+        jl_value_t *A = jl_typeegal_T(x);
+        if (jl_is_typeegal(y))
+            return jl_types_egal(A, jl_typeegal_T(y)) ? x : jl_bottom_type;
+        if (jl_is_typeeq(y)) {
+            jl_value_t *yp = jl_typeeq_T(y);
+            jl_value_t *ii = R ? intersect_invariant(yp, A, e) : intersect_invariant(A, yp, e);
+            return (ii == NULL || ii == jl_bottom_type) ? jl_bottom_type : x;
+        }
+        if (param != PARAM_INVARIANT && jl_typeof(A) == y)
+            return x;
+        return jl_bottom_type;
+    }
     if (jl_is_typeeq(x) && jl_is_typeeq(y)) {
         jl_value_t *xp = jl_typeeq_T(x);
         jl_value_t *yp = jl_typeeq_T(y);
@@ -5345,7 +5401,7 @@ static int might_intersect_concrete(jl_value_t *a) JL_NOTSAFEPOINT
                might_intersect_concrete(((jl_uniontype_t*)a)->b);
     if (jl_is_vararg(a))
         return might_intersect_concrete(jl_unwrap_vararg(a));
-    if (jl_is_typeeq(a))
+    if (jl_is_some_typeeq(a))
         return 1;
     if (jl_is_datatype(a)) {
         int tpl = jl_is_tuple_type(a);
@@ -5566,8 +5622,8 @@ static void check_diagonal(jl_value_t *t, jl_varbinding_t *troot, jl_param_pos_t
         check_diagonal(body, troot, param);
         v1->prev = v2;
     }
-    else if (jl_is_typeeq(t)) {
-        jl_value_t *T = jl_typeeq_T(t);
+    else if (jl_is_some_typeeq(t)) {
+        jl_value_t *T = jl_some_typeeq_T(t);
         check_diagonal(T, troot, PARAM_INVARIANT);
     }
     else if (jl_is_datatype(t)) {
@@ -5691,6 +5747,16 @@ static jl_value_t *insert_nondiagonal(jl_value_t *type, jl_varbinding_t *troot, 
         if (T != newT) {
             JL_GC_PUSH1(&newT);
             type = (jl_value_t*)jl_wrap_Type(newT);
+            JL_GC_POP();
+        }
+    }
+    else if (jl_is_typeegal(type)) {
+        // a no-op for closed `T`; kept parallel to the `TypeEq` case
+        jl_value_t *T = jl_typeegal_T(type);
+        jl_value_t *newT = insert_nondiagonal(T, troot, 1);
+        if (T != newT) {
+            JL_GC_PUSH1(&newT);
+            type = jl_wrap_TypeEgal(newT);
             JL_GC_POP();
         }
     }
@@ -6100,8 +6166,8 @@ static int count_occurs(jl_value_t *t, jl_tvar_t *v) JL_NOTSAFEPOINT
             return count_occurs(vm->T, v) + (vm->N ? count_occurs(vm->N, v) : 0);
         }
     }
-    if (jl_is_typeeq(t))
-        return count_occurs(jl_typeeq_T(t), v);
+    if (jl_is_some_typeeq(t))
+        return count_occurs(jl_some_typeeq_T(t), v);
     if (jl_is_datatype(t)) {
         int i, c=0;
         for(i=0; i < jl_nparams(t); i++)
@@ -6153,6 +6219,17 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_v
 {
     if (a == b)
         return 0;
+
+    if (jl_is_typeegal(a) || jl_is_typeegal(b)) {
+        // `TypeEgal{A}` sorts exactly like `Type{A}`; normalize before comparing
+        jl_value_t *a2 = a, *b2 = b;
+        JL_GC_PUSH2(&a2, &b2);
+        if (jl_is_typeegal(a)) a2 = (jl_value_t*)jl_wrap_Type(jl_typeegal_T(a));
+        if (jl_is_typeegal(b)) b2 = (jl_value_t*)jl_wrap_Type(jl_typeegal_T(b));
+        int res = type_morespecific_(a2, b2, a == a0 ? a2 : a0, b == b0 ? b2 : b0, invariant, env);
+        JL_GC_POP();
+        return res;
+    }
 
     if (jl_is_tuple_type(a) && jl_is_tuple_type(b)) {
         // compare whether a and b have Type{Union{}} included,

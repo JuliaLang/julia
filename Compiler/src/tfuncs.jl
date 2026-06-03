@@ -820,11 +820,10 @@ end
 @nospecs function typeof_tfunc(𝕃::AbstractLattice, t)
     isa(t, Const) && return Const(typeof(t.val))
     t = widenconst(t)
-    if isType(t)
-        tp = type_parameter(t)
-        if hasuniquerep(tp)
-            return Const(typeof(tp))
-        end
+    if isconstType(t)
+        return Const(typeof(type_parameter(t)))
+    elseif isType(t)
+        # the value is only `== tp`, so its `typeof` is not pinned down (#61323)
     elseif isa(t, DataType)
         if isconcretetype(t)
             return Const(t)
@@ -1606,11 +1605,8 @@ end
             exactft1 = exact || (!has_free_typevars(ft1) && u.name !== Tuple.name)
             ft1 = rewrap_unionall(ft1, s)
             if exactft1
-                if hasuniquerep(ft1)
-                    ft1 = Const(ft1) # ft unique via type cache
-                else
-                    ft1 = Type{ft1}
-                end
+                # `fieldtype` returns exactly (`===`) the stored type
+                ft1 = Const(ft1)
             elseif ft1 isa Type || ft1 isa TypeVar
                 if ft1 === Any && u.name === Tuple.name
                     # Tuple{:x} is possible in this case
@@ -1649,10 +1645,8 @@ end
     exactft = exact || (!has_free_typevars(ft) && u.name !== Tuple.name)
     ft = rewrap_unionall(ft, s)
     if exactft
-        if hasuniquerep(ft)
-            return Const(ft) # ft unique via type cache
-        end
-        return Type{ft}
+        # `fieldtype` returns exactly (`===`) the stored type
+        return Const(ft)
     end
     if u.name === Tuple.name && ft === Any
         # Tuple{:x} is possible
@@ -1665,6 +1659,7 @@ add_tfunc(fieldtype, 2, 3, fieldtype_tfunc, 0)
 # Like `valid_tparam`, but in the type domain.
 valid_tparam_type(T::DataType) = valid_typeof_tparam(T)
 valid_tparam_type(T::TypeEq) = true
+valid_tparam_type(T::Core.TypeEgal) = true
 valid_tparam_type(U::Union) = valid_tparam_type(U.a) && valid_tparam_type(U.b)
 valid_tparam_type(U::UnionAll) = valid_tparam_type(unwrap_unionall(U))
 
@@ -1691,7 +1686,8 @@ function typeeq_apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
         return Const(apply_type(TypeEq, v))
     end
     if isType(ai)
-        return hasuniquerep(ai) ? Const(ai) : Type{ai}
+        # the argument is only `== X`, so the result is only `== Type{X}` (#61323)
+        return Type{ai}
     end
     if isa(ai, PartialTypeVar)
         (ai.lb_certain && ai.ub_certain) || return TypeEq
@@ -1705,6 +1701,32 @@ function typeeq_apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
         return Bottom
     end
     return TypeEq
+end
+
+# like `TypeEq`, but free typevars inside `T` make the construction throw
+function typeegal_apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any})
+    length(argtypes) == 2 || return false
+    ai = widenslotwrapper(widenconditional(argtypes[2]))
+    if isa(ai, Const)
+        v = ai.val
+        isa(v, TypeVar) && return false
+        isa(v, Type) && has_free_typevars(v) && return false
+        return isa(v, Type) || valid_tparam(v)
+    end
+    # for a non-constant parameter we cannot rule out free typevars
+    return false
+end
+
+function typeegal_apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
+    length(argtypes) == 2 || return Bottom
+    ai = widenslotwrapper(argtypes[2])
+    if isa(ai, Const)
+        v = ai.val
+        (isa(v, TypeVar) || (isa(v, Type) && has_free_typevars(v))) && return Bottom
+        (isa(v, Type) || valid_tparam(v)) || return Bottom
+        return Const(Core.apply_type(Core.TypeEgal, v))
+    end
+    return Core.TypeEgal
 end
 
 function apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospecialize(rt))
@@ -1722,6 +1744,7 @@ function apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospe
     # Bottom (or Type).
     (headtype === Union) && return true
     headtype === TypeEq && return typeeq_apply_type_nothrow(𝕃, argtypes)
+    headtype === Core.TypeEgal && return typeegal_apply_type_nothrow(𝕃, argtypes)
     isa(rt, Const) && return true
     u = headtype
     # TODO: implement optimization for isvarargtype(u) and istuple occurrences (which are valid but are not UnionAll)
@@ -1787,6 +1810,10 @@ function apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any};
         headtype = headtypetype.val
     elseif isconstType(headtypetype)
         headtype = type_parameter(headtypetype)
+    elseif isType(headtypetype)
+        # an `==`-only head cannot be pinned down; a `Union` head can also collapse
+        # `Union{T}` to a bare `TypeVar`
+        return type_parameter(headtypetype) == Union ? Union{Type, TypeVar} : Type
     else
         return Any
     end
@@ -1827,7 +1854,9 @@ function apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any};
             ai = argtypes[i]
             if isType(ai)
                 aty = type_parameter(ai)
-                allconst &= hasuniquerep(aty)
+                # a `Type{X}` argument is only known up to `== X`, so the resulting
+                # `Union` is not a constant (a `=== X` argument arrives as a `Const`)
+                allconst = false
             else
                 aty = (ai::Const).val
             end
@@ -1837,6 +1866,9 @@ function apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any};
     end
     if headtype === TypeEq
         return typeeq_apply_type_tfunc(𝕃, argtypes)
+    end
+    if headtype === Core.TypeEgal
+        return typeegal_apply_type_tfunc(𝕃, argtypes)
     end
     if 1 < unionsplitcost(𝕃, argtypes) ≤ max_union_splitting
         rt = Bottom
@@ -2054,7 +2086,9 @@ function tuple_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
             if isType(x)
                 anyinfo = true
                 xparam = type_parameter(x)
-                if hasuniquerep(xparam) || xparam === Bottom
+                # an `==`-only type value has no pinned `typeof` (#61323), except
+                # `Type{Union{}}` whose only value is `Union{}`
+                if xparam === Bottom
                     params[i] = typeof(xparam)
                 else
                     params[i] = Type

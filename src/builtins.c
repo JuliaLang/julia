@@ -210,7 +210,7 @@ static int egal_types(const jl_value_t *a, const jl_value_t *b, jl_typeenv_t *en
         return egal_types(((jl_uniontype_t*)a)->a, ((jl_uniontype_t*)b)->a, env, tvar_names) &&
             egal_types(((jl_uniontype_t*)a)->b, ((jl_uniontype_t*)b)->b, env, tvar_names);
     }
-    if (dtag == jl_typeeq_tag << 4)
+    if (dtag == jl_typeeq_tag << 4 || dtag == jl_typeegal_tag << 4)
         return egal_types(((jl_typeeq_t*)a)->T, ((jl_typeeq_t*)b)->T, env, tvar_names);
     if (dtag == jl_vararg_tag << 4) {
         jl_vararg_t *vma = (jl_vararg_t*)a;
@@ -292,6 +292,7 @@ JL_DLLEXPORT int jl_egal__bitstag(const jl_value_t *a JL_MAYBE_UNROOTED, const j
         case jl_uniontype_tag:
             return compare_fields(a, b, jl_uniontype_type);
         case jl_typeeq_tag:
+        case jl_typeegal_tag:
             return egal_types(a, b, NULL, 1);
         case jl_vararg_tag:
             return compare_fields(a, b, jl_vararg_type);
@@ -408,7 +409,7 @@ static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOIN
                              type_object_id_(((jl_uniontype_t*)v)->a, env)),
                       type_object_id_(((jl_uniontype_t*)v)->b, env));
     }
-    if (tv == jl_typeeq_type) {
+    if (tv == jl_typeeq_type || tv == jl_typeegal_type) {
         return bitmix(jl_object_id((jl_value_t*)tv),
                       type_object_id_(((jl_typeeq_t*)v)->T, env));
     }
@@ -1244,8 +1245,8 @@ static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f, int dothrow)
         jl_value_t *a = ((jl_uniontype_t*)t)->a;
         jl_value_t *b = ((jl_uniontype_t*)t)->b;
         JL_GC_PUSHARGS(u, 2);
-        u[0] = jl_is_typeeq(a) ? jl_bottom_type : get_fieldtype(a, f, 0);
-        u[1] = jl_is_typeeq(b) ? jl_bottom_type : get_fieldtype(b, f, 0);
+        u[0] = jl_is_some_typeeq(a) ? jl_bottom_type : get_fieldtype(a, f, 0);
+        u[1] = jl_is_some_typeeq(b) ? jl_bottom_type : get_fieldtype(b, f, 0);
         if (u[0] == jl_bottom_type && u[1] == jl_bottom_type && dothrow) {
             // error if all types in the union might have
             get_fieldtype(a, f, 1);
@@ -1700,6 +1701,13 @@ JL_CALLABLE(jl_f_apply_type)
         if (!jl_valid_type_param(pi))
             jl_type_error_rt("TypeEq", "parameter", (jl_value_t*)jl_type_type, pi);
         return (jl_value_t*)jl_wrap_Type(pi);
+    }
+    else if (args[0] == (jl_value_t*)jl_typeegal_type) {
+        JL_NARGS(apply_type, 2, 2);
+        jl_value_t *pi = args[1];
+        if (!jl_valid_type_param(pi))
+            jl_type_error_rt("TypeEgal", "parameter", (jl_value_t*)jl_type_type, pi);
+        return jl_wrap_TypeEgal(pi);
     }
     else if (jl_is_vararg(args[0])) {
         jl_vararg_t *vm = (jl_vararg_t*)args[0];
@@ -2662,6 +2670,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("Any", (jl_value_t*)jl_any_type);
     add_builtin("AnyType", (jl_value_t*)jl_anytype_type);
     add_builtin("TypeEq", (jl_value_t*)jl_typeeq_type);
+    add_builtin("TypeEgal", (jl_value_t*)jl_typeegal_type);
     add_builtin("Type", (jl_value_t*)jl_type_type);
     add_builtin("Nothing", (jl_value_t*)jl_nothing_type);
     add_builtin("nothing", (jl_value_t*)jl_nothing);

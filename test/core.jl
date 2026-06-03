@@ -1006,7 +1006,7 @@ let f = g -> x -> g(x)
     @test fieldtype(typeof(f(Int)), 1) === Type{Int}
     @test @inferred(f(Rational{Int})) isa Function
     @test fieldtype(typeof(f(Rational{Int})), 1) === Type{Rational{Int}}
-    @test_broken @inferred(f(Rational)) isa Function
+    @test @inferred(f(Rational)) isa Function
     @test fieldtype(typeof(f(Rational)), 1) === Type{Rational}
     @test_broken @inferred(f(Rational{Core.TypeVar(:T)})) isa Function
     @test fieldtype(typeof(f(Rational{Core.TypeVar(:T)})), 1) === DataType

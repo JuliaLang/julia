@@ -853,9 +853,9 @@ static void foreach_top_nth_typename(void (*f)(jl_typename_t*, int, void*), jl_v
         jl_value_t *current_a = (jl_value_t*)arraylist_pop(&workqueue);
         JL_GC_PROMISE_ROOTED(current_a);
 
-        if (jl_is_typeeq(current_a)) {
+        if (jl_is_some_typeeq(current_a)) {
             *facts |= HAVE_TYPE;
-            arraylist_push(&workqueue, jl_typeeq_T(current_a));
+            arraylist_push(&workqueue, jl_some_typeeq_T(current_a));
             arraylist_push(&workqueue, (void*)(uintptr_t)-1);
         }
         else if (jl_is_datatype(current_a)) {
@@ -1244,6 +1244,25 @@ static void jl_compilation_sig(
         type_i = jl_rewrap_unionall(decl_i, decl);
         size_t i_arg = (i < nargs - 1 ? i : nargs - 1);
 
+        // Key a closed type-valued slot on egality (`TypeEgal{A}`) -- unless the method
+        // declares the slot as a *concrete* `Type{X}`: there one `Type{A}`-keyed
+        // specialization soundly covers all `==`-equal argument values, since no static
+        // parameter can distinguish them (#61323). Normalize both runtime (`TypeEgal{A}`)
+        // and by-type (`Type{A}`, e.g. from `precompile`) signatures to the one form.
+        if (!jl_is_vararg(jl_tparam(tt, i)) && !jl_has_free_typevars(elt)) {
+            int decl_concrete = jl_is_typeeq(decl_i) && !jl_has_free_typevars(decl_i);
+            if (jl_is_typeeq(elt) && !decl_concrete) {
+                if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
+                elt = jl_wrap_TypeEgal(jl_typeeq_T(elt));
+                jl_svecset(*newparams, i, elt);
+            }
+            else if (jl_is_typeegal(elt) && decl_concrete) {
+                if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
+                elt = (jl_value_t*)jl_wrap_Type(jl_some_typeeq_T(elt));
+                jl_svecset(*newparams, i, elt);
+            }
+        }
+
         if (jl_is_kind(type_i)) {
             // if we can prove the match was against the kind (not a Type)
             // we want to put that in the cache instead
@@ -1251,12 +1270,12 @@ static void jl_compilation_sig(
             elt = type_i;
             jl_svecset(*newparams, i, elt);
         }
-        else if (jl_is_typeeq(elt)) {
+        else if (jl_is_some_typeeq(elt)) {
             // if the declared type was not Any or Union{Type, ...},
             // then the match must been with the kind (e.g. UnionAll or DataType)
             // and the result of matching the type signature
             // needs to be restricted to the concrete type 'kind'
-            jl_value_t *kind = jl_typeof(jl_typeeq_T(elt));
+            jl_value_t *kind = jl_typeof(jl_some_typeeq_T(elt));
             if (!jl_has_free_typevars(decl_i) &&
                     jl_subtype(kind, type_i) && !jl_subtype((jl_value_t*)jl_type_type, type_i)) {
                 // if we can prove the match was against the kind (not a Type)
@@ -1300,13 +1319,13 @@ static void jl_compilation_sig(
             // not triggered for isdispatchtuple(tt), this attempts to handle
             // some cases of adapting a random signature into a compilation signature
         }
-        else if (!jl_is_typeeq(elt) && !jl_is_datatype(elt) && jl_subtype(elt, (jl_value_t*)jl_type_type)) { // elt <: Type{T}
+        else if (!jl_is_some_typeeq(elt) && !jl_is_datatype(elt) && jl_subtype(elt, (jl_value_t*)jl_type_type)) { // elt <: Type{T}
             // not triggered for isdispatchtuple(tt), this attempts to handle
             // some cases of adapting a random signature into a compilation signature
             if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
             jl_svecset(*newparams, i, jl_type_type);
         }
-        else if (jl_is_typeeq(elt)) { // elt isa Type{T}
+        else if (jl_is_some_typeeq(elt)) { // elt isa Type{T} / TypeEgal{T}
             if (!jl_has_free_typevars(decl_i) && very_general_type(type_i)) {
                 /*
                   Here's a fairly simple heuristic: if this argument slot's
@@ -1333,9 +1352,9 @@ static void jl_compilation_sig(
                     jl_svecset(*newparams, i, jl_type_type);
                 }
             }
-            else if (jl_is_typeeq(jl_typeeq_T(elt)) &&
+            else if (jl_is_some_typeeq(jl_some_typeeq_T(elt)) &&
                      // try to give up on specializing type parameters for Type{Type{Type{...}}}
-                     (jl_is_typeeq(jl_typeeq_T(jl_typeeq_T(elt))) || !jl_has_free_typevars(decl_i))) {
+                     (jl_is_some_typeeq(jl_some_typeeq_T(jl_some_typeeq_T(elt))) || !jl_has_free_typevars(decl_i))) {
                 /*
                   actual argument was Type{...}, we computed its type as
                   Type{Type{...}}. we like to avoid unbounded nesting here, so
@@ -1407,7 +1426,7 @@ static void jl_compilation_sig(
         }
         if (all_are_subtypes) {
             // avoid Vararg{Type{Type{...}}}
-            if (jl_is_typeeq(type_i) && jl_is_typeeq(jl_typeeq_T(type_i)))
+            if (jl_is_some_typeeq(type_i) && jl_is_some_typeeq(jl_some_typeeq_T(type_i)))
                 type_i = (jl_value_t*)jl_type_type;
             type_i = (jl_value_t*)jl_wrap_vararg(type_i, (jl_value_t*)NULL, 1, 0); // this cannot throw for these inputs
         }
@@ -1491,7 +1510,7 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
             if (jl_egal(elt, type_i))
                 continue; // elt could be chosen by inst_varargp_in_env for these sparams
             elt = jl_unwrap_vararg(elt);
-            if (jl_is_typeeq(elt) && jl_is_typeeq(jl_typeeq_T(elt))) {
+            if (jl_is_some_typeeq(elt) && jl_is_some_typeeq(jl_some_typeeq_T(elt))) {
                 JL_GC_POP();
                 return 0; // elt would be set equal to jl_type_type instead
             }
@@ -1530,8 +1549,8 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
 
         // `elt` can be either equal representation of `Type` (specializations are
         // deduplicated by type-equality): both take the `jl_types_equal(elt,
-        // jl_type_type)` path; an `AnyType` elt must not reach `jl_typeeq_T` below
-        if (jl_is_typeeq(jl_unwrap_unionall(elt)) || elt == (jl_value_t*)jl_anytype_type) {
+        // jl_type_type)` path; an `AnyType` elt must not reach `jl_some_typeeq_T` below
+        if (jl_is_some_typeeq(jl_unwrap_unionall(elt)) || elt == (jl_value_t*)jl_anytype_type) {
             int iscalled = (i_arg > 0 && i_arg <= 8 && (definition->called & (1 << (i_arg - 1)))) ||
                            jl_has_free_typevars(decl_i);
             if (jl_types_equal(elt, (jl_value_t*)jl_type_type)) {
@@ -1546,7 +1565,7 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
                 JL_GC_POP();
                 return 0;
             }
-            if (!jl_is_datatype(elt) && !jl_is_typeeq(elt)) {
+            if (!jl_is_datatype(elt) && !jl_is_some_typeeq(elt)) {
                 JL_GC_POP();
                 return 0;
             }
@@ -1555,7 +1574,7 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
             // then the match must been with kind, such as UnionAll or DataType,
             // and the result of matching the type signature
             // needs to be corrected to the concrete type 'kind' (and not to Type)
-            jl_value_t *kind = jl_typeof(jl_typeeq_T(elt));
+            jl_value_t *kind = jl_typeof(jl_some_typeeq_T(elt));
             if (kind == jl_bottom_type) {
                 JL_GC_POP();
                 return 0; // Type{Union{}} gets normalized to typeof(Union{})
@@ -1566,9 +1585,9 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
                 return 0; // gets turned into a kind
             }
 
-            else if (jl_is_typeeq(jl_typeeq_T(elt)) &&
+            else if (jl_is_some_typeeq(jl_some_typeeq_T(elt)) &&
                      // give up on specializing static parameters for Type{Type{Type{...}}}
-                     (jl_is_typeeq(jl_typeeq_T(jl_typeeq_T(elt))) || !jl_has_free_typevars(decl_i))) {
+                     (jl_is_some_typeeq(jl_some_typeeq_T(jl_some_typeeq_T(elt))) || !jl_has_free_typevars(decl_i))) {
                 /*
                   actual argument was Type{...}, we computed its type as
                   Type{Type{...}}. we must avoid unbounded nesting here, so
@@ -1630,7 +1649,7 @@ static int concretesig_equal(jl_value_t *tt, jl_value_t *simplesig) JL_NOTSAFEPO
         jl_value_t *decl = sigs[i];
         jl_value_t *a = types[i];
         if (a != decl && decl != (jl_value_t*)jl_any_type) {
-            if (!(jl_is_typeeq(a) && jl_typeof(jl_typeeq_T(a)) == decl))
+            if (!(jl_is_some_typeeq(a) && jl_typeof(jl_some_typeeq_T(a)) == decl))
                 return 0;
         }
     }
@@ -1693,9 +1712,9 @@ jl_value_t *compute_simplett(jl_tupletype_t *cachett)
         jl_value_t *elt = jl_svecref(cachett->parameters, i);
         if (jl_is_vararg(elt)) {
         }
-        else if (jl_is_typeeq(elt)) {
+        else if (jl_is_some_typeeq(elt)) {
             // TODO: if (!jl_is_singleton(elt)) ...
-            jl_value_t *kind = jl_typeof(jl_typeeq_T(elt));
+            jl_value_t *kind = jl_typeof(jl_some_typeeq_T(elt));
             if (!newparams) newparams = jl_svec_copy(cachett->parameters);
             jl_svecset(newparams, i, kind);
         }

@@ -452,15 +452,15 @@ int jl_pointer_egal(jl_value_t *t)
         !jl_is_kind(t))
         return 1;
     if ((jl_is_datatype(t) && jl_is_datatype_singleton((jl_datatype_t*)t)) ||
-        (jl_is_typeeq(t) && jl_typeeq_T(t) == jl_bottom_type))
+        (jl_is_some_typeeq(t) && jl_some_typeeq_T(t) == jl_bottom_type))
         return 1;
-    if (jl_is_typeeq(t) && jl_is_datatype(jl_typeeq_T(t))) {
+    if (jl_is_some_typeeq(t) && jl_is_datatype(jl_some_typeeq_T(t))) {
         // need to use typeseq for most types
         // but can compare some types by pointer
-        jl_datatype_t *dt = (jl_datatype_t*)jl_typeeq_T(t);
+        jl_datatype_t *dt = (jl_datatype_t*)jl_some_typeeq_T(t);
         // `Core.TypeofBottom` and `Type{Union{}}` are used interchangeably
         // with different pointer values even though `Core.TypeofBottom` is a concrete type.
-        // See `Core.Compiler.hasuniquerep`
+        // (the same `Union{}` special case appears in `is_uniquerep_Type` in codegen.cpp)
         if (dt != jl_typeofbottom_type &&
             (dt->isconcretetype || jl_svec_len(dt->parameters) == 0)) {
             // Concrete types have unique pointer values
@@ -2614,7 +2614,7 @@ void jl_check_valid_supertype(jl_value_t *super, const char *type_name)
         jl_errorf("invalid subtyping in definition of %s: cannot subtype a Union type.", type_name);
     if (jl_is_typevar(super))
         jl_errorf("invalid subtyping in definition of %s: cannot subtype a type variable.", type_name);
-    if (jl_is_typeeq(super))
+    if (jl_is_some_typeeq(super))
         jl_errorf("invalid subtyping in definition of %s: cannot add subtypes to Type.", type_name);
     if (!jl_is_datatype(super)) {
         ios_t buf;

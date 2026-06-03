@@ -796,7 +796,7 @@ let fieldtype_tfunc(@nospecialize args...) =
     @test fieldtype_tfunc(Union{Type{Int32}, Int32}, Const(:x)) == Union{}
     @test fieldtype_tfunc(Union{Type{Base.RefValue{T}}, Type{Int32}} where {T<:Array}, Const(:x)) == Type{<:Array}
     @test fieldtype_tfunc(Union{Type{Base.RefValue{T}}, Type{Int32}} where {T<:Real}, Const(:x)) == Type{<:Real}
-    @test fieldtype_tfunc(Union{Type{Base.RefValue{<:Array}}, Type{Int32}}, Const(:x)) == Type{Array}
+    @test fieldtype_tfunc(Union{Type{Base.RefValue{<:Array}}, Type{Int32}}, Const(:x)) == Const(Array)
     @test fieldtype_tfunc(Union{Type{Base.RefValue{<:Real}}, Type{Int32}}, Const(:x)) == Const(Real)
     @test fieldtype_tfunc(Const(Union{Base.RefValue{<:Real}, Type{Int32}}), Const(:x)) == Const(Real)
     @test fieldtype_tfunc(Type{Union{Base.RefValue{T}, Type{Int32}}} where {T<:Real}, Const(:x)) == Type{<:Real}
@@ -1568,14 +1568,19 @@ let nfields_tfunc(@nospecialize xs...) =
     @test nfields_tfunc(Number) === Int
     @test nfields_tfunc(Int) === Const(0)
     @test nfields_tfunc(Complex) === Const(2)
-    @test nfields_tfunc(Type{Type{Int}}) === Const(nfields(Type{Int}))
+    # only the egality kind `TypeEgal{X}` pins the value to exactly `X` (#61323)
+    @test nfields_tfunc(Type{Type{Int}}) === Int
+    @test nfields_tfunc(Core.TypeEgal{Type{Int}}) === Const(nfields(Type{Int}))
     @test nfields_tfunc(UnionAll) === Const(2)
     @test nfields_tfunc(DataType) === Const(nfields(DataType))
-    @test nfields_tfunc(Type{Int}) === Const(nfields(DataType))
-    @test nfields_tfunc(Type{Integer}) === Const(nfields(DataType))
+    @test nfields_tfunc(Type{Int}) === Int
+    @test nfields_tfunc(Core.TypeEgal{Int}) === Const(nfields(DataType))
+    @test nfields_tfunc(Type{Integer}) === Int
+    @test nfields_tfunc(Core.TypeEgal{Integer}) === Const(nfields(DataType))
     @test nfields_tfunc(Type{Complex}) === Int
     @test nfields_tfunc(typeof(Union{})) === Const(0)
-    @test nfields_tfunc(Type{Union{}}) === Const(0)
+    @test nfields_tfunc(Type{Union{}}) === Int
+    @test nfields_tfunc(Core.TypeEgal{Union{}}) === Const(0)
     @test nfields_tfunc(Tuple{Int, Vararg{Int}}) === Int
     @test nfields_tfunc(Tuple{Int, Integer}) === Const(2)
     @test nfields_tfunc(Union{Tuple{Int, Float64}, Tuple{Int, Int}}) === Const(2)
@@ -1673,7 +1678,9 @@ end
 
 let tuple_tfunc(@nospecialize xs...) =
         Compiler.tuple_tfunc(Compiler.fallback_lattice, Any[xs...])
-    @test Compiler.widenconst(tuple_tfunc(Type{Int})) === Tuple{DataType}
+    # only the egality kind `TypeEgal{X}` pins the element's `typeof` (#61323)
+    @test Compiler.widenconst(tuple_tfunc(Type{Int})) === Tuple{Type}
+    @test Compiler.widenconst(tuple_tfunc(Core.TypeEgal{Int})) === Tuple{DataType}
     # https://github.com/JuliaLang/julia/issues/44705
     @test tuple_tfunc(Union{Type{Int32},Type{Int64}}) === Tuple{Type}
     @test tuple_tfunc(DataType) === Tuple{DataType}
@@ -1691,7 +1698,7 @@ g23024(TT::Tuple{DataType}) = f23024(TT[1], v23024)
 
 @test !Compiler.isconstType(Type{typeof(Union{})}) # could be Core.TypeofBottom or Type{Union{}} at runtime
 @test !isa(Compiler.getfield_tfunc(Compiler.fallback_lattice, Type{Core.TypeofBottom}, Compiler.Const(:name)), Compiler.Const)
-@test Base.return_types(supertype, (Type{typeof(Union{})},)) == Any[Any]
+@test Base.return_types(supertype, (Type{typeof(Union{})},)) == Any[Type{Core.AnyType}]
 
 # issue #23685
 struct Node23685{T}
@@ -2042,6 +2049,8 @@ g26339(T) = T === Int ? 1 : ""
 @test Base.return_types(f26339, (Int,)) == Any[String]
 @test Base.return_types(g26339, (Int,)) == Any[String]
 @test Base.return_types(f26339, (Type{Int},)) == Any[String]
+# a closed type-valued argument specializes on egality (`TypeEgal{Int}`), so `T === Int`
+# folds for a `Type{Int}` by-type query just as it does for a runtime `g26339(Int)` call
 @test Base.return_types(g26339, (Type{Int},)) == Any[Int]
 @test Base.return_types(f26339, (Type{Union{}},)) == Any[Int]
 @test Base.return_types(g26339, (Type{Union{}},)) == Any[String]
@@ -2876,12 +2885,13 @@ end |> only === Int
 # correct `apply_type` inference of `NamedTuple{(), <:Any}`
 @test (() -> NamedTuple{(), <:Any})() isa UnionAll
 
-# Don't pessimize apply_type to anything worse than Type (or TypeVar) and yield Bottom for invalid Unions
-@test only(Base.return_types(Core.apply_type, Tuple{Type{Union}})) == Type{Union{}}
+# Don't pessimize apply_type to anything worse than Type (or TypeVar). An `==`-only
+# `Type{Union}` head isn't pinned down (#61323), so these widen to the Type/TypeVar floor.
+@test only(Base.return_types(Core.apply_type, Tuple{Type{Union}})) == Union{Type,TypeVar}
 @test only(Base.return_types(Core.apply_type, Tuple{Type{Union},Any})) == Union{Type,TypeVar}
-@test only(Base.return_types(Core.apply_type, Tuple{Type{Union},Any,Any})) == Type
-@test only(Base.return_types(Core.apply_type, Tuple{Type{Union},Int})) == Union{}
-@test only(Base.return_types(Core.apply_type, Tuple{Type{Union},Any,Int})) == Union{}
+@test only(Base.return_types(Core.apply_type, Tuple{Type{Union},Any,Any})) == Union{Type,TypeVar}
+@test only(Base.return_types(Core.apply_type, Tuple{Type{Union},Int})) == Union{Type,TypeVar}
+@test only(Base.return_types(Core.apply_type, Tuple{Type{Union},Any,Int})) == Union{Type,TypeVar}
 @test only(Base.return_types(Core.apply_type, Tuple{Any})) == Any
 @test only(Base.return_types(Core.apply_type, Tuple{Any,Any})) == Any
 
@@ -6326,7 +6336,8 @@ let interp = CachedConditionalInterp();
 end
 
 # fieldcount on `Tuple` should constant fold, even though `.fields` not const
-@test fully_eliminated(Base.fieldcount, Tuple{Type{Tuple{Nothing, Int, Int}}})
+# (only for the egality kind; an `==`-only `Type{T}` no longer folds, #61323)
+@test fully_eliminated(Base.fieldcount, Tuple{Core.TypeEgal{Tuple{Nothing, Int, Int}}})
 
 # Vararg-constprop regression from MutableArithmetics (#54341)
 global SIDE_EFFECT54341::Int

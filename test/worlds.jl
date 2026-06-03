@@ -230,6 +230,12 @@ function method_instance(f, types=Base.default_tt(f))
     m = which(f, types)
     inst = nothing
     tt = Base.signature_type(f, types)
+    # canonicalize type-valued slots to the egality key the dispatch
+    # specializations use (see `jl_compilation_sig`)
+    u = Base.unwrap_unionall(tt)::DataType
+    ps = Any[isa(p, Core.TypeEq) && !Base.has_free_typevars(Base.type_parameter(p)) ?
+             Core.TypeEgal{Base.type_parameter(p)} : p for p in u.parameters]
+    tt = Base.rewrap_unionall(Tuple{ps...}, tt)
     for mi in Base.specializations(m)
         if mi.specTypes <: tt && tt <: mi.specTypes
             inst = mi

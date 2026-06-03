@@ -600,11 +600,14 @@ io_has_tvar_name(io::IO, name::Symbol, @nospecialize(x)) = false
 
 modulesof!(s::Set{Module}, x::TypeVar) = modulesof!(s, x.ub)
 modulesof!(s::Set{Module}, x::TypeEq) = modulesof!(s, type_parameter(x))
+modulesof!(s::Set{Module}, x::Core.TypeEgal) = modulesof!(s, type_parameter(x))
 function modulesof!(s::Set{Module}, x::Type)
     x = unwrap_unionall(x)
     if x isa DataType
         push!(s, parentmodule(x))
     elseif x isa TypeEq
+        modulesof!(s, x)
+    elseif x isa Core.TypeEgal
         modulesof!(s, x)
     elseif x isa Union
         modulesof!(s, x.a)
@@ -1020,6 +1023,15 @@ function show(io::IO, ::MIME"text/plain", @nospecialize(x::Type))
 end
 
 show(io::IO, @nospecialize(x::TypeEq)) = show_typeeq(io, x)
+# `TypeEgal{T}` is the internal, egality-based dispatch-cache dual of `Type{T}`: its
+# sole instance is exactly `T` (by egality), making it strictly more specific than the
+# equality kind `Type{T}`. It always prints under its own `TypeEgal{T}` spelling so it
+# is never conflated with `Type{T}`.
+function show(io::IO, @nospecialize(x::Core.TypeEgal))
+    print(io, "TypeEgal{")
+    show(io, type_parameter(x))
+    print(io, "}")
+end
 show(io::IO, @nospecialize(x::Core.AnyType)) = _show_type(io, inferencebarrier(x))
 # `Type{T}` is the familiar user-facing spelling and is used for all normal
 # (compact) printing. In non-compact contexts (e.g. the REPL's `text/plain`
@@ -1031,7 +1043,10 @@ function show_typeeq(io::IO, @nospecialize(x::TypeEq))
     print(io, "}")
 end
 function _show_type(io::IO, @nospecialize(x::Type))
-    if print_without_params(x)
+    if x isa Core.TypeEgal
+        show(io, x)
+        return
+    elseif print_without_params(x)
         show_type_name(io, (unwrap_unionall(x)::DataType).name)
         return
     elseif get(io, :compact, true)::Bool && show_typealias(io, x)
@@ -2548,7 +2563,9 @@ function show_signature_function(io::IO, @nospecialize(ft), demangle=false, farg
         end
         s = sprint(show_sym, (demangle ? demangle_function_name : identity)(uw.name.singletonname), context=io)
         print_within_stacktrace(io, s, bold=true)
-    elseif isType(ft) && (f = type_parameter(ft); !isa(f, TypeVar))
+    elseif (isType(ft) || isa(ft, Core.TypeEgal)) && (f = type_parameter(ft); !isa(f, TypeVar))
+        # a constructor call displays by its type name (`T(...)`), whether the call was
+        # keyed on the equality kind `Type{T}` or the egality kind `TypeEgal{T}`
         uwf = unwrap_unionall(f)
         parens = isa(f, UnionAll) && !(isa(uwf, DataType) && f === uwf.name.wrapper)
         parens && print(io, "(")
