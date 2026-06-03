@@ -1018,7 +1018,7 @@ function isdispatchelem(@nospecialize v)
 end
 
 isType(@nospecialize t) = isa(t, TypeEq)
-type_parameter(@nospecialize t) = getfield(t, :T)
+type_parameter(t::TypeEq) = getfield(t, :T)
 
 """
     isconcretetype(T)
