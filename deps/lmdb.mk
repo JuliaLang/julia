@@ -13,12 +13,12 @@ $(BUILDDIR)/$(LMDB_SRC_DIR)/build-configured: $(SRCCACHE)/$(LMDB_SRC_DIR)/source
 	echo 1 > $@
 
 $(BUILDDIR)/$(LMDB_SRC_DIR)/build-compiled: $(BUILDDIR)/$(LMDB_SRC_DIR)/build-configured
-	$(MAKE) -C $(SRCCACHE)/$(LMDB_SRC_DIR)/$(LMDB_SRC_SUBDIR) $(MAKE_COMMON) $(LMDB_BUILD_OPTS) liblmdb$(SHLIB_EXT)
+	$(MAKE) -C $(SRCCACHE)/$(LMDB_SRC_DIR)/$(LMDB_SRC_SUBDIR) $(MAKE_COMMON) $(LMDB_BUILD_OPTS) liblmdb.$(SHLIB_EXT)
 	echo 1 > $@
 
 define LMDB_INSTALL
 	mkdir -p $2/$$(build_shlibdir)
-	cp $(SRCCACHE)/$(LMDB_SRC_DIR)/$(LMDB_SRC_SUBDIR)/liblmdb$(SHLIB_EXT) $2/$$(build_shlibdir)/
+	cp $(SRCCACHE)/$(LMDB_SRC_DIR)/$(LMDB_SRC_SUBDIR)/liblmdb.$(SHLIB_EXT) $2/$$(build_shlibdir)/
 	$(INSTALL_NAME_CMD)liblmdb.$(SHLIB_EXT) $2/$$(build_shlibdir)/liblmdb.$(SHLIB_EXT)
 endef
 $(eval $(call staged-install, \
