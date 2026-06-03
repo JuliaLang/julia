@@ -527,21 +527,22 @@ bool ObjCache::updateATime(MDBTxn &Txn, const Hash &Hash, int64_t Time, bool Fre
 
 bool ObjCache::maybeEvictLRU(MDBTxn &Txn, bool Force)
 {
-    size_t EvictFromSize = (OBJCACHE_CAPACITY * OBJCACHE_EVICT_FROM) >> 31;
-    auto ShouldEvict = [&]() {
-        return Force ||
-               dbiSize(Txn, ObjCacheDbi) + dbiSize(Txn, ObjMetaDbi) >= EvictFromSize;
+    auto ShouldEvict = [&](uint32_t P) {
+        size_t Threshold = ((uint64_t)OBJCACHE_CAPACITY * P) >> 31;
+        return Force || dbiSize(Txn, ObjCacheDbi) + dbiSize(Txn, ObjMetaDbi) >= Threshold;
     };
-    if (!ShouldEvict())
+    if (!ShouldEvict(OBJCACHE_EVICT_FROM))
         return true;
 
     MDB_cursor *MetaCur;
-    checkMDB(mdb_cursor_open(Txn.Txn, ObjMetaDbi, &MetaCur));
+    if (checkMDB(mdb_cursor_open(Txn.Txn, ObjMetaDbi, &MetaCur)))
+        return false;
 
     auto LowMeta = toMetaKey(0, {});
     MDB_val MetaKey = mdbVal(LowMeta);
     int Ret = mdb_cursor_get(MetaCur, &MetaKey, nullptr, MDB_SET_RANGE);
-    while (!Ret && ShouldEvict() && ((const char *)MetaKey.mv_data)[0] == METAKEY_TAG) {
+    while (!Ret && ShouldEvict(OBJCACHE_EVICT_TO) &&
+           ((const char *)MetaKey.mv_data)[0] == METAKEY_TAG) {
         Force = false;
         auto [Time, Hash] = fromMetaKey((const char *)MetaKey.mv_data);
         NEvicted.fetch_add(1, memory_order_relaxed);
