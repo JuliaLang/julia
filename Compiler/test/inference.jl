@@ -2625,6 +2625,43 @@ end
     @test Type{AbstractVector} == Base.infer_return_type(Base.promote_typeof, Tuple{R, R, Vector{Any}, R, Vararg{R}})
 end
 
+# issue #61953: `constprop_cache_lookup` asserted that all cached const-prop results for a
+# `MethodInstance` share their `argtypes` length. That is false for an `mi` whose `specTypes`
+# ends in an unbounded `Vararg` (its trailing varargs are not specialized to a fixed arity):
+# such an `mi` can be const-propagated at multiple arities, yielding cached results whose
+# `argtypes` differ in length. This is a reduction of the original report (inferring
+# `Polyhedra.points` over a `CDDLib.CDDGeneratorMatrix`): a varargs `constructpolyhedron` whose
+# trailing iterators are a large `Union` keyed on a union-constrained coefficient type var, so
+# type intersection widens differing-arity calls to the same unbounded-`Vararg` `mi`.
+module Issue61953
+    const CoefT = Union{Float64, Rational{BigInt}}
+    abstract type Rep{T} end
+    abstract type VRep{T} <: Rep{T} end
+    struct Line{T, AT<:AbstractVector{T}} end
+    struct Ray{T, AT<:AbstractVector{T}} end
+    abstract type AbstractRepIterator{T, ElemT} end
+    struct AllRepIterator{T, ElemT, LinElemT, LRT<:AbstractRepIterator{T, LinElemT}, RT<:AbstractRepIterator{T, ElemT}} end
+    const ElemIt{ElemT} = Union{AllRepIterator{<:Any, ElemT}, AbstractRepIterator{<:Any, ElemT}, AbstractVector{ElemT}}
+    const It{T} = Union{ElemIt{<:AbstractVector{T}}, ElemIt{<:Line{T}}, ElemIt{<:Ray{T}}}
+    const SINK = Ref{Any}(nothing)
+    mkrep(::Type{R}, d, it...) where {R} = R(length(it))
+    function constructpolyhedron(RepT::Type{<:Rep{T}}, d, p::Tuple{Vararg{Rep}}, it::It{T}...) where {T}
+        SINK[] = d # observable effect, so const-prop is preferred over (semi-)concrete eval
+        return mkrep(RepT, d, it...)::RepT
+    end
+    mutable struct ConcreteV{T<:CoefT} <: VRep{T}; x::Int; end
+    # a statically-unknown-length iterator collection (splat yields a trailing `Vararg`)...
+    itervar(p::VRep{T}) where {T} = Base.inferencebarrier(())::Tuple{Vararg{It{T}}}
+    # ...and a fixed-length one (splat yields concrete trailing arguments)
+    iterfix(p::VRep{T}) where {T} = ntuple(_ -> Base.inferencebarrier(nothing)::It{T}, Val(3))
+    asrep(p::VRep{T}) where {T} = Base.inferencebarrier(p)::VRep{T}
+    abstractrep(::Type{T}) where {T} = Base.inferencebarrier(ConcreteV{T})::Type{<:VRep{T}}
+    cvar(p::VRep{T}) where {T} = constructpolyhedron(abstractrep(T), 2, (asrep(p),), itervar(p)...)
+    cfix(p::VRep{T}) where {T} = constructpolyhedron(abstractrep(T), 2, (asrep(p),), iterfix(p)...)
+    driver(p::VRep{<:CoefT}) = (cvar(p), cfix(p))
+end
+@test Base.infer_return_type(Issue61953.driver, Tuple{Issue61953.ConcreteV{<:Issue61953.CoefT}}) <: Tuple
+
 function f25579(g)
     h = g[]
     t = (h === nothing)
