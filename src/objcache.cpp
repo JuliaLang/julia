@@ -570,7 +570,7 @@ bool ObjCache::maybeEvictLRU(MDBTxn &Txn, bool Force)
 size_t ObjCache::dbiSize(MDBTxn &Txn, MDB_dbi Dbi)
 {
     MDB_stat Stat;
-    mdb_stat(Txn.Txn, ObjCacheDbi, &Stat);
+    mdb_stat(Txn.Txn, Dbi, &Stat);
     return (Stat.ms_leaf_pages + Stat.ms_branch_pages + Stat.ms_overflow_pages) *
            Stat.ms_psize;
 }
