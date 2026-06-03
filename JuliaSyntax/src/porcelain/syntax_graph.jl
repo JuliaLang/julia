@@ -419,6 +419,21 @@ function macro_prov(st::SyntaxTree)
     return nothing
 end
 
+"The first macro expansion `st` was involved in (chronologically), or nothing"
+function macro_prov_end(st::SyntaxTree)
+    lastmp = mp = macro_prov(st)
+    while !isnothing(mp)
+        lastmp, mp = mp, macro_prov(mp)
+    end
+    return lastmp
+end
+
+"The top-level location of `st`"
+function unexpanded_sourceref(st::SyntaxTree)
+    mp = macro_prov_end(st)
+    isnothing(mp) ? sourceref(st) : sourceref(mp)
+end
+
 """
 A SyntaxList of textrefs associated with `st`.  The number of returned trees
 should equal one plus the number of macro expansions `st` "went through":

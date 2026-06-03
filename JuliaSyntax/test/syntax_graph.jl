@@ -1,4 +1,4 @@
-using .JuliaSyntax: SyntaxGraph, SyntaxTree, SyntaxList, ensure_attributes, ensure_attributes!, delete_attributes, copy_ast, attrdefs, @stm, NodeId, SourceRef, SourceAttrType, Kind, syntax_graph, prov, prov_end, provenance, macro_prov, flattened_provenance, sourceref, newleaf, mkleaf, mknode, mktree, setattr!, hasattr
+using .JuliaSyntax: SyntaxGraph, SyntaxTree, SyntaxList, ensure_attributes, ensure_attributes!, delete_attributes, copy_ast, attrdefs, @stm, NodeId, SourceRef, SourceAttrType, Kind, syntax_graph, prov, prov_end, provenance, macro_prov, macro_prov_end, flattened_provenance, sourceref, unexpanded_sourceref, newleaf, mkleaf, mknode, mktree, setattr!, hasattr
 
 "For filling required attrs in graphs created by hand"
 function testgraph(edge_ranges, edges, more_attrs...)
@@ -149,6 +149,24 @@ end
         @test macro_prov(stmm3) == nothing
         @test macro_prov(stmm2) == nothing
         @test macro_prov(stmm1) == nothing
+        @test macro_prov_end(st3) == stmm3
+        @test macro_prov_end(st2) == stm_unused
+        @test macro_prov_end(st1) == stm_unused
+        @test macro_prov_end(stm3) == stmm3
+        @test macro_prov_end(stm2) == nothing
+        @test macro_prov_end(stm1) == nothing
+        @test macro_prov_end(stmm3) == nothing
+        @test macro_prov_end(stmm2) == nothing
+        @test macro_prov_end(stmm1) == nothing
+        @test unexpanded_sourceref(st3) == LineNumberNode(1, :mm)
+        @test unexpanded_sourceref(st2) == LineNumberNode(0)
+        @test unexpanded_sourceref(st1) == LineNumberNode(0)
+        @test unexpanded_sourceref(stm3) == LineNumberNode(1, :mm)
+        @test unexpanded_sourceref(stm2) == LineNumberNode(1, :m)
+        @test unexpanded_sourceref(stm1) == LineNumberNode(1, :m)
+        @test unexpanded_sourceref(stmm3) == LineNumberNode(1, :mm)
+        @test unexpanded_sourceref(stmm2) == LineNumberNode(1, :mm)
+        @test unexpanded_sourceref(stmm1) == LineNumberNode(1, :mm)
         @test flattened_provenance(st3) == SyntaxList(stmm1, stm1, st1)
         @test flattened_provenance(st2) == SyntaxList(stm_unused, st1)
         @test flattened_provenance(st1) == SyntaxList(stm_unused, st1)
