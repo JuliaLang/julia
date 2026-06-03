@@ -26,7 +26,7 @@ static uint64_t parseEnvU64(const char *Name, uint64_t Default)
     char *End;
     unsigned long long V = strtoull(S, &End, 0);
     if (*End != '\0') {
-        jl_printf(JL_STDERR, "objcache: invalid value for %s: %s\n", Name, S);
+        fprintf(stderr, "objcache: invalid value for %s: %s\n", Name, S);
         return Default;
     }
     return (uint64_t)V;
@@ -42,7 +42,7 @@ static uint32_t parseEnvFrac31(const char *Name, double Default)
         char *End;
         V = strtod(S, &End);
         if (*End != '\0') {
-            jl_printf(JL_STDERR, "objcache: invalid value for %s: %s\n", Name, S);
+            fprintf(stderr, "objcache: invalid value for %s: %s\n", Name, S);
             V = Default;
         }
     }
