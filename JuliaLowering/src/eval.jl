@@ -263,6 +263,7 @@ function compress_sbt(sbt::SourceByteTable)
 end
 
 function uncompress_sbt(di::Core.DebugInfo)
+    di.linetable isa String || throw(ArgumentError("linetable: expected string"))
     io = IOBuffer(di.linetable)
     byte_offset = _take32(io, 4)
     line_offset = _take32(io, 4)
