@@ -152,7 +152,6 @@ end
 function optakessuffix(k)
     (K"BEGIN_OPS" <= k <= K"END_OPS") &&
     !(
-        k == K"..." ||
         K"BEGIN_ASSIGNMENTS" <= k <= K"END_ASSIGNMENTS" ||
         k == K"?"   ||
         k == K"<:"  ||
@@ -164,7 +163,6 @@ function optakessuffix(k)
         k == K"≔"   ||
         k == K"⩴"   ||
         k == K":"   ||
-        k == K".."  ||
         k == K"$"   ||
         k == K"::"  ||
         k == K"where" ||
@@ -986,7 +984,7 @@ function lex_digit(l::Lexer, kind)
     pc,ppc = dpeekchar(l)
     if pc == '.'
         if ppc == '.'
-            # Number followed by K".." or K"..."
+            # Number followed by K"."
             return emit(l, kind)
         elseif kind === K"Float"
             # If we enter the function with kind == K"Float" then a '.' has been parsed.
@@ -1174,23 +1172,19 @@ function lex_backslash(l::Lexer)
 end
 
 function lex_dot(l::Lexer)
-    if accept(l, '.')
+    if l.last_token == K"@"
         if accept(l, '.')
-            l.last_token == K"@" && return emit(l, K"Identifier")
-            return emit(l, K"...")
-        else
-            if is_dottable_operator_start_char(peekchar(l))
+            if !accept(l, '.') && is_dottable_operator_start_char(peekchar(l))
                 readchar(l)
                 return emit(l, K"ErrorInvalidOperator")
-            else
-                l.last_token == K"@" && return emit(l, K"Identifier")
-                return emit(l, K"..")
             end
         end
-    elseif Base.isdigit(peekchar(l))
+        # Emit `.`, `..` and `...` as identifiers after `@`
+        emit(l, K"Identifier")
+    elseif l.last_token != K"." && Base.isdigit(peekchar(l))
+        # Only start a numeric constant if the previous token wasn't a dot
         return lex_digit(l, K"Float")
     else
-        l.last_token == K"@" && return emit(l, K"Identifier")
         return emit(l, K".")
     end
 end
