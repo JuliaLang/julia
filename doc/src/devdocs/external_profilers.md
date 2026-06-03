@@ -96,7 +96,7 @@ The `TracyCZoneColor` function can be used to set the color of a certain zone. S
 
 ### Viewing Tracy files in your browser
 
-Visit https://topolarity.github.io/trace-viewer/ for an (experimental) web viewer for Tracy traces.
+Visit [https://maleadt.github.io/trace-viewer/](https://maleadt.github.io/trace-viewer/) for an (experimental) web viewer for Tracy traces.
 
 You can open a local `.tracy` file or provide a URL from the web (e.g. a file in a Github repo). If you load a trace file from the web, you can also share the page URL directly with others, enabling them to view the same trace.
 
