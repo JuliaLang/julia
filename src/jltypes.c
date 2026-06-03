@@ -528,7 +528,7 @@ static void flatten_type_union(jl_value_t **types, size_t n, jl_value_t **out, s
         if (widen && jl_is_unionall(e) && jl_is_uniontype(jl_unwrap_unionall(e))) {
             // flatten this UnionAll into place by switching the union and unionall
             jl_uniontype_t *u = (jl_uniontype_t*)jl_unwrap_unionall(e);
-            size_t old_idx = 0;
+            size_t old_idx = *idx;
             flatten_type_union(&u->a, 2, out, idx, widen);
             for (; old_idx < *idx; old_idx++)
                 out[old_idx] = jl_rewrap_unionall(out[old_idx], e);
