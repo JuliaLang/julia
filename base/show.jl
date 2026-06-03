@@ -1021,8 +1021,12 @@ end
 
 show(io::IO, @nospecialize(x::TypeEq)) = show_typeeq(io, x)
 show(io::IO, @nospecialize(x::Core.AnyType)) = _show_type(io, inferencebarrier(x))
+# `Type{T}` is the familiar user-facing spelling and is used for all normal
+# (compact) printing. In non-compact contexts (e.g. the REPL's `text/plain`
+# display) the canonical kind name `TypeEq{T}` is shown instead, so that a
+# concrete `Type{T}` renders as `Type{T} (alias for TypeEq{T})`.
 function show_typeeq(io::IO, @nospecialize(x::TypeEq))
-    print(io, "Type{")
+    print(io, get(io, :compact, true)::Bool ? "Type{" : "TypeEq{")
     show(io, type_parameter(x))
     print(io, "}")
 end
@@ -1034,9 +1038,6 @@ function _show_type(io::IO, @nospecialize(x::Type))
         return
     elseif x isa TypeEq
         show_typeeq(io, x)
-        return
-    elseif x === Type
-        print(io, "Type")
         return
     elseif x isa DataType
         show_datatype(io, x)
