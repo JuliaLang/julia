@@ -196,64 +196,39 @@ end
 
 const top_level_scope_sym = Symbol("top-level scope")
 
+# Interpreted => unoptimized => no inlined frames, so >1 frames are returned
+# only with code from macro expansions.
 function lookup(ip::Base.InterpreterIP)
     code = ip.code
-    if code === nothing
-        # interpreted top-level expression with no CodeInfo
-        return [StackFrame(top_level_scope_sym, empty_sym, 0, nothing, false, false, 0)]
-    end
-    # prepare approximate code info
-    if code isa MethodInstance && (meth = code.def; meth isa Method)
-        func = meth.name
-        file = meth.file
-        line = meth.line
-        codeinfo = meth.source
-    else
-        func = top_level_scope_sym
-        file = empty_sym
-        line = Int32(0)
-        if code isa Core.CodeInstance
-            codeinfo = code.inferred::CodeInfo
-            def = code.def
-            if isa(def, Core.ABIOverride)
-                def = def.def
-            end
-            if isa(def, MethodInstance)
-                let meth = def.def
-                    if isa(meth, Method)
-                        func = meth.name
-                        file = meth.file
-                        line = meth.line
-                    end
-                end
-            end
-        else
-            codeinfo = code::CodeInfo
-        end
-    end
-    def = (code isa CodeInfo ? StackTraces : code) # Module just used as a token for top-level code
     pc::Int = max(ip.stmt + 1, 0) # n.b. ip.stmt is 0-indexed
-    scopes = IRShow.LineInfoNode[]
-    IRShow.append_scopes!(scopes, pc, codeinfo.debuginfo, def)
-    if isempty(scopes)
-        return [StackFrame(func, file, line, code, false, false, 0)]
-    end
-    res = Vector{StackFrame}(undef, length(scopes))
-    inlined = false
-    def_local = def
-    for i in eachindex(scopes)
-        lno = scopes[i]
-        if inlined
-            def_local = lno.method
-            def_local isa Union{Method,Core.CodeInstance,MethodInstance} || (def_local = nothing)
-        else
-            def_local = codeinfo
+    if code === nothing
+        return [StackFrame(
+            top_level_scope_sym, empty_sym, 0, nothing, false, false, 0)]
+    elseif code isa MethodInstance && (meth = code.def; meth isa Method)
+        func = meth.name
+        codeinfo = meth.source
+        di = codeinfo.debuginfo
+    elseif code isa Core.CodeInstance
+        codeinfo = code.inferred::CodeInfo
+        def = code.def isa Core.ABIOverride ? code.def.def : code.def
+        @assert def isa MethodInstance "unexpected $(typeof(def))"
+        meth = def.def
+        func = meth isa Method ? meth.name : top_level_scope_sym
+        di = code.debuginfo
+        while Base.Compiler.has_prev_debuginfo(di, pc)
+            di, pc = Base.Compiler.prev_debuginfo(di, pc)
         end
-        res[i] = StackFrame(IRShow.normalize_method_name(lno.method), lno.file, lno.line,
-            def_local, false, inlined, 0)
-        inlined = true
+    else
+        codeinfo = code::CodeInfo
+        di = codeinfo.debuginfo
+        func = top_level_scope_sym
     end
-    return res
+    file = IRShow.debuginfo_file1(di)
+    line = pc > 0 ? Base.Compiler.source_location(di, pc).line :
+        IRShow.debuginfo_firstline(di)
+    frames = [StackFrame(func, file, line, codeinfo, false, false, 0, pc, di)]
+    _add_linetable_frames!(frames, 0, di, pc)
+    return frames
 end
 
 """
