@@ -8764,3 +8764,11 @@ module AmbiguousUsing60659
     using .D, .A
     @test_throws UndefVarError X
 end
+
+# (#61914) when transforming UnionAll of Union to Union of UnionAll, don't
+# re-wrap members of the union that were not beneath the UnionAll with the type
+# variable.
+let T = TypeVar(:T)
+    a = UnionAll(T, Union{Vector{T}, Int64})
+    @test Union{T, a} == Union{a, T} == Union{T, Int64, Vector}
+end
