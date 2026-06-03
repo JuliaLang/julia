@@ -1235,9 +1235,9 @@ end
 end
 
 @testset "no lost wakeups under bursty spawn (#61820, #50425)" begin
-    # A multiqueue insert wakes one thread in the pool and relies on consumers
-    # cascading the wake to peers; regression smoke test that bursts of tasks
-    # spawned across an idle pool still all run to completion.
+    # A multiqueue insert wakes one thread in the pool; bursts of tasks spawned
+    # across an idle pool must all still run to completion (regression smoke test
+    # that wake-one does not drop wakeups).
     for pool in (:default, :interactive)
         nt = Threads.threadpoolsize(pool)
         n = 50 * nt

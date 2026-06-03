@@ -309,12 +309,32 @@ typedef struct {
 static pool_wake_hint_t pool_wake_hints[POOL_WAKE_HINT_STRIPES];
 
 // Wake at most one sleeping thread in threadpool `tpid`, replacing the
-// O(jl_n_threads) broadcast of jl_wakeup_thread(-1) (#61820, #50425). Workers
-// only consume tasks from their own pool, and re-check the queue before sleeping
-// ([^store_buffering_1]), so bursty inserts cascade to wake more consumers.
+// O(jl_n_threads) broadcast of jl_wakeup_thread(-1) (#61820, #50425). Each
+// multiqueue insert wakes one worker, so a burst of N inserts wakes up to N
+// workers (there is no peer-to-peer cascade; a woken worker just consumes its
+// task).
+//
+// Correctness comes from inspecting each candidate's sleep_check_state under a
+// sequentially-consistent fence ([^store_buffering_1], paired with the
+// consumer's re-check of the queue after it stores `sleeping` in
+// jl_task_get_next): a worker is either observed `sleeping` here (and woken), or
+// has not yet committed to its sleep transition and is therefore guaranteed to
+// re-check the queue and find the freshly-inserted task.
+//
+// We must NOT short-circuit this scan based on n_threads_running. That counter
+// is decremented only *after* a worker has already re-checked the queue (see
+// jl_task_get_next), so an "all threads running" snapshot can be stale: a worker
+// may have read its (then empty) queue, be about to park, and still be counted
+// as running. Worse, n_threads_running is global while this wake is pool-local,
+// so busy threads in another pool could mask an entirely parked target pool and
+// strand its tasks. sleep_check_state, by contrast, is set to `sleeping` before
+// the re-check, so scanning it never misses such a worker.
 JL_DLLEXPORT void jl_wakeup_threadpool(int8_t tpid) JL_NOTSAFEPOINT
 {
-    assert(tpid >= 0 && tpid < jl_n_threadpools);
+    if (tpid < 0 || tpid >= jl_n_threadpools) {
+        wakeup_thread(jl_current_task, -1);
+        return;
+    }
     jl_task_t *ct = jl_current_task;
     int16_t self = jl_atomic_load_relaxed(&ct->tid);
     jl_fence(); // [^store_buffering_1]
@@ -338,12 +358,6 @@ JL_DLLEXPORT void jl_wakeup_threadpool(int8_t tpid) JL_NOTSAFEPOINT
     for (int8_t i = 0; i < tpid; i++)
         lo += (int16_t)jl_n_threads_per_pool[i];
     int16_t n = (int16_t)jl_n_threads_per_pool[tpid];
-
-    // if every thread is already running, nothing is parked: skip the wake loop
-    if (jl_atomic_load_relaxed(&n_threads_running) >= jl_atomic_load_relaxed(&jl_n_threads)) {
-        JULIA_DEBUG_SLEEPWAKE( wakeup_leave = cycleclock() );
-        return;
-    }
 
     int woke = 0;
     if (n > 0) {
