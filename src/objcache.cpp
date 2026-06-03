@@ -319,9 +319,11 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
         return Compile();
 
     size_t Weight = 0;
-    for (auto &F : M.functions())
-        for (auto &BB : F)
-            Weight += BB.size();
+    if (LogFile) {
+        for (auto &F : M.functions())
+            for (auto &BB : F)
+                Weight += BB.size();
+    }
 
     uint64_t LookupStart = jl_hrtime();
 
