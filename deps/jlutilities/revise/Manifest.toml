@@ -70,11 +70,11 @@ version = "1.11.0"
 
 [[deps.JuliaInterpreter]]
 deps = ["CodeTracking", "InteractiveUtils", "Random", "UUIDs"]
-git-tree-sha1 = "c6a0611d4fbc9ee502e02afb3a15e571b45fadbe"
+git-tree-sha1 = "58927c485919bf17ea308d9d82156de1adf4b006"
 repo-rev = "master"
 repo-url = "https://github.com/JuliaDebug/JuliaInterpreter.jl.git"
 uuid = "aa1ae85d-cabe-5617-a682-6adf51b2e16a"
-version = "0.10.9"
+version = "0.10.12"
 
     [deps.JuliaInterpreter.syntax]
     julia_version = "1.10.0"
@@ -120,11 +120,11 @@ version = "1.11.0"
 
 [[deps.LoweredCodeUtils]]
 deps = ["CodeTracking", "Compiler", "JuliaInterpreter"]
-git-tree-sha1 = "33ed9090b43f7e209ceff1f858fba1f906f869b5"
+git-tree-sha1 = "c46957d8047fe62dc59ffb83cbd005a511e90d5d"
 repo-rev = "master"
 repo-url = "https://github.com/JuliaDebug/LoweredCodeUtils.jl.git"
 uuid = "6f1432cf-f94c-5a45-995e-cdbf5db27b0b"
-version = "3.5.0"
+version = "3.5.2"
 
     [deps.LoweredCodeUtils.syntax]
     julia_version = "1.10.0"
