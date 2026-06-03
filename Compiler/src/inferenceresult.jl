@@ -220,7 +220,17 @@ function constprop_cache_lookup(𝕃::AbstractLattice, mi::MethodInstance, given
     for idx in indices
         cached_result = cache.results[idx]
         cache_argtypes = cached_result.argtypes
-        @assert length(cache_argtypes) == nargtypes "invalid `cache_argtypes` for `mi`"
+        if length(cache_argtypes) != nargtypes
+            # A `MethodInstance` whose `specTypes` ends in an unbounded `Vararg` (i.e. its
+            # trailing varargs are not specialized to a fixed arity) can be
+            # const-propagated at multiple arities, producing cached results whose
+            # `argtypes` differ in length (e.g. one ending in a `Vararg` element, another
+            # expanded to concrete arguments). Such entries describe distinct argument
+            # refinements, and a query of a different arity cannot reuse them, so skip.
+            # Any other length mismatch would indicate a genuine bug.
+            @assert isvarargtype((unwrap_unionall(mi.specTypes)::DataType).parameters[end]) "invalid `cache_argtypes` for `mi`"
+            @goto next_cache
+        end
         cache_overridden_by_const = cached_result.overridden_by_const
         cache_overridden_by_const === nothing && continue
         cache_overridden_by_const = cache_overridden_by_const::BitVector
