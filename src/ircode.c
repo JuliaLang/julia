@@ -1452,6 +1452,7 @@ static const char *sbt_parseheader(jl_string_t *str, jl_sourcebytetable_header_t
     assert(jl_is_string(str));
     const char *ptr = jl_string_data(str);
     memcpy(h, ptr, SBT_HEADER_SIZE); // TODO assumes LE
+    assert(h->byte_encl == 1 || h->byte_encl == 2 || h->byte_encl == 4);
     return ptr + SBT_HEADER_SIZE;
 }
 
