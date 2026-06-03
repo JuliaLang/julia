@@ -433,11 +433,6 @@ function extension_type(ex)
     ex[1].name_val
 end
 
-function is_sym_decl(x)
-    k = kind(x)
-    k == K"Identifier" || k == K"::"
-end
-
 function is_eventually_call(ex::SyntaxTree)
     k = kind(ex)
     return k == K"call" || ((k == K"where" || k == K"::") && is_eventually_call(ex[1]))
