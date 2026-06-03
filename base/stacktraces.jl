@@ -74,12 +74,15 @@ struct StackFrame # this type should be kept platform-agnostic so that profiles 
     pointer::UInt64  # Large enough to be read losslessly on 32- and 64-bit machines.
     "if !from_c, 1-based statement index (PC) within the frame's CodeInfo, or 0 if unavailable"
     pc::Int
+    # TODO: can be redundant given `linfo`, but needed for inlined frames with
+    # `linfo isa MethodInstance`
+    debuginfo::Union{Core.DebugInfo, Nothing}
 end
 
 StackFrame(func, file, line, linfo, from_c, inlined, pointer) =
-    StackFrame(func, file, line, linfo, from_c, inlined, pointer, 0)
+    StackFrame(func, file, line, linfo, from_c, inlined, pointer, 0, nothing)
 StackFrame(func, file, line) = StackFrame(Symbol(func), Symbol(file), line,
-                                          nothing, false, false, 0, 0)
+                                          nothing, false, false, 0, 0, nothing)
 
 """
     StackTrace
@@ -134,7 +137,8 @@ function _add_di_frames!(frames, pointer, di::Core.DebugInfo, pc::Int)
         false, # we can assume C frames aren't inlined into julia
         !isempty(frames),
         pointer,
-        pc))
+        pc,
+        di))
     _add_linetable_frames!(frames, pointer, di, pc)
     edi, epc = Base.Compiler.edge_debuginfo(di, pc)
     edi !== nothing && _add_di_frames!(frames, pointer, edi, epc)
@@ -179,7 +183,8 @@ Base.@constprop :none function lookup(pointer::Ptr{Cvoid})
             inlined = f[6]::Bool
             sv_pc = from_c ? f[7]::Int : 0
             out[i] = StackFrame(
-                func, file, linenum, linfo, from_c, inlined, pointer, sv_pc)
+                func, file, linenum, linfo, from_c, inlined, pointer, sv_pc,
+                nothing)
         end
     else
         out = Vector{StackFrame}()
@@ -327,6 +332,27 @@ function frame_mi(lkup::StackFrame)
     return code
 end
 
+function frame_location(frame::StackFrame)
+    if frame.from_c
+        Base.Compiler.SourceLocation(0,0,frame.pc,0,frame.line,0)
+    elseif isnothing(frame.debuginfo) || frame.pc <= 0
+        Base.Compiler.SourceLocation(0,0,0,0,frame.line,0)
+    else
+        # Ideally this would just be a source_location call, but we need to
+        # check for pc=0 recursively since source_location doesn't have a good
+        # answer for that until we stop producing that.
+        di, pc = frame.debuginfo, frame.pc
+        while Base.Compiler.has_prev_debuginfo(di, pc)
+            di, pc = Base.Compiler.prev_debuginfo(di, pc)
+        end
+        if pc <= 0
+            Base.Compiler.SourceLocation(0,0,0,0,frame.line,0)
+        else
+            Base.Compiler.source_location(frame.debuginfo, frame.pc)
+        end
+    end
+end
+
 function show_spec_linfo(io::IO, frame::StackFrame)
     linfo = frame.linfo
     if linfo === nothing
@@ -403,10 +429,15 @@ function show(io::IO, frame::StackFrame)
         file_info = basename(string(frame.file))
         print(io, " at ")
         print(io, file_info, ":")
-        if frame.line >= 0
-            print(io, frame.line)
+        fl = frame_location(frame)
+        if fl.line >= 0
+            print(io, fl.line)
         else
             print(io, "?")
+        end
+        if fl.col != 0
+            print(io, ":")
+            print(io, fl.col)
         end
     end
     if frame.inlined

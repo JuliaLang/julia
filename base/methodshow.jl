@@ -258,7 +258,7 @@ function show_method(io::IO, m::Method;
             digit_align_width += 4
         end
         # module & file, re-using function from errorshow.jl
-        print_module_path_file(io, parentmodule(m), string(file), line; modulecolor, digit_align_width)
+        print_module_path_file(io, parentmodule(m), string(file), line, 0; modulecolor, digit_align_width)
     end
 end
 
