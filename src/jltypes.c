@@ -1877,6 +1877,15 @@ static unsigned typeeq_hash(jl_value_t *T, int *failed) JL_NOTSAFEPOINT
         // e.g. `Vector{Type}` and `Vector{Kind}` land in the same cache bucket
         // (they are equal per `typekey_eq`/`jl_types_equal`).
         return type_hash((jl_value_t*)jl_anytype_type, failed);
+    if (jl_is_typeeq(T)) {
+        jl_value_t *innerT = jl_typeeq_T(T);
+        if (jl_is_typevar(innerT) && ((jl_tvar_t*)innerT)->lb == jl_bottom_type &&
+                ((jl_tvar_t*)innerT)->ub == (jl_value_t*)jl_any_type)
+            // the unbounded `Type{Type{T}} where T` is `== TypeEq` (the kind whose
+            // instances are the `Type{X}` types); hash it as `TypeEq` so that the two
+            // equal representations land in the same cache bucket.
+            return type_hash((jl_value_t*)jl_typeeq_type, failed);
+    }
     unsigned hashT = type_hash(T, failed);
     return bitmix(~jl_type_typename->hash, hashT);
 }
