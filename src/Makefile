@@ -82,13 +82,23 @@ GC_CODEGEN_SRCS += llvm-final-gc-lowering-mmtk
 else
 GC_CODEGEN_SRCS += llvm-final-gc-lowering-stock
 endif
-CODEGEN_SRCS_HASH := codegen jitlayers aotcompile debuginfo disasm llvm-simdloop \
-	llvm-pass-helpers llvm-ptls llvm-propagate-addrspaces \
-	llvm-multiversioning llvm-alloc-opt llvm-alloc-helpers cgmemmgr llvm-remove-addrspaces \
-	llvm-remove-ni llvm-julia-licm llvm-demote-float16 llvm-cpufeatures llvm-expand-atomic-modify \
-	pipeline llvm_api \
-	cgutils intrinsics ccall \
-	$(GC_CODEGEN_SRCS)
+# Every file whose contents can change codegen output, used to invalidate the
+# objcache when codegen changes (see objcache.cpp).  The hash is computed per
+# file and does not follow #includes, so the sources that are #included into the
+# codegen translation units (the abi_*.cpp and the llvm-julia-passes.inc pass
+# list) and the codegen headers must be listed explicitly.
+CODEGEN_SRCS_HASH := codegen.cpp jitlayers.cpp aotcompile.cpp debuginfo.cpp disasm.cpp llvm-simdloop.cpp \
+	llvm-pass-helpers.cpp llvm-ptls.cpp llvm-propagate-addrspaces.cpp \
+	llvm-multiversioning.cpp llvm-alloc-opt.cpp llvm-alloc-helpers.cpp cgmemmgr.cpp llvm-remove-addrspaces.cpp \
+	llvm-remove-ni.cpp llvm-julia-licm.cpp llvm-demote-float16.cpp llvm-cpufeatures.cpp llvm-expand-atomic-modify.cpp \
+	pipeline.cpp llvm_api.cpp \
+	cgutils.cpp intrinsics.cpp ccall.cpp \
+	abi_llvm.cpp abi_arm.cpp abi_aarch64.cpp abi_riscv.cpp abi_ppc64le.cpp abi_win32.cpp abi_win64.cpp abi_x86_64.cpp abi_x86.cpp \
+	llvm-julia-passes.inc \
+	debug-registry.h debuginfo.h intrinsics.h jitlayers.h julia-task-dispatcher.h \
+	llvm-alloc-helpers.h llvm-codegen-shared.h llvm-gc-interface-passes.h llvm-pass-helpers.h \
+	llvm-version.h passes.h \
+	$(GC_CODEGEN_SRCS:%=%.cpp)
 CODEGEN_SRCS := codegen jitlayers aotcompile debuginfo disasm llvm-simdloop \
 	llvm-pass-helpers llvm-ptls llvm-propagate-addrspaces \
 	llvm-multiversioning llvm-alloc-opt llvm-alloc-helpers cgmemmgr llvm-remove-addrspaces \
@@ -318,7 +328,7 @@ ifeq ($(SHA256SUM),)
 SHA256SUM := shasum -a 256
 endif
 
-$(BUILDDIR)/jl_codegen_hash.inc: $(CODEGEN_SRCS_HASH:%=$(SRCDIR)/%.cpp)
+$(BUILDDIR)/jl_codegen_hash.inc: $(CODEGEN_SRCS_HASH:%=$(SRCDIR)/%)
 	cat $^ | $(SHA256SUM) | sed -E 's/^([0-9a-f]+).*/#define JL_CODEGEN_SRC_HASH "\1"/g' > $@
 
 # source file rules
