@@ -7581,13 +7581,15 @@ std::string emit_abi_constreturn(jl_codegen_output_t &out, bool specsig, jl_code
     return emit_abi_constreturn(out, abi, codeinst->rettype_const);
 }
 
+// (get_abi_converter / method table mutating thread)
 // release jl_world_counter
-// store theFptr
+// release theFptr
 // release last_world_v
 //
+// (dispatch site)
 // acquire last_world_v
-// read theFptr
-// acquire jl_world_counter
+// acquire theFptr
+// read jl_world_counter
 // if (last_world_v != jl_world_counter)
 //   fptr = compute_new_fptr(&last_world_v)
 // return fptr()
@@ -7622,10 +7624,10 @@ static jl_cgval_t emit_abi_call(jl_codectx_t &ctx, jl_value_t *declrt, jl_value_
         LoadInst *last_world_v = ctx.builder.CreateAlignedLoad(T_size, last_world_p, ctx.types().alignof_ptr);
         last_world_v->setOrdering(AtomicOrdering::Acquire);
         LoadInst *callee = ctx.builder.CreateAlignedLoad(T_ptr, cfuncdata, ctx.types().alignof_ptr);
-        callee->setOrdering(AtomicOrdering::Monotonic);
+        callee->setOrdering(AtomicOrdering::Acquire);
         LoadInst *world_v = ctx.builder.CreateAlignedLoad(ctx.types().T_size,
             prepare_global_in(M, jlgetworld_global), ctx.types().alignof_ptr);
-        world_v->setOrdering(AtomicOrdering::Acquire);
+        world_v->setOrdering(AtomicOrdering::Monotonic);
         ctx.builder.CreateStore(world_v, world_age_field);
         Value *age_not_ok = ctx.builder.CreateICmpNE(last_world_v, world_v);
         Value *target = emit_guarded_test(ctx, age_not_ok, callee, [&] {
