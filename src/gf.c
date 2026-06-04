@@ -762,7 +762,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst_uninit(jl_method_instance_t *mi
 }
 
 JL_DLLEXPORT void jl_mi_cache_insert(jl_method_instance_t *mi,
-                                     jl_code_instance_t *ci JL_ROOTED_BY_ARG(0) JL_MAYBE_UNROOTED)
+                                     jl_code_instance_t *ci JL_MAYBE_UNROOTED)
 {
     JL_GC_PUSH1(&ci);
     if (jl_is_method(mi->def.method))
@@ -826,7 +826,7 @@ JL_DLLEXPORT void jl_mi_cache_insert(jl_method_instance_t *mi,
 
 JL_DLLEXPORT int jl_mi_try_insert(jl_method_instance_t *mi,
                                    jl_code_instance_t *expected_ci,
-                                   jl_code_instance_t *ci JL_ROOTED_BY_ARG(0) JL_MAYBE_UNROOTED)
+                                   jl_code_instance_t *ci JL_MAYBE_UNROOTED)
 {
     JL_GC_PUSH1(&ci);
     if (jl_is_method(mi->def.method))
@@ -1060,7 +1060,7 @@ JL_DLLEXPORT void jl_set_type_infer_preserve_ir(int8_t v)
 
 static int invalidate_all_entries(jl_typemap_entry_t *entry, void *env)
 {
-    entry->max_world = 0;
+    jl_atomic_store_relaxed(&entry->max_world, 0);
     return 1;
 }
 
@@ -1660,7 +1660,7 @@ static inline jl_typemap_entry_t *lookup_leafcache(jl_genericmemory_t *leafcache
     return NULL;
 }
 
-static jl_typemap_entry_t *mt_find_cache_entry(_Atomic(jl_typemap_t*) *JL_NONNULL cache JL_PROPAGATES_ROOT, _Atomic(jl_genericmemory_t*) *leafcache JL_PROPAGATES_ROOT, jl_datatype_t *tt, size_t world, int offs)
+static jl_typemap_entry_t *mt_find_cache_entry(_Atomic(jl_typemap_t* JL_NONNULL) *JL_NONNULL cache JL_PROPAGATES_ROOT, _Atomic(jl_genericmemory_t*) *leafcache JL_PROPAGATES_ROOT, jl_datatype_t *tt, size_t world, int offs)
 {
     if (leafcache) {
         jl_typemap_entry_t *entry = lookup_leafcache(jl_atomic_load_relaxed(leafcache), (jl_value_t*)tt, world);
@@ -1859,6 +1859,7 @@ static void recache_method(
         jl_typemap_entry_t *entry = lookup_leafcache(jl_atomic_load_relaxed(&mc->leafcache), (jl_value_t*)tt, world);
         if (entry) {
             entry->func.linfo = newmeth;
+            jl_gc_wb(entry, newmeth);
             orig_in_cache = 1;
             if (jl_egal((jl_value_t*)tt, (jl_value_t*)newmeth->specTypes)) {
                 if (mc) JL_UNLOCK(&mc->writelock);
@@ -1871,6 +1872,7 @@ static void recache_method(
         jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(jl_atomic_load_relaxed(cache), &search, offs, /*subtype*/1);
         if (entry && jl_subtype((jl_value_t*)entry->sig, (jl_value_t*)newmeth->specTypes)) {
             entry->func.linfo = newmeth;
+            jl_gc_wb(entry, newmeth);
             if (entry->simplesig == (void*)jl_nothing || jl_egal((jl_value_t*)entry->simplesig, compute_simplett((jl_tupletype_t*)newmeth->specTypes))) {
                 if (mc) JL_UNLOCK(&mc->writelock);
                 return; // cache entry already sufficient
@@ -1911,6 +1913,7 @@ static void recache_method(
         // now examine what will happen if we chose to use this sig in the cache
         size_t min_valid2 = 1;
         size_t max_valid2 = ~(size_t)0;
+        // TODO: check if inferences is empty, before doing the filtered lookup
         matches = ml_matches(mt, mc, (jl_tupletype_t*)compilationsig, MAX_UNSPECIALIZED_CONFLICTS, 1, 1, world, 0, &min_valid2, &max_valid2, NULL);
         int guards = 0;
         if (matches == jl_nothing) {
@@ -2016,14 +2019,11 @@ static void promote_cache_method(jl_value_t *F, jl_value_t **args, uint32_t narg
     else if (cause == TRIGGER_INVOKE) {
         jl_tupletype_t *tt = arg_type_tuple(F, args, nargs + 1);
         JL_GC_PUSH1(&tt);
-        size_t current_world = ~(size_t)0;
-        size_t min_valid = 1;
-        size_t max_valid = 1;
         jl_method_t *definition = newmeth->def.method;
         JL_LOCK(&definition->writelock);
         recache_method(
-            NULL, NULL, &definition->invokes, (jl_value_t*)definition, tt, definition, world,
-            min_valid, max_valid, current_world, newmeth->sparam_vals, newmeth, compilationsig);
+            NULL, NULL, &definition->invokes, (jl_value_t*)definition, tt, definition,
+            1, 1, 1, 1, newmeth->sparam_vals, newmeth, compilationsig);
         JL_UNLOCK(&definition->writelock);
         JL_GC_POP();
     }
@@ -2455,8 +2455,9 @@ static int _invalidate_dispatch_backedges(jl_method_instance_t *mi, jl_value_t *
     if (!backedges)
         return 0;
     size_t ib = 0, insb = 0, nb = jl_array_nrows(backedges);
-    jl_value_t *invokeTypes;
-    jl_code_instance_t *caller;
+    jl_value_t *invokeTypes = NULL;
+    jl_code_instance_t *caller = NULL;
+    JL_GC_PUSH2(&caller, &invokeTypes);
     int invalidated_any = 0;
     while (mi->backedges && ib < nb) {
         ib = get_next_edge(backedges, ib, &invokeTypes, &caller);
@@ -2485,6 +2486,7 @@ static int _invalidate_dispatch_backedges(jl_method_instance_t *mi, jl_value_t *
             insb = set_next_edge(backedges, insb, invokeTypes, caller);
         }
     }
+    JL_GC_POP();
     jl_mi_done_backedges(mi, backedge_recursion_flags);
     return invalidated_any;
 }
@@ -3792,7 +3794,7 @@ jl_code_instance_t *copy_to_mi_cache(jl_method_instance_t *mi JL_PROPAGATES_ROOT
 // a cacheable sig is normally the same as a compileable sig
 // except in the case where we can't execute the compileable sig without copying
 // (because of jl_fptr_sparam environment usage)
-static jl_value_t *normalize_to_cacheable_sig(jl_method_instance_t *mi)
+static jl_value_t *normalize_to_cacheable_sig(jl_method_instance_t *mi JL_PROPAGATES_ROOT)
 {
     jl_method_instance_t *mi2 = jl_normalize_to_compilable_mi(mi);
     if (mi != mi2 && need_copy_to_mi_cache(mi, mi2, TRIGGER_NONE)) // rarely true
@@ -3816,14 +3818,14 @@ static jl_code_instance_t *jl_compile_method_very_internal(jl_method_instance_t 
     // but many of the code paths here would be invalid if we reached them.
     jl_method_t *def = mi->def.method;
     if (def == jl_opaque_closure_method) {
-        codeinst = jl_method_compiled(def->unspecialized, world);
+        codeinst = jl_method_compiled(jl_atomic_load_relaxed(&def->unspecialized), world);
         promote_cache_method(F, args, nargs, world, mi, def->sig, cause);
         return codeinst;
     }
 
     // We don't really want to compile (or infer) unspecialized, since it confuses various heuristics and caches,
     // so re-acquire the specialized MethodInstance, and work forward with that
-    if (jl_is_method(def) && mi == def->unspecialized) {
+    if (jl_is_method(def) && mi == jl_atomic_load_relaxed(&def->unspecialized)) {
         if (F) {
             jl_tupletype_t *tt = arg_type_tuple(F, args, nargs + 1);
             jl_svec_t *env = NULL;
@@ -3958,7 +3960,7 @@ static jl_code_instance_t *jl_compile_method_very_internal(jl_method_instance_t 
         if (mi != mi2) {
             codeinst = jl_compile_method_very_internal(mi2, world, F, args, nargs, cause);
             if (need_copy_to_mi_cache(mi, mi2, cause)) {
-                codeinst = copy_to_mi_cache(mi2, codeinst);
+                codeinst = copy_to_mi_cache(mi, codeinst);
                 mi2 = mi;
             }
             else {
@@ -4549,11 +4551,13 @@ have_entry:
         assert(tt);
         // cache miss case
         jl_methcache_t *mc = jl_method_table->cache;
+        JL_GC_PUSH1(&tt);
         mfunc = jl_mt_assoc_by_type(jl_method_table, mc, tt, world);
+        JL_GC_POP();
         if (jl_options.malloc_log)
             jl_gc_sync_total_bytes(last_alloc); // discard allocation count from compilation
-        if (mfunc == NULL) {
-            if (for_call) {
+        if (for_call) {
+            if (mfunc == NULL) {
 #ifdef JL_TRACE
                 if (error_en)
                     show_call(F, args, nargs);
@@ -4561,8 +4565,6 @@ have_entry:
                 jl_method_error(F, args, nargs, world);
                 // unreachable
             }
-        }
-        else {
             // mfunc was found in slow path, so log --trace-dispatch
             record_dispatch_statement_on_first_dispatch(mfunc);
         }

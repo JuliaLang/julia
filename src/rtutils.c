@@ -938,7 +938,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_printf(out, "MethodInstance ");
         jl_method_instance_t *mi = (jl_method_instance_t*)v;
         if (jl_is_method(mi->def.method)) {
-            if (mi->def.method->unspecialized == mi)
+            if (jl_atomic_load_relaxed(&mi->def.method->unspecialized) == mi)
                 n += jl_printf(out, "unspecialized");
             else
                 n += jl_static_show_func_sig(out, mi->specTypes);
