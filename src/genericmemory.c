@@ -315,7 +315,7 @@ jl_genericmemoryref_t *jl_new_memoryref(jl_value_t *typ, jl_genericmemory_t *mem
 }
 
 // memoryref primitives
-JL_DLLEXPORT jl_genericmemoryref_t jl_memoryrefindex(jl_genericmemoryref_t m JL_PROPAGATES_ROOT, size_t idx)
+JL_DLLEXPORT jl_genericmemoryref_t jl_memoryrefindex(jl_genericmemoryref_t m JL_ROOTING_ARGUMENT, size_t idx)
 {
     const jl_datatype_layout_t *layout = ((jl_datatype_t*)jl_typetagof(m.mem))->layout;
     if ((layout->flags.arrayelem_isboxed || !layout->flags.arrayelem_isunion) && layout->size != 0) {
@@ -443,7 +443,7 @@ JL_DLLEXPORT void jl_memoryrefunset(jl_genericmemoryref_t m, int isatomic)
     }
 }
 
-JL_DLLEXPORT void jl_memoryrefset(jl_genericmemoryref_t m, jl_value_t *rhs JL_ROOTED_BY_ARG(0) JL_MAYBE_UNROOTED, int isatomic)
+JL_DLLEXPORT void jl_memoryrefset(jl_genericmemoryref_t m JL_ROOTING_ARGUMENT, jl_value_t *rhs JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, int isatomic)
 {
     const jl_datatype_layout_t *layout = ((jl_datatype_t*)jl_typetagof(m.mem))->layout;
     assert(isatomic == (layout->flags.arrayelem_isatomic || layout->flags.arrayelem_islocked));

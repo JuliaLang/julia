@@ -3229,7 +3229,7 @@ static void jl_write_header_for_incremental(ios_t *f, jl_array_t *worklist, jl_a
 }
 
 JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *worklist, bool_t emit_split,
-                                         ios_t **s, ios_t **z, jl_array_t **udeps JL_REQUIRE_ROOTED_SLOT, int64_t *srctextpos, jl_array_t *module_init_order)
+                                         ios_t **s, ios_t **z, jl_array_t **udeps, int64_t *srctextpos, jl_array_t *module_init_order)
 {
     JL_TIMING(SYSIMG_DUMP, SYSIMG_DUMP);
 
@@ -3670,12 +3670,9 @@ static int all_usings_unchanged_implicit(jl_module_t *mod)
 
 static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
                                                  jl_array_t *depmods, uint64_t checksum,
-                                /* outputs */    jl_array_t **restored JL_REQUIRE_ROOTED_SLOT,
-                                                 jl_array_t **init_order JL_REQUIRE_ROOTED_SLOT,
-                                                 jl_array_t **extext_methods JL_REQUIRE_ROOTED_SLOT,
-                                                 jl_array_t **internal_methods JL_REQUIRE_ROOTED_SLOT,
-                                                 jl_array_t **new_ext_cis JL_REQUIRE_ROOTED_SLOT,
-                                                 jl_array_t **method_roots_list JL_REQUIRE_ROOTED_SLOT,
+                                /* outputs */    jl_array_t **restored,         jl_array_t **init_order,
+                                                 jl_array_t **extext_methods, jl_array_t **internal_methods,
+                                                 jl_array_t **new_ext_cis, jl_array_t **method_roots_list,
                                                  pkgcachesizes *cachesizes) JL_GC_DISABLED
 {
     jl_task_t *ct = jl_current_task;

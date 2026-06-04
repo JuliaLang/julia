@@ -7,7 +7,7 @@
 #include "julia_internal.h"
 #include "julia_assert.h"
 
-JL_DLLEXPORT jl_svec_t *(ijl_svec)(size_t n, ...) JL_ROOTED_VARARGS
+JL_DLLEXPORT jl_svec_t *(ijl_svec)(size_t n, ...)
 {
     va_list args;
     if (n == 0) return jl_emptysvec;
@@ -34,8 +34,7 @@ jl_svec_t *(jl_perm_symsvec)(size_t n, ...)
     return jv;
 }
 
-JL_DLLEXPORT jl_svec_t *jl_svec1(
-    void *a JL_ROOTED_BY_RETURN)
+JL_DLLEXPORT jl_svec_t *jl_svec1(void *a)
 {
     jl_task_t *ct = jl_current_task;
     jl_svec_t *v = (jl_svec_t*)jl_gc_alloc(ct->ptls, sizeof(void*) * 2,
@@ -46,9 +45,7 @@ JL_DLLEXPORT jl_svec_t *jl_svec1(
     return v;
 }
 
-JL_DLLEXPORT jl_svec_t *jl_svec2(
-    void *a JL_ROOTED_BY_RETURN,
-    void *b JL_ROOTED_BY_RETURN)
+JL_DLLEXPORT jl_svec_t *jl_svec2(void *a, void *b)
 {
     jl_task_t *ct = jl_current_task;
     jl_svec_t *v = (jl_svec_t*)jl_gc_alloc(ct->ptls, sizeof(void*) * 3,
@@ -60,10 +57,7 @@ JL_DLLEXPORT jl_svec_t *jl_svec2(
     return v;
 }
 
-JL_DLLEXPORT jl_svec_t *jl_svec3(
-    void *a JL_ROOTED_BY_RETURN,
-    void *b JL_ROOTED_BY_RETURN,
-    void *c JL_ROOTED_BY_RETURN)
+JL_DLLEXPORT jl_svec_t *jl_svec3(void *a, void *b, void *c)
 {
     jl_task_t *ct = jl_current_task;
     jl_svec_t *v = (jl_svec_t*)jl_gc_alloc(ct->ptls, sizeof(void*) * 4,

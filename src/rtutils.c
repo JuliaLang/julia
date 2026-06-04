@@ -400,8 +400,8 @@ static void jl_reserve_excstack(jl_task_t *ct, jl_excstack_t **stack JL_REQUIRE_
     jl_gc_wb(ct, new_s);
 }
 
-void jl_push_excstack(jl_task_t *ct, jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT,
-                      jl_value_t *exception JL_ROOTED_BY_ARG(1),
+void jl_push_excstack(jl_task_t *ct, jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT JL_ROOTING_ARGUMENT,
+                      jl_value_t *exception JL_ROOTED_ARGUMENT,
                       jl_bt_element_t *bt_data, size_t bt_size)
 {
     jl_reserve_excstack(ct, stack, (*stack ? (*stack)->top : 0) + bt_size + 2);
