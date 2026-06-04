@@ -31,6 +31,8 @@ function is_same_identifier_like(ex::SyntaxTree, name::AbstractString)
     return kind(ex) == K"Identifier" && ex.name_val == name
 end
 
+# Hack.  Scopes aren't resolved, so only use this where a false positive is
+# still a correct answer.
 function contains_identifier(ex::SyntaxTree, idents::AbstractVector{<:SyntaxTree})
     contains_unquoted(ex) do e
         any(is_same_identifier_like(e, id) for id in idents)
@@ -1509,16 +1511,16 @@ function expand_let(ctx, ex)
     end
     for binding in Iterators.reverse(children(bindings))
         kb = kind(binding)
-        if is_sym_decl(kb)
+        if kb == K"::" || is_identifier_like(binding)
             blk = @ast ctx ex [K"scope_block"(scope_type=scope_type)
                 [K"local" binding]
                 blk
             ]
-        elseif kb == K"=" && numchildren(binding) == 2
+        elseif kb == K"="
             lhs = binding[1]
             rhs = binding[2]
-            kl = kind(lhs)
-            if kl == K"Identifier" || kl == K"BindingId"
+            if is_identifier_like(lhs)
+                kind(lhs) === K"Placeholder" && continue
                 blk = @ast ctx binding [K"block"
                     tmp := rhs
                     [K"scope_block"(ex, scope_type=scope_type)
@@ -1528,9 +1530,10 @@ function expand_let(ctx, ex)
                         blk
                     ]
                 ]
-            elseif kl == K"::"
+            elseif kind(lhs) == K"::"
                 var = lhs[1]
-                if !(kind(var) in KSet"Identifier BindingId")
+                kind(var) === K"Placeholder" && continue
+                if !is_identifier_like(var)
                     throw(LoweringError(var, "Invalid assignment location in let syntax"))
                 end
                 blk = @ast ctx binding [K"block"
@@ -1573,18 +1576,13 @@ function expand_let(ctx, ex)
             blk = @ast ctx binding [K"block"
                 [K"scope_block"(ex, scope_type=scope_type)
                     [K"local"(func_name) func_name]
-                    [K"always_defined" func_name]
+                    # note no always_defined, as it's stronger than flisp's local-def
                     binding
-                    [K"scope_block"(ex, scope_type=scope_type)
-                        # The inside of the block is isolated from the closure,
-                        # which itself can only capture values from the outside.
-                        blk
-                    ]
+                    blk
                 ]
             ]
         else
-            throw(LoweringError(binding, "Invalid binding in let"))
-            continue
+            @jl_assert false (binding, "invalid binding in let")
         end
     end
     return blk

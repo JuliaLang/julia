@@ -46,7 +46,7 @@ end
 # (In the flisp implementation it captures from inner scope, but this is
 # inconsistent with let assignment where the rhs refers to the outer scope and
 # thus seems like a bug.)
-@test JuliaLowering.include_string(test_mod, """
+@test_broken JuliaLowering.include_string(test_mod, """
 begin
     local y = :outer_y
     let f() = y
