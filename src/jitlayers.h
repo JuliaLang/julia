@@ -297,7 +297,8 @@ jl_llvm_functions_t jl_emit_code(
         jl_code_info_t *src,
         jl_value_t *abi_at,
         jl_value_t *abi_rt,
-        jl_codegen_params_t &params);
+        jl_codegen_params_t &params,
+        jl_code_instance_t *codeinst = nullptr);
 
 jl_llvm_functions_t jl_emit_codeinst(
         orc::ThreadSafeModule &M,
