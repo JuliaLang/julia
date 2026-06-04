@@ -82,6 +82,9 @@ struct ScopeResolutionContext{Attrs} <: AbstractLoweringContext
     # be assigned to without the `global` keyword in soft scopes due to being
     # assigned to at top level, or passing the defined-and-owned-global check.
     soft_assignable_globals::Set{NameKey}
+    # Globals declared at the base scope layer instead of the apparent scope
+    # layer due to hygiene_compat rules
+    rescoped_globals::Set{NameKey}
     enable_soft_scopes::Bool
     expr_compat_mode::Bool
     world::UInt
@@ -112,7 +115,7 @@ _var_str(v) = v === :local ? "local variable" :
 # for conflict: declaring a local (or global) twice with the same name is a
 # no-op, but doing so with an argument or static parameter is an error.  A
 # variable usually can't be two things in one scope, but flisp has quirks.
-function maybe_declare_in_scope!(ctx, scope::ScopeInfo, ex, new_k::Symbol)
+function explicit_declare_in_scope!(ctx, scope::ScopeInfo, ex, new_k::Symbol)
     if kind(ex) === K"BindingId"
         bid = ex.var_id
         b = get_binding(ctx, bid)
@@ -126,7 +129,12 @@ function maybe_declare_in_scope!(ctx, scope::ScopeInfo, ex, new_k::Symbol)
     bid = get(scope.vars, NameKey(ex), nothing)
     old_k = isnothing(bid) ? nothing : get_binding(ctx, bid).kind
     if isnothing(old_k)
-        if new_k === :argument
+        if new_k === :global && (sl = ctx.scope_layers[ex.scope_layer]; sl.hygiene_compat)
+            # old macros declare all explicit globals without hygiene
+            push!(ctx.rescoped_globals, NameKey(ex))
+            ex2 = setattr(ex, :scope_layer, base_layer(ctx, sl).id)
+            declare_in_scope!(ctx, scope, ex2, :global)
+        elseif new_k === :argument
             declare_in_scope!(ctx, scope, ex, :argument;
                               is_nospecialize=getmeta(ex, :nospecialize, false))
         else
@@ -203,14 +211,29 @@ end
 
 function resolve_name(ctx, ex; exclude_toplevel_globals=false)
     # TODO: probably want to cache these lookups
+    nk = NameKey(ex)
     for sid in Iterators.reverse(ctx.scope_stack)
-        bid = get(ctx.scopes[sid].vars, NameKey(ex), nothing)
+        bid = get(ctx.scopes[sid].vars, nk, nothing)
         isnothing(bid) && continue
         b = get_binding(ctx, bid)
         if !exclude_toplevel_globals || sid !== top_scope(ctx).id || b.kind !== :global
             return b
         end
     end
+    # hygiene compat: retry at the base layer for rescoped globals only
+    sl = ctx.scope_layers[nk.layer]
+    if sl.hygiene_compat && !is_base_layer(sl) && nk in ctx.rescoped_globals
+        nk_rescoped = NameKey(ex.name_val, base_layer(ctx, sl).id)
+        for sid in Iterators.reverse(ctx.scope_stack)
+            bid = get(ctx.scopes[sid].vars, nk_rescoped, nothing)
+            isnothing(bid) && continue
+            b = get_binding(ctx, bid)
+            if b.kind === :global && (!exclude_toplevel_globals || sid !== top_scope(ctx).id)
+                return b
+            end
+        end
+    end
+    return nothing
 end
 
 function _find_scope_decls!(ctx, scope, ex)
@@ -218,9 +241,9 @@ function _find_scope_decls!(ctx, scope, ex)
     if k === K"local" && kind(ex[1]) === K"Identifier"
         var_k = getmeta(ex, :is_destructured_arg, false) ?
             :destructured_arg : :local
-        maybe_declare_in_scope!(ctx, scope, ex[1], var_k)
+        explicit_declare_in_scope!(ctx, scope, ex[1], var_k)
     elseif k === K"global" && kind(ex[1]) === K"Identifier"
-        maybe_declare_in_scope!(ctx, scope, ex[1], :global)
+        explicit_declare_in_scope!(ctx, scope, ex[1], :global)
     elseif k === K"function_decl"
         k1 = kind(ex[1])
         if k1 === K"BindingId"
@@ -229,7 +252,7 @@ function _find_scope_decls!(ctx, scope, ex)
                 ex, "allow local BindingId as function name?")
             get!(scope.binding_assignments, b.id, ex[1]._id)
         elseif k1 === K"Identifier"
-            hasattr(ex[1], :mod) && maybe_declare_in_scope!(ctx, scope, ex[1], :global)
+            hasattr(ex[1], :mod) && explicit_declare_in_scope!(ctx, scope, ex[1], :global)
             get!(scope.assignments, NameKey(ex[1]), ex[1]._id)
         else
             @jl_assert false (ex, "unknown kind in assignment")
@@ -273,11 +296,11 @@ function enter_scope!(ctx, ex)
     if kind(ex) === K"lambda"
         for c in children(ex[1])
             @jl_assert kind(c) in KSet"Identifier BindingId Placeholder" c
-            maybe_declare_in_scope!(ctx, scope, c, :argument)
+            explicit_declare_in_scope!(ctx, scope, c, :argument)
         end
         for c in children(ex[2])
             @jl_assert kind(c) in KSet"Identifier BindingId Placeholder" c
-            maybe_declare_in_scope!(ctx, scope, c, :static_parameter)
+            explicit_declare_in_scope!(ctx, scope, c, :static_parameter)
         end
         for c in children(ex)[3:end]
             _find_scope_decls!(ctx, scope, c)
@@ -785,6 +808,7 @@ enclosing lambda form and information about variables captured by closures.
     ctx2 = ScopeResolutionContext(graph, ctx.bindings, ctx.mod,
                                   Vector{ScopeInfo}(), Vector{ScopeId}(),
                                   ctx.scope_layers, Set{NameKey}(),
+                                  Set{NameKey}(),
                                   enable_soft_scopes,
                                   ctx.expr_compat_mode,
                                   world)
