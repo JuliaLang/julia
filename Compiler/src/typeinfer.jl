@@ -1480,6 +1480,11 @@ function ci_has_invoke(code::CodeInstance)
     return (@atomic :monotonic code.invoke) !== C_NULL
 end
 
+const CI_FLAGS_FROM_IMAGE = 0b0100
+function ci_from_image(code::CodeInstance)
+    return (@atomic :monotonic code.flags) & CI_FLAGS_FROM_IMAGE != 0
+end
+
 function ci_meets_requirement(interp::AbstractInterpreter, code::CodeInstance, source_mode::UInt8)
     source_mode == SOURCE_MODE_NOT_REQUIRED && return true
     source_mode == SOURCE_MODE_ABI && return ci_has_abi(interp, code)
@@ -1614,14 +1619,22 @@ Base.isempty(queue::CompilationQueue) = isempty(queue.tocompile)
 
 # collect a list of all code that is needed along with CodeInstance to codegen it fully
 function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vector{VarState};
-                         invokelatest_queue::Union{CompilationQueue,Nothing} = nothing)
+                         invokelatest_queue::Union{CompilationQueue,Nothing} = nothing,
+                         external_linkage::Bool = false)
     src = ci.code
     for i = 1:length(src)
         stmt = src[i]
         isexpr(stmt, :(=)) && (stmt = stmt.args[2])
         if isexpr(stmt, :invoke) || isexpr(stmt, :invoke_modify)
             edge = stmt.args[1]
-            edge isa CodeInstance && isdefined(edge, :inferred) && push!(workqueue, edge)
+            # If this CodeInstance is already compiled in the image, and we can
+            # link to it, we should do that instead of compiling it again.  With
+            # invoke_modify, we need to compile it regardless.
+            edge isa CodeInstance &&
+                isdefined(edge, :inferred) &&
+                (isexpr(stmt, :invoke_modify) ||
+                 !(external_linkage && ci_from_image(edge) && ci_has_invoke(edge))) &&
+                push!(workqueue, edge)
         end
 
         invokelatest_queue === nothing && continue
@@ -1733,6 +1746,7 @@ end
 
 function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
     invokelatest_queue::Union{CompilationQueue,Nothing} = nothing,
+    external_linkage::Bool,
 )
     interp = workqueue.interp
     world = get_inference_world(interp)
@@ -1789,7 +1803,7 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
             markinspected!(workqueue, callee)
             if src isa CodeInfo
                 sptypes = sptypes_from_meth_instance(mi)
-                collectinvokes!(workqueue, src, sptypes; invokelatest_queue)
+                collectinvokes!(workqueue, src, sptypes; invokelatest_queue, external_linkage)
                 # try to reuse an existing CodeInstance from before to avoid making duplicates in the cache
                 if iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), mi, callee))
                     cached = ccall(:jl_get_ci_equiv, Any, (Any, UInt), callee, world)::CodeInstance
@@ -1814,7 +1828,7 @@ const TRIM_NO = 0x0
 const TRIM_SAFE = 0x1
 const TRIM_UNSAFE = 0x2
 const TRIM_UNSAFE_WARN = 0x3
-function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_mode::UInt8)
+function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_mode::UInt8, external_linkage::Bool)
     inf_params = InferenceParams(; force_enable_inference = trim_mode != TRIM_NO)
 
     # Create an "invokelatest" queue to enable eager compilation of speculative
@@ -1831,13 +1845,13 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
         )
 
         append!(workqueue, methods)
-        compile!(codeinfos, workqueue; invokelatest_queue)
+        compile!(codeinfos, workqueue; invokelatest_queue, external_linkage)
     end
 
     if invokelatest_queue !== nothing
         # This queue is intentionally aliased, to handle e.g. a `finalizer` calling `Core.finalizer`
         # (it will enqueue into itself and immediately drain)
-        compile!(codeinfos, invokelatest_queue; invokelatest_queue)
+        compile!(codeinfos, invokelatest_queue; invokelatest_queue, external_linkage)
     end
 
     if trim_mode != TRIM_NO && trim_mode != TRIM_UNSAFE

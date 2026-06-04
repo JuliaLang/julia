@@ -20,7 +20,7 @@ end
 
 finalizer(@nospecialize(f), @nospecialize(o)) = Core.finalizer(f, o)
 
-let infos = typeinf_ext_toplevel(Any[Core.svec(Nothing, Tuple{typeof(finalizer), typeof(identity), Any})], [Base.get_world_counter()], TRIM_UNSAFE)
+let infos = typeinf_ext_toplevel(Any[Core.svec(Nothing, Tuple{typeof(finalizer), typeof(identity), Any})], [Base.get_world_counter()], TRIM_UNSAFE, false)
     errors, parents = get_verify_typeinf_trim(infos)
     @test !isempty(errors) # unresolvable finalizer
 
@@ -40,14 +40,14 @@ end
 
 # test that basic `cfunction` generation is allowed, when the dispatch target can be resolved
 make_cfunction() = @cfunction(+, Float64, (Int64,Int64))
-let infos = typeinf_ext_toplevel(Any[Core.svec(Ptr{Cvoid}, Tuple{typeof(make_cfunction)})], [Base.get_world_counter()], TRIM_UNSAFE)
+let infos = typeinf_ext_toplevel(Any[Core.svec(Ptr{Cvoid}, Tuple{typeof(make_cfunction)})], [Base.get_world_counter()], TRIM_UNSAFE, false)
     errors, parents = get_verify_typeinf_trim(infos)
     @test isempty(errors)
 end
 
 # use TRIM_UNSAFE to bypass verifier inside typeinf_ext_toplevel
 make_cfunction_bad(@nospecialize(f::Any)) = @cfunction($f, Float64, (Int64,Int64))::Base.CFunction
-let infos = typeinf_ext_toplevel(Any[Core.svec(Base.CFunction, Tuple{typeof(make_cfunction_bad), Any})], [Base.get_world_counter()], TRIM_UNSAFE)
+let infos = typeinf_ext_toplevel(Any[Core.svec(Base.CFunction, Tuple{typeof(make_cfunction_bad), Any})], [Base.get_world_counter()], TRIM_UNSAFE, false)
     errors, parents = get_verify_typeinf_trim(infos)
     @test !isempty(errors) # missing cfunction
 
@@ -72,7 +72,7 @@ let infos = typeinf_ext_toplevel(Any[Core.svec(Base.CFunction, Tuple{typeof(make
     @test repr == "unresolved ccallable for Tuple{$(typeof(make_cfunction_bad)), Any} => Base.CFunction\n\n"
 end
 
-let infos = typeinf_ext_toplevel(Any[Core.svec(Base.SecretBuffer, Tuple{Type{Base.SecretBuffer}})], [Base.get_world_counter()], TRIM_UNSAFE)
+let infos = typeinf_ext_toplevel(Any[Core.svec(Base.SecretBuffer, Tuple{Type{Base.SecretBuffer}})], [Base.get_world_counter()], TRIM_UNSAFE, false)
     @test length(infos) > 4
     errors, parents = get_verify_typeinf_trim(infos)
     @test isempty(errors)
@@ -90,7 +90,7 @@ let infos = typeinf_ext_toplevel(Any[Core.svec(Base.SecretBuffer, Tuple{Type{Bas
     @test repr == "unresolved ccallable for Tuple{Type{Base.SecretBuffer}} => Base.SecretBuffer\n\n"
 end
 
-let infos = typeinf_ext_toplevel(Any[Core.svec(Float64, Tuple{typeof(+), Int32, Int64})], [Base.get_world_counter()], TRIM_UNSAFE)
+let infos = typeinf_ext_toplevel(Any[Core.svec(Float64, Tuple{typeof(+), Int32, Int64})], [Base.get_world_counter()], TRIM_UNSAFE, false)
     errors, parents = get_verify_typeinf_trim(infos)
     (warn, desc) = only(errors)
     @test !warn
@@ -102,7 +102,7 @@ let infos = typeinf_ext_toplevel(Any[Core.svec(Float64, Tuple{typeof(+), Int32, 
     @test repr == "ccallable declared return type does not match inference for Tuple{typeof(+), Int32, Int64} => Int64\n\n"
 end
 
-let infos = typeinf_ext_toplevel(Any[Core.svec(Int64, Tuple{typeof(ifelse), Bool, Int64, UInt64})], [Base.get_world_counter()], TRIM_UNSAFE)
+let infos = typeinf_ext_toplevel(Any[Core.svec(Int64, Tuple{typeof(ifelse), Bool, Int64, UInt64})], [Base.get_world_counter()], TRIM_UNSAFE, false)
     errors, parents = get_verify_typeinf_trim(infos)
     (warn, desc) = only(errors)
     @test warn  # this is a warning since Union{Int64, UInt64} <: Int64 is false but not an error
@@ -112,17 +112,17 @@ let infos = typeinf_ext_toplevel(Any[Core.svec(Int64, Tuple{typeof(ifelse), Bool
     @test repr == "ccallable declared return type does not match inference for Tuple{typeof(ifelse), Bool, Int64, UInt64} => Union{Int64, UInt64}\n\n"
 end
 
-let infos = typeinf_ext_toplevel(Any[Core.svec(Union{Int64,UInt64}, Tuple{typeof(ifelse), Bool, Int64, UInt64})], [Base.get_world_counter()], TRIM_SAFE)
+let infos = typeinf_ext_toplevel(Any[Core.svec(Union{Int64,UInt64}, Tuple{typeof(ifelse), Bool, Int64, UInt64})], [Base.get_world_counter()], TRIM_SAFE, false)
     errors, parents = get_verify_typeinf_trim(infos)
     @test isempty(errors)
-    infos = typeinf_ext_toplevel(Any[Core.svec(Real, Tuple{typeof(ifelse), Bool, Int64, UInt64})], [Base.get_world_counter()], TRIM_SAFE)
+    infos = typeinf_ext_toplevel(Any[Core.svec(Real, Tuple{typeof(ifelse), Bool, Int64, UInt64})], [Base.get_world_counter()], TRIM_SAFE, false)
     errors, parents = get_verify_typeinf_trim(infos)
     @test isempty(errors)
 end
 
 
 mi = Base.method_instance(sum, (Vector{Union{Int64,Float64, Float32,UInt32}},))
-let infos = typeinf_ext_toplevel(Any[mi], [Base.get_world_counter()], TRIM_UNSAFE)
+let infos = typeinf_ext_toplevel(Any[mi], [Base.get_world_counter()], TRIM_UNSAFE, false)
     errors, parents = get_verify_typeinf_trim(infos)
     @test !isempty(errors)
 end

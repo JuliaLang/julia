@@ -418,7 +418,7 @@ function compile_and_emit_native(worlds::Vector{UInt},
 
     # Step 4: Perform type inference on tocompile to create codeinfos
     codeinfos = try
-        typeinf_ext_toplevel(tocompile, worlds, trim_mode)
+        typeinf_ext_toplevel(tocompile, worlds, trim_mode, external_linkage)
     catch exc
         # Handle trimming failures
         isa(exc, Core.TrimFailure) || rethrow()

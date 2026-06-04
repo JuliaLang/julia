@@ -737,6 +737,33 @@ static jl_compiled_functions_t::iterator get_ci_equiv_compiled(jl_code_instance_
     return compiled_functions.end();
 }
 
+// Check the global cache for an equivalent CodeInstance with a world age range
+// containing the world age range of the given CodeInstance.
+static jl_code_instance_t *jl_get_ci_equiv_range(jl_code_instance_t *ci JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    size_t target_min = jl_atomic_load_relaxed(&ci->min_world);
+    size_t target_max = jl_atomic_load_relaxed(&ci->max_world);
+    jl_value_t *def = ci->def;
+    jl_method_instance_t *mi = jl_get_ci_mi(ci);
+    jl_value_t *owner = ci->owner;
+    jl_value_t *rettype = ci->rettype;
+    jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mi->cache);
+    while (codeinst) {
+        if (codeinst != ci &&
+            jl_atomic_load_relaxed(&codeinst->inferred) != NULL &&
+            jl_atomic_load_relaxed(&codeinst->min_world) <= target_min &&
+            jl_atomic_load_relaxed(&codeinst->max_world) >= target_max &&
+            jl_egal(codeinst->def, def) &&
+            jl_egal(codeinst->owner, owner) &&
+            jl_egal(codeinst->rettype, rettype)) {
+            return codeinst;
+        }
+        codeinst = jl_atomic_load_relaxed(&codeinst->next);
+    }
+    return ci;
+}
+
+
 // Static version of JuliaOJIT::linkOutput
 static void aot_link_output(jl_codegen_output_t &out)
 {
@@ -748,8 +775,13 @@ static void aot_link_output(jl_codegen_output_t &out)
             continue;
 
         auto it = out.ci_funcs.find(ci);
+        // Prefer a equivalent CodeInstance that we are compiling.
         if (it == out.ci_funcs.end())
             it = get_ci_equiv_compiled(ci, out.ci_funcs);
+        // If that fails, look for an equivalent CodeInstance that we can link to.
+        if (it == out.ci_funcs.end() && out.external_linkage &&
+            !(jl_atomic_load_relaxed(&ci->flags) & JL_CI_FLAGS_FROM_IMAGE))
+            ci = jl_get_ci_equiv_range(ci);
         jl_codeinst_funcs_t<Value *> funcs;
         if (it != out.ci_funcs.end()) {
             funcs = {it->second.invoke_api, it->second.invoke, it->second.specptr};
