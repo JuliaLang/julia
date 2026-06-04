@@ -3293,7 +3293,7 @@ function include_package_for_output(pkg::PkgId, input::String, syntax_version::V
     t_include_start = time_ns()
     t_comp_before, _ = cumulative_compile_time_ns()
     try
-        Base.include(Base.__toplevel__, input)
+        Compiler.@zone "PRECOMPILE_INCLUDE" Base.include(Base.__toplevel__, input)
     catch ex
         precompilableerror(ex) || rethrow()
         @debug "Aborting `create_expr_cache'" exception=(ErrorException("Declaration of __precompile__(false) not allowed"), catch_backtrace())
@@ -3551,7 +3551,7 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
         if result
             if cache_objects
                 # Run linker over tmppath_o
-                Linking.link_image(tmppath_o, tmppath_so)
+                Compiler.@zone "PRECOMPILE_LINK" Linking.link_image(tmppath_o, tmppath_so)
             end
 
             # Read preferences blob back from .ji file (we can't precompute because we don't

@@ -4913,7 +4913,7 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState{I}) where {I
     nextstates = CurrentState[]
     takenext = frame.frameid
     minwarn = warnlength
-    while takenext >= frame.frameid
+    @zone "CC: ABSTRACT_INTERPRET" while takenext >= frame.frameid
         callee = takenext == 0 ? frame : callstack[takenext]::InferenceState
         if !isempty(callstack)
             if length(callstack) - frame.frameid >= minwarn
