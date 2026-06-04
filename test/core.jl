@@ -195,7 +195,7 @@ f11840(::DataType) = "DataType"
 f11840(::UnionAll) = "UnionAll"
 f11840(::Type{T}) where {T<:Tuple} = "Tuple"
 @test f11840(Type) == "UnionAll"
-@test f11840(Type.body) == "DataType"
+@test f11840(Type.body) == "Type"
 @test f11840(Union{Int,Int8}) == "Type"
 @test f11840(Tuple) == "Tuple"
 @test f11840(TT11840) == "Tuple"
@@ -231,6 +231,17 @@ h11840(::Type{T}) where {T<:Tuple} = '4'
 @test h11840(Union{Vector.body, Matrix.body}) == '2'
 @test h11840(Tuple) == '4'
 @test h11840(TT11840) == '4'
+
+# issue #61242: free-TypeVar bodies and their enclosing UnionAlls bind as
+# distinct type objects.
+let f61242(::Type{T}) where T = T
+    @test f61242(Vector.body) === Vector.body
+    @test f61242(Vector) === Vector
+end
+let g61242(::Type{T}) where T = T
+    @test g61242(Vector) === Vector
+    @test g61242(Vector.body) === Vector.body
+end
 
 # show that we don't make the cache confused by using alternative representations
 # when specificity is reversed
@@ -346,6 +357,15 @@ end
 @test typejoin(Tuple{Tuple{T, T, Any}} where T, Tuple{T, T, Vector{T}} where T) == Tuple{Any,Vararg{Any}}
 @test typejoin(Tuple{T, T, T} where T, Tuple{T, T, Vector{T}} where T) == Tuple{Any,Any,Any}
 
+# issue #61876: a UnionAll operand over a bounded type parameter must still join
+# to the common wrapper rather than collapsing to Any (a free TypeVar parameter
+# no longer subtypes a bounded wrapper var, so typejoin detects shared families
+# by type name).
+abstract type AbstractCfg61876{O<:Integer} end
+struct Cfg61876{O<:Integer, T} <: AbstractCfg61876{O} end
+@test typejoin(Cfg61876{<:Integer, Tuple{Int,Int}}, Cfg61876{Int, Tuple{Int}}) === Cfg61876
+@test typejoin(Cfg61876{<:Integer, Int}, AbstractCfg61876{Int}) === AbstractCfg61876
+
 # issue #26321
 struct T26321{N,S<:NTuple{N}}
     t::S
@@ -371,6 +391,29 @@ end  |> only == Type{typejoin(Int, UInt, Float64)}
 @test typejoin(1, 2, 3) === Any
 @test typejoin(Int, Int, 3) === Any
 
+# issue #61915: typejoin must stay sound when an operand is a `Type{X}` kind. Under the
+# TypeEq refactor `typeof(Type{X})` is no longer a `DataType`; joining a kind with an
+# unrelated non-`Type` operand must give `Any`, not `Type`.
+@test typejoin(Symbol, Type{Int}) === Any
+@test typejoin(Type{Int}, Symbol) === Any
+@test typejoin(Type{Int}, Int) === Any
+@test typejoin(Type{Int}, String) === Any
+@test typejoin(Type{Int}, Type{Float64}) === Type
+@test typejoin(Type{Int}, Type) === Type
+@test_broken typejoin(Type{Int}, DataType) !== DataType
+@test typejoin(Symbol, Type{Int}) === typejoin(Type{Int}, Symbol)
+@test typejoin(DataType, Type{Int}) === typejoin(Type{Int}, DataType)
+
+# issue #61915: a method whose function type is `Type{Foo{...} where ...}` must derive its
+# name as `Foo`, not `:Any` (nth_arg_datatype has to unwrap the wrapped UnionAll).
+struct UA61915{T,N,A<:AbstractArray{T,N}}
+    a::A
+end
+UA61915{T}(a) where {T} = UA61915{T,ndims(a),typeof(a)}(a)
+@test all(m -> m.name === :UA61915, methods(UA61915))
+@test which(UA61915{Int}, (Vector{Int},)).name === :UA61915
+@test ccall(:jl_argument_datatype, Any, (Any,), Type{Array}) === Base.unwrap_unionall(Array)
+
 # promote_typejoin returns a Union only with Nothing/Missing combined with concrete types
 for T in (Nothing, Missing)
     @test Base.promote_typejoin(Int, Float64) === Real
@@ -394,6 +437,17 @@ for T in (Nothing, Missing)
     end
     @test Base.promote_typejoin(T, Union{}) === T
     @test Base.promote_typejoin(Union{}, T) === T
+end
+
+# PR #61915: `promote_typejoin_union` must handle `Type{X}` (a `TypeEq` kind), not error
+@test Base.promote_typejoin_union(Type{Int}) === Type{Int}
+@test Base.promote_typejoin_union(Union{Type{Int}, Type{String}}) === Type
+@test fieldtype.(Tuple{Int,Float32,Int}, [1, 2, 3]) == [Int, Float32, Int]
+@test typeof.(Any[Int, "x", 1.0]) == [DataType, String, Float64]
+# PR #61915: dispatching `::Type{Type{T}}` on a `TypeEq`-typed value (e.g. iterating a
+# tuple of `Type{X}` values) must not infer `Union{}` (which crashed via `unreachable`)
+let get_param(::Type{Type{T}}) where {T} = T
+    @test Tuple(get_param(t) for t in (Type{Int}, Type{Float64})) === (Int, Float64)
 end
 
 @test promote_type(Bool,Bottom) === Bool
@@ -3625,6 +3679,12 @@ function f11355(sig::Type{T}) where T<:Tuple
 end
 function f11355(arg::DataType)
     if arg <: Tuple
+        return 200
+    end
+    return 100
+end
+function f11355(arg::TypeEq)
+    if Base.type_parameter(arg) <: Tuple
         return 200
     end
     return 100
@@ -8838,3 +8898,11 @@ function _envleak_build(n::Int)
     return typeof(b)
 end
 @test _envleak_build(3) === Vector{_EnvLeak_Foo{3}}
+
+# (#61914) when transforming UnionAll of Union to Union of UnionAll, don't
+# re-wrap members of the union that were not beneath the UnionAll with the type
+# variable.
+let T = TypeVar(:T)
+    a = UnionAll(T, Union{Vector{T}, Int64})
+    @test Union{T, a} == Union{a, T} == Union{T, Int64, Vector}
+end

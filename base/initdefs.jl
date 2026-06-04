@@ -309,8 +309,11 @@ end
 function init_named_env!(path)
     try
         mkpath(dirname(path))
-        open(path, "w") do io
+        io = open(path, "w")
+        try
             print(io, "syntax.julia_version = \"",VERSION,"\"")
+        finally
+            close(io)
         end
         return path
     catch e

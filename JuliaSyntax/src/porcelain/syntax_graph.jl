@@ -1294,6 +1294,14 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
     core_globalref(s::String) = setattr!(symleaf(s), :mod, Core)
     valleaf(@nospecialize(v)) = setattr!(newleaf(graph, st, K"Value"), :value, v)
 
+    if k === K"DotsIdentifier"
+        # `..`/`...` used as an ordinary identifier (eg the `..` operator, or
+        # `...` quoted as in `:(...)`). The dots are held as trivia children, so
+        # this is not a leaf; represent it as a plain identifier named by the
+        # dots themselves (the dot count is stored in the numeric flags).
+        return symleaf(repeat('.', numeric_flags(st)))
+    end
+
     if is_leaf(st)
         return if k === K"CmdMacroName" || k === K"StrMacroName"
             name = lower_identifier_name(st.name_val, k)

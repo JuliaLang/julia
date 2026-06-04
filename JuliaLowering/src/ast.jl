@@ -13,7 +13,7 @@
                 push!(msgs.args, a.args[2])
             else
                 push!(sts.args, a)
-                push!(msgs.args, QuoteNode(a))
+                push!(msgs.args, string(a))
             end
         end
         # just add assertion string to first msg
@@ -581,5 +581,3 @@ with_stmts(ctx::StatementListCtx, stmts) = StatementListCtx(ctx.ctx, stmts)
 function with_stmts(ctx)
     StatementListCtx(ctx, SyntaxList(ctx))
 end
-
-with_stmts(ctx::StatementListCtx) = StatementListCtx(ctx.ctx)

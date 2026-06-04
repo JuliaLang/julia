@@ -8,19 +8,18 @@ struct Binding
         # Normalise the binding module for module symbols so that:
         #   Binding(Base, :Base) === Binding(Main, :Base)
         m = nameof(m) === v ? parentmodule(m) : m
-        # For renamed imports (`using X: y as z` / `import X: y as z`), the
-        # local symbol `v` doesn't exist on the canonical owner module.
-        # Inspect the binding partition: if it's an explicit by-name import
-        # (the only kinds where `as`-rename is syntactically possible), the
-        # partition's restriction is the underlying `Core.Binding` whose
-        # globalref carries the canonical `(mod, name)` pair.
+        # Walk every explicit by-name import to recover the canonical `(mod, name)` pair,
+        # threading `as`-renames through chained re-exports.
+        # `partition_restriction` only walks one hop; `binding_module` walks all hops
+        # but drops the name.
         world = Base.get_world_counter()
-        if Base.invoke_in_world(world, isdefinedglobal, m, v)
+        while Base.invoke_in_world(world, isdefinedglobal, m, v)
             bpart = Base.lookup_binding_partition(world, GlobalRef(m, v))
-            if Base.is_some_explicit_imported(Base.binding_kind(bpart))
-                imported = Base.partition_restriction(bpart)::Core.Binding
-                return new(imported.globalref.mod, imported.globalref.name)
-            end
+            Base.is_some_explicit_imported(Base.binding_kind(bpart)) || break
+            imported = Base.partition_restriction(bpart)::Core.Binding
+            next_m, next_v = imported.globalref.mod, imported.globalref.name
+            (next_m === m && next_v === v) && break
+            m, v = next_m, next_v
         end
         new(Base.binding_module(m, v), v)
     end

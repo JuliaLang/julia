@@ -155,7 +155,7 @@ end # testset
 end # testset
 
 @testset "issue 5, '..'" begin
-    @test kind.(collect(tokenize("1.23..3.21"))) == [K"Float",K"..",K"Float",K"EndMarker"]
+    @test kind.(collect(tokenize("1.23..3.21"))) == [K"Float",K".",K".",K"Float",K"EndMarker"]
 end
 
 @testset "issue 17, >>" begin
@@ -716,10 +716,10 @@ end
     @test toks("1.#") == ["1."=>K"Float", "#"=>K"Comment"]
 
     # ellipses
-    @test toks("1..")    == ["1"=>K"Integer",   ".."=>K".."]
-    @test toks("1...")   == ["1"=>K"Integer",  "..."=>K"..."]
-    @test toks(".1..")   == [".1"=>K"Float",    ".."=>K".."]
-    @test toks("0x01..") == ["0x01"=>K"HexInt", ".."=>K".."]
+    @test toks("1..")    == ["1"=>K"Integer",   "."=>K".", "."=>K"."]
+    @test toks("1...")   == ["1"=>K"Integer",  "."=>K".", "."=>K".", "."=>K"."]
+    @test toks(".1..")   == [".1"=>K"Float",    "."=>K".", "."=>K"."]
+    @test toks("0x01..") == ["0x01"=>K"HexInt", "."=>K".", "."=>K"."]
 
     # Dotted operators and other dotted suffixes
     @test toks("1234 .+1") == ["1234"=>K"Integer", " "=>K"Whitespace", "."=>K".", "+"=>K"+", "1"=>K"Integer"]
@@ -880,8 +880,9 @@ end
     @test toks("--")      == ["--"=>K"ErrorInvalidOperator"]
     @test toks("1**2") == ["1"=>K"Integer", "**"=>K"Error**", "2"=>K"Integer"]
     @test toks("a<---b") == ["a"=>K"Identifier", "<---"=>K"ErrorInvalidOperator", "b"=>K"Identifier"]
-    @test toks("a..+b") == ["a"=>K"Identifier", "..+"=>K"ErrorInvalidOperator", "b"=>K"Identifier"]
-    @test toks("a..−b") == ["a"=>K"Identifier", "..−"=>K"ErrorInvalidOperator", "b"=>K"Identifier"]
+    # These used to test for invalid operators ..+ and ..−, but now .. is tokenized as two dots
+    @test toks("a..+b") == ["a"=>K"Identifier", "."=>K".", "."=>K".", "+"=>K"+", "b"=>K"Identifier"]
+    @test toks("a..−b") == ["a"=>K"Identifier", "."=>K".", "."=>K".", "−"=>K"-", "b"=>K"Identifier"]
 end
 
 @testset "hat suffix" begin

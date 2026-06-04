@@ -306,7 +306,7 @@
                (map (lambda (x) (replace-vars x renames))
                     (cdr e))))))
 
-(define (make-generator-function name sp-names arg-names body)
+(define (make-generator-function name sp-names arg-names body loc)
   (let ((arg-names (append sp-names
                            (map (lambda (n)
                                   (if (eq? n '|#self#|) (gensy) n))
@@ -316,7 +316,7 @@
                                    `((meta nospecialize ,@(map (lambda (idx) `(slot ,(+ idx 2))) (iota (length arg-names))))))))
       `(block
         (global ,name)
-        (function (call ,name ,@arg-names) ,body)))))
+        (function (call ,name ,@arg-names) (block ,loc ,@(cdr body)))))))
 
 ;; select the `then` or `else` part of `if @generated` based on flag `genpart`
 (define (generated-part- x genpart)
@@ -393,7 +393,7 @@
                            (let* ((gen    (generated-version body))
                                   (nongen (non-generated-version body))
                                   (gname  (symbol (string "#" (current-julia-module-counter '()) "#" (current-julia-module-counter '()))))
-                                  (gf     (make-generator-function gname names anames gen)))
+                                  (gf     (make-generator-function gname names anames gen loc)))
                              (set! body (insert-after-meta
                                          nongen
                                          `((meta generated
@@ -2150,7 +2150,7 @@
                          `(let (block ,@(map (lambda (v) `(= ,v ,v)) (filter-not-underscore outervars)))
                             ,expr))
                         (else expr))))
-        `(-> ,argname (block ,@splat ,expr)))))))
+        `(-> ,argname (block ,*current-desugar-loc* ,@splat ,expr)))))))
 
 (define (expand-generator e flat outervars)
   (let* ((expr  (cadr e))
@@ -5561,8 +5561,9 @@ f(x) = yt(x)
              (list ,@(cadr vi)) ,(caddr vi) (list ,@(cadddr vi)))
        ,@(cdddr lam))))
 
+;; LineNumberNode may have file=nothing, but LegacyLineInfoNode may not
 (define (make-lineinfo file line (inlined-at #f))
-  `(lineinfo ,file ,line ,(or inlined-at 0)))
+  `(lineinfo ,(if (nothing? file) 'none file) ,line ,(or inlined-at 0)))
 
 (define (set-lineno! lineinfo num)
   (set-car! (cddr lineinfo) num))

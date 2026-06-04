@@ -557,9 +557,6 @@ function est_to_dst(st::SyntaxTree)
 
         #-----------------------------------------------------------------------
         # Heads not emitted from parsing
-        ([K"meta" [K"unknown_head" ps...]], when=st[1].name_val === "purity") ->
-            @ast g st [K"meta" "purity"::K"Symbol"
-                Base.EffectsOverride([x.value for x in ps]...)::K"Value"]
         ([K"meta" s vs...],
          when=(meta=get(s, :name_val, "")::String; meta in ("nospecialize", "specialize"))) ->
              # Should be handled in the function case
@@ -569,10 +566,8 @@ function est_to_dst(st::SyntaxTree)
                 s->(kind(s) === K"Identifier" ? setattr(s, :kind, K"Symbol") : s),
                 syms)...
            ]
-        # TODO: JL doesn't support inline/noinline/inbounds
-        [K"inline" _] -> newleaf(g, st, K"TOMBSTONE")
-        [K"noinline" _] -> newleaf(g, st, K"TOMBSTONE")
-        [K"inbounds" _] -> newleaf(g, st, K"TOMBSTONE")
+        [K"boundscheck" x] -> mknode(st, SyntaxList(g))
+        [K"inbounds" [K"Identifier"]] -> newnode(g, st, K"inbounds_pop", SyntaxList(g))
         [K"core" x] -> setattr!(mkleaf(st), :name_val, x.name_val)
         [K"top" x] -> setattr!(mkleaf(st), :name_val, x.name_val)
         [K"static_parameter" x] -> setattr!(mkleaf(st), :var_id, x.value::IdTag)
@@ -595,7 +590,7 @@ function est_to_dst(st::SyntaxTree)
             else
                 @jl_assert(false, (st, string(
                     "unknown expr head (corresponding to no kind) between",
-                    "macro-expansion and desugaring: ")))
+                    " macro-expansion and desugaring: ")))
             end
         end
         ([K"latestworld"], when=!is_leaf(st)) -> newleaf(g, st, K"latestworld")
@@ -622,7 +617,16 @@ function est_to_dst(st::SyntaxTree)
 
         # avoid creating excess nodes
         _ -> let out_cs::Vector{NodeId} = map(x->rec(x)._id, children(st))
-            out_cs == children(st) ? st : mknode(st, out_cs)
+            out_cs == children(st).ids ? st : mknode(st, out_cs)
         end
     end
+end
+
+#-------------------------------------------------------------------------------
+# misc
+
+function purity_expr_to_flags(st::SyntaxTree)
+    @jl_assert kind(st) === K"purity" st
+    args = Bool[x.value for x in children(st)]
+    Base.encode_effects_override(Base.EffectsOverride(args...))
 end
