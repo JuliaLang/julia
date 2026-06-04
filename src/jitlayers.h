@@ -490,7 +490,8 @@ std::optional<jl_llvm_functions_t> jl_emit_code(
         jl_method_instance_t *mi,
         jl_code_info_t *src,
         jl_value_t *abi_at,
-        jl_value_t *abi_rt);
+        jl_value_t *abi_rt,
+        jl_code_instance_t *codeinst = nullptr);
 
 std::optional<jl_llvm_functions_t> jl_emit_codeinst(
         jl_codegen_output_t &out,
