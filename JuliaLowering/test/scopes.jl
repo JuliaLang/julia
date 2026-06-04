@@ -550,15 +550,6 @@ end
     end
 end
 
-# Note: Certain flisp (un)hygiene behaviour is yet to be implemented.
-# In flisp, with no escaping:
-# - Top-level functions are unhygienic and declared in the macro's module
-# - Top level globals are unhygienic and declared in the calling module
-#   - this includes abstract, primitive, and struct types
-# - Top-level `x=y` implicitly declares hygienic globals (but it is not breaking
-#   to make them local)
-#
-# See https://github.com/JuliaLang/julia/issues/53667 for more quirks
 @testset "unescaped macro expansions introduce a hygienic scope" begin
     @eval test_mod module macro_mod
         macro m(x); x; end
@@ -576,4 +567,249 @@ end
     @test isdefined(test_mod, :c_nonlocal_2)
     JuliaLowering.include_string(test_mod, "macro_mod.@mesc const c_nonlocal_3 = 1"; expr_compat_mode=true)
     @test isdefined(test_mod, :c_nonlocal_3)
+end
+
+fl_eval(test_mod, :(macro old_hyg(x); x; end))
+fl_eval(test_mod, :(macro old_esc(x); Expr(:escape, x); end))
+
+module jl_mod
+import ..test_mod.@old_hyg
+import ..test_mod.@old_esc
+end
+module fl_mod
+import ..test_mod.@old_hyg
+import ..test_mod.@old_esc
+end
+
+# In flisp, with no escaping:
+# - Top level globals are unhygienic and declared in the calling module
+#   - this includes abstract, primitive, and struct types
+
+# Not yet explicitly handled or tested:
+# - Top-level functions are unhygienic and declared in the macro's module
+# - Top-level `x=y` implicitly declares hygienic globals (but it is not breaking
+#   to make them local)
+#
+# See https://github.com/JuliaLang/julia/issues/53667 for more quirks
+@testset "compat: macro hygiene exemptions for explicit globals" begin
+    # desirable side of this behaviour where global decls passed as arguments to
+    # non-escaping macros appear to have automatic hygiene (it's assumed that
+    # declaring a global in the body of a macro is usually intended to produce a
+    # global in the calling module).
+    @testset "passed as an argument" for (ctx, mod, run) in [
+        ("flisp reference (delete if fail)", fl_mod, x->fl_eval(fl_mod, x)),
+        ("jl expr_compat_mode=true", jl_mod, x->jl_eval(jl_mod, x; expr_compat_mode=true)),
+        ("jl expr_compat_mode=false", jl_mod, x->jl_eval(jl_mod, x; expr_compat_mode=false))]
+
+        @testset for str in [
+            # "@old_hyg const GENSYM = 1; GENSYM == 1" # flisp mangles, JL counts local
+            "@old_hyg(global GENSYM = 1); GENSYM == 1"
+            "@old_hyg(global GENSYM::Int = 1); GENSYM == 1"
+            "@old_hyg(global (((GENSYM,),),) = (((1,),),)); GENSYM == 1"
+            "(()->(@old_hyg global GENSYM = 1))() == 1"
+            "@old_hyg(global const GENSYM = 1); GENSYM == 1"
+            "@old_hyg(const global GENSYM = 1); GENSYM == 1"
+            "@old_hyg(struct GENSYM end); GENSYM isa Type"
+            "@old_hyg(abstract type GENSYM end); GENSYM isa Type"
+            "@old_hyg(primitive type GENSYM 8 end); GENSYM isa Type"
+
+            # global functions: flisp encounters errors
+            # "@old_hyg(global GENSYM(x) = x); GENSYM isa Function"
+            # "@old_hyg(global function GENSYM(x)\nx\nend); GENSYM isa Function"
+            # "@old_hyg(let\n global GENSYM(x) = x\nend); GENSYM isa Function"
+            # "@old_hyg(let\n global function GENSYM(x)\nx\nend \nend); GENSYM isa Function"
+            ]
+            @gensym gen_global_sym
+            prog_str = "#="*ctx*"=# "*replace(
+                str, "GENSYM"=>"var\""*(string(gen_global_sym))*"\"")
+            prog = JuliaSyntax.parseall(SyntaxTree, prog_str)
+
+            @test run(prog) context=prog_str
+            Core.@latestworld
+            @test Base.isdefinedglobal(mod, gen_global_sym) context=prog_str
+            @test !Base.isdefinedglobal(test_mod, gen_global_sym) context=prog_str
+        end
+
+        # these shouldn't resolve (JL implementation shouldn't be too lax)
+        @testset for str in [
+            "begin; global GENSYM=1; @old_hyg(GENSYM) == 1; end"
+            "begin; global GENSYM::Int=1; @old_hyg(GENSYM) == 1; end"
+            "begin; global (((GENSYM,),),) = (((1,),),); @old_hyg(GENSYM) == 1; end"
+            "begin; (()->(global GENSYM = 1; @old_hyg(GENSYM)))() == 1; end"
+            "begin; global const GENSYM = 1; @old_hyg(GENSYM) == 1; end"
+            "begin; const global GENSYM = 1; @old_hyg(GENSYM) == 1; end"
+            "begin; struct GENSYM end; @old_hyg(GENSYM) isa Type; end"
+            "begin; abstract type GENSYM end; @old_hyg(GENSYM) isa Type; end"
+            "begin; primitive type GENSYM 8 end; @old_hyg(GENSYM) isa Type; end"
+            ]
+            @gensym gen_global_sym
+            prog_str = "#="*ctx*"=# "*replace(
+                str, "GENSYM"=>"var\""*(string(gen_global_sym))*"\"")
+            prog = JuliaSyntax.parseall(SyntaxTree, prog_str)
+
+            @test_throws string(gen_global_sym) run(prog) context=prog_str
+            Core.@latestworld
+            @test Base.isdefinedglobal(mod, gen_global_sym) context=prog_str
+            @test !Base.isdefinedglobal(test_mod, gen_global_sym) context=prog_str
+        end
+    end
+
+    # bad side: the same global decl coming from the body of the macro behaves
+    # as if it was passed as a macro argument.  It would have been more
+    # consistent to require escaping here, since now it's impossible to
+    # represent a global declaration in the macro module.
+    @testset "from the macro body" for (ctx, mod, run) in [
+        ("flisp reference (delete if fail)", fl_mod, x->fl_eval(fl_mod, x)),
+        ("jl expr_compat_mode=true", jl_mod, x->jl_eval(jl_mod, x; expr_compat_mode=true)),
+        ("jl expr_compat_mode=false", jl_mod, x->jl_eval(jl_mod, x; expr_compat_mode=false))]
+
+        # interpolating global name here appears to hit a bug
+        fl_eval(test_mod, :(macro old_hyg_globalvar(str);
+                                quote
+                                    global old_hyg_globalvar_G = $str
+                                end
+                            end))
+        run(:(import ..test_mod.@old_hyg_globalvar))
+        Core.@latestworld
+        let s = "ran old_hyg_globalvar"
+            @test run(:(@old_hyg_globalvar $s)) == s context=ctx
+            Core.@latestworld
+            @test Base.isdefinedglobal(mod, :old_hyg_globalvar_G) context=ctx
+            @test !Base.isdefinedglobal(test_mod, :old_hyg_globalvar_G) context=ctx
+        end
+        Base.delete_binding(mod, :old_hyg_globalvar_G)
+        Base.delete_binding(test_mod, :old_hyg_globalvar_G)
+
+        fl_eval(test_mod, :(macro old_hyg_globalvar_typed(str);
+                                quote
+                                    global old_hyg_globalvar_typed_G::String = $str
+                                end
+                            end))
+        run(:(import ..test_mod.@old_hyg_globalvar_typed))
+        Core.@latestworld
+        let s = "ran old_hyg_globalvar_typed"
+            @test run(:(@old_hyg_globalvar_typed $s)) == s context=ctx
+            Core.@latestworld
+            @test Base.isdefinedglobal(mod, :old_hyg_globalvar_typed_G) context=ctx
+            @test !Base.isdefinedglobal(test_mod, :old_hyg_globalvar_typed_G) context=ctx
+        end
+        Base.delete_binding(mod, :old_hyg_globalvar_typed_G)
+        Base.delete_binding(test_mod, :old_hyg_globalvar_typed_G)
+
+        fl_eval(test_mod, :(macro old_hyg_globalvar_tuple(str);
+                                quote
+                                    global (((old_hyg_globalvar_tuple_G,),),) = ((($str,),),)
+                                end
+                            end))
+        run(:(import ..test_mod.@old_hyg_globalvar_tuple))
+        Core.@latestworld
+        let s = "ran old_hyg_globalvar_tuple"
+            @test run(:(@old_hyg_globalvar_tuple $s)) == (((s,),),) context=ctx
+            Core.@latestworld
+            @test Base.isdefinedglobal(mod, :old_hyg_globalvar_tuple_G) context=ctx
+            @test !Base.isdefinedglobal(test_mod, :old_hyg_globalvar_tuple_G) context=ctx
+        end
+        Base.delete_binding(mod, :old_hyg_globalvar_tuple_G)
+        Base.delete_binding(test_mod, :old_hyg_globalvar_tuple_G)
+
+        fl_eval(test_mod, :(macro old_hyg_globalvar_in_lam(str);
+                                quote
+                                    (()->(global old_hyg_globalvar_in_lam_G = $str))()
+                                end
+                            end))
+        run(:(import ..test_mod.@old_hyg_globalvar_in_lam))
+        Core.@latestworld
+        let s = "ran old_hyg_globalvar_in_lam"
+            @test run(:(@old_hyg_globalvar_in_lam $s)) == s context=ctx
+            Core.@latestworld
+            @test Base.isdefinedglobal(mod, :old_hyg_globalvar_in_lam_G) context=ctx
+            @test !Base.isdefinedglobal(test_mod, :old_hyg_globalvar_in_lam_G) context=ctx
+        end
+        Base.delete_binding(mod, :old_hyg_globalvar_in_lam_G)
+        Base.delete_binding(test_mod, :old_hyg_globalvar_in_lam_G)
+
+        fl_eval(test_mod, :(macro old_hyg_globalvar_const(str);
+                                quote
+                                    global const old_hyg_globalvar_const_G = $str
+                                end
+                            end))
+        run(:(import ..test_mod.@old_hyg_globalvar_const))
+        Core.@latestworld
+        let s = "ran old_hyg_globalvar_const"
+            @test run(:(@old_hyg_globalvar_const $s)) == s context=ctx
+            Core.@latestworld
+            @test Base.isdefinedglobal(mod, :old_hyg_globalvar_const_G) context=ctx
+            @test !Base.isdefinedglobal(test_mod, :old_hyg_globalvar_const_G) context=ctx
+        end
+        Base.delete_binding(mod, :old_hyg_globalvar_const_G)
+        Base.delete_binding(test_mod, :old_hyg_globalvar_const_G)
+
+        fl_eval(test_mod, :(macro old_hyg_const_globalvar(str);
+                                quote
+                                    const global old_hyg_const_globalvar_G = $str
+                                end
+                            end))
+        run(:(import ..test_mod.@old_hyg_const_globalvar))
+        Core.@latestworld
+        let s = "ran old_hyg_const_globalvar"
+            @test run(:(@old_hyg_const_globalvar $s)) == s context=ctx
+            Core.@latestworld
+            @test Base.isdefinedglobal(mod, :old_hyg_const_globalvar_G) context=ctx
+            @test !Base.isdefinedglobal(test_mod, :old_hyg_const_globalvar_G) context=ctx
+        end
+        Base.delete_binding(mod, :old_hyg_const_globalvar_G)
+        Base.delete_binding(test_mod, :old_hyg_const_globalvar_G)
+
+        fl_eval(test_mod, :(macro old_hyg_struct(str);
+                                quote
+                                    struct old_hyg_struct_G end
+                                end
+                            end))
+        run(:(import ..test_mod.@old_hyg_struct))
+        Core.@latestworld
+        let s = "ran old_hyg_struct"
+            @test run(:(@old_hyg_struct $s)) === nothing context=ctx
+            Core.@latestworld
+            @test Base.isdefinedglobal(mod, :old_hyg_struct_G) context=ctx
+            @test mod.old_hyg_struct_G isa Type context=ctx
+            @test !Base.isdefinedglobal(test_mod, :old_hyg_struct_G) context=ctx
+        end
+        Base.delete_binding(mod, :old_hyg_struct_G)
+        Base.delete_binding(test_mod, :old_hyg_struct_G)
+
+        fl_eval(test_mod, :(macro old_hyg_abstract_type(str);
+                                quote
+                                    abstract type old_hyg_abstract_type_G end
+                                end
+                            end))
+        run(:(import ..test_mod.@old_hyg_abstract_type))
+        Core.@latestworld
+        let s = "ran old_hyg_abstract_type"
+            @test run(:(@old_hyg_abstract_type $s)) === nothing context=ctx
+            Core.@latestworld
+            @test Base.isdefinedglobal(mod, :old_hyg_abstract_type_G) context=ctx
+            @test mod.old_hyg_abstract_type_G isa Type context=ctx
+            @test !Base.isdefinedglobal(test_mod, :old_hyg_abstract_type_G) context=ctx
+        end
+        Base.delete_binding(mod, :old_hyg_abstract_type_G)
+        Base.delete_binding(test_mod, :old_hyg_abstract_type_G)
+
+        fl_eval(test_mod, :(macro old_hyg_primitive_type(str);
+                                quote
+                                    primitive type old_hyg_primitive_type_G 8 end
+                                end
+                            end))
+        run(:(import ..test_mod.@old_hyg_primitive_type))
+        Core.@latestworld
+        let s = "ran old_hyg_primitive_type"
+            @test run(:(@old_hyg_primitive_type $s)) === nothing context=ctx
+            Core.@latestworld
+            @test Base.isdefinedglobal(mod, :old_hyg_primitive_type_G) context=ctx
+            @test mod.old_hyg_primitive_type_G isa Type context=ctx
+            @test !Base.isdefinedglobal(test_mod, :old_hyg_primitive_type_G) context=ctx
+        end
+        Base.delete_binding(mod, :old_hyg_primitive_type_G)
+        Base.delete_binding(test_mod, :old_hyg_primitive_type_G)
+
+    end
 end

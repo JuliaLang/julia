@@ -16,7 +16,7 @@ parent_layer(ctx::MacroExpansionContext, sl, err_ex) =
 
 function MacroExpansionContext(graph::SyntaxGraph, mod::Module,
                                expr_compat_mode::Bool, world::UInt)
-    base_layer = ScopeLayer(1, mod, 0, false)
+    base_layer = ScopeLayer(1, mod, 0, false, false)
     MacroExpansionContext(
         graph, Bindings(), ScopeLayer[base_layer], expr_compat_mode, world)
 end
@@ -212,7 +212,8 @@ function set_macro_arg_hygiene(ctx, ex, sl)
         setattr!(mkleaf(ex), :scope_layer, sl.id)
     elseif k === K"hygienic-scope"
         set_macro_arg_hygiene(
-            ctx, ex[1], new_macro_scope_layer(ctx, sl, ex[2].value::Module, false))
+            ctx, ex[1], new_macro_scope_layer(
+                ctx, sl, ex[2].value::Module, sl.hygiene_compat))
     elseif k === K"escape"
         set_macro_arg_hygiene(ctx, ex[1], parent_layer(ctx, sl, ex))
     else
@@ -368,7 +369,7 @@ function expand_macro(ctx, ex, outer_sl)
                                              ctx.macro_world).def.module
         expanded = expand_forms_1(
             ctx, expanded,
-            new_macro_scope_layer(ctx, outer_sl, mod_for_ast, has_new_macro))
+            new_macro_scope_layer(ctx, outer_sl, mod_for_ast, !has_new_macro))
     end
     return expanded
 end
@@ -419,7 +420,8 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree, sl::ScopeLay
         end
         expand_forms_1(
             ctx, ex[1],
-            new_macro_scope_layer(ctx, expr_sl, ex[2].value::Module, false))
+            new_macro_scope_layer(
+                ctx, expr_sl, ex[2].value::Module, expr_sl.hygiene_compat))
     elseif k == K"quote"
         if numchildren(ex) !== 1
             throw(LoweringError(ex,"`quote` expects one argument"))
