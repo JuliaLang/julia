@@ -927,8 +927,8 @@ LIBITTAPI:=-littnotify
 endif
 
 ifeq ($(WITH_TRACY), 1)
-JCXXFLAGS += -DUSE_TRACY -DTRACY_ENABLE -DTRACY_FIBERS
-JCFLAGS += -DUSE_TRACY -DTRACY_ENABLE -DTRACY_FIBERS
+JCXXFLAGS += -DUSE_TRACY -DTRACY_ENABLE -DTRACY_FIBERS -I$(build_includedir)/tracy
+JCFLAGS += -DUSE_TRACY -DTRACY_ENABLE -DTRACY_FIBERS -I$(build_includedir)/tracy
 LIBTRACYCLIENT:=-lTracyClient
 endif
 ifeq ($(WITH_TRACY_CALLSTACKS), 1)
@@ -965,12 +965,17 @@ endif
 # Linker garbage collection
 ifeq ($(USE_LINKER_GC), 1)
 ifeq ($(OS), Darwin)
-  JLDFLAGS += -Wl,-dead_strip
+  LINKER_GC_LDFLAGS := -Wl,-dead_strip
 else
-  JLDFLAGS += -Wl,--gc-sections
-  JCFLAGS += -ffunction-sections -fdata-sections
-  JCXXFLAGS += -ffunction-sections -fdata-sections
+  LINKER_GC_LDFLAGS := -Wl,--gc-sections
+  LINKER_GC_CFLAGS := -ffunction-sections -fdata-sections
+  LINKER_GC_CXXFLAGS := -ffunction-sections -fdata-sections
 endif
+
+JLDFLAGS += $(LINKER_GC_LDFLAGS)
+JCFLAGS += $(LINKER_GC_CFLAGS)
+JCXXFLAGS += $(LINKER_GC_CXXFLAGS)
+
 endif
 
 # ===========================================================================

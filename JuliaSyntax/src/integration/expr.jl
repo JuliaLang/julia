@@ -343,6 +343,9 @@ end
         return adjust_macro_name!(retexpr.args[1])
     elseif k == K"?"
         retexpr.head = :if
+    elseif k == K"DotsIdentifier"
+        n = numeric_flags(flags(nodehead))
+        return n == 2 ? :(..) : :(...)
     elseif k == K"op=" && length(args) == 3
         lhs = args[1]
         op = args[2]

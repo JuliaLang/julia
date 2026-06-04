@@ -137,8 +137,8 @@ function untokenize(head::SyntaxHead; unique=true, include_flag_suff=true)
         is_postfix_op_call(head) && (str = str*"-post")
 
         k = kind(head)
-        # Handle numeric flags for nrow/ncat nodes
-        if k in KSet"nrow ncat typed_ncat"
+        # Handle numeric flags for nodes that take them
+        if k in KSet"nrow ncat typed_ncat DotsIdentifier"
             n = numeric_flags(head)
             n != 0 && (str = str*"-"*string(n))
         else
@@ -300,13 +300,18 @@ function bump_split(stream::ParseStream, split_spec::Vararg{Any, N}) where {N}
     return position(stream)
 end
 
-function peek_dotted_op_token(ps, allow_whitespace=false)
+function peek_dotted_op_token(ps)
     # Peek the next token, but if it is a dot, peek the next one as well
     t = peek_token(ps)
     isdotted = kind(t) == K"."
     if isdotted
         t2 = peek_token(ps, 2)
-        if !is_operator(t2) || (!allow_whitespace && preceding_whitespace(t2))
+        if preceding_whitespace(t2)
+            isdotted = false
+        elseif !is_operator(t2)
+            isdotted = false
+        elseif kind(t2) == K"." && peek(ps, 3) == K"."
+            # Treat `..` as dotted K".", unless there's another dot after
             isdotted = false
         else
             t = t2
@@ -315,13 +320,26 @@ function peek_dotted_op_token(ps, allow_whitespace=false)
     return (isdotted, t)
 end
 
-function bump_dotted(ps, isdot, flags=EMPTY_FLAGS; emit_dot_node=false, remap_kind=K"None")
+function bump_dotted(ps, isdot, t, flags=EMPTY_FLAGS; emit_dot_node=false, remap_kind=K"None")
     if isdot
-        if emit_dot_node
-            dotmark = position(ps)
-            bump(ps, TRIVIA_FLAG) # TODO: NOTATION_FLAG
-        else
-            bump(ps, TRIVIA_FLAG) # TODO: NOTATION_FLAG
+        dotmark = position(ps)
+        bump(ps, TRIVIA_FLAG)
+        if kind(t) == K"."
+            # .. => DotsIdentifier-2
+            bump(ps, TRIVIA_FLAG)
+            pos = emit(ps, dotmark, K"DotsIdentifier", set_numeric_flags(2))
+            nt = peek_token(ps)
+            # `..` directly followed by another operator (eg `a..+b`) is
+            # ambiguous and requires a space (the lexer used to glue these into
+            # an invalid operator token). The quote/interpolation/char operators
+            # `: :: $ '` begin an operand rather than continuing the operator,
+            # so `a..:b`, `a..$b` and `'a'..'b'` are allowed.
+            if is_operator(nt) && !preceding_whitespace(nt) && !(kind(nt) in KSet": :: $ '")
+                # a..+b  => (call-i a .. (error-t) (call + b))
+                bump_invisible(ps, K"error", TRIVIA_FLAG,
+                    error="`..` here is interpreted as a binary operator. A space is required if followed by another operator.")
+            end
+            return pos
         end
     end
     pos = bump(ps, flags, remap_kind=remap_kind)

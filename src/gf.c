@@ -65,7 +65,7 @@ static size_t get_max_varargs(
             dt = jl_nth_argument_datatype(m->sig, 3);
         else
             dt = dt1;
-        if (dt != NULL && !jl_is_type_type((jl_value_t*)dt) && dt != jl_kwcall_type) {
+        if (dt != NULL && !jl_is_typeeq((jl_value_t*)dt) && dt != jl_kwcall_type) {
             if (may_increase != NULL)
                 *may_increase = 1; // `max_args` can increase as new methods are inserted
 
@@ -746,8 +746,8 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst_uninit(jl_method_instance_t *mi
     return codeinst;
 }
 
-JL_DLLEXPORT void jl_mi_cache_insert(jl_method_instance_t *mi JL_ROOTING_ARGUMENT,
-                                     jl_code_instance_t *ci JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED)
+JL_DLLEXPORT void jl_mi_cache_insert(jl_method_instance_t *mi,
+                                     jl_code_instance_t *ci JL_ROOTED_BY_ARG(0) JL_MAYBE_UNROOTED)
 {
     JL_GC_PUSH1(&ci);
     if (jl_is_method(mi->def.method))
@@ -809,9 +809,9 @@ JL_DLLEXPORT void jl_mi_cache_insert(jl_method_instance_t *mi JL_ROOTING_ARGUMEN
     return;
 }
 
-JL_DLLEXPORT int jl_mi_try_insert(jl_method_instance_t *mi JL_ROOTING_ARGUMENT,
+JL_DLLEXPORT int jl_mi_try_insert(jl_method_instance_t *mi,
                                    jl_code_instance_t *expected_ci,
-                                   jl_code_instance_t *ci JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED)
+                                   jl_code_instance_t *ci JL_ROOTED_BY_ARG(0) JL_MAYBE_UNROOTED)
 {
     JL_GC_PUSH1(&ci);
     if (jl_is_method(mi->def.method))
@@ -858,15 +858,15 @@ static void foreach_top_nth_typename(void (*f)(jl_typename_t*, int, void*), jl_v
         jl_value_t *current_a = (jl_value_t*)arraylist_pop(&workqueue);
         JL_GC_PROMISE_ROOTED(current_a);
 
-        if (jl_is_datatype(current_a)) {
+        if (jl_is_typeeq(current_a)) {
+            *facts |= HAVE_TYPE;
+            arraylist_push(&workqueue, jl_typeeq_T(current_a));
+            arraylist_push(&workqueue, (void*)(uintptr_t)-1);
+        }
+        else if (jl_is_datatype(current_a)) {
             if (current_n <= 0) {
                 jl_datatype_t *dt = ((jl_datatype_t*)current_a);
-                if (dt->name == jl_type_typename) { // key Type{T} on T instead of Type
-                    *facts |= HAVE_TYPE;
-                    arraylist_push(&workqueue, jl_tparam0(current_a));
-                    arraylist_push(&workqueue, (void*)(uintptr_t)-1);
-                }
-                else if (dt == jl_function_type) {
+                if (dt == jl_function_type) {
                     if (current_n == -1) // key Type{>:Function} as Type instead of Function
                         *facts |= EXACTLY_TYPE; // HAVE_TYPE is already set
                     else
@@ -1096,7 +1096,8 @@ static jl_value_t *inst_varargp_in_env(jl_value_t *decl, jl_svec_t *sparams)
     assert(jl_is_vararg(vm));
     int nsp = jl_svec_len(sparams);
     if (nsp > 0 && jl_has_free_typevars(vm)) {
-        JL_GC_PUSH1(&vm);
+        jl_value_t *Nroot = NULL;
+        JL_GC_PUSH2(&vm, &Nroot);
         assert(jl_subtype_env_size(decl) == nsp);
         vm = jl_instantiate_type_in_env(vm, (jl_unionall_t*)decl, jl_svec_data(sparams));
         assert(jl_is_vararg(vm));
@@ -1111,14 +1112,16 @@ static jl_value_t *inst_varargp_in_env(jl_value_t *decl, jl_svec_t *sparams)
             if (v && jl_is_typevar(v)) {
                 // must unwrap and re-wrap Vararg object explicitly here since jl_type_unionall handles it differently
                 jl_value_t *T = ((jl_vararg_t*)vm)->T;
-                jl_value_t *N = ((jl_vararg_t*)vm)->N;
+                Nroot = ((jl_vararg_t*)vm)->N;
                 int T_has_tv = T && jl_has_typevar(T, v);
-                int N_has_tv = N && jl_has_typevar(N, v); // n.b. JL_VARARG_UNBOUND check means this should be false
-                assert(!N_has_tv || N == (jl_value_t*)v);
+                // n.b. JL_VARARG_UNBOUND check means this should be false
+                int N_has_tv = Nroot && jl_has_typevar(Nroot, v);
+                assert(!N_has_tv || Nroot == (jl_value_t*)v);
                 vm = T_has_tv ? jl_type_unionall(v, T) : T;
                 if (N_has_tv)
-                    N = NULL;
-                vm = (jl_value_t*)jl_wrap_vararg(vm, N, 1, 0); // this cannot throw for these inputs
+                    Nroot = NULL;
+                vm = (jl_value_t*)jl_wrap_vararg(vm, Nroot, 1, 0); // this cannot throw for these inputs
+                Nroot = NULL;
             }
             sp++;
             decl = ((jl_unionall_t*)decl)->body;
@@ -1206,13 +1209,14 @@ static void jl_compilation_sig(
             elt = type_i;
             jl_svecset(*newparams, i, elt);
         }
-        else if (jl_is_type_type(elt)) {
+        else if (jl_is_typeeq(elt)) {
             // if the declared type was not Any or Union{Type, ...},
             // then the match must been with the kind (e.g. UnionAll or DataType)
             // and the result of matching the type signature
             // needs to be restricted to the concrete type 'kind'
-            jl_value_t *kind = jl_typeof(jl_tparam0(elt));
-            if (jl_subtype(kind, type_i) && !jl_subtype((jl_value_t*)jl_type_type, type_i)) {
+            jl_value_t *kind = jl_typeof(jl_typeeq_T(elt));
+            if (!jl_has_free_typevars(decl_i) &&
+                    jl_subtype(kind, type_i) && !jl_subtype((jl_value_t*)jl_type_type, type_i)) {
                 // if we can prove the match was against the kind (not a Type)
                 // it's simpler (and thus better) to put that cache instead
                 if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
@@ -1254,13 +1258,13 @@ static void jl_compilation_sig(
             // not triggered for isdispatchtuple(tt), this attempts to handle
             // some cases of adapting a random signature into a compilation signature
         }
-        else if (!jl_is_datatype(elt) && jl_subtype(elt, (jl_value_t*)jl_type_type)) { // elt <: Type{T}
+        else if (!jl_is_typeeq(elt) && !jl_is_datatype(elt) && jl_subtype(elt, (jl_value_t*)jl_type_type)) { // elt <: Type{T}
             // not triggered for isdispatchtuple(tt), this attempts to handle
             // some cases of adapting a random signature into a compilation signature
             if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
             jl_svecset(*newparams, i, jl_type_type);
         }
-        else if (jl_is_type_type(elt)) { // elt isa Type{T}
+        else if (jl_is_typeeq(elt)) { // elt isa Type{T}
             if (!jl_has_free_typevars(decl_i) && very_general_type(type_i)) {
                 /*
                   Here's a fairly simple heuristic: if this argument slot's
@@ -1287,9 +1291,9 @@ static void jl_compilation_sig(
                     jl_svecset(*newparams, i, jl_type_type);
                 }
             }
-            else if (jl_is_type_type(jl_tparam0(elt)) &&
+            else if (jl_is_typeeq(jl_typeeq_T(elt)) &&
                      // try to give up on specializing type parameters for Type{Type{Type{...}}}
-                     (jl_is_type_type(jl_tparam0(jl_tparam0(elt))) || !jl_has_free_typevars(decl_i))) {
+                     (jl_is_typeeq(jl_typeeq_T(jl_typeeq_T(elt))) || !jl_has_free_typevars(decl_i))) {
                 /*
                   actual argument was Type{...}, we computed its type as
                   Type{Type{...}}. we like to avoid unbounded nesting here, so
@@ -1361,7 +1365,7 @@ static void jl_compilation_sig(
         }
         if (all_are_subtypes) {
             // avoid Vararg{Type{Type{...}}}
-            if (jl_is_type_type(type_i) && jl_is_type_type(jl_tparam0(type_i)))
+            if (jl_is_typeeq(type_i) && jl_is_typeeq(jl_typeeq_T(type_i)))
                 type_i = (jl_value_t*)jl_type_type;
             type_i = (jl_value_t*)jl_wrap_vararg(type_i, (jl_value_t*)NULL, 1, 0); // this cannot throw for these inputs
         }
@@ -1387,8 +1391,9 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
 {
     jl_value_t *decl = definition->sig;
 
-    if (!jl_is_datatype(type) || jl_has_free_typevars((jl_value_t*)type))
+    if (!jl_is_datatype(type) || jl_has_free_typevars((jl_value_t*)type)) {
         return 0;
+    }
     if (definition->sig == (jl_value_t*)jl_anytuple_type && jl_atomic_load_relaxed(&definition->unspecialized))
         return jl_egal((jl_value_t*)type, definition->sig); // handle builtin methods
 
@@ -1444,7 +1449,7 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
             if (jl_egal(elt, type_i))
                 continue; // elt could be chosen by inst_varargp_in_env for these sparams
             elt = jl_unwrap_vararg(elt);
-            if (jl_is_type_type(elt) && jl_is_type_type(jl_tparam0(elt))) {
+            if (jl_is_typeeq(elt) && jl_is_typeeq(jl_typeeq_T(elt))) {
                 JL_GC_POP();
                 return 0; // elt would be set equal to jl_type_type instead
             }
@@ -1468,6 +1473,12 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
             // kind slots always get guard entries (checking for subtypes of Type)
             if (jl_subtype(elt, type_i) && !jl_subtype((jl_value_t*)jl_type_type, type_i))
                 continue;
+            // if the declared slot is itself a kind (e.g. `::DataType` or the
+            // maximal `::Kind`, which is type-equal to `Type`), then
+            // jl_compilation_sig keeps the kind argument equal to that slot, so
+            // that is the canonical compileable form.
+            if (jl_is_kind(type_i) && jl_egal(elt, type_i))
+                continue;
             // TODO: other code paths that could reach here?
             JL_GC_POP();
             return 0;
@@ -1477,7 +1488,7 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
             return 0;
         }
 
-        if (jl_is_type_type(jl_unwrap_unionall(elt))) {
+        if (jl_is_typeeq(jl_unwrap_unionall(elt))) {
             int iscalled = (i_arg > 0 && i_arg <= 8 && (definition->called & (1 << (i_arg - 1)))) ||
                            jl_has_free_typevars(decl_i);
             if (jl_types_equal(elt, (jl_value_t*)jl_type_type)) {
@@ -1492,7 +1503,7 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
                 JL_GC_POP();
                 return 0;
             }
-            if (!jl_is_datatype(elt)) {
+            if (!jl_is_datatype(elt) && !jl_is_typeeq(elt)) {
                 JL_GC_POP();
                 return 0;
             }
@@ -1501,19 +1512,20 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
             // then the match must been with kind, such as UnionAll or DataType,
             // and the result of matching the type signature
             // needs to be corrected to the concrete type 'kind' (and not to Type)
-            jl_value_t *kind = jl_typeof(jl_tparam0(elt));
+            jl_value_t *kind = jl_typeof(jl_typeeq_T(elt));
             if (kind == jl_bottom_type) {
                 JL_GC_POP();
                 return 0; // Type{Union{}} gets normalized to typeof(Union{})
             }
-            if (jl_subtype(kind, type_i) && !jl_subtype((jl_value_t*)jl_type_type, type_i)) {
+            if (!jl_has_free_typevars(decl_i) &&
+                    jl_subtype(kind, type_i) && !jl_subtype((jl_value_t*)jl_type_type, type_i)) {
                 JL_GC_POP();
                 return 0; // gets turned into a kind
             }
 
-            else if (jl_is_type_type(jl_tparam0(elt)) &&
+            else if (jl_is_typeeq(jl_typeeq_T(elt)) &&
                      // give up on specializing static parameters for Type{Type{Type{...}}}
-                     (jl_is_type_type(jl_tparam0(jl_tparam0(elt))) || !jl_has_free_typevars(decl_i))) {
+                     (jl_is_typeeq(jl_typeeq_T(jl_typeeq_T(elt))) || !jl_has_free_typevars(decl_i))) {
                 /*
                   actual argument was Type{...}, we computed its type as
                   Type{Type{...}}. we must avoid unbounded nesting here, so
@@ -1575,7 +1587,7 @@ static int concretesig_equal(jl_value_t *tt, jl_value_t *simplesig) JL_NOTSAFEPO
         jl_value_t *decl = sigs[i];
         jl_value_t *a = types[i];
         if (a != decl && decl != (jl_value_t*)jl_any_type) {
-            if (!(jl_is_type_type(a) && jl_typeof(jl_tparam0(a)) == decl))
+            if (!(jl_is_typeeq(a) && jl_typeof(jl_typeeq_T(a)) == decl))
                 return 0;
         }
     }
@@ -1630,7 +1642,7 @@ jl_method_instance_t *cache_method(
     }
 
     jl_method_instance_t *newmeth = NULL;
-    if (definition->sig == (jl_value_t*)jl_anytuple_type && definition != jl_opaque_closure_method && !definition->is_for_opaque_closure) {
+    if (definition->source == NULL && definition->generator == NULL && !definition->is_for_opaque_closure) {
         newmeth = jl_atomic_load_relaxed(&definition->unspecialized);
         if (newmeth != NULL) { // handle builtin methods de-specialization (for invoke, or if the global cache entry somehow gets lost)
             jl_tupletype_t *cachett = (jl_tupletype_t*)newmeth->specTypes;
@@ -1648,7 +1660,8 @@ jl_method_instance_t *cache_method(
     jl_value_t *temp2 = NULL;
     jl_value_t *temp3 = NULL;
     jl_svec_t *newparams = NULL;
-    JL_GC_PUSH5(&temp, &temp2, &temp3, &newmeth, &newparams);
+    jl_tupletype_t *cachett = tt;
+    JL_GC_PUSH6(&temp, &temp2, &temp3, &newmeth, &newparams, &cachett);
 
     // Consider if we can cache with the preferred compile signature
     // so that we can minimize the number of required cache entries.
@@ -1687,7 +1700,6 @@ jl_method_instance_t *cache_method(
     // Capture world counter at start to detect races
     size_t current_world = mc ? jl_atomic_load_acquire(&jl_world_counter) : ~(size_t)0;
 
-    jl_tupletype_t *cachett = tt;
     jl_svec_t *guardsigs = jl_emptysvec;
     if (!cache_with_orig && mt) {
         // now examine what will happen if we chose to use this sig in the cache
@@ -1775,9 +1787,9 @@ jl_method_instance_t *cache_method(
         jl_value_t *elt = jl_svecref(cachett->parameters, i);
         if (jl_is_vararg(elt)) {
         }
-        else if (jl_is_type_type(elt)) {
+        else if (jl_is_typeeq(elt)) {
             // TODO: if (!jl_is_singleton(elt)) ...
-            jl_value_t *kind = jl_typeof(jl_tparam0(elt));
+            jl_value_t *kind = jl_typeof(jl_typeeq_T(elt));
             if (!newparams) newparams = jl_svec_copy(cachett->parameters);
             jl_svecset(newparams, i, kind);
         }
@@ -1799,6 +1811,7 @@ jl_method_instance_t *cache_method(
         if (entry && jl_egal((jl_value_t*)entry->simplesig, simplett ? (jl_value_t*)simplett : jl_nothing) &&
                 jl_egal((jl_value_t*)guardsigs, (jl_value_t*)entry->guardsigs)) {
             JL_GC_POP();
+            if (mc) JL_UNLOCK(&mc->writelock);
             return entry->func.linfo;
         }
     }
@@ -2087,7 +2100,7 @@ static void update_max_args(jl_value_t *type)
 {
     type = jl_unwrap_unionall(type);
     jl_datatype_t *dt = jl_nth_argument_datatype(type, 1);
-    if (dt == NULL || dt == jl_kwcall_type || jl_is_type_type((jl_value_t*)dt))
+    if (dt == NULL || dt == jl_kwcall_type || jl_is_typeeq((jl_value_t*)dt))
         return;
     jl_typename_t *tn = dt->name;
     assert(jl_is_datatype(type));
@@ -2189,7 +2202,6 @@ static void _invalidate_backedges(jl_method_instance_t *replaced_mi, jl_code_ins
             ins = i;
             continue;
         }
-        JL_GC_PROMISE_ROOTED(replaced); // propagated by get_next_edge from backedges
         if (replaced_ci) {
             // If we're invalidating a particular codeinstance, only invalidate
             // this backedge it actually has an edge for our codeinstance.
@@ -2289,7 +2301,6 @@ static int _invalidate_dispatch_backedges(jl_method_instance_t *mi, jl_value_t *
             insb = ib;
             continue;
         }
-        JL_GC_PROMISE_ROOTED(caller); // propagated by get_next_edge from backedges
         int replaced_edge;
         if (invokeTypes) {
             // n.b. normally we must have mi.specTypes <: invokeTypes <: m.sig (though it might not strictly hold), so we only need to check the other subtypes
