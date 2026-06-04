@@ -623,7 +623,7 @@ Stacktrace:
 """
 log1p(x)
 
-@inline function sqrt(x::Union{Float32,Float64})
+@inline function sqrt(x::IEEEFloat)
     x < zero(x) && throw_complex_domainerror(:sqrt, x)
     sqrt_llvm(x)
 end
@@ -1289,7 +1289,7 @@ include("special/pow.jl")
 # Float16 definitions
 
 for func in (:sin,:cos,:tan,:asin,:acos,:atan,:cosh,:tanh,:asinh,:acosh,
-             :atanh,:log,:log2,:log10,:sqrt,:fourthroot,:log1p)
+             :atanh,:log,:log2,:log10,:log1p)
     @eval begin
         $func(a::Float16) = Float16($func(Float32(a)))
         $func(a::ComplexF16) = ComplexF16($func(ComplexF32(a)))
