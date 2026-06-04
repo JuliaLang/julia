@@ -21,6 +21,7 @@
 #include <llvm/Analysis/LoopPass.h>
 #include <llvm/Analysis/OptimizationRemarkEmitter.h>
 #include <llvm/Analysis/MemorySSA.h>
+#include <llvm/Analysis/ScalarEvolution.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Metadata.h>
 #include <llvm/IR/Verifier.h>
