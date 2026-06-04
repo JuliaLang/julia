@@ -1621,7 +1621,12 @@ function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vec
         isexpr(stmt, :(=)) && (stmt = stmt.args[2])
         if isexpr(stmt, :invoke) || isexpr(stmt, :invoke_modify)
             edge = stmt.args[1]
-            edge isa CodeInstance && isdefined(edge, :inferred) && push!(workqueue, edge)
+            if edge isa CodeInstance
+                isdefined(edge, :inferred) && push!(workqueue, edge)
+            elseif edge isa MethodInstance && invokelatest_queue !== nothing
+                code = get(code_cache(workqueue.interp), edge, nothing)
+                code isa CodeInstance && isdefined(code, :inferred) && push!(workqueue, code)
+            end
         end
 
         invokelatest_queue === nothing && continue
@@ -1682,6 +1687,7 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
     while !isempty(workqueue)
         # ci_has_real_invoke(ci) && return ci # optimization: cease looping if ci happens to get compiled (not just jl_fptr_wait_for_compiled, but fully jl_is_compiled_codeinst)
         callee = pop!(workqueue)
+        callee isa CodeInstance || continue
         ci_has_invoke(callee) && continue
         isinspected(workqueue, callee) && continue
         src = ci_get_source(interp, callee)
@@ -1815,7 +1821,10 @@ const TRIM_SAFE = 0x1
 const TRIM_UNSAFE = 0x2
 const TRIM_UNSAFE_WARN = 0x3
 function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_mode::UInt8)
-    inf_params = InferenceParams(; force_enable_inference = trim_mode != TRIM_NO)
+    # During `--trim`, infer against an isolated cache namespace. The owner is re-stamped
+    # back to `nothing` at serialization time (see `src/staticdata.c`).
+    cache_owner = trim_mode == TRIM_NO ? nothing : :trim
+    inf_params = InferenceParams(; force_enable_inference = trim_mode != TRIM_NO, cache_owner)
 
     # Create an "invokelatest" queue to enable eager compilation of speculative
     # invokelatest calls such as from `Core.finalizer` and `ccallable`
