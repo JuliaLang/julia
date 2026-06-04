@@ -661,6 +661,8 @@ static jl_datatype_t *nth_arg_datatype(jl_value_t *a JL_PROPAGATES_ROOT, int n) 
             return (jl_datatype_t*)T;
         if (jl_is_typevar(T))
             return nth_arg_datatype(((jl_tvar_t*)T)->ub, 0);
+        if (jl_is_unionall(T))
+            return nth_arg_datatype(jl_unwrap_unionall(T), 0);
         return NULL;
     }
     else if (jl_is_typevar(a)) {
