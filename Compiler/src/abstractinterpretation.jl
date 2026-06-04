@@ -1079,7 +1079,7 @@ collect_const_args(arginfo::ArgInfo, start::Int) = collect_const_args(arginfo.ar
 function collect_const_args(argtypes::Vector{Any}, start::Int)
     return Any[ let a = widenslotwrapper(argtypes[i])
                     isa(a, Const) ? a.val :
-                    isconstType(a) ? a.parameters[1] :
+                    isconstType(a) ? type_parameter(a) :
                     (a::DataType).instance
                 end for i = start:length(argtypes) ]
 end
@@ -2413,7 +2413,7 @@ function abstract_call_unionall(interp::AbstractInterpreter, argtypes::Vector{An
     if isa(a3, Const)
         body = a3.val
     elseif isType(a3)
-        body = a3.parameters[1]
+        body = type_parameter(a3)
         canconst = false
     else
         return CallMeta(Any, Any, Effects(EFFECTS_TOTAL; nothrow), call.info)
@@ -2502,7 +2502,6 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
         nargtype === Bottom && return Future(CallMeta(Bottom, TypeError, EFFECTS_THROWS, NoCallInfo()))
         nargtype isa DataType || return Future(CallMeta(Any, Any, Effects(), NoCallInfo())) # other cases are not implemented below
         isdispatchelem(ft) || return Future(CallMeta(Any, Any, Effects(), NoCallInfo())) # check that we might not have a subtype of `ft` at runtime, before doing supertype lookup below
-        ft = ft::DataType
         lookupsig = rewrap_unionall(Tuple{ft, unwrapped.parameters...}, types)::Type
         nargtype = Tuple{ft, nargtype.parameters...}
         argtype = Tuple{ft, argtype.parameters...}

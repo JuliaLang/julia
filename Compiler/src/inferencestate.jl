@@ -740,6 +740,14 @@ function constrains_param(var::TypeVar, @nospecialize(typ), covariant::Bool, typ
         ba = constrains_param(var, typ.a, covariant, type_constrains)
         bb = constrains_param(var, typ.b, covariant, type_constrains)
         (ba && bb) && return true
+    elseif isType(typ)
+        p = type_parameter(typ)
+        if p === var && var.ub === Any
+            # Types with free type parameters are <: Type cause the typevar
+            # to be unconstrained because Type{T} with free typevars is illegal
+            return type_constrains
+        end
+        constrains_param(var, p, false, type_constrains) && return true
     elseif typ isa DataType
         # return true if any param constrains var
         fc = length(typ.parameters)
@@ -759,11 +767,6 @@ function constrains_param(var::TypeVar, @nospecialize(typ), covariant::Bool, typ
                     constrains_param(var, lastp, covariant, type_constrains) && return true
                 end
             else
-                if typ.name === typename(Type) && typ.parameters[1] === var && var.ub === Any
-                    # Types with free type parameters are <: Type cause the typevar
-                    # to be unconstrained because Type{T} with free typevars is illegal
-                    return type_constrains
-                end
                 for i in 1:fc
                     p = typ.parameters[i]
                     constrains_param(var, p, false, type_constrains) && return true
@@ -785,7 +788,7 @@ function sptype_for_tvar(vᵢ::TypeVar, output_tvar::TypeVar, sigtypes::Core.Sim
                          @nospecialize(specTypes))
     for j = 1:length(sigtypes)
         sⱼ = sigtypes[j]
-        if isType(sⱼ) && sⱼ.parameters[1] === vᵢ
+        if isType(sⱼ) && type_parameter(sⱼ) === vᵢ
             # `arg::Type{T}` pins the sparam to the arg's type
             return fieldtype(specTypes, j)
         elseif (va = va_from_vatuple(sⱼ)) !== nothing
@@ -799,7 +802,7 @@ function sptype_for_tvar(vᵢ::TypeVar, output_tvar::TypeVar, sigtypes::Core.Sim
         # `Bottom <: T <: Any` additionally allows non-Type tvars
         return Any
     end
-    return rewrap_free_typevars(Type{output_tvar}, find_free_typevars(specTypes))
+    return rewrap_free_typevars(TypeEq{output_tvar}, find_free_typevars(specTypes))
 end
 
 function sptypes_from_meth_instance(mi::MethodInstance)
@@ -845,7 +848,7 @@ function sptypes_from_meth_instance(mi::MethodInstance)
                                      (unwrap_unionall(temp)::DataType).parameters,
                                      mi.specTypes)
             else
-                ty = rewrap_free_typevars(Type{v}, find_free_typevars(mi.specTypes))
+                ty = rewrap_free_typevars(TypeEq{v}, find_free_typevars(mi.specTypes))
             end
             undef = !v_constrained
         elseif isvarargtype(v)

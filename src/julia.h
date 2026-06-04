@@ -604,6 +604,11 @@ typedef struct {
     jl_value_t *JL_NONNULL b;
 } jl_intersecttype_t;
 
+typedef struct {
+    JL_DATA_TYPE
+    jl_value_t *JL_NONNULL T;
+} jl_typeeq_t;
+
 // in little-endian, isptr is always the first bit, avoiding the need for a branch in computing isptr
 typedef struct {
     uint8_t isptr:1;
@@ -1047,6 +1052,9 @@ typedef struct {
     XX(globalref) \
     XX(gotonode) \
     XX(quotenode) \
+    XX(typeeq) \
+    /* Add new tags here to keep existing builds ABI stable - we don't guarantee ABI \
+       stability, but it'll help PkgEval to not break it unnecessarily */ \
     /* end of JL_SMALL_TYPEOF */
 enum jl_small_typeof_tags {
     jl_null_tag = 0,
@@ -1631,6 +1639,7 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 #define jl_may_be_immutable_datatype(t) (jl_is_datatype(t) && (!((jl_datatype_t*)t)->name->mutabl))
 #define jl_is_uniontype(v)   jl_typetagis(v,jl_uniontype_tag<<4)
 #define jl_is_intersecttype(v) jl_typetagis(v,jl_intersect_type)
+#define jl_is_typeeq(v)      jl_typetagis(v,jl_typeeq_tag<<4)
 #define jl_is_typevar(v)     jl_typetagis(v,jl_tvar_tag<<4)
 #define jl_is_unionall(v)    jl_typetagis(v,jl_unionall_tag<<4)
 #define jl_is_vararg(v)      jl_typetagis(v,jl_vararg_tag<<4)
@@ -1692,15 +1701,17 @@ int is_leaf_bound(jl_value_t *v) JL_NOTSAFEPOINT;
 
 STATIC_INLINE int jl_is_kind(jl_value_t *v) JL_NOTSAFEPOINT
 {
-    return (v==(jl_value_t*)jl_uniontype_type || v==(jl_value_t*)jl_datatype_type ||
-            v==(jl_value_t*)jl_unionall_type || v==(jl_value_t*)jl_typeofbottom_type);
+    return (v==(jl_value_t*)jl_anytype_type || v==(jl_value_t*)jl_uniontype_type || v==(jl_value_t*)jl_datatype_type ||
+            v==(jl_value_t*)jl_unionall_type || v==(jl_value_t*)jl_typeeq_type ||
+            v==(jl_value_t*)jl_typeofbottom_type);
 }
 
 STATIC_INLINE int jl_is_kindtag(uintptr_t t) JL_NOTSAFEPOINT
 {
     t >>= 4;
     return (t==(uintptr_t)jl_uniontype_tag || t==(uintptr_t)jl_datatype_tag ||
-            t==(uintptr_t)jl_unionall_tag || t==(uintptr_t)jl_typeofbottom_tag);
+            t==(uintptr_t)jl_unionall_tag || t==(uintptr_t)jl_typeeq_tag ||
+            t==(uintptr_t)jl_typeofbottom_tag);
 }
 
 STATIC_INLINE int jl_is_type(jl_value_t *v) JL_NOTSAFEPOINT
@@ -1832,10 +1843,10 @@ STATIC_INLINE int jl_is_vecelement_type(jl_value_t* t) JL_NOTSAFEPOINT
             ((jl_datatype_t*)(t))->name == jl_vecelement_typename);
 }
 
-STATIC_INLINE int jl_is_type_type(jl_value_t *v) JL_NOTSAFEPOINT
+STATIC_INLINE jl_value_t *jl_typeeq_T(jl_value_t *v JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
-    return (jl_is_datatype(v) &&
-            ((jl_datatype_t*)(v))->name == ((jl_datatype_t*)jl_type_type->body)->name);
+    assert(jl_is_typeeq(v));
+    return ((jl_typeeq_t*)v)->T;
 }
 
 STATIC_INLINE int jl_is_genericmemory_zeroinit(jl_genericmemory_t *m) JL_NOTSAFEPOINT
@@ -1850,6 +1861,7 @@ JL_DLLEXPORT int jl_egal__bitstag(const jl_value_t *a JL_MAYBE_UNROOTED, const j
 JL_DLLEXPORT int jl_egal__unboxed(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b JL_MAYBE_UNROOTED, uintptr_t dtag) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uintptr_t jl_object_id(jl_value_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uintptr_t jl_type_hash(jl_value_t *v) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uintptr_t jl_type_cache_hash(jl_value_t *v) JL_NOTSAFEPOINT;
 
 STATIC_INLINE int jl_egal__unboxed_(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b JL_MAYBE_UNROOTED, uintptr_t dtag) JL_NOTSAFEPOINT
 {

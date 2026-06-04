@@ -39,6 +39,9 @@ int must_be_new_dt(jl_value_t *t, htable_t *news, char *image_base, size_t sizeo
         return must_be_new_dt(tv->lb, news, image_base, sizeof_sysimg) ||
                must_be_new_dt(tv->ub, news, image_base, sizeof_sysimg);
     }
+    else if (jl_is_typeeq(t)) {
+        return must_be_new_dt(jl_typeeq_T(t), news, image_base, sizeof_sysimg);
+    }
     else if (jl_is_vararg(t)) {
         jl_vararg_t *tv = (jl_vararg_t*)t;
         if (tv->T && must_be_new_dt(tv->T, news, image_base, sizeof_sysimg))
@@ -48,7 +51,10 @@ int must_be_new_dt(jl_value_t *t, htable_t *news, char *image_base, size_t sizeo
     }
     else if (jl_is_datatype(t)) {
         jl_datatype_t *dt = (jl_datatype_t*)t;
-        assert(jl_object_in_image((jl_value_t*)dt->name) && "type_in_worklist mistake?");
+        if (dt->name == NULL || dt->parameters == NULL ||
+            (dt->super == NULL && dt != jl_any_type))
+            return 1;
+        assert(jl_astaggedvalue(dt->name)->bits.in_image && "type_in_worklist mistake?");
         jl_datatype_t *super = dt->super;
         // fast-path: check if super is in news, since then we must be new also
         // (it is also possible that super is indeterminate or NULL right now,
