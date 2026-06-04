@@ -350,3 +350,14 @@ end
         @test hash_generator === hash_pointer
     end
 end
+
+@testset "GlobalRef and PartialStruct hash consistent with ==" begin
+    @test hash(GlobalRef(Base, :sin)) == hash(GlobalRef(Base, :sin))
+    @test hash(GlobalRef(Base, :sin)) != hash(GlobalRef(Base, :cos))
+
+    ps(t, f) = Core.PartialStruct(t, Any[f...])
+    @test hash(ps(Tuple{Int,Float64}, (Int, Float64))) ==
+          hash(ps(Tuple{Int,Float64}, (Int, Float64)))
+    @test hash(ps(Tuple{Int,Float64}, (Int, Float64))) !=
+          hash(ps(Tuple{Int,Float64}, (Int, Int)))
+end

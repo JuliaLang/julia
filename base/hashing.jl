@@ -281,6 +281,17 @@ end
 
 hash(x::Symbol) = objectid(x)
 
+const hashgr_seed = 0xe19bede84d316c06 % UInt
+const hashps_seed = 0xee5c84c1439961a8 % UInt
+hash(x::GlobalRef, h::UInt) = hash(x.name, hash(x.mod, h ⊻ hashgr_seed))
+function hash(x::PartialStruct, h::UInt)
+    h ⊻= hashps_seed
+    h = hash(x.typ, h)
+    h = hash(x.undefs, h)
+    h = hash(x.fields, h)
+    return h
+end
+
 
 load_le(::Type{T}, ptr::Ptr{UInt8}, i) where {T <: Union{UInt32, UInt64}} =
     unsafe_load(convert(Ptr{T}, ptr + i - 1))
