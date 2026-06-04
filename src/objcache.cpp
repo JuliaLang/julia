@@ -175,6 +175,11 @@ void ObjCache::initDB()
     if (!CachePath || (Enable && !strcmp(Enable, "0")))
         goto done;
 
+    // Exiting processes with no live tasks can have mmap()ped files, which
+    // triggers an assertion in rr if another process does a writev() to the fd.
+    if (jl_running_under_rr(0))
+        goto done;
+
     if (checkMDB(mdb_env_create(&Env))) {
         Env = nullptr;
         goto done;

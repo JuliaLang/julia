@@ -137,7 +137,7 @@ void jl_init_thread_scheduler(jl_ptls_t ptls) JL_NOTSAFEPOINT
     // since we are being initialized from foreign code, we could not necessarily have expected or predicted that to happen
 }
 
-int jl_running_under_rr(int recheck)
+JL_DLLEXPORT int jl_running_under_rr(int recheck)
 {
 #ifdef _OS_LINUX_
 #define RR_CALL_BASE 1000
