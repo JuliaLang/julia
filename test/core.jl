@@ -391,6 +391,29 @@ end  |> only == Type{typejoin(Int, UInt, Float64)}
 @test typejoin(1, 2, 3) === Any
 @test typejoin(Int, Int, 3) === Any
 
+# issue #61915: typejoin must stay sound when an operand is a `Type{X}` kind. Under the
+# TypeEq refactor `typeof(Type{X})` is no longer a `DataType`; joining a kind with an
+# unrelated non-`Type` operand must give `Any`, not `Type`.
+@test typejoin(Symbol, Type{Int}) === Any
+@test typejoin(Type{Int}, Symbol) === Any
+@test typejoin(Type{Int}, Int) === Any
+@test typejoin(Type{Int}, String) === Any
+@test typejoin(Type{Int}, Type{Float64}) === Type
+@test typejoin(Type{Int}, Type) === Type
+@test_broken typejoin(Type{Int}, DataType) !== DataType
+@test typejoin(Symbol, Type{Int}) === typejoin(Type{Int}, Symbol)
+@test typejoin(DataType, Type{Int}) === typejoin(Type{Int}, DataType)
+
+# issue #61915: a method whose function type is `Type{Foo{...} where ...}` must derive its
+# name as `Foo`, not `:Any` (nth_arg_datatype has to unwrap the wrapped UnionAll).
+struct UA61915{T,N,A<:AbstractArray{T,N}}
+    a::A
+end
+UA61915{T}(a) where {T} = UA61915{T,ndims(a),typeof(a)}(a)
+@test all(m -> m.name === :UA61915, methods(UA61915))
+@test which(UA61915{Int}, (Vector{Int},)).name === :UA61915
+@test ccall(:jl_argument_datatype, Any, (Any,), Type{Array}) === Base.unwrap_unionall(Array)
+
 # promote_typejoin returns a Union only with Nothing/Missing combined with concrete types
 for T in (Nothing, Missing)
     @test Base.promote_typejoin(Int, Float64) === Real
