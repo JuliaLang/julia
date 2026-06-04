@@ -165,6 +165,11 @@ function rand!(r::AbstractRNG, A::Array{Complex{T}}, ::SamplerType{Complex{T}}) 
     rand!(r, reinterpret(T, A))
     return A
 end
+# Cannot reinterpret a 0-dim Complex{T} Array to T
+function rand!(r::AbstractRNG, A::Array{Complex{T},0}, sp::SamplerType{Complex{T}}) where {T<:Base.HWReal}
+    @inbounds A[] = rand(r, sp)
+    return A
+end
 
 ### random characters
 
