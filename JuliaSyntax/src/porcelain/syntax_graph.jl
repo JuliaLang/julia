@@ -1236,7 +1236,9 @@ function _insert_green(graph::SyntaxGraph, sf::Base.RefValue{SourceFile},
                        cursor::RedTreeCursor)
     id = new_id!(graph)
     setattr!(graph, id, :kind, kind(cursor))
-    setattr!(graph, id, :syntax_flags, flags(cursor))
+    let f = remove_flags(flags(cursor), NON_TERMINAL_FLAG)
+        f != 0 && setattr!(graph, id, :syntax_flags, f)
+    end
     setattr!(graph, id, :source, SourceRef(sf, first_byte(cursor), last_byte(cursor)))
     if !is_leaf(cursor)
         cs = NodeId[]
@@ -1291,6 +1293,14 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
     symleaf(s::String) = setattr!(newleaf(graph, st, K"Identifier"), :name_val, s)
     core_globalref(s::String) = setattr!(symleaf(s), :mod, Core)
     valleaf(@nospecialize(v)) = setattr!(newleaf(graph, st, K"Value"), :value, v)
+
+    if k === K"DotsIdentifier"
+        # `..`/`...` used as an ordinary identifier (eg the `..` operator, or
+        # `...` quoted as in `:(...)`). The dots are held as trivia children, so
+        # this is not a leaf; represent it as a plain identifier named by the
+        # dots themselves (the dot count is stored in the numeric flags).
+        return symleaf(repeat('.', numeric_flags(st)))
+    end
 
     if is_leaf(st)
         return if k === K"CmdMacroName" || k === K"StrMacroName"

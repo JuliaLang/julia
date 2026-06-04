@@ -1048,7 +1048,7 @@ public:
 };
 #else
 namespace JLEHFrames {
-    static orc::shared::CWrapperFunctionResult
+    static auto
     registerEHFrameSectionAllocAction(const char *ArgData, size_t ArgSize) {
         using namespace llvm::orc::shared;
         return WrapperFunction<SPSError(SPSExecutorAddrRange)>::handle(
@@ -1056,7 +1056,7 @@ namespace JLEHFrames {
             .release();
     }
 
-    static orc::shared::CWrapperFunctionResult
+    static auto
     deregisterEHFrameSectionAllocAction(const char *ArgData, size_t ArgSize) {
         using namespace llvm::orc::shared;
         return WrapperFunction<SPSError(SPSExecutorAddrRange)>::handle(
@@ -1685,7 +1685,17 @@ void optimizeDLSyms(Module &M) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER {
 void fixupTM(TargetMachine &TM) {
     auto TheTriple = TM.getTargetTriple();
     if (jl_options.opt_level < 2) {
-        if (!TheTriple.isARM() && !TheTriple.isPPC64() && !TheTriple.isAArch64())
+        // Try GlobalISel on AArch64 - it's the default in LLVM at -O0 and
+        // is apparently generally faster than SelectionDAG while producing good code.
+        // Use fallback mode so unsupported patterns fall back to SelectionDAG.
+        // Note: Requires RemoveJuliaAddrspacesPass to run before codegen
+        // because GlobalISel doesn't handle Julia's custom address spaces.
+        if (TheTriple.isAArch64()) {
+            TM.setGlobalISel(true);
+            TM.setGlobalISelAbort(GlobalISelAbortMode::Disable);
+            TM.setFastISel(false);
+        }
+        else if (!TheTriple.isARM() && !TheTriple.isPPC64())
             TM.setFastISel(true);
         else    // FastISel seems to be buggy Ref #13321
             TM.setFastISel(false);
@@ -1703,9 +1713,9 @@ JuliaOJIT::JuliaOJIT()
   : TM(createTargetMachine()),
     DL(jl_create_datalayout(*TM)),
     ES(cantFail(orc::SelfExecutorProcessControl::Create(nullptr, std::make_unique<::JuliaTaskDispatcher>()))),
+    SessionJD(ES.createBareJITDylib("JuliaSession")),
     GlobalJD(ES.createBareJITDylib("JuliaGlobals")),
     JD(ES.createBareJITDylib("JuliaOJIT")),
-    ExternalJD(ES.createBareJITDylib("JuliaExternal")),
     DLSymOpt(std::make_unique<DLSymOptimizer>(false)),
     MemMgr(createJITLinkMemoryManager()),
     ObjectLayer(ES, *MemMgr),
@@ -1733,46 +1743,51 @@ JuliaOJIT::JuliaOJIT()
     ObjectLayer.addPlugin(std::make_unique<EHFrameRegistrationPlugin>(
         ExecutorAddr::fromPtr(JLEHFrames::registerEHFrameSectionAllocAction),
         ExecutorAddr::fromPtr(JLEHFrames::deregisterEHFrameSectionAllocAction)));
-#endif
+# else
     ObjectLayer.addPlugin(cantFail(EHFrameRegistrationPlugin::Create(ES)));
+# endif
 #endif
 
     ObjectLayer.addPlugin(DebuginfoPlugin);
     ObjectLayer.addPlugin(std::make_unique<JLMemoryUsagePlugin>(&jit_bytes_size));
 
-    std::string ErrorStr;
-
+    SetVector<void*> libhandles;
     // Make sure that libjulia-internal is loaded and placed first in the
     // DynamicLibrary order so that calls to runtime intrinsics are resolved
     // to the correct library when multiple libjulia-*'s have been loaded
     // (e.g. when we `ccall` into a PackageCompiler.jl-created shared library)
-    sys::DynamicLibrary libjulia_internal_dylib = sys::DynamicLibrary::addPermanentLibrary(
-      jl_libjulia_internal_handle, &ErrorStr);
-    if(!ErrorStr.empty())
-        report_fatal_error(llvm::Twine("FATAL: unable to dlopen libjulia-internal\n") + ErrorStr);
-
+    libhandles.insert(jl_libjulia_internal_handle);
+    libhandles.insert(jl_libjulia_handle);
     // Make sure SectionMemoryManager::getSymbolAddressInProcess can resolve
     // symbols in the program as well. The nullptr argument to the function
-    // tells DynamicLibrary to load the program, not a library.
-    if (sys::DynamicLibrary::LoadLibraryPermanently(nullptr, &ErrorStr))
-        report_fatal_error(llvm::Twine("FATAL: unable to dlopen self\n") + ErrorStr);
-
-    GlobalJD.addGenerator(
-      std::make_unique<orc::DynamicLibrarySearchGenerator>(
-        libjulia_internal_dylib,
-        DL.getGlobalPrefix(),
-        orc::DynamicLibrarySearchGenerator::SymbolPredicate()));
-
-#if defined(_COMPILER_GCC_) && __GNUC__ < 14
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+    // tells DynamicLibrary to load the program); not a library.
+    libhandles.insert(jl_exe_handle);
+#ifdef _OS_WINDOWS_
+    // Find where compiler symbols (assumed by LLVM) are linked from
+    // by looking for an exported data symbol, or by typical name.
+    // libgcc_s_seh-1 doesn't export any data, so we have to hard-code a name.
+    // libwinpthreads-1 exports a single symbol: the pthread_key_dest table.
+    libhandles.insert(jl_dlopen("libgcc_s_seh-1.dll", JL_RTLD_NOLOAD));
+    libhandles.insert(jl_find_dynamic_library_by_addr((void*)&_pthread_key_dest, /* throw_err */ 1, 0));
+    // Add system C libraries explicitly too.
+    // Unlike posix, these aren't automatically handled by recursive search from libjulia-internal.
+    libhandles.insert(jl_ntdll_handle);
+    libhandles.insert(jl_kernel32_handle);
+    libhandles.insert(jl_crtdll_handle);
+    libhandles.insert(jl_winsock_handle);
 #endif
-    GlobalJD.addGenerator(
-      cantFail(orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(
-        DL.getGlobalPrefix())));
-#if defined(_COMPILER_GCC_) && __GNUC__ < 14
-#pragma GCC diagnostic pop
-#endif
+    for (void *h : libhandles) {
+        if (h == nullptr)
+            continue;
+        std::string ErrorStr;
+        sys::DynamicLibrary dylib = sys::DynamicLibrary::addPermanentLibrary(h, &ErrorStr);
+        if (!ErrorStr.empty())
+            report_fatal_error(llvm::Twine("FATAL: unable to dlopen libjulia dependency\n") + ErrorStr);
+        GlobalJD.addGenerator(
+            std::make_unique<orc::DynamicLibrarySearchGenerator>(
+            dylib,
+            DL.getGlobalPrefix()));
+    }
 
     // Resolve non-lock free atomic functions in the libatomic1 library.
     // This is the library that provides support for c11/c++11 atomic operations.
@@ -1783,21 +1798,26 @@ JuliaOJIT::JuliaOJIT()
     if (libatomic) {
         static void *atomic_hdl = jl_load_dynamic_library(libatomic, JL_RTLD_LOCAL, 0);
         if (atomic_hdl != NULL) {
+            std::string ErrorStr;
+            sys::DynamicLibrary dylib = sys::DynamicLibrary::addPermanentLibrary(atomic_hdl, &ErrorStr);
+            if (!ErrorStr.empty())
+                report_fatal_error(llvm::Twine("FATAL: unable to dlopen libjulia dependency\n") + ErrorStr);
             GlobalJD.addGenerator(
-              cantFail(orc::DynamicLibrarySearchGenerator::Load(
-                  libatomic,
+              std::make_unique<orc::DynamicLibrarySearchGenerator>(
+                  dylib,
                   DL.getGlobalPrefix(),
                   [&](const orc::SymbolStringPtr &S) {
                         const char *const atomic_prefix = "__atomic_";
                         return (*S).starts_with(atomic_prefix);
-                  })));
+                  }));
         }
     }
 
     JD.addToLinkOrder(GlobalJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly);
-    JD.addToLinkOrder(ExternalJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly);
-    ExternalJD.addToLinkOrder(GlobalJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly);
-    ExternalJD.addToLinkOrder(JD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly);
+#if defined(_OS_WINDOWS_)
+    // TODO: why does Windows CI hang without this?
+    JD.addToLinkOrder(SessionJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly);
+#endif
 
     orc::SymbolAliasMap jl_crt = {
         // Float16 conversion routines
@@ -1863,6 +1883,17 @@ JuliaOJIT::JuliaOJIT()
     cantFail(JD.define(orc::absoluteSymbols(asan_crt)));
 #endif
 
+#if defined(_COMPILER_GCC_) && __GNUC__ < 14
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
+    SessionJD.addGenerator(
+      cantFail(orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(
+        DL.getGlobalPrefix())));
+#if defined(_COMPILER_GCC_) && __GNUC__ < 14
+#pragma GCC diagnostic pop
+#endif
+
     if (jl_is_timing_trace) {
         PrintLLVMTimers.push_back([]() JL_NOTSAFEPOINT {
             if (timeTraceProfilerEnabled()) {
@@ -1925,6 +1956,16 @@ void JuliaOJIT::addOutput(jl_emitted_output_t O)
     check(JD.define(MU, JD.getDefaultResourceTracker()));
 }
 
+orc::JITDylib& JuliaOJIT::createJITDylib(StringRef NamePrefix)
+{
+    // Create a new JITDylib with unique name
+    std::string dylib_name = (NamePrefix + "_" + Twine(jl_atomic_fetch_add_relaxed(&jitcounter, 1))).str();
+    JITDylib &NewJD = ES.createBareJITDylib(dylib_name);
+    NewJD.addToLinkOrder(GlobalJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly);
+    NewJD.addToLinkOrder(SessionJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly);
+    return NewJD;
+}
+
 Error JuliaOJIT::addExternalModule(orc::JITDylib &JD, orc::ThreadSafeModule TSM, bool ShouldOptimize)
 {
     if (auto Err = TSM.withModuleDo([&](Module &M) JL_NOTSAFEPOINT -> Error {
@@ -1942,6 +1983,7 @@ Error JuliaOJIT::addExternalModule(orc::JITDylib &JD, orc::ThreadSafeModule TSM,
             return Error::success();
         }))
         return Err;
+
     //if (ShouldOptimize)
     //    return OptimizeLayer.add(JD, std::move(TSM));
     return CompileLayer.add(JD.getDefaultResourceTracker(), std::move(TSM));
@@ -1970,30 +2012,17 @@ SmallVector<uint64_t> JuliaOJIT::findSymbols(ArrayRef<StringRef> Names)
     return Addrs;
 }
 
-Expected<ExecutorSymbolDef> JuliaOJIT::findSymbol(StringRef Name, bool ExportedSymbolsOnly)
+Expected<ExecutorSymbolDef> JuliaOJIT::findJDSymbol(JITDylib &JD, StringRef Name, bool ExternalJDOnly)
 {
-    orc::JITDylib* SearchOrders[3] = {&JD, &GlobalJD, &ExternalJD};
-    ArrayRef<orc::JITDylib*> SearchOrder = ArrayRef<orc::JITDylib*>(&SearchOrders[0], ExportedSymbolsOnly ? 3 : 1);
-    auto Sym = ::safelookup(ES, SearchOrder, Name);
-    return Sym;
-}
-
-Expected<ExecutorSymbolDef> JuliaOJIT::findUnmangledSymbol(StringRef Name)
-{
-    return findSymbol(getMangledName(Name), true);
-}
-
-Expected<ExecutorSymbolDef> JuliaOJIT::findExternalJDSymbol(StringRef Name, bool ExternalJDOnly)
-{
-    orc::JITDylib* SearchOrders[3] = {&ExternalJD, &GlobalJD, &JD};
-    ArrayRef<orc::JITDylib*> SearchOrder = ArrayRef<orc::JITDylib*>(&SearchOrders[0], ExternalJDOnly ? 1 : 3);
+    orc::JITDylib *SearchOrders[2] = {&JD, &GlobalJD};
+    ArrayRef<orc::JITDylib*> SearchOrder = ArrayRef<orc::JITDylib*>(&SearchOrders[0], ExternalJDOnly ? 1 : 2);
     auto Sym = ::safelookup(ES, SearchOrder, getMangledName(Name));
     return Sym;
 }
 
 uint64_t JuliaOJIT::getGlobalValueAddress(StringRef Name)
 {
-    auto addr = findSymbol(getMangledName(Name), false);
+    auto addr = findJDSymbol(JD, Name, true);
     if (!addr) {
         consumeError(addr.takeError());
         return 0;
@@ -2003,7 +2032,7 @@ uint64_t JuliaOJIT::getGlobalValueAddress(StringRef Name)
 
 uint64_t JuliaOJIT::getFunctionAddress(StringRef Name)
 {
-    auto addr = findSymbol(getMangledName(Name), false);
+    auto addr = findJDSymbol(JD, Name, true);
     if (!addr) {
         consumeError(addr.takeError());
         return 0;

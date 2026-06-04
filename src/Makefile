@@ -29,6 +29,8 @@ FLAGS_GCC += -Wno-unused-result
 # GCC is throwing warnings like `warning: 'int __builtin_memcmp_eq(const void*, const void*, long unsigned int)' specified bound 18446744073709551615 exceeds maximum object size 9223372036854775807` in llvm's StringRef.h == seemingly because it doesn't realise the size can't be 0.
 FLAGS_GCC += -Wno-stringop-overflow
 FLAGS_GCC += -Wno-stringop-overread
+# LLVM 21 causes maybe uninitialized warnings in include/llvm/ADT/DenseMap.h
+FLAGS_GCC += -Wno-maybe-uninitialized
 
 # Required to be allowed to use nullability extension and not be required to annotate all of everything
 JCFLAGS_CLANG += -Wno-atomic-alignment -Wno-nullability-extension -Wno-nullability-completeness
@@ -600,6 +602,16 @@ clean-support:
 .PHONY: cleanall
 cleanall: clean clean-flisp clean-support clean-analyzegc
 
+GC_CHECKER_SOURCES := \
+	$(SRCDIR)/clangsa/GCChecker.cpp \
+	$(SRCDIR)/clangsa/GCCheckerState.cpp \
+	$(SRCDIR)/clangsa/GCCheckerReporting.cpp \
+	$(SRCDIR)/clangsa/GCCheckerPropagation.cpp
+
+$(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT): $(GC_CHECKER_SOURCES) $(SRCDIR)/clangsa/GCChecker.h $(LLVM_CONFIG_ABSOLUTE)
+	@$(call PRINT_CC, $(CXX) -g $(fPIC) -shared -o $@ -DCLANG_PLUGIN -I$(build_includedir) -L$(build_libdir) \
+		$(LLVM_CXXFLAGS) $(CLANG_LDFLAGS) $(CPPFLAGS) $(CXXFLAGS) $(LDFLAGS) $(CXXLDFLAGS) $(GC_CHECKER_SOURCES))
+
 $(build_shlibdir)/lib%Plugin.$(SHLIB_EXT): $(SRCDIR)/clangsa/%.cpp $(LLVM_CONFIG_ABSOLUTE)
 	@$(call PRINT_CC, $(CXX) -g $(fPIC) -shared -o $@ -DCLANG_PLUGIN -I$(build_includedir) -L$(build_libdir) \
 		$(LLVM_CXXFLAGS) $(CLANG_LDFLAGS) $(CPPFLAGS) $(CXXFLAGS) $(LDFLAGS) $(CXXLDFLAGS) $<)
@@ -637,6 +649,9 @@ SA_EXCEPTIONS-jloptions.c                   := -Xanalyzer -analyzer-config -Xana
  # clang doesn't understand that e->vars has the same value in save_env (NULL) and restore_env (assumed non-NULL)
 SA_EXCEPTIONS-subtype.c                     := -Xanalyzer -analyzer-config -Xanalyzer silence-checkers="core.uninitialized.Assign;core.UndefinedBinaryOperatorResult"
 SA_EXCEPTIONS-codegen.c                     := -Xanalyzer -analyzer-config -Xanalyzer silence-checkers="core"
+ # core.FixedAddressDereference is new in clang 21 and false-positives on LLVM ilist headers and gc_read_stack
+SA_EXCEPTIONS-llvm-alloc-opt.cpp            := -Xanalyzer -analyzer-config -Xanalyzer silence-checkers="core.FixedAddressDereference"
+SA_EXCEPTIONS-gc-stock.c                    := -Xanalyzer -analyzer-config -Xanalyzer silence-checkers="core.FixedAddressDereference"
  # these need to be annotated (and possibly fixed)
 SKIP_GC_CHECK := codegen.cpp rtutils.c
 

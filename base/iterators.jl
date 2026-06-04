@@ -33,7 +33,7 @@ import Base:
     popfirst!, isdone, peek, intersect
 
 export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, flatmap, partition, nth, findeach
-public accumulate, filter, map, peel, reverse, Stateful
+public accumulate, filter, map, peel, reverse, Reverse, Stateful
 
 """
     Iterators.map(f, iterators...)
@@ -71,6 +71,8 @@ end
 and_iteratorsize(isz::T, ::T) where {T} = isz
 and_iteratorsize(::HasLength, ::HasShape) = HasLength()
 and_iteratorsize(::HasShape, ::HasLength) = HasLength()
+and_iteratorsize(::HasShape{N}, ::HasShape{N}) where {N} = HasShape{N}()
+and_iteratorsize(::HasShape, ::HasShape) = HasLength()
 and_iteratorsize(a, b) = SizeUnknown()
 
 and_iteratoreltype(iel::T, ::T) where {T} = iel
@@ -110,6 +112,16 @@ julia> foreach(println, Iterators.reverse(1:5))
 """
 reverse(itr) = Reverse(itr)
 
+"""
+    Iterators.Reverse{T}
+
+A type representing a reverse-order iterator for an iterator of type `T`, which
+is stored in the `itr` field.  Typically returned by [`Iterators.reverse(itr::T)`](@ref),
+which constructs an `Iterators.Reverse{T}` wrapper around `itr` by default.
+
+To support lazy reverse-order iteration, a type `T` should either implement an [`iterate`](@ref)
+method for `Iterators.Reverse{T}` or overload `Iterators.reverse` to return a different type.
+"""
 struct Reverse{T}
     itr::T
 end
@@ -310,10 +322,10 @@ end
 haskey(v::Pairs, key) = key in keys(v)
 keys(v::Pairs) = getfield(v, :itr) === nothing ? keys(getfield(v, :data)) : getfield(v, :itr)
 values(v::Pairs) = getfield(v, :data) # TODO: this should be a view of data subset by itr
-getindex(v::Pairs, key) = getfield(v, :data)[key]
-setindex!(v::Pairs, value, key) = (getfield(v, :data)[key] = value; v)
-get(v::Pairs, key, default) = get(getfield(v, :data), key, default)
-get(f::Base.Callable, v::Pairs, key) = get(f, getfield(v, :data), key)
+getindex(v::Pairs, key) = values(v)[key]
+setindex!(v::Pairs, value, key) = (values(v)[key] = value; v)
+get(v::Pairs, key, default) = get(values(v), key, default)
+get(f::Base.Callable, v::Pairs, key) = get(f, values(v), key)
 
 # zip
 
@@ -1562,7 +1574,7 @@ convert(::Type{Stateful}, itr) = Stateful(itr)
         throw(Base.EOFError())
     else
         val, state = vs
-        Core.setfield!(s, :nextvalstate, iterate(s.itr, state))
+        setfield!(s, :nextvalstate, iterate(s.itr, state))
         return val
     end
 end

@@ -138,7 +138,7 @@ function is_valid_ir_rvalue(ctx, lhs, rhs)
            is_valid_ir_argument(ctx, rhs) ||
            (kind(lhs) == K"BindingId" &&
             # FIXME: add: invoke ?
-            kind(rhs) in KSet"new splatnew cfunction isdefined call foreigncall gc_preserve_begin foreigncall new_opaque_closure")
+            kind(rhs) in KSet"new splatnew cfunction isdefined call foreigncall gc_preserve_begin new_opaque_closure")
 end
 
 function check_no_local_bindings(ctx, ex, msg)
@@ -569,7 +569,6 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             next_action_label = !in_tail_pos || tag != 1 || on_exit != :return ?
                 make_label(ctx, srcref) : nothing
             if !isnothing(next_action_label)
-                next_action_label = make_label(ctx, srcref)
                 tmp = ssavar(ctx, srcref, "do_finally_action")
                 emit(ctx, @ast ctx srcref [K"=" tmp
                     [K"call"
@@ -884,17 +883,38 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         emit(ctx, ex)
         nothing
     elseif k == K"meta"
-        @jl_assert numchildren(ex) >= 1 ex
-        if ex[1].name_val in ("inline", "noinline", "propagate_inbounds",
-                              "nospecializeinfer", "aggressive_constprop", "no_constprop")
-            for c in children(ex)
-                ctx.meta[Symbol(c.name_val)] = true
+        if numchildren(ex) >= 1
+            # Certain blessed forms are allowed to share a meta expression;
+            # others (nkw, optlevel) treat ex[1] as head and ex[2:end] as args
+            if kind(ex[1]) === K"purity" ||
+                kind(ex[1]) === K"Symbol" && ex[1].name_val::String in (
+                    "inline", "noinline", "propagate_inbounds",
+                    "nospecializeinfer", "aggressive_constprop", "no_constprop")
+                for c in children(ex)
+                    if kind(c) === K"purity"
+                        old = get(ctx.meta, :purity, UInt16(0))
+                        ctx.meta[:purity] = (old | purity_expr_to_flags(c))::UInt16
+                    elseif kind(c) === K"Symbol"
+                        ctx.meta[Symbol(c.name_val::String)] = true
+                    else
+                        @jl_assert false c
+                    end
+                end
+            else
+                emit(ctx, ex)
             end
-        elseif ex[1].name_val === "purity"
-            ctx.meta[Symbol(ex[1].name_val)] = ex[2].value::Base.EffectsOverride
-        else
-            emit(ctx, ex)
         end
+        if needs_value
+            val = @ast ctx ex (::K"nothing")
+            if in_tail_pos
+                emit_return(ctx, val)
+            else
+                val
+            end
+        end
+    elseif k == K"inbounds" || k == K"inbounds_pop" ||
+        k == K"inline" || k == K"noinline" || k == K"purity"
+        emit(ctx, ex) # converted to nothing later
         if needs_value
             val = @ast ctx ex (::K"nothing")
             if in_tail_pos
@@ -923,8 +943,8 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         if needs_value
             compile(ctx, nothing_(ctx, ex), needs_value, in_tail_pos)
         end
-    elseif k == K"isdefined" || k == K"captured_local" || k == K"throw_undef_if_not" ||
-            k == K"boundscheck"
+    elseif k == K"isdefined" || k == K"captured_local" ||
+        k == K"throw_undef_if_not" || k == K"boundscheck"
         if in_tail_pos
             emit_return(ctx, ex)
         elseif needs_value
@@ -940,7 +960,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         end
     elseif k == K"latestworld"
         if needs_value
-            throw(LoweringError(ex, "misplaced latestsworld"))
+            throw(LoweringError(ex, "misplaced latestworld"))
         end
         emit_latestworld(ctx, ex)
     elseif k == K"latestworld_if_toplevel"

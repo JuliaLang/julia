@@ -21,6 +21,19 @@ typejoin() = Bottom
 typejoin(@nospecialize(t)) = (@_nospecializeinfer_meta; t)
 typejoin(@nospecialize(t), @nospecialize(s), @nospecialize(u)) = (@_foldable_meta; @_nospecializeinfer_meta; typejoin(typejoin(t, s), u))
 typejoin(@nospecialize(t), @nospecialize(s), @nospecialize(u), ts...) = (@_foldable_meta; @_nospecializeinfer_meta; afoldl(typejoin, typejoin(t, s, u), ts...))
+
+function _has_ancestor_typename(@nospecialize(a), name::Core.TypeName)
+    @_foldable_meta
+    @_nothrow_meta
+    @_nospecializeinfer_meta
+    a = a::DataType
+    while true
+        a.name === name && return true
+        a === Any && return false
+        a = supertype(a)::DataType
+    end
+end
+
 function typejoin(@nospecialize(a), @nospecialize(b))
     @_foldable_meta
     @_nothrow_meta
@@ -45,12 +58,23 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         return typejoin(typejoin(a.a, a.b), b)
     elseif isa(b, Union)
         return typejoin(a, typejoin(b.a, b.b))
+    elseif isa(a, TypeEq) || isa(b, TypeEq)
+        # At least one operand is a `Type{X}` kind. We have already ruled out
+        # `a <: b`, `b <: a`, and any `UnionAll`/`Union`/`TypeVar`. The least supertype
+        # of a `Type{X}` kind is the abstract `Type`, so widen each kind to `Type` and
+        # join the two by subtyping. We compare directly instead of recursing through
+        # `typejoin`, because `Type === (Type{T} where T)` would re-enter this branch and
+        # not terminate.
+        a = isa(a, TypeEq) ? Type : a
+        b = isa(b, TypeEq) ? Type : b
+        return a <: b ? b :
+               b <: a ? a : Any
     end
     # a and b are DataTypes
     # We have to hide Constant info from inference, see #44390
     a, b = inferencebarrier(a)::DataType, inferencebarrier(b)::DataType
-    if a <: Tuple
-        if !(b <: Tuple)
+    if a.name === Tuple.name
+        if !(b.name === Tuple.name)
             return Any
         end
         ap, bp = a.parameters, b.parameters
@@ -94,22 +118,13 @@ function typejoin(@nospecialize(a), @nospecialize(b))
             c[i] = i == length(c) && (isvarargtype(ai) || isvarargtype(bi)) ? Vararg{ci} : ci
         end
         return Tuple{c...}
-    elseif b <: Tuple
+    elseif b.name === Tuple.name
         return Any
     end
     while !(b === Any)
-        if a <: b.name.wrapper
+        if _has_ancestor_typename(a, b.name)
             while !(a.name === b.name)
                 a = supertype(a)::DataType
-            end
-            if a.name === Type.body.name
-                ap = a.parameters[1]
-                bp = b.parameters[1]
-                if ((isa(ap,TypeVar) && ap.lb === Bottom && ap.ub === Any) ||
-                    (isa(bp,TypeVar) && bp.lb === Bottom && bp.ub === Any))
-                    # handle special Type{T} supertype
-                    return Type
-                end
             end
             aprimary = a.name.wrapper
             # join on parameters
@@ -178,7 +193,7 @@ Float64
 """
 function promote_typejoin(@nospecialize(a), @nospecialize(b))
     c = typejoin(_promote_typesubtract(a), _promote_typesubtract(b))
-    return Union{a, b, c}::Type
+    return Union{a, b, c}
 end
 _promote_typesubtract(@nospecialize(a)) =
     a === Any ? a :
@@ -196,6 +211,8 @@ function promote_typejoin_union(::Type{T}) where T
         return promote_typejoin(promote_typejoin_union(T.a), promote_typejoin_union(T.b))
     elseif T isa DataType
         T <: Tuple && return typejoin_union_tuple(T)
+        return T
+    elseif isType(T)
         return T
     else
         error("unreachable") # not a type??

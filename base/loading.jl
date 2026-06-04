@@ -2662,24 +2662,43 @@ function require(uuidkey::PkgId)
     return invoke_in_world(world, __require, uuidkey)
 end
 __require(uuidkey::PkgId) = @lock require_lock _require_prelocked(uuidkey)
+# Enabled by `include_package_for_output` so the precompile worker can attribute
+# wall-clock time spent loading dependencies from disk. Only outermost (depth==0)
+# calls accumulate to avoid double-counting transitive `require`s.
+const _precompile_track_dep_load = Ref{Bool}(false)
+const _precompile_dep_load_ns = Ref{UInt64}(0)
+const _precompile_dep_load_depth = Ref{Int}(0)
 function _require_prelocked(uuidkey::PkgId, env=nothing)
     assert_havelock(require_lock)
-    m = start_loading(uuidkey, UInt128(0), true)
-    if m === nothing
-        last = toplevel_load[]
-        try
-            toplevel_load[] = false
-            m = __require_prelocked(uuidkey, env)
-            m isa Module || check_package_module_loaded_error(uuidkey)
-        finally
-            toplevel_load[] = last
-            end_loading(uuidkey, m)
-        end
-        insert_extension_triggers(uuidkey)
-        # After successfully loading, notify downstream consumers
-        run_package_callbacks(uuidkey)
+    track = _precompile_track_dep_load[]
+    t0 = UInt64(0)
+    if track
+        _precompile_dep_load_depth[] == 0 && (t0 = time_ns())
+        _precompile_dep_load_depth[] += 1
     end
-    return m
+    try
+        m = start_loading(uuidkey, UInt128(0), true)
+        if m === nothing
+            last = toplevel_load[]
+            try
+                toplevel_load[] = false
+                m = __require_prelocked(uuidkey, env)
+                m isa Module || check_package_module_loaded_error(uuidkey)
+            finally
+                toplevel_load[] = last
+                end_loading(uuidkey, m)
+            end
+            insert_extension_triggers(uuidkey)
+            # After successfully loading, notify downstream consumers
+            run_package_callbacks(uuidkey)
+        end
+        return m
+    finally
+        if track
+            _precompile_dep_load_depth[] -= 1
+            _precompile_dep_load_depth[] == 0 && (_precompile_dep_load_ns[] += time_ns() - t0)
+        end
+    end
 end
 
 mutable struct PkgOrigin
@@ -3267,13 +3286,30 @@ function include_package_for_output(pkg::PkgId, input::String, syntax_version::V
     __toplevel__.var"#_internal_julia_parse" = VersionedParse(syntax_version)
     # This one is the compatibility marker for cache loading
     __toplevel__._internal_syntax_version = cache_syntax_version(syntax_version)
+    cumulative_compile_timing(true)
+    _precompile_dep_load_ns[] = 0
+    _precompile_dep_load_depth[] = 0
+    _precompile_track_dep_load[] = true
+    t_include_start = time_ns()
+    t_comp_before, _ = cumulative_compile_time_ns()
     try
-        Base.include(Base.__toplevel__, input)
+        Compiler.@zone "PRECOMPILE_INCLUDE" Base.include(Base.__toplevel__, input)
     catch ex
         precompilableerror(ex) || rethrow()
         @debug "Aborting `create_expr_cache'" exception=(ErrorException("Declaration of __precompile__(false) not allowed"), catch_backtrace())
         exit(125) # we define status = 125 means PrecompileableError
     finally
+        t_comp_after, _ = cumulative_compile_time_ns()
+        t_include_end = time_ns()
+        cumulative_compile_timing(false)
+        _precompile_track_dep_load[] = false
+        if Base.get_bool_env("JULIA_PRECOMP_REPORT_TIMING", false)
+            println(stderr, PRECOMPILE_VERBOSE_TIMING_MARKER,
+                    " include_ns=", t_include_end - t_include_start,
+                    " deps_ns=", _precompile_dep_load_ns[],
+                    " compilation_ns=", t_comp_after - t_comp_before,
+                    " methods=", length(newly_inferred))
+        end
         ccall(:jl_set_newly_inferred, Cvoid, (Any,), nothing)
     end
     # check that the package defined the expected module so we can give a nice error message if not
@@ -3302,9 +3338,13 @@ _pkg_str(_pkg::Pair{PkgId}) = _pkg_str(_pkg.first) * " => " * repr(_pkg.second)
 _pkg_str(_pkg::Nothing) = "nothing"
 
 const PRECOMPILE_TRACE_COMPILE = Ref{String}()
+# Marker prefix used by the precompile subprocess to report per-package timing
+# buckets back to the parent process; the parent surfaces them in verbose mode.
+const PRECOMPILE_VERBOSE_TIMING_MARKER = "__JL_PRECOMP_VERBOSE_TIMING__"
 function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, output_o::Union{Nothing, String},
                            concrete_deps::typeof(_concrete_dependencies), flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(),
-                           internal_stderr::IO = stderr, internal_stdout::IO = stdout, loadable_exts::Union{Vector{PkgId},Nothing}=nothing)
+                           internal_stderr::IO = stderr, internal_stdout::IO = stdout, loadable_exts::Union{Vector{PkgId},Nothing}=nothing;
+                           report_timing::Bool=false)
     @nospecialize internal_stderr internal_stdout
     rm(output, force=true)   # Remove file if it exists
     output_o === nothing || rm(output_o, force=true)
@@ -3351,16 +3391,18 @@ function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, outpu
         push!(opts, "--trace-compile-timing")
     end
 
-    io = open(pipeline(addenv(`$(julia_cmd(;cpu_target)::Cmd)
-                               $(flags)
-                               $(opts)
-                               --output-incremental=yes
-                               --startup-file=no --history-file=no --warn-overwrite=yes
-                               $(have_color === nothing ? "--color=auto" : have_color ? "--color=yes" : "--color=no")
-                               -`,
-                              "OPENBLAS_NUM_THREADS" => 1,
-                              "JULIA_NUM_THREADS" => 1),
-                       stderr = internal_stderr, stdout = internal_stdout),
+    cmd = `$(julia_cmd(;cpu_target)::Cmd)
+           $(flags)
+           $(opts)
+           --output-incremental=yes
+           --startup-file=no --history-file=no --warn-overwrite=yes
+           $(have_color === nothing ? "--color=auto" : have_color ? "--color=yes" : "--color=no")
+           -`
+    cmd = addenv(cmd, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1)
+    # Only request per-package timing reports when explicitly asked for (e.g. by
+    # precompilepkgs), so that the marker lines don't leak into normal load logs.
+    report_timing && (cmd = addenv(cmd, "JULIA_PRECOMP_REPORT_TIMING" => 1))
+    io = open(pipeline(cmd, stderr = internal_stderr, stdout = internal_stdout),
               "w", stdout)
     # write data over stdin to avoid the (unlikely) case of exceeding max command line size
     write(io.in, """
@@ -3423,11 +3465,11 @@ This can be used to reduce package load times. Cache files are stored in
 `DEPOT_PATH[1]/compiled`. See [Module initialization and precompilation](@ref)
 for important notes.
 """
-function compilecache(pkg::PkgId, internal_stderr::IO = stderr, internal_stdout::IO = stdout; flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(), loadable_exts::Union{Vector{PkgId},Nothing}=nothing, signal_channel::Union{Channel{Int32},Nothing}=nothing)
+function compilecache(pkg::PkgId, internal_stderr::IO = stderr, internal_stdout::IO = stdout; flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(), loadable_exts::Union{Vector{PkgId},Nothing}=nothing, signal_channel::Union{Channel{Int32},Nothing}=nothing, report_timing::Bool=false)
     @nospecialize internal_stderr internal_stdout
     spec = locate_package_load_spec(pkg)
     spec === nothing && throw(ArgumentError("$(repr("text/plain", pkg)) not found during precompilation"))
-    return compilecache(pkg, spec, internal_stderr, internal_stdout; flags, cacheflags, loadable_exts, signal_channel)
+    return compilecache(pkg, spec, internal_stderr, internal_stdout; flags, cacheflags, loadable_exts, signal_channel, report_timing)
 end
 
 const MAX_NUM_PRECOMPILE_FILES = Ref(10)
@@ -3435,7 +3477,7 @@ const MAX_NUM_PRECOMPILE_FILES = Ref(10)
 function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stderr, internal_stdout::IO = stdout,
                       keep_loaded_modules::Bool = true; flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(),
                       loadable_exts::Union{Vector{PkgId},Nothing}=nothing, signal_channel::Union{Channel{Int32},Nothing}=nothing,
-                      pid_channel::Union{Channel{Int32},Nothing}=nothing)
+                      pid_channel::Union{Channel{Int32},Nothing}=nothing, report_timing::Bool=false)
 
     @nospecialize internal_stderr internal_stdout
     # decide where to put the resulting cache file
@@ -3473,7 +3515,7 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
             close(tmpio_o)
             close(tmpio_so)
         end
-        p = create_expr_cache(pkg, spec, tmppath, tmppath_o, concrete_deps, flags, cacheflags, internal_stderr, internal_stdout, loadable_exts)
+        p = create_expr_cache(pkg, spec, tmppath, tmppath_o, concrete_deps, flags, cacheflags, internal_stderr, internal_stdout, loadable_exts; report_timing)
 
         # Report the PID of the compilation subprocess
         if pid_channel !== nothing
@@ -3509,7 +3551,7 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
         if result
             if cache_objects
                 # Run linker over tmppath_o
-                Linking.link_image(tmppath_o, tmppath_so)
+                Compiler.@zone "PRECOMPILE_LINK" Linking.link_image(tmppath_o, tmppath_so)
             end
 
             # Read preferences blob back from .ji file (we can't precompute because we don't
@@ -4022,34 +4064,34 @@ function collect_preferences(project_toml::String, uuid::Union{UUID,Nothing})
 end
 
 """
-    recursive_prefs_merge(base::Dict, overrides::Dict...)
+    recursive_prefs_merge(base::Dict{String, Any}, overrides::Vector{Dict{String, Any}})
 
 Helper function to merge preference dicts recursively, honoring overrides in nested
 dictionaries properly.
 """
-function recursive_prefs_merge(base::Dict{String, Any}, overrides::Dict{String, Any}...)
-    new_base = Base._typeddict(base, overrides...)
+function recursive_prefs_merge(base::Dict{String, Any}, overrides::Vector{Dict{String, Any}})
+    merged = copy(base)
 
     for override in overrides
         # Clear entries are keys that should be deleted from any previous setting.
         override_clear = get(override, "__clear__", nothing)
         if override_clear isa Vector{String}
             for k in override_clear
-                delete!(new_base, k)
+                delete!(merged, k)
             end
         end
 
         for (k, override_k) in override
             # Note that if `base` has a mapping that is _not_ a `Dict`, and `override`
-            new_base_k = get(new_base, k, nothing)
-            if new_base_k isa Dict{String, Any} && override_k isa Dict{String, Any}
-                new_base[k] = recursive_prefs_merge(new_base_k, override_k)
+            merged_k = get(merged, k, nothing)
+            if merged_k isa Dict{String, Any} && override_k isa Dict{String, Any}
+                merged[k] = recursive_prefs_merge(merged_k, Dict{String,Any}[override_k])
             else
-                new_base[k] = override_k
+                merged[k] = override_k
             end
         end
     end
-    return new_base
+    return merged
 end
 
 function get_projects_workspace_to_root(project_file)
@@ -4080,7 +4122,7 @@ function get_preferences(uuid::Union{UUID,Nothing} = nothing)
 
         # Collect all dictionaries from the current point in the load path, then merge them in
         dicts = collect_preferences(project_toml, uuid)
-        merged_prefs = recursive_prefs_merge(merged_prefs, dicts...)
+        merged_prefs = recursive_prefs_merge(merged_prefs, dicts)
     end
     return merged_prefs
 end
@@ -4272,16 +4314,16 @@ function stale_prefs(prefs_blob::String)
     for (uuid, observed) in prefs_data
         uuid == "unset" && continue
         curr = get_preferences(UUID(uuid))
-        for (key, val) in observed
+        for (key, val) in observed::Dict{String,Any}
             # any set preferences should have the same value
             !haskey(curr, key) && return true
             !toml_egal(curr[key], val) && return true
         end
     end
     if haskey(prefs_data, "unset")
-        for (uuid, observed) in prefs_data["unset"]
+        for (uuid, observed) in prefs_data["unset"]::Dict{String,Any}
             curr = get_preferences(UUID(uuid))
-            for key in observed
+            for key in observed::Vector{String}
                 # any unset preferences should still be unset
                 haskey(curr, key) && return true
             end
@@ -4596,7 +4638,7 @@ function precompile(@nospecialize(f), @nospecialize(argtypes::Tuple), m::Method)
 end
 
 function precompile(@nospecialize(argt::Type), m::Method)
-    atype, sparams = ccall(:jl_type_intersection_with_env, Any, (Any, Any), argt, m.sig)::SimpleVector
+    atype, sparams = typeintersect_env(argt, m.sig)
     mi = Base.Compiler.specialize_method(m, atype, sparams)
     return precompile(mi)
 end

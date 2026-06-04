@@ -1595,6 +1595,38 @@ See the manual section on [Composite Types](@ref) for more information.
 kw"mutable struct"
 
 """
+    typegroup
+
+`typegroup` introduces a block in which mutually recursive [`struct`](@ref) and
+[`mutable struct`](@ref) definitions can refer to each other in their field types.
+All types declared inside the block are atomically defined together at the end of
+the block.
+
+```julia
+typegroup
+    struct Node
+        edges::Vector{Edge}
+    end
+    struct Edge
+        from::Node
+        to::Node
+    end
+end
+```
+
+Only `struct` or `mutable struct` definitions are allowed inside a `typegroup` block;
+other declarations, including method definitions, are disallowed. Inner constructor
+definitions are allowed inside the `struct` definitions and will semantically run
+after all types have been atomically instantiated.
+
+!!! compat "Julia 1.14"
+    The `typegroup` keyword requires at least Julia 1.14.
+
+See the manual section on [Mutually Recursive Types](@ref) for more details.
+"""
+kw"typegroup"
+
+"""
     new, or new{A,B,...}
 
 Special function available to inner constructors which creates a new object
@@ -3969,6 +4001,8 @@ function does nothing and returns `nothing`.
 This is intended for use in benchmarks that want to guarantee that `args` are
 actually computed. (Otherwise DCE may see that the result of the benchmark is
 unused and delete the entire benchmark code).
+
+For a stronger compiler barrier, see [`Base.blackbox`](@ref).
 
 !!! note
     `donotdelete` does not affect constant folding. For example, in

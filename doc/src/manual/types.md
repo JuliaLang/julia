@@ -544,10 +544,13 @@ Vector{Edge} (alias for Array{Edge, 1})
 ```
 
 !!! note
-    Only (`mutable`) `struct` definitions are allowed inside a `typegroup` block. All
-    other declarations, including method definitions are disallowed (Inner constructor
+    Only `struct` or `mutable struct` definitions are allowed inside a `typegroup` block;
+    All other declarations, including method definitions are disallowed (Inner constructor
     definitions are allowed inside the `struct` definition and will semantically run
     after all types have been atomically instantiated).
+
+!!! compat "Julia 1.14"
+    The `typegroup` keyword requires at least Julia 1.14.
 
 ## [Declared Types](@id man-declared-types)
 
@@ -1140,7 +1143,7 @@ julia> const T1 = Array{Array{T, 1} where T, 1}
 Vector{Vector} (alias for Array{Array{T, 1} where T, 1})
 
 julia> const T2 = Array{Array{T, 1}, 1} where T
-Array{Vector{T}, 1} where T
+Vector{Vector{T}} where T (alias for Array{Array{T, 1}, 1} where T)
 ```
 
 Type `T1` defines a 1-dimensional array of 1-dimensional arrays; each

@@ -514,6 +514,7 @@ jl_timing_block_t *jl_timing_block_task_exit(jl_task_t *ct, jl_ptls_t ptls)
     return blk;
 }
 
+#if defined(USE_APPLE_OSLOG) || defined(USE_TRACY)
 static void _jl_timing_show_buf(jl_timing_block_t *cur_block, ios_t *buf)
 {
     if (buf->size == buf->maxsize) {
@@ -526,6 +527,7 @@ static void _jl_timing_show_buf(jl_timing_block_t *cur_block, ios_t *buf)
     }
     jl_timing_puts(cur_block, buf->buf);
 }
+#endif
 
 JL_DLLEXPORT void jl_timing_show(jl_value_t *v, jl_timing_block_t *cur_block)
 {

@@ -24,7 +24,11 @@
 #include <llvm/IR/Verifier.h>
 #include <llvm/Transforms/IPO/InferFunctionAttrs.h>
 #include <llvm/Passes/PassBuilder.h>
-#include <llvm/Passes/PassPlugin.h>
+#if JL_LLVM_VERSION >= 220000
+#  include <llvm/Plugins/PassPlugin.h>
+#else
+#  include <llvm/Passes/PassPlugin.h>
+#endif
 
 // NewPM needs to manually include all the pass headers
 #include <llvm/Transforms/AggressiveInstCombine/AggressiveInstCombine.h>
@@ -535,14 +539,15 @@ static void buildVectorPipeline(FunctionPassManager &FPM, PassBuilder *PB, Optim
         // Rerotate loops that might have been unrotated in the simplification
         LoopPassManager LPM;
         LPM.addPass(LoopRotatePass());
+        LPM.addPass(LoopIdiomRecognizePass());
         LPM.addPass(LoopDeletionPass());
-        FPM.addPass(createFunctionToLoopPassAdaptor(std::move(LPM), /*UseMemorySSA=*/false, /*UseBlockFrequencyInfo=*/false));
+        FPM.addPass(createFunctionToLoopPassAdaptor(std::move(LPM), /*UseMemorySSA=*/false));
         FPM.addPass(LoopDistributePass());
         FPM.addPass(InjectTLIMappings());
         FPM.addPass(LoopVectorizePass());
         FPM.addPass(LoopLoadEliminationPass());
         FPM.addPass(SimplifyCFGPass(aggressiveSimplifyCFGOptions()));
-        FPM.addPass(createFunctionToLoopPassAdaptor(LICMPass(LICMOptions()), /*UseMemorySSA=*/true, /*UseBlockFrequencyInfo=*/false));
+        FPM.addPass(createFunctionToLoopPassAdaptor(LICMPass(LICMOptions()), /*UseMemorySSA=*/true));
         FPM.addPass(EarlyCSEPass());
         FPM.addPass(CorrelatedValuePropagationPass());
         FPM.addPass(InstCombinePass());

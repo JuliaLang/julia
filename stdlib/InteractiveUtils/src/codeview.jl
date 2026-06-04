@@ -101,6 +101,10 @@ function print_warntype_mi(io::IO, mi::Core.MethodInstance)
             sig = sig::UnionAll
             name = sig.var.name
             val = mi.sparam_vals[i]
+            # Env entries from intersection may be wrapped as svec(tvar, constrained_bool)
+            if val isa Core.SimpleVector
+                val = val[1]
+            end
             print_highlighted(io::IO, v::String, color::Symbol) =
                 if highlighting[:warntype]
                     Base.printstyled(io, v; color)

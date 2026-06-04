@@ -159,6 +159,13 @@ rand_generic(r::AbstractRNG, ::Type{Int64})  = rand(r, UInt64) % Int64
 rand(r::AbstractRNG, ::SamplerType{Complex{T}}) where {T<:Real} =
     complex(rand(r, T), rand(r, T))
 
+# Reuse the bulk (SIMD) rand! for T on a reinterpreted view, instead of the
+# per-element scalar fallback above.
+function rand!(r::AbstractRNG, A::Array{Complex{T}}, ::SamplerType{Complex{T}}) where {T<:Base.HWReal}
+    rand!(r, reinterpret(T, A))
+    return A
+end
+
 ### random characters
 
 # returns a random valid Unicode scalar value (i.e. 0 - 0xd7ff, 0xe000 - # 0x10ffff)

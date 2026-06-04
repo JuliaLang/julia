@@ -784,7 +784,7 @@ ERROR: MethodError: no method matching foo(::Vector{Int64})
 The function `foo` exists, but no method is defined for this combination of argument types.
 
 Closest candidates are:
-  foo(!Matched::Vector{Real})
+  foo(::Vector{!Matched{Real}})
    @ Main none:1
 
 Stacktrace:
