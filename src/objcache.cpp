@@ -64,10 +64,7 @@ static const size_t OBJCACHE_CAPACITY =
     parseEnvU64("JULIA_OBJCACHE_CAPACITY", OBJCACHE_DEFAULT_CAPACITY);
 
 // When the map is full, evict down to OBJCACHE_EVICT_TO/2^31 capacity.
-static const uint32_t OBJCACHE_EVICT_TO = parseEnvFrac31("JULIA_OBJCACHE_EVICT_TO", 0.5);
-// Evict when we reach OBJCACHE_EVICT_FROM/2^31 of capacity.
-static const uint32_t OBJCACHE_EVICT_FROM =
-    parseEnvFrac31("JULIA_OBJCACHE_EVICT_FROM", 0.875);
+static const uint32_t OBJCACHE_EVICT_TO = parseEnvFrac31("JULIA_OBJCACHE_EVICT_TO", 0.75);
 
 static FILE *getLogFile()
 {
@@ -184,7 +181,7 @@ void ObjCache::initDB()
     }
     checkMDB(mdb_env_set_maxreaders(Env, 510));
     checkMDB(mdb_env_set_maxdbs(Env, 128));
-    checkMDB(mdb_env_set_mapsize(Env, OBJCACHE_CAPACITY));
+    checkMDB(mdb_env_set_mapsize(Env, OBJCACHE_CAPACITY * 2));
     llvm::sys::fs::create_directories(*CachePath);
     if (checkMDB(mdb_env_open(Env, CachePath->c_str(), MDB_NOSYNC | MDB_NOTLS, 0640))) {
         mdb_env_close(Env);
@@ -199,6 +196,10 @@ void ObjCache::initDB()
             goto cleanup_env;
         if (checkMDB(mdb_dbi_open(Txn.Txn, "objmeta", MDB_CREATE, &ObjMetaDbi)))
             goto cleanup_env;
+
+        MDB_stat Stat;
+        checkMDB(mdb_stat(Txn.Txn, ObjCacheDbi, &Stat));
+        PageSize = Stat.ms_psize;
 
         int Version = OBJCACHE_SCHEMA;
         MDB_val Key = mdbVal("schema");
@@ -254,7 +255,7 @@ static ObjCache::Hash hashModule(const llvm::Module &M)
 }
 
 /*
- * The objcache is stored using two LMDB database.  The "objcache" database
+ * The objcache is stored using two LMDB databases.  The "objcache" database
  * contains an entry for every cached object, with the key being an objkey
  * (O\0<hash>) and the value being the object file contents.  The "objmeta"
  * database contains two entries for every cached object, an objkey with the
@@ -419,7 +420,6 @@ void ObjCache::shutdown()
 void ObjCache::writerThread()
 {
     std::vector<std::pair<Hash, std::unique_ptr<llvm::MemoryBuffer>>> LocalQueue;
-    bool Evict = false;
     while (1) {
         LocalQueue.clear();
         {
@@ -434,25 +434,22 @@ void ObjCache::writerThread()
         if (!Txn.Txn)
             continue;
 
-        if (!maybeEvictLRU(Txn, Evict))
-            goto abort;
-        Evict = false;
-
         uv_timeval_t Tv;
         uv_gettimeofday(&Tv);
-        for (auto &[H, Obj] : LocalQueue) {
+        auto I = LocalQueue.begin();
+        for (; I < LocalQueue.end(); ++I) {
+            auto &[H, Obj] = *I;
             auto ObjKey = toObjKey(H);
             MDB_val Key = mdbVal(ObjKey);
             if (Obj) {
                 // Cache miss - write object
+                if (!maybeEvictLRU(Txn, Obj->getBufferSize()))
+                    goto abort;
                 MDB_val Data{Obj->getBufferSize(), (void *)Obj->getBufferStart()};
                 if (int Err = mdb_put(Txn.Txn, ObjCacheDbi, &Key, &Data, 0)) {
                     // If this fails because of MDB_MAP_FULL, we can't find
-                    // enough contiguous pages in the database.  Abort this
-                    // cache write, but evict on the next iteration.
-                    if (Err == MDB_MAP_FULL)
-                        Evict = true;
-                    else
+                    // enough contiguous pages in the database.  Skip it.
+                    if (Err != MDB_MAP_FULL)
                         checkMDB(Err);
                     goto abort;
                 }
@@ -471,7 +468,10 @@ void ObjCache::writerThread()
             }
         }
         Txn.commit();
+        continue;
 abort:;
+        std::unique_lock Lock{Mutex};
+        std::move(++I, LocalQueue.end(), std::back_inserter(ObjQueue));
     }
 }
 
@@ -525,13 +525,18 @@ bool ObjCache::updateATime(MDBTxn &Txn, const Hash &Hash, int64_t Time, bool Fre
     return true;
 }
 
-bool ObjCache::maybeEvictLRU(MDBTxn &Txn, bool Force)
+bool ObjCache::maybeEvictLRU(MDBTxn &Txn, size_t RoomFor)
 {
-    auto ShouldEvict = [&](uint32_t P) {
-        size_t Threshold = ((uint64_t)OBJCACHE_CAPACITY * P) >> 31;
-        return Force || dbiSize(Txn, ObjCacheDbi) + dbiSize(Txn, ObjMetaDbi) >= Threshold;
+    RoomFor = LLT_ALIGN(RoomFor, PageSize);
+    auto Used = [&]() {
+        return dbiSize(Txn, ObjCacheDbi) + dbiSize(Txn, ObjMetaDbi) + RoomFor;
     };
-    if (!ShouldEvict(OBJCACHE_EVICT_FROM))
+    auto ShouldEvict = [&]() {
+        size_t Threshold = ((uint64_t)OBJCACHE_CAPACITY * OBJCACHE_EVICT_TO) >> 31;
+        return Used() > Threshold;
+    };
+
+    if (Used() <= OBJCACHE_CAPACITY)
         return true;
 
     MDB_cursor *MetaCur;
@@ -541,9 +546,7 @@ bool ObjCache::maybeEvictLRU(MDBTxn &Txn, bool Force)
     auto LowMeta = toMetaKey(0, {});
     MDB_val MetaKey = mdbVal(LowMeta);
     int Ret = mdb_cursor_get(MetaCur, &MetaKey, nullptr, MDB_SET_RANGE);
-    while (!Ret && ShouldEvict(OBJCACHE_EVICT_TO) &&
-           ((const char *)MetaKey.mv_data)[0] == METAKEY_TAG) {
-        Force = false;
+    while (!Ret && ShouldEvict() && ((const char *)MetaKey.mv_data)[0] == METAKEY_TAG) {
         auto [Time, Hash] = fromMetaKey((const char *)MetaKey.mv_data);
         NEvicted.fetch_add(1, memory_order_relaxed);
         if (LogFile) {

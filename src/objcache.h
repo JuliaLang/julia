@@ -44,7 +44,7 @@ protected:
     void writerThread();
     void initDB();
     bool updateATime(MDBTxn &Txn, const Hash &H, int64_t Time, bool Fresh);
-    bool maybeEvictLRU(MDBTxn &Txn, bool Force);
+    bool maybeEvictLRU(MDBTxn &Txn, size_t RoomFor);
     size_t dbiSize(MDBTxn &Txn, MDB_dbi Dbi);
 
 private:
@@ -52,6 +52,7 @@ private:
     MDB_env *Env = nullptr;
     MDB_dbi ObjCacheDbi;
     MDB_dbi ObjMetaDbi;
+    size_t PageSize;
     uv_thread_t WriterThread;
     bool Started = false;
     bool Exiting = false;
