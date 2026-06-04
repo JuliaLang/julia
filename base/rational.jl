@@ -317,12 +317,10 @@ rationalize(::Type{T}, x::Rational; tol::Real = eps(float(x))) where {T<:Integer
 rationalize(x::Rational{T}; kvs...) where {T<:Integer} = rationalize(T, x; kvs...)
 function rationalize(::Type{T}, x::Rational, tol::Real) where {T<:Integer}
     T<:Unsigned && x < 0 && __throw_negate_unsigned()
-    try
+    if !hastypemax(T) || (typemin(T) ≤ x.num ≤ typemax(T) && x.den ≤ typemax(T))
         return Rational{T}(x)
-    catch e
-        isa(e,InexactError) || rethrow()
-        isfinite(float(x)) && tol ≥ eps(float(x))/2 || rethrow()
     end
+    isfinite(float(x)) && tol ≥ eps(float(x))/2 || throw(InexactError(:rationalize, Rational{T}, x))
     return rationalize(T, float(x), tol)
 end
 rationalize(x::Integer; kvs...) = Rational(x)
