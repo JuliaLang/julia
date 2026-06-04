@@ -174,17 +174,26 @@ end
 function <(x::AbstractIrrational, y::Rational{BigInt})
     Float64(x) != Float64(y) && return Float64(x) < Float64(y)
     p = precision(BigFloat) + 32
-    more_p = max(32, exponent(x) + exponent(y.den))
-    while true
-        xf, yf = BigFloat.((x, y), precision=p)
+    @assume_effects :terminates_locally while true
+        xf, yf = BigFloat(x; precision=p), BigFloat(y; precision=p)
         xf != yf && return xf < yf
-        p += more_p
+        p *= 2
     end
 end
 <(x::Rational{BigInt}, y::AbstractIrrational) = !(y < x)
 
 <=(x::AbstractIrrational, y::Rational) = x < y
 <=(x::Rational, y::AbstractIrrational) = x < y
+
+cmp(::Irrational{s}, ::Irrational{s}) where {s} = 0
+cmp(x::AbstractIrrational, y::AbstractIrrational) = x < y ? -1 : 1
+cmp(x::AbstractIrrational, y::Real) = x < y ? -1 : 1
+cmp(x::Real, y::AbstractIrrational) = x < y ? -1 : 1
+
+cmp(<, ::Irrational{s}, ::Irrational{s}) where {s} = 0
+cmp(<, x::AbstractIrrational, y::AbstractIrrational) = x < y ? -1 : 1
+cmp(<, x::AbstractIrrational, y::Real) = x < y ? -1 : 1
+cmp(<, x::Real, y::AbstractIrrational) = x < y ? -1 : 1
 
 isfinite(::AbstractIrrational) = true
 isinteger(::AbstractIrrational) = false
