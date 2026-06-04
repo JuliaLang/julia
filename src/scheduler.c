@@ -300,7 +300,7 @@ JL_DLLEXPORT void jl_wakeup_thread(int16_t tid) JL_NOTSAFEPOINT
 }
 
 // Round-robin start hint for jl_wakeup_threadpool, sharded across cache-line-padded
-// stripes so concurrent producers don't contend on a single global counter.
+// stripes so concurrent producers don't contend on a single counter.
 #define POOL_WAKE_HINT_STRIPES 64
 typedef struct {
     _Atomic(uint32_t) v;
@@ -309,26 +309,10 @@ typedef struct {
 static pool_wake_hint_t pool_wake_hints[POOL_WAKE_HINT_STRIPES];
 
 // Wake at most one sleeping thread in threadpool `tpid`, replacing the
-// O(jl_n_threads) broadcast of jl_wakeup_thread(-1) (#61820, #50425). Each
-// multiqueue insert wakes one worker, so a burst of N inserts wakes up to N
-// workers (there is no peer-to-peer cascade; a woken worker just consumes its
-// task).
-//
-// Correctness comes from inspecting each candidate's sleep_check_state under a
-// sequentially-consistent fence ([^store_buffering_1], paired with the
-// consumer's re-check of the queue after it stores `sleeping` in
-// jl_task_get_next): a worker is either observed `sleeping` here (and woken), or
-// has not yet committed to its sleep transition and is therefore guaranteed to
-// re-check the queue and find the freshly-inserted task.
-//
-// We must NOT short-circuit this scan based on n_threads_running. That counter
-// is decremented only *after* a worker has already re-checked the queue (see
-// jl_task_get_next), so an "all threads running" snapshot can be stale: a worker
-// may have read its (then empty) queue, be about to park, and still be counted
-// as running. Worse, n_threads_running is global while this wake is pool-local,
-// so busy threads in another pool could mask an entirely parked target pool and
-// strand its tasks. sleep_check_state, by contrast, is set to `sleeping` before
-// the re-check, so scanning it never misses such a worker.
+// O(jl_n_threads) broadcast of jl_wakeup_thread(-1) (#61820, #50425). Scan each
+// candidate's sleep_check_state under a fence ([^store_buffering_1]); do not
+// short-circuit on n_threads_running, which can be stale and is not pool-local.
+// See devdocs/scheduler-wakeup.
 JL_DLLEXPORT void jl_wakeup_threadpool(int8_t tpid) JL_NOTSAFEPOINT
 {
     if (tpid < 0 || tpid >= jl_n_threadpools) {

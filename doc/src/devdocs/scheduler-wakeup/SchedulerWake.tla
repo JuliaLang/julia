@@ -1,17 +1,14 @@
 -------------------------- MODULE SchedulerWake --------------------------
 (***************************************************************************)
-(* A TLA+ model of Julia's task scheduler sleep/wake handshake, focused on *)
-(* the `jl_wakeup_threadpool` "wake one worker" strategy introduced in      *)
-(* JuliaLang/julia#61826 and the soundness of skipping the wake based on     *)
-(* `n_threads_running`.                                                      *)
+(* A TLA+ model of Julia's task scheduler sleep/wake handshake and the       *)
+(* `jl_wakeup_threadpool` "wake one worker" strategy (JuliaLang/julia#61826). *)
 (*                                                                           *)
 (* It abstracts away weak memory: every action below is atomic and the       *)
 (* model checker explores all sequentially-consistent interleavings. That is *)
-(* sufficient to expose the *algorithmic* race the review worried about,     *)
-(* because the bug is about which shared variable the waker consults         *)
-(* (`n_threads_running` vs. each worker's `sleep_check_state`) and the order  *)
-(* in which a consumer re-checks its queue versus decrementing the running   *)
-(* count -- not about fences.                                                *)
+(* sufficient to check the *algorithmic* claim, because correctness rests on  *)
+(* which shared variable the waker consults (each worker's sleep_check_state) *)
+(* and the order in which a consumer re-checks its queue versus parking --    *)
+(* not on fences.                                                            *)
 (*                                                                           *)
 (* Each worker belongs to a thread pool. A worker only consumes tasks from   *)
 (* its own pool's queue. The sleep transition is split into the same steps   *)
@@ -22,20 +19,16 @@
 (*   c3  pre-park: decrement n_threads_running  (pc: "recheck" -> "park")     *)
 (*   c4  commit: if still "sleeping", actually park; else a waker raced us    *)
 (*                                                                           *)
-(* The crucial window is [c1 .. c3): the worker has published                *)
-(* `sleep_check_state = sleeping` but is *still counted* in n_threads_running *)
-(* and may have already read its queue as empty at c2. A waker that consults  *)
-(* the count therefore sees stale "all running" information; a waker that     *)
-(* scans `sleep_check_state` sees the truth.                                  *)
+(* The waker scans sleep_check_state, which a worker publishes at c1 (before  *)
+(* the c2 re-check), so the scan never misses a worker in the [c1 .. c3)      *)
+(* window even though that worker is still counted in n_threads_running.      *)
 (***************************************************************************)
 EXTENDS Naturals, FiniteSets
 
 CONSTANTS
     Threads,        \* set of worker ids, e.g. {1, 2}
     Pool,           \* function Threads -> pool id, e.g. (1 :> "A" @@ 2 :> "B")
-    Inject0,        \* function pool -> Nat: tasks producers will inject per pool
-    EarlyOut        \* TRUE  -> buggy: skip the scan when n_threads_running is "full"
-                    \* FALSE -> fixed: always scan sleep_check_state
+    Inject0         \* function pool -> Nat: tasks producers will inject per pool
 
 VARIABLES
     st,             \* st[t] in {"running", "sleeping"} -- the sleep_check_state
@@ -77,8 +70,7 @@ Init ==
     /\ inject = [p \in Pools |-> Inject0[p]]
 
 ----------------------------------------------------------------------------
-(* The wake step shared by both variants: wake (at most) one worker in pool  *)
-(* `p` whose sleep_check_state is "sleeping".                                *)
+(* Wake (at most) one worker in pool `p` whose sleep_check_state is sleeping. *)
 
 CanWakeIn(p) == \E t \in ThreadsOf(p) : st[t] = "sleeping"
 
@@ -91,13 +83,11 @@ WakeOne(p) ==
         /\ nrun' = nrun + 1
         /\ pc'   = [pc EXCEPT ![t] = IF pc[t] = "parked" THEN "run" ELSE @]
 
-(* Apply the wakeup policy for pool p after an insert. *)
+(* Apply the wakeup policy for pool p after an insert: scan sleep_check_state. *)
 Wakeup(p) ==
-    IF EarlyOut /\ nrun >= N
-        THEN /\ UNCHANGED <<st, pc, nrun>>      \* buggy short-circuit
-        ELSE IF CanWakeIn(p)
-            THEN WakeOne(p)
-            ELSE UNCHANGED <<st, pc, nrun>>      \* nobody parked: nothing to do
+    IF CanWakeIn(p)
+        THEN WakeOne(p)
+        ELSE UNCHANGED <<st, pc, nrun>>      \* nobody parked: nothing to do
 
 ----------------------------------------------------------------------------
 (* Producer: a running worker injects one pending task into some pool's queue *)

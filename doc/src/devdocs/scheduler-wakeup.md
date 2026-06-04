@@ -72,19 +72,19 @@ machine-checkable.
 
 * [`SchedulerWake.tla`](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/scheduler-wakeup/SchedulerWake.tla)
   models the sleep transition as the same discrete steps listed above, so the
-  model checker explores every interleaving of the steps 1–5 window against an
-  enqueuer. A `CONSTANT EarlyOut` toggles between the unsound count-based
-  short-circuit and the shipped scan.
-* `MCBuggy` (`EarlyOut = TRUE`) — TLC reports a violation of the `NoLostWakeup`
-  invariant: a cross-pool insert reads "all running", skips the wake, and the
-  target worker parks with its task still queued.
-* `MCFixed` (`EarlyOut = FALSE`) — TLC explores the full state space with no
-  deadlock and no `NoLostWakeup` violation.
+  model checker explores every interleaving of that window against an enqueuer
+  that wakes one worker by scanning `sleep_check_state`.
+* `MCFixed` — a concrete instance (two workers sharing a pool, plus a cross-pool
+  producer). TLC explores the full state space with no deadlock and no
+  `NoLostWakeup` violation.
 
 To reproduce, with [`tla2tools.jar`](https://github.com/tlaplus/tlaplus/releases):
 
 ```sh
 cd doc/src/devdocs/scheduler-wakeup
-java -cp tla2tools.jar tlc2.TLC -config MCBuggy.cfg MCBuggy.tla   # finds the lost wakeup
-java -cp tla2tools.jar tlc2.TLC -config MCFixed.cfg MCFixed.tla   # passes
+java -cp tla2tools.jar tlc2.TLC -config MCFixed.cfg MCFixed.tla
 ```
+
+Toggling the model back to the unsound `n_threads_running` short-circuit (by
+making `Wakeup` return early when `nrun >= N`) makes TLC report a `NoLostWakeup`
+violation, confirming the danger window described above is real.
