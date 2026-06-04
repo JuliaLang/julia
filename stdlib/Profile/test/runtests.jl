@@ -407,7 +407,9 @@ end
 
     # ensure that string data is redacted by default
     fname = cd(tmpdir) do
-        read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; const x = \"redact_this\"; print(Profile.take_heap_snapshot())"`, String)
+        # (and also that the snapshot works when taking
+        #  a snapshot with a live exception stack)
+        read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; const x = \"redact_this\"; f() = error(\"boom\"); try; f(); catch; print(Profile.take_heap_snapshot()); end"`, String)
     end
 
     @test isfile(fname)

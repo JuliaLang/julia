@@ -203,6 +203,7 @@ int current_sweep_full = 0;
 int next_sweep_full = 0;
 int under_pressure = 0;
 int gc_disable_auto_full_sweep = 0; // when set, automatic full collections are inhibited
+int gc_mark_image_subgraph = 0; // when set, descend into the object graph even for perm-alloc'd image objects
 
 // Full collection heuristics
 static int64_t live_bytes = 0;
@@ -237,8 +238,11 @@ FORCE_INLINE int gc_try_setmark_tag(jl_taggedvalue_t *o, uint8_t mark_mode) JL_N
 {
     assert(gc_marked(mark_mode));
     uintptr_t tag = o->header;
-    if (gc_marked(tag))
+    if (gc_marked(tag)) {
+        if (__unlikely(gc_mark_image_subgraph) && (tag & GC_IN_IMAGE))
+            return _gc_heap_snapshot_try_claim_image(jl_valueof(o));
         return 0;
+    }
     if (mark_reset_age) {
         // Reset the object as if it was just allocated
         mark_mode = GC_MARKED;
@@ -1599,6 +1603,8 @@ STATIC_INLINE void gc_assert_parent_validity(jl_value_t *parent, jl_value_t *chi
 STATIC_INLINE void gc_mark_push_remset(jl_ptls_t ptls, jl_value_t *obj,
                                        uintptr_t nptr) JL_NOTSAFEPOINT
 {
+    if (__unlikely(gc_mark_image_subgraph) && jl_astaggedvalue(obj)->bits.in_image)
+        return;
     if (__unlikely((nptr & 0x3) == 0x3)) {
         ptls->gc_tls.heap.remset_nptr += nptr >> 2;
         arraylist_t *remset = &ptls->gc_tls.heap.remset;
@@ -1824,6 +1830,8 @@ STATIC_INLINE void gc_mark_objarray(jl_ptls_t ptls, jl_value_t *obj_parent, jl_v
                     nptr |= 1;
                 if (!gc_marked(o->header))
                     break;
+                if (__unlikely(gc_mark_image_subgraph) && (o->header & GC_IN_IMAGE))
+                    gc_try_claim_and_push(mq, new_obj, NULL);
                 gc_heap_snapshot_record_array_edge(obj_parent, slot);
             }
         }
@@ -1896,6 +1904,8 @@ STATIC_INLINE void gc_mark_memory8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_v
                         early_end = 1;
                         break;
                     }
+                    if (__unlikely(gc_mark_image_subgraph) && (o->header & GC_IN_IMAGE))
+                        gc_try_claim_and_push(mq, new_obj, NULL);
                     gc_heap_snapshot_record_array_edge(ary8_parent, slot);
                 }
             }
@@ -1973,6 +1983,8 @@ STATIC_INLINE void gc_mark_memory16(jl_ptls_t ptls, jl_value_t *ary16_parent, jl
                         early_end = 1;
                         break;
                     }
+                    if (__unlikely(gc_mark_image_subgraph) && (o->header & GC_IN_IMAGE))
+                        gc_try_claim_and_push(mq, new_obj, NULL);
                     gc_heap_snapshot_record_array_edge(ary16_parent, slot);
                 }
             }
@@ -2136,6 +2148,8 @@ STATIC_INLINE void gc_mark_excstack(jl_ptls_t ptls, jl_excstack_t *excstack, siz
             // Found an extended backtrace entry: iterate over any
             // GC-managed values inside.
             size_t njlvals = jl_bt_num_jlvals(bt_entry);
+            if (njlvals > 0)
+                gc_heap_snapshot_record_frame_to_frame_edge((jl_gcframe_t *)excstack, (jl_gcframe_t *)bt_entry);
             for (size_t jlval_index = 0; jlval_index < njlvals; jlval_index++) {
                 new_obj = jl_bt_entry_jlvalue(bt_entry, jlval_index);
                 gc_try_claim_and_push(mq, new_obj, NULL);
@@ -2826,8 +2840,11 @@ static void gc_queue_bt_buf(jl_gc_markqueue_t *mq, jl_ptls_t ptls2) JL_NOTSAFEPO
         if (jl_bt_is_native(bt_entry))
             continue;
         size_t njlvals = jl_bt_num_jlvals(bt_entry);
-        for (size_t j = 0; j < njlvals; j++)
-            gc_try_claim_and_push(mq, jl_bt_entry_jlvalue(bt_entry, j), NULL);
+        for (size_t j = 0; j < njlvals; j++) {
+            jl_value_t *v = jl_bt_entry_jlvalue(bt_entry, j);
+            gc_try_claim_and_push(mq, v, NULL);
+            gc_heap_snapshot_record_gc_roots(v, (char*)"bt_buf");
+        }
     }
 }
 
@@ -2838,6 +2855,8 @@ static void gc_queue_remset(jl_gc_markqueue_t *mq, jl_ptls_t ptls2) JL_NOTSAFEPO
     for (size_t i = 0; i < len; i++) {
         void *_v = items[i];
         jl_astaggedvalue(_v)->bits.gc = GC_OLD_MARKED;
+        if (__unlikely(gc_mark_image_subgraph) && jl_astaggedvalue(_v)->bits.in_image)
+            continue;
         jl_value_t *v = (jl_value_t *)((uintptr_t)_v | GC_REMSET_PTR_TAG);
         gc_ptr_queue_push(mq, v);
     }
@@ -3074,6 +3093,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
     uint64_t before_free_heap_size = jl_atomic_load_relaxed(&gc_heap_stats.heap_size);
     uint64_t start_mark_time = jl_hrtime();
     JL_PROBE_GC_MARK_BEGIN();
+    gc_mark_image_subgraph = gc_heap_snapshot_enabled && prev_sweep_full;
     {
         JL_TIMING(GC, GC_Mark);
         assert(gc_n_threads);
@@ -3091,7 +3111,6 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
                 // 1.1. mark every thread local root
                 gc_queue_thread_local(mq_dest, ptls2);
                 // 1.2. mark any managed objects in the backtrace buffer
-                // TODO: treat these as roots for gc_heap_snapshot_record
                 gc_queue_bt_buf(mq_dest, ptls2);
                 // 1.3. mark every object in the remset
                 gc_queue_remset(mq_dest, ptls2);
@@ -3100,7 +3119,10 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
         gc_check_all_remsets_are_empty();
         // 1.4. in a full sweep, enqueue image remset
         // (image objects are a third, "permanent" GC generation)
-        if (prev_sweep_full)
+        // While recording a heap snapshot this is deferred to a second mark pass
+        // below, so the image remset only contributes liveness and not snapshot
+        // contents (see the comment on that pass).
+        if (prev_sweep_full && !gc_mark_image_subgraph)
             gc_queue_image_remset(mq);
 
         // 2. walk roots
@@ -3111,6 +3133,24 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
         }
         gc_mark_loop(ptls);
         gc_mark_loop_barrier();
+
+        // 2.5. When recording a heap snapshot, the root-reachable graph (which
+        // includes the root-reachable image subgraph, reached via descent) has
+        // now been recorded. Process the image remset for liveness only, with
+        // recording and image-subgraph descent disabled. This keeps image
+        // objects that are reachable solely through the (conservative) image
+        // remset -- and the objects they reference -- alive, without adding them
+        // to the snapshot, so the snapshot reports the same objects as it did
+        // before image objects were pretenured.
+        if (gc_mark_image_subgraph) { // i.e. recording a snapshot in a full sweep
+            gc_heap_snapshot_enabled = 0;
+            gc_mark_image_subgraph = 0;
+            gc_queue_image_remset(mq);
+            gc_mark_loop(ptls);
+            gc_mark_loop_barrier();
+            gc_heap_snapshot_enabled = 1;
+            gc_mark_image_subgraph = 1; // re-enable for finalizer marking below
+        }
         gc_mark_clean_reclaim_sets();
 
         // 3. check for objects to finalize
@@ -3150,6 +3190,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
         gc_mark_loop_serial(ptls);
         mark_reset_age = 0;
     }
+    gc_mark_image_subgraph = 0;
 
     JL_PROBE_GC_MARK_END(scanned_bytes, perm_scanned_bytes);
     gc_settime_premark_end();
