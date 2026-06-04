@@ -23,7 +23,7 @@ import .Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
 using .Base: sign_mask, exponent_mask, exponent_one,
             exponent_half, uinttype, significand_mask,
             significand_bits, exponent_bits, exponent_bias,
-            exponent_max, exponent_raw_max, clamp, clamp!
+            exponent_max, exponent_raw_max, clamp, clamp!, two_mul
 
 using Core.Intrinsics: sqrt_llvm, min_float, max_float
 
@@ -45,30 +45,6 @@ end
 end
 
 # non-type specific math functions
-
-function two_mul(x::T, y::T) where {T<:Number}
-    xy = x*y
-    xy, fma(x, y, -xy)
-end
-
-@assume_effects :consistent @inline function two_mul(x::Float64, y::Float64)
-    if Core.Intrinsics.have_fma(Float64)
-        xy = x*y
-        return xy, fma(x, y, -xy)
-    end
-    return Base.twomul(x,y)
-end
-
-@assume_effects :consistent @inline function two_mul(x::T, y::T) where T<: Union{Float16, Float32}
-    if Core.Intrinsics.have_fma(T)
-        xy = x*y
-        return xy, fma(x, y, -xy)
-    end
-    xy = widen(x)*y
-    Txy = T(xy)
-    return Txy, T(xy-Txy)
-end
-
 
 """
     evalpoly(x, p)
@@ -239,17 +215,9 @@ function _pi_over_180(z::AbstractFloat)
 end
 
 # rounded to closest representable number where necessary
-function _180_over_pi(z::Union{Float16, Float32})
-    if z isa Float16
-        r = Float16(57.28)
-    elseif z isa Float32
-        r = 57.29578f0
-    end
-    r
-end
-function _pi_over_180(::Float16)
-    Float16(0.01746)
-end
+_180_over_pi(::Float16) = Float16(57.28)
+_180_over_pi(::Float32) = 57.29578f0
+_pi_over_180(::Float16) = Float16(0.01746)
 
 """
     rad2deg(x)
@@ -864,13 +832,8 @@ min(x::T, y::T) where {T<:AbstractFloat} = isnan(x) || ~isnan(y) && _isless(x, y
 max(x::T, y::T) where {T<:AbstractFloat} = isnan(x) || ~isnan(y) && _isless(y, x) ? x : y
 minmax(x::T, y::T) where {T<:AbstractFloat} = min(x, y), max(x, y)
 
-function min(x::T, y::T) where {T<:IEEEFloat}
-    return min_float(x, y)
-end
-
-function max(x::T, y::T) where {T<:IEEEFloat}
-    return max_float(x, y)
-end
+min(x::T, y::T) where {T<:IEEEFloat} = min_float(x, y)
+max(x::T, y::T) where {T<:IEEEFloat} = max_float(x, y)
 
 """
     ldexp(x, n)
