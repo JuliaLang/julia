@@ -26,9 +26,9 @@ using Base:       # Base definitions
     !, !==, &, *, +, -, :, <, <<, >, |, ∈, ∉, ∩, ∪, ≠, ≤, ≥, ⊆
 using ..Compiler: # Compiler specific definitions
     AbstractLattice, Compiler, IRCode, IR_FLAG_NOTHROW,
-    argextype, fieldcount_noerror, has_flag, intrinsic_nothrow, is_meta_expr_head,
-    is_identity_free_argtype, isexpr, setfield!_nothrow, singleton_type, try_compute_field,
-    try_compute_fieldidx, widenconst
+    argextype, argextype_widened, fieldcount_noerror, has_flag, intrinsic_nothrow,
+    is_meta_expr_head, is_identity_free_argtype, isexpr, setfield!_nothrow, singleton_type,
+    try_compute_field, try_compute_fieldidx
 
 function include(x::String)
     if !isdefined(Base, :end_base_include)
@@ -1145,7 +1145,7 @@ function escape_new!(astate::AnalysisState, pc::Int, args::Vector{Any})
     if isa(AliasInfo, Bool)
         AliasInfo && @goto conservative_propagation
         # AliasInfo of this object hasn't been analyzed yet: set AliasInfo now
-        typ = widenconst(argextype(obj, astate.ir))
+        typ = argextype_widened(obj, astate.ir)
         nflds = fieldcount_noerror(typ)
         if nflds === nothing
             AliasInfo = Unindexable()
@@ -1255,7 +1255,7 @@ function escape_builtin!(::typeof(getfield), astate::AnalysisState, pc::Int, arg
     length(args) ≥ 3 || return false
     ir, estate = astate.ir, astate.estate
     obj = args[2]
-    typ = widenconst(argextype(obj, ir))
+    typ = argextype_widened(obj, ir)
     if hasintersect(typ, Module) # global load
         add_escape_change!(astate, SSAValue(pc), ⊤)
     end
@@ -1315,7 +1315,7 @@ function escape_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, ar
     if isa(AliasInfo, Bool)
         AliasInfo && @goto conservative_propagation
         # AliasInfo of this object hasn't been analyzed yet: set AliasInfo now
-        typ = widenconst(argextype(obj, ir))
+        typ = argextype_widened(obj, ir)
         AliasInfo, fidx = analyze_fields(ir, typ, args[3])
         if isa(AliasInfo, IndexableFields)
             @goto escape_indexable_def
@@ -1323,7 +1323,7 @@ function escape_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, ar
             @goto escape_unindexable_def
         end
     elseif isa(AliasInfo, IndexableFields)
-        typ = widenconst(argextype(obj, ir))
+        typ = argextype_widened(obj, ir)
         AliasInfo, fidx = reanalyze_fields(AliasInfo, ir, typ, args[3])
         isa(AliasInfo, Unindexable) && @goto escape_unindexable_def
         @label escape_indexable_def

@@ -877,9 +877,14 @@ STATIC_INLINE jl_array_t *jl_mi_get_backedges(jl_method_instance_t *mi JL_PROPAG
     return ret;
 }
 
-int get_next_edge(jl_array_t *list, int i, jl_value_t** invokesig, jl_code_instance_t **caller) JL_NOTSAFEPOINT;
-int set_next_edge(jl_array_t *list, int i, jl_value_t *invokesig, jl_code_instance_t *caller);
-int clear_next_edge(jl_array_t *list, int i, jl_value_t *invokesig, jl_code_instance_t *caller);
+int get_next_edge(jl_array_t *list JL_PROPAGATES_ROOT, int i,
+                  jl_value_t **invokesig JL_OUT_ROOTED_BY_ARG(0),
+                  jl_code_instance_t **caller JL_OUT_ROOTED_BY_ARG(0)) JL_NOTSAFEPOINT;
+int set_next_edge(jl_array_t *list JL_PROPAGATES_ROOT, int i,
+                  jl_value_t *invokesig JL_ROOTED_BY_ARG(0),
+                  jl_code_instance_t *caller JL_ROOTED_BY_ARG(0)) JL_NOTSAFEPOINT;
+int clear_next_edge(jl_array_t *list JL_PROPAGATES_ROOT, int i,
+                    jl_value_t *invokesig, jl_code_instance_t *caller) JL_NOTSAFEPOINT;
 void push_edge(jl_array_t *list, jl_value_t *invokesig, jl_code_instance_t *caller);
 void jl_mi_done_backedges(jl_method_instance_t *mi JL_PROPAGATES_ROOT, uint8_t old_flags);
 
@@ -963,7 +968,7 @@ jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_module_t *module,
                                    jl_datatype_t *super, jl_svec_t *parameters);
 jl_datatype_t *jl_new_uninitialized_datatype(void);
 void jl_precompute_memoized_dt(jl_datatype_t *dt, int cacheable);
-JL_DLLEXPORT jl_datatype_t *jl_wrap_Type(jl_value_t *t);  // x -> Type{x}
+JL_DLLEXPORT jl_typeeq_t *jl_wrap_Type(jl_value_t *t);  // x -> Type{x}
 jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n, int check, int nothrow);
 void jl_reinstantiate_inner_types(jl_datatype_t *t);
 jl_datatype_t *jl_lookup_cache_type_(jl_datatype_t *type);
@@ -993,7 +998,7 @@ int jl_type_equality_is_identity(jl_value_t *t1, jl_value_t *t2) JL_NOTSAFEPOINT
 jl_value_t *jl_check_binding_assign_value(jl_binding_t *b JL_PROPAGATES_ROOT, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs JL_MAYBE_UNROOTED, const char *msg);
 void jl_binding_set_type(jl_binding_t *b, jl_module_t *mod, jl_sym_t *sym, jl_value_t *ty);
 JL_DLLEXPORT void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, int strong);
-JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(jl_binding_t *b JL_ROOTING_ARGUMENT, jl_module_t *mod, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, enum jl_partition_kind, size_t new_world) JL_GLOBALLY_ROOTED;
+JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *val JL_ROOTED_BY_ARG(1) JL_MAYBE_UNROOTED, enum jl_partition_kind, size_t new_world) JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int expanded, const char **toplevel_filename, int *toplevel_lineno);
 JL_DLLEXPORT jl_value_t *jl_eval_thunk(jl_module_t *JL_NONNULL m, jl_code_info_t *thk, int fast);
 int jl_module_public_(jl_module_t *from, jl_sym_t *s, int exported, size_t new_world);
@@ -1297,6 +1302,16 @@ STATIC_INLINE int jl_is_va_tuple(jl_datatype_t *t) JL_NOTSAFEPOINT
     return (l>0 && jl_is_vararg(jl_tparam(t,l-1)));
 }
 
+// `Type{Union{}}` (a `TypeEq`) is laid out as the singleton `typeof(Union{})`
+// `DataType`. Code that inspects a field's declared type for layout purposes
+// must use this normalized form, otherwise it sees a non-`DataType` kind.
+STATIC_INLINE jl_value_t *normalize_typeofbottom_layout_alias(jl_value_t *ty JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    if (jl_typeofbottom_type != NULL && jl_is_typeeq(ty) && jl_typeeq_T(ty) == jl_bottom_type)
+        return (jl_value_t*)jl_typeofbottom_type;
+    return ty;
+}
+
 STATIC_INLINE size_t jl_vararg_length(jl_value_t *v) JL_NOTSAFEPOINT
 {
     assert(jl_is_vararg(v));
@@ -1438,13 +1453,13 @@ JL_DLLEXPORT jl_method_instance_t *jl_specializations_get_linfo(
 jl_method_instance_t *jl_specializations_get_or_insert(jl_method_instance_t *mi_ins JL_PROPAGATES_ROOT);
 JL_DLLEXPORT void jl_method_instance_add_backedge(jl_method_instance_t *callee, jl_value_t *invokesig, jl_code_instance_t *caller);
 JL_DLLEXPORT void jl_method_table_add_backedge(jl_value_t *typ, jl_code_instance_t *caller);
-JL_DLLEXPORT void jl_mi_cache_insert(jl_method_instance_t *mi JL_ROOTING_ARGUMENT,
-                                     jl_code_instance_t *ci JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED);
-JL_DLLEXPORT int jl_mi_try_insert(jl_method_instance_t *mi JL_ROOTING_ARGUMENT,
+JL_DLLEXPORT void jl_mi_cache_insert(jl_method_instance_t *mi,
+                                     jl_code_instance_t *ci JL_ROOTED_BY_ARG(0) JL_MAYBE_UNROOTED);
+JL_DLLEXPORT int jl_mi_try_insert(jl_method_instance_t *mi,
                                    jl_code_instance_t *expected_ci,
-                                   jl_code_instance_t *ci JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED);
+                                   jl_code_instance_t *ci JL_ROOTED_BY_ARG(0) JL_MAYBE_UNROOTED);
 JL_DLLEXPORT jl_code_instance_t *jl_cached_uninferred(jl_code_instance_t *codeinst, size_t world);
-JL_DLLEXPORT jl_code_instance_t *jl_cache_uninferred(jl_method_instance_t *mi, jl_code_instance_t *checked, size_t world, jl_code_instance_t *newci JL_MAYBE_UNROOTED);
+JL_DLLEXPORT jl_code_instance_t *jl_cache_uninferred(jl_method_instance_t *mi JL_PROPAGATES_ROOT, jl_code_instance_t *checked, size_t world, jl_code_instance_t *newci JL_MAYBE_UNROOTED);
 JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst_for_uninferred(jl_method_instance_t *mi, jl_code_info_t *src);
 JL_DLLEXPORT extern jl_value_t *(*const jl_rettype_inferred_addr)(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t min_world, size_t max_world) JL_NOTSAFEPOINT;
 
@@ -1694,8 +1709,8 @@ STATIC_INLINE size_t jl_excstack_next(jl_excstack_t *stack, size_t itr) JL_NOTSA
     return itr-2 - jl_excstack_bt_size(stack, itr);
 }
 // Exception stack manipulation
-void jl_push_excstack(jl_task_t *ct, jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT JL_ROOTING_ARGUMENT,
-                      jl_value_t *exception JL_ROOTED_ARGUMENT,
+void jl_push_excstack(jl_task_t *ct, jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT,
+                      jl_value_t *exception JL_ROOTED_BY_ARG(1),
                       jl_bt_element_t *bt_data, size_t bt_size);
 
 // System util to get maximum RSS

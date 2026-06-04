@@ -1667,13 +1667,13 @@ JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var)
     return jl_get_binding_value_depwarn(b, jl_atomic_load_acquire(&jl_world_counter));
 }
 
-JL_DLLEXPORT void jl_set_global(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT)
+JL_DLLEXPORT void jl_set_global(jl_module_t *m, jl_sym_t *var, jl_value_t *val JL_ROOTED_BY_ARG(0))
 {
     jl_binding_t *bp = jl_get_binding_wr(m, var);
     jl_checked_assignment(bp, m, var, val);
 }
 
-void jl_set_initial_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT, int exported)
+void jl_set_initial_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val JL_ROOTED_BY_ARG(0), int exported)
 {
     // this function is only valid during initialization, so there is no risk of data races her are not too important to use
     int kind = PARTITION_KIND_CONST | (exported ? PARTITION_FLAG_EXPORTED : 0);
@@ -1689,7 +1689,7 @@ void jl_set_initial_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_
     jl_gc_wb(bpart, val);
 }
 
-JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT)
+JL_DLLEXPORT void jl_set_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val JL_ROOTED_BY_ARG(0))
 {
     // this function is dangerous and unsound. do not use.
     jl_binding_t *bp = jl_get_module_binding(m, var, 1);

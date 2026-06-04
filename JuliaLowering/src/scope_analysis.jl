@@ -117,7 +117,7 @@ function maybe_declare_in_scope!(ctx, scope::ScopeInfo, ex, new_k::Symbol)
         bid = ex.var_id
         b = get_binding(ctx, bid)
         @jl_assert b.kind === new_k ex
-        @jl_assert b.lambda_id !== 0 (ex, "cannot declare a BindingId in multiple scopes")
+        @jl_assert b.lambda_id == 0 (ex, "cannot declare a BindingId in multiple scopes")
         add_lambda_local!(ctx, scope, b)
         return bid
     elseif kind(ex) === K"Placeholder"

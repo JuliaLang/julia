@@ -22,7 +22,11 @@
 #include <llvm/IR/Verifier.h>
 #include <llvm/Transforms/Utils/ModuleUtils.h>
 #include <llvm/Passes/PassBuilder.h>
-#include <llvm/Passes/PassPlugin.h>
+#if JL_LLVM_VERSION >= 220000
+#  include <llvm/Plugins/PassPlugin.h>
+#else
+#  include <llvm/Passes/PassPlugin.h>
+#endif
 #if defined(USE_POLLY)
 #include <polly/RegisterPasses.h>
 #include <polly/LinkAllPasses.h>
@@ -53,6 +57,10 @@ using namespace llvm;
 #include "serialize.h"
 #include "julia_assert.h"
 #include "processor.h"
+
+#ifdef USE_TRACY
+#include "tracy/TracyC.h"
+#endif
 
 #define DEBUG_TYPE "julia_aotcompile"
 
@@ -1354,13 +1362,31 @@ struct ImageTimer {
     uint64_t elapsed = 0;
     std::string name;
     std::string desc;
+#ifdef USE_TRACY
+    TracyCZoneCtx tracy_ctx;
+#endif
 
     void startTimer() {
         elapsed = jl_hrtime();
+#ifdef USE_TRACY
+        // Emit a Tracy zone for this stage. The AOT image shards run on libuv
+        // worker threads that lack a Julia task/ptls, so JL_TIMING cannot be
+        // used here; the raw Tracy C API works on any thread. `desc` is used as
+        // the zone name so stages aggregate across shards (the shard is
+        // distinguished by the named worker thread).
+        uint64_t srcloc = ___tracy_alloc_srcloc_name(
+            __LINE__, __FILE__, sizeof(__FILE__) - 1,
+            "add_output", sizeof("add_output") - 1,
+            desc.c_str(), desc.size(), 0);
+        tracy_ctx = ___tracy_emit_zone_begin_alloc(srcloc, 1);
+#endif
     }
 
     void stopTimer() {
         elapsed = jl_hrtime() - elapsed;
+#ifdef USE_TRACY
+        ___tracy_emit_zone_end(tracy_ctx);
+#endif
     }
 
     void init(const Twine &name, const Twine &desc) {
@@ -1851,6 +1877,10 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
                 // Initialize time trace profiler for this thread if enabled
                 if (jl_is_timing_trace)
                     timeTraceProfilerInitialize(jl_timing_trace_granularity, ("shard_" + std::to_string(i)).c_str());
+#ifdef USE_TRACY
+                std::string tracy_thread_name = "AOT shard " + std::to_string(i);
+                TracyCSetThreadName(tracy_thread_name.c_str());
+#endif
                 LLVMContext ctx;
                 ctx.setDiscardValueNames(true);
                 // Lazily deserialize the entire module

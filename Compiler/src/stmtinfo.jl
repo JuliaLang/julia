@@ -145,9 +145,14 @@ function add_one_edge!(edges::Vector{Any}, edge::CodeInstance)
                 # found edge we can upgrade
                 edges[i] = edge
                 return
-            elseif true # XXX compare `CodeInstance` identify?
+            elseif edgeᵢ_orig === edge || codeinst_edges_sub(edgeᵢ_orig, edge.min_world, edge.max_world, edge.edges)
+                # existing CodeInstance is identical
                 return
             end
+            # Different CodeInstance for the same MethodInstance with distinct
+            # edge information (e.g. two const-prop'd pseudo CIs of the same
+            # method recording different `Binding` edges). Keep both so that
+            # backedges are registered for each.
         end
         i += 1
     end
