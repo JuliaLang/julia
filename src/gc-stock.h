@@ -531,8 +531,6 @@ void gc_final_pause_end(int64_t t0, int64_t tend);
 void gc_time_pool_start(void) JL_NOTSAFEPOINT;
 void gc_time_count_page(int freedall, int pg_skpd) JL_NOTSAFEPOINT;
 void gc_time_pool_end(int sweep_full) JL_NOTSAFEPOINT;
-void gc_time_sysimg_end(uint64_t t0) JL_NOTSAFEPOINT;
-
 void gc_time_big_start(void) JL_NOTSAFEPOINT;
 void gc_time_count_big(int old_bits, int bits) JL_NOTSAFEPOINT;
 void gc_time_big_end(void) JL_NOTSAFEPOINT;
@@ -565,7 +563,6 @@ STATIC_INLINE void gc_time_count_page(int freedall, int pg_skpd) JL_NOTSAFEPOINT
     (void)pg_skpd;
 }
 #define gc_time_pool_end(sweep_full) (void)(sweep_full)
-#define gc_time_sysimg_end(t0) (void)(t0)
 #define gc_time_big_start()
 STATIC_INLINE void gc_time_count_big(int old_bits, int bits) JL_NOTSAFEPOINT
 {
