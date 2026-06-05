@@ -896,8 +896,10 @@ vst1_curly_typevar(vcx, st) = @stm st begin
     _ -> vst1_splat_or_val(vcx, st)
 end
 
-vst1_struct_arg(vcx, st) =
-    vst1_struct_special_form(vcx, st) | vst1(vcx, st)
+vst1_struct_arg(vcx, st) = @stm st begin
+    [K"block" xs...] -> all(vst1_struct_arg, vcx, xs)
+    _ -> vst1_struct_special_form(vcx, st) | vst1(vcx, st)
+end
 
 vst1_struct_special_form(vcx, st) = @stm st begin
     [K"Identifier"] -> pass()

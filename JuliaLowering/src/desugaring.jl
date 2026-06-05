@@ -3516,7 +3516,7 @@ end
 
 function expand_typegroup_def(ctx, ex)
     @jl_assert numchildren(ex) == 1 ex
-    body = ex[1]
+    body = flatten_blocks(ex[1])
     if kind(body) != K"block"
         throw(LoweringError(body, "expected block for `typegroup` body"))
     end
@@ -3722,7 +3722,7 @@ function expand_struct_def(ctx, ex, docs)
     @jl_assert numchildren(ex) == 3 ex
     is_mutable = ex[1].value::Bool
     type_sig = ex[2]
-    type_body = ex[3]
+    type_body = flatten_blocks(ex[3])
     if kind(type_body) != K"block"
         throw(LoweringError(type_body, "expected block for `struct` fields"))
     end
