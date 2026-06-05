@@ -358,7 +358,7 @@ function Compiler.:⊑(𝕃::AnyTaintLattice, @nospecialize(typea), @nospecializ
     end
     return ⊑(widenlattice(𝕃), typea, typeb)
 end
-Compiler.widenconst(taint::AnyTaint) = widenconst(taint.typ)
+Compiler._widenconst(taint::AnyTaint) = widenconst(taint.typ)
 
 function Compiler.abstract_eval_special_value(interp::TaintInterpreter,
     @nospecialize(e), sstate::Compiler.StatementState, sv::Compiler.InferenceState)
