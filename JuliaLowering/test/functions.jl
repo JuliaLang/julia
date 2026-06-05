@@ -362,6 +362,47 @@ f_return_in_interpolation()
     end
     """) == (1,2,3,4)
 
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_optarg_complex_spbounds(p::T, o=1) where {T<:Complex{<:Real}}
+            T, p, o
+        end
+        f_optarg_complex_spbounds(Complex(1)), f_optarg_complex_spbounds(Complex(2), Complex(3))
+    end
+    """) == ((Complex{Int},Complex(1),1), (Complex{Int},Complex(2),Complex(3)))
+
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_optarg_complex_spbounds2(p::T, o::T=Complex(0)) where {T<:Complex{<:Real}}
+            T, p, o
+        end
+        f_optarg_complex_spbounds2(Complex(1)), f_optarg_complex_spbounds2(Complex(2))
+    end
+    """) == ((Complex{Int},Complex(1),Complex(0)), (Complex{Int},Complex(2),Complex(0)))
+
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_optarg_complex_spbounds_rett(p::T, o=1)::T where {T<:Complex{<:Real}}
+            p
+        end
+        f_optarg_complex_spbounds_rett(Complex(1)), f_optarg_complex_spbounds_rett(Complex(2))
+    end
+    """) == (Complex(1), Complex(2))
+
+    # Both JL and flisp will evaluate the sparam bound multiple times
+    let res = JuliaLowering.include_string(test_mod, """
+        let eval_spbounds_counter = 0
+            global function f_optarg_eval_spbounds_counter(
+                    p::T, o=1,_=2,_=3) where {
+                        T<:Complex{<:(eval_spbounds_counter += 1; Real)}}
+                (p, eval_spbounds_counter)
+            end
+            f_optarg_eval_spbounds_counter(Complex(1))
+        end
+        """)
+        @test res == (Complex(1), 4)
+        @test_broken res == (Complex(1), 1)
+    end
 end
 
 @testset "slotflags" begin
@@ -902,6 +943,50 @@ end
             end
         """) == ((1, [10]), (1, [1]), (2, [10]), (2, [1]))
     end
+    @testset "complex sparam bounds requiring temporaries" begin
+        @test JL.include_string(
+            test_mod, """
+            let f = function (x::T;kw=[2]) where {T<:Vector{<:Number}}
+                        (T,x,kw)
+                    end
+                f([1]), f([1], kw=[0])
+            end
+        """) == ((Vector{Int}, [1], [2]), (Vector{Int}, [1], [0]))
+        @test JL.include_string(
+            test_mod, """
+            let f = function (x::T, o1=10, o2=20;kw=[2]) where {T<:Vector{<:Number}}
+                        (T,x,kw,o1,o2)
+                    end
+                f([1]), f([1], kw=[0])
+            end
+        """) == ((Vector{Int}, [1], [2], 10, 20), (Vector{Int}, [1], [0], 10, 20))
+        @test JL.include_string(
+            test_mod, """
+            let f = function (x;kw::T=x) where {T<:Vector{<:Number}}
+                        (T,x,kw)
+                    end
+                f([1]), f([1], kw=[0])
+            end
+        """) == ((Vector{Int}, [1], [1]), (Vector{Int}, [1], [0]))
+        @test JL.include_string(
+            test_mod, """
+            let f = function (x, o1=10, o2=20;kw::T=x) where {T<:Vector{<:Number}}
+                        (T,x,kw,o1,o2)
+                    end
+                f([1]), f([1], kw=[0])
+            end
+        """) == ((Vector{Int}, [1], [1], 10, 20), (Vector{Int}, [1], [0], 10, 20))
+        @test JL.include_string(
+            test_mod, """
+            let f = function (o1::T=[10];kw=1) where {T<:Vector{<:Number}}
+                        (T,kw,o1)
+                    end
+                f(), f([1]), f(;kw=2), f([1]; kw=2)
+            end
+        """) == ((Vector{Int}, 1, [10]), (Vector{Int}, 1, [1]),
+                 (Vector{Int}, 2, [10]), (Vector{Int}, 2, [1]))
+    end
+
 
     @testset "destructured args" begin
         @test JL.include_string(

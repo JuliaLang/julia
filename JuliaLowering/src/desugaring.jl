@@ -2999,7 +2999,7 @@ function typevar_bounds(ctx, ex)
         [K"<:" x ub] -> (x, any, ub)
         [K">:" x lb] -> (x, lb, any)
     end
-    @ast ctx ex [K"_typevar" name expand_forms_2(ctx, lb) expand_forms_2(ctx, ub)]
+    @ast ctx ex [K"_typevar" name lb ub]
 end
 
 function bounds_to_typevar(ctx, ex)
@@ -3007,19 +3007,17 @@ function bounds_to_typevar(ctx, ex)
     _bounds_to_typevar(ctx, ex, ex[1], ex[2], ex[3])
 end
 
+# Generate call to `TypeVar(name[, lb, ub])`.  Note the resulting expression may
+# contain SSA assignments, so can't be copied.
 function _bounds_to_typevar(ctx, srcref, name, lb, ub)
-    # Generate call to one of
-    # TypeVar(name)
-    # TypeVar(name, ub)
-    # TypeVar(name, lb, ub)
     @ast ctx srcref [K"call"
         "TypeVar"::K"core"
         name=>K"Symbol"
         if !is_core_Any(lb)
-            lb
+            expand_forms_2(ctx, lb)
         end
         if !is_core_Any(lb) || !is_core_Any(ub)
-            ub
+            expand_forms_2(ctx, ub)
         end
     ]
 end
@@ -3062,8 +3060,9 @@ end
 # - `typevar_names` are the names of the type's type parameters
 # - `typevar_stmts` are a list of statements to define a `TypeVar` for each parameter
 #   name in `typevar_names`, to be emitted prior to uses of `typevar_names`.
-#   There is exactly one statement from each typevar.
-function expand_typevars!(ctx, typevar_names, typevar_stmts, type_params)
+function expand_typevars(ctx, type_params)
+    typevar_names = SyntaxList(ctx)
+    typevar_stmts = SyntaxList(ctx)
     for param in type_params
         bounds = typevar_bounds(ctx, param)
         n = bounds[1]
@@ -3073,13 +3072,6 @@ function expand_typevars!(ctx, typevar_names, typevar_stmts, type_params)
             [K"=" n bounds_to_typevar(ctx, bounds)]
         ])
     end
-    return nothing
-end
-
-function expand_typevars(ctx, type_params)
-    typevar_names = SyntaxList(ctx)
-    typevar_stmts = SyntaxList(ctx)
-    expand_typevars!(ctx, typevar_names, typevar_stmts, type_params)
     return (typevar_names, typevar_stmts)
 end
 
