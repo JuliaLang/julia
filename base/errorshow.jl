@@ -1394,6 +1394,18 @@ end
 
 Experimental.register_error_hint(string_concatenation_hint_handler, MethodError)
 
+# Display a hint in case the user tries to use replace! on a string
+# (strings are immutable, so the non-mutating replace is what they want)
+function string_replace_hint_handler(@nospecialize(io::IO), ex::MethodError, arg_types::Vector{Any}, kwargs::Vector{Any})
+    if ex.f === _replace! && any(@nospecialize(a) -> unwrapva(a) <: AbstractString, arg_types)
+        print(io, "\nStrings are immutable, so they cannot be modified with `replace!`. Use ")
+        printstyled(io, "replace", color=:cyan)
+        print(io, " instead, which returns a new string.")
+    end
+end
+
+Experimental.register_error_hint(string_replace_hint_handler, MethodError)
+
 # Display a hint in case the user tries to use the min or max function on an iterable
 # or tries to use something like `collect` on an iterator without defining either IteratorSize or length
 function methods_on_iterable(io, ex, arg_types, kwargs)
