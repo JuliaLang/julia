@@ -618,6 +618,23 @@ end
     @test allunique(x for x in [0.0, -0.0] if true)
     @test !allunique([NaN, NaN])
     @test !allunique(x for x in [NaN, NaN] if true)
+    # strings, including multibyte characters and the indexed/hashed size cutoffs
+    @test allunique("")
+    @test allunique("a")
+    @test allunique("é")
+    @test allunique("abcé")
+    @test allunique("αβγδ")
+    @test allunique("𐀀𐀁")
+    @test !allunique("aa")
+    @test !allunique("éé")
+    @test !allunique("abca")
+    @test !allunique("ab" * "c"^40)    # duplicate past the 32-code-unit cutoff
+    @test !allunique("x" * "a"^10_000) # duplicate past the 1000 prefix scan
+    @test allunique(join('A':'z'))
+    @test allunique(@views "abcd"[1:3])
+    @test !allunique(@views "abca"[1:4])
+    @test allunique(SubString("abcd", 1, 3))
+    @test !allunique(SubString("abca", 1, 4))
     # ranges
     @test allunique(4:7)
     @test allunique(1:1)
