@@ -2852,14 +2852,6 @@ function expand_function_def(ctx, src, raw_args, wheres, body, rett)
         end
     end
     sparams = mapsyntax(x->typevar_bounds(ctx, x), wheres)
-    # Error if there are unused sparams.  possible TODO: this is currently only
-    # a warning, so may need to be relaxed
-    let unused = unused_typevars(argl, sparams)
-        !isempty(unused) && throw(LoweringError(
-            unused[1], string(
-                "method definition declares type variable but ",
-                "does not use it in the type of any function parameter")))
-    end
     if has_kws
         pos_va = @stm raw_args[end-1] begin
             [K"kw" [K"..." _] _...] -> true

@@ -261,18 +261,6 @@ end
 20  (return %₁₉)
 
 ########################################
-# Error: Static parameter which is unused
-function f(::T) where {T,S}
-    (T,S)
-end
-#---------------------
-LoweringError:
-function f(::T) where {T,S}
-#                        ╙ ── method definition declares type variable but does not use it in the type of any function parameter
-    (T,S)
-end
-
-########################################
 # Return types
 function f(x)::Int
     if x
@@ -1868,18 +1856,6 @@ end
 44  latestworld
 45  TestMod.f_kw_sparams
 46  (return %₄₅)
-
-########################################
-# Error: Static parameter which is unused in keyword body arg types
-function f_kw_sparams(x::X; a::A) where {X,Y,A}
-    (X,A)
-end
-#---------------------
-LoweringError:
-function f_kw_sparams(x::X; a::A) where {X,Y,A}
-#                                          ╙ ── method definition declares type variable but does not use it in the type of any function parameter
-    (X,A)
-end
 
 ########################################
 # Keyword @nospecialize
