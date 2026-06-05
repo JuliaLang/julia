@@ -89,6 +89,34 @@ function String(l::LazyString)
     return ok ? str : (old::String)
 end
 
+function print(io::IO, l::LazyString)
+    old = @atomic :acquire l.str
+    if old !== nothing
+        print(io, old)
+    else
+        for p in l.parts
+            print(io, p)
+        end
+    end
+end
+
+function show(io::IO, s::LazyString)
+    old = @atomic :acquire s.str
+    if old !== nothing
+        show(io, old)
+    else
+        print(io, '"')
+        for p in s.parts
+            if p isa AbstractString
+                escape_string(io, p, ('\"','$'))
+            else
+                print(io, p)
+            end
+        end
+        print(io, '"')
+    end
+end
+
 hash(s::LazyString, h::UInt64) = hash(String(s), h)
 lastindex(s::LazyString) = lastindex(String(s))
 iterate(s::LazyString) = iterate(String(s))
