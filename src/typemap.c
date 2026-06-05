@@ -129,7 +129,7 @@ static int sig_match_by_type_leaf(jl_value_t **types, jl_tupletype_t *sig, size_
 static int jl_subtype_anytype(jl_value_t *a) JL_NOTSAFEPOINT
 {
     while (1) {
-        if (jl_is_kind(a) || jl_is_typeeq(a))
+        if (a == (jl_value_t*)jl_anytype_type || jl_is_kind(a) || jl_is_typeeq(a))
             return 1;
         else if (jl_is_unionall(a))
             a = jl_unwrap_unionall(a);
@@ -1495,8 +1495,9 @@ jl_typemap_entry_t *jl_typemap_alloc(
     size_t i, l;
     for (i = 0, l = jl_nparams(ttype); i < l && issimplesig; i++) {
         jl_value_t *decl = jl_tparam(ttype, i);
-        if (jl_is_kind(decl))
-            isleafsig = 0; // Type{} may have a higher priority than a kind
+        if (jl_is_kind(decl) || decl == (jl_value_t*)jl_anytype_type)
+            isleafsig = 0; // Type{} may have a higher priority than a kind; both are
+                           // still simple for sig_match_simple
         else if (jl_is_typeeq(decl))
             isleafsig = 0; // Type{} may need special processing to compute the match
         else if (jl_is_vararg(decl))

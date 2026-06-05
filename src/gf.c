@@ -1484,10 +1484,8 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
             // kind slots always get guard entries (checking for subtypes of Type)
             if (jl_subtype(elt, type_i) && !jl_subtype((jl_value_t*)jl_type_type, type_i))
                 continue;
-            // if the declared slot is itself a kind (e.g. `::DataType` or the
-            // maximal `::Kind`, which is type-equal to `Type`), then
-            // jl_compilation_sig keeps the kind argument equal to that slot, so
-            // that is the canonical compileable form.
+            // jl_compilation_sig keeps a slot declared as a concrete kind (e.g.
+            // `::DataType`) equal to that kind, making it the canonical form
             if (jl_is_kind(type_i) && jl_egal(elt, type_i))
                 continue;
             // TODO: other code paths that could reach here?

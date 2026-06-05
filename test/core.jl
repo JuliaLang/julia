@@ -450,6 +450,23 @@ let get_param(::Type{Type{T}}) where {T} = T
     @test Tuple(get_param(t) for t in (Type{Int}, Type{Float64})) === (Int, Float64)
 end
 
+# PR #61915: dispatch onto an `@nospecialize`d `::Core.AnyType` method with a type-valued
+# argument must hit the method cache (a miss re-runs the full lookup, which allocates).
+# The extra methods keep inference from devirtualizing the call site outright.
+struct AnyTypeCache61915a end
+struct AnyTypeCache61915b end
+anytype_dispatch_61915(::Int8) = 1
+anytype_dispatch_61915(@nospecialize t::Core.AnyType) = 2
+anytype_dispatch_61915(::TypeVar) = 3
+anytype_dispatch_61915(::AnyTypeCache61915a) = 4
+anytype_dispatch_61915(::AnyTypeCache61915b) = 5
+let r = Ref{Any}(Int)
+    @noinline callit() = anytype_dispatch_61915(r[])
+    @test callit() == 2          # dispatches to the `::Core.AnyType` method
+    callit()                     # warmup: populate the method cache
+    @test @allocated(callit()) == 0
+end
+
 @test promote_type(Bool,Bottom) === Bool
 
 # type declarations
