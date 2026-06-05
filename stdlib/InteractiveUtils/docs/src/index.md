@@ -16,11 +16,11 @@ InteractiveUtils.methodswith
 InteractiveUtils.subtypes
 InteractiveUtils.supertypes
 InteractiveUtils.edit(::AbstractString, ::Integer)
-InteractiveUtils.edit(::Any)
+InteractiveUtils.edit
 InteractiveUtils.@edit
 InteractiveUtils.define_editor
 InteractiveUtils.less(::AbstractString)
-InteractiveUtils.less(::Any)
+InteractiveUtils.less
 InteractiveUtils.@less
 InteractiveUtils.@which
 InteractiveUtils.@functionloc
