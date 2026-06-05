@@ -3400,19 +3400,19 @@ JL_DLLEXPORT jl_value_t *jl_method_lookup_by_tt(jl_tupletype_t *tt, size_t world
 }
 
 // hook provided for legacy staticdata lookups
+JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup(jl_value_t *types, jl_value_t *mt, size_t world);
 jl_method_instance_t *jl_builtin_method_lookup(jl_value_t *builtin)
 {
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(builtin);
-    jl_methtable_t *mt = jl_method_table;
     jl_value_t *params[2];
     params[0] = dt->name->wrapper;
     params[1] = jl_tparam0(jl_anytuple_type);
     jl_tupletype_t *tt = (jl_datatype_t*)jl_apply_tuple_type_v(params, 2);
     JL_GC_PUSH1(&tt);
-    jl_method_instance_t *mi = jl_mt_assoc_by_type(mt, mt->cache, tt, 1);
-    assert(mi);
+    jl_method_t *m = (jl_method_t*)jl_gf_invoke_lookup((jl_value_t*)tt, (jl_value_t*)jl_method_table, 1);
+    assert(jl_is_method(m) && m->unspecialized);
     JL_GC_POP();
-    return mi;
+    return m->unspecialized;
 }
 
 // return a Vector{Any} of svecs, each describing a method match:
