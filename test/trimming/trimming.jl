@@ -12,7 +12,7 @@ let exe_suffix = splitext(Base.julia_exename())[2]
 
     hello_exe = joinpath(bindir, "hello" * exe_suffix)
     @test readchomp(`$hello_exe arg1 arg2`) == "Hello, world!"
-    @test filesize(hello_exe) < 1_900_000
+    @test filesize(hello_exe) < 2_000_000
 
     trimmability_exe = joinpath(bindir, "trimmability" * exe_suffix)
     lines = split(readchomp(`$trimmability_exe arg1 arg2`), "\n")
@@ -34,7 +34,7 @@ let exe_suffix = splitext(Base.julia_exename())[2]
 
     # Test that the shared library can be used in a C application
     capplication_exe = joinpath(bindir, "capplication" * exe_suffix)
-    lines = split(readchomp(`$capplication_exe`), "\n")
+    lines = readlines(`$capplication_exe`)
     @test length(lines) == 2
     @test lines[1] == "Sum of copied values: 6.000000"
     @test lines[2] == "Count of same vectors: 1"

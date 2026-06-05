@@ -12,6 +12,13 @@ ifndef BIN
   $(error "Please pass BIN=[path of build directory], or set as environment variable!")
 endif
 
+# When made in cygwin, paths generated herein will start with /cygdrive/c/,
+# but when passed as arguments into julia, they must start with C:/. This function
+# should be used on all paths that are passed to and are to be used within a Julia session.
+define maybe_windows_path
+$(if $(filter CYGWIN%,$(shell uname -s)),$(shell cygpath -m $(1)),$(1))
+endef
+
 #=============================================================================
 # location of test source
 SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
@@ -37,19 +44,19 @@ release: $(BIN)/hello$(EXE) $(BIN)/trimmability$(EXE) $(BIN)/basic_jll$(EXE) $(B
 
 # Complete any needed Pkg operations before trimming (some Pkg code may not be trimmable)
 Manifest.toml: $(SRCDIR)/Project.toml
-	$(JULIA) --startup-file=no --history-file=no -e 'using Pkg; Pkg.activate("$(SRCDIR)"); Pkg.instantiate()'
+	$(JULIA) --startup-file=no --history-file=no -e 'using Pkg; Pkg.activate("$(call maybe_windows_path,$(SRCDIR))"); Pkg.instantiate()'
 
 $(BIN)/hello-o.a: $(SRCDIR)/hello.jl $(JULIAC_BUILDSCRIPT) Manifest.toml
-	$(JULIA) -t 1 -J $(JULIA_LIBDIR)/julia/sys.$(SHLIB_EXT) --startup-file=no --history-file=no --output-o $@ --output-incremental=no --strip-ir --strip-metadata --experimental --trim $(JULIAC_BUILDSCRIPT) $< --output-exe true
+	$(JULIA) -t 1 -J $(JULIA_LIBDIR)/julia/sys.$(SHLIB_EXT) --startup-file=no --history-file=no --output-o $(call maybe_windows_path,$@) --output-incremental=no --strip-ir --strip-metadata --experimental --trim $(JULIAC_BUILDSCRIPT) $(call maybe_windows_path,$<) --output-exe true
 
 $(BIN)/trimmability-o.a: $(SRCDIR)/trimmability.jl $(JULIAC_BUILDSCRIPT) Manifest.toml
-	$(JULIA) -t 1 -J $(JULIA_LIBDIR)/julia/sys.$(SHLIB_EXT) --startup-file=no --history-file=no --output-o $@ --output-incremental=no --strip-ir --strip-metadata --experimental --trim $(JULIAC_BUILDSCRIPT) $< --output-exe true
+	$(JULIA) -t 1 -J $(JULIA_LIBDIR)/julia/sys.$(SHLIB_EXT) --startup-file=no --history-file=no --output-o $(call maybe_windows_path,$@) --output-incremental=no --strip-ir --strip-metadata --experimental --trim $(JULIAC_BUILDSCRIPT) $(call maybe_windows_path,$<) --output-exe true
 
 $(BIN)/basic_jll-o.a: $(SRCDIR)/basic_jll.jl $(JULIAC_BUILDSCRIPT) Manifest.toml
-	$(JULIA) -t 1 -J $(JULIA_LIBDIR)/julia/sys.$(SHLIB_EXT) --startup-file=no --history-file=no --project=$(SRCDIR) --output-o $@ --output-incremental=no --strip-ir --strip-metadata --experimental --trim $(JULIAC_BUILDSCRIPT) $< --output-exe true
+	$(JULIA) -t 1 -J $(JULIA_LIBDIR)/julia/sys.$(SHLIB_EXT) --startup-file=no --history-file=no --project=$(SRCDIR) --output-o $(call maybe_windows_path,$@) --output-incremental=no --strip-ir --strip-metadata --experimental --trim $(JULIAC_BUILDSCRIPT) $(call maybe_windows_path,$<) --output-exe true
 
 $(BIN)/libsimple-o.a: $(SRCDIR)/libsimple.jl $(JULIAC_BUILDSCRIPT)
-	$(JULIA) -t 1 -J $(JULIA_LIBDIR)/julia/sys.$(SHLIB_EXT) --startup-file=no --history-file=no --output-o $@ --output-incremental=no --strip-ir --strip-metadata --experimental --trim $(JULIAC_BUILDSCRIPT) $< --output-lib true $(BIN)/bindinginfo_libsimple.json
+	$(JULIA) -t 1 -J $(JULIA_LIBDIR)/julia/sys.$(SHLIB_EXT) --startup-file=no --history-file=no --output-o $(call maybe_windows_path,$@) --output-incremental=no --strip-ir --strip-metadata --experimental --trim $(JULIAC_BUILDSCRIPT) $(call maybe_windows_path,$<) --output-lib true $(call maybe_windows_path,$(BIN)/bindinginfo_libsimple.json)
 
 $(BIN)/hello$(EXE): $(BIN)/hello-o.a
 	$(CC) -o $@ $(call whole_archive,$<) $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS) $(LDFLAGS_ADD) $(LDFLAGS)
@@ -64,7 +71,7 @@ $(BIN)/capplication$(EXE): $(SRCDIR)/capplication.c $(SRCDIR)/libsimple.h $(BIN)
 	$(CC) -I$(BIN) -I$(SRCDIR) -I$(JULIA_LIBDIR) -o $@ $< $(call whole_archive,$(BIN)/libsimple-o.a) $(LDFLAGS_ADD) $(LDFLAGS) $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS)
 
 check: $(BIN)/hello$(EXE) $(BIN)/trimmability$(EXE) $(BIN)/basic_jll$(EXE) $(BIN)/capplication$(EXE)
-	$(JULIA) --startup-file=no --history-file=no --depwarn=error $(SRCDIR)/trimming.jl $<
+	$(JULIA) --startup-file=no --history-file=no --depwarn=error $(call maybe_windows_path,$(SRCDIR))/trimming.jl $(call maybe_windows_path,$<)
 
 clean:
 	-rm -f $(BIN)/hello$(EXE) $(BIN)/trimmability$(EXE) $(BIN)/basic_jll$(EXE) $(BIN)/hello-o.a $(BIN)/trimmability-o.a $(BIN)/basic_jll-o.a $(BIN)/libsimple-o.a $(BIN)/libsimple.$(SHLIB_EXT) $(BIN)/capplication$(EXE) $(BIN)/bindinginfo_libsimple.json $(BIN)/Manifest.toml
