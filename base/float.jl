@@ -236,21 +236,32 @@ uabs(x::BitSigned) = unsigned(abs(x))
 
 ## conversions to floating-point ##
 
-# TODO: deprecate in 2.0
-Float16(x::Integer) = convert(Float16, convert(Float32, x)::Float32)
+if ALLOW_CORE_PIRACY
+
+    # TODO: deprecate in 2.0
+    Float16(x::Integer) = convert(Float16, convert(Float32, x)::Float32)
+
+    for t1 in (Float16, Float32, Float64)
+        for st in (Int8, Int16, Int32, Int64)
+            @eval begin
+                (::Type{$t1})(x::($st)) = sitofp($t1, x)
+            end
+        end
+        for ut in (Bool, UInt8, UInt16, UInt32, UInt64)
+            @eval begin
+                (::Type{$t1})(x::($ut)) = uitofp($t1, x)
+            end
+        end
+    end
+
+end
 
 for t1 in (Float16, Float32, Float64)
     for st in (Int8, Int16, Int32, Int64)
-        @eval begin
-            (::Type{$t1})(x::($st)) = sitofp($t1, x)
-            promote_rule(::Type{$t1}, ::Type{$st}) = $t1
-        end
+        @eval promote_rule(::Type{$t1}, ::Type{$st}) = $t1
     end
     for ut in (Bool, UInt8, UInt16, UInt32, UInt64)
-        @eval begin
-            (::Type{$t1})(x::($ut)) = uitofp($t1, x)
-            promote_rule(::Type{$t1}, ::Type{$ut}) = $t1
-        end
+        @eval promote_rule(::Type{$t1}, ::Type{$ut}) = $t1
     end
 end
 
@@ -261,103 +272,107 @@ promote_rule(::Type{Float32}, ::Type{Int128}) = Float32
 promote_rule(::Type{Float16}, ::Type{UInt128}) = Float16
 promote_rule(::Type{Float16}, ::Type{Int128}) = Float16
 
-function Float64(x::UInt128)
-    if x < UInt128(1) << 104 # Can fit it in two 52 bits mantissas
-        low_exp = 0x1p52
-        high_exp = 0x1p104
-        low_bits = (x % UInt64) & Base.significand_mask(Float64)
-        low_value = reinterpret(Float64, reinterpret(UInt64, low_exp) | low_bits) - low_exp
-        high_bits = ((x >> 52) % UInt64)
-        high_value = reinterpret(Float64, reinterpret(UInt64, high_exp) | high_bits) - high_exp
-        low_value + high_value
-    else # Large enough that low bits only affect rounding, pack low bits
-        low_exp = 0x1p76
-        high_exp = 0x1p128
-        low_bits = ((x >> 12) % UInt64) >> 12 | (x % UInt64) & 0xFFFFFF
-        low_value = reinterpret(Float64, reinterpret(UInt64, low_exp) | low_bits) - low_exp
-        high_bits = ((x >> 76) % UInt64)
-        high_value = reinterpret(Float64, reinterpret(UInt64, high_exp) | high_bits) - high_exp
-        low_value + high_value
+if ALLOW_CORE_PIRACY
+
+    function Float64(x::UInt128)
+        if x < UInt128(1) << 104 # Can fit it in two 52 bits mantissas
+            low_exp = 0x1p52
+            high_exp = 0x1p104
+            low_bits = (x % UInt64) & Base.significand_mask(Float64)
+            low_value = reinterpret(Float64, reinterpret(UInt64, low_exp) | low_bits) - low_exp
+            high_bits = ((x >> 52) % UInt64)
+            high_value = reinterpret(Float64, reinterpret(UInt64, high_exp) | high_bits) - high_exp
+            low_value + high_value
+        else # Large enough that low bits only affect rounding, pack low bits
+            low_exp = 0x1p76
+            high_exp = 0x1p128
+            low_bits = ((x >> 12) % UInt64) >> 12 | (x % UInt64) & 0xFFFFFF
+            low_value = reinterpret(Float64, reinterpret(UInt64, low_exp) | low_bits) - low_exp
+            high_bits = ((x >> 76) % UInt64)
+            high_value = reinterpret(Float64, reinterpret(UInt64, high_exp) | high_bits) - high_exp
+            low_value + high_value
+        end
     end
-end
 
-function Float64(x::Int128)
-    sign_bit = ((x >> 127) % UInt64) << 63
-    ux = uabs(x)
-    if ux < UInt128(1) << 104 # Can fit it in two 52 bits mantissas
-        low_exp = 0x1p52
-        high_exp = 0x1p104
-        low_bits = (ux % UInt64) & Base.significand_mask(Float64)
-        low_value = reinterpret(Float64, reinterpret(UInt64, low_exp) | low_bits) - low_exp
-        high_bits = ((ux >> 52) % UInt64)
-        high_value = reinterpret(Float64, reinterpret(UInt64, high_exp) | high_bits) - high_exp
-        reinterpret(Float64, sign_bit | reinterpret(UInt64, low_value + high_value))
-    else # Large enough that low bits only affect rounding, pack low bits
-        low_exp = 0x1p76
-        high_exp = 0x1p128
-        low_bits = ((ux >> 12) % UInt64) >> 12 | (ux % UInt64) & 0xFFFFFF
-        low_value = reinterpret(Float64, reinterpret(UInt64, low_exp) | low_bits) - low_exp
-        high_bits = ((ux >> 76) % UInt64)
-        high_value = reinterpret(Float64, reinterpret(UInt64, high_exp) | high_bits) - high_exp
-        reinterpret(Float64, sign_bit | reinterpret(UInt64, low_value + high_value))
+    function Float64(x::Int128)
+        sign_bit = ((x >> 127) % UInt64) << 63
+        ux = uabs(x)
+        if ux < UInt128(1) << 104 # Can fit it in two 52 bits mantissas
+            low_exp = 0x1p52
+            high_exp = 0x1p104
+            low_bits = (ux % UInt64) & Base.significand_mask(Float64)
+            low_value = reinterpret(Float64, reinterpret(UInt64, low_exp) | low_bits) - low_exp
+            high_bits = ((ux >> 52) % UInt64)
+            high_value = reinterpret(Float64, reinterpret(UInt64, high_exp) | high_bits) - high_exp
+            reinterpret(Float64, sign_bit | reinterpret(UInt64, low_value + high_value))
+        else # Large enough that low bits only affect rounding, pack low bits
+            low_exp = 0x1p76
+            high_exp = 0x1p128
+            low_bits = ((ux >> 12) % UInt64) >> 12 | (ux % UInt64) & 0xFFFFFF
+            low_value = reinterpret(Float64, reinterpret(UInt64, low_exp) | low_bits) - low_exp
+            high_bits = ((ux >> 76) % UInt64)
+            high_value = reinterpret(Float64, reinterpret(UInt64, high_exp) | high_bits) - high_exp
+            reinterpret(Float64, sign_bit | reinterpret(UInt64, low_value + high_value))
+        end
     end
-end
 
-function Float32(x::UInt128)
-    x == 0 && return 0f0
-    n = top_set_bit(x) # ndigits0z(x,2)
-    if n <= 24
-        y = ((x % UInt32) << (24-n)) & 0x007f_ffff
-    else
-        y = ((x >> (n-25)) % UInt32) & 0x00ff_ffff # keep 1 extra bit
-        y = (y+one(UInt32))>>1 # round, ties up (extra leading bit in case of next exponent)
-        y &= ~UInt32(trailing_zeros(x) == (n-25)) # fix last bit to round to even
+    function Float32(x::UInt128)
+        x == 0 && return 0f0
+        n = top_set_bit(x) # ndigits0z(x,2)
+        if n <= 24
+            y = ((x % UInt32) << (24-n)) & 0x007f_ffff
+        else
+            y = ((x >> (n-25)) % UInt32) & 0x00ff_ffff # keep 1 extra bit
+            y = (y+one(UInt32))>>1 # round, ties up (extra leading bit in case of next exponent)
+            y &= ~UInt32(trailing_zeros(x) == (n-25)) # fix last bit to round to even
+        end
+        d = ((n+126) % UInt32) << 23
+        reinterpret(Float32, d + y)
     end
-    d = ((n+126) % UInt32) << 23
-    reinterpret(Float32, d + y)
-end
 
-function Float32(x::Int128)
-    x == 0 && return 0f0
-    s = ((x >>> 96) % UInt32) & 0x8000_0000 # sign bit
-    x = abs(x) % UInt128
-    n = top_set_bit(x) # ndigits0z(x,2)
-    if n <= 24
-        y = ((x % UInt32) << (24-n)) & 0x007f_ffff
-    else
-        y = ((x >> (n-25)) % UInt32) & 0x00ff_ffff # keep 1 extra bit
-        y = (y+one(UInt32))>>1 # round, ties up (extra leading bit in case of next exponent)
-        y &= ~UInt32(trailing_zeros(x) == (n-25)) # fix last bit to round to even
+    function Float32(x::Int128)
+        x == 0 && return 0f0
+        s = ((x >>> 96) % UInt32) & 0x8000_0000 # sign bit
+        x = abs(x) % UInt128
+        n = top_set_bit(x) # ndigits0z(x,2)
+        if n <= 24
+            y = ((x % UInt32) << (24-n)) & 0x007f_ffff
+        else
+            y = ((x >> (n-25)) % UInt32) & 0x00ff_ffff # keep 1 extra bit
+            y = (y+one(UInt32))>>1 # round, ties up (extra leading bit in case of next exponent)
+            y &= ~UInt32(trailing_zeros(x) == (n-25)) # fix last bit to round to even
+        end
+        d = ((n+126) % UInt32) << 23
+        reinterpret(Float32, s | d + y)
     end
-    d = ((n+126) % UInt32) << 23
-    reinterpret(Float32, s | d + y)
+
+    # TODO: optimize
+    Float16(x::UInt128) = convert(Float16, Float64(x))
+    Float16(x::Int128)  = convert(Float16, Float64(x))
+
+    Float16(x::Float32) = fptrunc(Float16, x)
+    Float16(x::Float64) = fptrunc(Float16, x)
+    Float32(x::Float64) = fptrunc(Float32, x)
+
+    Float32(x::Float16) = fpext(Float32, x)
+    Float64(x::Float32) = fpext(Float64, x)
+    Float64(x::Float16) = fpext(Float64, x)
+
+    AbstractFloat(x::Bool)    = Float64(x)
+    AbstractFloat(x::Int8)    = Float64(x)
+    AbstractFloat(x::Int16)   = Float64(x)
+    AbstractFloat(x::Int32)   = Float64(x)
+    AbstractFloat(x::Int64)   = Float64(x) # LOSSY
+    AbstractFloat(x::Int128)  = Float64(x) # LOSSY
+    AbstractFloat(x::UInt8)   = Float64(x)
+    AbstractFloat(x::UInt16)  = Float64(x)
+    AbstractFloat(x::UInt32)  = Float64(x)
+    AbstractFloat(x::UInt64)  = Float64(x) # LOSSY
+    AbstractFloat(x::UInt128) = Float64(x) # LOSSY
+
+    Bool(x::Float16) = x==0 ? false : x==1 ? true : throw(InexactError(:Bool, Bool, x))
+
 end
-
-# TODO: optimize
-Float16(x::UInt128) = convert(Float16, Float64(x))
-Float16(x::Int128)  = convert(Float16, Float64(x))
-
-Float16(x::Float32) = fptrunc(Float16, x)
-Float16(x::Float64) = fptrunc(Float16, x)
-Float32(x::Float64) = fptrunc(Float32, x)
-
-Float32(x::Float16) = fpext(Float32, x)
-Float64(x::Float32) = fpext(Float64, x)
-Float64(x::Float16) = fpext(Float64, x)
-
-AbstractFloat(x::Bool)    = Float64(x)
-AbstractFloat(x::Int8)    = Float64(x)
-AbstractFloat(x::Int16)   = Float64(x)
-AbstractFloat(x::Int32)   = Float64(x)
-AbstractFloat(x::Int64)   = Float64(x) # LOSSY
-AbstractFloat(x::Int128)  = Float64(x) # LOSSY
-AbstractFloat(x::UInt8)   = Float64(x)
-AbstractFloat(x::UInt16)  = Float64(x)
-AbstractFloat(x::UInt32)  = Float64(x)
-AbstractFloat(x::UInt64)  = Float64(x) # LOSSY
-AbstractFloat(x::UInt128) = Float64(x) # LOSSY
-
-Bool(x::Float16) = x==0 ? false : x==1 ? true : throw(InexactError(:Bool, Bool, x))
 
 """
     float(x)

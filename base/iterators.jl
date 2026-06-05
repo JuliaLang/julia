@@ -20,11 +20,11 @@ using .Base:
 using .Core
 using Core: @doc
 
-using Base:
+using .Base:
     cld, fld, resize!, IndexCartesian, Checked
 using .Checked: checked_mul
 
-import Base:
+import .Base:
     first, last,
     isempty, length, size, axes, ndims,
     eltype, IteratorSize, IteratorEltype, promote_typejoin,
