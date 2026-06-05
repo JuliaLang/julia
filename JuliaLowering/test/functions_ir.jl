@@ -279,16 +279,76 @@ end
 8   (call core.svec %₅ %₆ %₇)
 9   --- method TestMod.f %₈
     slots: [slot₁/#self#(!read) slot₂/x slot₃/tmp(!read)]
-    1   (gotoifnot slot₂/x label₂)
-    2   TestMod.Int
+    1   TestMod.Int
+    2   (gotoifnot slot₂/x label₃)
     3   (= slot₃/tmp 0xff)
-    4   (call core.isa slot₃/tmp %₂)
+    4   (call core.isa slot₃/tmp %₁)
     5   (gotoifnot %₄ label₇)
     6   (goto label₉)
-    7   (call top.convert %₂ slot₃/tmp)
-    8   (= slot₃/tmp (call core.typeassert %₇ %₂))
+    7   (call top.convert %₁ slot₃/tmp)
+    8   (= slot₃/tmp (call core.typeassert %₇ %₁))
     9   slot₃/tmp
     10  (return %₉)
+10  latestworld
+11  TestMod.f
+12  (return %₁₁)
+
+########################################
+# Complex return types
+function f(c,b1,b2)::Union{Vector{<:Integer}, Int}
+    if b1
+        return 1
+    elseif b2
+        2
+    else
+        3
+    end
+end
+#---------------------
+1   (method TestMod.f)
+2   latestworld
+3   TestMod.f
+4   (call core.Typeof %₃)
+5   (call core.svec %₄ core.Any core.Any core.Any)
+6   (call core.svec)
+7   SourceLocation::1:10
+8   (call core.svec %₅ %₆ %₇)
+9   --- method TestMod.f %₈
+    slots: [slot₁/#self#(!read) slot₂/c(!read) slot₃/b1 slot₄/b2 slot₅/tmp(!read) slot₆/tmp(!read) slot₇/tmp(!read)]
+    1   TestMod.Union
+    2   TestMod.Integer
+    3   (call core.TypeVar :#T1 %₂)
+    4   TestMod.Vector
+    5   (call core.apply_type %₄ %₃)
+    6   (call core.UnionAll %₃ %₅)
+    7   TestMod.Int
+    8   (call core.apply_type %₁ %₆ %₇)
+    9   (gotoifnot slot₃/b1 label₁₈)
+    10  (= slot₅/tmp 1)
+    11  (call core.isa slot₅/tmp %₈)
+    12  (gotoifnot %₁₁ label₁₄)
+    13  (goto label₁₆)
+    14  (call top.convert %₈ slot₅/tmp)
+    15  (= slot₅/tmp (call core.typeassert %₁₄ %₈))
+    16  slot₅/tmp
+    17  (return %₁₆)
+    18  (gotoifnot slot₄/b2 label₂₇)
+    19  (= slot₆/tmp 2)
+    20  (call core.isa slot₆/tmp %₈)
+    21  (gotoifnot %₂₀ label₂₃)
+    22  (goto label₂₅)
+    23  (call top.convert %₈ slot₆/tmp)
+    24  (= slot₆/tmp (call core.typeassert %₂₃ %₈))
+    25  slot₆/tmp
+    26  (return %₂₅)
+    27  (= slot₇/tmp 3)
+    28  (call core.isa slot₇/tmp %₈)
+    29  (gotoifnot %₂₈ label₃₁)
+    30  (goto label₃₃)
+    31  (call top.convert %₈ slot₇/tmp)
+    32  (= slot₇/tmp (call core.typeassert %₃₁ %₈))
+    33  slot₇/tmp
+    34  (return %₃₃)
 10  latestworld
 11  TestMod.f
 12  (return %₁₁)

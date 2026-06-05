@@ -192,6 +192,21 @@ begin
     X1{Int}()()
 end
 """) === Int
+# or anywhere
+@test JuliaLowering.include_string(test_mod, """
+let f = function foo(y::X1{T})::X1{T} where T
+        y
+    end
+    f(X1{Int}())
+end
+""") == test_mod.X1{Int}()
+@test JuliaLowering.include_string(test_mod, """
+let f = function foo(y::X1{<:T})::X1{<:T} where T
+        y
+    end
+    f(X1{Int}())
+end
+""") == test_mod.X1{Int}()
 
 Base.include_string(test_mod,
 """
@@ -836,6 +851,17 @@ end
     """)
     @test test_mod.f_kw_rett() isa Vector{Int}
     @test test_mod.f_kw_rett(T=Float64) isa Vector{Float64}
+
+    JuliaLowering.include_string(test_mod, """
+    function f_kw_rett2(; T::Type=Int)::Union{Vector{<:T}, Vector{<:AbstractVector{<:T}}}
+        false && return T[]
+        T == Int ? T[1,2,3] : [T[1,2],T[3,4]]
+    end
+    """)
+    @test test_mod.f_kw_rett2() isa Vector{Int}
+    @test test_mod.f_kw_rett2() == Int[1,2,3]
+    @test test_mod.f_kw_rett2(T=Float64) isa Vector{Vector{Float64}}
+    @test test_mod.f_kw_rett2(T=Float64) == [Float64[1.0,2.0],Float64[3.0,4.0]]
 
     # Throwing of UndefKeywordError
     JuliaLowering.include_string(test_mod, """
