@@ -119,6 +119,40 @@
         @test Base.cconvert(Ptr{Int8}, u) == u
     end
 
+    @testset "StringIndexError uses SubString indices (issue #55840)" begin
+        s = SubString("αβγ", 3)  # "βγ", offset 2
+        e = @test_throws StringIndexError s[2]
+        @test e.value.string === s
+        @test e.value.index == 2
+        @test sprint(showerror, e.value) ==
+            "StringIndexError: invalid index [2], valid nearby indices [1]=>'β', [3]=>'γ'"
+        ep = @test_throws StringIndexError "αβγ"[2]
+        @test ep.value.string isa String
+        @test ep.value.index == 2
+
+        # a non-Int Integer index hits the generic `(SubString, Integer)` method
+        eu = @test_throws StringIndexError s[0x02]
+        @test eu.value.string === s
+        @test eu.value.index == 2
+
+        # a SubString backed by something other than String reports in SubString
+        # coordinates too, through the same generic method
+        as = Base.AnnotatedString("αβγ")
+        sa = SubString(as, 3)  # "βγ"
+        ea = @test_throws StringIndexError sa[2]
+        @test ea.value.string === sa
+        @test ea.value.index == 2
+        eau = @test_throws StringIndexError sa[0x02]
+        @test eau.value.string === sa
+        @test eau.value.index == 2
+
+        # interior multi-byte index: in "aβγ" the index 3 falls inside β
+        s2 = SubString("aβγ", 1)
+        e2 = @test_throws StringIndexError s2[3]
+        @test e2.value.string === s2
+        @test e2.value.index == 3
+    end
+
     let str = "føøbar"
         @test_throws BoundsError SubString(str, 10, 10)
         u = SubString(str, 4, 3)
