@@ -267,11 +267,12 @@ function foreach_anyssa(@specialize(f), @nospecialize(stmt))
     end
 end
 
-# Uses of each SSA value, in compressed-sparse-row form: a set per value would
-# waste ~2*nvals allocations since ~98% of values are used 0 or 1 times, so all
-# uses are scattered into one flat array for two allocations regardless of nvals.
+# Uses of each SSA value, in compressed-sparse-row form: the uses of ssa `i` are
+# `data[offsets[i]:offsets[i+1]-1]`. Entries are use occurrences, not distinct
+# statement indices, so a statement using the same value twice lists its line
+# twice; harmless for the consumers (`isempty` and idempotent block re-enqueue).
 struct SSAUses
-    offsets::Vector{Int} # uses of ssa `i` are `data[offsets[i]:offsets[i+1]-1]`
+    offsets::Vector{Int}
     data::Vector{Int}
 end
 
