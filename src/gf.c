@@ -1660,7 +1660,7 @@ static inline jl_typemap_entry_t *lookup_leafcache(jl_genericmemory_t *leafcache
     return NULL;
 }
 
-static jl_typemap_entry_t *mt_find_cache_entry(_Atomic(jl_typemap_t* JL_NONNULL) *JL_NONNULL cache JL_PROPAGATES_ROOT, _Atomic(jl_genericmemory_t*) *leafcache JL_PROPAGATES_ROOT, jl_datatype_t *tt, size_t world, int offs)
+static jl_typemap_entry_t *mt_find_cache_entry(_Atomic(jl_typemap_t*) JL_NONNULL *JL_NONNULL cache JL_PROPAGATES_ROOT, _Atomic(jl_genericmemory_t*) *leafcache JL_PROPAGATES_ROOT, jl_datatype_t *tt, size_t world, int offs)
 {
     if (leafcache) {
         jl_typemap_entry_t *entry = lookup_leafcache(jl_atomic_load_relaxed(leafcache), (jl_value_t*)tt, world);
@@ -1668,6 +1668,7 @@ static jl_typemap_entry_t *mt_find_cache_entry(_Atomic(jl_typemap_t* JL_NONNULL)
             return entry;
     }
     struct jl_typemap_assoc search = {(jl_value_t*)tt, world, NULL};
+    assert(cache);
     jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(jl_atomic_load_relaxed(cache), &search, offs, /*subtype*/1);
     return entry;
 }
@@ -1842,7 +1843,7 @@ static jl_method_instance_t *cache_result(
 }
 
 static void recache_method(
-        jl_methtable_t *mt, jl_methcache_t *mc, _Atomic(jl_typemap_t*) *cache, jl_value_t *parent JL_PROPAGATES_ROOT,
+        jl_methtable_t *mt, jl_methcache_t *mc, _Atomic(jl_typemap_t*) JL_NONNULL *JL_NONNULL cache, jl_value_t *parent JL_PROPAGATES_ROOT,
         jl_tupletype_t *tt, // the original tupletype of the signature
         jl_method_t *definition,
         size_t world, size_t min_valid, size_t max_valid, size_t current_world,
@@ -1869,6 +1870,7 @@ static void recache_method(
     }
     { // scope block
         struct jl_typemap_assoc search = {tt ? (jl_value_t*)tt : compilationsig, world, NULL};
+        assert(cache);
         jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(jl_atomic_load_relaxed(cache), &search, offs, /*subtype*/1);
         if (entry && jl_subtype((jl_value_t*)entry->sig, (jl_value_t*)newmeth->specTypes)) {
             entry->func.linfo = newmeth;

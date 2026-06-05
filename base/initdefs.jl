@@ -502,7 +502,7 @@ may still be executing concurrently during shutdown.
 """
 function atexit(f::Function)
     # HACK: if generating output, hint that we might want to compile `f`, so that it is available for the no-codegen test
-    generating_output() && precompile(f, hasmethod(f, (Cint,)) ? (Cint,) : ())
+    generating_output() && (precompile(f, (Cint,)) || precompile(f, ()))
     @lock _atexit_hooks_lock begin
         _atexit_hooks_finished && error("cannot register new atexit hook; already exiting.")
         pushfirst!(atexit_hooks, f)

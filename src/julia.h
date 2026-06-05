@@ -929,9 +929,9 @@ struct _jl_globalref_t {
 struct _jl_typemap_entry_t {
     JL_DATA_TYPE
     _Atomic(struct _jl_typemap_entry_t*) next; // invasive linked list
-    jl_tupletype_t *sig; // the type signature for this entry
+    jl_tupletype_t *JL_NONNULL sig; // the type signature for this entry
     jl_tupletype_t *simplesig; // a simple signature for fast rejection
-    jl_svec_t *guardsigs;
+    jl_svec_t *JL_NONNULL guardsigs;
     _Atomic(size_t) min_world;
     _Atomic(size_t) max_world;
     union {
@@ -953,24 +953,24 @@ typedef struct _jl_typemap_level_t {
     // next split may be on Type{T} as LeafTypes then TypeName's parents up to Any
     // next split may be on LeafType
     // next split may be on TypeName
-    _Atomic(jl_genericmemory_t*) arg1; // contains LeafType (in a map of non-abstract TypeName)
-    _Atomic(jl_genericmemory_t*) targ; // contains Type{LeafType} (in a map of non-abstract TypeName)
-    _Atomic(jl_genericmemory_t*) name1; // a map for a map for TypeName, for parents up to (excluding) Any
-    _Atomic(jl_genericmemory_t*) tname; // a map for Type{TypeName}, for parents up to (including) Any
+    _Atomic(jl_genericmemory_t*) JL_NONNULL arg1; // contains LeafType (in a map of non-abstract TypeName)
+    _Atomic(jl_genericmemory_t*) JL_NONNULL targ; // contains Type{LeafType} (in a map of non-abstract TypeName)
+    _Atomic(jl_genericmemory_t*) JL_NONNULL name1; // a map for a map for TypeName, for parents up to (excluding) Any
+    _Atomic(jl_genericmemory_t*) JL_NONNULL tname; // a map for Type{TypeName}, for parents up to (including) Any
     // next a linear list of things too complicated at this level for analysis (no more levels)
-    _Atomic(jl_typemap_entry_t*) linear;
+    _Atomic(jl_typemap_entry_t*) JL_NONNULL linear;
     // finally, start a new level if the type at offs is Any
-    _Atomic(jl_typemap_t*) any;
+    _Atomic(jl_typemap_t*) JL_NONNULL any;
 } jl_typemap_level_t;
 
 typedef struct _jl_methcache_t {
     JL_DATA_TYPE
     // hash map from dispatchtuple type to a linked-list of TypeMapEntry
     // entry.sig == type for all entries in the linked-list
-    _Atomic(jl_genericmemory_t*) leafcache;
+    _Atomic(jl_genericmemory_t*) JL_NONNULL leafcache;
 
     // cache for querying everything else (anything that didn't seem profitable to put into leafcache)
-    _Atomic(jl_typemap_t*) cache;
+    _Atomic(jl_typemap_t*) JL_NONNULL cache;
 
     jl_mutex_t writelock;
 } jl_methcache_t;
@@ -979,24 +979,24 @@ typedef struct _jl_methcache_t {
 typedef struct _jl_methtable_t {
     JL_DATA_TYPE
     // full set of entries
-    _Atomic(jl_typemap_t*) defs;
-    jl_methcache_t *cache;
-    jl_sym_t *name; // sometimes used for debug printing
-    jl_module_t *module; // sometimes used for debug printing
+    _Atomic(jl_typemap_t*) JL_NONNULL defs;
+    jl_methcache_t *JL_NONNULL cache;
+    jl_sym_t *JL_NONNULL name; // sometimes used for debug printing
+    jl_module_t *JL_NONNULL module; // sometimes used for debug printing
     jl_genericmemory_t *backedges; // IdDict{top typenames, Vector{uncovered (sig => caller::CodeInstance)}}
 } jl_methtable_t;
 
 typedef struct {
     JL_DATA_TYPE
-    jl_sym_t *head;
-    jl_array_t *args;
+    jl_sym_t *JL_NONNULL head;
+    jl_array_t *JL_NONNULL args;
 } jl_expr_t;
 
 typedef struct {
     JL_DATA_TYPE
-    jl_tupletype_t *spec_types;
-    jl_svec_t *sparams;
-    jl_method_t *method;
+    jl_tupletype_t *JL_NONNULL spec_types;
+    jl_svec_t *JL_NONNULL sparams;
+    jl_method_t *JL_NONNULL method;
     // A bool on the julia side, but can be temporarily 0x2 as a sentinel
     // during construction.
     uint8_t fully_covers;
