@@ -1055,7 +1055,7 @@ function run_passes_ipo_safe(
 
     __stage__ = 0  # used by @pass
     # NOTE: The pass name MUST be unique for `optimize_until::String` to work
-    @pass "CC: CONVERT"   ir = convert_to_ircode(ci, sv)
+    @pass "CC: CONVERT"   ir = convert_to_ircode!(ci, sv)
     @pass "CC: SLOT2REG"  ir = slot2reg(ir, ci, sv)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
     @pass "CC: COMPACT_1" ir = compact!(ir)
@@ -1138,7 +1138,7 @@ function changed_lineinfo(di::DebugInfo, codeloc::Int, prevloc::Int)
     end
 end
 
-function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
+function convert_to_ircode!(ci::CodeInfo, sv::OptimizationState)
     # Update control-flow to reflect any unreachable branches.
     ssavaluetypes = ci.ssavaluetypes::Vector{Any}
     # ci is always a fresh private copy so we can reuse it here.

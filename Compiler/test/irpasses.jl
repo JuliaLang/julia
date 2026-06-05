@@ -1543,7 +1543,7 @@ let code = Any[
     sv.bb_states[#=block_id=#4].vartable[#=slot_id=#4] = VarState(Bool, #=def=#7, #=maybe_undef=#false)
     sv.bb_states[#=block_id=#5].vartable[#=slot_id=#4] = VarState(Bool, #=def=#7, #=maybe_undef=#false)
 
-    ir = Compiler.convert_to_ircode(src, sv)
+    ir = Compiler.convert_to_ircode!(src, sv)
     ir = Compiler.slot2reg(ir, src, sv)
     ir = Compiler.compact!(ir)
 
