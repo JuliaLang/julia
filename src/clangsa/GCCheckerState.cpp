@@ -627,7 +627,25 @@ ProgramStateRef GCChecker::bindRootRegionToCurrentValue(
     if (const auto *TVR = Region->getAs<TypedValueRegion>())
       ValueType = TVR->getValueType();
   }
-  SVal Value = State->getSVal(Region);
+  // Reading the region's current value requires a concrete, non-void value
+  // type. The base region of a `JL_GC_PUSHARGS` args array is the symbolic
+  // region produced by `alloca`, whose pointee type is `void`; asking the
+  // store for its scalar value there trips an assertion in the analyzer's
+  // RegionStore ("Attempting to dereference a void pointer!"). Mirror the
+  // store's own type auto-detection (which `getSVal(Region)` performs
+  // implicitly) so we can skip the read when it would yield a null or void
+  // type -- such regions carry no scalar value to track, and for an args array
+  // the per-slot element regions are rooted separately.
+  QualType LoadType;
+  if (const auto *TVR = Region->getAs<TypedValueRegion>())
+    LoadType = TVR->getValueType();
+  else if (const auto *TR = Region->getAs<TypedRegion>())
+    LoadType = TR->getLocationType()->getPointeeType();
+  else if (const auto *SR = Region->getAs<SymbolicRegion>())
+    LoadType = SR->getSymbol()->getType()->getPointeeType();
+  SVal Value = (!LoadType.isNull() && !LoadType->isVoidType())
+                   ? State->getSVal(Region, LoadType)
+                   : UnknownVal();
   GCObjectSet ValueObjects = getObjectsForSVal(State, Value);
   bool HasGCObjectValue = !ValueObjects.isEmpty();
   bool MayBeUnknownObject =
