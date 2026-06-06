@@ -192,8 +192,9 @@ if ccall(:jl_ver_major, Int32, ()) < 2
     # TODO: here, we really want the return type of o.by, without calling it
     ordtype(o::By,              vs::AbstractArray) = try typeof(o.by(vs[1])) catch; Any end
     ordtype(o::Ordering,        vs::AbstractArray) = eltype(vs)
+    ordtype(o::Ordering,        vs::AbstractArray) = eltype(vs)
 
-    """
+    @doc """
         Base.Order.ordtype(o::Ordering, a::AbstractArray)
 
     Return the type of object being compared when the ordering `o` is
@@ -202,8 +203,7 @@ if ccall(:jl_ver_major, Int32, ()) < 2
 
     !!! warning
         This function may be removed in a future version of Julia and its use is discouraged.
-    """
-    ordtype(o::Ordering,        vs::AbstractArray) = eltype(vs)
+    """ ordtype
 end
 
 end
