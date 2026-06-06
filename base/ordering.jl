@@ -27,25 +27,25 @@ export # not exported by Base
 """
     Base.Order.Ordering
 
-Abstract type which represents a strict weak order on some set of elements. See
-[`sort!`](@ref) for more.
+Abstract type representing a [strict weak order](https://en.wikipedia.org/wiki/Weak_ordering) on some set of elements,
+used to indicate sorting order in [`sort!`](@ref) and [`sort`](@ref).
 
-Use [`Base.Order.lt`](@ref) to compare two elements according to the ordering.
+Use [`Base.Order.lt`](@ref) to compare two elements according to an ordering.
 """
 abstract type Ordering end
 
 """
     Base.Order.ForwardOrdering <: Ordering
 
-This is a singleton [`Ordering`](@ref) subtype that represents ascending order according to [`isless`](@ref).
+Singleton [`Ordering`](@ref) subtype that represents ascending order according to [`isless`](@ref).
 The constant [`Forward`](@ref) is defined for the singleton instance `ForwardOrdering()`.
 """
 struct ForwardOrdering <: Ordering end
 
 """
-    Base.Order.ReverseOrdering(fwd::Ordering=Forward) <: Ordering
+    Base.Order.ReverseOrdering(o::Ordering=Forward) <: Ordering
 
-A wrapper which reverses an ordering.
+Return a new `Ordering` instance that represents the reverse of the `o` ordering.
 
 For a given `Ordering` `o`, the following holds for all  `a`, `b`:
 
@@ -69,8 +69,8 @@ reverse(o::Ordering) = ReverseOrdering(o)
 """
     Base.Order.DirectOrdering <: Ordering
 
-An alias for the union of [`ForwardOrdering`](@ref) and its reverse via [`ReverseOrdering`](@ref):
-these are subtypes of [`Ordering`](@ref)` that represent either ascending or descending
+Union of [`ForwardOrdering`](@ref) and its reverse via [`ReverseOrdering`](@ref):
+the subtypes of [`Ordering`](@ref)` that represent either ascending or descending
 order according to [`isless`](@ref).
 """
 const DirectOrdering = Union{ForwardOrdering,ReverseOrdering{ForwardOrdering}}
@@ -94,7 +94,7 @@ const Reverse = ReverseOrdering()
 """
     By(by, order::Ordering=Forward)
 
-`Ordering` which applies `order` to elements after they have been transformed
+Return [`Ordering`](@ref) that applies `order` to elements after they have been transformed
 by the function `by`.
 """
 struct By{T, O} <: Ordering
@@ -108,7 +108,7 @@ By(by) = By(by, Forward)
 """
     Lt(lt)
 
-`Ordering` that calls `lt(a, b)` to compare elements. `lt` must
+[`Ordering`](@ref) that calls `lt(a, b)` to compare elements. `lt` must
 obey the same rules as the `lt` parameter of [`sort!`](@ref).
 """
 struct Lt{T} <: Ordering
@@ -118,7 +118,7 @@ end
 """
     Perm(order::Ordering, data::AbstractVector)
 
-`Ordering` on the indices of `data` where `i` is less than `j` if `data[i]` is
+[`Ordering`](@ref) on the indices of `data` where `i` is less than `j` if `data[i]` is
 less than `data[j]` according to `order`. In the case that `data[i]` and
 `data[j]` are equal, `i` and `j` are compared by numeric value.
 """
