@@ -10,9 +10,7 @@ isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.j
 using .Main.OffsetArrays
 
 @testset "Base.Sort docstrings" begin
-    undoc = Docs.undocumented_names(Base.Sort)
-    @test_broken isempty(undoc)
-    @test undoc == [:Algorithm, :SMALL_THRESHOLD, :Sort]
+    @test isempty(Docs.undocumented_names(Base.Sort))
 end
 
 @testset "Order" begin

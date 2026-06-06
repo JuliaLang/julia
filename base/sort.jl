@@ -1,5 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    Sort
+
+Module implementing sorting functions and associated types.
+"""
 module Sort
 
 using Base.Order
@@ -43,6 +48,13 @@ export # not exported by Base
     SMALL_ALGORITHM,
     SMALL_THRESHOLD
 
+"""
+    Base.Sort.Algorithm
+
+An `abstract` type representing a sorting algorithm, which can be passed to functions
+like [`sort`](@ref) and [`sort!`](@ref) to indicate the algorithm to be used.  Subtypes
+of `Algorithm` include, for example, [`PartialQuickSort`](@ref) and [`MergeSort`](@ref).
+"""
 abstract type Algorithm end
 
 ## functions requiring only ordering ##

@@ -1234,9 +1234,7 @@ f51129(v, x) = (1 .- (v ./ x) .^ 2)
 @test @inferred(f51129([13.0], 6.5)) == [-3.0]
 
 @testset "Docstrings" begin
-    undoc = Docs.undocumented_names(Broadcast)
-    @test_broken isempty(undoc)
-    @test undoc == [:dotview]
+    @test isempty(Docs.undocumented_names(Broadcast))
 end
 
 @testset "broadcast for `AbstractArray` without `CartesianIndex` support" begin

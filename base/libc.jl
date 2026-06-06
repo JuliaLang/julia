@@ -2,7 +2,10 @@
 
 module Libc
 @doc """
-Interface to libc, the C standard library.
+    Libc
+
+The `Libc` module provides low-level functions and data types to directly interface libc,
+the C standard library.
 """ Libc
 
 import Base: transcode, windowserror, show
