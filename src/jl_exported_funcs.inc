@@ -503,6 +503,7 @@
     XX(jl_vexceptionf) \
     XX(jl_vprintf) \
     XX(jl_wakeup_thread) \
+    XX(jl_wakeup_threadpool) \
     XX(jl_write_compiler_output) \
 
 #define JL_RUNTIME_EXPORTED_FUNCS_WIN(XX) \
