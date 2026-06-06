@@ -3,7 +3,7 @@
 """
     Iterators
 
-The `Iterators` module defines functions and data types for "lazy" iteration
+Module defining functions and data types for "lazy" iteration
 (iteration without necessarily allocating a data structure to store the collection).
 """
 baremodule Iterators
