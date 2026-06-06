@@ -1,5 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    Order
+
+A module that defines [`Ordering`](@ref) types and associated functions used
+to characterize sorting order.
+"""
 module Order
 
 
@@ -28,10 +34,16 @@ Use [`Base.Order.lt`](@ref) to compare two elements according to the ordering.
 """
 abstract type Ordering end
 
+"""
+    Base.Order.ForwardOrdering <: Ordering
+
+This is a singleton [`Ordering`](@ref) subtype that represents ascending order according to [`isless`](@ref).
+The constant [`Forward`](@ref) is defined for the singleton instance `ForwardOrdering()`.
+"""
 struct ForwardOrdering <: Ordering end
 
 """
-    ReverseOrdering(fwd::Ordering=Forward)
+    Base.Order.ReverseOrdering(fwd::Ordering=Forward) <: Ordering
 
 A wrapper which reverses an ordering.
 
@@ -50,24 +62,32 @@ ReverseOrdering() = ReverseOrdering(ForwardOrdering())
 """
     reverse(o::Base.Ordering)
 
-reverses ordering specified by `o`.
-
+Reverse the ordering specified by `o`, by default using [`ReverseOrdering`](@ref).
 """
 reverse(o::Ordering) = ReverseOrdering(o)
 
+"""
+    Base.Order.DirectOrdering <: Ordering
+
+An alias for the union of [`ForwardOrdering`](@ref) and its reverse via [`ReverseOrdering`](@ref):
+these are subtypes of [`Ordering`](@ref)` that represent either ascending or descending
+order according to [`isless`](@ref).
+"""
 const DirectOrdering = Union{ForwardOrdering,ReverseOrdering{ForwardOrdering}}
 
 """
     Base.Order.Forward
 
-Default ordering according to [`isless`](@ref).
+Ascending ordering according to [`isless`](@ref), the singleton instance
+of [`ForwardOrdering`]().
 """
 const Forward = ForwardOrdering()
 
 """
     Base.Order.Reverse
 
-Reverse ordering according to [`isless`](@ref).
+Descending ordering according to [`isless`](@ref), via [`ReverseOrdering`](@ref)
+of [`Forward`](@ref).
 """
 const Reverse = ReverseOrdering()
 
@@ -171,6 +191,18 @@ if ccall(:jl_ver_major, Int32, ()) < 2
     ordtype(o::Perm,            vs::AbstractArray) = ordtype(o.order, o.data)
     # TODO: here, we really want the return type of o.by, without calling it
     ordtype(o::By,              vs::AbstractArray) = try typeof(o.by(vs[1])) catch; Any end
+    ordtype(o::Ordering,        vs::AbstractArray) = eltype(vs)
+
+    """
+        Base.Order.ordtype(o::Ordering, a::AbstractArray)
+
+    Return the type of object being compared when the ordering `o` is
+    applied to the array `a`.  This is normally `eltype(a)` except when `o`
+    is the [`By`](@ref)` ordering (which maps the elements to some other type).
+
+    !!! warning
+        This function may be removed in a future version of Julia and its use is discouraged.
+    """
     ordtype(o::Ordering,        vs::AbstractArray) = eltype(vs)
 end
 
