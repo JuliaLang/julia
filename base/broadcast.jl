@@ -1262,12 +1262,12 @@ end
     Broadcast.dotview(x, args...)
 
 `dotview(x, args...)` is like [`getindex`](@ref), but returns a view for slicing operations
-(similar to [`@views`](@ref)), while remaining equivalent to getindex for scalar indices
+(similar to [`@views`](@ref)), while remaining equivalent to `getindex` for scalar indices
 non-array types.
 
 In a dotted assignment operation like `x[...] .= f.(y...)`, the indexing
 expression on the left-hand side is lowered to `dotview(x, ...)` when
-it is passed to [`broadcast!`](@ref), in order to construct a "view" object
+it is passed to [`broadcast!`](@ref), in order to construct a view object
 to assign the left-hand-side in-place if it is a slice.
 """
 Base.@propagate_inbounds dotview(args...) = Base.maybeview(args...)
