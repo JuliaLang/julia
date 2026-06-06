@@ -3,7 +3,7 @@
 """
     Order
 
-A module that defines [`Ordering`](@ref) types and associated functions used
+Module defining [`Ordering`](@ref) types and associated functions used
 to characterize sorting order.
 """
 module Order
