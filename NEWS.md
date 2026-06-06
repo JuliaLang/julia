@@ -55,6 +55,9 @@ Multi-threading changes
     (`:static`, `:dynamic`, `:greedy`) are supported. Results preserve element order for `:static`
     and `:dynamic` scheduling; `:greedy` does not guarantee order. Non-indexable iterators are
     also supported. ([#59019])
+  - The task scheduler now avoids O(nthreads) wake overhead on every `@spawn`, significantly reducing
+    threading overhead particularly on highly oversubscribed machines. Benchmarks show up to 1000x
+    reduction in spawn time in such scenarios ([#61826]).
 
 Build system changes
 --------------------
