@@ -212,6 +212,29 @@ end
 
 test_threaded_loop_and_atomic_add()
 
+# @threads combined with @simd (issue #32684)
+@testset "@threads @simd" begin
+    function axpy_serial!(a, X, Y)
+        @simd for i = eachindex(X)
+            @inbounds Y[i] += a * X[i]
+        end
+        Y
+    end
+    function axpy_threads_simd!(a, X, Y)
+        @threads @simd for i = eachindex(X)
+            @inbounds Y[i] += a * X[i]
+        end
+        Y
+    end
+    for T in (Float32, Float64), n in (0, 1, 7, 255, 256)
+        X = rand(T, n)
+        Y = rand(T, n)
+        expected = axpy_serial!(T(2), X, copy(Y))
+        axpy_threads_simd!(T(2), X, Y)
+        @test Y == expected
+    end
+end
+
 # Helper for test_threaded_atomic_minmax that verifies sequential consistency.
 function check_minmax_consistency(old::Array{T,1}, m::T, start::T, o::Base.Ordering) where T
     for v in old

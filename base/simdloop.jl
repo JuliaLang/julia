@@ -53,6 +53,61 @@ simd_outer_range(r) = 0:0
 # Construct user-level element from original range, outer loop index j, and inner loop index i.
 @inline simd_index(r, j, i) = (@inbounds ret = r[i+firstindex(r)]; ret)
 
+function _macro_sym(mac)
+    if mac isa Symbol
+        return mac
+    elseif mac isa GlobalRef
+        return mac.name
+    elseif isa(mac, Expr) && mac.head === :.
+        arg = mac.args[end]
+        return arg isa QuoteNode ? arg.value : arg
+    end
+    return nothing
+end
+
+function _is_named_macrocall(ex, name::Symbol)
+    isa(ex, Expr) && ex.head === :macrocall || return false
+    return _macro_sym(ex.args[1]) === name
+end
+
+# Unwrap `@simd [ivdep] for ...` when it follows `@threads` (issue #32684).
+function unwrap_simd_for(ex)
+    _is_named_macrocall(ex, Symbol("@simd")) || return nothing
+    if length(ex.args) >= 4 && ex.args[3] === :ivdep &&
+            ex.args[4] isa Expr && ex.args[4].head === :for
+        return (ex.args[4], true)
+    elseif length(ex.args) >= 3 && ex.args[3] isa Expr && ex.args[3].head === :for
+        return (ex.args[3], false)
+    end
+    return nothing
+end
+
+# Unwrap `Threads.@threads [schedule] for ...` when it follows `@simd`.
+function _unwrap_threads_for(ex)
+    _is_named_macrocall(ex, Symbol("@threads")) || return nothing
+    if length(ex.args) >= 4 && ex.args[3] isa Symbol &&
+            ex.args[3] in (:static, :dynamic, :greedy) &&
+            ex.args[4] isa Expr && ex.args[4].head === :for
+        return (ex.args[3], ex.args[4])
+    elseif length(ex.args) >= 3 && ex.args[3] isa Expr && ex.args[3].head === :for
+        return (:default, ex.args[3])
+    end
+    return nothing
+end
+
+# Rewrite `@simd Threads.@threads for ...` to `Threads.@threads @simd for ...`.
+function _rewrite_as_threads_simd(forloop, ivdep::Bool)
+    unwrapped = _unwrap_threads_for(forloop)
+    unwrapped === nothing && return nothing
+    sched, for_ex = unwrapped
+    simd_loop = ivdep ? :(@simd ivdep $for_ex) : :(@simd $for_ex)
+    if sched === :default
+        return :(Base.Threads.@threads $simd_loop)
+    else
+        return :(Base.Threads.@threads $sched $simd_loop)
+    end
+end
+
 # Compile Expr x in context of @simd.
 function compile(x, ivdep)
     (isa(x, Expr) && x.head === :for) || throw(SimdError("for loop expected"))
@@ -123,13 +178,21 @@ either case, your inner loop should have the following properties to allow vecto
 
 * There exists no loop-carried memory dependencies
 * No iteration ever waits on a previous iteration to make forward progress.
+
+`@simd` can be combined with [`Threads.@threads`](@ref Threads.@threads) in either order,
+e.g. `Threads.@threads @simd for ... end` or `@simd Threads.@threads for ... end`.
+Each thread runs a SIMD-vectorized chunk of the iteration space.
 """
 macro simd(forloop)
+    rewritten = _rewrite_as_threads_simd(forloop, false)
+    rewritten === nothing || return rewritten
     compile(forloop, nothing)
 end
 
 macro simd(ivdep, forloop)
     if ivdep === :ivdep
+        rewritten = _rewrite_as_threads_simd(forloop, true)
+        rewritten === nothing || return rewritten
         compile(forloop, Symbol("julia.ivdep"))
     else
         throw(SimdError("Only ivdep is valid as the first argument to @simd"))

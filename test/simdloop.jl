@@ -161,3 +161,12 @@ Base.SimdLoop.simd_index(v::iter31113, j, i) = j
 Base.SimdLoop.simd_inner_length(v::iter31113, j) = 1
 Base.SimdLoop.simd_outer_range(v::iter31113) = v
 @test 2001000 == simd_sum_over_array(iter31113(Vector(1:2000)))
+
+# Combining @threads and @simd (issue #32684)
+@testset "@threads and @simd composition" begin
+    using Base.Threads
+    @test isexpr(@macroexpand1(Threads.@threads @simd for i = 1:0; end), :block)
+    @test isexpr(@macroexpand1(Threads.@threads @simd ivdep for i = 1:0; end), :block)
+    @test isexpr(@macroexpand1(@simd Threads.@threads for i = 1:0; end), :block)
+    @test isexpr(@macroexpand1(@simd ivdep Threads.@threads for i = 1:0; end), :block)
+end

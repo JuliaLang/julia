@@ -213,14 +213,24 @@ function _threading_run_expr(schedule)
     end
 end
 
-function _threadsfor(iter, lbody, schedule)
+function _threadsfor_loop(forloop::Expr, schedule; simd::Bool=false, ivdep::Bool=false)
+    if !(forloop.args[1] isa Expr && forloop.args[1].head === :(=))
+        throw(ArgumentError("nested outer loops are not currently supported by @threads"))
+    end
+    _threadsfor(forloop.args[1], forloop.args[2], schedule; simd, ivdep)
+end
+
+function _threadsfor(iter, lbody, schedule; simd::Bool=false, ivdep::Bool=false)
     lidx = iter.args[1]         # index
     range = iter.args[2]
     esc_range = esc(range)
+    if simd && schedule === :greedy
+        throw(ArgumentError("`@simd` is not supported with `@threads :greedy`"))
+    end
     func = if schedule === :greedy
         greedy_func(esc_range, lidx, lbody)
     else
-        default_func(esc_range, lidx, lbody)
+        default_func(esc_range, lidx, lbody; simd, ivdep)
     end
     quote
         local threadsfor_fun
@@ -510,17 +520,41 @@ function _work_distribution_code()
     end
 end
 
-function default_func(itr, lidx, lbody)
+function _threaded_chunk_loop(lidx, lbody; simd::Bool=false, ivdep::Bool=false)
+    chunk_body = quote
+        local $(esc(lidx)) = @inbounds r[i]
+        $(esc(lbody))
+    end
+    if !simd
+        quote
+            for i = loop_first:loop_last
+                $chunk_body
+            end
+        end
+    elseif ivdep
+        quote
+            @simd ivdep for i = loop_first:loop_last
+                $chunk_body
+            end
+        end
+    else
+        quote
+            @simd for i = loop_first:loop_last
+                $chunk_body
+            end
+        end
+    end
+end
+
+function default_func(itr, lidx, lbody; simd::Bool=false, ivdep::Bool=false)
     work_dist = _work_distribution_code()
+    inner_loop = _threaded_chunk_loop(lidx, lbody; simd, ivdep)
     quote
         let items = $itr
         function threadsfor_fun(tid = 1)
-            # Reads: items, tid. Defines: r, loop_first, loop_last.
+            # Each thread runs a (possibly SIMD) loop over its chunk of items.
             $work_dist
-            for i = loop_first:loop_last
-                local $(esc(lidx)) = @inbounds r[i]
-                $(esc(lbody))
-            end
+            $inner_loop
         end
         end
     end
@@ -570,6 +604,7 @@ end
     Threads.@threads [schedule] for ... end
     Threads.@threads [schedule] [expr for ... end]
     Threads.@threads [schedule] T[expr for ... end]
+    Threads.@threads [schedule] @simd for ... end
 
 A macro to execute a `for` loop or array comprehension in parallel. The iteration space is distributed to
 coarse-grained tasks. This policy can be specified by the `schedule` argument. The
@@ -802,12 +837,11 @@ macro threads(args...)
         else
             return _threadsfor_comprehension(ex.args[1], sched)
         end
+    elseif (simd_result = Base.SimdLoop.unwrap_simd_for(ex)) !== nothing
+        forloop, ivdep = simd_result
+        return _threadsfor_loop(forloop, sched; simd=true, ivdep)
     elseif isa(ex, Expr) && ex.head === :for
-        # Handle for loops
-        if !(ex.args[1] isa Expr && ex.args[1].head === :(=))
-            throw(ArgumentError("nested outer loops are not currently supported by @threads"))
-        end
-        return _threadsfor(ex.args[1], ex.args[2], sched)
+        return _threadsfor_loop(ex, sched)
     else
         throw(ArgumentError("@threads requires a `for` loop or comprehension expression"))
     end
