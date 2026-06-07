@@ -27,6 +27,17 @@ extern "C" {
 _Atomic(int) allow_new_worlds = 1;
 JL_DLLEXPORT _Atomic(size_t) jl_world_counter = 1; // uses atomic acquire/release
 jl_mutex_t world_counter_lock;
+static _Atomic(size_t) jl_method_cache_insert_generation = 1;
+
+static inline size_t jl_method_cache_insert_generation_load(void) JL_NOTSAFEPOINT
+{
+    return jl_atomic_load_relaxed(&jl_method_cache_insert_generation);
+}
+
+static inline void jl_method_cache_inserted(void)
+{
+    jl_atomic_fetch_add_relaxed(&jl_method_cache_insert_generation, 1);
+}
 
 JL_DLLEXPORT size_t jl_get_world_counter(void) JL_NOTSAFEPOINT
 {
@@ -1617,12 +1628,16 @@ jl_method_instance_t *cache_method(
         jl_tupletype_t *tt, // the original tupletype of the signature
         jl_method_t *definition,
         size_t world, size_t min_valid, size_t max_valid,
-        jl_svec_t *sparams)
+        jl_svec_t *sparams,
+        // set by callers that have already proven `tt` is absent from the cache
+        // immediately before acquiring the lock and that no insertion can have
+        // happened since, allowing the redundant re-check below to be skipped
+        int tt_known_absent)
 {
     // caller must hold the parent->writelock, which this releases
     // short-circuit (now that we hold the lock) if this entry is already present
     int8_t offs = mc ? jl_cachearg_offset() : 1;
-    { // scope block
+    if (!tt_known_absent) { // scope block
         if (mc) {
             jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mc->leafcache);
             jl_typemap_entry_t *entry = lookup_leafcache(leafcache, (jl_value_t*)tt, world);
@@ -1650,6 +1665,8 @@ jl_method_instance_t *cache_method(
             jl_typemap_entry_t *newentry = jl_typemap_alloc(cachett, NULL, jl_emptysvec, (jl_value_t*)newmeth, min_valid, max_valid);
             JL_GC_PUSH1(&newentry);
             jl_typemap_insert(cache, parent, newentry, offs);
+            if (mc)
+                jl_method_cache_inserted();
             JL_GC_POP();
             if (mc) JL_UNLOCK(&mc->writelock);
             return newmeth;
@@ -1853,6 +1870,8 @@ jl_method_instance_t *cache_method(
              }
          }
     }
+    if (mc)
+        jl_method_cache_inserted();
     if (mc) {
         JL_UNLOCK(&mc->writelock);
 
@@ -1957,6 +1976,7 @@ JL_DLLEXPORT jl_typemap_entry_t *jl_mt_find_cache_entry(jl_methcache_t *mc JL_PR
 
 static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_methcache_t *mc JL_PROPAGATES_ROOT, jl_datatype_t *tt JL_MAYBE_UNROOTED, size_t world)
 {
+    size_t cache_insert_generation = jl_method_cache_insert_generation_load();
     jl_typemap_entry_t *entry = jl_mt_find_cache_entry(mc, tt, world);
     if (entry)
         return entry->func.linfo;
@@ -1966,9 +1986,14 @@ static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_methcach
     JL_GC_PUSH2(&tt, &matc);
     JL_LOCK(&mc->writelock);
     jl_method_instance_t *mi = NULL;
-    entry = jl_mt_find_cache_entry(mc, tt, world);
-    if (entry)
-        mi = entry->func.linfo;
+    // No need to re-check if no method cache insertion happened since the
+    // lock-free probe above.
+    int tt_known_absent = jl_method_cache_insert_generation_load() == cache_insert_generation;
+    if (!tt_known_absent) {
+        entry = jl_mt_find_cache_entry(mc, tt, world);
+        if (entry)
+            mi = entry->func.linfo;
+    }
     if (!mi) {
         size_t min_valid = 0;
         size_t max_valid = ~(size_t)0;
@@ -1976,7 +2001,9 @@ static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_methcach
         if (matc) {
             jl_method_t *m = matc->method;
             jl_svec_t *env = matc->sparams;
-            mi = cache_method(mt, mc, &mc->cache, (jl_value_t*)mc, tt, m, world, min_valid, max_valid, env);
+            // tt was just proven absent above and no method cache insertion has
+            // happened since, so cache_method can skip its redundant re-check.
+            mi = cache_method(mt, mc, &mc->cache, (jl_value_t*)mc, tt, m, world, min_valid, max_valid, env, tt_known_absent);
             JL_GC_POP();
             return mi;
         }
@@ -3863,7 +3890,9 @@ static jl_value_t *jl_method_match_to_mi(jl_method_match_t *match, size_t world,
             jl_methcache_t *mc = jl_method_table->cache;
             assert(mc);
             JL_LOCK(&mc->writelock);
-            mi = (jl_value_t*)cache_method(jl_method_get_table(m), mc, &mc->cache, (jl_value_t*)mc, ti, m, world, min_valid, max_valid, env);
+            // this path does not pre-probe `ti`, so cache_method must keep its
+            // own presence check (ti may already be cached from a prior hint)
+            mi = (jl_value_t*)cache_method(jl_method_get_table(m), mc, &mc->cache, (jl_value_t*)mc, ti, m, world, min_valid, max_valid, env, /*tt_known_absent*/0);
         }
         else {
             jl_value_t *tt = jl_normalize_to_compilable_sig(ti, env, m, 1);
@@ -4459,7 +4488,7 @@ jl_value_t *jl_gf_invoke_by_method(jl_method_t *method, jl_value_t *gf, jl_value
                 int sub = jl_subtype_matching((jl_value_t*)tt, (jl_value_t*)method->sig, &tpenv);
                 assert(sub); (void)sub;
             }
-            mfunc = cache_method(NULL, NULL, &method->invokes, (jl_value_t*)method, tt, method, 1, 1, ~(size_t)0, tpenv);
+            mfunc = cache_method(NULL, NULL, &method->invokes, (jl_value_t*)method, tt, method, 1, 1, ~(size_t)0, tpenv, /*tt_known_absent*/0);
         }
         JL_UNLOCK(&method->writelock);
         JL_GC_POP();
@@ -5203,7 +5232,11 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
             jl_method_t *meth = env.matc->method;
             jl_svec_t *tpenv = env.matc->sparams;
             JL_LOCK(&mc->writelock);
-            cache_method(mt, mc, &mc->cache, (jl_value_t*)mc, (jl_tupletype_t*)unw, meth, world, env.match.min_valid, env.match.max_valid, tpenv);
+            // a matching entry may already be present here (e.g. ml_matches fell
+            // through the full-cache check above to recompute min_world exactly),
+            // so cache_method must keep its own presence check to avoid a
+            // duplicate insertion
+            cache_method(mt, mc, &mc->cache, (jl_value_t*)mc, (jl_tupletype_t*)unw, meth, world, env.match.min_valid, env.match.max_valid, tpenv, /*tt_known_absent*/0);
         }
     }
     *min_valid = env.match.min_valid;
