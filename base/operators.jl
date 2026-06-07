@@ -698,6 +698,10 @@ Left bit shift operator, `x << n`. For `n >= 0`, the result is `x` shifted left
 by `n` bits, filling with `0`s. This is equivalent to `x * 2^n`. For `n < 0`,
 this is equivalent to `x >> -n`.
 
+For arbitrary-precision integer types such as `BigInt`, a shift count whose
+magnitude exceeds `typemax(Int)` throws `OverflowError` rather than silently
+returning `0`, since no fixed bit width is available to saturate against.
+
 # Examples
 ```jldoctest
 julia> Int8(3) << 2
@@ -714,15 +718,27 @@ See also [`>>`](@ref), [`>>>`](@ref), [`exp2`](@ref), [`ldexp`](@ref).
 function <<(x::Integer, c::Integer)
     @inline
     typemin(Int) <= c <= typemax(Int) && return x << (c % Int)
-    (x >= 0 || c >= 0) && return zero(x) << 0  # for type stability
-    oftype(x, -1)
+    if hastypemax(typeof(x))
+        # Fixed-width: shifting past the bit width saturates.
+        (x >= 0 || c >= 0) && return zero(x) << 0  # for type stability
+        return oftype(x, -1)
+    end
+    # Arbitrary-precision: a huge left shift cannot be silently squashed
+    # to zero; only `x == 0` is invariant. A huge negative count is a huge
+    # right shift, which still sign-extends.
+    iszero(x) && return x
+    c >= 0 && throw(OverflowError(LazyString("shift count ", c, " is too large")))
+    x >= 0 ? zero(x) : oftype(x, -1)
 end
 function <<(x::Integer, c::Unsigned)
     @inline
     if c isa UInt
         throw(MethodError(<<, (x, c)))
     end
-    c <= typemax(UInt) ? x << (c % UInt) : zero(x) << UInt(0)
+    c <= typemax(UInt) && return x << (c % UInt)
+    hastypemax(typeof(x)) && return zero(x) << UInt(0)
+    iszero(x) && return x
+    throw(OverflowError(LazyString("shift count ", c, " is too large")))
 end
 <<(x::Integer, c::Int) = c >= 0 ? x << unsigned(c) : x >> unsigned(-c)
 
@@ -762,8 +778,17 @@ function >>(x::Integer, c::Integer)
         throw(MethodError(>>, (x, c)))
     end
     typemin(Int) <= c <= typemax(Int) && return x >> (c % Int)
-    (x >= 0 || c < 0) && return zero(x) >> 0
-    oftype(x, -1)
+    if hastypemax(typeof(x))
+        # Fixed-width: right shift past width sign-extends; huge negative
+        # count is a huge left shift, which saturates.
+        (x >= 0 || c < 0) && return zero(x) >> 0
+        return oftype(x, -1)
+    end
+    # Arbitrary-precision: huge right shift sign-extends; huge negative
+    # count is a huge left shift, which cannot be silently squashed.
+    iszero(x) && return x
+    c < 0 && throw(OverflowError(LazyString("shift count ", c, " is too large")))
+    x >= 0 ? zero(x) : oftype(x, -1)
 end
 >>(x::Integer, c::Int) = c >= 0 ? x >> unsigned(c) : x << unsigned(-c)
 
@@ -796,14 +821,22 @@ See also [`>>`](@ref), [`<<`](@ref).
 """
 function >>>(x::Integer, c::Integer)
     @inline
-    typemin(Int) <= c <= typemax(Int) ? x >>> (c % Int) : zero(x) >>> 0
+    typemin(Int) <= c <= typemax(Int) && return x >>> (c % Int)
+    hastypemax(typeof(x)) && return zero(x) >>> 0
+    # Arbitrary-precision: `>>>` matches `>>` since there is no fixed
+    # width to zero-fill within.
+    iszero(x) && return x
+    c < 0 && throw(OverflowError(LazyString("shift count ", c, " is too large")))
+    x >= 0 ? zero(x) : oftype(x, -1)
 end
 function >>>(x::Integer, c::Unsigned)
     @inline
     if c isa UInt
         throw(MethodError(>>>, (x, c)))
     end
-    c <= typemax(UInt) ? x >>> (c % UInt) : zero(x) >>> 0
+    c <= typemax(UInt) && return x >>> (c % UInt)
+    hastypemax(typeof(x)) && return zero(x) >>> 0
+    x >= 0 ? zero(x) : oftype(x, -1)
 end
 >>>(x::Integer, c::Int) = c >= 0 ? x >>> unsigned(c) : x << unsigned(-c)
 

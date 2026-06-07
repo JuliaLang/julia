@@ -433,3 +433,34 @@ end
     end == Bool
     @test Base.infer_return_type(in, (Symbol,Tuple{Vararg{String}})) == Bool
 end
+
+# Regression test for #57502: huge shift on an unbounded Integer subtype
+# must not silently return 0.
+@testset "shift fallback on unbounded Integer subtypes" begin
+    struct UnboundedInt <: Integer
+        v::BigInt
+    end
+    Base.iszero(x::UnboundedInt) = iszero(x.v)
+    Base.zero(::UnboundedInt) = UnboundedInt(BigInt(0))
+    Base.:(>=)(x::UnboundedInt, y::Integer) = x.v >= y
+    Base.oftype(::UnboundedInt, y) = UnboundedInt(BigInt(y))
+    Base.:(==)(x::UnboundedInt, y::Integer) = x.v == y
+
+    @test !Base.hastypemax(UnboundedInt)
+
+    huge = big(2)^1000
+    pos, neg, z = UnboundedInt(big(2)), UnboundedInt(big(-2)), UnboundedInt(big(0))
+
+    @test_throws OverflowError pos << huge
+    @test_throws OverflowError neg << huge
+    @test z << huge == 0
+    @test pos >> huge == 0
+    @test neg >> huge == -1
+    @test z >> huge == 0
+    @test pos >>> huge == 0
+    @test neg >>> huge == -1
+    @test_throws OverflowError pos >> -huge
+    @test_throws OverflowError pos >>> -huge
+    @test pos << -huge == 0
+    @test neg << -huge == -1
+end
