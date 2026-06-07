@@ -31,12 +31,12 @@ static _Atomic(size_t) jl_method_cache_insert_generation = 1;
 
 static inline size_t jl_method_cache_insert_generation_load(void) JL_NOTSAFEPOINT
 {
-    return jl_atomic_load_relaxed(&jl_method_cache_insert_generation);
+    return jl_atomic_load_acquire(&jl_method_cache_insert_generation);
 }
 
 static inline void jl_method_cache_inserted(void)
 {
-    jl_atomic_fetch_add_relaxed(&jl_method_cache_insert_generation, 1);
+    jl_atomic_fetch_add(&jl_method_cache_insert_generation, 1);
 }
 
 JL_DLLEXPORT size_t jl_get_world_counter(void) JL_NOTSAFEPOINT
