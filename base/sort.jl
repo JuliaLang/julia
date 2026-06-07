@@ -838,7 +838,7 @@ const InsertionSort = InsertionSortAlg()
 """
     SMALL_ALGORITHM
 
-Default sorting algorithm for small arrays.
+Default sorting algorithm for small arrays (length ≤ [`SMALL_THRESHOLD`](@ref)).
 
 This is an alias for a simple low-overhead algorithm that does not scale well
 to large arrays, unlike high-overhead recursive algorithms used for larger arrays.
@@ -1607,6 +1607,13 @@ _sort!(v::AbstractVector, ::Union{DefaultStable, DefaultUnstable}, o::Ordering, 
     _sort!(v, _DEFAULT_ALGORITHMS_FOR_VECTORS, o, kw)
 
 const SMALL_THRESHOLD  = 20
+@doc """
+    SMALL_THRESHOLD::Integer
+
+Maximum length (currently $SMALL_THRESHOLD) for which an array is considered "small"
+for sorting, and for which [`SMALL_ALGORITHM`](@ref) is used.  (Often the base-case
+cutoff for recursive sorting algorithms.)
+""" SMALL_THRESHOLD
 
 function Base.show(io::IO, alg::Algorithm)
     print_tree(io, alg, 0)
