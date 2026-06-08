@@ -230,33 +230,43 @@ struct GenericDomTree{IsPostDom}
 
     # The nodes in the tree (ordered by BB indices)
     nodes::Vector{DomTreeNode}
-
-    # Scratch buffers reused across (re)computations to avoid reallocating on
-    # every dynamic update. `worklist` is shared between `SNCA!` and
-    # `compute_domtree_nodes!`, which never run concurrently (both
-    # `PreNumber` and `BBNumber` are `Int`).
-    snca_ancestors::Vector{PreNumber}
-    snca_idoms_pre::Vector{PreNumber}
-    worklist::Vector{Tuple{Int, Int}}
 end
 const DomTree = GenericDomTree{false}
 const PostDomTree = GenericDomTree{true}
 
 function (T::Type{<:GenericDomTree})()
-    return T(DFSTree(0), SNCAData[], BBNumber[], DomTreeNode[],
-             PreNumber[], PreNumber[], Tuple{Int, Int}[])
+    return T(DFSTree(0), SNCAData[], BBNumber[], DomTreeNode[])
 end
 
-function construct_domtree(blocks::Vector{BasicBlock})
-    return update_domtree!(blocks, DomTree(), true, 0)
+"""
+Reusable scratch buffers for (re)computing a dominator tree. Kept separate from
+the `GenericDomTree` so that the working storage can be reused across successive
+dynamic updates (by threading the same cache through), and dropped entirely once
+the tree is finalized. A fresh cache is used by default.
+
+The buffers are reset on each use, so a cache must not be shared between
+concurrent computations. `worklist` is shared between `SNCA!` and
+`compute_domtree_nodes!`, which run sequentially (both `PreNumber` and
+`BBNumber` are `Int`).
+"""
+struct DomTreeCache
+    ancestors::Vector{PreNumber}
+    idoms_pre::Vector{PreNumber}
+    worklist::Vector{Tuple{Int, Int}}
+end
+DomTreeCache() = DomTreeCache(PreNumber[], PreNumber[], Tuple{Int, Int}[])
+
+function construct_domtree(blocks::Vector{BasicBlock}; cache::DomTreeCache=DomTreeCache())
+    return update_domtree!(blocks, DomTree(), true, 0; cache)
 end
 
-function construct_postdomtree(blocks::Vector{BasicBlock})
-    return update_domtree!(blocks, PostDomTree(), true, 0)
+function construct_postdomtree(blocks::Vector{BasicBlock}; cache::DomTreeCache=DomTreeCache())
+    return update_domtree!(blocks, PostDomTree(), true, 0; cache)
 end
 
 function update_domtree!(blocks::Vector{BasicBlock}, domtree::GenericDomTree{IsPostDom},
-                         recompute_dfs::Bool, max_pre::PreNumber) where {IsPostDom}
+                         recompute_dfs::Bool, max_pre::PreNumber;
+                         cache::DomTreeCache=DomTreeCache()) where {IsPostDom}
     if recompute_dfs
         DFS!(domtree.dfs_tree, blocks, IsPostDom)
     end
@@ -265,12 +275,13 @@ function update_domtree!(blocks::Vector{BasicBlock}, domtree::GenericDomTree{IsP
         max_pre = length(domtree.dfs_tree)
     end
 
-    SNCA!(domtree, blocks, max_pre)
-    compute_domtree_nodes!(domtree)
+    SNCA!(domtree, blocks, max_pre, cache)
+    compute_domtree_nodes!(domtree; cache)
     return domtree
 end
 
-function compute_domtree_nodes!(domtree::GenericDomTree{IsPostDom}) where {IsPostDom}
+function compute_domtree_nodes!(domtree::GenericDomTree{IsPostDom};
+                                cache::DomTreeCache=DomTreeCache()) where {IsPostDom}
     # Compute children. Reuse any existing `children` vectors (e.g. when
     # recomputing the domtree during a dynamic update) to avoid reallocating
     # them, and reset the levels to the default of 1.
@@ -292,7 +303,7 @@ function compute_domtree_nodes!(domtree::GenericDomTree{IsPostDom}) where {IsPos
     end
     # n.b. now issorted(domtree.nodes[*].children) since idx is sorted above
     # Recursively set level
-    worklist = domtree.worklist
+    worklist = cache.worklist
     if IsPostDom
         for (node, idom) in enumerate(domtree.idoms_bb)
             idom == 0 || continue
@@ -328,7 +339,7 @@ pseudocode in [LG05] is not entirely accurate. The best way to understand
 what's happening is to read [LT79], then the description of SLT in [LG05]
 (warning: inconsistent notation), then the description of Semi-NCA.
 """
-function SNCA!(domtree::GenericDomTree{IsPostDom}, blocks::Vector{BasicBlock}, max_pre::PreNumber) where {IsPostDom}
+function SNCA!(domtree::GenericDomTree{IsPostDom}, blocks::Vector{BasicBlock}, max_pre::PreNumber, cache::DomTreeCache) where {IsPostDom}
     D = domtree.dfs_tree
     state = domtree.snca_state
     # There may be more blocks than are reachable in the DFS / dominator tree
@@ -366,7 +377,7 @@ function SNCA!(domtree::GenericDomTree{IsPostDom}, blocks::Vector{BasicBlock}, m
 
     # Calculate semidominators, but only for blocks with preorder number up to
     # max_pre
-    ancestors = domtree.snca_ancestors
+    ancestors = cache.ancestors
     copy!(ancestors, D.to_parent_pre)
     relevant_blocks = IsPostDom ? (1:max_pre) : (2:max_pre)
     for w::PreNumber in reverse(relevant_blocks)
@@ -394,7 +405,7 @@ function SNCA!(domtree::GenericDomTree{IsPostDom}, blocks::Vector{BasicBlock}, m
                     snca_compress!(state, ancestors, v_pre, last_linked)
                 else
                     snca_compress_worklist!(state, ancestors, v_pre, last_linked,
-                                            domtree.worklist)
+                                            cache.worklist)
                 end
             end
 
@@ -408,7 +419,7 @@ function SNCA!(domtree::GenericDomTree{IsPostDom}, blocks::Vector{BasicBlock}, m
     # Compute immediate dominators, which for a node must be the nearest common
     # ancestor in the (immediate) dominator tree between its semidominator and
     # its parent (see Lemma 2.6 in [LG05]).
-    idoms_pre = domtree.snca_idoms_pre
+    idoms_pre = cache.idoms_pre
     copy!(idoms_pre, D.to_parent_pre)
     for v in (IsPostDom ? (1:n_nodes) : (2:n_nodes))
         idom = idoms_pre[v]
@@ -477,7 +488,7 @@ end
 
 "Given updated blocks, update the given dominator tree with an inserted edge."
 function domtree_insert_edge!(domtree::DomTree, blocks::Vector{BasicBlock},
-                              from::BBNumber, to::BBNumber)
+                              from::BBNumber, to::BBNumber; cache::DomTreeCache=DomTreeCache())
     # `from` is unreachable, so `from` and `to` aren't in domtree
     if bb_unreachable(domtree, from)
         return domtree
@@ -492,10 +503,10 @@ function domtree_insert_edge!(domtree::DomTree, blocks::Vector{BasicBlock},
     if to_pre == 0 || (from_pre < to_pre && from_post < to_post)
         # The DFS tree is invalidated by the edge insertion, so run from
         # scratch
-        update_domtree!(blocks, domtree, true, 0)
+        update_domtree!(blocks, domtree, true, 0; cache)
     else
         # DFS tree is still valid, so update only affected nodes
-        update_domtree!(blocks, domtree, false, to_pre)
+        update_domtree!(blocks, domtree, false, to_pre; cache)
     end
 
     return domtree
@@ -503,7 +514,7 @@ end
 
 "Given updated blocks, update the given dominator tree with a deleted edge."
 function domtree_delete_edge!(domtree::DomTree, blocks::Vector{BasicBlock},
-                              from::BBNumber, to::BBNumber)
+                              from::BBNumber, to::BBNumber; cache::DomTreeCache=DomTreeCache())
     # `from` is unreachable, so `from` and `to` aren't in domtree
     if bb_unreachable(domtree, from)
         return domtree
@@ -513,7 +524,7 @@ function domtree_delete_edge!(domtree::DomTree, blocks::Vector{BasicBlock},
     if is_parent(domtree.dfs_tree, from, to)
         # The `from` block is the parent of the `to` block in the DFS tree, so
         # deleting the edge invalidates the DFS tree, so start from scratch
-        update_domtree!(blocks, domtree, true, 0)
+        update_domtree!(blocks, domtree, true, 0; cache)
     elseif on_semidominator_path(domtree, from, to)
         # Recompute semidominators for blocks with preorder number up to that
         # of `to` block. Semidominators for blocks with preorder number greater
@@ -522,7 +533,7 @@ function domtree_delete_edge!(domtree::DomTree, blocks::Vector{BasicBlock},
         # `to` would be lower than those of these blocks, and `to` is not their
         # parent in the DFS tree).
         to_pre = domtree.dfs_tree.to_pre[to]
-        update_domtree!(blocks, domtree, false, to_pre)
+        update_domtree!(blocks, domtree, false, to_pre; cache)
     end
     # Otherwise, dominator tree is not affected
 
