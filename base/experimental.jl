@@ -206,7 +206,7 @@ Supported values are `1`, `2`, `3`, `4`, and `default` (currently equivalent to 
 """
 macro max_methods(n::Int)
     1 <= n <= 4 || error("We must have that `1 <= max_methods <= 4`, but `max_methods = $n`.")
-    return Expr(:meta, :max_methods, n)
+    return Expr(:meta, Expr(:max_methods, n))
 end
 
 """
@@ -282,7 +282,7 @@ macro compiler_options(args...)
                 a = a === :default ? 3 :
                   a isa Int ? ((1 <= a <= 4) ? a : error("We must have that `1 <= max_methods <= 4`, but `max_methods = $a`.")) :
                   error("invalid argument to \"max_methods\" option")
-                push!(metas, Expr(:meta, :max_methods, a))
+                push!(metas, Expr(:max_methods, a))
             else
                 error("unknown option \"$(ex.args[1])\"")
             end
@@ -298,8 +298,7 @@ macro compiler_options(args...)
     else
         opts = Expr(:block)
         for m in metas
-            # `max_methods` is already a full `(meta ...)`; the rest are inner forms
-            push!(opts.args, m.head === :meta ? m : Expr(:meta, m))
+            push!(opts.args, Expr(:meta, m))
         end
         return opts
     end

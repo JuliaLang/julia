@@ -888,6 +888,8 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             # Per-method/module compiler options (see `Base.Experimental.@compiler_options`)
             # are recorded in the CodeInfo. For a method this becomes the Method's
             # setting; for a top-level thunk `jl_eval_thunk` applies it to the module.
+            # `max_methods` is module-level only, so it is left as a `(meta ...)`
+            # statement for the interpreter to apply rather than consumed here.
             if kind(ex[1]) in KSet"optlevel compile infer"
                 for c in children(ex)
                     ctx.meta[Symbol(untokenize(kind(c)))] = c[1].value

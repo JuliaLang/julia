@@ -444,10 +444,12 @@ function _to_lowered_expr(ex::SyntaxTree)
         Expr(:opaque_closure_method, args...)
     elseif k == K"meta"
         args = Any[_to_lowered_expr(e) for e in children(ex)]
-        # Unpack K"Symbol" QuoteNode as `Expr(:meta)` requires an identifier here.
-        arg1 = args[1]
-        @jl_assert (arg1 isa QuoteNode) ex
-        args[1] = arg1.value
+        # Flat metas like `(meta :nospecialize ...)` carry an identifier as the
+        # first child, which `Expr(:meta)` wants unquoted; nested metas like
+        # `(meta (max_methods n))` instead carry an `Expr` and are left as-is.
+        if !isempty(args) && args[1] isa QuoteNode
+            args[1] = args[1].value
+        end
         Expr(:meta, args...)
     elseif k == K"foreigncall_arg1"
         @jl_assert kind(ex[1]) == K"tuple" ex
@@ -494,6 +496,10 @@ function _to_lowered_expr(ex::SyntaxTree)
                k == K"foreigncall"       ? :foreigncall       :
                k == K"cfunction"         ? :cfunction         :
                k == K"new_opaque_closure" ? :new_opaque_closure :
+               # module-level `@max_methods` survives lowering as a `(meta ...)`
+               # statement for the interpreter (unlike optlevel/compile/infer,
+               # which are consumed into the CodeInfo)
+               k == K"max_methods"       ? :max_methods       :
                nothing
         if isnothing(head)
             throw(LoweringError(ex, "Unhandled form for kind $k"))
