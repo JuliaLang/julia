@@ -4143,8 +4143,9 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         @jl_assert numchildren(ex) == 3 ex
         expand_forms_2(ctx, @ast ctx ex [K"if" children(ex)...])
     elseif k == K"&&" || k == K"||"
-        @jl_assert numchildren(ex) > 1 ex
         cs = expand_cond_children(ctx, ex)
+        isempty(cs) && return @ast ctx ex (k === K"&&")::K"Bool"
+        length(cs) == 1 && return @ast ctx ex cs[1]
         # Attributing correct provenance for `cs[1:end-1]` is tricky in cases
         # like `a && (b && c)` because the expression constructed here arises
         # from the source fragment `a && (b` which doesn't follow the tree
