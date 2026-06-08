@@ -1458,11 +1458,11 @@ end
 # https://github.com/JuliaLang/julia/issues/57613
 let err_str
     err_str = @except_str replace!("abc", "a" => "1") MethodError
-    @test occursin("Strings are immutable, so they cannot be modified with `replace!`", err_str)
+    @test occursin("`String`s cannot be modified with `replace!`", err_str)
     err_str = @except_str replace!(uppercase, "abc") MethodError
-    @test occursin("Strings are immutable, so they cannot be modified with `replace!`", err_str)
+    @test occursin("`String`s cannot be modified with `replace!`", err_str)
     err_str = @except_str replace!((1, 2), 1 => 0) MethodError
-    @test !occursin("Strings are immutable", err_str)
+    @test !occursin("cannot be modified with `replace!`", err_str)
 end
 
 # https://github.com/JuliaLang/julia/issues/55745
