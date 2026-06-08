@@ -418,9 +418,11 @@ eltype(::Type{Zip{Is}}) where {Is<:Tuple} = TupleOrBottom(map(eltype, fieldtypes
 #eltype(::Type{Zip{Tuple{}}}) = Tuple{}
 #eltype(::Type{Zip{Tuple{A}}}) where {A} = Tuple{eltype(A)}
 #eltype(::Type{Zip{Tuple{A, B}}}) where {A, B} = Tuple{eltype(A), eltype(B)}
+
 @inline isdone(z::Zip) = _zip_any_isdone(z.is, Base.map(_ -> (), z.is))
 @inline isdone(z::Zip, ss) = _zip_any_isdone(z.is, Base.map(tuple, ss))
-@inline function _zip_any_isdone(is, ss)
+
+@inline function _zip_any_isdone(is::Tuple, ss::Tuple)
     d1 = isdone(is[1], ss[1]...)
     d1 === true && return true
     return d1 | _zip_any_isdone(tail(is), tail(ss))
@@ -444,28 +446,28 @@ end
     return _zip_iterate_interleave(xs1, xs2, ds)
 end
 
-@propagate_inbounds function _zip_iterate_some(is, ss, ds::Tuple{T,Vararg{Any}}, f::T) where T
+@propagate_inbounds function _zip_iterate_some(is::Tuple, ss::Tuple, ds::Tuple{T,Vararg{Any}}, f::T) where T
     x = iterate(is[1], ss[1]...)
     x === nothing && return nothing
     y = _zip_iterate_some(tail(is), tail(ss), tail(ds), f)
     y === nothing && return nothing
     return (x, y...)
 end
-@propagate_inbounds _zip_iterate_some(is, ss, ds::Tuple{Any,Vararg{Any}}, f) =
+@propagate_inbounds _zip_iterate_some(is::Tuple, ss::Tuple, ds::Tuple{Any,Vararg{Any}}, f) =
     _zip_iterate_some(tail(is), tail(ss), tail(ds), f)
 _zip_iterate_some(::Tuple{}, ::Tuple{}, ::Tuple{}, ::Any) = ()
 
-function _zip_iterate_interleave(xs1, xs2, ds)
+function _zip_iterate_interleave(xs1::Tuple, xs2::Tuple, ds::Tuple)
     t = _zip_iterate_interleave(tail(xs1), xs2, tail(ds))
     ((xs1[1][1], t[1]...), (xs1[1][2], t[2]...))
 end
-function _zip_iterate_interleave(xs1, xs2, ds::Tuple{Bool,Vararg{Any}})
+function _zip_iterate_interleave(xs1::Tuple, xs2::Tuple, ds::Tuple{Bool,Vararg{Any}})
     t = _zip_iterate_interleave(xs1, tail(xs2), tail(ds))
     ((xs2[1][1], t[1]...), (xs2[1][2], t[2]...))
 end
 _zip_iterate_interleave(::Tuple{}, ::Tuple{}, ::Tuple{}) = ((), ())
 
-function _zip_isdone(is, ss)
+function _zip_isdone(is::Tuple, ss::Tuple)
     d = isdone(is[1], ss[1]...)
     d´, ds = _zip_isdone(tail(is), tail(ss))
     return (d === true || d´, (d, ds...))
