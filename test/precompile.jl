@@ -2030,9 +2030,6 @@ precompile_test_harness("PerMethodCompilerOpts") do load_path
         Base.Experimental.@compiler_options infer=false function no_infer(x)
             x + 1
         end
-        Base.Experimental.@compiler_options max_methods=2 function limited_methods(x)
-            x + 1
-        end
         Base.Experimental.@optlevel 1 function opt1(x)
             x + 1
         end
@@ -2047,9 +2044,6 @@ precompile_test_harness("PerMethodCompilerOpts") do load_path
 
         m2 = only(methods(PerMethodCompilerOpts.no_infer))
         @test Base.Experimental.get_infer(m2) == 0
-
-        m3 = only(methods(PerMethodCompilerOpts.limited_methods))
-        @test Base.Experimental.get_max_methods(m3) == 2
 
         m4 = only(methods(PerMethodCompilerOpts.opt1))
         @test Base.Experimental.get_optlevel(m4) == 1

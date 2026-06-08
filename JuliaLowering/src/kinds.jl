@@ -27,7 +27,6 @@ function _register_kinds()
             "optlevel"
             "compile"
             "infer"
-            "max_methods"
             # Call into foreign code
             "foreigncall"
             # ccall convention

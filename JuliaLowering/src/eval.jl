@@ -125,8 +125,8 @@ else
         fts = fieldtypes(Core.CodeInfo)
         conversions = [:(convert($t, $n)) for (t,n) in zip(fts, fns)]
 
-        expected_fns = (:code, :debuginfo, :ssavaluetypes, :ssaflags, :slotnames, :slotflags, :slottypes, :rettype, :parent, :edges, :min_world, :max_world, :method_for_inference_limit_heuristics, :nargs, :propagate_inbounds, :has_fcall, :has_image_globalref, :nospecializeinfer, :isva, :inlining, :constprop, :purity, :optlevel, :compile, :infer, :max_methods, :inlining_cost)
-        expected_fts = (Vector{Any}, Core.DebugInfo, Any, Vector{UInt32}, Vector{Symbol}, Vector{UInt8}, Any, Any, Any, Any, UInt, UInt, Any, UInt, Bool, Bool, Bool, Bool, Bool, UInt8, UInt8, UInt16, UInt8, UInt8, UInt8, UInt8, UInt16)
+        expected_fns = (:code, :debuginfo, :ssavaluetypes, :ssaflags, :slotnames, :slotflags, :slottypes, :rettype, :parent, :edges, :min_world, :max_world, :method_for_inference_limit_heuristics, :nargs, :propagate_inbounds, :has_fcall, :has_image_globalref, :nospecializeinfer, :isva, :inlining, :constprop, :purity, :optlevel, :compile, :infer, :inlining_cost)
+        expected_fts = (Vector{Any}, Core.DebugInfo, Any, Vector{UInt32}, Vector{Symbol}, Vector{UInt8}, Any, Any, Any, Any, UInt, UInt, Any, UInt, Bool, Bool, Bool, Bool, Bool, UInt8, UInt8, UInt16, UInt8, UInt8, UInt8, UInt16)
 
         code = if fns != expected_fns
             unexpected_fns = collect(setdiff(Set(fns), Set(expected_fns)))
@@ -330,10 +330,9 @@ function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
     min_world           = Csize_t(1)
     max_world           = typemax(Csize_t)
     isva                = false
-    optlevel            = 0xff
-    compile             = 0xff
-    infer               = 0xff
-    max_methods         = 0xff
+    optlevel            = get(meta, :optlevel, 0xff)
+    compile             = get(meta, :compile, 0xff)
+    infer               = get(meta, :infer, 0xff)
     inlining_cost       = 0xffff
     rettype             = Any
 
@@ -365,7 +364,6 @@ function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
         optlevel,
         compile,
         infer,
-        max_methods,
         inlining_cost
     )
 end

@@ -187,18 +187,6 @@ function get_infer(m::Method)
 end
 
 """
-    Experimental.get_max_methods(m::Method)
-
-Get the effective max_methods setting for a specific method. Returns the method's
-own setting if set, otherwise the enclosing module's setting.
-
-See also [`Experimental.@compiler_options`](@ref).
-"""
-function get_max_methods(m::Method)
-    return ccall(:jl_get_method_max_methods, Cint, (Any,), m)
-end
-
-"""
     Experimental.@max_methods n::Int
 
 Set the maximum number of potentially-matching methods considered when running inference
@@ -248,14 +236,17 @@ are currently supported:
   * `infer`: Enable or disable type inference. If disabled, implies [`@nospecialize`](@ref).
   * `max_methods`: Maximum number of matching methods considered when running type inference.
 
-When applied to a function definition, sets the options for that specific method
-rather than the enclosing module:
+When applied to a function definition, sets the `optimize`, `compile`, and `infer`
+options for that specific method rather than the enclosing module:
 
 ```julia
 Base.Experimental.@compiler_options optimize=0 compile=min function my_function(x)
     ...
 end
 ```
+
+`max_methods` can only be set at the module level; to set it for a specific
+generic function use [`@max_methods`](@ref).
 """
 macro compiler_options(args...)
     # Check if the last argument is a function definition
@@ -286,11 +277,12 @@ macro compiler_options(args...)
                     a === true  || a === :yes ? 1 : error("invalid argument to \"infer\" option")
                 push!(metas, Expr(:infer, a))
             elseif ex.args[1] === :max_methods
+                fdef === nothing || error("`max_methods` can only be set at module level, not per-method; use `@max_methods n function f end` to set it for a generic function")
                 a = ex.args[2]
                 a = a === :default ? 3 :
                   a isa Int ? ((1 <= a <= 4) ? a : error("We must have that `1 <= max_methods <= 4`, but `max_methods = $a`.")) :
                   error("invalid argument to \"max_methods\" option")
-                push!(metas, Expr(:max_methods, a))
+                push!(metas, Expr(:meta, :max_methods, a))
             else
                 error("unknown option \"$(ex.args[1])\"")
             end
@@ -306,7 +298,8 @@ macro compiler_options(args...)
     else
         opts = Expr(:block)
         for m in metas
-            push!(opts.args, Expr(:meta, m.head, m.args...))
+            # `max_methods` is already a full `(meta ...)`; the rest are inner forms
+            push!(opts.args, m.head === :meta ? m : Expr(:meta, m))
         end
         return opts
     end

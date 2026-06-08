@@ -1197,7 +1197,7 @@ function get_max_methods(interp::AbstractInterpreter, @nospecialize(f))
     return get_max_methods(interp)
 end
 function get_max_methods(interp::AbstractInterpreter, sv::AbsIntState)
-    mmax = get_max_methods_for_method_or_module(sv)
+    mmax = get_max_methods_for_module(sv)
     mmax !== nothing && return mmax
     return get_max_methods(interp)
 end
@@ -1209,16 +1209,6 @@ function get_max_methods_for_func(@nospecialize(f))
         fmm !== UInt8(0) && return Int(fmm)
     end
     return nothing
-end
-function get_max_methods_for_method_or_module(sv::AbsIntState)
-    mi = frame_instance(sv)
-    def = mi.def
-    if isa(def, Method)
-        max_methods = ccall(:jl_get_method_max_methods, Cint, (Any,), def) % Int
-        max_methods < 0 && return nothing
-        return max_methods
-    end
-    return get_max_methods_for_module(isa(def, Module) ? def : def.module)
 end
 get_max_methods_for_module(sv::AbsIntState) = get_max_methods_for_module(frame_module(sv))
 function get_max_methods_for_module(mod::Module)

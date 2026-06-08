@@ -1703,12 +1703,6 @@ end
     m = only(methods(_test_opts_fn3))
     @test Base.Experimental.get_infer(m) == 0
 
-    Base.Experimental.@compiler_options max_methods=1 function _test_opts_fn4(x)
-        x + 1
-    end
-    m = only(methods(_test_opts_fn4))
-    @test Base.Experimental.get_max_methods(m) == 1
-
     # Test multiple options at once
     Base.Experimental.@compiler_options optimize=2 compile=min infer=true function _test_opts_fn5(x)
         x + 1
@@ -1725,12 +1719,16 @@ end
     m = only(methods(_test_opts_fn6))
     @test Base.Experimental.get_optlevel(m) == 1
 
+    # max_methods cannot be set per-method
+    @test_throws "max_methods" @macroexpand Base.Experimental.@compiler_options max_methods=1 function _test_opts_fn_mm(x)
+        x + 1
+    end
+
     # Unset options inherit from the enclosing module (returns -1 for module default)
     _test_opts_fn7(x) = x + 1
     m = only(methods(_test_opts_fn7))
     @test Base.Experimental.get_compile(m) == -1
     @test Base.Experimental.get_infer(m) == -1
-    @test Base.Experimental.get_max_methods(m) == -1
 
     # Test generated functions can set compiler options via meta expressions
     struct _TestWrapper{P, F}
@@ -1758,4 +1756,28 @@ end
     @test ci0.optlevel == 0x00
     @test ci2.optlevel == 0x02
     @test cidef.optlevel == 0xFF
+end
+
+# Module-level compiler options are applied to the enclosing module (not just methods)
+module _TestModuleOpts
+    Base.Experimental.@optlevel 1
+    Base.Experimental.@compiler_options compile=min max_methods=2
+    fmod(x) = x + 1
+end
+module _TestMethodOnlyOpts
+    Base.Experimental.@compiler_options optimize=0 function fmeth(x)
+        x + 1
+    end
+end
+@testset "module-level compiler options" begin
+    mm = only(methods(_TestModuleOpts.fmod))
+    # `fmod` has no per-method override, so these report the module-level settings
+    @test Base.Experimental.get_optlevel(mm) == 1
+    @test Base.Experimental.get_compile(mm) == 3
+    # `max_methods` is module-level only
+    @test ccall(:jl_get_module_max_methods, Cint, (Any,), _TestModuleOpts) == 2
+
+    # The function-definition form sets only the method, not the enclosing module
+    @test Base.Experimental.get_optlevel(only(methods(_TestMethodOnlyOpts.fmeth))) == 0
+    @test ccall(:jl_get_module_optlevel, Cint, (Any,), _TestMethodOnlyOpts) == -1
 end

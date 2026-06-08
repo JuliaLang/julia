@@ -543,7 +543,6 @@ function serialize(s::AbstractSerializer, meth::Method)
     serialize(s, meth.optlevel)
     serialize(s, meth.compile)
     serialize(s, meth.infer)
-    serialize(s, meth.max_methods)
     if isdefined(meth, :source)
         serialize(s, Base._uncompressed_ast(meth))
     else
@@ -1169,7 +1168,6 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     optlevel = 0xff
     compile = 0xff
     infer = 0xff
-    max_methods = 0xff
     template_or_is_opaque = with(current_module => mod) do
         deserialize(s)
     end
@@ -1190,7 +1188,6 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
             optlevel = deserialize(s)::UInt8
             compile = deserialize(s)::UInt8
             infer = deserialize(s)::UInt8
-            max_methods = deserialize(s)::UInt8
         end
         with(current_module => mod) do
             deserialize(s)
@@ -1219,7 +1216,6 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         meth.optlevel = optlevel
         meth.compile = compile
         meth.infer = infer
-        meth.max_methods = max_methods
         if template !== nothing
             # TODO: compress template
             template = template::CodeInfo
@@ -1449,7 +1445,6 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
         ci.optlevel = deserialize(s)::UInt8
         ci.compile = deserialize(s)::UInt8
         ci.infer = deserialize(s)::UInt8
-        ci.max_methods = deserialize(s)::UInt8
     end
     if format_version(s) >= 22
         ci.inlining_cost = deserialize(s)::UInt16

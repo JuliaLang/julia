@@ -205,7 +205,6 @@
     XX(jl_get_julia_bindir) \
     XX(jl_get_method_compile) \
     XX(jl_get_method_infer) \
-    XX(jl_get_method_max_methods) \
     XX(jl_get_method_optlevel) \
     XX(jl_get_module_compile) \
     XX(jl_get_module_infer) \

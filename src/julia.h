@@ -341,7 +341,6 @@ typedef struct _jl_code_info_t {
     uint8_t optlevel; // UINT8_MAX = inherit from module; 0-3 = explicit level
     uint8_t compile; // UINT8_MAX = inherit from module; 0-3 = explicit level
     uint8_t infer; // UINT8_MAX = inherit from module; 0 = off, 1 = on
-    uint8_t max_methods; // UINT8_MAX = inherit from module; 0+ = explicit limit
     // uint16 settings
     uint16_t inlining_cost;
 } jl_code_info_t;
@@ -422,7 +421,6 @@ typedef struct _jl_method_t {
     uint8_t optlevel;
     uint8_t compile;
     uint8_t infer;
-    uint8_t max_methods;
 
 // hidden fields:
     jl_mutex_t writelock;
@@ -2106,7 +2104,6 @@ JL_DLLEXPORT int jl_get_module_optlevel(jl_module_t *m);
 JL_DLLEXPORT int jl_get_method_optlevel(jl_method_t *m);
 JL_DLLEXPORT int jl_get_method_compile(jl_method_t *m);
 JL_DLLEXPORT int jl_get_method_infer(jl_method_t *m);
-JL_DLLEXPORT int jl_get_method_max_methods(jl_method_t *m);
 JL_DLLEXPORT void jl_set_module_compile(jl_module_t *self, int value);
 JL_DLLEXPORT int jl_get_module_compile(jl_module_t *m);
 JL_DLLEXPORT void jl_set_module_infer(jl_module_t *self, int value);

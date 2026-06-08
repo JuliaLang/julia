@@ -738,13 +738,6 @@ JL_DLLEXPORT int jl_get_method_infer(jl_method_t *m)
     return jl_get_module_infer(m->module);
 }
 
-JL_DLLEXPORT int jl_get_method_max_methods(jl_method_t *m)
-{
-    uint8_t value = m->max_methods;
-    if (value != UINT8_MAX)
-        return value;
-    return jl_get_module_max_methods(m->module);
-}
 
 JL_DLLEXPORT void jl_set_module_compile(jl_module_t *self, int value)
 {
