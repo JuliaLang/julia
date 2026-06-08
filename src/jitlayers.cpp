@@ -473,7 +473,7 @@ jl_emit_codeinsts_to_jit_impl(jl_code_instance_t **codeinsts, jl_code_info_t **s
     JL_TIMING(CODEINST_COMPILE, CODEINST_COMPILE);
 
     // Partition the batch by effective optimization level and emit each group as
-    // its own LLVM module.
+    // its own LLVM module, then add them together so the batch stays atomic.
     std::map<int, SmallVector<int, 0>> groups;
     for (int i = 0; i < len; ++i) {
         if (jl_atomic_load_relaxed(&codeinsts[i]->invoke))
@@ -481,6 +481,7 @@ jl_emit_codeinsts_to_jit_impl(jl_code_instance_t **codeinsts, jl_code_info_t **s
         groups[jl_codeinst_optlevel(codeinsts[i])].push_back(i);
     }
 
+    SmallVector<jl_emitted_output_t> outputs;
     for (auto &group : groups) {
         SmallVector<int, 0> &idxs = group.second;
         const char *name = name_from_method_instance(jl_get_ci_mi(codeinsts[idxs.back()]));
@@ -532,10 +533,12 @@ jl_emit_codeinsts_to_jit_impl(jl_code_instance_t **codeinsts, jl_code_info_t **s
         emit_llvmcall_modules(out);
 
         auto &ES = jl_ExecutionEngine->getExecutionSession();
-        jl_emitted_output_t emitted =
-            out.finish(std::move(ctx), std::move(mod), *ES.getSymbolStringPool());
-        jl_ExecutionEngine->addOutput(std::move(emitted));
+        outputs.push_back(
+            out.finish(std::move(ctx), std::move(mod), *ES.getSymbolStringPool()));
     }
+
+    if (!outputs.empty())
+        jl_ExecutionEngine->addOutputs(outputs);
 }
 
 extern "C" JL_DLLEXPORT_CODEGEN
@@ -1976,16 +1979,26 @@ static void timing_print_module_names(jl_timing_block_t *block,
 
 void JuliaOJIT::addOutput(jl_emitted_output_t O)
 {
+    addOutputs(MutableArrayRef<jl_emitted_output_t>(&O, 1));
+}
+
+void JuliaOJIT::addOutputs(MutableArrayRef<jl_emitted_output_t> Os)
+{
     JL_TIMING(LLVM_JIT, JIT_Total);
-    ++ModulesAdded;
-#ifdef ENABLE_TIMINGS
-    timing_print_module_names(JL_TIMING_DEFAULT_BLOCK, *O.module);
-#endif
+    // Register and define every module before releasing the lock, so the whole
+    // batch becomes visible at once and cross-module references between
+    // co-emitted CodeInstances never fall back to a tojlinvoke trampoline.
     std::unique_lock Lock{LinkerMutex};
-    auto MU = std::make_unique<JLMaterializationUnit>(
-        JLMaterializationUnit::Create(*this, ObjectLayer, std::move(O)));
     ExitOnError check{"Failed to add objectfile to JIT!"};
-    check(JD.define(MU, JD.getDefaultResourceTracker()));
+    for (auto &O : Os) {
+        ++ModulesAdded;
+#ifdef ENABLE_TIMINGS
+        timing_print_module_names(JL_TIMING_DEFAULT_BLOCK, *O.module);
+#endif
+        auto MU = std::make_unique<JLMaterializationUnit>(
+            JLMaterializationUnit::Create(*this, ObjectLayer, std::move(O)));
+        check(JD.define(MU, JD.getDefaultResourceTracker()));
+    }
 }
 
 orc::JITDylib& JuliaOJIT::createJITDylib(StringRef NamePrefix)
