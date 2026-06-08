@@ -1536,6 +1536,18 @@ end
         @test transcode(String, transcode(UInt32, transcode(UInt8, str))) == str
         @test transcode(String, transcode(UInt8, transcode(UInt16, str))) == str
     end
+    # transcode(String, ::Vector{UInt8}) must not empty the input (#28612)
+    let v = UInt8[0x68, 0x65, 0x6c, 0x6c, 0x6f]
+        @test transcode(String, v) == "hello"
+        @test length(v) == 5
+        @test v == UInt8[0x68, 0x65, 0x6c, 0x6c, 0x6f]
+    end
+    let v = UInt8[0x68, 0x65, 0x6c, 0x6c, 0x6f]
+        sv = view(v, 1:5)
+        @test transcode(String, sv) == "hello"
+        @test length(sv) == 5
+        @test v == UInt8[0x68, 0x65, 0x6c, 0x6c, 0x6f]
+    end
 end
 
 if Sys.iswindows()
