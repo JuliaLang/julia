@@ -442,6 +442,28 @@ static void jl_do_dump_compile(jl_code_instance_t *codeinst, uint64_t time)
                             julia_double_to_half(orig_time + time * 1e-9));
 }
 
+static constexpr size_t N_optlevels = 4;
+
+static int jl_clamp_optlevel(int requested) JL_NOTSAFEPOINT
+{
+    int opt_level = std::max(static_cast<int>(jl_options.opt_level), 0);
+    if (requested >= 0 && requested < opt_level)
+        opt_level = requested;
+    int opt_level_min = std::max(static_cast<int>(jl_options.opt_level_min), 0);
+    if (opt_level < opt_level_min)
+        opt_level = opt_level_min;
+    return std::min(opt_level, static_cast<int>(N_optlevels) - 1);
+}
+
+static int jl_codeinst_optlevel(jl_code_instance_t *ci)
+{
+    jl_method_instance_t *mi = jl_get_ci_mi(ci);
+    jl_value_t *def = mi->def.value;
+    int raw = jl_get_module_optlevel(jl_is_method(def) ? ((jl_method_t*)def)->module
+                                                       : mi->def.module);
+    return jl_clamp_optlevel(raw);
+}
+
 extern "C" JL_DLLEXPORT_CODEGEN void
 jl_emit_codeinsts_to_jit_impl(jl_code_instance_t **codeinsts, jl_code_info_t **srcs, int len)
 {
@@ -449,55 +471,71 @@ jl_emit_codeinsts_to_jit_impl(jl_code_instance_t **codeinsts, jl_code_info_t **s
         return;
 
     JL_TIMING(CODEINST_COMPILE, CODEINST_COMPILE);
-    const char *name = name_from_method_instance(jl_get_ci_mi(codeinsts[len - 1]));
-    auto ctx = std::make_unique<LLVMContext>();
-    auto &dl = jl_ExecutionEngine->getDataLayout();
-    auto &tt = jl_ExecutionEngine->getTargetTriple();
-    auto mod = jl_create_llvm_module(name, *ctx, dl, tt);
-    jl_codegen_output_t out{*mod};
-    out.get_context().setDiscardValueNames(true);
-    out.imaging_mode = false;
-    JL_GC_PUSH1(&out.temporary_roots);
 
+    // Partition the batch by effective optimization level and emit each group as
+    // its own LLVM module.
+    std::map<int, SmallVector<int, 0>> groups;
     for (int i = 0; i < len; ++i) {
-        jl_code_instance_t *codeinst = codeinsts[i];
-        jl_code_info_t *src = srcs[i];
-        jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
-
-        if (jl_atomic_load_relaxed(&codeinst->invoke))
-            continue;
-
-        out.temporary_roots = jl_alloc_array_1d(jl_array_any_type, 0);
-        out.temporary_roots_set.clear();
-        if (!jl_emit_codeinst(out, codeinst, src)) { // contains safepoints
-            JL_GC_POP();
-            return;
-        }
-
-        // contains safepoints
-        jl_promote_method_roots(out, mi);
-        emit_always_inline(out, jl_get_method_ir); // contains safepoints
-
-        // Non-opaque-closure MethodInstances are considered globally rooted
-        // through their methods, but for OC, we need to create a global root
-        // here.
-        if (jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure)
-            jl_as_global_root((jl_value_t*)mi, 1);
+        if (jl_atomic_load_relaxed(&codeinsts[i]->invoke))
+            continue; // already compiled
+        groups[jl_codeinst_optlevel(codeinsts[i])].push_back(i);
     }
 
-    out.temporary_roots = nullptr;
-    out.temporary_roots_set.clear();
-    JL_GC_POP();
+    for (auto &group : groups) {
+        SmallVector<int, 0> &idxs = group.second;
+        const char *name = name_from_method_instance(jl_get_ci_mi(codeinsts[idxs.back()]));
+        auto ctx = std::make_unique<LLVMContext>();
+        auto &dl = jl_ExecutionEngine->getDataLayout();
+        auto &tt = jl_ExecutionEngine->getTargetTriple();
+        auto mod = jl_create_llvm_module(name, *ctx, dl, tt);
+        jl_codegen_output_t out{*mod};
+        out.get_context().setDiscardValueNames(true);
+        out.imaging_mode = false;
+        JL_GC_PUSH1(&out.temporary_roots);
 
-    if (out.ci_funcs.empty())
-        return;
+        bool failed = false;
+        for (int i : idxs) {
+            jl_code_instance_t *codeinst = codeinsts[i];
+            jl_code_info_t *src = srcs[i];
+            jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
 
-    emit_llvmcall_modules(out);
+            if (jl_atomic_load_relaxed(&codeinst->invoke))
+                continue;
 
-    auto &ES = jl_ExecutionEngine->getExecutionSession();
-    jl_emitted_output_t emitted =
-        out.finish(std::move(ctx), std::move(mod), *ES.getSymbolStringPool());
-    jl_ExecutionEngine->addOutput(std::move(emitted));
+            out.temporary_roots = jl_alloc_array_1d(jl_array_any_type, 0);
+            out.temporary_roots_set.clear();
+            if (!jl_emit_codeinst(out, codeinst, src)) { // contains safepoints
+                failed = true;
+                break;
+            }
+
+            // contains safepoints
+            jl_promote_method_roots(out, mi);
+            emit_always_inline(out, jl_get_method_ir); // contains safepoints
+
+            // Non-opaque-closure MethodInstances are considered globally rooted
+            // through their methods, but for OC, we need to create a global root
+            // here.
+            if (jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure)
+                jl_as_global_root((jl_value_t*)mi, 1);
+        }
+
+        out.temporary_roots = nullptr;
+        out.temporary_roots_set.clear();
+        JL_GC_POP();
+
+        if (failed)
+            return;
+        if (out.ci_funcs.empty())
+            continue;
+
+        emit_llvmcall_modules(out);
+
+        auto &ES = jl_ExecutionEngine->getExecutionSession();
+        jl_emitted_output_t emitted =
+            out.finish(std::move(ctx), std::move(mod), *ES.getSymbolStringPool());
+        jl_ExecutionEngine->addOutput(std::move(emitted));
+    }
 }
 
 extern "C" JL_DLLEXPORT_CODEGEN
@@ -625,32 +663,26 @@ static auto countBasicBlocks(const Function &F) JL_NOTSAFEPOINT
     return std::distance(F.begin(), F.end());
 }
 
-static constexpr size_t N_optlevels = 4;
-
 static void selectOptLevel(Module &M) JL_NOTSAFEPOINT {
-    size_t opt_level = std::max(static_cast<int>(jl_options.opt_level), 0);
-    do {
-        if (jl_generating_output()) {
-            opt_level = 0;
-            break;
-        }
-        size_t opt_level_min = std::max(static_cast<int>(jl_options.opt_level_min), 0);
+    size_t opt_level;
+    if (jl_generating_output()) {
+        opt_level = 0;
+    }
+    else {
+        int requested = -1;
         for (auto &F : M) {
             if (!F.isDeclaration()) {
                 Attribute attr = F.getFnAttribute("julia-optimization-level");
                 StringRef val = attr.getValueAsString();
                 if (val != "") {
-                    size_t ol = (size_t)val[0] - '0';
-                    if (ol < opt_level)
-                        opt_level = ol;
+                    int ol = (int)val[0] - '0';
+                    if (ol >= 0 && (requested < 0 || ol < requested))
+                        requested = ol;
                 }
             }
         }
-        if (opt_level < opt_level_min)
-            opt_level = opt_level_min;
-    } while (0);
-    // currently -O3 is max
-    opt_level = std::min(opt_level, N_optlevels - 1);
+        opt_level = jl_clamp_optlevel(requested);
+    }
     M.addModuleFlag(Module::Warning, "julia.optlevel", opt_level);
 }
 

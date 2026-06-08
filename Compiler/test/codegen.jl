@@ -1218,3 +1218,32 @@ _blackbox_licmloop_simple(1.0)
     @test count(re_licmcall, ir_bb_simple) == 5  # unrolled, not hoisted
     @test !occursin(re_raw_arg, ir_bb_simple)
 end
+
+module OptLevelNoLeakHeavy
+    @noinline function ksum1(a)
+        s = 0.0
+        @inbounds @simd for i in eachindex(a)
+            s += a[i] * a[i]
+        end
+        return s
+    end
+    @noinline function ksum2(a)
+        s = 0.0
+        @inbounds @simd for i in eachindex(a)
+            s += a[i] * a[i]
+        end
+        return s
+    end
+end
+module OptLevelNoLeakSlow
+    Base.Experimental.@optlevel 0
+    using ..OptLevelNoLeakHeavy: ksum2
+    call2(a) = ksum2(a)
+end
+@testset "per-module optlevel does not leak across co-compiled modules" begin
+    Random.seed!(1)
+    a = rand(100_000)
+    expected = OptLevelNoLeakHeavy.ksum1(a)   # compiled directly at the default level
+    OptLevelNoLeakSlow.call2(a)               # ksum2 first reached (co-compiled) via an -O0 module
+    @test OptLevelNoLeakHeavy.ksum2(a) === expected
+end
