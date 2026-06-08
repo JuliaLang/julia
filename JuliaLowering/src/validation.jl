@@ -501,15 +501,15 @@ end
 vst1_calldecl_dot_name(vcx, st) = @stm st begin
     [K"." l r] ->
         vst1_calldecl_dot_name(vcx, l) &
-        vst1_dot_definition_rhs(vcx, r) |
+        vst1_calldecl_dot_name_rhs(vcx, r) |
         @fail(st, "invalid `.` form")
     [K"Value"] -> pass()
     i -> vst1_ident(vcx, i)
 end
 
-vst1_dot_definition_rhs(vcx, st) = @stm st begin
-    [K"inert" x] -> vst1_dot_definition_rhs(vcx, x)
-    [K"inert_syntaxtree" x] ->  vst1_dot_definition_rhs(vcx, x)
+vst1_calldecl_dot_name_rhs(vcx, st) = @stm st begin
+    [K"inert" x] -> vst1_calldecl_dot_name_rhs(vcx, x)
+    [K"inert_syntaxtree" x] ->  vst1_calldecl_dot_name_rhs(vcx, x)
     [K"Identifier"] -> vst1_ident(vcx, st; lhs=true)
     ([K"Value"], when=st.value isa String) -> _ident_str(vcx, st, st.value; lhs=true)
     [K"String"] -> _ident_str(vcx, st, st.value; lhs=true)
@@ -970,7 +970,8 @@ vst1_assign_lhs_nontuple(vcx, st; in_const=false, in_tuple=false) = @stm st begi
         vst1_assign_lhs(vcx, x; in_const, in_tuple) & vst1(vcx, t)
     [K"." x y] ->
         in_const ? @fail(st, "cannot declare this form constant") :
-        vst1(vcx, x) & vst1_dot_definition_rhs(vcx, y)
+        kind(y) === K"tuple" ? @fail(st, "dotcall syntax not valid here") :
+        vst1(vcx, x) & vst1(vcx, y)
     [K"ref" x is...] ->
         in_const ? @fail(st, "cannot declare this form constant") :
         vst1(vcx, x) & all(vst1_splat_or_val, vcx, is)

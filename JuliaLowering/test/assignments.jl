@@ -39,14 +39,35 @@ let
 end
 """) == (42,42,[1])
 
-# setproperty!
-@test JuliaLowering.include_string(test_mod, """
-let
-    x = X(1,2)
-    x.a = 10
-    (x.a, x.b)
+@testset "setproperty" begin
+    @test JuliaLowering.include_string(test_mod, """
+    let
+        x = X(1,2)
+        x.a = 10
+        (x.a, x.b)
+    end
+    """) == (10,2)
+
+    # RHS of the dot is not restricted like getproperty, and can be anything but
+    # a syntactic tuple (tested as "no assignment to dotcall").
+    JuliaLowering.include_string(test_mod, """
+    mutable struct AnyDotSetProperty; x; end
+    global anydotsetproperty = AnyDotSetProperty(1)
+    function Base.setproperty!(asp::AnyDotSetProperty, y, z)
+        setfield!(asp, :x, (y, z))
+    end
+    """)
+    @test jl_eval(test_mod, Expr(:(=), Expr(:., :anydotsetproperty, 1), 2)) == 2
+    @test test_mod.anydotsetproperty.x == (1,2)
+    @test jl_eval(test_mod,
+                  Expr(:(=), Expr(:., :anydotsetproperty,
+                                  Expr(:call, :identity, 1)), 2)) == 2
+    @test test_mod.anydotsetproperty.x == (1,2)
+    @test jl_eval(test_mod,
+                  Expr(:(=), Expr(:., :anydotsetproperty,
+                                  QuoteNode(Expr(:call, :identity, 1))), 2)) == 2
+    @test test_mod.anydotsetproperty.x == (Expr(:call, :identity, 1),2)
 end
-""") == (10,2)
 
 # Declarations
 @test JuliaLowering.include_string(test_mod, """

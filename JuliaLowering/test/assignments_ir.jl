@@ -165,6 +165,14 @@ a.(b) = rhs
 
 ########################################
 # Error: Invalid lhs in `=`
+a.(b,c) = rhs
+#---------------------
+LoweringError:
+a.(b,c) = rhs
+└─────┘ ── dotcall syntax not valid here
+
+########################################
+# Error: Invalid lhs in `=`
 T[x y] = rhs
 #---------------------
 LoweringError:
