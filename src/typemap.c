@@ -125,6 +125,27 @@ static int sig_match_by_type_leaf(jl_value_t **types, jl_tupletype_t *sig, size_
     return 1;
 }
 
+// Returns true if every value of type `a` is itself a type (i.e., a <: AnyType)
+static int jl_subtype_anytype(jl_value_t *a) JL_NOTSAFEPOINT
+{
+    while (1) {
+        if (jl_is_kind(a) || jl_is_typeeq(a))
+            return 1;
+        else if (jl_is_unionall(a))
+            a = jl_unwrap_unionall(a);
+        else if (jl_is_uniontype(a)) {
+            jl_uniontype_t *u = (jl_uniontype_t*)a;
+            if (!jl_subtype_anytype(u->a))
+                return 0;
+            a = u->b;
+        }
+        else if (jl_is_typevar(a))
+            a = ((jl_tvar_t*)a)->ub;
+        else
+            return 0;
+    }
+}
+
 static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t *sig, size_t lensig, int va)
 {
     size_t i;
@@ -157,9 +178,14 @@ static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t
         }
         else if (decl == (jl_value_t*)jl_any_type) {
         }
+        else if (decl == (jl_value_t*)jl_anytype_type) {
+            if (!jl_subtype_anytype(a))
+                return 0;
+        }
         else {
-            if (jl_is_typeeq(a)) // decl is not Type, because it would be caught above
+            if (jl_is_typeeq(a)) { // decl is not TypeEq or AnyType, because it would be caught above, so it must be concrete
                 a = jl_typeof(jl_typeeq_T(a));
+            }
             if (!jl_types_equal(a, decl))
                 return 0;
         }
@@ -246,6 +272,10 @@ static inline int sig_match_simple(jl_value_t *arg1, jl_value_t **args, size_t n
                         return 0;
                 }
             }
+        }
+        else if (decl == (jl_value_t*)jl_anytype_type) {
+            if (!jl_is_type(a))
+                return 0;
         }
         else {
             return 0;
