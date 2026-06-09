@@ -511,7 +511,7 @@ end
     end
 end
 
-@testset "reproducility of methods for $RNG" for RNG=(MersenneTwister,Xoshiro)
+@testset "reproducibility of methods for $RNG" for RNG=(MersenneTwister,Xoshiro)
     mta, mtb = RNG(42), RNG(42)
 
     @test rand(mta) == rand(mtb)
@@ -529,6 +529,8 @@ end
     for T in Base.uniontypes(Base.HWReal)
         a, b = Vector{Complex{T}}(undef, 10), Vector{Complex{T}}(undef, 10)
         @test rand!(mta, a) == rand!(mtb, b)
+        c, d = Array{Complex{T},0}(undef), Array{Complex{T},0}(undef)
+        @test rand!(mta, c) == rand!(mtb, d)
     end
 
     @test randstring(mta) == randstring(mtb)
