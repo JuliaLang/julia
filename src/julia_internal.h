@@ -236,6 +236,7 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage);
 JL_DLLEXPORT void jl_enter_threaded_region(void);
 JL_DLLEXPORT void jl_exit_threaded_region(void);
 int jl_running_under_rr(int recheck) JL_NOTSAFEPOINT;
+int jl_running_under_sanitizer(int recheck) JL_NOTSAFEPOINT;
 
 //--------------------------------------------------
 // timers
