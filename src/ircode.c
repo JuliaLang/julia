@@ -965,17 +965,17 @@ static size_t codelocs_parseheader(jl_string_t *cl, int *loc_offset, int *loc_by
     int32_t header[3];
     memcpy(&header, (char*)jl_string_data(cl), sizeof(header));
     *loc_offset = header[0];
-    if (header[1] <= UINT8_MAX)
+    if (header[1] < UINT8_MAX)
         *loc_bytes = 1;
-    else if (header[1] <= UINT16_MAX)
+    else if (header[1] < UINT16_MAX)
         *loc_bytes = 2;
     else
         *loc_bytes = 4;
     if (header[2] == 0)
         *to_bytes = 0;
-    else if (header[2] <= UINT8_MAX)
+    else if (header[2] < UINT8_MAX)
         *to_bytes = 1;
-    else if (header[2] <= UINT16_MAX)
+    else if (header[2] < UINT16_MAX)
         *to_bytes = 2;
     else
         *to_bytes = 4;
@@ -1625,18 +1625,19 @@ JL_DLLEXPORT jl_string_t *jl_compress_codelocs(int32_t firstloc, jl_value_t *cod
     header[1] = min.loc > max.loc ? 0 : max.loc - min.loc;
     header[2] = max.to > max.pc ? max.to : max.pc;
     size_t loc_bytes;
-    if (header[1] <= UINT8_MAX)
+    /* 0 encodes a special value, `n` encodes `n-1+loc_offset`. */
+    if (header[1] < UINT8_MAX)
         loc_bytes = 1;
-    else if (header[1] <= UINT16_MAX)
+    else if (header[1] < UINT16_MAX)
         loc_bytes = 2;
     else
         loc_bytes = 4;
     size_t to_bytes;
     if (header[2] == 0)
         to_bytes = 0;
-    else if (header[2] <= UINT8_MAX)
+    else if (header[2] < UINT8_MAX)
         to_bytes = 1;
-    else if (header[2] <= UINT16_MAX)
+    else if (header[2] < UINT16_MAX)
         to_bytes = 2;
     else
         to_bytes = 4;

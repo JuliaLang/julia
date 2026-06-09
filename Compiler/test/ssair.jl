@@ -845,6 +845,13 @@ let cl = Int32[32, 1, 1, 1000, 240, 230, 0, 0, 0]
     @test roundtrip_di(cl, 32, 3) == cl
     @test roundtrip_di(cl, 33, 3) == cl
 end
+let cl = Int32[0,0,0,255,0,0,256,0,0,257,0,0]
+    @test roundtrip_di(cl, -1, 4) == cl
+    @test roundtrip_di(cl, 0, 4) == cl
+    @test roundtrip_di(cl, 1, 4) == cl
+    @test roundtrip_di(cl, 32, 4) == cl
+    @test roundtrip_di(cl, 33, 4) == cl
+end
 
 @test_throws ErrorException Base.code_ircode(+, (Float64, Float64); optimize_until = "nonexisting pass name")
 @test_throws ErrorException Base.code_ircode(+, (Float64, Float64); optimize_until = typemax(Int))
