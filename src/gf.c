@@ -2100,7 +2100,18 @@ static void method_overwrite(jl_typemap_entry_t *newentry, jl_method_t *oldvalue
     if (jl_kwcall_type && dt == jl_kwcall_type)
         dt = jl_nth_argument_datatype(oldvalue->sig, 3);
     int anon = dt && is_anonfn_typename(jl_symbol_name(dt->name->name));
+    // For --warn-overwrite=default, warn only when one module's FQN is not a
+    // prefix of the other's. The check compares modules by name (an interned
+    // `Symbol`) rather than identity, so it stays stable across module
+    // redefinition (e.g. re-`include`-ing a file or re-evaluating
+    // `module Foo ... end` in the REPL produces a fresh identity but the same
+    // name). Examples that stay silent: the same file `include`d into
+    // separately-named test modules; a parent module overriding a submodule's
+    // method via `@deprecate Sub.f()`.
+    int same_unit = jl_modules_share_fqn_prefix(newmod, oldmod);
     if ((jl_options.warn_overwrite == JL_OPTIONS_WARN_OVERWRITE_ON) ||
+        (jl_options.warn_overwrite == JL_OPTIONS_WARN_OVERWRITE_DEFAULT &&
+         !same_unit) ||
         (jl_options.incremental && jl_generating_output()) || anon) {
         JL_STREAM *s = JL_STDERR;
         jl_printf(s, "WARNING: Method definition ");
