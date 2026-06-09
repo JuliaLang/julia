@@ -41,8 +41,10 @@ static jl_value_t *jl_type_extract_name(jl_value_t *t1 JL_PROPAGATES_ROOT, int i
             return (jl_value_t*)jl_type_typename;
         return (jl_value_t*)jl_anytype_type->name;
     }
-    else if (t1 == jl_bottom_type || t1 == (jl_value_t*)jl_typeofbottom_type) {
-        return (jl_value_t*)jl_typeofbottom_type->name; // put Union{} and typeof(Union{}) and Type{Union{}} together for convenience
+    else if (t1 == jl_bottom_type || (t1 == (jl_value_t*)jl_typeofbottom_type && invariant)) {
+        // group Union{} with Type{Union{}} for targ keying; a covariant typeof(Union{})
+        // is an ordinary concrete kind and files with the kinds below
+        return (jl_value_t*)jl_typeofbottom_type->name;
     }
     else if (jl_is_datatype(t1)) {
         jl_datatype_t *dt = (jl_datatype_t*)t1;

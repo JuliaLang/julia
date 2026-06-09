@@ -499,6 +499,24 @@ end
 @test any(m -> m.sig == Tuple{typeof(anytype_levelsplit_61915), DataType},
           methods(anytype_levelsplit_61915, (Union{Type{Int}, Int},)))
 
+# `Core.TypeofBottom` methods file with the kinds: method matching and dispatch with
+# `Type{...}`-represented queries (e.g. for the value `Union{}`) must reach them after
+# a level split instead of using a less specific `::Type` method
+anytype_bottom_61915(::Core.TypeofBottom) = 0
+anytype_bottom_61915(@nospecialize ::Type) = 1
+anytype_bottom_61915(::Integer) = 2
+anytype_bottom_61915(::AbstractString) = 3
+anytype_bottom_61915(::AbstractFloat) = 4
+anytype_bottom_61915(::AbstractVector) = 5
+anytype_bottom_61915(::Exception) = 6
+anytype_bottom_61915(::IO) = 7
+anytype_bottom_61915(::Function) = 8
+let f = Ref{Any}(anytype_bottom_61915), r = Ref{Any}(Union{})
+    @noinline callit() = f[](r[])
+    @test callit() == 0
+    @test length(methods(anytype_bottom_61915, (Type,))) == 2
+end
+
 @test promote_type(Bool,Bottom) === Bool
 
 # type declarations
