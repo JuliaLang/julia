@@ -274,11 +274,8 @@ void wakeup_thread(jl_task_t *ct, int16_t tid) JL_NOTSAFEPOINT { // Pass in ptls
                 wake_libuv();
         }
     }
-    // check if the other threads might be sleeping
     if (tid == -1) {
-        // something added to the multi-queue: notify all threads
-        // in the future, we might want to instead wake some fraction of threads,
-        // and let each of those wake additional threads if they find work
+        // Legacy broadcast wake; prefer jl_wakeup_threadpool.
         int anysleep = 0;
         int nthreads = jl_atomic_load_acquire(&jl_n_threads);
         for (tid = 0; tid < nthreads; tid++) {
@@ -300,6 +297,76 @@ JL_DLLEXPORT void jl_wakeup_thread(int16_t tid) JL_NOTSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
     wakeup_thread(ct, tid);
+}
+
+// Round-robin start hint for jl_wakeup_threadpool, sharded across cache-line-padded
+// stripes so concurrent producers don't contend on a single counter.
+#define POOL_WAKE_HINT_STRIPES 64
+typedef struct {
+    _Atomic(uint32_t) v;
+    char pad[64 - sizeof(_Atomic(uint32_t))];
+} pool_wake_hint_t;
+static pool_wake_hint_t pool_wake_hints[POOL_WAKE_HINT_STRIPES];
+
+// Wake at most one sleeping thread in threadpool `tpid`, replacing the
+// O(jl_n_threads) broadcast of jl_wakeup_thread(-1) (#61820, #50425). Scan each
+// candidate's sleep_check_state under a fence ([^store_buffering_1]); do not
+// short-circuit on n_threads_running, which can be stale and is not pool-local.
+// See devdocs/scheduler-wakeup.
+JL_DLLEXPORT void jl_wakeup_threadpool(int8_t tpid) JL_NOTSAFEPOINT
+{
+    if (tpid < 0 || tpid >= jl_n_threadpools) {
+        wakeup_thread(jl_current_task, -1);
+        return;
+    }
+    jl_task_t *ct = jl_current_task;
+    int16_t self = jl_atomic_load_relaxed(&ct->tid);
+    jl_fence(); // [^store_buffering_1]
+    jl_task_t *uvlock = jl_atomic_load_relaxed(&jl_uv_mutex.owner);
+    JULIA_DEBUG_SLEEPWAKE( wakeup_enter = cycleclock() );
+
+    // ensure self exits any partial sleep transition
+    jl_ptls_t ptls = ct->ptls;
+    if (jl_atomic_load_relaxed(&ptls->sleep_check_state) != not_sleeping) {
+        if (jl_atomic_exchange_relaxed(&ptls->sleep_check_state, not_sleeping) != not_sleeping) {
+            int wasrunning = jl_atomic_fetch_add_relaxed(&n_threads_running, 1);
+            assert(wasrunning); (void)wasrunning;
+            JL_PROBE_RT_SLEEP_CHECK_WAKEUP(ptls);
+        }
+    }
+    if (uvlock == ct)
+        uv_stop(jl_global_event_loop());
+
+    // [lo, lo+n) tid range of the target pool
+    int16_t lo = 0;
+    for (int8_t i = 0; i < tpid; i++)
+        lo += (int16_t)jl_n_threads_per_pool[i];
+    int16_t n = (int16_t)jl_n_threads_per_pool[tpid];
+
+    int woke = 0;
+    if (n > 0) {
+        uint32_t stripe = ((uint32_t)self) & (POOL_WAKE_HINT_STRIPES - 1);
+        uint32_t start = jl_atomic_fetch_add_relaxed(&pool_wake_hints[stripe].v, 1);
+        for (int16_t k = 0; k < n; k++) {
+            int16_t tid = lo + (int16_t)((start + (uint32_t)k) % (uint32_t)n);
+            if (tid == self)
+                continue;
+            if (wake_thread(tid)) {
+                woke = 1;
+                if (uvlock != ct) {
+                    jl_fence();
+                    jl_ptls_t other = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+                    jl_task_t *tid_task = jl_atomic_load_relaxed(&other->current_task);
+                    // if the woken thread is the one blocked in uv_run, kick uv too
+                    if (jl_atomic_load_relaxed(&jl_uv_mutex.owner) == tid_task)
+                        wake_libuv();
+                }
+                break;
+            }
+        }
+    }
+    (void)woke;
+    JULIA_DEBUG_SLEEPWAKE( wakeup_leave = cycleclock() );
 }
 
 // get the next runnable task

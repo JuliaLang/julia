@@ -986,7 +986,9 @@ function enq_work(t::Task)
         else
             # Otherwise, put the task in the multiqueue.
             Partr.multiq_insert(t, t.priority)
-            tid = 0
+            # Wake one sleeping thread in the task's pool rather than all of them. See #61820, #50425.
+            ccall(:jl_wakeup_threadpool, Cvoid, (Int8,), Threads._sym_to_tpid(tp))
+            return t
         end
     end
     ccall(:jl_wakeup_thread, Cvoid, (Int16,), (tid - 1) % Int16)

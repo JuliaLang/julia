@@ -2498,8 +2498,11 @@ void (ijl_longjmp)(jmp_buf _Buf, int _Value);
 #define jl_setjmp_name "sigsetjmp"
 #endif
 #define jl_setjmp(a,b) sigsetjmp(a,b)
-#if defined(_COMPILER_ASAN_ENABLED_) && defined(__GLIBC__)
-extern void (*real_siglongjmp)(jmp_buf _Buf, int _Value);
+#if defined(__GLIBC__)
+// Route jl_longjmp through a function pointer so we can bypass the sanitizers' longjmp
+// interceptor (which mishandles Julia's task stacks) when a sanitizer is active.
+typedef void (*siglongjmp_func_t)(jmp_buf _Buf, int _Value) JL_NOTSAFEPOINT;
+extern siglongjmp_func_t real_siglongjmp;
 #define jl_longjmp(a,b) real_siglongjmp(a,b)
 #else
 #define jl_longjmp(a,b) siglongjmp(a,b)
