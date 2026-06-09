@@ -34,7 +34,12 @@ static jl_value_t *jl_type_extract_name(jl_value_t *t1 JL_PROPAGATES_ROOT, int i
         return jl_type_extract_name(((jl_tvar_t*)t1)->ub, 0);
     }
     else if (jl_is_typeeq(t1)) {
-        return (jl_value_t*)jl_type_typename;
+        // invariantly (a `T` from inside `Type{T}`, keying targ/tname) this is TypeEq's
+        // name; covariantly the key must lie on both the `typeof(arg)` and the TypeEq
+        // wrapper supertype chains that lookups walk, which intersect at `AnyType`
+        if (invariant)
+            return (jl_value_t*)jl_type_typename;
+        return (jl_value_t*)jl_anytype_type->name;
     }
     else if (t1 == jl_bottom_type || t1 == (jl_value_t*)jl_typeofbottom_type) {
         return (jl_value_t*)jl_typeofbottom_type->name; // put Union{} and typeof(Union{}) and Type{Union{}} together for convenience
@@ -42,7 +47,7 @@ static jl_value_t *jl_type_extract_name(jl_value_t *t1 JL_PROPAGATES_ROOT, int i
     else if (jl_is_datatype(t1)) {
         jl_datatype_t *dt = (jl_datatype_t*)t1;
         if (jl_is_kind(t1) && !invariant)
-            return (jl_value_t*)jl_type_typename;
+            return (jl_value_t*)jl_anytype_type->name;
         return (jl_value_t*)dt->name;
     }
     else if (jl_is_uniontype(t1)) {
@@ -452,6 +457,10 @@ static int tname_intersection(jl_value_t *a, jl_typename_t *bname, int8_t tparam
         a = jl_unwrap_unionall(jl_typeeq_T(a));
         if (!jl_is_datatype(a))
             return tname_intersection(a, bname, 0);
+    }
+    else if (jl_is_typeeq(a)) {
+        // a covariant `TypeEq{...}` reaches name buckets via its kind's supertype chain
+        return tname_intersection_dt(jl_typeeq_type, bname, jl_supertype_height(jl_typeeq_type));
     }
     if (jl_is_datatype(a)) {
         return tname_intersection_dt((jl_datatype_t*)a, bname, jl_supertype_height((jl_datatype_t*)a));

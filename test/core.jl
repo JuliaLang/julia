@@ -467,6 +467,38 @@ let r = Ref{Any}(Int)
     @test @allocated(callit()) == 0
 end
 
+# kind-typed (e.g. `::DataType`) and `::Core.AnyType` cache entries must stay reachable
+# (allocation-free dispatch) after the typemap node holding them splits into a level
+anytype_levelsplit_61915(@nospecialize x::Integer) = 1
+anytype_levelsplit_61915(@nospecialize x::AbstractString) = 2
+anytype_levelsplit_61915(@nospecialize x::AbstractFloat) = 3
+anytype_levelsplit_61915(@nospecialize x::AbstractVector) = 4
+anytype_levelsplit_61915(@nospecialize x::Exception) = 5
+anytype_levelsplit_61915(@nospecialize x::IO) = 6
+anytype_levelsplit_61915(@nospecialize x::Function) = 7
+anytype_levelsplit_61915(@nospecialize x::DataType) = 8
+anytype_levelsplit_61915(@nospecialize x::Core.AnyType) = 9
+let f = Ref{Any}(anytype_levelsplit_61915), r = Ref{Any}(Int)
+    @noinline callit() = f[](r[])
+    # populate one widened cache entry per method so the typemap node splits into a level
+    for a in Any[1, "", 1.0, [1], ErrorException(""), IOBuffer(), sin, Int, Union{Int,Char}]
+        r[] = a
+        callit(); callit()
+    end
+    r[] = Int                      # typeof(Int) === DataType: the `::DataType` method
+    @test callit() == 8
+    callit()
+    @test @allocated(callit()) == 0
+    r[] = Union{Int,Char}          # typeof is the `Union` kind: the `::AnyType` method
+    @test callit() == 9
+    callit()
+    @test @allocated(callit()) == 0
+end
+# union-mixed queries take the full-scan intersection path over the method definitions,
+# which must also reach the kind-keyed bucket
+@test any(m -> m.sig == Tuple{typeof(anytype_levelsplit_61915), DataType},
+          methods(anytype_levelsplit_61915, (Union{Type{Int}, Int},)))
+
 @test promote_type(Bool,Bottom) === Bool
 
 # type declarations
