@@ -517,6 +517,22 @@ let f = Ref{Any}(anytype_bottom_61915), r = Ref{Any}(Union{})
     @test length(methods(anytype_bottom_61915, (Type,))) == 2
 end
 
+# specializations are deduplicated by type equality (`Type == Core.AnyType`), so
+# `specTypes` carries whichever representation was interned first and
+# `jl_isa_compileable_sig` must accept both
+anytype_compilesig_61915(io::IO, T::Type) = 1
+let m = only(methods(anytype_compilesig_61915))
+    miA = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any),
+                m, Tuple{typeof(anytype_compilesig_61915), IOBuffer, Core.AnyType}, Core.svec())
+    miB = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any),
+                m, Tuple{typeof(anytype_compilesig_61915), IOBuffer, Type}, Core.svec())
+    @test miA === miB
+    for S in (Type, Core.AnyType)
+        sig = Tuple{typeof(anytype_compilesig_61915), IOBuffer, S}
+        @test ccall(:jl_isa_compileable_sig, Cint, (Any, Any, Any), sig, Core.svec(), m) == 1
+    end
+end
+
 @test promote_type(Bool,Bottom) === Bool
 
 # type declarations

@@ -1497,7 +1497,10 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
             return 0;
         }
 
-        if (jl_is_typeeq(jl_unwrap_unionall(elt))) {
+        // `elt` can be either equal representation of `Type` (specializations are
+        // deduplicated by type-equality): both take the `jl_types_equal(elt,
+        // jl_type_type)` path; an `AnyType` elt must not reach `jl_typeeq_T` below
+        if (jl_is_typeeq(jl_unwrap_unionall(elt)) || elt == (jl_value_t*)jl_anytype_type) {
             int iscalled = (i_arg > 0 && i_arg <= 8 && (definition->called & (1 << (i_arg - 1)))) ||
                            jl_has_free_typevars(decl_i);
             if (jl_types_equal(elt, (jl_value_t*)jl_type_type)) {
