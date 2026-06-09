@@ -172,7 +172,7 @@ JL_DLLEXPORT void *jl_dlopen(const char *filename, unsigned flags) JL_NOTSAFEPOI
 #define JL_RTLD(flags, FLAG) (flags & JL_RTLD_ ## FLAG ? RTLD_ ## FLAG : 0)
 
 #if defined(__GLIBC__)
-static int jl_running_under_sanitizer(int recheck) JL_NOTSAFEPOINT
+int jl_running_under_sanitizer(int recheck) JL_NOTSAFEPOINT
 {
 #if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_)
     return 1;
