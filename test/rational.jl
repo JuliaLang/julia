@@ -34,7 +34,6 @@ using Base.MathConstants
 
     @test @inferred(rationalize(Int, 3.0, 0.0)) === 3//1
     @test @inferred(rationalize(Int, 3.0, 0)) === 3//1
-    @test @inferred(rationalize(Int, 33//100; tol=0.1)) === 1//3 # because tol
     @test @inferred(rationalize(Int, 3; tol=0.0)) === 3//1
     @test @inferred(rationalize(Int8, 1000//333)) === Rational{Int8}(3//1)
     @test @inferred(rationalize(Int8, 1000//3)) === Rational{Int8}(1//0)
@@ -911,4 +910,16 @@ end
             @test (x < r) == (BigFloat(x; precision=pp) < BigFloat(r; precision=pp))
         end
     end
+end
+
+@testset "rationalize(Rational) (issue #60768)" begin
+    r = rationalize(Int64, pi)
+    @test rationalize(Int64, r) == r
+    @test rationalize(Int32, r) == rationalize(Int32, float(r))
+    @test rationalize(Int32, r, tol=0.1) == 16//5
+    @test_throws InexactError rationalize(Int32, r, tol=0)
+    @test_throws InexactError rationalize(Int16, r, tol=0)
+    @test_throws OverflowError rationalize(UInt, -r)
+    @test rationalize(BigInt, r) == Rational{BigInt}(r) == r
+    @test rationalize(Int64, big(r)) == r
 end

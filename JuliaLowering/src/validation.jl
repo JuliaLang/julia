@@ -534,13 +534,19 @@ vst1_ident(vcx, st; lhs=false) = @stm st begin
     _ -> @fail(st, "expected identifier")
 end
 function _ident_str(vcx, st, s::String; lhs=false)
-    if !lhs && all(==('_'), s) && !vcx.readable_underscore
+    if !lhs && !vcx.readable_underscore && is_writeonly_est_name(s)
         @fail(st, "all-underscore identifiers are write-only and their values cannot be used in expressions")
     elseif lhs && s in ("ccall", "cglobal")
         @fail(st, string(s, " is a reserved identifier"))
     else
         pass()
     end
+end
+
+"N.B. this shouldn't be used after `est_to_dst`, as JuliaLowering uses the
+Placeholder kind when we have write-only identifiers"
+function is_writeonly_est_name(s::String)
+    (all(==('_'), s) || s == UNUSED) && length(s) > 0
 end
 
 vst1_call(vcx, st) = @stm st begin

@@ -41,6 +41,91 @@ let x=11
 end
 """) == 220
 
+@testset "empty symbol" begin
+    @test JuliaLowering.include_string(test_mod, """
+    let var\"\"=1; 1; end
+    """) == 1
+
+    # Note function name fails in flisp
+    @test jl_eval(test_mod,
+                Expr(:let, Expr(:block),
+                     Expr(:block,
+                          Expr(:function, Expr(:call, Symbol(""), :x),
+                               Expr(:block, :x)),
+                          Expr(:call, Symbol(""), 1)))) == 1
+
+    # function arg
+    @test jl_eval(test_mod,
+                Expr(:let, Expr(:block),
+                     Expr(:block,
+                          Expr(:function, Expr(:call, :func, Symbol("")),
+                               Expr(:block, Symbol(""))),
+                          Expr(:call, :func, 2)))) == 2
+    # kwarg
+    @test jl_eval(test_mod,
+                Expr(:let, Expr(:block),
+                     Expr(:block,
+                          Expr(:function, Expr(:call, :func, Expr(:parameters, Symbol(""))),
+                               Expr(:block, Symbol(""))),
+                          Expr(:call, :func, Expr(:kw, Symbol(""), 2))))) == 2
+
+    # empty label
+    @test jl_eval(test_mod,
+                Expr(:symbolicblock, Symbol(""),
+                     Expr(:break, Symbol(""), 1))) == 1
+
+    # read empty local
+    @test jl_eval(test_mod,
+                Expr(:let, Expr(:block),
+                     Expr(:block, Expr(:local, Symbol("")),
+                          Expr(:(=), Symbol(""), 17),
+                          Symbol("")))) == 17
+
+    # read empty global
+    @test jl_eval(test_mod,
+                Expr(:block, Expr(:global, Symbol("")),
+                     Expr(:(=), Symbol(""), 7),
+                     Symbol(""))) == 7
+
+    # typed read of empty
+    @test jl_eval(test_mod,
+                Expr(:let, Expr(:block, Expr(:(=), Symbol(""), 5)),
+                     Expr(:block, Expr(:(::), Symbol(""), :Int)))) == 5
+
+    # empty in curly (read position)
+    @test jl_eval(test_mod,
+                Expr(:let, Expr(:block, Expr(:(=), Symbol(""), Int)),
+                     Expr(:block, Expr(:curly, :Vector, Symbol(""))))) == Vector{Int}
+
+    # empty in tuple (read position)
+    @test jl_eval(test_mod,
+                Expr(:let, Expr(:block, Expr(:(=), Symbol(""), 99)),
+                     Expr(:block, Expr(:tuple, Symbol(""))))) == (99,)
+
+    # isdefined on empty
+    @test jl_eval(test_mod,
+                Expr(:let, Expr(:block, Expr(:(=), Symbol(""), 1)),
+                     Expr(:block, Expr(:isdefined, Symbol("")))))
+
+    # for-loop empty iter var referenced in body
+    @test jl_eval(test_mod,
+                Expr(:let, Expr(:block, Expr(:(=), :s, 0)),
+                     Expr(:block,
+                          Expr(:for, Expr(:(=), Symbol(""), Expr(:tuple, 10, 20, 30)),
+                               Expr(:block, Expr(:(=), :s, Expr(:call, :+, :s, Symbol(""))))),
+                          :s))) == 60
+
+    # tuple destructure with empty lhs
+    @test jl_eval(test_mod,
+                Expr(:let, Expr(:block),
+                     Expr(:block, Expr(:local, Symbol("")), Expr(:local, :a),
+                          Expr(:(=), Expr(:tuple, Symbol(""), :a), Expr(:tuple, 1, 2)),
+                          Expr(:tuple, Symbol(""), :a)))) == (1, 2)
+
+    # quote of empty
+    @test jl_eval(test_mod, Expr(:quote, Symbol(""))) === Symbol("")
+end
+
 @eval test_mod libccalltest_var = "libccalltest"
 
 @testset "cglobal" begin

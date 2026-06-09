@@ -112,12 +112,11 @@ function hash(frame::StackFrame, h::UInt)
 end
 
 function _add_linetable_frames!(frames, pointer, di::Core.DebugInfo, pc::Int)
-    lt = di.linetable
+    lt, ltpc = Base.Compiler.prev_debuginfo(di, pc)
     if lt isa Core.DebugInfo
-        ltpc::Int, _, _ = Base.Compiler.getdebugidx(di, pc)
         _add_linetable_frames!(frames, pointer, lt, ltpc)
-        _, eid::Int, epc::Int = Base.Compiler.getdebugidx(lt, ltpc)
-        eid != 0 && _add_di_frames!(frames, pointer, lt.edges[eid], epc)
+        edi, epc = Base.Compiler.edge_debuginfo(lt, ltpc)
+        edi !== nothing && _add_di_frames!(frames, pointer, edi, epc)
     end
     nothing
 end
@@ -126,7 +125,6 @@ end
 # 2. If there is a linetable, recurse on edges there (and not the linetable)
 # 3. Recurse on any of our own edges
 function _add_di_frames!(frames, pointer, di::Core.DebugInfo, pc::Int)
-    _, eid::Int, epc::Int = Base.Compiler.getdebugidx(di, pc)
     @assert pc > 0 "invalid pc"
     push!(frames, StackFrame(
         di.def isa Symbol ? Symbol("macro expansion") : IRShow.method_name(di.def),
@@ -138,7 +136,8 @@ function _add_di_frames!(frames, pointer, di::Core.DebugInfo, pc::Int)
         pointer,
         pc))
     _add_linetable_frames!(frames, pointer, di, pc)
-    eid != 0 && epc != 0 && _add_di_frames!(frames, pointer, di.edges[eid], epc)
+    edi, epc = Base.Compiler.edge_debuginfo(di, pc)
+    edi !== nothing && _add_di_frames!(frames, pointer, edi, epc)
     nothing
 end
 
