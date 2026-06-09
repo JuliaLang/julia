@@ -176,12 +176,11 @@ function transcode(::Type{UInt8}, src::Vector{<:Union{Int32,UInt32}})
 end
 transcode(::Type{String}, src::String) = src
 transcode(T, src::String) = transcode(T, codeunits(src))
-function transcode(::Type{String}, src)
-    b = transcode(UInt8, src)
-    # String(::Vector{UInt8}) empties its argument, so don't hand it the
-    # caller's own buffer.
-    b === src ? String(copy(b)) : String(b)
-end
+# `String(::Vector{UInt8})` takes ownership of (and empties) its argument, so a
+# caller's own `Vector{UInt8}` must be copied; every other `src` produces a fresh
+# buffer from `transcode(UInt8, src)` that is safe to consume. (#28612)
+transcode(::Type{String}, src::Vector{UInt8}) = String(copy(src))
+transcode(::Type{String}, src) = String(transcode(UInt8, src))
 
 function transcode(::Type{UInt16}, src::AbstractVector{UInt8})
     require_one_based_indexing(src)
