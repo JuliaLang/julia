@@ -100,6 +100,24 @@ let x = [1 2; 3 4]
 end
 """) == [0 1 ; 3 4]
 
+@testset "lhs forms" begin
+    @test JuliaLowering.include_string(test_mod, """
+    mutable struct with_mutable_x; x; end
+    let x1 = 1, x2 = [2], x3 = Ref(3), x4 = with_mutable_x(4)
+        val = (x1, x2[1], x3[], x4.x) = 10,20,30,40
+        (val, x1, x2[1], x3[], x4.x)
+    end
+    """) == ((10,20,30,40), 10,20,30,40)
+
+    # TODO: both flisp and JL drop the final conversion
+    @test JuliaLowering.include_string(test_mod, """
+    let x1 = 1, x2 = [2], x3 = Ref(3), x4 = with_mutable_x(4)
+        val = (x1::Int, x2[1]::Int, x3[]::Int, x4.x::Int) = 10.0,20.0,30.0,40.0
+        (val, x1, x2[1], x3[], x4.x)
+    end
+    """) == ((10.0,20.0,30.0,40.0), 10,20,30,40.0)
+end
+
 # Test that side effects of computing indices in left hand side only occur
 # once.
 @test JuliaLowering.include_string(test_mod, """

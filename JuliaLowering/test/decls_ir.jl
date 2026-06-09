@@ -256,6 +256,14 @@ const x[] = 1
 #     └─┘ ── cannot declare this form constant
 
 ########################################
+# Error: const ref
+const x[2] = 1
+#---------------------
+LoweringError:
+const x[2] = 1
+#     └──┘ ── cannot declare this form constant
+
+########################################
 # Error: const setproperty
 const Main.x = 1
 #---------------------

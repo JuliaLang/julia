@@ -275,15 +275,23 @@ end
         @test !isdefined(test_mod, sym)
     end
 
-    # ref form: decl is ignored (syntax TODO)
+    # ref form: decl is ignored, but assignment works (syntax TODO)
     @gensym sym
     @testset let ex =
         Expr(:let, Expr(:block),
              Expr(:block,
-                  Expr(declkind, Expr(:(=), sym, [1,2,3])),
+                  Expr(declkind, Expr(:(=), Expr(:ref, sym), 0))))
+        @test_throws UndefVarError jl_eval(test_mod, ex)
+        Core.@latestworld
+        @test !isdefined(test_mod, sym)
+    end
+    @testset let ex =
+        Expr(:let, Expr(:block),
+             Expr(:block,
+                  Expr(:(=), sym, [1,2,3]),
                   Expr(declkind, Expr(:(=), Expr(:ref, sym, 2), 0)),
                   Expr(:tuple, sym)))
-        @test_broken jl_eval(test_mod, ex) == ([1,0,3],)
+        @test jl_eval(test_mod, ex) == ([1,0,3],)
         Core.@latestworld
         @test !isdefined(test_mod, sym)
     end
