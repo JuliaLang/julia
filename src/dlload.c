@@ -240,9 +240,7 @@ JL_DLLEXPORT int jl_dlclose(void *handle) JL_NOTSAFEPOINT
     }
     int rc = dlclose(handle);
 #ifdef JL_USE_FRAMEHOP
-    // Mirror the jl_dlopen hook: drop the unloaded object's modules now (off-signal), so
-    // a later mapping reusing the address range is not unwound with stale info. (On macOS
-    // this is already handled by framehop's dyld remove-image callback.)
+    // Mirror the jl_dlopen hook so unloaded ranges are not unwound with stale info.
     if (rc == 0)
         fh_modules_refresh();
 #endif

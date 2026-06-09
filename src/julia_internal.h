@@ -1586,9 +1586,7 @@ typedef struct {
 // framehop-backed unwinding (opt-in). The build defines JL_ENABLE_FRAMEHOP to turn this
 // on; JL_USE_FRAMEHOP is then derived for the (os, arch) combinations framehop supports.
 // When off, everything below is byte-for-byte the existing libunwind/dbghelp path.
-// NB: the framehop path lives inside the !JL_DISABLE_LIBUNWIND branch below (libunwind
-// stays linked for task.c context switching), so it cannot be combined with
-// DISABLE_LIBUNWIND.
+// Requires libunwind (the framehop path lives in the !JL_DISABLE_LIBUNWIND branch below).
 #if !defined(JL_USE_FRAMEHOP) && defined(JL_ENABLE_FRAMEHOP) && !defined(JL_DISABLE_LIBUNWIND)
 #  if (defined(_OS_LINUX_) || defined(_OS_FREEBSD_) || defined(_OS_DARWIN_)) && (defined(_CPU_X86_64_) || defined(_CPU_AARCH64_))
 #    define JL_USE_FRAMEHOP 1
@@ -1649,14 +1647,14 @@ size_t rec_backtrace(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTS
 // which was asynchronously interrupted.
 size_t rec_backtrace_ctx(jl_bt_element_t *bt_data, size_t maxsize, bt_context_t *ctx,
                          jl_gcframe_t *pgcstack) JL_NOTSAFEPOINT;
-#if defined(LLVMLIBUNWIND) || defined(JL_USE_FRAMEHOP)
+// The macOS profiler's compact-unwind-fault DWARF retry; libunwind-only (framehop
+// recovers faults via safe_restore instead, see signals-mach.c).
+#if defined(LLVMLIBUNWIND) && !defined(JL_USE_FRAMEHOP)
 size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t maxsize, bt_context_t *ctx, jl_gcframe_t *pgcstack) JL_NOTSAFEPOINT;
 #endif
-// Variant of rec_backtrace_ctx for unwinding a context that belongs to another
-// (suspended) thread or to a not-currently-running task. Under framehop this passes the
-// target's exact stack bounds to the cursor (the unwinding thread's own registered
-// bounds can never cover another thread's stack), making the stack reads fault-free
-// instead of fault-recovered; elsewhere the extra arguments are simply dropped.
+// rec_backtrace_ctx for a context belonging to another (suspended) thread or a
+// not-currently-running task; under framehop the target supplies exact stack bounds,
+// elsewhere the extra arguments are ignored.
 #ifdef JL_USE_FRAMEHOP
 size_t rec_backtrace_ctx_target(jl_bt_element_t *bt_data, size_t maxsize, bt_context_t *ctx,
                                 jl_gcframe_t *pgcstack, jl_ptls_t target_ptls,

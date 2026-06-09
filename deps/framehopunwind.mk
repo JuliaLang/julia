@@ -18,11 +18,9 @@ $(error USE_FRAMEHOP=1 does not support cross-compilation yet (cargo builds for 
 endif
 endif
 
-# NB: the first build needs network access for the crates.io dependencies (Cargo.lock is
-# enforced via --locked; the --offline attempt succeeds once ~/.cargo holds the pinned
-# crates). A fully-offline source build would need vendored crates or a future
-# LibFramehopUnwind_jll. The `+` hands make's jobserver to cargo so `make -j N` is
-# respected instead of cargo spawning NUM_CPUS extra rustc jobs.
+# NB: the first build fetches the crates.io deps (pinned via --locked); a fully-offline
+# build needs vendored crates or a future LibFramehopUnwind_jll. The `+` hands make's
+# jobserver to cargo.
 $(FRAMEHOPUNWIND_BUILDDIR)/build-compiled: $(FRAMEHOPUNWIND_BUILDDIR)/source-extracted
 	@command -v $(CARGO) >/dev/null 2>&1 || { \
 		echo "ERROR: USE_FRAMEHOP=1 requires a Rust toolchain (cargo >= 1.78)." >&2; \

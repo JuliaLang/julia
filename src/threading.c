@@ -401,11 +401,9 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
 #endif
 
 #ifdef JL_USE_FRAMEHOP
-    // Pre-fault framehop's thread-local storage and capture this thread's pthread-stack
-    // bounds off the signal path. NB: the recorded bounds tighten reads only for
-    // *same-thread* unwinding (rec_backtrace) on the pthread stack; cross-thread walks
-    // (the suspend-based profiler, jl_record_backtrace) instead pass the target's exact
-    // bounds via rec_backtrace_ctx_target, with jl_set_safe_restore as the backstop.
+    // Pre-fault framehop's TLS and record this thread's pthread-stack bounds. The
+    // bounds only cover same-thread walks; cross-thread walks pass exact bounds via
+    // rec_backtrace_ctx_target.
     fh_thread_register();
 #endif
 

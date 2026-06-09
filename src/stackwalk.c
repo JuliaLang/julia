@@ -234,8 +234,7 @@ NOINLINE size_t rec_backtrace(jl_bt_element_t *bt_data, size_t maxsize, int skip
     if (r < 0)
         return 0;
     bt_cursor_t cursor;
-    // Check maxsize before initializing the cursor: a framehop cursor owns a pooled slot
-    // from a successful init, and the early return would leak it.
+    // Check maxsize first: a successful framehop init claims a pooled slot.
     if (maxsize == 0 || !jl_unw_init(&cursor, &context))
         return 0;
     jl_gcframe_t *pgcstack = jl_pgcstack;
@@ -295,9 +294,8 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp, int skip)
         skip += 1;
         size_t offset = 0;
 #ifdef JL_USE_FRAMEHOP
-        // jl_array_grow_end below can throw (OutOfMemoryError) while the cursor still
-        // owns its pooled slot; release the slot on the exception path too, or it would
-        // leak permanently. Other unwinders hold no resources; keep them as-is.
+        // jl_array_grow_end can throw while the cursor holds a pooled slot; release it
+        // on the exception path too.
         JL_TRY {
 #endif
         int have_more_frames = 1;
@@ -799,20 +797,9 @@ static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *
     return r > 0;
 }
 
-// framehop has no separate compact-vs-DWARF unwind path (it always uses CFI / .eh_frame
-// and is async-signal-safe), so the macOS mach profiler's DWARF-retry entry point just
-// reuses the regular framehop cursor.
-NOINLINE size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t maxsize,
-                                        bt_context_t *context, jl_gcframe_t *pgcstack)
-{
-    return rec_backtrace_ctx(bt_data, maxsize, context, pgcstack);
-}
-
-// Best-effort exact stack-read window for a context whose stack pointer is `sp`,
-// belonging to a (possibly suspended) target thread and/or a not-currently-running task:
-// the thread's pthread stack, the stack buffer of the task the thread is running, or the
-// target task's own stack buffer. Leaves (0, 0) — framehop's sp-derived fallback window —
-// when nothing matches (e.g. sp on a sigaltstack, or a copy-stacks task).
+// Exact stack-read window for a (possibly suspended) target thread / parked task: its
+// pthread stack, its current task's stack buffer, or the given task's. (0, 0) — the
+// sp-derived fallback — when nothing matches (sigaltstack, copy-stacks task).
 static void jl_unw_target_bounds(jl_ptls_t target_ptls, jl_task_t *target_task, uintptr_t sp,
                                  uint64_t *lo, uint64_t *hi) JL_NOTSAFEPOINT
 {
@@ -851,8 +838,7 @@ NOINLINE size_t rec_backtrace_ctx_target(jl_bt_element_t *bt_data, size_t maxsiz
         return 0;
     fh_context c;
     jl_unw_fh_context(&c, context);
-    // fh_context's r[1] is the captured stack pointer on both supported arches (see the
-    // layout note in framehopunwind.h).
+    // fh_context.r[1] is the captured sp on both supported arches.
     uint64_t lo = 0, hi = 0;
     jl_unw_target_bounds(target_ptls, target_task, (uintptr_t)c.r[1], &lo, &hi);
     bt_cursor_t cursor;

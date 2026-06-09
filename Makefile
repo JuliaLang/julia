@@ -316,8 +316,7 @@ JL_PRIVATE_LIBS-0 += libTracyClient
 endif
 
 ifeq ($(USE_FRAMEHOP),1)
-# libjulia-internal and libjulia-codegen link against this; without it an installed
-# tree fails to start.
+# libjulia-internal and libjulia-codegen link against this.
 JL_PRIVATE_LIBS-0 += libframehopunwind
 endif
 

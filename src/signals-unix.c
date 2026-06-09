@@ -1009,8 +1009,7 @@ static void do_profile(void)
             jl_safe_printf("WARNING: profiler attempt to access an invalid memory location\n");
         }
         else {
-            // Get backtrace data. This is a cross-thread unwind of the suspended target,
-            // so pass it along for exact stack bounds (under framehop).
+            // Get backtrace data; pass the suspended target for exact stack bounds.
             profile_bt_size_cur += rec_backtrace_ctx_target((jl_bt_element_t*)profile_bt_data_prof + profile_bt_size_cur,
                     profile_bt_size_max - profile_bt_size_cur - 1, &signal_context, NULL,
                     jl_atomic_load_relaxed(&jl_all_tls_states)[tid], NULL);
@@ -1048,9 +1047,7 @@ static void *signal_listener(void *arg)
     int sig, critical, profile;
     jl_sigsetset(&sset);
 #ifdef JL_USE_FRAMEHOP
-    // This thread runs the unwinder against suspended/parked targets (do_profile,
-    // critical-error dumps): pre-fault framehop's thread-local storage now, off that
-    // window (the first TLS access from a thread can allocate via __tls_get_addr/dyld).
+    // Pre-fault framehop's TLS off the suspend window; the first access can allocate.
     fh_thread_register();
 #endif
 #if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L
