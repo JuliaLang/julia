@@ -401,10 +401,11 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
 #endif
 
 #ifdef JL_USE_FRAMEHOP
-    // Eagerly preallocate framehop's per-thread cache and capture this thread's stack
-    // bounds off the signal path. NB: this tightens reads only for *same-thread* unwinding
-    // (rec_backtrace); the suspend-based profiler runs the cursor on the sampler thread, so
-    // it falls back to the sp-derived window plus jl_set_safe_restore for the target.
+    // Pre-fault framehop's thread-local storage and capture this thread's pthread-stack
+    // bounds off the signal path. NB: the recorded bounds tighten reads only for
+    // *same-thread* unwinding (rec_backtrace) on the pthread stack; cross-thread walks
+    // (the suspend-based profiler, jl_record_backtrace) instead pass the target's exact
+    // bounds via rec_backtrace_ctx_target, with jl_set_safe_restore as the backstop.
     fh_thread_register();
 #endif
 

@@ -592,13 +592,6 @@ static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, j
 
     jl_init_codegen();
 
-#ifdef JL_USE_FRAMEHOP
-    // Bring up the framehop unwinder and enumerate already-loaded modules. Must run off
-    // any signal path (it allocates the slot pool and copies unwind sections).
-    fh_init(0);
-    fh_thread_register();
-#endif
-
     if (sysimage.kind != JL_IMAGE_KIND_NONE) {
         // Load the .ji or .so sysimage
         jl_restore_system_image(&parsed_image, sysimage);
@@ -784,6 +777,14 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
     jl_init_engine();
     jl_init_threading();
     jl_init_threadinginfra();
+#ifdef JL_USE_FRAMEHOP
+    // Bring up the framehop unwinder and enumerate already-loaded modules BEFORE the
+    // signal handlers are installed, so a crash anywhere during startup (sysimage load,
+    // codegen init) still gets a native backtrace. Must run off any signal path (it
+    // allocates the slot pool and copies unwind sections); idempotent. Thread 0's
+    // per-thread registration happens in jl_init_threadtls below.
+    fh_init(0);
+#endif
     if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
         jl_install_default_signal_handlers();
 

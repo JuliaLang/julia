@@ -234,7 +234,9 @@ NOINLINE size_t rec_backtrace(jl_bt_element_t *bt_data, size_t maxsize, int skip
     if (r < 0)
         return 0;
     bt_cursor_t cursor;
-    if (!jl_unw_init(&cursor, &context) || maxsize == 0)
+    // Check maxsize before initializing the cursor: a framehop cursor owns a pooled slot
+    // from a successful init, and the early return would leak it.
+    if (maxsize == 0 || !jl_unw_init(&cursor, &context))
         return 0;
     jl_gcframe_t *pgcstack = jl_pgcstack;
     size_t bt_size = 0;
@@ -292,6 +294,12 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp, int skip)
         // Skip frame for jl_backtrace_from_here itself
         skip += 1;
         size_t offset = 0;
+#ifdef JL_USE_FRAMEHOP
+        // jl_array_grow_end below can throw (OutOfMemoryError) while the cursor still
+        // owns its pooled slot; release the slot on the exception path too, or it would
+        // leak permanently. Other unwinders hold no resources; keep them as-is.
+        JL_TRY {
+#endif
         int have_more_frames = 1;
         while (have_more_frames) {
             jl_array_grow_end(ip, maxincr);
@@ -306,6 +314,13 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp, int skip)
             skip = 0;
             offset += size_incr;
         }
+#ifdef JL_USE_FRAMEHOP
+        }
+        JL_CATCH {
+            jl_unw_fini(&cursor);
+            jl_rethrow();
+        }
+#endif
         // Release the cursor's pooled slot as soon as stepping is done, before the
         // (allocating, hence possibly-throwing) GC-value harvest below — otherwise an
         // OutOfMemoryError there would longjmp past the fini and permanently leak the slot.
@@ -755,16 +770,22 @@ static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *
 #elif defined(JL_USE_FRAMEHOP)
 // stacktrace using framehop (async-signal-safe; no dl_iterate_phdr / malloc / locks)
 
+// Convert Julia's bt_context_t into framehop's register snapshot.
+static void jl_unw_fh_context(fh_context *c, bt_context_t *context) JL_NOTSAFEPOINT
+{
+#ifdef _OS_DARWIN_
+    // On macOS bt_context_t holds a mach thread state (not a ucontext_t).
+    fh_context_from_thread_state(c, (const void*)context);
+#else
+    // On Linux/FreeBSD bt_context_t is a ucontext_t (== unw_context_t).
+    fh_context_from_ucontext(c, (const void*)context);
+#endif
+}
+
 static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context)
 {
     fh_context c;
-#ifdef _OS_DARWIN_
-    // On macOS bt_context_t holds a mach thread state (not a ucontext_t).
-    fh_context_from_thread_state(&c, (const void*)context);
-#else
-    // On Linux/FreeBSD bt_context_t is a ucontext_t (== unw_context_t).
-    fh_context_from_ucontext(&c, (const void*)context);
-#endif
+    jl_unw_fh_context(&c, context);
     return fh_cursor_init(cursor, &c) == 0;
 }
 
@@ -785,6 +806,62 @@ NOINLINE size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t maxsize
                                         bt_context_t *context, jl_gcframe_t *pgcstack)
 {
     return rec_backtrace_ctx(bt_data, maxsize, context, pgcstack);
+}
+
+// Best-effort exact stack-read window for a context whose stack pointer is `sp`,
+// belonging to a (possibly suspended) target thread and/or a not-currently-running task:
+// the thread's pthread stack, the stack buffer of the task the thread is running, or the
+// target task's own stack buffer. Leaves (0, 0) — framehop's sp-derived fallback window —
+// when nothing matches (e.g. sp on a sigaltstack, or a copy-stacks task).
+static void jl_unw_target_bounds(jl_ptls_t target_ptls, jl_task_t *target_task, uintptr_t sp,
+                                 uint64_t *lo, uint64_t *hi) JL_NOTSAFEPOINT
+{
+    *lo = 0;
+    *hi = 0;
+    if (sp == 0)
+        return;
+    if (target_ptls != NULL) {
+        char *base = (char*)target_ptls->stackbase; // high end; the stack grows down
+        size_t size = target_ptls->stacksize;
+        if (base && size && (uintptr_t)(base - size) <= sp && sp < (uintptr_t)base) {
+            *lo = (uintptr_t)(base - size);
+            *hi = (uintptr_t)base;
+            return;
+        }
+        jl_task_t *t = jl_atomic_load_relaxed(&target_ptls->current_task);
+        if (t != NULL && target_task == NULL)
+            target_task = t;
+    }
+    // A copy-stacks task's stkbuf is the copy *buffer*, not the stack it executes on.
+    if (target_task != NULL && !target_task->ctx.copy_stack &&
+        target_task->ctx.stkbuf && target_task->ctx.bufsz) {
+        char *stk = (char*)target_task->ctx.stkbuf;
+        if ((uintptr_t)stk <= sp && sp < (uintptr_t)stk + target_task->ctx.bufsz) {
+            *lo = (uintptr_t)stk;
+            *hi = (uintptr_t)stk + target_task->ctx.bufsz;
+        }
+    }
+}
+
+NOINLINE size_t rec_backtrace_ctx_target(jl_bt_element_t *bt_data, size_t maxsize,
+                                         bt_context_t *context, jl_gcframe_t *pgcstack,
+                                         jl_ptls_t target_ptls, jl_task_t *target_task) JL_NOTSAFEPOINT
+{
+    if (maxsize == 0)
+        return 0;
+    fh_context c;
+    jl_unw_fh_context(&c, context);
+    // fh_context's r[1] is the captured stack pointer on both supported arches (see the
+    // layout note in framehopunwind.h).
+    uint64_t lo = 0, hi = 0;
+    jl_unw_target_bounds(target_ptls, target_task, (uintptr_t)c.r[1], &lo, &hi);
+    bt_cursor_t cursor;
+    if (fh_cursor_init_bounds(&cursor, &c, lo, hi) != 0)
+        return 0;
+    size_t bt_size = 0;
+    jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, 0, &pgcstack, 1);
+    jl_unw_fini(&cursor);
+    return bt_size;
 }
 
 #elif !defined(JL_DISABLE_LIBUNWIND)
@@ -1485,7 +1562,8 @@ JL_DLLEXPORT size_t jl_try_record_thread_backtrace(jl_ptls_t ptls2, jl_bt_elemen
     // thread is stopped, safe to read the task it was running before we stopped it
     t = jl_atomic_load_relaxed(&ptls2->current_task);
     context = &c;
-    size_t bt_size = rec_backtrace_ctx(bt_data, max_bt_size, context, ptls2->previous_task ? NULL : t->gcstack);
+    size_t bt_size = rec_backtrace_ctx_target(bt_data, max_bt_size, context,
+                                              ptls2->previous_task ? NULL : t->gcstack, ptls2, t);
     jl_thread_resume(tid);
     return bt_size;
 }
@@ -1509,6 +1587,7 @@ JL_DLLEXPORT jl_record_backtrace_result_t jl_record_backtrace(jl_task_t *t, jl_b
     }
     bt_context_t *context = NULL;
     bt_context_t c;
+    jl_ptls_t context_ptls = NULL;
     int16_t old;
     for (old = -1; !jl_atomic_cmpswap(&t->tid, &old, tid) && old != tid; old = -1) {
         // if this task is already running somewhere, we need to stop the thread it is running on and query its state
@@ -1523,6 +1602,7 @@ JL_DLLEXPORT jl_record_backtrace_result_t jl_record_backtrace(jl_task_t *t, jl_b
                 (ptls2->previous_task == NULL && jl_atomic_load_relaxed(&ptls2->current_task) == t)) { // this case should be always accurate
                 // use the thread context for the unwind state
                 context = &c;
+                context_ptls = ptls2;
             }
             break;
         }
@@ -1548,7 +1628,8 @@ JL_DLLEXPORT jl_record_backtrace_result_t jl_record_backtrace(jl_task_t *t, jl_b
     }
     size_t bt_size = 0;
     if (context) {
-        bt_size = rec_backtrace_ctx(bt_data, max_bt_size, context, all_tasks_profiler ? NULL : t->gcstack);
+        bt_size = rec_backtrace_ctx_target(bt_data, max_bt_size, context,
+                                           all_tasks_profiler ? NULL : t->gcstack, context_ptls, t);
     }
     if (old == -1)
         jl_atomic_store_relaxed(&t->tid, old);

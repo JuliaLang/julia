@@ -73,6 +73,12 @@ static inline int jl_addr_is_restore_trigger(uintptr_t addr)
 void *mach_segv_listener(void *arg)
 {
     (void)arg;
+#ifdef JL_USE_FRAMEHOP
+    // This thread runs the unwinder against *other* threads' states (jl_throw_in_state),
+    // possibly while the faulting thread is stopped: pre-fault framehop's thread-local
+    // storage now, off that window (the first TLS access from a thread can allocate).
+    fh_thread_register();
+#endif
     int ret = mach_msg_server(mach_exc_server, 2048, segv_port, MACH_MSG_TIMEOUT_NONE);
     mach_error("mach_msg_server" XSTR(: __FILE__:__LINE__:), ret);
     abort();
@@ -284,9 +290,11 @@ static void jl_throw_in_state(jl_ptls_t ptls2, host_thread_state_t *state, jl_va
     }
     else {
         assert(exception);
+        // Cross-thread unwind: this runs on the exception-server thread against the
+        // faulting thread's state, so pass the target for exact stack bounds.
         ptls2->bt_size =
-            rec_backtrace_ctx(ptls2->bt_data, JL_MAX_BT_SIZE, (bt_context_t *)state,
-                            NULL /*current_task?*/);
+            rec_backtrace_ctx_target(ptls2->bt_data, JL_MAX_BT_SIZE, (bt_context_t *)state,
+                            NULL /*current_task?*/, ptls2, NULL);
         ptls2->sig_exception = exception;
         ptls2->io_wait = 0;
         jl_task_t *ct = jl_atomic_load_relaxed(&ptls2->current_task);
@@ -798,7 +806,7 @@ void jl_profile_thread_mach(int tid)
     if (!valid_thread)
         return;
     if (profile_running) {
-#ifdef LLVMLIBUNWIND
+#if defined(LLVMLIBUNWIND) && !defined(JL_USE_FRAMEHOP)
         /*
             *  Unfortunately compact unwind info is incorrectly generated for quite a number of
             *  libraries by quite a large number of compilers. We can fall back to DWARF unwind info
@@ -829,7 +837,17 @@ void jl_profile_thread_mach(int tid)
 
         forceDwarf = -2;
 #else
-        profile_bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)profile_bt_data_prof + profile_bt_size_cur, profile_bt_size_max - profile_bt_size_cur - 1, uc, NULL);
+        // Under framehop the forceDwarf retry above MUST NOT be used: its recovery warps
+        // this thread back past jl_unw_stepn's setjmp scope, abandoning the framehop
+        // cursor's pooled slot — repeated faulting samples would drain the pool and
+        // silently kill every backtrace in the process. There is also nothing to retry
+        // (framehop has a single CFI path). Instead pass the target's exact stack bounds,
+        // which turns out-of-stack reads into clean truncation; any residual fault is
+        // recovered through jl_unw_stepn's safe_restore (the mach handler declines
+        // profiler-thread faults when forceDwarf is -2, so they surface as a BSD signal
+        // and longjmp back *inside* jl_unw_stepn, after which the cursor is released).
+        profile_bt_size_cur += rec_backtrace_ctx_target((jl_bt_element_t*)profile_bt_data_prof + profile_bt_size_cur, profile_bt_size_max - profile_bt_size_cur - 1, uc, NULL,
+                                                        jl_atomic_load_relaxed(&jl_all_tls_states)[tid], NULL);
 #endif
         jl_ptls_t ptls = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
 
@@ -861,6 +879,13 @@ void *mach_profile_listener(void *arg)
     attach_exception_port(mach_thread_self(), 1);
 #ifdef LLVMLIBUNWIND
     mach_profiler_thread = mach_thread_self();
+#endif
+#ifdef JL_USE_FRAMEHOP
+    // This thread runs the unwinder against suspended targets: pre-fault framehop's
+    // thread-local storage now, not during the first sample while a target thread —
+    // possibly holding the malloc lock — is suspended (the first TLS access from a
+    // thread can allocate via dyld's lazy TLV path).
+    fh_thread_register();
 #endif
     mig_reply_error_t *bufRequest = (mig_reply_error_t*)malloc_s(max_size);
     while (1) {

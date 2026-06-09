@@ -12,8 +12,23 @@ FRAMEHOPUNWIND_BUILDDIR := $(BUILDDIR)/$(FRAMEHOPUNWIND_SRC_DIR)
 # Rust toolchain (override CARGO in Make.user if it is not on PATH).
 CARGO ?= cargo
 
+ifeq ($(USE_FRAMEHOP), 1)
+ifneq ($(XC_HOST),)
+$(error USE_FRAMEHOP=1 does not support cross-compilation yet (cargo builds for the host triple); build natively or wait for LibFramehopUnwind_jll)
+endif
+endif
+
+# NB: the first build needs network access for the crates.io dependencies (Cargo.lock is
+# enforced via --locked; the --offline attempt succeeds once ~/.cargo holds the pinned
+# crates). A fully-offline source build would need vendored crates or a future
+# LibFramehopUnwind_jll. The `+` hands make's jobserver to cargo so `make -j N` is
+# respected instead of cargo spawning NUM_CPUS extra rustc jobs.
 $(FRAMEHOPUNWIND_BUILDDIR)/build-compiled: $(FRAMEHOPUNWIND_BUILDDIR)/source-extracted
-	cd $(dir $<) && \
+	@command -v $(CARGO) >/dev/null 2>&1 || { \
+		echo "ERROR: USE_FRAMEHOP=1 requires a Rust toolchain (cargo >= 1.78)." >&2; \
+		echo "       Install one via https://rustup.rs, or set CARGO in Make.user." >&2; \
+		exit 1; }
+	+cd $(dir $<) && \
 		$(CARGO) build --release --locked --offline 2>/dev/null || \
 		$(CARGO) build --release --locked
 	echo 1 > $@

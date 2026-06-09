@@ -1296,12 +1296,17 @@ endif
 USE_FRAMEHOP ?= 0
 FRAMEHOPUNWIND :=
 ifeq ($(USE_FRAMEHOP), 1)
-ifneq ($(findstring $(OS),Linux FreeBSD Darwin),)
-ifneq ($(filter $(ARCH),x86_64 aarch64),)
+ifneq ($(DISABLE_LIBUNWIND), 0)
+$(error USE_FRAMEHOP=1 requires libunwind (framehop replaces only the backtrace cursor; task.c context switching still uses libunwind) — unset DISABLE_LIBUNWIND)
+endif
+ifeq ($(findstring $(OS),Linux FreeBSD Darwin),)
+$(error USE_FRAMEHOP=1 is not supported on OS=$(OS) (supported: Linux, FreeBSD, Darwin))
+endif
+ifeq ($(filter $(ARCH),x86_64 aarch64),)
+$(error USE_FRAMEHOP=1 is not supported on ARCH=$(ARCH) (supported: x86_64, aarch64))
+endif
 FRAMEHOPUNWIND := -lframehopunwind
 JCPPFLAGS += -DJL_ENABLE_FRAMEHOP
-endif
-endif
 endif
 
 ifeq ($(origin LLVM_CONFIG), undefined)
