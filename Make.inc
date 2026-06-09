@@ -826,6 +826,14 @@ endif # SANITIZE_MEMORY=1
 ifeq ($(SANITIZE_ADDRESS),1)
 SANITIZE_OPTS += -fsanitize=address
 SANITIZE_LDFLAGS += -fsanitize=address -shared-libasan
+# LLVM_SANITIZE can be set to 1 if LLVM was built with sanitizers.
+# When LLVM is not sanitized (e.g., BinaryBuilder LLVM), we need to disable
+# container overflow detection to avoid false positives from sharing
+# std::vector between ASAN-instrumented and non-instrumented code.
+ifeq ($(LLVM_SANITIZE),1)
+JCFLAGS += -D_LLVM_ASAN_ENABLED_
+JCXXFLAGS += -D_LLVM_ASAN_ENABLED_
+endif
 endif
 ifeq ($(SANITIZE_THREAD),1)
 SANITIZE_OPTS += -fsanitize=thread -fsanitize-ignorelist=$(JULIAHOME)/contrib/tsan/ignorelist.txt

@@ -96,9 +96,12 @@ $(BUILDDIR)/$(LIBTARGET).a: $(OBJS) | $(BUILDDIR)
 CCLD := $(CC)
 
 # Override `-shared-libasan` from root Make.inc
+# Static AddressSanitizer runtime is not supported on Darwin
 ifeq ($(SANITIZE),1)
+ifneq ($(OS),Darwin)
 ifeq ($(SANITIZE_ADDRESS),1)
 JLDFLAGS += -static-libsan
+endif
 endif
 endif
 

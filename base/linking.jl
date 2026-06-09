@@ -143,6 +143,8 @@ else
     "-shared"
 end
 
+isasanbuild() = ccall(:jl_is_asanbuild, Cint, ()) == 1
+
 libdir() = abspath(Sys.BINDIR, Base.LIBDIR)
 private_libdir() = abspath(Sys.BINDIR, Base.PRIVATE_LIBDIR)
 if Sys.iswindows()
@@ -205,6 +207,15 @@ function link_image_cmd(path, out)
         append!(LIBS,     String["--as-needed", ld_linux, "--no-as-needed"])
         append!(crtbegin, String[_find_static("crti.o"), _find_static("crtbeginS.o")])
         append!(crtend,   String[_find_static("crtendS.o"), _find_static("crtn.o")])
+    end
+
+    # When built with ASAN on macOS, link against the ASAN runtime
+    # (On Linux, ASAN symbols resolve from the Julia binary or standard paths)
+    # The ASAN runtime is installed to Julia's lib directory by deps/sanitizers.mk
+    @static if Sys.isapple()
+        if isasanbuild()
+            LIBS = (LIBS..., "-lclang_rt.asan_osx_dynamic")
+        end
     end
 
     V = verbose_linking() ? "--verbose" : ""
