@@ -696,7 +696,7 @@ _widenconst(t::PartialOpaque) = t.typ
 _widenconst(::TypeVar) = error("unhandled TypeVar")
 _widenconst(::TypeofVararg) = error("unhandled Vararg")
 _widenconst(::LimitedAccuracy) = error("unhandled LimitedAccuracy")
-typeof(_widenconst).name.max_methods = UInt8(10)
+typeof(_widenconst).name.max_methods = UInt8(20)
 
 """
     widenconst(x) -> t::Type
