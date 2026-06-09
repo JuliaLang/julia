@@ -161,7 +161,7 @@ static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t
                 if (!jl_types_equal(jl_typeeq_T(a), tp0))
                     return 0;
             }
-            else if (!jl_is_kind(a)) {
+            else {
                 return 0;
             }
         }
