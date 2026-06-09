@@ -4,6 +4,7 @@ Pkg.activate(".")
 
 using Test
 using JSON
+using Serialization
 
 @test length(ARGS) == 1
 bindir = dirname(ARGS[1])
@@ -89,4 +90,92 @@ let exe_suffix = splitext(Base.julia_exename())[2]
     # `Ptr{CTree{Float64}}` should refer (recursively) back to the original type id
     Ptr_CTree_Float64 = abi["types"][CVector_CTree_Float64["fields"][2]["type_id"]]
     @test Ptr_CTree_Float64["pointee_type_id"] == CTree_Float64_id
+
+    # Test that Serialization.serialize supports trimming
+    serialization_exe = joinpath(bindir, "serialization" * exe_suffix)
+    @test readchomp(`$serialization_exe`) == "serialization ok"
+    # Verify stdlib types were serialized correctly
+    result = deserialize(joinpath(bindir, "_trim_stdlib.jls"))
+    @test result == (42, "hello", :sym, (1, 2.0), Int[10, 20, 30])
+    # Verify custom struct file was produced and round-trips, including the
+    # `Memory{Union{Int,String}}` field (regression test for trim-safe
+    # serialization of `Union`-valued DataType parameters). The struct
+    # definitions must match those in `serialization.jl`.
+    @eval mutable struct TrimSerMut
+        s::String
+        m::Memory{Int}
+        u::Union{Int, Nothing}
+        t::Tuple{Int, String}
+        mu::Memory{Union{Int, String}}
+    end
+    @eval struct TrimSerImm
+        a::Int
+        b::TrimSerMut
+    end
+    @test filesize(joinpath(bindir, "_trim_custom.jls")) > 0
+    custom = deserialize(joinpath(bindir, "_trim_custom.jls"))
+    @test custom.a == 42
+    @test custom.b.s == "hello"
+    @test custom.b.u === 7
+    @test custom.b.t == (3, "world")
+    @test custom.b.mu isa Memory{Union{Int, String}}
+    @test custom.b.mu[1] === 123
+    @test custom.b.mu[2] == "abc"
+    # Clean up
+    rm(joinpath(bindir, "_trim_stdlib.jls"), force=true)
+    rm(joinpath(bindir, "_trim_custom.jls"), force=true)
+
+    # Test that Serialization.deserialize with type annotation supports trimming
+    # Prepare serialized data for the trimmed executable to deserialize
+    serialize(joinpath(bindir, "_trim_deser_int.jls"), 42)
+    serialize(joinpath(bindir, "_trim_deser_str.jls"), "hello")
+    serialize(joinpath(bindir, "_trim_deser_vec.jls"), Int[10, 20, 30])
+    serialize(joinpath(bindir, "_trim_deser_dict.jls"), Dict("a" => 1, "b" => 2))
+    # User-defined struct: must match the definition in deserialization.jl
+    @eval struct TrimDeserPoint; x::Int; y::Float64; s::String; end
+    @eval struct TrimDeserInner; v::Vector{Int}; t::TrimDeserPoint; end
+    @eval struct TrimDeserOuter
+        a::Int; b::TrimDeserInner; c::Vector{TrimDeserPoint}
+        d::Memory{TrimDeserPoint}; e::Vector{TrimDeserInner}
+        f::@NamedTuple{lon::Float64, lat::Float64}
+    end
+    serialize(joinpath(bindir, "_trim_deser_pt.jls"), TrimDeserPoint(7, 2.5, "pt"))
+    let mem = Memory{TrimDeserPoint}(undef, 2)
+        mem[1] = TrimDeserPoint(501, 0.1, "mem1")
+        mem[2] = TrimDeserPoint(502, 0.2, "mem2")
+        serialize(joinpath(bindir, "_trim_deser_nest.jls"),
+                  TrimDeserOuter(
+                      9,
+                      TrimDeserInner([11, 22, 33], TrimDeserPoint(1, 1.5, "inner")),
+                      [TrimDeserPoint(100, 0.25, "first"), TrimDeserPoint(200, 0.5, "second")],
+                      mem,
+                      [TrimDeserInner([77, 88], TrimDeserPoint(8, 9.5, "deep"))],
+                      (lon=12.5, lat=-3.25)))
+    end
+    deserialization_exe = joinpath(bindir, "deserialization" * exe_suffix)
+    lines = split(readchomp(`$deserialization_exe`), "\n")
+    @test lines[1] == "42"
+    @test lines[2] == "hello"
+    @test lines[3] == "10 20 30"
+    @test lines[4] == "1 2"
+    @test lines[5] == "7 2.5 pt"
+    @test lines[6] == "9"
+    @test lines[7] == "11"
+    @test lines[8] == "1"
+    @test lines[9] == "first"
+    @test lines[10] == "0.5"
+    @test lines[11] == "501"
+    @test lines[12] == "mem2"
+    @test lines[13] == "88"
+    @test lines[14] == "deep"
+    @test lines[15] == "12.5"
+    @test lines[16] == "-3.25"
+    @test lines[17] == "deserialization ok"
+    # Clean up
+    rm(joinpath(bindir, "_trim_deser_int.jls"), force=true)
+    rm(joinpath(bindir, "_trim_deser_str.jls"), force=true)
+    rm(joinpath(bindir, "_trim_deser_vec.jls"), force=true)
+    rm(joinpath(bindir, "_trim_deser_dict.jls"), force=true)
+    rm(joinpath(bindir, "_trim_deser_pt.jls"), force=true)
+    rm(joinpath(bindir, "_trim_deser_nest.jls"), force=true)
 end

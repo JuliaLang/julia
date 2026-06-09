@@ -733,3 +733,122 @@ end
     @test new_d[:m] isa Memory
     @test new_d[:m][5] == 125
 end
+
+# Typed deserialization: deserialize(s, ::Type{T})
+struct ParamWrapRegression{T}
+    x::T
+end
+@testset "typed deserialize" begin
+    # Basic types
+    @testset "primitives" begin
+        for val in (true, false, 42, 3.14, 'x', 0x01, Int16(7), UInt64(99), Float32(1.5))
+            buf = sprint(serialize, val)
+            @test deserialize(IOBuffer(buf), typeof(val)) === val
+        end
+    end
+
+    @testset "nothing and missing" begin
+        buf = sprint(serialize, nothing)
+        @test deserialize(IOBuffer(buf), Nothing) === nothing
+
+        buf = sprint(serialize, missing)
+        @test deserialize(IOBuffer(buf), Missing) === missing
+    end
+
+    @testset "strings" begin
+        buf = sprint(serialize, "hello")
+        @test deserialize(IOBuffer(buf), String) == "hello"
+    end
+
+    @testset "symbols" begin
+        buf = sprint(serialize, :foo)
+        @test deserialize(IOBuffer(buf), Symbol) === :foo
+    end
+
+    @testset "tuples" begin
+        tpl = (1, "two", 3.0)
+        buf = sprint(serialize, tpl)
+        @test deserialize(IOBuffer(buf), Tuple{Int, String, Float64}) === tpl
+        @test deserialize(IOBuffer(buf), Tuple) == tpl
+    end
+
+    @testset "arrays" begin
+        arr = [1, 2, 3]
+        buf = sprint(serialize, arr)
+        @test deserialize(IOBuffer(buf), Vector{Int}) == arr
+
+        mat = [1 2; 3 4]
+        buf = sprint(serialize, mat)
+        @test deserialize(IOBuffer(buf), Matrix{Int}) == mat
+    end
+
+    @testset "dicts" begin
+        d = Dict("a" => 1, "b" => 2)
+        buf = sprint(serialize, d)
+        @test deserialize(IOBuffer(buf), Dict{String, Int}) == d
+        @test deserialize(IOBuffer(buf), Dict) == d
+    end
+
+    @testset "regex" begin
+        r = r"foo.*bar"i
+        buf = sprint(serialize, r)
+        result = deserialize(IOBuffer(buf), Regex)
+        @test result.pattern == r.pattern
+    end
+
+    @testset "BigInt" begin
+        n = big"123456789012345678901234567890"
+        buf = sprint(serialize, n)
+        @test deserialize(IOBuffer(buf), BigInt) == n
+    end
+
+    # Union types
+    @testset "union types" begin
+        buf = sprint(serialize, 42)
+        @test deserialize(IOBuffer(buf), Union{Int, String}) === 42
+
+        buf = sprint(serialize, "hello")
+        @test deserialize(IOBuffer(buf), Union{Int, String}) == "hello"
+    end
+
+    # Abstract types
+    @testset "abstract types" begin
+        buf = sprint(serialize, 42)
+        @test deserialize(IOBuffer(buf), Integer) === 42
+        @test deserialize(IOBuffer(buf), Number) === 42
+        @test deserialize(IOBuffer(buf), Any) === 42
+    end
+
+    # Type mismatch errors
+    @testset "type mismatch" begin
+        buf = sprint(serialize, 42)
+        @test_throws ArgumentError deserialize(IOBuffer(buf), String)
+
+        buf = sprint(serialize, "hello")
+        @test_throws ArgumentError deserialize(IOBuffer(buf), Int)
+
+        buf = sprint(serialize, [1, 2, 3])
+        @test_throws ArgumentError deserialize(IOBuffer(buf), Dict)
+    end
+
+    # File-based typed deserialization
+    @testset "file-based" begin
+        mktempdir() do dir
+            path = joinpath(dir, "test.bin")
+            serialize(path, [1, 2, 3])
+            @test deserialize(path, Vector{Int}) == [1, 2, 3]
+            @test_throws ArgumentError deserialize(path, String)
+        end
+    end
+
+    # Regression: parametric DataType as a type parameter of a struct.
+    # `deserialize_skip_datatype!` must recurse statically into `Vector{Vector{Int}}`
+    # when skipping the struct's type data — the type-blind
+    # `deserialize_consume_value!` would stop after name+module and leave the
+    # nested parameter bytes on the stream, corrupting subsequent reads.
+    @testset "parametric DataType as struct type parameter" begin
+        data = ParamWrapRegression{Vector{Vector{Int}}}([[1, 2], [3]])
+        buf = sprint(serialize, data)
+        @test deserialize(IOBuffer(buf), ParamWrapRegression{Vector{Vector{Int}}}).x == data.x
+    end
+end

@@ -289,16 +289,22 @@ serialize(s::AbstractSerializer, p::Ptr) = serialize_any(s, oftype(p, C_NULL))
 serialize(s::AbstractSerializer, ::Tuple{}) = writetag(s.io, EMPTYTUPLE_TAG)
 
 function serialize(s::AbstractSerializer, t::Tuple)
-    l = length(t)
-    if l <= NTAGS
-        writetag(s.io, TUPLE_TAG)
-        write(s.io, UInt8(l))
+    l = nfields(t)
+    short = l <= NTAGS
+    if @generated
+        exprs = Vector{Expr}(undef, l + 2)
+        exprs[1] = :(writetag(s.io, $(short ? TUPLE_TAG : LONGTUPLE_TAG)))
+        exprs[2] = :(write(s.io, $(short ? UInt8 : Int32)($l)))
+        for i in 1:l
+            exprs[2+i] = :(serialize(s, t[$i]))
+        end
+        return Expr(:block, exprs...)
     else
-        writetag(s.io, LONGTUPLE_TAG)
-        write(s.io, Int32(l))
-    end
-    for x in t
-        serialize(s, x)
+        writetag(s.io, short ? TUPLE_TAG : LONGTUPLE_TAG)
+        write(s.io, (short ? UInt8 : Int32)(l))
+        for i in 1:l
+            serialize(s, t[i])
+        end
     end
 end
 
@@ -368,7 +374,7 @@ function serialize(s::AbstractSerializer, a::Array)
     elty = eltype(a)
     writetag(s.io, ARRAY_TAG)
     if elty !== UInt8
-        serialize(s, elty)
+        serialize_datatype(s, elty)
     end
     if ndims(a) != 1
         serialize(s, size(a))
@@ -437,9 +443,11 @@ function serialize(s::AbstractSerializer, r::Regex)
     serialize(s, r.match_options)
 end
 
+const BIGINT_BASE = 62  # max base accepted by `string`/`parse` (0-9A-Za-z)
+
 function serialize(s::AbstractSerializer, n::BigInt)
     serialize_type(s, BigInt)
-    serialize(s, string(n, base = 62))
+    serialize(s, string(n, base = BIGINT_BASE))
 end
 
 function serialize(s::AbstractSerializer, ex::Expr)
@@ -497,19 +505,10 @@ function serialize(s::AbstractSerializer, m::Module)
     writetag(s.io, EMPTYTUPLE_TAG)
 end
 
-# TODO: make this bidirectional, so objects can be sent back via the same key
-const object_numbers = WeakKeyDict()
-const obj_number_salt = Ref{UInt64}(0)
-function object_number(s::AbstractSerializer, @nospecialize(l))
-    global obj_number_salt, object_numbers
-    if haskey(object_numbers, l)
-        return object_numbers[l]
-    end
-    ln = obj_number_salt[]
-    object_numbers[l] = ln
-    obj_number_salt[] += 1
-    return ln::UInt64
-end
+# In principle, use the `AbstractSerializer`'s counter to assign unique object numbers.
+# However, as the counter as already be incremented, actually use the copy in `table.l`
+# as the result is more intuitive.
+object_number(s::AbstractSerializer, l) = s.table[l] % UInt64
 
 lookup_object_number(s::AbstractSerializer, n::UInt64) = nothing
 
@@ -681,7 +680,7 @@ function should_send_whole_type(s, t::DataType)
     return isanonfunction
 end
 
-function serialize_type_data(s, @nospecialize(t::DataType))
+function serialize_type_data_dynamic(s, @nospecialize(t::DataType))
     whole = should_send_whole_type(s, t)
     iswrapper = (t === unwrap_unionall(t.name.wrapper))
     if whole && iswrapper
@@ -711,6 +710,71 @@ function serialize_type_data(s, @nospecialize(t::DataType))
     nothing
 end
 
+# Serialize a type-valued DataType parameter statically, recursing through
+# `Union` so that trimming does not need to see the reflective
+# `serialize_fields(::Union)` fallback. Any non-`Union` case falls back to the
+# ordinary `serialize` dispatch (which for `DataType`/`UnionAll`/`Bottom` is
+# already statically resolvable from the compile-time type argument).
+function serialize_type_param(s::AbstractSerializer, ::Type{T}) where T
+    if @generated
+        if T isa Union
+            a = T.a
+            b = T.b
+            return quote
+                writetag(s.io, $(sertag(Union)))
+                serialize_type_param(s, $a)
+                serialize_type_param(s, $b)
+            end
+        elseif T isa DataType
+            return :(serialize_datatype(s, $T))
+        else
+            return :(serialize(s, T))
+        end
+    else
+        serialize(s, T)
+    end
+end
+
+function serialize_type_data(s, t::Type{T}) where T
+    if @generated
+        # When called with a DataType containing free TypeVars (e.g. Foo{T} from
+        # a UnionAll body), Julia's type dispatch binds T to the TypeVar itself
+        # rather than the DataType. Fall back to the runtime path in that case.
+        T isa DataType || return :(serialize_type_data_dynamic(s, t))
+        should_send_whole_type(nothing, T) && return :(serialize_type_data_dynamic(s, $T))
+        iswrapper = T === unwrap_unionall(T.name.wrapper)
+        name_sym = QuoteNode(nameof(T))
+        mod = parentmodule(T)
+        params = T.parameters
+        exprs = Expr[]
+        push!(exprs, :(serialize_cycle(s, $T) && return))
+        push!(exprs, :(writetag(s.io, DATATYPE_TAG)))
+        push!(exprs, :(serialize(s, $name_sym)))
+        push!(exprs, :(serialize(s, $mod)))
+        if !isempty(params)
+            np = iswrapper ? 0 : length(params)
+            push!(exprs, :(write(s.io, Int32($np))))
+            if !iswrapper
+                for p in params
+                    if p isa DataType
+                        push!(exprs, :(serialize_datatype(s, $p)))
+                    elseif p isa Type
+                        # Union (and similar) type parameters: recurse
+                        # statically so trim does not see the reflective
+                        # `serialize_fields`/`getfield(::Type, N)::Any` path.
+                        push!(exprs, :(serialize_type_param(s, $p)))
+                    else
+                        push!(exprs, :(serialize(s, $(QuoteNode(p)))))
+                    end
+                end
+            end
+        end
+        return quote $(exprs...) end
+    else
+        serialize_type_data_dynamic(s, t)
+    end
+end
+
 function serialize(s::AbstractSerializer, t::DataType)
     tag = sertag(t)
     tag > 0 && return write_as_tag(s.io, tag)
@@ -724,11 +788,25 @@ function serialize(s::AbstractSerializer, t::DataType)
     serialize_type_data(s, t)
 end
 
-function serialize_type(s::AbstractSerializer, @nospecialize(t::DataType), ref::Bool = false)
-    tag = sertag(t)
+# Resolves tag checks at compile time when the type is statically known
+# (e.g. Array element type serialization).
+function serialize_datatype(s::AbstractSerializer, ::Type{T}) where T
+    if @generated
+        T isa DataType || return :(serialize(s, $T))
+        tag = sertag(T)
+        tag > 0 && return :(write_as_tag(s.io, $tag))
+        T === Tuple && return :(write_as_tag(s.io, TUPLE_TAG))
+        return :(serialize_type_data(s, $T))
+    else
+        serialize(s, T)
+    end
+end
+
+function serialize_type(s::AbstractSerializer, ::Type{T}, ref::Bool = false) where T
+    tag = sertag(T)
     tag > 0 && return writetag(s.io, tag)
     writetag(s.io, ref ? REF_OBJECT_TAG : OBJECT_TAG)
-    serialize_type_data(s, t)
+    serialize_type_data(s, T)
 end
 
 function serialize(s::AbstractSerializer, n::Int32)
@@ -781,7 +859,7 @@ function serialize(s::AbstractSerializer, u::UnionAll)
     end
 end
 
-serialize(s::AbstractSerializer, @nospecialize(x)) = serialize_any(s, x)
+serialize(s::AbstractSerializer, x) = serialize_any(s, x)
 
 function serialize(s::AbstractSerializer, x::Core.AddrSpace)
     serialize_type(s, typeof(x))
@@ -793,24 +871,58 @@ function serialize(s::AbstractSerializer, x::Core.IntrinsicFunction)
     serialize(s, nameof(x))
 end
 
-function serialize_any(s::AbstractSerializer, @nospecialize(x))
-    tag = sertag(x)
-    if tag > 0
-        return write_as_tag(s.io, tag)
-    end
-    t = typeof(x)::DataType
-    if isprimitivetype(t)
-        serialize_type(s, t)
-        write(s.io, x)
-    else
-        if ismutable(x)
-            serialize_cycle(s, x) && return
-            serialize_type(s, t, true)
+function serialize_any(s::AbstractSerializer, x::T) where T
+    if @generated
+        exprs = Expr[]
+        push!(exprs, :(tag = sertag(x)))
+        push!(exprs, :(tag > 0 && return write_as_tag(s.io, tag)))
+        if isprimitivetype(T)
+            push!(exprs, :(serialize_type(s, $T)))
+            push!(exprs, :(write(s.io, x)))
+        elseif ismutabletype(T)
+            push!(exprs, :(serialize_cycle(s, x) && return))
+            push!(exprs, :(serialize_type(s, $T, true)))
+            push!(exprs, :(serialize_fields(s, x)))
         else
-            serialize_type(s, t, false)
+            push!(exprs, :(serialize_type(s, $T, false)))
+            push!(exprs, :(serialize_fields(s, x)))
         end
-        nf = nfields(x)
+        push!(exprs, :(return nothing))
+        return quote $(exprs...) end
+    else
+        tag = sertag(x)
+        tag > 0 && return write_as_tag(s.io, tag)
+        if isprimitivetype(T)
+            serialize_type(s, T)
+            write(s.io, x)
+        elseif ismutabletype(T)
+            serialize_cycle(s, x) && return
+            serialize_type(s, T, true)
+            serialize_fields(s, x)
+        else
+            serialize_type(s, T, false)
+            serialize_fields(s, x)
+        end
+        return nothing
+    end
+end
+
+function serialize_fields(s::AbstractSerializer, x::T) where T
+    if @generated
+        nf = fieldcount(T)
+        exprs = Vector{Expr}(undef, nf)
         for i in 1:nf
+            exprs[i] = quote
+                if isdefined(x, $i)
+                    serialize(s, getfield(x, $i))
+                else
+                    writetag(s.io, UNDEFREF_TAG)
+                end
+            end
+        end
+        return Expr(:block, exprs...)
+    else
+        for i in 1:nfields(x)
             if isdefined(x, i)
                 serialize(s, getfield(x, i))
             else
@@ -818,7 +930,6 @@ function serialize_any(s::AbstractSerializer, @nospecialize(x))
             end
         end
     end
-    nothing
 end
 
 """
@@ -924,7 +1035,14 @@ Open a file and serialize the given value to it.
 !!! compat "Julia 1.1"
     This method is available as of Julia 1.1.
 """
-serialize(filename::AbstractString, x) = open(io->serialize(io, x), filename, "w")
+function serialize(filename::AbstractString, x)
+    io = open(filename, "w")
+    try
+        serialize(io, x)
+    finally
+        close(io)
+    end
+end
 
 ## deserializing values ##
 
@@ -940,6 +1058,41 @@ the integrity and correctness of data read from `stream`.
 deserialize(s::IO) = deserialize(Serializer(s))
 
 """
+    deserialize(stream, ::Type{T}) where T
+
+Read a value written by [`serialize`](@ref) and assert that the deserialized value is of type `T`.
+Throws an `ArgumentError` if the deserialized value is not an instance of `T`.
+
+The type parameter `T` enables the compiler to statically determine the expected return type,
+which is useful for trimming (dead-code elimination in compiled binaries). Use `Union` types
+to allow multiple possible types, e.g. `deserialize(stream, Union{Int, String})`.
+
+!!! compat "Julia 1.14"
+    This method is available as of Julia 1.14.
+"""
+function deserialize(s::IO, ::Type{T}) where T
+    if @generated
+        return quote
+            ser = Serializer(s)
+            b = Int32(read(ser.io, UInt8)::UInt8)
+            if b == HEADER_TAG
+                readheader(ser)
+                b = Int32(read(ser.io, UInt8)::UInt8)
+            end
+            return deserialize_typed(ser, b, $T)
+        end
+    else
+        ser = Serializer(s)
+        b = Int32(read(ser.io, UInt8)::UInt8)
+        if b == HEADER_TAG
+            readheader(ser)
+            b = Int32(read(ser.io, UInt8)::UInt8)
+        end
+        return deserialize_typed(ser, b, T)
+    end
+end
+
+"""
     deserialize(filename::AbstractString)
 
 Open a file and deserialize its contents.
@@ -948,6 +1101,24 @@ Open a file and deserialize its contents.
     This method is available as of Julia 1.1.
 """
 deserialize(filename::AbstractString) = open(deserialize, filename)
+
+"""
+    deserialize(filename::AbstractString, ::Type{T}) where T
+
+Open a file and deserialize its contents, asserting that the result is of type `T`.
+Throws an `ArgumentError` if the deserialized value is not an instance of `T`.
+
+!!! compat "Julia 1.14"
+    This method is available as of Julia 1.14.
+"""
+function deserialize(filename::AbstractString, ::Type{T}) where T
+    io = open(filename)
+    try
+        deserialize(io, T)
+    finally
+        close(io)
+    end
+end
 
 function deserialize(s::AbstractSerializer)
     handle_deserialize(s, Int32(read(s.io, UInt8)::UInt8))
@@ -1731,6 +1902,837 @@ function deserialize_string(s::AbstractSerializer, len::Int)
     return out
 end
 
+# Typed deserialization for trimming support
+# ==========================================
+#
+# These functions provide statically-typed deserialization paths that avoid the
+# fully-dynamic `handle_deserialize` dispatch. When the expected type `T` is known
+# at compile time (via `deserialize(s, T)`), the `if @generated` mechanism emits
+# specialized code that only handles the relevant serialization tags for that type,
+# never calling into the generic `handle_deserialize` (which would produce
+# unresolvable dynamic dispatch that breaks trimming).
+
+"""
+    deserialize_typed(s::AbstractSerializer, b::Int32, ::Type{T}) -> T
+
+Deserialize a value of known type `T` from the stream, given that the first tag byte `b`
+has already been read. Uses `if @generated` to emit specialized code for concrete types.
+"""
+function deserialize_typed(s::AbstractSerializer, b::Int32, ::Type{T}) where T
+    if @generated
+        if T isa Union
+            members = Base.uniontypes(T)
+            if all(t -> isconcretetype(t) || t === Union{} || can_deserialize_typed(t), members)
+                return emit_deserialize_union(T, members)
+            end
+        end
+
+        if !isconcretetype(T)
+            # Non-concrete T: fall back to the fully-dynamic dispatch. Such
+            # calls are not trim-safe, but the trim verifier already rejects
+            # abstract `T` at the entrypoint (`deserialize(s, ::Type{T})`).
+            return quote
+                result = handle_deserialize(s, b)
+                result isa $T || throw(ArgumentError(
+                    string("expected value of type ", $(string(T)), " during deserialization, got ", typeof(result))))
+                return result::$T
+            end
+        end
+
+        parts = Expr[]
+        emit_deserialize_refs!(parts, T)
+        emit_deserialize_body!(parts, T)
+        push!(parts, quote
+            if b >= VALUE_TAGS
+                result = desertag(b)
+                result isa $T && return result::$T
+            end
+            throw(ArgumentError(
+                string("unexpected serialization tag ", b, " when deserializing ", $(string(T)))))
+        end)
+
+        return Expr(:block, parts...)
+    else
+        # Non-generated path (interpreter / introspection only — not trim-compiled):
+        # defer to the untyped dispatch with a runtime type assertion.
+        handle_deserialize(s, b)::T
+    end
+end
+
+# Check whether a non-concrete type can be handled by deserialize_typed without
+# falling back to handle_deserialize. Currently only `Union` types whose members
+# are all themselves handleable qualify; everything else must be concrete.
+function can_deserialize_typed(@nospecialize(T))
+    T isa Union && return all(can_deserialize_typed, Base.uniontypes(T))
+    return isconcretetype(T)
+end
+
+# Emit the common backref / shared-ref / header handling block.
+# Predicate and reader for the three backref tag variants. Widely reused in
+# both generated and interpreted deserialization paths. Assumes `b` is one of
+# `SHORTBACKREF_TAG` / `BACKREF_TAG` / `LONGBACKREF_TAG`.
+is_backref_tag(b::Int32) = b == SHORTBACKREF_TAG || b == BACKREF_TAG || b == LONGBACKREF_TAG
+@inline function read_backref_id(s::AbstractSerializer, b::Int32)
+    b == SHORTBACKREF_TAG && return Int(read(s.io, UInt16)::UInt16)
+    b == BACKREF_TAG      && return Int(read(s.io, Int32)::Int32)
+    return Int(read(s.io, Int64)::Int64)
+end
+
+function emit_deserialize_refs!(parts::Vector{Expr}, @nospecialize(T))
+    push!(parts, quote
+        if is_backref_tag(b)
+            return gettable(s, read_backref_id(s, b))::$T
+        elseif b == SHARED_REF_TAG
+            slot = s.counter; s.counter += 1
+            nb = Int32(read(s.io, UInt8)::UInt8)
+            obj = deserialize_typed(s, nb, $T)
+            s.table[slot] = obj
+            return obj::$T
+        elseif b == HEADER_TAG
+            readheader(s)
+            nb = Int32(read(s.io, UInt8)::UInt8)
+            return deserialize_typed(s, nb, $T)
+        end
+    end)
+end
+
+# Generate code for deserializing a Union type by combining handlers for all members.
+function emit_deserialize_union(@nospecialize(T), members)
+    parts = Expr[]
+
+    # Backrefs / shared refs
+    emit_deserialize_refs!(parts, T)
+
+    # Emit type-specific handlers for each member type
+    for M in members
+        emit_deserialize_body!(parts, M)
+    end
+
+    # VALUE_TAGS
+    push!(parts, quote
+        if b >= VALUE_TAGS
+            result = desertag(b)
+            result isa $T && return result::$T
+        end
+        throw(ArgumentError(
+            string("unexpected serialization tag ", b, " when deserializing ", $(string(T)))))
+    end)
+
+    return Expr(:block, parts...)
+end
+
+# Code generation helpers for deserialize_typed
+function emit_deserialize_body!(parts::Vector{Expr}, @nospecialize(T))
+    if T === Bool || T === Nothing
+        # Handled entirely by the VALUE_TAGS fallback at the end of the generated function.
+    elseif T === Missing
+        # missing does not have a sertag; it's serialized as OBJECT_TAG
+        push!(parts, quote
+            if b == OBJECT_TAG
+                deserialize_read_type!(s, Missing)
+                return missing
+            end
+        end)
+    elseif T === Int64
+        push!(parts, quote
+            if b == INT64_TAG
+                return read(s.io, Int64)
+            elseif b == SHORTINT64_TAG
+                return Int64(read(s.io, Int32)::Int32)
+            elseif b >= VALUE_TAGS
+                return Int64(desertag(b)::Int64)
+            end
+        end)
+    elseif T === Int32
+        push!(parts, quote
+            if b == INT32_TAG
+                return read(s.io, Int32)
+            elseif b >= VALUE_TAGS
+                return Int32(desertag(b)::Int32)
+            end
+        end)
+    elseif T <: Union{Int8, UInt8, Int16, UInt16, UInt32, UInt64,
+                      Int128, UInt128, Float16, Float32, Float64, Char}
+        tag = sertag(T)
+        push!(parts, quote
+            if b == $(Int32(tag))
+                return read(s.io, $T)
+            end
+        end)
+    elseif T === String
+        push!(parts, quote
+            if b == STRING_TAG
+                return deserialize_string(s, Int(read(s.io, UInt8)::UInt8))
+            elseif b == LONGSTRING_TAG
+                return deserialize_string(s, Int(read(s.io, Int64)::Int64))
+            end
+        end)
+    elseif T === Symbol
+        push!(parts, quote
+            if b == SYMBOL_TAG
+                return deserialize_symbol(s, Int(read(s.io, UInt8)::UInt8))
+            elseif b == LONGSYMBOL_TAG
+                return deserialize_symbol(s, Int(read(s.io, Int32)::Int32))
+            end
+        end)
+    elseif T <: Tuple
+        emit_deserialize_tuple!(parts, T)
+    elseif T <: Array
+        emit_deserialize_array!(parts, T)
+    elseif T <: Memory
+        emit_deserialize_memory!(parts, T)
+    elseif T <: AbstractDict
+        emit_deserialize_dict!(parts, T)
+    elseif T isa DataType
+        emit_deserialize_struct!(parts, T)
+    end
+end
+
+function emit_deserialize_tuple!(parts::Vector{Expr}, @nospecialize(T))
+    # NamedTuples serialize like immutable structs (OBJECT_TAG + type + fields)
+    # and are routed through `emit_deserialize_struct!` via the fall-through in
+    # `emit_deserialize_body!`; here we only handle plain `Tuple{...}`.
+    n = fieldcount(T)
+    if n == 0
+        push!(parts, quote
+            if b == EMPTYTUPLE_TAG
+                return ()::$T
+            end
+        end)
+        return
+    end
+    ancestors = Set{DataType}([T])
+    field_reads = Expr[]
+    for i in 1:n
+        FT = fieldtype(T, i)
+        ft_sym = gensym(:tf)
+        val = emit_field_read_expr(FT, ft_sym, ancestors)
+        push!(field_reads, :(
+            let $(ft_sym) = Int32(read(s.io, UInt8)::UInt8)
+                ($(val))::$FT
+            end))
+    end
+    lenmsg = :(throw(ArgumentError(
+        string("Tuple ", $(string(T)), " has ", $n, " fields but stream has ", len))))
+    push!(parts, quote
+        if b == TUPLE_TAG
+            len = Int(read(s.io, UInt8)::UInt8)
+            len == $n || $lenmsg
+            return ($(field_reads...),)::$T
+        elseif b == LONGTUPLE_TAG
+            len = Int(read(s.io, Int32)::Int32)
+            len == $n || $lenmsg
+            return ($(field_reads...),)::$T
+        end
+    end)
+end
+
+function emit_deserialize_array!(parts::Vector{Expr}, @nospecialize(T))
+    # Array{ET, N} — we know the element type and ndims at compile time
+    ET = eltype(T)
+    N = ndims(T)
+    push!(parts, quote
+        if b == ARRAY_TAG
+            return deserialize_array_typed(s, $ET, Val($N))::$T
+        end
+    end)
+end
+
+# Consume the serialized element type tag for a typed array, if one was written.
+# `serialize(::AbstractSerializer, ::Array)` skips the element type tag iff
+# `elty === UInt8`; for everything else the type was emitted via `serialize_datatype`.
+# Because `ET` is known at compile time, the `@generated` body reduces to either a
+# no-op or a direct call to `deserialize_read_type!(s, ET)`, which itself is `@generated`
+# to emit only the tag branches valid for `ET`.
+function deserialize_array_read_eltype!(s::AbstractSerializer, ::Type{ET}) where {ET}
+    if @generated
+        ET === UInt8 ? :nothing : :(deserialize_read_type!(s, $ET); nothing)
+    else
+        ET === UInt8 || deserialize_read_type!(s, ET)
+        nothing
+    end
+end
+
+"""
+    deserialize_array_typed(s, ::Type{ET}, ::Val{N}) -> Array{ET, N}
+
+Typed array deserialization. Since `ET` is known at compile time, we know whether
+the element type was serialized (everything except `UInt8`) and delegate tag
+consumption to `deserialize_read_type!(s, ET)`, which emits only the tag branches
+valid for `ET`. This avoids pulling in the fully-dynamic `deserialize_typename`
+path.
+"""
+function deserialize_array_typed(s::AbstractSerializer, ::Type{ET}, ::Val{N}) where {ET, N}
+    slot = s.counter; s.counter += 1
+    deserialize_array_read_eltype!(s, ET)
+    db = Int32(read(s.io, UInt8)::UInt8)
+    d1 = deserialize_read_dims(s, db)
+
+    if isa(d1, Int64)
+        if ET !== Bool && isbitstype(ET)
+            a = Vector{ET}(undef, d1)
+            s.table[slot] = a
+            return read!(s.io, a)::Array{ET, N}
+        end
+        dims = (d1,)::NTuple{1, Int64}
+    else
+        dims = d1::NTuple{N, Int64}
+    end
+
+    if isbitstype(ET)
+        n = prod(dims)::Int
+        if ET === Bool && n > 0
+            A = Array{Bool, N}(undef, dims)
+            i = 1
+            while i <= n
+                b = read(s.io, UInt8)::UInt8
+                v = (b >> 7) != 0
+                count = b & 0x7f
+                nxt = i + count
+                while i < nxt
+                    A[i] = v
+                    i += 1
+                end
+            end
+        else
+            A = read!(s.io, Array{ET, N}(undef, dims))
+        end
+        s.table[slot] = A
+        return A::Array{ET, N}
+    end
+    A = Array{ET, N}(undef, dims)
+    s.table[slot] = A
+    sizehint!(s.table, s.counter + div(length(A)::Int, 4))
+    deserialize_fillarray_typed!(A, s)
+    return A::Array{ET, N}
+end
+
+# Read dimensions from the stream for typed array deserialization.
+# Returns either an Int64 (for 1-d) or an NTuple of Int64.
+function deserialize_read_dims(s::AbstractSerializer, b::Int32)
+    read_one(tb::Int32) =
+        tb == INT64_TAG     ? read(s.io, Int64) :
+        tb == INT32_TAG     ? Int64(read(s.io, Int32)::Int32) :
+        tb == SHORTINT64_TAG ? Int64(read(s.io, Int32)::Int32) :
+        tb >= VALUE_TAGS    ? Int64(desertag(tb)::Union{Int32, Int64}) :
+        throw(ArgumentError("unexpected tag in array dimensions"))
+    if b == TUPLE_TAG
+        n = Int(read(s.io, UInt8)::UInt8)
+        return ntuple(_ -> read_one(Int32(read(s.io, UInt8)::UInt8)), n)::NTuple{n, Int64}
+    elseif b == LONGTUPLE_TAG
+        n = Int(read(s.io, Int32)::Int32)
+        return ntuple(_ -> read_one(Int32(read(s.io, UInt8)::UInt8)), n)::NTuple{n, Int64}
+    end
+    return read_one(b)
+end
+
+# Typed version of deserialize_fillarray! that uses deserialize_typed instead
+# of handle_deserialize. Uses `if @generated` on the element type so that, when
+# the element is itself a user-defined struct, the per-element body is inlined
+# via `emit_struct_value_expr` — otherwise the inner `deserialize_typed` call
+# would be a cross-specialization invoke the trim verifier cannot resolve.
+function deserialize_fillarray_typed!(A::Union{Array{T},Memory{T}}, s::AbstractSerializer) where {T}
+    if @generated
+        tag = gensym(:tag)
+        elem_expr = emit_field_read_expr(T, tag, Set{DataType}())
+        return quote
+            for i = eachindex(A)
+                $tag = Int32(read(s.io, UInt8)::UInt8)
+                if $tag != UNDEFREF_TAG
+                    @inbounds A[i] = ($(elem_expr))::$T
+                end
+            end
+            return A
+        end
+    else
+        for i = eachindex(A)
+            tag = Int32(read(s.io, UInt8)::UInt8)
+            if tag != UNDEFREF_TAG
+                @inbounds A[i] = deserialize_typed(s, tag, T)
+            end
+        end
+        return A
+    end
+end
+
+# Typed Memory deserialization — avoids untyped deserialize(s, T) which uses handle_deserialize.
+function deserialize_memory_typed(s::AbstractSerializer, ::Type{X}) where {X <: Memory}
+    slot = pop!(s.pending_refs)
+    # Read length — typed read of Int64
+    nb = Int32(read(s.io, UInt8)::UInt8)
+    n = deserialize_typed(s, nb, Int)::Int
+    ET = eltype(X)
+    if isbitstype(ET)
+        A = X(undef, n)
+        if X === Memory{Bool}
+            i = 1
+            while i <= n
+                b = read(s.io, UInt8)::UInt8
+                v = (b >> 7) != 0
+                count = b & 0x7f
+                nxt = i + count
+                while i < nxt
+                    A[i] = v
+                    i += 1
+                end
+            end
+        else
+            A = read!(s.io, A)::X
+        end
+        s.table[slot] = A
+        return A
+    end
+    A = X(undef, n)
+    s.table[slot] = A
+    sizehint!(s.table, s.counter + div(n, 4))
+    deserialize_fillarray_typed!(A, s)
+    return A
+end
+
+function emit_deserialize_memory!(parts::Vector{Expr}, @nospecialize(T))
+    # Memory{ET} is serialized via serialize_cycle_header → REF_OBJECT_TAG + type + length + data
+    ET = eltype(T)
+    push!(parts, quote
+        if b == REF_OBJECT_TAG
+            slot = s.counter; s.counter += 1
+            push!(s.pending_refs, slot)
+            deserialize_read_type!(s, $T)
+            return deserialize_memory_typed(s, $T)::$T
+        end
+    end)
+end
+
+function emit_deserialize_dict!(parts::Vector{Expr}, @nospecialize(T))
+    # Dict is serialized via serialize_cycle_header → REF_OBJECT_TAG + type + data;
+    # IDDICT_TAG (IdDict) uses the same framing but is only valid for an IdDict T.
+    if T <: Dict && isconcretetype(T)
+        push!(parts, quote
+            if b == IDDICT_TAG || b == REF_OBJECT_TAG
+                slot = s.counter; s.counter += 1
+                push!(s.pending_refs, slot)
+                deserialize_read_type!(s, $T)
+                return deserialize_dict_typed(s, $T)::$T
+            end
+        end)
+    else
+        push!(parts, quote
+            if b == IDDICT_TAG
+                slot = s.counter; s.counter += 1
+                push!(s.pending_refs, slot)
+                t = deserialize(s)
+                return deserialize_dict(s, t)::$T
+            elseif b == REF_OBJECT_TAG
+                slot = s.counter; s.counter += 1
+                push!(s.pending_refs, slot)
+                deserialize_read_type!(s, $T)
+                return deserialize_dict(s, $T)::$T
+            end
+        end)
+    end
+end
+
+
+# Types with their own top-level tag byte (e.g. `STRING_TAG`, `ARRAY_TAG`,
+# tuple tags, `DICT_TAG`), dispatched in `emit_deserialize_body!` ahead of
+# the generic struct path. They do not use the `OBJECT_TAG + type + fields`
+# envelope. Their typed deserialization goes through dedicated helpers
+# (`deserialize_array_typed`, `deserialize_memory_typed`,
+# `deserialize_dict_typed`, ...) whose bodies the trim verifier can resolve,
+# so they are never inlined as struct bodies into a parent's generated code.
+uses_own_tag(@nospecialize(T)) = T === String || T === Symbol ||
+    T <: Tuple || T <: Array || T <: Memory || T <: AbstractDict
+
+# Struct-shaped types that share the `OBJECT_TAG + type + payload` envelope
+# but whose payload does not match the default "one field per declaration"
+# layout (they skip internal pointers or replace fields with surrogates).
+# `emit_deserialize_struct!` delegates to their hand-written
+# `deserialize(s, ::Type{T})` method instead of emitting field reads.
+uses_custom_payload(@nospecialize(T)) =
+    T === Regex || T === BigInt || T === Base.StackTraces.StackFrame
+
+# Whether a concrete type is a struct whose body we should inline into a
+# parent's generated body rather than route through a recursive
+# `deserialize_typed` call. Inlining is required because the trim verifier
+# cannot resolve cross-specialization `invoke`s between two
+# `@generated deserialize_typed` bodies for different struct types.
+is_inlineable_struct(@nospecialize(T)) =
+    T isa DataType && isconcretetype(T) && !isprimitivetype(T) &&
+    fieldcount(T) > 0 && !uses_own_tag(T) && !uses_custom_payload(T)
+
+# Emit an inline value-expression that produces a field of concrete type `FT`,
+# given that its 1-byte tag has already been read into the variable named
+# `tag_sym` (and is known to differ from `UNDEFREF_TAG`). For inlineable
+# struct fields whose type is not currently being inlined (i.e. not in
+# `ancestors`) the struct's body is inlined to avoid cross-type
+# `deserialize_typed` invokes the trim verifier cannot resolve. All other
+# field types delegate to `deserialize_typed`, whose own specialization the
+# trimmer can resolve (see e.g. `deserialize_fillarray_typed!`).
+emit_field_read_expr(@nospecialize(FT), tag_sym::Symbol, ancestors::Set{DataType}) =
+    if is_inlineable_struct(FT) && FT ∉ ancestors
+        new_ancestors = copy(ancestors)
+        push!(new_ancestors, FT)
+        emit_struct_value_expr(FT, tag_sym, new_ancestors)
+    else
+        :(deserialize_typed(s, $tag_sym, $FT))
+    end
+
+# Build the two value-expression bodies for a user-struct type `T`:
+# one for OBJECT_TAG (no backref registration) and one for REF_OBJECT_TAG.
+# `ancestors` is the set of struct types currently being inlined on the
+# enclosing path; it must already contain `T` and is used directly (the
+# caller is responsible for copying if needed).
+# Used both by `emit_struct_value_expr` (inlined as a field) and
+# `emit_deserialize_struct!` (top-level dispatch).
+# Build a list of per-field read expressions for `T`. Each element reads the
+# 1-byte field tag into a fresh local and dispatches to `set_field(i, FT,
+# ft_sym, val)` for the actual store/assignment (which also handles the
+# `UNDEFREF_TAG` case).
+function emit_field_reads(@nospecialize(T), ancestors::Set{DataType}, set_field)
+    field_reads = Expr[]
+    for i in 1:fieldcount(T)
+        FT = fieldtype(T, i)
+        ft_sym = gensym(:ft)
+        val = emit_field_read_expr(FT, ft_sym, ancestors)
+        push!(field_reads, :(
+            let $(ft_sym) = Int32(read(s.io, UInt8)::UInt8)
+                $(set_field(i, FT, ft_sym, val))
+            end))
+    end
+    return field_reads
+end
+
+function emit_struct_bodies(@nospecialize(T), ancestors::Set{DataType})
+    nf = fieldcount(T)
+    # Use gensym'd locals so nested inlined struct bodies do not clobber each
+    # other's `x` / `vflds` / `na` bindings when one struct type is inlined
+    # as a field of another.
+    if ismutabletype(T)
+        x = gensym(:x)
+        field_reads = emit_field_reads(T, ancestors, (i, FT, ft_sym, val) -> :(
+            if $ft_sym != UNDEFREF_TAG
+                ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), $x, $(i-1),
+                      ($val)::$FT)
+            end))
+        object_body = quote
+            deserialize_read_type!(s, $T)
+            $x = ccall(:jl_new_struct_uninit, Any, (Any,), $T)
+            $(field_reads...)
+            $x
+        end
+        ref_body = quote
+            _rslot = s.counter; s.counter += 1
+            push!(s.pending_refs, _rslot)
+            deserialize_read_type!(s, $T)
+            $x = ccall(:jl_new_struct_uninit, Any, (Any,), $T)
+            deserialize_cycle(s, $x)
+            $(field_reads...)
+            $x
+        end
+    else
+        vflds = gensym(:vflds)
+        na = gensym(:na)
+        field_reads = emit_field_reads(T, ancestors, (i, FT, ft_sym, val) -> :(
+            if $ft_sym != UNDEFREF_TAG
+                $vflds[$i] = ($val)::$FT
+            else
+                $na >= $i && ($na = $(i - 1))
+            end))
+        object_body = quote
+            deserialize_read_type!(s, $T)
+            $na = $nf
+            $vflds = Vector{Any}(undef, $nf)
+            $(field_reads...)
+            ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), $T, $vflds, $na)
+        end
+        ref_body = object_body
+    end
+    return object_body, ref_body
+end
+
+# Emit an inline value-expression producing a value of user-struct type `T`,
+# given its 1-byte tag in `tag_sym`. `ancestors` must already contain `T`
+# (the caller is responsible for copying and pushing).
+function emit_struct_value_expr(@nospecialize(T), tag_sym::Symbol, ancestors::Set{DataType})
+    object_body, ref_body = emit_struct_bodies(T, ancestors)
+    return quote
+        if $tag_sym == OBJECT_TAG
+            $(object_body)::$T
+        elseif $tag_sym == REF_OBJECT_TAG
+            $(ref_body)::$T
+        elseif is_backref_tag($tag_sym)
+            gettable(s, read_backref_id(s, $tag_sym))::$T
+        else
+            # Unreachable for normal struct fields; avoid a cross-specialization
+            # `deserialize_typed` call so the trim verifier can resolve the
+            # enclosing specialization.
+            throw(ArgumentError(string("unexpected tag ", $tag_sym,
+                                       " while deserializing field of type ", $(string(T)))))
+        end
+    end
+end
+
+function emit_deserialize_struct!(parts::Vector{Expr}, @nospecialize(T))
+    if uses_custom_payload(T)
+        # Delegate the payload after `OBJECT_TAG + type` to the hand-written
+        # `deserialize(s, ::Type{T})` method. These types' hand-written
+        # `serialize` methods only ever emit `OBJECT_TAG` (no cycle header).
+        push!(parts, quote
+            if b == OBJECT_TAG
+                deserialize_read_type!(s, $T)
+                return deserialize(s, $T)::$T
+            end
+        end)
+    elseif isprimitivetype(T)
+        push!(parts, quote
+            if b == OBJECT_TAG
+                deserialize_read_type!(s, $T)
+                return read(s.io, $T)
+            end
+        end)
+    else
+        object_body, ref_body = emit_struct_bodies(T, Set{DataType}([T]))
+        if ismutabletype(T) && fieldcount(T) > 0
+            push!(parts, quote
+                if b == REF_OBJECT_TAG
+                    return ($(ref_body))::$T
+                elseif b == OBJECT_TAG
+                    return ($(object_body))::$T
+                end
+            end)
+        else
+            # Immutable struct (or mutable with 0 fields) — only OBJECT_TAG.
+            push!(parts, quote
+                if b == OBJECT_TAG
+                    return ($(object_body))::$T
+                end
+            end)
+        end
+    end
+end
+
+# Consume a serialized value from the stream without interpreting it.
+# Only handles tags that appear in type-data contexts (Symbol, Module, sertag values,
+# backrefs, numeric types, tuples). Does NOT call handle_deserialize, making it trimming-safe.
+function deserialize_consume_value!(s::AbstractSerializer, b::Int32)
+    if b >= VALUE_TAGS
+        # sertag value — no extra bytes
+    elseif b == SYMBOL_TAG
+        deserialize_symbol(s, Int(read(s.io, UInt8)::UInt8))
+    elseif b == LONGSYMBOL_TAG
+        deserialize_symbol(s, Int(read(s.io, Int32)::Int32))
+    elseif b == MODULE_TAG
+        # Module data: sequence of serialized values terminated by EMPTYTUPLE_TAG.
+        # Format: [uuid_or_nothing, root_name, submod1, submod2, ...] EMPTYTUPLE_TAG
+        while true
+            mb = Int32(read(s.io, UInt8)::UInt8)
+            mb == EMPTYTUPLE_TAG && break
+            deserialize_consume_value!(s, mb)
+        end
+    elseif is_backref_tag(b)
+        read_backref_id(s, b)
+    elseif b == 0
+        read(s.io, UInt8)  # two-byte tag
+    elseif b == INT8_TAG;       read(s.io, Int8)
+    elseif b == INT8_TAG+1;     read(s.io, UInt8)
+    elseif b == INT8_TAG+2;     read(s.io, Int16)
+    elseif b == INT8_TAG+3;     read(s.io, UInt16)
+    elseif b == INT32_TAG;      read(s.io, Int32)
+    elseif b == INT8_TAG+5;     read(s.io, UInt32)
+    elseif b == INT64_TAG;      read(s.io, Int64)
+    elseif b == INT8_TAG+7;     read(s.io, UInt64)
+    elseif b == INT8_TAG+8;     read(s.io, Int128)
+    elseif b == INT8_TAG+9;     read(s.io, UInt128)
+    elseif b == INT8_TAG+10;    read(s.io, Float16)
+    elseif b == INT8_TAG+11;    read(s.io, Float32)
+    elseif b == INT8_TAG+12;    read(s.io, Float64)
+    elseif b == INT8_TAG+13;    read(s.io, Char)
+    elseif b == SHORTINT64_TAG; read(s.io, Int32)
+    elseif b == STRING_TAG
+        deserialize_string(s, Int(read(s.io, UInt8)::UInt8))
+    elseif b == LONGSTRING_TAG
+        deserialize_string(s, Int(read(s.io, Int64)::Int64))
+    elseif b == EMPTYTUPLE_TAG
+        # nothing
+    elseif b == TUPLE_TAG
+        n = Int(read(s.io, UInt8)::UInt8)
+        for _ in 1:n
+            deserialize_consume_value!(s, Int32(read(s.io, UInt8)::UInt8))
+        end
+    elseif b == LONGTUPLE_TAG
+        n = Int(read(s.io, Int32)::Int32)
+        for _ in 1:n
+            deserialize_consume_value!(s, Int32(read(s.io, UInt8)::UInt8))
+        end
+    elseif b == DATATYPE_TAG
+        # Nested DataType in type parameters — consume without getglobal.
+        # Allocate a table slot and consume name + module.
+        slot = s.counter; s.counter += 1
+        deserialize_consume_value!(s, Int32(read(s.io, UInt8)::UInt8))  # name
+        deserialize_consume_value!(s, Int32(read(s.io, UInt8)::UInt8))  # module
+        s.table[slot] = nothing  # placeholder
+    else
+        throw(ArgumentError("unsupported tag in type data context"))
+    end
+    return nothing
+end
+
+# Consume a serialized TypeName from the stream (for FULL_DATATYPE_TAG and WRAPPER_DATATYPE_TAG).
+function deserialize_consume_typename!(s::AbstractSerializer)
+    tb = Int32(read(s.io, UInt8)::UInt8)
+    if tb == TYPENAME_TAG
+        number = read(s.io, UInt64)
+        deserialize_typename(s, number)
+    elseif is_backref_tag(tb)
+        read_backref_id(s, tb)
+    else
+        throw(ArgumentError("expected TypeName tag in type data"))
+    end
+    return nothing
+end
+
+"""
+    deserialize_read_type!(s::AbstractSerializer, ::Type{T}) -> nothing
+
+Read the serialized DataType from the stream and validate it matches `T`.
+Instead of calling `deserialize_datatype` (which uses `getglobal` to look up
+the type by name — failing in trimmed executables where bindings are removed),
+this reads the type data from the stream, discards it, and registers `T`
+in the backref table (so later backrefs resolve correctly).
+
+This function avoids calling `handle_deserialize` to remain trimming-compatible.
+"""
+@generated function deserialize_read_type!(s::AbstractSerializer, ::Type{T}) where T
+    # Determine at generation time whether this type uses whole-type serialization.
+    # Union{...} is serialized as a 1-byte sertag(Union) followed by
+    # `serialize_fields` of its two members (`a` and `b`); because `T` is a
+    # concrete Union at generation time, we recurse statically.
+    whole = isa(T, DataType) && should_send_whole_type(nothing, T)
+    # Common tail: backref variants, sertag-encoded types, and the 2-byte tag
+    # escape. Union-valued `T` does not use DATATYPE_TAG, so WRAPPER/FULL
+    # branches are omitted for it.
+    tail = quote
+        if is_backref_tag(tb)
+            read_backref_id(s, tb)
+        elseif tb >= VALUE_TAGS
+            # sertag-encoded type
+        elseif tb == 0
+            read(s.io, UInt8)
+        else
+            throw(ArgumentError("unexpected tag when reading type"))
+        end
+    end
+    if T isa Union
+        head = quote
+            if tb == $(Int32(sertag(Union)))
+                deserialize_read_type!(s, $(T.a))
+                deserialize_read_type!(s, $(T.b))
+                return nothing
+            end
+        end
+    elseif whole
+        head = quote
+            if tb == DATATYPE_TAG || tb == FULL_DATATYPE_TAG
+                deserialize_skip_datatype!(s, $T, tb == FULL_DATATYPE_TAG)
+                return nothing
+            elseif tb == WRAPPER_DATATYPE_TAG
+                deserialize_consume_typename!(s)
+                return nothing
+            end
+        end
+    else
+        head = quote
+            if tb == DATATYPE_TAG
+                deserialize_skip_datatype!(s, $T, false)
+                return nothing
+            end
+        end
+    end
+    return quote
+        tb = Int32(read(s.io, UInt8)::UInt8)
+        $head
+        $tail
+        return nothing
+    end
+end
+
+"""
+    deserialize_skip_datatype!(s, ::Type{T}, full::Bool) -> nothing
+
+Read the serialized DataType data from the stream (matching the format
+written by `serialize_type_data`), registering the known type `T` in the
+backref table. The type data bytes are consumed from the stream but the
+result is discarded — we already know `T`.
+
+Uses `@generated` to emit specialized parameter-consumption code that
+avoids `getglobal` for primitive type instance parameters (which would
+fail in trimmed executables).
+"""
+@generated function deserialize_skip_datatype!(s::AbstractSerializer, ::Type{T}, full::Bool) where T
+    whole = isa(T, DataType) && should_send_whole_type(nothing, T)
+
+    param_reads = Expr[]
+    if isa(T, DataType) && !isempty(T.parameters)
+        iswrapper = T === unwrap_unionall(T.name.wrapper)
+        if !iswrapper
+            for i in 1:length(T.parameters)
+                P = T.parameters[i]
+                PT = typeof(P)
+                if isprimitivetype(PT)
+                    nbytes = sizeof(PT)
+                    push!(param_reads, quote
+                        let pb = Int32(read(s.io, UInt8)::UInt8)
+                            if pb == OBJECT_TAG
+                                deserialize_read_type!(s, $PT)
+                                skip(s.io, $nbytes)
+                            else
+                                deserialize_consume_value!(s, pb)
+                            end
+                        end
+                    end)
+                elseif P isa Type
+                    # Type-valued parameter — recurse via `deserialize_read_type!`,
+                    # which knows `P`'s static shape and emits exactly the
+                    # right reads (in particular, it knows whether `P` itself
+                    # is parametric, so no wire-format ambiguity arises).
+                    push!(param_reads, :(deserialize_read_type!(s, $P)))
+                else
+                    push!(param_reads, :(deserialize_consume_value!(s, Int32(read(s.io, UInt8)::UInt8))))
+                end
+            end
+        end
+    end
+
+    has_params = !isempty(param_reads)
+    param_block = has_params ? Expr(:block,
+        :(np = Int(read(s.io, Int32)::Int32)),
+        param_reads...
+    ) : :nothing
+
+    if whole
+        return quote
+            slot = s.counter; s.counter += 1
+            if full
+                deserialize_consume_typename!(s)
+            else
+                deserialize_consume_value!(s, Int32(read(s.io, UInt8)::UInt8))  # name
+                deserialize_consume_value!(s, Int32(read(s.io, UInt8)::UInt8))  # module
+            end
+            $param_block
+            s.table[slot] = $T
+            return nothing
+        end
+    else
+        return quote
+            slot = s.counter; s.counter += 1
+            deserialize_consume_value!(s, Int32(read(s.io, UInt8)::UInt8))  # name
+            deserialize_consume_value!(s, Int32(read(s.io, UInt8)::UInt8))  # module
+            $param_block
+            s.table[slot] = $T
+            return nothing
+        end
+    end
+end
+
 # default DataType deserializer
 function deserialize(s::AbstractSerializer, t::DataType)
     nf = length(t.types)
@@ -1776,11 +2778,46 @@ function deserialize_dict(s::AbstractSerializer, T::Type{<:AbstractDict})
     return t
 end
 
-function deserialize(s::AbstractSerializer, T::Type{Dict{K,V}}) where {K,V}
-    return deserialize_dict(s, T)
+deserialize(s::AbstractSerializer, T::Type{Dict{K,V}}) where {K,V} = deserialize_dict(s, T)
+
+# Typed dict deserialization — uses deserialize_typed for keys and values to avoid
+# unresolvable dynamic dispatch in trimmed executables. Uses `if @generated` so
+# that, when `K` or `V` is a user-defined struct, its body is inlined via
+# `emit_struct_value_expr` rather than emitting a cross-specialization invoke.
+function deserialize_dict_typed(s::AbstractSerializer, ::Type{T}) where {K, V, T <: Dict{K, V}}
+    if @generated
+        kb = gensym(:kb); vb = gensym(:vb)
+        key_expr = emit_field_read_expr(K, kb, Set{DataType}())
+        val_expr = emit_field_read_expr(V, vb, Set{DataType}())
+        return quote
+            n = read(s.io, Int32)
+            t = sizehint!($T(), n)
+            deserialize_cycle(s, t)
+            for i = 1:n
+                $kb = Int32(read(s.io, UInt8)::UInt8)
+                k = ($(key_expr))::$K
+                $vb = Int32(read(s.io, UInt8)::UInt8)
+                v = ($(val_expr))::$V
+                t[k] = v
+            end
+            return t
+        end
+    else
+        n = read(s.io, Int32)
+        t = sizehint!(T(), n)
+        deserialize_cycle(s, t)
+        for i = 1:n
+            kb = Int32(read(s.io, UInt8)::UInt8)
+            k = deserialize_typed(s, kb, K)
+            vb = Int32(read(s.io, UInt8)::UInt8)
+            v = deserialize_typed(s, vb, V)
+            t[k] = v
+        end
+        return t
+    end
 end
 
-deserialize(s::AbstractSerializer, ::Type{BigInt}) = parse(BigInt, deserialize(s), base = 62)
+deserialize(s::AbstractSerializer, ::Type{BigInt}) = parse(BigInt, deserialize(s), base = BIGINT_BASE)
 
 function deserialize(s::AbstractSerializer, t::Type{Regex})
     pattern = deserialize(s)
