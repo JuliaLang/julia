@@ -909,32 +909,29 @@ arguments which method is invoked. When optional arguments are defined in terms 
 the type of the optional argument may even change at run-time.
 
 Keyword arguments behave quite differently from ordinary positional arguments. In particular,
-their names and types do not participate in method dispatch. Methods are dispatched based only
-on positional arguments and on the presence or absence of keyword arguments, with keyword
-argument names and values processed after the matching method is identified:
+they do not participate in method dispatch. Methods are dispatched based only on positional arguments,
+with keyword arguments processed after the matching method is identified.
 
-```julia
-julia> f(x, y; z) = :kwargs;
+!!! warning "Known bug: the presence of keyword arguments affects dispatch"
+    Due to a long-standing bug ([#9498](https://github.com/JuliaLang/julia/issues/9498)),
+    a call that supplies keyword arguments only considers methods that accept keyword
+    arguments. This can select a less specific method over a more specific one that
+    accepts no keywords:
 
-julia> f(x, y) = :nokwargs;
+    ```julia
+    julia> f(x; y=10) = "generic";
 
-julia> f(1, 2; z=3)  # dispatches to the first method
-:kwargs
+    julia> f(x::Int) = "int-specific";
 
-julia> f(1, 2; w=3)  # dispatches to the first method even though the keyword names differ
-ERROR: UndefKeywordError: keyword argument `z` not assigned
+    julia> f(1)
+    "int-specific"
 
-julia> f(1, 2)  # dispatches to the second method
-:nokwargs
-```
+    julia> f(1; y=2)  # bug: bypasses the more specific method
+    "generic"
+    ```
 
-!!! warning
-    The fact that the presence of keyword arguments affects dispatch is a known, long-standing
-    bug ([#9498](https://github.com/JuliaLang/julia/issues/9498)) rather than an intended
-    feature. A call that passes keyword arguments only considers methods that accept keyword
-    arguments, so it can select a less specific method over a more specific one that takes
-    none. This behavior may change in a future release, so avoid relying on it. To keep a
-    specialized method applicable to keyword-bearing calls, give it its own keyword interface,
+    This may be fixed in a future release, so avoid relying on it. To keep a specialized
+    method applicable to calls with keyword arguments, give it its own keyword interface,
     either by repeating the keyword arguments or by collecting any keyword with `kwargs...`.
 
 ## Function-like objects
