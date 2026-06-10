@@ -801,6 +801,12 @@ function sptype_for_tvar(vᵢ::TypeVar, output_tvar::TypeVar, sigtypes::Core.Sim
         # `Bottom <: T <: Any` additionally allows non-Type tvars
         return Any
     end
+    if output_tvar.lb === output_tvar.ub
+        # `X <: T <: X` pins the var to `X` up to type equality: an `S == X` rep
+        # argument also matches this MethodInstance and would bind the var to `S`
+        # (#61323)
+        return rewrap_free_typevars(TypeEq{output_tvar.lb}, find_free_typevars(specTypes))
+    end
     return rewrap_free_typevars(TypeEq{output_tvar}, find_free_typevars(specTypes))
 end
 
@@ -829,17 +835,14 @@ function sptypes_from_meth_instance(mi::MethodInstance)
         # via `constrains_param_static`, so `v_constrained` is authoritative.
         v_tvar = nothing
         v_constrained = false
-        v_marked = false
         if isa(v, SimpleVector)
             v_inner = v[1]
             v_constrained = v[2]::Bool
-            v_marked = true
             if isa(v_inner, TypeVar)
                 v_tvar = v_inner
             else
-                # closed-value / DataType-with-free-tvars case: unwrap; closed type
-                # values are handled by the `v_marked` arm below, the rest routes
-                # through the generic `has_free_typevars(v)` path
+                # DataType-with-free-tvars case: route through the generic
+                # `has_free_typevars(v)` path by unwrapping.
                 v = v_inner
             end
         end
@@ -858,12 +861,6 @@ function sptypes_from_meth_instance(mi::MethodInstance)
             # so the type is known to be `Int`
             ty = Int
             undef = false
-        elseif v_marked && isa(v, Type)
-            # subtyping marked this var as pinned only up to type equality: an
-            # `S == v` rep argument also matches this MethodInstance and would
-            # bind the var to `S` (#61323)
-            ty = TypeEq{v}
-            undef = !v_constrained
         else
             ty = Const(v)
             undef = false

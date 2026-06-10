@@ -59,6 +59,21 @@ typedef struct {
     uint8_t *stack;
 } jl_saved_unionstate_t;
 
+// How certain a lower-bound contribution to an existential variable is, for
+// the purposes of the `envout` it computes (#61323). Context transitions only
+// ever lower the channel (see `jl_stenv_t.bound_channel`); per-variable, the
+// strongest contribution wins (see `jl_varbinding_t.lb_certainty`).
+typedef enum {
+    BOUND_NONE  = 0, // no (non-Bottom) lower-bound contribution yet
+    BOUND_PROXY = 1, // derives from another variable's declared bounds: a
+                     // `==`-equal rep of the query need not bind this var at all
+    BOUND_EQ    = 2, // derives from a query value reached through an `==`
+                     // equality wrapper (`Type{A}`): every `==`-equal rep of the
+                     // query also binds this var, but only to an `==`-equal value
+    BOUND_EGAL  = 3, // derives from an egality-pinned position (`TypeEgal`/type
+                     // tag): the value is `===`-certain
+} jl_bound_certainty_t;
+
 // Linked list storing the type variable environment. A new jl_varbinding_t
 // is pushed for each UnionAll type we encounter. `lb` and `ub` are updated
 // during the computation.
@@ -95,11 +110,12 @@ typedef struct jl_varbinding_t {
     int8_t limited;
     int8_t intersected; // whether this variable has been intersected
     int8_t widened_to_kind;   // Type{X} was widened to a union of kinds
-    int8_t egal_bound;  // some lower-bound contribution arrived outside any x-side
-                        // equality wrapper (`Type{X}`), i.e. from an egality-pinned
-                        // (`TypeEgal`/type-tag) position; a type-valued binding without
-                        // this is only known up to `==` (#61323) and is wrapped as an
-                        // uncertainty marker in `envout`
+    int8_t lb_certainty; // strongest channel (jl_bound_certainty_t) through which a
+                         // lower-bound contribution arrived; a type-valued binding
+                         // below BOUND_EGAL is only known up to `==` (#61323) and is
+                         // wrapped as an uncertainty marker in `envout`, with the
+                         // marker `constrained` (defined for every `==`-equal query
+                         // rep) iff the channel is at least BOUND_EQ
     int8_t tainted_inner; // 1 if this var's bounds reference a TypeVar from a vb that
                           // was pushed at depth0 *strictly greater* than this var's
                           // depth0 and has since been popped. Such "inner" tvars
@@ -137,9 +153,14 @@ typedef struct jl_stenv_t {
     int envsz;                // length of envout
     int envidx;               // current index in envout
     int invdepth;             // current number of invariant constructors we're nested in
-    int eq_wrapped;           // depth of descent through an x-side equality wrapper
-                              // (`Type{A}` matched by `==`); bounds recorded inside
-                              // do not pin variables by egality
+    int bound_channel;        // certainty (jl_bound_certainty_t) of lower-bound
+                              // contributions recorded in the current context;
+                              // starts at BOUND_EGAL and is only ever lowered:
+                              // to BOUND_EQ inside an x-side equality wrapper
+                              // (`Type{A}` matched by `==`), to BOUND_PROXY inside
+                              // a bounds-consistency check on a typevar-containing
+                              // x-term (whose bindings derive from another var's
+                              // declared bounds rather than from a query value)
     int intersection;         // true iff subtype is being called from intersection
     int emptiness_only;       // true iff intersection only needs to test for emptiness
     int triangular;           // when intersecting Ref{X} with Ref{<:Y}
@@ -324,7 +345,8 @@ static int current_env_length(jl_stenv_t *e)
     return len;
 }
 
-// Per-var saved env layout: [occurs_inv, occurs_cov, cov_diag, max_offset].
+// Per-var saved env layout:
+// [occurs_inv, occurs_cov, cov_diag, max_offset, lb_certainty].
 #define JL_SAVEDENV_BYTES_PER_VAR 5
 
 // Combined covariance count used for diagonal-rule decisions: the max of the
@@ -384,7 +406,7 @@ static void re_save_env(jl_stenv_t *e, jl_savedenv_t *se, int root)
         se->buf[j++] = v->occurs_cov;
         se->buf[j++] = v->cov_diag;
         se->buf[j++] = v->max_offset;
-        se->buf[j++] = v->egal_bound;
+        se->buf[j++] = v->lb_certainty;
         v = v->prev;
     }
     assert(i == nroots); (void)nroots;
@@ -479,7 +501,7 @@ static void restore_env(jl_stenv_t *e, jl_savedenv_t *se, int root) JL_NOTSAFEPO
         v->occurs_cov = se->buf[j++];
         v->cov_diag = se->buf[j++];
         v->max_offset = se->buf[j++];
-        v->egal_bound = se->buf[j++];
+        v->lb_certainty = se->buf[j++];
         v = v->prev;
     }
     assert(i == nroots); (void)nroots;
@@ -891,7 +913,14 @@ static int subtype_ccheck(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
     // cov_diag on exit.
     int8_t *saved_cov = (int8_t*)alloca(current_env_length(e));
     int nsaved_cov = push_consistency_scope(e, saved_cov);
+    // A check on a closed x-term checks an actual value of the query, so bounds
+    // recorded inside keep the current certainty channel. A typevar-containing x
+    // checks a typevar bound proxy, whose bindings need not exist for every call.
+    int saved_channel = e->bound_channel;
+    if (e->bound_channel > BOUND_PROXY && jl_has_free_typevars(x))
+        e->bound_channel = BOUND_PROXY;
     int sub = local_forall_exists_subtype(x, y, e, PARAM_COVARIANT, 1);
+    e->bound_channel = saved_channel;
     pop_consistency_scope(e, saved_cov, nsaved_cov);
     pop_unionstate(&e->Lunions, &oldLunions);
     return sub;
@@ -1118,8 +1147,8 @@ static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t par
         pop_forall_bound_scope(e, saved_fb, nsaved_fb);
         return sub;
     }
-    if (a != jl_bottom_type && !e->eq_wrapped)
-        bb->egal_bound = 1;
+    if (a != jl_bottom_type && bb->lb_certainty < e->bound_channel)
+        bb->lb_certainty = e->bound_channel;
     if (bb->lb == a)
         return 1;
     if (!((bb->ub == (jl_value_t*)jl_any_type && !jl_is_type(a) && !jl_is_typevar(a)) || subtype_ccheck(a, bb->ub, e)))
@@ -1445,11 +1474,14 @@ static jl_value_t *subtype_unionall_envout_value(jl_value_t *t, jl_unionall_t *u
     if (!vb->occurs_inv && lb != jl_bottom_type) {
         if (is_leaf_bound(lb)) {
             // a (closed) type value pinned only through equality (`Type{X}`)
-            // positions is only known up to `==` (#61323); record it as uncertain.
+            // positions is only known up to `==` (#61323); record it as a
+            // pinned (lb == ub) typevar marker. A BOUND_EQ channel still
+            // marks it *defined* (constrained) for every `==`-equal call.
             // Free-typevar values keep the legacy plain binding (#61242).
-            if (jl_is_type(lb) && lb != jl_bottom_type && !vb->egal_bound &&
+            if (jl_is_type(lb) && lb != jl_bottom_type && vb->lb_certainty < BOUND_EGAL &&
                 !jl_has_free_typevars(lb))
-                return wrap_tvar_env(lb, constrained);
+                return wrap_tvar_env((jl_value_t*)jl_new_typevar(u->var->name, lb, lb),
+                                     constrained || vb->lb_certainty == BOUND_EQ);
             return lb;
         }
         if (constrained && !jl_has_free_typevars(t) && !jl_has_free_typevars(lb) &&
@@ -1479,9 +1511,10 @@ static jl_value_t *subtype_unionall_envout_value(jl_value_t *t, jl_unionall_t *u
         // method parameters expect.
         if (vb->tainted_inner || has_universal_typevar(lb, e))
             return wrap_tvar_env(lb, constrained);
-        if (jl_is_type(lb) && lb != jl_bottom_type && !vb->egal_bound &&
+        if (jl_is_type(lb) && lb != jl_bottom_type && vb->lb_certainty < BOUND_EGAL &&
             !jl_has_free_typevars(lb))
-            return wrap_tvar_env(lb, constrained);
+            return wrap_tvar_env((jl_value_t*)jl_new_typevar(u->var->name, lb, lb),
+                                 constrained || vb->lb_certainty == BOUND_EQ);
         return lb;
     }
     if (lb == u->var->lb && vb->ub == u->var->ub && !*new_tvar)
@@ -2231,12 +2264,13 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
         // only pin variables up to `==` (an egality-pinned slot arrives as `TypeEgal`
         // above instead). An invariant occurrence is a parameter of a type tag, whose
         // identity pins its parameters exactly.
-        int eq = param != PARAM_INVARIANT;
+        int saved_channel = e->bound_channel;
+        if (param != PARAM_INVARIANT && e->bound_channel > BOUND_EQ)
+            e->bound_channel = BOUND_EQ;
         e->invdepth++;
-        e->eq_wrapped += eq;
         int ans = forall_exists_equal(jl_typeeq_T(x), jl_typeeq_T(y), e);
-        e->eq_wrapped -= eq;
         e->invdepth--;
+        e->bound_channel = saved_channel;
         return ans;
     }
     if (jl_is_typeeq(x) && jl_is_datatype(y)) {
@@ -2441,8 +2475,8 @@ static int equal_var(jl_tvar_t *v, jl_value_t *x, jl_stenv_t *e)
     if (!vb->existential)
         return local_forall_exists_subtype(x, vb->lb, e, PARAM_INVARIANT, !jl_has_free_typevars(x)) &&
                local_forall_exists_subtype(vb->ub, x, e, PARAM_NONE, 0);
-    if (x != jl_bottom_type && !e->eq_wrapped)
-        vb->egal_bound = 1;
+    if (x != jl_bottom_type && vb->lb_certainty < e->bound_channel)
+        vb->lb_certainty = e->bound_channel;
     if (vb->lb == x)
         return var_lt(v, x, e, PARAM_NONE, vb, innervar);
     if (!subtype_ccheck(x, vb->ub, e))
@@ -2568,7 +2602,7 @@ static void init_stenv(jl_stenv_t *e, jl_value_t **env, int envsz)
     }
     e->envidx = 0;
     e->invdepth = 0;
-    e->eq_wrapped = 0;
+    e->bound_channel = BOUND_EGAL;
     e->intersection = 0;
     e->emptiness_only = 0;
     e->triangular = 0;

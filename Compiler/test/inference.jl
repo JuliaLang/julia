@@ -552,9 +552,16 @@ const NInt1{N} = Tuple{Int, Vararg{Int, N}}
 fNInt(x::NInt) = (x...,)
 gNInt() = fNInt(x)
 @test Base.return_types(gNInt, ()) == Any[NInt]
-# issue 21763 (TODO: the bottom-spelling mix `Type{Union{}}`/`typeof(Union{})`/`TypeEgal`
-# currently widens this to `Type`; ideally `Union{Core.TypeEgal{Int}, Type{Union{}}}`)
+# issue 21763: a closed equality-keyed query folds `eltype`'s `@isdefined(E)` sparam
+# guard — every `==`-equal rep of the argument binds the var (BOUND_EQ), even
+# though its value is only `==`-certain. The value-typed entry must stay `Type`: its
+# `Type{<:NInt}` argtype includes `Tuple{}`, which matches without binding the var.
+@test Base.return_types(Base._eltype_ntuple, (Type{Tuple{Int}},)) == Any[Type{Int}]
+@test Base.return_types(eltype, (Type{NInt{1}},)) == Any[Type{Int}]
 @test Base.return_types(eltype, (NInt,)) == Any[Type]
+f21763_def(t::Type{<:Tuple{Vararg{E}}}) where E = @isdefined(E) ? E : :undef
+@test Base.return_types(f21763_def, (Type{Tuple{Int}},)) == Any[Type{Int}]
+@test Base.return_types(f21763_def, (Type{<:NInt},)) == Any[Union{Symbol, Type{Int}}]
 
 # issue #17572
 function f17572(::Type{Val{A}}) where A

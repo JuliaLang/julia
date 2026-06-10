@@ -243,6 +243,20 @@ let g61242(::Type{T}) where T = T
     @test g61242(Vector.body) === Vector.body
 end
 
+# sparam definedness must agree across `==`-equal representations of a type
+# argument (#61323): a closed `==`-keyed callsite may fold `@isdefined`, an
+# abstract one (where some member leaves the var unbound) must not
+let S = Tuple{S2} where S2<:Int
+    fdef(t::Type{<:Tuple{Vararg{E}}}) where E = @isdefined(E) ? E : :undef
+    @test S == Tuple{Int} && S !== Tuple{Int}
+    @test fdef(Tuple{Int}) === Int
+    @test fdef(S) === Int
+    feq(tarr, i) = fdef(tarr[i])
+    @test feq(Type{Tuple{Int}}[S, Tuple{Int}], 1) === Int
+    @test feq(Type{Tuple{Int}}[S, Tuple{Int}], 2) === Int
+    @test feq(Type{<:Tuple{Vararg{Int,N}} where N}[Tuple{}], 1) === :undef
+end
+
 # show that we don't make the cache confused by using alternative representations
 # when specificity is reversed
 j11840(::DataType) = '1'
