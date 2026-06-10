@@ -45,7 +45,7 @@ kind(head::SyntaxHead) = head.kind
 
 Return the flag bits of a syntactic construct. Prefer to query these with the
 predicates `is_trivia`, `is_prefix_call`, `is_infix_op_call`,
-`is_prefix_op_call`, `is_postfix_op_call`, `is_dotted`, `is_suffixed`,
+`is_prefix_op_call`, `is_postfix_op_call`, `is_dotted`,
 `is_decorated`.
 
 Or extract numeric portion of the flags with `numeric_flags`.
@@ -376,7 +376,10 @@ function _buffer_lookahead_tokens(lexer, lookahead)
         was_whitespace = is_whitespace(k)
         had_whitespace |= was_whitespace
         f = EMPTY_FLAGS
-        raw.suffix     && (f |= SUFFIXED_FLAG)
+        if k == K"Operator" && raw.op_precedence != Tokenize.PREC_NONE
+            # Store operator precedence in numeric flags
+            f |= set_numeric_flags(Int(raw.op_precedence))
+        end
         push!(lookahead, SyntaxToken(SyntaxHead(k, f), k,
                                      had_whitespace, raw.endbyte + 2))
         token_count += 1

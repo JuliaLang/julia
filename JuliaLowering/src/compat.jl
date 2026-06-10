@@ -6,10 +6,18 @@ function find_kind(s::String)
 end
 
 # flisp: dot-operators
+#
+# We work from the operator's name here (rather than its `Kind`) because by this
+# point operators are represented uniformly as identifier-like names: this code
+# also runs on trees converted from `Expr`, where an operator such as `.^` is
+# simply the `Symbol` `:.^` with no token or `Kind` to inspect. `Base.isoperator`
+# is the same operator-name test already used for `op=` in `est_to_dst` below;
+# note we can't look up a `Kind` by name (eg via `find_kind`), since most
+# operators no longer have their own kind - they share `K"Operator"`.
 function is_dotted_operator(s::AbstractString)
     return length(s) >= 2 &&
         s[1] === '.' && s[2] !== '.' &&
-        JS.is_operator(something(find_kind(s[2:end]), K"None"))
+        Base.isoperator(s[2:end])
 end
 
 function is_eventually_call(e)

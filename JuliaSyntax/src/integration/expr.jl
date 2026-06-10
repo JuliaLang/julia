@@ -346,20 +346,28 @@ end
     elseif k == K"DotsIdentifier"
         n = numeric_flags(flags(nodehead))
         return n == 2 ? :(..) : :(...)
-    elseif k == K"op=" && length(args) == 3
-        lhs = args[1]
-        op = args[2]
-        rhs = args[3]
-        headstr = string(args[2], '=')
-        retexpr.head = Symbol(headstr)
-        retexpr.args = Any[lhs, rhs]
-    elseif k == K".op=" && length(args) == 3
-        lhs = args[1]
-        op = args[2]
-        rhs = args[3]
-        headstr = '.' * string(args[2], '=')
-        retexpr.head = Symbol(headstr)
-        retexpr.args = Any[lhs, rhs]
+    elseif k == K"op="
+        if length(args) == 3
+            lhs = args[1]
+            op = args[2]
+            rhs = args[3]
+            headstr = string(args[2], '=')
+            retexpr.head = Symbol(headstr)
+            retexpr.args = Any[lhs, rhs]
+        elseif length(args) == 1
+            return Symbol(string(args[1], '='))
+        end
+    elseif k == K".op="
+        if length(args) == 3
+            lhs = args[1]
+            op = args[2]
+            rhs = args[3]
+            headstr = '.' * string(args[2], '=')
+            retexpr.head = Symbol(headstr)
+            retexpr.args = Any[lhs, rhs]
+        else
+            return Symbol(string('.', args[1], '='))
+        end
     elseif k == K"macrocall"
         if length(args) >= 2
             a2 = args[2]

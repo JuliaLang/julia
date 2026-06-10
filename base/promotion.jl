@@ -499,7 +499,11 @@ true
 ^(x::Number, y::Number) = ^(promote(x,y)...)
 
 fma(x::Number, y::Number, z::Number) = fma(promote(x,y,z)...)
-muladd(x::Number, y::Number, z::Number) = muladd(promote(x,y,z)...)
+function muladd(a::Number, b::Number, c::Number)
+    _a, _b, _c = promote(a, b, c)
+    ((a === false) || (b === false)) && return _c
+    return muladd(_a, _b, _c)
+end
 
 ==(x::Number, y::Number) = (==)(promote(x,y)...)
 <( x::Real, y::Real)     = (< )(promote(x,y)...)

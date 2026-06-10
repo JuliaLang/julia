@@ -209,6 +209,13 @@ ctx, expanded = JuliaLowering.expand_forms_1(test_mod, ex, false, Base.get_world
         x * 10
     end
     """; expr_compat_mode) == 90
+    @test JuliaLowering.include_string(test_mod, raw"""
+    let fp = @cfunction(Cint, (Cint,)) do x
+            x + Cint(1)
+        end
+        ccall(fp isa Ptr ? fp : fp.ptr, Cint, (Cint,), 2)
+    end
+    """; expr_compat_mode) == 3
 end
 
 @test JuliaLowering.include_string(test_mod, raw"""
@@ -577,6 +584,12 @@ end
     ref = Meta.lower(test_mod, Meta.parse(prog))
     our = jlower_e(prog)
     @test find_method_ci(ref).purity === find_method_ci(our).purity
+
+    prog = "Base.@pure @inline foo(x) = x + 1"
+    ref = Meta.lower(test_mod, Meta.parse(prog))
+    our = jlower_e(prog)
+    @test find_method_ci(ref).purity === find_method_ci(our).purity
+    @test find_method_ci(ref).inlining === find_method_ci(our).inlining
 
     # TODO: no api for option retrieval, just check that it compiles
     let options_mod = Module()

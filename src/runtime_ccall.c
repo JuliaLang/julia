@@ -363,13 +363,21 @@ static inline const char *name_from_method_instance(jl_method_instance_t *mi) JL
 }
 
 static jl_mutex_t cfun_lock;
+
+// (get_abi_converter / method table mutating thread)
 // release jl_world_counter
-// store theFptr
+// release theFptr
 // release last_world_v
 //
+// (dispatch site)
 // acquire last_world_v
-// read theFptr
-// acquire jl_world_counter
+// acquire theFptr
+// read jl_world_counter
+//
+// The above ordering requirements are intended to guarantee that if the
+// dispatch site observes last_world == jl_world_counter then the loaded
+// fptr is consistent with both of them, meaning it was published for
+// exactly that world.
 JL_DLLEXPORT
 void *jl_get_abi_converter(jl_task_t *ct, void *data)
 {
@@ -448,7 +456,7 @@ void *jl_get_abi_converter(jl_task_t *ct, void *data)
 
     cfuncdata->plast_codeinst = &cfuncdata->last_codeinst;
     cfuncdata->last_codeinst = codeinst;
-    jl_atomic_store_relaxed(&cfuncdata->fptr, f);
+    jl_atomic_store_release(&cfuncdata->fptr, f);
     jl_atomic_store_release(&cfuncdata->last_world, world);
     JL_UNLOCK(&cfun_lock);
     return f;

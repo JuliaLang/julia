@@ -384,7 +384,7 @@ function debuginfo_firstline(di::DebugInfoStream)
         debuginfo_firstline(di)
     else
         # likely doesn't contain any usable provenance
-        debuginfo_file1(debuginfo), di.firstline
+        debuginfo_file1(di), di.firstline
     end
 end
 function debuginfo_firstline(di::DebugInfo)
