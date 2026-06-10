@@ -1619,6 +1619,9 @@ other declarations, including method definitions, are disallowed. Inner construc
 definitions are allowed inside the `struct` definitions and will semantically run
 after all types have been atomically instantiated.
 
+!!! compat "Julia 1.14"
+    The `typegroup` keyword requires at least Julia 1.14.
+
 See the manual section on [Mutually Recursive Types](@ref) for more details.
 """
 kw"typegroup"

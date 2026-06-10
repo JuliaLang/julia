@@ -965,17 +965,17 @@ static size_t codelocs_parseheader(jl_string_t *cl, int *loc_offset, int *loc_by
     int32_t header[3];
     memcpy(&header, (char*)jl_string_data(cl), sizeof(header));
     *loc_offset = header[0];
-    if (header[1] < 255)
+    if (header[1] < UINT8_MAX)
         *loc_bytes = 1;
-    else if (header[1] < 65535)
+    else if (header[1] < UINT16_MAX)
         *loc_bytes = 2;
     else
         *loc_bytes = 4;
     if (header[2] == 0)
         *to_bytes = 0;
-    else if (header[2] < 255)
+    else if (header[2] < UINT8_MAX)
         *to_bytes = 1;
-    else if (header[2] < 65535)
+    else if (header[2] < UINT16_MAX)
         *to_bytes = 2;
     else
         *to_bytes = 4;
@@ -1464,11 +1464,13 @@ static const char *sbt_parseheader(jl_string_t *str, jl_sourcebytetable_header_t
  * returning new debuginfo in `p_di` and optionally pc in `p_pc`. */
 static void cdi_deref(jl_debuginfo_t **p_di, int32_t *p_pc, int recursive) JL_NOTSAFEPOINT
 {
+    assert(jl_is_debuginfo(*p_di));
     jl_debuginfo_t *di = *p_di;
     int32_t pc = 0;
     if (!p_pc)
         p_pc = &pc;
-    if (jl_typeof(di->linetable) == (jl_value_t *)jl_debuginfo_type) {
+    if (jl_is_debuginfo(di->linetable)) {
+        assert(*p_pc >= 0);
         *p_pc = jl_uncompress1_codeloc(di, *p_pc).loc;
         *p_di = (jl_debuginfo_t *)di->linetable;
         if (recursive) {
@@ -1575,9 +1577,6 @@ JL_DLLEXPORT const char *jl_cdi_file(jl_debuginfo_t *di) JL_NOTSAFEPOINT
         jl_value_t *m = ((jl_method_instance_t *)di->def)->def.value;
         assert(jl_is_method(m) && "unimplemented");
         return jl_symbol_name(((jl_method_t*)m)->file);
-    } else if (jl_is_nothing(di->def)) {
-        // reachable when linenumbernode.file is nothing (through method.c)
-        return "<unknown>";
     } else {
         assert(0 && "unexpected type for debuginfo.def");
         return "<unknown>";
@@ -1626,18 +1625,19 @@ JL_DLLEXPORT jl_string_t *jl_compress_codelocs(int32_t firstloc, jl_value_t *cod
     header[1] = min.loc > max.loc ? 0 : max.loc - min.loc;
     header[2] = max.to > max.pc ? max.to : max.pc;
     size_t loc_bytes;
-    if (header[1] < 255)
+    /* 0 encodes a special value, `n` encodes `n-1+loc_offset`. */
+    if (header[1] < UINT8_MAX)
         loc_bytes = 1;
-    else if (header[1] < 65535)
+    else if (header[1] < UINT16_MAX)
         loc_bytes = 2;
     else
         loc_bytes = 4;
     size_t to_bytes;
     if (header[2] == 0)
         to_bytes = 0;
-    else if (header[2] < 255)
+    else if (header[2] < UINT8_MAX)
         to_bytes = 1;
-    else if (header[2] < 65535)
+    else if (header[2] < UINT16_MAX)
         to_bytes = 2;
     else
         to_bytes = 4;

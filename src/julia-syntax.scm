@@ -2150,7 +2150,7 @@
                          `(let (block ,@(map (lambda (v) `(= ,v ,v)) (filter-not-underscore outervars)))
                             ,expr))
                         (else expr))))
-        `(-> ,argname (block ,@splat ,expr)))))))
+        `(-> ,argname (block ,*current-desugar-loc* ,@splat ,expr)))))))
 
 (define (expand-generator e flat outervars)
   (let* ((expr  (cadr e))
@@ -5561,8 +5561,9 @@ f(x) = yt(x)
              (list ,@(cadr vi)) ,(caddr vi) (list ,@(cadddr vi)))
        ,@(cdddr lam))))
 
+;; LineNumberNode may have file=nothing, but LegacyLineInfoNode may not
 (define (make-lineinfo file line (inlined-at #f))
-  `(lineinfo ,file ,line ,(or inlined-at 0)))
+  `(lineinfo ,(if (nothing? file) 'none file) ,line ,(or inlined-at 0)))
 
 (define (set-lineno! lineinfo num)
   (set-car! (cddr lineinfo) num))

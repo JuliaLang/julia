@@ -260,6 +260,7 @@ function OptimizationState(mi::MethodInstance, interp::AbstractInterpreter)
 end
 
 function argextype end # imported by EscapeAnalysis
+function argextype_widened end # imported by EscapeAnalysis
 function try_compute_field end # imported by EscapeAnalysis
 
 include("ssair/heap.jl")
@@ -271,8 +272,8 @@ include("ssair/EscapeAnalysis.jl")
 include("ssair/passes.jl")
 include("ssair/irinterp.jl")
 
-function ir_to_codeinf!(opt::OptimizationState, frame::InferenceState, edges::SimpleVector)
-    ir_to_codeinf!(opt, edges, compute_inlining_cost(frame.interp, frame.result, opt.optresult))
+function ir_to_codeinf!(opt::OptimizationState{I}, frame::InferenceState{I}, edges::SimpleVector) where {I<:AbstractInterpreter}
+    ir_to_codeinf!(opt, edges, compute_inlining_cost(frame.interp::I, frame.result, opt.optresult))
 end
 
 function ir_to_codeinf!(opt::OptimizationState, edges::SimpleVector, inlining_cost::InlineCostType)
@@ -338,8 +339,8 @@ function new_expr_effect_flags(𝕃ₒ::AbstractLattice, args::Vector{Any}, src:
     typ, isexact = instanceof_tfunc(atyp, true)
     if !isexact
         atyp = unwrap_unionall(widenconst(atyp))
-        if isType(atyp) && isTypeDataType(atyp.parameters[1])
-            typ = atyp.parameters[1]
+        if isType(atyp) && isTypeDataType(type_parameter(atyp))
+            typ = type_parameter(atyp)
         else
             return (false, false, false)
         end
@@ -515,7 +516,7 @@ function argextype(
     elseif isa(x, QuoteNode)
         return Const(x.value)
     elseif isa(x, GlobalRef)
-        return abstract_eval_globalref_type(x, src)
+        return globalref_rt(x, src)
     elseif isa(x, PhiNode) || isa(x, PhiCNode) || isa(x, UpsilonNode)
         return Any
     elseif isa(x, PiNode)
@@ -524,6 +525,16 @@ function argextype(
         return Const(x)
     end
 end
+
+# `widenconst(argextype(x, src, ...))` without the throwaway `Const` for GlobalRef args.
+@inline function argextype_widened(@nospecialize(x),
+        src::Union{IRCode,IncrementalCompact,CodeInfo}, sptypes::Vector{VarState})
+    isa(x, GlobalRef) && return globalref_rt_widened(x, src)
+    return widenconst(argextype(x, src, sptypes))
+end
+@inline argextype_widened(@nospecialize(x), ir::IRCode) = argextype_widened(x, ir, ir.sptypes)
+@inline argextype_widened(@nospecialize(x), compact::IncrementalCompact) =
+    argextype_widened(x, compact, compact.ir.sptypes)
 function abstract_eval_ssavalue(s::SSAValue, src::CodeInfo)
     ssavaluetypes = src.ssavaluetypes
     if ssavaluetypes isa Int
@@ -1019,7 +1030,7 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, opt::OptimizationSt
 end
 
 # run the optimization work
-function optimize(interp::AbstractInterpreter, opt::OptimizationState, caller::InferenceResult)
+function optimize(interp::AbstractInterpreter, opt::OptimizationState{I}, caller::InferenceResult) where {I<:AbstractInterpreter}
     @zone "CC: OPTIMIZER" ir = run_passes_ipo_safe(opt.src, opt)
     ipo_dataflow_analysis!(interp, opt, ir, caller)
     finishopt!(interp, opt, ir)
@@ -1415,7 +1426,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
             elseif f === Core.memoryrefunset! && length(ex.args) >= 3
                 atyp = argextype(ex.args[2], src, sptypes)
                 return isknowntype(atyp) ? 5 : params.inline_nonleaf_penalty
-            elseif f === typeassert && isconstType(widenconst(argextype(ex.args[3], src, sptypes)))
+            elseif f === typeassert && isconstType(argextype_widened(ex.args[3], src, sptypes))
                 return 1
             end
             fidx = find_tfunc(f)

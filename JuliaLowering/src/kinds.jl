@@ -16,12 +16,13 @@ function _register_kinds()
             "gc_preserve_end"
             # A (quoted) `Symbol`
             "Symbol"
-            # TODO: Use `meta` for inbounds and loopinfo etc?
             "inbounds"
+            "inbounds_pop" # expr: (inbounds pop) with identifier "pop"
             "boundscheck"
             "inline"
             "noinline"
             "loopinfo"
+            "purity"
             # Call into foreign code
             "foreigncall"
             # ccall convention
@@ -116,7 +117,6 @@ function _register_kinds()
             # [K"method_defs" name block]
             # The code in `block` defines methods for generic function `name`
             "method_defs"
-            # The code in `block` defines methods for generic function `name`
             "_opaque_closure"
             # The enclosed statements must be executed at top level
             "toplevel_butfirst"
