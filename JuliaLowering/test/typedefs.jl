@@ -730,3 +730,32 @@ typegroup
 end
 """; version=v"1.14") === nothing
 @test test_mod.TG_SuperA <: AbstractVector{test_mod.TG_SuperB}
+
+# bad test: flisp will scan the struct for assigned fields to throw errors, but
+# runs a `flatten-blocks` pass before collecting the real fields, so
+# assignment-like fields/ctors can sneak through.  As of #59882, the @doc form
+# emits an assignment inside of a block that sneaks through this way.  JL found
+# assignments in the actual field list, so `@doc` hit that case.
+@test jl_eval(test_mod, Expr(:block,
+    Expr(:struct, true, :struct_doc_test, Expr(:block,
+        Expr(:(::), :status, :Int),
+        Expr(:macrocall, GlobalRef(Core, Symbol("@doc")), LineNumberNode(0), "doc",
+            Expr(:function,
+                Expr(:call, :struct_doc_test, Expr(:(::), :status, :Integer),
+                     Expr(:kw, :headers, Expr(:vect))),
+                Expr(:block, Expr(:call, :new, :status)))))),
+    Expr(:., Expr(:call, :struct_doc_test, 5), QuoteNode(:status)))) == 5
+
+# bad test: flisp does not continue scanning past anything it doesn't recognize
+# as a field
+@test jl_eval(
+    test_mod,
+    :(begin
+          struct struct_eq_assigns_test
+              x::Int
+              struct_eq_assigns_test(x) = new(x)
+              default = 1
+              struct_eq_assigns_test() = new(default)
+          end
+          (struct_eq_assigns_test(5).x, struct_eq_assigns_test().x)
+      end)) == (5, 1)

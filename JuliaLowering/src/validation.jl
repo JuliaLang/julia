@@ -367,7 +367,7 @@ vst1_toplevel_only(vcx, st) = @stm st begin
     [K"struct" [K"Value"] sig [K"block" body...]] ->
         vst1_typesig(vcx, sig) & (
             !(st[1].value isa Bool) ? @fail(st[1], "expected mutable flag") :
-                all(vst1_struct_arg, vcx, body))
+                _struct_noassign(vcx, body) & all(vst1_struct_arg, vcx, body))
     [K"abstract" sig] ->
         vst1_typesig(vcx, sig)
     [K"primitive" sig n] ->
@@ -885,16 +885,29 @@ vst1_curly_typevar(vcx, st) = @stm st begin
     _ -> vst1_splat_or_val(vcx, st)
 end
 
-vst1_struct_arg(vcx, st) = @stm st begin
-    [K"block" xs...] -> all(vst1_struct_arg, vcx, xs)
-    _ -> vst1_struct_special_form(vcx, st) | vst1(vcx, st)
+# assignment should never be allowed, but flisp fails to check inside blocks or
+# after anything that isn't a field.  See #62075.
+function _struct_noassign(vcx, body::SyntaxList)
+    for st in body
+        if kind(st) === K"=" && vst1_struct_field(vcx, st[1]).ok
+            return @fail(st, "assignment syntax in structure fields is reserved")
+        elseif !vst1_struct_field(vcx, st).ok
+            return pass()
+        end
+    end
+    return pass()
 end
 
-vst1_struct_special_form(vcx, st) = @stm st begin
+vst1_struct_arg(vcx, st) = @stm st begin
+    [K"block" xs...] -> all(vst1_struct_arg, vcx, xs)
+    _ -> vst1_struct_field(vcx, st) | vst1(vcx, st)
+end
+
+vst1_struct_field(vcx, st) = @stm st begin
     [K"Identifier"] -> pass()
-    [K"::" x t] -> vst1_struct_special_form(vcx, x) & vst1(vcx, t)
-    [K"const" x] -> vst1_struct_special_form(vcx, x)
-    [K"atomic" x] -> vst1_struct_special_form(vcx, x)
+    [K"::" x t] -> vst1_struct_field(vcx, x) & vst1(vcx, t)
+    [K"const" x] -> vst1_struct_field(vcx, x)
+    [K"atomic" x] -> vst1_struct_field(vcx, x)
     _ -> unknown()
 end
 

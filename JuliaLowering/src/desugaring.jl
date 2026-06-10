@@ -3163,8 +3163,6 @@ function _collect_struct_fields(ctx, field_names, field_types, field_attrs, fiel
         if kind(e) == K"block"
             _collect_struct_fields(ctx, field_names, field_types, field_attrs, field_docs,
                                    inner_defs, children(e))
-        elseif kind(e) == K"="
-            throw(LoweringError(e, "assignment syntax in structure fields is reserved"))
         else
             m = _match_struct_field(e)
             if !isnothing(m)
