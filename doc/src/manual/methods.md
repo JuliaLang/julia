@@ -908,41 +908,34 @@ to a function, not to any specific method of that function. It depends on the ty
 arguments which method is invoked. When optional arguments are defined in terms of a global variable,
 the type of the optional argument may even change at run-time.
 
-Keyword arguments interact with method dispatch in a subtle way. The types and values of
-keyword arguments do not participate in dispatch; they are processed after a matching method
-is selected. Whether a method accepts keyword arguments at all, however, does affect
-dispatch: keyword-bearing calls are dispatched only among the methods that declare a keyword
-interface. A method without a keyword interface is therefore invisible to a call that passes
-any keyword argument, even when it would otherwise be the most specific match on positional
-arguments.
+Keyword arguments behave quite differently from ordinary positional arguments. In particular,
+their names and types do not participate in method dispatch. Methods are dispatched based only
+on positional arguments and on the presence or absence of keyword arguments, with keyword
+argument names and values processed after the matching method is identified:
 
-A consequence is that adding a more specific positional method without giving it a keyword
-interface can silently route keyword-bearing calls to a more general method:
+```julia
+julia> f(x, y; z) = :kwargs;
 
-```jldoctest keyword-dispatch
-julia> f(x; y=10) = "generic, y=$y";
+julia> f(x, y) = :nokwargs;
 
-julia> f(x::Int) = "int-specific";
+julia> f(1, 2; z=3)  # dispatches to the first method
+:kwargs
 
-julia> f(1)
-"int-specific"
+julia> f(1, 2; w=3)  # dispatches to the first method even though the keyword names differ
+ERROR: UndefKeywordError: keyword argument `z` not assigned
 
-julia> f(1; y=2)
-"generic, y=2"
+julia> f(1, 2)  # dispatches to the second method
+:nokwargs
 ```
 
-Although `f(x::Int)` is more specific than `f(x; y=10)` on positional arguments, it accepts no
-keyword arguments and so is not a candidate when one is supplied. To extend the specialization
-to keyword-bearing calls, the specialized method needs its own keyword interface, either
-listing the relevant keywords (e.g. `f(x::Int; y=10)`) or collecting any keyword with
-`kwargs...`.
-
-Among the methods that do accept keyword arguments, dispatch proceeds by positional argument
-types in the usual way; the names of the supplied keyword arguments are not consulted in
-choosing between candidates. Once a method is selected, the supplied keyword arguments are
-matched against only that method. If the selected method does not accept some supplied
-keyword (and does not collect it with `kwargs...`), the call raises a `MethodError`; Julia
-does not fall back to a different method that would have accepted it.
+!!! warning
+    The fact that the presence of keyword arguments affects dispatch is a known, long-standing
+    bug ([#9498](https://github.com/JuliaLang/julia/issues/9498)) rather than an intended
+    feature. A call that passes keyword arguments only considers methods that accept keyword
+    arguments, so it can select a less specific method over a more specific one that takes
+    none. This behavior may change in a future release, so avoid relying on it. To keep a
+    specialized method applicable to keyword-bearing calls, give it its own keyword interface,
+    either by repeating the keyword arguments or by collecting any keyword with `kwargs...`.
 
 ## Function-like objects
 
