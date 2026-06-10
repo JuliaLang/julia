@@ -930,6 +930,25 @@ with keyword arguments processed after the matching method is identified.
     "generic"
     ```
 
+    Relatedly, redefining a method without keyword arguments does not replace the keyword
+    handling of an earlier definition with the same positional signature, even though only
+    one method is displayed:
+
+    ```julia
+    julia> g(x; y=1) = "with keywords";
+
+    julia> g(x) = "without keywords";
+
+    julia> g
+    g (generic function with 1 method)
+
+    julia> g(1)
+    "without keywords"
+
+    julia> g(1; y=2)  # bug: calls the overwritten definition
+    "with keywords"
+    ```
+
     This may be fixed in a future release, so avoid relying on it. To keep a specialized
     method applicable to calls with keyword arguments, give it its own keyword interface,
     either by repeating the keyword arguments or by collecting any keyword with `kwargs...`.
