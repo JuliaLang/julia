@@ -1,7 +1,3 @@
-# Token flags - may be set for operator kinded tokens
-# Operator has a suffix
-const SUFFIXED_FLAG = RawFlags(1<<2)
-
 # Set for K"call", K"dotcall" or any syntactic operator heads
 # Distinguish various syntaxes which are mapped to K"call"
 const PREFIX_CALL_FLAG = RawFlags(0<<3)
@@ -110,15 +106,6 @@ Return true for postfix operator calls such as the `'ᵀ` call node parsed from 
 """
 is_postfix_op_call(x) = call_type_flags(x) == POSTFIX_OP_FLAG
 
-
-"""
-    is_suffixed(x)
-
-Return true for operators which have suffixes, such as `+₁`
-"""
-is_suffixed(x) = has_flags(x, SUFFIXED_FLAG)
-
-
 """
     numeric_flags(x)
 
@@ -164,7 +151,6 @@ function untokenize(head::SyntaxHead; unique=true, include_flag_suff=true)
                 str *= "-,"
             end
         end
-        is_suffixed(head) && (str = str*"-suf")
     end
     str
 end
@@ -261,45 +247,6 @@ function validate_tokens(stream::ParseStream)
     sort!(stream.diagnostics, by=first_byte)
 end
 
-"""
-    bump_split(stream, token_spec1, [token_spec2 ...])
-
-Bump the next token, splitting it into several pieces
-
-Tokens are defined by a number of `token_spec` of shape `(nbyte, kind, flags)`.
-If all `nbyte` are positive, the sum must equal the token length. If one
-`nbyte` is negative, that token is given `tok_len + nbyte` bytes and the sum of
-all `nbyte` must equal zero.
-
-This is a hack which helps resolves the occasional lexing ambiguity. For
-example
-* Whether .+ should be a single token or the composite (. +) which is used for
-  standalone operators.
-* Whether ... is splatting (most of the time) or three . tokens in import paths
-
-TODO: Are these the only cases?  Can we replace this general utility with a
-simpler one which only splits preceding dots?
-"""
-function bump_split(stream::ParseStream, split_spec::Vararg{Any, N}) where {N}
-    tok = stream.lookahead[stream.lookahead_index]
-    stream.lookahead_index += 1
-    start_b = _next_byte(stream)
-    toklen = tok.next_byte - start_b
-    prev_b = start_b
-    for (nbyte, k, f) in split_spec
-        h = SyntaxHead(k, f)
-        actual_nbyte = nbyte < 0 ? (toklen + nbyte) : nbyte
-        orig_k = k == K"." ? K"." : kind(tok)
-        node = RawGreenNode(h, actual_nbyte, orig_k)
-        push!(stream.output, node)
-        prev_b += actual_nbyte
-        stream.next_byte += actual_nbyte
-    end
-    @assert tok.next_byte == prev_b
-    stream.peek_count = 0
-    return position(stream)
-end
-
 function peek_dotted_op_token(ps)
     # Peek the next token, but if it is a dot, peek the next one as well
     t = peek_token(ps)
@@ -317,7 +264,14 @@ function peek_dotted_op_token(ps)
             t = t2
         end
     end
-    return (isdotted, t)
+    # A compound assignment such as `x += y` is lexed as an operator carrying
+    # the special `PREC_COMPOUND_ASSIGN` precedence (immediately followed by an
+    # `=` token). Operators which don't form a compound assignment - eg `⋅`,
+    # `√`, or suffixed operators like `+₁` - are not marked this way, so `x ⋅= y`
+    # is left to be parsed as the identifier `⋅` followed by `=`, matching the
+    # reference parser.
+    isassign = is_prec_compound_assign(t)
+    return (isdotted, isassign, t)
 end
 
 function bump_dotted(ps, isdot, t, flags=EMPTY_FLAGS; emit_dot_node=false, remap_kind=K"None")
