@@ -23,6 +23,8 @@ function _register_kinds()
             "noinline"
             "loopinfo"
             "purity"
+            "aliasscope"
+            "popaliasscope"
             # Call into foreign code
             "foreigncall"
             # ccall convention

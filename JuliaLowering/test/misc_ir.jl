@@ -581,3 +581,13 @@ T{U}, (x::Float64, g()) = [Bool, (1, 2)]
 LoweringError:
 T{U}, (x::Float64, g()) = [Bool, (1, 2)]
 #                  └─┘ ── invalid assignment location
+
+########################################
+# aliasscope form: should be passed through unless implementation changes
+Base.Experimental.@aliasscope 1
+#---------------------
+1   (aliasscope)
+2   (= slot₁/aliasscope_result 1)
+3   (popaliasscope)
+4   slot₁/aliasscope_result
+5   (return %₄)

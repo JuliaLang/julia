@@ -310,6 +310,8 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         head === "latestworld-if-toplevel" ? pass() :
             @fail(st, string("unknown expr head: ", head))
     end
+    [K"aliasscope"] -> pass()
+    [K"popaliasscope"] -> pass()
 
     #---------------------------------------------------------------------------
     # Invalid forms for which we want to produce detailed errors
@@ -1273,6 +1275,8 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
     [K"purity"] -> pass()
     [K"purity" _ _...] -> numchildren(st) == fieldcount(Base.EffectsOverride) ?
         pass() : @fail(st, "wrong number of args to `purity` expression")
+    [K"aliasscope"] -> pass()
+    [K"popaliasscope"] -> pass()
 
     [K"always_defined" x] -> vst2_ident(vcx, x)
     [K"assert" [K"Symbol"] x] -> vst2(vcx, x)

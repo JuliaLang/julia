@@ -917,8 +917,9 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             end
         end
     elseif k == K"inbounds" || k == K"inbounds_pop" ||
-        k == K"inline" || k == K"noinline" || k == K"purity"
-        emit(ctx, ex) # converted to nothing later
+        k == K"inline" || k == K"noinline" || k == K"purity" ||
+        k == K"aliasscope" || k == K"popaliasscope"
+        emit(ctx, ex) # if absorbed in flags, converted to nothing later
         if needs_value
             val = @ast ctx ex (::K"nothing")
             if in_tail_pos
