@@ -212,7 +212,7 @@ function _dump_function(arginfo::ArgInfo, native::Bool, wrapper::Bool,
                         raw::Bool, dump_module::Bool, syntax::Symbol,
                         optimize::Bool, debuginfo::Symbol, binary::Bool,
                         llvm_options::String="",
-                        params::CodegenParams=CodegenParams(debug_info_kind=Cint(0), debug_info_level=Cint(2), safepoint_on_entry=raw, gcstack_arg=raw))
+                        params::CodegenParams=CodegenParams(debug_info_kind=Cint(0), debug_info_level=Cint(2)))
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     warning = ""
     # get the MethodInstance for the method match
@@ -344,7 +344,7 @@ See also: [`@code_llvm`](@ref), [`code_warntype`](@ref), [`code_typed`](@ref), [
 function code_llvm(io::IO, arginfo::ArgInfo;
                    raw::Bool=false, dump_module::Bool=false, optimize::Bool=true, debuginfo::Symbol=:default,
                    llvm_options::String="",
-                   params::CodegenParams=CodegenParams(debug_info_kind=Cint(0), debug_info_level=Cint(2), safepoint_on_entry=raw, gcstack_arg=raw))
+                   params::CodegenParams=CodegenParams(debug_info_kind=Cint(0), debug_info_level=Cint(2)))
     d = _dump_function(arginfo, false, false, raw, dump_module, :intel, optimize, debuginfo, false, llvm_options, params)
     if highlighting[:llvm] && get(io, :color, false)::Bool
         print_llvm(io, d)
@@ -366,7 +366,7 @@ generic function and type signature to `io`.
 * Specify verbosity of code comments by setting `debuginfo` to `:source` (equivalently, `:default`) or `:none`.
 * If `binary` is `true`, also print the binary machine code for each instruction precedented by an abbreviated address.
 * If `dump_module` is `false`, do not print metadata such as rodata or directives.
-* If `raw` is `false` (default), uninteresting instructions (like the safepoint function prologue) are elided.
+* If `raw` is `false` (default), CFI directives are elided.
 
 See also: [`@code_native`](@ref), [`code_warntype`](@ref), [`code_typed`](@ref), [`code_lowered`](@ref), [`code_llvm`](@ref).
 """
@@ -374,7 +374,7 @@ function code_native(io::IO, arginfo::ArgInfo;
                      dump_module::Bool=true, syntax::Symbol=:intel, raw::Bool=false,
                      debuginfo::Symbol=:default, binary::Bool=false,
                      llvm_options::String="",
-                     params::CodegenParams=CodegenParams(debug_info_kind=Cint(0), debug_info_level=Cint(2), safepoint_on_entry=raw, gcstack_arg=raw))
+                     params::CodegenParams=CodegenParams(debug_info_kind=Cint(0), debug_info_level=Cint(2)))
     d = _dump_function(arginfo, true, false, raw, dump_module, syntax, true, debuginfo, binary, llvm_options, params)
     if highlighting[:native] && get(io, :color, false)::Bool
         print_native(io, d)
