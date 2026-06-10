@@ -668,10 +668,9 @@ vst1_simple_calldecl(vcx, st) = @stm st begin
         vst1_calldecl_kws(vcx, st[2])
     [K"call" f ps...] -> vst1_calldecl_name(vcx, f) &
         _calldecl_positionals(vcx, ps, false)
-    # anonymous function syntax `function (x); end`  or `function (x...); end`
-    [K"tuple" _...] -> vst1_lam_lhs(vcx, st)
-    [K"..." va] -> vst1_pparam_typed_tuple(vcx, va)
-    _ -> @fail(st, "malformed `call` in function decl")
+    # anonymous function syntax `function (x); end` or `function (x...); end` is
+    # subject to bad-arglist rules (block, etc.)
+    _ ->  vst1_lam_lhs(vcx, st) | @fail(st, "malformed `call` in function decl")
 end
 
 vst1_macro(vcx, st) = @stm st begin
@@ -920,7 +919,7 @@ end
 
 vst1_assign(vcx, st; in_const = false) = @stm st begin
     # This case handles a proper function declaration (= (call ...) ...) form.
-    # `vst1_assign_lhs_nontuple` also accepts call forms, but this is a lowering
+    # `vst1_assign_lhs_nontuple` also accepts call forms, but that is a lowering
     # bug where the "function body" is evaluated immediately
     ([K"=" l r], when=is_eventually_call(l)) -> vst1_function(vcx, st)
     [K"=" l r] -> vst1_assign_lhs(vcx, l; in_const) & vst1(vcx, r)

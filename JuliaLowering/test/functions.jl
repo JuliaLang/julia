@@ -1443,15 +1443,85 @@ end
     @test JL.include_string(test_mod, "(((a::T=0;b=2)   where T<:U where U<:Any) ->(a,b))(1;b=3)") == (1,3)
     @test_throws LoweringError JL.include_string(test_mod, "(a=0;b=2;c=3)->nothing")
 
-    # `...` is the only real bad form with (function (tuple _...) _) forms
+    # `...` is the only parser-reachable bad form with (function notcall _) forms
     @test JL.include_string(test_mod, "(function (a...); (a...,); end)(1,2,3)") == (1,2,3)
+    @test JL.include_string(test_mod, "(function (a::Int...); (a...,); end)(1,2,3)") == (1,2,3)
     # test with where: need empty tv list to avoid unused sparam warning
-    ex = Expr(:call,
-              Expr(:function, Expr(:where, Expr(:where, Expr(:..., :a))),
-                   Expr(:block, Expr(:tuple, Expr(:..., :a)))),
-              1,2,3)
-    @test jl_eval(test_mod, ex) == (1,2,3)
+    @test jl_eval(test_mod,
+                  Expr(:call,
+                       Expr(:function, Expr(:where, Expr(:where, Expr(:..., :a))),
+                            Expr(:block, Expr(:tuple, Expr(:..., :a)))),
+                       1,2,3)) == (1,2,3)
     @test JL.include_string(test_mod, "(function (a::T) where T<:U where U<:Any; a; end)(1)") == 1
+    @test JL.include_string(test_mod, "(function (a::T...) where T<:U where U<:Any; a; end)(1,2,3)") == (1,2,3)
+end
+
+@testset "Consequences of accepting badly-parsed anonymous forms" begin
+    # empty block
+    @test jl_eval(test_mod,
+                  Expr(:call,
+                       Expr(:function, Expr(:block),
+                            Expr(:block, Expr(:tuple))),
+                       )) == ()
+
+    # unwrapped or block-wrapped arg
+    @testset for a1 in [:a, Expr(:(::), :a, :Int)],
+        a2 in [a1, Expr(:(=), :a, 0)],
+        wrap_where in [identity, x->Expr(:where, x), x->Expr(:where, Expr(:where, x))]
+
+        @test jl_eval(test_mod,
+                      Expr(:call,
+                           Expr(:function, wrap_where(a2),
+                                Expr(:block, Expr(:tuple, :a))),
+                           1)) == (1,)
+        @test jl_eval(test_mod,
+                      Expr(:call,
+                           Expr(:function, wrap_where(Expr(:block, a2)),
+                                Expr(:block, Expr(:tuple, :a))),
+                           1)) == (1,)
+    end
+
+    # two-arg block
+    @test jl_eval(test_mod,
+                  Expr(:call,
+                       Expr(:function, Expr(:block, :a, :b),
+                            Expr(:block, Expr(:tuple, :a, :b))),
+                       1, Expr(:kw, :b, 2))) == (1,2)
+end
+
+@testset "assignment to where-wrapped-tuple" begin
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(((a,b,c::T)     where T<:U where U<:Any) = (a,b,c))(1,2,3)") == (1,2,3)
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(((a,b=0,c::T=0) where T<:U where U<:Any) = (a,b,c))(1)") == (1,0,0)
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(((a,b=0,c::T=0) where T<:U where U<:Any) = (a,b,c))(1,2)") == (1,2,0)
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(((a,b=0,c::T=0) where T<:U where U<:Any) = (a,b,c))(1,2,3)") == (1,2,3)
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(((a::T...)      where T<:U where U<:Any) = (a...,))(1,2,3)") == (1,2,3)
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(((a::T;)        where T<:U where U<:Any) = a)(1)") == 1
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(((a::T;b=2)     where T<:U where U<:Any) = (a,b))(1)") == (1,2)
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(((a::T;b=2)     where T<:U where U<:Any) = (a,b))(1;b=3)") == (1,3)
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(((a::T=0;b=2)   where T<:U where U<:Any) = (a,b))()") == (0,2)
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(((a::T=0;b=2)   where T<:U where U<:Any) = (a,b))(1)") == (1,2)
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(((a::T=0;b=2)   where T<:U where U<:Any) = (a,b))(;b=3)") == (0,3)
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(((a::T=0;b=2)   where T<:U where U<:Any) = (a,b))(1;b=3)") == (1,3)
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(a=0;b=2;c=3) where T = nothing")
+    @test_throws LoweringError jl_eval(
+        test_mod,
+        Expr(:call,
+             Expr(:(=), Expr(:where, Expr(:where, Expr(:..., :a))),
+                  Expr(:block, Expr(:tuple, Expr(:..., :a)))),
+             1,2,3)) == (1,2,3)
 end
 
 @testset "Assigned-to arguments" begin
