@@ -190,6 +190,14 @@ static bool canReorderWithRMW(Instruction &Target, bool verifyop)
     for (auto &I : BB) {
       if (&I == &Target)
         continue;
+      // julia.get_pgcstack reads thread-local state and never writes memory, but
+      // is declared without attributes when not lowered to an argument (non-swiftcc
+      // ABI, used by reflection); don't let it defeat the scan.
+      if (auto *CI = dyn_cast<CallInst>(&I)) {
+        Function *Callee = CI->getCalledFunction();
+        if (Callee && Callee->getName() == "julia.get_pgcstack")
+          continue;
+      }
       if (I.mayWriteToMemory())
         return false;
       if (!mayRead) {
@@ -212,12 +220,9 @@ static std::variant<AtomicRMWInst::BinOp,bool> patternMatchAtomicRMWOp(Value *Ol
     return false;
    // TODO: peek forward from Old through any trivial casts which don't affect the instruction (e.g. i64 to f64 and back)
   if (RetVal == nullptr) {
-    if (Old->use_empty()) {
-      if (ValOp) *ValOp = nullptr;
-      return AtomicRMWInst::Xchg;
-    }
-    if (!Old->hasOneUse())
-      return false;
+    // find the unique return first: a helper with no return always throws
+    // (e.g. the modify type check for a type-unstable op) and must not be
+    // converted to a raw atomicrmw, even if it ignores the loaded value
     ReturnInst *Ret = nullptr;
     for (auto &BB : *Op) {
       if (isa<ReturnInst>(BB.getTerminator())) {
@@ -227,6 +232,12 @@ static std::variant<AtomicRMWInst::BinOp,bool> patternMatchAtomicRMWOp(Value *Ol
       }
     }
     if (Ret == nullptr)
+      return false;
+    if (Old->use_empty()) {
+      if (ValOp) *ValOp = nullptr;
+      return AtomicRMWInst::Xchg;
+    }
+    if (!Old->hasOneUse())
       return false;
     // Now examine the instruction list
     RetVal = Ret->getReturnValue();
@@ -339,8 +350,7 @@ void expandAtomicModifyToCmpXchg(CallInst &Modify,
 
   ReplacementIRBuilder Builder(&Modify, Modify.getModule()->getDataLayout());
 
-  CallInst *ModifyOp;
-  {
+  auto CreateModifyOp = [&]() {
     SmallVector<Value*> Args(1 + Modify.arg_size() - user_arg_start);
     Args[0] = UndefValue::get(Ty); // Undef used as placeholder for Loaded / RMW;
     for (size_t argi = 0; argi < Modify.arg_size() - user_arg_start; ++argi) {
@@ -348,9 +358,11 @@ void expandAtomicModifyToCmpXchg(CallInst &Modify,
     }
     SmallVector<OperandBundleDef> Defs;
     Modify.getOperandBundlesAsDefs(Defs);
-    ModifyOp = Builder.CreateCall(Op, Args, Defs);
-    ModifyOp->setCallingConv(Op->getCallingConv());
-  }
+    CallInst *C = Builder.CreateCall(Op, Args, Defs);
+    C->setCallingConv(Op->getCallingConv());
+    return C;
+  };
+  CallInst *ModifyOp = CreateModifyOp();
   Use *LoadedOp = &ModifyOp->getOperandUse(0);
 
   Value *OldVal = nullptr;
@@ -394,6 +406,17 @@ void expandAtomicModifyToCmpXchg(CallInst &Modify,
           break;
       } else {
         assert(BinOp != decltype(BinOp)(true));
+        if (BinOp == decltype(BinOp)(false)) {
+          // inlining simplified the op into something unconvertible; recreate
+          // the call so the fallback cmpxchg loop has an op to expand (the
+          // leftover inlined code is dead and write-free, per canReorderWithRMW,
+          // so it is safe to disconnect it from RMW and let DCE remove it)
+          RMW->replaceAllUsesWith(UndefValue::get(Ty));
+          Builder.SetInsertPoint(&Modify);
+          ModifyOp = CreateModifyOp();
+          LoadedOp = &ModifyOp->getOperandUse(0);
+          break;
+        }
         auto RMWOp = std::get<AtomicRMWInst::BinOp>(BinOp);
         assert(RMWOp != AtomicRMWInst::BAD_BINOP);
         assert(isa<UndefValue>(RMW->getOperand(1))); // RMW was previously being used as the placeholder for Val
@@ -402,10 +425,32 @@ void expandAtomicModifyToCmpXchg(CallInst &Modify,
           RMW->moveBeforePreserving(cast<Instruction>(ValOp->getUser())->getIterator()); // ValOp is a user of RMW, and RMW has no other dependants (per patternMatchAtomicRMWOp)
           Val = ValOp->get();
         } else if (RMWOp == AtomicRMWInst::Xchg) {
+          // NewVal may be an instruction from the inlined op body, which sits
+          // after RMW's placeholder position; move RMW to the original modify
+          // site so the operand dominates it and so that an op which throws
+          // does not commit the store
+          RMW->moveBeforePreserving(Modify.getIterator());
           Val = NewVal;
         } else {
           // convert to an atomic fence of the form: atomicrmw or %ptr, 0
           assert(RMWOp == AtomicRMWInst::Or);
+          if (!Ty->isIntegerTy()) {
+            // `or` is integer-only: emit it on the equivalent integer type and
+            // bitcast the loaded value back (happens e.g. when an FP op folds
+            // to an identity, like fadd x, -0.0)
+            IntegerType *ITy = Builder.getIntNTy(Ty->getPrimitiveSizeInBits().getFixedValue());
+            Builder.SetInsertPoint(RMW);
+            AtomicRMWInst *IRMW = Builder.CreateAtomicRMW(AtomicRMWInst::Or, Ptr,
+                ConstantInt::getNullValue(ITy), Alignment, Ordering, SSID);
+            IRMW->copyMetadata(Modify);
+            Value *Cast = Builder.CreateBitCast(IRMW, Ty);
+            if (NewVal == RMW)
+              NewVal = Cast;
+            OldVal = Cast;
+            RMW->replaceAllUsesWith(Cast);
+            RMW->eraseFromParent();
+            break;
+          }
           Val = ConstantInt::getNullValue(Ty);
         }
         RMW->setOperation(RMWOp);
@@ -431,6 +476,17 @@ void expandAtomicModifyToCmpXchg(CallInst &Modify,
         return ModifyOp;
       },
       CreateWeakCmpXchg);
+    // the op was not convertible to an atomicrmw, but still inline its body
+    // into the loop rather than leaving an opaque call in it
+    Function *Callee = ModifyOp->getCalledFunction();
+    if (Callee && !Callee->isDeclaration() && !Callee->isInterposable()) {
+      assert(NewVal == ModifyOp);
+      FreezeInst *TrackReturn = Builder.Insert(new FreezeInst(ModifyOp));
+      InlineFunctionInfo IFI;
+      if (InlineFunction(*ModifyOp, IFI).isSuccess())
+        NewVal = TrackReturn->getOperand(0);
+      TrackReturn->eraseFromParent();
+    }
   }
 
   for (auto user : make_early_inc_range(Modify.users())) {

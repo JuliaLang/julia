@@ -140,7 +140,7 @@ top:
 
 define i8 @mod_i8_subx(ptr %a, i8 %b) {
 ; CHECK-LABEL: @mod_i8_subx
-; CHECK: [[newval:%.*]] = call i8 @subx.i8(i8 %loaded, i8 %b)
+; CHECK: [[newval:%.*]] = sub i8 %b, %loaded
 ; CHECK: [[success:%.*]] = cmpxchg ptr %a, i8 %loaded, i8 [[newval]]
 ; CHECK: [[oldval:%.*]] = extractvalue { i8, i1 } [[success:%.*]], 0
 ; CHECK: ret i8 [[oldval]]
@@ -152,7 +152,7 @@ top:
 
 define i8 @mod_i8_subx_new(ptr %a, i8 %b) {
 ; CHECK-LABEL: @mod_i8_subx_new
-; CHECK: [[newval:%.*]] = call i8 @subx.i8(i8 %loaded, i8 %b)
+; CHECK: [[newval:%.*]] = sub i8 %b, %loaded
 ; CHECK: [[oldval:%.*]] = cmpxchg ptr %a, i8 %loaded, i8 [[newval]]
 ; CHECK: ret i8 [[newval]]
 top:

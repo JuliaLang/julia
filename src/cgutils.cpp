@@ -2694,10 +2694,14 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         ai.decorateInst(store);
         instr = store;
     }
-    else if (op == StoreKind::Modify && modifyop && !needlock && Order != AtomicOrdering::NotAtomic && !isboxed && realelty == elty && !intcast && elty->isIntegerTy() && !jl_type_hasptr(jltype)) {
+    else if (op == StoreKind::Modify && modifyop && !needlock && Order != AtomicOrdering::NotAtomic && !isboxed && realelty == elty &&
+             (intcast ? intcast_eltyp->isFloatingPointTy() : elty->isIntegerTy()) && !jl_type_hasptr(jltype)) {
         // emit this only if we have a possibility of optimizing it
         if (Order == AtomicOrdering::Unordered)
             Order = AtomicOrdering::Monotonic;
+        // for FP element types, emit the pseudo-intrinsic on the FP type directly so
+        // that ExpandAtomicModifyPass can match the op to atomicrmw fadd/fsub/...
+        Type *modifyty = intcast ? intcast_eltyp : elty;
         if (jl_is_pointerfree(rhs.typ) && !rhs.isghost && (rhs.constant || rhs.isboxed || rhs.ispointer())) {
             // if this value can be loaded from memory, do that now so that it is sequenced before the atomicmodify
             // and the IR is less dependent on what was emitted before now to create this rhs.
@@ -2705,13 +2709,18 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             rhs = jl_cgval_t(emit_unbox(ctx, julia_type_to_llvm(ctx, rhs.typ), rhs), rhs.typ, NULL);
         }
         bool gcstack_arg = JL_FEAT_TEST(ctx,gcstack_arg);
-        Function *op = emit_modifyhelper(ctx, cmpop, *modifyop, jltype, elty, rhs, fname, gcstack_arg);
-        std::string intr_name = "julia.atomicmodify.i";
-        intr_name += utostr(cast<IntegerType>(elty)->getBitWidth());
+        Function *op = emit_modifyhelper(ctx, cmpop, *modifyop, jltype, modifyty, rhs, fname, gcstack_arg);
+        std::string intr_name = "julia.atomicmodify.";
+        if (modifyty->isBFloatTy())
+            intr_name += "bf16";
+        else if (modifyty->isFloatingPointTy())
+            intr_name += "f" + utostr(modifyty->getPrimitiveSizeInBits().getFixedValue());
+        else
+            intr_name += "i" + utostr(cast<IntegerType>(modifyty)->getBitWidth());
         intr_name += ".p";
         intr_name += utostr(ptr->getType()->getPointerAddressSpace());
         FunctionCallee intr = jl_Module->getOrInsertFunction(intr_name,
-                FunctionType::get(StructType::get(elty, elty), {ptr->getType(), ctx.builder.getPtrTy(), ctx.builder.getInt8Ty(), ctx.builder.getInt8Ty()}, true),
+                FunctionType::get(StructType::get(modifyty, modifyty), {ptr->getType(), ctx.builder.getPtrTy(), ctx.builder.getInt8Ty(), ctx.builder.getInt8Ty()}, true),
                 AttributeList::get(elty->getContext(),
                   Attributes(elty->getContext(), {Attribute::NoMerge}), // prevent llvm from merging calls to different functions
                   AttributeSet(), {}));
