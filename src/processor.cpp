@@ -273,7 +273,7 @@ static bool cpufeatures_debug_enabled() {
 // Called from Julia's loading.jl to display ImageTarget features.
 JL_DLLEXPORT jl_value_t *jl_feature_bits_to_string(const uint8_t *bits, int32_t nwords)
 {
-    FeatureBits fb{};
+    tp::FeatureBits fb{};
     int copy_words = nwords < TARGET_FEATURE_WORDS ? nwords : TARGET_FEATURE_WORDS;
     memcpy(fb.bits, bits, copy_words * sizeof(uint64_t));
     auto str = tp::build_feature_string(fb);
@@ -433,7 +433,7 @@ static uint32_t match_sysimg_target(void *ctx, const void *id, jl_value_t **reje
                 "avx512vp2intersect", "avx512bf16", "avx512fp16", nullptr
             };
             for (const char **f = avx512; *f; f++) {
-                const FeatureEntry *fe = find_feature(*f);
+                const tp::FeatureEntry *fe = tp::find_feature(*f);
                 if (fe) feature_clear(&target.en_features, fe->bit);
             }
         }
@@ -443,12 +443,12 @@ static uint32_t match_sysimg_target(void *ctx, const void *id, jl_value_t **reje
                 "vaes", "vpclmulqdq", nullptr
             };
             for (const char **f = avx; *f; f++) {
-                const FeatureEntry *fe = find_feature(*f);
+                const tp::FeatureEntry *fe = tp::find_feature(*f);
                 if (fe) feature_clear(&target.en_features, fe->bit);
             }
         }
         for (int w = 0; w < TARGET_FEATURE_WORDS; w++)
-            target.dis_features.bits[w] = llvm_feature_mask.bits[w] & ~target.en_features.bits[w];
+            target.dis_features.bits[w] = tp::llvm_feature_mask.bits[w] & ~target.en_features.bits[w];
         target.cpu_features = tp::build_llvm_feature_string(target.en_features, target.dis_features);
     }
 #else
@@ -521,13 +521,13 @@ JL_DLLEXPORT void jl_dump_host_cpu(void)
     jl_safe_printf("Features:");
     auto host_feats = tp::get_host_features();
     bool first = true;
-    for (uint32_t i = 0; i < num_features; i++) {
-        if (feature_test(&host_feats, feature_table[i].bit)) {
+    for (uint32_t i = 0; i < tp::num_features; i++) {
+        if (feature_test(&host_feats, tp::feature_table[i].bit)) {
             if (first) {
-                jl_safe_printf(" %s", feature_table[i].name);
+                jl_safe_printf(" %s", tp::feature_table[i].name);
                 first = false;
             } else {
-                jl_safe_printf(", %s", feature_table[i].name);
+                jl_safe_printf(", %s", tp::feature_table[i].name);
             }
         }
     }
@@ -638,11 +638,11 @@ const std::pair<std::string, std::string> &jl_get_llvm_disasm_target(void)
     // for targets beyond the current JIT target).
     static const auto res = [] {
         std::string features;
-        for (uint32_t i = 0; i < num_features; i++) {
-            if (feature_table[i].is_hw) {
+        for (uint32_t i = 0; i < tp::num_features; i++) {
+            if (tp::feature_table[i].is_hw) {
                 if (!features.empty()) features += ',';
                 features += '+';
-                features += feature_table[i].name;
+                features += tp::feature_table[i].name;
             }
         }
         return std::make_pair(std::string("generic"), std::move(features));
@@ -696,33 +696,33 @@ extern "C" int jl_test_cpu_feature(jl_cpu_feature_t feature)
 
 extern "C" JL_DLLEXPORT size_t jl_cpufeatures_nbytes(void)
 {
-    return sizeof(FeatureBits);
+    return sizeof(tp::FeatureBits);
 }
 
 extern "C" JL_DLLEXPORT int jl_cpufeatures_lookup(const char *cpu_name,
                                                     uint8_t *features_out,
                                                     size_t bufsize)
 {
-    if (bufsize < sizeof(FeatureBits))
+    if (bufsize < sizeof(tp::FeatureBits))
         return -1;
-    const CPUEntry *entry = find_cpu(cpu_name);
+    const tp::CPUEntry *entry = tp::find_cpu(cpu_name);
     if (!entry)
         return -1;
-    FeatureBits hw;
+    tp::FeatureBits hw;
     for (int i = 0; i < TARGET_FEATURE_WORDS; i++)
-        hw.bits[i] = entry->features.bits[i] & llvm_feature_mask.bits[i];
-    memcpy(features_out, &hw, sizeof(FeatureBits));
+        hw.bits[i] = entry->features.bits[i] & tp::llvm_feature_mask.bits[i];
+    memcpy(features_out, &hw, sizeof(tp::FeatureBits));
     return 0;
 }
 
 extern "C" JL_DLLEXPORT void jl_cpufeatures_host(uint8_t *features_out, size_t bufsize)
 {
-    if (bufsize < sizeof(FeatureBits))
+    if (bufsize < sizeof(tp::FeatureBits))
         return;
     auto fb = tp::get_host_features();
     for (int i = 0; i < TARGET_FEATURE_WORDS; i++)
-        fb.bits[i] &= llvm_feature_mask.bits[i];
-    memcpy(features_out, &fb, sizeof(FeatureBits));
+        fb.bits[i] &= tp::llvm_feature_mask.bits[i];
+    memcpy(features_out, &fb, sizeof(tp::FeatureBits));
 }
 
 extern "C" JL_DLLEXPORT size_t jl_cpufeatures_cross_lookup(
