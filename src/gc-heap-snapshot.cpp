@@ -406,6 +406,14 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
     return val.first->second;
 }
 
+int _gc_heap_snapshot_try_claim_image(jl_value_t *a) JL_NOTSAFEPOINT
+{
+    if (g_snapshot->node_ptr_to_index_map.find(a) != g_snapshot->node_ptr_to_index_map.end())
+        return 0;
+    record_node_to_gc_snapshot(a);
+    return 1;
+}
+
 static size_t record_pointer_to_gc_snapshot(void *a, size_t bytes, StringRef name) JL_NOTSAFEPOINT
 {
     auto val = g_snapshot->node_ptr_to_index_map.insert(make_pair(a, g_snapshot->num_nodes));

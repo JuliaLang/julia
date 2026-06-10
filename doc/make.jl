@@ -258,6 +258,7 @@ DevDocs = [
         "devdocs/stdio.md",
         "devdocs/boundscheck.md",
         "devdocs/locks.md",
+        "devdocs/scheduler-wakeup.md",
         "devdocs/offset-arrays.md",
         "devdocs/require.md",
         "devdocs/inference.md",

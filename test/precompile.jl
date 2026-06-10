@@ -1968,7 +1968,7 @@ precompile_test_harness("PkgCacheInspector") do load_path
             cachefile, depmods, #=completeinfo=#true, "PCI")
     end
 
-    modules, init_order, internal_methods, new_method_roots, cache_sizes = sv
+    modules, init_order, internal_methods, extext_methods, new_ext_cis, new_method_roots, cache_sizes = sv
     for m in internal_methods::Vector{Any}
         m isa Core.MethodInstance || continue
         m = m.func::Method

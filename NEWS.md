@@ -30,6 +30,7 @@ Multi-threading changes
 
 * A new `AbstractSpinLock` is defined with `SpinLock <: AbstractSpinLock` ([#55944]).
 * A new `PaddedSpinLock <: AbstractSpinLock` is defined. It has extra padding to avoid false sharing ([#55944]).
+* The task scheduler now avoids O(nthreads) wake overhead on every `@spawn`, significantly reducing threading overhead particularly on highly oversubscribed machines. Benchmarks show up to 1000x reduction in spawn time in such scenarios ([#61826]).
 
 New library functions
 ---------------------

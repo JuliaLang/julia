@@ -31,6 +31,7 @@ struct GC_Num
     total_stack_pool_sweep_time::Int64
     last_full_sweep ::Int64
     last_incremental_sweep ::Int64
+    image_remset_size::Int64
 end
 
 gc_num() = ccall(:jl_gc_num, GC_Num, ())

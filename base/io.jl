@@ -423,7 +423,7 @@ julia> open(io->read(io, String), "myfile.txt")
 julia> rm("myfile.txt")
 ```
 """
-function open(f::Function, args...; kwargs...)
+@inline function open(f::Function, args...; kwargs...)
     io = open(args...; kwargs...)
     try
         f(io)
