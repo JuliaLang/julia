@@ -949,7 +949,7 @@ with keyword arguments processed after the matching method is identified.
     "with keywords"
     ```
 
-    This may be fixed in a future release, so avoid relying on it. To keep a specialized
+    This warning is descriptive, not prescriptive, and code should not rely on this behavior. To keep a specialized
     method applicable to calls with keyword arguments, give it its own keyword interface,
     either by repeating the keyword arguments or by collecting any keyword with `kwargs...`.
 
