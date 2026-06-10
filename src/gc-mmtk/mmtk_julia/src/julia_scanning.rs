@@ -87,6 +87,7 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
     if vtag_usize == ((jl_small_typeof_tags_jl_datatype_tag as usize) << 4)
         || vtag_usize == ((jl_small_typeof_tags_jl_unionall_tag as usize) << 4)
         || vtag_usize == ((jl_small_typeof_tags_jl_uniontype_tag as usize) << 4)
+        || vtag_usize == ((jl_small_typeof_tags_jl_typeeq_tag as usize) << 4)
         || vtag_usize == ((jl_small_typeof_tags_jl_tvar_tag as usize) << 4)
         || vtag_usize == ((jl_small_typeof_tags_jl_vararg_tag as usize) << 4)
         || vtag_usize == ((jl_small_typeof_tags_jl_globalref_tag as usize) << 4)
