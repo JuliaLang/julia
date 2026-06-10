@@ -123,9 +123,7 @@ endif
 else
 # Other targets just use libgcc_s.1
 $(eval $(call copy_csl,$(call versioned_libname,libgcc_s,1)))
-install-csl: $(build_shlibdir)/libgcc_s.$(SHLIB_EXT)
-$(build_shlibdir)/libgcc_s.$(SHLIB_EXT): $(build_shlibdir)/$(call versioned_libname,libgcc_s,1)
-	ln -sf $(call versioned_libname,libgcc_s,1) $@
+$(eval $(call copy_csl,libgcc_s.$(SHLIB_EXT)))
 # These are static gcc runtime libraries / objects for linking pkgimages
 $(eval $(call copy_csl_static,libgcc.a))
 $(eval $(call copy_csl_static,crti.o))
@@ -188,7 +186,6 @@ install-csl:
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/crtn.o $(build_libdir)/
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/crtbeginS.o $(build_libdir)/
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/crtendS.o $(build_libdir)/
-	ln -sf $(call versioned_libname,libgcc_s,1) $(build_shlibdir)/libgcc_s.$(SHLIB_EXT)
 ifeq ($(OS),Linux)
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libc_nonshared.a $(build_libdir)/
 endif

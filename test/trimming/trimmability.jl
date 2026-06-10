@@ -110,6 +110,8 @@ function @main(args::Vector{String})::Cint
     # e = reduce(xor, rand(Int, 10))
 
     println(Core.stdout, _test_cat())
+    println(Core.stdout, "Version: ", v"1.1")
+    println(Core.stdout, "# preferences: ", length(Base.get_preferences()))
 
     for i = 1:10
         # https://github.com/JuliaLang/julia/issues/60846

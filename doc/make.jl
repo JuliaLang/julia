@@ -259,6 +259,7 @@ DevDocs = [
         "devdocs/stdio.md",
         "devdocs/boundscheck.md",
         "devdocs/locks.md",
+        "devdocs/scheduler-wakeup.md",
         "devdocs/offset-arrays.md",
         "devdocs/require.md",
         "devdocs/inference.md",
@@ -301,6 +302,9 @@ DevDocs = [
         "devdocs/contributing/formatting.md",
         "devdocs/contributing/git-workflow.md",
         "devdocs/contributing/aiagents.md"
+    ],
+    "Agentic Devdocs" => [
+        "devdocs/agents/buildkite-logs.md"
     ]
 ]
 

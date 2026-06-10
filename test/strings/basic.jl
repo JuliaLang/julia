@@ -1243,6 +1243,9 @@ end
     let i=49248
         @test String(lazy"PR n°$i") == "PR n°49248"
     end
+
+    @test lazy"$(Float64(pi))"c == "3.14159" # :compact=>true
+    @test lazy"$(collect(1:1000))"c == repr(collect(1:1000), context=:limit=>true) # :limit=>true
 end
 
 @testset "String Effects" begin

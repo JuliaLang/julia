@@ -55,6 +55,9 @@ Multi-threading changes
     (`:static`, `:dynamic`, `:greedy`) are supported. Results preserve element order for `:static`
     and `:dynamic` scheduling; `:greedy` does not guarantee order. Non-indexable iterators are
     also supported. ([#59019])
+  - The task scheduler now avoids O(nthreads) wake overhead on every `@spawn`, significantly reducing
+    threading overhead particularly on highly oversubscribed machines. Benchmarks show up to 1000x
+    reduction in spawn time in such scenarios ([#61826]).
 
 Build system changes
 --------------------
@@ -72,13 +75,15 @@ New library features
 
 * `IOContext` supports a new boolean `hexunsigned` option that allows for
   printing unsigned integers in decimal instead of hexadecimal ([#60267]).
+* `lazy"..."` strings now support a flag `lazy"..."c` that adds `compact` and `limit` flags
+  to the `IOContext` for final output-string generation ([#61887]).
 * The `StringView` type wraps an `AbstractVector{UInt8}` and interprets it as a UTF-8 encoded string,
   superseding the [StringViews.jl](https://github.com/JuliaStrings/StringViews.jl) package ([#60526]).
-
 * Package precompilation now supports running precompilation in
   a background task and has new interactive keyboard controls:
   `c` to cleanly cancel immediately, `d` to detach, `i` for a profile peek,
   `v` to toggle verbose mode showing elapsed time, CPU%, and memory usage, and `?` for help. ([#60943]).
+* Instances of an `Enum` can now be given their own docstrings within the `@enum` definition ([#61955]).
 
 Standard library changes
 ------------------------

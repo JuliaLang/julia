@@ -1234,6 +1234,33 @@ end
     @test check_sync_end_race() === nothing
 end
 
+@testset "no lost wakeups under bursty spawn (#61820, #50425)" begin
+    # A multiqueue insert wakes one thread in the pool; bursts of tasks spawned
+    # across an idle pool must all still run to completion (regression smoke test
+    # that wake-one does not drop wakeups).
+    for pool in (:default, :interactive)
+        nt = Threads.threadpoolsize(pool)
+        n = 50 * nt
+        done = Threads.Atomic{Int}(0)
+        for _ in 1:n
+            Threads.@spawn pool Threads.atomic_add!(done, 1)
+        end
+        @test timedwait(() -> done[] == n, 60.0) === :ok
+    end
+    # nested spawns must also complete
+    let n = 20 * Threads.threadpoolsize(:default)
+        done = Threads.Atomic{Int}(0)
+        for _ in 1:n
+            Threads.@spawn begin
+                a = Threads.@spawn Threads.atomic_add!(done, 1)
+                b = Threads.@spawn Threads.atomic_add!(done, 1)
+                fetch(a); fetch(b)
+            end
+        end
+        @test timedwait(() -> done[] == 2n, 60.0) === :ok
+    end
+end
+
 # issue #41546, thread-safe package loading
 @testset "package loading" begin
     ntasks = max(threadpoolsize(:default), 4)
