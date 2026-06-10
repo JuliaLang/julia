@@ -301,11 +301,13 @@ function enter_scope!(ctx, ex)
         local ex = SyntaxTree(ctx.graph, node_id)
         b = resolve_name(ctx, ex)
         if b === nothing
-            if is_toplevel_thunk && is_base_layer(ctx.scope_layers[vk.layer])
+            sl = ctx.scope_layers[vk.layer]
+            if is_toplevel_thunk && is_base_layer(sl)
+                # top-level assignments in no scope and no expansion
                 push!(ctx.soft_assignable_globals, vk)
                 declare_in_scope!(ctx, top_scope(ctx), ex, :global)
             elseif scope.is_permeable && is_defined_and_owned_global(
-                ctx.scope_layers[vk.layer].mod, Symbol(vk.name), ctx.world)
+                sl.mod, Symbol(vk.name), ctx.world)
                 # special soft scope rules: existing global variables are assigned to
                 if ctx.enable_soft_scopes
                     push!(ctx.soft_assignable_globals, vk)
@@ -545,19 +547,23 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
         end
         resolved
     elseif k == K"constdecl"
-        resolved = mapchildren(e->_resolve_scopes(ctx, e, scope), ctx, ex)
-        @jl_assert kind(resolved[1]) === K"BindingId" resolved[1]
-        if get_binding(ctx, resolved[1].var_id).kind === :local
-            throw(LoweringError(ex, "unsupported `const` declaration on local variable"))
-        elseif !is_top_scope(enclosing_lambda(ctx, scope))
+        if !is_top_scope(enclosing_lambda(ctx, scope))
             throw(LoweringError(ex, "unsupported `const` inside function"))
+        end
+        resolved = mapchildren(e->_resolve_scopes(ctx, e, scope), ctx, ex)
+        if kind(resolved[1]) !== K"Placeholder"
+            @jl_assert kind(resolved[1]) === K"BindingId" resolved
+            if get_binding(ctx, resolved[1].var_id).kind === :local
+                throw(LoweringError(ex, "unsupported `const` declaration on local variable"))
+            end
         end
         resolved
     elseif k == K"assign_or_constdecl_if_global"
-        id = _resolve_scopes(ctx, ex[1], scope)
-        bk = get_binding(ctx, id).kind
         @jl_assert numchildren(ex) === 2 ex
-        assignment_kind = bk == :global ? K"constdecl" : K"="
+        id = _resolve_scopes(ctx, ex[1], scope)
+        assignment_kind =
+            kind(id) === K"Placeholder" ||
+            (get_binding(ctx, id).kind !== :global) ? K"=" : K"constdecl"
         @ast ctx ex _resolve_scopes(ctx, [assignment_kind ex[1] ex[2]], scope)
     else
         mapchildren(e->_resolve_scopes(ctx, e, scope), ctx, ex)
@@ -693,9 +699,12 @@ function analyze_variables!(ctx, ex)
             analyze_variables!(ctx, ex[1])
         end
     elseif k == K"constdecl"
-        b = get_binding(ctx, ex[1])
-        b.is_const = true
-        add_assign!(b)
+        if kind(ex[1]) !== K"Placeholder"
+            b = get_binding(ctx, ex[1])
+            b.is_const = true
+            add_assign!(b)
+        end
+        analyze_variables!(ctx, ex[2])
     elseif k == K"call"
         name = ex[1]
         if kind(name) == K"BindingId"

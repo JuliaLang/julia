@@ -977,8 +977,8 @@ vst1_assign_lhs_nontuple(vcx, st; in_const=false, in_tuple=false) = @stm st begi
     [K"ref" x is...] ->
         in_const ? @fail(st, "cannot declare this form constant") :
         vst1(vcx, x) & all(vst1_splat_or_val, vcx, is)
-    [K"curly" [K"Identifier"] tvs...] ->
-        all(vst1_typevar_decl, vcx, tvs)
+    [K"curly" x tvs...] ->
+        vst1_ident(vcx, x; lhs=true) & all(vst1_typevar_decl, vcx, tvs)
 
     [K"typed_hcat" _...] ->
         @fail(st, "invalid spacing in left side of indexed assignment")
@@ -1233,7 +1233,7 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
     [K"block" xs...] -> all(vst2, vcx, xs)
     [K"scope_block" xs...] -> all(vst2, vcx, xs)
     [K"=" l r] -> vst2_ident_lhs(vcx, l) & vst2(vcx, r)
-    [K"assign_or_constdecl_if_global" l r] -> vst2_ident(vcx, l) & vst2(vcx, r)
+    [K"assign_or_constdecl_if_global" l r] -> vst2_ident_lhs(vcx, l) & vst2(vcx, r)
     [K"constdecl" l] -> vst2_ident_lhs(vcx, l)
     [K"constdecl" l r] -> vst2_ident_lhs(vcx, l) & vst2(vcx, r)
     [K"global" x] -> vst2_ident_lhs(vcx, x)

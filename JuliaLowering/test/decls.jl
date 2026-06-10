@@ -36,26 +36,67 @@ let
 end
 """) === (1, 20)
 
-# Global const mixes
-@test JuliaLowering.include_string(test_mod, "global x_g = 1") === 1
-@test Base.isdefinedglobal(test_mod, :x_g)
-@test !Base.isconst(test_mod, :x_g)
-@test test_mod.x_g === 1
+@testset "Global const mixes" for (mod, run) in [(Module(), fl_eval),
+                                                 (Module(), jl_eval)]
 
-@test JuliaLowering.include_string(test_mod, "const x_c = 1") === 1
-@test Base.isdefinedglobal(test_mod, :x_c)
-@test Base.isconst(test_mod, :x_c)
-@test test_mod.x_c === 1
+    @gensym sym
+    @test run(mod, :(const $sym = 1)) === 1
+    Core.@latestworld
+    @test Base.isdefinedglobal(mod, sym)
+    @test Base.isconst(mod, sym)
+    @test getproperty(mod, sym) === 1
 
-@test JuliaLowering.include_string(test_mod, "global const x_gc = 1") === 1
-@test Base.isdefinedglobal(test_mod, :x_gc)
-@test Base.isconst(test_mod, :x_gc)
-@test test_mod.x_gc === 1
+    @gensym sym
+    @test_broken run(mod, :(const $sym::Int = 1.0)) === 1.0
+    Core.@latestworld
+    @test Base.isdefinedglobal(mod, sym)
+    @test Base.isconst(mod, sym)
+    @test getproperty(mod, sym) === 1
 
-@test JuliaLowering.include_string(test_mod, "const global x_cg = 1") === 1
-@test Base.isdefinedglobal(test_mod, :x_cg)
-@test Base.isconst(test_mod, :x_cg)
-@test test_mod.x_cg === 1
+    @testset for wrap in [identity, x->Expr(:let, Expr(:block), Expr(:block, x))]
+        @gensym sym
+        @test run(mod, wrap(:(global $sym = 1))) === 1
+        Core.@latestworld
+        @test Base.isdefinedglobal(mod, sym)
+        @test !Base.isconst(mod, sym)
+        @test getproperty(mod, sym) === 1
+
+        @gensym sym
+        @test run(mod, wrap(:(global $sym::Int = 1.0))) === 1.0
+        Core.@latestworld
+        @test Base.isdefinedglobal(mod, sym)
+        @test !Base.isconst(mod, sym)
+        @test getproperty(mod, sym) === 1
+
+        @gensym sym
+        @test run(mod, wrap(:(global const $sym = 1))) === 1
+        Core.@latestworld
+        @test Base.isdefinedglobal(mod, sym)
+        @test Base.isconst(mod, sym)
+        @test getproperty(mod, sym) === 1
+
+        @gensym sym
+        @test_broken run(mod, wrap(:(global const $sym::Int = 1.0))) === 1.0
+        Core.@latestworld
+        @test Base.isdefinedglobal(mod, sym)
+        @test Base.isconst(mod, sym)
+        @test getproperty(mod, sym) === 1
+
+        @gensym sym
+        @test run(mod, wrap(:(const global $sym = 1))) === 1
+        Core.@latestworld
+        @test Base.isdefinedglobal(mod, sym)
+        @test Base.isconst(mod, sym)
+        @test getproperty(mod, sym) === 1
+
+        @gensym sym
+        @test_broken run(mod, wrap(:(const global $sym::Int = 1.0))) === 1.0
+        Core.@latestworld
+        @test Base.isdefinedglobal(mod, sym)
+        @test Base.isconst(mod, sym)
+        @test getproperty(mod, sym) === 1
+    end
+end
 
 # lowering is strict about the nesting order where parsing is not
 @test_throws LoweringError jl_eval(test_mod, Expr(:global, Expr(:const, Expr(:(=), :a, 1))))
@@ -146,6 +187,8 @@ end
     @test JuliaLowering.include_string(test_mod, "let; local _::Int = 1; end") === 1
     @test JuliaLowering.include_string(test_mod, "let; local (a0, _, a2) = [1,2,3]; end") == [1,2,3]
     @test JuliaLowering.include_string(test_mod, "let; local (a0, _::Int, a2) = [1,2,3]; end") == [1,2,3]
+    @test JuliaLowering.include_string(test_mod, "_{x} = Vector{x}") == Vector
+    @test !Base.isdefinedglobal(test_mod, :_)
 end
 
 test_mod_2 = Module()
@@ -190,8 +233,9 @@ end
     # const
     @gensym func func2
     @testset let ex = Expr(:const, Expr(:(=), Expr(:call, func, :x), :x))
-        @test_broken jl_eval(test_mod, ex) isa Function
-        @test_broken getproperty(test_mod, func)(1) == 1
+        @test jl_eval(test_mod, ex) isa Function
+        Core.@latestworld
+        @test getproperty(test_mod, func)(1) == 1
     end
 
     # global
@@ -205,7 +249,17 @@ end
         @test getproperty(test_mod, func2)(1) == 2
     end
 
-    # const global
+    # const global 1-arg
+    @gensym func func2
+    @testset let ex = Expr(:const,
+                           Expr(:global,
+                                Expr(:(=), Expr(:call, func, :x), :x)))
+        @test jl_eval(test_mod, ex) isa Function
+        Core.@latestworld
+        @test getproperty(test_mod, func)(1) == 1
+    end
+
+    # const global 2-arg (should probably disallow)
     @gensym func func2
     @testset let ex = Expr(:const,
                            Expr(:global,
@@ -230,7 +284,16 @@ end
         @test getproperty(test_mod, func2)(1) == 2
     end
 
-    # const global in local scope
+    @gensym func func2
+    @testset let ex = Expr(:let, Expr(:block),
+                           Expr(:const,
+                                Expr(:global,
+                                     Expr(:(=), Expr(:call, func, :x), :x))))
+        @test jl_eval(test_mod, ex) isa Function
+        Core.@latestworld
+        @test getproperty(test_mod, func)(1) == 1
+    end
+    # const global in local scope 2-arg (should probably disallow)
     @gensym func func2
     @testset let ex = Expr(:let, Expr(:block),
                            Expr(:const,
@@ -380,6 +443,17 @@ end
     ex = Expr(:const, Expr(:(.+=), :x, 1))
     @test_throws LoweringError jl_lower(test_mod, ex)
 
+    # placeholder
+    @test jl_eval(test_mod, :(const _ = 1)) === 1
+    @test jl_eval(test_mod, :(const _ = _ = __ = ___ = 1)) === 1
+    @test jl_eval(test_mod, :(const _::Int = 1.0)) === 1.0
+    @test jl_eval(test_mod, :(const _{x} = Vector{x})) == Vector
+    @test jl_eval(test_mod, :(const (_, _::Int, _{x}) = 1, 2, Vector)) == (1, 2, Vector)
+    Core.@latestworld
+    @test !Base.isdefinedglobal(Main, :_)
+    @test !Base.isdefinedglobal(Main, :__)
+    @test !Base.isdefinedglobal(Main, :___)
+
     # pre-desugared const
     @gensym sym
     ex = Expr(:const, sym, 1)
@@ -502,6 +576,19 @@ end
         @test getproperty(test_mod, sym1) == 1
         @test getproperty(test_mod, sym2) == (2, 22, 222)
         @test getproperty(test_mod, sym3) == 3
+    end
+
+    # curly
+    @gensym sym1 sym2
+    @testset let ex = Expr(:const,
+                           Expr(:(=), Expr(:curly, sym1, sym2),
+                                Expr(:curly, Vector, sym2)))
+        @test jl_eval(test_mod, ex) == Vector
+        Core.@latestworld
+
+        @test Base.binding_kind(test_mod, sym1) == Base.PARTITION_KIND_CONST
+        @test !Base.isdefinedglobal(test_mod, sym2)
+        @test getproperty(test_mod, sym1){Int} == Vector{Int}
     end
 end
 
