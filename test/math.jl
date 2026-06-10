@@ -829,6 +829,10 @@ end
     c = 3
     @test @evalpoly(c, a0, a1) == 7
     @test @evalpoly(1, 2) == 2
+
+    isdefined(Main, :Furlongs) || @eval Main include("testhelpers/Furlongs.jl")
+    using .Main.Furlongs
+    @test @evalpoly(Furlong(2)) === evalpoly(Furlong(2), ()) === evalpoly(Furlong(2), Int[]) === 0
 end
 
 @testset "evalpoly real" begin
@@ -837,6 +841,13 @@ end
         @test evalpoly(x, (p1, p2, p3)) == evpm
         @test evalpoly(x, [p1, p2, p3]) == evpm
     end
+    @test evalpoly(1.0f0, ()) === 0.0f0 # issue #56699
+    @test @inferred(evalpoly(1.0f0, Int[])) === 0.0f0 # issue #56699
+    @test_throws MethodError evalpoly(1.0f0, [])
+    @test @inferred(evalpoly(1.0f0, [2])) === 2.0f0 # type-stability
+
+    # different @generated branches should return same type:
+    @test evalpoly(3.0, (1,)) === Base.Math._evalpoly(3.0, (1,)) === 1.0
 end
 
 @testset "evalpoly complex" begin
@@ -848,6 +859,14 @@ end
     end
     @test evalpoly(1+im, (2,)) == 2
     @test evalpoly(1+im, [2,]) == 2
+    @test evalpoly(1.0f0+im, ()) === 0.0f0+0im # issue #56699
+    @test @inferred(evalpoly(1.0f0+im, Int[])) === 0.0f0+0im # issue #56699
+    @test_throws MethodError evalpoly(1.0f0, [])
+    @test @inferred(evalpoly(1.0f0+im, [2])) === 2.0f0+0im # type-stability
+
+    # different @generated branches should return same type:
+    @test evalpoly(3.0+0im, (1,)) === Base.Math._evalpoly(3.0+0im, (1,)) === 1.0+0im
+    @test evalpoly(3.0+0im, (1,2)) === Base.Math._evalpoly(3.0+0im, (1,2)) === 7.0+0im
 end
 
 @testset "cis" begin
