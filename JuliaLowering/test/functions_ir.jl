@@ -1220,7 +1220,7 @@ end
 12  (return %₁₁)
 
 ########################################
-# Error: nospecialize should be outermost expr in arg
+# FIXME: Error: nospecialize should be outermost expr in arg
 function f_bad_nospecialize(@nospecialize(x)=1); end
 #---------------------
 LoweringError:
@@ -1236,7 +1236,7 @@ function f_bad_nospecialize(;@nospecialize(x)=1); end
 #                            └──────────────┘ ── expected identifier or `identifier::type`
 
 ########################################
-# Error: nospecialize should be outermost expr in arg
+# FIXME: Error: nospecialize should be outermost expr in arg
 function f_bad_nospecialize(@nospecialize(x)...); end
 #---------------------
 LoweringError:

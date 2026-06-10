@@ -2781,7 +2781,7 @@ function expand_function_arg1(ctx, arg)
         return true, arg[1], x
     end
     aname = @stm arg begin
-        [K"::" n t] -> n
+        [K"::" [K"Identifier"] t] -> arg[1]
         _ -> newsym(ctx, arg, "#self#")
     end
     atype = @stm arg begin

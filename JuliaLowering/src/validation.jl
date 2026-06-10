@@ -695,7 +695,7 @@ vst1_macro_calldecl_name(vcx, st) = @stm st begin
         vst1_ident(vcx, m; lhs=true) | vst1_ident(vcx, m; lhs=false)
 end
 
-vst1_calldecl_name(vcx, st) = @stm st begin
+vst1_calldecl_name(vcx, st) = @stm (st=strip_arg_meta(st)) begin
     [K"Identifier"] -> vst1_ident(vcx, st; lhs=true) &
         (!is_dotted_operator(st.name_val::String) ? pass() :
         @fail(st, "dotted operator is not a valid function name"))
@@ -717,14 +717,12 @@ vst1_calldecl_name(vcx, st) = @stm st begin
     _ -> @fail(st, "invalid function name")
 end
 
-_is_arg_meta(st) = @stm st begin
+strip_arg_meta(st) = @stm st begin
     [K"meta" s arg] -> let meta_s = get(s, :name_val, "")::String
-        kind(arg) === K"meta" ?
-            @fail(st, "invalid nested annotation") :
-        !(meta_s in ("specialize", "nospecialize")) ?
-            @fail(st, "unrecognized meta function arg form") : pass()
+        kind(arg) === K"meta" ? st :
+            !(meta_s in ("specialize", "nospecialize")) ? st : arg
     end
-    _ -> unknown()
+    _ -> st
 end
 
 # Check mandatory and optional positional params:
@@ -733,15 +731,7 @@ end
 function _calldecl_positionals(vcx, params_meta, eq_is_kw)
     isempty(params_meta) && return pass()
     ok = Ref(pass())
-    params = map(params_meta) do meta_p
-        @stm meta_p begin
-            [K"meta" s p] -> begin
-                ok[] &= _is_arg_meta(meta_p)
-                p
-            end
-            p -> p
-        end
-    end
+    params = map(strip_arg_meta, params_meta)
     va_ok = vst1_pparam_va(vcx, params[end]; eq_is_kw)
     if is_known(va_ok)
         params = params[1:end-1]
@@ -775,8 +765,9 @@ vst1_pparam_va(vcx, st; eq_is_kw) = @stm st begin
     _ -> unknown()
 end
 
-# destructuring args: function f(a, (x, y)) ...
-vst1_pparam_typed_tuple(vcx, st) = @stm st begin
+# destructuring args: function f(a, (x, y)) ...  TODO: the strip_arg_meta call
+# here corresponds to no-op nospecialize, and should ideally be removed.
+vst1_pparam_typed_tuple(vcx, st) = @stm (st=strip_arg_meta(st)) begin
     [K"::" [K"tuple" _...] t] ->
         vst1_pparam_simple_tuple(vcx, st[1]) &
         vst1(with(vcx; readable_underscore=true), t)
@@ -829,12 +820,10 @@ vst1_pparam_and_default(vcx, st; eq_is_kw, allow_val_splat) = @stm st begin
 end
 
 vst1_calldecl_kws(vcx, st) = @stm st begin
-    [K"parameters" kws... [K"..." varkw]] ->
-        all(vst1_param_kw, vcx, kws) & vst1_param_varkw(vcx, varkw)
-    [K"parameters" kws... [K"meta" _ [K"..." varkw]]] ->
-        all(vst1_param_kw, vcx, kws) &
-        _is_arg_meta(st[end]) &
-        vst1_param_varkw(vcx, varkw)
+    ([K"parameters" kws... last],
+     when=(varkw = strip_arg_meta(last);
+           kind(varkw) === K"..." && numchildren(varkw) == 1)) ->
+         all(vst1_param_kw, vcx, kws) & vst1_param_varkw(vcx, varkw[1])
     [K"parameters" kws...] -> all(vst1_param_kw, vcx, kws)
     _ -> @fail(st, "malformed keyword parameters")
 end
@@ -846,10 +835,9 @@ vst1_param_varkw(vcx, st) = @stm st begin
     _ -> @fail(st, "expected identifier")
 end
 
-vst1_param_kw(vcx, st) = @stm st begin
+vst1_param_kw(vcx, st) = @stm (st=strip_arg_meta(st)) begin
     [K"kw" id val] ->
         vst1_param(vcx, id) & vst1(vcx, val)
-    [K"meta" s x] -> _is_arg_meta(st) & vst1_param_kw(vcx, x)
     [K"..." _...] ->
         @fail(st, "`...` may only be used for the final keyword parameter")
     _ -> vst1_param(vcx, st) |
