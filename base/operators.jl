@@ -84,7 +84,7 @@ DenseVector (alias for DenseArray{T, 1} where T)
 ```
 """
 supertype(T::DataType) = (@_total_meta; T.super)
-supertype(T::UnionAll) = (@_total_meta; UnionAll(T.var, supertype(T.body)))
+supertype(T::UnionAll) = (@_foldable_meta; UnionAll(T.var, supertype(T.body)))
 
 ## generic comparison ##
 
@@ -318,6 +318,7 @@ false
 ```
 """
 !=(x, y) = !(x == y)
+typeof(!=).name.max_methods = UInt8(1)
 const ≠ = !=
 
 """
@@ -422,6 +423,7 @@ true
 ```
 """
 >(x, y) = y < x
+typeof(>).name.max_methods = UInt8(1)
 
 """
     <=(x, y)
@@ -477,6 +479,7 @@ true
 ```
 """
 >=(x, y) = (y <= x)
+typeof(>=).name.max_methods = UInt8(1)
 const ≥ = >=
 
 # this definition allows Number types to implement < instead of isless,
@@ -980,7 +983,7 @@ julia> [0 1; 2 3] .|> (x -> x^2) |> sum
 |>(x, f) = f(x)
 
 _stable_typeof(x) = typeof(x)
-_stable_typeof(::Type{T}) where {T} = @isdefined(T) ? Type{T} : DataType
+_stable_typeof(::Type{T}) where {T} = @isdefined(T) && !Core.has_free_typevars(T) ? Type{T} : DataType
 
 """
     f = Returns(value)
@@ -1363,6 +1366,27 @@ end
 (s::Splat)(args) = s.f(args...)
 show(io::IO, s::Splat) = (print(io, "splat("); show(io, s.f); print(io, ")"))
 
+"""
+    tap(f)
+
+Create a function that calls `f(x)` and returns `x`.
+
+# Examples
+```jldoctest
+julia> 2 |> sqrt |> tap(println) |> inv
+1.4142135623730951
+0.7071067811865475
+
+julia> "hello" |> uppercase |> tap(Base.Fix1(println, stderr)) |> length
+HELLO
+5
+```
+
+!!! compat "Julia 1.14"
+    `tap` requires at least Julia 1.14.
+"""
+tap(f) = x -> (f(x); x)
+
 ## in and related operators
 
 """
@@ -1441,13 +1465,14 @@ contains `missing` but not `item`, in which case `missing` is returned
 ([three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
 matching the behavior of [`any`](@ref) and [`==`](@ref)).
 Some collections follow a slightly different definition. For example,
-[`Set`](@ref)s check whether the item [`isequal`](@ref) to one of the elements;
-[`Dict`](@ref)s look for `key=>value` pairs, and the `key` is compared using
-[`isequal`](@ref).
+[`Set`](@ref)s check whether the item [`isequal`](@ref) to one of the elements.
+For [`Dict`](@ref), [`ImmutableDict`](@ref), and [`WeakKeyDict`](@ref),
+`key=>value` membership compares keys using [`isequal`](@ref) and values using
+[`==`](@ref); [`IdDict`](@ref) instead compares keys using [`===`](@ref).
 
 To test for the presence of a key in a dictionary, use [`haskey`](@ref)
-or `k in keys(dict)`. For the collections mentioned above,
-the result is always a `Bool`.
+or `k in keys(dict)`. For the dictionaries mentioned above,
+the result of `haskey(dict, k)` or `k in keys(dict)` is always a `Bool`.
 
 When broadcasting with `in.(items, collection)` or `items .∈ collection`, both
 `items` and `collection` are broadcasted over, which is often not what is intended.

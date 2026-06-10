@@ -27,6 +27,12 @@ else ifeq ($(OS),OpenBSD)
 LOADER_LDFLAGS += -Wl,--no-as-needed -lpthread -rdynamic -lc -Wl,--as-needed
 endif
 
+LOADER_EXE_LDFLAGS := $(LOADER_LDFLAGS)
+
+ifeq ($(OS),Darwin)
+LOADER_EXE_LDFLAGS += -Wl,-export_dynamic
+endif
+
 # Build list of dependent libraries that must be opened
 SHIPFLAGS  += -DDEP_LIBS=$(call shell_escape,$(call c_escape,$(LOADER_BUILD_DEP_LIBS)))
 DEBUGFLAGS += -DDEP_LIBS=$(call shell_escape,$(call c_escape,$(LOADER_DEBUG_BUILD_DEP_LIBS)))
@@ -163,10 +169,10 @@ $(build_shlibdir)/libjulia.$(SHLIB_EXT) $(build_shlibdir)/libjulia-debug.$(SHLIB
 endif
 
 $(build_bindir)/julia$(EXE): $(EXE_OBJS) $(build_shlibdir)/libjulia.$(SHLIB_EXT) | $(build_bindir)
-	@$(call PRINT_LINK, $(CC) $(LOADER_CFLAGS) $(SHIPFLAGS) $(EXE_OBJS) -o $@ $(LOADER_LDFLAGS) $(RPATH) -ljulia)
+	@$(call PRINT_LINK, $(CC) $(LOADER_CFLAGS) $(SHIPFLAGS) $(EXE_OBJS) -o $@ $(LOADER_EXE_LDFLAGS) $(RPATH) -ljulia)
 
 $(build_bindir)/julia-debug$(EXE): $(EXE_DOBJS) $(build_shlibdir)/libjulia-debug.$(SHLIB_EXT) | $(build_bindir)
-	@$(call PRINT_LINK, $(CC) $(LOADER_CFLAGS) $(DEBUGFLAGS) $(EXE_DOBJS) -o $@ $(LOADER_LDFLAGS) $(RPATH) -ljulia-debug)
+	@$(call PRINT_LINK, $(CC) $(LOADER_CFLAGS) $(DEBUGFLAGS) $(EXE_DOBJS) -o $@ $(LOADER_EXE_LDFLAGS) $(RPATH) -ljulia-debug)
 
 $(BUILDDIR)/julia.expmap: $(SRCDIR)/julia.expmap.in $(JULIAHOME)/VERSION
 	@TMPFILE=$$(mktemp $(abspath $@.XXXXXX)); \

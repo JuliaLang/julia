@@ -1018,6 +1018,11 @@ end
     for x in (3, 3+13im, 1im), y in (2, 2+7im, 1im), z in (5, 5+11im, 0x01, 0x01 + 0x00*im)
         @test muladd(x,y,z) === x*y + z
     end
+    @test muladd(false, complex(NaN64), 2) == 2
+    @test muladd(complex(NaN64), false, 2) == 2
+    @test muladd(complex(NaN64), false, 2+7im) == 2+7im
+    @test muladd(false, NaN64, 2+7im) == 2+7im
+    @test muladd(NaN64, false, 2+7im) == 2+7im
 end
 
 @testset "issue #11839" begin
@@ -1202,6 +1207,23 @@ end
     # in the hope that someday we can fix these corner cases.  (Python gets them wrong too.)
     @test_broken (Inf + 1im)^3 === (Inf + 1im)^3.0 === (Inf + 1im)^(3+0im) === Inf + Inf*im
     @test_broken (Inf + 1im)^3.1 === (Inf + 1im)^(3.1+0im) === Inf + Inf*im
+
+    # issue #54692: r^pᵣ * exp(-pᵢ*θ) could combine overflow with underflow
+    # and yield NaN where the true magnitude exp(pᵣ*log(r) - pᵢ*θ) is finite.
+    let a = exp(1+im), b = 1e5*(1+im)
+        @test a^b ≈ cis(2e5)
+        @test abs(a^b) ≈ 1
+        @test a^b * a^(-b) ≈ 1
+    end
+    # negative real z, complex p hits the same formula
+    @test isfinite((-2.0+0.0im)^(1e5*(1+im)))
+    @test iszero((-2.0+0.0im)^(1e5*(1+im)))
+    # safe path keeps r^pᵣ's extra precision that exp(pᵣ*log(r)) loses
+    @test abs((2.0+1.0im)^(100.0+0.001im)) ≈ Float64(abs(big(2.0+1.0im)^big(100.0+0.001im))) rtol=40*eps()
+    @test abs((-3.0+0.0im)^(200.0+1e-6im)) ≈ Float64(abs(big(-3.0+0.0im)^big(200.0+1e-6im))) rtol=10*eps()
+    # type-aware threshold: a Float64-sized lim would re-introduce #54692 on Float32
+    @test isfinite(Complex{Float32}(1, 1) ^ Complex{Float32}(300, 300))
+    @test isfinite(Complex{Float32}(-2, 0) ^ Complex{Float32}(130, 40))
 
     # cases where phase angle is non-finite yield NaN + NaN*im:
     @test NaN + NaN*im ≟ Inf ^ (2 + 3im) ≟ (Inf + 1im) ^ (2 + 3im) ≟ (Inf*im) ^ (2 + 3im) ≟

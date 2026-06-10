@@ -127,18 +127,13 @@ else
 
         expected_fns = (:code, :debuginfo, :ssavaluetypes, :ssaflags, :slotnames, :slotflags, :slottypes, :rettype, :parent, :edges, :min_world, :max_world, :method_for_inference_limit_heuristics, :nargs, :propagate_inbounds, :has_fcall, :has_image_globalref, :nospecializeinfer, :isva, :inlining, :constprop, :purity, :inlining_cost)
         expected_fts = (Vector{Any}, Core.DebugInfo, Any, Vector{UInt32}, Vector{Symbol}, Vector{UInt8}, Any, Any, Any, Any, UInt, UInt, Any, UInt, Bool, Bool, Bool, Bool, Bool, UInt8, UInt8, UInt16, UInt16)
-
-        code = if fns != expected_fns
-            unexpected_fns = collect(setdiff(Set(fns), Set(expected_fns)))
-            missing_fns = collect(setdiff(Set(expected_fns), Set(fns)))
+        code = if fns != expected_fns || fts != expected_fts
             :(function _CodeInfo(args...)
-                  error("Unrecognized CodeInfo fields: Maybe version $VERSION is too new for this version of JuliaLowering?"
-                         * isempty(unexpected_fns) ? "" : "\nUnexpected fields found: $($unexpected_fns)"
-                         * isempty(missing_fns)    ? "" : "\nMissing fields:          $($missing_fns)")
-              end)
-        elseif fts != expected_fts
-            :(function _CodeInfo(args...)
-                  error("Unrecognized CodeInfo field types: Maybe version $VERSION is too new for this version of JuliaLowering?")
+                  error(string(
+                      "JuliaLowering didn't recognize Core.CodeInfo's fields; ",
+                      "it may need updating to match Core.CodeInfo.\n",
+                      "expected field names: $($expected_fns)\n",
+                      "expected field types: $($expected_fts)\n"))
               end)
         else
             :(function _CodeInfo($(fns...))
@@ -210,6 +205,61 @@ function finish_ir_debug_info!(current_codelocs_stack)
     _compress_debuginfo(only(current_codelocs_stack))
 end
 
+# flisp: jl_new_code_info_from_ir (method.c)
+function compute_ssaflags(st::SyntaxTree)
+    @jl_assert kind(st) == K"block" st
+    stmts = children(st)
+    out = zeros(UInt32, length(stmts))
+    inline_flags = Vector{Bool}()
+    inbounds_depth = 0
+    purity_flags = Vector{UInt32}()
+
+    # Note this should probably go in validation or be a user-facing
+    # loweringerror, but method.c only checks this in asserts builds, so we may
+    # need to allow these to be unbalanced
+    function checked_pop!(stk)
+        @jl_assert(!isempty(stk), (st, "ssaflags pop without push"))
+        pop!(stk)
+    end
+    for (i, stmt) in enumerate(stmts)
+        is_flag_stmt = true
+        @stm stmt begin
+            [K"inbounds" [K"Value"]] -> stmt[1].value::Bool ?
+                (inbounds_depth += 1) : # push
+                (inbounds_depth = 0)    # clear
+            [K"inbounds_pop"] -> (inbounds_depth = max(0, inbounds_depth-1))
+            [K"boundscheck" _...] -> nothing
+            [K"inline" [K"Value"]] -> stmt[1].value::Bool ?
+                push!(inline_flags, true) : checked_pop!(inline_flags)
+            [K"noinline" [K"Value"]] -> stmt[1].value::Bool ?
+                push!(inline_flags, false) : checked_pop!(inline_flags)
+            [K"purity"] -> checked_pop!(purity_flags)
+            [K"purity" _ _...] -> push!(
+                purity_flags,
+                UInt32(purity_expr_to_flags(stmt)) << Core.Compiler.NUM_IR_FLAGS)
+            _ -> is_flag_stmt = false
+        end
+        flag = UInt32(0)
+        if !isempty(inline_flags)
+            flag |= (inline_flags[end] ?
+                Core.Compiler.IR_FLAG_INLINE : Core.Compiler.IR_FLAG_NOINLINE)
+        end
+        if inbounds_depth != 0
+            flag |= Core.Compiler.IR_FLAG_INBOUNDS
+        end
+        if !isempty(purity_flags)
+            for pf in purity_flags
+                flag |= pf
+            end
+        end
+        out[i] = is_flag_stmt ? UInt32(0) : flag
+    end
+    @jl_assert length(out) == length(stmts) st
+    @jl_assert length(inline_flags) == 0 st
+    @jl_assert length(purity_flags) == 0 st
+    out
+end
+
 # Convert SyntaxTree to the CodeInfo+Expr data structures understood by the
 # Julia runtime
 function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
@@ -221,7 +271,6 @@ function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
     slotnames = Vector{Symbol}(undef, length(slots))
     slot_rename_inds = Dict{String,Int}()
     slotflags = Vector{UInt8}(undef, length(slots))
-    nospecialize_slots = Core.SlotNumber[]
     for (i, slot) in enumerate(slots)
         name = slot.name
         # TODO: Do we actually want unique names here? The C code in
@@ -241,36 +290,16 @@ function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
             slot.is_single_assign << 4 | # SLOT_ASSIGNEDONCE  | -
             slot.is_maybe_undef   << 5 | # SLOT_USEDUNDEF     | jl_vinfo_usedundef
             slot.is_called        << 6   # SLOT_CALLED        | -
-        if slot.is_nospecialize
-            # Ideally this should be a slot flag instead
-            i > nargs && throw(LoweringError(
-                ex, "@nospecialize annotation applied to a non-argument"))
-            push!(nospecialize_slots, Core.SlotNumber(i))
-        end
-    end
-    if !isempty(nospecialize_slots)
-        add_ir_debug_info!(current_codelocs_stack, ex)
-        length(nospecialize_slots) == nargs - 1 ? # all args but self
-            push!(stmts, Expr(:meta, :nospecialize)) :
-            push!(stmts, Expr(:meta, :nospecialize, nospecialize_slots...))
     end
 
-    stmt_offset = length(stmts)
     for stmt in children(ex)
-        push!(stmts, _to_lowered_expr(stmt, stmt_offset))
+        push!(stmts, _to_lowered_expr(stmt))
         add_ir_debug_info!(current_codelocs_stack, stmt)
     end
 
     debuginfo = finish_ir_debug_info!(current_codelocs_stack)
-
     has_image_globalref = any(codeinfo_has_image_globalref, stmts)
-
-    # TODO: Set ssaflags based on call site annotations:
-    # - @inbounds annotations
-    # - call site @inline / @noinline
-    # - call site @assume_effects
-    ssaflags = zeros(UInt32, length(stmts))
-
+    ssaflags = compute_ssaflags(ex)
     propagate_inbounds =
         get(meta, :propagate_inbounds, false)
     # TODO: Set true if there's a foreigncall
@@ -285,7 +314,7 @@ function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
         get(meta, :no_constprop, false) ? 0x02 : 0x00
     purity =
         let eo = get(meta, :purity, nothing)
-            isnothing(eo) ? 0x0000 : Base.encode_effects_override(eo)
+            isnothing(eo) ? 0x0000 : eo::UInt16
         end
 
     # The following CodeInfo fields always get their default values for
@@ -300,6 +329,8 @@ function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
     isva                = false
     inlining_cost       = 0xffff
     rettype             = Any
+
+    @jl_assert(length(stmts) == numchildren(ex), ex)
 
     _CodeInfo(
         stmts,
@@ -329,10 +360,10 @@ function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
 end
 
 @fzone "JL: to_lowered_expr" function to_lowered_expr(ex::SyntaxTree)
-    _to_lowered_expr(ex, 0)
+    _to_lowered_expr(ex)
 end
 
-function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
+function _to_lowered_expr(ex::SyntaxTree)
     k = kind(ex)
     if is_literal(k)
         ex.value
@@ -358,9 +389,9 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
     elseif k == K"static_parameter"
         Expr(:static_parameter, ex.var_id::IdTag)
     elseif k == K"SSAValue"
-        Core.SSAValue(ex.var_id::IdTag + stmt_offset)
+        Core.SSAValue(ex.var_id::IdTag)
     elseif k == K"return"
-        Core.ReturnNode(_to_lowered_expr(ex[1], stmt_offset))
+        Core.ReturnNode(_to_lowered_expr(ex[1]))
     elseif k == K"inert"
         est_to_expr(ex)
     elseif k == K"inert_syntaxtree"
@@ -378,24 +409,24 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
         #     ex, "smuggling AST through Value is asking for trouble; find a SyntaxTree representation")
         ex.value isa LineNumberNode ? QuoteNode(ex.value) : ex.value
     elseif k == K"goto"
-        Core.GotoNode(ex[1].id + stmt_offset)
+        Core.GotoNode(ex[1].id)
     elseif k == K"gotoifnot"
-        Core.GotoIfNot(_to_lowered_expr(ex[1], stmt_offset), ex[2].id + stmt_offset)
+        Core.GotoIfNot(_to_lowered_expr(ex[1]), ex[2].id)
     elseif k == K"enter"
-        catch_idx = ex[1].id + stmt_offset
+        catch_idx = ex[1].id
         numchildren(ex) == 1 ?
             Core.EnterNode(catch_idx) :
-            Core.EnterNode(catch_idx, _to_lowered_expr(ex[2], stmt_offset))
+            Core.EnterNode(catch_idx, _to_lowered_expr(ex[2]))
     elseif k == K"method"
-        cs = map(e->_to_lowered_expr(e, stmt_offset), children(ex))
+        cs = map(_to_lowered_expr, children(ex))
         # Ad-hoc unwrapping to satisfy `Expr(:method)` expectations
         cs1 = cs[1]
         c1 = cs1 isa QuoteNode ? cs1.value : cs1
         Expr(:method, c1, cs[2:end]...)
     elseif k == K"newvar"
-        Core.NewvarNode(_to_lowered_expr(ex[1], stmt_offset))
+        Core.NewvarNode(_to_lowered_expr(ex[1]))
     elseif k == K"opaque_closure_method"
-        args = map(e->_to_lowered_expr(e, stmt_offset), children(ex))
+        args = map(_to_lowered_expr, children(ex))
         # opaque_closure_method has special non-evaluated semantics for the
         # `functionloc` line number node so we need to undo a level of quoting
         arg4 = args[4]
@@ -403,18 +434,34 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
         args[4] = arg4.value
         Expr(:opaque_closure_method, args...)
     elseif k == K"meta"
-        args = Any[_to_lowered_expr(e, stmt_offset) for e in children(ex)]
+        args = Any[_to_lowered_expr(e) for e in children(ex)]
         # Unpack K"Symbol" QuoteNode as `Expr(:meta)` requires an identifier here.
         arg1 = args[1]
-        @jl_assert arg1 isa QuoteNode ex
+        @jl_assert (arg1 isa QuoteNode) ex
         args[1] = arg1.value
         Expr(:meta, args...)
     elseif k == K"foreigncall_arg1"
         @jl_assert kind(ex[1]) == K"tuple" ex
-        _foreigncall_arg1_expr(ex[1], stmt_offset)
+        _foreigncall_arg1_expr(ex[1])
     elseif k == K"static_eval"
         @jl_assert numchildren(ex) == 1 ex
-        _to_lowered_expr(ex[1], stmt_offset)
+        _to_lowered_expr(ex[1])
+    elseif k == K"cfunction"
+        # For a scope-resolved callable (`K"static_eval"`), drop the module tag
+        # and emit a bare Symbol so `method.c` resolves it in the method's
+        # module at eval time, matching Base `@cfunction`'s runtime semantics.
+        ret = Expr(:cfunction)
+        for (i, e) in enumerate(children(ex))
+            if i == 2 && kind(e) == K"static_eval" && kind(e[1]) == K"globalref"
+                push!(ret.args, QuoteNode(Symbol(e[1].name_val::String)))
+            else
+                push!(ret.args, _to_lowered_expr(e))
+            end
+        end
+        return ret
+    elseif k in KSet"inline noinline inbounds inbounds_pop purity"
+        # only used in compute_ssaflags (see method.c)
+        nothing
     else
         # Allowed forms according to https://docs.julialang.org/en/v1/devdocs/ast/
         #
@@ -444,20 +491,20 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
         end
         ret = Expr(head)
         for e in children(ex)
-            push!(ret.args, _to_lowered_expr(e, stmt_offset))
+            push!(ret.args, _to_lowered_expr(e))
         end
         return ret
     end
 end
 
 # ultra-permissive conversion allowing unlowered structure, but lowered leaves
-function _foreigncall_arg1_expr(ex, stmt_offset)
+function _foreigncall_arg1_expr(ex)
     if is_leaf(ex) || kind(ex) == K"inert"
-        _to_lowered_expr(ex, stmt_offset)
+        _to_lowered_expr(ex)
     else
         k = kind(ex)
-        Expr(Symbol((k === K"unknown_head" ? st.name_val : untokenize(k))::String),
-             map(e->_foreigncall_arg1_expr(e, stmt_offset), children(ex))...)
+        Expr(Symbol((k === K"unknown_head" ? ex.name_val : untokenize(k))::String),
+             map(_foreigncall_arg1_expr, children(ex))...)
     end
 end
 

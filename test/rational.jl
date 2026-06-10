@@ -34,7 +34,6 @@ using Base.MathConstants
 
     @test @inferred(rationalize(Int, 3.0, 0.0)) === 3//1
     @test @inferred(rationalize(Int, 3.0, 0)) === 3//1
-    @test @inferred(rationalize(Int, 33//100; tol=0.1)) === 1//3 # because tol
     @test @inferred(rationalize(Int, 3; tol=0.0)) === 3//1
     @test @inferred(rationalize(Int8, 1000//333)) === Rational{Int8}(3//1)
     @test @inferred(rationalize(Int8, 1000//3)) === Rational{Int8}(1//0)
@@ -895,17 +894,34 @@ end
     @test rationalize(Int16, 3e-5) == 1//32767
 end
 
-@testset "rationalize(Rational) (issue #60768)" begin
-    x = float(pi)
-    r = rationalize(x)
-    @test rationalize(Int32, r, tol=0.0) === Rational{Int32}(r) == r
-    @test rationalize(r) === rationalize(r, tol=0) === r
-    @test rationalize(r, tol=eps(float(r))) === r
-    @test rationalize(r, tol=0.1) == 16//5
-    for n=1:10
-        @test rationalize(r, tol=1/10^n) == rationalize(float(r), tol=1/10^n)
+@testset "Irrational vs Rational{BigInt} comparison (#60769)" begin
+    p = precision(BigFloat)
+    for x in (π, ℯ, γ, catalan, φ)
+        r = rationalize(BigInt, x)
+        @test (x < r) == (BigFloat(x; precision=p+32) < BigFloat(r; precision=p+32))
+        @test (x > r) == (BigFloat(x; precision=p+32) > BigFloat(r; precision=p+32))
+        @test cmp(x, r) == -cmp(r, x)
+        @test cmp(x, x) == 0
+        e1 = eps(Float64(x))
+        e2 = eps(BigFloat(x))
+        for tol in (e1 * 2.0.^(-24:8:24)..., e2 * 2.0.^(-64:16:64)...)
+            r = rationalize(BigInt, x; tol)
+            pp = max(p, exponent(x) - exponent(tol) + 32)
+            @test (x < r) == (BigFloat(x; precision=pp) < BigFloat(r; precision=pp))
+        end
     end
+end
+
+@testset "rationalize(Rational) (issue #60768)" begin
+    r = rationalize(Int64, pi)
+    @test rationalize(Int64, r) == r
+    @test rationalize(Int32, r) == rationalize(Int32, float(r))
+    @test rationalize(Int32, r, tol=0.1) == 16//5
+    @test_throws InexactError rationalize(Int32, r, tol=0)
+    @test_throws InexactError rationalize(Int16, r, tol=0)
     @test_throws OverflowError rationalize(UInt, -r)
+    @test rationalize(BigInt, r) == Rational{BigInt}(r) == r
+    @test rationalize(Int64, big(r)) == r
 end
 
 @testset "rationalize(x; tol) accuracy (issue #61138)" begin

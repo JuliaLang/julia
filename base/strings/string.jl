@@ -241,6 +241,10 @@ typemin(::String) = typemin(String)
 
 @propagate_inbounds thisind(s::String, i::Int) = _thisind_str(s, i)
 
+# nothrow: i == ncodeunits(s) always satisfies the bounds check inside _thisind_str
+# (it short-circuits when i == 0, otherwise 1 ≤ i ≤ n).
+@assume_effects :nothrow lastindex(s::String) = thisind(s, ncodeunits(s)::Int)
+
 # s should be String, StringView, or SubString{String}
 @inline function _thisind_str(s, i::Int)
     i == 0 && return 0
@@ -579,8 +583,10 @@ end
         @inbounds isvalid(s, i) || string_index_err(s, i)
         @inbounds isvalid(s, j) || string_index_err(s, j)
     end
-    j = nextind(s, j) - 1
-    n = j - i + 1
+    # Safety: The boundscheck checked r is inbounds in s,
+    # and since we also checked r is not empty, j must be inbounds in s
+    j = @inbounds nextind(s, j) - 1
+    n = (j - i + 1) % UInt
     ss = _string_n(n)
     GC.@preserve s ss unsafe_copyto!(pointer(ss), pointer(s, i), n)
     return ss
@@ -653,7 +659,8 @@ end
 
 isvalid(s::String, i::Int) = checkbounds(Bool, s, i) && thisind(s, i) == i
 
-isascii(s::String) = isascii(codeunits(s))
+# `isascii(::AbstractVector)` reduces to `@inbounds codeunit(::String, ::Int)`, total.
+isascii(s::String) = @assume_effects :nothrow :foldable isascii(codeunits(s))
 
 # don't assume effects for general integers since we cannot know their implementation
 @assume_effects :foldable repeat(c::Char, r::BitInteger) = @invoke repeat(c::Char, r::Integer)

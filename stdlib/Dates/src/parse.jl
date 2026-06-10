@@ -42,7 +42,7 @@ If successful, return a 3-element tuple `(values, pos, num_parsed)`:
 
     tokens = Type[CONVERSION_SPECIFIERS[letter] for letter in letters]
     value_names = Symbol[genvar(t) for t in tokens]
-    value_defaults = Tuple(CONVERSION_DEFAULTS[t] for t in tokens)
+    value_defaults = Any[CONVERSION_DEFAULTS[t] for t in tokens]
 
     # Pre-assign variables to defaults. Allows us to use `@goto done` without worrying about
     # unassigned variables.
@@ -131,7 +131,7 @@ If successful, returns a 2-element tuple `(values, pos)`:
 
     output_tokens = CONVERSION_TRANSLATIONS[T]
     output_names = Symbol[genvar(t) for t in output_tokens]
-    output_defaults = Tuple(CONVERSION_DEFAULTS[t] for t in output_tokens)
+    output_defaults = Any[CONVERSION_DEFAULTS[t] for t in output_tokens]
 
     # Pre-assign output variables to defaults. Ensures that all output variables are
     # assigned as the value tuple returned from `tryparsenext_core` may not include all

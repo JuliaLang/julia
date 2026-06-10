@@ -185,7 +185,7 @@ LoweringError:
 #---------------------
 LoweringError:
 (; a=1, f())
-#       └─┘ ── expected identifier, `=`, or, `...` after semicolon
+#       └─┘ ── expected identifier, `=`, or `...` after semicolon
 
 ########################################
 # Error: Modules not allowed inside blocks
@@ -367,7 +367,7 @@ JuxtuposeTest.@emit_juxtupose
 # @cfunction expansion with global generic function as function argument
 @cfunction(callable, Int, (Int, Float64))
 #---------------------
-1   (cfunction Ptr{Nothing} :callable (static_eval TestMod.Int) (static_eval (call core.svec TestMod.Int TestMod.Float64)) :ccall)
+1   (cfunction Ptr{Nothing} (static_eval TestMod.callable) (static_eval TestMod.Int) (static_eval (call core.svec TestMod.Int TestMod.Float64)) :ccall)
 2   (return %₁)
 
 ########################################
@@ -486,6 +486,14 @@ MacroExpansionError while expanding @ccall in module Main.TestMod:
 MacroExpansionError while expanding @ccall in module Main.TestMod:
 @ccall foo(; x::Int; y::Float64)::Int
 #          └──────┘ ── C ABI prohibits varargs without one required argument
+
+########################################
+# Error: Bad @ccall first arg
+@ccall $(:(foo))(1::Cint)::Cint
+#---------------------
+MacroExpansionError while expanding @ccall in module Main.TestMod:
+@ccall $(:(foo))(1::Cint)::Cint
+#      └───────┘ ── interpolated value should be a variable or expression, not a literal name or tuple
 
 ########################################
 # Error: Bad @ccall option

@@ -40,6 +40,8 @@ Compiler/Runtime improvements
 Command-line option changes
 ---------------------------
 
+  - `-P <project>` is now a shorthand for `--project <project>` ([#59867]).
+
 Multi-threading changes
 -----------------------
 
@@ -53,6 +55,9 @@ Multi-threading changes
     (`:static`, `:dynamic`, `:greedy`) are supported. Results preserve element order for `:static`
     and `:dynamic` scheduling; `:greedy` does not guarantee order. Non-indexable iterators are
     also supported. ([#59019])
+  - The task scheduler now avoids O(nthreads) wake overhead on every `@spawn`, significantly reducing
+    threading overhead particularly on highly oversubscribed machines. Benchmarks show up to 1000x
+    reduction in spawn time in such scenarios ([#61826]).
 
 Build system changes
 --------------------
@@ -60,7 +65,8 @@ Build system changes
 New library functions
 ---------------------
 
-- `Base.generating_output()` has been made `public` (but not exported) to allow
+* `tap(f)` creates a function that calls `f(x)` for side effects and returns `x`. ([#61340]).
+* `Base.generating_output()` has been made `public` (but not exported) to allow
   checking whether the current process is performing compilation for a
   pkgimage/sysimage ([#61224]).
 
@@ -69,13 +75,15 @@ New library features
 
 * `IOContext` supports a new boolean `hexunsigned` option that allows for
   printing unsigned integers in decimal instead of hexadecimal ([#60267]).
+* `lazy"..."` strings now support a flag `lazy"..."c` that adds `compact` and `limit` flags
+  to the `IOContext` for final output-string generation ([#61887]).
 * The `StringView` type wraps an `AbstractVector{UInt8}` and interprets it as a UTF-8 encoded string,
   superseding the [StringViews.jl](https://github.com/JuliaStrings/StringViews.jl) package ([#60526]).
-
 * Package precompilation now supports running precompilation in
   a background task and has new interactive keyboard controls:
   `c` to cleanly cancel immediately, `d` to detach, `i` for a profile peek,
   `v` to toggle verbose mode showing elapsed time, CPU%, and memory usage, and `?` for help. ([#60943]).
+* Instances of an `Enum` can now be given their own docstrings within the `@enum` definition ([#61955]).
 
 Standard library changes
 ------------------------
@@ -119,6 +127,8 @@ Standard library changes
 * `unix2datetime` now accepts a keyword argument `localtime=true` to use the host system's local time zone instead of UTC ([#50296]).
 
 #### InteractiveUtils
+
+* `less`/`@less` and `edit`/`@edit` are now supported for documented variables ([#53539]).
 
 #### Dates
 

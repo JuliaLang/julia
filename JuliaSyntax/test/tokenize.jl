@@ -129,11 +129,11 @@ end # testset
 
             K"NewlineWs",K"Comment",
 
-            K"NewlineWs",K"Integer",K"%",K"Integer",
+            K"NewlineWs",K"Integer",K"Operator",K"Integer",
 
-            K"NewlineWs",K"Identifier",K"'",K"/",K"Identifier",K"'",
+            K"NewlineWs",K"Identifier",K"'",K"Operator",K"Identifier",K"'",
 
-            K"NewlineWs",K"Identifier",K".",K"'",K"\\",K"Identifier",K".",K"'",
+            K"NewlineWs",K"Identifier",K".",K"'",K"Operator",K"Identifier",K".",K"'",
 
             K"NewlineWs",K"`",K"CmdString",K"`",
 
@@ -155,7 +155,7 @@ end # testset
 end # testset
 
 @testset "issue 5, '..'" begin
-    @test kind.(collect(tokenize("1.23..3.21"))) == [K"Float",K"..",K"Float",K"EndMarker"]
+    @test kind.(collect(tokenize("1.23..3.21"))) == [K"Float",K".",K".",K"Float",K"EndMarker"]
 end
 
 @testset "issue 17, >>" begin
@@ -175,19 +175,33 @@ end
 end
 
 @testset "test added operators" begin
-    @test tok("1+=2",  2).kind == K"op="
-    @test tok("1-=2",  2).kind == K"op="
-    @test tok("1*=2",  2).kind == K"op="
-    @test tok("1^=2",  2).kind == K"op="
-    @test tok("1÷=2",  2).kind == K"op="
-    @test tok("1\\=2", 2).kind == K"op="
-    @test tok("1\$=2", 2).kind == K"op="
-    @test tok("1⊻=2",  2).kind == K"op="
-    @test tok("1:=2",  2).kind == K":="
-    @test tok("1-->2", 2).kind == K"-->"
-    @test tok("1<--2", 2).kind == K"<--"
-    @test tok("1<-->2", 2).kind == K"<-->"
-    @test tok("1>:2",  2).kind == K">:"
+    # Compound assignments now emit separate operator and = tokens. The operator
+    # itself is emitted as K"Operator" when immediately followed by `=`.
+    @test toks("1+=2")[2:3]  == ["+"=>K"Operator", "="=>K"="]
+    @test toks("1-=2")[2:3]  == ["-"=>K"Operator", "="=>K"="]
+    @test toks("1*=2")[2:3]  == ["*"=>K"Operator", "="=>K"="]
+    @test toks("1^=2")[2:3]  == ["^"=>K"Operator", "="=>K"="]
+    @test toks("1÷=2")[2:3]  == ["÷"=>K"Operator", "="=>K"="]
+    @test toks("1\\=2")[2:3] == ["\\"=>K"Operator", "="=>K"="]
+    @test toks("1\$=2")[2:3] == ["\$"=>K"Operator", "="=>K"="]
+    @test toks("1⊻=2")[2:3]  == ["⊻"=>K"Operator", "="=>K"="]
+    @test toks("1:=2")[2]    == (":="=>K":=")
+    @test toks("1-->2")[2]   == ("-->"=>K"-->")
+    @test toks("1<--2")[2]   == ("<--"=>K"Operator")
+    @test toks("1<-->2")[2]  == ("<-->"=>K"Operator")
+    @test toks("1>:2")[2]    == (">:"=>K">:")
+
+    # Operators followed by `==`, `===` or `=>` (rather than the single token
+    # `=`) do not form compound assignments
+    @test toks("1+==2")[2:3]   == ["+"=>K"+", "=="=>K"Operator"]
+    @test toks("1-=>2")[2:3]   == ["-"=>K"-", "=>"=>K"Operator"]
+    @test toks("1*===2")[2:3]  == ["*"=>K"*", "==="=>K"Operator"]
+    @test toks("1&==2")[2:3]   == ["&"=>K"&", "=="=>K"Operator"]
+    @test toks("1−==2")[2:3]   == ["−"=>K"-", "=="=>K"Operator"]
+    @test toks("1^==2")[2:3]   == ["^"=>K"Operator", "=="=>K"Operator"]
+    @test toks("1<<==2")[2:3]  == ["<<"=>K"Operator", "=="=>K"Operator"]
+    @test toks("1>>=>2")[2:3]  == [">>"=>K"Operator", "=>"=>K"Operator"]
+    @test toks("1>>>==2")[2:3] == [">>>"=>K"Operator", "=="=>K"Operator"]
 end
 
 @testset "infix" begin
@@ -567,6 +581,22 @@ end
             "⫪"=>K"String"
             "\""=>K"\""
         ]
+        # Operators which have their own kind rather than being in the
+        # generic operator table are also allowed
+        @test toks("\"\$x∈y\"") == [
+            "\""=>K"\""
+            "\$"=>K"$"
+            "x"=>K"Identifier"
+            "∈y"=>K"String"
+            "\""=>K"\""
+        ]
+        @test toks("\"\$x√y\"") == [
+            "\""=>K"\""
+            "\$"=>K"$"
+            "x"=>K"Identifier"
+            "√y"=>K"String"
+            "\""=>K"\""
+        ]
         # Some chars disallowed (eg, U+0DF4)
         @test toks("\"\$x෴\"") == [
             "\""=>K"\""
@@ -584,9 +614,9 @@ end
 end
 
 @testset "modifying function names (!) followed by operator" begin
-    @test toks("a!=b") == ["a"=>K"Identifier", "!="=>K"!=", "b"=>K"Identifier"]
-    @test toks("a!!=b") == ["a!"=>K"Identifier", "!="=>K"!=", "b"=>K"Identifier"]
-    @test toks("!=b") == ["!="=>K"!=", "b"=>K"Identifier"]
+    @test toks("a!=b") == ["a"=>K"Identifier", "!="=>K"Operator", "b"=>K"Identifier"]
+    @test toks("a!!=b") == ["a!"=>K"Identifier", "!="=>K"Operator", "b"=>K"Identifier"]
+    @test toks("!=b") == ["!="=>K"Operator", "b"=>K"Identifier"]
 end
 
 @testset "integer literals" begin
@@ -716,10 +746,10 @@ end
     @test toks("1.#") == ["1."=>K"Float", "#"=>K"Comment"]
 
     # ellipses
-    @test toks("1..")    == ["1"=>K"Integer",   ".."=>K".."]
-    @test toks("1...")   == ["1"=>K"Integer",  "..."=>K"..."]
-    @test toks(".1..")   == [".1"=>K"Float",    ".."=>K".."]
-    @test toks("0x01..") == ["0x01"=>K"HexInt", ".."=>K".."]
+    @test toks("1..")    == ["1"=>K"Integer",   "."=>K".", "."=>K"."]
+    @test toks("1...")   == ["1"=>K"Integer",  "."=>K".", "."=>K".", "."=>K"."]
+    @test toks(".1..")   == [".1"=>K"Float",    "."=>K".", "."=>K"."]
+    @test toks("0x01..") == ["0x01"=>K"HexInt", "."=>K".", "."=>K"."]
 
     # Dotted operators and other dotted suffixes
     @test toks("1234 .+1") == ["1234"=>K"Integer", " "=>K"Whitespace", "."=>K".", "+"=>K"+", "1"=>K"Integer"]
@@ -729,13 +759,18 @@ end
                                  "f"=>K"Identifier", "("=>K"(", "a"=>K"Identifier", ")"=>K")"]
     @test toks("1234.0 .f(a)") == ["1234.0"=>K"Float", " "=>K"Whitespace", "."=>K".",
                                    "f"=>K"Identifier", "("=>K"(", "a"=>K"Identifier", ")"=>K")"]
-    @test toks("1f0./1") == ["1f0"=>K"Float32", "."=>K".", "/"=>K"/", "1"=>K"Integer"]
+    @test toks("1f0./1") == ["1f0"=>K"Float32", "."=>K".", "/"=>K"Operator", "1"=>K"Integer"]
 
     # Dotted operators after numeric constants are ok
-    @test toks("1e1.⫪")  == ["1e1"=>K"Float", "."=>K".", "⫪"=>K"⫪"]
-    @test toks("1.1.⫪")  == ["1.1"=>K"Float", "."=>K".", "⫪"=>K"⫪"]
+    @test toks("1e1.⫪")  == ["1e1"=>K"Float", "."=>K".", "⫪"=>K"Operator"]
+    @test toks("1.1.⫪")  == ["1.1"=>K"Float", "."=>K".", "⫪"=>K"Operator"]
     @test toks("1e1.−")  == ["1e1"=>K"Float", "."=>K".", "−"=>K"-"]
     @test toks("1.1.−")  == ["1.1"=>K"Float", "."=>K".", "−"=>K"-"]
+    # ... including operators which have their own kind rather than being in
+    # the generic operator table
+    @test toks("1e1.∈")  == ["1e1"=>K"Float", "."=>K".", "∈"=>K"∈"]
+    @test toks("1.1.∈")  == ["1.1"=>K"Float", "."=>K".", "∈"=>K"∈"]
+    @test toks("1.1.√")  == ["1.1"=>K"Float", "."=>K".", "√"=>K"√"]
     # Non-dottable operators are not ok
     @test toks("1e1.\$")  == ["1e1."=>K"ErrorInvalidNumericConstant", "\$"=>K"$"]
     @test toks("1.1.\$")  == ["1.1."=>K"ErrorInvalidNumericConstant", "\$"=>K"$"]
@@ -743,8 +778,11 @@ end
     # Ambiguous dotted operators
     @test toks("1.+") == ["1."=>K"ErrorAmbiguousNumericConstant", "+"=>K"+"]
     @test toks("1.+ ") == ["1."=>K"ErrorAmbiguousNumericConstant", "+"=>K"+", " "=>K"Whitespace"]
-    @test toks("1.⤋")  == ["1."=>K"ErrorAmbiguousNumericConstant", "⤋"=>K"⤋"]
-    @test toks("1.⫪")  == ["1."=>K"ErrorAmbiguousNumericConstant", "⫪"=>K"⫪"]
+    @test toks("1.⤋")  == ["1."=>K"ErrorAmbiguousNumericConstant", "⤋"=>K"Operator"]
+    @test toks("1.⫪")  == ["1."=>K"ErrorAmbiguousNumericConstant", "⫪"=>K"Operator"]
+    @test toks("1.∈")  == ["1."=>K"ErrorAmbiguousNumericConstant", "∈"=>K"∈"]
+    @test toks("1.√")  == ["1."=>K"ErrorAmbiguousNumericConstant", "√"=>K"√"]
+    @test toks("1.≔")  == ["1."=>K"ErrorAmbiguousNumericConstant", "≔"=>K"≔"]
     # non-dottable ops are the exception
     @test toks("1.:")  == ["1."=>K"Float", ":"=>K":"]
     @test toks("1.\$") == ["1."=>K"Float", "\$"=>K"$"]
@@ -797,10 +835,45 @@ end
     @test length(collect(tokenize(io))) == 4
 end
 
+# Multi-character operators which share `K"Operator"` rather than having their
+# own kind. Their precedence is assigned directly in the `lex_*` functions
+# rather than via `generic_operators_by_level`, so they're listed here.
+const _LEXER_MULTICHAR_OPERATORS = [
+    "==", "===", "!=", "!==", "<=", ">=",
+    "<<", ">>", ">>>", "//", "|>", "<|", "=>", "<--", "<-->",
+]
+
+# Operators which aren't symbolic infix/prefix operators (or aren't operators at
+# all) and so can't be exercised by the dotted/suffixed forms below.
+const _NON_SYMBOLIC_OPERATORS = Set([
+    "ErrorInvalidOperator", "Error**", "Operator",
+    ".", "..", "where", "isa", "in", ".'", "op=",
+])
+
+# The non-dotted symbolic operators in the language. Most operators no longer
+# have their own `Kind` (they share `K"Operator"`, distinguished by precedence
+# flags), so rather than hard-coding the full list we derive it: single-character
+# operators come from the precedence table `generic_operators_by_level`, the
+# operators which still have a dedicated kind from the `BEGIN_OPS:END_OPS` range,
+# and the multi-character `K"Operator"`s from `_LEXER_MULTICHAR_OPERATORS`.
+function _all_symbolic_operators()
+    ops = String[]
+    # Normalize the chars from the precedence table the same way the lexer does,
+    # so eg the `·` variants collapse to `⋅` (matching how they're tokenized).
+    for chars in values(JuliaSyntax.generic_operators_by_level), c in chars
+        push!(ops, JuliaSyntax.normalize_identifier(string(c)))
+    end
+    op_range = reinterpret(UInt16, K"BEGIN_OPS"):reinterpret(UInt16, K"END_OPS")
+    for k in reinterpret.(Kind, op_range)
+        push!(ops, string(k))
+    end
+    append!(ops, _LEXER_MULTICHAR_OPERATORS)
+    return unique!(filter(s -> !(s in _NON_SYMBOLIC_OPERATORS), ops))
+end
+
 @testset "dotted and suffixed operators" begin
 
-for opkind in Tokenize._nondot_symbolic_operator_kinds()
-    op = string(opkind)
+for op in _all_symbolic_operators()
     strs = [
         1 => [ # unary
             "$(op)b",
@@ -857,19 +930,21 @@ end
 
 @testset "Normalization of Unicode symbols" begin
     # https://github.com/JuliaLang/julia/pull/25157
-    @test tok("\u00b7").kind == K"⋅"
-    @test tok("\u0387").kind == K"⋅"
-    @test toks(".\u00b7") == ["."=>K".", "\u00b7"=>K"⋅"]
-    @test toks(".\u0387") == ["."=>K".", "\u0387"=>K"⋅"]
+    @test tok("\u00b7").kind == K"Operator"
+    @test tok("\u0387").kind == K"Operator"
+    @test toks(".\u00b7") == ["."=>K".", "\u00b7"=>K"Operator"]
+    @test toks(".\u0387") == ["."=>K".", "\u0387"=>K"Operator"]
 
     # https://github.com/JuliaLang/julia/pull/40948
     @test tok("−").kind == K"-"
-    @test tok("−=").kind == K"op="
+    # −= now emits separate tokens
+    @test tok("−=").kind == K"Operator" # − before =
+    @test tok("−=", 2).kind == K"="
     @test toks(".−") == ["."=>K".", "−"=>K"-"]
 end
 
 @testset "perp" begin
-    @test tok("1 ⟂ 2", 3).kind==K"⟂"
+    @test tok("1 ⟂ 2", 3).kind==K"Operator"
 end
 
 @testset "outer" begin
@@ -880,8 +955,9 @@ end
     @test toks("--")      == ["--"=>K"ErrorInvalidOperator"]
     @test toks("1**2") == ["1"=>K"Integer", "**"=>K"Error**", "2"=>K"Integer"]
     @test toks("a<---b") == ["a"=>K"Identifier", "<---"=>K"ErrorInvalidOperator", "b"=>K"Identifier"]
-    @test toks("a..+b") == ["a"=>K"Identifier", "..+"=>K"ErrorInvalidOperator", "b"=>K"Identifier"]
-    @test toks("a..−b") == ["a"=>K"Identifier", "..−"=>K"ErrorInvalidOperator", "b"=>K"Identifier"]
+    # These used to test for invalid operators ..+ and ..−, but now .. is tokenized as two dots
+    @test toks("a..+b") == ["a"=>K"Identifier", "."=>K".", "."=>K".", "+"=>K"+", "b"=>K"Identifier"]
+    @test toks("a..−b") == ["a"=>K"Identifier", "."=>K".", "."=>K".", "−"=>K"-", "b"=>K"Identifier"]
 end
 
 @testset "hat suffix" begin
@@ -897,7 +973,7 @@ end
 
 @testset "circ arrow right op" begin
     s = "↻"
-    @test collect(tokenize(s))[1].kind == K"↻"
+    @test collect(tokenize(s))[1].kind == K"Operator"
 end
 
 @testset "invalid float" begin
@@ -921,8 +997,8 @@ end
         raw"<|"
         raw"|>"
         raw": .. … ⁝ ⋮ ⋱ ⋰ ⋯"
-        raw"$ + - ¦ | ⊕ ⊖ ⊞ ⊟ ++ ∪ ∨ ⊔ ± ∓ ∔ ∸ ≏ ⊎ ⊻ ⊽ ⋎ ⋓ ⧺ ⧻ ⨈ ⨢ ⨣ ⨤ ⨥ ⨦ ⨧ ⨨ ⨩ ⨪ ⨫ ⨬ ⨭ ⨮ ⨹ ⨺ ⩁ ⩂ ⩅ ⩊ ⩌ ⩏ ⩐ ⩒ ⩔ ⩖ ⩗ ⩛ ⩝ ⩡ ⩢ ⩣"
-        raw"* / ⌿ ÷ % & ⋅ ∘ × \ ∩ ∧ ⊗ ⊘ ⊙ ⊚ ⊛ ⊠ ⊡ ⊓ ∗ ∙ ∤ ⅋ ≀ ⊼ ⋄ ⋆ ⋇ ⋉ ⋊ ⋋ ⋌ ⋏ ⋒ ⟑ ⦸ ⦼ ⦾ ⦿ ⧶ ⧷ ⨇ ⨰ ⨱ ⨲ ⨳ ⨴ ⨵ ⨶ ⨷ ⨸ ⨻ ⨼ ⨽ ⩀ ⩃ ⩄ ⩋ ⩍ ⩎ ⩑ ⩓ ⩕ ⩘ ⩚ ⩜ ⩞ ⩟ ⩠ ⫛ ⊍ ▷ ⨝ ⟕ ⟖ ⟗"
+        raw"$ + - | ⊕ ⊖ ⊞ ⊟ ++ ∪ ∨ ⊔ ± ∓ ∔ ∸ ≏ ⊎ ⊻ ⊽ ⋎ ⋓ ⧺ ⧻ ⨈ ⨢ ⨣ ⨤ ⨥ ⨦ ⨧ ⨨ ⨩ ⨪ ⨫ ⨬ ⨭ ⨮ ⨹ ⨺ ⩁ ⩂ ⩅ ⩊ ⩌ ⩏ ⩐ ⩒ ⩔ ⩖ ⩗ ⩛ ⩝ ⩡ ⩢ ⩣"
+        raw"* / ÷ % & ⋅ ∘ × \ ∩ ∧ ⊗ ⊘ ⊙ ⊚ ⊛ ⊠ ⊡ ⊓ ∗ ∙ ∤ ⅋ ≀ ⊼ ⋄ ⋆ ⋇ ⋉ ⋊ ⋋ ⋌ ⋏ ⋒ ⟑ ⦸ ⦼ ⦾ ⦿ ⧶ ⧷ ⨇ ⨰ ⨱ ⨲ ⨳ ⨴ ⨵ ⨶ ⨷ ⨸ ⨻ ⨼ ⨽ ⩀ ⩃ ⩄ ⩋ ⩍ ⩎ ⩑ ⩓ ⩕ ⩘ ⩚ ⩜ ⩞ ⩟ ⩠ ⫛ ⊍ ▷ ⨝ ⟕ ⟖ ⟗"
         raw"//"
         raw"<< >> >>>"
         raw"^ ↑ ↓ ⇵ ⟰ ⟱ ⤈ ⤉ ⤊ ⤋ ⤒ ⤓ ⥉ ⥌ ⥍ ⥏ ⥑ ⥔ ⥕ ⥘ ⥙ ⥜ ⥝ ⥠ ⥡ ⥣ ⥥ ⥮ ⥯ ￪ ￬"
@@ -930,7 +1006,7 @@ end
         raw"."
     ]
     if VERSION >= v"1.6.0"
-        push!(ops, raw"<-- <-->")
+        push!(ops, raw"<-- <--> ¦ ⌿")
     end
     if VERSION >= v"1.7.0"
         append!(ops, [

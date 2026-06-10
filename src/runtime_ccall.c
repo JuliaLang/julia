@@ -363,13 +363,21 @@ static inline const char *name_from_method_instance(jl_method_instance_t *mi) JL
 }
 
 static jl_mutex_t cfun_lock;
+
+// (get_abi_converter / method table mutating thread)
 // release jl_world_counter
-// store theFptr
+// release theFptr
 // release last_world_v
 //
+// (dispatch site)
 // acquire last_world_v
-// read theFptr
-// acquire jl_world_counter
+// acquire theFptr
+// read jl_world_counter
+//
+// The above ordering requirements are intended to guarantee that if the
+// dispatch site observes last_world == jl_world_counter then the loaded
+// fptr is consistent with both of them, meaning it was published for
+// exactly that world.
 JL_DLLEXPORT
 void *jl_get_abi_converter(jl_task_t *ct, void *data)
 {
@@ -389,6 +397,7 @@ void *jl_get_abi_converter(jl_task_t *ct, void *data)
         size_t last_world_v = jl_atomic_load_relaxed(&cfuncdata->last_world);
         void *f = jl_atomic_load_relaxed(&cfuncdata->fptr);
         jl_code_instance_t *last_ci = cfuncdata->plast_codeinst ? *cfuncdata->plast_codeinst : NULL;
+        JL_GC_PROMISE_ROOTED(last_ci); // cached CI is retained by the MI cache or by an image literal root slot
         world = jl_atomic_load_acquire(&jl_world_counter);
         ct->world_age = world;
         if (world == last_world_v) {
@@ -447,7 +456,7 @@ void *jl_get_abi_converter(jl_task_t *ct, void *data)
 
     cfuncdata->plast_codeinst = &cfuncdata->last_codeinst;
     cfuncdata->last_codeinst = codeinst;
-    jl_atomic_store_relaxed(&cfuncdata->fptr, f);
+    jl_atomic_store_release(&cfuncdata->fptr, f);
     jl_atomic_store_release(&cfuncdata->last_world, world);
     JL_UNLOCK(&cfun_lock);
     return f;

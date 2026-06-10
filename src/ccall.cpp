@@ -813,13 +813,14 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
     }
     else {
         // Fall back to runtime intrinsic
-        JL_GC_POP();
         jl_cgval_t argv[2];
         argv[0] = emit_expr(ctx, args[1]);
         if (nargs == 2)
             argv[1] = emit_expr(ctx, args[2]);
-        if (!jl_is_cpointer_type(argv[0].typ))
+        if (!jl_is_cpointer_type(argv[0].typ)) {
+            JL_GC_POP();
             return emit_runtime_call(ctx, nargs == 1 ? JL_I::cglobal_auto : JL_I::cglobal, argv, nargs);
+        }
         sym.jl_ptr = emit_unbox(ctx, ctx.types().T_ptr, voidpointer_update(ctx, argv[0]));
         res = sym.jl_ptr;
     }
@@ -855,8 +856,8 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     }
     if (jl_is_ssavalue(args[2]) && !jl_is_long(ctx.source->ssavaluetypes)) {
         jl_value_t *rtt = jl_array_ptr_ref((jl_array_t*)ctx.source->ssavaluetypes, ((jl_ssavalue_t*)args[2])->id - 1);
-        if (jl_is_type_type(rtt))
-            rt = jl_tparam0(rtt);
+        if (jl_is_typeeq(rtt))
+            rt = jl_typeeq_T(rtt);
     }
     if (!rt) {
         rt = static_eval(ctx, args[2]);
@@ -868,8 +869,8 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     }
     if (jl_is_ssavalue(args[3]) && !jl_is_long(ctx.source->ssavaluetypes)) {
         jl_value_t *att = jl_array_ptr_ref((jl_array_t*)ctx.source->ssavaluetypes, ((jl_ssavalue_t*)args[3])->id - 1);
-        if (jl_is_type_type(att))
-            at = jl_tparam0(att);
+        if (jl_is_typeeq(att))
+            at = jl_typeeq_T(att);
     }
     if (!at) {
         at = static_eval(ctx, args[3]);

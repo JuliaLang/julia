@@ -724,3 +724,143 @@ gr_mod = Module()
                        GlobalRef(gr_mod, sym),
                        Expr(:block, GlobalRef(gr_mod, sym))))
 end
+
+@testset "All possible `let` forms" for run in [fl_eval, jl_eval],
+    maybe_int in [identity, x->Expr(:(::), x, :Int)]
+    # no-assignment forms
+    @test run(test_mod,
+              Expr(:let, maybe_int(:a),
+                   Expr(:tuple,
+                        Expr(:islocal, :a),
+                        Expr(:isdefined, :a)))) == (true, false)
+    @test run(test_mod,
+              Expr(:let, Expr(:block, maybe_int(:a)),
+                   Expr(:tuple,
+                        Expr(:islocal, :a),
+                        Expr(:isdefined, :a)))) == (true, false)
+    @test run(test_mod,
+              Expr(:let, Expr(:block, maybe_int(:a), maybe_int(:b), maybe_int(:c)),
+                   Expr(:tuple,
+                        Expr(:islocal, :a),
+                        Expr(:isdefined, :a),
+                        Expr(:islocal, :b),
+                        Expr(:isdefined, :b),
+                        Expr(:islocal, :c),
+                        Expr(:isdefined, :c)))) ==
+                            (true, false, true, false, true, false)
+
+    # placeholder should at least pass lowering
+    # flisp bug: isdefined throws because `_` is assumed global
+    @testset "placeholder" for p_inner in [maybe_int(:_), Expr(:(=), maybe_int(:_), 1)],
+        p_block in [p_inner, Expr(:block, p_inner)]
+        @test run(test_mod, Expr(:let, p_block,
+                                 Expr(:block, Expr(:islocal, :_)))) == false
+    end
+
+    # assignment forms
+    @test run(test_mod,
+              Expr(:let,
+                   Expr(:(=), maybe_int(:a), 1),
+                   Expr(:tuple, Expr(:islocal, :a), :a))) == (true, 1)
+    @test run(test_mod,
+              Expr(:let,
+                   Expr(:block, Expr(:(=), maybe_int(:a), 1)),
+                   Expr(:tuple, Expr(:islocal, :a), :a))) == (true, 1)
+    @test run(test_mod,
+              Expr(:let,
+                   Expr(:block,
+                        Expr(:(=), maybe_int(:a), 10),
+                        Expr(:(=), maybe_int(:b), 20),
+                        Expr(:(=), maybe_int(:c), 30)),
+                   Expr(:tuple,
+                        Expr(:islocal, :a), :a,
+                        Expr(:islocal, :b), :b,
+                        Expr(:islocal, :c), :c))) == (true, 10, true, 20, true, 30)
+
+    @test run(test_mod,
+              Expr(:let,
+                   Expr(:block,
+                        Expr(:(=),
+                             Expr(:tuple, :a1, maybe_int(:a2), :a3),
+                             Expr(:tuple, 11, 12, 13)),
+                        Expr(:(=),
+                             Expr(:tuple, :b1, :b2, :b3, :_),
+                             Expr(:tuple, 21, 22, 23, 0)),
+                        Expr(:(=),
+                             Expr(:tuple, Expr(:parameters, :c1, maybe_int(:c2), :c3)),
+                             :((;c1=31, c2=32, c3=33)))),
+                   Expr(:tuple,
+                        Expr(:islocal, :a1), :a1,
+                        Expr(:islocal, :a2), :a2,
+                        Expr(:islocal, :a3), :a3,
+                        Expr(:islocal, :b1), :b1,
+                        Expr(:islocal, :b2), :b2,
+                        Expr(:islocal, :b3), :b3,
+                        Expr(:islocal, :c1), :c1,
+                        Expr(:islocal, :c2), :c2,
+                        Expr(:islocal, :c3), :c3,
+                        ))) ==
+                            (true, 11, true, 12, true, 13,
+                             true, 21, true, 22, true, 23,
+                             true, 31, true, 32, true, 33)
+
+    @test run(test_mod,
+              Expr(:let,
+                   Expr(:block,
+                        Expr(:(=),
+                             Expr(:tuple, :a1, maybe_int(:a2), Expr(:..., :a3)),
+                             Expr(:tuple, 11, 12, 13, 14, 15)),
+                        Expr(:(=),
+                             Expr(:tuple, :b1, :b2, :b3, Expr(:..., :_)),
+                             Expr(:tuple, 21, 22, 23, 0, 0, 0))),
+                   Expr(:tuple,
+                        Expr(:islocal, :a1), :a1,
+                        Expr(:islocal, :a2), :a2,
+                        Expr(:islocal, :a3), :a3,
+                        Expr(:islocal, :b1), :b1,
+                        Expr(:islocal, :b2), :b2,
+                        Expr(:islocal, :b3), :b3,
+                        ))) ==
+                            (true, 11, true, 12, true, (13, 14, 15),
+                             true, 21, true, 22, true, 23)
+
+    # functions
+    @test run(test_mod,
+              Expr(:let,
+                   Expr(:(=), maybe_int(Expr(:call, :f)), 1),
+                   Expr(:tuple,
+                        Expr(:call, :f),
+                        Expr(:islocal, :f)))) == (1, true)
+
+    @test run(test_mod,
+              Expr(:let,
+                   Expr(:block,
+                        Expr(:(=), maybe_int(Expr(:call, :f)), 1),
+                        Expr(:(=), maybe_int(Expr(:call, :g)), 2)),
+                   Expr(:tuple,
+                        Expr(:call, :f),
+                        Expr(:islocal, :f),
+                        Expr(:call, :g),
+                        Expr(:islocal, :g)))) == (1, true, 2, true)
+
+    @test run(test_mod,
+              Expr(:let,
+                   Expr(:(=),
+                        Expr(:where, maybe_int(Expr(:call, :f, :(x::Int))), :Int),
+                        :x),
+                   Expr(:tuple,
+                        Expr(:call, :f, "foo"),
+                        Expr(:islocal, :f)))) == ("foo", true)
+
+    @test run(test_mod,
+              Expr(:let,
+                   Expr(:(=), Expr(:where,
+                                   Expr(:where,
+                                        maybe_int(Expr(:call, :f, :(x::Int), :(y::T))),
+                                        :T),
+                                   :Int), :(x*y)),
+                   Expr(:tuple,
+                        Expr(:call, :f, "x", "y"),
+                        Expr(:islocal, :f)))) == ("xy", true)
+
+end

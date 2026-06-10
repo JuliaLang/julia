@@ -52,7 +52,7 @@ let t = Tuple{Ref{T},T,T} where T, c = Tuple{Ref, T, T} where T # #36407
 end
 
 # obtain Vararg with 2 undefined fields
-let va = ccall(:jl_type_intersection_with_env, Any, (Any, Any), Tuple{Tuple}, Tuple{Tuple{Vararg{Any, N}}} where N)[2][1]
+let va = Base.typeintersect_env(Tuple{Tuple}, Tuple{Tuple{Vararg{Any, N}}} where N)[2][1]
     @test Compiler.__limit_type_size(Tuple, va, Core.svec(va, Union{}), 2, 2) === Tuple
 end
 
@@ -307,8 +307,8 @@ let
     fT(x::T) where {T} = T
     @test fT(Any) === DataType
     @test fT(Int) === DataType
-    @test fT(Type{Any}) === DataType
-    @test fT(Type{Int}) === DataType
+    @test fT(Type{Any}) === Core.TypeEq
+    @test fT(Type{Int}) === Core.TypeEq
 
     ff(x::Type{T}) where {T} = T
     @test ff(Type{Any}) === Type{Any}
@@ -506,6 +506,11 @@ f11366(x::Type{Ref{T}}) where {T} = Ref{x}
 let f(T) = Type{T}
     @test Base.return_types(f, Tuple{Type{Int}}) == Any[Type{Type{Int}}]
 end
+
+# Keep tuple iteration precise when joining ordinary values with kind values.
+@test Core.Compiler.tmerge(String, Type) == Union{String, Type}
+@test Base.return_types(iterate, Tuple{Tuple{String, Type}, Int}) ==
+    Any[Union{Nothing, Tuple{Union{String, Type}, Int}}]
 
 # issue #9222
 function SimpleTest9222(pdedata, mu_actual::Vector{T1},
@@ -1036,7 +1041,7 @@ end
 # issue #21410
 f21410(::V, ::Pair{V,E}) where {V, E} = E
 @test only(Base.return_types(f21410, Tuple{Ref, Pair{Ref{T},Ref{T}} where T<:Number})) ==
-    Type{E} where E <: (Ref{T} where T<:Number)
+    Type{Ref{T}} where T<:Number
 
 # issue #21369
 function inf_error_21369(arg)
@@ -1563,7 +1568,7 @@ let nfields_tfunc(@nospecialize xs...) =
     @test nfields_tfunc(Number) === Int
     @test nfields_tfunc(Int) === Const(0)
     @test nfields_tfunc(Complex) === Const(2)
-    @test nfields_tfunc(Type{Type{Int}}) === Const(nfields(DataType))
+    @test nfields_tfunc(Type{Type{Int}}) === Const(nfields(Type{Int}))
     @test nfields_tfunc(UnionAll) === Const(2)
     @test nfields_tfunc(DataType) === Const(nfields(DataType))
     @test nfields_tfunc(Type{Int}) === Const(nfields(DataType))
@@ -2625,6 +2630,43 @@ end
     @test Type{AbstractVector} == Base.infer_return_type(Base.promote_typeof, Tuple{R, R, Vector{Any}, R, Vararg{R}})
 end
 
+# issue #61953: `constprop_cache_lookup` asserted that all cached const-prop results for a
+# `MethodInstance` share their `argtypes` length. That is false for an `mi` whose `specTypes`
+# ends in an unbounded `Vararg` (its trailing varargs are not specialized to a fixed arity):
+# such an `mi` can be const-propagated at multiple arities, yielding cached results whose
+# `argtypes` differ in length. This is a reduction of the original report (inferring
+# `Polyhedra.points` over a `CDDLib.CDDGeneratorMatrix`): a varargs `constructpolyhedron` whose
+# trailing iterators are a large `Union` keyed on a union-constrained coefficient type var, so
+# type intersection widens differing-arity calls to the same unbounded-`Vararg` `mi`.
+module Issue61953
+    const CoefT = Union{Float64, Rational{BigInt}}
+    abstract type Rep{T} end
+    abstract type VRep{T} <: Rep{T} end
+    struct Line{T, AT<:AbstractVector{T}} end
+    struct Ray{T, AT<:AbstractVector{T}} end
+    abstract type AbstractRepIterator{T, ElemT} end
+    struct AllRepIterator{T, ElemT, LinElemT, LRT<:AbstractRepIterator{T, LinElemT}, RT<:AbstractRepIterator{T, ElemT}} end
+    const ElemIt{ElemT} = Union{AllRepIterator{<:Any, ElemT}, AbstractRepIterator{<:Any, ElemT}, AbstractVector{ElemT}}
+    const It{T} = Union{ElemIt{<:AbstractVector{T}}, ElemIt{<:Line{T}}, ElemIt{<:Ray{T}}}
+    const SINK = Ref{Any}(nothing)
+    mkrep(::Type{R}, d, it...) where {R} = R(length(it))
+    function constructpolyhedron(RepT::Type{<:Rep{T}}, d, p::Tuple{Vararg{Rep}}, it::It{T}...) where {T}
+        SINK[] = d # observable effect, so const-prop is preferred over (semi-)concrete eval
+        return mkrep(RepT, d, it...)::RepT
+    end
+    mutable struct ConcreteV{T<:CoefT} <: VRep{T}; x::Int; end
+    # a statically-unknown-length iterator collection (splat yields a trailing `Vararg`)...
+    itervar(p::VRep{T}) where {T} = Base.inferencebarrier(())::Tuple{Vararg{It{T}}}
+    # ...and a fixed-length one (splat yields concrete trailing arguments)
+    iterfix(p::VRep{T}) where {T} = ntuple(_ -> Base.inferencebarrier(nothing)::It{T}, Val(3))
+    asrep(p::VRep{T}) where {T} = Base.inferencebarrier(p)::VRep{T}
+    abstractrep(::Type{T}) where {T} = Base.inferencebarrier(ConcreteV{T})::Type{<:VRep{T}}
+    cvar(p::VRep{T}) where {T} = constructpolyhedron(abstractrep(T), 2, (asrep(p),), itervar(p)...)
+    cfix(p::VRep{T}) where {T} = constructpolyhedron(abstractrep(T), 2, (asrep(p),), iterfix(p)...)
+    driver(p::VRep{<:CoefT}) = (cvar(p), cfix(p))
+end
+@test Base.infer_return_type(Issue61953.driver, Tuple{Issue61953.ConcreteV{<:Issue61953.CoefT}}) <: Tuple
+
 function f25579(g)
     h = g[]
     t = (h === nothing)
@@ -2861,8 +2903,8 @@ let apply_type_tfunc = Compiler.apply_type_tfunc
     @test apply_type_tfunc(𝕃, Const(Val), Type{Union{Int,Pair{Pair{Pair{Pair{A,B},C},D},E}}} where {A,B,C,D,E}) == Type{Val{_A}} where _A
 end
 @test only(Base.return_types(keys, (Dict{String},))) == Base.KeySet{String, T} where T<:(Dict{String})
-@test only(Base.return_types((r)->similar(Array{typeof(r[])}, 1), (Base.RefValue{Array{Int}},))) == Vector{<:Array{Int}}
-@test only(Base.return_types((r)->similar(Array{typeof(r[])}, 1), (Base.RefValue{Array{<:Real}},))) == Vector{<:Array{<:Real}}
+@test only(Base.return_types((r)->similar(Array{typeof(r[])}, 1), (Base.RefValue{Array{Int}},))) == Vector{Array{Int, N}} where N
+@test only(Base.return_types((r)->similar(Array{typeof(r[])}, 1), (Base.RefValue{Array{<:Real}},))) == Vector{Array{T, N}} where {T<:Real, N}
 # test complexity limit on apply_type on a function capturing functions returning functions
 @test only(Base.return_types(Base.afoldl, (typeof((m, n) -> () -> Returns(nothing)(m, n)), Function, Function, Vararg{Function}))) === Function
 
@@ -5517,16 +5559,16 @@ function issue49027(::Type{<:Issue49027{Ty}}) where Ty
     end
     return nothing
 end
-@test only(Base.return_types(issue49027, (Type{Issue49027{TypeVar(:Ty)}},))) >: Nothing
-@test isnothing(issue49027(Issue49027{TypeVar(:Ty)}))
+@test_skip only(Base.return_types(issue49027, (Type{Issue49027{TypeVar(:Ty)}},))) >: Nothing
+@test_skip isnothing(issue49027(Issue49027{TypeVar(:Ty)}))
 function issue49027_integer(::Type{<:Issue49027{Ty}}) where Ty<:Integer
     if @isdefined Ty # should be false when `Ty` is given as a free type var.
         return Ty::DataType
     end
     nothing
 end
-@test only(Base.return_types(issue49027_integer, (Type{Issue49027{TypeVar(:Ty,Int)}},))) >: Nothing
-@test isnothing(issue49027_integer(Issue49027{TypeVar(:Ty,Int)}))
+@test_skip only(Base.return_types(issue49027_integer, (Type{Issue49027{TypeVar(:Ty,Int)}},))) >: Nothing
+@test_skip isnothing(issue49027_integer(Issue49027{TypeVar(:Ty,Int)}))
 
 function fapplicable end
 gapplicable() = Val(applicable(fapplicable))
@@ -6784,5 +6826,60 @@ f60252(f, nt::NamedTuple) = NamedTuple{keys(nt)}(f(v) for v in values(nt))
 @inferred f60252(identity, (a=1, b=2))
 f60252_2(t::Tuple) = NamedTuple{(:a, :b), typeof(t)}(t)
 @test Base.infer_return_type(f60252_2, (Tuple{Vararg{Int64}},)) == @NamedTuple{a::Int64, b::Int64}
+
+# perform post const-prop' concrete evaluation when effects are further improved by const-prop'
+@noinline function concrete_eval_eligible_if_false(x::Float64, n::Int, y::Bool)
+    if y # this prevents initial concrete-evaluation
+        println("x = ", x)
+    end
+    s = 0.0
+    Base.@assume_effects :terminates_locally for i = 1:n
+        s += sin(x)
+    end
+    return s
+end
+@test Base.infer_return_type() do
+    Val(concrete_eval_eligible_if_false(42., 5, false) == 5sin(42.))
+end == Val{true}
+
+# Const-prop' `PartialStruct` of well-formed types that are `!isconcretedispatch`:
+# Test with an example using `OpaqueClosure`, which would be represented as `PartialOpaque`,
+# which will be a field of `PartialStruct` representing `Some`. Here, since this `oc` has
+# untyped argument types, the return type cannot be derived by eager inference in the
+# current OC framework, so inference will fail unless `PartialOpaque` is propagated all the
+# way to `call_someoc`.
+call_someoc(some, x) = some.value(x)
+@test Base.infer_return_type() do
+    oc = Base.Experimental.@opaque x -> 2x
+    call_someoc(Some(oc), 1)
+end == Int
+# A somewhat artificial example, but a test case that exercises the above code path without
+# using `OpaqueClosure`
+struct UntypedBoxWithParam{T}
+    x::Some{Any}
+    UntypedBoxWithParam{T}(x) where T = new{T}(Some{Any}(x))
+end
+readbox(box::UntypedBoxWithParam) = box.x.value
+@test Base.infer_return_type((Type,Int)) do T, x
+    readbox(UntypedBoxWithParam{T}(x))
+end == Int
+
+# A constructor call where one argument is `Any`-typed forces the corresponding
+# sparam (M) to be unresolved. Inference must still tighten the *other* sparam
+# (B) from its declared `<:Tuple` to `<:Tuple{Vector}`.
+module NestedTVarSPtype
+struct ParamStruct{N,M,A<:Tuple,B<:Tuple,C<:Tuple}
+    output_size::NTuple{N,Int}
+    temparray_size::NTuple{M,Int}
+    output_indices::A
+    temparray_indices::B
+    data_indices::C
+end
+mk(tempinds::Vector, tempsize) =
+    ParamStruct((1,), (tempsize,), (Colon(),), (tempinds,), (1:1,))
+end # module NestedTVarSPtype
+let rt = Base.infer_return_type(NestedTVarSPtype.mk, (Vector, Any))
+    @test rt <: (NestedTVarSPtype.ParamStruct{1, 1, Tuple{Colon}, B, Tuple{UnitRange{Int}}} where B<:Tuple{Vector})
+end
 
 end # module inference

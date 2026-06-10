@@ -333,17 +333,14 @@ rationalize(::Type{T}, x::AbstractFloat; tol::Real = eps(x)) where {T<:Integer} 
 rationalize(x::Real; kvs...) = rationalize(Int, x; kvs...)
 rationalize(::Type{T}, x::Complex; kvs...) where {T<:Integer} = Complex(rationalize(T, x.re; kvs...), rationalize(T, x.im; kvs...))
 rationalize(x::Complex; kvs...) = Complex(rationalize(Int, x.re; kvs...), rationalize(Int, x.im; kvs...))
-rationalize(::Type{T}, x::Rational; tol::Real = 0) where {T<:Integer} = rationalize(T, x, tol)
+rationalize(::Type{T}, x::Rational; tol::Real = eps(float(x))) where {T<:Integer} = rationalize(T, x, tol)
 rationalize(x::Rational{T}; kvs...) where {T<:Integer} = rationalize(T, x; kvs...)
 function rationalize(::Type{T}, x::Rational, tol::Real) where {T<:Integer}
     T<:Unsigned && x < 0 && __throw_negate_unsigned()
-    if 0 ≤ tol ≤ eps(float(x))
-        try
-            return Rational{T}(x)
-        catch e
-            isa(e,InexactError) || rethrow()
-        end
+    if !hastypemax(T) || (typemin(T) ≤ x.num ≤ typemax(T) && x.den ≤ typemax(T))
+        return Rational{T}(x)
     end
+    isfinite(float(x)) && tol ≥ eps(float(x))/2 || throw(InexactError(:rationalize, Rational{T}, x))
     return rationalize(T, float(x), tol)
 end
 rationalize(x::Integer; kvs...) = Rational(x)

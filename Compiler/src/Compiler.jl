@@ -37,10 +37,11 @@ else
 
 using Core.Intrinsics, Core.IR
 
-using Core: ABIOverride, Builtin, CodeInstance, IntrinsicFunction, MethodInstance, MethodMatch,
+using Core: ABIOverride, Builtin, CodeInstance, IntrinsicFunction, AnyType, MethodInstance, MethodMatch,
     MethodTable, MethodCache, PartialOpaque, SimpleVector, TypeofVararg,
+    TypeEq,
     _apply_iterate, apply_type, compilerbarrier, donotdelete, memoryref_isassigned,
-    memoryrefget, memoryrefnew, memoryrefoffset, memoryrefset!, print, println, show, svec,
+    memoryrefget, memoryrefnew, memoryrefoffset, memoryrefset!, memoryrefunset!, print, println, show, svec,
     typename, unsafe_write, write, stdout, stderr
 
 using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospecializeinfer,
@@ -61,11 +62,12 @@ using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospeciali
     iskindtype, ismutabletypename, ismutationfree, issingletontype, isvarargtype, isvatuple,
     kwerr, lookup_binding_partition, may_invoke_generator, methods, midpoint, moduleroot,
     partition_restriction, quoted, rename_unionall, rewrap_unionall, specialize_method,
-    structdiff, tls_world_age, unconstrain_vararg_length, unionlen, uniontype_layout,
+    structdiff, tls_world_age, type_parameter, unconstrain_vararg_length, unionlen, uniontype_layout,
     uniontypes, unsafe_convert, unwrap_unionall, unwrapva, vect, widen_diagonal,
     _uncompressed_ir, datatype_min_ninitialized,
     partialstruct_init_undefs, fieldcount_noerror, _eval_import, _eval_using,
     get_ci_mi, get_methodtable, morespecific, specializations, has_image_globalref,
+    rewrap_free_typevars, find_free_typevars, typeintersect_env,
     PARTITION_MASK_KIND, PARTITION_KIND_GUARD, PARTITION_FLAG_EXPORTED, PARTITION_FLAG_DEPRECATED,
     BINDING_FLAG_ANY_IMPLICIT_EDGES, is_some_implicit, IteratorSize, SizeUnknown, get_require_world, JLOptions,
     devnull, devnull as stdin
@@ -159,6 +161,12 @@ if !isdefined(Base, :end_base_include)
     end
 else
     using Base: @show
+end
+
+# JuliaSyntax doesn't support syntax evolution in bare modules via Project.toml
+# This surfaces only when Compiler.jl is loaded as a standalone package.
+if isdefined(Base, :end_base_include) && isdefined(Base, :set_syntax_version)
+    Base.set_syntax_version(Compiler, Base.VersionNumber(1, 14))
 end
 
 include("cicache.jl")
