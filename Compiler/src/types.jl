@@ -495,6 +495,8 @@ function add_remark! end
 may_optimize(::AbstractInterpreter) = true
 may_compress(::AbstractInterpreter) = true
 may_discard_trees(::AbstractInterpreter) = true
+may_discard_trees(::NativeInterpreter) =
+    ccall(:jl_get_type_infer_preserve_ir, Int8, ()) == 0
 
 """
     method_table(interp::AbstractInterpreter)::MethodTableView

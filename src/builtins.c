@@ -210,6 +210,8 @@ static int egal_types(const jl_value_t *a, const jl_value_t *b, jl_typeenv_t *en
         return egal_types(((jl_uniontype_t*)a)->a, ((jl_uniontype_t*)b)->a, env, tvar_names) &&
             egal_types(((jl_uniontype_t*)a)->b, ((jl_uniontype_t*)b)->b, env, tvar_names);
     }
+    if (dtag == jl_typeeq_tag << 4)
+        return egal_types(((jl_typeeq_t*)a)->T, ((jl_typeeq_t*)b)->T, env, tvar_names);
     if (dtag == jl_vararg_tag << 4) {
         jl_vararg_t *vma = (jl_vararg_t*)a;
         jl_vararg_t *vmb = (jl_vararg_t*)b;
@@ -289,6 +291,8 @@ JL_DLLEXPORT int jl_egal__bitstag(const jl_value_t *a JL_MAYBE_UNROOTED, const j
             return egal_types(a, b, NULL, 1);
         case jl_uniontype_tag:
             return compare_fields(a, b, jl_uniontype_type);
+        case jl_typeeq_tag:
+            return egal_types(a, b, NULL, 1);
         case jl_vararg_tag:
             return compare_fields(a, b, jl_vararg_type);
         case jl_task_tag:
@@ -403,6 +407,10 @@ static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOIN
         return bitmix(bitmix(jl_object_id((jl_value_t*)tv),
                              type_object_id_(((jl_uniontype_t*)v)->a, env)),
                       type_object_id_(((jl_uniontype_t*)v)->b, env));
+    }
+    if (tv == jl_typeeq_type) {
+        return bitmix(jl_object_id((jl_value_t*)tv),
+                      type_object_id_(((jl_typeeq_t*)v)->T, env));
     }
     if (tv == jl_unionall_type) {
         jl_unionall_t *u = (jl_unionall_t*)v;
@@ -1218,20 +1226,23 @@ static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f, int dothrow)
     if (jl_is_uniontype(t)) {
         jl_value_t **u;
         jl_value_t *r;
+        jl_value_t *a = ((jl_uniontype_t*)t)->a;
+        jl_value_t *b = ((jl_uniontype_t*)t)->b;
         JL_GC_PUSHARGS(u, 2);
-        u[0] = get_fieldtype(((jl_uniontype_t*)t)->a, f, 0);
-        u[1] = get_fieldtype(((jl_uniontype_t*)t)->b, f, 0);
+        u[0] = jl_is_typeeq(a) ? jl_bottom_type : get_fieldtype(a, f, 0);
+        u[1] = jl_is_typeeq(b) ? jl_bottom_type : get_fieldtype(b, f, 0);
         if (u[0] == jl_bottom_type && u[1] == jl_bottom_type && dothrow) {
             // error if all types in the union might have
-            get_fieldtype(((jl_uniontype_t*)t)->a, f, 1);
-            get_fieldtype(((jl_uniontype_t*)t)->b, f, 1);
+            get_fieldtype(a, f, 1);
+            get_fieldtype(b, f, 1);
         }
         r = jl_type_union(u, 2);
         JL_GC_POP();
         return r;
     }
-    if (!jl_is_datatype(t))
+    if (!jl_is_datatype(t)) {
         jl_type_error("fieldtype", (jl_value_t*)jl_datatype_type, t);
+    }
     jl_datatype_t *st = (jl_datatype_t*)t;
     int field_index;
     if (jl_is_long(f)) {
@@ -1668,6 +1679,13 @@ JL_CALLABLE(jl_f_apply_type)
         // substituting typevars (a valid_type_param check here isn't sufficient).
         return (jl_value_t*)jl_type_union(&args[1], nargs-1);
     }
+    else if (args[0] == (jl_value_t*)jl_typeeq_type) {
+        JL_NARGS(apply_type, 2, 2);
+        jl_value_t *pi = args[1];
+        if (!jl_valid_type_param(pi))
+            jl_type_error_rt("TypeEq", "parameter", (jl_value_t*)jl_type_type, pi);
+        return (jl_value_t*)jl_wrap_Type(pi);
+    }
     else if (jl_is_vararg(args[0])) {
         jl_vararg_t *vm = (jl_vararg_t*)args[0];
         if (!vm->T) {
@@ -1690,6 +1708,9 @@ JL_CALLABLE(jl_f_apply_type)
             }
         }
         return jl_apply_type(args[0], &args[1], nargs-1);
+    }
+    else if (jl_is_datatype(args[0])) {
+        jl_type_error("apply_type", (jl_value_t*)jl_unionall_type, args[0]);
     }
     jl_type_error("Type{...} expression", (jl_value_t*)jl_unionall_type, args[0]);
 }
@@ -1944,6 +1965,32 @@ JL_CALLABLE(jl_f_memoryrefset)
     return args[1];
 }
 
+JL_CALLABLE(jl_f_memoryrefunset)
+{
+    enum jl_memory_order order = jl_memory_order_notatomic;
+    JL_NARGS(memoryrefunset!, 3, 3);
+    JL_TYPECHK(memoryrefunset!, genericmemoryref, args[0]);
+    JL_TYPECHK(memoryrefunset!, symbol, args[1]);
+    JL_TYPECHK(memoryrefunset!, bool, args[2]);
+    jl_genericmemoryref_t m = *(jl_genericmemoryref_t*)args[0];
+    jl_value_t *kind = jl_tparam0(jl_typetagof(m.mem));
+    if (kind == (jl_value_t*)jl_not_atomic_sym) {
+        if (args[1] != kind) {
+            order = jl_get_atomic_order_checked((jl_sym_t*)args[1], 0, 1);
+            jl_atomic_error("memoryrefunset!: non-atomic memory cannot be written atomically");
+        }
+    }
+    else if (kind == (jl_value_t*)jl_atomic_sym) {
+        order = jl_get_atomic_order_checked((jl_sym_t*)args[1], 0, 1);
+        if (order == jl_memory_order_notatomic)
+            jl_atomic_error("memoryrefunset!: atomic memory cannot be written non-atomically");
+    }
+    if (m.mem->length == 0)
+        jl_bounds_error_int((jl_value_t*)m.mem, 1);
+    jl_memoryrefunset(m, kind == (jl_value_t*)jl_atomic_sym);
+    return jl_nothing;
+}
+
 JL_CALLABLE(jl_f_memoryref_isassigned)
 {
     enum jl_memory_order order = jl_memory_order_notatomic;
@@ -2143,15 +2190,12 @@ static void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
     // Check context-specific conditions first, before jl_check_valid_supertype
     // which calls jl_subtype and would crash walking the supertype chain of a
     // type with super == NULL.
-    const char *error = NULL;
+    const char *type_name = jl_symbol_name(tt->name->name);
     if (tt->super != NULL)
-        error = "type already has a supertype";
-    else if (jl_is_datatype(super) && tt->name == ((jl_datatype_t*)super)->name)
-        error = "a type cannot subtype itself";
-    if (!error)
-        error = jl_check_valid_supertype(super);
-    if (error)
-         jl_errorf("invalid subtyping in definition of %s: %s.", jl_symbol_name(tt->name->name), error);
+        jl_errorf("invalid subtyping in definition of %s: type already has a supertype.", type_name);
+    if (jl_is_datatype(super) && tt->name == ((jl_datatype_t*)super)->name)
+        jl_errorf("invalid subtyping in definition of %s: a type cannot subtype itself.", type_name);
+    jl_check_valid_supertype(super, type_name);
     tt->super = (jl_datatype_t*)super;
     jl_gc_wb(tt, tt->super);
 }
@@ -2335,19 +2379,36 @@ JL_CALLABLE(jl_f__typebody)
         } else {
             jl_datatype_t *prev_dt = (jl_datatype_t*)jl_unwrap_unionall(prev);
             JL_TYPECHK(_typebody!, datatype, (jl_value_t*)prev_dt);
-            if (equiv_field_types((jl_value_t*)prev_dt->types, ft)) {
+            // Field types in `ft` reference the new stub `dt`; substitute them
+            // with references to `prev_dt` before comparing, so self-referential
+            // structs (e.g. `next::R`) and types whose fields embed the type as
+            // a parameter (e.g. `v::Vector{T}`) are recognized as equivalent.
+            jl_svec_t *ft_subst = (jl_svec_t*)ft;
+            jl_value_t *sub = NULL;
+            JL_GC_PUSH2(&ft_subst, &sub);
+            for (size_t i = 0; i < nf; i++) {
+                jl_value_t *fld = jl_svecref(ft, i);
+                sub = jl_substitute_datatype(fld, dt, prev_dt);
+                if (sub != fld) {
+                    if (ft_subst == (jl_svec_t*)ft)
+                        ft_subst = jl_svec_copy((jl_svec_t*)ft);
+                    jl_svecset(ft_subst, i, sub);
+                }
+            }
+            int eq = equiv_field_types((jl_value_t*)prev_dt->types, (jl_value_t*)ft_subst);
+            JL_GC_POP();
+            if (eq) {
                 tret = prev;
                 goto have_type;
-            } else {
-                if (jl_svec_len(prev_dt->parameters) != jl_svec_len(dt->parameters))
-                    jl_errorf("Internal Error: Types should not have been considered equivalent");
-                for (size_t i = 0; i < nf; i++) {
-                    jl_value_t *elt = jl_svecref(ft, i);
-                    for (int j = 0; j < jl_svec_len(prev_dt->parameters); ++j) {
-                        // Only the last svecset matters for semantics, but we re-use the GC root
-                        elt = jl_substitute_var(elt, (jl_tvar_t *)jl_svecref(prev_dt->parameters, j), jl_svecref(dt->parameters, j));
-                        jl_svecset(ft, i, elt);
-                    }
+            }
+            if (jl_svec_len(prev_dt->parameters) != jl_svec_len(dt->parameters))
+                jl_errorf("Internal Error: Types should not have been considered equivalent");
+            for (size_t i = 0; i < nf; i++) {
+                jl_value_t *elt = jl_svecref(ft, i);
+                for (int j = 0; j < jl_svec_len(prev_dt->parameters); ++j) {
+                    // Only the last svecset matters for semantics, but we re-use the GC root
+                    elt = jl_substitute_var(elt, (jl_tvar_t *)jl_svecref(prev_dt->parameters, j), jl_svecref(dt->parameters, j));
+                    jl_svecset(ft, i, elt);
                 }
             }
         }
@@ -2586,6 +2647,8 @@ void jl_init_primitives(void) JL_GC_DISABLED
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);
+    add_builtin("AnyType", (jl_value_t*)jl_anytype_type);
+    add_builtin("TypeEq", (jl_value_t*)jl_typeeq_type);
     add_builtin("Type", (jl_value_t*)jl_type_type);
     add_builtin("Nothing", (jl_value_t*)jl_nothing_type);
     add_builtin("nothing", (jl_value_t*)jl_nothing);
@@ -2594,6 +2657,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("TypeVar", (jl_value_t*)jl_tvar_type);
     add_builtin("UnionAll", (jl_value_t*)jl_unionall_type);
     add_builtin("Union", (jl_value_t*)jl_uniontype_type);
+    add_builtin("Intersect", (jl_value_t*)jl_intersect_type);
     add_builtin("TypeofBottom", (jl_value_t*)jl_typeofbottom_type);
     add_builtin("Tuple", (jl_value_t*)jl_anytuple_type);
     add_builtin("TypeofVararg", (jl_value_t*)jl_vararg_type);

@@ -192,6 +192,21 @@ begin
     X1{Int}()()
 end
 """) === Int
+# or anywhere
+@test JuliaLowering.include_string(test_mod, """
+let f = function foo(y::X1{T})::X1{T} where T
+        y
+    end
+    f(X1{Int}())
+end
+""") == test_mod.X1{Int}()
+@test JuliaLowering.include_string(test_mod, """
+let f = function foo(y::X1{<:T})::X1{<:T} where T
+        y
+    end
+    f(X1{Int}())
+end
+""") == test_mod.X1{Int}()
 
 Base.include_string(test_mod,
 """
@@ -362,6 +377,47 @@ f_return_in_interpolation()
     end
     """) == (1,2,3,4)
 
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_optarg_complex_spbounds(p::T, o=1) where {T<:Complex{<:Real}}
+            T, p, o
+        end
+        f_optarg_complex_spbounds(Complex(1)), f_optarg_complex_spbounds(Complex(2), Complex(3))
+    end
+    """) == ((Complex{Int},Complex(1),1), (Complex{Int},Complex(2),Complex(3)))
+
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_optarg_complex_spbounds2(p::T, o::T=Complex(0)) where {T<:Complex{<:Real}}
+            T, p, o
+        end
+        f_optarg_complex_spbounds2(Complex(1)), f_optarg_complex_spbounds2(Complex(2))
+    end
+    """) == ((Complex{Int},Complex(1),Complex(0)), (Complex{Int},Complex(2),Complex(0)))
+
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_optarg_complex_spbounds_rett(p::T, o=1)::T where {T<:Complex{<:Real}}
+            p
+        end
+        f_optarg_complex_spbounds_rett(Complex(1)), f_optarg_complex_spbounds_rett(Complex(2))
+    end
+    """) == (Complex(1), Complex(2))
+
+    # Both JL and flisp will evaluate the sparam bound multiple times
+    let res = JuliaLowering.include_string(test_mod, """
+        let eval_spbounds_counter = 0
+            global function f_optarg_eval_spbounds_counter(
+                    p::T, o=1,_=2,_=3) where {
+                        T<:Complex{<:(eval_spbounds_counter += 1; Real)}}
+                (p, eval_spbounds_counter)
+            end
+            f_optarg_eval_spbounds_counter(Complex(1))
+        end
+        """)
+        @test res == (Complex(1), 4)
+        @test_broken res == (Complex(1), 1)
+    end
 end
 
 @testset "slotflags" begin
@@ -516,10 +572,14 @@ end
     test_arg_unspecialized(test_mod.f_body_nospecialize_nontrivial_sig2, 1)
     test_arg_specialized(test_mod.f_body_nospecialize_nontrivial_sig2, 2)
 
-    @testset "all positional arg forms" for arg0 in [:x, :(x::Type), :(::Type), :(_), :(_::Type)],
+    # all positional arg forms
+    @testset for arg0 in [:x, :(x::Type), :(::Type), :(_), :(_::Type)],
         arg1 in [arg0, Expr(:..., arg0)],
         arg2 in [arg1, Expr(:kw, arg1, :Int)],
-        expander in [fl_macroexpand, jl_macroexpand]
+        expander in [fl_macroexpand, (_,x)->x]
+        # TODO: would use jl_macroexpand, but that cannot be done as a separate
+        # step due to MacroExpansionContext, and we must use jl_eval.
+        @test_broken false
 
         @testset let expanded = expander(
             test_mod, :(function (specialized, @nospecialize($arg2))
@@ -539,7 +599,7 @@ end
         end
     end
 
-    @testset "kwargs" for expander in [fl_macroexpand, jl_macroexpand]
+    @testset "kwargs" for expander in [fl_macroexpand, (_,x)->x]
         local f
         @test (f = jl_eval(test_mod, expander(
             test_mod, quote
@@ -792,6 +852,17 @@ end
     @test test_mod.f_kw_rett() isa Vector{Int}
     @test test_mod.f_kw_rett(T=Float64) isa Vector{Float64}
 
+    JuliaLowering.include_string(test_mod, """
+    function f_kw_rett2(; T::Type=Int)::Union{Vector{<:T}, Vector{<:AbstractVector{<:T}}}
+        false && return T[]
+        T == Int ? T[1,2,3] : [T[1,2],T[3,4]]
+    end
+    """)
+    @test test_mod.f_kw_rett2() isa Vector{Int}
+    @test test_mod.f_kw_rett2() == Int[1,2,3]
+    @test test_mod.f_kw_rett2(T=Float64) isa Vector{Vector{Float64}}
+    @test test_mod.f_kw_rett2(T=Float64) == [Float64[1.0,2.0],Float64[3.0,4.0]]
+
     # Throwing of UndefKeywordError
     JuliaLowering.include_string(test_mod, """
     function f_kw_no_default(; x)
@@ -898,6 +969,50 @@ end
             end
         """) == ((1, [10]), (1, [1]), (2, [10]), (2, [1]))
     end
+    @testset "complex sparam bounds requiring temporaries" begin
+        @test JL.include_string(
+            test_mod, """
+            let f = function (x::T;kw=[2]) where {T<:Vector{<:Number}}
+                        (T,x,kw)
+                    end
+                f([1]), f([1], kw=[0])
+            end
+        """) == ((Vector{Int}, [1], [2]), (Vector{Int}, [1], [0]))
+        @test JL.include_string(
+            test_mod, """
+            let f = function (x::T, o1=10, o2=20;kw=[2]) where {T<:Vector{<:Number}}
+                        (T,x,kw,o1,o2)
+                    end
+                f([1]), f([1], kw=[0])
+            end
+        """) == ((Vector{Int}, [1], [2], 10, 20), (Vector{Int}, [1], [0], 10, 20))
+        @test JL.include_string(
+            test_mod, """
+            let f = function (x;kw::T=x) where {T<:Vector{<:Number}}
+                        (T,x,kw)
+                    end
+                f([1]), f([1], kw=[0])
+            end
+        """) == ((Vector{Int}, [1], [1]), (Vector{Int}, [1], [0]))
+        @test JL.include_string(
+            test_mod, """
+            let f = function (x, o1=10, o2=20;kw::T=x) where {T<:Vector{<:Number}}
+                        (T,x,kw,o1,o2)
+                    end
+                f([1]), f([1], kw=[0])
+            end
+        """) == ((Vector{Int}, [1], [1], 10, 20), (Vector{Int}, [1], [0], 10, 20))
+        @test JL.include_string(
+            test_mod, """
+            let f = function (o1::T=[10];kw=1) where {T<:Vector{<:Number}}
+                        (T,kw,o1)
+                    end
+                f(), f([1]), f(;kw=2), f([1]; kw=2)
+            end
+        """) == ((Vector{Int}, 1, [10]), (Vector{Int}, 1, [1]),
+                 (Vector{Int}, 2, [10]), (Vector{Int}, 2, [1]))
+    end
+
 
     @testset "destructured args" begin
         @test JL.include_string(

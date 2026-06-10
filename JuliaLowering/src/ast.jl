@@ -13,7 +13,7 @@
                 push!(msgs.args, a.args[2])
             else
                 push!(sts.args, a)
-                push!(msgs.args, QuoteNode(a))
+                push!(msgs.args, string(a))
             end
         end
         # just add assertion string to first msg
@@ -66,9 +66,16 @@ generates a new layer.
 struct ScopeLayer
     id::LayerId
     mod::Module
-    parent_layer::LayerId # Index of parent layer in a macro expansion. Equal to 0 for no parent
-    is_macro_expansion::Bool # FIXME
+    # Index of parent layer in a macro expansion. Equal to 0 for no parent
+    parent_id::LayerId
     is_internal::Bool
+end
+
+is_base_layer(sl::ScopeLayer) = sl.parent_id === 0
+
+base_layer(ctx, sl::ScopeLayer) = while true
+    is_base_layer(sl) && return sl
+    sl = ctx.scope_layers[sl.parent_id]
 end
 
 """
@@ -409,7 +416,7 @@ function setmeta!(ex::SyntaxTree, key::Symbol, @nospecialize(val))
 end
 
 setmeta(ex::SyntaxTree, k::Symbol, @nospecialize(v)) =
-    setmeta!(copy_node(ex), k, v)
+    setmeta!(is_leaf(ex) ? mkleaf(ex) : mknode(ex, children(ex)), k, v)
 
 function getmeta(ex::SyntaxTree, name::Symbol, default)
     meta = get(ex, :meta, nothing)
@@ -431,11 +438,6 @@ function extension_type(ex)
     @jl_assert numchildren(ex) >= 1 ex
     @jl_assert kind(ex[1]) == K"Symbol" ex
     ex[1].name_val
-end
-
-function is_sym_decl(x)
-    k = kind(x)
-    k == K"Identifier" || k == K"::"
 end
 
 function is_eventually_call(ex::SyntaxTree)
@@ -537,15 +539,23 @@ function to_symbol(ctx, ex)
     @ast ctx ex ex=>K"Symbol"
 end
 
-function new_scope_layer(ctx, mod_ref::Module=ctx.mod)
-    new_layer = ScopeLayer(length(ctx.scope_layers)+1, mod_ref, 0, false, true)
+function new_internal_scope_layer(ctx, mod_ref::Module=ctx.mod)
+    new_layer = ScopeLayer(length(ctx.scope_layers)+1, mod_ref, 0, true)
     push!(ctx.scope_layers, new_layer)
     new_layer.id
 end
 
-function new_scope_layer(ctx, mod_ref::SyntaxTree)
+function new_internal_scope_layer(ctx, mod_ref::SyntaxTree)
     @jl_assert kind(mod_ref) == K"Identifier" mod_ref
-    new_scope_layer(ctx, ctx.scope_layers[mod_ref.scope_layer].mod)
+    new_internal_scope_layer(ctx, ctx.scope_layers[mod_ref.scope_layer::LayerId].mod)
+end
+
+# TODO: `expr` is unused, but should be placed in the scope layer to trigger
+# certain compat behaviour.
+function new_macro_scope_layer(ctx, parent::ScopeLayer, mod::Module, expr::Bool)
+    sl = ScopeLayer(length(ctx.scope_layers)+1, mod, parent.id, false)
+    push!(ctx.scope_layers, sl)
+    sl
 end
 
 #-------------------------------------------------------------------------------
@@ -581,5 +591,3 @@ with_stmts(ctx::StatementListCtx, stmts) = StatementListCtx(ctx.ctx, stmts)
 function with_stmts(ctx)
     StatementListCtx(ctx, SyntaxList(ctx))
 end
-
-with_stmts(ctx::StatementListCtx) = StatementListCtx(ctx.ctx)

@@ -192,7 +192,7 @@ mutable struct DebugInfoStream
     # DebugInfoStream(def::Union{MethodInstance,Nothing}, di::DebugInfo, nstmts::Int) =
     #     if debuginfo_file1(di.def) === debuginfo_file1(di.def)
     #         new(def, di.linetable, Core.svec(di.edges...), getdebugidx(di, 0),
-    #             ccall(:jl_uncompress_codelocs, Any, (Any, Int), di.codelocs, nstmts)::Vector{Int32})
+    #             ccall(:jl_uncompress_codelocs, Any, (Any, Int), di, nstmts)::Vector{Int32})
     #     else
     function DebugInfoStream(def::Union{MethodInstance,Nothing}, di::DebugInfo, nstmts::Int)
         codelocs = zeros(Int32, nstmts * 3)
@@ -208,8 +208,14 @@ Core.DebugInfo(di::DebugInfoStream, nstmts::Int) =
     DebugInfo(something(di.def), di.linetable, Core.svec(di.edges...),
         ccall(:jl_compress_codelocs, Any, (Int32, Any, Int), di.firstline, di.codelocs, nstmts)::String)
 
-getdebugidx(debuginfo::DebugInfo, pc::Int) =
-    ccall(:jl_uncompress1_codeloc, NTuple{3,Int32}, (Any, Int), debuginfo.codelocs, pc)
+function getdebugidx(debuginfo::DebugInfo, pc::Int)
+    if debuginfo.linetable isa String
+        # drop provenance for compatibility
+        ((pc <= 0 ? -1 : source_location(debuginfo, pc).line), 0, 0)
+    else
+        ccall(:jl_uncompress1_codeloc, NTuple{3,Int32}, (Any, Int), debuginfo, pc)
+    end
+end
 
 function getdebugidx(debuginfo::DebugInfoStream, pc::Int)
     if 3 <= 3pc <= length(debuginfo.codelocs)
@@ -221,6 +227,53 @@ function getdebugidx(debuginfo::DebugInfoStream, pc::Int)
     end
 end
 
+has_prev_debuginfo(di, pc::Int) = prev_debuginfo(di, pc)[1] !== nothing
+has_edge_debuginfo(di, pc::Int) = edge_debuginfo(di, pc)[1] !== nothing
+
+"(debuginfo, nextpc) from the previous step in the compiler"
+function prev_debuginfo(di, pc::Int)
+    di.linetable isa Core.DebugInfo || return (nothing, 0)
+    pc > 0 || return (nothing, 0)
+    nextpc::Int = getdebugidx(di, pc)[1]
+    (di.linetable, nextpc)
+end
+
+"(debuginfo, nextpc) of inlinee"
+function edge_debuginfo(di, pc::Int)
+    _, eid::Int, epc::Int = getdebugidx(di, pc)
+    # XXX: eid > 0 should imply epc > 0
+    (eid > 0 && epc > 0) || return (nothing, 0)
+    (di.edges[eid]::DebugInfo, epc)
+end
+
+# All 1-based.  0 if unavailable.
+struct SourceLocation
+    byte::Int
+    byte_end::Int
+    col::Int
+    col_end::Int
+    line::Int
+    line_end::Int
+end
+
+function source_location(di::Union{DebugInfo,DebugInfoStream}, pc::Int)
+    while has_prev_debuginfo(di, pc)
+        di, pc = prev_debuginfo(di, pc)
+    end
+    if di isa DebugInfoStream
+        # DebugInfoStream with linetable=nothing does not contain source
+        # information on its own.
+        return SourceLocation(0,0,0,0,0,0)
+    end
+    @assert pc > 0 "no source for pc<=0"
+    (l1, c1) = ccall(:jl_cdi_firstxy, NTuple{2, Int32}, (Any, Int32), di, pc)
+    if c1 <= 0
+        return SourceLocation(0,0,0,0,l1,0)
+    end
+    (b1, b2) = ccall(:jl_cdi_bytespan, NTuple{2, Int32}, (Any, Int32), di, pc)
+    (l2, c2) = ccall(:jl_cdi_byte_to_xy, NTuple{2, Int32}, (Any, Int32), di, b2)
+    return SourceLocation(b1,b2,c1,c2,l1,l2)
+end
 
 # SSA values that need renaming
 struct OldSSAValue

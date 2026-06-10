@@ -31,6 +31,8 @@ function is_same_identifier_like(ex::SyntaxTree, name::AbstractString)
     return kind(ex) == K"Identifier" && ex.name_val == name
 end
 
+# Hack.  Scopes aren't resolved, so only use this where a false positive is
+# still a correct answer.
 function contains_identifier(ex::SyntaxTree, idents::AbstractVector{<:SyntaxTree})
     contains_unquoted(ex) do e
         any(is_same_identifier_like(e, id) for id in idents)
@@ -87,7 +89,7 @@ end
 function newsym(ctx, src::SyntaxTree, name::String; unused=false)
     out = newleaf(ctx, src, unused ? K"Placeholder" : K"Identifier", name)
     hasattr(src, :meta) && setattr!(out, :meta, src.meta)
-    setattr!(out, :scope_layer, new_scope_layer(ctx))
+    setattr!(out, :scope_layer, new_internal_scope_layer(ctx))
 end
 
 #-------------------------------------------------------------------------------
@@ -1108,9 +1110,11 @@ function flatten_ncat_rows!(flat_elems, nrow_spans, row_major, parent_layout_dim
     k = kind(ex)
     if k == K"row"
         layout_dim = 1
+        elems = children(ex)
         parent_layout_dim != 1 || throw(LoweringError(ex,"Badly nested rows in `ncat`"))
     elseif k == K"nrow"
-        dim = JuliaSyntax.numeric_flags(ex)
+        dim = ex[1].value::Int
+        elems = children(ex)[2:end]
         dim > 0                || throw(LoweringError(ex,"Unsupported dimension $dim in ncat"))
         !row_major || dim != 2 || throw(LoweringError(ex,"2D `nrow` cannot be mixed with `row` in `ncat`"))
         layout_dim = nrow_flipdim(row_major, dim)
@@ -1125,7 +1129,7 @@ function flatten_ncat_rows!(flat_elems, nrow_spans, row_major, parent_layout_dim
     end
     row_start = length(flat_elems)
     parent_layout_dim > layout_dim || throw(LoweringError(ex, "Badly nested rows in `ncat`"))
-    for e in children(ex)
+    for e in elems
         if layout_dim == 1
             kind(e) ∉ KSet"nrow row" || throw(LoweringError(e,"Badly nested rows in `ncat`"))
         end
@@ -1143,11 +1147,11 @@ end
 # - ragged column first or row first
 function expand_ncat(ctx, ex)
     is_typed = kind(ex) == K"typed_ncat"
-    outer_dim = JuliaSyntax.numeric_flags(ex)
-    @jl_assert outer_dim > 0 (ex,"Unsupported dimension in ncat")
     eltype      = is_typed ? ex[1]     : nothing
-    elements    = is_typed ? ex[2:end] : ex[1:end]
+    outer_dim   = is_typed ? ex[2].value::Int : ex[1].value::Int
+    elements    = is_typed ? ex[3:end] : ex[2:end]
     hvncat_name = is_typed ? "typed_hvncat" : "hvncat"
+    @jl_assert outer_dim > 0 (ex,"Unsupported dimension in ncat")
     if !any(kind(e) in KSet"row nrow" for e in elements)
         # One-dimensional ncat along some dimension
         #   [a ;;; b ;;; c]
@@ -1507,16 +1511,16 @@ function expand_let(ctx, ex)
     end
     for binding in Iterators.reverse(children(bindings))
         kb = kind(binding)
-        if is_sym_decl(kb)
+        if kb == K"::" || is_identifier_like(binding)
             blk = @ast ctx ex [K"scope_block"(scope_type=scope_type)
                 [K"local" binding]
                 blk
             ]
-        elseif kb == K"=" && numchildren(binding) == 2
+        elseif kb == K"="
             lhs = binding[1]
             rhs = binding[2]
-            kl = kind(lhs)
-            if kl == K"Identifier" || kl == K"BindingId"
+            if is_identifier_like(lhs)
+                kind(lhs) === K"Placeholder" && continue
                 blk = @ast ctx binding [K"block"
                     tmp := rhs
                     [K"scope_block"(ex, scope_type=scope_type)
@@ -1526,9 +1530,10 @@ function expand_let(ctx, ex)
                         blk
                     ]
                 ]
-            elseif kl == K"::"
+            elseif kind(lhs) == K"::"
                 var = lhs[1]
-                if !(kind(var) in KSet"Identifier BindingId")
+                kind(var) === K"Placeholder" && continue
+                if !is_identifier_like(var)
                     throw(LoweringError(var, "Invalid assignment location in let syntax"))
                 end
                 blk = @ast ctx binding [K"block"
@@ -1571,18 +1576,13 @@ function expand_let(ctx, ex)
             blk = @ast ctx binding [K"block"
                 [K"scope_block"(ex, scope_type=scope_type)
                     [K"local"(func_name) func_name]
-                    [K"always_defined" func_name]
+                    # note no always_defined, as it's stronger than flisp's local-def
                     binding
-                    [K"scope_block"(ex, scope_type=scope_type)
-                        # The inside of the block is isolated from the closure,
-                        # which itself can only capture values from the outside.
-                        blk
-                    ]
+                    blk
                 ]
             ]
         else
-            throw(LoweringError(binding, "Invalid binding in let"))
-            continue
+            @jl_assert false (binding, "invalid binding in let")
         end
     end
     return blk
@@ -1622,7 +1622,7 @@ function expand_named_tuple(ctx, ex, kws; field_name="named tuple field",
         k = kind(kw)
         appended_nt = nothing
         name = value = nothing
-        if kind(k) == K"Identifier"
+        if k == K"Identifier"
             # x  ==>  x = x
             name = to_symbol(ctx, kw)
             value = kw
@@ -2269,7 +2269,7 @@ end
 # - `typevar_stmts` are a list of statements to define a `TypeVar` for each parameter
 #   name in `typevar_names`, with exactly one per `typevar_name`. Some of these
 #   may already have been emitted.
-# - `new_typevar_stmts` is the list of statements which needs to to be emitted
+# - `new_typevar_stmts` is the list of statements which needs to be emitted
 #   prior to uses of `typevar_names`.
 
 # (where (where x a b) c d) -> (x, [c d a b])
@@ -2852,14 +2852,6 @@ function expand_function_def(ctx, src, raw_args, wheres, body, rett)
         end
     end
     sparams = mapsyntax(x->typevar_bounds(ctx, x), wheres)
-    # Error if there are unused sparams.  possible TODO: this is currently only
-    # a warning, so may need to be relaxed
-    let unused = unused_typevars(argl, sparams)
-        !isempty(unused) && throw(LoweringError(
-            unused[1], string(
-                "method definition declares type variable but ",
-                "does not use it in the type of any function parameter")))
-    end
     if has_kws
         pos_va = @stm raw_args[end-1] begin
             [K"kw" [K"..." _] _...] -> true
@@ -3007,7 +2999,7 @@ function typevar_bounds(ctx, ex)
         [K"<:" x ub] -> (x, any, ub)
         [K">:" x lb] -> (x, lb, any)
     end
-    @ast ctx ex [K"_typevar" name expand_forms_2(ctx, lb) expand_forms_2(ctx, ub)]
+    @ast ctx ex [K"_typevar" name lb ub]
 end
 
 function bounds_to_typevar(ctx, ex)
@@ -3015,19 +3007,17 @@ function bounds_to_typevar(ctx, ex)
     _bounds_to_typevar(ctx, ex, ex[1], ex[2], ex[3])
 end
 
+# Generate call to `TypeVar(name[, lb, ub])`.  Note the resulting expression may
+# contain SSA assignments, so can't be copied.
 function _bounds_to_typevar(ctx, srcref, name, lb, ub)
-    # Generate call to one of
-    # TypeVar(name)
-    # TypeVar(name, ub)
-    # TypeVar(name, lb, ub)
     @ast ctx srcref [K"call"
         "TypeVar"::K"core"
         name=>K"Symbol"
         if !is_core_Any(lb)
-            lb
+            expand_forms_2(ctx, lb)
         end
         if !is_core_Any(lb) || !is_core_Any(ub)
-            ub
+            expand_forms_2(ctx, ub)
         end
     ]
 end
@@ -3070,8 +3060,9 @@ end
 # - `typevar_names` are the names of the type's type parameters
 # - `typevar_stmts` are a list of statements to define a `TypeVar` for each parameter
 #   name in `typevar_names`, to be emitted prior to uses of `typevar_names`.
-#   There is exactly one statement from each typevar.
-function expand_typevars!(ctx, typevar_names, typevar_stmts, type_params)
+function expand_typevars(ctx, type_params)
+    typevar_names = SyntaxList(ctx)
+    typevar_stmts = SyntaxList(ctx)
     for param in type_params
         bounds = typevar_bounds(ctx, param)
         n = bounds[1]
@@ -3081,13 +3072,6 @@ function expand_typevars!(ctx, typevar_names, typevar_stmts, type_params)
             [K"=" n bounds_to_typevar(ctx, bounds)]
         ])
     end
-    return nothing
-end
-
-function expand_typevars(ctx, type_params)
-    typevar_names = SyntaxList(ctx)
-    typevar_stmts = SyntaxList(ctx)
-    expand_typevars!(ctx, typevar_names, typevar_stmts, type_params)
     return (typevar_names, typevar_stmts)
 end
 
@@ -3532,7 +3516,7 @@ end
 
 function expand_typegroup_def(ctx, ex)
     @jl_assert numchildren(ex) == 1 ex
-    body = ex[1]
+    body = flatten_blocks(ex[1])
     if kind(body) != K"block"
         throw(LoweringError(body, "expected block for `typegroup` body"))
     end
@@ -3559,9 +3543,10 @@ function expand_typegroup_def(ctx, ex)
             throw(LoweringError(child, "`typegroup` only supports `struct` definitions"))
         end
 
-        @jl_assert numchildren(sdef) == 2 sdef
-        type_sig = sdef[1]
-        type_body = sdef[2]
+        @jl_assert numchildren(sdef) == 3 sdef
+        is_mutable = sdef[1].value::Bool
+        type_sig = sdef[2]
+        type_body = sdef[3]
         if kind(type_body) != K"block"
             throw(LoweringError(type_body, "expected block for `struct` fields"))
         end
@@ -3575,7 +3560,6 @@ function expand_typegroup_def(ctx, ex)
         _collect_struct_fields(ctx, field_names, field_types, field_attrs, field_docs,
                                inner_defs, children(type_body))
 
-        is_mutable = has_flags(sdef, JuliaSyntax.MUTABLE_FLAG)
         min_initialized = minimum((_constructor_min_initialized(e) for e in inner_defs),
                                   init=length(field_names))
 
@@ -3584,7 +3568,7 @@ function expand_typegroup_def(ctx, ex)
                                       supertype, is_mutable, min_initialized,
                                       inner_defs, field_docs))
         push!(struct_names, struct_name)
-        layer = new_scope_layer(ctx, struct_name)
+        layer = new_internal_scope_layer(ctx, struct_name)
         push!(global_names, adopt_scope(struct_name, layer))
         push!(info_vars, ssavar(ctx, sdef, "struct_info"))
     end
@@ -3735,9 +3719,10 @@ function expand_typegroup_def(ctx, ex)
 end
 
 function expand_struct_def(ctx, ex, docs)
-    @jl_assert numchildren(ex) == 2 ex
-    type_sig = ex[1]
-    type_body = ex[2]
+    @jl_assert numchildren(ex) == 3 ex
+    is_mutable = ex[1].value::Bool
+    type_sig = ex[2]
+    type_body = flatten_blocks(ex[3])
     if kind(type_body) != K"block"
         throw(LoweringError(type_body, "expected block for `struct` fields"))
     end
@@ -3750,14 +3735,13 @@ function expand_struct_def(ctx, ex, docs)
     inner_defs = SyntaxList(ctx)
     _collect_struct_fields(ctx, field_names, field_types, field_attrs, field_docs,
                            inner_defs, children(type_body))
-    is_mutable = has_flags(ex, JuliaSyntax.MUTABLE_FLAG)
     min_initialized = minimum((_constructor_min_initialized(e) for e in inner_defs),
                               init=length(field_names))
     newtype_var = ssavar(ctx, ex, "struct_type")
     hasprev = ssavar(ctx, ex, "hasprev")
     prev = ssavar(ctx, ex, "prev")
     newdef = ssavar(ctx, ex, "newdef")
-    layer = new_scope_layer(ctx, struct_name)
+    layer = new_internal_scope_layer(ctx, struct_name)
     global_struct_name = adopt_scope(struct_name, layer)
     if !isempty(typevar_names)
         # Generate expression like `prev_struct.body.body.parameters`
@@ -4091,7 +4075,6 @@ function expand_public(ctx, ex)
         @jl_assert kind(e) == K"Identifier" (ex, "Expected identifier")
         push!(identifiers, e.name_val)
     end
-    (e.name_val::K"String" for e in children(ex))
     @ast ctx ex [K"call"
         eval_public::K"Value"
         ctx.mod::K"Value"
@@ -4160,8 +4143,9 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         @jl_assert numchildren(ex) == 3 ex
         expand_forms_2(ctx, @ast ctx ex [K"if" children(ex)...])
     elseif k == K"&&" || k == K"||"
-        @jl_assert numchildren(ex) > 1 ex
         cs = expand_cond_children(ctx, ex)
+        isempty(cs) && return @ast ctx ex (k === K"&&")::K"Bool"
+        length(cs) == 1 && return @ast ctx ex cs[1]
         # Attributing correct provenance for `cs[1:end-1]` is tricky in cases
         # like `a && (b && c)` because the expression constructed here arises
         # from the source fragment `a && (b` which doesn't follow the tree
@@ -4457,7 +4441,7 @@ ensure_desugaring_attributes!(graph) = ensure_attributes!(
     graph = ensure_desugaring_attributes!(copy_attrs(ctx.graph))
     ex = reparent(graph, ex)
     ctx_out = DesugaringContext(graph, ctx.bindings, ctx.scope_layers,
-                                current_layer(ctx).mod, ctx.expr_compat_mode,
+                                ctx.scope_layers[1].mod, ctx.expr_compat_mode,
                                 Dict{Int, IdTag}(), ctx.macro_world)
     vr = valid_st1(ex)
     # surface only one error until we have pretty-printing for multiple

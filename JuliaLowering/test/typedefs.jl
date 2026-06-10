@@ -103,6 +103,69 @@ end
 @test fieldtypes(test_mod.S1{Int,String}) == (Int, String, Any)
 @test supertype(test_mod.S1) == test_mod.A
 
+@testset "atomic/const fields" begin
+    # The parser rejects wrapped const struct fields ("expected assignment after
+    # const") which probably shouldn't be the parser's job.
+    fl_eval(test_mod, :(macro var"const"(x); esc(Expr(:const, x)); end))
+
+    @gensym S
+    @test jl_eval(
+        test_mod,
+        :(begin
+              mutable struct $S
+                  @atomic x::Bool
+                  @const y::Bool
+              end
+              $S(true,false).x
+          end)) == true
+    @test fieldnames(getproperty(test_mod, S)) == (:x, :y)
+    @test_throws "cannot be changed" jl_eval(
+        test_mod, :($S(true,false).y = true))
+
+    @gensym S
+    @test jl_eval(
+        test_mod,
+        :(begin
+              mutable struct $S
+                  begin
+                      begin
+                          @atomic x::Bool
+                      end
+                  end
+                  begin
+                      begin
+                          @const y::Bool
+                      end
+                  end
+              end
+              $S(true,false).x
+          end)) == true
+    @test fieldnames(getproperty(test_mod, S)) == (:x, :y)
+    @test_throws "cannot be changed" jl_eval(
+        test_mod, :($S(true,false).y = true))
+
+    @gensym S
+    @test jl_eval(
+        test_mod,
+        :(begin
+              mutable struct $S
+                  @static if true
+                      # Blocks are expected to be splatted into the struct body
+                      begin
+                          @atomic x::Bool
+                          @const y::Bool
+                      end
+                  else
+                      x::Bool
+                      y::Bool
+                  end
+              end
+              $S(true,false).x
+          end)) == true
+    @test fieldnames(getproperty(test_mod, S)) == (:x, :y)
+    @test_throws "cannot be changed" jl_eval(test_mod, :($S(true,false).y = true))
+end
+
 # Inner constructors: one field non-Any
 @test JuliaLowering.include_string(test_mod, """
 struct S2

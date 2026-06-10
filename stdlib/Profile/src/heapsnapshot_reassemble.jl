@@ -10,13 +10,13 @@ Assemble a .heapsnapshot file from the .json files produced by `Profile.take_sna
 
 # SoA layout to reduce padding
 struct Edges
-    type::Vector{Int8}       # index into `snapshot.meta.edge_types`
+    type::Vector{UInt32}       # index into `snapshot.meta.edge_types`
     name_or_index::Vector{UInt} # Either an index into `snapshot.strings`, or the index in an array, depending on edge_type
     to_pos::Vector{UInt}   # index into `snapshot.nodes`
 end
 function Edges(n::Int)
     Edges(
-        Vector{Int8}(undef, n),
+        Vector{UInt32}(undef, n),
         Vector{UInt}(undef, n),
         Vector{UInt}(undef, n),
     )
@@ -25,7 +25,7 @@ Base.length(n::Edges) = length(n.type)
 
 # trace_node_id and detachedness are always 0 in the snapshots Julia produces so we don't store them
 struct Nodes
-    type::Vector{Int8}         # index into `snapshot.meta.node_types`
+    type::Vector{UInt32}         # index into `snapshot.meta.node_types`
     name_idx::Vector{UInt32} # index into `snapshot.strings`
     id::Vector{UInt}           # unique id, in julia it is the address of the object
     self_size::Vector{Int}     # size of the object itself, not including the size of its fields
@@ -40,7 +40,7 @@ struct Nodes
 end
 function Nodes(n::Int, e::Int)
     Nodes(
-        Vector{Int8}(undef, n),
+        Vector{UInt32}(undef, n),
         Vector{UInt32}(undef, n),
         Vector{UInt}(undef, n),
         Vector{Int}(undef, n),
@@ -101,7 +101,7 @@ function assemble_snapshot(in_prefix, io::IO)
     # Parse nodes with empty edge counts that we need to fill later
     open(string(in_prefix, ".nodes"), "r") do nodes_file
         for i in 1:length(nodes)
-            node_type = read(nodes_file, Int8)
+            node_type = read(nodes_file, UInt32)
             node_name_idx = read(nodes_file, UInt)
             id = read(nodes_file, UInt)
             self_size = read(nodes_file, Int)
@@ -121,7 +121,7 @@ function assemble_snapshot(in_prefix, io::IO)
     # Parse the edges to fill in the edge counts for nodes and correct the to_node offsets
     open(string(in_prefix, ".edges"), "r") do edges_file
         for i in 1:length(nodes.edges)
-            edge_type = read(edges_file, Int8)
+            edge_type = read(edges_file, UInt32)
             edge_name_or_index = read(edges_file, UInt)
             from_node = read(edges_file, UInt)
             to_node = read(edges_file, UInt)

@@ -45,7 +45,7 @@ static void print_str_escape_json(ios_t *stream, const char *s, size_t len) JL_N
 // mimicking https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/src/profiler/heap-snapshot-generator.cc#L2598-L2601
 
 typedef struct {
-    uint8_t type; // These *must* match the Enums on the JS side; control interpretation of name_or_index.
+    uint32_t type; // These *must* match the Enums on the JS side; control interpretation of name_or_index.
     size_t name_or_index; // name of the field (for objects/modules) or index of array
     size_t from_node;  // This is a deviation from the .heapsnapshot format to support streaming.
     size_t to_node;
@@ -57,7 +57,7 @@ typedef struct {
 // mimicking https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/src/profiler/heap-snapshot-generator.cc#L2568-L2575
 
 typedef struct {
-    uint8_t type; // index into snapshot->node_types
+    uint32_t type; // index into snapshot->node_types
     size_t name;
     size_t id; // This should be a globally-unique counter, but we use the memory address
     size_t self_size;
@@ -181,6 +181,7 @@ typedef struct {
     size_t internal_root_idx; // node index of the internal root node
     size_t _gc_root_idx; // node index of the GC roots node
     size_t _gc_finlist_root_idx; // node index of the GC finlist roots node
+    size_t _gc_image_node_idx; // node index of the combined [image] node
 } HeapSnapshot;
 
 // global heap snapshot, mutated by garbage collector
@@ -293,7 +294,7 @@ static void _add_synthetic_root_entries(HeapSnapshot *snapshot) JL_NOTSAFEPOINT
     // adds a node at id 0 which is the "uber root":
     // a synthetic node which points to all the GC roots.
     Node internal_root = {
-        (uint8_t)st_find_or_create(&snapshot->node_types, "synthetic"),
+        (uint32_t)st_find_or_create(&snapshot->node_types, "synthetic"),
         st_find_or_serialize(&snapshot->names, snapshot->strings, ""), // name
         0, // id
         0, // size
@@ -305,7 +306,7 @@ static void _add_synthetic_root_entries(HeapSnapshot *snapshot) JL_NOTSAFEPOINT
     // Add a node for the GC roots
     snapshot->_gc_root_idx = snapshot->internal_root_idx + 1;
     Node gc_roots = {
-        (uint8_t)st_find_or_create(&snapshot->node_types, "synthetic"),
+        (uint32_t)st_find_or_create(&snapshot->node_types, "synthetic"),
         st_find_or_serialize(&snapshot->names, snapshot->strings, "GC roots"), // name
         snapshot->_gc_root_idx, // id
         0, // size
@@ -314,7 +315,7 @@ static void _add_synthetic_root_entries(HeapSnapshot *snapshot) JL_NOTSAFEPOINT
     };
     serialize_node(snapshot, gc_roots);
     Edge root_to_gc_roots = {
-        (uint8_t)st_find_or_create(&snapshot->edge_types, "internal"),
+        (uint32_t)st_find_or_create(&snapshot->edge_types, "internal"),
         st_find_or_serialize(&snapshot->names, snapshot->strings, "GC roots"), // edge label
         snapshot->internal_root_idx, // from
         snapshot->_gc_root_idx // to
@@ -324,7 +325,7 @@ static void _add_synthetic_root_entries(HeapSnapshot *snapshot) JL_NOTSAFEPOINT
     // add a node for the gc finalizer list roots
     snapshot->_gc_finlist_root_idx = snapshot->internal_root_idx + 2;
     Node gc_finlist_roots = {
-        (uint8_t)st_find_or_create(&snapshot->node_types, "synthetic"),
+        (uint32_t)st_find_or_create(&snapshot->node_types, "synthetic"),
         st_find_or_serialize(&snapshot->names, snapshot->strings, "GC finalizer list roots"), // name
         snapshot->_gc_finlist_root_idx, // id
         0, // size
@@ -333,12 +334,34 @@ static void _add_synthetic_root_entries(HeapSnapshot *snapshot) JL_NOTSAFEPOINT
     };
     serialize_node(snapshot, gc_finlist_roots);
     Edge root_to_gc_finlist_roots = {
-        (uint8_t)st_find_or_create(&snapshot->edge_types, "internal"),
+        (uint32_t)st_find_or_create(&snapshot->edge_types, "internal"),
         st_find_or_serialize(&snapshot->names, snapshot->strings, "GC finalizer list roots"), // edge label
         snapshot->internal_root_idx, // from
         snapshot->_gc_finlist_root_idx // to
     };
     serialize_edge(snapshot, root_to_gc_finlist_roots);
+
+    // Add a synthetic node representing all sysimage/pkgimage objects.
+    // Image objects are permanently marked and never traced by the GC mark
+    // phase, so we collapse them into a single node rather than recording
+    // their internal structure.
+    snapshot->_gc_image_node_idx = snapshot->num_nodes;
+    Node gc_image_node = {
+        (uint8_t)st_find_or_create(&snapshot->node_types, "synthetic"),
+        st_find_or_serialize(&snapshot->names, snapshot->strings, "[image]"), // name
+        snapshot->_gc_image_node_idx, // id
+        0, // size (image memory is not GC-managed)
+        0, // size_t trace_node_id (unused)
+        0 // int detachedness;  // 0 - unknown,  1 - attached;  2 - detached
+    };
+    serialize_node(snapshot, gc_image_node);
+    Edge root_to_image = {
+        (uint8_t)st_find_or_create(&snapshot->edge_types, "internal"),
+        st_find_or_serialize(&snapshot->names, snapshot->strings, "[image]"), // edge label
+        snapshot->internal_root_idx, // from
+        snapshot->_gc_image_node_idx // to
+    };
+    serialize_edge(snapshot, root_to_image);
 }
 
 // mimicking https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/src/profiler/heap-snapshot-generator.cc#L597-L597
@@ -428,7 +451,7 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
     }
 
     Node node = {
-        (uint8_t)st_find_or_create(&g_snapshot->node_types, node_type), // size_t type;
+        (uint32_t)st_find_or_create(&g_snapshot->node_types, node_type), // size_t type;
         st_serialize(&g_snapshot->names, g_snapshot->strings, name), // size_t name;
         (size_t)a,     // size_t id;
         // We add 1 to self-size for the type tag that all heap-allocated objects have.
@@ -442,6 +465,18 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
     if (ios_need_close)
         ios_close(&str_);
 
+    // Image objects are permanently marked and never traced by the GC mark
+    // phase, so they would otherwise appear as orphan nodes. Root them under
+    // the synthetic [image] node with a label indicating which image they belong to.
+    if (jl_astaggedvalue(a)->bits.in_image) {
+        jl_value_t *top_mod = jl_object_top_module(a);
+        const char *label = "[image]";
+        if (top_mod != (jl_value_t*)jl_nothing && jl_is_module((jl_module_t*)top_mod))
+            label = jl_symbol_name_(((jl_module_t*)top_mod)->name);
+        _record_gc_just_edge("internal", g_snapshot->_gc_image_node_idx, idx,
+                             st_find_or_serialize(&g_snapshot->names, g_snapshot->strings, label));
+    }
+
     return idx;
 }
 
@@ -452,7 +487,7 @@ static size_t record_pointer_to_gc_snapshot(void *a, size_t bytes, const char *n
         return idx;
 
     Node node = {
-        (uint8_t)st_find_or_create(&g_snapshot->node_types, "object"), // size_t type;
+        (uint32_t)st_find_or_create(&g_snapshot->node_types, "object"), // size_t type;
         st_serialize(&g_snapshot->names, g_snapshot->strings, name), // size_t name;
         (size_t)a,     // size_t id;
         bytes,         // size_t self_size;
@@ -528,7 +563,7 @@ size_t _record_stack_frame_node(HeapSnapshot *snapshot, void *frame) JL_NOTSAFEP
         return idx;
 
     Node node = {
-        (uint8_t)st_find_or_create(&snapshot->node_types, "synthetic"),
+        (uint32_t)st_find_or_create(&snapshot->node_types, "synthetic"),
         st_find_or_serialize(&snapshot->names, snapshot->strings, "(stack frame)"), // name
         (size_t)frame, // id
         1, // size
@@ -633,7 +668,7 @@ static inline void _record_gc_edge(const char *edge_type, jl_value_t *a,
 static void _record_gc_just_edge(const char *edge_type, size_t from_idx, size_t to_idx, size_t name_or_idx) JL_NOTSAFEPOINT
 {
     Edge edge = {
-        (uint8_t)st_find_or_create(&g_snapshot->edge_types, edge_type),
+        (uint32_t)st_find_or_create(&g_snapshot->edge_types, edge_type),
         name_or_idx, // edge label
         from_idx, // from
         to_idx // to

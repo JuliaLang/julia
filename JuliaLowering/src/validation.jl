@@ -286,12 +286,16 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         @fail(st, "expected (cconv convention_tuple n_req_args)")
     [K"tryfinally" t f] -> vst1(vcx, t) & vst1(vcx, f)
     [K"tryfinally" t f scope] -> vst1(vcx, t) & vst1(vcx, f) & vst1(vcx, scope)
-    [K"inline" _] -> pass()
-    [K"noinline" _] -> pass()
-    [K"inbounds" _] -> pass()
-    [K"boundscheck"] -> pass()
-    [K"boundscheck" _] -> pass()
-    [K"loopinfo" _...] -> pass()
+    [K"loopinfo" _...] -> pass() # TODO
+    [K"boundscheck"] -> pass() # optional bool arg does nothing
+    ([K"boundscheck" [K"Value"]], when=(st[1].value isa Bool)) -> pass()
+    ([K"inbounds" [K"Value"]], when=(st[1].value isa Bool)) -> pass()
+    ([K"inbounds" [K"Identifier"]], when=(st[1].name_val == "pop")) -> pass()
+    ([K"inline" [K"Value"]], when=(st[1].value isa Bool)) -> pass()
+    ([K"noinline" [K"Value"]], when=(st[1].value isa Bool)) -> pass()
+    [K"purity"] -> pass()
+    [K"purity" _ _...] -> numchildren(st) == fieldcount(Base.EffectsOverride) ?
+        pass() : @fail(st, "wrong number of args to `purity` expression")
     [K"locals"] -> pass()
     [K"islocal" _] -> pass()
     [K"isglobal" _] -> pass()
@@ -530,13 +534,19 @@ vst1_ident(vcx, st; lhs=false) = @stm st begin
     _ -> @fail(st, "expected identifier")
 end
 function _ident_str(vcx, st, s::String; lhs=false)
-    if !lhs && all(==('_'), s) && !vcx.readable_underscore
+    if !lhs && !vcx.readable_underscore && is_writeonly_est_name(s)
         @fail(st, "all-underscore identifiers are write-only and their values cannot be used in expressions")
     elseif lhs && s in ("ccall", "cglobal")
         @fail(st, string(s, " is a reserved identifier"))
     else
         pass()
     end
+end
+
+"N.B. this shouldn't be used after `est_to_dst`, as JuliaLowering uses the
+Placeholder kind when we have write-only identifiers"
+function is_writeonly_est_name(s::String)
+    (all(==('_'), s) || s == UNUSED) && length(s) > 0
 end
 
 vst1_call(vcx, st) = @stm st begin
@@ -582,7 +592,7 @@ vst1_call_kwarg(vcx, st) = @stm st begin
     [K"." x [K"inert_syntaxtree" id]] -> vst1(vcx, x) & vst1_ident(vcx, id; lhs=true)
     ([K"call" [K"Identifier"] symval v], when=(st[1].name_val==="=>")) ->
         vst1(vcx, symval) & vst1(vcx, v)
-    _ -> @fail(st, "expected identifier, `=`, or, `...` after semicolon")
+    _ -> @fail(st, "expected identifier, `=`, or `...` after semicolon")
 end
 
 vst1_lam(vcx, st) = let
@@ -886,8 +896,10 @@ vst1_curly_typevar(vcx, st) = @stm st begin
     _ -> vst1_splat_or_val(vcx, st)
 end
 
-vst1_struct_arg(vcx, st) =
-    vst1_struct_special_form(vcx, st) | vst1(vcx, st)
+vst1_struct_arg(vcx, st) = @stm st begin
+    [K"block" xs...] -> all(vst1_struct_arg, vcx, xs)
+    _ -> vst1_struct_special_form(vcx, st) | vst1(vcx, st)
+end
 
 vst1_struct_special_form(vcx, st) = @stm st begin
     [K"Identifier"] -> pass()
@@ -1169,6 +1181,13 @@ function _assert_syntaxtree(st::SyntaxTree, parents::Vector{NodeId}, vr)
     for a in required_attrs
         vr &= hasattr(st, a) ? pass() : @fail(st, string("needs attribute ", a))
     end
+    # TODO: Proper traversal along .source and .macro_source (need to cache
+    # results to avoid exponential repeated lookups, and figure out how these
+    # edges may form cycles with child edges)
+    st.source === st._id && (vr &= @fail(st, ".source equal to self ID"))
+    get(st, :macro_source, nothing) === st._id &&
+        (vr &= @fail(st, ".macro_source equal to self ID"))
+
     push!(parents, st._id)
     for c in children(st)
         vr &= _assert_syntaxtree(c, parents, vr)
@@ -1230,7 +1249,9 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
     [K"tryfinally" t f] -> vst2(vcx, t) & vst2(vcx, f)
     [K"tryfinally" t f scope] -> vst2(vcx, t) & vst2(vcx, f) & vst2(vcx, scope)
     [K"_opaque_closure" id argt lb ub partial nargs isva src lam] ->
-        all(vst2, vcx, children(st)[2:end]) & vst2_lam(vcx, lam)
+        vst2_ident(vcx, id) &
+        all(vst2, vcx, children(st)[2:end-1]) &
+        vst2_lam(vcx, lam)
     [K"_do_while" body cond] -> vst2(vcx, body) & vst2(vcx, cond)
     [K"_while" cond body] -> vst2(vcx, cond) & vst2(vcx, body)
     [K"inert" _] -> pass()
@@ -1255,7 +1276,14 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
 
     [K"meta" xs...] -> all(vst2, vcx, xs) # TODO
     [K"loopinfo" xs...] -> all(vst2, vcx, xs) # TODO
-    [K"boundscheck" xs...] -> all(vst2, vcx, xs) # TODO
+    [K"boundscheck"] -> pass()
+    [K"inbounds_pop"] -> pass()
+    ([K"inbounds" [K"Value"]], when=(st[1].value isa Bool)) -> pass()
+    ([K"inline" [K"Value"]], when=(st[1].value isa Bool)) -> pass()
+    ([K"noinline" [K"Value"]], when=(st[1].value isa Bool)) -> pass()
+    [K"purity"] -> pass()
+    [K"purity" _ _...] -> numchildren(st) == fieldcount(Base.EffectsOverride) ?
+        pass() : @fail(st, "wrong number of args to `purity` expression")
 
     [K"always_defined" x] -> vst2_ident(vcx, x)
     [K"assert" [K"Symbol"] x] -> vst2(vcx, x)
@@ -1267,6 +1295,8 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
          vst2(vcx, at) &
          vst2(vcx, cconv) &
          all(vst2, vcx, roots_args)
+    [K"cfunction" [K"Value"] [K"static_eval" fptr] [K"static_eval" rt] [K"static_eval" at] [K"Symbol"]] ->
+         vst2(vcx, fptr) & vst2(vcx, rt) & vst2(vcx, at)
     [K"cfunction" [K"Value"] fptr [K"static_eval" rt] [K"static_eval" at] [K"Symbol"]] ->
          vst2(vcx, fptr) & vst2(vcx, rt) & vst2(vcx, at)
 

@@ -3,7 +3,11 @@
 # commented-out definitions are implemented in C
 
 #abstract type Any <: Any end
-#abstract type Type{T} end
+#abstract type AnyType end
+#struct TypeEq <: AnyType
+#    T
+#end
+#const Type = TypeEq(T) where T
 
 #abstract type Vararg{T} end
 
@@ -15,7 +19,7 @@
 #    name::Symbol
 #end
 
-#mutable struct DataType <: Type
+#mutable struct DataType <: AnyType
 #    name::TypeName
 #    super::Type
 #    parameters::Tuple
@@ -29,7 +33,7 @@
 #    pointerfree::Bool
 #end
 
-#struct Union <: Type
+#struct Union <: AnyType
 #    a
 #    b
 #end
@@ -40,7 +44,7 @@
 #    ub::Type
 #end
 
-#struct UnionAll
+#struct UnionAll <: AnyType
 #    var::TypeVar
 #    body
 #end
@@ -206,8 +210,8 @@
 
 export
     # key types
-    Any, DataType, Vararg, NTuple,
-    Tuple, Type, UnionAll, TypeVar, Union, Nothing, Cvoid,
+    Any, TypeEq, Type, DataType, Vararg, NTuple,
+    Tuple, UnionAll, TypeVar, Union, Nothing, Cvoid,
     AbstractArray, DenseArray, NamedTuple, Pair,
     # special objects
     Function, Method, Module, Symbol, Task, UndefInitializer, undef, WeakRef, VecElement,
@@ -600,7 +604,7 @@ eval(Core, quote
         isa(f, String) && (f = Symbol(f))
         return $(Expr(:new, :LineNumberNode, :l, :f))
     end
-    DebugInfo(def::Union{Method,MethodInstance,Symbol}, linetable::Union{Nothing,DebugInfo}, edges::SimpleVector, codelocs::String) =
+    DebugInfo(def::Union{Method,MethodInstance,Symbol}, linetable::Union{Nothing,DebugInfo,String}, edges::SimpleVector, codelocs::String) =
         $(Expr(:new, :DebugInfo, :def, :linetable, :edges, :codelocs))
     DebugInfo(def::Union{Method,MethodInstance,Symbol}) =
         $(Expr(:new, :DebugInfo, :def, nothing, Core.svec(), ""))
