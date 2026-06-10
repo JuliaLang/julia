@@ -1660,7 +1660,7 @@ static inline jl_typemap_entry_t *lookup_leafcache(jl_genericmemory_t *leafcache
     return NULL;
 }
 
-static jl_typemap_entry_t *mt_find_cache_entry(_Atomic(jl_typemap_t*) JL_NONNULL *JL_NONNULL cache JL_PROPAGATES_ROOT, _Atomic(jl_genericmemory_t*) *leafcache JL_PROPAGATES_ROOT, jl_datatype_t *tt, size_t world, int offs)
+static jl_typemap_entry_t *mt_find_cache_entry(_Atomic(jl_typemap_t*) *cache JL_PROPAGATES_ROOT, _Atomic(jl_genericmemory_t*) *leafcache JL_PROPAGATES_ROOT, jl_datatype_t *tt, size_t world, int offs)
 {
     if (leafcache) {
         jl_typemap_entry_t *entry = lookup_leafcache(jl_atomic_load_relaxed(leafcache), (jl_value_t*)tt, world);
@@ -1673,7 +1673,7 @@ static jl_typemap_entry_t *mt_find_cache_entry(_Atomic(jl_typemap_t*) JL_NONNULL
     return entry;
 }
 
-JL_DLLEXPORT jl_typemap_entry_t *jl_mt_find_cache_entry(jl_methcache_t *JL_NONNULL cache, jl_datatype_t *tt, size_t world)
+JL_DLLEXPORT jl_typemap_entry_t *jl_mt_find_cache_entry(jl_methcache_t *cache, jl_datatype_t *tt, size_t world)
 { // exported only for debugging purposes, not for casual use
     return mt_find_cache_entry(&cache->cache, &cache->leafcache, tt, world, jl_cachearg_offset());
 }
@@ -1843,7 +1843,7 @@ static jl_method_instance_t *cache_result(
 }
 
 static void recache_method(
-        jl_methtable_t *mt, jl_methcache_t *mc, _Atomic(jl_typemap_t*) JL_NONNULL *JL_NONNULL cache, jl_value_t *parent JL_PROPAGATES_ROOT,
+        jl_methtable_t *mt, jl_methcache_t *mc, _Atomic(jl_typemap_t*) *cache, jl_value_t *parent JL_PROPAGATES_ROOT,
         jl_tupletype_t *tt, // the original tupletype of the signature
         jl_method_t *definition,
         size_t world, size_t min_valid, size_t max_valid, size_t current_world,
@@ -3410,9 +3410,9 @@ jl_method_instance_t *jl_builtin_method_lookup(jl_value_t *builtin)
     jl_tupletype_t *tt = (jl_datatype_t*)jl_apply_tuple_type_v(params, 2);
     JL_GC_PUSH1(&tt);
     jl_method_t *m = (jl_method_t*)jl_gf_invoke_lookup((jl_value_t*)tt, (jl_value_t*)jl_method_table, 1);
-    assert(jl_is_method(m) && m->unspecialized);
+    assert(jl_is_method(m) && jl_atomic_load_relaxed(&m->unspecialized));
     JL_GC_POP();
-    return m->unspecialized;
+    return jl_atomic_load_relaxed(&m->unspecialized);
 }
 
 // return a Vector{Any} of svecs, each describing a method match:
