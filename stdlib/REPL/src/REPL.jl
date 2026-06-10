@@ -71,16 +71,16 @@ Supertype for all Read-Eval-Print Loop (REPL) frontends.
 
 A REPL frontend reads user input, hands complete expressions to a backend for
 evaluation, and prints the response. A backend is started and connected to the
-frontend by [`run_repl`](@ref). The three concrete frontends shipped with Julia
-are [`LineEditREPL`](@ref) — the interactive terminal REPL with line editing,
-history, and prompt modes — [`BasicREPL`](@ref) — a minimal line-based fallback —
-and [`StreamREPL`](@ref) — a frontend that drives the REPL over an arbitrary
-`IO` stream.
+frontend by [`run_repl`](@ref). The three frontends defined by default are:
 
-A concrete subtype `R <: AbstractREPL` is expected to implement
-`run_frontend(repl::R, backend::REPLBackendRef)`, which runs the read/print loop
-and feeds parsed input to `backend`, and the accessors `outstream(repl::R)` and
-`hascolor(repl::R)`.
+- [`LineEditREPL`](@ref), the interactive terminal REPL with line editing,
+  history, and prompt modes. Julia's default REPL is a `LineEditREPL`.
+- [`BasicREPL`](@ref), a minimal, line-based fallback.
+- [`StreamREPL`](@ref), a frontend that drives the REPL over an arbitrary
+  `IO` stream.
+
+Every `AbstractREPL` subtype is expected to support `run_frontend`, `outstream`,
+and `hascolor`.
 """
 abstract type AbstractREPL end
 
@@ -730,11 +730,7 @@ line editing, history, or prompt modes.
 
 `BasicREPL` is the fallback frontend used instead of [`LineEditREPL`](@ref) when
 the terminal is not fully functional — that is, when the `TERM` environment
-variable is `"dumb"` (or unset, on non-Windows systems). It writes a plain
-`julia> ` prompt, reads a complete expression (continuing to read while the
-parser reports the input as incomplete), evaluates it on the backend, and prints
-the response. Input is terminated by EOF (Ctrl-D); an `InterruptException`
-(Ctrl-C) cancels the current line.
+variable is `"dumb"` (or unset, on non-Windows systems).
 """
 mutable struct BasicREPL <: AbstractREPL
     terminal::TextTerminal
