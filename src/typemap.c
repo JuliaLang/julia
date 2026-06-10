@@ -33,7 +33,7 @@ static jl_value_t *jl_type_extract_name(jl_value_t *t1 JL_PROPAGATES_ROOT, int i
     else if (jl_is_typevar(t1)) {
         return jl_type_extract_name(((jl_tvar_t*)t1)->ub, 0);
     }
-    else if (jl_is_some_typeeq(t1)) {
+    else if (jl_is_some_Type(t1)) {
         // invariantly this is the wrapper's own name; covariantly the key must lie on
         // both the `typeof(arg)` and the wrapper supertype chains, which meet at `AnyType`
         if (invariant)
@@ -75,7 +75,7 @@ static int jl_type_extract_name_precise(jl_value_t *t1, int invariant)
     else if (jl_is_typevar(t1)) {
         return jl_type_extract_name_precise(((jl_tvar_t*)t1)->ub, 0);
     }
-    else if (jl_is_some_typeeq(t1)) {
+    else if (jl_is_some_Type(t1)) {
         return 1;
     }
     else if (t1 == jl_bottom_type || t1 == (jl_value_t*)jl_typeofbottom_type) {
@@ -123,8 +123,8 @@ static int sig_match_by_type_leaf(jl_value_t **types, jl_tupletype_t *sig, size_
     for (i = 0; i < n; i++) {
         jl_value_t *decl = jl_tparam(sig, i);
         jl_value_t *a = types[i];
-        if (jl_is_some_typeeq(a)) // decl is not Type, because it wouldn't be leafsig
-            a = jl_typeof(jl_some_typeeq_T(a));
+        if (jl_is_some_Type(a)) // decl is not Type, because it wouldn't be leafsig
+            a = jl_typeof(jl_some_Type_T(a));
         if (!jl_types_equal(a, decl))
             return 0;
     }
@@ -135,7 +135,7 @@ static int sig_match_by_type_leaf(jl_value_t **types, jl_tupletype_t *sig, size_
 static int jl_subtype_anytype(jl_value_t *a) JL_NOTSAFEPOINT
 {
     while (1) {
-        if (a == (jl_value_t*)jl_anytype_type || jl_is_kind(a) || jl_is_some_typeeq(a))
+        if (a == (jl_value_t*)jl_anytype_type || jl_is_kind(a) || jl_is_some_Type(a))
             return 1;
         else if (jl_is_unionall(a))
             a = jl_unwrap_unionall(a);
@@ -164,8 +164,8 @@ static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t
         if (jl_is_typeeq(decl)) {
             jl_value_t *tp0 = jl_typeeq_T(decl);
             // either query wrapper matches by type equality (egal implies equal)
-            if (jl_is_some_typeeq(a)) {
-                if (!jl_types_equal(jl_some_typeeq_T(a), tp0))
+            if (jl_is_some_Type(a)) {
+                if (!jl_types_equal(jl_some_Type_T(a), tp0))
                     return 0;
             }
             else {
@@ -185,8 +185,8 @@ static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t
         }
         else {
             assert(jl_is_concrete_type(decl));
-            if (jl_is_some_typeeq(a)) { // decl is not TypeEq/TypeEgal or AnyType, because it would be caught above, so it must be concrete
-                a = jl_typeof(jl_some_typeeq_T(a));
+            if (jl_is_some_Type(a)) { // decl is not TypeEq/TypeEgal or AnyType, because it would be caught above, so it must be concrete
+                a = jl_typeof(jl_some_Type_T(a));
             }
             if (!jl_types_equal(a, decl))
                 return 0;
@@ -466,13 +466,13 @@ static int tname_intersection(jl_value_t *a, jl_typename_t *bname, int8_t tparam
     if (jl_is_typevar(a))
         return tname_intersection(((jl_tvar_t*)a)->ub, bname, tparam);
     if (tparam) {
-        if (!jl_is_some_typeeq(a))
+        if (!jl_is_some_Type(a))
             return 0;
-        a = jl_unwrap_unionall(jl_some_typeeq_T(a));
+        a = jl_unwrap_unionall(jl_some_Type_T(a));
         if (!jl_is_datatype(a))
             return tname_intersection(a, bname, 0);
     }
-    else if (jl_is_some_typeeq(a)) {
+    else if (jl_is_some_Type(a)) {
         // a covariant wrapper reaches name buckets via its kind's supertype chain
         jl_datatype_t *kind = jl_is_typeeq(a) ? jl_typeeq_type : jl_typeegal_type;
         return tname_intersection_dt(kind, bname, jl_supertype_height(kind));
@@ -508,7 +508,7 @@ static int jl_typemap_intersection_memory_visitor(jl_genericmemory_t *a, jl_valu
         jl_value_t *ttype = jl_unwrap_unionall(ty);
         if (tparam & 1)
             // extract T from Type{T} (if possible)
-            ttype = jl_is_some_typeeq(ttype) ? jl_some_typeeq_T(ttype) : NULL;
+            ttype = jl_is_some_Type(ttype) ? jl_some_Type_T(ttype) : NULL;
         if (ttype && jl_is_datatype(ttype)) {
             tydt = (jl_datatype_t*)ttype;
         }
@@ -680,7 +680,7 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
                 maybe_type = maybe_kind || jl_has_intersect_type_not_kind(ty);
                 if (maybe_type && !maybe_kind) {
                     typetype = jl_unwrap_unionall(ty);
-                    typetype = jl_is_some_typeeq(typetype) ? jl_some_typeeq_T(typetype) : NULL;
+                    typetype = jl_is_some_Type(typetype) ? jl_some_Type_T(typetype) : NULL;
                     name = typetype ? jl_type_extract_name(typetype, 1) : NULL;
                     if (!typetype)
                         exclude_typeofbottom = !jl_subtype((jl_value_t*)jl_typeofbottom_type, ty);
@@ -1004,8 +1004,8 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(
         }
         if (ty) {
             // now look at the optimized leaftype caches
-            if (jl_is_some_typeeq(ty)) {
-                jl_value_t *a0 = jl_some_typeeq_T(ty);
+            if (jl_is_some_Type(ty)) {
+                jl_value_t *a0 = jl_some_Type_T(ty);
                 if (is_cache_leaf(a0, 1)) {
                     jl_genericmemory_t *targ = jl_atomic_load_relaxed(&cache->targ);
                     if (targ != (jl_genericmemory_t*)jl_an_empty_memory_any) {
@@ -1040,7 +1040,7 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(
             // now look at the optimized TypeName caches
             jl_genericmemory_t *tname = jl_atomic_load_relaxed(&cache->tname);
             if (tname != (jl_genericmemory_t*)jl_an_empty_memory_any) {
-                jl_value_t *a0 = ty && jl_is_some_typeeq(ty) ? jl_type_extract_name(jl_some_typeeq_T(ty), 1) : NULL;
+                jl_value_t *a0 = ty && jl_is_some_Type(ty) ? jl_type_extract_name(jl_some_Type_T(ty), 1) : NULL;
                 if (a0) { // TODO: if we start analyzing Union types in jl_type_extract_name, then a0 might be over-approximated here, leading us to miss possible subtypes
                     jl_datatype_t *super = (jl_datatype_t*)jl_unwrap_unionall(((jl_typename_t*)a0)->wrapper);
                     while (1) {
@@ -1351,8 +1351,8 @@ static jl_value_t *jl_method_convert_list_to_cache(
             if (jl_is_vararg(key))
                 key = jl_unwrap_vararg(key);
             if (tparam) {
-                assert(jl_is_some_typeeq(key));
-                key = jl_some_typeeq_T(key);
+                assert(jl_is_some_Type(key));
+                key = jl_some_Type_T(key);
             }
             jl_typemap_memory_insert_(map, &dblcache, key, ml, NULL, 0, offs, NULL);
         }
@@ -1465,10 +1465,10 @@ static void jl_typemap_level_insert_(
     // Don't put Varargs in the optimized caches (too hard to handle in lookup and bp)
     if (t1 && !isva) {
         // try to put in leaf type caches
-        if (jl_is_some_typeeq(t1)) {
+        if (jl_is_some_Type(t1)) {
             // if the argument is Type{...}, this method has specializations for singleton kinds
             // and we use the table indexed for that purpose.
-            jl_value_t *a0 = jl_some_typeeq_T(t1);
+            jl_value_t *a0 = jl_some_Type_T(t1);
             if (is_cache_leaf(a0, 1)) {
                 jl_typename_t *name = a0 == jl_bottom_type ? jl_typeofbottom_type->name : ((jl_datatype_t*)a0)->name;
                 jl_typemap_memory_insert_(map, &cache->targ, (jl_value_t*)name, newrec, (jl_value_t*)cache, 1, offs, jl_is_datatype(name->wrapper) ? NULL : a0);
@@ -1484,8 +1484,8 @@ static void jl_typemap_level_insert_(
         // try to put in TypeName caches
         jl_value_t *a0;
         t1 = jl_unwrap_unionall(t1);
-        if (jl_is_some_typeeq(t1)) {
-            jl_value_t *tp0 = jl_some_typeeq_T(t1);
+        if (jl_is_some_Type(t1)) {
+            jl_value_t *tp0 = jl_some_Type_T(t1);
             a0 = jl_type_extract_name(tp0, 1);
             jl_datatype_t *super = a0 ? (jl_datatype_t*)jl_unwrap_unionall(((jl_typename_t*)a0)->wrapper) : jl_any_type;
             jl_typename_t *name = super->name;
@@ -1521,7 +1521,7 @@ jl_typemap_entry_t *jl_typemap_alloc(
         if (jl_is_kind(decl) || decl == (jl_value_t*)jl_anytype_type)
             isleafsig = 0; // Type{} may have a higher priority than a kind; both are
                            // still simple for sig_match_simple
-        else if (jl_is_some_typeeq(decl))
+        else if (jl_is_some_Type(decl))
             isleafsig = 0; // Type{}/TypeEgal{} may need special processing to compute the match
         else if (jl_is_vararg(decl))
             isleafsig = 0; // makes iteration easier when the endpoints are the same

@@ -4,12 +4,11 @@
 # lattice utilities #
 #####################
 
-# true if a value of this type is inlineable as the constant `T`, i.e. is known
-# to be exactly `T` (`===`). Only `TypeEgal{T}` (the egality-based dispatch-cache
-# dual of `Type{T}`) qualifies: `Type{T}` matches any `S == T`, and for *every*
-# `T` there is an `S` with `S == T` yet `S !== T` (e.g. `Union{U,V} where {U<:T,
-# V<:T}`), so the old `hasuniquerep`-based test was unsound (JuliaLang/julia#61323).
-isconstType(@nospecialize t) = isa(t, Core.TypeEgal)
+# true if a value of this type is known to be exactly (`===`) the type `T`, so it
+# is inlineable as the constant `T`. A general `Type{T}` is not: it also matches
+# `S == T` with `S !== T` reps, e.g. `Union{U,V} where {U<:T,V<:T}` (#61323).
+# `Type{Union{}}` is the exception, since the bottom object is unique.
+isconstType(@nospecialize t) = isa(t, Core.TypeEgal) || (isType(t) && type_parameter(t) === Union{})
 
 """
     isTypeDataType(@nospecialize t)::Bool
@@ -28,7 +27,7 @@ function isTypeDataType(@nospecialize t)
     return t.name !== Tuple.name
 end
 
-has_extended_info(@nospecialize x) = (!isa(x, Type) && !isvarargtype(x)) || isType(x)
+has_extended_info(@nospecialize x) = (!isa(x, Type) && !isvarargtype(x)) || isType(x) || isa(x, Core.TypeEgal)
 
 # Subtyping currently intentionally answers certain queries incorrectly for kind types. For
 # some of these queries, this check can be used to somewhat protect against making incorrect
@@ -64,7 +63,7 @@ function valid_as_lattice(@nospecialize(x), astag::Bool=false)
         # operations that might remove the Union itself)
         return true
     end
-    if isType(x)
+    if isType(x) || isa(x, Core.TypeEgal)
         p = type_parameter(x)
         p isa Type || p isa TypeVar || return false
         return true
@@ -463,7 +462,7 @@ function _is_immutable_type(@nospecialize ty)
     if isa(ty, Union)
         return _is_immutable_type(ty.a) && _is_immutable_type(ty.b)
     end
-    isType(ty) && return false
+    (isType(ty) || isa(ty, Core.TypeEgal)) && return false
     return !isabstracttype(ty) && !ismutabletype(ty)
 end
 

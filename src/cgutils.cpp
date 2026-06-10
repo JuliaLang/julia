@@ -817,7 +817,7 @@ static bool is_typeofbottom_typealias(jl_value_t *jt)
         return false;
     return jt == (jl_value_t*)jl_bottom_type ||
            jt == (jl_value_t*)jl_typeofbottom_type ||
-           (jl_is_some_typeeq(jt) && jl_some_typeeq_T(jt) == jl_bottom_type);
+           (jl_is_some_Type(jt) && jl_some_Type_T(jt) == jl_bottom_type);
 }
 
 static Type *_julia_type_to_llvm(jl_codegen_output_t *ctx, LLVMContext &ctxt, jl_value_t *jt, bool *isboxed, bool no_boxing)
@@ -2024,7 +2024,7 @@ static Value *emit_exactly_isa(jl_codectx_t &ctx, const jl_cgval_t &arg, jl_data
             ctx.builder.SetInsertPoint(isaBB);
             Value *istype_boxed = NULL;
             if (is_uniquerep_Type((jl_value_t*)dt)) {
-                istype_boxed = ctx.builder.CreateICmpEQ(decay_derived(ctx, arg.Vboxed), decay_derived(ctx, literal_pointer_val(ctx, jl_some_typeeq_T((jl_value_t*)dt))));
+                istype_boxed = ctx.builder.CreateICmpEQ(decay_derived(ctx, arg.Vboxed), decay_derived(ctx, literal_pointer_val(ctx, jl_some_Type_T((jl_value_t*)dt))));
             } else {
                 istype_boxed = ctx.builder.CreateICmpEQ(emit_typeof(ctx, arg.Vboxed, false, true), emit_tagfrom(ctx, dt));
             }
@@ -2104,7 +2104,7 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
 
     if (is_uniquerep_Type(intersected_type) && jl_pointer_egal(intersected_type)) {
         // `TypeEgal{X}` with pointer-egal `X`: `isa(x, T)` is the pointer test `x === X`
-        auto ptr = track_pjlvalue(ctx, literal_pointer_val(ctx, jl_some_typeeq_T(intersected_type)));
+        auto ptr = track_pjlvalue(ctx, literal_pointer_val(ctx, jl_some_Type_T(intersected_type)));
         return {ctx.builder.CreateICmpEQ(boxed(ctx, x), ptr), false};
     }
     if (intersected_type == (jl_value_t*)jl_type_type) {

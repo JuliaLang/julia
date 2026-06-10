@@ -1876,14 +1876,14 @@ STATIC_INLINE jl_value_t *jl_typeegal_T(jl_value_t *v JL_PROPAGATES_ROOT) JL_NOT
 }
 
 // either type wrapper (the equality `TypeEq`/`Type{T}` or the egality `TypeEgal{T}`)
-STATIC_INLINE int jl_is_some_typeeq(jl_value_t *v) JL_NOTSAFEPOINT
+STATIC_INLINE int jl_is_some_Type(jl_value_t *v) JL_NOTSAFEPOINT
 {
     return jl_is_typeeq(v) || jl_is_typeegal(v);
 }
 
-STATIC_INLINE jl_value_t *jl_some_typeeq_T(jl_value_t *v JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+STATIC_INLINE jl_value_t *jl_some_Type_T(jl_value_t *v JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
-    assert(jl_is_some_typeeq(v));
+    assert(jl_is_some_Type(v));
     return ((jl_typeeq_t*)v)->T;
 }
 

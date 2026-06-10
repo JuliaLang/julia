@@ -1023,12 +1023,10 @@ function show(io::IO, ::MIME"text/plain", @nospecialize(x::Type))
 end
 
 show(io::IO, @nospecialize(x::TypeEq)) = show_typeeq(io, x)
-# `TypeEgal{T}` is the internal, egality-based dispatch-cache dual of `Type{T}`: its
-# sole instance is exactly `T` (by egality), making it strictly more specific than the
-# equality kind `Type{T}`. It always prints under its own `TypeEgal{T}` spelling so it
-# is never conflated with `Type{T}`.
+# always print under the qualified (eval-able) `Core.TypeEgal{T}` spelling, so the
+# egality kind is never conflated with `Type{T}`
 function show(io::IO, @nospecialize(x::Core.TypeEgal))
-    print(io, "TypeEgal{")
+    print(io, "Core.TypeEgal{")
     show(io, type_parameter(x))
     print(io, "}")
 end
@@ -2564,8 +2562,6 @@ function show_signature_function(io::IO, @nospecialize(ft), demangle=false, farg
         s = sprint(show_sym, (demangle ? demangle_function_name : identity)(uw.name.singletonname), context=io)
         print_within_stacktrace(io, s, bold=true)
     elseif (isType(ft) || isa(ft, Core.TypeEgal)) && (f = type_parameter(ft); !isa(f, TypeVar))
-        # a constructor call displays by its type name (`T(...)`), whether the call was
-        # keyed on the equality kind `Type{T}` or the egality kind `TypeEgal{T}`
         uwf = unwrap_unionall(f)
         parens = isa(f, UnionAll) && !(isa(uwf, DataType) && f === uwf.name.wrapper)
         parens && print(io, "(")

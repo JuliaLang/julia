@@ -104,8 +104,8 @@ static int layout_uses_free_typevars(jl_value_t *v, jl_typeenv_t *env)
                 return 1;
            v = ((jl_uniontype_t*)v)->b;
         }
-        else if (jl_is_some_typeeq(v)) {
-            v = jl_some_typeeq_T(v);
+        else if (jl_is_some_Type(v)) {
+            v = jl_some_Type_T(v);
         }
         else if (jl_is_vararg(v)) {
             jl_vararg_t *vm = (jl_vararg_t*)v;
@@ -160,8 +160,8 @@ static int has_free_typevars(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT
                 return 1;
            v = ((jl_uniontype_t*)v)->b;
         }
-        else if (jl_is_some_typeeq(v)) {
-            v = jl_some_typeeq_T(v);
+        else if (jl_is_some_Type(v)) {
+            v = jl_some_Type_T(v);
         }
         else if (jl_is_vararg(v)) {
             jl_vararg_t *vm = (jl_vararg_t*)v;
@@ -234,8 +234,8 @@ static void find_free_typevars(jl_value_t *v, jl_typeenv_t *env, jl_array_t *out
             find_free_typevars(((jl_uniontype_t*)v)->a, env, out);
             v = ((jl_uniontype_t*)v)->b;
         }
-        else if (jl_is_some_typeeq(v)) {
-            v = jl_some_typeeq_T(v);
+        else if (jl_is_some_Type(v)) {
+            v = jl_some_Type_T(v);
         }
         else if (jl_is_vararg(v)) {
             jl_vararg_t *vm = (jl_vararg_t *)v;
@@ -308,8 +308,8 @@ int jl_has_bound_typevars(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT
                 return 1;
            v = ((jl_uniontype_t*)v)->b;
         }
-        else if (jl_is_some_typeeq(v)) {
-            v = jl_some_typeeq_T(v);
+        else if (jl_is_some_Type(v)) {
+            v = jl_some_Type_T(v);
         }
         else if (jl_is_vararg(v)) {
             jl_vararg_t *vm = (jl_vararg_t *)v;
@@ -1044,7 +1044,7 @@ static int typekey_eq(jl_datatype_t *tt, jl_value_t **key, size_t n)
                 // require exact same Type{T} in covariant context. see e.g. issue #22842
                 // this should work because `Tuple{Type}`s don't need unique pointers, and aren't the
                 // direct tags of values (concrete) so we don't rely on pointer equality.
-                if (jl_is_some_typeeq(tj) || jl_is_some_typeeq(kj))
+                if (jl_is_some_Type(tj) || jl_is_some_Type(kj))
                     return 0;
             }
             if (jl_type_equality_is_identity(tj, kj))
@@ -1070,7 +1070,11 @@ static int typekeyvalue_eq(jl_datatype_t *tt, jl_value_t *key1, jl_value_t **key
         jl_value_t *kj = j == 0 ? key1 : key[j - 1];
         jl_value_t *tj = jl_svecref(tt->parameters, j);
         if (leaf && jl_is_typeeq(tj)) {
+            // a closed `Type{T}` key can only belong to a by-type constructed tuple,
+            // which must not capture (`==`-equal but non-egal) argument values (#61323)
             jl_value_t *tp0 = jl_typeeq_T(tj);
+            if (!jl_has_free_typevars(tp0))
+                return 0;
             if (!(kj == tp0 || (jl_typeof(tp0) == jl_typeof(kj) && jl_types_equal(tp0, kj))))
                 return 0;
         }
@@ -1084,7 +1088,10 @@ static int typekeyvalue_eq(jl_datatype_t *tt, jl_value_t *key1, jl_value_t **key
             return 0;
         }
         else if (leaf && jl_is_kind(tj)) {
-            return 0;
+            // type-valued arguments are keyed through the wrappers above, except
+            // `Union{}` (the unique instance of `typeof(Union{})`)
+            if (tj != (jl_value_t*)jl_typeofbottom_type)
+                return 0;
         }
     }
     return 1;
@@ -1406,7 +1413,7 @@ static int has_concrete_supertype(jl_value_t *kj) JL_NOTSAFEPOINT
         int cb = has_concrete_supertype(((jl_uniontype_t*)uw)->b);
         return ca && cb;
     }
-    else if (jl_is_some_typeeq(uw)) {
+    else if (jl_is_some_Type(uw)) {
         return 1;
     }
     else if (uw == jl_bottom_type) {
@@ -1784,7 +1791,7 @@ jl_value_t *jl_substitute_datatype(jl_value_t *t, jl_datatype_t * x, jl_datatype
         }
         JL_GC_POP();
     }
-    else if (jl_is_some_typeeq(t)) {
+    else if (jl_is_some_Type(t)) {
         int egal = jl_is_typeegal(t);
         jl_typeeq_t *te = (jl_typeeq_t*)t;
         jl_value_t *T = NULL;
@@ -2002,8 +2009,12 @@ static unsigned typekeyvalue_hash(jl_typename_t *tn, jl_value_t *key1, jl_value_
         uint_t hj;
         if (leaf && jl_is_kind(jl_typeof(kj))) {
             // hash to match whichever key `jl_inst_arg_tuple_type` stores
+            // (`Union{}` is keyed as `typeof(Union{})`, see `jl_wrap_TypeEgal`)
             int failed = 0;
-            hj = jl_has_free_typevars(kj) ? typeeq_hash(kj, &failed) : typeegal_hash(kj, &failed);
+            if (kj == jl_bottom_type)
+                hj = ((jl_datatype_t*)jl_typeofbottom_type)->hash;
+            else
+                hj = jl_has_free_typevars(kj) ? typeeq_hash(kj, &failed) : typeegal_hash(kj, &failed);
             if (failed)
                 return 0;
         }
@@ -2036,11 +2047,16 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt, int cacheable)
                 dt->isconcretetype = (jl_is_datatype(p) && ((jl_datatype_t*)p)->isconcretetype) ||
                     p == jl_bottom_type;
             if (dt->isdispatchtuple) {
+                // a type-valued slot is a dispatch slot only in the egality form
+                // `TypeEgal{T}` that `jl_inst_arg_tuple_type` produces; an equality
+                // `Type{T}` slot also admits `==`-equal but non-egal arguments --
+                // except `Type{Union{}}`, whose sole instance is the unique bottom
+                // object (and which aliases the dispatch slot `typeof(Union{})`)
                 dt->isdispatchtuple =
                     (jl_is_datatype(p) && ((!jl_is_kind(p) && ((jl_datatype_t*)p)->isconcretetype) ||
-                     (p == (jl_value_t*)jl_typeofbottom_type) || // == Type{Union{}}, so needs to be consistent
-                     (((jl_datatype_t*)p)->name == jl_type_typename && !((jl_datatype_t*)p)->hasfreetypevars))) ||
-                    (jl_is_some_typeeq(p) && !jl_has_free_typevars(p));
+                     (p == (jl_value_t*)jl_typeofbottom_type))) ||
+                    jl_is_typeegal(p) ||
+                    (jl_is_typeeq(p) && jl_typeeq_T(p) == jl_bottom_type);
             }
         }
         if (jl_is_vararg(p))
@@ -2187,9 +2203,9 @@ static int _may_substitute_ub(jl_value_t *v, jl_tvar_t *var, int inside_inv, int
                 inside_inv = 1; // treat as invariant inside vararg, for the sake of this algorithm
             v = va->T;
         }
-        else if (jl_is_some_typeeq(v)) {
+        else if (jl_is_some_Type(v)) {
             inside_inv = 1;
-            v = jl_some_typeeq_T(v);
+            v = jl_some_Type_T(v);
         }
         else {
             return 1;
@@ -3068,6 +3084,10 @@ jl_value_t *jl_wrap_TypeEgal(jl_value_t *t)
     // free typevars are not allowed inside `TypeEgal`
     if (jl_has_free_typevars(t))
         jl_type_error_rt("TypeEgal", "parameter", (jl_value_t*)jl_type_type, t);
+    // `typeof(Union{})` already denotes exactly the single-instance set `{Union{}}`
+    // (the bottom object is unique), so normalize to it
+    if (t == jl_bottom_type)
+        return (jl_value_t*)jl_typeofbottom_type;
     jl_task_t *ct = jl_current_task;
     JL_GC_PUSH1(&t);
     jl_value_t *te = jl_gc_alloc(ct->ptls, sizeof(jl_typeeq_t), jl_typeegal_type);

@@ -382,10 +382,10 @@ end
 
 @test Base.return_types() do
     typejoin(Int, UInt)
-end  |> only == Type{typejoin(Int, UInt)}
+end  |> only == Core.TypeEgal{typejoin(Int, UInt)}
 @test Base.return_types() do
     typejoin(Int, UInt, Float64)
-end  |> only == Type{typejoin(Int, UInt, Float64)}
+end  |> only == Core.TypeEgal{typejoin(Int, UInt, Float64)}
 
 @test typejoin(1, 2) === Any
 @test typejoin(1, 2, 3) === Any

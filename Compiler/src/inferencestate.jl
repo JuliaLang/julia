@@ -829,14 +829,17 @@ function sptypes_from_meth_instance(mi::MethodInstance)
         # via `constrains_param_static`, so `v_constrained` is authoritative.
         v_tvar = nothing
         v_constrained = false
+        v_marked = false
         if isa(v, SimpleVector)
             v_inner = v[1]
             v_constrained = v[2]::Bool
+            v_marked = true
             if isa(v_inner, TypeVar)
                 v_tvar = v_inner
             else
-                # DataType-with-free-tvars case: route through the generic
-                # `has_free_typevars(v)` path by unwrapping.
+                # closed-value / DataType-with-free-tvars case: unwrap; closed type
+                # values are handled by the `v_marked` arm below, the rest routes
+                # through the generic `has_free_typevars(v)` path
                 v = v_inner
             end
         end
@@ -855,6 +858,12 @@ function sptypes_from_meth_instance(mi::MethodInstance)
             # so the type is known to be `Int`
             ty = Int
             undef = false
+        elseif v_marked && isa(v, Type)
+            # subtyping marked this var as pinned only up to type equality: an
+            # `S == v` rep argument also matches this MethodInstance and would
+            # bind the var to `S` (#61323)
+            ty = TypeEq{v}
+            undef = !v_constrained
         else
             ty = Const(v)
             undef = false

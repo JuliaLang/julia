@@ -973,7 +973,7 @@ function ismutationfree(@nospecialize(t))
     t = unwrap_unionall(t)
     if isa(t, DataType)
         return datatype_ismutationfree(t)
-    elseif isa(t, TypeEq)
+    elseif isa(t, TypeEq) || isa(t, Core.TypeEgal)
         T = type_parameter(t)
         return isa(T, Type) && ismutationfree(typeof(T))
     elseif isa(t, Union)
@@ -1048,7 +1048,7 @@ using Core: has_free_typevars
 # and is thus perhaps most similar to the old (pre-1.0) `isconcretetype` query
 function isdispatchelem(@nospecialize v)
     return (v === Bottom) || (v === typeof(Bottom)) || isconcretedispatch(v) ||
-        (isType(v) && !has_free_typevars(v))
+        isa(v, Core.TypeEgal) || (isType(v) && type_parameter(v) === Union{})
 end
 
 isType(@nospecialize t) = isa(t, TypeEq)
@@ -1904,40 +1904,11 @@ is_nospecializeinfer(method::Method) = method.nospecializeinfer && is_nospeciali
 """
 Return MethodInstance corresponding to `atype` and `sparams`.
 
-No widening / narrowing / compileable-normalization of `atype` is performed, except
-that closed `Type{X}` argument slots are keyed on the egality kind `TypeEgal{X}` (see
-`egal_normalize_atype`).
+No widening / narrowing / compileable-normalization of `atype` is performed.
+A slot for an argument known by egality must already carry the egality kind
+(`TypeEgal{X}`, as `Compiler.widenconst` produces); a closed `Type{X}` slot
+means the argument is only known up to type equality (#61323).
 """
-# Key a specialization on the egality kind `TypeEgal{X}` for a closed `Type{X}` argument
-# slot, so that egal-distinct type objects get distinct specializations and inference,
-# const-prop and codegen agree on one `MethodInstance` (JuliaLang/julia#61323) -- the
-# form the runtime dispatch cache (`jl_inst_arg_tuple_type`) and `jl_compilation_sig`
-# produce. A slot the method declares as a *concrete* `Type{X}` is excluded: it is pinned
-# to that exact type and matched by equality, like the method's own `def`, so egal-keying
-# it would make a signature-widened specialization diverge from that `def`.
-function egal_normalize_atype(method::Method, @nospecialize(atype))
-    t = unwrap_unionall(atype)
-    (isa(t, DataType) && t.name === Tuple.name) || return atype
-    sig = unwrap_unionall(method.sig)
-    isa(sig, DataType) || return atype
-    dparams = sig.parameters
-    nd = length(dparams)
-    params = t.parameters
-    newparams = nothing
-    for i = 1:length(params)
-        p = params[i]
-        (isa(p, Core.TypeEq) && !has_free_typevars(p)) || continue
-        di = i ≤ nd ? dparams[i] : (nd > 0 ? dparams[nd] : Any)
-        isvarargtype(di) && (di = unwrapva(di))
-        # concrete `::Type{X}` declared slot: keep equality (matches the method's `def`)
-        (isa(di, Core.TypeEq) && !has_free_typevars(di)) && continue
-        newparams === nothing && (newparams = Any[params...])
-        newparams[i] = Core.TypeEgal{type_parameter(p)}
-    end
-    newparams === nothing && return atype
-    return rewrap_unionall(Tuple{newparams...}, atype)
-end
-
 function specialize_method(method::Method, @nospecialize(atype), sparams::SimpleVector; preexisting::Bool=false)
     @inline
     if isa(atype, UnionAll)
@@ -1946,7 +1917,6 @@ function specialize_method(method::Method, @nospecialize(atype), sparams::Simple
     if is_nospecializeinfer(method) # TODO: this shouldn't be here
         atype = get_nospecializeinfer_sig(method, atype, sparams)
     end
-    atype = egal_normalize_atype(method, atype)
     if preexisting
         # check cached specializations
         # for an existing result stored there

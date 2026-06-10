@@ -39,8 +39,8 @@ int must_be_new_dt(jl_value_t *t, htable_t *news, char *image_base, size_t sizeo
         return must_be_new_dt(tv->lb, news, image_base, sizeof_sysimg) ||
                must_be_new_dt(tv->ub, news, image_base, sizeof_sysimg);
     }
-    else if (jl_is_some_typeeq(t)) {
-        return must_be_new_dt(jl_some_typeeq_T(t), news, image_base, sizeof_sysimg);
+    else if (jl_is_some_Type(t)) {
+        return must_be_new_dt(jl_some_Type_T(t), news, image_base, sizeof_sysimg);
     }
     else if (jl_is_vararg(t)) {
         jl_vararg_t *tv = (jl_vararg_t*)t;

@@ -650,10 +650,10 @@ static jl_datatype_t *nth_arg_datatype(jl_value_t *a JL_PROPAGATES_ROOT, int n) 
         }
         return NULL;
     }
-    else if (jl_is_some_typeeq(a)) {
+    else if (jl_is_some_Type(a)) {
         if (n != 0)
             return NULL;
-        jl_value_t *T = jl_some_typeeq_T(a);
+        jl_value_t *T = jl_some_Type_T(a);
         if (T == jl_bottom_type)
             return jl_typeofbottom_type;
         if (jl_is_datatype(T))
@@ -1630,7 +1630,7 @@ size_t jl_static_show_func_sig_(JL_STREAM *s, jl_value_t *type, jl_static_show_c
         return n;
     }
     if ((jl_nparams(ftype) == 0 || ftype == ((jl_datatype_t*)ftype)->name->wrapper) &&
-            !jl_is_some_typeeq(ftype) && !jl_is_some_typeeq((jl_value_t*)((jl_datatype_t*)ftype)->super)) { // aka !iskind
+            !jl_is_some_Type(ftype) && !jl_is_some_Type((jl_value_t*)((jl_datatype_t*)ftype)->super)) { // aka !iskind
         n += jl_static_show_symbol(s, ((jl_datatype_t*)ftype)->name->singletonname);
     }
     else {

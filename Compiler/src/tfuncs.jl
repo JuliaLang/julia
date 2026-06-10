@@ -67,6 +67,7 @@ end
 
 const DATATYPE_TYPES_FIELDINDEX = fieldindex(DataType, :types)
 const DATATYPE_NAME_FIELDINDEX = fieldindex(DataType, :name)
+const DATATYPE_SUPER_FIELDINDEX = fieldindex(DataType, :super)
 
 ##########
 # tfuncs #
@@ -108,6 +109,11 @@ function instanceof_tfunc(@nospecialize(t), astag::Bool=false, @nospecialize(tro
         return Bottom, true, true, false # runtime unreachable
     elseif t === typeof(Bottom) || !hasintersect(t, Type)
         return Bottom, true, false, false # literal Bottom or non-Type
+    elseif isa(t, Core.TypeEgal)
+        # the value is exactly (`===`) the closed type `tp`
+        tp = type_parameter(t)
+        valid_as_lattice(tp, astag) || return Bottom, true, false, false # runtime unreachable / throws on non-Type
+        return tp, true, isconcretetype(tp), true
     elseif isType(t)
         tp = type_parameter(t)
         valid_as_lattice(tp, astag) || return Bottom, true, false, false # runtime unreachable / throws on non-Type
@@ -657,7 +663,7 @@ end
     ⊑ = partialorder(𝕃)
     b = widenconst(b)
     (b ⊑ TypeVar) && return true
-    if isType(b)
+    if isType(b) || isa(b, Core.TypeEgal) || b === typeof(Union{})
         return true
     end
     return false
@@ -1197,7 +1203,7 @@ end
         return tmerge(_getfield_tfunc(𝕃, rewrap_unionall(s.a, s00), name, setfield),
                       _getfield_tfunc(𝕃, rewrap_unionall(s.b, s00), name, setfield))
     end
-    if isType(s)
+    if isType(s) || isa(s, Core.TypeEgal)
         if isconstType(s)
             sv = type_parameter(s)
             if isa(name, Const)
@@ -1207,6 +1213,13 @@ end
             s = typeof(sv)
         else
             sv = type_parameter(s)
+            if isa(sv, DataType) && isa(name, Const) &&
+               _getfield_fieldindex(DataType, name) == DATATYPE_SUPER_FIELDINDEX &&
+               !has_free_typevars(sv.super)
+                # only `DataType` reps reach `.super` without throwing, and the
+                # `.super`s of `==`-equal `DataType`s are `==`-equal (if not egal)
+                return Type{sv.super}
+            end
             if isTypeDataType(sv) && isa(name, Const)
                 nv = _getfield_fieldindex(DataType, name)::Int
                 if nv == DATATYPE_NAME_FIELDINDEX
@@ -1570,7 +1583,7 @@ end
         end
         return Any
     end
-    isType(u) && return Bottom
+    (isType(u) || isa(u, Core.TypeEgal)) && return Bottom # type objects have no fields
     u isa DataType || return Any
     if isabstracttype(u)
         # Abstract types have no fields
@@ -1835,7 +1848,7 @@ function apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any};
                     end
                 end
             else
-                if !isType(ai)
+                if !(isType(ai) || (isa(ai, Core.TypeEgal) && type_parameter(ai) isa Type))
                     if !isa(ai, Type) || hasintersect(ai, Type) || hasintersect(ai, TypeVar)
                         hasnonType = true
                     else
@@ -1852,10 +1865,12 @@ function apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any};
         allconst = true
         for i = 2:largs
             ai = argtypes[i]
-            if isType(ai)
+            if isa(ai, Core.TypeEgal)
                 aty = type_parameter(ai)
-                # a `Type{X}` argument is only known up to `== X`, so the resulting
-                # `Union` is not a constant (a `=== X` argument arrives as a `Const`)
+            elseif isType(ai)
+                aty = type_parameter(ai)
+                # `Union` does not instantiate-normalize (`Union{S} === S`), so an
+                # `==`-only argument leaves the result non-constant
                 allconst = false
             else
                 aty = (ai::Const).val
@@ -1889,6 +1904,7 @@ end
     uw = unwrap_unionall(headtype)
     uncertain = false
     canconst = true
+    anyeq = false # some argument is only known up to type equality (`==`)
     tparams = Any[]
     outervars = TypeVar[]
 
@@ -1909,9 +1925,12 @@ end
     ua = headtype
     for i = 2:largs
         ai = widenslotwrapper(argtypes[i])
-        if isType(ai)
+        if isa(ai, Core.TypeEgal)
+            push!(tparams, type_parameter(ai))
+        elseif isType(ai)
             aip1 = type_parameter(ai)
             canconst &= !has_free_typevars(aip1)
+            anyeq = true
             push!(tparams, aip1)
         elseif isa(ai, Const) && (isa(ai.val, Type) || isa(ai.val, TypeVar) ||
                                   valid_tparam(ai.val) || (istuple && isvarargtype(ai.val)))
@@ -2031,7 +2050,12 @@ end
             end
         end
     end
-    !uncertain && canconst && return Const(appl)
+    # An `==`-only (`Type{X}`) argument still yields a `Const`: datatype instantiation
+    # normalizes and `==`-deduplicates its (invariant) parameters, so all `S == X` reps
+    # apply to the same (egal) object. Wrapper (`Type{...}`), `UnionAll` and covariant
+    # `Tuple` results do not canonicalize and stay egal-distinct across reps (#61323).
+    !uncertain && canconst &&
+        (!anyeq || (isa(appl, DataType) && appl.name !== Tuple.name)) && return Const(appl)
     if isvarargtype(appl)
         return TypeofVararg
     end

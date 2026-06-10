@@ -552,7 +552,9 @@ const NInt1{N} = Tuple{Int, Vararg{Int, N}}
 fNInt(x::NInt) = (x...,)
 gNInt() = fNInt(x)
 @test Base.return_types(gNInt, ()) == Any[NInt]
-@test Base.return_types(eltype, (NInt,)) == Any[Union{Type{Int}, Type{Union{}}}] # issue 21763
+# issue 21763 (TODO: the bottom-spelling mix `Type{Union{}}`/`typeof(Union{})`/`TypeEgal`
+# currently widens this to `Type`; ideally `Union{Core.TypeEgal{Int}, Type{Union{}}}`)
+@test Base.return_types(eltype, (NInt,)) == Any[Type]
 
 # issue #17572
 function f17572(::Type{Val{A}}) where A
@@ -582,9 +584,9 @@ f16530b(c) = fieldtype(Foo16530b, c)
 let T = Vector{Tuple{Vararg{Float64,dim}}} where dim
     @test f16530a() == T
     @test f16530a(:c) == T
-    @test Base.return_types(f16530a, ()) == Any[Type{T}]
-    @test Base.return_types(f16530b, ()) == Any[Type{T}]
-    @test Base.return_types(f16530b, (Symbol,)) == Any[Type{T}]
+    @test Base.return_types(f16530a, ()) == Any[Core.TypeEgal{T}]
+    @test Base.return_types(f16530b, ()) == Any[Core.TypeEgal{T}]
+    @test Base.return_types(f16530b, (Symbol,)) == Any[Core.TypeEgal{T}]
 end
 @test f16530a(:d) == Vector
 
@@ -600,8 +602,8 @@ let T1 = Tuple{Int, Float64},
     @test f18037(1) === T1
     @test f18037(2) === T2
 
-    @test Base.return_types(f18037, ()) == Any[Type{T1}]
-    @test Base.return_types(f18037, (Int,)) == Any[Union{Type{T1},Type{T2}}]
+    @test Base.return_types(f18037, ()) == Any[Core.TypeEgal{T1}]
+    @test Base.return_types(f18037, (Int,)) == Any[Union{Core.TypeEgal{T1},Core.TypeEgal{T2}}]
 end
 
 # issue #18015
@@ -787,7 +789,7 @@ mutable struct HasAbstractlyTypedField
     x::Union{Int,String}
 end
 f_infer_abstract_fieldtype() = fieldtype(HasAbstractlyTypedField, :x)
-@test Base.return_types(f_infer_abstract_fieldtype, ()) == Any[Type{Union{Int,String}}]
+@test Base.return_types(f_infer_abstract_fieldtype, ()) == Any[Core.TypeEgal{Union{Int,String}}]
 let fieldtype_tfunc(@nospecialize args...) =
         Compiler.fieldtype_tfunc(Compiler.fallback_lattice, args...),
     fieldtype_nothrow(@nospecialize(s0), @nospecialize(name)) = Compiler.fieldtype_nothrow(
@@ -1008,11 +1010,11 @@ err20033(x::Float64...) = prod(x)
 @test Base._return_type(tuple, Tuple{Int,Int8,Int}) === Tuple{Int,Int8,Int}
 
 # issue #21088
-@test Base._return_type(typeof, Tuple{Int}) == Type{Int}
+@test Base._return_type(typeof, Tuple{Int}) == Core.TypeEgal{Int}
 
 # Inference of constant svecs
 @eval fsvecinf() = $(QuoteNode(Core.svec(Tuple{Int,Int}, Int)))[1]
-@test only(Base.return_types(fsvecinf, Tuple{})) == Type{Tuple{Int,Int}}
+@test only(Base.return_types(fsvecinf, Tuple{})) == Core.TypeEgal{Tuple{Int,Int}}
 
 # nfields tfunc on `DataType`
 let f = ()->Val{nfields(DataType[Int][1])}
@@ -1579,7 +1581,10 @@ let nfields_tfunc(@nospecialize xs...) =
     @test nfields_tfunc(Core.TypeEgal{Integer}) === Const(nfields(DataType))
     @test nfields_tfunc(Type{Complex}) === Int
     @test nfields_tfunc(typeof(Union{})) === Const(0)
-    @test nfields_tfunc(Type{Union{}}) === Int
+    # `Type{Union{}}` stays egality-pinned (unique bottom object, see `isconstType`);
+    # `TypeEgal{Union{}}` normalizes to `typeof(Union{})` at construction
+    @test nfields_tfunc(Type{Union{}}) === Const(0)
+    @test Core.TypeEgal{Union{}} === typeof(Union{})
     @test nfields_tfunc(Core.TypeEgal{Union{}}) === Const(0)
     @test nfields_tfunc(Tuple{Int, Vararg{Int}}) === Int
     @test nfields_tfunc(Tuple{Int, Integer}) === Const(2)
@@ -1603,7 +1608,7 @@ let typeof_tfunc(@nospecialize xs...) =
 end
 
 f_typeof_tfunc(x) = typeof(x)
-@test Base.return_types(f_typeof_tfunc, (Union{<:T, Int} where T<:Complex,)) == Any[Union{Type{Int}, Type{Complex{T}} where T<:Real}]
+@test Base.return_types(f_typeof_tfunc, (Union{<:T, Int} where T<:Complex,)) == Any[Union{Core.TypeEgal{Int}, Type{Complex{T}} where T<:Real}]
 
 # memoryref_tfunc, memoryrefget_tfunc, memoryrefset!_tfunc, memoryref_isassigned, memoryrefoffset_tfunc
 let memoryref_tfunc(@nospecialize xs...) = Compiler.memoryref_tfunc(Compiler.fallback_lattice, xs...)
@@ -2049,15 +2054,41 @@ g26339(T) = T === Int ? 1 : ""
 @test Base.return_types(f26339, (Int,)) == Any[String]
 @test Base.return_types(g26339, (Int,)) == Any[String]
 @test Base.return_types(f26339, (Type{Int},)) == Any[String]
-# a closed type-valued argument specializes on egality (`TypeEgal{Int}`), so `T === Int`
-# folds for a `Type{Int}` by-type query just as it does for a runtime `g26339(Int)` call
-@test Base.return_types(g26339, (Type{Int},)) == Any[Int]
+# only the egality kind pins the argument to `=== Int`; a `Type{Int}` query also
+# admits `S == Int` reps with `S !== Int` (#61323), so there `T === Int` cannot fold
+@test Base.return_types(g26339, (Core.TypeEgal{Int},)) == Any[Int]
+@test Base.return_types(g26339, (Type{Int},)) == Any[Union{Int, String}]
 @test Base.return_types(f26339, (Type{Union{}},)) == Any[Int]
 @test Base.return_types(g26339, (Type{Union{}},)) == Any[String]
 @test Base.return_types(f26339, (typeof(Union{}),)) == Any[Int]
 @test Base.return_types(g26339, (typeof(Union{}),)) == Any[String]
 @test Base.return_types(f26339, (Type,)) == Any[Union{Int, String}]
 @test Base.return_types(g26339, (Type,)) == Any[Union{Int, String}]
+
+# JuliaLang/julia#61323: a `Type{X}`-typed (`==`-only) value must not be treated as
+# `=== X`, neither directly nor through a static parameter bound from it, while
+# egality-pinned (`Const`/dispatch) queries keep folding. `S == Int` but `S !== Int`:
+let S = (Union{T, U} where {T<:Int, U<:Int})
+    @test S == Int && S !== Int
+    garg61323(x) = x === Int ? 1 : ""
+    fsparam61323(::Type{T}) where {T} = T === Int ? 1 : ""
+    for f in Any[garg61323, fsparam61323]
+        @test f(Int) === 1
+        @test f(S) === ""
+        @test (@noinline f(Base.inferencebarrier(S)::Type{Int})) === ""
+        @test Base.return_types(f, (Type{Int},)) == Any[Union{Int, String}]
+        @test Base.return_types(f, (Core.TypeEgal{Int},)) == Any[Int]
+    end
+    @test Base.return_types(() -> garg61323(Int)) == Any[Int]
+    @test Base.return_types(() -> fsparam61323(Int)) == Any[Int]
+    # instantiation `==`-deduplicates parameters, so this folds for every rep,
+    # consistently with the runtime
+    fapply61323(::Type{T}) where {T} = Ref{T} === Ref{Int} ? 1 : ""
+    @test fapply61323(Int) === 1
+    @test fapply61323(S) === 1
+    @test (@noinline fapply61323(Base.inferencebarrier(S)::Type{Int})) === 1
+    @test Base.return_types(fapply61323, (Type{Int},)) == Any[Int]
+end
 
 # Test that Conditional doesn't get widened to Bool too quickly
 f25261() = (1, 1)
@@ -2272,7 +2303,7 @@ end
     # the `fargs = nothing` edge case
     @test Base.return_types((Any,)) do a
         Base._return_type(invoke, Tuple{typeof(ispositive), Type{Tuple{Any}}, Any})
-    end |> only == Type{Bool}
+    end |> only == Core.TypeEgal{Bool}
 
     # `InterConditional` handling: `abstract_call_opaque_closure`
     @test Base.return_types((Any,)) do a
@@ -2635,8 +2666,8 @@ end
 
 @testset "issue #56913: `BoundsError` in type inference" begin
     R = UnitRange{Int}
-    @test Type{AbstractVector} == Base.infer_return_type(Base.promote_typeof, Tuple{R, R, Vector{Any}, Vararg{R}})
-    @test Type{AbstractVector} == Base.infer_return_type(Base.promote_typeof, Tuple{R, R, Vector{Any}, R, Vararg{R}})
+    @test Core.TypeEgal{AbstractVector} == Base.infer_return_type(Base.promote_typeof, Tuple{R, R, Vector{Any}, Vararg{R}})
+    @test Core.TypeEgal{AbstractVector} == Base.infer_return_type(Base.promote_typeof, Tuple{R, R, Vector{Any}, R, Vararg{R}})
 end
 
 # issue #61953: `constprop_cache_lookup` asserted that all cached const-prop results for a
@@ -2702,7 +2733,7 @@ function h25579(g)
     return t ? typeof(h) : typeof(h)
 end
 @test Base.return_types(h25579, (Base.RefValue{Union{Nothing, Int}},)) ==
-        Any[Type{Float64}]
+        Any[Core.TypeEgal{Float64}]
 
 f26172(v) = Val{length(Base.tail(ntuple(identity, v)))}() # Val(M-1)
 g26172(::Val{0}) = ()
@@ -3432,7 +3463,7 @@ f30394(foo::T1, ::Type{T2}) where {T2, T1 <: T2} = foo
 
 f30394(foo, T2) = f30394(foo.foo_inner, T2)
 
-@test Base.return_types(f30394, (Foo30394_2, Type{Base30394})) == Any[Base30394]
+@test Base.return_types(f30394, (Foo30394_2, Core.TypeEgal{Base30394})) == Any[Base30394]
 
 # PR #30385
 
@@ -3886,7 +3917,7 @@ f36531(args...) = tuple((args...)...)
 partial_return_1(x) = (x, 1)
 partial_return_2(x) = Val{partial_return_1(x)[2]}
 
-@test Base.return_types(partial_return_2, (Int,)) == Any[Type{Val{1}}]
+@test Base.return_types(partial_return_2, (Int,)) == Any[Core.TypeEgal{Val{1}}]
 
 # Soundness and precision of abstract_iteration
 f41839() = (1:100...,)
@@ -3929,7 +3960,7 @@ function f_typ_assert(x::Int)
     y = y::Any
     Val{y[2]}
 end
-@test Base.return_types(f_typ_assert, (Int,)) == Any[Type{Val{1}}]
+@test Base.return_types(f_typ_assert, (Int,)) == Any[Core.TypeEgal{Val{1}}]
 
 function f_typ_assert2(x::Any)
     y = (x::Union{Int, Float64}, 1)
@@ -4026,7 +4057,7 @@ f37532(T, x) = (Core.bitcast(Ptr{T}, x); x)
 f37943(x::Any, i::Int) = getfield((x::Pair{false, Int}), i)
 g37943(i::Int) = fieldtype(Pair{false, T} where T, i)
 @test only(Base.return_types(f37943, Tuple{Any, Int})) === Union{}
-@test only(Base.return_types(g37943, Tuple{Int})) === Union{Type{Union{}}, Type{Any}}
+@test only(Base.return_types(g37943, Tuple{Int})) == Union{Type{Union{}}, Core.TypeEgal{Any}}
 
 # Don't let PartialStruct prevent const prop
 f_partial_struct_constprop(a, b) = (a[1]+b[1], nothing)
@@ -4585,10 +4616,10 @@ invoke_constprop(a::Any,    typ::Bool) = typ ? Any : :any
 invoke_constprop(a::Number, typ::Bool) = typ ? Number : :number
 @test Base.return_types((Any,)) do a
     @invoke invoke_constprop(a::Any, true::Bool)
-end |> only === Type{Any}
+end |> only == Core.TypeEgal{Any}
 @test Base.return_types((Any,)) do a
     @invoke invoke_constprop(a::Number, true::Bool)
-end |> only === Type{Number}
+end |> only == Core.TypeEgal{Number}
 @test Base.return_types((Any,)) do a
     @invoke invoke_constprop(a::Any, false::Bool)
 end |> only === Symbol
@@ -5502,8 +5533,8 @@ end |> only === Union{}
 @test Base.return_types((Tuple{typeof(typeof),Float64},)) do args
     f = args[1] # ::MustAlias
     v = args[2] # ::MustAlias
-    f(v)        # ::Type{Float64}
-end |> only === Type{Float64}
+    f(v)        # exactly `Float64`
+end |> only == Core.TypeEgal{Float64}
 
 # Issue #46839: `abstract_invoke` should handle incorrect call type
 @test only(Base.return_types(()->invoke(BitSet, Any, x), ())) === Union{}
@@ -5659,7 +5690,7 @@ Base.@constprop :aggressive function issue48679(x, b)
 end
 @test Base.return_types((Float64,)) do x
     issue48679(x, false)
-end |> only == Type{Float64}
+end |> only == Core.TypeEgal{Float64}
 
 Base.@constprop :aggressive @noinline _issue48679_const(b, y::Union{Nothing,T}) where {T} = b ? nothing : T::Type
 Base.@constprop :aggressive function issue48679_const(x, b)
@@ -5670,7 +5701,7 @@ Base.@constprop :aggressive function issue48679_const(x, b)
 end
 @test Base.return_types((Float64,)) do x
     issue48679_const(x, false)
-end |> only == Type{Float64}
+end |> only == Core.TypeEgal{Float64}
 
 # `invoke` call in irinterp
 @noinline _irinterp_invoke(x::Any) = :any
@@ -5680,7 +5711,7 @@ Base.@constprop :aggressive Base.@assume_effects :foldable function irinterp_inv
 end
 @test Base.return_types((Int,)) do x
     irinterp_invoke(x, true)
-end |> only == Type{Int}
+end |> only == Core.TypeEgal{Int}
 
 # recursion detection for semi-concrete interpretation
 # avoid direct infinite loop via `concrete_eval_invoke`
@@ -5715,12 +5746,12 @@ end |> only === Tuple{Int,Symbol}
     else
         return T
     end
-end) == Type{Nothing}
+end) == Core.TypeEgal{Nothing}
 
 # Test that Base._return_type inference works for the 1-arg version
 @test Base.return_types() do
     Base._return_type(Tuple{typeof(+), Int, Int})
-end |> only == Type{Int}
+end |> only == Core.TypeEgal{Int}
 
 # Test that NamedTuple abstract iteration works for PartialStruct/Const
 function nt_splat_const()
@@ -5795,7 +5826,7 @@ Base.@propagate_inbounds f_issue50544(::Type{Issue50544{T}}, i) where T = T.para
 g_issue50544(T...) = Issue50544{Tuple{T...}}
 h_issue50544(x::T) where T = g_issue50544(f_issue50544(T, 1), f_issue50544(T, 2, 1))
 let x = Issue50544((1, Issue50544((2.0, 'x'))))
-    @test only(Base.return_types(h_issue50544, (typeof(x),))) == Type{Issue50544{Tuple{Int,Float64}}}
+    @test only(Base.return_types(h_issue50544, (typeof(x),))) == Core.TypeEgal{Issue50544{Tuple{Int,Float64}}}
 end
 
 # refine const-prop'ed `PartialStruct` with declared method signature type
@@ -6279,7 +6310,7 @@ end
 
 # issue #53585
 let t = ntuple(i -> i % 8 == 1 ? Int64 : Float64, 4000)
-    @test only(Base.return_types(Base.promote_typeof, t)) == Type{Float64}
+    @test only(Base.return_types(Base.promote_typeof, t)) == Core.TypeEgal{Float64}
     @test only(Base.return_types(vcat, t)) == Vector{Float64}
 end
 
@@ -6606,13 +6637,13 @@ function issue56387(nt::NamedTuple, field::Symbol=:a)
     end
     types[index]
 end
-@test Base.infer_return_type(issue56387, (typeof((;a=1)),)) == Type{Int}
+@test Base.infer_return_type(issue56387, (typeof((;a=1)),)) == Core.TypeEgal{Int}
 
 # `apply_type_tfunc` with `Union` in its arguments
 let apply_type_tfunc = Compiler.apply_type_tfunc
     𝕃 = Compiler.fallback_lattice
     Const = Core.Const
-    @test apply_type_tfunc(𝕃, Any[Const(Vector), Union{Type{Int},Type{Nothing}}]) == Union{Type{Vector{Int}},Type{Vector{Nothing}}}
+    @test apply_type_tfunc(𝕃, Any[Const(Vector), Union{Type{Int},Type{Nothing}}]) == Union{Core.TypeEgal{Vector{Int}},Core.TypeEgal{Vector{Nothing}}}
 end
 
 @test Base.infer_return_type((Bool,Int,)) do b, y
