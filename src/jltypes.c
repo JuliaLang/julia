@@ -4197,6 +4197,9 @@ void post_boot_hooks(void)
     jl_fielderror_type       = (jl_datatype_t*)core("FieldError");
     jl_atomicerror_type      = (jl_datatype_t*)core("ConcurrencyViolationError");
     jl_boundserror_type      = (jl_datatype_t*)core("BoundsError");
+    // generic, pre-allocated BoundsError thrown from the signal handler when an
+    // empty Memory's guard page is dereferenced (no array/index detail available).
+    jl_empty_memory_exception = jl_new_struct_uninit(jl_boundserror_type);
     jl_typeerror_type        = (jl_datatype_t*)core("TypeError");
     jl_argumenterror_type    = (jl_datatype_t*)core("ArgumentError");
     jl_methoderror_type      = (jl_datatype_t*)core("MethodError");

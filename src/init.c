@@ -725,6 +725,7 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
     libsupport_init();
     jl_safepoint_init();
     jl_page_size = jl_getpagesize();
+    jl_init_empty_memory_guard();
     jl_hugepage_size = (size_t)jl_gethugepagesize();
     htable_new(&jl_current_modules, 0);
     init_global_mutexes();

@@ -625,8 +625,11 @@ void jl_get_genericmemory_layout(jl_datatype_t *st)
             jl_task_t *ct = jl_current_task;
             jl_genericmemory_t *zeroinst = (jl_genericmemory_t*)jl_gc_permobj(ct->ptls, LLT_ALIGN(sizeof(jl_genericmemory_t), JL_SMALL_BYTE_ALIGNMENT) + (elsz ? elsz : isunion), st, 0);
             zeroinst->length = 0;
-            zeroinst->ptr = (char*)zeroinst + JL_SMALL_BYTE_ALIGNMENT;
-            memset(zeroinst->ptr, 0, elsz ? elsz : isunion);
+            // Point empty Memory at the inaccessible guard page so that any read or
+            // write of element 0 faults; the signal handler turns this into a
+            // BoundsError. jl_genericmemory_how special-cases length==0.
+            assert(jl_empty_memory_guard_base != NULL);
+            zeroinst->ptr = jl_empty_memory_guard_base;
             assert(!st->instance);
             st->instance = (jl_value_t*)zeroinst;
         }
