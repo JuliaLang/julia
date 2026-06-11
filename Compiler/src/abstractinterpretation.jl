@@ -118,6 +118,9 @@ mutable struct CallInferenceState
     end
 end
 
+widen_call_result(::AbstractInterpreter, si::StmtInfo, state::CallInferenceState, ::AbsIntState) =
+    call_result_unused(si) && !(state.rettype === Bottom)
+
 function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(func),
                                   arginfo::ArgInfo, si::StmtInfo, @nospecialize(atype),
                                   vtypes::Union{VarTable,Nothing}, sv::AbsIntState, max_methods::Int)
@@ -277,14 +280,13 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                 state.slotrefinements = collect_slot_refinements(𝕃ᵢ, applicable, argtypes, fargs, sv)
             end
             state.rettype = from_interprocedural!(interp, state.rettype, sv, arginfo, state.conditionals, vtypes)
-            if call_result_unused(si) && !(state.rettype === Bottom)
-                add_remark!(interp, sv, "Call result type was widened because the return value is unused")
-                # We're mainly only here because the optimizer might want this code,
-                # but we ourselves locally don't typically care about it locally
-                # (beyond checking if it always throws).
-                # So avoid adding an edge, since we don't want to bother attempting
-                # to improve our result even if it does change (to always throw),
-                # and avoid keeping track of a more complex result type.
+            if widen_call_result(interp, si, state, sv)
+                add_remark!(interp, sv, "Call result type was widened")
+                # Encode the decision as a local `Any` in `state.rettype`, which flows into
+                # `ssavaluetypes[pc]` of the enclosing frame. Downstream `=== Any` gates
+                # (most notably the cycle backedge revisit filter in `update_cycle_worklists!`)
+                # then treat this call site as needing no further refinement. By default
+                # `Bottom` is excluded so that "always throws" remains observable.
                 state.rettype = Any
             end
             # if from_interprocedural added any pclimitations to the set inherited from the arguments,
