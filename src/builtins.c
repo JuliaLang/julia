@@ -897,9 +897,9 @@ JL_CALLABLE(jl_f__apply_iterate)
                 roots[stackalloc] = state;
                 _grow_to(&roots[0], &newargs, &arg_heap, &n_alloc, n + precount + 1, extra);
                 JL_GC_ASSERT_LIVE(value);
-                newargs[n++] = value;
                 if (arg_heap)
                     jl_gc_wb(arg_heap, value);
+                newargs[n++] = value;
                 roots[stackalloc + 1] = NULL;
                 JL_GC_ASSERT_LIVE(state);
                 args[1] = state;

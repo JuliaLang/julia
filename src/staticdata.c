@@ -2488,9 +2488,8 @@ static void strip_specializations_(jl_method_instance_t *mi)
             }
             else if (jl_options.strip_metadata) {
                 jl_value_t *stripped = strip_codeinfo_meta(mi->def.method, inferred, codeinst);
-                if (jl_atomic_cmpswap_relaxed(&codeinst->inferred, &inferred, stripped)) {
-                    jl_gc_wb(codeinst, stripped);
-                }
+                jl_gc_wb(codeinst, stripped);
+                jl_atomic_cmpswap_relaxed(&codeinst->inferred, &inferred, stripped);
             }
         }
         if (jl_options.strip_ir)

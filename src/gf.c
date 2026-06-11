@@ -586,6 +586,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_get_method_uninferred(
                 return codeinst;
             jl_debuginfo_t *debuginfo = jl_atomic_load_relaxed(&codeinst->debuginfo);
             if (di != debuginfo) {
+                jl_gc_wb(codeinst, di);
                 if (!(debuginfo == NULL && jl_atomic_cmpswap_relaxed(&codeinst->debuginfo, &debuginfo, di)))
                     if (!(debuginfo && jl_egal((jl_value_t*)debuginfo, (jl_value_t*)di)))
                         continue;
@@ -2344,6 +2345,7 @@ static void _invalidate_backedges(jl_method_instance_t *replaced_mi, jl_code_ins
     if (!replaced_ci) {
         // We know all backedges are deleted - clear them eagerly
         // Clears both array and flags
+        jl_gc_wb(replaced_mi, NULL);
         replaced_mi->backedges = NULL;
         jl_atomic_fetch_and_relaxed(&replaced_mi->flags, ~MI_FLAG_BACKEDGES_ALL);
     }
@@ -2812,12 +2814,14 @@ static int erase_method_backedges(jl_typemap_entry_t *def, void *closure)
         for (i = 0; i < l; i++) {
             jl_method_instance_t *mi = (jl_method_instance_t*)jl_svecref(specializations, i);
             if ((jl_value_t*)mi != jl_nothing) {
+                jl_gc_wb(mi, NULL);
                 mi->backedges = 0;
             }
         }
     }
     else {
         jl_method_instance_t *mi = (jl_method_instance_t*)specializations;
+        jl_gc_wb(mi, NULL);
         mi->backedges = 0;
     }
     JL_UNLOCK(&method->writelock);

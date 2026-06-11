@@ -162,6 +162,7 @@ retry:
                         if (next_max_world >= expected_prev_min_world-1 && next->kind == new_kind && next->restriction == resolution.binding_or_const) {
                             if (jl_atomic_cmpswap(&prev->min_world, &expected_prev_min_world, next_min_world)) {
                                 jl_binding_partition_t *nextnext = jl_atomic_load_relaxed(&next->next);
+                                jl_gc_wb(prev, nextnext);
                                 if (!jl_atomic_cmpswap(&prev->next, &next, nextnext)) {
                                     // `next` may have been merged into its subsequent partition - we need to retry
                                     assert(next);
@@ -183,8 +184,8 @@ retry:
     jl_binding_partition_t *new_bpart = new_binding_partition();
     jl_atomic_store_relaxed(&new_bpart->max_world, new_max_world);
     new_bpart->kind = new_kind;
+    jl_gc_wb_fresh(new_bpart, resolution.binding_or_const);
     new_bpart->restriction = resolution.binding_or_const;
-    jl_gc_wb_fresh(new_bpart, new_bpart->restriction);
 
     if (next) {
         // See if we can merge the next partition into this one
@@ -198,9 +199,9 @@ retry:
 
     jl_atomic_store_relaxed(&new_bpart->min_world, new_min_world);
     jl_atomic_store_relaxed(&new_bpart->next, next);
+    jl_gc_wb(gap.parent, new_bpart);
     if (!jl_atomic_cmpswap(gap.insert, &gap.replace, new_bpart))
         return NULL;
-    jl_gc_wb(gap.parent, new_bpart);
     return new_bpart;
 }
 
@@ -775,12 +776,12 @@ static jl_globalref_t *jl_new_globalref(jl_module_t *mod, jl_sym_t *name, jl_bin
     jl_task_t *ct = jl_current_task;
     jl_globalref_t *g = (jl_globalref_t*)jl_gc_alloc(ct->ptls, sizeof(jl_globalref_t), jl_globalref_type);
     jl_set_typetagof(g, jl_globalref_tag, 0);
+    jl_gc_wb_fresh(g, mod);
     g->mod = mod;
-    jl_gc_wb_fresh(g, g->mod);
+    jl_gc_wb_fresh(g, name);
     g->name = name;
-    jl_gc_wb_fresh(g, g->name);
+    jl_gc_wb_fresh(g, b);
     g->binding = b;
-    jl_gc_wb_fresh(g, g->binding);
     return g;
 }
 
@@ -1364,9 +1365,9 @@ void jl_module_initial_using(jl_module_t *to, jl_module_t *from)
         .max_world = ~(size_t)0,
         .flags = 0
     };
+    jl_gc_wb(to, from);
     arraylist_grow(&to->usings, sizeof(struct _jl_module_using)/sizeof(void*));
     memcpy(&to->usings.items[to->usings.len-4], &new_item, sizeof(struct _jl_module_using));
-    jl_gc_wb(to, from);
     jl_add_usings_backedge(from, to);
 }
 
@@ -1397,9 +1398,9 @@ JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from, size_t fla
             .max_world = ~(size_t)0,
             .flags = flags
         };
+        jl_gc_wb(to, from);
         arraylist_grow(&to->usings, sizeof(struct _jl_module_using)/sizeof(void*));
         memcpy(&to->usings.items[to->usings.len-4], &new_item, sizeof(struct _jl_module_using));
-        jl_gc_wb(to, from);
     } else {
         // Update existing entry to add new flags
         struct _jl_module_using *existing = module_usings_getidx(to, existing_idx);
@@ -1784,8 +1785,8 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b,
         if (resolution.should_be_reexported) {
             new_bpart->kind |= PARTITION_FLAG_IMPLICITLY_EXPORTED;
         }
-        new_bpart->restriction = resolution.binding_or_const;
         jl_gc_wb_fresh(new_bpart, resolution.binding_or_const);
+        new_bpart->restriction = resolution.binding_or_const;
         assert(resolution.min_world <= new_world && resolution.max_world == ~(size_t)0);
         if (new_bpart->kind == old_bpart->kind && new_bpart->restriction == old_bpart->restriction) {
             JL_GC_POP();
@@ -2010,8 +2011,8 @@ JL_DLLEXPORT jl_value_t *jl_checked_assignonce(jl_binding_t *b, jl_module_t *mod
 {
     jl_check_binding_assign_value(b, mod, var, rhs, "setglobalonce!");
     jl_value_t *old = NULL;
-    if (jl_atomic_cmpswap(&b->value, &old, rhs))
-        jl_gc_wb(b, rhs);
+    jl_gc_wb(b, rhs);
+    jl_atomic_cmpswap(&b->value, &old, rhs);
     return old;
 }
 

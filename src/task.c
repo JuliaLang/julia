@@ -461,6 +461,7 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
         jl_stack_context_t copy_ctx;
     } lasttstate;
 
+    jl_gc_wb_back(lastt);
     if (killed) {
         *pt = NULL; // can't fail after here: clear the gc-root for the target task now
         lastt->gcstack = NULL;
@@ -501,7 +502,6 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
     // move the barrier back instead of walking the shadow stack again here to check if that is required
     // even if killed (dropping the stack) and just the scope field matters,
     // let the gc figure that out next time it does a quick mark
-    jl_gc_wb_back(lastt);
 
     // set up global state for new task and clear global state for old task
     t->ptls = ptls;
@@ -1133,8 +1133,8 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t *start, jl_value_t *completion_fu
     t->donenotify = completion_future;
     jl_atomic_store_relaxed(&t->_isexception, 0);
     // Inherit scope from parent task
+    jl_gc_wb_fresh(t, ct->scope);
     t->scope = ct->scope;
-    jl_gc_wb_fresh(t, t->scope);
     // Fork task-local random state from parent
     jl_rng_split(t->rngState, ct->rngState);
     // there is no active exception handler available on this stack yet
@@ -1583,8 +1583,8 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->result = jl_nothing;
     ct->donenotify = jl_nothing;
     jl_atomic_store_relaxed(&ct->_isexception, 0);
+    jl_gc_wb_fresh(ct, jl_nothing);
     ct->scope = jl_nothing;
-    jl_gc_wb_knownold(ct, ct->scope);
     ct->eh = NULL;
     ct->gcstack = NULL;
     ct->excstack = NULL;

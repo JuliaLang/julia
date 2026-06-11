@@ -1093,8 +1093,10 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
     ios_flush(s.s);
     v = jl_pchar_to_string(s.s->buf, s.s->size);
     ios_close(s.s);
-    if (jl_array_nrows(m->roots) == 0)
+    if (jl_array_nrows(m->roots) == 0) {
+        jl_gc_wb(m, NULL);
         m->roots = NULL;
+    }
     JL_UNLOCK(&m->writelock); // Might GC
     JL_GC_POP();
 

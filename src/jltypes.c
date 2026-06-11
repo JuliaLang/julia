@@ -1222,11 +1222,11 @@ static int cache_insert_type_set_(jl_svec_t *a, jl_datatype_t *val, uint_t hv, i
     do {
         jl_value_t *tab_i = jl_atomic_load_relaxed(&tab[index]);
         if (tab_i == jl_nothing) {
+            jl_gc_wb(a, (jl_value_t*)val);
             if (atomic)
                 jl_atomic_store_release(&tab[index], (jl_value_t*)val);
             else
                 jl_atomic_store_relaxed(&tab[index], (jl_value_t*)val);
-            jl_gc_wb(a, val);
             return 1;
         }
         index = (index + 1) & (sz - 1);

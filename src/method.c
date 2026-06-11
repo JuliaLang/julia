@@ -1358,9 +1358,9 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
         jl_errorf("cannot add methods to builtin function `%s`", jl_symbol_name(name));
 
     m = jl_new_method_uninit(module);
-    m->external_mt = (jl_value_t*)external_mt;
     if (external_mt)
-        jl_gc_wb(m, external_mt);
+        jl_gc_wb_fresh(m, external_mt);
+    m->external_mt = (jl_value_t*)external_mt;
     m->sig = argtype;
     m->name = name;
     m->isva = isva;
