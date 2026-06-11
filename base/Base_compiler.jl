@@ -402,68 +402,6 @@ include("flfrontend.jl")
 Core._setparser!(fl_parse)
 Core._setlowerer!(fl_lower)
 
-# Expr-flavored quote interpolation: the runtime support function behind the
-# `(copyast (inert ...))` form produced by JuliaLowering's Expr compatibility
-# mode. It copies the quoted AST, splicing `\$` interpolation values. Like
-# Core.eval_closure_type (boot.jl), it lives in Core so that lowered code can
-# reference it by name and be evaluated by a runtime without JuliaLowering
-# loaded; it is defined here in early bootstrap rather than boot.jl because
-# the implementation wants Array/Tuple infrastructure.
-function _interpolate_expr_ast(@nospecialize(ex), values::Tuple, counter::Vector{Int}, depth::Int)
-    if ex isa QuoteNode
-        inner = _interpolate_expr_ast(Expr(:inert, ex.value), values, counter, depth)
-        return QuoteNode((inner::Expr).args[1])
-    end
-    ex isa Expr || return ex
-    h = ex.head
-    inner_depth = h === :quote ? depth + 1 :
-                  h === :$     ? depth - 1 :
-                  depth
-    args = ex.args
-    out = Vector{Any}()
-    i = 1
-    n = length(args)
-    while i <= n
-        e = args[i]
-        if e isa Expr && e.head === :$ && inner_depth == 0
-            idx = counter[1]
-            counter[1] = idx + 1
-            vals = values[idx]::Tuple
-            j = 1
-            m = nfields(vals)
-            while j <= m
-                push!(out, getfield(vals, j))
-                j += 1
-            end
-        else
-            push!(out, _interpolate_expr_ast(e, values, counter, inner_depth))
-        end
-        i += 1
-    end
-    ex2 = Expr(h)
-    ex2.args = out
-    return ex2
-end
-
-function _core_interpolate_ast(@nospecialize(ex), values::Tuple)
-    if ex isa Expr && ex.head === :$
-        (nfields(values) === 1 && length(ex.args) === 1) ||
-            throw(ArgumentError("More than one value in bare `\$` expression"))
-        vals = values[1]::Tuple
-        nfields(vals) === 1 ||
-            throw(ArgumentError("More than one value in bare `\$` expression"))
-        return vals[1]
-    end
-    counter = Vector{Int}(undef, 1)
-    counter[1] = 1
-    return _interpolate_expr_ast(ex, values, counter, 0)
-end
-
-# n.b. one-line delegation: the method body is evaluated in Core's scope,
-# where Base's vocabulary is not available
-@eval Core interpolate_ast(::Type{Expr}, @nospecialize(ex), values...) =
-    $_core_interpolate_ast(ex, values)
-
 # Further definition of Base will happen in Base.jl if loaded.
 
 # Ensure this file is also tracked

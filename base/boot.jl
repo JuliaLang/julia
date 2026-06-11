@@ -284,10 +284,129 @@ else
 end
 
 function Typeof end
+# (f::typeof(Typeof))(x) = (@nospecialize x; isa(x,Type) ? Type{x} : typeof(x))
+# This must be built with explicit _expr calls: methods cannot be defined with
+# ordinary syntax before `Typeof` itself exists, and quoted syntax cannot be
+# used before `interpolate_ast` below is defined.
 ccall(:jl_toplevel_eval_in, Any, (Any, Any),
-      Core, quote
-      (f::typeof(Typeof))(x) = ($(_expr(:meta,:nospecialize,:x)); isa(x,Type) ? Type{x} : typeof(x))
-      end)
+      Core, _expr(:(=),
+          _expr(:call, _expr(:(::), :f, _expr(:call, :typeof, :Typeof)), :x),
+          _expr(:block, _expr(:meta, :nospecialize, :x),
+              _expr(:if, _expr(:call, :isa, :x, :Type),
+                  _expr(:curly, :Type, :x),
+                  _expr(:call, :typeof, :x)))))
+
+# Expr-flavored quote interpolation: the runtime support function behind
+# quoted syntax in lowered code produced by JuliaLowering (referenced as
+# `(core interpolate_ast)`). It deep-copies the quoted prototype AST,
+# splicing `$` interpolation values. The first quoted syntax in this file
+# follows just below, so only the most primitive vocabulary is available.
+function _interp_ast_push!(a::Array{Any, 1}, v)
+    ccall(:jl_array_ptr_1d_push, Nothing, (Any, Any), a, v)
+    return a
+end
+
+function _interpolate_expr_ast(ex, values::Tuple, counter::Array{Any, 1}, depth::Int)
+    if isa(ex, QuoteNode)
+        inner = _interpolate_expr_ast(_expr(:inert, getfield(ex, :value)), values, counter, depth)::Expr
+        iargs = getfield(inner, :args)::Array{Any, 1}
+        v = memoryrefget(memoryrefnew(getfield(iargs, :ref), 1, false), :not_atomic, false)
+        # n.b. the convenience QuoteNode constructor is not defined yet
+        return ccall(:jl_new_struct, Any, (Any, Any...), QuoteNode, v)
+    end
+    isa(ex, Expr) || return ex
+    h = getfield(ex, :head)::Symbol
+    inner_depth = h === :quote ? Intrinsics.add_int(depth, 1) :
+                  h === :$     ? Intrinsics.sub_int(depth, 1) :
+                  depth
+    args = getfield(ex, :args)::Array{Any, 1}
+    n = getfield(getfield(args, :size), 1)
+    out = ccall(:jl_alloc_vec_any, Any, (Int,), 0)::Array{Any, 1}
+    i = 1
+    while Intrinsics.sle_int(i, n)
+        e = memoryrefget(memoryrefnew(getfield(args, :ref), i, false), :not_atomic, false)
+        if isa(e, Expr) && getfield(e, :head) === :$ && inner_depth === 0
+            cref = memoryrefnew(getfield(counter, :ref), 1, false)
+            idx = memoryrefget(cref, :not_atomic, false)::Int
+            memoryrefset!(cref, Intrinsics.add_int(idx, 1), :not_atomic, false)
+            vals = getfield(values, idx)::Tuple
+            j = 1
+            m = nfields(vals)
+            while Intrinsics.sle_int(j, m)
+                _interp_ast_push!(out, getfield(vals, j))
+                j = Intrinsics.add_int(j, 1)
+            end
+        else
+            _interp_ast_push!(out, _interpolate_expr_ast(e, values, counter, inner_depth))
+        end
+        i = Intrinsics.add_int(i, 1)
+    end
+    ex2 = _expr(h)
+    setfield!(ex2, :args, out)
+    return ex2
+end
+
+function interpolate_ast(ty, ex, values...)
+    if isa(ex, Expr) && getfield(ex, :head) === :$
+        args = getfield(ex, :args)::Array{Any, 1}
+        if nfields(values) === 1 && getfield(getfield(args, :size), 1) === 1
+            vals = getfield(values, 1)::Tuple
+            if nfields(vals) === 1
+                return getfield(vals, 1)
+            end
+        end
+        msg = "More than one value in bare `\$` expression"
+        # ArgumentError is not defined yet at this point in bootstrap, but
+        # will be by the time a malformed interpolation can be evaluated
+        isdefined(Core, :ArgumentError) ? throw(ArgumentError(msg)) : throw(msg)
+    end
+    counter = ccall(:jl_alloc_vec_any, Any, (Int,), 1)::Array{Any, 1}
+    memoryrefset!(memoryrefnew(getfield(counter, :ref), 1, false), 1, :not_atomic, false)
+    return _interpolate_expr_ast(ex, values, counter, 0)
+end
+
+# Runtime support functions for lowered code produced by JuliaLowering.
+# These live in Core so that such lowered code is self-contained: it can be
+# evaluated by any runtime, including one whose frontend library carries its
+# own copy of the lowering implementation (the lowered code references these
+# as `(core eval_closure_type)` etc. rather than embedding function values).
+function eval_closure_type(mod::Module, name::Symbol, field_names::Tuple,
+                           field_types::Tuple, type_params::Tuple)
+    ty = _structtype(mod, name, svec(type_params...), svec(field_names...),
+                     svec(), false, nfields(field_names))
+    _setsuper!(ty, Function)
+    declare_const(mod, name, ty)
+    _typebody!(false, ty, svec(field_types...))
+    return ty
+end
+
+# Replace the `Expr(:captured_local, i)` placeholders in the CodeInfo of a
+# global method which captures toplevel locals with the captured values.
+function replace_captured_locals!(ci::CodeInfo, locals::Tuple)
+    code = getfield(ci, :code)
+    n = getfield(getfield(code, :size), 1)
+    i = 1
+    while Intrinsics.sle_int(i, n)
+        ref = memoryrefnew(getfield(code, :ref), i, false)
+        stmt = memoryrefget(ref, :not_atomic, false)
+        if isa(stmt, Expr)
+            if getfield(stmt, :head) === :captured_local
+                args = getfield(stmt, :args)
+                idxref = memoryrefnew(getfield(args, :ref), 1, false)
+                idx = memoryrefget(idxref, :not_atomic, false)::Int
+                memoryrefset!(ref, getfield(locals, idx), :not_atomic, false)
+            end
+        end
+        i = Intrinsics.add_int(i, 1)
+    end
+    return ci
+end
+
+# The current exception in a catch block; lowered code references this as
+# `(core current_exception)` when binding a catch variable.
+current_exception() = ccall(:jl_current_exception, Any, (Any,), ccall(:jl_get_current_task, Ref{Task}, ()))
+
+
 
 function iterate end
 
@@ -1148,46 +1267,6 @@ _lower = nothing
 _setparser!(parser) = setglobal!(Core, :_parse, parser)
 _setlowerer!(lowerer) = setglobal!(Core, :_lower, lowerer)
 
-# Runtime support functions for lowered code produced by JuliaLowering.
-# These live in Core so that such lowered code is self-contained: it can be
-# evaluated by any runtime, including one whose frontend library carries its
-# own copy of the lowering implementation (the lowered code references these
-# as `(core eval_closure_type)` etc. rather than embedding function values).
-function eval_closure_type(mod::Module, name::Symbol, field_names::Tuple,
-                           field_types::Tuple, type_params::Tuple)
-    ty = _structtype(mod, name, svec(type_params...), svec(field_names...),
-                     svec(), false, nfields(field_names))
-    _setsuper!(ty, Function)
-    declare_const(mod, name, ty)
-    _typebody!(false, ty, svec(field_types...))
-    return ty
-end
-
-# Replace the `Expr(:captured_local, i)` placeholders in the CodeInfo of a
-# global method which captures toplevel locals with the captured values.
-function replace_captured_locals!(ci::CodeInfo, locals::Tuple)
-    code = getfield(ci, :code)
-    n = getfield(getfield(code, :size), 1)
-    i = 1
-    while Intrinsics.sle_int(i, n)
-        ref = memoryrefnew(getfield(code, :ref), i, false)
-        stmt = memoryrefget(ref, :not_atomic, false)
-        if isa(stmt, Expr)
-            if getfield(stmt, :head) === :captured_local
-                args = getfield(stmt, :args)
-                idxref = memoryrefnew(getfield(args, :ref), 1, false)
-                idx = memoryrefget(idxref, :not_atomic, false)::Int
-                memoryrefset!(ref, getfield(locals, idx), :not_atomic, false)
-            end
-        end
-        i = Intrinsics.add_int(i, 1)
-    end
-    return ci
-end
-
-# The current exception in a catch block; lowered code references this as
-# `(core current_exception)` when binding a catch variable.
-current_exception() = ccall(:jl_current_exception, Any, (Any,), ccall(:jl_get_current_task, Ref{Task}, ()))
 
 # support for deprecated uses of builtin functions
 _apply(x...) = _apply_iterate(Main.Base.iterate, x...)
