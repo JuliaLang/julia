@@ -107,13 +107,19 @@ julia, dlopens the standalone library, and exercises parse and the operator
 queries through the ABI with host values, comparing against the host's own
 frontend.
 
-Status: parse and the operator queries work cross-runtime (`make
-check-standalone` passes: structural parse parity with the host's parser,
-EOF/incomplete contracts, operator queries), and a julia whose
-`libjulia-frontend.so` is replaced by the standalone library starts up
-normally, booting the guest runtime during `jl_frontend_init`.
-`jl_frontend_lower` and `jl_macroexpand` raise a host error until
-cross-runtime lowering is implemented (modules and lowered code crossing
-the boundary symbolically, macro invocation calling back into the host via
-`jl_invoke_julia_macro`) — until then a swapped-in julia can start but not
-evaluate new code, so the swap is demonstrational.
+Status: parse, the operator queries, and *lowering* work cross-runtime
+(`make check-standalone`): host expressions are lowered by the guest's
+JuliaLowering, with host modules mirrored by shadow modules, lowered
+`CodeInfo` reconstructed host-side field-by-name, and arbitrary host values
+carried opaquely. A julia whose `libjulia-frontend.so` is replaced by the
+standalone library boots and evaluates code normally — including method
+definitions — with all lowering served by the guest runtime.
+
+Remaining cross-runtime gaps:
+- macro calls are rejected with a clear error (`jl_macroexpand` and macro
+  expansion inside `jl_frontend_lower` need host macro invocation through
+  `jl_invoke_julia_macro` plus bidirectional conversion of the expansion);
+- closures and generators: JuliaLowering currently embeds eagerly-created
+  closure type objects in its output, which cannot cross the boundary;
+  lowering needs to emit those definitions as code instead;
+- lowering warnings (the `warn` flag) are not forwarded to the host.

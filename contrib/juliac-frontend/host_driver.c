@@ -17,6 +17,7 @@ extern jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t *filen
                             jl_module_t *inmodule);
 
 typedef jl_value_t *(*parse_fptr_t)(const char *, size_t, jl_value_t *, size_t, size_t, jl_value_t *);
+typedef jl_value_t *(*lower_fptr_t)(jl_value_t *, jl_module_t *, const char *, int, size_t, int);
 typedef int (*opquery_fptr_t)(const char *);
 typedef void (*init_fptr_t)(void);
 
@@ -50,9 +51,10 @@ int main(int argc, char **argv)
     }
     init_fptr_t fe_init = (init_fptr_t)dlsym(handle, "jl_frontend_init_impl");
     parse_fptr_t fe_parse = (parse_fptr_t)dlsym(handle, "jl_frontend_parse_impl");
+    lower_fptr_t fe_lower = (lower_fptr_t)dlsym(handle, "jl_frontend_lower_impl");
     opquery_fptr_t fe_isop = (opquery_fptr_t)dlsym(handle, "jl_is_operator_impl");
     opquery_fptr_t fe_prec = (opquery_fptr_t)dlsym(handle, "jl_operator_precedence_impl");
-    if (!fe_init || !fe_parse || !fe_isop || !fe_prec) {
+    if (!fe_init || !fe_parse || !fe_lower || !fe_isop || !fe_prec) {
         fprintf(stderr, "ERROR: missing ABI symbols in %s\n", argv[1]);
         return 2;
     }
@@ -119,6 +121,71 @@ int main(int argc, char **argv)
         check("cross-runtime parse incomplete",
               jl_is_expr(ex) && ((jl_expr_t *)ex)->head == jl_symbol("incomplete"));
         JL_GC_POP();
+    }
+
+    // --- cross-runtime lowering: lower host exprs in the guest, then
+    // evaluate the returned thunk in the host ---
+    {
+        // n.b. no closures or generators here: JuliaLowering currently
+        // embeds eagerly-created closure type objects in its output, which
+        // cannot cross the runtime boundary (needs lowering to emit those
+        // definitions as code; see README)
+        const struct { const char *code; int64_t expected; } lowers[] = {
+            {"1 + 2", 3},
+            {"let s = 0\n    for i = 1:10\n        s += i\n    end\n    s\nend", 55},
+            {"begin\n    a = [1, 2, 3]\n    a[1] + a[3] * 10\nend", 31},
+            {"begin\n    t = try\n        error(\"x\")\n        1\n    catch\n        2\n    end\n    t + 40\nend", 42},
+            {"begin\n    x = 7\n    if x > 3\n        x = x * 6\n    else\n        x = 0\n    end\n    x\nend", 42},
+            {"let g = 0\n    while g < 5\n        g += 1\n    end\n    g\nend", 5},
+        };
+        for (size_t i = 0; i < sizeof(lowers) / sizeof(lowers[0]); i++) {
+            const char *code = lowers[i].code;
+            char name[64];
+            snprintf(name, sizeof(name), "cross-runtime lower+eval %zu", i + 1);
+            jl_value_t *fname = NULL, *expr = NULL, *lowered = NULL, *val = NULL;
+            JL_GC_PUSH4(&fname, &expr, &lowered, &val);
+            JL_TRY {
+                fname = jl_cstr_to_string("none");
+                expr = jl_svecref(jl_parse(code, strlen(code), fname, 1, 0,
+                                           (jl_value_t *)jl_symbol("statement"), NULL), 0);
+                lowered = fe_lower(expr, jl_main_module, "none", 1, (size_t)-1, 0);
+                val = jl_toplevel_eval(jl_main_module, jl_svecref(lowered, 0));
+                int ok = jl_is_int64(val) && jl_unbox_int64(val) == lowers[i].expected;
+                check(name, ok);
+                if (!ok) {
+                    jl_printf(jl_stderr_stream(), "  value: ");
+                    jl_static_show(jl_stderr_stream(), val);
+                    jl_printf(jl_stderr_stream(), "\n  lowered: ");
+                    jl_static_show(jl_stderr_stream(), jl_svecref(lowered, 0));
+                    jl_printf(jl_stderr_stream(), "\n");
+                }
+            }
+            JL_CATCH {
+                jl_static_show(jl_stderr_stream(), jl_current_exception(jl_current_task));
+                jl_printf(jl_stderr_stream(), "\n");
+                check(name, 0);
+            }
+            JL_GC_POP();
+        }
+        // macro calls are rejected with a clear error for now
+        {
+            int threw = 0;
+            jl_value_t *fname = NULL, *expr = NULL;
+            JL_GC_PUSH2(&fname, &expr);
+            JL_TRY {
+                fname = jl_cstr_to_string("none");
+                const char *mc = "@assert true";
+                expr = jl_svecref(jl_parse(mc, strlen(mc), fname, 1, 0,
+                                           (jl_value_t *)jl_symbol("statement"), NULL), 0);
+                fe_lower(expr, jl_main_module, "none", 1, (size_t)-1, 0);
+            }
+            JL_CATCH {
+                threw = 1;
+                jl_exception_clear();
+            }
+            check("cross-runtime lower macrocall rejected", threw);
+            JL_GC_POP();
+        }
     }
 
     // --- operator queries: guest answers must match the host frontend ---

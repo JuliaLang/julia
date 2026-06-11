@@ -206,6 +206,29 @@ int jl_has_meta(jl_array_t *body, jl_sym_t *sym) JL_NOTSAFEPOINT
     return 0;
 }
 
+// Helpers for foreign frontends (e.g. a frontend library carrying its own
+// runtime) to inspect and construct host syntax trees by name, without
+// assumptions about struct layouts; part of the frontend support API.
+JL_DLLEXPORT size_t jl_expr_argcount(jl_value_t *e) JL_NOTSAFEPOINT
+{
+    return jl_expr_nargs(e);
+}
+
+JL_DLLEXPORT jl_value_t *jl_expr_arg(jl_value_t *e, size_t i)
+{
+    return jl_exprarg(e, i);
+}
+
+JL_DLLEXPORT void jl_expr_setarg(jl_value_t *e, size_t i, jl_value_t *v)
+{
+    jl_exprargset(e, i, v);
+}
+
+JL_DLLEXPORT size_t jl_string_size(jl_value_t *s) JL_NOTSAFEPOINT
+{
+    return jl_string_len(s);
+}
+
 // Utility function to return whether `e` is any of the special AST types or
 // will always evaluate to itself exactly unchanged. This corresponds to
 // `isa_ast_node` in Core.Compiler utilities.
