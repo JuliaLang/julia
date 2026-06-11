@@ -5310,8 +5310,10 @@ JL_DLLEXPORT void jl_extern_c(jl_value_t *name, jl_value_t *declrt, jl_tupletype
     size_t i, nargs = jl_nparams(sigt);
     for (i = 1; i < nargs; i++) {
         jl_value_t *ati = jl_tparam(sigt, i);
+        if (ati == (jl_value_t*)jl_any_type)
+            continue; // passed through unmodified as `jl_value_t*`
         if (!jl_is_concrete_type(ati) || jl_is_kind(ati) || !jl_type_mappable_to_c(ati))
-            jl_error("@ccallable: argument types must be concrete");
+            jl_error("@ccallable: argument types must be concrete (or Any)");
     }
 
     // save a record of this so that the alias is generated when we write an object file

@@ -277,6 +277,7 @@ precompile_test_harness(false) do dir
               # check that @ccallable works from precompiled modules
               Base.@ccallable Cint f35014(x::Cint) = x+Cint(1)
               Base.@ccallable "f35014_other" f35014_2(x::Cint)::Cint = x+Cint(1)
+              Base.@ccallable "f35014_any" f35014_3(x::Any)::Any = (x, x)
 
               # check that Tasks work from serialized state
               ch1 = Channel(x -> nothing)
@@ -419,6 +420,8 @@ precompile_test_harness(false) do dir
                 @test ccall(f35014_ptr, Int32, (Int32,), 3) == 4
                 f35014_other_ptr = Libdl.dlsym(foo_ptr, :f35014_other)
                 @test ccall(f35014_other_ptr, Int32, (Int32,), 3) == 4
+                f35014_any_ptr = Libdl.dlsym(foo_ptr, :f35014_any)
+                @test ccall(f35014_any_ptr, Any, (Any,), 7) === (7, 7)
             end
         else
             ocachefile = nothing
