@@ -1529,9 +1529,13 @@ function expand_let(ctx, ex)
                 end
                 blk = @ast ctx binding [K"block"
                     tmp := rhs
-                    type := lhs[2]
+                    # type := lhs[2]
                     [K"scope_block"(ex, scope_type=scope_type)
-                        [K"local"(lhs) [K"::" var type]]
+                        # n.b. the declared type is referenced directly (not
+                        # hoisted into a temporary) so that the declaration
+                        # works for variables captured into other lambdas, where
+                        # it is re-evaluated at each assignment like flisp does
+                        [K"local"(lhs) [K"::" var lhs[2]]]
                         [K"always_defined" var]
                         [K"="(binding) var tmp]
                         blk
@@ -2945,11 +2949,11 @@ function expand_macro_def(ctx, ex)
                 [K"::"
                     # TODO: should we be adopting the scope of the K"macro" expression itself?
                     adopt_scope(@ast(ctx, sig, "__source__"::K"Identifier"), scope_ref)
-                    LineNumberNode::K"Value"
+                    "LineNumberNode"::K"core"
                 ]
                 [K"::"
                     adopt_scope(@ast(ctx, sig, "__module__"::K"Identifier"), scope_ref)
-                    Module::K"Value"
+                    "Module"::K"core"
                 ]
                 mapsyntax(e->apply_arg_meta(e, :nospecialize), args)...
             ]
@@ -3124,7 +3128,7 @@ function _match_struct_field(x0)
     x = x0
     while true
         k = kind(x)
-        if k == K"Identifier"
+        if k == K"Identifier" || k == K"Placeholder"
             return (name=x, type=type, atomic=atomic, _const=_const, docs=docs)
         elseif k == K"::" && numchildren(x) == 2
             isnothing(type) || throw(LoweringError(x0, "multiple types in struct field"))
@@ -3303,7 +3307,9 @@ end
 #
 #     (t::Type{X{A,B}})() = new()
 function rewrite_ctor(ctx, ex, tname, global_tname, struct_typevars, field_types)
+    is_leaf(ex) && return ex
     @stm ex begin
+        [K"inert" _] -> ex
         [K"function" call body] -> let (sig, wheres) = flatten_wheres(call)
             call2, ctor_self =
                 rewrite_ctor_sig(ctx, sig, tname, global_tname, struct_typevars, wheres)

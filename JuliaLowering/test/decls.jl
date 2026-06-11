@@ -14,8 +14,35 @@ begin
 end
 """) === 1.0
 
-# Global decl in value position without assignment returns nothing
-@test JuliaLowering.include_string(test_mod, "global x_no_assign") === nothing
+@testset "global decl in value position" begin
+    # Global decl in value position without assignment returns nothing
+    @test JuliaLowering.include_string(test_mod, "global x_no_assign") === nothing
+
+    # In tail position in a function is OK; returns nothing
+    @test JuliaLowering.include_string(test_mod, """
+    function f_tail_global_decl()
+        global x_tail_decl
+    end
+    f_tail_global_decl()
+    """) === nothing
+    @test Base.binding_kind(test_mod, :x_tail_decl) == Base.PARTITION_KIND_DECLARED
+    @test JuliaLowering.include_string(test_mod, """
+    function f_tail_global_decl_2(b)
+        if b
+            global x_tail_decl2, x_tail_decl3
+        end
+    end
+    (f_tail_global_decl_2(true), f_tail_global_decl_2(false))
+    """) === (nothing, nothing)
+    @test JuliaLowering.include_string(test_mod, "(() -> (global x_tail_decl4))()") === nothing
+
+    # disallowed in value position otherwise
+    @test_throws LoweringError JuliaLowering.include_string(test_mod, """
+    function f_value_global_decl()
+        y = (global x_value_decl)
+    end
+    """)
+end
 
 # Unadorned declarations
 @test JuliaLowering.include_string(test_mod, """
@@ -603,6 +630,37 @@ gr_mod = Module()
     @test !Base.isdefinedglobal(test_mod, sym)
     # test gr as a value
     @test 1 == jl_eval(test_mod, Expr(:block, GlobalRef(gr_mod, sym)))
+
+    # gr resolves when a similar local is in scope
+    @gensym sym
+    Base.eval(gr_mod, Expr(:(=), sym, "gr"))
+    @test ("let-local", "gr") == jl_eval(
+        test_mod, Expr(:let, Expr(:block, Expr(:(=), sym, "let-local")),
+                       Expr(:tuple, sym, GlobalRef(gr_mod, sym))))
+    @test !Base.isdefinedglobal(test_mod, sym)
+
+    @test ("let-local", "gr reassigned") == jl_eval(
+        test_mod, Expr(:let, Expr(:block, Expr(:(=), sym, "let-local")),
+                       Expr(:block,
+                            Expr(:(=), GlobalRef(gr_mod, sym), "gr reassigned"),
+                            Expr(:tuple, sym, GlobalRef(gr_mod, sym)))))
+    @test !Base.isdefinedglobal(test_mod, sym)
+    @test getproperty(gr_mod, sym) == "gr reassigned"
+
+    @test ("let-local", "gr reassigned twice") == jl_eval(
+        test_mod, Expr(:let, Expr(:block, Expr(:(=), sym, "let-local")),
+                       Expr(:block,
+                            Expr(:(*=), GlobalRef(gr_mod, sym), " twice"),
+                            Expr(:tuple, sym, GlobalRef(gr_mod, sym)))))
+    @test !Base.isdefinedglobal(test_mod, sym)
+    @test getproperty(gr_mod, sym) == "gr reassigned twice"
+
+    @test ("lambda-local", "gr reassigned twice") == jl_eval(
+        test_mod, Expr(:let, Expr(:block, Expr(:(=), sym, "let-local")),
+                       Expr(:call,
+                            Expr(:->, Expr(:tuple, Expr(:kw, sym, "lambda-local")),
+                                 Expr(:block, Expr(:tuple, sym, GlobalRef(gr_mod, sym)))))))
+    @test !Base.isdefinedglobal(test_mod, sym)
 
     # gr1 = gr2 = gr3 = gr4 = 1
     @gensym sym1 sym2 sym3 sym4

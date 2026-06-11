@@ -356,6 +356,9 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
     k = kind(ex)
     @jl_assert scope isa ScopeInfo || k === K"lambda" ex
     if k == K"Identifier"
+        if (mod = get(ex, :mod, nothing); !isnothing(mod))
+            return new_global_binding(ctx, ex, ex.name_val, mod)
+        end
         b = resolve_name(ctx, ex)
         # Unresolved names are assumed global
         if isnothing(b)

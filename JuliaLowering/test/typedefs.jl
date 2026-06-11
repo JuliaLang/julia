@@ -166,6 +166,35 @@ end
     @test_throws "cannot be changed" jl_eval(test_mod, :($S(true,false).y = true))
 end
 
+@testset "placeholder fields" begin
+    @test JuliaLowering.include_string(test_mod, """
+    mutable struct PlaceholderFields
+        _::Int
+        __
+        const ___
+        x
+    end
+    fieldnames(PlaceholderFields)
+    """) === (:_, :__, :___, :x)
+    @test fieldtypes(test_mod.PlaceholderFields) == (Int, Any, Any, Any)
+    let p = test_mod.PlaceholderFields(1.0, 2, 3, 4)
+        @test getfield(p, 1) === 1
+        @test getfield(p, 2) === 2
+        @test getfield(p, 3) === 3
+        @test getfield(p, 4) === 4
+        @test_throws "const field" setfield!(p, 3, 0)
+    end
+
+    # placeholder field types still apply in `new`
+    @test JuliaLowering.include_string(test_mod, """
+    struct PlaceholderNew
+        _::Int
+        PlaceholderNew(x) = new(x)
+    end
+    getfield(PlaceholderNew(3.0), 1)
+    """) === 3
+end
+
 # Inner constructors: one field non-Any
 @test JuliaLowering.include_string(test_mod, """
 struct S2
@@ -329,6 +358,7 @@ end
         end
     """) === nothing
     test_has_inner_ctor(test_mod.DefaultInnerCtors1)
+    @test fieldnames(test_mod.DefaultInnerCtors1) == (:field,)
 
     @test JL.include_string(test_mod, raw"""
         struct DefaultInnerCtors2
@@ -337,6 +367,7 @@ end
         end
     """) === nothing
     test_has_inner_ctor(test_mod.DefaultInnerCtors2)
+    @test fieldnames(test_mod.DefaultInnerCtors2) == (:field,)
 
     @test JL.include_string(test_mod, raw"""
         struct DefaultInnerCtors3
@@ -345,6 +376,7 @@ end
         end
     """) === nothing
     test_has_inner_ctor(test_mod.DefaultInnerCtors3)
+    @test fieldnames(test_mod.DefaultInnerCtors3) == (:field,)
 
     @test JL.include_string(test_mod, raw"""
         struct DefaultInnerCtors4
@@ -356,6 +388,7 @@ end
         end
     """) === nothing
     test_has_inner_ctor(test_mod.DefaultInnerCtors4)
+    @test fieldnames(test_mod.DefaultInnerCtors4) == (:field,)
 
     @test JL.include_string(test_mod, raw"""
         struct DefaultInnerCtors5
@@ -364,6 +397,7 @@ end
         end
     """) === nothing
     test_has_inner_ctor(test_mod.DefaultInnerCtors5)
+    @test fieldnames(test_mod.DefaultInnerCtors5) == (:field,)
 
     @test JL.include_string(test_mod, raw"""
         struct DefaultInnerCtors6
@@ -372,6 +406,7 @@ end
         end
     """) === nothing
     test_has_inner_ctor(test_mod.DefaultInnerCtors6)
+    @test fieldnames(test_mod.DefaultInnerCtors6) == (:field,)
 
     @test JL.include_string(test_mod, raw"""
         struct NoDefaultInnerCtors1
@@ -380,6 +415,7 @@ end
         end
     """) === nothing
     test_no_inner_ctor(test_mod.NoDefaultInnerCtors1)
+    @test fieldnames(test_mod.NoDefaultInnerCtors1) == (:field,)
 
     @test JL.include_string(test_mod, raw"""
         struct NoDefaultInnerCtors2
@@ -388,6 +424,7 @@ end
         end
     """) === nothing
     test_no_inner_ctor(test_mod.NoDefaultInnerCtors2)
+    @test fieldnames(test_mod.NoDefaultInnerCtors2) == (:field,)
 
     @test JL.include_string(test_mod, raw"""
         struct NoDefaultInnerCtors3
@@ -396,6 +433,7 @@ end
         end
     """) === nothing
     test_no_inner_ctor(test_mod.NoDefaultInnerCtors3)
+    @test fieldnames(test_mod.NoDefaultInnerCtors3) == (:field,)
     @test length(methods(test_mod.NoDefaultInnerCtors3)) == 1
 
     @test JL.include_string(test_mod, raw"""
@@ -405,6 +443,7 @@ end
         end
     """) === nothing
     test_no_inner_ctor(test_mod.NoDefaultInnerCtors4)
+    @test fieldnames(test_mod.NoDefaultInnerCtors4) == (:field,)
 end
 
 # User defined inner constructors and helper functions for structs without type params

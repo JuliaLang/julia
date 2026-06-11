@@ -65,18 +65,6 @@ end
 3   (return core.nothing)
 
 ########################################
-# Error: Global declaration not allowed in tail position in functions
-function f()
-    global x
-end
-#---------------------
-LoweringError:
-function f()
-    global x
-#          ╙ ── global declaration doesn't read the variable and can't return a value
-end
-
-########################################
 # Error: Global declaration not allowed in value position
 y = global x
 #---------------------
