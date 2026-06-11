@@ -345,8 +345,11 @@ function convert_local_function_decl(ctx, ex)
         for (id, boxed) in zip(field_orig_bindings, field_is_box)]
     nospec_arg = !any(field_is_nospec) ? nothing :
         @ast ctx ex [:call "svec"::core [f::value for f in field_is_nospec]...]
+    # n.b. the runtime support functions of closures are referenced in `Core`
+    # (see base/boot.jl), so that lowered code is self-contained: it can be
+    # serialized, and evaluated by a runtime without this JuliaLowering loaded
     define_clstruct = type_ex = @ast ctx ex [:call
-        eval_closure_type::value
+        "eval_closure_type"::core
         ctx.mod::value
         name_str::symbol
         [:call "svec"::core sp_syms...]
@@ -684,7 +687,7 @@ function closure_convert_lambda(ctx, ex, sps)
     lam = @mknode(ex; children=lambda_children)
     if !isnothing(interpolations) && !isempty(interpolations)
         @ast ctx ex [:call
-            replace_captured_locals::value
+            "replace_captured_locals"::core
             lam
             [:call
                 "svec"::core

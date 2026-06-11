@@ -324,6 +324,64 @@ function iterate end
 macro nospecialize(x)
     _expr(:escape, _expr(:meta, :nospecialize, x))
 end
+
+# Runtime support functions for the code that JuliaLowering's closure
+# conversion produces. They live in Core so that lowered code can reference
+# them by name, as `(core eval_closure_type)` etc., rather than embedding
+# function values from JuliaLowering itself: such code is self-contained, so it
+# can be serialized, and evaluated by a runtime which does not have the
+# lowering implementation loaded (e.g. one whose frontend library carries its
+# own copy of it). They are defined as early as possible, before the first
+# closure in this file, so only early bootstrap vocabulary is available.
+
+# Create and declare the type of a closure, with a type parameter for each
+# captured static parameter (`capt_sp`, their names) and for each field that is
+# neither boxed nor `@nospecialize`d (see jl_eval_closure_type)
+eval_closure_type(mod::Module, name::Symbol, capt_sp::SimpleVector, field_names::SimpleVector,
+                  field_is_box::SimpleVector, field_is_nospec=nothing) =
+    ccall(:jl_eval_closure_type, Any, (Any, Any, Any, Any, Any, Any),
+          mod, name, capt_sp, field_names, field_is_box, field_is_nospec)
+
+# A copy of the CodeInfo of a global method which captures toplevel locals,
+# with the `Expr(:captured_local, i)` placeholders replaced by the captured
+# values.
+function replace_captured_locals(ci::CodeInfo, locals::SimpleVector)
+    ci = ccall(:jl_copy_ast, Any, (Any,), ci)::CodeInfo
+    _replace_captured_locals!(getfield(ci, :code), locals)
+    return ci
+end
+# `stmts` (and the expressions in it) are fresh copies, so they can be updated in place
+function _replace_captured_locals!(stmts::Array{Any,1}, locals::SimpleVector)
+    n = getfield(getfield(stmts, :size), 1)
+    i = 1
+    while Intrinsics.sle_int(i, n)
+        ref = memoryrefnew(getfield(stmts, :ref), i, false)
+        e = _replace_captured_local(memoryrefget(ref, :not_atomic, false), locals)
+        memoryrefset!(ref, e, :not_atomic, false)
+        i = Intrinsics.add_int(i, 1)
+    end
+end
+function _replace_captured_local(@nospecialize(e), locals::SimpleVector)
+    if isa(e, Expr)
+        args = getfield(e, :args)
+        if getfield(e, :head) === :captured_local
+            idx = memoryrefget(memoryrefnew(getfield(args, :ref), 1, false), :not_atomic, false)
+            v = _svec_ref(locals, idx::Int)
+            # as `isa_lowering_ast_node`: values which would otherwise be read as syntax
+            if isa(v, Symbol) || isa(v, QuoteNode) || isa(v, Expr) || isa(v, GlobalRef)
+                return QuoteNode(v)
+            end
+            return v
+        end
+        # could possibly limit to foreigncall
+        _replace_captured_locals!(args, locals)
+    elseif isa(e, QuoteNode)
+        # `jl_copy_ast` does not copy what a QuoteNode holds
+        v = ccall(:jl_copy_ast, Any, (Any,), getfield(e, :value))
+        return QuoteNode(_replace_captured_local(v, locals))
+    end
+    return e
+end
 Expr(@nospecialize args...) = _expr(args...)
 
 macro latestworld() Expr(:latestworld) end
