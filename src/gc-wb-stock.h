@@ -14,10 +14,19 @@ extern "C" {
 STATIC_INLINE void jl_gc_wb(const void *parent, const void *ptr) JL_NOTSAFEPOINT
 {
     // parent and ptr isa jl_value_t*
+    // The barrier is emitted before the store and may receive a NULL ptr (e.g.
+    // when a field is being cleared); a NULL child is never young so it cannot
+    // require the parent to be remembered.
+#ifndef __clang_gcanalyzer__
+    // Hidden from the GC analyzer: branching on `ptr != NULL` here splits the
+    // analysis state, and on the assumed-NULL path the caller's subsequent
+    // store of `ptr` no longer registers as rooting it, producing false
+    // "may have been GCed" reports at the next safepoint.
     if (__unlikely(jl_astaggedvalue(parent)->bits.gc == 3 /* GC_OLD_MARKED */ && // parent is old and not in remset
                    (jl_astaggedvalue(parent)->bits.in_image == 1 /* GC_IN_IMAGE_NOT_REMSET */ || // parent in image and not in remset
-                    (jl_astaggedvalue(ptr)->bits.gc & 1 /* GC_MARKED */) == 0))) // ptr is young
+                    (ptr != NULL && (jl_astaggedvalue(ptr)->bits.gc & 1 /* GC_MARKED */) == 0)))) // ptr is young
         jl_gc_queue_root((jl_value_t*)parent);
+#endif
 }
 
 STATIC_INLINE void jl_gc_wb_back(const void *ptr) JL_NOTSAFEPOINT // ptr isa jl_value_t*

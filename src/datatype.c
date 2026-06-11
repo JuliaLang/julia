@@ -357,7 +357,7 @@ STATIC_INLINE void jl_maybe_allocate_singleton_instance(jl_datatype_t *st) JL_NO
         return;
     if (jl_is_datatype_make_singleton(st)) {
         jl_task_t *ct = jl_current_task;
-        st->instance = jl_gc_permobj(ct->ptls, 0, st, 0);
+        jl_gc_write(st, st->instance, jl_gc_permobj(ct->ptls, 0, st, 0));
     }
 }
 
@@ -628,7 +628,7 @@ void jl_get_genericmemory_layout(jl_datatype_t *st)
             zeroinst->ptr = (char*)zeroinst + JL_SMALL_BYTE_ALIGNMENT;
             memset(zeroinst->ptr, 0, elsz ? elsz : isunion);
             assert(!st->instance);
-            st->instance = (jl_value_t*)zeroinst;
+            jl_gc_write(st, st->instance, (jl_value_t*)zeroinst);
         }
     }
 }
@@ -929,13 +929,11 @@ static void jl_process_field_attrs(jl_svec_t *fattrs, jl_svec_t *fnames, int mut
 // Caller must handle GC rooting of wrapper across this call
 static void jl_setup_type_wrapper(jl_typename_t *tn, jl_svec_t *parameters, jl_value_t **wrapper)
 {
-    tn->wrapper = *wrapper;
-    jl_gc_wb(tn, *wrapper);
+    jl_gc_write(tn, tn->wrapper, *wrapper);
     int np = jl_svec_len(parameters);
     for (int i = np - 1; i >= 0; i--) {
         *wrapper = jl_new_struct(jl_unionall_type, jl_svecref(parameters, i), *wrapper);
-        tn->wrapper = *wrapper;
-        jl_gc_wb(tn, *wrapper);
+        jl_gc_write(tn, tn->wrapper, *wrapper);
     }
 }
 
@@ -958,12 +956,9 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
 
     // init enough before possibly calling jl_new_typename_in
     t = jl_new_uninitialized_datatype();
-    t->super = super;
-    if (super != NULL) jl_gc_wb(t, t->super);
-    t->parameters = parameters;
-    jl_gc_wb(t, t->parameters);
-    t->types = ftypes;
-    if (ftypes != NULL) jl_gc_wb(t, t->types);
+    jl_gc_write(t, t->super, super);
+    jl_gc_write(t, t->parameters, parameters);
+    jl_gc_write(t, t->types, ftypes);
 
     t->name = NULL;
     if (jl_is_typename(name)) {
@@ -975,10 +970,8 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
     else {
         tn = jl_new_typename_in((jl_sym_t*)name, module, abstract, mutabl);
     }
-    t->name = tn;
-    jl_gc_wb(t, t->name);
-    t->name->names = fnames;
-    jl_gc_wb(t->name, t->name->names);
+    jl_gc_write(t, t->name, tn);
+    jl_gc_write(t->name, t->name->names, fnames);
     tn->n_uninitialized = jl_svec_len(fnames) - ninitialized;
 
     uint32_t *atomicfields = NULL;
@@ -1066,7 +1059,7 @@ JL_DLLEXPORT jl_datatype_t * jl_new_foreign_type(jl_sym_t *name,
     desc->markfunc = markfunc;
     desc->sweepfunc = sweepfunc;
     bt->layout = layout;
-    bt->instance = NULL;
+    jl_gc_write(bt, bt->instance, NULL);
     return bt;
 }
 
@@ -1917,8 +1910,7 @@ inline void set_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t
         return;
     }
     if (jl_field_isptr(st, i)) {
-        jl_atomic_store_release((_Atomic(jl_value_t*)*)((char*)v + offs), rhs);
-        jl_gc_wb(v, rhs);
+        jl_gc_write_atomic(v, ((_Atomic(jl_value_t*)*)((char*)v + offs))[0], rhs, release);
     }
     else {
         jl_value_t *ty = jl_field_type_concrete(st, i);
@@ -2700,10 +2692,8 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
 
             // Create typename
             jl_typename_t *tn = jl_new_typename_in(name, module, abstract, mutabl);
-            datatypes[i]->name = tn;
-            jl_gc_wb(datatypes[i], tn);
-            tn->names = fieldnames;
-            jl_gc_wb(tn, fieldnames);
+            jl_gc_write(datatypes[i], datatypes[i]->name, tn);
+            jl_gc_write(tn, tn->names, fieldnames);
             tn->n_uninitialized = (int32_t)(jl_svec_len(fieldnames) - min_initialized);
 
             // Set up initial values
@@ -2722,8 +2712,7 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
             jl_svec_t *info = (jl_svec_t*)jl_svecref(struct_infos, i);
             jl_svec_t *params = (jl_svec_t*)jl_svecref(info, 0);
 
-            datatypes[i]->parameters = params;
-            jl_gc_wb(datatypes[i], params);
+            jl_gc_write(datatypes[i], datatypes[i]->parameters, params);
 
             // Create wrapper UnionAll chain
             if (datatypes[i]->name->wrapper == NULL) {
@@ -2758,8 +2747,7 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
                     datatypes[i]->name == ((jl_datatype_t*)resolved_super)->name)
                     jl_errorf("invalid subtyping in definition of %s: a type cannot subtype itself.", type_name);
                 jl_check_valid_supertype(resolved_super, type_name);
-                datatypes[i]->super = (jl_datatype_t*)resolved_super;
-                jl_gc_wb(datatypes[i], datatypes[i]->super);
+                jl_gc_write(datatypes[i], datatypes[i]->super, (jl_datatype_t*)resolved_super);
                 JL_GC_POP();
             }
         }
@@ -2794,8 +2782,7 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
             jl_tvar_t *tv = (jl_tvar_t*)jl_svecref(typevars, i);
             jl_check_field_types(ftypes, tv->name);
             jl_datatype_t *dt = unwrap_to_datatype(results[i]);
-            dt->types = ftypes;
-            jl_gc_wb(dt, ftypes);
+            jl_gc_write(dt, dt->types, ftypes);
             JL_GC_POP();
         }
     }
