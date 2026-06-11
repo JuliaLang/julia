@@ -1066,9 +1066,6 @@ static void lock_low32(void)
     return;
 }
 
-// Actual definition in `ast.c`
-void jl_lisp_prompt(void);
-
 #ifdef _OS_LINUX_
 static void rr_detach_teleport(void) {
 #define RR_CALL_BASE 1000

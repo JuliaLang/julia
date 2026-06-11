@@ -75,6 +75,9 @@ typedef intptr_t ssize_t;
 # ifdef JL_LIBRARY_EXPORTS_CODEGEN
 #  define JL_DLLEXPORT_CODEGEN __declspec(dllexport) JL_VISIBILITY_DEFAULT
 # endif
+# ifdef JL_LIBRARY_EXPORTS_FRONTEND
+#  define JL_DLLEXPORT_FRONTEND __declspec(dllexport) JL_VISIBILITY_DEFAULT
+# endif
 #define JL_HIDDEN
 #define JL_DLLIMPORT   __declspec(dllimport) JL_VISIBILITY_DEFAULT
 #else
@@ -87,6 +90,9 @@ typedef intptr_t ssize_t;
 #endif
 #ifndef JL_DLLEXPORT_CODEGEN
 # define JL_DLLEXPORT_CODEGEN JL_DLLIMPORT
+#endif
+#ifndef JL_DLLEXPORT_FRONTEND
+# define JL_DLLEXPORT_FRONTEND JL_DLLIMPORT
 #endif
 
 #ifdef _OS_LINUX_

@@ -9,6 +9,9 @@
     small_arraylist_*;
     jl_*;
     ijl_*;
+    fl_profile*;
+    fl_show_profile*;
+    fl_clear_profile*;
     _jl_mutex_*;
     rec_backtrace*;
     julia_*;

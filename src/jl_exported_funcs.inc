@@ -278,12 +278,8 @@
     XX(jl_is_in_pure_context) \
     XX(jl_is_memdebug) \
     XX(jl_is_not_broken_subtype) \
-    XX(jl_is_operator) \
     XX(jl_is_task_started) \
-    XX(jl_is_unary_and_binary_operator) \
-    XX(jl_is_unary_operator) \
     XX(jl_lazy_load_and_lookup) \
-    XX(jl_lisp_prompt) \
     XX(jl_load) \
     XX(jl_load_) \
     XX(jl_load_and_lookup) \
@@ -293,7 +289,6 @@
     XX(jl_lower) \
     XX(jl_lseek) \
     XX(jl_lstat) \
-    XX(jl_macroexpand) \
     XX(jl_malloc) \
     XX(jl_malloc_stack) \
     XX(jl_matching_methods) \
@@ -349,7 +344,6 @@
     XX(jl_object_id) \
     XX(jl_object_id_) \
     XX(jl_obvious_subtype) \
-    XX(jl_operator_precedence) \
     XX(jl_parse) \
     XX(jl_parse_all) \
     XX(jl_parse_input_line) \
@@ -564,6 +558,23 @@
     YY(JLJITGetGlobalPrefix) \
     YY(JLJITGetDataLayoutString) \
     YY(JLJITGetIRCompileLayer) \
+
+
+// use YY instead of XX to avoid jl -> ijl renaming in libjulia-frontend
+#define JL_FRONTEND_EXPORTED_FUNCS(YY) \
+    YY(jl_frontend_init) \
+    YY(jl_frontend_parse) \
+    YY(jl_frontend_lower) \
+    YY(jl_macroexpand) \
+    YY(jl_is_operator) \
+    YY(jl_is_unary_operator) \
+    YY(jl_is_unary_and_binary_operator) \
+    YY(jl_is_syntactic_operator) \
+    YY(jl_operator_precedence) \
+    YY(jl_lisp_prompt) \
+    YY(fl_profile) \
+    YY(fl_show_profile) \
+    YY(fl_clear_profile) \
 
 
 // end of file

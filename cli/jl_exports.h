@@ -29,6 +29,7 @@ JL_RUNTIME_EXPORTED_FUNCS(XX)
 JL_RUNTIME_EXPORTED_FUNCS_WIN(XX)
 #endif
 JL_CODEGEN_EXPORTED_FUNCS(XX)
+JL_FRONTEND_EXPORTED_FUNCS(XX)
 #undef XX
 
 // Define holder locations for function addresses as `const void * $(name)_addr = NULL;
@@ -38,6 +39,7 @@ JL_RUNTIME_EXPORTED_FUNCS(XX)
 JL_RUNTIME_EXPORTED_FUNCS_WIN(XX)
 #endif
 JL_CODEGEN_EXPORTED_FUNCS(XX)
+JL_FRONTEND_EXPORTED_FUNCS(XX)
 #undef XX
 
 // Generate lists of function names and addresses
@@ -65,6 +67,20 @@ static const char *const jl_codegen_fallback_func_names[] = {
 };
 #undef XX
 
+#define XX(name)    #name"_impl",
+static const char *const jl_frontend_exported_func_names[] = {
+    JL_FRONTEND_EXPORTED_FUNCS(XX)
+    NULL
+};
+#undef XX
+
+#define XX(name)    #name"_fallback",
+static const char *const jl_frontend_fallback_func_names[] = {
+    JL_FRONTEND_EXPORTED_FUNCS(XX)
+    NULL
+};
+#undef XX
+
 #define XX(name)    &name##_addr,
 static anonfunc **const jl_runtime_exported_func_addrs[] = {
     JL_RUNTIME_EXPORTED_FUNCS(XX)
@@ -75,6 +91,10 @@ static anonfunc **const jl_runtime_exported_func_addrs[] = {
 };
 static anonfunc **const jl_codegen_exported_func_addrs[] = {
     JL_CODEGEN_EXPORTED_FUNCS(XX)
+    NULL
+};
+static anonfunc **const jl_frontend_exported_func_addrs[] = {
+    JL_FRONTEND_EXPORTED_FUNCS(XX)
     NULL
 };
 #undef XX

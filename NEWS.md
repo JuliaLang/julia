@@ -62,6 +62,15 @@ Multi-threading changes
 Build system changes
 --------------------
 
+* The flisp-based reference frontend (parser, macro expansion and lowering) has been split out of
+  `libjulia-internal` into a new shared library, `libjulia-frontend` (analogous to the existing
+  `libjulia-codegen`). The runtime calls the frontend through a small trampoline interface
+  (`jl_frontend_init`, `jl_frontend_parse`, `jl_frontend_lower`, `jl_macroexpand`, the operator
+  query functions, and the flisp REPL/profiling entry points), so the library can eventually be
+  replaced or omitted; fallback stubs in `libjulia-internal` are used when it is absent. The C
+  entry points `jl_fl_parse`/`jl_fl_lower` have been renamed to
+  `jl_frontend_parse`/`jl_frontend_lower`.
+
 New library functions
 ---------------------
 
