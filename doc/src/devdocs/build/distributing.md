@@ -25,7 +25,7 @@ pregenerate the `base/version_git.jl` file with:
 
     make -C base version_git.jl.phony
 
-Julia has lots of build dependencies where we use patched versions that has not
+Julia has lots of build dependencies where we use patched versions that have not
 yet been included by the popular package managers. These dependencies will usually
 be automatically downloaded when you build, but if you want to be able to build
 Julia on a computer without internet access you should create a full-source-dist
