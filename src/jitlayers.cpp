@@ -627,30 +627,31 @@ static auto countBasicBlocks(const Function &F) JL_NOTSAFEPOINT
 
 static constexpr size_t N_optlevels = 4;
 
-static void selectOptLevel(Module &M) JL_NOTSAFEPOINT {
-    size_t opt_level = std::max(static_cast<int>(jl_options.opt_level), 0);
-    do {
-        if (jl_generating_output()) {
-            opt_level = 0;
-            break;
-        }
-        size_t opt_level_min = std::max(static_cast<int>(jl_options.opt_level_min), 0);
-        for (auto &F : M) {
-            if (!F.isDeclaration()) {
-                Attribute attr = F.getFnAttribute("julia-optimization-level");
-                StringRef val = attr.getValueAsString();
-                if (val != "") {
-                    size_t ol = (size_t)val[0] - '0';
-                    if (ol < opt_level)
-                        opt_level = ol;
-                }
+// Scan the module for the lowest per-function optimization level requested via
+// the "julia-optimization-level" attribute, then clamp to [opt_level_min, max].
+int jl_module_optlevel(Module &M) JL_NOTSAFEPOINT {
+    int opt_level = std::max(static_cast<int>(jl_options.opt_level), 0);
+    int opt_level_min = std::max(static_cast<int>(jl_options.opt_level_min), 0);
+    for (auto &F : M) {
+        if (!F.isDeclaration()) {
+            Attribute attr = F.getFnAttribute("julia-optimization-level");
+            StringRef val = attr.getValueAsString();
+            if (val != "") {
+                int ol = (int)val[0] - '0';
+                if (ol >= 0 && ol < opt_level)
+                    opt_level = ol;
             }
         }
-        if (opt_level < opt_level_min)
-            opt_level = opt_level_min;
-    } while (0);
+    }
+    if (opt_level < opt_level_min)
+        opt_level = opt_level_min;
     // currently -O3 is max
-    opt_level = std::min(opt_level, N_optlevels - 1);
+    return std::min(opt_level, static_cast<int>(N_optlevels) - 1);
+}
+
+static void selectOptLevel(Module &M) JL_NOTSAFEPOINT {
+    // pkgimage / sysimage generation always compiles at -O0
+    size_t opt_level = jl_generating_output() ? 0 : (size_t)jl_module_optlevel(M);
     M.addModuleFlag(Module::Warning, "julia.optlevel", opt_level);
 }
 

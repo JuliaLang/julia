@@ -261,6 +261,7 @@ struct AnalysisManagers {
 };
 
 OptimizationLevel getOptLevel(int optlevel) JL_NOTSAFEPOINT;
+int jl_module_optlevel(Module &M) JL_NOTSAFEPOINT;
 
 struct jl_locked_stream {
     ios_t *stream = nullptr;

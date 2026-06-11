@@ -888,9 +888,18 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         nothing
     elseif k == K"meta"
         if numchildren(ex) >= 1
+            # Per-method/module compiler options (see `Base.Experimental.@compiler_options`)
+            # are recorded in the CodeInfo. For a method this becomes the Method's
+            # setting; for a top-level thunk `jl_eval_thunk` applies it to the module.
+            # `max_methods` is module-level only, so it is left as a `(meta ...)`
+            # statement for the interpreter to apply rather than consumed here.
+            if kind(ex[1]) in KSet"optlevel compile infer"
+                for c in children(ex)
+                    ctx.meta[Symbol(untokenize(kind(c)))] = c[1].value
+                end
             # Certain blessed forms are allowed to share a meta expression;
-            # others (nkw, optlevel) treat ex[1] as head and ex[2:end] as args
-            if kind(ex[1]) === K"purity" ||
+            # others (e.g. nkw) treat ex[1] as head and ex[2:end] as args
+            elseif kind(ex[1]) === K"purity" ||
                 kind(ex[1]) === K"Symbol" && ex[1].name_val::String in (
                     "inline", "noinline", "propagate_inbounds",
                     "nospecializeinfer", "aggressive_constprop", "no_constprop")

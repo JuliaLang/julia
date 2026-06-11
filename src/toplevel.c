@@ -722,6 +722,17 @@ JL_DLLEXPORT jl_value_t *jl_eval_thunk(jl_module_t *JL_NONNULL m, jl_code_info_t
     JL_TYPECHK(jl_eval_thunk, code_info, (jl_value_t*)thk);
     JL_TYPECHK(jl_eval_thunk, array_any, (jl_value_t*)thk->code);
 
+    // Apply any module-level compiler options declared by this thunk. Lowering
+    // records `@optlevel` / `@compiler_options` written at module scope in the
+    // thunk's CodeInfo (UINT8_MAX means "unset"). Apply them here so they take
+    // effect for the remainder of the module.
+    if (thk->optlevel != UINT8_MAX)
+        jl_set_module_optlevel(m, thk->optlevel);
+    if (thk->compile != UINT8_MAX)
+        jl_set_module_compile(m, thk->compile);
+    if (thk->infer != UINT8_MAX)
+        jl_set_module_infer(m, thk->infer);
+
     // Set global jl_lineno/jl_filename to file and line info for the original
     // start of this block.
     int last_lineno = jl_atomic_load_relaxed(&jl_lineno);

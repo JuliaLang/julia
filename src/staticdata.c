@@ -2515,8 +2515,8 @@ static int strip_all_codeinfos__(jl_typemap_entry_t *def, void *_env)
                 }
             }
             if (!should_strip_ir) {
-                int mod_setting = jl_get_module_compile(m->module);
-                if (!(mod_setting == JL_OPTIONS_COMPILE_OFF || mod_setting == JL_OPTIONS_COMPILE_MIN)) {
+                int method_setting = jl_get_method_compile(m);
+                if (!(method_setting == JL_OPTIONS_COMPILE_OFF || method_setting == JL_OPTIONS_COMPILE_MIN)) {
                     // if the method is declared not to be compiled, keep IR for interpreter
                     should_strip_ir = 1;
                 }

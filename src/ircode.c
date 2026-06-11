@@ -1063,6 +1063,10 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
         write_int32(s.s, (int32_t)nargs);
     }
 
+    write_uint8(s.s, code->optlevel);
+    write_uint8(s.s, code->compile);
+    write_uint8(s.s, code->infer);
+
     size_t i, l = jl_array_dim0(code->code);
     write_uint64(s.s, l);
     for (i = 0; i < l; i++) {
@@ -1156,6 +1160,10 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     } else {
         code->nargs = read_int32(s.s);
     }
+
+    code->optlevel = read_uint8(s.s);
+    code->compile = read_uint8(s.s);
+    code->infer = read_uint8(s.s);
 
     size_t i, l = read_uint64(s.s);
     code->code = jl_alloc_array_1d(jl_array_any_type, l);

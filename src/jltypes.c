@@ -3747,7 +3747,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_code_info_type =
         jl_new_datatype(jl_symbol("CodeInfo"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(23,
+                        jl_perm_symsvec(26,
                             "code",
                             "debuginfo",
                             "ssavaluetypes",
@@ -3770,8 +3770,11 @@ void jl_init_types(void) JL_GC_DISABLED
                             "inlining",
                             "constprop",
                             "purity",
+                            "optlevel",
+                            "compile",
+                            "infer",
                             "inlining_cost"),
-                        jl_svec(23,
+                        jl_svec(26,
                             jl_array_any_type,
                             jl_debuginfo_type,
                             jl_any_type,
@@ -3794,14 +3797,17 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_uint8_type,
                             jl_uint8_type,
                             jl_uint16_type,
+                            jl_uint8_type,
+                            jl_uint8_type,
+                            jl_uint8_type,
                             jl_uint16_type),
                         jl_emptysvec,
-                        0, 1, 22);
+                        0, 1, 25);
 
     jl_method_type =
         jl_new_datatype(jl_symbol("Method"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(33,
+                        jl_perm_symsvec(36,
                             "name",
                             "module",
                             "file",
@@ -3834,8 +3840,11 @@ void jl_init_types(void) JL_GC_DISABLED
                             "did_scan_source",
                             "constprop",
                             "max_varargs",
-                            "purity"),
-                        jl_svec(33,
+                            "purity",
+                            "optlevel",
+                            "compile",
+                            "infer"),
+                        jl_svec(36,
                             jl_symbol_type,
                             jl_module_type,
                             jl_symbol_type,
@@ -3868,11 +3877,15 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_uint8_type,
                             jl_uint8_type,
                             jl_uint8_type,
-                            jl_uint16_type),
+                            jl_uint16_type,
+                            jl_uint8_type,
+                            jl_uint8_type,
+                            jl_uint8_type),
                         jl_emptysvec,
                         0, 1, 10);
     //const static uint32_t method_constfields[] = { 0b0, 0b0 }; // (1<<0)|(1<<1)|(1<<2)|(1<<3)|(1<<6)|(1<<9)|(1<<10)|(1<<17)|(1<<21)|(1<<22)|(1<<23)|(1<<24)|(1<<25)|(1<<26)|(1<<27)|(1<<28)|(1<<29)|(1<<30);
     //jl_method_type->name->constfields = method_constfields;
+    // atomic fields: dispatch_status(4), interferences(5), primary_world(6), did_scan_source(29)
     const static uint32_t method_atomicfields[] = { 0x20000070, 0x0 }; // (1<<4)|(1<<5)|(1<<6)|(1<<29)
     jl_method_type->name->atomicfields = method_atomicfields;
 

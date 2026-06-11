@@ -23,6 +23,11 @@ function _register_kinds()
             "noinline"
             "loopinfo"
             "purity"
+            # Per-method/module compiler options (see `Base.Experimental.@compiler_options`)
+            "optlevel"
+            "compile"
+            "infer"
+            "max_methods"
             # Call into foreign code
             "foreigncall"
             # ccall convention

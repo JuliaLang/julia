@@ -3603,12 +3603,12 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
 
     int compile_option = jl_options.compile_enabled;
     jl_method_t *def = mi->def.method;
-    // disabling compilation per-module can override global setting
+    // disabling compilation per-method/module can override global setting
     if (jl_is_method(def)) {
-        int mod_setting = jl_get_module_compile(((jl_method_t*)def)->module);
-        if (mod_setting == JL_OPTIONS_COMPILE_OFF ||
-            mod_setting == JL_OPTIONS_COMPILE_MIN)
-            compile_option = ((jl_method_t*)def)->module->compile;
+        int method_setting = jl_get_method_compile(def);
+        if (method_setting == JL_OPTIONS_COMPILE_OFF ||
+            method_setting == JL_OPTIONS_COMPILE_MIN)
+            compile_option = method_setting;
     }
 
     // if compilation is disabled or source is unavailable, try calling unspecialized version

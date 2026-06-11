@@ -1176,8 +1176,8 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             end
         end
     end
-    if !InferenceParams(interp).force_enable_inference && ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0
-        add_remark!(interp, caller, "[typeinf_edge] Inference is disabled for the target module")
+    if !InferenceParams(interp).force_enable_inference && ccall(:jl_get_method_infer, Cint, (Any,), method) == 0
+        add_remark!(interp, caller, "[typeinf_edge] Inference is disabled for the target method")
         return Future(MethodCallResult(interp, caller, method, Any, Any, Effects(), nothing, edgecycle, edgelimited))
     end
     if !is_cached(caller) && frame_parent(caller) === nothing
@@ -1515,7 +1515,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mod
         end
     end
     if !InferenceParams(interp).force_enable_inference
-        if isa(def, Method) && ccall(:jl_get_module_infer, Cint, (Any,), def.module) == 0
+        if isa(def, Method) && ccall(:jl_get_method_infer, Cint, (Any,), def) == 0
             src = retrieve_code_info(mi, get_inference_world(interp))
             if src isa CodeInfo
                 finish!(interp, mi, ci, src)

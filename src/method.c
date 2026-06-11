@@ -501,6 +501,21 @@ jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ir)
                     li->constprop = 1;
                 else if (ma == (jl_value_t*)jl_no_constprop_sym)
                     li->constprop = 2;
+                else if (jl_is_expr(ma) && ((jl_expr_t*)ma)->head == jl_optlevel_sym) {
+                    if (jl_expr_nargs(ma) == 1 && jl_is_long(jl_exprarg(ma, 0))) {
+                        li->optlevel = jl_unbox_long(jl_exprarg(ma, 0));
+                    }
+                }
+                else if (jl_is_expr(ma) && ((jl_expr_t*)ma)->head == jl_compile_sym) {
+                    if (jl_expr_nargs(ma) == 1 && jl_is_long(jl_exprarg(ma, 0))) {
+                        li->compile = jl_unbox_long(jl_exprarg(ma, 0));
+                    }
+                }
+                else if (jl_is_expr(ma) && ((jl_expr_t*)ma)->head == jl_infer_sym) {
+                    if (jl_expr_nargs(ma) == 1 && jl_is_long(jl_exprarg(ma, 0))) {
+                        li->infer = jl_unbox_long(jl_exprarg(ma, 0));
+                    }
+                }
                 else if (jl_is_expr(ma) && ((jl_expr_t*)ma)->head == jl_purity_sym) {
                     if (jl_expr_nargs(ma) == NUM_EFFECTS_OVERRIDES) {
                         // N.B. this code allows multiple :purity expressions to be present in a single `:meta` node
@@ -706,6 +721,9 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->constprop = 0;
     src->inlining = 0;
     src->purity.bits = 0;
+    src->optlevel = UINT8_MAX;
+    src->compile = UINT8_MAX;
+    src->infer = UINT8_MAX;
     src->nargs = 0;
     src->isva = 0;
     src->inlining_cost = UINT16_MAX;
@@ -943,6 +961,9 @@ JL_DLLEXPORT void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     m->nospecializeinfer = src->nospecializeinfer;
     m->constprop = src->constprop;
     m->purity.bits = src->purity.bits;
+    m->optlevel = src->optlevel;
+    m->compile = src->compile;
+    m->infer = src->infer;
 
     jl_array_t *copy = NULL;
     jl_svec_t *sparam_vars = jl_outer_unionall_vars(m->sig);
@@ -1086,6 +1107,9 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     jl_atomic_store_relaxed(&m->did_scan_source, 0);
     m->constprop = 0;
     m->purity.bits = 0;
+    m->optlevel = UINT8_MAX;
+    m->compile = UINT8_MAX;
+    m->infer = UINT8_MAX;
     m->max_varargs = UINT8_MAX;
     JL_MUTEX_INIT(&m->writelock, "method->writelock");
     return m;
