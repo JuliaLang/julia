@@ -55,8 +55,18 @@ static void * load_library(const char * rel_path, const char * src_dir, int err)
     if ((handle = GetModuleHandleA(basename)))
         return handle;
 #else
-    // if err == 0 the library is optional, so don't allow global lookups to see it
-    if ((handle = dlopen(basename, RTLD_NOLOAD | RTLD_NOW | (err ? RTLD_GLOBAL : RTLD_LOCAL))))
+    // If err == 0 the library is optional (a runtime plugin such as
+    // libjulia-codegen or libjulia-frontend), so don't allow global lookups
+    // to see it, and let it prefer its own symbol definitions over the
+    // process's: a plugin may carry private copies of runtime components
+    // (up to and including a complete second julia runtime, in the case of
+    // a standalone frontend library).
+#if defined(RTLD_DEEPBIND)
+#define PLUGIN_DLOPEN_FLAGS (RTLD_LOCAL | RTLD_DEEPBIND)
+#else
+#define PLUGIN_DLOPEN_FLAGS RTLD_LOCAL
+#endif
+    if ((handle = dlopen(basename, RTLD_NOLOAD | RTLD_NOW | (err ? RTLD_GLOBAL : PLUGIN_DLOPEN_FLAGS))))
         return handle;
 #endif
 
@@ -75,7 +85,7 @@ static void * load_library(const char * rel_path, const char * src_dir, int err)
     handle = (void *)LoadLibraryExW(wpath, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
 #else
 #define PATH_EXISTS() !access(path, F_OK)
-    handle = dlopen(path, RTLD_NOW | (err ? RTLD_GLOBAL : RTLD_LOCAL));
+    handle = dlopen(path, RTLD_NOW | (err ? RTLD_GLOBAL : PLUGIN_DLOPEN_FLAGS));
 #endif
     if (handle != NULL) {
 #if defined(_OS_WINDOWS_)
