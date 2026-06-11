@@ -18,13 +18,12 @@ end
 12  (return %₂)
 
 ########################################
-# Error: Local declarations outside a scope are disallowed
+# Local declarations outside a scope could be disallowed
 # See https://github.com/JuliaLang/julia/issues/57483
 local x
 #---------------------
-LoweringError:
-local x
-└─────┘ ── local declarations have no effect outside a scope
+1   (newvar slot₁/x)
+2   (return core.nothing)
 
 ########################################
 # Local declaration allowed in tail position
