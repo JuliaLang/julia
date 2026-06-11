@@ -970,11 +970,18 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     elseif k == K"latestworld_if_toplevel"
         ctx.is_toplevel_thunk && emit_latestworld(ctx, ex)
     elseif k == K"unused_only"
-        if needs_value && !(in_tail_pos && ctx.is_toplevel_thunk)
+        if needs_value && !in_tail_pos
             throw(LoweringError(ex,
                 "global declaration doesn't read the variable and can't return a value"))
         end
-        compile(ctx, ex[1], needs_value, in_tail_pos)
+        if needs_value && in_tail_pos && !ctx.is_toplevel_thunk
+            # in tail position a bare declaration evaluates to `nothing`
+            # (flisp compatibility, e.g. `function f(); global G; end`)
+            compile(ctx, ex[1], false, false)
+            compile(ctx, @ast(ctx, ex, (::K"nothing")), needs_value, in_tail_pos)
+        else
+            compile(ctx, ex[1], needs_value, in_tail_pos)
+        end
     else
         throw(LoweringError(ex, "Invalid syntax; $(repr(k))"))
     end
