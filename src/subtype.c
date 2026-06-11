@@ -1379,6 +1379,45 @@ static int has_universal_typevar(jl_value_t *x, jl_stenv_t *e) JL_NOTSAFEPOINT
     return env != NULL && jl_has_bound_typevars(x, env);
 }
 
+// Helper for the hoisted union-split of a `∀` variable's upper bound in
+// `subtype_unionall` below.
+// Test whether every occurrence of `var` in `t` is covariant, where covariant
+// means reachable purely through Tuple parameters, Union components, and
+// Vararg element types. An occurrence under a non-Tuple datatype parameter,
+// in a Vararg length, or anywhere inside an inner UnionAll (bounds or body)
+// is not covariant. Returns 1 if `var` does not occur at all.
+static int var_occurs_covariant_only(jl_value_t *t, jl_tvar_t *var, int covariant) JL_NOTSAFEPOINT
+{
+    if (t == (jl_value_t*)var)
+        return covariant;
+    else if (jl_is_uniontype(t)) {
+        return var_occurs_covariant_only(((jl_uniontype_t*)t)->a, var, covariant) &&
+               var_occurs_covariant_only(((jl_uniontype_t*)t)->b, var, covariant);
+    }
+    else if (jl_is_unionall(t)) {
+        if (((jl_unionall_t*)t)->var == var)
+            return 1; // shadowed
+        return !jl_has_typevar(t, var);
+    }
+    else if (jl_is_vararg(t)) {
+        jl_vararg_t *vm = (jl_vararg_t*)t;
+        if (vm->N && jl_has_typevar(vm->N, var))
+            return 0;
+        return vm->T == NULL || var_occurs_covariant_only(vm->T, var, covariant);
+    }
+    else if (jl_is_datatype(t)) {
+        int incov = covariant && jl_is_tuple_type(t);
+        for (size_t i = 0; i < jl_nparams(t); i++) {
+            if (!var_occurs_covariant_only(jl_tparam(t, i), var, incov))
+                return 0;
+        }
+        return 1;
+    }
+    // conservative for internal nodes (TypeEq, TypeApp, Intersect); plain
+    // values contain no typevars
+    return !jl_has_typevar(t, var);
+}
+
 static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, jl_param_pos_t param)
 {
     u = unalias_unionall(u, e);
@@ -1400,8 +1439,22 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
         ans = subtype(t, u->body, e, param);
         e->envidx--;
     }
-    else
+    else {
+        // ∀ path: a variable with a trivial lower bound, a union upper bound,
+        // and only covariant occurrences in the body ranges over each arm of
+        // its upper bound independently, i.e. the UnionAll distributes over
+        // the arms:
+        //   (Tuple{T,T} where T<:Union{A,B}) ==
+        //       Union{Tuple{T,T} where T<:A, Tuple{T,T} where T<:B}
+        // (diagonality, if any, is preserved: each value of the variable is
+        // concrete and therefore lies entirely within a single arm).
+        // Split the bound here by registering one ordinary left-union decision
+        // per Union node, so that the enclosing ∀∃ loop enumerates all arms.
+        if (!e->intersection && vb.lb == jl_bottom_type && jl_is_uniontype(vb.ub) &&
+            !body_occurs_inv && var_occurs_covariant_only(u->body, u->var, 1))
+            vb.ub = pick_union_element(vb.ub, e, 0);
         ans = subtype(u->body, t, e, param);
+    }
 
     // handle the "diagonal dispatch" rule, which says that a type var occurring more
     // than once, and only in covariant position, is constrained to concrete types. E.g.
