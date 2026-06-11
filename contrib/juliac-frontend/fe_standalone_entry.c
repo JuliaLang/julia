@@ -83,11 +83,69 @@ static struct {
     void (*errorf)(const char *, ...);
     hv   (*get_global)(hv, hv);
     hv   (*call1)(hv, hv);
+    // lowering support
+    hv   (*typeof_)(hv);
+    size_t (*expr_argcount)(hv);
+    hv   (*expr_arg)(hv, size_t);
+    void (*expr_setarg)(hv, size_t, hv);
+    size_t (*string_size)(hv);
+    hv   (*module_name)(hv);
+    hv   (*module_globalref)(hv, hv);
+    hv   (*get_nth_field)(hv, size_t);
+    int8_t (*unbox_bool)(hv);
+    int64_t (*unbox_int64)(hv);
+    int32_t (*unbox_int32)(hv);
+    uint64_t (*unbox_uint64)(hv);
+    uint32_t (*unbox_uint32)(hv);
+    uint16_t (*unbox_uint16)(hv);
+    uint8_t (*unbox_uint8)(hv);
+    double (*unbox_float64)(hv);
+    float (*unbox_float32)(hv);
+    hv   (*box_ssavalue)(size_t);
+    hv   (*box_slotnumber)(size_t);
+    hv   (*new_code_info_uninit)(void);
+    int  (*field_index)(hv, hv, int);
+    void (*set_nth_field)(hv, size_t, hv);
+    hv   (*new_structv)(hv, hv *, uint32_t);
+    hv   (*alloc_array_1d)(hv, size_t);
+    hv   (*alloc_vec_any)(size_t);
+    hv   (*pchar_to_array)(const char *, size_t);
+    void *(*array_ptr)(hv);
     // slots holding host globals (deref at use; filled by the host loader)
     hv *nothing;
     hv *linenumbernode_type;
     hv *quotenode_type;
     hv *base_module;
+    hv *core_module;
+    hv *main_module;
+    hv *expr_type;
+    hv *symbol_type;
+    hv *string_type;
+    hv *module_type;
+    hv *globalref_type;
+    hv *bool_type;
+    hv *int64_type;
+    hv *int32_type;
+    hv *uint64_type;
+    hv *uint32_type;
+    hv *uint16_type;
+    hv *uint8_type;
+    hv *float64_type;
+    hv *float32_type;
+    hv *char_type;
+    hv *gotonode_type;
+    hv *gotoifnot_type;
+    hv *returnnode_type;
+    hv *enternode_type;
+    hv *newvarnode_type;
+    hv *argument_type;
+    hv *code_info_type;
+    hv *debuginfo_type;
+    hv *any_type;
+    hv *emptysvec;
+    hv *array_symbol_type;
+    hv *array_int32_type;
+    hv *array_uint32_type;
 } H;
 
 static const char *fe_missing_host_sym = NULL;
@@ -133,10 +191,67 @@ static void fe_resolve_host_api(void)
     H.errorf = (void (*)(const char *, ...))host_sym("jl_errorf");
     H.get_global = (hv (*)(hv, hv))host_sym("jl_get_global");
     H.call1 = (hv (*)(hv, hv))host_sym("jl_call1");
+    H.typeof_ = (hv (*)(hv))host_sym("jl_typeof");
+    H.expr_argcount = (size_t (*)(hv))host_sym("jl_expr_argcount");
+    H.expr_arg = (hv (*)(hv, size_t))host_sym("jl_expr_arg");
+    H.expr_setarg = (void (*)(hv, size_t, hv))host_sym("jl_expr_setarg");
+    H.string_size = (size_t (*)(hv))host_sym("jl_string_size");
+    H.module_name = (hv (*)(hv))host_sym("jl_module_name");
+    H.module_globalref = (hv (*)(hv, hv))host_sym("jl_module_globalref");
+    H.get_nth_field = (hv (*)(hv, size_t))host_sym("jl_get_nth_field");
+    H.unbox_bool = (int8_t (*)(hv))host_sym("jl_unbox_bool");
+    H.unbox_int64 = (int64_t (*)(hv))host_sym("jl_unbox_int64");
+    H.unbox_int32 = (int32_t (*)(hv))host_sym("jl_unbox_int32");
+    H.unbox_uint64 = (uint64_t (*)(hv))host_sym("jl_unbox_uint64");
+    H.unbox_uint32 = (uint32_t (*)(hv))host_sym("jl_unbox_uint32");
+    H.unbox_uint16 = (uint16_t (*)(hv))host_sym("jl_unbox_uint16");
+    H.unbox_uint8 = (uint8_t (*)(hv))host_sym("jl_unbox_uint8");
+    H.unbox_float64 = (double (*)(hv))host_sym("jl_unbox_float64");
+    H.unbox_float32 = (float (*)(hv))host_sym("jl_unbox_float32");
+    H.box_ssavalue = (hv (*)(size_t))host_sym("jl_box_ssavalue");
+    H.box_slotnumber = (hv (*)(size_t))host_sym("jl_box_slotnumber");
+    H.new_code_info_uninit = (hv (*)(void))host_sym("jl_new_code_info_uninit");
+    H.field_index = (int (*)(hv, hv, int))host_sym("jl_field_index");
+    H.set_nth_field = (void (*)(hv, size_t, hv))host_sym("jl_set_nth_field");
+    H.new_structv = (hv (*)(hv, hv *, uint32_t))host_sym("jl_new_structv");
+    H.alloc_array_1d = (hv (*)(hv, size_t))host_sym("jl_alloc_array_1d");
+    H.alloc_vec_any = (hv (*)(size_t))host_sym("jl_alloc_vec_any");
+    H.pchar_to_array = (hv (*)(const char *, size_t))host_sym("jl_pchar_to_array");
+    H.array_ptr = (void *(*)(hv))host_sym("jl_array_ptr");
     H.nothing = (hv *)host_sym("jl_nothing");
     H.linenumbernode_type = (hv *)host_sym("jl_linenumbernode_type");
     H.quotenode_type = (hv *)host_sym("jl_quotenode_type");
     H.base_module = (hv *)host_sym("jl_base_module");
+    H.core_module = (hv *)host_sym("jl_core_module");
+    H.main_module = (hv *)host_sym("jl_main_module");
+    H.expr_type = (hv *)host_sym("jl_expr_type");
+    H.symbol_type = (hv *)host_sym("jl_symbol_type");
+    H.string_type = (hv *)host_sym("jl_string_type");
+    H.module_type = (hv *)host_sym("jl_module_type");
+    H.globalref_type = (hv *)host_sym("jl_globalref_type");
+    H.bool_type = (hv *)host_sym("jl_bool_type");
+    H.int64_type = (hv *)host_sym("jl_int64_type");
+    H.int32_type = (hv *)host_sym("jl_int32_type");
+    H.uint64_type = (hv *)host_sym("jl_uint64_type");
+    H.uint32_type = (hv *)host_sym("jl_uint32_type");
+    H.uint16_type = (hv *)host_sym("jl_uint16_type");
+    H.uint8_type = (hv *)host_sym("jl_uint8_type");
+    H.float64_type = (hv *)host_sym("jl_float64_type");
+    H.float32_type = (hv *)host_sym("jl_float32_type");
+    H.char_type = (hv *)host_sym("jl_char_type");
+    H.gotonode_type = (hv *)host_sym("jl_gotonode_type");
+    H.gotoifnot_type = (hv *)host_sym("jl_gotoifnot_type");
+    H.returnnode_type = (hv *)host_sym("jl_returnnode_type");
+    H.enternode_type = (hv *)host_sym("jl_enternode_type");
+    H.newvarnode_type = (hv *)host_sym("jl_newvarnode_type");
+    H.argument_type = (hv *)host_sym("jl_argument_type");
+    H.code_info_type = (hv *)host_sym("jl_code_info_type");
+    H.debuginfo_type = (hv *)host_sym("jl_debuginfo_type");
+    H.any_type = (hv *)host_sym("jl_any_type");
+    H.emptysvec = (hv *)host_sym("jl_emptysvec");
+    H.array_symbol_type = (hv *)host_sym("jl_array_symbol_type");
+    H.array_int32_type = (hv *)host_sym("jl_array_int32_type");
+    H.array_uint32_type = (hv *)host_sym("jl_array_uint32_type");
     if (fe_missing_host_sym != NULL) {
         if (H.errorf)
             H.errorf("libjulia-frontend-standalone: missing required host symbol %s "
@@ -183,6 +298,11 @@ static inline void hpop(void **pg, hframe_t *f)
 // ------------------------------------------------------------------------
 // Conversion of this runtime's values to host values, for the value kinds
 // that can occur in parser output.
+
+static hv fe2host_codeinfo(jl_value_t *v, void **pg);
+static void *fe_shadow_host_ptr(jl_value_t *m);
+static void *fe_foreign_ptr_of(jl_value_t *v);
+static jl_value_t *fe_wrap_foreign(hv p);
 
 static hv fe2host(jl_value_t *v, void **pg)
 {
@@ -250,6 +370,104 @@ static hv fe2host(jl_value_t *v, void **pg)
         hpop(pg, &f);
         return r;
     }
+    if (t == (jl_value_t *)jl_module_type) {
+        // lowering-inserted references to this runtime's Core/Base/Main map
+        // to the host's; other modules must be shadows of host modules
+        if (v == (jl_value_t *)jl_core_module)
+            return *H.core_module;
+        if (v == (jl_value_t *)jl_base_module)
+            return *H.base_module;
+        if (v == (jl_value_t *)jl_main_module)
+            return *H.main_module;
+        void *hmod = fe_shadow_host_ptr(v);
+        if (hmod == NULL)
+            H.errorf("libjulia-frontend-standalone: module %s is not a host module shadow",
+                     jl_symbol_name(((jl_module_t *)v)->name));
+        return (hv)hmod;
+    }
+    if (t == (jl_value_t *)jl_globalref_type) {
+        hv hmod = fe2host((jl_value_t *)jl_globalref_mod(v), pg);
+        return H.module_globalref(hmod, H.symbol(jl_symbol_name(jl_globalref_name(v))));
+    }
+    if (t == (jl_value_t *)jl_ssavalue_type)
+        return H.box_ssavalue(((jl_ssavalue_t *)v)->id);
+    if (t == (jl_value_t *)jl_slotnumber_type)
+        return H.box_slotnumber(jl_slot_number(v));
+    if (t == (jl_value_t *)jl_argument_type) {
+        hv arg = H.box_int64(jl_unbox_long(jl_fieldref(v, 0)));
+        return H.new_structv(*H.argument_type, &arg, 1);
+    }
+    if (t == (jl_value_t *)jl_gotonode_type) {
+        hv arg = H.box_int64(jl_gotonode_label(v));
+        return H.new_structv(*H.gotonode_type, &arg, 1);
+    }
+    if (t == (jl_value_t *)jl_gotoifnot_type) {
+        hframe_t f;
+        hpush(pg, &f);
+        hv args[2];
+        args[0] = fe2host(jl_gotoifnot_cond(v), pg);
+        hroot(&f, 0, args[0]);
+        args[1] = H.box_int64(jl_gotoifnot_label(v));
+        hroot(&f, 1, args[1]);
+        hv r = H.new_structv(*H.gotoifnot_type, args, 2);
+        hpop(pg, &f);
+        return r;
+    }
+    if (t == (jl_value_t *)jl_returnnode_type) {
+        if (!jl_field_isdefined(v, 0))
+            return H.new_structv(*H.returnnode_type, NULL, 0); // unreachable terminator
+        hframe_t f;
+        hpush(pg, &f);
+        hv arg = fe2host(jl_returnnode_value(v), pg);
+        hroot(&f, 0, arg);
+        hv r = H.new_structv(*H.returnnode_type, &arg, 1);
+        hpop(pg, &f);
+        return r;
+    }
+    if (t == (jl_value_t *)jl_enternode_type) {
+        hframe_t f;
+        hpush(pg, &f);
+        hv args[2];
+        uint32_t nargs = 1;
+        args[0] = H.box_int64(jl_enternode_catch_dest(v));
+        hroot(&f, 0, args[0]);
+        if (jl_field_isdefined(v, 1) && jl_enternode_scope(v) != NULL) {
+            args[1] = fe2host(jl_enternode_scope(v), pg);
+            hroot(&f, 1, args[1]);
+            nargs = 2;
+        }
+        hv r = H.new_structv(*H.enternode_type, args, nargs);
+        hpop(pg, &f);
+        return r;
+    }
+    if (t == (jl_value_t *)jl_newvarnode_type) {
+        hframe_t f;
+        hpush(pg, &f);
+        hv arg = fe2host(jl_fieldref(v, 0), pg);
+        hroot(&f, 0, arg);
+        hv r = H.new_structv(*H.newvarnode_type, &arg, 1);
+        hpop(pg, &f);
+        return r;
+    }
+    if (t == (jl_value_t *)jl_code_info_type)
+        return fe2host_codeinfo(v, pg);
+    if (jl_is_svec(v)) {
+        if (jl_svec_len(v) == 0)
+            return *H.emptysvec;
+        H.errorf("libjulia-frontend-standalone: cannot convert non-empty "
+                 "SimpleVector across the runtime boundary yet");
+    }
+    if (t == (jl_value_t *)jl_datatype_type) {
+        if (v == (jl_value_t *)jl_any_type)
+            return *H.any_type;
+        H.errorf("libjulia-frontend-standalone: cannot convert type %s across the "
+                 "runtime boundary", jl_symbol_name(((jl_datatype_t *)v)->name->name));
+    }
+    {
+        void *fp = fe_foreign_ptr_of(v);
+        if (fp != NULL)
+            return (hv)fp; // host value passing back through unchanged
+    }
     // VersionNumber appears in parser output as the per-module syntax
     // version marker; round-trip it through its string form.
     jl_value_t *vnty = jl_get_global(jl_base_module, jl_symbol("VersionNumber"));
@@ -271,6 +489,260 @@ static hv fe2host(jl_value_t *v, void **pg)
     H.errorf("libjulia-frontend-standalone: cannot convert value of type %s "
              "across the runtime boundary", jl_typeof_str(v));
     return NULL; // unreachable
+}
+
+// ------------------------------------------------------------------------
+// Conversion of host values to this runtime's values, for surface ASTs
+// passed to lowering. Host modules are mirrored by shadow modules; host
+// values with no syntactic meaning are wrapped opaquely and flow through
+// lowering unchanged (the host tree stays rooted by our caller for the
+// duration of the entry call, so the raw pointers remain valid).
+
+// Registry of shadow modules mirroring host modules, and the wrapper type
+// carrying opaque host values through lowering. Kept entirely on the C side
+// (using this runtime's C API directly) so no guest Julia code runs for it.
+// The shadow modules array doubles as the GC root for the shadows (it is
+// bound as a constant in the guest's Main).
+static jl_array_t *fe_shadow_mods = NULL;
+static void **fe_shadow_hostptrs = NULL;
+static size_t fe_nshadows = 0, fe_shadow_cap = 0;
+static jl_value_t *fe_foreign_type = NULL;
+
+static void fe_cross_runtime_init(void)
+{
+    fe_shadow_mods = jl_alloc_vec_any(0);
+    jl_set_const(jl_main_module, jl_symbol("__fe_cross_runtime_shadow_modules"),
+                 (jl_value_t *)fe_shadow_mods);
+    fe_foreign_type = jl_eval_string(
+        "struct __FeHostValue ptr::Ptr{Cvoid} end; __FeHostValue");
+    if (fe_foreign_type == NULL || !jl_is_datatype(fe_foreign_type)) {
+        fprintf(stderr, "FATAL: libjulia-frontend-standalone: could not define "
+                        "the host value wrapper type\n");
+        abort();
+    }
+}
+
+static jl_value_t *fe_shadow_module(hv hmod)
+{
+    for (size_t i = 0; i < fe_nshadows; i++)
+        if (fe_shadow_hostptrs[i] == (void *)hmod)
+            return jl_array_ptr_ref(fe_shadow_mods, i);
+    hv hname = H.module_name(hmod);
+    jl_module_t *m = jl_new_module(jl_symbol((const char *)H.symbol_name(hname)), jl_main_module);
+    JL_GC_PUSH1(&m);
+    jl_array_ptr_1d_push(fe_shadow_mods, (jl_value_t *)m);
+    JL_GC_POP();
+    if (fe_nshadows == fe_shadow_cap) {
+        fe_shadow_cap = fe_shadow_cap ? 2 * fe_shadow_cap : 16;
+        fe_shadow_hostptrs = (void **)realloc(fe_shadow_hostptrs,
+                                              fe_shadow_cap * sizeof(void *));
+    }
+    fe_shadow_hostptrs[fe_nshadows++] = (void *)hmod;
+    return jl_array_ptr_ref(fe_shadow_mods, fe_nshadows - 1);
+}
+
+static void *fe_shadow_host_ptr(jl_value_t *m)
+{
+    for (size_t i = 0; i < fe_nshadows; i++)
+        if (jl_array_ptr_ref(fe_shadow_mods, i) == m)
+            return fe_shadow_hostptrs[i];
+    return NULL;
+}
+
+static jl_value_t *fe_wrap_foreign(hv p)
+{
+    jl_value_t *boxed = jl_box_voidpointer((void *)p);
+    JL_GC_PUSH1(&boxed);
+    jl_value_t *r = jl_new_struct((jl_datatype_t *)fe_foreign_type, boxed);
+    JL_GC_POP();
+    return r;
+}
+
+static void *fe_foreign_ptr_of(jl_value_t *v)
+{
+    if (fe_foreign_type != NULL && jl_typeof(v) == fe_foreign_type)
+        return jl_unbox_voidpointer(jl_fieldref_noalloc(v, 0));
+    return NULL;
+}
+
+static jl_value_t *host2fe(hv v)
+{
+    if (v == *H.nothing)
+        return jl_nothing;
+    hv ht = H.typeof_(v);
+    if (ht == *H.symbol_type)
+        return (jl_value_t *)jl_symbol((const char *)H.symbol_name(v));
+    if (ht == *H.string_type)
+        return jl_pchar_to_string(H.string_ptr(v), H.string_size(v));
+    if (ht == *H.bool_type)
+        return H.unbox_bool(v) ? jl_true : jl_false;
+    if (ht == *H.int64_type)
+        return jl_box_int64(H.unbox_int64(v));
+    if (ht == *H.int32_type)
+        return jl_box_int32(H.unbox_int32(v));
+    if (ht == *H.uint64_type)
+        return jl_box_uint64(H.unbox_uint64(v));
+    if (ht == *H.uint32_type)
+        return jl_box_uint32(H.unbox_uint32(v));
+    if (ht == *H.uint16_type)
+        return jl_box_uint16(H.unbox_uint16(v));
+    if (ht == *H.uint8_type)
+        return jl_box_uint8(H.unbox_uint8(v));
+    if (ht == *H.float64_type)
+        return jl_box_float64(H.unbox_float64(v));
+    if (ht == *H.float32_type)
+        return jl_box_float32(H.unbox_float32(v));
+    if (ht == *H.char_type)
+        return jl_box_char(H.unbox_uint32(v));
+    if (ht == *H.expr_type) {
+        hv hhead = H.get_field(v, "head");
+        size_t i, n = H.expr_argcount(v);
+        jl_expr_t *e = jl_exprn(jl_symbol((const char *)H.symbol_name(hhead)), n);
+        JL_GC_PUSH1(&e);
+        for (i = 0; i < n; i++) {
+            jl_value_t *c = host2fe(H.expr_arg(v, i));
+            jl_exprargset(e, i, c);
+        }
+        JL_GC_POP();
+        return (jl_value_t *)e;
+    }
+    if (ht == *H.linenumbernode_type) {
+        jl_value_t *line = NULL, *file = NULL, *r = NULL;
+        JL_GC_PUSH2(&line, &file);
+        line = host2fe(H.get_field(v, "line"));
+        file = host2fe(H.get_field(v, "file"));
+        r = jl_new_struct(jl_linenumbernode_type, line, file);
+        JL_GC_POP();
+        return r;
+    }
+    if (ht == *H.quotenode_type) {
+        jl_value_t *val = host2fe(H.get_field(v, "value"));
+        JL_GC_PUSH1(&val);
+        jl_value_t *r = jl_new_struct(jl_quotenode_type, val);
+        JL_GC_POP();
+        return r;
+    }
+    if (ht == *H.globalref_type) {
+        jl_value_t *m = fe_shadow_module(H.get_field(v, "mod"));
+        jl_sym_t *name = jl_symbol((const char *)H.symbol_name(H.get_field(v, "name")));
+        return jl_module_globalref((jl_module_t *)m, name);
+    }
+    if (ht == *H.module_type)
+        return fe_shadow_module(v);
+    return fe_wrap_foreign(v);
+}
+
+// ------------------------------------------------------------------------
+// Conversion of lowered output to host values: in addition to the parser
+// output kinds handled by fe2host, lowered code contains modules,
+// GlobalRefs, the linear IR node types, and CodeInfo itself. CodeInfo is
+// constructed host-side field-by-field by *name* (jl_field_index /
+// jl_set_nth_field), so the two runtimes only need compatible field
+// meanings, not identical layouts.
+
+static hv fe2host_vec_any(jl_value_t *a, void **pg)
+{
+    size_t i, n = jl_array_nrows((jl_array_t *)a);
+    hframe_t f;
+    hpush(pg, &f);
+    hv ha = H.alloc_vec_any(0);
+    hroot(&f, 0, ha);
+    for (i = 0; i < n; i++) {
+        hv c = fe2host(jl_array_ptr_ref((jl_array_t *)a, i), pg);
+        hroot(&f, 1, c);
+        H.array_ptr_1d_push(ha, c);
+    }
+    hpop(pg, &f);
+    return ha;
+}
+
+static hv fe2host_symbol_vec(jl_value_t *a, void **pg)
+{
+    size_t i, n = jl_array_nrows((jl_array_t *)a);
+    hframe_t f;
+    hpush(pg, &f);
+    hv ha = H.alloc_array_1d(*H.array_symbol_type, 0);
+    hroot(&f, 0, ha);
+    for (i = 0; i < n; i++) {
+        jl_value_t *sym = jl_array_ptr_ref((jl_array_t *)a, i);
+        H.array_ptr_1d_push(ha, H.symbol((const char *)jl_symbol_name((jl_sym_t *)sym)));
+    }
+    hpop(pg, &f);
+    return ha;
+}
+
+static hv fe2host_bits_vec(jl_value_t *a, hv htype, size_t elsz)
+{
+    size_t n = jl_array_nrows((jl_array_t *)a);
+    hv ha = H.alloc_array_1d(htype, n);
+    memcpy(H.array_ptr(ha), jl_array_data((jl_array_t *)a, char), n * elsz);
+    return ha;
+}
+
+static hv fe2host_debuginfo(jl_value_t *di, void **pg)
+{
+    // DebugInfo(def::Union{Symbol,Method,MethodInstance}, linetable, edges::SimpleVector, codelocs::String)
+    jl_value_t *def = jl_fieldref_noalloc(di, 0);
+    jl_value_t *linetable = jl_fieldref_noalloc(di, 1);
+    jl_value_t *edges = jl_fieldref_noalloc(di, 2);
+    jl_value_t *codelocs = jl_fieldref_noalloc(di, 3);
+    if (!jl_is_symbol(def))
+        H.errorf("libjulia-frontend-standalone: cannot convert DebugInfo.def of type %s",
+                 jl_typeof_str(def));
+    if (jl_svec_len(edges) != 0)
+        H.errorf("libjulia-frontend-standalone: cannot convert DebugInfo with edges yet");
+    hframe_t f;
+    hpush(pg, &f);
+    hv args[4];
+    args[0] = H.symbol((const char *)jl_symbol_name((jl_sym_t *)def));
+    args[1] = linetable == jl_nothing ? *H.nothing : fe2host_debuginfo(linetable, pg);
+    hroot(&f, 0, args[1]);
+    args[2] = *H.emptysvec;
+    args[3] = H.pchar_to_string(jl_string_data(codelocs), jl_string_len(codelocs));
+    hroot(&f, 1, args[3]);
+    hv r = H.new_structv(*H.debuginfo_type, args, 4);
+    hpop(pg, &f);
+    return r;
+}
+
+static hv fe2host_codeinfo(jl_value_t *v, void **pg)
+{
+    jl_datatype_t *gt = (jl_datatype_t *)jl_typeof(v);
+    size_t i, nf = jl_datatype_nfields(gt);
+    hframe_t f;
+    hpush(pg, &f);
+    hv hci = H.new_code_info_uninit();
+    hroot(&f, 0, hci);
+    for (i = 0; i < nf; i++) {
+        jl_sym_t *fname = (jl_sym_t *)jl_svecref(jl_field_names(gt), i);
+        if (!jl_field_isdefined(v, i))
+            continue;
+        int hidx = H.field_index(*H.code_info_type, H.symbol((const char *)jl_symbol_name(fname)), 0);
+        if (hidx < 0)
+            continue; // field unknown to the host's CodeInfo; skip
+        jl_value_t *fv = jl_fieldref(v, i);
+        hv hfv;
+        jl_value_t *ft = jl_typeof(fv);
+        if (ft == (jl_value_t *)jl_array_any_type)
+            hfv = fe2host_vec_any(fv, pg);
+        else if (ft == (jl_value_t *)jl_array_symbol_type)
+            hfv = fe2host_symbol_vec(fv, pg);
+        else if (ft == (jl_value_t *)jl_array_uint8_type)
+            hfv = H.pchar_to_array((const char *)jl_array_data((jl_array_t *)fv, uint8_t),
+                                   jl_array_nrows((jl_array_t *)fv));
+        else if (ft == (jl_value_t *)jl_array_int32_type)
+            hfv = fe2host_bits_vec(fv, *H.array_int32_type, sizeof(int32_t));
+        else if (ft == (jl_value_t *)jl_array_uint32_type)
+            hfv = fe2host_bits_vec(fv, *H.array_uint32_type, sizeof(uint32_t));
+        else if (ft == (jl_value_t *)jl_debuginfo_type)
+            hfv = fe2host_debuginfo(fv, pg);
+        else
+            hfv = fe2host(fv, pg);
+        hroot(&f, 1, hfv);
+        H.set_nth_field(hci, (size_t)hidx, hfv);
+    }
+    hpop(pg, &f);
+    return hci;
 }
 
 // ------------------------------------------------------------------------
@@ -325,6 +797,7 @@ static void fe_runtime_init(void)
 
     jl_init_(image);
     jl_exception_clear();
+    fe_cross_runtime_init();
 }
 
 static void fe_enter(void)
@@ -373,14 +846,65 @@ JL_DLLEXPORT hv jl_frontend_parse_impl(const char *text, size_t text_len, hv fil
     return result;
 }
 
+// Reject macro calls until cross-runtime macro expansion (host macro
+// invocation via jl_invoke_julia_macro plus result conversion) is wired up;
+// the host macro functions do not exist in this runtime.
+static void fe_check_no_macrocall(hv v)
+{
+    if (H.typeof_(v) != *H.expr_type)
+        return;
+    hv head = H.get_field(v, "head");
+    const char *hname = (const char *)H.symbol_name(head);
+    if (strcmp(hname, "macrocall") == 0)
+        H.errorf("jl_frontend_lower: cross-runtime macro expansion is not yet "
+                 "implemented by libjulia-frontend-standalone");
+    if (strcmp(hname, "quote") == 0 || strcmp(hname, "inert") == 0)
+        return;
+    size_t i, n = H.expr_argcount(v);
+    for (i = 0; i < n; i++)
+        fe_check_no_macrocall(H.expr_arg(v, i));
+}
+
 JL_DLLEXPORT hv jl_frontend_lower_impl(hv expr, hv inmodule, const char *filename,
                                        int line, size_t world, int warn)
 {
-    (void)expr; (void)inmodule; (void)filename; (void)line; (void)world; (void)warn;
+    (void)world;
     fe_enter();
-    H.errorf("jl_frontend_lower: cross-runtime lowering is not yet implemented "
-             "by libjulia-frontend-standalone");
-    return NULL; // unreachable
+    fe_check_no_macrocall(expr);
+
+    jl_value_t *fe_ex = NULL, *fe_mod = NULL, *fe_res = NULL;
+    JL_GC_PUSH3(&fe_ex, &fe_mod, &fe_res);
+    fe_mod = fe_shadow_module(inmodule);
+    fe_ex = host2fe(expr);
+    if (getenv("FE_DEBUG_LOWER") != NULL) {
+        jl_printf(JL_STDERR, "FE_DEBUG_LOWER input: ");
+        jl_static_show(JL_STDERR, fe_ex);
+        jl_printf(JL_STDERR, "\n");
+    }
+    // n.b. the host's world counter is not meaningful in this runtime; any
+    // (future) macro lookup goes back to the host instead
+    fe_res = jlfe_lower(fe_ex, (jl_module_t *)fe_mod, filename ? filename : "none",
+                        line, (size_t)-1, warn);
+
+    jl_value_t *r0 = jl_svecref(fe_res, 0);
+    if (jl_svec_len(fe_res) == 2 && jl_is_symbol(r0) &&
+        r0 == (jl_value_t *)jl_symbol("__fe_lowering_error__")) {
+        char buf[2048];
+        jl_value_t *msg = jl_svecref(fe_res, 1);
+        snprintf(buf, sizeof(buf), "%.*s", (int)jl_string_len(msg), jl_string_data(msg));
+        JL_GC_POP();
+        H.errorf("jl_frontend_lower: %s", buf);
+    }
+
+    void **pg = (void **)H.get_pgcstack();
+    hframe_t f;
+    hpush(pg, &f);
+    hv hlowered = fe2host(r0, pg);
+    hroot(&f, 0, hlowered);
+    hv result = H.svec(1, hlowered);
+    hpop(pg, &f);
+    JL_GC_POP();
+    return result;
 }
 
 JL_DLLEXPORT hv jl_macroexpand_impl(hv expr, hv inmodule, int recursive, int inplace,

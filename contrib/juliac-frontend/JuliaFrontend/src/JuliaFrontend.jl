@@ -132,7 +132,19 @@ Base.@ccallable "jlfe_lower" function _c_frontend_lower(
         ex::Any, mod::Module, filename::Ptr{UInt8}, line::Cint,
         world::Csize_t, warn::Cint)::Any
     fname = filename == C_NULL ? "none" : unsafe_string(filename)
-    r = frontend_lower(ex, mod, fname, Int(line), UInt(world), warn != 0)
+    # n.b. must not throw: in the standalone configuration there is no
+    # handler in this runtime above this frame. Errors are returned as a
+    # sentinel for the entry point to rethrow host-side.
+    r = try
+        frontend_lower(ex, mod, fname, Int(line), UInt(world), warn != 0)
+    catch err
+        msg = try
+            sprint(showerror, err)
+        catch
+            "error while printing lowering error"
+        end
+        Core.svec(:__fe_lowering_error__, msg)
+    end
     _last_result[] = r
     return r
 end

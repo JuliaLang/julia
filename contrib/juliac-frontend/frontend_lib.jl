@@ -54,11 +54,33 @@ let
                                         "warmup.jl", Csize_t(1), Csize_t(0), :statement)
     end
     fname = "warmup.jl"
+    # exercise lowering into a bare module, as the cross-runtime path does
+    # with its shadow modules
+    shadow = Module(:WarmupShadow, false, false)
     GC.@preserve fname begin
         JuliaFrontend._c_frontend_lower(:(function lw(x); y -> y + x; end), Main,
                                         pointer(fname), Cint(1), Csize_t(typemax(Csize_t)), Cint(0))
+        JuliaFrontend._c_frontend_lower(
+            :(begin
+                  s = 0
+                  for i = 1:3
+                      s += i * i
+                  end
+                  t = try
+                      error("x")
+                  catch
+                      2
+                  end
+                  q = [a^2 for a in 1:3]
+                  (function (x); y -> y + x; end)(2)(3) + s + t + length(q)
+              end), shadow,
+            pointer(fname), Cint(1), Csize_t(typemax(Csize_t)), Cint(0))
         JuliaFrontend._c_macroexpand(:(@assert true), Main, Cint(1), Cint(0), Cint(1))
+        # exercise the lowering-error path (escape outside of a macro errors)
+        JuliaFrontend._c_frontend_lower(Expr(:escape, :x), shadow,
+                                        pointer(fname), Cint(1), Csize_t(typemax(Csize_t)), Cint(0))
     end
+
     for s in ("+", ".+", "+=", "where", "in", "⊕₁", "&&", "::", "...", "im", "√")
         for f in (JuliaFrontend._c_is_operator, JuliaFrontend._c_is_unary_operator,
                   JuliaFrontend._c_is_unary_and_binary_operator,

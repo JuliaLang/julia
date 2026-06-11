@@ -62,10 +62,16 @@ JL_RT_OBJS = $(addprefix $(JULIAHOME)/src/,$(filter-out null_sysimage.o,\
 	$(notdir $(shell $(MAKE) -s -C $(JULIAHOME)/src print-OBJS | sed 's/^OBJS=//'))))
 
 # Bind the codegen and frontend trampoline names directly to their fallback
-# implementations (codegen-stubs.c / frontend-stubs.c) inside the library.
-TRAMPOLINE_NAMES := $(filter-out YY,$(shell grep -oE '^[[:space:]]+YY\([a-zA-Z0-9_]+\)' \
+# implementations (codegen-stubs.c / frontend-stubs.c) inside the library —
+# except the operator queries, which this runtime's own Julia code consults
+# (e.g. Meta.isoperator during lowering's Expr compatibility handling) and
+# which must therefore give real answers from the embedded classifier.
+SELF_OP_QUERIES := jl_is_operator jl_is_unary_operator \
+	jl_is_unary_and_binary_operator jl_is_syntactic_operator jl_operator_precedence
+TRAMPOLINE_NAMES := $(filter-out YY $(SELF_OP_QUERIES),$(shell grep -oE '^[[:space:]]+YY\([a-zA-Z0-9_]+\)' \
 	$(JULIAHOME)/src/jl_exported_funcs.inc | grep -oE '[a-zA-Z0-9_]+'))
 DEFSYM_FLAGS := $(foreach n,$(TRAMPOLINE_NAMES),-Wl,--defsym,$(n)=$(n)_fallback)
+DEFSYM_FLAGS += $(foreach n,$(SELF_OP_QUERIES),-Wl,--defsym,$(n)=$(patsubst jl_%,jlfe_%,$(n)))
 
 # The runtime functions in JL_RUNTIME_EXPORTED_FUNCS are defined under ijl_*
 # names; the CLI loader normally provides the jl_* trampolines for by-name
@@ -100,7 +106,7 @@ $(BIN)/julia-frontend-img-std.a: $(BIN)/julia-frontend-jl-o.a
 # its own jl_*/ijl_*/uv_* symbols visible to dlsym on its own handle (julia
 # resolves runtime ccalls by name through jl_dlsym).
 $(STANDALONE_LIB): $(BIN)/fe_standalone_entry.o $(BIN)/fe_standalone_shim.o $(BIN)/fe_standalone_globals.o \
-		$(BIN)/julia-frontend-img-std.a
+		$(BIN)/julia-frontend-img-std.a $(SRCDIR)/Makefile
 	$(CXX) -shared -static-libstdc++ -static-libgcc -o $@ \
 		$(BIN)/fe_standalone_entry.o $(BIN)/fe_standalone_shim.o $(BIN)/fe_standalone_globals.o \
 		-Wl,--whole-archive $(BIN)/julia-frontend-img-std.a -Wl,--no-whole-archive \
