@@ -107,6 +107,45 @@ julia, dlopens the standalone library, and exercises parse and the operator
 queries through the ABI with host values, comparing against the host's own
 frontend.
 
+The library drives a full julia *bootstrap*: with `libjulia-frontend.so`
+replaced by the standalone library, `julia --output-ji basecompiler.ji
+Base_compiler.jl` cold-boots from `boot.jl` and builds the stage-1 image
+(boot, Base_compiler, the whole Compiler), and `julia --sysimage
+basecompiler.ji --output-ji sysbase.ji sysimg.jl` builds the full Base +
+stdlib stage-2 image on top, with every parse and lower served by the
+embedded JuliaSyntax/JuliaLowering (flisp is never invoked); the resulting
+image boots and runs julia code. Bootstrap-specific constraints this
+required:
+
+- the `Core` runtime-support helpers (`interpolate_ast`,
+  `eval_closure_type`, ...) are defined at the top of `boot.jl`, before the
+  first quoted syntax / closure / catch-variable in the file, restricted to
+  early-bootstrap vocabulary (and the `Typeof` bootstrap definition is
+  built with explicit `_expr` calls rather than quoted syntax, since
+  defining `interpolate_ast`'s own methods requires `Typeof`);
+- the guest's `(top X)` references resolve through the host's
+  `jl_base_relative_to(inmodule)`, which falls back to `Core` before `Base`
+  exists — and host globals like `jl_base_module` must always be read
+  through live functions, never through the CLI loader's data-pointer
+  slots, which are snapshots taken before bootstrap populates them;
+- `export`/`public` pass through lowering unchanged (the runtime's toplevel
+  machinery evaluates them; boot.jl's own `export` runs before `Core.eval`
+  exists), and `import`/`using` lower to `(top _eval_import)`/`(top
+  _eval_using)` exactly as flisp emits;
+- the image build parses and lowers the whole `base/` and `Compiler/`
+  source corpus to AOT-compile the full breadth of frontend code paths
+  (the guest has no JIT; an interpreted path that reaches a `ccall` fails);
+- the C ABI parses with the frontend's own current syntax version and
+  strips per-module syntax-version markers (no version parameter exists in
+  the ABI, and a `VersionNumber` cannot cross before the host has `Base`);
+- closure type names are salted with a host-unique token (derived from the
+  host world counter): name uniquification scans shadow modules, which
+  start empty in every process, so without it separate sessions whose
+  output is serialized into one image chain would collide;
+- macro expansions with `toplevel` heads are deferred with each chunk
+  wrapped in its own hygienic-scope, so the runtime can re-lower chunks
+  one at a time with hygiene intact.
+
 Status: parse, the operator queries, *lowering*, and *macros* work
 cross-runtime (`make check-standalone`): host expressions are lowered by the
 guest's JuliaLowering, with host modules mirrored by shadow modules, lowered

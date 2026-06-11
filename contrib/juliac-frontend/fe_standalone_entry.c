@@ -83,6 +83,8 @@ static struct {
     void (*errorf)(const char *, ...);
     hv   (*get_global)(hv, hv);
     hv   (*call1)(hv, hv);
+    hv   (*call2)(hv, hv, hv);
+    hv   (*call)(hv, hv *, int32_t);
     hv   (*copy_ast)(hv);
     hv   (*invoke_julia_macro)(hv, hv, hv *, hv *, size_t, int);
     size_t (*get_world_counter)(void);
@@ -95,6 +97,7 @@ static struct {
     size_t (*array_length)(hv);
     hv   (*module_name)(hv);
     hv   (*module_globalref)(hv, hv);
+    hv   (*base_relative_to)(hv);
     hv   (*get_nth_field)(hv, size_t);
     int8_t (*unbox_bool)(hv);
     int64_t (*unbox_int64)(hv);
@@ -117,6 +120,7 @@ static struct {
     void *(*array_ptr)(hv);
     // slots holding host globals (deref at use; filled by the host loader)
     hv *nothing;
+    hv *true_;
     hv *linenumbernode_type;
     hv *quotenode_type;
     hv *base_module;
@@ -198,6 +202,8 @@ static void fe_resolve_host_api(void)
     H.errorf = (void (*)(const char *, ...))host_sym("jl_errorf");
     H.get_global = (hv (*)(hv, hv))host_sym("jl_get_global");
     H.call1 = (hv (*)(hv, hv))host_sym("jl_call1");
+    H.call2 = (hv (*)(hv, hv, hv))host_sym("jl_call2");
+    H.call = (hv (*)(hv, hv *, int32_t))host_sym("jl_call");
     H.copy_ast = (hv (*)(hv))host_sym("jl_copy_ast");
     H.invoke_julia_macro = (hv (*)(hv, hv, hv *, hv *, size_t, int))host_sym("jl_invoke_julia_macro");
     H.get_world_counter = (size_t (*)(void))host_sym("jl_get_world_counter");
@@ -209,6 +215,7 @@ static void fe_resolve_host_api(void)
     H.array_length = (size_t (*)(hv))host_sym("jl_array_length");
     H.module_name = (hv (*)(hv))host_sym("jl_module_name");
     H.module_globalref = (hv (*)(hv, hv))host_sym("jl_module_globalref");
+    H.base_relative_to = (hv (*)(hv))host_sym("jl_base_relative_to");
     H.get_nth_field = (hv (*)(hv, size_t))host_sym("jl_get_nth_field");
     H.unbox_bool = (int8_t (*)(hv))host_sym("jl_unbox_bool");
     H.unbox_int64 = (int64_t (*)(hv))host_sym("jl_unbox_int64");
@@ -230,6 +237,7 @@ static void fe_resolve_host_api(void)
     H.pchar_to_array = (hv (*)(const char *, size_t))host_sym("jl_pchar_to_array");
     H.array_ptr = (void *(*)(hv))host_sym("jl_array_ptr");
     H.nothing = (hv *)host_sym("jl_nothing");
+    H.true_ = (hv *)host_sym("jl_true");
     H.linenumbernode_type = (hv *)host_sym("jl_linenumbernode_type");
     H.quotenode_type = (hv *)host_sym("jl_quotenode_type");
     H.base_module = (hv *)host_sym("jl_base_module");
@@ -316,6 +324,10 @@ static inline void hpop(void **pg, hframe_t *f)
 static hv fe2host_codeinfo(jl_value_t *v, void **pg);
 static void *fe_shadow_host_ptr(jl_value_t *m);
 static void *fe_foreign_ptr_of(jl_value_t *v);
+// host module the current jl_frontend_lower invocation lowers into, for
+// resolving the guest's `(top X)` (Base-relative) references host-side
+static hv fe_cur_host_inmodule = NULL;
+
 static jl_value_t *fe_wrap_foreign(hv p);
 
 static hv fe2host(jl_value_t *v, void **pg)
@@ -389,8 +401,14 @@ static hv fe2host(jl_value_t *v, void **pg)
         // to the host's; other modules must be shadows of host modules
         if (v == (jl_value_t *)jl_core_module)
             return *H.core_module;
-        if (v == (jl_value_t *)jl_base_module)
-            return *H.base_module;
+        if (v == (jl_value_t *)jl_base_module) {
+            // `(top X)` references: flisp resolves these relative to the
+            // module being lowered into, falling back to Core during
+            // bootstrap when Base does not exist yet
+            hv relto = fe_cur_host_inmodule != NULL ? fe_cur_host_inmodule
+                                                    : *H.main_module;
+            return H.base_relative_to(relto);
+        }
         if (v == (jl_value_t *)jl_main_module)
             return *H.main_module;
         void *hmod = fe_shadow_host_ptr(v);
@@ -471,6 +489,26 @@ static hv fe2host(jl_value_t *v, void **pg)
         H.errorf("libjulia-frontend-standalone: cannot convert non-empty "
                  "SimpleVector across the runtime boundary yet");
     }
+    if (jl_is_tuple(v)) {
+        // e.g. the (:ccall, effects) calling-convention tuple in lowered
+        // foreigncall expressions
+        size_t i, n = jl_nfields(v);
+        hframe_t f;
+        hpush(pg, &f);
+        hv ha = H.alloc_vec_any(0);
+        hroot(&f, 0, ha);
+        for (i = 0; i < n; i++) {
+            hv c = fe2host(jl_get_nth_field(v, i), pg);
+            hroot(&f, 1, c);
+            H.array_ptr_1d_push(ha, c);
+        }
+        hv tuple_f = H.get_global(*H.core_module, H.symbol("tuple"));
+        hv r = H.call(tuple_f, (hv *)H.array_ptr(ha), (int32_t)n);
+        hpop(pg, &f);
+        if (r == NULL)
+            H.errorf("libjulia-frontend-standalone: host tuple construction failed");
+        return r;
+    }
     if (t == (jl_value_t *)jl_datatype_type) {
         if (v == (jl_value_t *)jl_any_type)
             return *H.any_type;
@@ -482,10 +520,38 @@ static hv fe2host(jl_value_t *v, void **pg)
         if (fp != NULL)
             return (hv)fp; // host value passing back through unchanged
     }
+    // Core.MacroSource carries macro provenance (location + syntax version)
+    // in macro expansions; construct the host's equivalent, or degrade to
+    // the plain location if the host runtime predates the type.
+    jl_value_t *msty = jl_get_global(jl_core_module, jl_symbol("MacroSource"));
+    if (msty != NULL && t == msty) {
+        hv hty = H.get_global(*H.core_module, H.symbol("MacroSource"));
+        if (hty == NULL)
+            return fe2host(jl_fieldref(v, 0), pg);
+        hframe_t f;
+        hpush(pg, &f);
+        hv args[2];
+        args[0] = fe2host(jl_fieldref(v, 0), pg);
+        hroot(&f, 0, args[0]);
+        args[1] = fe2host(jl_fieldref(v, 1), pg);
+        hroot(&f, 1, args[1]);
+        hv r = H.new_structv(hty, args, 2);
+        hpop(pg, &f);
+        return r;
+    }
     // VersionNumber appears in parser output as the per-module syntax
     // version marker; round-trip it through its string form.
     jl_value_t *vnty = jl_get_global(jl_base_module, jl_symbol("VersionNumber"));
     if (vnty != NULL && t == vnty) {
+        // n.b. the host's Base must be found through jl_base_relative_to:
+        // the jl_base_module CLI data slot is a snapshot taken before
+        // bootstrap defines Base. Pre-Base there is no host VersionNumber
+        // type at all; degrade to `nothing` (this can only be reached for
+        // the syntax-version field of a MacroSource during bootstrap).
+        hv hbase = H.base_relative_to(*H.main_module);
+        hv hctor = hbase != NULL ? H.get_global(hbase, H.symbol("VersionNumber")) : NULL;
+        if (hctor == NULL)
+            return *H.nothing;
         jl_value_t *str = jl_call1(jl_get_function(jl_base_module, "string"), v);
         if (str == NULL || !jl_is_string(str))
             H.errorf("libjulia-frontend-standalone: failed to stringify VersionNumber");
@@ -493,7 +559,6 @@ static hv fe2host(jl_value_t *v, void **pg)
         hpush(pg, &f);
         hv hstr = H.pchar_to_string(jl_string_data(str), jl_string_len(str));
         hroot(&f, 0, hstr);
-        hv hctor = H.get_global(*H.base_module, H.symbol("VersionNumber"));
         hv r = H.call1(hctor, hstr);
         hpop(pg, &f);
         if (r == NULL)
@@ -527,6 +592,24 @@ static void fe_cross_runtime_init(void)
     fe_shadow_mods = jl_alloc_vec_any(0);
     jl_set_const(jl_main_module, jl_symbol("__fe_cross_runtime_shadow_modules"),
                  (jl_value_t *)fe_shadow_mods);
+    {
+        // Salt closure-type names with a host-unique token: name
+        // uniquification scans shadow modules, which start empty in every
+        // process, so without it separate sessions whose lowered output is
+        // serialized into the same image chain (bootstrap stages) would
+        // reuse names. The host world counter is monotonic across such
+        // chains.
+        char saltbuf[128];
+        snprintf(saltbuf, sizeof(saltbuf),
+                 "JuliaFrontend.JuliaLowering._module_binding_salt[] = \"w%zu#\"",
+                 (size_t)H.get_world_counter());
+        jl_eval_string(saltbuf);
+        if (jl_exception_occurred()) {
+            jl_exception_clear();
+            fprintf(stderr, "libjulia-frontend-standalone: warning: could not "
+                            "set the binding name salt\n");
+        }
+    }
     fe_foreign_type = jl_eval_string(
         "struct __FeHostValue ptr::Ptr{Cvoid} end; __FeHostValue");
     if (fe_foreign_type == NULL || !jl_is_datatype(fe_foreign_type)) {
@@ -646,6 +729,27 @@ static jl_value_t *host2fe(hv v)
     }
     if (ht == *H.module_type)
         return fe_shadow_module(v);
+    {
+        // host Tuples (e.g. the (:ccall, effects) calling-convention tuple
+        // produced by ccall macro expansion) convert structurally
+        hv isa_f = H.get_global(*H.core_module, H.symbol("isa"));
+        hv tuple_ty = H.get_global(*H.core_module, H.symbol("Tuple"));
+        hv isa_r = (isa_f != NULL && tuple_ty != NULL) ? H.call2(isa_f, v, tuple_ty) : NULL;
+        if (isa_r != NULL && isa_r == *H.true_) {
+            hv nfields_f = H.get_global(*H.core_module, H.symbol("nfields"));
+            hv getfield_f = H.get_global(*H.core_module, H.symbol("getfield"));
+            size_t i, n = (size_t)H.unbox_int64(H.call1(nfields_f, v));
+            jl_value_t **fe_args;
+            JL_GC_PUSHARGS(fe_args, n);
+            for (i = 0; i < n; i++) {
+                hv elt = H.call2(getfield_f, v, H.box_int64((int64_t)(i + 1)));
+                fe_args[i] = host2fe(elt);
+            }
+            jl_value_t *r = jl_f_tuple(NULL, fe_args, (uint32_t)n);
+            JL_GC_POP();
+            return r;
+        }
+    }
     if (ht == *H.array_any_type) {
         // e.g. the argnames Vector{Any} in a generated function stub's
         // Expr(:lambda, ...). Vector{Any} data is contiguous jl_value_t*
@@ -940,15 +1044,25 @@ static int h_need_esc_node(hv v)
     return h_isa_ast_node(v);
 }
 
+static hv h_expand_macros_in_quote(hv expr, hv inmodule, h_macroctx_t *macroctx,
+                                   int onelevel, size_t world, int throw_load_error,
+                                   int depth);
+
 static hv h_expand_macros(hv expr, hv inmodule, h_macroctx_t *macroctx,
                           int onelevel, size_t world, int throw_load_error)
 {
     if (expr == NULL || !h_is_expr(expr))
         return expr;
     if (h_head_is(expr, "inert") || h_head_is(expr, "module") ||
-        h_head_is(expr, "toplevel") || h_head_is(expr, "meta") ||
-        h_head_is(expr, "quote"))
+        h_head_is(expr, "toplevel") || h_head_is(expr, "meta"))
         return expr;
+    if (h_head_is(expr, "quote")) {
+        // quoted syntax is left for the lowering side, EXCEPT live code in
+        // `$` interpolations, whose macros must be expanded here like any
+        // other code (flisp does the same)
+        return h_expand_macros_in_quote(expr, inmodule, macroctx, onelevel, world,
+                                        throw_load_error, 0);
+    }
     void **pg = (void **)H.get_pgcstack();
     if (h_head_is(expr, "hygienic-scope") && H.expr_argcount(expr) >= 2) {
         h_macroctx_t newctx;
@@ -979,6 +1093,31 @@ static hv h_expand_macros(hv expr, hv inmodule, h_macroctx_t *macroctx,
                                          world, throw_load_error);
         if (!h_need_esc_node(result))
             return result;
+        if (h_is_expr(result) && h_head_is(result, "toplevel")) {
+            // a `toplevel` expansion is deferred and re-lowered chunk by
+            // chunk by the runtime; wrap each chunk in its own
+            // hygienic-scope so chunks stay self-contained
+            hframe_t ft;
+            hpush(pg, &ft);
+            hroot(&ft, 0, result);
+            hroot(&ft, 1, newctx.m);
+            hroot(&ft, 2, lineinfo);
+            result = H.copy_ast(result);
+            hroot(&ft, 0, result);
+            size_t ti, tn = H.expr_argcount(result);
+            for (ti = 0; ti < tn; ti++) {
+                hv c = H.expr_arg(result, ti);
+                if (h_need_esc_node(c)) {
+                    hv cwrap = H.exprn(H.symbol("hygienic-scope"), 3);
+                    H.expr_setarg(cwrap, 0, c);
+                    H.expr_setarg(cwrap, 1, newctx.m);
+                    H.expr_setarg(cwrap, 2, lineinfo);
+                    H.expr_setarg(result, ti, cwrap);
+                }
+            }
+            hpop(pg, &ft);
+            return result;
+        }
         hframe_t f;
         hpush(pg, &f);
         hroot(&f, 0, result);
@@ -1054,10 +1193,50 @@ static hv h_expand_macros(hv expr, hv inmodule, h_macroctx_t *macroctx,
     return expr;
 }
 
+// Walk quoted syntax expanding macros only inside `$` interpolations,
+// tracking quote nesting depth.
+static hv h_expand_macros_in_quote(hv expr, hv inmodule, h_macroctx_t *macroctx,
+                                   int onelevel, size_t world, int throw_load_error,
+                                   int depth)
+{
+    if (expr == NULL || !h_is_expr(expr))
+        return expr;
+    if (h_head_is(expr, "inert") || h_head_is(expr, "meta"))
+        return expr;
+    int newdepth = depth;
+    if (h_head_is(expr, "quote"))
+        newdepth = depth + 1;
+    else if (h_head_is(expr, "$"))
+        newdepth = depth - 1;
+
+    void **pg = (void **)H.get_pgcstack();
+    hframe_t f;
+    hpush(pg, &f);
+    hroot(&f, 0, expr);
+    size_t i, n = H.expr_argcount(expr);
+    for (i = 0; i < n; i++) {
+        hv a = H.expr_arg(expr, i);
+        hv a2;
+        if (newdepth == 0) {
+            // live interpolated code
+            a2 = h_expand_macros(a, inmodule, macroctx, onelevel, world,
+                                 throw_load_error);
+        } else {
+            a2 = h_expand_macros_in_quote(a, inmodule, macroctx, onelevel, world,
+                                          throw_load_error, newdepth);
+        }
+        if (a2 != a)
+            H.expr_setarg(expr, i, a2);
+    }
+    hpop(pg, &f);
+    return expr;
+}
+
 JL_DLLEXPORT hv jl_frontend_lower_impl(hv expr, hv inmodule, const char *filename,
                                        int line, size_t world, int warn)
 {
     fe_enter();
+    fe_cur_host_inmodule = inmodule;
 
     // Expand macros host-side first (flisp's lowering did the same); the
     // expanded tree, including its hygienic-scope wrappers, then crosses
