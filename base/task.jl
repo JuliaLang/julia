@@ -870,6 +870,8 @@ function task_done_hook(t::Task)
             backend isa Task && throwto(backend, result)
         end
     end
+    ref = last_idle_task()
+    ref[] === t && (ref[] = nothing)
     # Clear sigatomic before waiting
     sigatomic_end()
     try
@@ -1163,6 +1165,31 @@ function throwto(t::Task, @nospecialize exc)
     return try_yieldto(identity)
 end
 
+# The scheduler task on each thread remembers the last user task that went idle on it,
+# as the best victim for an InterruptException that would otherwise be delivered to
+# (and swallowed by) the scheduler task itself (issue #58689). Done tasks are never
+# recorded, so this does not delay collection of completed tasks (see #57544).
+const last_idle_task = OncePerThread{RefValue{Union{Task,Nothing}}}() do
+    RefValue{Union{Task,Nothing}}(nothing)
+end
+
+# Find a task that can meaningfully receive an InterruptException that was delivered
+# to a scheduler task. This is inherently best-effort (the victim may be racing to be
+# rescheduled concurrently); robust interrupt delivery requires cooperation from the
+# receiving code, which the runtime cannot guarantee here.
+function interrupt_victim()
+    backend = repl_backend_task()
+    backend isa Task && return backend
+    # an active REPL session that is not evaluating user code: drop the interrupt
+    @isdefined(active_repl_backend) && active_repl_backend !== nothing && return nothing
+    t = last_idle_task()[]
+    if t isa Task && !istaskdone(t) && t._state === task_state_runnable &&
+       (!t.sticky || Threads.threadid(t) == Threads.threadid())
+        return t
+    end
+    return istaskdone(roottask) ? nothing : roottask
+end
+
 function wait_forever()
     while true
         try
@@ -1170,16 +1197,31 @@ function wait_forever()
                 wait()
             end
         catch e
-            local errs = stderr
-            # try to display the failure atomically
-            errio = IOContext(PipeBuffer(), errs::IO)
-            emphasize(errio, "Internal Task ")
-            display_error(errio, current_exceptions())
-            write(errs, errio)
-            # victimize another random Task also
+            handled = false
             if Threads.threadid() == 1 && isa(e, InterruptException) && isempty(Workqueue)
-                backend = repl_backend_task()
-                backend isa Task && throwto(backend, e)
+                # A Ctrl-C/SIGINT was delivered to this internal scheduler task because
+                # no user task was running on this thread. Redirect it to a task that
+                # can meaningfully handle it, or drop it (issue #58689).
+                try
+                    victim = interrupt_victim()
+                    victim isa Task && throwto(victim, e)
+                    handled = true
+                catch e2
+                    # throwto throws an ErrorException if the victim cannot be switched
+                    # to (e.g. it was concurrently rescheduled), and rethrows an
+                    # InterruptException delivered while this task was suspended in the
+                    # switch; drop the interrupt in both cases. Anything else is an
+                    # unexpected failure and is reported below.
+                    handled = e2 isa InterruptException || e2 isa ErrorException
+                end
+            end
+            if !handled
+                local errs = stderr
+                # try to display the failure atomically
+                errio = IOContext(PipeBuffer(), errs::IO)
+                emphasize(errio, "Internal Task ")
+                display_error(errio, current_exceptions())
+                write(errs, errio)
             end
         end
     end
@@ -1242,6 +1284,7 @@ function wait()
         # thread sleep logic.
         sched_task = get_sched_task()
         if ct !== sched_task
+            istaskdone(ct) || (last_idle_task()[] = ct)
             istaskdone(sched_task) && (sched_task = @task wait())
             return yieldto(sched_task)
         end
