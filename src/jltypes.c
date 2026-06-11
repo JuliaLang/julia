@@ -1886,7 +1886,22 @@ static unsigned typeeq_hash(jl_value_t *T, int *failed) JL_NOTSAFEPOINT
             // equal representations land in the same cache bucket.
             return type_hash((jl_value_t*)jl_typeeq_type, failed);
     }
-    unsigned hashT = type_hash(T, failed);
+    unsigned hashT;
+    if (!*failed && !jl_has_free_typevars(T)) {
+        // Compute the hash of `T` in failure-tolerant mode rather than
+        // propagating the failure (which would zero out the hash of any type
+        // with a `Type{T}` parameter, e.g. constructor call signatures,
+        // degrading their caches to linear scans). This matches the hash that
+        // the interned `Type{T}` DataType memoized before the TypeEq refactor:
+        // the nofail hash is stable under `jl_types_equal` of the inner `T`
+        // (unions hash associatively), which is exactly the equality used for
+        // `TypeEq` nodes.
+        int hfail = 1;
+        hashT = type_hash(T, &hfail);
+    }
+    else {
+        hashT = type_hash(T, failed);
+    }
     return bitmix(~jl_type_typename->hash, hashT);
 }
 
