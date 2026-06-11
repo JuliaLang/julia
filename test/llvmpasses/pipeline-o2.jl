@@ -75,6 +75,34 @@ function multiiterate_write!(arr1, arr2)
     end
 end
 
+# COM: Ensure that a GC.@preserve region inside a loop body does not act as an
+# COM: optimization barrier: the gc_preserve_begin/end intrinsics must not block
+# COM: LICM, bounds check elimination, or vectorization (#51658)
+
+# ALL-LABEL: @julia_preserve_loop
+# ALL: vector.body
+function preserve_loop(v::Vector{UInt8})
+    s = 0
+    for i in 1:length(v)
+        s += GC.@preserve v unsafe_load(pointer(v), i)
+    end
+    s
+end
+
+# COM: Same property for the per-element GC.@preserve in the pointer-based
+# COM: indexing path of reinterpreted arrays with element size mismatch (#51658).
+# COM: @inbounds is needed because LLVM cannot eliminate the bounds check from
+# COM: the reinterpreted index computation; without it the loop would not
+# COM: vectorize under --check-bounds=auto regardless of the preserve region.
+
+# ALL-LABEL: @"julia_reinterpret_write!
+# ALL: vector.body
+function reinterpret_write!(arr)
+    for i in eachindex(arr)
+        @inbounds arr[i] += one(eltype(arr))
+    end
+end
+
 # COM: memset checks
 
 # COM: INT64
@@ -151,6 +179,9 @@ emit(iterate_write!, Vector{Int64})
 emit(multiiterate_read, Vector{Int64}, Vector{Int64})
 emit(multiiterate_write, Vector{Int64}, Vector{Int64}, Vector{Int64})
 emit(multiiterate_write!, Vector{Int64}, Vector{Int64})
+
+emit(preserve_loop, Vector{UInt8})
+emit(reinterpret_write!, Base.ReinterpretArray{Int16, 1, UInt8, Vector{UInt8}, false})
 
 emit(zeros, Type{Int64}, Int64)
 emit(zeros, Type{Int32}, Int64)

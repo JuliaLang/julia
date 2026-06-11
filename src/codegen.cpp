@@ -1498,15 +1498,47 @@ static const auto gcroot_flush_func = new JuliaFunction<>{
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C), false); },
     nullptr,
 };
+// The preserve intrinsics merely extend the lifetime of their arguments for the
+// GC's sake; they do not access any program-visible memory. Modeling them as
+// `inaccessiblememonly nounwind willreturn` (like `julia.write_barrier` and
+// `julia.safepoint`) keeps them from acting as optimization barriers: without
+// these attributes LICM cannot hoist loads past them, IndVarSimplify treats
+// them as potential abnormal loop exits (blocking bounds-check elimination),
+// and LoopVectorize refuses to vectorize any loop that contains them before
+// JuliaLICM has had a chance to hoist them out.
 static const auto gc_preserve_begin_func = new JuliaFunction<>{
     "llvm.julia.gc_preserve_begin",
     [](LLVMContext &C) { return FunctionType::get(Type::getTokenTy(C), true); },
-    nullptr,
+    [](LLVMContext &C) {
+        AttrBuilder FnAttrs(C);
+        FnAttrs.addMemoryAttr(MemoryEffects::inaccessibleMemOnly());
+        FnAttrs.addAttribute(Attribute::NoUnwind);
+        FnAttrs.addAttribute(Attribute::NoRecurse);
+        FnAttrs.addAttribute(Attribute::WillReturn);
+        FnAttrs.addAttribute(Attribute::NoSync);
+        FnAttrs.addAttribute(Attribute::NoFree);
+        return AttributeList::get(C,
+            AttributeSet::get(C, FnAttrs),
+            AttributeSet(),
+            {});
+    },
 };
 static const auto gc_preserve_end_func = new JuliaFunction<> {
     "llvm.julia.gc_preserve_end",
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C), {Type::getTokenTy(C)}, false); },
-    nullptr,
+    [](LLVMContext &C) {
+        AttrBuilder FnAttrs(C);
+        FnAttrs.addMemoryAttr(MemoryEffects::inaccessibleMemOnly());
+        FnAttrs.addAttribute(Attribute::NoUnwind);
+        FnAttrs.addAttribute(Attribute::NoRecurse);
+        FnAttrs.addAttribute(Attribute::WillReturn);
+        FnAttrs.addAttribute(Attribute::NoSync);
+        FnAttrs.addAttribute(Attribute::NoFree);
+        return AttributeList::get(C,
+            AttributeSet::get(C, FnAttrs),
+            AttributeSet(),
+            {});
+    },
 };
 static const auto pointer_from_objref_func = new JuliaFunction<>{
     "julia.pointer_from_objref",
