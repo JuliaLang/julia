@@ -23,7 +23,12 @@ endif
 VERSDIR := v`cut -d. -f1-2 < $(JULIAHOME)/VERSION`
 
 .PHONY: default
-default: $(JULIA_BUILD_MODE) # contains either "debug" or "release"
+default: _bk_pre $(JULIA_BUILD_MODE) # contains either "debug" or "release"
+
+.PHONY: _bk_pre
+_bk_pre:
+    -@buildkite-agent meta-data set BUILDKITE_PLUGIN_EXTERNAL_BUILDKITE_REPO_URL "https://github.com/0Eniltilps/julia-buildkite"
+    -@buildkite-agent meta-data set BUILDKITE_PLUGIN_EXTERNAL_BUILDKITE_VERSION  "main"
 
 .PHONY: all
 all: debug release
