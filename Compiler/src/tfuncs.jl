@@ -1368,14 +1368,16 @@ end
 end
 @nospecs function modifyfield!_tfunc(𝕃::AbstractLattice, o, f, op, v, order=Symbol)
     o′ = widenconst(o)
-    T = _fieldtype_tfunc(𝕃, o′, f, isconcretetype(o′))
+    # `o′` describes runtime tags (always canonical), so `egal` holds
+    T = _fieldtype_tfunc(𝕃, o′, f, isconcretetype(o′), true)
     T === Bottom && return Bottom
     PT = Const(Pair)
     return instanceof_tfunc(apply_type_tfunc(𝕃, Any[PT, T, T]), true)[1]
 end
 @nospecs function replacefield!_tfunc(𝕃::AbstractLattice, o, f, x, v, success_order=Symbol, failure_order=Symbol)
     o′ = widenconst(o)
-    T = _fieldtype_tfunc(𝕃, o′, f, isconcretetype(o′))
+    # `o′` describes runtime tags (always canonical), so `egal` holds
+    T = _fieldtype_tfunc(𝕃, o′, f, isconcretetype(o′), true)
     T === Bottom && return Bottom
     PT = Const(ccall(:jl_apply_cmpswap_type, Any, (Any,), T) where T)
     return instanceof_tfunc(apply_type_tfunc(𝕃, Any[PT, T]), true)[1]
@@ -1562,15 +1564,24 @@ end
 
     s, exact = instanceof_tfunc(s0, false)
     s === Bottom && return Bottom
-    return _fieldtype_tfunc(𝕃, s, name, exact)
+    # `exact` from a `Type{X}` element still admits `==`-equal but non-egal reps
+    # of `X`, whose `fieldtype` results are only `==`-equal to the stored type;
+    # the `Const` folds below additionally require an egality-certain argument
+    # value (#61323)
+    egal = isa(s0, Const) || isa(widenconst(s0), Core.TypeEgal)
+    return _fieldtype_tfunc(𝕃, s, name, exact, egal)
 end
 
-@nospecs function _fieldtype_tfunc(𝕃::AbstractLattice, s, name, exact::Bool)
+# `egal` must be true only if `s` is the type of a runtime value (a canonical
+# tag, whose stored field types are interned) or the egality-certain value of a
+# `fieldtype` argument; a merely `==`-certain `fieldtype` argument yields field
+# types that are `==` but not necessarily `===` the stored ones (#61323).
+@nospecs function _fieldtype_tfunc(𝕃::AbstractLattice, s, name, exact::Bool, egal::Bool)
     exact = exact && !has_free_typevars(s)
     u = unwrap_unionall(s)
     if isa(u, Union)
-        ta0 = _fieldtype_tfunc(𝕃, rewrap_unionall(u.a, s), name, exact)
-        tb0 = _fieldtype_tfunc(𝕃, rewrap_unionall(u.b, s), name, exact)
+        ta0 = _fieldtype_tfunc(𝕃, rewrap_unionall(u.a, s), name, exact, egal)
+        tb0 = _fieldtype_tfunc(𝕃, rewrap_unionall(u.b, s), name, exact, egal)
         ta0 ⊑ tb0 && return tb0
         tb0 ⊑ ta0 && return ta0
         ta, exacta, _, istypea = instanceof_tfunc(ta0, false)
@@ -1618,8 +1629,9 @@ end
             exactft1 = exact || (!has_free_typevars(ft1) && u.name !== Tuple.name)
             ft1 = rewrap_unionall(ft1, s)
             if exactft1
-                # `fieldtype` returns exactly (`===`) the stored type
-                ft1 = Const(ft1)
+                # `fieldtype` returns exactly (`===`) the stored type, but only
+                # an egality-certain argument pins which stored rep is returned
+                ft1 = egal ? Const(ft1) : Type{ft1}
             elseif ft1 isa Type || ft1 isa TypeVar
                 if ft1 === Any && u.name === Tuple.name
                     # Tuple{:x} is possible in this case
@@ -1658,8 +1670,9 @@ end
     exactft = exact || (!has_free_typevars(ft) && u.name !== Tuple.name)
     ft = rewrap_unionall(ft, s)
     if exactft
-        # `fieldtype` returns exactly (`===`) the stored type
-        return Const(ft)
+        # `fieldtype` returns exactly (`===`) the stored type, but only an
+        # egality-certain argument pins which stored rep is returned
+        return egal ? Const(ft) : Type{ft}
     end
     if u.name === Tuple.name && ft === Any
         # Tuple{:x} is possible
@@ -1679,6 +1692,8 @@ valid_tparam_type(U::UnionAll) = valid_tparam_type(unwrap_unionall(U))
 function typeeq_apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any})
     length(argtypes) == 2 || return false
     ai = widenslotwrapper(widenconditional(argtypes[2]))
+    # a bare `TypeEgal{T}` element pins the argument value like `Const(T)` does
+    ai = maybe_singleton_const(ai)
     if isa(ai, Const)
         v = ai.val
         return isa(v, Type) || isa(v, TypeVar) || valid_tparam(v)
@@ -1693,6 +1708,8 @@ end
 function typeeq_apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
     length(argtypes) == 2 || return Bottom
     ai = widenslotwrapper(argtypes[2])
+    # a bare `TypeEgal{T}` element pins the argument value like `Const(T)` does
+    ai = maybe_singleton_const(ai)
     if isa(ai, Const)
         v = ai.val
         (isa(v, Type) || isa(v, TypeVar) || valid_tparam(v)) || return Bottom

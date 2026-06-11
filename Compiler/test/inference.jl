@@ -563,6 +563,30 @@ f21763_def(t::Type{<:Tuple{Vararg{E}}}) where E = @isdefined(E) ? E : :undef
 @test Base.return_types(f21763_def, (Type{Tuple{Int}},)) == Any[Type{Int}]
 @test Base.return_types(f21763_def, (Type{<:NInt},)) == Any[Union{Symbol, Type{Int}}]
 
+# `fieldtype` of an `==`-only `Type{X}` element must not fold to an egal constant:
+# an `==`-equal rep of `X` yields a fieldtype that is `==` but not `===` the stored
+# one (#61323)
+let rep = Tuple{Tuple{S}} where S<:Int
+    @test rep == Tuple{Tuple{Int}} && rep !== Tuple{Tuple{Int}}
+    @test fieldtype(rep, 1) == Tuple{Int} && fieldtype(rep, 1) !== Tuple{Int}
+    @test Base.return_types((Type{Tuple{Tuple{Int}}},)) do t
+        fieldtype(t, 1)
+    end == Any[Type{Tuple{Int}}]
+    fldrep(t) = fieldtype(t, 1) === Tuple{Int}
+    fldreparr(tarr, i) = fldrep(tarr[i])
+    @test fldreparr(Type{Tuple{Tuple{Int}}}[rep, Tuple{Tuple{Int}}], 1) === false
+    @test fldreparr(Type{Tuple{Tuple{Int}}}[rep, Tuple{Tuple{Int}}], 2) === true
+end
+
+# a bare `TypeEgal{T}` lattice element pins a `Type{...}` construction argument
+# like `Const(T)` does, while an `==`-only `Type{T}` element must not
+let apply_type_tfunc = Compiler.apply_type_tfunc
+    𝕃 = Compiler.fallback_lattice
+    rt = apply_type_tfunc(𝕃, Const(Type), Core.TypeEgal{Int})
+    @test rt isa Compiler.Const && rt.val === Type{Int}
+    @test apply_type_tfunc(𝕃, Const(Type), Type{Int}) == Type{Type{Int}}
+end
+
 # issue #17572
 function f17572(::Type{Val{A}}) where A
     return Tuple{Int}(Tuple{A}((1,)))
@@ -805,8 +829,9 @@ let fieldtype_tfunc(@nospecialize args...) =
     @test fieldtype_tfunc(Union{Type{Int32}, Int32}, Const(:x)) == Union{}
     @test fieldtype_tfunc(Union{Type{Base.RefValue{T}}, Type{Int32}} where {T<:Array}, Const(:x)) == Type{<:Array}
     @test fieldtype_tfunc(Union{Type{Base.RefValue{T}}, Type{Int32}} where {T<:Real}, Const(:x)) == Type{<:Real}
-    @test fieldtype_tfunc(Union{Type{Base.RefValue{<:Array}}, Type{Int32}}, Const(:x)) == Const(Array)
-    @test fieldtype_tfunc(Union{Type{Base.RefValue{<:Real}}, Type{Int32}}, Const(:x)) == Const(Real)
+    # the `Type{...}` elements are only `==`-certain, so no `Const` fold (#61323)
+    @test fieldtype_tfunc(Union{Type{Base.RefValue{<:Array}}, Type{Int32}}, Const(:x)) == Type{Array}
+    @test fieldtype_tfunc(Union{Type{Base.RefValue{<:Real}}, Type{Int32}}, Const(:x)) == Type{Real}
     @test fieldtype_tfunc(Const(Union{Base.RefValue{<:Real}, Type{Int32}}), Const(:x)) == Const(Real)
     @test fieldtype_tfunc(Type{Union{Base.RefValue{T}, Type{Int32}}} where {T<:Real}, Const(:x)) == Type{<:Real}
     @test fieldtype_tfunc(Type{<:Tuple}, Const(1)) == Any
@@ -4064,7 +4089,8 @@ f37532(T, x) = (Core.bitcast(Ptr{T}, x); x)
 f37943(x::Any, i::Int) = getfield((x::Pair{false, Int}), i)
 g37943(i::Int) = fieldtype(Pair{false, T} where T, i)
 @test only(Base.return_types(f37943, Tuple{Any, Int})) === Union{}
-@test only(Base.return_types(g37943, Tuple{Int})) == Union{Type{Union{}}, Core.TypeEgal{Any}}
+# the runtime-constructed `where`-type argument is only `==`-certain (#61323)
+@test only(Base.return_types(g37943, Tuple{Int})) == Union{Type{Union{}}, Type{Any}}
 
 # Don't let PartialStruct prevent const prop
 f_partial_struct_constprop(a, b) = (a[1]+b[1], nothing)
