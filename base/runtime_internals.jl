@@ -920,7 +920,10 @@ Determine whether type `T` is a [`Tuple`](@ref) that could appear as a type
 signature in dispatch.  For this to be true, every element of the tuple type
 must be either:
 - [concrete](@ref isconcretetype) but not a [kind type](@ref Base.iskindtype)
-- a [`Type{U}`](@ref Type) with no free type variables in `U`
+- the egality kind `Core.TypeEgal{U}` with no free type variables in `U` (a
+  `Type{U}` slot is not enough, since it also admits `==`-equal but non-`===`
+  argument values; `Type{Union{}}` is the exception, the bottom object being
+  unique)
 
 !!! note
     A dispatch tuple is relevant for method dispatch because it has no inhabited
@@ -950,6 +953,9 @@ julia> isdispatchtuple(Tuple{DataType})
 false
 
 julia> isdispatchtuple(Tuple{Type{Int}})
+false
+
+julia> isdispatchtuple(Tuple{Core.TypeEgal{Int}})
 true
 
 julia> isdispatchtuple(Tuple{Type})
