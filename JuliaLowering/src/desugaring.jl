@@ -1275,34 +1275,27 @@ function expand_assignment(ctx, ex, is_const=false)
         expand_unionall_def(ctx, ex, lhs, rhs, is_const)
     elseif kind(rhs) == K"="
         # Expand chains of assignments
-        # a = b = c  ==>  b=c; a=c
+        # a = b = rhs  ==>  rr=rhs; b=rr; a=rr
         stmts = SyntaxList(ctx)
-        push!(stmts, lhs)
-        while kind(rhs) == K"="
-            push!(stmts, rhs[1])
-            rhs = rhs[2]
+        rhs_end = rhs; while kind(rhs_end) === K"="
+            rhs_end = rhs_end[2]
         end
-        if is_identifier_like(rhs)
-            tmp_rhs = nothing
-            rr = rhs
+        if !is_identifier_like(rhs_end)
+            rr = ssavar(ctx, rhs_end, "rhs")
+            assign_rr = @ast ctx rhs_end [K"=" rr rhs_end]
         else
-            tmp_rhs = ssavar(ctx, rhs, "rhs")
-            rr = tmp_rhs
+            rr = rhs_end
+            assign_rr = nothing
+        end
+        ex_i = ex; while kind(ex_i) === K"="
+            push!(stmts, @ast ctx ex_i [K"=" ex_i[1] rr])
+            ex_i = ex_i[2]
         end
         # In const a = b = c, only a is const
-        stmts[1] = @ast ctx ex [(is_const ? K"constdecl" : K"=") stmts[1] rr]
-        for i in 2:length(stmts)
-            stmts[i] = @ast ctx ex [K"=" stmts[i] rr]
-        end
-        if !isnothing(tmp_rhs)
-            pushfirst!(stmts, @ast ctx ex [K"=" tmp_rhs rhs])
-        end
-        expand_forms_2(ctx,
-            @ast ctx ex [K"block"
-                stmts...
-                [K"removable" rr]
-            ]
-        )
+        is_const && setattr!(stmts[1], :kind, K"constdecl")
+
+        out = @ast ctx ex [K"block" assign_rr reverse!(stmts)... [K"removable" rr]]
+        expand_forms_2(ctx, out)
     elseif kl == K"ssavalue"
         sink_assignment(ctx, ex, _resolve_ssavalue(ctx, lhs), expand_forms_2(ctx, rhs))
     elseif is_identifier_like(lhs)
