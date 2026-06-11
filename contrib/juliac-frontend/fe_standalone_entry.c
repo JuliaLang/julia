@@ -83,12 +83,16 @@ static struct {
     void (*errorf)(const char *, ...);
     hv   (*get_global)(hv, hv);
     hv   (*call1)(hv, hv);
+    hv   (*copy_ast)(hv);
+    hv   (*invoke_julia_macro)(hv, hv, hv *, hv *, size_t, int);
+    size_t (*get_world_counter)(void);
     // lowering support
     hv   (*typeof_)(hv);
     size_t (*expr_argcount)(hv);
     hv   (*expr_arg)(hv, size_t);
     void (*expr_setarg)(hv, size_t, hv);
     size_t (*string_size)(hv);
+    size_t (*array_length)(hv);
     hv   (*module_name)(hv);
     hv   (*module_globalref)(hv, hv);
     hv   (*get_nth_field)(hv, size_t);
@@ -146,6 +150,9 @@ static struct {
     hv *array_symbol_type;
     hv *array_int32_type;
     hv *array_uint32_type;
+    hv *ssavalue_type;
+    hv *slotnumber_type;
+    hv *array_any_type;
 } H;
 
 static const char *fe_missing_host_sym = NULL;
@@ -191,11 +198,15 @@ static void fe_resolve_host_api(void)
     H.errorf = (void (*)(const char *, ...))host_sym("jl_errorf");
     H.get_global = (hv (*)(hv, hv))host_sym("jl_get_global");
     H.call1 = (hv (*)(hv, hv))host_sym("jl_call1");
+    H.copy_ast = (hv (*)(hv))host_sym("jl_copy_ast");
+    H.invoke_julia_macro = (hv (*)(hv, hv, hv *, hv *, size_t, int))host_sym("jl_invoke_julia_macro");
+    H.get_world_counter = (size_t (*)(void))host_sym("jl_get_world_counter");
     H.typeof_ = (hv (*)(hv))host_sym("jl_typeof");
     H.expr_argcount = (size_t (*)(hv))host_sym("jl_expr_argcount");
     H.expr_arg = (hv (*)(hv, size_t))host_sym("jl_expr_arg");
     H.expr_setarg = (void (*)(hv, size_t, hv))host_sym("jl_expr_setarg");
     H.string_size = (size_t (*)(hv))host_sym("jl_string_size");
+    H.array_length = (size_t (*)(hv))host_sym("jl_array_length");
     H.module_name = (hv (*)(hv))host_sym("jl_module_name");
     H.module_globalref = (hv (*)(hv, hv))host_sym("jl_module_globalref");
     H.get_nth_field = (hv (*)(hv, size_t))host_sym("jl_get_nth_field");
@@ -252,6 +263,9 @@ static void fe_resolve_host_api(void)
     H.array_symbol_type = (hv *)host_sym("jl_array_symbol_type");
     H.array_int32_type = (hv *)host_sym("jl_array_int32_type");
     H.array_uint32_type = (hv *)host_sym("jl_array_uint32_type");
+    H.ssavalue_type = (hv *)host_sym("jl_ssavalue_type");
+    H.slotnumber_type = (hv *)host_sym("jl_slotnumber_type");
+    H.array_any_type = (hv *)host_sym("jl_array_any_type");
     if (fe_missing_host_sym != NULL) {
         if (H.errorf)
             H.errorf("libjulia-frontend-standalone: missing required host symbol %s "
@@ -560,8 +574,11 @@ static jl_value_t *fe_wrap_foreign(hv p)
 
 static void *fe_foreign_ptr_of(jl_value_t *v)
 {
+    // n.b. the Ptr{Cvoid} field is stored inline (isbits), so it must be
+    // read as raw data; jl_fieldref_noalloc is only valid for fields that
+    // hold references.
     if (fe_foreign_type != NULL && jl_typeof(v) == fe_foreign_type)
-        return jl_unbox_voidpointer(jl_fieldref_noalloc(v, 0));
+        return *(void **)jl_data_ptr(v);
     return NULL;
 }
 
@@ -629,6 +646,22 @@ static jl_value_t *host2fe(hv v)
     }
     if (ht == *H.module_type)
         return fe_shadow_module(v);
+    if (ht == *H.array_any_type) {
+        // e.g. the argnames Vector{Any} in a generated function stub's
+        // Expr(:lambda, ...). Vector{Any} data is contiguous jl_value_t*
+        // (and the host GC is non-moving), so reading through the data
+        // pointer is safe while the array stays rooted by the input tree.
+        size_t i, n = H.array_length(v);
+        hv *data = (hv *)H.array_ptr(v);
+        jl_array_t *a = jl_alloc_vec_any(n);
+        JL_GC_PUSH1(&a);
+        for (i = 0; i < n; i++) {
+            jl_value_t *c = host2fe(data[i]);
+            jl_array_ptr_set(a, i, c);
+        }
+        JL_GC_POP();
+        return (jl_value_t *)a;
+    }
     return fe_wrap_foreign(v);
 }
 
@@ -846,75 +879,257 @@ JL_DLLEXPORT hv jl_frontend_parse_impl(const char *text, size_t text_len, hv fil
     return result;
 }
 
-// Reject macro calls until cross-runtime macro expansion (host macro
-// invocation via jl_invoke_julia_macro plus result conversion) is wired up;
-// the host macro functions do not exist in this runtime.
-static void fe_check_no_macrocall(hv v)
+// ------------------------------------------------------------------------
+// Macro expansion, performed host-side on the host's syntax tree before it
+// crosses into this runtime for lowering: the macro functions live in the
+// host's world and are resolved and invoked there through the host's
+// jl_invoke_julia_macro, so macro arguments and results never need to be
+// converted. This is a port of the flisp frontend's jl_expand_macros (see
+// src/flfrontend.c), driving the host runtime through the host API table;
+// the resulting `hygienic-scope` wrappers are understood by JuliaLowering's
+// Expr compatibility mode (with the modules inside becoming shadows).
+//
+// One difference from flisp: `quote` is left alone (like `inert`), since
+// JuliaLowering expands quoted syntax itself during lowering, while flisp
+// required backquote pre-expansion.
+
+typedef struct h_macroctx {
+    hv m;
+    struct h_macroctx *parent;
+} h_macroctx_t;
+
+static int h_head_is(hv e, const char *name)
 {
-    if (H.typeof_(v) != *H.expr_type)
-        return;
-    hv head = H.get_field(v, "head");
-    const char *hname = (const char *)H.symbol_name(head);
-    if (strcmp(hname, "macrocall") == 0)
-        H.errorf("jl_frontend_lower: cross-runtime macro expansion is not yet "
-                 "implemented by libjulia-frontend-standalone");
-    if (strcmp(hname, "quote") == 0 || strcmp(hname, "inert") == 0)
-        return;
-    size_t i, n = H.expr_argcount(v);
-    for (i = 0; i < n; i++)
-        fe_check_no_macrocall(H.expr_arg(v, i));
+    hv head = H.get_field(e, "head");
+    return strcmp((const char *)H.symbol_name(head), name) == 0;
+}
+
+static int h_is_expr(hv v)
+{
+    return v != NULL && H.typeof_(v) == *H.expr_type;
+}
+
+static int h_isa_ast_node(hv v)
+{
+    hv t = H.typeof_(v);
+    return t == *H.expr_type || t == *H.symbol_type || t == *H.globalref_type ||
+        t == *H.linenumbernode_type || t == *H.quotenode_type ||
+        t == *H.newvarnode_type || t == *H.code_info_type ||
+        t == *H.gotonode_type || t == *H.gotoifnot_type ||
+        t == *H.returnnode_type || t == *H.enternode_type ||
+        t == *H.ssavalue_type || t == *H.slotnumber_type ||
+        t == *H.argument_type;
+}
+
+static int h_is_self_escaping_expr(hv e)
+{
+    return h_head_is(e, "inert") || h_head_is(e, "leave") || h_head_is(e, "core") ||
+        h_head_is(e, "line") || h_head_is(e, "lineinfo") || h_head_is(e, "meta") ||
+        h_head_is(e, "boundscheck") || h_head_is(e, "inline") || h_head_is(e, "noinline");
+}
+
+static int h_need_esc_node(hv v)
+{
+    hv t = H.typeof_(v);
+    if (t == *H.linenumbernode_type || t == *H.ssavalue_type ||
+        t == *H.slotnumber_type || t == *H.argument_type ||
+        t == *H.enternode_type || t == *H.quotenode_type)
+        return 0;
+    if (t == *H.expr_type)
+        return !h_is_self_escaping_expr(v);
+    return h_isa_ast_node(v);
+}
+
+static hv h_expand_macros(hv expr, hv inmodule, h_macroctx_t *macroctx,
+                          int onelevel, size_t world, int throw_load_error)
+{
+    if (expr == NULL || !h_is_expr(expr))
+        return expr;
+    if (h_head_is(expr, "inert") || h_head_is(expr, "module") ||
+        h_head_is(expr, "toplevel") || h_head_is(expr, "meta") ||
+        h_head_is(expr, "quote"))
+        return expr;
+    void **pg = (void **)H.get_pgcstack();
+    if (h_head_is(expr, "hygienic-scope") && H.expr_argcount(expr) >= 2) {
+        h_macroctx_t newctx;
+        newctx.m = H.expr_arg(expr, 1);
+        newctx.parent = macroctx;
+        hv a = H.expr_arg(expr, 0);
+        hframe_t f;
+        hpush(pg, &f);
+        hv a2 = h_expand_macros(a, inmodule, &newctx, onelevel, world, throw_load_error);
+        hroot(&f, 0, a2);
+        hv r = expr;
+        if (h_is_expr(a2) && h_head_is(a2, "escape") && !h_need_esc_node(H.expr_arg(a2, 0)))
+            r = H.expr_arg(a2, 0);
+        else if (!h_need_esc_node(a2))
+            r = a2;
+        else if (a != a2)
+            H.expr_setarg(expr, 0, a2);
+        hpop(pg, &f);
+        return r;
+    }
+    if (h_head_is(expr, "macrocall")) {
+        h_macroctx_t newctx;
+        newctx.m = macroctx ? macroctx->m : inmodule;
+        newctx.parent = macroctx;
+        hv lineinfo = NULL;
+        hv margs = H.get_field(expr, "args");
+        hv result = H.invoke_julia_macro(margs, inmodule, &newctx.m, &lineinfo,
+                                         world, throw_load_error);
+        if (!h_need_esc_node(result))
+            return result;
+        hframe_t f;
+        hpush(pg, &f);
+        hroot(&f, 0, result);
+        hroot(&f, 1, newctx.m);
+        hroot(&f, 2, lineinfo);
+        hv wrap = NULL;
+        if (h_is_expr(result) && h_head_is(result, "escape"))
+            result = H.expr_arg(result, 0);
+        else
+            wrap = H.exprn(H.symbol("hygienic-scope"), 3);
+        hroot(&f, 0, result);
+        if (wrap != NULL) {
+            // re-push the frame to keep both result and wrap rooted
+            hframe_t f2;
+            hpush(pg, &f2);
+            hroot(&f2, 0, wrap);
+            result = H.copy_ast(result);
+            hroot(&f, 0, result);
+            if (!onelevel)
+                result = h_expand_macros(result, inmodule, &newctx, onelevel,
+                                         world, throw_load_error);
+            hroot(&f, 0, result);
+            if (h_need_esc_node(result)) {
+                H.expr_setarg(wrap, 0, result);
+                H.expr_setarg(wrap, 1, newctx.m);
+                H.expr_setarg(wrap, 2, lineinfo);
+                if (h_is_expr(result) && h_head_is(result, "escape"))
+                    result = H.expr_arg(result, 0);
+                else
+                    result = wrap;
+            }
+            hpop(pg, &f2);
+        }
+        else {
+            result = H.copy_ast(result);
+            hroot(&f, 0, result);
+            if (!onelevel)
+                result = h_expand_macros(result, inmodule, macroctx, onelevel,
+                                         world, throw_load_error);
+        }
+        hpop(pg, &f);
+        return result;
+    }
+    if (h_head_is(expr, "do") && H.expr_argcount(expr) == 2 &&
+        h_is_expr(H.expr_arg(expr, 0)) && h_head_is(H.expr_arg(expr, 0), "macrocall")) {
+        hv mc = H.expr_arg(expr, 0);
+        size_t j, nm = H.expr_argcount(mc);
+        hframe_t f;
+        hpush(pg, &f);
+        hv mc2 = H.exprn(H.symbol("macrocall"), nm + 1);
+        hroot(&f, 0, mc2);
+        H.expr_setarg(mc2, 0, H.expr_arg(mc, 0)); // macro name
+        H.expr_setarg(mc2, 1, H.expr_arg(mc, 1)); // location
+        H.expr_setarg(mc2, 2, H.expr_arg(expr, 1)); // function argument
+        for (j = 2; j < nm; j++)
+            H.expr_setarg(mc2, j + 1, H.expr_arg(mc, j));
+        hv ret = h_expand_macros(mc2, inmodule, macroctx, onelevel, world,
+                                 throw_load_error);
+        hpop(pg, &f);
+        return ret;
+    }
+    if (h_head_is(expr, "escape") && macroctx != NULL)
+        macroctx = macroctx->parent;
+
+    size_t i, n = H.expr_argcount(expr);
+    for (i = 0; i < n; i++) {
+        hv a = H.expr_arg(expr, i);
+        hv a2 = h_expand_macros(a, inmodule, macroctx, onelevel, world,
+                                throw_load_error);
+        if (a != a2)
+            H.expr_setarg(expr, i, a2);
+    }
+    return expr;
 }
 
 JL_DLLEXPORT hv jl_frontend_lower_impl(hv expr, hv inmodule, const char *filename,
                                        int line, size_t world, int warn)
 {
-    (void)world;
     fe_enter();
-    fe_check_no_macrocall(expr);
 
-    jl_value_t *fe_ex = NULL, *fe_mod = NULL, *fe_res = NULL;
-    JL_GC_PUSH3(&fe_ex, &fe_mod, &fe_res);
-    fe_mod = fe_shadow_module(inmodule);
-    fe_ex = host2fe(expr);
-    if (getenv("FE_DEBUG_LOWER") != NULL) {
-        jl_printf(JL_STDERR, "FE_DEBUG_LOWER input: ");
-        jl_static_show(JL_STDERR, fe_ex);
-        jl_printf(JL_STDERR, "\n");
-    }
-    // n.b. the host's world counter is not meaningful in this runtime; any
-    // (future) macro lookup goes back to the host instead
-    fe_res = jlfe_lower(fe_ex, (jl_module_t *)fe_mod, filename ? filename : "none",
-                        line, (size_t)-1, warn);
+    // Expand macros host-side first (flisp's lowering did the same); the
+    // expanded tree, including its hygienic-scope wrappers, then crosses
+    // into this runtime for lowering proper.
+    {
+        void **pg = (void **)H.get_pgcstack();
+        hframe_t f;
+        hpush(pg, &f);
+        hv copied = H.copy_ast(expr);
+        hroot(&f, 0, copied);
+        expr = h_expand_macros(copied, inmodule, NULL, 0, world, 1);
+        hroot(&f, 1, expr);
 
-    jl_value_t *r0 = jl_svecref(fe_res, 0);
-    if (jl_svec_len(fe_res) == 2 && jl_is_symbol(r0) &&
-        r0 == (jl_value_t *)jl_symbol("__fe_lowering_error__")) {
-        char buf[2048];
-        jl_value_t *msg = jl_svecref(fe_res, 1);
-        snprintf(buf, sizeof(buf), "%.*s", (int)jl_string_len(msg), jl_string_data(msg));
+        jl_value_t *fe_ex0 = NULL, *fe_mod0 = NULL, *fe_res0 = NULL;
+        JL_GC_PUSH3(&fe_ex0, &fe_mod0, &fe_res0);
+        fe_mod0 = fe_shadow_module(inmodule);
+        fe_ex0 = host2fe(expr);
+        // n.b. frame f (rooting the expanded host tree) must stay pushed
+        // until fe2host below is done: foreign-wrapped host values inside
+        // fe_ex0 hold raw pointers into the host heap that are only kept
+        // alive by the expanded tree.
+        if (getenv("FE_DEBUG_LOWER") != NULL) {
+            jl_printf(JL_STDERR, "FE_DEBUG_LOWER input: ");
+            jl_static_show(JL_STDERR, fe_ex0);
+            jl_printf(JL_STDERR, "\n");
+        }
+        fe_res0 = jlfe_lower(fe_ex0, (jl_module_t *)fe_mod0, filename ? filename : "none",
+                             line, (size_t)-1, warn);
+        jl_value_t *r0 = jl_svecref(fe_res0, 0);
+        if (jl_svec_len(fe_res0) == 2 && jl_is_symbol(r0) &&
+            r0 == (jl_value_t *)jl_symbol("__fe_lowering_error__")) {
+            char buf[2048];
+            jl_value_t *msg = jl_svecref(fe_res0, 1);
+            snprintf(buf, sizeof(buf), "%.*s", (int)jl_string_len(msg), jl_string_data(msg));
+            JL_GC_POP();
+            hpop(pg, &f);
+            H.errorf("jl_frontend_lower: %s", buf);
+        }
+        if (getenv("FE_DEBUG_LOWER") != NULL) {
+            jl_printf(JL_STDERR, "FE_DEBUG_LOWER output: ");
+            jl_static_show(JL_STDERR, r0);
+            jl_printf(JL_STDERR, "\n");
+        }
+        hv hlowered = fe2host(r0, pg);
+        hroot(&f, 2, hlowered);
+        hv result = H.svec(1, hlowered);
+        hpop(pg, &f);
         JL_GC_POP();
-        H.errorf("jl_frontend_lower: %s", buf);
+        return result;
     }
-
-    void **pg = (void **)H.get_pgcstack();
-    hframe_t f;
-    hpush(pg, &f);
-    hv hlowered = fe2host(r0, pg);
-    hroot(&f, 0, hlowered);
-    hv result = H.svec(1, hlowered);
-    hpop(pg, &f);
-    JL_GC_POP();
-    return result;
 }
 
 JL_DLLEXPORT hv jl_macroexpand_impl(hv expr, hv inmodule, int recursive, int inplace,
                                     int expand_scope)
 {
-    (void)expr; (void)inmodule; (void)recursive; (void)inplace; (void)expand_scope;
+    // Macro expansion runs entirely host-side; this runtime is not involved.
+    // n.b. expand_scope (resolution of the hygienic-scope wrappers into the
+    // legacy escape form) is not implemented; callers see the wrappers.
+    (void)expand_scope;
     fe_enter();
-    H.errorf("jl_macroexpand: cross-runtime macro expansion is not yet implemented "
-             "by libjulia-frontend-standalone");
-    return NULL; // unreachable
+    void **pg = (void **)H.get_pgcstack();
+    hframe_t f;
+    hpush(pg, &f);
+    hv ex = expr;
+    if (!inplace) {
+        ex = H.copy_ast(expr);
+    }
+    hroot(&f, 0, ex);
+    hv r = h_expand_macros(ex, inmodule, NULL, !recursive,
+                           H.get_world_counter(), 0);
+    hpop(pg, &f);
+    return r;
 }
 
 JL_DLLEXPORT int jl_is_operator_impl(const char *s)

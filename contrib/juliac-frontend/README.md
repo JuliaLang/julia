@@ -107,19 +107,43 @@ julia, dlopens the standalone library, and exercises parse and the operator
 queries through the ABI with host values, comparing against the host's own
 frontend.
 
-Status: parse, the operator queries, and *lowering* work cross-runtime
-(`make check-standalone`): host expressions are lowered by the guest's
-JuliaLowering, with host modules mirrored by shadow modules, lowered
+Status: parse, the operator queries, *lowering*, and *macros* work
+cross-runtime (`make check-standalone`): host expressions are lowered by the
+guest's JuliaLowering, with host modules mirrored by shadow modules, lowered
 `CodeInfo` reconstructed host-side field-by-name, and arbitrary host values
-carried opaquely. A julia whose `libjulia-frontend.so` is replaced by the
-standalone library boots and evaluates code normally — including method
-definitions — with all lowering served by the guest runtime.
+carried opaquely. Macros are expanded *before* the boundary by a host-side
+port of flisp's `jl_expand_macros` (h_expand_macros in
+fe_standalone_entry.c): macro functions are invoked in the host runtime via
+`jl_invoke_julia_macro` on host trees, so neither macro arguments nor
+expansions ever cross runtimes, and hygiene (`esc`) follows the same
+hygienic-scope protocol flisp uses, which JuliaLowering's compat layer
+consumes. A julia whose `libjulia-frontend.so` is replaced by the standalone
+library boots and evaluates code normally — including macro and method
+definitions, closures, generators and quoted syntax — with all lowering
+served by the guest runtime.
+
+Constructs whose lowering used to embed run-time objects in the output
+(which cannot cross runtimes, and could not be restored from an image) are
+now emitted as calls to named `Core` runtime-support functions when the
+host runtime provides them: `Core.eval_closure_type` and
+`Core.replace_captured_locals!` (boot.jl) for closures, and
+`Core.interpolate_ast(Expr, ...)` (defined in early bootstrap) for quoted
+syntax with `$` interpolation. On older runtimes without these names,
+JuliaLowering falls back to embedding values as before
+(`_core_has_lowering_support` in JuliaLowering/src/runtime.jl).
+
+`@generated` functions work in both directions: definitions lowered in
+expr-compat mode emit the runtime-recognized `Core.GeneratedFunctionStub`
+protocol (rather than JuliaLowering's own stub type, which could not cross),
+and when a generator fires, `Base.generated_body_to_codeinfo`'s
+`Expr(:lambda/:scope-block/:with-static-parameters ...)` forms are
+understood by JuliaLowering's Expr compatibility layer.
 
 Remaining cross-runtime gaps:
-- macro calls are rejected with a clear error (`jl_macroexpand` and macro
-  expansion inside `jl_frontend_lower` need host macro invocation through
-  `jl_invoke_julia_macro` plus bidirectional conversion of the expansion);
-- closures and generators: JuliaLowering currently embeds eagerly-created
-  closure type objects in its output, which cannot cross the boundary;
-  lowering needs to emit those definitions as code instead;
-- lowering warnings (the `warn` flag) are not forwarded to the host.
+- lowering warnings (the `warn` flag) are not forwarded to the host;
+- `jl_macroexpand`'s non-recursive flavor leaves hygienic-scope wrappers
+  visible (the `expand_scope` post-pass is not implemented);
+- JuliaLowering's SyntaxTree-flavored quote interpolation
+  (macro_expansion.jl) still embeds its `interpolate_ast` function value;
+  that path is only reachable for macros defined *by* the guest world, not
+  through the C ABI.
