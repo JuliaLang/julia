@@ -399,11 +399,10 @@ default_access_order(::GenericMemoryRef{:atomic}) = :monotonic
 
 function getindex(A::GenericMemory, i::Int)
     @_noub_if_noinbounds_meta
-    (@_boundscheck) && checkbounds(A, i)
-    memoryrefget(memoryrefnew(A, i, false), default_access_order(A), false)
+    memoryrefget(memoryrefnew(A, i, @_boundscheck), default_access_order(A), false)
 end
 
-getindex(A::GenericMemoryRef) = memoryrefget(A, default_access_order(A), @_boundscheck)
+getindex(A::GenericMemoryRef) = memoryrefget(A, default_access_order(A), false)
 
 """
     nameof(m::Module)::Symbol
@@ -1036,19 +1035,17 @@ end
 # linear indexing
 function getindex(A::Array, i::Int)
     @_noub_if_noinbounds_meta
-    @boundscheck checkbounds(A, i)
-    memoryrefget(memoryrefnew(getfield(A, :ref), i, false), :not_atomic, false)
+    memoryrefget(memoryrefnew(getfield(A, :ref), i, @_boundscheck), :not_atomic, false)
 end
 # simple Array{Any} operations needed for bootstrap
 function setindex!(A::Array{Any}, @nospecialize(x), i::Int)
     @_noub_if_noinbounds_meta
-    @boundscheck checkbounds(A, i)
-    memoryrefset!(memoryrefnew(getfield(A, :ref), i, false), x, :not_atomic, false)
+    memoryrefset!(memoryrefnew(getfield(A, :ref), i, @_boundscheck), x, :not_atomic, false)
     return A
 end
-setindex!(A::Memory{Any}, @nospecialize(x), i::Int) = (memoryrefset!(memoryrefnew(A, i, @_boundscheck), x, :not_atomic, @_boundscheck); A)
-setindex!(A::MemoryRef{T}, x) where {T} = (memoryrefset!(A, convert(T, x), :not_atomic, @_boundscheck); A)
-setindex!(A::MemoryRef{Any}, @nospecialize(x)) = (memoryrefset!(A, x, :not_atomic, @_boundscheck); A)
+setindex!(A::Memory{Any}, @nospecialize(x), i::Int) = (memoryrefset!(memoryrefnew(A, i, @_boundscheck), x, :not_atomic, false); A)
+setindex!(A::MemoryRef{T}, x) where {T} = (memoryrefset!(A, convert(T, x), :not_atomic, false); A)
+setindex!(A::MemoryRef{Any}, @nospecialize(x)) = (memoryrefset!(A, x, :not_atomic, false); A)
 
 # SimpleVector
 

@@ -772,8 +772,7 @@ let
     fail() = throw(ArgumentError("unsupported import/using while bootstrapping"))
     length(a::Array{T, 1}) where {T} = getfield(getfield(a, :size), 1)
     function getindex(A::Array, i::Int)
-        Intrinsics.ult_int(Intrinsics.bitcast(UInt, Intrinsics.sub_int(i, 1)), Intrinsics.bitcast(UInt, length(A))) || fail()
-        memoryrefget(memoryrefnew(getfield(A, :ref), i, false), :not_atomic, false)
+        memoryrefget(memoryrefnew(getfield(A, :ref), i, true), :not_atomic, false)
     end
     x == y = Intrinsics.eq_int(x, y)
     x + y = Intrinsics.add_int(x, y)
