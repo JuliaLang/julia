@@ -131,6 +131,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
         add_remark!(interp, sv, "Cannot infer call, because we previously saw :latestworld")
         return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
     end
+    current_world = get_world_counter()
     matches = find_method_matches(interp, argtypes, atype; max_methods, fargs=arginfo.fargs)
     if isa(matches, FailedMethodMatch)
         add_remark!(interp, sv, matches.reason)
@@ -316,7 +317,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                     inferidx[] += 1
                     local method = match.method
                     local sig = match.spec_types
-                    mi = specialize_method(match; preexisting=true)
+                    local mi = specialize_method(match; preexisting=true)
                     local call_result = call_results[edge_idx]
                     if mi === nothing || !(call_result isa InferenceResult) || !const_prop_methodinstance_heuristic(interp, call_result, mi, arginfo, sv)
                         csig = get_compileable_sig(method, sig, match.sparams)
@@ -324,7 +325,22 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                             #println(sig, " changed to ", csig, " for ", method)
                             (_, sparams) = typeintersect_env(csig, method.sig)
                             mresult = abstract_call_method(interp, method, csig, sparams, multiple_matches, StmtInfo(false, false), sv)::Future
-                            isready(mresult) || return false # wait for mresult Future to resolve off the callstack before continuing
+                            function infercalls3(interp, sv)
+                                local edge = mresult[].edge
+                                if edge !== nothing
+                                    local sig = match.spec_types
+                                    local mi = get_ci_mi(edge)
+                                    local vw = matches.valid_worlds
+                                    ccall(:jl_recache_method_by_type, Cvoid, (Any, Any, Any, UInt, UInt, UInt, UInt),
+                                            sig, mi, mi.specTypes, get_inference_world(interp),
+                                            first(vw), last(vw), current_world)
+                                end
+                                return true
+                            end
+                            if !isready(mresult) || !infercalls3(interp, sv)
+                                push!(sv.tasks, infercalls3)
+                                return false # wait for mresult Future to resolve off the callstack before continuing
+                            end
                         end
                     end
                 end
@@ -2953,38 +2969,6 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
     elseif isa(f, Core.OpaqueClosure)
         # calling an OpaqueClosure about which we have no information returns no information
         return Future(CallMeta(typeof(f).parameters[2], Any, Effects(), NoCallInfo()))
-    elseif f === TypeVar && !isvarargtype(argtypes[end])
-        # Manually look through the definition of TypeVar to
-        # make sure to be able to get `PartialTypeVar`s out.
-        2 ≤ la ≤ 4 || return Future(CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo()))
-        # make sure generic code is prepared for inlining if needed later
-        let T = Any[Type{TypeVar}, Any, Any, Any]
-            resize!(T, la)
-            atype = Tuple{T...}
-            T[1] = Const(TypeVar)
-            let call = abstract_call_gf_by_type(interp, f, ArgInfo(nothing, T), si, atype, vtypes, sv, max_methods)::Future
-                return Future{CallMeta}(call, interp, sv) do call, interp, sv
-                    n = argtypes[2]
-                    ub_var = Const(Any)
-                    lb_var = Const(Union{})
-                    if la == 4
-                        ub_var = argtypes[4]
-                        lb_var = argtypes[3]
-                    elseif la == 3
-                        ub_var = argtypes[3]
-                    end
-                    pT = typevar_tfunc(𝕃ᵢ, n, lb_var, ub_var)
-                    typevar_argtypes = Any[n, lb_var, ub_var]
-                    effects = builtin_effects(𝕃ᵢ, Core._typevar, typevar_argtypes, pT)
-                    if effects.nothrow
-                        exct = Union{}
-                    else
-                        exct = builtin_exct(𝕃ᵢ, Core._typevar, typevar_argtypes, pT)
-                    end
-                    return CallMeta(pT, exct, effects, call.info)
-                end
-            end
-        end
     elseif f === UnionAll
         let call = abstract_call_gf_by_type(interp, f, ArgInfo(nothing, Any[Const(UnionAll), Any, Any]), si, Tuple{Type{UnionAll}, Any, Any}, vtypes, sv, max_methods)::Future
             return Future{CallMeta}(call, interp, sv) do call, interp, sv
@@ -3016,20 +3000,67 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
     elseif la == 3 && f === Core.:(>:)
         # mark issupertype as a exact alias for issubtype
         # swap T1 and T2 arguments and call <:
-        if fargs !== nothing && length(fargs) == 3
-            fargs = Any[<:, fargs[3], fargs[2]]
-        else
-            fargs = nothing
+        atype = argtypes_to_type(argtypes)
+        let call = abstract_call_gf_by_type(interp, f, ArgInfo(fargs, Any[Const(f), Any, Any]), si, Tuple{typeof(f), Any, Any}, vtypes, sv, max_methods)::Future
+            if fargs !== nothing && length(fargs) == 3
+                fargs_reverse = Any[<:, fargs[3], fargs[2]]
+            else
+                fargs_reverse = nothing
+            end
+            argtypes_reverse = Any[typeof(<:), argtypes[3], argtypes[2]]
+            call_reverse = abstract_call_known(interp, <:, ArgInfo(fargs_reverse, argtypes_reverse), si, vtypes, sv, max_methods)
+            return Future{CallMeta}(isready(call) && isready(call_reverse), interp, sv) do interp, sv
+                return call_reverse[]
+            end
         end
-        argtypes = Any[typeof(<:), argtypes[3], argtypes[2]]
-        return abstract_call_known(interp, <:, ArgInfo(fargs, argtypes), si, vtypes, sv, max_methods)
-    elseif la == 2 && f === Core.typename
-        return Future(CallMeta(typename_static(argtypes[2]), Bottom, EFFECTS_TOTAL, MethodResultPure()))
-    elseif f === Core._hasmethod
-        return Future(_hasmethod_tfunc(interp, argtypes, sv))
     end
     atype = argtypes_to_type(argtypes)
-    return abstract_call_gf_by_type(interp, f, arginfo, si, atype, vtypes, sv, max_methods)::Future
+    call = abstract_call_gf_by_type(interp, f, arginfo, si, atype, vtypes, sv, max_methods)::Future
+    # Improve some results with custom tfuncs,
+    # now that we've inferred the target function to generate source code,
+    # which might be needed for inlining / invoke / dispatch.
+    if f === TypeVar && !isvarargtype(argtypes[end])
+        # Manually look through the definition of TypeVar to
+        # make sure to be able to get `PartialTypeVar`s out.
+        2 ≤ la ≤ 4 || return Future{CallMeta}(call, sv, interp) do call, sv, interp
+            return CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo())
+        end
+        # make sure generic code is prepared for inlining if needed later
+        let T = Any[Type{TypeVar}, Any, Any, Any]
+            resize!(T, la)
+            atype = Tuple{T...}
+            T[1] = Const(TypeVar)
+            return Future{CallMeta}(call, interp, sv) do call, interp, sv
+                n = argtypes[2]
+                ub_var = Const(Any)
+                lb_var = Const(Union{})
+                if la == 4
+                    ub_var = argtypes[4]
+                    lb_var = argtypes[3]
+                elseif la == 3
+                    ub_var = argtypes[3]
+                end
+                pT = typevar_tfunc(𝕃ᵢ, n, lb_var, ub_var)
+                typevar_argtypes = Any[n, lb_var, ub_var]
+                effects = builtin_effects(𝕃ᵢ, Core._typevar, typevar_argtypes, pT)
+                if effects.nothrow
+                    exct = Union{}
+                else
+                    exct = builtin_exct(𝕃ᵢ, Core._typevar, typevar_argtypes, pT)
+                end
+                return CallMeta(pT, exct, effects, call.info)
+            end
+        end
+    elseif la == 2 && f === Core.typename
+        return Future{CallMeta}(call, interp, sv) do call, interp, sv
+            return CallMeta(typename_static(argtypes[2]), Bottom, EFFECTS_TOTAL, MethodResultPure())
+        end
+    elseif f === Core._hasmethod
+        return Future{CallMeta}(call, interp, sv) do call, interp, sv
+            return _hasmethod_tfunc(interp, argtypes, sv)
+        end
+    end
+    return call
 end
 
 function abstract_call_opaque_closure(interp::AbstractInterpreter, closure::PartialOpaque,

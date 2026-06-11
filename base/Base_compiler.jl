@@ -242,6 +242,8 @@ function Core.kwcall(kwargs::NamedTuple, ::typeof(applicable), @nospecialize(arg
     return applicable(Core.kwcall, kwargs, args...)
 end
 function Core._hasmethod(@nospecialize(f), @nospecialize(t)) # this function has a special tfunc (TODO: make this a Builtin instead like applicable)
+    Core.@nospecializeinfer
+    @noinline
     tt = rewrap_unionall(Tuple{Core.Typeof(f), (unwrap_unionall(t)::DataType).parameters...}, t)
     return Core._hasmethod(tt)
 end

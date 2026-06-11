@@ -628,6 +628,10 @@ for important details on how to modify these fields safely.
 
     Cache of `CodeInstance` objects that share this template instantiation.
 
+  * `precompile`
+
+    If set, this `MethodInstance` will be compiled and added to the output system image.
+
 ### CodeInstance
 
   * `def`
