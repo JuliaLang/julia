@@ -2461,15 +2461,27 @@ function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
     end
 
     gen_mdef = let arg1_name = newsym(ctx, argl[1], "#self#"),
-         gen_argl = SyntaxList(
-            @ast(ctx, src, [K"::" arg1_name [K"function_type" gen_name]]),
-            @ast(ctx, src, [K"::"
-                # TODO: correct scope layer?
-                "__context__"::K"Identifier"(scope_layer=get(mtable, :scope_layer, 1))
-                MacroContext::K"Value"
-            ]),
-            mapsyntax(_untyped_arg, sparams)...,
-             mapsyntax(_untyped_arg, argl)...)
+         gen_argl = if ctx.expr_compat_mode
+            # Core.GeneratedFunctionStub calls the generator as
+            # gen(spvals..., argtypes...) (see its call method in
+            # base/expr.jl), so there is no context argument. All arguments
+            # are @nospecialize'd, which Compiler.may_invoke_generator
+            # requires before it will concretely evaluate the generator.
+            SyntaxList(
+                @ast(ctx, src, [K"::" arg1_name [K"function_type" gen_name]]),
+                mapsyntax(e->apply_arg_meta(_untyped_arg(e), :nospecialize), sparams)...,
+                mapsyntax(e->apply_arg_meta(_untyped_arg(e), :nospecialize), argl)...)
+        else
+            SyntaxList(
+                @ast(ctx, src, [K"::" arg1_name [K"function_type" gen_name]]),
+                @ast(ctx, src, [K"::"
+                    # TODO: correct scope layer?
+                    "__context__"::K"Identifier"(scope_layer=get(mtable, :scope_layer, 1))
+                    MacroContext::K"Value"
+                ]),
+                mapsyntax(_untyped_arg, sparams)...,
+                mapsyntax(_untyped_arg, argl)...)
+        end
         @jl_assert kind(body[1]) === K"quote" body
         gen_body = est_to_dst(expand_quote(ctx, body[1][1]))
 
@@ -2478,8 +2490,17 @@ function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
     end
 
     nongen_mdef = let
-        nongen_body = @ast ctx body[2] [K"block" [K"meta" "generated"::K"Symbol"
-            [K"new"
+        stub = if ctx.expr_compat_mode
+            # The runtime-recognized generated function stub, matching what
+            # flisp emits; the generator returns the body as an Expr and the
+            # runtime lowers it (Base.generated_body_to_codeinfo)
+            @ast ctx body[2] [K"new"
+                "GeneratedFunctionStub"::K"core"
+                gen_name
+                [K"call" "svec"::K"core" mapsyntax(_expr_arg_sym, argl)...]
+                [K"call" "svec"::K"core" mapsyntax(_expr_arg_sym, sparams)...]]
+        else
+            @ast ctx body[2] [K"new"
                 GeneratedFunctionStub::K"Value" # Use stub type from JuliaLowering
                 ctx.expr_compat_mode::K"Value"
                 gen_name
@@ -2490,7 +2511,9 @@ function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
                 #  source file either.)
                 sourceref(src)::K"Value"
                 [K"call" "svec"::K"core" mapsyntax(_expr_arg_sym, argl)...]
-                [K"call" "svec"::K"core" mapsyntax(_expr_arg_sym, sparams)...]]]
+                [K"call" "svec"::K"core" mapsyntax(_expr_arg_sym, sparams)...]]
+        end
+        nongen_body = @ast ctx body[2] [K"block" [K"meta" "generated"::K"Symbol" stub]
             body[2]]
         method_def_expr(ctx, src, mtable, sparams, argl, nongen_body, rett)
     end

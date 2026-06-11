@@ -393,7 +393,7 @@ function _to_lowered_expr(ex::SyntaxTree)
     elseif k == K"return"
         Core.ReturnNode(_to_lowered_expr(ex[1]))
     elseif k == K"inert"
-        est_to_expr(ex)
+        est_to_expr(ex; flatten_default_layer=true)
     elseif k == K"inert_syntaxtree"
         ex[1]
     elseif k == K"code_info"
