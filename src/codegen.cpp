@@ -1605,8 +1605,10 @@ static _Atomic(uint64_t) globalUniqueGeneratedNames{1};
 
 static MDNode *best_tbaa(jl_tbaacache_t &tbaa_cache, jl_value_t *jt) {
     jt = jl_unwrap_unionall(jt);
+    // only an egality-pinned type value is known to be represented as a
+    // DataType; an `==`-only `Type{X}` also admits e.g. UnionAll reps (#61323)
     if (jt == (jl_value_t*)jl_datatype_type ||
-        (jl_is_some_Type(jt) && jl_is_datatype(jl_some_Type_T(jt))))
+        (is_uniquerep_Type(jt) && jl_is_datatype(jl_some_Type_T(jt))))
         return tbaa_cache.tbaa_datatype;
     if (!jl_is_datatype(jt))
         return tbaa_cache.tbaa_value;
@@ -4859,7 +4861,9 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
 
         jl_datatype_t *utt = (jl_datatype_t*)jl_unwrap_unionall(obj.typ);
-        if (jl_is_some_Type((jl_value_t*)utt) && jl_is_concrete_type(jl_some_Type_T((jl_value_t*)utt)))
+        // requires an egality-pinned type value: an `==`-only `Type{X}` element
+        // admits reps whose representation differs from `typeof(X)` (#61323)
+        if (is_uniquerep_Type((jl_value_t*)utt) && jl_is_concrete_type(jl_some_Type_T((jl_value_t*)utt)))
             utt = (jl_datatype_t*)jl_typeof(jl_some_Type_T((jl_value_t*)utt));
 
         if (fld.constant && jl_is_symbol(fld.constant)) {
@@ -5063,7 +5067,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         if (obj.constant) {
             nf = jl_datatype_nfields(jl_typeof(obj.constant));
         }
-        else if (jl_is_some_Type(obj.typ)) {
+        else if (is_uniquerep_Type(obj.typ)) {
             jl_value_t *tp0 = jl_some_Type_T(obj.typ);
             if (jl_is_datatype(tp0) && jl_is_datatype_singleton((jl_datatype_t*)tp0))
                 nf = jl_datatype_nfields((jl_value_t*)jl_datatype_type);
@@ -5083,7 +5087,9 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     else if (f == BUILTIN(fieldtype) && (nargs == 2 || nargs == 3)) {
         const jl_cgval_t &typ = argv[1];
         const jl_cgval_t &fld = argv[2];
-        if ((jl_is_some_Type(typ.typ) && jl_is_concrete_type(jl_some_Type_T(typ.typ))) ||
+        // requires an egality-pinned type value: an `==`-only `Type{X}` element
+        // admits e.g. UnionAll reps without DataType field layout (#61323)
+        if ((is_uniquerep_Type(typ.typ) && jl_is_concrete_type(jl_some_Type_T(typ.typ))) ||
                 (typ.constant && jl_is_concrete_type(typ.constant))) {
             if (fld.typ == (jl_value_t*)jl_long_type) {
                 assert(typ.isboxed);
@@ -5205,8 +5211,9 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         const jl_cgval_t &fld = argv[2];
         jl_datatype_t *stt = (jl_datatype_t*)obj.typ;
         ssize_t fieldidx = -1;
-        if (jl_is_some_Type((jl_value_t*)stt)) {
-            // the representation type of Type{T} is either typeof(T), or unknown
+        if (is_uniquerep_Type((jl_value_t*)stt)) {
+            // the representation type of an egality-pinned `TypeEgal{T}` is
+            // typeof(T); an `==`-only `Type{T}` element admits other reps (#61323)
             // TODO: could use `issingletontype` predicate here, providing better type knowledge
             // than only handling DataType
             jl_value_t *tp0 = jl_some_Type_T((jl_value_t*)stt);
@@ -6825,7 +6832,9 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
             argv[i] = emit_expr(ctx, args[i]);
         }
         jl_value_t *ty = argv[0].typ;
-        if (jl_is_some_Type(ty) &&
+        // requires an egality-pinned type value: the constructed instance must
+        // have exactly the runtime type object, not an `==`-equal rep (#61323)
+        if (is_uniquerep_Type(ty) &&
                 jl_is_datatype(jl_some_Type_T(ty)) &&
                 jl_is_concrete_type(jl_some_Type_T(ty))) {
             jl_value_t *tp0 = jl_some_Type_T(ty);
