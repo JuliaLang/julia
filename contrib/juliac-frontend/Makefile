@@ -33,7 +33,10 @@ $(BIN)/Manifest.stamp: $(SRCDIR)/JuliaFrontend/Project.toml | $(BIN)
 	$(JULIA_CMD) --project=$(SRCDIR)/JuliaFrontend -e 'using Pkg; Pkg.instantiate()'
 	touch $@
 
-$(BIN)/julia-frontend-jl-o.a: $(SRCDIR)/frontend_lib.jl $(SRCDIR)/JuliaFrontend/src/*.jl $(JULIAC_BUILDSCRIPT) $(BIN)/Manifest.stamp $(build_private_libdir)/sys.$(SHLIB_EXT) | $(BIN)
+$(BIN)/julia-frontend-jl-o.a: $(SRCDIR)/frontend_lib.jl $(SRCDIR)/JuliaFrontend/src/*.jl \
+		$(wildcard $(JULIAHOME)/JuliaSyntax/src/*.jl $(JULIAHOME)/JuliaSyntax/src/*/*.jl) \
+		$(wildcard $(JULIAHOME)/JuliaLowering/src/*.jl) \
+		$(JULIAC_BUILDSCRIPT) $(BIN)/Manifest.stamp $(build_private_libdir)/sys.$(SHLIB_EXT) | $(BIN)
 	$(JULIA_CMD) -t 1 -J $(build_private_libdir)/sys.$(SHLIB_EXT) --project=$(SRCDIR)/JuliaFrontend --output-o $@ --output-incremental=no \
 		$(JULIAC_BUILDSCRIPT) $(SRCDIR)/frontend_lib.jl --output-lib true
 

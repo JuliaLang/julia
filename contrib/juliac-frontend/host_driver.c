@@ -126,10 +126,13 @@ int main(int argc, char **argv)
     // --- cross-runtime lowering: lower host exprs in the guest, then
     // evaluate the returned thunk in the host ---
     {
-        // n.b. no closures or generators here: JuliaLowering currently
-        // embeds eagerly-created closure type objects in its output, which
-        // cannot cross the runtime boundary (needs lowering to emit those
-        // definitions as code; see README)
+        // host-side macro for the cross-runtime macro expansion tests
+        // (defined with the host's own frontend; the guest never sees it)
+        jl_eval_string("macro fe_addone(x)\n    :( \$(esc(x)) + 1 )\nend");
+        if (jl_exception_occurred()) {
+            jl_static_show(jl_stderr_stream(), jl_current_exception(jl_current_task));
+            jl_exception_clear();
+        }
         const struct { const char *code; int64_t expected; } lowers[] = {
             {"1 + 2", 3},
             {"let s = 0\n    for i = 1:10\n        s += i\n    end\n    s\nend", 55},
@@ -137,6 +140,30 @@ int main(int argc, char **argv)
             {"begin\n    t = try\n        error(\"x\")\n        1\n    catch\n        2\n    end\n    t + 40\nend", 42},
             {"begin\n    x = 7\n    if x > 3\n        x = x * 6\n    else\n        x = 0\n    end\n    x\nend", 42},
             {"let g = 0\n    while g < 5\n        g += 1\n    end\n    g\nend", 5},
+            // macros: invoked host-side during the guest's lowering entry
+            {"@fe_addone 41", 42},
+            {"let x = 20\n    @fe_addone x + @fe_addone 20\nend", 42},
+            // closures, generators and comprehensions (closure types are
+            // emitted as inline Core calls by JuliaLowering)
+            {"(x -> x + 1)(41)", 42},
+            {"let a = 40\n    f = () -> a + 2\n    f()\nend", 42},
+            {"let a = 1\n    f = () -> (a += 41; a)\n    f()\nend", 42},
+            {"sum([i * i for i in 1:4]) + 12", 42},
+            {"sum(i for i in 1:5) + 27", 42},
+            {"map(x -> x^2, [1, 2, 3])[3] + 33", 42},
+            // quoted syntax (with and without interpolation)
+            {"let q = :(a + b)\n    q.head === :call ? 42 : 0\nend", 42},
+            {"let x = 41\n    ex = :( \$x + 1 )\n    ex.args[2] + 1\nend", 42},
+            // global method capturing a toplevel local
+            // (Core.replace_captured_locals! path)
+            {"let v = 42\n    global cross_capt_f() = v\n    cross_capt_f()\nend", 42},
+            // a macro whose expansion is a runtime VALUE, not an Expr: the
+            // host object must survive embedding into the lowered code
+            // (string macros are the common case)
+            {"r\"a.c\" isa Regex ? 42 : 0", 42},
+            {"begin\n    rx = r\"a.c\"\n    occursin(rx, \"abc\") ? 42 : 0\nend", 42},
+            // catch with a bound exception variable (Core.current_exception)
+            {"try\n    error(\"b\")\ncatch exc\n    exc isa ErrorException ? 42 : 0\nend", 42},
         };
         for (size_t i = 0; i < sizeof(lowers) / sizeof(lowers[0]); i++) {
             const char *code = lowers[i].code;
@@ -167,23 +194,24 @@ int main(int argc, char **argv)
             }
             JL_GC_POP();
         }
-        // macro calls are rejected with a clear error for now
+        // Base macros work too (@assert lowers and evaluates to nothing)
         {
-            int threw = 0;
-            jl_value_t *fname = NULL, *expr = NULL;
-            JL_GC_PUSH2(&fname, &expr);
+            jl_value_t *fname = NULL, *expr = NULL, *lowered = NULL, *val = NULL;
+            JL_GC_PUSH4(&fname, &expr, &lowered, &val);
             JL_TRY {
                 fname = jl_cstr_to_string("none");
-                const char *mc = "@assert true";
+                const char *mc = "@assert 1 + 1 == 2";
                 expr = jl_svecref(jl_parse(mc, strlen(mc), fname, 1, 0,
                                            (jl_value_t *)jl_symbol("statement"), NULL), 0);
-                fe_lower(expr, jl_main_module, "none", 1, (size_t)-1, 0);
+                lowered = fe_lower(expr, jl_main_module, "none", 1, (size_t)-1, 0);
+                val = jl_toplevel_eval(jl_main_module, jl_svecref(lowered, 0));
+                check("cross-runtime lower of @assert", val == jl_nothing);
             }
             JL_CATCH {
-                threw = 1;
-                jl_exception_clear();
+                jl_static_show(jl_stderr_stream(), jl_current_exception(jl_current_task));
+                jl_printf(jl_stderr_stream(), "\n");
+                check("cross-runtime lower of @assert", 0);
             }
-            check("cross-runtime lower macrocall rejected", threw);
             JL_GC_POP();
         }
     }

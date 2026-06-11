@@ -229,6 +229,11 @@ JL_DLLEXPORT size_t jl_string_size(jl_value_t *s) JL_NOTSAFEPOINT
     return jl_string_len(s);
 }
 
+JL_DLLEXPORT size_t jl_array_length(jl_value_t *a) JL_NOTSAFEPOINT
+{
+    return jl_array_nrows(a);
+}
+
 // Utility function to return whether `e` is any of the special AST types or
 // will always evaluate to itself exactly unchanged. This corresponds to
 // `isa_ast_node` in Core.Compiler utilities.
