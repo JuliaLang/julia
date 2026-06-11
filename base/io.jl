@@ -605,7 +605,7 @@ julia> rm("my_file.txt")
 ```
 
 !!! compat "Julia 1.11"
-       `copyuntil` was introduced in Julia 1.11.
+    `copyuntil` was introduced in Julia 1.11.
 """
 copyuntil(out::IO, filename::AbstractString, delim; kw...) = open(io->copyuntil(out, io, delim; kw...), convert(String, filename)::String)
 
