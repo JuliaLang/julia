@@ -623,13 +623,17 @@ void jl_get_genericmemory_layout(jl_datatype_t *st)
     if (jl_is_addrspacecore(addrspace) && jl_unbox_uint8(addrspace) == 0) {
         if (kind == (jl_value_t*)jl_not_atomic_sym || kind == (jl_value_t*)jl_atomic_sym) {
             jl_task_t *ct = jl_current_task;
-            jl_genericmemory_t *zeroinst = (jl_genericmemory_t*)jl_gc_permobj(ct->ptls, LLT_ALIGN(sizeof(jl_genericmemory_t), JL_SMALL_BYTE_ALIGNMENT) + (elsz ? elsz : isunion), st, 0);
+            jl_genericmemory_t *zeroinst = (jl_genericmemory_t*)jl_gc_permobj(ct->ptls, LLT_ALIGN(sizeof(jl_genericmemory_t), JL_SMALL_BYTE_ALIGNMENT) + sizeof(void*), st, 0);
             zeroinst->length = 0;
             // Point empty Memory at the inaccessible guard page so that any read or
             // write of element 0 faults; the signal handler turns this into a
-            // BoundsError. jl_genericmemory_how special-cases length==0.
+            // BoundsError. jl_genericmemory_how special-cases the guard pointer.
             assert(jl_empty_memory_guard_base != NULL);
             zeroinst->ptr = jl_empty_memory_guard_base;
+            // Since ptr is not the inline data, codegen's owner check
+            // (emit_genericmemoryowner) loads the word after the header as a
+            // potential owner; it must be NULL so the memory resolves as its own owner.
+            jl_genericmemory_data_owner_field(zeroinst) = NULL;
             assert(!st->instance);
             st->instance = (jl_value_t*)zeroinst;
         }

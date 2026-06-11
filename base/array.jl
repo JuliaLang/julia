@@ -1049,7 +1049,8 @@ function setindex!(A::Array{T}, x, i::Int) where {T}
 end
 function _setindex!(A::Array{T}, x::T, i::Int) where {T}
     @_noub_if_noinbounds_meta
-    memoryrefset!(memoryrefnew(A.ref, i, @_boundscheck), x, :not_atomic, false)
+    @boundscheck checkbounds(A, i)
+    memoryrefset!(memoryrefnew(A.ref, i, false), x, :not_atomic, false)
     return A
 end
 function setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T}

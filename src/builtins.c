@@ -1934,6 +1934,8 @@ JL_CALLABLE(jl_f_memoryrefget)
         if (order == jl_memory_order_notatomic)
             jl_atomic_error("memoryrefget: atomic memory cannot be accessed non-atomically");
     }
+    if (m.mem->length == 0)
+        jl_bounds_error_int((jl_value_t*)m.mem, 1);
     return jl_memoryrefget(m, kind == (jl_value_t*)jl_atomic_sym);
 }
 
@@ -1957,6 +1959,8 @@ JL_CALLABLE(jl_f_memoryrefset)
         if (order == jl_memory_order_notatomic)
             jl_atomic_error("memoryrefset!: atomic memory cannot be written non-atomically");
     }
+    if (m.mem->length == 0)
+        jl_bounds_error_int((jl_value_t*)m.mem, 1);
     jl_memoryrefset(m, args[1], kind == (jl_value_t*)jl_atomic_sym);
     return args[1];
 }
@@ -1981,6 +1985,8 @@ JL_CALLABLE(jl_f_memoryrefunset)
         if (order == jl_memory_order_notatomic)
             jl_atomic_error("memoryrefunset!: atomic memory cannot be written non-atomically");
     }
+    if (m.mem->length == 0)
+        jl_bounds_error_int((jl_value_t*)m.mem, 1);
     jl_memoryrefunset(m, kind == (jl_value_t*)jl_atomic_sym);
     return jl_nothing;
 }
@@ -2031,6 +2037,8 @@ JL_CALLABLE(jl_f_memoryrefswap)
         if (order == jl_memory_order_notatomic)
             jl_atomic_error("memoryrefswap!: atomic memory cannot be written non-atomically");
     }
+    if (m.mem->length == 0)
+        jl_bounds_error_int((jl_value_t*)m.mem, 1);
     return jl_memoryrefswap(m, args[1], kind == (jl_value_t*)jl_atomic_sym);
 }
 
@@ -2054,6 +2062,8 @@ JL_CALLABLE(jl_f_memoryrefmodify)
         if (order == jl_memory_order_notatomic)
             jl_atomic_error("memoryrefmodify!: atomic memory cannot be written non-atomically");
     }
+    if (m.mem->length == 0)
+        jl_bounds_error_int((jl_value_t*)m.mem, 1);
     return jl_memoryrefmodify(m, args[1], args[2], kind == (jl_value_t*)jl_atomic_sym);
 }
 
@@ -2086,6 +2096,8 @@ JL_CALLABLE(jl_f_memoryrefreplace)
         if (failure_order == jl_memory_order_notatomic)
             jl_atomic_error("memoryrefreplace!: atomic memory cannot be accessed non-atomically");
     }
+    if (m.mem->length == 0)
+        jl_bounds_error_int((jl_value_t*)m.mem, 1);
     return jl_memoryrefreplace(m, args[1], args[2], kind == (jl_value_t*)jl_atomic_sym);
 }
 
@@ -2118,6 +2130,8 @@ JL_CALLABLE(jl_f_memoryrefsetonce)
         if (failure_order == jl_memory_order_notatomic)
             jl_atomic_error("memoryrefsetonce!: atomic memory cannot be accessed non-atomically");
     }
+    if (m.mem->length == 0)
+        jl_bounds_error_int((jl_value_t*)m.mem, 1);
     return jl_memoryrefsetonce(m, args[1], kind == (jl_value_t*)jl_atomic_sym);
 }
 

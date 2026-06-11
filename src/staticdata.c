@@ -1490,6 +1490,13 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                             write_pointerfield(s, e);
                         }
                     }
+                    if (len == 0) {
+                        // the data pointer is repointed at the guard page on load, so
+                        // codegen's owner check (emit_genericmemoryowner) reads the word
+                        // after the header as a potential owner; write a NULL owner so
+                        // the memory resolves as its own owner.
+                        write_pointer(f);
+                    }
                 }
             }
         }
