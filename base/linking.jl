@@ -247,7 +247,7 @@ end
 ## Runtime library dependencies ##
 
 # Known components. Others are rejected, so a typo cannot drop libraries from a bundle.
-const COMPONENTS = (:codegen,)
+const COMPONENTS = (:codegen, :frontend)
 
 """
     Base.Linking.DEFAULT_COMPONENTS
@@ -331,6 +331,9 @@ function runtime_library_names(optional_components)
         # LLVM may come from the system or be linked statically
         append!(optional, Base.CODEGEN_LIBRARY_NAMES)
     end
+    if :frontend in optional_components
+        push!(required, "libjulia-frontend$debug")
+    end
     return required, optional
 end
 
@@ -341,8 +344,10 @@ Paths of the shared library files, including version symlinks, that this Julia i
 ships and a program embedding the runtime needs. A bundle should keep each at the same path
 relative to `Sys.BINDIR`.
 
-The only optional component is `:codegen` (`libjulia-codegen` and LLVM), which a program that
-never compiles code at run time, such as one built with `--trim`, can leave out.
+The optional components are `:codegen` (`libjulia-codegen` and LLVM), which a program that
+never compiles code at run time, such as one built with `--trim`, can leave out, and
+`:frontend` (`libjulia-frontend`, the flisp-based parser and lowering), which a program that
+never parses or lowers code at run time can leave out.
 
 Only files in this installation are returned, and libraries of standard libraries are not
 included; see [`library_files`](@ref) for those. Throws if the installation lacks a library
