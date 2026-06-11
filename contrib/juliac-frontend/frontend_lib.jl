@@ -88,4 +88,62 @@ let
             GC.@preserve s f(Base.unsafe_convert(Cstring, s))
         end
     end
+
+    # Parse and lower the whole `base/` source corpus through the C-ABI
+    # entry points. This is what makes a full julia bootstrap through the
+    # standalone library possible: it compiles essentially every
+    # JuliaSyntax/JuliaLowering code path that lowering base exercises into
+    # the image (anything missed runs in the interpreter, where `ccall`
+    # fails).
+    juliahome = abspath(joinpath(@__DIR__, "..", ".."))
+    corpus_dirs = [joinpath(juliahome, "base"), joinpath(juliahome, "Compiler", "src")]
+    function warm_lower(ex, fname)
+        if ex isa Expr && (ex.head === :toplevel || ex.head === :block)
+            for a in ex.args
+                warm_lower(a, fname)
+            end
+            return
+        elseif ex isa Expr && ex.head === :module && length(ex.args) >= 3
+            body = ex.args[3]
+            body isa Expr && warm_lower(body, fname)
+            return
+        end
+        try
+            GC.@preserve fname begin
+                JuliaFrontend._c_frontend_lower(ex, Main, pointer(fname), Cint(1),
+                                                Csize_t(typemax(Csize_t)), Cint(0))
+            end
+        catch
+        end
+    end
+    nfiles = 0
+    for basedir in corpus_dirs
+        isdir(basedir) || continue
+        for (root, _, files) in walkdir(basedir)
+            for fn in files
+                endswith(fn, ".jl") || continue
+                path = joinpath(root, fn)
+                code = try
+                    read(path, String)
+                catch
+                    continue
+                end
+                parsed = try
+                    GC.@preserve code begin
+                        JuliaFrontend._c_frontend_parse(
+                            pointer(code), Csize_t(sizeof(code)), path,
+                            Csize_t(1), Csize_t(0), :all)
+                    end
+                catch
+                    continue
+                end
+                warm_lower(parsed[1], path)
+                nfiles += 1
+                if nfiles % 50 == 0
+                    Core.println("frontend warmup: ", nfiles, " files")
+                end
+            end
+        end
+        Core.println("frontend warmup: lowered ", nfiles, " base files")
+    end
 end

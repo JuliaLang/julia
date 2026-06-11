@@ -37,20 +37,52 @@ function frontend_parse(text::Ptr{UInt8}, text_len::Int, filename, lineno::Int,
     end
     code = Core.svec(text, text_len)
     # n.b. the C frontend interface has no syntax version parameter; parse
-    # with the hook's default version, like the in-process default parser.
-    r = JuliaSyntax.core_parser_hook(code, filename, lineno, offset, options)
+    # with this frontend's own current syntax version, like flisp does
+    # (the hook's default is an older version for Expr compatibility).
+    r = JuliaSyntax.core_parser_hook(code, filename, lineno, offset, options;
+                                     syntax_version = VERSION)
+    ex = r[1]
+    # Strip per-module syntax version markers: the C frontend ABI has no
+    # syntax version parameter, so they could never round-trip (and the
+    # VersionNumber could not cross the runtime boundary during bootstrap,
+    # before the host has Base). flisp emits unversioned modules.
+    ex isa Expr && _strip_module_versions!(ex)
     return _legacy_error_form(r)
 end
 
 # Rich ParseError objects cannot cross the runtime boundary when this
 # library runs as a standalone second runtime; rewrite error/incomplete
 # results to the legacy string form, which all consumers understand.
+function _strip_module_versions!(ex::Expr)
+    if ex.head === :module && length(ex.args) >= 1 && ex.args[1] isa VersionNumber
+        popfirst!(ex.args)
+    end
+    for a in ex.args
+        a isa Expr && _strip_module_versions!(a)
+    end
+    return ex
+end
+
 function _legacy_error_form(r)
     ex = r[1]
+    if ex isa Expr && ex.head === :toplevel
+        # in :all mode a parse error appears as a nested error node
+        for (i, a) in enumerate(ex.args)
+            if a isa Expr && (a.head === :error || a.head === :incomplete)
+                ex.args[i] = _legacy_error_node(a)
+            end
+        end
+        return r
+    end
     (ex isa Expr && (ex.head === :error || ex.head === :incomplete)) || return r
-    length(ex.args) == 1 || return r
+    ex2 = _legacy_error_node(ex)
+    return ex2 === ex ? r : Core.svec(ex2, r[2])
+end
+
+function _legacy_error_node(ex::Expr)
+    length(ex.args) == 1 || return ex
     arg = ex.args[1]
-    arg isa Union{String,Expr,Symbol} && return r
+    arg isa Union{String,Expr,Symbol} && return ex
     msg = try
         arg isa Meta.ParseError ? arg.msg : sprint(showerror, arg)
     catch
@@ -67,7 +99,7 @@ function _legacy_error_form(r)
             tag === :char    ? "incomplete: invalid character literal" :
                                "incomplete: premature end of input"
     end
-    return Core.svec(Expr(ex.head, msg), r[2])
+    return Expr(ex.head, msg)
 end
 
 # ------------------------------------------------------------------------
