@@ -6811,6 +6811,17 @@ throwconditional(c, x) = c ? throw(x isa Int) : throw(x isa Float64)
     throwconditional(c, x)
 end == Bool
 
+# issue #61177: effects of a recursive `@inline` function must not degrade when
+# inference runs again over its cached, source-discarded CodeInstance
+f61177(@nospecialize x) = x isa Int ? @inline(f61177(x + 1)) + x : 0
+let eff = Base.infer_effects(f61177)
+    @test Compiler.is_consistent(eff)
+    @test Compiler.is_effect_free(eff)
+    @test Compiler.is_nothrow(eff)
+    @test !Compiler.is_terminates(eff)
+    @test eff == Base.infer_effects(f61177)
+end
+
 # issue #60715
 let
     f() = 1; f(_, x...) = (0, f(x...))
