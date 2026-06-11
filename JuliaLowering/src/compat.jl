@@ -579,11 +579,19 @@ function est_to_dst(st::SyntaxTree)
         [K"core" x] -> setattr!(mkleaf(st), :name_val, x.name_val)
         [K"top" x] -> setattr!(mkleaf(st), :name_val, x.name_val)
         [K"static_parameter" x] -> setattr!(mkleaf(st), :var_id, x.value::IdTag)
-        [K"copyast" [K"inert" ex]] -> @ast g st [K"call"
-            interpolate_ast::K"Value"
-            Expr::K"Value"
-            [K"inert"(st[1]) ex]
-        ]
+        [K"copyast" [K"inert" ex]] -> if _core_has_lowering_support
+            @ast g st [K"call"
+                "interpolate_ast"::K"core"
+                "Expr"::K"core"
+                [K"inert"(st[1]) ex]
+            ]
+        else
+            @ast g st [K"call"
+                interpolate_ast::K"Value"
+                Expr::K"Value"
+                [K"inert"(st[1]) ex]
+            ]
+        end
         [K"symbolicgoto" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
         [K"oldsymbolicgoto" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
         [K"symboliclabel" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)

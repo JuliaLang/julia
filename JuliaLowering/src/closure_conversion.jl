@@ -275,19 +275,47 @@ end
 
 # Return a thunk which creates a new type for a closure with `field_syms` named
 # fields. The new type will be named `name_str` which must be an unassigned
-# name in the module.
+# name in the module. The type creation is a call to the runtime support
+# function `Core.eval_closure_type` (referenced by name, so that the lowered
+# code is self-contained and can be evaluated by a runtime which does not
+# have JuliaLowering itself loaded); the TypeVars for the unboxed fields are
+# known statically and created inline. On older runtimes without the Core
+# support function, the equivalent helper from this package is embedded as a
+# value instead.
 function type_for_closure(ctx::ClosureConversionCtx, srcref, name_str, field_syms, field_is_box)
     # New closure types always belong to the module we're expanding into - they
     # need to be serialized there during precompile.
     mod = ctx.mod
     type_binding = new_global_binding(ctx, srcref, name_str, mod)
-    type_ex = @ast ctx srcref [K"call"
-        #"_call_latest"::K"core"
-        eval_closure_type::K"Value"
-        ctx.mod::K"Value"
-        name_str::K"Symbol"
-        [K"call" "svec"::K"core" field_syms...]
-        [K"call" "svec"::K"core" [f::K"Bool" for f in field_is_box]...]
+    stmts = SyntaxList(ctx)
+    typevars = SyntaxList(ctx)
+    field_types = SyntaxList(ctx)
+    for (fs, isbox) in zip(field_syms, field_is_box)
+        if isbox
+            push!(field_types, @ast ctx srcref "Box"::K"core")
+        else
+            tv = ssavar(ctx, srcref, "closure_typevar")
+            push!(stmts, @ast ctx srcref [K"="
+                tv
+                [K"call" "TypeVar"::K"core" string(fs.name_val, "_type")::K"Symbol"]
+            ])
+            push!(typevars, tv)
+            push!(field_types, tv)
+        end
+    end
+    helper = _core_has_lowering_support ?
+        (@ast ctx srcref "eval_closure_type"::K"core") :
+        (@ast ctx srcref eval_closure_type::K"Value")
+    type_ex = @ast ctx srcref [K"block"
+        stmts...
+        [K"call"
+            helper
+            ctx.mod::K"Value"
+            name_str::K"Symbol"
+            [K"call" "tuple"::K"core" field_syms...]
+            [K"call" "tuple"::K"core" field_types...]
+            [K"call" "tuple"::K"core" typevars...]
+        ]
     ]
     type_ex, type_binding
 end
@@ -597,11 +625,14 @@ function closure_convert_lambda(ctx, ex)
 
     lam = setattr!(mknode(ex, lambda_children), :lambda_bindings, lambda_bindings)
     if !isnothing(interpolations) && !isempty(interpolations)
+        helper = _core_has_lowering_support ?
+            (@ast ctx ex "replace_captured_locals!"::K"core") :
+            (@ast ctx ex replace_captured_locals!::K"Value")
         @ast ctx ex [K"call"
-            replace_captured_locals!::K"Value"
+            helper
             lam
             [K"call"
-                "svec"::K"core"
+                "tuple"::K"core"
                 interpolations...
             ]
         ]

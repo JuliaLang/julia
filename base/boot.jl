@@ -1148,6 +1148,47 @@ _lower = nothing
 _setparser!(parser) = setglobal!(Core, :_parse, parser)
 _setlowerer!(lowerer) = setglobal!(Core, :_lower, lowerer)
 
+# Runtime support functions for lowered code produced by JuliaLowering.
+# These live in Core so that such lowered code is self-contained: it can be
+# evaluated by any runtime, including one whose frontend library carries its
+# own copy of the lowering implementation (the lowered code references these
+# as `(core eval_closure_type)` etc. rather than embedding function values).
+function eval_closure_type(mod::Module, name::Symbol, field_names::Tuple,
+                           field_types::Tuple, type_params::Tuple)
+    ty = _structtype(mod, name, svec(type_params...), svec(field_names...),
+                     svec(), false, nfields(field_names))
+    _setsuper!(ty, Function)
+    declare_const(mod, name, ty)
+    _typebody!(false, ty, svec(field_types...))
+    return ty
+end
+
+# Replace the `Expr(:captured_local, i)` placeholders in the CodeInfo of a
+# global method which captures toplevel locals with the captured values.
+function replace_captured_locals!(ci::CodeInfo, locals::Tuple)
+    code = getfield(ci, :code)
+    n = getfield(getfield(code, :size), 1)
+    i = 1
+    while Intrinsics.sle_int(i, n)
+        ref = memoryrefnew(getfield(code, :ref), i, false)
+        stmt = memoryrefget(ref, :not_atomic, false)
+        if isa(stmt, Expr)
+            if getfield(stmt, :head) === :captured_local
+                args = getfield(stmt, :args)
+                idxref = memoryrefnew(getfield(args, :ref), 1, false)
+                idx = memoryrefget(idxref, :not_atomic, false)::Int
+                memoryrefset!(ref, getfield(locals, idx), :not_atomic, false)
+            end
+        end
+        i = Intrinsics.add_int(i, 1)
+    end
+    return ci
+end
+
+# The current exception in a catch block; lowered code references this as
+# `(core current_exception)` when binding a catch variable.
+current_exception() = ccall(:jl_current_exception, Any, (Any,), ccall(:jl_get_current_task, Ref{Task}, ()))
+
 # support for deprecated uses of builtin functions
 _apply(x...) = _apply_iterate(Main.Base.iterate, x...)
 const _apply_pure = _apply

@@ -67,24 +67,25 @@ end
 let f() = body
 end
 #---------------------
-1   (call core.svec)
-2   (call core.svec)
-3   (call JuliaLowering.eval_closure_type TestMod :#f##0 %₁ %₂)
-4   latestworld
-5   TestMod.#f##0
-6   (new %₅)
-7   (= slot₁/f %₆)
-8   TestMod.#f##0
-9   (call core.svec %₈)
-10  (call core.svec)
-11  SourceLocation::1:5
-12  (call core.svec %₉ %₁₀ %₁₁)
-13  --- method core.nothing %₁₂
+1   (call core.tuple)
+2   (call core.tuple)
+3   (call core.tuple)
+4   (call core.eval_closure_type TestMod :#f##0 %₁ %₂ %₃)
+5   latestworld
+6   TestMod.#f##0
+7   (new %₆)
+8   (= slot₁/f %₇)
+9   TestMod.#f##0
+10  (call core.svec %₉)
+11  (call core.svec)
+12  SourceLocation::1:5
+13  (call core.svec %₁₀ %₁₁ %₁₂)
+14  --- method core.nothing %₁₃
     slots: [slot₁/#self#(!read)]
     1   TestMod.body
     2   (return %₁)
-14  latestworld
-15  (return core.nothing)
+15  latestworld
+16  (return core.nothing)
 
 ########################################
 # Error: Invalid `let` var with K"::"
@@ -418,8 +419,8 @@ end
     2   (captured_local 1)
     3   (call core.setfield! %₂ :contents %₁)
     4   (return %₁)
-15  (call core.svec slot₁/x)
-16  (call JuliaLowering.replace_captured_locals! %₁₄ %₁₅)
+15  (call core.tuple slot₁/x)
+16  (call core.replace_captured_locals! %₁₄ %₁₅)
 17  --- method TestMod.f %₁₃ %₁₆
 18  latestworld
 19  (call core.declare_global TestMod :g false)
@@ -442,8 +443,8 @@ end
     6   slot₂/x
     7   (call core.getfield %₁ :contents)
     8   (return %₇)
-30  (call core.svec slot₁/x)
-31  (call JuliaLowering.replace_captured_locals! %₂₉ %₃₀)
+30  (call core.tuple slot₁/x)
+31  (call core.replace_captured_locals! %₂₉ %₃₀)
 32  --- method TestMod.g %₂₈ %₃₁
 33  latestworld
 34  TestMod.g
@@ -482,8 +483,8 @@ end
     10  (captured_local 1)
     11  (call core.setfield! %₁₀ :contents %₉)
     12  (return %₉)
-15  (call core.svec slot₁/x)
-16  (call JuliaLowering.replace_captured_locals! %₁₄ %₁₅)
+15  (call core.tuple slot₁/x)
+16  (call core.replace_captured_locals! %₁₄ %₁₅)
 17  --- method TestMod.f %₁₃ %₁₆
 18  latestworld
 19  TestMod.f

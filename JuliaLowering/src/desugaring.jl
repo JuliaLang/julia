@@ -2113,12 +2113,15 @@ function expand_try(ctx, ex)
         if !is_identifier_like(exc_var)
             throw(LoweringError(exc_var, "Expected an identifier as exception variable"))
         end
+        cur_exc = _core_has_lowering_support ?
+            @ast(ctx, ex, "current_exception"::K"core") :
+            @ast(ctx, ex, current_exception::K"Value")
         try_block = @ast ctx ex [K"trycatchelse"
             try_body
             [K"scope_block"(catch_, scope_type=:neutral)
                 if kind(exc_var) != K"Placeholder"
                     [K"block"
-                        [K"="(exc_var) exc_var [K"call" current_exception::K"Value"]]
+                        [K"="(exc_var) exc_var [K"call" cur_exc]]
                         catch_block
                     ]
                 else
@@ -2957,11 +2960,11 @@ function expand_macro_def(ctx, ex)
                 [K"::"
                     # TODO: should we be adopting the scope of the K"macro" expression itself?
                     adopt_scope(@ast(ctx, sig, "__source__"::K"Identifier"), scope_ref)
-                    LineNumberNode::K"Value"
+                    "LineNumberNode"::K"core"
                 ]
                 [K"::"
                     adopt_scope(@ast(ctx, sig, "__module__"::K"Identifier"), scope_ref)
-                    Module::K"Value"
+                    "Module"::K"core"
                 ]
                 mapsyntax(e->apply_arg_meta(e, :nospecialize), args)...
             ]
