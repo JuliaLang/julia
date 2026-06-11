@@ -424,10 +424,19 @@ end
 # closure types as a more local alternative to current-julia-module-counter.
 # However, we should ideally defer it to eval-time to make lowering itself
 # completely non-mutating.
+# Salt mixed into reserved binding names. The cross-runtime frontend sets
+# this to a host-unique token (derived from the host world counter at
+# initialization): bindings are reserved against shadow modules there, which
+# start empty in each process, so the existing-binding scan alone cannot see
+# names reserved by previous runtime sessions whose results were serialized
+# (e.g. earlier julia bootstrap stages).
+const _module_binding_salt = Base.RefValue{String}("")
+
 function reserve_module_binding_i(mod, basename)
+    base = string(basename, _module_binding_salt[])
     i = 0
     while true
-        name = "$basename$i"
+        name = "$base$i"
         if reserve_module_binding(mod, Symbol(name))
             return name
         end

@@ -4083,13 +4083,22 @@ function expand_import_or_using(ctx, ex)
         push!(path_specs, @ast ctx spec path::K"Value")
     end
     is_using = kind(ex) == K"using"
+    # When the runtime provides them (matching what flisp emits), reference
+    # the import/using runtime support functions by name so that the lowered
+    # code is self-contained
+    imp_f = _Base_has_eval_import ?
+        @ast(ctx, ex, "_eval_import"::K"top") :
+        @ast(ctx, ex, eval_import::K"Value")
+    use_f = _Base_has_eval_import ?
+        @ast(ctx, ex, "_eval_using"::K"top") :
+        @ast(ctx, ex, eval_using::K"Value")
     stmts = SyntaxList(ctx)
     if isnothing(from_path)
         for spec in path_specs
             if is_using
                 push!(stmts,
                     @ast ctx spec [K"call"
-                        eval_using   ::K"Value"
+                        use_f
                         ctx.mod      ::K"Value"
                         spec
                     ]
@@ -4097,7 +4106,7 @@ function expand_import_or_using(ctx, ex)
             else
                 push!(stmts,
                     @ast ctx spec [K"call"
-                        eval_import   ::K"Value"
+                        imp_f
                         (!is_using)   ::K"Bool"
                         ctx.mod       ::K"Value"
                         (::K"nothing")
@@ -4111,7 +4120,7 @@ function expand_import_or_using(ctx, ex)
         end
     else
         push!(stmts, @ast ctx ex [K"call"
-            eval_import   ::K"Value"
+            imp_f
             (!is_using)   ::K"Bool"
             ctx.mod       ::K"Value"
             from_path
@@ -4133,11 +4142,15 @@ function expand_public(ctx, ex)
         @jl_assert kind(e) == K"Identifier" (ex, "Expected identifier")
         push!(identifiers, e.name_val)
     end
+    # `export`/`public` is evaluated by the runtime's toplevel machinery;
+    # round-trip through Core.eval with the legacy Expr form so the lowered
+    # code contains no lowering-runtime objects
+    legacy = QuoteNode(Expr(kind(ex) == K"export" ? :export : :public,
+                            map(Symbol, identifiers)...))
     @ast ctx ex [K"call"
-        eval_public::K"Value"
+        "eval"::K"core"
         ctx.mod::K"Value"
-        (kind(ex) == K"export")::K"Bool"
-        identifiers::K"Value"
+        legacy::K"Value"
     ]
 end
 
@@ -4394,20 +4407,34 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"toplevel"
         # The toplevel form can't be lowered here - it needs to just be quoted
         # and passed through to a call to eval.
-        ex2 = @ast ctx ex [K"block"
-            [K"assert" "toplevel_only"::K"Symbol" [K"inert_syntaxtree" ex]]
-            [K"call"
-                eval                  ::K"Value"
-                ctx.mod               ::K"Value"
-                [K"inert_syntaxtree" ex]
-                [K"parameters"
-                    [K"kw"
-                        "expr_compat_mode"::K"Identifier"
-                        ctx.expr_compat_mode::K"Bool"
+        ex2 = if ctx.expr_compat_mode
+            # in compat mode the output may not reference JuliaLowering's own
+            # runtime objects; Core.eval of the legacy Expr form has the
+            # right semantics since the runtime's installed lowerer applies
+            @ast ctx ex [K"block"
+                [K"assert" "toplevel_only"::K"Symbol" [K"inert_syntaxtree" ex]]
+                [K"call"
+                    "eval"::K"core"
+                    ctx.mod::K"Value"
+                    [K"inert" ex]
+                ]
+            ]
+        else
+            @ast ctx ex [K"block"
+                [K"assert" "toplevel_only"::K"Symbol" [K"inert_syntaxtree" ex]]
+                [K"call"
+                    eval                  ::K"Value"
+                    ctx.mod               ::K"Value"
+                    [K"inert_syntaxtree" ex]
+                    [K"parameters"
+                        [K"kw"
+                            "expr_compat_mode"::K"Identifier"
+                            ctx.expr_compat_mode::K"Bool"
+                        ]
                     ]
                 ]
             ]
-        ]
+        end
         expand_forms_2(ctx, ex2)
     elseif k == K"vect"
         check_no_parameters(ex, "unexpected semicolon in array expression")

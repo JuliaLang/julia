@@ -238,22 +238,33 @@ function Base.Experimental.var"@opaque"(__context__::MacroContext, ex)
 end
 
 function _at_eval_code(ctx, srcref, mod, ex)
+    evalcall = if ctx.expr_compat_mode
+        # In Expr compatibility mode the lowered output must be free of
+        # JuliaLowering's own runtime objects; Core.eval has the right
+        # semantics there since the runtime's installed lowerer applies.
+        @ast ctx srcref [K"call"
+            [K"core" "eval"::K"Identifier"]
+            mod
+            [K"quote" ex]
+        ]
+    else
+        @ast ctx srcref [K"call"
+            JuliaLowering.eval::K"Value"
+            [K"parameters"
+                [K"kw"
+                    "expr_compat_mode"::K"Identifier"
+                    ctx.expr_compat_mode::K"Bool"
+                ]
+            ]
+            mod
+            [K"quote" ex]
+        ]
+    end
     @ast ctx srcref [K"block"
         [K"local"
             [K"="
                 "eval_result"::K"Identifier"
-                [K"call"
-                    # TODO: Call "eval"::K"core" here
-                    JuliaLowering.eval::K"Value"
-                    [K"parameters"
-                        [K"kw"
-                            "expr_compat_mode"::K"Identifier"
-                            ctx.expr_compat_mode::K"Bool"
-                        ]
-                    ]
-                    mod
-                    [K"quote" ex]
-                ]
+                evalcall
             ]
         ]
         [K"unknown_head"(name_val="latestworld-if-toplevel")]
