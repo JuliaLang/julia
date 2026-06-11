@@ -13,6 +13,9 @@ println(xs...) = print(stdout, xs..., "\n")  # fewer allocations than `println(s
 println(io::IO) = print(io, "\n")
 
 function show end
+# four kind methods (TypeEgal, TypeEq, TypeofBottom, AnyType) match a
+# `show(::IO, ::Type)` callsite; the default limit of 3 would devirtualize it
+typeof(show).name.max_methods = UInt8(4)
 function repr end
 
 struct DevNull <: IO
