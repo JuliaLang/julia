@@ -642,12 +642,12 @@ julia> nextpow(4, 16)
 16
 ```
 """
-function nextpow(a::Real, x::Real)
+function nextpow(a::T, x::Real) where T <: Real
     x <= 0 && throw(DomainError(x, "`x` must be positive."))
     # Special case fast path for x::Integer, a == 2.
     # This is a very common case. Constant prop will make sure that a call site
     # specified as `nextpow(2, x)` will get this special case inlined.
-    a == 2 && isa(x, Integer) && return _nextpow2(x)
+    a == 2 && isa(x, Integer) && return T(_nextpow2(x))
     a <= 1 && throw(DomainError(a, "`a` must be greater than 1."))
     x <= 1 && return one(a)
     n = ceil(Integer,log(a, x))
@@ -690,7 +690,7 @@ julia> prevpow(4, 16)
 function prevpow(a::T, x::Real) where T <: Real
     x < 1 && throw(DomainError(x, "`x` must be ≥ 1."))
     # See comment in nextpos() for a == special case.
-    a == 2 && isa(x, Integer) && return _prevpow2(x)
+    a == 2 && isa(x, Integer) && return T(_prevpow2(x))
     a <= 1 && throw(DomainError(a, "`a` must be greater than 1."))
     n = floor(Integer,log(a, x))
     # round-off error of log can go either direction, so need some checks
