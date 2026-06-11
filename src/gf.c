@@ -516,10 +516,11 @@ jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, uint8_
         JL_GC_POP();
     }
 
-    JL_GC_POP();
     // may rethrow a deferred InterruptException, now that the compiler state
-    // is consistent again
+    // is consistent again; keep `ci` rooted across the safepoint
+    fargs[0] = (jl_value_t*)ci;
     JL_SIGATOMIC_END();
+    JL_GC_POP();
 #endif
 
     return ci;
