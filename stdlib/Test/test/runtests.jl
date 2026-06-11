@@ -1430,6 +1430,11 @@ erronce() = @error "an error" maxlog=1
     @test fails[3] isa Test.LogTestFailure
     @test fails[4] isa Test.Error
     @test startswith(fails[4].value, "ErrorException")
+    # The failure message pinpoints the first mismatch (#29449)
+    @test occursin("field `level`", fails[1].reason)
+    @test occursin("expected Warn, got Info", fails[1].reason)
+    @test occursin("did not match any captured log record", fails[2].reason)
+    @test occursin("expected 1 log record(s), but 0 were captured", fails[3].reason)
 end
 
 @testset "@test_logs broken/skip keywords" begin
