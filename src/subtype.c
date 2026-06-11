@@ -5605,13 +5605,44 @@ JL_DLLEXPORT jl_value_t *jl_type_intersection(jl_value_t *a, jl_value_t *b)
     return jl_type_intersection_env(a, b, NULL);
 }
 
-JL_DLLEXPORT jl_svec_t *jl_type_intersection_with_env(jl_value_t *a, jl_value_t *b)
+JL_DLLEXPORT jl_svec_t *jl_type_intersection_with_env_markers(jl_value_t *a, jl_value_t *b)
 {
     jl_svec_t *env = jl_emptysvec;
     jl_value_t *ti = NULL;
     JL_GC_PUSH2(&env, &ti);
     ti = jl_type_intersection_env(a, b, &env);
     jl_svec_t *pair = jl_svec2(ti, env);
+    JL_GC_POP();
+    return pair;
+}
+
+// Compat boundary for external reflection (e.g. JuliaInterpreter), which
+// predates the `svec(inner, constrained)` env uncertainty markers: strip them,
+// substituting a pinned (lb == ub) tvar by its `==`-pinned value. In-tree
+// consumers use `jl_type_intersection_with_env_markers` to keep the markers.
+JL_DLLEXPORT jl_svec_t *jl_type_intersection_with_env(jl_value_t *a, jl_value_t *b)
+{
+    jl_svec_t *pair = jl_type_intersection_with_env_markers(a, b);
+    jl_svec_t *stripped = NULL;
+    JL_GC_PUSH2(&pair, &stripped);
+    jl_svec_t *env = (jl_svec_t*)jl_svecref(pair, 1);
+    size_t i, n = jl_svec_len(env);
+    for (i = 0; i < n; i++) {
+        jl_value_t *v = jl_svecref(env, i);
+        if (jl_is_svec(v) && jl_svec_len(v) == 2) {
+            jl_value_t *second = jl_svecref(v, 1);
+            if (second != jl_true && second != jl_false)
+                continue;
+            jl_value_t *inner = jl_svecref(v, 0);
+            if (jl_is_typevar(inner) && ((jl_tvar_t*)inner)->lb == ((jl_tvar_t*)inner)->ub)
+                inner = ((jl_tvar_t*)inner)->lb;
+            if (!stripped)
+                stripped = jl_svec_copy(env);
+            jl_svecset(stripped, i, inner);
+        }
+    }
+    if (stripped)
+        jl_svecset(pair, 1, stripped);
     JL_GC_POP();
     return pair;
 }
