@@ -683,7 +683,7 @@ julia> rm("my_file.txt")
 ```
 
 !!! compat "Julia 1.11"
-       `copyline` was introduced in Julia 1.11.
+    `copyline` was introduced in Julia 1.11.
 """
 copyline(out::IO, filename::AbstractString; keep::Bool=false) =
     open(io -> copyline(out, io; keep), filename)
