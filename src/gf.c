@@ -1179,28 +1179,22 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
                               int intersections, size_t world, int cache_result_recursion,
                               size_t *min_valid, size_t *max_valid, int *ambig);
 
-// Key a closed type-valued slot on egality (`TypeEgal{A}`) -- unless the method
+// Widen an egality-keyed slot `TypeEgal{A}` to `Type{A}` when the method
 // declares the slot as a *concrete* `Type{X}`: there a single `Type{A}`-keyed
 // specialization soundly covers all `==`-equal argument values, since no static
-// parameter can distinguish them (#61323). Normalize both runtime (`TypeEgal{A}`)
-// and by-type (`Type{A}`, e.g. from `precompile`) signatures to the one form.
-static jl_value_t *egal_normalize_slot(jl_tupletype_t *tt, size_t i, jl_value_t *elt,
-                                       jl_value_t *decl_i, jl_svec_t **newparams JL_REQUIRE_ROOTED_SLOT)
+// parameter can distinguish them (#61323). The reverse (narrowing a `Type{A}`
+// slot of a by-type signature to `TypeEgal{A}`) is not legal here; by-type
+// requests that mean the runtime calls narrow at their entry point instead
+// (see `jl_get_compile_hint_specialization`).
+static void egal_normalize_slot(jl_tupletype_t *tt, size_t i, jl_value_t *decl_i,
+                                jl_svec_t **newparams JL_REQUIRE_ROOTED_SLOT)
 {
-    if (!jl_is_vararg(jl_tparam(tt, i)) && !jl_has_free_typevars(elt)) {
-        int decl_concrete = jl_is_typeeq(decl_i) && !jl_has_free_typevars(decl_i);
-        if (jl_is_typeeq(elt) && !decl_concrete) {
-            if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
-            elt = jl_wrap_TypeEgal(jl_typeeq_T(elt));
-            jl_svecset(*newparams, i, elt);
-        }
-        else if (jl_is_typeegal(elt) && decl_concrete) {
-            if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
-            elt = (jl_value_t*)jl_wrap_Type(jl_some_Type_T(elt));
-            jl_svecset(*newparams, i, elt);
-        }
+    jl_value_t *elt = jl_tparam(tt, i);
+    if (jl_is_typeegal(elt) && !jl_has_free_typevars(elt) &&
+        jl_is_typeeq(decl_i) && !jl_has_free_typevars(decl_i)) {
+        if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
+        jl_svecset(*newparams, i, jl_wrap_Type(jl_some_Type_T(elt)));
     }
-    return elt;
 }
 
 // get the compilation signature specialization for this method
@@ -1262,14 +1256,18 @@ static void jl_compilation_sig(
     JL_GC_PUSH1(&type_i);
     for (i = 0; i < np; i++) {
         jl_value_t *elt = jl_tparam(tt, i);
-        if (jl_is_vararg(elt))
-            elt = jl_unwrap_vararg(elt);
         jl_value_t *decl_i = jl_nth_slot_type(decl, i);
         type_i = jl_rewrap_unionall(decl_i, decl);
         size_t i_arg = (i < nargs - 1 ? i : nargs - 1);
 
-        elt = egal_normalize_slot(tt, i, elt, decl_i, newparams);
-        JL_GC_PROMISE_ROOTED(elt); // via `tt` or `*newparams`
+        if (jl_is_vararg(elt)) {
+            elt = jl_unwrap_vararg(elt);
+        }
+        else {
+            egal_normalize_slot(tt, i, decl_i, newparams);
+            if (*newparams)
+                elt = jl_svecref(*newparams, i);
+        }
 
         if (jl_is_kind(type_i)) {
             // if we can prove the match was against the kind (not a Type)
@@ -1538,8 +1536,10 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
             }
         }
 
-        // the non-canonical wrapper spelling is not a possible output of
-        // `egal_normalize_slot` in jl_compilation_sig
+        // a closed type-valued dispatch slot is spelled by egality (`TypeEgal{A}`),
+        // or by equality (`Type{A}`) iff the method declares the slot as concrete
+        // `Type{X}` (see `egal_normalize_slot`); the other spellings are not
+        // compileable (an `==`-keyed slot admits non-egal argument values)
         if (!jl_is_vararg(jl_tparam(type, i)) && !jl_has_free_typevars(elt)) {
             int decl_concrete = jl_is_typeeq(decl_i) && !jl_has_free_typevars(decl_i);
             if ((jl_is_typeeq(elt) && !decl_concrete) || (jl_is_typeegal(elt) && decl_concrete)) {
@@ -4196,6 +4196,51 @@ jl_value_t *jl_get_specialization1(jl_tupletype_t *types, size_t world)
     return mi;
 }
 
+// A compile request like `precompile(f, (Type{A},))` means the runtime calls it
+// denotes, and a closed type-valued argument keys runtime dispatch by egality:
+// narrow such slots to the dispatch spelling `TypeEgal{A}` (#61323). `Type{Union{}}`
+// stays: the bottom object is the unique instance of its `Type`.
+static jl_tupletype_t *egal_normalize_hint_types(jl_tupletype_t *types JL_PROPAGATES_ROOT)
+{
+    jl_svec_t *newparams = NULL;
+    JL_GC_PUSH1(&newparams);
+    size_t i, np = jl_nparams(types);
+    for (i = 0; i < np; i++) {
+        jl_value_t *elt = jl_tparam(types, i);
+        if (!jl_is_vararg(elt) && jl_is_typeeq(elt) && !jl_has_free_typevars(elt) &&
+            jl_typeeq_T(elt) != jl_bottom_type) {
+            if (!newparams)
+                newparams = jl_svec_copy(types->parameters);
+            jl_svecset(newparams, i, jl_wrap_TypeEgal(jl_typeeq_T(elt)));
+        }
+    }
+    if (newparams)
+        types = (jl_tupletype_t*)jl_apply_tuple_type(newparams, 1);
+    JL_GC_POP();
+    return types;
+}
+
+// The canonical per-method spelling of a by-type request: apply the
+// egality-slot widening of `jl_compilation_sig` (egality-keyed slots that the
+// method declares as concrete `Type{X}` are keyed by equality instead).
+// The caller must root the result.
+static jl_tupletype_t *egal_canonical_sig(jl_tupletype_t *types JL_PROPAGATES_ROOT, jl_method_t *m)
+{
+    jl_svec_t *newparams = NULL;
+    JL_GC_PUSH1(&newparams);
+    size_t i, np = jl_nparams(types);
+    for (i = 0; i < np; i++) {
+        if (jl_is_vararg(jl_tparam(types, i)))
+            continue;
+        jl_value_t *decl_i = jl_nth_slot_type(m->sig, i);
+        egal_normalize_slot(types, i, decl_i, &newparams);
+    }
+    if (newparams)
+        types = (jl_tupletype_t*)jl_apply_tuple_type(newparams, 1);
+    JL_GC_POP();
+    return types;
+}
+
 // Try to get a MethodInstance for a precompile() call. This uses a special kind of lookup that
 // tries to find a method for which the requested signature is compileable.
 JL_DLLEXPORT jl_value_t *jl_get_compile_hint_specialization(jl_tupletype_t *types JL_PROPAGATES_ROOT, size_t world)
@@ -4208,21 +4253,28 @@ JL_DLLEXPORT jl_value_t *jl_get_compile_hint_specialization(jl_tupletype_t *type
     size_t min_valid2 = 1;
     size_t max_valid2 = ~(size_t)0;
     int ambig = 0;
-    jl_value_t *matches = jl_matching_methods(types, jl_nothing, -1, 0, world, &min_valid2, &max_valid2, &ambig);
+    jl_value_t *matches = NULL;
+    jl_tupletype_t *normtypes = NULL;
+    JL_GC_PUSH3(&types, &matches, &normtypes);
+    types = egal_normalize_hint_types(types);
+    matches = jl_matching_methods(types, jl_nothing, -1, 0, world, &min_valid2, &max_valid2, &ambig);
     size_t i, n = jl_array_nrows(matches);
-    if (n == 0)
+    if (n == 0) {
+        JL_GC_POP();
         return jl_nothing;
-    JL_GC_PUSH1(&matches);
+    }
     jl_method_match_t *match = NULL;
     if (n == 1) {
         match = (jl_method_match_t*)jl_array_ptr_ref(matches, 0);
     }
     else if (jl_is_datatype(types)) {
-        // first, select methods for which `types` is compileable
+        // first, select methods for which `types` (in its canonical per-method
+        // spelling, see `egal_canonical_sig`) is compileable
         size_t count = 0;
         for (i = 0; i < n; i++) {
             jl_method_match_t *match1 = (jl_method_match_t*)jl_array_ptr_ref(matches, i);
-            if (jl_isa_compileable_sig(types, match1->sparams, match1->method))
+            normtypes = egal_canonical_sig(types, match1->method);
+            if (jl_isa_compileable_sig(normtypes, match1->sparams, match1->method))
                 jl_array_ptr_set(matches, count++, (jl_value_t*)match1);
         }
         jl_array_del_end((jl_array_t*)matches, n - count);
