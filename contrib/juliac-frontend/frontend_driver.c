@@ -106,10 +106,10 @@ int main(int argc, char **argv)
     // Initialize Julia using the image embedded in the frontend library
     jl_init_with_image_handle(handle);
 
-    init_fptr_t fe_init = (init_fptr_t)lookup(handle, "jl_frontend_init_impl");
-    parse_fptr_t fe_parse = (parse_fptr_t)lookup(handle, "jl_frontend_parse_impl");
-    lower_fptr_t fe_lower = (lower_fptr_t)lookup(handle, "jl_frontend_lower_impl");
-    macroexpand_fptr_t fe_macroexpand = (macroexpand_fptr_t)lookup(handle, "jl_macroexpand_impl");
+    init_fptr_t fe_init = (init_fptr_t)lookup(handle, "jlfe_init");
+    parse_fptr_t fe_parse = (parse_fptr_t)lookup(handle, "jlfe_parse");
+    lower_fptr_t fe_lower = (lower_fptr_t)lookup(handle, "jlfe_lower");
+    macroexpand_fptr_t fe_macroexpand = (macroexpand_fptr_t)lookup(handle, "jlfe_macroexpand");
     fe_init();
 
     int ret = 0;
@@ -179,11 +179,11 @@ int main(int argc, char **argv)
             fprintf(stderr, "missing candidates file\n");
             return 2;
         }
-        opquery_fptr_t is_op = (opquery_fptr_t)lookup(handle, "jl_is_operator_impl");
-        opquery_fptr_t is_un = (opquery_fptr_t)lookup(handle, "jl_is_unary_operator_impl");
-        opquery_fptr_t is_ub = (opquery_fptr_t)lookup(handle, "jl_is_unary_and_binary_operator_impl");
-        opquery_fptr_t is_syn = (opquery_fptr_t)lookup(handle, "jl_is_syntactic_operator_impl");
-        opquery_fptr_t prec = (opquery_fptr_t)lookup(handle, "jl_operator_precedence_impl");
+        opquery_fptr_t is_op = (opquery_fptr_t)lookup(handle, "jlfe_is_operator");
+        opquery_fptr_t is_un = (opquery_fptr_t)lookup(handle, "jlfe_is_unary_operator");
+        opquery_fptr_t is_ub = (opquery_fptr_t)lookup(handle, "jlfe_is_unary_and_binary_operator");
+        opquery_fptr_t is_syn = (opquery_fptr_t)lookup(handle, "jlfe_is_syntactic_operator");
+        opquery_fptr_t prec = (opquery_fptr_t)lookup(handle, "jlfe_operator_precedence");
         size_t len;
         char *data = read_file(argv[3], &len);
         char *line = strtok(data, "\n");

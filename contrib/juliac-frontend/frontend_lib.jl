@@ -35,3 +35,35 @@ end
     filename = filename isa Ptr{UInt8} ? unsafe_string(filename) : filename
     return $(JuliaFrontend).frontend_lower(ex, mod, filename, Int(lineno), world, warn)
 end
+
+# Exercise the frontend entry points so that their full call graphs are
+# compiled into the image: the standalone library runs without a JIT
+# (codegen stubs only), so anything not compiled here would run in the
+# interpreter.
+let
+    code = "begin\n    f(x::Int; kw=1) = 2x + kw\n    \"doc\" module M\n    struct P{T}; x::T; end\n    g() = [a^2 for a in 1:10 if a > 0x02]\n    h() = \"s\" * 'c' * string(1.5, 1f0, 0xff, true)\n    end\nend\n"
+    for rule in (:all, :statement, :atom)
+        GC.@preserve code begin
+            JuliaFrontend._c_frontend_parse(pointer(code), Csize_t(sizeof(code)),
+                                            "warmup.jl", Csize_t(1), Csize_t(0), rule)
+        end
+    end
+    bad = "f(x) = "
+    GC.@preserve bad begin
+        JuliaFrontend._c_frontend_parse(pointer(bad), Csize_t(sizeof(bad)),
+                                        "warmup.jl", Csize_t(1), Csize_t(0), :statement)
+    end
+    fname = "warmup.jl"
+    GC.@preserve fname begin
+        JuliaFrontend._c_frontend_lower(:(function lw(x); y -> y + x; end), Main,
+                                        pointer(fname), Cint(1), Csize_t(typemax(Csize_t)), Cint(0))
+        JuliaFrontend._c_macroexpand(:(@assert true), Main, Cint(1), Cint(0), Cint(1))
+    end
+    for s in ("+", ".+", "+=", "where", "in", "⊕₁", "&&", "::", "...", "im", "√")
+        for f in (JuliaFrontend._c_is_operator, JuliaFrontend._c_is_unary_operator,
+                  JuliaFrontend._c_is_unary_and_binary_operator,
+                  JuliaFrontend._c_is_syntactic_operator, JuliaFrontend._c_operator_precedence)
+            GC.@preserve s f(Base.unsafe_convert(Cstring, s))
+        end
+    end
+end

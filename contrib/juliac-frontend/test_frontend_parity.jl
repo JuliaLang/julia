@@ -64,8 +64,7 @@ for file in ["abstractset.jl", "sort.jl"]
     isfile(path) || (path = joinpath(dirname(dirname(Sys.BINDIR)), "base", file))
     if isfile(path)
         code = read(path, String)
-        js_host = repr(Base.JuliaSyntax.core_parser_hook(code, path, 1, 0, :all;
-                                                         syntax_version=VERSION)[1])
+        js_host = repr(Base.JuliaSyntax.core_parser_hook(code, path, 1, 0, :all)[1])
         js_abi = drive("parse", path)
         check("parse base/$file (ABI == in-process JuliaSyntax)", js_host == js_abi)
         fl = repr(Base.fl_parse(code, path, 1, 0, :all)[1])

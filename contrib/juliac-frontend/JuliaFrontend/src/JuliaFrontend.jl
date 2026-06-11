@@ -36,10 +36,38 @@ function frontend_parse(text::Ptr{UInt8}, text_len::Int, filename, lineno::Int,
         throw(BoundsError(unsafe_string(text, text_len), offset + 1))
     end
     code = Core.svec(text, text_len)
-    # The C frontend interface has no syntax version parameter; like flisp,
-    # always parse the current version's syntax.
-    return JuliaSyntax.core_parser_hook(code, filename, lineno, offset, options;
-                                        syntax_version=Base.VERSION)
+    # n.b. the C frontend interface has no syntax version parameter; parse
+    # with the hook's default version, like the in-process default parser.
+    r = JuliaSyntax.core_parser_hook(code, filename, lineno, offset, options)
+    return _legacy_error_form(r)
+end
+
+# Rich ParseError objects cannot cross the runtime boundary when this
+# library runs as a standalone second runtime; rewrite error/incomplete
+# results to the legacy string form, which all consumers understand.
+function _legacy_error_form(r)
+    ex = r[1]
+    (ex isa Expr && (ex.head === :error || ex.head === :incomplete)) || return r
+    length(ex.args) == 1 || return r
+    arg = ex.args[1]
+    arg isa Union{String,Expr,Symbol} && return r
+    msg = try
+        arg isa Meta.ParseError ? arg.msg : sprint(showerror, arg)
+    catch
+        "parse error"
+    end
+    if ex.head === :incomplete
+        tag = arg isa Meta.ParseError && arg.detail isa JuliaSyntax.ParseError ?
+            arg.detail.incomplete_tag : :other
+        msg =
+            tag === :string  ? "incomplete: invalid string syntax"     :
+            tag === :comment ? "incomplete: unterminated multi-line comment #= ... =#" :
+            tag === :block   ? "incomplete: construct requires end"    :
+            tag === :cmd     ? "incomplete: invalid \"`\" syntax"      :
+            tag === :char    ? "incomplete: invalid character literal" :
+                               "incomplete: premature end of input"
+    end
+    return Core.svec(Expr(ex.head, msg), r[2])
 end
 
 # ------------------------------------------------------------------------
@@ -72,70 +100,87 @@ function frontend_macroexpand(@nospecialize(ex), mod::Module, recursive::Bool,
 end
 
 # ------------------------------------------------------------------------
-# C entry points matching JL_FRONTEND_EXPORTED_FUNCS. The runtime fills its
-# frontend trampolines with the `*_impl` symbols exported here when this
-# library is used as libjulia-frontend.
+# Native C entry points. These use this image's own value representation
+# (arguments and results are values of *this* runtime). When the library is
+# compiled standalone (see the `standalone` Makefile target), the exported
+# `jl_frontend_*_impl` ABI wrappers in fe_standalone_entry.c convert between
+# the host runtime's values and these natives. The results are additionally
+# kept alive in `_last_result` until the next call, since the C caller holds
+# them across the boundary without a GC frame in this world.
 
-Base.@ccallable "jl_frontend_init_impl" function _c_frontend_init()::Cvoid
+Base.@ccallable "jlfe_init" function _c_frontend_init()::Cvoid
     return nothing
 end
 
-Base.@ccallable "jl_frontend_parse_impl" function _c_frontend_parse(
+const _last_result = Ref{Any}(nothing)
+
+Base.@ccallable "jlfe_parse" function _c_frontend_parse(
         text::Ptr{UInt8}, text_len::Csize_t, filename::Any,
         lineno::Csize_t, offset::Csize_t, options::Any)::Any
-    return frontend_parse(text, Int(text_len), filename, Int(lineno),
-                          Int(offset), options)
+    r = try
+        frontend_parse(text, Int(text_len), filename, Int(lineno),
+                       Int(offset), options)
+    catch err
+        Core.svec(Expr(:error, "JuliaFrontend internal error: " *
+                       sprint(showerror, err)), Int(text_len))
+    end
+    _last_result[] = r
+    return r
 end
 
-Base.@ccallable "jl_frontend_lower_impl" function _c_frontend_lower(
+Base.@ccallable "jlfe_lower" function _c_frontend_lower(
         ex::Any, mod::Module, filename::Ptr{UInt8}, line::Cint,
         world::Csize_t, warn::Cint)::Any
     fname = filename == C_NULL ? "none" : unsafe_string(filename)
-    return frontend_lower(ex, mod, fname, Int(line), UInt(world), warn != 0)
+    r = frontend_lower(ex, mod, fname, Int(line), UInt(world), warn != 0)
+    _last_result[] = r
+    return r
 end
 
-Base.@ccallable "jl_macroexpand_impl" function _c_macroexpand(
+Base.@ccallable "jlfe_macroexpand" function _c_macroexpand(
         ex::Any, mod::Module, recursive::Cint, inplace::Cint,
         expand_scope::Cint)::Any
-    return frontend_macroexpand(ex, mod, recursive != 0, inplace != 0,
-                                expand_scope != 0)
+    r = frontend_macroexpand(ex, mod, recursive != 0, inplace != 0,
+                             expand_scope != 0)
+    _last_result[] = r
+    return r
 end
 
-Base.@ccallable "jl_is_operator_impl" function _c_is_operator(s::Cstring)::Cint
+Base.@ccallable "jlfe_is_operator" function _c_is_operator(s::Cstring)::Cint
     return Cint(flisp_is_operator(unsafe_string(s)))
 end
 
-Base.@ccallable "jl_is_unary_operator_impl" function _c_is_unary_operator(s::Cstring)::Cint
+Base.@ccallable "jlfe_is_unary_operator" function _c_is_unary_operator(s::Cstring)::Cint
     return Cint(flisp_is_unary_operator(unsafe_string(s)))
 end
 
-Base.@ccallable "jl_is_unary_and_binary_operator_impl" function _c_is_unary_and_binary_operator(s::Cstring)::Cint
+Base.@ccallable "jlfe_is_unary_and_binary_operator" function _c_is_unary_and_binary_operator(s::Cstring)::Cint
     return Cint(flisp_is_unary_and_binary_operator(unsafe_string(s)))
 end
 
-Base.@ccallable "jl_is_syntactic_operator_impl" function _c_is_syntactic_operator(s::Cstring)::Cint
+Base.@ccallable "jlfe_is_syntactic_operator" function _c_is_syntactic_operator(s::Cstring)::Cint
     return Cint(flisp_is_syntactic_operator(unsafe_string(s)))
 end
 
-Base.@ccallable "jl_operator_precedence_impl" function _c_operator_precedence(s::Cstring)::Cint
+Base.@ccallable "jlfe_operator_precedence" function _c_operator_precedence(s::Cstring)::Cint
     return flisp_operator_precedence(unsafe_string(s))
 end
 
 # flisp-specific entry points: this frontend has no flisp.
 
-Base.@ccallable "jl_lisp_prompt_impl" function _c_lisp_prompt()::Cvoid
+Base.@ccallable "jlfe_lisp_prompt" function _c_lisp_prompt()::Cvoid
     error("--lisp: this frontend library is built from JuliaSyntax/JuliaLowering and does not contain flisp")
 end
 
-Base.@ccallable "fl_profile_impl" function _c_fl_profile(fname::Cstring)::Cvoid
+Base.@ccallable "jlfe_fl_profile" function _c_fl_profile(fname::Cstring)::Cvoid
     error("flisp profiling is not available in the JuliaSyntax/JuliaLowering frontend")
 end
 
-Base.@ccallable "fl_show_profile_impl" function _c_fl_show_profile()::Cvoid
+Base.@ccallable "jlfe_fl_show_profile" function _c_fl_show_profile()::Cvoid
     error("flisp profiling is not available in the JuliaSyntax/JuliaLowering frontend")
 end
 
-Base.@ccallable "fl_clear_profile_impl" function _c_fl_clear_profile()::Cvoid
+Base.@ccallable "jlfe_fl_clear_profile" function _c_fl_clear_profile()::Cvoid
     error("flisp profiling is not available in the JuliaSyntax/JuliaLowering frontend")
 end
 

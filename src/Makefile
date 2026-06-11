@@ -1074,3 +1074,6 @@ compile-database: regenerate-compile_commands
 
 .FORCE:
 .PHONY: .FORCE
+
+print-%:
+	@echo '$*=$($*)'

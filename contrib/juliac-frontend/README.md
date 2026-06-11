@@ -71,3 +71,49 @@ into a process that already has a sysimage (or that is bootstrapping a fresh
 Until one of those lands, this directory serves as: the definition of the
 replacement frontend's ABI surface, a continuously testable parity harness
 against flisp, and the build recipe for the eventual swap.
+
+## The standalone (two-runtimes-in-one-process) library
+
+`make standalone` produces `build/libjulia-frontend-standalone.so`: the
+frontend image *plus a complete private copy of the Julia runtime*
+(libjulia-internal's objects, libsupport, libuv, libutf8proc, libunwind,
+codegen and frontend stubs) linked into one shared library with every symbol
+internalized except the 13-function frontend ABI. This is the form intended
+to be loadable in-process as a host julia's `libjulia-frontend`, including
+by a host of a *different version*:
+
+- The host and guest runtimes share nothing: distinct TLS, GC, heaps and
+  type objects. The entry points "switch TLS" by initializing/adopting the
+  calling thread into the private runtime (`fe_enter`), leaving host TLS
+  untouched.
+- Values are converted, not shared, at the boundary (fe2host in
+  fe_standalone_entry.c) — the role scm_to_julia played for flisp. Host
+  values are only touched through a small dlsym-resolved host C API table
+  (`jl_symbol`, `jl_exprn`, `jl_box_*`, ... — the cross-version contract),
+  with host-side GC rooting done through manually-built PUSHARGS gcframes.
+- The private runtime initializes from the statically-linked image
+  (`jl_init_` with a directly-constructed `jl_image_buf_t`; `null_sysimage.o`
+  is excluded so the image's `jl_image_unpack` definition binds), with
+  signal handling off and a single thread. `jl_export_cli_globals = 0`
+  prevents it from exporting its globals to a loader library it does not
+  have; the CLI data-pointer slots its image code references are provided
+  and filled locally (fe_standalone_globals.c).
+- The codegen/frontend trampoline names that libjulia-internal expects from
+  the CLI loader are bound at link time to the in-library `*_fallback`
+  stubs (`--defsym`); the guest needs no LLVM and contains no flisp.
+
+`make check-standalone` runs `host_driver`, which initializes a normal host
+julia, dlopens the standalone library, and exercises parse and the operator
+queries through the ABI with host values, comparing against the host's own
+frontend.
+
+Status: parse and the operator queries work cross-runtime (`make
+check-standalone` passes: structural parse parity with the host's parser,
+EOF/incomplete contracts, operator queries), and a julia whose
+`libjulia-frontend.so` is replaced by the standalone library starts up
+normally, booting the guest runtime during `jl_frontend_init`.
+`jl_frontend_lower` and `jl_macroexpand` raise a host error until
+cross-runtime lowering is implemented (modules and lowered code crossing
+the boundary symbolically, macro invocation calling back into the host via
+`jl_invoke_julia_macro`) — until then a swapped-in julia can start but not
+evaluate new code, so the swap is demonstrational.
