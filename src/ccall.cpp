@@ -77,7 +77,7 @@ static bool runtime_sym_gvs(jl_codectx_t &ctx, const native_sym_arg_t &symarg,
 {
     const auto &f_lib = symarg.f_lib;
     const auto &f_name = symarg.f_name;
-    // If f_name isn't constant or f_lib_expr is present but not present,
+    // If f_name isn't constant or f_lib_expr is present but f_lib is not,
     // emit a local cache for sym, but do not cache lib
     if (!((f_lib || symarg.f_lib_expr == NULL) && f_name)) {
         std::string name = "dynccall_";

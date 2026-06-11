@@ -441,7 +441,7 @@ See also [`ispath`](@ref), [`isexecutable`](@ref), [`isreadable`](@ref).
 """
 function iswritable(path::String)
     # We use `access()` and `W_OK` to determine if a given path is
-    # writeable by the current user.  `W_OK` comes from `unistd.h`.
+    # writable by the current user.  `W_OK` comes from `unistd.h`.
     W_OK = 0x02
     return ccall(:jl_fs_access, Cint, (Cstring, Cint), path, W_OK) == 0
 end

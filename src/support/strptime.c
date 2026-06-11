@@ -515,7 +515,7 @@ literal:
 			 *          Nautical/Military
 			 * [A-IL-M] = -1 ... -9 (J not used)
 			 * [N-Y]  = +1 ... +12
-			 * Note: J maybe used to denote non-nautical
+			 * Note: J may be used to denote non-nautical
 			 *       local time
 			 */
 			if (mandatory)
@@ -667,7 +667,7 @@ loadzone:
 				offs /= 100;
 				if (i >= SECSPERMIN)
 					goto out;
-				/* Convert minutes into decimal */
+				/* Convert minutes into seconds */
 				offs = offs * SECSPERHOUR + i * SECSPERMIN;
 				break;
 			default:

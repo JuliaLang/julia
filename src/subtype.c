@@ -837,7 +837,7 @@ static int env_unchanged(jl_stenv_t *e, jl_savedenv_t *se) JL_NOTSAFEPOINT
             int8_t saved_diag = se->buf[j+1];  // saved cov_diag
             int8_t saved_max = saved_cov > saved_diag ? saved_cov : saved_diag;
             if (is_leaf_typevar(v->var) && v->body_occurs_inv == 0 && cov_count(v) > 1 && saved_max <= 1)
-                return 0; // check if a variable became digonal from non-diagonal
+                return 0; // check if a variable became diagonal from non-diagonal
         }
         i += 3; // lb, ub, innervars
         j += JL_SAVEDENV_BYTES_PER_VAR;

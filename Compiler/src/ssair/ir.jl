@@ -295,7 +295,7 @@ on where they appear:
     ii. a `NewSSAValue` with negative `id` refers to post-compaction `new_node` node.
 
 2. In non-compacted nodes,
-    i. a `NewSSAValue` with positive `id` refers to the index of an already-compacted instructions.
+    i. a `NewSSAValue` with positive `id` refers to the index of an already-compacted instruction.
     ii. a `NewSSAValue` with negative `id` has the same meaning as in compacted nodes.
 """
 struct NewSSAValue

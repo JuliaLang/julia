@@ -635,8 +635,6 @@ true
 """
 isprint(c::AbstractChar) = UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_ZS
 
-# true in principal if a printer would use ink
-
 """
     isxdigit(c::AbstractChar)::Bool
 

@@ -88,7 +88,7 @@ static inline int jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, j
         }
 
         /* table full */
-        /* quadruple size, rehash, retry the insert */
+        /* grow size, rehash, retry the insert */
         /* it's important to grow the table really fast; otherwise we waste */
         /* lots of time rehashing all the keys over and over. */
         sz = a -> length;

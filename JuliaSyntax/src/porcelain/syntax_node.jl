@@ -63,7 +63,7 @@ end
 function Base.getproperty(data::SyntaxData, name::Symbol)
     if name === :position
         # Previous versions of JuliaSyntax had `position::Int`.
-        # Allow access for compatibility. It was renamed (with changed) semantics
+        # Allow access for compatibility. It was renamed (with changed semantics)
         # to `byte_end::UInt32` to match the rest of the code base, which identified
         # nodes, by their last byte.
         return Int(getfield(data, :byte_end) - getfield(data, :raw).span + UInt32(1))

@@ -595,9 +595,9 @@ static Constant *julia_pgv(jl_codegen_output_t &params, Module *M, const char *c
                                 false, GlobalVariable::ExternalLinkage,
                                 nullptr, localname);
     // LLVM passes sometimes strip metadata when moving load around
-    // since the load at the new location satisfy the same condition as the original one.
+    // since the load at the new location satisfies the same condition as the original one.
     // Mark the global as constant to LLVM code using our own metadata
-    // which is much less likely to be striped.
+    // which is much less likely to be stripped.
     gv->setMetadata("julia.constgv", MDNode::get(gv->getContext(), {}));
     assert(localname == gv->getName());
     assert(!gv->hasInitializer());
@@ -1914,7 +1914,7 @@ static Value *emit_nullcheck_guard2(jl_codectx_t &ctx, Value *nullcheck1,
 
 // Returns typeof(v), or null if v is a null pointer at run time and maybenull is true.
 // This is used when the value might have come from an undefined value (a PhiNode),
-// yet jl_max_tags try to read its type to compute a union index when moving the value (a PiNode).
+// yet the code may try to read its type to compute a union index when moving the value (a PiNode).
 // Returns a ctx.types().T_prjlvalue typed Value
 static Value *emit_typeof(jl_codectx_t &ctx, Value *v, bool maybenull, bool justtag, bool notag)
 {
@@ -3300,9 +3300,9 @@ static bool isConstGV(GlobalVariable *gv)
     return gv->isConstant() || gv->getMetadata("julia.constgv");
 }
 
-// Check if this is can be traced through constant loads to an constant global
+// Check if this can be traced through constant loads to a constant global
 // or otherwise globally rooted value.
-// Almost all `tbaa_const` loads satisfies this with the exception of
+// Almost all `tbaa_const` loads satisfy this with the exception of
 // task local constants which are constant as far as the code is concerned but aren't
 // global constants. For task local constant `task_local` will be true when this function
 // returns.

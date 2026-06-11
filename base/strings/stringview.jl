@@ -76,7 +76,7 @@ function reverse(s::UTF8String)::String
         __unsafe_string!(out, c, offs)
     end
     # note that for StringViewAndSub, we cannot return the same type of StringView
-    # anyway since the data type may not be mutable, so just we return String
+    # anyway since the data type may not be mutable, so we just return String
     return out
 end
 

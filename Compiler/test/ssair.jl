@@ -371,7 +371,7 @@ let cfg = CFG(BasicBlock[
     Compiler.cfg_delete_edge!(cfg, 6, 5)
     Compiler.domtree_delete_edge!(domtree, cfg.blocks, 6, 5)
     @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 2, 4]
-    # Add edge back (testing second case for insertion)
+    # Add edge back (testing last case for insertion)
     Compiler.cfg_insert_edge!(cfg, 6, 5)
     Compiler.domtree_insert_edge!(domtree, cfg.blocks, 6, 5)
     @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 1, 4]

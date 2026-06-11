@@ -195,7 +195,7 @@ end
 """
     info::MethodResultPure <: CallInfo
 
-This struct represents a method result constant was proven to be effect-free.
+This struct represents a method result that was proven to be a pure (effect-free) constant.
 """
 struct MethodResultPure <: CallInfo
     info::CallInfo

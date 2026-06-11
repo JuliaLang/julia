@@ -1330,7 +1330,7 @@ extern "C" jl_code_instance_t *jl_gdblookupci(void *p) JL_NOTSAFEPOINT
 // This implementation handles frame registration for local targets.
 void register_eh_frames(uint8_t *Addr, size_t Size)
 {
-  // On OS X OS X __register_frame takes a single FDE as an argument.
+  // On OS X __register_frame takes a single FDE as an argument.
   // See http://lists.cs.uiuc.edu/pipermail/llvmdev/2013-April/061768.html
   processFDEs((char*)Addr, Size, [](const char *Entry) JL_NOTSAFEPOINT {
       getJITDebugRegistry().libc_frames.libc_register_frame(Entry);
@@ -1359,8 +1359,8 @@ static const uint8_t *consume_leb128(const uint8_t *Addr, const uint8_t *End) JL
     return P + 1;
 }
 
-// Parse a LEB128 encoding to a type T. Truncate the result if there's more
-// bytes than what there are more bytes than what the type can store.
+// Parse a LEB128 encoding to a type T. Truncate the result if there are more
+// bytes than what the type can store.
 // Adjust the pointer to the first unprocessed byte.
 template<typename T> static T parse_leb128(const uint8_t *&Addr,
                                            const uint8_t *End) JL_NOTSAFEPOINT
@@ -1416,7 +1416,7 @@ enum DW_EH_PE : uint8_t {
 
     DW_EH_PE_pcrel = 0x10, // Value is PC relative.
 
-    // We currently don't support the following once.
+    // We currently don't support the following ones.
     DW_EH_PE_textrel = 0x20, // Value is text relative.
     DW_EH_PE_datarel = 0x30, // Value is data relative.
     DW_EH_PE_funcrel = 0x40, // Value is relative to start of function.

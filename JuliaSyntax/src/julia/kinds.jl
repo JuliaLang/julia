@@ -12,9 +12,9 @@ syntax tree nodes. We do this explicitly outside the Julia type system because
 are unityped from the Julia compiler's point of view, for efficiency.
 
 Naming rules:
-* Kinds which correspond to exactly one textural form are represented with that
+* Kinds which correspond to exactly one textual form are represented with that
   text. This includes keywords like K"for" and operators like K"*".
-* Kinds which represent many textural forms have UpperCamelCase names. This
+* Kinds which represent many textual forms have UpperCamelCase names. This
   includes kinds like K"Identifier" and K"Comment".
 * Kinds which exist merely as delimiters are all uppercase
 """

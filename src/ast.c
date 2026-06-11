@@ -98,7 +98,7 @@ static value_t fl_module_unique_name(fl_context_t *fl_ctx, value_t *args, uint32
     jl_ast_context_t *ctx = jl_ast_ctx(fl_ctx);
     jl_module_t *m = ctx->module;
     assert(m != NULL);
-    // Get the outermost function name from the `parsed_method_stack` top
+    // Get the outermost function name from the bottom of `parsed_method_stack`
     char *funcname = NULL;
     value_t parsed_method_stack = args[0];
     if (parsed_method_stack != fl_ctx->NIL) {

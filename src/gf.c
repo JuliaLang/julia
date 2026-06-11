@@ -951,7 +951,7 @@ static void foreach_top_nth_typename(void (*f)(jl_typename_t*, int, void*), jl_v
 // The `int explct` argument instructs the caller if the callback is due to an exactly
 // encountered type or if it rather encountered a subtype.
 // This is not capable of walking to all top-typenames for an explicitly encountered
-// Function or Any, so the caller a fallback that can scan the entire  in that case.
+// Function or Any, so the caller has a fallback that can scan the entire table in that case.
 // We do not de-duplicate calls when encountering a Union.
 static int jl_foreach_top_typename_for(void (*f)(jl_typename_t*, int, void*), jl_value_t *argtypes JL_PROPAGATES_ROOT, int all_subtypes, void *env)
 {
@@ -967,7 +967,7 @@ static int jl_foreach_top_typename_for(void (*f)(jl_typename_t*, int, void*), jl
         facts |= kwfacts;
     }
     if (all_subtypes && (facts & (EXACTLY_FUNCTION | EXACTLY_TYPE | EXACTLY_ANY)))
-        // flag that we have an explct match than is necessitating a full table scan
+        // flag that we have an explicit match that is necessitating a full table scan
         return 0;
     // or inform caller of only which supertypes are applicable
     if (facts & HAVE_FUNCTION)
@@ -3533,7 +3533,7 @@ JL_DLLEXPORT void jl_force_trace_compile_timing_enable(void)
  */
 JL_DLLEXPORT void jl_force_trace_compile_timing_disable(void)
 {
-    // Increment the flag to allow reentrant callers to `@trace_compile`.
+    // Decrement the flag to allow reentrant callers to `@trace_compile`.
     jl_atomic_fetch_add(&jl_force_trace_compile_timing_enabled, -1);
 }
 
@@ -3600,7 +3600,7 @@ JL_DLLEXPORT void jl_force_trace_dispatch_enable(void)
  */
 JL_DLLEXPORT void jl_force_trace_dispatch_disable(void)
 {
-    // Increment the flag to allow reentrant callers to `@trace_dispatch`.
+    // Decrement the flag to allow reentrant callers to `@trace_dispatch`.
     jl_atomic_fetch_add(&jl_force_trace_dispatch_enabled, -1);
 }
 
@@ -3625,7 +3625,7 @@ static void record_dispatch_statement(jl_method_instance_t *mi)
             s_dispatch = (JL_STREAM*) &f_dispatch;
         }
     }
-    // NOTE: For builtin functions, the specType is just `Tuple`, which is not useful to print.
+    // NOTE: For builtin functions, the specTypes is just `Tuple`, which is not useful to print.
     if (!jl_has_free_typevars(mi->specTypes) && (jl_datatype_t*)mi->specTypes != jl_tuple_type) {
         jl_printf(s_dispatch, "precompile(");
         jl_static_show(s_dispatch, mi->specTypes);

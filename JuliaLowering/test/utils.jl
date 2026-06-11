@@ -73,7 +73,7 @@ end
 """
     format_as_ast_macro(ex)
 
-Format AST `ex` as a Juila source code call to the `@ast_` macro for generating
+Format AST `ex` as a Julia source code call to the `@ast_` macro for generating
 test case comparisons with the `≈` function.
 """
 format_as_ast_macro(ex) = format_as_ast_macro(stdout, ex)

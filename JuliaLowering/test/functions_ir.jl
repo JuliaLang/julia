@@ -940,7 +940,7 @@ end
 12  (return %₁₁)
 
 ########################################
-# Function argument destructuring combined with splats, types and and defaults
+# Function argument destructuring combined with splats, types and defaults
 function f((x,)::T...=rhs)
 end
 #---------------------
@@ -1112,7 +1112,7 @@ function f(x=(1,2)...,y=(3,4)...); end
 #            └──────┘ ── splat only allowed on final positional default arg
 
 ########################################
-# Function argument destructuring combined with splats, types and and defaults
+# Function argument destructuring combined with splats, types and defaults
 function f(x=default_x)::T
 end
 #---------------------

@@ -41,7 +41,7 @@ isϕ(@nospecialize x) = isa(x, Core.PhiNode)
 """
     is_load_forwardable(x::EscapeInfo) -> Bool
 
-Queries if `x` is elibigle for store-to-load forwarding optimization.
+Queries if `x` is eligible for store-to-load forwarding optimization.
 """
 function is_load_forwardable(x::EscapeInfo)
     AliasInfo = x.AliasInfo

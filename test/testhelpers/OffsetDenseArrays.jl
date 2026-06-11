@@ -1,7 +1,7 @@
 """
     module OffsetDenseArrays
 
-A minimal implementation of an offset array which is also <: DenseArray.
+A minimal implementation of an offset array which is also <: DenseVector.
 """
 module OffsetDenseArrays
 

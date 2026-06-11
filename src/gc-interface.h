@@ -198,7 +198,7 @@ JL_DLLEXPORT uint64_t jl_gc_total_hrtime(void);
 // **must** also set the type of the returning object to be `ty`. The type `ty` may also be used to record
 // an allocation of that type in the allocation profiler.
 struct _jl_value_t *jl_gc_alloc_(struct _jl_tls_states_t * ptls, size_t sz, void *ty);
-// Allocates small objects and increments Julia allocation counterst. Size of the object
+// Allocates small objects and increments Julia allocation counters. Size of the object
 // header must be included in the object size. The (possibly unused in some implementations)
 // offset to the arena in which we're allocating is passed in the second parameter, and the
 // object size in the third parameter. If thread-local allocators are used, then this

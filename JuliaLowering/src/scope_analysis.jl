@@ -108,7 +108,7 @@ _var_str(v) = v === :local ? "local variable" :
     v === :static_parameter ? "static parameter" : "unknown"
 
 # Declare `ex` in `scope`, unless a binding already exists with the same name in
-# scope, or id anywhere.  Throw an error if a name conflict occurs.  The rules
+# scope, or anywhere.  Throw an error if a name conflict occurs.  The rules
 # for conflict: declaring a local (or global) twice with the same name is a
 # no-op, but doing so with an argument or static parameter is an error.  A
 # variable usually can't be two things in one scope, but flisp has quirks.

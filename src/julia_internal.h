@@ -1244,7 +1244,7 @@ STATIC_INLINE int is_anonfn_typename(char *name)
     return other > &name[1] && is10digit(other[1]);
 }
 
-// Returns true for typenames of anounymous functions that have been canonicalized (i.e.
+// Returns true for typenames of anonymous functions that have been canonicalized (i.e.
 // we mangled the name of the outermost enclosing function in their name).
 STATIC_INLINE int is_canonicalized_anonfn_typename(char *name) JL_NOTSAFEPOINT
 {

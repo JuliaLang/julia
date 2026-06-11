@@ -110,7 +110,7 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
         # `Base.isa_ast_node(e)`, but `K"Value"` should be fine for most, since
         # most are produced in or after lowering
         if e isa LineNumberNode
-            # linenode oustside of block or toplevel
+            # linenode outside of block or toplevel
             src = e
         end
         setattr!(newleaf(graph, src, K"Value"), :value, e)

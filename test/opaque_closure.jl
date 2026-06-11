@@ -179,7 +179,7 @@ end
 # cannot specify types both on arguments and separately
 @test_throws ErrorException @eval @opaque Tuple{Any}->_ (x::Int)->x
 
-# Vargarg in complied mode
+# Vararg in compiled mode
 mk_va_opaque() = @opaque (x...)->x
 @test mk_va_opaque()(1) == (1,)
 @test mk_va_opaque()(1,2) == (1,2)

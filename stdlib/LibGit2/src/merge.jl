@@ -59,7 +59,7 @@ end
 
 Run analysis on the branches pointed to by the annotated branch tips `anns` and
 determine under what circumstances they can be merged. For instance, if `anns[1]`
-is simply an ancestor of `ann[2]`, then `merge_analysis` will report that a
+is simply an ancestor of `anns[2]`, then `merge_analysis` will report that a
 fast-forward merge is possible.
 
 Return two outputs, `analysis` and `preference`. `analysis` has several possible values:
@@ -219,7 +219,7 @@ function merge!(repo::GitRepo, anns::Vector{GitAnnotated}, fastforward::Bool;
     merge_result = if ffpref == Consts.MERGE_PREFERENCE_NONE
         if isset(ma, Cint(Consts.MERGE_ANALYSIS_FASTFORWARD))
             if length(anns) > 1
-                @warn "Unable to perform Fast-Forward merge with mith multiple merge heads"
+                @warn "Unable to perform Fast-Forward merge with multiple merge heads."
                 false
             else
                 ffmerge!(repo, anns[1])
@@ -232,7 +232,7 @@ function merge!(repo::GitRepo, anns::Vector{GitAnnotated}, fastforward::Bool;
     elseif ffpref == Consts.MERGE_PREFERENCE_FASTFORWARD_ONLY
         if isset(ma, Cint(Consts.MERGE_ANALYSIS_FASTFORWARD))
             if length(anns) > 1
-                @warn "Unable to perform Fast-Forward merge with mith multiple merge heads"
+                @warn "Unable to perform Fast-Forward merge with multiple merge heads."
                 false
             else
                 ffmerge!(repo, anns[1])

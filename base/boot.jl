@@ -1277,14 +1277,14 @@ function typename(a::Union)
 end
 typename(union::UnionAll) = typename(union.body)
 
-# Special inference support to avoid execess specialization of these methods.
+# Special inference support to avoid excess specialization of these methods.
 # TODO: Replace this by a generic heuristic.
 (>:)(@nospecialize(a), @nospecialize(b)) = (b <: a)
 (!==)(@nospecialize(a), @nospecialize(b)) = Intrinsics.not_int(a === b)
 
 include(Core, "optimized_generics.jl")
 
-# Used only be the magic @VERSION macro
+# Used only by the magic @VERSION macro
 struct MacroSource
     lno::Any # ::LineNumberNode, but needs to be a pointer
     syntax_ver::Any # ::VersionNumber =#

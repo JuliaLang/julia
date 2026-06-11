@@ -1852,7 +1852,7 @@ static unsigned type_hash(jl_value_t *kj, int *failed) JL_NOTSAFEPOINT
         // compute a hash now, only for the parent object we are putting in the cache
         unsigned hasha = type_hash(((jl_uniontype_t*)uw)->a, failed);
         unsigned hashb = type_hash(((jl_uniontype_t*)uw)->b, failed);
-        // use a associative mixing function, with well-defined overflow
+        // use an associative mixing function, with well-defined overflow
         // since Union is associative
         return hasha + hashb;
     }

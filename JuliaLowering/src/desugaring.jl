@@ -369,7 +369,7 @@ function _destructure(ctx, assignment_srcref, stmts, lhs, rhs, is_const)
             )
         end
     end
-    # Actual assignments must happen after the whole iterator is desctructured
+    # Actual assignments must happen after the whole iterator is destructured
     # (https://github.com/JuliaLang/julia/issues/40574)
     append!(stmts, end_stmts)
     stmts

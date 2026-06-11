@@ -111,7 +111,7 @@ function _register_kinds()
             # Declare a zero-method generic function with global `name` or
             # creates a closure object and assigns it to the local `name`.
             "function_decl"
-            # [K"function_type name]
+            # [K"function_type" name]
             # Evaluates to the type of the function or closure with given `name`
             "function_type"
             # [K"method_defs" name block]
