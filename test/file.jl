@@ -72,6 +72,12 @@ end
         @test sort!(collect(scandir(dir))) == sort!(readdir(dir))
         # DirEntry form yields DirEntry objects matching readdir(DirEntry, ...)
         @test sort!(basename.(collect(scandir(DirEntry, dir)))) == sort!(readdir(dir))
+        # join=true yields full paths matching readdir(dir; join=true)
+        @test sort!(collect(scandir(dir; join=true))) == sort!(readdir(dir; join=true))
+        joined = scandir(dir; join=true) do paths
+            collect(paths)
+        end
+        @test sort!(joined) == sort!(readdir(dir; join=true))
 
         # Iterator type and traits
         it = scandir(dir)
@@ -112,6 +118,7 @@ end
         sub = only(e for e in readdir(DirEntry, dir) if isdir(e))
         @test sort!(collect(scandir(sub))) == ["bfile.txt"]
         @test sort!(basename.(collect(scandir(DirEntry, sub)))) == ["bfile.txt"]
+        @test sort!(collect(scandir(sub; join=true))) == [joinpath(dir, "adir", "bfile.txt")]
     end
 end
 

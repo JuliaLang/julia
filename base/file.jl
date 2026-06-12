@@ -1185,6 +1185,8 @@ owning task has finished iterating is safe.
 """
 mutable struct DirEntryIterator{T}
     const dir::String
+    # Yield joinpath(dir, name) instead of the bare name (String eltype only)
+    const join::Bool
     # Opaque uv_dir_t* returned by jl_uv_fs_opendir; C_NULL until opened and
     # C_NULL again after close. Acts as the ownership gate: the thread that
     # atomically swaps it to C_NULL is the sole owner of the resources below
@@ -1195,9 +1197,9 @@ mutable struct DirEntryIterator{T}
     # valid for the lifetime of the iterator.
     ent::Base.RefValue{uv_dirent_t}
     closed::Bool
-    function DirEntryIterator{T}(dir::AbstractString) where {T}
+    function DirEntryIterator{T}(dir::AbstractString, join::Bool=false) where {T}
         T === String || T === DirEntry || throw(ArgumentError("element type must be String or DirEntry"))
-        finalizer(close, new{T}(String(dir), C_NULL, Ref{uv_dirent_t}(), false))
+        finalizer(close, new{T}(String(dir), join, C_NULL, Ref{uv_dirent_t}(), false))
     end
 end
 
@@ -1247,26 +1249,30 @@ function Base.iterate(it::DirEntryIterator{T}, _=nothing) where {T}
     ent = it.ent[]
     name = unsafe_string(ent.name)
     Libc.free(ent.name)
-    value = T === DirEntry ? DirEntry(it.dir, name, ent.typ) : name
+    value = T === DirEntry ? DirEntry(it.dir, name, ent.typ) :
+            it.join ? joinpath(it.dir, name) : name
     return value, nothing
 end
 
 """
-    scandir(dir::AbstractString=pwd())                     -> DirEntryIterator{String}
-    scandir(entry::DirEntry)                               -> DirEntryIterator{String}
+    scandir(dir::AbstractString=pwd(); join::Bool=false)   -> DirEntryIterator{String}
+    scandir(entry::DirEntry; join::Bool=false)             -> DirEntryIterator{String}
     scandir(::Type{DirEntry}, dir::AbstractString=pwd())   -> DirEntryIterator{DirEntry}
     scandir(::Type{DirEntry}, entry::DirEntry)             -> DirEntryIterator{DirEntry}
-    scandir(f, [::Type{DirEntry},] dir)                    -> f(::DirEntryIterator)
+    scandir(f, [::Type{DirEntry},] dir; kwargs...)         -> f(::DirEntryIterator)
 
 Return a stateful, single-pass iterator over the contents of the directory `dir`
 (or the current working directory if not given), without first materializing the
 full listing. Useful for very large directories or when iteration may be
 short-circuited (e.g. with `break` or [`Iterators.take`](@ref)).
 
-By default the iterator yields filename `String`s, matching [`readdir`](@ref).
+By default the iterator yields filename `String`s, matching [`readdir`](@ref);
+if `join` is true it yields `joinpath(dir, name)` for each name instead.
 Pass `DirEntry` as the leading type argument to yield [`DirEntry`](@ref)
 objects, which carry the entry type as cached at scan time so [`isfile`](@ref),
-[`isdir`](@ref), etc. can be checked without further `stat` calls.
+[`isdir`](@ref), etc. can be checked without further `stat` calls (the full
+path of a `DirEntry` is available via `joinpath(entry)`, so there is no `join`
+keyword for that form, as with `readdir(DirEntry, dir)`).
 
 Unlike [`readdir`](@ref), the entries are returned in filesystem order (not
 sorted) and the iterator can only be traversed once. The do-block form ensures
@@ -1293,12 +1299,12 @@ scandir("/very/large/dir") do names
 end
 ```
 """
-scandir(dir::AbstractString=pwd()) = DirEntryIterator{String}(dir)
-scandir(entry::DirEntry) = DirEntryIterator{String}(joinpath(entry))
+scandir(dir::AbstractString=pwd(); join::Bool=false) = DirEntryIterator{String}(dir, join)
+scandir(entry::DirEntry; join::Bool=false) = DirEntryIterator{String}(joinpath(entry), join)
 scandir(::Type{DirEntry}, dir::AbstractString=pwd()) = DirEntryIterator{DirEntry}(dir)
 scandir(::Type{DirEntry}, entry::DirEntry) = DirEntryIterator{DirEntry}(joinpath(entry))
-function scandir(f, dir)
-    it = scandir(dir)
+function scandir(f, dir; join::Bool=false)
+    it = scandir(dir; join)
     try
         return f(it)
     finally
