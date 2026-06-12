@@ -810,7 +810,7 @@ end
         r = only(findall(isreturn, result.ir.stmts.stmt))
         findall(1:length(result.ir.stmts)) do i
             if isnew(result.ir.stmts[i][:stmt])
-                t = result.ir.stmts[i][:type]
+                t = Compiler.widenconst(result.ir.stmts[i][:type])
                 return t === SafeRef{String}  || # o1
                        t === SafeRef{SafeRef}    # o2
             end
@@ -1069,7 +1069,7 @@ end
             @test is_load_forwardable(result.state[SSAValue(i)])
         end
         for i in findall(isnew, result.ir.stmts.stmt)
-            if result.ir[SSAValue(i)][:type] <: SafeRef
+            if Compiler.widenconst(result.ir[SSAValue(i)][:type]) <: SafeRef
                 @test is_load_forwardable(result.state[SSAValue(i)])
             end
         end
@@ -1091,7 +1091,7 @@ end
             @test is_load_forwardable(result.state[SSAValue(i)])
         end
         for i in findall(isnew, result.ir.stmts.stmt)
-            if result.ir[SSAValue(i)][:type] <: SafeRef
+            if Compiler.widenconst(result.ir[SSAValue(i)][:type]) <: SafeRef
                 @test is_load_forwardable(result.state[SSAValue(i)])
             end
         end
@@ -1388,7 +1388,7 @@ end
         @test has_return_escape(result.state[Argument(3)], r) # baz
         @test has_return_escape(result.state[Argument(4)], r) # qux
         for new in findall(isnew, result.ir.stmts.stmt)
-            if !(result.ir[SSAValue(new)][:type] <: Base.RefValue)
+            if !(Compiler.widenconst(result.ir[SSAValue(new)][:type]) <: Base.RefValue)
                 @test is_load_forwardable(result.state[SSAValue(new)])
             end
         end
@@ -1448,7 +1448,7 @@ let result = @code_escapes compute(MPoint, 1+.5im, 2+.5im, 2+.25im, 4+.75im)
     for i in findall(1:length(result.ir.stmts)) do idx
                  inst = result.ir[SSAValue(idx)]
                  stmt = inst[:stmt]
-                 return (isnew(stmt) || isϕ(stmt)) && inst[:type] <: MPoint
+                 return (isnew(stmt) || isϕ(stmt)) && Compiler.widenconst(inst[:type]) <: MPoint
              end
         @test is_load_forwardable(result.state[SSAValue(i)])
     end
@@ -1464,7 +1464,7 @@ end
 #     idxs = findall(1:length(result.ir.stmts)) do idx
 #         inst = result.ir[SSAValue(idx)]
 #         stmt = inst[:stmt]
-#         return isnew(stmt) && inst[:type] <: MPoint
+#         return isnew(stmt) && Compiler.widenconst(inst[:type]) <: MPoint
 #     end
 #     @assert length(idxs) == 2
 #     @test count(i->is_load_forwardable(result.state[SSAValue(i)]), idxs) == 1
@@ -1481,7 +1481,7 @@ let result = @code_escapes compute!(MPoint(1+.5im, 2+.5im), MPoint(2+.25im, 4+.7
     for i in findall(1:length(result.ir.stmts)) do idx
                  inst = result.ir[SSAValue(idx)]
                  stmt = inst[:stmt]
-                 return isnew(stmt) && inst[:type] <: MPoint
+                 return isnew(stmt) && Compiler.widenconst(inst[:type]) <: MPoint
              end
         @test is_load_forwardable(result.state[SSAValue(i)])
     end

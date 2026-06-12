@@ -848,8 +848,10 @@ check_code_trampoline(testclosure, (Any, Any, Bool, Type), 2)
 check_code_trampoline(testclosure, (Any, Int, Bool, Type{Int}), 2)
 check_code_trampoline(testclosure, (Any, String, Bool, Type{String}), 2)
 check_code_trampoline(testclosure, (typeof(identity), Any, Bool, Type), 2)
-check_code_trampoline(testclosure, (typeof(identity), Int, Bool, Type{Int}), 0)
-check_code_trampoline(testclosure, (typeof(identity), String, Bool, Type{String}), 0)
+# an `==`-only `Type{Int}` slot cannot statically pin the cfunction signature
+# value; the egality-pinned spelling can (#61323)
+check_code_trampoline(testclosure, (typeof(identity), Int, Bool, Core.TypeEgal{Int}), 0)
+check_code_trampoline(testclosure, (typeof(identity), String, Bool, Core.TypeEgal{String}), 0)
 
 function g(i)
     x = -332210 + i
