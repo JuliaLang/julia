@@ -2077,6 +2077,12 @@ end
         return TypeofVararg
     end
     if istuple
+        if !uncertain && canconst
+            # every parameter is exactly known and only `==`-certainty (`anyeq`)
+            # blocked the `Const` fold above: the invariant parameters still pin
+            # the tuple up to type equality (`S == X` implies `Tuple{S} == Tuple{X}`)
+            return Type{appl}
+        end
         return Type{<:appl}
     end
     ans = Type{appl}
