@@ -84,7 +84,7 @@ DenseVector (alias for DenseArray{T, 1} where T)
 ```
 """
 supertype(T::DataType) = (@_total_meta; T.super)
-supertype(T::UnionAll) = (@_total_meta; UnionAll(T.var, supertype(T.body)))
+supertype(T::UnionAll) = (@_foldable_meta; UnionAll(T.var, supertype(T.body)))
 
 ## generic comparison ##
 

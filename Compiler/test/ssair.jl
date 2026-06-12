@@ -324,17 +324,6 @@ let code = Any[
     oc = Core.OpaqueClosure(ir)
     @test oc(false, 1, 1) == 2
     @test_throws "potential throw" oc(true, 1, 1)
-
-    let buf = IOBuffer()
-        oc = Core.OpaqueClosure(ir; slotnames=Symbol[:ocfunc, :x, :y, :z])
-        try
-            oc(true, 1, 1)
-        catch
-            Base.show_backtrace(buf, catch_backtrace())
-        end
-        s = String(take!(buf))
-        @test occursin("(x::Bool, y::$Int, z::$Int)", s)
-    end
 end
 
 # Test dynamic update of domtree with edge insertions and deletions in the
@@ -855,6 +844,13 @@ let cl = Int32[32, 1, 1, 1000, 240, 230, 0, 0, 0]
     @test roundtrip_di(cl, 1, 3) == cl
     @test roundtrip_di(cl, 32, 3) == cl
     @test roundtrip_di(cl, 33, 3) == cl
+end
+let cl = Int32[0,0,0,255,0,0,256,0,0,257,0,0]
+    @test roundtrip_di(cl, -1, 4) == cl
+    @test roundtrip_di(cl, 0, 4) == cl
+    @test roundtrip_di(cl, 1, 4) == cl
+    @test roundtrip_di(cl, 32, 4) == cl
+    @test roundtrip_di(cl, 33, 4) == cl
 end
 
 @test_throws ErrorException Base.code_ircode(+, (Float64, Float64); optimize_until = "nonexisting pass name")

@@ -2073,7 +2073,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                             t = @elapsed ret = begin
                                 Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !s.ignore_loaded;
                                                   flags=flags_, cacheflags, loadable_exts, signal_channel=make_signal_channel(),
-                                                  pid_channel=pid_ch)
+                                                  pid_channel=pid_ch, report_timing=true)
                             end
                         else
                             fullname = full_name(s.ext_to_parent, pkg)
@@ -2098,7 +2098,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                                 end
                                 Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !s.ignore_loaded;
                                                   flags=flags_, cacheflags, loadable_exts, signal_channel=make_signal_channel(),
-                                                  pid_channel=pid_ch)
+                                                  pid_channel=pid_ch, report_timing=true)
                             end
                         end
                         if ret isa Exception

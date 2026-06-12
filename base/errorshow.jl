@@ -470,6 +470,8 @@ function show_type_diff(io::IO, @nospecialize(sig), @nospecialize(called), use_c
     sig_params, called_params, alias = params
     if alias !== nothing
         show_typealias_name(io, alias)
+    elseif sig isa TypeEq
+        print(io, "Type")
     else
         show_type_name(io, (sig::DataType).name)
     end
@@ -543,6 +545,9 @@ end
 #   `(sa_env, ca_env, alias::GlobalRef)`           — both resolve to the same alias
 #   `nothing`                                      — bail; caller falls back to whole-subtree highlighting
 function descend_params(io::IO, @nospecialize(sig), @nospecialize(called))
+    if sig isa TypeEq && called isa TypeEq
+        return Core.svec(type_parameter(sig)), Core.svec(type_parameter(called)), nothing
+    end
     sig isa DataType && called isa DataType || return nothing
     sig.name === called.name || return nothing
     n = length(sig.parameters)
@@ -611,7 +616,7 @@ function show_shadowed_type_hint(io::IO, @nospecialize(f), san_arg_types_param::
             isa(expected, Core.TypeofVararg) && (expected = unwrapva(expected))
 
             e_dt = unwrap_unionall(expected); isa(e_dt, DataType) || continue
-            a_dt = unwrap_unionall(san_arg_types_param[i])::DataType
+            a_dt = unwrap_unionall(san_arg_types_param[i]); isa(a_dt, DataType) || continue
             e_tn, a_tn = e_dt.name, a_dt.name
 
             # actual shadowing heuristics
@@ -665,8 +670,11 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
     # pool MethodErrors for these two functions.
     if f === convert && !isempty(arg_types_param)
         at1 = arg_types_param[1]
-        if isType(at1) && !has_free_typevars(at1) && at1.parameters[1] isa Type
-            push!(funcs, (at1.parameters[1], arg_types_param[2:end]))
+        if isType(at1) && !has_free_typevars(at1)
+            at1p = type_parameter(at1)
+            if at1p isa Type
+                push!(funcs, (at1p, arg_types_param[2:end]))
+            end
         end
     end
 
@@ -1364,7 +1372,7 @@ function nonsetable_type_hint_handler(io, ex, arg_types, kwargs)
             printstyled(io, "a[1, 2]", color=:cyan)
             print(io, " rather than a[1][2]")
         elseif isType(T)
-            Tx = T.parameters[1]
+            Tx = type_parameter(T)
             print(io, "\nYou attempted to index the type $Tx, rather than an instance of the type. Make sure you create the type using its constructor: ")
             printstyled(io, "d = $Tx([...])", color=:cyan)
             print(io, " rather than d = $Tx")
@@ -1385,6 +1393,18 @@ function string_concatenation_hint_handler(@nospecialize(io::IO), ex::MethodErro
 end
 
 Experimental.register_error_hint(string_concatenation_hint_handler, MethodError)
+
+# Display a hint in case the user tries to use replace! on a string
+# (replace! cannot modify a string in place; replace returns a new string)
+function string_replace_hint_handler(@nospecialize(io::IO), ex::MethodError, arg_types::Vector{Any}, kwargs::Vector{Any})
+    if ex.f === _replace! && any(@nospecialize(a) -> unwrapva(a) <: AbstractString, arg_types)
+        print(io, "\n`String`s cannot be modified with `replace!`. Use ")
+        printstyled(io, "replace", color=:cyan)
+        print(io, " instead, which returns a new string.")
+    end
+end
+
+Experimental.register_error_hint(string_replace_hint_handler, MethodError)
 
 # Display a hint in case the user tries to use the min or max function on an iterable
 # or tries to use something like `collect` on an iterator without defining either IteratorSize or length

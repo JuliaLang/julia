@@ -119,6 +119,13 @@ end
         Diagnostic(1, 0, :error, "premature end of input")
     @test diagnostic("", rule=:atom) ==
         Diagnostic(1, 0, :error, "premature end of input")
+
+    # `..` immediately followed by another operator must be space-separated, as
+    # the lexer no longer glues the dots into a single `..` token (#573)
+    @test diagnostic("a..+b") ==
+        Diagnostic(4, 3, :error, "`..` here is interpreted as a binary operator. A space is required if followed by another operator.")
+    @test diagnostic("a..−b") ==
+        Diagnostic(4, 3, :error, "`..` here is interpreted as a binary operator. A space is required if followed by another operator.")
 end
 
 @testset "parser warnings" begin

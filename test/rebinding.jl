@@ -428,6 +428,23 @@ module Invalidate61745
     @test caller_both() == "foo_changed!bar_changed!"
 end
 
+# Test that codegen does not bake in a binding's value when there is no forward
+# edge from the `CodeInstance` to the binding. Without const-prop tracking the
+# `Module` argument, inference cannot record a `Binding` edge for `M.foo`, so
+# codegen must fall back to a runtime binding load to remain correct under
+# redefinition (#61745).
+module Invalidate61745_indirect
+    using Test
+    module M
+        const foo = "unchanged"
+    end
+    indirect_access(modref::Module) = Base.getproperty(modref, :foo)::String
+    caller() = indirect_access(M)
+    @test caller() == "unchanged"
+    Core.eval(M, :(const foo = "changed!"))
+    @test caller() == "changed!"
+end
+
 # Test @reexport
 module ReexportTests
     using Test

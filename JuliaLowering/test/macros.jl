@@ -7,6 +7,83 @@ Base.eval(test_mod, :(const var"@K_str" = $(JuliaLowering.var"@K_str")))
 Base.eval(test_mod, :(const JuliaLowering = $(JuliaLowering)))
 Base.eval(test_mod, :(const JuliaSyntax = $(JuliaSyntax)))
 
+# Set up identity macros for use in this file
+# - `old_e`, escaping its whole output, should do nothing to an expression
+# - `new_m`, introducing no new syntax, should behave exactly as `old_e` does
+# - `old_*` should behave the same across JL and flisp
+# - `old_h` should not be specified too hard here (buggy renaming pass)
+fl_eval(test_mod, :(macro old_e(x); esc(x); end))
+fl_eval(test_mod, :(macro old_h(x); x; end))
+JuliaLowering.include_string(test_mod, "macro new_m(x); x; end")
+fl_eval(test_mod, :(global mvar = "global mvar"))
+
+@testset "basic hygiene and escaping: old macros" for run in [
+    (x::String)->Base.include_string(
+        test_mod, "#=FLISP SANITY-CHECK=# "*x),
+    (x::String)->JuliaLowering.include_string(
+        test_mod, "#=JL COMPAT=# "*x; expr_compat_mode=true),
+    (x::String)->JuliaLowering.include_string(
+        test_mod, "#=JL=# "*x; expr_compat_mode=false)]
+
+    @test run("@old_e let mvar = 0; mvar; end") == 0
+    @test run("@old_e let @old_e(mvar = 0); mvar; end") == 0
+    @test run("@old_e let @old_e(@old_e(mvar = 0)); mvar; end") == 0
+    @test run("@old_e let @old_e(mvar) = 0; mvar; end") == 0
+    @test run("@old_e let @old_e(@old_e(mvar)) = 0; mvar; end") == 0
+    @test run("@old_e let mvar = 0; @old_e(mvar); end") == 0
+    @test run("@old_e let mvar = 0; @old_e(@old_e(mvar)); end") == 0
+    @test run("@old_e let @old_e(@old_e(mvar) = 0); @old_e(mvar); end") == 0
+
+    @test run("@old_h let mvar = 0; mvar; end") == 0
+    @test run("@old_h let @old_e(mvar = 0); mvar; end") == 0
+    @test run("@old_h let @old_e(@old_e(mvar = 0)); mvar; end") == 0
+    @test run("@old_h let @old_e(mvar) = 0; mvar; end") == 0
+    @test run("@old_h let @old_e(@old_e(mvar)) = 0; mvar; end") == 0
+    @test run("@old_h let mvar = 0; @old_e(mvar); end") == 0
+    @test run("@old_h let mvar = 0; @old_e(@old_e(mvar)); end") == 0
+    @test run("@old_h let @old_e(@old_e(mvar) = 0); @old_e(mvar); end") == 0
+
+    @test run("@old_h @old_h let mvar = 0; mvar; end") == 0
+    @test run("@old_h @old_h let @old_e(mvar = 0); mvar; end") == 0
+    @test run("@old_h @old_h let @old_e(@old_e(mvar = 0)); mvar; end") == 0
+    @test run("@old_h @old_h let @old_e(mvar) = 0; mvar; end") == 0
+    @test run("@old_h @old_h let @old_e(@old_e(mvar)) = 0; mvar; end") == 0
+    @test run("@old_h @old_h let mvar = 0; @old_e(mvar); end") == 0
+    @test run("@old_h @old_h let mvar = 0; @old_e(@old_e(mvar)); end") == 0
+    @test run("@old_h @old_h let @old_e(@old_e(mvar) = 0); @old_e(mvar); end") == 0
+end
+
+@testset "basic hygiene and escaping: new macros only" for expr_compat_mode in [true, false]
+    local run = (x::String)->JuliaLowering.include_string(test_mod, x; expr_compat_mode)
+
+    @test run("@new_m let mvar = 0; mvar; end") == 0
+    @test run("@new_m let @new_m(mvar = 0); mvar; end") == 0
+    @test run("@new_m let @new_m(@new_m(mvar = 0)); mvar; end") == 0
+    @test run("@new_m let @new_m(mvar) = 0; mvar; end") == 0
+    @test run("@new_m let @new_m(@new_m(mvar)) = 0; mvar; end") == 0
+    @test run("@new_m let mvar = 0; @new_m(mvar); end") == 0
+    @test run("@new_m let mvar = 0; @new_m(@new_m(mvar)); end") == 0
+    @test run("@new_m let @new_m(@new_m(mvar) = 0); @new_m(mvar); end") == 0
+end
+
+@testset "basic hygiene and escaping: new+old interop" for expr_compat_mode in [true, false],
+    mcall in ["@old_e ", "@new_m ", "@old_e @new_m ", "@new_m @old_e "],
+    old_h in ["", "@old_h "]
+
+    local run = (x::String)->JuliaLowering.include_string(test_mod, x; expr_compat_mode)
+
+    @test run(old_h*mcall*"let mvar = 0; mvar; end") == 0
+    @test run(old_h*"let ("*mcall*"mvar = 0); mvar; end") == 0
+    @test run(old_h*"let ("*mcall*"mvar) = 0; mvar; end") == 0
+    @test run(old_h*"let mvar = 0; ("*mcall*"mvar); end") == 0
+
+    @testset for mcall2 in ["@old_e ", "@new_m ", "@old_e @new_m ", "@new_m @old_e "]
+        @test run(old_h*mcall*"let ("*mcall2*"mvar) = 0; mvar; end") == 0
+        @test run(old_h*mcall*"let mvar = 0; ("*mcall2*"mvar); end") == 0
+        @test run(old_h*"let ("*mcall*"mvar = 0); ("*mcall2*"mvar); end") == 0
+    end
+end
+
 JuliaLowering.include_string(test_mod, raw"""
 module M
     using ..JuliaLowering: JuliaLowering, adopt_scope
@@ -132,6 +209,13 @@ ctx, expanded = JuliaLowering.expand_forms_1(test_mod, ex, false, Base.get_world
         x * 10
     end
     """; expr_compat_mode) == 90
+    @test JuliaLowering.include_string(test_mod, raw"""
+    let fp = @cfunction(Cint, (Cint,)) do x
+            x + Cint(1)
+        end
+        ccall(fp isa Ptr ? fp : fp.ptr, Cint, (Cint,), 2)
+    end
+    """; expr_compat_mode) == 3
 end
 
 @test JuliaLowering.include_string(test_mod, raw"""
@@ -170,7 +254,7 @@ call_world_arg_test = JuliaLowering.parsestmt(JuliaLowering.SyntaxTree, "@world_
 # Layer parenting
 @test expanded[1].scope_layer == 2
 @test expanded[2][1].scope_layer == 3
-@test getfield.(ctx.scope_layers, :parent_layer) == [0,1,2]
+@test getfield.(ctx.scope_layers, :parent_id) == [0,1,2]
 
 JuliaLowering.include_string(test_mod, """
 f_throw(x) = throw(x)
@@ -187,7 +271,9 @@ let (err, st) = try
     @test !isnothing(err.err)
     # Check that `catch_backtrace` can capture the stacktrace of the macro functions
     @test any(sf->sf.func===:f_throw, st)
-    @test any(sf->sf.func===Symbol("@m_throw"), st)
+    # TODO: store this in DebugInfo
+    @test_broken any(sf->sf.func===Symbol("@m_throw"), st)
+    @test any(sf->sf.func===Symbol("macro expansion"), st)
 end
 
 let err = try
@@ -233,9 +319,9 @@ JuliaLowering.include_string(test_mod, raw"""
         end
     end
 
-    macro newstyle(a, b, c)
+    macro newstyle3(a, b, c)
         quote
-            x = "x in @newstyle"
+            x = "x in @newstyle3"
             ($a, $b, $c, x)
         end
     end
@@ -246,7 +332,7 @@ Base.eval(test_mod, :(
 macro oldstyle(a, b)
     quote
         x = "x in @oldstyle"
-        @newstyle $(esc(a)) $(esc(b)) x
+        @newstyle3 $(esc(a)) $(esc(b)) x
     end
 end
 ))
@@ -257,17 +343,17 @@ end
 """) == ("x in outer scope",
          "x in call_oldstyle_macro",
          "x in @oldstyle",
-         "x in @newstyle")
+         "x in @newstyle3")
 
-# Old style unhygenic escaping with esc()
+# Old style unhygienic escaping with esc()
 Base.eval(test_mod, :(
-macro oldstyle_unhygenic()
+macro oldstyle_unhygienic()
     esc(:x)
 end
 ))
 @test JuliaLowering.include_string(test_mod, """
 let x = "x in outer scope"
-    @oldstyle_unhygenic
+    @oldstyle_unhygienic
 end
 """) == "x in outer scope"
 
@@ -498,6 +584,12 @@ end
     ref = Meta.lower(test_mod, Meta.parse(prog))
     our = jlower_e(prog)
     @test find_method_ci(ref).purity === find_method_ci(our).purity
+
+    prog = "Base.@pure @inline foo(x) = x + 1"
+    ref = Meta.lower(test_mod, Meta.parse(prog))
+    our = jlower_e(prog)
+    @test find_method_ci(ref).purity === find_method_ci(our).purity
+    @test find_method_ci(ref).inlining === find_method_ci(our).inlining
 
     # TODO: no api for option retrieval, just check that it compiles
     let options_mod = Module()

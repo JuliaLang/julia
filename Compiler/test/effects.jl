@@ -46,6 +46,17 @@ end
     return nothing
 end
 
+# `supertype(::UnionAll)` can throw (its recursion hits `supertype(::Union)` for
+# inputs like `Union{S,T} where {S,T}`), so it must be `:foldable` rather than
+# `:total` and a dead call to it must not be eliminated (issue #61988)
+@test Compiler.is_foldable(Base.infer_effects(supertype, (UnionAll,)))
+@test !Compiler.is_nothrow(Base.infer_effects(supertype, (UnionAll,)))
+@test !fully_eliminated((UnionAll,)) do x
+    supertype(x)
+    return nothing
+end
+@test_throws MethodError (x -> (supertype(x); nothing))(Union{S,T} where {S,T})
+
 # Test that a missing methtable identification gets tainted
 # appropriately
 struct FCallback; f::Union{Nothing, Function}; end
