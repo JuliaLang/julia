@@ -1941,7 +1941,24 @@ static unsigned typeeq_hash(jl_value_t *T, int *failed) JL_NOTSAFEPOINT
 // does not collide with `Type{T}`
 static unsigned typeegal_hash(jl_value_t *T, int *failed) JL_NOTSAFEPOINT
 {
-    unsigned hashT = type_hash(T, failed);
+    unsigned hashT;
+    if (!*failed) {
+        int hfail = 0;
+        hashT = type_hash(T, &hfail);
+        if (hfail) {
+            // egality keys compare by `jl_types_egal`, and egal types are
+            // structurally identical, so the failure-tolerant structural hash
+            // is always stable for them; never propagate the failure (which
+            // would zero the hash of every dispatch tuple whose `TypeEgal{T}`
+            // slot wraps e.g. a Union-bounded typename wrapper and degrade
+            // the method-specializations cache to linear scans, cf. #62080)
+            hfail = 1;
+            hashT = type_hash(T, &hfail);
+        }
+    }
+    else {
+        hashT = type_hash(T, failed);
+    }
     return bitmix(jl_typeegal_type->name->hash, hashT);
 }
 
