@@ -1757,6 +1757,8 @@ static void cache_insert(
         jl_method_instance_t *newmeth,
         int offs)
 {
+    // exact-dispatch lookups (`jl_typemap_entry_assoc_exact`) require datatype sigs
+    assert(jl_is_datatype(cachett));
     int unconstrained_max = max_valid == ~(size_t)0;
     if (max_valid > current_world)
         max_valid = current_world;
@@ -1916,6 +1918,10 @@ static void recache_method(
         cache_with_orig = 1;
     if (!cache_with_orig && !jl_subtype(compilationsig, (jl_value_t*)definition->sig))
         // TODO: use (compilationsig = definition->sig; cache_with_orig = jl_is_unionall(definition->sig);) here instead?
+        cache_with_orig = 1;
+    if (!cache_with_orig && (!jl_is_datatype(compilationsig) || ((jl_datatype_t*)compilationsig)->hasfreetypevars))
+        // a UnionAll or free-typevar signature (e.g. the specTypes of a sig-widened
+        // MethodInstance) can never serve as an exact-dispatch cache key
         cache_with_orig = 1;
     if (cache_with_orig && (orig_in_cache || tt == NULL)) {
         if (mc) JL_UNLOCK(&mc->writelock);
