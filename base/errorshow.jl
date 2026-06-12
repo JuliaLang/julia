@@ -210,8 +210,7 @@ end
 
 # the dispatch type of an argument value, mirroring `jl_inst_arg_tuple_type`, so
 # reflection through `typesof` agrees with actual dispatch
-_dispatch_typeof(@nospecialize a) =
-    (isa(a, Type) && !has_free_typevars(a)) ? Core.TypeEgal{a} : Core.Typeof(a)
+_dispatch_typeof(@nospecialize a) = ccall(:jl_arg_slot_type, Any, (Any,), a)
 typesof(@nospecialize args...) = Tuple{Any[_dispatch_typeof(arg) for arg in args]...}
 
 function print_with_compare(io::IO, @nospecialize(a::DataType), @nospecialize(b::DataType), color::Symbol)

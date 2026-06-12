@@ -61,9 +61,11 @@ function get_typeof(@nospecialize ex)
     if isexpr(ex, :..., 1)
         splatted = ex.args[1]
         isexpr(splatted, :(::)) && return Expr(:curly, :(Core.Vararg), splatted.args[end])
-        return :(Any[Core.Typeof(x) for x in $splatted]...)
+        return :(Any[Base._dispatch_typeof(x) for x in $splatted]...)
     end
-    return :(Core.Typeof($ex))
+    # use the dispatch type so the reflected call agrees with runtime dispatch:
+    # a type-valued argument is keyed by egality (`Core.TypeEgal`), not `Type{x}` (#61323)
+    return :(Base._dispatch_typeof($ex))
 end
 
 function is_broadcasting_call(ex)

@@ -634,7 +634,7 @@ expansion = string(@macroexpand @code_typed optimize=false max.(Ref.([5, 6])...)
 # Make sure broadcasts in nested arguments are not processed.
 v = Any[1]
 expansion = string(@macroexpand @code_typed v[1] = rand.(Ref(1)))
-@test contains(expansion, "Typeof(rand.(Ref(1)))")
+@test contains(expansion, "_dispatch_typeof(rand.(Ref(1)))")
 @test !contains(expansion, "(x1) =")
 
 # Issue # 45889

@@ -20,6 +20,7 @@
     XX(jl_apply_type) \
     XX(jl_apply_type1) \
     XX(jl_apply_type2) \
+    XX(jl_arg_slot_type) \
     XX(jl_argument_datatype) \
     XX(jl_argument_datatypename) \
     XX(jl_array_del_end) \

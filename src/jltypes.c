@@ -3097,6 +3097,20 @@ jl_value_t *jl_wrap_TypeEgal(jl_value_t *t)
     return te;
 }
 
+// The most specific type containing the value `v`: the per-argument key
+// `jl_inst_arg_tuple_type` uses — egality-pinned closed type values, equality
+// keys (`Type{v}`) for free-typevar types (#61242), `typeof` otherwise.
+// This backs `Core.Typeof`.
+JL_DLLEXPORT jl_value_t *jl_arg_slot_type(jl_value_t *v)
+{
+    if (jl_is_type(v)) {
+        if (jl_has_free_typevars(v))
+            return (jl_value_t*)jl_wrap_Type(v);
+        return jl_wrap_TypeEgal(v);
+    }
+    return jl_typeof(v);
+}
+
 jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n, int check, int nothrow)
 {
     int valid = 1;
