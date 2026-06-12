@@ -3305,9 +3305,7 @@ static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex)
             size_t idx = jl_unbox_long(jl_exprarg(e, 0));
             if (idx <= jl_svec_len(ctx.linfo->sparam_vals)) {
                 jl_value_t *e = jl_svecref(ctx.linfo->sparam_vals, idx - 1);
-                if (jl_is_svec(e) || jl_has_free_typevars(e))
-                    return NULL;
-                return e;
+                return jl_sparam_defined_value(e);
             }
         }
         return NULL;
@@ -5913,8 +5911,8 @@ static jl_cgval_t emit_checked_var(jl_codectx_t &ctx, Value *bp, jl_sym_t *name,
 static jl_cgval_t emit_sparam(jl_codectx_t &ctx, size_t i)
 {
     if (jl_svec_len(ctx.linfo->sparam_vals) > 0) {
-        jl_value_t *e = jl_svecref(ctx.linfo->sparam_vals, i);
-        if (!jl_is_svec(e) && !jl_has_free_typevars(e)) {
+        jl_value_t *e = jl_sparam_defined_value(jl_svecref(ctx.linfo->sparam_vals, i));
+        if (e != NULL) {
             return mark_julia_const(ctx, e);
         }
     }
@@ -5966,7 +5964,7 @@ static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym, int allow_i
         size_t i = jl_unbox_long(jl_exprarg(sym, 0)) - 1;
         if (jl_svec_len(ctx.linfo->sparam_vals) > 0) {
             jl_value_t *e = jl_svecref(ctx.linfo->sparam_vals, i);
-            if (!jl_is_svec(e) && !jl_has_free_typevars(e)) {
+            if (jl_sparam_defined_value(e) != NULL) {
                 return mark_julia_const(ctx, jl_true);
             }
         }
