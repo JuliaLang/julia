@@ -41,9 +41,11 @@ function GitAnnotated(repo::GitRepo, fh::FetchHead)
 end
 
 function GitAnnotated(repo::GitRepo, committish::AbstractString)
-    obj = GitObject(repo, committish)
-    cmt = peel(GitCommit, obj)
-    return GitAnnotated(repo, GitHash(cmt))
+    with(GitObject(repo, committish)) do obj
+        with(peel(GitCommit, obj)) do cmt
+            GitAnnotated(repo, GitHash(cmt))
+        end
+    end
 end
 
 function GitHash(ann::GitAnnotated)
@@ -104,18 +106,18 @@ referred to by `ann` is descended from the current HEAD (e.g. if pulling changes
 from a remote branch which is simply ahead of the local branch tip).
 """
 function ffmerge!(repo::GitRepo, ann::GitAnnotated)
-    cmt = GitCommit(repo, GitHash(ann))
-
-    checkout_tree(repo, cmt)
-    with(head(repo)) do head_ref
-        cmt_oid = GitHash(cmt)
-        msg = "libgit2.merge: fastforward $(string(cmt_oid)) into $(name(head_ref))"
-        new_head_ref = if reftype(head_ref) == Consts.REF_OID
-            target!(head_ref, cmt_oid, msg=msg)
-        else
-            GitReference(repo, cmt_oid, fullname(head_ref), msg=msg)
+    with(GitCommit(repo, GitHash(ann))) do cmt
+        checkout_tree(repo, cmt)
+        with(head(repo)) do head_ref
+            cmt_oid = GitHash(cmt)
+            msg = "libgit2.merge: fastforward $(string(cmt_oid)) into $(name(head_ref))"
+            new_head_ref = if reftype(head_ref) == Consts.REF_OID
+                target!(head_ref, cmt_oid, msg=msg)
+            else
+                GitReference(repo, cmt_oid, fullname(head_ref), msg=msg)
+            end
+            close(new_head_ref)
         end
-        close(new_head_ref)
     end
     return true
 end
@@ -219,7 +221,7 @@ function merge!(repo::GitRepo, anns::Vector{GitAnnotated}, fastforward::Bool;
     merge_result = if ffpref == Consts.MERGE_PREFERENCE_NONE
         if isset(ma, Cint(Consts.MERGE_ANALYSIS_FASTFORWARD))
             if length(anns) > 1
-                @warn "Unable to perform Fast-Forward merge with multiple merge heads."
+                @warn "Unable to perform Fast-Forward merge with multiple merge headss"
                 false
             else
                 ffmerge!(repo, anns[1])
@@ -232,7 +234,7 @@ function merge!(repo::GitRepo, anns::Vector{GitAnnotated}, fastforward::Bool;
     elseif ffpref == Consts.MERGE_PREFERENCE_FASTFORWARD_ONLY
         if isset(ma, Cint(Consts.MERGE_ANALYSIS_FASTFORWARD))
             if length(anns) > 1
-                @warn "Unable to perform Fast-Forward merge with multiple merge heads."
+                @warn "Unable to perform Fast-Forward merge with multiple merge heads"
                 false
             else
                 ffmerge!(repo, anns[1])

@@ -500,6 +500,7 @@ static jl_value_t *normalize_typeofbottom_typealias(jl_value_t *t) JL_NOTSAFEPOI
 // quickly test that two types are identical
 static int obviously_egal(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT
 {
+    if (a == b) return 1;
     a = normalize_typeofbottom_typealias(a);
     b = normalize_typeofbottom_typealias(b);
     if (a == b) return 1;
@@ -539,6 +540,8 @@ static int obviously_egal(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT
 
 static int obviously_unequal(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT
 {
+    if (a == b)
+        return 0;
     a = normalize_typeofbottom_typealias(a);
     b = normalize_typeofbottom_typealias(b);
     if (a == b)

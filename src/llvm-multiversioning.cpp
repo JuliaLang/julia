@@ -156,21 +156,25 @@ struct TargetSpec {
     bool clone_all = false;
     bool opt_size = false;
     bool min_size = false;
-    tp::FeatureDiff diff;
+    // What's new vs the base target, in codegen terms (see compute_clone_categories)
+    bool has_new_math = false;
+    bool has_new_simd = false;
+    bool has_new_float16 = false;
+    bool has_new_bfloat16 = false;
 
     // Which per-function categories to clone for this target
     uint32_t clone_flags() const {
         uint32_t mask = JL_CLONE_LOOP | JL_CLONE_CPU;
-        if (diff.has_new_math)     mask |= JL_CLONE_MATH;
-        if (diff.has_new_simd)     mask |= JL_CLONE_SIMD;
-        if (diff.has_new_float16)  mask |= JL_CLONE_FLOAT16;
-        if (diff.has_new_bfloat16) mask |= JL_CLONE_BFLOAT16;
+        if (has_new_math)     mask |= JL_CLONE_MATH;
+        if (has_new_simd)     mask |= JL_CLONE_SIMD;
+        if (has_new_float16)  mask |= JL_CLONE_FLOAT16;
+        if (has_new_bfloat16) mask |= JL_CLONE_BFLOAT16;
         return mask;
     }
 
     TargetSpec() = default;
 
-    static TargetSpec fromSpec(jl_target_spec_t &spec) {
+    static TargetSpec fromSpec(const jl_target_spec_t &spec) {
         TargetSpec out;
         out.cpu_name = spec.cpu_name;
         out.cpu_features = spec.cpu_features;
@@ -178,31 +182,59 @@ struct TargetSpec {
         out.clone_all = spec.clone_all;
         out.opt_size = spec.opt_size;
         out.min_size = spec.min_size;
-        out.diff = spec.diff;
         return out;
+    }
+
+    // Determine which cloning categories this target enables relative to its
+    // base target, by diffing the enabled-feature bitsets. A category is set
+    // when the delta includes a feature that changes how functions in that
+    // category are compiled (e.g. FMA contraction, wider vectors, native
+    // half/bfloat support).
+    void compute_clone_categories(const jl_target_spec_t &spec, const jl_target_spec_t &base_spec) {
+        tp::FeatureBits diff = {};
+        size_t nwords = spec.en_features_nwords < TARGET_FEATURE_WORDS ?
+                        spec.en_features_nwords : TARGET_FEATURE_WORDS;
+        for (size_t i = 0; i < nwords; i++)
+            diff.bits[i] = spec.en_features[i] & ~base_spec.en_features[i];
+#if defined(_CPU_X86_) || defined(_CPU_X86_64_)
+        has_new_math = tp::has_feature(diff, "fma") || tp::has_feature(diff, "fma4");
+        has_new_simd = tp::has_feature(diff, "avx") || tp::has_feature(diff, "avx2") ||
+                       tp::has_feature(diff, "avx512f") || tp::has_feature(diff, "sse4.1");
+        has_new_float16 = tp::has_feature(diff, "avx512fp16");
+        has_new_bfloat16 = tp::has_feature(diff, "avx512bf16");
+#elif defined(_CPU_AARCH64_)
+        has_new_simd = tp::has_feature(diff, "sve") || tp::has_feature(diff, "sve2");
+        has_new_float16 = tp::has_feature(diff, "fullfp16");
+        has_new_bfloat16 = tp::has_feature(diff, "bf16");
+#elif defined(_CPU_RISCV64_)
+        has_new_simd = tp::has_feature(diff, "v") || tp::has_feature(diff, "zve32x") ||
+                       tp::has_feature(diff, "zve64d");
+        has_new_float16 = tp::has_feature(diff, "zfh");
+        has_new_bfloat16 = tp::has_feature(diff, "zvfbfmin");
+#endif
     }
 
     // Pack/unpack for LLVM metadata serialization
     uint32_t packed_flags() const {
         uint32_t f = 0;
-        if (clone_all)             f |= 1 << 0;
-        if (opt_size)              f |= 1 << 1;
-        if (min_size)              f |= 1 << 2;
-        if (diff.has_new_math)     f |= 1 << 3;
-        if (diff.has_new_simd)     f |= 1 << 4;
-        if (diff.has_new_float16)  f |= 1 << 5;
-        if (diff.has_new_bfloat16) f |= 1 << 6;
+        if (clone_all)        f |= 1 << 0;
+        if (opt_size)         f |= 1 << 1;
+        if (min_size)         f |= 1 << 2;
+        if (has_new_math)     f |= 1 << 3;
+        if (has_new_simd)     f |= 1 << 4;
+        if (has_new_float16)  f |= 1 << 5;
+        if (has_new_bfloat16) f |= 1 << 6;
         return f;
     }
 
     void unpack_flags(uint32_t f) {
-        clone_all             = f & (1 << 0);
-        opt_size              = f & (1 << 1);
-        min_size              = f & (1 << 2);
-        diff.has_new_math     = f & (1 << 3);
-        diff.has_new_simd     = f & (1 << 4);
-        diff.has_new_float16  = f & (1 << 5);
-        diff.has_new_bfloat16 = f & (1 << 6);
+        clone_all        = f & (1 << 0);
+        opt_size         = f & (1 << 1);
+        min_size         = f & (1 << 2);
+        has_new_math     = f & (1 << 3);
+        has_new_simd     = f & (1 << 4);
+        has_new_float16  = f & (1 << 5);
+        has_new_bfloat16 = f & (1 << 6);
     }
 
     static TargetSpec fromMD(MDTuple *tup) {
@@ -261,11 +293,17 @@ static void annotate_module_clones(Module &M) {
         specs = std::move(*maybe_specs);
     } else {
 #ifndef __clang_analyzer__
-        auto full = jl_get_llvm_clone_targets(jl_options.cpu_target);
-        specs.reserve(full.specs.size());
-        for (auto &spec: full.specs) {
-            specs.push_back(TargetSpec::fromSpec(spec));
+        jl_clone_targets_t full = jl_get_llvm_clone_targets(jl_options.cpu_target);
+        specs.reserve(full.nspecs);
+        for (size_t i = 0; i < full.nspecs; i++) {
+            TargetSpec spec = TargetSpec::fromSpec(full.specs[i]);
+            if (i > 0) {
+                size_t base = full.specs[i].base >= 0 ? full.specs[i].base : 0;
+                spec.compute_clone_categories(full.specs[i], full.specs[base]);
+            }
+            specs.push_back(std::move(spec));
         }
+        jl_free_clone_targets(&full);
         set_target_specs(M, specs);
 #endif
     }
