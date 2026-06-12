@@ -222,12 +222,25 @@ The test condition couldn't be evaluated due to an exception, or
 it evaluated to something other than a [`Bool`](@ref).
 In the case of `@test_broken` it is used to indicate that an
 unexpected `Pass` `Result` occurred.
+
+Fields:
+- `test_type::Symbol`: the type of test that produced this result.
+- `orig_expr::String`: the original expression as a string.
+- `value::String`: a string representation of the exception or value.
+- `backtrace::String`: a human-readable formatted backtrace string.
+- `raw_backtrace::Union{Vector{Base.StackTraces.StackFrame}, Nothing}`: the
+  structured backtrace as a vector of stack frames, available for programmatic
+  use by tooling (e.g. IDEs). Populated for `:test_error` and `:nontest_error`
+  test types; `nothing` otherwise.
+- `context::Union{Nothing, String}`: optional context string from `context=` keyword.
+- `source::LineNumberNode`: the source location of the test.
 """
 struct Error <: Result
     test_type::Symbol
     orig_expr::String
     value::String
     backtrace::String
+    raw_backtrace::Union{Vector{Base.StackTraces.StackFrame}, Nothing}
     context::Union{Nothing, String}
     source::LineNumberNode
 
@@ -264,17 +277,22 @@ struct Error <: Result
                         "of type " * string(typeof(ex))
                     end
             end
+        raw_bt = nothing
+        if !isnothing(excs) && (test_type === :test_error || test_type === :nontest_error)
+            raw_bt = stacktrace(excs[end][2])
+        end
         return new(test_type,
             string(orig_expr),
             value,
             bt_str,
+            raw_bt,
             context,
             source)
     end
 
     # Internal constructor for creating Error with pre-processed values (used by ContextTestSet)
-    function Error(test_type::Symbol, orig_expr::String, value::String, backtrace::String, context::Union{Nothing, String}, source::LineNumberNode)
-        return new(test_type, orig_expr, value, backtrace, context, source)
+    function Error(test_type::Symbol, orig_expr::String, value::String, backtrace::String, raw_backtrace::Union{Vector{Base.StackTraces.StackFrame}, Nothing}, context::Union{Nothing, String}, source::LineNumberNode)
+        return new(test_type, orig_expr, value, backtrace, raw_backtrace, context, source)
     end
 end
 
@@ -1484,7 +1502,7 @@ function record(c::ContextTestSet, t::Error)
     context = string(c.context_name, " = ", c.context)
     context = t.context === nothing ? context : string(t.context, "\n              ", context)
     # Create a new Error with the same data but updated context using internal constructor
-    new_error = Error(t.test_type, t.orig_expr, t.value, t.backtrace, context, t.source)
+    new_error = Error(t.test_type, t.orig_expr, t.value, t.backtrace, t.raw_backtrace, context, t.source)
     record(c.parent_ts, new_error)
 end
 
