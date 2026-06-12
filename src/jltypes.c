@@ -455,8 +455,10 @@ int jl_find_union_component(jl_value_t *haystack, jl_value_t *needle, unsigned *
             return 1;
         haystack = u->b;
     }
-    if (needle == haystack)
-        return 1;
+    // A `Type{Union{}}` component stores its instance with `TypeofBottom`
+    // layout, so a needle of `typeof(Union{})` must match it.
+    if (needle == haystack || normalize_typeofbottom_layout_alias(haystack) == needle)
+         return 1;
     (*nth)++;
     return 0;
 }

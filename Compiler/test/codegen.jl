@@ -1218,3 +1218,8 @@ _blackbox_licmloop_simple(1.0)
     @test count(re_licmcall, ir_bb_simple) == 5  # unrolled, not hoisted
     @test !occursin(re_raw_arg, ir_bb_simple)
 end
+
+
+p62093() = Pair{Union{typeof(Union{}),Nothing}, Union{Type{Union{}},Nothing}}(Union{}, Union{})
+# Shouldn't crash
+sizeof(p())
