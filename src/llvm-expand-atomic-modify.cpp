@@ -402,6 +402,10 @@ void expandAtomicModifyToCmpXchg(CallInst &Modify,
           RMW->moveBeforePreserving(cast<Instruction>(ValOp->getUser())->getIterator()); // ValOp is a user of RMW, and RMW has no other dependants (per patternMatchAtomicRMWOp)
           Val = ValOp->get();
         } else if (RMWOp == AtomicRMWInst::Xchg) {
+          // The op ignored the loaded value, so NewVal is computed by the
+          // inlined op body which may be after RMW: move RMW down to the
+          // original call site, which NewVal is known to dominate.
+          RMW->moveBeforePreserving(Modify.getIterator());
           Val = NewVal;
         } else {
           // convert to an atomic fence of the form: atomicrmw or %ptr, 0

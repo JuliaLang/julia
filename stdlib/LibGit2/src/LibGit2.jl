@@ -206,19 +206,18 @@ function diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractStr
     tree1 = GitTree(repo, b1_id)
     tree2 = GitTree(repo, b2_id)
     files = AbstractString[]
-    try
-        diff = diff_tree(repo, tree1, tree2)
-        for i in 1:count(diff)
-            delta = diff[i]
-            delta === nothing && break
-            if Consts.DELTA_STATUS(delta.status) in filter
-                Base.push!(files, unsafe_string(delta.new_file.path))
+    with(tree1) do tree1
+        with(tree2) do tree2
+            with(diff_tree(repo, tree1, tree2)) do diff
+                for i in 1:count(diff)
+                    delta = diff[i]
+                    delta === nothing && break
+                    if Consts.DELTA_STATUS(delta.status) in filter
+                        Base.push!(files, unsafe_string(delta.new_file.path))
+                    end
+                end
             end
         end
-        close(diff)
-    finally
-        close(tree1)
-        close(tree2)
     end
     return files
 end
@@ -447,9 +446,11 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
             new_branch_ref = create_branch(repo, branch_name, cmt, force=force)
         finally
             close(cmt)
-            new_branch_ref === nothing && throw(GitError(Error.Object, Error.ERROR, "cannot create branch `$branch_name` with `$commit_id`"))
-            branch_ref = new_branch_ref
         end
+        if new_branch_ref === nothing
+            throw(GitError(Error.Object, Error.ERROR, "cannot create branch `$branch_name` with `$commit_id`"))
+        end
+        branch_ref = new_branch_ref
     end
 
     branch_ref′ = branch_ref # Avoids boxing `branch_ref`
@@ -524,15 +525,17 @@ function checkout!(repo::GitRepo, commit::AbstractString = "";
     end
 
     # search for commit to get a commit object
-    obj = GitObject(repo, GitHash(commit))
-    peeled = peel(GitCommit, obj)
-    obj_oid = GitHash(peeled)
+    with(GitObject(repo, GitHash(commit))) do obj
+        with(peel(GitCommit, obj)) do peeled
+            obj_oid = GitHash(peeled)
 
-    # checkout commit
-    checkout_tree(repo, peeled, options = force ? CheckoutOptions(checkout_strategy = Consts.CHECKOUT_FORCE) : CheckoutOptions())
+            # checkout commit
+            checkout_tree(repo, peeled, options = force ? CheckoutOptions(checkout_strategy = Consts.CHECKOUT_FORCE) : CheckoutOptions())
 
-    GitReference(repo, obj_oid, force=force,
-                 msg="libgit2.checkout: moving from $(head_name[]) to $(obj_oid))")
+            with(GitReference(repo, obj_oid, force=force,
+                         msg="libgit2.checkout: moving from $(head_name[]) to $(obj_oid)")) do _ end
+        end
+    end
 
     return nothing
 end
