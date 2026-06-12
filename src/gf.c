@@ -3966,6 +3966,7 @@ static jl_code_instance_t *jl_compile_method_very_internal(jl_method_instance_t 
                 mi2 = mi;
             }
             else {
+                jl_typeinf_timing_end(inference_start, is_recompile);
                 return codeinst;
             }
         }
