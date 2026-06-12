@@ -1890,21 +1890,23 @@ static unsigned typeeq_hash(jl_value_t *T, int *failed) JL_NOTSAFEPOINT
     if (!*failed) {
         int hfail = 0;
         hashT = type_hash(T, &hfail);
-        if (hfail && !jl_has_free_typevars(T)) {
-            // Recompute the hash of `T` in failure-tolerant mode rather than
-            // propagating the failure (which would zero out the hash of any type
-            // with a `Type{T}` parameter, e.g. constructor call signatures,
-            // degrading their caches to linear scans). This matches the hash that
-            // the interned `Type{T}` DataType memoized before the TypeEq refactor:
-            // the nofail hash is stable under `jl_types_equal` of the inner `T`
-            // (unions hash associatively), which is exactly the equality used for
-            // `TypeEq` nodes.
-            hfail = 1;
-            hashT = type_hash(T, &hfail);
-        }
-        else if (hfail) {
-            *failed = 1;
-            return 0;
+        if (hfail) {
+            // If `T` is exactly a typename wrapper (e.g. `Type{Broadcasted}`),
+            // recompute in failure-tolerant mode rather than propagating the
+            // failure, which would zero the hash of anything with a `Type{T}`
+            // parameter and degrade its caches to linear scans. Sound because
+            // construction normalizes anything types_equal to a wrapper into
+            // the wrapper itself (cf. #49725); for other `T`, equal types may
+            // be structurally distinct, so the hash must stay 0.
+            jl_value_t *uw = jl_unwrap_unionall(T);
+            if (jl_is_datatype(uw) && ((jl_datatype_t*)uw)->name->wrapper == T) {
+                hfail = 1;
+                hashT = type_hash(T, &hfail);
+            }
+            else {
+                *failed = 1;
+                return 0;
+            }
         }
     }
     else {

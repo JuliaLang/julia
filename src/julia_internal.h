@@ -1353,8 +1353,7 @@ typedef struct {
 
 extern jl_datatype_t *jl_typeapp_type;
 JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *typevars, jl_svec_t *struct_infos);
-// Type predicate for TypeApp. Inline: this sits on the hottest paths of
-// `has_free_typevars`, subtyping and intersection, called once per type node.
+// Type predicate for TypeApp (inline: called per type node on hot type-query paths)
 STATIC_INLINE int jl_is_typeapp(jl_value_t *v) JL_NOTSAFEPOINT
 {
     return jl_typeapp_type != NULL && jl_typeis(v, jl_typeapp_type);
