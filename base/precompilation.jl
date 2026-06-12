@@ -29,7 +29,8 @@ mutable struct PrecompileJob
     waiting_for_bg::Bool
     verbose_timing::String  # raw payload from the worker subprocess; surfaced in verbose mode
     peak_rss_bytes::UInt64  # max RSS observed by `poll_process_stats!`; 0 on unsupported platforms
-    PrecompileJob() = new(JOB_PENDING, 0.0, "", IOBuffer(), Int32(0), false, "", false, "", UInt64(0))
+    retries::Int  # rebuilds, usually after the OS (Windows) blocked the freshly-created image
+    PrecompileJob() = new(JOB_PENDING, 0.0, "", IOBuffer(), Int32(0), false, "", false, "", UInt64(0), 0)
 end
 
 is_pending(j::PrecompileJob)    = j.status == JOB_PENDING
@@ -41,6 +42,7 @@ has_pid(j::PrecompileJob)       = j.pid > 0
 had_pid(j::PrecompileJob)       = j.had_pid
 is_locked(j::PrecompileJob)     = !isempty(j.lock_holder)
 is_waiting(j::PrecompileJob)    = j.waiting_for_bg
+is_retrying(j::PrecompileJob)   = j.retries > 0
 
 mark_started!(j::PrecompileJob, t::Float64=time()) = (j.status = JOB_STARTED; j.started_at = t)
 mark_recompiled!(j::PrecompileJob) = (j.status = JOB_RECOMPILED)
@@ -1858,6 +1860,8 @@ function spawn_print_loop!(s::PrecompileSession)
                                     color_string(" Being precompiled by $(job.lock_holder)", Base.info_color(), s.hascolor)
                                 elseif is_waiting(job)
                                     color_string(" Waiting for background task / IO / timer. Interrupt to inspect", Base.warn_color(), s.hascolor)
+                                elseif is_retrying(job)
+                                    color_string(retry_annotation(job.retries), Base.warn_color(), s.hascolor)
                                 else
                                     ""
                                 end
@@ -1988,6 +1992,27 @@ function precompile_pkgs_maybe_cachefile_lock(f, s::PrecompileSession, pkg_confi
     return cachefile
 end
 
+# Build a fresh pkgimage via `produce_pkgimage`, retrying if Windows Smart App
+# Control blocked loading the freshly built image. Any retries are reported as
+# part of the precompile task status via the PrecompileSession.
+function retry_if_image_blocked_interactive(produce_pkgimage, s::PrecompileSession, pkg_config::PkgConfig)
+    pkg, _ = pkg_config
+    Base.retry_if_image_blocked(produce_pkgimage, pkg;
+        should_stop = () -> should_stop(s),
+        on_retry = (pkg, n, err) -> @lock s.print_lock begin
+            s.jobs[pkg_config].retries = n
+            if BG.monitoring
+                # The progress display reports the retry: as an inline annotation on the
+                # job line in fancyprint mode, or as a status line in plain mode.
+                !s.fancyprint && println(s.io, "    ", full_name(s.ext_to_parent, pkg),
+                    color_string(retry_annotation(n), Base.warn_color(), s.hascolor))
+            end
+        end
+    )
+end
+
+retry_annotation(n::Int) = " Smart App Control blocked the image. Rebuilding ($n/$(Base.MAX_BLOCKED_IMAGE_RETRIES[]))"
+
 function spawn_precompile_tasks!(s::PrecompileSession;
         direct_deps, was_processed, configs, circular_deps,
         requested_pkgids, pkg_names, requested_pkgs, from_loading)
@@ -2067,10 +2092,13 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                         pid_ch = Channel{Int32}(1)
                         if from_loading && pkg in requested_pkgids
                             Base.errormonitor(Threads.@spawn :samepool begin
-                                pid = try; take!(pid_ch); catch; Int32(0); end
-                                pid > 0 && @lock s.print_lock set_pid!(s.jobs[pkg_config], pid)
+                                # compilecache reports a new pid for each rebuild attempt
+                                # (the channel is closed once the build is done)
+                                for pid in pid_ch
+                                    pid > 0 && @lock s.print_lock set_pid!(s.jobs[pkg_config], pid)
+                                end
                             end)
-                            t = @elapsed ret = begin
+                            t = @elapsed ret = retry_if_image_blocked_interactive(s, pkg_config) do
                                 Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !s.ignore_loaded;
                                                   flags=flags_, cacheflags, loadable_exts, signal_channel=make_signal_channel(),
                                                   pid_channel=pid_ch, report_timing=true)
@@ -2078,8 +2106,11 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                         else
                             fullname = full_name(s.ext_to_parent, pkg)
                             Base.errormonitor(Threads.@spawn :samepool begin
-                                pid = try; take!(pid_ch); catch; Int32(0); end
-                                pid > 0 && @lock s.print_lock set_pid!(s.jobs[pkg_config], pid)
+                                # compilecache reports a new pid for each rebuild attempt
+                                # (the channel is closed once the build is done)
+                                for pid in pid_ch
+                                    pid > 0 && @lock s.print_lock set_pid!(s.jobs[pkg_config], pid)
+                                end
                             end)
                             t = @elapsed ret = precompile_pkgs_maybe_cachefile_lock(s, pkg_config, fullname) do
                                 if should_stop(s)
@@ -2096,9 +2127,11 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                                 s.logcalls === CoreLogging.Debug && @lock s.print_lock begin
                                     @debug "Precompiling $(repr("text/plain", pkg))"
                                 end
-                                Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !s.ignore_loaded;
-                                                  flags=flags_, cacheflags, loadable_exts, signal_channel=make_signal_channel(),
-                                                  pid_channel=pid_ch, report_timing=true)
+                                retry_if_image_blocked_interactive(s, pkg_config) do
+                                    Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !s.ignore_loaded;
+                                                      flags=flags_, cacheflags, loadable_exts, signal_channel=make_signal_channel(),
+                                                      pid_channel=pid_ch, report_timing=true)
+                                end
                             end
                         end
                         if ret isa Exception

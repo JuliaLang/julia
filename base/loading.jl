@@ -2472,6 +2472,8 @@ end
 
 # we throw PrecompilableError when a module doesn't want to be precompiled
 import Core: PrecompilableError
+# the runtime throws ImageLoadBlockedError when the OS refuses to load a pkgimage
+import Core: ImageLoadBlockedError
 function show(io::IO, ex::PrecompilableError)
     print(io, "Error when precompiling module, potentially caused by a __precompile__(false) declaration in the module.")
 end
@@ -2898,7 +2900,18 @@ function __require_prelocked(pkg::PkgId, env)
                                 end
                             end
                         end
-                        return compilecache(pkg, spec; loadable_exts)
+                        return let loadable_exts = loadable_exts # to avoid box
+                            retry_if_image_blocked(pkg;
+                                on_retry = (pkg::PkgId, n, err::ImageLoadBlockedError) -> begin
+                                    warning = image_blocked_summary(err)
+                                    warning = warning * " Rebuilding cache for $(repr("text/plain", pkg))"
+                                    warning = warning * " ($n/$(MAX_BLOCKED_IMAGE_RETRIES[]))"
+                                    @warn warning
+                                end,
+                            ) do
+                                compilecache(pkg, spec; loadable_exts)
+                            end
+                        end
                     finally
                         lock(require_lock)
                     end
@@ -3474,6 +3487,83 @@ end
 
 const MAX_NUM_PRECOMPILE_FILES = Ref(10)
 
+# Windows can intermittently refuse to load a pkgimage due to application
+# policy controls, esp. Smart App Control whose cloud reputation (ISG)
+# queries have been observed to fail when querying many new pkgimages.
+const APPLICATION_CONTROL_POLICY_ERROR = UInt32(0x000011C7)
+const MAX_BLOCKED_IMAGE_RETRIES = Ref(3)
+
+image_blocked_summary(ex::ImageLoadBlockedError) =
+    ex.errcode == APPLICATION_CONTROL_POLICY_ERROR ?
+        "Smart App Control blocked loading the image." :
+        "The operating system blocked loading the image (error $(repr(ex.errcode)))."
+
+function showerror(io::IO, ex::ImageLoadBlockedError)
+    print(io, image_blocked_summary(ex))
+    print(io, " LoadLibrary was prevented from loading ", repr(ex.ocachefile))
+    print(io, " (Windows error ", repr(ex.errcode), ").")
+    if ex.errcode == APPLICATION_CONTROL_POLICY_ERROR
+        print(io, " This is usually an intermittent failure caused by a failed")
+        print(io, " cloud reputation (ISG) query. Try again later or disable Smart App Control.")
+    end
+end
+
+# Map a Win32 `LoadLibrary` error code to an `ImageLoadBlockedError` if it
+# indicates an application control policy failure.
+function image_blocked_error(ocachefile::String, errcode::UInt32)
+    if errcode == APPLICATION_CONTROL_POLICY_ERROR
+        return ImageLoadBlockedError(ocachefile, errcode)
+    end
+    return nothing
+end
+
+"""
+    check_pkgimage_not_blocked(ocachefile) -> Union{Nothing,ImageLoadBlockedError}
+
+Load the provided image in a temporary sub-process. Return an `ImageLoadBlockedError`
+if the operating system refuses to load `ocachefile` because an Application Control
+Policy, such as Smart App Control / WDAC blocked it.
+"""
+function check_pkgimage_not_blocked(ocachefile::Union{String,Nothing})
+    @static if !Sys.iswindows()
+        return nothing
+    else
+        ocachefile === nothing && return nothing
+        exe = joinpath(Sys.BINDIR, julia_exename())
+        probe = pipeline(ignorestatus(`$exe --probe-image-load=$ocachefile`), stdout=devnull, stderr=devnull)
+        errcode = run(probe).exitcode % UInt32
+        errcode == 0 && return nothing
+        @debug "Probe `LoadLibrary` of pkgimage failed" ocachefile errcode
+        return image_blocked_error(ocachefile, errcode)
+    end
+end
+
+"""
+    retry_if_image_blocked(build, pkg; on_retry, should_stop) -> Any
+
+Invoke `build`, retrying it whenever it throws an `ImageLoadBlockedError`.
+
+The error is rethrown after `MAX_BLOCKED_IMAGE_RETRIES[]` failed rebuilds, or as
+soon as `should_stop()` returns `true`. `on_retry(pkg, n, err)` is called before
+each re-invocation.
+"""
+function retry_if_image_blocked(build, pkg::PkgId;
+        on_retry = (pkg::PkgId, n, err::ImageLoadBlockedError)->nothing,
+        should_stop = Returns(false))
+    retries = 0
+    max_retries = MAX_BLOCKED_IMAGE_RETRIES[]
+    while true
+        try
+            return build()
+        catch err
+            err isa ImageLoadBlockedError || rethrow()
+            (retries >= max_retries || should_stop()) && rethrow()
+            retries += 1
+            on_retry(pkg, retries, err)
+        end
+    end
+end
+
 function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stderr, internal_stdout::IO = stdout,
                       keep_loaded_modules::Bool = true; flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(),
                       loadable_exts::Union{Vector{PkgId},Nothing}=nothing, signal_channel::Union{Channel{Int32},Nothing}=nothing,
@@ -3609,6 +3699,16 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
                 end
                 @static if Sys.isapple()
                     run(`$(Linking.dsymutil()) $ocachefile`, Base.DevNull(), Base.DevNull(), Base.DevNull())
+                end
+                # Check that the OS will actually load the image before it is
+                # published via the `.ji` rename below.
+                load_error = check_pkgimage_not_blocked(ocachefile)
+                if load_error isa ImageLoadBlockedError
+                    @debug "Image loading blocked with error code $(load_error.errcode). Deleting the rejected cache file." ocachefile
+                    rm(ocachefile; force=true)
+                    throw(load_error)
+                else
+                    @assert load_error === nothing "Unexpected image load error."
                 end
             end
             # this is atomic according to POSIX (not Win32):
