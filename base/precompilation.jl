@@ -2013,6 +2013,23 @@ end
 
 retry_annotation(n::Int) = " Smart App Control blocked the image. Rebuilding ($n/$(Base.MAX_BLOCKED_IMAGE_RETRIES[]))"
 
+# An existing image can become blocked by the OS after it was created, which
+# the freshness checks cannot detect. Spawn a sub-process to verify that has
+# not happened and purge the cache if it has.
+#
+# This costs a sub-process spawn for each non-stale cache image, but we only
+# perform the check during pre-compile sessions (not when loading from a
+# complete + fresh cache) so it's worth it to avoid unexpected SAC blocks
+# during the precompile job itself.
+function verify_pkgimage_loadable!(s::PrecompileSession, freshpath::String)
+    Base.JLOptions().use_pkgimages == 1 || return true
+    ocachepath = Base.ocachefile_from_cachefile(freshpath)
+    load_error = Base.check_pkgimage_not_blocked(ocachepath)
+    Base.maybe_purge_blocked_cachefile!(load_error, freshpath, ocachepath) || return true
+    @lock s.cache_lock filter!(kv -> kv.first[4] != freshpath, s.stale_cache)
+    return false
+end
+
 function spawn_precompile_tasks!(s::PrecompileSession;
         direct_deps, was_processed, configs, circular_deps,
         requested_pkgids, pkg_names, requested_pkgs, from_loading)
@@ -2120,7 +2137,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                                 local freshpath = @lock s.cache_lock Base.compilecache_freshest_path(pkg; ignore_loaded=s.ignore_loaded,
                                     stale_cache=s.stale_cache, cachepath_cache=s.cachepath_cache, cachepaths, sourcespec, flags=cacheflags)
                                 local is_stale = freshpath === nothing
-                                if !is_stale
+                                if !is_stale && verify_pkgimage_loadable!(s, freshpath)
                                     push!(freshpaths, freshpath)
                                     return nothing
                                 end

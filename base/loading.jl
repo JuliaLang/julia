@@ -1459,8 +1459,15 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
         sv = try
             if ocachepath !== nothing
                 @debug "Loading object cache file $ocachepath for $(repr("text/plain", pkg))"
-                ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint, Cstring, Cint),
-                    ocachepath, depmods, #=completeinfo=#false, pkg.name, ignore_native)
+                try
+                    ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint, Cstring, Cint),
+                        ocachepath, depmods, #=completeinfo=#false, pkg.name, ignore_native)
+                catch err
+                    err isa ImageLoadBlockedError || rethrow()
+                    @debug "Loading an existing image for $(repr("text/plain", pkg)) blocked with error code $(err.errcode)." ocachepath
+                    maybe_purge_blocked_cachefile!(err, path, ocachepath)
+                    err
+                end
             else
                 @debug "Loading cache file $path for $(repr("text/plain", pkg))"
                 ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint, Cstring),
@@ -3517,6 +3524,17 @@ function image_blocked_error(ocachefile::String, errcode::UInt32)
     return nothing
 end
 
+# If `load_error` is an ImageLoadBlockedError, delete the cache files for the
+# image: the OS caches its rejection per-file, so the image may not be able to
+# load for a long time and must be rebuilt. Returns whether the files were purged.
+function maybe_purge_blocked_cachefile!(load_error, cachefile::String, ocachefile::Union{String,Nothing})
+    load_error isa ImageLoadBlockedError || return false
+    @debug "Deleting cache file $cachefile: the OS blocked loading its image." exception=load_error
+    rm(cachefile; force=true)
+    ocachefile === nothing || rm(ocachefile; force=true)
+    return true
+end
+
 """
     check_pkgimage_not_blocked(ocachefile) -> Union{Nothing,ImageLoadBlockedError}
 
@@ -3703,12 +3721,8 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
                 # Check that the OS will actually load the image before it is
                 # published via the `.ji` rename below.
                 load_error = check_pkgimage_not_blocked(ocachefile)
-                if load_error isa ImageLoadBlockedError
-                    @debug "Image loading blocked with error code $(load_error.errcode). Deleting the rejected cache file." ocachefile
-                    rm(ocachefile; force=true)
+                if maybe_purge_blocked_cachefile!(load_error, cachefile, ocachefile)
                     throw(load_error)
-                else
-                    @assert load_error === nothing "Unexpected image load error."
                 end
             end
             # this is atomic according to POSIX (not Win32):
