@@ -873,9 +873,9 @@ static void jl_dump_asm_internal(
     // Get the host information
     Triple TheTriple(sys::getProcessTriple());
 
-    const auto &target = jl_get_llvm_disasm_target();
-    const auto &cpu = target.first;
-    const auto &features = target.second;
+    const jl_llvm_target_t target = jl_get_llvm_disasm_target();
+    const char *cpu = target.cpu_name;
+    const char *features = target.cpu_features;
 
     std::string err;
     const Target *TheTarget = TargetRegistry::lookupTarget(TheTriple.str(), err);
