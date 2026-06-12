@@ -36,7 +36,10 @@ end
 
 Generator(f, I1, I2, Is...) = Generator(splat(f), zip(I1, I2, Is...))
 
-Generator(::Type{T}, iter::I) where {T,I} = Generator{I,Type{T}}(T, iter)
+# store the egality-pinned key for a type-valued `f`: the field is then a ghost
+# whose value inference knows exactly, keeping mapped-constructor pipelines
+# (e.g. `sum(Generator(Float64, itr))`) precisely inferable (#61323)
+Generator(::Type{T}, iter::I) where {T,I} = Generator{I,Core.TypeEgal{T}}(T, iter)
 
 Generator(::Type{T}, I1, I2, Is...) where {T} = Generator(splat(T), zip(I1, I2, Is...))
 
