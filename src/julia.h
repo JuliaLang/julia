@@ -447,6 +447,7 @@ struct _jl_method_instance_t {
     //   bit 3: The ->backedges field was modified and should be compacted when clearing bit 2
     _Atomic(uint8_t) flags;
     _Atomic(uint8_t) dispatch_status; // bits defined in staticdata.jl
+    _Atomic(uint8_t) precompile; // if set, this will be added to the output system image
 };
 #define JL_MI_FLAGS_MASK_PRECOMPILED    0x01
 #define JL_MI_FLAGS_MASK_DISPATCHED     0x02
@@ -524,7 +525,6 @@ typedef struct _jl_code_instance_t {
                             // & 0b010 == invokeptr matches specptr
                             // & 0b100 == From image
                             // & 0b1000 == native_cache_valid
-    _Atomic(uint8_t) precompile;  // if set, this will be added to the output system image
     _Atomic(jl_callptr_t) invoke; // jlcall entry point usually, but if this codeinst belongs to an OC Method, then this is an jl_fptr_args_t fptr1 instead, unless it is not, because it is a special token object instead
     union _jl_generic_specptr_t {
         _Atomic(void*) fptr;
@@ -1701,7 +1701,7 @@ int is_leaf_bound(jl_value_t *v) JL_NOTSAFEPOINT;
 
 STATIC_INLINE int jl_is_kind(jl_value_t *v) JL_NOTSAFEPOINT
 {
-    return (v==(jl_value_t*)jl_anytype_type || v==(jl_value_t*)jl_uniontype_type || v==(jl_value_t*)jl_datatype_type ||
+    return (v==(jl_value_t*)jl_uniontype_type || v==(jl_value_t*)jl_datatype_type ||
             v==(jl_value_t*)jl_unionall_type || v==(jl_value_t*)jl_typeeq_type ||
             v==(jl_value_t*)jl_typeofbottom_type);
 }
@@ -2278,7 +2278,7 @@ JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *d
 JL_DLLEXPORT jl_value_t *jl_object_top_module(jl_value_t* v) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t *newly_inferred);
-JL_DLLEXPORT jl_array_t* jl_compute_new_ext_cis(void);
+JL_DLLEXPORT jl_array_t* jl_compute_new_ext(void);
 JL_DLLEXPORT void jl_push_newly_inferred(jl_value_t *ci);
 JL_DLLEXPORT void jl_set_inference_entrance_backtraces(jl_value_t *inference_entrance_backtraces);
 JL_DLLEXPORT void jl_push_inference_entrance_backtraces(jl_value_t *ci);

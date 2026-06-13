@@ -500,6 +500,7 @@ static jl_value_t *normalize_typeofbottom_typealias(jl_value_t *t) JL_NOTSAFEPOI
 // quickly test that two types are identical
 static int obviously_egal(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT
 {
+    if (a == b) return 1;
     a = normalize_typeofbottom_typealias(a);
     b = normalize_typeofbottom_typealias(b);
     if (a == b) return 1;
@@ -539,6 +540,8 @@ static int obviously_egal(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT
 
 static int obviously_unequal(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT
 {
+    if (a == b)
+        return 0;
     a = normalize_typeofbottom_typealias(a);
     b = normalize_typeofbottom_typealias(b);
     if (a == b)
@@ -638,6 +641,13 @@ static int obviously_in_union(jl_value_t *u, jl_value_t *x)
         return res;
     }
     return obviously_egal(u, x);
+}
+
+// the types whose instances are all themselves types: the concrete kinds plus the
+// abstract kind `AnyType` (`== Type`, though not `===`)
+STATIC_INLINE int is_kind_or_anytype(jl_value_t *t) JL_NOTSAFEPOINT
+{
+    return jl_is_kind(t) || t == (jl_value_t*)jl_anytype_type;
 }
 
 int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity) JL_NOTSAFEPOINT
@@ -2106,7 +2116,11 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
     if (jl_is_datatype(x) && jl_is_typeeq(y) && x != (jl_value_t*)jl_typeofbottom_type) {
         jl_value_t *tp0 = jl_typeeq_T(y);
         if (jl_is_typevar(tp0)) {
-            if (!jl_is_kind(x))
+            // kinds and `AnyType` are subtypes of `Type` but of no narrower `Type{T'}`,
+            // and no `TypeEq` appears in their supertype chains to derive this from; so
+            // answer as for `Type <: Type{T}`, at the depth where `Type{T}` occurs (the
+            // depth of `x` doesn't matter: it doesn't contain the variable)
+            if (!is_kind_or_anytype(x))
                 return 0;
             return subtype((jl_value_t*)jl_type_type, y, e, param);
         }
@@ -3050,7 +3064,7 @@ int jl_has_intersect_type_not_kind(jl_value_t *t)
                jl_has_intersect_type_not_kind(((jl_uniontype_t*)t)->b);
     if (jl_is_typeeq(t)) {
         jl_value_t *T = jl_typeeq_T(t);
-        return jl_is_typevar(T) || !jl_is_kind(T);
+        return jl_is_typevar(T) || !is_kind_or_anytype(T);
     }
     if (jl_is_typevar(t))
         return jl_has_intersect_type_not_kind(((jl_tvar_t*)t)->ub);
@@ -3064,7 +3078,7 @@ int jl_has_intersect_type_not_kind(jl_value_t *t)
 int jl_has_intersect_kind_not_type(jl_value_t *t)
 {
     t = jl_unwrap_unionall(t);
-    if (t == (jl_value_t*)jl_any_type || jl_is_kind(t))
+    if (t == (jl_value_t*)jl_any_type || is_kind_or_anytype(t))
         return 1;
     assert(!jl_is_vararg(t));
     if (jl_is_uniontype(t))
@@ -3072,7 +3086,7 @@ int jl_has_intersect_kind_not_type(jl_value_t *t)
                jl_has_intersect_kind_not_type(((jl_uniontype_t*)t)->b);
     if (jl_is_typeeq(t)) {
         jl_value_t *T = jl_typeeq_T(t);
-        return jl_is_typevar(T) || jl_is_kind(T);
+        return jl_is_typevar(T) || is_kind_or_anytype(T);
     }
     if (jl_is_typevar(t))
         return jl_has_intersect_kind_not_type(((jl_tvar_t*)t)->ub);
@@ -4529,7 +4543,7 @@ static jl_value_t *intersect_type_type(jl_value_t *x, jl_value_t *y, jl_stenv_t 
     jl_value_t *p0 = jl_typeeq_T(x);
     if (!jl_is_typevar(p0))
         return (jl_typeof(p0) == y) ? x : jl_bottom_type;
-    if (!jl_is_kind(y)) return jl_bottom_type;
+    if (!is_kind_or_anytype(y)) return jl_bottom_type;
     if (y == (jl_value_t*)jl_typeofbottom_type && ((jl_tvar_t*)p0)->lb == jl_bottom_type)
         return (jl_value_t*)jl_wrap_Type(jl_bottom_type);
     if (((jl_tvar_t*)p0)->ub == (jl_value_t*)jl_any_type)
@@ -6156,7 +6170,7 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_v
     if (jl_is_datatype(a) && jl_is_datatype(b)) {
         jl_datatype_t *tta = (jl_datatype_t*)a, *ttb = (jl_datatype_t*)b;
         // Type{Union{}} is more specific than other types, so TypeofBottom must be too
-        if (tta == jl_typeofbottom_type && (jl_is_kind(b) || jl_is_typeeq(b)))
+        if (tta == jl_typeofbottom_type && (is_kind_or_anytype(b) || jl_is_typeeq(b)))
             return 1;
         int super = 0;
         while (tta != jl_any_type) {

@@ -677,6 +677,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
     mi->cache_with_orig = 0;
     jl_atomic_store_relaxed(&mi->flags, 0);
     jl_atomic_store_relaxed(&mi->dispatch_status, 0);
+    jl_atomic_store_relaxed(&mi->precompile, 0);
     return mi;
 }
 
@@ -1292,13 +1293,6 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     if (!mt)
         mt = jl_method_table;
     jl_methtable_t *external_mt = mt == jl_method_table ? NULL : mt;
-
-    //if (!external_mt) {
-    //    jl_value_t **ttypes = { jl_builtin_type, jl_tparam0(jl_anytuple_type) };
-    //    jl_value_t *invalidt = jl_apply_tuple_type_v(ttypes, 2); // Tuple{Union{Builtin,OpaqueClosure}, Vararg}
-    //    if (!jl_has_empty_intersection(argtype, invalidt))
-    //        jl_error("cannot add methods to builtin function");
-    //}
 
     assert(jl_is_linenode(functionloc));
     jl_sym_t *file = (jl_sym_t*)jl_linenode_file(functionloc);

@@ -9,7 +9,7 @@ The JIT is responsible for managing compilation resources, looking up previously
 ## Overview
 
 ```@raw html
-<img src="img/compiler_diagram.svg" alt="Diagram of the compiler flow"/>
+<img src="../img/compiler_diagram.svg" alt="Diagram of the compiler flow"/>
 ```
 ```@raw latex
 \begin{figure}
