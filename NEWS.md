@@ -36,6 +36,12 @@ Compiler/Runtime improvements
     ([#41199], [#47574]).
   - Stack traces now show full method signatures with argument types for inlined
     frames, matching the display of non-inlined frames ([#53925]).
+  - Parallel package precompilation now coordinates CPU usage across both the
+    precompile worker processes and the LLVM threads each spawns to compile its
+    native image, sharing a single thread budget so idle cores are filled during
+    the long tail without oversubscribing the machine when many packages compile
+    at once. The total budget can be set with the new `JULIA_PRECOMPILE_THREADS`
+    environment variable ([#61958]).
 
 Command-line option changes
 ---------------------------
