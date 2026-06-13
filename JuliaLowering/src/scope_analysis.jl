@@ -43,6 +43,9 @@ struct ScopeInfo
     # See `LambdaBindings`. Nothing if not a lambda scope.  This is the final
     # collecting place for locals going in to closure conversion.
     locals_capt::Union{Nothing, Dict{IdTag,Bool}}
+    # Globals declared at the base scope layer instead of the apparent scope
+    # layer due to hygiene_compat rules.
+    rescoped_globals::Set{NameKey}
 end
 
 function ScopeInfo(ctx, parent_id, ex::SyntaxTree)
@@ -63,7 +66,7 @@ function ScopeInfo(ctx, parent_id, ex::SyntaxTree)
     s = ScopeInfo(
         id, parent_id, lambda_id, ex._id, is_permeable, is_lifted,
         Dict{IdTag, NodeId}(), Dict{NameKey, NodeId}(), Dict{NameKey,IdTag}(),
-        kind(ex) === K"lambda" ? Dict{IdTag,Bool}() : nothing)
+        kind(ex) === K"lambda" ? Dict{IdTag,Bool}() : nothing, Set{NameKey}())
     push!(ctx.scopes, s)
     return s
 end
@@ -82,9 +85,6 @@ struct ScopeResolutionContext{Attrs} <: AbstractLoweringContext
     # be assigned to without the `global` keyword in soft scopes due to being
     # assigned to at top level, or passing the defined-and-owned-global check.
     soft_assignable_globals::Set{NameKey}
-    # Globals declared at the base scope layer instead of the apparent scope
-    # layer due to hygiene_compat rules
-    rescoped_globals::Set{NameKey}
     enable_soft_scopes::Bool
     expr_compat_mode::Bool
     world::UInt
@@ -126,15 +126,14 @@ function explicit_declare_in_scope!(ctx, scope::ScopeInfo, ex, new_k::Symbol)
     elseif kind(ex) === K"Placeholder"
         return nothing
     end
+    if new_k === :global && (sl = ctx.scope_layers[ex.scope_layer]; sl.hygiene_compat)
+        push!(scope.rescoped_globals, NameKey(ex))
+        ex = setattr(ex, :scope_layer, base_layer(ctx, sl).id)
+    end
     bid = get(scope.vars, NameKey(ex), nothing)
     old_k = isnothing(bid) ? nothing : get_binding(ctx, bid).kind
     if isnothing(old_k)
-        if new_k === :global && (sl = ctx.scope_layers[ex.scope_layer]; sl.hygiene_compat)
-            # old macros declare all explicit globals without hygiene
-            push!(ctx.rescoped_globals, NameKey(ex))
-            ex2 = setattr(ex, :scope_layer, base_layer(ctx, sl).id)
-            declare_in_scope!(ctx, scope, ex2, :global)
-        elseif new_k === :argument
+        if new_k === :argument
             declare_in_scope!(ctx, scope, ex, :argument;
                               is_nospecialize=getmeta(ex, :nospecialize, false))
         else
@@ -154,13 +153,15 @@ function explicit_declare_in_scope!(ctx, scope::ScopeInfo, ex, new_k::Symbol)
     end
 end
 
-# globals are added to both `scope` and the top scope
+# globals are added to both `scope` and the top scope (mainly so we can get the
+# same binding for many unrelated global references, which doesn't apply to
+# rescoped globals).
 function declare_in_scope!(ctx, scope::ScopeInfo, ex, bk::Symbol; kws...)
     nk = NameKey(ex)
     if bk === :global
-        declaration_scope = top_scope(ctx)
         mod = hasattr(ex, :mod) ? ex.mod::Module :
             ctx.scope_layers[ex.scope_layer::LayerId].mod
+        declaration_scope = nk in scope.rescoped_globals ? scope : top_scope(ctx)
     else
         declaration_scope = scope
         mod = hasattr(ex, :mod) ?
@@ -221,15 +222,16 @@ function resolve_name(ctx, ex; exclude_toplevel_globals=false)
         end
     end
     # hygiene compat: retry at the base layer for rescoped globals only
-    sl = ctx.scope_layers[nk.layer]
-    if sl.hygiene_compat && !is_base_layer(sl) && nk in ctx.rescoped_globals
-        nk_rescoped = NameKey(ex.name_val, base_layer(ctx, sl).id)
+    if (sl = ctx.scope_layers[nk.layer]; sl.hygiene_compat && !is_base_layer(sl))
         for sid in Iterators.reverse(ctx.scope_stack)
-            bid = get(ctx.scopes[sid].vars, nk_rescoped, nothing)
-            isnothing(bid) && continue
-            b = get_binding(ctx, bid)
-            if b.kind === :global && (!exclude_toplevel_globals || sid !== top_scope(ctx).id)
-                return b
+            scope = ctx.scopes[sid]
+            if nk in scope.rescoped_globals
+                nk2 = NameKey(nk.name, base_layer(ctx, sl).id)
+                bid = get(scope.vars, nk2, nothing)
+                @jl_assert !isnothing(bid) && get_binding(ctx, bid).kind === :global ex
+                if (!exclude_toplevel_globals || sid !== top_scope(ctx).id)
+                    return get_binding(ctx, bid)
+                end
             end
         end
     end
@@ -329,8 +331,8 @@ function enter_scope!(ctx, ex)
                 # top-level assignments in no scope and no expansion
                 push!(ctx.soft_assignable_globals, vk)
                 declare_in_scope!(ctx, top_scope(ctx), ex, :global)
-            elseif scope.is_permeable && is_defined_and_owned_global(
-                sl.mod, Symbol(vk.name), ctx.world)
+            elseif scope.is_permeable && is_base_layer(sl) &&
+                is_defined_and_owned_global(sl.mod, Symbol(vk.name), ctx.world)
                 # special soft scope rules: existing global variables are assigned to
                 if ctx.enable_soft_scopes
                     push!(ctx.soft_assignable_globals, vk)
@@ -808,7 +810,6 @@ enclosing lambda form and information about variables captured by closures.
     ctx2 = ScopeResolutionContext(graph, ctx.bindings, ctx.mod,
                                   Vector{ScopeInfo}(), Vector{ScopeId}(),
                                   ctx.scope_layers, Set{NameKey}(),
-                                  Set{NameKey}(),
                                   enable_soft_scopes,
                                   ctx.expr_compat_mode,
                                   world)

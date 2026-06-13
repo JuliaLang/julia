@@ -3797,9 +3797,8 @@ function expand_struct_def(ctx, ex, docs)
     @ast ctx ex [K"block"
         [K"assert" "toplevel_only"::K"Symbol" [K"inert_syntaxtree" ex] ]
         [K"scope_block"(scope_type=:hard)
-            # Needed for later constdecl to work, though plain global form may be removed soon.
             [K"global" global_struct_name]
-            [K"block"
+            [K"scope_block"(scope_type=:hard)
                 [K"local" struct_name]
                 [K"always_defined" struct_name]
                 typevar_stmts...
@@ -3850,7 +3849,6 @@ function expand_struct_def(ctx, ex, docs)
                     global_struct_name
                     newdef
                  ]
-            ]
         ]
 
         if isempty(inner_defs)
@@ -3871,6 +3869,7 @@ function expand_struct_def(ctx, ex, docs)
                 [K"block" inner_defs...]
             ]
         end
+        ]
 
         # Documentation
         if !isnothing(docs) || !isempty(field_docs)
