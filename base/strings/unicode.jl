@@ -6,7 +6,8 @@ module Unicode
 import Base: show, ==, hash, string, Symbol, isless, length, eltype,
              convert, isvalid, ismalformed, isoverlong, iterate,
              AnnotatedString, AnnotatedChar, annotated_chartransform,
-             @assume_effects, annotations, is_overlong_enc, unsafe_codepoint
+             @assume_effects, annotations, is_overlong_enc, throw_invalid_char,
+             unsafe_codepoint
 
 # whether codepoints are valid Unicode scalar values, i.e. 0-0xd7ff, 0xe000-0x10ffff
 
@@ -316,6 +317,14 @@ julia> lowercase('Ö')
 lowercase(c::T) where {T<:AbstractChar} = isascii(c) ? ('A' <= c <= 'Z' ? c + 0x20 : c) :
     T(ccall(:utf8proc_tolower, UInt32, (UInt32,), c))
 
+_ascii_lowercase(c::Char) = reinterpret(Char, (unsafe_codepoint(c) + UInt32(0x20)) << 24)
+
+function lowercase(c::Char)
+    isascii(c) && return 'A' <= c <= 'Z' ? _ascii_lowercase(c) : c
+    ismalformed(c) && throw_invalid_char(c)
+    Char(@assume_effects :foldable :nothrow @ccall utf8proc_tolower(unsafe_codepoint(c)::UInt32)::UInt32)
+end
+
 lowercase(c::AnnotatedChar) = AnnotatedChar(lowercase(c.char), annotations(c))
 
 """
@@ -336,6 +345,14 @@ julia> uppercase('ê')
 """
 uppercase(c::T) where {T<:AbstractChar} = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) :
     T(ccall(:utf8proc_toupper, UInt32, (UInt32,), c))
+
+_ascii_uppercase(c::Char) = reinterpret(Char, (unsafe_codepoint(c) - UInt32(0x20)) << 24)
+
+function uppercase(c::Char)
+    isascii(c) && return 'a' <= c <= 'z' ? _ascii_uppercase(c) : c
+    ismalformed(c) && throw_invalid_char(c)
+    Char(@assume_effects :foldable :nothrow @ccall utf8proc_toupper(unsafe_codepoint(c)::UInt32)::UInt32)
+end
 
 uppercase(c::AnnotatedChar) = AnnotatedChar(uppercase(c.char), annotations(c))
 
@@ -361,6 +378,12 @@ julia> uppercase('ǆ')
 """
 titlecase(c::T) where {T<:AbstractChar} = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) :
     T(ccall(:utf8proc_totitle, UInt32, (UInt32,), c))
+
+function titlecase(c::Char)
+    isascii(c) && return 'a' <= c <= 'z' ? _ascii_uppercase(c) : c
+    ismalformed(c) && throw_invalid_char(c)
+    Char(@assume_effects :foldable :nothrow @ccall utf8proc_totitle(unsafe_codepoint(c)::UInt32)::UInt32)
+end
 
 titlecase(c::AnnotatedChar) = AnnotatedChar(titlecase(c.char), annotations(c))
 
