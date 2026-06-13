@@ -310,4 +310,8 @@ end
 
     @test JuliaLowering.include_string(m, """ macro _(x); x; end """) isa Function
     @test JuliaLowering.include_string(m, "@_(3)") == 3
+
+    # empty name is usable (though won't parse)
+    @test jl_eval(m, Expr(:macro, Expr(:call, Symbol(""), :x), :x)) isa Function
+    @test jl_eval(m, Expr(:macrocall, Symbol("@"), LineNumberNode(1), 123)) == 123
 end

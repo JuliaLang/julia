@@ -345,11 +345,10 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
         ex0 = newleaf(syntax_graph(ctx1), g.srcref, K"Value", ex0)
     end
     # Expand any macros emitted by the generator
-    ex1 = expand_forms_1(ctx1, reparent(ctx1, ex0))
+    ex1 = expand_forms_1(ctx1, reparent(ctx1, ex0), layer)
     ctx1 = MacroExpansionContext(delete_attributes(graph, :__macro_ctx__),
                                  ctx1.bindings, ctx1.scope_layers,
-                                 ctx1.scope_layer_stack, g.expr_compat_mode,
-                                 macro_world)
+                                 g.expr_compat_mode, macro_world)
     ex1 = reparent(ctx1, ex1)
 
     # Desugaring

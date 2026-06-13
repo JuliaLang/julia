@@ -677,6 +677,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
     mi->cache_with_orig = 0;
     jl_atomic_store_relaxed(&mi->flags, 0);
     jl_atomic_store_relaxed(&mi->dispatch_status, 0);
+    jl_atomic_store_relaxed(&mi->precompile, 0);
     return mi;
 }
 
@@ -743,7 +744,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_cached_uninferred(jl_code_instance_t *codein
     return NULL;
 }
 
-JL_DLLEXPORT jl_code_instance_t *jl_cache_uninferred(jl_method_instance_t *mi, jl_code_instance_t *checked, size_t world, jl_code_instance_t *newci)
+JL_DLLEXPORT jl_code_instance_t *jl_cache_uninferred(jl_method_instance_t *mi JL_PROPAGATES_ROOT, jl_code_instance_t *checked, size_t world, jl_code_instance_t *newci)
 {
     while (!jl_mi_try_insert(mi, checked, newci)) {
         jl_code_instance_t *new_checked = jl_atomic_load_relaxed(&mi->cache);
@@ -759,7 +760,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_cache_uninferred(jl_method_instance_t *mi, j
 
 // Return a newly allocated CodeInfo for the function signature
 // effectively described by the tuple (specTypes, env, Method) inside linfo
-JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi, size_t world, jl_code_instance_t **cache)
+JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world, jl_code_instance_t **cache JL_OUT_ROOTED_BY_ARG(0))
 {
     jl_code_instance_t *cache_ci = jl_atomic_load_relaxed(&mi->cache);
     jl_code_instance_t *uninferred_ci = jl_cached_uninferred(cache_ci, world);
@@ -1098,7 +1099,9 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
 // it will be the signature supplied in an `invoke` call.
 // If you don't need `invokesig`, you can set it to NULL on input.
 // Initialize iteration with `i = 0`. Returns `i` for the next backedge to be extracted.
-int get_next_edge(jl_array_t *list, int i, jl_value_t** invokesig, jl_code_instance_t **caller) JL_NOTSAFEPOINT
+int get_next_edge(jl_array_t *list JL_PROPAGATES_ROOT, int i,
+                  jl_value_t **invokesig JL_OUT_ROOTED_BY_ARG(0),
+                  jl_code_instance_t **caller JL_OUT_ROOTED_BY_ARG(0)) JL_NOTSAFEPOINT
 {
     jl_value_t *item = jl_array_ptr_ref(list, i);
     if (!item || jl_is_code_instance(item)) {
@@ -1118,7 +1121,9 @@ int get_next_edge(jl_array_t *list, int i, jl_value_t** invokesig, jl_code_insta
     return i + 2;
 }
 
-int set_next_edge(jl_array_t *list, int i, jl_value_t *invokesig, jl_code_instance_t *caller)
+int set_next_edge(jl_array_t *list JL_PROPAGATES_ROOT, int i,
+                  jl_value_t *invokesig JL_ROOTED_BY_ARG(0),
+                  jl_code_instance_t *caller JL_ROOTED_BY_ARG(0)) JL_NOTSAFEPOINT
 {
     if (invokesig)
         jl_array_ptr_set(list, i++, invokesig);
@@ -1126,7 +1131,8 @@ int set_next_edge(jl_array_t *list, int i, jl_value_t *invokesig, jl_code_instan
     return i;
 }
 
-int clear_next_edge(jl_array_t *list, int i, jl_value_t *invokesig, jl_code_instance_t *caller)
+int clear_next_edge(jl_array_t *list JL_PROPAGATES_ROOT, int i,
+                    jl_value_t *invokesig, jl_code_instance_t *caller) JL_NOTSAFEPOINT
 {
     if (invokesig)
         jl_array_ptr_set(list, i++, NULL);
@@ -1288,13 +1294,6 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
         mt = jl_method_table;
     jl_methtable_t *external_mt = mt == jl_method_table ? NULL : mt;
 
-    //if (!external_mt) {
-    //    jl_value_t **ttypes = { jl_builtin_type, jl_tparam0(jl_anytuple_type) };
-    //    jl_value_t *invalidt = jl_apply_tuple_type_v(ttypes, 2); // Tuple{Union{Builtin,OpaqueClosure}, Vararg}
-    //    if (!jl_has_empty_intersection(argtype, invalidt))
-    //        jl_error("cannot add methods to builtin function");
-    //}
-
     assert(jl_is_linenode(functionloc));
     jl_sym_t *file = (jl_sym_t*)jl_linenode_file(functionloc);
     if (!jl_is_symbol(file))
@@ -1305,8 +1304,8 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     // if we have a kwcall, try to derive the name from the callee argument method table
     jl_datatype_t *dtname = (jl_datatype_t*)jl_argument_datatype(jl_kwcall_type && ft == (jl_value_t*)jl_kwcall_type && nargs >= 3 ? jl_svecref(atypes, 2) : ft);
     name = (jl_value_t*)dtname != jl_nothing ? dtname->name->singletonname : jl_any_type->name->singletonname;
-    if (jl_is_type_type((jl_value_t*)dtname)) {
-        dtname = (jl_datatype_t*)jl_argument_datatype(jl_tparam0(dtname));
+    if (jl_is_typeeq((jl_value_t*)dtname)) {
+        dtname = (jl_datatype_t*)jl_argument_datatype(jl_typeeq_T((jl_value_t*)dtname));
         if ((jl_value_t*)dtname != jl_nothing) {
             name = dtname->name->singletonname;
         }

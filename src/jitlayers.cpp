@@ -1048,7 +1048,7 @@ public:
 };
 #else
 namespace JLEHFrames {
-    static orc::shared::CWrapperFunctionResult
+    static auto
     registerEHFrameSectionAllocAction(const char *ArgData, size_t ArgSize) {
         using namespace llvm::orc::shared;
         return WrapperFunction<SPSError(SPSExecutorAddrRange)>::handle(
@@ -1056,7 +1056,7 @@ namespace JLEHFrames {
             .release();
     }
 
-    static orc::shared::CWrapperFunctionResult
+    static auto
     deregisterEHFrameSectionAllocAction(const char *ArgData, size_t ArgSize) {
         using namespace llvm::orc::shared;
         return WrapperFunction<SPSError(SPSExecutorAddrRange)>::handle(

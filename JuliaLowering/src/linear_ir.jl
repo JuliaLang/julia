@@ -69,7 +69,7 @@ struct LinearIRContext{Attrs} <: AbstractLoweringContext
     is_toplevel_thunk::Bool
     lambda_bindings::LambdaBindings
     argmap::Dict{IdTag, IdTag}
-    return_type::Union{Nothing, SyntaxTree{Attrs}}
+    rettype_ssa::Ref{NodeId}
     break_targets::Dict{String, JumpTarget{Attrs}}
     break_label_stack::Vector{String}  # tracks nesting order of symbolicblock labels
     handler_token_stack::SyntaxList{Attrs, Vector{NodeId}}
@@ -82,12 +82,17 @@ struct LinearIRContext{Attrs} <: AbstractLoweringContext
     mod::Module
 end
 
-function LinearIRContext(graph, ctx, is_toplevel_thunk, lambda_bindings, return_type)
-    rett = isnothing(return_type) ? nothing : reparent(graph, return_type)
+function rettype(ctx::LinearIRContext)
+    let r = ctx.rettype_ssa[]
+        r == 0 ? nothing : SyntaxTree(ctx.graph, r)
+    end
+end
+
+function LinearIRContext(graph, ctx, is_toplevel_thunk, lambda_bindings)
     Attrs = typeof(graph.attributes)
     LinearIRContext(graph, SyntaxList(ctx), ctx.bindings, Ref(0),
-                    is_toplevel_thunk, lambda_bindings, Dict{IdTag,IdTag}(), rett,
-                    Dict{String,JumpTarget{Attrs}}(), String[],
+                    is_toplevel_thunk, lambda_bindings, Dict{IdTag,IdTag}(),
+                    Ref(0), Dict{String,JumpTarget{Attrs}}(), String[],
                     SyntaxList(ctx), SyntaxList(ctx),
                     Vector{FinallyHandler{Attrs}}(), Dict{String,JumpTarget{Attrs}}(),
                     Vector{JumpOrigin{Attrs}}(), Set{String}(), Dict{Symbol, Any}(), ctx.mod)
@@ -138,7 +143,7 @@ function is_valid_ir_rvalue(ctx, lhs, rhs)
            is_valid_ir_argument(ctx, rhs) ||
            (kind(lhs) == K"BindingId" &&
             # FIXME: add: invoke ?
-            kind(rhs) in KSet"new splatnew cfunction isdefined call foreigncall gc_preserve_begin foreigncall new_opaque_closure")
+            kind(rhs) in KSet"new splatnew cfunction isdefined call foreigncall gc_preserve_begin new_opaque_closure")
 end
 
 function check_no_local_bindings(ctx, ex, msg)
@@ -245,8 +250,7 @@ end
 # Helper function for emit_return
 function _actually_return(ctx, ex)
     # TODO: Handle the implicit return coverage hack for #53354 ?
-    rett = ctx.return_type
-    if !isnothing(rett)
+    if (rett = rettype(ctx); !isnothing(rett))
         ex = compile(ctx, convert_for_type_decl(ctx, rett, ex, rett, true), true, false)
     end
     simple_ret_val = isempty(ctx.catch_token_stack) ?
@@ -569,7 +573,6 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             next_action_label = !in_tail_pos || tag != 1 || on_exit != :return ?
                 make_label(ctx, srcref) : nothing
             if !isnothing(next_action_label)
-                next_action_label = make_label(ctx, srcref)
                 tmp = ssavar(ctx, srcref, "do_finally_action")
                 emit(ctx, @ast ctx srcref [K"=" tmp
                     [K"call"
@@ -961,7 +964,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         end
     elseif k == K"latestworld"
         if needs_value
-            throw(LoweringError(ex, "misplaced latestsworld"))
+            throw(LoweringError(ex, "misplaced latestworld"))
         end
         emit_latestworld(ctx, ex)
     elseif k == K"latestworld_if_toplevel"
@@ -1168,10 +1171,14 @@ end
 function compile_lambda(outer_ctx, ex)
     lambda_args = ex[1]
     static_parameters = ex[2]
-    ret_var = numchildren(ex) == 4 ? ex[4] : nothing
     lambda_bindings = ex.lambda_bindings
-    ctx = LinearIRContext(outer_ctx.graph, outer_ctx, ex.is_toplevel_thunk,
-                          lambda_bindings, ret_var)
+    ctx = LinearIRContext(
+        outer_ctx.graph, outer_ctx, ex.is_toplevel_thunk, lambda_bindings)
+    if numchildren(ex) == 4
+        tmp = ssavar(ctx, ex[4], "rett")
+        ctx.rettype_ssa[] = tmp._id
+        compile(ctx, @ast(ctx, ex[4], [K"=" tmp ex[4]]), false, false)
+    end
     for arg in children(lambda_args)
         kind(arg) == K"Placeholder" && continue
         @jl_assert kind(arg) == K"BindingId" ex
@@ -1270,7 +1277,7 @@ loops, etc) to gotos and exception handling to enter/leave. We also convert
 @fzone "JL: linearize" function linearize_ir(ctx::ClosureConversionCtx, ex)
     graph = ensure_linearization_attributes!(copy_attrs(ctx.graph))
     ex = reparent(graph, ex)
-    ctx_out = LinearIRContext(graph, ctx, false, LambdaBindings(), nothing)
+    ctx_out = LinearIRContext(graph, ctx, false, LambdaBindings())
     ex_out = compile_lambda(ctx_out, ex)
     ctx_out, ex_out
 end

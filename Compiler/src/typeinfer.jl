@@ -122,7 +122,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
             rettype_const = result_type
             const_flags = 0x2
         elseif isconstType(result_type)
-            rettype_const = result_type.parameters[1]
+            rettype_const = type_parameter(result_type)
             const_flags = 0x2
         elseif isa(result_type, PartialStruct)
             rettype_const = (_getundefs(result_type), result_type.fields)
@@ -1612,6 +1612,20 @@ markinspected!(queue::CompilationQueue, item) = push!(queue.inspected, item)
 isinspected(queue::CompilationQueue, item) = item in queue.inspected
 Base.isempty(queue::CompilationQueue) = isempty(queue.tocompile)
 
+function has_valid_abi_sparams(mi::MethodInstance)
+    isa(mi.specTypes, UnionAll) && return false
+    def = mi.def
+    isa(def, Method) || return true
+    unionall_depth(def.sig) == length(mi.sparam_vals) || return false
+    for i = 1:length(mi.sparam_vals)
+        sp = mi.sparam_vals[i]
+        if isa(sp, SimpleVector) || isvarargtype(sp)
+            return false
+        end
+    end
+    return true
+end
+
 # collect a list of all code that is needed along with CodeInstance to codegen it fully
 function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vector{VarState};
                          invokelatest_queue::Union{CompilationQueue,Nothing} = nothing)
@@ -1621,14 +1635,15 @@ function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vec
         isexpr(stmt, :(=)) && (stmt = stmt.args[2])
         if isexpr(stmt, :invoke) || isexpr(stmt, :invoke_modify)
             edge = stmt.args[1]
-            edge isa CodeInstance && isdefined(edge, :inferred) && push!(workqueue, edge)
+            edge isa CodeInstance && isdefined(edge, :inferred) &&
+                has_valid_abi_sparams(get_ci_mi(edge)) && push!(workqueue, edge)
         end
 
         invokelatest_queue === nothing && continue
         if isexpr(stmt, :call)
             farg = stmt.args[1]
             !applicable(argextype, farg, ci, sptypes) && continue # TODO: Why is this failing during bootstrap
-            ftyp = widenconst(argextype(farg, ci, sptypes))
+            ftyp = argextype_widened(farg, ci, sptypes)
 
             if ftyp === typeof(Core.finalizer) && length(stmt.args) == 3
                 finalizer = argextype(stmt.args[2], ci, sptypes)
@@ -1684,6 +1699,10 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
         callee = pop!(workqueue)
         ci_has_invoke(callee) && continue
         isinspected(workqueue, callee) && continue
+        if !has_valid_abi_sparams(get_ci_mi(callee))
+            markinspected!(workqueue, callee)
+            continue
+        end
         src = ci_get_source(interp, callee)
         if !isa(src, CodeInfo)
             newcallee = typeinf_ext(workqueue.interp, callee.def, source_mode) # always SOURCE_MODE_ABI
@@ -1719,7 +1738,8 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
 end
 
 function typeinf_ext_toplevel(interp::AbstractInterpreter, mi::MethodInstance, source_mode::UInt8)
-    ci = typeinf_ext(interp, mi, source_mode)
+    mi2 = ccall(:jl_normalize_to_compilable_mi, Any, (Any,), mi)::MethodInstance
+    ci = typeinf_ext(interp, mi2, source_mode)
     ci = add_codeinsts_to_jit!(interp, ci, source_mode)
     return ci
 end
@@ -1754,9 +1774,7 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
             invokelatest_queue === nothing && continue
             (rt::Type, sig::Type) = item
             # make a best-effort attempt to enqueue the relevant code for the ccallable
-            mi = ccall(:jl_get_specialization1, Any,
-                        (Any, Csize_t, Cint),
-                        sig, world, #= mt_cache =# 0)
+            mi = ccall(:jl_get_specialization1, Any, (Any, Csize_t), sig, world)
             if mi !== nothing
                 mi = mi::MethodInstance
                 ci = typeinf_ext(interp, mi, SOURCE_MODE_GET_SOURCE)
@@ -1769,6 +1787,10 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
             callee = item
             isinspected(workqueue, callee) && continue
             mi = get_ci_mi(callee)
+            if !has_valid_abi_sparams(mi)
+                markinspected!(workqueue, callee)
+                continue
+            end
             # now make sure everything has source code, if desired
             if use_const_api(callee)
                 src = codeinfo_for_const(interp, mi, WorldRange(callee.min_world, callee.max_world), callee.edges, callee.rettype_const)

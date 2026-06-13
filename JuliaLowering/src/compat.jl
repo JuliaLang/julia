@@ -6,10 +6,18 @@ function find_kind(s::String)
 end
 
 # flisp: dot-operators
+#
+# We work from the operator's name here (rather than its `Kind`) because by this
+# point operators are represented uniformly as identifier-like names: this code
+# also runs on trees converted from `Expr`, where an operator such as `.^` is
+# simply the `Symbol` `:.^` with no token or `Kind` to inspect. `Base.isoperator`
+# is the same operator-name test already used for `op=` in `est_to_dst` below;
+# note we can't look up a `Kind` by name (eg via `find_kind`), since most
+# operators no longer have their own kind - they share `K"Operator"`.
 function is_dotted_operator(s::AbstractString)
     return length(s) >= 2 &&
         s[1] === '.' && s[2] !== '.' &&
-        JS.is_operator(something(find_kind(s[2:end]), K"None"))
+        Base.isoperator(s[2:end])
 end
 
 function is_eventually_call(e)
@@ -288,7 +296,7 @@ end
 
 function _est_to_dst_ident(st::SyntaxTree)
     s = st.name_val::String
-    if all(==('_'), s) || s == UNUSED
+    if is_writeonly_est_name(s)
         setattr!(mkleaf(st), :kind, K"Placeholder")
     else
         st
@@ -579,10 +587,12 @@ function est_to_dst(st::SyntaxTree)
         [K"symbolicgoto" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
         [K"oldsymbolicgoto" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
         [K"symboliclabel" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
-        [K"symbolicblock" id body] -> if all(==('_'), id.name_val)
-            @ast g st [K"symbolicblock" id=>K"Placeholder" rec(body)]
-        else
-            @ast g st [K"symbolicblock" id=>K"symboliclabel" rec(body)]
+        [K"symbolicblock" id body] -> let s = id.name_val::String
+            if is_writeonly_est_name(s)
+                @ast g st [K"symbolicblock" id=>K"Placeholder" rec(body)]
+            else
+                @ast g st [K"symbolicblock" id=>K"symboliclabel" rec(body)]
+            end
         end
         [K"unknown_head" cs...] -> let head = st.name_val
             if head === "latestworld-if-toplevel"
@@ -590,7 +600,7 @@ function est_to_dst(st::SyntaxTree)
             else
                 @jl_assert(false, (st, string(
                     "unknown expr head (corresponding to no kind) between",
-                    "macro-expansion and desugaring: ")))
+                    " macro-expansion and desugaring: ")))
             end
         end
         ([K"latestworld"], when=!is_leaf(st)) -> newleaf(g, st, K"latestworld")
@@ -617,7 +627,7 @@ function est_to_dst(st::SyntaxTree)
 
         # avoid creating excess nodes
         _ -> let out_cs::Vector{NodeId} = map(x->rec(x)._id, children(st))
-            out_cs == children(st) ? st : mknode(st, out_cs)
+            out_cs == children(st).ids ? st : mknode(st, out_cs)
         end
     end
 end

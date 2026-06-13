@@ -185,7 +185,7 @@ LoweringError:
 #---------------------
 LoweringError:
 (; a=1, f())
-#       └─┘ ── expected identifier, `=`, or, `...` after semicolon
+#       └─┘ ── expected identifier, `=`, or `...` after semicolon
 
 ########################################
 # Error: Modules not allowed inside blocks
@@ -486,6 +486,14 @@ MacroExpansionError while expanding @ccall in module Main.TestMod:
 MacroExpansionError while expanding @ccall in module Main.TestMod:
 @ccall foo(; x::Int; y::Float64)::Int
 #          └──────┘ ── C ABI prohibits varargs without one required argument
+
+########################################
+# Error: Bad @ccall first arg
+@ccall $(:(foo))(1::Cint)::Cint
+#---------------------
+MacroExpansionError while expanding @ccall in module Main.TestMod:
+@ccall $(:(foo))(1::Cint)::Cint
+#      └───────┘ ── interpolated value should be a variable or expression, not a literal name or tuple
 
 ########################################
 # Error: Bad @ccall option
