@@ -266,6 +266,10 @@ create_serialization_stream() do s # small 1d array
     @test result[2].v == arr5[2].v
 end
 
+# isbitsunion arrays with > 32 members exercise the dynamic deserialize path (vs the unrolled one)
+struct BitsUnionTg{N} x::Int end
+const BitsUnionBigU = foldl((acc, i) -> Union{acc, BitsUnionTg{i}}, 1:34; init=Union{})
+
 # bits-union arrays (#30148)
 create_serialization_stream() do s
     v1 = Union{Int,Missing}[1, missing, 2, 3, missing]
@@ -280,11 +284,20 @@ create_serialization_stream() do s
     mem = Memory{Union{Int,Missing}}(undef, 5)
     mem[1] = 1; mem[2] = missing; mem[3] = 3; mem[4] = missing; mem[5] = 5
     serialize(s, mem)
+    vmix = Union{UInt8,Int,Missing}[0x01, 7, missing, typemax(Int), 0xff]
+    serialize(s, vmix)
+    vzero = Union{Missing,Nothing}[missing, nothing, missing, nothing]
+    serialize(s, vzero)
+    vbig = BitsUnionBigU[BitsUnionTg{mod1(i, 34)}(i) for i in 1:40]
+    serialize(s, vbig)
     seek(s, 0)
     @test isequal(deserialize(s), v1)
     @test deserialize(s) == v2
     @test isequal(deserialize(s), m)
     @test isequal(deserialize(s), mem)
+    @test isequal(deserialize(s), vmix)
+    @test isequal(deserialize(s), vzero)
+    @test deserialize(s) == vbig
 
     # corrupted tag byte must error rather than silently produce wrong data
     bad = IOBuffer()
@@ -293,6 +306,53 @@ create_serialization_stream() do s
     bytes[end] = 0xff   # tag region is the last `length(v)` bytes; corrupt the last
     @test_throws ErrorException deserialize(IOBuffer(bytes))
 end
+
+# bits-union deserialize: layout guards and the dynamic/buffered fallbacks not hit by the round-trips above
+let U = Union{Int,Missing}
+    # a concrete but pointerful serialized type must error, not reinterpret raw bytes as a reference
+    @test_throws ErrorException Serialization._deserialize_bitsunion_dynamic!(
+        Vector{U}(undef, 0), UInt8[], UInt8[], 8, 0, Any[Missing, Base.RefValue{Int}])
+    # a serialized member wider than the stored element stride must error
+    @test_throws ErrorException Serialization._deserialize_bitsunion_dynamic!(
+        Vector{Union{Int8,Missing}}(undef, 0), UInt8[], UInt8[], 1, 0, Any[Missing, Int])
+    # the dynamic path loads values (and singletons) from a separate source buffer
+    let a = Vector{U}(undef, 3)
+        Serialization._deserialize_bitsunion_dynamic!(a, UInt8[1, 0, 1], U[10, missing, 20], 8, 3, Any[Missing, Int])
+        @test isequal(a, U[10, missing, 20])
+    end
+    # an out-of-range tag in the dynamic path errors
+    @test_throws ErrorException Serialization._deserialize_bitsunion_dynamic!(
+        Vector{U}(undef, 1), UInt8[5], U[1], 8, 1, Any[Missing, Int])
+    # the stored element size may use a different `Int` width than ours (cross-arch streams)
+    let a_orig = U[10, missing, 20], n = 3, elsz = Base.elsize(Vector{U})
+        io = IOBuffer(); ws = Serializer(io)
+        serialize(ws, DataType[Missing, Int]); serialize(ws, Int32(elsz))
+        GC.@preserve a_orig unsafe_write(io, Ptr{UInt8}(pointer(a_orig)), UInt(n * elsz))
+        write(io, UInt8[Serialization._bitsunion_tag(a_orig[i], Serialization._uniontuple(U)) for i in 1:n])
+        seekstart(io)
+        a = Vector{U}(undef, n)
+        Serialization._deserialize_bitsunion_array!(Serializer(io), a)
+        @test isequal(a, a_orig)
+    end
+    # a stored stride larger than ours takes the buffered fallback
+    let n = 3, elsz_read = 16
+        buf = zeros(UInt8, n * elsz_read)
+        GC.@preserve buf begin
+            unsafe_store!(Ptr{Int}(pointer(buf) + 0 * elsz_read), 10)
+            unsafe_store!(Ptr{Int}(pointer(buf) + 2 * elsz_read), 20)
+        end
+        io = IOBuffer(); ws = Serializer(io)
+        serialize(ws, DataType[Missing, Int]); serialize(ws, elsz_read)
+        write(io, buf); write(io, UInt8[1, 0, 1])
+        seekstart(io)
+        a = Vector{U}(undef, n)
+        Serialization._deserialize_bitsunion_array!(Serializer(io), a)
+        @test isequal(a, U[10, missing, 20])
+    end
+end
+
+# a corrupted Bool run length must throw rather than write past the array (the new safe `@inbounds`)
+@test_throws BoundsError Serialization._deserialize_isbits_array!(IOBuffer(UInt8[0xff]), Vector{Bool}(undef, 2))
 
 # SubArray
 create_serialization_stream() do s # slices

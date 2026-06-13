@@ -1504,7 +1504,7 @@ end
 function _deserialize_bitsunion_dynamic!(a, tags::Vector{UInt8}, src, src_stride::Int, n::Int, types_read::Vector)
     for T in types_read
         # only hit if T is redefined between ser - de, but we'd prefer an error than illegal `unsafe_load`
-        T isa DataType && isconcretetype(T) && sizeof(T)::Int <= src_stride ||
+        T isa DataType && isbitstype(T) && sizeof(T)::Int <= src_stride ||
             error("incompatible layout for serialized type ", T)
     end
     @inbounds for i in 1:n
@@ -1548,7 +1548,7 @@ end
 
 function _deserialize_bitsunion_array!(s::AbstractSerializer, a::AbstractArray{U}) where {U}
     types_read = deserialize(s)::Vector
-    elsz_read = deserialize(s)::Int
+    elsz_read = Int(deserialize(s))::Int
     elsz = Base.elsize(a)
     n = length(a)
     types_local = Base.uniontypes(U)
