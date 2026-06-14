@@ -576,6 +576,9 @@ julia> String(take!(copyuntil(IOBuffer(), "my_file.txt", '.', keep = true)))
 
 julia> rm("my_file.txt")
 ```
+
+!!! compat "Julia 1.11"
+    `copyuntil` was introduced in Julia 1.11.
 """
 copyuntil(out::IO, filename::AbstractString, delim; kw...) = open(io->copyuntil(out, io, delim; kw...), convert(String, filename)::String)
 
@@ -652,6 +655,9 @@ julia> String(take!(copyline(IOBuffer(), "my_file.txt", keep=true)))
 
 julia> rm("my_file.txt")
 ```
+
+!!! compat "Julia 1.11"
+    `copyline` was introduced in Julia 1.11.
 """
 copyline(out::IO, filename::AbstractString; keep::Bool=false) =
     open(io -> copyline(out, io; keep), filename)
