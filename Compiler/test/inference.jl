@@ -6892,4 +6892,35 @@ let rt = Base.infer_return_type(NestedTVarSPtype.mk, (Vector, Any))
     @test rt <: (NestedTVarSPtype.ParamStruct{1, 1, Tuple{Colon}, B, Tuple{UnitRange{Int}}} where B<:Tuple{Vector})
 end
 
+# `Core.Compiler.return_type` should infer the body of an `OpaqueClosure` argument that
+# is still a `PartialOpaque` at the call site (rather than bailing to `Type`), since an
+# `OpaqueClosure`'s return type at a given argtype is fully determined by its body.
+function oc_rt_inf()
+    oc = Base.Experimental.@opaque x::Int -> 2x
+    Core.Compiler.return_type(oc, Tuple{Int})
+end
+@test Base.infer_return_type(oc_rt_inf) == Type{Int}
+# An untyped parameter is still probed precisely at the requested argtype.
+function oc_rt_inf_untyped()
+    oc = Base.Experimental.@opaque x -> 2x
+    Core.Compiler.return_type(oc, Tuple{Int})
+end
+@test Base.infer_return_type(oc_rt_inf_untyped) == Type{Int}
+# Captured environment types flow through the `PartialOpaque`, so the probed return
+# type reflects them.
+function oc_rt_inf_env(c::Float64)
+    oc = Base.Experimental.@opaque x::Int -> x + c
+    Core.Compiler.return_type(oc, Tuple{Int})
+end
+@test Base.infer_return_type(oc_rt_inf_env, (Float64,)) == Type{Float64}
+
+# Match runtime `return_type(::OpaqueClosure, ...)` semantics: use the capture tuple's
+# runtime type, not call-site-only constant env refinements.
+function oc_rt_inf_const_env()
+    c = true
+    oc = Base.Experimental.@opaque x::Int -> c ? x : 1.0
+    Core.Compiler.return_type(oc, Tuple{Int})
+end
+@test Base.infer_return_type(oc_rt_inf_const_env) == Type{Union{Float64,Int}}
+
 end # module inference

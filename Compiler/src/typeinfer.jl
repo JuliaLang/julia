@@ -1881,11 +1881,19 @@ verify_typeinf_trim(codeinfos::Vector{Any}, onlywarn::Bool) = Core._call_in_worl
 
 function return_type(@nospecialize(f), t::DataType) # this method has a special tfunc
     world = tls_world_age()
-    args = Any[_return_type, NativeInterpreter(world), Tuple{Core.Typeof(f), t.parameters...}]
+    if isa(f, Core.OpaqueClosure)
+        args = Any[_return_type_opaque_closure, NativeInterpreter(world), f, t]
+    else
+        args = Any[_return_type, NativeInterpreter(world), Tuple{Core.Typeof(f), t.parameters...}]
+    end
     return ccall(:jl_call_in_typeinf_world, Any, (Ptr{Any}, Cint), args, length(args))
 end
 
 function return_type(@nospecialize(f), t::DataType, world::UInt)
+    if isa(f, Core.OpaqueClosure)
+        args = Any[_return_type_opaque_closure, NativeInterpreter(world), f, t]
+        return ccall(:jl_call_in_typeinf_world, Any, (Ptr{Any}, Cint), args, length(args))
+    end
     return return_type(Tuple{Core.Typeof(f), t.parameters...}, world)
 end
 
@@ -1897,6 +1905,25 @@ end
 function return_type(t::DataType, world::UInt)
     args = Any[_return_type, NativeInterpreter(world), t]
     return ccall(:jl_call_in_typeinf_world, Any, (Ptr{Any}, Cint), args, length(args))
+end
+
+function _return_type_opaque_closure(
+        interp::NativeInterpreter, @nospecialize(oc::Core.OpaqueClosure), t::DataType
+    )
+    m = oc.source
+    isa(m, Method) || return Any
+    if isdefined(m, :source)
+        ocworld = UInt(oc.world)
+        ocinterp = get_inference_world(interp) == ocworld ? interp :
+            NativeInterpreter(ocworld;
+                inf_params = InferenceParams(interp),
+                opt_params = OptimizationParams(interp))
+        rt = typeinf_type(ocinterp, m, Tuple{typeof(oc.captures), t.parameters...}, Core.svec())
+        return rt === nothing ? Any : rt
+    else
+        codeinst = m.specializations.cache
+        return isa(codeinst, CodeInstance) ? codeinst.rettype : Any
+    end
 end
 
 function _return_type(interp::AbstractInterpreter, t::DataType)

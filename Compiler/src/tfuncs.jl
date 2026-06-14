@@ -3206,8 +3206,13 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
         isempty(argtypes_vec) && push!(argtypes_vec, Union{})
         aft = argtypes_vec[1]
     end
-    if !(isa(aft, Const) || (isType(aft) && !has_free_typevars(aft)) ||
-            (isconcretetype(aft) && !(aft <: Builtin) && !iskindtype(aft)))
+    if isa(aft, PartialOpaque)
+        # Match `return_type(::OpaqueClosure, ::DataType)`: infer the OC body with
+        # the runtime type of its captures, not with call-site-only env refinements.
+        aft = PartialOpaque(aft.typ, widenconst(aft.env), aft.parent, aft.source)
+        argtypes_vec[1] = aft
+    elseif !(isa(aft, Const) || (isType(aft) && !has_free_typevars(aft)) ||
+             (isconcretetype(aft) && !(aft <: Builtin) && !iskindtype(aft)))
         return Future(UNKNOWN)
     end
 
