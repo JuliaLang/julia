@@ -876,7 +876,7 @@ static int subtype_ccheck(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
     // cov_diag on exit.
     int8_t *saved_cov = (int8_t*)alloca(current_env_length(e));
     int nsaved_cov = push_consistency_scope(e, saved_cov);
-    int sub = local_forall_exists_subtype(x, y, e, PARAM_NONE, 1);
+    int sub = local_forall_exists_subtype(x, y, e, PARAM_COVARIANT, 1);
     pop_consistency_scope(e, saved_cov, nsaved_cov);
     pop_unionstate(&e->Lunions, &oldLunions);
     return sub;
@@ -1502,7 +1502,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
         jl_value_t *eff_ub = vb.ub;
         while (jl_is_typevar(eff_ub))
             eff_ub = ((jl_tvar_t*)eff_ub)->ub;
-        int eff_constrained = (vb.occurs_inv || (vb.occurs_cov && u->var->lb == jl_bottom_type));
+        int eff_constrained = (vb.occurs_inv || (cov_count(&vb) && u->var->lb == jl_bottom_type));
         if (vb.intvalued && vb.lb == (jl_value_t*)jl_any_type)
             val = (jl_value_t*)jl_wrap_vararg(NULL, NULL, 0, 0); // special token result that represents N::Int in the envout
         else if (!vb.occurs_inv && vb.lb != jl_bottom_type) {
