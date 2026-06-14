@@ -317,7 +317,7 @@ let U = Union{Int,Missing}
         Vector{Union{Int8,Missing}}(undef, 0), UInt8[], UInt8[], 1, 0, Any[Missing, Int])
     # the dynamic path loads values (and singletons) from a separate source buffer
     let a = Vector{U}(undef, 3)
-        Serialization._deserialize_bitsunion_dynamic!(a, UInt8[1, 0, 1], U[10, missing, 20], 8, 3, Any[Missing, Int])
+        Serialization._deserialize_bitsunion_dynamic!(a, UInt8[1, 0, 1], U[10, missing, 20], Base.elsize(Vector{U}), 3, Any[Missing, Int])
         @test isequal(a, U[10, missing, 20])
     end
     # an out-of-range tag in the dynamic path errors
