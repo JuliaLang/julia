@@ -346,6 +346,11 @@ end
 GC.gc()
 rm(file)
 
+m = mmap(Vector{UInt8}, 12)
+for (r,w,x) in Base.Iterators.product((false,true),(false,true),(false,true))
+    Mmap.mprotect!(m, read=r, write=w, exec=x)
+end
+
 @testset "Docstrings" begin
     @test isempty(Docs.undocumented_names(Mmap))
 end

@@ -282,8 +282,7 @@ function _mmap(io::IO,
             end
         end
         page_flag = exec ? (readonly ? PAGE_EXECUTE_READ : PAGE_EXECUTE_READWRITE) : (readonly ? PAGE_READONLY : PAGE_READWRITE)
-        file_flag = readonly ? FILE_MAP_READ : FILE_MAP_WRITE
-        exec && (file_flag |= FILE_MAP_EXECUTE)
+        file_flag = (exec ? FILE_MAP_EXECUTE : 0) | (readonly ? 0 : FILE_MAP_WRITE) | FILE_MAP_READ
         handle = create ? ccall(:CreateFileMappingW, stdcall, Ptr{Cvoid}, (OS_HANDLE, Ptr{Cvoid}, DWORD, DWORD, DWORD, Cwstring),
                                 file_desc, C_NULL, page_flag, szfile >> 32, szfile & typemax(UInt32), name) :
                           ccall(:OpenFileMappingW, stdcall, Ptr{Cvoid}, (DWORD, Cint, Cwstring),
@@ -480,5 +479,77 @@ function madvise!(m::Array, flag::Integer=MADV_NORMAL)
 end
 madvise!(B::BitArray, flag::Integer=MADV_NORMAL) = madvise!(B.chunks, flag)
 end # Sys.isunix()
+
+"""
+    mprotect!(A::Array; exec::Bool=false, read::Bool=true, write::Bool=false, offset::Integer=0)
+
+Changes access protection for the mmapped array `A`.
+
+!!! note
+    You must use the same `offset` as used to create `A` with `mmap`.
+
+!!! note
+    On Windows you can only set `exec=true` if you used `mmap(; exec=true)` to create `A`.
+
+```julia
+julia> using Mmap
+
+julia> A = mmap(Vector{Int8}, 12);
+
+julia> mprotect!(A, exec=true, write=false);
+```
+"""
+function mprotect!(A::Array{T}; exec::Bool=false, read::Bool=true, write::Bool=false,
+        offset::Int64=0) where T
+    offset_page::Int64 = div(offset, PAGESIZE) * PAGESIZE
+    len = length(A) * Base.aligned_sizeof(T)
+    mmaplen = (offset - offset_page) + len
+    ptr = convert(Ptr{T}, UInt(pointer(A)) - UInt(offset - offset_page))
+    @static if Sys.isunix()
+        prot = (exec ? PROT_EXEC : 0) | (read ? PROT_READ : 0) | (write ? PROT_WRITE : 0)
+        GC.@preserve A begin
+            ret = ccall(:jl_mprotect, Cint, (Ptr{Cvoid}, Csize_t, Cint),
+                        ptr, mmaplen, prot)
+        end
+        systemerror("changing memory protection failed", ret == -1)
+    else
+        prot = (exec ? FILE_MAP_EXECUTE : 0) | (read ? FILE_MAP_READ : 0) | (write ? FILE_MAP_WRITE : 0)
+        old_prot = Ref{Dword}()
+        GC.@preserve A begin
+            ret = ccall(:VirtualProtect, Cint, (Ptr{Cvoid}, Csize_t, DWORD, Ref{DWORD}),
+                        ptr, mmaplen, prot, old_prot)
+        end
+        Base.windowserror(:mprotect, ret == 0)
+    end
+    return
+end
+
+# TODO Need to ask whether to use
+#   __builtin___clear_cache() from GCC/Clang on linux and FlushInstructionCache() on win
+#   or implement it using LLVM's __clear_cache?
+#
+# define void @flush_instruction_cache_range(i8* %start_ptr, i8* %end_ptr) {
+# entry:
+#   ; Call the architecture-independent cache flush function
+#   ; This is the core part that mirrors FlushInstructionCache/mprotect's effect
+#   call void @__clear_cache(i8* %start_ptr, i8* %end_ptr)
+#   ret void
+# }
+#
+# function flushinstr(A::Array{T})
+#     # shift `offset` to start of page boundary
+#     offset_page::Int64 = div(offset, PAGESIZE) * PAGESIZE
+#     # add (offset - offset_page) to `len` to get total length of memory-mapped region
+#     mmaplen = (offset - offset_page) + len
+#     ptr = pointer(A)
+#     ptr = convert(Ptr{T}, UInt(ptr) - UInt(offset - offset_page))
+#     @static if Sys.isunix()
+#         GC.@preserve A begin
+#
+#         end
+#     else
+#     end
+# end
+
 
 end # module

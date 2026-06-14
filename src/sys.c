@@ -81,6 +81,14 @@ JL_DLLEXPORT void *jl_mmap(void *addr, size_t length, int prot, int flags,
 {
     return mmap(addr, length, prot, flags, fd, (off_t)offset);
 }
+JL_DLLEXPORT int jl_mprotect(void *addr, size_t length, int prot)
+{
+    return mprotect(addr, length, prot);
+}
+/** JL_DLLEXPORT void jl_flush_instructions(void *start, void *end) */
+/** { */
+/**     __builtin___clear_cache(start, end); */
+/** } */
 #else
 JL_DLLEXPORT int64_t jl_lseek(HANDLE fd, int64_t offset, int whence)
 {
