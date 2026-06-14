@@ -1647,19 +1647,12 @@
 
 (define (expand-assignment e (const? #f))
   (define lhs (cadr e))
-  (define (function-lhs? lhs)
-    (and (pair? lhs)
-         (or (eq? (car lhs) 'call)
-             (eq? (car lhs) 'where)
-             (and (eq? (car lhs) '|::|)
-                  (pair? (cadr lhs))
-                  (eq? (car (cadr lhs)) 'call)))))
   (define (assignment-to-function lhs e)  ;; convert '= expr to 'function expr
     (cons 'function (cdr e)))
   (define (maybe-wrap-const x)
     (if const? `(const ,x) x))
   (cond
-   ((function-lhs? lhs)
+   ((eventually-call? lhs)
     ;; `const f() = ...` - The `const` here is inoperative, but the syntax
     ;; happened to work in earlier versions, so simply strip `const`.
     (expand-forms (assignment-to-function lhs e)))
@@ -1670,7 +1663,7 @@
     ;; chain of assignments - convert a=b=c to `b=c; a=c`
     (let loop ((lhss (list lhs))
                (rhs  (caddr e)))
-      (if (and (assignment? rhs) (not (function-lhs? (cadr rhs))))
+      (if (and (assignment? rhs) (not (eventually-call? (cadr rhs))))
           (loop (cons (cadr rhs) lhss) (caddr rhs))
           (let* ((rr (if (symbol-like? rhs) rhs (make-ssavalue)))
                  (lhss (reverse lhss))

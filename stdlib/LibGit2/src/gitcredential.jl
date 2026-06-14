@@ -151,7 +151,7 @@ function fill!(cfg::GitConfig, cred::GitCredential)
 
         # "Once Git has acquired both a username and a password, no more helpers will be
         # tried." – https://git-scm.com/docs/gitcredentials#gitcredentials-helper
-        !isfilled(cred) && break
+        isfilled(cred) && break
     end
 
     return cred

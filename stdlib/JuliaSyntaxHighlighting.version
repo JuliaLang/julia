@@ -1,4 +1,4 @@
-JULIASYNTAXHIGHLIGHTING_BRANCH = kf/op-kind-removal
-JULIASYNTAXHIGHLIGHTING_SHA1 = 4409eba6a0fee8d7188a8d8c5f31a9d0113fd237
-JULIASYNTAXHIGHLIGHTING_GIT_URL := https://github.com/KenoAIStaging/JuliaSyntaxHighlighting.jl.git
-JULIASYNTAXHIGHLIGHTING_TAR_URL = https://api.github.com/repos/KenoAIStaging/JuliaSyntaxHighlighting.jl/tarball/$1
+JULIASYNTAXHIGHLIGHTING_BRANCH = main
+JULIASYNTAXHIGHLIGHTING_SHA1 = 52924c1460bc5e66bd1f54cd6b2216009a87ac38
+JULIASYNTAXHIGHLIGHTING_GIT_URL := https://github.com/JuliaLang/JuliaSyntaxHighlighting.jl.git
+JULIASYNTAXHIGHLIGHTING_TAR_URL = https://api.github.com/repos/JuliaLang/JuliaSyntaxHighlighting.jl/tarball/$1

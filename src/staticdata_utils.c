@@ -116,34 +116,66 @@ JL_DLLEXPORT void jl_tag_newly_inferred_disable(void)
 // This gets called as the first step of Base.include_package_for_output
 JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t* _newly_inferred)
 {
-    assert(_newly_inferred == NULL || _newly_inferred == jl_nothing || jl_is_array(_newly_inferred));
+    assert(_newly_inferred == NULL || _newly_inferred == jl_nothing || jl_is_array_any(_newly_inferred));
     if (_newly_inferred == jl_nothing)
         _newly_inferred = NULL;
     newly_inferred = (jl_array_t*) _newly_inferred;
 }
 
-static jl_array_t *queue_external_cis(jl_array_t *list, jl_query_cache *query_cache);
+// Null `CodeInstance.inferred` for native-owned CIs where it is still a raw
+// `CodeInfo` left by `jl_precompile_keep_ir`. These are non-inlineable methods
+// whose IR is otherwise discarded, retained only long enough for
+// `jl_create_native` to reuse via the `typeinf_ext` short-circuit. A
+// CodeInstance cached racing the end of the include phase can escape this walk;
+// see jl_queue_for_serialization.
+JL_DLLEXPORT void jl_finalize_precompile_inferred(int8_t cleanup_keep_ir)
+{
+    jl_set_precompile_keep_ir(0);
+    if (!cleanup_keep_ir || newly_inferred == NULL)
+        return;
+    size_t n = jl_array_nrows(newly_inferred);
+    for (size_t i = 0; i < n; i++) {
+        jl_code_instance_t *ci = (jl_code_instance_t*)jl_array_ptr_ref(newly_inferred, i);
+        if (ci == NULL)
+            continue;
+        if (ci->owner != jl_nothing)
+            continue; // foreign interpreters own their cached IR
+        jl_value_t *inferred = jl_atomic_load_relaxed(&ci->inferred);
+        if (inferred == NULL || !jl_is_code_info(inferred))
+            continue;
+        jl_method_instance_t *mi = jl_get_ci_mi(ci);
+        if (!jl_is_method(mi->def.value))
+            continue; // toplevel code retains its inferred IR
+        if (mi->def.method->source == NULL)
+            continue; // optimized opaque closures can't reconstruct their IR
+        jl_atomic_store_release(&ci->inferred, jl_nothing);
+    }
+}
 
-JL_DLLEXPORT jl_array_t* jl_compute_new_ext_cis(void)
+static jl_array_t *queue_external(jl_array_t *list, jl_query_cache *query_cache);
+
+JL_DLLEXPORT jl_array_t* jl_compute_new_ext(void)
 {
     if (newly_inferred == NULL)
         return jl_alloc_vec_any(0);
     jl_query_cache query_cache;
     init_query_cache(&query_cache);
-    jl_array_t *new_ext_cis = queue_external_cis(newly_inferred, &query_cache);
+    jl_array_t *new_ext = queue_external(newly_inferred, &query_cache);
     destroy_query_cache(&query_cache);
-    return new_ext_cis;
+    return new_ext;
 }
 
 JL_DLLEXPORT void jl_push_newly_inferred(jl_value_t* ci)
 {
     if (!newly_inferred)
         return;
-    uint8_t tag_newly_inferred = jl_atomic_load_relaxed(&jl_tag_newly_inferred_enabled);
-    if (tag_newly_inferred) {
-        jl_method_instance_t *mi = jl_get_ci_mi((jl_code_instance_t*)ci);
-        uint8_t miflags = jl_atomic_load_relaxed(&mi->flags);
-        jl_atomic_store_relaxed(&mi->flags, miflags | JL_MI_FLAGS_MASK_PRECOMPILED);
+    if (jl_is_code_instance(ci)) {
+        uint8_t tag_newly_inferred = jl_atomic_load_relaxed(&jl_tag_newly_inferred_enabled);
+        if (tag_newly_inferred) {
+            jl_method_instance_t *mi = jl_get_ci_mi((jl_code_instance_t*)ci);
+            uint8_t miflags = jl_atomic_load_relaxed(&mi->flags);
+            jl_atomic_store_relaxed(&mi->flags, miflags | JL_MI_FLAGS_MASK_PRECOMPILED);
+        }
     }
     JL_LOCK(&newly_inferred_mutex);
     size_t end = jl_array_nrows(newly_inferred);
@@ -482,12 +514,11 @@ static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited,
     return final_result;
 }
 
-// Given the list of CodeInstances that were inferred during the build, select
-// those that are (1) external, (2) still valid, (3) are inferred to be called
-// from the worklist or explicitly added by a `precompile` statement, and
-// (4) are the most recently computed result for that method.
-// These will be preserved in the image.
-static jl_array_t *queue_external_cis(jl_array_t *list, jl_query_cache *query_cache)
+// Given the list of CodeInstances or MethodInstances that were inferred during the build,
+// select those that are (1) external, (2) still valid, (3) are inferred to be called from
+// the worklist or explicitly added by a `precompile` statement, and (4) are the most
+// recently computed result for that method. These will be preserved in the image.
+static jl_array_t *queue_external(jl_array_t *list, jl_query_cache *query_cache)
 {
     if (list == NULL)
         return NULL;
@@ -498,37 +529,42 @@ static jl_array_t *queue_external_cis(jl_array_t *list, jl_query_cache *query_ca
     size_t n0 = jl_array_nrows(list);
     htable_new(&visited, n0);
     arraylist_new(&stack, 0);
-    jl_array_t *new_ext_cis = jl_alloc_vec_any(0);
-    JL_GC_PUSH1(&new_ext_cis);
+    jl_array_t *new_ext = jl_alloc_vec_any(0);
+    JL_GC_PUSH1(&new_ext);
     for (i = n0; i-- > 0; ) {
-        jl_code_instance_t *ci = (jl_code_instance_t*)jl_array_ptr_ref(list, i);
-        assert(jl_is_code_instance(ci));
-        jl_method_instance_t *mi = jl_get_ci_mi(ci);
-        jl_method_t *m = mi->def.method;
-        int dispatch_status = jl_atomic_load_relaxed(&m->dispatch_status);
-        if (!(dispatch_status & METHOD_SIG_LATEST_WHICH))
-            continue; // ignore replaced methods
-        if (jl_atomic_load_relaxed(&ci->inferred) && jl_is_method(m) && jl_object_in_image((jl_value_t*)m->module)) {
-            int found = has_backedge_to_worklist(mi, &visited, &stack, query_cache);
-            assert(found == 0 || found == 1 || found == 2);
-            assert(stack.len == 0);
-            if (found == 1) {
-                jl_array_ptr_1d_push(new_ext_cis, (jl_value_t*)ci);
+        jl_value_t *v = jl_array_ptr_ref(list, i);
+        if (jl_is_code_instance(v)) {
+            jl_code_instance_t *ci = (jl_code_instance_t*)v;
+            jl_method_instance_t *mi = jl_get_ci_mi(ci);
+            jl_method_t *m = mi->def.method;
+            int dispatch_status = jl_atomic_load_relaxed(&m->dispatch_status);
+            if (!(dispatch_status & METHOD_SIG_LATEST_WHICH))
+                continue; // ignore replaced methods
+            if (jl_atomic_load_relaxed(&ci->inferred) && jl_is_method(m) && jl_object_in_image((jl_value_t*)m->module)) {
+                int found = has_backedge_to_worklist(mi, &visited, &stack, query_cache);
+                assert(found == 0 || found == 1 || found == 2);
+                assert(stack.len == 0);
+                if (found == 1) {
+                    jl_array_ptr_1d_push(new_ext, (jl_value_t*)ci);
+                }
             }
+        }
+        else if (jl_is_method_instance(v)) {
+            jl_array_ptr_1d_push(new_ext, v);
         }
     }
     htable_free(&visited);
     arraylist_free(&stack);
     JL_GC_POP();
-    // reverse new_ext_cis
-    n0 = jl_array_nrows(new_ext_cis);
-    jl_value_t **news = jl_array_data(new_ext_cis, jl_value_t*);
-    for (i = 0; i < n0; i++) {
+    // reverse new_ext
+    n0 = jl_array_nrows(new_ext);
+    jl_value_t **news = jl_array_data(new_ext, jl_value_t*);
+    for (i = 0; i < n0 / 2; i++) {
         jl_value_t *temp = news[i];
         news[i] = news[n0 - i - 1];
         news[n0 - i - 1] = temp;
     }
-    return new_ext_cis;
+    return new_ext;
 }
 
 // For every method:

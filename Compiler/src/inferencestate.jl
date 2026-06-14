@@ -292,7 +292,7 @@ mutable struct InferenceState{I<:AbstractInterpreter}
     currpc::Int
     ip::BitSet#=TODO BoundedMinPrioritySet=# # current active instruction pointers
     handler_info::Union{Nothing,HandlerInfo{TryCatchFrame}}
-    ssavalue_uses::Vector{BitSet} # ssavalue sparsity and restart info
+    ssavalue_uses::SSAUses # ssavalue sparsity and restart info
     # Per-basic-block entry state. `nothing` if the BB has not been analyzed yet.
     # Populated lazily during the main inference loop by `update_bbstate!`, which merges
     # the current exit state into each successor. Both the variable-type table and the
