@@ -456,6 +456,10 @@
     XX(jl_set_ptls_rng) \
     XX(jl_throw) \
     XX(jl_throw_out_of_memory_error) \
+    XX(jl_tier_callcount) \
+    XX(jl_tier_counter_pointer) \
+    XX(jl_tier_enabled) \
+    XX(jl_tier_swap_target) \
     XX(jl_too_few_args) \
     XX(jl_too_many_args) \
     XX(jl_toplevel_eval) \

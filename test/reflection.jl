@@ -1496,3 +1496,28 @@ end
 using .X1ConstConflict, .X2ConstConflict
 
 @test_throws ErrorException which(@__MODULE__, :xconstconflict)
+
+# Tiered-compilation prototype: per-CodeInstance call-count profiling and manual
+# tier promotion. Gated by JULIA_TIER=1 (must be set at startup so the prologue
+# call counters are emitted); skipped in normal CI runs.
+tiered_work(x::Int) = (s = 0; for i in 1:x; s += i % 7; end; s)
+tiered_drive(@nospecialize(g), n::Int) = (s = 0; for i in 1:n; s += g(i % 100 + 1)::Int; end; s)
+@testset "tiered compilation prototype" begin
+    if get(ENV, "JULIA_TIER", "") != "1"
+        @info "skipping tiered-compilation prototype test; set JULIA_TIER=1 to enable"
+    else
+        include(joinpath(@__DIR__, "..", "tiered", "TieredCompilation.jl"))
+        tiered_work(10)                      # native (tier-1) compile
+        tiered_drive(tiered_work, 50_000)    # accrue calls on the native CodeInstance
+        st = TieredCompilation.tier_stats(tiered_work, (Int,))
+        @test st.owner === nothing           # native CI
+        @test st.callcount > 0               # counter instrumented and climbing
+        before = tiered_work(33)
+        opt = TieredCompilation.promote_tier!(tiered_work, (Int,))
+        @test opt isa Core.CodeInstance
+        @test opt.owner !== nothing          # distinct optimized owner token
+        tiered_drive(tiered_work, 50_000)    # route through the swapped invoke
+        @test tiered_work(33) == before      # correctness preserved across promotion
+        @test ccall(:jl_tier_callcount, UInt64, (Any,), opt) > 0  # optimized CI now hot
+    end
+end

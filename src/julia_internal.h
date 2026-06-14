@@ -2138,6 +2138,13 @@ void jl_init_coverage(void);
 void jl_write_malloc_log(void);
 JL_DLLEXPORT void jl_write_coverage_data(const char*);
 
+// Tiered-compilation prototype (see src/tiered.c)
+JL_DLLEXPORT int jl_tier_enabled(void) JL_NOTSAFEPOINT;
+void jl_init_tiered(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uint64_t *jl_tier_counter_pointer(jl_code_instance_t *ci) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uint64_t jl_tier_callcount(jl_code_instance_t *ci) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_tier_swap_target(jl_code_instance_t *old_ci, jl_code_instance_t *new_ci);
+
 extern uv_mutex_t symtab_lock;
 jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
 

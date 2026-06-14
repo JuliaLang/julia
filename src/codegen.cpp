@@ -3152,6 +3152,10 @@ extern "C" JL_DLLEXPORT void jl_coverage_alloc_line(const char *filename, int li
 extern "C" JL_DLLEXPORT uint64_t *jl_coverage_data_pointer(const char *filename, int line);
 extern "C" JL_DLLEXPORT uint64_t *jl_malloc_data_pointer(const char *filename, int line);
 
+// Tiered-compilation prototype (see src/tiered.c)
+extern "C" JL_DLLEXPORT uint64_t *jl_tier_counter_pointer(jl_code_instance_t *ci) JL_NOTSAFEPOINT;
+extern "C" JL_DLLEXPORT int jl_tier_enabled(void) JL_NOTSAFEPOINT;
+
 static void visitLine(jl_codectx_t &ctx, uint64_t *ptr, Value *addend, const char *name)
 {
     Value *pv = ConstantExpr::getIntToPtr(
@@ -9023,6 +9027,15 @@ static jl_llvm_functions_t
     allocate_gc_frame(ctx, b0);
     if (out.safepoint_on_entry && JL_FEAT_TEST(ctx, safepoint_on_entry))
         emit_gc_safepoint(ctx.builder, ctx.types().T_size, get_current_ptls(ctx), ctx.tbaa().tbaa_const);
+
+    // step 6c. tiered compilation prototype: bump this CodeInstance's call counter
+    // on entry (hotness profiling). Gated by JULIA_TIER; skipped during image
+    // generation since the baked counter address is not valid across serialization
+    // (same restriction as code coverage above).
+    if (jl_tier_enabled() && ctx.codeinst && !ctx.emission_context.imaging_mode) {
+        uint64_t *tier_counter = jl_tier_counter_pointer(ctx.codeinst);
+        visitLine(ctx, tier_counter, ConstantInt::get(getInt64Ty(ctx.builder.getContext()), 1), "tiercnt");
+    }
 
     Value *last_age = NULL;
     Value *world_age_field = NULL;
