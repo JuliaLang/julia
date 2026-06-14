@@ -3399,7 +3399,11 @@ function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, outpu
         push!(opts, "--trace-compile-timing")
     end
 
-    cmd = `$(julia_cmd(;cpu_target)::Cmd)
+    # when running under `rr`, forward the wrapper invocation set in the pipeline
+    # to ensure precompile workers record into their own detached traces.
+    rr = get(ENV, "JULIA_RR", "")
+    rr_prefix = isempty(rr) ? String[] : Base.shell_split(rr)
+    cmd = `$(rr_prefix) $(julia_cmd(;cpu_target)::Cmd)
            $(flags)
            $(opts)
            --output-incremental=yes
