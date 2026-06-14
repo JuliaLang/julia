@@ -1248,18 +1248,37 @@ function _fieldindex_nothrow(T::DataType, name::Symbol)
 end
 
 function fieldindex(t::UnionAll, name::Symbol, err::Bool=true)
-    t = argument_datatype(t)
-    if t === nothing
+    return _fieldindex(t, name, err)
+end
+
+function fieldindex(t::Union, name::Symbol, err::Bool=true)
+    return _fieldindex(t, name, err)
+end
+
+function _fieldindex(@nospecialize(t), name::Symbol, err::Bool)
+    idx = _fieldindex_noerror(t, name)
+    if idx === nothing
         err && throw(ArgumentError("type does not have definite fields"))
         return 0
     end
-    return fieldindex(t, name, err)
+    if idx == 0 && err
+        t = _fieldindex_error_type(t)
+        t === nothing && throw(ArgumentError("type does not have definite fields"))
+        return fieldindex(t, name, true)
+    end
+    return idx
 end
 
 function argument_datatype(@nospecialize t)
     @_total_meta
     @noinline
     return ccall(:jl_argument_datatype, Any, (Any,), t)::Union{Nothing,DataType}
+end
+
+function argument_datatypename(@nospecialize t)
+    @_total_meta
+    @noinline
+    return ccall(:jl_argument_datatypename, Any, (Any,), t)::Union{Nothing,Core.TypeName}
 end
 
 function datatype_fieldcount(t::DataType)
@@ -1284,6 +1303,64 @@ function datatype_fieldcount(t::DataType)
     return length(t.name.names)
 end
 
+function _typename_noerror(@nospecialize(t))
+    t = unwrap_unionall(t)
+    if t isa DataType
+        return t.name
+    elseif t isa Union
+        aname = _typename_noerror(t.a)
+        aname === nothing && return nothing
+        bname = _typename_noerror(t.b)
+        return aname === bname ? aname : nothing
+    end
+    return nothing
+end
+
+function _fieldindex_error_type(@nospecialize(t))
+    t = unwrap_unionall(t)
+    if t isa DataType
+        fieldcount_noerror(t) === nothing && return nothing
+        return t
+    elseif t isa Union
+        tn = _typename_noerror(t)
+        tn === nothing && return nothing
+        t = unwrap_unionall(tn.wrapper)
+        t isa DataType || return nothing
+        return t
+    end
+    return nothing
+end
+
+function _fieldindex_noerror(@nospecialize(t), name::Symbol)
+    t = unwrap_unionall(t)
+    if t isa Union
+        _typename_noerror(t) === nothing && return nothing
+        aidx = _fieldindex_noerror(t.a, name)
+        aidx === nothing && return nothing
+        bidx = _fieldindex_noerror(t.b, name)
+        return aidx === bidx ? aidx : nothing
+    elseif t isa DataType
+        return fieldindex(t, name, false)
+    end
+    return nothing
+end
+
+function _fieldcount_noerror(@nospecialize(t))
+    t === Union{} && return 0
+    t = unwrap_unionall(t)
+    if t isa Union
+        _typename_noerror(t) === nothing && return nothing
+        acount = _fieldcount_noerror(t.a)
+        acount === nothing && return nothing
+        bcount = _fieldcount_noerror(t.b)
+        return acount === bcount ? acount : nothing
+    elseif t === Union{}
+        return 0
+    end
+    t isa DataType || return nothing
+    return datatype_fieldcount(t)
+end
+
 """
     fieldcount(t::Type)
 
@@ -1292,13 +1369,14 @@ An error is thrown if the type is too abstract to determine this.
 """
 function fieldcount(@nospecialize t)
     @_foldable_meta
-    if t isa UnionAll || t isa Union
-        t = argument_datatype(t)
-        if t === nothing
-            throw(ArgumentError("type does not have a definite number of fields"))
-        end
-    elseif t === Union{}
+    if t === Union{}
         throw(ArgumentError("The empty type does not have a well-defined number of fields since it does not have instances."))
+    end
+    t = unwrap_unionall(t)
+    if t isa Union
+        fcount = _fieldcount_noerror(t)
+        fcount === nothing && throw(ArgumentError("type does not have a definite number of fields"))
+        return fcount
     end
     if !(t isa DataType)
         throw(TypeError(:fieldcount, DataType, t))
@@ -1311,28 +1389,7 @@ function fieldcount(@nospecialize t)
 end
 
 function fieldcount_noerror(@nospecialize t)
-    if t isa UnionAll || t isa Union
-        t = argument_datatype(t)
-        if t === nothing
-            return nothing
-        end
-    elseif t === Union{}
-        return 0
-    end
-    t isa DataType || return nothing
-    if t.name === _NAMEDTUPLE_NAME
-        names, types = t.parameters
-        if names isa Tuple
-            return length(names)
-        end
-        if types isa DataType && types <: Tuple
-            return fieldcount_noerror(types)
-        end
-        return nothing
-    elseif isabstracttype(t) || (t.name === Tuple.name && isvatuple(t))
-        return nothing
-    end
-    return isdefined(t, :types) ? length(t.types) : length(t.name.names)
+    return _fieldcount_noerror(t)
 end
 
 

@@ -683,19 +683,62 @@ static jl_datatype_t *nth_arg_datatype(jl_value_t *a JL_PROPAGATES_ROOT, int n) 
     return NULL;
 }
 
+static jl_datatype_t *arg_datatype(jl_value_t *a JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    if (jl_is_datatype(a))
+        return (jl_datatype_t*)a;
+    else if (jl_is_typeeq(a)) {
+        jl_value_t *T = jl_typeeq_T(a);
+        if (T == jl_bottom_type)
+            return jl_typeofbottom_type;
+        if (jl_is_datatype(T))
+            return (jl_datatype_t*)T;
+        if (jl_is_typevar(T))
+            return arg_datatype(((jl_tvar_t*)T)->ub);
+        if (jl_is_unionall(T))
+            return arg_datatype(jl_unwrap_unionall(T));
+        return NULL;
+    }
+    else if (jl_is_typevar(a)) {
+        return arg_datatype(((jl_tvar_t*)a)->ub);
+    }
+    else if (jl_is_unionall(a)) {
+        return arg_datatype(((jl_unionall_t*)a)->body);
+    }
+    return NULL;
+}
+
 // get DataType of first tuple element (if present), or NULL if cannot be determined
 jl_datatype_t *jl_nth_argument_datatype(jl_value_t *argtypes JL_PROPAGATES_ROOT, int n) JL_NOTSAFEPOINT
 {
     return nth_arg_datatype(argtypes, n);
 }
 
+// get TypeName of first tuple element (if present), or NULL if cannot be determined
+jl_typename_t *jl_nth_argument_datatypename(jl_value_t *argtypes JL_PROPAGATES_ROOT, int n) JL_NOTSAFEPOINT
+{
+    jl_datatype_t *dt = nth_arg_datatype(argtypes, n);
+    if (dt == NULL)
+        return NULL;
+    return dt->name;
+}
+
 // get DataType implied by a single given type, or `nothing`
 JL_DLLEXPORT jl_value_t *jl_argument_datatype(jl_value_t *argt JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    jl_datatype_t *dt = arg_datatype(argt);
+    if (dt == NULL)
+        return jl_nothing;
+    return (jl_value_t*)dt;
+}
+
+// get TypeName implied by a single given type, or `nothing`
+JL_DLLEXPORT jl_value_t *jl_argument_datatypename(jl_value_t *argt JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
     jl_datatype_t *dt = nth_arg_datatype(argt, 0);
     if (dt == NULL)
         return jl_nothing;
-    return (jl_value_t*)dt;
+    return (jl_value_t*)dt->name;
 }
 
 static int is_globname_binding(jl_value_t *v, jl_datatype_t *dv) JL_NOTSAFEPOINT
