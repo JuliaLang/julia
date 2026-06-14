@@ -435,15 +435,23 @@ end
 
 function discard_optimized_result(interp::AbstractInterpreter, _#=::OptimizationState=#, inlining_cost#=::InlineCostType=#)
     may_discard_trees(interp) || return false
-    return inlining_cost == MAX_INLINE_COST
+    inlining_cost == MAX_INLINE_COST || return false
+    precompile_keep_ir(interp) && return false
+    return true
 end
 
 function maybe_compress_codeinfo(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInfo)
     def = mi.def
     isa(def, Method) || return ci # don't compress toplevel code
     can_discard_trees = may_discard_trees(interp)
-    cache_the_tree = !can_discard_trees || is_inlineable(ci)
-    cache_the_tree || return nothing
+    inlineable = is_inlineable(ci)
+    if can_discard_trees && !inlineable
+        # Precompile-keep-ir mode: retain non-inlineable IR as raw CodeInfo so
+        # irgen's typeinf_ext can reuse it instead of re-inferring.
+        # jl_finalize_precompile_inferred nulls it before save.
+        precompile_keep_ir(interp) && return ci
+        return nothing
+    end
     may_compress(interp) && return ccall(:jl_compress_ir, String, (Any, Any), def, ci)
     return ci
 end
