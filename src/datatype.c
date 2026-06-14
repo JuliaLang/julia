@@ -517,6 +517,8 @@ void jl_get_genericmemory_layout(jl_datatype_t *st)
     jl_value_t *kind = jl_tparam0(st);
     jl_value_t *eltype = jl_tparam1(st);
     jl_value_t *addrspace = jl_tparam2(st);
+
+    eltype = normalize_typeofbottom_layout_alias(eltype);
     if (!st->isconcretetype) {
         // Since parent dt has an opaque layout, we may end up here being asked to copy that layout to subtypes,
         // but we don't actually want to do that unless this object is constructable (or at least has a layout).
