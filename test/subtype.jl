@@ -1645,7 +1645,7 @@ g25430(t::Vector{Tuple{>:Int}}) = true
 # issue #24521
 g24521(::T, ::T) where {T} = T
 @test_throws MethodError g24521(Tuple{Any}, Tuple{T} where T)
-@test g24521(Vector, Matrix) == UnionAll
+@test isequal_type(g24521(Vector, Matrix), Union{Type{Vector}, Type{Matrix}})
 @test [Tuple{Vararg{Int64}}, Tuple{Vararg{Int64,N}} where N] isa Vector{Type}
 f24521(::Type{T}, ::Type{T}) where {T} = T
 @test f24521(Tuple{Any}, Tuple{T} where T) == Tuple{Any}

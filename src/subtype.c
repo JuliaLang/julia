@@ -1410,6 +1410,9 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     // Then check concreteness by checking that the lower bound is not an abstract type.
     int diagonal = cov_count(&vb) > 1 && !vb.body_occurs_inv;
     if (ans && (vb.concrete || (diagonal && is_leaf_typevar(u->var)))) {
+        jl_value_t *concrete_lb = vb.lb;
+        if (diagonal && !vb.occurs_inv)
+            concrete_lb = widen_Type_if_concrete(concrete_lb);
         if (vb.concrete && !diagonal && !is_leaf_bound(vb.ub)) {
             // a non-diagonal var can only be a subtype of a diagonal var if its
             // upper bound is concrete.
@@ -1421,7 +1424,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
             if (vlb)
                 vlb->concrete = 1;
         }
-        else if (!is_leaf_bound(vb.lb)) {
+        else if (!is_leaf_bound(concrete_lb)) {
             ans = 0;
         }
     }
