@@ -688,7 +688,7 @@ static int dlinfo_helper(struct dl_phdr_info *info, size_t size, void *vdata)
 #endif
 
 // Takes a handle (as returned from dlopen()) and returns the absolute path to the image loaded
-JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
+JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle) JL_NOTSAFEPOINT
 {
     if (!handle)
         return NULL;
@@ -696,9 +696,9 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
 #ifdef __APPLE__
     // Iterate through all images currently in memory
     for (int32_t i = _dyld_image_count() - 1; i >= 0 ; i--) {
-        // dlopen() each image, check handle
+        // dlopen() each image, check handle.
         const char *image_name = _dyld_get_image_name(i);
-        void *probe_lib = jl_load_dynamic_library(image_name, JL_RTLD_DEFAULT | JL_RTLD_NOLOAD, 0);
+        void *probe_lib = jl_dlopen(image_name, JL_RTLD_DEFAULT | JL_RTLD_NOLOAD);
         jl_dlclose(probe_lib);
 
         // If the handle is the same as what was passed in (modulo mode bits), return this image name
@@ -747,6 +747,82 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
 
 #endif
     return NULL;
+}
+
+#if !defined(_OS_WINDOWS_) && !defined(__APPLE__) && !defined(__GLIBC__)
+struct sym_phdr_query {
+    uintptr_t   addr;
+    const char *name;        // matched dlpi_name
+    int         is_main_exe;
+    int         found;
+    int         index;       // running object index; 0 == main program
+};
+
+static int sym_phdr_helper(struct dl_phdr_info *info, size_t size, void *vdata) JL_NOTSAFEPOINT
+{
+    (void)size;
+    struct sym_phdr_query *q = (struct sym_phdr_query *)vdata;
+    int idx = q->index++;
+    // Find the object whose mapped PT_LOAD segments contain `addr`.
+    for (int i = 0; i < info->dlpi_phnum; i++) {
+        if (info->dlpi_phdr[i].p_type != PT_LOAD)
+            continue;
+        uintptr_t beg = (uintptr_t)info->dlpi_addr + info->dlpi_phdr[i].p_vaddr;
+        uintptr_t end = beg + info->dlpi_phdr[i].p_memsz;
+        if (q->addr >= beg && q->addr < end) {
+            q->name = info->dlpi_name;
+            // Note that `dlpi_name` for the main executable is platform-dependent
+            // and frequently `argv[0]` on non-GLIBC platforms. We do not want to
+            // return that result from this API since it cannot be reliably dlopen'd.
+            //
+            // Return "" instead, which also cannot be dlopen'd either (on non-GLIBC
+            // platforms) but which is at least a consistent value to match on for a
+            // dlopen(NULL) fallback, which does give a handle to the main exe.
+            q->is_main_exe = (idx == 0); // dl_iterate_phdr reports the main program first
+            q->found = 1;
+            return 1; // stop: found the containing object
+        }
+    }
+    return 0; // keep searching
+}
+#endif
+
+// Takes the address of a symbol and returns the path to the image that contains
+// it, or NULL. On ELF, the main executable is reported as the empty string "".
+JL_DLLEXPORT const char *jl_pathname_for_symbol(void *symbol) JL_NOTSAFEPOINT
+{
+    if (!symbol)
+        return NULL;
+#ifdef _OS_WINDOWS_
+    HMODULE handle;
+    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                            (LPCWSTR)symbol, &handle))
+        return NULL;
+    return jl_pathname_for_handle(handle);
+#elif defined(__APPLE__)
+    // dyld reports the real image path (including for the main executable).
+    Dl_info info;
+    if (!dladdr(symbol, &info) || !info.dli_fname)
+        return NULL;
+    return info.dli_fname;
+#elif defined(__GLIBC__)
+    // glibc: dladdr1 hands us the containing object's link_map directly.
+    Dl_info info;
+    struct link_map *map = NULL;
+    if (!dladdr1(symbol, &info, (void **)&map, RTLD_DL_LINKMAP) || map == NULL)
+        return NULL;
+    msan_unpoison(&map, sizeof(struct link_map *));
+    msan_unpoison(map, sizeof(struct link_map));
+    msan_unpoison_string(map->l_name);
+    return map->l_name; // the empty string for the main executable
+#else
+    // Other libc: walk the program headers and test PT_LOAD containment.
+    struct sym_phdr_query q = { (uintptr_t)symbol, NULL, 0, 0, 0 };
+    dl_iterate_phdr(&sym_phdr_helper, &q);
+    if (!q.found)
+        return NULL;
+    return q.is_main_exe ? "" : q.name;
+#endif
 }
 
 #ifdef _OS_WINDOWS_

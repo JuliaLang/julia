@@ -304,26 +304,17 @@ void *jl_find_dynamic_library_by_addr(void *symbol, int throw_err, int close) JL
         return NULL;
     }
 #else
-    Dl_info info;
-    if (!dladdr(symbol, &info) || !info.dli_fname) {
+    const char *path = jl_pathname_for_symbol(symbol);
+    if (path == NULL) {
         if (throw_err)
             jl_error("could not load base module");
         return NULL;
     }
-    dlerror();
-    handle = dlopen(info.dli_fname, RTLD_NOW | RTLD_NOLOAD | RTLD_LOCAL);
-#if defined(_OS_FREEBSD_)
-    // FreeBSD will not give you a handle for the executable if you dlopen() it
-    // with RTLD_NOLOAD, so check jl_exe_handle.
-    if (handle == NULL && dlerror() == NULL) {
-        handle = jl_exe_handle;
+    if (path[0] == '\0') { // symbol is in the main executable
+        handle = dlopen(NULL, RTLD_NOW | RTLD_NOLOAD | RTLD_LOCAL);
+    } else {
+        handle = dlopen(path, RTLD_NOW | RTLD_NOLOAD | RTLD_LOCAL);
     }
-#elif !defined(__APPLE__)
-    if (handle == RTLD_DEFAULT && (RTLD_DEFAULT != NULL || dlerror() == NULL)) {
-        // We loaded the executable but got RTLD_DEFAULT back, ask for a real handle instead
-        handle = dlopen("", RTLD_NOW | RTLD_NOLOAD | RTLD_LOCAL);
-    }
-#endif
     if (handle != NULL && close)
         dlclose(handle); // Undo ref count increment from `dlopen`
 #endif
