@@ -23,7 +23,11 @@ end
 # Return true when `x` and `y` are "the same identifier", but also works with
 # bindings (and hence ssa vars). See also `is_identifier_like()`
 function is_same_identifier_like(ex::SyntaxTree, y::SyntaxTree)
-    return (kind(ex) == K"Identifier" && kind(y) == K"Identifier" && NameKey(ex) == NameKey(y)) ||
+    # n.b. compare scope layers with a default: identifiers from quoted
+    # syntax that was spliced by a macro may not have been assigned a layer
+    return (kind(ex) == K"Identifier" && kind(y) == K"Identifier" &&
+            ex.name_val == y.name_val &&
+            get(ex, :scope_layer, 0) == get(y, :scope_layer, 0)) ||
            (kind(ex) == K"BindingId"  && kind(y) == K"BindingId"  && ex.var_id   == y.var_id)
 end
 
@@ -1538,9 +1542,13 @@ function expand_let(ctx, ex)
                 end
                 blk = @ast ctx binding [K"block"
                     tmp := rhs
-                    type := lhs[2]
                     [K"scope_block"(ex, scope_type=scope_type)
-                        [K"local"(lhs) [K"::" var type]]
+                        # n.b. the declared type is referenced directly (not
+                        # hoisted into a temporary) so that the declaration
+                        # works for variables captured into other lambdas,
+                        # where it is re-evaluated at each assignment like
+                        # flisp does
+                        [K"local"(lhs) [K"::" var lhs[2]]]
                         [K"always_defined" var]
                         [K"="(binding) var tmp]
                         blk
@@ -2113,12 +2121,15 @@ function expand_try(ctx, ex)
         if !is_identifier_like(exc_var)
             throw(LoweringError(exc_var, "Expected an identifier as exception variable"))
         end
+        cur_exc = _core_has_lowering_support ?
+            @ast(ctx, ex, "current_exception"::K"core") :
+            @ast(ctx, ex, current_exception::K"Value")
         try_block = @ast ctx ex [K"trycatchelse"
             try_body
             [K"scope_block"(catch_, scope_type=:neutral)
                 if kind(exc_var) != K"Placeholder"
                     [K"block"
-                        [K"="(exc_var) exc_var [K"call" current_exception::K"Value"]]
+                        [K"="(exc_var) exc_var [K"call" cur_exc]]
                         catch_block
                     ]
                 else
@@ -2209,6 +2220,13 @@ function expand_decls(ctx, ex)
         # type decls are handled elsewhere unless simple
         make_lhs_decls(ctx, stmts, declkind, get(ex, :meta, nothing), lhs, simple)
         simple || push!(stmts, expand_forms_2(ctx, c))
+    end
+    if declkind == K"global" && all(c->kind(c) == K"::", children(ex))
+        # a typed global declaration evaluates to `nothing` (flisp
+        # compatibility: e.g. `@doc`-annotated `global X::T` puts the
+        # declaration in value position); bare `global x` remains an error
+        # in value position
+        push!(stmts, @ast ctx ex (::K"nothing"))
     end
     newnode(ctx, ex, K"block", stmts)
 end
@@ -2458,15 +2476,27 @@ function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
     end
 
     gen_mdef = let arg1_name = newsym(ctx, argl[1], "#self#"),
-         gen_argl = SyntaxList(
-            @ast(ctx, src, [K"::" arg1_name [K"function_type" gen_name]]),
-            @ast(ctx, src, [K"::"
-                # TODO: correct scope layer?
-                "__context__"::K"Identifier"(scope_layer=get(mtable, :scope_layer, 1))
-                MacroContext::K"Value"
-            ]),
-            mapsyntax(_untyped_arg, sparams)...,
-             mapsyntax(_untyped_arg, argl)...)
+         gen_argl = if ctx.expr_compat_mode
+            # Core.GeneratedFunctionStub calls the generator as
+            # gen(spvals..., argtypes...) (see its call method in
+            # base/expr.jl), so there is no context argument. All arguments
+            # are @nospecialize'd, which Compiler.may_invoke_generator
+            # requires before it will concretely evaluate the generator.
+            SyntaxList(
+                @ast(ctx, src, [K"::" arg1_name [K"function_type" gen_name]]),
+                mapsyntax(e->apply_arg_meta(_untyped_arg(e), :nospecialize), sparams)...,
+                mapsyntax(e->apply_arg_meta(_untyped_arg(e), :nospecialize), argl)...)
+        else
+            SyntaxList(
+                @ast(ctx, src, [K"::" arg1_name [K"function_type" gen_name]]),
+                @ast(ctx, src, [K"::"
+                    # TODO: correct scope layer?
+                    "__context__"::K"Identifier"(scope_layer=get(mtable, :scope_layer, 1))
+                    MacroContext::K"Value"
+                ]),
+                mapsyntax(_untyped_arg, sparams)...,
+                mapsyntax(_untyped_arg, argl)...)
+        end
         @jl_assert kind(body[1]) === K"quote" body
         gen_body = est_to_dst(expand_quote(ctx, body[1][1]))
 
@@ -2475,8 +2505,17 @@ function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
     end
 
     nongen_mdef = let
-        nongen_body = @ast ctx body[2] [K"block" [K"meta" "generated"::K"Symbol"
-            [K"new"
+        stub = if ctx.expr_compat_mode
+            # The runtime-recognized generated function stub, matching what
+            # flisp emits; the generator returns the body as an Expr and the
+            # runtime lowers it (Base.generated_body_to_codeinfo)
+            @ast ctx body[2] [K"new"
+                "GeneratedFunctionStub"::K"core"
+                gen_name
+                [K"call" "svec"::K"core" mapsyntax(_expr_arg_sym, argl)...]
+                [K"call" "svec"::K"core" mapsyntax(_expr_arg_sym, sparams)...]]
+        else
+            @ast ctx body[2] [K"new"
                 GeneratedFunctionStub::K"Value" # Use stub type from JuliaLowering
                 ctx.expr_compat_mode::K"Value"
                 gen_name
@@ -2487,7 +2526,9 @@ function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
                 #  source file either.)
                 sourceref(src)::K"Value"
                 [K"call" "svec"::K"core" mapsyntax(_expr_arg_sym, argl)...]
-                [K"call" "svec"::K"core" mapsyntax(_expr_arg_sym, sparams)...]]]
+                [K"call" "svec"::K"core" mapsyntax(_expr_arg_sym, sparams)...]]
+        end
+        nongen_body = @ast ctx body[2] [K"block" [K"meta" "generated"::K"Symbol" stub]
             body[2]]
         method_def_expr(ctx, src, mtable, sparams, argl, nongen_body, rett)
     end
@@ -2957,11 +2998,11 @@ function expand_macro_def(ctx, ex)
                 [K"::"
                     # TODO: should we be adopting the scope of the K"macro" expression itself?
                     adopt_scope(@ast(ctx, sig, "__source__"::K"Identifier"), scope_ref)
-                    LineNumberNode::K"Value"
+                    "LineNumberNode"::K"core"
                 ]
                 [K"::"
                     adopt_scope(@ast(ctx, sig, "__module__"::K"Identifier"), scope_ref)
-                    Module::K"Value"
+                    "Module"::K"core"
                 ]
                 mapsyntax(e->apply_arg_meta(e, :nospecialize), args)...
             ]
@@ -3136,7 +3177,8 @@ function _match_struct_field(x0)
     x = x0
     while true
         k = kind(x)
-        if k == K"Identifier"
+        if k == K"Identifier" || k == K"Placeholder"
+            # `_` is a valid (write-only) field name, e.g. for padding fields
             return (name=x, type=type, atomic=atomic, _const=_const, docs=docs)
         elseif k == K"::" && numchildren(x) == 2
             isnothing(type) || throw(LoweringError(x0, "multiple types in struct field"))
@@ -3157,20 +3199,30 @@ function _match_struct_field(x0)
     end
 end
 
-function _collect_struct_fields(ctx, field_names, field_types, field_attrs, field_docs, inner_defs, exs)
+function _collect_struct_fields(ctx, field_names, field_types, field_attrs, field_docs, inner_defs, exs;
+                                nested::Bool=false)
     for e in exs
         if kind(e) == K"block"
             _collect_struct_fields(ctx, field_names, field_types, field_attrs, field_docs,
-                                   inner_defs, children(e))
+                                   inner_defs, children(e); nested=true)
         elseif kind(e) == K"="
-            throw(LoweringError(e, "assignment syntax in structure fields is reserved"))
+            if numchildren(e) == 2 && kind(e[2]) in KSet"function ->"
+                # assignments of function definitions arise from macro
+                # expansions in the struct body (e.g. a doc-annotated inner
+                # function); they are ordinary inner definitions
+                push!(inner_defs, e)
+            else
+                throw(LoweringError(e, "assignment syntax in structure fields is reserved"))
+            end
         else
             m = _match_struct_field(e)
             if !isnothing(m)
                 # Struct field
-                for prev in field_names
-                    if prev.name_val == m.name.name_val
-                        throw(LoweringError(m.name, "duplicate field name"))
+                if kind(m.name) != K"Placeholder"
+                    for prev in field_names
+                        if prev.name_val == m.name.name_val
+                            throw(LoweringError(m.name, "duplicate field name"))
+                        end
                     end
                 end
                 push!(field_names, m.name)
@@ -3317,6 +3369,12 @@ end
 #
 #     (t::Type{X{A,B}})() = new()
 function rewrite_ctor(ctx, ex, tname, global_tname, struct_typevars, field_types)
+    # don't rewrite `new` etc inside quoted syntax (e.g. the quoted method
+    # signature a doc system macro expansion captures alongside an inner
+    # constructor)
+    if is_leaf(ex) || is_quoted(ex)
+        return ex
+    end
     @stm ex begin
         [K"function" call body] -> let (sig, wheres) = flatten_wheres(call)
             call2, ctor_self =
@@ -4025,13 +4083,22 @@ function expand_import_or_using(ctx, ex)
         push!(path_specs, @ast ctx spec path::K"Value")
     end
     is_using = kind(ex) == K"using"
+    # When the runtime provides them (matching what flisp emits), reference
+    # the import/using runtime support functions by name so that the lowered
+    # code is self-contained
+    imp_f = _Base_has_eval_import ?
+        @ast(ctx, ex, "_eval_import"::K"top") :
+        @ast(ctx, ex, eval_import::K"Value")
+    use_f = _Base_has_eval_import ?
+        @ast(ctx, ex, "_eval_using"::K"top") :
+        @ast(ctx, ex, eval_using::K"Value")
     stmts = SyntaxList(ctx)
     if isnothing(from_path)
         for spec in path_specs
             if is_using
                 push!(stmts,
                     @ast ctx spec [K"call"
-                        eval_using   ::K"Value"
+                        use_f
                         ctx.mod      ::K"Value"
                         spec
                     ]
@@ -4039,7 +4106,7 @@ function expand_import_or_using(ctx, ex)
             else
                 push!(stmts,
                     @ast ctx spec [K"call"
-                        eval_import   ::K"Value"
+                        imp_f
                         (!is_using)   ::K"Bool"
                         ctx.mod       ::K"Value"
                         (::K"nothing")
@@ -4053,7 +4120,7 @@ function expand_import_or_using(ctx, ex)
         end
     else
         push!(stmts, @ast ctx ex [K"call"
-            eval_import   ::K"Value"
+            imp_f
             (!is_using)   ::K"Bool"
             ctx.mod       ::K"Value"
             from_path
@@ -4075,11 +4142,15 @@ function expand_public(ctx, ex)
         @jl_assert kind(e) == K"Identifier" (ex, "Expected identifier")
         push!(identifiers, e.name_val)
     end
+    # `export`/`public` is evaluated by the runtime's toplevel machinery;
+    # round-trip through Core.eval with the legacy Expr form so the lowered
+    # code contains no lowering-runtime objects
+    legacy = QuoteNode(Expr(kind(ex) == K"export" ? :export : :public,
+                            map(Symbol, identifiers)...))
     @ast ctx ex [K"call"
-        eval_public::K"Value"
+        "eval"::K"core"
         ctx.mod::K"Value"
-        (kind(ex) == K"export")::K"Bool"
-        identifiers::K"Value"
+        legacy::K"Value"
     ]
 end
 
@@ -4336,20 +4407,34 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"toplevel"
         # The toplevel form can't be lowered here - it needs to just be quoted
         # and passed through to a call to eval.
-        ex2 = @ast ctx ex [K"block"
-            [K"assert" "toplevel_only"::K"Symbol" [K"inert_syntaxtree" ex]]
-            [K"call"
-                eval                  ::K"Value"
-                ctx.mod               ::K"Value"
-                [K"inert_syntaxtree" ex]
-                [K"parameters"
-                    [K"kw"
-                        "expr_compat_mode"::K"Identifier"
-                        ctx.expr_compat_mode::K"Bool"
+        ex2 = if ctx.expr_compat_mode
+            # in compat mode the output may not reference JuliaLowering's own
+            # runtime objects; Core.eval of the legacy Expr form has the
+            # right semantics since the runtime's installed lowerer applies
+            @ast ctx ex [K"block"
+                [K"assert" "toplevel_only"::K"Symbol" [K"inert_syntaxtree" ex]]
+                [K"call"
+                    "eval"::K"core"
+                    ctx.mod::K"Value"
+                    [K"inert" ex]
+                ]
+            ]
+        else
+            @ast ctx ex [K"block"
+                [K"assert" "toplevel_only"::K"Symbol" [K"inert_syntaxtree" ex]]
+                [K"call"
+                    eval                  ::K"Value"
+                    ctx.mod               ::K"Value"
+                    [K"inert_syntaxtree" ex]
+                    [K"parameters"
+                        [K"kw"
+                            "expr_compat_mode"::K"Identifier"
+                            ctx.expr_compat_mode::K"Bool"
+                        ]
                     ]
                 ]
             ]
-        ]
+        end
         expand_forms_2(ctx, ex2)
     elseif k == K"vect"
         check_no_parameters(ex, "unexpected semicolon in array expression")

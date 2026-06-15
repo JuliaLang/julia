@@ -150,19 +150,16 @@ function interpolate_ast(::Type{Expr}, @nospecialize(ex), values...)
 end
 
 #--------------------------------------------------
-# Functions called by closure conversion
-function eval_closure_type(mod::Module, closure_type_name::Symbol, field_names, field_is_box)
-    type_params = Core.TypeVar[]
-    field_types = []
-    for (name, isbox) in zip(field_names, field_is_box)
-        if !isbox
-            T = Core.TypeVar(Symbol(name, "_type"))
-            push!(type_params, T)
-            push!(field_types, T)
-        else
-            push!(field_types, Core.Box)
-        end
-    end
+# Functions called by closure conversion. These have moved into `Core` (see
+# base/boot.jl) so that lowered code can reference them by name and remain
+# evaluable without JuliaLowering loaded; the copies here are fallbacks used
+# when lowering for/on runtimes without the Core versions.
+const _core_has_lowering_support = isdefined(Core, :eval_closure_type) &&
+    isdefined(Core, :replace_captured_locals!) && isdefined(Core, :interpolate_ast) &&
+    isdefined(Core, :current_exception)
+
+function eval_closure_type(mod::Module, closure_type_name::Symbol, field_names::Tuple,
+                           field_types::Tuple, type_params::Tuple)
     type = Core._structtype(mod, closure_type_name,
                             Core.svec(type_params...),
                             Core.svec(field_names...),
@@ -176,7 +173,7 @@ function eval_closure_type(mod::Module, closure_type_name::Symbol, field_names, 
 end
 
 # Interpolate captured local variables into the CodeInfo for a global method
-function replace_captured_locals!(codeinfo::Core.CodeInfo, locals::Core.SimpleVector)
+function replace_captured_locals!(codeinfo::Core.CodeInfo, locals::Tuple)
     for (i, ex) in enumerate(codeinfo.code)
         if Meta.isexpr(ex, :captured_local)
             codeinfo.code[i] = locals[ex.args[1]::Int]
@@ -427,10 +424,19 @@ end
 # closure types as a more local alternative to current-julia-module-counter.
 # However, we should ideally defer it to eval-time to make lowering itself
 # completely non-mutating.
+# Salt mixed into reserved binding names. The cross-runtime frontend sets
+# this to a host-unique token (derived from the host world counter at
+# initialization): bindings are reserved against shadow modules there, which
+# start empty in each process, so the existing-binding scan alone cannot see
+# names reserved by previous runtime sessions whose results were serialized
+# (e.g. earlier julia bootstrap stages).
+const _module_binding_salt = Base.RefValue{String}("")
+
 function reserve_module_binding_i(mod, basename)
+    base = string(basename, _module_binding_salt[])
     i = 0
     while true
-        name = "$basename$i"
+        name = "$base$i"
         if reserve_module_binding(mod, Symbol(name))
             return name
         end

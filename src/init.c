@@ -607,7 +607,7 @@ static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, j
     // This must be set after Core module is available, whether from sysimage or boot.jl
     jl_typeapp_type = (jl_datatype_t*)jl_get_global(jl_core_module, jl_symbol("TypeApp"));
 
-    jl_init_flisp();
+    jl_frontend_init();
     jl_init_serializer();
 
     if (sysimage.kind == JL_IMAGE_KIND_NONE) {

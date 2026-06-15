@@ -249,9 +249,9 @@ JL_PRIVATE_LIBS-1 := # libraries from USE_SYSTEM=1
 JL_PRIVATE_EXES := 7z
 JL_PRIVATE_TOOLS :=
 ifeq ($(JULIA_BUILD_MODE),release)
-JL_PRIVATE_LIBS-0 += libjulia-internal libjulia-codegen
+JL_PRIVATE_LIBS-0 += libjulia-internal libjulia-codegen libjulia-frontend
 else ifeq ($(JULIA_BUILD_MODE),debug)
-JL_PRIVATE_LIBS-0 += libjulia-internal-debug libjulia-codegen-debug
+JL_PRIVATE_LIBS-0 += libjulia-internal-debug libjulia-codegen-debug libjulia-frontend-debug
 endif
 # BSD-3-Clause
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBSUITESPARSE) += libamd libcamd libccolamd libcolamd libsuitesparseconfig
@@ -397,11 +397,13 @@ ifeq ($(JULIA_BUILD_MODE),release)
 	cp -a $(build_libdir)/libjulia.*.dSYM $(DESTDIR)$(libdir)
 	cp -a $(build_libdir)/libjulia-internal.*.dSYM $(DESTDIR)$(private_libdir)
 	cp -a $(build_libdir)/libjulia-codegen.*.dSYM $(DESTDIR)$(private_libdir)
+	cp -a $(build_libdir)/libjulia-frontend.*.dSYM $(DESTDIR)$(private_libdir)
 	cp -a $(build_private_libdir)/sys.dylib.dSYM $(DESTDIR)$(private_libdir)
 else ifeq ($(JULIA_BUILD_MODE),debug)
 	cp -a $(build_libdir)/libjulia-debug.*.dSYM $(DESTDIR)$(libdir)
 	cp -a $(build_libdir)/libjulia-internal-debug.*.dSYM $(DESTDIR)$(private_libdir)
 	cp -a $(build_libdir)/libjulia-codegen-debug.*.dSYM $(DESTDIR)$(private_libdir)
+	cp -a $(build_libdir)/libjulia-frontend-debug.*.dSYM $(DESTDIR)$(private_libdir)
 	cp -a $(build_private_libdir)/sys-debug.dylib.dSYM $(DESTDIR)$(private_libdir)
 endif
 endif
@@ -545,18 +547,22 @@ ifneq ($(DARWIN_FRAMEWORK),1)
 ifeq ($(JULIA_BUILD_MODE),release)
 	install_name_tool -add_rpath @loader_path/$(reverse_private_libdir_rel) $(DESTDIR)$(private_libdir)/libjulia-internal.$(SHLIB_EXT)
 	install_name_tool -add_rpath @loader_path/$(reverse_private_libdir_rel) $(DESTDIR)$(private_libdir)/libjulia-codegen.$(SHLIB_EXT)
+	install_name_tool -add_rpath @loader_path/$(reverse_private_libdir_rel) $(DESTDIR)$(private_libdir)/libjulia-frontend.$(SHLIB_EXT)
 else ifeq ($(JULIA_BUILD_MODE),debug)
 	install_name_tool -add_rpath @loader_path/$(reverse_private_libdir_rel) $(DESTDIR)$(private_libdir)/libjulia-internal-debug.$(SHLIB_EXT)
 	install_name_tool -add_rpath @loader_path/$(reverse_private_libdir_rel) $(DESTDIR)$(private_libdir)/libjulia-codegen-debug.$(SHLIB_EXT)
+	install_name_tool -add_rpath @loader_path/$(reverse_private_libdir_rel) $(DESTDIR)$(private_libdir)/libjulia-frontend-debug.$(SHLIB_EXT)
 endif
 endif
 else ifneq (,$(findstring $(OS),Linux FreeBSD))
 ifeq ($(JULIA_BUILD_MODE),release)
 	$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-internal.$(SHLIB_EXT)
 	$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-codegen.$(SHLIB_EXT)
+	$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-frontend.$(SHLIB_EXT)
 else ifeq ($(JULIA_BUILD_MODE),debug)
 	$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-internal-debug.$(SHLIB_EXT)
 	$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-codegen-debug.$(SHLIB_EXT)
+	$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-frontend-debug.$(SHLIB_EXT)
 endif
 endif
 
@@ -818,6 +824,7 @@ endif
 		$(call cygpath_w,$(build_shlibdir)/libjulia.$(SHLIB_EXT)) \
 		$(call cygpath_w,$(build_shlibdir)/libjulia-internal.$(SHLIB_EXT)) \
 		$(call cygpath_w,$(build_shlibdir)/libjulia-codegen.$(SHLIB_EXT)) \
+		$(call cygpath_w,$(build_shlibdir)/libjulia-frontend.$(SHLIB_EXT)) \
 		$(call cygpath_w,$(build_bindir)/julia$(EXE)))
 ifeq ($(OS),Darwin)
 	$(call spawn,$(LLVM_SIZE) -A $(call cygpath_w,$(build_shlibdir)/libLLVM.$(SHLIB_EXT)))

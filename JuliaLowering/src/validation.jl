@@ -74,6 +74,7 @@ Base.@kwdef struct Validation1Context <: ValidationContext
     in_gscope::Bool=true    # not in any scope; implies toplevel
     in_loop::Bool=false     # any break/continue allowed
     in_symblock::Bool=false # labeled break allowed
+    in_breakblock::Bool=false # unlabeled break allowed (`@label begin`)
     inner_cond::Bool=false  # methods not allowed in control flow in an outer
                             # function.  true in if (args 2-3), &&, || (arg 2+)
     return_ok::Bool=true    # yes usually (even outside of functions), no in
@@ -98,13 +99,14 @@ function with(vcx::Validation1Context;
               in_gscope    =vcx.in_gscope,
               in_loop      =vcx.in_loop,
               in_symblock  =vcx.in_symblock,
+              in_breakblock=vcx.in_breakblock,
               inner_cond   =vcx.inner_cond,
               return_ok    =vcx.return_ok,
               readable_underscore=vcx.readable_underscore,
               unexpanded   =vcx.unexpanded)
     Validation1Context(
-        toplevel, in_gscope, in_loop, in_symblock, inner_cond, return_ok,
-        readable_underscore, unexpanded)
+        toplevel, in_gscope, in_loop, in_symblock, in_breakblock, inner_cond,
+        return_ok, readable_underscore, unexpanded)
 end
 
 """
@@ -177,7 +179,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         @fail(st, "`return` not allowed inside comprehension or generator")
     ([K"continue"], when=vcx.in_loop) -> pass()
     ([K"continue" lab], when=vcx.in_loop) -> vst1_ident(vcx, lab; lhs=true)
-    ([K"break"], when=vcx.in_loop) -> pass()
+    ([K"break"], when=vcx.in_loop||vcx.in_breakblock) -> pass()
     ([K"break" lab], when=vcx.in_loop||vcx.in_symblock) ->
         vst1_ident(vcx, lab; lhs=true)
     ([K"break" lab x], when=vcx.in_loop||vcx.in_symblock) ->
@@ -258,17 +260,26 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"symbolicgoto" lab] -> vst1_ident(vcx, lab; lhs=true)
     [K"oldsymbolicgoto" lab] -> vst1_ident(vcx, lab; lhs=true)
     [K"symbolicblock" lab body] ->
-        vst1_ident(vcx, lab; lhs=true) & vst1(with(vcx; in_symblock=true), body)
+        # an anonymous `@label begin` block (label `loop-exit`) is the
+        # default break scope, so unlabeled `break` is allowed inside
+        vst1_ident(vcx, lab; lhs=true) & vst1(with(vcx; in_symblock=true,
+            in_breakblock=(vcx.in_breakblock ||
+                           (kind(lab) === K"Identifier" && lab.name_val == "loop-exit"))), body)
     [K"gc_preserve" x ids...] -> vst1(vcx, x) & all(vst1_ident, vcx, ids)
     # lowering TODO: 0 args segfaults
     [K"gc_preserve_begin" ids...] -> all(vst1_ident, vcx, ids)
     [K"gc_preserve_end" ids...] -> all(vst1_ident, vcx, ids)
     [K"isdefined" [K"Identifier"]] -> pass()
     [K"lambda" [K"block" b1...] [K"block" b2...] _] ->
-        all(vst1_ident, vcx, b1) &
-        all(vst1_ident, vcx, b2) &
+        # arguments and static parameters are binding positions, so
+        # placeholder names (`#unused#`, underscores) are permitted
+        all((vcx, x) -> vst1_ident(vcx, x; lhs=true), vcx, b1) &
+        all((vcx, x) -> vst1_ident(vcx, x; lhs=true), vcx, b2) &
         (kind(st[3]) === K"->" ? vst1_lam(vcx, st[3]) :
             vst1(with(vcx; return_ok=true, toplevel=false, in_gscope=false), st[3]))
+    # flisp-style scope block (Expr compat, e.g. inside Expr(:lambda ...)
+    # from Base.generated_body_to_codeinfo)
+    [K"scope_block" x] -> vst1(vcx, x)
     [K"softscope" _] -> pass()
     [K"softscope"] -> pass()
     [K"generated"] -> pass()

@@ -354,6 +354,14 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
     k = kind(ex)
     @jl_assert scope isa ScopeInfo || k === K"lambda" ex
     if k == K"Identifier"
+        mod = get(ex, :mod, nothing)
+        if !isnothing(mod)
+            # Identifiers carrying a module (from GlobalRef values in Expr
+            # input, e.g. in legacy macro expansions) are fully qualified;
+            # they must not be re-resolved by name in the current scope,
+            # which may shadow the referenced global.
+            return new_global_binding(ctx, ex, ex.name_val, mod)
+        end
         b = resolve_name(ctx, ex)
         # Unresolved names are assumed global
         if isnothing(b)
@@ -370,6 +378,11 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
         ex
     elseif k == K"softscope"
         newleaf(ctx, ex, K"TOMBSTONE")
+    elseif k == K"break" && numchildren(ex) >= 2
+        # break with value: resolve the value expression but not the label.
+        # As in analyze_variables!, this must come before the
+        # !needs_resolution check since K"break" is in is_quoted.
+        @ast ctx ex [K"break" ex[1] _resolve_scopes(ctx, ex[2], scope)]
     elseif !needs_resolution(ex)
         ex
     elseif k == K"local"

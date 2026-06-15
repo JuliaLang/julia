@@ -601,9 +601,13 @@ const FUNC_HEADS    = [:function, :macro, :(=)]
 const BINDING_HEADS = [:const, :global, :(=)]
 # For the special `:@mac` / `:(Base.@mac)` syntax for documenting a macro after definition.
 isquotedmacrocall(@nospecialize x) =
-    isexpr(x, :copyast, 1) &&
-    isa(x.args[1], QuoteNode) &&
-    isexpr(x.args[1].value, :macrocall, 2)
+    (isexpr(x, :copyast, 1) &&
+     isa(x.args[1], QuoteNode) &&
+     isexpr(x.args[1].value, :macrocall, 2)) ||
+    # frontends need not reduce interpolation-free quotes to copyast form
+    # before macro invocation (flisp does; JuliaSyntax/JuliaLowering doesn't)
+    (isexpr(x, :quote, 1) &&
+     isexpr(x.args[1], :macrocall, 2))
 # Simple expressions / atoms the may be documented.
 isbasicdoc(@nospecialize x) = isexpr(x, :.) || isa(x, Union{QuoteNode, Symbol})
 is_signature(@nospecialize x) = isexpr(x, :call) || (isexpr(x, :(::), 2) && isexpr(x.args[1], :call)) || isexpr(x, :where)

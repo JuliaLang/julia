@@ -64,12 +64,21 @@ function expand_quote(ctx, ex)
         # not just an optimization; expected e.g. in (. mod (quote field))
         @ast ctx ex [(ctx.expr_compat_mode ? K"inert" : K"inert_syntaxtree") ex]
     elseif ctx.expr_compat_mode
-        @ast ctx ex [K"call"
-            interpolate_ast::K"Value"
-            Expr::K"Value"
-            [K"inert" ex]
-            unquoted...
-        ]
+        if _core_has_lowering_support
+            @ast ctx ex [K"call"
+                [K"core" "interpolate_ast"::K"Identifier"]
+                [K"core" "Expr"::K"Identifier"]
+                [K"inert" ex]
+                unquoted...
+            ]
+        else
+            @ast ctx ex [K"call"
+                interpolate_ast::K"Value"
+                Expr::K"Value"
+                [K"inert" ex]
+                unquoted...
+            ]
+        end
     else
         @ast ctx ex [K"call"
             interpolate_ast::K"Value"

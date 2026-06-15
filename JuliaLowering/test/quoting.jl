@@ -201,8 +201,15 @@ err = try
     JuliaLowering.eval(test_mod, multi_interp_ex, expr_compat_mode=true)
     nothing
 catch exc
-    @test exc isa LoweringError
-    sprint(io->Base.showerror(io, exc, show_detail=false))
+    if JuliaLowering._core_has_lowering_support
+        # Core.interpolate_ast throws a plain ArgumentError (Core cannot
+        # reference LoweringError)
+        @test exc isa ArgumentError
+        sprint(io->Base.showerror(io, exc))
+    else
+        @test exc isa LoweringError
+        sprint(io->Base.showerror(io, exc, show_detail=false))
+    end
 end
 @test contains(err, raw"More than one value in bare `$` expression")
 

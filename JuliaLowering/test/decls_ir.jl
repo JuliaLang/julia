@@ -66,16 +66,27 @@ end
 3   (return core.nothing)
 
 ########################################
-# Error: Global declaration not allowed in tail position in functions
+# Global declaration in tail position evaluates to `nothing`
 function f()
     global x
 end
 #---------------------
-LoweringError:
-function f()
-    global x
-#          ╙ ── global declaration doesn't read the variable and can't return a value
-end
+1   (method TestMod.f)
+2   latestworld
+3   (call core.declare_global TestMod :x false)
+4   latestworld
+5   TestMod.f
+6   (call core.Typeof %₅)
+7   (call core.svec %₆)
+8   (call core.svec)
+9   SourceLocation::1:10
+10  (call core.svec %₇ %₈ %₉)
+11  --- method TestMod.f %₁₀
+    slots: [slot₁/#self#(!read)]
+    1   (return core.nothing)
+12  latestworld
+13  TestMod.f
+14  (return %₁₃)
 
 ########################################
 # Error: Global declaration not allowed in value position

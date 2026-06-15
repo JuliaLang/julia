@@ -32,15 +32,18 @@ begin
 end
 """) === (:y,:x)
 
-# Types on left hand side of type decls refer to the outer scope
-# (In the flisp implementation they refer to the inner scope, but this seems
-# like a bug.)
-@test JuliaLowering.include_string(test_mod, """
+# Types on left hand side of type decls refer to the inner scope and are
+# re-evaluated at each assignment, like the flisp implementation. (Referring
+# to the outer scope via a hoisted temporary may seem cleaner, but the
+# declared type must be re-evaluatable at assignments in *other* lambdas
+# when the variable is captured, which a scope-local temporary cannot
+# support.)
+@test_throws UndefVarError JuliaLowering.include_string(test_mod, """
 let x::Int = 10.0
     local Int = Float64
     x
 end
-""") === 10
+""")
 
 # Closures in let syntax can only capture values from the outside
 # (In the flisp implementation it captures from inner scope, but this is

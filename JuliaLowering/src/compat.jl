@@ -57,6 +57,18 @@ function is_expr_value(st::SyntaxTree)
     return JuliaSyntax.is_literal(k) || k === K"Value"
 end
 
+# Does this generated-body lambda body contain Base.generated_body_to_codeinfo's
+# `(return (toplevel_pure ...))` marker?
+function _has_toplevel_pure_marker(@nospecialize(e))
+    e isa Expr || return false
+    if e.head === :return
+        return length(e.args) == 1 && Meta.isexpr(e.args[1], :toplevel_pure)
+    elseif e.head === Symbol("scope-block") || e.head === :block
+        return any(_has_toplevel_pure_marker, e.args)
+    end
+    return false
+end
+
 function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
     st = if e isa Symbol
         setattr!(newleaf(graph, src, K"Identifier"), :name_val, String(e))
@@ -68,21 +80,48 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
         ident = newleaf(graph, src, K"Identifier")
         setattr!(ident, :name_val, String(e.args[1]::Symbol))
         setattr!(ident, :scope_layer, e.args[2])
-    elseif e isa Expr && e.head === :lambda && length(e.args) == 2
-        argnames = e.args[1]::Vector{Any}
+    elseif e isa Expr && (e.head === :lambda && length(e.args) == 2 ||
+                          (e.head === Symbol("with-static-parameters") &&
+                           length(e.args) >= 1 && Meta.isexpr(e.args[1], :lambda, 2)))
+        # flisp wraps the lambda of a generated body with the static
+        # parameter names of the method; they become the lambda's sparams
+        spnames = e.head === :lambda ? Any[] : e.args[2:end]
+        lam = (e.head === :lambda ? e : e.args[1])::Expr
+        argnames = lam.args[1]::Vector{Any}
         arg_cs = NodeId[]
         for name in argnames
             id = newleaf(graph, src, K"Identifier")
             setattr!(id, :name_val, String(name::Symbol))
             push!(arg_cs, id._id)
         end
-        body_id, src = _expr_to_est(graph, e.args[2], src)
+        sp_cs = NodeId[]
+        for name in spnames
+            id = newleaf(graph, src, K"Identifier")
+            setattr!(id, :name_val, String(name::Symbol))
+            push!(sp_cs, id._id)
+        end
+        body_id, src = _expr_to_est(graph, lam.args[2], src)
         args_block = newnode(graph, src, K"block", arg_cs)
-        tvars_block = newnode(graph, src, K"block", NodeId[])
+        tvars_block = newnode(graph, src, K"block", sp_cs)
         st = newnode(graph, src, K"lambda",
                      NodeId[args_block._id, tvars_block._id, body_id])
         setattr!(st, :is_toplevel_thunk, false)
-        setattr!(st, :toplevel_pure, false)
+        # `Base.generated_body_to_codeinfo` wraps the body it returns in
+        # `(toplevel_pure ...)`, requesting that no top-level side effects
+        # (`declare_global`) be generated for it; that marker corresponds to
+        # our lambda attribute
+        setattr!(st, :toplevel_pure, _has_toplevel_pure_marker(lam.args[2]))
+    elseif e isa Expr && e.head === :toplevel_pure && length(e.args) == 1
+        # handled as a lambda attribute (see above); the head itself is
+        # transparent
+        cid, src = _expr_to_est(graph, e.args[1], src)
+        return cid, src
+    elseif e isa Expr && e.head === Symbol("scope-block") && length(e.args) == 1
+        # flisp-style scope block, e.g. in the `Expr(:lambda, ...)` body
+        # produced by `Base.generated_body_to_codeinfo`
+        body_id, src = _expr_to_est(graph, e.args[1], src)
+        st = newnode(graph, src, K"scope_block", NodeId[body_id])
+        setattr!(st, :scope_type, :hard)
     elseif e isa Expr
         head_s = string(e.head)
         st_k = find_kind(head_s)
@@ -123,13 +162,21 @@ end
 # `suppress_linenodes` is true if `st`'s parent knows `st` is an exception to
 # normal linenode rules.  It only applies to `st`, and not transitively to its
 # children.
-function est_to_expr(st::SyntaxTree, suppress_linenodes=false)
+function est_to_expr(st::SyntaxTree, suppress_linenodes=false; flatten_default_layer::Bool=false)
     k = kind(st)
     if kind(st) === K"Identifier"
         n = Symbol(st.name_val::String)
         mod = get(st, :mod, nothing)
+        # With `flatten_default_layer`, identifiers in the default scope
+        # layer (1) are emitted as plain symbols. This is used for quoted
+        # code embedded as a value in lowered output (`K"inert"`), which may
+        # be re-lowered standalone or by a frontend that doesn't understand
+        # `scope_layer` wrappers (e.g. flisp lowering a generated-function
+        # body); a plain symbol re-ingests into the default layer, which is
+        # equivalent in those contexts.
         !isnothing(mod) ? GlobalRef(mod, n) :
-            hasattr(st, :scope_layer) ? Expr(:scope_layer, n, st.scope_layer) :
+            (hasattr(st, :scope_layer) && !(flatten_default_layer && st.scope_layer == 1)) ?
+                Expr(:scope_layer, n, st.scope_layer) :
             n
     elseif is_leaf(st) && is_expr_value(st)
         v = st.value
@@ -141,7 +188,14 @@ function est_to_expr(st::SyntaxTree, suppress_linenodes=false)
         # Expr(st.value).
         isa_lowering_ast_node(v) ? QuoteNode(v) : v
     elseif k === K"inert"
-        QuoteNode(est_to_expr(st[1]))
+        QuoteNode(est_to_expr(st[1]; flatten_default_layer))
+    elseif k === K"core" && numchildren(st) == 1
+        # e.g. the `interpolate_ast` reference emitted by `expand_quote`;
+        # serialize as a GlobalRef value, which any consumer of the Expr
+        # (including flisp, for generated-function bodies) understands
+        GlobalRef(Core, Symbol(st[1].name_val::String))
+    elseif k === K"top" && numchildren(st) == 1
+        GlobalRef(Base, Symbol(st[1].name_val::String))
     else
         # TODO: should handle post-lowering forms as well
         @jl_assert !is_leaf(st) (st, "est_to_expr should only be used pre-desugaring")
@@ -162,7 +216,7 @@ function est_to_expr(st::SyntaxTree, suppress_linenodes=false)
         for (i, c) in enumerate(children(st))
             need_lnns && push!(out.args, source_location(LineNumberNode, c))
             let suppress_c = i == 1 && (k == K"for" || k == K"let")
-                push!(out.args, est_to_expr(c, suppress_c))
+                push!(out.args, est_to_expr(c, suppress_c; flatten_default_layer))
             end
         end
         # Add extra linenodes to some blocks for better provenance
@@ -579,11 +633,19 @@ function est_to_dst(st::SyntaxTree)
         [K"core" x] -> setattr!(mkleaf(st), :name_val, x.name_val)
         [K"top" x] -> setattr!(mkleaf(st), :name_val, x.name_val)
         [K"static_parameter" x] -> setattr!(mkleaf(st), :var_id, x.value::IdTag)
-        [K"copyast" [K"inert" ex]] -> @ast g st [K"call"
-            interpolate_ast::K"Value"
-            Expr::K"Value"
-            [K"inert"(st[1]) ex]
-        ]
+        [K"copyast" [K"inert" ex]] -> if _core_has_lowering_support
+            @ast g st [K"call"
+                "interpolate_ast"::K"core"
+                "Expr"::K"core"
+                [K"inert"(st[1]) ex]
+            ]
+        else
+            @ast g st [K"call"
+                interpolate_ast::K"Value"
+                Expr::K"Value"
+                [K"inert"(st[1]) ex]
+            ]
+        end
         [K"symbolicgoto" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
         [K"oldsymbolicgoto" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
         [K"symboliclabel" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)

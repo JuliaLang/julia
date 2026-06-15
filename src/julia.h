@@ -3,7 +3,7 @@
 #ifndef JULIA_H
 #define JULIA_H
 
-#if defined(JL_LIBRARY_EXPORTS_INTERNAL) || defined(JL_LIBRARY_EXPORTS_CODEGEN)
+#if defined(JL_LIBRARY_EXPORTS_INTERNAL) || defined(JL_LIBRARY_EXPORTS_CODEGEN) || defined(JL_LIBRARY_EXPORTS_FRONTEND)
 #define JL_LIBRARY_EXPORTS
 #endif
 #ifdef JL_LIBRARY_EXPORTS
@@ -2298,6 +2298,22 @@ JL_DLLEXPORT jl_value_t *jl_lower(jl_value_t *expr, jl_module_t *inmodule,
 JL_DLLEXPORT jl_value_t *jl_parse_input_line(const char *text, size_t text_len,
                                              const char *filename, size_t filename_len);
 
+// frontend interface (implemented in libjulia-frontend; when that library is
+// not available these fall back to stubs in libjulia-internal)
+JL_DLLIMPORT void jl_frontend_init(void);
+JL_DLLIMPORT jl_value_t *jl_frontend_parse(const char *text, size_t text_len,
+                                           jl_value_t *filename, size_t lineno,
+                                           size_t offset, jl_value_t *options);
+JL_DLLIMPORT jl_value_t *jl_frontend_lower(jl_value_t *expr, jl_module_t *inmodule,
+                                           const char *file, int line, size_t world,
+                                           bool_t warn);
+JL_DLLIMPORT jl_value_t *jl_macroexpand(jl_value_t *expr, jl_module_t *inmodule,
+                                        int recursive, int inplace, int expand_scope);
+JL_DLLIMPORT void jl_lisp_prompt(void);
+JL_DLLIMPORT void fl_profile(const char *fname);
+JL_DLLIMPORT void fl_show_profile(void);
+JL_DLLIMPORT void fl_clear_profile(void);
+
 // external libraries
 enum JL_RTLD_CONSTANT {
      JL_RTLD_LOCAL=1U,
@@ -2361,11 +2377,13 @@ JL_DLLEXPORT const char *jl_cdi_file(jl_debuginfo_t *di) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint8_t jl_encode_inlining_cost(uint16_t inlining_cost) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint16_t jl_decode_inlining_cost(uint8_t inlining_cost) JL_NOTSAFEPOINT;
 
-JL_DLLEXPORT int jl_is_operator(const char *sym);
-JL_DLLEXPORT int jl_is_unary_operator(const char *sym);
-JL_DLLEXPORT int jl_is_unary_and_binary_operator(const char *sym);
-JL_DLLEXPORT int jl_is_syntactic_operator(const char *sym);
-JL_DLLEXPORT int jl_operator_precedence(const char *sym);
+// operator queries, implemented in libjulia-frontend (the fallback stubs
+// conservatively return 0/false when that library is not available)
+JL_DLLIMPORT int jl_is_operator(const char *sym);
+JL_DLLIMPORT int jl_is_unary_operator(const char *sym);
+JL_DLLIMPORT int jl_is_unary_and_binary_operator(const char *sym);
+JL_DLLIMPORT int jl_is_syntactic_operator(const char *sym);
+JL_DLLIMPORT int jl_operator_precedence(const char *sym);
 
 STATIC_INLINE int jl_vinfo_sa(uint8_t vi)
 {

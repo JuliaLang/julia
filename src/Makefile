@@ -67,7 +67,7 @@ SRCS := \
 	simplevector runtime_intrinsics precompile jloptions mtarraylist \
 	threading scheduler stackwalk null_sysimage \
 	method jlapi signal-handling safepoint timing subtype rtutils \
-	crc32c APInt processor ircode opaque_closure codegen-stubs coverage runtime_ccall engine \
+	crc32c APInt processor ircode opaque_closure codegen-stubs frontend-stubs coverage runtime_ccall engine \
 	$(GC_SRCS)
 
 RT_LLVMLINK :=
@@ -109,6 +109,8 @@ else
 endif
 
 RT_LLVM_LIBS := support
+
+FRONTEND_SRCS := flfrontend
 
 ifeq ($(OS),WINNT)
 SRCS += win32_ucontext
@@ -223,16 +225,23 @@ RT_LIBS += $(MMTK_LIB)
 CG_LIBS += $(MMTK_LIB)
 endif
 
-RT_DEBUG_LIBS := $(COMMON_LIBPATHS) $(call whole_archive,$(BUILDDIR)/flisp/libflisp-debug.a) $(call whole_archive,$(BUILDDIR)/support/libsupport-debug.a) -ljulia-debug $(RT_LIBS)
+RT_DEBUG_LIBS := $(COMMON_LIBPATHS) $(call whole_archive,$(BUILDDIR)/support/libsupport-debug.a) -ljulia-debug $(RT_LIBS)
 CG_DEBUG_LIBS := $(COMMON_LIBPATHS) $(CG_LIBS) -ljulia-debug -ljulia-internal-debug
-RT_RELEASE_LIBS := $(COMMON_LIBPATHS) $(call whole_archive,$(BUILDDIR)/flisp/libflisp.a) $(call whole_archive,$(BUILDDIR)/support/libsupport.a) -ljulia $(RT_LIBS)
+RT_RELEASE_LIBS := $(COMMON_LIBPATHS) $(call whole_archive,$(BUILDDIR)/support/libsupport.a) -ljulia $(RT_LIBS)
 CG_RELEASE_LIBS := $(COMMON_LIBPATHS) $(CG_LIBS) -ljulia -ljulia-internal
+# NB: FE needs uv_mutex_* symbols, but we expect to export them from libjulia-internal
+FE_LIBS := $(OSLIBS) $(LIBTRACYCLIENT) $(LIBITTAPI)
+FE_DEBUG_LIBS := $(COMMON_LIBPATHS) $(call whole_archive,$(BUILDDIR)/flisp/libflisp-debug.a) $(call whole_archive,$(BUILDDIR)/support/libsupport-debug.a) $(FE_LIBS) -ljulia-debug -ljulia-internal-debug
+FE_RELEASE_LIBS := $(COMMON_LIBPATHS) $(call whole_archive,$(BUILDDIR)/flisp/libflisp.a) $(call whole_archive,$(BUILDDIR)/support/libsupport.a) $(FE_LIBS) -ljulia -ljulia-internal
 
 OBJS := $(SRCS:%=$(BUILDDIR)/%.o)
 DOBJS := $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
 
 CODEGEN_OBJS := $(CODEGEN_SRCS:%=$(BUILDDIR)/%.o)
 CODEGEN_DOBJS := $(CODEGEN_SRCS:%=$(BUILDDIR)/%.dbg.obj)
+
+FRONTEND_OBJS := $(FRONTEND_SRCS:%=$(BUILDDIR)/%.o)
+FRONTEND_DOBJS := $(FRONTEND_SRCS:%=$(BUILDDIR)/%.dbg.obj)
 
 ifeq ($(OS)_$(BINARY),WINNT_32)
 OBJS += $(BUILDDIR)/llvm-Compression.o
@@ -274,7 +283,7 @@ default: $(JULIA_BUILD_MODE) # contains either "debug" or "release"
 all: debug release
 
 .PHONY: release debug
-release debug: %: libjulia-internal-% libjulia-codegen-% regenerate-compile_commands
+release debug: %: libjulia-internal-% libjulia-codegen-% libjulia-frontend-% regenerate-compile_commands
 
 $(BUILDDIR):
 	mkdir -p $(BUILDDIR)
@@ -391,7 +400,7 @@ $(BUILDDIR)/julia_flisp.boot: $(addprefix $(SRCDIR)/,jlfrontend.scm flisp/aliase
 # additional dependency links
 $(BUILDDIR)/codegen-stubs.o $(BUILDDIR)/codegen-stubs.dbg.obj: $(addprefix $(SRCDIR)/,intrinsics.h llvm-julia-passes.inc)
 $(BUILDDIR)/aotcompile.o $(BUILDDIR)/aotcompile.dbg.obj: $(SRCDIR)/jitlayers.h $(SRCDIR)/llvm-codegen-shared.h $(SRCDIR)/processor.h
-$(BUILDDIR)/ast.o $(BUILDDIR)/ast.dbg.obj: $(BUILDDIR)/julia_flisp.boot.inc $(SRCDIR)/flisp/*.h
+$(BUILDDIR)/flfrontend.o $(BUILDDIR)/flfrontend.dbg.obj: $(BUILDDIR)/julia_flisp.boot.inc $(SRCDIR)/flisp/*.h
 $(BUILDDIR)/builtins.o $(BUILDDIR)/builtins.dbg.obj: $(SRCDIR)/iddict.c $(SRCDIR)/idset.c $(SRCDIR)/builtin_proto.h
 $(BUILDDIR)/codegen.o $(BUILDDIR)/codegen.dbg.obj: $(addprefix $(SRCDIR)/,\
 	intrinsics.cpp jitlayers.h intrinsics.h llvm-codegen-shared.h cgutils.cpp ccall.cpp abi_*.cpp processor.h builtin_proto.h)
@@ -478,13 +487,13 @@ $(BUILDDIR)/julia.expmap: $(SRCDIR)/julia.expmap.in $(JULIAHOME)/VERSION $(LLVM_
 		        -e "s/@LLVM_SHLIB_SYMBOL_VERSION@/$(LLVM_SHLIB_SYMBOL_VERSION)/"; \
 	mv $$TMPFILE $@
 
-$(build_shlibdir)/libjulia-internal.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDIR)/julia.expmap $(OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(LIBUV) $(LIBTARGET_PARSING)
+$(build_shlibdir)/libjulia-internal.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDIR)/julia.expmap $(OBJS) $(BUILDDIR)/support/libsupport.a $(LIBUV) $(LIBTARGET_PARSING)
 	@$(call PRINT_LINK, $(CXXLD) $(call IMPLIB_FLAGS,$@) $(SHIPFLAGS) $(JCXXFLAGS) $(CXXLDFLAGS) $(OBJS) $(RPATH_LIB) -o $@ \
 		$(JLDFLAGS) $(BOLT_LDFLAGS) $(JLIBLDFLAGS) $(RT_RELEASE_LIBS) $(call SONAME_FLAGS,libjulia-internal.$(JL_MAJOR_SHLIB_EXT)))
 	@$(INSTALL_NAME_CMD)libjulia-internal.$(SHLIB_EXT) $@
 	$(DSYMUTIL) $@
 
-$(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDIR)/julia.expmap $(DOBJS) $(BUILDDIR)/flisp/libflisp-debug.a $(BUILDDIR)/support/libsupport-debug.a $(LIBUV) $(LIBTARGET_PARSING)
+$(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDIR)/julia.expmap $(DOBJS) $(BUILDDIR)/support/libsupport-debug.a $(LIBUV) $(LIBTARGET_PARSING)
 	@$(call PRINT_LINK, $(CXXLD) $(call IMPLIB_FLAGS,$@) $(DEBUGFLAGS) $(JCXXFLAGS) $(CXXLDFLAGS) $(DOBJS) $(RPATH_LIB) -o $@ \
 		$(JLDFLAGS) $(JLIBLDFLAGS) $(RT_DEBUG_LIBS) $(call SONAME_FLAGS,libjulia-internal-debug.$(JL_MAJOR_SHLIB_EXT)))
 	@$(INSTALL_NAME_CMD)libjulia-internal-debug.$(SHLIB_EXT) $@
@@ -499,6 +508,8 @@ $(build_shlibdir)/libjulia-internal.$(SHLIB_EXT) $(build_shlibdir)/libjulia-inte
 	@$(call PRINT_LINK, ln -sf $(notdir $<) $@)
 $(build_shlibdir)/libjulia-codegen.$(JL_MAJOR_MINOR_SHLIB_EXT): $(build_shlibdir)/libjulia-internal.$(SHLIB_EXT)
 $(build_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(build_shlibdir)/libjulia-internal-debug.$(SHLIB_EXT)
+$(build_shlibdir)/libjulia-frontend.$(JL_MAJOR_MINOR_SHLIB_EXT): $(build_shlibdir)/libjulia-internal.$(SHLIB_EXT)
+$(build_shlibdir)/libjulia-frontend-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(build_shlibdir)/libjulia-internal-debug.$(SHLIB_EXT)
 libjulia-internal-release: $(build_shlibdir)/libjulia-internal.$(JL_MAJOR_SHLIB_EXT) $(build_shlibdir)/libjulia-internal.$(SHLIB_EXT)
 libjulia-internal-debug: $(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_SHLIB_EXT) $(build_shlibdir)/libjulia-internal-debug.$(SHLIB_EXT)
 endif
@@ -532,9 +543,36 @@ libjulia-codegen-release: $(build_shlibdir)/libjulia-codegen.$(JL_MAJOR_MINOR_SH
 libjulia-codegen-debug: $(build_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_MINOR_SHLIB_EXT)
 libjulia-codegen-debug libjulia-codegen-release: $(PUBLIC_HEADER_TARGETS)
 
+$(build_shlibdir)/libjulia-frontend.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDIR)/julia.expmap $(FRONTEND_OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(build_shlibdir)/libjulia-internal.$(JL_MAJOR_MINOR_SHLIB_EXT)
+	@$(call PRINT_LINK, $(CXXLD) $(call IMPLIB_FLAGS,$@) $(SHIPFLAGS) $(JCXXFLAGS) $(CXXLDFLAGS) $(FRONTEND_OBJS) $(RPATH_LIB) -o $@ \
+		$(JLDFLAGS) $(BOLT_LDFLAGS) $(JLIBLDFLAGS) $(FE_RELEASE_LIBS) $(call SONAME_FLAGS,libjulia-frontend.$(JL_MAJOR_SHLIB_EXT)))
+	@$(INSTALL_NAME_CMD)libjulia-frontend.$(SHLIB_EXT) $@
+	$(DSYMUTIL) $@
+
+$(build_shlibdir)/libjulia-frontend-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDIR)/julia.expmap $(FRONTEND_DOBJS) $(BUILDDIR)/flisp/libflisp-debug.a $(BUILDDIR)/support/libsupport-debug.a $(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT)
+	@$(call PRINT_LINK, $(CXXLD) $(call IMPLIB_FLAGS,$@) $(DEBUGFLAGS) $(JCXXFLAGS) $(CXXLDFLAGS) $(FRONTEND_DOBJS) $(RPATH_LIB) -o $@ \
+		$(JLDFLAGS) $(JLIBLDFLAGS) $(FE_DEBUG_LIBS) $(call SONAME_FLAGS,libjulia-frontend-debug.$(JL_MAJOR_SHLIB_EXT)))
+	@$(INSTALL_NAME_CMD)libjulia-frontend-debug.$(SHLIB_EXT) $@
+	$(DSYMUTIL) $@
+
+ifneq ($(OS), WINNT)
+$(build_shlibdir)/libjulia-frontend.$(JL_MAJOR_SHLIB_EXT) $(build_shlibdir)/libjulia-frontend-debug.$(JL_MAJOR_SHLIB_EXT): $(build_shlibdir)/libjulia-frontend%.$(JL_MAJOR_SHLIB_EXT): \
+		$(build_shlibdir)/libjulia-frontend%.$(JL_MAJOR_MINOR_SHLIB_EXT)
+	@$(call PRINT_LINK, ln -sf $(notdir $<) $@)
+$(build_shlibdir)/libjulia-frontend.$(SHLIB_EXT) $(build_shlibdir)/libjulia-frontend-debug.$(SHLIB_EXT): $(build_shlibdir)/libjulia-frontend%.$(SHLIB_EXT): \
+		$(build_shlibdir)/libjulia-frontend%.$(JL_MAJOR_MINOR_SHLIB_EXT)
+	@$(call PRINT_LINK, ln -sf $(notdir $<) $@)
+libjulia-frontend-release: $(build_shlibdir)/libjulia-frontend.$(JL_MAJOR_SHLIB_EXT) $(build_shlibdir)/libjulia-frontend.$(SHLIB_EXT)
+libjulia-frontend-debug: $(build_shlibdir)/libjulia-frontend-debug.$(JL_MAJOR_SHLIB_EXT) $(build_shlibdir)/libjulia-frontend-debug.$(SHLIB_EXT)
+endif
+libjulia-frontend-release: $(build_shlibdir)/libjulia-frontend.$(JL_MAJOR_MINOR_SHLIB_EXT)
+libjulia-frontend-debug: $(build_shlibdir)/libjulia-frontend-debug.$(JL_MAJOR_MINOR_SHLIB_EXT)
+libjulia-frontend-debug libjulia-frontend-release: $(PUBLIC_HEADER_TARGETS)
+
 # set the exports for the source files based on where they are getting linked
 $(OBJS) $(DOBJS): FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_INTERNAL -DBUILDING_UV_SHARED
 $(CODEGEN_OBJS) $(CODEGEN_DOBJS): FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_CODEGEN -DUSING_UV_SHARED
+$(FRONTEND_OBJS) $(FRONTEND_DOBJS): FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_FRONTEND -DUSING_UV_SHARED
 # set the exports for the source files based on where they are getting linked
 $(addprefix clang-sa-,$(SRCS)):      FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_INTERNAL
 $(addprefix clang-sagc-,$(SRCS)):    FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_INTERNAL
@@ -542,6 +580,9 @@ $(addprefix clang-tidy-,$(SRCS)):    FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_INTERN
 $(addprefix clang-sa-,$(CODEGEN_SRCS)):   FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_CODEGEN
 $(addprefix clang-sagc-,$(CODEGEN_SRCS)): FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_CODEGEN
 $(addprefix clang-tidy-,$(CODEGEN_SRCS)): FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_CODEGEN
+$(addprefix clang-sa-,$(FRONTEND_SRCS)):   FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_FRONTEND
+$(addprefix clang-sagc-,$(FRONTEND_SRCS)): FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_FRONTEND
+$(addprefix clang-tidy-,$(FRONTEND_SRCS)): FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_FRONTEND
 
 # Common flag patterns for all clang tooling (clang-sa, clang-tidy, compile-database)
 CLANG_TOOLING_C_FLAGS = $(CLANGSA_FLAGS) $(LLVM_CFLAGS) $(DEBUGFLAGS_CLANG) $(JCPPFLAGS_CLANG) $(JCFLAGS_CLANG)
@@ -691,17 +732,17 @@ clang-tidy-%: $(SRCDIR)/%.cpp $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB
 
 # Add C files as a target of `analyzesrc` and `analyzegc` and `tidysrc`
 .PHONY: tidysrc
-tidysrc: $(addprefix clang-tidy-,$(CODEGEN_SRCS) $(SRCS))
+tidysrc: $(addprefix clang-tidy-,$(CODEGEN_SRCS) $(FRONTEND_SRCS) $(SRCS))
 .PHONY: analyzesrc
-analyzesrc: $(addprefix clang-sa-,$(CODEGEN_SRCS) $(SRCS))
+analyzesrc: $(addprefix clang-sa-,$(CODEGEN_SRCS) $(FRONTEND_SRCS) $(SRCS))
 .PHONY: analyzegc
-analyzegc: $(addprefix clang-sagc-,$(filter-out $(basename $(SKIP_GC_CHECK)),$(CODEGEN_SRCS) $(SRCS)))
+analyzegc: $(addprefix clang-sagc-,$(filter-out $(basename $(SKIP_GC_CHECK)),$(CODEGEN_SRCS) $(FRONTEND_SRCS) $(SRCS)))
 .PHONY: analyze
 analyze: analyzesrc analyzegc tidysrc
 
-$(addprefix analyze-,$(CODEGEN_SRCS) $(SRCS)) : analyze-% : clang-sa-%
-$(addprefix analyze-,$(CODEGEN_SRCS) $(SRCS)) : analyze-% : clang-tidy-%
-$(addprefix analyze-,$(filter-out $(basename $(SKIP_GC_CHECK)),$(CODEGEN_SRCS) $(SRCS))) : analyze-% : clang-sagc-%
+$(addprefix analyze-,$(CODEGEN_SRCS) $(FRONTEND_SRCS) $(SRCS)) : analyze-% : clang-sa-%
+$(addprefix analyze-,$(CODEGEN_SRCS) $(FRONTEND_SRCS) $(SRCS)) : analyze-% : clang-tidy-%
+$(addprefix analyze-,$(filter-out $(basename $(SKIP_GC_CHECK)),$(CODEGEN_SRCS) $(FRONTEND_SRCS) $(SRCS))) : analyze-% : clang-sagc-%
 
 .PHONY: clean-analyzegc
 clean-analyzegc:
@@ -737,6 +778,12 @@ regenerate-compile_commands:
 				cmd="$${CLANG_TOOLING_C_FLAGS}, \"-DJL_LIBRARY_EXPORTS_CODEGEN\", \"$$src.c\""; \
 				file_path="$$src.c"; \
 			fi; \
+			printf '{\n  "directory": "%s",\n  "file": "%s",\n  "arguments": [%s]\n}' "$(abspath $(SRCDIR))" "$$file_path" "$$cmd"; \
+		done; \
+		for src in $(FRONTEND_SRCS); do \
+			[ "$$first" = "true" ] && first=false || echo ","; \
+			cmd="$${CLANG_TOOLING_C_FLAGS}, \"-DJL_LIBRARY_EXPORTS_FRONTEND\", \"$$src.c\""; \
+			file_path="$$src.c"; \
 			printf '{\n  "directory": "%s",\n  "file": "%s",\n  "arguments": [%s]\n}' "$(abspath $(SRCDIR))" "$$file_path" "$$cmd"; \
 		done; \
 		for header in $(HEADERS) $(ADDITIONAL_C_HEADERS); do \
@@ -783,3 +830,6 @@ compile-database: regenerate-compile_commands
 
 .FORCE:
 .PHONY: .FORCE
+
+print-%:
+	@echo '$*=$($*)'

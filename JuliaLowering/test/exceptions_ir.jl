@@ -361,7 +361,7 @@ end
 2   TestMod.a
 3   (leave %₁)
 4   (return %₂)
-5   (= slot₁/exc (call JuliaLowering.current_exception))
+5   (= slot₁/exc (call core.current_exception))
 6   TestMod.b
 7   (pop_exception %₁)
 8   (return %₆)

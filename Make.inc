@@ -1856,6 +1856,12 @@ LIBJULIACODEGEN_INSTALL_DEPLIB := $(call dep_lib_path,$(shlibdir),$(private_shli
 LIBJULIACODEGEN_DEBUG_BUILD_DEPLIB := $(call dep_lib_path,$(build_shlibdir),$(build_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_SHLIB_EXT))
 LIBJULIACODEGEN_DEBUG_INSTALL_DEPLIB := $(call dep_lib_path,$(shlibdir),$(private_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_SHLIB_EXT))
 
+LIBJULIAFRONTEND_BUILD_DEPLIB := $(call dep_lib_path,$(build_shlibdir),$(build_shlibdir)/libjulia-frontend.$(JL_MAJOR_SHLIB_EXT))
+LIBJULIAFRONTEND_INSTALL_DEPLIB := $(call dep_lib_path,$(shlibdir),$(private_shlibdir)/libjulia-frontend.$(JL_MAJOR_SHLIB_EXT))
+
+LIBJULIAFRONTEND_DEBUG_BUILD_DEPLIB := $(call dep_lib_path,$(build_shlibdir),$(build_shlibdir)/libjulia-frontend-debug.$(JL_MAJOR_SHLIB_EXT))
+LIBJULIAFRONTEND_DEBUG_INSTALL_DEPLIB := $(call dep_lib_path,$(shlibdir),$(private_shlibdir)/libjulia-frontend-debug.$(JL_MAJOR_SHLIB_EXT))
+
 ifeq ($(OS),WINNT)
 ifeq ($(BINARY),32)
 LIBGCC_NAME := libgcc_s_sjlj-1.$(SHLIB_EXT)
@@ -1916,14 +1922,15 @@ LIBM_INSTALL_DEPLIB := $(call dep_lib_path,$(shlibdir),$(private_shlibdir)/$(LIB
 #  * libopenlibm, because Windows has an untrustworthy libm, and we want to use ours more than theirs
 #  * libstdc++, because while performing `libstdc++` probing we need to
 #    know the path to the bundled `libstdc++` library.
-#  * libjulia-internal, which must always come second-to-last.
-#  * libjulia-codegen, which must always come last
+#  * libjulia-internal, which must always come third-to-last.
+#  * libjulia-codegen, which must always come second-to-last
+#  * libjulia-frontend, which must always come last
 #
 # We need these four separate variables because:
 #  * debug builds must link against libjuliadebug, not libjulia
 #  * install time relative paths are not equal to build time relative paths (../lib vs. ../lib/julia)
 # That second point will no longer be true for most deps once they are placed within Artifacts directories.
-# Note that we prefix `libjulia-codegen` and `libjulia-internal` with `@` to signify to the loader that it
+# Note that we prefix `libjulia-frontend`, `libjulia-codegen` and `libjulia-internal` with `@` to signify to the loader that it
 # should not automatically dlopen() it in its loading loop, it is "special" and should happen later.
 # We do the same for `libstdc++`, and explicitly place it _after_ `libgcc_s`, and `libm` since `libstdc++`
 # may depend on those libraries (e.g. when USE_SYSTEM_LIBM=1)
@@ -1939,6 +1946,7 @@ LOADER_BUILD_DEP_LIBS = $(call build_deplibs, \
     @$(LIBSTDCXX_BUILD_DEPLIB) \
     @$(LIBJULIAINTERNAL_BUILD_DEPLIB) \
     @$(LIBJULIACODEGEN_BUILD_DEPLIB) \
+    @$(LIBJULIAFRONTEND_BUILD_DEPLIB) \
 )
 
 LOADER_DEBUG_BUILD_DEP_LIBS = $(call build_deplibs, \
@@ -1947,6 +1955,7 @@ LOADER_DEBUG_BUILD_DEP_LIBS = $(call build_deplibs, \
    @$(LIBSTDCXX_BUILD_DEPLIB) \
    @$(LIBJULIAINTERNAL_DEBUG_BUILD_DEPLIB) \
    @$(LIBJULIACODEGEN_DEBUG_BUILD_DEPLIB) \
+   @$(LIBJULIAFRONTEND_DEBUG_BUILD_DEPLIB) \
 )
 
 LOADER_INSTALL_DEP_LIBS = $(call build_deplibs, \
@@ -1955,6 +1964,7 @@ LOADER_INSTALL_DEP_LIBS = $(call build_deplibs, \
     @$(LIBSTDCXX_INSTALL_DEPLIB) \
     @$(LIBJULIAINTERNAL_INSTALL_DEPLIB) \
     @$(LIBJULIACODEGEN_INSTALL_DEPLIB) \
+    @$(LIBJULIAFRONTEND_INSTALL_DEPLIB) \
 )
 LOADER_DEBUG_INSTALL_DEP_LIBS = $(call build_deplibs, \
     $(LIBGCC_INSTALL_DEPLIB) \
@@ -1962,6 +1972,7 @@ LOADER_DEBUG_INSTALL_DEP_LIBS = $(call build_deplibs, \
     @$(LIBSTDCXX_INSTALL_DEPLIB) \
     @$(LIBJULIAINTERNAL_DEBUG_INSTALL_DEPLIB) \
     @$(LIBJULIACODEGEN_DEBUG_INSTALL_DEPLIB) \
+    @$(LIBJULIAFRONTEND_DEBUG_INSTALL_DEPLIB) \
 )
 
 # Colors for make
