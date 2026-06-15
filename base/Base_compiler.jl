@@ -166,9 +166,9 @@ eval(m::Module, x) = Core.eval(m, x)
 include("public.jl")
 
 if false
-    # simple print definitions for debugging. enable these if something
+    # Simple print definitions for debugging. Enable these if something
     # goes wrong during bootstrap before printing code is available.
-    # otherwise, they just eventually get (noisily) overwritten later
+    # otherwise, they eventually get (noisily) overwritten later
     global show, print, println
     show(io::IO, x) = Core.show(io, x)
     print(io::IO, a...) = Core.print(io, a...)

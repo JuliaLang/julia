@@ -89,7 +89,7 @@ let
             :SHA, # transitive through Random
             :Sockets, # used by stream.jl
 
-            # Transitive through LinAlg
+            # Transitive through LinearAlgebra
             # OpenBLAS_jll
             # libblastrampoline_jll
 

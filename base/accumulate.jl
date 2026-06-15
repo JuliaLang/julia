@@ -2,8 +2,8 @@
 
 # `accumulate_pairwise`` runs slightly slower than `accumulate``, but more numerically
 # stable in certain situations (e.g. sums).
-# It does double the number of operations compared to `accumulate``,
-# though for cheap operations like + this does not have much impact (20%).
+# It does double the number of operations compared to `accumulate`,
+# though for cheap operations like `+` this does not have much impact (20%).
 function _accumulate_pairwise!(op::Op, c::AbstractVector{T}, v::AbstractVector, s, i1, n)::T where {T,Op}
     if n < 128
         @inbounds s_ = v[i1]
