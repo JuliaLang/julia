@@ -3289,6 +3289,11 @@ function include_package_for_output(pkg::PkgId, input::String, syntax_version::V
     # clears them (and the flag) before staticdata serialization.
     keep_ir = JLOptions().outputo != C_NULL
     keep_ir && ccall(:jl_set_precompile_keep_ir, Cvoid, (Int8,), 1)
+    # Native code generated to run a workload during `include` is thrown away when
+    # this worker exits, so skip its debug-info emission. Restored before the cached
+    # AOT codegen runs at exit, leaving the pkgimage and .ji unchanged.
+    saved_debug_info_level = ccall(:jl_get_default_debug_info_level, Cint, ())
+    ccall(:jl_set_default_debug_info_level, Cvoid, (Cint,), Cint(0))
     # This one changes the parser behavior
     __toplevel__.var"#_internal_julia_parse" = VersionedParse(syntax_version)
     # This one is the compatibility marker for cache loading
@@ -3319,6 +3324,7 @@ function include_package_for_output(pkg::PkgId, input::String, syntax_version::V
         end
         ccall(:jl_set_newly_inferred, Cvoid, (Any,), nothing)
         keep_ir && ccall(:jl_set_precompile_keep_ir, Cvoid, (Int8,), 0)
+        ccall(:jl_set_default_debug_info_level, Cvoid, (Cint,), saved_debug_info_level)
     end
     # check that the package defined the expected module so we can give a nice error message if not
     m = maybe_root_module(pkg)
