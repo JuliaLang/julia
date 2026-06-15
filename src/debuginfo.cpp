@@ -396,6 +396,8 @@ void jl_register_jit_object(const object::ObjectFile &Object,
     // method, so promote them to global roots here, before entering the
     // JL_NOTSAFEPOINT registerJITObject body. Switch to GC-unsafe, since the
     // promotion allocates, and the JIT runs materialization in a GC-safe state.
+    // TODO: Tell GCChecker that jl_register_jit_object is entered GC-safe.
+#ifndef __clang_analyzer__
     jl_task_t *ct = jl_current_task;
     int8_t gc_state = jl_gc_unsafe_enter(ct->ptls);
     for (auto &[ci, funcs] : Info.ci_funcs) {
@@ -408,6 +410,7 @@ void jl_register_jit_object(const object::ObjectFile &Object,
         }
     }
     jl_gc_unsafe_leave(ct->ptls, gc_state);
+#endif
     getJITDebugRegistry().registerJITObject(Object, getLoadAddress, Info);
 }
 
