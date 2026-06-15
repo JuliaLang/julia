@@ -71,6 +71,8 @@ New library functions
   pkgimage/sysimage ([#61224]).
 - `Base.raw_substring` is an unexported, public constructor to build a `SubString`
   without checking for valid string indices.
+- `Base.unannotate(::AnnotatedString)` returns a string equal to the input string, but
+  with its annotation removed.
 
 New library features
 --------------------
