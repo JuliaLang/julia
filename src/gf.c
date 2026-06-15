@@ -3738,6 +3738,59 @@ int need_copy_to_mi_cache(jl_method_instance_t *mi, jl_method_instance_t *mi2,
         !jl_egal((jl_value_t*)mi->sparam_vals, (jl_value_t*)mi2->sparam_vals);
 }
 
+// Register `caller` in the backedges of each dependency in the forward edges svec.
+// Mirrors the Julia-side store_backedges, but callable from C.
+static void store_backedges_c(jl_code_instance_t *caller, jl_svec_t *edges)
+{
+    if (edges == NULL)
+        return;
+    jl_method_instance_t *caller_mi = jl_get_ci_mi(caller);
+    if (!jl_is_method(caller_mi->def.method))
+        return;
+    size_t n = jl_svec_len(edges);
+    if (n == 0)
+        return;
+    for (size_t i = 0; i < n; ) {
+        jl_value_t *item = jl_svecref(edges, i);
+        if (jl_is_long(item)) {
+            i += 2;
+            continue;
+        }
+        if (jl_is_method(item)) {
+            i += 1;
+            continue;
+        }
+        jl_value_t *invokesig = NULL;
+        if (!jl_is_method_instance(item) && !jl_is_code_instance(item) && !jl_is_binding(item)) {
+            // it's a Type used as invokesig
+            invokesig = item;
+            i += 1;
+            if (i >= n)
+                break;
+            item = jl_svecref(edges, i);
+            if (jl_is_method(item)) {
+                i += 1;
+                continue;
+            }
+            if (jl_is_mtable(item)) {
+                jl_method_table_add_backedge(invokesig, caller);
+                i += 1;
+                continue;
+            }
+        }
+        if (jl_is_binding(item)) {
+            jl_maybe_add_binding_backedge((jl_binding_t*)item, (jl_value_t*)caller, caller_mi->def.method);
+        }
+        else if (jl_is_code_instance(item)) {
+            jl_method_instance_add_backedge(jl_get_ci_mi((jl_code_instance_t*)item), invokesig, caller);
+        }
+        else if (jl_is_method_instance(item)) {
+            jl_method_instance_add_backedge((jl_method_instance_t*)item, invokesig, caller);
+        }
+        i += 1;
+    }
+}
+
 jl_code_instance_t *copy_to_mi_cache(jl_method_instance_t *mi JL_PROPAGATES_ROOT, jl_code_instance_t *codeinst2)
 {
     jl_code_instance_t *codeinst = jl_get_method_uninferred(
@@ -3747,7 +3800,11 @@ jl_code_instance_t *copy_to_mi_cache(jl_method_instance_t *mi JL_PROPAGATES_ROOT
             jl_atomic_load_relaxed(&codeinst2->debuginfo),
             jl_atomic_load_relaxed(&codeinst2->edges));
     if (jl_atomic_load_relaxed(&codeinst->invoke) == NULL) {
-        // TODO: add edges and jl_promote_ci_to_current here
+        JL_GC_PUSH2(&codeinst, &codeinst2);
+        jl_svec_t *edges = jl_atomic_load_relaxed(&codeinst->edges);
+        store_backedges_c(codeinst, edges);
+        jl_promote_ci_to_current(codeinst, jl_get_world_counter());
+        JL_GC_POP();
         jl_gc_write(codeinst, codeinst->rettype_const, codeinst2->rettype_const);
         uint8_t specsigflags;
         jl_callptr_t invoke;
