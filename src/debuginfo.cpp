@@ -212,6 +212,7 @@ void JITDebugInfoRegistry::registerJITObject(
 {
     object::section_iterator EndSection = Object.section_end();
 
+    auto &JIT = *jl_ExecutionEngine;
     StringMap<jl_code_instance_t *> sym_to_ci;
     for (auto &[ci, funcs] : Info.ci_funcs) {
         // don't remember toplevel thunks because
@@ -220,9 +221,9 @@ void JITDebugInfoRegistry::registerJITObject(
         if (!jl_is_method(jl_get_ci_mi(ci)->def.method))
             continue;
         if (funcs.invoke)
-            sym_to_ci[*funcs.invoke] = ci;
+            sym_to_ci[*JIT.mangle(*funcs.invoke)] = ci;
         if (funcs.specptr)
-            sym_to_ci[*funcs.specptr] = ci;
+            sym_to_ci[*JIT.mangle(*funcs.specptr)] = ci;
     }
 
     bool anyfunctions = false;
