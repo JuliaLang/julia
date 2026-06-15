@@ -1,54 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-    SubString(s::AbstractString, i::Integer, j::Integer=lastindex(s))
-    SubString(s::AbstractString, r::UnitRange{<:Integer})
-
-Like [`getindex`](@ref), but returns a view into the parent string `s`
-within range `i:j` or `r` respectively instead of making a copy.
-
-The [`@views`](@ref) macro converts any string slices `s[i:j]` into
-substrings `SubString(s, i, j)` in a block of code.
-
-# Examples
-```jldoctest
-julia> SubString("abc", 1, 2)
-"ab"
-
-julia> SubString("abc", 1:2)
-"ab"
-
-julia> SubString("abc", 2)
-"bc"
-```
-"""
-struct SubString{T<:AbstractString} <: AbstractString
-    string::T
-    offset::Int
-    ncodeunits::Int
-
-    function SubString{T}(s::T, i::Int, j::Int) where T<:AbstractString
-        i ≤ j || return new(s, 0, 0)
-        @boundscheck begin
-            checkbounds(s, i:j)
-            @inbounds isvalid(s, i) || string_index_err(s, i)
-            @inbounds isvalid(s, j) || string_index_err(s, j)
-        end
-        return new(s, i-1, nextind(s,j)-i)
-    end
-
-    global function raw_substring(s::T, first_index::Int, ncodeunits::Int) where {T <: AbstractString}
-        @boundscheck @inline checkbounds(codeunits(s), first_index:(first_index + n_codeunits - 1))
-        new{T}(s, first_index - 1, ncodeunits)
-    end
-
-    global function raw_substring(s::SubString{T}, first_index::Int, ncodeunits::Int) where {T <: AbstractString}
-        @boundscheck @inline checkbounds(codeunits(s), first_index:(first_index + n_codeunits - 1))
-        new{T}(s.string, first_index + s.offset - 1, n_codeunits)
-    end
-end
-
-"""
     raw_substring(s::AbstractString, first_index::Int, n_codeunits::Int)::SubString{typeof(s)}
     raw_substring(s::SubString{S}, first_index::Int, n_codeunits::Int)::SubString{S}
 
@@ -90,10 +42,52 @@ ERROR: StringIndexError:
 """
 function raw_substring end
 
+"""
+    SubString(s::AbstractString, i::Integer, j::Integer=lastindex(s))
+    SubString(s::AbstractString, r::UnitRange{<:Integer})
 
-function raw_substring(s::AbstractString, first_index::Int, n_codeunits::Int)
-    @boundscheck @inline checkbounds(codeunits(s), first_index:(first_index + n_codeunits - 1))
-    return @inbounds raw_substring(s, first_index, n_codeunits)
+Like [`getindex`](@ref), but returns a view into the parent string `s`
+within range `i:j` or `r` respectively instead of making a copy.
+
+The [`@views`](@ref) macro converts any string slices `s[i:j]` into
+substrings `SubString(s, i, j)` in a block of code.
+
+# Examples
+```jldoctest
+julia> SubString("abc", 1, 2)
+"ab"
+
+julia> SubString("abc", 1:2)
+"ab"
+
+julia> SubString("abc", 2)
+"bc"
+```
+"""
+struct SubString{T<:AbstractString} <: AbstractString
+    string::T
+    offset::Int
+    ncodeunits::Int
+
+    function SubString{T}(s::T, i::Int, j::Int) where T<:AbstractString
+        i ≤ j || return new(s, 0, 0)
+        @boundscheck begin
+            checkbounds(s, i:j)
+            @inbounds isvalid(s, i) || string_index_err(s, i)
+            @inbounds isvalid(s, j) || string_index_err(s, j)
+        end
+        return new(s, i-1, nextind(s,j)-i)
+    end
+
+    global function raw_substring(s::T, first_index::Int, n_codeunits::Int) where {T <: AbstractString}
+        @boundscheck @inline checkbounds(codeunits(s), first_index:(first_index + n_codeunits - 1))
+        new{T}(s, first_index - 1, n_codeunits)
+    end
+
+    global function raw_substring(s::SubString{T}, first_index::Int, n_codeunits::Int) where {T <: AbstractString}
+        @boundscheck @inline checkbounds(codeunits(s), first_index:(first_index + n_codeunits - 1))
+        new{T}(s.string, first_index + s.offset - 1, n_codeunits)
+    end
 end
 
 @propagate_inbounds SubString(s::T, i::Int, j::Int) where {T<:AbstractString} = SubString{T}(s, i, j)
