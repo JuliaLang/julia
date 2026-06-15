@@ -39,6 +39,10 @@ julia> ss3 = raw_substring(s, 11, 4); ss3[1]
 ERROR: StringIndexError:
 [...]
 ```
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+
 """
 function raw_substring end
 

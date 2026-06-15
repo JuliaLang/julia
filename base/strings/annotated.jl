@@ -175,6 +175,10 @@ julia> u = unannotate(s)
 julia> typeof(u)
 String
 ```
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+
 """
 unannotate(s::AnnotatedString) = s.string
 
