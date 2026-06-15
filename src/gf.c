@@ -1728,7 +1728,7 @@ static void cache_insert(
     JL_GC_PUSH2(&simplett, &newentry);
     simplett = (jl_datatype_t*)compute_simplett(cachett);
     newentry = jl_typemap_alloc(cachett, simplett, guardsigs, (jl_value_t*)newmeth, min_valid, max_valid);
-    if (mc && cachett == tt && tt->hash && !tt->hasfreetypevars) {
+    if (mc && tt && cachett == tt && tt->hash && !tt->hasfreetypevars) {
         // we check `tt->hash` exists, since otherwise the NamedTuple
         // constructor and `structdiff` method pollutes this lookup with a lot
         // of garbage in the linear table search
