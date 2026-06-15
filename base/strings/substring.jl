@@ -24,13 +24,13 @@ may throw a `StringIndexError`.
 julia> s = "Hello, Bjørn!";
 
 julia> ss = Base.raw_substring(s, 3, 10)
-"lo, Bjørn"
+"llo, Bjør"
 
 julia> typeof(ss)
 SubString{String}
 
-julia> ss2 = Base.raw_substring(ss, 2, 6)
-"o, Bj\\xc3"
+julia> ss2 = Base.raw_substring(ss, 3, 7)
+"o, Bjø"
 
 julia> typeof(ss2)
 SubString{String}

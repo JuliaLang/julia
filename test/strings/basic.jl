@@ -235,6 +235,8 @@ end
 
     @testset "raw_substring" begin
         s = "abcdefgøø"
+        raw_substring = Base.raw_substring
+
         @test raw_substring(s, 1, 11) == s
         @test raw_substring(s, 1, 3) == "abc"
         @test raw_substring(s, 3, 3) == "cde"
