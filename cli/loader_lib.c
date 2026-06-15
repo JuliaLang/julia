@@ -238,6 +238,7 @@ static const char *libstdcxxprobe(void)
 
 void *libjulia_internal = NULL;
 void *libjulia_codegen = NULL;
+void *libjulia_frontend = NULL;
 __attribute__((constructor)) void jl_load_libjulia_internal(void) {
 #if defined(_OS_LINUX_)
     // Julia uses `sigwait()` to handle signals, and all threads are required
@@ -267,7 +268,8 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
     //   libstdc++
     //   libjulia-internal
     //   libjulia-codegen
-    const int NUM_SPECIAL_LIBRARIES = 3;
+    //   libjulia-frontend
+    const int NUM_SPECIAL_LIBRARIES = 4;
     int special_idx = 0;
     while (1) {
         // try to find next colon character; if we can't, break out
@@ -363,6 +365,9 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
             } else if (special_idx == 2) {
                 // This special library is `libjulia-codegen`
                 libjulia_codegen = load_library(curr_dep, lib_dir, 0);
+            } else if (special_idx == 3) {
+                // This special library is `libjulia-frontend`
+                libjulia_frontend = load_library(curr_dep, lib_dir, 0);
             }
             special_idx++;
         } else {
@@ -387,6 +392,19 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
         codegen_liberr = " from libjulia-codegen\n";
     }
 
+    const char * const * frontend_func_names;
+    const char *frontend_liberr;
+    if (libjulia_frontend == NULL) {
+        // if the frontend is not available, use fallback implementation in libjulia-internal
+        libjulia_frontend = libjulia_internal;
+        frontend_func_names = jl_frontend_fallback_func_names;
+        frontend_liberr = " from libjulia-internal\n";
+    }
+    else {
+        frontend_func_names = jl_frontend_exported_func_names;
+        frontend_liberr = " from libjulia-frontend\n";
+    }
+
     // Once we have libjulia-internal loaded, re-export its symbols:
     for (unsigned int symbol_idx=0; jl_runtime_exported_func_names[symbol_idx] != NULL; ++symbol_idx) {
         void *addr = lookup_symbol(libjulia_internal, jl_runtime_exported_func_names[symbol_idx]);
@@ -407,6 +425,14 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
             exit(1);
         }
         (*jl_codegen_exported_func_addrs[symbol_idx]) = addr;
+    }
+    for (unsigned int symbol_idx=0; frontend_func_names[symbol_idx] != NULL; ++symbol_idx) {
+        void *addr = lookup_symbol(libjulia_frontend, frontend_func_names[symbol_idx]);
+        if (addr == NULL) {
+            jl_loader_print_stderr3("ERROR: Unable to load ", frontend_func_names[symbol_idx], frontend_liberr);
+            exit(1);
+        }
+        (*jl_frontend_exported_func_addrs[symbol_idx]) = addr;
     }
     // Next, if we're on Linux/FreeBSD, set up fast TLS.
 #if !defined(_OS_WINDOWS_) && !defined(_OS_OPENBSD_)
