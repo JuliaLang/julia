@@ -408,137 +408,43 @@ release in the x.y series.
 
 Follow the remaining directions in the Makefile.
 
-## Signing binaries
+## Verifying signatures
 
-Some of these steps will require secure passwords.
-To obtain the appropriate passwords, contact Elliot Saba (staticfloat) or Alex Arslan
-(ararslan).
-Note that code signing for each platform must be performed on that platform (e.g. Windows
-signing must be done on Windows, etc.).
+Signing is performed automatically by the buildbots. The commands below verify
+that the published binaries are correctly signed; run each on the relevant
+platform.
 
-### Linux
+### GPG (Linux, FreeBSD, and source tarballs)
 
-Code signing must be done manually on Linux, but it's quite simple.
-First obtain the file `julia.key` from the CodeSigning folder in the `juliasecure` AWS
-bucket.
-Add this to your GnuPG keyring using
+Each tarball ships with a detached `.asc` signature. Import the Julia release
+signing public key (published at <https://julialang.org/assets/juliareleases.asc>)
+and verify:
 
 ```
-gpg --import julia.key
+gpg --verify julia-x.y.z-linux-x86_64.tar.gz.asc julia-x.y.z-linux-x86_64.tar.gz
 ```
 
-This will require entering a password that you must obtain from Elliot or Alex.
-Next, set the trust level for the key to maximum.
-Start by entering a `gpg` session:
-
-```
-gpg --edit-key julia
-```
-
-At the prompt, type `trust`, then when asked for a trust level, provide the maximum
-available (likely 5).
-Exit GnuPG.
-
-Now, for each of the Linux tarballs that were built on the buildbots, enter
-
-```
-gpg -u julia --armor --detach-sig julia-x.y.z-linux-<arch>.tar.gz
-```
-
-This will produce a corresponding .asc file for each tarball.
-And that's it!
+A "Good signature" line means the tarball is authentic and intact.
 
 ### macOS
 
-Code signing should happen automatically on the macOS buildbots.
-However, it's important to verify that it was successful.
-On a system or virtual machine running macOS, download the .dmg file that was built on
-the buildbots.
-For the sake of example, say that the .dmg file is called `julia-x.y.z-osx.dmg`.
-Run
+Mount the `.dmg`, then check the code signature and the Gatekeeper /
+notarization status of the app bundle:
 
 ```
-mkdir ./jlmnt
-hdiutil mount -readonly -mountpoint ./jlmnt julia-x.y.z-osx.dmg
-codesign -v jlmnt/Julia-x.y.app
+codesign --verify --strict --verbose=2 /Volumes/Julia-x.y.z/Julia-x.y.app
+spctl --assess --type execute --verbose /Volumes/Julia-x.y.z/Julia-x.y.app
 ```
 
-Be sure to note the name of the mounted disk listed when mounting!
-For the sake of example, we'll assume this is `disk3`.
-If the code signing verification exited successfully, there will be no output from the
-`codesign` step.
-If it was indeed successful, you can detach the .dmg now:
-
-```
-hdiutil eject /dev/disk3
-rm -rf ./jlmnt
-```
-
-If you get a message like
-
-> Julia-x.y.app: code object is not signed at all
-
-then you'll need to sign manually.
-
-To sign manually, first retrieve the OS X certificates from the CodeSigning folder
-in the `juliasecure` bucket on AWS.
-Add the .p12 file to your keychain using Keychain.app.
-Ask Elliot Saba (staticfloat) or Alex Arslan (ararslan) for the password for the key.
-Now run
-
-```
-hdiutil convert julia-x.y.z-osx.dmg -format UDRW -o julia-x.y.z-osx_writable.dmg
-mkdir ./jlmnt
-hdiutil mount -mountpoint julia-x.y.z-osx_writable.dmg
-codesign -s "AFB379C0B4CBD9DB9A762797FC2AB5460A2B0DBE" --deep jlmnt/Julia-x.y.app
-```
-
-This may fail with a message like
-
-> Julia-x.y.app: resource fork, Finder information, or similar detritus not allowed
-
-If that's the case, you'll need to remove extraneous attributes:
-
-```
-xattr -cr jlmnt/Julia-x.y.app
-```
-
-Then retry code signing.
-If that produces no errors, retry verification.
-If all is now well, unmount the writable .dmg and convert it back to read-only:
-
-```
-hdiutil eject /dev/disk3
-rm -rf ./jlmnt
-hdiutil convert julia-x.y.z-osx_writable.dmg -format UDZO -o julia-x.y.z-osx_fixed.dmg
-```
-
-Verify that the resulting .dmg is in fact fixed by double clicking it.
-If everything looks good, eject it then drop the `_fixed` suffix from the name.
-And that's it!
+`spctl` should report `accepted` with `source=Notarized Developer ID`.
 
 ### Windows
 
-Signing must be performed manually on Windows.
-First obtain the Windows 10 SDK, which contains the necessary signing utilities, from
-the Microsoft website.
-We need the `SignTool` utility which should have been installed somewhere like
-`C:\Program Files (x86)\Windows Kits\10\App Certification Kit`.
-Grab the Windows certificate files from CodeSigning on `juliasecure` and put them
-in the same directory as the executables.
-Open a Windows CMD window, `cd` to where all the files are, and run
+Check the Authenticode signature on the installer:
 
 ```
-set PATH=%PATH%;C:\Program Files (x86)\Windows Kits\10\App Certification Kit;
-signtool sign /f julia-windows-code-sign_2017.p12 /p "PASSWORD" ^
-   /t http://timestamp.verisign.com/scripts/timstamp.dll ^
-   /v julia-x.y.z-win32.exe
+signtool verify /pa julia-x.y.z-win64.exe
 ```
-
-Note that `^` is a line continuation character in Windows CMD and `PASSWORD` is a
-placeholder for the password for this certificate.
-As usual, contact Elliot or Alex for passwords.
-If there are no errors, we're all good!
 
 ## Uploading binaries
 
