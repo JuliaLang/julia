@@ -959,13 +959,19 @@ ios_t *ios_file(ios_t *s, const char *fname, int rd, int wr, int create, int tru
     if (create) flags |= O_CREAT;
     if (trunc)  flags |= O_TRUNC;
 #if defined(_OS_WINDOWS_)
-    ssize_t wlen = uv_wtf8_length_as_utf16(fname);
-    if (wlen < 0) goto open_file_err;
-    wchar_t *fname_w = (wchar_t*)alloca(wlen * sizeof(wchar_t));
-    uv_wtf8_to_utf16(fname, (uint16_t*)fname_w, wlen);
-    set_io_wait_begin(1);
-    fd = _wopen(fname_w, flags | O_BINARY | O_NOINHERIT, _S_IREAD | _S_IWRITE);
-    set_io_wait_begin(0);
+    {
+        ssize_t wlen = uv_wtf8_length_as_utf16(fname);
+        if (wlen < 0) {
+            fd = -1;
+        }
+        else {
+            wchar_t *fname_w = (wchar_t*)alloca(wlen * sizeof(wchar_t));
+            uv_wtf8_to_utf16(fname, (uint16_t*)fname_w, wlen);
+            set_io_wait_begin(1);
+            fd = _wopen(fname_w, flags | O_BINARY | O_NOINHERIT, _S_IREAD | _S_IWRITE);
+            set_io_wait_begin(0);
+        }
+    }
 #else
     // The mode of the created file is (mode & ~umask), which resolves with
     // default umask to u=rw,g=r,o=r
