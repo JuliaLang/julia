@@ -101,6 +101,7 @@ Standard library changes
 * Support autolinks for email addresses (#60570)
 * Many improvements and bugfixes for rendering Markdown lists in a terminal ([#55456], [#60519])
 * Strikethrough text via `~strike~` or `~~through~~` is now supported by the Markdown parser. ([#60537])
+* Admonition titles now support inline Markdown formatting (bold, italic, code, LaTeX, links, etc.) ([#62122]).
 * Many, many bug fixes and minor tweaks; overall behavior is now much closer to CommonMark ([#59977], [#60502])
 
 #### Profile
