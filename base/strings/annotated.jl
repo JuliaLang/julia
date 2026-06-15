@@ -169,7 +169,7 @@ Get the underlying string of `s`, without copying.
 julia> s = AnnotatedString("abcde", [(1:3, :A, 4)])
 "abcde"
 
-julia> u = unannotate(s)
+julia> u = Base.unannotate(s)
 "abcde"
 
 julia> typeof(u)

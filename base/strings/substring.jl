@@ -23,19 +23,19 @@ may throw a `StringIndexError`.
 ```jldoctest
 julia> s = "Hello, Bjørn!";
 
-julia> ss = raw_substring(s, 3, 10)
+julia> ss = Base.raw_substring(s, 3, 10)
 "lo, Bjørn"
 
 julia> typeof(ss)
 SubString{String}
 
-julia> ss2 = raw_substring(ss, 2, 6)
+julia> ss2 = Base.raw_substring(ss, 2, 6)
 "o, Bj\\xc3"
 
 julia> typeof(ss2)
 SubString{String}
 
-julia> ss3 = raw_substring(s, 11, 4); ss3[1]
+julia> ss3 = Base.raw_substring(s, 11, 4); ss3[1]
 ERROR: StringIndexError:
 [...]
 ```
