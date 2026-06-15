@@ -80,13 +80,24 @@ struct SubString{T<:AbstractString} <: AbstractString
     end
 
     global function raw_substring(s::T, first_index::Int, n_codeunits::Int) where {T <: AbstractString}
-        @boundscheck @inline checkbounds(codeunits(s), first_index:(first_index + n_codeunits - 1))
+        @boundscheck if n_codeunits < 0 || first_index < 1 || (n_codeunits > ncodeunits(s) - first_index + 1)
+            throw(BoundsError(s, first_index:(first_index+n_codeunits-1)))
+        end
         new{T}(s, first_index - 1, n_codeunits)
     end
 
     global function raw_substring(s::SubString{T}, first_index::Int, n_codeunits::Int) where {T <: AbstractString}
-        @boundscheck @inline checkbounds(codeunits(s), first_index:(first_index + n_codeunits - 1))
+        @boundscheck if n_codeunits < 0 || first_index < 1 || (n_codeunits > ncodeunits(s) - first_index + 1)
+            throw(BoundsError(s, first_index:(first_index+n_codeunits-1)))
+        end
         new{T}(s.string, first_index + s.offset - 1, n_codeunits)
+    end
+
+    # Unlike the un-parameterized SubString constructor, this function must allow creating
+    # e.g. a SubString{SubString{String}}, as this type is what the user may have explicitly
+    # requested.
+    function SubString{T}(s::T) where {T <: AbstractString}
+        new{T}(s, 0, ncodeunits(s))
     end
 end
 
@@ -101,11 +112,6 @@ end
 
 SubString(s::AbstractString) = @inbounds raw_substring(s, 1, Int(ncodeunits(s))::Int)
 SubString(s::SubString) = s
-
-# Unlike the un-parameterized SubString constructor, this function must allow creating
-# e.g. a SubString{SubString{String}}, as this type is what the user may have explicitly
-# requested.
-SubString{T}(s::T) where {T<:AbstractString} = @inbounds raw_substring(s, 1, ncodeunits(s))
 
 @propagate_inbounds view(s::AbstractString, r::AbstractUnitRange{<:Integer}) = SubString(s, r)
 @propagate_inbounds maybeview(s::AbstractString, r::AbstractUnitRange{<:Integer}) = view(s, r)
