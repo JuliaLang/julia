@@ -4556,7 +4556,7 @@ let # Test the presence of PhiNodes in lowered IR by taking the above function,
     ci.slottypes = Any[ Any for i = 1:length(ci.slotflags) ]
     ci.ssavaluetypes = Any[Any for i = 1:ci.ssavaluetypes]
     sv = Compiler.OptimizationState(mi, Compiler.NativeInterpreter())
-    ir = Compiler.convert_to_ircode(ci, sv)
+    ir = Compiler.convert_to_ircode!(ci, sv)
     ir = Compiler.slot2reg(ir, ci, sv)
     ir = Compiler.compact!(ir)
     Compiler.replace_code_newstyle!(ci, ir)
