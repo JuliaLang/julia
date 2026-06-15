@@ -1409,10 +1409,13 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     // !( Tuple{Int, String} <: Tuple{T, T} where T)
     // Then check concreteness by checking that the lower bound is not an abstract type.
     int diagonal = cov_count(&vb) > 1 && !vb.body_occurs_inv;
+    // Widen Type{x} to typeof(x) for ordinary argument-slot occurrences and
+    // diagonal constraints, but not invariant matches. This is only a local
+    // view for checks and envout; keep `vb.lb` structurally precise.
+    int widen_lb = !vb.occurs_inv && (diagonal || (vb.occurs_cov == 1 && vb.cov_diag == 0));
+    jl_value_t *widened_lb = widen_lb ? widen_Type_if_concrete(vb.lb) : vb.lb;
     if (ans && (vb.concrete || (diagonal && is_leaf_typevar(u->var)))) {
-        jl_value_t *concrete_lb = vb.lb;
-        if (diagonal && !vb.occurs_inv)
-            concrete_lb = widen_Type_if_concrete(concrete_lb);
+        jl_value_t *concrete_lb = diagonal ? widened_lb : vb.lb;
         if (vb.concrete && !diagonal && !is_leaf_bound(vb.ub)) {
             // a non-diagonal var can only be a subtype of a diagonal var if its
             // upper bound is concrete.
@@ -1499,11 +1502,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     // fill variable values into `envout` up to `envsz`
     if (R && ans && e->envidx < e->envsz) {
         jl_value_t *val;
-        jl_value_t *lb = vb.lb;
-        // Widen Type{x} to typeof(x) in envout only for a single ordinary
-        // argument-slot occurrence, not for diagonal constraints.
-        if (!vb.occurs_inv && vb.occurs_cov == 1 && vb.cov_diag == 0)
-            lb = widen_Type_if_concrete(lb);
+        jl_value_t *lb = widened_lb;
         jl_value_t *eff_ub = vb.ub;
         while (jl_is_typevar(eff_ub))
             eff_ub = ((jl_tvar_t*)eff_ub)->ub;
