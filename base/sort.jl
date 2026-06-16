@@ -1611,8 +1611,8 @@ const SMALL_THRESHOLD  = 20
     SMALL_THRESHOLD::Integer
 
 Maximum length (currently $SMALL_THRESHOLD) for which an array is considered "small"
-for sorting, and for which [`SMALL_ALGORITHM`](@ref) is used.  (Often the base-case
-cutoff for recursive sorting algorithms.)
+for sorting—used as the base-case cutoff for recursive sorting algorithms—and for which
+[`SMALL_ALGORITHM`](@ref) is used.
 """ SMALL_THRESHOLD
 
 function Base.show(io::IO, alg::Algorithm)
