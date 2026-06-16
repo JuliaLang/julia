@@ -334,8 +334,7 @@ a_method_to_overwrite_in_test() = inferencebarrier(1)
 # Compiler frontend
 Core.println("JuliaSyntax/src/JuliaSyntax.jl")
 include(@__MODULE__, string(DATAROOT, "julia/JuliaSyntax/src/JuliaSyntax.jl"))
-# May be replaced in incremental sysimage build after-the-fact
-const JuliaLowering = nothing
+include(@__MODULE__, string(DATAROOT, "julia/JuliaLowering/src/JuliaLowering.jl"))
 
 # Now that JuliaSyntax is bootstrapped and ready to use, set Base's syntax version.
 set_syntax_version(Base, VERSION)
@@ -419,7 +418,7 @@ function __init__()
     if get_bool_env("JULIA_USE_FLISP_PARSER", false) === false
         JuliaSyntax.enable_in_core!()
     end
-    if JuliaLowering !== nothing && get_bool_env("JULIA_USE_FLISP_LOWERING", true) === false
+    if JuliaLowering !== nothing && get_bool_env("JULIA_USE_FLISP_LOWERING", false) === false
         # This is not available by default, but JuliaLowering can be added to
         # Base after-the-fact via an incremental sysimage build.
         JuliaLowering.activate!()
