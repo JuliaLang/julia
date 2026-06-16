@@ -138,11 +138,13 @@ julia> String(Iterators.map(c -> c+1, "Hello, world"))
 
 julia> String(Iterators.take("Hello, world", 5))
 "Hello"
-"""
-String(iter) = sprint(io -> foreach(c -> write(io, Char(c)::Char), iter))
+```
 
 !!! compat "Julia 1.14"
     This method requires Julia 1.14 or later.
+"""
+String(iter) = sprint(io -> foreach(c -> write(io, Char(c)::Char), iter))
+
 
 """
     unsafe_takestring(m::Memory{UInt8})::String
