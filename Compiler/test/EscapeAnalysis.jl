@@ -35,7 +35,8 @@ let utils_ex = quote
     Core.eval(@__MODULE__, utils_ex)
 end
 
-using .EscapeAnalysis: EscapeInfo, IndexableFields
+using .EscapeAnalysis: EscapeInfo, IndexableFields, Unindexable,
+    NoEscape, ArgEscape, ReturnEscape, ThrownEscape, AllEscape
 
 isϕ(@nospecialize x) = isa(x, Core.PhiNode)
 """
@@ -1708,5 +1709,16 @@ end
 end
 @test (@code_escapes scope_folding()) isa EAUtils.EscapeResult
 @test (@code_escapes scope_folding_opt()) isa EAUtils.EscapeResult
+
+@testset "EscapeInfo hash consistent with ==" begin
+    @test hash(NoEscape()) == hash(NoEscape())
+    @test hash(EscapeInfo(NoEscape(), IndexableFields(2))) ==
+          hash(EscapeInfo(NoEscape(), IndexableFields(2)))
+    @test hash(EscapeInfo(NoEscape(), Unindexable())) ==
+          hash(EscapeInfo(NoEscape(), Unindexable()))
+    @test allunique(hash.([NoEscape(), ArgEscape(), ReturnEscape(1), ThrownEscape(1),
+                           AllEscape(), EscapeInfo(NoEscape(), IndexableFields(2)),
+                           EscapeInfo(NoEscape(), Unindexable())]))
+end
 
 end # module test_EA

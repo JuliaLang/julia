@@ -13,7 +13,7 @@ export
 using Base: Base
 
 # imports
-import Base: ==, copy, getindex, setindex!
+import Base: ==, copy, getindex, hash, setindex!
 # usings
 using Core
 using Core: Builtin, IntrinsicFunction, SimpleVector, ifelse, sizeof
@@ -23,7 +23,7 @@ using Base:       # Base definitions
     @nospecialize, @specialize, BitSet, IdDict, IdSet, UnitRange, Vector,
     delete!, empty!, enumerate, first, get, get!, hasintersect, haskey, isassigned,
     isempty, length, max, min, missing, println, push!, pushfirst!,
-    !, !==, &, *, +, -, :, <, <<, >, |, ∈, ∉, ∩, ∪, ≠, ≤, ≥, ⊆
+    !, !==, %, &, *, +, -, :, <, <<, >, |, ⊻, ∈, ∉, ∩, ∪, ≠, ≤, ≥, ⊆
 using ..Compiler: # Compiler specific definitions
     AbstractLattice, Compiler, IRCode, IR_FLAG_NOTHROW,
     argextype, argextype_widened, fieldcount_noerror, has_flag, intrinsic_nothrow,
@@ -185,7 +185,7 @@ end
 
 # we need to make sure this `==` operator corresponds to lattice equality rather than object equality,
 # otherwise `propagate_changes` can't detect the convergence
-x::EscapeInfo == y::EscapeInfo = begin
+function ==(x::EscapeInfo, y::EscapeInfo)
     # fast pass: better to avoid top comparison
     x === y && return true
     x.Analyzed === y.Analyzed || return false
@@ -218,6 +218,24 @@ x::EscapeInfo == y::EscapeInfo = begin
         xl == yl || return false
     end
     return true
+end
+
+const hashei_seed = 0x2fe2deaeb40ac445 % UInt
+function hash(x::EscapeInfo, h::UInt)
+    h ⊻= hashei_seed
+    h = hash(x.Analyzed, h)
+    h = hash(x.ReturnEscape, h)
+    h = hash(x.ThrownEscape, h)
+    xa = x.AliasInfo
+    if isa(xa, Bool)
+        h = hash(xa, h)
+    elseif isa(xa, IndexableFields)
+        h = hash(xa.infos, h)
+    else
+        h = hash((xa::Unindexable).info, h)
+    end
+    h = hash(x.Liveness, h)
+    return h
 end
 
 """
