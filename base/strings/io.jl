@@ -242,8 +242,11 @@ print(io::IO, s::Union{String,SubString{String}}) = (write(io, s); nothing)
     repr(x; context=nothing)
 
 Create a string representation of any value using the 2-argument `show(io, x)` function,
-which aims to produce a string that is parseable Julia code, where possible.
-i.e. `eval(Meta.parse(repr(x))) == x` should hold true.
+which should be parseable Julia code and, after parsing and evaluation,
+should be equal to the value, i.e. `eval(Meta.parse(repr(x))) == x`
+should hold true if there are no technical reasons against it or if
+such an output is not considered too verbose for a REPL representation.
+Note that `repr` is not a text-based serialization format.
 You should not add methods to `repr`; define a [`show`](@ref) method instead.
 
 The optional keyword argument `context` can be set to a `:key=>value` pair, a
