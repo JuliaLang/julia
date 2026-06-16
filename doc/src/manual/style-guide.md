@@ -163,7 +163,7 @@ defines the `play` method on that particular type, leaving other types to
 have their own implementation.
 
 Similarly, non-exported functions are typically internal and subject to change,
-unless the documentations states otherwise. Names sometimes are given a `_` prefix
+unless the documentation states otherwise. Names sometimes are given a `_` prefix
 (or suffix) to further suggest that something is "internal" or an
 implementation-detail, but it is not a rule.
 

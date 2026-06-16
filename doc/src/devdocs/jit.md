@@ -27,7 +27,7 @@ Currently, only one thread at a time is permitted to enter the optimize-compile-
 
 ## Optimization Pipeline
 
-The optimization pipeline is based off LLVM's new pass manager, but the pipeline is customized for Julia's needs. The pipeline is defined in `src/pipeline.cpp`, and broadly proceeds through a number of stages as detailed below.
+The optimization pipeline is based on LLVM's new pass manager, but the pipeline is customized for Julia's needs. The pipeline is defined in `src/pipeline.cpp`, and broadly proceeds through a number of stages as detailed below.
 
 1. Early Simplification
    1. These passes are mainly used to simplify the IR and canonicalize patterns so that later passes can identify those patterns more easily. Additionally, various intrinsic calls such as branch prediction hints and annotations are lowered into other metadata or other IR features. [`SimplifyCFG`](https://llvm.org/docs/Passes.html#simplifycfg-simplify-the-cfg) (simplify control flow graph), [`DCE`](https://llvm.org/docs/Passes.html#dce-dead-code-elimination) (dead code elimination), and [`SROA`](https://llvm.org/docs/Passes.html#sroa-scalar-replacement-of-aggregates) (scalar replacement of aggregates) are some of the key players here.
