@@ -417,20 +417,20 @@ function vst1_importpath(vcx, st; dots_ok)
         [K"as" [K"." xs...] [K"Identifier"]] -> xs
         [K"as" [K"." xs...] x] -> (ok &= @fail(x, "expected identifier"); xs)
         [K"." xs...] -> xs
+        _ -> return @fail(st, "malformed import path")
     end
     seen_first = false
     for c in path_components
-        if kind(c) === K"."
+        if kind(c) === K"Identifier" && c.name_val::String === "."
             if !dots_ok || seen_first
                 ok &= @fail(c, "unexpected `.` in import path")
             end
             continue
         end
-        ok = ok & vst1_ident(vcx, seen_first && kind(c) === K"quote" ? c[1] : c)
+        ok = ok & vst1_ident(vcx, c)
         seen_first = true
     end
-    return !seen_first ?
-        @fail(st, "expected identifier in `importpath`") : ok
+    return !seen_first ? @fail(st, "expected identifier in `importpath`") : ok
 end
 
 vst1_tuple(vcx, st) = @stm st begin

@@ -1587,6 +1587,13 @@ end
 
         @test JuliaLowering.include_string(test_mod, raw"""
         begin
+            @generated f_gen_quotenodeexpr() = QuoteNode(Expr(:begin, nothing))
+            f_gen_quotenodeexpr()
+        end
+        """; expr_compat_mode) == Expr(:begin, nothing)
+
+        @test JuliaLowering.include_string(test_mod, raw"""
+        begin
             @generated f_gen_gr_nothing() = GlobalRef(Core, :nothing)
             f_gen_gr_nothing()
         end
