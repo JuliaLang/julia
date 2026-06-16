@@ -578,8 +578,8 @@ JL_DLLEXPORT jl_code_instance_t *jl_get_method_uninferred(
     jl_value_t *owner = jl_nothing; // TODO: owner should be arg
     jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mi->cache);
     for (; codeinst; codeinst = jl_atomic_load_relaxed(&codeinst->next)) {
-        if (jl_atomic_load_relaxed(&codeinst->min_world) == min_world &&
-            jl_atomic_load_relaxed(&codeinst->max_world) == max_world &&
+        if (jl_atomic_load_relaxed(&codeinst->min_world) <= min_world &&
+            jl_atomic_load_relaxed(&codeinst->max_world) >= max_world &&
             jl_egal(codeinst->owner, owner) &&
             jl_egal(codeinst->rettype, rettype)) {
             if (di == NULL)
@@ -3716,73 +3716,63 @@ int need_copy_to_mi_cache(jl_method_instance_t *mi, jl_method_instance_t *mi2,
         !jl_egal((jl_value_t*)mi->sparam_vals, (jl_value_t*)mi2->sparam_vals);
 }
 
-// Register `caller` in the backedges of each dependency in the forward edges svec.
-// Mirrors the Julia-side store_backedges, but callable from C.
-static void store_backedges_c(jl_code_instance_t *caller, jl_svec_t *edges)
+// Link callee to cached so that invalidation of cached propagates to callee.
+// When a CodeInstance swap occurs (callee replaced by cached during compilation),
+// we must ensure callee gets invalidated whenever cached is, since any caller
+// holding callee by pointer identity in its edges won't otherwise be reached.
+// Return 1 if cached should replace callee (cached covers a wider world range),
+// or 0 if cached object is no longer current (world counter invalidated it concurrently).
+// Sets up edges and backedges so that invalidation of cached propagates to callee.
+JL_DLLEXPORT int jl_link_ci_equiv(jl_code_instance_t *callee, jl_code_instance_t *cached)
 {
-    if (edges == NULL)
-        return;
-    jl_method_instance_t *caller_mi = jl_get_ci_mi(caller);
-    if (!jl_is_method(caller_mi->def.method))
-        return;
-    size_t n = jl_svec_len(edges);
-    if (n == 0)
-        return;
-    for (size_t i = 0; i < n; ) {
-        jl_value_t *item = jl_svecref(edges, i);
-        if (jl_is_long(item)) {
-            i += 2;
-            continue;
-        }
-        if (jl_is_method(item)) {
-            i += 1;
-            continue;
-        }
-        jl_value_t *invokesig = NULL;
-        if (!jl_is_method_instance(item) && !jl_is_code_instance(item) && !jl_is_binding(item)) {
-            // it's a Type used as invokesig
-            invokesig = item;
-            i += 1;
-            if (i >= n)
+    if (callee == cached)
+        return 1;
+    jl_method_instance_t *mi = jl_get_ci_mi(cached);
+    if (!jl_is_method(mi->def.method))
+        return 1;
+    size_t world = jl_get_world_counter();
+    if (jl_atomic_load_relaxed(&callee->max_world) >= world) {
+        // Append cached to callee->edges so _invalidate_backedges can find it by identity
+        int already_linked = 0;
+        jl_svec_t *old_edges = jl_atomic_load_relaxed(&callee->edges);
+        size_t old_n = jl_svec_len(old_edges);
+        for (size_t i = 0; i < old_n; i++) {
+            if (jl_svecref(old_edges, i) == (jl_value_t *)cached) {
+                already_linked = 1;
                 break;
-            item = jl_svecref(edges, i);
-            if (jl_is_method(item)) {
-                i += 1;
-                continue;
-            }
-            if (jl_is_mtable(item)) {
-                jl_method_table_add_backedge(invokesig, caller);
-                i += 1;
-                continue;
             }
         }
-        if (jl_is_binding(item)) {
-            jl_maybe_add_binding_backedge((jl_binding_t*)item, (jl_value_t*)caller, caller_mi->def.method);
+        if (!already_linked) {
+            jl_svec_t *new_edges = jl_alloc_svec(old_n + 1);
+            memcpy(jl_svec_data(new_edges), jl_svec_data(old_edges), old_n * sizeof(jl_value_t *));
+            jl_svecset(new_edges, old_n, (jl_value_t *)cached);
+            // an invoke-type edge would be more accurate here, but this is conservatively correct
+            jl_gc_write_atomic(callee, callee->edges, jl_svec_t, new_edges, release);
+            // register callee in cached's MI backedges so invalidation of cached propagates to callee
+            jl_method_instance_add_backedge(mi, NULL, callee);
         }
-        else if (jl_is_code_instance(item)) {
-            jl_method_instance_add_backedge(jl_get_ci_mi((jl_code_instance_t*)item), invokesig, caller);
-        }
-        else if (jl_is_method_instance(item)) {
-            jl_method_instance_add_backedge((jl_method_instance_t*)item, invokesig, caller);
-        }
-        i += 1;
     }
+    // after storing new backedges, use cached if it is still legal (covers wider world range)
+    return jl_atomic_load_relaxed(&cached->max_world) >= jl_atomic_load_relaxed(&callee->max_world);
 }
 
 jl_code_instance_t *copy_to_mi_cache(jl_method_instance_t *mi JL_PROPAGATES_ROOT, jl_code_instance_t *codeinst2)
 {
+    size_t current_world = jl_get_world_counter();
+    size_t max_world2 = jl_atomic_load_relaxed(&codeinst2->max_world);
     jl_code_instance_t *codeinst = jl_get_method_uninferred(
             mi, codeinst2->rettype,
             jl_atomic_load_relaxed(&codeinst2->min_world),
-            jl_atomic_load_relaxed(&codeinst2->max_world), // TODO: use min(max_world, current_world) here
+            max_world2 < current_world ? max_world2 : current_world,
             jl_atomic_load_relaxed(&codeinst2->debuginfo),
             jl_atomic_load_relaxed(&codeinst2->edges));
     if (jl_atomic_load_relaxed(&codeinst->invoke) == NULL) {
-        JL_GC_PUSH2(&codeinst, &codeinst2);
-        jl_svec_t *edges = jl_atomic_load_relaxed(&codeinst->edges);
-        store_backedges_c(codeinst, edges);
-        jl_promote_ci_to_current(codeinst, jl_get_world_counter());
-        JL_GC_POP();
+        // if codeinst2 is still valid beyond current_world, link codeinst to it so
+        // that invalidation of codeinst2 also invalidates codeinst
+        if (max_world2 == ~(size_t)0) {
+            if (jl_link_ci_equiv(codeinst, codeinst2))
+                jl_promote_ci_to_current(codeinst, current_world);
+        }
         jl_gc_write(codeinst, codeinst->rettype_const, jl_value_t, codeinst2->rettype_const);
         uint8_t specsigflags;
         jl_callptr_t invoke;
@@ -4390,10 +4380,16 @@ JL_DLLEXPORT jl_value_t *jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t na
     return _jl_invoke(F, args, nargs, mfunc, world, TRIGGER_FOREIGN);
 }
 
+jl_value_t *jl_invoke_fromdispatch(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc)
+{
+    size_t world = jl_current_task->world_age;
+    return _jl_invoke(F, args, nargs, mfunc, world, TRIGGER_DISPATCH);
+}
+
 // Used by jl_eval_thunk to invoke top-level thunks.  They will be
 // garbage-collectable as soon as they are invoked, so their ORC symbols must be
 // unregistered before we enter invoke, which may never return.
-JL_DLLEXPORT jl_value_t *jl_invoke_oneshot(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc)
+jl_value_t *jl_invoke_oneshot(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc)
 {
     size_t world = jl_current_task->world_age;
 
