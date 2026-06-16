@@ -166,7 +166,7 @@ IEEE 754 definition of the minimum exponent.
 """
 ieee754_exponent_min(::Type{T}) where {T<:IEEEFloat} = Int(1 - exponent_max(T))::Int
 
-exponent_min(::Type{T}) where {T<:IEEEFloat} = ieee754_exponent_min(T)
+exponent_min(T::Union{Type{Float16},Type{Float32},Type{Float64}}) = ieee754_exponent_min(T)
 
 function ieee754_representation(
     ::Type{F}, sign_bit::Bool, exponent_field::Integer, significand_field::Integer
