@@ -404,6 +404,8 @@ static unsigned union_isinlinable(jl_value_t *ty, int pointerfree, size_t *nbyte
         return na + nb;
     }
     ty = normalize_typeofbottom_layout_alias(ty);
+    if (pointerfree && jl_is_tuple_type(ty))
+        return 0;
     if (jl_is_datatype(ty) && jl_datatype_isinlinealloc((jl_datatype_t*)ty, pointerfree)) {
         size_t sz = jl_datatype_size(ty);
         size_t al = jl_datatype_align(ty);
