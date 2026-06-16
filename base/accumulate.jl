@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# `accumulate_pairwise`` runs slightly slower than `accumulate``, but more numerically
+# `accumulate_pairwise` runs slightly slower than `accumulate`, but more numerically
 # stable in certain situations (e.g. sums).
 # It does double the number of operations compared to `accumulate`,
 # though for cheap operations like `+` this does not have much impact (20%).
