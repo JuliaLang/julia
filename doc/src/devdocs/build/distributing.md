@@ -428,15 +428,33 @@ A "Good signature" line means the tarball is authentic and intact.
 
 ### macOS
 
-Mount the `.dmg`, then check the code signature and the Gatekeeper /
-notarization status of the app bundle:
+The `.dmg` is signed and carries a stapled notarization ticket. Verify the disk
+image itself -- run these against the `.dmg` file, not the mounted volume (see
+the note below):
 
 ```
-codesign --verify --strict --verbose=2 /Volumes/Julia-x.y.z/Julia-x.y.app
-spctl --assess --type execute --verbose /Volumes/Julia-x.y.z/Julia-x.y.app
+xcrun stapler validate julia-x.y.z-macos-x86_64.dmg
+spctl --assess --type open --context context:primary-signature --verbose \
+    julia-x.y.z-macos-x86_64.dmg
 ```
 
-`spctl` should report `accepted` with `source=Notarized Developer ID`.
+`stapler` should report that the validate action worked, and `spctl` should
+report `accepted` with `source=Notarized Developer ID`.
+
+To check the app bundle, first copy it out of the mounted image to a writable
+location (for example, drag it to `/Applications`), then assess it:
+
+```
+spctl --assess --type install --verbose /Applications/Julia-x.y.app
+```
+
+This should likewise report `accepted` with `source=Notarized Developer ID`.
+
+!!! note
+    Run these checks against the `.dmg` file or a copied-out app bundle, never
+    against the app inside the mounted disk image. The image mounts read-only,
+    and `codesign --verify` errors out on it with "internal error in Code
+    Signing subsystem".
 
 ### Windows
 
