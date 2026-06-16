@@ -394,22 +394,23 @@ void jl_register_jit_object(const object::ObjectFile &Object,
 {
     // Opaque-closure code instances are not otherwise reachable through their
     // method, so promote them to global roots here, before entering the
-    // JL_NOTSAFEPOINT registerJITObject body. Switch to GC-unsafe, since the
-    // promotion allocates, and the JIT runs materialization in a GC-safe state.
+    // JL_NOTSAFEPOINT registerJITObject body. Scanning the list is safe in the
+    // GC-safe materialization state (registerJITObject reads the same fields),
+    // so only switch to GC-unsafe around the rare allocating promotion.
     // TODO: Tell GCChecker that jl_register_jit_object is entered GC-safe.
 #ifndef __clang_analyzer__
     jl_task_t *ct = jl_current_task;
-    int8_t gc_state = jl_gc_unsafe_enter(ct->ptls);
     for (auto &[ci, funcs] : Info.ci_funcs) {
         jl_method_instance_t *mi = jl_get_ci_mi(ci);
         if (jl_is_method(mi->def.method) && mi->def.method->is_for_opaque_closure) {
             jl_code_instance_t *ci_root = ci;
+            int8_t gc_state = jl_gc_unsafe_enter(ct->ptls);
             JL_GC_PUSH1(&ci_root);
             jl_as_global_root((jl_value_t*)ci_root, 1);
             JL_GC_POP();
+            jl_gc_unsafe_leave(ct->ptls, gc_state);
         }
     }
-    jl_gc_unsafe_leave(ct->ptls, gc_state);
 #endif
     getJITDebugRegistry().registerJITObject(Object, getLoadAddress, Info);
 }
