@@ -1912,7 +1912,7 @@ JL_DLLEXPORT void jl_deprecate_binding(jl_module_t *m, jl_sym_t *var, int flag)
 }
 
 // Select the declared visibility of a binding:
-//   0=private (neither), 1=public, 2=exported
+//   0=none (neither), 1=public, 2=export
 // The exported flag is world-versioned (it lives in the binding partition and
 // gates implicit resolution through `using`), so clearing it creates a new
 // partition and invalidates dependent code. The public flag is world-agnostic

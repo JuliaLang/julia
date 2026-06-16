@@ -106,27 +106,27 @@ module RebindingVisibility
     end
     using .SrcMod
 
-    @test Base.binding_visibility(SrcMod, :visg) == :exported
+    @test Base.isexported(SrcMod, :visg)
     f_use_visg() = visg()
     @test f_use_visg() == 42
 
     # Retract the export: `visg` is still defined in SrcMod but no longer reachable here.
-    Base.set_binding_visibility!(SrcMod, :visg, :private)
-    @test Base.binding_visibility(SrcMod, :visg) == :private
+    Base.set_binding_visibility!(SrcMod, :visg, :none)
     @test !Base.isexported(SrcMod, :visg)
+    @test !Base.ispublic(SrcMod, :visg)
     @test :visg ∉ names(SrcMod)
     @test_throws UndefVarError f_use_visg()
     @test SrcMod.visg() == 42
 
     # Re-export and confirm implicit resolution is restored.
-    Base.set_binding_visibility!(SrcMod, :visg, :exported)
+    Base.set_binding_visibility!(SrcMod, :visg, :export)
     @test Base.isexported(SrcMod, :visg)
     @test :visg ∈ names(SrcMod)
     @test f_use_visg() == 42
 
-    # The public/private flag is independent of export and not world-versioned.
-    @test Base.binding_visibility(SrcMod, :visp) == :public
-    Base.set_binding_visibility!(SrcMod, :visp, :private)
+    # The public flag is independent of export and not world-versioned.
+    @test Base.ispublic(SrcMod, :visp) && !Base.isexported(SrcMod, :visp)
+    Base.set_binding_visibility!(SrcMod, :visp, :none)
     @test !Base.ispublic(SrcMod, :visp)
     Base.set_binding_visibility!(SrcMod, :visp, :public)
     @test Base.ispublic(SrcMod, :visp)
@@ -268,7 +268,7 @@ module RebindingPrecompile
         @eval using RetractExport
         # Retract the export before loading the dependent package
         invokelatest() do
-            Base.set_binding_visibility!(RetractExport, :retract_me, :private)
+            Base.set_binding_visibility!(RetractExport, :retract_me, :none)
         end
         @eval using UseRetractExport
         invokelatest() do
@@ -276,7 +276,7 @@ module RebindingPrecompile
         end
         # Re-export and confirm resolution is restored
         invokelatest() do
-            Base.set_binding_visibility!(RetractExport, :retract_me, :exported)
+            Base.set_binding_visibility!(RetractExport, :retract_me, :export)
         end
         invokelatest() do
             @test UseRetractExport.f_use_retract() == 11

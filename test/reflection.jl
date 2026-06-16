@@ -459,7 +459,7 @@ const a_value = 1
 @test !Base.ispublic(@__MODULE__, :this_is_not_exported)
 end
 
-# binding_visibility / set_binding_visibility!
+# set_binding_visibility!
 module TestBindingVisibility
 using Test
 public a_public_name
@@ -468,13 +468,12 @@ export an_exported_name
 an_exported_name() = 2
 no_decl() = 3
 
-@test Base.binding_visibility(@__MODULE__, :an_exported_name) == :exported
-@test Base.binding_visibility(@__MODULE__, :a_public_name) == :public
-@test Base.binding_visibility(@__MODULE__, :no_decl) == :private
+@test Base.isexported(@__MODULE__, :an_exported_name)
+@test Base.ispublic(@__MODULE__, :a_public_name) && !Base.isexported(@__MODULE__, :a_public_name)
+@test !Base.ispublic(@__MODULE__, :no_decl)
 
-# public <-> private round trip
-Base.set_binding_visibility!(@__MODULE__, :a_public_name, :private)
-@test Base.binding_visibility(@__MODULE__, :a_public_name) == :private
+# public <-> none round trip
+Base.set_binding_visibility!(@__MODULE__, :a_public_name, :none)
 @test !Base.ispublic(@__MODULE__, :a_public_name)
 Base.set_binding_visibility!(@__MODULE__, :a_public_name, :public)
 @test Base.ispublic(@__MODULE__, :a_public_name)
@@ -482,13 +481,12 @@ Base.set_binding_visibility!(@__MODULE__, :a_public_name, :public)
 # an exported name is reported public; lowering it to :public clears only the export
 @test Base.ispublic(@__MODULE__, :an_exported_name)
 Base.set_binding_visibility!(@__MODULE__, :an_exported_name, :public)
-@test Base.binding_visibility(@__MODULE__, :an_exported_name) == :public
 @test !Base.isexported(@__MODULE__, :an_exported_name)
 @test Base.ispublic(@__MODULE__, :an_exported_name)
 
-# promote an undeclared name to exported
-Base.set_binding_visibility!(@__MODULE__, :no_decl, :exported)
-@test Base.binding_visibility(@__MODULE__, :no_decl) == :exported
+# promote an undeclared name to export
+Base.set_binding_visibility!(@__MODULE__, :no_decl, :export)
+@test Base.isexported(@__MODULE__, :no_decl)
 
 @test_throws ArgumentError Base.set_binding_visibility!(@__MODULE__, :no_decl, :bogus)
 end
