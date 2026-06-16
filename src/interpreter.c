@@ -33,9 +33,9 @@ typedef struct {
   var = (decltype(var))alloca((n))
 #else
 #define JL_CPPALLOCA(var,n)                                                         \
-  JL_GCC_IGNORE_START("-Wc++-compat")                                               \
+  JL_CC_IGNORE_START("-Wc++-compat")                                               \
   var = alloca((n));                                                                \
-  JL_GCC_IGNORE_STOP
+  JL_CC_IGNORE_STOP
 #endif
 
 #ifdef __clang_gcanalyzer__

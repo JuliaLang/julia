@@ -624,6 +624,7 @@ restart_switch:
                 jl_error("julia: failed to allocate memory");
             break;
         case 't': // threads
+        {
             errno = 0;
             jl_options.nthreadpools = 2;
             // By default:
@@ -675,6 +676,7 @@ restart_switch:
                 ntpp[1] = (int16_t)nthreadsi;
             jl_options.nthreads_per_pool = ntpp;
             break;
+        }
         case 'p': // procs
             errno = 0;
             if (!strcmp(optarg,"auto")) {
@@ -964,6 +966,7 @@ restart_switch:
 
             break;
         case opt_gc_threads:
+        {
             errno = 0;
             long nmarkthreads = strtol(optarg, &endptr, 10);
             if (errno != 0 || optarg == endptr || nmarkthreads < 1 || nmarkthreads >= INT16_MAX) {
@@ -978,6 +981,7 @@ restart_switch:
                     jl_errorf("julia: --gcthreads=<n>,<m>; m must be 0 or 1");
                 jl_options.nsweepthreads = (int8_t)nsweepthreads;
             }
+        }
             break;
         case opt_permalloc_pkgimg:
             if (!strcmp(optarg,"yes"))
@@ -988,12 +992,14 @@ restart_switch:
                 jl_errorf("julia: invalid argument to --permalloc-pkgimg={yes|no} (%s)", optarg);
             break;
         case opt_timeout_for_safepoint_straggler:
+        {
             errno = 0;
             long timeout = strtol(optarg, &endptr, 10);
             if (errno != 0 || optarg == endptr || timeout < 1 || timeout > INT16_MAX)
                 jl_errorf("julia: --timeout-for-safepoint-straggler=<seconds>; seconds must be an integer between 1 and %d", INT16_MAX);
             jl_options.timeout_for_safepoint_straggler_s = (int16_t)timeout;
             break;
+        }
         case opt_trim:
             if (optarg == NULL || !strcmp(optarg,"safe"))
                 jl_options.trim = JL_TRIM_SAFE;
