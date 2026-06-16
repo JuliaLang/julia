@@ -93,6 +93,47 @@ module Rebinding
     @test_throws UndefVarError f_return_delete_me_implicit()
 end
 
+# Retracting an `export` with `set_binding_visibility!` makes a name stop
+# resolving through `using`, and re-exporting restores it.
+module RebindingVisibility
+    using Test
+
+    module SrcMod
+        export visg
+        visg() = 42
+        public visp
+        visp() = 7
+    end
+    using .SrcMod
+
+    @test Base.binding_visibility(SrcMod, :visg) == :exported
+    f_use_visg() = visg()
+    @test f_use_visg() == 42
+
+    # Retract the export: `visg` is still defined in SrcMod but no longer reachable here.
+    Base.set_binding_visibility!(SrcMod, :visg, :private)
+    @test Base.binding_visibility(SrcMod, :visg) == :private
+    @test !Base.isexported(SrcMod, :visg)
+    @test :visg ∉ names(SrcMod)
+    @test_throws UndefVarError f_use_visg()
+    @test SrcMod.visg() == 42
+
+    # Re-export and confirm implicit resolution is restored.
+    Base.set_binding_visibility!(SrcMod, :visg, :exported)
+    @test Base.isexported(SrcMod, :visg)
+    @test :visg ∈ names(SrcMod)
+    @test f_use_visg() == 42
+
+    # The public/private flag is independent of export and not world-versioned.
+    @test Base.binding_visibility(SrcMod, :visp) == :public
+    Base.set_binding_visibility!(SrcMod, :visp, :private)
+    @test !Base.ispublic(SrcMod, :visp)
+    Base.set_binding_visibility!(SrcMod, :visp, :public)
+    @test Base.ispublic(SrcMod, :visp)
+
+    @test_throws ArgumentError Base.set_binding_visibility!(SrcMod, :visg, :bogus)
+end
+
 module RebindingPrecompile
     using Test
     include("precompile_utils.jl")
@@ -203,6 +244,42 @@ module RebindingPrecompile
         end
         invokelatest() do
             @test_throws UndefVarError ImportTest.f_use_binding2()
+        end
+    end
+
+    precompile_test_harness("export retraction") do load_path
+        write(joinpath(load_path, "RetractExport.jl"),
+              """
+              module RetractExport
+                export retract_me
+                const retract_me = 11
+              end
+              """)
+        Base.compilecache(Base.PkgId("RetractExport"))
+        write(joinpath(load_path, "UseRetractExport.jl"),
+              """
+              module UseRetractExport
+                using RetractExport
+                f_use_retract() = retract_me
+                @assert f_use_retract() == 11
+              end
+              """)
+        Base.compilecache(Base.PkgId("UseRetractExport"))
+        @eval using RetractExport
+        # Retract the export before loading the dependent package
+        invokelatest() do
+            Base.set_binding_visibility!(RetractExport, :retract_me, :private)
+        end
+        @eval using UseRetractExport
+        invokelatest() do
+            @test_throws UndefVarError UseRetractExport.f_use_retract()
+        end
+        # Re-export and confirm resolution is restored
+        invokelatest() do
+            Base.set_binding_visibility!(RetractExport, :retract_me, :exported)
+        end
+        invokelatest() do
+            @test UseRetractExport.f_use_retract() == 11
         end
     end
 

@@ -1911,6 +1911,36 @@ JL_DLLEXPORT void jl_deprecate_binding(jl_module_t *m, jl_sym_t *var, int flag)
     JL_UNLOCK(&world_counter_lock);
 }
 
+// Select the declared visibility of a binding:
+//   0=private (neither), 1=public, 2=exported
+// The exported flag is world-versioned (it lives in the binding partition and
+// gates implicit resolution through `using`), so clearing it creates a new
+// partition and invalidates dependent code. The public flag is world-agnostic
+// (it lives on the binding). Unlike the `export`/`public` keyword path
+// (jl_module_public_), this both raises and lowers the state, so it does not
+// enforce the public-vs-exported conflict.
+JL_DLLEXPORT void jl_module_set_visibility(jl_module_t *m, jl_sym_t *var, int state)
+{
+    int want_exported = state == 2;
+    int want_public = state >= 1;
+    jl_binding_t *b = jl_get_module_binding(m, var, 1);
+    JL_LOCK(&world_counter_lock);
+    size_t new_world = jl_atomic_load_acquire(&jl_world_counter)+1;
+    jl_binding_partition_t *old_bpart = jl_get_binding_partition(b, jl_current_task->world_age);
+    int was_exported = (old_bpart->kind & PARTITION_FLAG_EXPORTED) != 0;
+    if (was_exported != want_exported) {
+        size_t new_kind = want_exported ? (old_bpart->kind | PARTITION_FLAG_EXPORTED) :
+                                          (old_bpart->kind & ~(size_t)PARTITION_FLAG_EXPORTED);
+        jl_replace_binding_locked2(b, old_bpart, old_bpart->restriction, new_kind, new_world);
+        jl_atomic_store_release(&jl_world_counter, new_world);
+    }
+    JL_UNLOCK(&world_counter_lock);
+    if (want_public)
+        jl_atomic_fetch_or_relaxed(&b->flags, BINDING_FLAG_PUBLICP);
+    else
+        jl_atomic_fetch_and_relaxed(&b->flags, (uint8_t)~BINDING_FLAG_PUBLICP);
+}
+
 static int should_depwarn(jl_binding_t *b, uint8_t flag)
 {
     // We consider bindings deprecated, if:

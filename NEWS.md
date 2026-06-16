@@ -66,6 +66,9 @@ New library functions
 ---------------------
 
 * `tap(f)` creates a function that calls `f(x)` for side effects and returns `x`. ([#61340]).
+* `Base.set_binding_visibility!` and `Base.binding_visibility` get and set the declared
+  visibility (`:private`, `:public`, or `:exported`) of a name in a module, allowing an
+  `export` or `public` declaration to be retracted programmatically ([#XXXXX]).
 * `Base.generating_output()` has been made `public` (but not exported) to allow
   checking whether the current process is performing compilation for a
   pkgimage/sysimage ([#61224]).

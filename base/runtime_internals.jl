@@ -322,6 +322,54 @@ function delete_binding(mod::Module, sym::Symbol)
 end
 
 """
+    binding_visibility(mod::Module, sym::Symbol) -> Symbol
+
+Return the declared visibility of `mod.sym`: `:exported` (declared with
+`export`), `:public` (declared with `public`), or `:private` (neither).
+
+See also [`set_binding_visibility!`](@ref), [`isexported`](@ref), [`ispublic`](@ref).
+
+!!! compat "Julia 1.14"
+    This function was added in Julia 1.14.
+"""
+function binding_visibility(mod::Module, sym::Symbol)
+    isexported(mod, sym) && return :exported   # checked first: an export is also public
+    ispublic(mod, sym) && return :public
+    return :private
+end
+
+"""
+    set_binding_visibility!(mod::Module, sym::Symbol, vis::Symbol)
+
+Select the declared visibility of `mod.sym`, one of `:exported`, `:public`, or
+`:private`. This is the programmatic counterpart to the `export` and `public`
+keywords; unlike them it can also *retract* a declaration, since `:private`
+removes a name's `export` or `public` status.
+
+Retracting an `export` causes modules that did `using \$mod` to stop resolving
+`sym` implicitly, once their world age advances past this call (see
+[`invokelatest`](@ref) and [`get_world_counter`](@ref)). Because that
+invalidates dependent compiled code, it can be expensive. The `:public` versus
+`:private` distinction is not world-versioned: clearing it takes effect in every
+world age. A name that is `:exported` is reported as public by [`ispublic`](@ref)
+regardless.
+
+See also [`binding_visibility`](@ref), [`isexported`](@ref), [`ispublic`](@ref),
+[`delete_binding`](@ref).
+
+!!! compat "Julia 1.14"
+    This function was added in Julia 1.14.
+"""
+function set_binding_visibility!(mod::Module, sym::Symbol, vis::Symbol)
+    state = vis === :private  ? Cint(0) :
+            vis === :public   ? Cint(1) :
+            vis === :exported ? Cint(2) :
+            throw(ArgumentError(LazyString("visibility must be :private, :public, or :exported, got ", repr(vis))))
+    ccall(:jl_module_set_visibility, Cvoid, (Any, Any, Cint), mod, sym, state)
+    return nothing
+end
+
+"""
     fieldname(x::DataType, i::Integer)
 
 Get the name of field `i` of a `DataType`.
