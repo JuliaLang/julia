@@ -10513,6 +10513,11 @@ static void init_jit_functions(void)
     add_named_global(jlunlockfield_func, &jl_unlock_field);
     add_named_global(jlgetabiconverter_func, &jl_get_abi_converter);
 
+    jl_get_pgcstack_func *get_pgcstack;
+    jl_pgcstack_key_t pgcstack_key;
+    jl_pgcstack_getkey(&get_pgcstack, &pgcstack_key);
+    add_named_global("jl_get_pgcstack_resolved", get_pgcstack);
+
 #ifdef _OS_WINDOWS_
 #if defined(_CPU_X86_64_)
     add_named_global("__julia_personality", &__julia_personality);

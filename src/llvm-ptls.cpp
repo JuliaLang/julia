@@ -286,7 +286,7 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
     }
     else {
         auto FT = FunctionType::get(Type::getVoidTy(pgcstack->getContext()), false);
-        auto F = M->getOrInsertFunction("jl_get_pgcstack", FT).getCallee();
+        auto F = M->getOrInsertFunction("jl_get_pgcstack_resolved", FT).getCallee();
         pgcstack->setCalledFunction(pgcstack->getFunctionType(), F);
         set_pgcstack_attrs(pgcstack);
     }
