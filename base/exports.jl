@@ -177,6 +177,7 @@ export
     DimensionMismatch,
     EOFError,
     InvalidStateException,
+    IOError,
     KeyError,
     MissingException,
     ProcessFailedException,
