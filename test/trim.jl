@@ -83,18 +83,12 @@ c_compiler() = something(Sys.which("cc"), Sys.which("clang"), Sys.which("gcc"), 
                     run_juliac(String["--output-exe", lowercase(name), "--trim=safe",
                                       "--experimental", projdir, "--bundle", outdir])
                 end
-                # Verify the build with the project's test script.
-                #
-                # Running it in a subprocess lets test-only deps (e.g. JSON) resolve from
-                # the project env, and a failing `@testset` propagates via the exit code.
-                verify_cmd = addenv(`$(Base.julia_cmd()) --startup-file=no --history-file=no --depwarn=error --project=$projdir $(joinpath(projdir, "runtests.jl")) $outdir`,
-                                    "JULIA_DEPOT_PATH" => depot_env())
-                mktemp() do logpath, logio
-                    if !success(run(pipeline(ignorestatus(verify_cmd); stdout=logio, stderr=logio)))
-                        print(stderr, read(logpath, String))
-                        error("trim verification failed for `$name`")
-                    end
-                end
+                # Verify the build with the project's test script. Running it in a
+                # subprocess lets test-only deps (e.g. JSON) resolve from the project
+                # env, and a failing `@testset` propagates via the exit code.
+                run(addenv(`$(Base.julia_cmd()) --startup-file=no --history-file=no --depwarn=error
+                            --project=$projdir $(joinpath(projdir, "runtests.jl")) $outdir`,
+                           "JULIA_DEPOT_PATH" => depot_env()))
             finally
                 append!(empty!(ARGS), saved_args)
                 rm(outdir; recursive=true, force=true)

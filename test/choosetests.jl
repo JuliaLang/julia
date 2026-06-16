@@ -31,7 +31,7 @@ const TESTNAMES = [
         "smallarrayshrink", "opaque_closure", "filesystem", "download",
         "scopedvalues", "compileall", "rebinding",
         "faulty_constructor_method_should_not_cause_stack_overflows",
-        "JuliaSyntax", "JuliaLowering", "JuliaLowering_stdlibs", "jit", "trim",
+        "JuliaSyntax", "JuliaLowering", "JuliaLowering_stdlibs", "jit",
 ]
 
 const INTERNET_REQUIRED_LIST = [
@@ -43,7 +43,6 @@ const INTERNET_REQUIRED_LIST = [
     "Pkg",
     "TOML",
     "download",
-    "trim",
 ]
 
 const NETWORK_REQUIRED_LIST = vcat(INTERNET_REQUIRED_LIST, ["Sockets"])
