@@ -2375,6 +2375,8 @@ CISymbolPtr *JuliaOJIT::linkCISymbol(jl_code_instance_t *CI)
 
 void JuliaOJIT::optimizeModule(Module &M)
 {
+    if (!OCache.isEnabled())
+        optimizeDLSyms(M);
     (*Optimizers)(M);
     if (!OCache.isEnabled())
         (*JITPointers)(M);
