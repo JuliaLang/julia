@@ -1610,8 +1610,7 @@ const SMALL_THRESHOLD  = 20
 @doc """
     SMALL_THRESHOLD::Integer
 
-Maximum length (currently $SMALL_THRESHOLD) for which an array is considered "small"
-for sorting—used as the base-case cutoff for recursive sorting algorithms—and for which
+Base-case cutoff (currently $SMALL_THRESHOLD) for recursive sorting algorithms, below which
 [`SMALL_ALGORITHM`](@ref) is used.
 """ SMALL_THRESHOLD
 
