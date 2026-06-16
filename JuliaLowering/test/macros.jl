@@ -517,6 +517,21 @@ end
         @test jltestset isa Test.AbstractTestSet
         @test jltestset.n_passed == 1
     end
+
+    # aliasscope
+    @test jl_eval(
+        test_mod,
+        :(function simple_aliasscope(A, B)
+              Base.Experimental.@aliasscope @inbounds for I in eachindex(A, B)
+                  A[I] = Base.Experimental.Const(B)[I]
+              end
+              return 0
+          end)) isa Function
+    @test jl_eval(
+        test_mod,
+        :(let A = [1,2,3], B = [4,5,6]
+              simple_aliasscope(A,B), A, B
+          end)) == (0, [4,5,6], [4,5,6])
 end
 
 @testset "empty meta" begin

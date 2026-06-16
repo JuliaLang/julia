@@ -572,6 +572,45 @@ end
     test_arg_unspecialized(test_mod.f_body_nospecialize_nontrivial_sig2, 1)
     test_arg_specialized(test_mod.f_body_nospecialize_nontrivial_sig2, 2)
 
+    # callable type: should compile, but nospecialize doesn't do anything
+    @test JuliaLowering.include_string(test_mod, """
+    struct nospecialize_callable_type; field; end
+    (@nospecialize(x::nospecialize_callable_type))() = (x.field,)
+    nospecialize_callable_type(0)()
+    """) == (0,)
+    @test JuliaLowering.include_string(test_mod, """
+    (@nospecialize(::nospecialize_callable_type))(x::Int) = (x,)
+    nospecialize_callable_type(0)(1)
+    """) == (1,)
+    @test JuliaLowering.include_string(test_mod, """
+    (@nospecialize(_::nospecialize_callable_type))(x::Int, y::Int) = (x,y)
+    nospecialize_callable_type(0)(1,2)
+    """) == (1,2)
+    @test JuliaLowering.include_string(test_mod, """
+    function (self::nospecialize_callable_type)(x::Int, y::Int, z::Int)
+        @nospecialize self
+        (self.field,x,y,z)
+    end
+    nospecialize_callable_type(0)(1,2,3)
+    """) == (0,1,2,3)
+    @test JuliaLowering.include_string(test_mod, """
+    (@nospecialize((;field)::nospecialize_callable_type))(x::Int, y::Int, z::Int, a::Int) = (field,x,y,z,a)
+    nospecialize_callable_type(0)(1,2,3,4)
+    """) == (0,1,2,3,4)
+    @test_throws LoweringError JuliaLowering.include_string(test_mod, """
+    (@nospecialize(x)::nospecialize_callable_type)() = 1
+    """)
+
+    # function name: should compile, but nospecialize doesn't do anything
+    @test_broken JuliaLowering.include_string(test_mod, """
+    (@nospecialize(_))(x::Int) = ()
+    func_nospecialize_self(1)
+    """) == ()
+    @test JuliaLowering.include_string(test_mod, """
+    (@nospecialize(func_nospecialize_self))(x::Int) = (x,)
+    func_nospecialize_self(1)
+    """) == (1,)
+
     # all positional arg forms
     @testset for arg0 in [:x, :(x::Type), :(::Type), :(_), :(_::Type)],
         arg1 in [arg0, Expr(:..., arg0)],
@@ -598,6 +637,18 @@ end
             test_arg_unspecialized(f, 1)
         end
     end
+
+    # nospecialize should still compile where flisp drops it
+    @test jl_eval(
+        test_mod,
+        :(let bad(@nospecialize(x) = 1) = x
+              (bad(0), bad())
+          end)) == (0, 1)
+    @test jl_eval(
+        test_mod,
+        :(let bad(@nospecialize(x::Int) = 1) = x
+              (bad(0), bad())
+          end)) == (0, 1)
 
     @testset "kwargs" for expander in [fl_macroexpand, (_,x)->x]
         local f
@@ -647,6 +698,39 @@ end
         Core.@latestworld
         @test f(1, kw=2, a=3) == (1,:kw=>2,:a=>3)
         test_arg_specialized(f, 1)
+    end
+
+    # macros already mark all non-internal args nospecialize
+    @testset "macro definitions" begin
+        @gensym sym
+        @test jl_eval(test_mod, :(macro $sym(@nospecialize(x)); end)) isa Function
+        @gensym sym
+        @test jl_eval(test_mod, :(macro $sym(@nospecialize(x::Int)); end)) isa Function
+        @gensym sym
+        @test jl_eval(test_mod, :(macro $sym(@nospecialize(x=1)); end)) isa Function
+        @gensym sym
+        @test jl_eval(test_mod, :(macro $sym(@nospecialize(x::Int=1)); end)) isa Function
+
+        @gensym sym
+        @test jl_eval(test_mod, :(macro $sym(x); @nospecialize(); end)) isa Function
+
+        @gensym sym
+        @test jl_eval(test_mod, :(macro $sym(x); @nospecialize(x); x; end)) isa Function
+        @gensym sym
+        @test jl_eval(test_mod, :(macro $sym(x::Int); @nospecialize(x); x; end)) isa Function
+        @gensym sym
+        @test jl_eval(test_mod, :(macro $sym(x=1); @nospecialize(x); x; end)) isa Function
+        @gensym sym
+        @test jl_eval(test_mod, :(macro $sym(x::Int=1); @nospecialize(x); x; end)) isa Function
+
+        @gensym sym
+        @test jl_eval(test_mod, :(macro $sym(@nospecialize(_)); end)) isa Function
+        @gensym sym
+        @test jl_eval(test_mod, :(macro $sym(@nospecialize(_::Int)); end)) isa Function
+        @gensym sym
+        @test jl_eval(test_mod, :(macro $sym(@nospecialize(_=1)); end)) isa Function
+        @gensym sym
+        @test jl_eval(test_mod, :(macro $sym(@nospecialize(_::Int=1)); end)) isa Function
     end
 end
 
@@ -1359,15 +1443,85 @@ end
     @test JL.include_string(test_mod, "(((a::T=0;b=2)   where T<:U where U<:Any) ->(a,b))(1;b=3)") == (1,3)
     @test_throws LoweringError JL.include_string(test_mod, "(a=0;b=2;c=3)->nothing")
 
-    # `...` is the only real bad form with (function (tuple _...) _) forms
+    # `...` is the only parser-reachable bad form with (function notcall _) forms
     @test JL.include_string(test_mod, "(function (a...); (a...,); end)(1,2,3)") == (1,2,3)
+    @test JL.include_string(test_mod, "(function (a::Int...); (a...,); end)(1,2,3)") == (1,2,3)
     # test with where: need empty tv list to avoid unused sparam warning
-    ex = Expr(:call,
-              Expr(:function, Expr(:where, Expr(:where, Expr(:..., :a))),
-                   Expr(:block, Expr(:tuple, Expr(:..., :a)))),
-              1,2,3)
-    @test jl_eval(test_mod, ex) == (1,2,3)
+    @test jl_eval(test_mod,
+                  Expr(:call,
+                       Expr(:function, Expr(:where, Expr(:where, Expr(:..., :a))),
+                            Expr(:block, Expr(:tuple, Expr(:..., :a)))),
+                       1,2,3)) == (1,2,3)
     @test JL.include_string(test_mod, "(function (a::T) where T<:U where U<:Any; a; end)(1)") == 1
+    @test JL.include_string(test_mod, "(function (a::T...) where T<:U where U<:Any; a; end)(1,2,3)") == (1,2,3)
+end
+
+@testset "Consequences of accepting badly-parsed anonymous forms" begin
+    # empty block
+    @test jl_eval(test_mod,
+                  Expr(:call,
+                       Expr(:function, Expr(:block),
+                            Expr(:block, Expr(:tuple))),
+                       )) == ()
+
+    # unwrapped or block-wrapped arg
+    @testset for a1 in [:a, Expr(:(::), :a, :Int)],
+        a2 in [a1, Expr(:(=), :a, 0)],
+        wrap_where in [identity, x->Expr(:where, x), x->Expr(:where, Expr(:where, x))]
+
+        @test jl_eval(test_mod,
+                      Expr(:call,
+                           Expr(:function, wrap_where(a2),
+                                Expr(:block, Expr(:tuple, :a))),
+                           1)) == (1,)
+        @test jl_eval(test_mod,
+                      Expr(:call,
+                           Expr(:function, wrap_where(Expr(:block, a2)),
+                                Expr(:block, Expr(:tuple, :a))),
+                           1)) == (1,)
+    end
+
+    # two-arg block
+    @test jl_eval(test_mod,
+                  Expr(:call,
+                       Expr(:function, Expr(:block, :a, :b),
+                            Expr(:block, Expr(:tuple, :a, :b))),
+                       1, Expr(:kw, :b, 2))) == (1,2)
+end
+
+@testset "assignment to where-wrapped-tuple" begin
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(((a,b,c::T)     where T<:U where U<:Any) = (a,b,c))(1,2,3)") == (1,2,3)
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(((a,b=0,c::T=0) where T<:U where U<:Any) = (a,b,c))(1)") == (1,0,0)
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(((a,b=0,c::T=0) where T<:U where U<:Any) = (a,b,c))(1,2)") == (1,2,0)
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(((a,b=0,c::T=0) where T<:U where U<:Any) = (a,b,c))(1,2,3)") == (1,2,3)
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(((a::T...)      where T<:U where U<:Any) = (a...,))(1,2,3)") == (1,2,3)
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(((a::T;)        where T<:U where U<:Any) = a)(1)") == 1
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(((a::T;b=2)     where T<:U where U<:Any) = (a,b))(1)") == (1,2)
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(((a::T;b=2)     where T<:U where U<:Any) = (a,b))(1;b=3)") == (1,3)
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(((a::T=0;b=2)   where T<:U where U<:Any) = (a,b))()") == (0,2)
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(((a::T=0;b=2)   where T<:U where U<:Any) = (a,b))(1)") == (1,2)
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(((a::T=0;b=2)   where T<:U where U<:Any) = (a,b))(;b=3)") == (0,3)
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(((a::T=0;b=2)   where T<:U where U<:Any) = (a,b))(1;b=3)") == (1,3)
+    @test_throws LoweringError JL.include_string(
+        test_mod, "(a=0;b=2;c=3) where T = nothing")
+    @test_throws LoweringError jl_eval(
+        test_mod,
+        Expr(:call,
+             Expr(:(=), Expr(:where, Expr(:where, Expr(:..., :a))),
+                  Expr(:block, Expr(:tuple, Expr(:..., :a)))),
+             1,2,3)) == (1,2,3)
 end
 
 @testset "Assigned-to arguments" begin

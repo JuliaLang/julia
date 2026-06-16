@@ -1271,48 +1271,38 @@ function expand_assignment(ctx, ex, is_const=false)
     lhs = ex[1]
     rhs = ex[2]
     kl = kind(lhs)
-    if kind(ex) == K"function"
-        # `const f() = ...` - The `const` here is inoperative, but the syntax
-        # happened to work in earlier versions, so simply strip `const`.
-        expand_forms_2(ctx, ex[1])
-    elseif kl == K"curly"
+    if kl == K"curly"
         expand_unionall_def(ctx, ex, lhs, rhs, is_const)
     elseif kind(rhs) == K"="
         # Expand chains of assignments
-        # a = b = c  ==>  b=c; a=c
+        # a = b = rhs  ==>  rr=rhs; b=rr; a=rr
         stmts = SyntaxList(ctx)
-        push!(stmts, lhs)
-        while kind(rhs) == K"="
-            push!(stmts, rhs[1])
-            rhs = rhs[2]
+        rhs_end = rhs; while kind(rhs_end) === K"="
+            rhs_end = rhs_end[2]
         end
-        if is_identifier_like(rhs)
-            tmp_rhs = nothing
-            rr = rhs
+        if !is_identifier_like(rhs_end)
+            rr = ssavar(ctx, rhs_end, "rhs")
+            assign_rr = @ast ctx rhs_end [K"=" rr rhs_end]
         else
-            tmp_rhs = ssavar(ctx, rhs, "rhs")
-            rr = tmp_rhs
+            rr = rhs_end
+            assign_rr = nothing
+        end
+        ex_i = ex; while kind(ex_i) === K"="
+            push!(stmts, @ast ctx ex_i [K"=" ex_i[1] rr])
+            ex_i = ex_i[2]
         end
         # In const a = b = c, only a is const
-        stmts[1] = @ast ctx ex [(is_const ? K"constdecl" : K"=") stmts[1] rr]
-        for i in 2:length(stmts)
-            stmts[i] = @ast ctx ex [K"=" stmts[i] rr]
-        end
-        if !isnothing(tmp_rhs)
-            pushfirst!(stmts, @ast ctx ex [K"=" tmp_rhs rhs])
-        end
-        expand_forms_2(ctx,
-            @ast ctx ex [K"block"
-                stmts...
-                [K"removable" rr]
-            ]
-        )
+        is_const && setattr!(stmts[1], :kind, K"constdecl")
+
+        out = @ast ctx ex [K"block" assign_rr reverse!(stmts)... [K"removable" rr]]
+        expand_forms_2(ctx, out)
     elseif kl == K"ssavalue"
         sink_assignment(ctx, ex, _resolve_ssavalue(ctx, lhs), expand_forms_2(ctx, rhs))
     elseif is_identifier_like(lhs)
         if is_const
+            rr = ssavar(ctx, ex)
             @ast ctx ex [K"block"
-                rr := expand_forms_2(ctx, rhs)
+                sink_assignment(ctx, ex, rr, expand_forms_2(ctx, rhs))
                 [K"constdecl" lhs rr]
                 [K"removable" rr]
             ]
@@ -1358,7 +1348,8 @@ function expand_assignment(ctx, ex, is_const=false)
             expand_forms_2(ctx, @ast ctx ex [K"const"
                 [K"="
                      lhs[1]
-                     convert_for_type_decl(ctx, ex, rhs, T, true)
+                     kind(lhs[1]) === K"Placeholder" ? rhs :
+                        convert_for_type_decl(ctx, ex, rhs, T, true)
                  ]])
         elseif is_identifier_like(x)
             # Identifier in lhs[1] is a variable type declaration, eg
@@ -1367,7 +1358,7 @@ function expand_assignment(ctx, ex, is_const=false)
                 if kind(x) !== K"Placeholder"
                      [K"decl" x T]
                 end
-                is_const ? [K"const" [K"=" x rhs]] : [K"=" x rhs]
+                [K"=" x rhs]
             ]
         else
             # Otherwise just a type assertion, eg
@@ -1538,9 +1529,13 @@ function expand_let(ctx, ex)
                 end
                 blk = @ast ctx binding [K"block"
                     tmp := rhs
-                    type := lhs[2]
+                    # type := lhs[2]
                     [K"scope_block"(ex, scope_type=scope_type)
-                        [K"local"(lhs) [K"::" var type]]
+                        # n.b. the declared type is referenced directly (not
+                        # hoisted into a temporary) so that the declaration
+                        # works for variables captured into other lambdas, where
+                        # it is re-evaluated at each assignment like flisp does
+                        [K"local"(lhs) [K"::" var lhs[2]]]
                         [K"always_defined" var]
                         [K"="(binding) var tmp]
                         blk
@@ -2180,6 +2175,7 @@ function make_lhs_decls(ctx, stmts, declkind, declmeta, ex, type_decls=true)
             make_lhs_decls(ctx, stmts, declkind, declmeta, x, type_decls)
         end
         [K"..." x] -> nothing # from recursion above
+        [K"ref" _ _...] -> nothing # decl is ignored; syntax TODO
     end
 
     if !isnothing(declname)
@@ -2232,32 +2228,28 @@ function foreach_lhs_name(f::Function, ex)
 end
 
 function expand_const_decl(ctx, ex)
-    k = kind(ex[1])
     if numchildren(ex) == 2
         # pre-desugared const
-        @ast ctx ex [K"constdecl" ex[1] ex[2]]
-    elseif k == K"global"
-        asgn = ex[1][1]
-        @jl_assert (kind(asgn) == K"=" || kind(asgn) == K"function") (ex, "expected assignment after `const`")
-        globals = SyntaxList(ctx)
-        foreach_lhs_name(asgn[1]) do x
-            push!(globals, @ast ctx ex [K"global" x])
+        return @ast ctx ex [K"constdecl" ex[1] ex[2]]
+    end
+    @stm ex[1] begin
+        # const is ignored on function
+        [K"function" _ _] -> expand_forms_2(ctx, ex[1])
+        [K"global" [K"function" _ _]] -> expand_forms_2(ctx, ex[1])
+
+        [K"global" x] -> let decls = SyntaxList(ctx)
+            @jl_assert kind(x) === K"=" ex
+            make_lhs_decls(
+                ctx, decls, K"global", get(ex[1], :meta, nothing), x[1], false)
+            ex2 = @ast ctx ex [K"const" x]
+            @ast ctx ex [K"block" decls... expand_const_decl(ctx, ex2)]
         end
-        @ast ctx ex [K"block"
-            globals...
-            expand_assignment(ctx, asgn, true)
-        ]
-    elseif k == K"=" || k == K"function"
-        expand_assignment(ctx, ex[1], true)
-    elseif k == K"Identifier" || k == K"Value"
+        [K"=" _ _] -> expand_assignment(ctx, ex[1], true)
         # Expr(:const, v) where v is a Symbol or a GlobalRef is an unfortunate
         # remnant from the days when const-ness was a flag that could be set on
         # any global.  It creates a binding with kind PARTITION_KIND_UNDEF_CONST.
         # TODO: deprecate and delete this "feature"
-        @jl_assert numchildren(ex) == 1 ex
-        @ast ctx ex [K"constdecl" ex[1]]
-    else
-        @jl_assert false ex
+        [K"Identifier"] -> @ast ctx ex [K"constdecl" ex[1]]
     end
 end
 
@@ -2780,7 +2772,7 @@ function expand_function_arg1(ctx, arg)
         return true, arg[1], x
     end
     aname = @stm arg begin
-        [K"::" n t] -> n
+        [K"::" [K"Identifier"] t] -> arg[1]
         _ -> newsym(ctx, arg, "#self#")
     end
     atype = @stm arg begin
@@ -2957,11 +2949,11 @@ function expand_macro_def(ctx, ex)
                 [K"::"
                     # TODO: should we be adopting the scope of the K"macro" expression itself?
                     adopt_scope(@ast(ctx, sig, "__source__"::K"Identifier"), scope_ref)
-                    LineNumberNode::K"Value"
+                    "LineNumberNode"::K"core"
                 ]
                 [K"::"
                     adopt_scope(@ast(ctx, sig, "__module__"::K"Identifier"), scope_ref)
-                    Module::K"Value"
+                    "Module"::K"core"
                 ]
                 mapsyntax(e->apply_arg_meta(e, :nospecialize), args)...
             ]
@@ -3136,7 +3128,7 @@ function _match_struct_field(x0)
     x = x0
     while true
         k = kind(x)
-        if k == K"Identifier"
+        if k == K"Identifier" || k == K"Placeholder"
             return (name=x, type=type, atomic=atomic, _const=_const, docs=docs)
         elseif k == K"::" && numchildren(x) == 2
             isnothing(type) || throw(LoweringError(x0, "multiple types in struct field"))
@@ -3162,8 +3154,6 @@ function _collect_struct_fields(ctx, field_names, field_types, field_attrs, fiel
         if kind(e) == K"block"
             _collect_struct_fields(ctx, field_names, field_types, field_attrs, field_docs,
                                    inner_defs, children(e))
-        elseif kind(e) == K"="
-            throw(LoweringError(e, "assignment syntax in structure fields is reserved"))
         else
             m = _match_struct_field(e)
             if !isnothing(m)
@@ -3317,7 +3307,9 @@ end
 #
 #     (t::Type{X{A,B}})() = new()
 function rewrite_ctor(ctx, ex, tname, global_tname, struct_typevars, field_types)
+    is_leaf(ex) && return ex
     @stm ex begin
+        [K"inert" _] -> ex
         [K"function" call body] -> let (sig, wheres) = flatten_wheres(call)
             call2, ctor_self =
                 rewrite_ctor_sig(ctx, sig, tname, global_tname, struct_typevars, wheres)

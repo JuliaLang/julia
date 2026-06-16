@@ -14,8 +14,35 @@ begin
 end
 """) === 1.0
 
-# Global decl in value position without assignment returns nothing
-@test JuliaLowering.include_string(test_mod, "global x_no_assign") === nothing
+@testset "global decl in value position" begin
+    # Global decl in value position without assignment returns nothing
+    @test JuliaLowering.include_string(test_mod, "global x_no_assign") === nothing
+
+    # In tail position in a function is OK; returns nothing
+    @test JuliaLowering.include_string(test_mod, """
+    function f_tail_global_decl()
+        global x_tail_decl
+    end
+    f_tail_global_decl()
+    """) === nothing
+    @test Base.binding_kind(test_mod, :x_tail_decl) == Base.PARTITION_KIND_DECLARED
+    @test JuliaLowering.include_string(test_mod, """
+    function f_tail_global_decl_2(b)
+        if b
+            global x_tail_decl2, x_tail_decl3
+        end
+    end
+    (f_tail_global_decl_2(true), f_tail_global_decl_2(false))
+    """) === (nothing, nothing)
+    @test JuliaLowering.include_string(test_mod, "(() -> (global x_tail_decl4))()") === nothing
+
+    # disallowed in value position otherwise
+    @test_throws LoweringError JuliaLowering.include_string(test_mod, """
+    function f_value_global_decl()
+        y = (global x_value_decl)
+    end
+    """)
+end
 
 # Unadorned declarations
 @test JuliaLowering.include_string(test_mod, """
@@ -36,26 +63,67 @@ let
 end
 """) === (1, 20)
 
-# Global const mixes
-@test JuliaLowering.include_string(test_mod, "global x_g = 1") === 1
-@test Base.isdefinedglobal(test_mod, :x_g)
-@test !Base.isconst(test_mod, :x_g)
-@test test_mod.x_g === 1
+@testset "Global const mixes" for (mod, run) in [(Module(), fl_eval),
+                                                 (Module(), jl_eval)]
 
-@test JuliaLowering.include_string(test_mod, "const x_c = 1") === 1
-@test Base.isdefinedglobal(test_mod, :x_c)
-@test Base.isconst(test_mod, :x_c)
-@test test_mod.x_c === 1
+    @gensym sym
+    @test run(mod, :(const $sym = 1)) === 1
+    Core.@latestworld
+    @test Base.isdefinedglobal(mod, sym)
+    @test Base.isconst(mod, sym)
+    @test getproperty(mod, sym) === 1
 
-@test JuliaLowering.include_string(test_mod, "global const x_gc = 1") === 1
-@test Base.isdefinedglobal(test_mod, :x_gc)
-@test Base.isconst(test_mod, :x_gc)
-@test test_mod.x_gc === 1
+    @gensym sym
+    @test_broken run(mod, :(const $sym::Int = 1.0)) === 1.0
+    Core.@latestworld
+    @test Base.isdefinedglobal(mod, sym)
+    @test Base.isconst(mod, sym)
+    @test getproperty(mod, sym) === 1
 
-@test JuliaLowering.include_string(test_mod, "const global x_cg = 1") === 1
-@test Base.isdefinedglobal(test_mod, :x_cg)
-@test Base.isconst(test_mod, :x_cg)
-@test test_mod.x_cg === 1
+    @testset for wrap in [identity, x->Expr(:let, Expr(:block), Expr(:block, x))]
+        @gensym sym
+        @test run(mod, wrap(:(global $sym = 1))) === 1
+        Core.@latestworld
+        @test Base.isdefinedglobal(mod, sym)
+        @test !Base.isconst(mod, sym)
+        @test getproperty(mod, sym) === 1
+
+        @gensym sym
+        @test run(mod, wrap(:(global $sym::Int = 1.0))) === 1.0
+        Core.@latestworld
+        @test Base.isdefinedglobal(mod, sym)
+        @test !Base.isconst(mod, sym)
+        @test getproperty(mod, sym) === 1
+
+        @gensym sym
+        @test run(mod, wrap(:(global const $sym = 1))) === 1
+        Core.@latestworld
+        @test Base.isdefinedglobal(mod, sym)
+        @test Base.isconst(mod, sym)
+        @test getproperty(mod, sym) === 1
+
+        @gensym sym
+        @test_broken run(mod, wrap(:(global const $sym::Int = 1.0))) === 1.0
+        Core.@latestworld
+        @test Base.isdefinedglobal(mod, sym)
+        @test Base.isconst(mod, sym)
+        @test getproperty(mod, sym) === 1
+
+        @gensym sym
+        @test run(mod, wrap(:(const global $sym = 1))) === 1
+        Core.@latestworld
+        @test Base.isdefinedglobal(mod, sym)
+        @test Base.isconst(mod, sym)
+        @test getproperty(mod, sym) === 1
+
+        @gensym sym
+        @test_broken run(mod, wrap(:(const global $sym::Int = 1.0))) === 1.0
+        Core.@latestworld
+        @test Base.isdefinedglobal(mod, sym)
+        @test Base.isconst(mod, sym)
+        @test getproperty(mod, sym) === 1
+    end
+end
 
 # lowering is strict about the nesting order where parsing is not
 @test_throws LoweringError jl_eval(test_mod, Expr(:global, Expr(:const, Expr(:(=), :a, 1))))
@@ -146,6 +214,8 @@ end
     @test JuliaLowering.include_string(test_mod, "let; local _::Int = 1; end") === 1
     @test JuliaLowering.include_string(test_mod, "let; local (a0, _, a2) = [1,2,3]; end") == [1,2,3]
     @test JuliaLowering.include_string(test_mod, "let; local (a0, _::Int, a2) = [1,2,3]; end") == [1,2,3]
+    @test JuliaLowering.include_string(test_mod, "_{x} = Vector{x}") == Vector
+    @test !Base.isdefinedglobal(test_mod, :_)
 end
 
 test_mod_2 = Module()
@@ -190,8 +260,9 @@ end
     # const
     @gensym func func2
     @testset let ex = Expr(:const, Expr(:(=), Expr(:call, func, :x), :x))
-        @test_broken jl_eval(test_mod, ex) isa Function
-        @test_broken getproperty(test_mod, func)(1) == 1
+        @test jl_eval(test_mod, ex) isa Function
+        Core.@latestworld
+        @test getproperty(test_mod, func)(1) == 1
     end
 
     # global
@@ -205,7 +276,17 @@ end
         @test getproperty(test_mod, func2)(1) == 2
     end
 
-    # const global
+    # const global 1-arg
+    @gensym func func2
+    @testset let ex = Expr(:const,
+                           Expr(:global,
+                                Expr(:(=), Expr(:call, func, :x), :x)))
+        @test jl_eval(test_mod, ex) isa Function
+        Core.@latestworld
+        @test getproperty(test_mod, func)(1) == 1
+    end
+
+    # const global 2-arg (should probably disallow)
     @gensym func func2
     @testset let ex = Expr(:const,
                            Expr(:global,
@@ -230,7 +311,16 @@ end
         @test getproperty(test_mod, func2)(1) == 2
     end
 
-    # const global in local scope
+    @gensym func func2
+    @testset let ex = Expr(:let, Expr(:block),
+                           Expr(:const,
+                                Expr(:global,
+                                     Expr(:(=), Expr(:call, func, :x), :x))))
+        @test jl_eval(test_mod, ex) isa Function
+        Core.@latestworld
+        @test getproperty(test_mod, func)(1) == 1
+    end
+    # const global in local scope 2-arg (should probably disallow)
     @gensym func func2
     @testset let ex = Expr(:let, Expr(:block),
                            Expr(:const,
@@ -275,15 +365,23 @@ end
         @test !isdefined(test_mod, sym)
     end
 
-    # ref form: decl is ignored (syntax TODO)
+    # ref form: decl is ignored, but assignment works (syntax TODO)
     @gensym sym
     @testset let ex =
         Expr(:let, Expr(:block),
              Expr(:block,
-                  Expr(declkind, Expr(:(=), sym, [1,2,3])),
+                  Expr(declkind, Expr(:(=), Expr(:ref, sym), 0))))
+        @test_throws UndefVarError jl_eval(test_mod, ex)
+        Core.@latestworld
+        @test !isdefined(test_mod, sym)
+    end
+    @testset let ex =
+        Expr(:let, Expr(:block),
+             Expr(:block,
+                  Expr(:(=), sym, [1,2,3]),
                   Expr(declkind, Expr(:(=), Expr(:ref, sym, 2), 0)),
                   Expr(:tuple, sym)))
-        @test_broken jl_eval(test_mod, ex) == ([1,0,3],)
+        @test jl_eval(test_mod, ex) == ([1,0,3],)
         Core.@latestworld
         @test !isdefined(test_mod, sym)
     end
@@ -371,6 +469,17 @@ end
     @test_throws LoweringError jl_lower(test_mod, ex)
     ex = Expr(:const, Expr(:(.+=), :x, 1))
     @test_throws LoweringError jl_lower(test_mod, ex)
+
+    # placeholder
+    @test jl_eval(test_mod, :(const _ = 1)) === 1
+    @test jl_eval(test_mod, :(const _ = _ = __ = ___ = 1)) === 1
+    @test jl_eval(test_mod, :(const _::Int = 1.0)) === 1.0
+    @test jl_eval(test_mod, :(const _{x} = Vector{x})) == Vector
+    @test jl_eval(test_mod, :(const (_, _::Int, _{x}) = 1, 2, Vector)) == (1, 2, Vector)
+    Core.@latestworld
+    @test !Base.isdefinedglobal(Main, :_)
+    @test !Base.isdefinedglobal(Main, :__)
+    @test !Base.isdefinedglobal(Main, :___)
 
     # pre-desugared const
     @gensym sym
@@ -495,6 +604,19 @@ end
         @test getproperty(test_mod, sym2) == (2, 22, 222)
         @test getproperty(test_mod, sym3) == 3
     end
+
+    # curly
+    @gensym sym1 sym2
+    @testset let ex = Expr(:const,
+                           Expr(:(=), Expr(:curly, sym1, sym2),
+                                Expr(:curly, Vector, sym2)))
+        @test jl_eval(test_mod, ex) == Vector
+        Core.@latestworld
+
+        @test Base.binding_kind(test_mod, sym1) == Base.PARTITION_KIND_CONST
+        @test !Base.isdefinedglobal(test_mod, sym2)
+        @test getproperty(test_mod, sym1){Int} == Vector{Int}
+    end
 end
 
 gr_mod = Module()
@@ -508,6 +630,37 @@ gr_mod = Module()
     @test !Base.isdefinedglobal(test_mod, sym)
     # test gr as a value
     @test 1 == jl_eval(test_mod, Expr(:block, GlobalRef(gr_mod, sym)))
+
+    # gr resolves when a similar local is in scope
+    @gensym sym
+    Base.eval(gr_mod, Expr(:(=), sym, "gr"))
+    @test ("let-local", "gr") == jl_eval(
+        test_mod, Expr(:let, Expr(:block, Expr(:(=), sym, "let-local")),
+                       Expr(:tuple, sym, GlobalRef(gr_mod, sym))))
+    @test !Base.isdefinedglobal(test_mod, sym)
+
+    @test ("let-local", "gr reassigned") == jl_eval(
+        test_mod, Expr(:let, Expr(:block, Expr(:(=), sym, "let-local")),
+                       Expr(:block,
+                            Expr(:(=), GlobalRef(gr_mod, sym), "gr reassigned"),
+                            Expr(:tuple, sym, GlobalRef(gr_mod, sym)))))
+    @test !Base.isdefinedglobal(test_mod, sym)
+    @test getproperty(gr_mod, sym) == "gr reassigned"
+
+    @test ("let-local", "gr reassigned twice") == jl_eval(
+        test_mod, Expr(:let, Expr(:block, Expr(:(=), sym, "let-local")),
+                       Expr(:block,
+                            Expr(:(*=), GlobalRef(gr_mod, sym), " twice"),
+                            Expr(:tuple, sym, GlobalRef(gr_mod, sym)))))
+    @test !Base.isdefinedglobal(test_mod, sym)
+    @test getproperty(gr_mod, sym) == "gr reassigned twice"
+
+    @test ("lambda-local", "gr reassigned twice") == jl_eval(
+        test_mod, Expr(:let, Expr(:block, Expr(:(=), sym, "let-local")),
+                       Expr(:call,
+                            Expr(:->, Expr(:tuple, Expr(:kw, sym, "lambda-local")),
+                                 Expr(:block, Expr(:tuple, sym, GlobalRef(gr_mod, sym)))))))
+    @test !Base.isdefinedglobal(test_mod, sym)
 
     # gr1 = gr2 = gr3 = gr4 = 1
     @gensym sym1 sym2 sym3 sym4

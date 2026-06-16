@@ -138,6 +138,7 @@ function setup_ir_test_module(preamble)
 end
 
 function format_ir_for_test(mod, case)
+    @assert !case.is_broken
     ex = parsestmt(SyntaxTree, case.input)
     try
         if (kind(ex) == K"macrocall" && kind(ex[1]) == K"Identifier" &&
@@ -158,8 +159,6 @@ function format_ir_for_test(mod, case)
         elseif case.expect_error && (exc isa LoweringError)
             return sprint(io->Base.showerror(io, exc, show_detail=false))
         elseif case.expect_error && (exc isa MacroExpansionError)
-            return sprint(io->Base.showerror(io, exc))
-        elseif case.is_broken
             return sprint(io->Base.showerror(io, exc))
         else
             throw("Error in test case \"$(case.description)\"")
@@ -200,7 +199,7 @@ function refresh_ir_test_cases(filename, pattern=nothing)
         println(io, "#*******************************************************************************")
     end
     for case in cases
-        if isnothing(pattern) || occursin(pattern, case.description)
+        if !case.is_broken && (isnothing(pattern) || occursin(pattern, case.description))
             ir = format_ir_for_test(test_mod, case)
             if rstrip(ir) != case.output
                 @info "Refreshing test case $(repr(case.description)) in $filename"
