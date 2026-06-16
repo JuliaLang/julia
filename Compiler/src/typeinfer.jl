@@ -824,30 +824,7 @@ function store_backedges(caller::CodeInstance, edges::SimpleVector)
     nothing
 end
 
-# When `callee` (not in the global MI cache) is being replaced by an equivalent `cached`
-# (in the MI cache) for JIT compilation, ensure callee will be properly invalidated if
-# cached is invalidated later. We do this by making callee depend on cached (adding cached
-# to callee.edges) and registering callee in cached's MI backedges.
-function link_ci_equiv!(callee::CodeInstance, cached::CodeInstance)
-    callee === cached && return true
-    mi = get_ci_mi(cached)
-    isa(mi.def, Method) || return true
-    # check if callee already has cached in its edges
-    old_edges = callee.edges::SimpleVector
-    for e in old_edges
-        e === cached && return true
-    end
-    validation_world = get_world_counter()
-    if callee.max_world > validation_world
-        # append cached to callee's edges so _invalidate_backedges can find it by identity
-        new_edges = Core.svec(old_edges..., cached)
-        @atomic :release callee.edges = new_edges
-        # register callee in cached's MI backedges so invalidation of cached propagates to callee
-        store_backedges(callee, Core.svec(cached))
-    end
-    # after storing new backedges, use method if it is still legal
-    return cached.max_world > callee.max_world
-end
+link_ci_equiv!(callee::CodeInstance, cached::CodeInstance) = !iszero(ccall(:jl_link_ci_equiv, Cint, (Any, Any), callee, cached))
 
 function compute_edges!(sv::InferenceState)
     edges = sv.edges

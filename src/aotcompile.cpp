@@ -841,8 +841,11 @@ static void aot_link_output(jl_codegen_output_t &out)
             continue;
 
         auto it = out.ci_funcs.find(ci);
-        if (it == out.ci_funcs.end())
-            it = get_ci_equiv_compiled(ci, out.ci_funcs);
+        if (it == out.ci_funcs.end()) {
+            auto equiv = get_ci_equiv_compiled(ci, out.ci_funcs);
+            if (equiv != out.ci_funcs.end() && jl_link_ci_equiv(ci, equiv->first))
+                it = equiv;
+        }
         jl_codeinst_funcs_t<Value *> funcs;
         if (it != out.ci_funcs.end()) {
             funcs = {it->second.invoke_api, it->second.invoke, it->second.specptr};
