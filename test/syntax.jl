@@ -4726,3 +4726,23 @@ module M59755 end
     @test M59755.v6 === 5
     @test Base.binding_kind(M59755, :v6) == Base.PARTITION_KIND_CONST
 end
+
+@testset "assignment to where-expr throws unless LHS is `call`" for ex in [
+    :(x where T = 1)
+    :((x...) where T = 1)
+    Expr(:(=), Expr(:where, Expr(:block, :a, :b)), 1)
+    :((((a,b,c::T)     where T<:U where U<:Any) = (a,b,c))(1,2,3))
+    :((((a,b=0,c::T=0) where T<:U where U<:Any) = (a,b,c))(1))
+    :((((a,b=0,c::T=0) where T<:U where U<:Any) = (a,b,c))(1,2))
+    :((((a,b=0,c::T=0) where T<:U where U<:Any) = (a,b,c))(1,2,3))
+    :((((a::T...)      where T<:U where U<:Any) = (a...,))(1,2,3))
+    :((((a::T;)        where T<:U where U<:Any) = a)(1))
+    :((((a::T;b=2)     where T<:U where U<:Any) = (a,b))(1))
+    :((((a::T;b=2)     where T<:U where U<:Any) = (a,b))(1;b=3))
+    :((((a::T=0;b=2)   where T<:U where U<:Any) = (a,b))())
+    :((((a::T=0;b=2)   where T<:U where U<:Any) = (a,b))(1))
+    :((((a::T=0;b=2)   where T<:U where U<:Any) = (a,b))(;b=3))
+    :((((a::T=0;b=2)   where T<:U where U<:Any) = (a,b))(1;b=3))
+    ]
+    @test_throws "invalid assignment location" Core.eval(@__MODULE__, ex)
+end

@@ -51,6 +51,29 @@ static bool isStdAtomic(const Expr *E) {
   return E->getType()->isAtomicType();
 }
 
+// `&*p` performs no access, so a deref appearing directly under an
+// address-of (e.g. the `&(field)` of a macro called with `*slot`) is fine.
+static bool isDerefUnderAddrOf(const UnaryOperator *UOp, ASTContext &Ctx) {
+  if (UOp->getOpcode() != UO_Deref)
+    return false;
+  const Stmt *S = UOp;
+  while (true) {
+    DynTypedNodeList Parents = Ctx.getParents(*S);
+    if (Parents.empty())
+      return false;
+    const Stmt *P = Parents[0].get<Stmt>();
+    if (!P)
+      return false;
+    if (isa<ParenExpr>(P) || isa<ImplicitCastExpr>(P)) {
+      S = P;
+      continue;
+    }
+    if (const auto *POp = dyn_cast<UnaryOperator>(P))
+      return POp->getOpcode() == UO_AddrOf;
+    return false;
+  }
+}
+
 void ImplicitAtomicsChecker::reportBug(const Stmt *S, StringRef desc) {
   // try to find the "best" node to attach this to, so we generate fewer duplicate reports
   while (1) {
@@ -100,7 +123,8 @@ void ImplicitAtomicsChecker::registerMatchers(MatchFinder *Finder) {
 void ImplicitAtomicsChecker::check(const MatchFinder::MatchResult &Result) {
   if (const auto *UOp = Result.Nodes.getNodeAs<UnaryOperator>("unary-op")) {
     const Expr *Sub = UOp->getSubExpr();
-    if (isStdAtomic(UOp) || isStdAtomic(Sub))
+    if ((isStdAtomic(UOp) || isStdAtomic(Sub)) &&
+        !isDerefUnderAddrOf(UOp, *Result.Context))
       reportBug(UOp);
   }
   if (const auto *BOp = Result.Nodes.getNodeAs<BinaryOperator>("binary-op")) {

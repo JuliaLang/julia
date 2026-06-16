@@ -484,6 +484,8 @@ function _to_lowered_expr(ex::SyntaxTree)
                k == K"gc_preserve_end"   ? :gc_preserve_end   :
                k == K"foreigncall"       ? :foreigncall       :
                k == K"cfunction"         ? :cfunction         :
+               k == K"aliasscope"        ? :aliasscope        :
+               k == K"popaliasscope"     ? :popaliasscope     :
                k == K"new_opaque_closure" ? :new_opaque_closure :
                nothing
         if isnothing(head)

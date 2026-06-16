@@ -34,15 +34,22 @@ static jl_value_t *jl_type_extract_name(jl_value_t *t1 JL_PROPAGATES_ROOT, int i
         return jl_type_extract_name(((jl_tvar_t*)t1)->ub, 0);
     }
     else if (jl_is_typeeq(t1)) {
-        return (jl_value_t*)jl_type_typename;
+        // invariantly (a `T` from inside `Type{T}`, keying targ/tname) this is TypeEq's
+        // name; covariantly the key must lie on both the `typeof(arg)` and the TypeEq
+        // wrapper supertype chains that lookups walk, which intersect at `AnyType`
+        if (invariant)
+            return (jl_value_t*)jl_type_typename;
+        return (jl_value_t*)jl_anytype_type->name;
     }
-    else if (t1 == jl_bottom_type || t1 == (jl_value_t*)jl_typeofbottom_type) {
-        return (jl_value_t*)jl_typeofbottom_type->name; // put Union{} and typeof(Union{}) and Type{Union{}} together for convenience
+    else if (t1 == jl_bottom_type || (t1 == (jl_value_t*)jl_typeofbottom_type && invariant)) {
+        // group Union{} with Type{Union{}} for targ keying; a covariant typeof(Union{})
+        // is an ordinary concrete kind and files with the kinds below
+        return (jl_value_t*)jl_typeofbottom_type->name;
     }
     else if (jl_is_datatype(t1)) {
         jl_datatype_t *dt = (jl_datatype_t*)t1;
         if (jl_is_kind(t1) && !invariant)
-            return (jl_value_t*)jl_type_typename;
+            return (jl_value_t*)jl_anytype_type->name;
         return (jl_value_t*)dt->name;
     }
     else if (jl_is_uniontype(t1)) {
@@ -125,6 +132,27 @@ static int sig_match_by_type_leaf(jl_value_t **types, jl_tupletype_t *sig, size_
     return 1;
 }
 
+// Returns true if every value of type `a` is itself a type (i.e., a <: AnyType)
+static int jl_subtype_anytype(jl_value_t *a) JL_NOTSAFEPOINT
+{
+    while (1) {
+        if (a == (jl_value_t*)jl_anytype_type || jl_is_kind(a) || jl_is_typeeq(a))
+            return 1;
+        else if (jl_is_unionall(a))
+            a = jl_unwrap_unionall(a);
+        else if (jl_is_uniontype(a)) {
+            jl_uniontype_t *u = (jl_uniontype_t*)a;
+            if (!jl_subtype_anytype(u->a))
+                return 0;
+            a = u->b;
+        }
+        else if (jl_is_typevar(a))
+            a = ((jl_tvar_t*)a)->ub;
+        else
+            return 0;
+    }
+}
+
 static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t *sig, size_t lensig, int va)
 {
     size_t i;
@@ -132,40 +160,36 @@ static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t
     for (i = 0; i < lensig; i++) {
         jl_value_t *decl = jl_tparam(sig, i);
         jl_value_t *a = types[i];
-        jl_value_t *unw = jl_is_unionall(decl) ? ((jl_unionall_t*)decl)->body : decl;
         if (jl_is_vararg(a))
             return 0;
-        if (jl_is_typeeq(unw)) {
-            jl_value_t *tp0 = jl_typeeq_T(unw);
+        if (jl_is_typeeq(decl)) {
+            jl_value_t *tp0 = jl_typeeq_T(decl);
             if (jl_is_typeeq(a)) {
-                if (jl_is_typevar(tp0)) {
-                    // in the case of Type{_}, the types don't have to match exactly.
-                    // this is cached as `Type{T} where T`.
-                    if (((jl_tvar_t*)tp0)->ub != (jl_value_t*)jl_any_type &&
-                        !jl_subtype(jl_typeeq_T(a), ((jl_tvar_t*)tp0)->ub))
-                        return 0;
-                }
-                else if (!jl_types_equal(jl_typeeq_T(a), tp0)) {
+                if (!jl_types_equal(jl_typeeq_T(a), tp0))
                     return 0;
-                }
             }
-            else if (!jl_is_kind(a) || !jl_is_typevar(tp0) || ((jl_tvar_t*)tp0)->ub != (jl_value_t*)jl_any_type) {
-                // manually unroll jl_subtype(a, decl)
-                // where `a` can be a subtype and decl is Type{T}
+            else {
                 return 0;
             }
         }
         else if (decl == (jl_value_t*)jl_any_type) {
         }
+        else if (decl == (jl_value_t*)jl_anytype_type) {
+            if (!jl_subtype_anytype(a))
+                return 0;
+        }
         else {
-            if (jl_is_typeeq(a)) // decl is not Type, because it would be caught above
+            assert(jl_is_concrete_type(decl));
+            if (jl_is_typeeq(a)) { // decl is not TypeEq or AnyType, because it would be caught above, so it must be concrete
                 a = jl_typeof(jl_typeeq_T(a));
+            }
             if (!jl_types_equal(a, decl))
                 return 0;
         }
     }
     if (va) {
-        jl_value_t *decl = jl_unwrap_unionall(jl_tparam(sig, i));
+        jl_value_t *decl = jl_tparam(sig, i);
+        assert(jl_is_vararg(decl));
         if (jl_vararg_kind(decl) == JL_VARARG_INT) {
             if (n - i != jl_unbox_long(jl_tparam1(decl)))
                 return 0;
@@ -222,32 +246,29 @@ static inline int sig_match_simple(jl_value_t *arg1, jl_value_t **args, size_t n
             */
             continue;
         }
-        jl_value_t *unw = jl_is_unionall(decl) ? ((jl_unionall_t*)decl)->body : decl;
-        if (jl_is_typeeq(unw) && jl_is_type(a)) {
-            jl_value_t *tp0 = jl_typeeq_T(unw);
-            if (jl_is_typevar(tp0)) {
-                // in the case of Type{_}, the types don't have to match exactly.
-                // this is cached as `Type{T} where T`.
-                jl_value_t *ub = ((jl_tvar_t*)tp0)->ub;
-                if (ub != (jl_value_t*)jl_any_type && !jl_subtype(a, ub))
+        if (jl_is_typeeq(decl)) {
+            if (!jl_is_type(a))
+                return 0;
+            jl_value_t *tp0 = jl_typeeq_T(decl);
+            if (a != tp0) {
+                jl_datatype_t *da = (jl_datatype_t*)a;
+                jl_datatype_t *dt = (jl_datatype_t*)tp0;
+                while (jl_is_unionall(da))
+                    da = (jl_datatype_t*)((jl_unionall_t*)da)->body;
+                while (jl_is_unionall(dt))
+                    dt = (jl_datatype_t*)((jl_unionall_t*)dt)->body;
+                if (jl_is_datatype(da) && jl_is_datatype(dt) && da->name != dt->name)
+                    return 0; // quick rejection test
+                if (!jl_types_equal(a, tp0))
                     return 0;
             }
-            else {
-                if (a != tp0) {
-                    jl_datatype_t *da = (jl_datatype_t*)a;
-                    jl_datatype_t *dt = (jl_datatype_t*)tp0;
-                    while (jl_is_unionall(da))
-                        da = (jl_datatype_t*)((jl_unionall_t*)da)->body;
-                    while (jl_is_unionall(dt))
-                        dt = (jl_datatype_t*)((jl_unionall_t*)dt)->body;
-                    if (jl_is_datatype(da) && jl_is_datatype(dt) && da->name != dt->name)
-                        return 0;
-                    if (!jl_types_equal(a, tp0))
-                        return 0;
-                }
-            }
+        }
+        else if (decl == (jl_value_t*)jl_anytype_type) {
+            if (!jl_is_type(a))
+                return 0;
         }
         else {
+            assert(jl_is_concrete_type(decl));
             return 0;
         }
     }
@@ -438,6 +459,10 @@ static int tname_intersection(jl_value_t *a, jl_typename_t *bname, int8_t tparam
         a = jl_unwrap_unionall(jl_typeeq_T(a));
         if (!jl_is_datatype(a))
             return tname_intersection(a, bname, 0);
+    }
+    else if (jl_is_typeeq(a)) {
+        // a covariant `TypeEq{...}` reaches name buckets via its kind's supertype chain
+        return tname_intersection_dt(jl_typeeq_type, bname, jl_supertype_height(jl_typeeq_type));
     }
     if (jl_is_datatype(a)) {
         return tname_intersection_dt((jl_datatype_t*)a, bname, jl_supertype_height((jl_datatype_t*)a));
@@ -1481,8 +1506,9 @@ jl_typemap_entry_t *jl_typemap_alloc(
     size_t i, l;
     for (i = 0, l = jl_nparams(ttype); i < l && issimplesig; i++) {
         jl_value_t *decl = jl_tparam(ttype, i);
-        if (jl_is_kind(decl))
-            isleafsig = 0; // Type{} may have a higher priority than a kind
+        if (jl_is_kind(decl) || decl == (jl_value_t*)jl_anytype_type)
+            isleafsig = 0; // Type{} may have a higher priority than a kind; both are
+                           // still simple for sig_match_simple
         else if (jl_is_typeeq(decl))
             isleafsig = 0; // Type{} may need special processing to compute the match
         else if (jl_is_vararg(decl))

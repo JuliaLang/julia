@@ -95,6 +95,12 @@ precompile_test_harness(false) do dir
               end
               abstract type AbstractAlgebraMap{A} end
               struct GAPGroupHomomorphism{A, B} <: AbstractAlgebraMap{GAPGroupHomomorphism{B, A}} end
+              # issue #62047: supertype whose parameters reach back through the subtype
+              struct Wrap62047{T} end
+              struct Recur62047{T} <: AbstractAlgebraMap{Wrap62047{Recur62047{T}}} end
+              # two types sharing the identical supertype object
+              struct ShareA62047{T} <: AbstractAlgebraMap{T} end
+              struct ShareB62047{T} <: AbstractAlgebraMap{T} end
 
               global process_state_calls::Int = 0
               const process_state = Base.OncePerProcess{typeof(getpid())}() do
@@ -127,6 +133,7 @@ precompile_test_harness(false) do dir
           """
           module $Foo_module
               import $FooBase_module, $FooBase_module.typeA, $FooBase_module.GAPGroupHomomorphism
+              import $FooBase_module: Wrap62047, Recur62047, ShareA62047, ShareB62047
               import $Foo2_module: $Foo2_module, override, overridenc
               import $FooBase_module.hash
               import Test
@@ -211,6 +218,10 @@ precompile_test_harness(false) do dir
 
               const GAPType1 = GAPGroupHomomorphism{Nothing, Nothing}
               const GAPType2 = GAPGroupHomomorphism{1, 2}
+
+              # issue #62047
+              const Type62047 = Wrap62047{Recur62047{Int}}
+              const Shared62047 = (ShareA62047{Int}, ShareB62047{Int})
 
               # issue #28297
               mutable struct Result
@@ -1072,8 +1083,9 @@ precompile_test_harness("code caching") do dir
         mi = m.specializations::Core.MethodInstance
         @test hasvalid(mi, world)       # was compiled with the new method
         m = only(methods(MA.fib))
-        mi = m.specializations::Core.MethodInstance
-        @test !hasvalid(mi, world)      # invalidated by redefining `gib` before loading StaleB
+        for mi in Base.specializations(m)
+            @test !hasvalid(mi, world)      # invalidated by redefining `gib` before loading StaleB
+        end
         @test MA.fib() === 2.0
 
         # Reporting test (ensure SnoopCompile works)
@@ -1968,7 +1980,7 @@ precompile_test_harness("PkgCacheInspector") do load_path
             cachefile, depmods, #=completeinfo=#true, "PCI")
     end
 
-    modules, init_order, internal_methods, extext_methods, new_ext_cis, new_method_roots, cache_sizes = sv
+    modules, init_order, internal_methods, extext_methods, new_method_roots, cache_sizes = sv
     for m in internal_methods::Vector{Any}
         m isa Core.MethodInstance || continue
         m = m.func::Method
@@ -2519,8 +2531,13 @@ precompile_test_harness("Package precompilation works without manifest") do load
 end
 
 # Verify that inference / caching was not performed for any macros in the sysimage
-let m = only(methods(Base.var"@big_str"))
-    @test m.specializations === Core.svec() || !isdefined(m.specializations, :cache)
+let m = only(methods(Base.var"@lazy_str"))
+    for mi in Base.specializations(m)
+        isdefined(mi, :cache) || continue
+        ci = mi.cache
+        @test !isdefined(ci, :inferred)
+        @test !isdefined(ci, :next)
+    end
 end
 
 # Issue #58841 - make sure we don't accidentally throw away code for inference

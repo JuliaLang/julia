@@ -2416,11 +2416,6 @@ JL_DLLEXPORT int jl_nth_pointer_isdefined(jl_value_t *v, size_t i)
 // Cache for TypeApp DataType (looked up from Core after boot.jl loads)
 jl_datatype_t *jl_typeapp_type = NULL;
 
-// Type predicate for TypeApp
-int jl_is_typeapp(jl_value_t *v) JL_NOTSAFEPOINT {
-    return jl_typeapp_type != NULL && jl_typeis(v, jl_typeapp_type);
-}
-
 // Forward declaration
 static jl_value_t *resolve_type_refs(jl_value_t *t, htable_t *subst_map);
 

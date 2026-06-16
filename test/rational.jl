@@ -894,6 +894,24 @@ end
     @test rationalize(Int16, 3e-5) == 1//32767
 end
 
+@testset "Irrational vs Rational{BigInt} comparison (#60769)" begin
+    p = precision(BigFloat)
+    for x in (π, ℯ, γ, catalan, φ)
+        r = rationalize(BigInt, x)
+        @test (x < r) == (BigFloat(x; precision=p+32) < BigFloat(r; precision=p+32))
+        @test (x > r) == (BigFloat(x; precision=p+32) > BigFloat(r; precision=p+32))
+        @test cmp(x, r) == -cmp(r, x)
+        @test cmp(x, x) == 0
+        e1 = eps(Float64(x))
+        e2 = eps(BigFloat(x))
+        for tol in (e1 * 2.0.^(-24:8:24)..., e2 * 2.0.^(-64:16:64)...)
+            r = rationalize(BigInt, x; tol)
+            pp = max(p, exponent(x) - exponent(tol) + 32)
+            @test (x < r) == (BigFloat(x; precision=pp) < BigFloat(r; precision=pp))
+        end
+    end
+end
+
 @testset "rationalize(Rational) (issue #60768)" begin
     r = rationalize(Int64, pi)
     @test rationalize(Int64, r) == r

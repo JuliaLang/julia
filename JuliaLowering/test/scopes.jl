@@ -35,12 +35,26 @@ end
 # Types on left hand side of type decls refer to the outer scope
 # (In the flisp implementation they refer to the inner scope, but this seems
 # like a bug.)
-@test JuliaLowering.include_string(test_mod, """
+# edit: Using flisp semantics for now; see test below.
+@test_broken JuliaLowering.include_string(test_mod, """
 let x::Int = 10.0
     local Int = Float64
     x
 end
 """) === 10
+
+# The type in a let type decl must apply (and be re-evaluated) on assignments
+# to the variable from closures capturing it; hoisting the type into a
+# temporary outside the closure broke lowering of the closure body.
+@test JuliaLowering.include_string(test_mod, """
+let x::Int = 1.0
+    f = function ()
+        x = 2.0
+    end
+    f()
+    x
+end
+""") === 2
 
 # Closures in let syntax can only capture values from the outside
 # (In the flisp implementation it captures from inner scope, but this is

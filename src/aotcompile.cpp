@@ -485,7 +485,7 @@ static void generate_cfunc_thunks(jl_codegen_output_t &out)
             initvals[0] = f;
             cfunc.cfuncdata->setInitializer(ConstantArray::get(init->getType(), initvals));
         };
-        jl_method_instance_t *mi = (jl_method_instance_t*)jl_get_specialization1((jl_tupletype_t*)sigt, latestworld, 0);
+        jl_method_instance_t *mi = (jl_method_instance_t*)jl_get_specialization1((jl_tupletype_t*)sigt, latestworld);
         Function *func = nullptr;
         if ((jl_value_t*)mi != jl_nothing) {
             auto it = compiled_mi.find(mi);
@@ -2282,8 +2282,8 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
             builder.CreateRet(ConstantInt::get(T_int32, 1));
         }
         if (imaging_mode) {
-            auto targets = jl_get_llvm_clone_targets(jl_options.cpu_target);
-            auto &data = targets.data;
+            jl_clone_targets_t targets = jl_get_llvm_clone_targets(jl_options.cpu_target);
+            ArrayRef<uint8_t> data(targets.data, targets.data_size);
             auto value = ConstantDataArray::get(Context, data);
             auto target_ids = new GlobalVariable(metadataM, value->getType(), true,
                                         GlobalVariable::InternalLinkage,
@@ -2301,7 +2301,9 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
 
             // Create CPU target string constant.
             // Don't store "sysimage" keyword — store the actual resolved target string.
-            std::string cpu_target_str = jl_expand_sysimage_keyword(jl_options.cpu_target);
+            char *expanded = jl_expand_sysimage_keyword(jl_options.cpu_target);
+            std::string cpu_target_str(expanded);
+            free(expanded);
             auto cpu_target_data = ConstantDataArray::getString(Context, cpu_target_str, true);
             auto cpu_target_global = new GlobalVariable(metadataM, cpu_target_data->getType(), true,
                                                        GlobalVariable::InternalLinkage,
@@ -2324,6 +2326,7 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
                 write_int32(s, data.size());
                 ios_write(s, (const char *)data.data(), data.size());
             }
+            jl_free_clone_targets(&targets);
         }
 
         // no need to free module/context, destructor handles that
@@ -2479,7 +2482,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
             for (cfunc_decl_t &cfunc : output.cfuncs) {
                 jl_value_t *sigt = cfunc.abi.sigt;
                 JL_GC_PROMISE_ROOTED(sigt);
-                jl_value_t *mi = jl_get_specialization1((jl_tupletype_t*)sigt, latestworld, 0);
+                jl_value_t *mi = jl_get_specialization1((jl_tupletype_t*)sigt, latestworld);
                 if (mi == jl_nothing)
                     continue;
                 jl_code_instance_t *codeinst = jl_type_infer((jl_method_instance_t*)mi, latestworld, SOURCE_MODE_NOT_REQUIRED, jl_options.trim);

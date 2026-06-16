@@ -24,7 +24,7 @@ access the network during the build process, add the following in `Make.user`:
 USE_BINARYBUILDER=0
 ```
 
-Building Julia requires 5GiB if building all dependencies and approximately 4GiB of virtual memory.
+Building Julia requires 5GiB of disk space when building all dependencies and approximately 4GiB of virtual memory.
 
 To perform a parallel build, use `make -j N` and supply the maximum
 number of concurrent processes. If the defaults in the build do not work for you, and
@@ -227,7 +227,7 @@ The most complicated dependency is LLVM, for which we require additional patches
 For packaging Julia with LLVM, we recommend either:
  - bundling a Julia-only LLVM library inside the Julia package, or
  - adding the patches to the LLVM package of the distribution.
-   * A complete list of patches is available in on [Github](https://github.com/JuliaLang/llvm-project) see the `julia-release/18.x` branch.
+   * A complete list of patches is available on [Github](https://github.com/JuliaLang/llvm-project) see the `julia-release/18.x` branch.
    * The remaining patches are all upstream bug fixes, and have been contributed into upstream LLVM.
 
 Using an unpatched or different version of LLVM will result in errors and/or poor performance.

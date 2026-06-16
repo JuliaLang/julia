@@ -310,6 +310,8 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         head === "latestworld-if-toplevel" ? pass() :
             @fail(st, string("unknown expr head: ", head))
     end
+    [K"aliasscope"] -> pass()
+    [K"popaliasscope"] -> pass()
 
     #---------------------------------------------------------------------------
     # Invalid forms for which we want to produce detailed errors
@@ -365,7 +367,7 @@ vst1_toplevel_only(vcx, st) = @stm st begin
     [K"struct" [K"Value"] sig [K"block" body...]] ->
         vst1_typesig(vcx, sig) & (
             !(st[1].value isa Bool) ? @fail(st[1], "expected mutable flag") :
-                all(vst1_struct_arg, vcx, body))
+                _struct_noassign(vcx, body) & all(vst1_struct_arg, vcx, body))
     [K"abstract" sig] ->
         vst1_typesig(vcx, sig)
     [K"primitive" sig n] ->
@@ -501,15 +503,15 @@ end
 vst1_calldecl_dot_name(vcx, st) = @stm st begin
     [K"." l r] ->
         vst1_calldecl_dot_name(vcx, l) &
-        vst1_dot_definition_rhs(vcx, r) |
+        vst1_calldecl_dot_name_rhs(vcx, r) |
         @fail(st, "invalid `.` form")
     [K"Value"] -> pass()
     i -> vst1_ident(vcx, i)
 end
 
-vst1_dot_definition_rhs(vcx, st) = @stm st begin
-    [K"inert" x] -> vst1_dot_definition_rhs(vcx, x)
-    [K"inert_syntaxtree" x] ->  vst1_dot_definition_rhs(vcx, x)
+vst1_calldecl_dot_name_rhs(vcx, st) = @stm st begin
+    [K"inert" x] -> vst1_calldecl_dot_name_rhs(vcx, x)
+    [K"inert_syntaxtree" x] ->  vst1_calldecl_dot_name_rhs(vcx, x)
     [K"Identifier"] -> vst1_ident(vcx, st; lhs=true)
     ([K"Value"], when=st.value isa String) -> _ident_str(vcx, st, st.value; lhs=true)
     [K"String"] -> _ident_str(vcx, st, st.value; lhs=true)
@@ -666,10 +668,9 @@ vst1_simple_calldecl(vcx, st) = @stm st begin
         vst1_calldecl_kws(vcx, st[2])
     [K"call" f ps...] -> vst1_calldecl_name(vcx, f) &
         _calldecl_positionals(vcx, ps, false)
-    # anonymous function syntax `function (x); end`  or `function (x...); end`
-    [K"tuple" _...] -> vst1_lam_lhs(vcx, st)
-    [K"..." va] -> vst1_pparam_typed_tuple(vcx, va)
-    _ -> @fail(st, "malformed `call` in function decl")
+    # anonymous function syntax `function (x); end` or `function (x...); end` is
+    # subject to bad-arglist rules (block, etc.)
+    _ ->  vst1_lam_lhs(vcx, st) | @fail(st, "malformed `call` in function decl")
 end
 
 vst1_macro(vcx, st) = @stm st begin
@@ -695,7 +696,7 @@ vst1_macro_calldecl_name(vcx, st) = @stm st begin
         vst1_ident(vcx, m; lhs=true) | vst1_ident(vcx, m; lhs=false)
 end
 
-vst1_calldecl_name(vcx, st) = @stm st begin
+vst1_calldecl_name(vcx, st) = @stm (st=strip_arg_meta(st)) begin
     [K"Identifier"] -> vst1_ident(vcx, st; lhs=true) &
         (!is_dotted_operator(st.name_val::String) ? pass() :
         @fail(st, "dotted operator is not a valid function name"))
@@ -717,14 +718,12 @@ vst1_calldecl_name(vcx, st) = @stm st begin
     _ -> @fail(st, "invalid function name")
 end
 
-_is_arg_meta(st) = @stm st begin
+strip_arg_meta(st) = @stm st begin
     [K"meta" s arg] -> let meta_s = get(s, :name_val, "")::String
-        kind(arg) === K"meta" ?
-            @fail(st, "invalid nested annotation") :
-        !(meta_s in ("specialize", "nospecialize")) ?
-            @fail(st, "unrecognized meta function arg form") : pass()
+        kind(arg) === K"meta" ? st :
+            !(meta_s in ("specialize", "nospecialize")) ? st : arg
     end
-    _ -> unknown()
+    _ -> st
 end
 
 # Check mandatory and optional positional params:
@@ -733,15 +732,7 @@ end
 function _calldecl_positionals(vcx, params_meta, eq_is_kw)
     isempty(params_meta) && return pass()
     ok = Ref(pass())
-    params = map(params_meta) do meta_p
-        @stm meta_p begin
-            [K"meta" s p] -> begin
-                ok[] &= _is_arg_meta(meta_p)
-                p
-            end
-            p -> p
-        end
-    end
+    params = map(strip_arg_meta, params_meta)
     va_ok = vst1_pparam_va(vcx, params[end]; eq_is_kw)
     if is_known(va_ok)
         params = params[1:end-1]
@@ -775,8 +766,9 @@ vst1_pparam_va(vcx, st; eq_is_kw) = @stm st begin
     _ -> unknown()
 end
 
-# destructuring args: function f(a, (x, y)) ...
-vst1_pparam_typed_tuple(vcx, st) = @stm st begin
+# destructuring args: function f(a, (x, y)) ...  TODO: the strip_arg_meta call
+# here corresponds to no-op nospecialize, and should ideally be removed.
+vst1_pparam_typed_tuple(vcx, st) = @stm (st=strip_arg_meta(st)) begin
     [K"::" [K"tuple" _...] t] ->
         vst1_pparam_simple_tuple(vcx, st[1]) &
         vst1(with(vcx; readable_underscore=true), t)
@@ -829,12 +821,10 @@ vst1_pparam_and_default(vcx, st; eq_is_kw, allow_val_splat) = @stm st begin
 end
 
 vst1_calldecl_kws(vcx, st) = @stm st begin
-    [K"parameters" kws... [K"..." varkw]] ->
-        all(vst1_param_kw, vcx, kws) & vst1_param_varkw(vcx, varkw)
-    [K"parameters" kws... [K"meta" _ [K"..." varkw]]] ->
-        all(vst1_param_kw, vcx, kws) &
-        _is_arg_meta(st[end]) &
-        vst1_param_varkw(vcx, varkw)
+    ([K"parameters" kws... last],
+     when=(varkw = strip_arg_meta(last);
+           kind(varkw) === K"..." && numchildren(varkw) == 1)) ->
+         all(vst1_param_kw, vcx, kws) & vst1_param_varkw(vcx, varkw[1])
     [K"parameters" kws...] -> all(vst1_param_kw, vcx, kws)
     _ -> @fail(st, "malformed keyword parameters")
 end
@@ -846,10 +836,9 @@ vst1_param_varkw(vcx, st) = @stm st begin
     _ -> @fail(st, "expected identifier")
 end
 
-vst1_param_kw(vcx, st) = @stm st begin
+vst1_param_kw(vcx, st) = @stm (st=strip_arg_meta(st)) begin
     [K"kw" id val] ->
         vst1_param(vcx, id) & vst1(vcx, val)
-    [K"meta" s x] -> _is_arg_meta(st) & vst1_param_kw(vcx, x)
     [K"..." _...] ->
         @fail(st, "`...` may only be used for the final keyword parameter")
     _ -> vst1_param(vcx, st) |
@@ -896,14 +885,29 @@ vst1_curly_typevar(vcx, st) = @stm st begin
     _ -> vst1_splat_or_val(vcx, st)
 end
 
-vst1_struct_arg(vcx, st) =
-    vst1_struct_special_form(vcx, st) | vst1(vcx, st)
+# assignment should never be allowed, but flisp fails to check inside blocks or
+# after anything that isn't a field.  See #62075.
+function _struct_noassign(vcx, body::SyntaxList)
+    for st in body
+        if kind(st) === K"=" && vst1_struct_field(vcx, st[1]).ok
+            return @fail(st, "assignment syntax in structure fields is reserved")
+        elseif !vst1_struct_field(vcx, st).ok
+            return pass()
+        end
+    end
+    return pass()
+end
 
-vst1_struct_special_form(vcx, st) = @stm st begin
+vst1_struct_arg(vcx, st) = @stm st begin
+    [K"block" xs...] -> all(vst1_struct_arg, vcx, xs)
+    _ -> vst1_struct_field(vcx, st) | vst1(vcx, st)
+end
+
+vst1_struct_field(vcx, st) = @stm st begin
     [K"Identifier"] -> pass()
-    [K"::" x t] -> vst1_struct_special_form(vcx, x) & vst1(vcx, t)
-    [K"const" x] -> vst1_struct_special_form(vcx, x)
-    [K"atomic" x] -> vst1_struct_special_form(vcx, x)
+    [K"::" x t] -> vst1_struct_field(vcx, x) & vst1(vcx, t)
+    [K"const" x] -> vst1_struct_field(vcx, x)
+    [K"atomic" x] -> vst1_struct_field(vcx, x)
     _ -> unknown()
 end
 
@@ -928,7 +932,7 @@ end
 
 vst1_assign(vcx, st; in_const = false) = @stm st begin
     # This case handles a proper function declaration (= (call ...) ...) form.
-    # `vst1_assign_lhs_nontuple` also accepts call forms, but this is a lowering
+    # `vst1_assign_lhs_nontuple` also accepts call forms, but that is a lowering
     # bug where the "function body" is evaluated immediately
     ([K"=" l r], when=is_eventually_call(l)) -> vst1_function(vcx, st)
     [K"=" l r] -> vst1_assign_lhs(vcx, l; in_const) & vst1(vcx, r)
@@ -968,12 +972,13 @@ vst1_assign_lhs_nontuple(vcx, st; in_const=false, in_tuple=false) = @stm st begi
         vst1_assign_lhs(vcx, x; in_const, in_tuple) & vst1(vcx, t)
     [K"." x y] ->
         in_const ? @fail(st, "cannot declare this form constant") :
-        vst1(vcx, x) & vst1_dot_definition_rhs(vcx, y)
+        kind(y) === K"tuple" ? @fail(st, "dotcall syntax not valid here") :
+        vst1(vcx, x) & vst1(vcx, y)
     [K"ref" x is...] ->
         in_const ? @fail(st, "cannot declare this form constant") :
         vst1(vcx, x) & all(vst1_splat_or_val, vcx, is)
-    [K"curly" [K"Identifier"] tvs...] ->
-        all(vst1_typevar_decl, vcx, tvs)
+    [K"curly" x tvs...] ->
+        vst1_ident(vcx, x; lhs=true) & all(vst1_typevar_decl, vcx, tvs)
 
     [K"typed_hcat" _...] ->
         @fail(st, "invalid spacing in left side of indexed assignment")
@@ -1228,7 +1233,7 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
     [K"block" xs...] -> all(vst2, vcx, xs)
     [K"scope_block" xs...] -> all(vst2, vcx, xs)
     [K"=" l r] -> vst2_ident_lhs(vcx, l) & vst2(vcx, r)
-    [K"assign_or_constdecl_if_global" l r] -> vst2_ident(vcx, l) & vst2(vcx, r)
+    [K"assign_or_constdecl_if_global" l r] -> vst2_ident_lhs(vcx, l) & vst2(vcx, r)
     [K"constdecl" l] -> vst2_ident_lhs(vcx, l)
     [K"constdecl" l r] -> vst2_ident_lhs(vcx, l) & vst2(vcx, r)
     [K"global" x] -> vst2_ident_lhs(vcx, x)
@@ -1282,6 +1287,8 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
     [K"purity"] -> pass()
     [K"purity" _ _...] -> numchildren(st) == fieldcount(Base.EffectsOverride) ?
         pass() : @fail(st, "wrong number of args to `purity` expression")
+    [K"aliasscope"] -> pass()
+    [K"popaliasscope"] -> pass()
 
     [K"always_defined" x] -> vst2_ident(vcx, x)
     [K"assert" [K"Symbol"] x] -> vst2(vcx, x)

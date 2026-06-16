@@ -244,6 +244,10 @@ struct NewPM {
     void run(Module &M) JL_NOTSAFEPOINT;
 
     void printTimers() JL_NOTSAFEPOINT;
+
+#ifdef USE_TRACY
+    void registerTracyCallbacks(PassInstrumentationCallbacks &PIC) JL_NOTSAFEPOINT;
+#endif
 };
 
 struct AnalysisManagers {

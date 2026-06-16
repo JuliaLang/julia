@@ -6,10 +6,18 @@ function find_kind(s::String)
 end
 
 # flisp: dot-operators
+#
+# We work from the operator's name here (rather than its `Kind`) because by this
+# point operators are represented uniformly as identifier-like names: this code
+# also runs on trees converted from `Expr`, where an operator such as `.^` is
+# simply the `Symbol` `:.^` with no token or `Kind` to inspect. `Base.isoperator`
+# is the same operator-name test already used for `op=` in `est_to_dst` below;
+# note we can't look up a `Kind` by name (eg via `find_kind`), since most
+# operators no longer have their own kind - they share `K"Operator"`.
 function is_dotted_operator(s::AbstractString)
     return length(s) >= 2 &&
         s[1] === '.' && s[2] !== '.' &&
-        JS.is_operator(something(find_kind(s[2:end]), K"None"))
+        Base.isoperator(s[2:end])
 end
 
 function is_eventually_call(e)
@@ -364,7 +372,7 @@ function apply_arglist_meta(st, meta::Union{Nothing, Symbol, Dict{String, Symbol
             fixed == x ? st : @ast g st [K"::" fixed t]
         end
         [K"call" f args...] -> mapchildren(x->
-            x == f ? f : apply_arg_meta(x, meta), st._graph, st)
+            x == f ? strip_arg_meta(f) : apply_arg_meta(x, meta), st._graph, st)
         [K"tuple" _...] -> mapchildren(x->apply_arg_meta(x, meta), st._graph, st)
     end
 end
@@ -531,6 +539,10 @@ function est_to_dst(st::SyntaxTree)
                 r2 = rec(r)
             end
             @ast g st [K"->" rec(l) r2]
+        end
+        [K"macro" l r] -> let
+            l = apply_arglist_meta(l, collect_body_arg_meta(r))
+            @ast g st [K"macro" rec(l) rec(r)]
         end
         [K"do" [K"call" f args...] lam] -> let
             @ast g st [K"call" rec(f) rec(lam) _dst_sink_parameters(args)...]

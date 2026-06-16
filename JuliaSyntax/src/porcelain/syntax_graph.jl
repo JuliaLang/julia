@@ -319,7 +319,7 @@ function kind(ex::SyntaxTree)
 end
 
 function flags(ex::SyntaxTree)
-    get(ex, :syntax_flags, 0x0000)
+    get(ex, :syntax_flags, 0x0000)::UInt16
 end
 
 
@@ -1375,6 +1375,12 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         rhs = _green_to_est(st, 0, cs[3])
         out = newnode(graph, st, K"unknown_head", tree_ids(lhs, rhs))
         return setattr!(out, :name_val, op_s)
+    elseif k === K"op=" && n_cs === 1
+        # (op= +) => +=   (the operator name itself, eg when quoted as `:(+=)`)
+        return symleaf(string(cs[1]) * '=')
+    elseif k === K".op=" && n_cs === 1
+        # (.op= +) => .+=
+        return symleaf('.' * string(cs[1]) * '=')
     elseif k === K"macrocall" && n_cs > 0
         # LineNumberNodes are not usually added to the tree as they are in Expr,
         # but this specifically inserts the macrocall child for compatibility

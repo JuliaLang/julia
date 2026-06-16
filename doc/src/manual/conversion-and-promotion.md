@@ -261,7 +261,7 @@ to a common numeric type for arithmetic operations -- it just happens automatica
 definitions of catch-all promotion methods for a number of other arithmetic and mathematical functions
 in [`promotion.jl`](https://github.com/JuliaLang/julia/blob/master/base/promotion.jl), but beyond
 that, there are hardly any calls to `promote` required in Julia Base. The most
-common usages of `promote` occur in outer constructors methods, provided for convenience, to allow
+common usages of `promote` occur in outer constructor methods, provided for convenience, to allow
 constructor calls with mixed types to delegate to an inner type with fields promoted to an appropriate
 common type. For example, recall that [`rational.jl`](https://github.com/JuliaLang/julia/blob/master/base/rational.jl)
 provides the following outer constructor method:

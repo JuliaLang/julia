@@ -4556,7 +4556,7 @@ let # Test the presence of PhiNodes in lowered IR by taking the above function,
     ci.slottypes = Any[ Any for i = 1:length(ci.slotflags) ]
     ci.ssavaluetypes = Any[Any for i = 1:ci.ssavaluetypes]
     sv = Compiler.OptimizationState(mi, Compiler.NativeInterpreter())
-    ir = Compiler.convert_to_ircode(ci, sv)
+    ir = Compiler.convert_to_ircode!(ci, sv)
     ir = Compiler.slot2reg(ir, ci, sv)
     ir = Compiler.compact!(ir)
     Compiler.replace_code_newstyle!(ci, ir)
@@ -4649,38 +4649,48 @@ Base.@nospecializeinfer func_nospecializeinfer_constprop(@nospecialize a) = func
 itr_dispatchonly = Any[sin, muladd, "foo", nothing, missing]   # untyped container can cause excessive runtime dispatch
 itr_withinfernce = tuple(sin, muladd, "foo", nothing, missing) # typed container can cause excessive inference
 
+function count_inferred(m::Method)
+    count = 0
+    for mi in Base.specializations(m)
+        isdefined(mi, :cache) || continue
+        # inferred methods come first in the cache by construction, so no iteratation needed
+        count += isdefined(mi.cache, :inferred)
+    end
+    return count
+end
+
 @testset "compilation annotations" begin
     @testset "@nospecialize" begin
         # `@nospecialize` should suppress runtime dispatches of `nospecialize`
         @test call_func_itr(func_nospecialized, itr_dispatchonly) == 2
-        @test length(Base.specializations(only(methods((func_nospecialized))))) == 1
+        @test length(Base.specializations(only(methods(func_nospecialized)))) == 1
         # `@nospecialize` should allow inference to happen
         @test call_func_itr(func_nospecialized, itr_withinfernce) == 2
-        @test length(Base.specializations(only(methods((func_nospecialized))))) == 6
+        @test length(Base.specializations(only(methods(func_nospecialized)))) == 6
         @test count(is_inline_checker, @get_code call_func_itr(func_nospecialized, itr_dispatchonly)) == 0
 
         # `@nospecialize` should allow inlinining
         @test call_func_itr(func_nospecialized_inline, itr_dispatchonly) == 2
-        @test length(Base.specializations(only(methods((func_nospecialized_inline))))) == 1
+        @test length(Base.specializations(only(methods(func_nospecialized_inline)))) == 1
         @test call_func_itr(func_nospecialized_inline, itr_withinfernce) == 2
-        @test length(Base.specializations(only(methods((func_nospecialized_inline))))) == 6
+        @test length(Base.specializations(only(methods(func_nospecialized_inline)))) == 6
         @test count(is_inline_checker, @get_code call_func_itr(func_nospecialized_inline, itr_dispatchonly)) == 5
     end
 
     @testset "@nospecializeinfer" begin
         # `@nospecialize` should suppress runtime dispatches of `nospecialize`
         @test call_func_itr(func_nospecializeinfer, itr_dispatchonly) == 2
-        @test length(Base.specializations(only(methods((func_nospecializeinfer))))) == 1
+        @test length(Base.specializations(only(methods(func_nospecializeinfer)))) == 1
         # `@nospecializeinfer` suppresses inference also
         @test call_func_itr(func_nospecializeinfer, itr_withinfernce) == 2
-        @test length(Base.specializations(only(methods((func_nospecializeinfer))))) == 1
+        @test count_inferred(only(methods(func_nospecializeinfer))) == 1
         @test !any(is_inline_checker, @get_code call_func_itr(func_nospecializeinfer, itr_dispatchonly))
 
         # `@nospecializeinfer` should allow inlinining
         @test call_func_itr(func_nospecializeinfer_inline, itr_dispatchonly) == 2
         @test length(Base.specializations(only(methods((func_nospecializeinfer_inline))))) == 1
         @test call_func_itr(func_nospecializeinfer_inline, itr_withinfernce) == 2
-        @test length(Base.specializations(only(methods((func_nospecializeinfer_inline))))) == 1
+        @test count_inferred(only(methods(func_nospecializeinfer_inline))) == 1
         @test any(is_inline_checker, @get_code call_func_itr(func_nospecializeinfer_inline, itr_dispatchonly))
 
         # `@nospecializeinfer` should allow constprop
@@ -4693,7 +4703,7 @@ itr_withinfernce = tuple(sin, muladd, "foo", nothing, missing) # typed container
         end
         @test call_func_itr(func_nospecializeinfer_constprop, itr_withinfernce) == 0
         for m = methods(func_nospecializeinfer_constprop)
-            @test length(Base.specializations(m)) == 1
+            @test count_inferred(m) == 1
         end
     end
 end

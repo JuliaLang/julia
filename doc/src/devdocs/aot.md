@@ -21,7 +21,7 @@ Firstly, the methods that need to be compiled to native code must be identified.
 
     Currently when compiling images, Julia runs the trace generation in a different process than the process performing the AOT compilation. This can have impacts when attempting to use a debugger during precompilation. The best way to debug precompilation with a debugger is to use the rr debugger, record the entire process tree, use `rr ps` to identify the relevant failing process, and then use `rr replay -p PID` to replay just the failing process.
 
-Once the methods to be compiled have been identified, they are passed to the `jl_create_system_image` function. This function sets up a number of data structures that will be used when serializing native code to a file, and then calls `jl_create_native` with the array of methods. `jl_create_native` runs codegen on the methods produces one or more LLVM modules. `jl_create_system_image` then records some useful information about what codegen produced from the module(s).
+Once the methods to be compiled have been identified, they are passed to the `jl_create_system_image` function. This function sets up a number of data structures that will be used when serializing native code to a file, and then calls `jl_create_native` with the array of methods. `jl_create_native` runs codegen on the methods and produces one or more LLVM modules. `jl_create_system_image` then records some useful information about what codegen produced from the module(s).
 
 The module(s) are then passed to `jl_dump_native`, along with the information recorded by `jl_create_system_image`. `jl_dump_native` contains the code necessary to serialize the module(s) to bitcode, object, or assembly files depending on the command-line options passed to Julia. The serialized code and information are then written to a file as an archive.
 
@@ -67,7 +67,7 @@ The first step in loading a code image is to load the shared library produced by
 
 ### Loading Native Code
 
-The loader first needs to identify whether the native code that was compiled is valid for the architecture that the loader is running on. This is necessary to avoid executing instructions that older CPUs do not recognize. This is done by checking the CPU features available on the current machine against the CPU features that the code was compiled for. When multiversioning is enabled, the loader will pick the appropriate version of each function to use based on the CPU features available on the current machine. If none of the feature sets that were multiversioned, the loader will throw an error.
+The loader first needs to identify whether the native code that was compiled is valid for the architecture that the loader is running on. This is necessary to avoid executing instructions that older CPUs do not recognize. This is done by checking the CPU features available on the current machine against the CPU features that the code was compiled for. When multiversioning is enabled, the loader will pick the appropriate version of each function to use based on the CPU features available on the current machine. If none of the multiversioned feature sets match the current CPU, the loader will throw an error.
 
 Part of the multiversioning pass creates a number of global arrays of all of the functions in the module. When this process is multithreaded, an array of arrays is created, which the loader reorganizes into one large array with all of the functions that were compiled for this architecture. A similar process occurs for the global variables in the module.
 
