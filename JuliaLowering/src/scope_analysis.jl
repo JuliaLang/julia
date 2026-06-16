@@ -44,7 +44,10 @@ struct ScopeInfo
     # collecting place for locals going in to closure conversion.
     locals_capt::Union{Nothing, Dict{IdTag,Bool}}
     # Globals declared at the base scope layer instead of the apparent scope
-    # layer due to hygiene_compat rules.
+    # layer due to hygiene_compat rules.  Macros generally an expect explicit
+    # global declaration (and any initialization in the same expression) to be
+    # unhygienic, but JL is more generous than flisp in resolving references to
+    # the rescoped global.
     rescoped_globals::Set{NameKey}
 end
 
@@ -127,8 +130,17 @@ function explicit_declare_in_scope!(ctx, scope::ScopeInfo, ex, new_k::Symbol)
         return nothing
     end
     if new_k === :global && (sl = ctx.scope_layers[ex.scope_layer]; sl.hygiene_compat)
+        # Check no conflict in the original scope before rescoping
+        bid_conflict = get(scope.vars, NameKey(ex), nothing)
+        !isnothing(bid_conflict) && throw(LoweringError(ex, """
+            unhygienic global name `$(NameKey(ex).name)` conflicts with an \
+            existing $(_var_str(get_binding(ctx, bid_conflict).kind))"""))
         push!(scope.rescoped_globals, NameKey(ex))
         ex = setattr(ex, :scope_layer, base_layer(ctx, sl).id)
+    elseif NameKey(ex) in scope.rescoped_globals
+        throw(LoweringError(ex, """
+            $(_var_str(new_k)) name `$(NameKey(ex).name)` conflicts with an \
+            existing unhygienic global"""))
     end
     bid = get(scope.vars, NameKey(ex), nothing)
     old_k = isnothing(bid) ? nothing : get_binding(ctx, bid).kind

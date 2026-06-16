@@ -891,6 +891,69 @@ end
         Base.delete_binding(test_mod, :old_hyg_g_sibling_G)
     end
 
+    @testset "rescoping conflicts" for (ctx, mod, run) in [
+        # flisp is quite unpredictable here: segfaults, local-form-assigns-global
+        # ("flisp reference (delete if fail)", fl_mod, x->fl_eval(fl_mod, x)),
+        ("jl expr_compat_mode=true", jl_mod, x->jl_eval(jl_mod, x; expr_compat_mode=true)),
+        ("jl expr_compat_mode=false", jl_mod, x->jl_eval(jl_mod, x; expr_compat_mode=false))]
+
+        fl_eval(test_mod, :(macro old_hyg_g_rescope_conflict_old();
+                                quote
+                                    global bad = 1
+                                end
+                            end))
+        run(:(import ..test_mod.@old_hyg_g_rescope_conflict_old))
+        Core.@latestworld
+        @test_throws "conflicts with an existing" run(:(
+            let bad = 1; @old_hyg_g_rescope_conflict_old(); end)) context=ctx
+        @test_throws "conflicts with an existing" run(:(
+            ((bad)->@old_hyg_g_rescope_conflict_old())(1))) context=ctx
+        @test_throws "conflicts with an existing" run(:(
+            (function old_hyg_g_rescope_conflict_old_F() where bad
+                 @old_hyg_g_rescope_conflict_old()
+             end)())) context=ctx
+
+        fl_eval(test_mod, :(macro old_hyg_g_rescope_conflict_new1();
+                                :(let
+                                      local bad = 1
+                                      global bad = 2
+                                  end)
+                            end))
+        run(:(import ..test_mod.@old_hyg_g_rescope_conflict_new1))
+        Core.@latestworld
+        @test_throws "unhygienic global" run(:(@old_hyg_g_rescope_conflict_new1())) context=ctx
+
+        fl_eval(test_mod, :(macro old_hyg_g_rescope_conflict_new2();
+                                :(let
+                                      global bad = 2
+                                      local bad = 1
+                                  end)
+                            end))
+        run(:(import ..test_mod.@old_hyg_g_rescope_conflict_new2))
+        Core.@latestworld
+        @test_throws "unhygienic global" run(:(@old_hyg_g_rescope_conflict_new2())) context=ctx
+
+        fl_eval(test_mod, :(macro old_hyg_g_rescope_conflict_new3();
+                                :(let
+                                      local bad
+                                      global bad
+                                  end)
+                            end))
+        run(:(import ..test_mod.@old_hyg_g_rescope_conflict_new3))
+        Core.@latestworld
+        @test_throws "unhygienic global" run(:(@old_hyg_g_rescope_conflict_new3())) context=ctx
+
+        fl_eval(test_mod, :(macro old_hyg_g_rescope_conflict_new4();
+                                :(let
+                                      global bad
+                                      local bad
+                                  end)
+                            end))
+        run(:(import ..test_mod.@old_hyg_g_rescope_conflict_new4))
+        Core.@latestworld
+        @test_throws "unhygienic global" run(:(@old_hyg_g_rescope_conflict_new4())) context=ctx
+    end
+
     # A reference in the same scope as the declaration: flisp keeps the
     # reference hygienic (hitting the undefined macro-module global), but
     # JuliaLowering deliberately resolves it to the global the declaration just
