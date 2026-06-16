@@ -290,23 +290,18 @@ jl_emitted_output_t jl_codegen_output_t::finish(std::unique_ptr<LLVMContext> ctx
                                                 orc::SymbolStringPool &SSP)
 {
     auto info = std::make_unique<jl_linker_info_t>();
-    auto intern = [&](StringRef name) {
-        SmallString<128> buf;
-        Mangler::getNameWithPrefix(buf, name, DL);
-        return SSP.intern(buf);
-    };
 
-    // Mangle and intern each part of the linking metadata, before all the
-    // pointers to LLVM values are invaliated.
+    // Intern each part of the linking metadata, before all the pointers to LLVM
+    // values are invaliated.
     for (auto &[ci, funcs] : ci_funcs) {
         info->ci_funcs[ci] = {funcs.invoke_api,
-                              funcs.invoke ? intern(funcs.invoke->getName()) : nullptr,
-                              funcs.specptr ? intern(funcs.specptr->getName()) : nullptr};
+                              funcs.invoke ? SSP.intern(funcs.invoke->getName()) : nullptr,
+                              funcs.specptr ? SSP.intern(funcs.specptr->getName()) : nullptr};
     }
     for (auto &[call, target] : call_targets)
-        info->call_targets[call] = intern(target.decl->getName());
+        info->call_targets[call] = SSP.intern(target.decl->getName());
     for (auto [val, gv] : global_targets) {
-        info->global_targets[val] = intern(gv->getName());
+        info->global_targets[val] = SSP.intern(gv->getName());
     }
 
     return {std::move(ctx), std::move(mod), std::move(info)};
@@ -844,25 +839,46 @@ public:
         Interface I;
         auto &Syms = I.SymbolFlags;
         SmallSet<SymbolStringPtr, 2> CISyms;
+        SmallVector<
+            std::pair<jl_code_instance_t *, jl_codeinst_funcs_t<orc::SymbolStringPtr>>, 2>
+            DeadCIs;
         for (auto &[CI, Funcs] : Out.linker_info->ci_funcs) {
+            jl_callptr_t Expected = NULL;
+            CISymbolPtr Unique{};
+
+            // If we lose the race to register a symbol for this CI, we must
+            // avoid defining a symbol in the ORC interface for this
+            // MaterializationUnit, lest we raise a UnexpectedSymbolDefinitions
+            // error.
+            if (jl_atomic_cmpswap_relaxed(&CI->invoke, &Expected,
+                                          jl_fptr_wait_for_compiled_addr)) {
+                Unique = JIT.makeUniqueCIName(CI, Funcs);
+            }
+            else {
+                DeadCIs.push_back({CI, Funcs});
+                continue;
+            }
+
             if (Funcs.invoke)
                 CISyms.insert(Funcs.invoke);
             if (Funcs.specptr)
                 CISyms.insert(Funcs.specptr);
 
-            // If we discover that another thread added this CI to the JIT
-            // first, we'll still add the original symbols to CISyms (so they
-            // will be filtered out of the MU Interface), but we won't register them in
-            // CISymbols.
-            jl_callptr_t Expected = NULL;
-            CISymbolPtr Unique{};
-            if (jl_atomic_cmpswap_relaxed(&CI->invoke, &Expected,
-                                          jl_fptr_wait_for_compiled_addr))
-                Unique = JIT.makeUniqueCIName(CI, Funcs);
             if (Unique.invoke)
                 Syms[Unique.invoke] = JITSymbolFlags::Callable | JITSymbolFlags::Exported;
             if (Unique.specptr)
                 Syms[Unique.specptr] = JITSymbolFlags::Callable | JITSymbolFlags::Exported;
+        }
+
+        auto Privatize = [&](const orc::SymbolStringPtr &S) JL_NOTSAFEPOINT {
+            Function *F;
+            if (S && (F = Out.module->getFunction(*S)))
+                F->setLinkage(Function::PrivateLinkage);
+        };
+        for (auto &[CI, Funcs] : DeadCIs) {
+            Out.linker_info->ci_funcs.erase(CI);
+            Privatize(Funcs.invoke);
+            Privatize(Funcs.specptr);
         }
 
         // Tell ORC about all the other definition in this module.  When
@@ -876,7 +892,7 @@ public:
             if (isa<Function>(&G))
                 Flags |= JITSymbolFlags::Callable;
             auto S = JIT.mangle(G.getName());
-            if (CISyms.contains(S))
+            if (CISyms.contains(SSP->intern(G.getName())))
                 continue;
             Syms[S] = Flags;
         }
@@ -2229,7 +2245,7 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
 
     // Rename the defined CI functions.
     auto RenameDef = [&](const SymbolStringPtr &Orig, const SymbolStringPtr &Dest)
-                             JL_NOTSAFEPOINT { Syms.at(Orig)->setName(Dest); };
+                         JL_NOTSAFEPOINT { Syms.at(mangle(*Orig))->setName(Dest); };
     for (auto &[CI, Funcs] : Info->ci_funcs) {
         auto &S = CISymbols.at(CI);
         if (Funcs.invoke)
@@ -2241,13 +2257,14 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
     // Rename referenced CIs in the workqueue.
     for (auto &[Call, T] : Info->call_targets) {
         auto [CI, API] = Call;
-        if (!Syms.contains(T))
+        auto TM = mangle(*T);
+        if (!Syms.contains(TM))
             continue;
         JL_GC_PROMISE_ROOTED(CI);
         auto Dest = linkCallTarget(MR, CI, API);
         if (!Dest)
             return false;
-        Syms.at(T)->setName(Dest);
+        Syms.at(TM)->setName(Dest);
     }
 
     // Rename globals and add mappings
@@ -2260,7 +2277,7 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
     orc::SymbolMap GlobalSyms;
     for (auto &[Addr, Orig] : Info->global_targets) {
         auto Sym = ES.intern(Names(*Orig, "#"));
-        auto It = Syms.find(Orig);
+        auto It = Syms.find(mangle(*Orig));
         if (It == Syms.end())
             continue;
         It->second->setName(Sym);
