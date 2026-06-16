@@ -2659,10 +2659,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
     if (needlock)
         emit_lockstate_value(ctx, needlock, true);
     jl_cgval_t oldval = rhs;
-    // Emit the write barrier *before* the store. The barrier receives the new
-    // value being stored. Roots for the non-boxed case are derived from the
-    // `rhs` cgval (type-accurate) rather than the lowered `r`, since `r` may be
-    // an integer (e.g. for atomic stores) that no longer exposes its pointers.
+    // Emit the write barrier for the new value *before* the store.
     auto emit_store_pre_barrier = [&] {
         if (parent == NULL || !tracked_pointers)
             return;
@@ -2676,9 +2673,13 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             emit_write_multibarrier(ctx, parent, rhs);
         }
         else {
-            // The field is stored inline; derive the tracked pointers from the
-            // unboxed aggregate of `rhs` (which may itself still be boxed here).
-            Value *agg = emit_unbox(ctx, julia_type_to_llvm(ctx, rhs.typ), rhs);
+            // Unbox to the field's storage type (concrete by construction), not
+            // rhs.typ which may be bottom for an unreachable store (e.g. a modify
+            // of an always-undef field) and would make emit_unbox return null.
+            // intcast_eltyp is the pointer-exposing type when the field was
+            // widened to an integer for atomics.
+            Type *wb_eltyp = intcast_eltyp ? intcast_eltyp : realelty;
+            Value *agg = emit_unbox(ctx, wb_eltyp, rhs);
             emit_write_multibarrier(ctx, parent, agg, rhs.typ);
         }
     };
