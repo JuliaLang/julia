@@ -838,7 +838,7 @@ const InsertionSort = InsertionSortAlg()
 """
     SMALL_ALGORITHM
 
-Default sorting algorithm for small arrays (length ≤ [`SMALL_THRESHOLD`](@ref)).
+Default sorting algorithm for sufficiently small arrays.
 
 This is an alias for a simple low-overhead algorithm that does not scale well
 to large arrays, unlike high-overhead recursive algorithms used for larger arrays.
