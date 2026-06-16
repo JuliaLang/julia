@@ -319,7 +319,7 @@ function kind(ex::SyntaxTree)
 end
 
 function flags(ex::SyntaxTree)
-    get(ex, :syntax_flags, 0x0000)
+    get(ex, :syntax_flags, 0x0000)::UInt16
 end
 
 
