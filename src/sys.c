@@ -853,6 +853,49 @@ JL_DLLEXPORT int jl_dllist(jl_array_t *list)
     free(hMods);
     return TRUE;
 }
+#elif !defined(__APPLE__)
+struct dllist_data {
+    arraylist_t *names; // strdup'd object names (freed by jl_dllist)
+    int index;
+};
+
+// This runs under the dynamic linker lock (held by `dl_iterate_phdr` across the
+// callback), so it must not allocate Julia objects or otherwise hit a GC safepoint.
+// A stop-the-world here while another thread is blocked in the linker would deadlock
+static int dllist_helper(struct dl_phdr_info *info, size_t size, void *vdata) JL_NOTSAFEPOINT
+{
+    (void)size;
+    struct dllist_data *data = (struct dllist_data *)vdata;
+    int idx = data->index++; // dl_iterate_phdr reports the main program first
+    const char *name = info->dlpi_name;
+    if (idx == 0 || name == NULL || name[0] == '\0')
+        return 0; // skip the main executable and any unnamed objects
+    arraylist_push(data->names, strdup(name));
+    return 0;
+}
+
+// Get a list of all the modules in this process.
+//
+// This is done in C, rather than a Julia `dl_iterate_phdr` callback, so that
+// no Julia code (which can allocate, run finalizers, or re-enter the linker
+// via (lazy) `ccall`) runs under the dynamic loader lock. See `dllist_helper`
+JL_DLLEXPORT int jl_dllist(jl_array_t *list)
+{
+    arraylist_t names;
+    arraylist_new(&names, 0);
+    struct dllist_data data = { &names, 0 };
+    dl_iterate_phdr(&dllist_helper, &data);
+    // The loader lock is now released: safe to allocate Julia objects.
+    for (size_t i = 0; i < names.len; i++) {
+        char *name = (char*)names.items[i];
+        jl_array_grow_end(list, 1);
+        jl_value_t *v = jl_cstr_to_string(name);
+        jl_array_ptr_set(list, jl_array_dim0(list) - 1, v);
+        free(name);
+    }
+    arraylist_free(&names);
+    return 1;
+}
 #endif
 
 JL_DLLEXPORT void jl_raise_debugger(void)
