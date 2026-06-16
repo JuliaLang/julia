@@ -127,23 +127,22 @@ function String(v::Vector{UInt8})
 end
 
 """
-The `String` constructor is enhanced to accept iterators/generator objects.
+    String(iterable)::String
 
-### Method Details:
-- **String(iter)**
-    - Converts an iterator into a string.
-    - Throws a `MethodError` if the iterator contains invalid data types (non-Char types) or if it is an infinite iterator.
-    - Ensures that the result is a valid string representation composed solely of characters (`Char`).
+Create a `String` from `iterable`. `Char(x)::Char` is called on each element of the iterable to create the resulting string's constituent characters.
 
-### Examples
+# Examples
 ```jldoctest
 julia> String(Iterators.map(c -> c+1, "Hello, world"))
-"Ifmmp-!xpsme"  # Generates a string by incrementing ASCII values of each character.
+"Ifmmp-!xpsme"
 
 julia> String(Iterators.take("Hello, world", 5))
-"Hello"  # Takes the first 5 characters of the string and converts it to a string.
+"Hello"
 """
 String(iter) = sprint(io -> foreach(c -> write(io, Char(c)::Char), iter))
+
+!!! compat "Julia 1.14"
+    This method requires Julia 1.14 or later.
 
 """
     unsafe_takestring(m::Memory{UInt8})::String
