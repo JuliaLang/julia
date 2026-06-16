@@ -138,7 +138,7 @@ function unsafe_takestring(m::Memory{UInt8})
 end
 
 """
-    takestring!(x) -> String
+    takestring!(x)::AbstractString
 
 Create a string from the content of `x`, emptying `x`.
 
@@ -152,6 +152,9 @@ julia> s = takestring!(v)
 julia> isempty(v)
 true
 ```
+
+!!! compat "Julia 1.13"
+    This function requires at least Julia 1.13.
 """
 takestring!(v::Vector{UInt8}) = String(v)
 

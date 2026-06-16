@@ -809,7 +809,7 @@ function unsafe_takestring!(io::IOBuffer)
 end
 
 """
-    takestring!(io::IOBuffer) -> String
+    takestring!(io::IOBuffer)::String
 
 Return the content of `io` as a `String`, resetting the buffer to its initial
 state.
