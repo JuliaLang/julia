@@ -65,9 +65,9 @@ dmg/$(APP_NAME): startup.applescript julia.icns
 		MACHO_FILES=$$(find "$@" -type f -perm -0111 | cut -d: -f1); \
 		for f in $${MACHO_FILES}; do \
 			echo "Codesigning $${f}..."; \
-			codesign -s "$$MACOS_CODESIGN_IDENTITY" --option=runtime --entitlements Entitlements.plist -vvv --timestamp --deep --force "$${f}"; \
+			codesign -s "$$MACOS_CODESIGN_IDENTITY" --option=runtime --entitlements Entitlements.plist -vvv --timestamp --force "$${f}"; \
 		done; \
-		codesign -s "$$MACOS_CODESIGN_IDENTITY" --option=runtime --entitlements Entitlements.plist -vvv --timestamp --deep --force "$@"; \
+		codesign -s "$$MACOS_CODESIGN_IDENTITY" --option=runtime --entitlements Entitlements.plist -vvv --timestamp --force "$@"; \
 	else \
 		true; \
 	fi
