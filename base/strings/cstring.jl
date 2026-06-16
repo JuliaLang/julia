@@ -176,10 +176,10 @@ function transcode(::Type{UInt8}, src::Vector{<:Union{Int32,UInt32}})
 end
 transcode(::Type{String}, src::String) = src
 transcode(T, src::String) = transcode(T, codeunits(src))
-# `String(::Vector{UInt8})` takes ownership of (and empties) its argument, so a
-# caller's own `Vector{UInt8}` must be copied; every other `src` produces a fresh
-# buffer from `transcode(UInt8, src)` that is safe to consume. (#28612)
-transcode(::Type{String}, src::Vector{UInt8}) = String(copy(src))
+# `String(::Vector{UInt8})` consumes (empties) its argument, so wrap a caller's
+# own vector in a view: `String` then copies the bytes out without touching the
+# source, and only that one copy is made. (#28612)
+transcode(::Type{String}, src::Vector{UInt8}) = String(view(src, :))
 transcode(::Type{String}, src) = String(transcode(UInt8, src))
 
 function transcode(::Type{UInt16}, src::AbstractVector{UInt8})
