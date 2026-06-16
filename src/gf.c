@@ -684,37 +684,14 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
     return codeinst;
 }
 
-JL_DLLEXPORT void jl_update_codeinst(
-        jl_code_instance_t *codeinst, jl_value_t *inferred,
-        int32_t const_flags, size_t min_world, size_t max_world,
-        uint32_t effects, jl_value_t *analysis_results,
-        double time_infer_total, double time_infer_cache_saved, double time_infer_self,
-        jl_debuginfo_t *di, jl_svec_t *edges /* , int absolute_max*/)
-{
-    assert(min_world <= max_world && "attempting to set invalid world constraints");
-    //assert((!jl_is_method(codeinst->def->def.value) || max_world != ~(size_t)0 || min_world <= 1 || jl_svec_len(edges) != 0) && "missing edges");
-    jl_gc_write(codeinst, codeinst->analysis_results, jl_value_t, analysis_results);
-    codeinst->time_infer_total = julia_double_to_half(time_infer_total);
-    codeinst->time_infer_cache_saved = julia_double_to_half(time_infer_cache_saved);
-    codeinst->time_infer_self = julia_double_to_half(time_infer_self);
-    jl_atomic_store_relaxed(&codeinst->ipo_purity_bits, effects);
-    jl_gc_write_atomic(codeinst, codeinst->debuginfo, jl_debuginfo_t, di, relaxed);
-    jl_gc_write_atomic(codeinst, codeinst->edges, jl_svec_t, edges, relaxed);
-    if ((const_flags & 1) != 0) {
-        assert(codeinst->rettype_const);
-        jl_atomic_store_release(&codeinst->invoke, jl_fptr_const_return);
-    }
-    jl_gc_write_atomic(codeinst, codeinst->inferred, jl_value_t, inferred, release);
-    jl_atomic_store_relaxed(&codeinst->min_world, min_world); // XXX: these should be unchanged?
-    jl_atomic_store_relaxed(&codeinst->max_world, max_world); // since the edges shouldn't change after jl_fill_codeinst
-}
-
 JL_DLLEXPORT void jl_fill_codeinst(
         jl_code_instance_t *codeinst,
         jl_value_t *rettype, jl_value_t *exctype,
         jl_value_t *inferred_const,
+        jl_value_t *inferred,
         int32_t const_flags, size_t min_world, size_t max_world,
         uint32_t effects, jl_value_t *analysis_results,
+        double time_infer_total, double time_infer_cache_saved, double time_infer_self,
         jl_debuginfo_t *di, jl_svec_t *edges /* , int absolute_max*/)
 {
     assert(min_world <= max_world && "attempting to set invalid world constraints");
@@ -724,20 +701,21 @@ JL_DLLEXPORT void jl_fill_codeinst(
     if ((const_flags & 2) != 0) {
         jl_gc_write(codeinst, codeinst->rettype_const, jl_value_t, inferred_const);
     }
+    jl_gc_write(codeinst, codeinst->analysis_results, jl_value_t, analysis_results);
+    codeinst->time_infer_total = julia_double_to_half(time_infer_total);
+    codeinst->time_infer_cache_saved = julia_double_to_half(time_infer_cache_saved);
+    codeinst->time_infer_self = julia_double_to_half(time_infer_self);
+    jl_atomic_store_relaxed(&codeinst->ipo_purity_bits, effects);
+    jl_gc_write_atomic(codeinst, codeinst->debuginfo, jl_debuginfo_t, di, relaxed);
     jl_gc_write_atomic(codeinst, codeinst->edges, jl_svec_t, edges, relaxed);
-    if ((jl_value_t*)di != jl_nothing) {
-        jl_gc_write_atomic(codeinst, codeinst->debuginfo, jl_debuginfo_t, di, relaxed);
-    }
     if ((const_flags & 1) != 0) {
         // TODO: may want to follow ordering restrictions here (see jitlayers.cpp)
         assert(const_flags & 2);
         jl_atomic_store_release(&codeinst->invoke, jl_fptr_const_return);
     }
-    jl_atomic_store_relaxed(&codeinst->ipo_purity_bits, effects);
-    jl_gc_write(codeinst, codeinst->analysis_results, jl_value_t, analysis_results);
     assert(jl_atomic_load_relaxed(&codeinst->min_world) == 1);
     assert(jl_atomic_load_relaxed(&codeinst->max_world) == 0);
-    jl_gc_write_atomic(codeinst, codeinst->inferred, jl_value_t, jl_nothing, release);
+    jl_gc_write_atomic(codeinst, codeinst->inferred, jl_value_t, inferred, relaxed);
     jl_atomic_store_release(&codeinst->min_world, min_world);
     jl_atomic_store_release(&codeinst->max_world, max_world);
 }
@@ -745,7 +723,7 @@ JL_DLLEXPORT void jl_fill_codeinst(
 JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst_uninit(jl_method_instance_t *mi, jl_value_t *owner)
 {
     jl_code_instance_t *codeinst = jl_new_codeinst(mi, owner, NULL, NULL, NULL, NULL, 0, 0, 0, 0, NULL, NULL, NULL);
-    jl_atomic_store_relaxed(&codeinst->min_world, 1); // make temporarily invalid before returning, so that jl_fill_codeinst is valid later
+    jl_atomic_store_relaxed(&codeinst->min_world, 1); // sentinel: temporarily invalid so jl_fill_codeinst can assert correct initial state
     return codeinst;
 }
 

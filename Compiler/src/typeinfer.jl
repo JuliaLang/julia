@@ -184,13 +184,10 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
         time_now = _time_ns()
         time_self_ns = caller.time_self_ns + (time_now - time_before)
         time_total = (time_now - caller.time_start - caller.time_paused) * 1e-9
-        ccall(:jl_fill_codeinst, Cvoid, (Any, Any, Any, Any, Int32, UInt, UInt, UInt32, Any, Any, Any),
-            ci, widenconst(result_type), widenconst(result.exc_result), rettype_const, const_flags,
-            min_world, max_world,
-            ipo_effects, result.analysis_results, debuginfo, edges)
-        ccall(:jl_update_codeinst, Cvoid, (Any, Any, Int32, UInt, UInt, UInt32, Any, Float64, Float64, Float64, Any, Any),
-            ci, inferred_result, const_flag, min_world, max_world, ipo_effects,
-            result.analysis_results, time_total, caller.time_caches, time_self_ns * 1e-9, debuginfo, edges)
+        ccall(:jl_fill_codeinst, Cvoid, (Any, Any, Any, Any, Any, Int32, UInt, UInt, UInt32, Any, Float64, Float64, Float64, Any, Any),
+            ci, widenconst(result_type), widenconst(result.exc_result), rettype_const, inferred_result,
+            const_flags, min_world, max_world,
+            ipo_effects, result.analysis_results, time_total, caller.time_caches, time_self_ns * 1e-9, debuginfo, edges)
     elseif caller.cache_mode === CACHE_MODE_LOCAL
         result.src = transform_result_for_local_cache(interp, result)
     end
@@ -241,7 +238,6 @@ end
 function finish!(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInstance, src::CodeInfo)
     user_edges = src.edges
     edges = user_edges isa SimpleVector ? user_edges : user_edges === nothing ? Core.svec() : Core.svec(user_edges...)
-    const_flag = false
     di = src.debuginfo
     rettype = Any
     exctype = Any
@@ -257,10 +253,8 @@ function finish!(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInstan
         # we can now widen our applicability in the global cache too
         store_backedges(ci, edges)
     end
-    ccall(:jl_fill_codeinst, Cvoid, (Any, Any, Any, Any, Int32, UInt, UInt, UInt32, Any, Any, Any),
-        ci, rettype, exctype, nothing, const_flags, min_world, max_world, ipo_effects, nothing, di, edges)
-    ccall(:jl_update_codeinst, Cvoid, (Any, Any, Int32, UInt, UInt, UInt32, Any, Float64, Float64, Float64, Any, Any),
-        ci, nothing, const_flag, min_world, max_world, ipo_effects, nothing, 0.0, 0.0, 0.0, di, edges)
+    ccall(:jl_fill_codeinst, Cvoid, (Any, Any, Any, Any, Any, Int32, UInt, UInt, UInt32, Any, Float64, Float64, Float64, Any, Any),
+        ci, rettype, exctype, nothing, nothing, const_flags, min_world, max_world, ipo_effects, nothing, 0.0, 0.0, 0.0, di, edges)
     code_cache(interp)[mi] = ci
     codegen = codegen_cache(interp)
     if codegen !== nothing
@@ -1125,10 +1119,9 @@ function _schedule_edge_infer_task!(caller::AbsIntState, frame::InferenceState, 
         update_valid_age!(caller, get_inference_world(interp), frame.valid_worlds)
         isinferred = is_inferred(frame)
         effects = nothing
-        edge = nothing
         call_result = nothing
+        edge = result.ci
         if isinferred
-            edge = result.ci
             if edge_ci isa CodeInstance && codeinst_edges_sub(edge_ci, edge.min_world, edge.max_world, edge.edges)
                 edge = edge_ci # override the edge for tracking invalidation
             end
@@ -1263,7 +1256,8 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     bestguess = frame.bestguess
     exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
     add_cycle_backedge!(caller, frame)
-    return Future(MethodCallResult(interp, caller, method, bestguess, exc_bestguess, effects, nothing, edgecycle, edgelimited))
+    result = frame.result
+    return Future(MethodCallResult(interp, caller, method, bestguess, exc_bestguess, effects, isdefined(result, :ci) ? result.ci : nothing, edgecycle, edgelimited))
 end
 
 # The `:terminates` effect bit must be conservatively tainted unless recursion cycle has

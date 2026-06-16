@@ -145,7 +145,7 @@ function add_one_edge!(edges::Vector{Any}, edge::CodeInstance)
                 # found edge we can upgrade
                 edges[i] = edge
                 return
-            elseif edgeᵢ_orig === edge || codeinst_edges_sub(edgeᵢ_orig, edge.min_world, edge.max_world, edge.edges)
+            elseif edgeᵢ_orig === edge || (isdefined(edge, :inferred) && codeinst_edges_sub(edgeᵢ_orig, edge.min_world, edge.max_world, edge.edges))
                 # existing CodeInstance is identical
                 return
             end
