@@ -291,12 +291,14 @@ function uncompress_sbt(di::Core.DebugInfo)
     return SourceByteTable(di.def, line_offset, out_spans, out_newlines)
 end
 
+const LINENODE_SPAN_END = Int32(-5)
+
 function _di_pos(st::SyntaxTree)
     src = JuliaSyntax.unexpanded_sourceref(st)
     pos = if src isa SourceRef
         (Int32(first_byte(src)), Int32(last_byte(src)))
     elseif src isa LineNumberNode
-        (Int32(src.line), Int32(-1))
+        (Int32(src.line), LINENODE_SPAN_END)
     else
         @jl_assert false st
     end
@@ -309,7 +311,7 @@ _di_sourcefile(st) =
     end
 
 # A single pass over all IR to collect unique byte/line positions and CodeInfos
-function collect_locs!(node_sources, codeinfos, top_sf, st, toplevel)
+function collect_locs!(node_sources, codeinfos, top_sf, st)
     if kind(st) === K"code_info"
         push!(codeinfos, st)
         # TODO: macro_source is ignored for now
@@ -323,14 +325,15 @@ function collect_locs!(node_sources, codeinfos, top_sf, st, toplevel)
                 else
                     _di_pos(c)
                 end
-            collect_locs!(node_sources, codeinfos, top_sf, c, st.is_toplevel_thunk::Bool)
+            collect_locs!(node_sources, codeinfos, top_sf, c)
         end
-    elseif toplevel
-        # Note non-toplevel codeinfo should not contain nested codeinfo
+    elseif !is_leaf(st)
+        # Non-toplevel codeinfo can contain nested codeinfo (opaque closures)
         for c in children(st)
-            collect_locs!(node_sources, codeinfos, top_sf, c, true)
+            collect_locs!(node_sources, codeinfos, top_sf, c)
         end
     end
+    nothing
 end
 
 function add_ci_debuginfo!(st::SyntaxTree, file::Symbol,
@@ -340,7 +343,13 @@ function add_ci_debuginfo!(st::SyntaxTree, file::Symbol,
     @jl_assert kind(st) === K"code_info" st
     locs = let a = sizehint!(Vector{Int32}(), 3*numchildren(st[1]))
         for c in children(st[1])
-            push!(a, Int32(searchsortedfirst(spans, node_sources[c._id])))
+            if top_sbt isa String # precise provenance
+                push!(a, Int32(searchsortedfirst(spans, node_sources[c._id])))
+            else
+                i = searchsortedfirst(spans, node_sources[c._id])
+                @jl_assert spans[i][2] == LINENODE_SPAN_END (c, "lno with span end?")
+                push!(a, spans[i][1])
+            end
             push!(a, Int32(0))
             push!(a, Int32(0))
         end
@@ -359,7 +368,7 @@ function add_debuginfo!(st::SyntaxTree)
     node_sources = Dict{NodeId, Tuple{Int32, Int32}}()
     codeinfos = SyntaxList(st._graph)
     top_sf = _di_sourcefile(st)
-    collect_locs!(node_sources, codeinfos, top_sf, st, true)
+    collect_locs!(node_sources, codeinfos, top_sf, st)
     spans = sort!(unique(values(node_sources)))
     if top_sf isa SourceFile
         top_sbt = compress_sbt(SourceByteTable(top_sf, spans))

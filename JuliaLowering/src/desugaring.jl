@@ -2865,7 +2865,7 @@ expand_opaque_closure(ctx, ex) = @stm ex begin
     [K"opaque_closure" argt rt_lb rt_ub allow_partial lam] -> begin
         @jl_assert kind(lam[1]) === K"tuple" ex
         check_no_parameters(ex, lam[1])
-        raw_args = SyntaxList(children(lam[1])...)
+        raw_args = append!(SyntaxList(ctx.graph), children(lam[1]))
         arg_stmts = lower_destructuring_args!(ctx, raw_args)
 
         arg_names = SyntaxList(newsym(ctx, lam[1], "#self#"))
@@ -2891,7 +2891,7 @@ expand_opaque_closure(ctx, ex) = @stm ex begin
         out_rt_ub = kind(rt_ub) !== K"nothing" ? rt_ub :
             @ast ctx lam[1] "Any"::K"core"
         nargs = (length(arg_names)-1) # ignoring #self#
-        is_va = kind(raw_args[end]) === K"..."
+        is_va = !isempty(raw_args) && kind(raw_args[end]) === K"..."
         body = @ast ctx lam[2] [K"block" arg_stmts... lam[2]]
 
     @ast ctx ex [K"_opaque_closure"

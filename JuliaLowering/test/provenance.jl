@@ -44,3 +44,25 @@ end
         test_byte_precise(di, nstmts)
     end
 end
+
+@testset "Stack traces can read our debuginfo" begin
+    f_errors = JuliaLowering.eval(
+        test_mod,
+        Expr(:function, Expr(:call, :func_throws_at_myfile_200),
+             Expr(:block,
+                  LineNumberNode(100, :myfile),
+                  LineNumberNode(200, :myfile),
+                  Expr(:call, :error, "foo"),
+                  LineNumberNode(300, :myfile),
+                  :(return y * 2))))
+    frames = try
+        f_errors()
+        @test false=="expected error"
+    catch err
+        stacktrace(catch_backtrace())
+    end
+    myframe_i = findfirst(x->x.func==:func_throws_at_myfile_200, frames)
+    @test myframe_i == 2
+    # TODO: line field may disappear
+    @test frames[myframe_i].line == 200
+end
