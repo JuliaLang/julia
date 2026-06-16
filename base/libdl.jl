@@ -262,30 +262,6 @@ File extension for dynamic libraries (e.g. dll, dylib, so) on the current platfo
 """
 dlext
 
-if (Sys.islinux() || Sys.isbsd()) && !Sys.isapple()
-    struct dl_phdr_info
-        # Base address of object
-        addr::Cuint
-
-        # Null-terminated name of object
-        name::Ptr{UInt8}
-
-        # Pointer to array of ELF program headers for this object
-        phdr::Ptr{Cvoid}
-
-        # Number of program headers for this object
-        phnum::Cshort
-    end
-
-    # This callback function called by dl_iterate_phdr() on Linux and BSD's
-    # DL_ITERATE_PHDR(3) on freebsd
-    function dl_phdr_info_callback(di::dl_phdr_info, size::Csize_t, dynamic_libraries::Array{String,1})
-        name = unsafe_string(di.name)
-        push!(dynamic_libraries, name)
-        return Cint(0)
-    end
-end
-
 """
     dllist()
 
@@ -302,13 +278,10 @@ function dllist()
             name = unsafe_string(ccall(:_dyld_get_image_name, Cstring, (UInt32,), i))
             push!(dynamic_libraries, name)
         end
-    elseif Sys.islinux() || Sys.isbsd()
-        callback = @cfunction(dl_phdr_info_callback, Cint,
-                              (Ref{dl_phdr_info}, Csize_t, Ref{Vector{String}}))
-        ccall(:dl_iterate_phdr, Cint, (Ptr{Cvoid}, Ref{Vector{String}}), callback, dynamic_libraries)
-        popfirst!(dynamic_libraries)
-        filter!(!isempty, dynamic_libraries)
-    elseif Sys.iswindows()
+    elseif Sys.iswindows() || Sys.islinux() || Sys.isbsd()
+        # `dl_iterate_phdr` must be handled by C, since otherwise arbitrary Julia
+        # code (in finalizers / ccall symbol resolution) may compete for the dynamic
+        # linker lock held during its callback
         ccall(:jl_dllist, Cint, (Any,), dynamic_libraries)
     else
         # unimplemented
