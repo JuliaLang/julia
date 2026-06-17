@@ -42,7 +42,7 @@ If successful, return a 3-element tuple `(values, pos, num_parsed)`:
 
     tokens = Type[CONVERSION_SPECIFIERS[letter] for letter in letters]
     value_names = Symbol[genvar(t) for t in tokens]
-    value_defaults = Tuple(CONVERSION_DEFAULTS[t] for t in tokens)
+    value_defaults = Any[CONVERSION_DEFAULTS[t] for t in tokens]
 
     # Pre-assign variables to defaults. Allows us to use `@goto done` without worrying about
     # unassigned variables.
@@ -131,7 +131,7 @@ If successful, returns a 2-element tuple `(values, pos)`:
 
     output_tokens = CONVERSION_TRANSLATIONS[T]
     output_names = Symbol[genvar(t) for t in output_tokens]
-    output_defaults = Tuple(CONVERSION_DEFAULTS[t] for t in output_tokens)
+    output_defaults = Any[CONVERSION_DEFAULTS[t] for t in output_tokens]
 
     # Pre-assign output variables to defaults. Ensures that all output variables are
     # assigned as the value tuple returned from `tryparsenext_core` may not include all
@@ -326,7 +326,7 @@ end
 Parse the string into its components according to the directives in the `DateFormat`.
 Each component will be a distinct type, typically a subtype of Period. The order of the
 components will match the order of the `DatePart` directives within the `DateFormat`. The
-number of components may be less than the total number of `DatePart`.
+number of components may be less than the total number of `DatePart` directives.
 """
 @generated function parse_components(str::AbstractString, df::DateFormat)
     letters = character_codes(df)

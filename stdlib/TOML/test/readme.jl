@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# This test stuff in the TOML README at https://github.com/toml-lang/toml
+# This tests stuff in the TOML README at https://github.com/toml-lang/toml
 @testset "README" begin
 
 @testset "Example" begin
@@ -462,7 +462,7 @@ d = parse(str)
 @test d["bin5"] isa UInt128
 @test d["bin6"] isa BigInt
 
-#Arbitrary 64-bit signed integers (from −2^63 to 2^63−1) should be accepted and
+#Arbitrary 128-bit signed integers (from −2^127 to 2^127−1) should be accepted and
 #handled losslessly. If an integer cannot be represented losslessly, an error
 #must be thrown.
 str = """

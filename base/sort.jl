@@ -599,7 +599,7 @@ struct WithoutMissingVector{T, U} <: AbstractVector{T}
 end
 Base.@propagate_inbounds function Base.getindex(v::WithoutMissingVector, i::Integer)
     out = v.data[i]
-    @assert !(out isa Missing)
+    @assert !(out isa Missing) "encountered `missing` in WithoutMissingVector"
     out::eltype(v)
 end
 Base.@propagate_inbounds function Base.setindex!(v::WithoutMissingVector, x, i::Integer)
@@ -694,7 +694,7 @@ end
 Move NaN values to the end, partition by sign, and reinterpret the rest as unsigned integers.
 
 IEEE floating point numbers (`Float64`, `Float32`, and `Float16`) compare the same as
-unsigned integers with the bits with a few exceptions. This pass
+unsigned integers with the bits with a few exceptions.
 
 This pass is triggered for both `sort([1.0, NaN, 3.0])` and `sortperm([1.0, NaN, 3.0])`.
 """
@@ -1251,13 +1251,13 @@ function move!(v, target, source)
     # This function never dominates runtime—only add `@inbounds` if you can demonstrate a
     # performance improvement. And if you do, also double check behavior when `target`
     # is out of bounds.
-    @assert length(target) == length(source)
+    @assert length(target) == length(source) "length mismatch"
     if length(target) == 1 || isdisjoint(target, source)
         for (i, j) in zip(target, source)
             v[i], v[j] = v[j], v[i]
         end
     else
-        @assert minimum(source) <= minimum(target)
+        @assert minimum(source) <= minimum(target) "range mismatch"
         reverse!(v, minimum(source), maximum(target))
         reverse!(v, minimum(target), maximum(target))
     end
@@ -1328,7 +1328,7 @@ function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
             # Specifically, this means that expected_middle_ln == ln, so
             # ln <= ... + 2.0expected_middle_ln && return ...
             # will trigger.
-            @assert false
+            @assert false "this should never happen"
             # But if it does happen, the kernel reduces to
             0, hi
         elseif lo_signpost_i <= lo
@@ -2241,7 +2241,7 @@ UIntMappable(T::Type, order::Ordering) = nothing
 """
     uint_map(x, order::Base.Order.Ordering)::Unsigned
 
-Map `x` to an un unsigned integer, maintaining sort order.
+Map `x` to an unsigned integer, maintaining sort order.
 
 The map should be reversible with [`uint_unmap`](@ref), so `isless(order, a, b)` must be
 a linear ordering for `a, b <: typeof(x)`. Satisfies
@@ -2332,7 +2332,7 @@ Characteristics:
     compare equal (e.g. "a" and "A" in a sort of letters that
     ignores case).
   * *in-place* in memory.
-  * *divide-and-conquer*: sort strategy similar to [`MergeSort`](@ref).
+  * *divide-and-conquer*: sort strategy similar to [`QuickSort`](@ref).
 
 Note that `PartialQuickSort(k)` does not necessarily sort the whole array. For example,
 

@@ -7,8 +7,8 @@ const STDLIBS = filter!(x -> isfile(joinpath(STDLIB_DIR, x, "src", "$(x).jl")), 
 
 const TESTNAMES = [
         "subarray", "core", "compiler", "compiler_extras", "worlds", "atomics",
-        "keywordargs", "numbers", "subtype",
-        "char", "strings", "triplequote", "unicode", "intrinsics",
+        "keywordargs", "numbers", "subtype", "typegroup",
+        "char", "strings", "triplequote", "unicode", "intrinsics", "apint",
         "dict", "hashing", "iobuffer", "staged", "offsetarray",
         "arrayops", "tuple", "reduce", "reducedim", "abstractarray",
         "intfuncs", "simdloop", "vecelement", "rational",
@@ -31,7 +31,7 @@ const TESTNAMES = [
         "smallarrayshrink", "opaque_closure", "filesystem", "download",
         "scopedvalues", "compileall", "rebinding",
         "faulty_constructor_method_should_not_cause_stack_overflows",
-        "JuliaSyntax", "JuliaLowering", "JuliaLowering_stdlibs",
+        "JuliaSyntax", "JuliaLowering", "JuliaLowering_stdlibs", "jit",
 ]
 
 const INTERNET_REQUIRED_LIST = [
@@ -80,7 +80,7 @@ function test_path(test)
 end
 
 """
-`(; tests, net_on, exit_on_error, seed) = choosetests(choices)` selects a set of tests to be
+`(; tests, net_on, exit_on_error, use_revise, buildroot, seed) = choosetests(choices)` selects a set of tests to be
 run. `choices` should be a vector of test names; if empty or set to
 `["all"]`, all tests are selected.
 

@@ -49,7 +49,6 @@ for (Op, initval) in ((:(typeof(and_all)), true), (:(typeof(or_any)), false))
     @eval initarray!(a::AbstractArray, ::Any, ::$(Op), init::Bool, src::AbstractArray) = (init && fill!(a, $initval); a)
 end
 
-# reducedim_initarray is called by
 reducedim_initarray(A::AbstractArrayOrBroadcasted, region, init, ::Type{R}) where {R} = fill!(similar(A,R,reduced_indices(A,region)), init)
 reducedim_initarray(A::AbstractArrayOrBroadcasted, region, init::T) where {T} = reducedim_initarray(A, region, init, T)
 
@@ -871,7 +870,7 @@ julia> all(i -> i > 0, A, dims=2)
  1
 ```
 """
-all(::Function, ::AbstractArray; dims)
+all(f, ::AbstractArray; dims)
 
 """
     all!(r, A)
@@ -945,7 +944,7 @@ julia> any(i -> i > 0, A, dims=2)
  1
 ```
 """
-any(::Function, ::AbstractArray; dims)
+any(f, ::AbstractArray; dims)
 
 """
     any!(r, A)
@@ -1002,7 +1001,7 @@ for (fname, op) in [(:sum, :add_sum), (:prod, :mul_prod),
     _fname = Symbol('_', fname)
     mapf = fname === :extrema ? :(ExtremaMap(f)) : :f
     @eval begin
-        $(fname!)(f::Function, r::AbstractArray, A::AbstractArray; init::Bool=true) =
+        $(fname!)(f, r::AbstractArray, A::AbstractArray; init::Bool=true) =
             mapreducedim!($mapf, $(op), initarray!(r, $mapf, $(op), init, A), A)
         $(fname!)(r::AbstractArray, A::AbstractArray; init::Bool=true) = $(fname!)(identity, r, A; init=init)
 

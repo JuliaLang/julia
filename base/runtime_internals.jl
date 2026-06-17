@@ -88,7 +88,7 @@ function moduleloc(m::Module)
 end
 
 """
-    names(x::Module; all::Bool=false, imported::Bool=false, usings::Bool=false)::Vector{Symbol}
+    names(x::Module; all::Bool=false, imported::Bool=false, usings::Bool=false, world::UInt=Base.tls_world_age())::Vector{Symbol}
 
 Get a vector of the public names of a `Module`, excluding deprecated names.
 If `all` is true, then the list also includes non-public names defined in the module,
@@ -100,6 +100,10 @@ Names are returned in sorted order.
 
 As a special case, all names defined in `Main` are considered \"public\",
 since it is not idiomatic to explicitly mark names from `Main` as public.
+
+The `world` argument controls the world age used to look up binding partitions, defaulting
+to the current task's world age. Pass `world=Base.get_world_counter()` to include names
+from the latest world.
 
 !!! note
     `sym ∈ names(SomeModule)` does *not* imply `isdefined(SomeModule, sym)`.
@@ -116,8 +120,9 @@ since it is not idiomatic to explicitly mark names from `Main` as public.
 See also [`Base.isexported`](@ref), [`Base.ispublic`](@ref), [`Base.@locals`](@ref), [`@__MODULE__`](@ref).
 """
 names(m::Module; kwargs...) = sort!(unsorted_names(m; kwargs...))
-unsorted_names(m::Module; all::Bool=false, imported::Bool=false, usings::Bool=false) =
-    ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint, Cint), m, all, imported, usings)
+unsorted_names(m::Module; all::Bool=false, imported::Bool=false, usings::Bool=false,
+               world::UInt=tls_world_age()) =
+    ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint, Cint, UInt), m, all, imported, usings, world)
 
 """
     isexported(m::Module, s::Symbol)::Bool
@@ -208,6 +213,9 @@ julia> bar() = nameof(@__FUNCTION__);
 julia> bar()
 :bar
 ```
+
+!!! compat "Julia 1.13"
+    This macro requires at least Julia 1.13.
 """
 macro __FUNCTION__()
     Expr(:thisfunction)
@@ -224,6 +232,7 @@ function binding_module(m::Module, s::Symbol)
 end
 
 const _NAMEDTUPLE_NAME = NamedTuple.body.body.name
+const _TYPE_NAME = TypeEq.name
 
 function _fieldnames(@nospecialize t)
     if t.name === _NAMEDTUPLE_NAME
@@ -577,6 +586,12 @@ struct DataTypeLayout
     # padding : 8;
 end
 
+function DataTypeLayout(dt::DataType)
+    layout = dt.layout::Ptr{Cvoid}
+    layout == C_NULL && throw(UndefRefError())
+    return unsafe_load(convert(Ptr{DataTypeLayout}, layout))
+end
+
 """
     Base.datatype_alignment(dt::DataType)::Int
 
@@ -584,13 +599,8 @@ Memory allocation minimum alignment for instances of this type.
 Can be called on any `isconcretetype`, although for Memory it will give the
 alignment of the elements, not the whole object.
 """
-function datatype_alignment(dt::DataType)
-    @_foldable_meta
-    layout = dt.layout::Ptr{Cvoid}
-    layout == C_NULL && throw(UndefRefError())
-    alignment = unsafe_load(convert(Ptr{DataTypeLayout}, layout)).alignment
-    return Int(alignment)
-end
+datatype_alignment(dt::DataType) = (@_foldable_meta; datatype_alignment(DataTypeLayout(dt)))
+datatype_alignment(dtl::DataTypeLayout) = Int(dtl.alignment)
 
 function uniontype_layout(@nospecialize T::Type)
     sz = RefValue{Csize_t}(0)
@@ -629,27 +639,19 @@ with no intervening padding bits (defined as bits whose value does not impact
 the semantic value of the instance itself).
 Can be called on any `isconcretetype`.
 """
-function datatype_haspadding(dt::DataType)
-    @_foldable_meta
-    dt.layout == C_NULL && throw(UndefRefError())
-    flags = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).flags
-    return flags & 1 == 1
-end
+datatype_haspadding(dt::DataType) = (@_foldable_meta; datatype_haspadding(DataTypeLayout(dt)))
+datatype_haspadding(dtl::DataTypeLayout) = dtl.flags & 1 == 1
 
 """
     Base.datatype_isbitsegal(dt::DataType)::Bool
 
 Return whether egality of the (non-padding bits of the) in-memory representation
-of an instance of this type implies semantic egality of the instance itself.
-This may not be the case if the type contains to other values whose egality is
+of an instance of this type is equivalent to semantic egality of the instance itself.
+This may not be the case if the type contains pointers to other values whose egality is
 independent of their identity (e.g. immutable structs, some types, etc.).
 """
-function datatype_isbitsegal(dt::DataType)
-    @_foldable_meta
-    dt.layout == C_NULL && throw(UndefRefError())
-    flags = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).flags
-    return (flags & (1<<7)) != 0
-end
+datatype_isbitsegal(dt::DataType) = (@_foldable_meta; datatype_isbitsegal(DataTypeLayout(dt)))
+datatype_isbitsegal(dtl::DataTypeLayout) = (dtl.flags & (1<<7)) != 0
 
 """
     Base.datatype_nfields(dt::DataType)::UInt32
@@ -658,23 +660,16 @@ Return the number of fields known to this datatype's layout. This may be
 different from the number of actual fields of the type for opaque types.
 Can be called on any `isconcretetype`.
 """
-function datatype_nfields(dt::DataType)
-    @_foldable_meta
-    dt.layout == C_NULL && throw(UndefRefError())
-    return unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).nfields
-end
+datatype_nfields(dt::DataType) = (@_foldable_meta; datatype_nfields(DataTypeLayout(dt)))
+datatype_nfields(dtl::DataTypeLayout) = dtl.nfields
 
 """
     Base.datatype_npointers(dt::DataType)::Int
 
 Return the number of pointers in the layout of a datatype.
 """
-function datatype_npointers(dt::DataType)
-    @_foldable_meta
-    layout = dt.layout::Ptr{Cvoid}
-    layout == C_NULL && throw(UndefRefError())
-    return unsafe_load(convert(Ptr{DataTypeLayout}, layout)).npointers
-end
+datatype_npointers(dt::DataType) = (@_foldable_meta; datatype_npointers(DataTypeLayout(dt)))
+datatype_npointers(dtl::DataTypeLayout) = dtl.npointers
 
 """
     Base.datatype_pointerfree(dt::DataType)::Bool
@@ -696,12 +691,8 @@ Can be called on any `isconcretetype`.
 
 See also [`fieldoffset`](@ref).
 """
-function datatype_fielddesc_type(dt::DataType)
-    @_foldable_meta
-    dt.layout == C_NULL && throw(UndefRefError())
-    flags = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).flags
-    return (flags >> 1) & 3
-end
+datatype_fielddesc_type(dt::DataType) = (@_foldable_meta; datatype_fielddesc_type(DataTypeLayout(dt)))
+datatype_fielddesc_type(dtl::DataTypeLayout) = (dtl.flags >> 1) & 3
 
 """
     Base.datatype_arrayelem(dt::DataType)::Int
@@ -713,19 +704,11 @@ Can be called on any `isconcretetype`, but only meaningful on `Memory`.
 1 = isboxed
 2 = isbitsunion
 """
-function datatype_arrayelem(dt::DataType)
-    @_foldable_meta
-    dt.layout == C_NULL && throw(UndefRefError())
-    flags = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).flags
-    return (flags >> 3) & 3
-end
+datatype_arrayelem(dt::DataType) = (@_foldable_meta; datatype_arrayelem(DataTypeLayout(dt)))
+datatype_arrayelem(dtl::DataTypeLayout) = (dtl.flags >> 3) & 3
 
-function datatype_layoutsize(dt::DataType)
-    @_foldable_meta
-    dt.layout == C_NULL && throw(UndefRefError())
-    size = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).size
-    return size % Int
-end
+datatype_layoutsize(dt::DataType) = (@_foldable_meta; datatype_layoutsize(DataTypeLayout(dt)))
+datatype_layoutsize(dtl::DataTypeLayout) = dtl.size % Int
 
 
 # For type stability, we only expose a single struct that describes everything
@@ -759,14 +742,13 @@ function getindex(dtfd::DataTypeFieldDesc, i::Int)
     fielddesc_type = (layout.flags >> 1) & 3
     nfields = layout.nfields
     @boundscheck ((1 <= i <= nfields) || throw(BoundsError(dtfd, i)))
-    if fielddesc_type == 0
+    if fielddesc_type == 0  # JL_FIELDDESC_8
         return FieldDesc(unsafe_load(Ptr{FieldDescStorage{UInt8}}(fd_ptr), i))
-    elseif fielddesc_type == 1
+    elseif fielddesc_type == 1  # JL_FIELDDESC_16
         return FieldDesc(unsafe_load(Ptr{FieldDescStorage{UInt16}}(fd_ptr), i))
-    elseif fielddesc_type == 2
+    elseif fielddesc_type == 2  # JL_FIELDDESC_32
         return FieldDesc(unsafe_load(Ptr{FieldDescStorage{UInt32}}(fd_ptr), i))
-    else
-        # fielddesc_type == 3
+    else # fielddesc_type == 3  # JL_FIELDDESC_FOREIGN
         return FieldDesc(true, true, 0, 0)
     end
 end
@@ -957,6 +939,9 @@ function ismutationfree(@nospecialize(t))
     t = unwrap_unionall(t)
     if isa(t, DataType)
         return datatype_ismutationfree(t)
+    elseif isa(t, TypeEq)
+        T = type_parameter(t)
+        return isa(T, Type) && ismutationfree(typeof(T))
     elseif isa(t, Union)
         return ismutationfree(t.a) && ismutationfree(t.b)
     end
@@ -977,6 +962,9 @@ function isidentityfree(@nospecialize(t))
     t = unwrap_unionall(t)
     if isa(t, DataType)
         return datatype_isidentityfree(t)
+    elseif isa(t, TypeEq)
+        T = type_parameter(t)
+        return isa(T, Type) && isidentityfree(typeof(T))
     elseif isa(t, Union)
         return isidentityfree(t.a) && isidentityfree(t.b)
     end
@@ -993,7 +981,7 @@ or [`Core.TypeofBottom`](@ref).
 
 All kinds are [concrete](@ref isconcretetype) because types are Julia values.
 """
-iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union || t === typeof(Bottom))
+iskindtype(@nospecialize t) = (t === Core.AnyType || t === DataType || t === UnionAll || t === Union || t === TypeEq || t === typeof(Bottom))
 
 """
     Base.isconcretedispatch(T)
@@ -1029,8 +1017,8 @@ function isdispatchelem(@nospecialize v)
         (isType(v) && !has_free_typevars(v))
 end
 
-const _TYPE_NAME = Type.body.name
-isType(@nospecialize t) = isa(t, DataType) && t.name === _TYPE_NAME
+isType(@nospecialize t) = isa(t, TypeEq)
+type_parameter(t::TypeEq) = getfield(t, :T)
 
 """
     isconcretetype(T)
@@ -1107,6 +1095,7 @@ false
 function isabstracttype(@nospecialize(t))
     @_total_meta
     t = unwrap_unionall(t)
+    isType(t) && return true
     # TODO: what to do for `Union`?
     return isa(t, DataType) && (t.name.flags & 0x1) == 0x1
 end
@@ -1170,7 +1159,7 @@ We can use it to summarize information about a struct:
 julia> structinfo(T) = [(fieldoffset(T,i), fieldname(T,i), fieldtype(T,i)) for i = 1:fieldcount(T)];
 
 julia> structinfo(Base.Filesystem.StatStruct)
-14-element Vector{Tuple{UInt64, Symbol, Type}}:
+14-element Vector{Tuple{UInt64, Symbol, Core.AnyType}}:
  (0x0000000000000000, :desc, Union{RawFD, String})
  (0x0000000000000008, :device, UInt64)
  (0x0000000000000010, :inode, UInt64)
@@ -1366,7 +1355,7 @@ julia> fieldtypes(Foo)
 (Int64, String)
 ```
 """
-fieldtypes(T::Type) = (@_foldable_meta; ntupleany(i -> fieldtype(T, i), fieldcount(T)))
+fieldtypes(@nospecialize T::Type) = (@_foldable_meta; ntupleany(i -> fieldtype(T, i), fieldcount(T)))
 
 # return all instances, for types that can be enumerated
 
@@ -1395,7 +1384,7 @@ function to_tuple_type(@nospecialize(t))
             if isa(p, Core.TypeofVararg)
                 p = unwrapva(p)
             end
-            if !(isa(p, Type) || isa(p, TypeVar))
+            if !(isa(p, Core.AnyType) || isa(p, TypeVar))
                 error("argument tuple type must contain only types")
             end
         end
@@ -1425,17 +1414,65 @@ end
 
 Determine whether `t` is a Type for which one or more of its parameters is `Union{}`.
 """
-function has_bottom_parameter(t::DataType)
-    for p in t.parameters
-        has_bottom_parameter(p) && return true
+function has_bottom_parameter(@nospecialize(t::Core.AnyType))
+    t === Bottom && return true
+    ty = typeof(t)
+    if ty === DataType
+        for p in getfield(t, :parameters)
+            has_bottom_parameter(p) && return true
+        end
+    elseif ty === TypeEq
+        return has_bottom_parameter(type_parameter(t))
+    elseif ty === UnionAll
+        return has_bottom_parameter(unwrap_unionall(t))
+    elseif ty === Union
+        return has_bottom_parameter(getfield(t, :a)) & has_bottom_parameter(getfield(t, :b))
     end
     return false
 end
-has_bottom_parameter(t::typeof(Bottom)) = true
-has_bottom_parameter(t::UnionAll) = has_bottom_parameter(unwrap_unionall(t))
-has_bottom_parameter(t::Union) = has_bottom_parameter(t.a) & has_bottom_parameter(t.b)
 has_bottom_parameter(t::TypeVar) = has_bottom_parameter(t.ub)
 has_bottom_parameter(::Any) = false
+
+function find_free_typevars(@nospecialize(t))
+    return ccall(:jl_find_free_typevars, Array{Any, 1}, (Any,), t)
+end
+
+"""
+    rewrap_free_typevars(@nospecialize(t), pre=Core.svec())
+
+Wrap `t` in `UnionAll` for each `TypeVar` that is free in `t` but not referenced
+in `pre` (the typevars that were free in the consumer's input before an env was
+applied).
+
+This is the consumer-side complement to `jl_type_intersection_env` /
+`jl_subtype_env`: the env svec may contain entries whose typevar identity is
+shared across slots. Rather than wrapping each slot independently (which breaks
+that identity), callers that build a new type from the env should apply this
+helper once to the final reconstructed type.
+"""
+function rewrap_free_typevars(@nospecialize(t), pre=Core.svec())
+    has_free_typevars(t) || return t
+    # UnionAll cannot directly wrap a Vararg; the caller must wrap it in Tuple first
+    isvarargtype(t) && return t
+    fv = find_free_typevars(t)
+    for i in length(fv):-1:1
+        v = fv[i]::TypeVar
+        wrap = true
+        for p in pre
+            if p === v
+                wrap = false
+                break
+            end
+        end
+        wrap && (t = UnionAll(v, t))
+    end
+    return t
+end
+
+function typeintersect_env(@nospecialize(a), @nospecialize(b))
+    (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), a, b)::SimpleVector
+    Pair{Any, SimpleVector}(ti, env)
+end
 
 min_world(m::Core.CodeInstance) = m.min_world
 max_world(m::Core.CodeInstance) = m.max_world
@@ -1542,6 +1579,10 @@ Return the method table for `f`.
 If `types` is specified, return an array of methods whose types match.
 If `module` is specified, return an array of methods defined in that module.
 A list of modules can also be specified as an array or set.
+
+The methods are ordered from most to least specific. The relative order of
+methods without a specificity relationship (i.e. ambiguous or incomparable)
+is unspecified.
 
 !!! compat "Julia 1.4"
     At least Julia 1.4 is required for specifying a module.
@@ -1695,7 +1736,7 @@ function may_invoke_generator(method::Method, @nospecialize(atype), sparams::Sim
 
     firstarg = 1
     for i = 1:nsparams
-        if isa(sparams[i], TypeVar)
+        if isa(sparams[i], SimpleVector)
             if (ast_slotflag(code, firstarg + i) & SLOT_USED) != 0
                 return false
             end
@@ -1712,7 +1753,7 @@ function may_invoke_generator(method::Method, @nospecialize(atype), sparams::Sim
     end
     if method.isva
         # If the va argument is used, we need to ensure that all arguments that
-        # contribute to the va tuple are dispatchelemes
+        # contribute to the va tuple are dispatch elements
         if (ast_slotflag(code, firstarg + nargs + nsparams) & SLOT_USED) != 0
             for i = (non_va_args+1):length(at.parameters)
                 if !isdispatchelem(at.parameters[i])
@@ -1754,8 +1795,7 @@ function normalize_typevars(method::Method, @nospecialize(atype), sparams::Simpl
     at2 = subst_trivial_bounds(atype)
     if at2 !== atype && at2 == atype
         atype = at2
-        sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), at2, method.sig)::SimpleVector
-        sparams = sp_[2]::SimpleVector
+        (_, sparams) = typeintersect_env(at2, method.sig)
     end
     return Pair{Any,SimpleVector}(atype, sparams)
 end

@@ -227,7 +227,7 @@ function validate_tags(tags::Dict)
     # Validate `os`/`arch`/`call_abi` combination
     throw_call_abi_mismatch() = throw(ArgumentError("Invalid os/arch/call_abi combination: $(tags["os"])/$(tags["arch"])/$(tags["call_abi"])"))
     if tags["os"] == "linux" && tags["arch"] ∈ ("armv7l", "armv6l")
-        # If an ARM linux has does not have `call_abi` set to something valid, be sad.
+        # If an ARM linux does not have `call_abi` set to something valid, be sad.
         if !haskey(tags, "call_abi") || tags["call_abi"] ∉ ("eabihf", "eabi")
             throw_call_abi_mismatch()
         end
@@ -620,22 +620,12 @@ const arch_march_isa_mapping = let
             "avx2" => get_set("x86_64", "haswell"),
             "avx512" => get_set("x86_64", "skylake_avx512"),
         ],
-        "armv6l" => [
-            "arm1176jzfs" => get_set("armv6l", "arm1176jzfs"),
-        ],
-        "armv7l" => [
-            "armv7l" => get_set("armv7l", "armv7l"),
-            "neonvfpv4" => get_set("armv7l", "armv7l+neon+vfpv4"),
-        ],
         "aarch64" => [
             "armv8_0" => get_set("aarch64", "armv8.0-a"),
             "armv8_1" => get_set("aarch64", "armv8.1-a"),
             "armv8_2_crypto" => get_set("aarch64", "armv8.2-a+crypto"),
             "a64fx" => get_set("aarch64", "a64fx"),
             "apple_m1" => get_set("aarch64", "apple_m1"),
-        ],
-        "powerpc64le" => [
-            "power8" => get_set("powerpc64le", "power8"),
         ],
         "riscv64" => [
             "riscv64" => get_set("riscv64", "riscv64"),
@@ -832,7 +822,7 @@ function parse_dl_name_version(path::String, os::String=_this_os_name())
         # On OSX, libraries look like `libnettle.6.3.dylib`
         dlregex = r"^(.*?)((?:\.[\d]+)*)\.dylib$"sa
     else
-        # On Linux and others BSD, libraries look like `libnettle.so.6.3.0`
+        # On Linux and other BSDs, libraries look like `libnettle.so.6.3.0`
         dlregex = r"^(.*?)\.so((?:\.[\d]+)*)$"sa
     end
 
@@ -904,7 +894,7 @@ function _get_libstdcxx_handle()
         return Libdl.dlopen(first(libstdcxx_paths), Libdl.RTLD_NOLOAD)::Ptr{Cvoid}
     end
 
-    # One day, I hope to not be linking against libgfortran in base Julia
+    # One day, I hope to not be linking against libstdc++ in base Julia
     return nothing
 end
 

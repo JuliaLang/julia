@@ -1,8 +1,55 @@
-@testset "Type definitions" begin
-
 test_mod = Module(:TestMod)
 
 Base.eval(test_mod, :(struct XX{S,T,U,W} end))
+
+@testset "where" begin
+    @test JuliaLowering.include_string(test_mod, """
+    Vector{T} where T<:Number
+    """) == Vector{T} where T<:Number
+    @test JuliaLowering.include_string(test_mod, """
+    Vector{T} where T>:Int
+    """) == Vector{T} where T>:Int
+    @test JuliaLowering.include_string(test_mod, """
+    Vector{T} where Int<:T<:Number
+    """) == Vector{T} where Int<:T<:Number
+    @test JuliaLowering.include_string(test_mod, """
+    Vector{T} where Number>:T>:Int
+    """) == Vector{T} where Int<:T<:Number
+
+    # with nontrivial type bounds
+    @test JuliaLowering.include_string(test_mod, """
+    Vector{T} where {T<:(U where U<:(V where V<:Number))}
+    """) == Vector{T} where T<:Number
+    @test JuliaLowering.include_string(test_mod, """
+    Vector{T} where T<:(()->Number)()
+    """) == Vector{T} where T<:Number
+    @test JuliaLowering.include_string(test_mod, """
+    Vector{T} where (()->Int)()<:T<:(()->Number)()
+    """) == Vector{T} where Int<:T<:Number
+
+    # multi-layer
+    @test JuliaLowering.include_string(test_mod, """
+    Vector{T} where {A<:Any, B<:A, C>:B, C<:T<:C}
+    """) == Vector{T} where {A, B<:A, C>:B, C<:T<:C}
+    @test JuliaLowering.include_string(test_mod, """
+    Pair{T, A} where {A<:E<:D, A<:T<:E} where {A<:C<:B, A<:D<:C} where {A, B<:A}
+    """) == Pair{T, A} where {A, B<:A, A<:C<:B, A<:D<:C, A<:E<:D, A<:T<:E}
+    @test JuliaLowering.include_string(test_mod, """
+    Vector{T} where (()->U)()<:T<:(()->U)() where (()->Int)()<:U<:(()->Number)()
+    """) == Vector{T} where {Int<:U<:Number, U<:T<:U}
+
+    @testset "implicit whereparams" begin
+        @test JuliaLowering.include_string(test_mod, """
+        Vector{<:Number}
+        """) == Vector{<:Number}
+        @test JuliaLowering.include_string(test_mod, """
+        Vector{>:Number}
+        """) == Vector{>:Number}
+        @test JuliaLowering.include_string(test_mod, """
+        Vector{<:(()->Number)()}
+        """) == Vector{<:Number}
+    end
+end
 
 @test JuliaLowering.include_string(test_mod, """
 XX{Int, <:Integer, Float64, >:AbstractChar}
@@ -55,6 +102,98 @@ end
 @test isconcretetype(test_mod.S1{Int,String})
 @test fieldtypes(test_mod.S1{Int,String}) == (Int, String, Any)
 @test supertype(test_mod.S1) == test_mod.A
+
+@testset "atomic/const fields" begin
+    # The parser rejects wrapped const struct fields ("expected assignment after
+    # const") which probably shouldn't be the parser's job.
+    fl_eval(test_mod, :(macro var"const"(x); esc(Expr(:const, x)); end))
+
+    @gensym S
+    @test jl_eval(
+        test_mod,
+        :(begin
+              mutable struct $S
+                  @atomic x::Bool
+                  @const y::Bool
+              end
+              $S(true,false).x
+          end)) == true
+    @test fieldnames(getproperty(test_mod, S)) == (:x, :y)
+    @test_throws "cannot be changed" jl_eval(
+        test_mod, :($S(true,false).y = true))
+
+    @gensym S
+    @test jl_eval(
+        test_mod,
+        :(begin
+              mutable struct $S
+                  begin
+                      begin
+                          @atomic x::Bool
+                      end
+                  end
+                  begin
+                      begin
+                          @const y::Bool
+                      end
+                  end
+              end
+              $S(true,false).x
+          end)) == true
+    @test fieldnames(getproperty(test_mod, S)) == (:x, :y)
+    @test_throws "cannot be changed" jl_eval(
+        test_mod, :($S(true,false).y = true))
+
+    @gensym S
+    @test jl_eval(
+        test_mod,
+        :(begin
+              mutable struct $S
+                  @static if true
+                      # Blocks are expected to be splatted into the struct body
+                      begin
+                          @atomic x::Bool
+                          @const y::Bool
+                      end
+                  else
+                      x::Bool
+                      y::Bool
+                  end
+              end
+              $S(true,false).x
+          end)) == true
+    @test fieldnames(getproperty(test_mod, S)) == (:x, :y)
+    @test_throws "cannot be changed" jl_eval(test_mod, :($S(true,false).y = true))
+end
+
+@testset "placeholder fields" begin
+    @test JuliaLowering.include_string(test_mod, """
+    mutable struct PlaceholderFields
+        _::Int
+        __
+        const ___
+        x
+    end
+    fieldnames(PlaceholderFields)
+    """) === (:_, :__, :___, :x)
+    @test fieldtypes(test_mod.PlaceholderFields) == (Int, Any, Any, Any)
+    let p = test_mod.PlaceholderFields(1.0, 2, 3, 4)
+        @test getfield(p, 1) === 1
+        @test getfield(p, 2) === 2
+        @test getfield(p, 3) === 3
+        @test getfield(p, 4) === 4
+        @test_throws "const field" setfield!(p, 3, 0)
+    end
+
+    # placeholder field types still apply in `new`
+    @test JuliaLowering.include_string(test_mod, """
+    struct PlaceholderNew
+        _::Int
+        PlaceholderNew(x) = new(x)
+    end
+    getfield(PlaceholderNew(3.0), 1)
+    """) === 3
+end
 
 # Inner constructors: one field non-Any
 @test JuliaLowering.include_string(test_mod, """
@@ -172,6 +311,139 @@ Base.Vector{T}(x::T) where {S5<:T<:S5} = T[x]
 let v = Base.Vector{test_mod.S5}(test_mod.S5(1,1))
     @test v isa Vector{test_mod.S5}
     @test v[1] === test_mod.S5(1,1)
+end
+
+@testset "inner ctor should always include (latestworld)" begin
+    @test fl_eval(
+        test_mod,
+        :(begin
+              struct fl_DefaultInnerCtorWorld; x::Int; end
+              fl_DefaultInnerCtorWorld(1)
+          end)).x == 1
+    @test jl_eval(
+        test_mod,
+        :(begin
+              struct jl_DefaultInnerCtorWorld; x::Int; end
+              jl_DefaultInnerCtorWorld(1)
+          end)).x == 1
+    @test fl_eval(
+        test_mod,
+        :(begin
+              struct fl_InnerCtorWorld; x::Int; fl_InnerCtorWorld() = new(1); end
+              fl_InnerCtorWorld()
+          end)).x == 1
+    @test jl_eval(
+        test_mod,
+        :(begin
+              struct jl_InnerCtorWorld; x::Int; jl_InnerCtorWorld() = new(1); end
+              jl_InnerCtorWorld()
+          end)).x == 1
+end
+
+# Likely not set in stone (the behaviour is odd here), but test to detect changes
+@testset "when default inner ctors are generated" begin
+    local function test_has_inner_ctor(t)
+        @test t(0) isa t
+        @test t(0).field == 0
+        @test_throws MethodError t(nothing)
+    end
+
+    local function test_no_inner_ctor(t)
+        @test_throws MethodError t(0)
+    end
+
+    @test JL.include_string(test_mod, raw"""
+        struct DefaultInnerCtors1
+        field::Int
+        end
+    """) === nothing
+    test_has_inner_ctor(test_mod.DefaultInnerCtors1)
+    @test fieldnames(test_mod.DefaultInnerCtors1) == (:field,)
+
+    @test JL.include_string(test_mod, raw"""
+        struct DefaultInnerCtors2
+        "docs"
+        field::Int
+        end
+    """) === nothing
+    test_has_inner_ctor(test_mod.DefaultInnerCtors2)
+    @test fieldnames(test_mod.DefaultInnerCtors2) == (:field,)
+
+    @test JL.include_string(test_mod, raw"""
+        struct DefaultInnerCtors3
+        "docs with interpolation $(999)"
+        field::Int
+        end
+    """) === nothing
+    test_has_inner_ctor(test_mod.DefaultInnerCtors3)
+    @test fieldnames(test_mod.DefaultInnerCtors3) == (:field,)
+
+    @test JL.include_string(test_mod, raw"""
+        struct DefaultInnerCtors4
+        "docs with interpolation $(999)"
+        "docs with interpolation $(999)"
+        field::Int
+        "docs with interpolation $(999)"
+        "docs with interpolation $(999)"
+        end
+    """) === nothing
+    test_has_inner_ctor(test_mod.DefaultInnerCtors4)
+    @test fieldnames(test_mod.DefaultInnerCtors4) == (:field,)
+
+    @test JL.include_string(test_mod, raw"""
+        struct DefaultInnerCtors5
+        field::Int
+        0
+        end
+    """) === nothing
+    test_has_inner_ctor(test_mod.DefaultInnerCtors5)
+    @test fieldnames(test_mod.DefaultInnerCtors5) == (:field,)
+
+    @test JL.include_string(test_mod, raw"""
+        struct DefaultInnerCtors6
+        field::Int
+        :inert_sym
+        end
+    """) === nothing
+    test_has_inner_ctor(test_mod.DefaultInnerCtors6)
+    @test fieldnames(test_mod.DefaultInnerCtors6) == (:field,)
+
+    @test JL.include_string(test_mod, raw"""
+        struct NoDefaultInnerCtors1
+        field::Int
+        identity(1)
+        end
+    """) === nothing
+    test_no_inner_ctor(test_mod.NoDefaultInnerCtors1)
+    @test fieldnames(test_mod.NoDefaultInnerCtors1) == (:field,)
+
+    @test JL.include_string(test_mod, raw"""
+        struct NoDefaultInnerCtors2
+        field::Int
+        ()->()
+        end
+    """) === nothing
+    test_no_inner_ctor(test_mod.NoDefaultInnerCtors2)
+    @test fieldnames(test_mod.NoDefaultInnerCtors2) == (:field,)
+
+    @test JL.include_string(test_mod, raw"""
+        struct NoDefaultInnerCtors3
+        field::Int
+        NoDefaultInnerCtors3(not,default,too,many,args) = new(1)
+        end
+    """) === nothing
+    test_no_inner_ctor(test_mod.NoDefaultInnerCtors3)
+    @test fieldnames(test_mod.NoDefaultInnerCtors3) == (:field,)
+    @test length(methods(test_mod.NoDefaultInnerCtors3)) == 1
+
+    @test JL.include_string(test_mod, raw"""
+        struct NoDefaultInnerCtors4
+        field::Int
+        :(inert + code)
+        end
+    """) === nothing
+    test_no_inner_ctor(test_mod.NoDefaultInnerCtors4)
+    @test fieldnames(test_mod.NoDefaultInnerCtors4) == (:field,)
 end
 
 # User defined inner constructors and helper functions for structs without type params
@@ -305,6 +577,11 @@ JuliaLowering.include_string(test_mod, "const orig_P36104 = P36104")
 JuliaLowering.include_string(test_mod, "primitive type P36104 16 end")
 @test test_mod.P36104 !== test_mod.orig_P36104
 
+# Duplicate field names should be rejected
+@test_throws LoweringError JuliaLowering.include_string(test_mod, "struct DupField; x; x; end")
+@test_throws LoweringError JuliaLowering.include_string(test_mod, "struct DupField2; x::Int; x::String; end")
+@test_throws LoweringError JuliaLowering.include_string(test_mod, "mutable struct DupField3; x; y; x; end")
+
 # Struct with outer constructor where one typevar is constrained by the other
 # See https://github.com/JuliaLang/julia/issues/27269)
 @test JuliaLowering.include_string(test_mod, """
@@ -367,4 +644,157 @@ let s = test_mod.ShadowTypeParam("hello")
     @test s.x === "hello"
 end
 
+# Inner kwarg constructor
+@test JuliaLowering.include_string(test_mod, """
+struct CheckConfig
+    field::Int
+    function CheckConfig(parg::String; kw::Int = 4)
+        new(length(parg) + kw)
+    end
+    function CheckConfig(optarg1=1, optarg2=10; kw1, kw2 = 1000)
+        new(optarg1+optarg2+kw1+kw2)
+    end
+    function CheckConfig(optarg1=1, optarg2=10; kw1, kw2 = 1000)
+        new(optarg1+optarg2+kw1+kw2)
+    end
 end
+""") === nothing
+
+@test isdefined(test_mod, :CheckConfig)
+
+let s = test_mod.CheckConfig("")
+    @test s isa test_mod.CheckConfig
+    @test s.field == 4
+end
+let s = test_mod.CheckConfig("";kw=5)
+    @test s isa test_mod.CheckConfig
+    @test s.field == 5
+end
+let s = test_mod.CheckConfig(;kw1=100)
+    @test s isa test_mod.CheckConfig
+    @test s.field == 1111
+end
+let s = test_mod.CheckConfig(;kw1=100, kw2=0)
+    @test s isa test_mod.CheckConfig
+    @test s.field == 111
+end
+let s = test_mod.CheckConfig(0;kw1=100, kw2=0)
+    @test s isa test_mod.CheckConfig
+    @test s.field == 110
+end
+let s = test_mod.CheckConfig(0,0;kw1=100)
+    @test s isa test_mod.CheckConfig
+    @test s.field == 1100
+end
+
+let s = test_mod.CheckConfig(;kw1=100)
+    @test s isa test_mod.CheckConfig
+    @test s.field == 1111
+end
+let s = test_mod.CheckConfig(;kw1=100, kw2=0)
+    @test s isa test_mod.CheckConfig
+    @test s.field == 111
+end
+let s = test_mod.CheckConfig(0;kw1=100, kw2=0)
+    @test s isa test_mod.CheckConfig
+    @test s.field == 110
+end
+let s = test_mod.CheckConfig(0,0;kw1=100)
+    @test s isa test_mod.CheckConfig
+    @test s.field == 1100
+end
+
+# typegroup: basic mutual recursion
+@test JuliaLowering.include_string(test_mod, """
+typegroup
+    struct TG_Node
+        edges::Vector{TG_Edge}
+    end
+    struct TG_Edge
+        from::TG_Node
+        to::TG_Node
+    end
+end
+"""; version=v"1.14") === nothing
+@test fieldtype(test_mod.TG_Node, :edges) == Vector{test_mod.TG_Edge}
+@test fieldtype(test_mod.TG_Edge, :from) == test_mod.TG_Node
+@test fieldtype(test_mod.TG_Edge, :to) == test_mod.TG_Node
+let n1 = test_mod.TG_Node(test_mod.TG_Edge[]),
+    n2 = test_mod.TG_Node(test_mod.TG_Edge[]),
+    e = test_mod.TG_Edge(n1, n2)
+    push!(n1.edges, e)
+    @test n1.edges[1].to === n2
+end
+
+# typegroup: parametric mutual recursion
+@test JuliaLowering.include_string(test_mod, """
+typegroup
+    struct TG_PNode{T}
+        data::T
+        edges::Vector{TG_PEdge{T}}
+    end
+    struct TG_PEdge{T}
+        from::TG_PNode{T}
+        to::TG_PNode{T}
+    end
+end
+"""; version=v"1.14") === nothing
+@test fieldtype(test_mod.TG_PNode{Int}, :edges) == Vector{test_mod.TG_PEdge{Int}}
+@test fieldtype(test_mod.TG_PEdge{String}, :from) == test_mod.TG_PNode{String}
+
+# typegroup: mutable structs
+@test JuliaLowering.include_string(test_mod, """
+typegroup
+    mutable struct TG_MNode
+        edges::Vector{TG_MEdge}
+    end
+    mutable struct TG_MEdge
+        from::TG_MNode
+        to::TG_MNode
+    end
+end
+"""; version=v"1.14") === nothing
+@test ismutabletype(test_mod.TG_MNode)
+@test ismutabletype(test_mod.TG_MEdge)
+
+# typegroup: supertype referencing incomplete type
+@test JuliaLowering.include_string(test_mod, """
+typegroup
+    struct TG_SuperA <: AbstractVector{TG_SuperB}
+        data::Vector{TG_SuperB}
+    end
+    struct TG_SuperB
+        a::TG_SuperA
+    end
+end
+"""; version=v"1.14") === nothing
+@test test_mod.TG_SuperA <: AbstractVector{test_mod.TG_SuperB}
+
+# bad test: flisp will scan the struct for assigned fields to throw errors, but
+# runs a `flatten-blocks` pass before collecting the real fields, so
+# assignment-like fields/ctors can sneak through.  As of #59882, the @doc form
+# emits an assignment inside of a block that sneaks through this way.  JL found
+# assignments in the actual field list, so `@doc` hit that case.
+@test jl_eval(test_mod, Expr(:block,
+    Expr(:struct, true, :struct_doc_test, Expr(:block,
+        Expr(:(::), :status, :Int),
+        Expr(:macrocall, GlobalRef(Core, Symbol("@doc")), LineNumberNode(0), "doc",
+            Expr(:function,
+                Expr(:call, :struct_doc_test, Expr(:(::), :status, :Integer),
+                     Expr(:kw, :headers, Expr(:vect))),
+                Expr(:block, Expr(:call, :new, :status)))))),
+    Expr(:., Expr(:call, :struct_doc_test, 5), QuoteNode(:status)))) == 5
+
+# bad test: flisp does not continue scanning past anything it doesn't recognize
+# as a field
+@test jl_eval(
+    test_mod,
+    :(begin
+          struct struct_eq_assigns_test
+              x::Int
+              struct_eq_assigns_test(x) = new(x)
+              default = 1
+              struct_eq_assigns_test() = new(default)
+          end
+          (struct_eq_assigns_test(5).x, struct_eq_assigns_test().x)
+      end)) == (5, 1)

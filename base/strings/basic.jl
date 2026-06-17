@@ -320,7 +320,7 @@ end
     ==(a::AbstractString, b::AbstractString)::Bool
 
 Test whether two strings are equal character by character (technically, Unicode
-code point by code point). Should either string be a [`AnnotatedString`](@ref) the
+code point by code point). Should either string be an [`AnnotatedString`](@ref) the
 string properties must match too.
 
 # Examples
@@ -558,7 +558,7 @@ julia> nextind("α", 1, 2)
 ```
 """
 nextind(s::AbstractString, i::Integer, n::Integer) = nextind(s, Int(i)::Int, Int(n)::Int)
-nextind(s::AbstractString, i::Integer)             = nextind(s, Int(i)::Int)
+nextind(s::AbstractString, i::Integer)             = nextind(s, Int(i)::Int, 1)
 nextind(s::AbstractString, i::Int)                 = nextind(s, i, 1)
 
 function nextind(s::AbstractString, i::Int, n::Int)
@@ -627,7 +627,7 @@ isascii(c::AbstractChar) = UInt32(c) < 0x80
     return 0 ≤ r < 0x80
 end
 
-#The chunking algorithm makes the last two chunks overlap inorder to keep the size fixed
+#The chunking algorithm makes the last two chunks overlap in order to keep the size fixed
 @inline function  _isascii_chunks(chunk_size,cu::AbstractVector{CU}, first,last) where {CU}
     n=first
     while n <= last - chunk_size
@@ -643,6 +643,7 @@ Test whether all values in the vector belong to the ASCII character set (0x00 to
 This function is intended to be used by other string implementations that need a fast ASCII check.
 """
 function isascii(cu::AbstractVector{CU}) where {CU <: Integer}
+    # Note that String and SubString{String} assume this is :nothrow :foldable
     chunk_size = 1024
     chunk_threshold =  chunk_size + (chunk_size ÷ 2)
     first = firstindex(cu);   last = lastindex(cu)

@@ -568,6 +568,11 @@ JCFLAGS_COMMON     = -std=gnu11 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSE
 JCFLAGS_CLANG      = $(JCFLAGS_COMMON)
 JCFLAGS_GCC        = $(JCFLAGS_COMMON) -fno-gnu-unique
 
+# Xcode 26 (clang 21) folds the new -Wc++-keyword diagnostic into -Wc++-compat, erroring
+# under -Werror on uses of C++ keywords like `wchar_t` as ordinary identifiers in C code.
+# Suppress it; -Wno-unknown-warning-option keeps older clang from rejecting the flag.
+JCFLAGS_CLANG     += -Wno-unknown-warning-option -Wno-c++-keyword
+
 
 # These flags are needed to generate decent debug info
 JCPPFLAGS_COMMON   = -fasynchronous-unwind-tables
@@ -898,7 +903,11 @@ MMTK_BUILD ?= release
 
 # Location of mmtk-julia binding
 # (needed for api/*.h and .so file)
-MMTK_JULIA_DIR ?= $(BUILDROOT)/usr/lib/mmtk_julia
+ifdef MMTK_JULIA_DIR
+MMTK_JULIA_DIR := $(abspath $(MMTK_JULIA_DIR))
+else
+MMTK_JULIA_DIR := $(BUILDROOT)/usr/lib/mmtk_julia
+endif
 MMTK_DIR = ${MMTK_JULIA_DIR}/mmtk
 MMTK_API_INC = ${MMTK_DIR}/api
 MMTK_LIB := -lmmtk_julia
@@ -922,8 +931,8 @@ LIBITTAPI:=-littnotify
 endif
 
 ifeq ($(WITH_TRACY), 1)
-JCXXFLAGS += -DUSE_TRACY -DTRACY_ENABLE -DTRACY_FIBERS
-JCFLAGS += -DUSE_TRACY -DTRACY_ENABLE -DTRACY_FIBERS
+JCXXFLAGS += -DUSE_TRACY -DTRACY_ENABLE -DTRACY_FIBERS -I$(build_includedir)/tracy
+JCFLAGS += -DUSE_TRACY -DTRACY_ENABLE -DTRACY_FIBERS -I$(build_includedir)/tracy
 LIBTRACYCLIENT:=-lTracyClient
 endif
 ifeq ($(WITH_TRACY_CALLSTACKS), 1)
@@ -960,12 +969,17 @@ endif
 # Linker garbage collection
 ifeq ($(USE_LINKER_GC), 1)
 ifeq ($(OS), Darwin)
-  JLDFLAGS += -Wl,-dead_strip
+  LINKER_GC_LDFLAGS := -Wl,-dead_strip
 else
-  JLDFLAGS += -Wl,--gc-sections
-  JCFLAGS += -ffunction-sections -fdata-sections
-  JCXXFLAGS += -ffunction-sections -fdata-sections
+  LINKER_GC_LDFLAGS := -Wl,--gc-sections
+  LINKER_GC_CFLAGS := -ffunction-sections -fdata-sections
+  LINKER_GC_CXXFLAGS := -ffunction-sections -fdata-sections
 endif
+
+JLDFLAGS += $(LINKER_GC_LDFLAGS)
+JCFLAGS += $(LINKER_GC_CFLAGS)
+JCXXFLAGS += $(LINKER_GC_CXXFLAGS)
+
 endif
 
 # ===========================================================================
@@ -1407,6 +1421,8 @@ else
   UTF8PROC_INC := $(build_includedir)
 endif
 
+LIBTARGET_PARSING := $(build_libdir)/libtarget_parsing.a
+
 # We need python for things like BB triplet recognition.  We don't really care
 # about version, generally, so just find something that works:
 PYTHON := $(shell which python 2>/dev/null || which python3 2>/dev/null || which python2 2>/dev/null || echo not found)
@@ -1467,7 +1483,7 @@ LIBGFORTRAN_VERSION := $(subst libgfortran,,$(filter libgfortran%,$(subst -,$(SP
 # shipped with CSL. Although we do not depend on any of the symbols, it is entirely
 # possible that a user might choose to install a library which depends on symbols provided
 # by a newer libstdc++. Without runtime detection, those libraries would break.
-CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.34|GLIBCXX_3\.5\.|GLIBCXX_4\.
+CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.35|GLIBCXX_3\.5\.|GLIBCXX_4\.
 
 
 # This is the set of projects that BinaryBuilder dependencies are hooked up for.
@@ -1716,16 +1732,19 @@ endif
 CLANGSA_FLAGS :=
 CLANGSA_CXXFLAGS :=
 ifeq ($(OS), Darwin) # on new XCode, the files are hidden
- CLANGSA_FLAGS += -isysroot $(shell xcrun --show-sdk-path -sdk macosx)
+ CLANGSA_FLAGS += -isysroot $(shell xcrun --show-sdk-path --sdk macosx)
 endif
 ifeq ($(USEGCC),1)
 # try to help clang find the c++ files for CC by guessing the value for --prefix
 # by dropping lib/gcc/<platform>/<version> from the install directory it reports
 CLANGSA_CXXFLAGS += --gcc-toolchain="$(abspath $(shell LANG=C $(CC) -print-search-dirs | grep '^install: ' | sed -e "s/^install: //")/../../../..)"
-ifneq ($(OS), Darwin)
+# On Linux without system headers (e.g., BinaryBuilder containers), derive sysroot from GCC
+ifeq ($(OS), Linux)
 GCC_SYSROOT := $(shell $(CC) --print-sysroot 2>/dev/null)
 ifneq ($(GCC_SYSROOT),)
-CLANGSA_FLAGS += --sysroot=$(GCC_SYSROOT)
+ifeq ($(wildcard /usr/include/stdlib.h),)
+ CLANGSA_FLAGS += --sysroot=$(GCC_SYSROOT)
+endif
 endif
 endif
 endif

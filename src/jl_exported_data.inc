@@ -61,9 +61,12 @@
     XX(int32_type, jl_datatype_t*) \
     XX(int64_type, jl_datatype_t*) \
     XX(int8_type, jl_datatype_t*) \
+    XX(inter_must_alias_type, jl_datatype_t*) \
     XX(interconditional_type, jl_datatype_t*) \
     XX(interrupt_exception, jl_value_t*) \
+    XX(intersect_type, jl_datatype_t*) \
     XX(intrinsic_type, jl_datatype_t*) \
+    XX(anytype_type, jl_datatype_t*) \
     XX(kwcall_type, jl_datatype_t*) \
     XX(lineinfonode_type, jl_datatype_t*) \
     XX(linenumbernode_type, jl_datatype_t*) \
@@ -125,6 +128,7 @@
     XX(tuple_typename, jl_typename_t*) \
     XX(tvar_type, jl_datatype_t*) \
     XX(typeerror_type, jl_datatype_t*) \
+    XX(typeeq_type, jl_datatype_t*) \
     XX(typemap_entry_type, jl_datatype_t*) \
     XX(typemap_level_type, jl_datatype_t*) \
     XX(typename_type, jl_datatype_t*) \

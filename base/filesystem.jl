@@ -1,8 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-## File Operations (Libuv-based) ##
+# NB: This file is `Core.eval`-uated into the (pre-existing) module Filesystem
 
-module Filesystem
+## File Operations (Libuv-based) ##
 
 """
     JL_O_APPEND
@@ -149,14 +149,15 @@ if Sys.iswindows()
     import .Base: cwstring
 end
 
-# Average buffer size including null terminator for several filesystem operations.
-# On Windows we use the MAX_PATH = 260 value on Win32.
-const AVG_PATH = Sys.iswindows() ? 260 : 512
-
 # helper function to clean up libuv request
 uv_fs_req_cleanup(req) = ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
 
-include("path.jl")
+if Sys.iswindows()
+    const path_separator_re = r"[/\\]+"sa # May be used by some external packages
+elseif Sys.isunix()
+    const path_separator_re = r"/+"sa # May be used by some external packages
+end
+
 include("stat.jl")
 include("file.jl")
 include(string(Base.BUILDROOT, "file_constants.jl"))  # include($BUILDROOT/base/file_constants.jl)
@@ -219,10 +220,10 @@ function sendfile(dst::File, src::File, src_offset::Int64, bytes::Int)
     check_open(dst)
     check_open(src)
     while true
+        nsent = min(typemax(Cssize_t), bytes) # biggest allowed chunk
         result = ccall(:jl_fs_sendfile, Int32, (OS_HANDLE, OS_HANDLE, Int64, Csize_t),
-                       src.handle, dst.handle, src_offset, bytes)
+                       src.handle, dst.handle, src_offset, nsent)
         uv_error("sendfile", result)
-        nsent = result
         bytes -= nsent
         src_offset += nsent
         bytes <= 0 && break
@@ -268,7 +269,7 @@ function read(f::File, ::Type{UInt8})
     ret = ccall(:jl_fs_read, Int32, (OS_HANDLE, Ptr{Cvoid}, Csize_t),
                 f.handle, p, 1)
     uv_error("read", ret)
-    @assert ret <= sizeof(p) == 1
+    @assert ret <= sizeof(p) == 1 "unexpected read size"
     ret < 1 && throw(EOFError())
     return p[] % UInt8
 end
@@ -440,11 +441,8 @@ See also [`ispath`](@ref), [`isexecutable`](@ref), [`isreadable`](@ref).
 """
 function iswritable(path::String)
     # We use `access()` and `W_OK` to determine if a given path is
-    # writeable by the current user.  `W_OK` comes from `unistd.h`.
+    # writable by the current user.  `W_OK` comes from `unistd.h`.
     W_OK = 0x02
     return ccall(:jl_fs_access, Cint, (Cstring, Cint), path, W_OK) == 0
 end
 iswritable(path::AbstractString) = iswritable(String(path)::String)
-
-
-end

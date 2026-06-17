@@ -48,6 +48,10 @@ end
         Diagnostic(3, 4, :error, "`@` must appear on first or last macro name component")
     @test diagnostic("@M.(x)") ==
         Diagnostic(1, 3, :error, "dot call syntax not supported for macros")
+    @test diagnostic("a.[x]") ==
+        Diagnostic(1, 5, :error, "brackets are not allowed after `.`")
+    @test diagnostic("a.{x}") ==
+        Diagnostic(1, 5, :error, "brackets are not allowed after `.`")
 
     @test diagnostic("try x end") ==
         Diagnostic(1, 9, :error, "try without catch or finally")
@@ -115,6 +119,13 @@ end
         Diagnostic(1, 0, :error, "premature end of input")
     @test diagnostic("", rule=:atom) ==
         Diagnostic(1, 0, :error, "premature end of input")
+
+    # `..` immediately followed by another operator must be space-separated, as
+    # the lexer no longer glues the dots into a single `..` token (#573)
+    @test diagnostic("a..+b") ==
+        Diagnostic(4, 3, :error, "`..` here is interpreted as a binary operator. A space is required if followed by another operator.")
+    @test diagnostic("a..−b") ==
+        Diagnostic(4, 3, :error, "`..` here is interpreted as a binary operator. A space is required if followed by another operator.")
 end
 
 @testset "parser warnings" begin
@@ -143,6 +154,26 @@ end
         diagnostic("public[7] = 5", version=v"1.11") ==
         diagnostic("public() = 6", version=v"1.11") ==
         Diagnostic(1, 6, :warning, "using public as an identifier is deprecated")
+
+    @test diagnostic("break +", only_first=true, version=v"1.13") ==
+        Diagnostic(6, 7, :error, "unexpected token after break")
+    @test diagnostic("break ()", only_first=true, version=v"1.13") ==
+        Diagnostic(6, 7, :error, "unexpected token after break")
+    @test diagnostic("continue +", only_first=true, version=v"1.13") ==
+        Diagnostic(9, 10, :error, "unexpected token after continue")
+    @test diagnostic("break label", only_first=true, version=v"1.13") ==
+        Diagnostic(1, 11, :error, "labeled `break` and `continue` not supported in Julia version 1.13 < 1.14")
+
+    @test diagnostic("break +", only_first=true, version=v"1.14") ==
+        Diagnostic(7, 7, :error, "expected identifier for break label")
+    @test diagnostic("continue +", only_first=true, version=v"1.14") ==
+        Diagnostic(10, 10, :error, "expected identifier for break label")
+
+    @test diagnostic("break f()", only_first=true, version=v"1.14") ==
+        Diagnostic(8, 7, :error, "expected space after break label")
+
+    @test diagnostic("continue f val", only_first=true, version=v"1.14") ==
+        Diagnostic(11, 14, :error, "unexpected token after continue")
 end
 
 @testset "diagnostics for literal parsing" begin

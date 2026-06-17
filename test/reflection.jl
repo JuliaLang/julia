@@ -62,6 +62,86 @@ str = String(take!(io))
 
 end # module ReflectionTest
 
+# code_llvm llvm_options parameter tests
+@testset "code_llvm llvm_options" begin
+    using InteractiveUtils: code_llvm
+
+    # Test that llvm_options parameter works without crashing
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="")
+    @test !isempty(String(take!(io)))
+
+    # Test print-after-all produces IR dump output
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="-print-after-all")
+    output = String(take!(io))
+    @test occursin("IR Dump After", output)
+    @test occursin("define", output)  # Final IR should also be present
+
+    # Test print-after with specific pass name
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="-print-after=AfterOptimization")
+    output = String(take!(io))
+    @test occursin("IR Dump After", output)
+    @test occursin("AfterOptimization", output)
+
+    # Test print-before-all
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="-print-before-all")
+    output = String(take!(io))
+    @test occursin("IR Dump Before", output)
+
+    # Test print-module-scope shows module structure
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="-print-after=AfterOptimization -print-module-scope")
+    output = String(take!(io))
+    @test occursin("ModuleID", output) || occursin("source_filename", output)
+
+    # Test comma-separated pass names
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="-print-after=BeforeOptimization,AfterOptimization")
+    output = String(take!(io))
+    @test occursin("IR Dump After BeforeOptimizationMarkerPass", output)
+    @test occursin("IR Dump After AfterOptimizationMarkerPass", output)
+
+    # Test repeated flags accumulate
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="-print-after=BeforeOptimization -print-after=AfterOptimization")
+    output = String(take!(io))
+    @test occursin("IR Dump After BeforeOptimizationMarkerPass", output)
+    @test occursin("IR Dump After AfterOptimizationMarkerPass", output)
+
+    # Test unknown option warning appears in output
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="-unknown-flag")
+    output = String(take!(io))
+    @test occursin("Warning: unknown llvm_options flag", output)
+
+    # Test missing value warning appears in output
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="-print-after")
+    output = String(take!(io))
+    @test occursin("Warning: -print-after requires a value", output)
+
+    # Test filter-print-funcs with non-matching names suppresses all output
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="-print-after-all -filter-print-funcs=julia_doesnotexist1,julia_doesnotexist2")
+    output = String(take!(io))
+    @test !occursin("IR Dump After", output)
+
+    # Test filter-print-funcs with comma-separated list matches multiple functions
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="-print-after-all -filter-print-funcs=julia_")
+    output_one = String(take!(io))
+    dumps_one = count("IR Dump After", output_one)
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="-print-after-all -filter-print-funcs=julia_,jfptr_")
+    output_both = String(take!(io))
+    dumps_both = count("IR Dump After", output_both)
+    # Matching both julia_ and jfptr_ prefixes should produce more dumps
+    @test dumps_both > dumps_one > 0
+end
+
 # isbits, isbitstype
 
 @test !isbitstype(Array{Int})
@@ -283,6 +363,53 @@ let defaultset = Set((:A,))
     @test Set(names(TestMod54609.A, all=true, usings=true)) == allset ∪ usings
     @test Set(names(TestMod54609.A, imported=true, usings=true)) == defaultset ∪ imported ∪ usings
     @test Set(names(TestMod54609.A, all=true, imported=true, usings=true)) == allset ∪ imported ∪ usings
+end
+
+module _TestModNamesNoMaterialize
+    export foo, bar, baz
+    foo() = 1
+    bar() = 2
+    baz() = 3
+end
+module _TestModNamesNoMaterializeUser
+    using .._TestModNamesNoMaterialize
+end
+@testset "names does not materialize binding partitions" begin
+    # names(m) should not materialize binding partitions for implicit imports,
+    # as doing so can trigger unnecessary invalidation cascades during
+    # subsequent `using` statements.
+    B = _TestModNamesNoMaterializeUser
+    # Create bindings in B for the using'd exports without materializing partitions
+    for sym in (:foo, :bar, :baz)
+        ccall(:jl_get_module_binding, Ref{Core.Binding}, (Any, Any, Cint), B, sym, Cint(1))
+    end
+    names(B)
+    # Verify partitions were not materialized as a side effect
+    for sym in (:foo, :bar, :baz)
+        b = ccall(:jl_get_module_binding_or_nothing, Any, (Any, Any), B, sym)
+        @test b !== nothing
+        @test !isdefined(b, :partitions)
+    end
+end
+
+@testset "names world argument" begin
+    # `names(M; all=true)` walks bindings and filters by partition kind at the
+    # given world. A binding that doesn't yet have a GLOBAL/CONST/DECLARED
+    # partition in the queried world should be excluded.
+    # Note: this can only be tested via plain assignment (not `export`/`public`,
+    # which set a non-partitioned per-binding flag that is world-insensitive).
+    M = @eval module $(gensym())
+        early_name = 1
+    end
+    world_mid = Base.get_world_counter()
+    @eval M late_name = 2
+    world_end = Base.get_world_counter()
+
+    @test :early_name ∈ names(M; all=true, world=world_end)
+    @test :late_name ∈ names(M; all=true, world=world_end)
+
+    @test :early_name ∈ names(M; all=true, world=world_mid)
+    @test :late_name ∉ names(M; all=true, world=world_mid)
 end
 
 let
@@ -707,6 +834,9 @@ end
 @test !isabstracttype(ReflectionExample)
 @test !isabstracttype(Int)
 @test !isabstracttype(TLayout)
+# PR #61915: `Type{T}` (a `TypeEq` kind) is still reported abstract
+@test isabstracttype(Type)
+@test isabstracttype(Type{<:Integer})
 
 @test !isprimitivetype(Union{})
 @test !isprimitivetype(Union{Int,Float64})
@@ -1147,7 +1277,6 @@ end
     @test mi1.def.name == :+
     mi2 = Base.method_instance((typeof(+), Int, Int))
     @test mi2.def.name == :+
-    # Note `jl_method_lookup` doesn't return CNull if not found
     mi3 = @ccall jl_method_lookup(Any[+, 1, 1]::Ptr{Any}, 3::Csize_t, Base.get_world_counter()::Csize_t)::Ref{Core.MethodInstance}
     @test mi1 == mi3
     @test mi2 == mi3

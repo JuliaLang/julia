@@ -153,7 +153,7 @@ end
 function is_valid_phiblock_stmt(@nospecialize(stmt))
     isa(stmt, PhiNode) && return true
     isa(stmt, Union{UpsilonNode, PhiCNode, SSAValue}) && return false
-    isa(stmt, Expr) && return is_value_pos_expr_head(stmt.head)
+    isa(stmt, Expr) && return false
     return true
 end
 
@@ -192,7 +192,7 @@ mutable struct DebugInfoStream
     # DebugInfoStream(def::Union{MethodInstance,Nothing}, di::DebugInfo, nstmts::Int) =
     #     if debuginfo_file1(di.def) === debuginfo_file1(di.def)
     #         new(def, di.linetable, Core.svec(di.edges...), getdebugidx(di, 0),
-    #             ccall(:jl_uncompress_codelocs, Any, (Any, Int), di.codelocs, nstmts)::Vector{Int32})
+    #             ccall(:jl_uncompress_codelocs, Any, (Any, Int), di, nstmts)::Vector{Int32})
     #     else
     function DebugInfoStream(def::Union{MethodInstance,Nothing}, di::DebugInfo, nstmts::Int)
         codelocs = zeros(Int32, nstmts * 3)
@@ -208,8 +208,14 @@ Core.DebugInfo(di::DebugInfoStream, nstmts::Int) =
     DebugInfo(something(di.def), di.linetable, Core.svec(di.edges...),
         ccall(:jl_compress_codelocs, Any, (Int32, Any, Int), di.firstline, di.codelocs, nstmts)::String)
 
-getdebugidx(debuginfo::DebugInfo, pc::Int) =
-    ccall(:jl_uncompress1_codeloc, NTuple{3,Int32}, (Any, Int), debuginfo.codelocs, pc)
+function getdebugidx(debuginfo::DebugInfo, pc::Int)
+    if debuginfo.linetable isa String
+        # drop provenance for compatibility
+        ((pc <= 0 ? -1 : source_location(debuginfo, pc).line), 0, 0)
+    else
+        ccall(:jl_uncompress1_codeloc, NTuple{3,Int32}, (Any, Int), debuginfo, pc)
+    end
+end
 
 function getdebugidx(debuginfo::DebugInfoStream, pc::Int)
     if 3 <= 3pc <= length(debuginfo.codelocs)
@@ -221,6 +227,53 @@ function getdebugidx(debuginfo::DebugInfoStream, pc::Int)
     end
 end
 
+has_prev_debuginfo(di, pc::Int) = prev_debuginfo(di, pc)[1] !== nothing
+has_edge_debuginfo(di, pc::Int) = edge_debuginfo(di, pc)[1] !== nothing
+
+"(debuginfo, nextpc) from the previous step in the compiler"
+function prev_debuginfo(di, pc::Int)
+    di.linetable isa Core.DebugInfo || return (nothing, 0)
+    pc > 0 || return (nothing, 0)
+    nextpc::Int = getdebugidx(di, pc)[1]
+    (di.linetable, nextpc)
+end
+
+"(debuginfo, nextpc) of inlinee"
+function edge_debuginfo(di, pc::Int)
+    _, eid::Int, epc::Int = getdebugidx(di, pc)
+    # XXX: eid > 0 should imply epc > 0
+    (eid > 0 && epc > 0) || return (nothing, 0)
+    (di.edges[eid]::DebugInfo, epc)
+end
+
+# All 1-based.  0 if unavailable.
+struct SourceLocation
+    byte::Int
+    byte_end::Int
+    col::Int
+    col_end::Int
+    line::Int
+    line_end::Int
+end
+
+function source_location(di::Union{DebugInfo,DebugInfoStream}, pc::Int)
+    while has_prev_debuginfo(di, pc)
+        di, pc = prev_debuginfo(di, pc)
+    end
+    if di isa DebugInfoStream
+        # DebugInfoStream with linetable=nothing does not contain source
+        # information on its own.
+        return SourceLocation(0,0,0,0,0,0)
+    end
+    @assert pc > 0 "no source for pc<=0"
+    (l1, c1) = ccall(:jl_cdi_firstxy, NTuple{2, Int32}, (Any, Int32), di, pc)
+    if c1 <= 0
+        return SourceLocation(0,0,0,0,l1,0)
+    end
+    (b1, b2) = ccall(:jl_cdi_bytespan, NTuple{2, Int32}, (Any, Int32), di, pc)
+    (l2, c2) = ccall(:jl_cdi_byte_to_xy, NTuple{2, Int32}, (Any, Int32), di, b2)
+    return SourceLocation(b1,b2,c1,c2,l1,l2)
+end
 
 # SSA values that need renaming
 struct OldSSAValue
@@ -242,7 +295,7 @@ on where they appear:
     ii. a `NewSSAValue` with negative `id` refers to post-compaction `new_node` node.
 
 2. In non-compacted nodes,
-    i. a `NewSSAValue` with positive `id` refers to the index of an already-compacted instructions.
+    i. a `NewSSAValue` with positive `id` refers to the index of an already-compacted instruction.
     ii. a `NewSSAValue` with negative `id` has the same meaning as in compacted nodes.
 """
 struct NewSSAValue
@@ -527,42 +580,69 @@ end
 struct OOBToken end; const OOB_TOKEN = OOBToken()
 struct UndefToken end; const UNDEF_TOKEN = UndefToken()
 
-@noinline function _useref_getindex(@nospecialize(stmt), op::Int)
+# Split into op==1 and op>1 cases to avoid redundant comparisons. Most IR node
+# types only have a single operand, so the op==1 path can return directly without
+# checking `op == 1 || return OOB_TOKEN` for each type. The op>1 path only needs
+# to handle Expr, PhiNode, and PhiCNode which can have multiple operands.
+function _useref_getindex(@nospecialize(stmt), op::Int)
+    if op == 1
+        return _useref_getindex_op1(stmt)
+    else
+        return _useref_getindex_opN(stmt, op)
+    end
+end
+
+@noinline function _useref_getindex_op1(@nospecialize(stmt))
     if isa(stmt, Expr) && stmt.head === :(=)
         rhs = stmt.args[2]
-        if isa(rhs, Expr)
-            if is_relevant_expr(rhs)
-                op > length(rhs.args) && return OOB_TOKEN
-                return rhs.args[op]
-            end
+        if isa(rhs, Expr) && is_relevant_expr(rhs)
+            length(rhs.args) < 1 && return OOB_TOKEN
+            return rhs.args[1]
         end
-        op == 1 || return OOB_TOKEN
         return rhs
     elseif isa(stmt, Expr) # @assert is_relevant_expr(stmt)
-        op > length(stmt.args) && return OOB_TOKEN
-        return stmt.args[op]
+        length(stmt.args) < 1 && return OOB_TOKEN
+        return stmt.args[1]
     elseif isa(stmt, GotoIfNot)
-        op == 1 || return OOB_TOKEN
         return stmt.cond
     elseif isa(stmt, ReturnNode)
         isdefined(stmt, :val) || return OOB_TOKEN
-        op == 1 || return OOB_TOKEN
         return stmt.val
     elseif isa(stmt, EnterNode)
         isdefined(stmt, :scope) || return OOB_TOKEN
-        op == 1 || return OOB_TOKEN
         return stmt.scope
     elseif isa(stmt, PiNode)
         isdefined(stmt, :val) || return OOB_TOKEN
-        op == 1 || return OOB_TOKEN
         return stmt.val
     elseif isa(stmt, Union{AnySSAValue, GlobalRef})
-        op == 1 || return OOB_TOKEN
         return stmt
     elseif isa(stmt, UpsilonNode)
         isdefined(stmt, :val) || return OOB_TOKEN
-        op == 1 || return OOB_TOKEN
         return stmt.val
+    elseif isa(stmt, PhiNode)
+        length(stmt.values) < 1 && return OOB_TOKEN
+        isassigned(stmt.values, 1) || return UNDEF_TOKEN
+        return stmt.values[1]
+    elseif isa(stmt, PhiCNode)
+        length(stmt.values) < 1 && return OOB_TOKEN
+        isassigned(stmt.values, 1) || return UNDEF_TOKEN
+        return stmt.values[1]
+    else
+        return OOB_TOKEN
+    end
+end
+
+@noinline function _useref_getindex_opN(@nospecialize(stmt), op::Int)
+    if isa(stmt, Expr) && stmt.head === :(=)
+        rhs = stmt.args[2]
+        if isa(rhs, Expr) && is_relevant_expr(rhs)
+            op > length(rhs.args) && return OOB_TOKEN
+            return rhs.args[op]
+        end
+        return OOB_TOKEN
+    elseif isa(stmt, Expr) # @assert is_relevant_expr(stmt)
+        op > length(stmt.args) && return OOB_TOKEN
+        return stmt.args[op]
     elseif isa(stmt, PhiNode)
         op > length(stmt.values) && return OOB_TOKEN
         isassigned(stmt.values, op) || return UNDEF_TOKEN
@@ -697,6 +777,9 @@ struct CFGTransformState
     bb_rename_pred::Vector{Int}
     bb_rename_succ::Vector{Int}
     domtree::Union{Nothing, DomTree}
+    # Scratch buffers reused for the in-place domtree updates performed while
+    # killing edges. Non-`nothing` exactly when `domtree` is.
+    domtree_cache::Union{Nothing, DomTreeCache}
 end
 
 # N.B.: Takes ownership of the CFG array
@@ -704,9 +787,9 @@ function CFGTransformState!(blocks::Vector{BasicBlock}, allow_cfg_transforms::Bo
     if allow_cfg_transforms
         bb_rename = Vector{Int}(undef, length(blocks))
         cur_bb = 1
-        domtree = construct_domtree(blocks)
+        dfs = DFS(blocks)
         for i = 1:length(bb_rename)
-            if bb_unreachable(domtree, i)
+            if i != 1 && dfs.to_pre[i] == 0 # if i is unreachable
                 bb_rename[i] = -1
             else
                 bb_rename[i] = cur_bb
@@ -732,14 +815,18 @@ function CFGTransformState!(blocks::Vector{BasicBlock}, allow_cfg_transforms::Bo
         let blocks = blocks, bb_rename = bb_rename
             result_bbs = BasicBlock[blocks[i] for i = 1:length(blocks) if bb_rename[i] != -1]
         end
+        # Reuse the same cache for the initial construction and any later
+        # in-place updates while killing edges during compaction.
+        domtree_cache = DomTreeCache()
         # TODO: This could be done by just renaming the domtree
-        domtree = construct_domtree(result_bbs)
+        domtree = construct_domtree(result_bbs; cache=domtree_cache)
     else
         bb_rename = Vector{Int}()
         result_bbs = blocks
         domtree = nothing
+        domtree_cache = nothing
     end
-    return CFGTransformState(allow_cfg_transforms, allow_cfg_transforms, result_bbs, bb_rename, bb_rename, domtree)
+    return CFGTransformState(allow_cfg_transforms, allow_cfg_transforms, result_bbs, bb_rename, bb_rename, domtree, domtree_cache)
 end
 
 mutable struct IncrementalCompact
@@ -795,7 +882,7 @@ mutable struct IncrementalCompact
         bb_rename = Vector{Int}()
         pending_nodes = NewNodeStream()
         pending_perm = Int[]
-        return new(code, parent.result, CFGTransformState(false, false, parent.cfg_transform.result_bbs, bb_rename, bb_rename, nothing),
+        return new(code, parent.result, CFGTransformState(false, false, parent.cfg_transform.result_bbs, bb_rename, bb_rename, nothing, nothing),
             ssa_rename, parent.used_ssas,
             parent.late_fixup, perm, 1,
             parent.new_new_nodes, parent.new_new_used_ssas, pending_nodes, pending_perm,
@@ -1396,13 +1483,14 @@ scan the compacted prefix when `to == active_bb`. `from` and `to` are non-rename
 """
 function kill_edge_terminator!(compact::IncrementalCompact, active_bb::Int, from::Int, to::Int)
     # Note: We recursively kill as many edges as are obviously dead.
-    (; bb_rename_pred, bb_rename_succ, result_bbs, domtree) = compact.cfg_transform
+    (; bb_rename_pred, bb_rename_succ, result_bbs, domtree, domtree_cache) = compact.cfg_transform
     preds = result_bbs[bb_rename_succ[to]].preds
     succs = result_bbs[bb_rename_pred[from]].succs
     deleteat!(preds, findfirst(x::Int->x==bb_rename_pred[from], preds)::Int)
     deleteat!(succs, findfirst(x::Int->x==bb_rename_succ[to], succs)::Int)
     if domtree !== nothing
-        domtree_delete_edge!(domtree, result_bbs, bb_rename_pred[from], bb_rename_succ[to])
+        domtree_delete_edge!(domtree, result_bbs, bb_rename_pred[from], bb_rename_succ[to];
+                             cache=domtree_cache::DomTreeCache)
     end
     # Check if the block is now dead
     if length(preds) == 0 || (domtree !== nothing && bb_unreachable(domtree, bb_rename_succ[to]))

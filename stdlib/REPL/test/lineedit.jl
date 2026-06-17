@@ -525,6 +525,24 @@ end
     @test LineEdit.region(s) == (0=>9)
     @inferred Union{Bool, LineEdit.InputAreaState} LineEdit.edit_shift_move(s, LineEdit.edit_move_right)
     @test LineEdit.region(s) == (2=>9)
+
+    # issue #61377
+    for edit_move in [LineEdit.edit_insert_newline, LineEdit.edit_backspace,
+            LineEdit.edit_move_left, LineEdit.edit_move_right,
+            LineEdit.edit_move_word_left, LineEdit.edit_move_word_right,
+            LineEdit.edit_move_up, LineEdit.edit_move_down]
+        s = new_state()
+        edit_insert(s, "abcd\nefgh\nijkl")
+        s.current_action = :unknown
+        LineEdit.edit_move_up(s)
+        s.current_action = :unknown
+        LineEdit.edit_shift_move(s, LineEdit.edit_move_left)
+        s.current_action = :unknown
+        LineEdit.edit_shift_move(s, LineEdit.edit_move_left)
+        s.current_action = :unknown
+        edit_move(s)
+        @test !LineEdit.is_region_active(s)
+    end
 end
 
 @testset "tab/backspace alignment feature" begin
@@ -665,7 +683,7 @@ end
     s.last_action = :unknown
     @test transform!(s->LineEdit.edit_yank_pop(s, false), s) == ("ça ≡ nothinga ≡ not", 19, 12)
 
-    # repetition (concatenation of killed strings
+    # repetition (concatenation of killed strings)
     edit_insert(s, "A B  C")
     LineEdit.edit_delete_prev_word(s)
     s.key_repeats = 1
@@ -1140,12 +1158,12 @@ end
     @test content(s) == " \"\""
     @test position(buffer(s)) == 2
 
-    # Test quote behavior: (|) + " -> ("")
+    # Test quote behavior: (|)) + " -> ("")
     s = LineEdit.init_state(term, interface)
     write_input(s, ")")
     charseek(buffer(s), 0)
     write_input(s, "(")
-    # Buffer is now () with cursor at 1
+    # Buffer is now ()) with cursor at 1
     write_input(s, "\"")
     @test content(s) == "(\"\"))"
     @test position(buffer(s)) == 2
@@ -1165,4 +1183,66 @@ end
     write_input(s, "(")
     @test content(s) == "\"()\""
     @test position(buffer(s)) == 2
+end
+
+@testset "Conflicting definitions for keyseq" begin
+    @testset "string" begin
+        keymap = Dict{Char, Any}()
+        REPL.LineEdit.add_nested_key!(keymap, "a", "abc")
+        @test keymap == Dict('a' => "abc")
+        expected_msg = "Conflicting definitions for keyseq a within one keymap"
+        @test_throws ErrorException(expected_msg) REPL.LineEdit.add_nested_key!(keymap, "a", "abdef")
+        @test keymap == Dict('a' => "abc")
+    end
+    @testset "char" begin
+        keymap = Dict{Char, Any}()
+        REPL.LineEdit.add_nested_key!(keymap, 'a', "abc")
+        @test keymap == Dict('a' => "abc")
+        expected_msg = "Conflicting definitions for keyseq a within one keymap"
+        @test_throws ErrorException(expected_msg) REPL.LineEdit.add_nested_key!(keymap, 'a', "abdef")
+        @test keymap == Dict('a' => "abc")
+   end
+end
+
+# Test TerminalProperties and DA1 parsing
+@testset "TerminalProperties" begin
+    @testset "receive_da1!" begin
+        # Typical DA1 response body (after \e[? already consumed): "64;1;2;6;22c"
+        props = LineEdit.TerminalProperties()
+        io = IOBuffer("64;1;2;6;22c")
+        LineEdit.receive_da1!(props, io)
+        @test props.da1 == [64, 1, 2, 6, 22]
+
+        # Single parameter
+        props2 = LineEdit.TerminalProperties()
+        io = IOBuffer("1c")
+        LineEdit.receive_da1!(props2, io)
+        @test props2.da1 == [1]
+    end
+
+    @testset "receive_da1! with ^C bail-out" begin
+        props = LineEdit.TerminalProperties()
+        io = IOBuffer("64;1\x03")
+        LineEdit.receive_da1!(props, io)
+        @test props.da1 == [64, 1]
+    end
+
+    @testset "receive_da1! with empty response" begin
+        # Empty response should store empty vector, not remain nothing
+        props = LineEdit.TerminalProperties()
+        io = IOBuffer("c")
+        LineEdit.receive_da1!(props, io)
+        @test props.da1 == Int[]
+    end
+
+    @testset "TerminalProperties default initialization" begin
+        props = LineEdit.TerminalProperties()
+        @test props.da1 === nothing
+    end
+
+    @testset "MIState has terminal_properties" begin
+        s = new_state()
+        @test s.terminal_properties isa LineEdit.TerminalProperties
+        @test s.terminal_properties.da1 === nothing
+    end
 end

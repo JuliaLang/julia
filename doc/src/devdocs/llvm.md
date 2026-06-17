@@ -64,10 +64,14 @@ LLVM_VER = 13.0.0
 Besides the LLVM release numerals, you can also use `DEPS_GIT = llvm` in combination with
 `USE_BINARYBUILDER_LLVM = 0` to build against the latest development version of LLVM.
 
+When changing the LLVM major version, the cpufeatures generated headers must also be
+regenerated to pick up new CPUs and features. See [Upgrading LLVM](@ref) in the
+system image documentation for the procedure.
+
 You can also specify to build a debug version of LLVM, by setting either `LLVM_DEBUG = 1` or
 `LLVM_DEBUG = Release` in your `Make.user` file. The former will be a fully unoptimized build
 of LLVM and the latter will produce an optimized build of LLVM. Depending on your needs the
-latter will suffice and it quite a bit faster. If you use `LLVM_DEBUG = Release` you will also
+latter will suffice and it is quite a bit faster. If you use `LLVM_DEBUG = Release` you will also
 want to set `LLVM_ASSERTIONS = 1` to enable diagnostics for different passes. Only `LLVM_DEBUG = 1`
 implies that option by default.
 
@@ -303,7 +307,7 @@ First, only the following address space casts are allowed:
   pointers should generally be storable to a GC slot, even in this address space.
 
 Now let us consider what constitutes a use:
-- Loads whose loaded values is in one of the address spaces
+- Loads whose loaded values are in one of the address spaces
 - Stores of a value in one of the address spaces to a location
 - Stores to a pointer in one of the address spaces
 - Calls for which a value in one of the address spaces is an operand
@@ -391,8 +395,7 @@ void @llvm.julia.gc_preserve_end(token)
 ```
 (The `llvm.` in the name is required in order to be able to use the `token`
 type). The semantics of these intrinsics are as follows:
-At any safepoint that is dominated by a `gc_preserve_begin` call, but that is not
-not dominated by a corresponding `gc_preserve_end` call (i.e. a call whose argument
+At any safepoint that is dominated by a `gc_preserve_begin` call, but that is not dominated by a corresponding `gc_preserve_end` call (i.e. a call whose argument
 is the token returned by a `gc_preserve_begin` call), the values passed as
 arguments to that `gc_preserve_begin` will be kept live. Note that the
 `gc_preserve_begin` still counts as a regular use of those values, so the

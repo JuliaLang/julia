@@ -227,15 +227,11 @@ void jl_safepoint_end_gc(void)
     jl_safepoint_disable(2);
     jl_safepoint_disable(1);
     jl_atomic_store_release(&jl_gc_running, 0);
-#  ifdef _OS_DARWIN_
-    // This wakes up other threads on mac.
-    jl_mach_gc_end();
-#  endif
     uv_mutex_unlock(&safepoint_lock);
     uv_cond_broadcast(&safepoint_cond_end);
 }
 
-void jl_set_gc_and_wait(jl_task_t *ct) // n.b. not used on _OS_DARWIN_
+void jl_set_gc_and_wait(jl_task_t *ct)
 {
     // reading own gc state doesn't need atomic ops since no one else
     // should store to it.
@@ -254,7 +250,7 @@ void jl_safepoint_wait_gc(jl_task_t *ct) JL_NOTSAFEPOINT
 {
     if (ct) {
         JL_TIMING_SUSPEND_TASK(GC_SAFEPOINT, ct);
-        // The thread should have set this is already
+        // The thread should have set this already
         assert(jl_atomic_load_relaxed(&ct->ptls->gc_state) != JL_GC_STATE_UNSAFE);
     }
     // Use normal volatile load in the loop for speed until GC finishes.
@@ -391,9 +387,6 @@ int jl_safepoint_resume_thread(int tid) JL_NOTSAFEPOINT
         else
             jl_atomic_store_relaxed(&ptls2->safepoint, (size_t*)(jl_safepoint_pages + jl_page_size * 2 + sizeof(void*)));
         uv_cond_signal(&ptls2->wake_signal);
-#ifdef _OS_DARWIN_
-        jl_safepoint_resume_thread_mach(ptls2, tid);
-#endif
         uv_cond_broadcast(&safepoint_cond_begin);
     }
     if (suspend_count != 0) {

@@ -141,13 +141,13 @@ typedef struct _jl_tls_states_t {
     //              finish.
 #define JL_GC_STATE_SAFE 2
     // gc_state = 2 means the thread is running unmanaged code that can be
-    //              execute at the same time with the GC.
+    //              executed at the same time with the GC.
 #define JL_GC_PARALLEL_COLLECTOR_THREAD 3
     // gc_state = 3 means the thread is a parallel collector thread (i.e. never runs Julia code)
 #define JL_GC_CONCURRENT_COLLECTOR_THREAD 4
     // gc_state = 4 means the thread is a concurrent collector thread (background sweeper thread that never runs Julia code)
     _Atomic(int8_t) gc_state; // read from foreign threads
-    // execution of certain certain impure
+    // execution of certain impure
     // statements is prohibited from certain
     // callbacks (such as generated functions)
     // as it may make compilation undecidable
@@ -377,6 +377,7 @@ extern JL_DLLEXPORT _Atomic(int) jl_gc_have_pending_finalizers;
 JL_DLLEXPORT int8_t jl_gc_is_in_finalizer(void) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT void jl_wakeup_thread(int16_t tid);
+JL_DLLEXPORT void jl_wakeup_threadpool(int8_t tpid);
 
 JL_DLLEXPORT int jl_getaffinity(int16_t tid, char *mask, int cpumasksize);
 JL_DLLEXPORT int jl_setaffinity(int16_t tid, char *mask, int cpumasksize);

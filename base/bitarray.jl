@@ -325,7 +325,7 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::Array{Bool}
         bind += 1
     end
     @inbounds if bind ≤ kd1
-        @assert bind == kd1
+        @assert bind == kd1 "bind != kd1"
         c = UInt64(0)
         for j = 0:ld1
             c |= (UInt64(C[ind]) << j)
@@ -1264,7 +1264,7 @@ function _reverse!(B::BitVector, ::Colon)
     # │000000000000000│   E   ││       D       │   C   ││       B       │   A   │
     # └───────────────┴───────┘└───────────────┴───────┘└───────────────┴───────┘
     #                     k            h           k            h            k
-    # yielding;
+    # yielding:
     # ┌───────────────┬───────┐┌───────────────┬───────┐┌───────────────┬───────┐
     # │000000000000000│  A'   ││      B'       │  C'   ││      D'       │  E'   │
     # └───────────────┴───────┘└───────────────┴───────┘└───────────────┴───────┘
@@ -1758,13 +1758,19 @@ for (T, f) in ((:(Union{typeof(&), typeof(*), typeof(min)}), :(&)),
                (:(typeof(==)),                               :((p, q) -> ~xor(p, q))),
                (:(typeof(<)),                                :((p, q) -> ~p & q)),
                (:(typeof(>)),                                :((p, q) -> p & ~q)))
-    @eval map(::$T, A::BitArray, B::BitArray) = bit_map!($f, similar(A), A, B)
+    @eval map(::$T, A::BitArray, B::BitArray) = bit_map($f, A, B)
     @eval map!(::$T, dest::BitArray, A::BitArray, B::BitArray) = bit_map!($f, dest, A, B)
 end
 
 # If we were able to specialize the function to a known bitwise operation,
 # map across the chunks. Otherwise, fall-back to the AbstractArray method that
 # iterates bit-by-bit.
+function bit_map(f::F, A::BitArray, B::BitArray) where F
+    AB = zip(A, B)
+    dest = similar(BitArray, _similar_shape(AB, IteratorSize(AB)))
+    bit_map!(f, dest, A, B)
+end
+
 function bit_map!(f::F, dest::BitArray, A::BitArray) where F
     length(A) <= length(dest) || throw(DimensionMismatch("length of destination must be >= length of collection"))
     isempty(A) && return dest
@@ -1774,12 +1780,12 @@ function bit_map!(f::F, dest::BitArray, A::BitArray) where F
     for i = 1:(len_Ac-1)
         destc[i] = f(Ac[i])
     end
-    # the last effected UInt64's original content
+    # the last affected UInt64's original content
     dest_last = destc[len_Ac]
     _msk = _msk_end(A)
     # first zero out the bits mask is going to change
     # then update bits by `or`ing with a masked RHS
-    # DO NOT SEPARATE ONTO TO LINES.
+    # DO NOT SEPARATE ONTO TWO LINES.
     # Otherwise there will be bugs when Ac aliases destc
     destc[len_Ac] = (dest_last & (~_msk)) | f(Ac[len_Ac]) & _msk
     dest
@@ -1796,14 +1802,14 @@ function bit_map!(f::F, dest::BitArray, A::BitArray, B::BitArray) where F
     for i = 1:len_Ac-1
         destc[i] = f(Ac[i], Bc[i])
     end
-    # the last effected UInt64's original content
+    # the last affected UInt64's original content
     dest_last = destc[len_Ac]
     _msk = _msk_end(min_bitlen)
     # first zero out the bits mask is going to change
     # then update bits by `or`ing with a masked RHS
-    # DO NOT SEPARATE ONTO TO LINES.
+    # DO NOT SEPARATE ONTO TWO LINES.
     # Otherwise there will be bugs when Ac or Bc aliases destc
-    destc[len_Ac] = (dest_last & ~(_msk)) | f(Ac[end], Bc[end]) & _msk
+    destc[len_Ac] = (dest_last & ~(_msk)) | f(Ac[len_Ac], Bc[len_Ac]) & _msk
     dest
 end
 

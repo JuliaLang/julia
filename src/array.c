@@ -198,8 +198,7 @@ JL_DLLEXPORT void jl_array_grow_end(jl_array_t *a, size_t inc)
     size_t newnrows = n + inc;
     if (!isbitsunion && elsz == 0) {
         jl_genericmemory_t *newmem = jl_alloc_genericmemory(mtype, MAXINTVAL - 2);
-        a->ref.mem = newmem;
-        jl_gc_wb(a, newmem);
+        jl_gc_write(a, a->ref.mem, newmem);
         a->dimsize[0] = newnrows;
         return;
     }
@@ -227,8 +226,7 @@ JL_DLLEXPORT void jl_array_grow_end(jl_array_t *a, size_t inc)
             char *newtypetagdata = (char*)newmem->ptr + newmaxsize * elsz + oldoffset;
             memcpy(newtypetagdata, typetagdata, n);
         }
-        a->ref.mem = newmem;
-        jl_gc_wb(a, newmem);
+        jl_gc_write(a, a->ref.mem, newmem);
         if (isbitsunion)
             a->ref.ptr_or_offset = (void*)oldoffset;
         else
@@ -323,15 +321,7 @@ JL_DLLEXPORT void jl_arrayunset(jl_array_t *a, size_t i)
 {
     if (i >= jl_array_len(a))
         jl_bounds_error_int((jl_value_t*)a, i + 1);
-    const jl_datatype_layout_t *layout = ((jl_datatype_t*)jl_typetagof(a->ref.mem))->layout;
-    if (layout->flags.arrayelem_isboxed) {
-        jl_atomic_store_relaxed(jl_array_data(a,_Atomic(jl_value_t*)) + i, NULL);
-    }
-    else if (layout->first_ptr >= 0) {
-        size_t elsize = layout->size;
-        jl_assume(elsize >= sizeof(void*) && elsize % sizeof(void*) == 0);
-        memset(jl_array_data(a,char) + elsize * i, 0, elsize);
-    }
+    jl_memoryrefunset(jl_memoryrefindex(a->ref, i), 0);
 }
 
 #ifdef __cplusplus

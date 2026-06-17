@@ -261,7 +261,7 @@ function export!(a::AbstractVector{T}, n::BigInt; order::Integer=-1, nails::Inte
     count = Ref{Csize_t}()
     ccall((:__gmpz_export, libgmp), Ptr{T}, (Ptr{T}, Ref{Csize_t}, Cint, Csize_t, Cint, Csize_t, mpz_t),
         a, count, order, sizeof(T), endian, nails, n)
-    @assert count[] ≤ length(a)
+    @assert count[] ≤ length(a) "count[] > length(a)"
     return a, Int(count[])
 end
 
@@ -484,6 +484,12 @@ promote_rule(::Type{BigInt}, ::Type{<:Integer}) = BigInt
 Convert a number to a maximum precision representation (typically [`BigInt`](@ref) or
 `BigFloat`). See [`BigFloat`](@ref BigFloat(::Any, rounding::RoundingMode)) for
 information about some pitfalls with floating-point numbers.
+
+!!! note "big(x::BigFloat)"
+    Unlike `BigFloat(x)`, `big(x)` is a no-op when `x` is already a `BigFloat`,
+    ie. when doing `x = big(x)`, the precision of `x` remains unchanged even if the
+    current `BigFloat` precision is different.
+    ```
 """
 function big end
 
@@ -530,7 +536,7 @@ function invmod(x::BigInt, y::BigInt)
     if y < 0
         MPZ.add!(z, y)
     end
-    # The postcondition is: mod(z * x, y) == mod(big(1), m) && div(z, y) == 0
+    # The postcondition is: mod(z * x, y) == mod(big(1), y) && div(z, y) == 0
     return z
 end
 

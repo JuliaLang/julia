@@ -531,8 +531,8 @@ static jl_datatype_t *staticeval_bitstype(const jl_cgval_t &targ)
 {
     // evaluate an argument at compile time to determine what type it is
     jl_value_t *unw = jl_unwrap_unionall(targ.typ);
-    if (jl_is_type_type(unw)) {
-        jl_value_t *bt = jl_tparam0(unw);
+    if (jl_is_typeeq(unw)) {
+        jl_value_t *bt = jl_typeeq_T(unw);
         if (jl_is_primitivetype(bt))
             return (jl_datatype_t*)bt;
     }
@@ -602,21 +602,23 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
 
     assert(!v.isghost);
     Value *vx = NULL;
-    if (!v.ispointer())
+    if (v.inline_roots.empty() && !v.ispointer())
         vx = v.V;
     else if (v.constant)
         vx = julia_const_to_llvm(ctx, v.constant);
 
-    if (v.ispointer() && vx == NULL) {
+    if (vx == NULL) {
         // try to load as original Type, to preserve llvm optimizations
         // but if the v.typ is not well known, use llvmt
+        // also handles values in split representation (inline_roots):
+        // the dynamic checks above ensure only primitive types reach here
         if (isboxed)
             vxt = llvmt;
         auto storage_type = vxt->isIntegerTy(1) ? getInt8Ty(ctx.builder.getContext()) : vxt;
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, v.tbaa);
         vx = ai.decorateInst(ctx.builder.CreateLoad(
             storage_type,
-            data_pointer(ctx, v)));
+            maybe_decay_tracked(ctx, v.V)));
         setName(ctx.emission_context, vx, "bitcast");
     }
 
@@ -861,17 +863,17 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_data);
         ai.decorateInst(store);
     }
-    else if (!x.inline_roots.empty()) {
-        recombine_value(ctx, e, thePtr, jl_aliasinfo_t(), Align(align_nb), false);
-    }
-    else if (x.ispointer()) {
+    else if (!x.inline_roots.empty() || x.ispointer()) {
         uint64_t size = jl_datatype_size(ety);
         im1 = ctx.builder.CreateMul(im1, ConstantInt::get(ctx.types().T_size,
                     LLT_ALIGN(size, jl_datatype_align(ety))));
         setName(ctx.emission_context, im1, "pointerset_offset");
         auto gep = emit_ptrgep(ctx, thePtr, im1);
         setName(ctx.emission_context, gep, "pointerset_ptr");
-        emit_memcpy(ctx, gep, jl_aliasinfo_t::fromTBAA(ctx, nullptr), x, size, Align(align_nb), Align(julia_alignment(ety)));
+        if (!x.inline_roots.empty())
+            recombine_value(ctx, x, gep, jl_aliasinfo_t(), Align(align_nb), false);
+        else
+            emit_memcpy(ctx, gep, jl_aliasinfo_t::fromTBAA(ctx, nullptr), x, size, Align(align_nb), Align(julia_alignment(ety)));
     }
     else {
         bool isboxed;
@@ -1145,7 +1147,7 @@ static Value *emit_checked_srem_int(jl_codectx_t &ctx, Value *x, Value *den)
 struct math_builder {
     IRBuilder<> &ctxbuilder;
     FastMathFlags old_fmf;
-    math_builder(jl_codectx_t &ctx, bool always_fast = false, bool contract = false)
+    math_builder(jl_codectx_t &ctx, bool always_fast = false, bool contract_only = false)
       : ctxbuilder(ctx.builder),
         old_fmf(ctxbuilder.getFastMathFlags())
     {
@@ -1153,10 +1155,11 @@ struct math_builder {
         if (jl_options.fast_math != JL_OPTIONS_FAST_MATH_OFF &&
             (always_fast ||
              jl_options.fast_math == JL_OPTIONS_FAST_MATH_ON)) {
-            fmf.setFast();
+            if (contract_only)
+                fmf.setAllowContract(true);
+            else
+                fmf.setFast();
         }
-        if (contract)
-            fmf.setAllowContract(true);
         ctxbuilder.setFastMathFlags(fmf);
     }
     IRBuilder<>& operator()() const { return ctxbuilder; }
@@ -1456,7 +1459,7 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
             return emit_runtime_call(ctx, f, argv, nargs);
         jl_datatype_t *dt = (jl_datatype_t*) x.constant;
 
-        // select the appropriated overloaded intrinsic
+        // select the appropriate overloaded intrinsic
         std::string intr_name = "julia.cpu.have_fma.";
         if (dt == jl_float32_type)
             intr_name += "f32";
@@ -1619,7 +1622,7 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, ArrayRef<Va
         // LLVM 5.0 can create FMA in the backend for contractible fmul and fadd
         // Emitting fmul and fadd here since they are easier for other LLVM passes to
         // optimize.
-        auto mathb = math_builder(ctx, false, true);
+        auto mathb = math_builder(ctx, true, true);
         return mathb().CreateFAdd(mathb().CreateFMul(x, y), z);
     }
 

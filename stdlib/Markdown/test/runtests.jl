@@ -1740,6 +1740,24 @@ end
     @test str_nbsp == "  abc\n  $nbsp| def"
 end
 
+@testset "Hack for handling <br>" begin
+    md = Markdown.parse("""
+    1<br>
+    2<br >
+    3<br/>
+    4<br />
+    5<BR>
+    6<BR >
+    7<BR/>
+    8<BR />
+    """)
+
+    @test length(md[1].content) == 16
+    @test all(i -> md[1].content[i] isa LineBreak, 2:2:16)
+    @test all(i -> md[1].content[i] isa String, 1:2:15)
+
+end
+
 include("test_spec_roundtrip_common.jl")
 include("test_spec_roundtrip_github.jl")
 include("test_spec_roundtrip_julia.jl")

@@ -32,6 +32,13 @@ end
 @test replstr(Array{Any}(undef, 2,2,2)) == "2×2×2 Array{Any, 3}:\n[:, :, 1] =\n #undef  #undef\n #undef  #undef\n\n[:, :, 2] =\n #undef  #undef\n #undef  #undef"
 @test replstr([1f10]) == "1-element Vector{Float32}:\n 1.0f10"
 
+# alignment of elided strings
+lens = length.(eachline(IOBuffer(replstr([" "^100 10;10 10]))))
+@test lens[2] == lens[3]
+# alignment of multiline items in arrays
+lens = length.(eachline(IOBuffer(replstr([[Array{Pair,0}(undef)] 10;10 10]))))
+@test lens[2] == lens[3]
+
 struct T5589
     names::Vector{String}
 end
@@ -1089,6 +1096,9 @@ test_mt(show_f5, "show_f5(A::AbstractArray{T, N}, indices::Vararg{$Int, N})")
 # Printing of :(function (x...) end)
 @test startswith(replstr(Meta.parse("function (x...) end")), ":(function (x...,)")
 
+# Printing of (x...) -> x
+@test startswith(replstr(Meta.parse("(x...) -> x")), ":((x...,)->")
+
 # Printing of macro definitions
 @test sprint(show, :(macro m end)) == ":(macro m end)"
 @test_repr "macro m end"
@@ -1193,7 +1203,7 @@ z856739 = [:a, :b]
 @test_broken repr(:(:(f($(($z856739)...))))) == ":(:(f(\$([:a, :b]...))))"
 @test repr(eval(:(:(f($(($z856739)...)))))) == ":(f(a, b))"
 
-# string interpolation, if this is what the comment in test_rep function
+# string interpolation, if this is what the comment in test_repr function
 # definition talk about
 @test repr(Expr(:string, "foo", :x, "bar")) == ":(\"foo\$(x)bar\")"
 @test Meta.parse(string(Expr(:string, "foo", :x, "bar"))) == Expr(:string, "foo", :x, "bar")
@@ -1644,6 +1654,24 @@ end
 
 # Test that static show prints something reasonable for `<:Function` types
 @test static_shown(:) == "Base.Colon()"
+
+# Test basic CodeInstance, MethodInstance printing in jl_static_show
+f_test_static_show_mi_ci() = nothing
+let
+    f = f_test_static_show_mi_ci
+    m = first(methods(f, Tuple{}))
+    mi = Base.specialize_method(m, Tuple{typeof(f)}, Core.svec())
+    Base.return_types(f, Tuple{}) # populate .cache
+    @test mi.cache isa Core.CodeInstance
+    ci = mi.cache
+
+    mi_s = static_shown(mi)
+    ci_s = static_shown(ci)
+    @test occursin("MethodInstance", mi_s)
+    @test occursin("CodeInstance", ci_s)
+    @test occursin("f_test_static_show_mi_ci", mi_s)
+    @test occursin("f_test_static_show_mi_ci", ci_s)
+end
 
 # Test @show
 let fname = tempname()
@@ -2503,6 +2531,31 @@ end
 @test string(Union{AbstractVector{T}, T} where T) == "Union{AbstractVector{T}, T} where T"
 @test string(Union{AbstractVector, T} where T) == "Union{AbstractVector, T} where T"
 @test string(Union{Array, Memory}) == "Union{Array, Memory}"
+
+# Alias printing should recover the source binder for bounded alias parameters.
+module MBoundedAlias
+export A, B, U
+struct A{T<:Integer} end
+struct B{T<:Integer} end
+const U{T<:Integer} = Union{A{T}, B{T}}
+end
+let S = TypeVar(:S, Union{}, Integer)
+    @test string(UnionAll(S, Union{MBoundedAlias.A{S}, MBoundedAlias.B{S}})) == "$(curmod_prefix)MBoundedAlias.U"
+end
+
+# Alias printing should also recover the binders for an alias with several
+# bounded parameters, including when an inner binder is bounded by an outer one
+# and the printed type carries the matching typevars as free variables.
+module MBoundedAlias2
+export A, B, U
+struct A{T<:Integer, S<:T} end
+struct B{T<:Integer, S<:T} end
+const U{T<:Integer, S<:T} = Union{A{T,S}, B{T,S}}
+end
+let T = TypeVar(:T, Union{}, Integer), S = TypeVar(:S, Union{}, T)
+    @test string(Union{MBoundedAlias2.A{T,S}, MBoundedAlias2.B{T,S}}) ==
+        "$(curmod_prefix)MBoundedAlias2.U{T, S} where {T<:Integer, S<:T}"
+end
 
 @test sprint(show, :(./)) == ":((./))"
 @test sprint(show, :((.|).(.&, b))) == ":((.|).((.&), b))"

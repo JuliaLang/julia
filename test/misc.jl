@@ -6,7 +6,7 @@ include("testhelpers/withlocales.jl")
 # Tests that do not really go anywhere else
 
 # Modify when (intentionally) changing the number of boxes in Base methods
-@test length(Test.detect_closure_boxes(Base)) == 6
+@test length(Test.detect_closure_boxes(Base)) == 3
 
 # test @assert macro
 @test_throws AssertionError (@assert 1 == 2)
@@ -54,7 +54,7 @@ let
         @test occursin("random_object", ex.msg)
     end
 end
-# if the second argument is an expression, c
+# if the second argument is an expression, call it to generate the error message
 let deepthought(x, y) = 42
     try
         @assert 1 == 2 string("the answer to the ultimate question: ",
@@ -1624,7 +1624,7 @@ end
 @testset "Base docstrings" begin
     undoc = Docs.undocumented_names(Base)
     @test_broken isempty(undoc)
-    @test isempty(setdiff(undoc, [:BufferStream, :CanonicalIndexError, :CapturedException, :Filesystem, :IOServer, :InvalidStateException, :Order, :PipeEndpoint, :ScopedValues, :Sort, :TTY, :AtomicMemoryRef, :Exception, :GenericMemoryRef, :GlobalRef, :IO, :LineNumberNode, :MemoryRef, :Method, :SegmentationFault, :TypeVar, :arrayref, :arrayset, :arraysize, :const_arrayref]))
+    @test isempty(setdiff(undoc, [:BufferStream, :CanonicalIndexError, :CapturedException, :Filesystem, :IOServer, :InvalidStateException, :Order, :PipeEndpoint, :ScopedValues, :Sort, :TTY, :AtomicMemoryRef, :Exception, :GenericMemoryRef, :GlobalRef, :IO, :AnyType, :LineNumberNode, :MemoryRef, :Method, :SegmentationFault, :TypeEq, :TypeVar, :arrayref, :arrayset, :arraysize, :const_arrayref]))
 end
 
 exported_names(m) = filter(s -> Base.isexported(m, s), names(m))

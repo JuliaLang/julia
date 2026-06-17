@@ -2,8 +2,9 @@
 
 function is_known_call(@nospecialize(x), @nospecialize(func), ir::Union{IRCode,IncrementalCompact})
     isexpr(x, :call) || return false
-    ft = argextype(x.args[1], ir)
-    return singleton_type(ft) === func
+    arg = x.args[1]
+    isa(arg, GlobalRef) && return globalref_singleton(arg, ir) === func
+    return singleton_type(argextype(arg, ir)) === func
 end
 
 function is_known_invoke_or_call(@nospecialize(x), @nospecialize(func), ir::Union{IRCode,IncrementalCompact})
@@ -11,8 +12,9 @@ function is_known_invoke_or_call(@nospecialize(x), @nospecialize(func), ir::Unio
     (isinvoke || isexpr(x, :call)) || return false
     narg = isinvoke ? 2 : 1
     length(x.args) < narg && return false
-    ft = argextype(x.args[narg], ir)
-    return singleton_type(ft) === func
+    arg = x.args[narg]
+    isa(arg, GlobalRef) && return globalref_singleton(arg, ir) === func
+    return singleton_type(argextype(arg, ir)) === func
 end
 
 struct SSAUse
@@ -304,7 +306,7 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
                 if is_old(compact, defssa) && isa(val, SSAValue)
                     val = OldSSAValue(val.id)
                 end
-                edge_typ = widenconst(argextype(val, compact))
+                edge_typ = argextype_widened(val, compact)
                 hasintersect(edge_typ, typeconstraint) || continue
                 push!(possible_predecessors, n)
             end
@@ -351,7 +353,7 @@ function record_immutable_preserve!(new_preserves::Vector{Any}, def::Expr, compa
     args = isexpr(def, :new) ? def.args : def.args[2:end]
     for i = 1:length(args)
         arg = args[i]
-        if !isbitstype(widenconst(argextype(arg, compact)))
+        if !isbitstype(argextype_widened(arg, compact))
             push!(new_preserves, arg)
         end
     end
@@ -442,7 +444,7 @@ function lift_leaves(compact::IncrementalCompact, field::Int,
                 lift_arg!(compact, leaf, cache_key, def, 1+field, lifted_leaves)
                 continue
             # NOTE we can enable this, but most `:splatnew` expressions are transformed into
-            #      `:new` expressions by the inlinear
+            #      `:new` expressions by the inliner
             # elseif isexpr(def, :splatnew) && length(def.args) == 2 && isa(def.args[2], AnySSAValue)
             #     tplssa = def.args[2]::AnySSAValue
             #     tplexpr = compact[tplssa][:stmt]
@@ -606,7 +608,7 @@ end
 function lift_comparison_leaves!(@specialize(tfunc),
     compact::IncrementalCompact, @nospecialize(val), @nospecialize(cmp),
     idx::Int, 𝕃ₒ::AbstractLattice)
-    typeconstraint = widenconst(argextype(val, compact))
+    typeconstraint = argextype_widened(val, compact)
     if isa(val, Union{OldSSAValue, SSAValue})
         val, typeconstraint = simple_walk_constraint(compact, val, typeconstraint)
     end
@@ -632,7 +634,7 @@ function lift_comparison_leaves!(@specialize(tfunc),
 
     # perform lifting
     (lifted_val, nest) = perform_lifting!(compact,
-        visited_philikes, cmp, Bool, lifted_leaves::LiftedLeaves, val, nothing)
+        visited_philikes, cmp, nothing, Bool, lifted_leaves::LiftedLeaves, val, nothing)
 
     compact[idx] = (lifted_val::LiftedValue).val
 
@@ -781,6 +783,7 @@ end
 
 function perform_lifting!(compact::IncrementalCompact,
         visited_philikes::Vector{AnySSAValue}, @nospecialize(cache_key),
+        lifting_cache::Union{IdDict{Pair{AnySSAValue,Pair{Any,Any}}, AnySSAValue}, Nothing},
         @nospecialize(result_t), lifted_leaves::Union{LiftedLeaves, LiftedDefs}, @nospecialize(stmt_val),
         lazydomtree::Union{LazyDomtree,Nothing}, walker_callback::WalkerCallback = TrivialWalker())
     reverse_mapping = IdDict{AnySSAValue, Int}()
@@ -840,10 +843,30 @@ function perform_lifting!(compact::IncrementalCompact,
     # Insert PhiNodes
     nphilikes = length(visited_philikes)
     lifted_philikes = Vector{LiftedPhilike}(undef, nphilikes)
+    # The cache key includes stmt_val to distinguish liftings through the same phi
+    # node with different type constraints (e.g. direct access vs through a PiNode).
+    # stmt_val has not been walked yet at this point, so it reflects the original
+    # getfield argument and thus the type constraint used by collect_leaves.
+    local cache_key_with_val
+    if lifting_cache !== nothing
+        cache_key_with_val = Pair{Any,Any}(cache_key, stmt_val)
+    end
     for i = 1:nphilikes
         old_ssa = visited_philikes[i]
         old_inst = compact[old_ssa]
         old_node = old_inst[:stmt]::Union{PhiNode,Expr}
+        if lifting_cache !== nothing
+            ckey = Pair{AnySSAValue,Pair{Any,Any}}(old_ssa, cache_key_with_val)
+            if ckey in keys(lifting_cache)
+                ssa = lifting_cache[ckey]
+                if isa(old_node, PhiNode)
+                    lifted_philikes[i] = LiftedPhilike(ssa, old_node, false)
+                else
+                    lifted_philikes[i] = LiftedPhilike(ssa, IfElseCall(old_node), false)
+                end
+                continue
+            end
+        end
         if isa(old_node, PhiNode)
             new_node = PhiNode()
             ssa = insert_node!(compact, old_ssa, removable_if_unused(NewInstruction(new_node, result_t)))
@@ -860,6 +883,10 @@ function perform_lifting!(compact::IncrementalCompact,
 
             ssa = insert_node!(compact, old_ssa, new_inst, #= attach_after =# true)
             lifted_philikes[i] = LiftedPhilike(ssa, IfElseCall(new_node), true)
+        end
+        if lifting_cache !== nothing
+            ckey = Pair{AnySSAValue,Pair{Any,Any}}(old_ssa, cache_key_with_val)
+            lifting_cache[ckey] = ssa
         end
     end
 
@@ -885,7 +912,7 @@ function lift_apply_args!(compact::IncrementalCompact, idx::Int, stmt::Expr)
     compact[idx] = nothing
     for i in 4:length(stmt.args) # Skip `_apply_iterate`, `iterate`, and the function
         arg = stmt.args[i]
-        arg_type = widenconst(argextype(arg, compact))
+        arg_type = argextype_widened(arg, compact)
         if isa(arg_type, DataType) && arg_type.name === Tuple.name
             svec_args = nothing
             if isa(arg, SSAValue)
@@ -1044,17 +1071,27 @@ function lift_keyvalue_get!(compact::IncrementalCompact, idx::Int, stmt::Expr, �
         result_t = tmerge(𝕃ₒ, result_t, argextype(v.val, compact))
     end
 
+    # Extract the wrapper type (e.g. Some{V}) from the inferred return type
+    # Union{Nothing, Some{V}} by subtracting Nothing. Bail out if the result
+    # is not a valid single-field concrete wrapper type.
+    get_rtype = widenconst(compact[SSAValue(idx)][:type])
+    wrapper_typ = typesubtract(get_rtype, Nothing, 0)
+    isconcretetype(wrapper_typ) || return
+    fieldcount(wrapper_typ) == 1 || return
+    ⊑(𝕃ₒ, result_t, fieldtype(wrapper_typ, 1)) || return
+
     (lifted_val, nest) = perform_lifting!(compact,
-        visited_philikes, key, result_t, lifted_leaves, collection, nothing,
+        visited_philikes, key, nothing, result_t, lifted_leaves, collection, nothing,
         KeyValueWalker(compact))
 
-    compact[idx] = lifted_val === nothing ? nothing : Expr(:call, GlobalRef(Core, :tuple), lifted_val.val)
-    finish_phi_nest!(compact, nest)
     if lifted_val !== nothing
-        if !⊑(𝕃ₒ, compact[SSAValue(idx)][:type], tuple_tfunc(𝕃ₒ, Any[result_t]))
-            add_flag!(compact[SSAValue(idx)], IR_FLAG_REFINED)
-        end
+        compact[idx] = Expr(:new, wrapper_typ, lifted_val.val)
+        compact[SSAValue(idx)][:type] = wrapper_typ
+        add_flag!(compact[SSAValue(idx)], IR_FLAG_REFINED)
+    else
+        compact[idx] = nothing
     end
+    finish_phi_nest!(compact, nest)
 
     return
 end
@@ -1100,7 +1137,7 @@ end
         argdef = compact[rarg][:stmt]
     else
         isType(arg) || return nothing
-        arg = arg.parameters[1]
+        arg = type_parameter(arg)
     end
 
     is_known_call(argdef, Core.apply_type, compact) || return nothing
@@ -1267,6 +1304,8 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
     defuses = nothing # will be initialized once we encounter mutability in order to reduce dynamic allocations
     # initialization of domtree is delayed to avoid the expensive computation in many cases
     lazydomtree = LazyDomtree(ir)
+    lifting_cache = IdDict{Pair{AnySSAValue,Pair{Any,Any}}, AnySSAValue}()
+    def_lifting_cache = IdDict{Pair{AnySSAValue,Pair{Any,Any}}, AnySSAValue}()
     scope_mapping::Union{Vector{SSAValue}, Nothing} = nothing
     for ((old_idx, idx), stmt) in compact
         # If we encounter any EnterNode with set :scope, propagate the current scope for all basic blocks, so
@@ -1378,7 +1417,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
                         push!(preserved, preserved_arg.id)
                         continue
                     elseif isexpr(def, :new)
-                        typ = unwrap_unionall(widenconst(argextype(SSAValue(defidx), compact)))
+                        typ = unwrap_unionall(argextype_widened(SSAValue(defidx), compact))
                         if typ isa DataType && !ismutabletype(typ)
                             record_immutable_preserve!(new_preserves, def, compact)
                             push!(preserved, preserved_arg.id)
@@ -1438,7 +1477,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             # analyze `getfield` / `isdefined` / `setfield!` call
             val = stmt.args[2]
         end
-        struct_typ = widenconst(argextype(val, compact))
+        struct_typ = argextype_widened(val, compact)
         struct_argtyp = argument_datatype(struct_typ)
         if struct_argtyp === nothing
             if isa(struct_typ, Union) && is_isdefined
@@ -1501,7 +1540,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         end
 
         (lifted_val, nest) = perform_lifting!(compact,
-            visited_philikes, field, result_t, lifted_leaves, val, lazydomtree)
+            visited_philikes, field, lifting_cache, result_t, lifted_leaves, val, lazydomtree)
 
         should_delete_node = false
         line = compact[SSAValue(idx)][:line]
@@ -1530,7 +1569,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
                     lifted_leaves_def[k] = v === nothing ? false : true
                 end
                 (def_val, nest) = perform_lifting!(compact,
-                    visited_philikes, field, Bool, lifted_leaves_def, val, lazydomtree)
+                    visited_philikes, field, def_lifting_cache, Bool, lifted_leaves_def, val, lazydomtree)
                 def_val = (def_val::LiftedValue).val
                 finish_phi_nest!(compact, nest)
             end
@@ -1778,10 +1817,9 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int,Tuple{SPCSet,SSADefUse}}
         # Find the type for this allocation
         defexpr = ir[SSAValue(defidx)][:stmt]
         isexpr(defexpr, :new) || continue
-        typ = unwrap_unionall(ir.stmts[defidx][:type])
         # Could still end up here if we tried to setfield! on an immutable, which would
         # error at runtime, but is not illegal to have in the IR.
-        typ = widenconst(typ)
+        typ = unwrap_unionall(widenconst(ir.stmts[defidx][:type]))
         ismutabletype(typ) || continue
         typ = typ::DataType
         # Check if there are any uses we did not account for. If so, the variable
@@ -1934,7 +1972,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int,Tuple{SPCSet,SSADefUse}}
                     elseif use.kind === :preserve
                         newval = compute_value_for_use(ir, domtree, allblocks,
                             du, phinodes, fidx, use.idx)
-                        if !isbitstype(widenconst(argextype(newval, ir)))
+                        if !isbitstype(argextype_widened(newval, ir))
                             if preserve_uses === nothing
                                 preserve_uses = IdDict{Int, Vector{Any}}()
                             end
@@ -2205,7 +2243,7 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             if !isassigned(stmt.values, i)
                 # Should be impossible to have something used only by PiNodes that's undef
                 push!(to_drop, i)
-            elseif !hasintersect(widenconst(argextype(stmt.values[i], compact)),
+            elseif !hasintersect(argextype_widened(stmt.values[i], compact),
                                  widenconst(t))
                 push!(to_drop, i)
             end
@@ -2620,7 +2658,7 @@ function cfg_simplify!(ir::IRCode)
     # Run instruction compaction to produce the result,
     # but we're messing with the CFG
     # so we don't want compaction to do so independently
-    compact = IncrementalCompact(ir, CFGTransformState(true, false, cresult_bbs, bb_rename_pred, bb_rename_succ, nothing))
+    compact = IncrementalCompact(ir, CFGTransformState(true, false, cresult_bbs, bb_rename_pred, bb_rename_succ, nothing, nothing))
     result_idx = 1
     for (idx, orig_bb) in enumerate(result_bbs)
         ms = orig_bb
@@ -2701,7 +2739,7 @@ function cfg_simplify!(ir::IRCode)
                         compact.result[compact.result_idx][:stmt] = nothing
                     end
                 end
-                # We always increase the result index to ensure a predicatable
+                # We always increase the result index to ensure a predictable
                 # placement of the resulting nodes.
                 compact.result_idx += 1
             end

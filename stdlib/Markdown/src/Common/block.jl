@@ -65,7 +65,7 @@ function hashheader(stream::IO, md::MD)
             c = '\n'
         end
 
-        if c != '\n' # Empty header
+        if c != '\n' # Non-empty header
             h = strip(readline(stream))
             h = (match(r"(.*?)( +#+)?$", h)::AbstractMatch).captures[1]
             buffer = IOBuffer()
@@ -322,7 +322,7 @@ function list(stream::IO, block::MD)
         indent = length(m.match)
         # Calculate the starting number and regex to use for bullet matching.
         initial, regex =
-            if m.captures[3] == nothing
+            if m.captures[3] === nothing
                 # An unordered list. Use `-1` to flag the list as unordered.
                 -1, Regex("^ {0,3}(\\$(m.captures[1]))( |\$)")
             elseif m.captures[3] == "."
@@ -416,7 +416,7 @@ const SPACES = "(?:[ \t]*(?:[ \t\n])[ \t]*)"
 
 # An unquoted attribute value is a nonempty string of characters not including
 # spaces, tabs, line endings, ", ', =, <, >, or `.
-const UNQUOTED_ATTRIBUTE_VALUE = "[^ \t\n\"'=<>`]"
+const UNQUOTED_ATTRIBUTE_VALUE = "[^ \t\n\"'=<>`]+"
 
 # A single-quoted attribute value consists of ', zero or more characters not
 # including ', and a final '.
@@ -429,6 +429,7 @@ const DOUBLE_QUOTED_ATTRIBUTE_VALUE = "\"[^\"]*\""
 # An attribute value consists of an unquoted attribute value, a single-quoted
 # attribute value, or a double-quoted attribute value.
 const ATTRIBUTE_VALUE = "(?:(?:$UNQUOTED_ATTRIBUTE_VALUE)|(?:$SINGLE_QUOTED_ATTRIBUTE_VALUE)|(?:$DOUBLE_QUOTED_ATTRIBUTE_VALUE))"
+const ATTRIBUTE_VALUE_REGEX = Regex("^$ATTRIBUTE_VALUE")
 
 # An attribute value specification consists of optional spaces, tabs, and up
 # to one line ending, a = character, optional spaces, tabs, and up to one line
@@ -439,6 +440,7 @@ const ATTRIBUTE_VALUE_SPEC = "$SPACES?=$SPACES?$ATTRIBUTE_VALUE"
 # more ASCII letters, digits, _, ., :, or -. (Note: This is the XML
 # specification restricted to ASCII. HTML5 is laxer.)
 const ATTRIBUTE_NAME = "[a-zA-Z_:][a-zA-Z0-9_.:-]*"
+const ATTRIBUTE_NAME_REGEX = Regex("^$ATTRIBUTE_NAME")
 
 # An attribute consists of spaces, tabs, and up to one line ending, an
 # attribute name, and an optional attribute value specification.
@@ -447,6 +449,7 @@ const ATTRIBUTE = "$SPACES$ATTRIBUTE_NAME(?:$ATTRIBUTE_VALUE_SPEC)?"
 # A tag name consists of an ASCII letter followed by zero or more ASCII
 # letters, digits, or hyphens (-).
 const TAG_NAME = "[a-zA-Z][a-zA-Z0-9-]*"
+const TAG_NAME_REGEX = Regex("^$TAG_NAME")
 
 # An open tag consists of a < character, a tag name, zero or more attributes,
 # optional spaces, tabs, and up to one line ending, an optional / character,
@@ -457,13 +460,13 @@ const OPEN_TAG = "<($TAG_NAME)((?:$ATTRIBUTE)*)$SPACES?/?>"
 # and up to one line ending, and the character >.
 const CLOSING_TAG = "</$TAG_NAME$SPACES?>"
 
-# Regex for a the HTML block start condition of type 7
+# Regex for the HTML block start condition of type 7
 const TYPE_7_REGEX = Regex("^(?:(?:$OPEN_TAG)|(?:$CLOSING_TAG))[ \t]*\$")
 
 # Tag names allowed as tag names for type 6 HTML blocks
 const TYPE_6_TAGNAMES = "address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h1|h2|h3|h4|h5|h6|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul"
 
-# Regex for a the HTML block start condition of type 6
+# Regex for the HTML block start condition of type 6
 const TYPE_6_REGEX = Regex("^<(?:$TYPE_6_TAGNAMES)(?:[ \t>]|/>|\$)", "i")
 
 # Regex for a the HTML block start condition of type 1

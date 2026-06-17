@@ -95,6 +95,12 @@ precompile_test_harness(false) do dir
               end
               abstract type AbstractAlgebraMap{A} end
               struct GAPGroupHomomorphism{A, B} <: AbstractAlgebraMap{GAPGroupHomomorphism{B, A}} end
+              # issue #62047: supertype whose parameters reach back through the subtype
+              struct Wrap62047{T} end
+              struct Recur62047{T} <: AbstractAlgebraMap{Wrap62047{Recur62047{T}}} end
+              # two types sharing the identical supertype object
+              struct ShareA62047{T} <: AbstractAlgebraMap{T} end
+              struct ShareB62047{T} <: AbstractAlgebraMap{T} end
 
               global process_state_calls::Int = 0
               const process_state = Base.OncePerProcess{typeof(getpid())}() do
@@ -127,6 +133,7 @@ precompile_test_harness(false) do dir
           """
           module $Foo_module
               import $FooBase_module, $FooBase_module.typeA, $FooBase_module.GAPGroupHomomorphism
+              import $FooBase_module: Wrap62047, Recur62047, ShareA62047, ShareB62047
               import $Foo2_module: $Foo2_module, override, overridenc
               import $FooBase_module.hash
               import Test
@@ -211,6 +218,10 @@ precompile_test_harness(false) do dir
 
               const GAPType1 = GAPGroupHomomorphism{Nothing, Nothing}
               const GAPType2 = GAPGroupHomomorphism{1, 2}
+
+              # issue #62047
+              const Type62047 = Wrap62047{Recur62047{Int}}
+              const Shared62047 = (ShareA62047{Int}, ShareB62047{Int})
 
               # issue #28297
               mutable struct Result
@@ -643,8 +654,7 @@ precompile_test_harness(false) do dir
           """)
 
     cachefile, _ = @test_logs (:debug, r"Generating object cache file for FooBar") min_level=Logging.Debug match_mode=:any Base.compilecache(Base.PkgId("FooBar"))
-    empty_prefs_hash = Base.get_preferences_hash(nothing, String[])
-    @test cachefile == Base.compilecache_path(Base.PkgId("FooBar"), empty_prefs_hash)
+    @test cachefile == Base.compilecache_path(Base.PkgId("FooBar"), "")
     @test isfile(joinpath(cachedir, "FooBar.ji"))
     Tsc = Bool(Base.JLOptions().use_pkgimages) ? Tuple{<:Vector, String, UInt128} : Tuple{<:Vector, Nothing, UInt128}
     @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) isa Tsc
@@ -1073,8 +1083,9 @@ precompile_test_harness("code caching") do dir
         mi = m.specializations::Core.MethodInstance
         @test hasvalid(mi, world)       # was compiled with the new method
         m = only(methods(MA.fib))
-        mi = m.specializations::Core.MethodInstance
-        @test !hasvalid(mi, world)      # invalidated by redefining `gib` before loading StaleB
+        for mi in Base.specializations(m)
+            @test !hasvalid(mi, world)      # invalidated by redefining `gib` before loading StaleB
+        end
         @test MA.fib() === 2.0
 
         # Reporting test (ensure SnoopCompile works)
@@ -1872,6 +1883,7 @@ end
     dir = @__DIR__
     @test success(pipeline(Cmd(`$(Base.julia_cmd()) --startup-file=no precompile_absint1.jl`; dir); stdout, stderr))
     @test success(pipeline(Cmd(`$(Base.julia_cmd()) --startup-file=no precompile_absint2.jl`; dir); stdout, stderr))
+    @test success(pipeline(Cmd(`$(Base.julia_cmd()) --startup-file=no precompile_extmi.jl`; dir); stdout, stderr))
 end
 
 precompile_test_harness("Recursive types") do load_path
@@ -1968,7 +1980,7 @@ precompile_test_harness("PkgCacheInspector") do load_path
             cachefile, depmods, #=completeinfo=#true, "PCI")
     end
 
-    modules, init_order, internal_methods, new_method_roots, cache_sizes = sv
+    modules, init_order, internal_methods, extext_methods, new_method_roots, cache_sizes = sv
     for m in internal_methods::Vector{Any}
         m isa Core.MethodInstance || continue
         m = m.func::Method
@@ -2123,7 +2135,7 @@ precompile_test_harness("Test flags") do load_path
     ji, ofile = Base.compilecache(Base.PkgId("TestFlags"); flags=`--check-bounds=no -O3`)
     open(ji, "r") do io
         Base.isvalid_cache_header(io)
-        _, _, _, _, _, _, _, flags = Base.parse_cache_header(io, ji)
+        _, _, _, _, _, _, flags = Base.parse_cache_header(io, ji)
         cacheflags = Base.CacheFlags(flags)
         @test cacheflags.check_bounds == 2
         @test cacheflags.opt_level == 3
@@ -2138,7 +2150,7 @@ if Base.get_bool_env("CI", false) && (Sys.ARCH === :x86_64 || Sys.ARCH === :aarc
         idx = findfirst(cachefiles) do cf
             Base.stale_cachefile(pkgpath, cf) !== true
         end
-        targets = Base.parse_image_targets(Base.parse_cache_header(cachefiles[idx])[7])
+        targets = Base.parse_image_targets(Base.parse_cache_header(cachefiles[idx])[6])
         @test length(targets) > 1
     end
 end
@@ -2519,8 +2531,13 @@ precompile_test_harness("Package precompilation works without manifest") do load
 end
 
 # Verify that inference / caching was not performed for any macros in the sysimage
-let m = only(methods(Base.var"@big_str"))
-    @test m.specializations === Core.svec() || !isdefined(m.specializations, :cache)
+let m = only(methods(Base.var"@lazy_str"))
+    for mi in Base.specializations(m)
+        isdefined(mi, :cache) || continue
+        ci = mi.cache
+        @test !isdefined(ci, :inferred)
+        @test !isdefined(ci, :next)
+    end
 end
 
 # Issue #58841 - make sure we don't accidentally throw away code for inference
@@ -2684,6 +2701,716 @@ end
         @test count("Now FailPkg is running.", output) == 0
         @test count("Now DependsOnly is running.", output) == 1
     end
+end
+
+precompile_test_harness("invalidation for 'foreign-keyed' Preferences") do load_path
+    # Test that compile-time preferences invalidate, even when queried from a
+    # "foreign" UUID / package namespace
+    foreign_uuid_str = "b5f1a95c-d45e-4b9e-84c6-b7ea3b5e5f22"
+    foreign_uuid = Base.UUID(foreign_uuid_str)
+
+    # Package that records compile-time preferences for a "foreign" UUID
+    write(joinpath(load_path, "PkgCrossPrefs.jl"),
+          """
+          module PkgCrossPrefs
+              # Query preferences for a foreign package UUID (cross-UUID tracking)
+              Base.record_compiletime_preference(Base.UUID("$foreign_uuid_str"), "debug")
+              # Also query a preference that won't be set
+              Base.record_compiletime_preference(Base.UUID("$foreign_uuid_str"), "unset_opt")
+          end
+          """)
+
+    env_base_dir    = mkpath(joinpath(load_path, "env_base"))
+    env_changed_dir = mkpath(joinpath(load_path, "env_changed"))
+    env_unset_dir   = mkpath(joinpath(load_path, "env_unset_set"))
+
+    env_base      = joinpath(env_base_dir, "Project.toml")
+    env_changed   = joinpath(env_changed_dir, "Project.toml")
+    env_unset_set = joinpath(env_unset_dir, "Project.toml")
+
+    write(env_base, """
+    [deps]
+    PkgForeign = "$foreign_uuid_str"
+
+    [preferences.PkgForeign]
+    debug = false
+    """)
+    write(env_changed, """
+    [deps]
+    PkgForeign = "$foreign_uuid_str"
+
+    [preferences.PkgForeign]
+    debug = true
+    """)
+    write(env_unset_set, """
+    [deps]
+    PkgForeign = "$foreign_uuid_str"
+
+    [preferences.PkgForeign]
+    debug = false
+    unset_opt = "now_set"
+    """)
+
+    old_proj = Base.active_project()
+    try
+        Base.set_active_project(env_base)
+        cachefile, _ = Base.compilecache(Base.PkgId("PkgCrossPrefs"))
+        pkg_file = joinpath(load_path, "PkgCrossPrefs.jl")
+
+        # Cache is not stale with the original preferences
+        @test Base.stale_cachefile(pkg_file, cachefile) !== true
+        # Changing the (foreign) preferences makes the cache stale
+        Base.set_active_project(env_changed)
+        @test Base.stale_cachefile(pkg_file, cachefile) === true
+        # Restoring the original preferences makes it not stale again
+        Base.set_active_project(env_base)
+        @test Base.stale_cachefile(pkg_file, cachefile) !== true
+        # Setting a previously-unset preference also causes staleness
+        Base.set_active_project(env_unset_set)
+        @test Base.stale_cachefile(pkg_file, cachefile) === true
+    finally
+        Base.set_active_project(old_proj)
+    end
+end
+
+precompile_test_harness("Preferences hash collision (issue #59344), part 1") do load_path
+    # Test for the preference hash collision bug (https://github.com/JuliaLang/julia/issues/59344)
+    # related to skipping unset preferences in preference hash
+    pkg_uuid_str = "c9de8a70-0fad-4996-b3e2-f9c45bce31af"
+    pkg_uuid = Base.UUID(pkg_uuid_str)
+
+    pkg_src_dir = mkpath(joinpath(load_path, "PkgHashCollision", "src"))
+    write(joinpath(pkg_src_dir, "PkgHashCollision.jl"),
+          """
+          module PkgHashCollision
+              Base.record_compiletime_preference(Base.UUID("$pkg_uuid_str"), "xyz")
+              Base.record_compiletime_preference(Base.UUID("$pkg_uuid_str"), "abc")
+          end
+          """)
+    write(joinpath(load_path, "PkgHashCollision", "Project.toml"), """
+          name = "PkgHashCollision"
+          uuid = "$pkg_uuid_str"
+          """)
+
+    env_xyz_dir = mkpath(joinpath(load_path, "env_xyz"))
+    env_abc_dir = mkpath(joinpath(load_path, "env_abc"))
+
+    env_xyz = joinpath(env_xyz_dir, "Project.toml")
+    env_abc = joinpath(env_abc_dir, "Project.toml")
+
+    # First config: xyz has the value, abc is unset
+    write(env_xyz, """
+    [deps]
+    PkgHashCollision = "$pkg_uuid_str"
+
+    [preferences.PkgHashCollision]
+    xyz = "same_value"
+    """)
+    # Second config: abc has the same value, xyz is unset
+    write(env_abc, """
+    [deps]
+    PkgHashCollision = "$pkg_uuid_str"
+
+    [preferences.PkgHashCollision]
+    abc = "same_value"
+    """)
+
+    old_proj = Base.active_project()
+    try
+        Base.set_active_project(env_xyz)
+        cachefile, _ = Base.compilecache(Base.PkgId(pkg_uuid, "PkgHashCollision"))
+        pkg_file = joinpath(load_path, "PkgHashCollision", "src", "PkgHashCollision.jl")
+
+        @test Base.stale_cachefile(pkg_file, cachefile) !== true
+        Base.set_active_project(env_abc)
+        @test Base.stale_cachefile(pkg_file, cachefile) === true
+    finally
+        Base.set_active_project(old_proj)
+    end
+end
+
+precompile_test_harness("Preferences hash collision (issue #59344), part 2") do load_path
+    # On Julia ≥1.13, `pref = false` and an unset preference triggered a hash collision,
+    # causing preference changes not to invalidate. Test that this invalidates as expected.
+    pkg_uuid_str = "d2e8c371-1b3f-4f5a-8c7e-9a2b1d4e6f8c"
+    pkg_uuid = Base.UUID(pkg_uuid_str)
+
+    pkg_src_dir = mkpath(joinpath(load_path, "PkgFalsePrefs", "src"))
+    write(joinpath(pkg_src_dir, "PkgFalsePrefs.jl"),
+          """
+          module PkgFalsePrefs
+              Base.record_compiletime_preference(Base.UUID("$pkg_uuid_str"), "flag")
+          end
+          """)
+    write(joinpath(load_path, "PkgFalsePrefs", "Project.toml"), """
+          name = "PkgFalsePrefs"
+          uuid = "$pkg_uuid_str"
+          """)
+
+    env_false_dir = mkpath(joinpath(load_path, "env_false"))
+    env_none_dir  = mkpath(joinpath(load_path, "env_none"))
+
+    env_false = joinpath(env_false_dir, "Project.toml")
+    env_none  = joinpath(env_none_dir,  "Project.toml")
+
+    # Compiled with flag = false
+    write(env_false, """
+    [deps]
+    PkgFalsePrefs = "$pkg_uuid_str"
+
+    [preferences.PkgFalsePrefs]
+    flag = false
+    """)
+    # Preference removed entirely
+    write(env_none, """
+    [deps]
+    PkgFalsePrefs = "$pkg_uuid_str"
+    """)
+
+    old_proj = Base.active_project()
+    try
+        Base.set_active_project(env_false)
+        cachefile, _ = Base.compilecache(Base.PkgId(pkg_uuid, "PkgFalsePrefs"))
+        pkg_file = joinpath(load_path, "PkgFalsePrefs", "src", "PkgFalsePrefs.jl")
+
+        @test Base.stale_cachefile(pkg_file, cachefile) !== true
+        Base.set_active_project(env_none)
+        @test Base.stale_cachefile(pkg_file, cachefile) === true
+    finally
+        Base.set_active_project(old_proj)
+    end
+end
+
+# Workspace sub-environment precompilation should not precompile packages from other sub-environments
+@testset "workspace sub-environment precompilation scoping" begin
+    mkdepottempdir() do depot
+        workspace_path = joinpath(@__DIR__, "project", "Workspaces", "PrecompileExt")
+        fooenv_path = joinpath(workspace_path, "FooEnv")
+
+        original_depot_path = copy(Base.DEPOT_PATH)
+        old_proj = Base.active_project()
+        try
+            push!(empty!(DEPOT_PATH), depot)
+            # Activate FooEnv (only depends on Foo, not Bar)
+            Base.set_active_project(fooenv_path)
+
+            io = IOBuffer()
+            ioc = IOContext(io, :color => false)
+            Base.Precompilation.precompilepkgs(; io=ioc, fancyprint=false)
+            output = String(take!(io))
+
+            # Foo should be precompiled
+            @test occursin("Foo", output)
+            # Bar should NOT be precompiled (it's in another sub-environment)
+            @test !occursin("Bar", output)
+        finally
+            Base.set_active_project(old_proj)
+            append!(empty!(DEPOT_PATH), original_depot_path)
+        end
+    end
+end
+
+# TypeEq payloads that mention package-image datatypes must be restored as new
+# before restore-side type-cache lookup compares them to cached types.
+@testset "precompile TypeEq references to new datatypes" begin
+    mkdepottempdir() do depot
+        project_path = joinpath(depot, "testenv")
+        dev_path = joinpath(depot, "dev")
+        mkpath(project_path)
+        mkpath(dev_path)
+
+        trigger_uuid = "10000000-0000-0000-0000-000000000103"
+        parent_uuid = "10000000-0000-0000-0000-000000000104"
+
+        trigger_dir = joinpath(dev_path, "TypeEqTrigger")
+        mkpath(joinpath(trigger_dir, "src"))
+        write(joinpath(trigger_dir, "Project.toml"), """
+            name = "TypeEqTrigger"
+            uuid = "$trigger_uuid"
+            version = "0.1.0"
+            """)
+        write(joinpath(trigger_dir, "src", "TypeEqTrigger.jl"), """
+            module TypeEqTrigger
+            macro latestworld_if_toplevel()
+                Expr(Symbol("latestworld-if-toplevel"))
+            end
+            workload() = tuple(values(Dict(:a => 1))...)
+            if ccall(:jl_generating_output, Cint, ()) == 1
+                ccall(:jl_tag_newly_inferred_enable, Cvoid, ())
+                try
+                    @latestworld_if_toplevel
+                    workload()
+                finally
+                    ccall(:jl_tag_newly_inferred_disable, Cvoid, ())
+                end
+            end
+            end
+            """)
+
+        parent_dir = joinpath(dev_path, "TypeEqParent")
+        mkpath(joinpath(parent_dir, "src"))
+        write(joinpath(parent_dir, "Project.toml"), """
+            name = "TypeEqParent"
+            uuid = "$parent_uuid"
+            version = "0.1.0"
+            """)
+        write(joinpath(parent_dir, "src", "TypeEqParent.jl"), """
+            module TypeEqParent
+            import Base: range
+
+            abstract type Left{N} end
+            abstract type Right{N} end
+            struct Iter{C}
+                c::C
+            end
+
+            Base.iterate(itr::Iter{C}, state::Int=0) where
+                {N, C <: Union{Left{N},Right{N}}} =
+                    state >= N ? nothing : (0, state + 1)
+            Base.BroadcastStyle(::Type{<:Iter{C}}) where
+                {N, C <: Union{Left{N},Right{N}}} =
+                    Base.BroadcastStyle(NTuple{N,Int})
+            Base.broadcastable(itr::Iter{C}) where
+                {N, C <: Union{Left{N},Right{N}}} =
+                    (itr...,)::NTuple{N,Int}
+
+            comps(c::C) where {N, C <: Union{Left{N},Right{N}}} = Iter(c)
+            range(start::T; stop::T, length::Integer=100) where
+                {N, T <: Union{Left{N},Right{N}}} =
+                    comps(start) .+ comps(stop)
+            range(start::T, stop::T; kwargs...) where
+                {N, T <: Union{Left{N},Right{N}}} =
+                    range(start; stop=stop, kwargs...)
+
+            macro latestworld_if_toplevel()
+                Expr(Symbol("latestworld-if-toplevel"))
+            end
+            function workload()
+                for T in (Float64, Int)
+                    range(one(T), T(2); length=2)
+                end
+            end
+            if ccall(:jl_generating_output, Cint, ()) == 1
+                ccall(:jl_tag_newly_inferred_enable, Cvoid, ())
+                try
+                    @latestworld_if_toplevel
+                    workload()
+                finally
+                    ccall(:jl_tag_newly_inferred_disable, Cvoid, ())
+                end
+            end
+            end
+            """)
+
+        write(joinpath(project_path, "Project.toml"), """
+            [deps]
+            TypeEqParent = "$parent_uuid"
+            TypeEqTrigger = "$trigger_uuid"
+            """)
+        write(joinpath(project_path, "Manifest.toml"), """
+            manifest_format = "2.0"
+
+            [[deps.TypeEqParent]]
+            path = "../dev/TypeEqParent"
+            uuid = "$parent_uuid"
+            version = "0.1.0"
+
+            [[deps.TypeEqTrigger]]
+            path = "../dev/TypeEqTrigger"
+            uuid = "$trigger_uuid"
+            version = "0.1.0"
+            """)
+
+        original_depot_path = copy(Base.DEPOT_PATH)
+        old_proj = Base.active_project()
+        try
+            push!(empty!(DEPOT_PATH), depot)
+            Base.set_active_project(project_path)
+            Base.Precompilation.precompilepkgs(; io=IOBuffer(), fancyprint=false)
+            @test Base.require(Main, :TypeEqParent) isa Module
+            @test Base.require(Main, :TypeEqTrigger) isa Module
+        finally
+            Base.set_active_project(old_proj)
+            append!(empty!(DEPOT_PATH), original_depot_path)
+        end
+    end
+end
+
+# Issue #61198 - extensions with superset triggers must be in the precompilation dep graph
+@testset "precompilation dep graph includes transitively-triggered extensions" begin
+    mkdepottempdir() do depot
+        project_path = joinpath(depot, "testenv")
+        mkpath(project_path)
+
+        parent_uuid = "10000000-0000-0000-0000-000000000023"
+        triga_uuid  = "10000000-0000-0000-0000-000000000050"
+        trigb_uuid  = "20000000-0000-0000-0000-000000000001"
+        top_uuid    = "10000000-0000-0000-0000-000000000064"
+
+        # ParentPkg with two extensions: ExtA triggered by TrigA,
+        # ExtAB triggered by [TrigA, TrigB] (superset of ExtA's triggers)
+        parent_dir = joinpath(depot, "dev", "ParentPkg")
+        mkpath(joinpath(parent_dir, "src"))
+        mkpath(joinpath(parent_dir, "ext"))
+        write(joinpath(parent_dir, "Project.toml"), """
+            name = "ParentPkg"
+            uuid = "$parent_uuid"
+            version = "0.1.0"
+
+            [weakdeps]
+            TrigA = "$triga_uuid"
+            TrigB = "$trigb_uuid"
+
+            [extensions]
+            ExtA = "TrigA"
+            ExtAB = ["TrigA", "TrigB"]
+            """)
+        write(joinpath(parent_dir, "src", "ParentPkg.jl"), """
+            module ParentPkg
+            end
+            """)
+        write(joinpath(parent_dir, "ext", "ExtA.jl"), """
+            module ExtA
+            using ParentPkg, TrigA
+            end
+            """)
+        write(joinpath(parent_dir, "ext", "ExtAB.jl"), """
+            module ExtAB
+            using ParentPkg, TrigA, TrigB
+            end
+            """)
+
+        triga_dir = joinpath(depot, "dev", "TrigA")
+        mkpath(joinpath(triga_dir, "src"))
+        write(joinpath(triga_dir, "Project.toml"), """
+            name = "TrigA"
+            uuid = "$triga_uuid"
+            version = "0.1.0"
+            """)
+        write(joinpath(triga_dir, "src", "TrigA.jl"), """
+            module TrigA
+            end
+            """)
+
+        trigb_dir = joinpath(depot, "dev", "TrigB")
+        mkpath(joinpath(trigb_dir, "src"))
+        write(joinpath(trigb_dir, "Project.toml"), """
+            name = "TrigB"
+            uuid = "$trigb_uuid"
+            version = "0.1.0"
+            """)
+        write(joinpath(trigb_dir, "src", "TrigB.jl"), """
+            module TrigB
+            end
+            """)
+
+        # TopPkg depends on ParentPkg + both triggers, so both extensions fire
+        top_dir = joinpath(depot, "dev", "TopPkg")
+        mkpath(joinpath(top_dir, "src"))
+        write(joinpath(top_dir, "Project.toml"), """
+            name = "TopPkg"
+            uuid = "$top_uuid"
+            version = "0.1.0"
+
+            [deps]
+            ParentPkg = "$parent_uuid"
+            TrigA = "$triga_uuid"
+            TrigB = "$trigb_uuid"
+            """)
+        write(joinpath(top_dir, "src", "TopPkg.jl"), """
+            module TopPkg
+            using ParentPkg, TrigA, TrigB
+            end
+            """)
+
+        write(joinpath(project_path, "Project.toml"), """
+            [deps]
+            ParentPkg = "$parent_uuid"
+            TrigA = "$triga_uuid"
+            TrigB = "$trigb_uuid"
+            TopPkg = "$top_uuid"
+            """)
+
+        write(joinpath(project_path, "Manifest.toml"), """
+            manifest_format = "2.0"
+
+            [[deps.ParentPkg]]
+            path = "../dev/ParentPkg/"
+            uuid = "$parent_uuid"
+            version = "0.1.0"
+
+            [deps.ParentPkg.weakdeps]
+            TrigA = "$triga_uuid"
+            TrigB = "$trigb_uuid"
+
+            [deps.ParentPkg.extensions]
+            ExtA = "TrigA"
+            ExtAB = ["TrigA", "TrigB"]
+
+            [[deps.TrigA]]
+            path = "../dev/TrigA/"
+            uuid = "$triga_uuid"
+            version = "0.1.0"
+
+            [[deps.TrigB]]
+            path = "../dev/TrigB/"
+            uuid = "$trigb_uuid"
+            version = "0.1.0"
+
+            [[deps.TopPkg]]
+            deps = ["ParentPkg", "TrigA", "TrigB"]
+            path = "../dev/TopPkg/"
+            uuid = "$top_uuid"
+            version = "0.1.0"
+            """)
+
+        original_depot_path = copy(Base.DEPOT_PATH)
+        old_proj = Base.active_project()
+        try
+            push!(empty!(DEPOT_PATH), depot)
+            Base.set_active_project(project_path)
+
+            # First precompilation: compile everything
+            Base.Precompilation.precompilepkgs(; io=IOBuffer(), fancyprint=false)
+
+            # Second precompilation: should not recompile anything
+            io = IOBuffer()
+            Base.Precompilation.precompilepkgs(; io, fancyprint=false)
+            @test isempty(takestring!(io))
+        finally
+            Base.set_active_project(old_proj)
+            append!(empty!(DEPOT_PATH), original_depot_path)
+        end
+    end
+end
+
+# Test that warn_loaded names loaded packages and counts affected dependents
+@testset "warn_loaded names packages and counts dependents" begin
+    mkdepottempdir() do depot; mktempdir() do dir
+        # Create LoadedDep old source — loaded at the start of the script
+        loaded_dep_old_path = joinpath(dir, "dev", "LoadedDepOld")
+        mkpath(joinpath(loaded_dep_old_path, "src"))
+        write(joinpath(loaded_dep_old_path, "Project.toml"),
+              """
+              name = "LoadedDep"
+              uuid = "a1a1a1a1-0000-0000-0000-000000000001"
+              version = "0.1.0"
+              """)
+        write(joinpath(loaded_dep_old_path, "src", "LoadedDep.jl"),
+              """
+              module LoadedDep
+              const _v = 1  # old version marker forces a different build_id
+              end
+              """)
+
+        # Create LoadedDep new source — resolved by the environment after switching
+        loaded_dep_new_path = joinpath(dir, "dev", "LoadedDepNew")
+        mkpath(joinpath(loaded_dep_new_path, "src"))
+        write(joinpath(loaded_dep_new_path, "Project.toml"),
+              """
+              name = "LoadedDep"
+              uuid = "a1a1a1a1-0000-0000-0000-000000000001"
+              version = "0.2.0"
+              """)
+        write(joinpath(loaded_dep_new_path, "src", "LoadedDep.jl"),
+              """
+              module LoadedDep
+              const _v = 2  # new version marker forces a different build_id
+              end
+              """)
+
+        # Create DepUser — depends on LoadedDep
+        depuser_path = joinpath(dir, "dev", "DepUser")
+        mkpath(joinpath(depuser_path, "src"))
+        write(joinpath(depuser_path, "Project.toml"),
+              """
+              name = "DepUser"
+              uuid = "b2b2b2b2-0000-0000-0000-000000000002"
+              version = "0.1.0"
+
+              [deps]
+              LoadedDep = "a1a1a1a1-0000-0000-0000-000000000001"
+              """)
+        write(joinpath(depuser_path, "src", "DepUser.jl"),
+              """
+              module DepUser
+              import LoadedDep
+              end
+              """)
+
+        # old_project: used to load the old version of LoadedDep
+        old_project_path = joinpath(dir, "old_project")
+        mkpath(old_project_path)
+        write(joinpath(old_project_path, "Project.toml"),
+              """
+              [deps]
+              LoadedDep = "a1a1a1a1-0000-0000-0000-000000000001"
+              """)
+        write(joinpath(old_project_path, "Manifest.toml"),
+              """
+              manifest_format = "2.0"
+
+              [[deps.LoadedDep]]
+              path = "../dev/LoadedDepOld/"
+              uuid = "a1a1a1a1-0000-0000-0000-000000000001"
+              version = "0.1.0"
+              """)
+
+        # new_project: resolved after loading old version; has LoadedDep new source
+        new_project_path = joinpath(dir, "new_project")
+        mkpath(new_project_path)
+        write(joinpath(new_project_path, "Project.toml"),
+              """
+              [deps]
+              DepUser = "b2b2b2b2-0000-0000-0000-000000000002"
+              LoadedDep = "a1a1a1a1-0000-0000-0000-000000000001"
+              """)
+        write(joinpath(new_project_path, "Manifest.toml"),
+              """
+              manifest_format = "2.0"
+
+              [[deps.DepUser]]
+              deps = ["LoadedDep"]
+              path = "../dev/DepUser/"
+              uuid = "b2b2b2b2-0000-0000-0000-000000000002"
+              version = "0.1.0"
+
+              [[deps.LoadedDep]]
+              path = "../dev/LoadedDepNew/"
+              uuid = "a1a1a1a1-0000-0000-0000-000000000001"
+              version = "0.2.0"
+              """)
+
+        # Load the old LoadedDep first, then switch to the new project whose manifest
+        # resolves a different source for LoadedDep — this causes a build_id mismatch
+        # and should trigger the warn_loaded warning.
+        script = """
+            using LoadedDep
+            Base.set_active_project($(repr(new_project_path)))
+            Base.Precompilation.precompilepkgs(; fancyprint=false, warn_loaded=true)
+            """
+
+        cmd = addenv(`$(Base.julia_cmd()) --startup-file=no --project=$(old_project_path) -e $script`,
+                     "JULIA_DEPOT_PATH" => depot)
+
+        out = Base.PipeEndpoint()
+        log = @async read(out, String)
+        try
+            proc = run(pipeline(cmd, stdout=out, stderr=out))
+            @test success(proc)
+        catch
+            @show fetch(log)
+            rethrow()
+        end
+        output = fetch(log)
+        @test occursin("currently loaded", output)
+        @test occursin("LoadedDep", output)
+    end end
+end
+
+# Test that warn_loaded does not warn when the loaded dep is already at the correct version
+@testset "warn_loaded does not warn when loaded dep matches env version" begin
+    mkdepottempdir() do depot; mktempdir() do dir
+        loaded_dep_path = joinpath(dir, "dev", "LoadedDep")
+        mkpath(joinpath(loaded_dep_path, "src"))
+        write(joinpath(loaded_dep_path, "Project.toml"),
+              """
+              name = "LoadedDep"
+              uuid = "a1a1a1a1-0000-0000-0000-000000000001"
+              version = "0.1.0"
+              """)
+        write(joinpath(loaded_dep_path, "src", "LoadedDep.jl"),
+              """
+              module LoadedDep
+              end
+              """)
+
+        depuser_path = joinpath(dir, "dev", "DepUser")
+        mkpath(joinpath(depuser_path, "src"))
+        write(joinpath(depuser_path, "Project.toml"),
+              """
+              name = "DepUser"
+              uuid = "b2b2b2b2-0000-0000-0000-000000000002"
+              version = "0.1.0"
+
+              [deps]
+              LoadedDep = "a1a1a1a1-0000-0000-0000-000000000001"
+              """)
+        write(joinpath(depuser_path, "src", "DepUser.jl"),
+              """
+              module DepUser
+              import LoadedDep
+              end
+              """)
+
+        project_path = joinpath(dir, "project")
+        mkpath(project_path)
+        write(joinpath(project_path, "Project.toml"),
+              """
+              [deps]
+              DepUser = "b2b2b2b2-0000-0000-0000-000000000002"
+              LoadedDep = "a1a1a1a1-0000-0000-0000-000000000001"
+              """)
+        # Manifest points to the same source as what gets loaded — versions match
+        write(joinpath(project_path, "Manifest.toml"),
+              """
+              manifest_format = "2.0"
+
+              [[deps.DepUser]]
+              deps = ["LoadedDep"]
+              path = "../dev/DepUser/"
+              uuid = "b2b2b2b2-0000-0000-0000-000000000002"
+              version = "0.1.0"
+
+              [[deps.LoadedDep]]
+              path = "../dev/LoadedDep/"
+              uuid = "a1a1a1a1-0000-0000-0000-000000000001"
+              version = "0.1.0"
+              """)
+
+        # Load LoadedDep first (caching it), then run precompilepkgs — the env resolves the
+        # same version that is loaded, so no version-mismatch warning should appear.
+        script = """
+            using LoadedDep
+            Base.Precompilation.precompilepkgs(; fancyprint=false, warn_loaded=true)
+            """
+
+        cmd = addenv(`$(Base.julia_cmd()) --startup-file=no --project=$(project_path) -e $script`,
+                     "JULIA_DEPOT_PATH" => depot)
+
+        out = Base.PipeEndpoint()
+        log = @async read(out, String)
+        try
+            proc = run(pipeline(cmd, stdout=out, stderr=out))
+            @test success(proc)
+        catch
+            @show fetch(log)
+            rethrow()
+        end
+        output = fetch(log)
+        @test !occursin("currently loaded", output)
+    end end
+end
+
+# PR #61915: a precompiled value with an inline `Type{Union{}}` field used to abort
+# in `record_memoryrefs_inside` while writing the cache, because the `TypeEq` field
+# type is laid out as the singleton `typeof(Union{})` `DataType`.
+precompile_test_harness("Type{Union{}} inline field") do dir
+    TypeBottomField = :TypeBottomField61915
+    write(joinpath(dir, "$TypeBottomField.jl"),
+          """
+          module $TypeBottomField
+              struct HoldsBottom
+                  t::Type{Union{}}
+                  x::Int
+              end
+              const X = HoldsBottom(Union{}, 7)
+          end
+          """)
+    @test Base.compilecache(Base.PkgId(string(TypeBottomField))) isa Tuple
+    @eval using $TypeBottomField
+    @test (@eval $TypeBottomField.X.x) == 7
+    @test (@eval $TypeBottomField.X.t) === Union{}
 end
 
 finish_precompile_test!()

@@ -153,7 +153,7 @@ function SharedArray{T,N}(dims::Dims{N}; init=false, pids=Int[]) where {T,N}
         shm_seg_name = ""
 
     finally
-        if !isempty(shm_seg_name)
+        if !isempty(shm_seg_name) && @isdefined shmmem_create_pid
             remotecall_fetch(shm_unlink, shmmem_create_pid, shm_seg_name)
         end
     end
@@ -682,7 +682,7 @@ function _shm_mmap_array(T, dims, shm_seg_name, mode)
 
     s = fdio(fd_mem, true)
 
-    # On OSX, ftruncate must to used to set size of segment, just lseek does not work.
+    # On OSX, ftruncate must be used to set size of segment, just lseek does not work.
     # and only at creation time
     if (mode & JL_O_CREAT) == JL_O_CREAT
         rc = ccall(:jl_ftruncate, Cint, (Cint, Int64), fd_mem, prod(dims)*sizeof(T))

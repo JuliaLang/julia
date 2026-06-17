@@ -10,20 +10,21 @@ function _register_kinds()
             "atomic"
             # Flag for @generated parts of a function
             "generated"
-            # Like (function call body) but (generated_function call gen nongen)
-            "generated_function"
             # Temporary rooting of identifiers (GC.@preserve)
             "gc_preserve"
             "gc_preserve_begin"
             "gc_preserve_end"
             # A (quoted) `Symbol`
             "Symbol"
-            # TODO: Use `meta` for inbounds and loopinfo etc?
             "inbounds"
+            "inbounds_pop" # expr: (inbounds pop) with identifier "pop"
             "boundscheck"
             "inline"
             "noinline"
             "loopinfo"
+            "purity"
+            "aliasscope"
+            "popaliasscope"
             # Call into foreign code
             "foreigncall"
             # ccall convention
@@ -43,6 +44,8 @@ function _register_kinds()
             "symboliclabel"
             # Goto named label
             "symbolicgoto"
+            # Goto named label (old syntax version, no try/finally check)
+            "oldsymbolicgoto"
             # Labeled block for `@label name expr` (block break)
             "symbolicblock"
             # Internal initializer for struct types, for inner constructors/functions
@@ -65,6 +68,8 @@ function _register_kinds()
             "islocal"
             "isglobal"
             "locals"
+            "thisfunction"
+            "overlay"
         "END_EXTENSION_KINDS"
 
         # The following kinds are internal to lowering
@@ -76,7 +81,6 @@ function _register_kinds()
             "BindingId"
             # Various heads harvested from flisp lowering.
             # (TODO: May or may not need all these - assess later)
-            "break_block"
             # Like block, but introduces a lexical scope; used during scope resolution.
             "scope_block"
             # Equivalent to Expr(:softscope).  If found in the top-level thunk,
@@ -89,9 +93,18 @@ function _register_kinds()
             "always_defined"
             "_while"
             "_do_while"
+            # (_typevar name lb ub).  flisp usually uses 3-long lists for these,
+            # usually called `sparams`
+            "_typevar"
             "_typevars" # used for supplying already-allocated `TypeVar`s to `where`
+            # (_generated_body (quote gen) nongen) to allow arglist-related desugaring
+            # to occur before the methods are created
+            "_generated_body"
             "with_static_parameters"
+            # converted from nothing::K"Value" into desugaring.  flisp: (null)
+            "nothing"
             "top"
+            "core"
             "lambda"
             # "A source location literal" - a node which exists only to record
             # a sourceref
@@ -100,13 +113,12 @@ function _register_kinds()
             # Declare a zero-method generic function with global `name` or
             # creates a closure object and assigns it to the local `name`.
             "function_decl"
-            # [K"function_type name]
+            # [K"function_type" name]
             # Evaluates to the type of the function or closure with given `name`
             "function_type"
             # [K"method_defs" name block]
             # The code in `block` defines methods for generic function `name`
             "method_defs"
-            # The code in `block` defines methods for generic function `name`
             "_opaque_closure"
             # The enclosed statements must be executed at top level
             "toplevel_butfirst"
@@ -138,6 +150,13 @@ function _register_kinds()
             "constdecl"
             # Returned from statements that should error if the result is used.
             "unused_only"
+            # Pre-lowered SSA value reference from Expr(:ssavalue, N).
+            # Translated to a BindingId during desugaring.
+            "ssavalue"
+            # Wraps the first argument of a foreigncall when it should not be
+            # lowered (and should mostly be treated as :inert), but requires
+            # scope resolution and special conversion to Expr.
+            "foreigncall_arg1"
         "END_LOWERING_KINDS"
 
         # The following kinds are emitted by lowering and used in Julia's untyped IR

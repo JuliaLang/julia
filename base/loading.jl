@@ -110,36 +110,39 @@ function isaccessiblepath(path)
     end
 end
 
-## SHA1 ##
-
-struct SHA1
-    bytes::NTuple{20, UInt8}
-end
-function SHA1(bytes::Vector{UInt8})
-    length(bytes) == 20 ||
-        throw(ArgumentError("wrong number of bytes for SHA1 hash: $(length(bytes))"))
-    return SHA1(ntuple(i->bytes[i], Val(20)))
-end
-SHA1(s::AbstractString) = SHA1(hex2bytes(s))
-parse(::Type{SHA1}, s::AbstractString) = SHA1(s)
-function tryparse(::Type{SHA1}, s::AbstractString)
-    try
-        return parse(SHA1, s)
-    catch e
-        if isa(e, ArgumentError)
-            return nothing
+## SHA1 and SHA256 ##
+for (name, namestr, numbytes) in [(:SHA1, "SHA1", 20), (:SHA256, "SHA256", 32)]
+    @eval begin
+        struct $name
+            bytes::NTuple{$numbytes, UInt8}
         end
-        rethrow(e)
+        function $name(bytes::Vector{UInt8})
+            length(bytes) == $numbytes ||
+                throw(ArgumentError("wrong number of bytes for " * string($namestr) * ": Expected " * string($numbytes) * " bytes, got $(length(bytes))"))
+            return $name(ntuple(i->bytes[i], Val($numbytes)))
+        end
+        $name(s::AbstractString) = $name(hex2bytes(s))
+        parse(::Type{$name}, s::AbstractString) = $name(s)
+        function tryparse(::Type{$name}, s::AbstractString)
+            try
+                return parse($name, s)
+            catch e
+                if isa(e, ArgumentError)
+                    return nothing
+                end
+                rethrow(e)
+            end
+        end
+
+        string(hash::$name) = bytes2hex(hash.bytes)
+        print(io::IO, hash::$name) = bytes2hex(io, hash.bytes)
+        show(io::IO, hash::$name) = print(io, $namestr * "(\"", hash, "\")")
+
+        isless(a::$name, b::$name) = isless(a.bytes, b.bytes)
+        hash(a::$name, h::UInt) = hash(($name, a.bytes), h)
+        ==(a::$name, b::$name) = a.bytes == b.bytes
     end
 end
-
-string(hash::SHA1) = bytes2hex(hash.bytes)
-print(io::IO, hash::SHA1) = bytes2hex(io, hash.bytes)
-show(io::IO, hash::SHA1) = print(io, "SHA1(\"", hash, "\")")
-
-isless(a::SHA1, b::SHA1) = isless(a.bytes, b.bytes)
-hash(a::SHA1, h::UInt) = hash((SHA1, a.bytes), h)
-==(a::SHA1, b::SHA1) = a.bytes == b.bytes
 
 # fake uuid5 function (for self-assigned UUIDs)
 # TODO: delete and use real uuid5 once it's in stdlib
@@ -481,7 +484,7 @@ function locate_package_env(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)
         specenv = get(cache.located, (pkg, stopenv), missing)
         specenv === missing || return specenv
     end
-    (env′, spec) = @label _ begin
+    (env′, spec) = @label found begin
         if pkg.uuid === nothing
             # The project we're looking for does not have a Project.toml (n.b. - present
             # `Project.toml` without UUID gets a path-based dummy UUID). It must have
@@ -493,10 +496,10 @@ function locate_package_env(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)
                 found = implicit_manifest_pkgid(env, pkg.name)
                 if found !== nothing && found.uuid === nothing
                     @assert found.name == pkg.name
-                    break _ (env, implicit_manifest_uuid_load_spec(env, pkg))
+                    break found (env, implicit_manifest_uuid_load_spec(env, pkg))
                 end
                 if !(loading_extension || precompiling_extension)
-                    stopenv == env && break _ (nothing, nothing)
+                    stopenv == env && break found (nothing, nothing)
                 end
             end
         else
@@ -505,10 +508,10 @@ function locate_package_env(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)
                 # missing is used as a sentinel to stop looking further down in envs
                 if spec === missing
                     is_stdlib(pkg) && break
-                    break _ (nothing, nothing)
+                    break found (nothing, nothing)
                 end
                 if spec !== nothing
-                    break _ (env, spec)
+                    break found (env, spec)
                 end
                 if !(loading_extension || precompiling_extension)
                     stopenv == env && break
@@ -518,7 +521,7 @@ function locate_package_env(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)
             # e.g. if they have been explicitly added to the project/manifest
             mbyspec = manifest_uuid_load_spec(Sys.STDLIB, pkg)
             if mbyspec isa PkgLoadSpec
-                break _ (Sys.STDLIB, mbyspec)
+                break found (Sys.STDLIB, mbyspec)
             end
         end
         (nothing, nothing)
@@ -658,13 +661,15 @@ the form `pkgversion(@__MODULE__)` can be used.
     This function was introduced in Julia 1.9.
 """
 function pkgversion(m::Module)
-    path = pkgdir(m)
-    path === nothing && return nothing
     @lock require_lock begin
-        v = get_pkgversion_from_path(path)
         pkgorigin = get(pkgorigins, PkgId(moduleroot(m)), nothing)
-        # Cache the version
-        if pkgorigin !== nothing && pkgorigin.version === nothing
+        if pkgorigin !== nothing && pkgorigin.version !== nothing
+            return pkgorigin.version
+        end
+        path = pkgdir(m)
+        path === nothing && return nothing
+        v = get_pkgversion_from_path(path)
+        if pkgorigin !== nothing
             pkgorigin.version = v
         end
         return v
@@ -1169,7 +1174,7 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
             # a table of entries (deps = {"DepA" = "6ea...", "DepB" = "55d..."}
             deps = get(entry, "deps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}
             local dep::Union{Nothing, PkgId}
-            @label _ begin
+            @label resolved begin
                 if UUID(uuid) === where.uuid
                     dep = dep_stanza_get(deps, name)
 
@@ -1197,7 +1202,7 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
                                     (deps,))
                                 dep = dep_stanza_get(deps′, name)
                                 dep === nothing && continue
-                                break _
+                                break resolved
                             end
                             return PkgId(name)
                         end
@@ -1210,7 +1215,7 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
 
             # We have the dep, but it did not specify a UUID. In this case,
             # it must be that the name is unique in the manifest - so lookup
-            # the UUID at the lop level by name
+            # the UUID at the top level by name
             name_deps = get(d, name, nothing)::Union{Nothing, Vector{Any}}
             if name_deps === nothing || length(name_deps) != 1
                 error("expected a single entry for $(repr(name)) in $(repr(project_file))")
@@ -1391,7 +1396,7 @@ function find_all_in_cache_path(pkg::PkgId, DEPOT_PATH::typeof(DEPOT_PATH)=DEPOT
                     if iszero(isvalid_cache_header(io))
                         false
                     else
-                        _, _, _, _, _, _, _, flags = parse_cache_header(io, path)
+                        _, _, _, _, _, _, flags = parse_cache_header(io, path)
                         CacheFlags(flags).use_pkgimages
                     end
                 finally
@@ -1855,7 +1860,7 @@ function CacheFlags(f::UInt8)
     debug_level = Int((f >> 1) & 3)
     check_bounds = Int((f >> 3) & 3)
     inline = Bool((f >> 5) & 1)
-    opt_level = Int((f >> 6) & 3) # define OPT_LEVEL in statiddata_utils
+    opt_level = Int((f >> 6) & 3) # define OPT_LEVEL in staticdata_utils
     CacheFlags(use_pkgimages, debug_level, check_bounds, inline, opt_level)
 end
 CacheFlags(f::Int) = CacheFlags(UInt8(f))
@@ -1931,21 +1936,25 @@ end
 struct ImageTarget
     name::String
     flags::Int32
+    base::Int32
     ext_features::String
-    features_en::Vector{UInt8}
-    features_dis::Vector{UInt8}
+    features_en::String
+    features_dis::String
 end
 
 function parse_image_target(io::IO)
     flags = read(io, Int32)
-    nfeature = read(io, Int32)
-    feature_en = read(io, 4*nfeature)
-    feature_dis = read(io, 4*nfeature)
+    base = read(io, Int32)
+    nwords = read(io, Int32)  # number of uint64_t feature words
+    feature_en_raw = read(io, 8*nwords)
+    feature_dis_raw = read(io, 8*nwords)
     name_len = read(io, Int32)
     name = String(read(io, name_len))
     ext_features_len = read(io, Int32)
     ext_features = String(read(io, ext_features_len))
-    ImageTarget(name, flags, ext_features, feature_en, feature_dis)
+    features_en = @ccall jl_feature_bits_to_string(feature_en_raw::Ptr{UInt8}, nwords::Int32)::Ref{String}
+    features_dis = @ccall jl_feature_bits_to_string(feature_dis_raw::Ptr{UInt8}, nwords::Int32)::Ref{String}
+    ImageTarget(name, flags, base, ext_features, features_en, features_dis)
 end
 
 function parse_image_targets(targets::Vector{UInt8})
@@ -1963,51 +1972,21 @@ function current_image_targets()
     return parse_image_targets(targets)
 end
 
-struct FeatureName
-    name::Cstring
-    bit::UInt32 # bit index into a `uint32_t` array;
-    llvmver::UInt32 # 0 if it is available on the oldest LLVM version we support
-end
-
-function feature_names()
-    fnames = Ref{Ptr{FeatureName}}()
-    nf = Ref{Csize_t}()
-    @ccall jl_reflect_feature_names(fnames::Ptr{Ptr{FeatureName}}, nf::Ptr{Csize_t})::Cvoid
-    if fnames[] == C_NULL
-        @assert nf[] == 0
-        return Vector{FeatureName}(undef, 0)
-    end
-    Base.unsafe_wrap(Array, fnames[], nf[], own=false)
-end
-
-function test_feature(features::Vector{UInt8}, feat::FeatureName)
-    bitidx = feat.bit
-    u8idx = div(bitidx, 8) + 1
-    bit = bitidx % 8
-    return (features[u8idx] & (1 << bit)) != 0
-end
-
 function show(io::IO, it::ImageTarget)
     print(io, it.name)
     if !isempty(it.ext_features)
         print(io, ",", it.ext_features)
     end
-    print(io, "; flags=", it.flags)
-    print(io, "; features_en=(")
-    first = true
-    for feat in feature_names()
-        if test_feature(it.features_en, feat)
-            name = Base.unsafe_string(feat.name)
-            if first
-                first = false
-                print(io, name)
-            else
-                print(io, ", ", name)
-            end
-        end
+    if it.base >= 0
+        print(io, "; base=", it.base)
     end
-    print(io, ")")
-    # Is feature_dis useful?
+    print(io, "; flags=", it.flags)
+    if !isempty(it.features_en)
+        print(io, "; features_en=(", it.features_en, ")")
+    end
+    if !isempty(it.features_dis)
+        print(io, "; features_dis=(", it.features_dis, ")")
+    end
 end
 
 # should sync with the types of arguments of `stale_cachefile`
@@ -2056,9 +2035,8 @@ function compilecache_freshest_path(pkg::PkgId;
             try
                 # update timestamp of precompilation file so that it is the first to be tried by code loading
                 touch(path_to_try)
-            catch ex
+            catch
                 # file might be read-only and then we fail to update timestamp, which is fine
-                ex isa IOError || rethrow()
             end
             return path_to_try
         end
@@ -2163,7 +2141,7 @@ function _tryrequire_from_serialized(pkg::PkgId, path::String, ocachepath::Union
     io = open(path, "r")
     try
         iszero(isvalid_cache_header(io)) && return ArgumentError("Incompatible header in cache file $path.")
-        _, (includes, _, _), depmodnames, _, _, _, clone_targets, _ = parse_cache_header(io, path)
+        _, (includes, _, _), depmodnames, _, _, clone_targets, _ = parse_cache_header(io, path)
 
 
         pkgimage = !isempty(clone_targets)
@@ -2278,8 +2256,8 @@ end
                 if stalecheck
                     try
                         touch(path_to_try) # update timestamp of precompilation file
-                    catch ex # file might be read-only and then we fail to update timestamp, which is fine
-                        ex isa IOError || rethrow()
+                    catch
+                        # file might be read-only and then we fail to update timestamp, which is fine
                     end
                 end
                 # finish loading module graph into staledeps
@@ -2501,7 +2479,7 @@ precompilableerror(ex::PrecompilableError) = true
 precompilableerror(ex::WrappedException) = precompilableerror(ex.error)
 precompilableerror(@nospecialize ex) = false
 
-# Call __precompile__(false) at the top of a tile prevent it from being precompiled (false)
+# Call __precompile__(false) at the top of a file to prevent it from being precompiled (false)
 """
     __precompile__(isprecompilable::Bool)
 
@@ -2635,13 +2613,13 @@ function find_unsuitable_manifests_versions()
         manifest_file isa String || continue # no manifest file
         m = parsed_toml(manifest_file)
         man_julia_version = get(m, "julia_version", nothing)
-        @label _ begin
-            man_julia_version isa String || break _
+        @label check begin
+            man_julia_version isa String || break check
             man_julia_version = VersionNumber(man_julia_version)
-            thispatch(man_julia_version) != thispatch(VERSION) && break _
-            isempty(man_julia_version.prerelease) != isempty(VERSION.prerelease) && break _
+            thispatch(man_julia_version) != thispatch(VERSION) && break check
+            isempty(man_julia_version.prerelease) != isempty(VERSION.prerelease) && break check
             isempty(man_julia_version.prerelease) && continue
-            man_julia_version.prerelease[1] != VERSION.prerelease[1] && break _
+            man_julia_version.prerelease[1] != VERSION.prerelease[1] && break check
             if VERSION.prerelease[1] == "DEV"
                 # manifests don't store the 2nd part of prerelease, so cannot check further
                 # so treat them specially in the warning
@@ -2684,24 +2662,43 @@ function require(uuidkey::PkgId)
     return invoke_in_world(world, __require, uuidkey)
 end
 __require(uuidkey::PkgId) = @lock require_lock _require_prelocked(uuidkey)
+# Enabled by `include_package_for_output` so the precompile worker can attribute
+# wall-clock time spent loading dependencies from disk. Only outermost (depth==0)
+# calls accumulate to avoid double-counting transitive `require`s.
+const _precompile_track_dep_load = Ref{Bool}(false)
+const _precompile_dep_load_ns = Ref{UInt64}(0)
+const _precompile_dep_load_depth = Ref{Int}(0)
 function _require_prelocked(uuidkey::PkgId, env=nothing)
     assert_havelock(require_lock)
-    m = start_loading(uuidkey, UInt128(0), true)
-    if m === nothing
-        last = toplevel_load[]
-        try
-            toplevel_load[] = false
-            m = __require_prelocked(uuidkey, env)
-            m isa Module || check_package_module_loaded_error(uuidkey)
-        finally
-            toplevel_load[] = last
-            end_loading(uuidkey, m)
-        end
-        insert_extension_triggers(uuidkey)
-        # After successfully loading, notify downstream consumers
-        run_package_callbacks(uuidkey)
+    track = _precompile_track_dep_load[]
+    t0 = UInt64(0)
+    if track
+        _precompile_dep_load_depth[] == 0 && (t0 = time_ns())
+        _precompile_dep_load_depth[] += 1
     end
-    return m
+    try
+        m = start_loading(uuidkey, UInt128(0), true)
+        if m === nothing
+            last = toplevel_load[]
+            try
+                toplevel_load[] = false
+                m = __require_prelocked(uuidkey, env)
+                m isa Module || check_package_module_loaded_error(uuidkey)
+            finally
+                toplevel_load[] = last
+                end_loading(uuidkey, m)
+            end
+            insert_extension_triggers(uuidkey)
+            # After successfully loading, notify downstream consumers
+            run_package_callbacks(uuidkey)
+        end
+        return m
+    finally
+        if track
+            _precompile_dep_load_depth[] -= 1
+            _precompile_dep_load_depth[] == 0 && (_precompile_dep_load_ns[] += time_ns() - t0)
+        end
+    end
 end
 
 mutable struct PkgOrigin
@@ -2855,6 +2852,11 @@ function __require_prelocked(pkg::PkgId, env)
 
     if JLOptions().use_compiled_modules == 1
         if !generating_output(#=incremental=#false)
+            # If a background precompile task is working on this package,
+            # temporarily monitor it until done, then retry from cache.
+            if Precompilation.wait_for_pending_package(pkg)
+                @goto load_from_cache
+            end
             # spawn off a new incremental pre-compile task for recursive `require` calls
             loaded = let spec = spec, reasons = reasons, parallel_precompile_attempted = parallel_precompile_attempted
                 maybe_cachefile_lock(pkg, spec.path) do
@@ -2873,7 +2875,7 @@ function __require_prelocked(pkg::PkgId, env)
                             # age issues when printing, see:
                             # https://github.com/JuliaLang/julia/issues/60223
                             precompiled = @invokelatest Precompilation.precompilepkgs([pkg]; _from_loading=true, ignore_loaded=false)
-                            # prcompiled returns either nothing, indicating it needs serial precompile,
+                            # precompiled returns either nothing, indicating it needs serial precompile,
                             # or the entry(ies) that it found would be best to load (possibly because it just created it)
                             # or an empty set of entries (indicating the precompile should be skipped)
                             if precompiled !== nothing
@@ -3253,7 +3255,7 @@ function load_path_setup_code(load_path::Bool=true)
 end
 
 # Const global for GC root
-const newly_inferred = CodeInstance[]
+const newly_inferred = []
 
 # this is called in the external process that generates precompiled package files
 function include_package_for_output(pkg::PkgId, input::String, syntax_version::VersionNumber, depot_path::Vector{String}, dl_load_path::Vector{String}, load_path::Vector{String},
@@ -3280,18 +3282,43 @@ function include_package_for_output(pkg::PkgId, input::String, syntax_version::V
     end
 
     ccall(:jl_set_newly_inferred, Cvoid, (Any,), newly_inferred)
+    # When this worker is producing a native object pkgimage, retain raw
+    # inferred IR on `CodeInstance.inferred` for the non-inlineable methods
+    # that would otherwise be discarded, so the irgen pass can short-circuit
+    # `typeinf_ext` instead of re-inferring. `jl_finalize_precompile_inferred`
+    # clears them (and the flag) before staticdata serialization.
+    keep_ir = JLOptions().outputo != C_NULL
+    keep_ir && ccall(:jl_set_precompile_keep_ir, Cvoid, (Int8,), 1)
     # This one changes the parser behavior
     __toplevel__.var"#_internal_julia_parse" = VersionedParse(syntax_version)
     # This one is the compatibility marker for cache loading
     __toplevel__._internal_syntax_version = cache_syntax_version(syntax_version)
+    cumulative_compile_timing(true)
+    _precompile_dep_load_ns[] = 0
+    _precompile_dep_load_depth[] = 0
+    _precompile_track_dep_load[] = true
+    t_include_start = time_ns()
+    t_comp_before, _ = cumulative_compile_time_ns()
     try
-        Base.include(Base.__toplevel__, input)
+        Compiler.@zone "PRECOMPILE_INCLUDE" Base.include(Base.__toplevel__, input)
     catch ex
         precompilableerror(ex) || rethrow()
         @debug "Aborting `create_expr_cache'" exception=(ErrorException("Declaration of __precompile__(false) not allowed"), catch_backtrace())
         exit(125) # we define status = 125 means PrecompileableError
     finally
+        t_comp_after, _ = cumulative_compile_time_ns()
+        t_include_end = time_ns()
+        cumulative_compile_timing(false)
+        _precompile_track_dep_load[] = false
+        if Base.get_bool_env("JULIA_PRECOMP_REPORT_TIMING", false)
+            println(stderr, PRECOMPILE_VERBOSE_TIMING_MARKER,
+                    " include_ns=", t_include_end - t_include_start,
+                    " deps_ns=", _precompile_dep_load_ns[],
+                    " compilation_ns=", t_comp_after - t_comp_before,
+                    " methods=", length(newly_inferred))
+        end
         ccall(:jl_set_newly_inferred, Cvoid, (Any,), nothing)
+        keep_ir && ccall(:jl_set_precompile_keep_ir, Cvoid, (Int8,), 0)
     end
     # check that the package defined the expected module so we can give a nice error message if not
     m = maybe_root_module(pkg)
@@ -3319,9 +3346,13 @@ _pkg_str(_pkg::Pair{PkgId}) = _pkg_str(_pkg.first) * " => " * repr(_pkg.second)
 _pkg_str(_pkg::Nothing) = "nothing"
 
 const PRECOMPILE_TRACE_COMPILE = Ref{String}()
+# Marker prefix used by the precompile subprocess to report per-package timing
+# buckets back to the parent process; the parent surfaces them in verbose mode.
+const PRECOMPILE_VERBOSE_TIMING_MARKER = "__JL_PRECOMP_VERBOSE_TIMING__"
 function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, output_o::Union{Nothing, String},
                            concrete_deps::typeof(_concrete_dependencies), flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(),
-                           internal_stderr::IO = stderr, internal_stdout::IO = stdout, loadable_exts::Union{Vector{PkgId},Nothing}=nothing)
+                           internal_stderr::IO = stderr, internal_stdout::IO = stdout, loadable_exts::Union{Vector{PkgId},Nothing}=nothing;
+                           report_timing::Bool=false)
     @nospecialize internal_stderr internal_stdout
     rm(output, force=true)   # Remove file if it exists
     output_o === nothing || rm(output_o, force=true)
@@ -3368,16 +3399,18 @@ function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, outpu
         push!(opts, "--trace-compile-timing")
     end
 
-    io = open(pipeline(addenv(`$(julia_cmd(;cpu_target)::Cmd)
-                               $(flags)
-                               $(opts)
-                               --output-incremental=yes
-                               --startup-file=no --history-file=no --warn-overwrite=yes
-                               $(have_color === nothing ? "--color=auto" : have_color ? "--color=yes" : "--color=no")
-                               -`,
-                              "OPENBLAS_NUM_THREADS" => 1,
-                              "JULIA_NUM_THREADS" => 1),
-                       stderr = internal_stderr, stdout = internal_stdout),
+    cmd = `$(julia_cmd(;cpu_target)::Cmd)
+           $(flags)
+           $(opts)
+           --output-incremental=yes
+           --startup-file=no --history-file=no --warn-overwrite=yes
+           $(have_color === nothing ? "--color=auto" : have_color ? "--color=yes" : "--color=no")
+           -`
+    cmd = addenv(cmd, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1)
+    # Only request per-package timing reports when explicitly asked for (e.g. by
+    # precompilepkgs), so that the marker lines don't leak into normal load logs.
+    report_timing && (cmd = addenv(cmd, "JULIA_PRECOMP_REPORT_TIMING" => 1))
+    io = open(pipeline(cmd, stderr = internal_stderr, stdout = internal_stdout),
               "w", stdout)
     # write data over stdin to avoid the (unlikely) case of exceeding max command line size
     write(io.in, """
@@ -3409,7 +3442,7 @@ function compilecache_dir(pkg::PkgId)
     return joinpath(DEPOT_PATH[1], entrypath)
 end
 
-function compilecache_path(pkg::PkgId, prefs_hash::UInt64; flags::CacheFlags=CacheFlags(), project::String=something(Base.active_project(), ""))::String
+function compilecache_path(pkg::PkgId, prefs_blob::String; flags::CacheFlags=CacheFlags(), project::String=something(Base.active_project(), ""))::String
     entrypath, entryfile = cache_file_entry(pkg)
     cachepath = joinpath(DEPOT_PATH[1], entrypath)
     isdir(cachepath) || mkpath(cachepath)
@@ -3426,8 +3459,7 @@ function compilecache_path(pkg::PkgId, prefs_hash::UInt64; flags::CacheFlags=Cac
             cpu_target = unsafe_string(JLOptions().cpu_target)
         end
         crc = _crc32c(cpu_target, crc)
-
-        crc = _crc32c(prefs_hash, crc)
+        crc = _crc32c(prefs_blob, crc)
         project_precompile_slug = slug(crc, 5)
         abspath(cachepath, string(entryfile, "_", project_precompile_slug, ".ji"))
     end
@@ -3441,18 +3473,19 @@ This can be used to reduce package load times. Cache files are stored in
 `DEPOT_PATH[1]/compiled`. See [Module initialization and precompilation](@ref)
 for important notes.
 """
-function compilecache(pkg::PkgId, internal_stderr::IO = stderr, internal_stdout::IO = stdout; flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(), loadable_exts::Union{Vector{PkgId},Nothing}=nothing)
+function compilecache(pkg::PkgId, internal_stderr::IO = stderr, internal_stdout::IO = stdout; flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(), loadable_exts::Union{Vector{PkgId},Nothing}=nothing, signal_channel::Union{Channel{Int32},Nothing}=nothing, report_timing::Bool=false)
     @nospecialize internal_stderr internal_stdout
     spec = locate_package_load_spec(pkg)
     spec === nothing && throw(ArgumentError("$(repr("text/plain", pkg)) not found during precompilation"))
-    return compilecache(pkg, spec, internal_stderr, internal_stdout; flags, cacheflags, loadable_exts)
+    return compilecache(pkg, spec, internal_stderr, internal_stdout; flags, cacheflags, loadable_exts, signal_channel, report_timing)
 end
 
 const MAX_NUM_PRECOMPILE_FILES = Ref(10)
 
 function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stderr, internal_stdout::IO = stdout,
                       keep_loaded_modules::Bool = true; flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(),
-                      loadable_exts::Union{Vector{PkgId},Nothing}=nothing)
+                      loadable_exts::Union{Vector{PkgId},Nothing}=nothing, signal_channel::Union{Channel{Int32},Nothing}=nothing,
+                      pid_channel::Union{Channel{Int32},Nothing}=nothing, report_timing::Bool=false)
 
     @nospecialize internal_stderr internal_stdout
     # decide where to put the resulting cache file
@@ -3483,25 +3516,56 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
     else
         tmppath_o = nothing
     end
-    local p
+    local p::Base.Process
     try
         close(tmpio)
         if cache_objects
             close(tmpio_o)
             close(tmpio_so)
         end
-        p = create_expr_cache(pkg, spec, tmppath, tmppath_o, concrete_deps, flags, cacheflags, internal_stderr, internal_stdout, loadable_exts)
+        p = create_expr_cache(pkg, spec, tmppath, tmppath_o, concrete_deps, flags, cacheflags, internal_stderr, internal_stdout, loadable_exts; report_timing)
 
-        if success(p)
+        # Report the PID of the compilation subprocess
+        if pid_channel !== nothing
+            try; put!(pid_channel, Int32(getpid(p))); catch; end
+        end
+
+        # Forward signals from the channel to the subprocess
+        if signal_channel !== nothing
+            let p = p
+                Base.errormonitor(Threads.@spawn :samepool begin
+                    for sig in signal_channel
+                        process_running(p) || break
+                        try
+                            kill(p, sig)
+                        catch e
+                            e isa IOError && break
+                            rethrow()
+                        end
+                    end
+                end)
+            end
+        end
+
+        local result
+        try
+            result = success(p)
+        finally
+            if signal_channel !== nothing
+                close(signal_channel)
+            end
+        end
+
+        if result
             if cache_objects
                 # Run linker over tmppath_o
-                Linking.link_image(tmppath_o, tmppath_so)
+                Compiler.@zone "PRECOMPILE_LINK" Linking.link_image(tmppath_o, tmppath_so)
             end
 
-            # Read preferences hash back from .ji file (we can't precompute because
-            # we don't actually know what the list of compile-time preferences are without compiling)
-            prefs_hash = preferences_hash(tmppath)
-            cachefile = compilecache_path(pkg, prefs_hash; flags=cacheflags)
+            # Read preferences blob back from .ji file (we can't precompute because we don't
+            # actually know what the list of compile-time preferences are without compiling)
+            prefs_blob = preferences_blob(tmppath)
+            cachefile = compilecache_path(pkg, prefs_blob; flags=cacheflags)
             ocachefile = cache_objects ? ocachefile_from_cachefile(cachefile) : nothing
 
             # append checksum for so to the end of the .ji file:
@@ -3562,6 +3626,9 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
             return cachefile, ocachefile
         end
     finally
+        if signal_channel !== nothing
+            close(signal_channel)
+        end
         rm(tmppath, force=true)
         if cache_objects
             rm(tmppath_o::String, force=true)
@@ -3732,18 +3799,10 @@ function _parse_cache_header(f::IO, cachefile::AbstractString)
             push!(includes, CacheHeaderIncludes(modkey, depname, fsize, hash, mtime, modpath))
         end
     end
-    prefs = String[]
-    while true
-        n2 = read(f, Int32)
-        totbytes -= 4
-        if n2 == 0
-            break
-        end
-        push!(prefs, String(read(f, n2)))
-        totbytes -= n2
-    end
-    prefs_hash = read(f, UInt64)
-    totbytes -= 8
+    n2 = read(f, Int32)
+    totbytes -= 4
+    prefs_blob = String(read(f, n2))
+    totbytes -= n2
     srctextpos = read(f, Int64)
     totbytes -= 8
     @assert totbytes == 0 "header of cache file appears to be corrupt (totbytes == $(totbytes))"
@@ -3754,12 +3813,12 @@ function _parse_cache_header(f::IO, cachefile::AbstractString)
 
     srcfiles = srctext_files(f, srctextpos, includes)
 
-    return modules, (includes, srcfiles, requires), required_modules, srctextpos, prefs, prefs_hash, clone_targets, flags, syntax_version
+    return modules, (includes, srcfiles, requires), required_modules, srctextpos, prefs_blob, clone_targets, flags, syntax_version
 end
 
 function parse_cache_header(f::IO, cachefile::AbstractString)
     modules, (includes, srcfiles, requires), required_modules,
-        srctextpos, prefs, prefs_hash, clone_targets, flags, syntax_version = _parse_cache_header(f, cachefile)
+        srctextpos, prefs_blob, clone_targets, flags, syntax_version = _parse_cache_header(f, cachefile)
 
     includes_srcfiles = CacheHeaderIncludes[]
     includes_depfiles = CacheHeaderIncludes[]
@@ -3833,7 +3892,7 @@ function parse_cache_header(f::IO, cachefile::AbstractString)
         end
     end
 
-    return modules, (includes, includes_srcfiles, requires), required_modules, srctextpos, prefs, prefs_hash, clone_targets, flags, syntax_version
+    return modules, (includes, includes_srcfiles, requires), required_modules, srctextpos, prefs_blob, clone_targets, flags, syntax_version
 end
 
 function parse_cache_header(cachefile::String)
@@ -3847,14 +3906,14 @@ function parse_cache_header(cachefile::String)
     end
 end
 
-preferences_hash(f::IO, cachefile::AbstractString) = parse_cache_header(f, cachefile)[6]
-function preferences_hash(cachefile::String)
+preferences_blob(f::IO, cachefile::AbstractString) = parse_cache_header(f, cachefile)[5]
+function preferences_blob(cachefile::String)
     io = open(cachefile, "r")
     try
         if iszero(isvalid_cache_header(io))
             throw(ArgumentError("Incompatible header in cache file $cachefile."))
         end
-        return preferences_hash(io, cachefile)
+        return preferences_blob(io, cachefile)
     finally
         close(io)
     end
@@ -3876,7 +3935,7 @@ function cache_dependencies(cachefile::String)
 end
 
 function read_dependency_src(io::IO, cachefile::AbstractString, filename::AbstractString)
-    _, (includes, _, _), _, srctextpos, _, _, _, _ = parse_cache_header(io, cachefile)
+    _, (includes, _, _), _, srctextpos, _, _, _ = parse_cache_header(io, cachefile)
     srctextpos == 0 && error("no source-text stored in cache file")
     seek(io, srctextpos)
     return _read_dependency_src(io, filename, includes)
@@ -4013,34 +4072,34 @@ function collect_preferences(project_toml::String, uuid::Union{UUID,Nothing})
 end
 
 """
-    recursive_prefs_merge(base::Dict, overrides::Dict...)
+    recursive_prefs_merge(base::Dict{String, Any}, overrides::Vector{Dict{String, Any}})
 
 Helper function to merge preference dicts recursively, honoring overrides in nested
 dictionaries properly.
 """
-function recursive_prefs_merge(base::Dict{String, Any}, overrides::Dict{String, Any}...)
-    new_base = Base._typeddict(base, overrides...)
+function recursive_prefs_merge(base::Dict{String, Any}, overrides::Vector{Dict{String, Any}})
+    merged = copy(base)
 
     for override in overrides
         # Clear entries are keys that should be deleted from any previous setting.
         override_clear = get(override, "__clear__", nothing)
         if override_clear isa Vector{String}
             for k in override_clear
-                delete!(new_base, k)
+                delete!(merged, k)
             end
         end
 
         for (k, override_k) in override
             # Note that if `base` has a mapping that is _not_ a `Dict`, and `override`
-            new_base_k = get(new_base, k, nothing)
-            if new_base_k isa Dict{String, Any} && override_k isa Dict{String, Any}
-                new_base[k] = recursive_prefs_merge(new_base_k, override_k)
+            merged_k = get(merged, k, nothing)
+            if merged_k isa Dict{String, Any} && override_k isa Dict{String, Any}
+                merged[k] = recursive_prefs_merge(merged_k, Dict{String,Any}[override_k])
             else
-                new_base[k] = override_k
+                merged[k] = override_k
             end
         end
     end
-    return new_base
+    return merged
 end
 
 function get_projects_workspace_to_root(project_file)
@@ -4071,47 +4130,53 @@ function get_preferences(uuid::Union{UUID,Nothing} = nothing)
 
         # Collect all dictionaries from the current point in the load path, then merge them in
         dicts = collect_preferences(project_toml, uuid)
-        merged_prefs = recursive_prefs_merge(merged_prefs, dicts...)
+        merged_prefs = recursive_prefs_merge(merged_prefs, dicts)
     end
     return merged_prefs
 end
 
-function get_preferences_hash(uuid::Union{UUID, Nothing}, prefs_list::Vector{String})
-    # Start from a predictable hash point to ensure that the same preferences always
-    # hash to the same value, modulo changes in how Dictionaries are hashed.
-    h = UInt(0)
-    uuid === nothing && return UInt64(h)
-
-    # Load the preferences
-    prefs = get_preferences(uuid)
-
-    # Walk through each name that's called out as a compile-time preference
-    for name in prefs_list
-        prefs_value = get(prefs, name, nothing)
-        if prefs_value !== nothing
-            h = hash(prefs_value, h)::UInt
-        end
-    end
-    # We always return a `UInt64` so that our serialization format is stable
-    return UInt64(h)
-end
-
-get_preferences_hash(m::Module, prefs_list::Vector{String}) = get_preferences_hash(PkgId(m).uuid, prefs_list)
-
 # This is how we keep track of who is using what preferences at compile-time
 const COMPILETIME_PREFERENCES = Dict{UUID,Set{String}}()
 
-# In `Preferences.jl`, if someone calls `load_preference(@__MODULE__, key)` while we're precompiling,
-# we mark that usage as a usage at compile-time and call this method, so that at the end of `.ji` generation,
-# we can record the list of compile-time preferences and embed that into the `.ji` header
+# This is used by `Preferences.load_preference` to record any (pre)compile-time preference
+# queries, which the resulting pkgimage will be keyed on to detect preference changes.
 function record_compiletime_preference(uuid::UUID, key::String)
     pref = get!(Set{String}, COMPILETIME_PREFERENCES, uuid)
     push!(pref, key)
     return nothing
 end
-get_compiletime_preferences(uuid::UUID) = collect(get(Vector{String}, COMPILETIME_PREFERENCES, uuid))
-get_compiletime_preferences(m::Module) = get_compiletime_preferences(PkgId(m).uuid)
-get_compiletime_preferences(::Nothing) = String[]
+
+# Return a serialized "blob" of all observed (at compile-time) preferences.
+# This is called at pkgimage write time (.ji generation).
+function get_preferences_blob()
+    isempty(COMPILETIME_PREFERENCES) && return ""
+    observed = Dict{String, Any}()
+    unset = Dict{String, Any}()
+    for (uuid, pref_keys) in COMPILETIME_PREFERENCES
+        uuid_prefs = get_preferences(uuid)
+        uuid_str = string(uuid)
+        for key in pref_keys
+            if haskey(uuid_prefs, key)
+                uuid_observed = get!(Dict{String, Any}, observed, uuid_str)
+                uuid_observed[key] = uuid_prefs[key]
+            else
+                # preferences that were not set are tracked in a
+                # separate table to prevent name / value collisions
+                uuid_unset = get!(Set{Any}, unset, uuid_str)
+                push!(uuid_unset, key)
+            end
+        end
+    end
+    for (uuid, uuid_unset) in pairs(unset)
+        unset[uuid] = sort!(collect(uuid_unset))
+    end
+    if !isempty(unset)
+        observed["unset"] = unset
+    end
+    buf = IOBuffer()
+    TOML.Printer.print(buf, observed; sorted=true)
+    return String(take!(buf))
+end
 
 function check_clone_targets(clone_targets)
     rejection_reason = ccall(:jl_check_pkgimage_clones, Any, (Ptr{Cchar},), clone_targets)
@@ -4125,10 +4190,10 @@ global mkpidlock_hook::Any
 global trymkpidlock_hook::Any
 global parse_pidfile_hook::Any
 
-# The preferences hash is only known after precompilation so just assume no preferences.
+# The preferences blob is only known after precompilation so just assume no preferences.
 # Also ignore the active project, which means that if all other conditions are equal,
 # the same package cannot be precompiled from different projects and/or different preferences at the same time.
-compilecache_pidfile_path(pkg::PkgId; flags::CacheFlags=CacheFlags()) = compilecache_path(pkg, UInt64(0); project="", flags) * ".pidfile"
+compilecache_pidfile_path(pkg::PkgId; flags::CacheFlags=CacheFlags()) = compilecache_path(pkg, ""; project="", flags) * ".pidfile"
 
 const compilecache_pidlock_stale_age = 10
 
@@ -4227,6 +4292,54 @@ function cache_syntax_version(ver::VersionNumber)
     UInt8(clamp(ver.minor - 13, 0, 255))
 end
 
+# This custom equality predicate is analogous to `===`, except that it also
+# compares mutable containers structurally. This allows us to differentiate
+# `1.0` / `1` / `true` in Preferences, despite these being normally `isequal`
+toml_egal(@nospecialize(A), @nospecialize(B)) = A === B
+
+function toml_egal(A::AbstractArray, B::AbstractArray)
+    axes(A) != axes(B) && return false
+    for (a, b) in zip(A, B)
+        !toml_egal(a, b) && return false
+    end
+    return true
+end
+
+function toml_egal(A::AbstractDict, B::AbstractDict)
+    isa(A,IdDict) != isa(B,IdDict) && return false
+    length(A) != length(B) && return false
+    for pair in A
+        !in(pair, B, toml_egal) && return false
+    end
+    return true
+end
+
+function stale_prefs(prefs_blob::String)
+    # ensure any preferences observed match their precompile-time values
+    prefs_blob == "" && return false # no observed preferences (fast-path)
+    prefs_data = TOML.parse(TOML.Parser{nothing}(prefs_blob))
+
+    for (uuid, observed) in prefs_data
+        uuid == "unset" && continue
+        curr = get_preferences(UUID(uuid))
+        for (key, val) in observed::Dict{String,Any}
+            # any set preferences should have the same value
+            !haskey(curr, key) && return true
+            !toml_egal(curr[key], val) && return true
+        end
+    end
+    if haskey(prefs_data, "unset")
+        for (uuid, observed) in prefs_data["unset"]::Dict{String,Any}
+            curr = get_preferences(UUID(uuid))
+            for key in observed::Vector{String}
+                # any unset preferences should still be unset
+                haskey(curr, key) && return true
+            end
+        end
+    end
+    return false
+end
+
 # returns true if it "cachefile.ji" is stale relative to "modpath.jl" and build_id for modkey
 # otherwise returns the list of dependencies to also check
 @constprop :none function stale_cachefile(modpath::String, cachefile::String; kwargs...)
@@ -4253,7 +4366,7 @@ end
             record_reason(reasons, "different Julia build configuration")
             return true # incompatible cache file
         end
-        modules, (includes, _, requires), required_modules, srctextpos, prefs, prefs_hash, clone_targets, actual_flags, syntax_version = parse_cache_header(io, cachefile)
+        modules, (includes, _, requires), required_modules, srctextpos, prefs_blob, clone_targets, actual_flags, syntax_version = parse_cache_header(io, cachefile)
         if isempty(modules)
             return true # ignore empty file
         end
@@ -4377,10 +4490,10 @@ end
             if !samefile(includes[1].filename, modspec.path)
                 # In certain cases the path rewritten by `fixup_stdlib_path` may
                 # point to an unreadable directory, make sure we can `stat` the
-                # file before comparing it with `modpath`.
+                # file before comparing it with `modspec.path`.
                 stdlib_path = fixup_stdlib_path(includes[1].filename)
                 if !(isreadable(stdlib_path) && samefile(stdlib_path, modspec.path))
-                    @debug "Rejecting cache file $cachefile because it is for file $(includes[1].filename) not file $modpath"
+                    @debug "Rejecting cache file $cachefile because it is for file $(includes[1].filename) not file $(modspec.path)"
                     record_reason(reasons, "different source file path")
                     return true # cache file was compiled from a different path
                 end
@@ -4413,9 +4526,8 @@ end
             end
         end
 
-        curr_prefs_hash = get_preferences_hash(id.uuid, prefs)
-        if prefs_hash != curr_prefs_hash
-            @debug "Rejecting cache file $cachefile because preferences hash does not match 0x$(string(prefs_hash, base=16)) != 0x$(string(curr_prefs_hash, base=16))"
+        if stale_prefs(prefs_blob)
+            @debug "Rejecting cache file $cachefile because preferences have changed"
             record_reason(reasons, "package preferences changed")
             return true
         end
@@ -4534,12 +4646,7 @@ function precompile(@nospecialize(f), @nospecialize(argtypes::Tuple), m::Method)
 end
 
 function precompile(@nospecialize(argt::Type), m::Method)
-    atype, sparams = ccall(:jl_type_intersection_with_env, Any, (Any, Any), argt, m.sig)::SimpleVector
+    atype, sparams = typeintersect_env(argt, m.sig)
     mi = Base.Compiler.specialize_method(m, atype, sparams)
     return precompile(mi)
 end
-
-precompile(include_package_for_output, (PkgId, String, VersionNumber, Vector{String}, Vector{String}, Vector{String}, typeof(_concrete_dependencies), Nothing)) || @assert false
-precompile(include_package_for_output, (PkgId, String, VersionNumber, Vector{String}, Vector{String}, Vector{String}, typeof(_concrete_dependencies), String)) || @assert false
-precompile(create_expr_cache, (PkgId, PkgLoadSpec, String, String, typeof(_concrete_dependencies), Cmd, CacheFlags, IO, IO)) || @assert false
-precompile(create_expr_cache, (PkgId, PkgLoadSpec, String, Nothing, typeof(_concrete_dependencies), Cmd, CacheFlags, IO, IO)) || @assert false

@@ -11,11 +11,11 @@ using ..Compiler:
      NamedTuple, Pair, PhiCNode, PhiNode, PiNode, QuoteNode, SSAValue, SimpleVector, String,
      Tuple, VarState, Vector,
      # functions
-     argextype, empty!, error, get, get_ci_mi, get_world_counter, getglobal, getindex, getproperty,
+     argextype, argextype_widened, empty!, error, get, get_ci_mi, get_world_counter, getglobal, getindex, getproperty,
      hasintersect, haskey, in, isdefinedglobal, isdispatchelem, isempty, isexpr, iterate, length, map!, max,
      pop!, popfirst!, push!, pushfirst!, reinterpret, reverse!, reverse, setindex!,
      setproperty!, similar, singleton_type, sptypes_from_meth_instance, sp_type_rewrap,
-     unsafe_pointer_to_objref, widenconst, isconcretetype,
+     unsafe_pointer_to_objref, isconcretetype,
      # misc
      @nospecialize, @assert, C_NULL
 using ..IRShow: LineInfoNode, print, show, println, append_scopes!, IOContext, IO, normalize_method_name, is_expected_union
@@ -115,7 +115,7 @@ end
 
 function has_unstable_arg(codeinfo::CodeInfo, sptypes::Vector{VarState}, args, startidx::Int)
     for i in (startidx + 1):length(args)
-        is_type_stable(widenconst(argextype(args[i], codeinfo, sptypes))) || return true
+        is_type_stable(argextype_widened(args[i], codeinfo, sptypes)) || return true
     end
     return false
 end
@@ -137,7 +137,7 @@ end
 # Print value with type annotation: value::type
 function print_typed(io::IO, codeinfo::CodeInfo, sptypes::Vector{VarState}, @nospecialize(stmt), stable::Bool;
                      depth::Int=0, indent::Int=0)
-    typ = widenconst(argextype(stmt, codeinfo, sptypes))
+    typ = argextype_widened(stmt, codeinfo, sptypes)
     arg_stable = is_type_stable(typ)
     # Fold deeply nested stable calls
     if arg_stable && depth >= MAX_NESTING_DEPTH && is_call_expr(codeinfo, stmt)
@@ -176,7 +176,7 @@ function print_stmt_colored(io::IO, codeinfo::CodeInfo, sptypes::Vector{VarState
         # Print function call
         if farg !== nothing
             fstmt = unwrap_stmt(codeinfo, farg)
-            ftyp = widenconst(argextype(farg, codeinfo, sptypes))
+            ftyp = argextype_widened(farg, codeinfo, sptypes)
             needs_type = !should_elide_type(fstmt, ftyp)
             needs_type && print(io, "(")
             print_value(io, codeinfo, farg, stable)
@@ -206,7 +206,7 @@ end
 function verify_print_stmt(io::IO, codeinfo::CodeInfo, sptypes::Vector{VarState}, stmtidx::Int)
     codeinfo.slotnames !== nothing && (io = IOContext(io, :SOURCE_SLOTNAMES => sourceinfo_slotnames(codeinfo)))
     stmt = unwrap_stmt(codeinfo, codeinfo.code[stmtidx])
-    typ = widenconst(argextype(SSAValue(stmtidx), codeinfo, sptypes))
+    typ = argextype_widened(SSAValue(stmtidx), codeinfo, sptypes)
     print_stmt_colored(io, codeinfo, sptypes, stmt)
     print(io, "::")
     print_type_colored(io, typ)
@@ -310,9 +310,8 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
             end
             # TODO: check for calls to Base.atexit?
         elseif isexpr(stmt, :call)
-            error = "unresolved call"
             farg = stmt.args[1]
-            ftyp = widenconst(argextype(farg, codeinfo, sptypes))
+            ftyp = argextype_widened(farg, codeinfo, sptypes)
             if ftyp <: IntrinsicFunction
                 #TODO: detect if f !== Core.Intrinsics.atomic_pointermodify (see statement_cost), otherwise error
                 continue
@@ -327,12 +326,12 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
                         # args[1] is _apply_iterate object
                         # args[2] is invoke object
                         farg = stmt.args[3]
-                        ftyp = widenconst(argextype(farg, codeinfo, sptypes))
+                        ftyp = argextype_widened(farg, codeinfo, sptypes)
                         if may_dispatch(ftyp)
                             error = "unresolved call to function"
                         else
                             for i in 4:length(stmt.args)
-                                atyp = widenconst(argextype(stmt.args[i], codeinfo, sptypes))
+                                atyp = argextype_widened(stmt.args[i], codeinfo, sptypes)
                                 if !(atyp <: Union{SimpleVector, GenericMemory, Array, Tuple, NamedTuple})
                                     error = "unresolved argument to call"
                                     break
@@ -371,6 +370,8 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
                 elseif Core.memoryrefmodify! isa ftyp
                     error = "trim verification not yet implemented for builtin `Core.memoryrefmodify!`"
                 else @assert false "unexpected builtin" end
+            else
+                error = "unresolved call"
             end
             extyp = argextype(SSAValue(i), codeinfo, sptypes)
             if extyp === Union{}
@@ -453,9 +454,7 @@ function get_verify_typeinf_trim(codeinfos::Vector{Any})
         elseif item isa SimpleVector
             rt = item[1]::Type
             sig = item[2]::Type
-            mi = ccall(:jl_get_specialization1, Any,
-                        (Any, Csize_t, Cint),
-                        sig, this_world, #= mt_cache =# 0)
+            mi = ccall(:jl_get_specialization1, Any, (Any, Csize_t), sig, this_world)
             asrt = Any
             valid = if mi !== nothing
                 mi = mi::MethodInstance

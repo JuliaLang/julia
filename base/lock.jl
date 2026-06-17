@@ -31,7 +31,7 @@ should naturally be supported, but beware of inverting the try/lock order or
 missing the try block entirely (e.g. attempting to return with the lock still
 held):
 
-This provides a acquire/release memory ordering on lock/unlock calls.
+This provides an acquire/release memory ordering on lock/unlock calls.
 
 ```
 lock(l)
@@ -500,7 +500,7 @@ Create a counting semaphore that allows at most `sem_size`
 acquires to be in use at any time.
 Each acquire must be matched with a release.
 
-This provides a acquire & release memory ordering on acquire/release calls.
+This provides an acquire & release memory ordering on acquire/release calls.
 """
 mutable struct Semaphore
     sem_size::Int

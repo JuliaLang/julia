@@ -267,7 +267,7 @@ end
     r = muladd(N_float, LogBo256U(base, T), x)
     r = muladd(N_float, LogBo256L(base, T), r)
     k = N >> 8
-    jU = reinterpret(Float64, JU_CONST | (@inbounds J_TABLE[N&255 + 1] & JU_MASK))
+    jU, _ = table_unpack(N)
     small_part =  muladd(jU, expm1b_kernel(base, r), jU)
     twopk = Int64(k) << 52
     return reinterpret(T, twopk + reinterpret(Int64, small_part))

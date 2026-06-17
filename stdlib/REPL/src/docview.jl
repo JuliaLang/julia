@@ -19,7 +19,7 @@ using Unicode: normalize
 
 ## Help mode ##
 
-# This is split into helpmode and _helpmode to easier unittest _helpmode
+# This is split into helpmode and _helpmode to more easily unit test _helpmode
 function helpmode(io::IO, line::AbstractString, mod::Module=Main)
     internal_accesses = Set{Pair{Module,Symbol}}()
     quote
@@ -89,8 +89,9 @@ end
 function parsedoc(d::DocStr)
     if d.object === nothing
         md = formatdoc(d)
-        md.meta[:module] = d.data[:module]
-        md.meta[:path]   = d.data[:path]
+        md.meta[:module]     = d.data[:module]
+        md.meta[:path]       = d.data[:path]
+        md.meta[:linenumber] = d.data[:linenumber]
         d.object = md
     end
     d.object
@@ -910,7 +911,7 @@ function accessible(mod::Module)
     return collect(bindings)
 end
 
-function doc_completions(name, mod::Module=Main)
+function doc_completions(name::AbstractString, mod::Module=Main)
     res = fuzzysort(name, accessible(mod))
 
     # to insert an entry like `raw""` for `"@raw_str"` in `res`
@@ -924,7 +925,7 @@ function doc_completions(name, mod::Module=Main)
     end
     res
 end
-doc_completions(name::Symbol) = doc_completions(string(name), mod)
+doc_completions(name::Symbol, mod::Module=Main) = doc_completions(string(name), mod)
 
 
 # Searching and apropos

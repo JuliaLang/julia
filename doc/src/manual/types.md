@@ -19,7 +19,7 @@ The default behavior in Julia when types are omitted is to allow values to be of
 one can write many useful Julia functions without ever explicitly using types. When additional
 expressiveness is needed, however, it is easy to gradually introduce explicit type annotations
 into previously "untyped" code. Adding annotations serves three primary purposes: to take advantage
-of Julia's powerful multiple-dispatch mechanism,  to improve human readability, and to catch
+of Julia's powerful multiple-dispatch mechanism, to improve human readability, and to catch
 programmer errors.
 
 Describing Julia in the lingo of [type systems](https://en.wikipedia.org/wiki/Type_system), it
@@ -32,7 +32,7 @@ While this might at first seem unduly restrictive, it has many beneficial conseq
 few drawbacks. It turns out that being able to inherit behavior is much more important than being
 able to inherit structure, and inheriting both causes significant difficulties in traditional
 object-oriented languages. While concrete types do have abstract subtypes, there are only two examples of this
-([`Union{}`](@ref man-abstract-types) and [`Type{T}`](@ref man-typet-type))) and additional subtypes
+([`Union{}`](@ref man-abstract-types) and [`Type{T}`](@ref man-typet-type)) and additional subtypes
 of concrete types cannot be declared.
 
 Other high-level aspects of Julia's type system that should be mentioned up front are:
@@ -113,7 +113,7 @@ x::Int8 = 10   # as the left-hand side of an assignment
 
 and applies to the whole current scope, even before the declaration.
 
-As of Julia 1.8, type declarations can now be used in global scope i.e.
+As of Julia 1.8, type declarations can now be used in global scope i.e.,
 type annotations can be added to global variables to make accessing them type stable.
 ```julia
 julia> x::Int = 10
@@ -470,7 +470,7 @@ To recap, two essential properties define immutability in Julia:
   * It is not permitted to modify the value of an immutable type.
     * For bits types this means that the bit pattern of a value once set will never change
       and that value is the identity of a bits type.
-    * For composite  types, this means that the identity of the values of its fields will
+    * For composite types, this means that the identity of the values of its fields will
       never change. When the fields are bits types, that means their bits will never change,
       for fields whose values are mutable types like arrays, that means the fields will
       always refer to the same mutable value even though that mutable value's content may
@@ -507,6 +507,50 @@ julia> baz.b = 2.0
 ERROR: setfield!: const field .b of type Baz cannot be changed
 [...]
 ```
+
+## Mutually Recursive Types
+
+Because Julia's top level scope is procedural, types defined later in a file are not available for
+earlier field types. This is generally not a problem if types are written in the order they are
+used, but of course this does not work if there are cycles in the field type definitions:
+
+```julia
+struct Node
+    edges::Vector{Edge} # Error: Edge not defined
+end
+struct Edge
+    from::Node
+    to::Node
+end
+```
+
+The `typegroup` block solves this by introducing temporary variables for all structs
+defined therein at the top of the block and then atomically defining them all together
+at the end of the block.
+
+```jldoctest recursivetypes
+julia> typegroup
+           struct Node
+               edges::Vector{Edge}
+           end
+           struct Edge
+               from::Node
+               to::Node
+           end
+       end
+
+julia> fieldtype(Node, :edges)
+Vector{Edge} (alias for Array{Edge, 1})
+```
+
+!!! note
+    Only `struct` or `mutable struct` definitions are allowed inside a `typegroup` block;
+    All other declarations, including method definitions are disallowed (Inner constructor
+    definitions are allowed inside the `struct` definition and will semantically run
+    after all types have been atomically instantiated).
+
+!!! compat "Julia 1.14"
+    The `typegroup` keyword requires at least Julia 1.14.
 
 ## [Declared Types](@id man-declared-types)
 
@@ -1099,7 +1143,7 @@ julia> const T1 = Array{Array{T, 1} where T, 1}
 Vector{Vector} (alias for Array{Array{T, 1} where T, 1})
 
 julia> const T2 = Array{Array{T, 1}, 1} where T
-Array{Vector{T}, 1} where T
+Vector{Vector{T}} where T (alias for Array{Array{T, 1}, 1} where T)
 ```
 
 Type `T1` defines a 1-dimensional array of 1-dimensional arrays; each

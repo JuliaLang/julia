@@ -3,6 +3,7 @@
 #ifndef JL_DTYPES_H
 #define JL_DTYPES_H
 
+#include <assert.h>
 #include <stddef.h>
 #include <stddef.h> // double include of stddef.h fixes #3421
 #include <stdint.h>
@@ -27,7 +28,7 @@
 #define WIN32_LEAN_AND_MEAN
 /* Clang does not like fvisibility=hidden with windows headers. This adds the visibility attribute there.
    Arguably this is a clang bug. */
-# ifndef _COMPILER_MICROSOFT_
+# if !defined(_COMPILER_MICROSOFT_) && !defined(DECLSPEC_IMPORT)
 #  define DECLSPEC_IMPORT __declspec(dllimport) __attribute__ ((visibility("default")))
 # endif
 #include <windows.h>
@@ -142,43 +143,46 @@ typedef intptr_t ssize_t;
 #  define JL_ATTRIBUTE_ALIGN_PTRSIZE(x)
 #endif
 
-#ifdef __has_builtin
+#if defined(__has_builtin)
 #  define jl_has_builtin(x) __has_builtin(x)
 #else
 #  define jl_has_builtin(x) 0
 #endif
 
-#if jl_has_builtin(__builtin_assume)
-#define jl_assume(cond) (__extension__ ({               \
-                __typeof__(cond) cond_ = (cond);        \
-                __builtin_assume(!!(cond_));            \
-                cond_;                                  \
-            }))
-#elif defined(__GNUC__)
+#ifdef JL_NDEBUG
+#  if jl_has_builtin(__builtin_assume)
+#    define jl_assume(cond)                     \
+       (__extension__({                         \
+           __typeof__(cond) cond_ = (cond);     \
+           __builtin_assume(!!(cond_));         \
+           cond_;                               \
+       }))
+#  elif defined(__GNUC__)
 static inline void jl_assume_(int cond)
 {
     if (!cond) {
         __builtin_unreachable();
     }
 }
-#define jl_assume(cond) (__extension__ ({               \
-                __typeof__(cond) cond_ = (cond);        \
-                jl_assume_(!!(cond_));                  \
-                cond_;                                  \
-            }))
-#else
-#define jl_assume(cond) (cond)
-#endif
-
-#if jl_has_builtin(__builtin_assume_aligned) || defined(_COMPILER_GCC_)
-#define jl_assume_aligned(ptr, align) __builtin_assume_aligned(ptr, align)
-#elif defined(__GNUC__)
-#define jl_assume_aligned(ptr, align) (__extension__ ({         \
-                __typeof__(ptr) ptr_ = (ptr);                   \
-                jl_assume(((uintptr_t)ptr) % (align) == 0);     \
-                ptr_;                                           \
-            }))
-#elif defined(__cplusplus)
+#    define jl_assume(cond)                     \
+       (__extension__({                         \
+           __typeof__(cond) cond_ = (cond);     \
+           jl_assume_(!!(cond_));               \
+           cond_;                               \
+       }))
+#  else
+#    define jl_assume(cond) (cond)
+#  endif
+#  if jl_has_builtin(__builtin_assume_aligned) || defined(_COMPILER_GCC_)
+#    define jl_assume_aligned(ptr, align) __builtin_assume_aligned(ptr, align)
+#  elif defined(__GNUC__)
+#    define jl_assume_aligned(ptr, align)               \
+       (__extension__({                                 \
+           __typeof__(ptr) ptr_ = (ptr);                \
+           jl_assume(((uintptr_t)ptr_) % (align) == 0); \
+           ptr_;                                        \
+       }))
+#  elif defined(__cplusplus)
 template<typename T>
 static inline T
 jl_assume_aligned(T ptr, unsigned align)
@@ -186,8 +190,40 @@ jl_assume_aligned(T ptr, unsigned align)
     (void)jl_assume(((uintptr_t)ptr) % align == 0);
     return ptr;
 }
+#  else
+#    define jl_assume_aligned(ptr, align) (ptr)
+#  endif
 #else
-#define jl_assume_aligned(ptr, align) (ptr)
+#  if defined(__GNUC__)
+#    define jl_assume(cond)                     \
+       (__extension__({                         \
+           __typeof__(cond) cond_ = (cond);     \
+           assert(!!(cond_));                   \
+           cond_;                               \
+       }))
+#    define jl_assume_aligned(ptr, align)               \
+       (__extension__({                                 \
+           __typeof__(ptr) ptr_ = (ptr);                \
+           assert(((uintptr_t)ptr_) % (align) == 0);    \
+           ptr_;                                        \
+       }))
+#  elif defined(__cplusplus)
+#    define jl_assume(cond)                     \
+       (([&]() {                                \
+           auto cond_ = (cond);                 \
+           assert(!!(cond_));                   \
+           return cond_;                        \
+       })())
+#    define jl_assume_aligned(ptr, align)               \
+       (([&]() {                                        \
+           auto ptr_ = (ptr);                           \
+           assert(((uintptr_t)ptr_) % (align) == 0);    \
+           return ptr_;                                 \
+       })())
+#  else
+#    define jl_assume(cond) (cond)
+#    define jl_assume_aligned(ptr, align) (ptr)
+#  endif
 #endif
 
 typedef int bool_t;
@@ -268,7 +304,7 @@ typedef enum { T_INT8, T_UINT8, T_INT16, T_UINT16, T_INT32, T_UINT32,
 #define JL_FALLTHROUGH __attribute__((fallthrough))
 #elif defined(__cplusplus) && defined(__clang_major__) && \
     defined(__clang_minor__) && (__clang_major__ > 4 || __clang_minor__ >= 5)
-// We require at least clang 3.x
+// We require at least clang 3.5
 #define JL_FALLTHROUGH [[clang::fallthrough]]
 #else
 #define JL_FALLTHROUGH
