@@ -332,10 +332,14 @@ removes a name's `export` or `public` status.
 Retracting an `export` causes modules that did `using \$mod` to stop resolving
 `sym` implicitly, once their world age advances past this call (see
 [`invokelatest`](@ref) and [`get_world_counter`](@ref)). Because that
-invalidates dependent compiled code, it can be expensive. The `:public` versus
-`:none` distinction is not world-versioned: clearing it takes effect in every
-world age. A name set to `:export` is reported as public by [`ispublic`](@ref)
-regardless.
+invalidates dependent compiled code, it can be expensive.
+
+Unlike the exported flag, the public flag is not world-versioned: setting or
+clearing it takes effect in every world age at once. Retracting to `:none`
+therefore drops public status in all world ages, including ones in which the name
+is declared public. Combined with the world-versioned export flag, this means an
+older world age can still report a name as [`isexported`](@ref) while no longer
+reporting it as [`ispublic`](@ref).
 
 See also [`isexported`](@ref), [`ispublic`](@ref), [`delete_binding`](@ref).
 
