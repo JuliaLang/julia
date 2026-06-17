@@ -2235,6 +2235,17 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
         }
     }
 
+    if (p == NULL) {
+        // slots in iparams are untracked by the GC static analyzer so it won't
+        // complain, but this is used as rooting storage for normalized types
+        // below so it must be rooted properly by the GC
+        p = jl_alloc_svec_uninit(ntp);
+        for (size_t i = 0; i < ntp; i++)
+            jl_svecset(p, i, iparams[i]);
+        iparams = jl_svec_data(p);
+    }
+    assert(jl_is_svec(p) && iparams == jl_svec_data(p));
+
     // try to simplify some type parameters
     if (check && tn != jl_type_typename) {
         int changed = 0;
@@ -2246,7 +2257,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
             jl_value_t *newp = normalize_unionalls(pi);
             if (newp != pi) {
                 iparams[i] = newp;
-                if (p) jl_gc_wb(p, newp);
+                jl_gc_wb(p, newp);
                 changed = 1;
             }
             if (istuple && cacheable && !jl_is_concrete_type(newp))
@@ -2282,17 +2293,9 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
                 pi = jl_as_global_root(pi, cacheable);
                 if (pi != NULL) {
                     iparams[i] = pi;
-                    if (p) jl_gc_wb(p, pi);
+                    jl_gc_wb(p, pi);
                 }
             }
-        }
-    }
-
-    // move array of instantiated parameters to heap; we need to keep it
-    if (p == NULL) {
-        p = jl_alloc_svec_uninit(ntp);
-        for (size_t i = 0; i < ntp; i++) {
-            jl_svecset(p, i, iparams[i]);
         }
     }
 
