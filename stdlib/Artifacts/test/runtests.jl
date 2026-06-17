@@ -203,7 +203,7 @@ end
 end
 
 @testset "artifact_hash()" begin
-    # Use the Linus OS on an ARMv7L architecture for the tests to make tests reproducible
+    # Use the Linux OS on an ARMv7L architecture for the tests to make tests reproducible
     armv7l_linux = Platform("armv7l", "linux")
 
     # Check the first key in Artifacts.toml is hashed correctly

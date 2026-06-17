@@ -98,7 +98,7 @@ static value_t fl_module_unique_name(fl_context_t *fl_ctx, value_t *args, uint32
     jl_ast_context_t *ctx = jl_ast_ctx(fl_ctx);
     jl_module_t *m = ctx->module;
     assert(m != NULL);
-    // Get the outermost function name from the `parsed_method_stack` top
+    // Get the outermost function name from the bottom of `parsed_method_stack`
     char *funcname = NULL;
     value_t parsed_method_stack = args[0];
     if (parsed_method_stack != fl_ctx->NIL) {
@@ -843,18 +843,13 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
                 jl_array_ptr_ref(new_code, i)
             ));
         }
-        new_ci->code = new_code;
-        jl_gc_wb(new_ci, new_code);
-        new_ci->slotnames = jl_array_copy(new_ci->slotnames);
-        jl_gc_wb(new_ci, new_ci->slotnames);
-        new_ci->slotflags = jl_array_copy(new_ci->slotflags);
-        jl_gc_wb(new_ci, new_ci->slotflags);
-        new_ci->ssaflags = jl_array_copy(new_ci->ssaflags);
-        jl_gc_wb(new_ci, new_ci->ssaflags);
+        jl_gc_write(new_ci, new_ci->code, new_code);
+        jl_gc_write(new_ci, new_ci->slotnames, jl_array_copy(new_ci->slotnames));
+        jl_gc_write(new_ci, new_ci->slotflags, jl_array_copy(new_ci->slotflags));
+        jl_gc_write(new_ci, new_ci->ssaflags, jl_array_copy(new_ci->ssaflags));
 
         if (jl_is_array(new_ci->ssavaluetypes)) {
-            new_ci->ssavaluetypes = (jl_value_t*)jl_array_copy((jl_array_t*)new_ci->ssavaluetypes);
-            jl_gc_wb(new_ci, new_ci->ssavaluetypes);
+            jl_gc_write(new_ci, new_ci->ssavaluetypes, (jl_value_t*)jl_array_copy((jl_array_t*)new_ci->ssavaluetypes));
         }
         JL_GC_POP();
         return (jl_value_t*)new_ci;

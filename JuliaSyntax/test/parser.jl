@@ -179,7 +179,7 @@ tests = [
         "a + b + c"  => "(call-i a + b c)"
         "a + b .+ c" => "(dotcall-i (call-i a + b) + c)"
         # parse_with_chains:
-        # The following is two elements of a hcat
+        # The following are two elements of an hcat
         "[x +y]"     =>  "(hcat x (call-pre + y))"
         "[x+y +z]"   =>  "(hcat (call-i x + y) (call-pre + z))"
         # Conversely the following are infix calls

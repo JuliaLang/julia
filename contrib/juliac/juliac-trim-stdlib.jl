@@ -53,7 +53,7 @@ let
         Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg"))
     if Pkg !== nothing
         @eval Pkg begin
-            __init__() = nothing # Assume the Pkg is not actually used
+            __init__() = nothing # Assume Pkg is not actually used
         end
     end
 
@@ -77,7 +77,7 @@ let
         Base.UUID("ac6e5ff7-fb65-4e79-a425-ec3bc9c03011"), "JuliaSyntaxHighlighting"))
     if JuliaSyntaxHighlighting !== nothing
         @eval JuliaSyntaxHighlighting begin
-            __init__() = nothing # Assume the JuliaSyntaxHighlighting is not actually used with StyledStrings
+            __init__() = nothing # Assume JuliaSyntaxHighlighting is not actually used with StyledStrings
         end
     end
 end

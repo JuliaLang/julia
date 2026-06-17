@@ -99,9 +99,9 @@ struct ElementType {
     ElementType() : type(nullptr), sz(0) {};
 };
 
-// Whether a type is a homogeneous floating-point aggregates (HFA) or a
+// Whether a type is a homogeneous floating-point aggregate (HFA) or a
 // homogeneous short-vector aggregates (HVA). Returns the element type.
-// An Homogeneous Aggregate is a Composite Type where all of the Fundamental
+// A Homogeneous Aggregate is a Composite Type where all of the Fundamental
 // Data Types of the members that compose the type are the same.
 // Note that it is the fundamental types that are important and not the member
 // types.
@@ -176,13 +176,13 @@ Type *isHFAorHVA(jl_datatype_t *dt, size_t &nele, LLVMContext &ctx) const
 {
     // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
 
-    // An Homogeneous Floating-point Aggregate (HFA) is an Homogeneous Aggregate
+    // A Homogeneous Floating-point Aggregate (HFA) is a Homogeneous Aggregate
     // with a Fundamental Data Type that is a Floating-Point type and at most
     // four uniquely addressable members.
     // An Homogeneous Short-Vector Aggregate (HVA) is an Homogeneous Aggregate
     // with a Fundamental Data Type that is a Short-Vector type and at most four
     // uniquely addressable members.
-    // Maximum HFA and HVA size is 64 bytes (4 x fp128 or 16bytes vector)
+    // Maximum HFA and HVA size is 64 bytes (4 x fp128 or 16-byte vector)
     size_t dsz = jl_datatype_size(dt);
     if (dsz > 64 || !dt->layout || dt->layout->npointers || !dt->layout->flags.isbitsegal || dt->layout->flags.haspadding)
         return NULL;

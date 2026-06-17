@@ -443,7 +443,7 @@ function showerror_ambiguous(io::IO, meths, f, args::Type)
     nothing
 end
 
-#Show an error by directly calling jl_printf.
+#Show an error by directly calling jl_printf and jl_static_show.
 #Useful in Base submodule __init__ functions where stderr isn't defined yet.
 function showerror_nostdio(@nospecialize(err), msg::AbstractString)
     stderr_stream = ccall(:jl_stderr_stream, Ptr{Cvoid}, ())
@@ -889,7 +889,7 @@ function _backtrace_find_and_remove_cycles(t)
     max_nested_cycles = 0
     displayed_stackframes = []
     repeated_cycles = Tuple{Int,Int,Int}[]
-    # First:  index into `display_stackframes` to introuce the cycle bracket on
+    # First:  index into `displayed_stackframes` to introduce the cycle bracket on
     # Second: length of the cycle as a count in the trace
     # Third:  number of cycle repetitions
 

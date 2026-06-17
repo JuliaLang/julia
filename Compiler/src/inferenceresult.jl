@@ -30,7 +30,7 @@ end
 
 # Like `SimpleArgtypes`, but allows the argtypes to be wider than the current call.
 # As a result, it is not legal to refine the cache result with information more
-# precise than was it deducible from the `WidenedSimpleArgtypes`.
+# precise than what was deducible from the `WidenedSimpleArgtypes`.
 struct WidenedArgtypes
     argtypes::Vector{Any}
 end

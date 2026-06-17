@@ -603,6 +603,9 @@ julia> takestring!(copyuntil(IOBuffer(), "my_file.txt", '.', keep = true))
 
 julia> rm("my_file.txt")
 ```
+
+!!! compat "Julia 1.11"
+    `copyuntil` was introduced in Julia 1.11.
 """
 copyuntil(out::IO, filename::AbstractString, delim; kw...) = open(io->copyuntil(out, io, delim; kw...), convert(String, filename)::String)
 
@@ -678,6 +681,9 @@ julia> takestring!(copyline(IOBuffer(), "my_file.txt", keep=true))
 
 julia> rm("my_file.txt")
 ```
+
+!!! compat "Julia 1.11"
+    `copyline` was introduced in Julia 1.11.
 """
 copyline(out::IO, filename::AbstractString; keep::Bool=false) =
     open(io -> copyline(out, io; keep), filename)
@@ -1198,7 +1204,7 @@ Read at most `nb` bytes from `s`, returning a `Vector{UInt8}` of the bytes read.
 """
 function read(s::IO, nb::Integer = typemax(Int))
     # Let readbytes! grow the array progressively by default
-    # instead of taking of risk of over-allocating
+    # instead of taking the risk of over-allocating
     b = Vector{UInt8}(undef, nb == typemax(Int) ? 1024 : nb)
     nr = readbytes!(s, b, nb)
     return resize!(b, nr)

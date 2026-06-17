@@ -15,7 +15,7 @@ end
 using Base.Meta
 
 ## Debugging options
-# Disable parallel precompiles generation by setting `false`
+# Disable parallel precompile generation by setting `false`
 const PARALLEL_PRECOMPILATION = true
 
 # View the code sent to the repl by setting this to `stdout`

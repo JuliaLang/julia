@@ -1264,7 +1264,7 @@ function _reverse!(B::BitVector, ::Colon)
     # │000000000000000│   E   ││       D       │   C   ││       B       │   A   │
     # └───────────────┴───────┘└───────────────┴───────┘└───────────────┴───────┘
     #                     k            h           k            h            k
-    # yielding;
+    # yielding:
     # ┌───────────────┬───────┐┌───────────────┬───────┐┌───────────────┬───────┐
     # │000000000000000│  A'   ││      B'       │  C'   ││      D'       │  E'   │
     # └───────────────┴───────┘└───────────────┴───────┘└───────────────┴───────┘
@@ -1780,12 +1780,12 @@ function bit_map!(f::F, dest::BitArray, A::BitArray) where F
     for i = 1:(len_Ac-1)
         destc[i] = f(Ac[i])
     end
-    # the last effected UInt64's original content
+    # the last affected UInt64's original content
     dest_last = destc[len_Ac]
     _msk = _msk_end(A)
     # first zero out the bits mask is going to change
     # then update bits by `or`ing with a masked RHS
-    # DO NOT SEPARATE ONTO TO LINES.
+    # DO NOT SEPARATE ONTO TWO LINES.
     # Otherwise there will be bugs when Ac aliases destc
     destc[len_Ac] = (dest_last & (~_msk)) | f(Ac[len_Ac]) & _msk
     dest
@@ -1802,7 +1802,7 @@ function bit_map!(f::F, dest::BitArray, A::BitArray, B::BitArray) where F
     for i = 1:len_Ac-1
         destc[i] = f(Ac[i], Bc[i])
     end
-    # the last effected UInt64's original content
+    # the last affected UInt64's original content
     dest_last = destc[len_Ac]
     _msk = _msk_end(min_bitlen)
     # first zero out the bits mask is going to change

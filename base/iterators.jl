@@ -873,7 +873,7 @@ end
 """
     takewhile(pred, iter)
 
-An iterator that generates element from `iter` as long as predicate `pred` is true,
+An iterator that generates elements from `iter` as long as predicate `pred` is true,
 afterwards, drops every element.
 
 !!! compat "Julia 1.4"
@@ -920,7 +920,7 @@ end
 """
     dropwhile(pred, iter)
 
-An iterator that drops element from `iter` as long as predicate `pred` is true,
+An iterator that drops elements from `iter` as long as predicate `pred` is true,
 afterwards, returns every element.
 
 !!! compat "Julia 1.4"

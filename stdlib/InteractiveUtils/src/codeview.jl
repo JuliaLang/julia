@@ -325,7 +325,7 @@ end
 Prints the LLVM bitcodes generated for running the method matching the given generic
 function and type signature to `io`.
 
-If the `optimize` keyword is unset, the code will be shown before LLVM optimizations.
+If the `optimize` keyword is `false`, the code will be shown before LLVM optimizations.
 All metadata and dbg.* calls are removed from the printed bitcode. For the full IR, set the `raw` keyword to true.
 To dump the entire module that encapsulates the function (with declarations), set the `dump_module` keyword to true.
 Keyword argument `debuginfo` may be one of source (default) or none, to specify the verbosity of code comments.
@@ -364,7 +364,7 @@ generic function and type signature to `io`.
 
 * Set assembly syntax by setting `syntax` to `:intel` (default) for intel syntax or `:att` for AT&T syntax.
 * Specify verbosity of code comments by setting `debuginfo` to `:source` (equivalently, `:default`) or `:none`.
-* If `binary` is `true`, also print the binary machine code for each instruction precedented by an abbreviated address.
+* If `binary` is `true`, also print the binary machine code for each instruction preceded by an abbreviated address.
 * If `dump_module` is `false`, do not print metadata such as rodata or directives.
 * If `raw` is `false` (default), uninteresting instructions (like the safepoint function prologue) are elided.
 

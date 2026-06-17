@@ -32,7 +32,7 @@ end
 
 Base.eval(test_mod, :(call_it(f, args...) = f(args...)))
 
-# Closure where a local `x` is captured but not boxed
+# Closure where an argument `x` is captured but not boxed
 @test JuliaLowering.include_string(test_mod, """
 begin
     function f_unboxed_test(x)
@@ -232,6 +232,14 @@ let
     oc(3,4,5)
 end
 """) == (3,4,5)
+
+# OC in lambda
+@test JuliaLowering.include_string(test_mod, """
+(x->(y->(z->(Base.Experimental.@opaque ()->"opaque"))('z'))('y'))('x')()
+""") == "opaque"
+@test_broken JuliaLowering.include_string(test_mod, """
+(x->(y->(z->(Base.Experimental.@opaque ()->(x,y,z)))('z'))('y'))('x')()
+""") == ('x','y','z')
 
 # opaque_closure_method internals
 method_ex = lower_str(test_mod, "Base.Experimental.@opaque x -> 2x").args[1].code[3]

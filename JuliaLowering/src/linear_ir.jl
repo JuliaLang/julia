@@ -917,8 +917,9 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             end
         end
     elseif k == K"inbounds" || k == K"inbounds_pop" ||
-        k == K"inline" || k == K"noinline" || k == K"purity"
-        emit(ctx, ex) # converted to nothing later
+        k == K"inline" || k == K"noinline" || k == K"purity" ||
+        k == K"aliasscope" || k == K"popaliasscope"
+        emit(ctx, ex) # if absorbed in flags, converted to nothing later
         if needs_value
             val = @ast ctx ex (::K"nothing")
             if in_tail_pos
@@ -970,11 +971,16 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     elseif k == K"latestworld_if_toplevel"
         ctx.is_toplevel_thunk && emit_latestworld(ctx, ex)
     elseif k == K"unused_only"
-        if needs_value && !(in_tail_pos && ctx.is_toplevel_thunk)
-            throw(LoweringError(ex,
-                "global declaration doesn't read the variable and can't return a value"))
+        if needs_value && !in_tail_pos
+            throw(LoweringError(
+                ex, "global declaration doesn't read the variable and can't return a value"))
         end
-        compile(ctx, ex[1], needs_value, in_tail_pos)
+        if needs_value && in_tail_pos && !ctx.is_toplevel_thunk
+            compile(ctx, ex[1], false, false)
+            compile(ctx, @ast(ctx, ex, (::K"nothing")), needs_value, in_tail_pos)
+        else
+            compile(ctx, ex[1], needs_value, in_tail_pos)
+        end
     else
         throw(LoweringError(ex, "Invalid syntax; $(repr(k))"))
     end
@@ -1270,7 +1276,7 @@ ensure_linearization_attributes!(graph) = ensure_attributes!(
 This pass converts nested ASTs in the body of a lambda into a list of
 statements (ie, Julia's linear/untyped IR).
 
-Most of the compliexty of this pass is in lowering structured control flow (if,
+Most of the complexity of this pass is in lowering structured control flow (if,
 loops, etc) to gotos and exception handling to enter/leave. We also convert
 `K"BindingId"` into `K"slot"`, `K"globalref"` or `K"SSAValue"` as appropriate.
 """

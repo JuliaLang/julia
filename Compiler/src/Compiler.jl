@@ -15,8 +15,8 @@ end
 
 # When generating an incremental precompile file, we first check whether we
 # already have a copy of this *exact* code in the system image. If so, we
-# simply generates a pkgimage that has the dependency edges we recorded in
-# the system image and simply returns that copy of the compiler. If not,
+# simply generate a pkgimage that has the dependency edges we recorded in
+# the system image and simply return that copy of the compiler. If not,
 # we proceed to load/precompile this as an ordinary package.
 elseif (isdefined(Base, :generating_output) && Base.generating_output(true) &&
         Base.samefile(joinpath(Sys.BINDIR, Base.DATAROOTDIR, Base._compiler_require_dependencies[1][2]), @eval @__FILE__) &&

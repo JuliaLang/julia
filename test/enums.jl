@@ -195,7 +195,7 @@ struct HashEnum4 <: Enum{Int} end
 
 @test (Vector{Fruit}(undef, 3) .= apple) == [apple, apple, apple]
 
-# long, discongruous
+# long, discontiguous
 @enum Alphabet begin
     alphabet_a
     alphabet_b

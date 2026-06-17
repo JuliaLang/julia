@@ -433,7 +433,7 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
             jl_genericmemory_t *mem = (jl_genericmemory_t*)a;
             int how = jl_genericmemory_how(mem);
             if (how != JL_GENERICMEMORY_STRINGOWNED && how != JL_GENERICMEMORY_MALLOCD) {
-                // Memory's that are string-owned or point to foreign memory have
+                // `Memory`s that are string-owned or point to foreign memory have
                 // explicit snapshot edges to pointee data. Otherwise the array
                 // contents are treated as part of the Memory itself.
                 self_size += jl_genericmemory_nbytes(mem);

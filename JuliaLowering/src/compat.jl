@@ -110,7 +110,7 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
         # `Base.isa_ast_node(e)`, but `K"Value"` should be fine for most, since
         # most are produced in or after lowering
         if e isa LineNumberNode
-            # linenode oustside of block or toplevel
+            # linenode outside of block or toplevel
             src = e
         end
         setattr!(newleaf(graph, src, K"Value"), :value, e)
@@ -372,7 +372,7 @@ function apply_arglist_meta(st, meta::Union{Nothing, Symbol, Dict{String, Symbol
             fixed == x ? st : @ast g st [K"::" fixed t]
         end
         [K"call" f args...] -> mapchildren(x->
-            x == f ? f : apply_arg_meta(x, meta), st._graph, st)
+            x == f ? strip_arg_meta(f) : apply_arg_meta(x, meta), st._graph, st)
         [K"tuple" _...] -> mapchildren(x->apply_arg_meta(x, meta), st._graph, st)
     end
 end
@@ -539,6 +539,10 @@ function est_to_dst(st::SyntaxTree)
                 r2 = rec(r)
             end
             @ast g st [K"->" rec(l) r2]
+        end
+        [K"macro" l r] -> let
+            l = apply_arglist_meta(l, collect_body_arg_meta(r))
+            @ast g st [K"macro" rec(l) rec(r)]
         end
         [K"do" [K"call" f args...] lam] -> let
             @ast g st [K"call" rec(f) rec(lam) _dst_sink_parameters(args)...]

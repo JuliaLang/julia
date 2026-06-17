@@ -113,7 +113,7 @@ end
 @eval Base.Sys begin
     __init_build() = nothing # VersionNumber parsing is not supported yet
 end
-# Used for LinearAlgebre ldiv with SVD
+# Used for LinearAlgebra ldiv with SVD
 for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
     @eval Base.Sort begin
         # identical to existing Base def. but specializes on `lt` / `by`

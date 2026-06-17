@@ -444,7 +444,7 @@ JL_DLLEXPORT jl_value_t *jl_call3(jl_value_t *f, jl_value_t *a,
 }
 
 /**
- * @brief Call a Julia function with three arguments.
+ * @brief Call a Julia function with four arguments.
  *
  * A specialized case of `jl_call` for simpler scenarios.
  *
@@ -547,7 +547,7 @@ JL_DLLEXPORT int jl_is_debugbuild(void) JL_NOTSAFEPOINT
 }
 
 /**
- * @brief Check if Julia has been build with assertions enabled.
+ * @brief Check if Julia has been built with assertions enabled.
  *
  * @return Returns 1 if assertions are enabled, 0 otherwise.
  */

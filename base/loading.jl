@@ -1215,7 +1215,7 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
 
             # We have the dep, but it did not specify a UUID. In this case,
             # it must be that the name is unique in the manifest - so lookup
-            # the UUID at the lop level by name
+            # the UUID at the top level by name
             name_deps = get(d, name, nothing)::Union{Nothing, Vector{Any}}
             if name_deps === nothing || length(name_deps) != 1
                 error("expected a single entry for $(repr(name)) in $(repr(project_file))")
@@ -1860,7 +1860,7 @@ function CacheFlags(f::UInt8)
     debug_level = Int((f >> 1) & 3)
     check_bounds = Int((f >> 3) & 3)
     inline = Bool((f >> 5) & 1)
-    opt_level = Int((f >> 6) & 3) # define OPT_LEVEL in statiddata_utils
+    opt_level = Int((f >> 6) & 3) # define OPT_LEVEL in staticdata_utils
     CacheFlags(use_pkgimages, debug_level, check_bounds, inline, opt_level)
 end
 CacheFlags(f::Int) = CacheFlags(UInt8(f))
@@ -2479,7 +2479,7 @@ precompilableerror(ex::PrecompilableError) = true
 precompilableerror(ex::WrappedException) = precompilableerror(ex.error)
 precompilableerror(@nospecialize ex) = false
 
-# Call __precompile__(false) at the top of a tile prevent it from being precompiled (false)
+# Call __precompile__(false) at the top of a file to prevent it from being precompiled (false)
 """
     __precompile__(isprecompilable::Bool)
 
@@ -2875,7 +2875,7 @@ function __require_prelocked(pkg::PkgId, env)
                             # age issues when printing, see:
                             # https://github.com/JuliaLang/julia/issues/60223
                             precompiled = @invokelatest Precompilation.precompilepkgs([pkg]; _from_loading=true, ignore_loaded=false)
-                            # prcompiled returns either nothing, indicating it needs serial precompile,
+                            # precompiled returns either nothing, indicating it needs serial precompile,
                             # or the entry(ies) that it found would be best to load (possibly because it just created it)
                             # or an empty set of entries (indicating the precompile should be skipped)
                             if precompiled !== nothing
@@ -3282,6 +3282,13 @@ function include_package_for_output(pkg::PkgId, input::String, syntax_version::V
     end
 
     ccall(:jl_set_newly_inferred, Cvoid, (Any,), newly_inferred)
+    # When this worker is producing a native object pkgimage, retain raw
+    # inferred IR on `CodeInstance.inferred` for the non-inlineable methods
+    # that would otherwise be discarded, so the irgen pass can short-circuit
+    # `typeinf_ext` instead of re-inferring. `jl_finalize_precompile_inferred`
+    # clears them (and the flag) before staticdata serialization.
+    keep_ir = JLOptions().outputo != C_NULL
+    keep_ir && ccall(:jl_set_precompile_keep_ir, Cvoid, (Int8,), 1)
     # This one changes the parser behavior
     __toplevel__.var"#_internal_julia_parse" = VersionedParse(syntax_version)
     # This one is the compatibility marker for cache loading
@@ -3311,6 +3318,7 @@ function include_package_for_output(pkg::PkgId, input::String, syntax_version::V
                     " methods=", length(newly_inferred))
         end
         ccall(:jl_set_newly_inferred, Cvoid, (Any,), nothing)
+        keep_ir && ccall(:jl_set_precompile_keep_ir, Cvoid, (Int8,), 0)
     end
     # check that the package defined the expected module so we can give a nice error message if not
     m = maybe_root_module(pkg)

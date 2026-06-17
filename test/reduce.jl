@@ -592,7 +592,7 @@ struct NonFunctionIsZero end
 @test count(!, [true false; false true], dims=:, init=Int16(0)) === 2
 @test isequal(count(identity, [true false; false true], dims=2, init=UInt(0)), reshape(UInt[1, 1], 2, 1))
 
-## cumsum, cummin, cummax
+## cumsum
 
 z = rand(10^6)
 let es = sum(BigFloat.(z)), es2 = sum(BigFloat.(z[1:10^5]))

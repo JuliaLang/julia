@@ -813,6 +813,8 @@ JL_DLLEXPORT void jl_engine_fulfill(jl_code_instance_t *ci, jl_code_info_t *src)
 JL_DLLEXPORT jl_code_instance_t *jl_type_infer(jl_method_instance_t *li JL_PROPAGATES_ROOT, size_t world, uint8_t source_mode, uint8_t trim_mode);
 JL_DLLEXPORT int8_t jl_get_type_infer_preserve_ir(void);
 JL_DLLEXPORT void jl_set_type_infer_preserve_ir(int8_t v);
+JL_DLLEXPORT int8_t jl_get_precompile_keep_ir(void);
+JL_DLLEXPORT void jl_set_precompile_keep_ir(int8_t v);
 JL_DLLEXPORT jl_code_info_t *jl_gdbcodetyped1(jl_method_instance_t *mi, size_t world);
 JL_DLLEXPORT jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *meth JL_PROPAGATES_ROOT, size_t world);
 JL_DLLEXPORT jl_code_instance_t *jl_get_method_uninferred(
@@ -1244,7 +1246,7 @@ STATIC_INLINE int is_anonfn_typename(char *name)
     return other > &name[1] && is10digit(other[1]);
 }
 
-// Returns true for typenames of anounymous functions that have been canonicalized (i.e.
+// Returns true for typenames of anonymous functions that have been canonicalized (i.e.
 // we mangled the name of the outermost enclosing function in their name).
 STATIC_INLINE int is_canonicalized_anonfn_typename(char *name) JL_NOTSAFEPOINT
 {
@@ -1353,7 +1355,11 @@ typedef struct {
 
 extern jl_datatype_t *jl_typeapp_type;
 JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *typevars, jl_svec_t *struct_infos);
-int jl_is_typeapp(jl_value_t *v) JL_NOTSAFEPOINT;
+// Type predicate for TypeApp (inline: called per type node on hot type-query paths)
+STATIC_INLINE int jl_is_typeapp(jl_value_t *v) JL_NOTSAFEPOINT
+{
+    return jl_typeapp_type != NULL && jl_typeis(v, jl_typeapp_type);
+}
 void jl_init_tasks(void) JL_GC_DISABLED;
 void jl_init_stack_limits(int ismaster, void **stack_hi, void **stack_lo) JL_NOTSAFEPOINT;
 jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi);

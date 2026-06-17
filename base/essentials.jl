@@ -1621,7 +1621,7 @@ end
 _resolve_in_world(world::Integer, gr::GlobalRef) =
     invoke_in_world(UInt(world), Core.getglobal, gr.mod, gr.name)
 
-# Special constprop heuristics for various binary opes
+# Special constprop heuristics for various binary ops
 typename(typeof(function + end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC
 typename(typeof(function - end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC
 typename(typeof(function * end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC

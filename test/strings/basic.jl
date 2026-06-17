@@ -604,7 +604,7 @@ end
             @test isvalid(String, UInt8[byt]) == flg
         end
     end
-    # Check overlong lead bytes for 2-character sequences (false)
+    # Check overlong lead bytes for 2-byte sequences (false)
     for byt = 0xc0:0xc1
         @test isvalid(String, UInt8[byt,0x80]) == false
     end
@@ -1481,7 +1481,7 @@ end
         end
 
         b3 = first(table_row[3])
-        #Prove that all valid forth bytes return correct state
+        #Prove that all valid fourth bytes return correct state
         for b4 = table_row[4]
             @test Base._UTF8_DFA_ACCEPT == Base._isvalid_utf8_dfa(state3,[b4],1,1)
         end

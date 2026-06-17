@@ -29,6 +29,7 @@ include("utils.jl")
     @testset "scopes" include("scopes.jl")
     @testset "typedefs" include("typedefs.jl")
 
+    @testset "provenance" include("provenance.jl")
     @testset "compat" include("compat.jl")
     @testset "hooks" include("hooks.jl")
 end

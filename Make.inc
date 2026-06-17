@@ -568,6 +568,11 @@ JCFLAGS_COMMON     = -std=gnu11 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSE
 JCFLAGS_CLANG      = $(JCFLAGS_COMMON)
 JCFLAGS_GCC        = $(JCFLAGS_COMMON) -fno-gnu-unique
 
+# Xcode 26 (clang 21) folds the new -Wc++-keyword diagnostic into -Wc++-compat, erroring
+# under -Werror on uses of C++ keywords like `wchar_t` as ordinary identifiers in C code.
+# Suppress it; -Wno-unknown-warning-option keeps older clang from rejecting the flag.
+JCFLAGS_CLANG     += -Wno-unknown-warning-option -Wno-c++-keyword
+
 
 # These flags are needed to generate decent debug info
 JCPPFLAGS_COMMON   = -fasynchronous-unwind-tables

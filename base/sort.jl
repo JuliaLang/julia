@@ -694,7 +694,7 @@ end
 Move NaN values to the end, partition by sign, and reinterpret the rest as unsigned integers.
 
 IEEE floating point numbers (`Float64`, `Float32`, and `Float16`) compare the same as
-unsigned integers with the bits with a few exceptions. This pass
+unsigned integers with the bits with a few exceptions.
 
 This pass is triggered for both `sort([1.0, NaN, 3.0])` and `sortperm([1.0, NaN, 3.0])`.
 """
@@ -2241,7 +2241,7 @@ UIntMappable(T::Type, order::Ordering) = nothing
 """
     uint_map(x, order::Base.Order.Ordering)::Unsigned
 
-Map `x` to an un unsigned integer, maintaining sort order.
+Map `x` to an unsigned integer, maintaining sort order.
 
 The map should be reversible with [`uint_unmap`](@ref), so `isless(order, a, b)` must be
 a linear ordering for `a, b <: typeof(x)`. Satisfies
@@ -2332,7 +2332,7 @@ Characteristics:
     compare equal (e.g. "a" and "A" in a sort of letters that
     ignores case).
   * *in-place* in memory.
-  * *divide-and-conquer*: sort strategy similar to [`MergeSort`](@ref).
+  * *divide-and-conquer*: sort strategy similar to [`QuickSort`](@ref).
 
 Note that `PartialQuickSort(k)` does not necessarily sort the whole array. For example,
 

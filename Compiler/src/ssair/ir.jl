@@ -295,7 +295,7 @@ on where they appear:
     ii. a `NewSSAValue` with negative `id` refers to post-compaction `new_node` node.
 
 2. In non-compacted nodes,
-    i. a `NewSSAValue` with positive `id` refers to the index of an already-compacted instructions.
+    i. a `NewSSAValue` with positive `id` refers to the index of an already-compacted instruction.
     ii. a `NewSSAValue` with negative `id` has the same meaning as in compacted nodes.
 """
 struct NewSSAValue
@@ -777,6 +777,9 @@ struct CFGTransformState
     bb_rename_pred::Vector{Int}
     bb_rename_succ::Vector{Int}
     domtree::Union{Nothing, DomTree}
+    # Scratch buffers reused for the in-place domtree updates performed while
+    # killing edges. Non-`nothing` exactly when `domtree` is.
+    domtree_cache::Union{Nothing, DomTreeCache}
 end
 
 # N.B.: Takes ownership of the CFG array
@@ -812,14 +815,18 @@ function CFGTransformState!(blocks::Vector{BasicBlock}, allow_cfg_transforms::Bo
         let blocks = blocks, bb_rename = bb_rename
             result_bbs = BasicBlock[blocks[i] for i = 1:length(blocks) if bb_rename[i] != -1]
         end
+        # Reuse the same cache for the initial construction and any later
+        # in-place updates while killing edges during compaction.
+        domtree_cache = DomTreeCache()
         # TODO: This could be done by just renaming the domtree
-        domtree = construct_domtree(result_bbs)
+        domtree = construct_domtree(result_bbs; cache=domtree_cache)
     else
         bb_rename = Vector{Int}()
         result_bbs = blocks
         domtree = nothing
+        domtree_cache = nothing
     end
-    return CFGTransformState(allow_cfg_transforms, allow_cfg_transforms, result_bbs, bb_rename, bb_rename, domtree)
+    return CFGTransformState(allow_cfg_transforms, allow_cfg_transforms, result_bbs, bb_rename, bb_rename, domtree, domtree_cache)
 end
 
 mutable struct IncrementalCompact
@@ -875,7 +882,7 @@ mutable struct IncrementalCompact
         bb_rename = Vector{Int}()
         pending_nodes = NewNodeStream()
         pending_perm = Int[]
-        return new(code, parent.result, CFGTransformState(false, false, parent.cfg_transform.result_bbs, bb_rename, bb_rename, nothing),
+        return new(code, parent.result, CFGTransformState(false, false, parent.cfg_transform.result_bbs, bb_rename, bb_rename, nothing, nothing),
             ssa_rename, parent.used_ssas,
             parent.late_fixup, perm, 1,
             parent.new_new_nodes, parent.new_new_used_ssas, pending_nodes, pending_perm,
@@ -1476,13 +1483,14 @@ scan the compacted prefix when `to == active_bb`. `from` and `to` are non-rename
 """
 function kill_edge_terminator!(compact::IncrementalCompact, active_bb::Int, from::Int, to::Int)
     # Note: We recursively kill as many edges as are obviously dead.
-    (; bb_rename_pred, bb_rename_succ, result_bbs, domtree) = compact.cfg_transform
+    (; bb_rename_pred, bb_rename_succ, result_bbs, domtree, domtree_cache) = compact.cfg_transform
     preds = result_bbs[bb_rename_succ[to]].preds
     succs = result_bbs[bb_rename_pred[from]].succs
     deleteat!(preds, findfirst(x::Int->x==bb_rename_pred[from], preds)::Int)
     deleteat!(succs, findfirst(x::Int->x==bb_rename_succ[to], succs)::Int)
     if domtree !== nothing
-        domtree_delete_edge!(domtree, result_bbs, bb_rename_pred[from], bb_rename_succ[to])
+        domtree_delete_edge!(domtree, result_bbs, bb_rename_pred[from], bb_rename_succ[to];
+                             cache=domtree_cache::DomTreeCache)
     end
     # Check if the block is now dead
     if length(preds) == 0 || (domtree !== nothing && bb_unreachable(domtree, bb_rename_succ[to]))
