@@ -89,7 +89,7 @@ end
 function newsym(ctx, src::SyntaxTree, name::String; unused=false)
     out = newleaf(ctx, src, unused ? K"Placeholder" : K"Identifier", name)
     hasattr(src, :meta) && setattr!(out, :meta, src.meta)
-    setattr!(out, :scope_layer, new_internal_scope_layer(ctx))
+    setattr!(out, :scope_layer, new_internal_scope_layer(ctx, ctx.mod).id)
 end
 
 #-------------------------------------------------------------------------------
@@ -3560,7 +3560,7 @@ function expand_typegroup_def(ctx, ex)
                                       supertype, is_mutable, min_initialized,
                                       inner_defs, field_docs))
         push!(struct_names, struct_name)
-        layer = new_internal_scope_layer(ctx, struct_name)
+        layer = new_internal_escapable_scope_layer(ctx, struct_name).id
         push!(global_names, adopt_scope(struct_name, layer))
         push!(info_vars, ssavar(ctx, sdef, "struct_info"))
     end
@@ -3733,7 +3733,7 @@ function expand_struct_def(ctx, ex, docs)
     hasprev = ssavar(ctx, ex, "hasprev")
     prev = ssavar(ctx, ex, "prev")
     newdef = ssavar(ctx, ex, "newdef")
-    layer = new_internal_scope_layer(ctx, struct_name)
+    layer = new_internal_escapable_scope_layer(ctx, struct_name).id
     global_struct_name = adopt_scope(struct_name, layer)
     if !isempty(typevar_names)
         # Generate expression like `prev_struct.body.body.parameters`
@@ -3797,9 +3797,8 @@ function expand_struct_def(ctx, ex, docs)
     @ast ctx ex [K"block"
         [K"assert" "toplevel_only"::K"Symbol" [K"inert_syntaxtree" ex] ]
         [K"scope_block"(scope_type=:hard)
-            # Needed for later constdecl to work, though plain global form may be removed soon.
             [K"global" global_struct_name]
-            [K"block"
+            [K"scope_block"(scope_type=:hard)
                 [K"local" struct_name]
                 [K"always_defined" struct_name]
                 typevar_stmts...
@@ -3850,7 +3849,6 @@ function expand_struct_def(ctx, ex, docs)
                     global_struct_name
                     newdef
                  ]
-            ]
         ]
 
         if isempty(inner_defs)
@@ -3871,6 +3869,7 @@ function expand_struct_def(ctx, ex, docs)
                 [K"block" inner_defs...]
             ]
         end
+        ]
 
         # Documentation
         if !isnothing(docs) || !isempty(field_docs)
