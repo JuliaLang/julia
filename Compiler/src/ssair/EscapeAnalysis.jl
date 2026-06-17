@@ -14,7 +14,7 @@ export
 using Base: Base
 
 # imports
-import Base: !=, ==, copy, delete!, getindex, isempty, setindex!, ∈
+import Base: !=, ==, copy, delete, delete!, getindex, isempty, setindex!, ∈
 # usings
 using Core
 using Core: Builtin, IntrinsicFunction, SimpleVector, ifelse, sizeof
@@ -46,12 +46,30 @@ include("disjoint_set.jl")
 
 @nospecialize
 
+"""
+    MemoryInfo
+
+Field-content facts for tracked object fields. `MemoryInfo` records whether a
+field is uninitialized or which values may be stored in that field; it is
+distinct from statement-level `SSAMemoryInfo` load-forwarding facts.
+"""
 abstract type MemoryInfo end
 struct UninitializedMemory <: MemoryInfo end
 const AliasedValues = IdSet{Any}
 struct AliasedMemory <: MemoryInfo
-    alias::Any # anything that is valid as IR elements (e.g. `SSAValue`, `Argument`, `GlobalRef`, literals), or `AliasedValues` of them
+    # A single alias value (anything valid as an IR element, e.g. `SSAValue`,
+    # `Argument`, `GlobalRef`, literals), or an `AliasedValues` may-alias set
+    # with at least two entries.
+    alias::Any
     maybeundef::Bool # required when `AliasedMemory` is merged with `UninitializedMemory`
+
+    function AliasedMemory(alias::AliasedValues, maybeundef::Bool)
+        @assert !isempty(alias) "empty alias sets are not valid memory facts"
+        return new(length(alias) == 1 ? only(alias) : alias, maybeundef)
+    end
+    function AliasedMemory(@nospecialize(alias), maybeundef::Bool)
+        return new(alias, maybeundef)
+    end
 end
 x::MemoryInfo == y::MemoryInfo = begin
     @nospecialize
@@ -72,13 +90,21 @@ function copy(x::MemoryInfo)
     return x
 end
 
+"""
+    ObjectInfo
+
+Memory-content facts attached to an object. `NoMemoryContents` is bottom:
+no field-content facts are associated with the object; `HasIndexableFields`
+stores per-field `MemoryInfo`; and `UnknownMemoryContents` is top for
+untrackable contents.
+"""
 abstract type ObjectInfo end
-struct HasUnanalyzedMemory <: ObjectInfo end
+struct NoMemoryContents <: ObjectInfo end
 struct HasIndexableFields <: ObjectInfo
     fields::Vector{MemoryInfo}
 end
-struct HasUnknownMemory <: ObjectInfo end
-const ⊥ₒ, ⊤ₒ = HasUnanalyzedMemory(), HasUnknownMemory()
+struct UnknownMemoryContents <: ObjectInfo end
+const ⊥ₒ, ⊤ₒ = NoMemoryContents(), UnknownMemoryContents()
 x::ObjectInfo == y::ObjectInfo = begin
     @nospecialize
     x === y && return true
@@ -156,11 +182,13 @@ function copy(x::Liveness)
     end
     return x
 end
-function delete!(x::Liveness, pc::Int)
+function delete(x::Liveness, pc::Int)
     @nospecialize x
     if x isa PCLiveness && pc ∈ x.pcs
         length(x.pcs) == 1 && return ⊥ₗ
-        delete!(x.pcs, pc)
+        pcs = copy(x.pcs)
+        delete!(pcs, pc)
+        return PCLiveness(pcs)
     end
     return x
 end
@@ -178,19 +206,22 @@ A lattice for escape information, which holds the following properties:
   * `-1 ∈ x.ThrownEscape`: `x` may be thrown at arbitrary points of this call frame (the top)
   This information will be used by `escape_exception!` to propagate potential escapes via exception.
 - `x.ObjectInfo::ObjectInfo`: maintains all possible values
-  that can be aliased to fields or array elements of `x`:
-  * `x.ObjectInfo::HasUnanalyzedMemory` indicates the fields/elements of `x` aren't analyzed yet
-  * `x.ObjectInfo::HasUnknownMemory` indicates the fields/elements of `x` can't be analyzed,
+  that can be aliased to tracked fields or array elements of `x`:
+  * `x.ObjectInfo::NoMemoryContents` represents the absence of field/element
+    facts for `x`
+  * `x.ObjectInfo::UnknownMemoryContents` indicates the fields/elements of `x` can't be analyzed,
     e.g. the type of `x` is not known or is not concrete and thus its fields/elements
     can't be known precisely
-  * `x.ObjectInfo::HasIndexableFields` records all the possible values that can be aliased to fields of object `x` with precise index information
-- `x.Liveness::BitSet`: records SSA statement numbers where `x` should be live, e.g.
+  * `x.ObjectInfo::HasIndexableFields` records per-field `MemoryInfo` facts
+    for object `x` with precise index information
+- `x.Liveness::Liveness`: records SSA statement numbers where `x` should be live, e.g.
   to be used as a call argument, to be returned to a caller, or preserved for `:foreigncall`:
-  * `isempty(x.Liveness)`: `x` is never used in this call frame (the bottom)
+  * `x.Liveness::BotLiveness`: `x` is never used in this call frame (the bottom);
+    empty `PCLiveness` is represented by this value
   * `0 ∈ x.Liveness` also has the special meaning that it's a call argument of the currently
-    analyzed call frame (and thus it's visible from the caller immediately).
+    analyzed call frame (and thus it's visible from a caller immediately).
   * `pc ∈ x.Liveness`: `x` may be used at the SSA statement at `pc`
-  * `-1 ∈ x.Liveness`: `x` may be used at arbitrary points of this call frame (the top)
+  * `x.Liveness::TopLiveness`: `x` may be used at arbitrary points of this call frame (the top)
 
 There are utility constructors to create common `EscapeInfo`s, e.g.,
 - `NoEscape()`: the bottom(-like) element of this lattice, meaning it won't escape to anywhere
@@ -242,7 +273,7 @@ function copy(x::EscapeInfo)
         copy(x.Liveness))
 end
 
-ArgLiveness() = PCLiveness(BitSet(0))
+ArgLiveness() = PCLiveness(0)
 
 NoEscape() = EscapeInfo(false, false, ⊥ₒ, ⊥ₗ)
 ArgEscape() = EscapeInfo(false, false, ⊤ₒ, ArgLiveness())
@@ -253,7 +284,7 @@ const ⊥, ⊤ = NoEscape(), AllEscape()
 # Convenience names for some ⊑ₑ queries
 function is_not_analyzed(x::EscapeInfo)
     if x.Liveness === BotLiveness()
-        @assert !x.ThrownEscape && !x.ReturnEscape && x.ObjectInfo === HasUnanalyzedMemory()
+        @assert !x.ThrownEscape && !x.ReturnEscape && x.ObjectInfo === NoMemoryContents()
         return true
     else
         return false
@@ -266,7 +297,7 @@ has_return_escape(x::EscapeInfo, pc::Int) = x.ReturnEscape && pc ∈ x.Liveness
 has_thrown_escape(x::EscapeInfo) = x.ThrownEscape
 function has_all_escape(x::EscapeInfo)
     if x.Liveness === TopLiveness() # top-liveness == this object may exist anywhere
-        @assert x.ThrownEscape && x.ReturnEscape && x.ObjectInfo === HasUnknownMemory()
+        @assert x.ThrownEscape && x.ReturnEscape && x.ObjectInfo === UnknownMemoryContents()
         return true
     else
         return false
@@ -274,7 +305,7 @@ function has_all_escape(x::EscapeInfo)
 end
 
 # utility lattice constructors
-ignore_argescape(x::EscapeInfo) = EscapeInfo(x; Liveness=delete!(copy(x.Liveness), 0))
+ignore_argescape(x::EscapeInfo) = EscapeInfo(x; Liveness=delete(x.Liveness, 0))
 ignore_thrownescapes(x::EscapeInfo) = EscapeInfo(x; ThrownEscape=false)
 ignore_objectinfo(x::EscapeInfo) = EscapeInfo(x; ObjectInfo=⊥ₒ)
 ignore_liveness(x::EscapeInfo) = EscapeInfo(x; Liveness=⊥ₗ)
@@ -330,6 +361,9 @@ x::Liveness ⊑ₗ y::Liveness = begin
     end
 end
 
+# `HasIndexableFields.fields` vectors are prefix-ordered. Missing trailing fields
+# represent absent/no field facts, not unknown contents. If memory cannot be
+# tracked precisely, represent it as `UnknownMemoryContents` (`⊤ₒ`) instead.
 x::ObjectInfo ⊑ₒ y::ObjectInfo = begin
     @nospecialize
     if x === ⊥ₒ
@@ -352,10 +386,16 @@ x::ObjectInfo ⊑ₒ y::ObjectInfo = begin
     end
 end
 
+# `AliasedMemory.alias` is normalized: an `AliasedValues` set is a proper
+# may-alias set with at least two entries. Empty sets are invalid, and singleton
+# may-alias sets are represented as a direct must/single alias value rather than
+# as an `IdSet`. `UninitializedMemory()` is below any `AliasedMemory(_, true)`,
+# matching the join that marks merged initialized/uninitialized facts as maybe
+# undefined.
 x::MemoryInfo ⊑ₘ y::MemoryInfo = begin
     @nospecialize
     if x === UninitializedMemory()
-        return y === UninitializedMemory()
+        return y === UninitializedMemory() || (y isa AliasedMemory && y.maybeundef)
     elseif y === UninitializedMemory()
         return false
     else
@@ -624,12 +664,19 @@ end
 abstract type Change end
 const Changes = Vector{Change}
 
+# Statement-level load-forwarding information keyed by SSA statement pc. This is
+# intentionally not the same lattice as `MemoryInfo`, which tracks field contents
+# for object fields. For a load at `pc`, `ssamemoryinfo[pc]` is one of:
+# - `ConflictedMemory()`: multiple or maybe-undefined field facts prevent forwarding
+# - `UnknownMemory()`: the object/field memory could not be analyzed precisely
+# - `UninitializedMemory()`: the loaded field is definitely uninitialized
+# - a direct alias value: the load can be forwarded to that value
 const SSAMemoryInfo = IdDict{Int,Any}
-# TODO CFG-aware `MemoryInfo`:
-# By incorporating some form of CFG information into `MemoryInfo`, it becomes possible
+# TODO CFG-aware load-forwarding facts:
+# By incorporating some form of CFG information into `SSAMemoryInfo`, it becomes possible
 # to enable load-forwarding even in cases where conflicts occur by inserting φ-nodes.
-struct ConflictedMemory end # a special instance to indicate the aliased memory is conflicted
-struct UnknownMemory end    # a special instance to indicate the aliased memory is unknown
+struct ConflictedMemory end # marker for a load whose source aliases conflict
+struct UnknownMemory end    # marker for a load from unanalyzable memory
 
 const LINEAR_BBESCAPES = Union{Bool,BlockEscapeState{false}}[false]
 
@@ -1490,7 +1537,7 @@ struct ArgEscapeCache
         argaliases = ArgAlias[]
         for i = 1:nargs
             arginfo = eresult[i]
-            @assert arginfo.ObjectInfo === HasUnknownMemory() "Argument's memory information isn't tracked"
+            @assert arginfo.ObjectInfo === UnknownMemoryContents() "Argument's memory information isn't tracked"
             argescapes[i] = ArgEscapeInfo(arginfo)
             for j = (i+1):nargs
                 if isaliased(eresult, i, j)
@@ -1579,7 +1626,7 @@ function _from_interprocedural!(astate::AnalysisState, retval::SSAValue, @nospec
             if has_return_escape(argescape)
                 _add_alias_change!(astate, argidx, retval)
             end
-            push!(astate.changes, ObjectInfoChange(argidx, HasUnknownMemory()))
+            push!(astate.changes, ObjectInfoChange(argidx, UnknownMemoryContents()))
             push!(astate.changes, LivenessChange(argidx))
         end
         # Propagate the updated information to the field values of `x`
@@ -1785,7 +1832,7 @@ function analyze_builtin!(::typeof(getfield), astate::AnalysisState, pc::Int, ar
         xfinfo = ObjectInfo.fields[fidx]
         if xfinfo isa UninitializedMemory
             # `UndefRefError` should be raised here
-            astate.ssamemoryinfo[pc] = UninitializedMemory() # TODO CFG-aware `MemoryInfo`
+            astate.ssamemoryinfo[pc] = UninitializedMemory() # TODO CFG-aware load-forwarding facts
         else
             xfinfo::AliasedMemory
             nothrow |= !xfinfo.maybeundef # refine `nothrow` information if possible
@@ -1793,19 +1840,19 @@ function analyze_builtin!(::typeof(getfield), astate::AnalysisState, pc::Int, ar
                 add_alias_change!(astate, SSAValue(pc), aval)
                 if !haskey(astate.ssamemoryinfo, pc)
                     if xfinfo.maybeundef
-                        astate.ssamemoryinfo[pc] = ConflictedMemory() # TODO CFG-aware `MemoryInfo`
+                        astate.ssamemoryinfo[pc] = ConflictedMemory() # TODO CFG-aware load-forwarding facts
                     else
                         astate.ssamemoryinfo[pc] = aval
                     end
                 elseif astate.ssamemoryinfo[pc] !== aval
-                    astate.ssamemoryinfo[pc] = ConflictedMemory() # TODO CFG-aware `MemoryInfo`
+                    astate.ssamemoryinfo[pc] = ConflictedMemory() # TODO CFG-aware load-forwarding facts
                 end
             end
         end
     else
         @label conservative_propagation
         # the field being read couldn't be analyzed precisely, now we need to:
-        # 1. mark its `ObjectInfo` as `HasUnknownMemory`, and also
+        # 1. mark its `ObjectInfo` as `UnknownMemoryContents`, and also
         # 2. alias the object to the returned value (since the field may opoint to `obj` itself)
         add_object_info_change!(astate, obj, ⊤ₒ)     # 1
         add_alias_change!(astate, obj, retval)       # 2
@@ -1844,7 +1891,7 @@ function analyze_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, a
     else
         @label conservative_propagation
         # the field being stored couldn't be analyzed precisely, now we need to:
-        # 1. mark its `ObjectInfo` as `HasUnknownMemory`, and also
+        # 1. mark its `ObjectInfo` as `UnknownMemoryContents`, and also
         # 2. alias the object to the stored value (since the field may opoint to `obj` itself)
         add_object_info_change!(astate, obj, ⊤ₒ) # 1
         add_alias_change!(astate, obj, val)      # 2
