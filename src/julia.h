@@ -258,8 +258,9 @@ typedef struct _jl_sourcebytetable_header_t {
     int32_t line_offset;
     // (>=0) number of (byte, len) bytespans
     int32_t nlocs;
-    // (0,1,2,4) compressed lengths
+    // (1,2,4) compressed length
     uint8_t byte_encl;
+    // (0,1,2,4) compressed length
     uint8_t span_encl;
 } jl_sourcebytetable_header_t;
 // packed size

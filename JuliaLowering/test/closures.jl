@@ -233,6 +233,14 @@ let
 end
 """) == (3,4,5)
 
+# OC in lambda
+@test JuliaLowering.include_string(test_mod, """
+(x->(y->(z->(Base.Experimental.@opaque ()->"opaque"))('z'))('y'))('x')()
+""") == "opaque"
+@test_broken JuliaLowering.include_string(test_mod, """
+(x->(y->(z->(Base.Experimental.@opaque ()->(x,y,z)))('z'))('y'))('x')()
+""") == ('x','y','z')
+
 # opaque_closure_method internals
 method_ex = lower_str(test_mod, "Base.Experimental.@opaque x -> 2x").args[1].code[3]
 @test method_ex.head === :opaque_closure_method
