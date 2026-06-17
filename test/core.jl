@@ -8259,6 +8259,32 @@ let vnull1 = NullableHomogeneousPointerImmutable(),
     @test !opt_jl_egal(vnull2, v2)
 end
 
+# #62095 - egal on large structs (> 512 bytes) with both ptrs and bits has
+# incorrect alias info
+struct MixedGC
+    obj::Base.RefValue{Int}
+    bits::Int
+end
+# 65 elements, so it's large enough to fail on both 32 and 64 bit
+let x = ntuple(i -> MixedGC(Base.RefValue(i), i), Val(65))
+    y = ntuple(i -> MixedGC(x[i].obj, i*2), Val(65))
+    z = ntuple(i -> MixedGC(Base.RefValue(i), i), Val(65))
+
+    @test unopt_jl_egal(x, x)
+    @test unopt_jl_egal(y, y)
+    @test unopt_jl_egal(z, z)
+    @test !unopt_jl_egal(x, y)
+    @test !unopt_jl_egal(x, z)
+    @test !unopt_jl_egal(y, z)
+
+    @test opt_jl_egal(x, x)
+    @test opt_jl_egal(y, y)
+    @test opt_jl_egal(z, z)
+    @test !opt_jl_egal(x, y)
+    @test !opt_jl_egal(x, z)
+    @test !opt_jl_egal(y, z)
+end
+
 # Make sure non-allbits union is handled correctly
 @noinline returns_union37557(r) = r[]
 @noinline compare_union37557(r1, r2) = returns_union37557(r1) === returns_union37557(r2)
