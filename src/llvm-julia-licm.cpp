@@ -257,6 +257,7 @@ struct JuliaLICM : public JuliaPassContext {
                     }
                 }
                 else if (callee == write_barrier_func) {
+#if 0 // TEMP: don't hoist write barriers (SATB barrier must fire per-iteration)
                     bool valid = true;
                     for (std::size_t i = 0; i < call->arg_size(); i++) {
                         if (!makeLoopInvariant(L, call->getArgOperand(i),
@@ -278,6 +279,7 @@ struct JuliaLICM : public JuliaPassContext {
                         return OptimizationRemark(DEBUG_TYPE, "Hoist", call)
                             << "hoisting write barrier " << ore::NV("GC Write Barrier", call);
                     });
+#endif
                 }
                 else if (callee == alloc_obj_func) {
                     bool valid = true;
