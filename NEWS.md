@@ -21,6 +21,10 @@ New language features
 
 Language changes
 ----------------
+* The return value of `@doc` has changed: it now returns the documented
+  expression (e.g. a function or type) instead of a `Docs.Binding` object
+  as in previous versions. Code that depended on `@doc` returning a
+  `Docs.Binding` will need to be updated ([#59882], [#60681]).
 
 Compiler/Runtime improvements
 -----------------------------
