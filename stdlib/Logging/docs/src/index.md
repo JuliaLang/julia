@@ -10,8 +10,8 @@ statement into the source code, for example:
 
 ```julia
 @warn "Abandon printf debugging, all ye who enter here!"
-┌ Warning: Abandon printf debugging, all ye who enter here!
-└ @ Main REPL[1]:1
+⎡ Warning: Abandon printf debugging, all ye who enter here!
+⎣ @ Main REPL[1]:1
 ```
 
 The system provides several advantages over peppering your source code with
@@ -40,14 +40,14 @@ v = ones(100)
 @info "Some variables"  A  s=sum(v)
 
 # output
-┌ Info: Some variables
-│   A =
-│    4×4 Matrix{Int64}:
-│     1  1  1  1
-│     1  1  1  1
-│     1  1  1  1
-│     1  1  1  1
-└   s = 100.0
+⎡ Info: Some variables
+⎜   A =
+⎜    4×4 Matrix{Int64}:
+⎜     1  1  1  1
+⎜     1  1  1  1
+⎜     1  1  1  1
+⎜     1  1  1  1
+⎣   s = 100.0
 ```
 
 All of the logging macros `@debug`, `@info`, `@warn` and `@error` share common
@@ -191,11 +191,11 @@ module. Loading julia with `JULIA_DEBUG=loading` will activate
 
 ```
 $ JULIA_DEBUG=loading julia -e 'using OhMyREPL'
-┌ Debug: Rejecting cache file /home/user/.julia/compiled/v0.7/OhMyREPL.ji due to it containing an incompatible cache header
-└ @ Base loading.jl:1328
+⎡ Debug: Rejecting cache file /home/user/.julia/compiled/v0.7/OhMyREPL.ji due to it containing an incompatible cache header
+⎣ @ Base loading.jl:1328
 [ Info: Recompiling stale cache file /home/user/.julia/compiled/v0.7/OhMyREPL.ji for module OhMyREPL
-┌ Debug: Rejecting cache file /home/user/.julia/compiled/v0.7/Tokenize.ji due to it containing an incompatible cache header
-└ @ Base loading.jl:1328
+⎡ Debug: Rejecting cache file /home/user/.julia/compiled/v0.7/Tokenize.ji due to it containing an incompatible cache header
+⎣ @ Base loading.jl:1328
 ...
 ```
 
@@ -219,8 +219,8 @@ julia> ENV["JULIA_DEBUG"] = Main
 Main
 
 julia> foo()
-┌ Debug: foo
-└ @ Main REPL[1]:1
+⎡ Debug: foo
+⎣ @ Main REPL[1]:1
 
 ```
 
