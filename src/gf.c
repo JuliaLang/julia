@@ -1075,6 +1075,8 @@ static void drop_all_methcache(jl_methcache_t *mc)
             }
         }
     }
+    // Deletion barrier: snapshot the old cache/leafcache for SATB collectors.
+    jl_gc_wb(mc, NULL);
     jl_atomic_store_relaxed(&mc->cache, jl_nothing);
     jl_atomic_store_relaxed(&mc->leafcache, (jl_genericmemory_t*)jl_an_empty_memory_any);
     JL_UNLOCK(&mc->writelock);

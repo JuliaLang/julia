@@ -1856,11 +1856,20 @@ MDNode *createMutableTBAAAccessTag(MDNode *Tag) {
 void LateLowerGCFrame::CleanupWriteBarriers(Function &F, State *S, const SmallVector<CallInst*, 0> &WriteBarriers, bool *CFGModified) {
     for (auto CI : WriteBarriers) {
         auto parent = CI->getArgOperand(0);
+#if 0 // TEMP: disable stripping unconditionally to test SATB-barrier hypothesis
+        // Elide the barrier when every child is the parent itself or perm-rooted:
+        // a generational barrier can never need to remember the parent for such a
+        // store. A SATB (ConcurrentImmix) barrier must fire regardless, since it
+        // snapshots the parent's old fields independent of the child, so skip this
+        // optimization for that plan.
         if (std::all_of(CI->op_begin() + 1, CI->op_end(),
                     [parent, &S](Value *child) { return parent == child || IsPermRooted(child, S); })) {
             CI->eraseFromParent();
             continue;
         }
+#else
+        (void)parent;
+#endif
     }
 }
 

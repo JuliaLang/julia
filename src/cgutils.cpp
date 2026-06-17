@@ -2658,8 +2658,11 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         if (parent == NULL || !tracked_pointers)
             return;
         if (isboxed) {
+#if 0 // TEMP: SATB needs the barrier even when storing a permalloc value, to
+      // snapshot the OLD value being overwritten (the skip is an insertion-barrier optimization).
             if (type_is_permalloc(rhs.typ))
                 return;
+#endif
             assert(r != nullptr);
             emit_write_barrier(ctx, parent, r);
         }
@@ -4384,8 +4387,12 @@ static void emit_write_multibarrier(jl_codectx_t &ctx, Value *parent, Value *agg
                                     jl_value_t *jltype)
 {
     SmallVector<unsigned,4> perm_offsets;
+#if 0 // TEMP: SATB needs the barrier even for permalloc pointer fields, so the
+      // overwritten old inline value is snapshotted. Excluding perm offsets is an
+      // insertion-barrier optimization that drops the barrier for all-permalloc structs.
     if (jltype && jl_is_datatype(jltype) && ((jl_datatype_t*)jltype)->layout)
         find_perm_offsets((jl_datatype_t*)jltype, perm_offsets, 0);
+#endif
     auto ptrs = ExtractTrackedValues(ctx, agg, perm_offsets);
     emit_write_barrier(ctx, parent, ptrs);
 }

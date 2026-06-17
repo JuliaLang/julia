@@ -248,6 +248,9 @@ JL_DLLEXPORT void jl_array_del_end(jl_array_t *a, size_t dec)
     // don't leave behind deleted data
     if (jl_is_genericmemory_zeroinit(a->ref.mem) && !jl_genericmemory_isbitsunion(a->ref.mem)) {
         size_t elsz = jl_array_elsize(a);
+        // Deletion barrier: snapshot the overwritten references for SATB collectors.
+        // A single object-remembering barrier on the owner covers all cleared slots.
+        jl_gc_wb((jl_value_t*)jl_genericmemory_owner(a->ref.mem), NULL);
         memset(jl_array_data(a,char) + n * elsz, 0, elsz * dec);
     }
 }
