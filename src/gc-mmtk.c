@@ -51,7 +51,7 @@ static memsize_t max_total_memory = (memsize_t) MAX32HEAP;
 
 extern void mmtk_julia_copy_stack_check(int copy_stack);
 extern void mmtk_gc_init(uintptr_t min_heap_size, uintptr_t max_heap_size, uintptr_t n_gcthreads, uintptr_t header_size, uintptr_t tag);
-extern void mmtk_object_reference_write_post(void* mutator, const void* parent, const void* ptr);
+extern void mmtk_set_concurrent_marking_enabled(bool enabled);
 extern void mmtk_object_reference_write_slow(void* mutator, const void* parent, const void* ptr);
 extern void* mmtk_alloc(void* mutator, size_t size, size_t align, size_t offset, int allocator);
 extern void mmtk_post_alloc(void* mutator, void* refer, size_t bytes, int allocator);
@@ -148,6 +148,12 @@ void jl_gc_init(void) {
 
     mmtk_julia_copy_stack_check(copy_stacks);
 
+    // Disable concurrent marking when generating output to verify the task
+    // init fix; remove this once all concurrent-marking issues are confirmed
+    // fixed.
+    if (jl_generating_output())
+        mmtk_set_concurrent_marking_enabled(0);
+
     // if only max size is specified initialize MMTk with a fixed size heap
     // TODO: We just assume mark threads means GC threads, and ignore the number of concurrent sweep threads.
     // If the two values are the same, we can use either. Otherwise, we need to be careful.
@@ -168,6 +174,7 @@ void jl_init_thread_heap(struct _jl_tls_states_t *ptls) JL_NOTSAFEPOINT {
     jl_thread_heap_common_t *heap = &ptls->gc_tls_common.heap;
     small_arraylist_new(&heap->weak_refs, 0);
     small_arraylist_new(&heap->live_tasks, 0);
+    small_arraylist_new(&heap->all_tasks, 0);
     for (int i = 0; i < JL_N_STACK_POOLS; i++)
         small_arraylist_new(&heap->free_stacks[i], 0);
     small_arraylist_new(&heap->mallocarrays, 0);
@@ -712,6 +719,34 @@ JL_DLLEXPORT void jl_gc_mmtk_sweep_stack_pools(void)
         }
         if (jl_atomic_load_relaxed(&ptls2->current_task) == NULL) {
             small_arraylist_free(ptls2->gc_tls_common.heap.free_stacks);
+        }
+
+        // sweep list of all tasks
+        {
+            small_arraylist_t *all_tasks = &ptls2->gc_tls_common.heap.all_tasks;
+            size_t n = 0;
+            size_t ndel = 0;
+            size_t l = all_tasks->len;
+            void **lst = all_tasks->items;
+            if (l != 0) {
+                while (1) {
+                    jl_task_t *t = (jl_task_t*)lst[n];
+                    assert(jl_is_task(t));
+                    if (mmtk_is_live_object(t)) {
+                        // tasks should be non moving
+                        assert(mmtk_get_possibly_forwarded(t) == t);
+                        n++;
+                    } else {
+                        ndel++;
+                    }
+                    if (n >= l - ndel)
+                        break;
+                    void *tmp = lst[n];
+                    lst[n] = lst[n + ndel];
+                    lst[n + ndel] = tmp;
+                }
+                all_tasks->len -= ndel;
+            }
         }
 
         small_arraylist_t *live_tasks = &ptls2->gc_tls_common.heap.live_tasks;
