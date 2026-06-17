@@ -3958,27 +3958,9 @@ end
 #-------------------------------------------------------------------------------
 # Expand import / using / export
 
-function expand_importpath(path)
+function expand_importpath(ctx, path)
     @jl_assert kind(path) == K"importpath" path
-    path_spec = Expr(:.)
-    prev_was_dot = true
-    for component in children(path)
-        k = kind(component)
-        if k == K"quote"
-            # Permit quoted path components as in
-            # import A.(:b).:c
-            component = component[1]
-        end
-        @jl_assert kind(component) in (K"Identifier", K".") component
-        name = component.name_val
-        is_dot = kind(component) == K"."
-        if is_dot && !prev_was_dot
-            throw(LoweringError(component, "invalid import path: `.` in identifier path"))
-        end
-        prev_was_dot = is_dot
-        push!(path_spec.args, Symbol(name))
-    end
-    return path_spec
+    setattr(path, :kind, K".")
 end
 
 function expand_import_or_using(ctx, ex)
@@ -3992,7 +3974,7 @@ function expand_import_or_using(ctx, ex)
         #  (call core.svec  2 "x" "y" "z"  1 "w" "w"))
         @jl_assert numchildren(ex[1]) >= 2 ex
         from = ex[1][1]
-        from_path = @ast ctx from QuoteNode(expand_importpath(from))::K"Value"
+        from_path = @ast ctx from [K"inert" expand_importpath(ctx, from)]
         paths = ex[1][2:end]
     else
         # import A.B
@@ -4008,12 +3990,11 @@ function expand_import_or_using(ctx, ex)
         if kind(spec) == K"as"
             @jl_assert numchildren(spec) == 2 spec
             @jl_assert kind(spec[2]) == K"Identifier" spec
-            as_name = Symbol(spec[2].name_val)
-            path = QuoteNode(Expr(:as, expand_importpath(spec[1]), as_name))
+            path = @ast ctx spec [K"as" expand_importpath(ctx, spec[1]) spec[2]]
         else
-            path = QuoteNode(expand_importpath(spec))
+            path = expand_importpath(ctx, spec)
         end
-        push!(path_specs, @ast ctx spec path::K"Value")
+        push!(path_specs, @ast ctx spec [K"inert" path])
     end
     is_using = kind(ex) == K"using"
     stmts = SyntaxList(ctx)

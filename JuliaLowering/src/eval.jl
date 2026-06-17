@@ -563,7 +563,7 @@ function _to_lowered_expr(ex::SyntaxTree)
     elseif k == K"return"
         Core.ReturnNode(_to_lowered_expr(ex[1]))
     elseif k == K"inert"
-        est_to_expr(ex)
+        est_to_expr(remove_scope_layer!(ex))
     elseif k == K"inert_syntaxtree"
         ex[1]
     elseif k == K"code_info"
@@ -574,9 +574,10 @@ function _to_lowered_expr(ex::SyntaxTree)
             ir
         end
     elseif k == K"Value"
-        # TODO: we still do this in ccall, import
+        # TODO: we still do this in some interpolation, genfunc situations
         # @jl_assert !isa_lowering_ast_node(ex.value) (
-        #     ex, "smuggling AST through Value is asking for trouble; find a SyntaxTree representation")
+        #     ex, string("smuggling AST through Value is asking for trouble; ",
+        #                "find a SyntaxTree representation"))
         ex.value isa LineNumberNode ? QuoteNode(ex.value) : ex.value
     elseif k == K"goto"
         Core.GotoNode(ex[1].id)
