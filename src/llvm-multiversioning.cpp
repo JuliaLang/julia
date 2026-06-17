@@ -331,7 +331,7 @@ static void annotate_module_clones(Module &M) {
             std::set<Function*> all_origs(sets[0]);
             auto *cur_set = &sets[0];
             auto *next_set = &sets[1];
-            // Reduce dispatch by expand the cloning set to functions that are directly called by
+            // Reduce dispatch by expanding the cloning set to functions that are directly called by
             // and calling cloned functions.
             while (!cur_set->empty()) {
                 for (auto orig_f: *cur_set) {

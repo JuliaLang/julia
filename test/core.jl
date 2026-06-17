@@ -499,7 +499,7 @@ end
 @test any(m -> m.sig == Tuple{typeof(anytype_levelsplit_61915), DataType},
           methods(anytype_levelsplit_61915, (Union{Type{Int}, Int},)))
 
-# `Core.TypeofBottom` methods file with the kinds: method matching and dispatch with
+# `Core.TypeofBottom` methods filed with the kinds: method matching and dispatch with
 # `Type{...}`-represented queries (e.g. for the value `Union{}`) must reach them after
 # a level split instead of using a less specific `::Type` method
 anytype_bottom_61915(::Core.TypeofBottom) = 0
@@ -4091,7 +4091,7 @@ struct B
     a::A
 end
 @eval function f1()
-    # Emitting this direction is not recommended but it can come from `convert` that does not
+    # Emitting this directly is not recommended but it can come from `convert` that does not
     # return the correct type.
     $(Expr(:new, B, 1))
 end
@@ -6461,7 +6461,7 @@ initvalue2(::Type{T}) where {T <: Number} = T(1)
 U = unboxedunions[1]
 
 @noinline compare(a, b) = (a === b) # make sure we are testing code-generation of `is`
-egal(x, y) = (ccall(:jl_egal, Cint, (Any, Any), x, y) != 0) # make sure we are NOT testing code-generate of `is`
+egal(x, y) = (ccall(:jl_egal, Cint, (Any, Any), x, y) != 0) # make sure we are NOT testing code-generation of `is`
 
 mutable struct UnionField
     u::U
@@ -8725,7 +8725,7 @@ let load_path = mktempdir()
             end
             """)
 
-        # when referring an method table in another module,
+        # when referring to a method table in another module,
         # the overlay method needs to be discovered explicitly
         Bar = Base.require(Main, :Bar)
         @test length(Bar.mt) == 0

@@ -469,7 +469,7 @@ success:
 /*
  * When search_deps is 1, act like dlsym and search both the library for the
  * handle and all its dependencies.  Use this option only when compatibility
- * with dlsym(3) is required, thought this behaviour is not possible on Windows.
+ * with dlsym(3) is required, though this behaviour is not possible on Windows.
  *
  * At time of writing, only Base.dlsym() uses search_deps = 1.
  */

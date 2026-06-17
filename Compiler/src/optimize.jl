@@ -460,7 +460,7 @@ function recompute_effects_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), 
     end
     if !iscallstmt(stmt)
         # There is a bit of a subtle point here, which is that some non-call
-        # statements (e.g. PiNode) can be UB:, however, we consider it
+        # statements (e.g. PiNode) can be UB, however, we consider it
         # illegal to introduce such statements that actually cause UB (for any
         # input). Ideally that'd be handled at insertion time (TODO), but for
         # the time being just do that here.
@@ -819,7 +819,7 @@ function scan_non_dataflow_flags!(inst::Instruction, sv::PostOptAnalysisState)
     stmt = inst[:stmt]
     if !needs_ea_validation
         if !isterminator(stmt) && stmt !== nothing
-            # ignore control flow node – they are not removable on their own and thus not
+            # ignore control flow nodes – they are not removable on their own and thus do not
             # have `IR_FLAG_EFFECT_FREE` but still do not taint `:effect_free`-ness of
             # the whole method invocation
             sv.all_effect_free &= has_flag(flag, IR_FLAG_EFFECT_FREE)

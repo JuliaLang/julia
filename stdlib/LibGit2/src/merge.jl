@@ -61,7 +61,7 @@ end
 
 Run analysis on the branches pointed to by the annotated branch tips `anns` and
 determine under what circumstances they can be merged. For instance, if `anns[1]`
-is simply an ancestor of `ann[2]`, then `merge_analysis` will report that a
+is simply an ancestor of `anns[2]`, then `merge_analysis` will report that a
 fast-forward merge is possible.
 
 Return two outputs, `analysis` and `preference`. `analysis` has several possible values:

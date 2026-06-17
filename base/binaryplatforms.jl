@@ -227,7 +227,7 @@ function validate_tags(tags::Dict)
     # Validate `os`/`arch`/`call_abi` combination
     throw_call_abi_mismatch() = throw(ArgumentError("Invalid os/arch/call_abi combination: $(tags["os"])/$(tags["arch"])/$(tags["call_abi"])"))
     if tags["os"] == "linux" && tags["arch"] ∈ ("armv7l", "armv6l")
-        # If an ARM linux has does not have `call_abi` set to something valid, be sad.
+        # If an ARM linux does not have `call_abi` set to something valid, be sad.
         if !haskey(tags, "call_abi") || tags["call_abi"] ∉ ("eabihf", "eabi")
             throw_call_abi_mismatch()
         end
@@ -822,7 +822,7 @@ function parse_dl_name_version(path::String, os::String=_this_os_name())
         # On OSX, libraries look like `libnettle.6.3.dylib`
         dlregex = r"^(.*?)((?:\.[\d]+)*)\.dylib$"sa
     else
-        # On Linux and others BSD, libraries look like `libnettle.so.6.3.0`
+        # On Linux and other BSDs, libraries look like `libnettle.so.6.3.0`
         dlregex = r"^(.*?)\.so((?:\.[\d]+)*)$"sa
     end
 
@@ -894,7 +894,7 @@ function _get_libstdcxx_handle()
         return Libdl.dlopen(first(libstdcxx_paths), Libdl.RTLD_NOLOAD)::Ptr{Cvoid}
     end
 
-    # One day, I hope to not be linking against libgfortran in base Julia
+    # One day, I hope to not be linking against libstdc++ in base Julia
     return nothing
 end
 

@@ -472,7 +472,7 @@ MacroExpansionError while expanding @ccall in module Main.TestMod:
 #                            └─┘ ── argument needs a type annotation
 
 ########################################
-# Error: @ccall varags without one fixed argument
+# Error: @ccall varargs without one fixed argument
 @ccall foo(; x::Int)::Int
 #---------------------
 MacroExpansionError while expanding @ccall in module Main.TestMod:

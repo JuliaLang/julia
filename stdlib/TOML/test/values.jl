@@ -12,7 +12,6 @@ function testval(s, v)
     # First, test with the standard entrypoint
     parsed = TOML.parse(f)["foo"]
     (!isequal(v, parsed) || typeof(v) != typeof(parsed)) && return false
-    # Next, test with the "cached" (explicit Parser) entrypoint
     parsed = TOML.parse(test_parser, f)["foo"]
     (!isequal(v, parsed) || typeof(v) != typeof(parsed)) && return false
     return true
@@ -23,7 +22,6 @@ function failval(s, v)
     # First, test with the standard entrypoint
     err = TOML.tryparse(f);
     (!isa(err, TOML.Internals.ParserError) || err.type != v) && return false
-    # Next, test with the "cached" (explicit Parser) entrypoint
     err = TOML.tryparse(test_parser, f);
     (!isa(err, TOML.Internals.ParserError) || err.type != v) && return false
     return true

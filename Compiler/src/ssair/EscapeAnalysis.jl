@@ -63,7 +63,7 @@ A lattice for escape information, which holds the following properties:
   * `x.AliasInfo::Unindexable` records all the possible values that can be aliased to fields/elements of `x` without precise index information
 - `x.Liveness::BitSet`: records SSA statement numbers where `x` should be live, e.g.
   to be used as a call argument, to be returned to a caller, or preserved for `:foreigncall`:
-  * `isempty(x.Liveness)`: `x` is never be used in this call frame (the bottom)
+  * `isempty(x.Liveness)`: `x` is never used in this call frame (the bottom)
   * `0 ∈ x.Liveness` also has the special meaning that it's a call argument of the currently
     analyzed call frame (and thus it's visible from the caller immediately).
   * `pc ∈ x.Liveness`: `x` may be used at the SSA statement at `pc`
@@ -186,7 +186,7 @@ end
 # we need to make sure this `==` operator corresponds to lattice equality rather than object equality,
 # otherwise `propagate_changes` can't detect the convergence
 x::EscapeInfo == y::EscapeInfo = begin
-    # fast pass: better to avoid top comparison
+    # fast path: better to avoid top comparison
     x === y && return true
     x.Analyzed === y.Analyzed || return false
     x.ReturnEscape === y.ReturnEscape || return false
@@ -226,7 +226,7 @@ end
 The non-strict partial order over [`EscapeInfo`](@ref).
 """
 x::EscapeInfo ⊑ₑ y::EscapeInfo = begin
-    # fast pass: better to avoid top comparison
+    # fast path: better to avoid top comparison
     if y === ⊤
         return true
     elseif x === ⊤
@@ -285,7 +285,7 @@ end
     x::EscapeInfo ⊏ₑ y::EscapeInfo -> Bool
 
 The strict partial order over [`EscapeInfo`](@ref).
-This is defined as the irreflexive kernel of `⊏ₑ`.
+This is defined as the irreflexive kernel of `⊑ₑ`.
 """
 x::EscapeInfo ⊏ₑ y::EscapeInfo = x ⊑ₑ y && !(y ⊑ₑ x)
 
@@ -303,7 +303,7 @@ x::EscapeInfo ⋤ₑ y::EscapeInfo = !(y ⊑ₑ x)
 Computes the join of `x` and `y` in the partial order defined by [`EscapeInfo`](@ref).
 """
 x::EscapeInfo ⊔ₑ y::EscapeInfo = begin
-    # fast pass: better to avoid top join
+    # fast path: better to avoid top join
     if x === ⊤ || y === ⊤
         return ⊤
     elseif x === ⊥
@@ -884,7 +884,7 @@ is_nothrow(ir::IRCode, pc::Int) = has_flag(ir[SSAValue(pc)], IR_FLAG_NOTHROW)
 Propagates escapes via exceptions that can happen in `tryregions`.
 
 Naively it seems enough to propagate escape information imposed on `:the_exception` object,
-but actually there are several other ways to access to the exception object such as
+but actually there are several other ways to access the exception object such as
 `Base.current_exceptions` and manual catch of `rethrow`n object.
 For example, escape analysis needs to account for potential escape of the allocated object
 via `rethrow_escape!()` call in the example below:
@@ -930,7 +930,7 @@ function escape_exception!(astate::AnalysisState, tryregions::Vector{UnitRange{I
     for i in 1:length(escapes)
         x = escapes[i]
         xt = x.ThrownEscape
-        xt === TOP_THROWN_ESCAPE && @goto propagate_exception_escape # fast pass
+        xt === TOP_THROWN_ESCAPE && @goto propagate_exception_escape # fast path
         for pc in xt
             for region in tryregions
                 pc ∈ region && @goto propagate_exception_escape # early break because of AllEscape
@@ -964,7 +964,7 @@ function escape_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any})
             for argidx = first_idx:last_idx
                 arg = args[argidx]
                 if arg isa GlobalRef
-                    continue # :effect_free guarantees that nothings escapes to the global scope
+                    continue # :effect_free guarantees that nothing escapes to the global scope
                 end
                 if !is_identity_free_argtype(argextype(arg, astate.ir))
                     add_alias_change!(astate, ret, arg)
@@ -1022,7 +1022,7 @@ function from_interprocedural(argescape::ArgEscapeInfo, pc::Int)
     return EscapeInfo(#=Analyzed=#true, #=ReturnEscape=#false, ThrownEscape, AliasInfo, Liveness)
 end
 
-# escape every argument `(args[6:length(args[3])])` and the name `args[1]`
+# escape every argument `(args[6:5+length(args[3])])` and the name `args[1]`
 # TODO: we can apply a similar strategy like builtin calls to specialize some foreigncalls
 function escape_foreigncall!(astate::AnalysisState, pc::Int, args::Vector{Any})
     nargs = length(args)
@@ -1174,7 +1174,7 @@ function escape_new!(astate::AnalysisState, pc::Int, args::Vector{Any})
     elseif isa(AliasInfo, Unindexable)
         AliasInfo = copy(AliasInfo)
         @label escape_unindexable_def
-        # fields are known partially: propagate escape information imposed on recorded possibilities to all fields values
+        # fields are known partially: propagate escape information imposed on recorded possibilities to all field values
         info = AliasInfo.info
         objinfo′ = ignore_aliasinfo(objinfo)
         for i in 2:nargs

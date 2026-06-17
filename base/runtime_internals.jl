@@ -1753,7 +1753,7 @@ function may_invoke_generator(method::Method, @nospecialize(atype), sparams::Sim
     end
     if method.isva
         # If the va argument is used, we need to ensure that all arguments that
-        # contribute to the va tuple are dispatchelemes
+        # contribute to the va tuple are dispatch elements
         if (ast_slotflag(code, firstarg + nargs + nsparams) & SLOT_USED) != 0
             for i = (non_va_args+1):length(at.parameters)
                 if !isdispatchelem(at.parameters[i])

@@ -444,7 +444,7 @@ function lift_leaves(compact::IncrementalCompact, field::Int,
                 lift_arg!(compact, leaf, cache_key, def, 1+field, lifted_leaves)
                 continue
             # NOTE we can enable this, but most `:splatnew` expressions are transformed into
-            #      `:new` expressions by the inlinear
+            #      `:new` expressions by the inliner
             # elseif isexpr(def, :splatnew) && length(def.args) == 2 && isa(def.args[2], AnySSAValue)
             #     tplssa = def.args[2]::AnySSAValue
             #     tplexpr = compact[tplssa][:stmt]
@@ -2739,7 +2739,7 @@ function cfg_simplify!(ir::IRCode)
                         compact.result[compact.result_idx][:stmt] = nothing
                     end
                 end
-                # We always increase the result index to ensure a predicatable
+                # We always increase the result index to ensure a predictable
                 # placement of the resulting nodes.
                 compact.result_idx += 1
             end

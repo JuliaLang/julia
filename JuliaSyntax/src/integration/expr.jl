@@ -72,7 +72,7 @@ reverse_nontrivia_children(cursor) = Iterators.filter(should_include_node, Itera
 # 1. Triple quoted string indentation is trivia
 # 2. An \ before newline removes the newline and any following indentation
 #
-# This function concatenating adjacent string chunks together as done in the
+# This function concatenates adjacent string chunks together as done in the
 # reference parser.
 function _string_to_Expr(cursor, source, txtbuf::Vector{UInt8}, txtbuf_offset::UInt32)
     ret = Expr(:string)
@@ -397,7 +397,7 @@ end
         retexpr.args = [GlobalRef(Core, Symbol("@doc")), loc, args...]
     elseif k == K"dotcall" || k == K"call"
         # Julia's standard `Expr` ASTs have children stored in a canonical
-        # order which is often not always source order. We permute the children
+        # order which is not always source order. We permute the children
         # here as necessary to get the canonical order.
         if is_infix_op_call(nodehead) || is_postfix_op_call(nodehead)
             args[2], args[1] = args[1], args[2]

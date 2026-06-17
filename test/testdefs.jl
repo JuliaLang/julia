@@ -104,7 +104,7 @@ function runtests(name, path, isolate=true; seed=nothing)
         ex isa TestSetException || rethrow()
         return Any[ex]
     end
-    end # TESET_PRINT_ENABLE
+    end # TESTSET_PRINT_ENABLE
 end
 
 # looking in . messes things up badly

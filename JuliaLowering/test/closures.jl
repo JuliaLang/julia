@@ -32,7 +32,7 @@ end
 
 Base.eval(test_mod, :(call_it(f, args...) = f(args...)))
 
-# Closure where a local `x` is captured but not boxed
+# Closure where an argument `x` is captured but not boxed
 @test JuliaLowering.include_string(test_mod, """
 begin
     function f_unboxed_test(x)

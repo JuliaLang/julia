@@ -226,7 +226,7 @@ static inline void malloc_maybe_collect(jl_ptls_t ptls, size_t sz)
     }
 }
 
-// This is called when the user calls for a GC with Gc.gc()
+// This is called when the user calls for a GC with GC.gc()
 JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection) {
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
@@ -522,7 +522,7 @@ JL_DLLEXPORT void jl_gc_scan_vm_specific_roots(RootsWorkClosure* closure)
     // add global_method_table
     add_node_to_roots_buffer(closure, &buf, &len, jl_method_table);
 
-    // buildin values
+    // builtin values
     add_node_to_roots_buffer(closure, &buf, &len, jl_an_empty_vec_any);
     add_node_to_roots_buffer(closure, &buf, &len, jl_module_init_order);
     for (size_t i = 0; i < jl_current_modules.size; i += 2) {
@@ -547,7 +547,7 @@ JL_DLLEXPORT void jl_gc_scan_vm_specific_roots(RootsWorkClosure* closure)
     add_node_to_tpinned_roots_buffer(closure, &tpinned_buf, &tpinned_len, jl_global_roots_list);
     add_node_to_tpinned_roots_buffer(closure, &tpinned_buf, &tpinned_len, jl_global_roots_keyset);
 
-    // FIXME: transivitely pinning for now, should be removed after we add moving Immix
+    // FIXME: transitively pinning for now, should be removed after we add moving Immix
     add_node_to_tpinned_roots_buffer(closure, &tpinned_buf, &tpinned_len, precompile_field_replace);
 
     // Push the result of the work.

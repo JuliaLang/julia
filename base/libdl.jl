@@ -171,7 +171,7 @@ end
 """
     dlclose(::Nothing)
 
-For the very common pattern usage pattern of
+For the very common usage pattern of
 
     try
         hdl = dlopen(library_name)
@@ -374,8 +374,7 @@ This is a thread-safe mechanism for on-demand library initialization.
 The dlopen operation is thread-safe: only one thread loads the library, acquired after the
 release store of the reference to each dependency from loading of each dependency. Other
 tasks block until loading completes. The handle is then cached and reused for all subsequent
-calls (there is no dlclose for lazy library and dlclose should not be called on the returned
-handled).
+calls (there is no dlclose for lazy library and dlclose should not be called on the returned handle).
 
 !!! compat "Julia 1.11"
     `LazyLibrary` was added in Julia 1.11.

@@ -506,7 +506,7 @@ For example, given the following method definition:
 
     g(x::T, y::T) where T<:Integer = ...
 
-it is _invalid_ to optimize a cal site like `g(x::Any, y::Any)` into:
+it is _invalid_ to optimize a call site like `g(x::Any, y::Any)` into:
 
     if isa(x, Integer) && isa(y, Integer)
         [inlined/resolved g(x::Integer, y::Integer)]

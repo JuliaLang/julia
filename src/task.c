@@ -69,7 +69,7 @@ static inline void sanitizer_finish_switch_fiber(jl_ucontext_t *last, jl_ucontex
 #endif
 
 #if defined(_COMPILER_TSAN_ENABLED_)
-// must defined as macros, since the function containing them must not return before the longjmp
+// must be defined as macros, since the function containing them must not return before the longjmp
 #define tsan_destroy_ctx(_ptls, _ctx) do { \
         jl_ucontext_t *_tsan_macro_ctx = (_ctx); \
         if (_tsan_macro_ctx != &(_ptls)->root_task->ctx) { \
@@ -139,7 +139,7 @@ JL_NO_ASAN void *memcpy_a16_noasan(uint64_t *dest, const uint64_t *src, size_t n
   return dest;
 }
 
-/* Copy stack are allocated as regular bigval objects and do no go through free_stack,
+/* Copy stacks are allocated as regular bigval objects and do not go through free_stack,
    which would otherwise unpoison it before returning to the GC pool */
 static void asan_free_copy_stack(void *stkbuf, size_t bufsz) {
     __asan_unpoison_stack_memory((uintptr_t)stkbuf, bufsz);
@@ -1480,16 +1480,16 @@ CFI_NORETURN
 #elif defined(_CPU_AARCH64_)
     asm volatile(
         " mov sp, %0;\n"
-        " mov x29, xzr;\n" // Clear link register (x29) and frame pointer
-        " mov x30, xzr;\n" // (x30) to terminate unwinder.
+        " mov x29, xzr;\n" // Clear frame pointer (x29)
+        " mov x30, xzr;\n" // and link register (x30) to terminate unwinder.
         " br %1;\n" // call `fn` with fake stack frame
         " brk #0x1" // abort
         : : "r" (stk), "r"(fn) : "memory" );
 #elif defined(_CPU_ARM_)
     // A "i" constraint on `&start_task` works only on clang and not on GCC.
     asm(" mov sp, %0;\n"
-        " mov lr, #0;\n" // Clear link register (lr) and frame pointer
-        " mov fp, #0;\n" // (fp) to terminate unwinder.
+        " mov lr, #0;\n" // Clear link register (lr)
+        " mov fp, #0;\n" // and frame pointer (fp) to terminate unwinder.
         " bx %1;\n" // call `fn` with fake stack frame.  While `bx` can change
                     // the processor mode to thumb, this will never happen
                     // because all our addresses are word-aligned.

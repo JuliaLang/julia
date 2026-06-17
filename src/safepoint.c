@@ -250,7 +250,7 @@ void jl_safepoint_wait_gc(jl_task_t *ct) JL_NOTSAFEPOINT
 {
     if (ct) {
         JL_TIMING_SUSPEND_TASK(GC_SAFEPOINT, ct);
-        // The thread should have set this is already
+        // The thread should have set this already
         assert(jl_atomic_load_relaxed(&ct->ptls->gc_state) != JL_GC_STATE_UNSAFE);
     }
     // Use normal volatile load in the loop for speed until GC finishes.

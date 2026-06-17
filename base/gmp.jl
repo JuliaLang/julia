@@ -536,7 +536,7 @@ function invmod(x::BigInt, y::BigInt)
     if y < 0
         MPZ.add!(z, y)
     end
-    # The postcondition is: mod(z * x, y) == mod(big(1), m) && div(z, y) == 0
+    # The postcondition is: mod(z * x, y) == mod(big(1), y) && div(z, y) == 0
     return z
 end
 

@@ -71,12 +71,12 @@ static int bits_equal(const void *a, const void *b, int sz) JL_NOTSAFEPOINT
 // comes to performance which is made challenging by the fact that the
 // function has to handle quite a few different cases and because it is
 // called recursively.  To optimize performance many special cases are
-// handle with separate comparisons which can dramatically reduce the run
+// handled with separate comparisons which can dramatically reduce the run
 // time of the function.  The compiler can translate these simple tests
 // with little effort, e.g., few registers are used.
 //
 // The complex cases require more effort and more registers to be translated
-// efficiently.  The effected cases include comparing tuples and fields.  If
+// efficiently.  The affected cases include comparing tuples and fields.  If
 // the code to perform these operation would be inlined in the jl_egal
 // function then the compiler would generate at the or close to the top of
 // the function a prologue which saves all the callee-save registers and at
@@ -479,8 +479,8 @@ static uintptr_t immut_id_(jl_datatype_t *dt, jl_value_t *v, uintptr_t h) JL_NOT
             assert(jl_is_datatype(fieldtype) && !fieldtype->name->abstract && !fieldtype->name->mutabl);
             int32_t first_ptr = fieldtype->layout->first_ptr;
             if (first_ptr >= 0 && ((jl_value_t**)vo)[first_ptr] == NULL) {
-                // If the field is a inline immutable that can be can be undef
-                // we need to check to check for undef first since undef struct
+                // If the field is a inline immutable that can be undef
+                // we need to check for undef first since undef struct
                 // may have fields that are different but should still be treated as equal.
                 u = 0;
             }

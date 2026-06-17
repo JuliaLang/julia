@@ -93,7 +93,7 @@ static void update_implicit_resolution(struct implicit_search_resolution *to_upd
     to_update->saw_cycle |= resolution.saw_cycle;
     to_update->should_be_reexported |= resolution.should_be_reexported;
     if (resolution.ultimate_kind == PARTITION_FAKE_KIND_CYCLE) {
-        // Cycles get ignored. This causes the resolution resolution to only be partial, so we can't
+        // Cycles get ignored. This causes the resolution to only be partial, so we can't
         // cache it. This gets tracked in saw_cycle;
         to_update->saw_cycle = 1;
         return;
@@ -1675,7 +1675,7 @@ JL_DLLEXPORT void jl_set_global(jl_module_t *m, jl_sym_t *var, jl_value_t *val J
 
 void jl_set_initial_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val JL_ROOTED_BY_ARG(0), int exported)
 {
-    // this function is only valid during initialization, so there is no risk of data races her are not too important to use
+    // this function is only valid during initialization, so there is no risk of data races
     int kind = PARTITION_KIND_CONST | (exported ? PARTITION_FLAG_EXPORTED : 0);
     // jl_declare_constant_val3(NULL, m, var, (jl_value_t*)jl_any_type, kind, 0);
     jl_binding_t *bp = jl_get_module_binding(m, var, 1);

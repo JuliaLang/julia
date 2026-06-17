@@ -932,7 +932,7 @@ include("emoji_symbols.jl")
 
 const non_identifier_chars = [" \t\n\r\"\\'`\$><=:;|&{}()[],+-*/?%^~"...]
 const whitespace_chars = [" \t\n\r"...]
-# "\"'`"... is added to whitespace_chars as non of the bslash_completions
+# "\"'`"... is added to whitespace_chars as none of the bslash_completions
 # characters contain any of these characters. It prohibits the
 # bslash_completions function to try and complete on escaped characters in strings
 const bslash_separators = [whitespace_chars..., "\"'`"...]
@@ -1003,7 +1003,7 @@ function complete_keyword_argument!(suggestions::Vector{Completion},
     # since the syntax "foo(; kwname)" is equivalent to "foo(; kwname=kwname)".
     kwargs = Set{String}()
     for m in methods
-        # if MAX_METHOD_COMPLETIONS is hit a single TextCompletion is return by complete_methods! with an explanation
+        # if MAX_METHOD_COMPLETIONS is hit a single TextCompletion is returned by complete_methods! with an explanation
         # which can be ignored here
         m isa TextCompletion && continue
         m::MethodCompletion

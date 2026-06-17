@@ -17,7 +17,7 @@ _type_intersect(@nospecialize(x), @nospecialize(y)) = ccall(:jl_intersect_types,
 
 intersection_env(@nospecialize(x), @nospecialize(y)) = Core.svec(Base.typeintersect_env(x, y)...)
 
-# level 1: no varags, union, UnionAll
+# level 1: no varargs, union, UnionAll
 function test_1()
     @test issub_strict(Int, Integer)
     @test issub_strict(Vector{Int}, AbstractVector{Int})
@@ -2563,7 +2563,7 @@ let S = Dict{Int, S1} where {F1, S1<:Union{Int8, Val{F1}}},
     @test typeintersect(T, S) == Dict{Int, S} where S<:Union{Val{Int}, Int8}
 end
 
-# Ensure inner `intersect_all` never under-esitimate.
+# Ensure inner `intersect_all` never under-estimate.
 let S = Tuple{F1, Dict{Int, S1}} where {F1, S1<:Union{Int8, Val{F1}}},
     T = Tuple{Any, Dict{F2, S2}} where {F2, S2<:Union{Int8, Val{F2}}}
     @test Tuple{Nothing, Dict{Int, Int8}} <: S
@@ -2851,7 +2851,7 @@ let S = Tuple{Val, Val{T}} where {T}, R = Tuple{Val{Val{T}}, Val{T}} where {T},
     @testintersect(Tuple{Val{A}, A} where {B, A<:Union{Val{B}, Complex{B}}}, S{1}, R{1})
     # parameters check for supertype (B54356 -> A54356)
     @testintersect(Tuple{Val{A}, A} where {B, A<:Union{Val{B}, B54356{B}}}, S{1}, R{1})
-    # enure unused TypeVar skips the `UnionAll` wrapping
+    # ensure unused TypeVar skips the `UnionAll` wrapping
     @testintersect(Tuple{Val{A}, A} where {B, A<:(Union{Val{B}, D54356{B,C}} where {C})}, S{1}, R{1})
     # invariant parameter should not get narrowed
     @testintersect(Tuple{Val{A}, A} where {B, A<:Union{Val{B}, Val{Union{Int,Complex{B}}}}}, S{1}, R{1})

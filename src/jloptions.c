@@ -293,7 +293,7 @@ static const char opts[]  =
     " --bug-report=KIND                             Launch a bug report session. It can be used to start\n"
     "                                               a REPL, run a script, or evaluate expressions. It\n"
     "                                               first tries to use BugReporting.jl installed in\n"
-    "                                               current environment and fallbacks to the latest\n"
+    "                                               current environment and falls back to the latest\n"
     "                                               compatible BugReporting.jl if not. For more\n"
     "                                               information, see --bug-report=help.\n\n"
     " --heap-size-hint=<size>[<unit>]               Forces garbage collection if memory usage is higher\n"
