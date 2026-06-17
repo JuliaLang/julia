@@ -138,12 +138,6 @@ const t_log_Float32 = (0.0,0.007782140442054949,0.015504186535965254,0.023167059
     0.6773988235918061,0.6813592248079031,0.6853040030989194,0.689233281238809,
     0.6931471805599453)
 
-# truncate lower order bits (up to 26)
-# ideally, this should be able to use ANDPD instructions, see #9868.
-@inline function truncbits(x::Float64)
-    reinterpret(Float64, reinterpret(UInt64,x) & 0xffff_ffff_f800_0000)
-end
-
 logb(::Type{Float32},::Val{2})  = 1.4426950408889634
 logb(::Type{Float32},::Val{:ℯ}) = 1.0
 logb(::Type{Float32},::Val{10}) = 0.4342944819032518

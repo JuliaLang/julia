@@ -475,8 +475,8 @@ end
     unescape_string(io, s::AbstractString, keep = ())::Nothing
 
 General unescaping of traditional C and Unicode escape sequences. The first form returns
-the escaped string, the second prints the result to `io`.
-The argument `keep` specifies a collection of characters which (along with backlashes) are
+the unescaped string, the second prints the result to `io`.
+The argument `keep` specifies a collection of characters which (along with backslashes) are
 to be kept as they are.
 
 The following escape sequences are recognised:

@@ -81,7 +81,7 @@ using namespace llvm;
 
 STATISTIC(LinkedGlobals, "Number of globals linked");
 STATISTIC(SpecFPtrCount, "Number of specialized function pointers compiled");
-STATISTIC(UnspecFPtrCount, "Number of specialized function pointers compiled");
+STATISTIC(UnspecFPtrCount, "Number of unspecialized function pointers compiled");
 STATISTIC(ModulesAdded, "Number of modules added to the JIT");
 STATISTIC(ModulesOptimized, "Number of modules optimized by the JIT");
 STATISTIC(OptO0, "Number of modules optimized at level -O0");
@@ -297,7 +297,7 @@ jl_emitted_output_t jl_codegen_output_t::finish(std::unique_ptr<LLVMContext> ctx
     };
 
     // Mangle and intern each part of the linking metadata, before all the
-    // pointers to LLVM values are invaliated.
+    // pointers to LLVM values are invalidated.
     for (auto &[ci, funcs] : ci_funcs) {
         info->ci_funcs[ci] = {funcs.invoke_api,
                               funcs.invoke ? intern(funcs.invoke->getName()) : nullptr,
@@ -884,7 +884,7 @@ public:
         return JLMaterializationUnit{JIT, OL, std::move(Out), std::move(I)};
     }
 
-    // During materializtion: finalizers disabled, GC safe
+    // During materialization: finalizers disabled, GC safe
     void materialize(std::unique_ptr<MaterializationResponsibility> R) override
     {
         auto &ES = R->getExecutionSession();
@@ -983,7 +983,7 @@ public:
         assert(API == JL_INVOKE_ARGS || API == JL_INVOKE_SPECSIG);
     };
 
-    // During materializtion: finalizers disabled, GC safe
+    // During materialization: finalizers disabled, GC safe
     void materialize(std::unique_ptr<MaterializationResponsibility> R) override
     {
         auto Ctx = std::make_unique<LLVMContext>();

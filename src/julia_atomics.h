@@ -68,7 +68,7 @@ enum jl_memory_order {
 /**
  * Thread synchronization primitives:
  *
- * These roughly follows the c11/c++11 memory model and the act as memory
+ * These roughly follow the c11/c++11 memory model and act as memory
  * barriers at both the compiler level and the hardware level.
  * The only exception is the GC safepoint and GC state transitions for which
  * we use only a compiler (signal) barrier and use the signal handler to do the

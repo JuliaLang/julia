@@ -3266,7 +3266,7 @@ end
     x, f1()... = [1, 2, 3]
     @test x == 1
     @test f1() == [2, 3]
-    # test that call to `Base.rest` is outside the definition of `f`
+    # test that call to `Base.rest` is outside the definition of `f1`
     @test f1() === f1()
 
     x, f2()... = 1, 2, 3
@@ -4266,7 +4266,7 @@ end
 @test callme(3, 3) === 3
 @test callme(4, 4, 4) === 4.0
 
-# Ambiguous 1-arg anymous vs macrosig
+# Ambiguous 1-arg anonymous vs macrosig
 @test_parseerror "function (@foo(a)) end"
 
 # #57267 - Missing `latestworld` after typealias

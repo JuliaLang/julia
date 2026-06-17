@@ -417,7 +417,7 @@ typedef struct _jl_method_t {
 } jl_method_t;
 
 // This type is a placeholder to cache data for a specType signature specialization of a Method
-// can can be used as a unique dictionary key representation of a call to a particular Method
+// and can be used as a unique dictionary key representation of a call to a particular Method
 // with a particular set of argument types
 //
 // Reading or writing requires `def.method->writelock` or exclusive ownership:
@@ -719,7 +719,7 @@ typedef struct _jl_weakref_t {
 //
 //      PARTITION_KIND_DECLARED
 //
-// 3. Strong Declared Bindings (Weak)
+// 3. Strong Declared Bindings (Strong)
 //    All other bindings are explicitly declared using a keyword or global assignment.
 //   These are considered strongest:
 //
@@ -756,7 +756,7 @@ enum jl_partition_kind {
     //  ->restriction holds the constant value
     PARTITION_KIND_CONST_IMPORT = 0x1,
     // Global: This binding partition is a global variable. It was declared either using
-    // `global x::T` to implicitly through a syntactic global assignment.
+    // `global x::T` or implicitly through a syntactic global assignment.
     //  -> restriction holds the type restriction
     PARTITION_KIND_GLOBAL       = 0x2,
     // Implicit: The binding was a global, implicitly imported from a `using`'d module.
@@ -2266,7 +2266,8 @@ JL_DLLEXPORT void jl_task_wait_empty(void);
 JL_DLLEXPORT void jl_postoutput_hook(void);
 JL_DLLEXPORT void JL_NORETURN jl_exit(int status);
 JL_DLLEXPORT void JL_NORETURN jl_raise(int signo);
-JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle);
+JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle) JL_NOTSAFEPOINT;
+JL_DLLEXPORT const char *jl_pathname_for_symbol(void *symbol) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void);
 
 JL_DLLEXPORT int jl_deserialize_verify_header(ios_t *s);

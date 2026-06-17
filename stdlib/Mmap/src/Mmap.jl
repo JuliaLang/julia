@@ -218,7 +218,7 @@ function mmap(io::IO,
     # platform-specific mmapping
     @static if Sys.isunix()
         prot, flags, iswrite = settings(file_desc, shared)
-        if requestedSizeLarger && isfile(io) # add a condition to this line to ensure it only checks files
+        if requestedSizeLarger && isfile(io)
             if iswrite
                 if grow
                     grow!(io, offset, len)

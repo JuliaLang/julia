@@ -1112,7 +1112,7 @@ int get_next_edge(jl_array_t *list JL_PROPAGATES_ROOT, int i,
         return i + 1;
     }
     assert(jl_is_type(item));
-    // An `invoke` call, it's a (sig, MethodInstance) pair
+    // An `invoke` call, it's a (sig, CodeInstance) pair
     if (invokesig != NULL)
         *invokesig = item;
     *caller = (jl_code_instance_t*)jl_array_ptr_ref(list, i + 1);

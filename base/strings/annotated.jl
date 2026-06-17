@@ -50,7 +50,7 @@ AnnotatedString(s::S<:AbstractString) -> AnnotatedString{S}
 AnnotatedString(s::S<:AbstractString, annotations::Vector{$RegionAnnotation})
 ```
 
-A AnnotatedString can also be created with [`annotatedstring`](@ref), which acts much
+An AnnotatedString can also be created with [`annotatedstring`](@ref), which acts much
 like [`string`](@ref) but preserves any annotations present in the arguments.
 
 # Examples
@@ -442,7 +442,7 @@ This works by comparing the number of code units of each character before and
 after transforming with `f`, recording and aggregating any differences, then
 applying them to the annotation regions.
 
-Returns an `AnnotatedString{String}` (regardless of the original underling
+Returns an `AnnotatedString{String}` (regardless of the original underlying
 string type of `str`).
 """
 function annotated_chartransform(f::Function, str::AnnotatedString, state=nothing)

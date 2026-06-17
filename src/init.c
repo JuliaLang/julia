@@ -194,7 +194,7 @@ static void jl_close_item_atexit(uv_handle_t *handle)
 // means by destroying some old state before we start destroying that state in atexit hooks.
 void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT;
 
-// cause this process to exit with WEXITSTATUS(signo), after waiting to finish all julia, C, and C++ cleanup
+// cause this process to exit with WEXITSTATUS(exitcode), after waiting to finish all julia, C, and C++ cleanup
 JL_DLLEXPORT void jl_exit(int exitcode)
 {
     jl_atexit_hook(exitcode);
@@ -458,7 +458,7 @@ static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
             jl_errorf("error initializing %s in uv_tty_init: %s (%s %d)", stdio, uv_strerror(err), uv_err_name(err), err);
         }
         ((uv_tty_t*)handle)->data = NULL;
-        uv_tty_set_mode((uv_tty_t*)handle, UV_TTY_MODE_NORMAL); // initialized cooked stdio
+        uv_tty_set_mode((uv_tty_t*)handle, UV_TTY_MODE_NORMAL); // initializes cooked stdio
         break;
     default:
         assert(0 && "missing case for uv_guess_handle return handling");
@@ -730,7 +730,7 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
     init_global_mutexes();
     jl_precompile_toplevel_module = NULL;
     ios_set_io_wait_func = jl_set_io_wait;
-    jl_io_loop = uv_default_loop(); // this loop will internal events (spawning process etc.),
+    jl_io_loop = uv_default_loop(); // this loop will handle internal events (spawning process etc.),
                                     // best to call this first, since it also initializes libuv
     jl_init_uv();
     init_stdio();

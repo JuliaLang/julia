@@ -364,7 +364,7 @@ static int jl_typemap_memory_visitor(jl_genericmemory_t *a, jl_typemap_visitor_f
 }
 
 
-// calls fptr on each jl_typemap_entry_t in cache in sort order, until fptr return false
+// calls fptr on each jl_typemap_entry_t in cache in sort order, until fptr returns false
 static int jl_typemap_node_visitor(jl_typemap_entry_t *ml, jl_typemap_visitor_fptr fptr, void *closure)
 {
     while (ml != (void*)jl_nothing) {
@@ -1182,7 +1182,7 @@ jl_typemap_entry_t *jl_typemap_entry_assoc_exact(jl_typemap_entry_t *ml, jl_valu
             size_t i, l;
             if (ml->guardsigs != jl_emptysvec) {
                 for (i = 0, l = jl_svec_len(ml->guardsigs); i < l; i++) {
-                    // checking guard entries require a more
+                    // checking guard entries requires a more
                     // expensive subtype check, since guard entries added for @nospecialize might be
                     // abstract. this fixed issue #12967.
                     if (jl_tuple1_isa(arg1, args, n, (jl_tupletype_t*)jl_svecref(ml->guardsigs, i))) {

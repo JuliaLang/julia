@@ -708,7 +708,7 @@ This dispatching branching can be observed, for example, in the logic to sum two
 ### Trait-based dispatch
 
 A natural extension to the iterated dispatch above is to add a layer to
-method selection that allows to dispatch on sets of types which are
+method selection that allows dispatching on sets of types which are
 independent from the sets defined by the type hierarchy.
 We could construct such a set by writing out a `Union` of the types in question,
 but then this set would not be extensible as `Union`-types cannot be
@@ -1005,7 +1005,7 @@ f(x::NTuple{N,Float64}) where {N} = 2
 
 are ambiguous because of the possibility that `N == 0`: there are no
 elements to determine whether the `Int` or `Float64` variant should be
-called. To resolve the ambiguity, one approach is define a method for
+called. To resolve the ambiguity, one approach is to define a method for
 the empty tuple:
 
 ```julia

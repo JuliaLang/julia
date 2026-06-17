@@ -141,13 +141,13 @@ typedef struct _jl_tls_states_t {
     //              finish.
 #define JL_GC_STATE_SAFE 2
     // gc_state = 2 means the thread is running unmanaged code that can be
-    //              execute at the same time with the GC.
+    //              executed at the same time with the GC.
 #define JL_GC_PARALLEL_COLLECTOR_THREAD 3
     // gc_state = 3 means the thread is a parallel collector thread (i.e. never runs Julia code)
 #define JL_GC_CONCURRENT_COLLECTOR_THREAD 4
     // gc_state = 4 means the thread is a concurrent collector thread (background sweeper thread that never runs Julia code)
     _Atomic(int8_t) gc_state; // read from foreign threads
-    // execution of certain certain impure
+    // execution of certain impure
     // statements is prohibited from certain
     // callbacks (such as generated functions)
     // as it may make compilation undecidable

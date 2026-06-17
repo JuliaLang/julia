@@ -177,7 +177,7 @@ iterate(s::Set, i...)       = iterate(KeySet(s.dict), i...)
 
 @propagate_inbounds Iterators.only(s::Set) = Iterators._only(s, first)
 
-# In case the size(s) is smaller than size(t) its more efficient to iterate through
+# In case the size(s) is smaller than size(t) it's more efficient to iterate through
 # elements of s instead and only delete the ones also contained in t.
 # The threshold for this decision boils down to a tradeoff between
 # size(s) * cost(in() + delete!()) ≶ size(t) * cost(delete!())

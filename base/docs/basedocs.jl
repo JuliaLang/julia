@@ -2167,7 +2167,7 @@ the runtime must do more work, `invoke` is generally also slower--sometimes sign
 so--than doing normal dispatch with a regular call.
 
 Be careful when using `invoke` for functions that you don't write. What definition is used
-for given `argtypes` is an implementation detail unless the function is explicitly states
+for given `argtypes` is an implementation detail unless the function explicitly states
 that calling with certain `argtypes` is a part of public API.  For example, the change
 between `f1` and `f2` in the example below is usually considered compatible because the
 change is invisible by the caller with a normal (non-`invoke`) call.  However, the change is

@@ -207,7 +207,7 @@ function isabspath(path::String)
     @static if Sys.iswindows()
         # the letter before : in e.g. "C:\" must be a valid drive letter.
         # This differs from `splitdrive`, where any non-separator single codeunit char is
-        # is accepted.
+        # accepted.
         firstsep = findfirst(isseparator, codeunits(path))
         if (!isnothing(firstsep) &&
             firstsep >= 3 &&

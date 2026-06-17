@@ -342,7 +342,7 @@ byte_range(::LineNumberNode) = 0:0
 source_location(src::LineNumberNode) = (src.line, 0)
 source_location(::Type{LineNumberNode}, src::LineNumberNode) = src
 source_line(src::LineNumberNode) = src.line
-# The follow somewhat strange cases are for where LineNumberNode is standing in
+# The following somewhat strange cases are for where LineNumberNode is standing in
 # for SourceFile because we've only got Expr-based provenance info
 sourcefile(src::LineNumberNode) = src
 sourcetext(::LineNumberNode) = SubString("")

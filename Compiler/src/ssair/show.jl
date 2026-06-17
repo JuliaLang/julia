@@ -221,7 +221,7 @@ end
 """
     Compute line number annotations for an IRCode or CodeInfo.
 
-This functions compute three sets of annotations for each IR line. Take the following
+This function computes three sets of annotations for each IR line. Take the following
 example (taken from `@code_typed sin(1.0)`):
 
 ```
@@ -398,7 +398,7 @@ struct LineInfoNode
     line::Int32
 end
 
-# utility function for converting a debuginfo object a particular pc to list of LineInfoNodes representing the inlining info at that pc for function `def`
+# utility function for converting a debuginfo object at a particular pc to a list of LineInfoNodes representing the inlining info at that pc for function `def`
 # which is either `nothing` (macro-expand), a module (top-level), a Method (unspecialized code) or a MethodInstance (specialized code)
 # Returns `false` if the line info should not be updated with this info because this
 # statement has no effect on the line numbers. The `scopes` will still be populated however

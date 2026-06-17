@@ -158,7 +158,7 @@ end
 end
 
 # Logical indexing following https://github.com/JuliaLang/julia/pull/31829
-#= Helper function to perform logical indxeing for boolean ranges
+#= Helper function to perform logical indexing for boolean ranges
 The code implemented is a branch-free version of the following:
 
     range(first(s) ? first(r) : last(r), length=Int(last(s)))

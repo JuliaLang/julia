@@ -383,7 +383,7 @@ let effects = Base.infer_effects(f_glob_assign_int, (); optimize=false)
     @test !Compiler.is_effect_free(effects)
     @test Compiler.is_nothrow(effects)
 end
-# effects modeling for for setglobal!
+# effects modeling for setglobal!
 global SETGLOBAL!_NOTHROW::Int = 0
 let effects = Base.infer_effects(; optimize=false) do
         setglobal!(@__MODULE__, :SETGLOBAL!_NOTHROW, 42)

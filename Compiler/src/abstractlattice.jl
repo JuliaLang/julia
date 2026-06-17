@@ -264,7 +264,7 @@ end
 
 Appropriately converts inferred type of a return value `rt` to such a type
 that we know we can store in the cache and is valid and good inter-procedurally,
-E.g. if `rt isa Conditional` then `rt` should be converted to `InterConditional`
+e.g. if `rt isa Conditional` then `rt` should be converted to `InterConditional`
 or the other cacheable lattice element.
 
 External lattice `𝕃ᵢ::ExternalLattice` may overload:

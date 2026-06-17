@@ -894,7 +894,7 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
     }
 }
 
-// also be used be extern consumers like GPUCompiler.jl to obtain a module containing
+// also be used by extern consumers like GPUCompiler.jl to obtain a module containing
 // all reachable & inferrrable functions.
 extern "C" JL_DLLEXPORT_CODEGEN
 void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int external_linkage)

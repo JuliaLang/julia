@@ -509,7 +509,7 @@ end
     buf = IOBuffer()
     show(IOContext(buf, :compact => true), d)
 
-    # Check explicitly for the expected strings, since the CPU bitness effects
+    # Check explicitly for the expected strings, since the CPU bitness affects
     # dictionary ordering.
     result = String(take!(buf))
     @test occursin("Dict", result)
