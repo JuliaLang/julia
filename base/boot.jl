@@ -3,7 +3,11 @@
 # commented-out definitions are implemented in C
 
 #abstract type Any <: Any end
-#abstract type Type{T} end
+#abstract type AnyType end
+#struct TypeEq <: AnyType
+#    T
+#end
+#const Type = TypeEq(T) where T
 
 #abstract type Vararg{T} end
 
@@ -15,7 +19,7 @@
 #    name::Symbol
 #end
 
-#mutable struct DataType <: Type
+#mutable struct DataType <: AnyType
 #    name::TypeName
 #    super::Type
 #    parameters::Tuple
@@ -29,7 +33,7 @@
 #    pointerfree::Bool
 #end
 
-#struct Union <: Type
+#struct Union <: AnyType
 #    a
 #    b
 #end
@@ -40,7 +44,7 @@
 #    ub::Type
 #end
 
-#struct UnionAll
+#struct UnionAll <: AnyType
 #    var::TypeVar
 #    body
 #end
@@ -206,8 +210,8 @@
 
 export
     # key types
-    Any, DataType, Vararg, NTuple,
-    Tuple, Type, UnionAll, TypeVar, Union, Nothing, Cvoid,
+    Any, TypeEq, Type, DataType, Vararg, NTuple,
+    Tuple, UnionAll, TypeVar, Union, Nothing, Cvoid,
     AbstractArray, DenseArray, NamedTuple, Pair,
     # special objects
     Function, Method, Module, Symbol, Task, UndefInitializer, undef, WeakRef, VecElement,
@@ -326,8 +330,9 @@ macro _foldable_meta()
         #=:nortcall=#true))
 end
 
-macro inline()   Expr(:meta, :inline)   end
-macro noinline() Expr(:meta, :noinline) end
+macro inline()      Expr(:meta, :inline)      end
+macro noinline()    Expr(:meta, :noinline)    end
+macro nospecializeinfer() Expr(:meta, :nospecializeinfer) end
 
 macro _boundscheck() Expr(:boundscheck) end
 
@@ -600,7 +605,7 @@ eval(Core, quote
         isa(f, String) && (f = Symbol(f))
         return $(Expr(:new, :LineNumberNode, :l, :f))
     end
-    DebugInfo(def::Union{Method,MethodInstance,Symbol}, linetable::Union{Nothing,DebugInfo}, edges::SimpleVector, codelocs::String) =
+    DebugInfo(def::Union{Method,MethodInstance,Symbol}, linetable::Union{Nothing,DebugInfo,String}, edges::SimpleVector, codelocs::String) =
         $(Expr(:new, :DebugInfo, :def, :linetable, :edges, :codelocs))
     DebugInfo(def::Union{Method,MethodInstance,Symbol}) =
         $(Expr(:new, :DebugInfo, :def, nothing, Core.svec(), ""))
@@ -1229,6 +1234,8 @@ function resolve_typegroup(mod::Module, typevars::SimpleVector, struct_infos::Si
 end
 
 function _hasmethod(@nospecialize(tt)) # this function has a special tfunc
+    @nospecializeinfer
+    @noinline
     world = ccall(:jl_get_tls_world_age, UInt, ()) # tls_world_age()
     return Intrinsics.not_int(ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), tt, nothing, world) === nothing)
 end
@@ -1270,14 +1277,14 @@ function typename(a::Union)
 end
 typename(union::UnionAll) = typename(union.body)
 
-# Special inference support to avoid execess specialization of these methods.
+# Special inference support to avoid excess specialization of these methods.
 # TODO: Replace this by a generic heuristic.
 (>:)(@nospecialize(a), @nospecialize(b)) = (b <: a)
 (!==)(@nospecialize(a), @nospecialize(b)) = Intrinsics.not_int(a === b)
 
 include(Core, "optimized_generics.jl")
 
-# Used only be the magic @VERSION macro
+# Used only by the magic @VERSION macro
 struct MacroSource
     lno::Any # ::LineNumberNode, but needs to be a pointer
     syntax_ver::Any # ::VersionNumber =#

@@ -220,10 +220,10 @@ function sendfile(dst::File, src::File, src_offset::Int64, bytes::Int)
     check_open(dst)
     check_open(src)
     while true
+        nsent = min(typemax(Cssize_t), bytes) # biggest allowed chunk
         result = ccall(:jl_fs_sendfile, Int32, (OS_HANDLE, OS_HANDLE, Int64, Csize_t),
-                       src.handle, dst.handle, src_offset, bytes)
+                       src.handle, dst.handle, src_offset, nsent)
         uv_error("sendfile", result)
-        nsent = result
         bytes -= nsent
         src_offset += nsent
         bytes <= 0 && break
@@ -441,7 +441,7 @@ See also [`ispath`](@ref), [`isexecutable`](@ref), [`isreadable`](@ref).
 """
 function iswritable(path::String)
     # We use `access()` and `W_OK` to determine if a given path is
-    # writeable by the current user.  `W_OK` comes from `unistd.h`.
+    # writable by the current user.  `W_OK` comes from `unistd.h`.
     W_OK = 0x02
     return ccall(:jl_fs_access, Cint, (Cstring, Cint), path, W_OK) == 0
 end

@@ -433,7 +433,7 @@ the `ccall` may block outside of julia.
 
 !!! warning
     This option should be used with caution, as it can lead to undefined behavior if the ccall
-    calls back into the julia runtime. (`@cfunction`/`@ccallables` are safe however)
+    calls back into the julia runtime. (`@cfunction`/`@ccallable` are safe however)
 
 !!! compat "Julia 1.12"
     The `gc_safe` argument requires Julia 1.12 or higher.

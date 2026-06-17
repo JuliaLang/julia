@@ -506,7 +506,7 @@ For example, given the following method definition:
 
     g(x::T, y::T) where T<:Integer = ...
 
-it is _invalid_ to optimize a cal site like `g(x::Any, y::Any)` into:
+it is _invalid_ to optimize a call site like `g(x::Any, y::Any)` into:
 
     if isa(x, Integer) && isa(y, Integer)
         [inlined/resolved g(x::Integer, y::Integer)]
@@ -720,7 +720,7 @@ function rewrite_apply_exprargs!(todo::Vector{Pair{Int,Any}},
                             # replace singleton types with their equivalent Const object
                             p = Const(p.instance)
                         elseif isconstType(p)
-                            p = Const(p.parameters[1])
+                            p = Const(type_parameter(p))
                         end
                         push!(def_argtypes, p)
                     end
@@ -776,8 +776,7 @@ function compileable_specialization(code::Union{MethodInstance,CodeInstance}, ef
         new_atype = get_compileable_sig(method, atype, sparams)
         new_atype === nothing && return nothing
         if atype !== new_atype
-            sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), new_atype, method.sig)::SimpleVector
-            sparams = sp_[2]::SimpleVector
+            (_, sparams) = typeintersect_env(new_atype, method.sig)
             mi_invoke = specialize_method(method, new_atype, sparams)
             mi_invoke === nothing && return nothing
             code = mi_invoke
@@ -786,9 +785,12 @@ function compileable_specialization(code::Union{MethodInstance,CodeInstance}, ef
         # If this caller does not want us to optimize calls to use their
         # declared compilesig, then it is also likely they would handle sparams
         # incorrectly if there were any unknown typevars, so we conservatively return nothing
-        if any(@nospecialize(t)->isa(t, TypeVar), mi.sparam_vals)
+        if any(@nospecialize(t)->isa(t, SimpleVector), mi.sparam_vals)
             return nothing
         end
+    end
+    if unionall_depth(method.sig) != length(sparams) || !validate_sparams(sparams)
+        return nothing
     end
     # prefer using a CodeInstance gotten from the cache, since that is where the invoke target should get compiled to normally
     # TODO: can this code be gotten directly from inference sometimes?
@@ -855,7 +857,7 @@ end
 function validate_sparams(sparams::SimpleVector)
     for i = 1:length(sparams)
         spᵢ = sparams[i]
-        (isa(spᵢ, TypeVar) || isvarargtype(spᵢ)) && return false
+        (isa(spᵢ, SimpleVector) || has_free_typevars(spᵢ) || isvarargtype(spᵢ)) && return false
     end
     return true
 end
@@ -1709,7 +1711,7 @@ function late_inline_special_case!(ir::IRCode, idx::Int, stmt::Expr, flag::UInt3
         return SomeCase(unionall_call)
     elseif is_return_type(f)
         if isconstType(type)
-            return SomeCase(quoted(type.parameters[1]))
+            return SomeCase(quoted(type_parameter(type)))
         elseif isa(type, Const)
             return SomeCase(quoted(type.val))
         end
@@ -1729,8 +1731,10 @@ function insert_spval!(insert_node!::Inserter, spvals_ssa::SSAValue, spidx::Int,
         removable_if_unused(NewInstruction(Expr(:call, Core._svec_ref, spvals_ssa, spidx), Any)))
     tcheck_not = nothing
     if do_isdefined
+        # An uncertain sparam is stored as `svec(tvar, constrained)`; the
+        # runtime check for "defined" is therefore "not a SimpleVector".
         tcheck = insert_node!(
-            removable_if_unused(NewInstruction(Expr(:call, Core.isa, ret, Core.TypeVar), Bool)))
+            removable_if_unused(NewInstruction(Expr(:call, Core.isa, ret, Core.SimpleVector), Bool)))
         tcheck_not = insert_node!(
             removable_if_unused(NewInstruction(Expr(:call, not_int, tcheck), Bool)))
     end
@@ -1749,22 +1753,23 @@ function ssa_substitute_op!(insert_node!::Inserter, subst_inst::Instruction, @no
         if head === :static_parameter
             spidx = e.args[1]::Int
             val = sparam_vals[spidx]
-            if !isa(val, TypeVar) && val !== Vararg
+            val_uncertain = isa(val, SimpleVector) || has_free_typevars(val)
+            if !val_uncertain && val !== Vararg
                 return quoted(val)
             else
                 flag = subst_inst[:flag]
-                maybe_undef = !has_flag(flag, IR_FLAG_NOTHROW) && isa(val, TypeVar)
+                maybe_undef = !has_flag(flag, IR_FLAG_NOTHROW) && val_uncertain
                 (ret, tcheck_not) = insert_spval!(insert_node!, ssa_substitute.spvals_ssa::SSAValue, spidx, maybe_undef)
                 if maybe_undef
                     insert_node!(
-                        NewInstruction(Expr(:throw_undef_if_not, val.name, tcheck_not), Nothing))
+                        NewInstruction(Expr(:throw_undef_if_not, sp_at_idx(ssa_substitute.mi.def.sig, spidx).name, tcheck_not), Nothing))
                 end
                 return ret
             end
         elseif head === :isdefined && isa(e.args[1], Expr) && e.args[1].head === :static_parameter
             spidx = (e.args[1]::Expr).args[1]::Int
             val = sparam_vals[spidx]
-            if !isa(val, TypeVar)
+            if !isa(val, SimpleVector) && !has_free_typevars(val)
                 return true
             else
                 (_, tcheck_not) = insert_spval!(insert_node!, ssa_substitute.spvals_ssa::SSAValue, spidx, true)

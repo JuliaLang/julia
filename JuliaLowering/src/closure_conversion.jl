@@ -614,7 +614,7 @@ end
 """
 Closure conversion and lowering of bindings
 
-This pass does a few things things:
+This pass does a few things:
 * Deal with typed variables (K"decl") and their assignments
 * Deal with const and non-const global assignments
 * Convert closures into types

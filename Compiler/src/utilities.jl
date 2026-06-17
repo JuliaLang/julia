@@ -214,7 +214,7 @@ is_no_constprop(method::Union{Method,CodeInfo}) = method.constprop == 0x02
     if isa(ft, Const)
         return ft.val
     elseif isconstType(ft)
-        return ft.parameters[1]
+        return type_parameter(ft)
     elseif issingletontype(ft)
         return ft.instance
     end
@@ -226,7 +226,7 @@ end
         if issingletontype(t)
             return Const(t.instance)
         elseif isconstType(t)
-            return Const(t.parameters[1])
+            return Const(type_parameter(t))
         end
     end
     return t
@@ -267,8 +267,60 @@ function foreach_anyssa(@specialize(f), @nospecialize(stmt))
     end
 end
 
+# Uses of each SSA value, in compressed-sparse-row form: the uses of ssa `i` are
+# `data[offsets[i]:offsets[i+1]-1]`. Entries are use occurrences, not distinct
+# statement indices, so a statement using the same value twice lists its line
+# twice; harmless for the consumers (`isempty` and idempotent block re-enqueue).
+struct SSAUses
+    offsets::Vector{Int}
+    data::Vector{Int}
+end
+
+# Non-escaping view over one value's uses; supports `isempty` and iteration.
+struct SSAUseList
+    data::Vector{Int}
+    start::Int
+    stop::Int
+end
+
+@inline function getindex(uses::SSAUses, i::Int)
+    offsets = uses.offsets
+    return SSAUseList(uses.data, offsets[i], offsets[i+1] - 1)
+end
+
+@inline isempty(l::SSAUseList) = l.stop < l.start
+@inline length(l::SSAUseList) = l.stop - l.start + 1
+@inline function iterate(l::SSAUseList, i::Int = l.start)
+    i > l.stop && return nothing
+    return (l.data[i], i + 1)
+end
+
 function find_ssavalue_uses(body::Vector{Any}, nvals::Int)
-    uses = BitSet[ BitSet() for _ = 1:nvals ]
+    # count uses per value
+    counts = zeros(Int, nvals)
+    foreach_ssavalue_use(body) do id::Int, _line::Int
+        counts[id] += 1
+    end
+    # prefix-sum the counts into row pointers
+    offsets = Vector{Int}(undef, nvals + 1)
+    tot = 1
+    for i = 1:nvals
+        offsets[i] = tot
+        tot += counts[i]
+    end
+    offsets[nvals + 1] = tot
+    # scatter line numbers into `data`, reusing `counts` as write cursors
+    data = Vector{Int}(undef, tot - 1)
+    fill!(counts, 0)
+    foreach_ssavalue_use(body) do id::Int, line::Int
+        data[offsets[id] + counts[id]] = line
+        counts[id] += 1
+    end
+    return SSAUses(offsets, data)
+end
+
+# Call `f(ssa_id, line)` for each SSA value used as an operand in `body`.
+function foreach_ssavalue_use(@specialize(f), body::Vector{Any})
     for line in 1:length(body)
         e = body[line]
         if isa(e, ReturnNode)
@@ -278,17 +330,17 @@ function find_ssavalue_uses(body::Vector{Any}, nvals::Int)
             e = e.cond
         end
         if isa(e, SSAValue)
-            push!(uses[e.id], line)
+            f(e.id, line)
         elseif isa(e, Expr)
-            find_ssavalue_uses!(uses, e, line)
+            foreach_ssavalue_use(f, e, line)
         elseif isa(e, PhiNode)
-            find_ssavalue_uses!(uses, e, line)
+            foreach_ssavalue_use(f, e, line)
         end
     end
-    return uses
+    return nothing
 end
 
-function find_ssavalue_uses!(uses::Vector{BitSet}, e::Expr, line::Int)
+function foreach_ssavalue_use(@specialize(f), e::Expr, line::Int)
     head = e.head
     is_meta_expr_head(head) && return
     skiparg = (head === :(=))
@@ -296,22 +348,24 @@ function find_ssavalue_uses!(uses::Vector{BitSet}, e::Expr, line::Int)
         if skiparg
             skiparg = false
         elseif isa(a, SSAValue)
-            push!(uses[a.id], line)
+            f(a.id, line)
         elseif isa(a, Expr)
-            find_ssavalue_uses!(uses, a, line)
+            foreach_ssavalue_use(f, a, line)
         end
     end
+    return nothing
 end
 
-function find_ssavalue_uses!(uses::Vector{BitSet}, e::PhiNode, line::Int)
+function foreach_ssavalue_use(@specialize(f), e::PhiNode, line::Int)
     values = e.values
     for i = 1:length(values)
         isassigned(values, i) || continue
         val = values[i]
         if isa(val, SSAValue)
-            push!(uses[val.id], line)
+            f(val.id, line)
         end
     end
+    return nothing
 end
 
 # using a function to ensure we can infer this

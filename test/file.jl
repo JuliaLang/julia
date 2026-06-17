@@ -392,27 +392,20 @@ if Sys.iswindows()
     @test filemode(file) & 0o777 == permissions
     chmod(dir, 0o666, recursive=true)  # Reset permissions in case someone wants to use these later
 else
-    function get_umask()
-        umask = ccall(:umask, UInt32, (UInt32,), 0)
-        ccall(:umask, UInt32, (UInt32,), umask)
-        return umask
-    end
-
     mktempdir() do tmpdir
-        umask = get_umask()
         tmpfile=joinpath(tmpdir, "tempfile.txt")
         tmpfile2=joinpath(tmpdir, "tempfile2.txt")
         touch(tmpfile)
         cp(tmpfile, tmpfile2)
-        @test filemode(tmpfile) & (~umask) == filemode(tmpfile2)
+        @test filemode(tmpfile) == filemode(tmpfile2)
         rm(tmpfile2)
         chmod(tmpfile, 0o777)
         cp(tmpfile, tmpfile2)
-        @test filemode(tmpfile) & (~umask) == filemode(tmpfile2)
+        @test filemode(tmpfile) == filemode(tmpfile2)
         rm(tmpfile2)
         chmod(tmpfile, 0o707)
         cp(tmpfile, tmpfile2)
-        @test filemode(tmpfile) & (~umask) == filemode(tmpfile2)
+        @test filemode(tmpfile) == filemode(tmpfile2)
         rm(tmpfile2)
         linkfile=joinpath(dir, "tempfile.txt")
         symlink(tmpfile, linkfile)
@@ -452,7 +445,7 @@ end
             touch("afile")
             try
                 # remove permission to access this folder
-                # to cause cause EACCESS-denied errors
+                # to cause EACCES-denied errors
                 @static if Sys.iswindows()
                     @test ccall((:ImpersonateAnonymousToken, "Advapi32.dll"), stdcall, Cint, (Libc.WindowsRawSocket,),
                                 ccall(:GetCurrentThread, Libc.WindowsRawSocket, ())) != 0
@@ -669,7 +662,7 @@ end
     PATH_PREFIX = Sys.iswindows() ? "C:\\" : "/tmp/" * "x"^255   # we want a long path on UNIX so that we test buffer resizing in `tempdir`
     # Warning: On Windows uv_os_tmpdir internally calls GetTempPathW. The max string length for
     # GetTempPathW is 261 (including the implied trailing backslash), not the typical length 259.
-    # We thus use 260 (with implied trailing slash backlash this then gives 261 chars)
+    # We thus use 260 (with implied trailing slash backslash this then gives 261 chars)
     # NOTE: not the actual max path on UNIX, but true in the Windows case for this function.
     # NOTE: we subtract 9 to account for i = 0:9.
     MAX_PATH = (Sys.iswindows() ? 260 - length(PATH_PREFIX) : 255)  - 9
@@ -1357,8 +1350,8 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         @test_throws(ArgumentError("'$nonexisting_src' is not a directory. Use `cp(src, dst)`"),
                      Base.cptree(nonexisting_src, dst; force=true, follow_symlinks=true))
         # cp
-        @test_throws Base._UVError("open($(repr(nonexisting_src)), $(Base.JL_O_RDONLY), 0)", Base.UV_ENOENT) cp(nonexisting_src, dst; force=true, follow_symlinks=false)
-        @test_throws Base._UVError("open($(repr(nonexisting_src)), $(Base.JL_O_RDONLY), 0)", Base.UV_ENOENT) cp(nonexisting_src, dst; force=true, follow_symlinks=true)
+        @test_throws Base._UVError("copyfile", Base.UV_ENOENT) cp(nonexisting_src, dst; force=true, follow_symlinks=false)
+        @test_throws Base._UVError("copyfile", Base.UV_ENOENT) cp(nonexisting_src, dst; force=true, follow_symlinks=true)
         # mv
         @test_throws Base._UVError("rename($(repr(nonexisting_src)), $(repr(dst)))", Base.UV_ENOENT) mv(nonexisting_src, dst; force=true)
     end
@@ -2049,7 +2042,7 @@ end
         touch(fpath)
         @test ispath(fpath)
 
-        # Test that we can actually set the executable/readable/writeable bit on all platforms.
+        # Test that we can actually set the executable/readable/writable bit on all platforms.
         chmod(fpath, 0o644)
         @test !Sys.isexecutable(fpath)
         @test Sys.isreadable(fpath)

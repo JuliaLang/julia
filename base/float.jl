@@ -166,9 +166,7 @@ IEEE 754 definition of the minimum exponent.
 """
 ieee754_exponent_min(::Type{T}) where {T<:IEEEFloat} = Int(1 - exponent_max(T))::Int
 
-exponent_min(::Type{Float16}) = ieee754_exponent_min(Float16)
-exponent_min(::Type{Float32}) = ieee754_exponent_min(Float32)
-exponent_min(::Type{Float64}) = ieee754_exponent_min(Float64)
+exponent_min(T::Union{Type{Float16},Type{Float32},Type{Float64}}) = ieee754_exponent_min(T)
 
 function ieee754_representation(
     ::Type{F}, sign_bit::Bool, exponent_field::Integer, significand_field::Integer
@@ -345,17 +343,8 @@ Float32(x::Float16) = fpext(Float32, x)
 Float64(x::Float32) = fpext(Float64, x)
 Float64(x::Float16) = fpext(Float64, x)
 
-AbstractFloat(x::Bool)    = Float64(x)
-AbstractFloat(x::Int8)    = Float64(x)
-AbstractFloat(x::Int16)   = Float64(x)
-AbstractFloat(x::Int32)   = Float64(x)
-AbstractFloat(x::Int64)   = Float64(x) # LOSSY
-AbstractFloat(x::Int128)  = Float64(x) # LOSSY
-AbstractFloat(x::UInt8)   = Float64(x)
-AbstractFloat(x::UInt16)  = Float64(x)
-AbstractFloat(x::UInt32)  = Float64(x)
-AbstractFloat(x::UInt64)  = Float64(x) # LOSSY
-AbstractFloat(x::UInt128) = Float64(x) # LOSSY
+# lossy for the 64- and 128-bit integer types
+AbstractFloat(x::Union{Bool, BitInteger}) = Float64(x)
 
 Bool(x::Float16) = x==0 ? false : x==1 ? true : throw(InexactError(:Bool, Bool, x))
 
@@ -901,7 +890,7 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
                     if ($(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti))+one(Tf))) && isinteger(x)
                         return unsafe_trunc($Ti,x)
                     else
-                        throw(InexactError($(Expr(:quote,Ti.name.name)), $Ti, x))
+                        throw(InexactError($(Expr(:quote,nameof(Ti))), $Ti, x))
                     end
                 end
             end
@@ -922,7 +911,7 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
                     if ($(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))) && isinteger(x)
                         return unsafe_trunc($Ti,x)
                     else
-                        throw(InexactError($(Expr(:quote,Ti.name.name)), $Ti, x))
+                        throw(InexactError($(Expr(:quote,nameof(Ti))), $Ti, x))
                     end
                 end
             end
@@ -1068,7 +1057,7 @@ julia> 1.0 + eps()/2
 ```
 
 More generally, for any floating-point numeric type, `eps` corresponds to an
-upper bound on the distance to the nearest floating-point complex value: if ``\text{fl}(x)`` is the closest
+upper bound on the distance to the nearest floating-point value: if ``\text{fl}(x)`` is the closest
 floating-point value to a number ``x`` (e.g. an arbitrary real number), then ``\text{fl}(x)``
 satisfies ``|x - \text{fl}(x)| ≤ \text{eps}(x)/2``, not including overflow cases.
 This allows the definition of `eps` to be extended to complex numbers,

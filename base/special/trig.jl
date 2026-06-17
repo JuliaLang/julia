@@ -190,7 +190,7 @@ function sincos(x::T) where T<:Union{Float32, Float64}
     # calculate both kernels at the reduced y...
     si, co = sincos_kernel(y)
     # ... and use the same selection scheme as above: (sin, cos, -sin, -cos) for
-    # for sin and (cos, -sin, -cos, sin) for cos
+    # sin and (cos, -sin, -cos, sin) for cos
     if n == 0
         return si, co
     elseif n == 1

@@ -22,7 +22,11 @@
 #include <llvm/IR/Verifier.h>
 #include <llvm/Transforms/Utils/ModuleUtils.h>
 #include <llvm/Passes/PassBuilder.h>
-#include <llvm/Passes/PassPlugin.h>
+#if JL_LLVM_VERSION >= 220000
+#  include <llvm/Plugins/PassPlugin.h>
+#else
+#  include <llvm/Passes/PassPlugin.h>
+#endif
 #if defined(USE_POLLY)
 #include <polly/RegisterPasses.h>
 #include <polly/LinkAllPasses.h>
@@ -51,6 +55,10 @@ using namespace llvm;
 #include "serialize.h"
 #include "julia_assert.h"
 #include "processor.h"
+
+#ifdef USE_TRACY
+#include "tracy/TracyC.h"
+#endif
 
 #define DEBUG_TYPE "julia_aotcompile"
 
@@ -336,10 +344,15 @@ public:
     egal_set() = default;
     void insert(jl_value_t *val)
     {
+        // list/keyset are GC-rooted by the caller via JL_GC_PUSH
+        JL_GC_PROMISE_ROOTED(val);
+        JL_GC_PROMISE_ROOTED(list);
+        JL_GC_PROMISE_ROOTED(keyset);
         jl_value_t *rval = jl_idset_get(list, keyset, val);
         if (rval == NULL) {
             ssize_t idx;
             list = jl_idset_put_key(list, val, &idx);
+            JL_GC_PROMISE_ROOTED(list);
             keyset = jl_idset_put_idx(list, keyset, idx);
         }
     }
@@ -470,7 +483,7 @@ static void generate_cfunc_thunks(jl_codegen_output_t &out)
             initvals[0] = f;
             cfunc.cfuncdata->setInitializer(ConstantArray::get(init->getType(), initvals));
         };
-        jl_method_instance_t *mi = (jl_method_instance_t*)jl_get_specialization1((jl_tupletype_t*)sigt, latestworld, 0);
+        jl_method_instance_t *mi = (jl_method_instance_t*)jl_get_specialization1((jl_tupletype_t*)sigt, latestworld);
         Function *func = nullptr;
         if ((jl_value_t*)mi != jl_nothing) {
             auto it = compiled_mi.find(mi);
@@ -879,7 +892,7 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
     }
 }
 
-// also be used be extern consumers like GPUCompiler.jl to obtain a module containing
+// also be used by extern consumers like GPUCompiler.jl to obtain a module containing
 // all reachable & inferrrable functions.
 extern "C" JL_DLLEXPORT_CODEGEN
 void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int external_linkage)
@@ -1347,13 +1360,31 @@ struct ImageTimer {
     uint64_t elapsed = 0;
     std::string name;
     std::string desc;
+#ifdef USE_TRACY
+    TracyCZoneCtx tracy_ctx;
+#endif
 
     void startTimer() {
         elapsed = jl_hrtime();
+#ifdef USE_TRACY
+        // Emit a Tracy zone for this stage. The AOT image shards run on libuv
+        // worker threads that lack a Julia task/ptls, so JL_TIMING cannot be
+        // used here; the raw Tracy C API works on any thread. `desc` is used as
+        // the zone name so stages aggregate across shards (the shard is
+        // distinguished by the named worker thread).
+        uint64_t srcloc = ___tracy_alloc_srcloc_name(
+            __LINE__, __FILE__, sizeof(__FILE__) - 1,
+            "add_output", sizeof("add_output") - 1,
+            desc.c_str(), desc.size(), 0);
+        tracy_ctx = ___tracy_emit_zone_begin_alloc(srcloc, 1);
+#endif
     }
 
     void stopTimer() {
         elapsed = jl_hrtime() - elapsed;
+#ifdef USE_TRACY
+        ___tracy_emit_zone_end(tracy_ctx);
+#endif
     }
 
     void init(const Twine &name, const Twine &desc) {
@@ -1844,6 +1875,10 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
                 // Initialize time trace profiler for this thread if enabled
                 if (jl_is_timing_trace)
                     timeTraceProfilerInitialize(jl_timing_trace_granularity, ("shard_" + std::to_string(i)).c_str());
+#ifdef USE_TRACY
+                std::string tracy_thread_name = "AOT shard " + std::to_string(i);
+                TracyCSetThreadName(tracy_thread_name.c_str());
+#endif
                 LLVMContext ctx;
                 ctx.setDiscardValueNames(true);
                 // Lazily deserialize the entire module
@@ -2233,8 +2268,8 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
             builder.CreateRet(ConstantInt::get(T_int32, 1));
         }
         if (imaging_mode) {
-            auto targets = jl_get_llvm_clone_targets(jl_options.cpu_target);
-            auto &data = targets.data;
+            jl_clone_targets_t targets = jl_get_llvm_clone_targets(jl_options.cpu_target);
+            ArrayRef<uint8_t> data(targets.data, targets.data_size);
             auto value = ConstantDataArray::get(Context, data);
             auto target_ids = new GlobalVariable(metadataM, value->getType(), true,
                                         GlobalVariable::InternalLinkage,
@@ -2252,7 +2287,9 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
 
             // Create CPU target string constant.
             // Don't store "sysimage" keyword — store the actual resolved target string.
-            std::string cpu_target_str = jl_expand_sysimage_keyword(jl_options.cpu_target);
+            char *expanded = jl_expand_sysimage_keyword(jl_options.cpu_target);
+            std::string cpu_target_str(expanded);
+            free(expanded);
             auto cpu_target_data = ConstantDataArray::getString(Context, cpu_target_str, true);
             auto cpu_target_global = new GlobalVariable(metadataM, cpu_target_data->getType(), true,
                                                        GlobalVariable::InternalLinkage,
@@ -2271,6 +2308,7 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
                                             }),
                                             "jl_image_pointers");
             addComdat(pointers, TheTriple);
+            jl_free_clone_targets(&targets);
         }
 
         // no need to free module/context, destructor handles that
@@ -2423,7 +2461,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
             for (cfunc_decl_t &cfunc : output.cfuncs) {
                 jl_value_t *sigt = cfunc.abi.sigt;
                 JL_GC_PROMISE_ROOTED(sigt);
-                jl_value_t *mi = jl_get_specialization1((jl_tupletype_t*)sigt, latestworld, 0);
+                jl_value_t *mi = jl_get_specialization1((jl_tupletype_t*)sigt, latestworld);
                 if (mi == jl_nothing)
                     continue;
                 jl_code_instance_t *codeinst = jl_type_infer((jl_method_instance_t*)mi, latestworld, SOURCE_MODE_NOT_REQUIRED, jl_options.trim);

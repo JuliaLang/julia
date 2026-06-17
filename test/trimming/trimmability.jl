@@ -35,7 +35,7 @@ function _test_cat()
     _cat1e = hcat(randn(3,3,3), rand(3,3,3), randn(3,3,3))
     _cat1f = [randn(3,3,3) rand(3,3,3) randn(3,3,3)]
 
-    # v_cat
+    # vcat
     _cat2a = vcat(randn(3), rand(3), randn(3))
     _cat2b = [randn(3); rand(3); randn(3)]
     _cat2c = vcat(randn(3,3), rand(3,3), randn(3,3))
@@ -110,6 +110,8 @@ function @main(args::Vector{String})::Cint
     # e = reduce(xor, rand(Int, 10))
 
     println(Core.stdout, _test_cat())
+    println(Core.stdout, "Version: ", v"1.1")
+    println(Core.stdout, "# preferences: ", length(Base.get_preferences()))
 
     for i = 1:10
         # https://github.com/JuliaLang/julia/issues/60846

@@ -43,7 +43,7 @@ const ARTIFACTS_DIR_OVERRIDE = Ref{Union{String,Nothing}}(nothing)
 Helper function to allow temporarily changing the artifact installation and search
 directory.  When this is set, no other directory will be searched for artifacts, and new
 artifacts will be installed within this directory.  Similarly, removing an artifact will
-only effect the given artifact directory.  To layer artifact installation locations, use
+only affect the given artifact directory.  To layer artifact installation locations, use
 the typical Julia depot path mechanism.
 """
 function with_artifacts_directory(f::Function, artifacts_dir::String)
@@ -60,7 +60,7 @@ end
 
 Return a list of paths joined into all possible artifacts directories, as dictated by the
 current set of depot paths and the current artifact directory override via the method
-`with_artifacts_dir()`.
+`with_artifacts_directory()`.
 """
 function artifacts_dirs(args...)
     if ARTIFACTS_DIR_OVERRIDE[] === nothing
@@ -643,7 +643,7 @@ function split_artifact_slash(name::String)
 end
 
 """
-    artifact_slash_lookup(name::String, atifact_dict::Dict,
+    artifact_slash_lookup(name::String, artifact_dict::Dict,
                           artifacts_toml::String, platform::Platform)
 
 Return `artifact_name`, `artifact_path_tail`, and `hash` by looking the results up in

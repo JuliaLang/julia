@@ -2,7 +2,7 @@
 
 # Internal changes mechanism.
 # Instructions for Julia Core Developers:
-# 1. When making a breaking change that is known to be depnedet upon by an
+# 1. When making a breaking change that is known to be depended upon by an
 #    important and closely coupled package, decide on a unique `change_name`
 #    for your PR and add it to the list below. In general, it is better to
 #    err on the side of caution and assign a `change_name` even if it is not
@@ -17,7 +17,7 @@
 # 2. Upon tagging an -alpha version
 #    a. On master, set __next_removal_version to v"1.(x+1)-alpha"
 #    b. On the release branch, set __next_removal_version to v"1.x" (no -alpha)
-# 3. Upong tagging a release candidate, clear the list of internal changes and
+# 3. Upon tagging a release candidate, clear the list of internal changes and
 #    set __next_removal_version to `nothing`.
 const __next_removal_version = v"1.12-alpha"
 const __internal_changes_list = (
@@ -28,6 +28,7 @@ const __internal_changes_list = (
     :ocnopartial,
     :printcodeinfocalls,
     :syntacticccall, #59165
+    :svectvar, #61645
     # Add new change names above this line
 )
 
@@ -208,24 +209,24 @@ macro deprecate(old, new, export_old=true)
         else
             error("invalid usage of @deprecate")
         end
-        Expr(:toplevel,
-            maybe_export,
-            :($(esc(old)) = begin
-                  $meta
-                  depwarn($"`$oldcall` is deprecated, use `$newcall` instead.", Core.Typeof($(esc(fnexpr))).name.singletonname)
-                  $(esc(new))
-              end))
+        ex = :($(esc(old)) = begin
+            $meta
+            depwarn($"`$oldcall` is deprecated, use `$newcall` instead.", Core.Typeof($(esc(fnexpr))).name.singletonname)
+            $(esc(new))
+        end)
+        Expr(:toplevel, maybe_export, replace_linenums!(ex, __source__))
     else
         if export_old && !(old isa Symbol)
             cannot_export_nonsymbol()
         end
+        ex = :(function $(esc(old))(args...; kwargs...)
+            $meta
+            depwarn($"`$old` is deprecated, use `$new` instead.", Core.Typeof($(esc(old))).name.singletonname)
+            $(esc(new))(args...; kwargs...)
+        end)
         Expr(:toplevel,
             export_old ? Expr(:export, esc(old)) : nothing,
-            :(function $(esc(old))(args...; kwargs...)
-                  $meta
-                  depwarn($"`$old` is deprecated, use `$new` instead.", Core.Typeof($(esc(old))).name.singletonname)
-                  $(esc(new))(args...; kwargs...)
-              end))
+            replace_linenums!(ex, __source__))
     end
 end
 
@@ -344,7 +345,7 @@ macro deprecate_moved(old, new, export_old=true)
         "Run `Pkg.add(\"", new, "\")` to install it, restart Julia,\n",
         "and then run `using ", new, "` to load it.")
     return Expr(:toplevel,
-        :($eold(args...; kwargs...) = error($emsg)),
+        replace_linenums!(:($eold(args...; kwargs...) = error($emsg)), __source__),
         export_old ? Expr(:export, eold) : nothing,
         Expr(:call, :deprecate, __module__, Expr(:quote, old), 2))
 end
@@ -580,6 +581,54 @@ function explicit_manifest_entry_path(args...)
     spec = explicit_manifest_entry_load_spec(args...)
     spec === nothing && return nothing
     return spec.path
+end
+
+# These functions get called from generated functions a lot where printing causes errors. We have the following options:
+# 1. Use ordinary depwarn. This breaks generated functions that use these deprecations, defeating the point.
+# 2. Always error in generated functions. This would probably be best (the depwarn would run at expansion time),
+#    but it completely breaks inference of these generated functions and some of them are important.
+# 3. Never print a warning in generated functions (but do throw the error if --depwarn=error).
+#
+# We choose option 3. It's not ideal, because users that never use --depwarn=error will never see the warning,
+# but it's the least bad tradeoff among the lot.
+function depwarn_if_not_pure(args...)
+    opts = JLOptions()
+    opts.depwarn != 2 && ccall(:jl_is_in_pure_context, Bool, ()) && return
+    depwarn(args...)
+end
+
+@noinline function getproperty(x::TypeEq, s::Symbol)
+    if s === :parameters
+        depwarn_if_not_pure("accessing `Type.parameters` is deprecated; use `Base.type_parameter(x)` instead", :getproperty)
+        return Core.svec(type_parameter(x))
+    elseif s === :name
+        depwarn_if_not_pure("accessing `Type.name` is deprecated without replacement. If for detection, use `Base.isType(x)`.", :getproperty)
+        return TypeEq.name
+    elseif s === :hash
+        depwarn_if_not_pure("accessing `Type.hash` is deprecated; use `Base._jl_type_cache_hash(x)` instead", :getproperty)
+        return reinterpret(Int32, UInt32(_jl_type_cache_hash(x)))
+    end
+    return getfield(x, s)
+end
+
+@noinline function typename(x::TypeEq)
+    depwarn_if_not_pure("calling `typename` on `Type` is deprecated. If for detection, use `Base.isType(x)`.", :typename)
+    return TypeEq.name
+end
+
+@noinline function nameof(x::TypeEq)
+    depwarn_if_not_pure("calling `nameof` on `Type` is deprecated. If for detection, use `Base.isType(x)`.", :nameof)
+    return :Type
+end
+
+@noinline function parentmodule(x::TypeEq)
+    depwarn_if_not_pure("calling `parentmodule` on `Type` is deprecated. If for detection, use `Base.isType(x)`.", :parentmodule)
+    return Core
+end
+
+@noinline function isabstracttype(x::TypeEq)
+    depwarn_if_not_pure("calling `isabstracttype` on a `Type{...}` is deprecated; `Type{}` is now a kind. If for detection, use `Base.isType(x)`.", :isabstracttype)
+    return true
 end
 
 # END 1.14 deprecations

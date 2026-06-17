@@ -32,7 +32,7 @@ end
 
 Base.eval(test_mod, :(call_it(f, args...) = f(args...)))
 
-# Closure where a local `x` is captured but not boxed
+# Closure where an argument `x` is captured but not boxed
 @test JuliaLowering.include_string(test_mod, """
 begin
     function f_unboxed_test(x)
@@ -232,6 +232,14 @@ let
     oc(3,4,5)
 end
 """) == (3,4,5)
+
+# OC in lambda
+@test JuliaLowering.include_string(test_mod, """
+(x->(y->(z->(Base.Experimental.@opaque ()->"opaque"))('z'))('y'))('x')()
+""") == "opaque"
+@test_broken JuliaLowering.include_string(test_mod, """
+(x->(y->(z->(Base.Experimental.@opaque ()->(x,y,z)))('z'))('y'))('x')()
+""") == ('x','y','z')
 
 # opaque_closure_method internals
 method_ex = lower_str(test_mod, "Base.Experimental.@opaque x -> 2x").args[1].code[3]
@@ -436,6 +444,58 @@ let y = 10
     (f_kw_closure(), f_kw_closure(x=5))
 end
 """) == (11, 15)
+
+# Adding kw methods to kw let-function
+@test JuliaLowering.include_string(test_mod, """
+let f(a; kw1 = nothing, kw2 = nothing) = "outer"
+    f(::Integer; kwargs...) = "call me"
+    f(1; kw1 = 1, kw2 = 2)
+end
+""") == "call me"
+
+# Currently an error in both lowering implementations (closure-conversion ordering)
+@test_broken JuliaLowering.include_string(test_mod, """
+let f(a; kw1 = nothing, kw2 = nothing) = "outer"
+    let
+        f(::Integer; kwargs...) = error("call me")
+    end
+    f(1; kw1 = 1, kw2 = 2)
+end
+""") == "outer"
+
+# Self-reference in let-function
+@test JuliaLowering.include_string(test_mod, """
+let f(x) = x <= 0 ? x : f(x-1)
+    f(5)
+end
+""") == 0
+@test JuliaLowering.include_string(test_mod, """
+let f(x::typeof(f)) = x
+    f(f)
+end
+""") isa Function # broken in flisp
+
+# Self-reference in let-function default args
+@test JuliaLowering.include_string(test_mod, """
+let f(x=f) = x
+    f()
+end
+""") isa Function
+@test JuliaLowering.include_string(test_mod, """
+let f(x::typeof(f)) = x
+    f(f)
+end
+""") isa Function
+@test JuliaLowering.include_string(test_mod, """
+let f(;x=f) = x
+    f()
+end
+""") isa Function
+@test JuliaLowering.include_string(test_mod, """
+let f(;x::typeof(f)) = x
+    f(x=f)
+end
+""") isa Function
 
 # Anonymous function syntax with `function`
 @test JuliaLowering.include_string(test_mod, """

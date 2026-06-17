@@ -138,7 +138,7 @@ function unsafe_takestring(m::Memory{UInt8})
 end
 
 """
-    takestring!(x) -> String
+    takestring!(x)::AbstractString
 
 Create a string from the content of `x`, emptying `x`.
 
@@ -152,6 +152,9 @@ julia> s = takestring!(v)
 julia> isempty(v)
 true
 ```
+
+!!! compat "Julia 1.13"
+    This function requires at least Julia 1.13.
 """
 takestring!(v::Vector{UInt8}) = String(v)
 
@@ -240,6 +243,10 @@ typemin(::String) = typemin(String)
 ## thisind, nextind ##
 
 @propagate_inbounds thisind(s::String, i::Int) = _thisind_str(s, i)
+
+# nothrow: i == ncodeunits(s) always satisfies the bounds check inside _thisind_str
+# (it short-circuits when i == 0, otherwise 1 ≤ i ≤ n).
+@assume_effects :nothrow lastindex(s::String) = thisind(s, ncodeunits(s)::Int)
 
 # s should be String, StringView, or SubString{String}
 @inline function _thisind_str(s, i::Int)
@@ -331,7 +338,7 @@ end
                     as seen by all 1s in that column of table below
             3 -> One valid continuation byte needed to return to state 0
         4,5,6 -> Two valid continuation bytes needed to return to state 0
-        7,8,9 -> Three valids continuation bytes needed to return to state 0
+        7,8,9 -> Three valid continuation bytes needed to return to state 0
 
                         Current State
                     0̲  1̲  2̲  3̲  4̲  5̲  6̲  7̲  8̲  9̲
@@ -353,7 +360,7 @@ end
     The shifts that represent each state were derived using the SMT solver Z3, to ensure when encoded into
     the rows the correct shift was a result.
 
-    Each character class row is encoding 10 states with shifts as defined above. By shifting the bitsof a row by
+    Each character class row is encoding 10 states with shifts as defined above. By shifting the bits of a row by
     the current state then masking the result with 0x11110 give the shift for the new state
 
 
@@ -579,8 +586,10 @@ end
         @inbounds isvalid(s, i) || string_index_err(s, i)
         @inbounds isvalid(s, j) || string_index_err(s, j)
     end
-    j = nextind(s, j) - 1
-    n = j - i + 1
+    # Safety: The boundscheck checked r is inbounds in s,
+    # and since we also checked r is not empty, j must be inbounds in s
+    j = @inbounds nextind(s, j) - 1
+    n = (j - i + 1) % UInt
     ss = _string_n(n)
     GC.@preserve s ss unsafe_copyto!(pointer(ss), pointer(s, i), n)
     return ss
@@ -653,7 +662,8 @@ end
 
 isvalid(s::String, i::Int) = checkbounds(Bool, s, i) && thisind(s, i) == i
 
-isascii(s::String) = isascii(codeunits(s))
+# `isascii(::AbstractVector)` reduces to `@inbounds codeunit(::String, ::Int)`, total.
+isascii(s::String) = @assume_effects :nothrow :foldable isascii(codeunits(s))
 
 # don't assume effects for general integers since we cannot know their implementation
 @assume_effects :foldable repeat(c::Char, r::BitInteger) = @invoke repeat(c::Char, r::Integer)

@@ -118,9 +118,7 @@ function withstream(f, stream)
 end
 
 """
-Consume the standard allowed markdown indent of
-three spaces. Returns false if there are more than
-three present.
+Consume the standard allowed markdown indent of `n` spaces (default three). Returns false if there are more than `n` present.
 """
 function eatindent(io::IO, n::Int = 3)
     withstream(io) do
@@ -166,7 +164,7 @@ end
 """
 Parse a symmetrical delimiter which wraps words.
 i.e. `*word word*` but not `*word * word`.
-`repeat` specifies whether the delimiter can be repeated.
+`rep` specifies whether the delimiter can be repeated.
 Escaped delimiters are not yet supported.
 """
 function parse_inline_wrapper(stream::IO, delimiter::AbstractString; rep::Bool = false)

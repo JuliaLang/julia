@@ -531,8 +531,8 @@ static jl_datatype_t *staticeval_bitstype(const jl_cgval_t &targ)
 {
     // evaluate an argument at compile time to determine what type it is
     jl_value_t *unw = jl_unwrap_unionall(targ.typ);
-    if (jl_is_type_type(unw)) {
-        jl_value_t *bt = jl_tparam0(unw);
+    if (jl_is_typeeq(unw)) {
+        jl_value_t *bt = jl_typeeq_T(unw);
         if (jl_is_primitivetype(bt))
             return (jl_datatype_t*)bt;
     }
@@ -1147,7 +1147,7 @@ static Value *emit_checked_srem_int(jl_codectx_t &ctx, Value *x, Value *den)
 struct math_builder {
     IRBuilder<> &ctxbuilder;
     FastMathFlags old_fmf;
-    math_builder(jl_codectx_t &ctx, bool always_fast = false, bool contract = false)
+    math_builder(jl_codectx_t &ctx, bool always_fast = false, bool contract_only = false)
       : ctxbuilder(ctx.builder),
         old_fmf(ctxbuilder.getFastMathFlags())
     {
@@ -1155,10 +1155,11 @@ struct math_builder {
         if (jl_options.fast_math != JL_OPTIONS_FAST_MATH_OFF &&
             (always_fast ||
              jl_options.fast_math == JL_OPTIONS_FAST_MATH_ON)) {
-            fmf.setFast();
+            if (contract_only)
+                fmf.setAllowContract(true);
+            else
+                fmf.setFast();
         }
-        if (contract)
-            fmf.setAllowContract(true);
         ctxbuilder.setFastMathFlags(fmf);
     }
     IRBuilder<>& operator()() const { return ctxbuilder; }
@@ -1458,7 +1459,7 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
             return emit_runtime_call(ctx, f, argv, nargs);
         jl_datatype_t *dt = (jl_datatype_t*) x.constant;
 
-        // select the appropriated overloaded intrinsic
+        // select the appropriate overloaded intrinsic
         std::string intr_name = "julia.cpu.have_fma.";
         if (dt == jl_float32_type)
             intr_name += "f32";
@@ -1621,7 +1622,7 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, ArrayRef<Va
         // LLVM 5.0 can create FMA in the backend for contractible fmul and fadd
         // Emitting fmul and fadd here since they are easier for other LLVM passes to
         // optimize.
-        auto mathb = math_builder(ctx, false, true);
+        auto mathb = math_builder(ctx, true, true);
         return mathb().CreateFAdd(mathb().CreateFMul(x, y), z);
     }
 

@@ -1181,7 +1181,7 @@ end
 
 @test Compiler.is_effect_free(Base.infer_effects(getfield, (Complex{Int}, Symbol)))
 
-# We consider a potential deprecatio warning an effect, so for completely unknown getglobal,
+# We consider a potential deprecation warning an effect, so for completely unknown getglobal,
 # we taint the effect_free bit.
 @test !Compiler.is_effect_free(Base.infer_effects(getglobal, (Module, Symbol)))
 
@@ -1336,6 +1336,19 @@ function wrap1_wrap1_wrapper(b, x, y)
 end
 @test wrap1_wrap1_wrapper(true, 1, 1.0) === 1.0
 @test wrap1_wrap1_wrapper(false, 1, 1.0) === 1
+
+# Regression test for #61740: `sroa_mutables!` previously asserted
+# `widenconst(:type)::DataType`, which broke after #61719 extended
+# `PartialStruct` to wrap parametric (UnionAll) types from `:new`.
+mutable struct MutBox61740{T}
+    const x::Some{Any}
+    y::Int
+    MutBox61740{T}(x, y) where T = new{T}(Some{Any}(x), y)
+end
+read_mutbox61740(box::MutBox61740) = box.x.value
+@test Base.infer_return_type((Type, Int)) do T, x
+    read_mutbox61740(MutBox61740{T}(x, 0))
+end === Int
 
 # Test unswitching-union optimization within SRO Apass
 function sroaunswitchuniontuple(c, x1, x2)
@@ -1530,7 +1543,7 @@ let code = Any[
     sv.bb_states[#=block_id=#4].vartable[#=slot_id=#4] = VarState(Bool, #=def=#7, #=maybe_undef=#false)
     sv.bb_states[#=block_id=#5].vartable[#=slot_id=#4] = VarState(Bool, #=def=#7, #=maybe_undef=#false)
 
-    ir = Compiler.convert_to_ircode(src, sv)
+    ir = Compiler.convert_to_ircode!(src, sv)
     ir = Compiler.slot2reg(ir, src, sv)
     ir = Compiler.compact!(ir)
 

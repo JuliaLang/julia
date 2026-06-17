@@ -102,7 +102,7 @@ end
     @test BitSet(0:2:4) ⊆ symdiff!(BitSet(rand(5:100, 30)), [0, 2, 4])
 
     # issue #23557 :
-    @test_throws MethodError symdiff!(BitSet([1]), ['a']) # should no stack-overflow
+    @test_throws MethodError symdiff!(BitSet([1]), ['a']) # should not stack-overflow
     @test_throws MethodError symdiff!(BitSet([1, 2]),  [[1]]) # should not return BitSet([2])
 end
 

@@ -101,6 +101,10 @@ function print_warntype_mi(io::IO, mi::Core.MethodInstance)
             sig = sig::UnionAll
             name = sig.var.name
             val = mi.sparam_vals[i]
+            # Env entries from intersection may be wrapped as svec(tvar, constrained_bool)
+            if val isa Core.SimpleVector
+                val = val[1]
+            end
             print_highlighted(io::IO, v::String, color::Symbol) =
                 if highlighting[:warntype]
                     Base.printstyled(io, v; color)
@@ -321,7 +325,7 @@ end
 Prints the LLVM bitcodes generated for running the method matching the given generic
 function and type signature to `io`.
 
-If the `optimize` keyword is unset, the code will be shown before LLVM optimizations.
+If the `optimize` keyword is `false`, the code will be shown before LLVM optimizations.
 All metadata and dbg.* calls are removed from the printed bitcode. For the full IR, set the `raw` keyword to true.
 To dump the entire module that encapsulates the function (with declarations), set the `dump_module` keyword to true.
 Keyword argument `debuginfo` may be one of source (default) or none, to specify the verbosity of code comments.
@@ -360,7 +364,7 @@ generic function and type signature to `io`.
 
 * Set assembly syntax by setting `syntax` to `:intel` (default) for intel syntax or `:att` for AT&T syntax.
 * Specify verbosity of code comments by setting `debuginfo` to `:source` (equivalently, `:default`) or `:none`.
-* If `binary` is `true`, also print the binary machine code for each instruction precedented by an abbreviated address.
+* If `binary` is `true`, also print the binary machine code for each instruction preceded by an abbreviated address.
 * If `dump_module` is `false`, do not print metadata such as rodata or directives.
 * If `raw` is `false` (default), uninteresting instructions (like the safepoint function prologue) are elided.
 

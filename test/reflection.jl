@@ -365,6 +365,53 @@ let defaultset = Set((:A,))
     @test Set(names(TestMod54609.A, all=true, imported=true, usings=true)) == allset ∪ imported ∪ usings
 end
 
+module _TestModNamesNoMaterialize
+    export foo, bar, baz
+    foo() = 1
+    bar() = 2
+    baz() = 3
+end
+module _TestModNamesNoMaterializeUser
+    using .._TestModNamesNoMaterialize
+end
+@testset "names does not materialize binding partitions" begin
+    # names(m) should not materialize binding partitions for implicit imports,
+    # as doing so can trigger unnecessary invalidation cascades during
+    # subsequent `using` statements.
+    B = _TestModNamesNoMaterializeUser
+    # Create bindings in B for the using'd exports without materializing partitions
+    for sym in (:foo, :bar, :baz)
+        ccall(:jl_get_module_binding, Ref{Core.Binding}, (Any, Any, Cint), B, sym, Cint(1))
+    end
+    names(B)
+    # Verify partitions were not materialized as a side effect
+    for sym in (:foo, :bar, :baz)
+        b = ccall(:jl_get_module_binding_or_nothing, Any, (Any, Any), B, sym)
+        @test b !== nothing
+        @test !isdefined(b, :partitions)
+    end
+end
+
+@testset "names world argument" begin
+    # `names(M; all=true)` walks bindings and filters by partition kind at the
+    # given world. A binding that doesn't yet have a GLOBAL/CONST/DECLARED
+    # partition in the queried world should be excluded.
+    # Note: this can only be tested via plain assignment (not `export`/`public`,
+    # which set a non-partitioned per-binding flag that is world-insensitive).
+    M = @eval module $(gensym())
+        early_name = 1
+    end
+    world_mid = Base.get_world_counter()
+    @eval M late_name = 2
+    world_end = Base.get_world_counter()
+
+    @test :early_name ∈ names(M; all=true, world=world_end)
+    @test :late_name ∈ names(M; all=true, world=world_end)
+
+    @test :early_name ∈ names(M; all=true, world=world_mid)
+    @test :late_name ∉ names(M; all=true, world=world_mid)
+end
+
 let
     using .TestMod7648
     @test Base.binding_module(@__MODULE__, :a9475) == TestMod7648.TestModSub9475
@@ -787,6 +834,9 @@ end
 @test !isabstracttype(ReflectionExample)
 @test !isabstracttype(Int)
 @test !isabstracttype(TLayout)
+# PR #61915: `Type{T}` (a `TypeEq` kind) is still reported abstract
+@test isabstracttype(Type)
+@test isabstracttype(Type{<:Integer})
 
 @test !isprimitivetype(Union{})
 @test !isprimitivetype(Union{Int,Float64})
@@ -1227,7 +1277,6 @@ end
     @test mi1.def.name == :+
     mi2 = Base.method_instance((typeof(+), Int, Int))
     @test mi2.def.name == :+
-    # Note `jl_method_lookup` doesn't return CNull if not found
     mi3 = @ccall jl_method_lookup(Any[+, 1, 1]::Ptr{Any}, 3::Csize_t, Base.get_world_counter()::Csize_t)::Ref{Core.MethodInstance}
     @test mi1 == mi3
     @test mi2 == mi3

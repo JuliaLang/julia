@@ -54,7 +54,7 @@ Type *get_llvm_fptype(jl_datatype_t *dt, LLVMContext &ctx) const
             lltype : NULL);
 }
 
-// Check whether a type contained by a candidate homogeneous aggregate is valid
+// Check whether a type contained by a candidate homogeneous aggregate is a valid
 // fundamental type.
 //
 // Returns the corresponding LLVM type.

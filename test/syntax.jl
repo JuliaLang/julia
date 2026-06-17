@@ -789,6 +789,17 @@ end"""))
     @test !any(x->(x == Expr(:meta, :push_loc, :none)), ex.args)
 end
 
+# LineNumberNode with file=nothing
+let ex = Expr(:toplevel,
+              LineNumberNode(1),
+              Expr(:->, Expr(:tuple),
+                   Expr(:block,
+                        LineNumberNode(2),
+                        Expr(:call, throw, 1))))
+    f = Core.eval(@__MODULE__, ex)
+    @test only(methods(f)).debuginfo.def isa Symbol
+end
+
 # Check qualified string macros
 Base.r"regex" == r"regex"
 
@@ -3255,7 +3266,7 @@ end
     x, f1()... = [1, 2, 3]
     @test x == 1
     @test f1() == [2, 3]
-    # test that call to `Base.rest` is outside the definition of `f`
+    # test that call to `Base.rest` is outside the definition of `f1`
     @test f1() === f1()
 
     x, f2()... = 1, 2, 3
@@ -4255,7 +4266,7 @@ end
 @test callme(3, 3) === 3
 @test callme(4, 4, 4) === 4.0
 
-# Ambiguous 1-arg anymous vs macrosig
+# Ambiguous 1-arg anonymous vs macrosig
 @test_parseerror "function (@foo(a)) end"
 
 # #57267 - Missing `latestworld` after typealias
@@ -4714,4 +4725,24 @@ module M59755 end
     @test M59755.v5 === 6
     @test M59755.v6 === 5
     @test Base.binding_kind(M59755, :v6) == Base.PARTITION_KIND_CONST
+end
+
+@testset "assignment to where-expr throws unless LHS is `call`" for ex in [
+    :(x where T = 1)
+    :((x...) where T = 1)
+    Expr(:(=), Expr(:where, Expr(:block, :a, :b)), 1)
+    :((((a,b,c::T)     where T<:U where U<:Any) = (a,b,c))(1,2,3))
+    :((((a,b=0,c::T=0) where T<:U where U<:Any) = (a,b,c))(1))
+    :((((a,b=0,c::T=0) where T<:U where U<:Any) = (a,b,c))(1,2))
+    :((((a,b=0,c::T=0) where T<:U where U<:Any) = (a,b,c))(1,2,3))
+    :((((a::T...)      where T<:U where U<:Any) = (a...,))(1,2,3))
+    :((((a::T;)        where T<:U where U<:Any) = a)(1))
+    :((((a::T;b=2)     where T<:U where U<:Any) = (a,b))(1))
+    :((((a::T;b=2)     where T<:U where U<:Any) = (a,b))(1;b=3))
+    :((((a::T=0;b=2)   where T<:U where U<:Any) = (a,b))())
+    :((((a::T=0;b=2)   where T<:U where U<:Any) = (a,b))(1))
+    :((((a::T=0;b=2)   where T<:U where U<:Any) = (a,b))(;b=3))
+    :((((a::T=0;b=2)   where T<:U where U<:Any) = (a,b))(1;b=3))
+    ]
+    @test_throws "invalid assignment location" Core.eval(@__MODULE__, ex)
 end

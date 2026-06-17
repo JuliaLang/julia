@@ -159,7 +159,7 @@ Both the raw text, `.text`, and the parsed markdown, `.object`, are tracked by t
 Parsing of the raw text is done lazily when a request is made to render the docstring,
 which helps to reduce total precompiled image size.
 
-The `.data` fields stores several values related to the docstring, such as: path,
+The `.data` field stores several values related to the docstring, such as: path,
 linenumber, source code, and fielddocs.
 """
 mutable struct DocStr

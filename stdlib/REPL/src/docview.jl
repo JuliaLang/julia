@@ -19,7 +19,7 @@ using Unicode: normalize
 
 ## Help mode ##
 
-# This is split into helpmode and _helpmode to easier unittest _helpmode
+# This is split into helpmode and _helpmode to more easily unit test _helpmode
 function helpmode(io::IO, line::AbstractString, mod::Module=Main)
     internal_accesses = Set{Pair{Module,Symbol}}()
     quote

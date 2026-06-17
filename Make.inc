@@ -568,6 +568,11 @@ JCFLAGS_COMMON     = -std=gnu11 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSE
 JCFLAGS_CLANG      = $(JCFLAGS_COMMON)
 JCFLAGS_GCC        = $(JCFLAGS_COMMON) -fno-gnu-unique
 
+# Xcode 26 (clang 21) folds the new -Wc++-keyword diagnostic into -Wc++-compat, erroring
+# under -Werror on uses of C++ keywords like `wchar_t` as ordinary identifiers in C code.
+# Suppress it; -Wno-unknown-warning-option keeps older clang from rejecting the flag.
+JCFLAGS_CLANG     += -Wno-unknown-warning-option -Wno-c++-keyword
+
 
 # These flags are needed to generate decent debug info
 JCPPFLAGS_COMMON   = -fasynchronous-unwind-tables
@@ -926,8 +931,8 @@ LIBITTAPI:=-littnotify
 endif
 
 ifeq ($(WITH_TRACY), 1)
-JCXXFLAGS += -DUSE_TRACY -DTRACY_ENABLE -DTRACY_FIBERS
-JCFLAGS += -DUSE_TRACY -DTRACY_ENABLE -DTRACY_FIBERS
+JCXXFLAGS += -DUSE_TRACY -DTRACY_ENABLE -DTRACY_FIBERS -I$(build_includedir)/tracy
+JCFLAGS += -DUSE_TRACY -DTRACY_ENABLE -DTRACY_FIBERS -I$(build_includedir)/tracy
 LIBTRACYCLIENT:=-lTracyClient
 endif
 ifeq ($(WITH_TRACY_CALLSTACKS), 1)
@@ -964,12 +969,17 @@ endif
 # Linker garbage collection
 ifeq ($(USE_LINKER_GC), 1)
 ifeq ($(OS), Darwin)
-  JLDFLAGS += -Wl,-dead_strip
+  LINKER_GC_LDFLAGS := -Wl,-dead_strip
 else
-  JLDFLAGS += -Wl,--gc-sections
-  JCFLAGS += -ffunction-sections -fdata-sections
-  JCXXFLAGS += -ffunction-sections -fdata-sections
+  LINKER_GC_LDFLAGS := -Wl,--gc-sections
+  LINKER_GC_CFLAGS := -ffunction-sections -fdata-sections
+  LINKER_GC_CXXFLAGS := -ffunction-sections -fdata-sections
 endif
+
+JLDFLAGS += $(LINKER_GC_LDFLAGS)
+JCFLAGS += $(LINKER_GC_CFLAGS)
+JCXXFLAGS += $(LINKER_GC_CXXFLAGS)
+
 endif
 
 # ===========================================================================
@@ -1410,6 +1420,8 @@ else
   LIBUTF8PROC := $(build_libdir)/libutf8proc.a
   UTF8PROC_INC := $(build_includedir)
 endif
+
+LIBTARGET_PARSING := $(build_libdir)/libtarget_parsing.a
 
 # We need python for things like BB triplet recognition.  We don't really care
 # about version, generally, so just find something that works:
