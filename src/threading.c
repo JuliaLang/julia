@@ -287,29 +287,34 @@ int jl_all_tls_states_size;
 void jl_init_thread_scheduler(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 
 // Parking lot for jl_mutex_t: keeps the blocking state out of jl_mutex_t so it
-// can stay a movable, zero-initializable POD ({owner, count}) embedded in
+// can stay a movable, zero-initializable struct ({owner, count}) embedded in
 // sysimage objects. A waiter that loses the CAS parks on the bucket its lock
-// hashes to instead of spinning; the owner broadcasts that bucket on release.
-// Sharding bounds the wakeup fan-out, and nwaiting lets an uncontended unlock
-// skip the bucket mutex.
+// hashes to; the owner broadcasts that bucket on release. Sharding bounds the
+// wakeup fan-out.
 #define JL_MUTEX_NPARK 256
 static struct {
     uv_mutex_t mtx;
     uv_cond_t cond;
-    _Atomic(uint32_t) nwaiting;
 } jl_mutex_park[JL_MUTEX_NPARK];
 
 static inline uint32_t jl_mutex_park_idx(jl_mutex_t *lock) JL_NOTSAFEPOINT
 {
     // Invertible xorshift (low bits dropped for alignment). Permutation-like on
     // purpose: the set of locks parked at once is small and often consecutively
-    // allocated, so mapping neighbors to distinct buckets gives sub-random
-    // collisions -- better here than a multiplicative/uniform hash.
+    // allocated, so mapping neighbors to distinct buckets keeps collisions low.
     uintptr_t h = (uintptr_t)lock >> 4;
     h ^= h >> 7;
     h ^= h >> 13;
     return (uint32_t)(h & (JL_MUTEX_NPARK - 1));
 }
+
+// The low bit of lock->owner flags that a task may be parked on this lock
+// (WebKit ParkingLot's hasParkedBit). Tasks are >=16-byte aligned, so the bit
+// is free, and the release CAS reads the owner and this flag in one atomic step.
+#define JL_MUTEX_PARKED ((uintptr_t)1)
+#define jl_mutex_owner(w)     ((jl_task_t*)((uintptr_t)(w) & ~JL_MUTEX_PARKED))
+#define jl_mutex_parked(w)    ((uintptr_t)(w) & JL_MUTEX_PARKED)
+#define jl_mutex_with_park(t) ((jl_task_t*)((uintptr_t)(t) | JL_MUTEX_PARKED))
 
 // return calling thread's ID
 JL_DLLEXPORT int16_t jl_threadid(void)
@@ -733,7 +738,6 @@ void jl_init_threading(void)
     for (int i = 0; i < JL_MUTEX_NPARK; i++) {
         uv_mutex_init(&jl_mutex_park[i].mtx);
         uv_cond_init(&jl_mutex_park[i].cond);
-        jl_atomic_store_relaxed(&jl_mutex_park[i].nwaiting, 0);
     }
 #ifdef JL_ELF_TLS_VARIANT
     jl_check_tls();
@@ -971,7 +975,7 @@ void _jl_mutex_init(jl_mutex_t *lock, const char *name) JL_NOTSAFEPOINT
 void _jl_mutex_wait(jl_task_t *self, jl_mutex_t *lock, int safepoint)
 {
     jl_task_t *owner = jl_atomic_load_relaxed(&lock->owner);
-    if (owner == self) {
+    if (jl_mutex_owner(owner) == self) {
         lock->count++;
         return;
     }
@@ -991,31 +995,37 @@ void _jl_mutex_wait(jl_task_t *self, jl_mutex_t *lock, int safepoint)
     JL_TIMING(LOCK_SPIN, LOCK_SPIN);
     uint32_t idx = jl_mutex_park_idx(lock);
     while (1) {
-        if (owner == NULL && jl_atomic_cmpswap(&lock->owner, &owner, self)) {
-            lock->count = 1;
-            jl_profile_lock_acquired(lock);
+        owner = jl_atomic_load_relaxed(&lock->owner);
+        if (jl_mutex_owner(owner) == NULL) {
+            // Owner slot is free -- grab it.
+            if (jl_atomic_cmpswap(&lock->owner, &owner, self)) {
+                lock->count = 1;
+                jl_profile_lock_acquired(lock);
 #ifdef _COMPILER_TSAN_ENABLED_
-            __tsan_mutex_post_divert(lock, 0);
+                __tsan_mutex_post_divert(lock, 0);
 #endif
-            return;
+                return;
+            }
+            continue; // raced; retry
         }
-        // Park instead of spin. Bump nwaiting and fence before re-checking the
-        // owner: pairs with the fence in _jl_mutex_unlock_nogc so the releaser
-        // always sees us and broadcasts (no lost wakeup). Block GC-safe (but not
-        // for nogc waiters, matching the prior behavior).
+        // Held by another task: publish the parked bit so its release path wakes
+        // us, then park on the bucket. Block in a GC-safe region unless this is a
+        // nogc waiter.
+        if (!jl_mutex_parked(owner) &&
+            !jl_atomic_cmpswap(&lock->owner, &owner, jl_mutex_with_park(owner)))
+            continue; // raced; retry
         int8_t gc_state = 0;
         if (safepoint)
             gc_state = jl_gc_safe_enter(self->ptls);
-        jl_atomic_fetch_add_relaxed(&jl_mutex_park[idx].nwaiting, 1);
-        jl_fence();
         uv_mutex_lock(&jl_mutex_park[idx].mtx);
-        if (jl_atomic_load_relaxed(&lock->owner) != NULL)
+        // Re-check under the bucket lock (the release broadcast is serialized by
+        // it): only sleep while the lock is held and flagged parked.
+        owner = jl_atomic_load_relaxed(&lock->owner);
+        if (jl_mutex_owner(owner) != NULL && jl_mutex_parked(owner))
             uv_cond_wait(&jl_mutex_park[idx].cond, &jl_mutex_park[idx].mtx);
         uv_mutex_unlock(&jl_mutex_park[idx].mtx);
-        jl_atomic_fetch_add_relaxed(&jl_mutex_park[idx].nwaiting, -1);
         if (safepoint)
             jl_gc_safe_leave(self->ptls, gc_state);
-        owner = jl_atomic_load_relaxed(&lock->owner);
     }
 #ifdef _COMPILER_TSAN_ENABLED_
     __tsan_mutex_post_divert(lock, 0);
@@ -1063,15 +1073,19 @@ int _jl_mutex_trylock_nogc(jl_task_t *self, jl_mutex_t *lock)
 #endif
     jl_task_t *owner = jl_atomic_load_acquire(&lock->owner);
     int ret = 0;
-    if (owner == self) {
+    if (jl_mutex_owner(owner) == self) {
         lock->count++;
         ret = 1;
         goto done;
     }
-    if (owner == NULL && jl_atomic_cmpswap(&lock->owner, &owner, self)) {
-        lock->count = 1;
-        ret = 1;
-        goto done;
+    if (jl_mutex_owner(owner) == NULL) {
+        // Owner slot is free -- grab it. Unlock clears the parked bit on release,
+        // so a free lock is never flagged parked.
+        if (jl_atomic_cmpswap(&lock->owner, &owner, self)) {
+            lock->count = 1;
+            ret = 1;
+            goto done;
+        }
     }
 done:
 #ifdef _COMPILER_TSAN_ENABLED_
@@ -1100,18 +1114,18 @@ void _jl_mutex_unlock_nogc(jl_mutex_t *lock)
 #ifdef _COMPILER_TSAN_ENABLED_
     __tsan_mutex_pre_unlock(lock, 0);
 #endif
-    assert(jl_atomic_load_relaxed(&lock->owner) == jl_current_task &&
+    jl_task_t *self = jl_current_task;
+    assert(jl_mutex_owner(jl_atomic_load_relaxed(&lock->owner)) == self &&
            "Unlocking a lock in a different thread.");
     if (--lock->count == 0) {
         jl_profile_lock_release_start(lock);
-        jl_atomic_store_release(&lock->owner, (jl_task_t*)NULL);
-        jl_cpu_wake();
-        // Wake anyone parked on this lock's bucket. The fence before reading
-        // nwaiting pairs with the one in _jl_mutex_wait (no lost wakeup); with
-        // no waiters this is just a relaxed load, no bucket mutex.
-        uint32_t idx = jl_mutex_park_idx(lock);
-        jl_fence();
-        if (jl_atomic_load_relaxed(&jl_mutex_park[idx].nwaiting) != 0) {
+        // Fast release: with no parked waiter the owner word is exactly `self`,
+        // so a single CAS hands the lock back. If the parked bit is set the CAS
+        // fails; then clear the word and broadcast the bucket to wake a waiter.
+        if (!jl_atomic_cmpswap(&lock->owner, &self, (jl_task_t*)NULL)) {
+            // Parked bit was set: clear the word and broadcast the bucket.
+            jl_atomic_store_release(&lock->owner, (jl_task_t*)NULL);
+            uint32_t idx = jl_mutex_park_idx(lock);
             uv_mutex_lock(&jl_mutex_park[idx].mtx);
             uv_cond_broadcast(&jl_mutex_park[idx].cond);
             uv_mutex_unlock(&jl_mutex_park[idx].mtx);
