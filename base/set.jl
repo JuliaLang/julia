@@ -550,10 +550,11 @@ allunique(::Union{AbstractSet,AbstractDict}) = true
 allunique(r::AbstractRange) = !iszero(step(r)) || length(r) <= 1
 
 function allunique(s::AbstractString)
-    # `length` scans the whole string, so size everything off the O(1) code unit count
-    n = ncodeunits(s)
-    n < 2 && return true
-    n < 32 ? _indexed_allunique(s) : _hashed_allunique(s, n)
+    # `ncodeunits` is an O(1) upper bound on the character count: fewer than 32
+    # code units guarantees fewer than 32 characters, so the indexed scan is
+    # picked without a `length` pass; the hashed path iterates anyway, so it can
+    # afford `length`, which it needs since iteration yields characters
+    ncodeunits(s) < 32 ? _indexed_allunique(s) : _hashed_allunique(s, length(s))
 end
 
 function allunique(A::StridedArray)

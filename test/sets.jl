@@ -630,6 +630,8 @@ end
     @test !allunique("abca")
     @test !allunique("ab" * "c"^40)    # duplicate past the 32-code-unit cutoff
     @test !allunique("x" * "a"^10_000) # duplicate past the 1000 prefix scan
+    @test allunique(join('\U1F600' + i for i in 0:599))   # >1000 code units, <1000 chars
+    @test !allunique(join('\U1F600' + i for i in 0:599) * "\U1F600")
     @test allunique(join('A':'z'))
     @test allunique(@views "abcd"[1:3])
     @test !allunique(@views "abca"[1:4])
