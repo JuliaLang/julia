@@ -1,4 +1,5 @@
 # Test that various constructs support trimming
+module Trimmability
 
 using Sockets
 
@@ -35,7 +36,7 @@ function _test_cat()
     _cat1e = hcat(randn(3,3,3), rand(3,3,3), randn(3,3,3))
     _cat1f = [randn(3,3,3) rand(3,3,3) randn(3,3,3)]
 
-    # vcat
+    # v_cat
     _cat2a = vcat(randn(3), rand(3), randn(3))
     _cat2b = [randn(3); rand(3); randn(3)]
     _cat2c = vcat(randn(3,3), rand(3,3), randn(3,3))
@@ -132,4 +133,6 @@ function @main(args::Vector{String})::Cint
     Base.donotdelete(reshape([1,2,3],:,1,1))
 
     return 0
+end
+
 end

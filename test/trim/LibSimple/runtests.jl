@@ -1,48 +1,26 @@
-import Pkg
-
-Pkg.activate(".")
-
+# Verify the trimmed `LibSimple` shared library works from C and that its ABI
+# export was logged correctly. Run as a subprocess so `JSON` resolves from this
+# project's environment.
 using Test
 using JSON
 
-@test length(ARGS) == 1
-bindir = dirname(ARGS[1])
+outdir = ARGS[1]
 
-let exe_suffix = splitext(Base.julia_exename())[2]
+@testset "LibSimple" begin
+    exe_suffix = splitext(Base.julia_exename())[2]
+    dlext = Base.BinaryPlatforms.platform_dlext()
+    libdir = Sys.iswindows() ? "bin" : "lib"
 
-    hello_exe = joinpath(bindir, "hello" * exe_suffix)
-    @test readchomp(`$hello_exe arg1 arg2`) == "Hello, world!"
-    @test filesize(hello_exe) < 1_900_000
-
-    trimmability_exe = joinpath(bindir, "trimmability" * exe_suffix)
-    lines = split(readchomp(`$trimmability_exe arg1 arg2`), "\n")
-    @test lines[1] == "Hello, world!"
-    @test lines[2] == trimmability_exe
-    @test lines[3] == "arg1"
-    @test lines[4] == "arg2"
-    @test lines[5] == string(4.0+pi)
-    @test parse(Float64, lines[6]) isa Float64
-    @test lines[7] == "Version: 1.1.0"
-    @test lines[8] == "# preferences: 0"
-
-    basic_jll_exe = joinpath(bindir, "basic_jll" * exe_suffix)
-    lines = split(readchomp(`$basic_jll_exe`), "\n")
-    @test lines[1] == "Julia! Hello, world!"
-    @test lines[2] == lines[3]
-    @test Base.VersionNumber(lines[2]) ≥ v"1.5.7"
-    @test filesize(basic_jll_exe) < filesize(unsafe_string(Base.JLOptions().image_file))/10
-
-    # Test that the shared library can be used in a C application
-    capplication_exe = joinpath(bindir, "capplication" * exe_suffix)
-    lines = split(readchomp(`$capplication_exe`), "\n")
+    # The shared library can be used in a C application
+    capplication_exe = joinpath(outdir, "bin", "capplication" * exe_suffix)
+    libpath = joinpath(outdir, libdir, "libsimple." * dlext)
+    lines = split(readchomp(`$capplication_exe $libpath`), "\n")
     @test length(lines) == 2
     @test lines[1] == "Sum of copied values: 6.000000"
     @test lines[2] == "Count of same vectors: 1"
 
-    # Test that the logging of entrypoints and types works correctly
-    str = read(joinpath(bindir, "bindinginfo_libsimple.json"), String)
-
-    # The log should parse as valid JSON
+    # The log of entrypoints and types should parse as valid JSON
+    str = read(joinpath(outdir, "bindinginfo_libsimple.json"), String)
     abi = JSON.parse(str)
 
     # `copyto_and_sum` should have been exported

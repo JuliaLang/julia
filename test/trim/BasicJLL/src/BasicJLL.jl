@@ -1,3 +1,6 @@
+# Test that a JLL dependency works under trimming, at both build- and run-time
+module BasicJLL
+
 using Libdl
 using Zstd_jll # Note this uses the vendored older non-LazyLibrary version of Zstd_jll
 
@@ -30,4 +33,6 @@ function @main(args::Vector{String})::Cint
     fptr = dlsym(Zstd_jll.libzstd_handle, :ZSTD_versionString)
     ccall(cfunc, Cvoid, (Ptr{Cvoid},), fptr)
     return 0
+end
+
 end
