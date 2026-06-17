@@ -13,6 +13,7 @@ New language features
 Language changes
 ----------------
 
+* The return value of `@doc` has changed: it now returns the documented expression (e.g. a function or type) instead of a `Docs.Binding` object as in previous versions. Code that depended on `@doc` returning a `Docs.Binding` will need to be updated ([#59882], [#60681]).
 * The `hash` algorithm and its values have changed for certain types, most notably `AbstractString`. Any `hash` specializations for equal types to those that changed, such as some third-party string packages, may need to be deleted ([#57509], [#59691]).
 * The `hash(::AbstractString)` function is now a zero-copy / zero-cost function, based upon providing a correct implementation of the `codeunit` and `iterate` functions. Third-party string packages should migrate to the new algorithm by deleting their existing overrides of the `hash` function ([#59691]).
 
@@ -151,7 +152,9 @@ Deprecated or removed
 [#59691]: https://github.com/JuliaLang/julia/issues/59691
 [#59775]: https://github.com/JuliaLang/julia/issues/59775
 [#59825]: https://github.com/JuliaLang/julia/issues/59825
+[#59882]: https://github.com/JuliaLang/julia/issues/59882
 [#60025]: https://github.com/JuliaLang/julia/issues/60025
+[#60681]: https://github.com/JuliaLang/julia/issues/60681
 
 
 Julia v1.12 Release Notes
