@@ -165,6 +165,16 @@ end
         end
         @test has_return_escape(result[Argument(2)])
     end
+    # Constant-false `GotoIfNot` should propagate only to its false successor.
+    let code = Any[
+            GotoIfNot(false, 3),
+            ReturnNode(nothing),
+            ReturnNode(Argument(1)),
+        ]
+        ir = make_ircode(code; slottypes=Any[Any], ssavaluetypes=Any[Any, Any, Any])
+        result = code_escapes(ir, 1)
+        @test has_return_escape(result[Argument(1)])
+    end
     let # loop
         result = code_escapes((Int,)) do n
             c = SafeRef{Bool}(false)

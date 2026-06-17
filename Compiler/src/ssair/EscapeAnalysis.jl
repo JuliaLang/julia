@@ -3,32 +3,35 @@ baremodule EscapeAnalysis
 export
     analyze_escapes,
     getaliases,
-    isaliased,
-    is_load_forwardable,
-    has_no_escape,
+    has_all_escape,
     has_arg_escape,
+    has_no_escape,
     has_return_escape,
     has_thrown_escape,
-    has_all_escape
+    is_load_forwardable,
+    isaliased
 
 using Base: Base
 
 # imports
-import Base: ==, !=, ∈, copy, delete!, getindex, isempty, setindex!
+import Base: !=, ==, copy, delete!, getindex, isempty, setindex!, ∈
 # usings
 using Core
 using Core: Builtin, IntrinsicFunction, SimpleVector, ifelse, sizeof
 using Core.IR
-using Base:       # Base definitions
+using Base: # Base definitions
+    !, !==, &, *, +, -, :, <, <<, =>, >,
     @__MODULE__, @assert, @eval, @goto, @inbounds, @inline, @isdefined, @label, @noinline,
-    @nospecialize, @specialize, BitSet, IdDict, IdSet, Pair, UnitRange, Vector,
-    _bits_findnext, copy!, empty!, enumerate, error, fill!, first, get, hasintersect,
-    haskey, isassigned, isexpr, keys, last, length, max, min, missing, only, println, push!,
-    pushfirst!, resize!, :, !, !==, <, <<, >, =>, ≠, ≤, ≥, ∉, ⊆, ⊇, &, *, +, -, |
+    @nospecialize, @specialize,
+    BitSet, IdDict, IdSet, Pair, UnitRange, Vector, _bits_findnext, copy!, empty!,
+    enumerate, error, fill!, first, get, hasintersect, haskey, isassigned, isexpr, keys,
+    last, length, max, min, missing, only, println, push!, pushfirst!, resize!,
+    |, ∉, ≠, ≤, ≥, ⊆, ⊇
 using ..Compiler: # Compiler specific definitions
-    @show, Compiler, HandlerInfo, IRCode, IR_FLAG_NOTHROW, NewNodeInfo, SimpleHandler,
+    @show,
+    Compiler, HandlerInfo, IRCode, IR_FLAG_NOTHROW, NewNodeInfo, SimpleHandler,
     argextype, block_for_inst, compute_trycatch, fieldcount_noerror, gethandler, has_flag,
-    intrinsic_nothrow, is_meta_expr_head, is_identity_free_argtype, is_nothrow,
+    intrinsic_nothrow, is_identity_free_argtype, is_meta_expr_head, is_nothrow,
     isterminator, singleton_type, try_compute_field, try_compute_fieldidx, widenconst
 
 function include(x::String)
@@ -100,8 +103,13 @@ end
 
 abstract type Liveness end
 struct BotLiveness <: Liveness end
+# `PCLiveness` always contains at least one pc; empty liveness is `BotLiveness`.
 struct PCLiveness <: Liveness
     pcs::BitSet
+    function PCLiveness(pcs::BitSet)
+        @assert !isempty(pcs) "empty pc liveness must be represented as BotLiveness"
+        return new(pcs)
+    end
 end
 PCLiveness(pc::Int) = PCLiveness(BitSet(pc))
 struct TopLiveness <: Liveness end
@@ -136,7 +144,9 @@ function isempty(x::Liveness)
     elseif x === ⊤ₗ
         return false
     else
-        return isempty(x.pcs)
+        x = x::PCLiveness
+        @assert !isempty(x.pcs)
+        return false
     end
 end
 function copy(x::Liveness)
@@ -148,7 +158,8 @@ function copy(x::Liveness)
 end
 function delete!(x::Liveness, pc::Int)
     @nospecialize x
-    if x isa PCLiveness
+    if x isa PCLiveness && pc ∈ x.pcs
+        length(x.pcs) == 1 && return ⊥ₗ
         delete!(x.pcs, pc)
     end
     return x
@@ -502,7 +513,6 @@ x::MemoryInfo ⊔ₘꜝ y::MemoryInfo = begin
     end
     y = y::AliasedMemory
     xa, ya = x.alias, y.alias
-    changed = false
     if xa isa AliasedValues
         alias = xa
         if ya isa AliasedValues
@@ -806,19 +816,20 @@ function analyze_escapes(ir::IRCode, nargs::Int, get_escape_cache)
                     condval = stmt.cond
                     if condval === true
                         @goto fall_through
-                    elseif condval === false
-                        nextbb = falsebb
-                        @goto propagate_state
                     else
                         succs = bbs[currbb].succs
                         if length(succs) == 1
                             nextbb = only(succs)
-                            @assert stmt.dest == nextbb + 1 "Invalid GotoIfNot"
+                            @assert condval === false || stmt.dest == nextbb "Invalid GotoIfNot"
                             @goto propagate_state
                         end
                         @assert length(succs) == 2 "GotoIfNot with ≥2 successors"
                         truebb = currbb + 1
                         falsebb = succs[1] == truebb ? succs[2] : succs[1]
+                        if condval === false
+                            nextbb = falsebb
+                            @goto propagate_state
+                        end
                         falseret = propagate_bbstate!(astate, currstate, falsebb, #=allow_direct_propagation=#!(@isdefined nextcurrbb))
                         if falseret === nothing
                             @assert currbb == only(bbs[falsebb].preds)
@@ -891,6 +902,7 @@ function analyze_escapes(ir::IRCode, nargs::Int, get_escape_cache)
             end
 
             if new_nodes_counter > 0
+                @assert @isdefined(attach_before_idxs) && @isdefined(attach_after_idxs) && @isdefined(nb) && @isdefined(n_nodes)
                 @goto analyze_new_node
             end
         end
@@ -1158,7 +1170,6 @@ function apply_liveness_change!(astate::AnalysisState, change::LivenessChange, p
 end
 
 function apply_alias_change!(astate::AnalysisState, change::AliasChange)
-    anychange = false
     (; xidx, yidx) = change
     aliasset = astate.aliasset
     xroot = find_root!(aliasset, xidx)
@@ -1525,7 +1536,6 @@ function analyze_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any})
         end
     end
     cache = cache::ArgEscapeCache
-    retinfo = astate.currstate[retval] # escape information imposed on the call statement
     method = mi.def::Method
     nargs = Int(method.nargs)
     for (i, argidx) in enumerate(first_idx:last_idx)
@@ -1633,7 +1643,7 @@ function analyze_foreigncall!(astate::AnalysisState, pc::Int, args::Vector{Any})
     end
 end
 
-function analyze_gc_preserve!(astate::AnalysisState, pc::Int, args::Vector{Any})
+function analyze_gc_preserve!(astate::AnalysisState, _pc::Int, args::Vector{Any})
     @assert length(args) == 1 "invalid :gc_preserve_end"
     val = args[1]
     @assert val isa SSAValue "invalid :gc_preserve_end"
@@ -1670,7 +1680,7 @@ function analyze_call!(astate::AnalysisState, pc::Int, args::Vector{Any})
     end
 end
 
-analyze_builtin!(@nospecialize(f), _...) = missing
+analyze_builtin!(@nospecialize(_), _...) = missing
 
 # safe builtins
 analyze_builtin!(::typeof(isa), _...) = false
@@ -1685,7 +1695,7 @@ analyze_builtin!(::typeof(Core.throw_methoderror), _...) = false
 
 function analyze_builtin!(::typeof(ifelse), astate::AnalysisState, pc::Int, args::Vector{Any})
     length(args) == 4 || return false
-    f, cond, th, el = args
+    _, cond, th, el = args
     ret = SSAValue(pc)
     condt = argextype(cond, astate.ir)
     if isa(condt, Const) && (cond = condt.val; isa(cond, Bool))
@@ -1703,7 +1713,7 @@ end
 
 function analyze_builtin!(::typeof(typeassert), astate::AnalysisState, pc::Int, args::Vector{Any})
     length(args) == 3 || return false
-    f, obj, typ = args
+    _, obj, _ = args
     add_alias_change!(astate, SSAValue(pc), obj)
     return false
 end
@@ -1777,10 +1787,10 @@ function analyze_builtin!(::typeof(getfield), astate::AnalysisState, pc::Int, ar
             # `UndefRefError` should be raised here
             astate.ssamemoryinfo[pc] = UninitializedMemory() # TODO CFG-aware `MemoryInfo`
         else
-            xfinfo = xfinfo::AliasedMemory
+            xfinfo::AliasedMemory
             nothrow |= !xfinfo.maybeundef # refine `nothrow` information if possible
             traverse_aliased_memory(xfinfo) do @nospecialize aval
-                add_alias_change!(astate, retval, aval)
+                add_alias_change!(astate, SSAValue(pc), aval)
                 if !haskey(astate.ssamemoryinfo, pc)
                     if xfinfo.maybeundef
                         astate.ssamemoryinfo[pc] = ConflictedMemory() # TODO CFG-aware `MemoryInfo`
@@ -1821,7 +1831,6 @@ function analyze_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, a
         add_all_escape_change!(astate, val)
         return false
     end
-    nothrow = is_nothrow(astate.ir, pc)
     ObjectInfo = objinfo.ObjectInfo
     if ObjectInfo isa HasIndexableFields
         fval = try_compute_field(ir, args[3])
@@ -1845,7 +1854,7 @@ function analyze_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, a
     return false
 end
 
-function analyze_builtin!(::typeof(Core.finalizer), astate::AnalysisState, pc::Int, args::Vector{Any})
+function analyze_builtin!(::typeof(Core.finalizer), astate::AnalysisState, _::Int, args::Vector{Any})
     if length(args) ≥ 3
         obj = args[3]
         add_liveness_change!(astate, obj) # TODO setup a proper FinalizerEscape?

@@ -1,6 +1,6 @@
 module EAUtils
 
-export code_escapes, @code_escapes, __clear_cache!
+export @code_escapes, __clear_cache!, code_escapes
 
 include("setup_Compiler.jl")
 
@@ -12,11 +12,11 @@ using .Compiler: EscapeAnalysis as EA
 # imports
 import .Compiler:
     AbstractInterpreter, InferenceParams, OptimizationParams,
-    get_world_counter, get_inference_cache, ipo_dataflow_analysis!
+    get_inference_cache, get_world_counter, ipo_dataflow_analysis!
 # usings
 using Core.IR
-using .Compiler: InferenceResult, InferenceState, OptimizationState, IRCode
-using .EA: analyze_escapes, ArgEscapeCache, ArgEscapeInfo, EscapeInfo, EscapeResult
+using .Compiler: IRCode, InferenceResult, InferenceState, OptimizationState
+using .EA: ArgEscapeCache, ArgEscapeInfo, EscapeInfo, EscapeResult, analyze_escapes
 
 mutable struct EscapeAnalyzerCacheToken end
 global GLOBAL_EA_CACHE_TOKEN::EscapeAnalyzerCacheToken = EscapeAnalyzerCacheToken()
@@ -104,10 +104,9 @@ end
 # printing
 # --------
 
-using .Compiler: widenconst, singleton_type
+using .Compiler: singleton_type, widenconst
 
 function get_name_color(x::Union{Nothing,EscapeInfo}, symbol::Bool = false)
-    getname(x) = string(nameof(x))
     if x === nothing
         name, color = ("NotAnalyzed", "◌"), :plain
     elseif EA.has_no_escape(EA.ignore_argescape(x))
@@ -204,13 +203,11 @@ Base.show(io::IO, ecacheinfo::EscapeCacheInfo) = show(io, EscapeAnalysisResult(e
 
 using .Compiler: IRShow
 function Base.show(io::IO, result::EscapeAnalysisResult, bb::Int=0)
-    (; ir, eresult, mi, slotnames, source) = result
-    if bb ≠ 0
-        bbstate = eresult.bbescapes[bb]
-        ssamemoryinfo = nothing
+    (; ir, eresult, mi, slotnames) = result
+    bbstate, ssamemoryinfo = if bb ≠ 0
+        eresult.bbescapes[bb], nothing
     else
-        bbstate = eresult.retescape
-        ssamemoryinfo = eresult.ssamemoryinfo
+        eresult.retescape, eresult.ssamemoryinfo
     end
 
     io = IOContext(io, :displaysize=>displaysize(io))
