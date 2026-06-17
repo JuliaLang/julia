@@ -2659,6 +2659,34 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
     if (needlock)
         emit_lockstate_value(ctx, needlock, true);
     jl_cgval_t oldval = rhs;
+    // Emit the write barrier for the new value *before* the store.
+    auto emit_store_pre_barrier = [&] {
+        if (parent == NULL || !tracked_pointers)
+            return;
+        if (isboxed) {
+            if (type_is_permalloc(rhs.typ))
+                return;
+            assert(r != nullptr);
+            emit_write_barrier(ctx, parent, r);
+        }
+        else if (!rhs.inline_roots.empty()) {
+            emit_write_multibarrier(ctx, parent, rhs);
+        }
+        else {
+            // Unbox to the field's storage type (concrete by construction), not
+            // rhs.typ which may be bottom for an unreachable store (e.g. a modify
+            // of an always-undef field) and would make emit_unbox return null.
+            // intcast_eltyp is the pointer-exposing type when the field was
+            // widened to an integer for atomics.
+            Type *wb_eltyp = intcast_eltyp ? intcast_eltyp : realelty;
+            Value *agg = emit_unbox(ctx, wb_eltyp, rhs);
+            emit_write_multibarrier(ctx, parent, agg, rhs.typ);
+        }
+    };
+    // For op == StoreKind::Modify the new value isn't known yet; its barrier is
+    // emitted later, once `rhs`/`r` have been computed.
+    if (op != StoreKind::Modify)
+        emit_store_pre_barrier();
     // TODO: we should do Release ordering for anything with CountTrackedPointers(elty).count > 0, instead of just isboxed
     if (op == StoreKind::Set || (Order == AtomicOrdering::NotAtomic && op == StoreKind::Swap)) {
         if (op == StoreKind::Swap) {
@@ -2877,6 +2905,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             }
             if (needlock)
                 emit_lockstate_value(ctx, needlock, true); // relock
+            emit_store_pre_barrier();
             cmpop = oldval;
         }
         Value *Done;
@@ -2990,40 +3019,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         ctx.builder.SetInsertPoint(DoneBB);
     if (needlock)
         emit_lockstate_value(ctx, needlock, false);
-    if (parent != NULL && tracked_pointers && (!isboxed || !type_is_permalloc(rhs.typ))) {
-        if (op == StoreKind::Replace || op == StoreKind::SetOnce) {
-            BasicBlock *BB = BasicBlock::Create(ctx.builder.getContext(), "xchg_wb", ctx.f);
-            DoneBB = BasicBlock::Create(ctx.builder.getContext(), "done_xchg_wb", ctx.f);
-            ctx.builder.CreateCondBr(Success, BB, DoneBB);
-            ctx.builder.SetInsertPoint(BB);
-        }
-        if (r) {
-            if (realelty != elty)
-                r = ctx.builder.Insert(CastInst::Create(Instruction::Trunc, r, realelty));
-            if (intcast) {
-                ctx.builder.CreateStore(r, intcast);
-                r = ctx.builder.CreateLoad(intcast_eltyp, intcast);
-            }
-            else if (!isboxed && intcast_eltyp) {
-                assert(op == StoreKind::Set);
-                // setfield doesn't use intcast, so need to reload rhs with the correct type
-                r = emit_unbox(ctx, intcast_eltyp, rhs);
-            }
-            if (!isboxed)
-                emit_write_multibarrier(ctx, parent, r, rhs.typ);
-            else
-                emit_write_barrier(ctx, parent, r);
-        }
-        else {
-            assert(!isboxed);
-            assert(!rhs.inline_roots.empty());
-            emit_write_multibarrier(ctx, parent, rhs);
-        }
-        if (op == StoreKind::Replace || op == StoreKind::SetOnce) {
-            ctx.builder.CreateBr(DoneBB);
-            ctx.builder.SetInsertPoint(DoneBB);
-        }
-    }
+    // Write barrier is emitted before the store (see emit_store_pre_barrier above).
     switch (op) {
     case StoreKind::Modify: {
         const jl_cgval_t argv[2] = { oldval, rhs };
