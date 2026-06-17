@@ -282,10 +282,34 @@ void jl_pgcstack_getkey(jl_get_pgcstack_func **f, jl_pgcstack_key_t *k)
 static uv_mutex_t tls_lock; // controls write-access to these variables:
 _Atomic(jl_ptls_t*) jl_all_tls_states JL_GLOBALLY_ROOTED;
 int jl_all_tls_states_size;
-static uv_cond_t cond;
 // concurrent reads are permitted, using the same pattern as mtsmall_arraylist
 // it is implemented separately because the API of direct jl_all_tls_states use is already widely prevalent
 void jl_init_thread_scheduler(jl_ptls_t ptls) JL_NOTSAFEPOINT;
+
+// Parking lot for jl_mutex_t: keeps the blocking state out of jl_mutex_t so it
+// can stay a movable, zero-initializable POD ({owner, count}) embedded in
+// sysimage objects. A waiter that loses the CAS parks on the bucket its lock
+// hashes to instead of spinning; the owner broadcasts that bucket on release.
+// Sharding bounds the wakeup fan-out, and nwaiting lets an uncontended unlock
+// skip the bucket mutex.
+#define JL_MUTEX_NPARK 256
+static struct {
+    uv_mutex_t mtx;
+    uv_cond_t cond;
+    _Atomic(uint32_t) nwaiting;
+} jl_mutex_park[JL_MUTEX_NPARK];
+
+static inline uint32_t jl_mutex_park_idx(jl_mutex_t *lock) JL_NOTSAFEPOINT
+{
+    // Invertible xorshift (low bits dropped for alignment). Permutation-like on
+    // purpose: the set of locks parked at once is small and often consecutively
+    // allocated, so mapping neighbors to distinct buckets gives sub-random
+    // collisions -- better here than a multiplicative/uniform hash.
+    uintptr_t h = (uintptr_t)lock >> 4;
+    h ^= h >> 7;
+    h ^= h >> 13;
+    return (uint32_t)(h & (JL_MUTEX_NPARK - 1));
+}
 
 // return calling thread's ID
 JL_DLLEXPORT int16_t jl_threadid(void)
@@ -706,7 +730,11 @@ void jl_init_threading(void)
     char *cp;
 
     uv_mutex_init(&tls_lock);
-    uv_cond_init(&cond);
+    for (int i = 0; i < JL_MUTEX_NPARK; i++) {
+        uv_mutex_init(&jl_mutex_park[i].mtx);
+        uv_cond_init(&jl_mutex_park[i].cond);
+        jl_atomic_store_relaxed(&jl_mutex_park[i].nwaiting, 0);
+    }
 #ifdef JL_ELF_TLS_VARIANT
     jl_check_tls();
 #endif
@@ -961,6 +989,7 @@ void _jl_mutex_wait(jl_task_t *self, jl_mutex_t *lock, int safepoint)
         return;
     }
     JL_TIMING(LOCK_SPIN, LOCK_SPIN);
+    uint32_t idx = jl_mutex_park_idx(lock);
     while (1) {
         if (owner == NULL && jl_atomic_cmpswap(&lock->owner, &owner, self)) {
             lock->count = 1;
@@ -970,22 +999,22 @@ void _jl_mutex_wait(jl_task_t *self, jl_mutex_t *lock, int safepoint)
 #endif
             return;
         }
-        if (jl_running_under_rr(0)) {
-            // when running under `rr`, use system mutexes rather than spin locking
-            int8_t gc_state;
-            if (safepoint)
-                gc_state = jl_gc_safe_enter(self->ptls);
-            uv_mutex_lock(&tls_lock);
-            if (jl_atomic_load_relaxed(&lock->owner))
-                uv_cond_wait(&cond, &tls_lock);
-            uv_mutex_unlock(&tls_lock);
-            if (safepoint)
-                jl_gc_safe_leave(self->ptls, gc_state);
-        }
-        else if (safepoint) {
-            jl_gc_safepoint_(self->ptls);
-        }
-        jl_cpu_suspend();
+        // Park instead of spin. Bump nwaiting and fence before re-checking the
+        // owner: pairs with the fence in _jl_mutex_unlock_nogc so the releaser
+        // always sees us and broadcasts (no lost wakeup). Block GC-safe (but not
+        // for nogc waiters, matching the prior behavior).
+        int8_t gc_state = 0;
+        if (safepoint)
+            gc_state = jl_gc_safe_enter(self->ptls);
+        jl_atomic_fetch_add_relaxed(&jl_mutex_park[idx].nwaiting, 1);
+        jl_fence();
+        uv_mutex_lock(&jl_mutex_park[idx].mtx);
+        if (jl_atomic_load_relaxed(&lock->owner) != NULL)
+            uv_cond_wait(&jl_mutex_park[idx].cond, &jl_mutex_park[idx].mtx);
+        uv_mutex_unlock(&jl_mutex_park[idx].mtx);
+        jl_atomic_fetch_add_relaxed(&jl_mutex_park[idx].nwaiting, -1);
+        if (safepoint)
+            jl_gc_safe_leave(self->ptls, gc_state);
         owner = jl_atomic_load_relaxed(&lock->owner);
     }
 #ifdef _COMPILER_TSAN_ENABLED_
@@ -1077,11 +1106,15 @@ void _jl_mutex_unlock_nogc(jl_mutex_t *lock)
         jl_profile_lock_release_start(lock);
         jl_atomic_store_release(&lock->owner, (jl_task_t*)NULL);
         jl_cpu_wake();
-        if (jl_running_under_rr(0)) {
-            // when running under `rr`, use system mutexes rather than spin locking
-            uv_mutex_lock(&tls_lock);
-            uv_cond_broadcast(&cond);
-            uv_mutex_unlock(&tls_lock);
+        // Wake anyone parked on this lock's bucket. The fence before reading
+        // nwaiting pairs with the one in _jl_mutex_wait (no lost wakeup); with
+        // no waiters this is just a relaxed load, no bucket mutex.
+        uint32_t idx = jl_mutex_park_idx(lock);
+        jl_fence();
+        if (jl_atomic_load_relaxed(&jl_mutex_park[idx].nwaiting) != 0) {
+            uv_mutex_lock(&jl_mutex_park[idx].mtx);
+            uv_cond_broadcast(&jl_mutex_park[idx].cond);
+            uv_mutex_unlock(&jl_mutex_park[idx].mtx);
         }
         jl_profile_lock_release_end(lock);
     }
