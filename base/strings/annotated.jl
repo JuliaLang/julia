@@ -161,6 +161,7 @@ lastindex(s::AnnotatedString) = lastindex(s.string)
 """
     unannotate(s::AnnotatedString{S})::S
     unannotate(s::SubString{AnnotatedString{S}})::SubString{S}
+    unannotate(s::SubString{AnnotatedString{SubString{S}}})::SubString{S}
 
 Get the underlying string of `s`, without copying.
 
