@@ -4,6 +4,7 @@ Pkg.activate(".")
 
 using Test
 using JSON
+using Serialization
 
 @test length(ARGS) == 1
 bindir = dirname(ARGS[1])
@@ -89,4 +90,38 @@ let exe_suffix = splitext(Base.julia_exename())[2]
     # `Ptr{CTree{Float64}}` should refer (recursively) back to the original type id
     Ptr_CTree_Float64 = abi["types"][CVector_CTree_Float64["fields"][2]["type_id"]]
     @test Ptr_CTree_Float64["pointee_type_id"] == CTree_Float64_id
+
+    # Test that Serialization.serialize supports trimming
+    serialization_exe = joinpath(bindir, "serialization" * exe_suffix)
+    @test readchomp(`$serialization_exe`) == "serialization ok"
+    # Verify stdlib types were serialized correctly
+    result = deserialize(joinpath(bindir, "_trim_stdlib.jls"))
+    @test result == (42, "hello", :sym, (1, 2.0), Int[10, 20, 30])
+    # Verify custom struct file was produced and round-trips, including the
+    # `Memory{Union{Int,String}}` field (regression test for trim-safe
+    # serialization of `Union`-valued DataType parameters). The struct
+    # definitions must match those in `serialization.jl`.
+    @eval mutable struct TrimSerMut
+        s::String
+        m::Memory{Int}
+        u::Union{Int, Nothing}
+        t::Tuple{Int, String}
+        mu::Memory{Union{Int, String}}
+    end
+    @eval struct TrimSerImm
+        a::Int
+        b::TrimSerMut
+    end
+    @test filesize(joinpath(bindir, "_trim_custom.jls")) > 0
+    custom = deserialize(joinpath(bindir, "_trim_custom.jls"))
+    @test custom.a == 42
+    @test custom.b.s == "hello"
+    @test custom.b.u === 7
+    @test custom.b.t == (3, "world")
+    @test custom.b.mu isa Memory{Union{Int, String}}
+    @test custom.b.mu[1] === 123
+    @test custom.b.mu[2] == "abc"
+    # Clean up
+    rm(joinpath(bindir, "_trim_stdlib.jls"), force=true)
+    rm(joinpath(bindir, "_trim_custom.jls"), force=true)
 end

@@ -289,16 +289,22 @@ serialize(s::AbstractSerializer, p::Ptr) = serialize_any(s, oftype(p, C_NULL))
 serialize(s::AbstractSerializer, ::Tuple{}) = writetag(s.io, EMPTYTUPLE_TAG)
 
 function serialize(s::AbstractSerializer, t::Tuple)
-    l = length(t)
-    if l <= NTAGS
-        writetag(s.io, TUPLE_TAG)
-        write(s.io, UInt8(l))
+    l = nfields(t)
+    short = l <= NTAGS
+    if @generated
+        exprs = Vector{Expr}(undef, l + 2)
+        exprs[1] = :(writetag(s.io, $(short ? TUPLE_TAG : LONGTUPLE_TAG)))
+        exprs[2] = :(write(s.io, $(short ? UInt8 : Int32)($l)))
+        for i in 1:l
+            exprs[2+i] = :(serialize(s, t[$i]))
+        end
+        return Expr(:block, exprs...)
     else
-        writetag(s.io, LONGTUPLE_TAG)
-        write(s.io, Int32(l))
-    end
-    for x in t
-        serialize(s, x)
+        writetag(s.io, short ? TUPLE_TAG : LONGTUPLE_TAG)
+        write(s.io, (short ? UInt8 : Int32)(l))
+        for i in 1:l
+            serialize(s, t[i])
+        end
     end
 end
 
@@ -368,7 +374,7 @@ function serialize(s::AbstractSerializer, a::Array)
     elty = eltype(a)
     writetag(s.io, ARRAY_TAG)
     if elty !== UInt8
-        serialize(s, elty)
+        serialize_datatype(s, elty)
     end
     if ndims(a) != 1
         serialize(s, size(a))
@@ -497,19 +503,10 @@ function serialize(s::AbstractSerializer, m::Module)
     writetag(s.io, EMPTYTUPLE_TAG)
 end
 
-# TODO: make this bidirectional, so objects can be sent back via the same key
-const object_numbers = WeakKeyDict()
-const obj_number_salt = Ref{UInt64}(0)
-function object_number(s::AbstractSerializer, @nospecialize(l))
-    global obj_number_salt, object_numbers
-    if haskey(object_numbers, l)
-        return object_numbers[l]
-    end
-    ln = obj_number_salt[]
-    object_numbers[l] = ln
-    obj_number_salt[] += 1
-    return ln::UInt64
-end
+# In principle, use the `AbstractSerializer`'s counter to assign unique object numbers.
+# However, as the counter as already be incremented, actually use the copy in `table.l`
+# as the result is more intuitive.
+object_number(s::AbstractSerializer, l) = s.table[l] % UInt64
 
 lookup_object_number(s::AbstractSerializer, n::UInt64) = nothing
 
@@ -681,7 +678,7 @@ function should_send_whole_type(s, t::DataType)
     return isanonfunction
 end
 
-function serialize_type_data(s, @nospecialize(t::DataType))
+function serialize_type_data_dynamic(s, @nospecialize(t::DataType))
     whole = should_send_whole_type(s, t)
     iswrapper = (t === unwrap_unionall(t.name.wrapper))
     if whole && iswrapper
@@ -711,6 +708,71 @@ function serialize_type_data(s, @nospecialize(t::DataType))
     nothing
 end
 
+# Serialize a type-valued DataType parameter statically, recursing through
+# `Union` so that trimming does not need to see the reflective
+# `serialize_fields(::Union)` fallback. Any non-`Union` case falls back to the
+# ordinary `serialize` dispatch (which for `DataType`/`UnionAll`/`Bottom` is
+# already statically resolvable from the compile-time type argument).
+function serialize_type_param(s::AbstractSerializer, ::Type{T}) where T
+    if @generated
+        if T isa Union
+            a = T.a
+            b = T.b
+            return quote
+                writetag(s.io, $(sertag(Union)))
+                serialize_type_param(s, $a)
+                serialize_type_param(s, $b)
+            end
+        elseif T isa DataType
+            return :(serialize_datatype(s, $T))
+        else
+            return :(serialize(s, T))
+        end
+    else
+        serialize(s, T)
+    end
+end
+
+function serialize_type_data(s, t::Type{T}) where T
+    if @generated
+        # When called with a DataType containing free TypeVars (e.g. Foo{T} from
+        # a UnionAll body), Julia's type dispatch binds T to the TypeVar itself
+        # rather than the DataType. Fall back to the runtime path in that case.
+        T isa DataType || return :(serialize_type_data_dynamic(s, t))
+        should_send_whole_type(nothing, T) && return :(serialize_type_data_dynamic(s, $T))
+        iswrapper = T === unwrap_unionall(T.name.wrapper)
+        name_sym = QuoteNode(nameof(T))
+        mod = parentmodule(T)
+        params = T.parameters
+        exprs = Expr[]
+        push!(exprs, :(serialize_cycle(s, $T) && return))
+        push!(exprs, :(writetag(s.io, DATATYPE_TAG)))
+        push!(exprs, :(serialize(s, $name_sym)))
+        push!(exprs, :(serialize(s, $mod)))
+        if !isempty(params)
+            np = iswrapper ? 0 : length(params)
+            push!(exprs, :(write(s.io, Int32($np))))
+            if !iswrapper
+                for p in params
+                    if p isa DataType
+                        push!(exprs, :(serialize_datatype(s, $p)))
+                    elseif p isa Type
+                        # Union (and similar) type parameters: recurse
+                        # statically so trim does not see the reflective
+                        # `serialize_fields`/`getfield(::Type, N)::Any` path.
+                        push!(exprs, :(serialize_type_param(s, $p)))
+                    else
+                        push!(exprs, :(serialize(s, $(QuoteNode(p)))))
+                    end
+                end
+            end
+        end
+        return quote $(exprs...) end
+    else
+        serialize_type_data_dynamic(s, t)
+    end
+end
+
 function serialize(s::AbstractSerializer, t::DataType)
     tag = sertag(t)
     tag > 0 && return write_as_tag(s.io, tag)
@@ -724,11 +786,25 @@ function serialize(s::AbstractSerializer, t::DataType)
     serialize_type_data(s, t)
 end
 
-function serialize_type(s::AbstractSerializer, @nospecialize(t::DataType), ref::Bool = false)
-    tag = sertag(t)
+# Resolves tag checks at compile time when the type is statically known
+# (e.g. Array element type serialization).
+function serialize_datatype(s::AbstractSerializer, ::Type{T}) where T
+    if @generated
+        T isa DataType || return :(serialize(s, $T))
+        tag = sertag(T)
+        tag > 0 && return :(write_as_tag(s.io, $tag))
+        T === Tuple && return :(write_as_tag(s.io, TUPLE_TAG))
+        return :(serialize_type_data(s, $T))
+    else
+        serialize(s, T)
+    end
+end
+
+function serialize_type(s::AbstractSerializer, ::Type{T}, ref::Bool = false) where T
+    tag = sertag(T)
     tag > 0 && return writetag(s.io, tag)
     writetag(s.io, ref ? REF_OBJECT_TAG : OBJECT_TAG)
-    serialize_type_data(s, t)
+    serialize_type_data(s, T)
 end
 
 function serialize(s::AbstractSerializer, n::Int32)
@@ -781,7 +857,7 @@ function serialize(s::AbstractSerializer, u::UnionAll)
     end
 end
 
-serialize(s::AbstractSerializer, @nospecialize(x)) = serialize_any(s, x)
+serialize(s::AbstractSerializer, x) = serialize_any(s, x)
 
 function serialize(s::AbstractSerializer, x::Core.AddrSpace)
     serialize_type(s, typeof(x))
@@ -793,24 +869,58 @@ function serialize(s::AbstractSerializer, x::Core.IntrinsicFunction)
     serialize(s, nameof(x))
 end
 
-function serialize_any(s::AbstractSerializer, @nospecialize(x))
-    tag = sertag(x)
-    if tag > 0
-        return write_as_tag(s.io, tag)
-    end
-    t = typeof(x)::DataType
-    if isprimitivetype(t)
-        serialize_type(s, t)
-        write(s.io, x)
-    else
-        if ismutable(x)
-            serialize_cycle(s, x) && return
-            serialize_type(s, t, true)
+function serialize_any(s::AbstractSerializer, x::T) where T
+    if @generated
+        exprs = Expr[]
+        push!(exprs, :(tag = sertag(x)))
+        push!(exprs, :(tag > 0 && return write_as_tag(s.io, tag)))
+        if isprimitivetype(T)
+            push!(exprs, :(serialize_type(s, $T)))
+            push!(exprs, :(write(s.io, x)))
+        elseif ismutabletype(T)
+            push!(exprs, :(serialize_cycle(s, x) && return))
+            push!(exprs, :(serialize_type(s, $T, true)))
+            push!(exprs, :(serialize_fields(s, x)))
         else
-            serialize_type(s, t, false)
+            push!(exprs, :(serialize_type(s, $T, false)))
+            push!(exprs, :(serialize_fields(s, x)))
         end
-        nf = nfields(x)
+        push!(exprs, :(return nothing))
+        return quote $(exprs...) end
+    else
+        tag = sertag(x)
+        tag > 0 && return write_as_tag(s.io, tag)
+        if isprimitivetype(T)
+            serialize_type(s, T)
+            write(s.io, x)
+        elseif ismutabletype(T)
+            serialize_cycle(s, x) && return
+            serialize_type(s, T, true)
+            serialize_fields(s, x)
+        else
+            serialize_type(s, T, false)
+            serialize_fields(s, x)
+        end
+        return nothing
+    end
+end
+
+function serialize_fields(s::AbstractSerializer, x::T) where T
+    if @generated
+        nf = fieldcount(T)
+        exprs = Vector{Expr}(undef, nf)
         for i in 1:nf
+            exprs[i] = quote
+                if isdefined(x, $i)
+                    serialize(s, getfield(x, $i))
+                else
+                    writetag(s.io, UNDEFREF_TAG)
+                end
+            end
+        end
+        return Expr(:block, exprs...)
+    else
+        for i in 1:nfields(x)
             if isdefined(x, i)
                 serialize(s, getfield(x, i))
             else
@@ -818,7 +928,6 @@ function serialize_any(s::AbstractSerializer, @nospecialize(x))
             end
         end
     end
-    nothing
 end
 
 """
@@ -924,7 +1033,14 @@ Open a file and serialize the given value to it.
 !!! compat "Julia 1.1"
     This method is available as of Julia 1.1.
 """
-serialize(filename::AbstractString, x) = open(io->serialize(io, x), filename, "w")
+function serialize(filename::AbstractString, x)
+    io = open(filename, "w")
+    try
+        serialize(io, x)
+    finally
+        close(io)
+    end
+end
 
 ## deserializing values ##
 
