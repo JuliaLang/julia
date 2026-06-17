@@ -127,22 +127,18 @@ function uses_frontend_opaque(x)
 end
 @test uses_frontend_opaque(10)(8) == 18
 
-# `Core.Compiler.return_type` on OpaqueClosure values
-let oc = @opaque x::Int -> 2x
-    @test Core.Compiler.return_type(oc, Tuple{Int}) == Int
+# `Core.Compiler.return_type` on OpaqueClosure values observes the return type
+# declared by the OC type without inspecting the OC source.
+let oc = @opaque Tuple{Int}->Real x -> 2x
+    @test isa(oc, OpaqueClosure{Tuple{Int}, Real})
+    @test Base.Compiler.return_type(oc, Tuple{Int}) == Real
+    @test Core.Compiler.return_type(oc, Tuple{String}) == Union{}
 end
 let oc = @opaque x -> 2x
-    @test Core.Compiler.return_type(oc, Tuple{Int}) == Int
+    @test Base.Compiler.return_type(oc, Tuple{Int}) === typeof(oc).parameters[2]
 end
-let c = 1.0
-    oc = @opaque x::Int -> x + c
-    @test Core.Compiler.return_type(oc, Tuple{Int}) == Float64
-end
-# `return_type` should model the actual OC value by the runtime type of its
-# captures, not by call-site-only constant refinements of those captures.
-let c = true
-    oc = @opaque x::Int -> c ? x : 1.0
-    @test Core.Compiler.return_type(oc, Tuple{Int}) == Union{Float64,Int}
+let oc = @opaque x::Int -> 2x
+    @test Base.Compiler.return_type(oc, Tuple{Int}) === typeof(oc).parameters[2]
 end
 
 # World age mechanism
@@ -164,14 +160,6 @@ test_oc_world_age() = 1
 g_world_age = @opaque ()->test_oc_world_age()
 @test g_world_age() == 1
 @test isa(mk_oc_world_age(), OpaqueClosure{Tuple{}, Int})
-
-# Compiler.return_type should be aware of the OC world age mechanism
-test_oc_return_type_world_age(x) = 2x
-g_return_type_world_age = @opaque x::Int -> test_oc_return_type_world_age(x)
-test_oc_return_type_world_age(x) = 2.0x
-@test g_return_type_world_age(1) === 2
-@test Core.Compiler.return_type(g_return_type_world_age, Tuple{Int}) == Int
-
 end # module test_world_age
 
 function maybe_vararg(isva::Bool)
