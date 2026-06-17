@@ -296,8 +296,8 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_task_t *ct, jl_handler_t *eh)
     sig_atomic_t old_defer_signal = ptls->defer_signal;
     ct->eh = eh->prev;
     ct->gcstack = eh->gcstack;
+    jl_gc_wb_current_task(ct, eh->scope);
     ct->scope = eh->scope;
-    jl_gc_wb_current_task(ct, ct->scope);
     small_arraylist_t *locks = &ptls->locks;
     int unlocks = locks->len > eh->locks_len;
     if (unlocks) {
@@ -336,8 +336,8 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_task_t *ct, jl_handler_t *eh)
 JL_DLLEXPORT void jl_eh_restore_state_noexcept(jl_task_t *ct, jl_handler_t *eh)
 {
     assert(ct->gcstack == eh->gcstack && "Incorrect GC usage under try catch");
+    jl_gc_wb_current_task(ct, eh->scope);
     ct->scope = eh->scope;
-    jl_gc_wb_current_task(ct, ct->scope);
     ct->eh = eh->prev;
     ct->ptls->defer_signal = eh->defer_signal; // optional, but certain try-finally (in stream.jl) may be slightly harder to write without this
 }
@@ -396,8 +396,7 @@ static void jl_reserve_excstack(jl_task_t *ct, jl_excstack_t **stack JL_REQUIRE_
     new_s->reserved_size = reserved_size;
     if (s)
         jl_copy_excstack(new_s, s);
-    *stack = new_s;
-    jl_gc_wb(ct, new_s);
+    jl_gc_write(ct, *stack, new_s);
 }
 
 void jl_push_excstack(jl_task_t *ct, jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT,
