@@ -6,7 +6,7 @@ outdir = ARGS[1]
 @testset "Trimmability" begin
     exe_suffix = splitext(Base.julia_exename())[2]
     trimmability_exe = joinpath(outdir, "bin", "trimmability" * exe_suffix)
-    lines = split(readchomp(`$trimmability_exe arg1 arg2`), "\n")
+    lines = readlines(`$trimmability_exe arg1 arg2`)
     @test lines[1] == "Hello, world!"
     @test lines[2] == trimmability_exe
     @test lines[3] == "arg1"

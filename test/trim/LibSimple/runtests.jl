@@ -14,7 +14,7 @@ outdir = ARGS[1]
     # The shared library can be used in a C application
     capplication_exe = joinpath(outdir, "bin", "capplication" * exe_suffix)
     libpath = joinpath(outdir, libdir, "libsimple." * dlext)
-    lines = split(readchomp(`$capplication_exe $libpath`), "\n")
+    lines = readlines(`$capplication_exe $libpath`)
     @test length(lines) == 2
     @test lines[1] == "Sum of copied values: 6.000000"
     @test lines[2] == "Count of same vectors: 1"
