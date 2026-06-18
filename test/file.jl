@@ -30,14 +30,14 @@ end
     @test !ispath("does/not/exist")
     @test !isdir("does/not/exist")
     @test_throws Base.IOError readdir("does/not/exist")
-    @test_throws Base.IOError readdir(DirEntry, "does/not/exist")
+    @test_throws Base.IOError readdir("does/not/exist", DirEntry)
 
     mktempdir() do dir
         touch(joinpath(dir, "afile.txt"))
         mkdir(joinpath(dir, "adir"))
         touch(joinpath(dir, "adir", "bfile.txt"))
         @test length(readdir(dir)) == 2
-        @test readdir(dir) == basename.(readdir(DirEntry, dir))
+        @test readdir(dir) == basename.(readdir(dir, DirEntry))
         for p in readdir(dir, join=true)
             if isdir(p)
                 @test only(readdir(p)) == "bfile.txt"
@@ -46,10 +46,10 @@ end
                 @test p == joinpath(dir, "afile.txt")
             end
         end
-        for e in readdir(DirEntry, dir)
+        for e in readdir(dir, DirEntry)
             if isdir(e)
                 @test only(readdir(e)) == "bfile.txt"
-                @test basename(only(readdir(DirEntry, e))) == "bfile.txt"
+                @test basename(only(readdir(e, DirEntry))) == "bfile.txt"
             else
                 @test isfile(e)
                 @test basename(e) == "afile.txt"
@@ -58,77 +58,13 @@ end
     end
 end
 
-# scandir: lazy single-pass iteration; default String, opt into DirEntry
-@testset "scandir" begin
-    @test_throws Base.IOError iterate(scandir("does/not/exist"))
-    @test_throws Base.IOError iterate(scandir(DirEntry, "does/not/exist"))
-
-    mktempdir() do dir
-        touch(joinpath(dir, "afile.txt"))
-        mkdir(joinpath(dir, "adir"))
-        touch(joinpath(dir, "adir", "bfile.txt"))
-
-        # Default yields String names matching readdir
-        @test sort!(collect(scandir(dir))) == sort!(readdir(dir))
-        # DirEntry form yields DirEntry objects matching readdir(DirEntry, ...)
-        @test sort!(basename.(collect(scandir(DirEntry, dir)))) == sort!(readdir(dir))
-        # join=true yields full paths matching readdir(dir; join=true)
-        @test sort!(collect(scandir(dir; join=true))) == sort!(readdir(dir; join=true))
-        joined = scandir(dir; join=true) do paths
-            collect(paths)
-        end
-        @test sort!(joined) == sort!(readdir(dir; join=true))
-
-        # Iterator type and traits
-        it = scandir(dir)
-        @test eltype(it) === String
-        @test Base.IteratorSize(it) === Base.SizeUnknown()
-        itD = scandir(DirEntry, dir)
-        @test eltype(itD) === Base.Filesystem.DirEntry
-
-        # Single-pass: once consumed, cannot iterate again
-        for _ in it; end
-        @test_throws ArgumentError iterate(it)
-
-        # Short-circuit via break does not error and frees resources via finalizer/close
-        for e in scandir(dir)
-            break
-        end
-        for e in scandir(DirEntry, dir)
-            break
-        end
-
-        # Explicit close is idempotent and disallows further iteration
-        it2 = scandir(dir)
-        close(it2)
-        close(it2)
-        @test_throws ArgumentError iterate(it2)
-
-        # do-block forms run and clean up
-        seen = scandir(dir) do names
-            collect(names)
-        end
-        @test sort!(seen) == sort!(readdir(dir))
-        seenD = scandir(DirEntry, dir) do entries
-            collect(basename(e) for e in entries)
-        end
-        @test sort!(seenD) == sort!(readdir(dir))
-
-        # Accepts a DirEntry as input
-        sub = only(e for e in readdir(DirEntry, dir) if isdir(e))
-        @test sort!(collect(scandir(sub))) == ["bfile.txt"]
-        @test sort!(basename.(collect(scandir(DirEntry, sub)))) == ["bfile.txt"]
-        @test sort!(collect(scandir(sub; join=true))) == [joinpath(dir, "adir", "bfile.txt")]
-    end
-end
-
 if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     dirlink = joinpath(dir, "dirlink")
     symlink(subdir, dirlink)
     @test stat(dirlink) == stat(subdir)
     @test readdir(dirlink) == readdir(subdir)
-    @test basename.(readdir(DirEntry, dirlink)) == basename.(readdir(DirEntry, subdir))
-    @test realpath.(readdir(DirEntry, dirlink)) == realpath.(readdir(DirEntry, subdir))
+    @test basename.(readdir(dirlink, DirEntry)) == basename.(readdir(subdir, DirEntry))
+    @test realpath.(readdir(dirlink, DirEntry)) == realpath.(readdir(subdir, DirEntry))
 
     # relative link
     relsubdirlink = joinpath(subdir, "rel_subdirlink")
@@ -136,8 +72,8 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     symlink(reldir, relsubdirlink)
     @test stat(relsubdirlink) == stat(subdir2)
     @test readdir(relsubdirlink) == readdir(subdir2)
-    @test basename.(readdir(DirEntry, relsubdirlink)) == basename.(readdir(DirEntry, subdir2))
-    @test realpath.(readdir(DirEntry, relsubdirlink)) == realpath.(readdir(DirEntry, subdir2))
+    @test basename.(readdir(relsubdirlink, DirEntry)) == basename.(readdir(subdir2, DirEntry))
+    @test realpath.(readdir(relsubdirlink, DirEntry)) == realpath.(readdir(subdir2, DirEntry))
 
     # creation of symlink to directory that does not yet exist
     new_dir = joinpath(subdir, "new_dir")
@@ -156,7 +92,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     mkdir(new_dir)
     touch(foo_file)
     @test readdir(new_dir) == readdir(nedlink)
-    @test realpath.(readdir(DirEntry, new_dir)) == realpath.(readdir(DirEntry, nedlink))
+    @test realpath.(readdir(new_dir, DirEntry)) == realpath.(readdir(nedlink, DirEntry))
 
     rm(foo_file)
     rm(new_dir)

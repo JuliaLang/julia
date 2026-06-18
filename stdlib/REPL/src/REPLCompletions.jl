@@ -478,7 +478,7 @@ function cache_PATH()
         end
 
         path_entries = try
-            readdir(DirEntry, pathdir)
+            readdir(pathdir, DirEntry)
         catch e
             # Bash allows dirs in PATH that can't be read, so we should as well.
             if isa(e, Base.IOError) || isa(e, Base.ArgumentError)
@@ -543,7 +543,7 @@ function complete_path(path::AbstractString;
         if isempty(dir)
             readdir(DirEntry)
         elseif isdir(dir)
-            readdir(DirEntry, dir)
+            readdir(dir, DirEntry)
         else
             return Completion[], dir, false
         end
@@ -1090,7 +1090,7 @@ function complete_loading_candidates!(suggestions::Vector{Completion}, s::String
             end
         end
         isdir(dir) || continue
-        for entry in readdir(DirEntry, dir)
+        for entry in readdir(dir, DirEntry)
             pname = basename(entry)
             if pname[1] != '.' && pname != "METADATA" &&
                 pname != "REQUIRE" && startswith(pname, s)

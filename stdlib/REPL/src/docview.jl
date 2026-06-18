@@ -394,7 +394,7 @@ function find_readme(m::Module)::Union{String, Nothing}
     path = dirname(mpath)
     top_path = pkgdir(m)
     while true
-        for entry in readdir(DirEntry, path; sort=true)
+        for entry in readdir(path, DirEntry; sort=true)
             isfile(entry) && (lowercase(basename(entry)) in ["readme.md", "readme"]) || continue
             return joinpath(entry)
         end
