@@ -1511,6 +1511,22 @@ endif
 endef
 $(foreach proj,$(BB_PROJECTS),$(eval $(call SET_BB_DEFAULT,$(proj))))
 
+# Set the CSL default here too because it affects top-level source flags in
+# addition to dependency installation rules in deps/csl.mk.
+ifeq ($(USE_BINARYBUILDER),0)
+USE_BINARYBUILDER_CSL ?= 0
+else
+ifeq ($(USE_SYSTEM_CSL),1)
+USE_BINARYBUILDER_CSL ?= 0
+else
+LIBSTDCXX_PATH := $(call pathsearch,$(call versioned_libname,libstdc++,6),$(STD_LIB_PATH))
+ifneq (,$(and $(LIBSTDCXX_PATH),$(shell objdump -p '$(LIBSTDCXX_PATH)' | grep '$(CSL_NEXT_GLIBCXX_VERSION)')))
+USE_BINARYBUILDER_CSL ?= 0
+else
+USE_BINARYBUILDER_CSL ?= 1
+endif
+endif
+endif
 
 # Warn if the user tries to build something that requires `gfortran` but they don't have it installed.
 ifeq ($(FC_VERSION),)

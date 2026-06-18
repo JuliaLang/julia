@@ -26,28 +26,18 @@ extern "C" {
 #include <fenv.h>
 #endif
 
-#if defined(JL_MINGW_RUNTIME_HAS_MSVC_FENV_ABI) && defined(__MINGW32__) && defined(_RC_CHOP) && FE_TOWARDZERO != _RC_CHOP
-#warning "Using MSVC-compatible MinGW fenv ABI with old fenv.h constants; redefining FE_* constants."
-#undef FE_INEXACT
-#undef FE_UNDERFLOW
-#undef FE_OVERFLOW
-#undef FE_DIVBYZERO
-#undef FE_INVALID
-#undef FE_ALL_EXCEPT
+#if defined(JL_MINGW_RUNTIME_HAS_MSVC_FENV_ABI) && defined(__MINGW32__) && FE_TOWARDZERO != 0x300
+// The linked MinGW runtime uses the MSVC-compatible fenv ABI, but the compiler
+// headers may still expose the older x87 constants.
+#pragma message "Using MSVC-compatible MinGW fenv ABI with old fenv.h rounding constants; redefining FE_* rounding constants."
 #undef FE_TONEAREST
 #undef FE_UPWARD
 #undef FE_DOWNWARD
 #undef FE_TOWARDZERO
-#define FE_INEXACT _SW_INEXACT
-#define FE_UNDERFLOW _SW_UNDERFLOW
-#define FE_OVERFLOW _SW_OVERFLOW
-#define FE_DIVBYZERO _SW_ZERODIVIDE
-#define FE_INVALID _SW_INVALID
-#define FE_ALL_EXCEPT (FE_DIVBYZERO | FE_INEXACT | FE_INVALID | FE_OVERFLOW | FE_UNDERFLOW)
-#define FE_TONEAREST _RC_NEAR
-#define FE_UPWARD _RC_UP
-#define FE_DOWNWARD _RC_DOWN
-#define FE_TOWARDZERO _RC_CHOP
+#define FE_TONEAREST 0x000
+#define FE_UPWARD 0x200
+#define FE_DOWNWARD 0x100
+#define FE_TOWARDZERO 0x300
 #endif
 
 static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel, const char* julia_bindir);
