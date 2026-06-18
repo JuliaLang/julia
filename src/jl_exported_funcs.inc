@@ -21,6 +21,7 @@
     XX(jl_apply_type1) \
     XX(jl_apply_type2) \
     XX(jl_argument_datatype) \
+    XX(jl_argument_datatypename) \
     XX(jl_array_del_end) \
     XX(jl_array_eltype) \
     XX(jl_array_grow_end) \

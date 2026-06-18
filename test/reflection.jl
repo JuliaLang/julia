@@ -516,6 +516,15 @@ tlayout = TLayout(5,7,11)
 @test_throws ArgumentError fieldnames(Real)
 @test_throws ArgumentError fieldnames(AbstractArray)
 
+# Common-field unions keep field-index queries structural without choosing a representative arm.
+@test fieldindex(Union{Base.RefValue{Int},Base.RefValue{Float64}}, :x) == 1
+@test hasfield(Union{Base.RefValue{Int},Base.RefValue{Float64}}, :x)
+@test Core.Compiler.try_compute_fieldidx(Union{Base.RefValue{Int},Base.RefValue{Float64}}, :x) == 1
+@test Core.Compiler.try_compute_fieldidx(Type{Base.RefValue{Int}}, :x) === nothing
+@test fieldindex(Union{Ref{Int},Ref{Float64}}, :x, false) == 0
+@test !hasfield(Union{Ref{Int},Ref{Float64}}, :x)
+@test_throws FieldError fieldindex(Union{Ref{Int},Ref{Float64}}, :x)
+
 @test fieldtype((NamedTuple{T,Tuple{Int,String}} where T), 1) === Int
 @test fieldtype((NamedTuple{T,Tuple{Int,String}} where T), 2) === String
 @test_throws BoundsError fieldtype((NamedTuple{T,Tuple{Int,String}} where T), 3)
@@ -911,6 +920,14 @@ end
 @test_throws ArgumentError fieldcount(Real)
 @test_throws ArgumentError fieldcount(AbstractArray)
 @test_throws ArgumentError fieldcount(Tuple{Any,Vararg{Any}})
+
+# Common-field unions are definite only when all alternatives share the field count.
+@test fieldcount(Union{Tuple{Int,Float64},Tuple{Int,Int}}) == 2
+@test fieldtypes(Union{Tuple{Int,Float64},Tuple{Int,Int}}) == (Int, Union{Float64,Int})
+@test_throws(ArgumentError("type does not have a definite number of fields"),
+             fieldcount(Union{Tuple{Int},Tuple{Int,Int}}))
+@test_throws(ArgumentError("type does not have a definite number of fields"),
+             fieldtypes(Union{Tuple{Int},Tuple{Int,Int}}))
 
 # PR #22979
 
