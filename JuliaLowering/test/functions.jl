@@ -251,6 +251,27 @@ end
 f_return_in_interpolation()
 """) === 123
 
+@test JuliaLowering.include_string(test_mod, raw"""
+function f_return_in_pparam_default(x, y=(return x), z=10)
+    (x, y, z)
+end
+(f_return_in_pparam_default(1),
+ f_return_in_pparam_default(1,2),
+ f_return_in_pparam_default(1,2,3))
+""") === (1, (1,2,10), (1,2,3))
+
+@test JuliaLowering.include_string(test_mod, raw"""
+function f_return_in_pparam_default2(x, y=(return x), z=(return y); kw=1)
+    (x, y, z, kw)
+end
+(f_return_in_pparam_default2(1),
+ f_return_in_pparam_default2(1,2),
+ f_return_in_pparam_default2(1,2,3),
+ f_return_in_pparam_default2(1;kw=0),
+ f_return_in_pparam_default2(1,2;kw=0),
+ f_return_in_pparam_default2(1,2,3;kw=0))
+""") === (1, 2, (1,2,3,1), 1, 2, (1,2,3,0))
+
 @testset "Optional positional arguments" begin
     @test JuliaLowering.include_string(test_mod, """
     begin

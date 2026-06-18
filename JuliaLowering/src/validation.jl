@@ -809,13 +809,13 @@ vst1_pparam_and_default(vcx, st; eq_is_kw, allow_val_splat) = @stm st begin
         vst1_pparam_typed_tuple(vcx, id) & @stm val begin
             [K"..." v] -> allow_val_splat ? vst1(vcx, v) :
                 @fail(val, "splat only allowed on final positional default arg")
-            _ -> vst1(vcx, val)
+            _ -> vst1(with(vcx; return_ok=true), val)
         end
     ([K"=" id val], when=eq_is_kw) ->
         vst1_pparam_typed_tuple(vcx, id) & @stm val begin
             [K"..." v] -> allow_val_splat ? vst1(vcx, v) :
                 @fail(val, "splat only allowed on final positional default arg")
-            _ -> vst1(vcx, val)
+            _ -> vst1(with(vcx; return_ok=true), val)
         end
     _ -> @fail(st, "malformed optional positional parameter; expected `=`")
 end
@@ -836,6 +836,7 @@ vst1_param_varkw(vcx, st) = @stm st begin
     _ -> @fail(st, "expected identifier")
 end
 
+# note no return_ok in default val, unlike positional defaults, due to bugs
 vst1_param_kw(vcx, st) = @stm (st=strip_arg_meta(st)) begin
     [K"kw" id val] ->
         vst1_param(vcx, id) & vst1(vcx, val)
