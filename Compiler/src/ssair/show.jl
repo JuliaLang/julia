@@ -8,12 +8,12 @@ using Base, Core.IR
 
 import Base: show
 using Base: isexpr, prec_decl, show_unquoted, with_output_color
-using .Compiler: ALWAYS_FALSE, ALWAYS_TRUE, argextype, BasicBlock, block_for_inst,
-    CachedMethodTable, CFG, compute_basic_blocks, DebugInfoStream, Effects,
-    EMPTY_SPTYPES, IncrementalCompact, InferenceResult, InferenceState,
-    InvalidIRError, IRCode, LimitedAccuracy, NativeInterpreter, scan_ssa_use!,
-    singleton_type, sptypes_from_meth_instance, StmtRange, Timings, VarState, widenconst,
-    get_ci_mi, get_ci_abi
+using .Compiler: ALWAYS_FALSE, ALWAYS_TRUE, BasicBlock, CFG, CachedMethodTable,
+    DebugInfoStream, EMPTY_SPTYPES, Effects, IRCode, IncrementalCompact, InferenceResult,
+    InferenceState, InvalidIRError, LimitedAccuracy, NativeInterpreter, StmtRange,
+    Timings, VarState, argextype, block_for_inst, compute_basic_blocks, edge_debuginfo,
+    get_ci_abi, get_ci_mi, has_prev_debuginfo, prev_debuginfo, scan_ssa_use!,
+    singleton_type, source_location, sptypes_from_meth_instance, widenconst
 
 @nospecialize
 
@@ -410,16 +410,16 @@ function append_scopes!(scopes::Vector{LineInfoNode}, pc::Int, di, @nospecialize
         if pc <= 0
             # TODO: assert false
             return false
-        elseif !Base.Compiler.has_prev_debuginfo(di, pc)
-            line = Base.Compiler.source_location(di, pc).line # TODO: column ignored here
+        elseif !has_prev_debuginfo(di, pc)
+            line = source_location(di, pc).line # TODO: column ignored here
             (line <= 0) && (doupdate = false; line = 0) # broken debug info
             push!(scopes, LineInfoNode(def, debuginfo_file1(di), Int32(line)))
         else
-            di2, pc2 = Base.Compiler.prev_debuginfo(di, pc)
+            di2, pc2 = prev_debuginfo(di, pc)
             doupdate &= append_scopes!(scopes, pc2, di2, def)
         end
         def = :var"macro expansion"
-        di, pc = Base.Compiler.edge_debuginfo(di, pc)
+        di, pc = edge_debuginfo(di, pc)
         doupdate |= di !== nothing
     end
     return doupdate

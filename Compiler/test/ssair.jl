@@ -5,7 +5,7 @@ include("irutils.jl")
 
 using Test
 
-using .Compiler: CFG, BasicBlock, NewSSAValue
+using .Compiler: BasicBlock, CFG, NewSSAValue
 
 make_bb(preds, succs) = BasicBlock(Compiler.StmtRange(0, 0), preds, succs)
 
@@ -829,6 +829,17 @@ end
 @test_throws ErrorException f_must_throw_phinode_edge()
 global global_error_switch = false
 @test f_must_throw_phinode_edge() == 1
+
+# Test that IRShow debuginfo printing works with IRCode owned by the active Compiler module.
+function irshow_debuginfo_smoke(x)
+    y = x + 1
+    return y
+end
+let ir = first(only(Base.code_ircode(irshow_debuginfo_smoke, (Int,))))
+    output = sprint(Compiler.IRShow.show_ir, ir,
+                    Compiler.IRShow.default_config(ir; debuginfo=:source_inline))
+    @test occursin("return", output)
+end
 
 function roundtrip_di(codelocs, firstline, nstmts)
     str = ccall(:jl_compress_codelocs,
