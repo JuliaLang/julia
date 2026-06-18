@@ -241,6 +241,10 @@ New library features
   `__builtin_cpu_supports`, tests whether code generation for the current target enables the named
   LLVM target features or CPU model. It is folded to a constant at compile time, separately for each
   multiversioning clone, so the untaken branch of an `if` on it is removed ([#61793]).
+* New function `eachentry(dir)` returns a stateful, single-pass iterator yielding filename `String`s
+  without first materializing the full listing. `eachentry(dir, DirEntry)` yields `DirEntry` objects
+  instead. Useful for very large directories or when iteration may be short-circuited. A do-block form
+  `eachentry(f, dir[, DirEntry])` ensures deterministic resource cleanup ([#62164]).
 
 Standard library changes
 ------------------------

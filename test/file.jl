@@ -58,6 +58,70 @@ end
     end
 end
 
+# eachentry: lazy single-pass iteration; default String, opt into DirEntry
+@testset "eachentry" begin
+    @test_throws Base.IOError iterate(eachentry("does/not/exist"))
+    @test_throws Base.IOError iterate(eachentry("does/not/exist", DirEntry))
+
+    mktempdir() do dir
+        touch(joinpath(dir, "afile.txt"))
+        mkdir(joinpath(dir, "adir"))
+        touch(joinpath(dir, "adir", "bfile.txt"))
+
+        # Default yields String names matching readdir
+        @test sort!(collect(eachentry(dir))) == sort!(readdir(dir))
+        # DirEntry form yields DirEntry objects matching readdir(dir, DirEntry)
+        @test sort!(basename.(collect(eachentry(dir, DirEntry)))) == sort!(readdir(dir))
+        # join=true yields full paths matching readdir(dir; join=true)
+        @test sort!(collect(eachentry(dir; join=true))) == sort!(readdir(dir; join=true))
+        joined = eachentry(dir; join=true) do paths
+            collect(paths)
+        end
+        @test sort!(joined) == sort!(readdir(dir; join=true))
+
+        # Iterator type and traits
+        it = eachentry(dir)
+        @test eltype(it) === String
+        @test Base.IteratorSize(it) === Base.SizeUnknown()
+        itD = eachentry(dir, DirEntry)
+        @test eltype(itD) === Base.Filesystem.DirEntry
+
+        # Single-pass: once consumed, cannot iterate again
+        for _ in it; end
+        @test_throws ArgumentError iterate(it)
+
+        # Short-circuit via break does not error and frees resources via finalizer/close
+        for e in eachentry(dir)
+            break
+        end
+        for e in eachentry(dir, DirEntry)
+            break
+        end
+
+        # Explicit close is idempotent and disallows further iteration
+        it2 = eachentry(dir)
+        close(it2)
+        close(it2)
+        @test_throws ArgumentError iterate(it2)
+
+        # do-block forms run and clean up
+        seen = eachentry(dir) do names
+            collect(names)
+        end
+        @test sort!(seen) == sort!(readdir(dir))
+        seenD = eachentry(dir, DirEntry) do entries
+            collect(basename(e) for e in entries)
+        end
+        @test sort!(seenD) == sort!(readdir(dir))
+
+        # Accepts a DirEntry as input
+        sub = only(e for e in readdir(dir, DirEntry) if isdir(e))
+        @test sort!(collect(eachentry(sub))) == ["bfile.txt"]
+        @test sort!(basename.(collect(eachentry(sub, DirEntry)))) == ["bfile.txt"]
+        @test sort!(collect(eachentry(sub; join=true))) == [joinpath(dir, "adir", "bfile.txt")]
+    end
+end
+
 if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     dirlink = joinpath(dir, "dirlink")
     symlink(subdir, dirlink)
