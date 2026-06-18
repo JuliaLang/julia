@@ -1,7 +1,7 @@
 # Custom build: produce a trimmed C-callable shared library (with an ABI export)
 # and compile a C application that loads it via `dlopen` at run-time.
 #
-# Included in-process by `test/trim.jl`, so `run_juliac` and `c_compiler` (defined
+# Included in-process by `test/trim.jl`, so `run_juliac` and `run_cc` (defined
 # there) are in scope. `ARGS[1]` is the output/bundle directory.
 outdir = ARGS[1]
 projdir = @__DIR__
@@ -31,11 +31,9 @@ isfile(libpath) || error("expected bundled library at $libpath")
 bindir = joinpath(outdir, "bin")
 mkpath(bindir)
 exe = joinpath(bindir, "capplication" * (Sys.iswindows() ? ".exe" : ""))
-cc = c_compiler()
-cc === nothing && error("no C compiler found (cc/clang/gcc)")
 csrc = joinpath(projdir, "capplication.c")
 if Sys.islinux()
-    run(`$cc -o $exe $csrc -ldl`)
+    run_cc(["-o", exe, csrc, "-ldl"])
 else
-    run(`$cc -o $exe $csrc`)
+    run_cc(["-o", exe, csrc])
 end

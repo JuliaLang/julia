@@ -4,7 +4,7 @@
 # By default a project is built as a trimmed executable (`--output-exe`) bundled
 # into a temporary directory. A project may instead provide a `build.jl` (see
 # `LibSimple`) that is `include`d here to perform a custom build using the
-# `run_juliac` and `c_compiler` helpers below; `ARGS[1]` is the bundle directory.
+# `run_juliac` and `run_cc` helpers below; `ARGS[1]` is the bundle directory.
 # Each project's `runtests.jl` is then run in a subprocess (activated in the
 # project's own environment) with the bundle directory as `ARGS[1]`.
 using Test
@@ -43,7 +43,12 @@ function run_juliac(args::Vector{String})
     return nothing
 end
 
-c_compiler() = something(Sys.which("cc"), Sys.which("clang"), Sys.which("gcc"), nothing)
+function run_cc(args::Vector{String})
+    code = "using JuliaC; run(`\$(JuliaC.get_compiler_cmd()) \$ARGS`)"
+    cmd = `$(Base.julia_cmd()) --startup-file=no --history-file=no --project=$JULIAC_PROJECT -e $code -- $args`
+    run(addenv(cmd, "JULIA_DEPOT_PATH" => depot_env()))
+    return nothing
+end
 
 @testset "trim" begin
     @test isdir(JULIAC_PROJECT)
