@@ -1033,6 +1033,8 @@ function escape_foreignglobal!(astate::AnalysisState, pc::Int, args::Vector{Any}
         return
     end
     name = args[1]
+    nothrow = is_nothrow(astate.ir, pc)
+    name_info = nothrow ? ⊥ : ThrownEscape(pc)
     if !isexpr(name, :tuple)
         add_escape_change!(astate, name, name_info)
         add_liveness_change!(astate, name, pc)
