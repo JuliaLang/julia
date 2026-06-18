@@ -99,7 +99,6 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), code::Union{IRCode,Co
         ci = stmt.args[1]
         if ci isa Core.CodeInstance
             printstyled(io, "   invoke "; color = :light_black)
-            mi = get_ci_mi(ci)
             abi = get_ci_abi(ci)
         else
             printstyled(io, "dynamic invoke "; color = :yellow)
@@ -282,7 +281,6 @@ function compute_ir_line_annotations(code::Union{IRCode,CodeInfo})
     loc_annotations = String[]
     loc_methods = String[]
     loc_lineno = String[]
-    cur_group = 1
     last_lineno = 0
     last_stack = LineInfoNode[] # nb. only file, line, and method are populated in this
     last_printed_depth = 0
@@ -360,7 +358,7 @@ end
 Base.show(io::IO, code::Union{IRCode, IncrementalCompact}) = show_ir(io, code)
 
 # A line_info_preprinter for disabling line info printing
-lineinfo_disabled(io::IO, linestart::String, idx::Int) = ""
+lineinfo_disabled(::IO, _linestart::String, _idx::Int) = ""
 
 # utility function to extract the file name from a DebugInfo object
 function debuginfo_file1(debuginfo::Union{DebugInfo,DebugInfoStream})
@@ -464,7 +462,6 @@ function DILineInfoPrinter(debuginfo, def, showtypes::Bool=false)
             #context_depth[] = 0
             nframes = length(DI)
             nctx::Int = 0
-            pop_skips = 0
             # compute the size of the matching prefix in the inlining information stack
             for i = 1:min(length(context), nframes)
                 CtxLine = context[i]
@@ -869,7 +866,7 @@ function inline_linfo_printer(code::Union{IRCode,CodeInfo})
     max_lineno_width = maximum(length, loc_lineno)
     max_method_width = maximum(length, loc_methods)
 
-    function (io::IO, indent::String, idx::Int)
+    function (io::IO, _indent::String, idx::Int)
         cols = (displaysize(io)::Tuple{Int,Int})[2]
 
         if idx == 0
@@ -1182,7 +1179,7 @@ const __debuginfo = Dict{Symbol, Any}(
     # :full => src -> statementidx_lineinfo_printer(src), # and add variable slot information
     :source => src -> statementidx_lineinfo_printer(src),
     # :oneliner => src -> statementidx_lineinfo_printer(PartialLineInfoPrinter, src),
-    :none => src -> lineinfo_disabled,
+    :none => _src -> lineinfo_disabled,
     )
 const default_debuginfo = Ref{Symbol}(:none)
 debuginfo(sym) = sym === :default ? default_debuginfo[] : sym
@@ -1192,7 +1189,7 @@ const __debuginfo = Dict{Symbol, Any}(
     :source => src -> statementidx_lineinfo_printer(src),
     :source_inline => src -> inline_linfo_printer(src),
     # :oneliner => src -> statementidx_lineinfo_printer(PartialLineInfoPrinter, src),
-    :none => src -> lineinfo_disabled,
+    :none => _src -> lineinfo_disabled,
     )
 
 const debuginfo_modes = [:none, :source, :source_inline]
