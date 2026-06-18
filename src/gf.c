@@ -4508,12 +4508,13 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
                 entry = lookup_leafcache(leafcache, (jl_value_t*)tt, world);
         }
         if (entry == NULL) {
-            jl_typemap_t *cache = jl_atomic_load_relaxed(&mc->cache); // XXX: gc root required?
+            jl_typemap_t *cache = jl_atomic_load_relaxed(&mc->cache);
             entry = jl_typemap_assoc_exact(cache, F, args, nargs, jl_cachearg_offset(), world);
             if (entry == NULL) {
                 last_alloc = jl_options.malloc_log ? jl_gc_diff_total_bytes() : 0;
                 if (tt == NULL) {
                     tt = arg_type_tuple(F, args, nargs);
+                    leafcache = jl_atomic_load_relaxed(&mc->leafcache); // reload: prior load may be stale after GC during arg_type_tuple
                     entry = lookup_leafcache(leafcache, (jl_value_t*)tt, world);
                 }
             }
