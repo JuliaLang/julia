@@ -648,8 +648,32 @@ JL_DLLEXPORT jl_value_t *jl_atomic_fence(jl_value_t *order_sym, jl_value_t *sync
     return jl_nothing;
 }
 
-JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
+jl_value_t *jl_lookup_foreignsymbol(jl_value_t *v)
 {
+    jl_value_t *f_lib = NULL;
+    JL_GC_PUSH2(&v, &f_lib);
+    if (jl_is_tuple(v)) {
+        size_t nf = jl_nfields(v);
+        if (nf == 0) {
+            jl_error("cglobal function name cannot be empty tuple");
+        } else if (nf == 1) {
+            v = jl_fieldref(v, 0);
+        } else if (nf == 2) {
+            f_lib = jl_fieldref(v, 1);
+            v = jl_fieldref(v, 0);
+        } else {
+            jl_error("cglobal function name tuple can have at most 2 elements");
+        }
+    }
+    void *ptr = jl_lazy_load_and_lookup(f_lib, v);
+    JL_GC_POP();
+    jl_value_t *jv = jl_gc_alloc(jl_current_task->ptls, sizeof(void*), jl_voidpointer_type);
+    *(void**)jl_data_ptr(jv) = ptr;
+    return jv;
+}
+
+// The auto-switching behavior here is deprecated, but preserved for Core.Intrinsics.cglobal
+JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty) {
     JL_TYPECHK(cglobal, type, ty);
     jl_value_t *rt =
         ty == (jl_value_t*)jl_nothing_type ? (jl_value_t*)jl_voidpointer_type : // a common case
@@ -659,23 +683,19 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
     if (!jl_is_concrete_type(rt))
         jl_error("cglobal: type argument not concrete");
 
-    if (jl_is_pointer(v))
-        return jl_bitcast(rt, v);
-
-    if (jl_is_tuple(v) && jl_nfields(v) == 1)
-        v = jl_fieldref(v, 0);
-
-    jl_value_t *f_lib = NULL;
-    JL_GC_PUSH2(&v, &f_lib);
-    if (jl_is_tuple(v) && jl_nfields(v) > 1) {
-        f_lib = jl_fieldref(v, 1);
-        v = jl_fieldref(v, 0);
+    jl_value_t *p = NULL;
+    if (jl_is_tuple(v)) {
+        p = jl_lookup_foreignsymbol(v);
+    } else {
+        JL_TYPECHK(cglobal, pointer, v);
+        p = v;
     }
-    void *ptr = jl_lazy_load_and_lookup(f_lib, v);
+
+    JL_GC_PUSH1(&p);
+    jl_value_t *r = jl_bitcast(rt, p);
     JL_GC_POP();
-    jl_value_t *jv = jl_gc_alloc(jl_current_task->ptls, sizeof(void*), rt);
-    *(void**)jl_data_ptr(jv) = ptr;
-    return jv;
+
+    return r;
 }
 
 JL_DLLEXPORT jl_value_t *jl_cglobal_auto(jl_value_t *v) {

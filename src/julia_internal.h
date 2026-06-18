@@ -975,6 +975,7 @@ JL_DLLEXPORT jl_typeeq_t *jl_wrap_Type(jl_value_t *t);  // x -> Type{x}
 jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n, int check, int nothrow);
 void jl_reinstantiate_inner_types(jl_datatype_t *t);
 jl_datatype_t *jl_lookup_cache_type_(jl_datatype_t *type);
+jl_value_t *jl_lookup_foreignsymbol(jl_value_t *v);
 void jl_cache_type_(jl_datatype_t *type);
 jl_svec_t *cache_rehash_set(jl_svec_t *a, size_t newsz);
 void set_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *rhs, int isatomic) JL_NOTSAFEPOINT;
@@ -1812,8 +1813,8 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerset(jl_value_t *p, jl_value_t *x, jl_v
 JL_DLLEXPORT jl_value_t *jl_atomic_pointerswap(jl_value_t *p, jl_value_t *x, jl_value_t *order);
 JL_DLLEXPORT jl_value_t *jl_atomic_pointermodify(jl_value_t *p, jl_value_t *f, jl_value_t *x, jl_value_t *order);
 JL_DLLEXPORT jl_value_t *jl_atomic_pointerreplace(jl_value_t *p, jl_value_t *x, jl_value_t *expected, jl_value_t *success_order, jl_value_t *failure_order);
-JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty);
-JL_DLLEXPORT jl_value_t *jl_cglobal_auto(jl_value_t *v);
+JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty); // deprecated
+JL_DLLEXPORT jl_value_t *jl_cglobal_auto(jl_value_t *v); // deprecated
 
 JL_DLLEXPORT jl_value_t *jl_neg_int(jl_value_t *a);
 JL_DLLEXPORT jl_value_t *jl_add_int(jl_value_t *a, jl_value_t *b);
@@ -2120,6 +2121,7 @@ JL_DLLEXPORT int jl_isabspath(const char *in) JL_NOTSAFEPOINT;
     XX(thunk_sym) \
     XX(top_sym) \
     XX(toplevel_sym) \
+    XX(tuple_sym) \
     XX(uninferred_sym) \
     XX(unordered_sym) \
     XX(unused_sym) \

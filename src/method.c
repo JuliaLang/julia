@@ -76,14 +76,13 @@ JL_DLLEXPORT void jl_scan_method_source_now(jl_method_t *m, jl_value_t *src)
 static void normalize_foreignsymbol(jl_expr_t *e, jl_module_t *module, const char *kind)
 {
     jl_task_t *ct = jl_current_task;
-    jl_sym_t *tuple_sym = jl_symbol("tuple");
     jl_value_t *fptr = jl_exprarg(e, 0);
     if (jl_is_quotenode(fptr)) {
         if (jl_is_string(jl_quotenode_value(fptr)) || jl_is_tuple(jl_quotenode_value(fptr)))
             fptr = jl_quotenode_value(fptr);
     }
     if (jl_is_tuple(fptr)) {
-        jl_expr_t *tupex = jl_exprn(tuple_sym, jl_nfields(fptr));
+        jl_expr_t *tupex = jl_exprn(jl_tuple_sym, jl_nfields(fptr));
         jl_value_t *v = NULL;
         JL_GC_PUSH2(&tupex, &v);
         for (long i = 0; i < jl_nfields(fptr); i++) {
@@ -96,7 +95,7 @@ static void normalize_foreignsymbol(jl_expr_t *e, jl_module_t *module, const cha
         fptr = (jl_value_t*)tupex;
         JL_GC_POP();
     }
-    if (jl_is_expr(fptr) && ((jl_expr_t*)fptr)->head == tuple_sym) {
+    if (jl_is_expr(fptr) && ((jl_expr_t*)fptr)->head == jl_tuple_sym) {
         jl_expr_t *tuple_expr = (jl_expr_t*)fptr;
         size_t nargs_tuple = jl_expr_nargs(tuple_expr);
         if (nargs_tuple == 0)
@@ -146,7 +145,7 @@ static void normalize_foreignsymbol(jl_expr_t *e, jl_module_t *module, const cha
         }
     }
     else if (jl_is_string(fptr) || (jl_is_quotenode(fptr) && jl_is_symbol(jl_quotenode_value(fptr)))) {
-        jl_expr_t *tupex = jl_exprn(tuple_sym, 1);
+        jl_expr_t *tupex = jl_exprn(jl_tuple_sym, 1);
         jl_exprargset(tupex, 0, fptr);
         jl_exprargset(e, 0, tupex);
     }

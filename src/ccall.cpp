@@ -621,7 +621,7 @@ static void interpret_foreignsymbol(jl_codectx_t &ctx, native_sym_arg_t &out, jl
     out.gcroot[1] = nullptr;
 
     // Check if this is a tuple (normalized by julia-syntax.scm)
-    if (jl_is_expr(arg) && ((jl_expr_t*)arg)->head == jl_symbol("tuple")) {
+    if (jl_is_expr(arg) && ((jl_expr_t*)arg)->head == jl_tuple_sym) {
         size_t nargs = jl_expr_nargs(arg);
         jl_array_t *tuple_args = ((jl_expr_t*)arg)->args;
 
@@ -709,7 +709,7 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
     ++EmittedCGlobals;
     assert(nargs == 1);
     jl_value_t *arg = args[0];
-    if (jl_is_expr(arg) && ((jl_expr_t*)arg)->head == jl_symbol("tuple")) {
+    if (jl_is_expr(arg) && ((jl_expr_t*)arg)->head == jl_tuple_sym) {
         // Name lookup form
         native_sym_arg_t sym = {};
         JL_GC_PUSH2(&sym.gcroot[0], &sym.gcroot[1]);

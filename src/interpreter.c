@@ -195,6 +195,22 @@ static void eval_stmt_value(jl_value_t *stmt, interpreter_state *s)
     s->locals[jl_source_nslots(s->src) + s->ip] = res;
 }
 
+static jl_value_t *eval_expr_tuple(jl_expr_t *ex, interpreter_state *s)
+{
+    // evaluate Expr(:tuple, ...)
+    // only appears in post-lowered IR in foreignglobal / foreigncall
+    assert(ex->head == jl_tuple_sym);
+    jl_value_t **argv;
+    jl_value_t **args = jl_array_ptr_data(ex->args);
+    size_t nargs = jl_expr_nargs(ex);
+    JL_GC_PUSHARGS(argv, nargs);
+    for (size_t i = 0; i < nargs; i++)
+        argv[i] = eval_value(args[i], s);
+    jl_value_t *v = jl_f_tuple(NULL, argv, nargs);
+    JL_GC_POP();
+    return v;
+}
+
 static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
 {
     jl_code_info_t *src = s->src;
@@ -357,15 +373,6 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
              head == jl_aliasscope_sym || head == jl_popaliasscope_sym || head == jl_inline_sym || head == jl_noinline_sym) {
         return jl_nothing;
     }
-    else if (head == jl_symbol("tuple")) {
-        jl_value_t **argv;
-        JL_GC_PUSHARGS(argv, nargs);
-        for (size_t i = 0; i < nargs; i++)
-            argv[i] = eval_value(args[i], s);
-        jl_value_t *v = jl_f_tuple(NULL, argv, nargs);
-        JL_GC_POP();
-        return v;
-    }
     else if (head == jl_gc_preserve_begin_sym || head == jl_gc_preserve_end_sym) {
         // The interpreter generally keeps values that were assigned in this scope
         // rooted. If the interpreter learns to be more aggressive here, we may
@@ -380,10 +387,36 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     }
     else if (head == jl_foreignglobal_sym) {
         assert(nargs == 1);
-        jl_value_t *v = eval_value(jl_exprarg(ex, 0), s);
+        jl_value_t *fptr = jl_exprarg(ex, 0);
+        if (jl_is_quotenode(fptr)) {
+            if (jl_is_string(jl_quotenode_value(fptr)) ||
+                jl_is_tuple(jl_quotenode_value(fptr)))
+                fptr = jl_quotenode_value(fptr);
+        }
+        if (jl_is_expr(fptr)) {
+            jl_expr_t *fptr_ex = (jl_expr_t*)fptr;
+            if (fptr_ex->head == jl_tuple_sym) {
+                jl_value_t *v = eval_expr_tuple(fptr_ex, s);
+                JL_GC_PUSH1(&v);
+                jl_value_t *r = jl_lookup_foreignsymbol(v);
+                JL_GC_POP();
+                return r;
+            }
+        } else if (jl_is_tuple(fptr)) {
+            return jl_lookup_foreignsymbol(fptr);
+        } else if (jl_is_string(fptr)) {
+            return jl_lookup_foreignsymbol(fptr);
+        } else if (jl_is_quotenode(fptr) && jl_is_symbol(jl_quotenode_value(fptr))) {
+            return jl_lookup_foreignsymbol(jl_quotenode_value(fptr));
+        }
+
+        jl_value_t *v = eval_value(fptr, s);
+        JL_TYPECHK(cglobal, pointer, v);
+
         JL_GC_PUSH1(&v);
-        jl_value_t *r = jl_cglobal_auto(v);
+        jl_value_t *r = jl_bitcast((jl_value_t*)jl_voidpointer_type, v);
         JL_GC_POP();
+
         return r;
     }
     else if (head == jl_cfunction_sym) {
