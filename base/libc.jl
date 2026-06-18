@@ -62,6 +62,7 @@ if Sys.iswindows()
     WindowsRawSocket(handle::WindowsRawSocket) = handle
 
     Base.cconvert(::Type{Ptr{Cvoid}}, fd::WindowsRawSocket) = bitcast(Ptr{Cvoid}, fd)
+    show(io::IO, fd::WindowsRawSocket) = print(io, "WindowsRawSocket(", bitcast(Ptr{Cvoid}, fd), ')')  # avoids invalidation via show_default
     _get_osfhandle(fd::RawFD) = ccall(:_get_osfhandle, WindowsRawSocket, (RawFD,), fd)
     _get_osfhandle(fd::WindowsRawSocket) = fd
     function dup(src::WindowsRawSocket)
