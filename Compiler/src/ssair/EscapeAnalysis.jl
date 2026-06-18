@@ -200,17 +200,12 @@ end
 
 A lattice for escape information, which holds the following properties:
 - `x.ReturnEscape::Bool`: indicates `x` can escape to the caller via return
-- `x.ThrownEscape::BitSet`: records SSA statement numbers where `x` can be thrown as exception:
-  * `isempty(x.ThrownEscape)`: `x` will never be thrown in this call frame (the bottom)
-  * `pc ∈ x.ThrownEscape`: `x` may be thrown at the SSA statement at `pc`
-  * `-1 ∈ x.ThrownEscape`: `x` may be thrown at arbitrary points of this call frame (the top)
-  This information will be used by `escape_exception!` to propagate potential escapes via exception.
-- `x.ObjectInfo::ObjectInfo`: maintains all possible values
-  that can be aliased to tracked fields or array elements of `x`:
-  * `x.ObjectInfo::NoMemoryContents` represents the absence of field/element
-    facts for `x`
-  * `x.ObjectInfo::UnknownMemoryContents` indicates the fields/elements of `x` can't be analyzed,
-    e.g. the type of `x` is not known or is not concrete and thus its fields/elements
+- `x.ThrownEscape::Bool`: indicates `x` may be thrown as an exception
+- `x.ObjectInfo::ObjectInfo`: records memory-content facts attached to tracked
+  fields of `x`:
+  * `x.ObjectInfo::NoMemoryContents` represents the absence of field facts for `x`
+  * `x.ObjectInfo::UnknownMemoryContents` indicates the fields of `x` can't be analyzed,
+    e.g. the type of `x` is not known or is not concrete and thus its fields
     can't be known precisely
   * `x.ObjectInfo::HasIndexableFields` records per-field `MemoryInfo` facts
     for object `x` with precise index information
