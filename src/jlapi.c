@@ -26,6 +26,30 @@ extern "C" {
 #include <fenv.h>
 #endif
 
+#if defined(JL_MINGW_RUNTIME_HAS_MSVC_FENV_ABI) && defined(__MINGW32__) && defined(_RC_CHOP) && FE_TOWARDZERO != _RC_CHOP
+#warning "Using MSVC-compatible MinGW fenv ABI with old fenv.h constants; redefining FE_* constants."
+#undef FE_INEXACT
+#undef FE_UNDERFLOW
+#undef FE_OVERFLOW
+#undef FE_DIVBYZERO
+#undef FE_INVALID
+#undef FE_ALL_EXCEPT
+#undef FE_TONEAREST
+#undef FE_UPWARD
+#undef FE_DOWNWARD
+#undef FE_TOWARDZERO
+#define FE_INEXACT _SW_INEXACT
+#define FE_UNDERFLOW _SW_UNDERFLOW
+#define FE_OVERFLOW _SW_OVERFLOW
+#define FE_DIVBYZERO _SW_ZERODIVIDE
+#define FE_INVALID _SW_INVALID
+#define FE_ALL_EXCEPT (FE_DIVBYZERO | FE_INEXACT | FE_INVALID | FE_OVERFLOW | FE_UNDERFLOW)
+#define FE_TONEAREST _RC_NEAR
+#define FE_UPWARD _RC_UP
+#define FE_DOWNWARD _RC_DOWN
+#define FE_TOWARDZERO _RC_CHOP
+#endif
+
 static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel, const char* julia_bindir);
 
 /**
@@ -892,20 +916,10 @@ JL_DLLEXPORT void jl_get_fenv_consts(int *ret)
     ret[2] = FE_OVERFLOW;
     ret[3] = FE_DIVBYZERO;
     ret[4] = FE_INVALID;
-#ifdef _WIN32
-    // MinGW-w64 v13+ uses MSVC-compatible fenv rounding constants. Windows
-    // builds may compile against older headers while linking newer runtime
-    // objects from CompilerSupportLibraries.
-    ret[5] = 0x000; // FE_TONEAREST
-    ret[6] = 0x200; // FE_UPWARD
-    ret[7] = 0x100; // FE_DOWNWARD
-    ret[8] = 0x300; // FE_TOWARDZERO
-#else
     ret[5] = FE_TONEAREST;
     ret[6] = FE_UPWARD;
     ret[7] = FE_DOWNWARD;
     ret[8] = FE_TOWARDZERO;
-#endif
 }
 
 // TODO: Windows binaries currently load msvcrt which doesn't have these C99 functions.

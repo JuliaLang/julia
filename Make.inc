@@ -1651,6 +1651,11 @@ WIN_CRT_LIB := -lmsvcrt-os
 # libmsvcrt-os.a contains MinGW CRT objects that can refer back to
 # libmingw32.a/libmingwex.a; keep the selected CRT last.
 WIN_MINGW_CRT_LIBS := -lmingwex $(WIN_CRT_LIB) -lmingw32 -lmingwex $(WIN_CRT_LIB)
+ifeq ($(USE_BINARYBUILDER_CSL),1)
+# The bundled CSL MinGW runtime uses the MSVC-compatible fenv ABI. If the
+# system compiler still has older MinGW headers, src/jlapi.c normalizes them.
+JCPPFLAGS += -DJL_MINGW_RUNTIME_HAS_MSVC_FENV_ABI=1
+endif
 WIN_LD_DLL_CRT_START := $(build_private_libdir)/dllcrt2.o $(build_private_libdir)/crtbegin.o
 WIN_LD_EXE_CRT_START := $(build_private_libdir)/crt2.o $(build_private_libdir)/crtbegin.o
 WIN_LD_CRT_END_OBJ := $(build_private_libdir)/crtend.o
