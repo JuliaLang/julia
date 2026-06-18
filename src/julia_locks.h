@@ -141,6 +141,11 @@ public:
     void wait(std::condition_variable& cond) JL_NOTSAFEPOINT {
         cond.wait(native);
     }
+    template <class Rep, class Period>
+    std::cv_status wait_for(std::condition_variable& cond,
+                            const std::chrono::duration<Rep, Period> &dur) JL_NOTSAFEPOINT {
+        return cond.wait_for(native, dur);
+    }
 };
 #endif
 

@@ -501,6 +501,17 @@ precompile_keep_ir(::AbstractInterpreter) = false
 precompile_keep_ir(::NativeInterpreter) =
     ccall(:jl_get_precompile_keep_ir, Int8, ()) != 0
 
+# Tiered compilation: the T1 re-emission worker needs callee optimized IR
+# for LLVM-level inlining, so while tiering is active the cache keeps
+# non-inlineable IR (compressed) instead of discarding it. Unlike the
+# debugging flag above, this deliberately does NOT affect const-ABI
+# eligibility or any other may_discard_trees consumer — disabling const-ABI
+# measurably degrades optimization (e.g. fully-eliminable calls stop
+# folding).
+preserve_noninlineable_ir(::AbstractInterpreter) = false
+preserve_noninlineable_ir(::NativeInterpreter) =
+    ccall(:jl_tier_enabled, Cint, ()) != 0
+
 """
     method_table(interp::AbstractInterpreter)::MethodTableView
 

@@ -4603,6 +4603,7 @@ Base.getproperty(x::Interface41024Extended, sym::Symbol) =
 end |> only === Int
 
 function call_func_itr(func, itr)
+    Base.Experimental.@force_compile
     local r = 0
     r += func(itr[1])
     r += func(itr[2])

@@ -394,6 +394,13 @@ private:
 
 struct jl_linker_info_t {
     DenseMap<jl_code_instance_t *, jl_codeinst_funcs_t<orc::SymbolStringPtr>> ci_funcs;
+    // Rename targets captured at MU creation for the CIs whose ownership
+    // CAS this module won (the names registered in CISymbols then).
+    // linkOutput must not consult CISymbols: the entry may have been
+    // created by a different owner (linkCISymbol absoluteSymbols for a
+    // tier-promoted CI) or not exist at all.
+    DenseMap<jl_code_instance_t *, std::pair<orc::SymbolStringPtr, orc::SymbolStringPtr>>
+        ci_renames;
     DenseMap<std::pair<jl_code_instance_t *, jl_invoke_api_t>, orc::SymbolStringPtr>
         call_targets;
     DenseMap<void *, orc::SymbolStringPtr> global_targets;

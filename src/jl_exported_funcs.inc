@@ -456,6 +456,21 @@
     XX(jl_set_ptls_rng) \
     XX(jl_throw) \
     XX(jl_throw_out_of_memory_error) \
+    XX(jl_tier_enqueue) \
+    XX(jl_tier_enqueue_mi) \
+    XX(jl_tier_get_stats) \
+    XX(jl_tier_get_queue_stats) \
+    XX(jl_tier_get_swaps) \
+    XX(jl_tier_reset_stats) \
+    XX(jl_tier_set_debug) \
+    XX(jl_tier_enabled) \
+    XX(jl_tier_get_threshold) \
+    XX(jl_tier_set_threshold) \
+    XX(jl_tier_init) \
+    XX(jl_tier_start_worker) \
+    XX(jl_tier_stop_worker) \
+    XX(jl_tier_worker_pop) \
+    XX(jl_tier_drain) \
     XX(jl_too_few_args) \
     XX(jl_too_many_args) \
     XX(jl_toplevel_eval) \

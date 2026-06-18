@@ -98,8 +98,8 @@ const GLOBAL_BUFFER = IOBuffer()
 begin
     take!(GLOBAL_BUFFER)
 
-    pr48932_callee(x) = (print(GLOBAL_BUFFER, x); Base.inferencebarrier(x))
-    pr48932_caller(x) = pr48932_callee(Base.inferencebarrier(x))
+    pr48932_callee(x) = (Base.Experimental.@force_compile; print(GLOBAL_BUFFER, x); Base.inferencebarrier(x))
+    pr48932_caller(x) = (Base.Experimental.@force_compile; pr48932_callee(Base.inferencebarrier(x)))
 
     # assert that type and effects information inferred from `pr48932_callee(::Any)` are the top
     let rt = only(Base.return_types(pr48932_callee, (Any,)))
@@ -200,8 +200,8 @@ end
 # we can avoid adding backedge even if the callee's return type is not the top
 # when the return value is not used within the caller
 begin take!(GLOBAL_BUFFER)
-    pr48932_callee_inferable(x) = (print(GLOBAL_BUFFER, x); Base.inferencebarrier(1)::Int)
-    pr48932_caller_unuse(x) = (pr48932_callee_inferable(Base.inferencebarrier(x)); nothing)
+    pr48932_callee_inferable(x) = (Base.Experimental.@force_compile; print(GLOBAL_BUFFER, x); Base.inferencebarrier(1)::Int)
+    pr48932_caller_unuse(x) = (Base.Experimental.@force_compile; pr48932_callee_inferable(Base.inferencebarrier(x)); nothing)
 
     # assert that type and effects information inferred from `pr48932_callee(::Any)` are the top
     let rt = only(Base.return_types(pr48932_callee_inferable, (Any,)))
@@ -262,8 +262,8 @@ end
 # we need to add backedge when the callee is inlined
 begin take!(GLOBAL_BUFFER)
 
-    @noinline pr48932_callee_inlined(@nospecialize x) = (print(GLOBAL_BUFFER, x); Base.inferencebarrier(x))
-    pr48932_caller_inlined(x) = pr48932_callee_inlined(Base.inferencebarrier(x))
+    @noinline pr48932_callee_inlined(@nospecialize x) = (Base.Experimental.@force_compile; print(GLOBAL_BUFFER, x); Base.inferencebarrier(x))
+    pr48932_caller_inlined(x) = (Base.Experimental.@force_compile; pr48932_callee_inlined(Base.inferencebarrier(x)))
 
     # assert that type and effects information inferred from `pr48932_callee(::Any)` are the top
     let rt = only(Base.return_types(pr48932_callee_inlined, (Any,)))
@@ -329,9 +329,10 @@ end
 @testset "drop_all_caches" begin
     # Run in subprocess to avoid disrupting the main test process
     script = """
-        # Define test functions
-        drop_cache_test_f(x) = x + 1
-        drop_cache_test_g(x) = drop_cache_test_f(x) * 2
+        # Define test functions (force compilation so they leave native CodeInstances
+        # under default-on tiering, instead of running ephemerally interpreted)
+        drop_cache_test_f(x) = (Base.Experimental.@force_compile; x + 1)
+        drop_cache_test_g(x) = (Base.Experimental.@force_compile; drop_cache_test_f(x) * 2)
 
         # Compile the functions and capture stderr
         drop_cache_test_g(5) == 12 || error("failure")

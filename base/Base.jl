@@ -390,6 +390,339 @@ function start_profile_listener()
     ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), cond.handle)
 end
 
+# Tiered compilation worker: a dedicated OS thread, created and run
+# entirely in C (jl_tier_start_worker / tier_worker_threadfun in
+# src/tiered.c) and adopted into the runtime, that drains the promotion
+# queue and re-emits hot CodeInstances at T1. It is woken directly by
+# jl_tier_enqueue via a uv condition variable — no Julia task, scheduler,
+# or libuv event loop involvement — and the kernel schedules it
+# preemptively (like the compiler threads of HotSpot or .NET), so
+# promotion makes progress even with --threads=1 and against a main
+# thread that never yields.
+# On-stack replacement for interpreted loops (Truffle-style; the C side is
+# the back-edge counter in src/interpreter.c and the hook plumbing in
+# src/tiered.c). When an interpreted method frame crosses the back-edge
+# threshold, the interpreter hands us its lowered source, MethodInstance,
+# the back-edge target statement index, and a snapshot of the frame state
+# (slots, then ssavalues — #undef entries unset). We synthesize a
+# continuation CodeInfo that re-enters the body at the target with the
+# live values passed as OpaqueClosure arguments — inference then
+# specializes the continuation (loop included) on their concrete runtime
+# types — call it, and return Some(result) for the interpreter to return
+# directly. The continuation is cached per (mi, target, world,
+# slot-definedness).
+const _tier_osr_cache = IdDict{Any,Any}()
+const _tier_osr_lock = ReentrantLock()
+
+function _tier_osr_rewrite(@nospecialize(x), slotmap::Vector{Int}, ssamap::Dict{Int,Int}, shift::Int,
+                           sparams::Core.SimpleVector)
+    if x isa Core.SlotNumber
+        return Core.SlotNumber(slotmap[x.id])
+    elseif x isa Core.SSAValue
+        ns = get(ssamap, x.id, 0)
+        return ns == 0 ? Core.SSAValue(x.id + shift) : Core.SlotNumber(ns)
+    elseif x isa Core.GotoNode
+        return Core.GotoNode(x.label + shift)
+    elseif x isa Core.GotoIfNot
+        return Core.GotoIfNot(_tier_osr_rewrite(x.cond, slotmap, ssamap, shift, sparams), x.dest + shift)
+    elseif x isa Core.ReturnNode
+        return isdefined(x, :val) ?
+            Core.ReturnNode(_tier_osr_rewrite(x.val, slotmap, ssamap, shift, sparams)) : x
+    elseif x isa Core.NewvarNode
+        return Core.NewvarNode(Core.SlotNumber(slotmap[x.slot.id]))
+    elseif x isa Expr
+        if x.head === :static_parameter
+            # The continuation OpaqueClosure method has no static parameters
+            # (a stray :static_parameter would crash inference of the
+            # continuation), so substitute the MethodInstance's concrete
+            # value. The plan declines when any used sparam is still a
+            # TypeVar (incompletely determined).
+            return QuoteNode(sparams[x.args[1]::Int])
+        end
+        return Expr(x.head, Any[_tier_osr_rewrite(a, slotmap, ssamap, shift, sparams) for a in x.args]...)
+    else
+        return x # literals, GlobalRef, QuoteNode, Symbol, LineNumberNode, ...
+    end
+end
+
+# Does `x` reference a static parameter that cannot be substituted with a
+# concrete value (out of range, or still an unbound TypeVar)?
+function _tier_osr_bad_sparam(@nospecialize(x), sparams::Core.SimpleVector)
+    if x isa Expr
+        if x.head === :static_parameter
+            n = x.args[1]
+            n isa Int || return true
+            (1 <= n <= length(sparams)) || return true
+            return sparams[n] isa Core.TypeVar
+        end
+        for a in x.args
+            _tier_osr_bad_sparam(a, sparams) && return true
+        end
+    elseif x isa Core.GotoIfNot
+        return _tier_osr_bad_sparam(x.cond, sparams)
+    elseif x isa Core.ReturnNode
+        return isdefined(x, :val) && _tier_osr_bad_sparam(x.val, sparams)
+    end
+    return false
+end
+
+# Statement indices reachable from `ip` in lowered control flow.
+function _tier_osr_reachable(code::Vector{Any}, ip::Int)
+    n = length(code)
+    seen = falses(n)
+    work = Int[ip]
+    while !isempty(work)
+        i = pop!(work)
+        (i < 1 || i > n || seen[i]) && continue
+        seen[i] = true
+        st = code[i]
+        if st isa Core.GotoNode
+            push!(work, st.label)
+        elseif st isa Core.GotoIfNot
+            push!(work, st.dest); push!(work, i + 1)
+        elseif st isa Core.ReturnNode
+        else
+            push!(work, i + 1)
+        end
+    end
+    return seen
+end
+
+_tier_osr_collect_ssas!(out::Dict{Int,Int}, @nospecialize(x), k::Int, reachable) = begin
+    if x isa Core.SSAValue
+        # An SSA value must be carried through a slot (saved entry value +
+        # def redirected to the slot) unless its only uses are the lowered
+        # idiom chain at the immediately following statement — anything
+        # farther can be reached on a path (notably the OSR entry path for
+        # loop-carried values) where the definition has not (re)executed.
+        if k > x.id + 1 || (x.id <= length(reachable) && reachable[k] && !reachable[x.id])
+            out[x.id] = 0
+        end
+    elseif x isa Core.GotoIfNot
+        _tier_osr_collect_ssas!(out, x.cond, k, reachable)
+    elseif x isa Core.ReturnNode
+        isdefined(x, :val) && _tier_osr_collect_ssas!(out, x.val, k, reachable)
+    elseif x isa Expr
+        for a in x.args
+            _tier_osr_collect_ssas!(out, a, k, reachable)
+        end
+    end
+    nothing
+end
+
+# Decide whether `src` is OSR-able at `ip` and, if so, which saved
+# ssavalues the continuation needs as arguments (definitions that cannot
+# re-execute from ip but are referenced by reachable code). Returns the
+# sorted ssa id list, or nothing to decline.
+function _tier_osr_build_plan(src::Core.CodeInfo, ip::Int, sparams::Core.SimpleVector)
+    code = src.code::Vector{Any}
+    # v1: no exception regions anywhere in the body (the continuation would
+    # have to re-establish active handlers), and lowered source only (the
+    # interpreter can also run inferred IR, whose phi nodes this transform
+    # does not handle). Static parameters are substituted with their
+    # concrete values during the rewrite; decline if any used one is still
+    # an unbound TypeVar.
+    for st in code
+        if st isa Core.EnterNode || st isa Core.PhiNode ||
+           st isa Core.PhiCNode || st isa Core.UpsilonNode ||
+           (st isa Expr && (st.head === :enter || st.head === :leave || st.head === :pop_exception))
+            return nothing
+        end
+        _tier_osr_bad_sparam(st, sparams) && return nothing
+    end
+    reachable = _tier_osr_reachable(code, ip)
+    ssamap = Dict{Int,Int}()
+    for i in 1:length(code)
+        _tier_osr_collect_ssas!(ssamap, code[i], i, reachable)
+    end
+    # The definition of a slotified SSA value is redirected to assign the
+    # slot; that is only expressible when the defining statement has a
+    # value position (not itself a slot assignment or control flow).
+    for j in keys(ssamap)
+        st = code[j]
+        if (st isa Expr && (st.head === :(=) || st.head === :meta || st.head === :loopinfo)) ||
+           st isa Core.GotoNode || st isa Core.GotoIfNot || st isa Core.ReturnNode ||
+           st isa Core.NewvarNode
+            return nothing
+        end
+    end
+    return sort!(collect(keys(ssamap)))
+end
+
+# Build (oc, ssalist) for re-entering `src` at statement `ip` with arguments
+# of the concrete types `argtypes` (OpaqueClosures compile once for their
+# declared signature, so the signature must be the live values' actual types
+# for the continuation's loop to be well-typed).
+function _tier_osr_build(src::Core.CodeInfo, mi::Core.MethodInstance, ip::Int, defined::Vector{Bool},
+                         argtypes::Vector{Any}, ssalist::Vector{Int})
+    code = src.code::Vector{Any}
+    nslots = length(src.slotnames)
+    ssamap = Dict{Int,Int}()
+
+    # New slot layout: 1 = #self#, then defined original slots (arguments),
+    # then saved ssavalues (arguments), then undef original slots (locals).
+    slotmap = zeros(Int, nslots)
+    slotnames = Symbol[Symbol("#osr#")]
+    next = 2
+    for k in 1:nslots
+        if defined[k]
+            slotmap[k] = next; next += 1
+            push!(slotnames, src.slotnames[k])
+        end
+    end
+    for j in ssalist
+        ssamap[j] = next; next += 1
+        push!(slotnames, Symbol(:osr_ssa, j))
+    end
+    nargs_real = next - 2
+    undef_slots = Int[]
+    for k in 1:nslots
+        if !defined[k]
+            slotmap[k] = next; next += 1
+            push!(slotnames, src.slotnames[k])
+            push!(undef_slots, slotmap[k])
+        end
+    end
+    ntotal = next - 1
+
+    # Prefix: force_compile (the continuation must not be parked back into
+    # the interpreter by the tier gate), re-undef the undefined slots, then
+    # jump to the target.
+    shift = 2 + length(undef_slots)
+    newcode = Vector{Any}(undef, shift + length(code))
+    newcode[1] = Expr(:meta, :force_compile)
+    for (i, sl) in enumerate(undef_slots)
+        newcode[1 + i] = Core.NewvarNode(Core.SlotNumber(sl))
+    end
+    newcode[shift] = Core.GotoNode(ip + shift)
+    sparams = mi.sparam_vals
+    for i in 1:length(code)
+        st = _tier_osr_rewrite(code[i], slotmap, ssamap, shift, sparams)
+        # Slotified SSA definition: also store the value into its slot, so
+        # later iterations observe the fresh definition while the OSR entry
+        # path sees the saved one. (References were rewritten to the slot.)
+        sl = get(ssamap, i, 0)
+        if sl != 0
+            st = Expr(:(=), Core.SlotNumber(sl), st)
+        end
+        newcode[shift + i] = st
+    end
+
+    cont = copy(src)
+    cont.code = newcode
+    cont.ssavaluetypes = length(newcode)
+    cont.ssaflags = vcat(fill(zero(eltype(src.ssaflags)), shift), src.ssaflags)
+    cont.slotnames = slotnames
+    # Carry the original slot flags through the renumbering — inference
+    # depends on them (notably the used-undef bit for conditionally
+    # assigned slots; wrong flags miscompile the continuation). Saved-ssa
+    # argument slots are plain used+assigned.
+    slotflags = Vector{UInt8}(undef, ntotal)
+    slotflags[1] = 0x00
+    for k in 1:nslots
+        slotflags[slotmap[k]] = src.slotflags[k]
+    end
+    for j in ssalist
+        slotflags[ssamap[j]] = 0x08
+    end
+    cont.slotflags = slotflags
+    cont.nargs = 1 + nargs_real
+    cont.isva = false
+    cont.debuginfo = Core.DebugInfo(:none)
+    @assert length(argtypes) == nargs_real
+    sig = Tuple{argtypes...}
+    oc = Experimental.generate_opaque_closure(sig, Union{}, Any, cont, nargs_real, false;
+                                               mod=mi.def.module, do_compile=true, isinferred=false)
+    return (oc, ssalist)
+end
+
+function _tier_osr_impl(src::Core.CodeInfo, mi::Core.MethodInstance, ip::Int, state::Vector{Any})
+    nslots = length(src.slotnames)
+    defined = Bool[isassigned(state, k) for k in 1:nslots]
+    # Assemble the live values first: the continuation is specialized on
+    # their concrete types, which therefore belong in the cache key. The
+    # ssavalue argument list cannot be known before building, so resolve it
+    # in two steps: probe the cache with a slots-only key to find ssalist,
+    # falling back to a build that records it.
+    world = ccall(:jl_get_tls_world_age, UInt, ())
+    slotargs = Vector{Any}()
+    for k in 1:nslots
+        defined[k] && push!(slotargs, state[k])
+    end
+    slottypes = Any[Core.Typeof(a) for a in slotargs]
+    key = (mi, ip, world, defined, slottypes)
+    entry = lock(_tier_osr_lock) do
+        get!(_tier_osr_cache, key) do
+            # Determine the ssavalue argument list and its current types,
+            # then build with the full concrete signature. (Named `plan`,
+            # not `ssalist`: reusing the outer destructuring name from
+            # inside this closure would box it.)
+            plan = _tier_osr_build_plan(src, ip, mi.sparam_vals)
+            plan === nothing && return nothing
+            argtypes = copy(slottypes)
+            for j in plan
+                push!(argtypes, isassigned(state, nslots + j) ?
+                      Core.Typeof(state[nslots + j]) : Nothing)
+            end
+            length(argtypes) <= 64 || return nothing
+            _tier_osr_build(src, mi, ip, defined, argtypes, plan)
+        end
+    end
+    entry === nothing && return nothing
+    oc, ssalist = entry
+    args = slotargs
+    for j in ssalist
+        # An unset saved ssavalue can only belong to a dynamically-dead use;
+        # pass a placeholder.
+        push!(args, isassigned(state, nslots + j) ? state[nslots + j] : nothing)
+    end
+    return (oc, args)
+end
+
+function _tier_osr(@nospecialize(src), @nospecialize(mi), @nospecialize(ip), @nospecialize(state))
+    # Called (via @cfunction) from the interpreter's back-edge check.
+    # Build/lookup failures decline by returning nothing. The continuation
+    # CALL is deliberately OUTSIDE the try: it runs user code with the
+    # original frame's semantics, so an exception it throws must propagate
+    # (through the cfunction, exactly like any throwing interpreted
+    # statement). Catching it here would silently discard the error and
+    # resume interpreting from the pre-OSR snapshot, re-running iterations
+    # the continuation already executed (duplicated side effects).
+    local oc, args
+    try
+        entry = _tier_osr_impl(src::Core.CodeInfo, mi::Core.MethodInstance,
+                               ip::Int, state::Vector{Any})
+        entry === nothing && return nothing
+        oc, args = entry
+    catch
+        return nothing
+    end
+    return Some{Any}(oc(args...))
+end
+
+function start_tier_worker()
+    # Master gate: tiering (and thus the worker) is on by default only
+    # when a spare CPU exists for the worker thread to run on; see
+    # jl_tier_enabled in src/tiered.c. Force with JULIA_TIER_ENABLE=1/0.
+    ccall(:jl_tier_enabled, Cint, ()) != 0 || return
+    get_bool_env("JULIA_TIER_WORKER", true) === true || return
+    # Inferred IR is kept on non-inlineable CodeInstances whenever tiering
+    # is enabled (Compiler.preserve_noninlineable_ir), so the worker can
+    # re-emit at T1 without re-inferring (which would mutate mi->cache and
+    # corrupt in-progress pkgimage serialization).
+    ccall(:jl_tier_start_worker, Cvoid, ())
+    # The interpreter's OSR back-edge path resolves `_tier_osr` dynamically
+    # by name (jl_get_global in eval_try_osr); we deliberately do NOT hold a
+    # @cfunction reference to it here, so juliac `--trim` never pulls its
+    # runtime IR-building machinery into the static call graph.
+    atexit() do
+        # Parks the worker and waits out any in-flight promotion, so
+        # runtime teardown never races a compile.
+        ccall(:jl_tier_stop_worker, Cvoid, ())
+    end
+    nothing
+end
+
 function __init__()
     # Base library init
     global _atexit_hooks_finished = false
@@ -413,6 +746,7 @@ function __init__()
         # triggering a profile via signals is not implemented on windows
         start_profile_listener()
     end
+    start_tier_worker()
     _require_world_age[] = get_world_counter()
     # Prevent spawned Julia process from getting stuck waiting on Tracy to connect.
     delete!(ENV, "JULIA_WAIT_FOR_TRACY")

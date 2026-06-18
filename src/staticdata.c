@@ -1658,7 +1658,12 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
             else if (jl_is_method_instance(v)) {
                 assert(f == s->s);
                 jl_method_instance_t *newmi = (jl_method_instance_t*)&f->buf[reloc_offset];
+                // Zeroes the MI tier bit (JL_MI_FLAGS_TIER_QUEUED) too: it is transient
+                // JIT-worker state and must never survive into an image, or a loaded MI
+                // could be wrongly treated as already-claimed and never promoted.
                 jl_atomic_store_relaxed(&newmi->flags, 0);
+                // tier_count is transient T0 promotion-threshold state; never serialize it.
+                jl_atomic_store_relaxed(&newmi->tier_count, 0);
                 if (s->incremental) {
                     jl_atomic_store_relaxed(&newmi->dispatch_status, 0);
                 }
@@ -1671,7 +1676,26 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                 jl_code_instance_t *newci = (jl_code_instance_t*)&f->buf[reloc_offset];
 
                 if (s->incremental) {
-                    if (jl_atomic_load_relaxed(&ci->max_world) == ~(size_t)0) {
+                    if (jl_atomic_load_relaxed(&ci->edges) == NULL) {
+                        // A CodeInstance without edges cannot be
+                        // revalidated by the loader (whose method verifier
+                        // reads ci->edges and would throw UndefRefError).
+                        // Two kinds exist: cached generator output for the
+                        // interpreter (owner :uninferred, see
+                        // jl_cache_uninferred) and the unspecialized
+                        // interpreter/fallback cache entries
+                        // (jl_get_method_inferred with edges=NULL from
+                        // jl_compile_method_internal). Both appear whenever
+                        // the interpreter executes methods (--compile=min,
+                        // or the tiered interpreter-T0 mode) and both are
+                        // recreated on demand at runtime, so drop them from
+                        // incremental images by giving them an empty world
+                        // range. (Edges == jl_emptysvec is different: that
+                        // revalidates trivially and is kept.)
+                        jl_atomic_store_release(&newci->min_world, 1);
+                        jl_atomic_store_release(&newci->max_world, 0);
+                    }
+                    else if (jl_atomic_load_relaxed(&ci->max_world) == ~(size_t)0) {
                         //assert(jl_atomic_load_relaxed(&ci->edges) != jl_emptysvec); // some code (such as !==) might add a method lookup restriction but not keep the edges
                         jl_atomic_store_release(&newci->min_world, ~(size_t)0);
                         jl_atomic_store_release(&newci->max_world, WORLD_AGE_REVALIDATION_SENTINEL);
@@ -1685,8 +1709,10 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                 }
                 jl_atomic_store_relaxed(&newci->time_compile, 0.0);
                 jl_atomic_store_relaxed(&newci->invoke, NULL);
-                // preserve only JL_CI_FLAGS_NATIVE_CACHE_VALID bits
-                jl_atomic_store_relaxed(&newci->flags, jl_atomic_load_relaxed(&newci->flags) & JL_CI_FLAGS_NATIVE_CACHE_VALID);
+                // preserve only NATIVE_CACHE_VALID; tiering carries no CI-level
+                // state (promotion is arbitrated entirely on the MethodInstance).
+                jl_atomic_store_relaxed(&newci->flags, jl_atomic_load_relaxed(&newci->flags) &
+                    JL_CI_FLAGS_NATIVE_CACHE_VALID);
                 jl_atomic_store_relaxed(&newci->specptr.fptr, NULL);
                 uintptr_t fptr_type = JL_INVOKE_SPECSIG;
                 int8_t builtin_id = 0;
@@ -3245,6 +3271,18 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
 {
     JL_TIMING(SYSIMG_DUMP, SYSIMG_DUMP);
 
+    // Park the async tier worker first (it runs on its own OS thread,
+    // truly concurrent with this serializer, and a mid-flight promotion
+    // mutates CodeInstance invoke/specptr/flags/inferred while we
+    // snapshot them), then drain any pending T0→T1 promotions
+    // synchronously so hot CodeInstances land in the artifact with their
+    // optimized specptr rather than the baseline T0 code. No-op when
+    // tiering is off or the queue is empty (i.e. always a no-op for the
+    // sysimage build). The worker is resumed at the end of this function,
+    // once the image content is fully serialized into the memory streams.
+    jl_tier_quiesce();
+    jl_tier_drain();
+
     // iff emit_split
     // write header and src_text to one file f/s
     // write systemimg to a second file ff/z
@@ -3378,6 +3416,9 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     *s = f;
     if (emit_split)
         *z = ff;
+    // Image content is fully serialized into the memory streams; CI
+    // mutations can no longer affect it.
+    jl_tier_resume();
     return;
 }
 

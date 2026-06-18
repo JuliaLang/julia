@@ -814,10 +814,21 @@ precompile_test_harness("code caching") do dir
         Base.invokelatest() do
             M.getelsize(M.X2[])
         end
+        # Force the Vector{M.X2} specialization to compile synchronously with retained
+        # source. Under default-on tiering the bare dispatch above only parks it (getelsize
+        # has a loop) and enqueues async promotion, so mi.cache would still be NULL here.
+        Base.invokelatest(precompile, M.getelsize, (Vector{M.X2},))
         mispecs = minternal.specializations::Core.SimpleVector
         @test mispecs[1] === mi
-        mi = mispecs[2]::Core.MethodInstance
-        mi.specTypes == Tuple{typeof(M.getelsize),Vector{M.X2}}
+        # look up by specTypes rather than positional index (robust to specialization ordering)
+        mi = nothing
+        for spec in mispecs
+            if spec isa Core.MethodInstance && spec.specTypes == Tuple{typeof(M.getelsize),Vector{M.X2}}
+                mi = spec
+                break
+            end
+        end
+        @test mi isa Core.MethodInstance
         ci = mi.cache
         @test (codeunits(ci.inferred::String)[end]) == 0x00
     end

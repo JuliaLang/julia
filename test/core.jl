@@ -258,21 +258,21 @@ k11840(::Type{Union{Tuple{Int32}, Tuple{Int64}}}) = '2'
 
 # issue #59327
 @noinline f59327(f, x) = Any[f, x]
-g59327(x) = f59327(+, Any[x][1])
+g59327(x) = (Base.Experimental.@force_compile; f59327(+, Any[x][1]))
 g59327(1)
 @test any(
     mi->mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(f59327), Function, Int},
     methods(f59327)[1].specializations)
 
 @noinline h59327(f::Union{Function, Nothing}, x) = Any[f, x]
-i59327(x) = h59327(+, Any[x][1])
+i59327(x) = (Base.Experimental.@force_compile; h59327(+, Any[x][1]))
 i59327(1)
 @test any(
     mi->mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(h59327), Function, Int},
     methods(h59327)[1].specializations)
 
 @noinline j59327(f::Function, x) = Any[f, x]
-k59327(x) = j59327(+, Any[x][1])
+k59327(x) = (Base.Experimental.@force_compile; j59327(+, Any[x][1]))
 k59327(1)
 @test any(
     mi->mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(j59327), Function, Int},
@@ -280,7 +280,7 @@ k59327(1)
 )
 
 @noinline l59327(f::Base.Callable, x) = Any[f, x]
-m59327(x) = l59327(+, Any[x][1])
+m59327(x) = (Base.Experimental.@force_compile; l59327(+, Any[x][1]))
 m59327(1)
 @test any(
     mi->mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(l59327), Function, Int},
@@ -289,7 +289,7 @@ m59327(1)
 
 # _do_ specialize if the signature has a `where`
 @noinline n59327(f::F, x) where F = Any[f, x]
-o59327(x) = n59327(+, Any[x][1])
+o59327(x) = (Base.Experimental.@force_compile; n59327(+, Any[x][1]))
 o59327(1)
 @test !any(
     mi->mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(n59327), Function, Int},
@@ -302,7 +302,7 @@ o59327(1)
 
 # _do_ specialize if the signature is specific
 @noinline n59327(f::typeof(+), x) = Any[f, x]
-o59327(x) = n59327(+, Any[x][1])
+o59327(x) = (Base.Experimental.@force_compile; n59327(+, Any[x][1]))
 o59327(1)
 @test !any(
     mi->mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(n59327), Function, Int},
@@ -460,10 +460,15 @@ anytype_dispatch_61915(@nospecialize t::Core.AnyType) = 2
 anytype_dispatch_61915(::TypeVar) = 3
 anytype_dispatch_61915(::AnyTypeCache61915a) = 4
 anytype_dispatch_61915(::AnyTypeCache61915b) = 5
+# Under default-on tiering a call runs interpreted (T0) until promoted, and the
+# interpreter boxes, so drive both the caller and the dynamically-dispatched callee
+# past the promotion threshold and drain synchronously before measuring allocations.
+warm_and_drain(f) = (for _ in 1:30; f(); end;
+    ccall(:jl_tier_quiesce, Cvoid, ()); ccall(:jl_tier_drain, Cvoid, ()); ccall(:jl_tier_resume, Cvoid, ()))
 let r = Ref{Any}(Int)
     @noinline callit() = anytype_dispatch_61915(r[])
     @test callit() == 2          # dispatches to the `::Core.AnyType` method
-    callit()                     # warmup: populate the method cache
+    warm_and_drain(callit)       # warmup + promote to native before measuring
     @test @allocated(callit()) == 0
 end
 
@@ -487,11 +492,11 @@ let f = Ref{Any}(anytype_levelsplit_61915), r = Ref{Any}(Int)
     end
     r[] = Int                      # typeof(Int) === DataType: the `::DataType` method
     @test callit() == 8
-    callit()
+    warm_and_drain(callit)
     @test @allocated(callit()) == 0
     r[] = Union{Int,Char}          # typeof is the `Union` kind: the `::AnyType` method
     @test callit() == 9
-    callit()
+    warm_and_drain(callit)
     @test @allocated(callit()) == 0
 end
 # union-mixed queries take the full-scan intersection path over the method definitions,

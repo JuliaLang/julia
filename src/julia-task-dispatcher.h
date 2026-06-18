@@ -4,6 +4,10 @@ namespace {
 
 using namespace llvm::orc;
 
+// Back-pointer for work_until's stall diagnostics (set by the JuliaOJIT
+// constructor once the ExecutionSession exists).
+static ExecutionSession *SessionForStallDump = nullptr;
+
 template <typename U> struct future_value_storage {
   // Union disables default construction/destruction semantics, allowing us to
   // use placement new/delete for precise control over value lifetime
@@ -373,6 +377,8 @@ void JuliaTaskDispatcher::work_until(future_base &F) {
   bool WasCooperative = InCooperativeContext;
   InCooperativeContext = true;
   jl_unique_gcsafe_lock Lock{DispatchMutex};
+  int StalledSeconds = 0;
+  bool DumpedStall = false;
   while (!F.ready()) {
     process_tasks(Lock);
 
@@ -380,10 +386,33 @@ void JuliaTaskDispatcher::work_until(future_base &F) {
     if (F.ready())
       break;
 
-    // If we get here, our queue is empty but the future isn't ready
-    // We need to wait for other threads to finish work that should complete our
-    // future
-    Lock.wait(WorkFinishedCV);
+    // If we get here, our queue is empty but the future isn't ready.
+    // We need to wait for other threads to finish work that should
+    // complete our future. Wait in slices and self-diagnose: if the
+    // future's completion is lost (wedged materialization, dropped
+    // notification), this would otherwise hang silently — after ~30s of
+    // no progress, dump the dispatcher and ORC session state (symbol
+    // states and pending queries) to stderr once, then keep waiting.
+    if (Lock.wait_for(WorkFinishedCV, std::chrono::seconds(1)) ==
+        std::cv_status::timeout) {
+      if (++StalledSeconds >= 30 && !DumpedStall) {
+        DumpedStall = true;
+        errs() << "==== JuliaTaskDispatcher: work_until stalled for "
+               << StalledSeconds << "s; future not completed ====\n"
+               << "TaskQueue size: " << TaskQueue.size() << "\n";
+        if (SessionForStallDump) {
+          // Drop the dispatch lock while taking the session lock to avoid
+          // inverting the dispatch()-under-session-lock order.
+          Lock.native.unlock();
+          SessionForStallDump->dump(errs());
+          errs() << "==== end of stall dump ====\n";
+          Lock.native.lock();
+        }
+      }
+    }
+    else {
+      StalledSeconds = 0;
+    }
   }
   InCooperativeContext = WasCooperative;
 }
@@ -393,7 +422,12 @@ void JuliaTaskDispatcher::process_tasks(jl_unique_gcsafe_lock &Lock) {
         auto T = TaskQueue.pop_back_val();
 
         Lock.native.unlock();
+        // The enclosing gcsafe lock holds this thread in GC_SAFE for the
+        // cooperative wait; the task itself allocates (materialization,
+        // jl_register_jit_object), so it must run GC_UNSAFE.
+        int8_t gc_state = jl_gc_unsafe_enter(jl_current_task->ptls);
         T->run();
+        jl_gc_unsafe_leave(jl_current_task->ptls, gc_state);
         Lock.native.lock();
 
         WorkFinishedCV.notify_all();

@@ -28,6 +28,11 @@ end
 
 const rmwait_timeout = running_under_rr() ? 300 : 30
 
+# Run the suite with tiered compilation active so CI exercises the tier
+# machinery. Inherits into test workers and spawned julia subprocesses;
+# a pre-set value is respected.
+get!(ENV, "JULIA_TIER_ENABLE", "1")
+
 ENV["JULIA_TEST_BUILDROOT"] = buildroot
 if use_revise
     # First put this at the top of the DEPOT PATH to install revise if necessary.

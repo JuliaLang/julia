@@ -377,6 +377,49 @@ JL_DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m)
     return jl_top_module;
 }
 
+// Resolve a lowered callee to its constant value when statically possible:
+// follows SSA uses, global bindings, quoted literals, and
+// `getproperty(<const module>, :name)` chains (lowering emits the latter for
+// dotted paths like `Core.Intrinsics.llvmcall`, which a plain GlobalRef
+// check misses).
+static jl_value_t *resolve_const_callee(jl_value_t *f JL_PROPAGATES_ROOT, jl_array_t *body JL_PROPAGATES_ROOT, int depth)
+{
+    if (depth > 8)
+        return NULL;
+    if (jl_is_ssavalue(f)) {
+        size_t id = ((jl_ssavalue_t*)f)->id;
+        if (id == 0 || id > (size_t)jl_array_nrows(body))
+            return NULL;
+        return resolve_const_callee(jl_array_ptr_ref(body, id - 1), body, depth + 1);
+    }
+    if (jl_is_globalref(f)) {
+        jl_binding_t *b = jl_get_binding(jl_globalref_mod(f), jl_globalref_name(f));
+        return jl_get_latest_binding_value_if_const(b);
+    }
+    if (jl_is_quotenode(f))
+        return jl_quotenode_value(f);
+    if (jl_is_expr(f) && ((jl_expr_t*)f)->head == jl_call_sym && jl_expr_nargs((jl_expr_t*)f) == 3) {
+        jl_expr_t *call = (jl_expr_t*)f;
+        jl_value_t *gp = resolve_const_callee(jl_exprarg(call, 0), body, depth + 1);
+        int is_getprop = gp != NULL &&
+            (gp == BUILTIN(getfield) ||
+             (jl_base_module != NULL &&
+              gp == jl_get_latest_binding_value_if_const(
+                  jl_get_binding(jl_base_module, jl_symbol("getproperty")))));
+        if (!is_getprop)
+            return NULL;
+        jl_value_t *owner = resolve_const_callee(jl_exprarg(call, 1), body, depth + 1);
+        jl_value_t *name = jl_exprarg(call, 2);
+        if (jl_is_quotenode(name))
+            name = jl_quotenode_value(name);
+        if (owner == NULL || !jl_is_module(owner) || !jl_is_symbol(name))
+            return NULL;
+        jl_binding_t *b = jl_get_binding((jl_module_t*)owner, (jl_sym_t*)name);
+        return jl_get_latest_binding_value_if_const(b);
+    }
+    return NULL;
+}
+
 static void expr_attributes(jl_value_t *v, jl_array_t *body, int *has_ccall, int *has_defs, int *has_opaque)
 {
     if (!jl_is_expr(v))
@@ -413,20 +456,7 @@ static void expr_attributes(jl_value_t *v, jl_array_t *body, int *has_ccall, int
         return;
     }
     else if (head == jl_call_sym && jl_expr_nargs(e) > 0) {
-        jl_value_t *called = NULL;
-        jl_value_t *f = jl_exprarg(e, 0);
-        if (jl_is_ssavalue(f)) {
-            f = jl_array_ptr_ref(body, ((jl_ssavalue_t*)f)->id - 1);
-        }
-        if (jl_is_globalref(f)) {
-            jl_module_t *mod = jl_globalref_mod(f);
-            jl_sym_t *name = jl_globalref_name(f);
-            jl_binding_t *b = jl_get_binding(mod, name);
-            called = jl_get_latest_binding_value_if_const(b);
-        }
-        else if (jl_is_quotenode(f)) {
-            called = jl_quotenode_value(f);
-        }
+        jl_value_t *called = resolve_const_callee(jl_exprarg(e, 0), body, 0);
         if (called != NULL) {
             if (jl_is_intrinsic(called) && jl_unbox_int32(called) == (int)llvmcall) {
                 *has_ccall = 1;
@@ -482,6 +512,36 @@ static void body_attributes(jl_array_t *body, int *has_ccall, int *has_defs, int
         expr_attributes(stmt, body, has_ccall, has_defs, has_opaque);
     }
     *forced_compile = jl_has_meta(body, jl_force_compile_sym);
+}
+
+// Tiered-compilation stopgap: should this body be compiled rather than parked
+// in the cheap T0 tier (interpreter)? Mirrors the compile-vs-interpret policy
+// Julia already applies to toplevel thunks (body_attributes): a body with a
+// loop (back-edge), a ccall/cfunction/llvmcall, an opaque closure, or a
+// @force_compile marker must be compiled. The AST interpreter cannot execute a
+// ccall, and a loop runs to completion at T0 (the entry counter sees calls,
+// not iterations), so such CIs must not be interpreted. Callers should pass the
+// LOWERED method source so the answer is deterministic (independent of the
+// optimizer unrolling constant-bound loops).
+// Bitmask variant: which attributes force compilation (JL_TIER_REJECT_* in
+// julia_internal.h); 0 = interp-eligible.
+JL_DLLEXPORT int jl_code_info_interp_reject_reasons(jl_code_info_t *src)
+{
+    // body_attributes/expr_attributes use jl_array_ptr_ref, valid only for an
+    // Any-element (pointer) array — match jl_code_requires_compiler's contract.
+    if (!jl_typetagis(src->code, jl_array_any_type))
+        return JL_TIER_REJECT_NOSOURCE;
+    int has_ccall = 0, has_defs = 0, has_loops = 0, has_opaque = 0, forced = 0;
+    body_attributes((jl_array_t*)src->code, &has_ccall, &has_defs, &has_loops, &has_opaque, &forced);
+    return (has_loops ? JL_TIER_REJECT_LOOPS : 0) |
+           (has_ccall ? JL_TIER_REJECT_CCALL : 0) |
+           (has_opaque ? JL_TIER_REJECT_OPAQUE : 0) |
+           (forced ? JL_TIER_REJECT_FORCED : 0);
+}
+
+JL_DLLEXPORT int jl_code_info_avoid_interp(jl_code_info_t *src)
+{
+    return jl_code_info_interp_reject_reasons(src) != 0;
 }
 
 int jl_is_toplevel_only_expr(jl_value_t *e) JL_NOTSAFEPOINT
