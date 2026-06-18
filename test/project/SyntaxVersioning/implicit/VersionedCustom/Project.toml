@@ -1,0 +1,7 @@
+name = "VersionedCustom"
+uuid = "8a930b9e-36a2-401f-aa8e-44e2578942c2"
+syntax.version = "CustomParser"
+
+[deps]
+CustomParser = "6cf8f07a-0a4d-4fb8-8ad8-b571fa5ee9d5"
+

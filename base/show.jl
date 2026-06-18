@@ -2242,8 +2242,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
             print(io, "end")
         end
 
-    elseif head === :module && nargs==4 && isa(args[1],VersionNumber) && isa(args[2],Bool)
-        # New 4-argument form: (version, baremodule_flag, name, body)
+    elseif head === :module && nargs == 4 &&
+            (isa(args[1], GlobalRef) || isa(args[1], VersionNumber)) && isa(args[2], Bool)
+        # 4-argument form: (parser_ref/version, baremodule_flag, name, body)
         show_block(IOContext(io, beginsym=>false), args[2] ? :module : :baremodule, args[3], args[4], indent, quote_level)
         print(io, "end")
     elseif head === :module && nargs==3 && isa(args[1],Bool)

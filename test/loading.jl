@@ -2106,6 +2106,14 @@ module M58272_to end
         @test invokelatest(getglobal, (@eval (using Versioned4; Versioned4)), :ver) == VersionNumber(VERSION.major, VERSION.minor)
         # Inherited from compat.julia = "1.14-2"
         @test invokelatest(getglobal, (@eval (using Versioned5; Versioned5)), :ver) == v"1.14"
+        # syntax.version selects a parser entry point from a dependency package.
+        versioned_custom = @eval (using VersionedCustom; VersionedCustom)
+        @test invokelatest(getglobal, versioned_custom, :custom_parser_used)
+        @test invokelatest(getglobal, versioned_custom, :parser_installed)
+        @test invokelatest(getglobal, versioned_custom, :child_parser_installed)
+        @test_throws ErrorException Base.project_get_syntax_spec(
+            Dict{String, Any}("syntax" => Dict{String, Any}("version" => "MissingParser")),
+            "Project.toml")
     finally
         copy!(LOAD_PATH, old_load_path)
     end

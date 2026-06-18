@@ -1597,8 +1597,12 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         end
         ret_k = K"="
     elseif k === K"module"
+        has_parser_ref = kind(cs[1]) === K"VERSION"
+        if has_parser_ref
+            cs[1] = valleaf(parser_ref_for_version(version_to_expr(cs[1])))
+        end
         not_bare = valleaf(!has_flags(st, BARE_MODULE_FLAG))
-        insert!(cs, kind(cs[1]) === K"VERSION" ? 2 : 1, not_bare)
+        insert!(cs, has_parser_ref ? 2 : 1, not_bare)
     elseif k === K"quote" && n_cs === 1
         # (quote something_simple) => (inert something_simple)
         ret_c = _green_to_est(st, 1, cs[1])

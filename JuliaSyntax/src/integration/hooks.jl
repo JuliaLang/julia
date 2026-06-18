@@ -161,7 +161,9 @@ end
 # Debug log file for dumping parsed code
 const _debug_log = Ref{Union{Nothing,IO}}(nothing)
 
-function core_parser_hook(code, filename::String, lineno::Int, offset::Int, options::Symbol; syntax_version = v"1.13")
+function core_parser_hook(code, filename::String, lineno::Int, offset::Int, options::Symbol;
+                          syntax_version = v"1.13",
+                          module_parser = parser_ref_for_version(syntax_version))
     try
         # TODO: Check that we do all this input wrangling without copying the
         # code buffer
@@ -237,7 +239,7 @@ function core_parser_hook(code, filename::String, lineno::Int, offset::Int, opti
                 # * includes the last line number
                 # * appends the error message
                 source = SourceFile(stream, filename=filename, first_line=lineno)
-                topex = build_tree(Expr, stream, source)
+                topex = build_tree(Expr, stream, source; module_parser)
                 @assert topex.head == :toplevel
                 i = findfirst(_has_nested_error, topex.args)
                 if i > 1 && topex.args[i-1] isa LineNumberNode
@@ -258,7 +260,7 @@ function core_parser_hook(code, filename::String, lineno::Int, offset::Int, opti
             #
             # show_diagnostics(stdout, stream.diagnostics, code)
             #
-            ex = build_tree(Expr, stream; filename=filename, first_line=lineno)
+            ex = build_tree(Expr, stream; filename=filename, first_line=lineno, module_parser)
         end
 
         # Note the next byte in 1-based indexing is `last_byte(stream) + 1` but
@@ -295,6 +297,16 @@ function core_parser_hook(code, filename::String, lineno::Int, offset::Int, opti
 
         _fl_parse_hook(code, filename, lineno, offset, options)
     end
+end
+
+function core_parser_hook_1_13(code, filename::String, lineno::Int, offset::Int, options::Symbol)
+    core_parser_hook(code, filename, lineno, offset, options;
+        syntax_version=v"1.13", module_parser=GlobalRef(@__MODULE__, :core_parser_hook_1_13))
+end
+
+function core_parser_hook_1_14(code, filename::String, lineno::Int, offset::Int, options::Symbol)
+    core_parser_hook(code, filename, lineno, offset, options;
+        syntax_version=v"1.14", module_parser=GlobalRef(@__MODULE__, :core_parser_hook_1_14))
 end
 
 # Core._parse gained a `lineno` argument in

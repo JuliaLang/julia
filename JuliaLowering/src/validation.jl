@@ -356,7 +356,7 @@ end
 vst1_toplevel_only(vcx, st) = @stm st begin
     # body will be validated when lowered
     [K"module" [K"Value"] [K"Value"] [K"Identifier"] [K"block" xs...]] ->
-        !(st[1].value isa VersionNumber) ? @fail(st[1], "expected version") :
+        !(st[1].value isa GlobalRef) ? @fail(st[1], "expected parser ref") :
         !(st[2].value isa Bool) ? @fail(st[2], "expected boolean bare flag") :
         pass()
     [K"module" [K"Value"] [K"Identifier"] [K"block" xs...]] ->

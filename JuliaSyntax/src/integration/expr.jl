@@ -221,6 +221,38 @@ function version_to_expr(node)
     return VersionNumber(1, nv ÷ 10, nv % 10)
 end
 
+function parser_ref_for_version(ver::VersionNumber)
+    ver <= v"1.13" && return GlobalRef(@__MODULE__, :core_parser_hook_1_13)
+    return GlobalRef(@__MODULE__, Symbol(:core_parser_hook_, ver.major, :_, ver.minor))
+end
+
+parser_ref_for_version(ver::Tuple{Int,Int}) =
+    parser_ref_for_version(VersionNumber(ver[1], ver[2]))
+
+function replace_module_versions!(@nospecialize(ex), parser_ref::GlobalRef)
+    if ex isa Expr
+        if ex.head === :module && !isempty(ex.args) && ex.args[1] isa VersionNumber
+            ex.args[1] = parser_ref
+        end
+        for arg in ex.args
+            replace_module_versions!(arg, parser_ref)
+        end
+    end
+    return ex
+end
+
+function replace_module_versions!(@nospecialize(ex))
+    if ex isa Expr
+        if ex.head === :module && !isempty(ex.args) && ex.args[1] isa VersionNumber
+            ex.args[1] = parser_ref_for_version(ex.args[1])
+        end
+        for arg in ex.args
+            replace_module_versions!(arg)
+        end
+    end
+    return ex
+end
+
 _expr_leaf_val(node::SyntaxNode, _...) = node.val
 _expr_leaf_val(cursor::RedTreeCursor, txtbuf::Vector{UInt8}, txtbuf_offset::UInt32) =
     parse_julia_literal(txtbuf, head(cursor), byte_range(cursor) .+ txtbuf_offset)
@@ -680,13 +712,15 @@ end
 
 function build_tree(::Type{Expr}, stream::ParseStream;
                     filename=nothing, first_line=1,
+                    module_parser=parser_ref_for_version(stream.version),
                     # unused, but required since `_parse` is written generic
                     keep_parens=false)
     source = SourceFile(stream, filename=filename, first_line=first_line)
-    return build_tree(Expr, stream, source)
+    return build_tree(Expr, stream, source; module_parser)
 end
 
-function build_tree(::Type{Expr}, stream::ParseStream, source::SourceFile)
+function build_tree(::Type{Expr}, stream::ParseStream, source::SourceFile;
+                    module_parser=parser_ref_for_version(stream.version))
     txtbuf = unsafe_textbuf(stream)
     cursor = RedTreeCursor(stream)
     wrapper_head = SyntaxHead(K"wrapper",EMPTY_FLAGS)
@@ -704,16 +738,17 @@ function build_tree(::Type{Expr}, stream::ParseStream, source::SourceFile)
             RedTreeCursor, wrapper_head,
             node_to_expr(cursor, source, txtbuf), false)
     end
-    return entry
+    return replace_module_versions!(entry, module_parser)
 end
 
 function to_expr(node)
     source = sourcefile(node)
     txtbuf_offset, txtbuf = _unsafe_wrap_substring(sourcetext(source))
     wrapper_head = SyntaxHead(K"wrapper",EMPTY_FLAGS)
-    return fixup_Expr_child(
+    ex = fixup_Expr_child(
         typeof(node), wrapper_head,
         node_to_expr(node, source, txtbuf, UInt32(txtbuf_offset)), false)
+    return replace_module_versions!(ex)
 end
 
 Base.Expr(node::SyntaxNode) = to_expr(node)
