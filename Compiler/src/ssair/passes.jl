@@ -80,6 +80,79 @@ function try_compute_fieldidx_stmt(ir::Union{IncrementalCompact,IRCode}, stmt::E
     return try_compute_fieldidx(typ, field)
 end
 
+function is_ea_forwardable_field_ordering(@nospecialize(field_ordering))
+    return field_ordering === :unspecified ||
+        (field_ordering isa Const && field_ordering.val === :not_atomic)
+end
+
+function is_ea_forwardable_field_query(ir::Union{IncrementalCompact,IRCode}, stmt::Expr)
+    is_getfield = is_known_call(stmt, getfield, ir)
+    is_isdefined = !is_getfield && is_known_call(stmt, isdefined, ir)
+    (is_getfield || is_isdefined) || return false
+    nargs = length(stmt.args)
+    if is_getfield
+        3 <= nargs <= 5 || return false
+    else
+        3 <= nargs <= 4 || return false
+    end
+    field_ordering = :unspecified
+    if is_getfield && nargs == 5
+        field_ordering = argextype(stmt.args[5], ir)
+    elseif nargs == 4
+        field_ordering = argextype(stmt.args[4], ir)
+        widenconst(field_ordering) === Bool && (field_ordering = :unspecified)
+    end
+    is_ea_forwardable_field_ordering(field_ordering) || return false
+    val = stmt.args[2]
+    val isa SSAValue || return false
+    struct_typ = argextype_widened(val, ir)
+    struct_typ_name = argument_datatypename(struct_typ)
+    struct_typ_name === nothing && return false
+    struct_typ_name.atomicfields == C_NULL || return false
+    return ismutabletypename(struct_typ_name)
+end
+
+function has_ea_forwardable_field_query(ir::IRCode)
+    for idx = 1:length(ir.stmts)
+        stmt = ir[SSAValue(idx)][:stmt]
+        stmt isa Expr || continue
+        is_ea_forwardable_field_query(ir, stmt) && return true
+    end
+    return false
+end
+
+function ea_forwarded_load_value(eresult::EscapeAnalysis.EscapeResult, idx::Int)
+    haskey(eresult.ssamemoryinfo, idx) || return false, nothing
+    memoryinfo = eresult.ssamemoryinfo[idx]
+    memoryinfo isa EscapeAnalysis.ConflictedMemory && return false, nothing
+    memoryinfo isa EscapeAnalysis.UnknownMemory && return false, nothing
+    memoryinfo isa EscapeAnalysis.UninitializedMemory && return false, nothing
+    return true, memoryinfo
+end
+
+function ea_no_escape_cache(@nospecialize(_))
+    return false
+end
+
+function ea_forward_field_queries(ir::IRCode, inlining::Union{Nothing,InliningState})
+    has_ea_forwardable_field_query(ir) || return ir
+    get_escape_cache′ = inlining === nothing ? ea_no_escape_cache : get_escape_cache(inlining.interp)
+    eresult = EscapeAnalysis.analyze_escapes(ir, length(ir.argtypes), get_escape_cache′)
+    isempty(eresult.ssamemoryinfo) && return ir
+    for idx = 1:length(ir.stmts)
+        inst = ir[SSAValue(idx)]
+        stmt = inst[:stmt]
+        stmt isa Expr || continue
+        is_ea_forwardable_field_query(ir, stmt) || continue
+        forwardable, val = ea_forwarded_load_value(eresult, idx)
+        forwardable || continue
+        val == SSAValue(idx) && continue
+        inst[:stmt] = val
+        add_flag!(inst, IR_FLAG_REFINED)
+    end
+    return ir
+end
+
 function find_curblock(domtree::DomTree, allblocks::BitSet, curblock::Int)
     # TODO: This can be much faster by looking at current level and only
     # searching for those blocks in a sorted order
@@ -1622,10 +1695,10 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             filter!(x -> ir[SSAValue(x.idx)][:stmt] !== nothing, defuse.uses)
         end
         sroa_mutables!(ir, defuses, used_ssas, lazydomtree, inlining)
-        return ir
+        return ea_forward_field_queries(ir, inlining)
     else
         simple_dce!(compact)
-        return complete(compact)
+        return ea_forward_field_queries(complete(compact), inlining)
     end
 end
 
