@@ -730,7 +730,7 @@ endif
 
 ifeq ($(OS),WINNT)
 define IMPLIB_FLAGS
-  -Wl,--out-implib,$(build_libdir)/$(notdir $1).a
+  --out-implib $(build_libdir)/$(notdir $1).a
 endef
 else
 define IMPLIB_FLAGS
@@ -1561,6 +1561,8 @@ RPATH_LIB := $(RPATH_ORIGIN)
 # --whole-archive
 ifeq ($(OS), Darwin)
   whole_archive = -Xlinker -force_load $(1)
+else ifeq ($(OS), WINNT)
+  whole_archive = --whole-archive $(1) --no-whole-archive
 else
   whole_archive = -Wl,--whole-archive $(1) -Wl,--no-whole-archive
 endif
@@ -1634,13 +1636,36 @@ endif
 
 ifeq ($(OS), WINNT)
 HAVE_SSP := 1
-OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(BUILDROOT)/src/julia.expmap \
-	-Wl,--no-whole-archive -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 -latomic -lole32
+ifeq ($(BINARY),64)
+WIN_LD_EMULATION := i386pep
+WIN_LD_DLL_ENTRY := DllMainCRTStartup
+WIN_LD_EXE_ENTRY := mainCRTStartup
+else
+WIN_LD_EMULATION := i386pe
+WIN_LD_DLL_ENTRY := _DllMainCRTStartup
+WIN_LD_EXE_ENTRY := _mainCRTStartup
+endif
+WIN_LD_SHARED_FLAGS := -m $(WIN_LD_EMULATION) -shared -Bdynamic -e $(WIN_LD_DLL_ENTRY) --enable-auto-image-base --allow-multiple-definition
+WIN_LD_EXE_FLAGS := -m $(WIN_LD_EMULATION) -Bdynamic --subsystem console -e $(WIN_LD_EXE_ENTRY)
+WIN_CRT_LIB := -lmsvcrt-os
+# libmsvcrt-os.a contains MinGW CRT objects that can refer back to
+# libmingw32.a/libmingwex.a; keep the selected CRT last.
+WIN_MINGW_CRT_LIBS := -lmingwex $(WIN_CRT_LIB) -lmingw32 -lmingwex $(WIN_CRT_LIB)
+WIN_LD_DLL_CRT_START := $(build_private_libdir)/dllcrt2.o $(build_private_libdir)/crtbegin.o
+WIN_LD_EXE_CRT_START := $(build_private_libdir)/crt2.o $(build_private_libdir)/crtbegin.o
+WIN_LD_CRT_END_OBJ := $(build_private_libdir)/crtend.o
+WIN_LD_CRT_END := $(WIN_MINGW_CRT_LIBS) $(WIN_LD_CRT_END_OBJ)
+WIN_LD_STDCXX := $(build_shlibdir)/$(call versioned_libname,libstdc++,6)
+WIN_LD_ATOMIC := $(build_shlibdir)/$(call versioned_libname,libatomic,1)
+WIN_SYSTEM_LIBS := -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 $(WIN_LD_ATOMIC) -lole32
+WIN_MINGW_LIBS := -lmingw32 -lgcc_s -lgcc -lmoldname $(WIN_MINGW_CRT_LIBS) -lkernel32 -lpthread -ladvapi32 -lshell32 -luser32
+OSLIBS += --export-all-symbols --version-script=$(BUILDROOT)/src/julia.expmap \
+	--no-whole-archive $(WIN_SYSTEM_LIBS) $(WIN_MINGW_LIBS)
 # N.B.: Unlike in the sysimage, we cannot -Wl,--disable-auto-import -Wl,--disable-runtime-pseudo-reloc here, because libstdc++/LLVM are not fully correct under
 # enforced visibility at this point.
-JLDFLAGS += -Wl,--stack,8388608
+JLDFLAGS += --stack 8388608
 ifeq ($(ARCH),i686)
-JLDFLAGS += -Wl,--large-address-aware
+JLDFLAGS += --large-address-aware
 endif
 JCPPFLAGS += -D_WIN32_WINNT=0x0602 # (0x0602 = _WIN32_WINNT_WIN8)
 UNTRUSTED_SYSTEM_LIBM := 1
@@ -1651,6 +1676,20 @@ WIN_MAKE_HARD_LINK := cp --dereference --link --force
 else
 WIN_MAKE_HARD_LINK := true -ignore
 endif # $(OS) == WINNT
+
+# Link commands that use $(LD) directly on Windows and the usual compiler driver
+# elsewhere. Arguments are:
+#   1: output, 2: Windows-only flags before -o, 3: Windows inputs after output,
+#   4: non-Windows command before -o, 5: non-Windows inputs after output.
+ifeq ($(OS), WINNT)
+WIN_LD_LIBPATHS := -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir)
+link-dll = $(LD) $(WIN_LD_SHARED_FLAGS) $(2) -o $(1) $(3)
+link-exe = $(LD) $(WIN_LD_EXE_FLAGS) $(2) -o $(1) $(3)
+else
+WIN_LD_LIBPATHS :=
+link-dll = $(4) -o $(1) $(5)
+link-exe = $(4) -o $(1) $(5)
+endif
 
 # Threads
 ifneq ($(JULIA_THREADS), 0)
