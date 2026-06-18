@@ -23,9 +23,9 @@ using Base: # Base definitions
     !, !==, &, *, +, -, :, <, <<, =>, >,
     @__MODULE__, @assert, @eval, @goto, @inbounds, @inline, @isdefined, @label, @noinline,
     @nospecialize, @specialize,
-    BitSet, IdDict, IdSet, Pair, UnitRange, Vector, _bits_findnext, copy!, empty!,
-    enumerate, error, fill!, first, get, hasintersect, haskey, isassigned, isexpr, keys,
-    last, length, max, min, missing, only, println, push!, pushfirst!, resize!,
+    BitSet, Dict, IdSet, Pair, UnitRange, Vector, _bits_findnext, copy!, empty!,
+    enumerate, error, fill!, first, get, hasintersect, haskey, isassigned, isexpr,
+    last, length, max, min, missing, only, println, push!, pushfirst!, resize!, sizehint!,
     |, ∉, ≠, ≤, ≥, ⊆, ⊇
 using ..Compiler: # Compiler specific definitions
     @show,
@@ -571,7 +571,7 @@ x::MemoryInfo ⊔ₘꜝ y::MemoryInfo = begin
 end
 x::MemoryInfo ⊔ₘ y::MemoryInfo = (@nospecialize; first(copy(x) ⊔ₘꜝ y))
 
-const EscapeTable = IdDict{Int,EscapeInfo} # TODO `Dict` would be more efficient?
+const EscapeTable = Dict{Int,EscapeInfo}
 
 struct BlockEscapeState{Sealed#=::Bool=#}
     escapes::EscapeTable
@@ -600,7 +600,11 @@ function setindex!(bbstate::BlockEscapeState{Sealed}, xinfo::EscapeInfo, xidx::I
     return bbstate.escapes[xidx] = xinfo
 end
 function copy(bbstate::BlockEscapeState{Sealed}) where Sealed
-    escapes = EscapeTable(i => copy(x) for (i, x) in bbstate.escapes)
+    escapes = EscapeTable()
+    sizehint!(escapes, length(bbstate.escapes))
+    for (i, x) in bbstate.escapes
+        escapes[i] = copy(x)
+    end
     return BlockEscapeState{Sealed}(escapes, bbstate.nargs, bbstate.nstmts)
 end
 function (bbstate1::BlockEscapeState{Sealed1} == bbstate2::BlockEscapeState{Sealed2}) where {Sealed1,Sealed2}
@@ -666,7 +670,7 @@ const Changes = Vector{Change}
 # - `UnknownMemory()`: the object/field memory could not be analyzed precisely
 # - `UninitializedMemory()`: the loaded field is definitely uninitialized
 # - a direct alias value: the load can be forwarded to that value
-const SSAMemoryInfo = IdDict{Int,Any}
+const SSAMemoryInfo = Dict{Int,Any}
 # TODO CFG-aware load-forwarding facts:
 # By incorporating some form of CFG information into `SSAMemoryInfo`, it becomes possible
 # to enable load-forwarding even in cases where conflicts occur by inserting φ-nodes.
@@ -681,7 +685,7 @@ struct AnalysisState{GetEscapeCache}
     ir::IRCode
     nargs::Int
     nstmts::Int
-    new_nodes_map::Union{Nothing,IdDict{Int,Vector{Pair{Int,NewNodeInfo}}}}
+    new_nodes_map::Union{Nothing,Dict{Int,Vector{Pair{Int,NewNodeInfo}}}}
     # escape states for each basic block:
     # - `bbescape === false` indicates the state for the block has not been initialized
     # - `bbescape === true` indicates the state for the block is known to be identical to
@@ -704,7 +708,7 @@ function AnalysisState(ir::IRCode, nargs::Int, get_escape_cache)
     if isempty(ir.new_nodes)
         new_nodes_map = nothing
     else
-        new_nodes_map = IdDict{Int,Vector{Pair{Int,NewNodeInfo}}}()
+        new_nodes_map = Dict{Int,Vector{Pair{Int,NewNodeInfo}}}()
         for (i, nni) in enumerate(ir.new_nodes.info)
             if haskey(new_nodes_map, nni.pos)
                 push!(new_nodes_map[nni.pos], i => nni)
@@ -724,7 +728,7 @@ function AnalysisState(ir::IRCode, nargs::Int, get_escape_cache)
     end
     retescape[0] = ⊥
     aliasset = AliasSet(nargs + nstmts)
-    ssamemoryinfo = IdDict{Int,Any}()
+    ssamemoryinfo = Dict{Int,Any}()
     changes = Changes()
     visited = BitSet()
     equalized_roots = BitSet()
@@ -824,7 +828,7 @@ function analyze_escapes(ir::IRCode, nargs::Int, get_escape_cache)
         bbstart, bbend = first(bbs[currbb].stmts), last(bbs[currbb].stmts)
         for pc = bbstart:bbend
             local new_nodes_counter::Int = 0
-            if new_nodes_map === nothing || pc ∉ keys(new_nodes_map)
+            if new_nodes_map === nothing || !haskey(new_nodes_map, pc)
                 stmt = ir[SSAValue(pc)][:stmt]
                 isterminator = pc == bbend
             else
@@ -1004,7 +1008,7 @@ function propagate_bbstate!(astate::AnalysisState, currstate::BlockEscapeState, 
             # avoiding unnecessary copying of the state.
             nextpc = only(nextbb.stmts)
             new_nodes_map = astate.new_nodes_map
-            if new_nodes_map === nothing || nextpc ∉ keys(new_nodes_map)
+            if new_nodes_map === nothing || !haskey(new_nodes_map, nextpc)
                 nextstmt = astate.ir[SSAValue(nextpc)][:stmt]
                 if is_stmt_escape_free(nextstmt)
                     bbescapes[nextbbidx] = true
@@ -1026,6 +1030,8 @@ is_stmt_escape_free(@nospecialize(stmt)) =
 
 function propagate_bbstate!(nextstate::BlockEscapeState, currstate::BlockEscapeState)
     anychanged = false
+    length(currstate.escapes) > length(nextstate.escapes) &&
+        sizehint!(nextstate.escapes, length(currstate.escapes))
     for (idx, newinfo) in currstate.escapes
         if haskey(nextstate.escapes, idx)
             oldinfo = nextstate.escapes[idx]
