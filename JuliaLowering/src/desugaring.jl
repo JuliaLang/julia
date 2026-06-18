@@ -3972,7 +3972,7 @@ function expand_import_or_using(ctx, ex)
         #  false
         #  (call core.svec "M")
         #  (call core.svec  2 "x" "y" "z"  1 "w" "w"))
-        @jl_assert numchildren(ex[1]) >= 2 ex
+        @jl_assert numchildren(ex[1]) >= 1 ex
         from = ex[1][1]
         from_path = @ast ctx from [K"inert" expand_importpath(ctx, from)]
         paths = ex[1][2:end]
