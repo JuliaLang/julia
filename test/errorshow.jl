@@ -1622,6 +1622,8 @@ let err_str
     f56325 = x->x+1
     err_str = @except_str f56325(1,2) MethodError
     @test occursin("The anonymous function", err_str)
+    @test occursin("no method matching (::$Int, ::$Int)->⬚", err_str)
+    @test occursin("(::Any)->⬚", err_str)
 end
 
 # Test that error hints catch abstract exception supertypes (issue #58367)
