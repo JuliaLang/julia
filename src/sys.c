@@ -825,6 +825,30 @@ JL_DLLEXPORT const char *jl_pathname_for_symbol(void *symbol) JL_NOTSAFEPOINT
 #endif
 }
 
+// Returns the absolute path of the running executable, or NULL on error.
+JL_DLLEXPORT const char *jl_exepath(void) JL_NOTSAFEPOINT
+{
+    static _Atomic(char*) exepath_cache;
+    char *path = jl_atomic_load_acquire(&exepath_cache);
+    if (path != NULL)
+        return path;
+
+    char buf[JL_PATH_MAX];
+    size_t sz = sizeof(buf);
+    if (uv_exepath(buf, &sz) || sz >= JL_PATH_MAX)
+        return NULL;
+    path = (char*)malloc_s(sz + 1);
+    memcpy(path, buf, sz);
+    path[sz] = '\0';
+
+    char *expected = NULL;
+    if (!jl_atomic_cmpswap_acqrel(&exepath_cache, &expected, path)) {
+        free(path);
+        path = expected;
+    }
+    return path;
+}
+
 #ifdef _OS_WINDOWS_
 // Get a list of all the modules in this process.
 JL_DLLEXPORT int jl_dllist(jl_array_t *list)

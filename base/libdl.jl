@@ -322,8 +322,15 @@ Base.print(io::IO, llp::LazyLibraryPath) = print(io, string(llp))
 # Helper to get `$(private_shlibdir)` at runtime
 struct PrivateShlibdirGetter; end
 const private_shlibdir = Base.OncePerProcess{String}() do
-    libname = ifelse(isdebugbuild(), "libjulia-internal-debug", "libjulia-internal")
-    dirname(dlpath(libname))
+    sym = cglobal(:ijl_load_dynamic_library)
+    p = ccall(:jl_pathname_for_symbol, Cstring, (Ptr{Cvoid},), sym)
+    path = unsafe_string(p)
+    Sys.iswindows() && Libc.free(p)
+    if isempty(path)
+        p = ccall(:jl_exepath, Cstring, ())
+        path = unsafe_string(p)
+    end
+    return dirname(path)
 end
 Base.string(::PrivateShlibdirGetter) = private_shlibdir()
 
