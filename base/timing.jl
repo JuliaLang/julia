@@ -517,19 +517,38 @@ function gc_bytes()
 end
 
 @constprop :none function allocated(f, args::Vararg{Any,N}) where {N}
+    Experimental.@force_compile
     b0 = Ref{Int64}(0)
     b1 = Ref{Int64}(0)
-    Base.gc_bytes(b0)
-    @noinline f(args...)
-    Base.gc_bytes(b1)
+    # The GC counters are process-global: drain pending tier promotions
+    # (so warmed-but-unpromoted callees run native inside the window), then
+    # park the worker so its re-compilation does not pollute the
+    # measurement. Both are no-ops when tiering is off.
+    ccall(:jl_tier_quiesce, Cvoid, ())
+    ccall(:jl_tier_drain, Cvoid, ())
+    try
+        Base.gc_bytes(b0)
+        @noinline f(args...)
+        Base.gc_bytes(b1)
+    finally
+        ccall(:jl_tier_resume, Cvoid, ())
+    end
     return b1[] - b0[]
 end
 only(methods(allocated)).called = 0xff
 
 @constprop :none function allocations(f, args::Vararg{Any,N}) where {N}
-    stats = Base.gc_num()
-    @noinline f(args...)
-    diff = Base.GC_Diff(Base.gc_num(), stats)
+    Experimental.@force_compile
+    local diff
+    ccall(:jl_tier_quiesce, Cvoid, ()) # see `allocated`
+    ccall(:jl_tier_drain, Cvoid, ())
+    try
+        stats = Base.gc_num()
+        @noinline f(args...)
+        diff = Base.GC_Diff(Base.gc_num(), stats)
+    finally
+        ccall(:jl_tier_resume, Cvoid, ())
+    end
     return Base.gc_alloc_count(diff)
 end
 only(methods(allocations)).called = 0xff
@@ -564,7 +583,9 @@ function _gen_allocation_measurer(ex, fname::Symbol)
             $(esc(ex))
         end
     elseif fname === :allocated
-        # v1.11-compatible implementation
+        # v1.11-compatible implementation. NB: `try` introduces a scope, and
+        # assignments in `ex` must remain visible to the caller, so this path
+        # cannot pair quiesce/resume exception-safely and stays unguarded.
         return quote
             Experimental.@force_compile
             local b0 = Ref{Int64}(0)

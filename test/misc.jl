@@ -449,8 +449,8 @@ end # redirect_stdout
 # issue #48024, avoid overcounting timers
 begin
     double(x::Real) = 2x;
-    calldouble(container) = double(container[1]);
-    calldouble2(container) = calldouble(container);
+    calldouble(container) = (Base.Experimental.@force_compile; double(container[1]));
+    calldouble2(container) = (Base.Experimental.@force_compile; calldouble(container));
 
     Base.Experimental.@force_compile;
     local elapsed = Base.time_ns();
@@ -495,8 +495,8 @@ end
 # issue #48024, but with the time macro itself
 begin
     double(x::Real) = 2x;
-    calldouble(container) = double(container[1]);
-    calldouble2(container) = calldouble(container);
+    calldouble(container) = (Base.Experimental.@force_compile; double(container[1]));
+    calldouble2(container) = (Base.Experimental.@force_compile; calldouble(container));
 
     local first = @capture_stdout @time @eval calldouble([1.0])
     local second = @capture_stdout @time @eval calldouble2(1.0)
@@ -518,7 +518,7 @@ let f = gensym("f"), callf = gensym("callf"), call2f = gensym("call2f")
     @eval begin
         $f(::Real) = 1
         $callf(container) = $f(container[1])
-        $call2f(container) = $callf(container)
+        $call2f(container) = (Base.Experimental.@force_compile; $callf(container))
         c64 = [1.0]
         c32 = [1.0f0]
         cabs = AbstractFloat[1.0]
@@ -548,7 +548,7 @@ let f = gensym("f"), callf = gensym("callf"), call2f = gensym("call2f")
     @eval begin
         $f(::Real) = 1
         $callf(container) = $f(container[1])
-        $call2f(container) = $callf(container)
+        $call2f(container) = (Base.Experimental.@force_compile; $callf(container))
         c64 = [1.0]
         c32 = [1.0f0]
         cabs = AbstractFloat[1.0]

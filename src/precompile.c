@@ -114,6 +114,16 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
         return;
     }
 
+    // Park the tier worker for the remainder of output generation: the
+    // native-code emission below and the serializer both walk
+    // CodeInstances that a concurrent promotion mutates (invoke/specptr/
+    // flags/inferred). Pending queue entries are drained synchronously
+    // inside jl_create_system_image — after native emission, so
+    // not-yet-promoted CIs keep their inferred source through the AOT
+    // walk — and the worker is resumed there once the image content is
+    // fully serialized.
+    jl_tier_quiesce();
+
     jl_array_t *udeps = NULL;
     JL_GC_PUSH2(&worklist, &udeps);
     jl_module_init_order = jl_alloc_vec_any(0);
