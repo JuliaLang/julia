@@ -892,10 +892,20 @@ JL_DLLEXPORT void jl_get_fenv_consts(int *ret)
     ret[2] = FE_OVERFLOW;
     ret[3] = FE_DIVBYZERO;
     ret[4] = FE_INVALID;
+#ifdef _WIN32
+    // MinGW-w64 v13+ uses MSVC-compatible fenv rounding constants. Windows
+    // builds may compile against older headers while linking newer runtime
+    // objects from CompilerSupportLibraries.
+    ret[5] = 0x000; // FE_TONEAREST
+    ret[6] = 0x200; // FE_UPWARD
+    ret[7] = 0x100; // FE_DOWNWARD
+    ret[8] = 0x300; // FE_TOWARDZERO
+#else
     ret[5] = FE_TONEAREST;
     ret[6] = FE_UPWARD;
     ret[7] = FE_DOWNWARD;
     ret[8] = FE_TOWARDZERO;
+#endif
 }
 
 // TODO: Windows binaries currently load msvcrt which doesn't have these C99 functions.
