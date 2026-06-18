@@ -298,6 +298,15 @@ end
         @test has_return_escape(result[Argument(2)], r)
         @test !has_all_escape(result[Argument(2)])
     end
+    # `isdefined` can be forwarded when the tracked field is definitely uninitialized.
+    let result = code_escapes() do
+            r = Ref{String}()
+            return isdefined(r, :x)
+        end
+        idx = only(findall(iscall((result.ir, isdefined)), result.ir.stmts.stmt))
+        @test is_load_forwardable(result, idx)
+        @test result.eresult.ssamemoryinfo[idx] === false
+    end
 end
 
 @testset "flow-sensitivity" begin
@@ -769,6 +778,20 @@ end
         r = only(findall(isreturn, result.ir.stmts.stmt))
         @test has_return_escape(result[Argument(2)], r)
         @test is_load_forwardable_old(result[SSAValue(i)])
+    end
+    # `setfield!` should update tracked field facts for later load-forwarding.
+    let result = code_escapes((Object, Object)) do old, new
+            obj = SafeRef(old)
+            Core.donotdelete(obj)
+            setfield!(obj, 1, new)
+            return getfield(obj, 1)
+        end
+        r = only(findall(isreturn, result.ir.stmts.stmt))
+        i = only(findall(iscall((result.ir, getfield)), result.ir.stmts.stmt))
+        @test is_load_forwardable(result, i)
+        @test result.eresult.ssamemoryinfo[i] == Argument(3)
+        @test !has_return_escape(result[Argument(2)], r)
+        @test has_return_escape(result[Argument(3)], r)
     end
     # propagate escape information imposed on return value of `setfield!` call
     let result = code_escapes((Base.RefValue{String},)) do a

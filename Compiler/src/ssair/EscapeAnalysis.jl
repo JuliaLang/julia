@@ -1736,7 +1736,6 @@ analyze_builtin!(::typeof(sizeof), _...) = false
 analyze_builtin!(::typeof(===), _...) = false
 analyze_builtin!(::typeof(Core.donotdelete), _...) = false
 # not really safe, but `ThrownEscape` will be imposed later
-analyze_builtin!(::typeof(isdefined), _...) = false
 analyze_builtin!(::typeof(throw), _...) = false
 analyze_builtin!(::typeof(Core.throw_methoderror), _...) = false
 
@@ -1803,6 +1802,35 @@ function analyze_builtin!(::typeof(tuple), astate::AnalysisState, pc::Int, args:
     # `add_liveness = false` since it will be added in `escape_call!` instead
     analyze_new!(astate, pc, args, #=add_liveness=#false)
     return true # `tuple` call is always no throw
+end
+
+function analyze_builtin!(::typeof(isdefined), astate::AnalysisState, pc::Int, args::Vector{Any})
+    length(args) ≥ 3 || return false
+    ir = astate.ir
+    obj = args[2]
+    if isa(obj, SSAValue) || isa(obj, Argument)
+        objinfo = astate.currstate[obj]
+    else
+        return false
+    end
+    ObjectInfo = objinfo.ObjectInfo
+    ObjectInfo isa HasIndexableFields || return false
+    fval = try_compute_field(ir, args[3])
+    fval === nothing && return false
+    typ = widenconst(argextype(obj, ir))
+    fidx = try_compute_fieldidx(typ, fval)
+    fidx === nothing && return false
+    @assert length(ObjectInfo.fields) ≥ fidx "invalid field index"
+    xfinfo = ObjectInfo.fields[fidx]
+    if xfinfo isa UninitializedMemory
+        astate.ssamemoryinfo[pc] = false
+    else
+        xfinfo = xfinfo::AliasedMemory
+        if !xfinfo.maybeundef
+            astate.ssamemoryinfo[pc] = true
+        end
+    end
+    return false
 end
 
 function analyze_builtin!(::typeof(getfield), astate::AnalysisState, pc::Int, args::Vector{Any})
@@ -1885,9 +1913,9 @@ function analyze_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, a
         fidx = try_compute_fieldidx(typ, fval)
         fidx === nothing && @goto conservative_propagation
         @assert length(ObjectInfo.fields) ≥ fidx "invalid field index"
-        # COMBAK use `add_object_info_change!` here
-        # TODO fix for the "may-alias" case
+        ObjectInfo = copy(ObjectInfo)
         ObjectInfo.fields[fidx] = AliasedMemory(val, false)
+        add_object_info_change!(astate, obj, ObjectInfo)
     else
         @label conservative_propagation
         # the field being stored couldn't be analyzed precisely, now we need to:
