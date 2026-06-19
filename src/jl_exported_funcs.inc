@@ -111,7 +111,6 @@
     XX(jl_eh_restore_state_noexcept) \
     XX(jl_enter_handler) \
     XX(jl_enter_threaded_region) \
-    XX(jl_environ) \
     XX(jl_eqtable_get) \
     XX(jl_eqtable_pop) \
     XX(jl_eqtable_put) \

@@ -492,25 +492,6 @@ JL_DLLEXPORT uint64_t jl_hrtime(void) JL_NOTSAFEPOINT
     return uv_hrtime();
 }
 
-// -- iterating the environment --
-
-#ifdef __APPLE__
-#include <crt_externs.h>
-#else
-#if !defined(_OS_WINDOWS_) || (defined(_COMPILER_GCC_) && defined(_POSIX_C_SOURCE))
-extern JL_DLLIMPORT char **environ;
-#endif
-#endif
-
-JL_DLLEXPORT jl_value_t *jl_environ(int i)
-{
-#ifdef __APPLE__
-    char **environ = *_NSGetEnviron();
-#endif
-    char *env = environ[i];
-    return env ? jl_pchar_to_string(env, strlen(env)) : jl_nothing;
-}
-
 // -- child process status --
 
 #if defined _OS_WINDOWS_
