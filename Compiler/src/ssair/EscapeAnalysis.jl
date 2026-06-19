@@ -26,7 +26,7 @@ using Base: # Base definitions
     BitSet, IdDict, IdSet, Pair, UnitRange, Vector, _bits_findnext, append!, copy!, empty!,
     enumerate, error, fill!, first, get, hasintersect, haskey, isassigned, isexpr,
     last, length, max, min, missing, only, println, push!, pushfirst!, resize!, sizehint!,
-    |, ∉, ≠, ≤, ≥, ⊆, ⊇
+    |, ∉, ≠, ≤, ≥, ⊆, ⊇, ⊈
 using ..Compiler: # Compiler specific definitions
     @show,
     Compiler, HandlerInfo, IRCode, IR_FLAG_NOTHROW, NewNodeInfo, SimpleHandler,
@@ -76,7 +76,20 @@ x::MemoryInfo == y::MemoryInfo = begin
     else
         x = x::AliasedMemory
         y isa AliasedMemory || return false
-        return x.alias == y.alias && x.maybeundef == y.maybeundef
+        x.maybeundef == y.maybeundef || return false
+        xa, ya = x.alias, y.alias
+        if xa isa AliasedValues
+            ya isa AliasedValues || return false
+            length(xa) == length(ya) || return false
+            for aval in xa
+                aval ∈ ya || return false
+            end
+        elseif ya isa AliasedValues
+            return false
+        else
+            xa === ya || return false
+        end
+        return true
     end
 end
 function copy(x::MemoryInfo)
@@ -398,10 +411,12 @@ x::MemoryInfo ⊑ₘ y::MemoryInfo = begin
             if ya isa AliasedValues
                 xa ∈ ya || return false
             else
-                xa == ya || return false
+                xa === ya || return false
             end
         elseif ya isa AliasedValues
-            xa ⊆ ya || return false
+            for aval in xa
+                aval ∈ ya || return false
+            end
         else
             return false
         end
@@ -547,20 +562,29 @@ x::MemoryInfo ⊔ₘꜝ y::MemoryInfo = begin
     y = y::AliasedMemory
     xa, ya = x.alias, y.alias
     if xa isa AliasedValues
+        # `⊔ₘꜝ` destructively updates the left-hand memory fact, so extend
+        # `x`'s may-alias set in-place when it already has one.
         alias = xa
         if ya isa AliasedValues
-            changed = alias ≠ ya
-            changed && union!(alias, ya)
+            changed = false
+            for aval in ya
+                if aval ∉ alias
+                    push!(alias, aval)
+                    changed = true
+                end
+            end
         else
             changed = ya ∉ alias
             changed && push!(alias, ya)
         end
     elseif ya isa AliasedValues
+        # Do not mutate `y`'s memory fact. The result changes from `x`'s
+        # singleton alias to a may-alias set even if `xa` is already in `ya`.
         alias = copy(ya)
-        changed = xa ∉ alias
-        changed && push!(alias, xa)
+        xa ∈ alias || push!(alias, xa)
+        changed = true
     else
-        changed = xa ≠ ya
+        changed = xa !== ya
         alias = changed ? AliasedValues((xa, ya)) : xa
     end
     maybeundef = x.maybeundef | y.maybeundef
