@@ -233,11 +233,67 @@ let
 end
 """) == (3,4,5)
 
+# Opaque closure inside a closure can capture the enclosing closure's captures
+@test JuliaLowering.include_string(test_mod, """
+let y = [1]
+    outer = () -> begin
+        inner = Base.Experimental.@opaque n -> n in y
+        inner(1)
+    end
+    outer()
+end
+""") === true
+
+# Nested opaque closure capture preserves boxed variable sharing
+@test JuliaLowering.include_string(test_mod, """
+let y = 1
+    outer = () -> begin
+        inner = Base.Experimental.@opaque () -> begin
+            y = y + 1
+        end
+        inner()
+    end
+    outer()
+    y
+end
+""") === 2
+
+# Opaque closure nested in another opaque closure can capture the outer OC environment
+@test JuliaLowering.include_string(test_mod, """
+let y = [1]
+    outer = Base.Experimental.@opaque () -> begin
+        inner = Base.Experimental.@opaque n -> n in y
+        inner(1)
+    end
+    outer()
+end
+""") === true
+
+# Opaque closure type-bound expressions can capture enclosing closure captures
+@test JuliaLowering.include_string(test_mod, """
+let T = Tuple{Int}
+    outer = () -> begin
+        inner = Base.Experimental.@opaque T -> _ (n) -> n
+        inner(1)
+    end
+    outer()
+end
+""") === 1
+@test JuliaLowering.include_string(test_mod, """
+let RT = Float64
+    outer = () -> begin
+        inner = Base.Experimental.@opaque _ -> RT () -> 1.0
+        inner()
+    end
+    outer()
+end
+""") === 1.0
+
 # OC in lambda
 @test JuliaLowering.include_string(test_mod, """
 (x->(y->(z->(Base.Experimental.@opaque ()->"opaque"))('z'))('y'))('x')()
 """) == "opaque"
-@test_broken JuliaLowering.include_string(test_mod, """
+@test JuliaLowering.include_string(test_mod, """
 (x->(y->(z->(Base.Experimental.@opaque ()->(x,y,z)))('z'))('y'))('x')()
 """) == ('x','y','z')
 
