@@ -23,7 +23,7 @@ using Base: # Base definitions
     !, !==, &, *, +, -, :, <, <<, =>, >,
     @__MODULE__, @assert, @eval, @goto, @inbounds, @inline, @isdefined, @label, @noinline,
     @nospecialize, @specialize,
-    BitSet, Dict, IdSet, Pair, UnitRange, Vector, _bits_findnext, append!, copy!, empty!,
+    BitSet, IdDict, IdSet, Pair, UnitRange, Vector, _bits_findnext, append!, copy!, empty!,
     enumerate, error, fill!, first, get, hasintersect, haskey, isassigned, isexpr,
     last, length, max, min, missing, only, println, push!, pushfirst!, resize!, sizehint!,
     |, ∉, ≠, ≤, ≥, ⊆, ⊇
@@ -571,7 +571,7 @@ x::MemoryInfo ⊔ₘꜝ y::MemoryInfo = begin
 end
 x::MemoryInfo ⊔ₘ y::MemoryInfo = (@nospecialize; first(copy(x) ⊔ₘꜝ y))
 
-const EscapeTable = Dict{Int,EscapeInfo}
+const EscapeTable = IdDict{Int,EscapeInfo}
 
 struct BlockEscapeState{Sealed#=::Bool=#}
     escapes::EscapeTable
@@ -670,7 +670,7 @@ const Changes = Vector{Change}
 # - `UnknownMemory()`: the object/field memory could not be analyzed precisely
 # - `UninitializedMemory()`: the loaded field is definitely uninitialized
 # - a direct alias value: the load can be forwarded to that value
-const SSAMemoryInfo = Dict{Int,Any}
+const SSAMemoryInfo = IdDict{Int,Any}
 # TODO CFG-aware load-forwarding facts:
 # By incorporating some form of CFG information into `SSAMemoryInfo`, it becomes possible
 # to enable load-forwarding even in cases where conflicts occur by inserting φ-nodes.
@@ -685,7 +685,7 @@ struct AnalysisState{GetEscapeCache}
     ir::IRCode
     nargs::Int
     nstmts::Int
-    new_nodes_map::Union{Nothing,Dict{Int,Vector{Pair{Int,NewNodeInfo}}}}
+    new_nodes_map::Union{Nothing,IdDict{Int,Vector{Pair{Int,NewNodeInfo}}}}
     # escape states for each basic block:
     # - `bbescape === false` indicates the state for the block has not been initialized
     # - `bbescape === true` indicates the state for the block is known to be identical to
@@ -711,7 +711,7 @@ function AnalysisState(ir::IRCode, nargs::Int, get_escape_cache)
     if isempty(ir.new_nodes)
         new_nodes_map = nothing
     else
-        new_nodes_map = Dict{Int,Vector{Pair{Int,NewNodeInfo}}}()
+        new_nodes_map = IdDict{Int,Vector{Pair{Int,NewNodeInfo}}}()
         for (i, nni) in enumerate(ir.new_nodes.info)
             if haskey(new_nodes_map, nni.pos)
                 push!(new_nodes_map[nni.pos], i => nni)
@@ -732,7 +732,7 @@ function AnalysisState(ir::IRCode, nargs::Int, get_escape_cache)
     retescape[0] = ⊥
     aliasset = AliasSet(nargs + nstmts)
     aliasgroups = fill!(Vector{Union{Nothing,Vector{Int}}}(undef, nargs + nstmts), nothing)
-    ssamemoryinfo = Dict{Int,Any}()
+    ssamemoryinfo = IdDict{Int,Any}()
     changes = Changes()
     visited = BitSet()
     equalized_roots = BitSet()
