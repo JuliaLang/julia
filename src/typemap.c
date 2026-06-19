@@ -585,11 +585,8 @@ static int jl_typemap_intersection_node_visitor(jl_typemap_entry_t *ml, struct t
     return 1;
 }
 
-int jl_has_intersect_type_not_kind(jl_value_t *t);
-int jl_has_intersect_kind_not_type(jl_value_t *t);
-
 // if TypeVar tv is used covariantly, it cannot be Union{}
-int has_covariant_var(jl_datatype_t *ttypes, jl_tvar_t *tv)
+static int has_covariant_var(jl_datatype_t *ttypes, jl_tvar_t *tv)
 {
     size_t i, l = jl_nparams(ttypes);
     for (i = 0; i < l; i++)

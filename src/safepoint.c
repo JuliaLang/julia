@@ -126,7 +126,7 @@ void jl_safepoint_init(void)
     jl_safepoint_pages = addr;
 }
 
-void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_threads)
+extern void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_threads)
 {
     JL_TIMING(GC, GC_Stop);
 #ifdef USE_TRACY

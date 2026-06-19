@@ -287,7 +287,7 @@ void PropagateJuliaAddrspacesVisitor::visitMemTransferInst(MemTransferInst &MTI)
     MTI.setArgOperand(1, Src);
 }
 
-bool propagateJuliaAddrspaces(Function &F) {
+static bool propagateJuliaAddrspaces(Function &F) {
     PropagateJuliaAddrspacesVisitor visitor;
     visitor.visit(F);
     for (auto it : visitor.ToInsert)

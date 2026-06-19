@@ -485,12 +485,7 @@ static void jl_strip_llvm_debug(Module *m, bool all_meta, LineNumberAnnotatedWri
     //    m->eraseNamedMetadata(md);
 }
 
-void jl_strip_llvm_debug(Module *m) JL_NOTSAFEPOINT
-{
-    jl_strip_llvm_debug(m, false, NULL);
-}
-
-void jl_strip_llvm_addrspaces(Module *m) JL_NOTSAFEPOINT
+static void jl_strip_llvm_addrspaces(Module *m) JL_NOTSAFEPOINT
 {
     PassBuilder PB;
     AnalysisManagers AM(PB);
@@ -837,7 +832,7 @@ static int OpInfoLookup(void *DisInfo, uint64_t PC,
 } // namespace
 
 // Stringify raw bytes as a comment string.
-std::string rawCodeComment(const llvm::ArrayRef<uint8_t>& Memory, const llvm::Triple& Triple) JL_NOTSAFEPOINT
+static std::string rawCodeComment(const llvm::ArrayRef<uint8_t>& Memory, const llvm::Triple& Triple) JL_NOTSAFEPOINT
 {
     std::string Buffer{"; "};
     llvm::raw_string_ostream Stream{Buffer};

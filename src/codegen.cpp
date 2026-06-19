@@ -80,6 +80,7 @@
 #include <llvm/Bitcode/BitcodeReader.h>
 #include <llvm/Linker/Linker.h>
 #include <llvm/CodeGen/MachineModuleInfo.h>
+#include <llvm/CodeGen/MIRPrinter.h>
 
 #ifdef USE_ITTAPI
 #include "ittapi/ittnotify.h"
@@ -96,43 +97,43 @@ static bool jl_floattemp_var_needed(const Triple &TT) {
 
 //Drag some useful type functions into our namespace
 //to reduce verbosity of our code
-auto getInt1Ty(LLVMContext &ctxt) {
+static auto getInt1Ty(LLVMContext &ctxt) {
     return Type::getInt1Ty(ctxt);
 }
-auto getInt8Ty(LLVMContext &ctxt) {
+static auto getInt8Ty(LLVMContext &ctxt) {
     return Type::getInt8Ty(ctxt);
 }
-auto getInt16Ty(LLVMContext &ctxt) {
+static auto getInt16Ty(LLVMContext &ctxt) {
     return Type::getInt16Ty(ctxt);
 }
-auto getInt32Ty(LLVMContext &ctxt) {
+static auto getInt32Ty(LLVMContext &ctxt) {
     return Type::getInt32Ty(ctxt);
 }
-auto getInt64Ty(LLVMContext &ctxt) {
+static auto getInt64Ty(LLVMContext &ctxt) {
     return Type::getInt64Ty(ctxt);
 }
-auto getHalfTy(LLVMContext &ctxt) {
+static auto getHalfTy(LLVMContext &ctxt) {
     return Type::getHalfTy(ctxt);
 }
-auto getFloatTy(LLVMContext &ctxt) {
+static auto getFloatTy(LLVMContext &ctxt) {
     return Type::getFloatTy(ctxt);
 }
-auto getDoubleTy(LLVMContext &ctxt) {
+static auto getDoubleTy(LLVMContext &ctxt) {
     return Type::getDoubleTy(ctxt);
 }
-auto getBFloatTy(LLVMContext &ctxt) {
+static auto getBFloatTy(LLVMContext &ctxt) {
     return Type::getBFloatTy(ctxt);
 }
-auto getFP128Ty(LLVMContext &ctxt) {
+static auto getFP128Ty(LLVMContext &ctxt) {
     return Type::getFP128Ty(ctxt);
 }
-auto getVoidTy(LLVMContext &ctxt) {
+static auto getVoidTy(LLVMContext &ctxt) {
     return Type::getVoidTy(ctxt);
 }
-auto getCharTy(LLVMContext &ctxt) {
+static auto getCharTy(LLVMContext &ctxt) {
     return getInt32Ty(ctxt);
 }
-auto getPointerTy(LLVMContext &ctxt) {
+static auto getPointerTy(LLVMContext &ctxt) {
     return PointerType::get(ctxt, 0);
 }
 
@@ -149,7 +150,7 @@ typedef Instruction TerminatorInst;
 #undef DEBUG_TYPE //LLVM occasionally likes to set DEBUG_TYPE in a header...
 #define DEBUG_TYPE "julia_irgen_codegen"
 
-void setName(jl_codegen_output_t &out, Value *V, const Twine &Name)
+static void setName(jl_codegen_output_t &out, Value *V, const Twine &Name)
 {
     // we do the constant check again later, duplicating it here just makes sure the assertion
     // fires on debug builds even if debug info is not enabled
@@ -162,21 +163,21 @@ void setName(jl_codegen_output_t &out, Value *V, const Twine &Name)
     }
 }
 
-void maybeSetName(jl_codegen_output_t &out, Value *V, const Twine &Name)
+static void maybeSetName(jl_codegen_output_t &out, Value *V, const Twine &Name)
 {
     // To be used when we may get an Instruction or something that is not an instruction i.e Constants/Arguments
     if (isa<Instruction>(V))
         V->setName(Name);
 }
 
-void setName(jl_codegen_output_t &out, Value *V, std::function<std::string()> GetName)
+static void setName(jl_codegen_output_t &out, Value *V, std::function<std::string()> GetName)
 {
     assert((isa<Constant>(V) || isa<Instruction>(V)) && "Should only set names on instructions!");
     if (!out.get_context().shouldDiscardValueNames() && !isa<Constant>(V))
         V->setName(Twine(GetName()));
 }
 
-void setNameWithField(jl_codegen_output_t &out, Value *V, std::function<StringRef()> GetObjName, jl_datatype_t *jt, unsigned idx, const Twine &suffix)
+static void setNameWithField(jl_codegen_output_t &out, Value *V, std::function<StringRef()> GetObjName, jl_datatype_t *jt, unsigned idx, const Twine &suffix)
 {
     assert((isa<Constant>(V) || isa<Instruction>(V)) && "Should only set names on instructions!");
     if (!out.get_context().shouldDiscardValueNames() && !isa<Constant>(V)) {
@@ -551,17 +552,17 @@ typedef FunctionType *(*TypeFnContextOnly)(LLVMContext &C);
 typedef FunctionType *(*TypeFnContextAndSizeT)(LLVMContext &C, Type *T_size);
 typedef FunctionType *(*TypeFnContextAndTriple)(LLVMContext &C, const Triple &triple);
 
-FunctionType *invoke_type(TypeFnContextOnly f, Module &M)
+static FunctionType *invoke_type(TypeFnContextOnly f, Module &M)
 {
     return f(M.getContext());
 }
 
-FunctionType *invoke_type(TypeFnContextAndSizeT f, Module &M)
+static FunctionType *invoke_type(TypeFnContextAndSizeT f, Module &M)
 {
     return f(M.getContext(), M.getDataLayout().getIntPtrType(M.getContext()));
 }
 
-FunctionType *invoke_type(TypeFnContextAndTriple f, Module &M)
+static FunctionType *invoke_type(TypeFnContextAndTriple f, Module &M)
 {
     return f(M.getContext(), Triple(M.getTargetTriple()));
 }
@@ -609,7 +610,7 @@ static inline void add_named_global(StringRef name, T *addr)
     add_named_global(name, (void*)(uintptr_t)addr);
 }
 
-AttributeSet Attributes(LLVMContext &C, std::initializer_list<Attribute::AttrKind> attrkinds, std::initializer_list<Attribute> extra={})
+static AttributeSet Attributes(LLVMContext &C, std::initializer_list<Attribute::AttrKind> attrkinds, std::initializer_list<Attribute> extra={})
 {
     SmallVector<Attribute, 8> attrs(attrkinds.size() + extra.size());
     for (size_t i = 0; i < attrkinds.size(); i++)
@@ -3164,10 +3165,6 @@ static std::pair<bool, bool> uses_specsig(jl_value_t *abi, jl_method_instance_t 
 
 
 // Logging for code coverage and memory allocation
-
-extern "C" JL_DLLEXPORT void jl_coverage_alloc_line(const char *filename, int line);
-extern "C" JL_DLLEXPORT uint64_t *jl_coverage_data_pointer(const char *filename, int line);
-extern "C" JL_DLLEXPORT uint64_t *jl_malloc_data_pointer(const char *filename, int line);
 
 static void visitLine(jl_codectx_t &ctx, uint64_t *ptr, Value *addend, const char *name)
 {
@@ -7220,7 +7217,7 @@ static Function *emit_modifyhelper(jl_codectx_t &ctx2, const jl_cgval_t &op, con
 }
 
 
-Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Value *theFunc, jl_codegen_output_t &out) JL_NOTSAFEPOINT
+static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Value *theFunc, jl_codegen_output_t &out) JL_NOTSAFEPOINT
 {
     ++EmittedToJLInvokes;
     jl_codectx_t ctx(out, codeinst);
@@ -10740,71 +10737,60 @@ extern "C" JL_DLLEXPORT_CODEGEN void jl_teardown_codegen_impl() JL_NOTSAFEPOINT
 
 // the rest of this file are convenience functions
 // that are exported for assisting with debugging from gdb
-extern "C" void jl_dump_llvm_value(void *v)
+extern "C" JL_DLLEXPORT_CODEGEN void jl_dump_llvm_value(void *v)
 {
     llvm_dump((Value*)v);
 }
 
-extern "C" void jl_dump_llvm_inst_function(void *v)
+extern "C" JL_DLLEXPORT_CODEGEN void jl_dump_llvm_inst_function(void *v)
 {
     llvm_dump(cast<Instruction>(((Value*)v))->getParent()->getParent());
 }
 
-extern "C" void jl_dump_llvm_type(void *v)
+extern "C" JL_DLLEXPORT_CODEGEN void jl_dump_llvm_type(void *v)
 {
     llvm_dump((Type*)v);
 }
 
-extern "C" void jl_dump_llvm_module(void *v)
+extern "C" JL_DLLEXPORT_CODEGEN void jl_dump_llvm_module(void *v)
 {
     llvm_dump((Module*)v);
 }
 
-extern "C" void jl_dump_llvm_metadata(void *v)
+extern "C" JL_DLLEXPORT_CODEGEN void jl_dump_llvm_metadata(void *v)
 {
     llvm_dump((Metadata*)v);
 }
 
-extern "C" void jl_dump_llvm_debugloc(void *v)
+extern "C" JL_DLLEXPORT_CODEGEN void jl_dump_llvm_debugloc(void *v)
 {
     llvm_dump((DebugLoc*)v);
 }
 
-namespace llvm {
-    class MachineBasicBlock;
-    class MachineFunction;
-    raw_ostream& operator<<(raw_ostream &OS, const MachineBasicBlock &MBB);
-#if JL_LLVM_VERSION >= 200000
-    void printMIR(raw_ostream &OS, const MachineModuleInfo &MMI,
-                const MachineFunction &MF);
-#else
-    void printMIR(raw_ostream &OS, const MachineFunction &MF);
-#endif
-}
-extern "C" void jl_dump_llvm_mbb(void *v)
+extern "C" JL_DLLEXPORT_CODEGEN void jl_dump_llvm_mbb(void *v)
 {
     errs() << *(llvm::MachineBasicBlock*)v;
 }
 #if JL_LLVM_VERSION >= 200000
-extern "C" void jl_dump_llvm_mfunction(void *m, void *v)
+extern "C" JL_DLLEXPORT_CODEGEN void jl_dump_llvm_mfunction(void *m, void *v)
 {
     llvm::printMIR(errs(), *(llvm::MachineModuleInfo*)v,
                 *(llvm::MachineFunction*)v);
 }
 #else
-extern "C" void jl_dump_llvm_mfunction(void *v)
+extern "C" JL_DLLEXPORT_CODEGEN void jl_dump_llvm_mfunction(void *v)
 {
     llvm::printMIR(errs(), *(llvm::MachineFunction*)v);
 }
 #endif
 
-extern void jl_write_bitcode_func(void *F, char *fname) {
+extern "C" JL_DLLEXPORT_CODEGEN void jl_write_bitcode_func(void *F, char *fname) {
     std::error_code EC;
     raw_fd_ostream OS(fname, EC, sys::fs::OF_None);
     llvm::WriteBitcodeToFile(*((llvm::Function*)F)->getParent(), OS);
 }
 
-extern void jl_write_bitcode_module(void *M, char *fname) {
+extern "C" JL_DLLEXPORT_CODEGEN void jl_write_bitcode_module(void *M, char *fname) {
     std::error_code EC;
     raw_fd_ostream OS(fname, EC, sys::fs::OF_None);
     llvm::WriteBitcodeToFile(*(llvm::Module*)M, OS);

@@ -277,8 +277,6 @@ static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list) JL_NO
 
 static uint64_t finalizer_rngState[JL_RNG_SIZE];
 
-void jl_rng_split(uint64_t dst[JL_RNG_SIZE], uint64_t src[JL_RNG_SIZE]) JL_NOTSAFEPOINT;
-
 JL_DLLEXPORT void jl_gc_init_finalizer_rng_state(void)
 {
     jl_rng_split(finalizer_rngState, jl_current_task->rngState);

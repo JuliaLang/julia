@@ -624,29 +624,24 @@ JL_DLLEXPORT uint64_t jl_hrtime(void) JL_NOTSAFEPOINT
     return uv_hrtime();
 }
 
-// -- child process status --
+// -- iterating the environment --
 
-#if defined _OS_WINDOWS_
-/* Native Woe32 API.  */
-#include <process.h>
-#define waitpid(pid,statusp,options) _cwait (statusp, pid, WAIT_CHILD)
-#define WAIT_T int
-#define WTERMSIG(x) ((x) & 0xff) /* or: SIGABRT ?? */
-#define WCOREDUMP(x) 0
-#define WEXITSTATUS(x) (((x) >> 8) & 0xff) /* or: (x) ?? */
-#define WIFSIGNALED(x) (WTERMSIG (x) != 0) /* or: ((x) == 3) ?? */
-#define WIFEXITED(x) (WTERMSIG (x) == 0) /* or: ((x) != 3) ?? */
-#define WIFSTOPPED(x) 0
-#define WSTOPSIG(x) 0 //Is this correct?
+#ifdef __APPLE__
+#include <crt_externs.h>
+#else
+#if !defined(_OS_WINDOWS_) || (defined(_COMPILER_GCC_) && defined(_POSIX_C_SOURCE))
+extern JL_DLLIMPORT char **environ;
+#endif
 #endif
 
-int jl_process_exited(int status)      { return WIFEXITED(status); }
-int jl_process_signaled(int status)    { return WIFSIGNALED(status); }
-int jl_process_stopped(int status)     { return WIFSTOPPED(status); }
-
-int jl_process_exit_status(int status) { return WEXITSTATUS(status); }
-int jl_process_term_signal(int status) { return WTERMSIG(status); }
-int jl_process_stop_signal(int status) { return WSTOPSIG(status); }
+JL_DLLEXPORT jl_value_t *jl_environ(int i)
+{
+#ifdef __APPLE__
+    char **environ = *_NSGetEnviron();
+#endif
+    char *env = environ[i];
+    return env ? jl_pchar_to_string(env, strlen(env)) : jl_nothing;
+}
 
 // -- access to std filehandles --
 

@@ -73,7 +73,7 @@ int gc_page_profile_is_enabled(void) JL_NOTSAFEPOINT
     return page_profile_enabled;
 }
 
-void gc_page_profile_write_preamble(gc_page_profiler_serializer_t *serializer)
+static void gc_page_profile_write_preamble(gc_page_profiler_serializer_t *serializer)
     JL_NOTSAFEPOINT
 {
     if (__unlikely(page_profile_enabled)) {
@@ -85,7 +85,7 @@ void gc_page_profile_write_preamble(gc_page_profiler_serializer_t *serializer)
     }
 }
 
-void gc_page_profile_write_epilogue(gc_page_profiler_serializer_t *serializer)
+static void gc_page_profile_write_epilogue(gc_page_profiler_serializer_t *serializer)
     JL_NOTSAFEPOINT
 {
     if (__unlikely(page_profile_enabled)) {
@@ -94,7 +94,7 @@ void gc_page_profile_write_epilogue(gc_page_profiler_serializer_t *serializer)
     }
 }
 
-void gc_page_profile_write_comma(gc_page_profiler_serializer_t *serializer) JL_NOTSAFEPOINT
+static void gc_page_profile_write_comma(gc_page_profiler_serializer_t *serializer) JL_NOTSAFEPOINT
 {
     if (__unlikely(page_profile_enabled)) {
         // write comma if not first page
@@ -143,7 +143,7 @@ void gc_page_profile_write_to_file(gc_page_profiler_serializer_t *serializer)
     }
 }
 
-void gc_page_profile_write_json_preamble(ios_t *stream) JL_NOTSAFEPOINT
+static void gc_page_profile_write_json_preamble(ios_t *stream) JL_NOTSAFEPOINT
 {
     if (__unlikely(page_profile_enabled)) {
         uv_mutex_lock(&page_profile_lock);
@@ -153,7 +153,7 @@ void gc_page_profile_write_json_preamble(ios_t *stream) JL_NOTSAFEPOINT
     }
 }
 
-void gc_page_profile_write_json_epilogue(ios_t *stream) JL_NOTSAFEPOINT
+static void gc_page_profile_write_json_epilogue(ios_t *stream) JL_NOTSAFEPOINT
 {
     if (__unlikely(page_profile_enabled)) {
         uv_mutex_lock(&page_profile_lock);

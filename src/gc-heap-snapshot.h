@@ -5,6 +5,7 @@
 
 #include "julia.h"
 #include "ios.h"
+#include "gc-common.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -38,9 +39,6 @@ void _gc_heap_snapshot_record_binding_partition_edge(jl_value_t *from, jl_value_
 extern int gc_heap_snapshot_enabled;
 extern int prev_sweep_full;
 extern jl_mutex_t heapsnapshot_lock;
-
-int gc_slot_to_fieldidx(void *_obj, void *slot, jl_datatype_t *vt) JL_NOTSAFEPOINT;
-int gc_slot_to_arrayidx(void *_obj, void *begin) JL_NOTSAFEPOINT;
 
 static inline void gc_heap_snapshot_record_frame_to_object_edge(void *from, jl_value_t *to) JL_NOTSAFEPOINT
 {
