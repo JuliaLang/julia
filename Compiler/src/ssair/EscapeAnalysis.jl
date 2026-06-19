@@ -23,7 +23,7 @@ using Base: # Base definitions
     !, !==, &, *, +, -, :, <, <<, =>, >,
     @__MODULE__, @assert, @eval, @goto, @inbounds, @inline, @isdefined, @label, @noinline,
     @nospecialize, @specialize,
-    BitSet, Dict, IdSet, Pair, UnitRange, Vector, _bits_findnext, copy!, empty!,
+    BitSet, Dict, IdSet, Pair, UnitRange, Vector, _bits_findnext, append!, copy!, empty!,
     enumerate, error, fill!, first, get, hasintersect, haskey, isassigned, isexpr,
     last, length, max, min, missing, only, println, push!, pushfirst!, resize!, sizehint!,
     |, ∉, ≠, ≤, ≥, ⊆, ⊇
@@ -692,6 +692,9 @@ struct AnalysisState{GetEscapeCache}
     #   the state of its single predecessor
     bbescapes::Vector{Union{Bool,BlockEscapeState{false}}}
     aliasset::AliasSet
+    # Analysis-time cache of alias-set members keyed by union-find root.
+    # `nothing` represents a singleton set.
+    aliasgroups::Vector{Union{Nothing,Vector{Int}}}
     get_escape_cache::GetEscapeCache
     #= results =#
     retescape::BlockEscapeState{false}
@@ -728,25 +731,35 @@ function AnalysisState(ir::IRCode, nargs::Int, get_escape_cache)
     end
     retescape[0] = ⊥
     aliasset = AliasSet(nargs + nstmts)
+    aliasgroups = fill!(Vector{Union{Nothing,Vector{Int}}}(undef, nargs + nstmts), nothing)
     ssamemoryinfo = Dict{Int,Any}()
     changes = Changes()
     visited = BitSet()
     equalized_roots = BitSet()
     handler_info = compute_trycatch(ir)
     return AnalysisState(ir, nargs, nstmts, new_nodes_map,
-        bbescapes, aliasset, get_escape_cache,
+        bbescapes, aliasset, aliasgroups, get_escape_cache,
         retescape, ssamemoryinfo,
         currstate, changes, visited, equalized_roots, handler_info)
 end
 
-getaliases(astate::AnalysisState, x::AnalyzableIRElement) =
-    getaliases(astate.aliasset, astate.nargs, astate.nstmts, x)
+function getaliases(astate::AnalysisState, x::AnalyzableIRElement)
+    aliases = getaliases(astate, iridx(x, astate.nargs, astate.nstmts))
+    aliases === nothing && return nothing
+    return (irval(aidx, astate.nargs, astate.nstmts) for aidx in aliases)
+end
 function getaliases(aliasset::AliasSet, nargs::Int, nstmts::Int, x::AnalyzableIRElement)
     aliases = getaliases(aliasset, iridx(x, nargs, nstmts))
     aliases === nothing && return nothing
     return (irval(aidx, nargs, nstmts) for aidx in aliases)
 end
-getaliases(astate::AnalysisState, xidx::Int) = getaliases(astate.aliasset, xidx)
+function getaliases(astate::AnalysisState, xidx::Int)
+    xroot, hasalias = getaliasroot!(astate.aliasset, xidx)
+    hasalias || return nothing
+    aliases = astate.aliasgroups[xroot]
+    @assert aliases !== nothing "missing alias group"
+    return aliases
+end
 function getaliases(aliasset::AliasSet, xidx::Int)
     xroot, hasalias = getaliasroot!(aliasset, xidx)
     if hasalias
@@ -1220,14 +1233,38 @@ end
 function apply_alias_change!(astate::AnalysisState, change::AliasChange)
     (; xidx, yidx) = change
     aliasset = astate.aliasset
-    xroot = find_root!(aliasset, xidx)
-    yroot = find_root!(aliasset, yidx)
+    xroot, yroot = find_root!(aliasset, xidx), find_root!(aliasset, yidx)
     if xroot ≠ yroot
-        xroot = union!(aliasset, xroot, yroot)
-        record_equalized_root!(astate, xroot)
-        xroot ≠ yroot && record_equalized_root!(astate, yroot)
+        newroot = union!(aliasset, xroot, yroot)
+        merge_alias_groups!(astate, xroot, yroot, newroot)
+        record_equalized_root!(astate, newroot)
+        newroot ≠ xroot && record_equalized_root!(astate, xroot)
+        newroot ≠ yroot && record_equalized_root!(astate, yroot)
     end
     nothing
+end
+
+function merge_alias_groups!(astate::AnalysisState, xroot::Int, yroot::Int, newroot::Int)
+    aliasgroups = astate.aliasgroups
+    xgroup, ygroup = aliasgroups[xroot], aliasgroups[yroot]
+    if xgroup === nothing
+        if ygroup === nothing
+            newgroup = xroot == newroot ? Int[xroot, yroot] : Int[yroot, xroot]
+        else
+            newgroup = ygroup
+            push!(newgroup, xroot)
+        end
+    else
+        newgroup = xgroup
+        if ygroup === nothing
+            push!(newgroup, yroot)
+        else
+            append!(newgroup, ygroup)
+        end
+    end
+    aliasgroups[xroot] = aliasgroups[yroot] = nothing
+    aliasgroups[newroot] = newgroup
+    return newgroup
 end
 
 function record_equalized_root!(astate::AnalysisState, xidx::Int)
