@@ -14,7 +14,7 @@ export
 using Base: Base
 
 # imports
-import Base: !=, ==, copy, delete, delete!, getindex, isempty, setindex!, ∈
+import Base: !=, ==, copy, delete, delete!, getindex, isempty, setindex!, union!, ∈
 # usings
 using Core
 using Core: Builtin, IntrinsicFunction, SimpleVector, ifelse, sizeof
@@ -41,8 +41,6 @@ function include(x::String)
     end
     Compiler.include(@__MODULE__, x)
 end
-
-include("disjoint_set.jl")
 
 @nospecialize
 
@@ -679,7 +677,75 @@ struct UnknownMemory end    # marker for a load from unanalyzable memory
 
 const LINEAR_BBESCAPES = Union{Bool,BlockEscapeState{false}}[false]
 
-const AliasSet = IntDisjointSet{Int}
+# Disjoint alias sets over the dense IR value index space. This is deliberately
+# specialized for escape analysis: EA frequently needs to iterate all members of
+# one alias set, so each root owns a materialized member vector once the set
+# becomes non-singleton.
+#
+# Invariant:
+# - root `r`: `sizes[r]` is the number of members in the set rooted at `r`
+# - non-root `x`: `sizes[x] == 0` and `members[x] === nothing`
+# - singleton root `r`: `sizes[r] == 1` and `members[r] === nothing`
+# - non-singleton root `r`: `members[r]` contains exactly all set members
+struct AliasSet
+    parents::Vector{Int}
+    sizes::Vector{Int}
+    members::Vector{Union{Nothing,Vector{Int}}}
+end
+function AliasSet(n::Int)
+    parents = Vector{Int}(undef, n)
+    sizes = fill!(Vector{Int}(undef, n), 1)
+    members = fill!(Vector{Union{Nothing,Vector{Int}}}(undef, n), nothing)
+    for i = 1:n
+        parents[i] = i
+    end
+    return AliasSet(parents, sizes, members)
+end
+@inline function find_alias_root!(aliasset::AliasSet, xidx::Int)
+    parents = aliasset.parents
+    @inbounds root = parents[xidx]
+    @inbounds if parents[root] ≠ root
+        parents[xidx] = root = _find_alias_root!(parents, root)
+    end
+    return root
+end
+function _find_alias_root!(parents::Vector{Int}, xidx::Int)
+    @inbounds root = parents[xidx]
+    @inbounds if parents[root] ≠ root
+        parents[xidx] = root = _find_alias_root!(parents, root)
+    end
+    return root
+end
+function union_alias_roots!(aliasset::AliasSet, xroot::Int, yroot::Int)
+    @assert aliasset.parents[xroot] == xroot
+    @assert aliasset.parents[yroot] == yroot
+    @assert xroot ≠ yroot
+    (; parents, sizes, members) = aliasset
+    xsize, ysize = sizes[xroot], sizes[yroot]
+    if xsize < ysize
+        xroot, yroot = yroot, xroot
+        xsize, ysize = ysize, xsize
+    end
+    parents[yroot] = xroot
+    sizes[xroot] = xsize + ysize
+    sizes[yroot] = 0
+    if xsize == 1
+        @assert ysize == 1
+        members[xroot] = Int[xroot, yroot]
+    else
+        xmembers = members[xroot]
+        @assert xmembers !== nothing
+        if ysize == 1
+            push!(xmembers, yroot)
+        else
+            ymembers = members[yroot]
+            @assert ymembers !== nothing
+            append!(xmembers, ymembers)
+        end
+    end
+    members[yroot] = nothing
+    return xroot
+end
 
 struct AnalysisState{GetEscapeCache}
     ir::IRCode
@@ -692,9 +758,6 @@ struct AnalysisState{GetEscapeCache}
     #   the state of its single predecessor
     bbescapes::Vector{Union{Bool,BlockEscapeState{false}}}
     aliasset::AliasSet
-    # Analysis-time cache of alias-set members keyed by union-find root.
-    # `nothing` represents a singleton set.
-    aliasgroups::Vector{Union{Nothing,Vector{Int}}}
     get_escape_cache::GetEscapeCache
     #= results =#
     retescape::BlockEscapeState{false}
@@ -731,15 +794,13 @@ function AnalysisState(ir::IRCode, nargs::Int, get_escape_cache)
     end
     retescape[0] = ⊥
     aliasset = AliasSet(nargs + nstmts)
-    aliasgroups = fill!(Vector{Union{Nothing,Vector{Int}}}(undef, nargs + nstmts), nothing)
     ssamemoryinfo = IdDict{Int,Any}()
     changes = Changes()
     visited = BitSet()
     equalized_roots = BitSet()
     handler_info = compute_trycatch(ir)
     return AnalysisState(ir, nargs, nstmts, new_nodes_map,
-        bbescapes, aliasset, aliasgroups, get_escape_cache,
-        retescape, ssamemoryinfo,
+        bbescapes, aliasset, get_escape_cache, retescape, ssamemoryinfo,
         currstate, changes, visited, equalized_roots, handler_info)
 end
 
@@ -753,31 +814,17 @@ function getaliases(aliasset::AliasSet, nargs::Int, nstmts::Int, x::AnalyzableIR
     aliases === nothing && return nothing
     return (irval(aidx, nargs, nstmts) for aidx in aliases)
 end
-function getaliases(astate::AnalysisState, xidx::Int)
-    xroot, hasalias = getaliasroot!(astate.aliasset, xidx)
+getaliases(astate::AnalysisState, xidx::Int) = getaliases(astate.aliasset, xidx)
+function getaliases(aliasset::AliasSet, xidx::Int)
+    xroot, hasalias = getaliasroot!(aliasset, xidx)
     hasalias || return nothing
-    aliases = astate.aliasgroups[xroot]
+    aliases = aliasset.members[xroot]
     @assert aliases !== nothing "missing alias group"
     return aliases
 end
-function getaliases(aliasset::AliasSet, xidx::Int)
-    xroot, hasalias = getaliasroot!(aliasset, xidx)
-    if hasalias
-        # the size of this alias set containing `key` is larger than 1,
-        # collect the entire alias set
-        return (aidx for aidx in 1:length(aliasset.parents)
-            if _find_root_impl!(aliasset.parents, aidx) == xroot)
-    else
-        return nothing
-    end
-end
 @inline function getaliasroot!(aliasset::AliasSet, xidx::Int)
-    root = find_root!(aliasset, xidx)
-    if xidx ≠ root || aliasset.ranks[xidx] > 0
-        return root, true
-    else
-        return root, false
-    end
+    root = find_alias_root!(aliasset, xidx)
+    return root, aliasset.sizes[root] > 1
 end
 
 isaliased(astate::AnalysisState, x::AnalyzableIRElement, y::AnalyzableIRElement) =
@@ -785,7 +832,8 @@ isaliased(astate::AnalysisState, x::AnalyzableIRElement, y::AnalyzableIRElement)
 isaliased(aliasset::AliasSet, nargs::Int, nstmts::Int, x::AnalyzableIRElement, y::AnalyzableIRElement) =
     isaliased(aliasset, iridx(x, nargs, nstmts), iridx(y, nargs, nstmts))
 isaliased(astate::AnalysisState, xidx::Int, yidx::Int) = isaliased(astate.aliasset, xidx, yidx)
-isaliased(aliasset::AliasSet, xidx::Int, yidx::Int) = in_same_set(aliasset, xidx, yidx)
+isaliased(aliasset::AliasSet, xidx::Int, yidx::Int) =
+    find_alias_root!(aliasset, xidx) == find_alias_root!(aliasset, yidx)
 
 """
     eresult::EscapeResult
@@ -1233,38 +1281,12 @@ end
 function apply_alias_change!(astate::AnalysisState, change::AliasChange)
     (; xidx, yidx) = change
     aliasset = astate.aliasset
-    xroot, yroot = find_root!(aliasset, xidx), find_root!(aliasset, yidx)
+    xroot, yroot = find_alias_root!(aliasset, xidx), find_alias_root!(aliasset, yidx)
     if xroot ≠ yroot
-        newroot = union!(aliasset, xroot, yroot)
-        merge_alias_groups!(astate, xroot, yroot, newroot)
+        newroot = union_alias_roots!(aliasset, xroot, yroot)
         record_equalized_root!(astate, newroot)
-        newroot ≠ xroot && record_equalized_root!(astate, xroot)
-        newroot ≠ yroot && record_equalized_root!(astate, yroot)
     end
     nothing
-end
-
-function merge_alias_groups!(astate::AnalysisState, xroot::Int, yroot::Int, newroot::Int)
-    aliasgroups = astate.aliasgroups
-    xgroup, ygroup = aliasgroups[xroot], aliasgroups[yroot]
-    if xgroup === nothing
-        if ygroup === nothing
-            newgroup = xroot == newroot ? Int[xroot, yroot] : Int[yroot, xroot]
-        else
-            newgroup = ygroup
-            push!(newgroup, xroot)
-        end
-    else
-        newgroup = xgroup
-        if ygroup === nothing
-            push!(newgroup, yroot)
-        else
-            append!(newgroup, ygroup)
-        end
-    end
-    aliasgroups[xroot] = aliasgroups[yroot] = nothing
-    aliasgroups[newroot] = newgroup
-    return newgroup
 end
 
 function record_equalized_root!(astate::AnalysisState, xidx::Int)
