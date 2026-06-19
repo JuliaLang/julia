@@ -1330,11 +1330,15 @@ STATIC_INLINE jl_value_t *jl_genericmemory_owner(jl_genericmemory_t *m JL_PROPAG
   1 = owns the gc-managed data, exclusively (will free it)
   2 = malloc-allocated pointer (does not own it)
   3 = has a pointer to the String object that owns the data pointer (m must be isbits)
+  4 = malloc-allocated pointer but will be freed by the GC (relevant when switching the default allocator)
 */
-#define JL_GENERICMEMORY_INLINED     0
-#define JL_GENERICMEMORY_GCMANAGED   1
-#define JL_GENERICMEMORY_MALLOCD     2
-#define JL_GENERICMEMORY_STRINGOWNED 3
+#define JL_GENERICMEMORY_INLINED       0
+#define JL_GENERICMEMORY_GCMANAGED     1
+#define JL_GENERICMEMORY_MALLOCD       2
+#define JL_GENERICMEMORY_STRINGOWNED   3
+#define JL_GENERICMEMORY_LIBCALLOCATED 4
+
+#define LIBC_ALLOCATED_POINTER (jl_value_t*)4
 
 STATIC_INLINE int jl_genericmemory_how(jl_genericmemory_t *m) JL_NOTSAFEPOINT
 {
@@ -1345,6 +1349,8 @@ STATIC_INLINE int jl_genericmemory_how(jl_genericmemory_t *m) JL_NOTSAFEPOINT
         return JL_GENERICMEMORY_GCMANAGED;
     if (owner == NULL)
         return JL_GENERICMEMORY_MALLOCD;
+    if (owner == LIBC_ALLOCATED_POINTER)
+        return JL_GENERICMEMORY_LIBCALLOCATED;
     return JL_GENERICMEMORY_STRINGOWNED;
 }
 

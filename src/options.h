@@ -79,7 +79,6 @@
 // GC_SMALL_PAGE allocates objects in 4k pages
 // #define GC_SMALL_PAGE
 
-
 // method dispatch profiling --------------------------------------------------
 
 // turn type inference on/off. this is for internal debugging only, and must be
