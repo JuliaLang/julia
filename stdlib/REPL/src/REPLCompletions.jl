@@ -10,7 +10,7 @@ using Core: Const
 # if it breaks.
 const CC = Base.Compiler
 using Base.Meta
-using Base: propertynames, something, IdSet
+using Base: propertynames, something, IdSet, DirEntry
 using Base.JuliaSyntax: @K_str, @KSet_str, parseall, byte_range, children, is_prefix_call, is_trivia, kind
 
 using ..REPL.LineEdit: NamedCompletion
@@ -227,7 +227,7 @@ function complete_symbol!(suggestions::Vector{Completion},
         end
     elseif @isdefined(val) # looking for a property of an instance
         try
-            for property in propertynames(val, false)
+            for property in propertynames(val; private=false)
                 # TODO: support integer arguments (#36872)
                 if property isa Symbol && startswith(string(property), name)
                     push!(suggestions, PropertyCompletion(val, property))

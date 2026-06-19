@@ -654,4 +654,8 @@ end
     SubString{T}(ss)
 end
 
+@deprecate propertynames(x, private::Bool) propertynames(x; private=private) false
+@deprecate propertynames(m::Module, private::Bool) propertynames(m; private=private) false
+@deprecate hasproperty(x, s::Symbol, private::Bool) hasproperty(x, s; private=private) false
+
 # END 1.14 deprecations
