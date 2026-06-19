@@ -70,8 +70,7 @@ module CompilerPlugins
     """
         typeinf(owner, mi, source_mode)::CodeInstance
 
-    Return a `CodeInstance` for the given `mi` whose valid results include at
-    the least current tls world and satisfies the requirements of `source_mode`.
+    Return a `CodeInstance` for the given `mi` whose valid results include at least the current tls world and satisfies the requirements of `source_mode`.
     """
     function typeinf end
 

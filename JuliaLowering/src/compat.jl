@@ -6,10 +6,18 @@ function find_kind(s::String)
 end
 
 # flisp: dot-operators
+#
+# We work from the operator's name here (rather than its `Kind`) because by this
+# point operators are represented uniformly as identifier-like names: this code
+# also runs on trees converted from `Expr`, where an operator such as `.^` is
+# simply the `Symbol` `:.^` with no token or `Kind` to inspect. `Base.isoperator`
+# is the same operator-name test already used for `op=` in `est_to_dst` below;
+# note we can't look up a `Kind` by name (eg via `find_kind`), since most
+# operators no longer have their own kind - they share `K"Operator"`.
 function is_dotted_operator(s::AbstractString)
     return length(s) >= 2 &&
         s[1] === '.' && s[2] !== '.' &&
-        JS.is_operator(something(find_kind(s[2:end]), K"None"))
+        Base.isoperator(s[2:end])
 end
 
 function is_eventually_call(e)
@@ -102,7 +110,7 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
         # `Base.isa_ast_node(e)`, but `K"Value"` should be fine for most, since
         # most are produced in or after lowering
         if e isa LineNumberNode
-            # linenode oustside of block or toplevel
+            # linenode outside of block or toplevel
             src = e
         end
         setattr!(newleaf(graph, src, K"Value"), :value, e)
@@ -288,7 +296,7 @@ end
 
 function _est_to_dst_ident(st::SyntaxTree)
     s = st.name_val::String
-    if all(==('_'), s) || s == UNUSED
+    if is_writeonly_est_name(s)
         setattr!(mkleaf(st), :kind, K"Placeholder")
     else
         st
@@ -364,7 +372,7 @@ function apply_arglist_meta(st, meta::Union{Nothing, Symbol, Dict{String, Symbol
             fixed == x ? st : @ast g st [K"::" fixed t]
         end
         [K"call" f args...] -> mapchildren(x->
-            x == f ? f : apply_arg_meta(x, meta), st._graph, st)
+            x == f ? strip_arg_meta(f) : apply_arg_meta(x, meta), st._graph, st)
         [K"tuple" _...] -> mapchildren(x->apply_arg_meta(x, meta), st._graph, st)
     end
 end
@@ -532,6 +540,10 @@ function est_to_dst(st::SyntaxTree)
             end
             @ast g st [K"->" rec(l) r2]
         end
+        [K"macro" l r] -> let
+            l = apply_arglist_meta(l, collect_body_arg_meta(r))
+            @ast g st [K"macro" rec(l) rec(r)]
+        end
         [K"do" [K"call" f args...] lam] -> let
             @ast g st [K"call" rec(f) rec(lam) _dst_sink_parameters(args)...]
         end
@@ -557,9 +569,6 @@ function est_to_dst(st::SyntaxTree)
 
         #-----------------------------------------------------------------------
         # Heads not emitted from parsing
-        ([K"meta" [K"unknown_head" ps...]], when=st[1].name_val === "purity") ->
-            @ast g st [K"meta" "purity"::K"Symbol"
-                Base.EffectsOverride([x.value for x in ps]...)::K"Value"]
         ([K"meta" s vs...],
          when=(meta=get(s, :name_val, "")::String; meta in ("nospecialize", "specialize"))) ->
              # Should be handled in the function case
@@ -569,10 +578,8 @@ function est_to_dst(st::SyntaxTree)
                 s->(kind(s) === K"Identifier" ? setattr(s, :kind, K"Symbol") : s),
                 syms)...
            ]
-        # TODO: JL doesn't support inline/noinline/inbounds
-        [K"inline" _] -> newleaf(g, st, K"TOMBSTONE")
-        [K"noinline" _] -> newleaf(g, st, K"TOMBSTONE")
-        [K"inbounds" _] -> newleaf(g, st, K"TOMBSTONE")
+        [K"boundscheck" x] -> mknode(st, SyntaxList(g))
+        [K"inbounds" [K"Identifier"]] -> newnode(g, st, K"inbounds_pop", SyntaxList(g))
         [K"core" x] -> setattr!(mkleaf(st), :name_val, x.name_val)
         [K"top" x] -> setattr!(mkleaf(st), :name_val, x.name_val)
         [K"static_parameter" x] -> setattr!(mkleaf(st), :var_id, x.value::IdTag)
@@ -584,10 +591,12 @@ function est_to_dst(st::SyntaxTree)
         [K"symbolicgoto" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
         [K"oldsymbolicgoto" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
         [K"symboliclabel" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
-        [K"symbolicblock" id body] -> if all(==('_'), id.name_val)
-            @ast g st [K"symbolicblock" id=>K"Placeholder" rec(body)]
-        else
-            @ast g st [K"symbolicblock" id=>K"symboliclabel" rec(body)]
+        [K"symbolicblock" id body] -> let s = id.name_val::String
+            if is_writeonly_est_name(s)
+                @ast g st [K"symbolicblock" id=>K"Placeholder" rec(body)]
+            else
+                @ast g st [K"symbolicblock" id=>K"symboliclabel" rec(body)]
+            end
         end
         [K"unknown_head" cs...] -> let head = st.name_val
             if head === "latestworld-if-toplevel"
@@ -595,7 +604,7 @@ function est_to_dst(st::SyntaxTree)
             else
                 @jl_assert(false, (st, string(
                     "unknown expr head (corresponding to no kind) between",
-                    "macro-expansion and desugaring: ")))
+                    " macro-expansion and desugaring: ")))
             end
         end
         ([K"latestworld"], when=!is_leaf(st)) -> newleaf(g, st, K"latestworld")
@@ -622,7 +631,16 @@ function est_to_dst(st::SyntaxTree)
 
         # avoid creating excess nodes
         _ -> let out_cs::Vector{NodeId} = map(x->rec(x)._id, children(st))
-            out_cs == children(st) ? st : mknode(st, out_cs)
+            out_cs == children(st).ids ? st : mknode(st, out_cs)
         end
     end
+end
+
+#-------------------------------------------------------------------------------
+# misc
+
+function purity_expr_to_flags(st::SyntaxTree)
+    @jl_assert kind(st) === K"purity" st
+    args = Bool[x.value for x in children(st)]
+    Base.encode_effects_override(Base.EffectsOverride(args...))
 end

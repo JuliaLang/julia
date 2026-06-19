@@ -186,7 +186,7 @@ void GCInvariantVerifier::visitIntToPtrInst(IntToPtrInst &IPI) {
 
 void GCInvariantVerifier::visitPtrToIntInst(PtrToIntInst &PII) {
     Check(!isSpecialAS(PII.getPointerAddressSpace()),
-          "Illegal inttoptr", &PII);
+          "Illegal ptrtoint", &PII);
 }
 
 PreservedAnalyses GCInvariantVerifierPass::run(Function &F, FunctionAnalysisManager &AM) {

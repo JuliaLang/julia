@@ -39,8 +39,7 @@ end
 """
     Profile.Allocs.@profile [sample_rate=0.1] expr
 
-Profile allocations that happen during `expr`, returning
-both the result and AllocResults struct.
+Profile allocations that happen during `expr`, returning the result of `expr`. Use `Profile.Allocs.fetch()` to retrieve the AllocResults.
 
 A sample rate of 1.0 will record everything; 0.0 will record nothing.
 
@@ -235,7 +234,7 @@ end
     Profile.Allocs.print([io::IO = stdout,] [data::AllocResults = fetch()]; kwargs...)
 
 Prints profiling results to `io` (by default, `stdout`). If you do not
-supply a `data` vector, the internal buffer of accumulated backtraces
+supply a `data` argument, the internal buffer of accumulated backtraces
 will be used.
 
 See `Profile.print` for an explanation of the valid keyword arguments.

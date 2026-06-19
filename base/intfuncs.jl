@@ -689,7 +689,7 @@ julia> prevpow(4, 16)
 """
 function prevpow(a::T, x::Real) where T <: Real
     x < 1 && throw(DomainError(x, "`x` must be ≥ 1."))
-    # See comment in nextpos() for a == special case.
+    # See comment in nextpow() for a == special case.
     a == 2 && isa(x, Integer) && return _prevpow2(x)
     a <= 1 && throw(DomainError(a, "`a` must be greater than 1."))
     n = floor(Integer,log(a, x))

@@ -220,7 +220,7 @@ end
     # Test that our `hash()` is stable
     @test hash(HostPlatform()) == hash(HostPlatform())
 
-    # Test that round-tripping through `triplet` for a does not
+    # Test that round-tripping through `triplet` for a platform does not
     # maintain equality, as we end up losing the `compare_strategies`:
     p = Platform("x86_64", "linux"; cuda = v"11")
     Base.BinaryPlatforms.set_compare_strategy!(p, "cuda", Base.BinaryPlatforms.compare_version_cap)

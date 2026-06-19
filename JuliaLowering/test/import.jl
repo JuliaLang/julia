@@ -74,3 +74,60 @@ import .H.I, .I.J
 @test test_mod.I === H.I
 @test test_mod.J === H.I.J
 @test test_mod.G_global === "exported from G"
+
+@testset "(AI) from macro expansion" for expr_compat_mode in (true, false)
+    macrocall_mod = Module()
+    JuliaLowering.include_string(macrocall_mod, raw"""
+    module Exporter
+        export val
+        val = [123]
+        other = [456]
+    end
+    macro imp_names()
+        :(import .Exporter: val, other as o)
+    end
+    macro use_target()
+        :(using .Exporter)
+    end
+    """; expr_compat_mode)
+    Core.@latestworld
+    JuliaLowering.include_string(macrocall_mod, "@imp_names"; expr_compat_mode)
+    JuliaLowering.include_string(macrocall_mod, "@use_target"; expr_compat_mode)
+    Core.@latestworld
+    @test macrocall_mod.val === macrocall_mod.Exporter.val
+    @test macrocall_mod.o === macrocall_mod.Exporter.other
+    @test !isdefined(macrocall_mod, :other)  # imported only under the name `o`
+end
+
+@testset "Imported macrocalls" for expr_compat_mode in (true, false)
+    # Test importing macros by their @-name
+    macname_mod = Module()
+    JuliaLowering.include_string(macname_mod, raw"""
+    module Macros
+        macro mac1(); "mac1"; end
+        macro mac2(); "mac2"; end
+        module Inner
+            macro mac3(); "mac3"; end
+            macro mac4(); "mac4"; end
+        end
+    end
+    """; expr_compat_mode)
+    JuliaLowering.include_string(macname_mod, raw"""
+    module UseMacros
+        import ..Macros:
+            @mac1,
+            @mac2 as @mac2_renamed,
+            Inner.@mac3,
+            Inner.@mac4 as @mac4_renamed
+    end
+    """; expr_compat_mode)
+    Core.@latestworld
+    @test JuliaLowering.include_string(macname_mod.UseMacros,
+                                       "@mac1()"; expr_compat_mode) == "mac1"
+    @test JuliaLowering.include_string(macname_mod.UseMacros,
+                                       "@mac2_renamed()"; expr_compat_mode) == "mac2"
+    @test JuliaLowering.include_string(macname_mod.UseMacros,
+                                       "@mac3()"; expr_compat_mode) == "mac3"
+    @test JuliaLowering.include_string(macname_mod.UseMacros,
+                                       "@mac4_renamed()"; expr_compat_mode) == "mac4"
+end

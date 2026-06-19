@@ -131,7 +131,7 @@ end
 Base.eof(pipe::Base64DecodePipe) = isempty(pipe.rest) && eof(pipe.io)::Bool
 Base.close(pipe::Base64DecodePipe) = nothing
 
-# Decode data from (b1, b2, b3, b5, buffer, input) into (ptr, rest).
+# Decode data from (b1, b2, b3, b4, buffer, input) into (ptr, rest).
 function decode_slow(b1, b2, b3, b4, buffer, i, input, ptr, n, rest)
     # Skip ignore code.
     while true
@@ -194,7 +194,7 @@ end
 """
     base64decode(string)
 
-Decode the base64-encoded `string` and returns a `Vector{UInt8}` of the decoded
+Decode the base64-encoded `string` and return a `Vector{UInt8}` of the decoded
 bytes.
 
 See also [`base64encode`](@ref).

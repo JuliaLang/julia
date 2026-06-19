@@ -1990,7 +1990,7 @@ end
         @test ccall(:jl_dlfind, Int, (Cstring,), "main") == 1               # JL_EXE_LIBNAME
     end
     @test ccall(:jl_dlfind, Int, (Cstring,), "jl_gc_safepoint") == 2    # JL_LIBJULIA_DL_LIBNAME
-    @test ccall(:jl_dlfind, Int, (Cstring,), "ijl_gc_small_alloc") == 3 # JL_LIBJULIA_INTERNAL_DL_LIBNME
+    @test ccall(:jl_dlfind, Int, (Cstring,), "ijl_gc_small_alloc") == 3 # JL_LIBJULIA_INTERNAL_DL_LIBNAME
     @test ccall(:jl_dlfind, Int, (Cstring,), "malloc") ∉ (1, 2, 3)      # Either 0 or msvcrt.dll on Windows
     let hdl = Libdl.dlopen(libccalltest, Libdl.RTLD_GLOBAL)
         try

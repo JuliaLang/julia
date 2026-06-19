@@ -28,7 +28,7 @@ int jl_unw_get(void *context) { return -1; }
 extern "C" {
 #endif
 
-static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context) JL_NOTSAFEPOINT;
+static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context, int from_signal_handler) JL_NOTSAFEPOINT;
 static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *ip, uintptr_t *sp) JL_NOTSAFEPOINT;
 
 static jl_gcframe_t *is_enter_interpreter_frame(jl_gcframe_t **ppgcstack, uintptr_t sp) JL_NOTSAFEPOINT
@@ -203,7 +203,7 @@ NOINLINE size_t rec_backtrace_ctx(jl_bt_element_t *bt_data, size_t maxsize,
                                   bt_context_t *context, jl_gcframe_t *pgcstack) JL_NOTSAFEPOINT
 {
     bt_cursor_t cursor;
-    if (!jl_unw_init(&cursor, context))
+    if (!jl_unw_init(&cursor, context, 1))
         return 0;
     size_t bt_size = 0;
     jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, 0, &pgcstack, 1);
@@ -223,7 +223,7 @@ NOINLINE size_t rec_backtrace(jl_bt_element_t *bt_data, size_t maxsize, int skip
     if (r < 0)
         return 0;
     bt_cursor_t cursor;
-    if (!jl_unw_init(&cursor, &context) || maxsize == 0)
+    if (!jl_unw_init(&cursor, &context, 0) || maxsize == 0)
         return 0;
     jl_gcframe_t *pgcstack = jl_pgcstack;
     size_t bt_size = 0;
@@ -276,7 +276,7 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp, int skip)
     memset(&context, 0, sizeof(context));
     int r = jl_unw_get(&context);
     jl_gcframe_t *pgcstack = jl_pgcstack;
-    if (r == 0 && jl_unw_init(&cursor, &context)) {
+    if (r == 0 && jl_unw_init(&cursor, &context, 0)) {
         // Skip frame for jl_backtrace_from_here itself
         skip += 1;
         size_t offset = 0;
@@ -629,9 +629,10 @@ JL_DLLEXPORT void jl_set_profile_abort_ptr(_Atomic(int) *abort_ptr) JL_NOTSAFEPO
 }
 #endif
 
-static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *Context)
+static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *Context, int from_signal_handler)
 {
     int result;
+    (void)from_signal_handler;
 
 #if !defined(_CPU_X86_64_)
     memset(&cursor->stackframe, 0, sizeof(cursor->stackframe));
@@ -739,8 +740,14 @@ static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *
 #elif !defined(JL_DISABLE_LIBUNWIND)
 // stacktrace using libunwind
 
-static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context)
+static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context, int from_signal_handler)
 {
+#if !defined(LLVMLIBUNWIND)
+    if (from_signal_handler)
+        return unw_init_local2(cursor, context, UNW_INIT_SIGNAL_FRAME) == 0;
+#else
+    (void)from_signal_handler;
+#endif
     return unw_init_local(cursor, context) == 0;
 }
 
@@ -772,7 +779,7 @@ NOINLINE size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t maxsize
 
 #else
 // stacktraces are disabled
-static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context)
+static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context, int from_signal_handler)
 {
     return 0;
 }
@@ -818,14 +825,18 @@ JL_DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
 }
 
 static void jl_safe_fprint_codeloc(ios_t *s, const char* func_name, const char* file_name,
-                                   int line, int pc, int inlined) JL_NOTSAFEPOINT
+                                   int line, int col, int pc, int inlined) JL_NOTSAFEPOINT
 {
     const char *inlined_str = inlined ? " [inlined]" : "";
+    if (col == -1) {
+        col = 0;
+    }
     if (line != -1) {
         if (pc > 0)
-            jl_safe_fprintf(s, "%s at %s:%d:%d%s\n", func_name, file_name, line, pc, inlined_str);
+            jl_safe_fprintf(s, "%s at %s:%d:%d (pc: %d)%s\n",
+                            func_name, file_name, line, col, pc, inlined_str);
         else
-            jl_safe_fprintf(s, "%s at %s:%d%s\n", func_name, file_name, line, inlined_str);
+            jl_safe_fprintf(s, "%s at %s:%d:%d%s\n", func_name, file_name, line, col, inlined_str);
     }
     else {
         jl_safe_fprintf(s, "%s at %s (unknown line)%s\n", func_name, file_name, inlined_str);
@@ -850,39 +861,15 @@ void jl_fprint_native_codeloc(ios_t *s, uintptr_t ip) JL_NOTSAFEPOINT
             jl_safe_fprintf(s, "unknown function (ip: %p) at %s\n", (void*)ip, frame.file_name ? frame.file_name : "(unknown file)");
         }
         else {
-            jl_safe_fprint_codeloc(s, frame.func_name, frame.file_name, frame.line, frame.pc, frame.inlined);
+            int col = frame.fromC ? frame.pc : 0;
+            int pc = frame.fromC ? 0 : frame.pc;
+            jl_safe_fprint_codeloc(
+                s, frame.func_name, frame.file_name, frame.line, col, pc, frame.inlined);
             free(frame.func_name);
         }
         free(frame.file_name);
     }
     free(frames);
-}
-
-const char *jl_debuginfo_file1(jl_debuginfo_t *debuginfo)
-{
-    jl_value_t *def = debuginfo->def;
-    if (jl_is_method_instance(def))
-        def = ((jl_method_instance_t*)def)->def.value;
-    if (jl_is_method(def))
-        def = (jl_value_t*)((jl_method_t*)def)->file;
-    if (jl_is_symbol(def))
-        return jl_symbol_name((jl_sym_t*)def);
-    return "<unknown>";
-}
-
-// File name and line number of first line
-const char *jl_debuginfo_firstline(jl_debuginfo_t *debuginfo, int* line)
-{
-    jl_value_t *linetable = (jl_value_t*)debuginfo;
-    while (jl_is_debuginfo(linetable)) {
-        debuginfo = (jl_debuginfo_t*)linetable;
-        linetable = debuginfo->linetable;
-    }
-    if (line) {
-        struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo, 0);
-        *line = lineidx.loc;
-    }
-    return jl_debuginfo_file1(debuginfo);
 }
 
 jl_module_t *jl_debuginfo_module1(jl_value_t *debuginfo_def)
@@ -932,8 +919,9 @@ static void jl_fprint_debugloc(ios_t *s, jl_debuginfo_t *debuginfo, jl_value_t *
         if (ip2 < 0) // set broken debug info to ignored
             ip2 = 0;
         const char *func_name = jl_debuginfo_name(func);
-        const char *file = jl_debuginfo_firstline(debuginfo, NULL);
-        jl_safe_fprint_codeloc(s, func_name, file, ip2, (int)ip, inlined);
+        const char *file = jl_cdi_file(debuginfo);
+        jl_locspan_t xy = jl_cdi_firstxy(debuginfo, ip);
+        jl_safe_fprint_codeloc(s, func_name, file, xy.first, xy.second, (int)ip, inlined);
     }
 }
 
@@ -1003,18 +991,18 @@ JL_UNUSED static uintptr_t ptr_demangle(uintptr_t p) JL_NOTSAFEPOINT
 {
 #if defined(__GLIBC__)
 #if defined(_CPU_X86_)
-// from https://github.com/bminor/glibc/blame/master/sysdeps/unix/sysv/linux/i386/sysdep.h
+// from https://github.com/bminor/glibc/blame/master/sysdeps/unix/sysv/linux/i386/pointer_guard.h
 // last changed for GLIBC_2.6 on 2007-02-01
     asm(" rorl $9, %0\n"
         " xorl %%gs:0x18, %0"
         : "=r"(p) : "0"(p) : );
 #elif defined(_CPU_X86_64_)
-// from https://github.com/bminor/glibc/blame/master/sysdeps/unix/sysv/linux/i386/sysdep.h
+// from https://github.com/bminor/glibc/blob/master/sysdeps/unix/sysv/linux/x86_64/pointer_guard.h
     asm(" rorq $17, %0\n"
         " xorq %%fs:0x30, %0"
         : "=r"(p) : "0"(p) : );
 #elif defined(_CPU_AARCH64_)
-// from https://github.com/bminor/glibc/blame/master/sysdeps/unix/sysv/linux/aarch64/sysdep.h
+// from https://github.com/bminor/glibc/blame/master/sysdeps/unix/sysv/linux/aarch64/pointer_guard.h
 // We need to use a trick like this (from GCC/LLVM TSAN) to get access to it:
 // https://github.com/llvm/llvm-project/commit/daa3ebce283a753f280c549cdb103fbb2972f08e
     static pthread_once_t once = PTHREAD_ONCE_INIT;

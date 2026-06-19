@@ -1203,7 +1203,7 @@ z856739 = [:a, :b]
 @test_broken repr(:(:(f($(($z856739)...))))) == ":(:(f(\$([:a, :b]...))))"
 @test repr(eval(:(:(f($(($z856739)...)))))) == ":(f(a, b))"
 
-# string interpolation, if this is what the comment in test_rep function
+# string interpolation, if this is what the comment in test_repr function
 # definition talk about
 @test repr(Expr(:string, "foo", :x, "bar")) == ":(\"foo\$(x)bar\")"
 @test Meta.parse(string(Expr(:string, "foo", :x, "bar"))) == Expr(:string, "foo", :x, "bar")
@@ -2531,6 +2531,31 @@ end
 @test string(Union{AbstractVector{T}, T} where T) == "Union{AbstractVector{T}, T} where T"
 @test string(Union{AbstractVector, T} where T) == "Union{AbstractVector, T} where T"
 @test string(Union{Array, Memory}) == "Union{Array, Memory}"
+
+# Alias printing should recover the source binder for bounded alias parameters.
+module MBoundedAlias
+export A, B, U
+struct A{T<:Integer} end
+struct B{T<:Integer} end
+const U{T<:Integer} = Union{A{T}, B{T}}
+end
+let S = TypeVar(:S, Union{}, Integer)
+    @test string(UnionAll(S, Union{MBoundedAlias.A{S}, MBoundedAlias.B{S}})) == "$(curmod_prefix)MBoundedAlias.U"
+end
+
+# Alias printing should also recover the binders for an alias with several
+# bounded parameters, including when an inner binder is bounded by an outer one
+# and the printed type carries the matching typevars as free variables.
+module MBoundedAlias2
+export A, B, U
+struct A{T<:Integer, S<:T} end
+struct B{T<:Integer, S<:T} end
+const U{T<:Integer, S<:T} = Union{A{T,S}, B{T,S}}
+end
+let T = TypeVar(:T, Union{}, Integer), S = TypeVar(:S, Union{}, T)
+    @test string(Union{MBoundedAlias2.A{T,S}, MBoundedAlias2.B{T,S}}) ==
+        "$(curmod_prefix)MBoundedAlias2.U{T, S} where {T<:Integer, S<:T}"
+end
 
 @test sprint(show, :(./)) == ":((./))"
 @test sprint(show, :((.|).(.&, b))) == ":((.|).((.&), b))"

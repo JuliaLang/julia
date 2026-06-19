@@ -1181,7 +1181,7 @@ end
 
 @test Compiler.is_effect_free(Base.infer_effects(getfield, (Complex{Int}, Symbol)))
 
-# We consider a potential deprecatio warning an effect, so for completely unknown getglobal,
+# We consider a potential deprecation warning an effect, so for completely unknown getglobal,
 # we taint the effect_free bit.
 @test !Compiler.is_effect_free(Base.infer_effects(getglobal, (Module, Symbol)))
 
@@ -1543,7 +1543,7 @@ let code = Any[
     sv.bb_states[#=block_id=#4].vartable[#=slot_id=#4] = VarState(Bool, #=def=#7, #=maybe_undef=#false)
     sv.bb_states[#=block_id=#5].vartable[#=slot_id=#4] = VarState(Bool, #=def=#7, #=maybe_undef=#false)
 
-    ir = Compiler.convert_to_ircode(src, sv)
+    ir = Compiler.convert_to_ircode!(src, sv)
     ir = Compiler.slot2reg(ir, src, sv)
     ir = Compiler.compact!(ir)
 

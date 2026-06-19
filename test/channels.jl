@@ -315,7 +315,7 @@ end
     @test timedwait(alwaysfalse, 0) === :timed_out
     @test_throws ArgumentError timedwait(alwaystrue, 0; pollint=0)
 
-    # Allowing a smaller positive `pollint` results in `timewait` hanging
+    # Allowing a smaller positive `pollint` results in `timedwait` hanging
     @test_throws ArgumentError timedwait(alwaystrue, 0, pollint=1e-4)
 
     # Callback passed in raises an exception

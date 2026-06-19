@@ -250,14 +250,14 @@ static inline jl_image_t load_sysimg_target(jl_image_buf_t image, F &&callback, 
 // Verify the cpufeatures tables were generated from a compatible LLVM version.
 #if defined(TARGET_TABLES_LLVM_VERSION_MAJOR) && defined(LLVM_VERSION_MAJOR)
 static_assert(TARGET_TABLES_LLVM_VERSION_MAJOR <= LLVM_VERSION_MAJOR,
-    "cpufeatures tables were generated with a different LLVM major version than Julia uses");
+    "cpufeatures tables were generated with a newer LLVM major version than Julia uses");
 #endif
 
 // ============================================================================
 // Debug output
 // ============================================================================
 
-static bool cpufeatures_debug_enabled() {
+static bool cpufeatures_debug_enabled() JL_NOTSAFEPOINT {
     static int enabled = -1;
     if (enabled == -1) {
         const char *debug_env = getenv("JULIA_DEBUG");
@@ -273,7 +273,7 @@ static bool cpufeatures_debug_enabled() {
 // Called from Julia's loading.jl to display ImageTarget features.
 JL_DLLEXPORT jl_value_t *jl_feature_bits_to_string(const uint8_t *bits, int32_t nwords)
 {
-    FeatureBits fb{};
+    tp::FeatureBits fb{};
     int copy_words = nwords < TARGET_FEATURE_WORDS ? nwords : TARGET_FEATURE_WORDS;
     memcpy(fb.bits, bits, copy_words * sizeof(uint64_t));
     auto str = tp::build_feature_string(fb);
@@ -303,14 +303,13 @@ static std::vector<tp::LLVMTargetSpec> jit_targets;
 
 // If cpu_target starts with "sysimage", replace it with the target string
 // stored in the loaded sysimage. Otherwise return as-is.
-extern "C" std::string jl_expand_sysimage_keyword(const char *cpu_target) {
+static std::string expand_sysimage_keyword(const char *cpu_target) JL_NOTSAFEPOINT {
     if (!cpu_target || !*cpu_target)
         return "";
     std::string option(cpu_target);
     if (option.substr(0, 8) == "sysimage" && (option.size() == 8 || option[8] == ';')) {
-        jl_value_t *target_str = jl_get_sysimage_cpu_target();
-        if (target_str && jl_string_len(target_str) > 0) {
-            std::string expanded(jl_string_data(target_str), jl_string_len(target_str));
+        if (!sysimage_cpu_target.empty()) {
+            std::string expanded = sysimage_cpu_target;
             if (option.size() > 8)
                 expanded += option.substr(8);
             CF_DEBUG("[cpufeatures] expanded 'sysimage' -> '%s'\n", expanded.c_str());
@@ -322,13 +321,18 @@ extern "C" std::string jl_expand_sysimage_keyword(const char *cpu_target) {
     return option;
 }
 
+extern "C" char *jl_expand_sysimage_keyword(const char *cpu_target)
+{
+    return strdup(expand_sysimage_keyword(cpu_target).c_str());
+}
+
 static void init_jit_targets(const char *cpu_target, bool imaging)
 {
 
     if (!jit_targets.empty())
         return;
 
-    auto target_str = jl_expand_sysimage_keyword(cpu_target);
+    auto target_str = expand_sysimage_keyword(cpu_target);
     CF_DEBUG("[cpufeatures] init_jit_targets: '%s' imaging=%d\n",
              target_str.c_str(), imaging);
 
@@ -382,7 +386,7 @@ static uint32_t match_sysimg_target(void *ctx, const void *id, jl_value_t **reje
 
     // For multi-target strings (sysimage building), use only the first
     // target for matching against the image being loaded.
-    auto target_str = jl_expand_sysimage_keyword(cpu_target);
+    auto target_str = expand_sysimage_keyword(cpu_target);
     auto semi = target_str.find(';');
     auto first = semi != std::string::npos ? target_str.substr(0, semi) : target_str;
     auto host_specs = tp::resolve_targets_for_llvm(first);
@@ -433,7 +437,7 @@ static uint32_t match_sysimg_target(void *ctx, const void *id, jl_value_t **reje
                 "avx512vp2intersect", "avx512bf16", "avx512fp16", nullptr
             };
             for (const char **f = avx512; *f; f++) {
-                const FeatureEntry *fe = find_feature(*f);
+                const tp::FeatureEntry *fe = tp::find_feature(*f);
                 if (fe) feature_clear(&target.en_features, fe->bit);
             }
         }
@@ -443,12 +447,12 @@ static uint32_t match_sysimg_target(void *ctx, const void *id, jl_value_t **reje
                 "vaes", "vpclmulqdq", nullptr
             };
             for (const char **f = avx; *f; f++) {
-                const FeatureEntry *fe = find_feature(*f);
+                const tp::FeatureEntry *fe = tp::find_feature(*f);
                 if (fe) feature_clear(&target.en_features, fe->bit);
             }
         }
         for (int w = 0; w < TARGET_FEATURE_WORDS; w++)
-            target.dis_features.bits[w] = llvm_feature_mask.bits[w] & ~target.en_features.bits[w];
+            target.dis_features.bits[w] = tp::llvm_feature_mask.bits[w] & ~target.en_features.bits[w];
         target.cpu_features = tp::build_llvm_feature_string(target.en_features, target.dis_features);
     }
 #else
@@ -521,13 +525,13 @@ JL_DLLEXPORT void jl_dump_host_cpu(void)
     jl_safe_printf("Features:");
     auto host_feats = tp::get_host_features();
     bool first = true;
-    for (uint32_t i = 0; i < num_features; i++) {
-        if (feature_test(&host_feats, feature_table[i].bit)) {
+    for (uint32_t i = 0; i < tp::num_features; i++) {
+        if (feature_test(&host_feats, tp::feature_table[i].bit)) {
             if (first) {
-                jl_safe_printf(" %s", feature_table[i].name);
+                jl_safe_printf(" %s", tp::feature_table[i].name);
                 first = false;
             } else {
-                jl_safe_printf(", %s", feature_table[i].name);
+                jl_safe_printf(", %s", tp::feature_table[i].name);
             }
         }
     }
@@ -568,7 +572,7 @@ extern "C" JL_DLLEXPORT void jl_check_cpu_target(const char *cpu_target, int ima
     if (!cpu_target || !*cpu_target)
         return; // NULL/empty handled elsewhere
 
-    auto target_str = jl_expand_sysimage_keyword(cpu_target);
+    auto target_str = expand_sysimage_keyword(cpu_target);
     if (target_str.empty())
         return;
 
@@ -619,42 +623,41 @@ jl_image_t jl_load_pkgimg(jl_image_buf_t image)
 }
 
 #ifndef __clang_analyzer__
-std::pair<std::string, std::string>
-jl_get_llvm_target(const char *cpu_target, bool imaging)
+jl_llvm_target_t jl_get_llvm_target(const char *cpu_target, bool imaging)
 {
     init_jit_targets(cpu_target, imaging);
     auto &spec = jit_targets[0];
     CF_DEBUG("[cpufeatures] jl_get_llvm_target: cpu='%s' features='%s'\n",
              spec.cpu_name.c_str(), spec.cpu_features.c_str());
-    return {spec.cpu_name, spec.cpu_features};
+    return {spec.cpu_name.c_str(), spec.cpu_features.c_str()};
 }
 #endif
 
 #ifndef __clang_analyzer__
-const std::pair<std::string, std::string> &jl_get_llvm_disasm_target(void)
+jl_llvm_target_t jl_get_llvm_disasm_target(void)
 {
     // Use generic CPU with all features enabled so the disassembler
     // can decode any instruction (including sysimage clones compiled
     // for targets beyond the current JIT target).
-    static const auto res = [] {
+    static const std::string features = [] {
         std::string features;
-        for (uint32_t i = 0; i < num_features; i++) {
-            if (feature_table[i].is_hw) {
+        for (uint32_t i = 0; i < tp::num_features; i++) {
+            if (tp::feature_table[i].is_hw) {
                 if (!features.empty()) features += ',';
                 features += '+';
-                features += feature_table[i].name;
+                features += tp::feature_table[i].name;
             }
         }
-        return std::make_pair(std::string("generic"), std::move(features));
+        return features;
     }();
-    return res;
+    return {"generic", features.c_str()};
 }
 #endif
 
 #ifndef __clang_gcanalyzer__
-jl_clone_targets_t jl_get_llvm_clone_targets(const char *cpu_target)
+extern "C" jl_clone_targets_t jl_get_llvm_clone_targets(const char *cpu_target)
 {
-    auto target_str = jl_expand_sysimage_keyword(cpu_target);
+    auto target_str = expand_sysimage_keyword(cpu_target);
     auto specs = tp::resolve_targets_for_llvm(target_str);
 
     if (specs.empty())
@@ -664,23 +667,41 @@ jl_clone_targets_t jl_get_llvm_clone_targets(const char *cpu_target)
 
     // Serialized blob for sysimage embedding
     auto blob = tp::serialize_targets(specs);
-    result.data.assign(blob.begin(), blob.end());
+    result.data_size = blob.size();
+    result.data = (uint8_t*)malloc(blob.size());
+    memcpy(result.data, blob.data(), blob.size());
 
     // LLVM specs for codegen
-    for (auto &s : specs) {
-        jl_target_spec_t ele;
-        ele.cpu_name = s.cpu_name;
-        ele.cpu_features = s.cpu_features;
+    result.nspecs = specs.size();
+    result.specs = (jl_target_spec_t*)calloc(specs.size(), sizeof(jl_target_spec_t));
+    for (size_t i = 0; i < specs.size(); i++) {
+        auto &s = specs[i];
+        jl_target_spec_t &ele = result.specs[i];
+        ele.cpu_name = strdup(s.cpu_name.c_str());
+        ele.cpu_features = strdup(s.cpu_features.c_str());
         ele.base = s.base;
         ele.clone_all = (s.flags & tp::TF_CLONE_ALL) != 0;
         ele.opt_size = (s.flags & tp::TF_OPTSIZE) != 0;
         ele.min_size = (s.flags & tp::TF_MINSIZE) != 0;
-        ele.diff = s.diff;
-        result.specs.push_back(std::move(ele));
+        ele.en_features_nwords = TARGET_FEATURE_WORDS;
+        ele.en_features = (uint64_t*)malloc(sizeof(s.en_features.bits));
+        memcpy(ele.en_features, s.en_features.bits, sizeof(s.en_features.bits));
     }
     return result;
 }
 #endif
+
+extern "C" void jl_free_clone_targets(jl_clone_targets_t *targets)
+{
+    for (size_t i = 0; i < targets->nspecs; i++) {
+        free(targets->specs[i].cpu_name);
+        free(targets->specs[i].cpu_features);
+        free(targets->specs[i].en_features);
+    }
+    free(targets->specs);
+    free(targets->data);
+    memset(targets, 0, sizeof(*targets));
+}
 
 extern "C" int jl_test_cpu_feature(jl_cpu_feature_t feature)
 {
@@ -696,33 +717,33 @@ extern "C" int jl_test_cpu_feature(jl_cpu_feature_t feature)
 
 extern "C" JL_DLLEXPORT size_t jl_cpufeatures_nbytes(void)
 {
-    return sizeof(FeatureBits);
+    return sizeof(tp::FeatureBits);
 }
 
 extern "C" JL_DLLEXPORT int jl_cpufeatures_lookup(const char *cpu_name,
                                                     uint8_t *features_out,
                                                     size_t bufsize)
 {
-    if (bufsize < sizeof(FeatureBits))
+    if (bufsize < sizeof(tp::FeatureBits))
         return -1;
-    const CPUEntry *entry = find_cpu(cpu_name);
+    const tp::CPUEntry *entry = tp::find_cpu(cpu_name);
     if (!entry)
         return -1;
-    FeatureBits hw;
+    tp::FeatureBits hw;
     for (int i = 0; i < TARGET_FEATURE_WORDS; i++)
-        hw.bits[i] = entry->features.bits[i] & llvm_feature_mask.bits[i];
-    memcpy(features_out, &hw, sizeof(FeatureBits));
+        hw.bits[i] = entry->features.bits[i] & tp::llvm_feature_mask.bits[i];
+    memcpy(features_out, &hw, sizeof(tp::FeatureBits));
     return 0;
 }
 
 extern "C" JL_DLLEXPORT void jl_cpufeatures_host(uint8_t *features_out, size_t bufsize)
 {
-    if (bufsize < sizeof(FeatureBits))
+    if (bufsize < sizeof(tp::FeatureBits))
         return;
     auto fb = tp::get_host_features();
     for (int i = 0; i < TARGET_FEATURE_WORDS; i++)
-        fb.bits[i] &= llvm_feature_mask.bits[i];
-    memcpy(features_out, &fb, sizeof(FeatureBits));
+        fb.bits[i] &= tp::llvm_feature_mask.bits[i];
+    memcpy(features_out, &fb, sizeof(tp::FeatureBits));
 }
 
 extern "C" JL_DLLEXPORT size_t jl_cpufeatures_cross_lookup(
@@ -875,8 +896,17 @@ JL_DLLEXPORT jl_value_t *jl_get_cpu_features(void)
 
 #ifndef __clang_analyzer__
 extern "C" JL_DLLEXPORT jl_value_t* jl_reflect_clone_targets() {
-    auto targets = jl_get_llvm_clone_targets(jl_options.cpu_target);
-    auto &data = targets.data;
+    // Return the actual JIT target(s) chosen after sysimage matching, so that
+    // debug output reflects what pkgimage clones are compared against rather
+    // than the unmatched targets parsed from `jl_options.cpu_target`.
+    std::vector<uint8_t> data;
+    if (!jit_targets.empty()) {
+        data = tp::serialize_targets(jit_targets);
+    } else {
+        jl_clone_targets_t targets = jl_get_llvm_clone_targets(jl_options.cpu_target);
+        data.assign(targets.data, targets.data + targets.data_size);
+        jl_free_clone_targets(&targets);
+    }
     jl_value_t *arr = (jl_value_t*)jl_alloc_array_1d(jl_array_uint8_type, data.size());
     uint8_t *out = jl_array_data(arr, uint8_t);
     memcpy(out, data.data(), data.size());

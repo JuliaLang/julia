@@ -304,7 +304,7 @@ for f in Union{Symbol,Expr}[
 end
 
 for f in [:edit_insert, :edit_insert_newline, :edit_backspace, :edit_move_left,
-          :edit_move_right, :edit_move_word_left, :edit_move_word_right]
+          :edit_move_word_left, :edit_move_word_right]  # :edit_move_right is handled separately
     @eval function ($f)(s::MIState, args...)
         set_action!(s, $(Expr(:quote, f)))
         $(f)(state(s), args...)
@@ -911,6 +911,7 @@ function edit_move_right(buf::IOBuffer)
     return false
 end
 function edit_move_right(m::MIState)
+    set_action!(m, :edit_move_right)
     s = state(m)
     buf = s.input_buffer
     if edit_move_right(s.input_buffer)
@@ -1375,7 +1376,7 @@ function edit_transpose_chars(s::MIState)
 end
 
 function edit_transpose_chars(buf::IOBuffer)
-    # Moving left but not transpoing anything is intentional, and matches Emacs's behavior
+    # Moving left but not transposing anything is intentional, and matches Emacs's behavior
     eof(buf) && position(buf) !== 0 && char_move_left(buf)
     position(buf) == 0 && return false
     char_move_left(buf)

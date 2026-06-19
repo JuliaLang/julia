@@ -15,8 +15,8 @@ end
 
 # When generating an incremental precompile file, we first check whether we
 # already have a copy of this *exact* code in the system image. If so, we
-# simply generates a pkgimage that has the dependency edges we recorded in
-# the system image and simply returns that copy of the compiler. If not,
+# simply generate a pkgimage that has the dependency edges we recorded in
+# the system image and simply return that copy of the compiler. If not,
 # we proceed to load/precompile this as an ordinary package.
 elseif (isdefined(Base, :generating_output) && Base.generating_output(true) &&
         Base.samefile(joinpath(Sys.BINDIR, Base.DATAROOTDIR, Base._compiler_require_dependencies[1][2]), @eval @__FILE__) &&
@@ -37,10 +37,11 @@ else
 
 using Core.Intrinsics, Core.IR
 
-using Core: ABIOverride, Builtin, CodeInstance, IntrinsicFunction, MethodInstance, MethodMatch,
+using Core: ABIOverride, Builtin, CodeInstance, IntrinsicFunction, AnyType, MethodInstance, MethodMatch,
     MethodTable, MethodCache, PartialOpaque, SimpleVector, TypeofVararg,
+    TypeEq,
     _apply_iterate, apply_type, compilerbarrier, donotdelete, memoryref_isassigned,
-    memoryrefget, memoryrefnew, memoryrefoffset, memoryrefset!, print, println, show, svec,
+    memoryrefget, memoryrefnew, memoryrefoffset, memoryrefset!, memoryrefunset!, print, println, show, svec,
     typename, unsafe_write, write, stdout, stderr
 
 using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospecializeinfer,
@@ -50,7 +51,7 @@ using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospeciali
     EffectsOverride, Filter, Generator, NUM_EFFECTS_OVERRIDES,
     OneTo, Ordering, RefValue, _NAMEDTUPLE_NAME,
     _array_for, _bits_findnext, _defaultctors, _methods_by_ftype, _uniontypes, all, allocatedinline, any,
-    argument_datatype, binding_kind, cconvert, copy_exprargs, datatype_arrayelem,
+    argument_datatypename, binding_kind, cconvert, copy_exprargs, datatype_arrayelem,
     datatype_fieldcount, datatype_fieldtypes, datatype_layoutsize, datatype_nfields,
     datatype_pointerfree, decode_effects_override, diff_names, fieldindex, visit,
     generating_output, get_nospecializeinfer_sig, get_world_counter, has_free_typevars, has_typevar,
@@ -61,7 +62,7 @@ using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospeciali
     iskindtype, ismutabletypename, ismutationfree, issingletontype, isvarargtype, isvatuple,
     kwerr, lookup_binding_partition, may_invoke_generator, methods, midpoint, moduleroot,
     partition_restriction, quoted, rename_unionall, rewrap_unionall, specialize_method,
-    structdiff, tls_world_age, unconstrain_vararg_length, unionlen, uniontype_layout,
+    structdiff, tls_world_age, type_parameter, unconstrain_vararg_length, unionlen, uniontype_layout,
     uniontypes, unsafe_convert, unwrap_unionall, unwrapva, vect, widen_diagonal,
     _uncompressed_ir, datatype_min_ninitialized,
     partialstruct_init_undefs, fieldcount_noerror, _eval_import, _eval_using,
@@ -160,6 +161,12 @@ if !isdefined(Base, :end_base_include)
     end
 else
     using Base: @show
+end
+
+# JuliaSyntax doesn't support syntax evolution in bare modules via Project.toml
+# This surfaces only when Compiler.jl is loaded as a standalone package.
+if isdefined(Base, :end_base_include) && isdefined(Base, :set_syntax_version)
+    Base.set_syntax_version(Compiler, Base.VersionNumber(1, 14))
 end
 
 include("cicache.jl")

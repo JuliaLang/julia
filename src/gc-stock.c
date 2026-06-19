@@ -88,7 +88,7 @@ static _Atomic(int) support_conservative_marking = 0;
  *
  * Before starting the mark phase the GC thread calls `jl_safepoint_start_gc()`
  * and `jl_gc_wait_for_the_world()`
- * to make sure all the thread are in a safe state for the GC. The function
+ * to make sure all the threads are in a safe state for the GC. The function
  * activates the safepoint and wait for all the threads to get ready for the
  * GC (`gc_state != 0`). It also acquires the `finalizers` lock so that no
  * other thread will access them when the GC is running.
@@ -1488,13 +1488,6 @@ static void gc_sweep_pool(void) JL_NOTSAFEPOINT
     gc_time_pool_end(current_sweep_full);
 }
 
-static void gc_sweep_perm_alloc(void) JL_NOTSAFEPOINT
-{
-    uint64_t t0 = jl_hrtime();
-    gc_sweep_sysimg();
-    gc_time_sysimg_end(t0);
-}
-
 // mark phase
 
 JL_DLLEXPORT void jl_gc_queue_root(const jl_value_t *ptr)
@@ -1509,6 +1502,16 @@ JL_DLLEXPORT void jl_gc_queue_root(const jl_value_t *ptr)
     if (header & GC_OLD) { // write barrier has not been triggered in this object yet
         arraylist_push(&ptls->gc_tls.heap.remset, (jl_value_t*)ptr);
         ptls->gc_tls.heap.remset_nptr++; // conservative
+        // Image objects are analogous to a third "permanent" GC
+        // generation, so here we maintain the remset for them.
+        if (__unlikely((header & GC_IN_IMAGE) && !(header & GC_IN_IMAGE_REMSET))) {
+            header = jl_atomic_fetch_or_relaxed((_Atomic(uintptr_t) *)&o->header, GC_IN_IMAGE_REMSET);
+            if (!(header & GC_IN_IMAGE_REMSET)) {
+                JL_LOCK_NOGC(&image_remset_lock);
+                arraylist_push(&image_remset, (void*)ptr);
+                JL_UNLOCK_NOGC(&image_remset_lock);
+            }
+        }
     }
 }
 
@@ -1581,6 +1584,7 @@ STATIC_INLINE void gc_assert_parent_validity(jl_value_t *parent, jl_value_t *chi
     if (child_vt == (jl_datatype_tag << 4) ||
         child_vt == (jl_unionall_tag << 4) ||
         child_vt == (jl_uniontype_tag << 4) ||
+        child_vt == (jl_typeeq_tag << 4) ||
         child_vt == (jl_tvar_tag << 4) ||
         child_vt == (jl_vararg_tag << 4)) {
         // Skip, since these wouldn't hit the object assert anyway
@@ -2281,6 +2285,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
         if (vtag == (jl_datatype_tag << 4) ||
             vtag == (jl_unionall_tag << 4) ||
             vtag == (jl_uniontype_tag << 4) ||
+            vtag == (jl_typeeq_tag << 4) ||
             vtag == (jl_tvar_tag << 4) ||
             vtag == (jl_vararg_tag << 4) ||
             vtag == (jl_globalref_tag << 4) ||
@@ -2835,6 +2840,17 @@ static void gc_queue_remset(jl_gc_markqueue_t *mq, jl_ptls_t ptls2) JL_NOTSAFEPO
     ptls2->gc_tls.heap.remset_nptr = 0;
 }
 
+static void gc_queue_image_remset(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
+{
+    size_t len = image_remset.len;
+    void **items = image_remset.items;
+    for (size_t i = 0; i < len; i++) {
+        void *_v = items[i];
+        jl_value_t *v = (jl_value_t *)((uintptr_t)_v | GC_REMSET_PTR_TAG);
+        gc_ptr_queue_push(mq, v);
+    }
+}
+
 static void gc_check_all_remsets_are_empty(void) JL_NOTSAFEPOINT
 {
     for (int i = 0; i < gc_n_threads; i++) {
@@ -2957,6 +2973,9 @@ JL_DLLEXPORT jl_gc_num_t jl_gc_num(void)
 {
     jl_gc_num_t num = gc_num;
     combine_thread_gc_counts(&num, 0);
+    JL_LOCK_NOGC(&image_remset_lock);
+    num.image_remset_size = image_remset.len;
+    JL_UNLOCK_NOGC(&image_remset_lock);
     return num;
 }
 
@@ -3046,7 +3065,7 @@ void _report_gc_finished(uint64_t pause, uint64_t freed, int full, int recollect
     jl_safe_printf("Heap stats: bytes_mapped %.2f MB, bytes_resident %.2f MB,\nheap_size %.2f MB, heap_target %.2f MB, Fragmentation %.3f\n",
         jl_atomic_load_relaxed(&gc_heap_stats.bytes_mapped)/(double)(1<<20),
         jl_atomic_load_relaxed(&gc_heap_stats.bytes_resident)/(double)(1<<20),
-        // live_bytes/(double)(1<<20), live byes tracking is not accurate.
+        // live_bytes/(double)(1<<20), live bytes tracking is not accurate.
         jl_atomic_load_relaxed(&gc_heap_stats.heap_size)/(double)(1<<20),
         jl_atomic_load_relaxed(&gc_heap_stats.heap_target)/(double)(1<<20),
         (double)live_bytes/(double)jl_atomic_load_relaxed(&gc_heap_stats.heap_size)
@@ -3094,6 +3113,10 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
             }
         }
         gc_check_all_remsets_are_empty();
+        // 1.4. in a full sweep, enqueue image remset
+        // (image objects are a third, "permanent" GC generation)
+        if (prev_sweep_full)
+            gc_queue_image_remset(mq);
 
         // 2. walk roots
         gc_mark_roots(mq);
@@ -3221,8 +3244,6 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
         gc_scrub();
         gc_verify_tags();
         gc_sweep_pool();
-        if (sweep_full)
-            gc_sweep_perm_alloc();
     }
 
     JL_PROBE_GC_SWEEP_END();
@@ -3745,6 +3766,8 @@ void jl_gc_init(void)
 {
     JL_MUTEX_INIT(&heapsnapshot_lock, "heapsnapshot_lock");
     JL_MUTEX_INIT(&finalizers_lock, "finalizers_lock");
+    JL_MUTEX_INIT(&image_remset_lock, "image_remset_lock");
+    arraylist_new(&image_remset, 0);
     uv_mutex_init(&page_profile_lock);
     uv_mutex_init(&gc_perm_lock);
     uv_mutex_init(&gc_pages_lock);

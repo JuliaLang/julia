@@ -94,8 +94,8 @@ end
 
 This struct is intended as a memory- and GC-pressure-efficient mechanism
 for incrementally computing def-use maps. The idea is that the def-use map
-is constructed into two passes over the IR. In the first, we simply count the
-the number of uses, computing the number of uses for each def as well as the
+is constructed in two passes over the IR. In the first, we simply count the
+number of uses, computing the number of uses for each def as well as the
 total number of uses. In the second pass, we actually fill in the def-use
 information.
 
@@ -270,7 +270,13 @@ end
 intersect(world::WorldWithRange, valid_worlds::WorldRange) =
     WorldWithRange(world.this, intersect(world.valid_worlds, valid_worlds))
 
-mutable struct InferenceState
+# `InferenceState` and `IRInterpretationState` are defined together in a `typegroup`
+# block so each can reference the other in its `callstack` field type. They are not
+# meant to be subtyped from outside, so rather than introducing an abstract supertype
+# the shared `AbsIntState{I}` is a `Union` type alias (defined further below).
+typegroup
+
+mutable struct InferenceState{I<:AbstractInterpreter}
     #= information about this method instance =#
     linfo::MethodInstance
     valid_worlds::WorldRange
@@ -286,7 +292,7 @@ mutable struct InferenceState
     currpc::Int
     ip::BitSet#=TODO BoundedMinPrioritySet=# # current active instruction pointers
     handler_info::Union{Nothing,HandlerInfo{TryCatchFrame}}
-    ssavalue_uses::Vector{BitSet} # ssavalue sparsity and restart info
+    ssavalue_uses::SSAUses # ssavalue sparsity and restart info
     # Per-basic-block entry state. `nothing` if the BB has not been analyzed yet.
     # Populated lazily during the main inference loop by `update_bbstate!`, which merges
     # the current exit state into each successor. Both the variable-type table and the
@@ -313,10 +319,10 @@ mutable struct InferenceState
     tasks::Vector{WorkThunk}
     pclimitations::IdSet{InferenceState} # causes of precision restrictions (LimitedAccuracy) on currpc ssavalue
     limitations::IdSet{InferenceState} # causes of precision restrictions (LimitedAccuracy) on return
-    cycle_backedges::Vector{Tuple{InferenceState, Int}} # call-graph backedges connecting from callee to caller
+    cycle_backedges::Vector{Tuple{InferenceState{I}, Int}} # call-graph backedges connecting from callee to caller
 
     # IPO tracking of in-process work, shared with all frames given AbstractInterpreter
-    callstack #::Vector{AbsIntState}
+    callstack::Vector{Union{InferenceState{I},IRInterpretationState{I}}}
     parentid::Int # index into callstack of the parent frame that originally added this frame (call cycle_parent to extract the current parent of the SCC)
     frameid::Int # index into callstack at which this object is found (or zero, if this is not a cached frame and has no parent)
     cycleid::Int # index into the callstack of the topmost frame in the cycle (all frames in the same cycle share the same cycleid)
@@ -340,12 +346,16 @@ mutable struct InferenceState
     insert_coverage::Bool
 
     # The interpreter that created this inference state. Not looked at by
-    # NativeInterpreter. But other interpreters may use this to detect cycles
+    # NativeInterpreter. But other interpreters may use this to detect cycles.
+    # Stored as the abstract supertype to keep reads boxed (the type parameter
+    # `I` lets callers narrow with `frame.interp::I` only at the specific call
+    # sites that need concrete dispatch, without propagating concrete unboxed
+    # values through every method that takes `interp`).
     interp::AbstractInterpreter
 
     # src is assumed to be a newly-allocated CodeInfo, that can be modified in-place to contain intermediate results
-    function InferenceState(result::InferenceResult, src::CodeInfo, cache_mode::UInt8,
-                            interp::AbstractInterpreter)
+    function InferenceState{I}(result::InferenceResult, src::CodeInfo, cache_mode::UInt8,
+                               interp::I) where {I<:AbstractInterpreter}
         mi = result.linfo
         world = get_inference_world(interp)
         if world == typemax(UInt)
@@ -392,8 +402,8 @@ mutable struct InferenceState
         unreachable = BitSet()
         pclimitations = IdSet{InferenceState}()
         limitations = IdSet{InferenceState}()
-        cycle_backedges = Tuple{InferenceState,Int}[]
-        callstack = AbsIntState[]
+        cycle_backedges = Tuple{InferenceState{I},Int}[]
+        callstack = Union{InferenceState{I},IRInterpretationState{I}}[]
         tasks = WorkThunk[]
 
         valid_worlds = WorldRange(1, get_world_counter())
@@ -442,6 +452,62 @@ mutable struct InferenceState
     end
 end
 
+# TODO add `result::InferenceResult` and put the irinterp result into the inference cache?
+mutable struct IRInterpretationState{I<:AbstractInterpreter}
+    const spec_info::SpecInfo
+    const ir::IRCode
+    const mi::MethodInstance
+    valid_worlds::WorldRange
+    curridx::Int
+    time_caches::Float64
+    time_paused::UInt64
+    const argtypes_refined::Vector{Bool}
+    const sptypes::Vector{VarState}
+    const tpdum::TwoPhaseDefUseMap
+    const ssa_refined::BitSet
+    const lazyreachability::LazyCFGReachability
+    const tasks::Vector{WorkThunk}
+    const edges::Vector{Any}
+    callstack::Vector{Union{InferenceState{I},IRInterpretationState{I}}}
+    frameid::Int
+    parentid::Int
+    interp::AbstractInterpreter # see comment on `InferenceState.interp`
+
+    function IRInterpretationState{I}(
+            interp::I, spec_info::SpecInfo, ir::IRCode,
+            mi::MethodInstance, argtypes::Vector{Any}, min_world::UInt, max_world::UInt
+        ) where {I<:AbstractInterpreter}
+        curridx = 1
+        given_argtypes = Vector{Any}(undef, length(argtypes))
+        for i = 1:length(given_argtypes)
+            given_argtypes[i] = widenslotwrapper(argtypes[i])
+        end
+        if isa(mi.def, Method)
+            argtypes_refined = Bool[!⊑(optimizer_lattice(interp), ir.argtypes[i], given_argtypes[i])
+                for i = 1:length(given_argtypes)]
+        else
+            argtypes_refined = Bool[false for _ = 1:length(given_argtypes)]
+        end
+        empty!(ir.argtypes)
+        append!(ir.argtypes, given_argtypes)
+        tpdum = TwoPhaseDefUseMap(length(ir.stmts))
+        ssa_refined = BitSet()
+        lazyreachability = LazyCFGReachability(ir)
+        valid_worlds = WorldRange(min_world, max_world == typemax(UInt) ? get_world_counter() : max_world)
+        if !(get_inference_world(interp) in valid_worlds)
+            error("invalid age range update")
+        end
+        tasks = WorkThunk[]
+        edges = Any[]
+        callstack = Union{InferenceState{I},IRInterpretationState{I}}[]
+        return new{I}(spec_info, ir, mi, valid_worlds,
+                curridx, 0.0, 0, argtypes_refined, ir.sptypes, tpdum,
+                ssa_refined, lazyreachability, tasks, edges, callstack, 0, 0, interp)
+    end
+end
+
+end # typegroup
+
 gethandler(frame::InferenceState, pc::Int=frame.currpc) = gethandler(frame.handler_info, pc)
 gethandler(::Nothing, ::Int) = nothing
 function gethandler(handler_info::HandlerInfo, pc::Int)
@@ -470,12 +536,11 @@ const compute_trycatch = ComputeTryCatch{SimpleHandler}()
     compute_trycatch(ir.stmts.stmt, ir.cfg.blocks)
 
 """
-    (::ComputeTryCatch{Handler})(code, [, bbs]) -> handler_info::Union{Nothing,HandlerInfo{Handler}}
+    (::ComputeTryCatch{Handler})(code[, bbs]) -> handler_info::Union{Nothing,HandlerInfo{Handler}}
     const compute_trycatch = ComputeTryCatch{SimpleHandler}()
 
 Given the code of a function, compute, at every statement, the current
-try/catch handler, and the current exception stack top. This function returns
-a tuple of:
+try/catch handler, and the current exception stack top. This function returns a `HandlerInfo` with:
 
     1. `handler_info.handler_at`: A statement length vector of tuples
        `(catch_handler, exception_stack)`, which are indices into `handlers`
@@ -549,7 +614,7 @@ function (::ComputeTryCatch{Handler})(code::Vector{Any}, bbs::Union{Vector{Basic
                 l = stmt.catch_dest
                 (bbs !== nothing) && (l != 0) && (l = first(bbs[l].stmts))
                 # We assigned a handler number above. Here we just merge that
-                # with out current handler information.
+                # with our current handler information.
                 if l != 0
                     handler_at[l] = (cur_stacks[1], handler_at[l][2])
                 end
@@ -628,6 +693,8 @@ function InferenceState(result::InferenceResult, cache_mode::UInt8, interp::Abst
     maybe_validate_code(mi, src, "lowered")
     return InferenceState(result, src, cache_mode, interp)
 end
+InferenceState(result::InferenceResult, src::CodeInfo, cache_mode::UInt8, interp::I) where {I<:AbstractInterpreter} =
+    InferenceState{I}(result, src, cache_mode, interp)
 InferenceState(result::InferenceResult, cache_mode::Symbol, interp::AbstractInterpreter) =
     InferenceState(result, convert_cache_mode(cache_mode), interp)
 InferenceState(result::InferenceResult, src::CodeInfo, cache_mode::Symbol, interp::AbstractInterpreter) =
@@ -672,6 +739,14 @@ function constrains_param(var::TypeVar, @nospecialize(typ), covariant::Bool, typ
         ba = constrains_param(var, typ.a, covariant, type_constrains)
         bb = constrains_param(var, typ.b, covariant, type_constrains)
         (ba && bb) && return true
+    elseif isType(typ)
+        p = type_parameter(typ)
+        if p === var && var.ub === Any
+            # Types with free type parameters are <: Type cause the typevar
+            # to be unconstrained because Type{T} with free typevars is illegal
+            return type_constrains
+        end
+        constrains_param(var, p, false, type_constrains) && return true
     elseif typ isa DataType
         # return true if any param constrains var
         fc = length(typ.parameters)
@@ -691,11 +766,6 @@ function constrains_param(var::TypeVar, @nospecialize(typ), covariant::Bool, typ
                     constrains_param(var, lastp, covariant, type_constrains) && return true
                 end
             else
-                if typ.name === typename(Type) && typ.parameters[1] === var && var.ub === Any
-                    # Types with free type parameters are <: Type cause the typevar
-                    # to be unconstrained because Type{T} with free typevars is illegal
-                    return type_constrains
-                end
                 for i in 1:fc
                     p = typ.parameters[i]
                     constrains_param(var, p, false, type_constrains) && return true
@@ -717,7 +787,7 @@ function sptype_for_tvar(vᵢ::TypeVar, output_tvar::TypeVar, sigtypes::Core.Sim
                          @nospecialize(specTypes))
     for j = 1:length(sigtypes)
         sⱼ = sigtypes[j]
-        if isType(sⱼ) && sⱼ.parameters[1] === vᵢ
+        if isType(sⱼ) && type_parameter(sⱼ) === vᵢ
             # `arg::Type{T}` pins the sparam to the arg's type
             return fieldtype(specTypes, j)
         elseif (va = va_from_vatuple(sⱼ)) !== nothing
@@ -731,7 +801,7 @@ function sptype_for_tvar(vᵢ::TypeVar, output_tvar::TypeVar, sigtypes::Core.Sim
         # `Bottom <: T <: Any` additionally allows non-Type tvars
         return Any
     end
-    return rewrap_free_typevars(Type{output_tvar}, find_free_typevars(specTypes))
+    return rewrap_free_typevars(TypeEq{output_tvar}, find_free_typevars(specTypes))
 end
 
 function sptypes_from_meth_instance(mi::MethodInstance)
@@ -777,11 +847,11 @@ function sptypes_from_meth_instance(mi::MethodInstance)
                                      (unwrap_unionall(temp)::DataType).parameters,
                                      mi.specTypes)
             else
-                ty = rewrap_free_typevars(Type{v}, find_free_typevars(mi.specTypes))
+                ty = rewrap_free_typevars(TypeEq{v}, find_free_typevars(mi.specTypes))
             end
             undef = !v_constrained
         elseif isvarargtype(v)
-            # if this parameter came from `func(..., ::Vararg{T,v})`,
+            # this parameter came from `func(..., ::Vararg{T,v})`,
             # so the type is known to be `Int`
             ty = Int
             undef = false
@@ -878,59 +948,12 @@ end
 
 # IRInterpretationState
 # =====================
+# (the struct itself is defined in the `typegroup` block alongside `InferenceState`)
 
-# TODO add `result::InferenceResult` and put the irinterp result into the inference cache?
-mutable struct IRInterpretationState
-    const spec_info::SpecInfo
-    const ir::IRCode
-    const mi::MethodInstance
-    valid_worlds::WorldRange
-    curridx::Int
-    time_caches::Float64
-    time_paused::UInt64
-    const argtypes_refined::Vector{Bool}
-    const sptypes::Vector{VarState}
-    const tpdum::TwoPhaseDefUseMap
-    const ssa_refined::BitSet
-    const lazyreachability::LazyCFGReachability
-    const tasks::Vector{WorkThunk}
-    const edges::Vector{Any}
-    callstack #::Vector{AbsIntState}
-    frameid::Int
-    parentid::Int
-
-    function IRInterpretationState(
-            interp::AbstractInterpreter, spec_info::SpecInfo, ir::IRCode,
-            mi::MethodInstance, argtypes::Vector{Any}, min_world::UInt, max_world::UInt
-        )
-        curridx = 1
-        given_argtypes = Vector{Any}(undef, length(argtypes))
-        for i = 1:length(given_argtypes)
-            given_argtypes[i] = widenslotwrapper(argtypes[i])
-        end
-        if isa(mi.def, Method)
-            argtypes_refined = Bool[!⊑(optimizer_lattice(interp), ir.argtypes[i], given_argtypes[i])
-                for i = 1:length(given_argtypes)]
-        else
-            argtypes_refined = Bool[false for _ = 1:length(given_argtypes)]
-        end
-        empty!(ir.argtypes)
-        append!(ir.argtypes, given_argtypes)
-        tpdum = TwoPhaseDefUseMap(length(ir.stmts))
-        ssa_refined = BitSet()
-        lazyreachability = LazyCFGReachability(ir)
-        valid_worlds = WorldRange(min_world, max_world == typemax(UInt) ? get_world_counter() : max_world)
-        if !(get_inference_world(interp) in valid_worlds)
-            error("invalid age range update")
-        end
-        tasks = WorkThunk[]
-        edges = Any[]
-        callstack = AbsIntState[]
-        return new(spec_info, ir, mi, valid_worlds,
-                curridx, 0.0, 0, argtypes_refined, ir.sptypes, tpdum,
-                ssa_refined, lazyreachability, tasks, edges, callstack, 0, 0)
-    end
-end
+IRInterpretationState(interp::I, spec_info::SpecInfo, ir::IRCode,
+                      mi::MethodInstance, argtypes::Vector{Any},
+                      min_world::UInt, max_world::UInt) where {I<:AbstractInterpreter} =
+    IRInterpretationState{I}(interp, spec_info, ir, mi, argtypes, min_world, max_world)
 
 function IRInterpretationState(
         interp::AbstractInterpreter, codeinst::CodeInstance, mi::MethodInstance,
@@ -952,11 +975,11 @@ end
 # AbsIntState
 # ===========
 
-const AbsIntState = Union{InferenceState,IRInterpretationState}
+const AbsIntState{I<:AbstractInterpreter} = Union{InferenceState{I}, IRInterpretationState{I}}
 
 function print_callstack(frame::AbsIntState)
     print("=================== Callstack: ==================\n")
-    frames = frame.callstack::Vector{AbsIntState}
+    frames = frame.callstack
     for idx = (frame.frameid == 0 ? 0 : 1):length(frames)
         sv = (idx == 0 ? frame : frames[idx])
         idx == frame.frameid && print("*")
@@ -987,11 +1010,11 @@ function frame_module(sv::AbsIntState)
     return def.module
 end
 
-frame_parent(sv::AbsIntState) = sv.parentid == 0 ? nothing : (sv.callstack::Vector{AbsIntState})[sv.parentid]
+frame_parent(sv::AbsIntState) = sv.parentid == 0 ? nothing : sv.callstack[sv.parentid]
 
 function cycle_parent(sv::InferenceState)
     sv.parentid == 0 && return nothing
-    callstack = sv.callstack::Vector{AbsIntState}
+    callstack = sv.callstack
     sv = callstack[sv.cycleid]::InferenceState
     sv.parentid == 0 && return nothing
     return callstack[sv.parentid]
@@ -1000,17 +1023,17 @@ cycle_parent(sv::IRInterpretationState) = frame_parent(sv)
 
 
 # add the orphan child to the parent and the parent to the child
-function assign_parentchild!(child::InferenceState, parent::AbsIntState)
+function assign_parentchild!(child::InferenceState{I}, parent::AbsIntState{I}) where {I<:AbstractInterpreter}
     @assert child.frameid in (0, 1)
-    child.callstack = callstack = parent.callstack::Vector{AbsIntState}
+    child.callstack = callstack = parent.callstack
     child.parentid = parent.frameid
     push!(callstack, child)
     child.cycleid = child.frameid = length(callstack)
     nothing
 end
-function assign_parentchild!(child::IRInterpretationState, parent::AbsIntState)
+function assign_parentchild!(child::IRInterpretationState{I}, parent::AbsIntState{I}) where {I<:AbstractInterpreter}
     @assert child.frameid in (0, 1)
-    child.callstack = callstack = parent.callstack::Vector{AbsIntState}
+    child.callstack = callstack = parent.callstack
     child.parentid = parent.frameid
     push!(callstack, child)
     child.frameid = length(callstack)
@@ -1070,17 +1093,17 @@ Iterate through all callers of the given `AbsIntState` in the abstract interpret
 ascending the tree from the given `AbsIntState`).
 Note that cycles may be visited in any order.
 """
-struct AbsIntStackUnwind
-    callstack::Vector{AbsIntState}
-    AbsIntStackUnwind(sv::AbsIntState) = new(sv.callstack::Vector{AbsIntState})
+struct AbsIntStackUnwind{I<:AbstractInterpreter}
+    callstack::Vector{AbsIntState{I}}
+    AbsIntStackUnwind(sv::AbsIntState{I}) where {I<:AbstractInterpreter} = new{I}(sv.callstack)
 end
 function iterate(unw::AbsIntStackUnwind, frame::Int=length(unw.callstack))
     frame == 0 && return nothing
     return (unw.callstack[frame], frame - 1)
 end
 
-struct AbsIntCycle
-    frames::Vector{AbsIntState}
+struct AbsIntCycle{I<:AbstractInterpreter}
+    frames::Vector{AbsIntState{I}}
     cycleid::Int
     cycletop::Int
 end
@@ -1098,7 +1121,7 @@ interpretation stack (including the given `AbsIntState` itself) that are part
 of the same cycle, only if it is part of a cycle with multiple frames.
 """
 function callers_in_cycle(sv::InferenceState)
-    callstack = sv.callstack::Vector{AbsIntState}
+    callstack = sv.callstack
     cycletop = cycleid = sv.cycleid
     while cycletop < length(callstack)
         frame = callstack[cycletop + 1]
@@ -1108,7 +1131,7 @@ function callers_in_cycle(sv::InferenceState)
     end
     return AbsIntCycle(callstack, cycletop == cycleid ? 0 : cycleid, cycletop)
 end
-callers_in_cycle(sv::IRInterpretationState) = AbsIntCycle(sv.callstack::Vector{AbsIntState}, 0, 0)
+callers_in_cycle(sv::IRInterpretationState) = AbsIntCycle(sv.callstack, 0, 0)
 
 get_curr_ssaflag(sv::InferenceState) = sv.ssaflags[sv.currpc]
 get_curr_ssaflag(sv::IRInterpretationState) = sv.ir.stmts[sv.curridx][:flag]
@@ -1262,7 +1285,7 @@ end
 """
     doworkloop(args...)
 
-Run a tasks inside the abstract interpreter, returning false if there are none.
+Run a task inside the abstract interpreter, returning false if there are none.
 Tasks will be run in DFS post-order tree order, such that all child tasks will
 be run in the order scheduled, prior to running any subsequent tasks. This
 allows tasks to generate more child tasks, which will be run before anything else.

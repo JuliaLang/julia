@@ -1657,7 +1657,7 @@ static inline void fpext(jl_datatype_t *aty, void *pa, jl_datatype_t *ty, void *
     fpext_convert(bfloat16, float64);
     fpext_convert(float32, float64);
     else
-        jl_error("fptrunc: runtime floating point intrinsics require both arguments to be Float16, BFloat16, Float32, or Float64");
+        jl_error("fpext: runtime floating point intrinsics require both arguments to be Float16, BFloat16, Float32, or Float64");
 #undef fpext_convert
 }
 

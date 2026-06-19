@@ -598,8 +598,7 @@ static jl_genericmemory_t *jl_decode_value_memory(jl_ircode_state *s, jl_value_t
         jl_value_t **data = (jl_value_t**)m->ptr;
         size_t i, numel = m->length;
         for (i = 0; i < numel; i++) {
-            data[i] = jl_decode_value(s);
-            jl_gc_wb(m, data[i]);
+            jl_gc_write(m, data[i], jl_decode_value(s));
         }
     }
     else if (layout->first_ptr >= 0) {
@@ -614,8 +613,7 @@ static jl_genericmemory_t *jl_decode_value_memory(jl_ircode_state *s, jl_value_t
                 jl_value_t **fld = &((jl_value_t**)data)[ptr];
                 if ((char*)fld != start)
                     ios_readall(s->s, start, (const char*)fld - start);
-                *fld = jl_decode_value(s);
-                jl_gc_wb(m, fld);
+                jl_gc_write(m, *fld, jl_decode_value(s));
                 start = (char*)&fld[1];
             }
             data += elsz;
@@ -681,8 +679,7 @@ static jl_value_t *jl_decode_value_expr(jl_ircode_state *s, uint8_t tag)
     jl_value_t **data = jl_array_ptr_data(e->args);
     jl_value_t *owner = jl_array_owner(e->args);
     for (i = 0; i < len; i++) {
-        data[i] = jl_decode_value(s);
-        jl_gc_wb(owner, data[i]);
+        jl_gc_write(owner, data[i], jl_decode_value(s));
     }
     JL_GC_POP();
     return (jl_value_t*)e;
@@ -711,8 +708,7 @@ static jl_value_t *jl_decode_value_phi(jl_ircode_state *s, uint8_t tag)
     }
     jl_value_t **data_v = jl_array_ptr_data(v);
     for (i = 0; i < len_v; i++) {
-        data_v[i] = jl_decode_value(s);
-        jl_gc_wb(jl_array_owner(v), data_v[i]);
+        jl_gc_write(jl_array_owner(v), data_v[i], jl_decode_value(s));
     }
     JL_GC_POP();
     return phi;
@@ -731,8 +727,7 @@ static jl_value_t *jl_decode_value_phic(jl_ircode_state *s, uint8_t tag)
     phic = jl_new_struct(jl_phicnode_type, v);
     jl_value_t **data = jl_array_ptr_data(v);
     for (i = 0; i < len; i++) {
-        data[i] = jl_decode_value(s);
-        jl_gc_wb(jl_array_owner(v), data[i]);
+        jl_gc_write(jl_array_owner(v), data[i], jl_decode_value(s));
     }
     JL_GC_POP();
     return phic;
@@ -768,8 +763,7 @@ static jl_value_t *jl_decode_value_any(jl_ircode_state *s)
             jl_value_t **fld = &((jl_value_t**)data)[ptr];
             if ((char*)fld != start)
                 ios_readall(s->s, start, (const char*)fld - start);
-            *fld = jl_decode_value(s);
-            jl_gc_wb(v, *fld);
+            jl_gc_write(v, *fld, jl_decode_value(s));
             start = (char*)&fld[1];
         }
         JL_GC_POP();
@@ -965,17 +959,17 @@ static size_t codelocs_parseheader(jl_string_t *cl, int *loc_offset, int *loc_by
     int32_t header[3];
     memcpy(&header, (char*)jl_string_data(cl), sizeof(header));
     *loc_offset = header[0];
-    if (header[1] < 255)
+    if (header[1] < UINT8_MAX)
         *loc_bytes = 1;
-    else if (header[1] < 65535)
+    else if (header[1] < UINT16_MAX)
         *loc_bytes = 2;
     else
         *loc_bytes = 4;
     if (header[2] == 0)
         *to_bytes = 0;
-    else if (header[2] < 255)
+    else if (header[2] < UINT8_MAX)
         *to_bytes = 1;
-    else if (header[2] < 65535)
+    else if (header[2] < UINT16_MAX)
         *to_bytes = 2;
     else
         *to_bytes = 4;
@@ -1026,8 +1020,7 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
     ios_mem(&dest, 0);
 
     if (m->roots == NULL) {
-        m->roots = jl_alloc_vec_any(0);
-        jl_gc_wb(m, m->roots);
+        jl_gc_write(m, m->roots, jl_alloc_vec_any(0));
     }
     jl_value_t *edges = code->edges;
     jl_ircode_state s = {
@@ -1100,8 +1093,10 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
     ios_flush(s.s);
     v = jl_pchar_to_string(s.s->buf, s.s->size);
     ios_close(s.s);
-    if (jl_array_nrows(m->roots) == 0)
+    if (jl_array_nrows(m->roots) == 0) {
+        jl_gc_wb(m, NULL);
         m->roots = NULL;
+    }
     JL_UNLOCK(&m->writelock); // Might GC
     JL_GC_POP();
 
@@ -1147,8 +1142,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     code->inlining_cost = jl_decode_inlining_cost(read_uint8(s.s));
 
     size_t nslots = read_int32(s.s);
-    code->slotflags = jl_alloc_array_1d(jl_array_uint8_type, nslots);
-    jl_gc_wb(code, code->slotflags);
+    jl_gc_write(code, code->slotflags, jl_alloc_array_1d(jl_array_uint8_type, nslots));
     ios_readall(s.s, jl_array_data(code->slotflags, char), nslots);
 
     if (flags.bits.nargsmatchesmethod) {
@@ -1158,17 +1152,14 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     }
 
     size_t i, l = read_uint64(s.s);
-    code->code = jl_alloc_array_1d(jl_array_any_type, l);
-    jl_gc_wb(code, code->code);
+    jl_gc_write(code, code->code, jl_alloc_array_1d(jl_array_any_type, l));
     for (i = 0; i < l; i++) {
         s.ssaid = i;
         jl_array_ptr_set(code->code, i, jl_decode_value(&s));
     }
     s.ssaid = 0;
-    code->ssavaluetypes = jl_decode_value(&s);
-    jl_gc_wb(code, code->ssavaluetypes);
-    code->ssaflags = jl_alloc_array_1d(jl_array_uint32_type, l);
-    jl_gc_wb(code, code->ssaflags);
+    jl_gc_write(code, code->ssavaluetypes, jl_decode_value(&s));
+    jl_gc_write(code, code->ssaflags, jl_alloc_array_1d(jl_array_uint32_type, l));
     uint32_t *ssaflags_data = jl_array_data(code->ssaflags, uint32_t);
     if (flags.bits.has_ssaflags)
         ios_readall(s.s, (char*)ssaflags_data, l * sizeof(*ssaflags_data));
@@ -1176,21 +1167,20 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
         memset(ssaflags_data, 0, l * sizeof(*ssaflags_data));
 
     if (m->is_for_opaque_closure) {
-        code->slottypes = jl_decode_value(&s);
-        jl_gc_wb(code, code->slottypes);
+        jl_gc_write(code, code->slottypes, jl_decode_value(&s));
     }
 
     slotnames = jl_decode_value(&s);
     if (!jl_is_string(slotnames))
         slotnames = m->slot_syms;
-    code->slotnames = jl_uncompress_argnames(slotnames);
-    jl_gc_wb(code, code->slotnames);
+    jl_gc_write(code, code->slotnames, jl_uncompress_argnames(slotnames));
 
-    if (metadata)
-        code->debuginfo = jl_atomic_load_relaxed(&metadata->debuginfo);
-    else
-        code->debuginfo = m->debuginfo;
-    jl_gc_wb(code, code->debuginfo);
+    if (metadata) {
+        jl_debuginfo_t *new_debuginfo = jl_atomic_load_relaxed(&metadata->debuginfo);
+        jl_gc_wb(code, new_debuginfo);
+        code->debuginfo = new_debuginfo;
+    } else
+        jl_gc_write(code, code->debuginfo, m->debuginfo);
     assert(code->debuginfo);
     assert(jl_array_nrows(code->code) == codelocs_nstmts(code->debuginfo->codelocs) || jl_string_len(code->debuginfo->codelocs) == 0);
 
@@ -1201,14 +1191,11 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     ios_close(s.s);
     JL_UNLOCK(&m->writelock); // Might GC
     if (metadata) {
-        code->parent = jl_get_ci_mi(metadata);
-        jl_gc_wb(code, code->parent);
-        code->rettype = metadata->rettype;
-        jl_gc_wb(code, code->rettype);
+        jl_gc_write(code, code->parent, jl_get_ci_mi(metadata));
+        jl_gc_write(code, code->rettype, metadata->rettype);
         code->min_world = jl_atomic_load_relaxed(&metadata->min_world);
         code->max_world = jl_atomic_load_relaxed(&metadata->max_world);
-        code->edges = (jl_value_t*)s.edges;
-        jl_gc_wb(code, s.edges);
+        jl_gc_write(code, code->edges, (jl_value_t*)s.edges);
     }
     JL_GC_POP();
 
@@ -1442,9 +1429,143 @@ JL_DLLEXPORT struct jl_codeloc_t jl_uncompress1_codeloc(jl_debuginfo_t *di, size
     assert(jl_is_string(cl));
     int loc_offset, loc_bytes, to_bytes;
     size_t nstmts = codelocs_parseheader(cl, &loc_offset, &loc_bytes, &to_bytes);
-    if (pc > nstmts)
-        return badloc;
+    if (pc < 0 || pc > nstmts)
+        return badloc; // ideally an assertion, but currently happens too often
     return unpack_codeloc(cl, pc, loc_offset, loc_bytes, to_bytes);
+}
+
+static const char *sbt_parseheader(jl_string_t *str, jl_sourcebytetable_header_t *h) JL_NOTSAFEPOINT
+{
+    assert(jl_is_string(str));
+    const char *ptr = jl_string_data(str);
+    memcpy(h, ptr, SBT_HEADER_SIZE); // TODO assumes LE
+    assert(h->byte_encl == 1 || h->byte_encl == 2 || h->byte_encl == 4);
+    return ptr + SBT_HEADER_SIZE;
+}
+
+/* `jl_cdi_*`: barebones non-allocating interface for reading compressed
+ * debuginfo.  Only `jl_cdi_firstxy` may be used on line-based DebugInfo.
+ * All byte positions, line numbers, column numbers, and program counters are
+ * 1-based, and all ranges are inclusive-inclusive. */
+
+/* traverse `di.linetable` (towards line/byte information, ignoring edges),
+ * returning new debuginfo in `p_di` and optionally pc in `p_pc`. */
+static void cdi_deref(jl_debuginfo_t **p_di, int32_t *p_pc, int recursive) JL_NOTSAFEPOINT
+{
+    assert(jl_is_debuginfo(*p_di));
+    jl_debuginfo_t *di = *p_di;
+    int32_t pc = 0;
+    if (!p_pc)
+        p_pc = &pc;
+    if (jl_is_debuginfo(di->linetable)) {
+        assert(*p_pc >= 0);
+        *p_pc = jl_uncompress1_codeloc(di, *p_pc).loc;
+        *p_di = (jl_debuginfo_t *)di->linetable;
+        if (recursive) {
+            cdi_deref(p_di, p_pc, recursive);
+        }
+    } else {
+        assert(jl_is_string(di->linetable) || jl_is_nothing(di->linetable));
+    }
+}
+
+JL_DLLEXPORT jl_locspan_t jl_cdi_bytespan(jl_debuginfo_t *di, int32_t pc) JL_NOTSAFEPOINT
+{
+    cdi_deref(&di, &pc, 1);
+    pc = jl_uncompress1_codeloc(di, pc).loc;
+    jl_sourcebytetable_header_t h;
+    const char *ptr = sbt_parseheader(di->linetable, &h);
+    if (pc <= 0 || pc > h.nlocs) {
+        return (jl_locspan_t){-1, -1};
+    }
+    ptr += (pc-1)*(h.byte_encl+h.span_encl);
+    jl_locspan_t out;
+    out.first = _take_u32(&ptr, h.byte_encl) + h.byte_offset;
+    out.second = _take_u32(&ptr, h.span_encl) + out.first - 1;
+    return out;
+}
+
+/* O(line_starts); could binary search instead */
+JL_DLLEXPORT jl_locspan_t jl_cdi_byte_to_xy(jl_debuginfo_t *di, int32_t b) JL_NOTSAFEPOINT
+{
+    cdi_deref(&di, NULL, 1);
+    jl_sourcebytetable_header_t h;
+    sbt_parseheader(di->linetable, &h);
+    size_t off = SBT_HEADER_SIZE + h.nlocs * (h.byte_encl + h.span_encl);
+    size_t n_lines = (jl_string_len(di->linetable) - off) / h.byte_encl;
+    jl_locspan_t out = {h.line_offset-1, -1};
+    const char *ptr = jl_string_data(di->linetable) + off;
+    for (int i = 0; i < n_lines; i++) {
+        int32_t line_start = _take_u32(&ptr, h.byte_encl);
+        if (line_start + h.byte_offset <= b) {
+            out.second = b - (line_start + h.byte_offset) + 1;
+            out.first++;
+        } else if (i == 0) { // b too small
+            return (jl_locspan_t){-1, -1};
+        } else {
+            break;
+        }
+    }
+    return out;
+}
+
+/* First (line, col) at the given pc, where col=-1 if unavailable */
+JL_DLLEXPORT jl_locspan_t jl_cdi_firstxy(jl_debuginfo_t *di, int32_t pc) JL_NOTSAFEPOINT
+{
+    assert(pc > 0);
+    cdi_deref(&di, &pc, 1);
+    jl_locspan_t out = {-1, -1};
+    if (jl_is_nothing(di->linetable)) {
+        out.first = jl_uncompress1_codeloc(di, pc).loc;
+    } else if (jl_is_string(di->linetable)) {
+        out = jl_cdi_byte_to_xy(di, jl_cdi_bytespan(di, pc).first);
+    }
+    return out;
+}
+
+/* Only when linetable==nothing, it's possible to have a separate first line not
+ * associated with any IR statement (the extra firstline argument to
+ * jl_compress_codelocs).  Coverage uses this.  -1 if not present.  Ideally the
+ * >-1 case will be deprecated, since this implementation doesn't allow a
+ * linetable to be shared between multiple owners */
+JL_DLLEXPORT int32_t jl_cdi_external_firstline(jl_debuginfo_t *di) JL_NOTSAFEPOINT
+{
+    int32_t pc = 0;
+    cdi_deref(&di, &pc, 1);
+    if (jl_is_nothing(di->linetable)) {
+        int32_t out = jl_uncompress1_codeloc(di, 0).loc;
+        return out > 0 ? out : -1;
+    } else if (jl_is_string(di->linetable)) {
+        return -1;
+    }
+    jl_unreachable();
+}
+
+JL_DLLEXPORT int32_t jl_cdi_firstline_all(jl_debuginfo_t *di) JL_NOTSAFEPOINT
+{
+    int32_t out = jl_cdi_external_firstline(di);
+    if (out == -1) {
+        /* TODO: not necessarily first, but a good enough guess for display */
+        cdi_deref(&di, NULL, 1);
+        out = jl_cdi_firstxy(di, 1).first;
+    }
+    return out;
+}
+
+JL_DLLEXPORT const char *jl_cdi_file(jl_debuginfo_t *di) JL_NOTSAFEPOINT
+{
+    cdi_deref(&di, NULL, 1);
+    if (jl_is_symbol(di->def)) {
+        return jl_symbol_name((jl_sym_t*)di->def);
+    } else if (jl_is_method_instance(di->def)) {
+        // reachable with hand-crafted CodeInstances in base tests
+        jl_value_t *m = ((jl_method_instance_t *)di->def)->def.value;
+        assert(jl_is_method(m) && "unimplemented");
+        return jl_symbol_name(((jl_method_t*)m)->file);
+    } else {
+        assert(0 && "unexpected type for debuginfo.def");
+        return "<unknown>";
+    }
 }
 
 static int allzero(jl_value_t *codelocs) JL_NOTSAFEPOINT
@@ -1489,18 +1610,19 @@ JL_DLLEXPORT jl_string_t *jl_compress_codelocs(int32_t firstloc, jl_value_t *cod
     header[1] = min.loc > max.loc ? 0 : max.loc - min.loc;
     header[2] = max.to > max.pc ? max.to : max.pc;
     size_t loc_bytes;
-    if (header[1] < 255)
+    /* 0 encodes a special value, `n` encodes `n-1+loc_offset`. */
+    if (header[1] < UINT8_MAX)
         loc_bytes = 1;
-    else if (header[1] < 65535)
+    else if (header[1] < UINT16_MAX)
         loc_bytes = 2;
     else
         loc_bytes = 4;
     size_t to_bytes;
     if (header[2] == 0)
         to_bytes = 0;
-    else if (header[2] < 255)
+    else if (header[2] < UINT8_MAX)
         to_bytes = 1;
-    else if (header[2] < 65535)
+    else if (header[2] < UINT16_MAX)
         to_bytes = 2;
     else
         to_bytes = 4;

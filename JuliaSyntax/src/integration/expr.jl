@@ -72,7 +72,7 @@ reverse_nontrivia_children(cursor) = Iterators.filter(should_include_node, Itera
 # 1. Triple quoted string indentation is trivia
 # 2. An \ before newline removes the newline and any following indentation
 #
-# This function concatenating adjacent string chunks together as done in the
+# This function concatenates adjacent string chunks together as done in the
 # reference parser.
 function _string_to_Expr(cursor, source, txtbuf::Vector{UInt8}, txtbuf_offset::UInt32)
     ret = Expr(:string)
@@ -343,20 +343,31 @@ end
         return adjust_macro_name!(retexpr.args[1])
     elseif k == K"?"
         retexpr.head = :if
-    elseif k == K"op=" && length(args) == 3
-        lhs = args[1]
-        op = args[2]
-        rhs = args[3]
-        headstr = string(args[2], '=')
-        retexpr.head = Symbol(headstr)
-        retexpr.args = Any[lhs, rhs]
-    elseif k == K".op=" && length(args) == 3
-        lhs = args[1]
-        op = args[2]
-        rhs = args[3]
-        headstr = '.' * string(args[2], '=')
-        retexpr.head = Symbol(headstr)
-        retexpr.args = Any[lhs, rhs]
+    elseif k == K"DotsIdentifier"
+        n = numeric_flags(flags(nodehead))
+        return n == 2 ? :(..) : :(...)
+    elseif k == K"op="
+        if length(args) == 3
+            lhs = args[1]
+            op = args[2]
+            rhs = args[3]
+            headstr = string(args[2], '=')
+            retexpr.head = Symbol(headstr)
+            retexpr.args = Any[lhs, rhs]
+        elseif length(args) == 1
+            return Symbol(string(args[1], '='))
+        end
+    elseif k == K".op="
+        if length(args) == 3
+            lhs = args[1]
+            op = args[2]
+            rhs = args[3]
+            headstr = '.' * string(args[2], '=')
+            retexpr.head = Symbol(headstr)
+            retexpr.args = Any[lhs, rhs]
+        else
+            return Symbol(string('.', args[1], '='))
+        end
     elseif k == K"macrocall"
         if length(args) >= 2
             a2 = args[2]
@@ -386,7 +397,7 @@ end
         retexpr.args = [GlobalRef(Core, Symbol("@doc")), loc, args...]
     elseif k == K"dotcall" || k == K"call"
         # Julia's standard `Expr` ASTs have children stored in a canonical
-        # order which is often not always source order. We permute the children
+        # order which is not always source order. We permute the children
         # here as necessary to get the canonical order.
         if is_infix_op_call(nodehead) || is_postfix_op_call(nodehead)
             args[2], args[1] = args[1], args[2]

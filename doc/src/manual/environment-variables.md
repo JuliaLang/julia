@@ -391,8 +391,7 @@ number of logical CPU cores is used in its place.
 
 ### [`JULIA_IMAGE_TIMINGS`](@id JULIA_IMAGE_TIMINGS)
 
-A boolean value that determines if detailed timing information is printed during
-during image compilation. Defaults to 0.
+A boolean value that determines if detailed timing information is printed during image compilation. Defaults to 0.
 
 ### [`JULIA_EXCLUSIVE`](@id JULIA_EXCLUSIVE)
 

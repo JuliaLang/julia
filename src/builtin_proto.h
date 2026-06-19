@@ -54,6 +54,7 @@ extern "C" {
     XX(memoryrefreplace,"memoryrefreplace!") \
     XX(memoryrefset,"memoryrefset!") \
     XX(memoryrefsetonce,"memoryrefsetonce!") \
+    XX(memoryrefunset,"memoryrefunset!") \
     XX(memoryrefswap,"memoryrefswap!") \
     XX(modifyfield,"modifyfield!") \
     XX(modifyglobal,"modifyglobal!") \

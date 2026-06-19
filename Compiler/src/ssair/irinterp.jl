@@ -459,7 +459,7 @@ function ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRI
     end
 
     if irsv.frameid != 0
-        callstack = irsv.callstack::Vector{AbsIntState}
+        callstack = irsv.callstack
         @assert callstack[end] === irsv && length(callstack) == irsv.frameid
         pop!(callstack)
     end

@@ -36,14 +36,15 @@
 extern "C" {
 #endif
 
-#if defined(_COMPILER_ASAN_ENABLED_)
-#if __GLIBC__
+#if defined(__GLIBC__)
 #include <dlfcn.h>
 // Bypass the ASAN longjmp wrapper - we are unpoisoning the stack ourselves,
 // since ASAN normally unpoisons far too much.
 // c.f. interceptor in jl_dlopen as well
-void (*real_siglongjmp)(jmp_buf _Buf, int _Value) = NULL;
+siglongjmp_func_t real_siglongjmp = (siglongjmp_func_t)&siglongjmp;
 #endif
+
+#if defined(_COMPILER_ASAN_ENABLED_)
 static inline void sanitizer_start_switch_fiber(jl_ptls_t ptls, jl_ucontext_t *from, jl_ucontext_t *to) {
     if (to->copy_stack)
         __sanitizer_start_switch_fiber(&from->asan_fake_stack, (char*)ptls->stackbase - ptls->stacksize, ptls->stacksize);
@@ -68,7 +69,7 @@ static inline void sanitizer_finish_switch_fiber(jl_ucontext_t *last, jl_ucontex
 #endif
 
 #if defined(_COMPILER_TSAN_ENABLED_)
-// must defined as macros, since the function containing them must not return before the longjmp
+// must be defined as macros, since the function containing them must not return before the longjmp
 #define tsan_destroy_ctx(_ptls, _ctx) do { \
         jl_ucontext_t *_tsan_macro_ctx = (_ctx); \
         if (_tsan_macro_ctx != &(_ptls)->root_task->ctx) { \
@@ -138,7 +139,7 @@ JL_NO_ASAN void *memcpy_a16_noasan(uint64_t *dest, const uint64_t *src, size_t n
   return dest;
 }
 
-/* Copy stack are allocated as regular bigval objects and do no go through free_stack,
+/* Copy stacks are allocated as regular bigval objects and do not go through free_stack,
    which would otherwise unpoison it before returning to the GC pool */
 static void asan_free_copy_stack(void *stkbuf, size_t bufsz) {
     __asan_unpoison_stack_memory((uintptr_t)stkbuf, bufsz);
@@ -460,6 +461,7 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
         jl_stack_context_t copy_ctx;
     } lasttstate;
 
+    jl_gc_wb_back(lastt);
     if (killed) {
         *pt = NULL; // can't fail after here: clear the gc-root for the target task now
         lastt->gcstack = NULL;
@@ -500,7 +502,6 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
     // move the barrier back instead of walking the shadow stack again here to check if that is required
     // even if killed (dropping the stack) and just the scope field matters,
     // let the gc figure that out next time it does a quick mark
-    jl_gc_wb_back(lastt);
 
     // set up global state for new task and clear global state for old task
     t->ptls = ptls;
@@ -1132,8 +1133,8 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t *start, jl_value_t *completion_fu
     t->donenotify = completion_future;
     jl_atomic_store_relaxed(&t->_isexception, 0);
     // Inherit scope from parent task
+    jl_gc_wb_fresh(t, ct->scope);
     t->scope = ct->scope;
-    jl_gc_wb_fresh(t, t->scope);
     // Fork task-local random state from parent
     jl_rng_split(t->rngState, ct->rngState);
     // there is no active exception handler available on this stack yet
@@ -1195,15 +1196,15 @@ void jl_init_tasks(void) JL_GC_DISABLED
         exit(1);
     }
 #endif
-#if defined(_COMPILER_ASAN_ENABLED_) && __GLIBC__
-    void *libc_handle = dlopen("libc.so.6", RTLD_NOW | RTLD_NOLOAD);
-    if (libc_handle) {
-        *(void**)&real_siglongjmp = dlsym(libc_handle, "siglongjmp");
-        dlclose(libc_handle);
-    }
-    if (real_siglongjmp == NULL) {
-        jl_safe_printf("failed to get real siglongjmp\n");
-        exit(1);
+#if defined(__GLIBC__)
+    if (jl_running_under_sanitizer(/*recheck*/0)) {
+        void *libc_handle = dlopen("libc.so.6", RTLD_NOW | RTLD_NOLOAD);
+        if (libc_handle) {
+            void *real = dlsym(libc_handle, "siglongjmp");
+            if (real)
+                *(void**)&real_siglongjmp = real;
+            dlclose(libc_handle);
+        }
     }
 #endif
 }
@@ -1281,8 +1282,7 @@ CFI_NORETURN
         }
 skip_pop_exception:;
     }
-    ct->result = res;
-    jl_gc_wb(ct, ct->result);
+    jl_gc_write(ct, ct->result, res);
     jl_finish_task(ct);
     jl_gc_debug_fprint_critical_error(ios_safe_stderr);
     abort();
@@ -1479,16 +1479,16 @@ CFI_NORETURN
 #elif defined(_CPU_AARCH64_)
     asm volatile(
         " mov sp, %0;\n"
-        " mov x29, xzr;\n" // Clear link register (x29) and frame pointer
-        " mov x30, xzr;\n" // (x30) to terminate unwinder.
+        " mov x29, xzr;\n" // Clear frame pointer (x29)
+        " mov x30, xzr;\n" // and link register (x30) to terminate unwinder.
         " br %1;\n" // call `fn` with fake stack frame
         " brk #0x1" // abort
         : : "r" (stk), "r"(fn) : "memory" );
 #elif defined(_CPU_ARM_)
     // A "i" constraint on `&start_task` works only on clang and not on GCC.
     asm(" mov sp, %0;\n"
-        " mov lr, #0;\n" // Clear link register (lr) and frame pointer
-        " mov fp, #0;\n" // (fp) to terminate unwinder.
+        " mov lr, #0;\n" // Clear link register (lr)
+        " mov fp, #0;\n" // and frame pointer (fp) to terminate unwinder.
         " bx %1;\n" // call `fn` with fake stack frame.  While `bx` can change
                     // the processor mode to thumb, this will never happen
                     // because all our addresses are word-aligned.
@@ -1583,8 +1583,8 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->result = jl_nothing;
     ct->donenotify = jl_nothing;
     jl_atomic_store_relaxed(&ct->_isexception, 0);
+    jl_gc_wb_fresh(ct, jl_nothing);
     ct->scope = jl_nothing;
-    jl_gc_wb_knownold(ct, ct->scope);
     ct->eh = NULL;
     ct->gcstack = NULL;
     ct->excstack = NULL;

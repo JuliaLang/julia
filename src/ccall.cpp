@@ -77,7 +77,7 @@ static bool runtime_sym_gvs(jl_codectx_t &ctx, const native_sym_arg_t &symarg,
 {
     const auto &f_lib = symarg.f_lib;
     const auto &f_name = symarg.f_name;
-    // If f_name isn't constant or f_lib_expr is present but not present,
+    // If f_name isn't constant or f_lib_expr is present but f_lib is not,
     // emit a local cache for sym, but do not cache lib
     if (!((f_lib || symarg.f_lib_expr == NULL) && f_name)) {
         std::string name = "dynccall_";
@@ -856,8 +856,8 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     }
     if (jl_is_ssavalue(args[2]) && !jl_is_long(ctx.source->ssavaluetypes)) {
         jl_value_t *rtt = jl_array_ptr_ref((jl_array_t*)ctx.source->ssavaluetypes, ((jl_ssavalue_t*)args[2])->id - 1);
-        if (jl_is_type_type(rtt))
-            rt = jl_tparam0(rtt);
+        if (jl_is_typeeq(rtt))
+            rt = jl_typeeq_T(rtt);
     }
     if (!rt) {
         rt = static_eval(ctx, args[2]);
@@ -869,8 +869,8 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     }
     if (jl_is_ssavalue(args[3]) && !jl_is_long(ctx.source->ssavaluetypes)) {
         jl_value_t *att = jl_array_ptr_ref((jl_array_t*)ctx.source->ssavaluetypes, ((jl_ssavalue_t*)args[3])->id - 1);
-        if (jl_is_type_type(att))
-            at = jl_tparam0(att);
+        if (jl_is_typeeq(att))
+            at = jl_typeeq_T(att);
     }
     if (!at) {
         at = static_eval(ctx, args[3]);

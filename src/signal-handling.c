@@ -77,7 +77,7 @@ JL_DLLEXPORT int jl_profile_is_running(void)
     return profile_running;
 }
 
-// Any function that acquires this lock must be either a unmanaged thread
+// Any function that acquires this lock must be either an unmanaged thread
 // or in the GC safe region and must NOT allocate anything through the GC
 // while holding this lock.
 // Certain functions in this file might be called from an unmanaged thread
@@ -356,7 +356,7 @@ static int jl_ignore_sigint(void)
     // On Unix, we get the SIGINT before the debugger which makes it very
     // hard to interrupt a running process in the debugger with `Ctrl-C`.
     // Manually raise a `SIGINT` on current thread with the signal temporarily
-    // unblocked and use it's behavior to decide if we need to handle the signal.
+    // unblocked and use its behavior to decide if we need to handle the signal.
 #ifndef _OS_WINDOWS_
     jl_sigint_passed = 0;
     pthread_sigmask(SIG_UNBLOCK, &jl_sigint_sset, NULL);
@@ -578,7 +578,7 @@ void jl_fprint_sigill(ios_t *s, void *_ctx)
 void surprise_wakeup(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 
 // make it invalid for a task to return from this point to its stack
-// this is generally quite an foolish operation, but does free you up to do
+// this is generally quite a foolish operation, but does free you up to do
 // arbitrary things on this stack now without worrying about corrupt state that
 // existed already on it
 void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT
