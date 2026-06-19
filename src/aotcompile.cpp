@@ -1152,12 +1152,14 @@ static void get_fvars_gvars(Module &M, DenseMap<GlobalValue *, unsigned> &fvars,
 // among the threads equally. The weight calculated here is an estimation of
 // how expensive a particular function is going to be to compile.
 
+namespace {
 struct FunctionInfo {
     size_t weight;
     size_t bbs;
     size_t insts;
     size_t clones;
 };
+}  // anonymous namespace
 
 static FunctionInfo getFunctionWeight(const Function &F)
 {
@@ -1183,6 +1185,7 @@ static FunctionInfo getFunctionWeight(const Function &F)
     return info;
 }
 
+namespace {
 struct ModuleInfo {
     size_t globals;
     size_t funcs;
@@ -1191,6 +1194,7 @@ struct ModuleInfo {
     size_t clones;
     size_t weight;
 };
+}  // anonymous namespace
 
 ModuleInfo compute_module_info(Module &M) {
     ModuleInfo info;
@@ -1219,12 +1223,14 @@ ModuleInfo compute_module_info(Module &M) {
     return info;
 }
 
+namespace {
 struct Partition {
     StringMap<bool> globals;
     StringMap<unsigned> fvars;
     StringMap<unsigned> gvars;
     size_t weight;
 };
+}  // anonymous namespace
 
 static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partitions, const Module &M, DenseMap<GlobalValue *, unsigned> &fvars, DenseMap<GlobalValue *, unsigned> &gvars) {
     bool bad = false;
@@ -1443,6 +1449,7 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
     return partitions;
 }
 
+namespace {
 struct ImageTimer {
     uint64_t elapsed = 0;
     std::string name;
@@ -1491,7 +1498,9 @@ struct ImageTimer {
             elapsed = 0;
     }
 };
+}  // anonymous namespace
 
+namespace {
 struct ShardTimers {
     ImageTimer deserialize;
     ImageTimer materialize;
@@ -1523,10 +1532,13 @@ struct ShardTimers {
         out << llvm::formatv("{0:F3}  total  Total time taken\n", total / 1e9);
     }
 };
+}  // anonymous namespace
 
+namespace {
 struct AOTOutputs {
     SmallVector<char, 0> unopt, opt, obj, asm_;
 };
+}  // anonymous namespace
 
 // Perform the actual optimization and emission of the output files
 static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimers &timers,

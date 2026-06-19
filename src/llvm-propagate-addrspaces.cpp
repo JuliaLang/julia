@@ -39,6 +39,7 @@ using namespace llvm;
     optimizations.
 */
 
+namespace {
 struct PropagateJuliaAddrspacesVisitor : public InstVisitor<PropagateJuliaAddrspacesVisitor> {
     DenseMap<Value *, Value *> LiftingMap;
     SmallPtrSet<Value *, 4> Visited;
@@ -58,6 +59,7 @@ public:
 private:
     void PoisonValues(SmallVectorImpl<Value *> &Worklist);
 };
+}  // anonymous namespace
 
 static unsigned getValueAddrSpace(Value *V) {
     return V->getType()->getPointerAddressSpace();

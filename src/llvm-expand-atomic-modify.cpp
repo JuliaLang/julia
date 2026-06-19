@@ -143,6 +143,7 @@ std::pair<Value *, Value *> insertRMWCmpXchgLoop(
 
 // from AtomicExpandImpl
 // IRBuilder to be used for replacement atomic instructions.
+namespace {
 struct ReplacementIRBuilder
     : IRBuilder<InstSimplifyFolder, IRBuilderCallbackInserter> {
   MDNode *MMRAMD = nullptr;
@@ -166,6 +167,7 @@ struct ReplacementIRBuilder
       I->setMetadata(LLVMContext::MD_mmra, MMRAMD);
   }
 };
+}  // anonymous namespace
 
 // Must check that either Target cannot observe or mutate global state
 // or that no trailing instructions does so either.

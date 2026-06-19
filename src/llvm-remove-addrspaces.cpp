@@ -26,6 +26,7 @@ using AddrspaceRemapFunction = std::function<unsigned(unsigned)>;
 // Helpers
 //
 
+namespace {
 class AddrspaceRemoveTypeRemapper : public ValueMapTypeRemapper {
     AddrspaceRemapFunction ASRemapper;
 
@@ -106,8 +107,10 @@ public:
 private:
     DenseMap<Type *, Type *> MappedTypes;
 };
+}  // anonymous namespace
 
 
+namespace {
 class AddrspaceRemoveValueMaterializer : public ValueMaterializer {
     ValueToValueMapTy &VM;
     RemapFlags Flags;
@@ -177,6 +180,7 @@ private:
         return MapValue(V, VM, Flags, TypeMapper, this);
     }
 };
+}  // anonymous namespace
 
 bool RemoveNoopAddrSpaceCasts(Function *F)
 {

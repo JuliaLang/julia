@@ -267,6 +267,7 @@ extern void _chkstk(void);
 #define prepare_call(Callee) prepare_call_in(jl_Module, (Callee))
 
 // types
+namespace {
 struct jl_typecache_t {
     PointerType *T_ptr;
     Type *T_size;
@@ -326,7 +327,9 @@ struct jl_typecache_t {
         T_pjlarray = getPointerTy(context);
     }
 };
+}  // anonymous namespace
 
+namespace {
 struct jl_tbaacache_t {
     // type-based alias analysis nodes.  Indentation of comments indicates hierarchy.
     MDNode *tbaa_root;     // Everything
@@ -404,7 +407,9 @@ struct jl_tbaacache_t {
         tbaa_const = tbaa_make_child(mbuilder, "jtbaa_const", nullptr, true).first;
     }
 };
+}  // anonymous namespace
 
+namespace {
 struct jl_noaliascache_t {
     // Each domain operates completely independently.
     // "No aliasing" is inferred if it is implied by any domain.
@@ -455,7 +460,9 @@ struct jl_noaliascache_t {
         aliasscope.initialize(context);
     }
 };
+}  // anonymous namespace
 
+namespace {
 struct jl_debugcache_t {
     // Basic DITypes
     DIDerivedType *jl_pvalue_dillvmt;
@@ -470,6 +477,7 @@ struct jl_debugcache_t {
 
     void initialize(Module *m);
 };
+}  // anonymous namespace
 
 
 // constants
@@ -508,7 +516,10 @@ static bool is_uniquerep_Type(jl_value_t *t)
     return jl_is_typeeq(t) && type_has_unique_rep(jl_typeeq_T(t));
 }
 
+namespace {
 class jl_codectx_t;
+}  // anonymous namespace
+namespace {
 struct JuliaVariable {
 public:
     StringLiteral name;
@@ -528,8 +539,8 @@ public:
             var->setDLLStorageClass(GlobalValue::DLLStorageClassTypes::DLLImportStorageClass); // Cross-library imports must be explicit for COFF (Windows)
         return var;
     }
-    GlobalVariable *realize(jl_codectx_t &ctx);
 };
+}  // anonymous namespace
 static inline void add_named_global(JuliaVariable *name, void *addr)
 {
     add_named_global(name->name, addr);
@@ -1699,6 +1710,7 @@ static void union_alloca_type(jl_uniontype_t *ut,
         bool &allunbox, size_t &nbytes, size_t &align, size_t &min_align, size_t &inline_roots);
 
 // Alias Analysis Info (analogous to llvm::AAMDNodes)
+namespace {
 struct jl_aliasinfo_t {
     MDNode *tbaa = nullptr;          // '!tbaa': Struct-path TBAA. TBAA graph forms a tree (indexed by offset).
                                      //          Two pointers do not alias if they are not transitive parents
@@ -1770,11 +1782,13 @@ struct jl_aliasinfo_t {
 #endif
     }
 };
+}  // anonymous namespace
 
 // A class to hold GC roots that can be either:
 // 1. Materialized: a SmallVector of Value* that have already been loaded
 // 2. Lazy: a pointer + count + tbaa that allows loading on demand
 // This allows deferring the load of GC roots until they are actually needed.
+namespace {
 struct jl_gc_roots_t {
 private:
     // Materialized roots (when ptr is null)
@@ -1836,9 +1850,11 @@ public:
     // Extract roots from [first, first+numel), lazily
     jl_gc_roots_t slice(jl_codectx_t &ctx, size_t first, size_t numel) const;
 };
+}  // anonymous namespace
 
 // metadata tracking for a llvm Value* during codegen
 const uint8_t UNION_BOX_MARKER = 0x80;
+namespace {
 struct jl_cgval_t {
     Value *V; // may be of type T* or T, or set to NULL if ghost (or if the value has not been initialized yet, for a variable definition)
     // For unions, we may need to keep a reference to the boxed part individually.
@@ -2012,8 +2028,10 @@ struct jl_cgval_t {
     {
     }
 };
+}  // anonymous namespace
 
 // per-local-variable information
+namespace {
 struct jl_varinfo_t {
     Instruction *boxroot; // an address, if the var might be in a jl_value_t** stack slot (marked ctx.tbaa().tbaa_const, if appropriate)
     jl_cgval_t value; // a stack slot or constant value
@@ -2045,9 +2063,11 @@ struct jl_varinfo_t {
     {
     }
 };
+}  // anonymous namespace
 
 // information about the context of a piece of code: its enclosing
 // function and module, and visible local variables and labels.
+namespace {
 class jl_codectx_t {
 public:
     IRBuilder<> builder;
@@ -2123,10 +2143,7 @@ public:
         return aliasscope_cache;
     }
 };
-
-GlobalVariable *JuliaVariable::realize(jl_codectx_t &ctx) {
-    return realize(jl_Module);
-}
+}  // anonymous namespace
 
 jl_aliasinfo_t::jl_aliasinfo_t(jl_codectx_t &ctx, Region r, MDNode *tbaa): tbaa(tbaa), tbaa_struct(nullptr) {
     MDNode *alias_scope = nullptr;

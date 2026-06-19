@@ -118,6 +118,7 @@ using namespace llvm;
 #include "julia_assert.h"
 
 // helper class for tracking inlining context while printing debug info
+namespace {
 class DILineInfoPrinter {
     // internal state:
     SmallVector<DILineInfo, 0> context;
@@ -193,6 +194,7 @@ public:
         emit_finish(OS);
     }
 };
+}  // anonymous namespace
 
 static raw_ostream &operator<<(raw_ostream &Out, struct DILineInfoPrinter::repeat i) JL_NOTSAFEPOINT
 {
@@ -330,6 +332,7 @@ void DILineInfoPrinter::emit_lineinfo(raw_ostream &Out, SmallVectorImpl<DILineIn
 
 
 // adaptor class for printing line numbers before llvm IR lines
+namespace {
 class LineNumberAnnotatedWriter : public AssemblyAnnotationWriter {
     const DILocation *InstrLoc = nullptr;
     DILineInfoPrinter LinePrinter;
@@ -362,6 +365,7 @@ public:
         DebugLoc[I] = Loc;
     }
 };
+}  // anonymous namespace
 
 void LineNumberAnnotatedWriter::emitFunctionAnnot(
       const Function *F, formatted_raw_ostream &Out)
@@ -1174,6 +1178,7 @@ addPassesToGenerateCode(LLVMTargetMachine *TM, PassManagerBase &PM) {
     return &MMIWP->getMMI().getContext();
 }
 
+namespace {
 class LineNumberPrinterHandler : public AsmPrinterHandler {
     MCStreamer &S;
     LineNumberAnnotatedWriter LinePrinter;
@@ -1223,6 +1228,7 @@ public:
     }
     virtual void endInstruction() override {}
 };
+}  // anonymous namespace
 
 // get a native assembly for llvm::Function
 extern "C" JL_DLLEXPORT_CODEGEN
