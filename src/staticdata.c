@@ -2732,7 +2732,7 @@ JL_DLLEXPORT jl_value_t *jl_as_global_root(jl_value_t *val, int insert)
     if (jl_is_globally_rooted(val))
         return val;
     jl_value_t *tw = extract_wrapper(val);
-    if (tw && (val == tw || jl_types_egal(val, tw)))
+    if (tw && (val == tw || jl_types_struct_equiv(val, tw)))
         return tw;
     if (jl_is_uint8(val))
         return jl_box_uint8(jl_unbox_uint8(val));

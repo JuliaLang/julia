@@ -173,8 +173,8 @@ static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t
             }
         }
         else if (jl_is_typeegal(decl)) {
-            // an egality key matches only an egal egality key
-            if (!(jl_is_typeegal(a) && jl_types_egal(jl_typeegal_T(a), jl_typeegal_T(decl))))
+            // an egality key matches only an `===`-equal egality key
+            if (!(jl_is_typeegal(a) && jl_egal(jl_typeegal_T(a), jl_typeegal_T(decl))))
                 return 0;
         }
         else if (decl == (jl_value_t*)jl_any_type) {

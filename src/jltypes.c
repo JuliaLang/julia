@@ -775,7 +775,7 @@ static int simple_subtype2(jl_value_t *a, jl_value_t *b, int hasfree, int isUnio
              jl_typeof(jl_typeeq_T(a)) != jl_typeof(jl_typeeq_T(b))) {
         // issue #24521: don't merge Type{T} where typeof(T) varies
     }
-    else if (jl_typeof(a) == jl_typeof(b) && jl_types_egal(a, b)) {
+    else if (jl_typeof(a) == jl_typeof(b) && jl_types_struct_equiv(a, b)) {
         subab = subba = 1;
     }
     else {
@@ -1946,7 +1946,7 @@ static unsigned typeegal_hash(jl_value_t *T, int *failed) JL_NOTSAFEPOINT
         int hfail = 0;
         hashT = type_hash(T, &hfail);
         if (hfail) {
-            // egality keys compare by `jl_types_egal`, and egal types are
+            // egality keys compare by `jl_types_struct_equiv`, and egal types are
             // structurally identical, so the failure-tolerant structural hash
             // is always stable for them; never propagate the failure (which
             // would zero the hash of every dispatch tuple whose `TypeEgal{T}`
@@ -1980,7 +1980,7 @@ JL_DLLEXPORT uintptr_t jl_type_cache_hash(jl_value_t *v) JL_NOTSAFEPOINT
         jl_value_t *T = jl_typeeq_T(v);
         if (!jl_has_free_typevars(T)) {
             jl_value_t *tw = extract_wrapper(T);
-            if (tw && (tw == T || (jl_typeof(T) == jl_typeof(tw) && jl_types_egal(T, tw)))) {
+            if (tw && (tw == T || (jl_typeof(T) == jl_typeof(tw) && jl_types_struct_equiv(T, tw)))) {
                 jl_value_t *key = tw;
                 return typekey_hash(jl_type_typename, &key, 1, 1);
             }

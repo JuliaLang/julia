@@ -2450,7 +2450,7 @@ static int jl_type_intersection2(jl_value_t *t1, jl_value_t *t2, jl_value_t **is
         *isect2 = NULL;
         return 0;
     }
-    if (jl_types_egal(*isect2, *isect)) {
+    if (jl_types_struct_equiv(*isect2, *isect)) {
         *isect2 = NULL;
     }
     return 1;

@@ -2239,7 +2239,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
         // singleton `typeof(A)` is a subtype of `y`
         jl_value_t *A = jl_typeegal_T(x);
         if (jl_is_typeegal(y))
-            return jl_types_egal(A, jl_typeegal_T(y));
+            return jl_egal(A, jl_typeegal_T(y));
         if (jl_is_typeeq(y)) {
             e->invdepth++;
             int ans = forall_exists_equal(A, jl_typeeq_T(y), e);
@@ -2771,7 +2771,7 @@ static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *su
     if (jl_is_typeegal(x)) {
         jl_value_t *A = jl_typeegal_T(x);
         if (jl_is_typeegal(y)) {
-            *subtype = jl_types_egal(A, jl_typeegal_T(y));
+            *subtype = jl_egal(A, jl_typeegal_T(y)); // `TypeEgal{A} <: TypeEgal{B}` iff `A === B`
             return 1;
         }
         // `Type{B}` (equality) and unions are left for the full subtype check
@@ -3065,7 +3065,7 @@ JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env, 
     if (x == y ||
         (jl_typeof(x) == jl_typeof(y) &&
          (jl_is_unionall(y) || jl_is_uniontype(y) || jl_is_some_Type(y)) &&
-         jl_types_egal(x, y))) {
+         jl_types_struct_equiv(x, y))) {
         if (envsz != 0) { // quickly copy env from x
             jl_unionall_t *ua = (jl_unionall_t*)x;
             int i;
@@ -3126,7 +3126,7 @@ JL_DLLEXPORT int jl_types_equal(jl_value_t *a, jl_value_t *b)
 {
     if (a == b)
         return 1;
-    if (jl_typeof(a) == jl_typeof(b) && jl_types_egal(a, b))
+    if (jl_typeof(a) == jl_typeof(b) && jl_types_struct_equiv(a, b))
         return 1;
     if (obviously_unequal(a, b))
         return 0;
@@ -5097,7 +5097,7 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_par
         if (!jl_is_typeegal(x)) { jl_value_t *t = x; x = y; y = t; R = 1; }
         jl_value_t *A = jl_typeegal_T(x);
         if (jl_is_typeegal(y))
-            return jl_types_egal(A, jl_typeegal_T(y)) ? x : jl_bottom_type;
+            return jl_egal(A, jl_typeegal_T(y)) ? x : jl_bottom_type; // intersection is nonempty iff `A === B`
         if (jl_is_typeeq(y)) {
             jl_value_t *yp = jl_typeeq_T(y);
             jl_value_t *ii = R ? intersect_invariant(yp, A, e) : intersect_invariant(A, yp, e);
@@ -5977,7 +5977,7 @@ static int eq_msp(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_value_t *b0, 
         return jl_egal(a, b);
     if (a == b) // assume the TypeVar env is the same??
         return 1;
-    if (jl_typeof(a) == jl_typeof(b) && jl_types_egal(a, b))
+    if (jl_typeof(a) == jl_typeof(b) && jl_types_struct_equiv(a, b))
         return 1;
     if (obviously_unequal(a, b))
         return 0;
@@ -6073,7 +6073,7 @@ static int sub_msp(jl_value_t *x, jl_value_t *y, jl_value_t *y0, jl_typeenv_t *e
     if (x == y ||
         (jl_typeof(x) == jl_typeof(y) &&
          (jl_is_unionall(y) || jl_is_uniontype(y)) &&
-         jl_types_egal(x, y))) {
+         jl_types_struct_equiv(x, y))) {
         return 1;
     }
     int obvious_sub = 2;

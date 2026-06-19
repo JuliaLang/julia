@@ -210,7 +210,12 @@ static int egal_types(const jl_value_t *a, const jl_value_t *b, jl_typeenv_t *en
         return egal_types(((jl_uniontype_t*)a)->a, ((jl_uniontype_t*)b)->a, env, tvar_names) &&
             egal_types(((jl_uniontype_t*)a)->b, ((jl_uniontype_t*)b)->b, env, tvar_names);
     }
-    if (dtag == jl_typeeq_tag << 4 || dtag == jl_typeegal_tag << 4)
+    if (dtag == jl_typeegal_tag << 4) {
+        // `jl_types_struct_equiv` (tvar_names==0) needs to imply equality, but
+        // this is not true for `TypeEgal`, so we can't ignore tvar names here.
+        return egal_types(((jl_typeeq_t*)a)->T, ((jl_typeeq_t*)b)->T, env, 1);
+    }
+    if (dtag == jl_typeeq_tag << 4)
         return egal_types(((jl_typeeq_t*)a)->T, ((jl_typeeq_t*)b)->T, env, tvar_names);
     if (dtag == jl_vararg_tag << 4) {
         jl_vararg_t *vma = (jl_vararg_t*)a;
@@ -227,7 +232,7 @@ static int egal_types(const jl_value_t *a, const jl_value_t *b, jl_typeenv_t *en
     return jl_egal__bitstag(a, b, dtag);
 }
 
-JL_DLLEXPORT int jl_types_egal(jl_value_t *a, jl_value_t *b)
+JL_DLLEXPORT int jl_types_struct_equiv(jl_value_t *a, jl_value_t *b)
 {
     return egal_types(a, b, NULL, 0);
 }
@@ -2305,7 +2310,7 @@ static int equiv_field_types(jl_value_t *old, jl_value_t *ft)
         jl_value_t *ta = jl_svecref(old, i);
         jl_value_t *tb = jl_svecref(ft, i);
         if (jl_has_free_typevars(ta)) {
-            if (!jl_has_free_typevars(tb) || !jl_types_egal(ta, tb))
+            if (!jl_has_free_typevars(tb) || !jl_types_struct_equiv(ta, tb))
                 return 0;
         }
         else if (jl_has_free_typevars(tb) || jl_typetagof(ta) != jl_typetagof(tb) ||
@@ -2518,7 +2523,7 @@ static int equiv_type(jl_value_t *ta, jl_value_t *tb)
     while (jl_is_unionall(a)) {
         jl_unionall_t *ua = (jl_unionall_t*)a;
         jl_unionall_t *ub = (jl_unionall_t*)b;
-        if (!jl_types_egal(ua->var->lb, ub->var->lb) || !jl_types_egal(ua->var->ub, ub->var->ub) ||
+        if (!jl_types_struct_equiv(ua->var->lb, ub->var->lb) || !jl_types_struct_equiv(ua->var->ub, ub->var->ub) ||
             ua->var->name != ub->var->name)
             goto no;
         a = jl_instantiate_unionall(ua, (jl_value_t*)ub->var);

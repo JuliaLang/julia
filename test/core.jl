@@ -405,8 +405,8 @@ end  |> only == Core.TypeEgal{typejoin(Int, UInt, Float64)}
 @test typejoin(1, 2, 3) === Any
 @test typejoin(Int, Int, 3) === Any
 
-# issue #61915: typejoin must stay sound when an operand is a `Type{X}` kind. Under the
-# TypeEq refactor `typeof(Type{X})` is no longer a `DataType`; joining a kind with an
+# issue #61915: typejoin must stay sound when an operand is a `Type{X}` kind. Because
+# `typeof(Type{X})` is not a `DataType` under the TypeEq kind, joining a kind with an
 # unrelated non-`Type` operand must give `Any`, not `Type`.
 @test typejoin(Symbol, Type{Int}) === Any
 @test typejoin(Type{Int}, Symbol) === Any
@@ -430,6 +430,21 @@ UA61915{T}(a) where {T} = UA61915{T,ndims(a),typeof(a)}(a)
 @test ccall(:jl_argument_datatype, Any, (Any,), Union{Tuple{Int},Tuple{Int,Int}}) === nothing
 @test ccall(:jl_argument_datatypename, Any, (Any,), Type{Array}) === Base.unwrap_unionall(Array).name
 @test ccall(:jl_argument_datatypename, Any, (Any,), Union{Tuple{Int},Tuple{Int,Int}}) === Tuple.name
+
+# issue #62001: a runtime-constructed UnionAll that is `==`-but-not-`===` the interned
+# `Foo{lines}` (differing only in a bound typevar's name) must still dispatch and run
+# correctly. `Core.TypeEgal` is `===`-keyed, so the two reps get distinct egal
+# MethodInstances instead of the cache binding one to a non-`===` argument (which would
+# trip the `Expr(:invoke)` validity check).
+struct Foo62001{F,T} end
+struct lines62001 end
+@noinline g62001(::Type{P}, x) where {P} = (P, x)
+Base.@assume_effects :foldable mkrep62001() = Foo62001{lines62001, ArgType} where ArgType
+caller62001(x) = g62001(mkrep62001(), x)
+let canon = Foo62001{lines62001}
+    g62001(canon, 1.0)                # create the canonical egal MethodInstance + cache
+    @test caller62001(1.0) == (canon, 1.0)
+end
 
 # promote_typejoin returns a Union only with Nothing/Missing combined with concrete types
 for T in (Nothing, Missing)

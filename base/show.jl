@@ -741,8 +741,8 @@ function show_typeparams(io::IO, env::SimpleVector, orig::SimpleVector, wheres::
     elide = length(wheres)
     function egal_var(p::TypeVar, @nospecialize o)
         return o isa TypeVar &&
-            ccall(:jl_types_egal, Cint, (Any, Any), p.ub, o.ub) != 0 &&
-            ccall(:jl_types_egal, Cint, (Any, Any), p.lb, o.lb) != 0
+            ccall(:jl_types_struct_equiv, Cint, (Any, Any), p.ub, o.ub) != 0 &&
+            ccall(:jl_types_struct_equiv, Cint, (Any, Any), p.lb, o.lb) != 0
     end
     for i = n:-1:1
         p = env[i]
