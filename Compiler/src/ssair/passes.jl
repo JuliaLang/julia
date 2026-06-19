@@ -112,13 +112,21 @@ function is_ea_forwardable_field_query(ir::Union{IncrementalCompact,IRCode}, stm
     return ismutabletypename(struct_typ_name)
 end
 
+const EA_FORWARD_FIELD_QUERY_LIMIT = 32
+
 function has_ea_forwardable_field_query(ir::IRCode)
+    nqueries = 0
     for idx = 1:length(ir.stmts)
         stmt = ir[SSAValue(idx)][:stmt]
         stmt isa Expr || continue
-        is_ea_forwardable_field_query(ir, stmt) && return true
+        is_ea_forwardable_field_query(ir, stmt) || continue
+        nqueries += 1
+        # This consumer runs whole-method EA. If many residual field queries remain,
+        # the current implementation is usually looking at general mutable data
+        # structure accesses rather than a small local SROA opportunity.
+        nqueries > EA_FORWARD_FIELD_QUERY_LIMIT && return false
     end
-    return false
+    return nqueries > 0
 end
 
 function ea_forwarded_load_value(eresult::EscapeAnalysis.EscapeResult, idx::Int)
