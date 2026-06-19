@@ -11,7 +11,6 @@ using Core: Const
 const CC = Base.Compiler
 using Base.Meta
 using Base: propertynames, something, IdSet
-using Base.Filesystem: _readdirx
 using Base.JuliaSyntax: @K_str, @KSet_str, parseall, byte_range, children, is_prefix_call, is_trivia, kind
 
 using ..REPL.LineEdit: NamedCompletion
@@ -479,7 +478,7 @@ function cache_PATH()
         end
 
         path_entries = try
-            _readdirx(pathdir)
+            readdir(pathdir, DirEntry)
         catch e
             # Bash allows dirs in PATH that can't be read, so we should as well.
             if isa(e, Base.IOError) || isa(e, Base.ArgumentError)
@@ -494,8 +493,9 @@ function cache_PATH()
             # here, or even on whether the current user can execute the file in question.
             try
                 if isfile(entry)
-                    @lock PATH_cache_lock push!(PATH_cache, entry.name)
-                    push!(this_PATH_cache, entry.name)
+                    name = basename(entry)
+                    @lock PATH_cache_lock push!(PATH_cache, name)
+                    push!(this_PATH_cache, name)
                 end
             catch e
                 # `isfile()` can throw in rare cases such as when probing a
@@ -541,9 +541,9 @@ function complete_path(path::AbstractString;
     end
     entries = try
         if isempty(dir)
-            _readdirx()
+            readdir(DirEntry)
         elseif isdir(dir)
-            _readdirx(dir)
+            readdir(dir, DirEntry)
         else
             return Completion[], dir, false
         end
@@ -554,9 +554,10 @@ function complete_path(path::AbstractString;
 
     matches = Set{String}()
     for entry in entries
-        if startswith(entry.name, prefix)
+        name = basename(entry)
+        if startswith(name, prefix)
             is_dir = try isdir(entry) catch ex; ex isa Base.IOError ? false : rethrow() end
-            push!(matches, is_dir ? joinpath_withsep(entry.name, ""; dirsep) : entry.name)
+            push!(matches, is_dir ? joinpath_withsep(name, ""; dirsep) : name)
         end
     end
 
@@ -1089,8 +1090,8 @@ function complete_loading_candidates!(suggestions::Vector{Completion}, s::String
             end
         end
         isdir(dir) || continue
-        for entry in _readdirx(dir)
-            pname = entry.name
+        for entry in readdir(dir, DirEntry)
+            pname = basename(entry)
             if pname[1] != '.' && pname != "METADATA" &&
                 pname != "REQUIRE" && startswith(pname, s)
                 # Valid file paths are

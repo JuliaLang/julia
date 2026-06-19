@@ -8,6 +8,7 @@ export
     chown,
     cp,
     cptree,
+    DirEntry,
     diskstat,
     hardlink,
     mkdir,
@@ -1055,52 +1056,82 @@ const UV_DIRENT_BLOCK = Cint(7)
     DirEntry
 
 A type representing a filesystem entry that contains the name of the entry, the directory, and
-the raw type of the entry. The full path of the entry can be obtained lazily by accessing the
-`path` field. The type of the entry can be checked for by calling [`isfile`](@ref), [`isdir`](@ref),
+the raw type of the entry. The full path of the entry can be obtained lazily via [`joinpath(entry)`](@ref).
+
+The directory and name components are accessed via [`dirname`](@ref) and [`basename`](@ref),
+respectively, mirroring the behavior of the corresponding string-returning functions.
+
+The type of the entry can be checked for by calling [`isfile`](@ref), [`isdir`](@ref),
 [`islink`](@ref), [`isfifo`](@ref), [`issocket`](@ref), [`ischardev`](@ref), and [`isblockdev`](@ref)
+on the entry object. These predicates use the raw type cached at scan time when available; on
+filesystems that report `UV_DIRENT_UNKNOWN` (some network/FUSE mounts) and for symlinks they fall
+through to a `stat` syscall on each call. Callers in tight loops that need multiple predicates for
+the same entry should call [`stat`](@ref) once and reuse the result.
+
+!!! warning "Staleness"
+    A `DirEntry` is a snapshot from when the directory was scanned. The underlying filesystem may
+    have changed in the meantime: the entry may no longer exist, may have been replaced by a
+    different type, or the cached `rawtype` may be wrong. Treat `DirEntry` values as advisory
+    and re-`stat` if up-to-date information is required.
 """
 struct DirEntry
     dir::String
     name::String
     rawtype::Cint
 end
-path(obj::DirEntry) = joinpath(getfield(obj, :dir), getfield(obj, :name))
-Base.isless(a::DirEntry, b::DirEntry) = a.dir == b.dir ? isless(a.name, b.name) : isless(a.dir, b.dir)
-Base.hash(o::DirEntry, h::UInt) = hash(o.dir, hash(o.name, hash(o.rawtype, h)))
-Base.:(==)(a::DirEntry, b::DirEntry) = a.name == b.name && a.dir == b.dir && a.rawtype == b.rawtype
-joinpath(obj::DirEntry, args...) = joinpath(path(obj), args...)
+basename(obj::DirEntry) = getfield(obj, :name)
+dirname(obj::DirEntry) = getfield(obj, :dir)
+joinpath(obj::DirEntry, args...) = joinpath(dirname(obj), basename(obj), args...)
+Base.isless(a::DirEntry, b::DirEntry) = dirname(a) == dirname(b) ? isless(basename(a), basename(b)) : isless(dirname(a), dirname(b))
+Base.hash(o::DirEntry, h::UInt) = hash(dirname(o), hash(basename(o), hash(o.rawtype, h)))
+Base.:(==)(a::DirEntry, b::DirEntry) = basename(a) == basename(b) && dirname(a) == dirname(b) && a.rawtype == b.rawtype
 isunknown(obj::DirEntry) =  obj.rawtype == UV_DIRENT_UNKNOWN
-islink(obj::DirEntry) =     isunknown(obj) ? islink(path(obj)) : obj.rawtype == UV_DIRENT_LINK
-isfile(obj::DirEntry) =     (isunknown(obj) || islink(obj)) ? isfile(path(obj))      : obj.rawtype == UV_DIRENT_FILE
-isdir(obj::DirEntry) =      (isunknown(obj) || islink(obj)) ? isdir(path(obj))       : obj.rawtype == UV_DIRENT_DIR
-isfifo(obj::DirEntry) =     (isunknown(obj) || islink(obj)) ? isfifo(path(obj))      : obj.rawtype == UV_DIRENT_FIFO
-issocket(obj::DirEntry) =   (isunknown(obj) || islink(obj)) ? issocket(path(obj))    : obj.rawtype == UV_DIRENT_SOCKET
-ischardev(obj::DirEntry) =  (isunknown(obj) || islink(obj)) ? ischardev(path(obj))   : obj.rawtype == UV_DIRENT_CHAR
-isblockdev(obj::DirEntry) = (isunknown(obj) || islink(obj)) ? isblockdev(path(obj))  : obj.rawtype == UV_DIRENT_BLOCK
-realpath(obj::DirEntry) = realpath(path(obj))
+islink(obj::DirEntry) =     isunknown(obj) ? islink(joinpath(obj)) : obj.rawtype == UV_DIRENT_LINK
+isfile(obj::DirEntry) =     (isunknown(obj) || islink(obj)) ? isfile(joinpath(obj))      : obj.rawtype == UV_DIRENT_FILE
+isdir(obj::DirEntry) =      (isunknown(obj) || islink(obj)) ? isdir(joinpath(obj))       : obj.rawtype == UV_DIRENT_DIR
+isfifo(obj::DirEntry) =     (isunknown(obj) || islink(obj)) ? isfifo(joinpath(obj))      : obj.rawtype == UV_DIRENT_FIFO
+issocket(obj::DirEntry) =   (isunknown(obj) || islink(obj)) ? issocket(joinpath(obj))    : obj.rawtype == UV_DIRENT_SOCKET
+ischardev(obj::DirEntry) =  (isunknown(obj) || islink(obj)) ? ischardev(joinpath(obj))   : obj.rawtype == UV_DIRENT_CHAR
+isblockdev(obj::DirEntry) = (isunknown(obj) || islink(obj)) ? isblockdev(joinpath(obj))  : obj.rawtype == UV_DIRENT_BLOCK
+realpath(obj::DirEntry) = realpath(joinpath(obj))
 
 """
-    _readdirx(dir::AbstractString=pwd(); sort::Bool = true)::Vector{DirEntry}
+    readdir(dir::AbstractString, ::Type{DirEntry}; sort::Bool=true)::Vector{DirEntry}
+    readdir(::Type{DirEntry}; sort::Bool=true)::Vector{DirEntry}
+    readdir(entry::DirEntry, ::Type{DirEntry}; sort::Bool=true)::Vector{DirEntry}
+    readdir(entry::DirEntry; join::Bool=false, sort::Bool=true)::Vector{String}
 
 Return a vector of [`DirEntry`](@ref) objects representing the contents of the directory `dir`,
 or the current working directory if not given. If `sort` is true, the returned vector is
 sorted by name.
 
-Unlike [`readdir`](@ref), `_readdirx` returns [`DirEntry`](@ref) objects, which contain the name of the
-file, the directory it is in, and the type of the file which is determined during the
-directory scan. This means that calls to [`isfile`](@ref), [`isdir`](@ref), [`islink`](@ref), [`isfifo`](@ref),
-[`issocket`](@ref), [`ischardev`](@ref), and [`isblockdev`](@ref) can be made on the
-returned objects without further stat calls. However, for some filesystems, the type of the file
-cannot be determined without a stat call. In these cases the `rawtype` field of the [`DirEntry`](@ref))
-object will be 0 (`UV_DIRENT_UNKNOWN`) and [`isfile`](@ref) etc. will fall back to a `stat` call.
+The element type is selected by the trailing `DirEntry` type argument (mirroring
+[`read(io, String)`](@ref)): include it to get [`DirEntry`](@ref) objects (which carry the
+type of each entry as determined during the directory scan, so [`isfile`](@ref),
+[`isdir`](@ref), etc. can be called without further `stat` calls), or omit it to get a
+`Vector{String}` of names — independent of whether the directory was specified as an
+`AbstractString` or a `DirEntry`. For some filesystems the type of the entry cannot be
+determined without a `stat` call; in those cases the `rawtype` field of the
+[`DirEntry`](@ref) is 0 (`UV_DIRENT_UNKNOWN`) and the predicates fall back to a `stat` call.
 
+# Examples
 ```julia
-for obj in _readdirx()
-    isfile(obj) && println("\$(obj.name) is a file with path \$(path(obj))")
+for entry in readdir(".", DirEntry)
+    if isfile(entry)
+        println("\$(basename(entry)) is a file with path \$(joinpath(entry))")
+        continue
+    end
+    isdir(entry) || continue
+    for entry2 in readdir(entry, DirEntry)
+        ...
+    end
 end
 ```
 """
-_readdirx(dir::AbstractString=pwd(); sort::Bool=true) = _readdir(dir; return_objects=true, sort)::Vector{DirEntry}
+readdir(dir::AbstractString, ::Type{DirEntry}; sort::Bool=true) = _readdir(dir; return_objects=true, sort)::Vector{DirEntry}
+readdir(::Type{DirEntry}; sort::Bool=true) = readdir(pwd(), DirEntry; sort)::Vector{DirEntry}
+readdir(entry::DirEntry, ::Type{DirEntry}; sort::Bool=true) = readdir(joinpath(entry), DirEntry; sort)::Vector{DirEntry}
+readdir(entry::DirEntry; kwargs...) = readdir(joinpath(entry); kwargs...)::Vector{String}
 
 function _readdir(dir::AbstractString; return_objects::Bool=false, join::Bool=false, sort::Bool=true)
     # Allocate space for uv_fs_t struct
@@ -1202,16 +1233,16 @@ function _walkdir(chnl, path, topdown, follow_symlinks, onerror)
             end
             return
         end
-    entries = tryf(_readdirx, path)
+    entries = tryf(p -> readdir(p, DirEntry), path)
     entries === nothing && return
     dirs = Vector{String}()
     files = Vector{String}()
     for entry in entries
         # If we're not following symlinks, then treat all symlinks as files
         if (!follow_symlinks && something(tryf(islink, entry), true)) || !something(tryf(isdir, entry), false)
-            push!(files, entry.name)
+            push!(files, basename(entry))
         else
-            push!(dirs, entry.name)
+            push!(dirs, basename(entry))
         end
     end
 
