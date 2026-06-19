@@ -496,7 +496,6 @@ function discard_optimized_result(interp::AbstractInterpreter, inlining_cost::In
     may_discard_trees(interp) || return false
     inlining_cost == MAX_INLINE_COST || return false
     precompile_keep_ir(interp) && return false
-    preserve_noninlineable_ir(interp) && return false
     return true
 end
 

@@ -706,10 +706,12 @@ function start_tier_worker()
     # jl_tier_enabled in src/tiered.c. Force with JULIA_TIER_ENABLE=1/0.
     ccall(:jl_tier_enabled, Cint, ()) != 0 || return
     get_bool_env("JULIA_TIER_WORKER", true) === true || return
-    # Inferred IR is kept on non-inlineable CodeInstances whenever tiering
-    # is enabled (Compiler.preserve_noninlineable_ir), so the worker can
-    # re-emit at T1 without re-inferring (which would mutate mi->cache and
-    # corrupt in-progress pkgimage serialization).
+    # The worker re-emits at T1 through the normal jl_compile_method_internal
+    # path, re-inferring when the inferred IR isn't cached. Concurrent cache
+    # mutation is safe: jl_mi_cache_insert holds the method writelock and
+    # inference is serialized per-MethodInstance by the engine; the serializer
+    # parks and drains the worker (jl_tier_quiesce/jl_tier_drain) before it
+    # snapshots CodeInstances, so a promotion can never race serialization.
     ccall(:jl_tier_start_worker, Cvoid, ())
     # The interpreter's OSR back-edge path resolves `_tier_osr` dynamically
     # by name (jl_get_global in eval_try_osr); we deliberately do NOT hold a
