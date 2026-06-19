@@ -530,10 +530,6 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         init_closure_args = SyntaxList(ctx)
         for id in field_orig_bindings
             init_arg = binding_ex(ctx, id)
-            # Closure initialization passes capture storage. For captures of the
-            # enclosing closure, use that closure's field rather than leaving a
-            # BindingId that is not native to the current lambda. Don't lower
-            # boxed captures to their contents; the nested closure needs the Box.
             if is_self_captured(ctx, init_arg)
                 init_arg = captured_var_access(ctx, init_arg)
             end
