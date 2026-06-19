@@ -1730,6 +1730,10 @@ JuliaOJIT::JuliaOJIT()
     OptimizeLayer(ES, JITPointersLayer, IRTransformRef(*Optimizers)),
     DebuginfoPlugin(std::make_shared<JLDebuginfoPlugin>())
 {
+    // Wire up the work_until stall diagnostic (src/julia-task-dispatcher.h):
+    // without this the 30s "future not completed" path can never dump the
+    // ORC session state, which names the wedged symbol/query.
+    SessionForStallDump = &ES;
 #if JL_LLVM_VERSION < 210000
 # if defined(LLVM_SHLIB)
     // When dynamically linking against LLVM, use our custom EH frame registration code
