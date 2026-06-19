@@ -2185,9 +2185,6 @@ extern int jl_n_sweepthreads;
 #define JL_THREADPOOL_ID_INTERACTIVE 0
 #define JL_THREADPOOL_ID_DEFAULT 1
 
-// environment entries
-JL_DLLEXPORT jl_value_t *jl_environ(int i);
-
 // throwing common exceptions
 JL_DLLEXPORT jl_value_t *jl_vexceptionf(jl_datatype_t *exception_type,
                                         const char *fmt, va_list args);
