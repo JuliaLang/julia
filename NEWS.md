@@ -36,6 +36,7 @@ Compiler/Runtime improvements
     ([#41199], [#47574]).
   - Stack traces now show full method signatures with argument types for inlined
     frames, matching the display of non-inlined frames ([#53925]).
+  - File paths in stack frames are now highlighted if they match a local directory or the REPL, which makes it easier to identify control flow and potential sources of error from "owned" code ([#60336]).
 
 Command-line option changes
 ---------------------------
