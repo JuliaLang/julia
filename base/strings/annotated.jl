@@ -158,6 +158,37 @@ eltype(::Type{<:AnnotatedString{S}}) where {S} = AnnotatedChar{eltype(S)}
 firstindex(s::AnnotatedString) = firstindex(s.string)
 lastindex(s::AnnotatedString) = lastindex(s.string)
 
+"""
+    unannotate(s::AnnotatedString{S})::S
+    unannotate(s::SubString{AnnotatedString{S}})::SubString{S}
+    unannotate(s::SubString{AnnotatedString{SubString{S}}})::SubString{S}
+
+Get the underlying string of `s`, without copying.
+
+# Examples
+```jldoctest; setup=:(using Base: AnnotatedString)
+julia> s = AnnotatedString("abcde", [(1:3, :A, 4)])
+"abcde"
+
+julia> u = Base.unannotate(s)
+"abcde"
+
+julia> typeof(u)
+String
+```
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+
+"""
+unannotate(s::AnnotatedString) = s.string
+
+function unannotate(s::SubString{<:AnnotatedString})
+    start_index = first(parentindices(s)[1])
+    @inbounds raw_substring(parent(s).string, start_index, ncodeunits(s))
+end
+
+
 function getindex(s::AnnotatedString, i::Integer)
     @boundscheck checkbounds(s, i)
     @inbounds if isvalid(s, i)
@@ -204,16 +235,14 @@ cmp(a::AnnotatedString, b::AnnotatedString) = cmp(a.string, b.string)
 # To prevent substring equality from hitting the generic fallback
 
 function ==(a::SubString{<:AnnotatedString}, b::SubString{<:AnnotatedString})
-    SubString(a.string.string, a.offset, a.ncodeunits, Val(:noshift)) ==
-        SubString(b.string.string, b.offset, b.ncodeunits, Val(:noshift)) &&
-        annotations(a) == annotations(b)
+    unannotate(a) == unannotate(b) && annotations(a) == annotations(b)
 end
 
 ==(a::SubString{<:AnnotatedString}, b::AnnotatedString) =
-    annotations(a) == annotations(b) && SubString(a.string.string, a.offset, a.ncodeunits, Val(:noshift)) == b.string
+    annotations(a) == annotations(b) && unannotate(a) == b.string
 
 ==(a::SubString{<:AnnotatedString}, b::AbstractString) =
-    isempty(annotations(a)) && SubString(a.string.string, a.offset, a.ncodeunits, Val(:noshift)) == b
+    isempty(annotations(a)) && unannotate(a) == b
 
 ==(a::AbstractString, b::SubString{<:AnnotatedString}) = b == a
 
@@ -262,7 +291,7 @@ function annotatedstring(xs...)
                     push!(annotations, @inline(setindex(annot, rstart:rstop, :region)))
                 end
             end
-            print(s, SubString(x.string.string, x.offset, x.ncodeunits, Val(:noshift)))
+            print(s, unannotate(x))
         elseif x isa AnnotatedChar
             for annot in x.annotations
                 push!(annotations, (region=1+size:1+size, annot...))
