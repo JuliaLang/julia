@@ -329,10 +329,10 @@ end
 # delayed_delete_dll(path) does so temporarily, until later cleanup by Pkg.gc().
 function delayed_delete_dll(path)
     # in-use DLL must be kept on the same drive
-    temp_path = tempname(abspath(dirname(path)); cleanup=false, suffix=string("_", basename(path)))
+    temp_path = _tempname(abspath(dirname(path)), string("_", basename(path)))
     @debug "Could not delete DLL most likely because it is loaded, moving to a temporary path" path temp_path
     mkpath(delayed_delete_ref())
-    io = last(mktemp(delayed_delete_ref(); cleanup=false))
+    io = Base.open(_win_mkstemp(delayed_delete_ref()), "r+")
     try
         print(io, temp_path) # record the temporary path for Pkg.gc()
     finally
@@ -742,6 +742,12 @@ end
 
 # Obtain a temporary filename.
 function tempname(parent::AbstractString=tempdir(); max_tries::Int = 100, cleanup::Bool=true, suffix::AbstractString="")
+    filename = _tempname(parent, suffix, max_tries)
+    cleanup && temp_cleanup_later(filename)
+    return filename
+end
+
+function _tempname(parent::AbstractString, suffix::AbstractString, max_tries::Int = 100)
     isdir(parent) || throw(ArgumentError("$(repr(parent)) is not a directory"))
 
     prefix = joinpath(parent, temp_prefix)
@@ -759,7 +765,6 @@ function tempname(parent::AbstractString=tempdir(); max_tries::Int = 100, cleanu
         error("tempname: max_tries exhausted")
     end
 
-    cleanup && temp_cleanup_later(filename)
     return filename
 end
 
