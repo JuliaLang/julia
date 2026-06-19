@@ -16,3 +16,5 @@ The documentation build renders each canonical `SKILL.md` with its Agent Skill m
 - [`c-static-analysis`](skills/c-static-analysis/index.md) — Clang static analysis and GC-rooting for C/C++ changes under `src/`.
 - [`external-deps`](skills/external-deps/index.md) — modifying external dependencies (`deps/`, patches) and JLLs.
 - [`buildkite-logs`](skills/buildkite-logs/index.md) — fetching and inspecting Buildkite CI logs without web sign-in.
+- [`compiler-jl`](skills/compiler-jl/index.md) — developing and testing Compiler.jl.
+- [`julia-syntax-lowering`](skills/julia-syntax-lowering/index.md) — developing and testing JuliaSyntax and JuliaLowering.
