@@ -2,6 +2,7 @@
 
 #include "llvm-version.h"
 #include "platform.h"
+#include <pthread.h>
 #include <stdint.h>
 #include <string>
 
