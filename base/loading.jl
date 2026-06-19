@@ -2449,6 +2449,60 @@ function _include_dependency!(dep_list::Vector{Any}, track_dependencies::Bool,
     return path, prev
 end
 
+# Hidden binding, written into a package's own root module, holding the non-identity `mapexpr`
+# functions passed to `include(mapexpr, mod, path)` while the package loaded. Stored inside the
+# module so it is serialized into the package image during precompilation and is therefore
+# retrievable after load (e.g. by revision tools) without re-parsing or re-executing any source.
+const _include_mapexprs_name = Symbol("#include_mapexprs#")
+
+# Keyed by `(including_module, absolute_path)`. A plain `Dict` (not `IdDict`): the path component
+# is a `String`, so keys must compare by value rather than by `===`.
+const IncludeMapexprs = Dict{Tuple{Module,String},Any}
+
+function _record_include_mapexpr!(mod::Module, path::AbstractString, @nospecialize(mapexpr))
+    # `identity` includes are reconstructible from the source snapshot alone, so the overwhelmingly
+    # common case stays zero-overhead and never allocates the table.
+    mapexpr === identity && return nothing
+    root = moduleroot(mod)
+    @lock require_lock begin
+        if isdefined(root, _include_mapexprs_name)
+            # The binding was created in an earlier world, so reading it now is safe.
+            table = getglobal(root, _include_mapexprs_name)::IncludeMapexprs
+        else
+            # First non-identity include for this root: create the table. `Core.eval` defines the
+            # binding because `setglobal!` cannot create one that does not yet exist (#56933). The
+            # rest of this call must use the local `table`, not look the binding back up: within the
+            # call that defines it, the binding lives in a world the call cannot yet observe.
+            table = IncludeMapexprs()
+            Core.eval(root, Expr(:const, Expr(:(=), _include_mapexprs_name, table)))
+        end
+        table[(mod, String(path))] = mapexpr
+    end
+    return nothing
+end
+
+"""
+    Base.include_mapexprs(mod::Module) -> Union{Nothing,Dict{Tuple{Module,String},Any}}
+
+Return the `mapexpr` functions used by `include(mapexpr, …)` calls (with `mapexpr !== identity`)
+while loading the package rooted at `mod`, keyed by `(including_module, absolute_path)`. Return
+`nothing` when no such includes occurred — the common case, so that querying every loaded package
+allocates nothing.
+
+This lets revision tools (e.g. Revise) re-apply the original transform when an edited file is
+re-evaluated: the table records the exact function object used at load/precompile time, which a
+`mapexpr` that captures runtime state could not be reconstructed by re-parsing.
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+"""
+function include_mapexprs(mod::Module)
+    root = moduleroot(mod)
+    isdefined(root, _include_mapexprs_name) || return nothing
+    return getglobal(root, _include_mapexprs_name)::IncludeMapexprs
+end
+public include_mapexprs
+
 """
     include_dependency(path::AbstractString; track_content::Bool=true)
 
@@ -3182,6 +3236,8 @@ Base.include # defined in Base.jl
 function _include(mapexpr::Function, mod::Module, _path::AbstractString)
     @noinline # Workaround for module availability in _simplify_include_frames
     path, prev = _include_dependency(mod, _path)
+    # Record a non-identity transform so it survives precompilation and can be re-applied on revision.
+    _record_include_mapexpr!(mod, path, mapexpr)
     for callback in include_callbacks # to preserve order, must come before eval in include_string
         invokelatest(callback, mod, path)
     end
