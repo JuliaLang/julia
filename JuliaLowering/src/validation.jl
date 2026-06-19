@@ -206,6 +206,10 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"generator" _...] -> vst1_generator(vcx, st)
     [K"comprehension" [K"flatten" g]] -> vst1_generator(vcx, g)
     [K"comprehension" g] -> vst1_generator(vcx, g)
+    [K"comprehension" xs...] ->
+        # HACK: We shouldn't be creating trees here, but this is extremely rare
+        # (deprecated even in 2016)
+        vst1_generator(vcx, @ast st._graph st [K"generator" xs...])
     [K"typed_comprehension" t [K"flatten" g]] ->
         vst1(vcx, t) & vst1_generator(vcx, g)
     [K"typed_comprehension" t g] ->
@@ -1059,12 +1063,14 @@ vst1_generator(vcx, st) = let
         [K"generator" val is...] ->
             vst1(vcx, val) & all(vst1_iter, vcx, is)
         [K"generator" _...] -> @fail(st, "malformed `generator`")
-        _ -> unknown()
+        _ -> @fail(st, "expected `generator`")
     end
 end
 
 vst1_iter(vcx, st) = @stm st begin
     [K"=" [K"outer" i] v] -> vst1_assign_lhs(vcx, i) & vst1(vcx, v)
+    # rare, malformed, happens to work in desugaring
+    [K"=" i [K"..." v]] -> vst1_assign_lhs(vcx, i) & vst1(vcx, v)
     [K"=" i v] -> vst1_assign_lhs(vcx, i) & vst1(vcx, v)
     _ -> @fail(st, "expected one of `=`, `in`, `∈`")
 end

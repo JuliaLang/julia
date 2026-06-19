@@ -785,33 +785,23 @@ function check_no_return(ex)
     end
 end
 
-# Return true for nested tuples of the same identifiers
-function similar_tuples_or_identifiers(a, b)
-    if kind(a) == K"tuple" && kind(b) == K"tuple"
-        return numchildren(a) == numchildren(b) &&
-            all( ((x,y),)->similar_tuples_or_identifiers(x,y),
-                zip(children(a), children(b)))
-    else
-        is_same_identifier_like(a,b)
-    end
-end
-
 # Return the anonymous function taking an iterated value, for use with the
 # first argument to `Base.Generator`
 function func_for_generator(ctx, body, iter_value_destructuring)
-    if similar_tuples_or_identifiers(iter_value_destructuring, body)
+    if is_same_identifier_like(iter_value_destructuring, body)
         # Use Base.identity for generators which are filters such as
         # `(x for x in xs if f(x))`. This avoids creating a new type.
         @ast ctx body "identity"::K"top"
-    else
+    elseif !is_identifier_like(iter_value_destructuring)
+        # compat: arg::T should convert, not assert, and duplicated arg is OK
+        arg = newsym(ctx, iter_value_destructuring, "#generator#")
         @ast ctx body [K"->"
-            [K"tuple"
-                iter_value_destructuring
-            ]
+            [K"tuple" arg]
             [K"block"
-                body
-            ]
-        ]
+                [K"=" iter_value_destructuring arg]
+                body]]
+    else
+        @ast ctx body [K"->" [K"tuple" iter_value_destructuring] [K"block" body]]
     end
 end
 
@@ -820,19 +810,14 @@ function expand_generator(ctx, ex)
     body = ex[1]
     check_no_return(body)
     if numchildren(ex) > 2
-        # Uniquify outer vars by NameKey
-        outervars_by_key = Dict{NameKey,typeof(ex)}()
+        outervar_assignments = SyntaxList(ctx)
         for iterspecs in ex[2:end-1]
             for iterspec in children(iterspecs)
                 foreach_lhs_name(iterspec[1]) do var
                     @jl_assert kind(var) == K"Identifier" ex # Todo: K"BindingId"?
-                    outervars_by_key[NameKey(var)] = var
+                    push!(outervar_assignments, @ast ctx var [K"=" var var])
                 end
             end
-        end
-        outervar_assignments = SyntaxList(ctx)
-        for (_,v) in sort(collect(pairs(outervars_by_key)), by=first)
-            push!(outervar_assignments, @ast ctx v [K"=" v v])
         end
         body = @ast ctx ex [K"let"
             [K"block"
