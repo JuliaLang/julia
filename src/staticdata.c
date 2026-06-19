@@ -3502,17 +3502,18 @@ JL_DLLEXPORT void jl_image_unpack_zstd(void *handle, jl_image_buf_t *image)
 }
 
 // From a shared library handle, verify consistency and return a jl_image_buf_t
-static jl_image_buf_t get_image_buf(void *handle, int is_pkgimage)
+static jl_image_buf_t get_image_buf(void *handle, int is_pkgimage) JL_NOTSAFEPOINT
 {
     // verify that the linker resolved the symbols in this image against ourselves (libjulia-internal)
-    void** (*get_jl_RTLD_DEFAULT_handle_addr)(void) = NULL;
+    typedef void** (JL_NOTSAFEPOINT *jl_RTLD_DEFAULT_handle_func_t)(void);
+    jl_RTLD_DEFAULT_handle_func_t get_jl_RTLD_DEFAULT_handle_addr = NULL;
     if (handle != jl_RTLD_DEFAULT_handle) {
         int symbol_found = jl_dlsym(handle, "get_jl_RTLD_DEFAULT_handle_addr", (void **)&get_jl_RTLD_DEFAULT_handle_addr, 0, 0);
         if (!symbol_found || (void*)&jl_RTLD_DEFAULT_handle != (get_jl_RTLD_DEFAULT_handle_addr()))
             jl_error("Image file failed consistency check: maybe opened the wrong version?");
     }
 
-    jl_image_unpack_func_t **unpack;
+    jl_image_unpack_func_t *unpack;
     jl_image_buf_t image = {
         .kind = JL_IMAGE_KIND_SO,
         .pointers = NULL,

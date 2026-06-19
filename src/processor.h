@@ -204,8 +204,8 @@ JL_DLLEXPORT int32_t jl_get_default_nans(void);
  * libjulia-* and the sysimage together (see null_sysimage.c), in which
  * case they allow accessing the local copy of the sysimage.
  **/
-typedef void jl_image_unpack_func_t(void *handle, jl_image_buf_t *image);
-extern jl_image_unpack_func_t *jl_image_unpack;
+typedef void (JL_NOTSAFEPOINT *jl_image_unpack_func_t)(void *handle, jl_image_buf_t *image);
+extern jl_image_unpack_func_t jl_image_unpack;
 
 /**
  * CPU name and feature string for LLVM.

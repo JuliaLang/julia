@@ -293,7 +293,7 @@ void wakeup_thread(jl_task_t *ct, int16_t tid) JL_NOTSAFEPOINT { // Pass in ptls
 }
 
 /* ensure thread tid is awake if necessary */
-JL_DLLEXPORT void jl_wakeup_thread(int16_t tid) JL_NOTSAFEPOINT
+JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
 {
     jl_task_t *ct = jl_current_task;
     wakeup_thread(ct, tid);
@@ -313,7 +313,7 @@ static pool_wake_hint_t pool_wake_hints[POOL_WAKE_HINT_STRIPES];
 // candidate's sleep_check_state under a fence ([^store_buffering_1]); do not
 // short-circuit on n_threads_running, which can be stale and is not pool-local.
 // See devdocs/scheduler-wakeup.
-JL_DLLEXPORT void jl_wakeup_threadpool(int8_t tpid) JL_NOTSAFEPOINT
+JL_DLLEXPORT void jl_wakeup_threadpool(int8_t tpid)
 {
     if (tpid < 0 || tpid >= jl_n_threadpools) {
         wakeup_thread(jl_current_task, -1);

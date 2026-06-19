@@ -1676,7 +1676,7 @@ struct JuliaOJIT::DLSymOptimizer {
     bool named;
 };
 
-void optimizeDLSyms(Module &M) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER {
+void optimizeDLSyms(Module &M) {
     JuliaOJIT::DLSymOptimizer(true)(M);
 }
 
@@ -2416,7 +2416,7 @@ void JuliaOJIT::printTimers()
     reportAndResetTimings();
 }
 
-void JuliaOJIT::optimizeDLSyms(Module &M) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER {
+void JuliaOJIT::optimizeDLSyms(Module &M) {
     (*DLSymOpt)(M);
 }
 

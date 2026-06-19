@@ -264,7 +264,7 @@ static void write_lcov_data(logdata_t *logData, const char *outfile) JL_NOTSAFEP
     fclose(outf);
 }
 
-JL_DLLEXPORT void jl_write_coverage_data(const char *output) JL_NOTSAFEPOINT
+JL_DLLEXPORT void jl_write_coverage_data(const char *output)
 {
     pthread_mutex_lock(&coverage_lock);
     if (output) {
@@ -283,7 +283,7 @@ JL_DLLEXPORT void jl_write_coverage_data(const char *output) JL_NOTSAFEPOINT
     pthread_mutex_unlock(&coverage_lock);
 }
 
-void jl_write_malloc_log(void) JL_NOTSAFEPOINT
+void jl_write_malloc_log(void)
 {
     pthread_mutex_lock(&coverage_lock);
     char stm[32];
@@ -292,7 +292,7 @@ void jl_write_malloc_log(void) JL_NOTSAFEPOINT
     pthread_mutex_unlock(&coverage_lock);
 }
 
-void jl_init_coverage(void) JL_NOTSAFEPOINT
+void jl_init_coverage(void)
 {
     strhash_new(&coverageData, 0);
     strhash_new(&mallocData, 0);

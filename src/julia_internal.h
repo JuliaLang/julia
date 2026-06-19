@@ -752,7 +752,7 @@ void jl_gc_add_finalizer_(jl_ptls_t ptls, void *v, void *f) JL_NOTSAFEPOINT;
 void jl_gc_debug_fprint_status(ios_t *s) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_gc_debug_fprint_critical_error(ios_t *s) JL_NOTSAFEPOINT;
 void jl_print_gc_stats(JL_STREAM *s);
-void jl_gc_reset_alloc_count(void);
+void jl_gc_reset_alloc_count(void) JL_NOTSAFEPOINT;
 uint32_t jl_get_gs_ctr(void);
 void jl_set_gs_ctr(uint32_t ctr);
 
@@ -1344,8 +1344,8 @@ void jl_init_common_symbols(void) JL_NOTSAFEPOINT;
 void jl_init_primitives(void) JL_GC_DISABLED;
 void jl_init_llvm(void);
 void jl_init_runtime_ccall(void);
-void jl_init_intrinsic_functions(void);
-void jl_init_intrinsic_properties(void);
+void jl_init_intrinsic_functions(void) JL_GC_DISABLED;
+void jl_init_intrinsic_properties(void) JL_GC_DISABLED;
 void jl_init_staticdata(void);
 // TypeApp: immutable struct with head::Any, param::Any
 // Represents a single lazy type application step (like UnionAll for where bindings).
@@ -1454,7 +1454,7 @@ JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *mo
 JL_DLLEXPORT jl_methcache_t *jl_new_method_cache(void);
 JL_DLLEXPORT jl_value_t *jl_get_specialization1(jl_tupletype_t *types JL_PROPAGATES_ROOT, size_t world);
 jl_method_instance_t *jl_get_specialized(jl_method_t *m, jl_value_t *types, jl_svec_t *sp) JL_PROPAGATES_ROOT;
-JL_DLLEXPORT jl_value_t *jl_rettype_inferred(jl_value_t *owner, jl_method_instance_t *li JL_PROPAGATES_ROOT, size_t min_world, size_t max_world);
+JL_DLLEXPORT jl_value_t *jl_rettype_inferred(jl_value_t *owner, jl_method_instance_t *li JL_PROPAGATES_ROOT, size_t min_world, size_t max_world) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_rettype_inferred_native(jl_method_instance_t *mi, size_t min_world, size_t max_world) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_code_instance_t *jl_method_compiled(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_methtable_lookup(jl_value_t *type, size_t world) JL_GLOBALLY_ROOTED;
@@ -1762,7 +1762,7 @@ STATIC_INLINE uint64_t cong(uint64_t max, uint64_t *seed) JL_NOTSAFEPOINT // Ope
 
 JL_DLLEXPORT uint64_t jl_rand(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_srand(uint64_t) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_init_rand(void);
+JL_DLLEXPORT void jl_init_rand(void) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT extern void *jl_exe_handle;
 JL_DLLEXPORT extern void *jl_libjulia_handle;
@@ -2136,9 +2136,9 @@ JL_DLLEXPORT enum jl_memory_order jl_get_atomic_order_checked(jl_sym_t *order, c
 
 struct _jl_image_fptrs_t;
 
-void jl_init_coverage(void);
-void jl_write_malloc_log(void);
-JL_DLLEXPORT void jl_write_coverage_data(const char*);
+void jl_init_coverage(void) JL_NOTSAFEPOINT;
+void jl_write_malloc_log(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_write_coverage_data(const char*) JL_NOTSAFEPOINT;
 
 extern uv_mutex_t symtab_lock;
 jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
