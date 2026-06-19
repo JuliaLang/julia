@@ -73,6 +73,11 @@ New library functions
   without checking for valid string indices.
 - `Base.unannotate(::AnnotatedString)` returns the underlying un-annotated string
   of the input string.
+- `Base.include_mapexprs(mod)` is an unexported, public function returning the non-identity
+  `mapexpr` functions used by `include(mapexpr, …)` calls while loading the package rooted at
+  `mod`, keyed by `(including_module, absolute_path)`. The table is stored inside the package
+  image, so it survives precompilation; revision tools (e.g. Revise) use it to re-apply the
+  original transform when an `include(mapexpr, …)`-ed file is edited.
 
 New library features
 --------------------

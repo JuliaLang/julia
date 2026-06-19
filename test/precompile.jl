@@ -3413,4 +3413,71 @@ precompile_test_harness("Type{Union{}} inline field") do dir
     @test (@eval $TypeBottomField.X.t) === Union{}
 end
 
+# `include(mapexpr, …)` records its non-identity `mapexpr` into a per-root-module side-table
+# (`Base.include_mapexprs`) that is serialized into the package image, so the exact transform
+# used at precompile time is recoverable after load (used by revision tools such as Revise).
+precompile_test_harness("include mapexpr persistence") do dir
+    Pkg = :IncludeMapexpr9f2c
+    write(joinpath(dir, "plain.jl"), "p = 1\n")
+    write(joinpath(dir, "named.jl"), "n = 2\n")
+    write(joinpath(dir, "closure.jl"), "c = 2\n")
+    write(joinpath(dir, "submod.jl"), "s = 2\n")
+    write(joinpath(dir, "$Pkg.jl"),
+          """
+          module $Pkg
+              # named-function transform: bump an integer rhs by 40
+              bump40(ex) = (Meta.isexpr(ex, :(=)) && ex.args[2] isa Int && (ex.args[2] = ex.args[2] + 40); ex)
+              # closure capturing state computed at load time -- the case that could NOT be
+              # reconstructed by re-parsing, only by serializing the actual object
+              const OFFSET = 40
+              addoffset = let off = OFFSET
+                  ex -> (Meta.isexpr(ex, :(=)) && ex.args[2] isa Int && (ex.args[2] = ex.args[2] + off); ex)
+              end
+
+              include("plain.jl")               # identity: must NOT be recorded
+              include(bump40, "named.jl")       # include(mapexpr, path)
+              include(addoffset, "closure.jl")  # state-capturing closure
+              module Sub end
+              Base.include(bump40, Sub, "submod.jl")  # include(mapexpr, mod, path)
+          end
+          """)
+    @test Base.compilecache(Base.PkgId(string(Pkg))) isa Tuple
+    @eval using $Pkg
+    M = @eval $Pkg
+
+    # The transforms actually executed (load-time behavior), via the package's own includes
+    @test M.p == 1                # untransformed
+    @test M.n == 42               # bump40
+    @test M.c == 42               # addoffset (closure)
+    @test M.Sub.s == 42           # include(mapexpr, mod, path)
+
+    # A package with only identity includes records nothing (the common, zero-allocation case).
+    NoMx = :IncludeMapexprNone9f2c
+    write(joinpath(dir, "$NoMx.jl"), "module $NoMx\n    include(\"plain.jl\")\nend\n")
+    @test Base.compilecache(Base.PkgId(string(NoMx))) isa Tuple
+    @eval using $NoMx
+    @test Base.include_mapexprs(@eval $NoMx) === nothing
+
+    # The side-table survived precompilation and is keyed by (including_module, abspath)
+    mapexprs = Base.include_mapexprs(M)
+    @test mapexprs isa Dict{Tuple{Module,String},Any}
+    plainpath   = normpath(joinpath(dir, "plain.jl"))
+    namedpath   = normpath(joinpath(dir, "named.jl"))
+    closurepath = normpath(joinpath(dir, "closure.jl"))
+    submodpath  = normpath(joinpath(dir, "submod.jl"))
+    @test !haskey(mapexprs, (M, plainpath))           # identity is never recorded
+    @test haskey(mapexprs, (M, namedpath))
+    @test haskey(mapexprs, (M, closurepath))
+    @test haskey(mapexprs, (M.Sub, submodpath))       # keyed by the including (sub)module
+
+    # The recorded objects are the actual functions, captured state and all: applying the
+    # deserialized closure reproduces the +OFFSET transform. `invokelatest` because the package
+    # (hence these methods) was loaded in this same world.
+    @test Base.invokelatest(mapexprs[(M, namedpath)], Expr(:(=), :z, 2)) == Expr(:(=), :z, 42)
+    @test Base.invokelatest(mapexprs[(M, closurepath)], Expr(:(=), :z, 2)) == Expr(:(=), :z, 42)
+
+    # Exactly the three non-identity includes were recorded (the identity one was not).
+    @test length(mapexprs) == 3
+end
+
 finish_precompile_test!()
