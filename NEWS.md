@@ -91,7 +91,7 @@ New library features
 * New function `scandir(dir)` returns a stateful, single-pass iterator yielding filename `String`s
   without first materializing the full listing. `scandir(dir, DirEntry)` yields `DirEntry` objects
   instead. Useful for very large directories or when iteration may be short-circuited. A do-block form
-  `scandir(f, dir[, DirEntry])` ensures deterministic resource cleanup ([#XXX]).
+  `scandir(f, dir[, DirEntry])` ensures deterministic resource cleanup ([#62164]).
 
 Standard library changes
 ------------------------
