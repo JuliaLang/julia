@@ -566,7 +566,7 @@ JL_DLLEXPORT jl_value_t *jl_cpu_has_fma(int bits)
 
 // Validate cpu_target string before any processing.
 // Called from init.c early in startup.
-extern "C" JL_DLLEXPORT void jl_check_cpu_target(const char *cpu_target, int imaging)
+extern "C" void jl_check_cpu_target(const char *cpu_target, int imaging)
 {
 
     if (!cpu_target || !*cpu_target)
