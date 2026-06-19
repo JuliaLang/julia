@@ -299,9 +299,23 @@ $(BUILDDIR)/%.h.gen : $(SRCDIR)/%.d
 # to have a `ijl_` prefix instead of `jl_`, to denote that they are coming from `libjulia-internal`.  This avoids
 # potential confusion with debugging tools, when inspecting a process that has both `libjulia` and `libjulia-internal`
 # loaded at the same time.
+#
+# When running under clang-tidy or the clang static analyzer, directly alias
+# the _fallback or _impl names to the exported name. This additionally catches any mistakes
+# where the prototype declaration mismatches the declaration.
 $(BUILDDIR)/jl_internal_funcs.inc: $(SRCDIR)/jl_exported_funcs.inc
 	@TMPFILE=$$(mktemp $(abspath $@.XXXXXX)); \
-	grep 'XX(..*)' $< | sed -E 's/.*XX\((.+)\).*/#define \1 i\1/g' > $$TMPFILE; \
+	{ \
+		grep 'XX(..*)' $< | sed -E 's/.*XX\((.+)\).*/#define \1 i\1/g'; \
+		echo '#ifdef __clang_analyzer__'; \
+		echo ' #ifdef JL_LIBRARY_EXPORTS_INTERNAL'; \
+		grep '  YY(..*)' $< | sed -E 's/.*YY\((.+)\).*/  #define \1 \1_fallback/g'; \
+		echo ' #endif'; \
+		echo ' #ifdef JL_LIBRARY_EXPORTS_CODEGEN'; \
+		grep '  YY(..*)' $< | sed -E 's/.*YY\((.+)\).*/  #define \1 \1_impl/g'; \
+		echo ' #endif'; \
+		echo '#endif'; \
+	} > $$TMPFILE; \
 	mv $$TMPFILE $@
 
 # Generate `.inc` file that contains a list of `#define` macros to access global data through struct instances
