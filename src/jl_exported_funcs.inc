@@ -93,6 +93,11 @@
     XX(jl_copy_code_info) \
     XX(jl_cpu_threads) \
     XX(jl_effective_threads) \
+    XX(jl_precompile_jobserver_create) \
+    XX(jl_precompile_jobserver_active) \
+    XX(jl_precompile_jobserver_destroy) \
+    XX(jl_precompile_jobserver_acquire) \
+    XX(jl_precompile_jobserver_release) \
     XX(jl_crc32c_sw) \
     XX(jl_create_system_image) \
     XX(jl_cstr_to_string) \

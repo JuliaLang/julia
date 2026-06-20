@@ -484,6 +484,138 @@ JL_DLLEXPORT int jl_effective_threads(void) JL_NOTSAFEPOINT
     return available_parallelism < cpu_threads ? available_parallelism : cpu_threads;
 }
 
+// -- precompile jobserver --
+// A named-semaphore token pool created by the orchestrating precompile process
+// and shared with worker subprocesses to bound the total number of AOT codegen
+// threads across all parallel workers (see JuliaLang/julia#58591). Workers open
+// it by name (via the JULIA_PRECOMPILE_JOBSERVER env var); the client side lives
+// in aotcompile.cpp.
+//
+// All state is mutex-guarded: acquire/release run on arbitrary task threads and
+// may race with destroy on exception paths. At most one jobserver is active per
+// process; create returns NULL while one exists, so a concurrent session joins
+// the existing pool (see jl_precompile_jobserver_active) rather than creating
+// its own.
+
+static uv_once_t jl_precompile_jobserver_once = UV_ONCE_INIT;
+static uv_mutex_t jl_precompile_jobserver_lock;
+static unsigned jl_precompile_jobserver_counter = 0;
+static char jl_precompile_jobserver_name[64];
+#ifdef _OS_WINDOWS_
+static HANDLE jl_precompile_jobserver_sem = NULL;
+#define JL_PRECOMPILE_JOBSERVER_ACTIVE() (jl_precompile_jobserver_sem != NULL)
+#else
+#include <semaphore.h>
+static sem_t *jl_precompile_jobserver_sem = SEM_FAILED;
+#define JL_PRECOMPILE_JOBSERVER_ACTIVE() (jl_precompile_jobserver_sem != SEM_FAILED)
+#endif
+
+static void jl_precompile_jobserver_init_lock(void) JL_NOTSAFEPOINT
+{
+    uv_mutex_init(&jl_precompile_jobserver_lock);
+}
+
+// Create the jobserver with `ntokens` tokens. Returns its name on success (for
+// export to workers via the environment), or NULL on failure or when another
+// jobserver is already active in this process. The name carries a per-process
+// counter so workers left over from a previous session cannot open a newer
+// session's pool.
+JL_DLLEXPORT const char *jl_precompile_jobserver_create(int ntokens) JL_NOTSAFEPOINT
+{
+    if (ntokens < 1)
+        ntokens = 1;
+    uv_once(&jl_precompile_jobserver_once, jl_precompile_jobserver_init_lock);
+    uv_mutex_lock(&jl_precompile_jobserver_lock);
+    const char *name = NULL;
+    if (!JL_PRECOMPILE_JOBSERVER_ACTIVE()) {
+        unsigned counter = ++jl_precompile_jobserver_counter;
+#ifdef _OS_WINDOWS_
+        snprintf(jl_precompile_jobserver_name, sizeof(jl_precompile_jobserver_name),
+                 "jl_pc_%lu_%u", (unsigned long)GetCurrentProcessId(), counter);
+        jl_precompile_jobserver_sem = CreateSemaphoreA(NULL, ntokens, ntokens, jl_precompile_jobserver_name);
+#else
+        // Name must start with '/' and stay short (macOS limits names to ~31 chars).
+        snprintf(jl_precompile_jobserver_name, sizeof(jl_precompile_jobserver_name),
+                 "/jl_pc_%ld_%u", (long)getpid(), counter);
+        sem_unlink(jl_precompile_jobserver_name); // clear any stale instance from a crashed run
+        jl_precompile_jobserver_sem = sem_open(jl_precompile_jobserver_name, O_CREAT | O_EXCL, 0600, (unsigned)ntokens);
+#endif
+        if (JL_PRECOMPILE_JOBSERVER_ACTIVE())
+            name = jl_precompile_jobserver_name;
+    }
+    uv_mutex_unlock(&jl_precompile_jobserver_lock);
+    return name;
+}
+
+// Report whether this process owns an active precompile jobserver. Lets a
+// session whose own create failed tell "another session already owns the pool"
+// (join it) from "the OS refused the semaphore" (no pool to join).
+JL_DLLEXPORT int jl_precompile_jobserver_active(void) JL_NOTSAFEPOINT
+{
+    uv_once(&jl_precompile_jobserver_once, jl_precompile_jobserver_init_lock);
+    uv_mutex_lock(&jl_precompile_jobserver_lock);
+    int active = JL_PRECOMPILE_JOBSERVER_ACTIVE();
+    uv_mutex_unlock(&jl_precompile_jobserver_lock);
+    return active;
+}
+
+// Tear down the jobserver created by jl_precompile_jobserver_create.
+JL_DLLEXPORT void jl_precompile_jobserver_destroy(void) JL_NOTSAFEPOINT
+{
+    uv_once(&jl_precompile_jobserver_once, jl_precompile_jobserver_init_lock);
+    uv_mutex_lock(&jl_precompile_jobserver_lock);
+#ifdef _OS_WINDOWS_
+    if (jl_precompile_jobserver_sem != NULL) {
+        CloseHandle(jl_precompile_jobserver_sem);
+        jl_precompile_jobserver_sem = NULL;
+    }
+#else
+    if (jl_precompile_jobserver_sem != SEM_FAILED) {
+        sem_close(jl_precompile_jobserver_sem);
+        sem_unlink(jl_precompile_jobserver_name);
+        jl_precompile_jobserver_sem = SEM_FAILED;
+    }
+#endif
+    uv_mutex_unlock(&jl_precompile_jobserver_lock);
+}
+
+// Take one token so the orchestrator can hold a baseline per running worker
+// against the shared pool. Non-blocking: returns 1 on success, 0 when no token
+// is available, and -1 when no jobserver is active (e.g. torn down) so pollers
+// stop waiting. The yielding poll loop lives on the Julia side.
+JL_DLLEXPORT int jl_precompile_jobserver_acquire(void) JL_NOTSAFEPOINT
+{
+    uv_once(&jl_precompile_jobserver_once, jl_precompile_jobserver_init_lock);
+    uv_mutex_lock(&jl_precompile_jobserver_lock);
+    int ret;
+    if (!JL_PRECOMPILE_JOBSERVER_ACTIVE())
+        ret = -1;
+#ifdef _OS_WINDOWS_
+    else
+        ret = WaitForSingleObject(jl_precompile_jobserver_sem, 0) == WAIT_OBJECT_0;
+#else
+    else
+        ret = sem_trywait(jl_precompile_jobserver_sem) == 0;
+#endif
+    uv_mutex_unlock(&jl_precompile_jobserver_lock);
+    return ret;
+}
+
+// Return one token previously taken with jl_precompile_jobserver_acquire.
+JL_DLLEXPORT void jl_precompile_jobserver_release(void) JL_NOTSAFEPOINT
+{
+    uv_once(&jl_precompile_jobserver_once, jl_precompile_jobserver_init_lock);
+    uv_mutex_lock(&jl_precompile_jobserver_lock);
+    if (JL_PRECOMPILE_JOBSERVER_ACTIVE()) {
+#ifdef _OS_WINDOWS_
+        ReleaseSemaphore(jl_precompile_jobserver_sem, 1, NULL);
+#else
+        sem_post(jl_precompile_jobserver_sem);
+#endif
+    }
+    uv_mutex_unlock(&jl_precompile_jobserver_lock);
+}
+
 
 // -- high resolution timers --
 // Returns time in nanosec
