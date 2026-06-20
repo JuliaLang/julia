@@ -1574,7 +1574,8 @@ REPL tab completion on `x.` shows only the `private=false` properties.
 
 See also [`hasproperty`](@ref), [`hasfield`](@ref).
 """
-propertynames(x; private::Bool=false) = fieldnames(typeof(x))
+propertynames(x; private::Bool=false) = propertynames(x)
+propertynames(x) = fieldnames(typeof(x))
 propertynames(m::Module; private::Bool=false) = names(m; all=private)
 propertynames(x::Array; private::Bool=false) = () # hide the fields from tab completion to discourage calling `x.size` instead of `size(x)`, even though they are equivalent
 
@@ -1594,7 +1595,8 @@ as described in [`propertynames`](@ref).
 
 See also [`propertynames`](@ref), [`hasfield`](@ref).
 """
-hasproperty(x, s::Symbol; private::Bool=false) = s in propertynames(x; private)
+hasproperty(x, s::Symbol; private::Bool=false) = private ? s in propertynames(x; private=true) : hasproperty(x, s)
+hasproperty(x, s::Symbol) = s in propertynames(x)
 
 """
     delete_method(m::Method)
