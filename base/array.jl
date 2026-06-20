@@ -205,10 +205,10 @@ false
 """
 isbitsunion(u::Type) = u isa Union && allocatedinline(u)
 
-function _unsetindex!(A::Array, i::Int)
+function unsetindex!(A::Array, i::Int)
     @inline
     @boundscheck checkbounds(A, i)
-    @inbounds _unsetindex!(memoryref(A.ref, i))
+    @inbounds unsetindex!(memoryref(A.ref, i))
     return A
 end
 
@@ -1151,7 +1151,7 @@ function _growbeg_internal!(a::Vector, delta::Int, len::Int)
         newmem = mem
         unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
         for j in offset:newoffset+delta-1
-            @inbounds _unsetindex!(mem, j)
+            @inbounds unsetindex!(mem, j)
         end
     else
         newmem = array_new_memory(mem, newmemlen)
@@ -1261,13 +1261,13 @@ function _growat!(a::Vector, i::Integer, delta::Integer)
         setfield!(a, :ref, newref)
         setfield!(a, :size, (newlen,))
         for j in i:i+delta-1
-            @inbounds _unsetindex!(a, j)
+            @inbounds unsetindex!(a, j)
         end
     elseif !prefer_start && memlen >= newmemlen
         unsafe_copyto!(mem, offset - 1 + delta + i, mem, offset - 1 + i, len - i + 1)
         setfield!(a, :size, (newlen,))
         for j in i:i+delta-1
-            @inbounds _unsetindex!(a, j)
+            @inbounds unsetindex!(a, j)
         end
     else
         # since we will allocate the array in the middle of the memory we need at least 2*delta extra space
@@ -1292,7 +1292,7 @@ function _deletebeg!(a::Vector, delta::Integer)
         throw(ArgumentError("_deletebeg! requires delta in 0:length(a)"))
     end
     for i in 1:delta
-        @inbounds _unsetindex!(a, i)
+        @inbounds unsetindex!(a, i)
     end
     newlen = len - delta
     setfield!(a, :size, (newlen,))
@@ -1313,7 +1313,7 @@ function _deleteend!(a::Vector, delta::Integer)
     end
     newlen = len - delta
     for i in newlen+1:len
-        @inbounds _unsetindex!(a, i)
+        @inbounds unsetindex!(a, i)
     end
     setfield!(a, :size, (newlen,))
     return
@@ -1960,7 +1960,7 @@ function _copy_item!(a::Vector, p, q)
     if isassigned(a, q)
         a[p] = a[q]
     else
-        _unsetindex!(a, p)
+        unsetindex!(a, p)
     end
 end
 
