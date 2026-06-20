@@ -909,6 +909,12 @@ static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size
             jl_atomic_store_relaxed(&ci->min_world, world);
             // n.b. ci->max_world is not updated until edges are verified
         }
+        else if (jl_is_opaque_closure(obj)) {
+            // issue #62180: a precompiled opaque closure runs in the world its
+            // package's methods become active in, so its body sees them.
+            jl_opaque_closure_t *oc = (jl_opaque_closure_t*)obj;
+            oc->world = world;
+        }
         else {
             abort();
         }

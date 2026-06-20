@@ -1815,6 +1815,16 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                 assert(f == s->s);
                 record_memoryref(s, reloc_offset, *(jl_genericmemoryref_t*)v);
             }
+            else if (jl_is_opaque_closure(v)) {
+                assert(f == s->s);
+                // issue #62180: `invoke` and `specptr` are native-code pointers into
+                // the serializing process; they are meaningless in any process that
+                // loads this image. Null them here and re-derive them at load time.
+                jl_opaque_closure_t *newoc = (jl_opaque_closure_t*)&f->buf[reloc_offset];
+                newoc->invoke = NULL;
+                newoc->specptr = NULL;
+                arraylist_push(&s->fixup_objs, (void*)reloc_offset);
+            }
             else {
                 write_padding(f, jl_datatype_size(t) - tot);
             }
@@ -4089,6 +4099,25 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
                 jl_globalref_t *gr = (jl_globalref_t*)jl_module_globalref(r->mod, r->name);
                 jl_gc_write(r, r->binding, gr->binding);
             }
+        }
+        else if (jl_is_opaque_closure(obj)) {
+            // issue #62180: the native-code pointers were nulled during serialization.
+            // Route calls through the interpreter, which reconstructs execution from
+            // the (serialized) source rather than a stale compiled-code pointer.
+            jl_opaque_closure_t *oc = (jl_opaque_closure_t*)obj;
+            oc->invoke = (jl_fptr_args_t)jl_interpret_opaque_closure;
+            oc->specptr = NULL;
+            // `world` pins the world the closure body executes in, fixing what its
+            // calls dispatch to; the closure is never invalidated, so this stays
+            // fixed and the body keeps reaching the definitions present when the
+            // image was built. The stored value is the serializing process's world
+            // age and is meaningless here, so re-pin it: for an incremental image to
+            // the world the package's methods are activated in (jl_activate_methods),
+            // otherwise to the world established when this image is loaded.
+            if (s.incremental)
+                jl_array_ptr_1d_push(*internal_methods, obj);
+            else
+                oc->world = jl_atomic_load_acquire(&jl_world_counter);
         }
         else if (jl_is_module(obj)) {
             // rebuild the usings table for module v

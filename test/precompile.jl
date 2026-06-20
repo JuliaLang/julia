@@ -2228,6 +2228,28 @@ precompile_test_harness("Generated Opaque") do load_path
     end
 end
 
+# A `Core.OpaqueClosure` instance stored in a package image (here a top-level `const`) must remain
+# callable once the package is loaded, returning what it returned in the precompiling process. The
+# call runs in a subprocess so it is isolated from the test runner. See JuliaLang/julia#62180.
+@testset "call precompiled opaque closure instance" begin
+    load_path = mktempdir(); depot = mktempdir()
+    try
+        modname = "OpaqueClosureInstancePrecompile"
+        write(joinpath(load_path, "$modname.jl"),
+              "module $modname\n    const oc = Base.Experimental.@opaque x -> x\nend\n")
+        sep = Sys.iswindows() ? ";" : ":"
+        code = "Base.compilecache(Base.PkgId($(repr(modname)))); using $modname; print($modname.oc(41))"
+        cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -e $code`,
+                     "JULIA_LOAD_PATH" => load_path * sep * "@stdlib",
+                     "JULIA_DEPOT_PATH" => depot * sep)
+        out = read(pipeline(ignorestatus(cmd); stderr=devnull), String)
+        @test out == "41"
+    finally
+        rm(load_path; recursive=true, force=true)
+        rm(depot; recursive=true, force=true)
+    end
+end
+
 precompile_test_harness("Issue #52063") do load_path
     fname = joinpath(load_path, "i_do_not_exist.jl")
     @test try
