@@ -2716,6 +2716,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
                 else
                     fname = &decl_names.invoke;
                 F = output.get_module().getFunction(*fname);
+                assert(F);
             }
             if (measure_compile_time_enabled) {
                 auto end = jl_hrtime();

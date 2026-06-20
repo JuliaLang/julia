@@ -133,7 +133,7 @@ JL_DLLEXPORT jl_value_t *jl_get_libllvm_fallback(void) JL_NOTSAFEPOINT
     return jl_nothing;
 }
 
-JL_DLLEXPORT uint64_t jl_getUnwindInfo_fallback(uint64_t dwAddr)
+JL_DLLEXPORT uint64_t jl_getUnwindInfo_fallback(uint64_t dwAddr) JL_NOTSAFEPOINT
 {
     return 0;
 }
