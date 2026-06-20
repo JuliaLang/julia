@@ -1125,22 +1125,26 @@ static void get_fvars_gvars(Module &M, DenseMap<GlobalValue *, unsigned> &fvars,
     assert(gvars_gv);
     assert(fvars_idxs);
     assert(gvars_idxs);
-    auto fvars_init = cast<ConstantArray>(fvars_gv->getInitializer());
-    auto gvars_init = cast<ConstantArray>(gvars_gv->getInitializer());
-    for (unsigned i = 0; i < fvars_init->getNumOperands(); ++i) {
-        auto gv = cast<GlobalValue>(fvars_init->getOperand(i)->stripPointerCasts());
-        assert(gv && gv->hasName() && "fvar must be a named global");
-        assert(!fvars.count(gv) && "Duplicate fvar");
-        fvars[gv] = i;
+    // A partition (shard) can legitimately have zero fvars or gvars, in which
+    // case the initializer is a zeroinitializer rather than a ConstantArray.
+    if (auto fvars_init = dyn_cast<ConstantArray>(fvars_gv->getInitializer())) {
+        for (unsigned i = 0; i < fvars_init->getNumOperands(); ++i) {
+            auto gv = cast<GlobalValue>(fvars_init->getOperand(i)->stripPointerCasts());
+            assert(gv && gv->hasName() && "fvar must be a named global");
+            assert(!fvars.count(gv) && "Duplicate fvar");
+            fvars[gv] = i;
+        }
+        assert(fvars.size() == fvars_init->getNumOperands());
     }
-    assert(fvars.size() == fvars_init->getNumOperands());
-    for (unsigned i = 0; i < gvars_init->getNumOperands(); ++i) {
-        auto gv = cast<GlobalValue>(gvars_init->getOperand(i)->stripPointerCasts());
-        assert(gv && gv->hasName() && "gvar must be a named global");
-        assert(!gvars.count(gv) && "Duplicate gvar");
-        gvars[gv] = i;
+    if (auto gvars_init = dyn_cast<ConstantArray>(gvars_gv->getInitializer())) {
+        for (unsigned i = 0; i < gvars_init->getNumOperands(); ++i) {
+            auto gv = cast<GlobalValue>(gvars_init->getOperand(i)->stripPointerCasts());
+            assert(gv && gv->hasName() && "gvar must be a named global");
+            assert(!gvars.count(gv) && "Duplicate gvar");
+            gvars[gv] = i;
+        }
+        assert(gvars.size() == gvars_init->getNumOperands());
     }
-    assert(gvars.size() == gvars_init->getNumOperands());
     fvars_gv->eraseFromParent();
     gvars_gv->eraseFromParent();
     fvars_idxs->eraseFromParent();
@@ -1862,21 +1866,22 @@ static inline void schedule_uv_thread(uv_thread_t *worker, CB &&cb)
 }
 
 // Entrypoint to optionally-multithreaded image compilation. This handles global coordination of the threading,
-// as well as partitioning, serialization, and deserialization. `threads` is the
-// partition (shard) count and the ceiling on concurrency; when `jobserver` is
-// non-null the actual thread pool is rationed elastically from the shared
-// imaging token budget.
+// as well as partitioning, serialization, and deserialization. `shards` is the
+// partition (output) count, fixing the shard layout; `threads` is the ceiling on
+// how many shards compile concurrently (the pool pulls from a shared queue, so
+// `shards` may exceed `threads`). When `jobserver` is non-null the actual thread
+// pool is rationed elastically from the shared imaging token budget, up to `threads`.
 template<typename ModuleReleasedFunc>
-static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, StringRef name, unsigned threads,
+static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, StringRef name, unsigned threads, unsigned shards,
                 bool unopt_out, bool opt_out, bool obj_out, bool asm_out,
                 JobserverClient *jobserver, ModuleReleasedFunc module_released) {
-    SmallVector<AOTOutputs, 16> outputs(threads);
-    assert(threads);
+    SmallVector<AOTOutputs, 16> outputs(shards);
+    assert(threads && shards);
     assert(unopt_out || opt_out || obj_out || asm_out);
     // Timers for timing purposes
     TimerGroup timer_group("add_output", ("Time to optimize and emit LLVM module " + name).str());
-    SmallVector<ShardTimers, 1> timers(threads);
-    for (unsigned i = 0; i < threads; ++i) {
+    SmallVector<ShardTimers, 1> timers(shards);
+    for (unsigned i = 0; i < shards; ++i) {
         auto idx = std::to_string(i);
         timers[i].name = "shard_" + idx;
         timers[i].desc = ("Timings for " + name + " module shard " + idx).str();
@@ -1907,8 +1912,11 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
                 errs() << "WARNING: Invalid value for JULIA_IMAGE_TIMINGS: " << env << "\n";
         }
     }
-    // Single-threaded case
-    if (threads == 1) {
+    // Single-shard case: emit the whole module as shard 0 without partitioning
+    // or the serialize/deserialize round-trip. Keyed on the shard count, not the
+    // thread count: a single thread can still produce many shards (it just works
+    // through the queue sequentially), and those must go through partitioning.
+    if (shards == 1) {
         output_timer.startTimer();
         {
             JL_TIMING(NATIVE_AOT, NATIVE_Opt);
@@ -1945,7 +1953,7 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
             G.setName("jl_ext_" + Twine(counter++));
         }
     }
-    auto partitions = partitionModule(M, threads);
+    auto partitions = partitionModule(M, shards);
     partition_timer.stopTimer();
 
     serialize_timer.startTimer();
@@ -1984,7 +1992,7 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
 #endif
                 while (true) {
                     unsigned i = next_partition.fetch_add(1, std::memory_order_relaxed);
-                    if (i >= threads)
+                    if (i >= shards)
                         break;
                     LLVMContext ctx;
                     ctx.setDiscardValueNames(true);
@@ -2045,13 +2053,14 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
         while (spawned < initial_pool)
             spawn_worker();
 
-        // Elastic scale-up: while unclaimed partitions remain, grow the pool
-        // as sibling precompile workers return tokens to the budget.
+        // Elastic scale-up: while unclaimed shards remain, grow the pool (up to
+        // the `threads` concurrency ceiling) as sibling precompile workers return
+        // tokens to the budget.
         while (jobserver && spawned < threads) {
             unsigned claimed = next_partition.load(std::memory_order_relaxed);
-            if (claimed >= threads)
+            if (claimed >= shards)
                 break;
-            unsigned want = std::min(threads - claimed, threads - spawned);
+            unsigned want = std::min(shards - claimed, threads - spawned);
             unsigned got = jobserver->acquire(want);
             if (got) {
                 {
@@ -2094,6 +2103,38 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
         dbgs() << "]\n";
     }
     return outputs;
+}
+
+// Number of shards (output partitions) to split an image into. Sized by the
+// module's estimated codegen work, independent of the CPU/concurrency count: a
+// small module stays in a single shard (avoiding redundant per-shard re-parsing
+// of the serialized module), while a large one is split finely so peak memory
+// and load balance stay bounded as worker threads pull shards from the queue.
+// There is deliberately no upper cap -- a bigger package simply gets more
+// shards. The actual concurrency is chosen separately (compute_image_thread_count)
+// and capped to this count. Because it depends only on the module, the shard
+// layout is machine-independent (unlike the old core-based count).
+static unsigned compute_image_shard_count(const ModuleInfo &info) {
+    // 32-bit systems are very memory-constrained; never split.
+#ifdef _P32
+    return 1;
+#endif
+    if (jl_is_timing_passes) // LLVM isn't thread safe when timing the passes
+        return 1;
+    // Target codegen weight per shard. Picked so the parallelizable optimize/emit
+    // work per shard dominates the fixed per-shard overhead (each shard re-parses
+    // the serialized module -- see add_output's `deserialize` timer). Tune with
+    // JULIA_IMAGE_PARTITION_WEIGHT; measure per-stage cost with JULIA_IMAGE_TIMINGS.
+    size_t weight_per_shard = 500000;
+    if (const char *env = getenv("JULIA_IMAGE_PARTITION_WEIGHT")) {
+        char *endptr;
+        unsigned long long val = strtoull(env, &endptr, 10);
+        if (endptr != env && !*endptr && val > 0)
+            weight_per_shard = (size_t)val;
+        else
+            jl_safe_printf("WARNING: invalid value '%s' for JULIA_IMAGE_PARTITION_WEIGHT\n", env);
+    }
+    return std::max<size_t>(1, info.weight / weight_per_shard);
 }
 
 static unsigned compute_image_thread_count(const ModuleInfo &info, bool jobserver_active, bool &explicit_override) {
@@ -2221,8 +2262,8 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
     std::string StackProtectorGuard = dataM.getStackProtectorGuard().str();
     unsigned OverrideStackAlignment = dataM.getOverrideStackAlignment();
 
-    auto compile = [&](Module &M, StringRef name, unsigned threads, JobserverClient *jobserver, auto module_released) {
-        return add_output(M, *SourceTM, name, threads, !!unopt_bc_fname, !!bc_fname, !!obj_fname, !!asm_fname, jobserver, module_released);
+    auto compile = [&](Module &M, StringRef name, unsigned threads, unsigned shards, JobserverClient *jobserver, auto module_released) {
+        return add_output(M, *SourceTM, name, threads, shards, !!unopt_bc_fname, !!bc_fname, !!obj_fname, !!asm_fname, jobserver, module_released);
     };
 
     SmallVector<AOTOutputs, 16> sysimg_outputs;
@@ -2296,11 +2337,12 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
         // Note that we don't set z to null, this allows the check in WRITE_ARCHIVE
         // to function as expected
         // no need to free the module/context, destructor handles that
-        sysimg_outputs = compile(sysimgM, "sysimg", 1, nullptr, [](Module &) {});
+        sysimg_outputs = compile(sysimgM, "sysimg", 1, 1, nullptr, [](Module &) {});
     }
 
     const bool imaging_mode = true;
     unsigned threads = 1;
+    unsigned nshards = 1;
     unsigned nfvars = 0;
     unsigned ngvars = 0;
 
@@ -2355,15 +2397,20 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
                 << "    clones: " << module_info.clones << "\n"
                 << "    weight: " << module_info.weight << "\n"
             );
+            // Shard count is sized by codegen work (machine-independent); the
+            // concurrency is sized by available CPU but never exceeds the shard
+            // count, so small modules don't spin up idle threads.
+            nshards = compute_image_shard_count(module_info);
             bool explicit_threads = false;
             threads = compute_image_thread_count(module_info, jobserver.active(), explicit_threads);
+            threads = std::min(threads, nshards);
             if (jobserver.active() && !explicit_threads && threads > 1) {
-                // `threads` is the partition count and concurrency ceiling;
-                // add_output rations the actual pool size from the shared
-                // token budget, growing it as sibling workers finish.
+                // add_output rations the actual pool size from the shared token
+                // budget (up to `threads`), growing it as sibling workers finish,
+                // while the `nshards` partitions are pulled from a shared queue.
                 text_jobserver = &jobserver;
             }
-            LLVM_DEBUG(dbgs() << "Using up to " << threads << " threads to emit aot image\n");
+            LLVM_DEBUG(dbgs() << "Using up to " << threads << " threads over " << nshards << " shards to emit aot image\n");
             nfvars = data->jl_sysimg_fvars.size();
             ngvars = data->jl_sysimg_gvars.size();
             emit_table(dataM, data->jl_sysimg_gvars, "jl_gvars", T_psize);
@@ -2406,7 +2453,7 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
         // auto lock = TSCtx.getLock();
         // auto dataM = data->M.getModuleUnlocked();
 
-        data_outputs = compile(dataM, "text", threads, text_jobserver, [data](Module &) {
+        data_outputs = compile(dataM, "text", threads, nshards, text_jobserver, [data](Module &) {
             // Delete data when add_output thinks it's done with it
             // Saves memory for use when multithreading
             delete data;
@@ -2467,9 +2514,9 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
             auto target_ids = new GlobalVariable(metadataM, value->getType(), true,
                                         GlobalVariable::InternalLinkage,
                                         value, "jl_dispatch_target_ids");
-            auto shards = emit_shard_table(metadataM, T_size, T_psize, threads);
+            auto shards = emit_shard_table(metadataM, T_size, T_psize, nshards);
             auto ptls = emit_ptls_table(metadataM, T_size, T_ptr);
-            auto header = emit_image_header(metadataM, threads, nfvars, ngvars);
+            auto header = emit_image_header(metadataM, nshards, nfvars, ngvars);
             auto AT = ArrayType::get(T_size, sizeof(jl_small_typeof) / sizeof(void*));
             auto jl_small_typeof_copy = new GlobalVariable(metadataM, AT, false,
                                                         GlobalVariable::ExternalLinkage,
@@ -2509,7 +2556,7 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
         }
 
         // no need to free module/context, destructor handles that
-        metadata_outputs = compile(metadataM, "data", 1, nullptr, [](Module &) {});
+        metadata_outputs = compile(metadataM, "data", 1, 1, nullptr, [](Module &) {});
     }
 
     {
@@ -2526,7 +2573,7 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
         SmallVector<NewArchiveMember, 0> archive; \
         SmallVector<std::string, 16> filenames; \
         SmallVector<StringRef, 16> buffers; \
-        for (size_t i = 0; i < threads; i++) { \
+        for (size_t i = 0; i < nshards; i++) { \
             filenames.push_back((StringRef("text") + prefix + "#" + Twine(i) + suffix).str()); \
             buffers.push_back(StringRef(data_outputs[i].field.data(), data_outputs[i].field.size())); \
         } \
