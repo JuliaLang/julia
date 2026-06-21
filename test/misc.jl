@@ -1433,6 +1433,57 @@ module KwdefWithEsc_TestModule
 end
 @test isdefined(KwdefWithEsc_TestModule, :Struct)
 
+@kwdef struct TestParametricType{T<:Number,S}
+    c::S = []
+    a::Bool = true
+    b::T = 2.0
+    d::T = 1.0
+end
+
+@kwdef struct TestParametricTypeWithUnused{T<:Number,Q,S}
+    c::S = []
+    a::Bool = true
+    b::T = 2.0
+    d::T = 1.0
+end
+
+@kwdef mutable struct TestParametricType2{S}
+    a = 1
+    "this field is nice"
+    const b = 2
+    @atomic(c::S) = 3
+end
+
+@testset "@kwdef with parametric type" begin
+    tpt1 = @test_nowarn TestParametricType(; a = 1)
+    tpt2 = @test_nowarn TestParametricType(; a = 1, b = 2)
+    tpt3 = @test_nowarn TestParametricType(; a = 1, b = 2, c = [])
+    @testset for tpt in (tpt1, tpt2, tpt3)
+        @test tpt.a # == true
+        @test tpt.b == 2
+        @test tpt.c == []
+        @test tpt.d == 1
+    end
+    @test_throws MethodError TestParametricTypeWithUnused()
+    tpt1 = @test_nowarn TestParametricTypeWithUnused{Int, String, Vector{Any}}(a = 1)
+    tpt2 = @test_nowarn TestParametricTypeWithUnused{Int, String, Vector{Any}}(a = 1, b = 2)
+    tpt3 = @test_nowarn TestParametricTypeWithUnused{Int, String, Vector{Any}}(a = 1, b = 2, c = [])
+    @testset for tpt in (tpt1, tpt2, tpt3)
+        @test tpt.a # == true
+        @test tpt.b == 2
+        @test tpt.c == []
+        @test tpt.d == 1
+    end
+    tpt1 = @test_nowarn TestParametricType2(a = 1)
+    tpt2 = @test_nowarn TestParametricType2(a = 1, b = 2)
+    tpt3 = @test_nowarn TestParametricType2(a = 1, b = 2, c = 3)
+    @testset for tpt in (tpt1, tpt2, tpt3)
+        @test tpt.a == 1
+        @test tpt.b == 2
+        @test tpt.c == 3
+    end
+end
+
 @testset "exports of modules" begin
     @testset "$mod" for (_, mod) in Base.loaded_modules
         mod === Main && continue # Main exports everything
