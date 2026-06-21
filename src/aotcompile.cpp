@@ -2105,26 +2105,30 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
     return outputs;
 }
 
-// Number of shards (output partitions) to split an image into. Sized by the
-// module's estimated codegen work, independent of the CPU/concurrency count: a
-// small module stays in a single shard (avoiding redundant per-shard re-parsing
-// of the serialized module), while a large one is split finely so peak memory
-// and load balance stay bounded as worker threads pull shards from the queue.
-// There is deliberately no upper cap -- a bigger package simply gets more
-// shards. The actual concurrency is chosen separately (compute_image_thread_count)
-// and capped to this count. Because it depends only on the module, the shard
-// layout is machine-independent (unlike the old core-based count).
-static unsigned compute_image_shard_count(const ModuleInfo &info) {
+// Number of shards (output partitions) to split an image into. This sets the
+// shard layout, separately from how many shards compile at once (concurrency,
+// see compute_image_thread_count). Two concerns drive it:
+//   * Bound peak working memory and per-shard overhead: each shard should carry
+//     roughly `weight_per_shard` of codegen work. Each shard re-parses the
+//     serialized module, so shards that are too small waste time on that fixed
+//     cost (see add_output's `deserialize` timer). A large module is split into
+//     ~`weight / weight_per_shard` shards (no upper cap), so peak working memory
+//     stays ~`concurrency * weight_per_shard` regardless of total module size.
+//   * Don't leave cores idle: a medium module below `weight_per_shard` would
+//     otherwise be a single serial shard, so a big long-tail package could not
+//     use the cores the jobserver frees at the end of a parallel precompile.
+//     So also ramp the shard count up toward `max_concurrency` as the module
+//     grows, keeping each such shard at least `min_shard` of work so the extra
+//     shards still pay for their per-shard overhead.
+// A tiny module stays in a single shard. Tune `weight_per_shard` with
+// JULIA_IMAGE_PARTITION_WEIGHT; measure per-stage cost with JULIA_IMAGE_TIMINGS.
+static unsigned compute_image_shard_count(const ModuleInfo &info, unsigned max_concurrency) {
     // 32-bit systems are very memory-constrained; never split.
 #ifdef _P32
     return 1;
 #endif
     if (jl_is_timing_passes) // LLVM isn't thread safe when timing the passes
         return 1;
-    // Target codegen weight per shard. Picked so the parallelizable optimize/emit
-    // work per shard dominates the fixed per-shard overhead (each shard re-parses
-    // the serialized module -- see add_output's `deserialize` timer). Tune with
-    // JULIA_IMAGE_PARTITION_WEIGHT; measure per-stage cost with JULIA_IMAGE_TIMINGS.
     size_t weight_per_shard = 500000;
     if (const char *env = getenv("JULIA_IMAGE_PARTITION_WEIGHT")) {
         char *endptr;
@@ -2134,7 +2138,15 @@ static unsigned compute_image_shard_count(const ModuleInfo &info) {
         else
             jl_safe_printf("WARNING: invalid value '%s' for JULIA_IMAGE_PARTITION_WEIGHT\n", env);
     }
-    return std::max<size_t>(1, info.weight / weight_per_shard);
+    // Fine-shard large modules to bound peak working memory.
+    size_t weight_bound = info.weight / weight_per_shard;
+    // Ramp up to fill the available cores for modules big enough to parallelize,
+    // keeping each forced shard >= weight_per_shard/4 so it still pays for its
+    // per-shard overhead. This is what keeps big long-tail packages from going
+    // serial and leaving jobserver-freed cores idle.
+    size_t min_shard = std::max<size_t>(weight_per_shard / 4, 1);
+    size_t core_fill = std::min<size_t>(max_concurrency, info.weight / min_shard);
+    return std::max<size_t>(1, std::max(weight_bound, core_fill));
 }
 
 static unsigned compute_image_thread_count(const ModuleInfo &info, bool jobserver_active, bool &explicit_override) {
@@ -2397,13 +2409,18 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
                 << "    clones: " << module_info.clones << "\n"
                 << "    weight: " << module_info.weight << "\n"
             );
-            // Shard count is sized by codegen work (machine-independent); the
-            // concurrency is sized by available CPU but never exceeds the shard
-            // count, so small modules don't spin up idle threads.
-            nshards = compute_image_shard_count(module_info);
+            // Concurrency is sized by available CPU / jobserver budget; the shard
+            // layout is sized by codegen work but floored at that concurrency for
+            // large modules (so big long-tail packages fill cores the jobserver
+            // frees), then concurrency is capped to the shard count so small
+            // modules don't spin up idle threads.
             bool explicit_threads = false;
             threads = compute_image_thread_count(module_info, jobserver.active(), explicit_threads);
+            nshards = compute_image_shard_count(module_info, threads);
             threads = std::min(threads, nshards);
+            if (getenv("JULIA_IMAGE_TIMINGS"))
+                jl_safe_printf("[image] \"text\" module weight %zu -> %u shards, up to %u threads\n",
+                               (size_t)module_info.weight, nshards, threads);
             if (jobserver.active() && !explicit_threads && threads > 1) {
                 // add_output rations the actual pool size from the shared token
                 // budget (up to `threads`), growing it as sibling workers finish,
