@@ -30,6 +30,8 @@ STATISTIC(SunkPreserveEnd, "Number of gc_preserve_end instructions sunk out of a
 STATISTIC(ErasedPreserveEnd, "Number of gc_preserve_end instructions removed from nonterminating loops");
 STATISTIC(HoistedWriteBarrier, "Number of write barriers hoisted out of a loop");
 STATISTIC(HoistedAllocation, "Number of allocations hoisted out of a loop");
+STATISTIC(HoistedTypeof, "Number of typeofs hoisted out of a loop");
+STATISTIC(HoistedPointerFromObjref, "Number of pointer_from_objref hoisted out of a loop");
 
 /*
  * Julia LICM pass.
@@ -127,15 +129,12 @@ static bool makeLoopInvariant(Loop *L, Value *V, bool &Changed, Instruction *Ins
 }
 
 struct JuliaLICM : public JuliaPassContext {
-    function_ref<DominatorTree &()> GetDT;
     function_ref<LoopInfo &()> GetLI;
     function_ref<MemorySSA *()> GetMSSA;
     function_ref<ScalarEvolution *()> GetSE;
-    JuliaLICM(function_ref<DominatorTree &()> GetDT,
-              function_ref<LoopInfo &()> GetLI,
+    JuliaLICM(function_ref<LoopInfo &()> GetLI,
               function_ref<MemorySSA *()> GetMSSA,
               function_ref<ScalarEvolution *()> GetSE) :
-                GetDT(GetDT),
                 GetLI(GetLI),
                 GetMSSA(GetMSSA),
                 GetSE(GetSE) {}
@@ -147,20 +146,18 @@ struct JuliaLICM : public JuliaPassContext {
         BasicBlock *preheader = L->getLoopPreheader();
         if (!preheader)
             return false;
-        BasicBlock *header = L->getHeader();
-        const llvm::DataLayout &DL = header->getModule()->getDataLayout();
-        initFunctions(*header->getModule());
+        const llvm::DataLayout &DL = preheader->getModule()->getDataLayout();
+        initFunctions(*preheader->getModule());
         // Also require `gc_preserve_begin_func` whereas
         // `gc_preserve_end_func` is optional since the input to
         // `gc_preserve_end_func` must be from `gc_preserve_begin_func`.
         // We also hoist write barriers here, so we don't exit if write_barrier_func exists
         if (!gc_preserve_begin_func && !write_barrier_func &&
-            !alloc_obj_func) {
+            !alloc_obj_func && !typeof_func && !pointer_from_objref_func) {
             LLVM_DEBUG(dbgs() << "No gc_preserve_begin_func or write_barrier_func or alloc_obj_func found, skipping JuliaLICM\n");
             return false;
         }
         auto LI = &GetLI();
-        auto DT = &GetDT();
         auto MSSA = GetMSSA();
         auto SE = GetSE();
         MemorySSAUpdater MSSAU(MSSA);
@@ -199,18 +196,15 @@ struct JuliaLICM : public JuliaPassContext {
                 // hoist the `begin` and if a `begin` dominates the loop the
                 // corresponding `end` can be moved to the loop exit.
                 if (callee == gc_preserve_begin_func) {
-                    bool canhoist = true;
-                    for (Use &U : call->args()) {
-                        // Check if all arguments are generated outside the loop
-                        auto origin = dyn_cast<Instruction>(U.get());
-                        if (!origin)
-                            continue;
-                        if (!DT->properlyDominates(origin->getParent(), header)) {
-                            canhoist = false;
+                    bool valid = true;
+                    for (std::size_t i = 0; i < call->arg_size(); i++) {
+                        if (!L->isLoopInvariant(call->getArgOperand(i))) {
+                            valid = false;
+                            LLVM_DEBUG(dbgs() << "gc_preserve_begin argument was not loop invariant: " << *call->getArgOperand(i) << "\n");
                             break;
                         }
                     }
-                    if (!canhoist)
+                    if (!valid)
                         continue;
                     ++HoistedPreserveBegin;
                     moveInstructionBefore(*call, *preheader->getTerminator(), MSSAU, SE);
@@ -223,8 +217,10 @@ struct JuliaLICM : public JuliaPassContext {
                 }
                 else if (callee == gc_preserve_end_func) {
                     auto begin = cast<Instruction>(call->getArgOperand(0));
-                    if (!DT->properlyDominates(begin->getParent(), header))
+                    if (!L->isLoopInvariant(begin)) {
+                        LLVM_DEBUG(dbgs() << "Failed to sink gc_preserve_end since the begin is not loop invariant: " << *begin << "\n");
                         continue;
+                    }
                     changed = true;
                     auto exit_pts = get_exit_pts();
                     if (exit_pts.empty()) {
@@ -346,6 +342,34 @@ struct JuliaLICM : public JuliaPassContext {
                         MSSAU.insertDef(cast<MemoryDef>(clear_mdef), true);
                     }
                     changed = true;
+                } else if (callee == typeof_func) {
+                    assert(call->arg_size() == 1);
+                    if (!L->isLoopInvariant(call->getArgOperand(0))) {
+                        LLVM_DEBUG(dbgs() << "Failed to hoist typeof because object is not loop invariant: " << *call->getArgOperand(0) << "\n");
+                        continue;
+                    }
+                    ++HoistedTypeof;
+                    moveInstructionBefore(*call, *preheader->getTerminator(), MSSAU, SE);
+                    changed = true;
+                    LLVM_DEBUG(dbgs() << "Hoisted typeof " << *call << "\n");
+                    REMARK([&](){
+                        return OptimizationRemark(DEBUG_TYPE, "Hoist", call)
+                            << "hoisting typeof " << ore::NV("typeof", call);
+                    });
+                } else if (callee == pointer_from_objref_func) {
+                    assert(call->arg_size() == 1);
+                    if (!L->isLoopInvariant(call->getArgOperand(0))) {
+                        LLVM_DEBUG(dbgs() << "Failed to hoist pointer_from_objref because object is not loop invariant: " << *call->getArgOperand(0) << "\n");
+                        continue;
+                    }
+                    ++HoistedPointerFromObjref;
+                    moveInstructionBefore(*call, *preheader->getTerminator(), MSSAU, SE);
+                    changed = true;
+                    LLVM_DEBUG(dbgs() << "Hoisted pointer_from_objref " << *call << "\n");
+                    REMARK([&](){
+                        return OptimizationRemark(DEBUG_TYPE, "Hoist", call)
+                            << "hoisting pointer_from_objref " << ore::NV("pointer_from_objref", call);
+                    });
                 }
             }
         }
@@ -365,9 +389,6 @@ PreservedAnalyses JuliaLICMPass::run(Loop &L, LoopAnalysisManager &AM,
                           LoopStandardAnalysisResults &AR, LPMUpdater &U)
 {
     OptimizationRemarkEmitter ORE(L.getHeader()->getParent());
-    auto GetDT = [&AR]() -> DominatorTree & {
-        return AR.DT;
-    };
     auto GetLI = [&AR]() -> LoopInfo & {
         return AR.LI;
     };
@@ -377,7 +398,7 @@ PreservedAnalyses JuliaLICMPass::run(Loop &L, LoopAnalysisManager &AM,
     auto GetSE = [&AR]() {
         return &AR.SE;
     };
-    auto juliaLICM = JuliaLICM(GetDT, GetLI, GetMSSA, GetSE);
+    auto juliaLICM = JuliaLICM(GetLI, GetMSSA, GetSE);
     if (juliaLICM.runOnLoop(&L, ORE)) {
 #ifdef JL_DEBUG_BUILD
         if (AR.MSSA)
