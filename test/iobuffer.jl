@@ -321,6 +321,38 @@ end
     @test_throws ArgumentError seek(io, 0)
 end
 
+@testset "seekend with offset" begin
+    # seekend(io, n) seeks `n` bytes relative to the end; non-seekable buffers reject n != 0.
+    io = IOBuffer()
+    write(io, "abcdef")
+    @test seekend(io, 0) === io
+    @test position(io) == 6
+    @test seekend(io, -2) === io
+    @test position(io) == 4
+    @test read(io, String) == "ef"
+    seekend(io, -3)
+    @test read(io, String) == "def"
+    # Positive n is clamped to the buffer's end (matches seek's clamping).
+    seekend(io, 2)
+    @test position(io) == 6
+
+    ub = new_unseekable_buffer()
+    write(ub, "xyz")
+    @test seekend(ub, 0) === ub
+    @test_throws ArgumentError seekend(ub, 1)
+    @test_throws ArgumentError seekend(ub, -1)
+
+    # Regression: with hidden offset bytes at the front of the buffer, a large negative n
+    # must not put io.ptr below the visible region and expose those bytes. popfirst! advances
+    # the Vector's memory ref, so the IOBuffer constructor records offset_or_compacted == 2.
+    v = UInt8['x', 'y', 'a', 'b', 'c']
+    popfirst!(v); popfirst!(v)
+    buf = IOBuffer(v; write=true, read=true)
+    @test seekend(buf, -100) === buf
+    @test position(buf) == 0
+    @test read(buf, String) == "abc"
+end
+
 @testset "takestring!" begin
     buf = IOBuffer()
     write(buf, "abcø")

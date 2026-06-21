@@ -558,6 +558,22 @@ end
 @test seekend(f2) == f2
 @test eof(f1)
 @test eof(f2)
+# seekend(f, n) seeks `n` bytes relative to the end of the file (filesize is 3).
+for fi in (f1, f2)
+    @test seekend(fi, 0) == fi
+    @test position(fi) == 3
+    @test seekend(fi, -2) == fi
+    @test position(fi) == 1
+    @test seekend(fi, 2) == fi
+    @test position(fi) == 5
+    # Atomic on error: a failing seekend(fi, n) must leave the position unchanged
+    # rather than at EOF (File: kernel lseek; IOStream: Julia-level save/restore).
+    seek(fi, 1)
+    @test_throws SystemError seekend(fi, -10)
+    @test position(fi) == 1
+    @test seekend(fi) == fi
+    @test position(fi) == 3
+end
 @test skip(f1, -2) == f1
 @test skip(f2, -2) == f2
 @test position(f1) == 1
