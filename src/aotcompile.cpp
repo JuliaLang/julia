@@ -2105,6 +2105,59 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
     return outputs;
 }
 
+// Target codegen weight per shard (the JULIA_IMAGE_PARTITION_WEIGHT knob);
+// shared by the shard-count and concurrency heuristics so they stay consistent.
+static size_t image_weight_per_shard() {
+    size_t weight_per_shard = 500000;
+    if (const char *env = getenv("JULIA_IMAGE_PARTITION_WEIGHT")) {
+        char *endptr;
+        unsigned long long val = strtoull(env, &endptr, 10);
+        if (endptr != env && !*endptr && val > 0)
+            weight_per_shard = (size_t)val;
+        else
+            jl_safe_printf("WARNING: invalid value '%s' for JULIA_IMAGE_PARTITION_WEIGHT\n", env);
+    }
+    return weight_per_shard;
+}
+
+// Rough estimate of the *marginal* codegen working memory each additional
+// concurrent shard adds, per unit of module `weight`. This is what should bound
+// concurrency: the bulk of a shard's footprint (the full module, the serialized
+// buffer, the accumulated outputs) is shared and does not scale with the thread
+// count, so this is smaller than a whole shard's peak. Heuristic; tune with
+// JULIA_IMAGE_CODEGEN_BYTES_PER_WEIGHT (and measure with JULIA_IMAGE_TIMINGS).
+static size_t image_codegen_bytes_per_weight() {
+    size_t bytes_per_weight = 2048; // ~1 GiB marginal for a default 500000-weight shard
+    if (const char *env = getenv("JULIA_IMAGE_CODEGEN_BYTES_PER_WEIGHT")) {
+        char *endptr;
+        unsigned long long val = strtoull(env, &endptr, 10);
+        if (endptr != env && !*endptr && val > 0)
+            bytes_per_weight = (size_t)val;
+        else
+            jl_safe_printf("WARNING: invalid value '%s' for JULIA_IMAGE_CODEGEN_BYTES_PER_WEIGHT\n", env);
+    }
+    return bytes_per_weight;
+}
+
+// Memory we are willing to dedicate to concurrent image codegen, in bytes.
+// Sized off the machine's *total* RAM (capped by any cgroup/container limit),
+// not momentarily-available memory: during a parallel build free memory is
+// transiently low (other build processes plus page cache), which would collapse
+// the budget and the thread count to 1. This is a capacity bound; CPU
+// oversubscription is handled separately (the jobserver). Headroom is left for
+// the build process itself, the GC, the accumulated outputs, and the OS.
+// Returns 0 if the platform does not report memory, so callers fall back to a
+// core-based default.
+static uint64_t image_codegen_memory_budget() {
+    uint64_t total = uv_get_total_memory();
+    uint64_t constrained = uv_get_constrained_memory();
+    if (constrained > 0 && (total == 0 || constrained < total))
+        total = constrained;
+    if (total == 0)
+        return 0;
+    return total / 10 * 6; // leave ~40% headroom
+}
+
 // Number of shards (output partitions) to split an image into. This sets the
 // shard layout, separately from how many shards compile at once (concurrency,
 // see compute_image_thread_count). Two concerns drive it:
@@ -2129,15 +2182,7 @@ static unsigned compute_image_shard_count(const ModuleInfo &info, unsigned max_c
 #endif
     if (jl_is_timing_passes) // LLVM isn't thread safe when timing the passes
         return 1;
-    size_t weight_per_shard = 500000;
-    if (const char *env = getenv("JULIA_IMAGE_PARTITION_WEIGHT")) {
-        char *endptr;
-        unsigned long long val = strtoull(env, &endptr, 10);
-        if (endptr != env && !*endptr && val > 0)
-            weight_per_shard = (size_t)val;
-        else
-            jl_safe_printf("WARNING: invalid value '%s' for JULIA_IMAGE_PARTITION_WEIGHT\n", env);
-    }
+    size_t weight_per_shard = image_weight_per_shard();
     // Fine-shard large modules to bound peak working memory.
     size_t weight_bound = info.weight / weight_per_shard;
     // Ramp up to fill the available cores for modules big enough to parallelize,
@@ -2165,12 +2210,30 @@ static unsigned compute_image_thread_count(const ModuleInfo &info, bool jobserve
         return 1;
     }
 
-    // With a jobserver coordinating across parallel workers, aim for all
-    // effective cores (the jobserver bounds the actual total); otherwise fall
-    // back to the conservative half-cores default to avoid oversubscription.
-    unsigned threads = jobserver_active
-        ? std::max(jl_effective_threads(), 1)
-        : std::max(jl_effective_threads() / 2, 1);
+    // Aim for all effective cores. With a jobserver the shared token budget
+    // bounds the actual total concurrency (and thus memory) across all worker
+    // processes. Without one (the sysimage build, or a single PackageCompiler
+    // run) this process owns the machine, so rather than the old blunt
+    // half-cores margin, bound concurrency by available memory: peak codegen
+    // memory is roughly `threads * bytes_per_weight * shard_weight`, and
+    // shard_weight is at most `weight_per_shard`, so cap threads at
+    // `budget / (bytes_per_weight * weight_per_shard)`.
+    unsigned threads = std::max(jl_effective_threads(), 1);
+    if (!jobserver_active) {
+        uint64_t budget = image_codegen_memory_budget();
+        if (budget != 0) {
+            uint64_t per_thread = (uint64_t)image_codegen_bytes_per_weight() * image_weight_per_shard();
+            unsigned mem_threads = (unsigned)std::max<uint64_t>(1, budget / std::max<uint64_t>(per_thread, 1));
+            if (mem_threads < threads) {
+                LLVM_DEBUG(dbgs() << "Limiting image codegen to " << mem_threads << " threads for the memory budget\n");
+                threads = mem_threads;
+            }
+        }
+        else {
+            // platform does not report memory: fall back to the conservative half
+            threads = std::max(jl_effective_threads() / 2, 1);
+        }
+    }
 
     auto max_threads = info.globals / 100;
     if (max_threads < threads) {
@@ -2419,8 +2482,10 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
             nshards = compute_image_shard_count(module_info, threads);
             threads = std::min(threads, nshards);
             if (getenv("JULIA_IMAGE_TIMINGS"))
-                jl_safe_printf("[image] \"text\" module weight %zu -> %u shards, up to %u threads\n",
-                               (size_t)module_info.weight, nshards, threads);
+                jl_safe_printf("[image] \"text\" module weight %zu -> %u shards, up to %u threads"
+                               " (codegen mem budget %llu MiB)\n",
+                               (size_t)module_info.weight, nshards, threads,
+                               (unsigned long long)(image_codegen_memory_budget() >> 20));
             if (jobserver.active() && !explicit_threads && threads > 1) {
                 // add_output rations the actual pool size from the shared token
                 // budget (up to `threads`), growing it as sibling workers finish,
