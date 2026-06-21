@@ -86,6 +86,26 @@ void lowerHaveFMA(Function &intr, Function &caller, const Triple &TT, CallInst *
     return;
 }
 
+void lowerPreferredVectorWidth(Function &intr, Function &caller, const Triple &TT, CallInst *I) JL_NOTSAFEPOINT {
+    auto intr_name = intr.getName();
+    auto typ = intr_name.substr(strlen("julia.cpu.preferred_vector_width."));
+
+    size_t width = 0;
+    if (typ == "b1")
+        width = 32;
+    else if (typ == "b2")
+        width = 16;
+    else if (typ == "b4")
+        width = 8;
+    else if (typ == "b8")
+        width = 4;
+    else if (typ == "b16")
+        width = 2;
+
+    I->replaceAllUsesWith(ConstantInt::get(I->getType(), width));
+    return;
+}
+
 bool lowerCPUFeatures(Module &M) JL_NOTSAFEPOINT
 {
     auto TT = Triple(M.getTargetTriple());
@@ -99,6 +119,15 @@ bool lowerCPUFeatures(Module &M) JL_NOTSAFEPOINT
                 User *RU = U.getUser();
                 CallInst *I = cast<CallInst>(RU);
                 lowerHaveFMA(F, *I->getParent()->getParent(), TT, I);
+                Materialized.push_back(I);
+            }
+        }
+
+        if (FN.starts_with("julia.cpu.preferred_vector_width.")) {
+            for (Use &U: F.uses()) {
+                User *RU = U.getUser();
+                CallInst *I = cast<CallInst>(RU);
+                lowerPreferredVectorWidth(F, *I->getParent()->getParent(), TT, I);
                 Materialized.push_back(I);
             }
         }
