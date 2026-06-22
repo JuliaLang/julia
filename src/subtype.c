@@ -876,7 +876,7 @@ static int subtype_ccheck(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
     // cov_diag on exit.
     int8_t *saved_cov = (int8_t*)alloca(current_env_length(e));
     int nsaved_cov = push_consistency_scope(e, saved_cov);
-    int sub = local_forall_exists_subtype(x, y, e, PARAM_NONE, 1);
+    int sub = local_forall_exists_subtype(x, y, e, PARAM_COVARIANT, 1);
     pop_consistency_scope(e, saved_cov, nsaved_cov);
     pop_unionstate(&e->Lunions, &oldLunions);
     return sub;
@@ -1399,10 +1399,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
         e->envidx++;
         ans = subtype(t, u->body, e, param);
         e->envidx--;
-        // widen Type{x} to typeof(x) in argument position
-        if (!vb.occurs_inv)
-            vb.lb = widen_Type_if_concrete(vb.lb);
-        }
+    }
     else
         ans = subtype(u->body, t, e, param);
 
@@ -1412,7 +1409,13 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     // !( Tuple{Int, String} <: Tuple{T, T} where T)
     // Then check concreteness by checking that the lower bound is not an abstract type.
     int diagonal = cov_count(&vb) > 1 && !vb.body_occurs_inv;
+    // Widen Type{x} to typeof(x) for ordinary argument-slot occurrences and
+    // diagonal constraints, but not invariant matches. This is only a local
+    // view for checks and envout; keep `vb.lb` structurally precise.
+    int widen_lb = !vb.occurs_inv && (diagonal || (vb.occurs_cov == 1 && vb.cov_diag == 0));
+    jl_value_t *widened_lb = widen_lb ? widen_Type_if_concrete(vb.lb) : vb.lb;
     if (ans && (vb.concrete || (diagonal && is_leaf_typevar(u->var)))) {
+        jl_value_t *concrete_lb = diagonal ? widened_lb : vb.lb;
         if (vb.concrete && !diagonal && !is_leaf_bound(vb.ub)) {
             // a non-diagonal var can only be a subtype of a diagonal var if its
             // upper bound is concrete.
@@ -1424,7 +1427,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
             if (vlb)
                 vlb->concrete = 1;
         }
-        else if (!is_leaf_bound(vb.lb)) {
+        else if (!is_leaf_bound(concrete_lb)) {
             ans = 0;
         }
     }
@@ -1499,46 +1502,47 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     // fill variable values into `envout` up to `envsz`
     if (R && ans && e->envidx < e->envsz) {
         jl_value_t *val;
+        jl_value_t *lb = widened_lb;
         jl_value_t *eff_ub = vb.ub;
         while (jl_is_typevar(eff_ub))
             eff_ub = ((jl_tvar_t*)eff_ub)->ub;
-        int eff_constrained = (vb.occurs_inv || (vb.occurs_cov && u->var->lb == jl_bottom_type));
-        if (vb.intvalued && vb.lb == (jl_value_t*)jl_any_type)
+        int eff_constrained = (vb.occurs_inv || (cov_count(&vb) && u->var->lb == jl_bottom_type));
+        if (vb.intvalued && lb == (jl_value_t*)jl_any_type)
             val = (jl_value_t*)jl_wrap_vararg(NULL, NULL, 0, 0); // special token result that represents N::Int in the envout
-        else if (!vb.occurs_inv && vb.lb != jl_bottom_type) {
-            if (is_leaf_bound(vb.lb)) {
-                val = vb.lb;
-            } else if (eff_constrained && !jl_has_free_typevars(t) && !jl_has_free_typevars(vb.lb) &&
+        else if (!vb.occurs_inv && lb != jl_bottom_type) {
+            if (is_leaf_bound(lb)) {
+                val = lb;
+            } else if (eff_constrained && !jl_has_free_typevars(t) && !jl_has_free_typevars(lb) &&
                        (jl_is_concrete_type(t) ||
                         (jl_is_datatype(t) && ((jl_datatype_t*)t)->isdispatchtuple))) {
                 // If the LHS is concrete, e.g. Type{Tuple{Ref}} vs Type{Tuple{S}} where {S<:T}, we'd like to still
                 // choose the least solution like below, so that our `eff_constrained` logic below is correct.
                 // Also accept dispatchtuples, which cover singleton-like LHSes such as
                 // `Tuple{typeof(f), Type{X}}` where the Type{} parameter pins to one runtime value.
-                // Refuse when `vb.lb` references universally-quantified vars from the
+                // Refuse when `lb` references universally-quantified vars from the
                 // current subtype environment: exposing it directly would leak sibling
                 // `where`-bound typevars (e.g. `where {S, T>:S}` would expose `S`).
-                val = vb.lb;
-            } else if (jl_is_typevar(vb.lb)) {
+                val = lb;
+            } else if (jl_is_typevar(lb)) {
                 // The path below would produce `T_new <: T`. This is redundant for bounds purposes,
                 // although it could affect diagonality in downstream uses. However, it is problematic
                 // to introduce a new tvar for safety here, because intersection can blow up on that
                 // pattern.
-                val = wrap_tvar_env(vb.lb, eff_constrained);
+                val = wrap_tvar_env(lb, eff_constrained);
             } else {
-                val = wrap_tvar_env((jl_value_t*)jl_new_typevar(u->var->name, jl_bottom_type, vb.lb), eff_constrained);
+                val = wrap_tvar_env((jl_value_t*)jl_new_typevar(u->var->name, jl_bottom_type, lb), eff_constrained);
             }
         }
-        else if (vb.lb == vb.ub || vb.lb != jl_bottom_type)
-            // TODO (vb.lb != jl_bottom_type): for now return the least solution, which is what
+        else if (lb == vb.ub || lb != jl_bottom_type)
+            // TODO (lb != jl_bottom_type): for now return the least solution, which is what
             // method parameters expect.
             if (vb.tainted_inner)
-                val = wrap_tvar_env(vb.lb, eff_constrained);
-            else if (has_universal_typevar(vb.lb, e))
-                val = wrap_tvar_env(vb.lb, eff_constrained);
+                val = wrap_tvar_env(lb, eff_constrained);
+            else if (has_universal_typevar(lb, e))
+                val = wrap_tvar_env(lb, eff_constrained);
             else
-                val = vb.lb;
-        else if (vb.lb == u->var->lb && vb.ub == u->var->ub && !new_tvar)
+                val = lb;
+        else if (lb == u->var->lb && vb.ub == u->var->ub && !new_tvar)
             val = wrap_tvar_env((jl_value_t*)u->var, eff_constrained);
         else {
             if (!new_tvar)
