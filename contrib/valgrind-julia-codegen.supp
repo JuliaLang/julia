@@ -1,0 +1,633 @@
+# https://github.com/JuliaLang/julia/issues/4533
+{
+   msync unwind
+   Memcheck:Param
+   write(buf)
+   ...
+   fun:validate_mem
+   ...
+   fun:rec_backtrace
+}
+
+{
+   <init_julia_llvm_env_1>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   ...
+   fun:_ZL19init_julia_llvm_envPN4llvm6ModuleE
+   fun:jl_init_codegen_impl
+   ...
+}
+
+{
+   <emit_function_1>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   ...
+   fun:_ZL13emit_functionP21_jl_method_instance_tP15_jl_code_info_tP11_jl_value_tR20_jl_codegen_params_tRN4llvm11LLVMContextE
+   fun:_Z12jl_emit_codeP21_jl_method_instance_tP15_jl_code_info_tP11_jl_value_tR20_jl_codegen_params_t
+   fun:_Z16jl_emit_codeinstP19_jl_code_instance_tP15_jl_code_info_tR20_jl_codegen_params_t
+   ...
+}
+
+{
+   <init_llvm>
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:_Znwm
+   fun:jl_init_llvm
+   fun:jl_init_codegen_impl
+   fun:jl_restore_system_image_from_stream
+   fun:ijl_restore_system_image_data
+   fun:jl_load_sysimg_so
+   fun:ijl_restore_system_image
+   fun:_finish_julia_init.isra.0
+   fun:julia_init
+   fun:jl_repl_entrypoint
+   fun:main
+}
+
+{
+   <init_jit_functions>
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:_Znwm
+   fun:init_jit_functions
+   fun:jl_init_codegen_impl
+   fun:jl_restore_system_image_from_stream
+   fun:ijl_restore_system_image_data
+   fun:jl_load_sysimg_so
+   fun:ijl_restore_system_image
+   fun:_finish_julia_init.isra.0
+   fun:julia_init
+   fun:jl_repl_entrypoint
+   fun:main
+}
+
+{
+   <gen_cfun_wrapper_restore_incremental_1>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:*
+   fun:Create
+   fun:_ZL16gen_cfun_wrapperPN4llvm6ModuleER20_jl_codegen_params_tRK14function_sig_tP11_jl_value_tPKcS8_P21_jl_method_instance_tP13jl_unionall_tP9jl_svec_tPP10jl_array_t
+   fun:_Z21jl_generate_ccallablePvS_P11_jl_value_tS1_R20_jl_codegen_params_tRN4llvm11LLVMContextE
+   fun:jl_compile_extern_c_impl
+   fun:_jl_restore_incremental
+   ...
+}
+
+{
+   <gen_cfun_wrapper_restore_incremental_2>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:*
+   fun:*
+   fun:realize
+   fun:realize
+   ...
+   fun:_ZL16gen_cfun_wrapperPN4llvm6ModuleER20_jl_codegen_params_tRK14function_sig_tP11_jl_value_tPKcS8_P21_jl_method_instance_tP13jl_unionall_tP9jl_svec_tPP10jl_array_t
+   fun:_Z21jl_generate_ccallablePvS_P11_jl_value_tS1_R20_jl_codegen_params_tRN4llvm11LLVMContextE
+   fun:jl_compile_extern_c_impl
+   fun:_jl_restore_incremental
+   ...
+}
+
+{
+   <gen_cfun_wrapper_restore_incremental_3>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:_ZNK4llvm8Function18BuildLazyArgumentsEv
+   fun:CheckLazyArguments
+   fun:arg_begin
+   fun:_ZL16gen_cfun_wrapperPN4llvm6ModuleER20_jl_codegen_params_tRK14function_sig_tP11_jl_value_tPKcS8_P21_jl_method_instance_tP13jl_unionall_tP9jl_svec_tPP10jl_array_t
+   fun:_Z21jl_generate_ccallablePvS_P11_jl_value_tS1_R20_jl_codegen_params_tRN4llvm11LLVMContextE
+   fun:jl_compile_extern_c_impl
+   fun:_jl_restore_incremental
+   ...
+}
+
+{
+   <gen_cfun_wrapper_restore_incremental_4>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:_ZN4llvm4UsernwEmj
+   ...
+   fun:_ZL11emit_jlcallR12jl_codectx_tPN4llvm8FunctionEPNS1_5ValueEPK10jl_cgval_tmj
+   fun:_ZL11emit_jlcallR12jl_codectx_tP13JuliaFunctionPN4llvm5ValueEPK10jl_cgval_tmj
+   fun:_ZL16gen_cfun_wrapperPN4llvm6ModuleER20_jl_codegen_params_tRK14function_sig_tP11_jl_value_tPKcS8_P21_jl_method_instance_tP13jl_unionall_tP9jl_svec_tPP10jl_array_t
+   fun:_Z21jl_generate_ccallablePvS_P11_jl_value_tS1_R20_jl_codegen_params_tRN4llvm11LLVMContextE
+   fun:jl_compile_extern_c_impl
+   fun:_jl_restore_incremental
+   ...
+}
+
+{
+   <gen_cfun_wrapper_restore_incremental_5>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:_ZN4llvm4UsernwEmj
+   fun:operator new
+   fun:_ZN4llvm13IRBuilderBase17CreateUnreachableEv
+   fun:_ZL14emit_typecheckR12jl_codectx_tRK10jl_cgval_tP11_jl_value_tRKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE
+   fun:_ZL16gen_cfun_wrapperPN4llvm6ModuleER20_jl_codegen_params_tRK14function_sig_tP11_jl_value_tPKcS8_P21_jl_method_instance_tP13jl_unionall_tP9jl_svec_tPP10jl_array_t
+   fun:_Z21jl_generate_ccallablePvS_P11_jl_value_tS1_R20_jl_codegen_params_tRN4llvm11LLVMContextE
+   fun:jl_compile_extern_c_impl
+   fun:_jl_restore_incremental
+   ...
+}
+
+{
+   <gen_cfun_wrapper_restore_incremental_6>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:_ZN4llvm4UsernwEmj
+   ...
+   fun:_ZL19emit_last_age_fieldR12jl_codectx_t
+   fun:_ZL16gen_cfun_wrapperPN4llvm6ModuleER20_jl_codegen_params_tRK14function_sig_tP11_jl_value_tPKcS8_P21_jl_method_instance_tP13jl_unionall_tP9jl_svec_tPP10jl_array_t
+   fun:_Z21jl_generate_ccallablePvS_P11_jl_value_tS1_R20_jl_codegen_params_tRN4llvm11LLVMContextE
+   fun:jl_compile_extern_c_impl
+   fun:_jl_restore_incremental
+   ...
+}
+
+{
+   <gen_cfun_wrapper_restore_incremental_7>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:_ZN4llvm4UsernwEmj
+   fun:operator new
+   fun:_ZN4llvm13IRBuilderBase17CreateAlignedLoadEPNS_4TypeEPNS_5ValueENS_10MaybeAlignEbRKNS_5TwineE.constprop.0
+   fun:CreateAlignedLoad
+   fun:_ZL16gen_cfun_wrapperPN4llvm6ModuleER20_jl_codegen_params_tRK14function_sig_tP11_jl_value_tPKcS8_P21_jl_method_instance_tP13jl_unionall_tP9jl_svec_tPP10jl_array_t
+   fun:_Z21jl_generate_ccallablePvS_P11_jl_value_tS1_R20_jl_codegen_params_tRN4llvm11LLVMContextE
+   fun:jl_compile_extern_c_impl
+   fun:_jl_restore_incremental
+   ...
+}
+
+{
+   <gen_cfun_wrapper_restore_incremental_8>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:_ZN4llvm4UsernwEmj
+   fun:*
+   fun:_ZL16gen_cfun_wrapperPN4llvm6ModuleER20_jl_codegen_params_tRK14function_sig_tP11_jl_value_tPKcS8_P21_jl_method_instance_tP13jl_unionall_tP9jl_svec_tPP10jl_array_t
+   fun:_Z21jl_generate_ccallablePvS_P11_jl_value_tS1_R20_jl_codegen_params_tRN4llvm11LLVMContextE
+   fun:jl_compile_extern_c_impl
+   fun:_jl_restore_incremental
+   ...
+}
+
+{
+   <gen_cfun_wrapper_restore_incremental_9>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:_ZN4llvm4UsernwEmjj
+   fun:Create
+   fun:_ZN4llvm13IRBuilderBase10CreateCallEPNS_12FunctionTypeEPNS_5ValueENS_8ArrayRefIS4_EERKNS_5TwineEPNS_6MDNodeE.constprop.0
+   fun:CreateCall
+   fun:_ZL17allocate_gc_frameR12jl_codectx_tPN4llvm10BasicBlockE.isra.0
+   fun:_ZL16gen_cfun_wrapperPN4llvm6ModuleER20_jl_codegen_params_tRK14function_sig_tP11_jl_value_tPKcS8_P21_jl_method_instance_tP13jl_unionall_tP9jl_svec_tPP10jl_array_t
+   fun:_Z21jl_generate_ccallablePvS_P11_jl_value_tS1_R20_jl_codegen_params_tRN4llvm11LLVMContextE
+   fun:jl_compile_extern_c_impl
+   fun:_jl_restore_incremental
+   ...
+}
+
+{
+   <gen_cfun_wrapper_restore_incremental_10>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:*
+   fun:operator new
+   fun:CreateICmp
+   fun:_ZN4llvm13IRBuilderBase10CreateICmpENS_7CmpInst9PredicateEPNS_5ValueES4_RKNS_5TwineE
+   fun:CreateICmpNE
+   fun:CreateIsNotNull
+   fun:_ZL16gen_cfun_wrapperPN4llvm6ModuleER20_jl_codegen_params_tRK14function_sig_tP11_jl_value_tPKcS8_P21_jl_method_instance_tP13jl_unionall_tP9jl_svec_tPP10jl_array_t
+   fun:_Z21jl_generate_ccallablePvS_P11_jl_value_tS1_R20_jl_codegen_params_tRN4llvm11LLVMContextE
+   fun:jl_compile_extern_c_impl
+   fun:_jl_restore_incremental
+   ...
+}
+
+{
+   <gen_cfun_wrapper_restore_incremental_11>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:*
+   fun:operator new
+   fun:_ZN4llvm13IRBuilderBase18CreateAlignedStoreEPNS_5ValueES2_NS_10MaybeAlignEb.constprop.0
+   fun:CreateStore
+   fun:_ZL16gen_cfun_wrapperPN4llvm6ModuleER20_jl_codegen_params_tRK14function_sig_tP11_jl_value_tPKcS8_P21_jl_method_instance_tP13jl_unionall_tP9jl_svec_tPP10jl_array_t
+   fun:_Z21jl_generate_ccallablePvS_P11_jl_value_tS1_R20_jl_codegen_params_tRN4llvm11LLVMContextE
+   fun:jl_compile_extern_c_impl
+   fun:_jl_restore_incremental
+   ...
+}
+
+{
+   <gen_cfun_wrapper_restore_incremental_11>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:calloc
+   fun:_ZN4llvm13StringMapImpl15LookupBucketForENS_9StringRefE
+   fun:_ZN4llvm16ValueSymbolTable15createValueNameENS_9StringRefEPNS_5ValueE
+   fun:_ZN4llvm5Value11setNameImplERKNS_5TwineE
+   fun:_ZN4llvm5Value7setNameERKNS_5TwineE
+   fun:Create
+   fun:_ZL16gen_cfun_wrapperPN4llvm6ModuleER20_jl_codegen_params_tRK14function_sig_tP11_jl_value_tPKcS8_P21_jl_method_instance_tP13jl_unionall_tP9jl_svec_tPP10jl_array_t
+   fun:_Z21jl_generate_ccallablePvS_P11_jl_value_tS1_R20_jl_codegen_params_tRN4llvm11LLVMContextE
+   fun:jl_compile_extern_c_impl
+   fun:_jl_restore_incremental
+   ...
+}
+
+
+{
+   <PM_1>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:_ZN4llvm7MDTuple7getImplERNS_11LLVMContextENS_8ArrayRefIPNS_8MetadataEEENS4_11StorageTypeEb
+   fun:_ZL24DisableAllLoopOptsOnLoopRN4llvm4LoopE
+   fun:_ZN12_GLOBAL__N_115LoopConstrainer3runEv
+   fun:_ZN12_GLOBAL__N_130InductiveRangeCheckElimination3runEPN4llvm4LoopENS1_12function_refIFvS3_bEEE
+   fun:_ZN12_GLOBAL__N_114IRCELegacyPass13runOnFunctionERN4llvm8FunctionE
+   fun:_ZN4llvm13FPPassManager13runOnFunctionERNS_8FunctionE
+   fun:_ZN4llvm13FPPassManager11runOnModuleERNS_6ModuleE
+   fun:_ZN4llvm6legacy15PassManagerImpl3runERNS_6ModuleE
+   fun:_ZN9JuliaOJIT9CompilerTclERN4llvm6ModuleE
+   fun:_ZN4llvm3orc14IRCompileLayer4emitESt10unique_ptrINS0_29MaterializationResponsibilityESt14default_deleteIS3_EENS0_16ThreadSafeModuleE
+   fun:_ZN4llvm3orc31BasicIRLayerMaterializationUnit11materializeESt10unique_ptrINS0_29MaterializationResponsibilityESt14default_deleteIS3_EE
+}
+
+{
+   <PM_2>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:_ZN4llvm6MDNodenwEmj
+   fun:_ZN4llvm10DILocation7getImplERNS_11LLVMContextEjjPNS_8MetadataES4_bNS3_11StorageTypeEb
+   fun:_ZN4llvm10DILocation17getMergedLocationEPKS0_S2_.part.938
+   ...
+   fun:_ZN4llvm16InstCombinerImpl3runEv
+   fun:_ZL31combineInstructionsOverFunctionRN4llvm8FunctionERNS_19InstCombineWorklistEPNS_9AAResultsERNS_15AssumptionCacheERNS_17TargetLibraryInfoERNS_19TargetTransformInfoERNS_13DominatorTreeERNS_25OptimizationRemarkEmitterEPNS_18BlockFrequencyInfoEPNS_18ProfileSummaryInfoEjPNS_8LoopInfoE
+   fun:_ZN4llvm24InstructionCombiningPass13runOnFunctionERNS_8FunctionE
+   ...
+}
+
+{
+   <PM_3>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:_ZN4llvm7MDTuple7getImplERNS_11LLVMContextENS_8ArrayRefIPNS_8MetadataEEENS4_11StorageTypeEb
+   ...
+   fun:tbaa_make_child_with_context
+   fun:_ZN16JuliaPassContext13initFunctionsERN4llvm6ModuleE
+   fun:_ZN16JuliaPassContext7initAllERN4llvm6ModuleE
+   fun:doInitialization
+   fun:_ZN12_GLOBAL__N_114AllocOptLegacy16doInitializationERN4llvm6ModuleE
+   fun:_ZN4llvm13FPPassManager16doInitializationERNS_6ModuleE
+   fun:_ZN4llvm6legacy15PassManagerImpl3runERNS_6ModuleE
+   fun:_ZN9JuliaOJIT9CompilerTclERN4llvm6ModuleE
+   fun:_ZN4llvm3orc14IRCompileLayer4emitESt10unique_ptrINS0_29MaterializationResponsibilityESt14default_deleteIS3_EENS0_16ThreadSafeModuleE
+   fun:_ZN4llvm3orc31BasicIRLayerMaterializationUnit11materializeESt10unique_ptrINS0_29MaterializationResponsibilityESt14default_deleteIS3_EE
+   fun:_ZN4llvm3orc19MaterializationTask3runEv
+}
+
+{
+   <PM_4>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:_ZN4llvm7MDTuple7getImplERNS_11LLVMContextENS_8ArrayRefIPNS_8MetadataEEENS4_11StorageTypeEb
+   ...
+   fun:_ZN16LateLowerGCFrame9CleanupIRERN4llvm8FunctionEP5StatePb
+   fun:_ZN16LateLowerGCFrame13runOnFunctionERN4llvm8FunctionEPb
+   fun:_ZN22LateLowerGCFrameLegacy13runOnFunctionERN4llvm8FunctionE
+   fun:_ZN4llvm13FPPassManager13runOnFunctionERNS_8FunctionE
+   fun:_ZN4llvm13FPPassManager11runOnModuleERNS_6ModuleE
+   fun:_ZN4llvm6legacy15PassManagerImpl3runERNS_6ModuleE
+   fun:_ZN9JuliaOJIT9CompilerTclERN4llvm6ModuleE
+   fun:_ZN4llvm3orc14IRCompileLayer4emitESt10unique_ptrINS0_29MaterializationResponsibilityESt14default_deleteIS3_EENS0_16ThreadSafeModuleE
+   fun:_ZN4llvm3orc31BasicIRLayerMaterializationUnit11materializeESt10unique_ptrINS0_29MaterializationResponsibilityESt14default_deleteIS3_EE
+}
+
+{
+   <PM_5>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:_ZN4llvm6MDNodenwEmj
+   fun:_ZN4llvm10DILocation7getImplERNS_11LLVMContextEjjPNS_8MetadataES4_bNS3_11StorageTypeEb
+   fun:_ZN4llvm11Instruction12dropLocationEv
+   fun:_ZN4llvm11hoistRegionEPNS_15DomTreeNodeBaseINS_10BasicBlockEEEPNS_9AAResultsEPNS_8LoopInfoEPNS_13DominatorTreeEPNS_18BlockFrequencyInfoEPNS_17TargetLibraryInfoEPNS_4LoopEPNS_15AliasSetTrackerEPNS_16MemorySSAUpdaterEPNS_15ScalarEvolutionEPNS_17ICFLoopSafetyInfoERNS_21SinkAndHoistLICMFlagsEPNS_25OptimizationRemarkEmitterEb
+   fun:_ZN12_GLOBAL__N_123LoopInvariantCodeMotion9runOnLoopEPN4llvm4LoopEPNS1_9AAResultsEPNS1_8LoopInfoEPNS1_13DominatorTreeEPNS1_18BlockFrequencyInfoEPNS1_17TargetLibraryInfoEPNS1_19TargetTransformInfoEPNS1_15ScalarEvolutionEPNS1_9MemorySSAEPNS1_25OptimizationRemarkEmitterEb.part.784
+   fun:_ZN12_GLOBAL__N_114LegacyLICMPass9runOnLoopEPN4llvm4LoopERNS1_13LPPassManagerE
+   fun:_ZN4llvm13LPPassManager13runOnFunctionERNS_8FunctionE
+   fun:_ZN4llvm13FPPassManager13runOnFunctionERNS_8FunctionE
+   fun:_ZN4llvm13FPPassManager11runOnModuleERNS_6ModuleE
+   fun:_ZN4llvm6legacy15PassManagerImpl3runERNS_6ModuleE
+   fun:_ZN9JuliaOJIT9CompilerTclERN4llvm6ModuleE
+}
+
+{
+   <PM_6>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:_ZN4llvm7MDTuple7getImplERNS_11LLVMContextENS_8ArrayRefIPNS_8MetadataEEENS4_11StorageTypeEb
+   fun:_ZN4llvm23addStringMetadataToLoopEPNS_4LoopEPKcj
+   fun:_ZN4llvm8peelLoopEPNS_4LoopEjPNS_8LoopInfoEPNS_15ScalarEvolutionEPNS_13DominatorTreeEPNS_15AssumptionCacheEb
+   fun:_ZL15tryToUnrollLoopPN4llvm4LoopERNS_13DominatorTreeEPNS_8LoopInfoERNS_15ScalarEvolutionERKNS_19TargetTransformInfoERNS_15AssumptionCacheERNS_25OptimizationRemarkEmitterEPNS_18BlockFrequencyInfoEPNS_18ProfileSummaryInfoEbibbNS_8OptionalIjEESK_NSJ_IbEESL_SL_SL_SL_SK_
+   fun:_ZN12_GLOBAL__N_110LoopUnroll9runOnLoopEPN4llvm4LoopERNS1_13LPPassManagerE
+   fun:_ZN4llvm13LPPassManager13runOnFunctionERNS_8FunctionE
+   fun:_ZN4llvm13FPPassManager13runOnFunctionERNS_8FunctionE
+   fun:_ZN4llvm13FPPassManager11runOnModuleERNS_6ModuleE
+   fun:_ZN4llvm6legacy15PassManagerImpl3runERNS_6ModuleE
+   fun:_ZN9JuliaOJIT9CompilerTclERN4llvm6ModuleE
+   fun:_ZN4llvm3orc14IRCompileLayer4emitESt10unique_ptrINS0_29MaterializationResponsibilityESt14default_deleteIS3_EENS0_16ThreadSafeModuleE
+}
+
+{
+   <PM_7>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:_ZN4llvm7MDTuple7getImplERNS_11LLVMContextENS_8ArrayRefIPNS_8MetadataEEENS4_11StorageTypeEb
+   fun:_ZN4llvm9MDBuilder19createBranchWeightsEjj
+   fun:_ZL16setBranchWeightsPN4llvm11InstructionEjj
+   fun:_ZN4llvm22FoldBranchToCommonDestEPNS_10BranchInstEPNS_14DomTreeUpdaterEPNS_16MemorySSAUpdaterEPKNS_19TargetTransformInfoEj.part.1126
+   fun:_ZN4llvm11simplifyCFGEPNS_10BasicBlockERKNS_19TargetTransformInfoEPNS_14DomTreeUpdaterERKNS_18SimplifyCFGOptionsENS_8ArrayRefINS_6WeakVHEEE
+   fun:_ZL22iterativelySimplifyCFGRN4llvm8FunctionERKNS_19TargetTransformInfoEPNS_14DomTreeUpdaterERKNS_18SimplifyCFGOptionsE
+   fun:_ZL23simplifyFunctionCFGImplRN4llvm8FunctionERKNS_19TargetTransformInfoEPNS_13DominatorTreeERKNS_18SimplifyCFGOptionsE
+   fun:_ZN4llvm13FPPassManager13runOnFunctionERNS_8FunctionE
+   fun:_ZN4llvm13FPPassManager11runOnModuleERNS_6ModuleE
+   fun:_ZN4llvm6legacy15PassManagerImpl3runERNS_6ModuleE
+   fun:_ZN9JuliaOJIT9CompilerTclERN4llvm6ModuleE
+}
+
+{
+   <PM_8>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:_ZN4llvm7MDTuple7getImplERNS_11LLVMContextENS_8ArrayRefIPNS_8MetadataEEENS4_11StorageTypeEb
+   fun:_ZN4llvm11Instruction16swapProfMetadataEv
+   fun:_ZN4llvm16InstCombinerImpl22freelyInvertAllUsersOfEPNS_5ValueE
+   fun:_ZN4llvm16InstCombinerImpl25canonicalizeICmpPredicateERNS_7CmpInstE
+   fun:_ZN4llvm16InstCombinerImpl13visitICmpInstERNS_8ICmpInstE
+   fun:_ZN4llvm16InstCombinerImpl3runEv
+   fun:_ZL31combineInstructionsOverFunctionRN4llvm8FunctionERNS_19InstCombineWorklistEPNS_9AAResultsERNS_15AssumptionCacheERNS_17TargetLibraryInfoERNS_19TargetTransformInfoERNS_13DominatorTreeERNS_25OptimizationRemarkEmitterEPNS_18BlockFrequencyInfoEPNS_18ProfileSummaryInfoEjPNS_8LoopInfoE
+   fun:_ZN4llvm24InstructionCombiningPass13runOnFunctionERNS_8FunctionE
+   fun:_ZN4llvm13FPPassManager13runOnFunctionERNS_8FunctionE
+   fun:_ZN4llvm13FPPassManager11runOnModuleERNS_6ModuleE
+   fun:_ZN4llvm6legacy15PassManagerImpl3runERNS_6ModuleE
+}
+
+
+{
+   <PM_9>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:_ZN4llvm6MDNodenwEmj
+   fun:_ZN4llvm10DILocation7getImplERNS_11LLVMContextEjjPNS_8MetadataES4_bNS3_11StorageTypeEb
+   fun:_ZN4llvm10DILocation17getMergedLocationEPKS0_S2_.part.938
+   fun:_ZN4llvm11Instruction19applyMergedLocationEPKNS_10DILocationES3_
+   fun:_ZN12_GLOBAL__N_114PromoteMem2Reg10RenamePassEPN4llvm10BasicBlockES3_RSt6vectorIPNS1_5ValueESaIS6_EERS4_INS1_8DebugLocESaISA_EERS4_INS_14RenamePassDataESaISE_EE
+   fun:_ZN12_GLOBAL__N_114PromoteMem2Reg3runEv
+   fun:_ZN4llvm15PromoteMemToRegENS_8ArrayRefIPNS_10AllocaInstEEERNS_13DominatorTreeEPNS_15AssumptionCacheE
+   fun:_ZN4llvm4SROA7runImplERNS_8FunctionERNS_13DominatorTreeERNS_15AssumptionCacheE
+   fun:_ZN4llvm4sroa14SROALegacyPass13runOnFunctionERNS_8FunctionE
+   fun:_ZN4llvm13FPPassManager13runOnFunctionERNS_8FunctionE
+   fun:_ZN4llvm13FPPassManager11runOnModuleERNS_6ModuleE
+}
+
+{
+   <PM_10>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:_ZN4llvm6MDNodenwEmj
+   fun:_ZN4llvm10DILocation7getImplERNS_11LLVMContextEjjPNS_8MetadataES4_bNS3_11StorageTypeEb
+   fun:_ZN4llvm10DILocation17getMergedLocationEPKS0_S2_.part.938
+   fun:_ZL11performSinkRN4llvm12MachineInstrERNS_17MachineBasicBlockENS_26MachineInstrBundleIteratorIS0_Lb0EEERNS_15SmallVectorImplISt4pairIPS0_NS_11SmallVectorIjLj2EEEEEE
+   ...
+}
+
+{
+   <PM_11>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:_ZN4llvm6MDNodenwEmj
+   fun:_ZN4llvm10DILocation7getImplERNS_11LLVMContextEjjPNS_8MetadataES4_bNS3_11StorageTypeEb
+   fun:_ZN4llvm10DILocation17getMergedLocationEPKS0_S2_.part.938
+   fun:_ZN4llvm11Instruction19applyMergedLocationEPKNS_10DILocationES3_
+   fun:_ZN12_GLOBAL__N_114SimplifyCFGOpt21HoistThenElseCodeToIfEPN4llvm10BranchInstERKNS1_19TargetTransformInfoEb
+   ...
+}
+
+{
+   <PM_12>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:_ZN4llvm7MDTuple7getImplERNS_11LLVMContextENS_8ArrayRefIPNS_8MetadataEEENS4_11StorageTypeEb
+   fun:getDistinct
+   fun:getDistinct
+   fun:_ZN12_GLOBAL__N_1L12markLoopInfoERN4llvm6ModuleEPNS0_8FunctionENS0_12function_refIFRNS0_8LoopInfoERS3_EEE.isra.0
+   fun:_ZN12_GLOBAL__N_119LowerSIMDLoopLegacy11runOnModuleERN4llvm6ModuleE
+   fun:_ZN4llvm6legacy15PassManagerImpl3runERNS_6ModuleE
+   fun:_ZN9JuliaOJIT9CompilerTclERN4llvm6ModuleE
+   fun:_ZN4llvm3orc14IRCompileLayer4emitESt10unique_ptrINS0_29MaterializationResponsibilityESt14default_deleteIS3_EENS0_16ThreadSafeModuleE
+   fun:_ZN4llvm3orc31BasicIRLayerMaterializationUnit11materializeESt10unique_ptrINS0_29MaterializationResponsibilityESt14default_deleteIS3_EE
+   fun:_ZN4llvm3orc19MaterializationTask3runEv
+   fun:_ZN4llvm6detail18UniqueFunctionBaseIvJSt10unique_ptrINS_3orc4TaskESt14default_deleteIS4_EEEE8CallImplIPFvS7_EEEvPvRS7_
+   fun:_ZN4llvm3orc16ExecutionSession22dispatchOutstandingMUsEv
+   fun:_ZN4llvm3orc16ExecutionSession17OL_completeLookupESt10unique_ptrINS0_21InProgressLookupStateESt14default_deleteIS3_EESt10shared_ptrINS0_23AsynchronousSymbolQueryEESt8functionIFvRKNS_8DenseMapIPNS0_8JITDylibENS_8DenseSetINS0_15SymbolStringPtrENS_12DenseMapInfoISF_EEEENSG_ISD_EENS_6detail12DenseMapPairISD_SI_EEEEEE
+}
+
+{
+   <PM_14>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:_ZN4llvm7MDTuple7getImplERNS_11LLVMContextENS_8ArrayRefIPNS_8MetadataEEENS4_11StorageTypeEb
+   fun:get
+   fun:get
+   fun:_ZN12_GLOBAL__N_1L12markLoopInfoERN4llvm6ModuleEPNS0_8FunctionENS0_12function_refIFRNS0_8LoopInfoERS3_EEE.isra.0
+   fun:_ZN12_GLOBAL__N_119LowerSIMDLoopLegacy11runOnModuleERN4llvm6ModuleE
+   fun:_ZN4llvm6legacy15PassManagerImpl3runERNS_6ModuleE
+   fun:_ZN9JuliaOJIT9CompilerTclERN4llvm6ModuleE
+   fun:_ZN4llvm3orc14IRCompileLayer4emitESt10unique_ptrINS0_29MaterializationResponsibilityESt14default_deleteIS3_EENS0_16ThreadSafeModuleE
+   fun:_ZN4llvm3orc31BasicIRLayerMaterializationUnit11materializeESt10unique_ptrINS0_29MaterializationResponsibilityESt14default_deleteIS3_EE
+   fun:_ZN4llvm3orc19MaterializationTask3runEv
+   fun:_ZN4llvm6detail18UniqueFunctionBaseIvJSt10unique_ptrINS_3orc4TaskESt14default_deleteIS4_EEEE8CallImplIPFvS7_EEEvPvRS7_
+   fun:_ZN4llvm3orc16ExecutionSession22dispatchOutstandingMUsEv
+   fun:_ZN4llvm3orc16ExecutionSession17OL_completeLookupESt10unique_ptrINS0_21InProgressLookupStateESt14default_deleteIS3_EESt10shared_ptrINS0_23AsynchronousSymbolQueryEESt8functionIFvRKNS_8DenseMapIPNS0_8JITDylibENS_8DenseSetINS0_15SymbolStringPtrENS_12DenseMapInfoISF_EEEENSG_ISD_EENS_6detail12DenseMapPairISD_SI_EEEEEE
+}
+
+{
+   <PM_15>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:_ZN4llvm6MDNodenwEmj
+   fun:_ZN4llvm10DILocation7getImplERNS_11LLVMContextEjjPNS_8MetadataES4_bNS3_11StorageTypeEb
+   fun:_ZN4llvm10DILocation17getMergedLocationEPKS0_S2_.part.938
+   fun:_ZN4llvm20ConstantHoistingPass17emitBaseConstantsEPNS_14GlobalVariableE
+   fun:_ZN4llvm20ConstantHoistingPass7runImplERNS_8FunctionERNS_19TargetTransformInfoERNS_13DominatorTreeEPNS_18BlockFrequencyInfoERNS_10BasicBlockEPNS_18ProfileSummaryInfoE
+   fun:_ZN12_GLOBAL__N_126ConstantHoistingLegacyPass13runOnFunctionERN4llvm8FunctionE
+   fun:_ZN4llvm13FPPassManager13runOnFunctionERNS_8FunctionE
+   fun:_ZN4llvm13FPPassManager11runOnModuleERNS_6ModuleE
+   fun:_ZN4llvm6legacy15PassManagerImpl3runERNS_6ModuleE
+   fun:_ZN9JuliaOJIT9CompilerTclERN4llvm6ModuleE
+   fun:_ZN4llvm3orc14IRCompileLayer4emitESt10unique_ptrINS0_29MaterializationResponsibilityESt14default_deleteIS3_EENS0_16ThreadSafeModuleE
+}
+
+{
+   <PM_16>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:_ZN4llvm4UsernwEmj
+   fun:_ZN4llvm14ConstantVector3getENS_8ArrayRefIPNS_8ConstantEEE
+   fun:_ZN4llvm36ConstantFoldInsertElementInstructionEPNS_8ConstantES1_S1_
+   fun:_ZN4llvm12ConstantExpr16getInsertElementEPNS_8ConstantES2_S2_PNS_4TypeE
+   fun:_ZZN4llvm13slpvectorizer7BoUpSLP6gatherENS_8ArrayRefIPNS_5ValueEEEENKUlS4_S4_jE0_clES4_S4_j
+   fun:_ZN4llvm13slpvectorizer7BoUpSLP6gatherENS_8ArrayRefIPNS_5ValueEEE
+   fun:_ZN4llvm13slpvectorizer7BoUpSLP13vectorizeTreeENS_8ArrayRefIPNS_5ValueEEE
+   fun:_ZN4llvm13slpvectorizer7BoUpSLP13vectorizeTreeEPNS1_9TreeEntryE
+   fun:_ZN4llvm13slpvectorizer7BoUpSLP13vectorizeTreeERNS_9MapVectorIPNS_5ValueENS_11SmallVectorIPNS_11InstructionELj2EEENS_8DenseMapIS4_jNS_12DenseMapInfoIS4_EENS_6detail12DenseMapPairIS4_jEEEESt6vectorISt4pairIS4_S8_ESaISI_EEEE
+   fun:_ZN4llvm13slpvectorizer7BoUpSLP13vectorizeTreeEv
+   fun:_ZN4llvm17SLPVectorizerPass19vectorizeStoreChainENS_8ArrayRefIPNS_5ValueEEERNS_13slpvectorizer7BoUpSLPEj
+}
+
+{
+   <PM_17>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:_ZN4llvm6MDNodenwEmj
+   fun:_ZN4llvm10DILocation7getImplERNS_11LLVMContextEjjPNS_8MetadataES4_bNS3_11StorageTypeEb
+   fun:_ZL16fixupLineNumbersPN4llvm8FunctionENS_14ilist_iteratorINS_12ilist_detail12node_optionsINS_10BasicBlockELb0ELb0EvEELb0ELb0EEEPNS_11InstructionEb
+   fun:_ZN4llvm14InlineFunctionERNS_8CallBaseERNS_18InlineFunctionInfoEPNS_9AAResultsEbPNS_8FunctionE
+   fun:_ZN4llvm17LegacyInlinerBase11inlineCallsERNS_12CallGraphSCCE
+   fun:_ZN12_GLOBAL__N_113CGPassManager11runOnModuleERN4llvm6ModuleE
+   ...
+}
+
+
+{
+   <PM_18>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:_ZN12_GLOBAL__N_1L20createELFDebugObjectERKN4llvm6object10ObjectFileERKNS_19LoadedELFObjectInfoE
+   fun:_ZNK12_GLOBAL__N_119LoadedELFObjectInfo17getObjectForDebugERKN4llvm6object10ObjectFileE
+   fun:_Z23registerRTDyldJITObjectRKN4llvm6object10ObjectFileERKNS_11RuntimeDyld16LoadedObjectInfoERKSt10shared_ptrINS_19RTDyldMemoryManagerEE
+   ...
+}
+
+{
+   <PM_19>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_ZnwmRKSt9nothrow_t
+   fun:_ZN4llvm20WritableMemoryBuffer21getNewUninitMemBufferEmRKNS_5TwineE
+   fun:_ZN4llvm12MemoryBuffer16getMemBufferCopyENS_9StringRefERKNS_5TwineE
+   fun:_ZN12_GLOBAL__N_1L20createELFDebugObjectERKN4llvm6object10ObjectFileERKNS_19LoadedELFObjectInfoE
+   fun:_ZNK12_GLOBAL__N_119LoadedELFObjectInfo17getObjectForDebugERKN4llvm6object10ObjectFileE
+   fun:_Z23registerRTDyldJITObjectRKN4llvm6object10ObjectFileERKNS_11RuntimeDyld16LoadedObjectInfoERKSt10shared_ptrINS_19RTDyldMemoryManagerEE
+   ...
+}
+
+{
+   <PM_20>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:_ZN4llvm6MDNodenwEmj
+   fun:_ZN4llvm10DILocation7getImplERNS_11LLVMContextEjjPNS_8MetadataES4_bNS3_11StorageTypeEb
+   fun:_ZN4llvm10DILocation17getMergedLocationEPKS0_S2_.part.938
+   fun:_ZL23simplifyFunctionCFGImplRN4llvm8FunctionERKNS_19TargetTransformInfoEPNS_13DominatorTreeERKNS_18SimplifyCFGOptionsE
+   fun:_ZN4llvm13FPPassManager13runOnFunctionERNS_8FunctionE
+   ...
+}
+
+{
+   <memcpy>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:_ZN4llvm7MDTuple7getImplERNS_11LLVMContextENS_8ArrayRefIPNS_8MetadataEEENS4_11StorageTypeEb
+   fun:_ZL15createAccessTagPKN4llvm6MDNodeE
+   fun:_ZL15matchAccessTagsPKN4llvm6MDNodeES2_PS2_.part.77
+   fun:_ZN4llvm6MDNode18getMostGenericTBAAEPS0_S1_
+   fun:_ZL16emit_memcpy_llvmR12jl_codectx_tPN4llvm5ValueEPNS1_6MDNodeES3_S5_mjb.part.0
+   fun:emit_memcpy_llvm
+   fun:emit_memcpy<int&>
+   fun:init_bits_cgval
+   fun:_ZL5boxedR12jl_codectx_tRK10jl_cgval_t
+   fun:_ZL15emit_new_structR12jl_codectx_tP11_jl_value_tmPK10jl_cgval_t
+   fun:_ZL9emit_exprR12jl_codectx_tP11_jl_value_tl
+   fun:_ZL18emit_ssaval_assignR12jl_codectx_tlP11_jl_value_t
+   fun:emit_stmtpos
+   fun:_ZL13emit_functionP21_jl_method_instance_tP15_jl_code_info_tP11_jl_value_tR20_jl_codegen_params_tRN4llvm11LLVMContextE
+   fun:_Z12jl_emit_codeP21_jl_method_instance_tP15_jl_code_info_tP11_jl_value_tR20_jl_codegen_params_t
+}
+
+{
+   <julia_type_to_di>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:_Znwm
+   fun:_ZN4llvm6MDNodenwEmj
+   fun:_ZN4llvm11DIBasicType7getImplERNS_11LLVMContextEjPNS_8MDStringEmjjNS_6DINode7DIFlagsENS_8Metadata11StorageTypeEb
+   fun:_ZN4llvm9DIBuilder15createBasicTypeENS_9StringRefEmjNS_6DINode7DIFlagsE
+   fun:_ZL17_julia_type_to_diP20_jl_codegen_params_tP11_jl_value_tPN4llvm9DIBuilderEb.constprop.0
+   fun:_ZL19init_julia_llvm_envPN4llvm6ModuleE
+   fun:jl_init_codegen_impl
+   fun:jl_restore_system_image_from_stream
+   fun:ijl_restore_system_image_data
+   fun:jl_load_sysimg_so
+   fun:ijl_restore_system_image
+   fun:_finish_julia_init.isra.0
+   fun:julia_init
+}
+
+{
+   <link>
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:_Znwm
+   fun:_ZN12_GLOBAL__N_1L20createELFDebugObjectERKN4llvm6object10ObjectFileERKNS_19LoadedELFObjectInfoE
+   fun:_ZNK12_GLOBAL__N_119LoadedELFObjectInfo17getObjectForDebugERKN4llvm6object10ObjectFileE
+   fun:_Z23registerRTDyldJITObjectRKN4llvm6object10ObjectFileERKNS_11RuntimeDyld16LoadedObjectInfoERKSt10shared_ptrINS_19RTDyldMemoryManagerEE
+   fun:_ZN4llvm3orc24RTDyldObjectLinkingLayer9onObjLoadERNS0_29MaterializationResponsibilityERKNS_6object10ObjectFileERNS_11RuntimeDyld13MemoryManagerERNS8_16LoadedObjectInfoESt3mapINS_9StringRefENS_18JITEvaluatedSymbolESt4lessISE_ESaISt4pairIKSE_SF_EEERSt3setISE_SH_SaISE_EE
+   fun:_ZN4llvm6detail18UniqueFunctionBaseINS_5ErrorEJRKNS_6object10ObjectFileERNS_11RuntimeDyld16LoadedObjectInfoESt3mapINS_9StringRefENS_18JITEvaluatedSymbolESt4lessISB_ESaISt4pairIKSB_SC_EEEEE8CallImplIZNS_3orc24RTDyldObjectLinkingLayer4emitESt10unique_ptrINSM_29MaterializationResponsibilityESt14default_deleteISP_EESO_INS_12MemoryBufferESQ_IST_EEEUlS6_S9_SJ_E_EES2_PvS6_S9_RSJ_
+   fun:_ZN4llvm13jitLinkForORCENS_6object12OwningBinaryINS0_10ObjectFileEEERNS_11RuntimeDyld13MemoryManagerERNS_17JITSymbolResolverEbNS_15unique_functionIFNS_5ErrorERKS2_RNS4_16LoadedObjectInfoESt3mapINS_9StringRefENS_18JITEvaluatedSymbolESt4lessISG_ESaISt4pairIKSG_SH_EEEEEENS9_IFvS3_St10unique_ptrISD_St14default_deleteISD_EESA_EEE
+   fun:_ZN4llvm3orc24RTDyldObjectLinkingLayer4emitESt10unique_ptrINS0_29MaterializationResponsibilityESt14default_deleteIS3_EES2_INS_12MemoryBufferES4_IS7_EE
+   fun:_ZN4llvm3orc14IRCompileLayer4emitESt10unique_ptrINS0_29MaterializationResponsibilityESt14default_deleteIS3_EENS0_16ThreadSafeModuleE
+   fun:_ZN4llvm3orc31BasicIRLayerMaterializationUnit11materializeESt10unique_ptrINS0_29MaterializationResponsibilityESt14default_deleteIS3_EE
+   fun:_ZN4llvm3orc19MaterializationTask3runEv
+   fun:_ZN4llvm6detail18UniqueFunctionBaseIvJSt10unique_ptrINS_3orc4TaskESt14default_deleteIS4_EEEE8CallImplIPFvS7_EEEvPvRS7_
+}
