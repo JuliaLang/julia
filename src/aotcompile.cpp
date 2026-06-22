@@ -2158,6 +2158,24 @@ static uint64_t image_codegen_memory_budget() {
     return total / 10 * 6; // leave ~40% headroom
 }
 
+// Cap on the core-fill shard ramp when a jobserver is coordinating a parallel
+// precompile (see compute_image_shard_count). Each worker realistically sustains
+// only a few concurrent shards there, so the ramp is held to a small constant
+// rather than the machine's core count. Tunable for experimentation via
+// JULIA_IMAGE_CORE_FILL_CAP (intentionally undocumented).
+static unsigned image_core_fill_cap() {
+    unsigned cap = 4;
+    if (const char *env = getenv("JULIA_IMAGE_CORE_FILL_CAP")) {
+        char *endptr;
+        unsigned long long val = strtoull(env, &endptr, 10);
+        if (endptr != env && !*endptr && val > 0)
+            cap = (unsigned)val;
+        else
+            jl_safe_printf("WARNING: invalid value '%s' for JULIA_IMAGE_CORE_FILL_CAP\n", env);
+    }
+    return cap;
+}
+
 // Number of shards (output partitions) to split an image into. This sets the
 // shard layout, separately from how many shards compile at once (concurrency,
 // see compute_image_thread_count). Two concerns drive it:
@@ -2172,10 +2190,15 @@ static uint64_t image_codegen_memory_budget() {
 //     use the cores the jobserver frees at the end of a parallel precompile.
 //     So also ramp the shard count up toward `max_concurrency` as the module
 //     grows, keeping each such shard at least `min_shard` of work so the extra
-//     shards still pay for their per-shard overhead.
+//     shards still pay for their per-shard overhead. When the jobserver is
+//     coordinating a parallel precompile, though, the machine is already filled
+//     by inter-package parallelism, so each worker only sustains a few concurrent
+//     shards; ramping to the full core count there just multiplies the per-shard
+//     deserialize cost, so the ramp is capped at `image_core_fill_cap()`. Only a
+//     single-process build (no jobserver) owns all the cores and ramps to them.
 // A tiny module stays in a single shard. Tune `weight_per_shard` with
 // JULIA_IMAGE_PARTITION_WEIGHT; measure per-stage cost with JULIA_IMAGE_TIMINGS.
-static unsigned compute_image_shard_count(const ModuleInfo &info, unsigned max_concurrency) {
+static unsigned compute_image_shard_count(const ModuleInfo &info, unsigned max_concurrency, bool jobserver_active) {
     // 32-bit systems are very memory-constrained; never split.
 #ifdef _P32
     return 1;
@@ -2188,9 +2211,13 @@ static unsigned compute_image_shard_count(const ModuleInfo &info, unsigned max_c
     // Ramp up to fill the available cores for modules big enough to parallelize,
     // keeping each forced shard >= weight_per_shard/4 so it still pays for its
     // per-shard overhead. This is what keeps big long-tail packages from going
-    // serial and leaving jobserver-freed cores idle.
+    // serial and leaving jobserver-freed cores idle. Under a jobserver, hold the
+    // ramp to a small cap so a saturated parallel build doesn't over-shard.
     size_t min_shard = std::max<size_t>(weight_per_shard / 4, 1);
-    size_t core_fill = std::min<size_t>(max_concurrency, info.weight / min_shard);
+    unsigned fill_cap = jobserver_active
+        ? std::min<unsigned>(max_concurrency, image_core_fill_cap())
+        : max_concurrency;
+    size_t core_fill = std::min<size_t>(fill_cap, info.weight / min_shard);
     return std::max<size_t>(1, std::max(weight_bound, core_fill));
 }
 
@@ -2475,11 +2502,12 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
             // Concurrency is sized by available CPU / jobserver budget; the shard
             // layout is sized by codegen work but floored at that concurrency for
             // large modules (so big long-tail packages fill cores the jobserver
-            // frees), then concurrency is capped to the shard count so small
-            // modules don't spin up idle threads.
+            // frees) -- under a jobserver that floor is held to a small cap so a
+            // saturated parallel build doesn't over-shard -- then concurrency is
+            // capped to the shard count so small modules don't spin up idle threads.
             bool explicit_threads = false;
             threads = compute_image_thread_count(module_info, jobserver.active(), explicit_threads);
-            nshards = compute_image_shard_count(module_info, threads);
+            nshards = compute_image_shard_count(module_info, threads, jobserver.active());
             threads = std::min(threads, nshards);
             if (getenv("JULIA_IMAGE_TIMINGS"))
                 jl_safe_printf("[image] \"text\" module weight %zu -> %u shards, up to %u threads"
