@@ -2478,7 +2478,18 @@ function report_precompile_results!(s::PrecompileSession)
                     plural1 = length(s.configs) > 1 ? "dependency configurations" : s.n_loaded == 1 ? "dependency" : "dependencies"
                     plural2 = s.n_loaded == 1 ? "a different version is" : "different versions are"
                     plural3 = s.n_loaded == 1 ? "" : "s"
-                    loaded_names = join(sort!([full_name(s.ext_to_parent, p) for p in s.loaded_pkgs]), ", ", " and ")
+                    loaded_names_vec = sort!([full_name(s.ext_to_parent, p) for p in s.loaded_pkgs])
+                    max_loaded_names = 5
+                    if length(loaded_names_vec) > max_loaded_names
+                        loaded_names = string(
+                            join(first(loaded_names_vec, max_loaded_names), ", ", " and "),
+                            ", and ",
+                            length(loaded_names_vec) - max_loaded_names,
+                            " more"
+                        )
+                    else
+                        loaded_names = join(loaded_names_vec, ", ", " and ")
+                    end
                     # compute how many precompiled packages transitively depend on the loaded packages
                     loaded_set = Set{PkgId}(s.loaded_pkgs)
                     n_affected = let reverse_deps = Dict{PkgId, Vector{PkgId}}()
