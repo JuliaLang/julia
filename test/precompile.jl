@@ -759,6 +759,58 @@ precompile_test_harness(false) do dir
 end
 end
 
+# Test for regression due to #62050: "circular type parameter constraint in definition of LittleDict"
+#
+# Canonicalization of recursive supertypes is fragile / unsound, due to subtyping's limitations
+# to handle non-canonicalized types. Nonetheless this tests that the bugfix from #62050 does not
+# regress patterns in OrderedCollections.jl, etc.
+precompile_test_harness("issue #62050") do load_path
+    write(joinpath(load_path, "LD62050.jl"),
+          """
+          module LD62050
+              export LittleDict, freeze
+              const StoreType{T} = Union{Tuple{Vararg{T}}, AbstractVector{T}}
+              struct LittleDict{K, V, KS<:StoreType{K}, VS<:StoreType{V}} <: AbstractDict{K, V}
+                  keys::KS
+                  vals::VS
+                  function LittleDict{K, V, KS, VS}(keys, vals) where {K, V, KS, VS}
+                      return new{K, V, KS, VS}(keys, vals)
+                  end
+              end
+              LittleDict{K,V}(ks::KS, vs::VS) where {K,V, KS<:StoreType,VS<:StoreType} = LittleDict{K, V, KS, VS}(ks, vs)
+              LittleDict(ks::KS, vs::VS) where {KS<:StoreType,VS<:StoreType} = LittleDict{eltype(KS), eltype(VS)}(ks, vs)
+              freeze(d::LittleDict) = LittleDict(Tuple(d.keys), Tuple(d.vals))
+              # a `Type{Union{...}}` whose members differ in typename, baked into the type cache
+              struct RectA{T} end
+              struct RectB{T} end
+              const RectOrDiag{T} = Union{RectA{T}, RectB{T}}
+              _seed(::Type{RectOrDiag}) = 1
+              const _seeded = _seed(RectOrDiag)
+          end
+          """)
+    write(joinpath(load_path, "PartialB62050.jl"),
+          """
+          module PartialB62050
+              using LD62050
+              struct ConfusionMatrix{N,O,L}
+                  index_given_level::LittleDict{L, I, NTuple{N,L}, NTuple{N,I}} where I<:Integer
+              end
+              function ConfusionMatrix(dic::LittleDict{L, I, NTuple{N,L}, NTuple{N,I}}; ordered=false) where {L,I<:Integer,N}
+                  ConfusionMatrix{N,ordered,L}(dic)
+              end
+              ConfusionMatrix(dic::AbstractDict; ordered=false) = ConfusionMatrix(freeze(dic); ordered)
+              function ConfusionMatrix(levels::AbstractVector{L}) where L
+                  igl = LittleDict{L, Int, Vector{L}, Vector{Int}}(levels, collect(eachindex(levels)))
+                  ConfusionMatrix(igl; ordered=false)
+              end
+              const _warm = ConfusionMatrix(["a", "b"])
+          end
+          """)
+    # Loading PartialB62050 pulls in its dependency LD62050 first (caching the `Type{Union{...}}`),
+    # then deserializes PartialB62050's pkgimage — where the deferred-super climb fires.
+    @test Base.require(Main, :PartialB62050) isa Module
+end
+
 # method root provenance & external code caching
 precompile_test_harness("code caching") do dir
     Cache_module = :Cacheb8321416e8a3e2f1

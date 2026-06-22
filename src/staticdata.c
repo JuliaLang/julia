@@ -4062,8 +4062,18 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
                 assert(tag == 0);
                 arraylist_push(&delay_list, obj);
                 arraylist_push(&delay_list, pfld);
-                ptrhash_put(&new_dt_objs, (void*)obj, obj); // mark obj as invalid
-                *pfld = (uintptr_t)NULL;
+                // FIXME: leaving the `super` field populated here and then performing
+                // type canonicalization is unsound since it intentionally exposes sub-
+                // typing to non-canonicalized types (c.f. `jl_type_equality_is_identity`)
+                //
+                // Type canonicalization requires that any queried types are already
+                // canonicalized or that `super` is not needed to decide type-equality.
+                // The latter is essentially never true in general (proof is left to the
+                // reader) and the former is not possible in the presence of circular types.
+                //
+                // For now we blindly hope that subtyping rarely inspects `super` and, if
+                // it does, that it doesn't compare it against any equal-but-not-yet-
+                // canonicalized-to types so that the result is unaffected.
                 continue;
             }
         }
