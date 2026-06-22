@@ -683,13 +683,10 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty) {
     if (!jl_is_concrete_type(rt))
         jl_error("cglobal: type argument not concrete");
 
-    jl_value_t *p = NULL;
-    if (jl_is_tuple(v)) {
-        p = jl_lookup_foreignsymbol(v);
-    } else {
-        JL_TYPECHK(cglobal, pointer, v);
-        p = v;
-    }
+    if (jl_is_pointer(v))
+        return jl_bitcast(rt, v);
+
+    jl_value_t *p = jl_lookup_foreignsymbol(v);
 
     JL_GC_PUSH1(&p);
     jl_value_t *r = jl_bitcast(rt, p);
