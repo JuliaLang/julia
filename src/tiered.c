@@ -28,9 +28,10 @@
 // `jl_mutex_t` safepoints while waiting and would lift this restriction, but
 // then the worker could not block on a uv_cond and would have to spin.)
 //
-// Single-writer invariant: for any given `ci`, the `fetch_or` on `ci->flags`
-// lets at most one caller observe the "first-to-set" outcome — the entire
-// promotion pipeline downstream relies on it.
+// Single-writer invariant: for any given `mi`, the `fetch_or` on `mi->flags`
+// (the JL_MI_FLAGS_TIER_QUEUED bit) lets at most one caller observe the
+// "first-to-set" outcome — the entire promotion pipeline downstream relies on
+// it. Tier state lives on the MethodInstance; the CodeInstance keeps none.
 //
 // Worker wakeup is a plain uv_cond_signal on `tier_queue_cond` (paired with
 // `tier_queue_mutex`); the worker is a dedicated, runtime-adopted OS thread
@@ -206,9 +207,9 @@ JL_DLLEXPORT uint32_t jl_tier_get_osr_threshold(void) JL_NOTSAFEPOINT
 }
 
 // Hotness threshold. T0 functions call `jl_tier_enqueue_mi` on
-// every entry; the CI is only pushed onto the promotion queue after its
-// per-CI call count reaches this threshold. Default 10. Tune via the
-// `JULIA_TIER_THRESHOLD` env var or `jl_tier_set_threshold`.
+// every entry; the MethodInstance is pushed onto the promotion queue after its
+// per-MI call count (mi->tier_count) reaches this threshold. Default 10. Tune
+// via the `JULIA_TIER_THRESHOLD` env var or `jl_tier_set_threshold`.
 static _Atomic(uint32_t) tier_threshold = 0; // 0 = uninitialized sentinel
 
 JL_DLLEXPORT uint32_t jl_tier_get_threshold(void) JL_NOTSAFEPOINT
@@ -537,8 +538,8 @@ JL_DLLEXPORT void jl_tier_drain(void)
         // Count synchronous drain-path recompile time too (the worker loop
         // times the async path); drain steals most of the work in practice.
         uint64_t t0 = jl_hrtime();
-        // jl_tier_promote marks the MI OPTIMIZED itself (success or not), so the
-        // entry is never re-enqueued regardless of outcome.
+        // The MI's set-once JL_MI_FLAGS_TIER_QUEUED bit (claimed at enqueue,
+        // never cleared) keeps it from being re-enqueued regardless of outcome.
         int ok = jl_tier_promote(mi);
         jl_tier_add_promote_ns(jl_hrtime() - t0);
         if (ok)
@@ -558,13 +559,6 @@ JL_DLLEXPORT void jl_tier_drain(void)
     }
 }
 
-// Promote a parked CodeInstance: compile real code for its
-// MethodInstance through the ordinary path (jl_compile_method_internal
-// with allow_interp=0 never returns a parked CI), then retire the parked
-// CI by capping its world range so dispatch in newer worlds walks past it
-// to the native CodeInstance. The parked CI itself is never mutated
-// beyond the world cap: in-flight frames and old-world dispatch keep
-// interpreting, which is world-correct per call.
 // Inference run for a promotion is background duplicate work, not a user
 // dispatch: diagnostics that attribute inference to its entrance (the
 // SnoopCompile hook) must skip it, or background promotions inject
@@ -635,8 +629,8 @@ static void tier_enqueue_mi_locked(jl_method_instance_t *mi) JL_NOTSAFEPOINT
         jl_safe_printf("[tier] enqueue mi=%p\n", (void*)mi);
     }
     // Push only if the worker is up. If init hasn't run yet we still treat this
-    // as a "win" — the MI PROMOTING bit stays set so it is never re-enqueued;
-    // counted as a drop for visibility.
+    // as a "win" — the MI's JL_MI_FLAGS_TIER_QUEUED bit stays set so it is never
+    // re-enqueued; counted as a drop for visibility.
     if (!jl_atomic_load_acquire(&tier_initialized)) {
         jl_atomic_fetch_add_relaxed(&tier_queue_drops, 1);
         return;
@@ -648,16 +642,6 @@ static void tier_enqueue_mi_locked(jl_method_instance_t *mi) JL_NOTSAFEPOINT
     // Wake the dedicated worker thread. Signal-after-unlock is safe: the
     // worker re-checks the queue under the mutex before waiting.
     uv_cond_signal(&tier_queue_cond);
-}
-
-// Enqueue from a (possibly ephemeral) CodeInstance — used by the loop-bearing
-// parked-stub path in gf.c. Foreign-owner CIs (external AbstractInterpreter
-// caches) don't participate in tiering. Only the MI is queued.
-JL_DLLEXPORT void jl_tier_enqueue(jl_code_instance_t *ci) JL_NOTSAFEPOINT
-{
-    if (ci == NULL || ci->owner != jl_nothing)
-        return;
-    tier_enqueue_mi_locked(jl_get_ci_mi(ci));
 }
 
 // "Stopgap": decide whether a code instance must be COMPILED rather than parked
