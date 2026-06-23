@@ -1,5 +1,5 @@
 name = "Zstd_jll"
-uuid = "3161d3a3-bdf6-5164-811a-617609db77b4"
+uuid = "bd2ca7ee-82fe-4ebb-8a47-7f0c280fb305" # private UUID, to avoid conflict w/ stdlib
 version = "1.5.7+1"
 
 [deps]

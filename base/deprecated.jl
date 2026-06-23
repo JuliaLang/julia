@@ -631,4 +631,27 @@ end
     return true
 end
 
+@deprecate SubString{T}(s::T, i::Int, j::Int, ::Val{:noshift}) where {T <: AbstractString} begin
+    @boundscheck if !(i == j == 0)
+        si, sj = i + 1, prevind(s, j + i + 1)
+        @inbounds isvalid(s, si) || string_index_err(s, si)
+        @inbounds isvalid(s, sj) || string_index_err(s, sj)
+    end
+    @inbounds raw_substring(s, i + 1, j)
+end
+
+# This method is slightly different because it returns a SubString{SubString},
+# therefore it requires an explicit SubString{T}(ss) call at the end.
+# We discourage creating substrings of substrings, but the deprecated method
+# allowed it.
+@deprecate SubString{T}(s::T, i::Int, j::Int, ::Val{:noshift}) where {T <: SubString} begin
+    @boundscheck if !(i == j == 0)
+        si, sj = i + 1, prevind(s, j + i + 1)
+        @inbounds isvalid(s, si) || string_index_err(s, si)
+        @inbounds isvalid(s, sj) || string_index_err(s, sj)
+    end
+    ss = @inbounds raw_substring(s, i + 1, j)
+    SubString{T}(ss)
+end
+
 # END 1.14 deprecations

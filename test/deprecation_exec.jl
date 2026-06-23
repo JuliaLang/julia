@@ -176,6 +176,20 @@ global_logger(prev_logger)
 
 
 #-------------------------------------------------------------------------------
+# BEGIN 1.14 deprecations
+
+begin # SubString noshift deprecations
+    @test_deprecated SubString{String}("abcd", 0, 1, Val(:noshift)) == "a"
+    let ss = SubString("abcd", 2, 3)
+        @test_deprecated (SubString{typeof(ss)}(ss, 0, 1, Val(:noshift)) == "b")
+        @test_deprecated (SubString{typeof(ss)}(ss, 0, 1, Val(:noshift)) isa SubString{typeof(ss)})
+    end
+end
+
+
+# END 1.14 deprecations
+
+#-------------------------------------------------------------------------------
 # BEGIN 0.7 deprecations
 
 begin # parser syntax deprecations

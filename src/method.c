@@ -1287,14 +1287,8 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
 
     // TODO: derive our debug name from the syntax instead of the type
     // if we have a kwcall, try to derive the name from the callee argument method table
-    jl_datatype_t *dtname = (jl_datatype_t*)jl_argument_datatype(jl_kwcall_type && ft == (jl_value_t*)jl_kwcall_type && nargs >= 3 ? jl_svecref(atypes, 2) : ft);
-    name = (jl_value_t*)dtname != jl_nothing ? dtname->name->singletonname : jl_any_type->name->singletonname;
-    if (jl_is_typeeq((jl_value_t*)dtname)) {
-        dtname = (jl_datatype_t*)jl_argument_datatype(jl_typeeq_T((jl_value_t*)dtname));
-        if ((jl_value_t*)dtname != jl_nothing) {
-            name = dtname->name->singletonname;
-        }
-    }
+    jl_value_t *dtname = jl_argument_datatypename(jl_kwcall_type && ft == (jl_value_t*)jl_kwcall_type && nargs >= 3 ? jl_svecref(atypes, 2) : ft);
+    name = dtname != jl_nothing ? ((jl_typename_t*)dtname)->singletonname : jl_any_type->name->singletonname;
 
     if (!jl_is_code_info(f)) {
         // this occurs when there is a closure being added to an out-of-scope function

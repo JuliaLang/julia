@@ -11,7 +11,6 @@ using Core: Const
 const CC = Base.Compiler
 using Base.Meta
 using Base: propertynames, something, IdSet
-using Base.Filesystem: _readdirx
 using Base.JuliaSyntax: @K_str, @KSet_str, parseall, byte_range, children, is_prefix_call, is_trivia, kind
 
 using ..REPL.LineEdit: NamedCompletion
@@ -479,7 +478,7 @@ function cache_PATH()
         end
 
         path_entries = try
-            _readdirx(pathdir)
+            readdir(pathdir, DirEntry)
         catch e
             # Bash allows dirs in PATH that can't be read, so we should as well.
             if isa(e, Base.IOError) || isa(e, Base.ArgumentError)
@@ -494,8 +493,9 @@ function cache_PATH()
             # here, or even on whether the current user can execute the file in question.
             try
                 if isfile(entry)
-                    @lock PATH_cache_lock push!(PATH_cache, entry.name)
-                    push!(this_PATH_cache, entry.name)
+                    name = basename(entry)
+                    @lock PATH_cache_lock push!(PATH_cache, name)
+                    push!(this_PATH_cache, name)
                 end
             catch e
                 # `isfile()` can throw in rare cases such as when probing a
@@ -541,9 +541,9 @@ function complete_path(path::AbstractString;
     end
     entries = try
         if isempty(dir)
-            _readdirx()
+            readdir(DirEntry)
         elseif isdir(dir)
-            _readdirx(dir)
+            readdir(dir, DirEntry)
         else
             return Completion[], dir, false
         end
@@ -554,9 +554,10 @@ function complete_path(path::AbstractString;
 
     matches = Set{String}()
     for entry in entries
-        if startswith(entry.name, prefix)
+        name = basename(entry)
+        if startswith(name, prefix)
             is_dir = try isdir(entry) catch ex; ex isa Base.IOError ? false : rethrow() end
-            push!(matches, is_dir ? joinpath_withsep(entry.name, ""; dirsep) : entry.name)
+            push!(matches, is_dir ? joinpath_withsep(name, ""; dirsep) : name)
         end
     end
 
@@ -735,6 +736,35 @@ function construct_toplevel_mi(src::Core.CodeInfo, context_module::Module)
     return @ccall jl_method_instance_for_thunk(src::Any, context_module::Any)::Ref{Core.MethodInstance}
 end
 
+function try_eval_global(@nospecialize(ex), mod::Module)
+    if ex isa Symbol
+        !isdefinedglobal(mod, ex) && return nothing
+        return Const(getglobal(mod, ex))
+    elseif ex isa GlobalRef
+        !isdefinedglobal(ex.mod, ex.name) && return nothing
+        return Const(getglobal(ex.mod, ex.name))
+    elseif isexpr(ex, :., 2)
+        rhs = ex.args[2]
+        rhs isa QuoteNode || return nothing
+        s = rhs.value
+        s isa Symbol || return nothing
+        parent = try_eval_global(ex.args[1], mod)
+        parent isa Const || return nothing
+        mod = parent.val
+        mod isa Module || return nothing
+        isdefinedglobal(mod, s) || return nothing
+        return Const(getglobal(mod, s))
+    end
+    return nothing
+end
+
+# Lowering can misbehave with nested error expressions.
+function expr_has_error(@nospecialize(e))
+    e isa Expr || return false
+    e.head === :error &&  return true
+    any(expr_has_error, e.args)
+end
+
 # lower `ex` and run type inference on the resulting top-level expression
 function repl_eval_ex(@nospecialize(ex), context_module::Module; limit_aggressive_inference::Bool=false)
     expr_has_error(ex) && return nothing
@@ -742,6 +772,8 @@ function repl_eval_ex(@nospecialize(ex), context_module::Module; limit_aggressiv
         # get the inference result for the last expression
         ex = ex.args[end]
     end
+    global_value = try_eval_global(ex, context_module)
+    global_value === nothing || return global_value
     lwr = try
         Meta.lower(context_module, ex)
     catch # macro expansion failed, etc.
@@ -770,7 +802,7 @@ end
 
 # `COMPLETION_WORLD[]` will be initialized within `__init__`
 # (to allow us to potentially remove REPL from the sysimage in the future).
-# Note that inference from the `code_typed` call below will use the current world age
+# Note that inference from the warmup calls below will use the current world age
 # rather than `typemax(UInt)`, since `Base.invoke_in_world` uses the current world age
 # when the given world age is higher than the current one.
 const COMPLETION_WORLD = Ref{UInt}(typemax(UInt))
@@ -779,7 +811,10 @@ const COMPLETION_WORLD = Ref{UInt}(typemax(UInt))
 # This code cache will be available at the world of `COMPLETION_WORLD`,
 # assuming no invalidation will happen before initializing REPL.
 # Once REPL is loaded, `REPLInterpreter` will be resilient against future invalidations.
+# Eval an end-to-end example so that the full compiler pipeline is exercised.
 code_typed(CC.typeinf, (REPLInterpreter, CC.InferenceState))
+repl_eval_ex(:(1 + 1), @__MODULE__)
+repl_eval_ex(:((1, 2).first), @__MODULE__)
 
 # Method completion on function call expression that look like :(max(1))
 MAX_METHOD_COMPLETIONS::Int = 40
@@ -1055,8 +1090,8 @@ function complete_loading_candidates!(suggestions::Vector{Completion}, s::String
             end
         end
         isdir(dir) || continue
-        for entry in _readdirx(dir)
-            pname = entry.name
+        for entry in readdir(dir, DirEntry)
+            pname = basename(entry)
             if pname[1] != '.' && pname != "METADATA" &&
                 pname != "REQUIRE" && startswith(pname, s)
                 # Valid file paths are
@@ -1245,13 +1280,6 @@ function close_path_completion(path)
     path = expanduser(path)
     path = do_string_unescape(path)
     !Base.isaccessibledir(path)
-end
-
-# Lowering can misbehave with nested error expressions.
-function expr_has_error(@nospecialize(e))
-    e isa Expr || return false
-    e.head === :error &&  return true
-    any(expr_has_error, e.args)
 end
 
 # Is the cursor inside the square brackets of a ref expression?  If so, returns:

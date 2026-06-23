@@ -79,18 +79,18 @@ static size_t get_max_varargs(
         max_varargs = m->max_varargs;
     }
     else {
-        jl_datatype_t *dt1 = jl_nth_argument_datatype(m->sig, 1);
-        jl_datatype_t *dt;
-        if (jl_kwcall_type && dt1 == jl_kwcall_type)
-            dt = jl_nth_argument_datatype(m->sig, 3);
+        jl_typename_t *tn1 = jl_nth_argument_datatypename(m->sig, 1);
+        jl_typename_t *tn;
+        if (jl_kwcall_type && tn1 == jl_kwcall_type->name)
+            tn = jl_nth_argument_datatypename(m->sig, 3);
         else
-            dt = dt1;
-        if (dt != NULL && !jl_is_typeeq((jl_value_t*)dt) && dt != jl_kwcall_type) {
+            tn = tn1;
+        if (tn != NULL && (!jl_kwcall_type || tn != jl_kwcall_type->name)) {
             if (may_increase != NULL)
                 *may_increase = 1; // `max_args` can increase as new methods are inserted
 
-            max_varargs = jl_atomic_load_relaxed(&dt->name->max_args) + 2;
-            if (jl_kwcall_type && dt1 == jl_kwcall_type)
+            max_varargs = jl_atomic_load_relaxed(&tn->max_args) + 2;
+            if (jl_kwcall_type && tn1 == jl_kwcall_type->name)
                 max_varargs += 2;
             if (max_varargs > m->nargs)
                 max_varargs -= m->nargs;
@@ -1752,9 +1752,8 @@ static void cache_insert(
     else {
          jl_typemap_insert(cache, parent, newentry, offs);
          if (mt) {
-             jl_datatype_t *dt = jl_nth_argument_datatype((jl_value_t*)(tt ? tt : cachett), 1);
-             if (dt) {
-                 jl_typename_t *tn = dt->name;
+             jl_typename_t *tn = jl_nth_argument_datatypename((jl_value_t*)(tt ? tt : cachett), 1);
+             if (tn) {
                  int cache_entry_count = jl_atomic_load_relaxed(&tn->cache_entry_count);
                  if (cache_entry_count < 31)
                      jl_atomic_store_relaxed(&tn->cache_entry_count, cache_entry_count + 1);
@@ -2226,10 +2225,10 @@ static void method_overwrite(jl_typemap_entry_t *newentry, jl_method_t *oldvalue
     jl_method_t *method = (jl_method_t*)newentry->func.method;
     jl_module_t *newmod = method->module;
     jl_module_t *oldmod = oldvalue->module;
-    jl_datatype_t *dt = jl_nth_argument_datatype(oldvalue->sig, 1);
-    if (jl_kwcall_type && dt == jl_kwcall_type)
-        dt = jl_nth_argument_datatype(oldvalue->sig, 3);
-    int anon = dt && is_anonfn_typename(jl_symbol_name(dt->name->name));
+    jl_typename_t *tn = jl_nth_argument_datatypename(oldvalue->sig, 1);
+    if (jl_kwcall_type && tn == jl_kwcall_type->name)
+        tn = jl_nth_argument_datatypename(oldvalue->sig, 3);
+    int anon = tn && is_anonfn_typename(jl_symbol_name(tn->name));
     if ((jl_options.warn_overwrite == JL_OPTIONS_WARN_OVERWRITE_ON) ||
         (jl_options.incremental && jl_generating_output()) || anon) {
         JL_STREAM *s = JL_STDERR;
@@ -2256,10 +2255,9 @@ static void method_overwrite(jl_typemap_entry_t *newentry, jl_method_t *oldvalue
 static void update_max_args(jl_value_t *type)
 {
     type = jl_unwrap_unionall(type);
-    jl_datatype_t *dt = jl_nth_argument_datatype(type, 1);
-    if (dt == NULL || dt == jl_kwcall_type || jl_is_typeeq((jl_value_t*)dt))
+    jl_typename_t *tn = jl_nth_argument_datatypename(type, 1);
+    if (tn == NULL || (jl_kwcall_type && tn == jl_kwcall_type->name))
         return;
-    jl_typename_t *tn = dt->name;
     assert(jl_is_datatype(type));
     size_t na = jl_nparams(type);
     if (jl_va_tuple_kind((jl_datatype_t*)type) == JL_VARARG_UNBOUND)

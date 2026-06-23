@@ -1,4 +1,4 @@
-module SimpleLib
+module LibSimple
 # Test the logging of entrypoints and types in a C-callable Julia library.
 
 struct CVector{T}

@@ -293,6 +293,13 @@ end
 
 const LINENODE_SPAN_END = Int32(-5)
 
+# Byte-precise `DebugInfo` requires `Core.DebugInfo` to accept a `String` linetable,
+# which is only available on recent Julia.  On older versions (e.g. v1.12) we degrade to
+# line-based `DebugInfo` so that lowering still produces a valid `CodeInfo`, at the cost of
+# byte-precise source attribution.
+const _has_byte_precise_debuginfo =
+    hasmethod(Core.DebugInfo, Tuple{Symbol, String, Core.SimpleVector, String})
+
 function _di_pos(st::SyntaxTree)
     src = JuliaSyntax.unexpanded_sourceref(st)
     pos = if src isa SourceRef
@@ -369,13 +376,23 @@ function add_debuginfo!(st::SyntaxTree)
     codeinfos = SyntaxList(st._graph)
     top_sf = _di_sourcefile(st)
     collect_locs!(node_sources, codeinfos, top_sf, st)
+    byte_precise = _has_byte_precise_debuginfo && top_sf isa SourceFile
+    if !byte_precise && top_sf isa SourceFile
+        # Without byte-precise support, degrade each byte span to its line number
+        # so the line-based path below emits valid `DebugInfo` (same shape as the
+        # `LineNumberNode` case).
+        for id in collect(keys(node_sources))
+            line = Int32(JuliaSyntax.source_line(top_sf, node_sources[id][1]))
+            node_sources[id] = (line, LINENODE_SPAN_END)
+        end
+    end
     spans = sort!(unique(values(node_sources)))
-    if top_sf isa SourceFile
+    if byte_precise
         top_sbt = compress_sbt(SourceByteTable(top_sf, spans))
         file = Symbol(top_sf.filename)
     else
         top_sbt = nothing
-        file = Symbol(top_sf)
+        file = top_sf isa SourceFile ? Symbol(top_sf.filename) : Symbol(top_sf)
     end
     for ci in codeinfos
         add_ci_debuginfo!(ci, file, top_sbt, node_sources, spans)

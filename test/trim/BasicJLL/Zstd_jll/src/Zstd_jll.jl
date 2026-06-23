@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-## dummy stub for https://github.com/JuliaBinaryWrappers/Zstd_jll.jl
+## dummy stub for https://github.com/JuliaBinaryWrappers/Zstd_jll.j:
 #
 baremodule Zstd_jll
 using Base, Libdl
