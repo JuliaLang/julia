@@ -456,7 +456,6 @@
     XX(jl_set_ptls_rng) \
     XX(jl_throw) \
     XX(jl_throw_out_of_memory_error) \
-    XX(jl_tier_enqueue) \
     XX(jl_tier_enqueue_mi) \
     XX(jl_tier_get_stats) \
     XX(jl_tier_get_queue_stats) \

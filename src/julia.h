@@ -229,6 +229,8 @@ typedef jl_value_t *(*jl_fptr_sparam_t)(jl_value_t*, jl_value_t**, uint32_t, jl_
 
 extern jl_call_t jl_fptr_interpret_call;
 JL_DLLEXPORT extern const jl_callptr_t jl_fptr_interpret_call_addr;
+jl_value_t *jl_interpret_mi(jl_value_t *f, jl_value_t **args, uint32_t nargs,
+                            jl_method_instance_t *mi, size_t world, int allow_rescue);
 
 JL_DLLEXPORT extern const jl_callptr_t jl_f_opaque_closure_call_addr;
 
@@ -536,8 +538,6 @@ typedef struct _jl_code_instance_t {
                             // & 0b010 == invokeptr matches specptr
                             // & 0b100 == From image
                             // & 0b1000 == native_cache_valid
-                            // & 0b10000 == tier promotion in progress (one-shot)
-                            // & 0b100000 == tier promotion has installed T1 code
     _Atomic(jl_callptr_t) invoke; // jlcall entry point usually, but if this codeinst belongs to an OC Method, then this is an jl_fptr_args_t fptr1 instead, unless it is not, because it is a special token object instead
     union _jl_generic_specptr_t {
         _Atomic(void*) fptr;

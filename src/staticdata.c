@@ -1677,21 +1677,12 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
 
                 if (s->incremental) {
                     if (jl_atomic_load_relaxed(&ci->edges) == NULL) {
-                        // A CodeInstance without edges cannot be
-                        // revalidated by the loader (whose method verifier
-                        // reads ci->edges and would throw UndefRefError).
-                        // Two kinds exist: cached generator output for the
-                        // interpreter (owner :uninferred, see
-                        // jl_cache_uninferred) and the unspecialized
-                        // interpreter/fallback cache entries
-                        // (jl_get_method_inferred with edges=NULL from
-                        // jl_compile_method_internal). Both appear whenever
-                        // the interpreter executes methods (--compile=min,
-                        // or the tiered interpreter-T0 mode) and both are
-                        // recreated on demand at runtime, so drop them from
-                        // incremental images by giving them an empty world
-                        // range. (Edges == jl_emptysvec is different: that
-                        // revalidates trivially and is kept.)
+                        // A CodeInstance with edges==NULL cannot be revalidated
+                        // by the loader (its method verifier reads ci->edges and
+                        // would throw UndefRefError), so drop it from incremental
+                        // images by giving it an empty world range. (edges ==
+                        // jl_emptysvec is different: it revalidates trivially and
+                        // is kept.)
                         jl_atomic_store_release(&newci->min_world, 1);
                         jl_atomic_store_release(&newci->max_world, 0);
                     }

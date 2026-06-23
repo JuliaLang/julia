@@ -2250,14 +2250,13 @@ JL_DLLIMPORT void jl_jit_register_ci(jl_code_instance_t *ci) JL_NOTSAFEPOINT;
 JL_DLLIMPORT void jl_jit_unregister_ci(jl_code_instance_t *ci) JL_NOTSAFEPOINT;
 
 // Tiered compilation (see contrib/tiered_compilation_plan.md).
-// `jl_tier_enqueue` is the entry point for promotion candidates. It performs
-// a one-shot CAS on the PROMOTING flag bit: at most one call per `ci`
-// observes the win. Called from the interpreter entry and the dispatch
-// parking path (never from compiled code); kept allocation- and
+// `jl_tier_enqueue_mi` is the entry point for promotion candidates. It performs a
+// one-shot fetch_or on the MethodInstance's JL_MI_FLAGS_TIER_QUEUED bit: at most
+// one call per MethodInstance observes the win. Called from the interpreter entry
+// and the dispatch interp path (never from compiled code); kept allocation- and
 // safepoint-free so the queue lock is never held across a safepoint (see the
 // header comment in tiered.c). Thread-safe.
 #define JL_TIER_MAX_INTERP_NARGS 128
-JL_DLLEXPORT void jl_tier_enqueue(jl_code_instance_t *ci) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_tier_enqueue_mi(jl_method_instance_t *mi) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_tier_set_debug(int enabled) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_tier_get_stats(uint64_t *calls, uint64_t *wins) JL_NOTSAFEPOINT;

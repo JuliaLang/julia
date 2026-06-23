@@ -409,10 +409,10 @@ end
 # live values passed as OpaqueClosure arguments — inference then
 # specializes the continuation (loop included) on their concrete runtime
 # types — call it, and return Some(result) for the interpreter to return
-# directly. The continuation is cached per (mi, target, world,
-# slot-definedness).
-const _tier_osr_cache = IdDict{Any,Any}()
-const _tier_osr_lock = ReentrantLock()
+# directly. OSR is a rare per-frame escape hatch (it fires only once a
+# single interpreted frame crosses the back-edge threshold), and a method
+# that stays hot is promoted to native by the worker and stops being
+# interpreted, so the continuation is rebuilt each time rather than cached.
 
 function _tier_osr_rewrite(@nospecialize(x), slotmap::Vector{Int}, ssamap::Dict{Int,Int}, shift::Int,
                            sparams::Core.SimpleVector)
@@ -639,35 +639,23 @@ end
 function _tier_osr_impl(src::Core.CodeInfo, mi::Core.MethodInstance, ip::Int, state::Vector{Any})
     nslots = length(src.slotnames)
     defined = Bool[isassigned(state, k) for k in 1:nslots]
-    # Assemble the live values first: the continuation is specialized on
-    # their concrete types, which therefore belong in the cache key. The
-    # ssavalue argument list cannot be known before building, so resolve it
-    # in two steps: probe the cache with a slots-only key to find ssalist,
-    # falling back to a build that records it.
-    world = ccall(:jl_get_tls_world_age, UInt, ())
+    # The continuation is specialized on the live values' concrete types.
     slotargs = Vector{Any}()
     for k in 1:nslots
         defined[k] && push!(slotargs, state[k])
     end
     slottypes = Any[Core.Typeof(a) for a in slotargs]
-    key = (mi, ip, world, defined, slottypes)
-    entry = lock(_tier_osr_lock) do
-        get!(_tier_osr_cache, key) do
-            # Determine the ssavalue argument list and its current types,
-            # then build with the full concrete signature. (Named `plan`,
-            # not `ssalist`: reusing the outer destructuring name from
-            # inside this closure would box it.)
-            plan = _tier_osr_build_plan(src, ip, mi.sparam_vals)
-            plan === nothing && return nothing
-            argtypes = copy(slottypes)
-            for j in plan
-                push!(argtypes, isassigned(state, nslots + j) ?
-                      Core.Typeof(state[nslots + j]) : Nothing)
-            end
-            length(argtypes) <= 64 || return nothing
-            _tier_osr_build(src, mi, ip, defined, argtypes, plan)
-        end
+    # Determine the ssavalue argument list, then build with the full
+    # concrete signature (slot types followed by saved-ssavalue types).
+    plan = _tier_osr_build_plan(src, ip, mi.sparam_vals)
+    plan === nothing && return nothing
+    argtypes = copy(slottypes)
+    for j in plan
+        push!(argtypes, isassigned(state, nslots + j) ?
+              Core.Typeof(state[nslots + j]) : Nothing)
     end
+    length(argtypes) <= 64 || return nothing
+    entry = _tier_osr_build(src, mi, ip, defined, argtypes, plan)
     entry === nothing && return nothing
     oc, ssalist = entry
     args = slotargs

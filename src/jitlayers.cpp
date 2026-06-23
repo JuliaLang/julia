@@ -2056,7 +2056,7 @@ void JuliaOJIT::publishCIs(ArrayRef<jl_code_instance_t *> CIs, bool Wait)
         for (auto CI : CIs) {
             auto It = CISymbols.find(CI);
             if (It == CISymbols.end())
-                return;
+                continue;
             auto CISym = It->second;
             if (CISym.invoke)
                 Exports.add(CISym.invoke);

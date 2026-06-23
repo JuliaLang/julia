@@ -842,29 +842,28 @@ jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi, size_t world)
 
 // interpreter entry points
 
-jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *codeinst)
+jl_value_t *NOINLINE jl_interpret_mi(jl_value_t *f, jl_value_t **args, uint32_t nargs,
+                                     jl_method_instance_t *mi, size_t world, int allow_rescue)
 {
     interpreter_state *s;
-    jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
-    // Tiered compilation probe: bump the per-CI counter; once it crosses
-    // the threshold the worker compiles at -O3 and atomically swaps in
-    // the native invoke. Cheap no-op once the CI is OPTIMIZED.
-    jl_tier_enqueue_mi(mi);
+    // Tiered compilation probe (counts toward promotion). Gated on
+    // jl_tier_enabled so the --compile=min/off cached interp stub, whose
+    // dispatch also lands here, never feeds the queue when tiering is off.
+    if (jl_tier_enabled())
+        jl_tier_enqueue_mi(mi);
     jl_task_t *ct = jl_current_task;
-    size_t world = ct->world_age;
     // Interpreted frames are an order of magnitude larger on the C stack
     // than compiled ones, so deep recursion overflows under T0 where
     // compiled code survives. When headroom runs low, rescue the frame:
     // compile real code and enter it instead of interpreting.
-    if (jl_tier_enabled() && codeinst->owner == jl_nothing &&
-        jl_is_method(mi->def.method)) {
+    if (allow_rescue && jl_tier_enabled() && jl_is_method(mi->def.method)) {
         jl_ptls_t ptls = ct->ptls;
         char here;
         if (ptls->stackbase != NULL &&
             (char*)&here - ((char*)ptls->stackbase - ptls->stacksize) < (ptrdiff_t)(4 << 20)) {
             jl_code_instance_t *native = jl_compile_method_internal(mi, world);
             jl_callptr_t inv = native == NULL ? NULL : jl_atomic_load_acquire(&native->invoke);
-            if (native != codeinst && inv != NULL && inv != jl_fptr_interpret_call_addr)
+            if (native != NULL && inv != NULL && inv != jl_fptr_interpret_call_addr)
                 return inv(f, args, nargs, native);
         }
     }
@@ -912,6 +911,13 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     jl_value_t *r = eval_body(stmts, s, 0, 0);
     JL_GC_POP();
     return r;
+}
+
+jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *codeinst)
+{
+    return jl_interpret_mi(f, args, nargs, jl_get_ci_mi(codeinst),
+                           jl_current_task->world_age,
+                           /*allow_rescue*/codeinst->owner == jl_nothing);
 }
 
 JL_DLLEXPORT const jl_callptr_t jl_fptr_interpret_call_addr = &jl_fptr_interpret_call;
