@@ -3540,9 +3540,20 @@ static size_t jl_image_get_split_ji(void *handle, char **dest, int use_pages)
         abort();
     }
 
-    // Replace the file extension with ".ji"
+    // Replace the file extension with ".ji". The "extension" starts at the
+    // first '.' after the last path separator, so e.g. "/foo/bar/baz.so.1.2.3"
+    // becomes "/foo/bar/baz.ji".
     char ji_path[JL_PATH_MAX];
-    const char *dot_pos = strrchr(lib_path, '.');
+    const char *basename = lib_path;
+    for (const char *p = lib_path; *p; p++) {
+#ifdef _OS_WINDOWS_
+        if (*p == '/' || *p == '\\')
+#else
+        if (*p == '/')
+#endif
+            basename = p + 1;
+    }
+    const char *dot_pos = strchr(basename, '.');
     int ji_path_len = dot_pos ? dot_pos - lib_path : strlen(lib_path);
     if (ji_path_len > JL_PATH_MAX - 4)
         abort();
