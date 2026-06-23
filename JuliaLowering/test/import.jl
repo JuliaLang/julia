@@ -131,3 +131,24 @@ end
     @test JuliaLowering.include_string(macname_mod.UseMacros,
                                        "@mac4_renamed()"; expr_compat_mode) == "mac4"
 end
+
+fl_eval(test_mod, :(
+    module mod_p_e_n
+    public_var = 1
+    public p
+    exported_var = 2
+    export e
+    neither_var = 3
+    end))
+@testset "colon followed by only from-path" begin
+    jl_eval(test_mod, Expr(:import, Expr(:(:), Expr(:., :., :mod_p_e_n))))
+    @test !isdefined(test_mod, :public_var)
+    @test !isdefined(test_mod, :exported_var)
+    @test !isdefined(test_mod, :neither_var)
+    @test test_mod.mod_p_e_n isa Module
+    jl_eval(test_mod, Expr(:using, Expr(:(:), Expr(:., :., :mod_p_e_n))))
+    @test !isdefined(test_mod, :public_var)
+    @test !isdefined(test_mod, :exported_var)
+    @test !isdefined(test_mod, :neither_var)
+    @test test_mod.mod_p_e_n isa Module
+end

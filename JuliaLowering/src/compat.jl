@@ -507,6 +507,10 @@ function est_to_dst(st::SyntaxTree)
             push!(out_iters, _dst_iterspec(next, next[2:end]))
             @ast g st [K"generator" rec(next[1]) out_iters...]
         end
+        [K"comprehension" _ _ _...] -> let
+            arg = rec(@ast g st [K"generator" children(st)...])
+            @ast g st [K"comprehension" arg]
+        end
         [K"generator" body iters...] ->
             @ast g st [K"generator" rec(body) _dst_iterspec(st, iters)]
         ([K"=" l r], when=(is_eventually_call(l))) -> let
