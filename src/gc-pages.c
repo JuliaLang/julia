@@ -138,21 +138,23 @@ NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT
         gc_alloc_map_set(meta->data, GC_PAGE_ALLOCATED);
         goto exit;
     }
-    // must map a new set of pages
-    char *data = jl_gc_try_alloc_pages();
-    meta = (jl_gc_pagemeta_t*)malloc_s(block_pg_cnt * sizeof(jl_gc_pagemeta_t));
-    for (int i = 0; i < block_pg_cnt; i++) {
-        jl_gc_pagemeta_t *pg = &meta[i];
-        pg->data = data + GC_PAGE_SZ * i;
-        gc_alloc_map_maybe_create(pg->data);
-        if (i == 0) {
-            gc_alloc_map_set(pg->data, GC_PAGE_ALLOCATED);
+    {
+        // must map a new set of pages
+        char *data = jl_gc_try_alloc_pages();
+        meta = (jl_gc_pagemeta_t*)malloc_s(block_pg_cnt * sizeof(jl_gc_pagemeta_t));
+        for (int i = 0; i < block_pg_cnt; i++) {
+            jl_gc_pagemeta_t *pg = &meta[i];
+            pg->data = data + GC_PAGE_SZ * i;
+            gc_alloc_map_maybe_create(pg->data);
+            if (i == 0) {
+                gc_alloc_map_set(pg->data, GC_PAGE_ALLOCATED);
+            }
+            else {
+                push_lf_back(&global_page_pool_clean, pg);
+            }
         }
-        else {
-            push_lf_back(&global_page_pool_clean, pg);
-        }
+        uv_mutex_unlock(&gc_pages_lock);
     }
-    uv_mutex_unlock(&gc_pages_lock);
 exit:
 #ifdef _OS_WINDOWS_
     VirtualAlloc(meta->data, GC_PAGE_SZ, MEM_COMMIT, PAGE_READWRITE);

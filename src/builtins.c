@@ -2285,15 +2285,15 @@ JL_CALLABLE(jl_f__typebody)
             dt->name->mayinlinealloc = mayinlinealloc;
         }
     }
-
-    JL_TRY {
-        jl_reinstantiate_inner_types(dt);
+    {
+        JL_TRY {
+            jl_reinstantiate_inner_types(dt);
+        }
+        JL_CATCH {
+            dt->name->partial = NULL;
+            jl_rethrow();
+        }
     }
-    JL_CATCH {
-        dt->name->partial = NULL;
-        jl_rethrow();
-    }
-
     if (jl_is_structtype(dt))
         jl_compute_field_offsets(dt);
 have_type:
@@ -2335,11 +2335,13 @@ static int equiv_type(jl_value_t *ta, jl_value_t *tb)
     b = jl_substitute_datatype(b, dtb, dta);
     if (!jl_types_equal(a, b))
         goto no;
-    JL_TRY {
-        a = jl_apply_type(dtb->name->wrapper, jl_svec_data(dta->parameters), jl_nparams(dta));
-    }
-    JL_CATCH {
-        ok = 0;
+    {
+        JL_TRY {
+            a = jl_apply_type(dtb->name->wrapper, jl_svec_data(dta->parameters), jl_nparams(dta));
+        }
+        JL_CATCH {
+            ok = 0;
+        }
     }
     if (!ok)
         goto no;

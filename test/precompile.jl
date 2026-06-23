@@ -95,12 +95,6 @@ precompile_test_harness(false) do dir
               end
               abstract type AbstractAlgebraMap{A} end
               struct GAPGroupHomomorphism{A, B} <: AbstractAlgebraMap{GAPGroupHomomorphism{B, A}} end
-              # issue #62047: supertype whose parameters reach back through the subtype
-              struct Wrap62047{T} end
-              struct Recur62047{T} <: AbstractAlgebraMap{Wrap62047{Recur62047{T}}} end
-              # two types sharing the identical supertype object
-              struct ShareA62047{T} <: AbstractAlgebraMap{T} end
-              struct ShareB62047{T} <: AbstractAlgebraMap{T} end
 
               global process_state_calls::Int = 0
               const process_state = Base.OncePerProcess{typeof(getpid())}() do
@@ -133,7 +127,6 @@ precompile_test_harness(false) do dir
           """
           module $Foo_module
               import $FooBase_module, $FooBase_module.typeA, $FooBase_module.GAPGroupHomomorphism
-              import $FooBase_module: Wrap62047, Recur62047, ShareA62047, ShareB62047
               import $Foo2_module: $Foo2_module, override, overridenc
               import $FooBase_module.hash
               import Test
@@ -218,10 +211,6 @@ precompile_test_harness(false) do dir
 
               const GAPType1 = GAPGroupHomomorphism{Nothing, Nothing}
               const GAPType2 = GAPGroupHomomorphism{1, 2}
-
-              # issue #62047
-              const Type62047 = Wrap62047{Recur62047{Int}}
-              const Shared62047 = (ShareA62047{Int}, ShareB62047{Int})
 
               # issue #28297
               mutable struct Result

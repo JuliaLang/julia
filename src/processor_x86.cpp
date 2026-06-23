@@ -977,6 +977,10 @@ static TargetData<feature_sz> arg_target_data(const TargetData<feature_sz> &arg,
     enable_depends(res.en.features);
     // Mask our rdrand/rdseed/rtm/xsaveopt features that LLVM doesn't use and rr disables
     unset_bits(res.en.features, Feature::rdrnd, Feature::rdseed, Feature::rtm, Feature::xsaveopt);
+    // Disable avx512fp16: it crashes the LLVM backend when compiling Float16 code
+    // (https://github.com/JuliaLang/julia/issues/61657). Unsetting it here makes every
+    // target (JIT and multiversioned image) emit `-avx512fp16` to LLVM.
+    unset_bits(res.en.features, Feature::avx512fp16);
     for (size_t i = 0; i < feature_sz; i++)
         res.en.features[i] &= ~res.dis.features[i];
     if (require_host) {
