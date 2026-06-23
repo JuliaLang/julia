@@ -4459,7 +4459,7 @@ static void jl_restore_system_image_from_stream(ios_t *f, jl_image_t *image)
     ios_t f_payload;
     ios_static_buffer(&f_payload, f->buf + datastartpos, f->size - datastartpos);
     jl_restore_system_image_from_stream_(&f_payload, image, NULL,
-                                         checksum | ((uint64_t)0xfdfcfbfa << 32), NULL,
+                                         (checksum & 0xffffffff) | ((uint64_t)0xfdfcfbfa << 32), NULL,
                                          NULL, NULL, NULL, NULL, NULL);
 }
 
