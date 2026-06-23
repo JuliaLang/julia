@@ -38,6 +38,7 @@ static inline jl_image_t load_sysimg_target(jl_image_buf_t image, F &&callback, 
 {
     JL_TIMING(LOAD_IMAGE, LOAD_Processor);
     jl_image_t res{};
+    res.heap_checksum = image.heap_checksum;
 
     if (image.kind != JL_IMAGE_KIND_SO)
         return res;

@@ -3436,6 +3436,9 @@ JL_DLLEXPORT jl_image_buf_t jl_preload_sysimg(const char *fname)
 static void jl_image_load_metadata(void *handle, jl_image_buf_t *image)
 {
     jl_dlsym(handle, "jl_image_pointers", (void **)&image->pointers, 1, 0);
+    uint32_t *pchecksum;
+    jl_dlsym(handle, "jl_system_image_checksum", (void **)&pchecksum, 1, 0);
+    image->heap_checksum = *pchecksum;
 }
 
 JL_DLLEXPORT void jl_image_unpack_uncomp(void *handle, jl_image_buf_t *image)
@@ -3491,7 +3494,8 @@ static char *jl_image_alloc_pages(size_t size)
 }
 
 static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint32_t *checksum,
-                                          int64_t *dataendpos, int64_t *datastartpos);
+                                          uint32_t expect_checksum, int64_t *dataendpos,
+                                          int64_t *datastartpos);
 
 // Decompress a compressed image payload found after the .ji header in data, and
 // return a buffer containing the uncompressed header and payload.
@@ -3501,7 +3505,10 @@ static void jl_image_decompress(jl_image_buf_t *image, char *data, size_t len)
     uint32_t checksum;
     int64_t datastartpos, dataendpos;
     ios_static_buffer(&f, data, len);
-    jl_validate_cache_file(&f, NULL, &checksum, &dataendpos, &datastartpos);
+    jl_value_t *exc = jl_validate_cache_file(&f, NULL, &checksum, image->heap_checksum,
+                                             &dataendpos, &datastartpos);
+    if (exc)
+        jl_throw(exc);
 
     char *comp_data = data + datastartpos;
     size_t comp_len = dataendpos - datastartpos;
@@ -4311,13 +4318,21 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
 
 }
 
-static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint32_t *checksum, int64_t *dataendpos, int64_t *datastartpos)
+static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint32_t *checksum,
+                                          uint32_t expect_checksum, int64_t *dataendpos,
+                                          int64_t *datastartpos)
 {
     uint8_t pkgimage = 0;
     if (ios_eof(f) ||
         0 == (*checksum = jl_read_verify_header(f, &pkgimage, dataendpos, datastartpos))) {
         return jl_get_exceptionf(jl_errorexception_type,
                                  "Precompile file header verification checks failed.");
+    }
+    // .ji images with no corresponding native image have expect_checksum = 0.
+    if (expect_checksum != 0 && *checksum != expect_checksum) {
+        return jl_get_exceptionf(jl_errorexception_type,
+                                 "Image checksum mismatch: the heap image (.ji) was not "
+                                 "compiled for use with this native image.");
     }
 
     // Syntax version mismatch is not fatal to load
@@ -4350,7 +4365,8 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
     uint32_t checksum = 0;
     int64_t dataendpos = 0;
     int64_t datastartpos = 0;
-    jl_value_t *verify_fail = jl_validate_cache_file(f, depmods, &checksum, &dataendpos, &datastartpos);
+    jl_value_t *verify_fail = jl_validate_cache_file(
+        f, depmods, &checksum, image->heap_checksum, &dataendpos, &datastartpos);
 
     if (verify_fail)
         return verify_fail;
@@ -4451,8 +4467,8 @@ static void jl_restore_system_image_from_stream(ios_t *f, jl_image_t *image)
     JL_TIMING(LOAD_IMAGE, LOAD_Sysimg);
     uint32_t checksum;
     int64_t dataendpos, datastartpos;
-    jl_value_t *exc =
-        jl_validate_cache_file(f, NULL, &checksum, &dataendpos, &datastartpos);
+    jl_value_t *exc = jl_validate_cache_file(f, NULL, &checksum, image->heap_checksum,
+                                             &dataendpos, &datastartpos);
     if (exc)
         jl_throw(exc);
     ios_t f_payload;
