@@ -459,6 +459,38 @@ const a_value = 1
 @test !Base.ispublic(@__MODULE__, :this_is_not_exported)
 end
 
+# set_binding_visibility!
+module TestBindingVisibility
+using Test
+public a_public_name
+a_public_name() = 1
+export an_exported_name
+an_exported_name() = 2
+no_decl() = 3
+
+@test Base.isexported(@__MODULE__, :an_exported_name)
+@test Base.ispublic(@__MODULE__, :a_public_name) && !Base.isexported(@__MODULE__, :a_public_name)
+@test !Base.ispublic(@__MODULE__, :no_decl)
+
+# public <-> none round trip
+Base.set_binding_visibility!(@__MODULE__, :a_public_name, :none)
+@test !Base.ispublic(@__MODULE__, :a_public_name)
+Base.set_binding_visibility!(@__MODULE__, :a_public_name, :public)
+@test Base.ispublic(@__MODULE__, :a_public_name)
+
+# an exported name is reported public; lowering it to :public clears only the export
+@test Base.ispublic(@__MODULE__, :an_exported_name)
+Base.set_binding_visibility!(@__MODULE__, :an_exported_name, :public)
+@test !Base.isexported(@__MODULE__, :an_exported_name)
+@test Base.ispublic(@__MODULE__, :an_exported_name)
+
+# promote an undeclared name to export
+Base.set_binding_visibility!(@__MODULE__, :no_decl, :export)
+@test Base.isexported(@__MODULE__, :no_decl)
+
+@test_throws ArgumentError Base.set_binding_visibility!(@__MODULE__, :no_decl, :bogus)
+end
+
 # PR 13825
 let ex = :(a + b)
     @test string(ex) == "a + b"

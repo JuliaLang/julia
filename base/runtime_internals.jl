@@ -322,6 +322,40 @@ function delete_binding(mod::Module, sym::Symbol)
 end
 
 """
+    set_binding_visibility!(mod::Module, sym::Symbol, vis::Symbol)
+
+Select the declared visibility of `mod.sym`, one of `:export`, `:public`, or
+`:none`. This is the programmatic counterpart to the `export` and `public`
+keywords; unlike them it can also *retract* a declaration, since `:none`
+removes a name's `export` or `public` status.
+
+Retracting an `export` causes modules that did `using \$mod` to stop resolving
+`sym` implicitly, once their world age advances past this call (see
+[`invokelatest`](@ref) and [`get_world_counter`](@ref)). Because that
+invalidates dependent compiled code, it can be expensive.
+
+Unlike the exported flag, the public flag is not world-versioned: setting or
+clearing it takes effect in every world age at once. Retracting to `:none`
+therefore drops public status in all world ages, including ones in which the name
+is declared public. Combined with the world-versioned export flag, this means an
+older world age can still report a name as [`isexported`](@ref) while no longer
+reporting it as [`ispublic`](@ref).
+
+See also [`isexported`](@ref), [`ispublic`](@ref), [`delete_binding`](@ref).
+
+!!! compat "Julia 1.14"
+    This function was added in Julia 1.14.
+"""
+function set_binding_visibility!(mod::Module, sym::Symbol, vis::Symbol)
+    state = vis === :none   ? Cint(0) :
+            vis === :public ? Cint(1) :
+            vis === :export ? Cint(2) :
+            throw(ArgumentError(LazyString("visibility must be :none, :public, or :export, got ", repr(vis))))
+    ccall(:jl_module_set_visibility, Cvoid, (Any, Any, Cint), mod, sym, state)
+    return nothing
+end
+
+"""
     fieldname(x::DataType, i::Integer)
 
 Get the name of field `i` of a `DataType`.
