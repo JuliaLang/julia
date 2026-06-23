@@ -562,6 +562,12 @@ gNInt() = fNInt(x)
 f21763_def(t::Type{<:Tuple{Vararg{E}}}) where E = @isdefined(E) ? E : :undef
 @test Base.return_types(f21763_def, (Type{Tuple{Int}},)) == Any[Type{Int}]
 @test Base.return_types(f21763_def, (Type{<:NInt},)) == Any[Union{Symbol, Type{Int}}]
+# the un-pinning is a property of the `Type{<:X}` range, not of `Vararg`: a
+# fixed-length tuple range still admits the `Union{}` member, which binds
+# nothing, so `E` is reached only through the range var's bound and stays undef
+f21763_def_fixed(t::Type{<:Tuple{E}}) where E = @isdefined(E) ? E : :undef
+@test Base.return_types(f21763_def_fixed, (Type{Tuple{Int}},)) == Any[Type{Int}]
+@test Base.return_types(f21763_def_fixed, (Type{<:Tuple{Int}},)) == Any[Union{Symbol, Type{Int}}]
 
 # `fieldtype` of an `==`-only `Type{X}` element must not fold to an egal constant:
 # an `==`-equal rep of `X` yields a fieldtype that is `==` but not `===` the stored

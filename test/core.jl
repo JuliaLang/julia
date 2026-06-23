@@ -256,6 +256,15 @@ let S = Tuple{S2} where S2<:Int
     @test feq(Type{Tuple{Int}}[S, Tuple{Int}], 2) === Int
     @test feq(Type{<:Tuple{Vararg{Int,N}} where N}[Tuple{}], 1) === :undef
 end
+# the same rule is a property of the `Type{<:X}` *range*, not of `Vararg`: a
+# fixed-length tuple range still admits the `Union{}` (Bottom) member, which
+# binds no parameter, so a barrier call through it folds `@isdefined` to false
+# rather than leaking the env-uncertainty marker (#61323)
+let frng(t::Type{<:Tuple{E}}) where E = @isdefined(E) ? E : :undef
+    feqr(tarr, i) = frng(tarr[i])
+    @test feqr(Type{<:Tuple{Int}}[Tuple{Int}], 1) === Int
+    @test feqr(Type{<:Tuple{Int}}[Union{}], 1) === :undef
+end
 
 # show that we don't make the cache confused by using alternative representations
 # when specificity is reversed
