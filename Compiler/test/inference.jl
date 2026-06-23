@@ -6892,4 +6892,26 @@ let rt = Base.infer_return_type(NestedTVarSPtype.mk, (Vector, Any))
     @test rt <: (NestedTVarSPtype.ParamStruct{1, 1, Tuple{Colon}, B, Tuple{UnitRange{Int}}} where B<:Tuple{Vector})
 end
 
+# `Compiler.return_type` on an `OpaqueClosure` should model the declared
+# return type stored in the OC type without inspecting the OC source.
+@test Base.infer_return_type() do
+    oc = Base.Experimental.@opaque Tuple{Int}->Real x -> 2x
+    Compiler.return_type(oc, Tuple{Int})
+end == Type{Real}
+# When the OC is still a `PartialOpaque`, but its declared return type parameter is
+# not exact, do not use the source to recover the runtime-selected OC type.
+@test Base.infer_return_type() do
+    oc = Base.Experimental.@opaque x::Int -> 2x
+    Compiler.return_type(oc, Tuple{Int})
+end == Type
+@test Base.infer_return_type((Core.OpaqueClosure{Tuple{Int},Real},)) do oc
+    Compiler.return_type(oc, Tuple{Int})
+end == Type{Real}
+@test Base.infer_return_type((Core.OpaqueClosure{Tuple{Int},<:Real},)) do oc
+    Compiler.return_type(oc, Tuple{Int})
+end == Type{<:Real}
+@test Base.infer_return_type((Core.OpaqueClosure{Tuple{Int},Real},)) do oc
+    Compiler.return_type(oc, Tuple{String})
+end == Type{Union{}}
+
 end # module inference
