@@ -3379,7 +3379,7 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
 
     // Go back and update the checksum in the header
     ios_seek(f, checksumpos);
-    write_uint64(f, checksum | ((uint64_t)0xfafbfcfd << 32));
+    write_uint32(f, checksum);
     write_uint64(f, datastartpos);
     write_uint64(f, dataendpos);
     ios_seek(f, dataendpos);
@@ -3490,7 +3490,7 @@ static char *jl_image_alloc_pages(size_t size)
     return data;
 }
 
-static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint64_t *checksum,
+static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint32_t *checksum,
                                           int64_t *dataendpos, int64_t *datastartpos);
 
 // Decompress a compressed image payload found after the .ji header in data, and
@@ -3498,7 +3498,7 @@ static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint64_
 static void jl_image_decompress(jl_image_buf_t *image, char *data, size_t len)
 {
     ios_t f;
-    uint64_t checksum;
+    uint32_t checksum;
     int64_t datastartpos, dataendpos;
     ios_static_buffer(&f, data, len);
     jl_validate_cache_file(&f, NULL, &checksum, &dataendpos, &datastartpos);
@@ -3757,7 +3757,7 @@ static int all_usings_unchanged_implicit(jl_module_t *mod)
 }
 
 static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
-                                                 jl_array_t *depmods, uint64_t checksum,
+                                                 jl_array_t *depmods, uint32_t checksum,
                                 /* outputs */    jl_array_t **restored JL_REQUIRE_ROOTED_SLOT,
                                                  jl_array_t **init_order JL_REQUIRE_ROOTED_SLOT,
                                                  jl_array_t **extext_methods JL_REQUIRE_ROOTED_SLOT,
@@ -4311,12 +4311,11 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
 
 }
 
-static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint64_t *checksum, int64_t *dataendpos, int64_t *datastartpos)
+static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint32_t *checksum, int64_t *dataendpos, int64_t *datastartpos)
 {
     uint8_t pkgimage = 0;
     if (ios_eof(f) ||
-        0 == (*checksum = jl_read_verify_header(f, &pkgimage, dataendpos, datastartpos)) ||
-        (*checksum >> 32 != 0xfafbfcfd)) {
+        0 == (*checksum = jl_read_verify_header(f, &pkgimage, dataendpos, datastartpos))) {
         return jl_get_exceptionf(jl_errorexception_type,
                                  "Precompile file header verification checks failed.");
     }
@@ -4348,7 +4347,7 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
 {
     JL_TIMING(LOAD_IMAGE, LOAD_Pkgimg);
     jl_timing_printf(JL_TIMING_DEFAULT_BLOCK, pkgname);
-    uint64_t checksum = 0;
+    uint32_t checksum = 0;
     int64_t dataendpos = 0;
     int64_t datastartpos = 0;
     jl_value_t *verify_fail = jl_validate_cache_file(f, depmods, &checksum, &dataendpos, &datastartpos);
@@ -4450,7 +4449,7 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
 static void jl_restore_system_image_from_stream(ios_t *f, jl_image_t *image)
 {
     JL_TIMING(LOAD_IMAGE, LOAD_Sysimg);
-    uint64_t checksum;
+    uint32_t checksum;
     int64_t dataendpos, datastartpos;
     jl_value_t *exc =
         jl_validate_cache_file(f, NULL, &checksum, &dataendpos, &datastartpos);
@@ -4459,8 +4458,7 @@ static void jl_restore_system_image_from_stream(ios_t *f, jl_image_t *image)
     ios_t f_payload;
     ios_static_buffer(&f_payload, f->buf + datastartpos, f->size - datastartpos);
     jl_restore_system_image_from_stream_(&f_payload, image, NULL,
-                                         (checksum & 0xffffffff) | ((uint64_t)0xfdfcfbfa << 32), NULL,
-                                         NULL, NULL, NULL, NULL, NULL);
+                                         checksum, NULL, NULL, NULL, NULL, NULL, NULL);
 }
 
 JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(jl_image_buf_t buf, jl_image_t *image, jl_array_t *depmods, int completeinfo, const char *pkgname, int needs_permalloc)

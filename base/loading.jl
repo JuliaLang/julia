@@ -3673,11 +3673,11 @@ end
 
 function isvalid_cache_header(f::IOStream)
     pkgimage = Ref{UInt8}()
-    checksum = ccall(:jl_read_verify_header, UInt64, (Ptr{Cvoid}, Ptr{UInt8}, Ptr{Int64}, Ptr{Int64}), f.ios, pkgimage, Ref{Int64}(), Ref{Int64}()) # returns checksum id or zero
+    checksum = ccall(:jl_read_verify_header, UInt32, (Ptr{Cvoid}, Ptr{UInt8}, Ptr{Int64}, Ptr{Int64}), f.ios, pkgimage, Ref{Int64}(), Ref{Int64}()) # returns checksum id or zero
 
     if !iszero(checksum) && pkgimage[] != 1
         @debug "Cache header was for a system image"
-        return UInt64(0) # We somehow read the header for a system image
+        return UInt32(0) # We somehow read the header for a system image
     end
     return checksum
 end

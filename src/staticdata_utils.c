@@ -713,9 +713,9 @@ static int64_t write_header(ios_t *s, uint8_t pkgimage)
         ios_write(s, commit, strlen(commit)+1);
     }
     int64_t checksumpos = ios_pos(s);
-    write_uint64(s, 0); // eventually will hold checksum for the content portion of this (build_id.hi)
-    write_uint64(s, 0); // eventually will hold dataendpos
+    write_uint32(s, 0); // eventually will hold checksum for the content portion of this (build_id.hi)
     write_uint64(s, 0); // eventually will hold datastartpos
+    write_uint64(s, 0); // eventually will hold dataendpos
     return checksumpos;
 }
 
@@ -1000,10 +1000,10 @@ static int readstr_verify(ios_t *s, const char *str, int include_null)
     return 1;
 }
 
-JL_DLLEXPORT uint64_t jl_read_verify_header(ios_t *s, uint8_t *pkgimage, int64_t *dataendpos, int64_t *datastartpos)
+JL_DLLEXPORT uint32_t jl_read_verify_header(ios_t *s, uint8_t *pkgimage, int64_t *dataendpos, int64_t *datastartpos)
 {
     uint16_t bom;
-    uint64_t checksum = 0;
+    uint32_t checksum = 0;
     if (!(readstr_verify(s, JI_MAGIC, 0) &&
           read_uint16(s) == JI_FORMAT_VERSION &&
           ios_read(s, (char *) &bom, 2) == 2 && bom == BOM &&
@@ -1019,7 +1019,7 @@ JL_DLLEXPORT uint64_t jl_read_verify_header(ios_t *s, uint8_t *pkgimage, int64_t
         !(readstr_verify(s, jl_git_branch(), 1) && readstr_verify(s, jl_git_commit(), 1)))
         return 0;
 
-    checksum = read_uint64(s);
+    checksum = read_uint32(s);
     *datastartpos = (int64_t)read_uint64(s);
     *dataendpos = (int64_t)read_uint64(s);
 
