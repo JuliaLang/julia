@@ -2157,6 +2157,25 @@ static size_t image_weight_per_shard() {
     return weight_per_shard;
 }
 
+// Minimum weight a core-fill shard must carry, so the extra shards forced to fill
+// idle cores still pay back their per-shard overhead. This is the granularity of
+// the *probe-gated* core-fill term only (it does not change the always-on memory
+// floor weight/weight_per_shard), so lowering it lets a worker fan out more
+// finely when cores are genuinely free without over-sharding a busy machine.
+// Defaults to weight_per_shard/4; override with JULIA_IMAGE_MIN_SHARD_WEIGHT.
+static size_t image_min_shard_weight() {
+    size_t min_shard = std::max<size_t>(image_weight_per_shard() / 4, 1);
+    if (const char *env = getenv("JULIA_IMAGE_MIN_SHARD_WEIGHT")) {
+        char *endptr;
+        unsigned long long val = strtoull(env, &endptr, 10);
+        if (endptr != env && !*endptr && val > 0)
+            min_shard = (size_t)val;
+        else
+            jl_safe_printf("WARNING: invalid value '%s' for JULIA_IMAGE_MIN_SHARD_WEIGHT\n", env);
+    }
+    return min_shard;
+}
+
 // Rough estimate of the *marginal* codegen working memory each additional
 // concurrent shard adds, per unit of module `weight`. This is what should bound
 // concurrency: the bulk of a shard's footprint (the full module, the serialized
@@ -2232,10 +2251,10 @@ static unsigned compute_image_shard_count(const ModuleInfo &info, unsigned fill_
     // Fine-shard large modules to bound peak working memory.
     size_t weight_bound = info.weight / weight_per_shard;
     // Ramp up to fill the available cores for modules big enough to parallelize,
-    // keeping each forced shard >= weight_per_shard/4 so it still pays for its
-    // per-shard overhead. This is what keeps big long-tail packages from going
-    // serial and leaving free cores idle.
-    size_t min_shard = std::max<size_t>(weight_per_shard / 4, 1);
+    // keeping each forced shard >= min_shard so it still pays for its per-shard
+    // overhead. This is what keeps big long-tail packages from going serial and
+    // leaving free cores idle.
+    size_t min_shard = image_min_shard_weight();
     size_t core_fill = std::min<size_t>(fill_cap, info.weight / min_shard);
     if (weight_bound_out)
         *weight_bound_out = (unsigned)weight_bound;
