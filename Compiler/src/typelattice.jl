@@ -456,8 +456,7 @@ end
         return isa(b, Type) && a.typ <: b
     elseif isa(b, PartialStruct)
         if isa(a, Const)
-            widea = widenconst(a)
-            isa(widea, DataType) || return false
+            widea = widenconst(a)::DataType
             wideb = widenconst(b)
             wideb′ = unwrap_unionall(wideb)::DataType
             widea.name === wideb′.name || return false
@@ -597,7 +596,7 @@ end
 # lattice operations
 # ==================
 
-@nospecializeinfer function tmeet(lattice::PartialsLattice, @nospecialize(v), @nospecialize(t::AnyType))
+@nospecializeinfer function tmeet(lattice::PartialsLattice, @nospecialize(v), @nospecialize(t::Type))
     if isa(v, PartialStruct)
         has_free_typevars(t) && return v
         widev = widenconst(v)
@@ -635,7 +634,7 @@ end
     return tmeet(widenlattice(lattice), v, t)
 end
 
-@nospecializeinfer function tmeet(lattice::ConstsLattice, @nospecialize(v), @nospecialize(t::AnyType))
+@nospecializeinfer function tmeet(lattice::ConstsLattice, @nospecialize(v), @nospecialize(t::Type))
     if isa(v, Const)
         if !has_free_typevars(t) && !isa(v.val, t)
             return Bottom
@@ -645,7 +644,7 @@ end
     tmeet(widenlattice(lattice), widenconst(v), t)
 end
 
-@nospecializeinfer function tmeet(lattice::ConditionalsLattice, @nospecialize(v), @nospecialize(t::AnyType))
+@nospecializeinfer function tmeet(lattice::ConditionalsLattice, @nospecialize(v), @nospecialize(t::Type))
     if isa(v, Conditional)
         if !(Bool <: t)
             return Bottom
@@ -655,26 +654,26 @@ end
     tmeet(widenlattice(lattice), v, t)
 end
 
-@nospecializeinfer function tmeet(𝕃::MustAliasesLattice, @nospecialize(v), @nospecialize(t::AnyType))
+@nospecializeinfer function tmeet(𝕃::MustAliasesLattice, @nospecialize(v), @nospecialize(t::Type))
     if isa(v, MustAlias)
         v = widenmustalias(v)
     end
     return tmeet(widenlattice(𝕃), v, t)
 end
 
-@nospecializeinfer function tmeet(lattice::InferenceLattice, @nospecialize(v), @nospecialize(t::AnyType))
+@nospecializeinfer function tmeet(lattice::InferenceLattice, @nospecialize(v), @nospecialize(t::Type))
     # TODO: This can probably happen and should be handled
     @assert !isa(v, LimitedAccuracy)
     tmeet(widenlattice(lattice), v, t)
 end
 
-@nospecializeinfer function tmeet(lattice::InterConditionalsLattice, @nospecialize(v), @nospecialize(t::AnyType))
+@nospecializeinfer function tmeet(lattice::InterConditionalsLattice, @nospecialize(v), @nospecialize(t::Type))
     # TODO: This can probably happen and should be handled
     @assert !isa(v, AnyConditional)
     tmeet(widenlattice(lattice), v, t)
 end
 
-@nospecializeinfer function tmeet(𝕃::InterMustAliasesLattice, @nospecialize(v), @nospecialize(t::AnyType))
+@nospecializeinfer function tmeet(𝕃::InterMustAliasesLattice, @nospecialize(v), @nospecialize(t::Type))
     if isa(v, InterMustAlias)
         v = widenmustalias(v)
     end
@@ -692,7 +691,7 @@ widenconst(c::Const) = (v = c.val; isa(v, Type) ? Type{v} : typeof(v))
 widenconst(::PartialTypeVar) = TypeVar
 widenconst(t::Core.PartialStruct) = t.typ
 widenconst(t::PartialOpaque) = t.typ
-@nospecializeinfer widenconst(@nospecialize t::AnyType) = t
+@nospecializeinfer widenconst(@nospecialize t::Type) = t
 widenconst(::TypeVar) = error("unhandled TypeVar")
 widenconst(::TypeofVararg) = error("unhandled Vararg")
 widenconst(::LimitedAccuracy) = error("unhandled LimitedAccuracy")

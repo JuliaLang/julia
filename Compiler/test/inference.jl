@@ -307,8 +307,8 @@ let
     fT(x::T) where {T} = T
     @test fT(Any) === DataType
     @test fT(Int) === DataType
-    @test fT(Type{Any}) === Core.TypeEq
-    @test fT(Type{Int}) === Core.TypeEq
+    @test fT(Type{Any}) === DataType
+    @test fT(Type{Int}) === DataType
 
     ff(x::Type{T}) where {T} = T
     @test ff(Type{Any}) === Type{Any}
@@ -506,11 +506,6 @@ f11366(x::Type{Ref{T}}) where {T} = Ref{x}
 let f(T) = Type{T}
     @test Base.return_types(f, Tuple{Type{Int}}) == Any[Type{Type{Int}}]
 end
-
-# Keep tuple iteration precise when joining ordinary values with kind values.
-@test Core.Compiler.tmerge(String, Type) == Union{String, Type}
-@test Base.return_types(iterate, Tuple{Tuple{String, Type}, Int}) ==
-    Any[Union{Nothing, Tuple{Union{String, Type}, Int}}]
 
 # issue #9222
 function SimpleTest9222(pdedata, mu_actual::Vector{T1},
@@ -1568,7 +1563,7 @@ let nfields_tfunc(@nospecialize xs...) =
     @test nfields_tfunc(Number) === Int
     @test nfields_tfunc(Int) === Const(0)
     @test nfields_tfunc(Complex) === Const(2)
-    @test nfields_tfunc(Type{Type{Int}}) === Const(nfields(Type{Int}))
+    @test nfields_tfunc(Type{Type{Int}}) === Const(nfields(DataType))
     @test nfields_tfunc(UnionAll) === Const(2)
     @test nfields_tfunc(DataType) === Const(nfields(DataType))
     @test nfields_tfunc(Type{Int}) === Const(nfields(DataType))

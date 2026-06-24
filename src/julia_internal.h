@@ -969,7 +969,7 @@ jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_module_t *module,
                                    jl_datatype_t *super, jl_svec_t *parameters);
 jl_datatype_t *jl_new_uninitialized_datatype(void);
 void jl_precompute_memoized_dt(jl_datatype_t *dt, int cacheable);
-JL_DLLEXPORT jl_typeeq_t *jl_wrap_Type(jl_value_t *t);  // x -> Type{x}
+JL_DLLEXPORT jl_datatype_t *jl_wrap_Type(jl_value_t *t);  // x -> Type{x}
 jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n, int check, int nothrow);
 void jl_reinstantiate_inner_types(jl_datatype_t *t);
 jl_datatype_t *jl_lookup_cache_type_(jl_datatype_t *type);
@@ -1302,16 +1302,6 @@ STATIC_INLINE int jl_is_va_tuple(jl_datatype_t *t) JL_NOTSAFEPOINT
     assert(jl_is_tuple_type(t));
     size_t l = jl_svec_len(t->parameters);
     return (l>0 && jl_is_vararg(jl_tparam(t,l-1)));
-}
-
-// `Type{Union{}}` (a `TypeEq`) is laid out as the singleton `typeof(Union{})`
-// `DataType`. Code that inspects a field's declared type for layout purposes
-// must use this normalized form, otherwise it sees a non-`DataType` kind.
-STATIC_INLINE jl_value_t *normalize_typeofbottom_layout_alias(jl_value_t *ty JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
-{
-    if (jl_typeofbottom_type != NULL && jl_is_typeeq(ty) && jl_typeeq_T(ty) == jl_bottom_type)
-        return (jl_value_t*)jl_typeofbottom_type;
-    return ty;
 }
 
 STATIC_INLINE size_t jl_vararg_length(jl_value_t *v) JL_NOTSAFEPOINT

@@ -3,7 +3,7 @@
 # Re-exports from `Core`
 export Core,
     # key types
-    Any, TypeEq, DataType, Vararg, NTuple,
+    Any, DataType, Vararg, NTuple,
     Tuple, Type, UnionAll, TypeVar, Union, Nothing, Cvoid,
     AbstractArray, DenseArray, NamedTuple, Pair,
     # special objects

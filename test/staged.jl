@@ -137,7 +137,7 @@ f10502() = ()
 
 # issue #11982
 @generated function f11982(T)
-    string(Base.type_parameter(T))
+    string(T.parameters[1])
 end
 @test f11982(Float32) == "Float32"
 @test f11982(Int32) == "Int32"
@@ -414,7 +414,7 @@ end
 
 # Test that writing a bad cassette-style pass gives the expected error (#49715)
 function generator49715(world, source, self, f, tt)
-    tt = Base.type_parameter(tt)
+    tt = tt.parameters[1]
     sig = Tuple{f, tt.parameters...}
     mi = Base._which(sig; world)
     error("oh no")

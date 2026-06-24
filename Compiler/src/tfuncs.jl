@@ -74,7 +74,7 @@ const DATATYPE_NAME_FIELDINDEX = fieldindex(DataType, :name)
 
 # Note that in most places in the compiler here, we'll assume that T=Type{S} is well-formed,
 # and implies that `S <: Type`, not `1::Type{1}`, for example.
-# This means that isType(T) implies we can call subtype on type_parameter(T), etc.
+# This means that isType(T) implies we can call subtype on T.parameters[1], etc.
 
 function add_tfunc(f::IntrinsicFunction, minarg::Int, maxarg::Int, @nospecialize(tfunc), cost::Int)
     idx = reinterpret(Int32, f) + 1
@@ -109,7 +109,7 @@ function instanceof_tfunc(@nospecialize(t), astag::Bool=false, @nospecialize(tro
     elseif t === typeof(Bottom) || !hasintersect(t, Type)
         return Bottom, true, false, false # literal Bottom or non-Type
     elseif isType(t)
-        tp = type_parameter(t)
+        tp = t.parameters[1]
         valid_as_lattice(tp, astag) || return Bottom, true, false, false # runtime unreachable / throws on non-Type
         if troot isa UnionAll
             # Free `TypeVar`s inside `Type` has violated the "diagonal" rule.
@@ -323,7 +323,7 @@ add_tfunc(Core.Intrinsics.llvmcall, 3, INT_INF, llvmcall_tfunc, 10)
 @nospecs cglobal_tfunc(𝕃::AbstractLattice, fptr) = Ptr{Cvoid}
 @nospecs function cglobal_tfunc(𝕃::AbstractLattice, fptr, t)
     isa(t, Const) && return isa(t.val, Type) ? Ptr{t.val} : Ptr
-    return isType(t) ? Ptr{type_parameter(t)} : Ptr
+    return isType(t) ? Ptr{t.parameters[1]} : Ptr
 end
 add_tfunc(Core.Intrinsics.cglobal, 1, 2, cglobal_tfunc, 5)
 
@@ -416,7 +416,7 @@ end
     if arg1 isa MustAlias
         arg1 = widenmustalias(arg1)
     end
-    arg1t = arg1 isa Const ? typeof(arg1.val) : isconstType(arg1) ? typeof(type_parameter(arg1)) : widenconst(arg1)
+    arg1t = arg1 isa Const ? typeof(arg1.val) : isconstType(arg1) ? typeof(arg1.parameters[1]) : widenconst(arg1)
     a1 = unwrap_unionall(arg1t)
     if isa(a1, DataType) && !isabstracttype(a1)
         if a1 === Module
@@ -532,7 +532,7 @@ end
     x = widenmustalias(x)
     isa(x, Const) && return _const_sizeof(x.val)
     isa(x, Conditional) && return _const_sizeof(Bool)
-    isconstType(x) && return _const_sizeof(type_parameter(x))
+    isconstType(x) && return _const_sizeof(x.parameters[1])
     xu = unwrap_unionall(x)
     if isa(xu, Union)
         return tmerge(sizeof_tfunc(𝕃, rewrap_unionall(xu.a, x)),
@@ -564,7 +564,7 @@ add_tfunc(Core.sizeof, 1, 1, sizeof_tfunc, 1)
     isa(x, Conditional) && return Const(0)
     xt = widenconst(x)
     x = unwrap_unionall(xt)
-    isconstType(x) && return Const(nfields(type_parameter(x)))
+    isconstType(x) && return Const(nfields(x.parameters[1]))
     if isa(x, DataType) && !isabstracttype(x)
         if x.name === Tuple.name
             isvatuple(x) && return Int
@@ -623,7 +623,7 @@ add_tfunc(Core._svec_ref, 2, 2, _svec_ref_tfunc, 1)
         else
             lb_arg = widenslotwrapper(lb_arg)
             if isType(lb_arg)
-                lb = type_parameter(lb_arg)
+                lb = lb_arg.parameters[1]
                 lb_certain = false
             else
                 return TypeVar
@@ -634,7 +634,7 @@ add_tfunc(Core._svec_ref, 2, 2, _svec_ref_tfunc, 1)
         else
             ub_arg = widenslotwrapper(ub_arg)
             if isType(ub_arg)
-                ub = type_parameter(ub_arg)
+                ub = ub_arg.parameters[1]
                 ub_certain = false
             else
                 return TypeVar
@@ -821,7 +821,7 @@ end
     isa(t, Const) && return Const(typeof(t.val))
     t = widenconst(t)
     if isType(t)
-        tp = type_parameter(t)
+        tp = t.parameters[1]
         if hasuniquerep(tp)
             return Const(typeof(tp))
         end
@@ -877,7 +877,7 @@ add_tfunc(typeassert, 2, 2, typeassert_tfunc, 4)
     ⊑ = partialorder(𝕃)
     # ty, exact = instanceof_tfunc(t, true)
     # return exact && v ⊑ ty
-    if (isType(t) && !has_free_typevars(t) && v ⊑ type_parameter(t)) ||
+    if (isType(t) && !has_free_typevars(t) && v ⊑ t.parameters[1]) ||
         (isa(t, Const) && isa(t.val, Type) && v ⊑ t.val)
         return true
     end
@@ -1031,7 +1031,7 @@ end
             nflds = fieldcount_noerror(sty)
             ismod = false
         else
-            sv = type_parameter(s00)
+            sv = (s00::DataType).parameters[1]
             sty = typeof(sv)
             nflds = nfields(sv)
             ismod = sv isa Module
@@ -1063,7 +1063,7 @@ end
     if isa(s, Union)
         return getfield_nothrow(𝕃, rewrap_unionall(s.a, s00), name, boundscheck) &&
                getfield_nothrow(𝕃, rewrap_unionall(s.b, s00), name, boundscheck)
-    elseif isType(s) && isTypeDataType(type_parameter(s))
+    elseif isType(s) && isTypeDataType(s.parameters[1])
         s = s0 = DataType
     end
     if isa(s, DataType)
@@ -1200,14 +1200,14 @@ end
     end
     if isType(s)
         if isconstType(s)
-            sv = type_parameter(s)
+            sv = (s00::DataType).parameters[1]
             if isa(name, Const)
                 r = _getfield_tfunc_const(sv, name)
                 r !== nothing && return r
             end
             s = typeof(sv)
         else
-            sv = type_parameter(s)
+            sv = s.parameters[1]
             if isTypeDataType(sv) && isa(name, Const)
                 nv = _getfield_fieldindex(DataType, name)::Int
                 if nv == DATATYPE_NAME_FIELDINDEX
@@ -1571,14 +1571,13 @@ end
         end
         return Any
     end
-    isType(u) && return Bottom
     u isa DataType || return Any
     if isabstracttype(u)
         # Abstract types have no fields
         exact && return Bottom
         # Type{...} without free typevars has no subtypes, so it is actually
         # exact, even if `exact` is false.
-        isType(u) && !has_free_typevars(type_parameter(u)) && return Bottom
+        isType(u) && !has_free_typevars(u.parameters[1]) && return Bottom
         return Any
     end
     if u.name === _NAMEDTUPLE_NAME && !isconcretetype(u)
@@ -1664,48 +1663,8 @@ add_tfunc(fieldtype, 2, 3, fieldtype_tfunc, 0)
 
 # Like `valid_tparam`, but in the type domain.
 valid_tparam_type(T::DataType) = valid_typeof_tparam(T)
-valid_tparam_type(T::TypeEq) = true
 valid_tparam_type(U::Union) = valid_tparam_type(U.a) && valid_tparam_type(U.b)
 valid_tparam_type(U::UnionAll) = valid_tparam_type(unwrap_unionall(U))
-
-function typeeq_apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any})
-    length(argtypes) == 2 || return false
-    ai = widenslotwrapper(widenconditional(argtypes[2]))
-    if isa(ai, Const)
-        v = ai.val
-        return isa(v, Type) || isa(v, TypeVar) || valid_tparam(v)
-    end
-    isType(ai) && return true
-    isa(ai, PartialTypeVar) && return true
-    ai = widenconst(ai)
-    return (⊑(𝕃, ai, AnyType) || ⊑(𝕃, ai, TypeVar) ||
-            (isa(ai, Type) && valid_tparam_type(ai)))
-end
-
-function typeeq_apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
-    length(argtypes) == 2 || return Bottom
-    ai = widenslotwrapper(argtypes[2])
-    if isa(ai, Const)
-        v = ai.val
-        (isa(v, Type) || isa(v, TypeVar) || valid_tparam(v)) || return Bottom
-        return Const(apply_type(TypeEq, v))
-    end
-    if isType(ai)
-        return hasuniquerep(ai) ? Const(ai) : Type{ai}
-    end
-    if isa(ai, PartialTypeVar)
-        (ai.lb_certain && ai.ub_certain) || return TypeEq
-        return Type{TypeEq{ai.tv}}
-    end
-    ai = widenconst(ai)
-    if ⊑(𝕃, ai, AnyType) || ⊑(𝕃, ai, TypeVar) || (isa(ai, Type) && valid_tparam_type(ai))
-        return TypeEq
-    end
-    if isa(ai, Type) && isconcretetype(ai)
-        return Bottom
-    end
-    return TypeEq
-end
 
 function apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospecialize(rt))
     rt === Type && return false
@@ -1714,14 +1673,13 @@ function apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospe
     if isa(headtypetype, Const)
         headtype = headtypetype.val
     elseif isconstType(headtypetype)
-        headtype = type_parameter(headtypetype)
+        headtype = headtypetype.parameters[1]
     else
         return false
     end
     # We know the apply_type is well formed. Otherwise our rt would have been
     # Bottom (or Type).
     (headtype === Union) && return true
-    headtype === TypeEq && return typeeq_apply_type_nothrow(𝕃, argtypes)
     isa(rt, Const) && return true
     u = headtype
     # TODO: implement optimization for isvarargtype(u) and istuple occurrences (which are valid but are not UnionAll)
@@ -1735,7 +1693,7 @@ function apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospe
                 return false
             end
         elseif (isa(ai, Const) && isa(ai.val, Type)) || isconstType(ai)
-            ai = isa(ai, Const) ? ai.val : type_parameter(ai)
+            ai = isa(ai, Const) ? ai.val : (ai::DataType).parameters[1]
             if has_free_typevars(u.var.lb) || has_free_typevars(u.var.ub)
                 return false
             end
@@ -1786,7 +1744,7 @@ function apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any};
     if isa(headtypetype, Const)
         headtype = headtypetype.val
     elseif isconstType(headtypetype)
-        headtype = type_parameter(headtypetype)
+        headtype = headtypetype.parameters[1]
     else
         return Any
     end
@@ -1826,7 +1784,7 @@ function apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any};
         for i = 2:largs
             ai = argtypes[i]
             if isType(ai)
-                aty = type_parameter(ai)
+                aty = ai.parameters[1]
                 allconst &= hasuniquerep(aty)
             else
                 aty = (ai::Const).val
@@ -1834,9 +1792,6 @@ function apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any};
             ty = Union{ty, aty}
         end
         return allconst ? Const(ty) : Type{ty}
-    end
-    if headtype === TypeEq
-        return typeeq_apply_type_tfunc(𝕃, argtypes)
     end
     if 1 < unionsplitcost(𝕃, argtypes) ≤ max_union_splitting
         rt = Bottom
@@ -1878,7 +1833,7 @@ end
     for i = 2:largs
         ai = widenslotwrapper(argtypes[i])
         if isType(ai)
-            aip1 = type_parameter(ai)
+            aip1 = ai.parameters[1]
             canconst &= !has_free_typevars(aip1)
             push!(tparams, aip1)
         elseif isa(ai, Const) && (isa(ai.val, Type) || isa(ai.val, TypeVar) ||
@@ -1893,7 +1848,7 @@ end
             isT = isType(unw)
             # compute our desired upper bound value
             if isT
-                ub = rewrap_unionall(type_parameter(unw), ai)
+                ub = rewrap_unionall(unw.parameters[1], ai)
             else
                 ub = Any
             end
@@ -1902,7 +1857,7 @@ end
                 # outer type, use the wrapper type, instead of letting it nest more
                 # complexity here. This is not monotonic, but seems to work out pretty well.
                 if isT
-                    ub = unwrap_unionall(type_parameter(unw))
+                    ub = unwrap_unionall(unw.parameters[1])
                     if ub isa DataType
                         ub = ub.name.wrapper
                         unw = Type{unwrap_unionall(ub)}
@@ -1933,13 +1888,13 @@ end
                     # make sure vars introduced here are unique
                     if contains_is(outervars, tai.var)
                         ai = rename_unionall(ai)
-                        unw = unwrap_unionall(ai)
+                        unw = unwrap_unionall(ai)::DataType
                         # ub = rewrap_unionall(unw, ai)
                         break
                     end
                     tai = tai.body
                 end
-                push!(tparams, type_parameter(unw))
+                push!(tparams, unw.parameters[1])
                 while isa(ai, UnionAll)
                     push!(outervars, ai.var)
                     ai = ai.body
@@ -2053,7 +2008,7 @@ function tuple_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
             # (::Union{Type{Int32},Type{Int64}}) -> Tuple{Type}
             if isType(x)
                 anyinfo = true
-                xparam = type_parameter(x)
+                xparam = x.parameters[1]
                 if hasuniquerep(xparam) || xparam === Bottom
                     params[i] = typeof(xparam)
                 else
@@ -3193,7 +3148,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
         return Future(UNKNOWN)
     end
 
-    af_argtype = isa(tt, Const) ? tt.val : type_parameter(tt)
+    af_argtype = isa(tt, Const) ? tt.val : (tt::DataType).parameters[1]
     if !isa(af_argtype, DataType) || !(af_argtype <: Tuple)
         return Future(UNKNOWN)
     end
@@ -3361,7 +3316,7 @@ function typename_static(@nospecialize(t))
     t isa Const && return _typename(t.val)
     t isa Conditional && return Bool.name
     t = unwrap_unionall(widenconst(t))
-    return isType(t) ? _typename(type_parameter(t)) : Core.TypeName
+    return isType(t) ? _typename(t.parameters[1]) : Core.TypeName
 end
 
 function global_order_exct(@nospecialize(o), loading::Bool, storing::Bool)

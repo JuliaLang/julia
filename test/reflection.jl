@@ -866,9 +866,6 @@ end
 @test !isabstracttype(ReflectionExample)
 @test !isabstracttype(Int)
 @test !isabstracttype(TLayout)
-# PR #61915: `Type{T}` (a `TypeEq` kind) is still reported abstract
-@test isabstracttype(Type)
-@test isabstracttype(Type{<:Integer})
 
 @test !isprimitivetype(Union{})
 @test !isprimitivetype(Union{Int,Float64})

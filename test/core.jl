@@ -195,7 +195,7 @@ f11840(::DataType) = "DataType"
 f11840(::UnionAll) = "UnionAll"
 f11840(::Type{T}) where {T<:Tuple} = "Tuple"
 @test f11840(Type) == "UnionAll"
-@test f11840(Type.body) == "Type"
+@test f11840(Type.body) == "DataType"
 @test f11840(Union{Int,Int8}) == "Type"
 @test f11840(Tuple) == "Tuple"
 @test f11840(TT11840) == "Tuple"
@@ -391,29 +391,6 @@ end  |> only == Type{typejoin(Int, UInt, Float64)}
 @test typejoin(1, 2, 3) === Any
 @test typejoin(Int, Int, 3) === Any
 
-# issue #61915: typejoin must stay sound when an operand is a `Type{X}` kind. Under the
-# TypeEq refactor `typeof(Type{X})` is no longer a `DataType`; joining a kind with an
-# unrelated non-`Type` operand must give `Any`, not `Type`.
-@test typejoin(Symbol, Type{Int}) === Any
-@test typejoin(Type{Int}, Symbol) === Any
-@test typejoin(Type{Int}, Int) === Any
-@test typejoin(Type{Int}, String) === Any
-@test typejoin(Type{Int}, Type{Float64}) === Type
-@test typejoin(Type{Int}, Type) === Type
-@test_broken typejoin(Type{Int}, DataType) !== DataType
-@test typejoin(Symbol, Type{Int}) === typejoin(Type{Int}, Symbol)
-@test typejoin(DataType, Type{Int}) === typejoin(Type{Int}, DataType)
-
-# issue #61915: a method whose function type is `Type{Foo{...} where ...}` must derive its
-# name as `Foo`, not `:Any` (nth_arg_datatype has to unwrap the wrapped UnionAll).
-struct UA61915{T,N,A<:AbstractArray{T,N}}
-    a::A
-end
-UA61915{T}(a) where {T} = UA61915{T,ndims(a),typeof(a)}(a)
-@test all(m -> m.name === :UA61915, methods(UA61915))
-@test which(UA61915{Int}, (Vector{Int},)).name === :UA61915
-@test ccall(:jl_argument_datatype, Any, (Any,), Type{Array}) === Base.unwrap_unionall(Array)
-
 # promote_typejoin returns a Union only with Nothing/Missing combined with concrete types
 for T in (Nothing, Missing)
     @test Base.promote_typejoin(Int, Float64) === Real
@@ -437,17 +414,6 @@ for T in (Nothing, Missing)
     end
     @test Base.promote_typejoin(T, Union{}) === T
     @test Base.promote_typejoin(Union{}, T) === T
-end
-
-# PR #61915: `promote_typejoin_union` must handle `Type{X}` (a `TypeEq` kind), not error
-@test Base.promote_typejoin_union(Type{Int}) === Type{Int}
-@test Base.promote_typejoin_union(Union{Type{Int}, Type{String}}) === Type
-@test fieldtype.(Tuple{Int,Float32,Int}, [1, 2, 3]) == [Int, Float32, Int]
-@test typeof.(Any[Int, "x", 1.0]) == [DataType, String, Float64]
-# PR #61915: dispatching `::Type{Type{T}}` on a `TypeEq`-typed value (e.g. iterating a
-# tuple of `Type{X}` values) must not infer `Union{}` (which crashed via `unreachable`)
-let get_param(::Type{Type{T}}) where {T} = T
-    @test Tuple(get_param(t) for t in (Type{Int}, Type{Float64})) === (Int, Float64)
 end
 
 @test promote_type(Bool,Bottom) === Bool
@@ -3679,12 +3645,6 @@ function f11355(sig::Type{T}) where T<:Tuple
 end
 function f11355(arg::DataType)
     if arg <: Tuple
-        return 200
-    end
-    return 100
-end
-function f11355(arg::TypeEq)
-    if Base.type_parameter(arg) <: Tuple
         return 200
     end
     return 100

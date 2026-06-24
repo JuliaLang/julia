@@ -599,13 +599,10 @@ end
 io_has_tvar_name(io::IO, name::Symbol, @nospecialize(x)) = false
 
 modulesof!(s::Set{Module}, x::TypeVar) = modulesof!(s, x.ub)
-modulesof!(s::Set{Module}, x::TypeEq) = modulesof!(s, type_parameter(x))
 function modulesof!(s::Set{Module}, x::Type)
     x = unwrap_unionall(x)
     if x isa DataType
         push!(s, parentmodule(x))
-    elseif x isa TypeEq
-        modulesof!(s, x)
     elseif x isa Union
         modulesof!(s, x.a)
         modulesof!(s, x.b)
@@ -1019,25 +1016,12 @@ function show(io::IO, ::MIME"text/plain", @nospecialize(x::Type))
     end
 end
 
-show(io::IO, @nospecialize(x::TypeEq)) = show_typeeq(io, x)
-show(io::IO, @nospecialize(x::Core.AnyType)) = _show_type(io, inferencebarrier(x))
-# `Type{T}` is the familiar user-facing spelling and is used for all normal
-# (compact) printing. In non-compact contexts (e.g. the REPL's `text/plain`
-# display) the canonical kind name `TypeEq{T}` is shown instead, so that a
-# concrete `Type{T}` renders as `Type{T} (alias for TypeEq{T})`.
-function show_typeeq(io::IO, @nospecialize(x::TypeEq))
-    print(io, get(io, :compact, true)::Bool ? "Type{" : "TypeEq{")
-    show(io, type_parameter(x))
-    print(io, "}")
-end
+show(io::IO, @nospecialize(x::Type)) = _show_type(io, inferencebarrier(x))
 function _show_type(io::IO, @nospecialize(x::Type))
     if print_without_params(x)
         show_type_name(io, (unwrap_unionall(x)::DataType).name)
         return
     elseif get(io, :compact, true)::Bool && show_typealias(io, x)
-        return
-    elseif x isa TypeEq
-        show_typeeq(io, x)
         return
     elseif x isa DataType
         show_datatype(io, x)
@@ -1048,9 +1032,6 @@ function _show_type(io::IO, @nospecialize(x::Type))
         end
         print(io, "Union")
         show_delim_array(io, uniontypes(x), '{', ',', '}', false)
-        return
-    elseif x === Union{}
-        print(io, "Union{}")
         return
     end
 
@@ -2548,7 +2529,7 @@ function show_signature_function(io::IO, @nospecialize(ft), demangle=false, farg
         end
         s = sprint(show_sym, (demangle ? demangle_function_name : identity)(uw.name.singletonname), context=io)
         print_within_stacktrace(io, s, bold=true)
-    elseif isType(ft) && (f = type_parameter(ft); !isa(f, TypeVar))
+    elseif isType(ft) && (f = ft.parameters[1]; !isa(f, TypeVar))
         uwf = unwrap_unionall(f)
         parens = isa(f, UnionAll) && !(isa(uwf, DataType) && f === uwf.name.wrapper)
         parens && print(io, "(")
@@ -2792,7 +2773,7 @@ function show(io::IO, tv::TypeVar)
     # Otherwise, the lower bound should be printed if it is not `Bottom`
     # and the upper bound should be printed if it is not `Any`.
     in_env = (:unionall_env => tv) in io
-    function show_bound(io::IO, @nospecialize(b::Union{Core.AnyType,TypeVar}))
+    function show_bound(io::IO, @nospecialize(b))
         parens = isa(b,UnionAll) && !print_without_params(b)
         parens && print(io, "(")
         show(io, b)

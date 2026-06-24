@@ -1233,9 +1233,6 @@ static void record_memoryrefs_inside(jl_serializer_state *s, jl_datatype_t *t, s
         jl_value_t *ft = jl_field_type_concrete(t, i);
         if (jl_is_uniontype(ft))
             continue;
-        // a `Type{Union{}}` field is laid out as the singleton `typeof(Union{})`,
-        // so normalize it before recursing (it is otherwise a non-`DataType` kind)
-        ft = normalize_typeofbottom_layout_alias(ft);
         if (jl_is_genericmemoryref_type(ft))
             record_memoryref(s, reloc_offset + offset, *(jl_genericmemoryref_t*)(data + offset));
         else

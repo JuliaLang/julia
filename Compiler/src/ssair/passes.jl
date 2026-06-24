@@ -1150,7 +1150,7 @@ end
         argdef = compact[rarg][:stmt]
     else
         isType(arg) || return nothing
-        arg = type_parameter(arg)
+        arg = arg.parameters[1]
     end
 
     is_known_call(argdef, Core.apply_type, compact) || return nothing

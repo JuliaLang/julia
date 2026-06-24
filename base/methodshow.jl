@@ -310,7 +310,7 @@ function _modulecolor(method::Method)
     # `ft` should be the type associated with the first argument in the method signature.
     # If it's `Type`, try to unwrap it again.
     if isType(ft)
-        ft = argument_datatype(type_parameter(ft))
+        ft = argument_datatype(ft.parameters[1])
     end
     if ft === nothing || parentmodule(method) === parentmodule(ft) !== Core
         return nothing

@@ -1584,7 +1584,6 @@ STATIC_INLINE void gc_assert_parent_validity(jl_value_t *parent, jl_value_t *chi
     if (child_vt == (jl_datatype_tag << 4) ||
         child_vt == (jl_unionall_tag << 4) ||
         child_vt == (jl_uniontype_tag << 4) ||
-        child_vt == (jl_typeeq_tag << 4) ||
         child_vt == (jl_tvar_tag << 4) ||
         child_vt == (jl_vararg_tag << 4)) {
         // Skip, since these wouldn't hit the object assert anyway
@@ -2285,7 +2284,6 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
         if (vtag == (jl_datatype_tag << 4) ||
             vtag == (jl_unionall_tag << 4) ||
             vtag == (jl_uniontype_tag << 4) ||
-            vtag == (jl_typeeq_tag << 4) ||
             vtag == (jl_tvar_tag << 4) ||
             vtag == (jl_vararg_tag << 4) ||
             vtag == (jl_globalref_tag << 4) ||
