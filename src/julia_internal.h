@@ -815,7 +815,7 @@ JL_DLLEXPORT int8_t jl_get_type_infer_preserve_ir(void);
 JL_DLLEXPORT void jl_set_type_infer_preserve_ir(int8_t v);
 JL_DLLEXPORT jl_code_info_t *jl_gdbcodetyped1(jl_method_instance_t *mi, size_t world);
 JL_DLLEXPORT jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *meth JL_PROPAGATES_ROOT, size_t world);
-JL_DLLEXPORT jl_code_instance_t *jl_get_method_uninferred(
+JL_DLLEXPORT jl_code_instance_t *jl_get_method_inferred(
         jl_method_instance_t *mi JL_PROPAGATES_ROOT, jl_value_t *rettype,
         size_t min_world, size_t max_world, jl_debuginfo_t *di, jl_svec_t *edges);
 JL_DLLEXPORT int jl_mi_cache_has_ci(jl_method_instance_t *mi, jl_code_instance_t *ci) JL_NOTSAFEPOINT;
@@ -1049,9 +1049,8 @@ jl_value_t *jl_call_scm_on_ast_and_loc(const char *funcname, jl_value_t *expr,
                                        jl_module_t *inmodule, const char *file, int line);
 int jl_isa_ast_node(jl_value_t *e) JL_NOTSAFEPOINT;
 
-jl_method_instance_t *jl_builtin_method_lookup(jl_value_t *builtin);
+JL_DLLEXPORT jl_value_t *jl_method_lookup_by_tt(jl_tupletype_t *tt, size_t world, jl_value_t *_mt);
 JL_DLLEXPORT jl_method_instance_t *jl_method_lookup(jl_value_t **args, size_t nargs, size_t world);
-jl_method_instance_t *jl_apply_lookup(jl_value_t **args, size_t nargs, size_t world);
 
 jl_value_t *jl_gf_invoke_by_method(jl_method_t *method, jl_value_t *gf, jl_value_t **args, size_t nargs);
 jl_value_t *jl_gf_invoke(jl_value_t *types, jl_value_t *f, jl_value_t **args, size_t nargs);
@@ -1451,7 +1450,7 @@ jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, uint8_t default
 jl_module_t *jl_add_standard_imports(jl_module_t *m);
 JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *module);
 JL_DLLEXPORT jl_methcache_t *jl_new_method_cache(void);
-JL_DLLEXPORT jl_value_t *jl_get_specialization1(jl_tupletype_t *types JL_PROPAGATES_ROOT, size_t world);
+JL_DLLEXPORT jl_value_t *jl_get_specialization1(jl_tupletype_t *types JL_PROPAGATES_ROOT, size_t world, int mt_cache);
 jl_method_instance_t *jl_get_specialized(jl_method_t *m, jl_value_t *types, jl_svec_t *sp) JL_PROPAGATES_ROOT;
 JL_DLLEXPORT jl_value_t *jl_rettype_inferred(jl_value_t *owner, jl_method_instance_t *li JL_PROPAGATES_ROOT, size_t min_world, size_t max_world);
 JL_DLLEXPORT jl_value_t *jl_rettype_inferred_native(jl_method_instance_t *mi, size_t min_world, size_t max_world) JL_NOTSAFEPOINT;

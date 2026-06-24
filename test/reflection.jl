@@ -1326,6 +1326,7 @@ end
     @test mi1.def.name == :+
     mi2 = Base.method_instance((typeof(+), Int, Int))
     @test mi2.def.name == :+
+    # Note `jl_method_lookup` doesn't return CNull if not found
     mi3 = @ccall jl_method_lookup(Any[+, 1, 1]::Ptr{Any}, 3::Csize_t, Base.get_world_counter()::Csize_t)::Ref{Core.MethodInstance}
     @test mi1 == mi3
     @test mi2 == mi3

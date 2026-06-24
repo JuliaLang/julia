@@ -670,7 +670,7 @@ void jl_timing_task_init(jl_task_t *t)
     // string live forever, so this allocation is intentionally leaked.
     char *fiber_name;
     if (start_name[0] == '#') {
-        jl_method_instance_t *mi = jl_apply_lookup(&t->start, 1, jl_get_world_counter());
+        jl_method_instance_t *mi = jl_method_lookup(&t->start, 1, jl_get_world_counter());
         const char *filename = gnu_basename(jl_symbol_name(mi->def.method->file));
         const char *module_name = jl_symbol_name(mi->def.method->module->name);
 

@@ -978,20 +978,17 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     }
     else if (vt == jl_method_instance_type) {
         n += jl_printf(out, "MethodInstance ");
-        jl_method_instance_t *mi = (jl_method_instance_t*)v;
-        if (jl_is_method(mi->def.method)) {
-            if (jl_atomic_load_relaxed(&mi->def.method->unspecialized) == mi)
-                n += jl_printf(out, "unspecialized");
-            else
-                n += jl_static_show_func_sig(out, mi->specTypes);
+        jl_method_instance_t *li = (jl_method_instance_t*)v;
+        if (jl_is_method(li->def.method)) {
+            n += jl_static_show_func_sig(out, li->specTypes);
             n += jl_printf(out, " from ");
-            n += jl_static_show_func_sig(out, mi->def.method->sig);
+            n += jl_static_show_func_sig(out, li->def.method->sig);
         }
         else {
-            n += jl_static_show_x(out, (jl_value_t*)mi->def.module, depth, ctx);
+            n += jl_static_show_x(out, (jl_value_t*)li->def.module, depth, ctx);
             n += jl_printf(out, ".<toplevel thunk> -> ");
             n += jl_static_show_x(out, jl_atomic_load_relaxed(&jl_cached_uninferred(
-                jl_atomic_load_relaxed(&mi->cache), 1)->inferred), depth, ctx);
+                jl_atomic_load_relaxed(&li->cache), 1)->inferred), depth, ctx);
         }
     }
     else if (vt == jl_code_instance_type && ctx.verbosity < JL_STATIC_SHOW_VERBOSITY_FULL) {

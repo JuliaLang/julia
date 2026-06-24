@@ -330,9 +330,8 @@ macro _foldable_meta()
         #=:nortcall=#true))
 end
 
-macro inline()      Expr(:meta, :inline)      end
-macro noinline()    Expr(:meta, :noinline)    end
-macro nospecializeinfer() Expr(:meta, :nospecializeinfer) end
+macro inline()   Expr(:meta, :inline)   end
+macro noinline() Expr(:meta, :noinline) end
 
 macro _boundscheck() Expr(:boundscheck) end
 
@@ -1234,8 +1233,6 @@ function resolve_typegroup(mod::Module, typevars::SimpleVector, struct_infos::Si
 end
 
 function _hasmethod(@nospecialize(tt)) # this function has a special tfunc
-    @nospecializeinfer
-    @noinline
     world = ccall(:jl_get_tls_world_age, UInt, ()) # tls_world_age()
     return Intrinsics.not_int(ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), tt, nothing, world) === nothing)
 end

@@ -1046,11 +1046,11 @@ lno_ok:
         JL_GC_PROMISE_ROOTED(ctx_module);
         margs[0] = jl_toplevel_eval(ctx_module, margs[0]);
         jl_method_instance_t *mfunc = NULL;
-        mfunc = jl_apply_lookup(margs, nargs, ct->world_age);
+        mfunc = jl_method_lookup(margs, nargs, ct->world_age);
         JL_GC_PROMISE_ROOTED(mfunc);
         if (mfunc == NULL && retry_lno != NULL) {
             margs[1] = retry_lno;
-            mfunc = jl_apply_lookup(margs, nargs, ct->world_age);
+            mfunc = jl_method_lookup(margs, nargs, ct->world_age);
             JL_GC_PROMISE_ROOTED(mfunc);
         }
         if (mfunc == NULL) {

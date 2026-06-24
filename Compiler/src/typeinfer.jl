@@ -1738,8 +1738,7 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
 end
 
 function typeinf_ext_toplevel(interp::AbstractInterpreter, mi::MethodInstance, source_mode::UInt8)
-    mi2 = ccall(:jl_normalize_to_compilable_mi, Any, (Any,), mi)::MethodInstance
-    ci = typeinf_ext(interp, mi2, source_mode)
+    ci = typeinf_ext(interp, mi, source_mode)
     ci = add_codeinsts_to_jit!(interp, ci, source_mode)
     return ci
 end
@@ -1774,7 +1773,9 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
             invokelatest_queue === nothing && continue
             (rt::Type, sig::Type) = item
             # make a best-effort attempt to enqueue the relevant code for the ccallable
-            mi = ccall(:jl_get_specialization1, Any, (Any, Csize_t), sig, world)
+            mi = ccall(:jl_get_specialization1, Any,
+                        (Any, Csize_t, Cint),
+                        sig, world, #= mt_cache =# 0)
             if mi !== nothing
                 mi = mi::MethodInstance
                 ci = typeinf_ext(interp, mi, SOURCE_MODE_GET_SOURCE)

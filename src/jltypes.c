@@ -3895,7 +3895,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_method_instance_type =
         jl_new_datatype(jl_symbol("MethodInstance"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(9,
+                        jl_perm_symsvec(8,
                             "def",
                             "specTypes",
                             "sparam_vals",
@@ -3903,9 +3903,8 @@ void jl_init_types(void) JL_GC_DISABLED
                             "cache",
                             "cache_with_orig",
                             "flags",
-                            "dispatch_status",
-                            "precompile"),
-                        jl_svec(9,
+                            "dispatch_status"),
+                        jl_svec(8,
                             jl_new_struct(jl_uniontype_type, jl_method_type, jl_module_type),
                             jl_any_type,
                             jl_simplevector_type,
@@ -3913,13 +3912,12 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_any_type/*jl_code_instance_type*/,
                             jl_bool_type,
                             jl_bool_type,
-                            jl_uint8_type,
-                            jl_bool_type),
+                            jl_uint8_type),
                         jl_emptysvec,
                         0, 1, 3);
     // These fields should be constant, but Serialization wants to mutate them in initialization
     //const static uint32_t method_instance_constfields[1] = { 0b00000111 }; // fields 1, 2, 3
-    const static uint32_t method_instance_atomicfields[1]  = { 0b111010000 }; // fields 5, 7, 8, 9
+    const static uint32_t method_instance_atomicfields[1]  = { 0b11010000 }; // fields 5, 7, 8
     //Fields 4 and 5 must be protected by method->write_lock, and thus all operations on jl_method_instance_t are threadsafe.
     //jl_method_instance_type->name->constfields = method_instance_constfields;
     jl_method_instance_type->name->atomicfields = method_instance_atomicfields;
@@ -3927,7 +3925,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_code_instance_type =
         jl_new_datatype(jl_symbol("CodeInstance"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(20,
+                        jl_perm_symsvec(21,
                             "def",
                             "owner",
                             "next",
@@ -3946,9 +3944,9 @@ void jl_init_types(void) JL_GC_DISABLED
                             "time_infer_self",
                             "time_compile",
                             //"absolute_max",
-                            "flags",
+                            "flags", "precompile",
                             "invoke", "specptr"), // function object decls
-                        jl_svec(20,
+                        jl_svec(21,
                             jl_any_type,
                             jl_any_type,
                             jl_any_type,
@@ -3968,12 +3966,13 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_uint16_type,
                             //jl_bool_type,
                             jl_uint8_type,
+                            jl_bool_type,
                             jl_any_type, jl_any_type), // fptrs
                         jl_emptysvec,
                         0, 1, 1);
     jl_svecset(jl_code_instance_type->types, 2, jl_code_instance_type);
-    const static uint32_t code_instance_constfields[1]  = { 0b00001110000011100011 }; // Set fields 1, 2, 6-8, 14-16 as const
-    const static uint32_t code_instance_atomicfields[1] = { 0b11110001011100011100 }; // Set fields 3-5, 9-12, 13, 17-20 as atomic
+    const static uint32_t code_instance_constfields[1]  = { 0b000001110000011100011 }; // Set fields 1, 2, 6-8, 14-16 as const
+    const static uint32_t code_instance_atomicfields[1] = { 0b111110001011100011100 }; // Set fields 3-5, 9-12, 13, 17-21 as atomic
     // Fields 4-5 are only operated on by construction and deserialization, so are effectively const at runtime
     // Fields ipo_purity_bits and analysis_results are not currently threadsafe or reliable, as they get mutated after optimization, but are not declared atomic
     // and there is no way to tell (during inference) if their value is finalized yet (to wait for them to be narrowed if applicable)
@@ -4121,8 +4120,8 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_svecset(jl_method_type->types, 14, jl_method_instance_type);
     //jl_svecset(jl_debuginfo_type->types, 0, jl_method_instance_type); // union(jl_method_instance_type, jl_method_type, jl_symbol_type)
     jl_svecset(jl_method_instance_type->types, 4, jl_code_instance_type);
-    jl_svecset(jl_code_instance_type->types, 18, jl_voidpointer_type);
     jl_svecset(jl_code_instance_type->types, 19, jl_voidpointer_type);
+    jl_svecset(jl_code_instance_type->types, 20, jl_voidpointer_type);
     jl_svecset(jl_binding_type->types, 0, jl_globalref_type);
     jl_svecset(jl_binding_type->types, 3, jl_array_any_type);
     jl_svecset(jl_binding_partition_type->types, 3, jl_binding_partition_type);
