@@ -1975,6 +1975,7 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
     module_released(M);
 
     output_timer.startTimer();
+    uint64_t image_wall_start = jl_hrtime();
 
     // Compile the partitions with a pool of worker threads pulling from a
     // shared queue. The partition count fixes the shard layout; the pool size
@@ -2094,10 +2095,21 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
     }
 
     output_timer.stopTimer();
+    uint64_t image_wall_ns = jl_hrtime() - image_wall_start;
 
     if (!report_timings) {
         timer_group.clear();
     } else {
+        // Aggregate per-shard wall times before the prints below clear them.
+        uint64_t shard_sum = 0, shard_max = 0;
+        for (auto &t : timers) {
+            uint64_t tot = t.deserialize.elapsed + t.materialize.elapsed + t.construct.elapsed +
+                           t.unopt.elapsed + t.optimize.elapsed + t.opt.elapsed +
+                           t.obj.elapsed + t.asm_.elapsed;
+            shard_sum += tot;
+            if (tot > shard_max)
+                shard_max = tot;
+        }
         timer_group.print(dbgs(), true);
         for (auto &t : timers) {
             t.print(dbgs(), true);
@@ -2112,6 +2124,20 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
             dbgs() << p.weight;
         }
         dbgs() << "]\n";
+        // Occupancy = average shards busy over the codegen window (total shard
+        // wall time / overall wall); the straggler gap is the slowest shard
+        // against the mean. Low occupancy or a large straggler gap means the
+        // shard count outran the useful parallelism (over-sharded) or the
+        // partitioner left the work imbalanced.
+        double wall_s = image_wall_ns / 1e9;
+        double sum_s = shard_sum / 1e9;
+        double mean_s = sum_s / shards;
+        double max_s = shard_max / 1e9;
+        dbgs() << formatv("Shard occupancy: {0:F1}/{1} threads busy (sum {2:F1}s / wall {3:F1}s); "
+                          "straggler {4:F2}x (slowest {5:F2}s vs mean {6:F2}s)\n",
+                          wall_s > 0 ? sum_s / wall_s : 0.0, threads,
+                          sum_s, wall_s,
+                          mean_s > 0 ? max_s / mean_s : 0.0, max_s, mean_s);
     }
     return outputs;
 }
@@ -2191,7 +2217,11 @@ static uint64_t image_codegen_memory_budget() {
 // the per-shard deserialize tax.
 // A tiny module stays in a single shard. Tune `weight_per_shard` with
 // JULIA_IMAGE_PARTITION_WEIGHT; measure per-stage cost with JULIA_IMAGE_TIMINGS.
-static unsigned compute_image_shard_count(const ModuleInfo &info, unsigned fill_cap) {
+// `weight_bound_out`/`core_fill_out`, when non-null, receive the two terms below
+// for the JULIA_IMAGE_TIMINGS diagnostic (which one bound the shard count).
+static unsigned compute_image_shard_count(const ModuleInfo &info, unsigned fill_cap,
+                                          unsigned *weight_bound_out = nullptr,
+                                          unsigned *core_fill_out = nullptr) {
     // 32-bit systems are very memory-constrained; never split.
 #ifdef _P32
     return 1;
@@ -2207,6 +2237,10 @@ static unsigned compute_image_shard_count(const ModuleInfo &info, unsigned fill_
     // serial and leaving free cores idle.
     size_t min_shard = std::max<size_t>(weight_per_shard / 4, 1);
     size_t core_fill = std::min<size_t>(fill_cap, info.weight / min_shard);
+    if (weight_bound_out)
+        *weight_bound_out = (unsigned)weight_bound;
+    if (core_fill_out)
+        *core_fill_out = (unsigned)core_fill;
     return std::max<size_t>(1, std::max(weight_bound, core_fill));
 }
 
@@ -2499,16 +2533,30 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
             bool explicit_threads = false;
             threads = compute_image_thread_count(module_info, jobserver.active(), explicit_threads);
             unsigned shard_fill = threads;
-            if (jobserver.active() && !explicit_threads)
+            int probed = -1; // -1 == no jobserver probe (single-process or explicit threads)
+            if (jobserver.active() && !explicit_threads) {
                 // +1 for this worker's baseline token (held by the orchestrator).
-                shard_fill = std::min(threads, jobserver.probe(threads) + 1);
-            nshards = compute_image_shard_count(module_info, shard_fill);
+                probed = (int)jobserver.probe(threads);
+                shard_fill = std::min(threads, (unsigned)probed + 1);
+            }
+            unsigned weight_bound = 0, core_fill = 0;
+            nshards = compute_image_shard_count(module_info, shard_fill, &weight_bound, &core_fill);
             threads = std::min(threads, nshards);
-            if (getenv("JULIA_IMAGE_TIMINGS"))
-                jl_safe_printf("[image] \"text\" module weight %zu -> %u shards, up to %u threads"
-                               " (codegen mem budget %llu MiB)\n",
-                               (size_t)module_info.weight, nshards, threads,
-                               (unsigned long long)(image_codegen_memory_budget() >> 20));
+            if (getenv("JULIA_IMAGE_TIMINGS")) {
+                unsigned long long budget_mib = image_codegen_memory_budget() >> 20;
+                if (probed >= 0)
+                    jl_safe_printf("[image] \"text\" module weight %zu -> %u shards"
+                                   " (weight_bound %u, core_fill %u), up to %u threads"
+                                   " [jobserver: %d free -> fill %u] (codegen mem budget %llu MiB)\n",
+                                   (size_t)module_info.weight, nshards, weight_bound, core_fill, threads,
+                                   probed, shard_fill, budget_mib);
+                else
+                    jl_safe_printf("[image] \"text\" module weight %zu -> %u shards"
+                                   " (weight_bound %u, core_fill %u), up to %u threads"
+                                   " (codegen mem budget %llu MiB)\n",
+                                   (size_t)module_info.weight, nshards, weight_bound, core_fill, threads,
+                                   budget_mib);
+            }
             if (jobserver.active() && !explicit_threads && threads > 1) {
                 // add_output rations the actual pool size from the shared token
                 // budget (up to `threads`), growing it as sibling workers finish,
