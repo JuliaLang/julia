@@ -2792,12 +2792,11 @@ function show(io::IO, tv::TypeVar)
     # Otherwise, the lower bound should be printed if it is not `Bottom`
     # and the upper bound should be printed if it is not `Any`.
     in_env = (:unionall_env => tv) in io
-    function show_bound(io::IO, @nospecialize(b)) # b::Union{Core.AnyType,TypeVar}
+    function show_bound(io::IO, @nospecialize(b::Union{Core.AnyType,TypeVar}))
         parens = isa(b,UnionAll) && !print_without_params(b)
         parens && print(io, "(")
-        b isa TypeVar ? show(io, b) : show(io, b::Core.AnyType)
+        show(io, b)
         parens && print(io, ")")
-        nothing
     end
     lb, ub = tv.lb, tv.ub
     if !in_env && lb !== Bottom
