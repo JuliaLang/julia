@@ -90,11 +90,6 @@ typedef struct jl_varbinding_t {
                           // would not be substituted by going to a more concrete LHS
                           // (they live inside Type{...}/etc value positions), so the
                           // binding is leaky regardless of what `constrained` says.
-    int8_t body_occurs_inv; // cached `var_occurs_invariant(u->body, u->var)` — the
-                            // static "occurs invariantly" check used by the diagonal
-                            // rule (since #34272). Unlike the dynamic `occurs_inv`
-                            // counter, this is a pure structural property of the
-                            // UnionAll body and does not change during traversal.
     int16_t depth0;         // # of invariant constructors nested around the UnionAll type for this var
     // array of typevars that our bounds depend on, whose UnionAlls need to be
     // moved outside ours.
@@ -724,8 +719,8 @@ static int env_unchanged(jl_stenv_t *e, jl_savedenv_t *se) JL_NOTSAFEPOINT
         if (v->existential) {
             if (v->lb != roots[i] || v->ub != roots[i + 1])
                 return 0; // check if bounds changed
-            if (is_leaf_typevar(v->var) && v->body_occurs_inv == 0 && v->occurs_cov > 1 && se->buf[j] <= 1)
-                return 0; // check if a variable became diagonal from non-diagonal
+            if (is_leaf_typevar(v->var) && v->occurs_inv == 0 && v->occurs_cov > 1 && se->buf[j] <= 1)
+                return 0; // check if a variable became digonal from non-diagonal
         }
         i += 3; // lb, ub, innervars
         j += 3;
@@ -1135,8 +1130,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
 {
     u = unalias_unionall(u, e);
     jl_value_t *new_tvar = NULL;
-    int body_occurs_inv = var_occurs_invariant(u->body, u->var);
-    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, body_occurs_inv,
+    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                            e->invdepth, NULL, e->vars };
     JL_GC_PUSH5(&u, &vb.lb, &vb.ub, &vb.innervars, &new_tvar);
     e->vars = &vb;
@@ -1157,7 +1151,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     //  ( Tuple{Int, Int}    <: Tuple{T, T} where T) but
     // !( Tuple{Int, String} <: Tuple{T, T} where T)
     // Then check concreteness by checking that the lower bound is not an abstract type.
-    int diagonal = vb.occurs_cov > 1 && !vb.body_occurs_inv;
+    int diagonal = vb.occurs_cov > 1 && !var_occurs_invariant(u->body, u->var);
     if (ans && (vb.concrete || (diagonal && is_leaf_typevar(u->var)))) {
         if (vb.concrete && !diagonal && !is_leaf_bound(vb.ub)) {
             // a non-diagonal var can only be a subtype of a diagonal var if its
@@ -3669,7 +3663,7 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
         res = intersect(u->body, t, e, param);
     }
     vb->concrete |= (vb->occurs_cov > 1 && is_leaf_typevar(u->var) &&
-                     !vb->body_occurs_inv);
+                     !var_occurs_invariant(u->body, u->var));
 
     // handle the "diagonal dispatch" rule, which says that a type var occurring more
     // than once, and only in covariant position, is constrained to concrete types. E.g.
@@ -3755,12 +3749,11 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
 {
     jl_value_t *res = NULL;
     jl_savedenv_t se;
-    int body_occurs_inv = var_occurs_invariant(u->body, u->var);
-    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, body_occurs_inv,
+    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                            e->invdepth, NULL, e->vars };
     JL_GC_PUSH4(&res, &vb.lb, &vb.ub, &vb.innervars);
     save_env(e, &se, 1);
-    int noinv = !body_occurs_inv;
+    int noinv = !var_occurs_invariant(u->body, u->var);
     if (is_leaf_typevar(u->var) && noinv && always_occurs_cov(u->body, u->var, param))
         vb.constraintkind = 1;
     res = intersect_unionall_(t, u, e, R, param, &vb);
@@ -5182,7 +5175,7 @@ static jl_value_t *_widen_diagonal(jl_value_t *t, jl_varbinding_t *troot) {
 
 static jl_value_t *widen_diagonal(jl_value_t *t, jl_unionall_t *u, jl_varbinding_t *troot)
 {
-    jl_varbinding_t vb = { u->var, NULL, NULL, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, NULL, troot };
+    jl_varbinding_t vb = { u->var, NULL, NULL, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, NULL, troot };
     jl_value_t *nt = NULL;
     JL_GC_PUSH2(&vb.innervars, &nt);
     if (jl_is_unionall(u->body))
