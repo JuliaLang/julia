@@ -1727,9 +1727,8 @@ function insert_spval!(insert_node!::Inserter, spvals_ssa::SSAValue, spidx::Int,
         removable_if_unused(NewInstruction(Expr(:call, Core._svec_ref, spvals_ssa, spidx), Any)))
     tcheck_not = nothing
     if do_isdefined
-        # The caller handles guaranteed-defined `svec(value, constrained)`
-        # markers before this fallback. At runtime, SimpleVector is the
-        # undefined sentinel for sparams.
+        # An uncertain sparam is stored as `svec(tvar, constrained)`; the
+        # runtime check for "defined" is therefore "not a SimpleVector".
         tcheck = insert_node!(
             removable_if_unused(NewInstruction(Expr(:call, Core.isa, ret, Core.SimpleVector), Bool)))
         tcheck_not = insert_node!(
@@ -1766,9 +1765,7 @@ function ssa_substitute_op!(insert_node!::Inserter, subst_inst::Instruction, @no
         elseif head === :isdefined && isa(e.args[1], Expr) && e.args[1].head === :static_parameter
             spidx = (e.args[1]::Expr).args[1]::Int
             val = sparam_vals[spidx]
-            if !isa(val, SimpleVector)
-                return true
-            elseif val[2]::Bool
+            if !isa(val, SimpleVector) && !has_free_typevars(val)
                 return true
             else
                 (_, tcheck_not) = insert_spval!(insert_node!, ssa_substitute.spvals_ssa::SSAValue, spidx, true)
