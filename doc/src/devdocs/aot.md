@@ -62,16 +62,23 @@ Two distinct quantities control this parallelism, and it is worth keeping them s
 
 **Choosing the thread count.** The thread count aims for all effective cores, then is capped to the shard count (there is no point having more threads than shards) and to a fraction of the module's global-variable count. How the "all cores" aim is bounded depends on who owns the machine. For a *single-process build* — the system image, or a lone `PackageCompiler` run — the process owns the whole machine, so concurrency is bounded by a *memory budget* rather than the core count alone: peak codegen memory grows with the number of concurrent shards, so the thread count is capped at roughly `codegen_memory_budget / per_shard_codegen_memory`. That budget is sized from the machine's total RAM (capped by any cgroup or container limit), leaving headroom for the build process, the GC, and the OS. For a *parallel package precompile*, concurrency is instead coordinated across all worker processes by a jobserver, described next.
 
-**Summary by module size.** With a default per-shard weight target of 500,000, a parallel package precompile splits a module's `text` as follows. ("free cores" is the number of jobserver tokens free when the module is partitioned — near zero during the dense phase, near the full core count at the tail.)
+**Summary by module size.** The full rule, with the default 500,000 weight target, is
 
-| Module size | Approx. `text` weight | Shards | What happens |
-| :--- | :--- | :--- | :--- |
-| Small | below 500,000 | 1–3 (a module below ~125,000 stays a single shard) | A tiny module is emitted as one shard with no serialize/deserialize round-trip and compiled serially; slightly larger ones get a few shards, each kept big enough to pay back its per-shard re-parse cost. |
-| Medium | 500,000 – 2,000,000 | `min(free cores, weight / 125,000)` | Tracks the parallelism actually free: held low while the machine is busy with other packages (more shards would only add per-shard overhead), but ramped up to fill the cores when they are idle. |
-| Large | 2,000,000 – roughly (free cores × 500,000) | `weight / 500,000` (about one per free core) | The memory term takes over; the shards roughly fill the free cores and generally compile together once the worker holds enough jobserver tokens. |
-| Extra-large | above roughly (free cores × 500,000) | `weight / 500,000` (more than the thread count) | Shards outnumber the concurrent threads and drain from the queue in waves, holding peak working memory near `concurrency × 500,000` however large the module grows. |
+```
+shards = max(weight / 500,000,  min(F, weight / 125,000))
+```
 
-A single-process build (the system image or a lone `PackageCompiler` run) has no jobserver, so the core-fill term ramps toward the memory-bounded core count directly: medium and large modules are split into correspondingly more shards, up to what the memory budget allows. In every case the thread count is additionally capped at one per 100 module globals, so a module with few globals shards and parallelizes less than its weight alone would suggest.
+where `F` is the number of free jobserver tokens at the moment the module is partitioned — roughly 1 during the dense phase of a precompile (the machine is saturated by other packages) and roughly the full core count at the tail (one big package compiling while the rest are done). The memory term `weight / 500,000` is a floor that always applies; the core-fill term ramps *up* from it toward `F`, splitting as fine as ~125,000 per shard (the `weight_per_shard / 4` minimum) when cores are free. So each shard targets ~500,000 weight when cores are scarce and ~125,000 when they are plentiful. Concretely, for a machine with `C` cores:
+
+| Module `text` weight | Dense phase (`F`≈1) | Tail / lone worker (`F`≈`C`) |
+| :--- | :--- | :--- |
+| below 125,000 | 1 (single shard, no round-trip) | 1 |
+| 125,000 – 500,000 | 1 | `weight / 125,000` (1–3) |
+| 500,000 – `C`×125,000 | `weight / 500,000` | `weight / 125,000` (~one per 125k) |
+| `C`×125,000 – `C`×500,000 | `weight / 500,000` | ≈ `C` (one per free core) |
+| above `C`×500,000 | `weight / 500,000` | `weight / 500,000` (more shards than threads; drain in waves) |
+
+For example, Makie's `text` module (`weight`≈3.1M) on a 32-core machine falls in the third row: in a dense precompile it splits into `3.1M / 500,000` ≈ 6 shards, but compiled alone at the tail it splits into `3.1M / 125,000` ≈ 24, fanning out across the freed cores. A single-process build (the system image or a lone `PackageCompiler` run) has no jobserver, so it behaves like the tail column with `F` set to the memory-bounded core count. In every case the thread count is additionally capped at one per 100 module globals, so a module with few globals shards and parallelizes less than its weight alone would suggest.
 
 During parallel package precompilation, the orchestrating process shares a single CPU-thread budget across all worker subprocesses via a named-semaphore jobserver (whose name is passed to workers through the `JULIA_PRECOMPILE_JOBSERVER` environment variable, and whose size defaults to one more than the number of effective CPU threads but is overridable via [`JULIA_PRECOMPILE_THREADS`](@ref JULIA_PRECOMPILE_THREADS)). Each worker holds one baseline token while it is CPU-active, and during its imaging phase sizes its thread pool elastically against the shared budget: it starts with the baseline thread plus whatever extra tokens are immediately available, keeps polling for tokens freed by sibling workers while it still has uncompiled shards, and returns each token to the pool as soon as the thread holding it runs out of work. Because a worker's main thread sleeps while its imaging threads run, that baseline token doubles as the imaging phase's first codegen thread rather than being counted twice. A lone worker thus expands to all available cores, workers that start while the machine is busy grow into cores as they free up, and concurrent workers share the pool without oversubscribing the machine. An explicit `JULIA_IMAGE_THREADS` setting takes precedence over the jobserver.
 
