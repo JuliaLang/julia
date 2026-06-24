@@ -136,6 +136,21 @@ collect((h, i, j) for (h, i..., j) in ((1,2,3,4),(5,6,7,8)))
     """) == 1:5
 end
 
+@testset "generator iteration variables are local" begin
+    @test JuliaLowering.include_string(test_mod, """
+    let x = 0
+        ys = [x for x::Int in 1:3]
+        (x, ys)
+    end
+    """) == (0, [1,2,3])
+    @test JuliaLowering.include_string(test_mod, """
+    let x = collect(1:3)
+        ys = [x for (i, x) in enumerate(x)]
+        (x, ys)
+    end
+    """) == (collect(1:3), [1,2,3])
+end
+
 @testset "compat: comprehension with non-generator arg" begin
     let ex = Expr(:comprehension, :i, Expr(:(=), :i, Expr(:call, :(:), 1, 3)))
         @test jl_eval(test_mod, ex) == fl_eval(test_mod, ex)
