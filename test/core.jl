@@ -405,7 +405,7 @@ end  |> only == Type{typejoin(Int, UInt, Float64)}
 @test typejoin(DataType, Type{Int}) === typejoin(Type{Int}, DataType)
 
 # issue #61915: a method whose function type is `Type{Foo{...} where ...}` must derive its
-# name as `Foo`, not `:Any` (argument_datatypename has to unwrap the wrapped UnionAll).
+# name as `Foo`, not `:Any` (nth_arg_datatype has to unwrap the wrapped UnionAll).
 struct UA61915{T,N,A<:AbstractArray{T,N}}
     a::A
 end
@@ -413,9 +413,6 @@ UA61915{T}(a) where {T} = UA61915{T,ndims(a),typeof(a)}(a)
 @test all(m -> m.name === :UA61915, methods(UA61915))
 @test which(UA61915{Int}, (Vector{Int},)).name === :UA61915
 @test ccall(:jl_argument_datatype, Any, (Any,), Type{Array}) === Base.unwrap_unionall(Array)
-@test ccall(:jl_argument_datatype, Any, (Any,), Union{Tuple{Int},Tuple{Int,Int}}) === nothing
-@test ccall(:jl_argument_datatypename, Any, (Any,), Type{Array}) === Base.unwrap_unionall(Array).name
-@test ccall(:jl_argument_datatypename, Any, (Any,), Union{Tuple{Int},Tuple{Int,Int}}) === Tuple.name
 
 # promote_typejoin returns a Union only with Nothing/Missing combined with concrete types
 for T in (Nothing, Missing)

@@ -623,7 +623,7 @@ function datatype_min_ninitialized(@nospecialize t0)
         if names isa Tuple
             return length(names)
         end
-        t = unwrap_unionall(types)
+        t = argument_datatype(types)
         t isa DataType || return 0
         t.name === Tuple.name || return 0
     end

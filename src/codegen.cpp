@@ -7998,10 +7998,16 @@ static Function *gen_cfun_wrapper(
 
 static const char *derive_sigt_name(jl_value_t *jargty)
 {
-    jl_value_t *tn = jl_argument_datatypename(jargty);
-    if (tn == jl_nothing)
+    jl_datatype_t *dt = (jl_datatype_t*)jl_argument_datatype(jargty);
+    if ((jl_value_t*)dt == jl_nothing)
         return NULL;
-    jl_sym_t *name = ((jl_typename_t*)tn)->singletonname;
+    jl_sym_t *name = dt->name->singletonname;
+    if (jl_is_typeeq((jl_value_t*)dt)) {
+        dt = (jl_datatype_t*)jl_argument_datatype(jl_typeeq_T((jl_value_t*)dt));
+        if ((jl_value_t*)dt != jl_nothing) {
+            name = dt->name->singletonname;
+        }
+    }
     return jl_symbol_name(name);
 }
 

@@ -948,8 +948,8 @@ add_tfunc(<:, 2, 2, subtype_tfunc, 10)
 end
 
 function try_compute_fieldidx(@nospecialize(typ), @nospecialize(field))
-    typ = unwraptv(typ)
-    typ isa Union || typ isa UnionAll || typ isa DataType || return nothing
+    typ = argument_datatype(typ)
+    typ === nothing && return nothing
     if isa(field, Symbol)
         field = fieldindex(typ, field, false)
         field == 0 && return nothing
