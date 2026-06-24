@@ -690,16 +690,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                     (jl_is_string(inferred) && jl_string_len(inferred) > 0 && jl_string_data(inferred)[jl_string_len(inferred) - 1]);
                 int may_discard_trees = !jl_get_type_infer_preserve_ir();
                 int discard = 0;
-                if (may_discard_trees && s->incremental && native_functions &&
-                    jl_options.outputo != NULL && ci->owner == jl_nothing && def->source != NULL &&
-                    jl_is_code_info(inferred) && jl_ir_inlining_cost(inferred) == UINT16_MAX) {
-                    // Backstop: CodeInstance cached by a task racing the end of
-                    // include phase can escape jl_finalize_precompile_inferred.
-                    // Mirror the def->source guard below so optimized opaque
-                    // closures (whose IR can't be reconstructed) are preserved.
-                    record_field_change((jl_value_t**)&ci->inferred, jl_nothing);
-                }
-                else if (!is_relocatable) {
+                if (!is_relocatable) {
                     discard = 1;
                 }
                 else if (def->source == NULL) {
@@ -3336,7 +3327,6 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
 
     jl_query_cache query_cache;
     init_query_cache(&query_cache);
-    jl_finalize_precompile_inferred(worklist != NULL && _native_data != NULL && jl_options.outputo != NULL);
     jl_save_system_image_to_stream(ff, mod_array, module_init_order, worklist, extext_methods, new_ext, &query_cache);
     if (_native_data != NULL)
         native_functions = NULL;

@@ -122,36 +122,6 @@ JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t* _newly_inferred)
     newly_inferred = (jl_array_t*) _newly_inferred;
 }
 
-// Null `CodeInstance.inferred` for native-owned CIs where it is still a raw
-// `CodeInfo` left by `jl_precompile_keep_ir`. These are non-inlineable methods
-// whose IR is otherwise discarded, retained only long enough for
-// `jl_create_native` to reuse via the `typeinf_ext` short-circuit. A
-// CodeInstance cached racing the end of the include phase can escape this walk;
-// see jl_queue_for_serialization.
-JL_DLLEXPORT void jl_finalize_precompile_inferred(int8_t cleanup_keep_ir)
-{
-    jl_set_precompile_keep_ir(0);
-    if (!cleanup_keep_ir || newly_inferred == NULL)
-        return;
-    size_t n = jl_array_nrows(newly_inferred);
-    for (size_t i = 0; i < n; i++) {
-        jl_code_instance_t *ci = (jl_code_instance_t*)jl_array_ptr_ref(newly_inferred, i);
-        if (ci == NULL)
-            continue;
-        if (ci->owner != jl_nothing)
-            continue; // foreign interpreters own their cached IR
-        jl_value_t *inferred = jl_atomic_load_relaxed(&ci->inferred);
-        if (inferred == NULL || !jl_is_code_info(inferred))
-            continue;
-        jl_method_instance_t *mi = jl_get_ci_mi(ci);
-        if (!jl_is_method(mi->def.value))
-            continue; // toplevel code retains its inferred IR
-        if (mi->def.method->source == NULL)
-            continue; // optimized opaque closures can't reconstruct their IR
-        jl_atomic_store_release(&ci->inferred, jl_nothing);
-    }
-}
-
 static jl_array_t *queue_external(jl_array_t *list, jl_query_cache *query_cache);
 
 JL_DLLEXPORT jl_array_t* jl_compute_new_ext(void)
