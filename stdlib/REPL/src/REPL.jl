@@ -64,6 +64,24 @@ _displaysize(io::IO) = displaysize(io)::Tuple{Int,Int}
 
 using Base.Terminals
 
+"""
+    AbstractREPL
+
+Supertype for all Read-Eval-Print Loop (REPL) frontends.
+
+A REPL frontend reads user input, hands complete expressions to a backend for
+evaluation, and prints the response. A backend is started and connected to the
+frontend by [`run_repl`](@ref). The three frontends defined by default are:
+
+- [`LineEditREPL`](@ref), the interactive terminal REPL with line editing,
+  history, and prompt modes. Julia's default REPL is a `LineEditREPL`.
+- [`BasicREPL`](@ref), a minimal, line-based fallback.
+- [`StreamREPL`](@ref), a frontend that drives the REPL over an arbitrary
+  `IO` stream.
+
+Every `AbstractREPL` subtype is expected to support `run_frontend`, `outstream`,
+and `hascolor`.
+"""
 abstract type AbstractREPL end
 
 include("options.jl")
@@ -704,6 +722,16 @@ end
 
 ## BasicREPL ##
 
+"""
+    BasicREPL(terminal::TextTerminal) -> BasicREPL
+
+A minimal REPL frontend that reads input line-by-line from `terminal` without
+line editing, history, or prompt modes.
+
+`BasicREPL` is the fallback frontend used instead of [`LineEditREPL`](@ref) when
+the terminal is not fully functional — that is, when the `TERM` environment
+variable is `"dumb"` (or unset, on non-Windows systems).
+"""
 mutable struct BasicREPL <: AbstractREPL
     terminal::TextTerminal
     waserror::Bool
@@ -763,6 +791,31 @@ end
 
 ## LineEditREPL ##
 
+"""
+    LineEditREPL(t::TextTerminal, hascolor::Bool, envcolors::Bool=false) -> LineEditREPL
+
+The interactive line-editing REPL frontend: this is the REPL you get at a normal
+`julia` session prompt.
+
+It drives the terminal `t` through the `LineEdit` modal interface, providing line
+editing, history, tab completion, and the standard prompt modes (the `julia>`
+prompt, shell mode `;`, help mode `?`, and the package mode added by Pkg).
+`hascolor` selects whether output is colorized; when `envcolors` is `true`,
+prompt/input/answer colors follow the corresponding environment-variable settings
+rather than this REPL's own color fields.
+
+Construct one and start it with [`run_repl`](@ref):
+
+```julia
+import REPL
+term = REPL.Terminals.TTYTerminal("dumb", stdin, stdout, stderr)
+repl = REPL.LineEditREPL(term, true)
+REPL.run_repl(repl)
+```
+
+See also [`BasicREPL`](@ref) for the non-line-editing fallback and
+[`StreamREPL`](@ref) for driving a REPL over a plain `IO` stream.
+"""
 mutable struct LineEditREPL <: AbstractREPL
     t::TextTerminal
     hascolor::Bool
@@ -1705,6 +1758,21 @@ end
 
 ## StreamREPL ##
 
+"""
+    StreamREPL(stream::IO) -> StreamREPL
+
+A REPL frontend that reads input from, and writes results to, an arbitrary `IO`
+`stream`.
+
+Unlike [`LineEditREPL`](@ref) it provides no line editing or prompt modes: it
+prints a banner and a `julia> ` prompt to `stream`, reads one line at a time
+until end-of-file, and evaluates each complete expression on the backend,
+printing the response back to `stream`. Colorization follows the `:color`
+`IOContext` property of `stream`.
+
+The convenience method `run_repl(stream::IO)` builds a `StreamREPL` over `stream`
+and runs it.
+"""
 mutable struct StreamREPL <: AbstractREPL
     stream::IO
     prompt_color::String
