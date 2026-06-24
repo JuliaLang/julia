@@ -21,19 +21,6 @@ typejoin() = Bottom
 typejoin(@nospecialize(t)) = (@_nospecializeinfer_meta; t)
 typejoin(@nospecialize(t), @nospecialize(s), @nospecialize(u)) = (@_foldable_meta; @_nospecializeinfer_meta; typejoin(typejoin(t, s), u))
 typejoin(@nospecialize(t), @nospecialize(s), @nospecialize(u), ts...) = (@_foldable_meta; @_nospecializeinfer_meta; afoldl(typejoin, typejoin(t, s, u), ts...))
-
-function _has_ancestor_typename(@nospecialize(a), name::Core.TypeName)
-    @_foldable_meta
-    @_nothrow_meta
-    @_nospecializeinfer_meta
-    a = a::DataType
-    while true
-        a.name === name && return true
-        a === Any && return false
-        a = supertype(a)::DataType
-    end
-end
-
 function typejoin(@nospecialize(a), @nospecialize(b))
     @_foldable_meta
     @_nothrow_meta
@@ -62,8 +49,8 @@ function typejoin(@nospecialize(a), @nospecialize(b))
     # a and b are DataTypes
     # We have to hide Constant info from inference, see #44390
     a, b = inferencebarrier(a)::DataType, inferencebarrier(b)::DataType
-    if a.name === Tuple.name
-        if !(b.name === Tuple.name)
+    if a <: Tuple
+        if !(b <: Tuple)
             return Any
         end
         ap, bp = a.parameters, b.parameters
@@ -107,11 +94,11 @@ function typejoin(@nospecialize(a), @nospecialize(b))
             c[i] = i == length(c) && (isvarargtype(ai) || isvarargtype(bi)) ? Vararg{ci} : ci
         end
         return Tuple{c...}
-    elseif b.name === Tuple.name
+    elseif b <: Tuple
         return Any
     end
     while !(b === Any)
-        if _has_ancestor_typename(a, b.name)
+        if a <: b.name.wrapper
             while !(a.name === b.name)
                 a = supertype(a)::DataType
             end
