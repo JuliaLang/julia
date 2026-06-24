@@ -271,7 +271,7 @@ function foo_apply_apply_type_svec()
 end
 @test fully_eliminated(foo_apply_apply_type_svec, Tuple{}; retval=NTuple{3, Float32})
 
-# The that inlining doesn't drop ambiguity errors (#30118)
+# Test that inlining doesn't drop ambiguity errors (#30118)
 c30118(::Tuple{Ref{<:Type}, Vararg}) = nothing
 c30118(::Tuple{Ref, Ref}) = nothing
 b30118(x...) = c30118(x)
@@ -771,7 +771,7 @@ end
 # Issue #42264 - crash on certain union splits
 let f(x) = (x...,)
     # Test splatting with a Union of non-{Tuple, SimpleVector} types that require creating new `iterate` calls
-    # in inlining. For this particular case, we're relying on `iterate(::CaretesianIndex)` throwing an error, such
+    # in inlining. For this particular case, we're relying on `iterate(::CartesianIndex)` throwing an error, such
     # that the original apply call is not union-split, but the inserted `iterate` call is.
     @test code_typed(f, Tuple{Union{Int64, CartesianIndex{1}, CartesianIndex{3}}})[1][2] == Tuple{Int64}
 end

@@ -2,7 +2,7 @@
 
 # Internal changes mechanism.
 # Instructions for Julia Core Developers:
-# 1. When making a breaking change that is known to be depnedet upon by an
+# 1. When making a breaking change that is known to be depended upon by an
 #    important and closely coupled package, decide on a unique `change_name`
 #    for your PR and add it to the list below. In general, it is better to
 #    err on the side of caution and assign a `change_name` even if it is not
@@ -17,7 +17,7 @@
 # 2. Upon tagging an -alpha version
 #    a. On master, set __next_removal_version to v"1.(x+1)-alpha"
 #    b. On the release branch, set __next_removal_version to v"1.x" (no -alpha)
-# 3. Upong tagging a release candidate, clear the list of internal changes and
+# 3. Upon tagging a release candidate, clear the list of internal changes and
 #    set __next_removal_version to `nothing`.
 const __next_removal_version = v"1.12-alpha"
 const __internal_changes_list = (
@@ -29,6 +29,7 @@ const __internal_changes_list = (
     :printcodeinfocalls,
     :syntacticccall, #59165
     :svectvar, #61645
+    :syntacticcglobal, #61709
     # Add new change names above this line
 )
 
@@ -589,7 +590,7 @@ end
 #    but it completely breaks inference of these generated functions and some of them are important.
 # 3. Never print a warning in generated functions (but do throw the error if --depwarn=error).
 #
-# We choose option 3. It's not ideal, because users that never use --depawarn=error will never see the warning,
+# We choose option 3. It's not ideal, because users that never use --depwarn=error will never see the warning,
 # but it's the least bad tradeoff among the lot.
 function depwarn_if_not_pure(args...)
     opts = JLOptions()
@@ -629,6 +630,29 @@ end
 @noinline function isabstracttype(x::TypeEq)
     depwarn_if_not_pure("calling `isabstracttype` on a `Type{...}` is deprecated; `Type{}` is now a kind. If for detection, use `Base.isType(x)`.", :isabstracttype)
     return true
+end
+
+@deprecate SubString{T}(s::T, i::Int, j::Int, ::Val{:noshift}) where {T <: AbstractString} begin
+    @boundscheck if !(i == j == 0)
+        si, sj = i + 1, prevind(s, j + i + 1)
+        @inbounds isvalid(s, si) || string_index_err(s, si)
+        @inbounds isvalid(s, sj) || string_index_err(s, sj)
+    end
+    @inbounds raw_substring(s, i + 1, j)
+end
+
+# This method is slightly different because it returns a SubString{SubString},
+# therefore it requires an explicit SubString{T}(ss) call at the end.
+# We discourage creating substrings of substrings, but the deprecated method
+# allowed it.
+@deprecate SubString{T}(s::T, i::Int, j::Int, ::Val{:noshift}) where {T <: SubString} begin
+    @boundscheck if !(i == j == 0)
+        si, sj = i + 1, prevind(s, j + i + 1)
+        @inbounds isvalid(s, si) || string_index_err(s, si)
+        @inbounds isvalid(s, sj) || string_index_err(s, sj)
+    end
+    ss = @inbounds raw_substring(s, i + 1, j)
+    SubString{T}(ss)
 end
 
 # END 1.14 deprecations

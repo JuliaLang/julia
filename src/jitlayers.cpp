@@ -81,7 +81,7 @@ using namespace llvm;
 
 STATISTIC(LinkedGlobals, "Number of globals linked");
 STATISTIC(SpecFPtrCount, "Number of specialized function pointers compiled");
-STATISTIC(UnspecFPtrCount, "Number of specialized function pointers compiled");
+STATISTIC(UnspecFPtrCount, "Number of unspecialized function pointers compiled");
 STATISTIC(ModulesAdded, "Number of modules added to the JIT");
 STATISTIC(ModulesOptimized, "Number of modules optimized by the JIT");
 STATISTIC(OptO0, "Number of modules optimized at level -O0");
@@ -297,7 +297,7 @@ jl_emitted_output_t jl_codegen_output_t::finish(std::unique_ptr<LLVMContext> ctx
     };
 
     // Mangle and intern each part of the linking metadata, before all the
-    // pointers to LLVM values are invaliated.
+    // pointers to LLVM values are invalidated.
     for (auto &[ci, funcs] : ci_funcs) {
         info->ci_funcs[ci] = {funcs.invoke_api,
                               funcs.invoke ? intern(funcs.invoke->getName()) : nullptr,
@@ -551,12 +551,10 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
             ++UnspecFPtrCount;
             jl_svec_t *edges = (jl_svec_t*)src->edges;
             if (jl_is_svec(edges)) {
-                jl_atomic_store_release(&unspec->edges, edges); // n.b. this assumes the field was always empty svec(), which is not entirely true
-                jl_gc_wb(unspec, edges);
+                jl_gc_write_atomic(unspec, unspec->edges, edges, release); // n.b. this assumes the field was always empty svec(), which is not entirely true
             }
             jl_debuginfo_t *debuginfo = src->debuginfo;
-            jl_atomic_store_release(&unspec->debuginfo, debuginfo); // n.b. this assumes the field was previously NULL, which is not entirely true
-            jl_gc_wb(unspec, debuginfo);
+            jl_gc_write_atomic(unspec, unspec->debuginfo, debuginfo, release); // n.b. this assumes the field was previously NULL, which is not entirely true
             jl_emit_codeinsts_to_jit(&unspec, &src, 1);
             jl_ExecutionEngine->publishCIs(unspec, true);
         }
@@ -884,7 +882,7 @@ public:
         return JLMaterializationUnit{JIT, OL, std::move(Out), std::move(I)};
     }
 
-    // During materializtion: finalizers disabled, GC safe
+    // During materialization: finalizers disabled, GC safe
     void materialize(std::unique_ptr<MaterializationResponsibility> R) override
     {
         auto &ES = R->getExecutionSession();
@@ -985,7 +983,7 @@ public:
         assert(API == JL_INVOKE_ARGS || API == JL_INVOKE_SPECSIG);
     };
 
-    // During materializtion: finalizers disabled, GC safe
+    // During materialization: finalizers disabled, GC safe
     void materialize(std::unique_ptr<MaterializationResponsibility> R) override
     {
         auto Ctx = std::make_unique<LLVMContext>();

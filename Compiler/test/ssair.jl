@@ -5,7 +5,7 @@ include("irutils.jl")
 
 using Test
 
-using .Compiler: CFG, BasicBlock, NewSSAValue
+using .Compiler: BasicBlock, CFG, NewSSAValue
 
 make_bb(preds, succs) = BasicBlock(Compiler.StmtRange(0, 0), preds, succs)
 
@@ -170,11 +170,10 @@ let code = Any[
     @test Compiler.verify_ir(ir) === nothing
 end
 
-# Test that the verifier doesn't choke on cglobals (which aren't linearized)
+# Test that the verifier accepts a syntactic-tuple first argument to :foreignglobal (cglobal)
 let code = Any[
-        Expr(:call, GlobalRef(Main, :cglobal),
-                    Expr(:call, Core.tuple, :(:c)), Nothing),
-                    Compiler.ReturnNode()
+        Expr(:foreignglobal, Expr(:tuple, QuoteNode(:c))),
+        Compiler.ReturnNode()
     ]
     ir = make_ircode(code)
     @test Compiler.verify_ir(ir) === nothing
@@ -371,7 +370,7 @@ let cfg = CFG(BasicBlock[
     Compiler.cfg_delete_edge!(cfg, 6, 5)
     Compiler.domtree_delete_edge!(domtree, cfg.blocks, 6, 5)
     @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 2, 4]
-    # Add edge back (testing second case for insertion)
+    # Add edge back (testing last case for insertion)
     Compiler.cfg_insert_edge!(cfg, 6, 5)
     Compiler.domtree_insert_edge!(domtree, cfg.blocks, 6, 5)
     @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 1, 4]
@@ -829,6 +828,17 @@ end
 @test_throws ErrorException f_must_throw_phinode_edge()
 global global_error_switch = false
 @test f_must_throw_phinode_edge() == 1
+
+# Test that IRShow debuginfo printing works with IRCode owned by the active Compiler module.
+function irshow_debuginfo_smoke(x)
+    y = x + 1
+    return y
+end
+let ir = first(only(Base.code_ircode(irshow_debuginfo_smoke, (Int,))))
+    output = sprint(Compiler.IRShow.show_ir, ir,
+                    Compiler.IRShow.default_config(ir; debuginfo=:source_inline))
+    @test occursin("return", output)
+end
 
 function roundtrip_di(codelocs, firstline, nstmts)
     str = ccall(:jl_compress_codelocs,

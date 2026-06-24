@@ -3798,12 +3798,10 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const
         jl_datatype_t *sty = (jl_datatype_t*)argty;
         size_t sz = jl_datatype_size(sty);
         if (sz > 512 && !sty->layout->flags.haspadding && sty->layout->flags.isbitsegal) {
-            Value *varg1 = arg1.inline_roots.empty() && arg1.ispointer() ? data_pointer(ctx, arg1) :
-                value_to_pointer(ctx, arg1).V;
-            Value *varg2 = arg2.inline_roots.empty() && arg2.ispointer() ? data_pointer(ctx, arg2) :
-                value_to_pointer(ctx, arg2).V;
-            varg1 = emit_pointer_from_objref(ctx, varg1);
-            varg2 = emit_pointer_from_objref(ctx, varg2);
+            jl_cgval_t parg1 = value_to_pointer(ctx, arg1);
+            jl_cgval_t parg2 = value_to_pointer(ctx, arg2);
+            Value *varg1 = emit_pointer_from_objref(ctx, data_pointer(ctx, parg1));
+            Value *varg2 = emit_pointer_from_objref(ctx, data_pointer(ctx, parg2));
             SmallVector<Value*, 0> gc_uses;
             // these roots may seem a bit overkill, but we want to make sure
             // that a!=b implies (a,)!=(b,) even if a and b are unused and
@@ -3817,17 +3815,20 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const
                         ConstantInt::get(ctx.types().T_size, sz) },
                     ArrayRef<OperandBundleDef>(&OpBundle, gc_uses.empty() ? 0 : 1));
 
-            if (arg1.tbaa || arg2.tbaa) {
+            // If either argument is in the mixed pointer/data split form,
+            // value_to_pointer will copy it to a fresh alloca in the canonical
+            // layout.  We need to use the copied version's tbaa.
+            if (parg1.tbaa || parg2.tbaa) {
                 jl_aliasinfo_t ai;
-                if (!arg1.tbaa) {
-                    ai = jl_aliasinfo_t::fromTBAA(ctx, arg2.tbaa);
+                if (!parg1.tbaa) {
+                    ai = jl_aliasinfo_t::fromTBAA(ctx, parg2.tbaa);
                 }
-                else if (!arg2.tbaa) {
-                    ai = jl_aliasinfo_t::fromTBAA(ctx, arg1.tbaa);
+                else if (!parg2.tbaa) {
+                    ai = jl_aliasinfo_t::fromTBAA(ctx, parg1.tbaa);
                 }
                 else {
-                    jl_aliasinfo_t arg1_ai = jl_aliasinfo_t::fromTBAA(ctx, arg1.tbaa);
-                    jl_aliasinfo_t arg2_ai = jl_aliasinfo_t::fromTBAA(ctx, arg2.tbaa);
+                    jl_aliasinfo_t arg1_ai = jl_aliasinfo_t::fromTBAA(ctx, parg1.tbaa);
+                    jl_aliasinfo_t arg2_ai = jl_aliasinfo_t::fromTBAA(ctx, parg2.tbaa);
                     ai = arg1_ai.merge(arg2_ai);
                 }
                 ai.decorateInst(answer);
@@ -3866,7 +3867,7 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const
 // emit code for is (===).
 // If either `nullcheck1` or `nullcheck2` are non-NULL, they are pointer values
 // representing the undef-ness of `arg1` and `arg2`.
-// This can only happen when comparing two fields of the same time and the result should be
+// This can only happen when comparing two fields of the same type and the result should be
 // true if both are NULL
 // Like the runtime counterpart, this is codegen guaranteed to be non-allocating and to exclude safepoints
 static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2,
@@ -4538,9 +4539,9 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         for (size_t i = 0; i < nargs; i++) {
             Value *elem = boxed(ctx, argv[i + 1]);
             Value *elem_ptr = emit_ptrgep(ctx, svec_derived, ctx.types().sizeof_ptr * (i + 1));
+            emit_write_barrier(ctx, svec, elem);
             auto *store = ctx.builder.CreateAlignedStore(elem, elem_ptr, Align(ctx.types().sizeof_ptr));
             store->setOrdering(AtomicOrdering::Release);
-            emit_write_barrier(ctx, svec, elem);
         }
         *ret = mark_julia_type(ctx, svec, true, jl_simplevector_type);
         return true;
@@ -6773,6 +6774,9 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
     else if (head == jl_foreigncall_sym) {
         return emit_ccall(ctx, args, jl_array_dim0(ex->args));
     }
+    else if (head == jl_foreignglobal_sym) {
+        return emit_cglobal(ctx, args, jl_array_dim0(ex->args));
+    }
     else if (head == jl_cfunction_sym) {
         assert(nargs == 5);
         jl_cgval_t fexpr_val = emit_expr(ctx, args[1]);
@@ -7994,16 +7998,10 @@ static Function *gen_cfun_wrapper(
 
 static const char *derive_sigt_name(jl_value_t *jargty)
 {
-    jl_datatype_t *dt = (jl_datatype_t*)jl_argument_datatype(jargty);
-    if ((jl_value_t*)dt == jl_nothing)
+    jl_value_t *tn = jl_argument_datatypename(jargty);
+    if (tn == jl_nothing)
         return NULL;
-    jl_sym_t *name = dt->name->singletonname;
-    if (jl_is_typeeq((jl_value_t*)dt)) {
-        dt = (jl_datatype_t*)jl_argument_datatype(jl_typeeq_T((jl_value_t*)dt));
-        if ((jl_value_t*)dt != jl_nothing) {
-            name = dt->name->singletonname;
-        }
-    }
+    jl_sym_t *name = ((jl_typename_t*)tn)->singletonname;
     return jl_symbol_name(name);
 }
 
@@ -9599,7 +9597,7 @@ static jl_llvm_functions_t
     };
     auto mallocVisitStmt = [&] (Value *sync, bool have_dbg_update) {
         if (!do_malloc_log(mod_is_user_mod, mod_is_tracked) || !have_dbg_update) {
-            // TODD: add || new_lineinfo[0].sameframe(prev_lineinfo[0])) above, but currently this breaks the test for it (by making an optimization better)
+            // TODO: add || new_lineinfo[0].sameframe(prev_lineinfo[0])) above, but currently this breaks the test for it (by making an optimization better)
             if (do_malloc_log(true, mod_is_tracked) && sync)
                 ctx.builder.CreateCall(prepare_call(sync_gc_total_bytes_func), {sync});
             return;

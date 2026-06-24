@@ -8,7 +8,7 @@
 # Functions/types used by code emitted from lowering, but not called by it directly
 
 # Return the current exception. In JuliaLowering we use this rather than the
-# special form `K"the_exception"` to reduces the number of special forms.
+# special form `K"the_exception"` to reduce the number of special forms.
 Base.@assume_effects :removable function current_exception()
     @ccall jl_current_exception(current_task()::Any)::Any
 end

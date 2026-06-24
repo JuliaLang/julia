@@ -1748,7 +1748,7 @@ end
 # #6080
 @test_loweringerror(:(ccall(:a, Cvoid, (Cint,), &x)), "invalid syntax &x")
 
-@test_loweringerror(:(f(x) = (y = x + 1; ccall((:a, y), Cvoid, ()))), "ccall function name and library expression cannot reference local variables")
+@test_loweringerror(:(f(x) = (y = x + 1; ccall((:a, y), Cvoid, ()))), "ccall/cglobal function name and library expression cannot reference local variables")
 
 @test_parseerror "x.'"
 @test_parseerror "0.+1"
@@ -3266,7 +3266,7 @@ end
     x, f1()... = [1, 2, 3]
     @test x == 1
     @test f1() == [2, 3]
-    # test that call to `Base.rest` is outside the definition of `f`
+    # test that call to `Base.rest` is outside the definition of `f1`
     @test f1() === f1()
 
     x, f2()... = 1, 2, 3
@@ -4266,7 +4266,7 @@ end
 @test callme(3, 3) === 3
 @test callme(4, 4, 4) === 4.0
 
-# Ambiguous 1-arg anymous vs macrosig
+# Ambiguous 1-arg anonymous vs macrosig
 @test_parseerror "function (@foo(a)) end"
 
 # #57267 - Missing `latestworld` after typealias

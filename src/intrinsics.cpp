@@ -1352,8 +1352,6 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
 
     if (f == llvmcall)
         return emit_llvmcall(ctx, args, nargs);
-    if (f == cglobal_auto || f == cglobal)
-        return emit_cglobal(ctx, args, nargs);
 
     SmallVector<jl_cgval_t, 0> argv(nargs);
     for (size_t i = 0; i < nargs; ++i) {
@@ -1459,7 +1457,7 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
             return emit_runtime_call(ctx, f, argv, nargs);
         jl_datatype_t *dt = (jl_datatype_t*) x.constant;
 
-        // select the appropriated overloaded intrinsic
+        // select the appropriate overloaded intrinsic
         std::string intr_name = "julia.cpu.have_fma.";
         if (dt == jl_float32_type)
             intr_name += "f32";

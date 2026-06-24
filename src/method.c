@@ -39,8 +39,7 @@ void jl_add_scanned_method(jl_module_t *m, jl_method_t *meth)
 {
     JL_LOCK(&m->lock);
     if (m->scanned_methods == jl_nothing) {
-        m->scanned_methods = (jl_value_t*)jl_alloc_vec_any(0);
-        jl_gc_wb(m, m->scanned_methods);
+        jl_gc_write(m, m->scanned_methods, (jl_value_t*)jl_alloc_vec_any(0));
     }
     jl_array_ptr_1d_push((jl_array_t*)m->scanned_methods, (jl_value_t*)meth);
     JL_UNLOCK(&m->lock);
@@ -71,6 +70,87 @@ JL_DLLEXPORT void jl_scan_method_source_now(jl_method_t *m, jl_value_t *src)
         if (any_implicit && !(jl_atomic_fetch_or(&m->did_scan_source, 0x2) & 0x2))
             jl_add_scanned_method(m->module, m);
         JL_GC_POP();
+    }
+}
+
+static void normalize_foreignsymbol(jl_expr_t *e, jl_module_t *module, const char *kind)
+{
+    jl_task_t *ct = jl_current_task;
+    jl_value_t *fptr = jl_exprarg(e, 0);
+    if (jl_is_quotenode(fptr)) {
+        if (jl_is_string(jl_quotenode_value(fptr)) || jl_is_tuple(jl_quotenode_value(fptr)))
+            fptr = jl_quotenode_value(fptr);
+    }
+    if (jl_is_tuple(fptr)) {
+        jl_expr_t *tupex = jl_exprn(jl_tuple_sym, jl_nfields(fptr));
+        jl_value_t *v = NULL;
+        JL_GC_PUSH2(&tupex, &v);
+        for (long i = 0; i < jl_nfields(fptr); i++) {
+            v = jl_fieldref(fptr, i);
+            if (!jl_is_string(v))
+                v = jl_new_struct(jl_quotenode_type, v);
+            jl_exprargset(tupex, i, v);
+        }
+        jl_exprargset(e, 0, tupex);
+        fptr = (jl_value_t*)tupex;
+        JL_GC_POP();
+    }
+    if (jl_is_expr(fptr) && ((jl_expr_t*)fptr)->head == jl_tuple_sym) {
+        jl_expr_t *tuple_expr = (jl_expr_t*)fptr;
+        size_t nargs_tuple = jl_expr_nargs(tuple_expr);
+        if (nargs_tuple == 0)
+            jl_errorf("%s function name cannot be empty tuple", kind);
+        if (nargs_tuple > 2)
+            jl_errorf("%s function name tuple can have at most 2 elements", kind);
+        for (size_t i = 0; i < nargs_tuple; i++) {
+            jl_value_t *arg = jl_exprarg(tuple_expr, i);
+            if (jl_is_expr(arg) && ((jl_expr_t*)arg)->head == jl_dot_sym) {
+                jl_expr_t *dot_expr = (jl_expr_t*)arg;
+                if (jl_expr_nargs(dot_expr) != 2)
+                    jl_errorf("%s function name: invalid dot expression", kind);
+                jl_value_t *mod_expr = jl_exprarg(dot_expr, 0);
+                jl_value_t *sym_expr = jl_exprarg(dot_expr, 1);
+                if (!(jl_is_quotenode(sym_expr) && jl_is_symbol(jl_quotenode_value(sym_expr))))
+                    jl_type_error("ccall/cglobal name dot expression", (jl_value_t*)jl_symbol_type, sym_expr);
+                JL_TRY {
+                    jl_value_t *mod_val = jl_toplevel_eval(module, mod_expr);
+                    JL_TYPECHK(ccall/cglobal name dot expression, module, mod_val);
+                    JL_GC_PROMISE_ROOTED(mod_val);
+                    jl_sym_t *sym = (jl_sym_t*)jl_quotenode_value(sym_expr);
+                    jl_value_t *globalref = jl_module_globalref((jl_module_t*)mod_val, sym);
+                    jl_exprargset(tuple_expr, i, globalref);
+                }
+                JL_CATCH {
+                    if (jl_typetagis(jl_current_exception(ct), jl_errorexception_type))
+                        jl_errorf("could not evaluate %s function/library name (it might depend on a local variable)", kind);
+                    else
+                        jl_rethrow();
+                }
+            }
+            else if (jl_is_quotenode(arg)) {
+                if (i == 0) {
+                    jl_value_t *quoted_val = jl_quotenode_value(arg);
+                    if (!jl_is_symbol(quoted_val) && !jl_is_string(quoted_val)) {
+                        char namebuf[64];
+                        snprintf(namebuf, sizeof(namebuf), "%s function name", kind);
+                        jl_type_error(namebuf, (jl_value_t*)jl_symbol_type, jl_quotenode_value(arg));
+                    }
+                }
+            }
+            else if (!jl_is_globalref(arg) && jl_isa_ast_node(arg)) {
+                char namebuf[64];
+                snprintf(namebuf, sizeof(namebuf), "%s %s name", kind, i == 0 ? "function" : "library");
+                jl_type_error(namebuf, (jl_value_t*)jl_symbol_type, arg);
+            }
+        }
+    }
+    else if (jl_is_string(fptr) || (jl_is_quotenode(fptr) && jl_is_symbol(jl_quotenode_value(fptr)))) {
+        jl_expr_t *tupex = jl_exprn(jl_tuple_sym, 1);
+        jl_exprargset(tupex, 0, fptr);
+        jl_exprargset(e, 0, tupex);
+    }
+    else {
+        // preserve argument (1-arg, pointer form)
     }
 }
 
@@ -125,8 +205,7 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
         if (typ == (jl_value_t*)jl_voidpointer_type) {
             jl_value_t *a = jl_exprarg(e, 1);
             JL_TYPECHK(cfunction method definition, quotenode, a);
-            *(jl_value_t**)a = jl_toplevel_eval(module, *(jl_value_t**)a);
-            jl_gc_wb(a, *(jl_value_t**)a);
+            jl_gc_write(a, *(jl_value_t**)a, jl_toplevel_eval(module, *(jl_value_t**)a));
         }
         jl_value_t *rt = jl_exprarg(e, 2);
         jl_value_t *at = jl_exprarg(e, 3);
@@ -160,88 +239,9 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
         return expr;
     }
     if (e->head == jl_foreigncall_sym) {
-        JL_NARGSV(ccall method definition, 5); // (fptr, rt, at, nreq, (cc, effects, gc_safe))
+        JL_NARGSV(ccall method definition, 5); // (target, rt, at, nreq, (cc, effects, gc_safe))
         jl_task_t *ct = jl_current_task;
-        jl_value_t *fptr = jl_exprarg(e, 0);
-        // Handle dot expressions in tuple arguments for ccall by converting to GlobalRef eagerly
-        jl_sym_t *tuple_sym = jl_symbol("tuple");
-        if (jl_is_quotenode(fptr)) {
-            if (jl_is_string(jl_quotenode_value(fptr)) || jl_is_tuple(jl_quotenode_value(fptr)))
-                fptr = jl_quotenode_value(fptr);
-        }
-        if (jl_is_tuple(fptr)) {
-            // convert literal Tuple to Expr tuple
-            jl_expr_t *tupex = jl_exprn(tuple_sym, jl_nfields(fptr));
-            jl_value_t *v = NULL;
-            JL_GC_PUSH2(&tupex, &v);
-            for (long i = 0; i < jl_nfields(fptr); i++) {
-                v = jl_fieldref(fptr, i);
-                if (!jl_is_string(v))
-                    v = jl_new_struct(jl_quotenode_type, v);
-                jl_exprargset(tupex, i, v);
-            }
-            jl_exprargset(e, 0, tupex);
-            fptr = (jl_value_t*)tupex;
-            JL_GC_POP();
-        }
-        if (jl_is_expr(fptr) && ((jl_expr_t*)fptr)->head == tuple_sym) {
-            // verify Expr tuple can be interpreted and handle
-            jl_expr_t *tuple_expr = (jl_expr_t*)fptr;
-            size_t nargs_tuple = jl_expr_nargs(tuple_expr);
-            if (nargs_tuple == 0)
-                jl_error("ccall function name cannot be empty tuple");
-            if (nargs_tuple > 2)
-                jl_error("ccall function name tuple can have at most 2 elements");
-            // Validate tuple elements are not more complicated than inference/codegen can safely handle
-            for (size_t i = 0; i < nargs_tuple; i++) {
-                jl_value_t *arg = jl_exprarg(tuple_expr, i);
-                // Handle dot expressions by converting to a GlobalRef
-                if (jl_is_expr(arg) && ((jl_expr_t*)arg)->head == jl_dot_sym) {
-                    jl_expr_t *dot_expr = (jl_expr_t*)arg;
-                    if (jl_expr_nargs(dot_expr) != 2)
-                        jl_error("ccall function name: invalid dot expression");
-                    jl_value_t *mod_expr = jl_exprarg(dot_expr, 0);
-                    jl_value_t *sym_expr = jl_exprarg(dot_expr, 1);
-                    if (!(jl_is_quotenode(sym_expr) && jl_is_symbol(jl_quotenode_value(sym_expr))))
-                        jl_type_error("ccall name dot expression", (jl_value_t*)jl_symbol_type, sym_expr);
-                    JL_TRY {
-                        // Evaluate the module expression
-                        jl_value_t *mod_val = jl_toplevel_eval(module, mod_expr);
-                        JL_TYPECHK(ccall name dot expression, module, mod_val);
-                        JL_GC_PROMISE_ROOTED(mod_val);
-                        // Create GlobalRef from evaluated module and quoted symbol
-                        jl_sym_t *sym = (jl_sym_t*)jl_quotenode_value(sym_expr);
-                        jl_value_t *globalref = jl_module_globalref((jl_module_t*)mod_val, sym);
-                        jl_exprargset(tuple_expr, i, globalref);
-                    }
-                    JL_CATCH {
-                        if (jl_typetagis(jl_current_exception(ct), jl_errorexception_type))
-                            jl_error("could not evaluate ccall function/library name (it might depend on a local variable)");
-                        else
-                            jl_rethrow();
-                    }
-                }
-                else if (jl_is_quotenode(arg)) {
-                    if (i == 0) {
-                        // function name must be a symbol or string, library can be anything
-                        jl_value_t *quoted_val = jl_quotenode_value(arg);
-                        if (!jl_is_symbol(quoted_val) && !jl_is_string(quoted_val))
-                            jl_type_error("ccall function name", (jl_value_t*)jl_symbol_type, jl_quotenode_value(arg));
-                    }
-                }
-                else if (!jl_is_globalref(arg) && jl_isa_ast_node(arg)) {
-                    jl_type_error(i == 0 ? "ccall function name" : "ccall library name", (jl_value_t*)jl_symbol_type, arg);
-                }
-            }
-        }
-        else if (jl_is_string(fptr) || (jl_is_quotenode(fptr) && jl_is_symbol(jl_quotenode_value(fptr)))) {
-            // convert String to Expr (String,)
-            // convert QuoteNode(Symbol) to Expr (QuoteNode(Symbol),)
-            jl_expr_t *tupex = jl_exprn(tuple_sym, 1);
-            jl_exprargset(tupex, 0, fptr);
-            jl_exprargset(e, 0, tupex);
-            fptr = (jl_value_t*)tupex;
-        }
+        normalize_foreignsymbol(e, module, "ccall");
         jl_value_t *rt = jl_exprarg(e, 1);
         jl_value_t *at = jl_exprarg(e, 2);
         if (!jl_is_type(rt)) {
@@ -281,6 +281,10 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
             JL_TYPECHK(ccall method definition, uint16, jl_get_nth_field(cc, 1));
             JL_TYPECHK(ccall method definition, bool, jl_get_nth_field(cc, 2));
         }
+    }
+    if (e->head == jl_foreignglobal_sym) {
+        JL_NARGS(cglobal method definition, 1, 1); // (target)
+        normalize_foreignsymbol(e, module, "cglobal");
     }
     if (e->head == jl_call_sym && nargs > 0 &&
             jl_is_globalref(jl_exprarg(e, 0))) {
@@ -462,17 +466,14 @@ jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ir)
 
     jl_array_t *codelocs_any = (jl_array_t*)jl_exprarg(ir, 3);
     jl_array_t *linetable = (jl_array_t*)jl_exprarg(ir, 4);
-    li->debuginfo = jl_linetable_to_debuginfo(codelocs_any, linetable);
-    jl_gc_wb(li, li->debuginfo);
+    jl_gc_write(li, li->debuginfo, jl_linetable_to_debuginfo(codelocs_any, linetable));
 
     assert(jl_is_expr(bodyex));
     jl_array_t *body = bodyex->args;
-    li->code = body;
-    jl_gc_wb(li, li->code);
+    jl_gc_write(li, li->code, body);
     size_t n = jl_array_nrows(body);
     jl_value_t **bd = (jl_value_t**)jl_array_ptr_data((jl_array_t*)li->code);
-    li->ssaflags = jl_alloc_array_1d(jl_array_uint32_type, n);
-    jl_gc_wb(li, li->ssaflags);
+    jl_gc_write(li, li->ssaflags, jl_alloc_array_1d(jl_array_uint32_type, n));
     int inbounds_depth = 0; // number of stacked inbounds
     // isempty(inline_flags): no user callsite inline annotation
     // last(inline_flags) == 1: callsite inline region
@@ -596,7 +597,9 @@ jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ir)
         else {
             if (jl_is_expr(st) && ((jl_expr_t*)st)->head == jl_assign_sym)
                 st = jl_exprarg(st, 1);
-            if (jl_is_expr(st) && (((jl_expr_t*)st)->head == jl_foreigncall_sym || ((jl_expr_t*)st)->head == jl_cfunction_sym))
+            if (jl_is_expr(st) && (((jl_expr_t*)st)->head == jl_foreigncall_sym ||
+                                   ((jl_expr_t*)st)->head == jl_foreignglobal_sym ||
+                                   ((jl_expr_t*)st)->head == jl_cfunction_sym))
                 li->has_fcall = 1;
         }
         if (is_flag_stmt)
@@ -631,12 +634,9 @@ jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ir)
     jl_value_t *ssavalue_types = jl_array_ptr_ref(vinfo, 2);
     assert(jl_is_long(ssavalue_types));
     size_t nssavalue = jl_unbox_long(ssavalue_types);
-    li->slotnames = jl_alloc_array_1d(jl_array_symbol_type, nslots);
-    jl_gc_wb(li, li->slotnames);
-    li->slotflags = jl_alloc_array_1d(jl_array_uint8_type, nslots);
-    jl_gc_wb(li, li->slotflags);
-    li->ssavaluetypes = jl_box_long(nssavalue);
-    jl_gc_wb(li, li->ssavaluetypes);
+    jl_gc_write(li, li->slotnames, jl_alloc_array_1d(jl_array_symbol_type, nslots));
+    jl_gc_write(li, li->slotflags, jl_alloc_array_1d(jl_array_uint8_type, nslots));
+    jl_gc_write(li, li->ssavaluetypes, jl_box_long(nssavalue));
 
     // Flags that need to be copied to slotflags
     const uint8_t vinfo_mask = 8 | 16 | 32 | 64;
@@ -1008,8 +1008,7 @@ JL_DLLEXPORT void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
                     jl_error("duplicate @generated function body");
                 jl_value_t *gexpr = jl_exprarg(st, 1);
                 // the frontend would put (new (core GeneratedFunctionStub) funcname argnames sp) here, for example
-                m->generator = jl_toplevel_eval(m->module, gexpr);
-                jl_gc_wb(m, m->generator);
+                jl_gc_write(m, m->generator, jl_toplevel_eval(m->module, gexpr));
                 st = jl_nothing;
             }
             else if (nargs == 1 && jl_exprarg(st, 0) == (jl_value_t*)jl_generated_only_sym) {
@@ -1032,20 +1031,15 @@ JL_DLLEXPORT void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     if (src->nargs == 0)
         src->nargs = m->nargs;
     assert(m->nargs == src->nargs);
-    src->code = copy;
-    jl_gc_wb(src, copy);
-    m->slot_syms = jl_compress_argnames(src->slotnames);
-    jl_gc_wb(m, m->slot_syms);
+    jl_gc_write(src, src->code, copy);
+    jl_gc_write(m, m->slot_syms, jl_compress_argnames(src->slotnames));
     if (gen_only) {
         m->source = NULL;
     }
     else {
-        m->debuginfo = src->debuginfo;
-        jl_gc_wb(m, m->debuginfo);
-        m->source = (jl_value_t*)src;
-        jl_gc_wb(m, m->source);
-        m->source = (jl_value_t*)jl_compress_ir(m, NULL);
-        jl_gc_wb(m, m->source);
+        jl_gc_write(m, m->debuginfo, src->debuginfo);
+        jl_gc_write(m, m->source, (jl_value_t*)src);
+        jl_gc_write(m, m->source, (jl_value_t*)jl_compress_ir(m, NULL));
     }
     JL_GC_POP();
 }
@@ -1112,7 +1106,7 @@ int get_next_edge(jl_array_t *list JL_PROPAGATES_ROOT, int i,
         return i + 1;
     }
     assert(jl_is_type(item));
-    // An `invoke` call, it's a (sig, MethodInstance) pair
+    // An `invoke` call, it's a (sig, CodeInstance) pair
     if (invokesig != NULL)
         *invokesig = item;
     *caller = (jl_code_instance_t*)jl_array_ptr_ref(list, i + 1);
@@ -1166,7 +1160,7 @@ void jl_mi_done_backedges(jl_method_instance_t *mi JL_PROPAGATES_ROOT, uint8_t o
             }
             if (insb == 0) {
                 // All were deleted
-                mi->backedges = NULL;
+                jl_gc_write(mi, mi->backedges, NULL);
             } else {
                 jl_array_del_end(backedges, n - insb);
             }
@@ -1198,8 +1192,7 @@ jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name
     m->file = jl_is_symbol(file) ? (jl_sym_t*)file : jl_empty_sym;
     m->line = jl_linenode_line(functionloc);
     if (isinferred) {
-        m->slot_syms = jl_compress_argnames(ci->slotnames);
-        jl_gc_wb(m, m->slot_syms);
+        jl_gc_write(m, m->slot_syms, jl_compress_argnames(ci->slotnames));
     } else {
         jl_method_set_source(m, ci);
     }
@@ -1302,14 +1295,8 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
 
     // TODO: derive our debug name from the syntax instead of the type
     // if we have a kwcall, try to derive the name from the callee argument method table
-    jl_datatype_t *dtname = (jl_datatype_t*)jl_argument_datatype(jl_kwcall_type && ft == (jl_value_t*)jl_kwcall_type && nargs >= 3 ? jl_svecref(atypes, 2) : ft);
-    name = (jl_value_t*)dtname != jl_nothing ? dtname->name->singletonname : jl_any_type->name->singletonname;
-    if (jl_is_typeeq((jl_value_t*)dtname)) {
-        dtname = (jl_datatype_t*)jl_argument_datatype(jl_typeeq_T((jl_value_t*)dtname));
-        if ((jl_value_t*)dtname != jl_nothing) {
-            name = dtname->name->singletonname;
-        }
-    }
+    jl_value_t *dtname = jl_argument_datatypename(jl_kwcall_type && ft == (jl_value_t*)jl_kwcall_type && nargs >= 3 ? jl_svecref(atypes, 2) : ft);
+    name = dtname != jl_nothing ? ((jl_typename_t*)dtname)->singletonname : jl_any_type->name->singletonname;
 
     if (!jl_is_code_info(f)) {
         // this occurs when there is a closure being added to an out-of-scope function
@@ -1373,9 +1360,9 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
         jl_errorf("cannot add methods to builtin function `%s`", jl_symbol_name(name));
 
     m = jl_new_method_uninit(module);
-    m->external_mt = (jl_value_t*)external_mt;
     if (external_mt)
-        jl_gc_wb(m, external_mt);
+        jl_gc_wb_fresh(m, external_mt);
+    m->external_mt = (jl_value_t*)external_mt;
     m->sig = argtype;
     m->name = name;
     m->isva = isva;
@@ -1457,12 +1444,10 @@ static void add_root_block(jl_array_t *root_blocks, uint64_t modid, size_t len)
 static void prepare_method_for_roots(jl_method_t *m, uint64_t modid)
 {
     if (!m->roots) {
-        m->roots = jl_alloc_vec_any(0);
-        jl_gc_wb(m, m->roots);
+        jl_gc_write(m, m->roots, jl_alloc_vec_any(0));
     }
     if (!m->root_blocks && modid != 0) {
-        m->root_blocks = jl_alloc_array_1d(jl_array_uint64_type, 0);
-        jl_gc_wb(m, m->root_blocks);
+        jl_gc_write(m, m->root_blocks, jl_alloc_array_1d(jl_array_uint64_type, 0));
     }
 }
 

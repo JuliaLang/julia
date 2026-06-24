@@ -302,7 +302,7 @@ end
 # as a cartesian product, relative to the size of the original representation.
 # Thus, we count the longest element as being roughly invariant to being inside
 # or outside of the Tuple/Union nesting, though somewhat more expensive to be
-# outside than inside because the representation is larger (because and it
+# outside than inside because the representation is larger (because it
 # informs the callee whether any splitting is possible).
 function unionsplitcost(𝕃::AbstractLattice, argtypes::Union{SimpleVector,Vector{Any}};
                         fargs::Union{Nothing,Vector{Any}}=nothing)

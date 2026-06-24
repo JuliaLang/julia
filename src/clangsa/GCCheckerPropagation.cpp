@@ -1543,7 +1543,7 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
     }
     CurrentDepth -= 1;
     // Go through all roots, see which ones are no longer with us.
-    // The go through the values and unroot those for which those were our
+    // Then go through the values and unroot those for which those were our
     // roots.
     ProgramStateRef State = C.getState()->set<GCDepth>(CurrentDepth);
     State = removeFrameRoots(State, CurrentDepth);

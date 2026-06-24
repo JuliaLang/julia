@@ -103,7 +103,7 @@ struct CodegenParams
     If enabled, generate the necessary code to support the --code-coverage
     command line flag to julia itself. Note that the option itself does not enable
     code coverage. Rather, it merely generates the support code necessary
-    to code coverage if requested by the command line option.
+    to perform code coverage if requested by the command line option.
     """
     code_coverage::Cint
 
@@ -160,13 +160,13 @@ struct CodegenParams
     targets. The option may be disabled for use in environments where the julia
     runtime is unavailable, but is otherwise recommended to be enabled, even if
     lazy resolution is not required, as the Julia PLT mechanism may have superior
-    performance compared to the native platform mechanism. The options is enabled by default.
+    performance compared to the native platform mechanism. The option is enabled by default.
     """
     use_jlplt::Cint
 
     """
-        If enabled emit LLVM IR for all functions even if wouldn't be compiled
-        for some reason (i.e functions that return a constant value).
+        If enabled emit LLVM IR for all functions even if they wouldn't be compiled
+        for some reason (i.e. functions that return a constant value).
     """
     force_emit_all::Cint
 
@@ -661,7 +661,7 @@ julia> Base.return_types(checksym, (Union{Symbol,String},))
 ```
 
 It's important to note the difference here: `Base.return_types` gives back inferred results
-for each method that matches the given signature `checksum(::Union{Symbol,String})`.
+for each method that matches the given signature `checksym(::Union{Symbol,String})`.
 On the other hand `Base.infer_return_type` returns one collective result that sums up all those possibilities.
 
 !!! warning

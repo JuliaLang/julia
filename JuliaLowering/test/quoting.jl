@@ -86,7 +86,7 @@ end
 @test ex.value == 123
 
 # Test that interpolation with field access works
-# (the field name can be interpolated into
+# (the field name can be interpolated after the dot).
 ex = JuliaLowering.include_string(test_mod, """
 let
     field_name = :(a)

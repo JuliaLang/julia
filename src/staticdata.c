@@ -2423,10 +2423,8 @@ static void jl_prune_idset(_Atomic(jl_svec_t*) *pkeys, _Atomic(jl_genericmemory_
     assert(serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] == keyset);
     ptrhash_put(&serialization_order, jl_atomic_load_relaxed(&keyset2), idx);
     serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] = jl_atomic_load_relaxed(&keyset2);
-    jl_atomic_store_relaxed(pkeys, keys2);
-    jl_gc_wb(parent, keys2);
-    jl_atomic_store_relaxed(pkeyset, jl_atomic_load_relaxed(&keyset2));
-    jl_gc_wb(parent, jl_atomic_load_relaxed(&keyset2));
+    jl_gc_write_atomic(parent, *pkeys, keys2, relaxed);
+    jl_gc_write_atomic(parent, *pkeyset, jl_atomic_load_relaxed(&keyset2), relaxed);
 }
 
 static void jl_prune_method_specializations(jl_method_t *m) JL_GC_DISABLED
@@ -2470,8 +2468,7 @@ static jl_value_t *strip_codeinfo_meta(jl_method_t *m, jl_value_t *ci_, jl_code_
         ci = (jl_code_info_t*)ci_;
     }
     strip_slotnames(ci->slotnames, jl_array_len(ci->slotnames));
-    ci->debuginfo = jl_nulldebuginfo;
-    jl_gc_wb(ci, ci->debuginfo);
+    jl_gc_write(ci, ci->debuginfo, jl_nulldebuginfo);
     jl_value_t *ret = (jl_value_t*)ci;
     if (compressed)
         ret = (jl_value_t*)jl_compress_ir(m, ci);
@@ -2491,9 +2488,8 @@ static void strip_specializations_(jl_method_instance_t *mi)
             }
             else if (jl_options.strip_metadata) {
                 jl_value_t *stripped = strip_codeinfo_meta(mi->def.method, inferred, codeinst);
-                if (jl_atomic_cmpswap_relaxed(&codeinst->inferred, &inferred, stripped)) {
-                    jl_gc_wb(codeinst, stripped);
-                }
+                jl_gc_wb(codeinst, stripped);
+                jl_atomic_cmpswap_relaxed(&codeinst->inferred, &inferred, stripped);
             }
         }
         if (jl_options.strip_ir)
@@ -2538,8 +2534,7 @@ static int strip_all_codeinfos__(jl_typemap_entry_t *def, void *_env)
         }
         if (jl_options.strip_metadata) {
             if (!stripped_ir) {
-                m->source = strip_codeinfo_meta(m, m->source, NULL);
-                jl_gc_wb(m, m->source);
+                jl_gc_write(m, m->source, strip_codeinfo_meta(m, m->source, NULL));
             }
             jl_array_t *slotnames = jl_uncompress_argnames(m->slot_syms);
             JL_GC_PUSH1(&slotnames);
@@ -2548,8 +2543,7 @@ static int strip_all_codeinfos__(jl_typemap_entry_t *def, void *_env)
             if (jl_tparam0(jl_unwrap_unionall(m->sig)) == (jl_value_t*)jl_kwcall_type)
                 tostrip = m->nargs;
             strip_slotnames(slotnames, tostrip);
-            m->slot_syms = jl_compress_argnames(slotnames);
-            jl_gc_wb(m, m->slot_syms);
+            jl_gc_write(m, m->slot_syms, jl_compress_argnames(slotnames));
             JL_GC_POP();
         }
     }
@@ -3012,9 +3006,8 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             }
             else if (jl_is_typename(v)) {
                 jl_typename_t *tn = (jl_typename_t*)v;
-                jl_atomic_store_relaxed(&tn->cache,
-                    jl_prune_type_cache_hash(jl_atomic_load_relaxed(&tn->cache)));
-                jl_gc_wb(tn, jl_atomic_load_relaxed(&tn->cache));
+                jl_gc_write_atomic(tn, tn->cache,
+                    jl_prune_type_cache_hash(jl_atomic_load_relaxed(&tn->cache)), relaxed);
                 jl_prune_type_cache_linear(jl_atomic_load_relaxed(&tn->linearcache));
             }
             else if (jl_is_method_instance(v)) {
@@ -3775,8 +3768,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         export_jl_sysimg_globals();
         jl_global_roots_list = (jl_genericmemory_t*)jl_read_value(&s);
         jl_global_roots_keyset = (jl_genericmemory_t*)jl_read_value(&s);
-        s.ptls->root_task->tls = jl_read_value(&s);
-        jl_gc_wb(s.ptls->root_task, s.ptls->root_task->tls);
+        jl_gc_write(s.ptls->root_task, s.ptls->root_task->tls, jl_read_value(&s));
 
         uint32_t gs_ctr = read_uint32(f);
         jl_require_world = read_uint(f);
@@ -4095,8 +4087,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
             jl_globalref_t *r = (jl_globalref_t*)obj;
             if (r->binding == NULL) {
                 jl_globalref_t *gr = (jl_globalref_t*)jl_module_globalref(r->mod, r->name);
-                r->binding = gr->binding;
-                jl_gc_wb(r, gr->binding);
+                jl_gc_write(r, r->binding, gr->binding);
             }
         }
         else if (jl_is_module(obj)) {

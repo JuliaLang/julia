@@ -94,8 +94,8 @@ end
 
 This struct is intended as a memory- and GC-pressure-efficient mechanism
 for incrementally computing def-use maps. The idea is that the def-use map
-is constructed into two passes over the IR. In the first, we simply count the
-the number of uses, computing the number of uses for each def as well as the
+is constructed in two passes over the IR. In the first, we simply count the
+number of uses, computing the number of uses for each def as well as the
 total number of uses. In the second pass, we actually fill in the def-use
 information.
 
@@ -536,12 +536,11 @@ const compute_trycatch = ComputeTryCatch{SimpleHandler}()
     compute_trycatch(ir.stmts.stmt, ir.cfg.blocks)
 
 """
-    (::ComputeTryCatch{Handler})(code, [, bbs]) -> handler_info::Union{Nothing,HandlerInfo{Handler}}
+    (::ComputeTryCatch{Handler})(code[, bbs]) -> handler_info::Union{Nothing,HandlerInfo{Handler}}
     const compute_trycatch = ComputeTryCatch{SimpleHandler}()
 
 Given the code of a function, compute, at every statement, the current
-try/catch handler, and the current exception stack top. This function returns
-a tuple of:
+try/catch handler, and the current exception stack top. This function returns a `HandlerInfo` with:
 
     1. `handler_info.handler_at`: A statement length vector of tuples
        `(catch_handler, exception_stack)`, which are indices into `handlers`
@@ -615,7 +614,7 @@ function (::ComputeTryCatch{Handler})(code::Vector{Any}, bbs::Union{Vector{Basic
                 l = stmt.catch_dest
                 (bbs !== nothing) && (l != 0) && (l = first(bbs[l].stmts))
                 # We assigned a handler number above. Here we just merge that
-                # with out current handler information.
+                # with our current handler information.
                 if l != 0
                     handler_at[l] = (cur_stacks[1], handler_at[l][2])
                 end
@@ -852,7 +851,7 @@ function sptypes_from_meth_instance(mi::MethodInstance)
             end
             undef = !v_constrained
         elseif isvarargtype(v)
-            # if this parameter came from `func(..., ::Vararg{T,v})`,
+            # this parameter came from `func(..., ::Vararg{T,v})`,
             # so the type is known to be `Int`
             ty = Int
             undef = false
@@ -1286,7 +1285,7 @@ end
 """
     doworkloop(args...)
 
-Run a tasks inside the abstract interpreter, returning false if there are none.
+Run a task inside the abstract interpreter, returning false if there are none.
 Tasks will be run in DFS post-order tree order, such that all child tasks will
 be run in the order scheduled, prior to running any subsequent tasks. This
 allows tasks to generate more child tasks, which will be run before anything else.

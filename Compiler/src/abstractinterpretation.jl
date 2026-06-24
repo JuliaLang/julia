@@ -304,7 +304,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
             state.all_effects = Effects()
         end
 
-        # Also considering inferring the compilation signature for this method, so
+        # Also consider inferring the compilation signature for this method, so
         # it is available to the compiler in case it ends up needing it for the invoke.
         if (isa(sv, InferenceState) && infer_compilation_signature(interp) &&
             (!is_removable_if_unused(state.all_effects) || !call_result_unused(si)))
@@ -437,7 +437,7 @@ In such cases `maybecondinfo` should be either of:
 - `maybecondinfo::Tuple{Vector{Any},Vector{Any}}`: precomputed argument type refinement information
 - method call signature tuple type
 When we deal with multiple `MethodMatch`es, it's better to precompute `maybecondinfo` by
-`tmerge`ing argument signature type of each method call.
+`tmerge`ing argument signature types of each method call.
 """
 function from_interprocedural!(interp::AbstractInterpreter, @nospecialize(rt), sv::AbsIntState,
                                arginfo::ArgInfo, @nospecialize(maybecondinfo), vtypes::Union{VarTable,Nothing})
@@ -725,8 +725,8 @@ function abstract_call_method(interp::AbstractInterpreter,
                 # if we don't (typically) actually care about this result,
                 # don't bother trying to examine some complex abstract signature
                 # since it's very unlikely that we'll try to inline this,
-                # or want make an invoke edge to its calling convention return type.
-                # (non-typically, this means that we lose the ability to detect a guaranteed StackOverflow in some cases)
+                # or want to make an invoke edge to its calling convention return type.
+                # (atypically, this means that we lose the ability to detect a guaranteed StackOverflow in some cases)
                 return Future(MethodCallResult(Any, Any, Effects(), nothing, true, true))
             end
             add_remark!(interp, sv, washardlimit ? RECURSION_MSG_HARDLIMIT : RECURSION_MSG)
@@ -878,7 +878,7 @@ function is_constprop_method_recursed(method::Method, caller::AbsIntState)
     end
 end
 
-# keeps result and context information of abstract_method_call, which will later be used for
+# keeps result and context information of abstract_call_method, which will later be used for
 # backedge computation, and concrete evaluation or constant-propagation
 struct MethodCallResult
     rt
@@ -1125,7 +1125,7 @@ function _concrete_eval_call(
         Core._call_in_world_total(world, f, args...)
     catch
         # The evaluation threw. By :consistent-cy, we're guaranteed this would have happened at runtime.
-        # Howevever, at present, :consistency does not mandate the type of the exception
+        # However, at present, :consistency does not mandate the type of the exception
         concrete_result = ConcreteResult(edge, effects)
         return ConstCallResult(Bottom, Any, concrete_result, effects, #=const_edge=#nothing)
     end
@@ -1263,7 +1263,7 @@ function find_constrained_arg(cnd::Conditional, fargs::Vector{Any}, sv::Inferenc
     return nothing
 end
 
-# checks if all argtypes has additional information other than what `Type` can provide
+# checks if all argtypes have additional information other than what `Type` can provide
 function is_all_overridden(interp::AbstractInterpreter, (; fargs, argtypes)::ArgInfo, sv::AbsIntState)
     𝕃ᵢ = typeinf_lattice(interp)
     for i in 1:length(argtypes)
@@ -2998,7 +2998,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             end
         end
     elseif la == 3 && f === Core.:(>:)
-        # mark issupertype as a exact alias for issubtype
+        # mark issupertype as an exact alias for issubtype
         # swap T1 and T2 arguments and call <:
         atype = argtypes_to_type(argtypes)
         let call = abstract_call_gf_by_type(interp, f, ArgInfo(fargs, Any[Const(f), Any, Any]), si, Tuple{typeof(f), Any, Any}, vtypes, sv, max_methods)::Future
@@ -3256,16 +3256,11 @@ function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(
 end
 
 function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, sv::AbsIntState)
-    if e.head === :call && length(e.args) ≥ 1
-        # TODO: We still have non-linearized cglobal
-        @assert e.args[1] === Core.tuple || e.args[1] === GlobalRef(Core, :tuple)
-    else
-        @assert e.head !== :(=)
-        # Some of our tests expect us to handle invalid IR here and error later
-        # - permit that for now.
-        # @assert false "Unexpected EXPR head in value position"
-        merge_effects!(interp, sv, EFFECTS_UNKNOWN)
-    end
+    @assert e.head !== :(=)
+    # Some of our tests expect us to handle invalid IR here and error later
+    # - permit that for now.
+    # @assert false "Unexpected EXPR head in value position"
+    merge_effects!(interp, sv, EFFECTS_UNKNOWN)
     return Any
 end
 
@@ -3366,7 +3361,7 @@ function abstract_eval_new(interp::AbstractInterpreter, e::Expr, sstate::Stateme
         else
             consistent = ALWAYS_TRUE # immutable allocation is consistent
         end
-        # `:new` can carry `PartialStruct` even when `rt` isn't isconcretedispatch` —
+        # `:new` can carry `PartialStruct` even when `rt` isn't `isconcretedispatch` —
         # partially-instantiated parametric types (e.g. `Generator{Vector{Int}, F<:OC{Tuple{Int}, T} where T}`) still
         # have well-defined field count, and field-level extended lattice elements carry
         # information beyond the declared type.
@@ -3709,6 +3704,8 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, ssta
         return abstract_eval_new_opaque_closure(interp, e, sstate, sv)
     elseif ehead === :foreigncall
         return abstract_eval_foreigncall(interp, e, sstate, sv)
+    elseif ehead === :foreignglobal
+        return abstract_eval_foreignglobal(interp, e, sstate, sv)
     elseif ehead === :cfunction
         return abstract_eval_cfunction(interp, e, sstate, sv)
     elseif ehead === :method
@@ -3796,6 +3793,21 @@ function abstract_eval_foreigncall(interp::AbstractInterpreter, e::Expr, sstate:
         effects = override_effects(effects, override)
     end
     return RTEffects(t, Any, effects)
+end
+
+function abstract_eval_foreignglobal(interp::AbstractInterpreter, e::Expr, sstate::StatementState, sv::AbsIntState)
+    arg = e.args[1]
+    # Evaluate the arguments to constrain the world for codegen
+    if isexpr(arg, :tuple)
+        for elt in arg.args
+            abstract_eval_value(interp, elt, sstate, sv)
+            #TODO: implement abstract_eval_nonlinearized_foreigncall_name correctly?
+            #      (see foreigncall implementation above)
+        end
+    else
+        abstract_eval_value(interp, arg, sstate, sv)
+    end
+    return RTEffects(Ptr{Cvoid}, Any, EFFECTS_UNKNOWN)
 end
 
 function abstract_eval_phi(interp::AbstractInterpreter, phi::PhiNode, sstate::StatementState, sv::AbsIntState)

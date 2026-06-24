@@ -1203,7 +1203,7 @@ z856739 = [:a, :b]
 @test_broken repr(:(:(f($(($z856739)...))))) == ":(:(f(\$([:a, :b]...))))"
 @test repr(eval(:(:(f($(($z856739)...)))))) == ":(f(a, b))"
 
-# string interpolation, if this is what the comment in test_rep function
+# string interpolation, if this is what the comment in test_repr function
 # definition talk about
 @test repr(Expr(:string, "foo", :x, "bar")) == ":(\"foo\$(x)bar\")"
 @test Meta.parse(string(Expr(:string, "foo", :x, "bar"))) == Expr(:string, "foo", :x, "bar")

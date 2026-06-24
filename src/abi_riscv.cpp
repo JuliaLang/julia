@@ -30,7 +30,7 @@ static const int NumArgFPRs = 8;
 // needPassByRef call, otherwise avail_gprs is wrong
 int avail_gprs, avail_fprs;
 
-// preferred type is determined in the same time of use_sret & needPassByRef
+// preferred type is determined at the same time as use_sret & needPassByRef
 // cache it here to avoid computing it again in preferred_llvm_type
 Type *cached_llvmtype = NULL;
 

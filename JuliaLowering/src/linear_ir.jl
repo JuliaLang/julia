@@ -4,7 +4,7 @@
 # Must outline anything that can throw, e.g. globalrefs, static params
 function is_valid_ir_argument(ctx, ex)
     k = kind(ex)
-    if is_simple_atom(ctx, ex) || k in KSet"inert inert_syntaxtree top core quote static_eval foreigncall_arg1"
+    if is_simple_atom(ctx, ex) || k in KSet"inert inert_syntaxtree top core quote static_eval foreignsymbol"
         true
     elseif k == K"BindingId"
         binfo = get_binding(ctx, ex)
@@ -117,7 +117,7 @@ function is_simple_arg(ctx, ex)
     return is_simple_atom(ctx, ex) || k == K"BindingId" || k == K"quote" ||
         k == K"inert" || k == K"inert_syntaxtree" || k == K"top" ||
         k == K"core" || k == K"globalref" || k == K"static_eval" ||
-        k == K"foreigncall_arg1"
+        k == K"foreignsymbol"
 end
 
 # flisp note: arguments are always counted as single-assign, so effects on
@@ -134,7 +134,7 @@ function is_const_read_arg(ctx, ex)
     # locals cannot be affected by them so we can inline them anyway.
     # TODO from flisp: "We could also allow const globals here"
     return k == K"inert" || k == K"inert_syntaxtree" || k == K"top" ||
-        k == K"core" || k == K"static_eval" || k == K"foreigncall_arg1" ||
+        k == K"core" || k == K"static_eval" || k == K"foreignsymbol" ||
         is_simple_atom(ctx, ex) || is_single_assign_var(ctx, ex)
 end
 
@@ -143,7 +143,7 @@ function is_valid_ir_rvalue(ctx, lhs, rhs)
            is_valid_ir_argument(ctx, rhs) ||
            (kind(lhs) == K"BindingId" &&
             # FIXME: add: invoke ?
-            kind(rhs) in KSet"new splatnew cfunction isdefined call foreigncall gc_preserve_begin new_opaque_closure")
+            kind(rhs) in KSet"new splatnew cfunction isdefined call foreigncall foreignglobal gc_preserve_begin new_opaque_closure")
 end
 
 function check_no_local_bindings(ctx, ex, msg)
@@ -623,7 +623,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             k == K"inert" || k == K"inert_syntaxtree" || k == K"top" ||
             k == K"core" || k == K"Value" || k == K"Symbol" ||
             k == K"SourceLocation" || k == K"static_eval" ||
-            k == K"foreigncall_arg1" || k == K"static_parameter"
+            k == K"foreignsymbol" || k == K"static_parameter"
         ex1 = ex
         if kind(ex1) == K"BindingId"
             binfo = get_binding(ctx, ex1)
@@ -650,7 +650,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         @jl_assert !needs_value (ex,"TOMBSTONE encountered in value position")
         nothing
     elseif k == K"call" || k == K"new" || k == K"splatnew" || k == K"foreigncall" ||
-            k == K"new_opaque_closure" || k == K"cfunction"
+            k == K"foreignglobal" || k == K"new_opaque_closure" || k == K"cfunction"
         callex = newnode(ctx, ex, k, compile_args(ctx, children(ex)))
         if in_tail_pos
             emit_return(ctx, ex, callex)
@@ -1276,7 +1276,7 @@ ensure_linearization_attributes!(graph) = ensure_attributes!(
 This pass converts nested ASTs in the body of a lambda into a list of
 statements (ie, Julia's linear/untyped IR).
 
-Most of the compliexty of this pass is in lowering structured control flow (if,
+Most of the complexity of this pass is in lowering structured control flow (if,
 loops, etc) to gotos and exception handling to enter/leave. We also convert
 `K"BindingId"` into `K"slot"`, `K"globalref"` or `K"SSAValue"` as appropriate.
 """

@@ -835,11 +835,11 @@ public:
 
     void publishCIs(ArrayRef<jl_code_instance_t *> CIs, bool Wait=false);
 
-    void registerCI(jl_code_instance_t *CI);
+    void registerCI(jl_code_instance_t *CI) JL_NOTSAFEPOINT;
     // When a CodeInstance is garbage collected, we must remove any existing
     // entries in CISymbols, to prevent invokes to a new CodeInstance with the
     // same address from being linked to old symbol.
-    void unregisterCI(jl_code_instance_t *CI);
+    void unregisterCI(jl_code_instance_t *CI) JL_NOTSAFEPOINT;
 
     orc::ThreadSafeContext makeContext() JL_NOTSAFEPOINT;
     const DataLayout& getDataLayout() const JL_NOTSAFEPOINT;

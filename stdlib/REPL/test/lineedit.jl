@@ -683,7 +683,7 @@ end
     s.last_action = :unknown
     @test transform!(s->LineEdit.edit_yank_pop(s, false), s) == ("ça ≡ nothinga ≡ not", 19, 12)
 
-    # repetition (concatenation of killed strings
+    # repetition (concatenation of killed strings)
     edit_insert(s, "A B  C")
     LineEdit.edit_delete_prev_word(s)
     s.key_repeats = 1
@@ -1158,12 +1158,12 @@ end
     @test content(s) == " \"\""
     @test position(buffer(s)) == 2
 
-    # Test quote behavior: (|) + " -> ("")
+    # Test quote behavior: (|)) + " -> ("")
     s = LineEdit.init_state(term, interface)
     write_input(s, ")")
     charseek(buffer(s), 0)
     write_input(s, "(")
-    # Buffer is now () with cursor at 1
+    # Buffer is now ()) with cursor at 1
     write_input(s, "\"")
     @test content(s) == "(\"\"))"
     @test position(buffer(s)) == 2

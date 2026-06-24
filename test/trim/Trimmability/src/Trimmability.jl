@@ -1,4 +1,5 @@
 # Test that various constructs support trimming
+module Trimmability
 
 using Sockets
 
@@ -132,4 +133,6 @@ function @main(args::Vector{String})::Cint
     Base.donotdelete(reshape([1,2,3],:,1,1))
 
     return 0
+end
+
 end

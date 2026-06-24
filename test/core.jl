@@ -405,7 +405,7 @@ end  |> only == Type{typejoin(Int, UInt, Float64)}
 @test typejoin(DataType, Type{Int}) === typejoin(Type{Int}, DataType)
 
 # issue #61915: a method whose function type is `Type{Foo{...} where ...}` must derive its
-# name as `Foo`, not `:Any` (nth_arg_datatype has to unwrap the wrapped UnionAll).
+# name as `Foo`, not `:Any` (argument_datatypename has to unwrap the wrapped UnionAll).
 struct UA61915{T,N,A<:AbstractArray{T,N}}
     a::A
 end
@@ -413,6 +413,9 @@ UA61915{T}(a) where {T} = UA61915{T,ndims(a),typeof(a)}(a)
 @test all(m -> m.name === :UA61915, methods(UA61915))
 @test which(UA61915{Int}, (Vector{Int},)).name === :UA61915
 @test ccall(:jl_argument_datatype, Any, (Any,), Type{Array}) === Base.unwrap_unionall(Array)
+@test ccall(:jl_argument_datatype, Any, (Any,), Union{Tuple{Int},Tuple{Int,Int}}) === nothing
+@test ccall(:jl_argument_datatypename, Any, (Any,), Type{Array}) === Base.unwrap_unionall(Array).name
+@test ccall(:jl_argument_datatypename, Any, (Any,), Union{Tuple{Int},Tuple{Int,Int}}) === Tuple.name
 
 # promote_typejoin returns a Union only with Nothing/Missing combined with concrete types
 for T in (Nothing, Missing)
@@ -499,7 +502,7 @@ end
 @test any(m -> m.sig == Tuple{typeof(anytype_levelsplit_61915), DataType},
           methods(anytype_levelsplit_61915, (Union{Type{Int}, Int},)))
 
-# `Core.TypeofBottom` methods file with the kinds: method matching and dispatch with
+# `Core.TypeofBottom` methods filed with the kinds: method matching and dispatch with
 # `Type{...}`-represented queries (e.g. for the value `Union{}`) must reach them after
 # a level split instead of using a less specific `::Type` method
 anytype_bottom_61915(::Core.TypeofBottom) = 0
@@ -4091,7 +4094,7 @@ struct B
     a::A
 end
 @eval function f1()
-    # Emitting this direction is not recommended but it can come from `convert` that does not
+    # Emitting this directly is not recommended but it can come from `convert` that does not
     # return the correct type.
     $(Expr(:new, B, 1))
 end
@@ -6461,7 +6464,7 @@ initvalue2(::Type{T}) where {T <: Number} = T(1)
 U = unboxedunions[1]
 
 @noinline compare(a, b) = (a === b) # make sure we are testing code-generation of `is`
-egal(x, y) = (ccall(:jl_egal, Cint, (Any, Any), x, y) != 0) # make sure we are NOT testing code-generate of `is`
+egal(x, y) = (ccall(:jl_egal, Cint, (Any, Any), x, y) != 0) # make sure we are NOT testing code-generation of `is`
 
 mutable struct UnionField
     u::U
@@ -8259,6 +8262,32 @@ let vnull1 = NullableHomogeneousPointerImmutable(),
     @test !opt_jl_egal(vnull2, v2)
 end
 
+# #62095 - egal on large structs (> 512 bytes) with both ptrs and bits has
+# incorrect alias info
+struct MixedGC
+    obj::Base.RefValue{Int}
+    bits::Int
+end
+# 65 elements, so it's large enough to fail on both 32 and 64 bit
+let x = ntuple(i -> MixedGC(Base.RefValue(i), i), Val(65))
+    y = ntuple(i -> MixedGC(x[i].obj, i*2), Val(65))
+    z = ntuple(i -> MixedGC(Base.RefValue(i), i), Val(65))
+
+    @test unopt_jl_egal(x, x)
+    @test unopt_jl_egal(y, y)
+    @test unopt_jl_egal(z, z)
+    @test !unopt_jl_egal(x, y)
+    @test !unopt_jl_egal(x, z)
+    @test !unopt_jl_egal(y, z)
+
+    @test opt_jl_egal(x, x)
+    @test opt_jl_egal(y, y)
+    @test opt_jl_egal(z, z)
+    @test !opt_jl_egal(x, y)
+    @test !opt_jl_egal(x, z)
+    @test !opt_jl_egal(y, z)
+end
+
 # Make sure non-allbits union is handled correctly
 @noinline returns_union37557(r) = r[]
 @noinline compare_union37557(r1, r2) = returns_union37557(r1) === returns_union37557(r2)
@@ -8725,7 +8754,7 @@ let load_path = mktempdir()
             end
             """)
 
-        # when referring an method table in another module,
+        # when referring to a method table in another module,
         # the overlay method needs to be discovered explicitly
         Bar = Base.require(Main, :Bar)
         @test length(Bar.mt) == 0
@@ -8968,6 +8997,30 @@ f_def_typevar_with_lowerbound(x::T) where {T>:Int} = @isdefined(T) ? T : false
 let r = f_def_typevar_with_lowerbound(1.0)
     @test r === false || r === Union{Int, Float64}
 end
+
+# Static parameters constrained indirectly through other static-parameter bounds
+# are defined.
+f1_sparam_defined_62099(t::Type{E}) where E = @isdefined(E)
+f2_sparam_defined_62099(t::Type{T}) where {E, T<:E} = @isdefined(E)
+f3_sparam_defined_62099(t::Type{T}) where {E, E<:T<:E} = @isdefined(E)
+ftuple_sparam_defined_62099(t::Type{T}) where {E, T<:Tuple{E}} = @isdefined(E)
+fvararg_sparam_defined_62099(t::Type{T}) where {E, T<:Tuple{Vararg{E}}} = @isdefined(E)
+g1_sparam_value_62099(t::Type{E}) where E = E
+g2_sparam_value_62099(t::Type{T}) where {E, T<:E} = E
+gtuple_sparam_value_62099(t::Type{T}) where {E, T<:Tuple{E}} = E
+gvararg_sparam_value_62099(t::Type{T}) where {E, T<:Tuple{Vararg{E}}} = E
+for T in (Int, Integer, Real, Any, Union{Int,String}, Type{Int}, Vector)
+    @test f1_sparam_defined_62099(T)
+    @test f2_sparam_defined_62099(T)
+    @test f3_sparam_defined_62099(T)
+    @test ftuple_sparam_defined_62099(Tuple{T})
+    @test fvararg_sparam_defined_62099(Tuple{T})
+end
+@test !fvararg_sparam_defined_62099(Tuple{})
+@test g1_sparam_value_62099(Type{Int}) === Type{Int}
+@test g2_sparam_value_62099(Type{Int}) === Type{Int}
+@test gtuple_sparam_value_62099(Tuple{Type{Int}}) === Type{Int}
+@test gvararg_sparam_value_62099(Tuple{Type{Int}}) === Type{Int}
 
 # An inferred / constant-folded type must not contain a `(tvar, constrains_bool)`
 # SimpleVector pair as a type parameter. The intersection-env svec format must

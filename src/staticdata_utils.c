@@ -484,7 +484,7 @@ static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited,
                 // If we are the top of the current cycle, now mark all other parts of
                 // our cycle with what we found.
                 // Or if we found a backedge, also mark all of the other parts of the
-                // cycle as also having an backedge.
+                // cycle as also having a backedge.
                 while (stack->len >= current->depth) {
                     void *mi_ptr = arraylist_pop(stack);
                     void **bp = ptrhash_bp(visited, mi_ptr);

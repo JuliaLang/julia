@@ -93,7 +93,7 @@ static void update_implicit_resolution(struct implicit_search_resolution *to_upd
     to_update->saw_cycle |= resolution.saw_cycle;
     to_update->should_be_reexported |= resolution.should_be_reexported;
     if (resolution.ultimate_kind == PARTITION_FAKE_KIND_CYCLE) {
-        // Cycles get ignored. This causes the resolution resolution to only be partial, so we can't
+        // Cycles get ignored. This causes the resolution to only be partial, so we can't
         // cache it. This gets tracked in saw_cycle;
         to_update->saw_cycle = 1;
         return;
@@ -162,6 +162,7 @@ retry:
                         if (next_max_world >= expected_prev_min_world-1 && next->kind == new_kind && next->restriction == resolution.binding_or_const) {
                             if (jl_atomic_cmpswap(&prev->min_world, &expected_prev_min_world, next_min_world)) {
                                 jl_binding_partition_t *nextnext = jl_atomic_load_relaxed(&next->next);
+                                jl_gc_wb(prev, nextnext);
                                 if (!jl_atomic_cmpswap(&prev->next, &next, nextnext)) {
                                     // `next` may have been merged into its subsequent partition - we need to retry
                                     assert(next);
@@ -183,8 +184,8 @@ retry:
     jl_binding_partition_t *new_bpart = new_binding_partition();
     jl_atomic_store_relaxed(&new_bpart->max_world, new_max_world);
     new_bpart->kind = new_kind;
+    jl_gc_wb_fresh(new_bpart, resolution.binding_or_const);
     new_bpart->restriction = resolution.binding_or_const;
-    jl_gc_wb_fresh(new_bpart, new_bpart->restriction);
 
     if (next) {
         // See if we can merge the next partition into this one
@@ -198,9 +199,9 @@ retry:
 
     jl_atomic_store_relaxed(&new_bpart->min_world, new_min_world);
     jl_atomic_store_relaxed(&new_bpart->next, next);
+    jl_gc_wb(gap.parent, new_bpart);
     if (!jl_atomic_cmpswap(gap.insert, &gap.replace, new_bpart))
         return NULL;
-    jl_gc_wb(gap.parent, new_bpart);
     return new_bpart;
 }
 
@@ -392,9 +393,7 @@ JL_DLLEXPORT void jl_update_loaded_bpart(jl_binding_t *b, jl_binding_partition_t
     struct implicit_search_resolution resolution = jl_resolve_implicit_import(b, NULL, jl_atomic_load_acquire(&jl_world_counter), 0);
     jl_atomic_store_relaxed(&bpart->min_world, resolution.min_world);
     jl_atomic_store_relaxed(&bpart->max_world, resolution.max_world);
-    bpart->restriction = resolution.binding_or_const;
-    if (resolution.binding_or_const)
-        jl_gc_wb(bpart, resolution.binding_or_const);
+    jl_gc_write(bpart, bpart->restriction, resolution.binding_or_const);
     bpart->kind = resolution.ultimate_kind;
 }
 
@@ -615,9 +614,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(
         }
         if (jl_atomic_load_relaxed(&bpart->min_world) == new_world) {
             bpart->kind = constant_kind | (bpart->kind & PARTITION_MASK_FLAG);
-            bpart->restriction = val;
-            if (val)
-                jl_gc_wb(bpart, val);
+            jl_gc_write(bpart, bpart->restriction, val);
             new_bpart = bpart;
         } else {
             new_bpart = jl_replace_binding_locked(b, bpart, val, constant_kind, new_world);
@@ -649,22 +646,21 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(
             new_prev_bpart = backdate_bpart;
             while (1) {
                 backdate_bpart->kind = (size_t)PARTITION_KIND_BACKDATED_CONST | (prev_bpart->kind & 0xf0);
+                jl_gc_wb_fresh(backdate_bpart, val);
                 backdate_bpart->restriction = val;
                 jl_atomic_store_relaxed(&backdate_bpart->min_world,
                     jl_atomic_load_relaxed(&prev_bpart->min_world));
-                jl_gc_wb_fresh(backdate_bpart, val);
                 jl_atomic_store_relaxed(&backdate_bpart->max_world,
                     jl_atomic_load_relaxed(&prev_bpart->max_world));
                 prev_bpart = jl_atomic_load_relaxed(&prev_bpart->next);
                 if (!prev_bpart)
                     break;
                 jl_binding_partition_t *next_prev_bpart = new_binding_partition();
-                jl_atomic_store_relaxed(&backdate_bpart->next, next_prev_bpart);
                 jl_gc_wb(backdate_bpart, next_prev_bpart);
+                jl_atomic_store_relaxed(&backdate_bpart->next, next_prev_bpart);
                 backdate_bpart = next_prev_bpart;
             }
-            jl_atomic_store_release(&new_bpart->next, new_prev_bpart);
-            jl_gc_wb(new_bpart, new_prev_bpart);
+            jl_gc_write_atomic(new_bpart, new_bpart->next, new_prev_bpart, release);
         }
     }
     JL_GC_POP();
@@ -780,12 +776,12 @@ static jl_globalref_t *jl_new_globalref(jl_module_t *mod, jl_sym_t *name, jl_bin
     jl_task_t *ct = jl_current_task;
     jl_globalref_t *g = (jl_globalref_t*)jl_gc_alloc(ct->ptls, sizeof(jl_globalref_t), jl_globalref_type);
     jl_set_typetagof(g, jl_globalref_tag, 0);
+    jl_gc_wb_fresh(g, mod);
     g->mod = mod;
-    jl_gc_wb_fresh(g, g->mod);
+    jl_gc_wb_fresh(g, name);
     g->name = name;
-    jl_gc_wb_fresh(g, g->name);
+    jl_gc_wb_fresh(g, b);
     g->binding = b;
-    jl_gc_wb_fresh(g, g->binding);
     return g;
 }
 
@@ -800,8 +796,7 @@ static jl_binding_t *new_binding(jl_module_t *mod, jl_sym_t *name)
     b->backedges = NULL;
     jl_atomic_store_relaxed(&b->flags, 0);
     JL_GC_PUSH1(&b);
-    b->globalref = jl_new_globalref(mod, name, b);
-    jl_gc_wb(b, b->globalref);
+    jl_gc_write(b, b->globalref, jl_new_globalref(mod, name, b));
     JL_GC_POP();
     return b;
 }
@@ -1356,8 +1351,7 @@ void jl_add_usings_backedge(jl_module_t *from, jl_module_t *to)
 {
     JL_LOCK(&from->lock);
     if (from->usings_backedges == jl_nothing) {
-        from->usings_backedges = (jl_value_t*)jl_alloc_vec_any(0);
-        jl_gc_wb(from, from->usings_backedges);
+        jl_gc_write(from, from->usings_backedges, (jl_value_t*)jl_alloc_vec_any(0));
     }
     jl_array_ptr_1d_push((jl_array_t*)from->usings_backedges, (jl_value_t*)to);
     JL_UNLOCK(&from->lock);
@@ -1371,9 +1365,9 @@ void jl_module_initial_using(jl_module_t *to, jl_module_t *from)
         .max_world = ~(size_t)0,
         .flags = 0
     };
+    jl_gc_wb(to, from);
     arraylist_grow(&to->usings, sizeof(struct _jl_module_using)/sizeof(void*));
     memcpy(&to->usings.items[to->usings.len-4], &new_item, sizeof(struct _jl_module_using));
-    jl_gc_wb(to, from);
     jl_add_usings_backedge(from, to);
 }
 
@@ -1404,9 +1398,9 @@ JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from, size_t fla
             .max_world = ~(size_t)0,
             .flags = flags
         };
+        jl_gc_wb(to, from);
         arraylist_grow(&to->usings, sizeof(struct _jl_module_using)/sizeof(void*));
         memcpy(&to->usings.items[to->usings.len-4], &new_item, sizeof(struct _jl_module_using));
-        jl_gc_wb(to, from);
     } else {
         // Update existing entry to add new flags
         struct _jl_module_using *existing = module_usings_getidx(to, existing_idx);
@@ -1629,8 +1623,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_module_binding(jl_module_t *m, jl_sym_t *var, 
                     memcpy((char*)jl_svec_data(nc), jl_svec_data(bindings), sizeof(void*) * i);
                 for (size_t j = i; j < ncl; j++)
                     jl_svec_data(nc)[j] = jl_nothing;
-                jl_atomic_store_release(&m->bindings, nc);
-                jl_gc_wb(m, nc);
+                jl_gc_write_atomic(m, m->bindings, nc, release);
                 bindings = nc;
             }
             jl_binding_t *b = new_binding(m, var);
@@ -1675,7 +1668,7 @@ JL_DLLEXPORT void jl_set_global(jl_module_t *m, jl_sym_t *var, jl_value_t *val J
 
 void jl_set_initial_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val JL_ROOTED_BY_ARG(0), int exported)
 {
-    // this function is only valid during initialization, so there is no risk of data races her are not too important to use
+    // this function is only valid during initialization, so there is no risk of data races
     int kind = PARTITION_KIND_CONST | (exported ? PARTITION_FLAG_EXPORTED : 0);
     // jl_declare_constant_val3(NULL, m, var, (jl_value_t*)jl_any_type, kind, 0);
     jl_binding_t *bp = jl_get_module_binding(m, var, 1);
@@ -1685,8 +1678,7 @@ void jl_set_initial_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val JL_ROOT
     if (exported)
         jl_atomic_fetch_or_relaxed(&bp->flags, BINDING_FLAG_PUBLICP);
     bpart->kind = kind | (bpart->kind & PARTITION_MASK_FLAG);
-    bpart->restriction = val;
-    jl_gc_wb(bpart, val);
+    jl_gc_write(bpart, bpart->restriction, val);
 }
 
 JL_DLLEXPORT void jl_set_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val JL_ROOTED_BY_ARG(0))
@@ -1697,8 +1689,7 @@ JL_DLLEXPORT void jl_set_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val JL
     jl_atomic_store_relaxed(&bpart->min_world, 0);
     jl_atomic_store_release(&bpart->max_world, ~(size_t)0);
     bpart->kind = PARTITION_KIND_CONST | (bpart->kind & PARTITION_MASK_FLAG);
-    bpart->restriction = val;
-    jl_gc_wb(bpart, val);
+    jl_gc_write(bpart, bpart->restriction, val);
 }
 
 void jl_invalidate_binding_refs(jl_globalref_t *ref, jl_binding_partition_t *invalidated_bpart, jl_binding_partition_t *new_bpart, size_t new_world)
@@ -1723,8 +1714,7 @@ JL_DLLEXPORT void jl_add_binding_backedge(jl_binding_t *b, jl_value_t *edge)
 {
     JL_LOCK(&b->globalref->mod->lock);
     if (!b->backedges) {
-        b->backedges = jl_alloc_vec_any(0);
-        jl_gc_wb(b, b->backedges);
+        jl_gc_write(b, b->backedges, jl_alloc_vec_any(0));
     } else if (jl_array_len(b->backedges) > 0 &&
                jl_array_ptr_ref(b->backedges, jl_array_len(b->backedges)-1) == edge) {
         // Optimization: Deduplicate repeated insertion of the same edge (e.g. during
@@ -1795,8 +1785,8 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b,
         if (resolution.should_be_reexported) {
             new_bpart->kind |= PARTITION_FLAG_IMPLICITLY_EXPORTED;
         }
-        new_bpart->restriction = resolution.binding_or_const;
         jl_gc_wb_fresh(new_bpart, resolution.binding_or_const);
+        new_bpart->restriction = resolution.binding_or_const;
         assert(resolution.min_world <= new_world && resolution.max_world == ~(size_t)0);
         if (new_bpart->kind == old_bpart->kind && new_bpart->restriction == old_bpart->restriction) {
             JL_GC_POP();
@@ -1805,19 +1795,18 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b,
     }
     else {
         new_bpart->kind = kind;
-        new_bpart->restriction = restriction_val;
         jl_gc_wb_fresh(new_bpart, restriction_val);
+        new_bpart->restriction = restriction_val;
     }
     jl_atomic_store_release(&old_bpart->max_world, new_world-1);
-    jl_atomic_store_relaxed(&new_bpart->next, old_bpart);
     jl_gc_wb_fresh(new_bpart, old_bpart);
+    jl_atomic_store_relaxed(&new_bpart->next, old_bpart);
 
     if ((jl_bpart_is_exported(old_bpart->kind) || jl_bpart_is_exported(kind)) && jl_require_world != ~(size_t)0) {
         jl_atomic_store_release(&b->globalref->mod->export_set_changed_since_require_world, 1);
     }
 
-    jl_atomic_store_release(&b->partitions, new_bpart);
-    jl_gc_wb(b, new_bpart);
+    jl_gc_write_atomic(b, b->partitions, new_bpart, release);
     JL_GC_POP();
 
     if (jl_typeinf_world != 1) {
@@ -1911,6 +1900,36 @@ JL_DLLEXPORT void jl_deprecate_binding(jl_module_t *m, jl_sym_t *var, int flag)
     JL_UNLOCK(&world_counter_lock);
 }
 
+// Select the declared visibility of a binding:
+//   0=none (neither), 1=public, 2=export
+// The exported flag is world-versioned (it lives in the binding partition and
+// gates implicit resolution through `using`), so clearing it creates a new
+// partition and invalidates dependent code. The public flag is world-agnostic
+// (it lives on the binding). Unlike the `export`/`public` keyword path
+// (jl_module_public_), this both raises and lowers the state, so it does not
+// enforce the public-vs-exported conflict.
+JL_DLLEXPORT void jl_module_set_visibility(jl_module_t *m, jl_sym_t *var, int state)
+{
+    int want_exported = state == 2;
+    int want_public = state >= 1;
+    jl_binding_t *b = jl_get_module_binding(m, var, 1);
+    JL_LOCK(&world_counter_lock);
+    size_t new_world = jl_atomic_load_acquire(&jl_world_counter)+1;
+    jl_binding_partition_t *old_bpart = jl_get_binding_partition(b, jl_current_task->world_age);
+    int was_exported = (old_bpart->kind & PARTITION_FLAG_EXPORTED) != 0;
+    if (was_exported != want_exported) {
+        size_t new_kind = want_exported ? (old_bpart->kind | PARTITION_FLAG_EXPORTED) :
+                                          (old_bpart->kind & ~(size_t)PARTITION_FLAG_EXPORTED);
+        jl_replace_binding_locked2(b, old_bpart, old_bpart->restriction, new_kind, new_world);
+        jl_atomic_store_release(&jl_world_counter, new_world);
+    }
+    JL_UNLOCK(&world_counter_lock);
+    if (want_public)
+        jl_atomic_fetch_or_relaxed(&b->flags, BINDING_FLAG_PUBLICP);
+    else
+        jl_atomic_fetch_and_relaxed(&b->flags, (uint8_t)~BINDING_FLAG_PUBLICP);
+}
+
 static int should_depwarn(jl_binding_t *b, uint8_t flag)
 {
     // We consider bindings deprecated, if:
@@ -1985,16 +2004,15 @@ jl_value_t *jl_check_binding_assign_value(jl_binding_t *b JL_PROPAGATES_ROOT, jl
 JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs)
 {
     if (jl_check_binding_assign_value(b, mod, var, rhs, "setglobal!") != NULL) {
-        jl_atomic_store_release(&b->value, rhs);
-        jl_gc_wb(b, rhs);
+        jl_gc_write_atomic(b, b->value, rhs, release);
     }
 }
 
 JL_DLLEXPORT jl_value_t *jl_checked_swap(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs)
 {
     jl_check_binding_assign_value(b, mod, var, rhs, "swapglobal!");
-    jl_value_t *old = jl_atomic_exchange(&b->value, rhs);
     jl_gc_wb(b, rhs);
+    jl_value_t *old = jl_atomic_exchange(&b->value, rhs);
     if (__unlikely(old == NULL))
         jl_undefined_var_error(var, (jl_value_t*)mod);
     return old;
@@ -2023,8 +2041,8 @@ JL_DLLEXPORT jl_value_t *jl_checked_assignonce(jl_binding_t *b, jl_module_t *mod
 {
     jl_check_binding_assign_value(b, mod, var, rhs, "setglobalonce!");
     jl_value_t *old = NULL;
-    if (jl_atomic_cmpswap(&b->value, &old, rhs))
-        jl_gc_wb(b, rhs);
+    jl_gc_wb(b, rhs);
+    jl_atomic_cmpswap(&b->value, &old, rhs);
     return old;
 }
 
@@ -2208,7 +2226,7 @@ JL_DLLEXPORT jl_uuid_t jl_module_uuid(jl_module_t* m) { return m->uuid; }
 
 // TODO: make this part of the module constructor and read-only?
 JL_DLLEXPORT void jl_set_module_uuid(jl_module_t *m, jl_uuid_t uuid) { m->uuid = uuid; }
-JL_DLLEXPORT void jl_set_module_parent(jl_module_t *m, jl_module_t *parent) { m->parent = parent; }
+JL_DLLEXPORT void jl_set_module_parent(jl_module_t *m, jl_module_t *parent) { jl_gc_write(m, m->parent, parent); }
 
 int jl_is_submodule(jl_module_t *child, jl_module_t *parent) JL_NOTSAFEPOINT
 {
@@ -2235,7 +2253,7 @@ JL_DLLEXPORT void jl_clear_implicit_imports(jl_module_t *m)
             break;
         jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
         if (jl_bkind_is_some_implicit(jl_binding_kind(bpart))) {
-            jl_atomic_store_relaxed(&b->partitions, NULL);
+            jl_gc_write_atomic(b, b->partitions, NULL, relaxed);
         }
     }
     JL_UNLOCK(&m->lock);

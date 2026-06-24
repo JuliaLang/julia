@@ -351,7 +351,7 @@ Base.seek(l::Lexer, pos) = seek(l.io, pos)
 """
     start_token!(l::Lexer)
 
-Updates the lexer's state such that the next  `RawToken` will start at the current
+Updates the lexer's state such that the next `RawToken` will start at the current
 position.
 """
 function start_token!(l::Lexer)
@@ -406,7 +406,7 @@ end
 """
     emit(l::Lexer, kind::Kind)
 
-Returns a `RawToken` of kind `kind` with contents `str` and starts a new `RawToken`.
+Returns a `RawToken` of kind `kind` and starts a new `RawToken`.
 """
 function emit(l::Lexer, kind::Kind)
     tok = RawToken(kind, startpos(l), position(l) - 1, PREC_NONE)
@@ -941,7 +941,7 @@ end
 
 function lex_star(l::Lexer)
     if accept(l, '*')
-        return emit(l, K"Error**") # "**" is an invalid operator use ^
+        return emit(l, K"Error**") # "**" is an invalid operator; use ^
     end
     return emit_operator_or_compound_assign(l, K"*", PREC_TIMES)
 end

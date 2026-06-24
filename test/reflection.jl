@@ -459,6 +459,38 @@ const a_value = 1
 @test !Base.ispublic(@__MODULE__, :this_is_not_exported)
 end
 
+# set_binding_visibility!
+module TestBindingVisibility
+using Test
+public a_public_name
+a_public_name() = 1
+export an_exported_name
+an_exported_name() = 2
+no_decl() = 3
+
+@test Base.isexported(@__MODULE__, :an_exported_name)
+@test Base.ispublic(@__MODULE__, :a_public_name) && !Base.isexported(@__MODULE__, :a_public_name)
+@test !Base.ispublic(@__MODULE__, :no_decl)
+
+# public <-> none round trip
+Base.set_binding_visibility!(@__MODULE__, :a_public_name, :none)
+@test !Base.ispublic(@__MODULE__, :a_public_name)
+Base.set_binding_visibility!(@__MODULE__, :a_public_name, :public)
+@test Base.ispublic(@__MODULE__, :a_public_name)
+
+# an exported name is reported public; lowering it to :public clears only the export
+@test Base.ispublic(@__MODULE__, :an_exported_name)
+Base.set_binding_visibility!(@__MODULE__, :an_exported_name, :public)
+@test !Base.isexported(@__MODULE__, :an_exported_name)
+@test Base.ispublic(@__MODULE__, :an_exported_name)
+
+# promote an undeclared name to export
+Base.set_binding_visibility!(@__MODULE__, :no_decl, :export)
+@test Base.isexported(@__MODULE__, :no_decl)
+
+@test_throws ArgumentError Base.set_binding_visibility!(@__MODULE__, :no_decl, :bogus)
+end
+
 # PR 13825
 let ex = :(a + b)
     @test string(ex) == "a + b"
@@ -515,6 +547,15 @@ tlayout = TLayout(5,7,11)
 @test_throws ArgumentError fieldnames(NamedTuple{T,Tuple{Int,Int}} where T)
 @test_throws ArgumentError fieldnames(Real)
 @test_throws ArgumentError fieldnames(AbstractArray)
+
+# Common-field unions keep field-index queries structural without choosing a representative arm.
+@test fieldindex(Union{Base.RefValue{Int},Base.RefValue{Float64}}, :x) == 1
+@test hasfield(Union{Base.RefValue{Int},Base.RefValue{Float64}}, :x)
+@test Core.Compiler.try_compute_fieldidx(Union{Base.RefValue{Int},Base.RefValue{Float64}}, :x) == 1
+@test Core.Compiler.try_compute_fieldidx(Type{Base.RefValue{Int}}, :x) === nothing
+@test fieldindex(Union{Ref{Int},Ref{Float64}}, :x, false) == 0
+@test !hasfield(Union{Ref{Int},Ref{Float64}}, :x)
+@test_throws FieldError fieldindex(Union{Ref{Int},Ref{Float64}}, :x)
 
 @test fieldtype((NamedTuple{T,Tuple{Int,String}} where T), 1) === Int
 @test fieldtype((NamedTuple{T,Tuple{Int,String}} where T), 2) === String
@@ -911,6 +952,14 @@ end
 @test_throws ArgumentError fieldcount(Real)
 @test_throws ArgumentError fieldcount(AbstractArray)
 @test_throws ArgumentError fieldcount(Tuple{Any,Vararg{Any}})
+
+# Common-field unions are definite only when all alternatives share the field count.
+@test fieldcount(Union{Tuple{Int,Float64},Tuple{Int,Int}}) == 2
+@test fieldtypes(Union{Tuple{Int,Float64},Tuple{Int,Int}}) == (Int, Union{Float64,Int})
+@test_throws(ArgumentError("type does not have a definite number of fields"),
+             fieldcount(Union{Tuple{Int},Tuple{Int,Int}}))
+@test_throws(ArgumentError("type does not have a definite number of fields"),
+             fieldtypes(Union{Tuple{Int},Tuple{Int,Int}}))
 
 # PR #22979
 

@@ -258,8 +258,9 @@ typedef struct _jl_sourcebytetable_header_t {
     int32_t line_offset;
     // (>=0) number of (byte, len) bytespans
     int32_t nlocs;
-    // (0,1,2,4) compressed lengths
+    // (1,2,4) compressed length
     uint8_t byte_encl;
+    // (0,1,2,4) compressed length
     uint8_t span_encl;
 } jl_sourcebytetable_header_t;
 // packed size
@@ -417,7 +418,7 @@ typedef struct _jl_method_t {
 } jl_method_t;
 
 // This type is a placeholder to cache data for a specType signature specialization of a Method
-// can can be used as a unique dictionary key representation of a call to a particular Method
+// and can be used as a unique dictionary key representation of a call to a particular Method
 // with a particular set of argument types
 //
 // Reading or writing requires `def.method->writelock` or exclusive ownership:
@@ -719,7 +720,7 @@ typedef struct _jl_weakref_t {
 //
 //      PARTITION_KIND_DECLARED
 //
-// 3. Strong Declared Bindings (Weak)
+// 3. Strong Declared Bindings (Strong)
 //    All other bindings are explicitly declared using a keyword or global assignment.
 //   These are considered strongest:
 //
@@ -756,7 +757,7 @@ enum jl_partition_kind {
     //  ->restriction holds the constant value
     PARTITION_KIND_CONST_IMPORT = 0x1,
     // Global: This binding partition is a global variable. It was declared either using
-    // `global x::T` to implicitly through a syntactic global assignment.
+    // `global x::T` or implicitly through a syntactic global assignment.
     //  -> restriction holds the type restriction
     PARTITION_KIND_GLOBAL       = 0x2,
     // Implicit: The binding was a global, implicitly imported from a `using`'d module.
@@ -1266,8 +1267,8 @@ STATIC_INLINE jl_value_t *jl_svecset(
     // while svec is supposedly immutable, in practice we sometimes publish it
     // first and set the values lazily. Those users occasionally might need to
     // instead use jl_atomic_store_release here.
-    jl_atomic_store_relaxed((_Atomic(jl_value_t*)*)jl_svec_data(t) + i, (jl_value_t*)x);
     jl_gc_wb(t, x);
+    jl_atomic_store_relaxed((_Atomic(jl_value_t*)*)jl_svec_data(t) + i, (jl_value_t*)x);
     return (jl_value_t*)x;
 }
 #endif
@@ -1305,6 +1306,23 @@ STATIC_INLINE jl_value_t *jl_genericmemory_owner(jl_genericmemory_t *m JL_PROPAG
 #endif
 #endif
 #endif
+
+// Utility for doing a basic write with the appropriate write barrier.
+// `parent` is the GC-tracked owner, `field` is an lvalue (e.g. obj->member),
+// and `val` is the new value to store. The barrier is emitted *before* the
+// store and receives the new value being stored.
+#define jl_gc_write(parent, field, val) do { \
+    void *_jl_write_val = (void*)(val); \
+    jl_gc_wb((parent), _jl_write_val); \
+    (field) = (__typeof__(field))_jl_write_val; \
+} while (0)
+
+// Atomic variant: `field` must be an _Atomic lvalue, `order` is relaxed or release.
+#define jl_gc_write_atomic(parent, field, val, order) do { \
+    __typeof__(jl_atomic_load_relaxed(&(field))) _jl_write_val = (__typeof__(jl_atomic_load_relaxed(&(field))))(val); \
+    jl_gc_wb((parent), (const void *)_jl_write_val); \
+    jl_atomic_store_##order(&(field), _jl_write_val); \
+} while (0)
 
 /*
   how - allocation style
@@ -1359,10 +1377,7 @@ STATIC_INLINE jl_value_t *jl_genericmemory_ptr_set(
     jl_genericmemory_t *m_ = (jl_genericmemory_t*)m;
     assert(((jl_datatype_t*)jl_typetagof(m_))->layout->flags.arrayelem_isboxed);
     assert(i < m_->length);
-    jl_atomic_store_release(((_Atomic(jl_value_t*)*)(m_->ptr)) + i, (jl_value_t*)x);
-    if (x) {
-        jl_gc_wb(m, x);
-    }
+    jl_gc_write_atomic(m, ((_Atomic(jl_value_t*)*)(m_->ptr))[i], (jl_value_t*)x, release);
     return (jl_value_t*)x;
 }
 #endif
@@ -1407,10 +1422,7 @@ STATIC_INLINE jl_value_t *jl_array_ptr_set(
 {
     assert(((jl_datatype_t*)jl_typetagof(((jl_array_t*)a)->ref.mem))->layout->flags.arrayelem_isboxed);
     assert(i < jl_array_len(a));
-    jl_atomic_store_release(jl_array_data(a, _Atomic(jl_value_t*)) + i, (jl_value_t*)x);
-    if (x) {
-        jl_gc_wb(jl_array_owner((jl_array_t*)a), x);
-    }
+    jl_gc_write_atomic(jl_array_owner((jl_array_t*)a), jl_array_data(a, _Atomic(jl_value_t*))[i], (jl_value_t*)x, release);
     return (jl_value_t*)x;
 }
 #endif
@@ -2145,6 +2157,7 @@ JL_DLLEXPORT void jl_module_import(jl_task_t *ct, jl_module_t *to, jl_module_t *
 JL_DLLEXPORT void jl_import_module(jl_task_t *ct, jl_module_t *m, jl_module_t *import, jl_sym_t *asname);
 JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from, size_t flags);
 JL_DLLEXPORT void jl_module_public(jl_module_t *from, jl_value_t **symbols, size_t nsymbols, int exported);
+JL_DLLEXPORT void jl_module_set_visibility(jl_module_t *m, jl_sym_t *var, int state);
 JL_DLLEXPORT int jl_is_imported(jl_module_t *m, jl_sym_t *s);
 JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var);
 
@@ -2160,6 +2173,11 @@ JL_DLLEXPORT void jl_set_errno(int e) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int32_t jl_stat(const char *path, char *statbuf) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_cpu_threads(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_effective_threads(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT const char *jl_precompile_jobserver_create(int ntokens) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_precompile_jobserver_active(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_precompile_jobserver_destroy(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_precompile_jobserver_acquire(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_precompile_jobserver_release(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT long jl_getpagesize(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT long jl_getallocationgranularity(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT long jl_gethugepagesize(void) JL_NOTSAFEPOINT;
@@ -2172,9 +2190,6 @@ extern int jl_n_sweepthreads;
 
 #define JL_THREADPOOL_ID_INTERACTIVE 0
 #define JL_THREADPOOL_ID_DEFAULT 1
-
-// environment entries
-JL_DLLEXPORT jl_value_t *jl_environ(int i);
 
 // throwing common exceptions
 JL_DLLEXPORT jl_value_t *jl_vexceptionf(jl_datatype_t *exception_type,
@@ -2266,7 +2281,8 @@ JL_DLLEXPORT void jl_task_wait_empty(void);
 JL_DLLEXPORT void jl_postoutput_hook(void);
 JL_DLLEXPORT void JL_NORETURN jl_exit(int status);
 JL_DLLEXPORT void JL_NORETURN jl_raise(int signo);
-JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle);
+JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle) JL_NOTSAFEPOINT;
+JL_DLLEXPORT const char *jl_pathname_for_symbol(void *symbol) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void);
 
 JL_DLLEXPORT int jl_deserialize_verify_header(ios_t *s);

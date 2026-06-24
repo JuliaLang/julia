@@ -1173,7 +1173,7 @@ end
     end
 end
 
-# @spawn racying with sync_end
+# @spawn racing with sync_end
 
 hidden_spawn(f) = Threads.@spawn f()
 
@@ -1311,7 +1311,7 @@ end
     end
 end
 
-#Thread safety of threacall
+# Thread safety of threadcall
 function threadcall_threads()
     Threads.@threads for i = 1:8
         ptr = @threadcall(:jl_malloc, Ptr{Cint}, (Csize_t,), sizeof(Cint))

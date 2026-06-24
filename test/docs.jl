@@ -2,7 +2,7 @@
 
 import Base.Docs: meta, DocStr, parsedoc, bindingexpr, namify
 
-macro var(x) # just for testing bindingexpr/nameify more conveniently
+macro var(x) # just for testing bindingexpr/namify more conveniently
     esc(bindingexpr(namify(x)))
 end
 

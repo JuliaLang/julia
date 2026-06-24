@@ -102,7 +102,7 @@ false
     A `Timer` requires yield points to update its state. For instance, `isopen(t::Timer)` cannot be
     used to timeout a non-yielding while loop.
 
-!!! compat "Julia 1.12
+!!! compat "Julia 1.12"
     The `timeout` and `interval` readable properties were added in Julia 1.12.
 
 """

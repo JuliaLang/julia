@@ -233,10 +233,38 @@ end
         @test (@views (x[3], x[1:2], x[[1,4]])) == ('c', "ab", "ad")
     end
 
-    @testset ":noshift constructor" begin
-        @test SubString("", 0, 0, Val(:noshift)) == ""
-        @test SubString("abcd", 0, 1, Val(:noshift)) == "a"
-        @test SubString("abcd", 0, 4, Val(:noshift)) == "abcd"
+    @testset "raw_substring" begin
+        s = "abcdefgøø"
+        raw_substring = Base.raw_substring
+
+        @test raw_substring(s, 1, 11) == s
+        @test raw_substring(s, 1, 3) == "abc"
+        @test raw_substring(s, 3, 3) == "cde"
+        @test raw_substring(s, 5, 4) == String(codeunits(s)[5:8])
+        @test raw_substring(s, 11, 1) == String(codeunits(s)[11:11])
+        @test raw_substring(s, 1, 2) isa SubString{String}
+        @test raw_substring(raw_substring(s, 2, 8), 1, 3) isa SubString{String}
+
+        @test raw_substring(s, 1, 0) == ""
+        @test raw_substring(s, 11, 0) == ""
+        @test_throws BoundsError raw_substring(s, 0, 0)
+        @test_throws BoundsError raw_substring(s, 11, 2)
+        @test_throws BoundsError raw_substring(s, 3, -1)
+
+        @test_throws BoundsError raw_substring(s, 0, 2)
+        @test_throws BoundsError raw_substring(s, 2, 11)
+    end
+
+    # if Substring of SubString is explicitly requested by typing out the type,
+    # we CAN construct them
+    @testset "Explicit sub-substring" begin
+        s = "abcdefg"
+        ss = view(s, 2:6)
+        sss = SubString{SubString{String}}(ss, 2, 3)
+        @test sss isa SubString{SubString{String}}
+        @test sss == "cd"
+        sss = SubString{SubString{String}}(ss)
+        @test sss == ss
     end
 end
 
@@ -604,7 +632,7 @@ end
             @test isvalid(String, UInt8[byt]) == flg
         end
     end
-    # Check overlong lead bytes for 2-character sequences (false)
+    # Check overlong lead bytes for 2-byte sequences (false)
     for byt = 0xc0:0xc1
         @test isvalid(String, UInt8[byt,0x80]) == false
     end
@@ -1481,7 +1509,7 @@ end
         end
 
         b3 = first(table_row[3])
-        #Prove that all valid forth bytes return correct state
+        #Prove that all valid fourth bytes return correct state
         for b4 = table_row[4]
             @test Base._UTF8_DFA_ACCEPT == Base._isvalid_utf8_dfa(state3,[b4],1,1)
         end

@@ -1877,7 +1877,7 @@ mktempdir() do dir
                 username = LibGit2.default_username(cfg, github_cred)
                 @test username === nothing
 
-                # Add a credential setting for a specific for a URL
+                # Add a credential setting for a specific URL
                 LibGit2.set!(cfg, "credential.https://github.com.username", "foo")
 
                 username = LibGit2.default_username(cfg, github_cred)
@@ -1944,7 +1944,7 @@ mktempdir() do dir
                 @test !LibGit2.use_http_path(cfg, github_cred)
                 @test !LibGit2.use_http_path(cfg, mygit_cred)
 
-                # Add a credential setting for a specific for a URL
+                # Add a credential setting for a specific URL
                 LibGit2.set!(cfg, "credential.https://github.com.useHttpPath", "true")
 
                 @test LibGit2.use_http_path(cfg, github_cred)
@@ -2287,7 +2287,7 @@ mktempdir() do dir
             ssh_u_ex = gen_ex(valid_cred, username=nothing)
 
             # Note: We cannot use the default ~/.ssh/id_rsa for tests since we cannot be
-            # sure a users will actually have these files. Instead we will use the ENV
+            # sure a user will actually have these files. Instead we will use the ENV
             # variables to set the default values.
 
             # ENV credentials are valid
@@ -3191,7 +3191,7 @@ mktempdir() do dir
                         """)
                 end
 
-                # Generated a certificate which has the CN set correctly but no subjectAltName
+                # Generate a certificate which has the CN set correctly but no subjectAltName
                 err = IOBuffer()
                 p = run(pipeline(addenv(
                     `openssl req -new -x509 -newkey rsa:2048 -sha256 -nodes -keyout $key -out $cert -days 1 -subj "/CN=$common_name"`,

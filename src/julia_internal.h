@@ -975,6 +975,7 @@ JL_DLLEXPORT jl_typeeq_t *jl_wrap_Type(jl_value_t *t);  // x -> Type{x}
 jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n, int check, int nothrow);
 void jl_reinstantiate_inner_types(jl_datatype_t *t);
 jl_datatype_t *jl_lookup_cache_type_(jl_datatype_t *type);
+jl_value_t *jl_lookup_foreignsymbol(jl_value_t *v);
 void jl_cache_type_(jl_datatype_t *type);
 jl_svec_t *cache_rehash_set(jl_svec_t *a, size_t newsz);
 void set_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *rhs, int isatomic) JL_NOTSAFEPOINT;
@@ -1063,7 +1064,9 @@ JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup_worlds(jl_value_t *types, jl_value_
 
 
 jl_datatype_t *jl_nth_argument_datatype(jl_value_t *argtypes JL_PROPAGATES_ROOT, int n) JL_NOTSAFEPOINT;
+jl_typename_t *jl_nth_argument_datatypename(jl_value_t *argtypes JL_PROPAGATES_ROOT, int n) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_argument_datatype(jl_value_t *argt JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_argument_datatypename(jl_value_t *argt JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_methtable_t *jl_method_table_for(
     jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_methcache_t *jl_method_cache_for(
@@ -1246,7 +1249,7 @@ STATIC_INLINE int is_anonfn_typename(char *name)
     return other > &name[1] && is10digit(other[1]);
 }
 
-// Returns true for typenames of anounymous functions that have been canonicalized (i.e.
+// Returns true for typenames of anonymous functions that have been canonicalized (i.e.
 // we mangled the name of the outermost enclosing function in their name).
 STATIC_INLINE int is_canonicalized_anonfn_typename(char *name) JL_NOTSAFEPOINT
 {
@@ -1812,8 +1815,8 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerset(jl_value_t *p, jl_value_t *x, jl_v
 JL_DLLEXPORT jl_value_t *jl_atomic_pointerswap(jl_value_t *p, jl_value_t *x, jl_value_t *order);
 JL_DLLEXPORT jl_value_t *jl_atomic_pointermodify(jl_value_t *p, jl_value_t *f, jl_value_t *x, jl_value_t *order);
 JL_DLLEXPORT jl_value_t *jl_atomic_pointerreplace(jl_value_t *p, jl_value_t *x, jl_value_t *expected, jl_value_t *success_order, jl_value_t *failure_order);
-JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty);
-JL_DLLEXPORT jl_value_t *jl_cglobal_auto(jl_value_t *v);
+JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty); // deprecated
+JL_DLLEXPORT jl_value_t *jl_cglobal_auto(jl_value_t *v); // deprecated
 
 JL_DLLEXPORT jl_value_t *jl_neg_int(jl_value_t *a);
 JL_DLLEXPORT jl_value_t *jl_add_int(jl_value_t *a, jl_value_t *b);
@@ -2056,6 +2059,7 @@ JL_DLLEXPORT int jl_isabspath(const char *in) JL_NOTSAFEPOINT;
     XX(export_sym) \
     XX(force_compile_sym) \
     XX(foreigncall_sym) \
+    XX(foreignglobal_sym) \
     XX(gc_preserve_begin_sym) \
     XX(gc_preserve_end_sym) \
     XX(generated_only_sym) \
@@ -2119,6 +2123,7 @@ JL_DLLEXPORT int jl_isabspath(const char *in) JL_NOTSAFEPOINT;
     XX(thunk_sym) \
     XX(top_sym) \
     XX(toplevel_sym) \
+    XX(tuple_sym) \
     XX(uninferred_sym) \
     XX(unordered_sym) \
     XX(unused_sym) \
@@ -2213,7 +2218,7 @@ JL_DLLIMPORT jl_value_t *jl_dump_function_ir(jl_llvmf_dump_t *dump, char strip_i
 JL_DLLIMPORT jl_value_t *jl_dump_function_asm(jl_llvmf_dump_t *dump, char emit_mc, const char* asm_variant, const char *debuginfo, char binary, char raw);
 
 typedef jl_value_t *(*jl_codeinstance_lookup_t)(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t min_world, size_t max_world);
-JL_DLLIMPORT void *jl_create_native(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int cache, size_t world, jl_array_t *mod_array JL_MAYBE_UNROOTED, jl_array_t *worklist JL_MAYBE_UNROOTED, int all, jl_array_t *module_init_order JL_MAYBE_UNROOTED, jl_array_t *ext_foreign_cis JL_MAYBE_UNROOTED);
+JL_DLLIMPORT void *jl_create_native(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int cache, size_t world, jl_array_t *mod_array, jl_array_t *worklist, int all, jl_array_t *module_init_order, jl_array_t *ext_foreign_cis);
 JL_DLLIMPORT void *jl_emit_native(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _external_linkage);
 JL_DLLIMPORT void jl_dump_native(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,

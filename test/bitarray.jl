@@ -1524,7 +1524,7 @@ timesofar("reductions")
     |<------------------b2(l)------>|    extra_l     |
     |<------------------b3(l)------>|
     |<------------------b4(l+extra_l)--------------->|
-    |<--------------desk_inbetween-------->| extra÷2 |
+    |<--------------dest_inbetween-------->| extra÷2 |
     =#
     @testset "Issue #47011, map! over unequal length bitarray" begin
         for l = [0, 1, 63, 64, 65, 127, 128, 129, 255, 256, 257, 6399, 6400, 6401]

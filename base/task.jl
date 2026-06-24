@@ -446,7 +446,7 @@ function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=fal
         end
     end
 
-    # We can return early all tasks are done, or if any is done and we only
+    # We can return early if all tasks are done, or if any is done and we only
     # needed to wait for one, or if any task failed and we have failfast
     if nremaining == 0 || (any(done_mask) && (!all || (failfast && exception)))
         if throwexc && (!all || failfast) && exception

@@ -342,7 +342,7 @@ byte_range(::LineNumberNode) = 0:0
 source_location(src::LineNumberNode) = (src.line, 0)
 source_location(::Type{LineNumberNode}, src::LineNumberNode) = src
 source_line(src::LineNumberNode) = src.line
-# The follow somewhat strange cases are for where LineNumberNode is standing in
+# The following somewhat strange cases are for where LineNumberNode is standing in
 # for SourceFile because we've only got Expr-based provenance info
 sourcefile(src::LineNumberNode) = src
 sourcetext(::LineNumberNode) = SubString("")
@@ -417,6 +417,21 @@ function macro_prov(st::SyntaxTree)
     end
     hasattr(st, :macro_source) && return SyntaxTree(st._graph, st.macro_source)
     return nothing
+end
+
+"The first macro expansion `st` was involved in (chronologically), or nothing"
+function macro_prov_end(st::SyntaxTree)
+    lastmp = mp = macro_prov(st)
+    while !isnothing(mp)
+        lastmp, mp = mp, macro_prov(mp)
+    end
+    return lastmp
+end
+
+"The top-level location of `st`"
+function unexpanded_sourceref(st::SyntaxTree)
+    mp = macro_prov_end(st)
+    isnothing(mp) ? sourceref(st) : sourceref(mp)
 end
 
 """

@@ -484,31 +484,144 @@ JL_DLLEXPORT int jl_effective_threads(void) JL_NOTSAFEPOINT
     return available_parallelism < cpu_threads ? available_parallelism : cpu_threads;
 }
 
+// -- precompile jobserver --
+// A named-semaphore token pool created by the orchestrating precompile process
+// and shared with worker subprocesses to bound the total number of AOT codegen
+// threads across all parallel workers (see JuliaLang/julia#58591). Workers open
+// it by name (via the JULIA_PRECOMPILE_JOBSERVER env var); the client side lives
+// in aotcompile.cpp.
+//
+// All state is mutex-guarded: acquire/release run on arbitrary task threads and
+// may race with destroy on exception paths. At most one jobserver is active per
+// process; create returns NULL while one exists, so a concurrent session joins
+// the existing pool (see jl_precompile_jobserver_active) rather than creating
+// its own.
+
+static uv_once_t jl_precompile_jobserver_once = UV_ONCE_INIT;
+static uv_mutex_t jl_precompile_jobserver_lock;
+static unsigned jl_precompile_jobserver_counter = 0;
+static char jl_precompile_jobserver_name[64];
+#ifdef _OS_WINDOWS_
+static HANDLE jl_precompile_jobserver_sem = NULL;
+#define JL_PRECOMPILE_JOBSERVER_ACTIVE() (jl_precompile_jobserver_sem != NULL)
+#else
+#include <semaphore.h>
+static sem_t *jl_precompile_jobserver_sem = SEM_FAILED;
+#define JL_PRECOMPILE_JOBSERVER_ACTIVE() (jl_precompile_jobserver_sem != SEM_FAILED)
+#endif
+
+static void jl_precompile_jobserver_init_lock(void) JL_NOTSAFEPOINT
+{
+    uv_mutex_init(&jl_precompile_jobserver_lock);
+}
+
+// Create the jobserver with `ntokens` tokens. Returns its name on success (for
+// export to workers via the environment), or NULL on failure or when another
+// jobserver is already active in this process. The name carries a per-process
+// counter so workers left over from a previous session cannot open a newer
+// session's pool.
+JL_DLLEXPORT const char *jl_precompile_jobserver_create(int ntokens) JL_NOTSAFEPOINT
+{
+    if (ntokens < 1)
+        ntokens = 1;
+    uv_once(&jl_precompile_jobserver_once, jl_precompile_jobserver_init_lock);
+    uv_mutex_lock(&jl_precompile_jobserver_lock);
+    const char *name = NULL;
+    if (!JL_PRECOMPILE_JOBSERVER_ACTIVE()) {
+        unsigned counter = ++jl_precompile_jobserver_counter;
+#ifdef _OS_WINDOWS_
+        snprintf(jl_precompile_jobserver_name, sizeof(jl_precompile_jobserver_name),
+                 "jl_pc_%lu_%u", (unsigned long)GetCurrentProcessId(), counter);
+        jl_precompile_jobserver_sem = CreateSemaphoreA(NULL, ntokens, ntokens, jl_precompile_jobserver_name);
+#else
+        // Name must start with '/' and stay short (macOS limits names to ~31 chars).
+        snprintf(jl_precompile_jobserver_name, sizeof(jl_precompile_jobserver_name),
+                 "/jl_pc_%ld_%u", (long)getpid(), counter);
+        sem_unlink(jl_precompile_jobserver_name); // clear any stale instance from a crashed run
+        jl_precompile_jobserver_sem = sem_open(jl_precompile_jobserver_name, O_CREAT | O_EXCL, 0600, (unsigned)ntokens);
+#endif
+        if (JL_PRECOMPILE_JOBSERVER_ACTIVE())
+            name = jl_precompile_jobserver_name;
+    }
+    uv_mutex_unlock(&jl_precompile_jobserver_lock);
+    return name;
+}
+
+// Report whether this process owns an active precompile jobserver. Lets a
+// session whose own create failed tell "another session already owns the pool"
+// (join it) from "the OS refused the semaphore" (no pool to join).
+JL_DLLEXPORT int jl_precompile_jobserver_active(void) JL_NOTSAFEPOINT
+{
+    uv_once(&jl_precompile_jobserver_once, jl_precompile_jobserver_init_lock);
+    uv_mutex_lock(&jl_precompile_jobserver_lock);
+    int active = JL_PRECOMPILE_JOBSERVER_ACTIVE();
+    uv_mutex_unlock(&jl_precompile_jobserver_lock);
+    return active;
+}
+
+// Tear down the jobserver created by jl_precompile_jobserver_create.
+JL_DLLEXPORT void jl_precompile_jobserver_destroy(void) JL_NOTSAFEPOINT
+{
+    uv_once(&jl_precompile_jobserver_once, jl_precompile_jobserver_init_lock);
+    uv_mutex_lock(&jl_precompile_jobserver_lock);
+#ifdef _OS_WINDOWS_
+    if (jl_precompile_jobserver_sem != NULL) {
+        CloseHandle(jl_precompile_jobserver_sem);
+        jl_precompile_jobserver_sem = NULL;
+    }
+#else
+    if (jl_precompile_jobserver_sem != SEM_FAILED) {
+        sem_close(jl_precompile_jobserver_sem);
+        sem_unlink(jl_precompile_jobserver_name);
+        jl_precompile_jobserver_sem = SEM_FAILED;
+    }
+#endif
+    uv_mutex_unlock(&jl_precompile_jobserver_lock);
+}
+
+// Take one token so the orchestrator can hold a baseline per running worker
+// against the shared pool. Non-blocking: returns 1 on success, 0 when no token
+// is available, and -1 when no jobserver is active (e.g. torn down) so pollers
+// stop waiting. The yielding poll loop lives on the Julia side.
+JL_DLLEXPORT int jl_precompile_jobserver_acquire(void) JL_NOTSAFEPOINT
+{
+    uv_once(&jl_precompile_jobserver_once, jl_precompile_jobserver_init_lock);
+    uv_mutex_lock(&jl_precompile_jobserver_lock);
+    int ret;
+    if (!JL_PRECOMPILE_JOBSERVER_ACTIVE())
+        ret = -1;
+#ifdef _OS_WINDOWS_
+    else
+        ret = WaitForSingleObject(jl_precompile_jobserver_sem, 0) == WAIT_OBJECT_0;
+#else
+    else
+        ret = sem_trywait(jl_precompile_jobserver_sem) == 0;
+#endif
+    uv_mutex_unlock(&jl_precompile_jobserver_lock);
+    return ret;
+}
+
+// Return one token previously taken with jl_precompile_jobserver_acquire.
+JL_DLLEXPORT void jl_precompile_jobserver_release(void) JL_NOTSAFEPOINT
+{
+    uv_once(&jl_precompile_jobserver_once, jl_precompile_jobserver_init_lock);
+    uv_mutex_lock(&jl_precompile_jobserver_lock);
+    if (JL_PRECOMPILE_JOBSERVER_ACTIVE()) {
+#ifdef _OS_WINDOWS_
+        ReleaseSemaphore(jl_precompile_jobserver_sem, 1, NULL);
+#else
+        sem_post(jl_precompile_jobserver_sem);
+#endif
+    }
+    uv_mutex_unlock(&jl_precompile_jobserver_lock);
+}
+
 
 // -- high resolution timers --
 // Returns time in nanosec
 JL_DLLEXPORT uint64_t jl_hrtime(void) JL_NOTSAFEPOINT
 {
     return uv_hrtime();
-}
-
-// -- iterating the environment --
-
-#ifdef __APPLE__
-#include <crt_externs.h>
-#else
-#if !defined(_OS_WINDOWS_) || (defined(_COMPILER_GCC_) && defined(_POSIX_C_SOURCE))
-extern JL_DLLIMPORT char **environ;
-#endif
-#endif
-
-JL_DLLEXPORT jl_value_t *jl_environ(int i)
-{
-#ifdef __APPLE__
-    char **environ = *_NSGetEnviron();
-#endif
-    char *env = environ[i];
-    return env ? jl_pchar_to_string(env, strlen(env)) : jl_nothing;
 }
 
 // -- child process status --
@@ -688,7 +801,7 @@ static int dlinfo_helper(struct dl_phdr_info *info, size_t size, void *vdata)
 #endif
 
 // Takes a handle (as returned from dlopen()) and returns the absolute path to the image loaded
-JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
+JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle) JL_NOTSAFEPOINT
 {
     if (!handle)
         return NULL;
@@ -696,9 +809,9 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
 #ifdef __APPLE__
     // Iterate through all images currently in memory
     for (int32_t i = _dyld_image_count() - 1; i >= 0 ; i--) {
-        // dlopen() each image, check handle
+        // dlopen() each image, check handle.
         const char *image_name = _dyld_get_image_name(i);
-        void *probe_lib = jl_load_dynamic_library(image_name, JL_RTLD_DEFAULT | JL_RTLD_NOLOAD, 0);
+        void *probe_lib = jl_dlopen(image_name, JL_RTLD_DEFAULT | JL_RTLD_NOLOAD);
         jl_dlclose(probe_lib);
 
         // If the handle is the same as what was passed in (modulo mode bits), return this image name
@@ -749,6 +862,82 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
     return NULL;
 }
 
+#if !defined(_OS_WINDOWS_) && !defined(__APPLE__) && !defined(__GLIBC__)
+struct sym_phdr_query {
+    uintptr_t   addr;
+    const char *name;        // matched dlpi_name
+    int         is_main_exe;
+    int         found;
+    int         index;       // running object index; 0 == main program
+};
+
+static int sym_phdr_helper(struct dl_phdr_info *info, size_t size, void *vdata) JL_NOTSAFEPOINT
+{
+    (void)size;
+    struct sym_phdr_query *q = (struct sym_phdr_query *)vdata;
+    int idx = q->index++;
+    // Find the object whose mapped PT_LOAD segments contain `addr`.
+    for (int i = 0; i < info->dlpi_phnum; i++) {
+        if (info->dlpi_phdr[i].p_type != PT_LOAD)
+            continue;
+        uintptr_t beg = (uintptr_t)info->dlpi_addr + info->dlpi_phdr[i].p_vaddr;
+        uintptr_t end = beg + info->dlpi_phdr[i].p_memsz;
+        if (q->addr >= beg && q->addr < end) {
+            q->name = info->dlpi_name;
+            // Note that `dlpi_name` for the main executable is platform-dependent
+            // and frequently `argv[0]` on non-GLIBC platforms. We do not want to
+            // return that result from this API since it cannot be reliably dlopen'd.
+            //
+            // Return "" instead, which also cannot be dlopen'd either (on non-GLIBC
+            // platforms) but which is at least a consistent value to match on for a
+            // dlopen(NULL) fallback, which does give a handle to the main exe.
+            q->is_main_exe = (idx == 0); // dl_iterate_phdr reports the main program first
+            q->found = 1;
+            return 1; // stop: found the containing object
+        }
+    }
+    return 0; // keep searching
+}
+#endif
+
+// Takes the address of a symbol and returns the path to the image that contains
+// it, or NULL. On ELF, the main executable is reported as the empty string "".
+JL_DLLEXPORT const char *jl_pathname_for_symbol(void *symbol) JL_NOTSAFEPOINT
+{
+    if (!symbol)
+        return NULL;
+#ifdef _OS_WINDOWS_
+    HMODULE handle;
+    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                            (LPCWSTR)symbol, &handle))
+        return NULL;
+    return jl_pathname_for_handle(handle);
+#elif defined(__APPLE__)
+    // dyld reports the real image path (including for the main executable).
+    Dl_info info;
+    if (!dladdr(symbol, &info) || !info.dli_fname)
+        return NULL;
+    return info.dli_fname;
+#elif defined(__GLIBC__)
+    // glibc: dladdr1 hands us the containing object's link_map directly.
+    Dl_info info;
+    struct link_map *map = NULL;
+    if (!dladdr1(symbol, &info, (void **)&map, RTLD_DL_LINKMAP) || map == NULL)
+        return NULL;
+    msan_unpoison(&map, sizeof(struct link_map *));
+    msan_unpoison(map, sizeof(struct link_map));
+    msan_unpoison_string(map->l_name);
+    return map->l_name; // the empty string for the main executable
+#else
+    // Other libc: walk the program headers and test PT_LOAD containment.
+    struct sym_phdr_query q = { (uintptr_t)symbol, NULL, 0, 0, 0 };
+    dl_iterate_phdr(&sym_phdr_helper, &q);
+    if (!q.found)
+        return NULL;
+    return q.is_main_exe ? "" : q.name;
+#endif
+}
+
 #ifdef _OS_WINDOWS_
 // Get a list of all the modules in this process.
 JL_DLLEXPORT int jl_dllist(jl_array_t *list)
@@ -776,6 +965,49 @@ JL_DLLEXPORT int jl_dllist(jl_array_t *list)
     }
     free(hMods);
     return TRUE;
+}
+#elif !defined(__APPLE__)
+struct dllist_data {
+    arraylist_t *names; // strdup'd object names (freed by jl_dllist)
+    int index;
+};
+
+// This runs under the dynamic linker lock (held by `dl_iterate_phdr` across the
+// callback), so it must not allocate Julia objects or otherwise hit a GC safepoint.
+// A stop-the-world here while another thread is blocked in the linker would deadlock
+static int dllist_helper(struct dl_phdr_info *info, size_t size, void *vdata) JL_NOTSAFEPOINT
+{
+    (void)size;
+    struct dllist_data *data = (struct dllist_data *)vdata;
+    int idx = data->index++; // dl_iterate_phdr reports the main program first
+    const char *name = info->dlpi_name;
+    if (idx == 0 || name == NULL || name[0] == '\0')
+        return 0; // skip the main executable and any unnamed objects
+    arraylist_push(data->names, strdup(name));
+    return 0;
+}
+
+// Get a list of all the modules in this process.
+//
+// This is done in C, rather than a Julia `dl_iterate_phdr` callback, so that
+// no Julia code (which can allocate, run finalizers, or re-enter the linker
+// via (lazy) `ccall`) runs under the dynamic loader lock. See `dllist_helper`
+JL_DLLEXPORT int jl_dllist(jl_array_t *list)
+{
+    arraylist_t names;
+    arraylist_new(&names, 0);
+    struct dllist_data data = { &names, 0 };
+    dl_iterate_phdr(&dllist_helper, &data);
+    // The loader lock is now released: safe to allocate Julia objects.
+    for (size_t i = 0; i < names.len; i++) {
+        char *name = (char*)names.items[i];
+        jl_array_grow_end(list, 1);
+        jl_value_t *v = jl_cstr_to_string(name);
+        jl_array_ptr_set(list, jl_array_dim0(list) - 1, v);
+        free(name);
+    }
+    arraylist_free(&names);
+    return 1;
 }
 #endif
 

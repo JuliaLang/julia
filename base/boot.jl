@@ -873,8 +873,8 @@ struct CoreSTDERR <: IO
 end
 const stdout = CoreSTDOUT()
 const stderr = CoreSTDERR()
-io_pointer(::CoreSTDOUT) = Intrinsics.pointerref(Intrinsics.cglobal(:jl_uv_stdout, Ptr{Cvoid}), 1, 1)
-io_pointer(::CoreSTDERR) = Intrinsics.pointerref(Intrinsics.cglobal(:jl_uv_stderr, Ptr{Cvoid}), 1, 1)
+io_pointer(::CoreSTDOUT) = Intrinsics.pointerref(cglobal(:jl_uv_stdout, Ptr{Cvoid}), 1, 1)
+io_pointer(::CoreSTDERR) = Intrinsics.pointerref(cglobal(:jl_uv_stderr, Ptr{Cvoid}), 1, 1)
 
 unsafe_write(io::IO, x::Ptr{UInt8}, nb::UInt) =
     (ccall(:jl_uv_puts, Cvoid, (Ptr{Cvoid}, Ptr{UInt8}, UInt), io_pointer(io), x, nb); nb)
@@ -1277,14 +1277,14 @@ function typename(a::Union)
 end
 typename(union::UnionAll) = typename(union.body)
 
-# Special inference support to avoid execess specialization of these methods.
+# Special inference support to avoid excess specialization of these methods.
 # TODO: Replace this by a generic heuristic.
 (>:)(@nospecialize(a), @nospecialize(b)) = (b <: a)
 (!==)(@nospecialize(a), @nospecialize(b)) = Intrinsics.not_int(a === b)
 
 include(Core, "optimized_generics.jl")
 
-# Used only be the magic @VERSION macro
+# Used only by the magic @VERSION macro
 struct MacroSource
     lno::Any # ::LineNumberNode, but needs to be a pointer
     syntax_ver::Any # ::VersionNumber =#
