@@ -1620,10 +1620,22 @@ end
         end
         t = Bottom
         for i in 1:length(ftypes)
-            ft1 = unwrapva(ftypes[i])
-            # Malformed Vararg types like `NTuple{<:Any, 3}` have non-Type components
-            # (e.g., `3`). Skip these since `fieldtype` would throw at runtime.
+            fti = ftypes[i]
+            ft1 = unwrapva(fti)
             if !(isa(ft1, Type) || isa(ft1, TypeVar))
+                if !isvarargtype(fti) && u.name === Tuple.name
+                    # A genuine tuple field may be a value parameter (e.g.
+                    # `Tuple{1:2}`); `fieldtype` returns that value rather than
+                    # throwing. Type identity compares non-type parameters by
+                    # egality, so the stored value is `===` the parameter even
+                    # when the argument type is only `==`-certain (#61323) -- the
+                    # `==`-vs-`===` ambiguity is specific to type-valued fields.
+                    t = tmerge(t, Const(ft1))
+                    t === Any && break
+                    continue
+                end
+                # Malformed Vararg types like `NTuple{<:Any, 3}` have non-Type
+                # components (e.g., `3`); `fieldtype` would throw at runtime.
                 continue
             end
             exactft1 = exact || (!has_free_typevars(ft1) && u.name !== Tuple.name)
@@ -1662,6 +1674,14 @@ end
         return Bottom
     else
         ft = ftypes[fld]
+        if !(isa(ft, Type) || isa(ft, TypeVar)) && u.name === Tuple.name
+            # A genuine tuple field may be a value parameter (e.g. `Tuple{1:2}`);
+            # `fieldtype` returns that value rather than throwing. Type identity
+            # compares non-type parameters by egality, so the stored value is
+            # `===` the parameter even when the argument type is only `==`-certain
+            # (#61323) -- that ambiguity is specific to type-valued fields.
+            return Const(ft)
+        end
     end
     if !(isa(ft, Type) || isa(ft, TypeVar))
         return Bottom # see non-`Const` case above

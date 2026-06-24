@@ -862,6 +862,24 @@ let fieldtype_tfunc(@nospecialize args...) =
     # JuliaLang/julia#30807: malformed types like `NTuple{<:Any, 3}` should not crash `fieldtype_tfunc`
     @test fieldtype_tfunc(Const(NTuple{<:Any, 3}), Const(1)) == Union{}
     @test fieldtype_tfunc(Const(NTuple{<:Any, 3}), Int) == Union{}
+    # a value-parameter tuple field (e.g. `Tuple{1:2}`) makes `fieldtype` return
+    # that value rather than throw, so the tfunc must not fold to `Union{}` (#62001)
+    @test fieldtype_tfunc(Const(Tuple{1:2, 3:4}), Const(1)) == Const(1:2)
+    @test fieldtype_tfunc(Const(Tuple{1:2, 3:4}), Const(2)) == Const(3:4)
+    @test fieldtype_tfunc(Const(Tuple{1:2, 3:4}), Const(3)) == Union{} # out of bounds
+    @test fieldtype_tfunc(Const(Tuple{1:2, 3:4}), Int) == UnitRange{Int}
+    @test fieldtype_tfunc(Const(Tuple{Int, 5, Char}), Const(2)) == Const(5)
+    # non-type parameters are `===`-pinned by type identity, so a value field is
+    # `Const` even when the argument type is only `==`-certain (#61323)
+    @test fieldtype_tfunc(Type{Tuple{1:2, 3:4}}, Const(1)) == Const(1:2)
+    @test fieldtype_tfunc(Type{Tuple{1:2, 3:4}}, Int) == UnitRange{Int}
+end
+
+# #62001: const-propagating a value-parameter tuple type through `fieldtypes`
+# (which reads each field via `fieldtype`) must yield valid IR rather than fold
+# the non-throwing value reads to `Union{}`
+let (ci, rt) = only(code_typed(() -> fieldtypes(Tuple{1:2, 3:4}), (); optimize=true))
+    @test rt == Tuple{UnitRange{Int}, UnitRange{Int}}
 end
 
 # JuliaLang/julia#30807: malformed types like `NTuple{<:Any, 3}` should not crash `fieldtype_tfunc`
