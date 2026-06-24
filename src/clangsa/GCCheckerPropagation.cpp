@@ -6,6 +6,33 @@
 
 namespace jl_gc_checker {
 
+// checkEndFunction runs on the synthetic exit path, after the analyzer has
+// already stepped past the call that ended the function. When that call is
+// noreturn, looking only at the immediate predecessor can miss the relevant
+// call or CFG block and spuriously treat the function as if it reached a
+// normal exit with an unterminated GC frame.
+static bool predecessorHasNoReturnElement(CheckerContext &C) {
+  const LocationContext *LCtx = C.getLocationContext();
+  unsigned steps = 0;
+  // Walk back a small number of predecessor nodes in the same frame to find
+  // the call or block that actually terminated the path.
+  for (const ExplodedNode *Node = C.getPredecessor();
+       Node && Node->getLocationContext() == LCtx && steps < 8;
+       Node = Node->getFirstPred(), ++steps) {
+    if (const auto BE = Node->getLocation().getAs<BlockExit>()) {
+      if (BE->getBlock()->hasNoReturnElement())
+        return true;
+    }
+    if (const auto *CE = dyn_cast_or_null<CallExpr>(getStmtForDiagnostics(Node))) {
+      if (const auto *FD = CE->getDirectCallee()) {
+        if (FD->isNoReturn())
+          return true;
+      }
+    }
+  }
+  return false;
+}
+
 bool GCChecker::gcEnabledHere(CheckerContext &C) const {
   return gcEnabledHere(C.getState());
 }
@@ -248,7 +275,7 @@ void GCChecker::checkEndFunction(const clang::ReturnStmt *RS,
   if (!C.inTopFrame())
     return;
   unsigned CurrentDepth = C.getState()->get<GCDepth>();
-  if (CurrentDepth != 0) {
+  if (CurrentDepth != 0 && !predecessorHasNoReturnElement(C)) {
     report_error(C, "Non-popped GC frame present at end of function");
   }
 }
