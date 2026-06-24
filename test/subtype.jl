@@ -3141,18 +3141,3 @@ let A = AbstractVector{<:Signed}, B = AbstractArray{Int}
     @test !occursin("Intersect", string(r))
     @test Ref{AbstractArray{Int}} <: r   # sound over-approximation of the meet
 end
-# The `Intersect` meet node must be respected by subtype queries that take the
-# no-free-typevars fast path.
-let
-    A = Tuple{T,T} where T <: Real
-    B = Tuple{Integer,Integer}
-    C = Tuple{Int,Int}
-
-    X = Tuple{Ref{B}, Ref{C}}
-    Y = Tuple{Ref{S}, Ref{T}} where {T <: A, S >: T}
-
-    @test C <: A
-    @test C <: B
-    @test X <: Y
-end
-

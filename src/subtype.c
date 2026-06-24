@@ -2515,29 +2515,6 @@ static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *su
         }
         return 0;
     }
-    // `Intersect` is an internal meet node, not a real type tag. Handle it
-    // before the non-type fallback, which would otherwise treat it as egal-only.
-    if (jl_is_intersecttype(y)) {
-        jl_intersecttype_t *iy = (jl_intersecttype_t*)y;
-        int sub_a, sub_b;
-        int known_a = obvious_subtype(x, iy->a, y0, &sub_a);
-        if (known_a && !sub_a) {
-            *subtype = 0;
-            return 1;
-        }
-        int known_b = obvious_subtype(x, iy->b, y0, &sub_b);
-        if (known_b && !sub_b) {
-            *subtype = 0;
-            return 1;
-        }
-        if (known_a && sub_a && known_b && sub_b) {
-            *subtype = 1;
-            return 1;
-        }
-        return 0;
-    }
-    if (jl_is_intersecttype(x))
-        return 0;
     if (!jl_is_type(x) || !jl_is_type(y)) {
         *subtype = jl_egal(x, y);
         return 1;
