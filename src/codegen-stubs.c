@@ -84,6 +84,11 @@ JL_DLLEXPORT void jl_teardown_codegen_fallback(void) JL_NOTSAFEPOINT
 {
 }
 
+JL_DLLEXPORT void jl_decorate_llvm_module_fallback(LLVMModuleRef m) JL_NOTSAFEPOINT
+{
+    (void)m;
+}
+
 JL_DLLEXPORT size_t jl_jit_total_bytes_fallback(void)
 {
     return 0;
