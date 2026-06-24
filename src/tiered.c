@@ -133,20 +133,19 @@ JL_DLLEXPORT int jl_tier_enabled(void) JL_NOTSAFEPOINT
 }
 
 // Interpreter-T0 for LOOP-bearing bodies (JULIA_TIER_INTERP_LOOPS, default
-// on). With it, the pre-inference gate parks loopy methods in the
+// OFF). When enabled, the pre-inference gate parks loopy methods in the
 // interpreter like everything else, but enqueues them for promotion
 // IMMEDIATELY at first call instead of waiting for the entry threshold:
 // the worker runs their inference + codegen off the main thread (the
 // promote-by-compile path), overlapping the first interpreted execution,
-// and later calls dispatch to the compiled CodeInstance. This moves the
-// dominant remaining cold-start cost (measured: loop roots accounted for
-// ~95% of main-thread root-inference time) off the critical path. A loop
-// that runs very long on its FIRST invocation escapes the interpreter via
-// on-stack replacement (the back-edge work budget below; see
-// jl_tier_set_osr_hook), but the budget plus continuation compile still
-// cost tens of milliseconds — workloads dominated by run-once long-running
-// kernels can set JULIA_TIER_INTERP_LOOPS=0 to restore the
-// compile-loops-eagerly policy.
+// and later calls dispatch to the compiled CodeInstance. A loop that runs
+// very long on its FIRST invocation escapes the interpreter via on-stack
+// replacement (the back-edge work budget below; see jl_tier_set_osr_hook).
+// This is OFF by default: the OSR continuation compile runs synchronously
+// from the interpreter and can race the worker's concurrent compilation
+// against a stop-the-world GC. Loop-bearing methods are compiled eagerly
+// instead; only loop-free bodies park at T0. Set JULIA_TIER_INTERP_LOOPS=1
+// to opt back in.
 static _Atomic(int) tier_interp_loops = -1; // -1 = uninitialized
 
 JL_DLLEXPORT int jl_tier_interp_loops_enabled(void) JL_NOTSAFEPOINT
@@ -154,7 +153,7 @@ JL_DLLEXPORT int jl_tier_interp_loops_enabled(void) JL_NOTSAFEPOINT
     int v = jl_atomic_load_relaxed(&tier_interp_loops);
     if (__builtin_expect(v < 0, 0)) {
         const char *env = getenv("JULIA_TIER_INTERP_LOOPS");
-        v = (env && env[0]) ? (env[0] != '0') : 1;
+        v = (env && env[0]) ? (env[0] != '0') : 0;
         jl_atomic_store_relaxed(&tier_interp_loops, v);
     }
     return v;
