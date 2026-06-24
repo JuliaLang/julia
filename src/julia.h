@@ -595,16 +595,6 @@ typedef struct {
     jl_value_t *JL_NONNULL b;
 } jl_uniontype_t;
 
-// Internal-use-only "meet" of two types, dual to Union: `Intersect{a, b}`
-// denotes `a ∩ b`. It is created transiently inside the subtyping algorithm to
-// represent a greatest-lower-bound that cannot be expressed precisely as a
-// single existing type, and never escapes into user-visible types.
-typedef struct {
-    JL_DATA_TYPE
-    jl_value_t *JL_NONNULL a;
-    jl_value_t *JL_NONNULL b;
-} jl_intersecttype_t;
-
 // in little-endian, isptr is always the first bit, avoiding the need for a branch in computing isptr
 typedef struct {
     uint8_t isptr:1;
@@ -1642,7 +1632,6 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 #define jl_is_immutable(t)   (!((jl_datatype_t*)t)->name->mutabl)
 #define jl_may_be_immutable_datatype(t) (jl_is_datatype(t) && (!((jl_datatype_t*)t)->name->mutabl))
 #define jl_is_uniontype(v)   jl_typetagis(v,jl_uniontype_tag<<4)
-#define jl_is_intersecttype(v) jl_typetagis(v,jl_intersect_type)
 #define jl_is_typevar(v)     jl_typetagis(v,jl_tvar_tag<<4)
 #define jl_is_unionall(v)    jl_typetagis(v,jl_unionall_tag<<4)
 #define jl_is_vararg(v)      jl_typetagis(v,jl_vararg_tag<<4)

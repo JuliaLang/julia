@@ -96,7 +96,7 @@ static int layout_uses_free_typevars(jl_value_t *v, jl_typeenv_t *env)
             }
             return 0;
         }
-        else if (jl_is_uniontype(v) || jl_is_intersecttype(v)) {
+        else if (jl_is_uniontype(v)) {
             if (layout_uses_free_typevars(((jl_uniontype_t*)v)->a, env))
                 return 1;
            v = ((jl_uniontype_t*)v)->b;
@@ -147,7 +147,7 @@ static int has_free_typevars(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT
             }
             return 0;
         }
-        else if (jl_is_uniontype(v) || jl_is_intersecttype(v)) {
+        else if (jl_is_uniontype(v)) {
             if (has_free_typevars(((jl_uniontype_t*)v)->a, env))
                 return 1;
            v = ((jl_uniontype_t*)v)->b;
@@ -215,7 +215,7 @@ static void find_free_typevars(jl_value_t *v, jl_typeenv_t *env, jl_array_t *out
                 find_free_typevars(jl_tparam(v, i), env, out);
             return;
         }
-        else if (jl_is_uniontype(v) || jl_is_intersecttype(v)) {
+        else if (jl_is_uniontype(v)) {
             find_free_typevars(((jl_uniontype_t*)v)->a, env, out);
             v = ((jl_uniontype_t*)v)->b;
         }
@@ -284,7 +284,7 @@ int jl_has_bound_typevars(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT
             }
             return 0;
         }
-        else if (jl_is_uniontype(v) || jl_is_intersecttype(v)) {
+        else if (jl_is_uniontype(v)) {
             if (jl_has_bound_typevars(((jl_uniontype_t*)v)->a, env))
                 return 1;
            v = ((jl_uniontype_t*)v)->b;
@@ -683,8 +683,6 @@ JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n)
     size_t i;
     for (i = 0; i < n; i++) {
         jl_value_t *pi = ts[i];
-        // reject the internal `Intersect` meet node (see #61917): it must not
-        // be embedded into a user-visible `Union`.
         if (!(jl_is_type(pi) || jl_is_typevar(pi)))
             jl_type_error("Union", (jl_value_t*)jl_type_type, pi);
     }
@@ -912,26 +910,16 @@ jl_value_t *simple_intersect(jl_value_t *a, jl_value_t *b, int overesi)
         JL_GC_POP();
         return jl_bottom_type;
     }
-    if (!subs[0] && !subs[1] && overesi == 1) {
-        // Neither operand subsumes the other and they are not disjoint, so the
-        // meet is not expressible as a single existing type. With `overesi==1`
-        // (exact-meet mode, used on the subtype path) keep it as an internal
-        // `Intersect{a, b}` node rather than over-approximating to one side,
-        // which would silently drop the other. `overesi==2` falls through to
-        // the legacy over-approximation below (used to widen an `Intersect`
-        // before it could escape into a static parameter). See #61917.
-        JL_GC_POP();
-        return jl_new_struct(jl_intersect_type, a, b);
-    }
     nt = subs[0] ? nta : subs[1] ? nt  : nt;
     i  = subs[0] ? 0   : subs[1] ? nta : 0;
     count = nt - i;
     if (!subs[0] && !subs[1]) {
-        // over-approximate (`overesi==2`): keep only `a` components with strict
-        // `<:` and all of `b`, then union them.
-        for (j = 0; j < nt; j++)
+        // prepare for over estimation
+        // only preserve `a` with strict <:, but preserve `b` without strict >:
+        for (j = 0; j < nt; j++) {
             if (stemp[j] < (j < nta ? 2 : 0))
                 temp[j] = NULL;
+        }
     }
     isort_union(&temp[i], count);
     temp[nt] = jl_bottom_type;
@@ -3192,15 +3180,6 @@ void jl_init_types(void) JL_GC_DISABLED
     // It seems like we probably usually end up needing the box for kinds (often used in an Any context), so force it to exist
     jl_uniontype_type->name->mayinlinealloc = 0;
 
-    // Internal-use-only kind dual to Union (see #61917). Not registered as a
-    // small_typeof tag: it is recognized by identity (jl_is_intersecttype) and
-    // only ever lives transiently inside the subtyping algorithm.
-    jl_intersect_type = jl_new_datatype(jl_symbol("Intersect"), core, type_type, jl_emptysvec,
-                                        jl_perm_symsvec(2, "a", "b"),
-                                        jl_svec(2, jl_any_type, jl_any_type),
-                                        jl_emptysvec, 0, 0, 2);
-    jl_intersect_type->name->mayinlinealloc = 0;
-
     jl_tvar_t *tttvar = tvar("T");
     type_type->parameters = jl_svec(1, tttvar);
     jl_precompute_memoized_dt(type_type, 0); // update the hash value ASAP
@@ -3953,7 +3932,6 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_compute_field_offsets(jl_datatype_type);
     jl_compute_field_offsets(jl_typename_type);
     jl_compute_field_offsets(jl_uniontype_type);
-    jl_compute_field_offsets(jl_intersect_type);
     jl_compute_field_offsets(jl_tvar_type);
     jl_compute_field_offsets(jl_methtable_type);
     jl_compute_field_offsets(jl_methcache_type);
@@ -3971,7 +3949,6 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_typename_type->ismutationfree = 1;
     jl_datatype_type->ismutationfree = 1;
     jl_uniontype_type->ismutationfree = 1;
-    jl_intersect_type->ismutationfree = 1;
     jl_unionall_type->ismutationfree = 1;
     assert(((jl_datatype_t*)jl_array_any_type)->ismutationfree == 0);
     assert(((jl_datatype_t*)jl_array_uint8_type)->ismutationfree == 0);
