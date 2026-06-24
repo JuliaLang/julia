@@ -77,6 +77,7 @@ import .H.I, .I.J
 
 @testset "(AI) from macro expansion" for expr_compat_mode in (true, false)
     macrocall_mod = Module()
+    @eval macrocall_mod import JuliaLowering, JuliaLowering.@legacy_quote_to_syntax
     JuliaLowering.include_string(macrocall_mod, raw"""
     module Exporter
         export val
@@ -84,10 +85,10 @@ import .H.I, .I.J
         other = [456]
     end
     macro imp_names()
-        :(import .Exporter: val, other as o)
+        @legacy_quote_to_syntax :(import .Exporter: val, other as o)
     end
     macro use_target()
-        :(using .Exporter)
+        @legacy_quote_to_syntax :(using .Exporter)
     end
     """; expr_compat_mode)
     Core.@latestworld
@@ -151,4 +152,69 @@ fl_eval(test_mod, :(
     @test !isdefined(test_mod, :exported_var)
     @test !isdefined(test_mod, :neither_var)
     @test test_mod.mod_p_e_n isa Module
+end
+
+@testset "(AI) public/export module resolution from macros" for (is_new, run) in [
+    (false, (mod, x)->fl_eval(mod,JuliaSyntax.parsestmt(Expr, x))),
+    (true, (mod, x)->JuliaLowering.include_string(mod, x; expr_compat_mode=true)),
+    (true, (mod, x)->JuliaLowering.include_string(mod, x; expr_compat_mode=false))
+    ]
+
+    defs_mod = Module(:Defs)
+    call_mod = Module(:CallSite)
+    Core.eval(call_mod, :(const Defs = $defs_mod))
+    Core.eval(defs_mod, :(import JuliaLowering, JuliaLowering.@legacy_quote_to_syntax))
+    Core.eval(defs_mod, :(const var"@ast" = $(JuliaLowering.var"@ast")))
+    Core.eval(defs_mod, :(const var"@K_str" = $(JuliaSyntax.var"@K_str")))
+
+    # old-style macros: hygienic plain name vs escaped argument
+    fl_eval(defs_mod, :(macro old_pub_plain(); Expr(:public, :op_hyg); end))
+    fl_eval(defs_mod, :(macro old_exp_plain(); Expr(:export, :oe_hyg); end))
+    fl_eval(defs_mod, :(macro old_pub_arg(name); Expr(:public, esc(name)); end))
+    fl_eval(defs_mod, :(macro old_exp_arg(name); Expr(:export, esc(name)); end))
+
+    # new-style macros: hygienic name (from syntaxquote) vs argument
+    JuliaLowering.include_string(defs_mod, raw"""
+        macro new_exp_plain(); @legacy_quote_to_syntax quote export ne_hyg end; end
+        macro new_pub_arg(name); @ast __context__ __context__.macrocall [K"public" name]; end
+        macro new_exp_arg(name); @ast __context__ __context__.macrocall [K"export" name]; end
+    """)
+    Core.@latestworld
+
+    # Define the names being marked so `isexported`/`ispublic` are meaningful.
+    # Hygienic names live in defs_mod; argument/escaped names live in call_mod.
+    Core.eval(defs_mod, :(global op_hyg=1; global oe_hyg=1; global ne_hyg=1))
+    Core.eval(call_mod, :(global cp=1; global ce=1; global np=1; global ne=1))
+
+    # old macros, hygienic plain name -> macro-definition module (defs_mod)
+    # flisp error: globalref means malformed public
+    # @test run(call_mod, "Defs.@old_pub_plain()")
+    # @test Base.ispublic(defs_mod, :op_hyg)
+    # @test !Base.ispublic(call_mod, :op_hyg)
+    run(call_mod, "Defs.@old_exp_plain()"); Core.@latestworld
+    @test !Base.isexported(defs_mod, :oe_hyg)
+    @test Base.isexported(call_mod, :oe_hyg)
+
+    # old macros, escaped argument -> call-site module (call_mod)
+    run(call_mod, "Defs.@old_pub_arg(cp)"); Core.@latestworld
+    @test Base.ispublic(call_mod, :cp)
+    @test !Base.ispublic(defs_mod, :cp)
+    run(call_mod, "Defs.@old_exp_arg(ce)"); Core.@latestworld
+    @test Base.isexported(call_mod, :ce)
+    @test !Base.isexported(defs_mod, :ce)
+
+    if is_new
+        # new macros, hygienic name -> macro-definition module (defs_mod)
+        run(call_mod, "Defs.@new_exp_plain()"); Core.@latestworld
+        @test Base.isexported(defs_mod, :ne_hyg)
+        @test !Base.isexported(call_mod, :ne_hyg)
+
+        # new macros, argument -> call-site module (call_mod)
+        run(call_mod, "Defs.@new_pub_arg(np)"); Core.@latestworld
+        @test Base.ispublic(call_mod, :np)
+        @test !Base.ispublic(defs_mod, :np)
+        run(call_mod, "Defs.@new_exp_arg(ne)"); Core.@latestworld
+        @test Base.isexported(call_mod, :ne)
+        @test !Base.isexported(defs_mod, :ne)
+    end
 end

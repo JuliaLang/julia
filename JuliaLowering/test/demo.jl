@@ -36,7 +36,7 @@ function formatsrc(ex; kws...)
 end
 
 function debug_lower(mod::Module, ex::SyntaxTree; expr_compat_mode::Bool=false, verbose::Bool=false, do_eval::Bool=false)
-    ctx1, ex_macroexpand = JuliaLowering.expand_forms_1(mod, ex, expr_compat_mode, Base.get_world_counter())
+    ctx1, ex_macroexpand = JuliaLowering.expand_forms_1(ex, expr_compat_mode, Base.get_world_counter())
 
     verbose && @info "Macro expanded" formatsrc(ex_macroexpand, color_by=:scope_layer)
 

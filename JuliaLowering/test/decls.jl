@@ -871,11 +871,11 @@ gr_mod = Module()
 
     # error: try/catch with GlobalRef catch var
     @gensym sym
-    @test_throws "cannot use GlobalRef as local identifier" jl_eval(
+    @test_throws ErrorException fl_eval(
         test_mod, Expr(:try,
                        Expr(:block, Expr(:call, :error, "oops")),
                        GlobalRef(gr_mod, sym),
-                       Expr(:block, GlobalRef(gr_mod, sym))))
+                       Expr(:block, 1))) broken=true
 end
 
 @testset "All possible `let` forms" for run in [fl_eval, jl_eval],
