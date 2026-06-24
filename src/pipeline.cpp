@@ -586,7 +586,7 @@ static void buildIntrinsicLoweringPipeline(ModulePassManager &MPM, PassBuilder *
             JULIA_PASS(FPM.addPass(ExpandAtomicModifyPass())); // after LateLowerGCPass so that all IPO is valid
             MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
         }
-        JULIA_PASS(MPM.addPass(LowerPTLSPass(options.dump_native)));
+        JULIA_PASS(MPM.addPass(LowerPTLSPass(options.dump_native, options.tls_getters)));
         MPM.addPass(RemoveJuliaAddrspacesPass()); //TODO: Make this conditional on arches (GlobalISel doesn't like our addrsspaces)
         if (O.getSpeedupLevel() >= 1) {
             FunctionPassManager FPM;
