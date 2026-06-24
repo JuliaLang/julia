@@ -1143,7 +1143,7 @@ julia> const T1 = Array{Array{T, 1} where T, 1}
 Vector{Vector} (alias for Array{Array{T, 1} where T, 1})
 
 julia> const T2 = Array{Array{T, 1}, 1} where T
-Vector{Vector{T}} where T (alias for Array{Array{T, 1}, 1} where T)
+Array{Vector{T}, 1} where T
 ```
 
 Type `T1` defines a 1-dimensional array of 1-dimensional arrays; each

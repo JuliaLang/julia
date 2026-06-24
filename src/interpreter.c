@@ -282,7 +282,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
             assert(n > 0);
             if (s->sparam_vals && n <= jl_svec_len(s->sparam_vals)) {
                 jl_value_t *sp = jl_svecref(s->sparam_vals, n - 1);
-                defined = !jl_is_svec(sp) && !jl_has_free_typevars(sp);
+                defined = !jl_is_typevar(sp);
             }
             else {
                 // static parameter val unknown needs to be an error for ccall
@@ -340,21 +340,8 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         assert(n > 0);
         if (s->sparam_vals && n <= jl_svec_len(s->sparam_vals)) {
             jl_value_t *sp = jl_svecref(s->sparam_vals, n - 1);
-            if ((jl_is_svec(sp) || jl_has_free_typevars(sp)) && !s->preevaluation) {
-                // look up the parameter name from the method's signature
-                jl_unionall_t *sig = (jl_unionall_t*)s->mi->def.method->sig;
-                jl_tvar_t *var = NULL;
-                for (ssize_t i = n; i > 0; i--) {
-                    if (jl_is_unionall(sig)) {
-                        var = sig->var;
-                        sig = (jl_unionall_t*)sig->body;
-                    }
-                    else {
-                        jl_error("malformed method signature");
-                    }
-                }
-                jl_undefined_var_error(var->name, (jl_value_t*)jl_static_parameter_sym);
-            }
+            if (jl_is_typevar(sp) && !s->preevaluation)
+                jl_undefined_var_error(((jl_tvar_t*)sp)->name, (jl_value_t*)jl_static_parameter_sym);
             return sp;
         }
         // static parameter val unknown needs to be an error for ccall
