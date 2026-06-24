@@ -1464,8 +1464,10 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
             // kind slots always get guard entries (checking for subtypes of Type)
             if (jl_subtype(elt, type_i) && !jl_subtype((jl_value_t*)jl_type_type, type_i))
                 continue;
-            // jl_compilation_sig keeps a slot declared as a concrete kind (e.g.
-            // `::DataType`) equal to that kind, making it the canonical form
+            // if the declared slot is itself a kind (e.g. `::DataType` or the
+            // maximal `::Kind`, which is type-equal to `Type`), then
+            // jl_compilation_sig keeps the kind argument equal to that slot, so
+            // that is the canonical compileable form.
             if (jl_is_kind(type_i) && jl_egal(elt, type_i))
                 continue;
             // TODO: other code paths that could reach here?
@@ -1477,10 +1479,7 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
             return 0;
         }
 
-        // `elt` can be either equal representation of `Type` (specializations are
-        // deduplicated by type-equality): both take the `jl_types_equal(elt,
-        // jl_type_type)` path; an `AnyType` elt must not reach `jl_typeeq_T` below
-        if (jl_is_typeeq(jl_unwrap_unionall(elt)) || elt == (jl_value_t*)jl_anytype_type) {
+        if (jl_is_typeeq(jl_unwrap_unionall(elt))) {
             int iscalled = (i_arg > 0 && i_arg <= 8 && (definition->called & (1 << (i_arg - 1)))) ||
                            jl_has_free_typevars(decl_i);
             if (jl_types_equal(elt, (jl_value_t*)jl_type_type)) {
