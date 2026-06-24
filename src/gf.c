@@ -3934,7 +3934,6 @@ static jl_code_instance_t *jl_compile_method_very_internal(jl_method_instance_t 
                 mi2 = mi;
             }
             else {
-                jl_typeinf_timing_end(inference_start, is_recompile);
                 return codeinst;
             }
         }
@@ -3953,9 +3952,6 @@ static jl_code_instance_t *jl_compile_method_very_internal(jl_method_instance_t 
                     if (ucache_invoke == NULL) {
                         if ((!jl_is_method(def) || def->source == jl_nothing) &&
                             !jl_cached_uninferred(jl_atomic_load_relaxed(&jl_get_ci_mi(codeinst)->cache), world)) {
-                            // end the timing region before escaping, so the task's
-                            // reentrant_timing bit is not left set if this is caught
-                            jl_typeinf_timing_end(inference_start, is_recompile);
                             jl_throw(jl_new_struct(jl_missingcodeerror_type, (jl_value_t*)mi));
                         }
                         jl_generate_fptr_for_unspecialized(codeinst);
