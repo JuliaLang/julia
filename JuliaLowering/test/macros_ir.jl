@@ -1,14 +1,16 @@
 module MacroMethods
+    using ..JuliaLowering
     macro some_macro()
-        quote
+        JuliaLowering.@legacy_quote_to_syntax quote
             some_global
         end
     end
 
     module ExtraMacroMethods
         using ..MacroMethods
+        using ..JuliaLowering
         macro MacroMethods.some_macro(ex)
-            quote
+            JuliaLowering.@legacy_quote_to_syntax quote
                 some_global
             end
         end
@@ -35,7 +37,7 @@ end
 ########################################
 # Simple macro
 macro add_one(ex)
-    quote
+    JuliaLowering.@legacy_quote_to_syntax quote
         $ex + 1
     end
 end
@@ -51,7 +53,7 @@ end
 9   --- method TestMod.@add_one %₈
     slots: [slot₁/#self#(!read) slot₂/__context__(!read) slot₃/ex]
     1   (call core.tuple slot₃/ex)
-    2   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (call-i + ($ ex) 1))) %₁)
+    2   (call JuliaLowering.interpolate_syntax (syntaxinert (block (call-i + (syntaxunquote ex) 1))) %₁)
     3   (return %₂)
 10  latestworld
 11  TestMod.@add_one

@@ -251,7 +251,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"ssavalue" [K"Value"]] -> pass()
     [K"static_parameter" [K"Value"]] -> pass()
     [K"inert" _] -> pass()
-    [K"inert_syntaxtree" _] -> pass()
+    [K"syntaxinert" _] -> pass()
     [K"core" [K"Identifier"]] -> pass()
     [K"top" [K"Identifier"]] -> pass()
     [K"meta" _...] -> pass() # TODO
@@ -497,7 +497,7 @@ end
 # syntax TODO: all-underscore variables may be read from with dot syntax
 vst1_dot_getproperty_rhs(vcx, st) = @stm st begin
     [K"inert" x] -> pass()
-    [K"inert_syntaxtree" x] -> pass()
+    [K"syntaxinert" x] -> pass()
     [K"Identifier"] -> pass()
     (_, when=is_expr_value(st)) -> pass()
     _ -> @fail(st, "invalid `.` syntax")
@@ -516,7 +516,7 @@ end
 
 vst1_calldecl_dot_name_rhs(vcx, st) = @stm st begin
     [K"inert" x] -> vst1_calldecl_dot_name_rhs(vcx, x)
-    [K"inert_syntaxtree" x] ->  vst1_calldecl_dot_name_rhs(vcx, x)
+    [K"syntaxinert" x] ->  vst1_calldecl_dot_name_rhs(vcx, x)
     [K"Identifier"] -> vst1_ident(vcx, st; lhs=true)
     ([K"Value"], when=st.value isa String) -> _ident_str(vcx, st, st.value; lhs=true)
     [K"String"] -> _ident_str(vcx, st, st.value; lhs=true)
@@ -596,7 +596,7 @@ vst1_call_kwarg(vcx, st) = @stm st begin
     [K"=" id val] -> vst1_ident(vcx, id; lhs=true) & vst1(vcx, val)
     [K"..." x] -> vst1(vcx, x)
     [K"." x [K"inert" id]] -> vst1(vcx, x) & vst1_ident(vcx, id; lhs=true)
-    [K"." x [K"inert_syntaxtree" id]] -> vst1(vcx, x) & vst1_ident(vcx, id; lhs=true)
+    [K"." x [K"syntaxinert" id]] -> vst1(vcx, x) & vst1_ident(vcx, id; lhs=true)
     ([K"call" [K"Identifier"] symval v], when=(st[1].name_val==="=>")) ->
         vst1(vcx, symval) & vst1(vcx, v)
     _ -> @fail(st, "expected identifier, `=`, or `...` after semicolon")
@@ -1150,7 +1150,7 @@ function _assert_syntaxtree(st::SyntaxTree, parents::Vector{NodeId}, vr)
         end
         return vr & @fail(st, err*"]")
     end
-    for a in (:kind, :source)
+    for a in (:kind, :source) # TODO: context
         vr &= hasattr(st, a) ? pass() : @fail(st, string("needs attribute ", a))
     end
     if is_leaf(st)
@@ -1196,8 +1196,9 @@ function _assert_syntaxtree(st::SyntaxTree, parents::Vector{NodeId}, vr)
     # results to avoid exponential repeated lookups, and figure out how these
     # edges may form cycles with child edges)
     st.source === st._id && (vr &= @fail(st, ".source equal to self ID"))
-    get(st, :macro_source, nothing) === st._id &&
-        (vr &= @fail(st, ".macro_source equal to self ID"))
+    sc = get(st, :context, nothing)
+    sc isa SyntaxContext &&
+        sc.unexpanded === st && (vr &= @fail(st, "unexpanded equal to self"))
 
     push!(parents, st._id)
     for c in children(st)
@@ -1266,7 +1267,7 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
     [K"_do_while" body cond] -> vst2(vcx, body) & vst2(vcx, cond)
     [K"_while" cond body] -> vst2(vcx, cond) & vst2(vcx, body)
     [K"inert" _] -> pass()
-    [K"inert_syntaxtree" _] -> pass()
+    [K"syntaxinert" _] -> pass()
     [K"lambda" _...] -> vst2_lam(vcx, st)
     [K"function_decl" x] -> vst2_ident(vcx, x)
     [K"function_type" x] -> vst2(vcx, x)
@@ -1301,6 +1302,7 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
     [K"always_defined" x] -> vst2_ident(vcx, x)
     [K"assert" [K"Symbol"] x] -> vst2(vcx, x)
     [K"removable" x] -> vst2(vcx, x)
+    [K"relayered_global" [K"Identifier"]] -> pass()
 
     # Could be made stricter
     [K"foreigncall" _ [K"static_eval" rt] [K"static_eval" at] cconv roots_args...] ->

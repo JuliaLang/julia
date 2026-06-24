@@ -6,7 +6,7 @@ end
 #---------------------
 1   TestMod.x
 2   (call core.tuple %₁)
-3   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (call-i + ($ x) 1))) %₂)
+3   (call JuliaLowering.interpolate_expr (inert (block (call-i + ($ x) 1))) %₂)
 4   (return %₃)
 
 ########################################
@@ -14,9 +14,7 @@ end
 :($x)
 #---------------------
 1   TestMod.x
-2   (call core.tuple %₁)
-3   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree ($ x)) %₂)
-4   (return %₃)
+2   (return %₁)
 
 ########################################
 # Double escape
@@ -28,7 +26,7 @@ end
 #---------------------
 1   TestMod.x
 2   (call core.tuple %₁)
-3   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (quote (block (call-i + ($ ($ x)) 1))))) %₂)
+3   (call JuliaLowering.interpolate_expr (inert (block (quote (block (call-i + ($ ($ x)) 1))))) %₂)
 4   (return %₃)
 
 ########################################
@@ -40,7 +38,7 @@ end
 1   1
 2   (= slot₁/x %₁)
 3   (call core.tuple slot₁/x)
-4   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (. A (inert ($ x)))) %₃)
+4   (call JuliaLowering.interpolate_expr (inert (. A (inert ($ x)))) %₃)
 5   (return %₄)
 
 ########################################

@@ -13,140 +13,63 @@ Base.@assume_effects :removable function current_exception()
     @ccall jl_current_exception(current_task()::Any)::Any
 end
 
-#--------------------------------------------------
-# Supporting functions for AST interpolation (`quote`)
-struct InterpolationContext{Graph} <: AbstractLoweringContext
-    graph::Graph
-    values::Tuple
-    current_index::Ref{Int}
-end
-
-# Context for `Expr`-based AST interpolation in compat mode
-struct ExprInterpolationContext <: AbstractLoweringContext
-    values::Tuple
-    current_index::Ref{Int}
-end
-
-# Helper functions to make shared interpolation code which works with both
-# SyntaxTree and Expr data structures.
-_interp_kind(ex::SyntaxTree) = kind(ex)
-function _interp_kind(@nospecialize(ex))
-    return (ex isa Expr && ex.head === :quote) ? K"quote" :
-           (ex isa Expr && ex.head === :$)     ? K"$"     :
-           K"None" # Other cases irrelevant to interpolation
-end
-
-_children(ex::SyntaxTree) = children(ex)
-_children(@nospecialize(ex)) = ex isa Expr ? ex.args : ()
-
-_numchildren(ex::SyntaxTree) = numchildren(ex)
-_numchildren(@nospecialize(ex)) = ex isa Expr ? length(ex.args) : 0
-
-_syntax_list(ctx::InterpolationContext) = SyntaxList(ctx)
-_syntax_list(::ExprInterpolationContext) = Any[]
-
-_interp_makenode(::InterpolationContext, ex, args) = mknode(ex, args)
-_interp_makenode(::ExprInterpolationContext, ex, args) = Expr((ex::Expr).head, args...)
-
-_is_leaf(ex::SyntaxTree) = is_leaf(ex)
-_is_leaf(::Expr) = false
-_is_leaf(@nospecialize(_)) = true
-
-# Produce interpolated node for `$x` syntax
-function _interpolated_value(ctx::InterpolationContext, srcref, @nospecialize(ex))
-    if ex isa SyntaxTree
-        if !is_compatible_graph(ctx, ex)
-            ex = copy_ast(ctx, ex)
-        end
-        append_sourceref!(ctx, ex, srcref._id)
-    elseif ex isa Symbol
-        # Plain symbols become identifiers. This is an accommodation for
-        # compatibility to allow `:x` (a Symbol) and `:(x)` (a SyntaxTree) to
-        # be used interchangeably in macros.
-        newleaf(ctx, srcref, K"Identifier", string(ex))
+function _interpolate_expr(@nospecialize(ex), depth, @nospecialize(vals::Tuple), val_i)
+    if ex isa QuoteNode
+        out = _interpolate_expr(Expr(:inert, ex.value), depth, vals, val_i)
+        QuoteNode(only(out.args))
+    elseif !(ex isa Expr)
+        ex
     else
-        newleaf(ctx, srcref, K"Value", ex)
+        inner_depth = ex.head == :quote ? depth + 1 :
+            ex.head == :$ ? depth - 1 : depth
+        cs_out = Any[]
+        for e in ex.args
+            if e isa Expr && e.head == :$ && inner_depth == 0
+                tup = vals[val_i[] += 1]::Tuple
+                for v in tup
+                    push!(cs_out, v)
+                end
+            else
+                push!(cs_out, _interpolate_expr(e, inner_depth, vals, val_i))
+            end
+        end
+        Expr(ex.head, cs_out...)
     end
 end
-
-function _interpolated_value(::ExprInterpolationContext, _, @nospecialize(ex))
-    ex
+function interpolate_expr(@nospecialize(ex), @nospecialize(values...))
+    @jl_assert !Meta.isexpr(ex, :$) (expr_to_est(ex), "expand_quote should handle this")
+    _interpolate_expr(ex, 0, values, Ref(0))
 end
 
-function _interpolate_ast(ctx::ExprInterpolationContext, ex::QuoteNode, depth)
-    out = _interpolate_ast(ctx, Expr(:inert, ex.value), depth)
-    QuoteNode(only(out.args))
-end
-
-function _interpolate_ast(ctx, @nospecialize(ex), depth)
-    _is_leaf(ex) && return ex
-    k = _interp_kind(ex)
-    inner_depth = k == K"quote" ? depth + 1 :
-                  k == K"$"     ? depth - 1 :
-                  depth
-    expanded_children = _syntax_list(ctx)
-
-    for e in _children(ex)
-        if _interp_kind(e) == K"$" && inner_depth == 0
-            vals = ctx.values[ctx.current_index[]]::Tuple
-            ctx.current_index[] += 1
-            for (i,v) in enumerate(vals)
-                srcref = _numchildren(e) == 1 ? e : _children(e)[i]
-                push!(expanded_children, _interpolated_value(ctx, srcref, v))
+function _interpolate_syntax(st::SyntaxTree, depth, @nospecialize(vals), val_i)
+    is_leaf(st) && return mkleaf(st)
+    k = kind(st)
+    inner_depth = k == K"syntaxquote" ? depth + 1 :
+        k == K"syntaxunquote" ? depth - 1 : depth
+    cs_out = SyntaxList(st._graph)
+    for c in children(st)
+        if kind(c) == K"syntaxunquote" && inner_depth == 0
+            tup = vals[val_i[] += 1]::Tuple
+            @jl_assert numchildren(c) == 1 st
+            @jl_assert kind(c[1]) === K"..." || length(tup) == 1 st
+            for v in tup
+                v2 = !(v isa SyntaxTree) ? expr_to_est(st._graph, v, c._id) :
+                   copy_ast(st._graph, v)
+                push!(cs_out, v2)
             end
         else
-            push!(expanded_children, _interpolate_ast(ctx, e, inner_depth))
+            push!(cs_out, _interpolate_syntax(c, inner_depth, vals, val_i))
         end
     end
-
-    _interp_makenode(ctx, ex, expanded_children)
+    mknode(st, cs_out)
 end
-
-# Produced by expanding K"quote".  Must create a copy of the AST.  Note that
-# wrapping `ex` in an extra node handles the edge case where the root `ex` is
-# `$` (our recursion is one step removed due to forms like `($ a b)`.)
-function interpolate_ast(::Type{SyntaxTree}, ex::SyntaxTree, values...)
-    # Construct graph for interpolation context. We inherit this from the macro
-    # context where possible by detecting it using __macro_ctx__. This feels
-    # hacky though.
-    #
-    # Perhaps we should use a ScopedValue for this instead or get it from
-    # the macro __context__? None of the options feel great here.
-    graph = nothing
-    for vals in values
-        for v in vals
-            if v isa SyntaxTree && hasattr(syntax_graph(v), :__macro_ctx__)
-                graph = syntax_graph(v)
-                break
-            end
-        end
-    end
-    if isnothing(graph)
-        graph = ensure_macro_attributes!(SyntaxGraph())
-    end
-    ctx = InterpolationContext(graph, values, Ref(1))
-
-    # We must copy the AST into our context to use it as the source reference of
-    # generated expressions.
-    ex1 = copy_ast(ctx, ex)
-    out = _interpolate_ast(ctx, @ast(ctx, ex1, [K"None" ex1]), 0)
-    length(children(out)) === 1 || throw(
-        LoweringError(ex1, "More than one value in bare `\$` expression"))
-    return only(children(out))
-end
-
-function interpolate_ast(::Type{Expr}, @nospecialize(ex), values...)
-    ctx = ExprInterpolationContext(values, Ref(1))
-    if ex isa Expr && ex.head === :$
-        @assert length(values) === 1
-        if length(ex.args) !== 1
-            throw(LoweringError(
-                expr_to_est(ex), "More than one value in bare `\$` expression"))
-        end
-        only(values[1])
-    else
-        _interpolate_ast(ctx, ex, 0)
-    end
+function interpolate_syntax(st::SyntaxTree, @nospecialize(vals...))
+    st = copy_ast(ensure_macro_attributes!(SyntaxGraph()), st)
+    val_i = Ref(0)
+    out = _interpolate_syntax((@ast st._graph st [K"None" st]), 0, vals, val_i)
+    @jl_assert val_i[] == length(vals) st
+    @jl_assert numchildren(out) == 1 st
+    out[1]
 end
 
 #--------------------------------------------------
@@ -288,19 +211,19 @@ end
 # An alternative to Core.GeneratedFunctionStub which works on SyntaxTree rather
 # than Expr.
 struct GeneratedFunctionStub
-    expr_compat_mode::Bool
+    syntax_context::SyntaxContext
     gen::Function
     srcref::Union{LineNumberNode,SourceRef}
     argnames::Core.SimpleVector
     spnames::Core.SimpleVector
 end
 
-function _gen_args_from_syms(ctx, src, layer, args)
+function _gen_args_from_syms(ctx, src, args)
     out = SyntaxList(ctx.graph)
     for a in args
         id = newleaf(syntax_graph(ctx), src, K"Identifier", string(a))
         id = _est_to_dst_ident(id) # support placeholders
-        push!(out, adopt_scope(id, layer))
+        push!(out, id)
     end
     out
 end
@@ -321,15 +244,11 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
 
     # Macro expansion. Note that we expand in `tls_world_age()` (see
     # Core.GeneratedFunctionStub)
-    macro_world = Base.tls_world_age()
-    ctx1 = MacroExpansionContext(graph, __module__, g.expr_compat_mode, macro_world)
+    sc = g.syntax_context
+    ctx1 = MacroExpansionContext(graph, sc, Bindings(), Base.tls_world_age(), true)
 
-    layer = only(ctx1.scope_layers)
-
-    # Run code generator - this acts like a macro expander and like a macro
-    # expander it gets a MacroContext.
-    mctx = MacroContext(syntax_graph(ctx1), g.srcref, layer, g.expr_compat_mode)
-    ex0 = g.gen(mctx, args...)
+    # Run code generator - this acts like a macro expander
+    ex0 = g.gen(sc, args...)
     if ex0 isa Expr
         ex0 = expr_to_est(
             syntax_graph(ctx1), ex0, source_location(LineNumberNode, g.srcref))
@@ -342,22 +261,20 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
             ex0 = copy_ast(ctx1, ex0)
         end
     else
-        ex0 = newleaf(syntax_graph(ctx1), g.srcref, K"Value", ex0)
+        ex0 isa Expr && throw(LoweringError(
+            ex0, "implicit expr->syntaxtree: may later be allowed, but is probably a mistake today"))
+        ex0 = expr_to_est(syntax_graph(ctx1), ex0, g.srcref)
     end
     # Expand any macros emitted by the generator
-    ex1 = expand_forms_1(ctx1, reparent(ctx1, ex0), layer)
-    ctx1 = MacroExpansionContext(delete_attributes(graph, :__macro_ctx__),
-                                 ctx1.bindings, ctx1.scope_layers,
-                                 g.expr_compat_mode, macro_world)
-    ex1 = reparent(ctx1, ex1)
-
+    ex1 = expand_forms_1(ctx1, apply_expansion_layer(
+        ctx1, reparent(ctx1, ex0), sc, nothing))
     # Desugaring
     ctx2, ex2 = expand_forms_2(ctx1, ex1)
 
     # Wrap expansion in a non-toplevel lambda and run scope resolution
     ex2 = @ast ctx2 ex0 [K"lambda"(is_toplevel_thunk=false, toplevel_pure=true)
-        [K"block" _gen_args_from_syms(ctx2, ex0, layer, g.argnames)...]
-        [K"block" _gen_args_from_syms(ctx2, ex0, layer, g.spnames)...]
+        [K"block" _gen_args_from_syms(ctx2, ex1, g.argnames)...]
+        [K"block" _gen_args_from_syms(ctx2, ex1, g.spnames)...]
         ex2
     ]
     ctx3, ex3 = resolve_scopes(ctx2, ex2)

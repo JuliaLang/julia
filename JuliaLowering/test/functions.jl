@@ -1583,6 +1583,7 @@ end
 
 @testset "Generated functions" begin; for expr_compat_mode in (false, true)
     local genfunc_s, genfunc_f
+    @eval test_mod import JuliaLowering.@legacy_quote_to_syntax
 
     @testset "returning special syntax forms" begin
         @test JuliaLowering.include_string(test_mod, raw"""
@@ -1802,12 +1803,22 @@ end
         f_gen_calls_macros(1)
     end
     """; expr_compat_mode) === "foo"
+    @test JuliaLowering.include_string(test_mod, raw"""begin
+        @generated function calls_versioned_macro(::Type{T}, ::Val{i}) where {T, i}
+            i isa Integer || @goto err
+            return i
+            @label err
+            return 0
+        end
+
+        calls_versioned_macro(Tuple{Int}, Val(1))
+    end """; expr_compat_mode) == 1
 end
 
     genfunc_quote_s = """
     begin
         function f_gen_quote_1(::Tuple{T}) where {T}
-            out = :(:x1,first)
+            out = @legacy_quote_to_syntax :(:x1,first)
             if @generated
             else
             end
@@ -1828,7 +1839,7 @@ end
         function f_gen_quote_2(::Tuple{T}) where {T}
             out = nothing
             if @generated
-                :(out = :(:x2,generated))
+                @legacy_quote_to_syntax :(out = @legacy_quote_to_syntax :(:x2,generated))
             else
                 out = (:x2,nongen)
             end
@@ -1850,7 +1861,7 @@ end
             if @generated
             else
             end
-            return :(:x4,after)
+            return @legacy_quote_to_syntax :(:x4,after)
         end
 
         f_gen_quote_3((1,))
@@ -1867,9 +1878,9 @@ end
         function f_gen_interpolate(::Tuple{T}) where {T}
             out = :(:x1,first)
             if @generated
-                out = :($out, generated)
+                out = @legacy_quote_to_syntax :($out, generated)
             else
-                out = :($out, nongen)
+                out = @legacy_quote_to_syntax :($out, nongen)
             end
             return out
         end
@@ -1888,18 +1899,21 @@ end
 
     genfunc_quote_s = raw"""
     begin
-        @eval function f_gen_quote_1(::Tuple{T}) where {T}
+        @eval function f_gen_eval_quote_1(::Tuple{T}) where {T}
             out = $(Expr(:quote, Expr(:call, :+, 1, Expr(:if, Expr(:generated), 1, 2))))
             if @generated
             else
             end
             return out
         end
-        f_gen_quote_1((1,))
+        f_gen_eval_quote_1((1,))
     end
     """
     @test JuliaLowering.include_string(
         test_mod, genfunc_quote_s; expr_compat_mode=true) ==
+            :(1 + $(Expr(:if, Expr(:generated), 1, 2)))
+    @test JuliaLowering.include_string(
+        test_mod, genfunc_quote_s; expr_compat_mode=false) ==
             :(1 + $(Expr(:if, Expr(:generated), 1, 2)))
 
     # Test generated function edges to bindings

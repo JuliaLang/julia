@@ -418,7 +418,7 @@ function resolve_and_get_bindings(
         soft_scope::Union{Nothing,Bool} = nothing,
     )
     est = JuliaLowering.expr_to_est(ex)
-    ctx1, ex1 = JuliaLowering.expand_forms_1(mod, est, false, world)
+    ctx1, ex1 = JuliaLowering.expand_forms_1(mod, est, false, world, true)
     ctx2, ex2 = JuliaLowering.expand_forms_2(ctx1, ex1)
     ctx3, _ = JuliaLowering.resolve_scopes(ctx2, ex2; soft_scope)
     return ctx3.bindings.info
@@ -560,8 +560,8 @@ end
     @test !isdefined(test_mod.macro_mod, :f_local_1)
     JuliaLowering.include_string(test_mod, "macro_mod.@mesc function f_nonlocal_2(); 1; end")
     @test isdefined(test_mod, :f_nonlocal_2)
-    # An unescaped const is local to a macro expansion
-    @test_throws LoweringError JuliaLowering.include_string(test_mod, "macro_mod.@m const c_local_1 = 1")
+    # An unescaped const should not error coming from an old-style macro
+    @test JuliaLowering.include_string(test_mod, "macro_mod.@m const c_local_1 = 1") == 1
     # The const may be escaped into test_mod
     JuliaLowering.include_string(test_mod, "macro_mod.@mesc const c_nonlocal_2 = 1")
     @test isdefined(test_mod, :c_nonlocal_2)
@@ -941,7 +941,7 @@ end
                             end))
         run(:(import ..test_mod.@old_hyg_g_rescope_conflict_new3))
         Core.@latestworld
-        @test_throws "unhygienic global" run(:(@old_hyg_g_rescope_conflict_new3())) context=ctx
+        @test_throws "conflicts with an existing local variable" run(:(@old_hyg_g_rescope_conflict_new3())) context=ctx
 
         fl_eval(test_mod, :(macro old_hyg_g_rescope_conflict_new4();
                                 :(let
@@ -951,7 +951,7 @@ end
                             end))
         run(:(import ..test_mod.@old_hyg_g_rescope_conflict_new4))
         Core.@latestworld
-        @test_throws "unhygienic global" run(:(@old_hyg_g_rescope_conflict_new4())) context=ctx
+        @test_throws "conflicts with an existing global variable" run(:(@old_hyg_g_rescope_conflict_new4())) context=ctx
     end
 
     # A reference in the same scope as the declaration: flisp keeps the
@@ -960,8 +960,8 @@ end
     # created in the calling module, which is more consistent.
     @testset "references in the declaring scope" for (ctx, mod, run, ref_resolves) in [
         ("flisp reference (delete if fail)", fl_mod, x->fl_eval(fl_mod, x), false),
-        ("jl expr_compat_mode=true", jl_mod, x->jl_eval(jl_mod, x; expr_compat_mode=true), true),
-        ("jl expr_compat_mode=false", jl_mod, x->jl_eval(jl_mod, x; expr_compat_mode=false), true)]
+        ("jl expr_compat_mode=true", jl_mod, x->jl_eval(jl_mod, x; expr_compat_mode=true), false),
+        ("jl expr_compat_mode=false", jl_mod, x->jl_eval(jl_mod, x; expr_compat_mode=false), false)]
 
         fl_eval(test_mod, :(macro old_hyg_g_ref_top();
                                 quote

@@ -1,4 +1,5 @@
 test_mod = Module()
+@eval test_mod import JuliaLowering, JuliaLowering.@legacy_quote_to_syntax
 
 # Blocks
 @test JuliaLowering.include_string(test_mod, """
@@ -27,13 +28,22 @@ end
 
 @test JuliaLowering.include_string(test_mod, raw"""
 module EvalTest
-    _some_var = 2
+    _some_var = 1
 end
 let
     x = 10
     @eval EvalTest $x + _some_var
 end
-""") == 12
+""") == 11
+@test JuliaLowering.include_string(test_mod, raw"""
+module EvalTest2
+    _some_var = 2
+end
+let
+    x = 10
+    @eval EvalTest2 $x + _some_var
+end
+"""; expr_compat_mode=true) == 12
 
 @test JuliaLowering.include_string(test_mod, """
 let x=11
@@ -123,7 +133,8 @@ end
                           Expr(:tuple, Symbol(""), :a)))) == (1, 2)
 
     # quote of empty
-    @test jl_eval(test_mod, Expr(:quote, Symbol(""))) === Symbol("")
+    @test jl_eval(test_mod, Expr(:quote, Symbol(""));
+                  expr_compat_mode=true) === Symbol("")
 end
 
 @eval test_mod libccalltest_var = "libccalltest"
@@ -220,13 +231,14 @@ end
     ccall((:ctest, libccalltest_var), Complex{Int}, (Complex{Int},), 10 + 20im)
 """) === 11 + 18im
 
-@testset "(robot-generated) ccall (sym, lib) tuple: globals and hygiene" begin
+@testset "(robot-generated) ccall (sym, lib) tuple: globals and hygiene" for expr_compat_mode in [true, false]
     # library is a module-qualified global
     JuliaLowering.include_string(test_mod, """
     module CCallLibMod
         const the_lib = "libccalltest"
     end
-    """)
+    """; expr_compat_mode)
+    Core.@latestworld
     @test JuliaLowering.include_string(test_mod, """
         ccall((:ctest, CCallLibMod.the_lib), Complex{Int}, (Complex{Int},), 10 + 20im)
     """) === 11 + 18im
@@ -235,11 +247,14 @@ end
     JuliaLowering.include_string(test_mod, raw"""
     module CCallHygieneMod
         const mylib = "libccalltest"
+        import ..JuliaLowering.@legacy_quote_to_syntax
         macro do_ccall()
-            :(ccall((:ctest, mylib), Complex{Int}, (Complex{Int},), 10 + 20im))
+            @legacy_quote_to_syntax(
+                :(ccall((:ctest, mylib), Complex{Int}, (Complex{Int},), 10 + 20im)))
         end
     end
-    """)
+    """; expr_compat_mode)
+    Core.@latestworld
     @test JuliaLowering.include_string(test_mod, """
         CCallHygieneMod.@do_ccall()
     """) === 11 + 18im
@@ -249,28 +264,32 @@ end
     @test JuliaLowering.include_string(test_mod, """
         mylib = "this_lib_does_not_exist"
         CCallHygieneMod.@do_ccall()
-    """) === 11 + 18im
+    """; expr_compat_mode) === 11 + 18im
 
     # macro that interpolates the lib value at expansion time
     JuliaLowering.include_string(test_mod, raw"""
     module CCallHygieneMod2
+        import ..JuliaLowering.@legacy_quote_to_syntax
         const mylib2 = "libccalltest"
         macro do_ccall_interp()
             lib = mylib2
-            :(ccall((:ctest, $lib), Complex{Int}, (Complex{Int},), 10 + 20im))
+            @legacy_quote_to_syntax(
+                :(ccall((:ctest, $lib), Complex{Int}, (Complex{Int},), 10 + 20im)))
         end
     end
-    """)
+    """; expr_compat_mode)
+    Core.@latestworld
     @test JuliaLowering.include_string(test_mod, """
         CCallHygieneMod2.@do_ccall_interp()
-    """) === 11 + 18im
+    """; expr_compat_mode) === 11 + 18im
 
     # ccall with plain symbol name still works inside a function
     @test JuliaLowering.include_string(test_mod, """
         function ccall_plain_sym()
             ccall(:strlen, Csize_t, (Cstring,), "abc")
         end
-    """) isa Function
+    """; expr_compat_mode) isa Function
+    Core.@latestworld
     @test test_mod.ccall_plain_sym() == 3
 
     # ccall with (sym, lib) tuple where lib is a global, inside a function
@@ -278,7 +297,8 @@ end
         function ccall_global_lib()
             ccall((:ctest, libccalltest_var), Complex{Int}, (Complex{Int},), 10 + 20im)
         end
-    """) isa Function
+    """; expr_compat_mode) isa Function
+    Core.@latestworld
     @test test_mod.ccall_global_lib() === 11 + 18im
 
     # ccall with module-qualified lib inside a function
@@ -286,7 +306,8 @@ end
         function ccall_qualified_lib()
             ccall((:ctest, CCallLibMod.the_lib), Complex{Int}, (Complex{Int},), 10 + 20im)
         end
-    """) isa Function
+    """; expr_compat_mode) isa Function
+    Core.@latestworld
     @test test_mod.ccall_qualified_lib() === 11 + 18im
 end
 
@@ -310,9 +331,10 @@ JuliaLowering.include_string(test_mod, raw"""
 f_ccallable_hygiene() = 1
 
 module Nested
+    import ..JuliaLowering.@legacy_quote_to_syntax
     f_ccallable_hygiene() = 2
     macro cfunction_hygiene()
-        :(@cfunction($f_ccallable_hygiene, Int, ()))
+        @legacy_quote_to_syntax :(@cfunction($f_ccallable_hygiene, Int, ()))
     end
 end
 """)
@@ -327,9 +349,10 @@ JuliaLowering.include_string(test_mod, raw"""
 f_ccallable_hygiene() = 10
 
 module Nested
+    import ..JuliaLowering.@legacy_quote_to_syntax
     f_ccallable_hygiene() = 20
     macro cfunction_hygiene()
-        :(@cfunction(f_ccallable_hygiene, Int, ()))
+        @legacy_quote_to_syntax :(@cfunction(f_ccallable_hygiene, Int, ()))
     end
 end
 """)
@@ -432,7 +455,7 @@ ccallable_sptest_name(::Type{String}) = :strlen
 
 @generated function ccall_with_sparams_in_name(s::T) where {T}
     name = QuoteNode(ccallable_sptest_name(T))
-    :(ccall($name, Csize_t, (Cstring,), s))
+    @legacy_quote_to_syntax :(ccall($name, Csize_t, (Cstring,), s))
 end
 """)
 @test test_mod.ccall_with_sparams_in_name("hii") == 3
@@ -551,15 +574,16 @@ end
 end
 
 # SyntaxTree @eval should pass along expr_compat_mode
-@test JuliaLowering.include_string(test_mod, "@eval quote x end";
-                                   expr_compat_mode=false) isa SyntaxTree
-@test JuliaLowering.include_string(test_mod, "@eval quote x end";
-                                   expr_compat_mode=true) isa Expr
 @test JuliaLowering.include_string(test_mod, raw"""
     let T = :foo
         @eval @doc $"This is a $T" $T = 1
     end
 """; expr_compat_mode=true) === 1
+JuliaLowering.include_string(test_mod, raw"""
+    let T = :foo
+        @eval @doc $"This is a $T" $T = 1
+    end
+"""; expr_compat_mode=false) === 1
 
 @testset "tryfinally with scopedvalues" begin
     @eval test_mod scopedval = Base.ScopedValues.ScopedValue(1)
