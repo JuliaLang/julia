@@ -235,10 +235,12 @@ void jl_init_common_symbols(void)
     jl_invoke_sym = jl_symbol("invoke");
     jl_invoke_modify_sym = jl_symbol("invoke_modify");
     jl_foreigncall_sym = jl_symbol("foreigncall");
+    jl_foreignglobal_sym = jl_symbol("foreignglobal");
     jl_cfunction_sym = jl_symbol("cfunction");
     jl_quote_sym = jl_symbol("quote");
     jl_inert_sym = jl_symbol("inert");
     jl_top_sym = jl_symbol("top");
+    jl_tuple_sym = jl_symbol("tuple");
     jl_core_sym = jl_symbol("core");
     jl_globalref_sym = jl_symbol("globalref");
     jl_line_sym = jl_symbol("line");

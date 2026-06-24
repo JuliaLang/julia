@@ -3996,7 +3996,7 @@ apply_fargs(f, args...) = f(args...)
 @test only(Base.return_types(apply_fargs, Tuple{typeof(Core.apply_type), Vararg})) == Any
 @test only(Base.return_types(apply_fargs, Tuple{typeof(Core.apply_type), Any, Vararg})) == Any
 @test only(Base.return_types(apply_fargs, Tuple{typeof(Core.apply_type), Any, Any, Vararg})) == Any
-f_apply_cglobal(args...) = cglobal(args...)
+f_apply_cglobal(args...) = Core.Intrinsics.cglobal(args...)
 @test only(Base.return_types(f_apply_cglobal, Tuple{Vararg{Type{Int}}})) == Ptr
 @test only(Base.return_types(f_apply_cglobal, Tuple{Any, Vararg{Type{Int}}})) == Ptr
 @test only(Base.return_types(f_apply_cglobal, Tuple{Any, Type{Int}, Vararg{Type{Int}}})) == Ptr{Int}

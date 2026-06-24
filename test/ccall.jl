@@ -1911,6 +1911,62 @@ end
     @test_throws(TypeError, cglobal45187fn())
     @test_throws(TypeError, @eval cglobal(nothing))
     @test_throws(TypeError, @eval cglobal((:fn, fn45187)))
+
+    # method-definition-time validation of literal name tuples (#59165 follow-up)
+    @test_throws ErrorException @eval cglobal((:a, :b, :c))
+    @test_throws ErrorException @eval cglobal(())
+    @test_throws TypeError @eval cglobal((1,))
+
+    # Runtime-resolved type argument: cglobal(name, T) lowers to bitcast(Ptr{T}, foreignglobal(name)),
+    # so T may be any runtime expression (including one that depends on local variables).
+    function cglobal_runtime_type(T)
+        return cglobal((:global_var, libccalltest), T)
+    end
+    @test cglobal_runtime_type(Cint) isa Ptr{Cint}
+    @test unsafe_load(cglobal_runtime_type(Cint)) == 1
+end
+
+@testset "cglobal interpreter matches compiler" begin
+    # The `cglobal(...)` calls written directly in `@test` run at top-level, i.e. through
+    # the interpreter; wrapping the same call in a function and calling it forces codegen.
+    # The two must agree on both pointer value and result type (`===` checks both).
+    compiled_tuple()    = cglobal((:global_var, libccalltest))
+    compiled_tuple_T()  = cglobal((:global_var, libccalltest), Cint)
+    compiled_sym()      = cglobal(:sin)
+    compiled_sym_T()    = cglobal(:sin, Cint)
+    compiled_str()      = cglobal("sin")
+    compiled_str_T()    = cglobal("sin", Cint)
+    compiled_ptr(p)     = cglobal(p)
+    compiled_ptr_T(p)   = cglobal(p, Cfloat)
+
+    typed_ptr = convert(Ptr{Cint}, cglobal((:global_var, libccalltest)))
+
+    @test cglobal((:global_var, libccalltest))        === compiled_tuple()
+    @test cglobal((:global_var, libccalltest), Cint)  === compiled_tuple_T()
+    @test cglobal(:sin)                               === compiled_sym()
+    @test cglobal(:sin, Cint)                         === compiled_sym_T()
+    @test cglobal("sin")                              === compiled_str()
+    @test cglobal("sin", Cint)                        === compiled_str_T()
+    @test cglobal(typed_ptr)                          === compiled_ptr(typed_ptr)
+    @test cglobal(typed_ptr, Cfloat)                  === compiled_ptr_T(typed_ptr)
+
+    # the no-type form always normalizes its result to Ptr{Cvoid}, even from a typed pointer
+    @test cglobal((:global_var, libccalltest)) isa Ptr{Cvoid}
+    @test cglobal(:sin)                        isa Ptr{Cvoid}
+    @test cglobal("sin")                       isa Ptr{Cvoid}
+    @test cglobal(typed_ptr)                   isa Ptr{Cvoid}
+
+    # Erroring forms: the pointer-vs-name choice is now syntactic, not value-based.
+    compiled_ptr_arg(x) = cglobal(x)
+    name_sym = :sin
+    name_str = "sin"
+    name_tup = (:global_var, libccalltest)
+    @test_throws TypeError cglobal(name_sym)           # interpreter
+    @test_throws TypeError compiled_ptr_arg(name_sym)  # compiler
+    @test_throws TypeError cglobal(name_str)           # interpreter
+    @test_throws TypeError compiled_ptr_arg(name_str)  # compiler
+    @test_throws TypeError cglobal(name_tup)           # interpreter
+    @test_throws TypeError compiled_ptr_arg(name_tup)  # compiler
 end
 
 @testset "ccall_effects" begin
@@ -1944,7 +2000,7 @@ end
 for A in (reinterpret(UInt, [0]), reshape([0, 0], 1, 2))
     @test pointer(A) == Base.unsafe_convert(Ptr{Cvoid}, A) == Base.unsafe_convert(Ptr{Int}, A)
 end
-# Cglobal with non-static symbols doesn't error
+# Cglobal with non-static symbols errors, just like ccall
 function cglobal_non_static1()
     sym = (:global_var, libccalltest)
     cglobal(sym)
@@ -1952,8 +2008,8 @@ end
 global the_sym = (:global_var, libccalltest)
 cglobal_non_static2() = cglobal(the_sym)
 
-@test isa(cglobal_non_static1(), Ptr)
-@test isa(cglobal_non_static2(), Ptr)
+@test_throws TypeError cglobal_non_static1()
+@test_throws TypeError cglobal_non_static2()
 
 @generated function generated_world_counter()
     return :($(Base.get_world_counter()))

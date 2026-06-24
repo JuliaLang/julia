@@ -29,6 +29,7 @@ const __internal_changes_list = (
     :printcodeinfocalls,
     :syntacticccall, #59165
     :svectvar, #61645
+    :syntacticcglobal, #61709
     # Add new change names above this line
 )
 
