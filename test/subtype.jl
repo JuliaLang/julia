@@ -3214,3 +3214,12 @@ end
     Union{Tuple{Int64,Ref{Int64}},Tuple{String,Ref{String}}})
 # ... and must not change the `∃` (right) side
 @test Vector{Union{Int64,String}} <: (Vector{T} where T<:Union{Int64,String})
+
+# obvious_subtype must definitively reject `X <: Type{T}` (Type{} is a TypeEq, not a DataType)
+let rejects(@nospecialize(x), @nospecialize(y)) =
+        (r = Ref{Cint}(2); ccall(:jl_obvious_subtype, Cint, (Any,Any,Ptr{Cint}), x, y, r) != 0 && r[] == 0)
+    @test rejects(Tuple{typeof(sin)}, Tuple{Type{T}} where T)
+    @test rejects(Int, Type{T} where T)
+    @test rejects(Int, Type{Int})
+    @test rejects(String, Type{Int})
+end

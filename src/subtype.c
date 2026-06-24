@@ -2689,6 +2689,24 @@ static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *su
         *subtype = 0;
         return 1;
     }
+    // `Type{T}` is a `TypeEq`, not a `DataType`, so the `jl_is_datatype` cases
+    // below miss it; decide the obvious `X <: Type{T}` rejections here.
+    if (jl_is_typeeq(y) && !jl_is_typeeq(x) && jl_is_datatype(x) &&
+            x != (jl_value_t*)jl_typeofbottom_type) {
+        jl_value_t *t0 = jl_typeeq_T(y);
+        if (jl_is_typevar(t0)) {
+            if (!is_kind_or_anytype(x)) {
+                *subtype = 0;    // an ordinary type value is never a subtype of `Type{T}`
+                return 1;
+            }
+            return 0;            // a kind may be: `Type <: Type{T}` is handled by `subtype`
+        }
+        if (!jl_is_typeeq(t0)) {
+            *subtype = 0;        // `X <: Type{ConcreteType}` (X not a `Type{}`) is never true
+            return 1;
+        }
+        // `Type{Type{...}}`: leave to `subtype`
+    }
     if (jl_is_datatype(y)) {
         int istuple = (((jl_datatype_t*)y)->name == jl_tuple_typename);
         int iscov = istuple;
@@ -2707,21 +2725,6 @@ static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *su
             //}
             int uncertain = 0;
             if (((jl_datatype_t*)x)->name != ((jl_datatype_t*)y)->name) {
-                if (jl_is_typeeq(x) && jl_is_kind(y)) {
-                    jl_value_t *t0 = jl_typeeq_T(x);
-                    if (jl_is_typevar(t0))
-                        return 0;
-                    *subtype = jl_typeof(t0) == y;
-                    return 1;
-                }
-                if (jl_is_typeeq(y)) {
-                    jl_value_t *t0 = jl_typeeq_T(y);
-                    assert(!jl_is_typeeq(x));
-                    if ((jl_is_kind(x) && jl_is_typevar(t0)) || (x == (jl_value_t*)jl_typeofbottom_type))
-                        return 0;
-                    *subtype = 0;
-                    return 1;
-                }
                 jl_datatype_t *temp = (jl_datatype_t*)x;
                 while (temp->name != ((jl_datatype_t*)y)->name) {
                     temp = temp->super;
