@@ -785,6 +785,14 @@ function check_no_return(ex)
     end
 end
 
+function lhs_local_defs(ctx, lhs)
+    defs = SyntaxList(ctx)
+    foreach_lhs_name(lhs) do var
+        push!(defs, @ast ctx var [K"local" var])
+    end
+    return defs
+end
+
 # Return the anonymous function taking an iterated value, for use with the
 # first argument to `Base.Generator`
 function func_for_generator(ctx, body, iter_value_destructuring)
@@ -798,6 +806,7 @@ function func_for_generator(ctx, body, iter_value_destructuring)
         @ast ctx body [K"->"
             [K"tuple" arg]
             [K"block"
+                lhs_local_defs(ctx, iter_value_destructuring)...
                 [K"=" iter_value_destructuring arg]
                 body]]
     else
