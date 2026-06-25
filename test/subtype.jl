@@ -3196,6 +3196,19 @@ let X = Tuple{Union{Type{Int}, Type{Vector{T}} where T}, Union{Type{Int}, Type{V
     @test typeintersect(X, Y) == X
 end
 
+# issue #62174: envout for tuple element matching must preserve TypeVar
+# identities in hoisted bounds.
+struct P62174{X} end
+struct M62174{D,F,V<:P62174{D},A<:P62174{F}} end
+let X = Tuple{Vector{M62174{D,F,V,A}} where {D,F,V<:P62174{D},A<:P62174{F}}},
+    Y = Tuple{Vector{T}} where T
+    _, env = intersection_env(X, Y)
+    v = env[1][1]
+    p = v.parameters
+    @test p[3].ub.parameters[1] === p[1]
+    @test p[4].ub.parameters[1] === p[2]
+end
+
 # Hoisted union-split of a `∀` variable's upper bound: a left-side `where` var
 # with trivial lower bound, a union upper bound, and only covariant occurrences
 # in the body distributes over the arms of its bound.
