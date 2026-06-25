@@ -319,16 +319,16 @@ static void mtcache_hash_insert(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t
     jl_genericmemory_t *a = jl_atomic_load_relaxed(pcache);
     if (a == (jl_genericmemory_t*)jl_an_empty_memory_any) {
         a = jl_alloc_memory_any(16);
+        jl_atomic_store_release(pcache, a);
         if (parent)
             jl_gc_wb(parent, a);
-        jl_atomic_store_release(pcache, a);
     }
     a = jl_eqtable_put(a, key, val, &inserted);
     assert(inserted);
     if (a != jl_atomic_load_relaxed(pcache)) {
+        jl_atomic_store_release(pcache, a);
         if (parent)
             jl_gc_wb(parent, a);
-        jl_atomic_store_release(pcache, a);
     }
 }
 
@@ -1325,7 +1325,7 @@ static jl_value_t *jl_method_convert_list_to_cache(
     JL_GC_PUSH4(&cache, &dblcache, &next, &ml);
     while (ml != (void*)jl_nothing) {
         next = jl_atomic_load_relaxed(&ml->next);
-        jl_gc_write_atomic(ml, ml->next, (jl_typemap_entry_t*)jl_nothing, relaxed);
+        jl_atomic_store_relaxed(&ml->next, (jl_typemap_entry_t*)jl_nothing);
         // n.b. this is being done concurrently with lookups!
         // TODO: is it safe to be doing this concurrently with lookups?
         if (doublesplit) {
@@ -1368,9 +1368,10 @@ static void jl_typemap_list_insert_(
         l = jl_atomic_load_relaxed(&l->next);
     }
 
-    jl_gc_write_atomic(newrec, newrec->next, l, relaxed);
-    jl_gc_wb(parent, newrec);
+    jl_atomic_store_relaxed(&newrec->next, l);
+    jl_gc_wb(newrec, l);
     jl_atomic_store_release(pml, newrec);
+    jl_gc_wb(parent, newrec);
 }
 
 // n.b. tparam value only needed if doublesplit is set (for jl_method_convert_list_to_cache)
@@ -1395,8 +1396,8 @@ static void jl_typemap_insert_generic(
     if (count > MAX_METHLIST_COUNT) {
         ml = jl_method_convert_list_to_cache(
             map, (jl_typemap_entry_t*)ml, tparam, offs, doublesplit != NULL);
-        jl_gc_wb(parent, ml);
         jl_atomic_store_release(pml, ml);
+        jl_gc_wb(parent, ml);
         if (doublesplit)
             jl_typemap_memory_insert_(map, (_Atomic(jl_genericmemory_t*)*)pml, doublesplit, newrec, parent, 0, offs, NULL);
         else
