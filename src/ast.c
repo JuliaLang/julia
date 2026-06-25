@@ -1059,7 +1059,7 @@ lno_ok:
         jl_timing_show_macro(mfunc, retry_lno != NULL ? retry_lno : margs[1],
                              inmodule, JL_TIMING_DEFAULT_BLOCK);
         *ctx = mfunc->def.method->module;
-        result = jl_invoke(margs[0], &margs[1], nargs - 1, mfunc);
+        result = jl_invoke(jl_get_pgcstack(), margs[0], &margs[1], nargs - 1, mfunc);
     }
     JL_CATCH {
         if ((jl_loaderror_type == NULL) || !throw_load_error) {

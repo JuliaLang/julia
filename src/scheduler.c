@@ -373,7 +373,7 @@ JL_DLLEXPORT void jl_wakeup_threadpool(int8_t tpid) JL_NOTSAFEPOINT
 static jl_task_t *get_next_task(jl_value_t *trypoptask, jl_value_t *q)
 {
     jl_gc_safepoint();
-    jl_task_t *task = (jl_task_t*)jl_apply_generic(trypoptask, &q, 1);
+    jl_task_t *task = (jl_task_t*)jl_apply_generic(jl_get_pgcstack(), trypoptask, &q, 1);
     if (jl_is_task(task)) {
         int self = jl_atomic_load_relaxed(&jl_current_task->tid);
         jl_set_task_tid(task, self);
@@ -384,7 +384,7 @@ static jl_task_t *get_next_task(jl_value_t *trypoptask, jl_value_t *q)
 
 static int check_empty(jl_value_t *checkempty)
 {
-    return jl_apply_generic(checkempty, NULL, 0) == jl_true;
+    return jl_apply_generic(jl_get_pgcstack(), checkempty, NULL, 0) == jl_true;
 }
 
 jl_task_t *wait_empty JL_GLOBALLY_ROOTED;
@@ -402,7 +402,7 @@ void jl_task_wait_empty(void)
         wait_empty = ct;
         if (f) {
             JL_GC_PUSH1(&f);
-            jl_apply_generic(f, NULL, 0);
+            jl_apply_generic(jl_get_pgcstack(), f, NULL, 0);
             JL_GC_POP();
         }
         // we are back from jl_task_get_next now

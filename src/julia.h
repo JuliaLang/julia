@@ -211,21 +211,21 @@ typedef struct _jl_typemap_entry_t jl_typemap_entry_t;
 // otherwise the leaf entries are stored sorted, linearly
 typedef jl_value_t jl_typemap_t;
 
-typedef jl_value_t *(jl_call_t)(jl_value_t*, jl_value_t**, uint32_t, struct _jl_code_instance_t*);
+typedef jl_value_t *(jl_call_t)(jl_gcframe_t **, jl_value_t*, jl_value_t**, uint32_t, struct _jl_code_instance_t*);
 typedef jl_call_t *jl_callptr_t;
 
 // "speccall" calling convention signatures.
 // This describes some of the special ABI used by compiled julia functions.
 extern jl_call_t jl_fptr_args;
 JL_DLLEXPORT extern const jl_callptr_t jl_fptr_args_addr;
-typedef jl_value_t *(*jl_fptr_args_t)(jl_value_t*, jl_value_t**, uint32_t);
+typedef jl_value_t *(*jl_fptr_args_t)(jl_gcframe_t **, jl_value_t*, jl_value_t**, uint32_t);
 
 extern jl_call_t jl_fptr_const_return;
 JL_DLLEXPORT extern const jl_callptr_t jl_fptr_const_return_addr;
 
 extern jl_call_t jl_fptr_sparam;
 JL_DLLEXPORT extern const jl_callptr_t jl_fptr_sparam_addr;
-typedef jl_value_t *(*jl_fptr_sparam_t)(jl_value_t*, jl_value_t**, uint32_t, jl_svec_t*);
+typedef jl_value_t *(*jl_fptr_sparam_t)(jl_gcframe_t **, jl_value_t*, jl_value_t**, uint32_t, jl_svec_t*);
 
 extern jl_call_t jl_fptr_interpret_call;
 JL_DLLEXPORT extern const jl_callptr_t jl_fptr_interpret_call_addr;
@@ -1963,6 +1963,7 @@ JL_DLLEXPORT int jl_atomic_cmpswap_bits(jl_datatype_t *dt, jl_value_t *y, char *
 JL_DLLEXPORT int jl_atomic_storeonce_bits(jl_datatype_t *dt, char *dst, const jl_value_t *src, int nb) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...) JL_ROOTED_VARARGS;
 JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, uint32_t na);
+JL_DLLEXPORT jl_value_t *jl_f_new_structv(jl_gcframe_t **, jl_value_t *, jl_value_t **, uint32_t);
 JL_DLLEXPORT jl_value_t *jl_new_structt(jl_datatype_t *type, jl_value_t *tup);
 JL_DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type);
 JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void);
@@ -2395,14 +2396,14 @@ STATIC_INLINE int jl_vinfo_usedundef(uint8_t vi)
 
 // calling into julia ---------------------------------------------------------
 
-JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint32_t nargs);
-JL_DLLEXPORT jl_value_t *jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *meth);
+JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_gcframe_t **, jl_value_t *F, jl_value_t **args, uint32_t nargs);
+JL_DLLEXPORT jl_value_t *jl_invoke(jl_gcframe_t **, jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *meth);
 JL_DLLEXPORT jl_value_t *jl_invoke_oc(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *meth);
 JL_DLLEXPORT int32_t jl_invoke_api(jl_code_instance_t *linfo);
 
 STATIC_INLINE jl_value_t *jl_apply(jl_value_t **args, uint32_t nargs)
 {
-    return jl_apply_generic(args[0], &args[1], nargs - 1);
+    return jl_apply_generic(jl_get_pgcstack(), args[0], &args[1], nargs - 1);
 }
 
 JL_DLLEXPORT jl_value_t *jl_call(jl_value_t *f JL_MAYBE_UNROOTED, jl_value_t **args, uint32_t nargs);

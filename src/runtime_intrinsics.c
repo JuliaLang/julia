@@ -553,7 +553,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointermodify(jl_value_t *p, jl_value_t *f, j
     args[0] = expected;
     while (1) {
         args[1] = x;
-        jl_value_t *y = jl_apply_generic(f, args, 2);
+        jl_value_t *y = jl_apply_generic(jl_get_pgcstack(), f, args, 2);
         args[1] = y;
         if (ety == (jl_value_t*)jl_any_type) {
             if (jl_atomic_cmpswap((_Atomic(jl_value_t*)*)pp, &expected, y))

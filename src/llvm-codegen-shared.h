@@ -50,6 +50,7 @@ namespace JuliaType {
         auto T_prjlvalue = get_prjlvalue_ty(C);
         auto T_pprjlvalue = llvm::PointerType::get(C, 0);
         return llvm::FunctionType::get(T_prjlvalue, {
+                T_pprjlvalue, // pgcstack
                 T_prjlvalue, // function
                 T_pprjlvalue, // args[]
                 llvm::Type::getInt32Ty(C)}, // nargs
@@ -60,6 +61,7 @@ namespace JuliaType {
         auto T_prjlvalue = get_prjlvalue_ty(C);
         auto T_pprjlvalue = llvm::PointerType::get(C, 0);
         return llvm::FunctionType::get(T_prjlvalue, {
+                T_pprjlvalue, // pgcstack
                 T_prjlvalue, // function
                 T_pprjlvalue, // args[]
                 llvm::Type::getInt32Ty(C), // nargs
@@ -72,6 +74,7 @@ namespace JuliaType {
         auto T_pprjlvalue = llvm::PointerType::get(C, 0);
         auto T = get_pjlvalue_ty(C, Derived);
         return llvm::FunctionType::get(T_prjlvalue, {
+                T_pprjlvalue, // pgcstack
                 T, // function
                 T_pprjlvalue, // args[]
                 llvm::Type::getInt32Ty(C)}, // nargs
@@ -82,6 +85,7 @@ namespace JuliaType {
         auto T_prjlvalue = get_prjlvalue_ty(C);
         auto T_pprjlvalue = llvm::PointerType::get(C, 0);
         return llvm::FunctionType::get(T_prjlvalue, {
+                T_pprjlvalue, // pgcstack
                 T_prjlvalue, // function
                 T_pprjlvalue, // args[]
                 llvm::Type::getInt32Ty(C), // nargs

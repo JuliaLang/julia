@@ -80,7 +80,7 @@ void *jl_lazy_load_and_lookup(jl_value_t *lib_val, jl_value_t *f_name)
         else if (jl_is_string(lib_val))
             lib_ptr = jl_get_library(jl_string_data(lib_val));
         else if (jl_libdl_dlopen_func != NULL) {
-            lib_ptr = jl_unbox_voidpointer(jl_apply_generic(jl_libdl_dlopen_func, &lib_val, 1));
+            lib_ptr = jl_unbox_voidpointer(jl_apply_generic(jl_get_pgcstack(), jl_libdl_dlopen_func, &lib_val, 1));
         } else
             jl_type_error("ccall", (jl_value_t*)jl_symbol_type, lib_val);
     }

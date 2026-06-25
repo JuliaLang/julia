@@ -907,7 +907,7 @@ JL_DLLEXPORT jl_value_t *jl_get_exceptionf(jl_datatype_t *exception_type, const 
 JL_DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t);
 
 #define JL_CALLABLE(name)                                               \
-    JL_DLLEXPORT jl_value_t *name(jl_value_t *F, jl_value_t **args, uint32_t nargs)
+    JL_DLLEXPORT jl_value_t *name(jl_gcframe_t **pgcstack, jl_value_t *F, jl_value_t **args, uint32_t nargs)
 
 JL_CALLABLE(jl_f_tuple);
 void jl_install_default_signal_handlers(void);

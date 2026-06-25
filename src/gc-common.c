@@ -177,7 +177,7 @@ void run_finalizer(jl_task_t *ct, void *o, void *ff)
     JL_TRY {
         size_t last_age = ct->world_age;
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-        jl_apply_generic((jl_value_t*)ff, (jl_value_t**)&o, 1);
+        jl_apply_generic(jl_get_pgcstack(), (jl_value_t*)ff, (jl_value_t**)&o, 1);
         ct->world_age = last_age;
     }
     JL_CATCH {

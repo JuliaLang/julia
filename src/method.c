@@ -718,8 +718,8 @@ static jl_value_t *jl_call_staged(jl_method_t *def, jl_value_t *generator,
     memcpy(&gargs[2], jl_svec_data(sparam_vals), n_sparams * sizeof(void*));
     memcpy(&gargs[2 + n_sparams], args, (def->nargs - def->isva) * sizeof(void*));
     if (def->isva)
-        gargs[totargs - 1] = jl_f_tuple(NULL, &args[def->nargs - 1], nargs - def->nargs + 1);
-    jl_value_t *code = jl_apply_generic(generator, gargs, totargs);
+        gargs[totargs - 1] = jl_f_tuple(jl_get_pgcstack(), NULL, &args[def->nargs - 1], nargs - def->nargs + 1);
+    jl_value_t *code = jl_apply_generic(jl_get_pgcstack(), generator, gargs, totargs);
     JL_GC_POP();
     return code;
 }
