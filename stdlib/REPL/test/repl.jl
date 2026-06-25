@@ -2048,33 +2048,34 @@ end
     fep(input, cursor_pos) = find_enclosing_parens(input,
         JuliaSyntax.parseall(JuliaSyntax.GreenNode, input; ignore_errors=true), cursor_pos)
 
-    # cursor_pos is a 0-indexed byte offset (like IOBuffer position).
+    # cursor_pos is a 1-indexed byte offset.
     # Returned positions are 1-indexed byte positions.
 
     # Boundary: "a(x)b" — '(' at byte 2, ')' at byte 4
     # Match range is cursor_pos ∈ [open_pos-1, close_pos] = [1, 4]
-    @test isempty(fep("a(x)b", 0))    # just before range
-    @test fep("a(x)b", 1) == [(2, 4)] # on '(' (left boundary)
-    @test fep("a(x)b", 3) == [(2, 4)] # inside
-    @test fep("a(x)b", 4) == [(2, 4)] # one past ')' (right boundary)
-    @test isempty(fep("a(x)b", 5))    # just after range
+    @test isempty(fep("a(x)b", 1))    # just before range
+    @test fep("a(x)b", 2) == [(2, 4)] # on '(' (left boundary)
+    @test fep("a(x)b", 4) == [(2, 4)] # inside
+    @test fep("a(x)b", 5) == [(2, 4)] # one past ')' (right boundary)
+    @test isempty(fep("a(x)b", 6))    # just after range
 
     # Multi-byte: α is 2 bytes, so ')' lands at byte 4 instead of 3
-    @test fep("(α)", 0) == [(1, 4)]
+    @test fep("(α)", 1) == [(1, 4)]
+    @test fep("(α)", 2) == [(1, 4)]
     @test fep("(α)", 4) == [(1, 4)]
     # 4-byte char: 𝐱 is U+1D431, ')' lands at byte 6
-    @test fep("(𝐱)", 0) == [(1, 6)]
-    @test fep("(𝐱)", 6) == [(1, 6)]
+    @test fep("(𝐱)", 1) == [(1, 6)]
+    @test fep("(𝐱)", 7) == [(1, 6)]
 
     # Nested same-type: innermost wins
-    @test fep("(a+(b))", 4) == [(4, 6)]
+    @test fep("(a+(b))", 5) == [(4, 6)]
     # Mixed types: matched independently
-    pairs = fep("f(a[b])", 4)
+    pairs = fep("f(a[b])", 5)
     @test (2, 7) in pairs && (4, 6) in pairs
 
     # Edge cases
-    @test isempty(fep("", 0))
-    @test isempty(fep("(x", 1))
+    @test isempty(fep("", 1))
+    @test isempty(fep("(x", 2))
 end
 
 # Test that REPL picks up syntax version from active project and re-latches on project switch
