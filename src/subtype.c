@@ -1519,37 +1519,61 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
         int ub_has_var = jl_has_typevar(btemp->ub, vb.var);
         int lb_has_var = jl_has_typevar(btemp->lb, vb.var);
 
-        if (!ub_has_var && !lb_has_var)
-            continue;
-
-        if (btemp->depth0 != vb.depth0) {
-            // If we've passed through an invariant constructor, the bounds of the outer var can never
-            // be satisfied. Consider (ignoring normalization) Ref{T where T} <: Ref{S} where S. This ends
-            // up as T<:S<:T. Since `T` is universally qualified over its bounds, this would require `S` to
-            // take the full range. However, the `∃` qualifier needs a single value, so unless `T` is similarly
-            // constrained, this is unsatisfiable.
-            if (vb.lb != vb.ub) {
-                JL_GC_POP();
-                return 0;
-            }
-        }
-        btemp->tainted_inner = 1;
-
-        // We need to rename the typevar to prevent confusion. Ordinarily typevar identity conflicts
-        // are taken care of by jl_rename_unionall, but of course if the tvar is not in the environment
-        // anymore, that code path does not know that it needs to do any renaming.
-        if (!new_tvar) {
-            new_tvar = (jl_value_t*)jl_new_typevar(vb.var->name, vb.lb, vb.ub);
-            if (outermost != NULL)
-                push_innervar(outermost, new_tvar);
-        }
         jl_tvar_t *old_tvar = vb.var;
         // Rooted by `u` in `vb`'s frame
         JL_GC_PROMISE_ROOTED(old_tvar);
-        if (ub_has_var)
-            btemp->ub = jl_substitute_var(btemp->ub, old_tvar, (jl_value_t*)new_tvar);
-        if (lb_has_var)
-            btemp->lb = jl_substitute_var(btemp->lb, old_tvar, (jl_value_t*)new_tvar);
+        if (ub_has_var || lb_has_var) {
+            if (btemp->depth0 != vb.depth0) {
+                // If we've passed through an invariant constructor, the bounds of the outer var can never
+                // be satisfied. Consider (ignoring normalization) Ref{T where T} <: Ref{S} where S. This ends
+                // up as T<:S<:T. Since `T` is universally qualified over its bounds, this would require `S` to
+                // take the full range. However, the `∃` qualifier needs a single value, so unless `T` is similarly
+                // constrained, this is unsatisfiable.
+                if (vb.lb != vb.ub) {
+                    JL_GC_POP();
+                    return 0;
+                }
+            }
+            btemp->tainted_inner = 1;
+
+            // We need to rename the typevar to prevent confusion. Ordinarily typevar identity conflicts
+            // are taken care of by jl_rename_unionall, but of course if the tvar is not in the environment
+            // anymore, that code path does not know that it needs to do any renaming.
+            if (!new_tvar) {
+                new_tvar = (jl_value_t*)jl_new_typevar(vb.var->name, vb.lb, vb.ub);
+                if (outermost != NULL)
+                    push_innervar(outermost, new_tvar);
+            }
+            if (ub_has_var)
+                btemp->ub = jl_substitute_var(btemp->ub, old_tvar, (jl_value_t*)new_tvar);
+            if (lb_has_var)
+                btemp->lb = jl_substitute_var(btemp->lb, old_tvar, (jl_value_t*)new_tvar);
+        }
+
+        if (new_tvar && btemp->innervars != NULL) {
+            jl_array_t *innervars = btemp->innervars;
+            JL_GC_PUSH1(&innervars);
+            for (size_t i = 0; i < jl_array_nrows(innervars); i++) {
+                jl_tvar_t *ivar = (jl_tvar_t*)jl_array_ptr_ref(innervars, i);
+                jl_value_t *lb = NULL;
+                jl_value_t *ub = NULL;
+                JL_GC_PUSH2(&lb, &ub);
+                if (jl_has_typevar(ivar->lb, old_tvar)) {
+                    lb = ivar->lb;
+                    lb = jl_substitute_var(lb, old_tvar, (jl_value_t*)new_tvar);
+                    ivar->lb = lb;
+                    jl_gc_wb((jl_value_t*)ivar, lb);
+                }
+                if (jl_has_typevar(ivar->ub, old_tvar)) {
+                    ub = ivar->ub;
+                    ub = jl_substitute_var(ub, old_tvar, (jl_value_t*)new_tvar);
+                    ivar->ub = ub;
+                    jl_gc_wb((jl_value_t*)ivar, ub);
+                }
+                JL_GC_POP();
+            }
+            JL_GC_POP();
+        }
     }
 
     // fill variable values into `envout` up to `envsz`
