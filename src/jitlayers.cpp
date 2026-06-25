@@ -552,10 +552,12 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
             ++UnspecFPtrCount;
             jl_svec_t *edges = (jl_svec_t*)src->edges;
             if (jl_is_svec(edges)) {
-                jl_gc_write_atomic(unspec, unspec->edges, edges, release); // n.b. this assumes the field was always empty svec(), which is not entirely true
+                jl_atomic_store_release(&unspec->edges, edges); // n.b. this assumes the field was always empty svec(), which is not entirely true
+                jl_gc_wb(unspec, edges);
             }
             jl_debuginfo_t *debuginfo = src->debuginfo;
-            jl_gc_write_atomic(unspec, unspec->debuginfo, debuginfo, release); // n.b. this assumes the field was previously NULL, which is not entirely true
+            jl_atomic_store_release(&unspec->debuginfo, debuginfo); // n.b. this assumes the field was previously NULL, which is not entirely true
+            jl_gc_wb(unspec, debuginfo);
             jl_emit_codeinsts_to_jit(&unspec, &src, 1);
             jl_ExecutionEngine->publishCIs(unspec, true);
         }
