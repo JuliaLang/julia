@@ -2219,6 +2219,59 @@ linkGraphSymbols(jitlink::LinkGraph &G) JL_NOTSAFEPOINT
     return Syms;
 }
 
+static jitlink::Symbol *
+findLinkGraphSymbolByName(jitlink::LinkGraph &G,
+                          const orc::SymbolStringPtr &Name) JL_NOTSAFEPOINT
+{
+    if (auto *Sym = G.findDefinedSymbolByName(Name))
+        return Sym;
+    if (auto *Sym = G.findExternalSymbolByName(Name))
+        return Sym;
+    if (auto *Sym = G.findAbsoluteSymbolByName(Name))
+        return Sym;
+    return nullptr;
+}
+
+static void retargetLinkGraphEdges(jitlink::LinkGraph &G, jitlink::Symbol &From,
+                                   jitlink::Symbol &To) JL_NOTSAFEPOINT
+{
+    struct RetargetEdgeVisitor {
+        jitlink::Symbol &From;
+        jitlink::Symbol &To;
+
+        bool visitEdge(jitlink::LinkGraph &, jitlink::Block *,
+                       jitlink::Edge &Edge) JL_NOTSAFEPOINT
+        {
+            if (&Edge.getTarget() != &From)
+                return false;
+            Edge.setTarget(To);
+            return true;
+        }
+    };
+    jitlink::visitExistingEdges(G, RetargetEdgeVisitor{From, To});
+}
+
+static void
+renameLinkGraphSymbol(jitlink::LinkGraph &G, jitlink::Symbol &Sym,
+                      const orc::SymbolStringPtr &Name) JL_NOTSAFEPOINT
+{
+    if (Sym.getName() == Name)
+        return;
+    if (!Sym.isExternal()) {
+        Sym.setName(Name);
+        return;
+    }
+    // External symbols are keyed by name inside LinkGraph, so retarget rather
+    // than renaming in place and leaving the external symbol map stale.
+    auto *Dest = findLinkGraphSymbolByName(G, Name);
+    if (!Dest) {
+        Dest = &G.addExternalSymbol(Name, Sym.getSize(), Sym.isWeaklyReferenced());
+        Dest->setCallable(Sym.isCallable());
+        Dest->setTargetFlags(Sym.getTargetFlags());
+    }
+    retargetLinkGraphEdges(G, Sym, *Dest);
+}
+
 bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferRef ObjBuf,
                            jitlink::LinkGraph &G, std::unique_ptr<jl_linker_info_t> Info)
 {
@@ -2228,7 +2281,9 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
 
     // Rename the defined CI functions.
     auto RenameDef = [&](const SymbolStringPtr &Orig, const SymbolStringPtr &Dest)
-                             JL_NOTSAFEPOINT { Syms.at(Orig)->setName(Dest); };
+                             JL_NOTSAFEPOINT {
+        renameLinkGraphSymbol(G, *Syms.at(Orig), Dest);
+    };
     for (auto &[CI, Funcs] : Info->ci_funcs) {
         auto &S = CISymbols.at(CI);
         if (Funcs.invoke)
@@ -2246,7 +2301,7 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
         auto Dest = linkCallTarget(MR, CI, API);
         if (!Dest)
             return false;
-        Syms.at(T)->setName(Dest);
+        renameLinkGraphSymbol(G, *Syms.at(T), Dest);
     }
 
     // Rename globals and add mappings
@@ -2262,7 +2317,7 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
         auto It = Syms.find(Orig);
         if (It == Syms.end())
             continue;
-        It->second->setName(Sym);
+        renameLinkGraphSymbol(G, *It->second, Sym);
         Ptrs[i] = Addr;
         GlobalSyms[Sym] = {ExecutorAddr::fromPtr(Ptrs + i), JITSymbolFlags::Exported};
         ++i;
