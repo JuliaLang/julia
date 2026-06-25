@@ -1237,6 +1237,9 @@ namespace {
             auto TM = cantFail(JTMB.createTargetMachine());
             fixupTM(*TM);
             auto options = OptimizationOptions::defaults();
+            // It is unsafe to embed the specific TLS offset into the output
+            // when the cache is enabled.
+            options.tls_getters = cache_enabled;
             auto NPM = std::make_unique<NewPM>(std::move(TM), O, options);
             // TODO this needs to be locked, as different resource pools may add to the printer vector at the same time
             {
