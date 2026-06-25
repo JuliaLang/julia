@@ -139,6 +139,7 @@ struct LogTestFailure <: Result
     source::LineNumberNode
     patterns
     logs
+    reason
 end
 function Base.show(io::IO, t::LogTestFailure)
     printstyled(io, "Log Test Failed"; bold=true, color=Base.error_color())
@@ -146,6 +147,9 @@ function Base.show(io::IO, t::LogTestFailure)
     printstyled(io, something(t.source.file, :none), ":", t.source.line, "\n"; bold=true, color=:default)
     println(io, "  Expression: ", t.orig_expr)
     println(io, "  Log Pattern: ", join(t.patterns, " "))
+    if t.reason !== nothing
+        println(io, "  Mismatch: ", t.reason)
+    end
     println(io, "  Captured Logs: ")
     for l in t.logs
         println(io, "    ", l)
@@ -272,7 +276,7 @@ macro test_logs(exs...)
         else
             let testres=nothing, value=nothing
                 try
-                    didmatch,logs,value = match_logs($(patterns...); $(kwargs...)) do
+                    didmatch,logs,value,reason = match_logs($(patterns...); $(kwargs...)) do
                         $(esc(expression))
                     end
                     if $(broken !== nothing && esc(broken))
@@ -286,7 +290,7 @@ macro test_logs(exs...)
                             testres = Pass(:test, $orig_expr, nothing, value, $sourceloc)
                         else
                             testres = LogTestFailure($orig_expr, $sourceloc,
-                                                     $(QuoteNode(exs[1:end-1])), logs)
+                                                     $(QuoteNode(exs[1:end-1])), logs, reason)
                         end
                     end
                 catch e
@@ -311,7 +315,44 @@ function match_logs(f, patterns...; match_mode::Symbol=:all, kwargs...)
     elseif match_mode === :any
         didmatch = all(any(occursin(p, l) for l in logs) for p in patterns)
     end
-    didmatch,logs,value
+    reason = didmatch ? nothing : explain_log_mismatch(patterns, logs, match_mode)
+    didmatch,logs,value,reason
+end
+
+# The standard `LogRecord` fields matched positionally against a pattern tuple,
+# with their display names. `kwargs` is not matched.
+log_stdfields(r::LogRecord) = (r.level, r.message, r._module, r.group, r.id, r.file, r.line)
+const _LOG_FIELD_NAMES      = (:level,  :message,  :module,   :group,  :id,  :file,  :line)
+
+function explain_log_mismatch(patterns, logs, match_mode::Symbol)
+    io = IOBuffer()
+    if match_mode === :all
+        if length(patterns) != length(logs)
+            print(io, "expected ", length(patterns), " log record(s), but ",
+                  length(logs), " were captured")
+            return String(take!(io))
+        end
+        for (i, (p, l)) in enumerate(zip(patterns, logs))
+            occursin(p, l) && continue
+            print(io, "log record ", i, " of ", length(logs), " does not match its pattern")
+            if p isa Tuple
+                stdfields = log_stdfields(l)
+                for (j, pj) in enumerate(p)
+                    logfield_contains(stdfields[j], pj) && continue
+                    print(io, "\n    field `", _LOG_FIELD_NAMES[j], "`: expected ",
+                          repr(pj), ", got ", repr(stdfields[j]))
+                end
+            end
+            return String(take!(io))
+        end
+    elseif match_mode === :any
+        for (i, p) in enumerate(patterns)
+            any(occursin(p, l) for l in logs) && continue
+            print(io, "pattern ", i, " (", p, ") did not match any captured log record")
+            return String(take!(io))
+        end
+    end
+    return nothing
 end
 
 # TODO: Use a version of parse_level from stdlib/Logging, when it exists.
@@ -334,7 +375,7 @@ logfield_contains(a::LogLevel, b::Symbol) = a == parse_level(b)
 logfield_contains(a, b::Ignored) = true
 
 function occursin(pattern::Tuple, r::LogRecord)
-    stdfields = (r.level, r.message, r._module, r.group, r.id, r.file, r.line)
+    stdfields = log_stdfields(r)
     all(logfield_contains(f, p) for (f, p) in zip(stdfields[1:length(pattern)], pattern))
 end
 
