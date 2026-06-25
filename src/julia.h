@@ -2157,6 +2157,7 @@ JL_DLLEXPORT void jl_module_import(jl_task_t *ct, jl_module_t *to, jl_module_t *
 JL_DLLEXPORT void jl_import_module(jl_task_t *ct, jl_module_t *m, jl_module_t *import, jl_sym_t *asname);
 JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from, size_t flags);
 JL_DLLEXPORT void jl_module_public(jl_module_t *from, jl_value_t **symbols, size_t nsymbols, int exported);
+JL_DLLEXPORT void jl_module_set_visibility(jl_module_t *m, jl_sym_t *var, int state);
 JL_DLLEXPORT int jl_is_imported(jl_module_t *m, jl_sym_t *s);
 JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var);
 

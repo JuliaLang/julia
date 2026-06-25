@@ -628,9 +628,9 @@ function _to_lowered_expr(ex::SyntaxTree)
         @jl_assert (arg1 isa QuoteNode) ex
         args[1] = arg1.value
         Expr(:meta, args...)
-    elseif k == K"foreigncall_arg1"
+    elseif k == K"foreignsymbol"
         @jl_assert kind(ex[1]) == K"tuple" ex
-        _foreigncall_arg1_expr(ex[1])
+        _foreignsymbol_expr(ex[1])
     elseif k == K"static_eval"
         @jl_assert numchildren(ex) == 1 ex
         _to_lowered_expr(ex[1])
@@ -671,6 +671,7 @@ function _to_lowered_expr(ex::SyntaxTree)
                k == K"gc_preserve_begin" ? :gc_preserve_begin :
                k == K"gc_preserve_end"   ? :gc_preserve_end   :
                k == K"foreigncall"       ? :foreigncall       :
+               k == K"foreignglobal"     ? :foreignglobal     :
                k == K"cfunction"         ? :cfunction         :
                k == K"aliasscope"        ? :aliasscope        :
                k == K"popaliasscope"     ? :popaliasscope     :
@@ -688,13 +689,13 @@ function _to_lowered_expr(ex::SyntaxTree)
 end
 
 # ultra-permissive conversion allowing unlowered structure, but lowered leaves
-function _foreigncall_arg1_expr(ex)
+function _foreignsymbol_expr(ex)
     if is_leaf(ex) || kind(ex) == K"inert"
         _to_lowered_expr(ex)
     else
         k = kind(ex)
         Expr(Symbol((k === K"unknown_head" ? ex.name_val : untokenize(k))::String),
-             map(_foreigncall_arg1_expr, children(ex))...)
+             map(_foreignsymbol_expr, children(ex))...)
     end
 end
 

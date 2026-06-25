@@ -66,7 +66,7 @@ has_flag(curr::UInt32, flag::UInt32) = (curr & flag) == flag
 function iscallstmt(@nospecialize stmt)
     stmt isa Expr || return false
     head = stmt.head
-    return head === :call || head === :invoke || head === :foreigncall
+    return head === :call || head === :invoke || head === :foreigncall || head === :foreignglobal
 end
 
 function flags_for_effects(effects::Effects)
@@ -393,7 +393,7 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             f = argextype(args[1], src)
             f = singleton_type(f)
             f === nothing && return (false, false, false)
-            if f === Intrinsics.cglobal || f === Intrinsics.llvmcall
+            if f === Intrinsics.llvmcall
                 # TODO: these are not yet linearized
                 return (false, false, false)
             end
@@ -420,6 +420,8 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             terminates = is_terminates(effects)
             removable = effect_free & nothrow & terminates
             return (consistent, removable, nothrow)
+        elseif head === :foreignglobal
+            return (false, false, false)
         elseif head === :new_opaque_closure
             length(args) < 4 && return (false, false, false)
             typ = argextype(args[1], src)
@@ -1386,8 +1388,8 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
                     # and are likely to combine with the operations around them,
                     # so reduce their cost by half.
                     cost = T_IFUNC_COST[iidx]
-                    if cost == 0 || nargs < 3 ||
-                       (f === Intrinsics.cglobal || f === Intrinsics.llvmcall) # these hold malformed IR, so argextype will crash on them
+                    if cost == 0 || nargs < 3 || f === Intrinsics.llvmcall
+                        # holds malformed IR, so argextype will crash on it
                         return cost
                     end
                     aty2 = widenconditional(argextype(ex.args[2], src, sptypes))
@@ -1452,6 +1454,8 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
             end
         end
         return 20
+    elseif head === :foreignglobal
+        return 1
     elseif head === :invoke || head === :invoke_modify
         # Calls whose "return type" is Union{} do not actually return:
         # they are errors. Since these are not part of the typical

@@ -3206,14 +3206,35 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
         isempty(argtypes_vec) && push!(argtypes_vec, Union{})
         aft = argtypes_vec[1]
     end
-    if !(isa(aft, Const) || (isType(aft) && !has_free_typevars(aft)) ||
-            (isconcretetype(aft) && !(aft <: Builtin) && !iskindtype(aft)))
-        return Future(UNKNOWN)
-    end
-
     # effects are not an issue if we know this statement will get removed, but if it does not get removed,
     # then this could be recursively re-entering inference (via concrete-eval), which will not terminate
     RT_CALL_EFFECTS = Effects(EFFECTS_TOTAL; nortcall=false)
+
+    if isa(aft, PartialOpaque)
+        argtypes_vec[1] = aft = widenconst(aft)
+    end
+    aftw = widenconst(aft)
+    if hasintersect(aftw, Core.OpaqueClosure)
+        # Match `return_type(::OpaqueClosure, ::DataType)`: observe the return type
+        # declared by the OC type without inspecting the opaque closure source.
+        uaft = unwrap_unionall(aftw)
+        if isa(uaft, DataType) && aftw <: Core.OpaqueClosure
+            ocargt = rewrap_unionall(uaft.parameters[1], aftw)
+            if !hasintersect(af_argtype, ocargt)
+                return Future(CallMeta(Const(Union{}), Union{}, RT_CALL_EFFECTS, NoCallInfo()))
+            end
+            rt = rewrap_unionall(uaft.parameters[2], aftw)
+            if aftw isa DataType
+                return Future(CallMeta(Const(rt), Union{}, RT_CALL_EFFECTS, NoCallInfo()))
+            else
+                return Future(CallMeta(Type{<:rt}, Union{}, RT_CALL_EFFECTS, NoCallInfo()))
+            end
+        end
+    end
+    if !(isa(aft, Const) || (isType(aft) && !has_free_typevars(aft)) ||
+         (isconcretetype(aft) && !(aft <: Builtin) && !iskindtype(aft)))
+        return Future(UNKNOWN)
+    end
 
     if contains_is(argtypes_vec, Union{})
         return Future(CallMeta(Const(Union{}), Union{}, RT_CALL_EFFECTS, NoCallInfo()))

@@ -1879,13 +1879,21 @@ end
 const _verify_trim_world_age = RefValue{UInt}(typemax(UInt))
 verify_typeinf_trim(codeinfos::Vector{Any}, onlywarn::Bool) = Core._call_in_world(_verify_trim_world_age[], verify_typeinf_trim, Base.stderr, codeinfos, onlywarn)
 
+function _return_type_opaque_closure(@nospecialize(oc::Core.OpaqueClosure), t::DataType)
+    ocargt, ocrt = typeof(oc).parameters
+    hasintersect(t, ocargt) || return Union{}
+    return ocrt
+end
+
 function return_type(@nospecialize(f), t::DataType) # this method has a special tfunc
+    isa(f, Core.OpaqueClosure) && return _return_type_opaque_closure(f, t)
     world = tls_world_age()
     args = Any[_return_type, NativeInterpreter(world), Tuple{Core.Typeof(f), t.parameters...}]
     return ccall(:jl_call_in_typeinf_world, Any, (Ptr{Any}, Cint), args, length(args))
 end
 
 function return_type(@nospecialize(f), t::DataType, world::UInt)
+    isa(f, Core.OpaqueClosure) && return _return_type_opaque_closure(f, t)
     return return_type(Tuple{Core.Typeof(f), t.parameters...}, world)
 end
 

@@ -1748,7 +1748,7 @@ end
 # #6080
 @test_loweringerror(:(ccall(:a, Cvoid, (Cint,), &x)), "invalid syntax &x")
 
-@test_loweringerror(:(f(x) = (y = x + 1; ccall((:a, y), Cvoid, ()))), "ccall function name and library expression cannot reference local variables")
+@test_loweringerror(:(f(x) = (y = x + 1; ccall((:a, y), Cvoid, ()))), "ccall/cglobal function name and library expression cannot reference local variables")
 
 @test_parseerror "x.'"
 @test_parseerror "0.+1"
