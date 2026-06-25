@@ -530,7 +530,9 @@ JL_DLLEXPORT inline uintptr_t jl_object_id_(uintptr_t tv, jl_value_t *v) JL_NOTS
     }
     else if (tv == jl_datatype_tag << 4) {
         jl_datatype_t *dtv = (jl_datatype_t*)v;
-        if (dtv->isconcretetype)
+        // dt->hash is an egal-consistent object id for any datatype (concrete ones already
+        // use it); reuse it for non-concrete ones too rather than rehashing on every call.
+        if (dtv->hash)
             return dtv->hash;
     }
     else if (tv == (uintptr_t)jl_typename_type) {
