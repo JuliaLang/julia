@@ -4513,6 +4513,10 @@ function conditional_change(𝕃ᵢ::AbstractLattice, currstate::VarTable, condt
         # approximate test for `typ ∩ oldtyp` being better than `oldtyp`
         # since we probably formed these types with `typesubstract`,
         # the comparison is likely simple
+    elseif condt.isdefined && then_or_else === :then && vtype.undef
+         # For `@isdefined slot`, the type may not be a refinement
+         # but the `.undef` information still can be
+         return StateRefinement(condt.slot, oldtyp, #= undef =# false)
     else
         return nothing
     end
