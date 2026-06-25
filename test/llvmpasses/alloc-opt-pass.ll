@@ -299,6 +299,26 @@ define void @legal_int_i64() {
 }
 ; CHECK-LABEL: }{{$}}
 
+; Test that two disjoint objref fields stay separate and permit allocation promotion.
+; CHECK-LABEL: @two_objref_fields_no_merge
+; CHECK-NOT: @julia.gc_alloc_obj
+; CHECK: ret ptr addrspace(10)
+define ptr addrspace(10) @two_objref_fields_no_merge(ptr addrspace(10) %a, ptr addrspace(10) %b) {
+  %pgcstack = call ptr @julia.get_pgcstack()
+  %ptls = call ptr @julia.ptls_states()
+  %v = call noalias nonnull align 8 dereferenceable(16) ptr addrspace(10) @julia.gc_alloc_obj(ptr %ptls, i64 16, ptr addrspace(10) @tag) #7
+  %v_derived = addrspacecast ptr addrspace(10) %v to ptr addrspace(11)
+  store ptr addrspace(10) %a, ptr addrspace(11) %v_derived, align 8, !tbaa !20
+  %f1 = getelementptr inbounds i8, ptr addrspace(11) %v_derived, i64 8
+  store ptr addrspace(10) %b, ptr addrspace(11) %f1, align 8, !tbaa !20
+  %tok = call token (...) @llvm.julia.gc_preserve_begin(ptr addrspace(10) %v)
+  %l0 = load ptr addrspace(10), ptr addrspace(11) %v_derived, align 8, !tbaa !20
+  %l1 = load ptr addrspace(10), ptr addrspace(11) %f1, align 8, !tbaa !20
+  call void @llvm.julia.gc_preserve_end(token %tok)
+  ret ptr addrspace(10) %l1
+}
+; CHECK-LABEL: }{{$}}
+
 declare ptr @julia.ptls_states()
 
 declare ptr @julia.pointer_from_objref(ptr addrspace(11))
@@ -374,4 +394,3 @@ attributes #8 = { nounwind willreturn memory(inaccessiblemem: readwrite) }
 !24 = !{!14, !15, !17, !11}
 !25 = !{!26, !26, i64 0}
 !26 = !{!"jtbaa_mutab", !21, i64 0}
-
