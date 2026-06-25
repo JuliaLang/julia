@@ -256,6 +256,21 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
     return 1;
 }
 
+JL_DLLEXPORT char *jl_empty_memory_guard_base = NULL;
+size_t jl_empty_memory_guard_size = 0;
+
+void jl_init_empty_memory_guard(void)
+{
+    SYSTEM_INFO si;
+    GetSystemInfo(&si);
+    size_t sz = si.dwPageSize;
+    void *p = VirtualAlloc(NULL, sz, MEM_RESERVE | MEM_COMMIT, PAGE_NOACCESS);
+    if (p == NULL)
+        jl_errorf("fatal error: failed to reserve empty-memory guard page");
+    jl_empty_memory_guard_base = (char*)p;
+    jl_empty_memory_guard_size = sz;
+}
+
 LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
 {
     if (ExceptionInfo->ExceptionRecord->ExceptionFlags != 0)
@@ -295,6 +310,13 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
             }
             if (jl_get_safe_restore()) {
                 jl_throw_in_ctx(NULL, NULL, ExceptionInfo->ContextRecord);
+                return EXCEPTION_CONTINUE_EXECUTION;
+            }
+            if (ct->eh != NULL &&
+                jl_addr_in_empty_memory_guard((void*)ExceptionInfo->ExceptionRecord->ExceptionInformation[1])) {
+                // read or write of element 0 of an empty Memory, whose data pointer
+                // is the inaccessible guard page; surface it as a BoundsError.
+                jl_throw_in_ctx(ct, jl_empty_memory_exception, ExceptionInfo->ContextRecord);
                 return EXCEPTION_CONTINUE_EXECUTION;
             }
             if (ct->eh != NULL) {

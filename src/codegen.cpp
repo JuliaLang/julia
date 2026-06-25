@@ -4241,7 +4241,6 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         return true;
     }
 
-    jl_value_t *boundscheck = argv[nargs].constant;
     emit_typecheck(ctx, argv[nargs], (jl_value_t*)jl_bool_type, fname);
     const jl_datatype_layout_t *layout = ((jl_datatype_t*)mty_dt)->layout;
     bool isboxed = layout->flags.arrayelem_isboxed;
@@ -4270,10 +4269,19 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     }
     Value *mem = emit_memoryref_mem(ctx, ref, layout);
     Value *mlen = emit_genericmemorylen(ctx, mem, ref.typ);
-    if (bounds_check_enabled(ctx, boundscheck)) {
+    // The length==0 (empty Memory) check is normally elided: an empty Memory's data
+    // pointer is the inaccessible guard page, so element-0 access faults and the
+    // signal handler converts it into a BoundsError. Ops that touch no memory
+    // (zero-size elements; unset with no pointer slots to clear) keep an explicit check.
+    // (elsz == 0 precludes boxed; a union of singletons still writes its selector byte,
+    // but unset is a no-op for any union.)
+    jl_value_t *boundscheck = argv[nargs].constant;
+    bool no_access = (elsz == 0 && !isunion) ||
+                     (op == StoreKind::Unset && !isboxed && (isunion || layout->first_ptr < 0));
+    if (no_access && bounds_check_enabled(ctx, boundscheck)) {
         BasicBlock *failBB, *endBB;
         failBB = BasicBlock::Create(ctx.builder.getContext(), "oob");
-        endBB = BasicBlock::Create(ctx.builder.getContext(), "load");
+        endBB = BasicBlock::Create(ctx.builder.getContext(), "store");
         ctx.builder.CreateCondBr(ctx.builder.CreateIsNull(mlen), failBB, endBB);
         failBB->insertInto(ctx.f);
         ctx.builder.SetInsertPoint(failBB);
@@ -4666,7 +4674,16 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             const jl_datatype_layout_t *layout = ((jl_datatype_t*)mty_dt)->layout;
             Value *mem = emit_memoryref_mem(ctx, ref, layout);
             Value *mlen = emit_genericmemorylen(ctx, mem, ref.typ);
-            if (bounds_check_enabled(ctx, boundscheck)) {
+            bool isboxed = layout->flags.arrayelem_isboxed;
+            bool isunion = layout->flags.arrayelem_isunion;
+            size_t elsz = layout->size;
+            // The length==0 (empty Memory) check is normally elided: an empty Memory's
+            // data pointer is the inaccessible guard page, so the load faults and the
+            // signal handler converts it into a BoundsError. Zero-size (ghost) element
+            // loads touch no memory, so they keep an explicit check. (elsz == 0
+            // precludes boxed; a union of singletons still loads its selector byte.)
+            bool ghostelt = elsz == 0 && !isunion;
+            if (ghostelt && bounds_check_enabled(ctx, boundscheck)) {
                 BasicBlock *failBB, *endBB;
                 failBB = BasicBlock::Create(ctx.builder.getContext(), "oob");
                 endBB = BasicBlock::Create(ctx.builder.getContext(), "load");
@@ -4678,9 +4695,6 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 endBB->insertInto(ctx.f);
                 ctx.builder.SetInsertPoint(endBB);
             }
-            bool isboxed = layout->flags.arrayelem_isboxed;
-            bool isunion = layout->flags.arrayelem_isunion;
-            size_t elsz = layout->size;
             size_t al = layout->alignment;
             if (al > JL_HEAP_ALIGNMENT)
                 al = JL_HEAP_ALIGNMENT;

@@ -399,8 +399,7 @@ default_access_order(::GenericMemoryRef{:atomic}) = :monotonic
 
 function getindex(A::GenericMemory, i::Int)
     @_noub_if_noinbounds_meta
-    (@_boundscheck) && checkbounds(A, i)
-    memoryrefget(memoryrefnew(A, i, false), default_access_order(A), false)
+    memoryrefget(memoryrefnew(A, i, @_boundscheck), default_access_order(A), @_boundscheck)
 end
 
 getindex(A::GenericMemoryRef) = memoryrefget(A, default_access_order(A), @_boundscheck)

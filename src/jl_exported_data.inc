@@ -113,6 +113,7 @@
     XX(precompilable_error, jl_value_t*) \
     XX(quotenode_type, jl_datatype_t*) \
     XX(readonlymemory_exception, jl_value_t*) \
+    XX(empty_memory_exception, jl_value_t*) \
     XX(ref_type, jl_unionall_t*) \
     XX(returnnode_type, jl_datatype_t*) \
     XX(signed_type, jl_datatype_t*) \

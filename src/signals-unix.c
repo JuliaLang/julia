@@ -41,6 +41,24 @@
 #include <sys/event.h>
 #endif
 
+#ifndef MAP_NORESERVE // not defined in POSIX, FreeBSD, etc.
+#define MAP_NORESERVE (0)
+#endif
+
+JL_DLLEXPORT char *jl_empty_memory_guard_base = NULL;
+size_t jl_empty_memory_guard_size = 0;
+
+void jl_init_empty_memory_guard(void)
+{
+    size_t sz = jl_page_size;
+    void *p = mmap(NULL, sz, PROT_NONE,
+                   MAP_NORESERVE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (p == MAP_FAILED)
+        jl_errorf("fatal error: failed to reserve empty-memory guard page");
+    jl_empty_memory_guard_base = (char*)p;
+    jl_empty_memory_guard_size = sz;
+}
+
 // 8M signal stack, same as default stack size (though we barely use this)
 static const size_t sig_stack_size = 8 * 1024 * 1024;
 
@@ -546,7 +564,12 @@ JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context)
     }
     if (ct->eh == NULL)
         sigdie_handler(sig, info, context);
-    if ((sig != SIGBUS || info->si_code == BUS_ADRERR) && is_addr_on_stack(ct, info->si_addr)) { // stack overflow and not a BUS_ADRALN (alignment error)
+    if (jl_addr_in_empty_memory_guard(info->si_addr)) {
+        // read or write of element 0 of an empty Memory, whose data pointer is
+        // the inaccessible guard page; surface it as a BoundsError.
+        jl_throw_in_ctx(ct, jl_empty_memory_exception, sig, context);
+    }
+    else if ((sig != SIGBUS || info->si_code == BUS_ADRERR) && is_addr_on_stack(ct, info->si_addr)) { // stack overflow and not a BUS_ADRALN (alignment error)
         stack_overflow_warning();
         jl_throw_in_ctx(ct, jl_stackovf_exception, sig, context);
     }

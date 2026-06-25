@@ -1386,6 +1386,18 @@ STATIC_INLINE int jl_addr_is_safepoint(uintptr_t addr)
     uintptr_t safepoint_addr = (uintptr_t)jl_safepoint_pages;
     return addr >= safepoint_addr && addr < safepoint_addr + jl_page_size * 4;
 }
+// Inaccessible page used as the data pointer of the zero-length GenericMemory
+// singleton, so that dereferencing element 0 of an empty Memory faults instead of
+// needing a runtime length==0 check. `jl_empty_memory_guard_base` is declared in
+// julia.h (used by jl_genericmemory_how). See src/datatype.c and the signal handlers.
+extern size_t jl_empty_memory_guard_size;
+void jl_init_empty_memory_guard(void);
+STATIC_INLINE int jl_addr_in_empty_memory_guard(void *addr) JL_NOTSAFEPOINT
+{
+    char *a = (char*)addr;
+    return a >= jl_empty_memory_guard_base &&
+           a < jl_empty_memory_guard_base + jl_empty_memory_guard_size;
+}
 extern _Atomic(uint32_t) jl_gc_running;
 extern _Atomic(uint32_t) jl_gc_disable_counter;
 // All the functions are safe to be called from within a signal handler

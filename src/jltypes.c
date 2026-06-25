@@ -4214,6 +4214,12 @@ void post_boot_hooks(void)
     jl_fielderror_type       = (jl_datatype_t*)core("FieldError");
     jl_atomicerror_type      = (jl_datatype_t*)core("ConcurrencyViolationError");
     jl_boundserror_type      = (jl_datatype_t*)core("BoundsError");
+    // generic, pre-allocated BoundsError thrown from the signal handler when an
+    // empty Memory's guard page is dereferenced (no array/index detail available).
+    // Unlike the singleton exceptions above, BoundsError has fields, so this is a
+    // heap allocation that must be explicitly rooted.
+    jl_empty_memory_exception = jl_new_struct_uninit(jl_boundserror_type);
+    jl_as_global_root(jl_empty_memory_exception, 1);
     jl_typeerror_type        = (jl_datatype_t*)core("TypeError");
     jl_argumenterror_type    = (jl_datatype_t*)core("ArgumentError");
     jl_methoderror_type      = (jl_datatype_t*)core("MethodError");

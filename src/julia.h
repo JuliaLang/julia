@@ -1336,8 +1336,16 @@ STATIC_INLINE jl_value_t *jl_genericmemory_owner(jl_genericmemory_t *m JL_PROPAG
 #define JL_GENERICMEMORY_MALLOCD     2
 #define JL_GENERICMEMORY_STRINGOWNED 3
 
+// Inaccessible page used as the data pointer of the zero-length GenericMemory
+// singleton, so that dereferencing element 0 of an empty Memory faults.
+extern JL_DLLEXPORT char *jl_empty_memory_guard_base;
+
 STATIC_INLINE int jl_genericmemory_how(jl_genericmemory_t *m) JL_NOTSAFEPOINT
 {
+    if (m->ptr == (void*)jl_empty_memory_guard_base)
+        // the zero-length Memory singleton points its data at the inaccessible
+        // guard page rather than at inline data, but is still managed inline.
+        return JL_GENERICMEMORY_INLINED;
     if (m->ptr == (void*)((char*)m + 16)) // JL_SMALL_BYTE_ALIGNMENT (from julia_internal.h)
         return JL_GENERICMEMORY_INLINED;
     jl_value_t *owner = jl_genericmemory_data_owner_field(m);
