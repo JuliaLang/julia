@@ -32,27 +32,6 @@ static uint64_t parseEnvU64(const char *Name, uint64_t Default)
     return (uint64_t)V;
 }
 
-// Parse an env var as a real number in [0, 1] and convert to a fixed-point
-// fraction of 2^31.
-static uint32_t parseEnvFrac31(const char *Name, double Default)
-{
-    const char *S = getenv(Name);
-    double V = Default;
-    if (S && *S) {
-        char *End;
-        V = strtod(S, &End);
-        if (*End != '\0') {
-            fprintf(stderr, "objcache: invalid value for %s: %s\n", Name, S);
-            V = Default;
-        }
-    }
-    if (V < 0.0)
-        V = 0.0;
-    if (V > 1.0)
-        V = 1.0;
-    return (uint32_t)(V * (double)(1ULL << 31));
-}
-
 // We'll use a smaller default cache size on 32 bit, since we have a lot less
 // address space to spare.
 #ifdef _P64
@@ -62,9 +41,6 @@ static constexpr size_t OBJCACHE_DEFAULT_CAPACITY = 32 << 20;
 #endif
 static const size_t OBJCACHE_CAPACITY =
     parseEnvU64("JULIA_OBJCACHE_CAPACITY", OBJCACHE_DEFAULT_CAPACITY);
-
-// When the map is full, evict down to OBJCACHE_EVICT_TO/2^31 capacity.
-static const uint32_t OBJCACHE_EVICT_TO = parseEnvFrac31("JULIA_OBJCACHE_EVICT_TO", 0.75);
 
 static FILE *getLogFile()
 {
@@ -539,7 +515,7 @@ bool ObjCache::maybeEvictLRU(MDBTxn &Txn, size_t RoomFor)
         return dbiSize(Txn, ObjCacheDbi) + dbiSize(Txn, ObjMetaDbi) + RoomFor;
     };
     auto ShouldEvict = [&]() {
-        size_t Threshold = ((uint64_t)OBJCACHE_CAPACITY * OBJCACHE_EVICT_TO) >> 31;
+        size_t Threshold = OBJCACHE_CAPACITY * 3 / 4;
         return Used() > Threshold;
     };
 
