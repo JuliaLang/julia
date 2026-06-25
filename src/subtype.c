@@ -679,6 +679,37 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param);
 
 static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param, int limit_slow);
 
+static int is_leaf_typevar(jl_tvar_t *v) JL_NOTSAFEPOINT;
+
+// Check whether env (variable bounds & diagonality) changed compared to saved env.
+static int env_unchanged(jl_stenv_t *e, jl_savedenv_t *se) JL_NOTSAFEPOINT
+{
+    jl_value_t **roots = NULL;
+    if (se->gcframe.nroots == JL_GC_ENCODE_PUSHARGS(1)) {
+        jl_svec_t *sv = (jl_svec_t*)se->roots[0];
+        assert(jl_is_svec(sv));
+        roots = jl_svec_data(sv);
+    }
+    else if (se->gcframe.nroots) {
+        roots = se->roots;
+    }
+    jl_varbinding_t *v = e->vars;
+    int i = 0, j = 1;
+    while (v != NULL) {
+        assert(roots != NULL);
+        if (v->right) {
+            if (v->lb != roots[i] || v->ub != roots[i + 1])
+                return 0; // check if bounds changed
+            if (is_leaf_typevar(v->var) && v->occurs_inv == 0 && v->occurs_cov > 1 && se->buf[j] <= 1)
+                return 0; // check if a variable became digonal from non-diagonal
+        }
+        i += 3; // lb, ub, innervars
+        j += 3;
+        v = v->prev;
+    }
+    return 1;
+}
+
 // subtype for variable bounds consistency check. needs its own forall/exists environment.
 static int subtype_ccheck(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 {
@@ -694,6 +725,8 @@ static int subtype_ccheck(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
         return 1;
     if (x == (jl_value_t*)jl_any_type && jl_is_datatype(y))
         return 0;
+    if (obviously_in_union(y, x))
+        return 1;
     jl_saved_unionstate_t oldLunions; push_unionstate(&oldLunions, &e->Lunions);
     int sub = local_forall_exists_subtype(x, y, e, 0, 1);
     pop_unionstate(&e->Lunions, &oldLunions);
@@ -1112,31 +1145,32 @@ static int subtype_tuple_varargs(
             }
         }
     }
-    int x_same = vx > 1 || (lastx && obviously_egal(xp0, lastx));
-    int y_same = vy > 1 || (lasty && obviously_egal(yp0, lasty));
-    // keep track of number of consecutive identical subtyping
-    x_reps = y_same && x_same ? x_reps + 1 : 1;
-    if (x_reps > 2) {
-        // an identical type on the left doesn't need to be compared to the same
-        // element type on the right more than twice.
+    {
+        int x_same = vx > 1 || (lastx && obviously_egal(xp0, lastx));
+        int y_same = vy > 1 || (lasty && obviously_egal(yp0, lasty));
+        // keep track of number of consecutive identical subtyping
+        x_reps = y_same && x_same ? x_reps + 1 : 1;
+        if (x_reps > 2) {
+            // an identical type on the left doesn't need to be compared to the same
+            // element type on the right more than twice.
+        }
+        else if (x_same && e->Runions.depth == 0 && y_same &&
+            !jl_has_free_typevars(xp0) && !jl_has_free_typevars(yp0)) {
+            // fast path for repeated elements
+        }
+        else if ((e->Runions.depth == 0 ? !jl_has_free_typevars(xp0) : jl_is_concrete_type(xp0)) && !jl_has_free_typevars(yp0)) {
+            // fast path for separable sub-formulas
+            if (!jl_subtype(xp0, yp0))
+                return 0;
+        }
+        else {
+            // in Vararg{T1} <: Vararg{T2}, need to check subtype twice to
+            // simulate the possibility of multiple arguments, which is needed
+            // to implement the diagonal rule correctly.
+            if (!subtype(xp0, yp0, e, param)) return 0;
+            if (x_reps < 2 && !subtype(xp0, yp0, e, 1)) return 0;
+        }
     }
-    else if (x_same && e->Runions.depth == 0 && y_same &&
-        !jl_has_free_typevars(xp0) && !jl_has_free_typevars(yp0)) {
-        // fast path for repeated elements
-    }
-    else if ((e->Runions.depth == 0 ? !jl_has_free_typevars(xp0) : jl_is_concrete_type(xp0)) && !jl_has_free_typevars(yp0)) {
-        // fast path for separable sub-formulas
-        if (!jl_subtype(xp0, yp0))
-            return 0;
-    }
-    else {
-        // in Vararg{T1} <: Vararg{T2}, need to check subtype twice to
-        // simulate the possibility of multiple arguments, which is needed
-        // to implement the diagonal rule correctly.
-        if (!subtype(xp0, yp0, e, param)) return 0;
-        if (x_reps < 2 && !subtype(xp0, yp0, e, 1)) return 0;
-    }
-
 constrain_length:
     if (!yp1) {
         return 1;
@@ -1673,8 +1707,6 @@ static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t 
                 break;
             if (limited || e->Runions.more == oldRmore) {
                 // re-save env and freeze the ∃decision for previous ∀Union
-                // Note: We could ignore the rest `∃Union` decisions if `x` and `y`
-                // contain no ∃ typevar, as they have no effect on env.
                 ini_count = count;
                 push_unionstate(&latestLunions, &e->Lunions);
                 re_save_env(e, &se, 1);
@@ -1690,7 +1722,9 @@ static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t 
     }
     if (!sub)
         assert(e->Runions.more == oldRmore);
-    else if (limited)
+    else if (e->Runions.more > oldRmore && (limited || env_unchanged(e, &se)))
+        // Ignore the rest ∃Union decisions if env is unchanged/limited.
+        // As otherwise it might cause combinatorial explosion without making any difference to the result.
         e->Runions.more = oldRmore;
     free_env(&se);
     return sub;

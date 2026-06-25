@@ -631,7 +631,7 @@ void jl_gc_reset_alloc_count(void) JL_NOTSAFEPOINT
 static void jl_gc_free_memory(jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPOINT
 {
     assert(jl_is_genericmemory(m));
-    assert(jl_genericmemory_how(m) == 1);
+    assert(jl_genericmemory_how(m) == JL_GENERICMEMORY_GCMANAGED);
     char *d = (char*)m->ptr;
     size_t freed_bytes = memory_block_usable_size(d, isaligned);
     assert(freed_bytes != 0);
@@ -928,7 +928,12 @@ static void gc_sweep_page(gc_page_profiler_serializer_t *s, jl_gc_pool_t *p, jl_
             }
             v = (jl_taggedvalue_t*)((char*)v + osize);
         }
-        assert(!freedall);
+        // gc_scrub_range (active under WITH_GC_DEBUG_ENV) conservatively marks any
+        // pool object found on a task stack, including slots past lim_newpages on the
+        // currently-active bump-pointer page. Those slots are unconditionally treated
+        // as garbage by the sweep (line above: `(char*)v >= lim_newpages`), so
+        // freedall=1 is valid when this is the active newpages page.
+        assert(!freedall || lim_newpages < data + GC_PAGE_SZ);
         pg->has_marked = has_marked;
         pg->has_young = has_young;
         if (pfl_begin) {
@@ -2375,13 +2380,13 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                     gc_setmark_big(ptls, o, bits);
             }
             int how = jl_genericmemory_how(m);
-            if (how == 0 || how == 2) {
-                gc_heap_snapshot_record_hidden_edge(new_obj, m->ptr, jl_genericmemory_nbytes(m), how == 0 ? 2 : 0);
+            if (how == JL_GENERICMEMORY_MALLOCD) {
+                gc_heap_snapshot_record_foreign_memory_edge(
+                    new_obj, m->ptr, jl_genericmemory_nbytes(m));
             }
-            else if (how == 1) {
+            else if (how == JL_GENERICMEMORY_GCMANAGED) {
                 if (update_meta || foreign_alloc) {
                     size_t nb = jl_genericmemory_nbytes(m);
-                    gc_heap_snapshot_record_hidden_edge(new_obj, m->ptr, nb, 0);
                     if (bits == GC_OLD_MARKED) {
                         ptls->gc_tls.gc_cache.perm_scanned_bytes += nb;
                     }
@@ -2390,7 +2395,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                     }
                 }
             }
-            else if (how == 3) {
+            else if (how == JL_GENERICMEMORY_STRINGOWNED) {
                 jl_value_t *owner = jl_genericmemory_data_owner_field(m);
                 uintptr_t nptr = (1 << 2) | (bits & GC_OLD);
                 gc_try_claim_and_push(mq, owner, &nptr);
@@ -4005,56 +4010,58 @@ JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p)
             // case 1: full page; `cell` must be an object
             goto valid_object;
         }
-        jl_gc_pool_t *pool =
-            gc_all_tls_states[meta->thread_n]->gc_tls.heap.norm_pools +
-            meta->pool_n;
-        if (meta->fl_begin_offset == UINT16_MAX) {
-            // case 2: this is a page on the newpages list
-            jl_taggedvalue_t *newpages = pool->newpages;
-            // Check if the page is being allocated from via newpages
-            if (!newpages)
-                return NULL;
-            char *data = gc_page_data(newpages);
-            if (data != meta->data) {
-                // Pages on newpages form a linked list where only the
-                // first one is allocated from (see gc_reset_page()).
-                // All other pages are empty.
-                return NULL;
+        {
+            jl_gc_pool_t *pool =
+                gc_all_tls_states[meta->thread_n]->gc_tls.heap.norm_pools +
+                meta->pool_n;
+            if (meta->fl_begin_offset == UINT16_MAX) {
+                // case 2: this is a page on the newpages list
+                jl_taggedvalue_t *newpages = pool->newpages;
+                // Check if the page is being allocated from via newpages
+                if (!newpages)
+                    return NULL;
+                char *data = gc_page_data(newpages);
+                if (data != meta->data) {
+                    // Pages on newpages form a linked list where only the
+                    // first one is allocated from (see gc_reset_page()).
+                    // All other pages are empty.
+                    return NULL;
+                }
+                // This is the first page on the newpages list, where objects
+                // are allocated from.
+                if ((char *)cell >= (char *)newpages) // past allocation pointer
+                    return NULL;
+                goto valid_object;
             }
-            // This is the first page on the newpages list, where objects
-            // are allocated from.
-            if ((char *)cell >= (char *)newpages) // past allocation pointer
-                return NULL;
-            goto valid_object;
+            // case 3: this is a page with a freelist
+            // marked or old objects can't be on the freelist
+            if (cell->bits.gc)
+                goto valid_object;
+            // When allocating from a freelist, three subcases are possible:
+            // * The freelist of a page has been exhausted; this was handled
+            //   under case 1, as nfree == 0.
+            // * The freelist of the page has not been used, and the age bits
+            //   reflect whether a cell is on the freelist or an object.
+            // * The freelist is currently being allocated from. In this case,
+            //   pool->freelist will point to the current page; any cell with
+            //   a lower address will be an allocated object, and for cells
+            //   with the same or a higher address, the corresponding age
+            //   bit will reflect whether it's on the freelist.
+            // Age bits are set in sweep_page() and are 0 for freelist
+            // entries and 1 for live objects. The above subcases arise
+            // because allocating a cell will not update the age bit, so we
+            // need extra logic for pages that have been allocated from.
+            // We now distinguish between the second and third subcase.
+            // Freelist entries are consumed in ascending order. Anything
+            // before the freelist pointer was either live during the last
+            // sweep or has been allocated since.
+            if (gc_page_data(cell) == gc_page_data(pool->freelist)
+                && (char *)cell < (char *)pool->freelist)
+                goto valid_object;
+            // already skipped marked or old objects above, so here
+            // the age bits are 0, thus the object is on the freelist
+            return NULL;
         }
-        // case 3: this is a page with a freelist
-        // marked or old objects can't be on the freelist
-        if (cell->bits.gc)
-            goto valid_object;
-        // When allocating from a freelist, three subcases are possible:
-        // * The freelist of a page has been exhausted; this was handled
-        //   under case 1, as nfree == 0.
-        // * The freelist of the page has not been used, and the age bits
-        //   reflect whether a cell is on the freelist or an object.
-        // * The freelist is currently being allocated from. In this case,
-        //   pool->freelist will point to the current page; any cell with
-        //   a lower address will be an allocated object, and for cells
-        //   with the same or a higher address, the corresponding age
-        //   bit will reflect whether it's on the freelist.
-        // Age bits are set in sweep_page() and are 0 for freelist
-        // entries and 1 for live objects. The above subcases arise
-        // because allocating a cell will not update the age bit, so we
-        // need extra logic for pages that have been allocated from.
-        // We now distinguish between the second and third subcase.
-        // Freelist entries are consumed in ascending order. Anything
-        // before the freelist pointer was either live during the last
-        // sweep or has been allocated since.
-        if (gc_page_data(cell) == gc_page_data(pool->freelist)
-            && (char *)cell < (char *)pool->freelist)
-            goto valid_object;
-        // already skipped marked or old objects above, so here
-        // the age bits are 0, thus the object is on the freelist
-        return NULL;
         // Not a freelist entry, therefore a valid object.
     valid_object:
         // We have to treat objects with type `jl_buff_tag` differently,

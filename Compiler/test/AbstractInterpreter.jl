@@ -103,6 +103,15 @@ overlay_match(::Any) = nothing
     overlay_match(x)
 end |> only === Union{Nothing,Missing}
 
+# overlay method should shadow the base method with the same signature,
+# filtering it out from method match results
+overlay_shadow_zero() = Any[]
+overlay_shadow_zero(xs::Vector{Int}...) = Int[xs[i][j] for i=eachindex(xs) for j=eachindex(xs[i])]
+@overlay OVERLAY_MT overlay_shadow_zero() = error()
+@test Base.infer_return_type((Vector{Vector{Int}},); interp=MTOverlayInterp()) do x
+    overlay_shadow_zero(x...)
+end == Vector{Int}
+
 # partial concrete evaluation
 @test Base.return_types(; interp=MTOverlayInterp()) do
     isbitstype(Int) ? nothing : missing
@@ -407,10 +416,10 @@ Compiler.nsplit_impl(info::NoinlineCallInfo) = Compiler.nsplit(info.info)
 Compiler.getsplit_impl(info::NoinlineCallInfo, idx::Int) = Compiler.getsplit(info.info, idx)
 Compiler.getresult_impl(info::NoinlineCallInfo, idx::Int) = Compiler.getresult(info.info, idx)
 
-function Compiler.abstract_call(interp::NoinlineInterpreter,
-    arginfo::Compiler.ArgInfo, si::Compiler.StmtInfo, sv::Compiler.InferenceState, max_methods::Int)
+function Compiler.abstract_call(interp::NoinlineInterpreter, arginfo::Compiler.ArgInfo, si::Compiler.StmtInfo,
+    vtypes::Union{Compiler.VarTable,Nothing}, sv::Compiler.InferenceState, max_methods::Int)
     ret = @invoke Compiler.abstract_call(interp::Compiler.AbstractInterpreter,
-        arginfo::Compiler.ArgInfo, si::Compiler.StmtInfo, sv::Compiler.InferenceState, max_methods::Int)
+        arginfo::Compiler.ArgInfo, si::Compiler.StmtInfo, vtypes::Union{Compiler.VarTable,Nothing}, sv::Compiler.InferenceState, max_methods::Int)
     return Compiler.Future{Compiler.CallMeta}(ret, interp, sv) do ret, interp, sv
         if sv.mod in noinline_modules(interp)
             (;rt, exct, effects, info) = ret

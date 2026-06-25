@@ -98,9 +98,10 @@ void win32_formatmessage(DWORD code, char *reason, int len) JL_NOTSAFEPOINT
 }
 #endif
 
+typedef void* (*dlopen_prototype)(const char* filename, int flags) JL_NOTSAFEPOINT;
+
 #if defined(_COMPILER_MSAN_ENABLED_) || defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_)
 struct link_map;
-typedef void* (dlopen_prototype)(const char* filename, int flags);
 
 /* This function is copied from the memory sanitizer runtime.
    Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
@@ -173,32 +174,84 @@ JL_DLLEXPORT void *jl_dlopen(const char *filename, unsigned flags) JL_NOTSAFEPOI
 
 #define JL_RTLD(flags, FLAG) (flags & JL_RTLD_ ## FLAG ? RTLD_ ## FLAG : 0)
 
+int jl_running_under_sanitizer(int recheck) JL_NOTSAFEPOINT
+{
+#if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_)
+    return 1;
+#else
+    static _Atomic(int) detected_ = -1;
+    int detected = jl_atomic_load_relaxed(&detected_);
+    if (detected < 0 || recheck) {
+        const char *env = getenv("JULIA_ASAN_COMPAT");
+        if (env != NULL && env[0] != '\0')
+            detected = strcmp(env, "0") != 0 ? 1 : 0;
+        else if (dlsym(RTLD_DEFAULT, "__asan_init") != NULL)
+            detected = 1;
+        else
+            detected = 0;
+        jl_atomic_store_relaxed(&detected_, detected);
+    }
+    return detected == 1;
+#endif
+}
+
+#ifdef RTLD_DEEPBIND
+// RTLD_DEEPBIND is incompatible with the sanitizers' libc interposition
+// (c.f. https://github.com/google/sanitizers/issues/611)
+static int jl_use_rtld_deepbind(int recheck) JL_NOTSAFEPOINT
+{
+    static _Atomic(int) enabled_ = -1;
+    int enabled = jl_atomic_load_relaxed(&enabled_);
+    if (enabled < 0 || recheck) {
+        const char *env = getenv("JULIA_USE_RTLD_DEEPBIND");
+        if (env != NULL && env[0] != '\0')
+            enabled = strcmp(env, "0") != 0;
+        else
+            enabled = !jl_running_under_sanitizer(recheck);
+        jl_atomic_store_relaxed(&enabled_, enabled);
+    }
+    return enabled == 1;
+}
+#endif
+
+/* The sanitizers break RUNPATH use in dlopen for annoying reasons that are
+   are hard to fix. Specifically, libc will use the return address of the
+   caller to determine certain paths and flags that affect .so location lookup.
+   To work around this, we need to avoid using the sanitizer's dlopen interposition,
+   instead using the real dlopen directly from the current shared library.
+   Of course, this does mean that we need to manually perform the work that
+   the sanitizers would otherwise do. */
+static JL_NO_SANITIZE dlopen_prototype resolve_dlopen(void) JL_NOTSAFEPOINT
+{
+#if defined(__GLIBC__)
+    // When a sanitizer is active, bypass its dlopen interposition by resolving and
+    // caching the real libdl dlopen; otherwise use dlopen directly.
+    if (jl_running_under_sanitizer(/*recheck*/0)) {
+        static dlopen_prototype real_dlopen = NULL;
+        if (!real_dlopen) {
+            real_dlopen = (dlopen_prototype)dlsym(RTLD_NEXT, "dlopen");
+            if (!real_dlopen)
+                return NULL;
+            void *libdl_handle = real_dlopen("libdl.so.2", RTLD_NOW | RTLD_NOLOAD);
+            assert(libdl_handle);
+            real_dlopen = (dlopen_prototype)dlsym(libdl_handle, "dlopen");
+            dlclose(libdl_handle);
+            assert(real_dlopen);
+        }
+        // The real interceptors check the validity of the string here, but let's
+        // just skip that for the time being.
+        return real_dlopen;
+    }
+#endif
+    return &dlopen;
+}
+
 JL_DLLEXPORT JL_NO_SANITIZE void *jl_dlopen(const char *filename, unsigned flags) JL_NOTSAFEPOINT
 {
-    /* The sanitizers break RUNPATH use in dlopen for annoying reasons that are
-       are hard to fix. Specifically, libc will use the return address of the
-       caller to determine certain paths and flags that affect .so location lookup.
-       To work around this, we need to avoid using the sanitizer's dlopen interposition,
-       instead using the real dlopen directly from the current shared library.
-       Of course, this does mean that we need to manually perform the work that
-       the sanitizers would otherwise do. */
-#if (defined(_COMPILER_MSAN_ENABLED_) || defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_)) && __GLIBC__
-    static dlopen_prototype *dlopen = NULL;
-    if (!dlopen) {
-        dlopen = (dlopen_prototype*)dlsym(RTLD_NEXT, "dlopen");
-        if (!dlopen)
-            return NULL;
-        void *libdl_handle = dlopen("libdl.so.2", RTLD_NOW | RTLD_NOLOAD);
-        assert(libdl_handle);
-        dlopen = (dlopen_prototype*)dlsym(libdl_handle, "dlopen");
-        dlclose(libdl_handle);
-        assert(dlopen);
-    }
-    // The real interceptors check the validity of the string here, but let's
-    // just skip that for the time being.
-#endif
-    void *hnd = dlopen(filename,
-                  (flags & JL_RTLD_NOW ? RTLD_NOW : RTLD_LAZY)
+    dlopen_prototype dlopen_fptr = resolve_dlopen();
+    if (dlopen_fptr == NULL)
+        return NULL;
+    int real_flags = (flags & JL_RTLD_NOW ? RTLD_NOW : RTLD_LAZY)
                   | JL_RTLD(flags, LOCAL)
                   | JL_RTLD(flags, GLOBAL)
 #ifdef RTLD_NODELETE
@@ -207,13 +260,15 @@ JL_DLLEXPORT JL_NO_SANITIZE void *jl_dlopen(const char *filename, unsigned flags
 #ifdef RTLD_NOLOAD
                   | JL_RTLD(flags, NOLOAD)
 #endif
-#if defined(RTLD_DEEPBIND) && !(defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_))
-                  | JL_RTLD(flags, DEEPBIND)
-#endif
 #ifdef RTLD_FIRST
                   | JL_RTLD(flags, FIRST)
 #endif
-                  );
+                  ;
+#ifdef RTLD_DEEPBIND
+    if (jl_use_rtld_deepbind(/*recheck*/0))
+        real_flags = real_flags | JL_RTLD(flags, DEEPBIND);
+#endif
+    void *hnd = dlopen_fptr(filename, real_flags);
 #if defined(_COMPILER_MSAN_ENABLED_) && defined(__GLIBC__)
     struct link_map *map = (struct link_map*)hnd;
     if (filename && map)
@@ -251,19 +306,17 @@ void *jl_find_dynamic_library_by_addr(void *symbol, int throw_err) {
         return NULL;
     }
 #else
-    Dl_info info;
-    if (!dladdr(symbol, &info) || !info.dli_fname) {
+    const char *path = jl_pathname_for_symbol(symbol);
+    if (path == NULL) {
         if (throw_err)
             jl_error("could not load base module");
         return NULL;
     }
-    handle = dlopen(info.dli_fname, RTLD_NOW | RTLD_NOLOAD | RTLD_LOCAL);
-#if !defined(__APPLE__)
-    if (handle == RTLD_DEFAULT && (RTLD_DEFAULT != NULL || dlerror() == NULL)) {
-        // We loaded the executable but got RTLD_DEFAULT back, ask for a real handle instead
-        handle = dlopen("", RTLD_NOW | RTLD_NOLOAD | RTLD_LOCAL);
+    if (path[0] == '\0') { // symbol is in the main executable
+        handle = dlopen(NULL, RTLD_NOW | RTLD_NOLOAD | RTLD_LOCAL);
+    } else {
+        handle = dlopen(path, RTLD_NOW | RTLD_NOLOAD | RTLD_LOCAL);
     }
-#endif
     if (handle != NULL)
         dlclose(handle); // Undo ref count increment from `dlopen`
 #endif

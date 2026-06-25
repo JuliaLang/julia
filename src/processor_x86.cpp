@@ -5,6 +5,17 @@
 // CPUID
 
 #include "julia.h"
+
+#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
+#  include <sched.h>
+#  include <unistd.h>
+#  define JL_X86_AFFINITY_LINUX 1
+#elif defined(_OS_WINDOWS_)
+#  include <windows.h>
+#  define JL_X86_AFFINITY_WIN32 1
+#endif
+
+
 extern "C" JL_DLLEXPORT void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType)
 {
     asm volatile (
@@ -215,11 +226,11 @@ constexpr auto cannonlake = skylake | get_feature_masks(avx512f, avx512cd, avx51
 constexpr auto icelake = cannonlake | get_feature_masks(avx512bitalg, vaes, avx512vbmi2,
                                                         vpclmulqdq, avx512vpopcntdq,
                                                         gfni, clwb, rdpid);
-constexpr auto icelake_server = icelake | get_feature_masks(pconfig, wbnoinvd);
+constexpr auto icelake_server = icelake; // pconfig (privileged), wbnoinvd (privileged)
 constexpr auto tigerlake = icelake | get_feature_masks(avx512vp2intersect, movdiri,
                                                        movdir64b, shstk);
-constexpr auto alderlake = skylake | get_feature_masks(clwb, sha, waitpkg, shstk, gfni, vaes, vpclmulqdq, pconfig,
-                                                       rdpid, movdiri, pku, movdir64b, serialize, ptwrite, avxvnni);
+constexpr auto alderlake = skylake | get_feature_masks(clwb, sha, waitpkg, shstk, gfni, vaes, vpclmulqdq,
+                                                       rdpid, movdiri, pku, movdir64b, serialize, ptwrite, avxvnni); // pconfig (privileged)
 constexpr auto sapphirerapids = icelake_server |
     get_feature_masks(amx_tile, amx_int8, amx_bf16, avx512bf16, avx512fp16, serialize, cldemote, waitpkg,
                       avxvnni, uintr, ptwrite, tsxldtrk, enqcmd, shstk, avx512vp2intersect, movdiri, movdir64b);
@@ -242,7 +253,7 @@ constexpr auto bdver4 = bdver3 | get_feature_masks(avx2, bmi2, mwaitx, movbe, rd
 // See: https://github.com/JuliaLang/julia/issues/50102
 constexpr auto znver1 = haswell | get_feature_masks(adx, aes, clflushopt, clzero, mwaitx, prfchw,
                                                     rdseed, sha, sse4a, xsavec);
-constexpr auto znver2 = znver1 | get_feature_masks(clwb, rdpid, wbnoinvd);
+constexpr auto znver2 = znver1 | get_feature_masks(clwb, rdpid); // wbnoinvd (privileged)
 constexpr auto znver3 = znver2 | get_feature_masks(shstk, pku, vaes, vpclmulqdq);
 constexpr auto znver4 = znver3 | get_feature_masks(avx512f, avx512cd, avx512dq, avx512bw, avx512vl, avx512ifma, avx512vbmi,
                                                    avx512vbmi2, avx512vnni, avx512bitalg, avx512vpopcntdq, avx512bf16, gfni, shstk, xsaves);
@@ -617,7 +628,10 @@ static inline void features_disable_amx(T &features)
     unset_bits(features, amx_bf16, amx_tile, amx_int8);
 }
 
-static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu(void)
+// Collect CPUID/XCR0-derived features on the currently running core.
+// CPU-name selection is intentionally excluded (family/model are constant
+// across cores in a single package).
+static NOINLINE FeatureList<feature_sz> _get_host_cpu_features(void)
 {
     FeatureList<feature_sz> features = {};
 
@@ -625,22 +639,9 @@ static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu(void)
     jl_cpuid(info0, 0);
     uint32_t maxleaf = info0[0];
     if (maxleaf < 1)
-        return std::make_pair(uint32_t(CPU::generic), features);
+        return features;
     int32_t info1[4];
     jl_cpuid(info1, 1);
-
-    auto vendor = info0[1];
-    auto brand_id = info1[1] & 0xff;
-
-    auto family = (info1[0] >> 8) & 0xf; // Bits 8 - 11
-    auto model = (info1[0] >> 4) & 0xf;  // Bits 4 - 7
-    if (family == 6 || family == 0xf) {
-        if (family == 0xf)
-            // Examine extended family ID if family ID is F.
-            family += (info1[0] >> 20) & 0xff; // Bits 20 - 27
-        // Examine extended model ID if family ID is 6 or F.
-        model += ((info1[0] >> 16) & 0xf) << 4; // Bits 16 - 19
-    }
 
     // Fill in the features
     features[0] = info1[2];
@@ -710,6 +711,131 @@ static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu(void)
         features_disable_amx(features);
     // Ignore feature bits that we are not interested in.
     mask_features(feature_masks, &features[0]);
+
+    return features;
+}
+
+// CPUID(7, 0).EDX bit 15: package contains heterogeneous core types
+// (Intel "Hybrid" — Alder Lake and later) with potentially different
+// CPU features available / enabled on each core.
+static bool cpu_is_hybrid_arch(void)
+{
+    int32_t info0[4];
+    jl_cpuid(info0, 0);
+    if (uint32_t(info0[0]) < 7)
+        return false;
+    int32_t info7[4];
+    jl_cpuidex(info7, 7, 0);
+    return ((uint32_t)info7[3] >> 15) & 1;
+}
+
+// Iterate every core that this process may be scheduled onto (including
+// cores outside the current CPU affinity), invoking `fn` while bound to
+// each one. Falls back to a single invocation on platforms where we have
+// no portable way to enumerate / pin to specific cores.
+template <typename Fn>
+static void for_each_schedulable_cpu(Fn &&fn)
+{
+#if defined(JL_X86_AFFINITY_LINUX)
+    cpu_set_t old_mask;
+    CPU_ZERO(&old_mask);
+    if (sched_getaffinity(0, sizeof(old_mask), &old_mask) != 0) {
+        fn();
+        return;
+    }
+    long ncpu = sysconf(_SC_NPROCESSORS_ONLN);
+    if (ncpu <= 0) ncpu = CPU_SETSIZE;
+    if (ncpu > CPU_SETSIZE) ncpu = CPU_SETSIZE;
+    if (ncpu <= 1) {
+        fn();
+        return;
+    }
+    bool ran = false;
+    for (long cpu = 0; cpu < ncpu; cpu++) {
+        cpu_set_t one;
+        CPU_ZERO(&one);
+        CPU_SET(cpu, &one);
+        if (sched_setaffinity(0, sizeof(one), &one) != 0) continue;
+        fn();
+        ran = true;
+    }
+    sched_setaffinity(0, sizeof(old_mask), &old_mask);
+    if (!ran) fn();
+#elif defined(JL_X86_AFFINITY_WIN32)
+    // On Windows a thread can't widen past its process mask, so the
+    // process mask is the upper bound of schedulable CPUs.
+    DWORD_PTR proc_mask = 0, sys_mask = 0;
+    HANDLE thread = GetCurrentThread();
+    if (!GetProcessAffinityMask(GetCurrentProcess(), &proc_mask, &sys_mask) || proc_mask == 0) {
+        fn();
+        return;
+    }
+    int n = 0;
+    for (DWORD_PTR m = proc_mask; m; m &= m - 1) n++;
+    if (n <= 1) {
+        fn();
+        return;
+    }
+    // Windows has no GetThreadAffinityMask; SetThreadAffinityMask returns
+    // the previous mask, so we read-modify-write to capture the original.
+    DWORD_PTR saved = SetThreadAffinityMask(thread, proc_mask);
+    if (saved == 0) {
+        fn();
+        return;
+    }
+    bool ran = false;
+    for (unsigned cpu = 0; cpu < sizeof(DWORD_PTR) * 8; cpu++) {
+        DWORD_PTR bit = (DWORD_PTR)1 << cpu;
+        if (!(proc_mask & bit)) continue;
+        if (SetThreadAffinityMask(thread, bit) == 0) continue;
+        // Windows applies the new affinity at the next dispatch; yield
+        // to force a migration before CPUID runs.
+        SwitchToThread();
+        fn();
+        ran = true;
+    }
+    SetThreadAffinityMask(thread, saved);
+    if (!ran) fn();
+#else
+    fn();
+#endif
+}
+
+static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu(void)
+{
+    int32_t info0[4];
+    jl_cpuid(info0, 0);
+    uint32_t maxleaf = info0[0];
+    if (maxleaf < 1)
+        return std::make_pair(uint32_t(CPU::generic), FeatureList<feature_sz>{});
+    int32_t info1[4];
+    jl_cpuid(info1, 1);
+
+    auto vendor = info0[1];
+    auto brand_id = info1[1] & 0xff;
+
+    auto family = (info1[0] >> 8) & 0xf; // Bits 8 - 11
+    auto model = (info1[0] >> 4) & 0xf;  // Bits 4 - 7
+    if (family == 6 || family == 0xf) {
+        if (family == 0xf)
+            // Examine extended family ID if family ID is F.
+            family += (info1[0] >> 20) & 0xff; // Bits 20 - 27
+        // Examine extended model ID if family ID is 6 or F.
+        model += ((info1[0] >> 16) & 0xf) << 4; // Bits 16 - 19
+    }
+
+    // Detect CPUID/XCR0-derived features on the current core, then
+    // intersect across every other core we might be scheduled onto if
+    // this is a hybrid CPU package — feature sets can differ between
+    // P-cores and E-cores on Alder Lake and later.
+    FeatureList<feature_sz> features = _get_host_cpu_features();
+    if (cpu_is_hybrid_arch()) {
+        for_each_schedulable_cpu([&]() {
+            FeatureList<feature_sz> per_core = _get_host_cpu_features();
+            for (size_t i = 0; i < feature_sz; i++)
+                features[i] &= per_core[i];
+        });
+    }
 
     uint32_t cpu;
     if (vendor == SIG_INTEL) {
@@ -851,6 +977,10 @@ static TargetData<feature_sz> arg_target_data(const TargetData<feature_sz> &arg,
     enable_depends(res.en.features);
     // Mask our rdrand/rdseed/rtm/xsaveopt features that LLVM doesn't use and rr disables
     unset_bits(res.en.features, Feature::rdrnd, Feature::rdseed, Feature::rtm, Feature::xsaveopt);
+    // Disable avx512fp16: it crashes the LLVM backend when compiling Float16 code
+    // (https://github.com/JuliaLang/julia/issues/61657). Unsetting it here makes every
+    // target (JIT and multiversioned image) emit `-avx512fp16` to LLVM.
+    unset_bits(res.en.features, Feature::avx512fp16);
     for (size_t i = 0; i < feature_sz; i++)
         res.en.features[i] &= ~res.dis.features[i];
     if (require_host) {
