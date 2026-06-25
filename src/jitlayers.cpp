@@ -215,7 +215,7 @@ static void jl_promote_method_roots(jl_codegen_output_t &out, jl_method_instance
 StringRef jl_codegen_output_t::strip_linux(StringRef name)
 {
     if (TargetTriple.isOSLinux()) {
-        if (name[0] == '@')
+        if (name.size() >= 1 && name[0] == '@')
             return name.drop_front();
     }
     return name;
@@ -892,7 +892,7 @@ public:
 #ifndef __clang_analyzer__
         {
             uint8_t state = jl_gc_unsafe_enter(ct->ptls);
-            JIT.optimizeDLSyms(*Out.module); // May safepoint
+            JIT.optimizeDLSyms(Out); // May safepoint
             jl_gc_unsafe_leave(ct->ptls, state);
         }
 #endif
@@ -1569,19 +1569,34 @@ struct JuliaOJIT::DLSymOptimizer {
         return handle;
     }
 
-    void operator()(Module &M) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER {
+    void operator()(Module &M,
+                    DenseMap<jl_csymbol_spec_t, std::pair<std::string, void *>> *csymbols =
+                        nullptr) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
+    {
+        // StackSafetyAnalysis fails on LLVM call instructions that call
+        // GlobalVariables, so we'll disable this pass for now when addrsan is
+        // used in the JIT.
+#ifdef _COMPILER_ASAN_ENABLED_
+        return;
+#endif
+        jl_name_counter_t Names;
         for (auto &GV : M.globals()) {
             auto Name = GV.getName();
+            jl_csymbol_spec_t CSym;
             if (Name.starts_with("jlplt") && Name.ends_with("got")) {
                 auto fname = GV.getAttribute("julia.fname").getValueAsString().str();
                 void *addr;
                 if (GV.hasAttribute("julia.libname")) {
                     auto libname = GV.getAttribute("julia.libname").getValueAsString().str();
                     addr = lookup(libname.data(), fname.data());
+                    CSym.func = jl_symbol_name(jl_symbol(fname.data()));
+                    CSym.lib = jl_symbol_name(jl_symbol(libname.data()));
                 } else {
                     assert(GV.hasAttribute("julia.libidx") && "PLT entry should have either libname or libidx attribute!");
                     auto libidx = (uintptr_t)std::stoull(GV.getAttribute("julia.libidx").getValueAsString().str());
                     addr = lookup(libidx, fname.data());
+                    CSym.func = jl_symbol_name(jl_symbol(fname.data()));
+                    CSym.lib = (void *)libidx;
                 }
                 if (addr) {
                     Function *Thunk = nullptr;
@@ -1593,12 +1608,12 @@ struct JuliaOJIT::DLSymOptimizer {
                     else {
                         GV.setLinkage(GlobalValue::PrivateLinkage);
                     }
-                    auto init = ConstantExpr::getIntToPtr(ConstantInt::get(M.getDataLayout().getIntPtrType(M.getContext()), (uintptr_t)addr), GV.getValueType());
-                    if (named) {
-                        auto T = GV.getValueType();
-                        assert(T->isPointerTy());
-                        init = GlobalAlias::create(T, 0, GlobalValue::PrivateLinkage, GV.getName() + ".jit", init, &M);
-                    }
+                    auto SymName = Names(JL_SYM_CSYMBOL, GV.getName(), "#");
+                    Constant *init = new GlobalVariable(M, GV.getValueType(), true,
+                                                        GlobalVariable::ExternalLinkage,
+                                                        nullptr, SymName);
+                    if (csymbols)
+                        (*csymbols)[CSym] = {SymName, addr};
                     GV.setInitializer(init);
                     GV.setConstant(true);
                     GV.setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
@@ -2248,6 +2263,18 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
         Syms.at(T)->setName(Dest);
     }
 
+    // Rename optimized C symbols and link them to the resolve addresses.
+    orc::SymbolMap GlobalSyms;
+    for (auto &[CSym, SymAddr] : Info->csymbols) {
+        auto &[Orig, Addr] = SymAddr;
+        auto It = Syms.find(Orig);
+        if (It == Syms.end())
+            continue;
+        auto Sym = ES.intern(Names(*Orig, "#"));
+        It->second->setName(Sym);
+        GlobalSyms[Sym] = {ExecutorAddr::fromPtr(Addr), JITSymbolFlags::Exported};
+    }
+
     // Rename globals and add mappings
     // TODO: don't leak when we have a way to GC code
 #ifdef __clang_analyzer__
@@ -2255,7 +2282,6 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
 #endif
     void **Ptrs = new void *[Info->global_targets.size()];
     size_t i = 0;
-    orc::SymbolMap GlobalSyms;
     for (auto &[Addr, Orig] : Info->global_targets) {
         auto Sym = ES.intern(Names(*Orig, "#"));
         auto It = Syms.find(Orig);
@@ -2416,8 +2442,14 @@ void JuliaOJIT::printTimers()
     reportAndResetTimings();
 }
 
-void JuliaOJIT::optimizeDLSyms(Module &M) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER {
-    (*DLSymOpt)(M);
+void JuliaOJIT::optimizeDLSyms(jl_emitted_output_t &Out)
+    JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
+{
+    DenseMap<jl_csymbol_spec_t, std::pair<std::string, void *>> csymbols;
+    (*DLSymOpt)(*Out.module, &csymbols);
+    Out.linker_info->csymbols.init(csymbols.size());
+    for (auto &[CSym, Target] : csymbols)
+        Out.linker_info->csymbols[CSym] = {mangle(Target.first), Target.second};
 }
 
 JuliaOJIT *jl_ExecutionEngine;

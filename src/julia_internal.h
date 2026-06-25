@@ -474,6 +474,21 @@ typedef enum {
 // Symbol prefix for the PLT thunk for a CodeInstance
 #define JL_SYM_JLPLT "jlpkg_"
 
+// Symbol prefix for optimized ccall/cglobal symbols
+#define JL_SYM_CSYMBOL "c_"
+
+// Symbol prefix for the cached result of a dynamic symbol lookup (arbitrary
+// expression used as the library)
+#define JL_SYM_DYNCCALL "dynccall"
+// Symbol prefix for the cached result of a symbol lookup (constant symbol)
+#define JL_SYM_CCALL "ccall_"
+// Symbol prefix for the cached result of a library load (constant libname)
+#define JL_SYM_CCALLLIB "ccalllib_"
+
+// Symbol prefix for Julia PLT thunks (ccall)
+#define JL_SYM_PLT "jlplt_"
+#define JL_SYM_DYNPLT "jldynplt"
+
 typedef enum {
     JL_SYMBOL_INVOKE_DEF,
     JL_SYMBOL_INVOKE_IMG,

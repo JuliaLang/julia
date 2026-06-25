@@ -392,11 +392,35 @@ private:
     StringMap<unsigned> counter;
 };
 
+struct jl_csymbol_spec_t {
+    // func is an interned string:
+    const char *func;
+    // lib is one of the special library names or an interned string:
+    // JL_EXE_LIBNAME, JL_LIBJULIA_DL_LIBNAME, JL_LIBJULIA_INTERNAL_DL_LIBNAME
+    void *lib;
+};
+
+template<>
+struct llvm::DenseMapInfo<jl_csymbol_spec_t> {
+    using T = std::pair<const char *, void *>;
+    using I = DenseMapInfo<T>;
+    static inline jl_csymbol_spec_t from(T t) { return {t.first, t.second}; }
+    static inline T to(jl_csymbol_spec_t t) { return {t.func, t.lib}; }
+
+    static inline jl_csymbol_spec_t getEmptyKey() { return from(I::getEmptyKey()); }
+    static inline jl_csymbol_spec_t getTombstoneKey() { return from(I::getTombstoneKey()); }
+    static unsigned getHashValue(const jl_csymbol_spec_t &Val) { return I::getHashValue(to(Val)); }
+    static bool isEqual(const jl_csymbol_spec_t &LHS, const jl_csymbol_spec_t &RHS) { return I::isEqual(to(LHS), to(RHS)); }
+};
+
 struct jl_linker_info_t {
     DenseMap<jl_code_instance_t *, jl_codeinst_funcs_t<orc::SymbolStringPtr>> ci_funcs;
     DenseMap<std::pair<jl_code_instance_t *, jl_invoke_api_t>, orc::SymbolStringPtr>
         call_targets;
     DenseMap<void *, orc::SymbolStringPtr> global_targets;
+    // A map from every C symbol (ccall, cglobal) to the corresponding symbol in
+    // the compiled object and the resolved address.
+    DenseMap<jl_csymbol_spec_t, std::pair<orc::SymbolStringPtr, void *>> csymbols;
 };
 
 struct jl_emitted_output_t {
@@ -857,7 +881,7 @@ public:
 
     // Note that this is a potential safepoint due to jl_get_library_ and jl_dlsym calls
     // but may be called from inside safe-regions due to jit compilation locks
-    void optimizeDLSyms(Module &M) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER;
+    void optimizeDLSyms(jl_emitted_output_t &Out) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER;
 
 protected:
     // Choose globally unique names for the functions defined by the given CI
