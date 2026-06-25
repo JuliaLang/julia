@@ -60,9 +60,38 @@ isdone(g::Generator, state...) = isdone(g.iter, state...)
 ## iterator traits
 
 abstract type IteratorSize end
+
+"""
+    SizeUnknown <: IteratorSize
+
+Singleton type returned by [`IteratorSize`](@ref) for iterators whose length
+(number of elements) cannot be determined in advance.
+"""
 struct SizeUnknown <: IteratorSize end
+
+"""
+    HasLength <: IteratorSize
+
+Singleton type returned by [`IteratorSize`](@ref) for iterators whose length
+is fixed, finite, and returned by [`length`](@ref).
+"""
 struct HasLength <: IteratorSize end
+
+"""
+    HasShape{N} <: IteratorSize
+
+Singleton type returned by [`IteratorSize`](@ref) for iterators with a known length
+plus a notion of multidimensional shape (as for an array).  `N` should give the number of dimensions,
+and the [`axes`](@ref) function is valid for the iterator.
+"""
 struct HasShape{N} <: IteratorSize end
+
+"""
+    IsInfinite <: IteratorSize
+
+Singleton type returned by [`IteratorSize`](@ref) for iterators which
+yield values forever.
+"""
 struct IsInfinite <: IteratorSize end
 
 """
@@ -103,7 +132,21 @@ IteratorSize(::Type{<:Generator{I}}) where {I} = (@isdefined I) ? IteratorSize(I
 haslength(iter) = IteratorSize(iter) isa Union{HasShape, HasLength}
 
 abstract type IteratorEltype end
+
+"""
+    EltypeUnknown <: IteratorEltype
+
+Singleton type returned by [`IteratorEltype`](@ref) for iterators whose element
+type is not known in advance.
+"""
 struct EltypeUnknown <: IteratorEltype end
+
+"""
+    HasEltype <: IteratorEltype
+
+Singleton type returned by [`IteratorEltype`](@ref) for iterators whose element
+type known and returned by [`eltype`](@ref).
+"""
 struct HasEltype <: IteratorEltype end
 
 """
