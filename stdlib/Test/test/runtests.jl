@@ -652,11 +652,58 @@ let errors = @testset NoThrowTestSet begin
     end
 end
 
+@testset "Error - raw_backtrace field" begin
+    # :test_error should populate raw_backtrace with structured stack frames
+    let errors = @testset NoThrowTestSet begin
+            @test error("intentional error")
+        end
+        @test length(errors) == 1
+        err = errors[1]
+        @test err isa Test.Error
+        @test err.test_type === :test_error
+        @test err.raw_backtrace isa Vector{Base.StackTraces.StackFrame}
+        @test !isempty(err.raw_backtrace)
+    end
+
+    # :nontest_error (exception thrown outside @test) should also populate raw_backtrace
+    let errors = @testset NoThrowTestSet begin
+            error("outside test")
+        end
+        @test length(errors) == 1
+        err = errors[1]
+        @test err isa Test.Error
+        @test err.test_type === :nontest_error
+        @test err.raw_backtrace isa Vector{Base.StackTraces.StackFrame}
+        @test !isempty(err.raw_backtrace)
+    end
+
+    # :test_unbroken (unexpected pass) should NOT populate raw_backtrace
+    let errors = @testset NoThrowTestSet begin
+            @test_broken true
+        end
+        @test length(errors) == 1
+        err = errors[1]
+        @test err isa Test.Error
+        @test err.test_type === :test_unbroken
+        @test err.raw_backtrace === nothing
+    end
+
+    # raw_backtrace frames should contain recognisable file/function info
+    let errors = @testset NoThrowTestSet begin
+            @test error("frame check")
+        end
+        err = errors[1]
+        @test err.raw_backtrace isa Vector{Base.StackTraces.StackFrame}
+        # Each element must be a StackFrame
+        @test all(f -> f isa Base.StackTraces.StackFrame, err.raw_backtrace)
+    end
+end
+
 let retval_tests = @testset NoThrowTestSet begin
         ts = Test.DefaultTestSet("Mock for testing retval of record(::DefaultTestSet, ::T <: Result) methods")
         pass_mock = Test.Pass(:test, 1, 2, 3, LineNumberNode(0, "A Pass Mock"))
         @test Test.record(ts, pass_mock) isa Test.Pass
-        error_mock = Test.Error(:test, 1, 2, nothing, LineNumberNode(0, "An Error Mock"), nothing)
+        error_mock = Test.Error(:test, "1", "2", "", nothing, nothing, LineNumberNode(0, "An Error Mock"))
         @test Test.record(ts, error_mock; print_result=false) isa Test.Error
         fail_mock = Test.Fail(:test, 1, 2, 3, nothing, LineNumberNode(0, "A Fail Mock"), false)
         @test Test.record(ts, fail_mock; print_result=false) isa Test.Fail
@@ -2377,7 +2424,7 @@ end
         ctx_ts2 = Test.ContextTestSet(mock_parent2, :x, 42)
 
         # Use internal constructor to create Error with pre-processed values
-        error_result = Test.Error(:test_error, "error(\"test\")", "ErrorException(\"test\")", "test\nStacktrace:\n [1] error()", nothing, LineNumberNode(1, :test))
+        error_result = Test.Error(:test_error, "error(\"test\")", "ErrorException(\"test\")", "test\nStacktrace:\n [1] error()", nothing, nothing, LineNumberNode(1, :test))
         Test.record(ctx_ts2, error_result)
 
         @test length(mock_parent2.results) == 1
@@ -2395,7 +2442,7 @@ end
         mock_parent3 = MockParentTestSet()
         ctx_ts3 = Test.ContextTestSet(mock_parent3, :(x, y), (42, "hello"))
 
-        error_result2 = Test.Error(:test_error, "error(\"test\")", "ErrorException(\"test\")", "test\nStacktrace:\n [1] error()", nothing, LineNumberNode(1, :test))
+        error_result2 = Test.Error(:test_error, "error(\"test\")", "ErrorException(\"test\")", "test\nStacktrace:\n [1] error()", nothing, nothing, LineNumberNode(1, :test))
         Test.record(ctx_ts3, error_result2)
 
         recorded_error2 = mock_parent3.results[1]
@@ -2409,7 +2456,7 @@ end
         mock_parent4 = MockParentTestSet()
         ctx_ts4 = Test.ContextTestSet(mock_parent4, :x, 42)
 
-        unbroken_result = Test.Error(:test_unbroken, "x != 99", "true", "", nothing, LineNumberNode(1, :test))
+        unbroken_result = Test.Error(:test_unbroken, "x != 99", "true", "", nothing, nothing, LineNumberNode(1, :test))
         Test.record(ctx_ts4, unbroken_result)
 
         @test length(mock_parent4.results) == 1
