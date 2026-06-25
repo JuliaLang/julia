@@ -887,7 +887,9 @@ ifeq (${USE_THIRD_PARTY_GC},mmtk)
 JCXXFLAGS += -DWITH_THIRD_PARTY_HEAP=1
 JCFLAGS += -DWITH_THIRD_PARTY_HEAP=1
 
-# Must specify a supported MMTk Plan: Immix or StickyImmix
+# Use StickyImmix as the default MMTk plan.
+MMTK_PLAN ?= StickyImmix
+# Must specify a supported MMTk plan: Immix or StickyImmix
 ifeq (${MMTK_PLAN},Immix)
 JCXXFLAGS += -DMMTK_PLAN_IMMIX
 JCFLAGS += -DMMTK_PLAN_IMMIX
@@ -898,18 +900,10 @@ else
 $(error "Unsupported MMTk plan: $(MMTK_PLAN). Supported plan(s): Immix or StickyImmix.")
 endif
 
-# Do a release build on the binding by default
-MMTK_BUILD ?= release
-
-# Location of mmtk-julia binding
-# (needed for api/*.h and .so file)
-ifdef MMTK_JULIA_DIR
-MMTK_JULIA_DIR := $(abspath $(MMTK_JULIA_DIR))
-else
-MMTK_JULIA_DIR := $(BUILDROOT)/usr/lib/mmtk_julia
-endif
-MMTK_DIR = ${MMTK_JULIA_DIR}/mmtk
-MMTK_API_INC = ${MMTK_DIR}/api
+# Location of the in-tree MMTk integration.
+MMTK_DIR := $(JULIAHOME)/src/gc-mmtk
+MMTK_JULIA_DIR := $(MMTK_DIR)/mmtk_julia
+MMTK_API_INC = ${MMTK_JULIA_DIR}/api
 MMTK_LIB := -lmmtk_julia
 
 # Must specify a supported third-party GC or use the stock GC.
@@ -1060,7 +1054,7 @@ endif
 ifeq (${USE_THIRD_PARTY_GC},mmtk)
 # MMTk is only available on x86_64 Linux for now
 ifeq ($(OS),Linux)
-MMTK_LIB_NAME := libmmtk_julia.so
+MMTK_LIB_NAME := libmmtk_julia.$(SHLIB_EXT)
 else
 $(error "Unsupported OS for MMTk")
 endif
@@ -1498,10 +1492,6 @@ CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.35|GLIBCXX_3\.5\.|GLIBCXX_4\.
 # advanced techniques to decide whether it should be installed from a BB source
 # or not.  See `deps/csl.mk` for more detail.
 BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP OPENSSL LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB ZSTD P7ZIP LLD LIBTRACYCLIENT BOLT
-
-ifeq (${USE_THIRD_PARTY_GC},mmtk)
-BB_PROJECTS += MMTK_JULIA
-endif
 
 define SET_BB_DEFAULT
 # First, check to see if BB is disabled on a global setting

@@ -133,7 +133,7 @@ impl mmtk::vm::slot::MemorySlice for JuliaMemorySlice {
             let n: isize = words as isize;
 
             if tgt_addr < src_addr || tgt_addr > src_addr + tgt.bytes() {
-                // non overlaping
+                // non overlapping
                 for i in 0..n {
                     let val: usize = src_addr
                         .shift::<usize>(i)

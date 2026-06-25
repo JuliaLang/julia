@@ -37,7 +37,7 @@ extern void* mmtk_alloc(MMTk_Mutator mutator, size_t size,
     size_t align, size_t offset, int allocator);
 
 extern void* mmtk_alloc_large(MMTk_Mutator mutator, size_t size,
-    size_t align, size_t offset, int allocator);    
+    size_t align, size_t offset, int allocator);
 
 extern void mmtk_post_alloc(MMTk_Mutator mutator, void* refer,
     size_t bytes, int allocator);
@@ -109,4 +109,3 @@ extern void mmtk_harness_end(void);
 #endif
 
 #endif // MMTK_H
-

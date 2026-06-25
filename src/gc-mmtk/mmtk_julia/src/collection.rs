@@ -1,7 +1,7 @@
 use crate::SINGLETON;
 use crate::{
-    jl_gc_get_max_memory, jl_gc_prepare_to_collect, jl_gc_update_stats, jl_get_gc_disable_counter,
-    jl_hrtime, jl_throw_out_of_memory_error,
+    jl_gc_prepare_to_collect, jl_gc_update_stats, jl_get_gc_disable_counter, jl_hrtime,
+    jl_throw_out_of_memory_error,
 };
 use crate::{JuliaVM, USER_TRIGGERED_GC};
 use log::{info, trace};
@@ -124,7 +124,7 @@ impl Collection<JuliaVM> for VMCollection {
                     }
                 }
 
-                // The GC thread quits somehow. Unresgister this GC thread
+                // The GC thread quits somehow. Unregister this GC thread
                 unregister_gc_thread();
             });
     }
@@ -146,13 +146,7 @@ impl Collection<JuliaVM> for VMCollection {
 
     fn create_gc_trigger() -> Box<dyn GCTriggerPolicy<JuliaVM>> {
         use crate::gc_trigger::*;
-        use mmtk::util::os::{OSMemory, OS};
-        // max_memory can be unrealistically large if no heap size hint is set for Julia, e.g. 2PB for 64 bits.
-        // We want to set MMTk's heap size to a more reasonable value.
-        let max_memory = unsafe { jl_gc_get_max_memory() };
-        let total_memory = OS::get_system_total_memory().unwrap() as usize;
-        let heap_size = std::cmp::min(max_memory, total_memory);
-        Box::new(JuliaGCTrigger::new(heap_size))
+        Box::new(JuliaGCTrigger::new())
     }
 }
 

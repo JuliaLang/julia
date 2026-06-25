@@ -17,7 +17,7 @@ typedef struct {
   void* vtable;
 } RustDynPtr;
 
-// These constants should match the constants defind in mmtk::util::alloc::allocators
+// These constants should match the constants defined in mmtk::util::alloc::allocators
 #define MAX_BUMP_ALLOCATORS 6
 #define MAX_LARGE_OBJECT_ALLOCATORS 2
 #define MAX_MALLOC_ALLOCATORS 1

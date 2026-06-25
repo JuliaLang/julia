@@ -8,11 +8,15 @@ mod raw {
 lazy_static! {
     // Owned string for the binding version, such as MMTk Julia 0.14.0 (cfc755f-dirty)
     static ref BINDING_VERSION_STRING: String = match (raw::GIT_COMMIT_HASH, raw::GIT_DIRTY) {
-        (Some(hash), Some(dirty)) => format!("Built with MMTk Julia {} ({}{})", raw::PKG_VERSION, hash.split_at(7).0, if dirty { "-dirty" } else { "" }),
-        (Some(hash), None) => format!("Built with MMTk Julia {} ({}{})", raw::PKG_VERSION, hash.split_at(7).0, "-?"),
-        _ => format!("Built with MMTk Julia {}", raw::PKG_VERSION),
+        (Some(hash), Some(dirty)) => format!("Built with MMTk Julia {} ({}{}, {})", raw::PKG_VERSION, hash.split_at(7).0, if dirty { "-dirty" } else { "" }, raw::FEATURES_STR),
+        (Some(hash), None) => format!("Built with MMTk Julia {} ({}{}, {})", raw::PKG_VERSION, hash.split_at(7).0, "-?", raw::FEATURES_STR),
+        _ => format!("Built with MMTk Julia {} ({})", raw::PKG_VERSION, raw::FEATURES_STR),
     };
     // Owned string for both binding and core version.
-    #[derive(Debug)]
-    pub static ref MMTK_JULIA_FULL_VERSION_STRING: CString = CString::new(format!("{}, using {}", *BINDING_VERSION_STRING, *mmtk::build_info::MMTK_FULL_BUILD_INFO)).unwrap();
+    pub static ref MMTK_JULIA_FULL_VERSION_STRING: CString = CString::new(format!(
+        "{}, using MMTk {} ({})",
+        *BINDING_VERSION_STRING,
+        mmtk::build_info::MMTK_PKG_VERSION,
+        *mmtk::build_info::MMTK_GIT_VERSION
+    )).unwrap();
 }

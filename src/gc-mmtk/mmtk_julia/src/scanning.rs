@@ -26,7 +26,7 @@ impl Scanning<JuliaVM> for VMScanning {
         mutator: &'static mut Mutator<JuliaVM>,
         mut factory: impl RootsWorkFactory<JuliaVMSlot>,
     ) {
-        // This allows us to reuse mmtk_scan_gcstack which expectes an SlotVisitor
+        // This allows us to reuse mmtk_scan_gcstack which expects an SlotVisitor
         // Push the nodes as they need to be transitively pinned
         struct SlotBuffer {
             pub buffer: Vec<ObjectReference>,
@@ -189,7 +189,7 @@ impl Scanning<JuliaVM> for VMScanning {
         );
 
         // We used to do this in the Compact stage, and add this work packet in notify_initial_thread_scan_complete.
-        // But notify_inital_thread_scan_complete is always called, even if MMTK does not do weak reference scanning, which makes it not a good place to add the work packet.
+        // But notify_initial_thread_scan_complete is always called, even if MMTK does not do weak reference scanning, which makes it not a good place to add the work packet.
         // I think it makes more sense to do this here -- if MMTK does not do weak ref scanning, this method will not be called and the work packet will not be added.
         let sweep_vm_specific_work = SweepVMSpecific::new();
         memory_manager::add_work_packet(

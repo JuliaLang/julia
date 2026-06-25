@@ -63,7 +63,7 @@ pub unsafe fn mmtk_jl_to_typeof(t: Address) -> *const jl_datatype_t {
 const PRINT_OBJ_TYPE: bool = false;
 
 // This function is a rewrite of `gc_mark_outrefs()` in `gc.c`
-// INFO: *_custom() functions are acessors to bitfields that do not use bindgen generated code.
+// INFO: *_custom() functions are accessors to bitfields that do not use bindgen generated code.
 #[inline(always)]
 pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, closure: &mut SV) {
     // get Julia object type

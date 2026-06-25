@@ -121,6 +121,7 @@ extern "C" {
     pub fn jl_gc_get_owner_address_to_mmtk(m: Address) -> Address;
     pub fn jl_gc_genericmemory_how(m: Address) -> usize;
     pub fn jl_gc_get_max_memory() -> usize;
+    pub fn jl_gc_get_hard_heap_limit() -> usize;
     pub static mut MMTK_SIDE_LOG_BIT_BASE_ADDRESS: Address;
 }
 

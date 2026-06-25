@@ -90,6 +90,18 @@ $(foreach module, $(TOP_LEVEL_PKGS), $(eval $(call symlink_target,$$(JULIAHOME)/
 julia-deps: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia/test
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/deps
 
+ifeq (${USE_THIRD_PARTY_GC},mmtk)
+.PHONY: julia-mmtk_julia
+julia-mmtk_julia: | $(DIRS)
+	@$(MAKE) $(QUIET_MAKE) -f $(JULIAHOME)/src/gc-mmtk/Makefile MMTK_BUILD_MODE=$(JULIA_BUILD_MODE) compile-mmtk_julia
+julia-deps: julia-mmtk_julia
+
+.PHONY: clean-mmtk_julia
+clean-mmtk_julia:
+	@$(MAKE) $(QUIET_MAKE) -f $(JULIAHOME)/src/gc-mmtk/Makefile clean-mmtk_julia
+clean: clean-mmtk_julia
+endif
+
 ifeq ($(OS),Darwin)
 julia-deps: $(build_libdir)/libSystem.tbd
 $(build_libdir)/libSystem.tbd: $(JULIAHOME)/contrib/mac/libSystem.tbd | $(build_libdir)
@@ -325,25 +337,7 @@ endif
 endif
 
 ifeq (${USE_THIRD_PARTY_GC},mmtk)
-# Make sure we use the right version of $MMTK_PLAN, $MMTK_MOVING and $MMTK_BUILD
-# if we use the BinaryBuilder version of mmtk-julia
-ifeq ($(USE_BINARYBUILDER_MMTK_JULIA),1)
-ifeq (${MMTK_PLAN},Immix)
-LIB_PATH_PLAN = immix
-else ifeq (${MMTK_PLAN},StickyImmix)
-LIB_PATH_PLAN = sticky
-endif
-
-ifeq ($(MMTK_MOVING), 1)
-LIB_PATH_MOVING := moving
-else
-LIB_PATH_MOVING := non_moving
-endif
-
-JL_PRIVATE_LIBS-0 += $(LIB_PATH_PLAN)/$(LIB_PATH_MOVING)/$(MMTK_BUILD)/libmmtk_julia
-else
 JL_PRIVATE_LIBS-0 += libmmtk_julia
-endif
 endif
 
 # Note that we disable MSYS2's path munging here, as otherwise
