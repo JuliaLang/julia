@@ -54,6 +54,25 @@ ci = compile_no_deps(M2.bar, (Int,))
 @test check_edges_not_compiled(ci, M2.foo)
 @test invoke(M2.bar, ci, 5) == 210
 
+# External symbol renames must keep JITLink's external symbol map consistent.
+@testset "JITLink external symbol rename" begin
+    jitlink_rename_resolve(chunks, i, x) =
+        jitlink_rename_resolve(Base.tail(chunks), i,
+            map(tuple, x, i[1] === Colon() ? (1, (), 1) : (1, 1, ())))
+    jitlink_rename_resolve(::Tuple{}, i, x) = x
+    function jitlink_rename_reproducer(i)
+        x = jitlink_rename_resolve(Base.inferencebarrier(true) ? (1,) :
+            map(+, Tuple([]), (1, 1)), i, ((), (), ()))
+        y = x[1] == x[1] ? :a : :b
+        if y === :a; elseif y === :b
+            jitlink_rename_reproducer(x[3])
+        else
+            0[x[2]]
+        end
+    end
+    @test precompile(jitlink_rename_reproducer, (Tuple{Colon},))
+end
+
 # Each `eval` must compile (because of the ccall) a top-level thunk.  The
 # CodeInstance for this thunk becomes garbage-collectable after being invoked,
 # but before returning, because of wait().  If the invoke must return for the
