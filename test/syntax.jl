@@ -1881,6 +1881,7 @@ end
 @test Meta.parse("1…2") == Expr(:call, :…, 1, 2)
 @test Meta.parse("1⁝2") == Expr(:call, :⁝, 1, 2)
 @test Meta.parse("1..2") == Expr(:call, :.., 1, 2)
+@test Meta.parse("-1e10..2") == Expr(:call, :.., -1e10, 2)
 # we don't parse chains of these since the associativity and meaning aren't clear
 @test_parseerror "1..2..3"
 
