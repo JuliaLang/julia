@@ -619,6 +619,10 @@ static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, j
         post_boot_hooks();
     }
 
+    // builtins are now populated (by sysimage restore or bare boot); build the
+    // fast-path table while still single-threaded so its reads need no lock
+    jl_init_builtin_dmap();
+
     if (jl_base_module == NULL) {
         // nthreads > 1 requires code in Base
         jl_atomic_store_relaxed(&jl_n_threads, 1);

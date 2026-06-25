@@ -12,6 +12,7 @@
 #include <string.h>
 #include "julia.h"
 #include "julia_internal.h"
+#include "builtin_proto.h"
 #ifndef _OS_WINDOWS_
 #include <unistd.h>
 #endif
@@ -4576,8 +4577,62 @@ jl_method_instance_t *jl_apply_lookup(jl_value_t **args, size_t nargs, size_t wo
             jl_int32hash_fast(jl_return_address()), world, 0);
 }
 
+// Maps a builtin value to its C implementation. The builtin set is fixed and never
+// grows, so a direct-mapped table sized up until collision-free gives a single
+// load + compare with no hashing or probing. Built once by jl_init_builtin_dmap
+// during startup (before threads start), so reads need no lock.
+static jl_value_t **builtin_dmap_key = NULL;
+static jl_fptr_args_t *builtin_dmap_val = NULL;
+static uintptr_t builtin_dmap_mask = 0;
+void jl_init_builtin_dmap(void)
+{
+    size_t size = 64;
+    jl_value_t **k;
+    jl_fptr_args_t *v;
+    for (;;) {
+        k = (jl_value_t**)calloc(size, sizeof(jl_value_t*));
+        v = (jl_fptr_args_t*)calloc(size, sizeof(jl_fptr_args_t));
+        int ok = 1;
+        for (int i = 0; i < jl_n_builtins; i++) {
+            jl_value_t *f = jl_builtin_instances[i];
+            if (f == NULL)
+                continue;
+            uintptr_t idx = ((uintptr_t)f >> 4) & (size - 1);
+            if (k[idx] != NULL) { ok = 0; break; } // collision: grow and retry
+            k[idx] = f;
+            v[idx] = jl_builtin_f_addrs[i];
+        }
+        if (ok)
+            break;
+        free(k); free(v);
+        size <<= 1;
+    }
+    builtin_dmap_key = k;
+    builtin_dmap_val = v;
+    builtin_dmap_mask = size - 1;
+}
+STATIC_INLINE jl_fptr_args_t jl_builtin_fptr(jl_value_t *F) JL_NOTSAFEPOINT
+{
+    jl_value_t **k = builtin_dmap_key;
+    if (__unlikely(k == NULL)) // not yet built (early startup): fall back to dispatch
+        return NULL;
+    uintptr_t idx = ((uintptr_t)F >> 4) & builtin_dmap_mask;
+    if (k[idx] == F)
+        return builtin_dmap_val[idx];
+    return NULL;
+}
+
 JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint32_t nargs)
 {
+    // Intrinsics all dispatch to jl_f_intrinsic_call; skip the typemap lookup.
+    if (jl_is_intrinsic(F))
+        return jl_f_intrinsic_call(F, args, nargs);
+    // Builtins have a fixed, arg-invariant implementation; call it directly.
+    if (((jl_datatype_t*)jl_typeof(F))->super == jl_builtin_type) {
+        jl_fptr_args_t bfptr = jl_builtin_fptr(F);
+        if (bfptr != NULL)
+            return bfptr(F, args, nargs);
+    }
     size_t world = jl_current_task->world_age;
     jl_method_instance_t *mfunc = jl_lookup_generic_(F, args, nargs,
                                                      jl_int32hash_fast(jl_return_address()),
