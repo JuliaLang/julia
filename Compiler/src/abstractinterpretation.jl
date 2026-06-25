@@ -4911,6 +4911,12 @@ function conditional_change(𝕃ᵢ::AbstractLattice, currstate::VarTable, condt
         # approximate test for `typ ∩ oldtyp` being better than `oldtyp`
         # since we probably formed these types with `typesubstract`,
         # the comparison is likely simple
+    elseif condt.isdefined
+        # An `@isdefined slot` Conditional exists to refine `undef`, not the type.
+        # If the (widened) type can't be narrowed against `oldtyp` — e.g. `oldtyp`
+        # is a `MustAlias` and `newtyp` is its widened form — keep `oldtyp` and still
+        # apply the `undef` refinement below, rather than dropping it entirely.
+        newtyp = oldtyp
     else
         return nothing
     end
