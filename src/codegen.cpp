@@ -2691,12 +2691,13 @@ static void CreateConditionalAbort(IRBuilder<> &irbuilder, Value *test)
 
 // new value is a split union and needs to be converted to that format
 // this always sets TIndex (or returns unreachable)
-static jl_cgval_t convert_julia_type_to_union(jl_codectx_t &ctx, const jl_cgval_t &v, jl_value_t *typ, bool allow_mismatch)
+static jl_cgval_t convert_julia_type_to_union(jl_codectx_t &ctx, const jl_cgval_t &v0, jl_value_t *typ, bool allow_mismatch)
 {
-    if (v.typ == jl_bottom_type || (v.TIndex && jl_egal(v.typ, typ)))
-        return v; // fast-path
+    if (v0.typ == jl_bottom_type || (v0.TIndex && jl_egal(v0.typ, typ)))
+        return v0; // fast-path
     assert(jl_is_uniontype(typ));
 
+    jl_cgval_t v = maybe_boxed(ctx, v0);
     Value *union_box_tindex = ConstantInt::get(getInt8Ty(ctx.builder.getContext()), UNION_BOX_MARKER);
     Value *new_tindex = union_box_tindex;
     bool computed_new_index_early = v.TIndex == nullptr;
@@ -10025,22 +10026,14 @@ static jl_llvm_functions_t
                 assert(jl_is_uniontype(phiType));
                 // must compute skip here, since the runtime type of val might not be in phiType
                 // caution: only Phi and PhiC are allowed to do this (and maybe sometimes Pi)
-                jl_cgval_t new_union = convert_julia_type_to_union(ctx, val, phiType, true);
+                jl_cgval_t move_val = maybe_boxed(ctx, val);
+                jl_cgval_t new_union = convert_julia_type_to_union(ctx, move_val, phiType, true);
                 Value *Vnull = Constant::getNullValue(ctx.types().T_prjlvalue);
                 SmallVector<Value*,0> lroots(roots.size(), Vnull);
                 Value *RTindex = new_union.TIndex;
                 Value *V = nullptr;
-                // When host object pointers are disabled, store constants whose type
-                // is an unboxed leaf of the union inline.
-                size_t const_leaf_tindex = 0;
-                if (!ctx.params->embed_pointers && dest && val.constant &&
-                        new_union.typ != (jl_value_t*)jl_bottom_type &&
-                        deserves_stack(jl_typeof(val.constant)))
-                    const_leaf_tindex = get_box_tindex((jl_datatype_t*)jl_typeof(val.constant), phiType);
                 if (VN) {
-                    if (const_leaf_tindex)
-                        V = Constant::getNullValue(ctx.types().T_prjlvalue);
-                    else if (new_union.Vboxed)
+                    if (new_union.Vboxed)
                         V = new_union.Vboxed;
                     else if (new_union.constant)
                         V = boxed(ctx, new_union);
@@ -10050,15 +10043,10 @@ static jl_llvm_functions_t
                 if (new_union.typ == (jl_value_t*)jl_bottom_type) {
                     RTindex = ConstantInt::get(getInt8Ty(ctx.builder.getContext()), UNION_BOX_MARKER);
                 }
-                else if (jl_is_concrete_type(val.typ) || val.constant) {
-                    size_t tindex = const_leaf_tindex ? const_leaf_tindex :
-                        get_box_tindex((jl_datatype_t*)(val.constant ? jl_typeof(val.constant) : val.typ), phiType);
-                    if (const_leaf_tindex) {
-                        emit_unionmove(ctx, dest, phiType, ctx.tbaa().tbaa_stack, val, nullptr, nullptr);
-                        RTindex = ConstantInt::get(getInt8Ty(ctx.builder.getContext()), tindex);
-                    }
-                    else if (tindex && dest && (!VN || !val.isboxed)) {
-                        emit_unionmove(ctx, dest, phiType, ctx.tbaa().tbaa_stack, val, RTindex, nullptr);
+                else if (jl_is_concrete_type(move_val.typ) || move_val.constant) {
+                    size_t tindex = get_box_tindex((jl_datatype_t*)(move_val.constant ? jl_typeof(move_val.constant) : move_val.typ), phiType);
+                    if (tindex && dest && (!VN || !move_val.isboxed)) {
+                        emit_unionmove(ctx, dest, phiType, ctx.tbaa().tbaa_stack, move_val, RTindex, nullptr);
                     }
                 }
                 else {

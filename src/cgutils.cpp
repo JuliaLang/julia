@@ -4171,6 +4171,22 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool is_promotab
     return box;
 }
 
+static jl_cgval_t maybe_boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo)
+{
+    if (ctx.params->embed_pointers || !vinfo.constant)
+        return vinfo;
+
+    jl_value_t *typ = jl_typeof(vinfo.constant);
+    if (!deserves_stack(typ))
+        return vinfo;
+
+    Constant *bits = julia_const_to_llvm(ctx, vinfo.constant);
+    if (!bits)
+        return vinfo;
+
+    return mark_julia_type(ctx, bits, false, typ);
+}
+
 // copy src to dest, if src is justbits. if skip is true, the value of dest is undefined
 // TODO: rename this to just `emit_typed_move`
 static void emit_unionmove(jl_codectx_t &ctx, Value *dest, jl_value_t *desttype,

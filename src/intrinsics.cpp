@@ -1225,6 +1225,14 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
         Value *x_tindex = x.TIndex;
         Value *y_tindex = y.TIndex;
         if (x_tindex || y_tindex) {
+            if (!x.isghost && x.constant) {
+                x = maybe_boxed(ctx, x);
+                x_tindex = x.TIndex;
+            }
+            if (!y.isghost && y.constant) {
+                y = maybe_boxed(ctx, y);
+                y_tindex = y.TIndex;
+            }
             Value *x_vboxed = x.Vboxed;
             Value *y_vboxed = y.Vboxed;
             Value *x_ptr = NULL;
@@ -1233,12 +1241,16 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
                 x_ptr = data_pointer(ctx, x);
                 x_vboxed = boxed(ctx, x);
             } else if (!x.isghost && x.V != NULL) {
+                if (jl_is_concrete_type(x.typ) && (!x.inline_roots.empty() || !x.ispointer()))
+                    x = value_to_pointer(ctx, x);
                 x_ptr = maybe_decay_tracked(ctx, x.V);
             }
             if (!y.isghost && y.constant) {
                 y_ptr = data_pointer(ctx, y);
                 y_vboxed = boxed(ctx, y);
             } else if (!y.isghost && y.V != NULL) {
+                if (jl_is_concrete_type(y.typ) && (!y.inline_roots.empty() || !y.ispointer()))
+                    y = value_to_pointer(ctx, y);
                 y_ptr = maybe_decay_tracked(ctx, y.V);
             }
             jl_gc_roots_t x_roots = x.inline_roots;
@@ -1284,8 +1296,18 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
             if (!x_tindex && x.constant) {
                 x_tindex = ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x80 | get_box_tindex((jl_datatype_t*)jl_typeof(x.constant), rt_hint));
             }
+            else if (!x_tindex && !x.isboxed && jl_is_concrete_type(x.typ)) {
+                unsigned idx = get_box_tindex((jl_datatype_t*)x.typ, rt_hint);
+                if (idx)
+                    x_tindex = ConstantInt::get(getInt8Ty(ctx.builder.getContext()), idx);
+            }
             if (!y_tindex && y.constant) {
                 y_tindex = ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x80 | get_box_tindex((jl_datatype_t*)jl_typeof(y.constant), rt_hint));
+            }
+            else if (!y_tindex && !y.isboxed && jl_is_concrete_type(y.typ)) {
+                unsigned idx = get_box_tindex((jl_datatype_t*)y.typ, rt_hint);
+                if (idx)
+                    y_tindex = ConstantInt::get(getInt8Ty(ctx.builder.getContext()), idx);
             }
             if (x_tindex && y_tindex) {
                 tindex = ctx.builder.CreateSelect(isfalse, y_tindex, x_tindex);
