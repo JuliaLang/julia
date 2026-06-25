@@ -116,7 +116,7 @@ static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t 
         jl_method_instance_t *mi_generic = jl_specializations_get_linfo(jl_opaque_closure_method, sigtype, jl_emptysvec);
 
         // OC wrapper methods are not world dependent and have no edges or other info
-        ci = jl_get_method_uninferred(mi_generic, selected_rt, 1, ~(size_t)0, NULL, NULL);
+        ci = jl_get_method_inferred(mi_generic, selected_rt, 1, ~(size_t)0, NULL, NULL);
         if (!jl_atomic_load_acquire(&ci->invoke)) {
             jl_code_info_t *src = NULL;
             jl_emit_codeinsts_to_jit(&ci, &src, 1); // confusing this actually calls jl_emit_oc_wrapper and never actually compiles ci (which would be impossible since it cannot have source)

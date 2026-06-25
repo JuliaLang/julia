@@ -6,7 +6,7 @@
 
 # true if Type{T} is inlineable as constant T
 # requires that T is a singleton, s.t. T == S implies T === S
-isconstType(@nospecialize t) = isType(t) && hasuniquerep(type_parameter(t))
+isconstType(@nospecialize t) = isType(t) && hasuniquerep(t.parameters[1])
 
 # test whether type T has a unique representation, s.t. T == S implies T === S
 function hasuniquerep(@nospecialize t)
@@ -15,11 +15,6 @@ function hasuniquerep(@nospecialize t)
     t === typeof(Union{}) && return false
     t === Union{} && return true
     isa(t, TypeVar) && return false # TypeVars are identified by address, not equality
-    if isType(t)
-        p = type_parameter(t)
-        (p === Union{} || p === typeof(Union{})) && return false
-        return !has_free_typevars(p)
-    end
     iskindtype(typeof(t)) || return true # non-types are always compared by egal in the type system
     isconcretetype(t) && return true # these are also interned and pointer comparable
     if isa(t, DataType) && t.name !== Tuple.name && !isvarargtype(t) # invariant DataTypes
@@ -37,8 +32,8 @@ we have `isa(S, DataType)`. In particular, if a statement is typed as `Type{t}`
 will be a `DataType` at runtime (and not e.g. a `Union` or `UnionAll` typeequal to it).
 """
 function isTypeDataType(@nospecialize t)
-    isType(t) && return false
     isa(t, DataType) || return false
+    isType(t) && return false
     # Could be Union{} at runtime
     t === Core.TypeofBottom && return false
     # Return true if `t` is not covariant
@@ -51,7 +46,7 @@ has_extended_info(@nospecialize x) = (!isa(x, Type) && !isvarargtype(x)) || isTy
 # some of these queries, this check can be used to somewhat protect against making incorrect
 # decisions based on incorrect subtyping. Note that this check, itself, is broken for
 # certain combinations of `a` and `b` where one/both isa/are `Union`/`UnionAll` type(s)s.
-isnotbrokensubtype(@nospecialize(a), @nospecialize(b)) = (!iskindtype(b) || !isType(a) || hasuniquerep(type_parameter(a)) || b <: a)
+isnotbrokensubtype(@nospecialize(a), @nospecialize(b)) = (!iskindtype(b) || !isType(a) || hasuniquerep(a.parameters[1]) || b <: a)
 
 function argtypes_to_type(argtypes::Vector{Any})
     argtypes = anymap(@nospecialize(a) -> isvarargtype(a) ? a : widenconst(a), argtypes)
@@ -81,13 +76,11 @@ function valid_as_lattice(@nospecialize(x), astag::Bool=false)
         # operations that might remove the Union itself)
         return true
     end
-    if isType(x)
-        p = type_parameter(x)
-        p isa Type || p isa TypeVar || return false
-        return true
-    end
     if x isa DataType
-        if astag && isstructtype(x)
+        if isType(x)
+            p = x.parameters[1]
+            p isa Type || p isa TypeVar || return false
+        elseif astag && isstructtype(x)
             datatype_fieldtypes(x) # force computation of has_concrete_subtype to be updated now
             return has_concrete_subtype(x)
         end
@@ -189,7 +182,6 @@ function _typename(a::Union)
 end
 _typename(union::UnionAll) = _typename(union.body)
 _typename(a::DataType) = Const(a.name)
-_typename(a::TypeEq) = Core.TypeName
 
 function tuple_tail_elem(𝕃::AbstractLattice, @nospecialize(init), ct::Vector{Any})
     t = init
@@ -480,7 +472,6 @@ function _is_immutable_type(@nospecialize ty)
     if isa(ty, Union)
         return _is_immutable_type(ty.a) && _is_immutable_type(ty.b)
     end
-    isType(ty) && return false
     return !isabstracttype(ty) && !ismutabletype(ty)
 end
 

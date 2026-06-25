@@ -132,7 +132,7 @@ const DEPOT_PATH = String[]
 function append_bundled_depot_path!(DEPOT_PATH)
     path = abspath(Sys.BINDIR, "..", "local", "share", "julia")
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
-    path = abspath(Sys.BINDIR, DATAROOTDIR, "julia")
+    path = abspath(Sys.BINDIR, Base.DATAROOTDIR, "julia")
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
     return DEPOT_PATH
 end
@@ -296,7 +296,7 @@ end
 
 function init_active_project()
     project = (JLOptions().project != C_NULL ?
-        unsafe_string(JLOptions().project) :
+        unsafe_string(Base.JLOptions().project) :
         get(ENV, "JULIA_PROJECT", nothing))
     set_active_project(
         project === nothing ? nothing :
@@ -415,7 +415,7 @@ function set_active_project(projfile::Union{AbstractString,Nothing})
     ACTIVE_PROJECT[] = projfile
     for f in active_project_callbacks
         try
-            invokelatest(f)
+            Base.invokelatest(f)
         catch
             @error "active project callback $f failed" maxlog=1
         end
@@ -500,9 +500,7 @@ This situation may occur if you are registering exit hooks from background Tasks
 may still be executing concurrently during shutdown.
 """
 function atexit(f::Function)
-    # HACK: if generating output, hint that we might want to compile `f`, so that it is available for the no-codegen test
-    generating_output() && (precompile(f, (Cint,)) || precompile(f, ()))
-    @lock _atexit_hooks_lock begin
+    Base.@lock _atexit_hooks_lock begin
         _atexit_hooks_finished && error("cannot register new atexit hook; already exiting.")
         pushfirst!(atexit_hooks, f)
         return nothing
@@ -574,7 +572,7 @@ library_threading_enabled::Bool = true
 
 # Base.OncePerProcess ensures that any registered hooks do not outlive the session.
 # (even if they are registered during the sysimage build process by top-level code)
-const disable_library_threading_hooks = OncePerProcess(Vector{Any})
+const disable_library_threading_hooks = Base.OncePerProcess(Vector{Any})
 
 function at_disable_library_threading(f)
     push!(disable_library_threading_hooks(), f)

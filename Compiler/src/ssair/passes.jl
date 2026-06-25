@@ -1150,7 +1150,7 @@ end
         argdef = compact[rarg][:stmt]
     else
         isType(arg) || return nothing
-        arg = type_parameter(arg)
+        arg = arg.parameters[1]
     end
 
     is_known_call(argdef, Core.apply_type, compact) || return nothing
@@ -1491,13 +1491,14 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             val = stmt.args[2]
         end
         struct_typ = argextype_widened(val, compact)
-        struct_typ_name = argument_datatypename(struct_typ)
-        if struct_typ_name === nothing
+        struct_argtyp = argument_datatype(struct_typ)
+        if struct_argtyp === nothing
             if isa(struct_typ, Union) && is_isdefined
                 lift_comparison!(isdefined, compact, idx, stmt, 𝕃ₒ)
             end
             continue
         end
+        struct_typ_name = struct_argtyp.name
 
         struct_typ_name.atomicfields == C_NULL || continue # TODO: handle more
         if !((field_ordering === :unspecified) ||

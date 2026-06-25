@@ -116,7 +116,8 @@ begin
         @test any(iscall((src, pr48932_callee)), src.code)
     end
 
-    let mi = only(Base.method_instances(pr48932_callee, Tuple, Base.get_world_counter()))
+    let mi = only(Base.specializations(Base.only(Base.methods(pr48932_callee))))
+        # Base.method_instance(pr48932_callee, (Any,))
         ci = mi.cache
         @test isdefined(ci, :next)
         @test ci.owner === nothing
@@ -280,7 +281,7 @@ begin take!(GLOBAL_BUFFER)
         @test any(isinvoke(:pr48932_callee_inlined), src.code)
     end
 
-    let mi = only(Base.method_instances(pr48932_callee_inlined, (Any,), Base.get_world_counter()))
+    let mi = Base.method_instance(pr48932_callee_inlined, (Int,))
         ci = mi.cache
         @test isdefined(ci, :next)
         @test ci.owner === nothing
@@ -290,7 +291,7 @@ begin take!(GLOBAL_BUFFER)
         @test ci.owner === InvalidationTesterToken()
         @test ci.max_world == typemax(UInt)
     end
-    let mi = only(Base.method_instances(pr48932_caller_inlined, (Int,), Base.get_world_counter()))
+    let mi = Base.method_instance(pr48932_caller_inlined, (Int,))
         ci = mi.cache
         @test !isdefined(ci, :next)
         @test ci.owner === InvalidationTesterToken()

@@ -827,7 +827,7 @@ end
 # test single, non-dispatchtuple callsite inlining
 
 @constprop :none @inline test_single_nondispatchtuple(@nospecialize(t)) =
-    isa(t, DataType) && t.name === Core.TypeEq.name
+    isa(t, DataType) && t.name === Type.body.name
 let
     src = code_typed1((Any,)) do x
         test_single_nondispatchtuple(x)
@@ -838,7 +838,7 @@ let
 end
 
 @constprop :aggressive @inline test_single_nondispatchtuple(c, @nospecialize(t)) =
-    c && isa(t, DataType) && t.name === Core.TypeEq.name
+    c && isa(t, DataType) && t.name === Type.body.name
 let
     src = code_typed1((Any,)) do x
         test_single_nondispatchtuple(true, x)
@@ -2315,13 +2315,13 @@ end
 path = Ref{Symbol}(:unknown)
 function f59018_generator(x)
     if @generated
-        if x isa Core.TypeEq
+        if x isa DataType && x.name === Type.body.name
             path[] = :generator
-            return Core.sizeof(x.T)
+            return Core.sizeof(x.parameters[1])
         end
     else
         path[] = :fallback
-        return Core.sizeof(x isa Core.TypeEq ? Base.type_parameter(x) : x.parameters[1])
+        return Core.sizeof(x.parameters[1])
     end
 end
 f59018() = f59018_generator(Base.inferencebarrier(Int64))

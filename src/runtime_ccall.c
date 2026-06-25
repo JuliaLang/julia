@@ -395,7 +395,7 @@ void *jl_get_abi_converter(jl_task_t *ct, void *data)
             JL_UNLOCK(&cfun_lock);
             return f;
         }
-        mi = jl_get_specialization1((jl_tupletype_t*)sigt, world);
+        mi = jl_get_specialization1((jl_tupletype_t*)sigt, world, 0);
         if (f != NULL) {
             if (last_ci == NULL) {
                 if (mi == jl_nothing) {

@@ -122,7 +122,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
             rettype_const = result_type
             const_flags = 0x2
         elseif isconstType(result_type)
-            rettype_const = type_parameter(result_type)
+            rettype_const = result_type.parameters[1]
             const_flags = 0x2
         elseif isa(result_type, PartialStruct)
             rettype_const = (_getundefs(result_type), result_type.fields)
@@ -494,23 +494,15 @@ end
 
 function discard_optimized_result(interp::AbstractInterpreter, inlining_cost::InlineCostType)
     may_discard_trees(interp) || return false
-    inlining_cost == MAX_INLINE_COST || return false
-    precompile_keep_ir(interp) && return false
-    return true
+    return inlining_cost == MAX_INLINE_COST
 end
 
 function maybe_compress_codeinfo(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInfo)
     def = mi.def
     isa(def, Method) || return ci # don't compress toplevel code
     can_discard_trees = may_discard_trees(interp)
-    inlineable = is_inlineable(ci)
-    if can_discard_trees && !inlineable
-        # Precompile-keep-ir mode: retain non-inlineable IR as raw CodeInfo so
-        # irgen's typeinf_ext can reuse it instead of re-inferring.
-        # jl_finalize_precompile_inferred nulls it before save.
-        precompile_keep_ir(interp) && return ci
-        return nothing
-    end
+    cache_the_tree = !can_discard_trees || is_inlineable(ci)
+    cache_the_tree || return nothing
     # TODO: do we want to augment edges here with any :invoke targets that we got from inlining (such that we didn't have a direct edge to it already)?
     may_compress(interp) && return ccall(:jl_compress_ir, String, (Any, Any), def, ci)
     return ci
@@ -1587,7 +1579,8 @@ function compileable_specialization_for_call(interp::AbstractInterpreter, @nospe
     compileable_atype = get_compileable_sig(match.method, match.spec_types, match.sparams)
     compileable_atype === nothing && return nothing
     if match.spec_types !== compileable_atype
-        (_, sparams) = typeintersect_env(compileable_atype, match.method.sig)
+        sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), compileable_atype, match.method.sig)::SimpleVector
+        sparams = sp_[2]::SimpleVector
         mi = specialize_method(match.method, compileable_atype, sparams)
     else
         mi = specialize_method(match.method, compileable_atype, match.sparams)
@@ -1620,20 +1613,6 @@ markinspected!(queue::CompilationQueue, item) = push!(queue.inspected, item)
 isinspected(queue::CompilationQueue, item) = item in queue.inspected
 Base.isempty(queue::CompilationQueue) = isempty(queue.tocompile)
 
-function has_valid_abi_sparams(mi::MethodInstance)
-    isa(mi.specTypes, UnionAll) && return false
-    def = mi.def
-    isa(def, Method) || return true
-    unionall_depth(def.sig) == length(mi.sparam_vals) || return false
-    for i = 1:length(mi.sparam_vals)
-        sp = mi.sparam_vals[i]
-        if isa(sp, SimpleVector) || isvarargtype(sp)
-            return false
-        end
-    end
-    return true
-end
-
 # collect a list of all code that is needed along with CodeInstance to codegen it fully
 function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vector{VarState};
                          invokelatest_queue::Union{CompilationQueue,Nothing} = nothing)
@@ -1643,8 +1622,7 @@ function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vec
         isexpr(stmt, :(=)) && (stmt = stmt.args[2])
         if isexpr(stmt, :invoke) || isexpr(stmt, :invoke_modify)
             edge = stmt.args[1]
-            edge isa CodeInstance && isdefined(edge, :inferred) &&
-                has_valid_abi_sparams(get_ci_mi(edge)) && push!(workqueue, edge)
+            edge isa CodeInstance && isdefined(edge, :inferred) && push!(workqueue, edge)
         end
 
         invokelatest_queue === nothing && continue
@@ -1707,10 +1685,6 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
         callee = pop!(workqueue)
         ci_has_invoke(callee) && continue
         isinspected(workqueue, callee) && continue
-        if !has_valid_abi_sparams(get_ci_mi(callee))
-            markinspected!(workqueue, callee)
-            continue
-        end
         src = ci_get_source(interp, callee)
         if !isa(src, CodeInfo)
             newcallee = typeinf_ext(workqueue.interp, callee.def, source_mode) # always SOURCE_MODE_ABI
@@ -1746,8 +1720,7 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
 end
 
 function typeinf_ext_toplevel(interp::AbstractInterpreter, mi::MethodInstance, source_mode::UInt8)
-    mi2 = ccall(:jl_normalize_to_compilable_mi, Any, (Any,), mi)::MethodInstance
-    ci = typeinf_ext(interp, mi2, source_mode)
+    ci = typeinf_ext(interp, mi, source_mode)
     ci = add_codeinsts_to_jit!(interp, ci, source_mode)
     return ci
 end
@@ -1782,7 +1755,9 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
             invokelatest_queue === nothing && continue
             (rt::Type, sig::Type) = item
             # make a best-effort attempt to enqueue the relevant code for the ccallable
-            mi = ccall(:jl_get_specialization1, Any, (Any, Csize_t), sig, world)
+            mi = ccall(:jl_get_specialization1, Any,
+                        (Any, Csize_t, Cint),
+                        sig, world, #= mt_cache =# 0)
             if mi !== nothing
                 mi = mi::MethodInstance
                 ci = typeinf_ext(interp, mi, SOURCE_MODE_GET_SOURCE)
@@ -1795,10 +1770,6 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
             callee = item
             isinspected(workqueue, callee) && continue
             mi = get_ci_mi(callee)
-            if !has_valid_abi_sparams(mi)
-                markinspected!(workqueue, callee)
-                continue
-            end
             # now make sure everything has source code, if desired
             if use_const_api(callee)
                 src = codeinfo_for_const(interp, mi, WorldRange(callee.min_world, callee.max_world), callee.edges, callee.rettype_const)

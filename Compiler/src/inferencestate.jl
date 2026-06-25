@@ -739,14 +739,6 @@ function constrains_param(var::TypeVar, @nospecialize(typ), covariant::Bool, typ
         ba = constrains_param(var, typ.a, covariant, type_constrains)
         bb = constrains_param(var, typ.b, covariant, type_constrains)
         (ba && bb) && return true
-    elseif isType(typ)
-        p = type_parameter(typ)
-        if p === var && var.ub === Any
-            # Types with free type parameters are <: Type cause the typevar
-            # to be unconstrained because Type{T} with free typevars is illegal
-            return type_constrains
-        end
-        constrains_param(var, p, false, type_constrains) && return true
     elseif typ isa DataType
         # return true if any param constrains var
         fc = length(typ.parameters)
@@ -766,6 +758,11 @@ function constrains_param(var::TypeVar, @nospecialize(typ), covariant::Bool, typ
                     constrains_param(var, lastp, covariant, type_constrains) && return true
                 end
             else
+                if typ.name === typename(Type) && typ.parameters[1] === var && var.ub === Any
+                    # Types with free type parameters are <: Type cause the typevar
+                    # to be unconstrained because Type{T} with free typevars is illegal
+                    return type_constrains
+                end
                 for i in 1:fc
                     p = typ.parameters[i]
                     constrains_param(var, p, false, type_constrains) && return true
@@ -778,78 +775,75 @@ end
 
 const EMPTY_SPTYPES = VarState[]
 
-# Compute the abstract value `ty` for a sparam whose inferred env entry carries
-# a TypeVar (either the sig's own `vᵢ` for unspecialized MIs, or a possibly
-# narrowed `output_tvar` from subtyping). First try to sharpen via
-# `arg::Type{vᵢ}` / `Vararg{_,vᵢ}` patterns in `sigtypes`; otherwise fall back
-# to `Type{output_tvar}` rewrapped against free typevars of `specTypes`.
-function sptype_for_tvar(vᵢ::TypeVar, output_tvar::TypeVar, sigtypes::Core.SimpleVector,
-                         @nospecialize(specTypes))
-    for j = 1:length(sigtypes)
-        sⱼ = sigtypes[j]
-        if isType(sⱼ) && type_parameter(sⱼ) === vᵢ
-            # `arg::Type{T}` pins the sparam to the arg's type
-            return fieldtype(specTypes, j)
-        elseif (va = va_from_vatuple(sⱼ)) !== nothing
-            # `::Tuple{.., Vararg{_,vᵢ}}` means `vᵢ` is the Int length
-            if isdefined(va, :N) && va.N === vᵢ
-                return Int
-            end
-        end
-    end
-    if Any === output_tvar.ub && Bottom === output_tvar.lb
-        # `Bottom <: T <: Any` additionally allows non-Type tvars
-        return Any
-    end
-    return rewrap_free_typevars(TypeEq{output_tvar}, find_free_typevars(specTypes))
-end
-
 function sptypes_from_meth_instance(mi::MethodInstance)
     def = mi.def
     isa(def, Method) || return EMPTY_SPTYPES # toplevel
     sig = def.sig
-    # mi is unspecialized: no subtyping has run, so we don't have the
-    # `svec(tvar, constrained)` markers that specialized env entries carry.
-    # Use the static `constrains_param` check directly.
-    isempty(mi.sparam_vals) && return sptypes_from_unspecialized(sig)
-    spvals = mi.sparam_vals
+    if isempty(mi.sparam_vals)
+        isa(sig, UnionAll) || return EMPTY_SPTYPES
+        # mi is unspecialized
+        spvals = Any[]
+        sig′ = sig
+        while isa(sig′, UnionAll)
+            push!(spvals, sig′.var)
+            sig′ = sig′.body
+        end
+    else
+        spvals = mi.sparam_vals
+    end
     nvals = length(spvals)
     sptypes = Vector{VarState}(undef, nvals)
-    temp = sig
     for i = 1:nvals
         v = spvals[i]
-        undef = true
-        # An `svec(inner, constrained)` marker from subtyping/intersection
-        # means the sparam value is uncertain; `inner` is either the env
-        # TypeVar (carrying identity and bounds) or a DataType with free
-        # typevars (when the var got pinned to a value that still contains
-        # call-site tvars). `constrained` is true iff every concrete subtype
-        # of the call site will pin this var to a definite value.
-        # `src/subtype.c` folds in the static `constrains_param` semantics
-        # via `constrains_param_static`, so `v_constrained` is authoritative.
-        v_tvar = nothing
-        v_constrained = false
-        if isa(v, SimpleVector)
-            v_inner = v[1]
-            v_constrained = v[2]::Bool
-            if isa(v_inner, TypeVar)
-                v_tvar = v_inner
-            else
-                # DataType-with-free-tvars case: route through the generic
-                # `has_free_typevars(v)` path by unwrapping.
-                v = v_inner
+        if v isa TypeVar
+            temp = sig
+            for _ = 1:i-1
+                temp = temp.body
             end
-        end
-        if v_tvar !== nothing || has_free_typevars(v)
             vᵢ = (temp::UnionAll).var
-            if v_tvar !== nothing
-                ty = sptype_for_tvar(vᵢ, v_tvar,
-                                     (unwrap_unionall(temp)::DataType).parameters,
-                                     mi.specTypes)
-            else
-                ty = rewrap_free_typevars(TypeEq{v}, find_free_typevars(mi.specTypes))
+            sigtypes = (unwrap_unionall(temp)::DataType).parameters
+            for j = 1:length(sigtypes)
+                sⱼ = sigtypes[j]
+                if isType(sⱼ) && sⱼ.parameters[1] === vᵢ
+                    # if this parameter came from `arg::Type{T}`,
+                    # then `arg` is more precise than `Type{T} where lb<:T<:ub`
+                    ty = fieldtype(mi.specTypes, j)
+                    @goto ty_computed
+                elseif (va = va_from_vatuple(sⱼ)) !== nothing
+                    # if this parameter came from `::Tuple{.., Vararg{T,vᵢ}}`,
+                    # then `vᵢ` is known to be `Int`
+                    if isdefined(va, :N) && va.N === vᵢ
+                        ty = Int
+                        @goto ty_computed
+                    end
+                end
             end
-            undef = !v_constrained
+            ub = unwraptv_ub(v)
+            if has_free_typevars(ub)
+                ub = Any
+            end
+            lb = unwraptv_lb(v)
+            if has_free_typevars(lb)
+                lb = Bottom
+            end
+            if Any === ub && lb === Bottom
+                ty = Any
+            else
+                tv = TypeVar(v.name, lb, ub)
+                ty = UnionAll(tv, Type{tv})
+            end
+            @label ty_computed
+            undef = !(let sig=sig
+                # if the specialized signature `linfo.specTypes` doesn't contain any free
+                # type variables, we can use it for a more accurate analysis of whether `v`
+                # is constrained or not, otherwise we should use `def.sig` which always
+                # doesn't contain any free type variables
+                if !has_free_typevars(mi.specTypes)
+                    sig = mi.specTypes
+                end
+                @assert !has_free_typevars(sig)
+                constrains_param(v, sig, #=covariant=#true)
+            end)
         elseif isvarargtype(v)
             # this parameter came from `func(..., ::Vararg{T,v})`,
             # so the type is known to be `Int`
@@ -860,47 +854,8 @@ function sptypes_from_meth_instance(mi::MethodInstance)
             undef = false
         end
         sptypes[i] = VarState(ty, typemin(Int), undef)
-        temp = (temp::UnionAll).body
     end
     return sptypes
-end
-
-# Separate path for unspecialized MIs (empty `sparam_vals`): no subtyping has
-# run, so we can't rely on the svec-wrapped env entries produced by
-# intersection. Every sparam is represented by its raw method-sig TypeVar, and
-# `undef` is determined by the static `constrains_param` check.
-function sptypes_from_unspecialized(@nospecialize sig)
-    isa(sig, UnionAll) || return EMPTY_SPTYPES
-    nvals = 0
-    let sig′ = sig
-        while isa(sig′, UnionAll)
-            nvals += 1
-            sig′ = sig′.body
-        end
-    end
-    sptypes = Vector{VarState}(undef, nvals)
-    temp = sig
-    for i = 1:nvals
-        vᵢ = (temp::UnionAll).var
-        ty = sptype_for_tvar(vᵢ, vᵢ,
-                             (unwrap_unionall(temp)::DataType).parameters,
-                             sig)
-        undef = !(let sig=sig
-            @assert !has_free_typevars(sig)
-            vᵢ.lb === Bottom && constrains_param(vᵢ, sig, #=covariant=#true)
-        end)
-        sptypes[i] = VarState(ty, typemin(Int), undef)
-        temp = (temp::UnionAll).body
-    end
-    return sptypes
-end
-
-function sp_at_idx(sig::UnionAll, idx::Int)
-    while idx != 1
-        sig = sig.body::UnionAll
-        idx -= 1
-    end
-    return sig.var
 end
 
 function va_from_vatuple(@nospecialize(t))

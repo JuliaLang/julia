@@ -210,8 +210,6 @@ static int egal_types(const jl_value_t *a, const jl_value_t *b, jl_typeenv_t *en
         return egal_types(((jl_uniontype_t*)a)->a, ((jl_uniontype_t*)b)->a, env, tvar_names) &&
             egal_types(((jl_uniontype_t*)a)->b, ((jl_uniontype_t*)b)->b, env, tvar_names);
     }
-    if (dtag == jl_typeeq_tag << 4)
-        return egal_types(((jl_typeeq_t*)a)->T, ((jl_typeeq_t*)b)->T, env, tvar_names);
     if (dtag == jl_vararg_tag << 4) {
         jl_vararg_t *vma = (jl_vararg_t*)a;
         jl_vararg_t *vmb = (jl_vararg_t*)b;
@@ -291,8 +289,6 @@ JL_DLLEXPORT int jl_egal__bitstag(const jl_value_t *a JL_MAYBE_UNROOTED, const j
             return egal_types(a, b, NULL, 1);
         case jl_uniontype_tag:
             return compare_fields(a, b, jl_uniontype_type);
-        case jl_typeeq_tag:
-            return egal_types(a, b, NULL, 1);
         case jl_vararg_tag:
             return compare_fields(a, b, jl_vararg_type);
         case jl_task_tag:
@@ -407,10 +403,6 @@ static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOIN
         return bitmix(bitmix(jl_object_id((jl_value_t*)tv),
                              type_object_id_(((jl_uniontype_t*)v)->a, env)),
                       type_object_id_(((jl_uniontype_t*)v)->b, env));
-    }
-    if (tv == jl_typeeq_type) {
-        return bitmix(jl_object_id((jl_value_t*)tv),
-                      type_object_id_(((jl_typeeq_t*)v)->T, env));
     }
     if (tv == jl_unionall_type) {
         jl_unionall_t *u = (jl_unionall_t*)v;
@@ -1239,23 +1231,20 @@ static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f, int dothrow)
     if (jl_is_uniontype(t)) {
         jl_value_t **u;
         jl_value_t *r;
-        jl_value_t *a = ((jl_uniontype_t*)t)->a;
-        jl_value_t *b = ((jl_uniontype_t*)t)->b;
         JL_GC_PUSHARGS(u, 2);
-        u[0] = jl_is_typeeq(a) ? jl_bottom_type : get_fieldtype(a, f, 0);
-        u[1] = jl_is_typeeq(b) ? jl_bottom_type : get_fieldtype(b, f, 0);
+        u[0] = get_fieldtype(((jl_uniontype_t*)t)->a, f, 0);
+        u[1] = get_fieldtype(((jl_uniontype_t*)t)->b, f, 0);
         if (u[0] == jl_bottom_type && u[1] == jl_bottom_type && dothrow) {
             // error if all types in the union might have
-            get_fieldtype(a, f, 1);
-            get_fieldtype(b, f, 1);
+            get_fieldtype(((jl_uniontype_t*)t)->a, f, 1);
+            get_fieldtype(((jl_uniontype_t*)t)->b, f, 1);
         }
         r = jl_type_union(u, 2);
         JL_GC_POP();
         return r;
     }
-    if (!jl_is_datatype(t)) {
+    if (!jl_is_datatype(t))
         jl_type_error("fieldtype", (jl_value_t*)jl_datatype_type, t);
-    }
     jl_datatype_t *st = (jl_datatype_t*)t;
     int field_index;
     if (jl_is_long(f)) {
@@ -1692,13 +1681,6 @@ JL_CALLABLE(jl_f_apply_type)
         // substituting typevars (a valid_type_param check here isn't sufficient).
         return (jl_value_t*)jl_type_union(&args[1], nargs-1);
     }
-    else if (args[0] == (jl_value_t*)jl_typeeq_type) {
-        JL_NARGS(apply_type, 2, 2);
-        jl_value_t *pi = args[1];
-        if (!jl_valid_type_param(pi))
-            jl_type_error_rt("TypeEq", "parameter", (jl_value_t*)jl_type_type, pi);
-        return (jl_value_t*)jl_wrap_Type(pi);
-    }
     else if (jl_is_vararg(args[0])) {
         jl_vararg_t *vm = (jl_vararg_t*)args[0];
         if (!vm->T) {
@@ -1734,7 +1716,7 @@ JL_CALLABLE(jl_f_applicable)
 {
     JL_NARGSV(applicable, 1);
     size_t world = jl_current_task->world_age;
-    return jl_apply_lookup(args, nargs, world) != NULL ? jl_true : jl_false;
+    return jl_method_lookup(args, nargs, world) != NULL ? jl_true : jl_false;
 }
 
 JL_CALLABLE(jl_f_invoke)
@@ -2658,8 +2640,6 @@ void jl_init_primitives(void) JL_GC_DISABLED
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);
-    add_builtin("AnyType", (jl_value_t*)jl_anytype_type);
-    add_builtin("TypeEq", (jl_value_t*)jl_typeeq_type);
     add_builtin("Type", (jl_value_t*)jl_type_type);
     add_builtin("Nothing", (jl_value_t*)jl_nothing_type);
     add_builtin("nothing", (jl_value_t*)jl_nothing);
@@ -2668,7 +2648,6 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("TypeVar", (jl_value_t*)jl_tvar_type);
     add_builtin("UnionAll", (jl_value_t*)jl_unionall_type);
     add_builtin("Union", (jl_value_t*)jl_uniontype_type);
-    add_builtin("Intersect", (jl_value_t*)jl_intersect_type);
     add_builtin("TypeofBottom", (jl_value_t*)jl_typeofbottom_type);
     add_builtin("Tuple", (jl_value_t*)jl_anytuple_type);
     add_builtin("TypeofVararg", (jl_value_t*)jl_vararg_type);

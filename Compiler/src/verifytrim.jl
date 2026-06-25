@@ -454,7 +454,9 @@ function get_verify_typeinf_trim(codeinfos::Vector{Any})
         elseif item isa SimpleVector
             rt = item[1]::Type
             sig = item[2]::Type
-            mi = ccall(:jl_get_specialization1, Any, (Any, Csize_t), sig, this_world)
+            mi = ccall(:jl_get_specialization1, Any,
+                        (Any, Csize_t, Cint),
+                        sig, this_world, #= mt_cache =# 0)
             asrt = Any
             valid = if mi !== nothing
                 mi = mi::MethodInstance

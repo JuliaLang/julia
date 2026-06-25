@@ -339,8 +339,8 @@ function new_expr_effect_flags(𝕃ₒ::AbstractLattice, args::Vector{Any}, src:
     typ, isexact = instanceof_tfunc(atyp, true)
     if !isexact
         atyp = unwrap_unionall(widenconst(atyp))
-        if isType(atyp) && isTypeDataType(type_parameter(atyp))
-            typ = type_parameter(atyp)
+        if isType(atyp) && isTypeDataType(atyp.parameters[1])
+            typ = atyp.parameters[1]
         else
             return (false, false, false)
         end

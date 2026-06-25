@@ -232,7 +232,6 @@ function binding_module(m::Module, s::Symbol)
 end
 
 const _NAMEDTUPLE_NAME = NamedTuple.body.body.name
-const _TYPE_NAME = TypeEq.name
 
 function _fieldnames(@nospecialize t)
     if t.name === _NAMEDTUPLE_NAME
@@ -973,9 +972,6 @@ function ismutationfree(@nospecialize(t))
     t = unwrap_unionall(t)
     if isa(t, DataType)
         return datatype_ismutationfree(t)
-    elseif isa(t, TypeEq)
-        T = type_parameter(t)
-        return isa(T, Type) && ismutationfree(typeof(T))
     elseif isa(t, Union)
         return ismutationfree(t.a) && ismutationfree(t.b)
     end
@@ -996,9 +992,6 @@ function isidentityfree(@nospecialize(t))
     t = unwrap_unionall(t)
     if isa(t, DataType)
         return datatype_isidentityfree(t)
-    elseif isa(t, TypeEq)
-        T = type_parameter(t)
-        return isa(T, Type) && isidentityfree(typeof(T))
     elseif isa(t, Union)
         return isidentityfree(t.a) && isidentityfree(t.b)
     end
@@ -1015,7 +1008,7 @@ or [`Core.TypeofBottom`](@ref).
 
 All kinds are [concrete](@ref isconcretetype) because types are Julia values.
 """
-iskindtype(@nospecialize t) = (t === Core.AnyType || t === DataType || t === UnionAll || t === Union || t === TypeEq || t === typeof(Bottom))
+iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union || t === typeof(Bottom))
 
 """
     Base.isconcretedispatch(T)
@@ -1051,8 +1044,8 @@ function isdispatchelem(@nospecialize v)
         (isType(v) && !has_free_typevars(v))
 end
 
-isType(@nospecialize t) = isa(t, TypeEq)
-type_parameter(t::TypeEq) = getfield(t, :T)
+const _TYPE_NAME = Type.body.name
+isType(@nospecialize t) = isa(t, DataType) && t.name === _TYPE_NAME
 
 """
     isconcretetype(T)
@@ -1129,7 +1122,6 @@ false
 function isabstracttype(@nospecialize(t))
     @_total_meta
     t = unwrap_unionall(t)
-    isType(t) && return true
     # TODO: what to do for `Union`?
     return isa(t, DataType) && (t.name.flags & 0x1) == 0x1
 end
@@ -1193,7 +1185,7 @@ We can use it to summarize information about a struct:
 julia> structinfo(T) = [(fieldoffset(T,i), fieldname(T,i), fieldtype(T,i)) for i = 1:fieldcount(T)];
 
 julia> structinfo(Base.Filesystem.StatStruct)
-14-element Vector{Tuple{UInt64, Symbol, Core.AnyType}}:
+14-element Vector{Tuple{UInt64, Symbol, Type}}:
  (0x0000000000000000, :desc, Union{RawFD, String})
  (0x0000000000000008, :device, UInt64)
  (0x0000000000000010, :inode, UInt64)
@@ -1282,37 +1274,18 @@ function _fieldindex_nothrow(T::DataType, name::Symbol)
 end
 
 function fieldindex(t::UnionAll, name::Symbol, err::Bool=true)
-    return _fieldindex(t, name, err)
-end
-
-function fieldindex(t::Union, name::Symbol, err::Bool=true)
-    return _fieldindex(t, name, err)
-end
-
-function _fieldindex(@nospecialize(t), name::Symbol, err::Bool)
-    idx = _fieldindex_noerror(t, name)
-    if idx === nothing
+    t = argument_datatype(t)
+    if t === nothing
         err && throw(ArgumentError("type does not have definite fields"))
         return 0
     end
-    if idx == 0 && err
-        t = _fieldindex_error_type(t)
-        t === nothing && throw(ArgumentError("type does not have definite fields"))
-        return fieldindex(t, name, true)
-    end
-    return idx
+    return fieldindex(t, name, err)
 end
 
 function argument_datatype(@nospecialize t)
     @_total_meta
     @noinline
     return ccall(:jl_argument_datatype, Any, (Any,), t)::Union{Nothing,DataType}
-end
-
-function argument_datatypename(@nospecialize t)
-    @_total_meta
-    @noinline
-    return ccall(:jl_argument_datatypename, Any, (Any,), t)::Union{Nothing,Core.TypeName}
 end
 
 function datatype_fieldcount(t::DataType)
@@ -1337,64 +1310,6 @@ function datatype_fieldcount(t::DataType)
     return length(t.name.names)
 end
 
-function _typename_noerror(@nospecialize(t))
-    t = unwrap_unionall(t)
-    if t isa DataType
-        return t.name
-    elseif t isa Union
-        aname = _typename_noerror(t.a)
-        aname === nothing && return nothing
-        bname = _typename_noerror(t.b)
-        return aname === bname ? aname : nothing
-    end
-    return nothing
-end
-
-function _fieldindex_error_type(@nospecialize(t))
-    t = unwrap_unionall(t)
-    if t isa DataType
-        fieldcount_noerror(t) === nothing && return nothing
-        return t
-    elseif t isa Union
-        tn = _typename_noerror(t)
-        tn === nothing && return nothing
-        t = unwrap_unionall(tn.wrapper)
-        t isa DataType || return nothing
-        return t
-    end
-    return nothing
-end
-
-function _fieldindex_noerror(@nospecialize(t), name::Symbol)
-    t = unwrap_unionall(t)
-    if t isa Union
-        _typename_noerror(t) === nothing && return nothing
-        aidx = _fieldindex_noerror(t.a, name)
-        aidx === nothing && return nothing
-        bidx = _fieldindex_noerror(t.b, name)
-        return aidx === bidx ? aidx : nothing
-    elseif t isa DataType
-        return fieldindex(t, name, false)
-    end
-    return nothing
-end
-
-function _fieldcount_noerror(@nospecialize(t))
-    t === Union{} && return 0
-    t = unwrap_unionall(t)
-    if t isa Union
-        _typename_noerror(t) === nothing && return nothing
-        acount = _fieldcount_noerror(t.a)
-        acount === nothing && return nothing
-        bcount = _fieldcount_noerror(t.b)
-        return acount === bcount ? acount : nothing
-    elseif t === Union{}
-        return 0
-    end
-    t isa DataType || return nothing
-    return datatype_fieldcount(t)
-end
-
 """
     fieldcount(t::Type)
 
@@ -1403,14 +1318,13 @@ An error is thrown if the type is too abstract to determine this.
 """
 function fieldcount(@nospecialize t)
     @_foldable_meta
-    if t === Union{}
+    if t isa UnionAll || t isa Union
+        t = argument_datatype(t)
+        if t === nothing
+            throw(ArgumentError("type does not have a definite number of fields"))
+        end
+    elseif t === Union{}
         throw(ArgumentError("The empty type does not have a well-defined number of fields since it does not have instances."))
-    end
-    t = unwrap_unionall(t)
-    if t isa Union
-        fcount = _fieldcount_noerror(t)
-        fcount === nothing && throw(ArgumentError("type does not have a definite number of fields"))
-        return fcount
     end
     if !(t isa DataType)
         throw(TypeError(:fieldcount, DataType, t))
@@ -1423,7 +1337,28 @@ function fieldcount(@nospecialize t)
 end
 
 function fieldcount_noerror(@nospecialize t)
-    return _fieldcount_noerror(t)
+    if t isa UnionAll || t isa Union
+        t = argument_datatype(t)
+        if t === nothing
+            return nothing
+        end
+    elseif t === Union{}
+        return 0
+    end
+    t isa DataType || return nothing
+    if t.name === _NAMEDTUPLE_NAME
+        names, types = t.parameters
+        if names isa Tuple
+            return length(names)
+        end
+        if types isa DataType && types <: Tuple
+            return fieldcount_noerror(types)
+        end
+        return nothing
+    elseif isabstracttype(t) || (t.name === Tuple.name && isvatuple(t))
+        return nothing
+    end
+    return isdefined(t, :types) ? length(t.types) : length(t.name.names)
 end
 
 
@@ -1475,7 +1410,7 @@ function to_tuple_type(@nospecialize(t))
             if isa(p, Core.TypeofVararg)
                 p = unwrapva(p)
             end
-            if !(isa(p, Core.AnyType) || isa(p, TypeVar))
+            if !(isa(p, Type) || isa(p, TypeVar))
                 error("argument tuple type must contain only types")
             end
         end
@@ -1505,65 +1440,17 @@ end
 
 Determine whether `t` is a Type for which one or more of its parameters is `Union{}`.
 """
-function has_bottom_parameter(@nospecialize(t::Core.AnyType))
-    t === Bottom && return true
-    ty = typeof(t)
-    if ty === DataType
-        for p in getfield(t, :parameters)
-            has_bottom_parameter(p) && return true
-        end
-    elseif ty === TypeEq
-        return has_bottom_parameter(type_parameter(t))
-    elseif ty === UnionAll
-        return has_bottom_parameter(unwrap_unionall(t))
-    elseif ty === Union
-        return has_bottom_parameter(getfield(t, :a)) & has_bottom_parameter(getfield(t, :b))
+function has_bottom_parameter(t::DataType)
+    for p in t.parameters
+        has_bottom_parameter(p) && return true
     end
     return false
 end
+has_bottom_parameter(t::typeof(Bottom)) = true
+has_bottom_parameter(t::UnionAll) = has_bottom_parameter(unwrap_unionall(t))
+has_bottom_parameter(t::Union) = has_bottom_parameter(t.a) & has_bottom_parameter(t.b)
 has_bottom_parameter(t::TypeVar) = has_bottom_parameter(t.ub)
 has_bottom_parameter(::Any) = false
-
-function find_free_typevars(@nospecialize(t))
-    return ccall(:jl_find_free_typevars, Array{Any, 1}, (Any,), t)
-end
-
-"""
-    rewrap_free_typevars(@nospecialize(t), pre=Core.svec())
-
-Wrap `t` in `UnionAll` for each `TypeVar` that is free in `t` but not referenced
-in `pre` (the typevars that were free in the consumer's input before an env was
-applied).
-
-This is the consumer-side complement to `jl_type_intersection_env` /
-`jl_subtype_env`: the env svec may contain entries whose typevar identity is
-shared across slots. Rather than wrapping each slot independently (which breaks
-that identity), callers that build a new type from the env should apply this
-helper once to the final reconstructed type.
-"""
-function rewrap_free_typevars(@nospecialize(t), pre=Core.svec())
-    has_free_typevars(t) || return t
-    # UnionAll cannot directly wrap a Vararg; the caller must wrap it in Tuple first
-    isvarargtype(t) && return t
-    fv = find_free_typevars(t)
-    for i in length(fv):-1:1
-        v = fv[i]::TypeVar
-        wrap = true
-        for p in pre
-            if p === v
-                wrap = false
-                break
-            end
-        end
-        wrap && (t = UnionAll(v, t))
-    end
-    return t
-end
-
-function typeintersect_env(@nospecialize(a), @nospecialize(b))
-    (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), a, b)::SimpleVector
-    Pair{Any, SimpleVector}(ti, env)
-end
 
 min_world(m::Core.CodeInstance) = m.min_world
 max_world(m::Core.CodeInstance) = m.max_world
@@ -1827,7 +1714,7 @@ function may_invoke_generator(method::Method, @nospecialize(atype), sparams::Sim
 
     firstarg = 1
     for i = 1:nsparams
-        if isa(sparams[i], SimpleVector)
+        if isa(sparams[i], TypeVar)
             if (ast_slotflag(code, firstarg + i) & SLOT_USED) != 0
                 return false
             end
@@ -1886,7 +1773,8 @@ function normalize_typevars(method::Method, @nospecialize(atype), sparams::Simpl
     at2 = subst_trivial_bounds(atype)
     if at2 !== atype && at2 == atype
         atype = at2
-        (_, sparams) = typeintersect_env(at2, method.sig)
+        sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), at2, method.sig)::SimpleVector
+        sparams = sp_[2]::SimpleVector
     end
     return Pair{Any,SimpleVector}(atype, sparams)
 end

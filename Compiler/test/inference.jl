@@ -52,7 +52,7 @@ let t = Tuple{Ref{T},T,T} where T, c = Tuple{Ref, T, T} where T # #36407
 end
 
 # obtain Vararg with 2 undefined fields
-let va = Base.typeintersect_env(Tuple{Tuple}, Tuple{Tuple{Vararg{Any, N}}} where N)[2][1]
+let va = ccall(:jl_type_intersection_with_env, Any, (Any, Any), Tuple{Tuple}, Tuple{Tuple{Vararg{Any, N}}} where N)[2][1]
     @test Compiler.__limit_type_size(Tuple, va, Core.svec(va, Union{}), 2, 2) === Tuple
 end
 
@@ -307,8 +307,8 @@ let
     fT(x::T) where {T} = T
     @test fT(Any) === DataType
     @test fT(Int) === DataType
-    @test fT(Type{Any}) === Core.TypeEq
-    @test fT(Type{Int}) === Core.TypeEq
+    @test fT(Type{Any}) === DataType
+    @test fT(Type{Int}) === DataType
 
     ff(x::Type{T}) where {T} = T
     @test ff(Type{Any}) === Type{Any}
@@ -506,11 +506,6 @@ f11366(x::Type{Ref{T}}) where {T} = Ref{x}
 let f(T) = Type{T}
     @test Base.return_types(f, Tuple{Type{Int}}) == Any[Type{Type{Int}}]
 end
-
-# Keep tuple iteration precise when joining ordinary values with kind values.
-@test Core.Compiler.tmerge(String, Type) == Union{String, Type}
-@test Base.return_types(iterate, Tuple{Tuple{String, Type}, Int}) ==
-    Any[Union{Nothing, Tuple{Union{String, Type}, Int}}]
 
 # issue #9222
 function SimpleTest9222(pdedata, mu_actual::Vector{T1},
@@ -1041,7 +1036,7 @@ end
 # issue #21410
 f21410(::V, ::Pair{V,E}) where {V, E} = E
 @test only(Base.return_types(f21410, Tuple{Ref, Pair{Ref{T},Ref{T}} where T<:Number})) ==
-    Type{Ref{T}} where T<:Number
+    Type{E} where E <: (Ref{T} where T<:Number)
 
 # issue #21369
 function inf_error_21369(arg)
@@ -1568,7 +1563,7 @@ let nfields_tfunc(@nospecialize xs...) =
     @test nfields_tfunc(Number) === Int
     @test nfields_tfunc(Int) === Const(0)
     @test nfields_tfunc(Complex) === Const(2)
-    @test nfields_tfunc(Type{Type{Int}}) === Const(nfields(Type{Int}))
+    @test nfields_tfunc(Type{Type{Int}}) === Const(nfields(DataType))
     @test nfields_tfunc(UnionAll) === Const(2)
     @test nfields_tfunc(DataType) === Const(nfields(DataType))
     @test nfields_tfunc(Type{Int}) === Const(nfields(DataType))
@@ -2903,8 +2898,8 @@ let apply_type_tfunc = Compiler.apply_type_tfunc
     @test apply_type_tfunc(𝕃, Const(Val), Type{Union{Int,Pair{Pair{Pair{Pair{A,B},C},D},E}}} where {A,B,C,D,E}) == Type{Val{_A}} where _A
 end
 @test only(Base.return_types(keys, (Dict{String},))) == Base.KeySet{String, T} where T<:(Dict{String})
-@test only(Base.return_types((r)->similar(Array{typeof(r[])}, 1), (Base.RefValue{Array{Int}},))) == Vector{Array{Int, N}} where N
-@test only(Base.return_types((r)->similar(Array{typeof(r[])}, 1), (Base.RefValue{Array{<:Real}},))) == Vector{Array{T, N}} where {T<:Real, N}
+@test only(Base.return_types((r)->similar(Array{typeof(r[])}, 1), (Base.RefValue{Array{Int}},))) == Vector{<:Array{Int}}
+@test only(Base.return_types((r)->similar(Array{typeof(r[])}, 1), (Base.RefValue{Array{<:Real}},))) == Vector{<:Array{<:Real}}
 # test complexity limit on apply_type on a function capturing functions returning functions
 @test only(Base.return_types(Base.afoldl, (typeof((m, n) -> () -> Returns(nothing)(m, n)), Function, Function, Vararg{Function}))) === Function
 
@@ -4649,48 +4644,38 @@ Base.@nospecializeinfer func_nospecializeinfer_constprop(@nospecialize a) = func
 itr_dispatchonly = Any[sin, muladd, "foo", nothing, missing]   # untyped container can cause excessive runtime dispatch
 itr_withinfernce = tuple(sin, muladd, "foo", nothing, missing) # typed container can cause excessive inference
 
-function count_inferred(m::Method)
-    count = 0
-    for mi in Base.specializations(m)
-        isdefined(mi, :cache) || continue
-        # inferred methods come first in the cache by construction, so no iteratation needed
-        count += isdefined(mi.cache, :inferred)
-    end
-    return count
-end
-
 @testset "compilation annotations" begin
     @testset "@nospecialize" begin
         # `@nospecialize` should suppress runtime dispatches of `nospecialize`
         @test call_func_itr(func_nospecialized, itr_dispatchonly) == 2
-        @test length(Base.specializations(only(methods(func_nospecialized)))) == 1
+        @test length(Base.specializations(only(methods((func_nospecialized))))) == 1
         # `@nospecialize` should allow inference to happen
         @test call_func_itr(func_nospecialized, itr_withinfernce) == 2
-        @test length(Base.specializations(only(methods(func_nospecialized)))) == 6
+        @test length(Base.specializations(only(methods((func_nospecialized))))) == 6
         @test count(is_inline_checker, @get_code call_func_itr(func_nospecialized, itr_dispatchonly)) == 0
 
         # `@nospecialize` should allow inlinining
         @test call_func_itr(func_nospecialized_inline, itr_dispatchonly) == 2
-        @test length(Base.specializations(only(methods(func_nospecialized_inline)))) == 1
+        @test length(Base.specializations(only(methods((func_nospecialized_inline))))) == 1
         @test call_func_itr(func_nospecialized_inline, itr_withinfernce) == 2
-        @test length(Base.specializations(only(methods(func_nospecialized_inline)))) == 6
+        @test length(Base.specializations(only(methods((func_nospecialized_inline))))) == 6
         @test count(is_inline_checker, @get_code call_func_itr(func_nospecialized_inline, itr_dispatchonly)) == 5
     end
 
     @testset "@nospecializeinfer" begin
         # `@nospecialize` should suppress runtime dispatches of `nospecialize`
         @test call_func_itr(func_nospecializeinfer, itr_dispatchonly) == 2
-        @test length(Base.specializations(only(methods(func_nospecializeinfer)))) == 1
+        @test length(Base.specializations(only(methods((func_nospecializeinfer))))) == 1
         # `@nospecializeinfer` suppresses inference also
         @test call_func_itr(func_nospecializeinfer, itr_withinfernce) == 2
-        @test count_inferred(only(methods(func_nospecializeinfer))) == 1
+        @test length(Base.specializations(only(methods((func_nospecializeinfer))))) == 1
         @test !any(is_inline_checker, @get_code call_func_itr(func_nospecializeinfer, itr_dispatchonly))
 
         # `@nospecializeinfer` should allow inlinining
         @test call_func_itr(func_nospecializeinfer_inline, itr_dispatchonly) == 2
         @test length(Base.specializations(only(methods((func_nospecializeinfer_inline))))) == 1
         @test call_func_itr(func_nospecializeinfer_inline, itr_withinfernce) == 2
-        @test count_inferred(only(methods(func_nospecializeinfer_inline))) == 1
+        @test length(Base.specializations(only(methods((func_nospecializeinfer_inline))))) == 1
         @test any(is_inline_checker, @get_code call_func_itr(func_nospecializeinfer_inline, itr_dispatchonly))
 
         # `@nospecializeinfer` should allow constprop
@@ -4703,7 +4688,7 @@ end
         end
         @test call_func_itr(func_nospecializeinfer_constprop, itr_withinfernce) == 0
         for m = methods(func_nospecializeinfer_constprop)
-            @test count_inferred(m) == 1
+            @test length(Base.specializations(m)) == 1
         end
     end
 end
@@ -5569,16 +5554,16 @@ function issue49027(::Type{<:Issue49027{Ty}}) where Ty
     end
     return nothing
 end
-@test_skip only(Base.return_types(issue49027, (Type{Issue49027{TypeVar(:Ty)}},))) >: Nothing
-@test_skip isnothing(issue49027(Issue49027{TypeVar(:Ty)}))
+@test only(Base.return_types(issue49027, (Type{Issue49027{TypeVar(:Ty)}},))) >: Nothing
+@test isnothing(issue49027(Issue49027{TypeVar(:Ty)}))
 function issue49027_integer(::Type{<:Issue49027{Ty}}) where Ty<:Integer
     if @isdefined Ty # should be false when `Ty` is given as a free type var.
         return Ty::DataType
     end
     nothing
 end
-@test_skip only(Base.return_types(issue49027_integer, (Type{Issue49027{TypeVar(:Ty,Int)}},))) >: Nothing
-@test_skip isnothing(issue49027_integer(Issue49027{TypeVar(:Ty,Int)}))
+@test only(Base.return_types(issue49027_integer, (Type{Issue49027{TypeVar(:Ty,Int)}},))) >: Nothing
+@test isnothing(issue49027_integer(Issue49027{TypeVar(:Ty,Int)}))
 
 function fapplicable end
 gapplicable() = Val(applicable(fapplicable))
@@ -6873,24 +6858,6 @@ readbox(box::UntypedBoxWithParam) = box.x.value
 @test Base.infer_return_type((Type,Int)) do T, x
     readbox(UntypedBoxWithParam{T}(x))
 end == Int
-
-# A constructor call where one argument is `Any`-typed forces the corresponding
-# sparam (M) to be unresolved. Inference must still tighten the *other* sparam
-# (B) from its declared `<:Tuple` to `<:Tuple{Vector}`.
-module NestedTVarSPtype
-struct ParamStruct{N,M,A<:Tuple,B<:Tuple,C<:Tuple}
-    output_size::NTuple{N,Int}
-    temparray_size::NTuple{M,Int}
-    output_indices::A
-    temparray_indices::B
-    data_indices::C
-end
-mk(tempinds::Vector, tempsize) =
-    ParamStruct((1,), (tempsize,), (Colon(),), (tempinds,), (1:1,))
-end # module NestedTVarSPtype
-let rt = Base.infer_return_type(NestedTVarSPtype.mk, (Vector, Any))
-    @test rt <: (NestedTVarSPtype.ParamStruct{1, 1, Tuple{Colon}, B, Tuple{UnitRange{Int}}} where B<:Tuple{Vector})
-end
 
 # `Compiler.return_type` on an `OpaqueClosure` should model the declared
 # return type stored in the OC type without inspecting the OC source.

@@ -21,7 +21,6 @@
     XX(jl_apply_type1) \
     XX(jl_apply_type2) \
     XX(jl_argument_datatype) \
-    XX(jl_argument_datatypename) \
     XX(jl_array_del_end) \
     XX(jl_array_eltype) \
     XX(jl_array_grow_end) \
@@ -230,6 +229,7 @@
     XX(jl_get_world_counter) \
     XX(jl_get_zero_subnormals) \
     XX(jl_gf_invoke_lookup) \
+    XX(jl_method_lookup_by_tt) \
     XX(jl_method_lookup) \
     XX(jl_gf_invoke_lookup_worlds) \
     XX(jl_global_event_loop) \

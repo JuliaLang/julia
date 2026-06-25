@@ -306,8 +306,13 @@ function _modulecolor(method::Method)
     # method table is shared, we now need to distinguish "primary" methods by trying to
     # check if there is a primary `DataType` to identify it with. c.f. how `jl_method_def`
     # would derive this same information (for the name).
-    ft = argument_datatypename((unwrap_unionall(method.sig)::DataType).parameters[1])
-    if ft === nothing || parentmodule(method) === ft.module !== Core
+    ft = argument_datatype((unwrap_unionall(method.sig)::DataType).parameters[1])
+    # `ft` should be the type associated with the first argument in the method signature.
+    # If it's `Type`, try to unwrap it again.
+    if isType(ft)
+        ft = argument_datatype(ft.parameters[1])
+    end
+    if ft === nothing || parentmodule(method) === parentmodule(ft) !== Core
         return nothing
     end
     m = parentmodule_before_main(method)

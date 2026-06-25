@@ -1083,9 +1083,8 @@ precompile_test_harness("code caching") do dir
         mi = m.specializations::Core.MethodInstance
         @test hasvalid(mi, world)       # was compiled with the new method
         m = only(methods(MA.fib))
-        for mi in Base.specializations(m)
-            @test !hasvalid(mi, world)      # invalidated by redefining `gib` before loading StaleB
-        end
+        mi = m.specializations::Core.MethodInstance
+        @test !hasvalid(mi, world)      # invalidated by redefining `gib` before loading StaleB
         @test MA.fib() === 2.0
 
         # Reporting test (ensure SnoopCompile works)
@@ -1980,7 +1979,7 @@ precompile_test_harness("PkgCacheInspector") do load_path
             cachefile, depmods, #=completeinfo=#true, "PCI")
     end
 
-    modules, init_order, internal_methods, extext_methods, new_method_roots, cache_sizes = sv
+    modules, init_order, internal_methods, extext_methods, new_ext_cis, new_method_roots, cache_sizes = sv
     for m in internal_methods::Vector{Any}
         m isa Core.MethodInstance || continue
         m = m.func::Method
@@ -2531,13 +2530,8 @@ precompile_test_harness("Package precompilation works without manifest") do load
 end
 
 # Verify that inference / caching was not performed for any macros in the sysimage
-let m = only(methods(Base.var"@lazy_str"))
-    for mi in Base.specializations(m)
-        isdefined(mi, :cache) || continue
-        ci = mi.cache
-        @test !isdefined(ci, :inferred)
-        @test !isdefined(ci, :next)
-    end
+let m = only(methods(Base.var"@big_str"))
+    @test m.specializations === Core.svec() || !isdefined(m.specializations, :cache)
 end
 
 # Issue #58841 - make sure we don't accidentally throw away code for inference
@@ -2910,132 +2904,6 @@ end
     end
 end
 
-# TypeEq payloads that mention package-image datatypes must be restored as new
-# before restore-side type-cache lookup compares them to cached types.
-@testset "precompile TypeEq references to new datatypes" begin
-    mkdepottempdir() do depot
-        project_path = joinpath(depot, "testenv")
-        dev_path = joinpath(depot, "dev")
-        mkpath(project_path)
-        mkpath(dev_path)
-
-        trigger_uuid = "10000000-0000-0000-0000-000000000103"
-        parent_uuid = "10000000-0000-0000-0000-000000000104"
-
-        trigger_dir = joinpath(dev_path, "TypeEqTrigger")
-        mkpath(joinpath(trigger_dir, "src"))
-        write(joinpath(trigger_dir, "Project.toml"), """
-            name = "TypeEqTrigger"
-            uuid = "$trigger_uuid"
-            version = "0.1.0"
-            """)
-        write(joinpath(trigger_dir, "src", "TypeEqTrigger.jl"), """
-            module TypeEqTrigger
-            macro latestworld_if_toplevel()
-                Expr(Symbol("latestworld-if-toplevel"))
-            end
-            workload() = tuple(values(Dict(:a => 1))...)
-            if ccall(:jl_generating_output, Cint, ()) == 1
-                ccall(:jl_tag_newly_inferred_enable, Cvoid, ())
-                try
-                    @latestworld_if_toplevel
-                    workload()
-                finally
-                    ccall(:jl_tag_newly_inferred_disable, Cvoid, ())
-                end
-            end
-            end
-            """)
-
-        parent_dir = joinpath(dev_path, "TypeEqParent")
-        mkpath(joinpath(parent_dir, "src"))
-        write(joinpath(parent_dir, "Project.toml"), """
-            name = "TypeEqParent"
-            uuid = "$parent_uuid"
-            version = "0.1.0"
-            """)
-        write(joinpath(parent_dir, "src", "TypeEqParent.jl"), """
-            module TypeEqParent
-            import Base: range
-
-            abstract type Left{N} end
-            abstract type Right{N} end
-            struct Iter{C}
-                c::C
-            end
-
-            Base.iterate(itr::Iter{C}, state::Int=0) where
-                {N, C <: Union{Left{N},Right{N}}} =
-                    state >= N ? nothing : (0, state + 1)
-            Base.BroadcastStyle(::Type{<:Iter{C}}) where
-                {N, C <: Union{Left{N},Right{N}}} =
-                    Base.BroadcastStyle(NTuple{N,Int})
-            Base.broadcastable(itr::Iter{C}) where
-                {N, C <: Union{Left{N},Right{N}}} =
-                    (itr...,)::NTuple{N,Int}
-
-            comps(c::C) where {N, C <: Union{Left{N},Right{N}}} = Iter(c)
-            range(start::T; stop::T, length::Integer=100) where
-                {N, T <: Union{Left{N},Right{N}}} =
-                    comps(start) .+ comps(stop)
-            range(start::T, stop::T; kwargs...) where
-                {N, T <: Union{Left{N},Right{N}}} =
-                    range(start; stop=stop, kwargs...)
-
-            macro latestworld_if_toplevel()
-                Expr(Symbol("latestworld-if-toplevel"))
-            end
-            function workload()
-                for T in (Float64, Int)
-                    range(one(T), T(2); length=2)
-                end
-            end
-            if ccall(:jl_generating_output, Cint, ()) == 1
-                ccall(:jl_tag_newly_inferred_enable, Cvoid, ())
-                try
-                    @latestworld_if_toplevel
-                    workload()
-                finally
-                    ccall(:jl_tag_newly_inferred_disable, Cvoid, ())
-                end
-            end
-            end
-            """)
-
-        write(joinpath(project_path, "Project.toml"), """
-            [deps]
-            TypeEqParent = "$parent_uuid"
-            TypeEqTrigger = "$trigger_uuid"
-            """)
-        write(joinpath(project_path, "Manifest.toml"), """
-            manifest_format = "2.0"
-
-            [[deps.TypeEqParent]]
-            path = "../dev/TypeEqParent"
-            uuid = "$parent_uuid"
-            version = "0.1.0"
-
-            [[deps.TypeEqTrigger]]
-            path = "../dev/TypeEqTrigger"
-            uuid = "$trigger_uuid"
-            version = "0.1.0"
-            """)
-
-        original_depot_path = copy(Base.DEPOT_PATH)
-        old_proj = Base.active_project()
-        try
-            push!(empty!(DEPOT_PATH), depot)
-            Base.set_active_project(project_path)
-            Base.Precompilation.precompilepkgs(; io=IOBuffer(), fancyprint=false)
-            @test Base.require(Main, :TypeEqParent) isa Module
-            @test Base.require(Main, :TypeEqTrigger) isa Module
-        finally
-            Base.set_active_project(old_proj)
-            append!(empty!(DEPOT_PATH), original_depot_path)
-        end
-    end
-end
-
 # Issue #61198 - extensions with superset triggers must be in the precompilation dep graph
 @testset "precompilation dep graph includes transitively-triggered extensions" begin
     mkdepottempdir() do depot
@@ -3390,27 +3258,6 @@ end
         output = fetch(log)
         @test !occursin("currently loaded", output)
     end end
-end
-
-# PR #61915: a precompiled value with an inline `Type{Union{}}` field used to abort
-# in `record_memoryrefs_inside` while writing the cache, because the `TypeEq` field
-# type is laid out as the singleton `typeof(Union{})` `DataType`.
-precompile_test_harness("Type{Union{}} inline field") do dir
-    TypeBottomField = :TypeBottomField61915
-    write(joinpath(dir, "$TypeBottomField.jl"),
-          """
-          module $TypeBottomField
-              struct HoldsBottom
-                  t::Type{Union{}}
-                  x::Int
-              end
-              const X = HoldsBottom(Union{}, 7)
-          end
-          """)
-    @test Base.compilecache(Base.PkgId(string(TypeBottomField))) isa Tuple
-    @eval using $TypeBottomField
-    @test (@eval $TypeBottomField.X.x) == 7
-    @test (@eval $TypeBottomField.X.t) === Union{}
 end
 
 finish_precompile_test!()
