@@ -65,34 +65,7 @@ struct Platform <: AbstractPlatform
                 continue
             end
 
-            # For compatibility, libstdcxx_version counts as both cxxlib=libstdcxx and
-            # cxxlib_version, but don't override an explicit existing cxxlib tag (the
-            # verifier will check for inconsistencies).
-            if tag == "libstdcxx_version"
-                haskey(tags, "cxxlib") || add_tag!(tags, "cxxlib", "libstdcxx")
-                tag = "cxxlib_version"
-            elseif tag == "cxxstring_abi"
-                # Implies cxxlib=libstdcxx for compatibility
-                haskey(tags, "cxxlib") || add_tag!(tags, "cxxlib", "libstdcxx")
-            end
-
-            # Normalize things that are known to be version numbers so that comparisons are easy.
-            # Note that in our effort to be extremely compatible, we actually allow something that
-            # doesn't parse nicely into a VersionNumber to persist, but if `validate_strict` is
-            # set to `true`, it will cause an error later on.
-            if tag ∈ ("libgfortran_version", "cxxlib_version", "os_version")
-                if isa(value, VersionNumber)
-                    value = string(value)
-                elseif isa(value, String)
-                    v = tryparse(VersionNumber, value)
-                    if isa(v, VersionNumber)
-                        value = string(v)
-                    end
-                end
-            end
-
-            # Use `add_tag!()` to add the tag to our collection of tags
-            add_tag!(tags, tag, string(value)::String)
+            add_platform_tag!(tags, tag, value)
         end
 
         # Auto-map call_abi and libc where necessary:
@@ -140,6 +113,43 @@ tagvalue(v::Union{String,VersionNumber,Nothing}) = v
 tagvalue(v::Symbol) = String(v)
 tagvalue(v::AbstractString) = convert(String, v)::String
 
+function add_platform_tag!(tags::Dict{String,String}, tag::String, value::Union{String,VersionNumber,Nothing})
+    tag = lowercase(tag)
+
+    # Drop `nothing` values; this means feature is not present or use default value.
+    if value === nothing
+        return nothing
+    end
+
+    # For compatibility, libstdcxx_version counts as both cxxlib=libstdcxx and
+    # cxxlib_version, but don't override an explicit existing cxxlib tag (the
+    # verifier will check for inconsistencies).
+    if tag == "libstdcxx_version"
+        haskey(tags, "cxxlib") || add_tag!(tags, "cxxlib", "libstdcxx")
+        tag = "cxxlib_version"
+    elseif tag == "cxxstring_abi"
+        # Implies cxxlib=libstdcxx for compatibility
+        haskey(tags, "cxxlib") || add_tag!(tags, "cxxlib", "libstdcxx")
+    end
+
+    # Normalize things that are known to be version numbers so that comparisons are easy.
+    # Note that in our effort to be extremely compatible, we actually allow something that
+    # doesn't parse nicely into a VersionNumber to persist, but if `validate_strict` is
+    # set to `true`, it will cause an error later on.
+    if tag ∈ ("libgfortran_version", "cxxlib_version", "os_version")
+        if isa(value, VersionNumber)
+            value = string(value)
+        elseif isa(value, String)
+            v = tryparse(VersionNumber, value)
+            if isa(v, VersionNumber)
+                value = string(v)
+            end
+        end
+    end
+
+    return add_tag!(tags, tag, string(value)::String)
+end
+
 # Simple tag insertion that performs a little bit of validation
 function add_tag!(tags::Dict{String,String}, tag::String, value::String)
     # I know we said only alphanumeric and dots, but let's be generous so that we can expand
@@ -167,7 +177,7 @@ tags(p::Platform) = p.tags
 Base.getindex(p::AbstractPlatform, k::String) = getindex(tags(p), k)
 Base.haskey(p::AbstractPlatform, k::String) = haskey(tags(p), k)
 function Base.setindex!(p::AbstractPlatform, v::String, k::String)
-    add_tag!(tags(p), k, v)
+    add_platform_tag!(tags(p), k, v)
     return p
 end
 

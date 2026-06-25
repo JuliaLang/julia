@@ -226,6 +226,18 @@ end
     p["os"] = "JuliaOS"
     @test p["os"] == "juliaos"
 
+    # Test that dict-like mutation uses the same compatibility aliases as constructors.
+    p = P("x86_64", "linux")
+    p["cxxstring_abi"] = "cxx11"
+    @test p == P("x86_64", "linux"; cxxstring_abi="cxx11")
+    @test triplet(p) == "x86_64-linux-gnu-cxx11"
+
+    p = P("x86_64", "linux")
+    p["libstdcxx_version"] = "3.4.26"
+    @test p == P("x86_64", "linux"; libstdcxx_version=v"3.4.26")
+    @test libstdcxx_version(p) == v"3.4.26"
+    @test triplet(p) == "x86_64-linux-gnu-libstdcxx26"
+
     # Test that trying to set illegal tags fails
     @test_throws ArgumentError p["os"] = "a+b"
 
