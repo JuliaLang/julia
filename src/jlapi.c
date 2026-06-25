@@ -40,7 +40,7 @@ extern "C" {
 #define FE_TOWARDZERO 0xc00
 #endif
 
-static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel, const char* julia_bindir);
+static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel, const char* julia_bindir) JL_NOTSAFEPOINT;
 
 /**
  * @brief Check if Julia is already initialized.
@@ -1042,7 +1042,7 @@ static NOINLINE int true_main(int argc, char *argv[])
     return 0;
 }
 
-static void lock_low32(void)
+static void lock_low32(void) JL_NOTSAFEPOINT
 {
 #if defined(_OS_WINDOWS_) && defined(_P64) && defined(JL_DEBUG_BUILD)
     // Prevent usage of the 32-bit address space on Win64, to catch pointer cast errors.
@@ -1084,7 +1084,7 @@ static void lock_low32(void)
 void jl_lisp_prompt(void);
 
 #ifdef _OS_LINUX_
-static void rr_detach_teleport(void) {
+static void rr_detach_teleport(void) JL_NOTSAFEPOINT {
 #define RR_CALL_BASE 1000
 #define SYS_rrcall_detach_teleport (RR_CALL_BASE + 9)
     int err = syscall(SYS_rrcall_detach_teleport, 0, 0, 0, 0, 0, 0);
@@ -1101,7 +1101,7 @@ static void rr_detach_teleport(void) {
  * @param argv Array of command-line arguments.
  * @return An integer indicating the exit status of the REPL session.
  */
-JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[])
+JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[]) JL_NOTSAFEPOINT_ENTER
 {
 #ifdef USE_TRACY
     if (getenv("JULIA_WAIT_FOR_TRACY"))
@@ -1157,7 +1157,7 @@ JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[])
 // create an absolute-path copy of the input path format string
 // formed as `joinpath(replace(pwd(), "%" => "%%"), in)`
 // unless `in` starts with `%`
-static const char *absformat(const char *in)
+static const char *absformat(const char *in) JL_NOTSAFEPOINT
 {
     if (in[0] == '%' || jl_isabspath(in))
         return in;
@@ -1184,7 +1184,7 @@ static const char *absformat(const char *in)
     return out;
 }
 
-static char *absrealpath(const char *in, int nprefix)
+static char *absrealpath(const char *in, int nprefix) JL_NOTSAFEPOINT
 { // compute an absolute realpath location, so that chdir doesn't change the file reference
   // ignores (copies directly over) nprefix characters at the start of abspath
     char *out;

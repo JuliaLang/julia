@@ -59,7 +59,7 @@ JL_DLLEXPORT void *jl_get_ptls_states(void)
     return jl_current_task->ptls;
 }
 
-static void jl_delete_thread(void*);
+static void jl_delete_thread(void*) JL_NOTSAFEPOINT_ENTER;
 
 #if !defined(_OS_WINDOWS_)
 static pthread_key_t jl_task_exit_key;
@@ -495,7 +495,7 @@ void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT;
 void scheduler_delete_thread(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 void _jl_free_stack(jl_ptls_t ptls, void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT;
 
-static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
+static void jl_delete_thread(void *value)
 {
 #ifndef _OS_WINDOWS_
     pthread_setspecific(jl_task_exit_key, NULL);

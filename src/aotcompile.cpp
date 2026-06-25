@@ -2631,6 +2631,7 @@ extern "C" JL_DLLEXPORT_CODEGEN
 void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_code_info_t *src, char getwrapper, char optimize, const char *llvm_options, const jl_cgparams_t params)
 {
     // emit this function into a new llvm module
+    jl_task_t *ct = jl_current_task;
     dump->F = nullptr;
     dump->TSM = nullptr;
     dump->pass_output = nullptr;
@@ -2681,7 +2682,9 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
                 decl_names.specptr = decls->specptr ? decls->specptr->getName() : "";
                 // if compilation succeeded, prepare to return the result
                 if (!jl_options.image_codegen) {
+                    int8_t gc_state = jl_gc_safe_enter(ct->ptls);
                     optimizeDLSyms(output.get_module());
+                    jl_gc_safe_leave(ct->ptls, gc_state);
                 }
                 assert(!verifyLLVMIR(output.get_module()));
                 if (optimize) {
@@ -2713,6 +2716,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
                 else
                     fname = &decl_names.invoke;
                 F = output.get_module().getFunction(*fname);
+                assert(F);
             }
             if (measure_compile_time_enabled) {
                 auto end = jl_hrtime();
@@ -2722,7 +2726,6 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
         if (F) {
             dump->TSM = wrap(new orc::ThreadSafeModule(std::move(mod), std::move(ctx)));
             dump->F = wrap(F);
-            return;
-        }
+       }
     }
 }

@@ -1052,6 +1052,16 @@ ios_t *ios_safe_stderr = NULL;
 
 void ios_init_stdstreams(void)
 {
+#ifdef _OS_WINDOWS_
+    // Set stdio writes to binary mode
+    fflush(stdin);
+    _setmode(STDIN_FILENO, _O_BINARY);
+    fflush(stdout);
+    _setmode(STDOUT_FILENO, _O_BINARY);
+    fflush(stderr);
+    _setmode(STDERR_FILENO, _O_BINARY);
+#endif
+
     ios_stdin = (ios_t*)malloc_s(sizeof(ios_t));
     ios_fd(ios_stdin, STDIN_FILENO, 0, 0);
 

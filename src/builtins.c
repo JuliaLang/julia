@@ -2604,7 +2604,7 @@ static void add_intrinsic(jl_module_t *inm, const char *name, enum intrinsic f) 
     jl_set_initial_const(inm, sym, i, 1);
 }
 
-void jl_init_intrinsic_properties(void) JL_GC_DISABLED
+void jl_init_intrinsic_properties(void)
 {
 #define ADD_I(name, nargs) add_intrinsic_properties(name, nargs, (void(*)(void))&jl_##name);
 #define ADD_HIDDEN ADD_I
@@ -2615,7 +2615,7 @@ void jl_init_intrinsic_properties(void) JL_GC_DISABLED
 #undef ALIAS
 }
 
-void jl_init_intrinsic_functions(void) JL_GC_DISABLED
+void jl_init_intrinsic_functions(void)
 {
     jl_module_t *inm = jl_new_module_(jl_symbol("Intrinsics"), jl_core_module, 0, 1);
     jl_set_initial_const(jl_core_module, jl_symbol("Intrinsics"), (jl_value_t*)inm, 0);
