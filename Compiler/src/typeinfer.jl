@@ -824,6 +824,8 @@ function store_backedges(caller::CodeInstance, edges::SimpleVector)
     nothing
 end
 
+link_ci_equiv!(callee::CodeInstance, cached::CodeInstance) = !iszero(ccall(:jl_link_ci_equiv, Cint, (Any, Any), callee, cached))
+
 function compute_edges!(sv::InferenceState)
     edges = sv.edges
     for i in 1:length(sv.stmt_info)
@@ -1734,8 +1736,10 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
                 code_cache(workqueue.interp)[mi] = callee
             else
                 # use an existing CI from the cache, if there is available one that is compatible
-                callee === ci && (ci = cached)
-                callee = cached
+                if link_ci_equiv!(callee, cached)
+                    callee === ci && (ci = cached)
+                    callee = cached
+                end
             end
         end
         push!(codeinsts, callee)
@@ -1827,7 +1831,9 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
                         code_cache(interp)[mi] = callee
                     else
                         # Use an existing CI from the cache, if there is available one that is compatible
-                        callee = cached
+                        if link_ci_equiv!(callee, cached)
+                            callee = cached
+                        end
                     end
                 end
                 push!(codeinfos, callee)

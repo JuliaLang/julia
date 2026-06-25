@@ -2221,7 +2221,9 @@ linkGraphSymbols(jitlink::LinkGraph &G) JL_NOTSAFEPOINT
 
 bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferRef ObjBuf,
                            jitlink::LinkGraph &G, std::unique_ptr<jl_linker_info_t> Info)
+    JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
 {
+    jl_task_t *ct = jl_current_task;
     std::unique_lock Lock{LinkerMutex};
 
     auto Syms = linkGraphSymbols(G);
@@ -2237,13 +2239,40 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
             RenameDef(Funcs.specptr, S.specptr);
     }
 
+    // Pre-pass: find CI equivalents, call jl_link_ci_equiv for each, and build
+    // EquivMap for use in the main pass to avoid re-running findCompatibleCI.
+    // This condition should match that in jl_add_codeinst_to_jit!, which will
+    // add a different, compatible CodeInstance to the JIT but not update the
+    // invoke statement.
+    DenseMap<jl_code_instance_t *, jl_code_instance_t *> EquivMap;
+    for (auto &[Call, T] : Info->call_targets) {
+        auto [CI, API] = Call;
+        JL_GC_PROMISE_ROOTED(CI);
+        if (!Syms.contains(T))
+            continue;
+        if (EquivMap.contains(CI))
+            continue;
+        if (!jl_mi_cache_has_ci(jl_get_ci_mi(CI), CI)) {
+            jl_code_instance_t *Equiv = findCompatibleCI(CI);
+            if (Equiv != CI) {
+                Lock.unlock();
+                int8_t gc_state = jl_gc_unsafe_enter(ct->ptls);
+                bool use_equiv = jl_link_ci_equiv(CI, Equiv);
+                jl_gc_unsafe_leave(ct->ptls, gc_state);
+                Lock.lock();
+                if (use_equiv)
+                    EquivMap[CI] = Equiv;
+            }
+        }
+    }
+
     // Rename referenced CIs in the workqueue.
     for (auto &[Call, T] : Info->call_targets) {
         auto [CI, API] = Call;
         if (!Syms.contains(T))
             continue;
         JL_GC_PROMISE_ROOTED(CI);
-        auto Dest = linkCallTarget(MR, CI, API);
+        auto Dest = linkCallTarget(MR, CI, API, EquivMap);
         if (!Dest)
             return false;
         Syms.at(T)->setName(Dest);
@@ -2276,16 +2305,19 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
 
 // Must hold LinkerMutex.
 orc::SymbolStringPtr JuliaOJIT::linkCallTarget(orc::MaterializationResponsibility &MR,
-                                               jl_code_instance_t *CI, jl_invoke_api_t API)
+                                               jl_code_instance_t *CI, jl_invoke_api_t API,
+                                               const DenseMap<jl_code_instance_t *, jl_code_instance_t *> &EquivMap)
 {
-    // This condition should match that in jl_add_codeinst_to_jit!, which will
-    // add a different, compatible CodeInstance to the JIT but not update the
-    // invoke statement.
-    if (!jl_mi_cache_has_ci(jl_get_ci_mi(CI), CI))
-        CI = findCompatibleCI(CI);
-    auto It = CISymbols.find(CI);
-    if (It != CISymbols.end() && It->second.invoke_api == API)
-        return It->second.specptr;
+    {
+        auto It = EquivMap.find(CI);
+        if (It != EquivMap.end())
+            CI = It->second;
+    }
+    {
+        auto It = CISymbols.find(CI);
+        if (It != CISymbols.end() && It->second.invoke_api == API)
+            return It->second.specptr;
+    }
 
     CISymbolPtr *Sym = linkCISymbol(CI);
 
