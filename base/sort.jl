@@ -1,5 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    Sort
+
+Module implementing sorting functions and associated types.
+"""
 module Sort
 
 using Base.Order
@@ -43,6 +48,13 @@ export # not exported by Base
     SMALL_ALGORITHM,
     SMALL_THRESHOLD
 
+"""
+    Base.Sort.Algorithm
+
+An `abstract` type representing a sorting algorithm, which can be passed to functions
+like [`sort`](@ref) and [`sort!`](@ref) to indicate the algorithm to be used.  Subtypes
+of `Algorithm` include, for example, [`PartialQuickSort`](@ref) and [`MergeSort`](@ref).
+"""
 abstract type Algorithm end
 
 ## functions requiring only ordering ##
@@ -826,7 +838,7 @@ const InsertionSort = InsertionSortAlg()
 """
     SMALL_ALGORITHM
 
-Default sorting algorithm for small arrays.
+Default sorting algorithm for sufficiently small arrays.
 
 This is an alias for a simple low-overhead algorithm that does not scale well
 to large arrays, unlike high-overhead recursive algorithms used for larger arrays.
@@ -1595,6 +1607,12 @@ _sort!(v::AbstractVector, ::Union{DefaultStable, DefaultUnstable}, o::Ordering, 
     _sort!(v, _DEFAULT_ALGORITHMS_FOR_VECTORS, o, kw)
 
 const SMALL_THRESHOLD  = 20
+@doc """
+    SMALL_THRESHOLD::Integer
+
+Base-case cutoff (currently $SMALL_THRESHOLD) for recursive sorting algorithms, below which
+[`SMALL_ALGORITHM`](@ref) is used.
+""" SMALL_THRESHOLD
 
 function Base.show(io::IO, alg::Algorithm)
     print_tree(io, alg, 0)
