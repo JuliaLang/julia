@@ -60,13 +60,10 @@ JL_DLLEXPORT void jl_emit_codeinsts_to_jit_fallback(jl_code_instance_t **codeins
         if (jl_is_code_info(inferred))
             continue;
         if (jl_is_svec(src->edges)) {
-            jl_atomic_store_release(&codeinst->inferred, (jl_value_t*)src->edges);
-            jl_gc_wb(codeinst, src->edges);
+            jl_gc_write_atomic(codeinst, codeinst->inferred, jl_value_t, (jl_value_t*)src->edges, release);
         }
-        jl_atomic_store_release(&codeinst->debuginfo, src->debuginfo);
-        jl_gc_wb(codeinst, src->debuginfo);
-        jl_atomic_store_release(&codeinst->inferred, (jl_value_t*)src);
-        jl_gc_wb(codeinst, src);
+        jl_gc_write_atomic(codeinst, codeinst->debuginfo, jl_debuginfo_t, src->debuginfo, release);
+        jl_gc_write_atomic(codeinst, codeinst->inferred, jl_value_t, (jl_value_t*)src, release);
     }
 }
 
