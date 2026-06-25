@@ -9042,3 +9042,16 @@ let T = TypeVar(:T)
     a = UnionAll(T, Union{Vector{T}, Int64})
     @test Union{T, a} == Union{a, T} == Union{T, Int64, Vector}
 end
+
+# `Type{Union{}}` is a `TypeEq` kind, not a `DataType`; its memory layout must be
+# normalized to the singleton `typeof(Union{})` rather than dereferenced as a
+# `DataType`.
+@test isconcretetype(Memory{Type{Union{}}})
+for typ in (Memory{Type{Union{}}}, Vector{Type{Union{}}},
+            Array{Type{Union{}}, 1}, Array{Type{Union{}}, true})
+    @test isconcretetype(typ)
+end
+let m = Memory{Type{Union{}}}(undef, 0)
+    @test length(m) == 0
+    @test eltype(m) === Type{Union{}}
+end
