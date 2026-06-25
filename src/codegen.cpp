@@ -10030,8 +10030,17 @@ static jl_llvm_functions_t
                 SmallVector<Value*,0> lroots(roots.size(), Vnull);
                 Value *RTindex = new_union.TIndex;
                 Value *V = nullptr;
+                // When host object pointers are disabled, store constants whose type
+                // is an unboxed leaf of the union inline.
+                size_t const_leaf_tindex = 0;
+                if (!ctx.params->embed_pointers && dest && val.constant &&
+                        new_union.typ != (jl_value_t*)jl_bottom_type &&
+                        deserves_stack(jl_typeof(val.constant)))
+                    const_leaf_tindex = get_box_tindex((jl_datatype_t*)jl_typeof(val.constant), phiType);
                 if (VN) {
-                    if (new_union.Vboxed)
+                    if (const_leaf_tindex)
+                        V = Constant::getNullValue(ctx.types().T_prjlvalue);
+                    else if (new_union.Vboxed)
                         V = new_union.Vboxed;
                     else if (new_union.constant)
                         V = boxed(ctx, new_union);
@@ -10042,8 +10051,13 @@ static jl_llvm_functions_t
                     RTindex = ConstantInt::get(getInt8Ty(ctx.builder.getContext()), UNION_BOX_MARKER);
                 }
                 else if (jl_is_concrete_type(val.typ) || val.constant) {
-                    size_t tindex = get_box_tindex((jl_datatype_t*)(val.constant ? jl_typeof(val.constant) : val.typ), phiType);
-                    if (tindex && dest && (!VN || !val.isboxed)) {
+                    size_t tindex = const_leaf_tindex ? const_leaf_tindex :
+                        get_box_tindex((jl_datatype_t*)(val.constant ? jl_typeof(val.constant) : val.typ), phiType);
+                    if (const_leaf_tindex) {
+                        emit_unionmove(ctx, dest, phiType, ctx.tbaa().tbaa_stack, val, nullptr, nullptr);
+                        RTindex = ConstantInt::get(getInt8Ty(ctx.builder.getContext()), tindex);
+                    }
+                    else if (tindex && dest && (!VN || !val.isboxed)) {
                         emit_unionmove(ctx, dest, phiType, ctx.tbaa().tbaa_stack, val, RTindex, nullptr);
                     }
                 }

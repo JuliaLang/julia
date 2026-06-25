@@ -684,6 +684,8 @@ JL_DLLEXPORT jl_cgparams_t jl_default_cgparams = {
 #else
         /* sanitize_address */ 0,
 #endif
+        /* unique_names */ 0,
+        /* embed_pointers */ 1,
 };
 
 static void init_global_mutexes(void) {
