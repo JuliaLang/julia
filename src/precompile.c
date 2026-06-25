@@ -133,40 +133,40 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
     const char *outputji = jl_options.outputji;
 
     bool_t emit_split = outputji && emit_native;
+    int comp = jl_options.compress_sysimage;
 
     ios_t *s = NULL;
-    ios_t *z = NULL;
     int64_t srctextpos = 0 ;
-    jl_create_system_image(emit_native ? &native_code : NULL,
-                           jl_options.incremental ? worklist : NULL,
-                           emit_split, &s, &z, &udeps, &srctextpos, jl_module_init_order);
-
-    if (!emit_split)
-        z = s;
+    uint32_t checksum =
+        jl_create_system_image(emit_native ? &native_code : NULL,
+                               jl_options.incremental ? worklist : NULL, emit_split, comp,
+                               &s, &udeps, &srctextpos, jl_module_init_order);
 
     ios_t f;
 
     if (outputji) {
         if (ios_file(&f, outputji, 1, 1, 1, 1) == NULL)
             jl_errorf("cannot open system image file \"%s\" for writing", outputji);
+        // It would be a waste to allocate a huge buffer only to write it all
+        // immediately to the file.
+        ios_bufmode(&f, bm_none);
         ios_write(&f, (const char *)s->buf, (size_t)s->size);
         ios_close(s);
         free(s);
+        ios_bufmode(&f, bm_block);
     }
 
-    // jl_dump_native writes the clone_targets into `s`
-    // We need to postpone the srctext writing after that.
     if (native_code) {
-        ios_t *targets = outputji ? &f : NULL;
-        // jl_dump_native will close and free z when appropriate
+        const char *unpack_func =
+            emit_split ? (comp ? "jl_image_unpack_split_zstd" : "jl_image_unpack_split") :
+                         (comp ? "jl_image_unpack_zstd" : "jl_image_unpack_uncomp");
+
+        // jl_dump_native will close and free s when appropriate
         // this is a horrible abstraction, but
         // this helps reduce live memory significantly
-        jl_dump_native(native_code,
-                        jl_options.outputbc,
-                        jl_options.outputunoptbc,
-                        jl_options.outputo,
-                        jl_options.outputasm,
-                        z, targets, NULL);
+        jl_dump_native(native_code, jl_options.outputbc, jl_options.outputunoptbc,
+                       jl_options.outputo, jl_options.outputasm, outputji ? NULL : s,
+                       checksum, unpack_func, NULL);
         jl_postoutput_hook();
     }
 

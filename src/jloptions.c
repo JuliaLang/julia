@@ -1129,6 +1129,14 @@ restart_switch:
     }
     jl_options.code_coverage = codecov;
     jl_options.malloc_log = malloclog;
+    bool_t emit_native = jl_options.outputo || jl_options.outputbc ||
+                         jl_options.outputunoptbc || jl_options.outputasm;
+    if (jl_options.compress_sysimage && !emit_native && jl_options.outputji) {
+        jl_printf(
+            JL_STDERR,
+            "WARNING: --compress-sysimage=yes is unsupported when emitting non-split .ji; disabling.\n");
+        jl_options.compress_sysimage = 0;
+    }
     int proc_args = *argcp < optind ? *argcp : optind;
     *argvp += proc_args;
     *argcp -= proc_args;
