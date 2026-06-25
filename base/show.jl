@@ -471,8 +471,13 @@ end
 
 Write a text representation of a value `x` to the output stream `io`. New types `T`
 should overload `show(io::IO, x::T)`. The representation used by `show` generally
-includes Julia-specific formatting and type information, and should be parseable
-Julia code when possible.
+includes Julia-specific formatting and type information.
+
+The output _should_ be parseable Julia code that, after parsing and evaluation,
+_should_ be equal to the value, i.e. `eval(Meta.parse(repr(x))) == x` _should_
+hold `true` if there are no technical reasons against it or if such an output
+is not considered to be too verbose for a representation in the REPL. So `show`
+is not a text-based serialization format.
 
 [`repr`](@ref) returns the output of `show` as a string.
 
@@ -491,6 +496,37 @@ julia> show("Hello World!")
 "Hello World!"
 julia> print("Hello World!")
 Hello World!
+```
+
+Example of round-tripping:
+```jldoctest
+julia> Int8(2) == eval(Meta.parse(repr(Int8(2))))
+true
+```
+
+Example of a technical reason preventing round-tripping (a self-referential object):
+```julia
+mutable struct X
+    x::X
+    function X()
+        x = new()
+        x.x = x
+    end
+end
+```
+
+Example of intentionally not round-tripping to avoid verbose output:
+```jldoctest
+julia> struct A a end
+
+julia> x = 2 |> Int8 |> A
+A(2)
+
+julia> y = x.a |> repr |> Meta.parse |> eval |> A
+A(2)
+
+julia> x == y
+false
 ```
 """
 show(io::IO, @nospecialize(x)) = show_default(io, x)
