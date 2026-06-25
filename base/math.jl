@@ -1235,7 +1235,10 @@ with each other or with surrounding operations for performance.
 For example, this may be implemented as an [`fma`](@ref) if the hardware supports it
 efficiently.
 The result can be different on different machines and can also be different on the same machine
-due to constant propagation or other optimizations.
+due to constant propagation or other optimizations. The result can also differ from `x*y+z` if
+the intermediate product `x*y` would have overflowed (or underflowed), but the fused operation
+computes in a wider type.
+
 See [`fma`](@ref).
 
 # Examples
