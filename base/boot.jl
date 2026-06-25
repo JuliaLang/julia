@@ -392,6 +392,14 @@ end
 struct ReadOnlyMemoryError <: Exception
     ReadOnlyMemoryError() = new()
 end
+"""
+
+    SegmentationFault
+
+Indicates that the program attempted to access a memory location that
+it is not allowed to access. This is typically caused by a bug in a
+`ccall`ed C or Fortran library, or by unsafe Julia code.
+"""
 struct SegmentationFault   <: Exception
     SegmentationFault() = new()
 end
