@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, Markdown, StyledStrings
-import Markdown: MD, Paragraph, Header, Italic, Bold, Strikethrough, LineBreak, Table, Code, LaTeX, Footnote
+import Markdown: MD, Paragraph, Header, Admonition, Italic, Bold, Strikethrough, LineBreak, Table, Code, LaTeX, Footnote
 import Base: show
 
 @test isempty(Test.detect_closure_boxes(Markdown))
@@ -841,36 +841,36 @@ end
 
     @test isa(m_1[2], Markdown.Admonition)
     @test m_1[2].category == "note"
-    @test m_1[2].title == "Note"
+    @test sprint(Markdown.plaininline, m_1[2].title) == "Note"
     @test m_1[2].content == []
 
     @test isa(m_1[3], Markdown.Admonition)
     @test m_1[3].category == "warning"
-    @test m_1[3].title == "custom title"
+    @test sprint(Markdown.plaininline, m_1[3].title) == "custom title"
     @test m_1[3].content == []
 
     @test isa(m_1[5], Markdown.Admonition)
     @test m_1[5].category == "danger"
-    @test m_1[5].title == ""
+    @test isempty(m_1[5].title)
     @test m_1[5].content == []
 
     @test isa(m_1[6], Markdown.Paragraph)
 
     @test isa(m_2[1], Markdown.Admonition)
     @test m_2[1].category == "note"
-    @test m_2[1].title == "Note"
+    @test sprint(Markdown.plaininline, m_2[1].title) == "Note"
     @test isa(m_2[1].content[1], Markdown.Paragraph)
     @test isa(m_2[1].content[2], Markdown.Paragraph)
 
     @test isa(m_2[2], Markdown.Admonition)
     @test m_2[2].category == "warning"
-    @test m_2[2].title == "custom title"
+    @test sprint(Markdown.plaininline, m_2[2].title) == "custom title"
     @test isa(m_2[2].content[1], Markdown.List)
     @test isa(m_2[2].content[2], Markdown.Paragraph)
 
     @test isa(m_2[3], Markdown.Admonition)
     @test m_2[3].category == "danger"
-    @test m_2[3].title == ""
+    @test isempty(m_2[3].title)
     @test isa(m_2[3].content[1], Markdown.Code)
     @test isa(m_2[3].content[2], Markdown.Code)
     @test isa(m_2[3].content[3], Markdown.Header{1})
@@ -1012,6 +1012,28 @@ end
 
             """
     @test actual == expected
+
+    # Inline markdown in admonition titles
+    @testset "inline titles" begin
+        # Analogous to the Header inline test: all common inline forms in one shot.
+        @test md"""!!! note "title *foo* `bar` **baz** ~~qux~~"
+            """ == MD(Admonition("note", Any["title ", Italic("foo"), " ", Code("bar"), " ",
+                                             Bold("baz"), " ", Strikethrough("qux")], []))
+
+        # LaTeX specifically, which was the original motivation for this fix.
+        @test md"""!!! note "Title with ``x^2`` math"
+            """ == MD(Admonition("note", Any["Title with ", LaTeX("x^2"), " math"], []))
+
+        # HTML renders inline LaTeX correctly in the title.
+        @test Markdown.html(Markdown.parse("!!! note \"Title with ``x^2`` math\"\n    body\n")) ==
+            "<div class=\"admonition note\"><p class=\"admonition-title\">Title with &#36;x^2&#36; math</p><p>body</p>\n</div>\n"
+
+        # Plain output round-trips correctly for LaTeX and inline formatting.
+        @test Markdown.plain(Markdown.parse("!!! note \"Title with ``x^2`` math\"\n    body\n")) ==
+            "!!! note \"Title with ``x^2`` math\"\n    body\n\n"
+        @test Markdown.plain(Markdown.parse("!!! note \"Title with **bold**\"\n    body\n")) ==
+            "!!! note \"Title with **bold**\"\n    body\n\n"
+    end
 end
 
 @testset "Nested Lists" begin

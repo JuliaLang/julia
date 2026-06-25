@@ -243,7 +243,7 @@ end
 
 mutable struct Admonition <: MarkdownElement
     category::String
-    title::String
+    title
     content::Vector
 end
 
@@ -266,11 +266,11 @@ function admonition(stream::IO, block::MD)
                 if occursin(untitled, line)
                     m = match(untitled, line)::AbstractMatch
                     # When no title is provided we use CATEGORY_NAME, capitalising it.
-                    m.captures[1], uppercasefirst(m.captures[1])
+                    m.captures[1], parseinline(uppercasefirst(m.captures[1]), block)
                 elseif occursin(titled, line)
                     m = match(titled, line)::AbstractMatch
                     # To have a blank TITLE provide an explicit empty string as TITLE.
-                    m.captures[1], m.captures[2]
+                    m.captures[1], parseinline(m.captures[2], block)
                 else
                     # Admonition header is invalid so we give up parsing here and move
                     # on to the next parser.
