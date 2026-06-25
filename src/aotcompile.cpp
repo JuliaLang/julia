@@ -135,15 +135,6 @@ struct JobserverClient {
 #endif
         }
     }
-    // Snapshot of how many tokens are free right now: claim as many as possible
-    // (up to `cap`), then return them. Racy -- siblings may take or return tokens
-    // concurrently -- but good enough to size the shard layout against the
-    // parallelism currently available.
-    unsigned probe(unsigned cap) {
-        unsigned got = acquire(cap);
-        release(got);
-        return got;
-    }
     void close() {
         if (!active())
             return;
@@ -2154,11 +2145,10 @@ static size_t image_weight_per_shard() {
 }
 
 // Minimum weight a core-fill shard must carry, so the extra shards forced to fill
-// idle cores still pay back their per-shard overhead. This is the granularity of
-// the *probe-gated* core-fill term only (it does not change the always-on memory
-// floor weight/weight_per_shard), so lowering it lets a worker fan out more
-// finely when cores are genuinely free without over-sharding a busy machine.
-// Defaults to weight_per_shard/4; override with JULIA_IMAGE_MIN_SHARD_WEIGHT.
+// idle cores still pay back their per-shard overhead. Granularity of the core-fill
+// term only (it does not change the always-on memory floor weight/weight_per_shard);
+// lowering it splits a parallelizable module into more, smaller shards toward the
+// core count. Defaults to weight_per_shard/4; override with JULIA_IMAGE_MIN_SHARD_WEIGHT.
 static size_t image_min_shard_weight() {
     size_t min_shard = std::max<size_t>(image_weight_per_shard() / 4, 1);
     if (const char *env = getenv("JULIA_IMAGE_MIN_SHARD_WEIGHT")) {
@@ -2212,10 +2202,11 @@ static uint64_t image_codegen_memory_budget() {
 //   * a core-fill term, min(fill_cap, weight / min_shard), that ramps a module big
 //     enough to parallelize up toward the available concurrency so it doesn't go
 //     serial and leave cores idle, each shard kept >= min_shard.
-// `fill_cap` is the parallelism realistically available (chosen by the caller):
-// effective cores for a single-process build, or the live free-token count under a
-// jobserver, so a lone tail worker fans out while a busy one stays coarse. The
-// "Image generation" devdoc has the full rule. `weight_bound_out`/`core_fill_out`
+// `fill_cap` is the concurrency to ramp toward (the effective core count). The
+// count is static -- under a jobserver the elastic pool rations the actual
+// concurrency at runtime, draining a larger shard count in waves when tokens are
+// scarce -- so it does not depend on momentary token availability. The "Image
+// generation" devdoc has the full rule. `weight_bound_out`/`core_fill_out`
 // optionally return the two terms for the JULIA_IMAGE_TIMINGS diagnostic.
 static unsigned compute_image_shard_count(const ModuleInfo &info, unsigned fill_cap,
                                           unsigned *weight_bound_out = nullptr,
@@ -2513,35 +2504,21 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
                 << "    weight: " << module_info.weight << "\n"
             );
             // Size concurrency from the CPU/jobserver budget, then the shard layout
-            // from codegen work floored at the parallelism free right now (probed
-            // live under a jobserver), then cap concurrency to the shard count.
+            // from codegen work toward that concurrency, then cap concurrency to the
+            // shard count. The shard count is sized statically (no live token probe):
+            // the elastic pool rations the actual concurrency at runtime, draining a
+            // larger shard count in waves when sibling workers hold the tokens.
             bool explicit_threads = false;
             threads = compute_image_thread_count(module_info, jobserver.active(), explicit_threads);
-            unsigned shard_fill = threads;
-            int probed = -1; // -1 == no jobserver probe (single-process or explicit threads)
-            if (jobserver.active() && !explicit_threads) {
-                // +1 for this worker's baseline token (held by the orchestrator).
-                probed = (int)jobserver.probe(threads);
-                shard_fill = std::min(threads, (unsigned)probed + 1);
-            }
             unsigned weight_bound = 0, core_fill = 0;
-            nshards = compute_image_shard_count(module_info, shard_fill, &weight_bound, &core_fill);
+            nshards = compute_image_shard_count(module_info, threads, &weight_bound, &core_fill);
             threads = std::min(threads, nshards);
-            if (getenv("JULIA_IMAGE_TIMINGS")) {
-                unsigned long long budget_mib = image_codegen_memory_budget() >> 20;
-                if (probed >= 0)
-                    jl_safe_printf("[image] \"text\" module weight %zu -> %u shards"
-                                   " (weight_bound %u, core_fill %u), up to %u threads"
-                                   " [jobserver: %d free -> fill %u] (codegen mem budget %llu MiB)\n",
-                                   (size_t)module_info.weight, nshards, weight_bound, core_fill, threads,
-                                   probed, shard_fill, budget_mib);
-                else
-                    jl_safe_printf("[image] \"text\" module weight %zu -> %u shards"
-                                   " (weight_bound %u, core_fill %u), up to %u threads"
-                                   " (codegen mem budget %llu MiB)\n",
-                                   (size_t)module_info.weight, nshards, weight_bound, core_fill, threads,
-                                   budget_mib);
-            }
+            if (getenv("JULIA_IMAGE_TIMINGS"))
+                jl_safe_printf("[image] \"text\" module weight %zu -> %u shards"
+                               " (weight_bound %u, core_fill %u), up to %u threads"
+                               " (codegen mem budget %llu MiB)\n",
+                               (size_t)module_info.weight, nshards, weight_bound, core_fill, threads,
+                               (unsigned long long)(image_codegen_memory_budget() >> 20));
             if (jobserver.active() && !explicit_threads && threads > 1) {
                 // add_output rations the actual pool size from the shared token
                 // budget (up to `threads`), growing it as sibling workers finish,
