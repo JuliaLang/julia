@@ -208,6 +208,30 @@ end
     @test BigInt(5) << -1 == 2
     @test BigInt(-5) >> -3 == -40
     @test BigInt(-5) << -1 == -3
+
+    # shift counts outside the Int range: left shift throws OverflowError,
+    # right shift sign-extends since BigInt has no fixed width (#57502)
+    let huge = big(2)^1000
+        @test_throws OverflowError BigInt(2) << huge
+        @test_throws OverflowError BigInt(-2) << huge
+        @test BigInt(0) << huge == 0
+        @test BigInt(0) >> huge == 0
+        @test BigInt(2) >> huge == 0
+        @test BigInt(-2) >> huge == -1
+        @test BigInt(2) >>> huge == 0
+        @test BigInt(-2) >>> huge == -1
+        @test_throws OverflowError BigInt(2) >> -huge
+        @test BigInt(2) << -huge == 0
+        @test BigInt(-2) << -huge == -1
+    end
+    for c in (typemax(Int128), typemax(UInt128))
+        @test_throws OverflowError BigInt(2) << c
+        @test BigInt(0) << c == 0
+        @test BigInt(2) >> c == 0
+        @test BigInt(-2) >> c == -1
+        @test BigInt(2) >>> c == 0
+        @test BigInt(-2) >>> c == -1
+    end
 end
 @testset "boolean ops" begin
     @test ~BigInt(123) == -124

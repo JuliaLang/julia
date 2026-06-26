@@ -22,6 +22,12 @@ New language features
 Language changes
 ----------------
 
+  - The abstract `<<`/`>>`/`>>>` fallbacks for `Integer` now throw `OverflowError`
+    on a shift count whose magnitude exceeds `typemax(Int)` when the value type
+    has no `typemax` (e.g. `BigInt` and user-defined arbitrary-precision integer
+    types). Previously such shifts silently returned `0`. Fixed-width integer
+    types (including `Bool`) retain the existing saturating behavior ([#57502]).
+
 Compiler/Runtime improvements
 -----------------------------
 
