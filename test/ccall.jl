@@ -2041,6 +2041,15 @@ let llvm = sprint(code_llvm, gc_safe_ccall, ())
     @test Base.infer_effects(gc_safe_ccall, Tuple{}).nothrow == true
 end
 
+# Non-concrete immutable values with inline roots must use the boxed jl_object_id ccall path.
+abstract type ObjectIdAbstract62001 end
+struct ObjectIdBox62001{T} <: ObjectIdAbstract62001
+    x::Vector{Any}
+end
+const ObjectIdSomeBox62001 = ObjectIdBox62001{T} where {T}
+object_id_abstract_box62001(x::ObjectIdSomeBox62001) = ccall(:jl_object_id, UInt, (Any,), x)
+@test object_id_abstract_box62001(ObjectIdBox62001{Int}(Any[1])) isa UInt
+
 @testset "jl_dlfind and dlsym" begin
     # Test that jl_dlfind finds things in the expected places.
     @test ccall(:jl_dlfind, Int, (Cstring,), "doesnotexist") == 0       # not found (RTLD_DEFAULT)

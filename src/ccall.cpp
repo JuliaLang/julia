@@ -1950,7 +1950,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             ai.decorateInst(hashval);
             return mark_or_box_ccall_result(ctx, hashval, retboxed, rt, unionall, static_rt);
         }
-        else if (!val.isboxed) {
+        else if (!val.isboxed && (val.isghost || jl_is_concrete_type(val.typ))) {
             // If the value is not boxed, try to compute the object id without
             // reboxing it.
             auto T_p_derived = PointerType::get(ctx.builder.getContext(), AddressSpace::Derived);
