@@ -289,6 +289,12 @@ end
         @test dt - Dates.Nanosecond(500_001) == Dates.DateTime(1999, 12, 26, 23, 59, 59, 999)
         @test dt - Dates.Nanosecond(1_499_999) == Dates.DateTime(1999, 12, 26, 23, 59, 59, 999)
     end
+    @testset "n-ary TimeType + Period inference" begin
+        # n-ary `+` on a TimeType with Periods must be type-stable.
+        @test only(Base.return_types(+, (DateTime, Day, Millisecond))) === DateTime
+        @test only(Base.return_types(+, (DateTime, Day, Millisecond, Second))) === DateTime
+        @test only(Base.return_types(+, (Date, Day, Week))) === Date
+    end
 end
 @testset "Date arithmetic" begin
     @testset "Date-Year arithmetic" begin
