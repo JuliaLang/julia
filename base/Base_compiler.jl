@@ -166,9 +166,9 @@ eval(m::Module, x) = Core.eval(m, x)
 include("public.jl")
 
 if false
-    # simple print definitions for debugging. enable these if something
+    # Simple print definitions for debugging. Enable these if something
     # goes wrong during bootstrap before printing code is available.
-    # otherwise, they just just eventually get (noisily) overwritten later
+    # otherwise, they eventually get (noisily) overwritten later
     global show, print, println
     show(io::IO, x) = Core.show(io, x)
     print(io::IO, a...) = Core.print(io, a...)
@@ -228,7 +228,7 @@ include("options.jl")
 # to forward to invoke
 function Core.kwcall(kwargs::NamedTuple, ::typeof(invoke), f, T, args...)
     @inline
-    # prepend kwargs and f to the invoked from the user
+    # prepend kwargs and f to the invoke from the user
     T = rewrap_unionall(Tuple{Core.Typeof(kwargs), Core.Typeof(f), (unwrap_unionall(T)::DataType).parameters...}, T)
     return invoke(Core.kwcall, T, kwargs, f, args...)
 end
@@ -242,6 +242,8 @@ function Core.kwcall(kwargs::NamedTuple, ::typeof(applicable), @nospecialize(arg
     return applicable(Core.kwcall, kwargs, args...)
 end
 function Core._hasmethod(@nospecialize(f), @nospecialize(t)) # this function has a special tfunc (TODO: make this a Builtin instead like applicable)
+    Core.@nospecializeinfer
+    @noinline
     tt = rewrap_unionall(Tuple{Core.Typeof(f), (unwrap_unionall(t)::DataType).parameters...}, t)
     return Core._hasmethod(tt)
 end
@@ -339,16 +341,16 @@ using .Checked
 include("indices.jl")
 include("genericmemory.jl")
 include("array.jl")
+include("abstractset.jl")
+include("abstractdict.jl")
+include("iddict.jl")
+include("idset.jl")
 include("abstractarray.jl")
 include("baseext.jl")
 
 include("c.jl")
-include("abstractset.jl")
 include("bitarray.jl")
 include("bitset.jl")
-include("abstractdict.jl")
-include("iddict.jl")
-include("idset.jl")
 include("ntuple.jl")
 include("iterators.jl")
 using .Iterators: zip, enumerate, only

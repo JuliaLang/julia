@@ -407,7 +407,7 @@ function, where the index `i` runs consecutively from `1` to [`ncodeunits(s)`](@
 [`codeunits(s)`](@ref) function returns an `AbstractVector{UInt8}` wrapper that lets you
 access these raw codeunits (bytes) as an array.
 
-Strings in Julia can contain invalid UTF-8 code unit sequences. This convention allows to
+Strings in Julia can contain invalid UTF-8 code unit sequences. This convention allows one to
 treat any byte sequence as a `String`. In such situations a rule is that when parsing
 a sequence of code units from left to right characters are formed by the longest sequence of
 8-bit code units that matches the start of one of the following bit patterns
@@ -481,7 +481,7 @@ julia> string(greet, ", ", whom, ".\n")
 
 It is important to be aware of potentially dangerous situations such as concatenation of
 invalid UTF-8 strings. The resulting string may contain different characters than the
-input strings, and its number of characters may be lower than sum of numbers of characters
+input strings, and its number of characters may be lower than the sum of numbers of characters
 of the concatenated strings, e.g.:
 
 ```jldoctest
@@ -1228,7 +1228,7 @@ last backslash escapes a quote, since these backslashes appear before a quote.
     Julia versions.
 
 It is sometimes useful to be able to hold metadata relating to regions of a
-string. A [`AnnotatedString`](@ref Base.AnnotatedString) wraps another string and
+string. An [`AnnotatedString`](@ref Base.AnnotatedString) wraps another string and
 allows for regions of it to be annotated with labelled values (`:label => value`).
 All generic string operations are applied to the underlying string. However,
 when possible, styling information is preserved. This means you can manipulate a

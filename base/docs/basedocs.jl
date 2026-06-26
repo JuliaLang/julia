@@ -1011,8 +1011,12 @@ kw"while"
 [`module`](@ref), [`struct`](@ref), [`mutable struct`](@ref),
 [`begin`](@ref), [`let`](@ref), [`for`](@ref) etc.
 
-`end` may also be used when indexing to represent the last index of a
-collection or the last index of a dimension of an array.
+`end` may also be used when indexing with `[...]` to represent the last index of a
+collection or the last index of a dimension of an array. For example, the expression
+`A[end-1]` becomes `A[lastindex(A)-1]` and `A[:, end]` becomes `A[:, lastindex(A, 2)]`.
+Every occurrence of `end` within the square bracket indexing syntax is lowered to a
+call to [`lastindex`](@ref), using the one argument `lastindex(A)` there's only one index
+argument and the two argument `lastindex(A, n)` for the n-th index argument.
 
 # Examples
 ```jldoctest
@@ -1468,6 +1472,17 @@ In most cases, this simply results in a call to `convert(argtype, argvalue)`.
 kw"ccall"
 
 """
+    cglobal((symbol, library) [, type=Cvoid])
+
+Obtain a pointer to a global variable in a C-exported shared library, specified
+exactly as in [`ccall`](@ref).
+Returns a `Ptr{Type}`, defaulting to `Ptr{Cvoid}` if no `Type` argument is supplied.
+The values can be read or written by [`unsafe_load`](@ref) or [`unsafe_store!`](@ref),
+respectively.
+"""
+Core.Intrinsics.cglobal
+
+"""
     llvmcall(fun_ir::String, returntype, Tuple{argtype1, ...}, argvalue1, ...)
     llvmcall((mod_ir::String, entry_fn::String), returntype, Tuple{argtype1, ...}, argvalue1, ...)
     llvmcall((mod_bc::Vector{UInt8}, entry_fn::String), returntype, Tuple{argtype1, ...}, argvalue1, ...)
@@ -1507,9 +1522,9 @@ end
 Usually `begin` will not be necessary, since keywords such as [`function`](@ref) and [`let`](@ref)
 implicitly begin blocks of code. See also [`;`](@ref).
 
-`begin` may also be used when indexing to represent the first index of a
-collection or the first index of a dimension of an array. For example,
-`a[begin]` is the first element of an array `a`.
+`begin` may also be used when indexing with `[...]` to represent the first index of a
+collection or the first index of a dimension of an array, where it is lowered to
+a call to [`firstindex`](@ref) along the relevant dimension (as determined by the context).  For example, `a[begin]` is the first element of an array `a`.
 
 !!! compat "Julia 1.4"
     Use of `begin` as an index requires Julia 1.4 or later.
@@ -1591,10 +1606,54 @@ See the manual section on [Composite Types](@ref) for more information.
 kw"mutable struct"
 
 """
+    typegroup
+
+`typegroup` introduces a block in which mutually recursive [`struct`](@ref) and
+[`mutable struct`](@ref) definitions can refer to each other in their field types.
+All types declared inside the block are atomically defined together at the end of
+the block.
+
+```julia
+typegroup
+    struct Node
+        edges::Vector{Edge}
+    end
+    struct Edge
+        from::Node
+        to::Node
+    end
+end
+```
+
+Only `struct` or `mutable struct` definitions are allowed inside a `typegroup` block;
+other declarations, including method definitions, are disallowed. Inner constructor
+definitions are allowed inside the `struct` definitions and will semantically run
+after all types have been atomically instantiated.
+
+!!! compat "Julia 1.14"
+    The `typegroup` keyword requires at least Julia 1.14.
+
+See the manual section on [Mutually Recursive Types](@ref) for more details.
+"""
+kw"typegroup"
+
+"""
     new, or new{A,B,...}
 
 Special function available to inner constructors which creates a new object
-of the type. The form new{A,B,...} explicitly specifies values of parameters for parametric types.
+of the type.
+
+The form `new{A,B,...}` explicitly specifies values of parameters for parametric types.
+
+For constructors that have all of their type parameters after the function name, the
+contents between the `{...}` are passed on to the short form `new()` automatically:
+
+```julia
+struct NewExample{A,B}
+    NewExample{A,B}() where {A,B} = new()
+end
+```
+
 See the manual section on [Inner Constructor Methods](@ref man-inner-constructor-methods)
 for more information.
 """
@@ -2131,7 +2190,7 @@ the runtime must do more work, `invoke` is generally also slower--sometimes sign
 so--than doing normal dispatch with a regular call.
 
 Be careful when using `invoke` for functions that you don't write. What definition is used
-for given `argtypes` is an implementation detail unless the function is explicitly states
+for given `argtypes` is an implementation detail unless the function explicitly states
 that calling with certain `argtypes` is a part of public API.  For example, the change
 between `f1` and `f2` in the example below is usually considered compatible because the
 change is invisible by the caller with a normal (non-`invoke`) call.  However, the change is
@@ -3966,6 +4025,8 @@ This is intended for use in benchmarks that want to guarantee that `args` are
 actually computed. (Otherwise DCE may see that the result of the benchmark is
 unused and delete the entire benchmark code).
 
+For a stronger compiler barrier, see [`Base.blackbox`](@ref).
+
 !!! note
     `donotdelete` does not affect constant folding. For example, in
     `donotdelete(1+1)`, no add instruction needs to be executed at runtime and
@@ -4000,7 +4061,7 @@ Base.donotdelete
 """
     Base.blackbox(x) -> x
 
-This function returns `x` unchanged, but treats the returned value as if it
+Return `x` unchanged but the returned value will be treated as if it
 came from an unknowable black-box source. The optimizer may not make any
 assumptions about the output: it cannot be constant-folded, common-subexpression
 eliminated (CSE'd), or treated as loop-invariant.

@@ -306,7 +306,7 @@
                (map (lambda (x) (replace-vars x renames))
                     (cdr e))))))
 
-(define (make-generator-function name sp-names arg-names body)
+(define (make-generator-function name sp-names arg-names body loc)
   (let ((arg-names (append sp-names
                            (map (lambda (n)
                                   (if (eq? n '|#self#|) (gensy) n))
@@ -316,7 +316,7 @@
                                    `((meta nospecialize ,@(map (lambda (idx) `(slot ,(+ idx 2))) (iota (length arg-names))))))))
       `(block
         (global ,name)
-        (function (call ,name ,@arg-names) ,body)))))
+        (function (call ,name ,@arg-names) (block ,loc ,@(cdr body)))))))
 
 ;; select the `then` or `else` part of `if @generated` based on flag `genpart`
 (define (generated-part- x genpart)
@@ -392,8 +392,8 @@
             (generator (if (expr-contains-p if-generated? body (lambda (x) (not (function-def? x))))
                            (let* ((gen    (generated-version body))
                                   (nongen (non-generated-version body))
-                                  (gname  (symbol (string (gensy) "#" (current-julia-module-counter '()))))
-                                  (gf     (make-generator-function gname names anames gen)))
+                                  (gname  (symbol (string "#" (current-julia-module-counter '()) "#" (current-julia-module-counter '()))))
+                                  (gf     (make-generator-function gname names anames gen loc)))
                              (set! body (insert-after-meta
                                          nongen
                                          `((meta generated
@@ -1647,19 +1647,12 @@
 
 (define (expand-assignment e (const? #f))
   (define lhs (cadr e))
-  (define (function-lhs? lhs)
-    (and (pair? lhs)
-         (or (eq? (car lhs) 'call)
-             (eq? (car lhs) 'where)
-             (and (eq? (car lhs) '|::|)
-                  (pair? (cadr lhs))
-                  (eq? (car (cadr lhs)) 'call)))))
   (define (assignment-to-function lhs e)  ;; convert '= expr to 'function expr
     (cons 'function (cdr e)))
   (define (maybe-wrap-const x)
     (if const? `(const ,x) x))
   (cond
-   ((function-lhs? lhs)
+   ((eventually-call? lhs)
     ;; `const f() = ...` - The `const` here is inoperative, but the syntax
     ;; happened to work in earlier versions, so simply strip `const`.
     (expand-forms (assignment-to-function lhs e)))
@@ -1670,7 +1663,7 @@
     ;; chain of assignments - convert a=b=c to `b=c; a=c`
     (let loop ((lhss (list lhs))
                (rhs  (caddr e)))
-      (if (and (assignment? rhs) (not (function-lhs? (cadr rhs))))
+      (if (and (assignment? rhs) (not (eventually-call? (cadr rhs))))
           (loop (cons (cadr rhs) lhss) (caddr rhs))
           (let* ((rr (if (symbol-like? rhs) rhs (make-ssavalue)))
                  (lhss (reverse lhss))
@@ -2150,7 +2143,7 @@
                          `(let (block ,@(map (lambda (v) `(= ,v ,v)) (filter-not-underscore outervars)))
                             ,expr))
                         (else expr))))
-        `(-> ,argname (block ,@splat ,expr)))))))
+        `(-> ,argname (block ,*current-desugar-loc* ,@splat ,expr)))))))
 
 (define (expand-generator e flat outervars)
   (let* ((expr  (cadr e))
@@ -2856,6 +2849,15 @@
                                                cconv)
                                            'ccall)
                                        (and have-cconv-expr (caddr cconv))))))
+                 ((eq? f 'cglobal)
+                  (cond ((length= e 3)
+                         `(foreignglobal ,(normalize-ccall-name (caddr e))))
+                        ((length= e 4)
+                         (let ((rt (expand-forms `(curly (top Ptr) ,(cadddr e))))
+                               (sym (normalize-ccall-name (caddr e))))
+                           `(call (top bitcast) ,rt (foreignglobal ,sym))))
+                        (else
+                         (error "wrong number of arguments to cglobal"))))
                  ((any kwarg? (cddr e))       ;; f(..., a=b, ...)
                   (expand-forms (lower-kw-call f (cddr e))))
                  ((has-parameters? (cddr e))  ;; f(...; ...)
@@ -4059,7 +4061,7 @@ f(x) = yt(x)
          meta inbounds boundscheck loopinfo decl aliasscope popaliasscope
          thunk with-static-parameters toplevel-only
          global globalref global-if-global assign-const-if-global isglobal thismodule thisfunction
-         const atomic null true false ssavalue isdefined toplevel module lambda
+         const atomic null true false ssavalue toplevel module lambda
          error gc_preserve_begin gc_preserve_end export public inline noinline purity)))
 
 (define (local-in? s lam (tab #f))
@@ -4092,7 +4094,7 @@ f(x) = yt(x)
     ;; Collect candidate variables: those that are captured (and hence we want to optimize)
     ;; and only assigned once. This populates the initial `unused` table.
     (for-each (lambda (v)
-                (if (and (vinfo:capt v) (vinfo:sa v))
+                (if (vinfo:sa v)
                     (put! unused (car v) #t)))
               vi)
     ;; Initialize decl with arguments since they're implicitly declared outside any loop
@@ -4214,7 +4216,7 @@ f(x) = yt(x)
               (append (table.keys live) (table.keys unused)))
     (for-each (lambda (v)
                 (if (and (vinfo:sa v) (vinfo:never-undef v))
-                    (set-car! (cddr v) (logand (caddr v) (lognot 5)))))
+                    (vinfo:set-capt! v #f)))
               vi)
     lam))
 
@@ -4666,14 +4668,13 @@ f(x) = yt(x)
 (define (valid-ir-argument? e)
   (or (simple-atom? e)
       (and (pair? e)
-           (memq (car e) '(quote inert top core
-                                 slot static_parameter)))))
+           (memq (car e) '(quote inert top core slot)))))
 
 (define (valid-ir-rvalue? lhs e)
   (or (ssavalue? lhs)
       (valid-ir-argument? e)
       (and (symbol? lhs) (pair? e)
-           (memq (car e) '(new splatnew the_exception isdefined call invoke foreigncall cfunction gc_preserve_begin copyast new_opaque_closure globalref)))))
+           (memq (car e) '(new splatnew the_exception isdefined call invoke foreigncall foreignglobal cfunction gc_preserve_begin copyast new_opaque_closure globalref)))))
 
 (define (valid-ir-return? e)
   ;; returning lambda directly is needed for @generated
@@ -4958,10 +4959,7 @@ f(x) = yt(x)
                   ((and (pair? e1) (memq (car e1) '(globalref static_parameter))) (emit e1) #f) ;; keep for undefined-var checking
                   (else #f)))
           (case (car e)
-            ((call new splatnew foreigncall cfunction new_opaque_closure)
-             (define (atom-or-not-tuple-call? fptr)
-               (or (atom? fptr)
-                   (not (tuple-call? fptr))))
+            ((call new splatnew foreigncall foreignglobal cfunction new_opaque_closure)
              (let* ((args
                      (cond ((eq? (car e) 'foreigncall)
                             ;; NOTE: 2nd to 5th arguments of ccall must be left in place
@@ -4971,6 +4969,12 @@ f(x) = yt(x)
                                         (compile-args (list (cadr e)) break-labels))
                                     (list-head (cddr e) 4)
                                     (compile-args (list-tail e 6) break-labels)))
+                           ;; NOTE: the 1st (and only) argument is handled just like
+                           ;;       foreigncall, compiled if not a syntactic tuple
+                           ((eq? (car e) 'foreignglobal)
+                            (if (tuple-syntax? (cadr e))
+                                (list (cadr e))
+                                (compile-args (list (cadr e)) break-labels)))
                            ;; NOTE: arguments of cfunction must be left in place
                            ;;       except for argument 2 (fptr)
                            ((eq? (car e) 'cfunction)
@@ -4985,16 +4989,6 @@ f(x) = yt(x)
                                (compile-args (list-head (cdr e) 4) break-labels)
                                (list (append (butlast oc_method) (list lambda)))
                                (compile-args (list-tail (cdr e) 5) break-labels))))
-                           ;; NOTE: 1st argument to cglobal is similar to ccall,
-                           ;; but tuple should be a value, not literal expr
-                           ((and (length> e 2)
-                                 (or (eq? (cadr e) 'cglobal)
-                                     (equal? (cadr e) '(globalref (thismodule) cglobal))))
-                            (append (list (cadr e))
-                                    (if (atom-or-not-tuple-call? (caddr e))
-                                        (compile-args (list (caddr e)) break-labels)
-                                        (list (caddr e)))
-                                    (compile-args (cdddr e) break-labels)))
                            (else
                             (compile-args (cdr e) break-labels))))
                     (callex (cons (car e) args)))
@@ -5562,8 +5556,9 @@ f(x) = yt(x)
              (list ,@(cadr vi)) ,(caddr vi) (list ,@(cadddr vi)))
        ,@(cdddr lam))))
 
+;; LineNumberNode may have file=nothing, but LegacyLineInfoNode may not
 (define (make-lineinfo file line (inlined-at #f))
-  `(lineinfo ,file ,line ,(or inlined-at 0)))
+  `(lineinfo ,(if (nothing? file) 'none file) ,line ,(or inlined-at 0)))
 
 (define (set-lineno! lineinfo num)
   (set-car! (cddr lineinfo) num))
@@ -5695,10 +5690,10 @@ f(x) = yt(x)
             (else
              (let ((e (cons (car e)
                             (map renumber-stuff (cdr e)))))
-               (if (and (eq? (car e) 'foreigncall)
+               (if (and (memq (car e) '(foreigncall foreignglobal))
                         (tuple-syntax? (cadr e))
                         (expr-contains-p (lambda (x) (or (ssavalue? x) (slot? x))) (cadr e))) ;; TODO: use allow-list here
-                   (error "ccall function name and library expression cannot reference local variables"))
+                   (error "ccall/cglobal function name and library expression cannot reference local variables"))
                e))))
     (let ((body (renumber-stuff (lam:body lam)))
           (vi   (lam:vinfo lam)))

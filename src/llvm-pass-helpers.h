@@ -52,7 +52,7 @@ struct JuliaPassContext {
     // Intrinsics.
     llvm::Function *pgcstack_getter;
     llvm::Function *adoptthread_func;
-    llvm::Function *gc_flush_func;
+    llvm::Function *gcroot_flush_func;
     llvm::Function *gc_preserve_begin_func;
     llvm::Function *gc_preserve_end_func;
     llvm::Function *pointer_from_objref_func;
@@ -86,7 +86,7 @@ struct JuliaPassContext {
 
     // Gets a call to the `julia.get_pgcstack' intrinsic in the entry
     // point of the given function, if there exists such a call.
-    // Otherwise, gets a swiftself argument, if there exists such an argument.
+    // Otherwise, gets a function argument with the 'gcstack' attribute, if there exists such an argument.
     // Otherwise, `nullptr` is returned.
     llvm::Value *getPGCstack(llvm::Function &F) const;
 

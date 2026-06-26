@@ -11,15 +11,13 @@ import Base.Docs: doc, formatdoc, parsedoc, apropos
 
 using Base: with_output_color, mapany, isdeprecated, isexported
 
-using Base.Filesystem: _readdirx
-
 using InteractiveUtils: subtypes
 
 using Unicode: normalize
 
 ## Help mode ##
 
-# This is split into helpmode and _helpmode to easier unittest _helpmode
+# This is split into helpmode and _helpmode to more easily unit test _helpmode
 function helpmode(io::IO, line::AbstractString, mod::Module=Main)
     internal_accesses = Set{Pair{Module,Symbol}}()
     quote
@@ -89,8 +87,9 @@ end
 function parsedoc(d::DocStr)
     if d.object === nothing
         md = formatdoc(d)
-        md.meta[:module] = d.data[:module]
-        md.meta[:path]   = d.data[:path]
+        md.meta[:module]     = d.data[:module]
+        md.meta[:path]       = d.data[:path]
+        md.meta[:linenumber] = d.data[:linenumber]
         d.object = md
     end
     d.object
@@ -395,8 +394,8 @@ function find_readme(m::Module)::Union{String, Nothing}
     path = dirname(mpath)
     top_path = pkgdir(m)
     while true
-        for entry in _readdirx(path; sort=true)
-            isfile(entry) && (lowercase(entry.name) in ["readme.md", "readme"]) || continue
+        for entry in readdir(path, DirEntry; sort=true)
+            isfile(entry) && (lowercase(basename(entry)) in ["readme.md", "readme"]) || continue
             return joinpath(entry)
         end
         path == top_path && break # go no further than pkgdir

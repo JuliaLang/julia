@@ -103,7 +103,7 @@ SmallVector<SmallVector<unsigned, 0>, 0> TrackCompositeType(Type *T) {
 }
 
 
-// Walk through simple expressions to until we hit something that requires root numbering
+// Walk through simple expressions until we hit something that requires root numbering
 // If the input value is a scalar (pointer), we may return a composite value as base
 // in which case the second member of the pair is the index of the value in the vector.
 static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCache = true) {
@@ -472,7 +472,7 @@ int LateLowerGCFrame::NumberBase(State &S, Value *CurrentV)
     } else if (isa<Argument>(CurrentV) || isa<AllocaInst>(CurrentV) ||
             (isa<AddrSpaceCastInst>(CurrentV) && !isTrackedValue(CurrentV))) {
         // We know this is rooted in the parent
-        // future note: we could chose to exclude argument of type CalleeRooted here
+        // future note: we could choose to exclude argument of type CalleeRooted here
         Number = -1;
     } else if (!isSpecialPtr(CurrentV->getType())) {
         // Externally rooted somehow hopefully (otherwise there's a bug in the
@@ -929,7 +929,7 @@ static bool isLoadFromConstGV(Value *v, bool &task_local, PhiSet *seen = nullptr
     return false;
 }
 
-// Check if this is can be traced through constant loads to an constant global
+// Check if this can be traced through constant loads to a constant global
 // or otherwise globally rooted value.
 // Almost all `tbaa_const` loads satisfies this with the exception of
 // task local constants which are constant as far as the code is concerned but aren't
@@ -1931,7 +1931,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 continue;
             }
 
-            if (callee && (callee == gc_flush_func || callee == gc_preserve_begin_func
+            if (callee && (callee == gcroot_flush_func || callee == gc_preserve_begin_func
                         || callee == gc_preserve_end_func)) {
                 /* No replacement */
             } else if (pointer_from_objref_func != nullptr && callee == pointer_from_objref_func) {
@@ -2556,6 +2556,37 @@ bool LateLowerGCFrame::runOnFunction(Function &F, bool *CFGModified) {
 
     pgcstack = getPGCstack(F);
     if (pgcstack) {
+      // Strip optimistic memory attrs added by add_fn_attrs_for_effects.
+      // Must happen before LocalScan (which uses memory effects for
+      // safepoint identification) and before post-GC passes (DSE/GVN).
+      if (F.hasFnAttribute("julia.safepoint")) {
+          F.setMemoryEffects(MemoryEffects::unknown());
+          for (unsigned i = 0; i < F.arg_size(); i++) {
+              if (F.hasParamAttribute(i, "gcstack"))
+                  F.removeParamAttr(i, Attribute::ReadNone);
+          }
+      }
+      for (auto &BB : F) {
+          for (auto &I : BB) {
+              if (auto *CI = dyn_cast<CallInst>(&I)) {
+                  Function *Callee = CI->getCalledFunction();
+                  if (!Callee || Callee->hasFnAttribute("julia.safepoint")) {
+                      CI->setMemoryEffects(MemoryEffects::unknown());
+                      for (unsigned i = 0; i < CI->arg_size(); i++) {
+                          if (CI->getParamAttr(i, "gcstack").isValid())
+                              CI->removeParamAttr(i, Attribute::ReadNone);
+                      }
+                      if (Callee) {
+                          Callee->setMemoryEffects(MemoryEffects::unknown());
+                          for (unsigned i = 0; i < Callee->arg_size(); i++) {
+                              if (Callee->hasParamAttribute(i, "gcstack"))
+                                  Callee->removeParamAttr(i, Attribute::ReadNone);
+                          }
+                      }
+                  }
+              }
+          }
+      }
       State S = LocalScan(F);
       // If there is no safepoint after the first reachable def, then we don't need any roots (even those for allocas)
       if (std::any_of(S.BBStates.begin(), S.BBStates.end(),

@@ -153,3 +153,31 @@ end
     @test vst1_ok(:(local _))
     @test vst1_ok(:(local _::Int))
 end
+
+@testset "empty symbol is valid" for e in [
+    Expr(:block, Symbol(""))
+    Expr(:inert, Symbol(""))
+    Expr(:(::), Symbol(""), :Int)
+    Expr(:const, Expr(:(=), Symbol(""), 1))
+    Expr(:global, Expr(:(=), Symbol(""), 1))
+    Expr(:local, Expr(:(=), Symbol(""), 1))
+    Expr(:let, Expr(:block, Expr(:(=), Symbol(""), 1)), Expr(:block))
+    Expr(:function, Expr(:call, Symbol("")), Expr(:block))
+    ]
+    @test vst1_ok(e)
+end
+
+@testset "import/using path" begin
+    # `.` after identifier
+    @test !vst1_ok(Expr(:import, Expr(:., :A, :., :B)))
+    # leading `.` on a name
+    @test !vst1_ok(Expr(:import, Expr(:(:), Expr(:., :M), Expr(:., :., :a))))
+    # non-identifier rename
+    @test !vst1_ok(Expr(:import, Expr(:(:), Expr(:., :M),
+                                      Expr(:as, Expr(:., :a), Expr(:call, :f)))))
+    # empty path
+    @test !vst1_ok(Expr(:import, Expr(:.)))
+    # not an import path
+    @test !vst1_ok(Expr(:import, Expr(:call, :f)))
+    @test !vst1_ok(Expr(:import, 42))
+end

@@ -29,7 +29,6 @@ EMBEDDING_ARGS := "JULIA=$(JULIA_EXECUTABLE)" "BIN=$(SRCDIR)/embedding" "CC=$(CC
 
 GCEXT_ARGS := "JULIA=$(JULIA_EXECUTABLE)" "BIN=$(SRCDIR)/gcext" "CC=$(CC)"
 
-TRIMMING_ARGS := "JULIA=$(JULIA_EXECUTABLE)" "BIN=$(SRCDIR)/trimming" "CC=$(CC)"
 TEST_JULIA_OPTIONS := --check-bounds=yes --startup-file=no --depwarn=error -q
 TEST_SCRIPT_OPTIONS := --buildroot=$(call cygpath_w,$(BUILDROOT))
 
@@ -86,11 +85,6 @@ embedding:
 gcext:
 	@$(MAKE) -C $(SRCDIR)/$@ check $(GCEXT_ARGS)
 
-.PHONY: trimming
-trimming:
-	@$(MAKE) -C $(SRCDIR)/$@ check $(TRIMMING_ARGS)
-	@$(MAKE) -C $(SRCDIR)/$@ clean $(TRIMMING_ARGS)
-
 .PHONY: clangsa
 clangsa:
 	@$(MAKE) -C $(SRCDIR)/$@
@@ -100,4 +94,3 @@ clean:
 	@$(MAKE) -C embedding $@ $(EMBEDDING_ARGS)
 	@$(MAKE) -C gcext $@ $(GCEXT_ARGS)
 	@$(MAKE) -C llvmpasses $@
-	@$(MAKE) -C trimming $@ $(TRIMMING_ARGS)

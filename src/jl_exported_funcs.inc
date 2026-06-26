@@ -21,6 +21,7 @@
     XX(jl_apply_type1) \
     XX(jl_apply_type2) \
     XX(jl_argument_datatype) \
+    XX(jl_argument_datatypename) \
     XX(jl_array_del_end) \
     XX(jl_array_eltype) \
     XX(jl_array_grow_end) \
@@ -92,6 +93,11 @@
     XX(jl_copy_code_info) \
     XX(jl_cpu_threads) \
     XX(jl_effective_threads) \
+    XX(jl_precompile_jobserver_create) \
+    XX(jl_precompile_jobserver_active) \
+    XX(jl_precompile_jobserver_destroy) \
+    XX(jl_precompile_jobserver_acquire) \
+    XX(jl_precompile_jobserver_release) \
     XX(jl_crc32c_sw) \
     XX(jl_create_system_image) \
     XX(jl_cstr_to_string) \
@@ -110,7 +116,6 @@
     XX(jl_eh_restore_state_noexcept) \
     XX(jl_enter_handler) \
     XX(jl_enter_threaded_region) \
-    XX(jl_environ) \
     XX(jl_eqtable_get) \
     XX(jl_eqtable_pop) \
     XX(jl_eqtable_put) \
@@ -225,7 +230,6 @@
     XX(jl_get_world_counter) \
     XX(jl_get_zero_subnormals) \
     XX(jl_gf_invoke_lookup) \
-    XX(jl_method_lookup_by_tt) \
     XX(jl_method_lookup) \
     XX(jl_gf_invoke_lookup_worlds) \
     XX(jl_global_event_loop) \
@@ -356,6 +360,7 @@
     XX(jl_parse_opts) \
     XX(jl_parse_string) \
     XX(jl_pathname_for_handle) \
+    XX(jl_pathname_for_symbol) \
     XX(jl_pchar_to_array) \
     XX(jl_pchar_to_string) \
     XX(jl_pointerref) \
@@ -507,6 +512,7 @@
     XX(jl_vexceptionf) \
     XX(jl_vprintf) \
     XX(jl_wakeup_thread) \
+    XX(jl_wakeup_threadpool) \
     XX(jl_write_compiler_output) \
     XX(jl_membarrier) \
 
@@ -517,7 +523,7 @@
 #define JL_CODEGEN_EXPORTED_FUNCS(YY) \
     YY(jl_dump_function_ir) \
     YY(jl_dump_method_asm) \
-    YY(jl_emit_codeinst_to_jit) \
+    YY(jl_emit_codeinsts_to_jit) \
     YY(jl_get_llvmf_defn) \
     YY(jl_get_llvm_function) \
     YY(jl_get_llvm_module) \
@@ -536,6 +542,7 @@
     YY(jl_generate_fptr_for_unspecialized) \
     YY(jl_compile_codeinst) \
     YY(jl_teardown_codegen) \
+    YY(jl_decorate_llvm_module) \
     YY(jl_jit_total_bytes) \
     YY(jl_create_native) \
     YY(jl_dump_compiles) \
@@ -554,10 +561,10 @@
     YY(jl_jit_unregister_ci) \
     YY(JLJITGetLLVMOrcExecutionSession) \
     YY(JLJITGetJuliaOJIT) \
-    YY(JLJITGetExternalJITDylib) \
+    YY(JLJITCreateJITDylib) \
     YY(JLJITAddObjectFile) \
     YY(JLJITAddLLVMIRModule) \
-    YY(JLJITLookup) \
+    YY(JLJITJDLookup) \
     YY(JLJITMangleAndIntern) \
     YY(JLJITGetTripleString) \
     YY(JLJITGetGlobalPrefix) \

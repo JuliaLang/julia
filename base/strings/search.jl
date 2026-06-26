@@ -355,6 +355,12 @@ end
 
 in(c::AbstractChar, s::AbstractString) = (findfirst(isequal(c),s)!==nothing)
 
+# nothrow+foldable: iteration over `String`/`SubString{String}` is total and
+# `Char` equality is total.
+@assume_effects :nothrow :foldable function in(c::Char, s::Union{String,SubString{String}})
+    @invoke in(c::AbstractChar, s::AbstractString)
+end
+
 function _searchindex(s::Union{AbstractString,DenseUInt8OrInt8},
                       t::Union{AbstractString,AbstractChar,Int8,UInt8},
                       i::Integer)
@@ -437,7 +443,7 @@ function _searchindex(s::AbstractVector{<:Union{Int8,UInt8}},
 
             # match found
             if j == n - 1
-                # restore in case `s` is an OffSetArray
+                # restore in case `s` is an OffsetArray
                 return i+firstindex(s)
             end
 

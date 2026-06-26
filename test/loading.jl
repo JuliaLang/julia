@@ -1757,7 +1757,7 @@ end
         ))
     end
     mktempdir() do depot
-        # This manifest has a LibGit2 entry that has a LibGit2_jll with a git-tree-hash1
+        # This manifest has a LibGit2 entry that has a LibGit2_jll with a git-tree-sha1
         # which simulates an old manifest where LibGit2_jll was not a stdlib
         badmanifest_test_dir2 = joinpath(@__DIR__, "project", "deps", "BadStdlibDeps2")
         @test success(addenv(

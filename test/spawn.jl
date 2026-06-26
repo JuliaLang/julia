@@ -730,6 +730,11 @@ end
 @test Cmd(`foo`, env=["A"=>true]).env     == ["A=true"]
 @test Cmd(`foo`, env=nothing).env         === nothing
 
+# mixed value types in env pairs (#56780)
+@test Cmd(`foo`, env=("A"=>1, "B"=>"two")).env == ["A=1", "B=two"]
+@test Cmd(`foo`, env=["A"=>1, "B"=>"two"]).env == ["A=1", "B=two"]
+@test setenv(`foo`, "A"=>1, "B"=>"two").env    == ["A=1", "B=two"]
+
 # uid/gid - exercise code path with current effective ids (doesn't test privilege change)
 if !Sys.iswindows()
     @test success(setuid(setgid(`$(Base.julia_cmd()) -e "exit(0)"`, Libc.getegid()), Libc.geteuid()))
@@ -1093,7 +1098,7 @@ end
         cmd2 = addenv(cmd, "BAR" => "bar"; inherit=true)
         @test strip(String(read(cmd2))) == "foo bar"
 
-        # Changing the environment doesn't effect the command,
+        # Changing the environment doesn't affect the command,
         # because it was baked in at `addenv()` time
         withenv("FOO" => "baz") do
             @test strip(String(read(cmd2))) == "foo bar"
@@ -1210,7 +1215,7 @@ end
     @test Base.escape_microsoft_c_args("hello world\\") == "\"hello world\\\\\""
 
     # input : A\B
-    # output: A\B"
+    # output: A\B
     @test Base.escape_microsoft_c_args("A\\B") == "A\\B"
 
     # input : [A\, B]
@@ -1292,7 +1297,7 @@ let buf = IOBuffer()
     @test String(take!(buf)) == "Hello\n"
 end
 
-# Test passing a pipe server as an addition fd
+# Test passing a pipe server as an additional fd
 @testset "Pipe server as additional fd" begin
     if !Sys.iswindows()
         # Windows CRT does not support passing server sockets as stdio fds
