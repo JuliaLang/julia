@@ -593,6 +593,11 @@ let apply_type_tfunc = Compiler.apply_type_tfunc
     @test apply_type_tfunc(𝕃, Const(Type), Type{Int}) == Type{Type{Int}}
 end
 
+# Structural TypeofVararg results should remain usable when constructing Tuple types.
+vararg_tail62001(X::Tuple{S,Vararg{S}}) where S =
+    X[2:end]::Tuple{Vararg{eltype(X::Tuple{Any,Vararg{Any}})}}
+@test only(Base.return_types(vararg_tail62001, Tuple{Tuple{Int,Vararg{Int}}})) == Tuple{Vararg{Int}}
+
 # issue #17572
 function f17572(::Type{Val{A}}) where A
     return Tuple{Int}(Tuple{A}((1,)))

@@ -1932,6 +1932,40 @@ function apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any};
     end
     return _apply_type_tfunc(𝕃, headtype, argtypes)
 end
+
+function apply_type_arg_value(@nospecialize(t))
+    if isa(t, Const)
+        val = t.val
+    elseif isa(t, Core.TypeEgal) || isType(t)
+        val = type_parameter(t)
+    else
+        val = singleton_type(t)
+        val === nothing && return nothing
+    end
+    return (isa(val, Type) || isvarargtype(val)) ? val : nothing
+end
+
+function partial_typeofvararg_value(@nospecialize(t))
+    isa(t, PartialStruct) || return nothing
+    t.typ === TypeofVararg || return nothing
+    length(t.fields) >= 1 || return nothing
+    undefs = _getundefs(t)
+    undefs[1] === false || return nothing
+    T = apply_type_arg_value(t.fields[1])
+    isa(T, Type) || return nothing
+    try
+        if length(t.fields) >= 2 && undefs[2] === false
+            N = t.fields[2]
+            isa(N, Const) && isa(N.val, Int) || return nothing
+            return Core.apply_type(Vararg, T, N.val)
+        end
+        return Core.apply_type(Vararg, T)
+    catch ex
+        ex isa InterruptException && rethrow()
+        return nothing
+    end
+end
+
 @nospecs function _apply_type_tfunc(𝕃::AbstractLattice, headtype, argtypes::Vector{Any})
     largs = length(argtypes)
     istuple = headtype === Tuple
@@ -1969,6 +2003,9 @@ end
             canconst &= !has_free_typevars(aip1)
             anyeq = true
             push!(tparams, aip1)
+        elseif istuple && partial_typeofvararg_value(ai) !== nothing
+            anyeq = true
+            push!(tparams, partial_typeofvararg_value(ai))
         elseif isa(ai, Const) && (isa(ai.val, Type) || isa(ai.val, TypeVar) ||
                                   valid_tparam(ai.val) || (istuple && isvarargtype(ai.val)))
             push!(tparams, ai.val)
@@ -2094,6 +2131,12 @@ end
     !uncertain && canconst &&
         (!anyeq || (isa(appl, DataType) && appl.name !== Tuple.name)) && return Const(appl)
     if isvarargtype(appl)
+        !uncertain && canconst && !anyeq && return Const(appl)
+        if !uncertain && canconst && 2 <= largs <= 3
+            fields = Any[widenslotwrapper(argtypes[2]), largs == 3 ? widenslotwrapper(argtypes[3]) : Any]
+            undefs = Union{Nothing,Bool}[false, largs == 3 ? false : true]
+            return PartialStruct(𝕃, TypeofVararg, undefs, fields)
+        end
         return TypeofVararg
     end
     if istuple
