@@ -47,6 +47,7 @@ AllocUseInfo::getField(uint32_t offset, uint32_t size, Type *elty)
             lb = it;
             ub = it;
         }
+        ++it;
     }
     else {
         it = memops.begin();

@@ -113,6 +113,8 @@ public
 
 # Strings
     escape_raw_string,
+    raw_substring,
+    unannotate,
 
 # Chars
     ismalformed,

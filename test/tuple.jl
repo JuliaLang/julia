@@ -227,7 +227,7 @@ end
 end
 
 
-@testset "elelement/value/key types" begin
+@testset "element/value/key types" begin
     @test eltype((1,2,3)) === Int
     @test eltype((1.0,2.0,3.0)) <: AbstractFloat
     @test eltype((true, false)) === Bool

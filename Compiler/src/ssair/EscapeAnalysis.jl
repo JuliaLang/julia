@@ -13,7 +13,7 @@ export
 using Base: Base
 
 # imports
-import Base: ==, copy, getindex, setindex!
+import Base: ==, !=, copy, getindex, setindex!
 # usings
 using Core
 using Core: Builtin, IntrinsicFunction, SimpleVector, ifelse, sizeof
@@ -26,9 +26,9 @@ using Base:       # Base definitions
     !, !==, &, *, +, -, :, <, <<, >, |, ∈, ∉, ∩, ∪, ≠, ≤, ≥, ⊆
 using ..Compiler: # Compiler specific definitions
     AbstractLattice, Compiler, IRCode, IR_FLAG_NOTHROW,
-    argextype, fieldcount_noerror, has_flag, intrinsic_nothrow, is_meta_expr_head,
-    is_identity_free_argtype, isexpr, setfield!_nothrow, singleton_type, try_compute_field,
-    try_compute_fieldidx, widenconst
+    argextype, argextype_widened, fieldcount_noerror, has_flag, intrinsic_nothrow,
+    is_meta_expr_head, is_identity_free_argtype, isexpr, setfield!_nothrow, singleton_type,
+    try_compute_field, try_compute_fieldidx
 
 function include(x::String)
     if !isdefined(Base, :end_base_include)
@@ -63,7 +63,7 @@ A lattice for escape information, which holds the following properties:
   * `x.AliasInfo::Unindexable` records all the possible values that can be aliased to fields/elements of `x` without precise index information
 - `x.Liveness::BitSet`: records SSA statement numbers where `x` should be live, e.g.
   to be used as a call argument, to be returned to a caller, or preserved for `:foreigncall`:
-  * `isempty(x.Liveness)`: `x` is never be used in this call frame (the bottom)
+  * `isempty(x.Liveness)`: `x` is never used in this call frame (the bottom)
   * `0 ∈ x.Liveness` also has the special meaning that it's a call argument of the currently
     analyzed call frame (and thus it's visible from the caller immediately).
   * `pc ∈ x.Liveness`: `x` may be used at the SSA statement at `pc`
@@ -186,7 +186,7 @@ end
 # we need to make sure this `==` operator corresponds to lattice equality rather than object equality,
 # otherwise `propagate_changes` can't detect the convergence
 x::EscapeInfo == y::EscapeInfo = begin
-    # fast pass: better to avoid top comparison
+    # fast path: better to avoid top comparison
     x === y && return true
     x.Analyzed === y.Analyzed || return false
     x.ReturnEscape === y.ReturnEscape || return false
@@ -226,7 +226,7 @@ end
 The non-strict partial order over [`EscapeInfo`](@ref).
 """
 x::EscapeInfo ⊑ₑ y::EscapeInfo = begin
-    # fast pass: better to avoid top comparison
+    # fast path: better to avoid top comparison
     if y === ⊤
         return true
     elseif x === ⊤
@@ -285,7 +285,7 @@ end
     x::EscapeInfo ⊏ₑ y::EscapeInfo -> Bool
 
 The strict partial order over [`EscapeInfo`](@ref).
-This is defined as the irreflexive kernel of `⊏ₑ`.
+This is defined as the irreflexive kernel of `⊑ₑ`.
 """
 x::EscapeInfo ⊏ₑ y::EscapeInfo = x ⊑ₑ y && !(y ⊑ₑ x)
 
@@ -303,7 +303,7 @@ x::EscapeInfo ⋤ₑ y::EscapeInfo = !(y ⊑ₑ x)
 Computes the join of `x` and `y` in the partial order defined by [`EscapeInfo`](@ref).
 """
 x::EscapeInfo ⊔ₑ y::EscapeInfo = begin
-    # fast pass: better to avoid top join
+    # fast path: better to avoid top join
     if x === ⊤ || y === ⊤
         return ⊤
     elseif x === ⊥
@@ -584,6 +584,8 @@ function analyze_escapes(ir::IRCode, nargs::Int, 𝕃ₒ::AbstractLattice, get_e
                     escape_new!(astate, pc, stmt.args)
                 elseif head === :foreigncall
                     escape_foreigncall!(astate, pc, stmt.args)
+                elseif head === :foreignglobal
+                    escape_foreignglobal!(astate, pc, stmt.args)
                 elseif head === :throw_undef_if_not # XXX when is this expression inserted ?
                     add_escape_change!(astate, stmt.args[1], ThrownEscape(pc))
                 elseif is_meta_expr_head(head)
@@ -884,7 +886,7 @@ is_nothrow(ir::IRCode, pc::Int) = has_flag(ir[SSAValue(pc)], IR_FLAG_NOTHROW)
 Propagates escapes via exceptions that can happen in `tryregions`.
 
 Naively it seems enough to propagate escape information imposed on `:the_exception` object,
-but actually there are several other ways to access to the exception object such as
+but actually there are several other ways to access the exception object such as
 `Base.current_exceptions` and manual catch of `rethrow`n object.
 For example, escape analysis needs to account for potential escape of the allocated object
 via `rethrow_escape!()` call in the example below:
@@ -930,7 +932,7 @@ function escape_exception!(astate::AnalysisState, tryregions::Vector{UnitRange{I
     for i in 1:length(escapes)
         x = escapes[i]
         xt = x.ThrownEscape
-        xt === TOP_THROWN_ESCAPE && @goto propagate_exception_escape # fast pass
+        xt === TOP_THROWN_ESCAPE && @goto propagate_exception_escape # fast path
         for pc in xt
             for region in tryregions
                 pc ∈ region && @goto propagate_exception_escape # early break because of AllEscape
@@ -964,7 +966,7 @@ function escape_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any})
             for argidx = first_idx:last_idx
                 arg = args[argidx]
                 if arg isa GlobalRef
-                    continue # :effect_free guarantees that nothings escapes to the global scope
+                    continue # :effect_free guarantees that nothing escapes to the global scope
                 end
                 if !is_identity_free_argtype(argextype(arg, astate.ir))
                     add_alias_change!(astate, ret, arg)
@@ -1022,7 +1024,24 @@ function from_interprocedural(argescape::ArgEscapeInfo, pc::Int)
     return EscapeInfo(#=Analyzed=#true, #=ReturnEscape=#false, ThrownEscape, AliasInfo, Liveness)
 end
 
-# escape every argument `(args[6:length(args[3])])` and the name `args[1]`
+# the only possible 'escape' here is really just that it can return a
+# bitcast of its one (pointer) argument, but be conservative anyway
+function escape_foreignglobal!(astate::AnalysisState, pc::Int, args::Vector{Any})
+    nargs = length(args)
+    if nargs != 1
+        # invalid foreignglobal, no escape
+        return
+    end
+    name = args[1]
+    nothrow = is_nothrow(astate.ir, pc)
+    name_info = nothrow ? ⊥ : ThrownEscape(pc)
+    if !isexpr(name, :tuple)
+        add_escape_change!(astate, name, name_info)
+        add_liveness_change!(astate, name, pc)
+    end
+end
+
+# escape every argument `(args[6:5+length(args[3])])` and the name `args[1]`
 # TODO: we can apply a similar strategy like builtin calls to specialize some foreigncalls
 function escape_foreigncall!(astate::AnalysisState, pc::Int, args::Vector{Any})
     nargs = length(args)
@@ -1145,7 +1164,7 @@ function escape_new!(astate::AnalysisState, pc::Int, args::Vector{Any})
     if isa(AliasInfo, Bool)
         AliasInfo && @goto conservative_propagation
         # AliasInfo of this object hasn't been analyzed yet: set AliasInfo now
-        typ = widenconst(argextype(obj, astate.ir))
+        typ = argextype_widened(obj, astate.ir)
         nflds = fieldcount_noerror(typ)
         if nflds === nothing
             AliasInfo = Unindexable()
@@ -1174,7 +1193,7 @@ function escape_new!(astate::AnalysisState, pc::Int, args::Vector{Any})
     elseif isa(AliasInfo, Unindexable)
         AliasInfo = copy(AliasInfo)
         @label escape_unindexable_def
-        # fields are known partially: propagate escape information imposed on recorded possibilities to all fields values
+        # fields are known partially: propagate escape information imposed on recorded possibilities to all field values
         info = AliasInfo.info
         objinfo′ = ignore_aliasinfo(objinfo)
         for i in 2:nargs
@@ -1255,7 +1274,7 @@ function escape_builtin!(::typeof(getfield), astate::AnalysisState, pc::Int, arg
     length(args) ≥ 3 || return false
     ir, estate = astate.ir, astate.estate
     obj = args[2]
-    typ = widenconst(argextype(obj, ir))
+    typ = argextype_widened(obj, ir)
     if hasintersect(typ, Module) # global load
         add_escape_change!(astate, SSAValue(pc), ⊤)
     end
@@ -1315,7 +1334,7 @@ function escape_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, ar
     if isa(AliasInfo, Bool)
         AliasInfo && @goto conservative_propagation
         # AliasInfo of this object hasn't been analyzed yet: set AliasInfo now
-        typ = widenconst(argextype(obj, ir))
+        typ = argextype_widened(obj, ir)
         AliasInfo, fidx = analyze_fields(ir, typ, args[3])
         if isa(AliasInfo, IndexableFields)
             @goto escape_indexable_def
@@ -1323,7 +1342,7 @@ function escape_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, ar
             @goto escape_unindexable_def
         end
     elseif isa(AliasInfo, IndexableFields)
-        typ = widenconst(argextype(obj, ir))
+        typ = argextype_widened(obj, ir)
         AliasInfo, fidx = reanalyze_fields(AliasInfo, ir, typ, args[3])
         isa(AliasInfo, Unindexable) && @goto escape_unindexable_def
         @label escape_indexable_def

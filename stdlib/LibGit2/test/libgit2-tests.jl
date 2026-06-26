@@ -922,6 +922,18 @@ mktempdir() do dir
                         LibGit2.delete_branch(tbref)
                         @test LibGit2.lookup_branch(repo, test_branch2, true) === nothing
                     end
+
+                    # an invalid branch name propagates the underlying error
+                    # instead of a generic "cannot create branch" error
+                    err = try
+                        LibGit2.branch!(repo, "invalid name", string(commit_oid1),
+                                        set_head=false, force=true)
+                        nothing
+                    catch ex
+                        ex
+                    end
+                    @test err isa LibGit2.Error.GitError
+                    @test err.code == LibGit2.Error.EINVALIDSPEC
                 end
                 branches = map(b->LibGit2.shortname(b[1]), LibGit2.GitBranchIter(repo))
                 @test default_branch in branches
@@ -1047,6 +1059,20 @@ mktempdir() do dir
                 @test length(blob2) == len1
                 @test blob  == blob2
                 @test blob !== blob2
+
+                # showing a text blob previews only the first 3 lines
+                text_file = joinpath(dir, "long_text_blob")
+                write(text_file, "l1\nl2\nl3\nl4\nl5\n")
+                text_blob = LibGit2.GitBlob(repo, LibGit2.addblob!(repo, text_file))
+                @test sprint(show, text_blob) ==
+                      "GitBlob:\nBlob id: $(LibGit2.GitHash(text_blob))\nContents:\nl1\nl2\nl3\n"
+
+                # showing a text blob with fewer than 3 lines should not error
+                short_file = joinpath(dir, "short_text_blob")
+                write(short_file, "l1\n")
+                short_blob = LibGit2.GitBlob(repo, LibGit2.addblob!(repo, short_file))
+                @test sprint(show, short_blob) ==
+                      "GitBlob:\nBlob id: $(LibGit2.GitHash(short_blob))\nContents:\nl1\n\n"
             end
         end
         @testset "trees" begin
@@ -1075,7 +1101,10 @@ mktempdir() do dir
                 @test te_str == ref_te_str
                 blob = LibGit2.GitBlob(tree_entry)
                 blob_str = sprint(show, blob)
-                @test blob_str == "GitBlob:\nBlob id: $(LibGit2.GitHash(blob))\nContents:\n$(LibGit2.content(blob))\n"
+                blob_lines = split(LibGit2.content(blob), "\n")
+                expected = "GitBlob:\nBlob id: $(LibGit2.GitHash(blob))\nContents:\n" *
+                           join([blob_lines[i] for i in 1:min(length(blob_lines), 3)], "\n") * "\n"
+                @test blob_str == expected
 
                 # tests for walking the tree and accessing objects
                 @test tree[""] == tree
@@ -1717,6 +1746,9 @@ mktempdir() do dir
             LibGit2.checkout!(repo, string(commit_oid1))
             @test !LibGit2.isattached(repo)
             @test LibGit2.headname(repo) == "(detached from $(string(commit_oid1)[1:7]))"
+            # the reflog message should end with the commit id (no stray paren)
+            reflog_msg = split(last(readlines(joinpath(cache_repo, ".git", "logs", "HEAD"))), '\t')[2]
+            @test endswith(reflog_msg, "to $(string(commit_oid1))")
         end
     end
 
@@ -1845,7 +1877,7 @@ mktempdir() do dir
                 username = LibGit2.default_username(cfg, github_cred)
                 @test username === nothing
 
-                # Add a credential setting for a specific for a URL
+                # Add a credential setting for a specific URL
                 LibGit2.set!(cfg, "credential.https://github.com.username", "foo")
 
                 username = LibGit2.default_username(cfg, github_cred)
@@ -1912,7 +1944,7 @@ mktempdir() do dir
                 @test !LibGit2.use_http_path(cfg, github_cred)
                 @test !LibGit2.use_http_path(cfg, mygit_cred)
 
-                # Add a credential setting for a specific for a URL
+                # Add a credential setting for a specific URL
                 LibGit2.set!(cfg, "credential.https://github.com.useHttpPath", "true")
 
                 @test LibGit2.use_http_path(cfg, github_cred)
@@ -1975,6 +2007,59 @@ mktempdir() do dir
 
                 Base.shred!(github_cred)
                 Base.shred!(mygit_cred)
+            end
+        end
+
+        @testset "fill! with multiple helpers" begin
+            # Requires `git` to be installed and available on the path.
+            if GIT_INSTALLED
+                config_path = joinpath(dir, config_file)
+                empty_store = joinpath(dir, "empty-credentials")
+                bob_store = joinpath(dir, "bob-credentials")
+                alice_store = joinpath(dir, "alice-credentials")
+                alice_alt_store = joinpath(dir, "alice-alt-credentials")
+                touch(empty_store)
+                write(bob_store, "https://bob:s3cre7@mygithost\n")
+                write(alice_store, "https://alice:pa55w0rd@mygithost\n")
+                write(alice_alt_store, "https://alice:0therpa55@mygithost\n")
+                store_helper(path) = "store --file=$(replace(path, '\\' => '/'))"
+
+                # helpers after one that returned nothing are still tried
+                open(config_path, "w+") do fp
+                    write(fp, """
+                        [credential]
+                            helper = $(store_helper(empty_store))
+                        [credential]
+                            helper = $(store_helper(bob_store))
+                        """)
+                end
+                LibGit2.with(LibGit2.GitConfig(config_path, LibGit2.Consts.CONFIG_LEVEL_APP)) do cfg
+                    cred = GitCredential("https", "mygithost")
+                    LibGit2.fill!(cfg, cred)
+                    @test LibGit2.isfilled(cred)
+                    @test cred.username == "bob"
+                    Base.shred!(cred)
+                end
+
+                # no more helpers are tried once the credential is filled
+                open(config_path, "w+") do fp
+                    write(fp, """
+                        [credential]
+                            helper = $(store_helper(alice_store))
+                        [credential]
+                            helper = $(store_helper(alice_alt_store))
+                        """)
+                end
+                LibGit2.with(LibGit2.GitConfig(config_path, LibGit2.Consts.CONFIG_LEVEL_APP)) do cfg
+                    cred = GitCredential("https", "mygithost")
+                    LibGit2.fill!(cfg, cred)
+                    @test LibGit2.isfilled(cred)
+                    @test cred.username == "alice"
+                    Base.shred!(Base.SecretBuffer("pa55w0rd")) do pw
+                        @test cred.password == pw
+                    end
+                    Base.shred!(cred)
+                end
             end
         end
 
@@ -2202,7 +2287,7 @@ mktempdir() do dir
             ssh_u_ex = gen_ex(valid_cred, username=nothing)
 
             # Note: We cannot use the default ~/.ssh/id_rsa for tests since we cannot be
-            # sure a users will actually have these files. Instead we will use the ENV
+            # sure a user will actually have these files. Instead we will use the ENV
             # variables to set the default values.
 
             # ENV credentials are valid
@@ -3106,7 +3191,7 @@ mktempdir() do dir
                         """)
                 end
 
-                # Generated a certificate which has the CN set correctly but no subjectAltName
+                # Generate a certificate which has the CN set correctly but no subjectAltName
                 err = IOBuffer()
                 p = run(pipeline(addenv(
                     `openssl req -new -x509 -newkey rsa:2048 -sha256 -nodes -keyout $key -out $cert -days 1 -subj "/CN=$common_name"`,

@@ -446,7 +446,7 @@ function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=fal
         end
     end
 
-    # We can return early all tasks are done, or if any is done and we only
+    # We can return early if all tasks are done, or if any is done and we only
     # needed to wait for one, or if any task failed and we have failfast
     if nremaining == 0 || (any(done_mask) && (!all || (failfast && exception)))
         if throwexc && (!all || failfast) && exception
@@ -986,7 +986,9 @@ function enq_work(t::Task)
         else
             # Otherwise, put the task in the multiqueue.
             Partr.multiq_insert(t, t.priority)
-            tid = 0
+            # Wake one sleeping thread in the task's pool rather than all of them. See #61820, #50425.
+            ccall(:jl_wakeup_threadpool, Cvoid, (Int8,), Threads._sym_to_tpid(tp))
+            return t
         end
     end
     ccall(:jl_wakeup_thread, Cvoid, (Int16,), (tid - 1) % Int16)

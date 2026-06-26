@@ -1,0 +1,15 @@
+name = "Zstd_jll"
+uuid = "bd2ca7ee-82fe-4ebb-8a47-7f0c280fb305" # private UUID, to avoid conflict w/ stdlib
+version = "1.5.7+1"
+
+[deps]
+Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
+
+[compat]
+julia = "1.6"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]

@@ -368,11 +368,10 @@ void JITDebugInfoRegistry::registerJITObject(
         if (it != sym_to_ci.end()) {
             codeinst = it->second;
         }
-        if (codeinst) {
-            JL_GC_PROMISE_ROOTED(codeinst);
-            // opaque-closure code instances are pre-promoted to global roots
-            // by jl_register_jit_object before this JL_NOTSAFEPOINT region runs.
-        }
+        // opaque-closure code instances are pre-promoted to global roots
+        // by jl_register_jit_object before this JL_NOTSAFEPOINT region runs.
+        // All other codeinstances are rooted by the cache.
+        JL_GC_PROMISE_ROOTED(codeinst);
         jl_profile_atomic([&]() JL_NOTSAFEPOINT {
             if (codeinst)
                 cimap[Addr] = std::make_pair(Size, codeinst);
@@ -391,15 +390,25 @@ void JITDebugInfoRegistry::registerJITObject(
 
 void jl_register_jit_object(const object::ObjectFile &Object,
                             std::function<uint64_t(const StringRef &)> getLoadAddress,
-                            const jl_linker_info_t &Info)
+                            const jl_linker_info_t &Info) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
 {
     // Opaque-closure code instances are not otherwise reachable through their
     // method, so promote them to global roots here, before entering the
-    // JL_NOTSAFEPOINT registerJITObject body.
+    // JL_NOTSAFEPOINT registerJITObject body. Scanning the list is safe in the
+    // GC-safe materialization state (registerJITObject reads the same fields),
+    // so only switch to GC-unsafe around the rare allocating promotion.
+    jl_task_t *ct = jl_current_task;
     for (auto &[ci, funcs] : Info.ci_funcs) {
         jl_method_instance_t *mi = jl_get_ci_mi(ci);
-        if (jl_is_method(mi->def.method) && mi->def.method->is_for_opaque_closure)
-            jl_as_global_root((jl_value_t*)ci, 1);
+        if (jl_is_method(mi->def.method) && mi->def.method->is_for_opaque_closure) {
+            jl_code_instance_t *ci_root = ci;
+            // jl_gc_unsafe_enter may safepoint, so root before the transition.
+            JL_GC_PUSH1(&ci_root);
+            int8_t gc_state = jl_gc_unsafe_enter(ct->ptls);
+            jl_as_global_root((jl_value_t*)ci_root, 1);
+            JL_GC_POP();
+            jl_gc_unsafe_leave(ct->ptls, gc_state);
+        }
     }
     getJITDebugRegistry().registerJITObject(Object, getLoadAddress, Info);
 }
@@ -531,7 +540,17 @@ static int lookup_pointer(
             frame->fromC = 1;
 
         frame->line = info.Line;
-        frame->pc = info.Column;
+        if (fromC) {
+            frame->pc = info.Column;
+        }
+        else if (info.Column > 0) {
+            // See "DWARF column" in codegen.cpp: If any frame has nonzero
+            // column, it is a PC into the first (non-inlined) frame.  Move it
+            // there for sanity.
+            jl_frame_t *frame0 = &(*frames)[n_frames - 1];
+            assert((frame0->pc == 0 || frame0->pc == (int)info.Column) && "conflicting pcs");
+            frame0->pc = info.Column;
+        }
         std::string file_name(info.FileName);
 
         if (file_name == "<invalid>")
@@ -1317,7 +1336,7 @@ extern "C" jl_code_instance_t *jl_gdblookupci(void *p) JL_NOTSAFEPOINT
 // This implementation handles frame registration for local targets.
 void register_eh_frames(uint8_t *Addr, size_t Size)
 {
-  // On OS X OS X __register_frame takes a single FDE as an argument.
+  // On OS X __register_frame takes a single FDE as an argument.
   // See http://lists.cs.uiuc.edu/pipermail/llvmdev/2013-April/061768.html
   processFDEs((char*)Addr, Size, [](const char *Entry) JL_NOTSAFEPOINT {
       getJITDebugRegistry().libc_frames.libc_register_frame(Entry);
@@ -1346,8 +1365,8 @@ static const uint8_t *consume_leb128(const uint8_t *Addr, const uint8_t *End) JL
     return P + 1;
 }
 
-// Parse a LEB128 encoding to a type T. Truncate the result if there's more
-// bytes than what there are more bytes than what the type can store.
+// Parse a LEB128 encoding to a type T. Truncate the result if there are more
+// bytes than what the type can store.
 // Adjust the pointer to the first unprocessed byte.
 template<typename T> static T parse_leb128(const uint8_t *&Addr,
                                            const uint8_t *End) JL_NOTSAFEPOINT
@@ -1403,7 +1422,7 @@ enum DW_EH_PE : uint8_t {
 
     DW_EH_PE_pcrel = 0x10, // Value is PC relative.
 
-    // We currently don't support the following once.
+    // We currently don't support the following ones.
     DW_EH_PE_textrel = 0x20, // Value is text relative.
     DW_EH_PE_datarel = 0x30, // Value is data relative.
     DW_EH_PE_funcrel = 0x40, // Value is relative to start of function.

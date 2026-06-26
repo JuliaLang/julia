@@ -137,8 +137,8 @@ protected:
 ///   from the future.
 /// - The future is in an invalid state until get_promise() has been called.
 /// - Waiting operations (get(&D), wait(&D)) help dispatch other tasks while
-///   blocked, requiring an additional argument of which TaskDispatcher object
-///   of where all associated work will be scheduled.
+///   blocked, requiring an additional argument indicating which TaskDispatcher
+///   object all associated work will be scheduled on.
 /// - While `wait` may be called multiple times and on multiple threads, all of
 ///   them must have returned before calling `get` on exactly one thread.
 /// - Must call get() exactly once before destruction (enforced with

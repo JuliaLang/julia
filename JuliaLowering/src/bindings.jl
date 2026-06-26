@@ -179,7 +179,7 @@ struct LambdaBindings
 end
 
 LambdaBindings(self::IdTag = 0, scope_id::ScopeId = 0) =
-    LambdaBindings(self, scope_id, Dict{IdTag,LambdaBindings}())
+    LambdaBindings(self, scope_id, Dict{IdTag,Bool}())
 
 function init_lambda_binding(bindings::LambdaBindings, b::BindingInfo, capt::Bool)
     bindings.locals_capt[b.id] = capt

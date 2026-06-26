@@ -242,7 +242,7 @@ Type inference proceeds like so:
 In the above diagram, threads 1 and 2 are doing type inference (the dotted
 line), while thread 3 is activating a new method.  The solid boxes represent
 critical sections where the `world_counter_lock` is held.  `acq`, `rel`, and
-`read`, are acquire loads, release stores, and relaxed loads respectively.
+`read` are acquire loads, release stores, and relaxed loads respectively.
 
 T1 promotes its CI in time, but T2 takes too long, blocking on
 `world_counter_lock` until T3 has finished publishing the new method and

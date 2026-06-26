@@ -147,7 +147,7 @@ function _any(::typeof(identity), itr::Tuple{Vararg{Bool}}, ::Colon)
 end
 
 # Specialized versions of any(f, ::Tuple)
-# We fall back to the for loop implementation all elements have the same type or
+# We fall back to the for loop implementation if all elements have the same type or
 # if the tuple is too large.
 function any(f, itr::Tuple)
     if itr isa NTuple || length(itr) > 32

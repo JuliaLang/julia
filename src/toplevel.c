@@ -539,7 +539,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_method_instance_for_thunk(jl_code_info_t *
     return mi;
 }
 
-// Eval `throw(ErrorException(msg)))` in module `m`.
+// Eval `throw(exc)` in module `m`.
 // Used in `jl_toplevel_eval_flex` instead of `jl_throw` so that the error
 // location in julia code gets into the backtrace.
 static void jl_eval_throw(jl_module_t *m, jl_value_t *exc, const char *filename, int lineno)
@@ -726,8 +726,8 @@ JL_DLLEXPORT jl_value_t *jl_eval_thunk(jl_module_t *JL_NONNULL m, jl_code_info_t
     // start of this block.
     int last_lineno = jl_atomic_load_relaxed(&jl_lineno);
     const char *last_filename = jl_atomic_load_relaxed(&jl_filename);
-    int toplevel_lineno = 0;
-    const char* toplevel_filename = jl_debuginfo_firstline(thk->debuginfo, &toplevel_lineno);
+    int toplevel_lineno = jl_cdi_firstline_all(thk->debuginfo);
+    const char *toplevel_filename = jl_cdi_file(thk->debuginfo);
     jl_atomic_store_relaxed(&jl_lineno, toplevel_lineno);
     jl_atomic_store_relaxed(&jl_filename, toplevel_filename);
 

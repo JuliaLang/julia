@@ -1472,6 +1472,17 @@ In most cases, this simply results in a call to `convert(argtype, argvalue)`.
 kw"ccall"
 
 """
+    cglobal((symbol, library) [, type=Cvoid])
+
+Obtain a pointer to a global variable in a C-exported shared library, specified
+exactly as in [`ccall`](@ref).
+Returns a `Ptr{Type}`, defaulting to `Ptr{Cvoid}` if no `Type` argument is supplied.
+The values can be read or written by [`unsafe_load`](@ref) or [`unsafe_store!`](@ref),
+respectively.
+"""
+Core.Intrinsics.cglobal
+
+"""
     llvmcall(fun_ir::String, returntype, Tuple{argtype1, ...}, argvalue1, ...)
     llvmcall((mod_ir::String, entry_fn::String), returntype, Tuple{argtype1, ...}, argvalue1, ...)
     llvmcall((mod_bc::Vector{UInt8}, entry_fn::String), returntype, Tuple{argtype1, ...}, argvalue1, ...)
@@ -1595,10 +1606,54 @@ See the manual section on [Composite Types](@ref) for more information.
 kw"mutable struct"
 
 """
+    typegroup
+
+`typegroup` introduces a block in which mutually recursive [`struct`](@ref) and
+[`mutable struct`](@ref) definitions can refer to each other in their field types.
+All types declared inside the block are atomically defined together at the end of
+the block.
+
+```julia
+typegroup
+    struct Node
+        edges::Vector{Edge}
+    end
+    struct Edge
+        from::Node
+        to::Node
+    end
+end
+```
+
+Only `struct` or `mutable struct` definitions are allowed inside a `typegroup` block;
+other declarations, including method definitions, are disallowed. Inner constructor
+definitions are allowed inside the `struct` definitions and will semantically run
+after all types have been atomically instantiated.
+
+!!! compat "Julia 1.14"
+    The `typegroup` keyword requires at least Julia 1.14.
+
+See the manual section on [Mutually Recursive Types](@ref) for more details.
+"""
+kw"typegroup"
+
+"""
     new, or new{A,B,...}
 
 Special function available to inner constructors which creates a new object
-of the type. The form new{A,B,...} explicitly specifies values of parameters for parametric types.
+of the type.
+
+The form `new{A,B,...}` explicitly specifies values of parameters for parametric types.
+
+For constructors that have all of their type parameters after the function name, the
+contents between the `{...}` are passed on to the short form `new()` automatically:
+
+```julia
+struct NewExample{A,B}
+    NewExample{A,B}() where {A,B} = new()
+end
+```
+
 See the manual section on [Inner Constructor Methods](@ref man-inner-constructor-methods)
 for more information.
 """
@@ -2135,7 +2190,7 @@ the runtime must do more work, `invoke` is generally also slower--sometimes sign
 so--than doing normal dispatch with a regular call.
 
 Be careful when using `invoke` for functions that you don't write. What definition is used
-for given `argtypes` is an implementation detail unless the function is explicitly states
+for given `argtypes` is an implementation detail unless the function explicitly states
 that calling with certain `argtypes` is a part of public API.  For example, the change
 between `f1` and `f2` in the example below is usually considered compatible because the
 change is invisible by the caller with a normal (non-`invoke`) call.  However, the change is

@@ -41,6 +41,91 @@ let x=11
 end
 """) == 220
 
+@testset "empty symbol" begin
+    @test JuliaLowering.include_string(test_mod, """
+    let var\"\"=1; 1; end
+    """) == 1
+
+    # Note function name fails in flisp
+    @test jl_eval(test_mod,
+                Expr(:let, Expr(:block),
+                     Expr(:block,
+                          Expr(:function, Expr(:call, Symbol(""), :x),
+                               Expr(:block, :x)),
+                          Expr(:call, Symbol(""), 1)))) == 1
+
+    # function arg
+    @test jl_eval(test_mod,
+                Expr(:let, Expr(:block),
+                     Expr(:block,
+                          Expr(:function, Expr(:call, :func, Symbol("")),
+                               Expr(:block, Symbol(""))),
+                          Expr(:call, :func, 2)))) == 2
+    # kwarg
+    @test jl_eval(test_mod,
+                Expr(:let, Expr(:block),
+                     Expr(:block,
+                          Expr(:function, Expr(:call, :func, Expr(:parameters, Symbol(""))),
+                               Expr(:block, Symbol(""))),
+                          Expr(:call, :func, Expr(:kw, Symbol(""), 2))))) == 2
+
+    # empty label
+    @test jl_eval(test_mod,
+                Expr(:symbolicblock, Symbol(""),
+                     Expr(:break, Symbol(""), 1))) == 1
+
+    # read empty local
+    @test jl_eval(test_mod,
+                Expr(:let, Expr(:block),
+                     Expr(:block, Expr(:local, Symbol("")),
+                          Expr(:(=), Symbol(""), 17),
+                          Symbol("")))) == 17
+
+    # read empty global
+    @test jl_eval(test_mod,
+                Expr(:block, Expr(:global, Symbol("")),
+                     Expr(:(=), Symbol(""), 7),
+                     Symbol(""))) == 7
+
+    # typed read of empty
+    @test jl_eval(test_mod,
+                Expr(:let, Expr(:block, Expr(:(=), Symbol(""), 5)),
+                     Expr(:block, Expr(:(::), Symbol(""), :Int)))) == 5
+
+    # empty in curly (read position)
+    @test jl_eval(test_mod,
+                Expr(:let, Expr(:block, Expr(:(=), Symbol(""), Int)),
+                     Expr(:block, Expr(:curly, :Vector, Symbol(""))))) == Vector{Int}
+
+    # empty in tuple (read position)
+    @test jl_eval(test_mod,
+                Expr(:let, Expr(:block, Expr(:(=), Symbol(""), 99)),
+                     Expr(:block, Expr(:tuple, Symbol(""))))) == (99,)
+
+    # isdefined on empty
+    @test jl_eval(test_mod,
+                Expr(:let, Expr(:block, Expr(:(=), Symbol(""), 1)),
+                     Expr(:block, Expr(:isdefined, Symbol("")))))
+
+    # for-loop empty iter var referenced in body
+    @test jl_eval(test_mod,
+                Expr(:let, Expr(:block, Expr(:(=), :s, 0)),
+                     Expr(:block,
+                          Expr(:for, Expr(:(=), Symbol(""), Expr(:tuple, 10, 20, 30)),
+                               Expr(:block, Expr(:(=), :s, Expr(:call, :+, :s, Symbol(""))))),
+                          :s))) == 60
+
+    # tuple destructure with empty lhs
+    @test jl_eval(test_mod,
+                Expr(:let, Expr(:block),
+                     Expr(:block, Expr(:local, Symbol("")), Expr(:local, :a),
+                          Expr(:(=), Expr(:tuple, Symbol(""), :a), Expr(:tuple, 1, 2)),
+                          Expr(:tuple, Symbol(""), :a)))) == (1, 2)
+
+    # quote of empty
+    @test jl_eval(test_mod, Expr(:quote, Symbol(""))) === Symbol("")
+end
+
 @eval test_mod libccalltest_var = "libccalltest"
 
 @testset "cglobal" begin
@@ -57,21 +142,47 @@ end
     @test cg !== C_NULL
     @test unsafe_load(cg) == 1
 
+    # the pointer-vs-name choice is syntactic, not value-based: a runtime
+    # variable holding a tuple takes the pointer form, which errors
     @eval test_mod global cglobal_tuple = (:global_var, libccalltest_var)
-    cg = JuliaLowering.include_string(test_mod, """
+    @test_throws TypeError JuliaLowering.include_string(test_mod, """
         cglobal(cglobal_tuple, Cint)
     """)
-    @test cg isa Ptr{Cint}
-    @test cg !== C_NULL
-    @test unsafe_load(cg) == 1
-    cg = JuliaLowering.include_string(test_mod, """
+    @test_throws TypeError JuliaLowering.include_string(test_mod, """
         let local_tuple = (:global_var, libccalltest_var)
             cglobal(local_tuple, Cint)
         end
     """)
+
+    # unlike the argtypes / rettype of a ccall, cglobal(name, T) should allow
+    # rettype T to be any runtime expression
+    cg = JuliaLowering.include_string(test_mod, """
+        function cglobal_runtime_type(T)
+            cglobal((:global_var, libccalltest_var), T)
+        end
+        cglobal_runtime_type(Cint)
+    """)
     @test cg isa Ptr{Cint}
-    @test cg !== C_NULL
     @test unsafe_load(cg) == 1
+
+    # invalid foreignsymbol (tuple) forms should error for cglobal
+    @test_throws ErrorException JuliaLowering.include_string(test_mod, "cglobal((:a, :b, :c))")
+    @test_throws ErrorException JuliaLowering.include_string(test_mod, "cglobal(())")
+    @test_throws TypeError JuliaLowering.include_string(test_mod, "cglobal((1,))")
+
+    # cglobal(name) with a non-static name errors, just like ccall
+    @test_throws TypeError JuliaLowering.include_string(test_mod, """
+        function cglobal_non_static1()
+            sym = (:global_var, libccalltest_var)
+            cglobal(sym)
+        end
+        cglobal_non_static1()
+    """)
+    @eval test_mod global the_sym = (:global_var, libccalltest_var)
+    @test_throws TypeError JuliaLowering.include_string(test_mod, """
+        cglobal_non_static2() = cglobal(the_sym)
+        cglobal_non_static2()
+    """)
 end
 
 # ccall
@@ -596,6 +707,17 @@ end
         shown = sprint(show, err)
         @test contains(shown, "error message 1")
         @test contains(shown, "error message 2")
+        err = try
+            new_st_name = st
+            JuliaLowering.@jl_assert(1 == 2, (st, "error message 1"), new_st_name, (st, "error message 2"))
+            nothing
+        catch err
+            err
+        end
+        @test err isa LoweringError
+        @test err.internal === true
+        shown = sprint(show, err)
+        @test contains(shown, "new_st_name")
     else
         @test nothing !== try
             JuliaLowering.@jl_assert false st

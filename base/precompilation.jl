@@ -7,6 +7,123 @@ using Base: CoreLogging, PkgId, UUID, SHA1, StaleCacheKey, parsed_toml, project_
 const Config = Pair{Cmd, Base.CacheFlags}
 const PkgConfig = Tuple{PkgId,Config}
 
+# --- Precompile jobserver (JuliaLang/julia#58591) ----------------------------
+# A token pool of size `ntokens` shared with worker subprocesses that caps total
+# CPU threads across all parallel workers: each holds one baseline token while
+# CPU-active and its AOT imaging phase draws extra codegen threads from the same
+# pool. Only one pool exists per process; a concurrent session (e.g. from package
+# loading) whose create fails joins the existing pool instead, holding baselines
+# against it without tearing it down. Returns:
+#   :created -- created and owns the pool (must tear it down)
+#   :joined  -- sharing a pool another session in this process owns
+#   :none    -- no pool available; run uncoordinated
+function setup_precompile_jobserver!(ntokens::Int)
+    namep = ccall(:jl_precompile_jobserver_create, Ptr{UInt8}, (Cint,), ntokens)
+    if namep != C_NULL
+        ENV["JULIA_PRECOMPILE_JOBSERVER"] = unsafe_string(namep)
+        return :created
+    end
+    # create failed: join an existing pool, else run uncoordinated (OS refused it)
+    ccall(:jl_precompile_jobserver_active, Cint, ()) != 0 ? :joined : :none
+end
+
+function teardown_precompile_jobserver!()
+    ccall(:jl_precompile_jobserver_destroy, Cvoid, ())
+    delete!(ENV, "JULIA_PRECOMPILE_JOBSERVER")
+    return nothing
+end
+
+# Bounds concurrently CPU-active workers. The `Base.Semaphore` enforces the
+# process-count cap; when the jobserver is active each worker also holds one
+# baseline token from the shared pool while CPU-active, balancing worker
+# baselines and imaging codegen threads against one budget. A worker's main
+# thread sleeps during imaging, so its baseline token doubles as that phase's
+# first codegen thread.
+#
+# Baseline acquisition is best-effort: it proceeds tokenless when the pool is
+# torn down, cancelled, or starved past a timeout (tokens leak if a worker is
+# killed mid-imaging), degrading to bounded oversubscription instead of hanging.
+# `ntokens` tracks tokens actually held, so releases only post back while it is
+# positive and tokenless acquires can never over-post.
+mutable struct WorkerLimiter
+    const sem::Base.Semaphore
+    const jobserver::Bool
+    @atomic ntokens::Int
+end
+WorkerLimiter(sem::Base.Semaphore, jobserver::Bool) = WorkerLimiter(sem, jobserver, 0)
+
+# How long an acquire keeps polling for a baseline token before proceeding
+# without one. Generous enough that it is only ever hit when the pool has been
+# starved abnormally (leaked tokens), not during routine imaging contention.
+const JOBSERVER_BASELINE_TIMEOUT_S = 240.0
+
+# Try to take one baseline token from the shared pool, with a yielding backoff
+# so the task scheduler keeps running while the pool is drained by imaging
+# workers. Returns whether a token was acquired; bails out tokenless when the
+# jobserver reports inactive (torn down), `cancel` returns true, or the timeout
+# expires.
+function _jobserver_acquire_baseline(w::WorkerLimiter; cancel=Returns(false))
+    delay = 0.005
+    waited = 0.0
+    while true
+        r = ccall(:jl_precompile_jobserver_acquire, Cint, ())
+        if r == 1
+            @atomic w.ntokens += 1
+            return true
+        end
+        if r == -1 || cancel()
+            return false
+        end
+        if waited >= JOBSERVER_BASELINE_TIMEOUT_S
+            @debug "Precompilation jobserver baseline token unavailable for $(waited)s; proceeding without one"
+            return false
+        end
+        Base.sleep(delay)
+        waited += delay
+        delay = min(2 * delay, 0.1)
+    end
+end
+
+function _jobserver_release_baseline(w::WorkerLimiter)
+    while true
+        old = @atomic w.ntokens
+        old == 0 && return false
+        (; success) = @atomicreplace w.ntokens old => old - 1
+        if success
+            ccall(:jl_precompile_jobserver_release, Cvoid, ())
+            return true
+        end
+    end
+end
+
+function Base.acquire(w::WorkerLimiter; cancel=Returns(false))
+    Base.acquire(w.sem)
+    if w.jobserver
+        try
+            _jobserver_acquire_baseline(w; cancel)
+        catch
+            Base.release(w.sem)
+            rethrow()
+        end
+    end
+    return nothing
+end
+
+function Base.release(w::WorkerLimiter)
+    w.jobserver && _jobserver_release_baseline(w)
+    Base.release(w.sem)
+    return nothing
+end
+
+function Base.acquire(f, w::WorkerLimiter; cancel=Returns(false))
+    Base.acquire(w; cancel)
+    try
+        return f()
+    finally
+        Base.release(w)
+    end
+end
+
 ## PrecompileJob
 
 # Per-package compilation status and associated state.
@@ -27,7 +144,9 @@ mutable struct PrecompileJob
     had_pid::Bool  # sticky: true once a subprocess was actually spawned for this job
     lock_holder::String
     waiting_for_bg::Bool
-    PrecompileJob() = new(JOB_PENDING, 0.0, "", IOBuffer(), Int32(0), false, "", false)
+    verbose_timing::String  # raw payload from the worker subprocess; surfaced in verbose mode
+    peak_rss_bytes::UInt64  # max RSS observed by `poll_process_stats!`; 0 on unsupported platforms
+    PrecompileJob() = new(JOB_PENDING, 0.0, "", IOBuffer(), Int32(0), false, "", false, "", UInt64(0))
 end
 
 is_pending(j::PrecompileJob)    = j.status == JOB_PENDING
@@ -86,7 +205,7 @@ Base.@kwdef mutable struct PrecompileSession
     _from_loading::Bool
     time_start::UInt64
     print_lock::ReentrantLock
-    parallel_limiter::Base.Semaphore
+    parallel_limiter::WorkerLimiter
     num_tasks::Int
     start_loaded_modules::Set{PkgId}
     requested_pkgids::Vector{PkgId}
@@ -194,6 +313,79 @@ function printpkgstyle(io, header, msg; color=:green)
 end
 
 timing_string(t) = string(lpad(round(t, digits = 1), 6), " s")
+
+# Parse the marker payload emitted by `Base.include_package_for_output` and
+# format an inline breakdown (include / compilation / image-gen seconds,
+# cache file size and cached method count) appended to the per-package timing
+# line in verbose mode. Column labels are emitted once via
+# `format_verbose_timing_header`. Returns an empty string if the payload is
+# missing or unparsable.
+function format_verbose_timing(payload::AbstractString, total_seconds::Float64, cache_bytes::Int, peak_rss_bytes::UInt64, hascolor::Bool)
+    isempty(payload) && return ""
+    include_ns = compilation_ns = deps_ns = UInt64(0)
+    methods = 0
+    seen = false
+    for tok in split(payload)
+        m = match(r"^(include|compilation|deps)_ns=(\d+)$", tok)
+        if m !== nothing
+            v = parse(UInt64, m.captures[2])
+            tag = m.captures[1]
+            if tag == "include"
+                include_ns = v; seen = true
+            elseif tag == "compilation"
+                compilation_ns = v
+            else
+                deps_ns = v
+            end
+            continue
+        end
+        m = match(r"^methods=(\d+)$", tok)
+        m === nothing || (methods = parse(Int, m.captures[1]))
+    end
+    seen || return ""
+    inc_s = include_ns / 1e9
+    comp_s = compilation_ns / 1e9
+    deps_s = deps_ns / 1e9
+    img_s = max(total_seconds - inc_s, 0.0)
+    dim(s, isz) = isz ? color_string(s, :light_black, hascolor) : s
+    function col(x)
+        s = string(round(x, digits = 2))
+        dot = findfirst('.', s)
+        if dot === nothing
+            s *= ".00"
+        elseif length(s) - dot == 1
+            s *= "0"
+        end
+        dim(string(lpad(s, 6), "s"), x < 0.005)
+    end
+    cache_mb = cache_bytes / 1024^2
+    cache_str = cache_bytes <= 0 ? dim(lpad("-", 8), true) :
+                                   string(lpad(round(cache_mb, digits = 1), 6), "MB")
+    peak_mb = peak_rss_bytes / 1024^2
+    peak_str = peak_rss_bytes == 0 ? dim(lpad("-", 7), true) :
+                                     string(lpad(round(Int, peak_mb), 5), "MB")
+    methods_str = dim(lpad(methods, 7), methods == 0)
+    bar = " │ "
+    return string(bar, col(inc_s), "  ", col(deps_s), "  ", col(comp_s),
+                  bar, methods_str, "  ", col(img_s), "  ", cache_str, "  ", peak_str)
+end
+
+# Header that labels the columns produced by `format_verbose_timing`. The leading
+# 8 spaces account for `timing_string`'s width so columns line up.
+format_verbose_timing_header() = "   total │ include   (deps)   (comp) │ methods  img-gen     cache  ~pk-rss"
+
+# Sum the on-disk size of the `.ji` cache file and (optionally) its companion
+# pkgimage (`.so`/`.dylib`/`.dll`). Returns 0 if files are missing.
+function _precompile_cache_bytes(cf_jl::AbstractString, cf_so::Union{Nothing,AbstractString})
+    total = 0
+    try
+        isfile(cf_jl) && (total += filesize(cf_jl))
+        cf_so === nothing || (isfile(cf_so) && (total += filesize(cf_so)))
+    catch
+    end
+    return total
+end
+
 
 
 function color_string(cstr::String, col::Union{Int64, Symbol}, hascolor)
@@ -880,6 +1072,25 @@ precompiles only the given packages and their dependencies (unless
   each package compilation, but only if compilation might have succeeded.
   Disables fancy progress bar output (timing is shown in simple text mode).
 
+- `verbose::Bool`: When `true` (not default), enables verbose timing mode: implies
+  `timing=true` and appends a per-package breakdown to each completion line with
+  these columns:
+    * `total`   — total wall-clock time for the worker subprocess.
+    * `include` — time spent in `Base.include` of the package source.
+    * `(deps)`  — subset of `include`: time spent loading already-precompiled
+                  dependencies from disk (via `require`).
+    * `(comp)`  — subset of `include`: cumulative compile time (type inference
+                  and code generation) reported by `cumulative_compile_time_ns`.
+    * `methods` — number of newly-inferred methods cached for this package.
+    * `img-gen` — `total - include`: post-include work (native-code generation,
+                  serialization, writing the `.ji` and pkgimage to disk).
+    * `cache`   — combined on-disk size of the `.ji` cache and any pkgimage.
+    * `~pk-rss` — approximate peak resident set size of the worker subprocess.
+                  The leading `~` indicates the value is sampled (every ~0.5 s)
+                  rather than observed continuously, so transient peaks between
+                  samples may be missed. Linux/macOS only, `-` elsewhere.
+  Values under 5 ms and zero counts are dimmed for readability.
+
 - `_from_loading::Bool`: Internal flag indicating the call originated from the
   package loading system. When `true` (not default): returns early instead of
   throwing when packages are not found; suppresses progress messages when not
@@ -940,7 +1151,9 @@ precompilation:
 - Packages with `__precompile__(false)` are skipped if they are from loading to
   avoid repeated work on every session.
 - Parallel compilation is controlled by `JULIA_NUM_PRECOMPILE_TASKS` environment variable
-  (defaults to CPU_THREADS + 1, capped at 16, halved on Windows).
+  (defaults to CPU_THREADS + 1, capped at 16, halved on Windows). The total CPU-thread
+  budget shared across those workers (worker baselines plus native-image codegen threads)
+  is controlled by `JULIA_PRECOMPILE_THREADS` (defaults to CPU_THREADS + 1).
 - Extensions are precompiled when all their triggers are available in the environment.
 """
 function precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}}=String[];
@@ -948,15 +1161,21 @@ function precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}}=String[];
                         strict::Bool = false,
                         warn_loaded::Bool = true,
                         timing::Bool = false,
+                        verbose::Bool = false,
                         _from_loading::Bool=false,
                         configs::Union{Config,Vector{Config}}=(``=>Base.CacheFlags()),
                         io::IO=stderr,
-                        # asking for timing disables fancy mode, as timing is shown in non-fancy mode
-                        fancyprint::Bool = can_fancyprint(io) && !timing,
+                        # asking for timing disables fancy mode, as timing is shown in non-fancy mode;
+                        # verbose implies timing (see below), so also disables fancy mode
+                        fancyprint::Bool = can_fancyprint(io) && !timing && !verbose,
                         manifest::Bool=false,
                         ignore_loaded::Bool=true,
                         detachable::Bool=false)
-    @debug "precompilepkgs called with" pkgs internal_call strict warn_loaded timing _from_loading configs fancyprint manifest ignore_loaded detachable
+    # verbose timing mode requires timing to be enabled (per-package breakdown
+    # is only shown alongside timing lines in non-fancy mode)
+    verbose && (timing = true)
+    @debug "precompilepkgs called with" pkgs internal_call strict warn_loaded timing verbose _from_loading configs fancyprint manifest ignore_loaded detachable
+    verbose && (@lock BG BG.verbose = true)
     # monomorphize this to avoid latency problems
     _precompilepkgs(pkgs, internal_call, strict, warn_loaded, timing, _from_loading,
                    configs isa Vector{Config} ? configs : [configs],
@@ -1583,11 +1802,35 @@ function poll_process_stats!(cpu_pcts::Dict{Int32, Float64}, rss::Dict{Int32, UI
         prev_cpu_times[pid] = stats.cpu_ns
         pct = dt > 0 ? (delta / 1.0e9) / dt * 100.0 : 0.0
         cpu_pcts[pid] = min(pct, 999.9)
-        stats.rss_bytes > 0 && (rss[pid] = stats.rss_bytes)
+        if stats.rss_bytes > 0
+            rss[pid] = stats.rss_bytes
+            stats.rss_bytes > job.peak_rss_bytes && (job.peak_rss_bytes = stats.rss_bytes)
+        end
     end
     pids_set = Set(job.pid for (_, job) in jobs if has_pid(job))
     for pid in keys(prev_cpu_times)
         pid in pids_set || delete!(prev_cpu_times, pid)
+    end
+    return
+end
+
+# Lightweight peak-RSS-only sampler used in non-fancy verbose timing mode,
+# where the live progress UI (which would otherwise drive `poll_process_stats!`)
+# is not running but the per-package verbose timing column still wants peak RSS.
+function sample_peak_rss!(jobs::Dict{PkgConfig, PrecompileJob})
+    @static if !(Sys.islinux() || Sys.isapple())
+        return
+    end
+    seen = Set{Int32}()
+    for (_, job) in jobs
+        has_pid(job) || continue
+        pid = job.pid
+        pid in seen && continue
+        push!(seen, pid)
+        stats = process_stats(pid)
+        if stats.rss_bytes > job.peak_rss_bytes
+            job.peak_rss_bytes = stats.rss_bytes
+        end
     end
     return
 end
@@ -1643,6 +1886,7 @@ function spawn_print_loop!(s::PrecompileSession)
             @lock s.print_lock begin
                 if BG.monitoring
                     printpkgstyle(s.logio, :Precompiling, s.target)
+                    BG.verbose && println(s.logio, format_verbose_timing_header())
                 end
             end
             t = Timer(0; interval=1/10)
@@ -1789,6 +2033,10 @@ function precompilepkgs_monitor_std(s::PrecompileSession, pkg_config, pipe, sing
     thistaskwaiting = false
     while !eof(pipe)
         str = readline(pipe, keep=true)
+        if startswith(str, Base.PRECOMPILE_VERBOSE_TIMING_MARKER)
+            s.jobs[pkg_config].verbose_timing = strip(str)
+            continue
+        end
         if single_requested_pkg && (liveprinting || !isempty(str))
             BG.monitoring && @lock s.print_lock begin
                 if !liveprinting
@@ -1849,11 +2097,11 @@ function precompile_pkgs_maybe_cachefile_lock(f, s::PrecompileSession, pkg_confi
             # wait until the lock is available
             cachefile = @invokelatest Base.mkpidlock_hook(() -> begin
                     job.lock_holder = ""
-                    Base.acquire(f, s.parallel_limiter)
+                    Base.acquire(f, s.parallel_limiter; cancel=() -> should_stop(s))
                 end,
                 pidfile; stale_age)
         finally
-            Base.acquire(s.parallel_limiter) # re-acquire so the outer release is balanced
+            Base.acquire(s.parallel_limiter; cancel=() -> should_stop(s)) # re-acquire so the outer release is balanced
         end
     end
     return cachefile
@@ -1905,7 +2153,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                     push!(freshpaths, freshpath)
                 end
                 if !circular && is_stale
-                    Base.acquire(s.parallel_limiter)
+                    Base.acquire(s.parallel_limiter; cancel=() -> should_stop(s))
                     is_serial_dep = pkg in s.serial_deps
                     is_project_dep = pkg in s.project_deps
 
@@ -1918,6 +2166,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                         @lock s.print_lock begin
                             if !s.fancyprint && isempty(s.pkg_queue) && BG.monitoring
                                 printpkgstyle(s.logio, :Precompiling, s.target)
+                                BG.verbose && println(s.logio, format_verbose_timing_header())
                             end
                             push!(s.pkg_queue, pkg_config)
                         end
@@ -1943,7 +2192,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                             t = @elapsed ret = begin
                                 Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !s.ignore_loaded;
                                                   flags=flags_, cacheflags, loadable_exts, signal_channel=make_signal_channel(),
-                                                  pid_channel=pid_ch)
+                                                  pid_channel=pid_ch, report_timing=true)
                             end
                         else
                             fullname = full_name(s.ext_to_parent, pkg)
@@ -1968,7 +2217,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                                 end
                                 Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !s.ignore_loaded;
                                                   flags=flags_, cacheflags, loadable_exts, signal_channel=make_signal_channel(),
-                                                  pid_channel=pid_ch)
+                                                  pid_channel=pid_ch, report_timing=true)
                             end
                         end
                         if ret isa Exception
@@ -1977,8 +2226,14 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                                 println(s.logio, timing_string(t), color_string("  ? ", Base.warn_color(), s.hascolor), name)
                             end
                         else
+                            cache_bytes = 0
+                            if ret !== nothing
+                                cf_jl, cf_so = ret::Tuple{String, Union{Nothing, String}}
+                                cache_bytes = _precompile_cache_bytes(cf_jl, cf_so)
+                            end
                             !s.fancyprint && BG.monitoring && @lock s.print_lock begin
-                                println(s.logio, timing_string(t), color_string("  ✓ ", loaded ? Base.warn_color() : :green, s.hascolor), name)
+                                verbose_prefix = BG.verbose ? format_verbose_timing(s.jobs[pkg_config].verbose_timing, t, cache_bytes, s.jobs[pkg_config].peak_rss_bytes, s.hascolor) : ""
+                                println(s.logio, timing_string(t), verbose_prefix, color_string("  ✓ ", loaded ? Base.warn_color() : :green, s.hascolor), name)
                             end
                             if ret !== nothing
                                 mark_recompiled!(s.jobs[pkg_config])
@@ -2223,7 +2478,18 @@ function report_precompile_results!(s::PrecompileSession)
                     plural1 = length(s.configs) > 1 ? "dependency configurations" : s.n_loaded == 1 ? "dependency" : "dependencies"
                     plural2 = s.n_loaded == 1 ? "a different version is" : "different versions are"
                     plural3 = s.n_loaded == 1 ? "" : "s"
-                    loaded_names = join(sort!([full_name(s.ext_to_parent, p) for p in s.loaded_pkgs]), ", ", " and ")
+                    loaded_names_vec = sort!([full_name(s.ext_to_parent, p) for p in s.loaded_pkgs])
+                    max_loaded_names = 5
+                    if length(loaded_names_vec) > max_loaded_names
+                        loaded_names = string(
+                            join(first(loaded_names_vec, max_loaded_names), ", ", " and "),
+                            ", and ",
+                            length(loaded_names_vec) - max_loaded_names,
+                            " more"
+                        )
+                    else
+                        loaded_names = join(loaded_names_vec, ", ", " and ")
+                    end
                     # compute how many precompiled packages transitively depend on the loaded packages
                     loaded_set = Set{PkgId}(s.loaded_pkgs)
                     n_affected = let reverse_deps = Dict{PkgId, Vector{PkgId}}()
@@ -2445,10 +2711,24 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
 
     print_lock = io.io isa Base.LibuvStream ? io.io.lock::ReentrantLock : ReentrantLock()
 
+    # Size the shared CPU-thread budget for the parallel workers. Defaults to
+    # `EFFECTIVE_CPU_THREADS + 1` (one baseline per worker plus a spare so a lone
+    # worker can fill every core during imaging); `JULIA_PRECOMPILE_THREADS`
+    # overrides it. Skipped for a single task or when JULIA_IMAGE_THREADS pins a
+    # per-worker count (a hard override that bypasses the shared budget).
+    precompile_jobserver = if num_tasks > 1 && !haskey(ENV, "JULIA_IMAGE_THREADS")
+        default_budget = Sys.EFFECTIVE_CPU_THREADS + 1
+        budget = max(1, something(tryparse(Int, get(ENV, "JULIA_PRECOMPILE_THREADS", string(default_budget))), default_budget))
+        setup_precompile_jobserver!(budget)
+    else
+        :none
+    end
+
     s = PrecompileSession(;
         configs, io, logio, logcalls, fancyprint, hascolor,
         warn_loaded, ignore_loaded, internal_call, strict, _from_loading,
-        time_start, print_lock, parallel_limiter=Base.Semaphore(num_tasks), num_tasks,
+        time_start, print_lock,
+        parallel_limiter=WorkerLimiter(Base.Semaphore(num_tasks), precompile_jobserver !== :none), num_tasks,
         start_loaded_modules=Set{PkgId}(keys(Base.loaded_modules)), requested_pkgids,
         direct_deps=graph.direct_deps,
         ext_to_parent=graph.ext_to_parent, parent_to_exts=graph.parent_to_exts,
@@ -2461,6 +2741,16 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
 
     # Start print loop
     t_print = spawn_print_loop!(s)
+    # In non-fancy verbose timing mode, the print loop exits immediately and so
+    # `poll_process_stats!` never runs; spawn a lightweight peak-RSS sampler so
+    # the `~pk-rss` column in the verbose timing line can be populated.
+    peak_rss_timer = if !fancyprint && (@lock BG BG.verbose)
+        Timer(0.1; interval=0.5, spawn=true) do _
+            @lock s.print_lock sample_peak_rss!(s.jobs)
+        end
+    else
+        nothing
+    end
 
     try
         if !_from_loading
@@ -2495,6 +2785,8 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
         # Ensure print loop exits even on exception
         s.interrupted_or_done = true
         notify(s.first_started)
+        peak_rss_timer === nothing || close(peak_rss_timer)
+        precompile_jobserver === :created && teardown_precompile_jobserver!()
     end
 end
 
