@@ -4,18 +4,9 @@ Julia keeps canonical project-local Agent Skills under
 `doc/src/devdocs/agents/skills/`. These files follow the
 [Agent Skills](https://agentskills.io) `SKILL.md` format.
 
-The `.agents/skills/` and `.claude/skills/` directories contain checked-in
-mirror copies for automatic discovery by skills-aware agents.
-Do not edit those copies directly. To update a skill, edit the canonical
-`SKILL.md` under `doc/src/devdocs/agents/skills/`, then refresh and check the
-mirrors:
-
-```sh
-make sync-agent-skills
-make check-agent-skills
-```
-
-CI also checks that the mirror copies match the canonical files.
+The `.agents/skills/` and `.claude/skills/` directories contain symlinks for
+automatic discovery by skills-aware agents. Do not edit those discovery entries
+directly; edit the canonical `SKILL.md` under `doc/src/devdocs/agents/skills/`.
 
 The documentation build renders each canonical `SKILL.md` with its Agent Skill metadata:
 

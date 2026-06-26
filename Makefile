@@ -175,22 +175,6 @@ else
 	$(warn "Skipping whitespace fix because git is unavailable")
 endif
 
-.PHONY: check-agent-skills
-check-agent-skills:
-ifneq ($(NO_GIT), 1)
-	@PATH="$(PATH):$(dir $(JULIA_EXECUTABLE))" julia $(call cygpath_w,$(JULIAHOME)/contrib/check-agent-skills.jl)
-else
-	$(warn "Skipping Agent Skill mirror check because git is unavailable")
-endif
-
-.PHONY: sync-agent-skills
-sync-agent-skills:
-ifneq ($(NO_GIT), 1)
-	@PATH="$(PATH):$(dir $(JULIA_EXECUTABLE))" julia $(call cygpath_w,$(JULIAHOME)/contrib/check-agent-skills.jl) --fix
-else
-	$(warn "Skipping Agent Skill mirror sync because git is unavailable")
-endif
-
 .PHONY: release-candidate
 release-candidate: release testall
 	@$(JULIA_EXECUTABLE) $(JULIAHOME)/contrib/add_license_to_files.jl #add license headers

@@ -58,10 +58,10 @@ make sure to take them into account.
 Detailed, situational procedures are provided as Agent Skills following the
 [agentskills.io](https://agentskills.io) open standard. The canonical location is
 `doc/src/devdocs/agents/skills/`; `.agents/skills/` and `.claude/skills/` hold
-checked-in mirror copies so skills-aware agents can discover them automatically.
-Agents that support the standard load each skill's `description` automatically
-and pull in the full `SKILL.md` when relevant; otherwise read the canonical
-`SKILL.md` directly.
+symlinks so skills-aware agents can discover them automatically. Agents that
+support the standard load each skill's `description` automatically and pull in
+the full `SKILL.md` when relevant; otherwise read the canonical `SKILL.md`
+directly.
 
 - [`doc/src/devdocs/agents/skills/doctests/`](doc/src/devdocs/agents/skills/doctests/SKILL.md) — writing and verifying `jldoctest` code blocks.
 - [`doc/src/devdocs/agents/skills/test-changes/`](doc/src/devdocs/agents/skills/test-changes/SKILL.md) — running and updating tests after changing them.
