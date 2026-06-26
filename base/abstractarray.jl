@@ -1120,29 +1120,69 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
 end
 
 function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray)
+    @_propagate_inbounds_meta
     copyto!(dest, dstart, src, first(LinearIndices(src)), length(src))
 end
 
 function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray, sstart::Integer)
+    @_propagate_inbounds_meta
     srcinds = LinearIndices(src)
-    checkbounds(Bool, srcinds, sstart) || throw(BoundsError(src, sstart))
+    @boundscheck checkbounds(Bool, srcinds, sstart) || throw(BoundsError(src, sstart))
     copyto!(dest, dstart, src, sstart, last(srcinds)-sstart+1)
 end
 
 function copyto!(dest::AbstractArray, dstart::Integer,
                  src::AbstractArray, sstart::Integer,
                  n::Integer)
+    @inline
     n == 0 && return dest
     n < 0 && throw(ArgumentError(LazyString("tried to copy n=",
         n," elements, but n should be non-negative")))
     destinds, srcinds = LinearIndices(dest), LinearIndices(src)
-    (checkbounds(Bool, destinds, dstart) && checkbounds(Bool, destinds, dstart+n-1)) || throw(BoundsError(dest, dstart:dstart+n-1))
-    (checkbounds(Bool, srcinds, sstart)  && checkbounds(Bool, srcinds, sstart+n-1))  || throw(BoundsError(src,  sstart:sstart+n-1))
+    @boundscheck (checkbounds(Bool, destinds, dstart) && checkbounds(Bool, destinds, dstart+n-1)) || throw(BoundsError(dest, dstart:dstart+n-1))
+    @boundscheck (checkbounds(Bool, srcinds, sstart)  && checkbounds(Bool, srcinds, sstart+n-1))  || throw(BoundsError(src,  sstart:sstart+n-1))
     src′ = unalias(dest, src)
     @inbounds for i = 0:n-1
         dest[dstart+i] = src′[sstart+i]
     end
     return dest
+end
+
+function copyto!(dest::AbstractArray{T,N}, dstart::NTuple{N,Integer}, src::AbstractArray) where {T,N}
+    @_propagate_inbounds_meta
+    copyto!(dest, dstart, src,
+            ntuple(i -> first(axes(src, i)), Val(N)),
+            ntuple(i -> size(src, i), Val(N)))
+end
+
+function copyto!(dest::AbstractArray{T,N}, dstart::NTuple{N,Integer},
+                 src::AbstractArray, sstart::NTuple{N,Integer},
+                 n::NTuple{N,Integer}) where {T,N}
+    @inline
+    all(>=(0), n) || throw(ArgumentError(LazyString("tried to copy with n=",
+        n,", but all entries should be non-negative")))
+    any(==(0), n) && return dest
+    @boundscheck checkbounds(dest, CartesianIndex(dstart))
+    @boundscheck checkbounds(dest, CartesianIndex(ntuple(i -> dstart[i] + n[i] - 1, Val(N))))
+    @boundscheck checkbounds(src, CartesianIndex(sstart))
+    @boundscheck checkbounds(src, CartesianIndex(ntuple(i -> sstart[i] + n[i] - 1, Val(N))))
+    src′ = unalias(dest, src)
+    _copyto_srcread!(IndexStyle(src′), dest, dstart, src′, sstart, n)
+    return dest
+end
+
+@inline function _copyto_srcread!(::IndexLinear, dest::AbstractArray{T,N}, dstart, src, sstart, n) where {T,N}
+    k = LinearIndices(src)[sstart...]
+    @inbounds for I in CartesianIndices(n)
+        dest[ntuple(i -> dstart[i] + I[i] - 1, Val(N))...] = src[k]
+        k += 1
+    end
+end
+
+@inline function _copyto_srcread!(::IndexCartesian, dest::AbstractArray{T,N}, dstart, src, sstart, n) where {T,N}
+    @inbounds for I in CartesianIndices(n)
+        dest[ntuple(i -> dstart[i] + I[i] - 1, Val(N))...] = src[ntuple(i -> sstart[i] + I[i] - 1, Val(N))...]
+    end
 end
 
 function copy(a::AbstractArray)
@@ -2801,36 +2841,20 @@ end
 
 function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::Vector{Int}, d1::Int, d2::Int, as::Tuple) where {T, N}
     N > 1 || throw(ArgumentError("dimensions of the destination array must be at least 2"))
-    length(scratch1) == length(scratch2) == N ||
-        throw(ArgumentError("scratch vectors must have as many elements as the destination array has dimensions"))
+    length(scratch1) == N ||
+        throw(ArgumentError("scratch vector must have as many elements as the destination array has dimensions"))
     0 < d1 < 3 &&
     0 < d2 < 3 &&
     d1 != d2 ||
         throw(ArgumentError("d1 and d2 must be either 1 or 2, exclusive."))
-    outdimsprod = cumprod(size(A))
     offsets = scratch1
-    inneroffsets = scratch2
     for a ∈ as
-        startindex = CartesianIndex(ntuple(i -> offsets[i] + 1, Val(N)))
         if isa(a, AbstractArray)
             if !isempty(a)
-                if length(a) > 4
-                    endindex = CartesianIndex(ntuple(i -> offsets[i] + cat_size(a, i), Val(N)))
-                    @inbounds A[startindex:endindex] = a
-                else
-                    for ai ∈ a
-                        @inbounds Ai = hvncat_calcindex(offsets, inneroffsets, outdimsprod, N)
-                        @inbounds A[Ai] = ai
-                        @inbounds for j ∈ 1:N
-                            inneroffsets[j] += 1
-                            inneroffsets[j] < cat_size(a, j) && break
-                            inneroffsets[j] = 0
-                        end
-                    end
-                end
+                @inbounds copyto!(A, ntuple(i -> offsets[i] + 1, Val(N)), a)
             end
         else
-            @inbounds A[startindex] = a
+            @inbounds A[CartesianIndex(ntuple(i -> offsets[i] + 1, Val(N)))] = a
         end
 
         @inbounds for i ∈ (d1, d2, 3:N...)
@@ -2839,17 +2863,6 @@ function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::V
             offsets[i] = 0
         end
     end
-end
-
-@propagate_inbounds function hvncat_calcindex(offsets::Vector{Int}, inneroffsets::Vector{Int},
-                                                outdimsprod::NTuple{N, Int}, nd::Int) where {N}
-    Ai = inneroffsets[1] + offsets[1] + 1
-    for j ∈ 2:nd
-        increment = inneroffsets[j] + offsets[j]
-        increment *= outdimsprod[j - 1]
-        Ai += increment
-    end
-    Ai
 end
 
 """
