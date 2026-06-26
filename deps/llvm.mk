@@ -257,6 +257,9 @@ ifeq ($(shell test $(LLVM_VER_MAJ) -lt 19 && echo true),true)
 $(eval $(call LLVM_PATCH,llvm-ittapi-cmake))
 endif
 
+# Fix excessive VMA count in JITLink memory mapper (llvm/llvm-project#63236)
+$(eval $(call LLVM_PATCH,llvm-jitlink-memprot-pools))
+
 ifeq ($(USE_SYSTEM_ZLIB), 0)
 $(LLVM_BUILDDIR_withtype)/build-configured: | $(build_prefix)/manifest/zlib
 endif
