@@ -1255,6 +1255,7 @@ julia> .![true false true]
 length(a::Array{T,1}) where {T} = getfield(getfield(a, :size), 1)
 const C_NULL = bitcast(Ptr{Cvoid}, 0)
 has_typevar(@nospecialize(t), v::TypeVar) = ccall(:jl_has_typevar, Int32, (Any, Any), t, v) !== Int32(0)
+var_occurs_covariant_only(@nospecialize(t), v::TypeVar) = ccall(:jl_var_occurs_covariant_only, Int32, (Any, Any), t, v) !== Int32(0)
 
 # Default constructor generation for structs without explicit inner constructors.
 # Called by lowered code from struct definitions (both flisp and JuliaLowering).
