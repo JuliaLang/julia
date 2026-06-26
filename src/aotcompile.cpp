@@ -858,14 +858,21 @@ static void aot_link_output(jl_codegen_output_t &out)
             funcs = {JL_INVOKE_ARGS, nullptr, f};
         }
 
+        Value *callee = funcs.specptr;
         if (funcs.invoke_api != api) {
-            assert(api == JL_INVOKE_SPECSIG); // Only possibility right now
-            Function *f = emit_specsig_to_fptr1(out, ci, funcs.specptr);
-            funcs.invoke_api = JL_INVOKE_SPECSIG;
-            funcs.specptr = f;
+            if (api == JL_INVOKE_SPECSIG) {
+                callee = emit_specsig_to_fptr1(out, ci, funcs.specptr);
+            }
+            else if (api == JL_INVOKE_ARGS) {
+                assert(funcs.invoke);
+                callee = funcs.invoke;
+            }
+            else {
+                assert(false);
+            }
         }
 
-        target.decl->replaceAllUsesWith(funcs.specptr);
+        target.decl->replaceAllUsesWith(callee);
         target.decl->eraseFromParent();
     }
 }
