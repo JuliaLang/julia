@@ -15,6 +15,7 @@ extern "C" {
 #endif
 
 struct _jl_tls_states_t;
+struct _jl_task_t;
 struct _jl_value_t;
 struct _jl_weakref_t;
 struct _jl_datatype_t;
@@ -158,6 +159,8 @@ JL_DLLEXPORT const char* jl_gc_active_impl(void);
 // each GC should implement it but it will most likely not be used by other code in the runtime.
 // It still needs to be annotated with JL_DLLEXPORT since it is called from Rust by MMTk.
 JL_DLLEXPORT void jl_gc_sweep_stack_pools_and_mtarraylist_buffers(jl_ptls_t ptls) JL_NOTSAFEPOINT;
+// Notify the GC that a task is resuming execution on a mutator thread.
+void jl_gc_notify_task_resume(struct _jl_task_t *task) JL_NOTSAFEPOINT;
 
 // ========================================================================= //
 // Metrics

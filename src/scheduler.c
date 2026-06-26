@@ -594,6 +594,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                 start_cycles = 0;
                 uv_mutex_unlock(&ptls->sleep_lock);
                 JULIA_DEBUG_SLEEPWAKE( ptls->sleep_leave = cycleclock() );
+                jl_gc_notify_task_resume(ct);
                 jl_gc_safe_leave(ptls, gc_state); // contains jl_gc_safepoint
                 if (task) {
                     assert(task == wait_empty);
