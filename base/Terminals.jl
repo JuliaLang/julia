@@ -16,6 +16,8 @@ export
     cmove_line_up,
     cmove_right,
     cmove_up,
+    csave,
+    crestore,
     disable_bracketed_paste,
     enable_bracketed_paste,
     end_keypad_transmit_mode,
@@ -31,6 +33,7 @@ import Base:
     flush,
     pipe_reader,
     pipe_writer
+    active_repl
 
 ## AbstractTerminal: abstract supertype of all terminals ##
 
@@ -41,61 +44,88 @@ abstract type AbstractTerminal <: Base.AbstractPipe end
 abstract type TextTerminal <: AbstractTerminal end
 
 # Terminal interface:
-pipe_reader(::TextTerminal) = error("Unimplemented")
-pipe_writer(::TextTerminal) = error("Unimplemented")
-displaysize(::TextTerminal) = error("Unimplemented")
+pipe_reader(::TextTerminal=active_repl.t) = error("Unimplemented")
+pipe_writer(::TextTerminal=active_repl.t) = error("Unimplemented")
+displaysize(::TextTerminal=active_repl.t) = error("Unimplemented")
 cmove(t::TextTerminal, x, y) = error("Unimplemented")
-getX(t::TextTerminal) = error("Unimplemented")
-getY(t::TextTerminal) = error("Unimplemented")
-pos(t::TextTerminal) = (getX(t), getY(t))
+cmove(x, y) = cmove(active_repl.t, x, y)
+
+"""
+    csave()
+    csave(t)
+Save the cursor position in TextTerminal `t`. If
+`t` is not provided, it defaults to `Base.active_repl.t`.
+Note that if this is run in the REPL, the cursor moves as it is run,
+and the final position is the one saved. This means that
+the saved position is just after "julia>" on the next line.
+"""
+csave(t::TextTerminal=active_repl.t) = error("Unimplemented")
+
+"""
+    crestore()
+    crestore(t)
+Restore the the cursor position in TextTerminal `t`to the
+position set by `csave`. If `t` is not provided, it defaults
+to `Base.active_repl.t`.
+Note that after the cursor position is restores, anything
+to the right it on the same line is cleared.
+"""
+crestore(t::TextTerminal=active_repl.t) = error("Unimplemented")
+
+getX(t::TextTerminal=active_repl.t) = error("Unimplemented")
+getY(t::TextTerminal=active_repl.t) = error("Unimplemented")
+pos(t::TextTerminal=active_repl.t) = (getX(t), getY(t))
 
 # Relative moves (Absolute position fallbacks)
 cmove_up(t::TextTerminal, n) = cmove(getX(t), max(1, getY(t)-n))
-cmove_up(t) = cmove_up(t, 1)
+cmove_up(n=1) = cmove_up(Base.current_repl.t, n)
 
 cmove_down(t::TextTerminal, n) = cmove(getX(t), max(height(t), getY(t)+n))
-cmove_down(t) = cmove_down(t, 1)
+cmove_down(n=1) = cmove_down(Base.current_repl.t, n)
 
 cmove_left(t::TextTerminal, n) = cmove(max(1, getX(t)-n), getY(t))
-cmove_left(t) = cmove_left(t, 1)
+cmove_left(n=1) = cmove_left(Base.current_repl.t, n)
 
 cmove_right(t::TextTerminal, n) = cmove(max(width(t), getX(t)+n), getY(t))
-cmove_right(t) = cmove_right(t, 1)
+cmove_right(n=1) = cmove_right(Base.current_repl.t, n)
 
 cmove_line_up(t::TextTerminal, n) = cmove(1, max(1, getY(t)-n))
-cmove_line_up(t) = cmove_line_up(t, 1)
+cmove_line_up(n=1) = cmove_line_up(Base.current_repl.t, n)
 
 cmove_line_down(t::TextTerminal, n) = cmove(1, max(height(t), getY(t)+n))
-cmove_line_down(t) = cmove_line_down(t, 1)
+cmove_line_down(n=1) = cmove_line_down(Base.current_repl.t, n)
 
 cmove_col(t::TextTerminal, c) = cmove(c, getY(t))
+cmove_col(c) = cmove_col(Base.current_repl.t, n)
 
 # Defaults
-hascolor(::TextTerminal) = false
+hascolor(::TextTerminal=active_repl.t) = false
 
 # Utility Functions
-width(t::TextTerminal) = (displaysize(t)::Tuple{Int,Int})[2]
-height(t::TextTerminal) = (displaysize(t)::Tuple{Int,Int})[1]
+width(t::TextTerminal=active_repl.t) = (displaysize(t)::Tuple{Int,Int})[2]
+height(t::TextTerminal=active_repl.t) = (displaysize(t)::Tuple{Int,Int})[1]
 
 # For terminals with buffers
-flush(t::TextTerminal) = nothing
+flush(t::TextTerminal=active_repl.t) = nothing
 
-clear(t::TextTerminal) = error("Unimplemented")
+clear(t::TextTerminal=active_repl.t) = error("Unimplemented")
 clear_line(t::TextTerminal, row) = error("Unimplemented")
-clear_line(t::TextTerminal) = error("Unimplemented")
+clear_line(row) = clear_line(active_repl.t, row)
+clear_line(t::TextTerminal=active_repl.t) = error("Unimplemented")
 
 raw!(t::TextTerminal, raw::Bool) = error("Unimplemented")
+raw!(raw::Bool) = raw!(active_repl.t, raw)
 
-beep(t::TextTerminal) = nothing
-enable_bracketed_paste(t::TextTerminal) = nothing
-disable_bracketed_paste(t::TextTerminal) = nothing
+beep(t::TextTerminal=active_repl.t) = nothing
+enable_bracketed_paste(t::TextTerminal=active_repl.t) = nothing
+disable_bracketed_paste(t::TextTerminal=active_repl.t) = nothing
 
 ## UnixTerminal ##
 
 abstract type UnixTerminal <: TextTerminal end
 
-pipe_reader(t::UnixTerminal) = t.in_stream::IO
-pipe_writer(t::UnixTerminal) = t.out_stream::IO
+pipe_reader(t::UnixTerminal=active_repl.t) = t.in_stream::IO
+pipe_writer(t::UnixTerminal=active_repl.t) = t.out_stream::IO
 
 @nospecialize
 mutable struct TerminalBuffer <: UnixTerminal
@@ -119,6 +149,8 @@ cmove_left(t::UnixTerminal, n) = write(t.out_stream, "$(CSI)$(n)D")
 cmove_line_up(t::UnixTerminal, n) = (cmove_up(t, n); cmove_col(t, 1))
 cmove_line_down(t::UnixTerminal, n) = (cmove_down(t, n); cmove_col(t, 1))
 cmove_col(t::UnixTerminal, n) = (write(t.out_stream, '\r'); n > 1 && cmove_right(t, n-1))
+csave(t::UnixTerminal) = print(t.out_stream, "$(CSI)s")
+crestore(t::UnixTerminal) = print(t.out_stream, "$(CSI)u")
 
 if Sys.iswindows()
     function raw!(t::TTYTerminal,raw::Bool)
