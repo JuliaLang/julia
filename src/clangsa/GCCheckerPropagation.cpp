@@ -2,6 +2,9 @@
 
 #include "GCChecker.h"
 
+#include "clang/AST/DeclCXX.h"
+#include "llvm/ADT/SmallPtrSet.h"
+
 // GCChecker root propagation, safepoint handling, and checker callbacks.
 
 namespace jl_gc_checker {
@@ -253,29 +256,67 @@ void GCChecker::checkEndFunction(const clang::ReturnStmt *RS,
   }
 }
 
+// Clang does not propagate `annotate` attributes from an overridden base-class
+// virtual method onto a derived-class override (overrides are distinct
+// declarations, not redeclarations of the same entity, so attribute merging
+// never runs across them). The Julia annotations on a virtual method express a
+// contract that any override is expected to honor, so when scanning a
+// CXXMethodDecl we also visit every method it transitively overrides.
+//
+// `Visit` is invoked on `D` and each transitively overridden method until it
+// returns a value that tests as true, which becomes the result; otherwise the
+// last (false) value is returned.
+template <typename Fn>
+static auto forDeclAndOverridden(const clang::Decl *D, Fn Visit)
+    -> decltype(Visit(D)) {
+  decltype(Visit(D)) Result = Visit(D);
+  if (Result)
+    return Result;
+  const auto *MD = dyn_cast_or_null<CXXMethodDecl>(D);
+  if (!MD)
+    return Result;
+  llvm::SmallVector<const CXXMethodDecl *, 4> Worklist(MD->overridden_methods());
+  llvm::SmallPtrSet<const CXXMethodDecl *, 8> Seen;
+  while (!Worklist.empty()) {
+    const CXXMethodDecl *Cur = Worklist.pop_back_val();
+    if (!Cur || !Seen.insert(Cur).second)
+      continue;
+    Result = Visit(Cur);
+    if (Result)
+      return Result;
+    Worklist.append(Cur->overridden_methods().begin(),
+                    Cur->overridden_methods().end());
+  }
+  return Result;
+}
+
 const AnnotateAttr *GCChecker::declHasAnnotation(const clang::Decl *D, const char *which) {
   if (!D)
     return nullptr;
-  for (const auto *Ann : D->specific_attrs<AnnotateAttr>()) {
-    if (Ann->getAnnotation() == which)
-      return Ann;
-  }
-  return nullptr;
+  return forDeclAndOverridden(D, [&](const clang::Decl *Cur) -> const AnnotateAttr * {
+    for (const auto *Ann : Cur->specific_attrs<AnnotateAttr>()) {
+      if (Ann->getAnnotation() == which)
+        return Ann;
+    }
+    return nullptr;
+  });
 }
 
 std::optional<unsigned>
 GCChecker::declHasIndexedAnnotation(const clang::Decl *D, StringRef Prefix) {
   if (!D)
     return std::nullopt;
-  for (const auto *Ann : D->specific_attrs<AnnotateAttr>()) {
-    StringRef Annotation = Ann->getAnnotation();
-    if (!Annotation.consume_front(Prefix))
-      continue;
-    unsigned Index = 0;
-    if (!Annotation.getAsInteger(10, Index))
-      return Index;
-  }
-  return std::nullopt;
+  return forDeclAndOverridden(D, [&](const clang::Decl *Cur) -> std::optional<unsigned> {
+    for (const auto *Ann : Cur->specific_attrs<AnnotateAttr>()) {
+      StringRef Annotation = Ann->getAnnotation();
+      if (!Annotation.consume_front(Prefix))
+        continue;
+      unsigned Index = 0;
+      if (!Annotation.getAsInteger(10, Index))
+        return Index;
+    }
+    return std::nullopt;
+  });
 }
 
 std::optional<std::pair<unsigned, unsigned>>
@@ -283,18 +324,21 @@ GCChecker::declHasIndexedPairAnnotation(const clang::Decl *D,
                                         StringRef Prefix) {
   if (!D)
     return std::nullopt;
-  for (const auto *Ann : D->specific_attrs<AnnotateAttr>()) {
-    StringRef Annotation = Ann->getAnnotation();
-    if (!Annotation.consume_front(Prefix))
-      continue;
-    auto Parts = Annotation.split(':');
-    unsigned First = 0;
-    unsigned Second = 0;
-    if (!Parts.first.getAsInteger(10, First) &&
-        !Parts.second.getAsInteger(10, Second))
-      return std::make_pair(First, Second);
-  }
-  return std::nullopt;
+  return forDeclAndOverridden(
+      D, [&](const clang::Decl *Cur) -> std::optional<std::pair<unsigned, unsigned>> {
+        for (const auto *Ann : Cur->specific_attrs<AnnotateAttr>()) {
+          StringRef Annotation = Ann->getAnnotation();
+          if (!Annotation.consume_front(Prefix))
+            continue;
+          auto Parts = Annotation.split(':');
+          unsigned First = 0;
+          unsigned Second = 0;
+          if (!Parts.first.getAsInteger(10, First) &&
+              !Parts.second.getAsInteger(10, Second))
+            return std::make_pair(First, Second);
+        }
+        return std::nullopt;
+      });
 }
 
 bool GCChecker::isFDAnnotatedNotSafepoint(const clang::FunctionDecl *FD, const SourceManager &SM) {
