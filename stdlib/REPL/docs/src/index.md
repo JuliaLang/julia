@@ -800,6 +800,14 @@ ENV["JULIA_WARN_COLOR"] = :yellow
 ENV["JULIA_INFO_COLOR"] = :cyan
 ```
 
+The default faces used for highlighting the current region and enclosing parentheses
+are as follows:
+```toml
+[REPL]
+region.inverse = true
+enclosing_paren = { weight = "bold", underline = true }
+```
+
 
 ## Changing the contextual module which is active at the REPL
 
