@@ -673,9 +673,27 @@ end
 
 Wrap an expression in a [`Task`](@ref) and add it to the local machine's scheduler queue.
 
-Values can be interpolated into `@async` via `\$`, which copies the value directly into the
-constructed underlying closure. This allows you to insert the _value_ of a variable,
-isolating the asynchronous code from changes to the variable's value in the current task.
+You can interpolate a variable `x` into an `@async` block using `\$x`. Doing so
+isolates the asynchronous code from later changes to the _variable_, but note
+that interpolation does not [`copy`](@ref) the variable's value and therefore
+mutations to `x` will still be visible in the interpolated value.
+
+# Examples
+```jldoctest
+julia> x = ["original"]
+       barrier = Threads.Event()
+       t = @async begin
+           wait(barrier) # Wait for change in x
+           println(" x = ", x)
+           println("\\\$x = ", \$x)
+       end
+       push!(x, "modified")
+       x = ["reassigned"]
+       notify(barrier)
+       wait(t)
+ x = ["reassigned"]
+\$x = ["original", "modified"]
+```
 
 !!! warning
     It is strongly encouraged to favor `Threads.@spawn` over `@async` always **even when no
