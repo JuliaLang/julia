@@ -1391,6 +1391,7 @@ function _add_thrown_escape_change!(astate::AnalysisState, @nospecialize(x))
 end
 
 function add_object_info_change!(astate::AnalysisState, @nospecialize(x), ObjectInfo::ObjectInfo)
+    @assert isempty(astate.visited) "non-empty visited set"
     with_profitable_irval(astate, x) do xidx::Int
         push!(astate.changes, ObjectInfoChange(xidx, ObjectInfo))
         if ObjectInfo === ⊤ₒ
@@ -1402,6 +1403,7 @@ function add_object_info_change!(astate::AnalysisState, @nospecialize(x), Object
             end
         end
     end
+    empty!(astate.visited)
 end
 
 function add_liveness_change!(astate::AnalysisState, @nospecialize(x))
@@ -1466,16 +1468,19 @@ function traverse_aliased_memory(callback, MemoryInfo::AliasedMemory)
 end
 
 function add_alias_change!(astate::AnalysisState, @nospecialize(x), @nospecialize(y))
+    @assert isempty(astate.visited) "non-empty visited set"
     if isa(x, GlobalRef)
-        return add_all_escape_change!(astate, y)
+        _add_all_escape_change!(astate, y)
     elseif isa(y, GlobalRef)
-        return add_all_escape_change!(astate, x)
-    end
-    with_profitable_irvals(astate, x, y) do xidx::Int, yidx::Int
-        if !isaliased(astate, xidx, yidx)
-            push!(astate.changes, AliasChange(xidx, yidx))
+        _add_all_escape_change!(astate, x)
+    else
+        with_profitable_irvals(astate, x, y) do xidx::Int, yidx::Int
+            if !isaliased(astate, xidx, yidx)
+                push!(astate.changes, AliasChange(xidx, yidx))
+            end
         end
     end
+    empty!(astate.visited)
     return nothing
 end
 

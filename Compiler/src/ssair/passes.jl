@@ -108,6 +108,7 @@ function is_ea_forwardable_field_query(ir::Union{IncrementalCompact,IRCode}, stm
     struct_typ = argextype_widened(val, ir)
     struct_typ_name = argument_datatypename(struct_typ)
     struct_typ_name === nothing && return false
+    struct_typ_name === typename(Array) && return false
     struct_typ_name.atomicfields == C_NULL || return false
     return ismutabletypename(struct_typ_name)
 end
@@ -130,32 +131,50 @@ function has_ea_forwardable_field_query(ir::IRCode)
 end
 
 function ea_forwarded_load_value(eresult::EscapeAnalysis.EscapeResult, idx::Int)
-    haskey(eresult.ssamemoryinfo, idx) || return false, nothing
+    haskey(eresult.ssamemoryinfo, idx) || return nothing
     memoryinfo = eresult.ssamemoryinfo[idx]
-    memoryinfo isa EscapeAnalysis.ConflictedMemory && return false, nothing
-    memoryinfo isa EscapeAnalysis.UnknownMemory && return false, nothing
-    memoryinfo isa EscapeAnalysis.UninitializedMemory && return false, nothing
-    return true, memoryinfo
+    memoryinfo isa EscapeAnalysis.ConflictedMemory && return nothing
+    memoryinfo isa EscapeAnalysis.UnknownMemory && return nothing
+    memoryinfo isa EscapeAnalysis.UninitializedMemory && return nothing
+    return Const(memoryinfo)
 end
 
-function ea_no_escape_cache(@nospecialize(_))
-    return false
+function ea_forwarded_load_replacement(@nospecialize(val))
+    val isa SSAValue && return val
+    val isa Argument && return val
+    is_inlineable_constant(val) && return quoted(val)
+    return nothing
 end
+
+function ea_value_dominates_load(ir::IRCode, domtree::DomTree, idx::Int, @nospecialize(val))
+    val isa SSAValue || return true
+    1 ≤ val.id ≤ length(ir.stmts) || return false
+    val.id == idx && return false
+    valbb = block_for_inst(ir.cfg, val.id)
+    idxbb = block_for_inst(ir.cfg, idx)
+    return valbb == idxbb ? val.id < idx : dominates(domtree, valbb, idxbb)
+end
+
+ea_no_escape_cache(@nospecialize(_)) = false
 
 function ea_forward_field_queries(ir::IRCode, inlining::Union{Nothing,InliningState})
     has_ea_forwardable_field_query(ir) || return ir
     get_escape_cache′ = inlining === nothing ? ea_no_escape_cache : get_escape_cache(inlining.interp)
     eresult = EscapeAnalysis.analyze_escapes(ir, length(ir.argtypes), get_escape_cache′)
     isempty(eresult.ssamemoryinfo) && return ir
+    domtree = construct_domtree(ir.cfg.blocks)
     for idx = 1:length(ir.stmts)
         inst = ir[SSAValue(idx)]
         stmt = inst[:stmt]
         stmt isa Expr || continue
         is_ea_forwardable_field_query(ir, stmt) || continue
-        forwardable, val = ea_forwarded_load_value(eresult, idx)
-        forwardable || continue
-        val == SSAValue(idx) && continue
-        inst[:stmt] = val
+        loadval = ea_forwarded_load_value(eresult, idx)
+        loadval === nothing && continue
+        val = loadval.val
+        ea_value_dominates_load(ir, domtree, idx, val) || continue
+        replacement = ea_forwarded_load_replacement(val)
+        replacement === nothing && continue
+        inst[:stmt] = replacement
         add_flag!(inst, IR_FLAG_REFINED)
     end
     return ir
