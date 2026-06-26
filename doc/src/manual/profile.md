@@ -66,6 +66,7 @@ One "family" of visualizers is based on [FlameGraphs.jl](https://github.com/timh
 - [ProfileSVG.jl](https://github.com/timholy/ProfileSVG.jl) renders SVG
 - [PProf.jl](https://github.com/JuliaPerf/PProf.jl) serves a local website for inspecting graphs, flamegraphs and more
 - [ProfileCanvas.jl](https://github.com/pfitzseb/ProfileCanvas.jl) is a HTML canvas based profile viewer UI, used by the [Julia VS Code extension](https://www.julia-vscode.org/), but can also generate interactive HTML files.
+- [ProfilePerfetto.jl](https://github.com/fonsp/ProfilePerfetto.jl) is a web-based profile viewer UI with zoom, search, flamegraphs and more, with automatic sample rate calibration, useful in REPL, VS Code and notebooks.
 
 An entirely independent approach to profile visualization is [PProf.jl](https://github.com/vchuravy/PProf.jl), which uses the external `pprof` tool.
 
