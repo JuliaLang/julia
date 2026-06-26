@@ -2210,11 +2210,7 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
             jl_ExecutionEngine->getTargetOptions(),
             RelocModel,
             CMModel,
-#if JL_LLVM_VERSION >= 180000
-            CodeGenOptLevel::Aggressive // -O3 TODO: respect command -O0 flag?
-#else
-            CodeGenOpt::Aggressive // -O3 TODO: respect command -O0 flag?
-#endif
+            CodeGenOptLevelFor(jl_options.opt_level) // respect the command-line -O flag
             ));
     fixupTM(*SourceTM);
     auto DL = jl_create_datalayout(*SourceTM);
