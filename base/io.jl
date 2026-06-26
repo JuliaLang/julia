@@ -1415,7 +1415,8 @@ readeach(stream::IOT, T::Type) where IOT<:IO = ReadEachIterator{T,IOT}(stream)
 iterate(itr::ReadEachIterator{T}, state=nothing) where T =
     eof(itr.stream) ? nothing : (read(itr.stream, T), nothing)
 
-eltype(::Type{ReadEachIterator{T}}) where T = T
+eltype(::Type{<:ReadEachIterator{T}}) where {T} = T
+eltype(::Type{ReadEachIterator}) = Any
 
 IteratorSize(::Type{<:ReadEachIterator}) = SizeUnknown()
 
