@@ -1485,7 +1485,7 @@ InitialOptimizations(next) = SubArrayOptimization(
 `DefaultStable` is an algorithm which indicates that a fast, general purpose sorting
 algorithm should be used, but does not specify exactly which algorithm.
 
-Currently, when sorting short NTuples, this is an unrolled mergesort, and otherwise it is
+Currently, when sorting short NTuples, this is an unrolled mergesort or an insertion sort, depending on the length of the tuple, and otherwise it is
 composed of two parts: the [`InitialOptimizations`](@ref) and a hybrid of Radix, Insertion,
 Counting, Quick sorts.
 
@@ -1784,6 +1784,43 @@ sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
 const COLLECT_ON_SORT_TYPES = Union{Base.KeySet, Base.ValueIterator}
 sort(v::COLLECT_ON_SORT_TYPES; kws...) = sort!(collect(v); kws...)
 
+function _tuple_insertion_sort(tup::Tuple, ordering::Ordering)
+    # Keep everything inlined into one function to allow escape analysis to prove
+    # `mem` does not escape. Then the heap allocation should be eliminated. At time
+    # of writing, Julia does not have interprocedural escape analysis. Once
+    # interprocedural escape analysis is implemented, it may be possible to simplify
+    # the code in this method body.
+    @inline let
+        n = length(tup)
+        elt = eltype(tup)
+        T = Memory{elt}
+        mem = T(undef, n)
+        for i ∈ eachindex(mem)  # copy `tup` to `mem`
+            x = tup[i]
+            mem[i] = x
+        end
+        for i ∈ eachindex(mem)[begin:(end - 1)]  # insertion sort `mem`
+            x = mem[i + 1]
+            j = i
+            while firstindex(mem) ≤ j
+                y = mem[j]
+                if !(Order.lt(ordering, x, y)::Bool)
+                    break
+                end
+                k = j + 1
+                mem[k] = y
+                j = j - 1
+            end
+            l = j + 1
+            mem[l] = x
+        end
+        function getindex_mem(i::Int)
+             @inline mem[i]
+        end
+        ntuple(getindex_mem, Val{n}())  # extract a `Tuple` from `mem`
+    end
+end
+
 function sort(x::NTuple;
               alg::Algorithm=defalg(x),
               lt=isless,
@@ -1798,12 +1835,15 @@ end
 # Folks who want to hack internals can define a new _sort(x::NTuple, ::TheirAlg, o::Ordering)
 # or _sort(x::NTuple{N, TheirType}, ::DefaultStable, o::Ordering) where N
 function _sort(x::NTuple, a::Union{DefaultStable, DefaultUnstable}, o::Ordering, kw)
+    len = length(x)
     # The unrolled tuple sort is prohibitively slow to compile for length > 9.
     # See https://github.com/JuliaLang/julia/pull/46104#issuecomment-1435688502 for benchmarks
-    if length(x) > 9
+    if len > 20
         v = copymutable(x)
         _sort!(v, a, o, kw)
         typeof(x)(v)
+    elseif len > 9
+        _tuple_insertion_sort(x, o)
     else
         _mergesort(x, o)
     end
