@@ -23,13 +23,13 @@ extern float julia_bfloat_to_float(uint16_t param) JL_NOTSAFEPOINT;
 
 // ---- Internal helper functions ----
 
-static inline uint64_t top_word_mask(unsigned numbits)
+static inline uint64_t top_word_mask(unsigned numbits) JL_NOTSAFEPOINT
 {
     unsigned r = numbits % WORD_SIZE;
     return r ? ((UINT64_C(1) << r) - 1) : UINT64_MAX;
 }
 
-static inline void load(uint64_t *dst, const void *src, unsigned numbits)
+static inline void load(uint64_t *dst, const void *src, unsigned numbits) JL_NOTSAFEPOINT
 {
     unsigned nw = APINT_NWORDS(numbits);
     unsigned nb = APINT_NBYTES(numbits);
@@ -38,32 +38,32 @@ static inline void load(uint64_t *dst, const void *src, unsigned numbits)
     dst[nw - 1] &= top_word_mask(numbits);
 }
 
-static inline void store(void *dst, const uint64_t *src, unsigned numbits)
+static inline void store(void *dst, const uint64_t *src, unsigned numbits) JL_NOTSAFEPOINT
 {
     memcpy(dst, src, APINT_NBYTES(numbits));
 }
 
-static inline void mask_top(uint64_t *a, unsigned nw, unsigned numbits)
+static inline void mask_top(uint64_t *a, unsigned nw, unsigned numbits) JL_NOTSAFEPOINT
 {
     if (nw == 0) jl_unreachable();
     a[nw - 1] &= top_word_mask(numbits);
 }
 
-static inline int is_zero(const uint64_t *a, unsigned nw)
+static inline int is_zero(const uint64_t *a, unsigned nw) JL_NOTSAFEPOINT
 {
     for (unsigned i = 0; i < nw; i++)
         if (a[i] != 0) return 0;
     return 1;
 }
 
-static inline int is_negative(const uint64_t *a, unsigned numbits)
+static inline int is_negative(const uint64_t *a, unsigned numbits) JL_NOTSAFEPOINT
 {
     unsigned nw = APINT_NWORDS(numbits);
     unsigned signbit = (numbits - 1) % WORD_SIZE;
     return (a[nw - 1] >> signbit) & 1;
 }
 
-static inline int compare_words(const uint64_t *a, const uint64_t *b, unsigned nw)
+static inline int compare_words(const uint64_t *a, const uint64_t *b, unsigned nw) JL_NOTSAFEPOINT
 {
     for (int i = (int)nw - 1; i >= 0; i--) {
         if (a[i] < b[i]) return -1;
@@ -76,7 +76,7 @@ static inline int compare_words(const uint64_t *a, const uint64_t *b, unsigned n
 // a - b is computed as a + ~b + 1.
 static inline unsigned addsub_words(uint64_t *r, const uint64_t *a,
                                     const uint64_t *b, unsigned nw,
-                                    int negate_b)
+                                    int negate_b) JL_NOTSAFEPOINT
 {
     unsigned carry = negate_b; // +1 for two's complement subtraction
     for (unsigned i = 0; i < nw; i++) {
@@ -94,7 +94,7 @@ static inline unsigned addsub_words(uint64_t *r, const uint64_t *a,
 #define add_words(r, a, b, nw)  addsub_words(r, a, b, nw, 0)
 #define sub_words(r, a, b, nw)  addsub_words(r, a, b, nw, 1)
 
-static inline void negate_words(uint64_t *r, const uint64_t *a, unsigned nw)
+static inline void negate_words(uint64_t *r, const uint64_t *a, unsigned nw) JL_NOTSAFEPOINT
 {
     unsigned carry = 1;
     for (unsigned i = 0; i < nw; i++) {
@@ -107,7 +107,7 @@ static inline void negate_words(uint64_t *r, const uint64_t *a, unsigned nw)
 // ---- Multiplication ----
 
 #ifndef __SIZEOF_INT128__
-static inline void mul64(uint64_t a, uint64_t b, uint64_t *lo, uint64_t *hi)
+static inline void mul64(uint64_t a, uint64_t b, uint64_t *lo, uint64_t *hi) JL_NOTSAFEPOINT
 {
 #ifdef _MSC_VER
     *lo = _umul128(a, b, hi);
@@ -130,7 +130,7 @@ static inline void mul64(uint64_t a, uint64_t b, uint64_t *lo, uint64_t *hi)
 
 // Multiply-accumulate helper for one limb pair
 static inline void mac_limb(uint64_t *rword, uint64_t *carry,
-                            uint64_t a, uint64_t b)
+                            uint64_t a, uint64_t b) JL_NOTSAFEPOINT
 {
 #ifdef __SIZEOF_INT128__
     __uint128_t prod = (__uint128_t)a * b + *rword + *carry;
@@ -150,7 +150,7 @@ static inline void mac_limb(uint64_t *rword, uint64_t *carry,
 
 // Truncated multiply: r = (a * b) mod 2^(nw*64)
 static void mul_words(uint64_t *r, const uint64_t *a,
-                      const uint64_t *b, unsigned nw)
+                      const uint64_t *b, unsigned nw) JL_NOTSAFEPOINT
 {
     memset(r, 0, nw * sizeof(uint64_t));
     for (unsigned i = 0; i < nw; i++) {
@@ -165,7 +165,7 @@ static void mul_words(uint64_t *r, const uint64_t *a,
 // ---- Division (binary long division) ----
 
 static void udivrem(uint64_t *q, uint64_t *rem, const uint64_t *a,
-                    const uint64_t *b, unsigned numbits, unsigned nw)
+                    const uint64_t *b, unsigned numbits, unsigned nw) JL_NOTSAFEPOINT
 {
     memset(q, 0, nw * sizeof(uint64_t));
     memset(rem, 0, nw * sizeof(uint64_t));
@@ -187,7 +187,7 @@ static void udivrem(uint64_t *q, uint64_t *rem, const uint64_t *a,
 // ---- Shift helpers ----
 
 static inline unsigned extract_shift(const uint64_t *b, unsigned nw,
-                                     unsigned numbits)
+                                     unsigned numbits) JL_NOTSAFEPOINT
 {
     for (unsigned i = 1; i < nw; i++)
         if (b[i] != 0) return numbits;
@@ -195,7 +195,7 @@ static inline unsigned extract_shift(const uint64_t *b, unsigned nw,
 }
 
 static void shl_n(uint64_t *r, const uint64_t *a,
-                  unsigned shift, unsigned nw)
+                  unsigned shift, unsigned nw) JL_NOTSAFEPOINT
 {
     unsigned ws = shift / WORD_SIZE;
     unsigned bs = shift % WORD_SIZE;
@@ -209,7 +209,7 @@ static void shl_n(uint64_t *r, const uint64_t *a,
 // Right shift by `shift` bits, filling vacated positions with `fill`.
 // fill=0 for logical shift, fill=UINT64_MAX for arithmetic shift of negative.
 static void shr_n(uint64_t *r, const uint64_t *a,
-                  unsigned shift, unsigned nw, uint64_t fill)
+                  unsigned shift, unsigned nw, uint64_t fill) JL_NOTSAFEPOINT
 {
     unsigned ws = shift / WORD_SIZE;
     unsigned bs = shift % WORD_SIZE;
@@ -221,7 +221,7 @@ static void shr_n(uint64_t *r, const uint64_t *a,
 }
 
 // Zero- or Sign-extend a numbits-wide value to fill total_nw words.
-static inline void extend(uint64_t *a, unsigned numbits, unsigned total_nw, int is_sign)
+static inline void extend(uint64_t *a, unsigned numbits, unsigned total_nw, int is_sign) JL_NOTSAFEPOINT
 {
     unsigned orig_nw = APINT_NWORDS(numbits);
     uint64_t fill = (is_sign && is_negative(a, numbits)) ? UINT64_MAX : 0;
@@ -235,7 +235,7 @@ static inline void extend(uint64_t *a, unsigned numbits, unsigned total_nw, int 
 // Check whether the bits above numbits in a total_nw-word value
 // are all equal to `expected` (0 for unsigned, or sign-extension for signed).
 static inline int check_overflow(const uint64_t *r, unsigned numbits,
-                                 unsigned total_nw, uint64_t expected)
+                                 unsigned total_nw, uint64_t expected) JL_NOTSAFEPOINT
 {
     unsigned nw = APINT_NWORDS(numbits);
     unsigned top_bits = numbits % WORD_SIZE;
@@ -254,7 +254,7 @@ static inline int check_overflow(const uint64_t *r, unsigned numbits,
 // Convert a multi-word unsigned integer to double, rounding correctly for a
 // mantissa of `mbits` bits. The returned double fits losslessly in a (possibly
 // narrower) floating-point type of `mbits` mantissa bits, avoiding double rounding.
-static double uint_to_fp(const uint64_t *a, unsigned nw, unsigned mbits)
+static double uint_to_fp(const uint64_t *a, unsigned nw, unsigned mbits) JL_NOTSAFEPOINT
 {
     // Find highest non-zero word
     int hw = (int)nw - 1;
@@ -289,7 +289,7 @@ static double uint_to_fp(const uint64_t *a, unsigned nw, unsigned mbits)
 
 static void sdivrem(uint64_t *q, uint64_t *rem,
                     const uint64_t *a, const uint64_t *b,
-                    unsigned numbits, unsigned nw)
+                    unsigned numbits, unsigned nw) JL_NOTSAFEPOINT
 {
     int neg_a = is_negative(a, numbits);
     int neg_b = is_negative(b, numbits);
@@ -306,7 +306,7 @@ static void sdivrem(uint64_t *q, uint64_t *rem,
 
 // Count trailing zeros (count_ones=0) or ones (count_ones=1) in a loaded word array.
 static inline unsigned countr(const uint64_t *a, unsigned nw, unsigned numbits,
-                              int count_ones)
+                              int count_ones) JL_NOTSAFEPOINT
 {
     unsigned count = 0;
     for (unsigned i = 0; i < nw; i++) {
@@ -326,7 +326,7 @@ static inline unsigned countr(const uint64_t *a, unsigned nw, unsigned numbits,
 
 // Count leading zeros (count_ones=0) or ones (count_ones=1) in a loaded word array.
 static inline unsigned countl(const uint64_t *a, unsigned nw, unsigned numbits,
-                              int count_ones)
+                              int count_ones) JL_NOTSAFEPOINT
 {
     unsigned count = 0;
     unsigned top_bits = numbits % WORD_SIZE;
@@ -354,13 +354,13 @@ static inline unsigned countl(const uint64_t *a, unsigned nw, unsigned numbits,
     return numbits;
 }
 
-static inline int is_min_int(const uint64_t *a, unsigned numbits)
+static inline int is_min_int(const uint64_t *a, unsigned numbits) JL_NOTSAFEPOINT
 {
     unsigned nw = APINT_NWORDS(numbits);
     return is_negative(a, numbits) && countr(a, nw, numbits, 0) == numbits - 1;
 }
 
-static inline int is_neg_one(const uint64_t *a, unsigned numbits, unsigned nw)
+static inline int is_neg_one(const uint64_t *a, unsigned numbits, unsigned nw) JL_NOTSAFEPOINT
 {
     for (unsigned i = 0; i < nw - 1; i++)
         if (a[i] != UINT64_MAX) return 0;
@@ -389,7 +389,7 @@ JL_DLLEXPORT void APInt_neg(unsigned numbits, integerPart *pa, integerPart *pr)
 // not the negated value, so the signed check is correct even for SMIN.
 static int APInt_addsub_ov(unsigned numbits, integerPart *pa,
                            integerPart *pb, integerPart *pr,
-                           int is_sub, int is_signed)
+                           int is_sub, int is_signed) JL_NOTSAFEPOINT
 {
     unsigned nw = APINT_NWORDS(numbits);
     uint64_t *a = (uint64_t *)alloca(nw * 8);
@@ -458,7 +458,7 @@ JL_DLLEXPORT void APInt_urem(unsigned numbits, integerPart *pa,
 // ---- Comparisons ----
 
 static int APInt_cmp(unsigned numbits, integerPart *pa, integerPart *pb,
-                     int is_signed)
+                     int is_signed) JL_NOTSAFEPOINT
 {
     unsigned nw = APINT_NWORDS(numbits);
     uint64_t *a = (uint64_t *)alloca(nw * 8);
@@ -551,7 +551,7 @@ JL_DLLEXPORT void APInt_shl(unsigned numbits, integerPart *pa,
 }
 
 static void APInt_shr(unsigned numbits, integerPart *pa,
-                      integerPart *pb, integerPart *pr, int is_signed)
+                      integerPart *pb, integerPart *pr, int is_signed) JL_NOTSAFEPOINT
 {
     unsigned nw = APINT_NWORDS(numbits);
     uint64_t *a = (uint64_t *)alloca(nw * 8);
@@ -578,7 +578,7 @@ JL_DLLEXPORT int APInt_sub_uov(unsigned n, integerPart *pa, integerPart *pb, int
 JL_DLLEXPORT int APInt_sub_sov(unsigned n, integerPart *pa, integerPart *pb, integerPart *pr) { return APInt_addsub_ov(n, pa, pb, pr, 1, 1); }
 
 static int APInt_mul_ov(unsigned numbits, integerPart *pa,
-                       integerPart *pb, integerPart *pr, int is_signed)
+                       integerPart *pb, integerPart *pr, int is_signed) JL_NOTSAFEPOINT
 {
     unsigned nw = APINT_NWORDS(numbits);
     unsigned nw2 = 2 * nw;
@@ -602,7 +602,7 @@ JL_DLLEXPORT int APInt_mul_sov(unsigned n, integerPart *pa, integerPart *pb, int
 
 // returns quotient in *pq, remainder in *pr; returns 1 on div-by-zero or signed overflow
 static int APInt_divrem(unsigned numbits, integerPart *pa, integerPart *pb,
-                        integerPart *pq, integerPart *pr, int is_signed)
+                        integerPart *pq, integerPart *pr, int is_signed) JL_NOTSAFEPOINT
 {
     unsigned nw = APINT_NWORDS(numbits);
     uint64_t *a = (uint64_t *)alloca(nw * 8);
@@ -670,7 +670,7 @@ JL_DLLEXPORT unsigned APInt_popcount(unsigned numbits, integerPart *pa)
     return count;
 }
 
-static unsigned APInt_countr(unsigned numbits, integerPart *pa, int count_ones)
+static unsigned APInt_countr(unsigned numbits, integerPart *pa, int count_ones) JL_NOTSAFEPOINT
 {
     unsigned nw = APINT_NWORDS(numbits);
     uint64_t *a = (uint64_t *)alloca(nw * 8);
@@ -678,7 +678,7 @@ static unsigned APInt_countr(unsigned numbits, integerPart *pa, int count_ones)
     return countr(a, nw, numbits, count_ones);
 }
 
-static unsigned APInt_countl(unsigned numbits, integerPart *pa, int count_ones)
+static unsigned APInt_countl(unsigned numbits, integerPart *pa, int count_ones) JL_NOTSAFEPOINT
 {
     unsigned nw = APINT_NWORDS(numbits);
     uint64_t *a = (uint64_t *)alloca(nw * 8);
@@ -694,7 +694,7 @@ JL_DLLEXPORT unsigned APInt_countl_one(unsigned n, integerPart *pa)  { return AP
 // ---- FP conversions ----
 
 static int FPtoInt(jl_datatype_t *ty, void *pa, jl_datatype_t *oty,
-                   integerPart *pr, int isSigned)
+                   integerPart *pr, int isSigned) JL_NOTSAFEPOINT
 {
     double Val;
     if (ty == jl_float16_type)
@@ -752,7 +752,7 @@ JL_DLLEXPORT int APInt_fptosi_exact(jl_datatype_t *ty, integerPart *pa, jl_datat
 JL_DLLEXPORT int APInt_fptoui_exact(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr) { return FPtoInt(ty, pa, oty, pr, 0); }
 
 static void APInt_inttofp(jl_datatype_t *ty, integerPart *pa,
-                         jl_datatype_t *oty, integerPart *pr, int is_signed)
+                         jl_datatype_t *oty, integerPart *pr, int is_signed) JL_NOTSAFEPOINT
 {
     unsigned numbytes = jl_datatype_size(ty);
     unsigned numbits = numbytes * 8;

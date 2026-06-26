@@ -215,7 +215,7 @@ static inline jl_image_t load_sysimg_target(jl_image_buf_t image, F &&callback, 
     {
         void *pgcstack_func_slot = pointers->ptls->pgcstack_func_slot;
         void *pgcstack_key_slot = pointers->ptls->pgcstack_key_slot;
-        jl_pgcstack_getkey((jl_get_pgcstack_func**)pgcstack_func_slot, (jl_pgcstack_key_t*)pgcstack_key_slot);
+        jl_pgcstack_getkey((jl_get_pgcstack_func_t*)pgcstack_func_slot, (jl_pgcstack_key_t*)pgcstack_key_slot);
 
         size_t *tls_offset_idx = pointers->ptls->tls_offset;
         *tls_offset_idx = (uintptr_t)(jl_tls_offset == -1 ? 0 : jl_tls_offset);
@@ -303,7 +303,8 @@ static std::vector<tp::LLVMTargetSpec> jit_targets;
 
 // If cpu_target starts with "sysimage", replace it with the target string
 // stored in the loaded sysimage. Otherwise return as-is.
-static std::string expand_sysimage_keyword(const char *cpu_target) JL_NOTSAFEPOINT {
+static std::string expand_sysimage_keyword(const char *cpu_target) JL_NOTSAFEPOINT
+{
     if (!cpu_target || !*cpu_target)
         return "";
     std::string option(cpu_target);
@@ -326,7 +327,7 @@ extern "C" char *jl_expand_sysimage_keyword(const char *cpu_target)
     return strdup(expand_sysimage_keyword(cpu_target).c_str());
 }
 
-static void init_jit_targets(const char *cpu_target, bool imaging)
+static void init_jit_targets(const char *cpu_target, bool imaging) JL_NOTSAFEPOINT
 {
 
     if (!jit_targets.empty())
@@ -622,7 +623,6 @@ jl_image_t jl_load_pkgimg(jl_image_buf_t image)
     return load_sysimg_target(image, match_pkgimg_target, NULL);
 }
 
-#ifndef __clang_analyzer__
 jl_llvm_target_t jl_get_llvm_target(const char *cpu_target, bool imaging)
 {
     init_jit_targets(cpu_target, imaging);
@@ -631,15 +631,13 @@ jl_llvm_target_t jl_get_llvm_target(const char *cpu_target, bool imaging)
              spec.cpu_name.c_str(), spec.cpu_features.c_str());
     return {spec.cpu_name.c_str(), spec.cpu_features.c_str()};
 }
-#endif
 
-#ifndef __clang_analyzer__
 jl_llvm_target_t jl_get_llvm_disasm_target(void)
 {
     // Use generic CPU with all features enabled so the disassembler
     // can decode any instruction (including sysimage clones compiled
     // for targets beyond the current JIT target).
-    static const std::string features = [] {
+    static const std::string features = []() JL_NOTSAFEPOINT {
         std::string features;
         for (uint32_t i = 0; i < tp::num_features; i++) {
             if (tp::feature_table[i].is_hw) {
@@ -652,9 +650,7 @@ jl_llvm_target_t jl_get_llvm_disasm_target(void)
     }();
     return {"generic", features.c_str()};
 }
-#endif
 
-#ifndef __clang_gcanalyzer__
 extern "C" jl_clone_targets_t jl_get_llvm_clone_targets(const char *cpu_target)
 {
     auto target_str = expand_sysimage_keyword(cpu_target);
@@ -689,7 +685,6 @@ extern "C" jl_clone_targets_t jl_get_llvm_clone_targets(const char *cpu_target)
     }
     return result;
 }
-#endif
 
 extern "C" void jl_free_clone_targets(jl_clone_targets_t *targets)
 {

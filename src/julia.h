@@ -24,7 +24,6 @@
 
 #include "htable.h"
 #include "arraylist.h"
-#include "analyzer_annotations.h"
 #include "jloptions.h"
 
 #include <setjmp.h>
@@ -1163,7 +1162,7 @@ extern void _JL_GC_PUSHARGS(jl_value_t **, size_t) JL_NOTSAFEPOINT;
   memset(rts_var, 0, sizeof(void*) * (n)); \
   _JL_GC_PUSHARGS(rts_var, (n));
 
-extern void JL_GC_POP() JL_NOTSAFEPOINT;
+extern void JL_GC_POP(void) JL_NOTSAFEPOINT;
 
 #else
 
@@ -1245,8 +1244,8 @@ void mtarraylist_push(small_arraylist_t *_a, void *elt) JL_NOTSAFEPOINT;
 #define jl_svec_data(t) ((jl_value_t**)((char*)(t) + sizeof(jl_svec_t)))
 
 #ifdef __clang_gcanalyzer__
-STATIC_INLINE jl_value_t *jl_svecref(void *t JL_PROPAGATES_ROOT, size_t i) JL_PROPAGATES_ROOT_INDEXED(0, 1) JL_NOTSAFEPOINT;
-STATIC_INLINE jl_value_t *jl_svecset(
+jl_value_t *jl_svecref(void *t JL_PROPAGATES_ROOT, size_t i) JL_PROPAGATES_ROOT_INDEXED(0, 1) JL_NOTSAFEPOINT;
+jl_value_t *jl_svecset(
     void *t JL_PROPAGATES_ROOT,
     size_t i, void *x JL_ROOTED_BY_ARG_INDEXED(0, 1)) JL_NOTSAFEPOINT;
 #else
@@ -1358,8 +1357,8 @@ JL_DLLEXPORT char *jl_genericmemory_typetagdata(jl_genericmemory_t *m) JL_NOTSAF
 
 #ifdef __clang_gcanalyzer__
 jl_value_t **jl_genericmemory_ptr_data(jl_genericmemory_t *m JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
-STATIC_INLINE jl_value_t *jl_genericmemory_ptr_ref(void *m JL_PROPAGATES_ROOT, size_t i) JL_PROPAGATES_ROOT_INDEXED(0, 1) JL_NOTSAFEPOINT;
-STATIC_INLINE jl_value_t *jl_genericmemory_ptr_set(
+jl_value_t *jl_genericmemory_ptr_ref(void *m JL_PROPAGATES_ROOT, size_t i) JL_PROPAGATES_ROOT_INDEXED(0, 1) JL_NOTSAFEPOINT;
+jl_value_t *jl_genericmemory_ptr_set(
     void *m, size_t i,
     void *x JL_ROOTED_BY_ARG_INDEXED(0, 1)) JL_NOTSAFEPOINT;
 #else
@@ -1405,8 +1404,8 @@ STATIC_INLINE jl_value_t *jl_array_owner(jl_array_t *a JL_PROPAGATES_ROOT) JL_NO
 
 #ifdef __clang_gcanalyzer__
 jl_value_t **jl_array_ptr_data(jl_array_t *a JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
-STATIC_INLINE jl_value_t *jl_array_ptr_ref(void *a JL_PROPAGATES_ROOT, size_t i) JL_PROPAGATES_ROOT_INDEXED(0, 1) JL_NOTSAFEPOINT;
-STATIC_INLINE jl_value_t *jl_array_ptr_set(
+jl_value_t *jl_array_ptr_ref(void *a JL_PROPAGATES_ROOT, size_t i) JL_PROPAGATES_ROOT_INDEXED(0, 1) JL_NOTSAFEPOINT;
+jl_value_t *jl_array_ptr_set(
     void *a, size_t i,
     void *x JL_ROOTED_BY_ARG_INDEXED(0, 1)) JL_NOTSAFEPOINT;
 #else
@@ -2448,7 +2447,7 @@ JL_DLLEXPORT int jl_set_task_threadpoolid(jl_task_t *task, int8_t tpid) JL_NOTSA
 JL_DLLEXPORT void JL_NORETURN jl_throw(jl_value_t *e JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow(void);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED);
-JL_DLLEXPORT void JL_NORETURN jl_no_exc_handler(jl_value_t *e, jl_task_t *ct);
+JL_DLLEXPORT void JL_NORETURN jl_no_exc_handler(jl_value_t *e JL_MAYBE_UNROOTED, jl_task_t *ct);
 
 
 #ifdef __cplusplus

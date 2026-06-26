@@ -516,7 +516,7 @@ jl_llvm_functions_t jl_emit_codedecls(
 jl_code_info_t *jl_get_method_ir(jl_code_instance_t *ci);
 void emit_always_inline(jl_codegen_output_t &out,
                         unique_function<jl_code_info_t *(jl_code_instance_t *)> get_src);
-void emit_llvmcall_modules(jl_codegen_output_t &out);
+void emit_llvmcall_modules(jl_codegen_output_t &out) JL_NOTSAFEPOINT;
 
 enum CompilationPolicy {
     Default = 0,
@@ -572,7 +572,7 @@ static const inline char *name_from_method_instance(jl_method_instance_t *li) JL
     return jl_is_method(li->def.method) ? jl_symbol_name(li->def.method->name) : "top-level scope";
 }
 
-static inline jl_value_t *get_ci_abi(jl_code_instance_t *ci)
+static inline jl_value_t *get_ci_abi(jl_code_instance_t *ci JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
     if (jl_typeof(ci->def) == (jl_value_t*)jl_abioverride_type)
         return ((jl_abi_override_t*)ci->def)->abi;
@@ -859,6 +859,7 @@ public:
 
     // Note that this is a potential safepoint due to jl_get_library_ and jl_dlsym calls
     // and must be called from inside safe-regions due to internal use of locks
+    // (this lock strategy is unusual here, so the annotations aren't entirely correct)
     void optimizeDLSyms(Module &M) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER;
 
 protected:
