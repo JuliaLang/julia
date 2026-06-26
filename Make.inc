@@ -891,14 +891,19 @@ JCFLAGS += -DWITH_THIRD_PARTY_HEAP=1
 MMTK_PLAN ?= StickyImmix
 # Must specify a supported MMTk plan: Immix or StickyImmix
 ifeq (${MMTK_PLAN},Immix)
-JCXXFLAGS += -DMMTK_PLAN_IMMIX
-JCFLAGS += -DMMTK_PLAN_IMMIX
+JCXXFLAGS += -DMMTK_PLAN_IMMIX -DMMTK_PLAN=\"Immix\"
+JCFLAGS += -DMMTK_PLAN_IMMIX -DMMTK_PLAN=\"Immix\"
 else ifeq (${MMTK_PLAN},StickyImmix)
-JCXXFLAGS += -DMMTK_PLAN_STICKYIMMIX
-JCFLAGS += -DMMTK_PLAN_STICKYIMMIX
+JCXXFLAGS += -DMMTK_PLAN_STICKYIMMIX -DMMTK_PLAN=\"StickyImmix\"
+JCFLAGS += -DMMTK_PLAN_STICKYIMMIX -DMMTK_PLAN=\"StickyImmix\"
 else
 $(error "Unsupported MMTk plan: $(MMTK_PLAN). Supported plan(s): Immix or StickyImmix.")
 endif
+
+# Julia's MMTk support does not support moving just yet
+MMTK_MOVING ?= 0
+JCXXFLAGS += -DMMTK_MOVING=$(MMTK_MOVING)
+JCFLAGS += -DMMTK_MOVING=$(MMTK_MOVING)
 
 # Location of the in-tree MMTk integration.
 MMTK_DIR := $(JULIAHOME)/src/gc-mmtk

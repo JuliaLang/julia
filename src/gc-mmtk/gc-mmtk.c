@@ -3,6 +3,7 @@
 #include "gc-wb-mmtk.h"
 #include "mmtkMutator.h"
 #include "threading.h"
+#include <string.h>
 
 #ifdef _COMPILER_TSAN_ENABLED_
 #include <sanitizer/tsan_interface.h>
@@ -170,6 +171,21 @@ void jl_gc_init(void) {
         mmtk_gc_init(min_heap_size, max_heap_size, gcthreads, (sizeof(jl_taggedvalue_t)), jl_buff_tag);
     } else {
         mmtk_gc_init(0, min_heap_size, gcthreads, (sizeof(jl_taggedvalue_t)), jl_buff_tag);
+    }
+
+    if ((int)mmtk_is_moving() != MMTK_MOVING) {
+        jl_safe_printf("FATAL: libmmtk_julia was built moving=%d, but the Julia runtime expects "
+                       "MMTK_MOVING=%d.\nRebuild the binding with a matching MMTK_MOVING.\n",
+                       (int)mmtk_is_moving(), (MMTK_MOVING));
+        exit(1);
+    }
+
+    const char *mmtk_plan = mmtk_get_plan_name();
+    if (strcmp(mmtk_plan, MMTK_PLAN) != 0) {
+        jl_safe_printf("FATAL: libmmtk_julia was built for plan \"%s\", but the Julia runtime "
+                       "expects plan \"%s\".\nRebuild the binding with a matching MMTK_PLAN.\n",
+                       mmtk_plan, MMTK_PLAN);
+        exit(1);
     }
 }
 

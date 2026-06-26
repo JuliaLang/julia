@@ -227,6 +227,22 @@ pub extern "C" fn mmtk_will_never_move(object: ObjectReference) -> bool {
 }
 
 #[no_mangle]
+pub extern "C" fn mmtk_is_moving() -> bool {
+    SINGLETON.get_plan().constraints().moves_objects
+}
+
+#[no_mangle]
+pub extern "C" fn mmtk_get_plan_name() -> *const c_char {
+    static PLAN_NAME: std::sync::OnceLock<std::ffi::CString> = std::sync::OnceLock::new();
+    PLAN_NAME
+        .get_or_init(|| {
+            let name = format!("{:?}", *SINGLETON.get_options().plan);
+            std::ffi::CString::new(name).unwrap()
+        })
+        .as_ptr()
+}
+
+#[no_mangle]
 pub extern "C" fn mmtk_start_worker(tls: VMWorkerThread, worker: *mut GCWorker<JuliaVM>) {
     let worker = unsafe { Box::from_raw(worker) };
     memory_manager::start_worker::<JuliaVM>(&SINGLETON, tls, worker)
