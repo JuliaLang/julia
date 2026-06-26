@@ -781,6 +781,46 @@ end
     end
 end
 
+# Detect silent overflow when a StepRangeLen with hardware signed integer ref/step
+# would produce wrapped elements at its endpoints. Non-integer ref/step (and types
+# we cannot inspect) construct silently, as before.
+@testset "StepRangeLen overflow detection on construction (#59032)" begin
+    @testset "$T" for T in (Int8, Int16, Int32, Int64, Int128)
+        # multiplying (len-1) by step overflows
+        @test_throws ArgumentError StepRangeLen{T}(zero(T), typemax(T), 3)
+        # ref + (len-1)*step overflows on the positive side
+        @test_throws ArgumentError StepRangeLen{T}(typemax(T) - T(5), T(10), 3)
+        # ref + (len-1)*step overflows on the negative side
+        @test_throws ArgumentError StepRangeLen{T}(typemin(T) + T(5), -T(10), 3)
+        # overflow on the lower endpoint via a large offset
+        @test_throws ArgumentError StepRangeLen{T}(zero(T), -typemax(T), 3, 3)
+        # outer no-type constructor goes through the same path
+        @test_throws ArgumentError StepRangeLen(zero(T), typemax(T), 3)
+
+        # cases that must keep working
+        @test StepRangeLen{T}(zero(T), one(T), 0) isa StepRangeLen{T}  # empty range
+        @test collect(StepRangeLen{T}(typemax(T), one(T), 1)) == [typemax(T)]  # length 1
+        @test collect(StepRangeLen{T}(typemin(T), one(T), 1)) == [typemin(T)]
+        @test collect(StepRangeLen{T}(zero(T), one(T), 5)) == T[0,1,2,3,4]
+    end
+
+    # element type wider than ref/step: iteration math happens in the wider type
+    # and does not wrap, so the check must not fire
+    let r = StepRangeLen{Int}(Int8(0), Int8(127), 3)
+        @test r isa StepRangeLen
+        @test collect(r) == [0, 127, 254]
+    end
+    # check does not interfere with the float StepRangeLen path
+    @test range(0.0, step=0.1, length=5) isa StepRangeLen
+    # BigInt has no hardware bound, so the check is a no-op
+    let r = StepRangeLen(big(0), big(typemax(Int128)), 3)
+        @test r isa StepRangeLen
+        @test collect(r) == [big(0), big(typemax(Int128)), big(2)*big(typemax(Int128))]
+    end
+    # user types we do not understand still construct silently (no false positives)
+    @test StepRangeLen(0x0, 0x1, 5) isa StepRangeLen  # UInt remains unchecked
+end
+
 # A number type with the overflow behavior of `UInt8`. Conversion to `Integer` returns an
 # `Int32`, i.e., a type with different `typemin`/`typemax`. See  #41479
 struct OverflowingReal <: Real
