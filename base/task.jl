@@ -260,6 +260,14 @@ end
 
 task_result(t::Task) = t.result
 
+"""
+    task_local_storage()
+
+Returns a dictionary (an [`IdDict`](@ref)) of the current task's task-local storage.
+
+For example, this dictionary can be passed to [`get!`](@ref) in order
+to either fetch or initialize the value of a key in the storage.
+"""
 task_local_storage() = get_task_tls(current_task())
 function get_task_tls(t::Task)
     if t.storage === nothing
@@ -272,6 +280,7 @@ end
     task_local_storage(key)
 
 Look up the value of a key in the current task's task-local storage.
+Key lookup is based on object equality ([`===`](@ref)).
 """
 task_local_storage(key) = task_local_storage()[key]
 
@@ -279,6 +288,7 @@ task_local_storage(key) = task_local_storage()[key]
     task_local_storage(key, value)
 
 Assign a value to a key in the current task's task-local storage.
+Key lookup is based on object equality ([`===`](@ref)).
 """
 task_local_storage(key, val) = (task_local_storage()[key] = val)
 
