@@ -7,7 +7,7 @@
 
 module StridedArrays
 
-using Test: @test_throws
+using Test: @test_throws, @test
 
 export strided_ptr
 export check_strided_get
@@ -26,6 +26,7 @@ end
 
 function check_strides_throws(err, a)
     @test_throws err strides(a)
+    @test isnothing(try_strides(a))
 end
 
 """
@@ -38,8 +39,17 @@ function check_strided_get(a::AbstractArray{T,N})::Nothing where {T, N}
     if !isbitstype(eltype(a))
         error("a doesn't have isbits elements")
     end
+    if !is_ptr_loadable(a)
+        error("is_ptr_loadable(a) is false")
+    end
+    if isnothing(try_strides(a))
+        error("try_strides(a) is nothing")
+    end
     # Putting strided_ptr before the loop means that strided_ptr shouldn't error for empty arrays
     strided_ptr(a) do a_ptr
+        if try_strides(a) != strides(a)
+            error("try_strides: $(try_strides(a)) doesn't equal strides: $(strides(a))")
+        end
         for d in 1:N
             if stride(a, d) != strides(a)[d]
                 error("stride(a, d) doesn't equal strides(a)[d] for dimension $(d)")
@@ -75,8 +85,17 @@ function check_strided_set(a::AbstractArray{T,N}, b::AbstractArray{T,N}, c::Abst
     if !isbitstype(eltype(a))
         error("a doesn't have isbits elements")
     end
+    if !is_ptr_storable(a)
+        error("is_ptr_storable(a) is false")
+    end
+    if isnothing(try_strides(a))
+        error("try_strides(a) is nothing")
+    end
     # Putting strided_ptr before the loop means that strided_ptr shouldn't error for empty arrays
     strided_ptr(a) do a_ptr
+        if try_strides(a) != strides(a)
+            error("try_strides: $(try_strides(a)) doesn't equal strides: $(strides(a))")
+        end
         for d in 1:N
             if stride(a, d) != strides(a)[d]
                 error("stride(a, d) doesn't equal strides(a)[d] for dimension $(d)")
@@ -129,6 +148,9 @@ function Base.setindex!(S::Strider{<:Any,N}, x, I::Vararg{Int,N}) where {N}
     S.data[sum(S.strides .* (I .- 1)) + S.offset] = x
     S
 end
+function Base.try_strides(S::Strider)
+    S.strides
+end
 function Base.strides(S::Strider)
     S.strides
 end
@@ -137,6 +159,12 @@ function Base.elsize(::Type{<:Strider{T}}) where {T}
 end
 function Base.cconvert(::Type{Ptr{T}}, S::Strider{T}) where {T}
     memoryref(S.data, S.offset)
+end
+function Base.is_ptr_loadable(::Strider)
+    true
+end
+function Base.is_ptr_storable(::Strider)
+    true
 end
 
 # Create a type to test strided array interface edge cases.
@@ -161,5 +189,7 @@ function Base.elsize(::Type{NonMemStridedArray{T, N}}) where {T, N}
     Base.elsize(Array{T, N})
 end
 Base.strides(A::NonMemStridedArray) = strides(A.a)
+Base.try_strides(A::NonMemStridedArray) = try_strides(A.a)
+Base.is_ptr_loadable(::NonMemStridedArray) = true
 
 end # module StridedArrays

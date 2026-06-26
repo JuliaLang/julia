@@ -71,6 +71,9 @@ Base.similar(A::WrapperArray, ::Type{T}, dims::Dims) where T = similar(A.parent,
 Base.cconvert(::Type{Ptr{T}}, A::WrapperArray{T}) where {T} = Base.cconvert(Ptr{T}, A.parent)
 Base.strides(A::WrapperArray) = strides(A.parent)
 Base.elsize(::Type{WrapperArray{T,N,A}}) where {T,N,A<:AbstractArray{T,N}} = Base.elsize(A)
+Base.try_strides(A::WrapperArray) = try_strides(A.parent)
+Base.is_ptr_loadable(A::WrapperArray) = is_ptr_loadable(A.parent)
+Base.is_ptr_storable(A::WrapperArray) = is_ptr_storable(A.parent)
 
 # An array type with heterogenous axis types
 struct TestAxis{N}

@@ -61,11 +61,21 @@ Base.cconvert(::Type{Ptr{T}}, A::PermutedDimsArray{T}) where {T} = Base.cconvert
 # or a linear index?
 Base.pointer(A::PermutedDimsArray, i::Integer) = throw(ArgumentError("pointer(A, i) is deliberately unsupported for PermutedDimsArray"))
 
+function Base.try_strides(A::PermutedDimsArray{T,N,perm}) where {T,N,perm}
+    s = @something try_strides(parent(A)) return nothing
+    ntuple(d->s[perm[d]], Val(N))
+end
 function Base.strides(A::PermutedDimsArray{T,N,perm}) where {T,N,perm}
     s = strides(parent(A))
     ntuple(d->s[perm[d]], Val(N))
 end
 Base.elsize(::Type{<:PermutedDimsArray{<:Any, <:Any, <:Any, <:Any, P}}) where {P} = Base.elsize(P)
+function Base.is_ptr_loadable(A::PermutedDimsArray)
+    is_ptr_loadable(parent(A))
+end
+function Base.is_ptr_storable(A::PermutedDimsArray)
+    is_ptr_storable(parent(A))
+end
 
 @inline function Base.getindex(A::PermutedDimsArray{T,N,perm,iperm}, I::Vararg{Int,N}) where {T,N,perm,iperm}
     @boundscheck checkbounds(A, I...)

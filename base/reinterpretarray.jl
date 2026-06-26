@@ -196,6 +196,16 @@ strides(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}) = siz
 stride(A::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}, k::Integer) =
     k ≤ ndims(A) ? strides(A)[k] : length(A)
 
+function try_strides(a::Union{Array, Memory, CodeUnits{UInt8, <:Union{String, SubString{String}}}})::Dims
+    size_to_strides(1, size(a)...)
+end
+function is_ptr_loadable(::Union{Array, Memory, CodeUnits{UInt8, <:Union{String, SubString{String}}}})
+    true
+end
+function is_ptr_storable(::Union{Array, Memory})
+    true
+end
+
 function strides(a::ReinterpretArray{T,<:Any,S,<:AbstractArray{S},IsReshaped}) where {T,S,IsReshaped}
     _checkcontiguous(Bool, a) && return size_to_strides(1, size(a)...)
     stp = strides(parent(a))
@@ -216,6 +226,48 @@ end
     all(i->iszero(i[2]), drs) ||
         throw(ArgumentError("Parent's strides could not be exactly divided!"))
     map(first, drs)
+end
+
+function try_strides(a::ReinterpretArray{T,<:Any,S,<:AbstractArray{S},IsReshaped}) where {T,S,IsReshaped}
+    stp = try_strides(parent(a))
+    isnothing(stp) && return nothing
+    els::Int, elp::Int = sizeof(T), sizeof(S)
+    els == elp && return stp # 0dim parent is also handled here.
+    if IsReshaped && els < elp
+        x = _try_checked_strides(stp, els, elp)
+        if isnothing(x)
+            return nothing # Parent's strides could not be exactly divided!
+        else
+            return (1, x...)
+        end
+    end
+    stp[1] == 1 || return nothing  # Parent must be contiguous in the 1st dimension!
+    st′ = _try_checked_strides(tail(stp), els, elp)
+    if isnothing(st′)
+        return nothing # Parent's strides could not be exactly divided!
+    else
+        return IsReshaped ? st′ : (1, st′...)
+    end
+end
+
+@inline function _try_checked_strides(stp::Tuple, els::Integer, elp::Integer)
+    if elp > els && rem(elp, els) == 0
+        N = div(elp, els)
+        return map(i -> N * i, stp)
+    end
+    drs = map(i -> divrem(elp * i, els), stp)
+    if !all(i->iszero(i[2]), drs)
+        return nothing # Parent's strides could not be exactly divided!
+    end
+    return map(first, drs)
+end
+
+function is_ptr_loadable(a::ReinterpretArray{T,N,S} where N) where {T,S}
+    is_ptr_loadable(parent(a)) && (a.readable || array_subpadding(T, S))
+end
+
+function is_ptr_storable(a::ReinterpretArray{T,N,S} where N) where {T,S}
+    is_ptr_storable(parent(a)) && (a.writable || array_subpadding(S, T))
 end
 
 _checkcontiguous(::Type{Bool}, A::ReinterpretArray) = _checkcontiguous(Bool, parent(A))
