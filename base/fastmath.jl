@@ -172,6 +172,8 @@ max_fast(x::T, y::T) where {T<:FloatTypes} = max_float_fast(x, y)
 min_fast(x::T, y::T) where {T<:FloatTypes} = min_float_fast(x, y)
 minmax_fast(x::T, y::T) where {T<:FloatTypes} = (min_fast(x, y), max_fast(x, y))
 
+inv_fast(x::T) where {T<:FloatTypes} = div_fast(one(T), x)
+
 @fastmath begin
     cmp_fast(x::T, y::T) where {T<:FloatTypes} = ifelse(x==y, 0, ifelse(x<y, -1, +1))
     log_fast(b::T, x::T) where {T<:FloatTypes} = log_fast(x)/log_fast(b)
