@@ -65,6 +65,7 @@ let
     @test e isa CapturedException
     @test e.ex == ErrorException("captured")
     @test e.processed_bt[2][1].func === :f42105
+    @test isempty(e.caused_by)
 end
 
 # propagate errors from tasks
@@ -76,6 +77,23 @@ let buffer = Vector{Any}(undef, 100)
     end
     @test e isa CapturedException
     @test e.ex == ErrorException("ouch")
+end
+
+# issue #47432
+let
+    f47432(x) = try error("root cause"); catch; error("additional info $x"); end
+    e = try
+        asyncmap(f47432, 1:3)
+    catch e
+        e
+    end
+    @test e isa CapturedException
+    @test e.ex isa ErrorException && startswith(e.ex.msg, "additional info")
+    @test length(e.caused_by) == 1
+    @test e.caused_by[1].exception == ErrorException("root cause")
+    rendered = sprint(showerror, e)
+    @test occursin("caused by", rendered)
+    @test occursin("root cause", rendered)
 end
 
 # issue #61440
