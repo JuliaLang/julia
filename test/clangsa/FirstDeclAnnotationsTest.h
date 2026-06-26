@@ -26,3 +26,12 @@ int fda_missing_param(int *p);
 void fda_ok_vis(void) JL_DLLEXPORT;
 void fda_missing_vis(void);
 void fda_raw_vis(void);
+
+// Function-pointer annotation compatibility: a function converted to this
+// typedef must carry at least its JL_NOTSAFEPOINT, or calls through the pointer
+// would be analyzed unsoundly.
+typedef void (*fda_cb_t)(int) JL_NOTSAFEPOINT;
+void fda_cb_ok(int x) JL_NOTSAFEPOINT;
+void fda_cb_bad(int x);
+void uv_fda_fake(int x);
+void fda_take_cb(fda_cb_t cb);
