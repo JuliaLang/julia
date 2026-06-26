@@ -265,6 +265,8 @@ void jl_safepoint_wait_gc(jl_task_t *ct) JL_NOTSAFEPOINT
             uv_cond_wait(&safepoint_cond_end, &safepoint_lock);
         uv_mutex_unlock(&safepoint_lock);
     }
+    if (ct != NULL)
+        jl_gc_notify_task_resume(ct);
 }
 
 // equivalent to jl_set_gc_and_wait, but waiting on resume-thread lock instead
@@ -293,6 +295,7 @@ void jl_safepoint_wait_thread_resume(jl_task_t *ct)
     // correct GC state, and not still stuck in JL_GC_STATE_WAITING
     jl_atomic_store_release(&ct->ptls->gc_state, state);
     uv_mutex_unlock(&ct->ptls->sleep_lock);
+    jl_gc_notify_task_resume(ct);
 }
 // This takes the sleep lock and puts the thread in GC_SAFE
 int8_t jl_safepoint_take_sleep_lock(jl_ptls_t ptls)
