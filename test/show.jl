@@ -3010,6 +3010,15 @@ end
         @test !contains(str, "\e[93m")
     end
 
+    @testset "no SSA highlighting with InteractiveUtils.highlighting[:warntype]=false" begin
+        InteractiveUtils.highlighting[:warntype] = false
+        str = render_code_warntype(foo_ssa_test, (Vector{Any},); color=true)
+        @test !contains(str, "\e[91m")
+        @test !contains(str, "\e[33m")
+        @test !contains(str, "\e[93m")
+        InteractiveUtils.highlighting[:warntype] = true
+    end
+
     @testset "stable input has no unstable highlighting" begin
         str = render_code_warntype(foo_ssa_test, (Vector{Float64},); color=true)
         @test !contains(str, "\e[91m")

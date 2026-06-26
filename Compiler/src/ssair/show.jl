@@ -108,6 +108,7 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), code::Union{IRCode,Co
     end
     # TODO: `indent` is supposed to be the full indent including `"│  "` prefixes
     indent = 2
+    io = color ? io : IOContext(io, :color => false)
     if !color && stmt isa PiNode
         # when the outer context is already colored (green, for pending nodes), don't use the usual coloring printer
         print(io, "π (")
@@ -620,6 +621,7 @@ end
   printed as part of the IR or not
 - `bb_color`: color used for printing the basic block brackets on the left
 - `label_dynamic_calls`: whether to label calls as dynamic / builtin / intrinsic
+- `color_warntype`: whether to color the SSA value index based on the stability of its type
 """
 struct IRShowConfig
     line_info_preprinter
@@ -627,19 +629,22 @@ struct IRShowConfig
     should_print_stmt
     bb_color::Symbol
     label_dynamic_calls::Bool
+    color_warntype::Bool
 
     IRShowConfig(
         line_info_preprinter,
         line_info_postprinter=default_expr_type_printer;
         should_print_stmt=Returns(true),
         bb_color::Symbol=:light_black,
-        label_dynamic_calls=true
+        label_dynamic_calls=true,
+        color_warntype=false
     ) = new(
         line_info_preprinter,
         line_info_postprinter,
         should_print_stmt,
         bb_color,
-        label_dynamic_calls
+        label_dynamic_calls,
+        color_warntype
     )
 end
 
@@ -698,7 +703,7 @@ end
 function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact}, idx::Int, config::IRShowConfig,
                       sptypes::Vector{VarState}, used::BitSet, cfg::CFG, bb_idx::Int; pop_new_node! = Returns(nothing), only_after::Bool=false)
     return show_ir_stmt(io, code, idx, config.line_info_preprinter, config.line_info_postprinter,
-                        sptypes, used, cfg, bb_idx; pop_new_node!, only_after, config.bb_color, config.label_dynamic_calls)
+                        sptypes, used, cfg, bb_idx; pop_new_node!, only_after, config.bb_color, config.label_dynamic_calls, config.color_warntype)
 end
 
 function _print_ir_indentation(io::IO, cfg::CFG, bb_idx::Int, max_bb_idx_size::Int, bb_color,
@@ -757,7 +762,7 @@ end
 
 function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact}, idx::Int, line_info_preprinter, line_info_postprinter,
                       sptypes::Vector{VarState}, used::BitSet, cfg::CFG, bb_idx::Int; pop_new_node! = Returns(nothing), only_after::Bool=false,
-                      bb_color=:light_black, label_dynamic_calls::Bool=true)
+                      bb_color=:light_black, label_dynamic_calls::Bool=true, color_warntype::Bool=false)
     stmt = _stmt(code, idx)
     type = _type(code, idx)
     max_bb_idx_size = length(string(length(cfg.blocks)))
@@ -798,7 +803,7 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact},
             stmt = statement_indices_to_labels(stmt, cfg)
         end
         show_type = type !== nothing && should_print_ssa_type(stmt)
-        print_stmt(io, idx, stmt, code, sptypes, used, maxlength_idx, true, show_type, label_dynamic_calls)
+        print_stmt(io, idx, stmt, code, sptypes, used, maxlength_idx, color_warntype, show_type, label_dynamic_calls)
         if type !== nothing # ignore types for pre-inference code
             if type === UNDEF
                 # This is an error, but can happen if passes don't update their type information

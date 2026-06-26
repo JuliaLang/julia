@@ -85,7 +85,7 @@ function print_warntype_codeinfo(io::IO, src::Core.CodeInfo, @nospecialize(retty
     print(io, "Body")
     warntype_type_printer(io; type=rettype, used=true)
     println(io)
-    irshow_config = Base.IRShow.IRShowConfig(lineprinter(src), warntype_type_printer; label_dynamic_calls)
+    irshow_config = Base.IRShow.IRShowConfig(lineprinter(src), warntype_type_printer; label_dynamic_calls, color_warntype=highlighting[:warntype])
     Base.IRShow.show_ir(io, src, irshow_config)
     println(io)
 end
