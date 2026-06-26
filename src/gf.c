@@ -3061,7 +3061,7 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
     }
     else {
         assert(jl_is_array(oldvalue));
-        d = (jl_method_t**)jl_array_ptr_data(oldvalue);
+        d = (jl_method_t**)jl_array_ptr_data((jl_array_t*)oldvalue);
         n = jl_array_nrows(oldvalue);
         oldmi = jl_alloc_vec_any(0);
     }
