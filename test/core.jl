@@ -564,6 +564,11 @@ end
 typeofbottom_sparam_call_62001() = typeofbottom_sparam_62001(Core.TypeofBottom.instance)
 @test typeofbottom_sparam_call_62001() == Union{}[]
 
+# Precompile hints should canonicalize `Core.TypeofBottom` to the singleton
+# `Type{Union{}}` dispatch spelling.
+@test precompile(Tuple{typeof(Base.typejoin), Core.TypeofBottom, Any})
+@test precompile(Tuple{typeof(Base.typejoin), Any, Core.TypeofBottom})
+
 # specializations are deduplicated by type equality (`Type == Core.AnyType`), so
 # `specTypes` carries whichever representation was interned first and
 # `jl_isa_compileable_sig` must accept both

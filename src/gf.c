@@ -4219,11 +4219,18 @@ static jl_tupletype_t *egal_normalize_hint_types(jl_tupletype_t *types JL_PROPAG
     size_t i, np = jl_nparams(types);
     for (i = 0; i < np; i++) {
         jl_value_t *elt = jl_tparam(types, i);
-        if (!jl_is_vararg(elt) && jl_is_typeeq(elt) && !jl_has_free_typevars(elt) &&
-            jl_typeeq_T(elt) != jl_bottom_type) {
-            if (!newparams)
-                newparams = jl_svec_copy(types->parameters);
-            jl_svecset(newparams, i, jl_wrap_TypeEgal(jl_typeeq_T(elt)));
+        if (!jl_is_vararg(elt)) {
+            if (elt == (jl_value_t*)jl_typeofbottom_type) {
+                if (!newparams)
+                    newparams = jl_svec_copy(types->parameters);
+                jl_svecset(newparams, i, jl_wrap_Type(jl_bottom_type));
+            }
+            else if (jl_is_typeeq(elt) && !jl_has_free_typevars(elt) &&
+                     jl_typeeq_T(elt) != jl_bottom_type) {
+                if (!newparams)
+                    newparams = jl_svec_copy(types->parameters);
+                jl_svecset(newparams, i, jl_wrap_TypeEgal(jl_typeeq_T(elt)));
+            }
         }
     }
     if (newparams)
