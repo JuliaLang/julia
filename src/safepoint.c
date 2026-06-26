@@ -241,6 +241,7 @@ void jl_set_gc_and_wait(jl_task_t *ct)
     uv_cond_broadcast(&safepoint_cond_begin);
     uv_mutex_unlock(&safepoint_lock);
     jl_safepoint_wait_gc(ct);
+    jl_gc_notify_task_resume(ct);
     jl_atomic_store_release(&ct->ptls->gc_state, state);
     jl_safepoint_wait_thread_resume(ct); // block in thread-suspend now if requested, after clearing the gc_state
 }
