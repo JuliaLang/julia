@@ -132,7 +132,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
         return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
     end
     current_world = get_world_counter()
-    matches = find_method_matches(interp, argtypes, atype; max_methods, fargs=arginfo.fargs)
+    matches = find_method_matches(interp, arginfo, atype, sv; max_methods)
     if isa(matches, FailedMethodMatch)
         add_remark!(interp, sv, matches.reason)
         return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
@@ -358,32 +358,251 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
     return gfresult
 end
 
-function find_method_matches(interp::AbstractInterpreter, argtypes::Vector{Any}, @nospecialize(atype);
-                             max_union_splitting::Int = InferenceParams(interp).max_union_splitting,
-                             max_methods::Int = InferenceParams(interp).max_methods,
-                             fargs::Union{Nothing,Vector{Any}}=nothing)
-    if is_union_split_eligible(typeinf_lattice(interp), argtypes, max_union_splitting; fargs)
-        return find_union_split_method_matches(interp, argtypes, max_methods; fargs)
+function find_method_matches(
+        interp::AbstractInterpreter, arginfo::ArgInfo, @nospecialize(atype), sv::AbsIntState;
+        max_union_splitting::Int = InferenceParams(interp).max_union_splitting,
+        max_methods::Int = InferenceParams(interp).max_methods
+    )
+    𝕃 = typeinf_lattice(interp)
+    constraints = caller_sig_constraints(arginfo, sv)
+    if constraints !== nothing
+        projection = project_caller_sig(arginfo.argtypes, constraints)
+        if projection !== nothing
+            projected_atype, enums = projection
+            # Fold the caller-frame constraints into the call signature.
+            # Intersecting with `atype` keeps any flow-sensitive refinement of
+            # the call arguments (e.g. a slot narrowed on one branch), which the
+            # projection from the caller's declared parameter types drops.
+            refined_atype = typeintersect(projected_atype, atype)
+            # Only proceed when this strictly narrows the call signature;
+            # otherwise (`refined_atype == atype`) fall through to ordinary union
+            # splitting, which can still split unconstrained union arguments.
+            if refined_atype !== Bottom && !(atype <: refined_atype)
+                # Looking each distributed arm up on its own keeps the per-arm
+                # method count bounded and lets a single covering method report a
+                # full match. `distribute_caller_arms` caps the arm count by
+                # `max_union_splitting` itself, so this branch needs no
+                # `unionsplitcost` gate like the unconstrained path below. With
+                # nothing to distribute, look up the projected signature directly
+                # (ordinary matching distributes its bound).
+                arm_sigs = distribute_caller_arms(refined_atype, enums,
+                    length(arginfo.argtypes), max_union_splitting)
+                if arm_sigs !== nothing
+                    # the per-arm constants are not refined here, so reuse the
+                    # original call argtypes for every arm
+                    arm_argtypes = Vector{Any}[arginfo.argtypes for _ in arm_sigs]
+                    return find_union_split_method_matches(interp, arm_argtypes,
+                        max_methods; split_sigs=arm_sigs)
+                end
+                return find_simple_method_matches(interp, refined_atype, max_methods)
+            end
+        end
+    end
+    if 1 < unionsplitcost(𝕃, arginfo.argtypes; fargs=arginfo.fargs) <= max_union_splitting
+        split_argtypes = switchtupleunion(𝕃, arginfo.argtypes; fargs=arginfo.fargs)
+        return find_union_split_method_matches(interp, split_argtypes, max_methods)
     end
     return find_simple_method_matches(interp, atype, max_methods)
 end
 
-# NOTE this is valid as far as any "constant" lattice element doesn't represent `Union` type
-is_union_split_eligible(𝕃::AbstractLattice, argtypes::Vector{Any}, max_union_splitting::Int;
-                        fargs::Union{Nothing,Vector{Any}}=nothing) =
-    1 < unionsplitcost(𝕃, argtypes; fargs) <= max_union_splitting
+"""
+    CallerSigConstraints
 
-function find_union_split_method_matches(interp::AbstractInterpreter, argtypes::Vector{Any},
-                                         max_methods::Int;
-                                         fargs::Union{Nothing,Vector{Any}}=nothing)
-    split_argtypes = switchtupleunion(typeinf_lattice(interp), argtypes; fargs)
+Represents the caller-side information needed to project the caller method
+signature onto a callee call signature (see `project_caller_sig`).
+
+This intentionally only records call arguments that originate from caller
+argument slots. In particular, it does not try to model static parameters or a
+general argument-origin abstraction.
+
+Fields:
+- `frame_sig` is the original caller method signature, including constraints
+  such as repeated use of the same type variable.
+- `arg_slots[i]` is the caller argument slot used by call argument `i`, or `0`
+  when argument `i` is not known to originate from a caller argument slot.
+- `frame_nargs` is the number of caller argument slots.
+- `frame_nfixed` is the number of fixed caller argument slots. For vararg
+  frames, this excludes the final rest slot.
+"""
+struct CallerSigConstraints
+    frame_sig::Type
+    arg_slots::Vector{Int}
+    frame_nargs::Int
+    frame_nfixed::Int
+    CallerSigConstraints(
+        @nospecialize(frame_sig::Type), arg_slots::Vector{Int}, frame_nargs::Int, frame_nfixed::Int
+    ) = new(frame_sig, arg_slots, frame_nargs, frame_nfixed)
+end
+
+function caller_sig_constraints(arginfo::ArgInfo, sv::AbsIntState)
+    sv isa InferenceState || return nothing
+    # This refinement projects the caller method signature onto the callee call
+    # signature, which is only useful when that signature constrains its
+    # argument slots beyond their individual declared types, i.e. when it is a
+    # `UnionAll` whose type variables couple multiple arguments (or multiple
+    # parameters of one argument).
+    sv.linfo.specTypes isa UnionAll || return nothing
+    fargs = arginfo.fargs
+    fargs === nothing && return nothing
+    length(fargs) == length(arginfo.argtypes) || return nothing
+    any(isvarargtype, arginfo.argtypes) && return nothing
+    nargs = Int(sv.src.nargs)
+    arg_slots = fill(0, length(fargs))
+    found_slot = false
+    for i = 1:length(fargs)
+        farg = ssa_def_slot(fargs[i], sv)
+        farg isa SlotNumber || continue
+        slot = slot_id(farg)
+        # Only caller argument slots are usable here. Other local slots do not
+        # participate in the caller method signature and therefore cannot safely
+        # recover same-TypeVar constraints from it.
+        1 <= slot <= nargs || continue
+        arg_slots[i] = slot
+        found_slot = true
+    end
+    found_slot || return nothing
+    return CallerSigConstraints(sv.linfo.specTypes, arg_slots, nargs, nargs - Int(sv.src.isva))
+end
+
+"""
+    project_caller_sig(argtypes::Vector{Any}, constraints::CallerSigConstraints)
+        -> Union{Nothing,Pair{Any,Vector{Tuple{Vector{Int},Vector{Any}}}}}
+
+Project the caller method signature onto the callee call signature: call
+arguments that originate from caller argument slots take the corresponding
+parameter of the caller signature with the caller's type variables kept intact,
+so that constraints such as repeated use of the same variable carry over to
+method lookup. Other arguments use their widened call-site argument types.
+
+A type variable may be kept in multiple covariant argument positions only when
+it is also diagonal in the caller signature. Otherwise (e.g. when the variable
+also occurs invariantly in a caller parameter that is not part of the call),
+the variable would become diagonal in the projected signature — requiring all
+its arguments to have the same concrete type — even though the caller frame
+imposes no such constraint. Such variables are widened to the call-site
+argument types instead.
+
+Returns the projected signature together with its *enumerable* variables: each
+entry `(positions, components)` records a union-bounded variable that appears
+only as a direct (bare) argument type at `positions`, so the call can be
+union-split by distributing the variable over the arms `components` of its upper
+bound (narrowing the bound rather than substituting a concrete type, which keeps
+the diagonal constraint inside each arm). The projected signature itself can
+also be looked up directly, since ordinary method matching distributes a
+union-bounded `∀` variable over the arms of its bound.
+"""
+function project_caller_sig(argtypes::Vector{Any}, constraints::CallerSigConstraints)
+    frame_sig = constraints.frame_sig
+    frame_tuple = unwrap_unionall(frame_sig)
+    frame_tuple isa DataType || return nothing
+    nargs = length(argtypes)
+    params = Vector{Any}(undef, nargs)
+    for i = 1:nargs
+        slot = constraints.arg_slots[i]
+        if slot == 0
+            params[i] = widenconst(argtypes[i])
+        else
+            1 <= slot <= constraints.frame_nargs || return nothing
+            if slot > constraints.frame_nfixed
+                # the vararg rest slot, passed as a tuple value
+                slot == constraints.frame_nfixed + 1 || return nothing
+                isempty(frame_tuple.parameters) && return nothing
+                vaty = frame_tuple.parameters[end]
+                isvarargtype(vaty) || return nothing
+                params[i] = Tuple{vaty}
+            else
+                slot <= length(frame_tuple.parameters) || return nothing
+                decl = frame_tuple.parameters[slot]
+                isvarargtype(decl) && return nothing
+                params[i] = decl
+            end
+        end
+    end
+    enums = Tuple{Vector{Int},Vector{Any}}[]
+    sig = frame_sig
+    while sig isa UnionAll
+        var = sig.var
+        sig = sig.body
+        touched = Int[]
+        allbare = true               # every occurrence of `var` is a whole (bare) argument
+        proj_covariant_only = true   # `var` occurs covariant-only across the projected arguments
+        for i = 1:nargs
+            has_typevar(params[i], var) || continue
+            push!(touched, i)
+            params[i] === var || (allbare = false)
+            var_occurs_covariant_only(params[i], var) || (proj_covariant_only = false)
+        end
+        isempty(touched) && continue
+        # see the docstring; variables with non-trivial bounds are handled conservatively
+        shareable = var.lb === Bottom && !has_free_typevars(var.ub)
+        if shareable && proj_covariant_only
+            # `var` is covariant in the projection, so keeping it shared would
+            # make it diagonal there. Do so only when the caller signature makes
+            # it diagonal too, i.e. `var` occurs covariant-only in the caller
+            # frame; otherwise the projection manufactures a constraint the
+            # caller frame lacks. A single covariant occurrence is unaffected
+            # either way (a lone free variable equals its bound).
+            shareable = var_occurs_covariant_only(frame_tuple, var)
+        end
+        if !shareable
+            for i in touched
+                params[i] = widenconst(argtypes[i])
+            end
+        elseif allbare && isa(var.ub, Union)
+            # `var` occurs only as bare argument types and has a union upper
+            # bound, so the call can be split by distributing it over the bound
+            push!(enums, (touched, uniontypes(var.ub)))
+        end
+    end
+    all(@nospecialize(x) -> valid_as_lattice(x, true), params) || return nothing
+    projected_sig = rewrap_unionall(Tuple{params...}, frame_sig)
+    return Pair{Any,Vector{Tuple{Vector{Int},Vector{Any}}}}(projected_sig, enums)
+end
+
+# Distribute the enumerable variables of a projected call signature over the arms
+# of their upper bounds, narrowing each variable's bound to one component at a
+# time (keeping the variable, so the diagonal constraint is preserved within each
+# arm). Returns the resulting arm signatures, or `nothing` when the split is not
+# applicable or would exceed `max_union_splitting`.
+function distribute_caller_arms(@nospecialize(atype), enums::Vector{Tuple{Vector{Int},Vector{Any}}},
+                                nargs::Int, max_union_splitting::Int)
+    isempty(enums) && return nothing
+    arms = Any[atype]
+    for (positions, components) in enums
+        newarms = Any[]
+        for arm in arms, comp in components
+            selector = Vector{Any}(undef, nargs)
+            fill!(selector, Any)
+            for p in positions
+                selector[p] = comp
+            end
+            narrowed = typeintersect(arm, Tuple{selector...})
+            narrowed === Bottom && continue
+            push!(newarms, narrowed)
+        end
+        length(newarms) > max_union_splitting && return nothing
+        arms = newarms
+    end
+    return isempty(arms) ? nothing : arms
+end
+
+# Look up each union-split case independently and merge the results. Each case
+# `i` is looked up using `split_sigs[i]` if given, otherwise the signature
+# derived from the argtypes `split_argtypes[i]`; the latter (including any
+# constants) is recorded for each match for later constant propagation.
+# `split_sigs` lets a case be looked up as a richer signature than its argtypes
+# can express, e.g. a bound-narrowed `Tuple{T,T} where T<:A`.
+function find_union_split_method_matches(
+        interp::AbstractInterpreter, split_argtypes::Vector, max_methods::Int;
+        split_sigs::Union{Nothing,Vector{Any}} = nothing
+    )
     infos = MethodMatchInfo[]
     applicable = MethodMatchTarget[]
     applicable_argtypes = Vector{Any}[] # arrays like `argtypes`, including constants, for each match
     valid_worlds = WorldRange()
     for i in 1:length(split_argtypes)
         arg_n = split_argtypes[i]::Vector{Any}
-        sig_n = argtypes_to_type(arg_n)
+        sig_n = split_sigs === nothing ? argtypes_to_type(arg_n) : split_sigs[i]
         sig_n === Bottom && continue
         thismatches = findall(sig_n, method_table(interp); limit = max_methods)
         if thismatches === nothing

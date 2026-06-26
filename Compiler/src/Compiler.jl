@@ -37,47 +37,48 @@ else
 
 using Core.Intrinsics, Core.IR
 
-using Core: ABIOverride, Builtin, CodeInstance, IntrinsicFunction, AnyType, MethodInstance, MethodMatch,
-    MethodTable, MethodCache, PartialOpaque, SimpleVector, TypeofVararg,
-    TypeEq,
-    _apply_iterate, apply_type, compilerbarrier, donotdelete, memoryref_isassigned,
-    memoryrefget, memoryrefnew, memoryrefoffset, memoryrefset!, memoryrefunset!, print, println, show, svec,
-    typename, unsafe_write, write, stdout, stderr
+using Core: ABIOverride, AnyType, Builtin, CodeInstance, IntrinsicFunction, MethodCache,
+    MethodInstance, MethodMatch, MethodTable, PartialOpaque, SimpleVector, TypeEq,
+    TypeofVararg, _apply_iterate, apply_type, compilerbarrier, donotdelete,
+    memoryref_isassigned, memoryrefget, memoryrefnew, memoryrefoffset, memoryrefset!,
+    memoryrefunset!, print, println, show, stderr, stdout, svec, typename, unsafe_write,
+    write
 
 using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospecializeinfer,
-    PARTITION_KIND_GLOBAL, PARTITION_KIND_UNDEF_CONST, PARTITION_KIND_BACKDATED_CONST, PARTITION_KIND_DECLARED,
-    PARTITION_FLAG_DEPWARN,
-    Base, BitVector, Bottom, Callable, DataTypeFieldDesc,
-    EffectsOverride, Filter, Generator, NUM_EFFECTS_OVERRIDES,
-    OneTo, Ordering, RefValue, _NAMEDTUPLE_NAME,
-    _array_for, _bits_findnext, _defaultctors, _methods_by_ftype, _uniontypes, all, allocatedinline, any,
-    argument_datatypename, binding_kind, cconvert, copy_exprargs, datatype_arrayelem,
-    datatype_fieldcount, datatype_fieldtypes, datatype_layoutsize, datatype_nfields,
-    datatype_pointerfree, decode_effects_override, diff_names, fieldindex, visit,
-    generating_output, get_nospecializeinfer_sig, get_world_counter, has_free_typevars, has_typevar,
-    hasgenerator, hasintersect, indexed_iterate, isType, is_file_tracked, is_function_def,
-    is_meta_expr, is_meta_expr_head, is_nospecialized, is_nospecializeinfer, is_defined_const_binding,
-    is_some_const_binding, is_some_guard, is_some_imported, is_some_explicit_imported, is_some_binding_imported, is_valid_intrinsic_elptr,
-    isbitsunion, isconcretedispatch, isdispatchelem, isexpr, isfieldatomic, isidentityfree,
-    iskindtype, ismutabletypename, ismutationfree, issingletontype, isvarargtype, isvatuple,
-    kwerr, lookup_binding_partition, may_invoke_generator, methods, midpoint, moduleroot,
-    partition_restriction, quoted, rename_unionall, rewrap_unionall, specialize_method,
-    structdiff, tls_world_age, type_parameter, unconstrain_vararg_length, unionlen, uniontype_layout,
-    uniontypes, unsafe_convert, unwrap_unionall, unwrapva, vect, widen_diagonal,
-    _uncompressed_ir, datatype_min_ninitialized,
-    partialstruct_init_undefs, fieldcount_noerror, _eval_import, _eval_using,
-    get_ci_mi, get_methodtable, morespecific, specializations, has_image_globalref,
-    rewrap_free_typevars, find_free_typevars, typeintersect_env,
-    PARTITION_MASK_KIND, PARTITION_KIND_GUARD, PARTITION_FLAG_EXPORTED, PARTITION_FLAG_DEPRECATED,
-    BINDING_FLAG_ANY_IMPLICIT_EDGES, is_some_implicit, IteratorSize, SizeUnknown, get_require_world, JLOptions,
-    devnull, devnull as stdin
+    BINDING_FLAG_ANY_IMPLICIT_EDGES, Base, BitVector, Bottom, Callable,
+    DataTypeFieldDesc, EffectsOverride, Filter, Generator, IteratorSize, JLOptions,
+    NUM_EFFECTS_OVERRIDES, OneTo, Ordering, PARTITION_FLAG_DEPRECATED,
+    PARTITION_FLAG_DEPWARN, PARTITION_FLAG_EXPORTED, PARTITION_KIND_BACKDATED_CONST,
+    PARTITION_KIND_DECLARED, PARTITION_KIND_GLOBAL, PARTITION_KIND_GUARD,
+    PARTITION_KIND_UNDEF_CONST, PARTITION_MASK_KIND, RefValue, SizeUnknown,
+    _NAMEDTUPLE_NAME, _array_for, _bits_findnext, _defaultctors, _eval_import,
+    _eval_using, _methods_by_ftype, _uncompressed_ir, _uniontypes, all, allocatedinline,
+    any, argument_datatypename, binding_kind, cconvert, copy_exprargs,
+    datatype_arrayelem, datatype_fieldcount, datatype_fieldtypes, datatype_layoutsize,
+    datatype_min_ninitialized, datatype_nfields, datatype_pointerfree,
+    decode_effects_override, devnull, devnull as stdin, diff_names, fieldcount_noerror,
+    fieldindex, find_free_typevars, generating_output, get_ci_mi, get_methodtable,
+    get_nospecializeinfer_sig, get_require_world, get_world_counter, has_free_typevars,
+    has_image_globalref, has_typevar, hasgenerator, hasintersect, indexed_iterate,
+    isType, is_defined_const_binding, is_file_tracked, is_function_def, is_meta_expr,
+    is_meta_expr_head, is_nospecialized, is_nospecializeinfer, is_some_binding_imported,
+    is_some_const_binding, is_some_explicit_imported, is_some_guard, is_some_implicit,
+    is_some_imported, is_valid_intrinsic_elptr, isbitsunion, isconcretedispatch,
+    isdispatchelem, isexpr, isfieldatomic, isidentityfree, iskindtype, ismutabletypename,
+    ismutationfree, issingletontype, isvarargtype, isvatuple, kwerr,
+    lookup_binding_partition, may_invoke_generator, methods, midpoint, moduleroot,
+    morespecific, partialstruct_init_undefs, partition_restriction, quoted,
+    rename_unionall, rewrap_free_typevars, rewrap_unionall, specializations,
+    specialize_method, structdiff, tls_world_age, type_parameter, typeintersect_env,
+    unconstrain_vararg_length, unionlen, uniontype_layout, uniontypes, unsafe_convert,
+    unwrap_unionall, unwrapva, var_occurs_covariant_only, vect, visit, widen_diagonal
 
 using Base
 using Base.Order
 
-import Base: ==, _topmod, append!, convert, copy, copy!, findall, first, get, get!,
-    getindex, haskey, in, isempty, isready, iterate, iterate, last, length, max_world,
-    min_world, popfirst!, push!, resize!, setindex!, size, intersect
+import Base: ==, _topmod, append!, convert, copy, copy!, findall, first, get, get!, getindex,
+    haskey, in, intersect, isempty, isready, iterate, iterate, last, length, max_world,
+    min_world, popfirst!, push!, resize!, setindex!, size
 
 # Needs to match UUID defined in Project.toml
 ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Compiler,
