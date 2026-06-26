@@ -558,6 +558,12 @@ let f = Ref{Any}(anytype_bottom_61915), r = Ref{Any}(Union{})
     @test length(methods(anytype_bottom_61915, (Type,))) == 2
 end
 
+# Compiled calls must keep the `Type{Union{}}` singleton key when binding static
+# parameters for `::Type{T}` methods.
+@noinline typeofbottom_sparam_62001(::Type{T}) where {T} = Vector{T}()
+typeofbottom_sparam_call_62001() = typeofbottom_sparam_62001(Core.TypeofBottom.instance)
+@test typeofbottom_sparam_call_62001() == Union{}[]
+
 # specializations are deduplicated by type equality (`Type == Core.AnyType`), so
 # `specTypes` carries whichever representation was interned first and
 # `jl_isa_compileable_sig` must accept both

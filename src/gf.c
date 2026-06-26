@@ -1295,7 +1295,11 @@ static void jl_compilation_sig(
             // not triggered for isdispatchtuple(tt), this attempts to handle
             // some cases of adapting a random signature into a compilation signature
             // if we get a kind, where we don't expect to accept one, widen it to something more expected (Type{T})
-            if (!(jl_subtype(elt, type_i) && !jl_subtype((jl_value_t*)jl_type_type, type_i))) {
+            if (elt == (jl_value_t*)jl_typeofbottom_type) {
+                // Preserve the singleton `Type{Union{}}` dispatch key. Widening it to
+                // `Type` loses static parameters for compiled calls to `::Type{T}`.
+            }
+            else if (!(jl_subtype(elt, type_i) && !jl_subtype((jl_value_t*)jl_type_type, type_i))) {
                 if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
                 elt = (jl_value_t*)jl_type_type;
                 jl_svecset(*newparams, i, elt);
@@ -1549,6 +1553,8 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
         }
 
         if (jl_is_kind(elt)) {
+            if (elt == (jl_value_t*)jl_typeofbottom_type && jl_subtype(elt, type_i))
+                continue;
             // kind slots always get guard entries (checking for subtypes of Type)
             if (jl_subtype(elt, type_i) && !jl_subtype((jl_value_t*)jl_type_type, type_i))
                 continue;

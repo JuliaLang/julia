@@ -2125,7 +2125,7 @@ inline jl_value_t *modify_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_
                 success = jl_egal__bits((jl_value_t*)px, r, (jl_datatype_t*)rty);
             if (success) {
                 if (isunion) {
-                    success = (rty == jl_nth_union_component(ty, *psel));
+                    success = (rty == normalize_typeofbottom_layout_alias(jl_nth_union_component(ty, *psel)));
                     if (success) {
                         unsigned nth = 0;
                         if (!jl_find_union_component(ty, yty, &nth))

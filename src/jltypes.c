@@ -447,6 +447,21 @@ jl_value_t *jl_nth_union_component(jl_value_t *v, int i) JL_NOTSAFEPOINT
 }
 
 // inverse of jl_nth_union_component
+static int union_component_matches(jl_value_t *haystack, jl_value_t *needle) JL_NOTSAFEPOINT
+{
+    if (needle == haystack)
+        return 1;
+    if (jl_typeofbottom_type == NULL)
+        return 0;
+    if (needle == (jl_value_t*)jl_typeofbottom_type &&
+        jl_is_typeeq(haystack) && jl_typeeq_T(haystack) == jl_bottom_type)
+        return 1;
+    if (haystack == (jl_value_t*)jl_typeofbottom_type &&
+        jl_is_typeeq(needle) && jl_typeeq_T(needle) == jl_bottom_type)
+        return 1;
+    return 0;
+}
+
 int jl_find_union_component(jl_value_t *haystack, jl_value_t *needle, unsigned *nth) JL_NOTSAFEPOINT
 {
     while (jl_is_uniontype(haystack)) {
@@ -455,7 +470,7 @@ int jl_find_union_component(jl_value_t *haystack, jl_value_t *needle, unsigned *
             return 1;
         haystack = u->b;
     }
-    if (needle == haystack)
+    if (union_component_matches(haystack, needle))
         return 1;
     (*nth)++;
     return 0;
