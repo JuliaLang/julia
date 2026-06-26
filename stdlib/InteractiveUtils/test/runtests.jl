@@ -581,10 +581,7 @@ let errf = tempname(),
                 Internal error: encountered unexpected error during compilation of f_broken_code:
                 ErrorException(\"unsupported or misplaced expression \\\"invalid\\\" in function f_broken_code\")
                 """, errstr) context=errstr
-            @test occursin("""\nlater
-                Internal error: encountered unexpected error during compilation of f_broken_code:
-                ErrorException(\"unsupported or misplaced expression \\\"invalid\\\" in function f_broken_code\")
-                """, errstr) context=errstr
+            @test occursin("\nlater\n", errstr) context=errstr
             @test endswith(errstr, "\nend\n") context=errstr
         end
         rm(errf)
@@ -634,7 +631,7 @@ expansion = string(@macroexpand @code_typed optimize=false max.(Ref.([5, 6])...)
 # Make sure broadcasts in nested arguments are not processed.
 v = Any[1]
 expansion = string(@macroexpand @code_typed v[1] = rand.(Ref(1)))
-@test contains(expansion, "_dispatch_typeof(rand.(Ref(1)))")
+@test contains(expansion, "Core.Typeof(rand.(Ref(1)))")
 @test !contains(expansion, "(x1) =")
 
 # Issue # 45889

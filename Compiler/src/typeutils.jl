@@ -7,7 +7,8 @@
 # true if a value of this type is known to be exactly (`===`) the type `T`, so it
 # is inlineable as the constant `T`. A general `Type{T}` is not: it also matches
 # `S == T` with `S !== T` reps, e.g. `Union{U,V} where {U<:T,V<:T}` (#61323).
-# `Type{Union{}}` is the exception, since the bottom object is unique.
+# Use `Core.TypeEgal{T}` when that exactness is required; `Type{Union{}}` is the
+# exception, since the bottom object is unique.
 isconstType(@nospecialize t) = isa(t, Core.TypeEgal) || (isType(t) && type_parameter(t) === Union{})
 
 """

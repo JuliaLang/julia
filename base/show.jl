@@ -580,7 +580,6 @@ end
 
 print(io::IO, f::Core.IntrinsicFunction) = print(io, nameof(f))
 
-show(io::IO, ::Core.TypeofBottom) = print(io, "Union{}")
 show(io::IO, ::MIME"text/plain", ::Core.TypeofBottom) = print(io, "Union{}")
 
 function print_without_params(@nospecialize(x))
@@ -1022,15 +1021,22 @@ function show(io::IO, ::MIME"text/plain", @nospecialize(x::Type))
     end
 end
 
-show(io::IO, @nospecialize(x::TypeEq)) = show_typeeq(io, x)
-# always print under the qualified (eval-able) `Core.TypeEgal{T}` spelling, so the
-# egality kind is never conflated with `Type{T}`
-function show(io::IO, @nospecialize(x::Core.TypeEgal))
+function show_typeegal(io::IO, @nospecialize(x::Core.TypeEgal))
     print(io, "Core.TypeEgal{")
     show(io, type_parameter(x))
     print(io, "}")
 end
-show(io::IO, @nospecialize(x::Core.AnyType)) = _show_type(io, inferencebarrier(x))
+function show(io::IO, @nospecialize(x::Core.AnyType))
+    if x isa Core.TypeofBottom
+        print(io, "Union{}")
+    elseif x isa Core.TypeEgal
+        show_typeegal(io, x)
+    elseif x isa TypeEq
+        show_typeeq(io, x)
+    else
+        _show_type(io, inferencebarrier(x))
+    end
+end
 # `Type{T}` is the familiar user-facing spelling and is used for all normal
 # (compact) printing. In non-compact contexts (e.g. the REPL's `text/plain`
 # display) the canonical kind name `TypeEq{T}` is shown instead, so that a
@@ -1042,7 +1048,7 @@ function show_typeeq(io::IO, @nospecialize(x::TypeEq))
 end
 function _show_type(io::IO, @nospecialize(x::Type))
     if x isa Core.TypeEgal
-        show(io, x)
+        show_typeegal(io, x)
         return
     elseif print_without_params(x)
         show_type_name(io, (unwrap_unionall(x)::DataType).name)

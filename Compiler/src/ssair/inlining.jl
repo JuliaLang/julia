@@ -776,10 +776,6 @@ function compileable_specialization(code::Union{MethodInstance,CodeInstance}, ef
         new_atype = get_compileable_sig(method, atype, sparams)
         new_atype === nothing && return nothing
         if atype !== new_atype
-            # all compilesig rewrites must widen; guard against any rewrite (such
-            # as narrowing a closed `Type{X}` slot to the egality key) that does
-            # not cover this call (#61323)
-            atype <: new_atype || return nothing
             (_, sparams) = typeintersect_env(new_atype, method.sig)
             mi_invoke = specialize_method(method, new_atype, sparams)
             mi_invoke === nothing && return nothing

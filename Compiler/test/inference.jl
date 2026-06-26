@@ -2144,6 +2144,8 @@ g26339(T) = T === Int ? 1 : ""
 @test Base.return_types(f26339, (Type,)) == Any[Union{Int, String}]
 @test Base.return_types(g26339, (Type,)) == Any[Union{Int, String}]
 
+@noinline call_type_int61323(f, x) = f(Base.inferencebarrier(x)::Type{Int})
+
 # JuliaLang/julia#61323: a `Type{X}`-typed (`==`-only) value must not be treated as
 # `=== X`, neither directly nor through a static parameter bound from it, while
 # egality-pinned (`Const`/dispatch) queries keep folding. `S == Int` but `S !== Int`:
@@ -2154,7 +2156,7 @@ let S = (Union{T, U} where {T<:Int, U<:Int})
     for f in Any[garg61323, fsparam61323]
         @test f(Int) === 1
         @test f(S) === ""
-        @test (@noinline f(Base.inferencebarrier(S)::Type{Int})) === ""
+        @test call_type_int61323(f, S) === ""
         @test Base.return_types(f, (Type{Int},)) == Any[Union{Int, String}]
         @test Base.return_types(f, (Core.TypeEgal{Int},)) == Any[Int]
     end
@@ -2165,7 +2167,7 @@ let S = (Union{T, U} where {T<:Int, U<:Int})
     fapply61323(::Type{T}) where {T} = Ref{T} === Ref{Int} ? 1 : ""
     @test fapply61323(Int) === 1
     @test fapply61323(S) === 1
-    @test (@noinline fapply61323(Base.inferencebarrier(S)::Type{Int})) === 1
+    @test call_type_int61323(fapply61323, S) === 1
     @test Base.return_types(fapply61323, (Type{Int},)) == Any[Int]
 end
 

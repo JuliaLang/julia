@@ -2738,6 +2738,11 @@ jl_tupletype_t *jl_inst_arg_tuple_type(jl_value_t *arg1, jl_value_t **args, size
             jl_value_t *ai = (i == 0 ? arg1 : args[i - 1]);
             if (leaf && jl_is_type(ai)) {
                 if (jl_has_free_typevars(ai)) {
+                    // if `ai` has free type vars this will not be a valid
+                    // (concrete) type.
+                    // TODO: it would be really nice to only dispatch and cache
+                    // those as `jl_typeof(ai)`, but that will require some
+                    // redesign of the caching logic.
                     // free typevars are disallowed inside `TypeEgal`; fall back to the
                     // equality key `Type{ai}`, which still binds static parameters (#61242)
                     ai = (jl_value_t*)jl_wrap_Type(ai);
@@ -3129,10 +3134,9 @@ jl_value_t *jl_wrap_TypeEgal(jl_value_t *t)
     return te;
 }
 
-// The most specific type containing the value `v`: the per-argument key
-// `jl_inst_arg_tuple_type` uses — egality-pinned closed type values, equality
+// The most specific type containing the value `v`, matching the per-argument
+// key `jl_inst_arg_tuple_type` uses: egality-pinned closed type values, equality
 // keys (`Type{v}`) for free-typevar types (#61242), `typeof` otherwise.
-// This backs `Core.Typeof`.
 JL_DLLEXPORT jl_value_t *jl_arg_slot_type(jl_value_t *v)
 {
     if (jl_is_type(v)) {

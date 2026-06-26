@@ -292,7 +292,14 @@ end
 function Typeof end
 ccall(:jl_toplevel_eval_in, Any, (Any, Any),
       Core, quote
-      (f::typeof(Typeof))(x) = ($(_expr(:meta,:nospecialize,:x)); isa(x,Type) ? Type{x} : typeof(x))
+      (f::typeof(Typeof))(x) = begin
+          $(_expr(:meta,:nospecialize,:x))
+          if isa(x,Type)
+              ccall(:jl_has_free_typevars, Bool, (Any,), x) ? Type{x} : TypeEgal{x}
+          else
+              typeof(x)
+          end
+      end
       end)
 
 function iterate end

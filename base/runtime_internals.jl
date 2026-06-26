@@ -1494,12 +1494,7 @@ end
 
 function signature_type(@nospecialize(f), @nospecialize(argtypes))
     argtypes = to_tuple_type(argtypes)
-    # key the function slot by its dispatch type so the signature names the
-    # specialization runtime dispatch actually selects: a type-valued `f` (a
-    # constructor call) is keyed by egality (`Core.TypeEgal{f}`), not `Type{f}`,
-    # mirroring `jl_inst_arg_tuple_type` (#61323). Computed in foldable Julia (not
-    # via `jl_arg_slot_type`) so `signature_type` stays constant-foldable, which
-    # `hasmethod`/`applicable` inference relies on.
+    # Match the dispatch tuple constructed by `jl_inst_arg_tuple_type`.
     ft = isa(f, Type) && !has_free_typevars(f) ? Core.TypeEgal{f} : Core.Typeof(f)
     u = unwrap_unionall(argtypes)::DataType
     return rewrap_unionall(Tuple{ft, u.parameters...}, argtypes)
@@ -1574,8 +1569,7 @@ function rewrap_free_typevars(@nospecialize(t), pre=Core.svec())
 end
 
 function typeintersect_env(@nospecialize(a), @nospecialize(b))
-    # keeps the `svec(inner, constrained)` env uncertainty markers; the plain
-    # `jl_type_intersection_with_env` strips them for external reflection
+    # Keep the `svec(inner, constrained)` env uncertainty markers.
     (ti, env) = ccall(:jl_type_intersection_with_env_markers, Any, (Any, Any), a, b)::SimpleVector
     Pair{Any, SimpleVector}(ti, env)
 end

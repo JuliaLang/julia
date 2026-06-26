@@ -1052,11 +1052,11 @@ end
 let f = g -> x -> g(x)
     @test f(Int)(1.0) === 1
     @test @inferred(f(Int)) isa Function
-    @test fieldtype(typeof(f(Int)), 1) === Type{Int}
+    @test fieldtype(typeof(f(Int)), 1) === Core.TypeEgal{Int}
     @test @inferred(f(Rational{Int})) isa Function
-    @test fieldtype(typeof(f(Rational{Int})), 1) === Type{Rational{Int}}
+    @test fieldtype(typeof(f(Rational{Int})), 1) === Core.TypeEgal{Rational{Int}}
     @test @inferred(f(Rational)) isa Function
-    @test fieldtype(typeof(f(Rational)), 1) === Type{Rational}
+    @test fieldtype(typeof(f(Rational)), 1) === Core.TypeEgal{Rational}
     @test_broken @inferred(f(Rational{Core.TypeVar(:T)})) isa Function
     @test fieldtype(typeof(f(Rational{Core.TypeVar(:T)})), 1) === DataType
 end
