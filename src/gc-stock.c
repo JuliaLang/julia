@@ -1515,6 +1515,16 @@ JL_DLLEXPORT void jl_gc_queue_root(const jl_value_t *ptr)
     }
 }
 
+JL_DLLEXPORT void jl_gc_wb_cold(const void *parent, const void *ptr) JL_NOTSAFEPOINT
+{
+    if (ptr == NULL)
+        return;
+    if (jl_astaggedvalue(parent)->bits.in_image != 1 /* GC_IN_IMAGE_NOT_REMSET */ && // parent is not an unmarked image object
+        (jl_astaggedvalue(ptr)->bits.gc & 1 /* GC_MARKED */) != 0) // ptr is old
+        return;
+    jl_gc_queue_root((jl_value_t*)parent);
+}
+
 void jl_gc_queue_multiroot(const jl_value_t *parent, const void *ptr, jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
     const jl_datatype_layout_t *ly = dt->layout;

@@ -276,6 +276,9 @@ void jl_gc_notify_image_alloc(const char* img_data, size_t len) JL_NOTSAFEPOINT;
 // Write barrier slow-path. If a generational collector is used,
 // it may enqueue an old object into the remembered set of the calling thread.
 JL_DLLEXPORT void jl_gc_queue_root(const struct _jl_value_t *ptr) JL_NOTSAFEPOINT;
+// Dedicated slow-path for `jl_gc_wb`. If a generational collector is used,
+// it may enqueue an old object into the remembered set of the calling thread.
+JL_DLLEXPORT void jl_gc_wb_cold(const void *parent, const void *ptr) JL_NOTSAFEPOINT;
 // In a generational collector is used, this function walks over the fields of the
 // object specified by the second parameter (as defined by the data type in the third
 // parameter). If a field points to a young object, the first parameter is enqueued into the
