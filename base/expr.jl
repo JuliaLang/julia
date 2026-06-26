@@ -379,7 +379,7 @@ Give a hint to the compiler that calls within `block` are worth inlining.
     ```
 
 !!! warning
-    Although a callsite annotation will try to force inlining in regardless of the cost model,
+    Although a callsite annotation will try to force inlining regardless of the cost model,
     there are still chances it can't succeed in it. Especially, recursive calls can not be
     inlined even if they are annotated as `@inline`d.
 
@@ -703,7 +703,7 @@ were not executed.
 ---
 ## `:nothrow`
 
-The `:nothrow` settings asserts that this method does not throw an exception
+The `:nothrow` setting asserts that this method does not throw an exception
 (i.e. will either always return a value or never return).
 
 !!! note
@@ -721,7 +721,7 @@ The `:nothrow` settings asserts that this method does not throw an exception
 ---
 ## `:terminates_globally`
 
-The `:terminates_globally` settings asserts that this method will eventually terminate
+The `:terminates_globally` setting asserts that this method will eventually terminate
 (either normally or abnormally), i.e. does not loop indefinitely.
 
 !!! note

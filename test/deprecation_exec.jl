@@ -11,11 +11,15 @@ using Logging
 module DeprecationTests # to test @deprecate
     f() = true
 
+    const source_file = Symbol(@__FILE__)
+
     # test the Symbol path of @deprecate
+    const f1_method_line = @__LINE__() + 1
     @deprecate f1 f
     @deprecate f2 f false # test that f2 is not exported
 
     # test the Expr path of @deprecate
+    const f3_method_line = @__LINE__() + 1
     @deprecate f3() f()
     @deprecate f4() f() false # test that f4 is not exported
     @deprecate f5(x::T) where T f()
@@ -32,6 +36,7 @@ module DeprecationTests # to test @deprecate
     @deprecate Sub.f2 f false
 
     # test that @deprecate_moved can be overridden by an import
+    const foo1234_method_line = @__LINE__() + 1
     Base.@deprecate_moved foo1234 "Foo"
     Base.@deprecate_moved bar "Bar" false
 
@@ -87,6 +92,20 @@ begin # @deprecate
 
     @test @test_warn "`Sub.f1()` is deprecated, use `f()` instead." DeprecationTests.Sub.f1()
 
+    # @deprecate-generated methods should report the macro call site.
+    let m = only(methods(DeprecationTests.f1))
+        @test m.file == DeprecationTests.source_file
+        @test m.line == DeprecationTests.f1_method_line
+    end
+    let m = only(methods(DeprecationTests.f3))
+        @test m.file == DeprecationTests.source_file
+        @test m.line == DeprecationTests.f3_method_line
+    end
+    let m = only(methods(DeprecationTests.foo1234))
+        @test m.file == DeprecationTests.source_file
+        @test m.line == DeprecationTests.foo1234_method_line
+    end
+
     redirect_stderr(devnull) do
         @test call(f1)
         @test call(DeprecationTests.f2)
@@ -112,6 +131,16 @@ begin # @deprecate
         T21972()
     end
     @test_deprecated "something" f21972()
+
+    @noinline deprecated_typename(T) = Base.typename(T)
+    @noinline deprecated_nameof(T) = nameof(T)
+    @noinline deprecated_parentmodule(T) = parentmodule(T)
+    @noinline deprecated_isabstracttype(T) = isabstracttype(T)
+    deprecated_type_ref = Ref{Any}(Type{Int})
+    @test @test_warn "calling `typename` on `Type` is deprecated" deprecated_typename(deprecated_type_ref[]) === TypeEq.name
+    @test @test_warn "calling `nameof` on `Type` is deprecated" deprecated_nameof(deprecated_type_ref[]) === :Type
+    @test @test_warn "calling `parentmodule` on `Type` is deprecated" deprecated_parentmodule(deprecated_type_ref[]) === Core
+    @test @test_warn "calling `isabstracttype` on a `Type{...}` is deprecated" deprecated_isabstracttype(deprecated_type_ref[]) === true
 
     # test that positional and keyword arguments are forwarded when
     # there is no explicit type annotation
@@ -145,6 +174,20 @@ testlogs = testlogger.logs
 @test all(l.message == "f25130 message" for l in testlogs)
 global_logger(prev_logger)
 
+
+#-------------------------------------------------------------------------------
+# BEGIN 1.14 deprecations
+
+begin # SubString noshift deprecations
+    @test_deprecated SubString{String}("abcd", 0, 1, Val(:noshift)) == "a"
+    let ss = SubString("abcd", 2, 3)
+        @test_deprecated (SubString{typeof(ss)}(ss, 0, 1, Val(:noshift)) == "b")
+        @test_deprecated (SubString{typeof(ss)}(ss, 0, 1, Val(:noshift)) isa SubString{typeof(ss)})
+    end
+end
+
+
+# END 1.14 deprecations
 
 #-------------------------------------------------------------------------------
 # BEGIN 0.7 deprecations

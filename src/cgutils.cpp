@@ -595,9 +595,9 @@ static Constant *julia_pgv(jl_codegen_output_t &params, Module *M, const char *c
                                 false, GlobalVariable::ExternalLinkage,
                                 nullptr, localname);
     // LLVM passes sometimes strip metadata when moving load around
-    // since the load at the new location satisfy the same condition as the original one.
+    // since the load at the new location satisfies the same condition as the original one.
     // Mark the global as constant to LLVM code using our own metadata
-    // which is much less likely to be striped.
+    // which is much less likely to be stripped.
     gv->setMetadata("julia.constgv", MDNode::get(gv->getContext(), {}));
     assert(localname == gv->getName());
     assert(!gv->hasInitializer());
@@ -636,6 +636,8 @@ static JuliaVariable *julia_const_gv(jl_value_t *val);
 Constant *literal_pointer_val_slot(jl_codegen_output_t &params, jl_value_t *p)
 {
     Module *M = &params.get_module();
+    if (params.temporary_roots)
+        jl_temporary_root(params, p);
     // emit a pointer to a jl_value_t* which will allow it to be valid across reloading code
     // also, try to give it a nice name for gdb, for easy identification
     if (JuliaVariable *gv = julia_const_gv(p)) {
@@ -809,11 +811,20 @@ static unsigned convert_struct_offset(jl_codectx_t &ctx, Type *lty, unsigned byt
 
 static Type *_julia_struct_to_llvm(jl_codegen_output_t *ctx, LLVMContext &ctxt, jl_value_t *jt, bool *isboxed, bool llvmcall=false);
 
+static bool is_typeofbottom_typealias(jl_value_t *jt)
+{
+    if (jt == nullptr)
+        return false;
+    return jt == (jl_value_t*)jl_bottom_type ||
+           jt == (jl_value_t*)jl_typeofbottom_type ||
+           (jl_is_typeeq(jt) && jl_typeeq_T(jt) == jl_bottom_type);
+}
+
 static Type *_julia_type_to_llvm(jl_codegen_output_t *ctx, LLVMContext &ctxt, jl_value_t *jt, bool *isboxed, bool no_boxing)
 {
     // this function converts a Julia Type into the equivalent LLVM type
     if (isboxed) *isboxed = false;
-    if (jt == (jl_value_t*)jl_bottom_type || jt == (jl_value_t*)jl_typeofbottom_type || jt == (jl_value_t*)jl_typeofbottom_type->super)
+    if (is_typeofbottom_typealias(jt))
         return getVoidTy(ctxt);
     if (jl_is_concrete_immutable(jt) || no_boxing) {
         if (jl_datatype_nbits(jt) == 0)
@@ -930,8 +941,12 @@ static Type *_julia_struct_to_llvm(jl_codegen_output_t *ctx, LLVMContext &ctxt, 
     // use this where C-compatible (unboxed) structs are desired
     // use julia_type_to_llvm directly when you want to preserve Julia's type semantics
     if (isboxed) *isboxed = false;
-    if (jt == (jl_value_t*)jl_bottom_type || jt == (jl_value_t*)jl_typeofbottom_type || jt == (jl_value_t*)jl_typeofbottom_type->super)
+    if (is_typeofbottom_typealias(jt))
         return getVoidTy(ctxt);
+    if (jl_is_kind(jt)) {
+        if (isboxed) *isboxed = true;
+        return JuliaType::get_prjlvalue_ty(ctxt);
+    }
     if (jl_is_primitivetype(jt))
         return bitstype_to_llvm(jt, ctxt, llvmcall);
     jl_datatype_t *jst = (jl_datatype_t*)jt;
@@ -1119,7 +1134,7 @@ static bool for_each_uniontype_small(
         allunbox &= for_each_uniontype_small(f, ((jl_uniontype_t*)ty)->b, counter);
         return allunbox;
     }
-    else if (ty == (jl_value_t*)jl_typeofbottom_type->super) {
+    else if (is_typeofbottom_typealias(ty)) {
         f(++counter, jl_typeofbottom_type); // treat Tuple{union{}} as identical to typeof(Union{})
     }
     else if (!deserves_unionbox(ty)) {
@@ -1150,8 +1165,6 @@ static unsigned get_box_tindex(jl_datatype_t *jt, jl_value_t *ut)
 {
     unsigned new_idx = 0;
     unsigned new_counter = 0;
-    if (jt == jl_typeofbottom_type->super)
-        jt = jl_typeofbottom_type; // treat Tuple{union{}} as identical to typeof(Union{})
     for_each_uniontype_small(
             // find the corresponding index in the new union-type
             [&](unsigned new_idx_, jl_datatype_t *new_jt) {
@@ -1901,7 +1914,7 @@ static Value *emit_nullcheck_guard2(jl_codectx_t &ctx, Value *nullcheck1,
 
 // Returns typeof(v), or null if v is a null pointer at run time and maybenull is true.
 // This is used when the value might have come from an undefined value (a PhiNode),
-// yet jl_max_tags try to read its type to compute a union index when moving the value (a PiNode).
+// yet the code may try to read its type to compute a union index when moving the value (a PiNode).
 // Returns a ctx.types().T_prjlvalue typed Value
 static Value *emit_typeof(jl_codectx_t &ctx, Value *v, bool maybenull, bool justtag, bool notag)
 {
@@ -1962,7 +1975,7 @@ static bool _can_optimize_isa(jl_value_t *type, int &counter)
     }
     if (type == (jl_value_t*)jl_type_type)
         return true;
-    if (jl_is_type_type(type) && jl_pointer_egal(type))
+    if (jl_is_typeeq(type) && jl_pointer_egal(type))
         return true;
     if (jl_has_intersect_type_not_kind(type))
         return false;
@@ -2010,7 +2023,7 @@ static Value *emit_exactly_isa(jl_codectx_t &ctx, const jl_cgval_t &arg, jl_data
             ctx.builder.SetInsertPoint(isaBB);
             Value *istype_boxed = NULL;
             if (is_uniquerep_Type((jl_value_t*)dt)) {
-                istype_boxed = ctx.builder.CreateICmpEQ(decay_derived(ctx, arg.Vboxed), decay_derived(ctx, literal_pointer_val(ctx, jl_tparam0(dt))));
+                istype_boxed = ctx.builder.CreateICmpEQ(decay_derived(ctx, arg.Vboxed), decay_derived(ctx, literal_pointer_val(ctx, jl_typeeq_T((jl_value_t*)dt))));
             } else {
                 istype_boxed = ctx.builder.CreateICmpEQ(emit_typeof(ctx, arg.Vboxed, false, true), emit_tagfrom(ctx, dt));
             }
@@ -2079,7 +2092,7 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
         if (intersected_type == (jl_value_t*)jl_bottom_type)
             known_isa = false;
     }
-    if (intersected_type == (jl_value_t*)jl_typeofbottom_type->super)
+    if (is_typeofbottom_typealias(intersected_type))
         intersected_type = (jl_value_t*)jl_typeofbottom_type; // swap abstract Type{Union{}} for concrete typeof(Union{})
     if (known_isa) {
         if (!*known_isa && !msg.isTriviallyEmpty()) {
@@ -2088,10 +2101,10 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
         return std::make_pair(ConstantInt::get(getInt1Ty(ctx.builder.getContext()), *known_isa), true);
     }
 
-    if (jl_is_type_type(intersected_type) && jl_pointer_egal(intersected_type)) {
+    if (jl_is_typeeq(intersected_type) && jl_pointer_egal(intersected_type)) {
         // Use the check in `jl_pointer_egal` to see if the type enclosed
         // has unique pointer value.
-        auto ptr = track_pjlvalue(ctx, literal_pointer_val(ctx, jl_tparam0(intersected_type)));
+        auto ptr = track_pjlvalue(ctx, literal_pointer_val(ctx, jl_typeeq_T(intersected_type)));
         return {ctx.builder.CreateICmpEQ(boxed(ctx, x), ptr), false};
     }
     if (intersected_type == (jl_value_t*)jl_type_type) {
@@ -2107,7 +2120,9 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
                 ctx.builder.CreateICmpEQ(typ, emit_tagfrom(ctx, jl_datatype_type))),
             ctx.builder.CreateOr(
                 ctx.builder.CreateICmpEQ(typ, emit_tagfrom(ctx, jl_unionall_type)),
-                ctx.builder.CreateICmpEQ(typ, emit_tagfrom(ctx, jl_typeofbottom_type))));
+                ctx.builder.CreateOr(
+                    ctx.builder.CreateICmpEQ(typ, emit_tagfrom(ctx, jl_typeeq_type)),
+                    ctx.builder.CreateICmpEQ(typ, emit_tagfrom(ctx, jl_typeofbottom_type)))));
         setName(ctx.emission_context, val, "is_kind");
         return std::make_pair(val, false);
     }
@@ -3285,9 +3300,9 @@ static bool isConstGV(GlobalVariable *gv)
     return gv->isConstant() || gv->getMetadata("julia.constgv");
 }
 
-// Check if this is can be traced through constant loads to an constant global
+// Check if this can be traced through constant loads to a constant global
 // or otherwise globally rooted value.
-// Almost all `tbaa_const` loads satisfies this with the exception of
+// Almost all `tbaa_const` loads satisfy this with the exception of
 // task local constants which are constant as far as the code is concerned but aren't
 // global constants. For task local constant `task_local` will be true when this function
 // returns.
@@ -3809,7 +3824,7 @@ static Value *_boxed_special(jl_codectx_t &ctx, const jl_cgval_t &vinfo, Type *t
     if (t == getInt1Ty(ctx.builder.getContext()))
         return track_pjlvalue(ctx, julia_bool(ctx, as_value(ctx, t, vinfo)));
 
-    if (ctx.linfo && jl_is_method(ctx.linfo->def.method) && vinfo.inline_roots.empty() && !vinfo.ispointer()) { // don't bother codegen pre-boxing for toplevel
+    if (ctx.linfo && jl_is_method(ctx.linfo->def.method) && vinfo.V && vinfo.inline_roots.empty() && !vinfo.ispointer()) { // don't bother codegen pre-boxing for toplevel
         if (Constant *c = dyn_cast<Constant>(vinfo.V)) {
             jl_value_t *s = static_constant_instance(jl_Module->getDataLayout(), c, jt);
             if (s) {
@@ -4120,7 +4135,6 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool is_promotab
         assert(vinfo.V->getType() == ctx.types().T_prjlvalue);
         return vinfo.V;
     }
-
     Value *box;
     if (vinfo.TIndex) {
         SmallBitVector skip_none;

@@ -1,5 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#include "llvm-version.h"
+
 #include "llvm/ADT/SmallSet.h"
 #include <llvm/ADT/MapVector.h>
 #include <llvm/ADT/StringSet.h>
@@ -19,7 +21,11 @@
 #include <llvm/ExecutionEngine/JITEventListener.h>
 
 #include <llvm/Passes/PassBuilder.h>
-#include <llvm/Passes/PassPlugin.h>
+#if JL_LLVM_VERSION >= 220000
+#  include <llvm/Plugins/PassPlugin.h>
+#else
+#  include <llvm/Passes/PassPlugin.h>
+#endif
 #include <llvm/Passes/StandardInstrumentations.h>
 
 #include <llvm/Target/TargetMachine.h>
@@ -28,7 +34,6 @@
 #include "julia_internal.h"
 #include "platform.h"
 #include "llvm-codegen-shared.h"
-#include "llvm-version.h"
 #include <stack>
 #include <queue>
 #include <tuple>
@@ -69,6 +74,8 @@ inline int jl_is_timing_trace = 0;
 inline unsigned jl_timing_trace_granularity = 500;
 inline std::string jl_timing_trace_file;
 
+inline LLVMOrcThreadSafeContextRef wrap(const orc::ThreadSafeContext *P) JL_NOTSAFEPOINT;
+inline LLVMOrcThreadSafeModuleRef wrap(const orc::ThreadSafeModule *P) JL_NOTSAFEPOINT;
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ThreadSafeContext, LLVMOrcThreadSafeContextRef)
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ThreadSafeModule, LLVMOrcThreadSafeModuleRef)
 
@@ -238,6 +245,10 @@ struct NewPM {
     void run(Module &M) JL_NOTSAFEPOINT;
 
     void printTimers() JL_NOTSAFEPOINT;
+
+#ifdef USE_TRACY
+    void registerTracyCallbacks(PassInstrumentationCallbacks &PIC) JL_NOTSAFEPOINT;
+#endif
 };
 
 struct AnalysisManagers {
@@ -412,14 +423,14 @@ private:
     jl_name_counter_t names;
 
 public:
-    LLVMContext &get_context() { return M.getContext(); }
-    Module &get_module() { return M; }
+    LLVMContext &get_context() JL_NOTSAFEPOINT { return M.getContext(); }
+    Module &get_module() JL_NOTSAFEPOINT { return M; }
 
-    StringRef strip_linux(StringRef name);
+    StringRef strip_linux(StringRef name) JL_NOTSAFEPOINT;
     std::string make_name(jl_symbol_prefix_t type, jl_invoke_api_t api,
-                          StringRef orig_name);
-    std::string make_name(StringRef prefix, StringRef orig_name);
-    std::string make_name(StringRef orig_name);
+                          StringRef orig_name) JL_NOTSAFEPOINT;
+    std::string make_name(StringRef prefix, StringRef orig_name) JL_NOTSAFEPOINT;
+    std::string make_name(StringRef orig_name) JL_NOTSAFEPOINT;
 
     StringRef get_call_target(jl_code_instance_t *ci, bool specsig, bool always_inline);
 
@@ -472,7 +483,7 @@ public:
     bool safepoint_on_entry = true;
     bool use_swiftcc = true;
 
-    jl_codegen_output_t(Module &M)
+    jl_codegen_output_t(Module &M) JL_NOTSAFEPOINT
       : M(M), DL(M.getDataLayout()), TargetTriple(M.getTargetTriple())
     {
         if (TargetTriple.isRISCV())
@@ -490,7 +501,8 @@ std::optional<jl_llvm_functions_t> jl_emit_code(
         jl_method_instance_t *mi,
         jl_code_info_t *src,
         jl_value_t *abi_at,
-        jl_value_t *abi_rt);
+        jl_value_t *abi_rt,
+        jl_code_instance_t *codeinst = nullptr);
 
 std::optional<jl_llvm_functions_t> jl_emit_codeinst(
         jl_codegen_output_t &out,
@@ -811,11 +823,11 @@ public:
 
     void publishCIs(ArrayRef<jl_code_instance_t *> CIs, bool Wait=false);
 
-    void registerCI(jl_code_instance_t *CI);
+    void registerCI(jl_code_instance_t *CI) JL_NOTSAFEPOINT;
     // When a CodeInstance is garbage collected, we must remove any existing
     // entries in CISymbols, to prevent invokes to a new CodeInstance with the
     // same address from being linked to old symbol.
-    void unregisterCI(jl_code_instance_t *CI);
+    void unregisterCI(jl_code_instance_t *CI) JL_NOTSAFEPOINT;
 
     orc::ThreadSafeContext makeContext() JL_NOTSAFEPOINT;
     const DataLayout& getDataLayout() const JL_NOTSAFEPOINT;
@@ -846,7 +858,7 @@ public:
     std::string getMangledName(const GlobalValue *GV) JL_NOTSAFEPOINT;
 
     // Note that this is a potential safepoint due to jl_get_library_ and jl_dlsym calls
-    // but may be called from inside safe-regions due to jit compilation locks
+    // and must be called from inside safe-regions due to internal use of locks
     void optimizeDLSyms(Module &M) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER;
 
 protected:
@@ -935,7 +947,7 @@ extern JuliaOJIT *jl_ExecutionEngine;
 
 void fixupTM(TargetMachine &TM) JL_NOTSAFEPOINT;
 
-void optimizeDLSyms(Module &M);
+void optimizeDLSyms(Module &M) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER;
 
 static inline const char *jl_symbol_prefix(jl_symbol_prefix_t type,
                                            jl_invoke_api_t api) JL_NOTSAFEPOINT

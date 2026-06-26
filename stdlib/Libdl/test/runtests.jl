@@ -228,7 +228,7 @@ mktempdir() do dir
     # Add an absurdly long entry to the load path to verify it doesn't lead to a buffer overflow
     push!(Base.DL_LOAD_PATH, joinpath(dir, join(rand('a':'z', 10000))))
 
-    # Add the temporary directors to load path by absolute path
+    # Add the temporary directory to load path by absolute path
     push!(Base.DL_LOAD_PATH, dir)
 
     # Test that we can now open that file

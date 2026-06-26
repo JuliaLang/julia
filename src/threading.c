@@ -59,7 +59,7 @@ JL_DLLEXPORT void *jl_get_ptls_states(void)
     return jl_current_task->ptls;
 }
 
-static void jl_delete_thread(void*);
+static void jl_delete_thread(void*) JL_NOTSAFEPOINT_ENTER;
 
 #if !defined(_OS_WINDOWS_)
 static pthread_key_t jl_task_exit_key;
@@ -315,7 +315,7 @@ JL_DLLEXPORT uint64_t jl_get_ptls_rng(void) JL_NOTSAFEPOINT
 
 typedef void (*unw_tls_ensure_func)(void) JL_NOTSAFEPOINT;
 
-// get thread local rng
+// set thread local rng
 JL_DLLEXPORT void jl_set_ptls_rng(uint64_t new_seed) JL_NOTSAFEPOINT
 {
     jl_current_task->ptls->rngseed = new_seed;
@@ -495,7 +495,7 @@ void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT;
 void scheduler_delete_thread(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 void _jl_free_stack(jl_ptls_t ptls, void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT;
 
-static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
+static void jl_delete_thread(void *value)
 {
 #ifndef _OS_WINDOWS_
     pthread_setspecific(jl_task_exit_key, NULL);
@@ -1136,7 +1136,7 @@ JL_DLLEXPORT int jl_getaffinity(int16_t tid, char *mask, int cpumasksize) {
 //     0  == success
 //     1  == invalid thread id provided
 //     2  == ptls2 was NULL
-//     <0 == uv_thread_getaffinity exit code
+//     <0 == uv_thread_setaffinity exit code
 JL_DLLEXPORT int jl_setaffinity(int16_t tid, char *mask, int cpumasksize) {
     int nthreads = jl_atomic_load_acquire(&jl_n_threads);
     if (tid < 0 || tid >= nthreads)

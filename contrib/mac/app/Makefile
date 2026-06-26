@@ -37,6 +37,13 @@ dmg/$(APP_NAME): startup.applescript julia.icns
 	-mkdir -p dmg
 	osacompile -o $@ startup.applescript
 	rm $@/Contents/Resources/applet.icns
+	# Newer osacompile ships the applet icon as a compiled asset catalog
+	# (Assets.car, referenced by CFBundleIconName) which modern macOS prefers
+	# over CFBundleIconFile -- so just dropping applet.icns/setting julia.icns
+	# below leaves the generic AppleScript applet icon showing. Remove the stale
+	# catalog and its key so CFBundleIconFile=julia.icns is authoritative.
+	rm -f $@/Contents/Resources/Assets.car
+	-plutil -remove CFBundleIconName $@/Contents/Info.plist
 	cp julia.icns $@/Contents/Resources/
 	plutil -replace CFBundleDevelopmentRegion  -string "en" $@/Contents/Info.plist
 	plutil -insert  CFBundleDisplayName        -string "Julia" $@/Contents/Info.plist
@@ -58,9 +65,9 @@ dmg/$(APP_NAME): startup.applescript julia.icns
 		MACHO_FILES=$$(find "$@" -type f -perm -0111 | cut -d: -f1); \
 		for f in $${MACHO_FILES}; do \
 			echo "Codesigning $${f}..."; \
-			codesign -s "$$MACOS_CODESIGN_IDENTITY" --option=runtime --entitlements Entitlements.plist -vvv --timestamp --deep --force "$${f}"; \
+			codesign -s "$$MACOS_CODESIGN_IDENTITY" --option=runtime --entitlements Entitlements.plist -vvv --timestamp --force "$${f}"; \
 		done; \
-		codesign -s "$$MACOS_CODESIGN_IDENTITY" --option=runtime --entitlements Entitlements.plist -vvv --timestamp --deep --force "$@"; \
+		codesign -s "$$MACOS_CODESIGN_IDENTITY" --option=runtime --entitlements Entitlements.plist -vvv --timestamp --force "$@"; \
 	else \
 		true; \
 	fi

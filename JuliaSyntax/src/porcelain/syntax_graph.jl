@@ -319,7 +319,7 @@ function kind(ex::SyntaxTree)
 end
 
 function flags(ex::SyntaxTree)
-    get(ex, :syntax_flags, 0x0000)
+    get(ex, :syntax_flags, 0x0000)::UInt16
 end
 
 
@@ -342,7 +342,7 @@ byte_range(::LineNumberNode) = 0:0
 source_location(src::LineNumberNode) = (src.line, 0)
 source_location(::Type{LineNumberNode}, src::LineNumberNode) = src
 source_line(src::LineNumberNode) = src.line
-# The follow somewhat strange cases are for where LineNumberNode is standing in
+# The following somewhat strange cases are for where LineNumberNode is standing in
 # for SourceFile because we've only got Expr-based provenance info
 sourcefile(src::LineNumberNode) = src
 sourcetext(::LineNumberNode) = SubString("")
@@ -417,6 +417,21 @@ function macro_prov(st::SyntaxTree)
     end
     hasattr(st, :macro_source) && return SyntaxTree(st._graph, st.macro_source)
     return nothing
+end
+
+"The first macro expansion `st` was involved in (chronologically), or nothing"
+function macro_prov_end(st::SyntaxTree)
+    lastmp = mp = macro_prov(st)
+    while !isnothing(mp)
+        lastmp, mp = mp, macro_prov(mp)
+    end
+    return lastmp
+end
+
+"The top-level location of `st`"
+function unexpanded_sourceref(st::SyntaxTree)
+    mp = macro_prov_end(st)
+    isnothing(mp) ? sourceref(st) : sourceref(mp)
 end
 
 """
@@ -1294,6 +1309,14 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
     core_globalref(s::String) = setattr!(symleaf(s), :mod, Core)
     valleaf(@nospecialize(v)) = setattr!(newleaf(graph, st, K"Value"), :value, v)
 
+    if k === K"DotsIdentifier"
+        # `..`/`...` used as an ordinary identifier (eg the `..` operator, or
+        # `...` quoted as in `:(...)`). The dots are held as trivia children, so
+        # this is not a leaf; represent it as a plain identifier named by the
+        # dots themselves (the dot count is stored in the numeric flags).
+        return symleaf(repeat('.', numeric_flags(st)))
+    end
+
     if is_leaf(st)
         return if k === K"CmdMacroName" || k === K"StrMacroName"
             name = lower_identifier_name(st.name_val, k)
@@ -1367,6 +1390,12 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         rhs = _green_to_est(st, 0, cs[3])
         out = newnode(graph, st, K"unknown_head", tree_ids(lhs, rhs))
         return setattr!(out, :name_val, op_s)
+    elseif k === K"op=" && n_cs === 1
+        # (op= +) => +=   (the operator name itself, eg when quoted as `:(+=)`)
+        return symleaf(string(cs[1]) * '=')
+    elseif k === K".op=" && n_cs === 1
+        # (.op= +) => .+=
+        return symleaf('.' * string(cs[1]) * '=')
     elseif k === K"macrocall" && n_cs > 0
         # LineNumberNodes are not usually added to the tree as they are in Expr,
         # but this specifically inserts the macrocall child for compatibility

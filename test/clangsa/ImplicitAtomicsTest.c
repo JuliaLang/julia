@@ -59,6 +59,9 @@ void hiddenAtomics(void) {
     *(int*)&x = 3; // CHECK-NOT: [[@LINE]]
     *(int*)px = 3; // CHECK-NOT: [[@LINE]]
 
+    &*px; // CHECK-NOT: [[@LINE]]
+    *&*px = 3; // CHECK: [[@LINE]]:8: warning: Implicit Atomic seq_cst synchronization
+
     y.y = 2; // CHECK-NOT: [[@LINE]]
     py->y = 2; // CHECK-NOT: [[@LINE]]
 #ifndef __cplusplus // invalid C++ code

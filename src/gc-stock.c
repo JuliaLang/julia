@@ -88,7 +88,7 @@ static _Atomic(int) support_conservative_marking = 0;
  *
  * Before starting the mark phase the GC thread calls `jl_safepoint_start_gc()`
  * and `jl_gc_wait_for_the_world()`
- * to make sure all the thread are in a safe state for the GC. The function
+ * to make sure all the threads are in a safe state for the GC. The function
  * activates the safepoint and wait for all the threads to get ready for the
  * GC (`gc_state != 0`). It also acquires the `finalizers` lock so that no
  * other thread will access them when the GC is running.
@@ -623,7 +623,7 @@ static void reset_thread_gc_counts(void) JL_NOTSAFEPOINT
     }
 }
 
-void jl_gc_reset_alloc_count(void) JL_NOTSAFEPOINT
+void jl_gc_reset_alloc_count(void)
 {
     combine_thread_gc_counts(&gc_num, 0);
     int64_t alloc_increment = gc_num.deferred_alloc + gc_num.allocd;
@@ -1584,6 +1584,7 @@ STATIC_INLINE void gc_assert_parent_validity(jl_value_t *parent, jl_value_t *chi
     if (child_vt == (jl_datatype_tag << 4) ||
         child_vt == (jl_unionall_tag << 4) ||
         child_vt == (jl_uniontype_tag << 4) ||
+        child_vt == (jl_typeeq_tag << 4) ||
         child_vt == (jl_tvar_tag << 4) ||
         child_vt == (jl_vararg_tag << 4)) {
         // Skip, since these wouldn't hit the object assert anyway
@@ -2284,6 +2285,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
         if (vtag == (jl_datatype_tag << 4) ||
             vtag == (jl_unionall_tag << 4) ||
             vtag == (jl_uniontype_tag << 4) ||
+            vtag == (jl_typeeq_tag << 4) ||
             vtag == (jl_tvar_tag << 4) ||
             vtag == (jl_vararg_tag << 4) ||
             vtag == (jl_globalref_tag << 4) ||
@@ -3063,7 +3065,7 @@ void _report_gc_finished(uint64_t pause, uint64_t freed, int full, int recollect
     jl_safe_printf("Heap stats: bytes_mapped %.2f MB, bytes_resident %.2f MB,\nheap_size %.2f MB, heap_target %.2f MB, Fragmentation %.3f\n",
         jl_atomic_load_relaxed(&gc_heap_stats.bytes_mapped)/(double)(1<<20),
         jl_atomic_load_relaxed(&gc_heap_stats.bytes_resident)/(double)(1<<20),
-        // live_bytes/(double)(1<<20), live byes tracking is not accurate.
+        // live_bytes/(double)(1<<20), live bytes tracking is not accurate.
         jl_atomic_load_relaxed(&gc_heap_stats.heap_size)/(double)(1<<20),
         jl_atomic_load_relaxed(&gc_heap_stats.heap_target)/(double)(1<<20),
         (double)live_bytes/(double)jl_atomic_load_relaxed(&gc_heap_stats.heap_size)

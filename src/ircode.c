@@ -965,17 +965,17 @@ static size_t codelocs_parseheader(jl_string_t *cl, int *loc_offset, int *loc_by
     int32_t header[3];
     memcpy(&header, (char*)jl_string_data(cl), sizeof(header));
     *loc_offset = header[0];
-    if (header[1] < 255)
+    if (header[1] < UINT8_MAX)
         *loc_bytes = 1;
-    else if (header[1] < 65535)
+    else if (header[1] < UINT16_MAX)
         *loc_bytes = 2;
     else
         *loc_bytes = 4;
     if (header[2] == 0)
         *to_bytes = 0;
-    else if (header[2] < 255)
+    else if (header[2] < UINT8_MAX)
         *to_bytes = 1;
-    else if (header[2] < 65535)
+    else if (header[2] < UINT16_MAX)
         *to_bytes = 2;
     else
         *to_bytes = 4;
@@ -1452,6 +1452,7 @@ static const char *sbt_parseheader(jl_string_t *str, jl_sourcebytetable_header_t
     assert(jl_is_string(str));
     const char *ptr = jl_string_data(str);
     memcpy(h, ptr, SBT_HEADER_SIZE); // TODO assumes LE
+    assert(h->byte_encl == 1 || h->byte_encl == 2 || h->byte_encl == 4);
     return ptr + SBT_HEADER_SIZE;
 }
 
@@ -1464,25 +1465,25 @@ static const char *sbt_parseheader(jl_string_t *str, jl_sourcebytetable_header_t
  * returning new debuginfo in `p_di` and optionally pc in `p_pc`. */
 static void cdi_deref(jl_debuginfo_t **p_di, int32_t *p_pc, int recursive) JL_NOTSAFEPOINT
 {
+    assert(jl_is_debuginfo(*p_di));
     jl_debuginfo_t *di = *p_di;
     int32_t pc = 0;
     if (!p_pc)
         p_pc = &pc;
-    if (jl_typeof(di->linetable) == (jl_value_t *)jl_debuginfo_type) {
+    if (jl_is_debuginfo(di->linetable)) {
+        assert(*p_pc >= 0);
         *p_pc = jl_uncompress1_codeloc(di, *p_pc).loc;
         *p_di = (jl_debuginfo_t *)di->linetable;
         if (recursive) {
             cdi_deref(p_di, p_pc, recursive);
         }
     } else {
-        if (jl_is_string(di->linetable)) {jl_unreachable();} // TODO: remove when byte-precise
         assert(jl_is_string(di->linetable) || jl_is_nothing(di->linetable));
     }
 }
 
 JL_DLLEXPORT jl_locspan_t jl_cdi_bytespan(jl_debuginfo_t *di, int32_t pc) JL_NOTSAFEPOINT
 {
-    jl_unreachable(); // TODO: remove when byte-precise
     cdi_deref(&di, &pc, 1);
     pc = jl_uncompress1_codeloc(di, pc).loc;
     jl_sourcebytetable_header_t h;
@@ -1500,7 +1501,6 @@ JL_DLLEXPORT jl_locspan_t jl_cdi_bytespan(jl_debuginfo_t *di, int32_t pc) JL_NOT
 /* O(line_starts); could binary search instead */
 JL_DLLEXPORT jl_locspan_t jl_cdi_byte_to_xy(jl_debuginfo_t *di, int32_t b) JL_NOTSAFEPOINT
 {
-    jl_unreachable(); // TODO: remove when byte-precise
     cdi_deref(&di, NULL, 1);
     jl_sourcebytetable_header_t h;
     sbt_parseheader(di->linetable, &h);
@@ -1623,18 +1623,19 @@ JL_DLLEXPORT jl_string_t *jl_compress_codelocs(int32_t firstloc, jl_value_t *cod
     header[1] = min.loc > max.loc ? 0 : max.loc - min.loc;
     header[2] = max.to > max.pc ? max.to : max.pc;
     size_t loc_bytes;
-    if (header[1] < 255)
+    /* 0 encodes a special value, `n` encodes `n-1+loc_offset`. */
+    if (header[1] < UINT8_MAX)
         loc_bytes = 1;
-    else if (header[1] < 65535)
+    else if (header[1] < UINT16_MAX)
         loc_bytes = 2;
     else
         loc_bytes = 4;
     size_t to_bytes;
     if (header[2] == 0)
         to_bytes = 0;
-    else if (header[2] < 255)
+    else if (header[2] < UINT8_MAX)
         to_bytes = 1;
-    else if (header[2] < 65535)
+    else if (header[2] < UINT16_MAX)
         to_bytes = 2;
     else
         to_bytes = 4;

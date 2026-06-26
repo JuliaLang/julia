@@ -135,7 +135,7 @@ function ccall_macro_parse(ctx, exs)
             [K"$" x] -> let kx = kind(x)
                 if kx in KSet"tuple String string" ||
                         (kx === K"Value" && x.value isa Tuple) ||
-                        kx == K"inert" && !(kx[1].value isa Ptr)
+                        kx == K"inert" && !(kind(x[1]) == K"Value" && x[1].value isa Ptr)
                     throw(MacroExpansionError(
                         f, "interpolated value should be a variable or expression, not a literal name or tuple"))
                 end

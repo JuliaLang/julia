@@ -94,8 +94,8 @@ end
 
 This struct is intended as a memory- and GC-pressure-efficient mechanism
 for incrementally computing def-use maps. The idea is that the def-use map
-is constructed into two passes over the IR. In the first, we simply count the
-the number of uses, computing the number of uses for each def as well as the
+is constructed in two passes over the IR. In the first, we simply count the
+number of uses, computing the number of uses for each def as well as the
 total number of uses. In the second pass, we actually fill in the def-use
 information.
 
@@ -292,7 +292,7 @@ mutable struct InferenceState{I<:AbstractInterpreter}
     currpc::Int
     ip::BitSet#=TODO BoundedMinPrioritySet=# # current active instruction pointers
     handler_info::Union{Nothing,HandlerInfo{TryCatchFrame}}
-    ssavalue_uses::Vector{BitSet} # ssavalue sparsity and restart info
+    ssavalue_uses::SSAUses # ssavalue sparsity and restart info
     # Per-basic-block entry state. `nothing` if the BB has not been analyzed yet.
     # Populated lazily during the main inference loop by `update_bbstate!`, which merges
     # the current exit state into each successor. Both the variable-type table and the
@@ -536,12 +536,11 @@ const compute_trycatch = ComputeTryCatch{SimpleHandler}()
     compute_trycatch(ir.stmts.stmt, ir.cfg.blocks)
 
 """
-    (::ComputeTryCatch{Handler})(code, [, bbs]) -> handler_info::Union{Nothing,HandlerInfo{Handler}}
+    (::ComputeTryCatch{Handler})(code[, bbs]) -> handler_info::Union{Nothing,HandlerInfo{Handler}}
     const compute_trycatch = ComputeTryCatch{SimpleHandler}()
 
 Given the code of a function, compute, at every statement, the current
-try/catch handler, and the current exception stack top. This function returns
-a tuple of:
+try/catch handler, and the current exception stack top. This function returns a `HandlerInfo` with:
 
     1. `handler_info.handler_at`: A statement length vector of tuples
        `(catch_handler, exception_stack)`, which are indices into `handlers`
@@ -615,7 +614,7 @@ function (::ComputeTryCatch{Handler})(code::Vector{Any}, bbs::Union{Vector{Basic
                 l = stmt.catch_dest
                 (bbs !== nothing) && (l != 0) && (l = first(bbs[l].stmts))
                 # We assigned a handler number above. Here we just merge that
-                # with out current handler information.
+                # with our current handler information.
                 if l != 0
                     handler_at[l] = (cur_stacks[1], handler_at[l][2])
                 end
@@ -740,6 +739,14 @@ function constrains_param(var::TypeVar, @nospecialize(typ), covariant::Bool, typ
         ba = constrains_param(var, typ.a, covariant, type_constrains)
         bb = constrains_param(var, typ.b, covariant, type_constrains)
         (ba && bb) && return true
+    elseif isType(typ)
+        p = type_parameter(typ)
+        if p === var && var.ub === Any
+            # Types with free type parameters are <: Type cause the typevar
+            # to be unconstrained because Type{T} with free typevars is illegal
+            return type_constrains
+        end
+        constrains_param(var, p, false, type_constrains) && return true
     elseif typ isa DataType
         # return true if any param constrains var
         fc = length(typ.parameters)
@@ -759,11 +766,6 @@ function constrains_param(var::TypeVar, @nospecialize(typ), covariant::Bool, typ
                     constrains_param(var, lastp, covariant, type_constrains) && return true
                 end
             else
-                if typ.name === typename(Type) && typ.parameters[1] === var && var.ub === Any
-                    # Types with free type parameters are <: Type cause the typevar
-                    # to be unconstrained because Type{T} with free typevars is illegal
-                    return type_constrains
-                end
                 for i in 1:fc
                     p = typ.parameters[i]
                     constrains_param(var, p, false, type_constrains) && return true
@@ -785,7 +787,7 @@ function sptype_for_tvar(vᵢ::TypeVar, output_tvar::TypeVar, sigtypes::Core.Sim
                          @nospecialize(specTypes))
     for j = 1:length(sigtypes)
         sⱼ = sigtypes[j]
-        if isType(sⱼ) && sⱼ.parameters[1] === vᵢ
+        if isType(sⱼ) && type_parameter(sⱼ) === vᵢ
             # `arg::Type{T}` pins the sparam to the arg's type
             return fieldtype(specTypes, j)
         elseif (va = va_from_vatuple(sⱼ)) !== nothing
@@ -799,7 +801,7 @@ function sptype_for_tvar(vᵢ::TypeVar, output_tvar::TypeVar, sigtypes::Core.Sim
         # `Bottom <: T <: Any` additionally allows non-Type tvars
         return Any
     end
-    return rewrap_free_typevars(Type{output_tvar}, find_free_typevars(specTypes))
+    return rewrap_free_typevars(TypeEq{output_tvar}, find_free_typevars(specTypes))
 end
 
 function sptypes_from_meth_instance(mi::MethodInstance)
@@ -845,11 +847,11 @@ function sptypes_from_meth_instance(mi::MethodInstance)
                                      (unwrap_unionall(temp)::DataType).parameters,
                                      mi.specTypes)
             else
-                ty = rewrap_free_typevars(Type{v}, find_free_typevars(mi.specTypes))
+                ty = rewrap_free_typevars(TypeEq{v}, find_free_typevars(mi.specTypes))
             end
             undef = !v_constrained
         elseif isvarargtype(v)
-            # if this parameter came from `func(..., ::Vararg{T,v})`,
+            # this parameter came from `func(..., ::Vararg{T,v})`,
             # so the type is known to be `Int`
             ty = Int
             undef = false
@@ -1283,7 +1285,7 @@ end
 """
     doworkloop(args...)
 
-Run a tasks inside the abstract interpreter, returning false if there are none.
+Run a task inside the abstract interpreter, returning false if there are none.
 Tasks will be run in DFS post-order tree order, such that all child tasks will
 be run in the order scheduled, prior to running any subsequent tasks. This
 allows tasks to generate more child tasks, which will be run before anything else.

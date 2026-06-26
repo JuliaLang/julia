@@ -122,7 +122,7 @@ function swaprows!(a::AbstractMatrix, i, j)
     end
 end
 
-# like permute!! applied to each row of a, in-place in a (overwriting p).
+# like permute!! applied to each column of a, in-place in a (overwriting p).
 function permutecols!!(a::AbstractMatrix, p::AbstractVector{<:Integer})
     require_one_based_indexing(a, p)
     count = 0

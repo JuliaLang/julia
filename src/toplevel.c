@@ -539,7 +539,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_method_instance_for_thunk(jl_code_info_t *
     return mi;
 }
 
-// Eval `throw(ErrorException(msg)))` in module `m`.
+// Eval `throw(exc)` in module `m`.
 // Used in `jl_toplevel_eval_flex` instead of `jl_throw` so that the error
 // location in julia code gets into the backtrace.
 static void jl_eval_throw(jl_module_t *m, jl_value_t *exc, const char *filename, int lineno)

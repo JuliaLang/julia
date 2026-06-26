@@ -271,7 +271,7 @@ function foo_apply_apply_type_svec()
 end
 @test fully_eliminated(foo_apply_apply_type_svec, Tuple{}; retval=NTuple{3, Float32})
 
-# The that inlining doesn't drop ambiguity errors (#30118)
+# Test that inlining doesn't drop ambiguity errors (#30118)
 c30118(::Tuple{Ref{<:Type}, Vararg}) = nothing
 c30118(::Tuple{Ref, Ref}) = nothing
 b30118(x...) = c30118(x)
@@ -771,7 +771,7 @@ end
 # Issue #42264 - crash on certain union splits
 let f(x) = (x...,)
     # Test splatting with a Union of non-{Tuple, SimpleVector} types that require creating new `iterate` calls
-    # in inlining. For this particular case, we're relying on `iterate(::CaretesianIndex)` throwing an error, such
+    # in inlining. For this particular case, we're relying on `iterate(::CartesianIndex)` throwing an error, such
     # that the original apply call is not union-split, but the inserted `iterate` call is.
     @test code_typed(f, Tuple{Union{Int64, CartesianIndex{1}, CartesianIndex{3}}})[1][2] == Tuple{Int64}
 end
@@ -827,7 +827,7 @@ end
 # test single, non-dispatchtuple callsite inlining
 
 @constprop :none @inline test_single_nondispatchtuple(@nospecialize(t)) =
-    isa(t, DataType) && t.name === Type.body.name
+    isa(t, DataType) && t.name === Core.TypeEq.name
 let
     src = code_typed1((Any,)) do x
         test_single_nondispatchtuple(x)
@@ -838,7 +838,7 @@ let
 end
 
 @constprop :aggressive @inline test_single_nondispatchtuple(c, @nospecialize(t)) =
-    c && isa(t, DataType) && t.name === Type.body.name
+    c && isa(t, DataType) && t.name === Core.TypeEq.name
 let
     src = code_typed1((Any,)) do x
         test_single_nondispatchtuple(true, x)
@@ -2315,13 +2315,13 @@ end
 path = Ref{Symbol}(:unknown)
 function f59018_generator(x)
     if @generated
-        if x isa DataType && x.name === Type.body.name
+        if x isa Core.TypeEq
             path[] = :generator
-            return Core.sizeof(x.parameters[1])
+            return Core.sizeof(x.T)
         end
     else
         path[] = :fallback
-        return Core.sizeof(x.parameters[1])
+        return Core.sizeof(x isa Core.TypeEq ? Base.type_parameter(x) : x.parameters[1])
     end
 end
 f59018() = f59018_generator(Base.inferencebarrier(Int64))

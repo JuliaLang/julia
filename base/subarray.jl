@@ -314,7 +314,7 @@ end
 
 # But SubArrays with fast linear indexing pre-compute a stride and offset
 FastSubArray{T,N,P,I} = SubArray{T,N,P,I,true}
-# We define a convenience functions to compute the shifted parent index
+# We define convenience functions to compute the shifted parent index
 # This differs from reindex as this accepts the view directly, instead of its indices
 @inline _reindexlinear(V::FastSubArray, i::Int) = V.offset1 + V.stride1*i
 @inline _reindexlinear(V::FastSubArray, i::AbstractUnitRange{Int}) = V.offset1 .+ V.stride1 .* i

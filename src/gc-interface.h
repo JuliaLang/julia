@@ -198,7 +198,7 @@ JL_DLLEXPORT uint64_t jl_gc_total_hrtime(void);
 // **must** also set the type of the returning object to be `ty`. The type `ty` may also be used to record
 // an allocation of that type in the allocation profiler.
 struct _jl_value_t *jl_gc_alloc_(struct _jl_tls_states_t * ptls, size_t sz, void *ty);
-// Allocates small objects and increments Julia allocation counterst. Size of the object
+// Allocates small objects and increments Julia allocation counters. Size of the object
 // header must be included in the object size. The (possibly unused in some implementations)
 // offset to the arena in which we're allocating is passed in the second parameter, and the
 // object size in the third parameter. If thread-local allocators are used, then this
@@ -263,11 +263,11 @@ struct _jl_value_t *jl_gc_permobj(struct _jl_tls_states_t *ptls, size_t sz, void
 // This function notifies the GC about memory addresses that are set when loading the boot image.
 // The GC may use that information to, for instance, determine that such objects should
 // be treated as marked and belonged to the old generation in nursery collections.
-void jl_gc_notify_image_load(const char* img_data, size_t len);
+void jl_gc_notify_image_load(const char* img_data, size_t len) JL_NOTSAFEPOINT;
 // This function notifies the GC about memory addresses that are set when allocating the boot image.
 // The GC may use that information to, for instance, determine that all objects in that chunk of memory should
 // be treated as marked and belonged to the old generation in nursery collections.
-void jl_gc_notify_image_alloc(const char* img_data, size_t len);
+void jl_gc_notify_image_alloc(const char* img_data, size_t len) JL_NOTSAFEPOINT;
 
 // ========================================================================= //
 // Runtime Write-Barriers
@@ -320,10 +320,10 @@ STATIC_INLINE void jl_gc_wb_genericmemory_copy_ptr(const struct _jl_value_t *own
                                           size_t n, struct _jl_datatype_t *dt) JL_NOTSAFEPOINT;
 // Similar to jl_gc_wb_genericmemory_copy but must be used when copying *boxed* elements of a genericmemory
 // object. Note that this barrier also performs the copying unlike jl_gc_wb_genericmemory_copy_ptr.
-// The parameters src_p, dest_p and n will be modified and will contain information about
-// the *uncopied* data after performing this barrier, and will be copied using memmove_refs.
-STATIC_INLINE void jl_gc_wb_genericmemory_copy_boxed(const struct _jl_value_t *owner, _Atomic(void*) * dest_p,
-                                          struct _jl_genericmemory_t *src, _Atomic(void*) * src_p,
+// `*dest_pp`, `*src_pp` and `*n` will be advanced past any elements the barrier copied inline, so that
+// the caller's trailing memmove_refs picks up where the barrier left off.
+STATIC_INLINE void jl_gc_wb_genericmemory_copy_boxed(const struct _jl_value_t *owner, _Atomic(void*) ** dest_pp,
+                                          struct _jl_genericmemory_t *src, _Atomic(void*) ** src_pp,
                                           size_t* n) JL_NOTSAFEPOINT;
 #ifdef __cplusplus
 }

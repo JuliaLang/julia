@@ -98,7 +98,7 @@ static value_t fl_module_unique_name(fl_context_t *fl_ctx, value_t *args, uint32
     jl_ast_context_t *ctx = jl_ast_ctx(fl_ctx);
     jl_module_t *m = ctx->module;
     assert(m != NULL);
-    // Get the outermost function name from the `parsed_method_stack` top
+    // Get the outermost function name from the bottom of `parsed_method_stack`
     char *funcname = NULL;
     value_t parsed_method_stack = args[0];
     if (parsed_method_stack != fl_ctx->NIL) {
@@ -235,10 +235,12 @@ void jl_init_common_symbols(void)
     jl_invoke_sym = jl_symbol("invoke");
     jl_invoke_modify_sym = jl_symbol("invoke_modify");
     jl_foreigncall_sym = jl_symbol("foreigncall");
+    jl_foreignglobal_sym = jl_symbol("foreignglobal");
     jl_cfunction_sym = jl_symbol("cfunction");
     jl_quote_sym = jl_symbol("quote");
     jl_inert_sym = jl_symbol("inert");
     jl_top_sym = jl_symbol("top");
+    jl_tuple_sym = jl_symbol("tuple");
     jl_core_sym = jl_symbol("core");
     jl_globalref_sym = jl_symbol("globalref");
     jl_line_sym = jl_symbol("line");
@@ -1049,11 +1051,11 @@ lno_ok:
         JL_GC_PROMISE_ROOTED(ctx_module);
         margs[0] = jl_toplevel_eval(ctx_module, margs[0]);
         jl_method_instance_t *mfunc = NULL;
-        mfunc = jl_method_lookup(margs, nargs, ct->world_age);
+        mfunc = jl_apply_lookup(margs, nargs, ct->world_age);
         JL_GC_PROMISE_ROOTED(mfunc);
         if (mfunc == NULL && retry_lno != NULL) {
             margs[1] = retry_lno;
-            mfunc = jl_method_lookup(margs, nargs, ct->world_age);
+            mfunc = jl_apply_lookup(margs, nargs, ct->world_age);
             JL_GC_PROMISE_ROOTED(mfunc);
         }
         if (mfunc == NULL) {

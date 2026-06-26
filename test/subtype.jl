@@ -17,7 +17,7 @@ _type_intersect(@nospecialize(x), @nospecialize(y)) = ccall(:jl_intersect_types,
 
 intersection_env(@nospecialize(x), @nospecialize(y)) = Core.svec(Base.typeintersect_env(x, y)...)
 
-# level 1: no varags, union, UnionAll
+# level 1: no varargs, union, UnionAll
 function test_1()
     @test issub_strict(Int, Integer)
     @test issub_strict(Vector{Int}, AbstractVector{Int})
@@ -601,6 +601,30 @@ function test_old()
     @test !isa(Array,Type{Any})
     @test Type{Complex} <: UnionAll
     @test isa(Complex,Type{Complex})
+
+    # `Type` (i.e. `Type{T} where T`) and `AnyType` denote the same set of all
+    # types, so they are equal; the type cache canonicalizes them as parameters.
+    @test Type <: Core.AnyType
+    @test Core.AnyType <: Type
+    @test Type == Core.AnyType
+    @test Vector{Type} === Vector{Core.AnyType}
+    # bounded `Type{}`s are strict subtypes of `AnyType`, not equal to it
+    @test (Type{T} where T<:Real) != Core.AnyType
+    @test (Type{T} where T<:Real) <: Core.AnyType
+    @test !(Core.AnyType <: (Type{T} where T<:Real))
+    # `Type{Type{T}} where T` (unbounded `T`) denotes the same set as the bare
+    # `TypeEq` (every `Type{X}` value), so they are equal
+    @test Core.TypeEq <: (Type{Type{T}} where T)
+    @test Core.TypeEq == (Type{Type{T}} where T)
+    @test (Type{Type{T}} where T) <: Core.TypeEq
+    @test !(DataType <: (Type{Type{T}} where T))
+    # a `Type{X}` with a non-typevar parameter still dispatches as the singleton
+    # `typeof(X)` (e.g. every `Ref{T}` is a `DataType`)
+    @test (Type{Ref{T}} where T<:Real) <: DataType
+    # this uses `jl_typeof(X)` even when `X` has free typevars, which is unsound
+    # if the kind can vary: `Union{Int,T}` collapses to the `DataType` `Int` when
+    # `T==Int`, so this should not be `<: Union` (currently broken).
+    @test_broken !((Type{Union{Int,T}} where T<:Real) <: Union)
     @test !(Type{Ptr{Bottom}} <: Type{Ptr})
     @test !(Type{Rational{Int}} <: Type{Rational})
     @test Tuple{} <: Tuple{Vararg}
@@ -1768,7 +1792,6 @@ end
 @testintersect(Tuple{Any,Tuple{Int},Int},
                Tuple{LT,R,I} where LT<:Union{I, R} where R<:Tuple{I} where I<:Integer,
                Tuple{LT,Tuple{Int},Int} where LT<:Union{Tuple{Int},Int})
-# fails due to this:
 let U = Tuple{Union{LT, LT1},Union{R, R1},Int} where LT1<:R1 where R1<:Tuple{Int} where LT<:Int where R<:Tuple{Int},
     U2 = Union{Tuple{LT,R,Int} where LT<:Int where R<:Tuple{Int}, Tuple{LT,R,Int} where LT<:R where R<:Tuple{Int}},
     V = Tuple{Union{Tuple{Int},Int},Tuple{Int},Int},
@@ -1778,7 +1801,7 @@ let U = Tuple{Union{LT, LT1},Union{R, R1},Int} where LT1<:R1 where R1<:Tuple{Int
     @test U == V2
     @test V == V2
     @test U2 == V
-    @test_broken U2 == V2
+    @test U2 == V2
 end
 
 # issue #31082 and #30741
@@ -2539,7 +2562,7 @@ let S = Dict{Int, S1} where {F1, S1<:Union{Int8, Val{F1}}},
     @test typeintersect(T, S) == Dict{Int, S} where S<:Union{Val{Int}, Int8}
 end
 
-# Ensure inner `intersect_all` never under-esitimate.
+# Ensure inner `intersect_all` never under-estimate.
 let S = Tuple{F1, Dict{Int, S1}} where {F1, S1<:Union{Int8, Val{F1}}},
     T = Tuple{Any, Dict{F2, S2}} where {F2, S2<:Union{Int8, Val{F2}}}
     @test Tuple{Nothing, Dict{Int, Int8}} <: S
@@ -2827,7 +2850,7 @@ let S = Tuple{Val, Val{T}} where {T}, R = Tuple{Val{Val{T}}, Val{T}} where {T},
     @testintersect(Tuple{Val{A}, A} where {B, A<:Union{Val{B}, Complex{B}}}, S{1}, R{1})
     # parameters check for supertype (B54356 -> A54356)
     @testintersect(Tuple{Val{A}, A} where {B, A<:Union{Val{B}, B54356{B}}}, S{1}, R{1})
-    # enure unused TypeVar skips the `UnionAll` wrapping
+    # ensure unused TypeVar skips the `UnionAll` wrapping
     @testintersect(Tuple{Val{A}, A} where {B, A<:(Union{Val{B}, D54356{B,C}} where {C})}, S{1}, R{1})
     # invariant parameter should not get narrowed
     @testintersect(Tuple{Val{A}, A} where {B, A<:Union{Val{B}, Val{Union{Int,Complex{B}}}}}, S{1}, R{1})
@@ -3118,3 +3141,89 @@ typeintersect(Tuple{typeof(convert),
               Tuple{typeof(convert),
                     Type{B61876{T1,N,R} where {N, R<:(AbstractArray{<:AbstractArray{T1,N},N})}},
                     AbstractArray{T2,N}} where {T1,T2,N})
+
+# issue #61917: an existential var inside an invariant constructor must not be
+# equated with an outer universal var whose bound is disjoint, e.g. `Ref{Ref{Bar}}`
+# inhabits the LHS but not the RHS, so the `UnionAll`s are not in a subtype relation.
+struct Foo61917; end
+struct Bar61917; end
+@test !((Ref{Ref{U}} where U<:Bar61917) <: (Ref{Union{Ref{T}, Ref{U}}} where {T<:Foo61917, U<:Bar61917}))
+@test !((Ref{Ref{U}} where U<:Integer) <: (Ref{Union{Ref{T}, Ref{U}}} where {T<:AbstractString, U<:Integer}))
+# a collapsible union is still a supertype
+@test (Ref{Ref{U}} where U<:Bar61917) <: (Ref{Union{Ref{T}, Ref{U}}} where {T<:Bar61917, U<:Bar61917})
+# the internal `Intersect` meet node used to fix this must never escape into a
+# user-visible result type
+let r = typeintersect((Ref{Ref{U}} where U<:Bar61917), (Ref{Union{Ref{T}, Ref{U}}} where {T<:Foo61917, U<:Bar61917}))
+    @test !occursin("Intersect", string(r))
+    @test r == Ref{Ref{Union{}}}
+end
+# issue #61917: the `Intersect` meet node can also reach the intersection result
+# (via a `where S>:T` lower bound); it must be over-approximated, not leaked.
+let A = AbstractVector{<:Signed}, B = AbstractArray{Int}
+    r = typeintersect(Ref{B}, (Ref{S} where S>:T) where T<:A)
+    @test !occursin("Intersect", string(r))
+    @test Ref{AbstractArray{Int}} <: r   # sound over-approximation of the meet
+end
+# The `Intersect` meet node must be respected by subtype queries that take the
+# no-free-typevars fast path.
+let
+    A = Tuple{T,T} where T <: Real
+    B = Tuple{Integer,Integer}
+    C = Tuple{Int,Int}
+
+    X = Tuple{Ref{B}, Ref{C}}
+    Y = Tuple{Ref{S}, Ref{T}} where {T <: A, S >: T}
+
+    @test C <: A
+    @test C <: B
+    @test X <: Y
+end
+
+# PR #61915: `concrete_min` must treat a `Type{T}` (`TypeEq`) element as
+# contributing no fixed concrete type, so the covariant-tuple diagonal rule in
+# `obvious_subtype` does not wrongly reject a `Tuple` of `Type{}`s against a
+# diagonal `Vararg`. Previously `obvious_subtype` returned a definitive
+# not-subtype that disagreed with full subtyping, tripping `assert` in subtype.c.
+let X = Tuple{Union{Type{Int}, Type{Vector{T}} where T}, Type{Int}},
+    Y = (Tuple{Vararg{T}} where T)
+    @test X <: Y
+    @test typeintersect(X, Y) == X
+    @test typeintersect(Y, X) == X
+end
+let X = Tuple{Union{Type{Int}, Type{Vector{T}} where T}, Union{Type{Int}, Type{Vector{T}} where T}},
+    Y = (Tuple{Vararg{T}} where T)
+    @test X <: Y
+    @test typeintersect(X, Y) == X
+end
+
+# issue #62174: envout for tuple element matching must preserve TypeVar
+# identities in hoisted bounds.
+struct P62174{X} end
+struct M62174{D,F,V<:P62174{D},A<:P62174{F}} end
+let X = Tuple{Vector{M62174{D,F,V,A}} where {D,F,V<:P62174{D},A<:P62174{F}}},
+    Y = Tuple{Vector{T}} where T
+    _, env = intersection_env(X, Y)
+    v = env[1][1]
+    p = v.parameters
+    @test p[3].ub.parameters[1] === p[1]
+    @test p[4].ub.parameters[1] === p[2]
+end
+
+# Hoisted union-split of a `∀` variable's upper bound: a left-side `where` var
+# with trivial lower bound, a union upper bound, and only covariant occurrences
+# in the body distributes over the arms of its bound.
+@test (Tuple{T,T} where T<:Union{Float64,Int64}) <: Union{Tuple{Float64,Float64},Tuple{Int64,Int64}}
+@test Union{Tuple{Float64,Float64},Tuple{Int64,Int64}} == (Tuple{T,T} where T<:Union{Float64,Int64})
+@test (Tuple{T,T} where T<:Union{Integer,AbstractString}) <:
+    Union{Tuple{Integer,Integer},Tuple{AbstractString,AbstractString}}
+@test (Tuple{T,T} where T<:Union{Int8,Int16,Int32,Int64}) <:
+    Union{Tuple{Int8,Int8},Tuple{Int16,Int16},Tuple{Int32,Int32},Tuple{Int64,Int64}}
+@test (Tuple{Vararg{T}} where T<:Union{Float64,Int64}) <:
+    Union{Tuple{Vararg{Float64}},Tuple{Vararg{Int64}}}
+@test (Tuple{Vararg{T}} where T<:Union{Integer,AbstractString}) <:
+    Union{Tuple{Vararg{Integer}},Tuple{Vararg{AbstractString}}}
+# the split must not apply to a variable that also occurs invariantly
+@test !((Tuple{T,Ref{T}} where T<:Union{Int64,String}) <:
+    Union{Tuple{Int64,Ref{Int64}},Tuple{String,Ref{String}}})
+# ... and must not change the `∃` (right) side
+@test Vector{Union{Int64,String}} <: (Vector{T} where T<:Union{Int64,String})

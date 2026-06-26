@@ -37,7 +37,7 @@ In addition, each [`Task`](@ref) stores a local world age that determines which 
 the global binding and method tables are currently visible to the running task. The world age of
 the running task will never exceed the global world age counter, but may run arbitrarily behind it.
 In general the term "current world age" refers to the local world age of the currently running task.
-The current world age may be retrieved using the (internal) function [`Base.tls_world_age`](@ref)
+The current world age may be retrieved using the (internal) function [`Base.tls_world_age`](@ref).
 
 ```julia-repl
 julia> function f end
@@ -265,7 +265,7 @@ Binding Main.x
 Certain language features capture the current task's world age. Perhaps the most common of
 these is creation of new tasks. Newly created tasks will inherit the creating task's local
 world age at creation time and will retain said world age (unless explicitly raised) even
-if the originating tasks raises its world age:
+if the originating task raises its world age:
 
 ```julia-repl
 julia> const x = 1

@@ -7,6 +7,123 @@ using Base: CoreLogging, PkgId, UUID, SHA1, StaleCacheKey, parsed_toml, project_
 const Config = Pair{Cmd, Base.CacheFlags}
 const PkgConfig = Tuple{PkgId,Config}
 
+# --- Precompile jobserver (JuliaLang/julia#58591) ----------------------------
+# A token pool of size `ntokens` shared with worker subprocesses that caps total
+# CPU threads across all parallel workers: each holds one baseline token while
+# CPU-active and its AOT imaging phase draws extra codegen threads from the same
+# pool. Only one pool exists per process; a concurrent session (e.g. from package
+# loading) whose create fails joins the existing pool instead, holding baselines
+# against it without tearing it down. Returns:
+#   :created -- created and owns the pool (must tear it down)
+#   :joined  -- sharing a pool another session in this process owns
+#   :none    -- no pool available; run uncoordinated
+function setup_precompile_jobserver!(ntokens::Int)
+    namep = ccall(:jl_precompile_jobserver_create, Ptr{UInt8}, (Cint,), ntokens)
+    if namep != C_NULL
+        ENV["JULIA_PRECOMPILE_JOBSERVER"] = unsafe_string(namep)
+        return :created
+    end
+    # create failed: join an existing pool, else run uncoordinated (OS refused it)
+    ccall(:jl_precompile_jobserver_active, Cint, ()) != 0 ? :joined : :none
+end
+
+function teardown_precompile_jobserver!()
+    ccall(:jl_precompile_jobserver_destroy, Cvoid, ())
+    delete!(ENV, "JULIA_PRECOMPILE_JOBSERVER")
+    return nothing
+end
+
+# Bounds concurrently CPU-active workers. The `Base.Semaphore` enforces the
+# process-count cap; when the jobserver is active each worker also holds one
+# baseline token from the shared pool while CPU-active, balancing worker
+# baselines and imaging codegen threads against one budget. A worker's main
+# thread sleeps during imaging, so its baseline token doubles as that phase's
+# first codegen thread.
+#
+# Baseline acquisition is best-effort: it proceeds tokenless when the pool is
+# torn down, cancelled, or starved past a timeout (tokens leak if a worker is
+# killed mid-imaging), degrading to bounded oversubscription instead of hanging.
+# `ntokens` tracks tokens actually held, so releases only post back while it is
+# positive and tokenless acquires can never over-post.
+mutable struct WorkerLimiter
+    const sem::Base.Semaphore
+    const jobserver::Bool
+    @atomic ntokens::Int
+end
+WorkerLimiter(sem::Base.Semaphore, jobserver::Bool) = WorkerLimiter(sem, jobserver, 0)
+
+# How long an acquire keeps polling for a baseline token before proceeding
+# without one. Generous enough that it is only ever hit when the pool has been
+# starved abnormally (leaked tokens), not during routine imaging contention.
+const JOBSERVER_BASELINE_TIMEOUT_S = 240.0
+
+# Try to take one baseline token from the shared pool, with a yielding backoff
+# so the task scheduler keeps running while the pool is drained by imaging
+# workers. Returns whether a token was acquired; bails out tokenless when the
+# jobserver reports inactive (torn down), `cancel` returns true, or the timeout
+# expires.
+function _jobserver_acquire_baseline(w::WorkerLimiter; cancel=Returns(false))
+    delay = 0.005
+    waited = 0.0
+    while true
+        r = ccall(:jl_precompile_jobserver_acquire, Cint, ())
+        if r == 1
+            @atomic w.ntokens += 1
+            return true
+        end
+        if r == -1 || cancel()
+            return false
+        end
+        if waited >= JOBSERVER_BASELINE_TIMEOUT_S
+            @debug "Precompilation jobserver baseline token unavailable for $(waited)s; proceeding without one"
+            return false
+        end
+        Base.sleep(delay)
+        waited += delay
+        delay = min(2 * delay, 0.1)
+    end
+end
+
+function _jobserver_release_baseline(w::WorkerLimiter)
+    while true
+        old = @atomic w.ntokens
+        old == 0 && return false
+        (; success) = @atomicreplace w.ntokens old => old - 1
+        if success
+            ccall(:jl_precompile_jobserver_release, Cvoid, ())
+            return true
+        end
+    end
+end
+
+function Base.acquire(w::WorkerLimiter; cancel=Returns(false))
+    Base.acquire(w.sem)
+    if w.jobserver
+        try
+            _jobserver_acquire_baseline(w; cancel)
+        catch
+            Base.release(w.sem)
+            rethrow()
+        end
+    end
+    return nothing
+end
+
+function Base.release(w::WorkerLimiter)
+    w.jobserver && _jobserver_release_baseline(w)
+    Base.release(w.sem)
+    return nothing
+end
+
+function Base.acquire(f, w::WorkerLimiter; cancel=Returns(false))
+    Base.acquire(w; cancel)
+    try
+        return f()
+    finally
+        Base.release(w)
+    end
+end
+
 ## PrecompileJob
 
 # Per-package compilation status and associated state.
@@ -88,7 +205,7 @@ Base.@kwdef mutable struct PrecompileSession
     _from_loading::Bool
     time_start::UInt64
     print_lock::ReentrantLock
-    parallel_limiter::Base.Semaphore
+    parallel_limiter::WorkerLimiter
     num_tasks::Int
     start_loaded_modules::Set{PkgId}
     requested_pkgids::Vector{PkgId}
@@ -1034,7 +1151,9 @@ precompilation:
 - Packages with `__precompile__(false)` are skipped if they are from loading to
   avoid repeated work on every session.
 - Parallel compilation is controlled by `JULIA_NUM_PRECOMPILE_TASKS` environment variable
-  (defaults to CPU_THREADS + 1, capped at 16, halved on Windows).
+  (defaults to CPU_THREADS + 1, capped at 16, halved on Windows). The total CPU-thread
+  budget shared across those workers (worker baselines plus native-image codegen threads)
+  is controlled by `JULIA_PRECOMPILE_THREADS` (defaults to CPU_THREADS + 1).
 - Extensions are precompiled when all their triggers are available in the environment.
 """
 function precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}}=String[];
@@ -1978,11 +2097,11 @@ function precompile_pkgs_maybe_cachefile_lock(f, s::PrecompileSession, pkg_confi
             # wait until the lock is available
             cachefile = @invokelatest Base.mkpidlock_hook(() -> begin
                     job.lock_holder = ""
-                    Base.acquire(f, s.parallel_limiter)
+                    Base.acquire(f, s.parallel_limiter; cancel=() -> should_stop(s))
                 end,
                 pidfile; stale_age)
         finally
-            Base.acquire(s.parallel_limiter) # re-acquire so the outer release is balanced
+            Base.acquire(s.parallel_limiter; cancel=() -> should_stop(s)) # re-acquire so the outer release is balanced
         end
     end
     return cachefile
@@ -2034,7 +2153,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                     push!(freshpaths, freshpath)
                 end
                 if !circular && is_stale
-                    Base.acquire(s.parallel_limiter)
+                    Base.acquire(s.parallel_limiter; cancel=() -> should_stop(s))
                     is_serial_dep = pkg in s.serial_deps
                     is_project_dep = pkg in s.project_deps
 
@@ -2073,7 +2192,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                             t = @elapsed ret = begin
                                 Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !s.ignore_loaded;
                                                   flags=flags_, cacheflags, loadable_exts, signal_channel=make_signal_channel(),
-                                                  pid_channel=pid_ch)
+                                                  pid_channel=pid_ch, report_timing=true)
                             end
                         else
                             fullname = full_name(s.ext_to_parent, pkg)
@@ -2098,7 +2217,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                                 end
                                 Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !s.ignore_loaded;
                                                   flags=flags_, cacheflags, loadable_exts, signal_channel=make_signal_channel(),
-                                                  pid_channel=pid_ch)
+                                                  pid_channel=pid_ch, report_timing=true)
                             end
                         end
                         if ret isa Exception
@@ -2359,7 +2478,18 @@ function report_precompile_results!(s::PrecompileSession)
                     plural1 = length(s.configs) > 1 ? "dependency configurations" : s.n_loaded == 1 ? "dependency" : "dependencies"
                     plural2 = s.n_loaded == 1 ? "a different version is" : "different versions are"
                     plural3 = s.n_loaded == 1 ? "" : "s"
-                    loaded_names = join(sort!([full_name(s.ext_to_parent, p) for p in s.loaded_pkgs]), ", ", " and ")
+                    loaded_names_vec = sort!([full_name(s.ext_to_parent, p) for p in s.loaded_pkgs])
+                    max_loaded_names = 5
+                    if length(loaded_names_vec) > max_loaded_names
+                        loaded_names = string(
+                            join(first(loaded_names_vec, max_loaded_names), ", ", " and "),
+                            ", and ",
+                            length(loaded_names_vec) - max_loaded_names,
+                            " more"
+                        )
+                    else
+                        loaded_names = join(loaded_names_vec, ", ", " and ")
+                    end
                     # compute how many precompiled packages transitively depend on the loaded packages
                     loaded_set = Set{PkgId}(s.loaded_pkgs)
                     n_affected = let reverse_deps = Dict{PkgId, Vector{PkgId}}()
@@ -2581,10 +2711,24 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
 
     print_lock = io.io isa Base.LibuvStream ? io.io.lock::ReentrantLock : ReentrantLock()
 
+    # Size the shared CPU-thread budget for the parallel workers. Defaults to
+    # `EFFECTIVE_CPU_THREADS + 1` (one baseline per worker plus a spare so a lone
+    # worker can fill every core during imaging); `JULIA_PRECOMPILE_THREADS`
+    # overrides it. Skipped for a single task or when JULIA_IMAGE_THREADS pins a
+    # per-worker count (a hard override that bypasses the shared budget).
+    precompile_jobserver = if num_tasks > 1 && !haskey(ENV, "JULIA_IMAGE_THREADS")
+        default_budget = Sys.EFFECTIVE_CPU_THREADS + 1
+        budget = max(1, something(tryparse(Int, get(ENV, "JULIA_PRECOMPILE_THREADS", string(default_budget))), default_budget))
+        setup_precompile_jobserver!(budget)
+    else
+        :none
+    end
+
     s = PrecompileSession(;
         configs, io, logio, logcalls, fancyprint, hascolor,
         warn_loaded, ignore_loaded, internal_call, strict, _from_loading,
-        time_start, print_lock, parallel_limiter=Base.Semaphore(num_tasks), num_tasks,
+        time_start, print_lock,
+        parallel_limiter=WorkerLimiter(Base.Semaphore(num_tasks), precompile_jobserver !== :none), num_tasks,
         start_loaded_modules=Set{PkgId}(keys(Base.loaded_modules)), requested_pkgids,
         direct_deps=graph.direct_deps,
         ext_to_parent=graph.ext_to_parent, parent_to_exts=graph.parent_to_exts,
@@ -2642,6 +2786,7 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
         s.interrupted_or_done = true
         notify(s.first_started)
         peak_rss_timer === nothing || close(peak_rss_timer)
+        precompile_jobserver === :created && teardown_precompile_jobserver!()
     end
 end
 

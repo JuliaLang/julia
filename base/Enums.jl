@@ -162,12 +162,19 @@ macro enum(T::Union{Symbol,Expr}, syms...)
     namemap = Dict{basetype,Symbol}()
     lo = hi = i = zero(basetype)
     hasexpr = false
+    docs = Dict{Symbol,Expr}()
 
     if length(syms) == 1 && syms[1] isa Expr && syms[1].head === :block
         syms = syms[1].args
     end
     for s in syms
         s isa LineNumberNode && continue
+        if isa(s, Expr) && s.head === :macrocall && s.args[1] == GlobalRef(Core, Symbol("@doc"))
+            doc = s
+            s = s.args[4]
+        else
+            doc = nothing
+        end
         if isa(s, Symbol)
             if i == typemin(basetype) && !isempty(values)
                 throw(ArgumentError(LazyString("overflow in value \"", s, "\" of Enum ", typename)))
@@ -203,6 +210,9 @@ macro enum(T::Union{Symbol,Expr}, syms...)
         else
             hi = max(hi, i)
         end
+        if doc !== nothing
+            docs[s] = doc
+        end
         i += oneunit(i)
     end
     blk = quote
@@ -228,7 +238,12 @@ macro enum(T::Union{Symbol,Expr}, syms...)
     end
     if isa(typename, Symbol)
         for (i, sym) in namemap
-            push!(blk.args, :(const $(esc(sym)) = $(esc(typename))($i)))
+            ex = :(const $(esc(sym)) = $(esc(typename))($i))
+            if haskey(docs, sym)
+                docs[sym].args[4] = ex
+                ex = docs[sym]
+            end
+            push!(blk.args, ex)
         end
     end
     push!(blk.args, :nothing)
