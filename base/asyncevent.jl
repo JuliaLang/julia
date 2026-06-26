@@ -324,7 +324,7 @@ end
 
 # timer with repeated callback
 """
-    Timer(callback::Function, delay; interval = 0, spawn::Union{Nothing,Bool}=nothing)
+    Timer(callback::Function, delay; interval = 0, spawn::Union{Nothing,Bool,Symbol}=nothing)
 
 Create a timer that runs the function `callback` at each timer expiration.
 
@@ -337,9 +337,20 @@ has already expired.
 If `spawn` is `true`, the created task will be spawned, meaning that it will be allowed
 to move thread, which avoids the side-effect of forcing the parent task to get stuck to the thread
 it is on. If `spawn` is `nothing` (default), the task will be spawned if the parent task isn't sticky.
+Spawned tasks are scheduled on the interactive threadpool whenever this is available. To spawn on a
+specific threadpool, set `spawn` to a `Symbol` naming the threadpool (e.g., `:default`, `:interactive`).
 
 !!! compat "Julia 1.12"
     The `spawn` argument was introduced in Julia 1.12.
+
+!!! compat "Julia 1.14"
+    The Symbol variant of the `spawn` argument through which a threadpool can be specified was
+    introduced in Julia 1.14.
+
+!!! note
+    Starting in Julia 1.14, callback tasks are spawned on the interactive threadpool by default
+    whenever `spawn=nothing` and the parent task is not sticky or when `spawn=true`. As a result,
+    callback tasks are expected to be lightweight and frequently yielding.
 
 # Examples
 
@@ -360,9 +371,8 @@ julia> begin
 3
 ```
 """
-function Timer(cb::Function, timeout; spawn::Union{Nothing,Bool}=nothing, kwargs...)
-    sticky = spawn === nothing ? current_task().sticky : !spawn
-    timer = Timer(timeout; kwargs...)
+function Timer(cb::Function, delay; spawn::Union{Nothing,Bool,Symbol}=nothing, kwargs...)
+    timer = Timer(delay; kwargs...)
     t = @task begin
         unpreserve_handle(timer)
         while _trywait(timer)
@@ -376,7 +386,26 @@ function Timer(cb::Function, timeout; spawn::Union{Nothing,Bool}=nothing, kwargs
             isopen(timer) || return
         end
     end
-    t.sticky = sticky
+    # Set sticky property and determine the threadpool for non-sticky tasks.
+    # - If `spawn` is `nothing`, inherit sticky property from parent task.
+    # - If `spawn` is `false`, the task will be sticky.
+    # - If `spawn` is `true`, the task will be non-sticky.
+    # - If `spawn` is a `Symbol`, the task will be non-sticky.
+    # Non-sticky tasks are spawned on the interactive threadpool unless a
+    # specific threadpool is specified via `spawn`.
+    if isa(spawn, Nothing)
+        t.sticky = current_task().sticky
+        threadpool = :interactive
+    elseif isa(spawn, Bool)
+        t.sticky = !spawn
+        threadpool = :interactive
+    else
+        t.sticky = false
+        threadpool = spawn
+    end
+    if !t.sticky
+        Threads._spawn_set_thrpool(t, threadpool)
+    end
     # here we are mimicking parts of _trywait, in coordination with task `t`
     preserve_handle(timer)
     @lock timer.cond begin
