@@ -778,6 +778,17 @@ end
 
 const EMPTY_SPTYPES = VarState[]
 
+function type_sptype_to_egal(@nospecialize(ty))
+    isType(ty) || return ty
+    p = type_parameter(ty)
+    try
+        return Core.TypeEgal{p}
+    catch ex
+        ex isa InterruptException && rethrow()
+        return ty
+    end
+end
+
 # Compute the abstract value `ty` for a sparam whose inferred env entry carries
 # a TypeVar (either the sig's own `vᵢ` for unspecialized MIs, or a possibly
 # narrowed `output_tvar` from subtyping). First try to sharpen via
@@ -808,6 +819,99 @@ function sptype_for_tvar(vᵢ::TypeVar, output_tvar::TypeVar, sigtypes::Core.Sim
         return rewrap_free_typevars(TypeEq{output_tvar.lb}, find_free_typevars(specTypes))
     end
     return rewrap_free_typevars(TypeEq{output_tvar}, find_free_typevars(specTypes))
+end
+
+function type_arg_parameter(@nospecialize(t))
+    t = unwrap_unionall(t)
+    (isType(t) || t isa Core.TypeEgal) || return nothing
+    return type_parameter(t)
+end
+
+function has_invariant_sparam_occurrence(@nospecialize(t), v::TypeVar)
+    t = unwrap_unionall(t)
+    t isa DataType || return false
+    t.name === Tuple.name && return false
+    for p in t.parameters
+        has_typevar(p, v) && return true
+    end
+    return false
+end
+
+function sparam_definitely_egal_from_spec(v::TypeVar, sigtypes::Core.SimpleVector,
+                                          @nospecialize(specTypes))
+    spec = unwrap_unionall(specTypes)
+    spec isa DataType || return false
+    for i = 1:min(length(sigtypes), length(spec.parameters))
+        sigarg = sigtypes[i]
+        specarg = spec.parameters[i]
+        sigarg_unwrapped = unwrap_unionall(sigarg)
+        if sigarg_unwrapped === v
+            isdispatchelem(specarg) && return true
+            continue
+        end
+        if sigarg_unwrapped isa TypeVar && has_invariant_sparam_occurrence(sigarg_unwrapped.ub, v)
+            return true
+        end
+        if has_invariant_sparam_occurrence(sigarg, v)
+            return true
+        end
+        sig_type_arg = type_arg_parameter(sigarg)
+        sig_type_arg === nothing && continue
+        if sig_type_arg === v
+            specarg isa Core.TypeEgal && return true
+            continue
+        end
+        if sig_type_arg isa TypeVar && has_invariant_sparam_occurrence(sig_type_arg.ub, v)
+            return true
+        end
+        has_invariant_sparam_occurrence(sig_type_arg, v) && return true
+    end
+    return false
+end
+
+function tuple_min_length(@nospecialize(t))
+    if t isa TypeVar
+        # A `Type{<:T}` range admits `Union{}` even when `T` is non-empty.
+        return 0
+    elseif t isa UnionAll
+        return tuple_min_length(unwrap_unionall(t))
+    elseif t isa Union
+        return min(tuple_min_length(t.a), tuple_min_length(t.b))
+    elseif t isa DataType && t.name === Tuple.name
+        n = length(t.parameters)
+        n == 0 && return 0
+        return unwrap_unionall(t.parameters[n]) isa Core.TypeofVararg ? n - 1 : n
+    end
+    return 0
+end
+
+function tuple_vararg_uses_tvar(@nospecialize(t), v::TypeVar)
+    if t isa TypeVar
+        t = t.ub
+    end
+    t = unwrap_unionall(t)
+    if t isa DataType && t.name === Tuple.name && !isempty(t.parameters)
+        va = va_from_vatuple(t)
+        va === nothing && return false
+        return has_typevar(unwrapva(va), v)
+    end
+    return false
+end
+
+function sparam_definitely_defined_from_spec(v::TypeVar, sigtypes::Core.SimpleVector,
+                                             @nospecialize(specTypes))
+    spec = unwrap_unionall(specTypes)
+    spec isa DataType || return false
+    for i = 1:min(length(sigtypes), length(spec.parameters))
+        sigp = type_arg_parameter(sigtypes[i])
+        sigp === nothing && continue
+        tuple_vararg_uses_tvar(sigp, v) || continue
+        specp = type_arg_parameter(spec.parameters[i])
+        specp === nothing && continue
+        specp isa TypeVar && continue
+        tuple_min_length(specp) > 0 && return true
+    end
+    return false
 end
 
 function sptypes_from_meth_instance(mi::MethodInstance)
@@ -848,12 +952,14 @@ function sptypes_from_meth_instance(mi::MethodInstance)
         end
         if v_tvar !== nothing || has_free_typevars(v)
             vᵢ = (temp::UnionAll).var
+            sigtypes = (unwrap_unionall(temp)::DataType).parameters
             if v_tvar !== nothing
-                ty = sptype_for_tvar(vᵢ, v_tvar,
-                                     (unwrap_unionall(temp)::DataType).parameters,
-                                     mi.specTypes)
+                ty = sptype_for_tvar(vᵢ, v_tvar, sigtypes, mi.specTypes)
+                v_constrained |= sparam_definitely_defined_from_spec(vᵢ, sigtypes, mi.specTypes)
+                v_egal = sparam_definitely_egal_from_spec(vᵢ, sigtypes, mi.specTypes)
             else
                 ty = rewrap_free_typevars(TypeEq{v}, find_free_typevars(mi.specTypes))
+                v_egal = false
             end
             undef = !v_constrained
         elseif isvarargtype(v)
@@ -861,9 +967,14 @@ function sptypes_from_meth_instance(mi::MethodInstance)
             # so the type is known to be `Int`
             ty = Int
             undef = false
+            v_egal = false
         else
             ty = Const(v)
             undef = false
+            v_egal = false
+        end
+        if !undef && v_egal
+            ty = type_sptype_to_egal(ty)
         end
         sptypes[i] = VarState(ty, typemin(Int), undef)
         temp = (temp::UnionAll).body

@@ -593,6 +593,13 @@ let apply_type_tfunc = Compiler.apply_type_tfunc
     @test apply_type_tfunc(𝕃, Const(Type), Type{Int}) == Type{Type{Int}}
 end
 
+# Generated-function static parameters from TypeEgal signatures need exact
+# datatype-parameter bindings.
+struct P62001{T,N} end
+@generated generated_type_sparam62001(::Type{P62001{T,N}}) where {T,N} = :(Val{$T}())
+const P62001Int4 = P62001{Int,4}
+@test only(Base.return_types(generated_type_sparam62001, Tuple{Core.TypeEgal{P62001Int4}})) === Val{Int}
+
 # Structural TypeofVararg results should remain usable when constructing Tuple types.
 vararg_tail62001(X::Tuple{S,Vararg{S}}) where S =
     X[2:end]::Tuple{Vararg{eltype(X::Tuple{Any,Vararg{Any}})}}
@@ -2149,6 +2156,53 @@ let S = (Union{T, U} where {T<:Int, U<:Int})
     @test fapply61323(S) === 1
     @test (@noinline fapply61323(Base.inferencebarrier(S)::Type{Int})) === 1
     @test Base.return_types(fapply61323, (Type{Int},)) == Any[Int]
+end
+
+# Defined type-valued static parameters should retain egality so DataType
+# parameter reads can fold through StaticArrays-like Size computation.
+tuple_svec62001(::Type{T}) where {T<:Tuple} = T.parameters
+Base.@pure tuple_tuple62001(::Type{T}) where {T<:Tuple} = (tuple_svec62001(T)...,)
+struct Size62001{S} end
+Base.@pure Size62001(s::Tuple) = Size62001{s}()
+Size62001(::Type{T}) where {T<:Tuple} = Size62001{tuple_tuple62001(T)}()
+abstract type StaticArray62001{S<:Tuple,T,N} <: AbstractArray{T,N} end
+struct SArray62001{S<:Tuple,T,N,L} <: StaticArray62001{S,T,N}
+    data::NTuple{L,T}
+end
+const SMatrix62001{N,M,T,L} = SArray62001{Tuple{N,M},T,2,L}
+Size62001(::Type{SA}) where {SA <: StaticArray62001} = error()
+Size62001(::Type{SA}) where {SA <: StaticArray62001{S}} where {S<:Tuple} =
+    @isdefined(S) ? Size62001(S) : error()
+Size62001(a::T) where {T<:AbstractArray} = Size62001(T)
+Base.getindex(a::SArray62001, i::Int) = getfield(a, :data)[i]
+@generated function _getindex_scalar62001(::Size62001{S}, a::StaticArray62001,
+                                           inds::Int...) where S
+    if length(inds) == 0
+        return :(a[1])
+    end
+    stride = 1
+    ind_expr = :()
+    for i in 1:length(inds)
+        if i == 1
+            ind_expr = :(inds[1])
+        else
+            ind_expr = :($ind_expr + $stride * (inds[$i] - 1))
+        end
+        stride *= S[i]
+    end
+    return :(a[$ind_expr])
+end
+Base.getindex(a::StaticArray62001, inds::Int...) = _getindex_scalar62001(Size62001(a), a, inds...)
+struct StaticKernel62001{N,T}
+    P::SMatrix62001{N,N,T}
+end
+static_matrix_getindex62001(k::StaticKernel62001{N,T}, i::Int, j::Int) where {N,T} = k.P[i,j]
+let A = SMatrix62001{2,2,Float64,4}((1.0, 2.0, 3.0, 4.0))
+    @test only(Base.return_types(Size62001, Tuple{Type{SMatrix62001{2,2,Float64}}})) == Size62001{(2,2)}
+    @test only(Base.return_types(Size62001, Tuple{SMatrix62001{2,2,Float64}})) == Size62001{(2,2)}
+    @test only(Base.return_types(getindex, Tuple{SMatrix62001{2,2,Float64},Int,Int})) === Float64
+    @test only(Base.return_types(static_matrix_getindex62001,
+        Tuple{typeof(StaticKernel62001{2,Float64}(A)),Int,Int})) === Float64
 end
 
 # Test that Conditional doesn't get widened to Bool too quickly
