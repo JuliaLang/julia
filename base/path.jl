@@ -684,7 +684,7 @@ function homedir(username::AbstractString)
     # For the current user, just return homedir().
     current_user = try
         Sys.username()
-    catch
+    catch err
         err isa IOError || rethrow()
         nothing
     end
@@ -792,7 +792,7 @@ function homedir(username::AbstractString)
         ret = ccall(:getpwnam_r, Cint,
                     (Cstring, Ptr{Cvoid}, Ptr{UInt8}, Csize_t, Ptr{Ptr{Cvoid}}),
                     username, pwd_storage, str_buf, Csize_t(buflen), result)
-        if ret == 34  # ERANGE: string buffer too small, retry with more space
+        if ret == Libc.ERANGE  # string buffer too small, retry with more space
             buflen *= 2
         elseif ret == 0 && result[] != C_NULL
             # pw_uid sits at offset 2*sizeof(Ptr) in struct passwd on all supported
