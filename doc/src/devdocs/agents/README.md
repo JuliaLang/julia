@@ -4,9 +4,10 @@ Julia keeps canonical project-local Agent Skills under
 `doc/src/devdocs/agents/skills/`. These files follow the
 [Agent Skills](https://agentskills.io) `SKILL.md` format.
 
-The `.agents/skills/` and `.claude/skills/` directories contain symlinks for
-automatic discovery by skills-aware agents. Do not edit those discovery entries
-directly; edit the canonical `SKILL.md` under `doc/src/devdocs/agents/skills/`.
+The `.agents/skills/` and `.claude/skills/` entries are symlinks to the canonical
+skills directory for automatic discovery by skills-aware agents. Do not edit
+through those discovery paths directly; edit the canonical `SKILL.md` under
+`doc/src/devdocs/agents/skills/`.
 
 The documentation build renders each canonical `SKILL.md` with its Agent Skill metadata:
 
