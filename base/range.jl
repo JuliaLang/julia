@@ -1191,10 +1191,40 @@ intersect(i::Integer, r::AbstractUnitRange{<:Integer}) = range(max(i, first(r)),
 
 intersect(r::AbstractUnitRange{<:Integer}, i::Integer) = intersect(i, r)
 
+# Empty StepRange{T,S}; the obvious sentinel `fr - sr` wraps at the type boundary
+# in narrow integer types and would yield a non-empty range (#47577). Swap
+# start/stop when the boundary is hit so the empty range stays empty. When `fr`
+# or `sr` can't be represented in `T`/`S` (e.g. mixed-signedness promotion gives
+# unsigned `T` but `fr` is a negative signed value), fall back to a canonical
+# empty range whose values are representable.
+function _empty_steprange(::Type{T}, ::Type{S}, fr::Integer, sr::Integer) where {T,S}
+    if isbitstype(T) && isbitstype(S) &&
+            typemin(T) <= fr <= typemax(T) && typemin(S) <= sr <= typemax(S)
+        o = oneunit(T)
+        if sr > zero(sr)
+            return fr > typemin(T) ? StepRange{T,S}(fr, sr, fr - o) : StepRange{T,S}(fr + o, sr, fr)
+        else
+            return fr < typemax(T) ? StepRange{T,S}(fr, sr, fr + o) : StepRange{T,S}(fr - o, sr, fr)
+        end
+    end
+    if !isbitstype(T)
+        # Unbounded integers (e.g. `BigInt`) have no `typemin`/`typemax`; the
+        # naive `fr - sr` sentinel can't wrap, so use the generic fallback shape.
+        return StepRange{T,S}(fr, sr, fr - sr)
+    end
+    if S <: Unsigned || sr > zero(sr)
+        return StepRange{T,S}(oneunit(T), oneunit(S), zero(T))
+    else
+        return StepRange{T,S}(zero(T), -oneunit(S), oneunit(T))
+    end
+end
+_empty_steprange(::Type{T}, ::Type{S}, fr, sr) where {T,S} =
+    StepRange{T,S}(fr, sr, fr - sr)
+
 function intersect(r::AbstractUnitRange{<:Integer}, s::StepRange{<:Integer})
     T = promote_type(eltype(r), eltype(s))
     if isempty(s)
-        StepRange{T}(first(r), +step(s), first(r)-step(s))
+        _empty_steprange(T, typeof(+step(s)), first(r), +step(s))
     else
         sta, ste, sto = first_step_last_ascending(s)
         lo = first(r)
@@ -1225,7 +1255,7 @@ function intersect(r::StepRange, s::StepRange)
     T = promote_type(eltype(r), eltype(s))
     S = promote_type(typeof(step(r)), typeof(step(s)))
     if isempty(r) || isempty(s)
-        return StepRange{T,S}(first(r), step(r), first(r)-step(r))
+        return _empty_steprange(T, S, first(r), step(r))
     end
 
     start1, step1, stop1 = first_step_last_ascending(r)
@@ -1233,14 +1263,11 @@ function intersect(r::StepRange, s::StepRange)
     a = lcm(step1, step2)
 
     g, x, y = gcdx(step1, step2)
+    rev = step(r) < zero(step(r))
 
     if !iszero(rem(start1 - start2, g))
-        # Unaligned, no overlap possible.
-        if  step(r) < zero(step(r))
-            return StepRange{T,S}(stop1, -a, stop1+a)
-        else
-            return StepRange{T,S}(start1, a, start1-a)
-        end
+        return rev ? _empty_steprange(T, S, last(r), step(r)) :
+                     _empty_steprange(T, S, first(r), step(r))
     end
 
     z = div(start1 - start2, g)
@@ -1250,7 +1277,90 @@ function intersect(r::StepRange, s::StepRange)
     # Determine where in the sequence to start and stop.
     m = max(start1 + mod(b - start1, a), start2 + mod(b - start2, a))
     n = min(stop1 - mod(stop1 - b, a), stop2 - mod(stop2 - b, a))
-    step(r) < zero(step(r)) ? StepRange{T,S}(n, -a, m) : StepRange{T,S}(m, a, n)
+    rev ? StepRange{T,S}(n, -a, m) : StepRange{T,S}(m, a, n)
+end
+
+# For Integer step-ranges, do the CRT and bounds computation in widen(T) to
+# avoid silent wrap on narrow types (#47577). The original implementation
+# computed `b = start1 - x*z*step1` in T, which overflowed for inputs as small
+# as `intersect(Int8(0):Int8(20):Int8(120), Int8(40):Int8(50):Int8(90))`
+# (intersection at 40, lost to wrap). It also wraps for Int64 starts near 2^60.
+# The m/n bound computation must also widen: `stop_i - b` (= span_i + i*step1)
+# can wrap in T even when every CRT input fits T. For unsigned `T`, widen to
+# a *signed* wider type, otherwise the difference and `gcdx` still wrap and
+# signed-negative inputs from a mixed-signedness promotion can't convert. When
+# `S` is unsigned, the output step must be non-negative; descending `r` is
+# rendered ascending.
+function intersect(r::StepRange{<:Integer}, s::StepRange{<:Integer})
+    T = promote_type(eltype(r), eltype(s))
+    S = promote_type(typeof(step(r)), typeof(step(s)))
+    if isempty(r) || isempty(s)
+        return _empty_steprange(T, S, first(r), step(r))
+    end
+    start1, step1, stop1 = first_step_last_ascending(r)
+    start2, step2, stop2 = first_step_last_ascending(s)
+    rev = step(r) < zero(step(r)) && !(S <: Unsigned)
+    # Signed types with native widening (Int64→Int128) take a fast path that
+    # stays in T for the CRT, falling back to the wide path on overflow.
+    # Smaller signed and all unsigned types go straight to the wide path,
+    # since their widen is cheap (or, for UInt, the with_overflow ladder
+    # interacts badly with `gcdx` Bezout coefficients).
+    if T <: Signed && sizeof(T) >= 8
+        g, x, _ = gcdx(step1, step2)
+        d, ovf = Base.Checked.sub_with_overflow(start1, start2)
+        if !ovf
+            if !iszero(rem(d, g))
+                return rev ? _empty_steprange(T, S, last(r), step(r)) :
+                             _empty_steprange(T, S, first(r), step(r))
+            end
+            zq, ovf = Base.Checked.mul_with_overflow(div(d, g), x)
+            if !ovf
+                p, ovf = Base.Checked.mul_with_overflow(step1, step2)
+                if !ovf
+                    W = widen(T)
+                    i = mod(zq, div(step2, g))
+                    # |i| < step2÷g and step1*step2 fits T, so
+                    # i*step1 < step1*step2÷g ≤ typemax(T).
+                    return _intersect_steprange_bounds(T, S, r,
+                        W(start1), W(stop1), W(start2), W(stop2),
+                        W(p ÷ g), W(start1) - W(i * step1), rev)
+                end
+            end
+        end
+    end
+    return _intersect_steprange_wide(T, S, r, start1, step1, stop1, start2, step2, stop2, rev)
+end
+
+function _intersect_steprange_wide(::Type{T}, ::Type{S}, r,
+        start1, step1, stop1, start2, step2, stop2, rev) where {T,S}
+    W = T <: Unsigned ? signed(widen(T)) : widen(T)
+    ws1, ws2 = W(start1), W(start2)
+    wst1, wst2 = W(step1), W(step2)
+    g, x, _ = gcdx(wst1, wst2)
+    d = ws1 - ws2
+    if !iszero(rem(d, g))
+        return rev ? _empty_steprange(T, S, last(r), step(r)) :
+                     _empty_steprange(T, S, first(r), step(r))
+    end
+    a = (wst1 * wst2) ÷ g
+    i = mod(div(d, g) * x, div(wst2, g))
+    b = ws1 - i * wst1
+    return _intersect_steprange_bounds(T, S, r, ws1, W(stop1), ws2, W(stop2), a, b, rev)
+end
+
+function _intersect_steprange_bounds(::Type{T}, ::Type{S}, r,
+        start1, stop1, start2, stop2, a, b, rev) where {T,S}
+    m = max(start1 + mod(b - start1, a), start2 + mod(b - start2, a))
+    n = min(stop1 - mod(stop1 - b, a), stop2 - mod(stop2 - b, a))
+    if m > n
+        return rev ? _empty_steprange(T, S, last(r), step(r)) :
+                     _empty_steprange(T, S, first(r), step(r))
+    end
+    if m == n && !(typemin(S) <= a <= typemax(S))
+        sa = oneunit(S)
+        return StepRange{T,S}(T(m), rev ? -sa : sa, T(m))
+    end
+    rev ? StepRange{T,S}(T(n), -S(a), T(m)) : StepRange{T,S}(T(m), S(a), T(n))
 end
 
 function intersect(r1::AbstractRange, r2::AbstractRange)

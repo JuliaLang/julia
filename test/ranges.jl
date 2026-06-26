@@ -568,6 +568,88 @@ end
                 start:Day(5):stop-Day(10)-mod(stop-start, Day(5))
         end
 
+        @testset "narrow integer overflow (#47577)" begin
+            # Empty-range sentinel `first(r) - step(r)` silently wrapped in narrow
+            # integer types and produced non-empty ranges.
+            a, b = StepRange{Int8, Int8}.((-56:121:-56, 35:62:34))
+            @test isempty(intersect(a, b))
+            @test isempty(intersect(b, a))
+            ur = Int8(-100):Int8(-90)
+            es = StepRange{Int8, Int8}(Int8(50):Int8(62):Int8(35))
+            @test isempty(intersect(ur, es))
+            @test isempty(intersect(es, ur))
+            # Unaligned no-overlap: same wrap previously in `start1 - a` / `stop1 + a`.
+            c = StepRange{Int8, Int8}(Int8(-127):Int8(4):Int8(120))
+            d = StepRange{Int8, Int8}(Int8(0):Int8(6):Int8(120))
+            @test isempty(intersect(c, d))
+            @test isempty(intersect(d, c))
+            # CRT product `x*z*step1` overflowed in T; widening + reducing the
+            # coefficient mod step2÷g recovers the correct intersection {40}.
+            p = StepRange{Int8, Int8}(Int8(0):Int8(20):Int8(120))
+            q = StepRange{Int8, Int8}(Int8(40):Int8(50):Int8(90))
+            @test intersect(p, q) == [Int8(40)]
+            @test intersect(q, p) == [Int8(40)]
+            # Int64 starts near 2^60: the unwidened `x*z*step1` overflows Int64.
+            @test intersect(Int64(2)^60 : Int64(7) : Int64(2)^60 + 50,
+                            Int64(0) : Int64(11) : Int64(2)^61) == [Int64(2)^60 + 21]
+            # Type boundary: `first(r) == typemin(T)` with positive step previously
+            # made the empty sentinel `fr - oneunit` wrap.
+            tmin_r = StepRange{Int8, Int8}(typemin(Int8), Int8(2), Int8(120))
+            odds   = StepRange{Int8, Int8}(Int8(1), Int8(2), Int8(121))
+            @test isempty(intersect(tmin_r, odds))
+            @test isempty(intersect(odds, tmin_r))
+            # `stop1 - b` (= span1 + i*step1) overflows in T even when every CRT
+            # input fits T; the m/n bounds must be computed in widen(T).
+            rb = StepRange{Int8, Int8}(Int8(-100), Int8(2), Int8(120))
+            sb = StepRange{Int8, Int8}(Int8(0),    Int8(3), Int8(120))
+            @test intersect(rb, sb) == Int8(0):Int8(6):Int8(120)
+            @test intersect(sb, rb) == Int8(0):Int8(6):Int8(120)
+        end
+
+        @testset "unsigned and mixed-signedness" begin
+            # Unsigned widening still wraps; the wide path needs a signed widen.
+            @test intersect(UInt8(0):UInt8(3):UInt8(9),
+                            UInt8(3):UInt8(3):UInt8(9)) == UInt8[3, 6, 9]
+            # Unsigned `S` can't carry a negative step; descending `r` must
+            # produce ascending output.
+            @test intersect(10:-1:0, UInt(0):UInt(1):UInt(10)) ==
+                  UInt[0,1,2,3,4,5,6,7,8,9,10]
+            # Signed-negative input can't convert to unsigned `widen(T)`; the
+            # signed widen avoids `InexactError`, and the unaligned check
+            # returns a representable empty range.
+            let r = intersect(-1:2:5, UInt(2):UInt(2):UInt(6))
+                @test isempty(r)
+                @test eltype(r) === UInt
+            end
+            @test intersect(-2:2:8, UInt(0):UInt(2):UInt(6)) == UInt[0,2,4,6]
+            @test intersect(20:-2:-10, UInt(0):UInt(2):UInt(20)) ==
+                  UInt[0,2,4,6,8,10,12,14,16,18,20]
+        end
+
+        @testset "single-point intersection with lcm > typemax(S)" begin
+            # `lcm(125, 127) == 15875` doesn't fit `Int8`; the result is still a
+            # one-element range, so the step falls back to `oneunit(S)` rather
+            # than throwing `InexactError` from the StepRange constructor.
+            u = StepRange{Int8, Int8}(Int8(0):Int8(125):Int8(125))
+            v = StepRange{Int8, Int8}(Int8(0):Int8(127):Int8(127))
+            @test intersect(u, v) == [Int8(0)]
+            @test intersect(v, u) == [Int8(0)]
+            @test step(intersect(u, v)) == Int8(1)
+            # Reverse-step variant uses `-oneunit(S)`.
+            @test intersect(reverse(u), v) == [Int8(0)]
+            @test step(intersect(reverse(u), v)) == Int8(-1)
+        end
+
+        @testset "Int64 fast-path wide fallback" begin
+            # `step1 * step2` overflows Int64 (~2^66), so the fast path bails to
+            # the widened (Int128) fallback. The two ranges are aligned mod
+            # gcd(step1, step2) only at a single point: 0 mod 2^33 and 0 mod
+            # (2^32 * 5) coincide only at 0, but neither range contains 0.
+            big_a = Int64(2)^32 * 3
+            big_b = Int64(2)^32 * 5
+            @test isempty(intersect(Int64(1):big_a:Int64(2)^60, Int64(2):big_b:Int64(2)^60))
+        end
+
         @testset "Two AbstractRanges" begin
             struct DummyRange{T} <: AbstractRange{T}
                 r
