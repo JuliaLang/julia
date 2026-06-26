@@ -66,7 +66,7 @@ char *jl_gc_try_alloc_pages_(int pg_cnt) JL_NOTSAFEPOINT
 }
 
 // Allocate the memory for a new page. Starts with `block_pg_cnt` number
-// of pages. Decrease 4x every time so that there are enough space for a few.
+// of pages. Decrease 4x every time so that there is enough space for a few
 // more chunks (or other allocations). The final page count is recorded
 // and will be used as the starting count next time. If the page count is
 // smaller `MIN_BLOCK_PG_ALLOC` a `jl_memory_exception` is thrown.

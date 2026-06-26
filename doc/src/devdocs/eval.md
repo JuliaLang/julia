@@ -18,19 +18,29 @@ function, and primitive function, before turning into the desired result (hopefu
         Abstract Syntax Tree. The AST is the digital representation of the code structure. In this form
         the code has been tokenized for meaning so that it is more suitable for manipulation and execution.
 
-
-![Diagram of the compiler flow](./img/compiler_diagram.png)
+```@raw html
+<img src="img/compiler_diagram.svg" alt="Diagram of the compiler flow"/>
+```
+```@raw latex
+\begin{figure}
+\centering
+\includegraphics[max width=\linewidth]{devdocs/img/compiler_diagram.pdf}
+\caption{Diagram of the compiler flow}
+\end{figure}
+```
 
 ## Julia Execution
 
 The 10,000 foot view of the whole process is as follows:
 
 1. The user starts `julia`.
-2. The C function `main()` from `cli/loader_exe.c` gets called. This function processes the command line
-   arguments, filling in the `jl_options` struct and setting the variable `ARGS`. It then initializes
-   Julia (by calling [`julia_init` in `init.c`](https://github.com/JuliaLang/julia/blob/master/src/init.c),
+2. The C function `main()` from [`cli/loader_exe.c`](https://github.com/JuliaLang/julia/blob/master/cli/loader_exe.c)
+   gets called. This loads Julia by calling `jl_load_repl()` in
+   [`cli/loader_lib.c`](https://github.com/JuliaLang/julia/blob/master/cli/loader_lib.c).
+   It ultimately ends up calling `jl_init_` in [`init.c`](https://github.com/JuliaLang/julia/blob/master/src/init.c),
    which may load a previously compiled [sysimg](@ref dev-sysimg)). Finally, it passes off control to Julia
    by calling [`Base._start()`](https://github.com/JuliaLang/julia/blob/master/base/client.jl).
+   For more details on this and the next step, see [Initialization of the Julia runtime](@ref).
 3. When `_start()` takes over control, the subsequent sequence of commands depends on the command
    line arguments given. For example, if a filename was supplied, it will proceed to execute that
    file. Otherwise, it will start an interactive REPL.
@@ -72,7 +82,7 @@ instead.
 
 When [`eval()`](@ref) encounters a macro, it expands that AST node before attempting to evaluate
 the expression. Macro expansion involves a handoff from [`eval()`](@ref) (in Julia), to the parser
-function `jl_macroexpand()` (written in `flisp`) to the Julia macro itself (written in - what
+function `jl_macroexpand()` to the Julia macro itself (written in - what
 else - Julia) via `fl_invoke_julia_macro()`, and back.
 
 Typically, macro expansion is invoked as a first step during a call to [`Meta.lower()`](@ref)/`Core._lower()`,
@@ -80,7 +90,7 @@ although it can also be invoked directly by a call to [`macroexpand()`](@ref)/`j
 
 ## [Type Inference](@id dev-type-inference)
 
-Type inference is implemented in Julia by [`typeinf()` in `compiler/typeinfer.jl`](https://github.com/JuliaLang/julia/blob/master/base/compiler/typeinfer.jl).
+Type inference is implemented in Julia by [`typeinf()` in `Compiler/src/typeinfer.jl`](https://github.com/JuliaLang/julia/blob/master/Compiler/src/typeinfer.jl).
 Type inference is the process of examining a Julia function and determining bounds for the types
 of each of its variables, as well as bounds on the type of the return value from the function.
 This enables many future optimizations, such as unboxing of known immutable values, and compile-time

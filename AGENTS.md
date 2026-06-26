@@ -20,6 +20,8 @@ will not be reflected, unless you use `Revise`.
 ## For all changes
 
 1. Run `make fix-whitespace` before creating the PR to make sure you're not committing any whitespace errors.
+2. Add the AI tool as a Git co-author on all commits created by that tool.
+3. Whenever a pull request is opened, you MUST disclose that the pull request was written with the assistance of generative AI.
 
 ## Building Julia
 
@@ -103,6 +105,11 @@ make sure to take them into account.
 - Do not `ccall` runtime C functions directly if there are existing wrappers for the function.
 - Do not explicitly add a module prefix if the code you're adding is in the same module. E.g. do not use `Base.` for code in Base unless required.
 
+## Reviewing Buildkite CI logs
+
+If you do not have the Buildkite MCP available, see `doc/src/devdocs/agents/buildkite-logs.md` for the
+recipe to fetch raw job logs without web sign-in.
+
 ## Commit messages and pull requests
 
 When writing commit messages, follow the format "component: Brief summary" for
@@ -119,3 +126,4 @@ When creating pull requests:
 1. If the pull request consists of one commit only, use the body of the commit for the body of the pull request.
 2. If there are multiple commits in the pull request, follow the same guidelines for the pull request as for the commit body.
 3. Make sure that the base commit of the pull request is recent (within the past two days) - if not rebase your changes first.
+4. You MUST disclose that the pull request was written with the assistance of generative AI.

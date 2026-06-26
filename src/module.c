@@ -93,7 +93,7 @@ static void update_implicit_resolution(struct implicit_search_resolution *to_upd
     to_update->saw_cycle |= resolution.saw_cycle;
     to_update->should_be_reexported |= resolution.should_be_reexported;
     if (resolution.ultimate_kind == PARTITION_FAKE_KIND_CYCLE) {
-        // Cycles get ignored. This causes the resolution resolution to only be partial, so we can't
+        // Cycles get ignored. This causes the resolution to only be partial, so we can't
         // cache it. This gets tracked in saw_cycle;
         to_update->saw_cycle = 1;
         return;
@@ -393,6 +393,8 @@ JL_DLLEXPORT void jl_update_loaded_bpart(jl_binding_t *b, jl_binding_partition_t
     jl_atomic_store_relaxed(&bpart->min_world, resolution.min_world);
     jl_atomic_store_relaxed(&bpart->max_world, resolution.max_world);
     bpart->restriction = resolution.binding_or_const;
+    if (resolution.binding_or_const)
+        jl_gc_wb(bpart, resolution.binding_or_const);
     bpart->kind = resolution.ultimate_kind;
 }
 
@@ -540,6 +542,7 @@ static jl_module_t *jl_new_module__(jl_sym_t *name, jl_module_t *parent)
     m->infer = -1;
     m->max_methods = -1;
     jl_atomic_store_relaxed(&m->has_reexports, 0);
+    jl_atomic_store_relaxed(&m->export_set_changed_since_require_world, 0);
     m->file = jl_empty_sym;
     m->line = 0;
     m->hash = parent == NULL ? bitmix(name->hash, jl_module_type->hash) :
@@ -776,6 +779,7 @@ static jl_globalref_t *jl_new_globalref(jl_module_t *mod, jl_sym_t *name, jl_bin
 {
     jl_task_t *ct = jl_current_task;
     jl_globalref_t *g = (jl_globalref_t*)jl_gc_alloc(ct->ptls, sizeof(jl_globalref_t), jl_globalref_type);
+    jl_set_typetagof(g, jl_globalref_tag, 0);
     g->mod = mod;
     jl_gc_wb_fresh(g, g->mod);
     g->name = name;
@@ -1663,15 +1667,15 @@ JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var)
     return jl_get_binding_value_depwarn(b, jl_atomic_load_acquire(&jl_world_counter));
 }
 
-JL_DLLEXPORT void jl_set_global(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT)
+JL_DLLEXPORT void jl_set_global(jl_module_t *m, jl_sym_t *var, jl_value_t *val JL_ROOTED_BY_ARG(0))
 {
     jl_binding_t *bp = jl_get_binding_wr(m, var);
     jl_checked_assignment(bp, m, var, val);
 }
 
-void jl_set_initial_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT, int exported)
+void jl_set_initial_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val JL_ROOTED_BY_ARG(0), int exported)
 {
-    // this function is only valid during initialization, so there is no risk of data races her are not too important to use
+    // this function is only valid during initialization, so there is no risk of data races
     int kind = PARTITION_KIND_CONST | (exported ? PARTITION_FLAG_EXPORTED : 0);
     // jl_declare_constant_val3(NULL, m, var, (jl_value_t*)jl_any_type, kind, 0);
     jl_binding_t *bp = jl_get_module_binding(m, var, 1);
@@ -1685,7 +1689,7 @@ void jl_set_initial_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_
     jl_gc_wb(bpart, val);
 }
 
-JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT)
+JL_DLLEXPORT void jl_set_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val JL_ROOTED_BY_ARG(0))
 {
     // this function is dangerous and unsound. do not use.
     jl_binding_t *bp = jl_get_module_binding(m, var, 1);
@@ -1792,6 +1796,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b,
             new_bpart->kind |= PARTITION_FLAG_IMPLICITLY_EXPORTED;
         }
         new_bpart->restriction = resolution.binding_or_const;
+        jl_gc_wb_fresh(new_bpart, resolution.binding_or_const);
         assert(resolution.min_world <= new_world && resolution.max_world == ~(size_t)0);
         if (new_bpart->kind == old_bpart->kind && new_bpart->restriction == old_bpart->restriction) {
             JL_GC_POP();
@@ -1904,6 +1909,36 @@ JL_DLLEXPORT void jl_deprecate_binding(jl_module_t *m, jl_sym_t *var, int flag)
         (old_bpart->kind & ~DEPWARN_FLAGS) | new_flags, new_world);
     jl_atomic_store_release(&jl_world_counter, new_world);
     JL_UNLOCK(&world_counter_lock);
+}
+
+// Select the declared visibility of a binding:
+//   0=none (neither), 1=public, 2=export
+// The exported flag is world-versioned (it lives in the binding partition and
+// gates implicit resolution through `using`), so clearing it creates a new
+// partition and invalidates dependent code. The public flag is world-agnostic
+// (it lives on the binding). Unlike the `export`/`public` keyword path
+// (jl_module_public_), this both raises and lowers the state, so it does not
+// enforce the public-vs-exported conflict.
+JL_DLLEXPORT void jl_module_set_visibility(jl_module_t *m, jl_sym_t *var, int state)
+{
+    int want_exported = state == 2;
+    int want_public = state >= 1;
+    jl_binding_t *b = jl_get_module_binding(m, var, 1);
+    JL_LOCK(&world_counter_lock);
+    size_t new_world = jl_atomic_load_acquire(&jl_world_counter)+1;
+    jl_binding_partition_t *old_bpart = jl_get_binding_partition(b, jl_current_task->world_age);
+    int was_exported = (old_bpart->kind & PARTITION_FLAG_EXPORTED) != 0;
+    if (was_exported != want_exported) {
+        size_t new_kind = want_exported ? (old_bpart->kind | PARTITION_FLAG_EXPORTED) :
+                                          (old_bpart->kind & ~(size_t)PARTITION_FLAG_EXPORTED);
+        jl_replace_binding_locked2(b, old_bpart, old_bpart->restriction, new_kind, new_world);
+        jl_atomic_store_release(&jl_world_counter, new_world);
+    }
+    JL_UNLOCK(&world_counter_lock);
+    if (want_public)
+        jl_atomic_fetch_or_relaxed(&b->flags, BINDING_FLAG_PUBLICP);
+    else
+        jl_atomic_fetch_and_relaxed(&b->flags, (uint8_t)~BINDING_FLAG_PUBLICP);
 }
 
 static int should_depwarn(jl_binding_t *b, uint8_t flag)
@@ -2090,10 +2125,9 @@ static void _materialize_reexported_bindings(jl_module_t *m, size_t world, jl_ar
     }
 }
 
-void append_module_names(jl_array_t* a, jl_module_t *m, int all, int imported, int usings)
+void append_module_names(jl_array_t* a, jl_module_t *m, int all, int imported, int usings, size_t world)
 {
     // Materialize reexported bindings first
-    size_t world = jl_current_task->world_age;
     jl_array_t *visited_modules = jl_alloc_vec_any(0);
     JL_GC_PUSH1(&visited_modules);
     _materialize_reexported_bindings(m, world, visited_modules);
@@ -2107,22 +2141,40 @@ void append_module_names(jl_array_t* a, jl_module_t *m, int all, int imported, i
         jl_sym_t *asname = b->globalref->name;
         int hidden = jl_symbol_name(asname)[0]=='#';
         int main_public = (m == jl_main_module && !(asname == jl_eval_sym || asname == jl_include_sym));
-        jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
-        enum jl_partition_kind kind = jl_binding_kind(bpart);
-        if (((jl_atomic_load_relaxed(&b->flags) & BINDING_FLAG_PUBLICP) ||
-             jl_bpart_is_exported(bpart->kind) ||
-             (imported && (kind == PARTITION_KIND_CONST_IMPORT || kind == PARTITION_KIND_IMPORTED)) ||
-             (usings && kind == PARTITION_KIND_EXPLICIT) ||
-             ((kind == PARTITION_KIND_GLOBAL || kind == PARTITION_KIND_CONST || kind == PARTITION_KIND_DECLARED) && (all || main_public))) &&
-            (all || (!(bpart->kind & PARTITION_FLAG_DEPRECATED) && !hidden)))
-            _append_symbol_to_bindings_array(a, asname);
+        // Use non-materializing read to avoid creating binding partitions as a
+        // side effect. Only fall back to materializing for `usings`, since
+        // using'd bindings may not have partitions yet. Non-using'd bindings
+        // (imported, global, const, etc.) will already have been materialized
+        // by their definition.
+        struct implicit_search_gap gap;
+        jl_binding_partition_t *bpart = jl_get_binding_partition_if_present(b, world, &gap);
+        if (!bpart && usings)
+            bpart = jl_get_binding_partition(b, world);
+        if (!bpart) {
+            // No partition — check public flag on the binding and exported
+            // flag from adjacent partitions.
+            if (!(jl_atomic_load_relaxed(&b->flags) & BINDING_FLAG_PUBLICP) &&
+                !jl_bpart_is_exported(gap.inherited_flags))
+                continue;
+            if (!all && ((gap.inherited_flags & PARTITION_FLAG_DEPRECATED) || hidden))
+                continue;
+        } else {
+            enum jl_partition_kind kind = jl_binding_kind(bpart);
+            if (!(jl_atomic_load_relaxed(&b->flags) & BINDING_FLAG_PUBLICP) &&
+                !jl_bpart_is_exported(bpart->kind) &&
+                !(imported && (kind == PARTITION_KIND_CONST_IMPORT || kind == PARTITION_KIND_IMPORTED)) &&
+                !(usings && kind == PARTITION_KIND_EXPLICIT) &&
+                !((kind == PARTITION_KIND_GLOBAL || kind == PARTITION_KIND_CONST || kind == PARTITION_KIND_DECLARED) && (all || main_public)))
+                continue;
+            if (!all && ((bpart->kind & PARTITION_FLAG_DEPRECATED) || hidden))
+                continue;
+        }
+        _append_symbol_to_bindings_array(a, asname);
     }
 }
 
-void append_exported_names(jl_array_t* a, jl_module_t *m, int all)
+void append_exported_names(jl_array_t* a, jl_module_t *m, int all, size_t world)
 {
-    size_t world = jl_current_task->world_age;
-
     // First, materialize all reexported bindings
     jl_array_t *visited_modules = jl_alloc_vec_any(0);
     JL_GC_PUSH1(&visited_modules);
@@ -2135,22 +2187,28 @@ void append_exported_names(jl_array_t* a, jl_module_t *m, int all)
         jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
         if ((void*)b == jl_nothing)
             break;
-        jl_binding_partition_t *bpart = jl_get_binding_partition(b, world);
+        struct implicit_search_gap gap;
+        jl_binding_partition_t *bpart = jl_get_binding_partition_if_present(b, world, &gap);
+        if (!bpart) {
+            if (jl_bpart_is_exported(gap.inherited_flags) && (all || !(gap.inherited_flags & PARTITION_FLAG_DEPRECATED)))
+                _append_symbol_to_bindings_array(a, b->globalref->name);
+            continue;
+        }
         if (jl_bpart_is_exported(bpart->kind) && (all || !(bpart->kind & PARTITION_FLAG_DEPRECATED)))
             _append_symbol_to_bindings_array(a, b->globalref->name);
     }
 }
 
-JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported, int usings)
+JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported, int usings, size_t world)
 {
     jl_array_t *a = jl_alloc_array_1d(jl_array_symbol_type, 0);
     JL_GC_PUSH1(&a);
-    append_module_names(a, m, all, imported, usings);
+    append_module_names(a, m, all, imported, usings, world);
     if (usings) {
         // If `usings` is specified, traverse the list of `using`-ed modules and incorporate
         // the names exported by those modules into the list.
         for (int i = module_usings_length(m)-1; i >= 0; i--)
-            append_exported_names(a, module_usings_getmod(m, i), all);
+            append_exported_names(a, module_usings_getmod(m, i), all, world);
     }
     JL_GC_POP();
     return (jl_value_t*)a;

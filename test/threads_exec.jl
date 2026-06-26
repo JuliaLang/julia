@@ -83,6 +83,14 @@ module AbstractIrrationalExamples
     )
 end
 
+macro big_expr(n, x)
+    x = esc(x)
+    for _ in 1:n
+        x = :($x + 1 - 1)
+    end
+    x
+end
+
 @testset """threads_exec.jl with JULIA_NUM_THREADS == $(ENV["JULIA_NUM_THREADS"])""" begin
 
 @test Threads.threadid() == 1
@@ -1165,7 +1173,7 @@ end
     end
 end
 
-# @spawn racying with sync_end
+# @spawn racing with sync_end
 
 hidden_spawn(f) = Threads.@spawn f()
 
@@ -1226,6 +1234,33 @@ end
     @test check_sync_end_race() === nothing
 end
 
+@testset "no lost wakeups under bursty spawn (#61820, #50425)" begin
+    # A multiqueue insert wakes one thread in the pool; bursts of tasks spawned
+    # across an idle pool must all still run to completion (regression smoke test
+    # that wake-one does not drop wakeups).
+    for pool in (:default, :interactive)
+        nt = Threads.threadpoolsize(pool)
+        n = 50 * nt
+        done = Threads.Atomic{Int}(0)
+        for _ in 1:n
+            Threads.@spawn pool Threads.atomic_add!(done, 1)
+        end
+        @test timedwait(() -> done[] == n, 60.0) === :ok
+    end
+    # nested spawns must also complete
+    let n = 20 * Threads.threadpoolsize(:default)
+        done = Threads.Atomic{Int}(0)
+        for _ in 1:n
+            Threads.@spawn begin
+                a = Threads.@spawn Threads.atomic_add!(done, 1)
+                b = Threads.@spawn Threads.atomic_add!(done, 1)
+                fetch(a); fetch(b)
+            end
+        end
+        @test timedwait(() -> done[] == 2n, 60.0) === :ok
+    end
+end
+
 # issue #41546, thread-safe package loading
 @testset "package loading" begin
     ntasks = max(threadpoolsize(:default), 4)
@@ -1276,7 +1311,7 @@ end
     end
 end
 
-#Thread safety of threacall
+# Thread safety of threadcall
 function threadcall_threads()
     Threads.@threads for i = 1:8
         ptr = @threadcall(:jl_malloc, Ptr{Cint}, (Csize_t,), sizeof(Cint))
@@ -1469,6 +1504,9 @@ end
             Rational{I}(c)
         end
         function is_racy_rational_from_irrational()
+            # `local` is needed to avoid sharing (and racily clobbering) the
+            # outer function's `task`/`ok` while it is fetching them
+            local task, ok
             worker_count = 10 * Threads.nthreads()
             task = ConcurrencyUtilities.run_concurrently_in_new_task(construct, worker_count)
             schedule(task)
@@ -1711,6 +1749,55 @@ end
         @test !isempty(read(tmp_output_filename, String))
         close(tmp_output_file)
         rm(tmp_output_filename)
+    end
+end
+
+include("threads_comprehensions.jl")
+
+# This test is designed to trigger the performance regression from #60241:
+#   Thread 1                           Thread 2
+#   --------                           --------
+#   call f()
+#     infer f(), g()
+#     emit LLVM IR f()
+#       set f() invoke
+#     emit LLVM IR g() (slow!)         call f()
+#       ...                              materialize f()
+#       ...                                emit trampoline for g()
+#                                        run f()
+#                                          tojlinvoke trampoline for g()
+#     call f()
+#       f() already materialized
+#
+# We can tell the trampoline was generated if calling f() with a large integer
+# allocates (the trampoline will box the integer).
+
+@testset "Race invoke trampolines" begin
+    for i=1:10
+        @eval begin
+            @noinline function g(x)
+                x = @big_expr(4000, x)
+                if x > 0
+                    f(x-1)
+                else
+                    0
+                end
+            end
+
+            @noinline function f(x)
+                if x > 0
+                    g(x-1)
+                else
+                    0
+                end
+            end
+
+            t = Threads.@spawn f(10)
+            f(10)
+            wait(t)
+        end
+
+        @test @eval @allocations(f(10000)) == 0
     end
 end
 

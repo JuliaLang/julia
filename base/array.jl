@@ -283,14 +283,19 @@ end
 Copy `n` elements from collection `src` starting at the linear index `soffs`, to array `dest` starting at
 the index `doffs`. Return `dest`.
 """
-copyto!(dest::Array, doffs::Integer, src::Array, soffs::Integer, n::Integer) = _copyto_impl!(dest, doffs, src, soffs, n)
-copyto!(dest::Array, doffs::Integer, src::Memory, soffs::Integer, n::Integer) = _copyto_impl!(dest, doffs, src, soffs, n)
-copyto!(dest::Memory, doffs::Integer, src::Array, soffs::Integer, n::Integer) = _copyto_impl!(dest, doffs, src, soffs, n)
+copyto!(dest::Array, doffs::Integer, src::Array, soffs::Integer, n::Integer) =
+    (@_propagate_inbounds_meta; _copyto_impl!(dest, doffs, src, soffs, n))
+copyto!(dest::Array, doffs::Integer, src::Memory, soffs::Integer, n::Integer) =
+    (@_propagate_inbounds_meta; _copyto_impl!(dest, doffs, src, soffs, n))
+copyto!(dest::Memory, doffs::Integer, src::Array, soffs::Integer, n::Integer) =
+    (@_propagate_inbounds_meta; _copyto_impl!(dest, doffs, src, soffs, n))
 
 # this is only needed to avoid possible ambiguities with methods added in some packages
-copyto!(dest::Array{T}, doffs::Integer, src::Array{T}, soffs::Integer, n::Integer) where {T} = _copyto_impl!(dest, doffs, src, soffs, n)
+copyto!(dest::Array{T}, doffs::Integer, src::Array{T}, soffs::Integer, n::Integer) where {T} =
+    (@_propagate_inbounds_meta; _copyto_impl!(dest, doffs, src, soffs, n))
 
 function _copyto_impl!(dest::Union{Array,Memory}, doffs::Integer, src::Union{Array,Memory}, soffs::Integer, n::Integer)
+    @inline
     n == 0 && return dest
     n > 0 || _throw_argerror("Number of elements to copy must be non-negative.")
     @boundscheck checkbounds(dest, doffs:doffs+n-1)
@@ -878,6 +883,29 @@ function setindex_widen_up_to(dest::AbstractArray{T}, el, i) where T
     return new
 end
 
+# Batch-widen an array given (index => value) pairs that don't fit the current element type.
+function setindices_widen_up_to(dest::AbstractArray, widen_buffers::Vector{Vector{Pair{Int, Any}}})
+    widen_pairs = reduce(vcat, widen_buffers; init=Pair{Int,Any}[])
+    isempty(widen_pairs) && return dest
+    new_T = eltype(dest)
+    for p in widen_pairs
+        new_T = promote_typejoin(new_T, typeof(p.second))
+    end
+    new_T === eltype(dest) && return dest
+    # Function barrier: specializes on new_T so the compiler sees
+    # concrete element types for both source and destination arrays.
+    return _setindices_widen_up_to(new_T, dest, widen_pairs)
+end
+
+function _setindices_widen_up_to(::Type{T}, dest::AbstractArray, widen_pairs::Vector{Pair{Int, Any}}) where T
+    new = similar(dest, T)
+    copyto!(new, dest)
+    for (idx, val) in widen_pairs
+        @inbounds new[idx] = val
+    end
+    return new
+end
+
 function collect_to!(dest::AbstractArray{T}, itr, offs, st) where T
     # collect to dest array, checking the type of each result. if a result does not
     # match, widen the result type and re-dispatch.
@@ -1021,7 +1049,7 @@ function setindex!(A::Array{T}, x, i::Int) where {T}
 end
 function _setindex!(A::Array{T}, x::T, i::Int) where {T}
     @_noub_if_noinbounds_meta
-    @boundscheck checkbounds(Bool, A, i) || throw_boundserror(A, (i,))
+    @boundscheck checkbounds(A, i)
     memoryrefset!(memoryrefnew(A.ref, i, false), x, :not_atomic, false)
     return A
 end
@@ -1339,7 +1367,7 @@ function push! end
 function push!(a::Vector{T}, item) where T
     @inline
     # convert first so we don't grow the array if the assignment won't work
-    # and also to avoid a dynamic dynamic dispatch in the common case that
+    # and also to avoid a dynamic dispatch in the common case that
     # `item` is poorly-typed and `a` is well-typed
     item = item isa T ? item : convert(T, item)::T
     return _push!(a, item)
@@ -1617,7 +1645,7 @@ function sizehint!(a::Vector, sz::Integer; first::Bool=false, shrink::Bool=true)
 end
 
 # Fall-back implementation for non-shrinkable collections
-# avoid defining this the normal way to avoid avoid infinite recursion
+# avoid defining this the normal way to avoid infinite recursion
 function Core.kwcall(kwargs::NamedTuple{names}, ::typeof(sizehint!), a, sz) where names
     get(kwargs, :first, false)::Bool
     get(kwargs, :shrink, true)::Bool
@@ -2326,7 +2354,7 @@ function vcat(arrays::Vector{T}...) where T
     nd = 1
     for a in arrays
         na = length(a)
-        @assert nd + na <= 1 + length(arr) # Concurrent modification of arrays?
+        @assert nd + na <= 1 + length(arr) "Concurrent modification of arrays?"
         unsafe_copyto!(arr, nd, a, 1, na)
         nd += na
     end

@@ -251,7 +251,7 @@ static void jl_gc_push_arraylist(jl_task_t *ct, arraylist_t *list) JL_NOTSAFEPOI
 }
 
 // Same assumption as `jl_gc_push_arraylist`. Requires the finalizers lock
-// to be hold for the current thread and will release the lock when the
+// to be held for the current thread and will release the lock when the
 // function returns.
 static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list) JL_NOTSAFEPOINT_LEAVE
 {
@@ -624,6 +624,11 @@ int gc_slot_to_arrayidx(void *obj, void *_slot) JL_NOTSAFEPOINT
     else if (vt == jl_simplevector_type) {
         start = (char*)jl_svec_data(obj);
         len = jl_svec_len(obj);
+    }
+    else if (vt->name == jl_genericmemory_typename) {
+        jl_genericmemory_t *mem = (jl_genericmemory_t*)obj;
+        start = (char*)mem->ptr;
+        len = mem->length;
     }
     if (slot < start || slot >= start + elsize * len)
         return -1;

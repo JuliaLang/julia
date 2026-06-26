@@ -1,5 +1,3 @@
-@testset "Closures" begin
-
 test_mod = Module()
 
 # Capture assigned before closure
@@ -34,7 +32,7 @@ end
 
 Base.eval(test_mod, :(call_it(f, args...) = f(args...)))
 
-# Closure where a local `x` is captured but not boxed
+# Closure where an argument `x` is captured but not boxed
 @test JuliaLowering.include_string(test_mod, """
 begin
     function f_unboxed_test(x)
@@ -234,6 +232,70 @@ let
     oc(3,4,5)
 end
 """) == (3,4,5)
+
+# Opaque closure inside a closure can capture the enclosing closure's captures
+@test JuliaLowering.include_string(test_mod, """
+let y = [1]
+    outer = () -> begin
+        inner = Base.Experimental.@opaque n -> n in y
+        inner(1)
+    end
+    outer()
+end
+""") === true
+
+# Nested opaque closure capture preserves boxed variable sharing
+@test JuliaLowering.include_string(test_mod, """
+let y = 1
+    outer = () -> begin
+        inner = Base.Experimental.@opaque () -> begin
+            y = y + 1
+        end
+        inner()
+    end
+    outer()
+    y
+end
+""") === 2
+
+# Opaque closure nested in another opaque closure can capture the outer OC environment
+@test JuliaLowering.include_string(test_mod, """
+let y = [1]
+    outer = Base.Experimental.@opaque () -> begin
+        inner = Base.Experimental.@opaque n -> n in y
+        inner(1)
+    end
+    outer()
+end
+""") === true
+
+# Opaque closure type-bound expressions can capture enclosing closure captures
+@test JuliaLowering.include_string(test_mod, """
+let T = Tuple{Int}
+    outer = () -> begin
+        inner = Base.Experimental.@opaque T -> _ (n) -> n
+        inner(1)
+    end
+    outer()
+end
+""") === 1
+@test JuliaLowering.include_string(test_mod, """
+let RT = Float64
+    outer = () -> begin
+        inner = Base.Experimental.@opaque _ -> RT () -> 1.0
+        inner()
+    end
+    outer()
+end
+""") === 1.0
+
+# OC in lambda
+@test JuliaLowering.include_string(test_mod, """
+(x->(y->(z->(Base.Experimental.@opaque ()->"opaque"))('z'))('y'))('x')()
+""") == "opaque"
+@test JuliaLowering.include_string(test_mod, """
+(x->(y->(z->(Base.Experimental.@opaque ()->(x,y,z)))('z'))('y'))('x')()
+""") == ('x','y','z')
 
 # opaque_closure_method internals
 method_ex = lower_str(test_mod, "Base.Experimental.@opaque x -> 2x").args[1].code[3]
@@ -439,6 +501,58 @@ let y = 10
 end
 """) == (11, 15)
 
+# Adding kw methods to kw let-function
+@test JuliaLowering.include_string(test_mod, """
+let f(a; kw1 = nothing, kw2 = nothing) = "outer"
+    f(::Integer; kwargs...) = "call me"
+    f(1; kw1 = 1, kw2 = 2)
+end
+""") == "call me"
+
+# Currently an error in both lowering implementations (closure-conversion ordering)
+@test_broken JuliaLowering.include_string(test_mod, """
+let f(a; kw1 = nothing, kw2 = nothing) = "outer"
+    let
+        f(::Integer; kwargs...) = error("call me")
+    end
+    f(1; kw1 = 1, kw2 = 2)
+end
+""") == "outer"
+
+# Self-reference in let-function
+@test JuliaLowering.include_string(test_mod, """
+let f(x) = x <= 0 ? x : f(x-1)
+    f(5)
+end
+""") == 0
+@test JuliaLowering.include_string(test_mod, """
+let f(x::typeof(f)) = x
+    f(f)
+end
+""") isa Function # broken in flisp
+
+# Self-reference in let-function default args
+@test JuliaLowering.include_string(test_mod, """
+let f(x=f) = x
+    f()
+end
+""") isa Function
+@test JuliaLowering.include_string(test_mod, """
+let f(x::typeof(f)) = x
+    f(f)
+end
+""") isa Function
+@test JuliaLowering.include_string(test_mod, """
+let f(;x=f) = x
+    f()
+end
+""") isa Function
+@test JuliaLowering.include_string(test_mod, """
+let f(;x::typeof(f)) = x
+    f(x=f)
+end
+""") isa Function
+
 # Anonymous function syntax with `function`
 @test JuliaLowering.include_string(test_mod, """
 begin
@@ -472,6 +586,83 @@ end
 @test_throws UndefVarError test_mod.f_undef_static_param(nothing)()
 @test test_mod.f_undef_static_param(42)() == Int
 
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_inner_sp(x::T) where T
+        function inner(y::U) where U
+            (T, U)
+        end
+        (T, inner("foo"))
+    end
+    f_inner_sp(1)
+end
+""") == (Int, (Int, String))
+
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_complex_arg_sp(a)
+        function inner(x::(let z = T; Vector{z} end)) where {T <: Integer}
+            T, typeof(x), @isdefined(z)
+        end
+        inner(a)
+    end
+    f_complex_arg_sp([1,2,3])
+end
+""") == (Int, Vector{Int}, false)
+
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_inner_rt_sp(a)
+        function inner(x::T)::Tuple{T, Vector{T}} where T
+            (x,T[x])
+        end
+        inner(a)
+    end
+    f_inner_rt_sp(1), f_inner_rt_sp("foo")
+end
+""") == ((1, [1]), ("foo", ["foo"]))
+
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_many_closure_sp()
+        function (); function (); function (x::T) where T; (x, T) end; end; end
+    end
+    f_many_closure_sp()()()(1)
+end
+""") == (1, Int)
+
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_many_closure_sp_capt(x::T) where T
+        function (); function (); function (); (x, T) end; end; end
+    end
+    f_many_closure_sp_capt(1)()()()
+end
+""") == (1, Int)
+
+@test_broken JuliaLowering.include_string(test_mod, """
+begin
+    function f_argcapt_sp(x::T) where T
+        (inner_x::T)->(x, inner_x, T)
+    end
+    f_argcapt_sp(1)(2)
+end
+""") == (1, 2, Int)
+
+# Inner method typevar `U` depending on a static parameter `T` so hoisting the
+# method def for `inner` out to top level would require detecting this and
+# making `inner` parametric on `T`.  Note this doesn't work in flisp either.
+@test_broken JuliaLowering.include_string(test_mod, """
+begin
+    function f_typevarcapt_sp(x::T) where T
+        function inner(y::U) where {U<:T}
+            (x,y,T,U)
+        end
+    end
+    f_typevarcapt_sp(1)(2)
+end
+""") == (1,2,Int,Int)
+
 # https://github.com/JuliaLang/JuliaLowering.jl/issues/134#issuecomment-3739626003
 JuliaLowering.include_string(test_mod, """
 function f_update_outer_capture()
@@ -488,4 +679,71 @@ let (f, response) = test_mod.f_update_outer_capture()
     @test response == 1
 end
 
+# https://github.com/JuliaLang/JuliaLowering.jl/issues/147
+JuliaLowering.include_string(test_mod, """
+function f_box_regression147()
+    function foo()
+        return true
+    end
+    return (()->foo, foo)
+end
+""")
+let (f, foo) = test_mod.f_box_regression147()
+    @test !(f.foo isa Core.Box)
+    @test f.foo === foo
+end
+
+# The internal "helper" of an (inner) kwargs function should not be boxed.
+JuliaLowering.include_string(test_mod, """
+function f_kwbody_box()
+    function inner(x; verbose=false)
+        return verbose ? x : nothing
+    end
+    return (inner, inner(1; verbose=true))
+end
+""")
+let (inner, result) = test_mod.f_kwbody_box()
+    @test result == 1
+    # The kw body closure should be captured directly, not through a Box
+    kw_body_field = only(filter(f -> startswith(string(f), "#kw_body#"), fieldnames(typeof(inner))))
+    @test !(getfield(inner, kw_body_field) isa Core.Box)
+end
+
+# Any `let` variables marked always-defined && assigned-once are known to
+# dominate their scope, so they should not be boxed even in the presence
+# of `@label`
+JuliaLowering.include_string(test_mod, """
+function f_let_capture_with_label()
+    for x in [1,2,3]
+        let x = x
+            if false
+                @goto done
+                @label done # force the binding analysis to give up
+            else
+                return (() -> x,)
+            end
+        end
+    end
+end
+""")
+let (f,) = test_mod.f_let_capture_with_label()
+    @test !(f.x isa Core.Box)
+    @test f.x == 1
+end
+
+JuliaLowering.include_string(test_mod, """
+function f_arg_reassign_with_label(x)
+    g() = x
+    if false
+        @goto done
+        @label done
+    end
+    x = 1
+    return (g, x)
+end
+""")
+let (g, x) = test_mod.f_arg_reassign_with_label(42)
+    @test g.x isa Core.Box
+    @test g() == 1
+    @test x == 1
 end

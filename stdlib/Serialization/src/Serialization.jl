@@ -10,21 +10,27 @@ module Serialization
 import Base: Bottom, unsafe_convert
 import Base.ScopedValues: ScopedValue, with
 import Core: svec, SimpleVector
-using Base: unaliascopy, unwrap_unionall, require_one_based_indexing, ntupleany
+using Base: @assume_effects, unaliascopy, unwrap_unionall, require_one_based_indexing, ntupleany
 using Core.IR
 
 export serialize, deserialize, AbstractSerializer, Serializer
 
 abstract type AbstractSerializer end
 
+# Dict is generally a much better dictionary than IdDict, but we want objectid comparison
+struct IdKey val::Any end
+Base.hash(k::IdKey, h::UInt) = hash(objectid(k.val), h)
+Base.isequal(a::IdKey, b::IdKey) = a.val === b.val
+
 mutable struct Serializer{I<:IO} <: AbstractSerializer
-    io::I
+    const io::I
     counter::Int
-    table::IdDict{Any,Any}
-    pending_refs::Vector{Int}
-    known_object_data::Dict{UInt64,Any}
+    const cycle_table::Dict{IdKey,Int}
+    const backref_table::Vector{Any}
+    const pending_refs::Vector{Int}
+    const known_object_data::Dict{UInt64,Any}
     version::Int
-    Serializer{I}(io::I) where I<:IO = new(io, 0, IdDict(), Int[], Dict{UInt64,Any}(), ser_version)
+    Serializer{I}(io::I) where I<:IO = new(io, 0, Dict{IdKey,Int}(), Any[], Int[], Dict{UInt64,Any}(), ser_version)
 end
 
 Serializer(io::IO) = Serializer{typeof(io)}(io)
@@ -88,16 +94,54 @@ const ser_version = 30 # do not make changes without bumping the version #!
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
 
-function sertag(@nospecialize(v))
-    # NOTE: we use jl_value_ptr directly since we know at least one of the arguments
-    # in the comparison below is a singleton.
-    ptr = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), v)
-    ptags = convert(Ptr{Ptr{Cvoid}}, pointer(TAGS))
-    # note: constant ints & reserved slots never returned here
-    @inbounds for i in 1:(NTAGS-(n_reserved_slots+2*n_int_literals))
-        ptr == unsafe_load(ptags,i) && return i%Int32
+# static lookup table of serializee value --> TAG index via objectid + linear probe
+# omit constant ints & reserved slots from the table as sertag doesn't return these
+const NSERTAG_KEYS = NTAGS - n_reserved_slots - 2*n_int_literals
+
+# keeps >50% sparse so linear probes hit in 1-2 steps. also allows :terminates
+const SERTAG_TABLE_SIZE = nextpow(2, 2 * NSERTAG_KEYS)
+
+struct SertagEmpty end
+const sertag_empty = SertagEmpty()
+
+struct SertagTable
+    keys::Memory{Any}
+    vals::Memory{Int32}
+end
+
+const sertag_table = let
+    keys = Memory{Any}(undef, SERTAG_TABLE_SIZE)
+    vals = Memory{Int32}(undef, SERTAG_TABLE_SIZE)
+    fill!(keys, sertag_empty)
+    @assume_effects :terminates_locally :noub @inbounds for i in Iterators.reverse(1:NSERTAG_KEYS)
+        key = TAGS[i]
+        loc = mod1(objectid(key), SERTAG_TABLE_SIZE)
+        while true
+            k = keys[loc]
+            if k === sertag_empty || k === key
+                keys[loc] = key
+                vals[loc] = Int32(i)
+                break
+            end
+            loc = mod1(loc + 1, SERTAG_TABLE_SIZE)
+        end
     end
-    return Int32(-1)
+    SertagTable(keys, vals)
+end
+
+@inline function sertag(@nospecialize(v))
+    (; keys, vals) = sertag_table
+    loc = mod1(objectid(v), SERTAG_TABLE_SIZE)
+    @assume_effects :terminates_locally :noub @inbounds while true
+        @inbounds k = keys[loc]
+        if k === v
+            return vals[loc]
+        elseif k === sertag_empty
+            return Int32(-1)
+        else
+            loc = mod1(loc + 1, SERTAG_TABLE_SIZE)
+        end
+    end
 end
 desertag(i::Int32) = @inbounds(TAGS[i])
 
@@ -112,7 +156,7 @@ const TUPLE_TAG = sertag(Tuple)
 const SIMPLEVECTOR_TAG = sertag(SimpleVector)
 const SYMBOL_TAG = sertag(Symbol)
 const INT8_TAG = sertag(Int8)
-const ARRAY_TAG = findfirst(==(Array), TAGS)%Int32
+const ARRAY_TAG = sertag(Array)
 const EXPR_TAG = sertag(Expr)
 const MODULE_TAG = sertag(Module)
 const METHODINSTANCE_TAG = sertag(Core.MethodInstance)
@@ -154,22 +198,65 @@ function write_as_tag(s::IO, tag)
 end
 
 # cycle handling
+_getcycle(s::AbstractSerializer, @nospecialize(x)) = get(s.table, x, -1)::Int
+_getcycle(s::Serializer, @nospecialize(x)) = get(s.cycle_table, IdKey(x), -1)
+_setcycle!(s::AbstractSerializer, @nospecialize(x), v::Int) = (s.table[x] = v; nothing)
+_setcycle!(s::Serializer, @nospecialize(x), v::Int) = (s.cycle_table[IdKey(x)] = v; nothing)
+
+_setbackref!(s::AbstractSerializer, slot::Int, @nospecialize(x)) = (s.table[slot] = x; nothing)
+function _setbackref!(s::Serializer, slot::Int, @nospecialize(x))
+    bt = s.backref_table
+    i = slot + 1
+    i > length(bt) && resize!(bt, max(i, 2 * length(bt) + 1))
+    @inbounds bt[i] = x
+    nothing
+end
+
+@noinline function __getbackref_error(id::Int)
+    error("""Inconsistent Serializer state when deserializing.
+            Attempt to access internal table with key $id failed.
+
+            This might occur if the Serializer contexts when serializing and deserializing are inconsistent.
+            In particular, if multiple serialize calls use the same Serializer object then
+            the corresponding deserialize calls should also use the same Serializer object.
+        """)
+end
+
+_getbackref(s::AbstractSerializer, id::Int) = get(() -> __getbackref_error(id), s.table, id)
+function _getbackref(s::Serializer, id::Int)
+    bt = s.backref_table
+    i = id + 1
+    (id < 0 || i > length(bt) || !isassigned(bt, i)) && __getbackref_error(id)
+    @inbounds return bt[i]
+end
+
+_sizehint_cycle!(s::AbstractSerializer, n::Integer) = (sizehint!(s.table, n); nothing)
+_sizehint_cycle!(s::Serializer, n::Integer) = (sizehint!(s.cycle_table, n); nothing)
+
+_sizehint_backref!(s::AbstractSerializer, n::Integer) = (sizehint!(s.table, n); nothing)
+_sizehint_backref!(s::Serializer, n::Integer) = (sizehint!(s.backref_table, n; shrink=false); nothing)
+
+function _emit_backref(io::IO, offs::Int)
+    if offs <= typemax(UInt16)
+        writetag(io, SHORTBACKREF_TAG)
+        write(io, UInt16(offs))
+    elseif offs <= typemax(Int32)
+        writetag(io, BACKREF_TAG)
+        write(io, Int32(offs))
+    else
+        writetag(io, LONGBACKREF_TAG)
+        write(io, Int64(offs))
+    end
+    nothing
+end
+
 function serialize_cycle(s::AbstractSerializer, @nospecialize(x))
-    offs = get(s.table, x, -1)::Int
+    offs = _getcycle(s, x)
     if offs != -1
-        if offs <= typemax(UInt16)
-            writetag(s.io, SHORTBACKREF_TAG)
-            write(s.io, UInt16(offs))
-        elseif offs <= typemax(Int32)
-            writetag(s.io, BACKREF_TAG)
-            write(s.io, Int32(offs))
-        else
-            writetag(s.io, LONGBACKREF_TAG)
-            write(s.io, Int64(offs))
-        end
+        _emit_backref(s.io, offs)
         return true
     end
-    s.table[x] = s.counter
+    _setcycle!(s, x, s.counter)
     s.counter += 1
     return false
 end
@@ -183,6 +270,13 @@ end
 function reset_state(s::AbstractSerializer)
     s.counter = 0
     empty!(s.table)
+    empty!(s.pending_refs)
+    s
+end
+function reset_state(s::Serializer)
+    s.counter = 0
+    empty!(s.cycle_table)
+    empty!(s.backref_table)
     empty!(s.pending_refs)
     s
 end
@@ -258,6 +352,17 @@ function serialize_array_data(s::IO, a)
     end
 end
 
+function _serialize_non_bits_elements!(s::AbstractSerializer, a)
+    _sizehint_cycle!(s, div(length(a), 4))  # prepare for lots of pointers
+    @inbounds for i in eachindex(a)
+        if isassigned(a, i)
+            serialize(s, a[i])
+        else
+            writetag(s.io, UNDEFREF_TAG)
+        end
+    end
+end
+
 function serialize(s::AbstractSerializer, a::Array)
     serialize_cycle(s, a) && return
     elty = eltype(a)
@@ -273,14 +378,7 @@ function serialize(s::AbstractSerializer, a::Array)
     if isbitstype(elty)
         serialize_array_data(s.io, a)
     else
-        sizehint!(s.table, div(length(a),4))  # prepare for lots of pointers
-        @inbounds for i in eachindex(a)
-            if isassigned(a, i)
-                serialize(s, a[i])
-            else
-                writetag(s.io, UNDEFREF_TAG)
-            end
-        end
+        _serialize_non_bits_elements!(s, a)
     end
 end
 
@@ -299,14 +397,7 @@ function serialize(s::AbstractSerializer, m::Memory)
     if isbitstype(elty)
         serialize_array_data(s.io, m)
     else
-        sizehint!(s.table, div(length(m),4))  # prepare for lots of pointers
-        @inbounds for i in eachindex(m)
-            if isassigned(m, i)
-                serialize(s, m[i])
-            else
-                writetag(s.io, UNDEFREF_TAG)
-            end
-        end
+        _serialize_non_bits_elements!(s, m)
     end
 end
 
@@ -460,7 +551,7 @@ function serialize(s::AbstractSerializer, meth::Method)
         serialize(s, nothing)
     end
     if isdefined(meth, :recursion_relation)
-        serialize(s, method.recursion_relation)
+        serialize(s, meth.recursion_relation)
     else
         serialize(s, nothing)
     end
@@ -491,6 +582,12 @@ function serialize(s::AbstractSerializer, linfo::Core.MethodInstance)
     serialize(s, linfo.specTypes)
     serialize(s, linfo.def)
     nothing
+end
+
+function serialize(s::AbstractSerializer, @nospecialize(u::Union))
+    serialize_type(s, Union, false)
+    serialize(s, u.a)
+    serialize(s, u.b)
 end
 
 function serialize(s::AbstractSerializer, t::Task)
@@ -691,6 +788,11 @@ function serialize(s::AbstractSerializer, x::Core.AddrSpace)
     write(s.io, Core.bitcast(UInt8, x))
 end
 
+function serialize(s::AbstractSerializer, x::Core.IntrinsicFunction)
+    serialize_type(s, typeof(x))
+    serialize(s, nameof(x))
+end
+
 function serialize_any(s::AbstractSerializer, @nospecialize(x))
     tag = sertag(x)
     if tag > 0
@@ -853,7 +955,7 @@ end
 
 function deserialize_cycle(s::AbstractSerializer, @nospecialize(x))
     slot = pop!(s.pending_refs)
-    s.table[slot] = x
+    _setbackref!(s, slot, x)
     nothing
 end
 
@@ -861,24 +963,11 @@ end
 #     slot = s.counter; s.counter += 1
 #     push!(s.pending_refs, slot)
 #     slot = pop!(s.pending_refs)
-#     s.table[slot] = x
+#     _setbackref!(s, slot, x)
 function resolve_ref_immediately(s::AbstractSerializer, @nospecialize(x))
-    s.table[s.counter] = x
+    _setbackref!(s, s.counter, x)
     s.counter += 1
     nothing
-end
-
-function gettable(s::AbstractSerializer, id::Int)
-    get(s.table, id) do
-        errmsg = """Inconsistent Serializer state when deserializing.
-            Attempt to access internal table with key $id failed.
-
-            This might occur if the Serializer contexts when serializing and deserializing are inconsistent.
-            In particular, if multiple serialize calls use the same Serializer object then
-            the corresponding deserialize calls should also use the same Serializer object.
-        """
-        error(errmsg)
-    end
 end
 
 # deserialize_ is an internal function to dispatch on the tag
@@ -894,10 +983,10 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
         return deserialize_tuple(s, Int(read(s.io, UInt8)::UInt8))
     elseif b == SHORTBACKREF_TAG
         id = read(s.io, UInt16)::UInt16
-        return gettable(s, Int(id))
+        return _getbackref(s, Int(id))
     elseif b == BACKREF_TAG
         id = read(s.io, Int32)::Int32
-        return gettable(s, Int(id))
+        return _getbackref(s, Int(id))
     elseif b == ARRAY_TAG
         return deserialize_array(s)
     elseif b == DATATYPE_TAG
@@ -921,7 +1010,7 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
     elseif b == SHARED_REF_TAG
         slot = s.counter; s.counter += 1
         obj = deserialize(s)
-        s.table[slot] = obj
+        _setbackref!(s, slot, obj)
         return obj
     elseif b == SYMBOL_TAG
         return deserialize_symbol(s, Int(read(s.io, UInt8)::UInt8))
@@ -949,7 +1038,7 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
         return deserialize_expr(s, Int(read(s.io, Int32)::Int32))
     elseif b == LONGBACKREF_TAG
         id = read(s.io, Int64)::Int64
-        return gettable(s, Int(id))
+        return _getbackref(s, Int(id))
     elseif b == LONGSYMBOL_TAG
         return deserialize_symbol(s, Int(read(s.io, Int32)::Int32))
     elseif b == HEADER_TAG
@@ -1007,7 +1096,13 @@ function deserialize_symbol(s::AbstractSerializer, len::Int)
     return sym
 end
 
-deserialize_tuple(s::AbstractSerializer, len) = ntupleany(i->deserialize(s), len)
+function deserialize_tuple(s::AbstractSerializer, len)
+    len == 0 && return ()
+    Base.Cartesian.@nexprs 10 i -> begin
+        len == i && return (Base.Cartesian.@ntuple i _ -> deserialize(s))
+    end
+    return ntupleany(i -> deserialize(s), len)
+end
 
 function deserialize_svec(s::AbstractSerializer)
     n = read(s.io, Int32)
@@ -1359,7 +1454,7 @@ function deserialize_array(s::AbstractSerializer)
     if isa(d1, Int32) || isa(d1, Int64)
         if elty !== Bool && isbitstype(elty)
             a = Vector{elty}(undef, d1)
-            s.table[slot] = a
+            _setbackref!(s, slot, a)
             return read!(s.io, a)
         end
         dims = (Int(d1),)
@@ -1386,12 +1481,12 @@ function deserialize_array(s::AbstractSerializer)
         else
             A = read!(s.io, Array{elty}(undef, dims))
         end
-        s.table[slot] = A
+        _setbackref!(s, slot, A)
         return A
     end
     A = Array{elty, length(dims)}(undef, dims)
-    s.table[slot] = A
-    sizehint!(s.table, s.counter + div(length(A)::Int,4))
+    _setbackref!(s, slot, A)
+    _sizehint_backref!(s, s.counter + div(length(A)::Int,4))
     deserialize_fillarray!(A, s)
     return A
 end
@@ -1427,12 +1522,12 @@ function deserialize(s::AbstractSerializer, X::Type{Memory{T}} where T)
         else
             A = read!(s.io, A)::X
         end
-        s.table[slot] = A
+        _setbackref!(s, slot, A)
         return A
     end
     A = X(undef, n)
-    s.table[slot] = A
-    sizehint!(s.table, s.counter + div(n, 4))
+    _setbackref!(s, slot, A)
+    _sizehint_backref!(s, s.counter + div(n, 4))
     deserialize_fillarray!(A, s)
     return A
 end
@@ -1440,12 +1535,17 @@ end
 function deserialize(s::AbstractSerializer, X::Type{MemoryRef{T}} where T)
     x = Core.memoryref(deserialize(s))::X
     i = deserialize(s)::Int
-    i == 2 || (x = Core.memoryref(x, i, true))
+    i == 1 || (x = Core.memoryrefnew(x, i, true))
     return x::X
 end
 
 function deserialize(s::AbstractSerializer, X::Type{Core.AddrSpace{M}} where M)
     Core.bitcast(X, read(s.io, UInt8))
+end
+
+function deserialize(s::AbstractSerializer, ::Type{Core.IntrinsicFunction})
+    name = deserialize(s)::Symbol
+    return getfield(Core.Intrinsics, name)::Core.IntrinsicFunction
 end
 
 function deserialize_expr(s::AbstractSerializer, len)
@@ -1568,7 +1668,7 @@ function deserialize_datatype(s::AbstractSerializer, full::Bool)
             end
         end
     end
-    s.table[slot] = t
+    _setbackref!(s, slot, t)
     return t
 end
 

@@ -267,7 +267,7 @@ to_index(i::SCartesianIndex2) = i
 struct SCartesianIndices2{K,R<:AbstractUnitRange{Int}} <: AbstractMatrix{SCartesianIndex2{K}}
     indices2::R
 end
-SCartesianIndices2{K}(indices2::AbstractUnitRange{Int}) where {K} = (@assert K::Int > 1; SCartesianIndices2{K,typeof(indices2)}(indices2))
+SCartesianIndices2{K}(indices2::AbstractUnitRange{Int}) where {K} = (@assert K::Int > 1 "invalid index"; SCartesianIndices2{K,typeof(indices2)}(indices2))
 
 eachindex(::IndexSCartesian2{K}, A::ReshapedReinterpretArray) where {K} = SCartesianIndices2{K}(eachindex(IndexLinear(), parent(A)))
 @inline function eachindex(style::IndexSCartesian2{K}, A::AbstractArray, B::AbstractArray...) where {K}
@@ -743,9 +743,7 @@ end
     CyclePadding(padding, total_size)
 
 Cycles an iterator of `Padding` structs, restarting the padding at `total_size`.
-E.g. if `padding` is all the padding in a struct and `total_size` is the total
-aligned size of that array, `CyclePadding` will correspond to the padding in an
-infinite vector of such structs.
+E.g. if `padding` is all the padding in a struct and `total_size` is the total aligned size of that struct, `CyclePadding` will correspond to the padding in an infinite vector of such structs.
 """
 struct CyclePadding{P}
     padding::P
@@ -967,3 +965,17 @@ end
 
 mapreduce_impl(f::F, op::OP, A::AbstractArrayOrBroadcasted, ifirst::SCartesianIndex2, ilast::SCartesianIndex2) where {F,OP} =
     mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
+
+# Fast path for `NTuple{N,E}(::Union{Array,Memory})` with `N >= 32`: when the
+# eltype matches and is isbits, the storage is layout-identical to the tuple,
+# so a single `reinterpret` load suffices (O(1) in N, unlike the All32 fallback).
+function _totuple(T::Type{All32{E,N}}, itr::Union{Array,Memory}) where {E,N}
+    len = N + 32
+    length(itr) >= len || _totuple_err(T)
+    if isbitstype(E) && eltype(itr) === E
+        v = length(itr) == len ? itr : view(itr, 1:len)
+        return @inbounds reinterpret(T, v)[1]
+    end
+    elts = collect(E, Iterators.take(itr, len))
+    return (elts...,)
+end

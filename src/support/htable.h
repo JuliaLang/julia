@@ -14,7 +14,7 @@ extern "C" {
 
 // Power-of-two hash table with linear probing.
 //
-// Keys and values are stored as in consecutive elements
+// Keys and values are stored in consecutive elements
 //   key   = table[2*i]
 //   value = table[2*i+1]
 // where `2*i < size`. An empty slot at index `i` is indicated with
@@ -24,6 +24,8 @@ extern "C" {
 typedef struct {
     size_t size;
     void **table;
+    size_t count; // # of occupied key slots (live + tombstone)
+    size_t live;  // # of live entries (value != HT_NOTFOUND)
     void *_space[HT_N_INLINE];
 } htable_t;
 

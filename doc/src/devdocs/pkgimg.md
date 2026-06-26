@@ -2,7 +2,7 @@
 
 Julia package images provide object (native code) caches for Julia packages.
 They are similar to Julia's [system image](@ref dev-sysimg) and support many of the same features.
-In fact the underlying serialization format is the same, and the system image is the base image that the package images are build against.
+In fact the underlying serialization format is the same, and the system image is the base image that the package images are built against.
 
 ## High-level overview
 

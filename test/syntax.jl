@@ -789,6 +789,17 @@ end"""))
     @test !any(x->(x == Expr(:meta, :push_loc, :none)), ex.args)
 end
 
+# LineNumberNode with file=nothing
+let ex = Expr(:toplevel,
+              LineNumberNode(1),
+              Expr(:->, Expr(:tuple),
+                   Expr(:block,
+                        LineNumberNode(2),
+                        Expr(:call, throw, 1))))
+    f = Core.eval(@__MODULE__, ex)
+    @test only(methods(f)).debuginfo.def isa Symbol
+end
+
 # Check qualified string macros
 Base.r"regex" == r"regex"
 
@@ -946,9 +957,8 @@ g21054(>:) = >:2
 @test g21054(-) == -2
 
 # issue #21168
-@test_loweringerror(:(a.[1]), "invalid syntax \"a.[1]\"", broken)
-@test_loweringerror(:(a.[1]), "invalid syntax \"a.[1]\"", broken)
-@test_loweringerror(:(a.{1}), "invalid syntax \"a.{1}\"", broken)
+@test_parseerror "a.[1]"
+@test_parseerror "a.{1}"
 
 # Issue #21225
 let abstr = Meta.parse("abstract type X end")
@@ -1516,10 +1526,7 @@ end
 @test c27964(8) == (8, 2)
 
 # issue #26739
-let exc = try Core.eval(@__MODULE__, :(sin.[1])) catch exc ; exc end
-    @test_broken exc isa ErrorException
-    @test_broken startswith(exc.msg, "syntax: invalid syntax \"sin.[1]\"")
-end
+@test_parseerror "sin.[1]"
 
 # issue #26873
 f26873 = 0
@@ -1531,10 +1538,10 @@ catch e
     @test e.error isa MethodError
 end
 
-@test_loweringerror(:(if true; break; end for i = 1:1), "break or continue outside loop")
-@test_loweringerror(:([if true; break; end for i = 1:1]), "break or continue outside loop")
+@test_loweringerror(:(if true; break; end for i = 1:1), "`break` must be used inside a `while`, `for` loop, or `@label` block")
+@test_loweringerror(:([if true; break; end for i = 1:1]), "`break` must be used inside a `while`, `for` loop, or `@label` block")
 @test_loweringerror(:(Int[if true; break; end for i = 1:1]), "break or continue outside loop")
-@test_loweringerror(:([if true; continue; end for i = 1:1]), "break or continue outside loop")
+@test_loweringerror(:([if true; continue; end for i = 1:1]), "`continue` must be used inside a `while` or `for` loop")
 @test_loweringerror(:(Int[if true; continue; end for i = 1:1]), "break or continue outside loop")
 
 @test_loweringerror(:(return 0 for i=1:2), "\"return\" not allowed inside comprehension or generator")
@@ -1741,7 +1748,7 @@ end
 # #6080
 @test_loweringerror(:(ccall(:a, Cvoid, (Cint,), &x)), "invalid syntax &x")
 
-@test_loweringerror(:(f(x) = (y = x + 1; ccall((:a, y), Cvoid, ()))), "ccall function name and library expression cannot reference local variables")
+@test_loweringerror(:(f(x) = (y = x + 1; ccall((:a, y), Cvoid, ()))), "ccall/cglobal function name and library expression cannot reference local variables")
 
 @test_parseerror "x.'"
 @test_parseerror "0.+1"
@@ -1874,6 +1881,7 @@ end
 @test Meta.parse("1…2") == Expr(:call, :…, 1, 2)
 @test Meta.parse("1⁝2") == Expr(:call, :⁝, 1, 2)
 @test Meta.parse("1..2") == Expr(:call, :.., 1, 2)
+@test Meta.parse("-1e10..2") == Expr(:call, :.., -1e10, 2)
 # we don't parse chains of these since the associativity and meaning aren't clear
 @test_parseerror "1..2..3"
 
@@ -2491,18 +2499,18 @@ import ..@test_loweringerror
 using Test
 @testset "scope of global declarations" begin
 
-    # global declarations from the top level are not inherited by functions.
-    # don't allow such a declaration to override an outer local, since it's not
-    # clear what it should do.
-    @test_loweringerror(
-        :(let
-              x = 1
+    # issue 61543: global shadowing local not within a function
+    @test Core.eval(GlobalContainment,
+        :(begin
+              x = "global"
               let
-                  global x
+                  x = "local"
+                  let
+                      global x
+                      x
+                  end
               end
-          end),
-        "`global x`: x is a local variable in its enclosing scope"
-    )
+          end)) === "global"
 
     # a declared global can shadow a local in an outer scope
     @test let
@@ -3259,7 +3267,7 @@ end
     x, f1()... = [1, 2, 3]
     @test x == 1
     @test f1() == [2, 3]
-    # test that call to `Base.rest` is outside the definition of `f`
+    # test that call to `Base.rest` is outside the definition of `f1`
     @test f1() === f1()
 
     x, f2()... = 1, 2, 3
@@ -4259,7 +4267,7 @@ end
 @test callme(3, 3) === 3
 @test callme(4, 4, 4) === 4.0
 
-# Ambiguous 1-arg anymous vs macrosig
+# Ambiguous 1-arg anonymous vs macrosig
 @test_parseerror "function (@foo(a)) end"
 
 # #57267 - Missing `latestworld` after typealias
@@ -4718,4 +4726,24 @@ module M59755 end
     @test M59755.v5 === 6
     @test M59755.v6 === 5
     @test Base.binding_kind(M59755, :v6) == Base.PARTITION_KIND_CONST
+end
+
+@testset "assignment to where-expr throws unless LHS is `call`" for ex in [
+    :(x where T = 1)
+    :((x...) where T = 1)
+    Expr(:(=), Expr(:where, Expr(:block, :a, :b)), 1)
+    :((((a,b,c::T)     where T<:U where U<:Any) = (a,b,c))(1,2,3))
+    :((((a,b=0,c::T=0) where T<:U where U<:Any) = (a,b,c))(1))
+    :((((a,b=0,c::T=0) where T<:U where U<:Any) = (a,b,c))(1,2))
+    :((((a,b=0,c::T=0) where T<:U where U<:Any) = (a,b,c))(1,2,3))
+    :((((a::T...)      where T<:U where U<:Any) = (a...,))(1,2,3))
+    :((((a::T;)        where T<:U where U<:Any) = a)(1))
+    :((((a::T;b=2)     where T<:U where U<:Any) = (a,b))(1))
+    :((((a::T;b=2)     where T<:U where U<:Any) = (a,b))(1;b=3))
+    :((((a::T=0;b=2)   where T<:U where U<:Any) = (a,b))())
+    :((((a::T=0;b=2)   where T<:U where U<:Any) = (a,b))(1))
+    :((((a::T=0;b=2)   where T<:U where U<:Any) = (a,b))(;b=3))
+    :((((a::T=0;b=2)   where T<:U where U<:Any) = (a,b))(1;b=3))
+    ]
+    @test_throws "invalid assignment location" Core.eval(@__MODULE__, ex)
 end

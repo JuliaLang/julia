@@ -14,7 +14,7 @@ When the `ephemeral_cache=true` option is specified, `NewInterpreter` will hold
 `CodeInstance` in an ephemeral non-integrated cache, rather than in the integrated
 `Compiler.InternalCodeCache`.
 Keep in mind that ephemeral cache lacks support for invalidation and doesn't persist across
-sessions. However it is an usual Julia object of the type `global_cache::IdDict{MethodInstance,CodeInstance}`,
+sessions. However it is a usual Julia object of the type `global_cache::IdDict{MethodInstance,CodeInstance}`,
 making it easier for debugging and inspecting the compiler behavior.
 """
 macro newinterp(InterpName, ephemeral_cache::Bool=false)
@@ -33,13 +33,13 @@ macro newinterp(InterpName, ephemeral_cache::Bool=false)
             world::UInt
             inf_params::$Compiler.InferenceParams
             opt_params::$Compiler.OptimizationParams
-            inf_cache::Vector{$Compiler.InferenceResult}
+            inf_cache::$Compiler.InferenceCache
             $(ephemeral_cache && :(global_cache::$InterpCacheName))
             function $InterpName(meta = nothing;
                                  world::UInt = Base.get_world_counter(),
                                  inf_params::$Compiler.InferenceParams = $Compiler.InferenceParams(),
                                  opt_params::$Compiler.OptimizationParams = $Compiler.OptimizationParams(),
-                                 inf_cache::Vector{$Compiler.InferenceResult} = $Compiler.InferenceResult[],
+                                 inf_cache::$Compiler.InferenceCache = $Compiler.InferenceCache(),
                                  $(ephemeral_cache ?
                                     Expr(:kw, :(global_cache::$InterpCacheName), :($InterpCacheName())) :
                                     Expr(:kw, :_, :nothing)))

@@ -69,6 +69,7 @@ Base.AbstractUnitRange
 Base.StepRange
 Base.StepRangeLen
 Base.UnitRange
+Base.AbstractOneTo
 Base.OneTo
 Base.LinRange
 Base.LogRange

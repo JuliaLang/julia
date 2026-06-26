@@ -166,9 +166,9 @@ value_t cvalue_from_data(fl_context_t *fl_ctx, fltype_t *type, void *data, size_
     return cv;
 }
 
-// this effectively dereferences a pointer
-// just like *p in C, it only removes a level of indirection from the type,
-// it doesn't copy any data.
+// this creates a cvalue that references an existing pointer
+// just like taking the address of *p in C, it wraps a pointer with cvalue metadata
+// without copying any data.
 // this method of creating a cvalue only allocates metadata.
 // ptr is user-managed; we don't autorelease it unless the
 // user explicitly calls (autorelease ) on the result of this function.

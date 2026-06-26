@@ -10,7 +10,7 @@ Core.IR
 """
     Core.IntrinsicFunction <: Core.Builtin <: Function
 
-The `Core.IntrinsicFunction` function define some basic primitives for what defines the
+The `Core.IntrinsicFunction` type defines some basic primitives for what defines the
 abilities and behaviors of a Julia program
 """
 Core.IntrinsicFunction
@@ -43,7 +43,7 @@ Return a `GenericMemoryRef` for a `GenericMemory`. See [`memoryref`](@ref).
 Core.memoryrefnew
 
 """
-    Core..memoryrefoffset(::GenericMemoryRef)
+    Core.memoryrefoffset(::GenericMemoryRef)
 
 Return the offset index that was used to construct the `MemoryRef`. See [`memoryref`](@ref).
 

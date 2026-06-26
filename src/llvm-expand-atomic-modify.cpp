@@ -37,7 +37,7 @@
 using namespace llvm;
 
 // This pass takes fake call instructions that look like this which were emitted by the front end:
-//   (oldval, newval) = call atomicmodify.iN(ptr %op, ptr align(N) %ptr, i8 immarg %SSID, i8 immarg %Ordering, ...) !rmwattributes
+//   (oldval, newval) = call atomicmodify.iN(ptr align(N) %ptr, ptr %op, i8 immarg %Ordering, i8 immarg %SSID, ...) !rmwattributes
 //   where op is a function with a prototype of `iN (iN arg, ...)`
 // Then rewrite that to
 //   oldval = atomicrmw op ptr, val ordering syncscope
@@ -402,6 +402,10 @@ void expandAtomicModifyToCmpXchg(CallInst &Modify,
           RMW->moveBeforePreserving(cast<Instruction>(ValOp->getUser())->getIterator()); // ValOp is a user of RMW, and RMW has no other dependants (per patternMatchAtomicRMWOp)
           Val = ValOp->get();
         } else if (RMWOp == AtomicRMWInst::Xchg) {
+          // The op ignored the loaded value, so NewVal is computed by the
+          // inlined op body which may be after RMW: move RMW down to the
+          // original call site, which NewVal is known to dominate.
+          RMW->moveBeforePreserving(Modify.getIterator());
           Val = NewVal;
         } else {
           // convert to an atomic fence of the form: atomicrmw or %ptr, 0

@@ -1026,7 +1026,7 @@ static void do_profile(void)
         // store cpu cycle clock
         profile_bt_data_prof[profile_bt_size_cur++].uintptr = cycleclock();
 
-        // store whether thread is sleeping (don't ever encode a state as `0` since is preserved to indicate end of block)
+        // store whether thread is sleeping (don't ever encode a state as `0` since it is preserved to indicate end of block)
         int state = jl_atomic_load_relaxed(&ptls2->sleep_check_state) == 0 ? PROFILE_STATE_THREAD_NOT_SLEEPING : PROFILE_STATE_THREAD_SLEEPING;
         profile_bt_data_prof[profile_bt_size_cur++].uintptr = state;
 
@@ -1302,7 +1302,7 @@ static void sigtrap_handler(int sig, siginfo_t *info, void *context)
     uint32_t* code = (uint32_t*)(pc);                              // https://gcc.gnu.org/legacy-ml/gcc-patches/2013-11/msg02228.html
     if (*code == 0xd4200020) { // brk #0x1 which is what LLVM defines as trap
         signal(sig, SIG_DFL);
-        sig = SIGILL; // redefine this as as an "unreachable reached" error message
+        sig = SIGILL; // redefine this as an "unreachable reached" error message
         sigdie_handler(sig, info, context);
     }
 }

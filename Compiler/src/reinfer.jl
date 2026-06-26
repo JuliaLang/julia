@@ -67,7 +67,7 @@ end
 
 
 # Restore backedges to external targets
-# `edges` = [caller1, ...], the list of worklist-owned code instances internally
+# `internal_methods` = [caller1, ...], the list of worklist-owned code instances internally
 function insert_backedges(internal_methods::Vector{Any})
     # determine which CodeInstance objects are still valid in our image
     # to enable any applicable new codes
@@ -154,7 +154,7 @@ function needs_instrumentation(codeinst::CodeInstance, mi::MethodInstance, def::
 end
 
 # Test all edges relevant to a method:
-# - Visit the entire call graph, starting from edges[idx] to determine if that method is valid
+# - Visit the entire call graph, starting from `codeinst` to determine if that method is valid
 # - Implements Tarjan's SCC (strongly connected components) algorithm, simplified to remove the count variable
 #   and slightly modified with an early termination option once the computation reaches its minimum
 function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace::VerifyMethodWorkspace)

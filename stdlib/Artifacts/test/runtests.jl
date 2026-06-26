@@ -132,19 +132,20 @@ end
     # Next, fuzz it out!  Ensure that we exactly reconstruct our platforms!
     platforms = Platform[]
     for libgfortran_version in (v"3", v"4", v"5", nothing),
-        libstdcxx_version in (v"3.4.11", v"3.4.19", nothing),
+        cxxlib in ("libstdcxx",),
+        cxxlib_version in (v"3.4.11", v"3.4.19", nothing),
         cxxstring_abi in ("cxx03", "cxx11", nothing)
 
         for arch in ("x86_64", "i686", "aarch64", "armv7l"),
             libc in ("glibc", "musl")
 
-            push!(platforms, Platform(arch, "linux"; libc, libgfortran_version, libstdcxx_version, cxxstring_abi))
+            push!(platforms, Platform(arch, "linux"; libc, libgfortran_version, cxxlib, cxxlib_version, cxxstring_abi))
         end
-        push!(platforms, Platform("x86_64", "windows"; libgfortran_version, libstdcxx_version, cxxstring_abi))
-        push!(platforms, Platform("i686", "windows"; libgfortran_version, libstdcxx_version, cxxstring_abi))
-        push!(platforms, Platform("x86_64", "macOS"; libgfortran_version, libstdcxx_version, cxxstring_abi))
-        push!(platforms, Platform("aarch64", "macOS"; libgfortran_version, libstdcxx_version, cxxstring_abi))
-        push!(platforms, Platform("x86_64", "FreeBSD"; libgfortran_version, libstdcxx_version, cxxstring_abi))
+        push!(platforms, Platform("x86_64", "windows"; libgfortran_version, cxxlib, cxxlib_version, cxxstring_abi))
+        push!(platforms, Platform("i686", "windows"; libgfortran_version, cxxlib, cxxlib_version, cxxstring_abi))
+        push!(platforms, Platform("x86_64", "macOS"; libgfortran_version, cxxlib, cxxlib_version, cxxstring_abi))
+        push!(platforms, Platform("aarch64", "macOS"; libgfortran_version, cxxlib, cxxlib_version, cxxstring_abi))
+        push!(platforms, Platform("x86_64", "FreeBSD"; libgfortran_version, cxxlib, cxxlib_version, cxxstring_abi))
     end
 
     for p in platforms
@@ -203,7 +204,7 @@ end
 end
 
 @testset "artifact_hash()" begin
-    # Use the Linus OS on an ARMv7L architecture for the tests to make tests reproducible
+    # Use the Linux OS on an ARMv7L architecture for the tests to make tests reproducible
     armv7l_linux = Platform("armv7l", "linux")
 
     # Check the first key in Artifacts.toml is hashed correctly
@@ -244,14 +245,29 @@ end
                 anon = Module(:__anon__)
                 Core.eval(anon, Meta.parse("using $(imports), Test"))
                 # Ensure that we get the expected exception, since this test runs with --depwarn=error
-                Core.eval(anon, quote
-                    try
-                        artifact"socrates"
-                        @assert false "this @artifact_str macro invocation should have failed!"
-                    catch e
-                        @test startswith("using Pkg instead of using LazyArtifacts is deprecated", e.msg)
-                    end
-                end)
+                depwarn_flag = Base.JLOptions().depwarn
+                # 0: --depwarn=no
+                # 1: --depwarn=yes
+                # 2: --depwarn=error
+                if depwarn_flag == 0
+                    @warn "Skipping one test, because we are running with --depwarn=no"
+                    @test_skip false
+                elseif depwarn_flag == 1
+                    expected_msg = "using Pkg instead of using LazyArtifacts is deprecated"
+                    @test_logs (:warn,expected_msg) Core.eval(anon, :(artifact"socrates"))
+                elseif depwarn_flag == 2
+                    Core.eval(anon, quote
+                        try
+                            artifact"socrates"
+                            # The previous line should have thrown, so we should not reach the next line:
+                            error("this @artifact_str macro invocation should have failed!")
+                        catch e
+                            @test startswith("using Pkg instead of using LazyArtifacts is deprecated", e.msg)
+                        end
+                    end)
+                else
+                    error("Unexpected value for Base.JLOptions().depwarn: $(depwarn_flag)")
+                end
             end
         end
     end

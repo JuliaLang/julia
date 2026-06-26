@@ -26,7 +26,7 @@ NATIVE_BUILDDIR := $(BUILDDIR)
 LLT_BUILDDIR := $(BUILDDIR)/$(LLTDIR)
 endif
 
-HEADERS := $(wildcard *.h) $(LIBUV_INC)/uv.h $(wildcard $(LLTDIR)/*.h)
+HEADERS := $(wildcard *.h) $(LIBUV_INC)/uv.h $(wildcard $(LLTDIR)/*.h) $(wildcard $(LLTDIR)/*.inc)
 
 OBJS := $(SRCS:%.c=$(BUILDDIR)/%.o)
 DOBJS := $(SRCS:%.c=$(BUILDDIR)/%.dbg.obj)
@@ -103,10 +103,20 @@ endif
 endif
 
 $(BUILDDIR)/$(EXENAME)-debug$(EXE): $(DOBJS) $(LIBFILES_debug) $(BUILDDIR)/$(LIBTARGET)-debug.a $(BUILDDIR)/flmain.dbg.obj | $(BUILDDIR)/flisp.boot
-	@$(call PRINT_LINK, $(CCLD) $(DEBUGFLAGS) $(JLDFLAGS) $(DOBJS) $(BUILDDIR)/flmain.dbg.obj -o $@ $(BUILDDIR)/$(LIBTARGET)-debug.a $(LIBFILES_debug) $(LIBS) $(OSLIBS))
+	@$(call PRINT_LINK, $(call link-exe,$@, \
+		$(JLDFLAGS) $(WIN_LD_LIBPATHS), \
+		$(WIN_LD_EXE_CRT_START) $(DOBJS) $(BUILDDIR)/flmain.dbg.obj $(BUILDDIR)/$(LIBTARGET)-debug.a $(LIBFILES_debug) $(LIBS) \
+		$(WIN_SYSTEM_LIBS) $(WIN_MINGW_LIBS) -lssp $(WIN_LD_CRT_END), \
+		$(CCLD) $(DEBUGFLAGS) $(JLDFLAGS), \
+		$(DOBJS) $(BUILDDIR)/flmain.dbg.obj $(BUILDDIR)/$(LIBTARGET)-debug.a $(LIBFILES_debug) $(LIBS) $(OSLIBS)))
 
 $(BUILDDIR)/$(EXENAME)$(EXE): $(OBJS) $(LIBFILES_release) $(BUILDDIR)/$(LIBTARGET).a $(BUILDDIR)/flmain.o | $(BUILDDIR)/flisp.boot
-	@$(call PRINT_LINK, $(CCLD) $(SHIPFLAGS) $(JLDFLAGS) $(OBJS) $(BUILDDIR)/flmain.o -o $@ $(BUILDDIR)/$(LIBTARGET).a $(LIBFILES_release) $(LIBS) $(OSLIBS))
+	@$(call PRINT_LINK, $(call link-exe,$@, \
+		$(JLDFLAGS) $(WIN_LD_LIBPATHS), \
+		$(WIN_LD_EXE_CRT_START) $(OBJS) $(BUILDDIR)/flmain.o $(BUILDDIR)/$(LIBTARGET).a $(LIBFILES_release) $(LIBS) \
+		$(WIN_SYSTEM_LIBS) $(WIN_MINGW_LIBS) -lssp $(WIN_LD_CRT_END), \
+		$(CCLD) $(SHIPFLAGS) $(JLDFLAGS), \
+		$(OBJS) $(BUILDDIR)/flmain.o $(BUILDDIR)/$(LIBTARGET).a $(LIBFILES_release) $(LIBS) $(OSLIBS)))
 
 $(BUILDDIR)/host/Makefile:
 	mkdir -p $(BUILDDIR)/host

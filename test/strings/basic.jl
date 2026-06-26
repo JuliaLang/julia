@@ -233,10 +233,38 @@ end
         @test (@views (x[3], x[1:2], x[[1,4]])) == ('c', "ab", "ad")
     end
 
-    @testset ":noshift constructor" begin
-        @test SubString("", 0, 0, Val(:noshift)) == ""
-        @test SubString("abcd", 0, 1, Val(:noshift)) == "a"
-        @test SubString("abcd", 0, 4, Val(:noshift)) == "abcd"
+    @testset "raw_substring" begin
+        s = "abcdefgøø"
+        raw_substring = Base.raw_substring
+
+        @test raw_substring(s, 1, 11) == s
+        @test raw_substring(s, 1, 3) == "abc"
+        @test raw_substring(s, 3, 3) == "cde"
+        @test raw_substring(s, 5, 4) == String(codeunits(s)[5:8])
+        @test raw_substring(s, 11, 1) == String(codeunits(s)[11:11])
+        @test raw_substring(s, 1, 2) isa SubString{String}
+        @test raw_substring(raw_substring(s, 2, 8), 1, 3) isa SubString{String}
+
+        @test raw_substring(s, 1, 0) == ""
+        @test raw_substring(s, 11, 0) == ""
+        @test_throws BoundsError raw_substring(s, 0, 0)
+        @test_throws BoundsError raw_substring(s, 11, 2)
+        @test_throws BoundsError raw_substring(s, 3, -1)
+
+        @test_throws BoundsError raw_substring(s, 0, 2)
+        @test_throws BoundsError raw_substring(s, 2, 11)
+    end
+
+    # if Substring of SubString is explicitly requested by typing out the type,
+    # we CAN construct them
+    @testset "Explicit sub-substring" begin
+        s = "abcdefg"
+        ss = view(s, 2:6)
+        sss = SubString{SubString{String}}(ss, 2, 3)
+        @test sss isa SubString{SubString{String}}
+        @test sss == "cd"
+        sss = SubString{SubString{String}}(ss)
+        @test sss == ss
     end
 end
 
@@ -604,7 +632,7 @@ end
             @test isvalid(String, UInt8[byt]) == flg
         end
     end
-    # Check overlong lead bytes for 2-character sequences (false)
+    # Check overlong lead bytes for 2-byte sequences (false)
     for byt = 0xc0:0xc1
         @test isvalid(String, UInt8[byt,0x80]) == false
     end
@@ -1243,6 +1271,9 @@ end
     let i=49248
         @test String(lazy"PR n°$i") == "PR n°49248"
     end
+
+    @test lazy"$(Float64(pi))"c == "3.14159" # :compact=>true
+    @test lazy"$(collect(1:1000))"c == repr(collect(1:1000), context=:limit=>true) # :limit=>true
 end
 
 @testset "String Effects" begin
@@ -1257,7 +1288,17 @@ end
                    (String, (Symbol,)),
                    (length, (String,)),
                    (hash, (String,UInt)),
-                   (hash, (Char,UInt)),]
+                   (hash, (Char,UInt)),
+                   (startswith, (String, String)),
+                   (startswith, (SubString{String}, String)),
+                   (startswith, (String, SubString{String})),
+                   (startswith, (SubString{String}, SubString{String})),
+                   (endswith, (String, String)),
+                   (endswith, (SubString{String}, String)),
+                   (endswith, (String, SubString{String})),
+                   (endswith, (SubString{String}, SubString{String})),
+                   (in, (Char, String)),
+                   (in, (Char, SubString{String})),]
         e = Base.infer_effects(f, Ts)
         @test Core.Compiler.is_foldable(e) context=(f, Ts)
         @test Core.Compiler.is_removable_if_unused(e) context=(f, Ts)
@@ -1284,6 +1325,46 @@ end
     @test_throws ArgumentError Symbol("a\0a")
 
     @test Base._string_n_override == Base.encode_effects_override(Base.compute_assumed_settings((:total, :(!:consistent))))
+
+    # Stress-test that the annotations added in this PR (and follow-ups) hold
+    # even when strings contain arbitrary, malformed UTF-8 byte sequences.
+    let garbage = String[
+            String(UInt8[0x80]),                  # lone continuation
+            String(UInt8[0xC0]),                  # truncated 2-byte lead
+            String(UInt8[0xE0, 0x80]),            # truncated 3-byte
+            String(UInt8[0xF0, 0x80, 0x80]),      # truncated 4-byte
+            String(UInt8[0xFF, 0xFE]),            # invalid lead bytes
+            String(UInt8[0xC0, 0x80]),            # overlong NUL
+            String(UInt8[0xED, 0xA0, 0x80]),      # surrogate
+            String(UInt8[0xF8, 0x88, 0x80, 0x80, 0x80]), # 5-byte (invalid)
+            "",
+            "ascii",
+            "naïve",
+        ]
+        for a in garbage, b in garbage
+            @test startswith(a, b) isa Bool
+            @test endswith(a, b) isa Bool
+            @test startswith(SubString(a), b) isa Bool
+            @test endswith(SubString(a), b) isa Bool
+            @test startswith(a, SubString(b)) isa Bool
+            @test endswith(a, SubString(b)) isa Bool
+        end
+        for a in garbage, c in ('\0', '\xff', 'a', 'α', '🎉')
+            @test in(c, a) isa Bool
+            @test in(c, SubString(a)) isa Bool
+        end
+        for a in garbage
+            sa = SubString(a)
+            @test length(a) isa Int
+            @test length(sa) isa Int
+            @test lastindex(a) isa Int
+            @test lastindex(sa) isa Int
+            @test isascii(a) isa Bool
+            @test isascii(sa) isa Bool
+            @test textwidth(a) isa Int
+            @test textwidth(sa) isa Int
+        end
+    end
 end
 
 @testset "Ensure UTF-8 DFA can never leave invalid state" begin
@@ -1428,7 +1509,7 @@ end
         end
 
         b3 = first(table_row[3])
-        #Prove that all valid forth bytes return correct state
+        #Prove that all valid fourth bytes return correct state
         for b4 = table_row[4]
             @test Base._UTF8_DFA_ACCEPT == Base._isvalid_utf8_dfa(state3,[b4],1,1)
         end
@@ -1454,6 +1535,18 @@ end
         @test transcode(String, transcode(Int32, transcode(UInt8, str))) == str
         @test transcode(String, transcode(UInt32, transcode(UInt8, str))) == str
         @test transcode(String, transcode(UInt8, transcode(UInt16, str))) == str
+    end
+    # transcode(String, ::Vector{UInt8}) must not empty the input (#28612)
+    let v = UInt8[0x68, 0x65, 0x6c, 0x6c, 0x6f]
+        @test transcode(String, v) == "hello"
+        @test length(v) == 5
+        @test v == UInt8[0x68, 0x65, 0x6c, 0x6c, 0x6f]
+    end
+    let v = UInt8[0x68, 0x65, 0x6c, 0x6c, 0x6f]
+        sv = view(v, 1:5)
+        @test transcode(String, sv) == "hello"
+        @test length(sv) == 5
+        @test v == UInt8[0x68, 0x65, 0x6c, 0x6c, 0x6f]
     end
 end
 

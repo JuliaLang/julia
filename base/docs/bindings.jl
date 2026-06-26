@@ -8,6 +8,19 @@ struct Binding
         # Normalise the binding module for module symbols so that:
         #   Binding(Base, :Base) === Binding(Main, :Base)
         m = nameof(m) === v ? parentmodule(m) : m
+        # Walk every explicit by-name import to recover the canonical `(mod, name)` pair,
+        # threading `as`-renames through chained re-exports.
+        # `partition_restriction` only walks one hop; `binding_module` walks all hops
+        # but drops the name.
+        world = Base.get_world_counter()
+        while Base.invoke_in_world(world, isdefinedglobal, m, v)
+            bpart = Base.lookup_binding_partition(world, GlobalRef(m, v))
+            Base.is_some_explicit_imported(Base.binding_kind(bpart)) || break
+            imported = Base.partition_restriction(bpart)::Core.Binding
+            next_m, next_v = imported.globalref.mod, imported.globalref.name
+            (next_m === m && next_v === v) && break
+            m, v = next_m, next_v
+        end
         new(Base.binding_module(m, v), v)
     end
 end
@@ -28,12 +41,19 @@ function Base.show(io::IO, b::Binding)
     if b.mod === Base.active_module()
         print(io, b.var)
     else
-        print(io, b.mod, '.', Base.isoperator(b.var) ? ":" : "", b.var)
+        print(io, b.mod, '.')
+        if Base.isoperator(b.var)
+            # ensures symbols are quoted right, so e.g.  :(==), :(:), :+ or :-
+            show(io, b.var)
+        else
+            # print ordinary identifiers without any quoting
+            print(io, b.var)
+        end
     end
 end
 
 aliasof(b::Binding)     = defined(b) ? (a = aliasof(resolve(b), b); defined(a) ? a : b) : b
-aliasof(d::DataType, b) = Binding(d.name.module, d.name.name)
-aliasof(λ::Function, b) = (m = typeof(λ).name; Binding(m.module, m.singletonname))
+aliasof(d::DataType, b) = Binding(parentmodule(d), nameof(d))
+aliasof(λ::Function, b) = Binding(parentmodule(λ), nameof(λ))
 aliasof(m::Module,   b) = Binding(m, nameof(m))
 aliasof(other,       b) = b

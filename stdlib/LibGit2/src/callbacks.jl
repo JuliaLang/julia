@@ -264,7 +264,7 @@ authentication fails, this function is called again without any indication wheth
 authentication was successful or not. To avoid an infinite loop from repeatedly
 using the same faulty credentials, we will keep track of state using the payload.
 
-For addition details see the LibGit2 guide on
+For additional details see the LibGit2 guide on
 [authenticating against a server](https://libgit2.org/docs/guides/authentication/).
 """
 function credentials_callback(libgit2credptr::Ptr{Ptr{Cvoid}}, url_ptr::Cstring,

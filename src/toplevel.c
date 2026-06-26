@@ -539,7 +539,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_method_instance_for_thunk(jl_code_info_t *
     return mi;
 }
 
-// Eval `throw(ErrorException(msg)))` in module `m`.
+// Eval `throw(exc)` in module `m`.
 // Used in `jl_toplevel_eval_flex` instead of `jl_throw` so that the error
 // location in julia code gets into the backtrace.
 static void jl_eval_throw(jl_module_t *m, jl_value_t *exc, const char *filename, int lineno)
@@ -726,14 +726,13 @@ JL_DLLEXPORT jl_value_t *jl_eval_thunk(jl_module_t *JL_NONNULL m, jl_code_info_t
     // start of this block.
     int last_lineno = jl_atomic_load_relaxed(&jl_lineno);
     const char *last_filename = jl_atomic_load_relaxed(&jl_filename);
-    int toplevel_lineno = 0;
-    const char* toplevel_filename = jl_debuginfo_firstline(thk->debuginfo, &toplevel_lineno);
+    int toplevel_lineno = jl_cdi_firstline_all(thk->debuginfo);
+    const char *toplevel_filename = jl_cdi_file(thk->debuginfo);
     jl_atomic_store_relaxed(&jl_lineno, toplevel_lineno);
     jl_atomic_store_relaxed(&jl_filename, toplevel_filename);
 
     size_t last_age = ct->world_age;
-    size_t world = jl_atomic_load_acquire(&jl_world_counter);
-    ct->world_age = world;
+    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
 
     int has_ccall = 0, has_defs = 0, has_loops = 0, has_opaque = 0, forced_compile = 0;
     body_attributes((jl_array_t*)thk->code, &has_ccall, &has_defs, &has_loops, &has_opaque, &forced_compile);
@@ -749,12 +748,16 @@ JL_DLLEXPORT jl_value_t *jl_eval_thunk(jl_module_t *JL_NONNULL m, jl_code_info_t
             jl_get_module_compile(m) != JL_OPTIONS_COMPILE_MIN)) {
         // use codegen
         mfunc = jl_method_instance_for_thunk(thk, m);
-        jl_resolve_definition_effects_in_ir((jl_array_t*)thk->code, m, NULL, NULL, 0);
-        // Don't infer blocks containing e.g. method definitions, since it's probably not worthwhile.
+        jl_resolve_definition_effects_in_ir((jl_array_t *)thk->code, m, NULL, NULL, 0);
+        // Update world again as resolving definition effects (eg ccall return type) may have side effects
+        size_t world = jl_atomic_load_acquire(&jl_world_counter);
+        ct->world_age = world;
+        // Don't infer blocks containing e.g. method definitions, since it's probably
+        // not worthwhile.
         if (!has_defs && jl_get_module_infer(m) != 0) {
             (void)jl_type_infer(mfunc, world, SOURCE_MODE_ABI, jl_options.trim);
         }
-        result = jl_invoke(/*func*/NULL, /*args*/NULL, /*nargs*/0, mfunc);
+        result = jl_invoke_oneshot(/*func*/ NULL, /*args*/ NULL, /*nargs*/ 0, mfunc);
     }
     else {
         // use interpreter

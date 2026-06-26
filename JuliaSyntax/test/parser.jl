@@ -9,13 +9,13 @@ function parse_to_sexpr_str(production, code::AbstractString; v=v"1.6", show_kws
     return sprint(io->show(io, MIME("text/x.sexpression"), s; show_kws...))
 end
 
-function test_parse(production, input, expected)
+function test_parse(production, input, expected; show_kws...)
     if !(input isa AbstractString)
         opts, input = input
     else
         opts = NamedTuple()
     end
-    parsed = parse_to_sexpr_str(production, input; opts...)
+    parsed = parse_to_sexpr_str(production, input; show_kws..., opts...)
     if expected isa Regex # Could be AbstractPattern, but that type was added in Julia 1.6.
         @test match(expected, parsed) !== nothing
     else
@@ -27,7 +27,7 @@ function test_parse(inout::Pair)
     test_parse(JuliaSyntax.parse_toplevel, inout...)
 end
 
-PARSE_ERROR = r"\(error-t "
+PARSE_ERROR = r"\(error"
 
 with_version(v::VersionNumber, (i,o)::Pair) = ((;v=v), i) => o
 
@@ -76,6 +76,19 @@ tests = [
         "f(x) where S where U = 1" =>  "(function-= (where (where (call f x) S) U) 1)"
         "(f(x)::T) where S = 1" =>  "(function-= (where (parens (::-i (call f x) T)) S) 1)"
         "f(x) = 1 = 2"    =>  "(function-= (call f x) (= 1 2))" # Should be a warning!
+        # Suffixed operators don't form compound assignments (matching the
+        # reference parser): `+₁` is parsed as the operator, leaving a stray `=`
+        "a +₁= b" =>  "(call-i a +₁ (error =))"
+        # ... and likewise operators which simply have no compound-assignment
+        # form are parsed as an identifier being assigned to
+        "⋅ = 5" =>  "(= ⋅ 5)"
+        "⋅=5" =>  "(= ⋅ 5)"
+        # Operators followed by `==`, `===` or `=>` (rather than the single
+        # token `=`) are not compound assignments
+        "a +== b"   => "(call-i a + (call-pre (error ==) b))"
+        "a -=> b"   => "(call-i a - (call-pre (error =>) b))"
+        "a >>>== b" => "(call-i a >>> (call-pre (error ==) b))"
+        "a .+== b"  => "(dotcall-i a + (call-pre (error ==) b))"
     ],
     JuliaSyntax.parse_pair => [
         "a => b"  =>  "(call-i a => b)"
@@ -119,6 +132,8 @@ tests = [
         "x < y"       => "(call-i x < y)"
         "x .< y"      => "(dotcall-i x < y)"
         "x .<: y"     => "(dotcall-i x <: y)"
+        # A dotted operator directly following a float literal
+        "1.1.∈a"      => "(dotcall-i 1.1 ∈ a)"
         ":. == :."    => "(call-i (quote-: .) == (quote-: .))"
         # Comparison chains
         "x < y < z"   => "(comparison x < y < z)"
@@ -141,14 +156,22 @@ tests = [
         "1:\n2"     => "(call-i 1 : (error))"
     ],
     JuliaSyntax.parse_range => [
-        "a..b"       => "(call-i a .. b)"
+        "a..b"       => "(call-i a (DotsIdentifier-2) b)"
+        "-1e10..2"   => "(call-i -1.0e10 (DotsIdentifier-2) 2)"
+        "0x1p3..2"   => "(call-i 8.0 (DotsIdentifier-2) 2)"
+        "a..+b"      => "(call-i a (DotsIdentifier-2) (error-t) (call-pre + b))"
+        # `..` may be directly followed by the operand-starting operators `: :: $ '`
+        "a..:b"      => "(call-i a (DotsIdentifier-2) (quote-: b))"
+        "'a'..'b'"   => "(call-i (char 'a') (DotsIdentifier-2) (char 'b'))"
+        "a..\$b"     => "(call-i a (DotsIdentifier-2) (\$ b))"
+        "a..::b"     => "(call-i a (DotsIdentifier-2) (::-pre b))"
         "a … b"      => "(call-i a … b)"
         "a .… b"     => "(dotcall-i a … b)"
         "[1 :a]"     => "(hcat 1 (quote-: a))"
         "[1 2:3 :a]" =>  "(hcat 1 (call-i 2 : 3) (quote-: a))"
         "x..."     => "(... x)"
         "x:y..."   => "(... (call-i x : y))"
-        "x..y..."  => "(... (call-i x .. y))"
+        "x..y..."  => "(... (call-i x (DotsIdentifier-2) y))"
     ],
     JuliaSyntax.parse_invalid_ops => [
         "a--b"  =>  "(call-i a (ErrorInvalidOperator) b)"
@@ -158,7 +181,7 @@ tests = [
         "a + b + c"  => "(call-i a + b c)"
         "a + b .+ c" => "(dotcall-i (call-i a + b) + c)"
         # parse_with_chains:
-        # The following is two elements of a hcat
+        # The following are two elements of an hcat
         "[x +y]"     =>  "(hcat x (call-pre + y))"
         "[x+y +z]"   =>  "(hcat (call-i x + y) (call-pre + z))"
         # Conversely the following are infix calls
@@ -200,6 +223,9 @@ tests = [
         "x 'y"      =>  "x"
         "x@y"       =>  "x"
         "(begin end)x" => "(parens (block))"
+        # Invalid operators (`**`, `--`) are not juxtaposed
+        "2**2"      =>  "2"
+        "2--2"      =>  "2"
     ],
     JuliaSyntax.parse_unary => [
         ":T"       => "(quote-: T)"
@@ -447,6 +473,9 @@ tests = [
         "A.@x"      =>  "(macrocall (. A (macro_name x)))"
         "A.@x a"    =>  "(macrocall (. A (macro_name x)) a)"
         "@A.B.@x a" =>  "(macrocall (macro_name (. (. A B) (error-t) x)) a)"
+        # .[ and .{ disallowed
+        "f.[x]"  =>  "(error f x)"
+        "f.{x}"  =>  "(error f x)"
         # .' discontinued
         "f.'"    =>  "(dotcall-post f (error '))"
         # Field/property syntax
@@ -543,21 +572,11 @@ tests = [
         ((v=v"1.7",), "struct A const a end") => "(struct A (block (error (const a))))"
         "struct A end"    =>  "(struct A (block))"
         "struct try end"  =>  "(struct (error try) (block))"
-        # return
-        "return\nx"   =>  "(return)"
-        "return)"     =>  "(return)"
-        "return x"    =>  "(return x)"
-        "return x,y"  =>  "(return (tuple x y))"
-        # break/continue
-        "break"    => "(break)"
-        "continue" => "(continue)"
-        # break/continue with labels (plain identifiers only, requires 1.14+)
-        ((v=v"1.14",), "break _")  => "(break _)"
-        ((v=v"1.14",), "break _ x") => "(break _ x)"
-        ((v=v"1.14",), "break label") => "(break label)"
-        ((v=v"1.14",), "break label x") => "(break label x)"
-        ((v=v"1.14",), "continue _") => "(continue _)"
-        ((v=v"1.14",), "continue label") => "(continue label)"
+        # typegroup (1.14+)
+        ((v=v"1.14",), "typegroup struct A end end")  =>  "(typegroup (block (struct A (block))))"
+        ((v=v"1.14",), "typegroup\nstruct A\na::Int\nend\nend")  =>  "(typegroup (block (struct A (block (::-i a Int)))))"
+        ((v=v"1.14",), "typegroup\nstruct A end\nstruct B end\nend")  =>  "(typegroup (block (struct A (block)) (struct B (block))))"
+        ((v=v"1.13",), "typegroup struct A end end")  =>  "(error (typegroup (block (struct A (block)))))"
         # module/baremodule
         "module A end"      =>  "(module A (block))"
         "baremodule A end"  =>  "(module-bare A (block))"
@@ -643,7 +662,7 @@ tests = [
         "function (\n        ::T\n        )(x, y) end" =>  "(function (call (parens (::-pre T)) x y) (block))"
         "function (\n        f::T{g(i)}\n        )() end" => "(function (call (parens (::-i f (curly T (call g i))))) (block))"
         "function (\n        x, y\n        ) x + y end" => "(function (tuple-p x y) (block (call-i x + y)))"
-        "function (:*=(f))() end" => "(function (call (parens (call (quote-: *=) f))) (block))"
+        "function (:*=(f))() end" => "(function (call (parens (call (quote-: (op= *)) f))) (block))"
         "function begin() end" =>  "(function (call (error begin)) (block))"
         "function f() end"     =>  "(function (call f) (block))"
         "function type() end"  =>  "(function (call type) (block))"
@@ -745,7 +764,7 @@ tests = [
         "import A.:(+)" =>  "(import (importpath A (quote-: (parens +))))"
         "import A.=="   =>  "(import (importpath A ==))"
         "import A.⋆.f"  =>  "(import (importpath A ⋆ f))"
-        "import A..."   =>  "(import (importpath A ..))"
+        "import A..."   =>  "(import (importpath A (DotsIdentifier-2)))"
         "import A; B"   =>  "(import (importpath A))"
         # Colons not allowed first in import paths
         # but are allowed in trailing components (#473)
@@ -842,25 +861,25 @@ tests = [
         "&&"  =>  "(error &&)"
         "||"  =>  "(error ||)"
         "."   =>  "(error .)"
-        "..." =>  "(error ...)"
-        "+="  =>  "(error +=)"
-        "-="  =>  "(error -=)"
-        "*="  =>  "(error *=)"
-        "/="  =>  "(error /=)"
-        "//=" =>  "(error //=)"
-        "|="  =>  "(error |=)"
-        "^="  =>  "(error ^=)"
-        "÷="  =>  "(error ÷=)"
-        "%="  =>  "(error %=)"
-        "<<=" =>  "(error <<=)"
-        ">>=" =>  "(error >>=)"
-        ">>>="=>  "(error >>>=)"
-        "\\=" =>  "(error \\=)"
-        "&="  =>  "(error &=)"
-        ":="  =>  "(error :=)"
-        "\$=" =>  "(error \$=)"
-        "⊻="  =>  "(error ⊻=)"
-        ".+=" =>  "(error (. +=))"
+        "..." =>  "(error (DotsIdentifier-3))"
+        "+="  =>  "(error (op= +))"
+        "-="  =>  "(error (op= -))"
+        "*="  =>  "(error (op= *))"
+        "/="  =>  "(error (op= /))"
+        "//=" =>  "(error (op= //))"
+        "|="  =>  "(error (op= |))"
+        "^="  =>  "(error (op= ^))"
+        "÷="  =>  "(error (op= ÷))"
+        "%="  =>  "(error (op= %))"
+        "<<=" =>  "(error (op= <<))"
+        ">>=" =>  "(error (op= >>))"
+        ">>>="=>  "(error (op= >>>))"
+        "\\=" =>  "(error (op= \\))"
+        "&="  =>  "(error (op= &))"
+        ":="  =>  "(error :=)" # Assignment operator, not `:`-update
+        "\$=" =>  "(error (op= \$))"
+        "⊻="  =>  "(error (op= ⊻))"
+        ".+=" =>  "(error (.op= +))"
         # Normal operators
         "+"  =>  "+"
         # Assignment-precedence operators which can be used as identifiers
@@ -869,8 +888,8 @@ tests = [
         "⩴"  =>  "⩴"
         "≕"  =>  "≕"
         # Quoted syntactic operators allowed
-        ":+="  =>  "(quote-: +=)"
-        ":.+=" =>  "(quote-: (. +=))"
+        ":+="  =>  "(quote-: (op= +))"
+        ":.+=" =>  "(quote-: (.op= +))"
         ":.="  =>  "(quote-: (. =))"
         ":.&&" =>  "(quote-: (. &&))"
         # Special symbols quoted
@@ -1127,6 +1146,64 @@ parsestmt_test_specs = [
     # unit tests there.
     "''" => "(char (error))"
 
+    # return
+    "return\nx"   =>  "(return)"
+    "return x"    =>  "(return x)"
+    "return x,y"  =>  "(return (tuple x y))"
+    # closing tokens after return
+    "if x return else end" => "(if x (block (return)) (block))"
+    "(return)"    =>  "(parens (return))"
+    "[return]" => "(vect (return))"
+    "{return}" => "(braces (return))"
+    # return doesn't require a closing token afterward
+    "[return x y]" => "(hcat (return x) y)"
+    # 1.14: return respects end/colon parse state
+    ((v=v"1.14",), "a[return end]") => "(ref a (return end))"
+    ((v=v"1.14",), "x ? return : y") => "(? x (return) y)"
+    ((v=v"1.13",), "a[return end]") => PARSE_ERROR
+    ((v=v"1.13",), "x ? return : y") => PARSE_ERROR
+    # break/continue
+    "break"    => "(break)"
+    "(break)"    => "(parens (break))"
+    "continue" => "(continue)"
+    # break/continue respect other closing delimiters (>=1.14)
+    ((v=v"1.14",), "[break]") =>  "(vect (break))"
+    ((v=v"1.14",), "{break}")  => "(braces (break))"
+    # break/continue with labels (plain identifiers only, requires >=1.14)
+    ((v=v"1.14",), "break _")        => "(break _)"
+    ((v=v"1.14",), "break _ x")      => "(break _ x)"
+    ((v=v"1.14",), "break label")    => "(break label)"
+    ((v=v"1.14",), "break var\"label\"") => "(break (var label))"
+    ((v=v"1.14",), "break \$label")  => "(break (\$ label))"
+    ((v=v"1.14",), "break label x")  => "(break label x)"
+    ((v=v"1.14",), "break f ()")     => "(break f (tuple-p))"
+    ((v=v"1.14",), "break f()")      => "(break f (error-t) (tuple-p))"
+    ((v=v"1.14",), "continue _")     => "(continue _)"
+    ((v=v"1.14",), "continue label") => "(continue label)"
+    ((v=v"1.14",), "break +")        => "(break (error-t +))"
+    ((v=v"1.14",), "a[break label end]") => "(ref a (break label end))"
+    ((v=v"1.14",), "x ? break : y")  => "(? x (break) y)"
+    ((v=v"1.14",), "x ? break label z : y") => "(? x (break label z) y)"
+    # `break label x` must be followed by closing token
+    ((v=v"1.14",), "[break label x y]") => "(vect (break label x) (error-t y))"
+    # misfeature disabled in 1.14 (`:` always considered a break closing token)
+    ((v=v"1.14",), "break : x")      => PARSE_ERROR
+
+    ((v=v"1.13",), "break label")    => "(error (break (error-t label (error-t))))"
+    ((v=v"1.13",), "continue label") => "(error (continue (error-t label (error-t))))"
+    ((v=v"1.13",), "break +")        => "(break (error-t + (error-t)))"
+    ((v=v"1.13",), "x ? break : y")  => "(? x (break) y)"
+    ((v=v"1.13",), "a[break label end]") => PARSE_ERROR
+    ((v=v"1.13",), "x ? break label z : y") => PARSE_ERROR
+    ((v=v"1.13",), "break : x")      => "(call-i (break) : x)"
+
+    # break / continue with trailing tokens are legal in some cases
+    "a ? break : c"    => "(? a (break) c)"
+    "begin break end"  => "(block (break))"
+    "a ? continue : c"   => "(? a (continue) c)"
+    "begin continue end" => "(block (continue))"
+    "break:x"  => "(call-i (break) : x)" # range colon allowed
+
     # The following may not be ideal error recovery! But at least the parser
     # shouldn't crash
     "@(x y)" => "(macrocall (macro_name (parens x (error-t y))))"
@@ -1150,9 +1227,15 @@ parsestmt_test_specs = [
     "(x for x = xs a)"      =>  "(parens (generator x (iteration (in x xs))) (error-t a))"
     "(x for x = xs a, b)"   =>  "(parens (generator x (iteration (in x xs))) (error-t a ✘ b))"
     "f(x for x = xs a)"     =>  "(call f (generator x (iteration (in x xs))) (error-t a))"
+
+    # typegroup as identifier on older versions
+    ((v=v"1.12",), "typegroup = 3")  =>  "(= typegroup 3)"
+    ((v=v"1.12",), "let typegroup = 3 end")  =>  "(let (block (= typegroup 3)) (block))"
+    # typegroup error recovery on older versions (would be a syntax error anyway)
+    ((v=v"1.12",), "typegroup struct A end end")  =>  "(error (typegroup (block (struct A (block)))))"
 ]
 
-@testset "Parser does not crash on broken code" begin
+@testset "Parsestmt tests" begin
     @testset "$(repr(input))" for (input, output) in parsestmt_test_specs
         test_parse(JuliaSyntax.parse_stmts, input, output)
     end
@@ -1169,7 +1252,7 @@ parsestmt_with_kind_tests = [
     "a →  b" => "(call-i a::Identifier →::Identifier b::Identifier)"
     "a < b < c" => "(comparison a::Identifier <::Identifier b::Identifier <::Identifier c::Identifier)"
     "a .<: b"=> "(dotcall-i a::Identifier <:::Identifier b::Identifier)"
-    "a .. b" => "(call-i a::Identifier ..::Identifier b::Identifier)"
+    "a .. b" => "(call-i a::Identifier (DotsIdentifier-2) b::Identifier)"
     "a : b"  => "(call-i a::Identifier :::Identifier b::Identifier)"
     "-2^x"   => "(call-pre -::Identifier (call-i 2::Integer ^::Identifier x::Identifier))"
     "-(2)"   => "(call-pre -::Identifier (parens 2::Integer))"
@@ -1179,6 +1262,11 @@ parsestmt_with_kind_tests = [
     "a^b"    => "(call-i a::Identifier ^::Identifier b::Identifier)"
     "f.'"    => "(dotcall-post f::Identifier (error '::Identifier))"
     "f'"     => "(call-post f::Identifier '::Identifier)"
+    # break/continue labels (contextual keywords allowed)
+    ((v=v"1.14",), "break label") => "(break label::Identifier)"
+    ((v=v"1.14",), "continue label") => "(continue label::Identifier)"
+    ((v=v"1.14",), "break outer") => "(break outer::Identifier)"
+    ((v=v"1.14",), "continue outer") => "(continue outer::Identifier)"
     # Standalone syntactic ops which keep their kind - they can't really be
     # used in a sane way as identifiers or interpolated into expressions
     # because they have their own syntactic forms.
@@ -1191,8 +1279,8 @@ parsestmt_with_kind_tests = [
     "a += b" => "(op= a::Identifier +::Identifier b::Identifier)"
     "a .+= b" => "(.op= a::Identifier +::Identifier b::Identifier)"
     "a >>= b" => "(op= a::Identifier >>::Identifier b::Identifier)"
-    ":+="    => "(quote-: +=::op=)"
-    ":.+="   => "(quote-: (. +=::op=))"
+    ":+="    => "(quote-: (op= +::Identifier))"
+    ":.+="   => "(quote-: (.op= +::Identifier))"
     # str/cmd macro name kinds
     "x\"str\""   => """(macrocall x::StrMacroName (string-r "str"::String))"""
     "x`str`"     => """(macrocall x::CmdMacroName (cmdstring-r "str"::CmdString))"""
@@ -1200,8 +1288,7 @@ parsestmt_with_kind_tests = [
 
 @testset "parser `Kind` remapping" begin
     @testset "$(repr(input))" for (input, output) in parsestmt_with_kind_tests
-        input = ((show_kind=true,), input)
-        test_parse(JuliaSyntax.parse_stmts, input, output)
+        test_parse(JuliaSyntax.parse_stmts, input, output; show_kind=true)
     end
 end
 

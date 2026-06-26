@@ -13,7 +13,7 @@ extern "C" {
 
 extern void mmtk_object_reference_write_post(void* mutator, const void* parent, const void* ptr);
 extern void mmtk_object_reference_write_slow(void* mutator, const void* parent, const void* ptr);
-extern const void* MMTK_SIDE_LOG_BIT_BASE_ADDRESS;
+extern void* MMTK_SIDE_LOG_BIT_BASE_ADDRESS;
 
 #define MMTK_OBJECT_BARRIER (1)
 // Stickyimmix needs write barrier. Immix does not need write barrier.
@@ -63,8 +63,8 @@ STATIC_INLINE void jl_gc_multi_wb(const void *parent, const jl_value_t *ptr) JL_
     mmtk_gc_wb_fast(parent, (void*)0);
 }
 
-STATIC_INLINE void jl_gc_wb_genericmemory_copy_boxed(const jl_value_t *dest_owner, _Atomic(void*) * dest_p,
-                                          jl_genericmemory_t *src, _Atomic(void*) * src_p,
+STATIC_INLINE void jl_gc_wb_genericmemory_copy_boxed(const jl_value_t *dest_owner, _Atomic(void*) ** dest_pp,
+                                          jl_genericmemory_t *src, _Atomic(void*) ** src_pp,
                                           size_t* n) JL_NOTSAFEPOINT
 {
     mmtk_gc_wb_fast(dest_owner, (void*)0);

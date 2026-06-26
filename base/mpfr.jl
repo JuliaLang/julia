@@ -9,7 +9,7 @@ export
 import
     .Base: *, +, -, /, <, <=, ==, >, >=, ^, ceil, cmp, convert, copysign, div,
         inv, exp, exp2, exponent, factorial, floor, fma, muladd, hypot, isinteger,
-        isfinite, isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf,
+        isfinite, isinf, isnan, issubnormal, ldexp, log, log2, log10, max, min, mod, modf,
         nextfloat, prevfloat, promote_rule, rem, rem2pi, round, show, float,
         sum, sqrt, string, print, trunc, precision, _precision, exp10, expm1, log1p,
         eps, signbit, sign, sin, cos, sincos, tan, sec, csc, cot, acos, asin, atan,
@@ -1135,6 +1135,8 @@ function isnan(x::BigFloat)
     return x.exp == mpfr_special_exponent_nan
 end
 
+issubnormal(x::BigFloat) = false
+
 isfinite(x::BigFloat) = !isinf(x) && !isnan(x)
 
 iszero(x::BigFloat) = x.exp == mpfr_special_exponent_zero
@@ -1254,7 +1256,7 @@ function _prettify_bigfloat(s::String)::String
         else
             neg = startswith(int, '-')
             neg == true && (int = lstrip(int, '-'))
-            @assert length(int) == 1
+            @assert length(int) == 1 "length(int) != 1"
             string(neg ? '-' : "", '0', '.', '0'^(-expo-1), int, frac == "0" ? "" : frac)
         end
     else

@@ -14,6 +14,8 @@
         @test parseatom(":(a)") == QuoteNode(:a)
         @test parseatom(":(:a)") == Expr(:quote, QuoteNode(:a))
         @test parseatom(":(1+2)") == Expr(:quote, Expr(:call, :+, 1, 2))
+        @test parseatom(":...") == QuoteNode(Symbol("..."))
+        @test parseatom(":(...)") == QuoteNode(Symbol("..."))
         # Compatibility hack for VERSION >= v"1.4"
         # https://github.com/JuliaLang/julia/pull/34077
         @test parseatom(":true") == Expr(:quote, true)
@@ -274,6 +276,10 @@
             Expr(:(=),
                  Expr(Symbol("'"), :x),
                  1)
+        @test parsestmt("x' = A * x") ==
+            Expr(:(=),
+                 Expr(Symbol("'"), :x),
+                 Expr(:call, :*, :A, :x))
 
         # `.=` doesn't introduce short form functions
         @test parsestmt("f() .= xs") ==
@@ -765,6 +771,12 @@
 
         @test parsestmt("struct A \n \"doc\" \n a end") ==
             Expr(:struct, false, :A, Expr(:block, LineNumberNode(2), "doc", :a))
+    end
+
+    @testset "typegroup" begin
+        @test parsestmt("typegroup\nstruct A\nend\nend", version=v"1.14") ==
+            Expr(:typegroup, Expr(:block, LineNumberNode(2),
+                Expr(:struct, false, :A, Expr(:block, LineNumberNode(2)))))
     end
 
     @testset "export" begin

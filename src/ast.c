@@ -98,7 +98,7 @@ static value_t fl_module_unique_name(fl_context_t *fl_ctx, value_t *args, uint32
     jl_ast_context_t *ctx = jl_ast_ctx(fl_ctx);
     jl_module_t *m = ctx->module;
     assert(m != NULL);
-    // Get the outermost function name from the `parsed_method_stack` top
+    // Get the outermost function name from the bottom of `parsed_method_stack`
     char *funcname = NULL;
     value_t parsed_method_stack = args[0];
     if (parsed_method_stack != fl_ctx->NIL) {
@@ -235,10 +235,12 @@ void jl_init_common_symbols(void)
     jl_invoke_sym = jl_symbol("invoke");
     jl_invoke_modify_sym = jl_symbol("invoke_modify");
     jl_foreigncall_sym = jl_symbol("foreigncall");
+    jl_foreignglobal_sym = jl_symbol("foreignglobal");
     jl_cfunction_sym = jl_symbol("cfunction");
     jl_quote_sym = jl_symbol("quote");
     jl_inert_sym = jl_symbol("inert");
     jl_top_sym = jl_symbol("top");
+    jl_tuple_sym = jl_symbol("tuple");
     jl_core_sym = jl_symbol("core");
     jl_globalref_sym = jl_symbol("globalref");
     jl_line_sym = jl_symbol("line");
@@ -481,6 +483,7 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
             JL_GC_PUSH3(&file, &linenum, &inlinedat);
             value_t lst = e;
             file = scm_to_julia_(fl_ctx, car_(lst), mod);
+            assert(jl_is_symbol(file));
             lst = cdr_(lst);
             linenum = scm_to_julia_(fl_ctx, car_(lst), mod);
             lst = cdr_(lst);
@@ -663,10 +666,10 @@ static value_t julia_to_scm_noalloc(fl_context_t *fl_ctx, jl_value_t *v, int che
         return retval;
     assert(!jl_is_expr(v) &&
            !jl_typetagis(v, jl_linenumbernode_type) &&
-           !jl_typetagis(v, jl_gotonode_type) &&
-           !jl_typetagis(v, jl_quotenode_type) &&
+           !jl_is_gotonode(v) &&
+           !jl_is_quotenode(v) &&
            !jl_typetagis(v, jl_newvarnode_type) &&
-           !jl_typetagis(v, jl_globalref_type));
+           !jl_is_globalref(v));
     return julia_to_scm_noalloc2(fl_ctx, v, check_valid);
 }
 
@@ -717,13 +720,13 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v, int check_vali
         fl_free_gc_handles(fl_ctx, 1);
         return scmv;
     }
-    if (jl_typetagis(v, jl_gotonode_type))
+    if (jl_is_gotonode(v))
         return julia_to_list2_noalloc(fl_ctx, (jl_value_t*)jl_goto_sym, jl_fieldref(v,0), check_valid);
-    if (jl_typetagis(v, jl_quotenode_type))
+    if (jl_is_quotenode(v))
         return julia_to_list2(fl_ctx, (jl_value_t*)jl_inert_sym, jl_fieldref_noalloc(v,0), 0);
     if (jl_typetagis(v, jl_newvarnode_type))
         return julia_to_list2_noalloc(fl_ctx, (jl_value_t*)jl_newvar_sym, jl_fieldref(v,0), check_valid);
-    if (jl_typetagis(v, jl_globalref_type)) {
+    if (jl_is_globalref(v)) {
         jl_module_t *m = jl_globalref_mod(v);
         jl_sym_t *sym = jl_globalref_name(v);
         if (m == jl_core_module)
@@ -1048,18 +1051,20 @@ lno_ok:
         JL_GC_PROMISE_ROOTED(ctx_module);
         margs[0] = jl_toplevel_eval(ctx_module, margs[0]);
         jl_method_instance_t *mfunc = NULL;
-        mfunc = jl_method_lookup(margs, nargs, ct->world_age);
+        mfunc = jl_apply_lookup(margs, nargs, ct->world_age);
         JL_GC_PROMISE_ROOTED(mfunc);
         if (mfunc == NULL && retry_lno != NULL) {
             margs[1] = retry_lno;
-            mfunc = jl_method_lookup(margs, nargs, ct->world_age);
+            mfunc = jl_apply_lookup(margs, nargs, ct->world_age);
             JL_GC_PROMISE_ROOTED(mfunc);
         }
         if (mfunc == NULL) {
             jl_method_error(margs[0], &margs[1], nargs, ct->world_age);
             // unreachable
         }
-        jl_timing_show_macro(mfunc, margs[1], inmodule, JL_TIMING_DEFAULT_BLOCK);
+        // margs[1] may still be a MacroSource; timing wants the inner LineNumberNode
+        jl_timing_show_macro(mfunc, retry_lno != NULL ? retry_lno : margs[1],
+                             inmodule, JL_TIMING_DEFAULT_BLOCK);
         *ctx = mfunc->def.method->module;
         result = jl_invoke(margs[0], &margs[1], nargs - 1, mfunc);
     }
@@ -1277,35 +1282,6 @@ JL_DLLEXPORT jl_value_t *jl_lower(jl_value_t *expr, jl_module_t *inmodule,
     JL_GC_POP();
     return result;
 }
-
-jl_code_info_t *jl_outer_ctor_body(jl_value_t *thistype, size_t nfields, size_t nsparams, jl_module_t *inmodule, const char *file, int line)
-{
-    JL_TIMING(LOWERING, LOWERING);
-    jl_timing_show_location(file, line, inmodule, JL_TIMING_DEFAULT_BLOCK);
-    jl_expr_t *expr = jl_exprn(jl_empty_sym, 3);
-    JL_GC_PUSH1(&expr);
-    jl_exprargset(expr, 0, thistype);
-    jl_exprargset(expr, 1, jl_box_long(nfields));
-    jl_exprargset(expr, 2, jl_box_long(nsparams));
-    jl_code_info_t *ci = (jl_code_info_t*)jl_call_scm_on_ast_and_loc("jl-default-outer-ctor-body", (jl_value_t*)expr, inmodule, file, line);
-    JL_GC_POP();
-    assert(jl_is_code_info(ci));
-    return ci;
-}
-
-jl_code_info_t *jl_inner_ctor_body(jl_array_t *fieldkinds, jl_module_t *inmodule, const char *file, int line)
-{
-    JL_TIMING(LOWERING, LOWERING);
-    jl_timing_show_location(file, line, inmodule, JL_TIMING_DEFAULT_BLOCK);
-    jl_expr_t *expr = jl_exprn(jl_empty_sym, 0);
-    JL_GC_PUSH1(&expr);
-    expr->args = fieldkinds;
-    jl_code_info_t *ci = (jl_code_info_t*)jl_call_scm_on_ast_and_loc("jl-default-inner-ctor-body", (jl_value_t*)expr, inmodule, file, line);
-    JL_GC_POP();
-    assert(jl_is_code_info(ci));
-    return ci;
-}
-
 
 //------------------------------------------------------------------------------
 // Parsing API and utils for calling parser from runtime

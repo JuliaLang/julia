@@ -317,8 +317,8 @@ of `&&` and `||` operators.
 
 This behavior is frequently used in Julia to form an alternative to very short `if` statements.
 Instead of `if <cond> <statement> end`, one can write `<cond> && <statement>` (which could be
-read as: <cond> *and then* <statement>). Similarly, instead of `if ! <cond> <statement> end`,
-one can write `<cond> || <statement>` (which could be read as: <cond> *or else* <statement>).
+read as: `<cond>` *and then* `<statement>`). Similarly, instead of `if ! <cond> <statement> end`,
+one can write `<cond> || <statement>` (which could be read as: `<cond>` *or else* `<statement>`).
 
 For example, a recursive factorial routine could be defined like this:
 
@@ -397,7 +397,7 @@ julia> while i <= 3
 3
 ```
 
-The `while` loop evaluates the condition expression (`i <= 3` in this case), and as long it remains
+The `while` loop evaluates the condition expression (`i <= 3` in this case), and as long as it remains
 `true`, keeps also evaluating the body of the `while` loop. If the condition expression is `false`
 when the `while` loop is first reached, the body is never evaluated.
 

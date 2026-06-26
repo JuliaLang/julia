@@ -126,7 +126,7 @@ end # os-test
 # core implementation of mmap
 
 """
-    mmap(io::Union{IOStream,AbstractString,Mmap.AnonymousMmap}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
+    mmap(io::Union{IOStream,AbstractString,Mmap.Anonymous}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
     mmap(type::Type{Array{T,N}}, dims)
 
 Create an `Array` whose values are linked to a file, using memory-mapping. This provides a
@@ -193,9 +193,10 @@ function mmap(io::IO,
     isbitstype(T)  || throw(ArgumentError("unable to mmap $T; must satisfy isbitstype(T) == true"))
 
     len = Base.aligned_sizeof(T)
+    orig_len = len
     for l in dims
         len, overflow = Base.Checked.mul_with_overflow(promote(len, l)...)
-        overflow && throw(ArgumentError("requested size prod($((len, dims...))) too large, would overflow typeof(size(T)) == $(typeof(len))"))
+        overflow && throw(ArgumentError("requested size prod($dims) * $orig_len too large, would overflow typeof(size(T)) == $(typeof(len))"))
     end
     len >= 0 || throw(ArgumentError("requested size must be ≥ 0, got $len"))
     len == 0 && return Array{T}(undef, dims)
@@ -217,7 +218,7 @@ function mmap(io::IO,
     # platform-specific mmapping
     @static if Sys.isunix()
         prot, flags, iswrite = settings(file_desc, shared)
-        if requestedSizeLarger && isfile(io) # add a condition to this line to ensure it only checks files
+        if requestedSizeLarger && isfile(io)
             if iswrite
                 if grow
                     grow!(io, offset, len)
@@ -256,8 +257,8 @@ function mmap(io::IO,
         @static if Sys.isunix()
             systemerror("munmap",  ccall(:munmap, Cint, (Ptr{Cvoid}, Int), ptr, mmaplen) != 0)
         else
-            status = ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Cvoid},), ptr)!=0
-            status |= ccall(:CloseHandle, stdcall, Cint, (Ptr{Cvoid},), handle)!=0
+            status = ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Cvoid},), ptr) != 0
+            status &= ccall(:CloseHandle, stdcall, Cint, (Ptr{Cvoid},), handle) != 0
             Base.windowserror(:UnmapViewOfFile, status == 0)
         end
     end
@@ -318,7 +319,7 @@ julia> rm("mmap.bin")
 This creates a 25-by-30000 `BitArray`, linked to the file associated with stream `io`.
 """
 function mmap(io::IOStream, ::Type{<:BitArray}, dims::NTuple{N,Integer},
-              offset::Int64=position(io); grow::Bool=true, shared::Bool=true) where N
+              offset::Integer=position(io); grow::Bool=true, shared::Bool=true) where N
     n = prod(dims)
     nc = Base.num_bit_chunks(n)
     chunks = mmap(io, Vector{UInt64}, (nc,), offset; grow=grow, shared=shared)
@@ -346,10 +347,6 @@ mmap(io::IO, ::Type{T}, len::Integer, offset::Integer=position(io); grow::Bool=t
     mmap(io, T, (len,), offset; grow=grow, shared=shared)
 mmap(file::AbstractString, ::Type{T}, len::Integer, offset::Integer=Int64(0); grow::Bool=true, shared::Bool=true) where {T<:BitArray} =
     open(io->mmap(io, T, (len,), offset; grow=grow, shared=shared), file, isfile(file) ? "r" : "w+")::BitVector
-
-# constructors for non-file-backed (anonymous) mmaps
-mmap(::Type{T}, dims::NTuple{N,Integer}; shared::Bool=true) where {T<:BitArray,N} = mmap(Anonymous(), T, dims, Int64(0); shared=shared)
-mmap(::Type{T}, i::Integer...; shared::Bool=true) where {T<:BitArray} = mmap(Anonymous(), T, convert(Tuple{Vararg{Int}},i), Int64(0); shared=shared)
 
 # msync flags for unix
 const MS_ASYNC = 1

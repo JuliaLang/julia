@@ -42,8 +42,9 @@ end
 
 write(io::AnnotatedIOBuffer, c::AnnotatedChar) =
     write(io, AnnotatedString(string(c), [(region=1:ncodeunits(c), a...) for a in c.annotations]))
-write(io::AnnotatedIOBuffer, x::AbstractString) = write(io.io, x)
+write(io::AnnotatedIOBuffer, x::AbstractString) = write(io.io, x)::Int
 write(io::AnnotatedIOBuffer, s::Union{SubString{String}, String}) = write(io.io, s)
+write(io::AnnotatedIOBuffer, s::StringViewAndSub) = write(io.io, s)::Int
 write(io::AnnotatedIOBuffer, b::UInt8) = write(io.io, b)
 
 function write(dest::AnnotatedIOBuffer, src::AnnotatedIOBuffer)
@@ -152,7 +153,7 @@ end
 
 Register new `annotations` in `io`, applying an `offset` to their regions.
 
-The largely consists of simply shifting the regions of `annotations` by `offset`
+This largely consists of simply shifting the regions of `annotations` by `offset`
 and pushing them onto `io`'s annotations. However, when it is possible to merge
 the new annotations with recent annotations in accordance with the semantics
 outlined in [`AnnotatedString`](@ref), we do so. More specifically, when there
@@ -165,7 +166,7 @@ This is implemented so that one can say write an `AnnotatedString` to an
 new annotation for each character.
 """
 function _insert_annotations!(annots::Vector{RegionAnnotation}, newannots::Vector{RegionAnnotation}, offset::Int = 0)
-    run = @label _ begin
+    run = @label search begin
         if !isempty(annots) && last(last(annots).region) == offset
             for i in reverse(axes(newannots, 1))
                 annot = newannots[i]
@@ -181,10 +182,10 @@ function _insert_annotations!(annots::Vector{RegionAnnotation}, newannots::Vecto
                     old.label != new.label ||
                     old.value != new.value)
                 end || continue
-                break _ i
+                break search i
             end
         end
-        break _ 0
+        0
     end
     for runindex in 0:run-1
         old_index = lastindex(annots) - run + 1 + runindex
@@ -301,7 +302,7 @@ function replace(out::AnnotatedIOBuffer, str::AnnotatedString, pat_f::Pair...; c
             by = r -> first(r.region))
         priorrep, postrep = replacements[prioridx], replacements[postidx]
         if prioridx == postidx && start >= first(priorrep.region) && stop <= last(priorrep.region)
-            # Region contained with a replacement
+            # Region contained within a replacement
             continue
         elseif postidx - prioridx <= 1 && start > last(priorrep.region) && stop < first(postrep.region)
             # Lies between replacements

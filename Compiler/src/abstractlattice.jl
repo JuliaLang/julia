@@ -80,8 +80,8 @@ const AnyConditionalsLattice{𝕃<:AbstractLattice} = Union{ConditionalsLattice{
 const AnyMustAliasesLattice{𝕃<:AbstractLattice} = Union{MustAliasesLattice{𝕃}, InterMustAliasesLattice{𝕃}}
 
 const SimpleInferenceLattice = typeof(PartialsLattice(ConstsLattice()))
-const BaseInferenceLattice = typeof(ConditionalsLattice(SimpleInferenceLattice.instance))
-const IPOResultLattice = typeof(InterConditionalsLattice(SimpleInferenceLattice.instance))
+const BaseInferenceLattice = typeof(MustAliasesLattice(ConditionalsLattice(SimpleInferenceLattice.instance)))
+const IPOResultLattice = typeof(InterMustAliasesLattice(InterConditionalsLattice(SimpleInferenceLattice.instance)))
 
 """
     struct InferenceLattice{𝕃<:AbstractLattice} <: AbstractLattice
@@ -96,7 +96,7 @@ widenlattice(𝕃::InferenceLattice) = 𝕃.parent
 is_valid_lattice_norec(::InferenceLattice, @nospecialize(elem)) = isa(elem, LimitedAccuracy)
 
 """
-    tmeet(𝕃::AbstractLattice, a, b::Type)
+    tmeet(𝕃::AbstractLattice, a, b::AnyType)
 
 Compute the lattice meet of lattice elements `a` and `b` over the lattice `𝕃`,
 dropping any results that will not be inhabited at runtime.
@@ -107,7 +107,7 @@ Note that currently `b` is restricted to being a type
 """
 function tmeet end
 
-function tmeet(::JLTypeLattice, @nospecialize(a::Type), @nospecialize(b::Type))
+function tmeet(::JLTypeLattice, @nospecialize(a::AnyType), @nospecialize(b::AnyType))
     ti = typeintersect(a, b)
     valid_as_lattice(ti, true) || return Bottom
     return ti
@@ -150,7 +150,7 @@ If `𝕃` is `JLTypeLattice`, this is equivalent to subtyping.
 """
 function ⊑ end
 
-@nospecializeinfer ⊑(::JLTypeLattice, @nospecialize(a::Type), @nospecialize(b::Type)) = a <: b
+@nospecializeinfer ⊑(::JLTypeLattice, @nospecialize(a::AnyType), @nospecialize(b::AnyType)) = a <: b
 
 """
     ⊏(𝕃::AbstractLattice, a, b)::Bool
@@ -252,6 +252,10 @@ end
     isa(x, Const) && return true
     return is_forwardable_argtype(widenlattice(𝕃), x)
 end
+@nospecializeinfer function is_forwardable_argtype(𝕃::MustAliasesLattice, @nospecialize x)
+    isa(x, MustAlias) && return true
+    return is_forwardable_argtype(widenlattice(𝕃), x)
+end
 @nospecializeinfer is_forwardable_argtype(::JLTypeLattice, @nospecialize x) = false
 
 """
@@ -260,7 +264,7 @@ end
 
 Appropriately converts inferred type of a return value `rt` to such a type
 that we know we can store in the cache and is valid and good inter-procedurally,
-E.g. if `rt isa Conditional` then `rt` should be converted to `InterConditional`
+e.g. if `rt isa Conditional` then `rt` should be converted to `InterConditional`
 or the other cacheable lattice element.
 
 External lattice `𝕃ᵢ::ExternalLattice` may overload:

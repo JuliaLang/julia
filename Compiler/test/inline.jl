@@ -151,8 +151,14 @@ end
     end
 
     (src, _) = only(code_typed(sum27403, Tuple{Vector{Int}}))
+    is_bounds_throw_invoke_target(@nospecialize(callee)) =
+        callee === Base.throw_boundserror ||
+        callee == Core.GlobalRef(Base, :throw_boundserror) ||
+        callee == Core.GlobalRef(Base, :_throw_boundserror_indices) ||
+        (callee isa Core.MethodInstance && (callee.def.def.name === :throw_boundserror ||
+                                            callee.def.def.name === :_throw_boundserror_indices))
     @test !any(src.code) do x
-        x isa Expr && x.head === :invoke && !(x.args[2] in (Core.GlobalRef(Base, :throw_boundserror), Base.throw_boundserror))
+        x isa Expr && x.head === :invoke && !is_bounds_throw_invoke_target(x.args[2])
     end
 end
 
@@ -265,7 +271,7 @@ function foo_apply_apply_type_svec()
 end
 @test fully_eliminated(foo_apply_apply_type_svec, Tuple{}; retval=NTuple{3, Float32})
 
-# The that inlining doesn't drop ambiguity errors (#30118)
+# Test that inlining doesn't drop ambiguity errors (#30118)
 c30118(::Tuple{Ref{<:Type}, Vararg}) = nothing
 c30118(::Tuple{Ref, Ref}) = nothing
 b30118(x...) = c30118(x)
@@ -765,7 +771,7 @@ end
 # Issue #42264 - crash on certain union splits
 let f(x) = (x...,)
     # Test splatting with a Union of non-{Tuple, SimpleVector} types that require creating new `iterate` calls
-    # in inlining. For this particular case, we're relying on `iterate(::CaretesianIndex)` throwing an error, such
+    # in inlining. For this particular case, we're relying on `iterate(::CartesianIndex)` throwing an error, such
     # that the original apply call is not union-split, but the inserted `iterate` call is.
     @test code_typed(f, Tuple{Union{Int64, CartesianIndex{1}, CartesianIndex{3}}})[1][2] == Tuple{Int64}
 end
@@ -821,7 +827,7 @@ end
 # test single, non-dispatchtuple callsite inlining
 
 @constprop :none @inline test_single_nondispatchtuple(@nospecialize(t)) =
-    isa(t, DataType) && t.name === Type.body.name
+    isa(t, DataType) && t.name === Core.TypeEq.name
 let
     src = code_typed1((Any,)) do x
         test_single_nondispatchtuple(x)
@@ -832,7 +838,7 @@ let
 end
 
 @constprop :aggressive @inline test_single_nondispatchtuple(c, @nospecialize(t)) =
-    c && isa(t, DataType) && t.name === Type.body.name
+    c && isa(t, DataType) && t.name === Core.TypeEq.name
 let
     src = code_typed1((Any,)) do x
         test_single_nondispatchtuple(true, x)
@@ -2309,13 +2315,13 @@ end
 path = Ref{Symbol}(:unknown)
 function f59018_generator(x)
     if @generated
-        if x isa DataType && x.name === Type.body.name
+        if x isa Core.TypeEq
             path[] = :generator
-            return Core.sizeof(x.parameters[1])
+            return Core.sizeof(x.T)
         end
     else
         path[] = :fallback
-        return Core.sizeof(x.parameters[1])
+        return Core.sizeof(x isa Core.TypeEq ? Base.type_parameter(x) : x.parameters[1])
     end
 end
 f59018() = f59018_generator(Base.inferencebarrier(Int64))
@@ -2360,6 +2366,16 @@ let src = code_typed1(issue44428, (Any,))
     @test count(isinvoke(:_issue44428_2), src.code) == 1
     @test count(isinvoke(:_issue44428_3), src.code) == 1
     @test count(x->Meta.isexpr(x,:call), src.code) == 0
+end
+
+# issue #61552
+let mi = Compiler.specialize_method(only(methods(ndims, (Matrix{Float64},))),
+        Tuple{typeof(ndims), Matrix{Float64}}, Core.svec())
+    codeinst = getcacheci(mi)::Core.CodeInstance
+    @test Compiler.use_const_api(codeinst)
+    @test codeinst.inferred === nothing
+    interp = Compiler.NativeInterpreter()
+    @test Compiler.ci_get_source(interp, codeinst) isa Core.CodeInfo
 end
 
 end # module inline_tests

@@ -5,7 +5,7 @@ include("irutils.jl")
 
 using Test
 
-using .Compiler: CFG, BasicBlock, NewSSAValue
+using .Compiler: BasicBlock, CFG, NewSSAValue
 
 make_bb(preds, succs) = BasicBlock(Compiler.StmtRange(0, 0), preds, succs)
 
@@ -170,11 +170,10 @@ let code = Any[
     @test Compiler.verify_ir(ir) === nothing
 end
 
-# Test that the verifier doesn't choke on cglobals (which aren't linearized)
+# Test that the verifier accepts a syntactic-tuple first argument to :foreignglobal (cglobal)
 let code = Any[
-        Expr(:call, GlobalRef(Main, :cglobal),
-                    Expr(:call, Core.tuple, :(:c)), Nothing),
-                    Compiler.ReturnNode()
+        Expr(:foreignglobal, Expr(:tuple, QuoteNode(:c))),
+        Compiler.ReturnNode()
     ]
     ir = make_ircode(code)
     @test Compiler.verify_ir(ir) === nothing
@@ -183,6 +182,16 @@ end
 # Test that GlobalRef in value position is non-canonical
 let code = Any[
         Expr(:call, GlobalRef(Main, :something_not_defined_please))
+        ReturnNode(SSAValue(1))
+    ]
+    ir = make_ircode(code; verify=false)
+    ir = Compiler.compact!(ir, true)
+    @test_throws ["IR verification failed.", "Code location: "] Compiler.verify_ir(ir, false)
+end
+
+# Test that static_parameter in value position is non-canonical
+let code = Any[
+        Expr(:call, identity, Expr(:static_parameter, 1))
         ReturnNode(SSAValue(1))
     ]
     ir = make_ircode(code; verify=false)
@@ -314,17 +323,6 @@ let code = Any[
     oc = Core.OpaqueClosure(ir)
     @test oc(false, 1, 1) == 2
     @test_throws "potential throw" oc(true, 1, 1)
-
-    let buf = IOBuffer()
-        oc = Core.OpaqueClosure(ir; slotnames=Symbol[:ocfunc, :x, :y, :z])
-        try
-            oc(true, 1, 1)
-        catch
-            Base.show_backtrace(buf, catch_backtrace())
-        end
-        s = String(take!(buf))
-        @test occursin("(x::Bool, y::$Int, z::$Int)", s)
-    end
 end
 
 # Test dynamic update of domtree with edge insertions and deletions in the
@@ -372,7 +370,7 @@ let cfg = CFG(BasicBlock[
     Compiler.cfg_delete_edge!(cfg, 6, 5)
     Compiler.domtree_delete_edge!(domtree, cfg.blocks, 6, 5)
     @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 2, 4]
-    # Add edge back (testing second case for insertion)
+    # Add edge back (testing last case for insertion)
     Compiler.cfg_insert_edge!(cfg, 6, 5)
     Compiler.domtree_insert_edge!(domtree, cfg.blocks, 6, 5)
     @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 1, 4]
@@ -831,11 +829,38 @@ end
 global global_error_switch = false
 @test f_must_throw_phinode_edge() == 1
 
+# Test that IRShow debuginfo printing works with IRCode owned by the active Compiler module.
+function irshow_debuginfo_smoke(x)
+    y = x + 1
+    return y
+end
+let ir = first(only(Base.code_ircode(irshow_debuginfo_smoke, (Int,))))
+    output = sprint(Compiler.IRShow.show_ir, ir,
+                    Compiler.IRShow.default_config(ir; debuginfo=:source_inline))
+    @test occursin("return", output)
+end
+
+function roundtrip_di(codelocs, firstline, nstmts)
+    str = ccall(:jl_compress_codelocs,
+                Any, (Int32, Any, Int), firstline, codelocs, nstmts)::String;
+    di = Core.DebugInfo(:foo, nothing, Core.svec(), str)
+    return ccall(:jl_uncompress_codelocs, Any, (Any, Int), di, nstmts)
+end
+
 # Test roundtrip of debuginfo compression
-let cl = Int32[32, 1, 1, 1000, 240, 230]
-    str = ccall(:jl_compress_codelocs, Any, (Int32, Any, Int), 378, cl, 2)::String;
-    cl2 = ccall(:jl_uncompress_codelocs, Any, (Any, Int), str, 2)
-    @test cl == cl2
+let cl = Int32[32, 1, 1, 1000, 240, 230, 0, 0, 0]
+    @test roundtrip_di(cl, -1, 3) == cl
+    @test roundtrip_di(cl, 0, 3) == cl
+    @test roundtrip_di(cl, 1, 3) == cl
+    @test roundtrip_di(cl, 32, 3) == cl
+    @test roundtrip_di(cl, 33, 3) == cl
+end
+let cl = Int32[0,0,0,255,0,0,256,0,0,257,0,0]
+    @test roundtrip_di(cl, -1, 4) == cl
+    @test roundtrip_di(cl, 0, 4) == cl
+    @test roundtrip_di(cl, 1, 4) == cl
+    @test roundtrip_di(cl, 32, 4) == cl
+    @test roundtrip_di(cl, 33, 4) == cl
 end
 
 @test_throws ErrorException Base.code_ircode(+, (Float64, Float64); optimize_until = "nonexisting pass name")

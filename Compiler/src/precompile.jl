@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# This file replaces the functionality from src/precompile_utils.c
-
 compile_hint(@nospecialize(argt::Type)) = ccall(:jl_compile_hint, Int32, (Any,), argt) != 0
 
 # Utility functions for type manipulation
@@ -273,10 +271,14 @@ function infer_all_method_defs!(all::Bool, allmeths, world::UInt, worklist)
     end
 end
 
-# This corresponds to precompile_enq_all_specializations_
 function enqueue_specializations!(all::Bool, newmethods, worklist)
     for method in newmethods
         method = method::Method
+
+        # skip all macros
+        if !all && !iszero(ccall(:jl_method_is_macro, Cint, (Any,), method))
+            continue
+        end
 
         # Check for special methods that should always be compiled
         if (method.name === :__init__ || isdefined(method, :ccallable)) && isdispatchtuple(method.sig)
@@ -290,10 +292,10 @@ function enqueue_specializations!(all::Bool, newmethods, worklist)
                 for i = 1:length(specializations)
                     mi = specializations[i]
                     if mi !== nothing
-                        enqueue_specialization!(all, worklist, mi::Core.MethodInstance)
+                        enqueue_specialization!(all, worklist, mi::MethodInstance)
                     end
                 end
-            elseif isa(specializations, Core.MethodInstance)
+            elseif isa(specializations, MethodInstance)
                 enqueue_specialization!(all, worklist, specializations)
             end
         end
@@ -305,17 +307,19 @@ function enqueue_specializations!(all::Bool, newmethods, worklist)
     end
 end
 
-function enqueue_specialization!(all::Bool, worklist, mi::Core.MethodInstance)
-    # Translation of precompile_enq_specialization_ from C
+function enqueue_specialization!(all::Bool, worklist, mi::MethodInstance)
+    if mi.precompile
+        push!(worklist, mi)
+        return true
+    end
     codeinst = isdefined(mi, :cache) ? mi.cache : nothing
     while codeinst !== nothing
         do_compile = false
         if codeinst.owner !== nothing
-            # TODO(vchuravy) native code caching for foreign interpreters
-            # Skip foreign code instances
+            # This code instance is from a foreign interpreter, so we skip it
         elseif use_const_api(codeinst) # Check if invoke is jl_fptr_const_return
             do_compile = true
-        elseif codeinst.invoke != C_NULL || codeinst.precompile
+        elseif codeinst.invoke != C_NULL
             do_compile = true
         elseif !do_compile && isdefined(codeinst, :inferred)
             inferred = codeinst.inferred
@@ -344,7 +348,8 @@ function compile_and_emit_native(worlds::Vector{UInt},
                                  newmodules, # Vector{Module} or Nothing
                                  mod_array, # Vector{Module} or Nothing
                                  all::Bool,
-                                 module_init_order::Vector{Any}) # Vector{Module}
+                                 module_init_order::Vector{Any}, # Vector{Module}
+                                 ext_foreign_cis::Vector{Any}) # Vector{CodeInstance}
     latestworld = worlds[end]
 
     # Step 1: Precompile all __init__ methods that will be required
@@ -371,11 +376,21 @@ function compile_and_emit_native(worlds::Vector{UInt},
             infer_all_method_defs!(all, newmethods, latestworld, specialization_worklist)
         else
             # Compute new_ext_cis using queue_external_cis with global newly_inferred
-            new_ext_cis = ccall(:jl_compute_new_ext_cis, Any, ())
-            if new_ext_cis !== nothing
-                for i in 1:length(new_ext_cis::Vector{Any})
-                    ci = new_ext_cis[i]::CodeInstance
-                    enqueue_specialization!(all, specialization_worklist, get_ci_mi(ci))
+            new_ext = ccall(:jl_compute_new_ext, Any, ())
+            if new_ext !== nothing
+                for i in 1:length(new_ext::Vector{Any})
+                    ci = new_ext[i]
+                    if ci isa MethodInstance
+                        push!(specialization_worklist, ci)
+                    elseif ci isa CodeInstance
+                        if ci.owner !== nothing
+                            # enqueue_specialization will skip over CIs from foreign interpreters
+                            # and currently will visit at most one (do_compile) CI per method instance
+                            push!(ext_foreign_cis, ci)
+                        else
+                            enqueue_specialization!(all, specialization_worklist, get_ci_mi(ci))
+                        end
+                    end
                 end
             end
         end
@@ -426,20 +441,19 @@ function compile_and_emit_native(worlds::Vector{UInt},
 end
 
 # Helper function to process method instances for compilation
-# This corresponds to the logic in jl_precompile_
-function process_method_instance_for_compilation(mi::Core.MethodInstance, world::UInt)
+function process_method_instance_for_compilation(mi::MethodInstance, world::UInt)
     method = mi.def::Method
     if !(isdefined(method, :unspecialized) && mi === method.unspecialized)
         if !isa_compileable_sig(mi.specTypes, mi.sparam_vals, method)
             # Try to get a compileable specialization
-            mi = ccall(:jl_get_specialization1, Any, (Any, Csize_t, Cint),
-                         mi.specTypes, world, #= mt_cache =# 0)::Union{Nothing,MethodInstance}
+            mi = ccall(:jl_get_specialization1, Any, (Any, Csize_t),
+                         mi.specTypes, world)::Union{Nothing,MethodInstance}
         end
     end
     return mi
 end
 
-const _entrypoint_mis = Vector{Core.MethodInstance}()
+const _entrypoint_mis = Vector{MethodInstance}()
 
 # Add a method signature as an entrypoint for compilation.
 function add_entrypoint(types::Type)
@@ -451,11 +465,10 @@ function add_entrypoint(types::Type)
     if mi === nothing
         return false
     end
-    push!(_entrypoint_mis, mi::Core.MethodInstance)
+    push!(_entrypoint_mis, mi::MethodInstance)
     return true
 end
 
-# This corresponds to jl_add_ccallable_entrypoints
 function add_ccallable_entrypoints!()
     # Collect all methods with ccallable annotations
     ccallable_methods = Any[]

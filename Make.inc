@@ -568,6 +568,11 @@ JCFLAGS_COMMON     = -std=gnu11 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSE
 JCFLAGS_CLANG      = $(JCFLAGS_COMMON)
 JCFLAGS_GCC        = $(JCFLAGS_COMMON) -fno-gnu-unique
 
+# Xcode 26 (clang 21) folds the new -Wc++-keyword diagnostic into -Wc++-compat, erroring
+# under -Werror on uses of C++ keywords like `wchar_t` as ordinary identifiers in C code.
+# Suppress it; -Wno-unknown-warning-option keeps older clang from rejecting the flag.
+JCFLAGS_CLANG     += -Wno-unknown-warning-option -Wno-c++-keyword
+
 
 # These flags are needed to generate decent debug info
 JCPPFLAGS_COMMON   = -fasynchronous-unwind-tables
@@ -725,7 +730,7 @@ endif
 
 ifeq ($(OS),WINNT)
 define IMPLIB_FLAGS
-  -Wl,--out-implib,$(build_libdir)/$(notdir $1).a
+  --out-implib $(build_libdir)/$(notdir $1).a
 endef
 else
 define IMPLIB_FLAGS
@@ -898,7 +903,11 @@ MMTK_BUILD ?= release
 
 # Location of mmtk-julia binding
 # (needed for api/*.h and .so file)
-MMTK_JULIA_DIR ?= $(BUILDROOT)/usr/lib/mmtk_julia
+ifdef MMTK_JULIA_DIR
+MMTK_JULIA_DIR := $(abspath $(MMTK_JULIA_DIR))
+else
+MMTK_JULIA_DIR := $(BUILDROOT)/usr/lib/mmtk_julia
+endif
 MMTK_DIR = ${MMTK_JULIA_DIR}/mmtk
 MMTK_API_INC = ${MMTK_DIR}/api
 MMTK_LIB := -lmmtk_julia
@@ -922,8 +931,8 @@ LIBITTAPI:=-littnotify
 endif
 
 ifeq ($(WITH_TRACY), 1)
-JCXXFLAGS += -DUSE_TRACY -DTRACY_ENABLE -DTRACY_FIBERS
-JCFLAGS += -DUSE_TRACY -DTRACY_ENABLE -DTRACY_FIBERS
+JCXXFLAGS += -DUSE_TRACY -DTRACY_ENABLE -DTRACY_FIBERS -I$(build_includedir)/tracy
+JCFLAGS += -DUSE_TRACY -DTRACY_ENABLE -DTRACY_FIBERS -I$(build_includedir)/tracy
 LIBTRACYCLIENT:=-lTracyClient
 endif
 ifeq ($(WITH_TRACY_CALLSTACKS), 1)
@@ -960,12 +969,17 @@ endif
 # Linker garbage collection
 ifeq ($(USE_LINKER_GC), 1)
 ifeq ($(OS), Darwin)
-  JLDFLAGS += -Wl,-dead_strip
+  LINKER_GC_LDFLAGS := -Wl,-dead_strip
 else
-  JLDFLAGS += -Wl,--gc-sections
-  JCFLAGS += -ffunction-sections -fdata-sections
-  JCXXFLAGS += -ffunction-sections -fdata-sections
+  LINKER_GC_LDFLAGS := -Wl,--gc-sections
+  LINKER_GC_CFLAGS := -ffunction-sections -fdata-sections
+  LINKER_GC_CXXFLAGS := -ffunction-sections -fdata-sections
 endif
+
+JLDFLAGS += $(LINKER_GC_LDFLAGS)
+JCFLAGS += $(LINKER_GC_CFLAGS)
+JCXXFLAGS += $(LINKER_GC_CXXFLAGS)
+
 endif
 
 # ===========================================================================
@@ -984,6 +998,13 @@ BUILD_MACHINE := $(shell $(HOSTCC) -dumpmachine)
 # Clang spells mingw `-windows-gnu`, but autotools, etc
 # don't recognize that, so canonicalize to mingw32
 BUILD_MACHINE := $(subst windows-gnu,mingw32,$(BUILD_MACHINE))
+
+# Detect a request for ucrt libc
+ifeq (,$(findstring MINGW,$(RAW_BUILD_OS)))
+ifeq (UCRT64,$(MSYSTEM))
+BUILD_MACHINE := $(subst mingw32,ucrt-mingw32,$(BUILD_MACHINE))
+endif
+endif
 
 ifeq ($(ARCH),)
 override ARCH := $(shell $(CC) -dumpmachine | sed "s/\([^-]*\).*$$/\1/")
@@ -1407,6 +1428,8 @@ else
   UTF8PROC_INC := $(build_includedir)
 endif
 
+LIBTARGET_PARSING := $(build_libdir)/libtarget_parsing.a
+
 # We need python for things like BB triplet recognition.  We don't really care
 # about version, generally, so just find something that works:
 PYTHON := $(shell which python 2>/dev/null || which python3 2>/dev/null || which python2 2>/dev/null || echo not found)
@@ -1467,7 +1490,7 @@ LIBGFORTRAN_VERSION := $(subst libgfortran,,$(filter libgfortran%,$(subst -,$(SP
 # shipped with CSL. Although we do not depend on any of the symbols, it is entirely
 # possible that a user might choose to install a library which depends on symbols provided
 # by a newer libstdc++. Without runtime detection, those libraries would break.
-CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.34|GLIBCXX_3\.5\.|GLIBCXX_4\.
+CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.35|GLIBCXX_3\.5\.|GLIBCXX_4\.
 
 
 # This is the set of projects that BinaryBuilder dependencies are hooked up for.
@@ -1495,6 +1518,22 @@ endif
 endef
 $(foreach proj,$(BB_PROJECTS),$(eval $(call SET_BB_DEFAULT,$(proj))))
 
+# Set the CSL default here too because it affects top-level source flags in
+# addition to dependency installation rules in deps/csl.mk.
+ifeq ($(USE_BINARYBUILDER),0)
+USE_BINARYBUILDER_CSL ?= 0
+else
+ifeq ($(USE_SYSTEM_CSL),1)
+USE_BINARYBUILDER_CSL ?= 0
+else
+LIBSTDCXX_PATH := $(call pathsearch,$(call versioned_libname,libstdc++,6),$(STD_LIB_PATH))
+ifneq (,$(and $(LIBSTDCXX_PATH),$(shell objdump -p '$(LIBSTDCXX_PATH)' | grep '$(CSL_NEXT_GLIBCXX_VERSION)')))
+USE_BINARYBUILDER_CSL ?= 0
+else
+USE_BINARYBUILDER_CSL ?= 1
+endif
+endif
+endif
 
 # Warn if the user tries to build something that requires `gfortran` but they don't have it installed.
 ifeq ($(FC_VERSION),)
@@ -1545,6 +1584,8 @@ RPATH_LIB := $(RPATH_ORIGIN)
 # --whole-archive
 ifeq ($(OS), Darwin)
   whole_archive = -Xlinker -force_load $(1)
+else ifeq ($(OS), WINNT)
+  whole_archive = --whole-archive $(1) --no-whole-archive
 else
   whole_archive = -Wl,--whole-archive $(1) -Wl,--no-whole-archive
 endif
@@ -1618,13 +1659,36 @@ endif
 
 ifeq ($(OS), WINNT)
 HAVE_SSP := 1
-OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(BUILDROOT)/src/julia.expmap \
-	-Wl,--no-whole-archive -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 -latomic -lole32
+ifeq ($(BINARY),64)
+WIN_LD_EMULATION := i386pep
+WIN_LD_DLL_ENTRY := DllMainCRTStartup
+WIN_LD_EXE_ENTRY := mainCRTStartup
+else
+WIN_LD_EMULATION := i386pe
+WIN_LD_DLL_ENTRY := _DllMainCRTStartup
+WIN_LD_EXE_ENTRY := _mainCRTStartup
+endif
+WIN_LD_SHARED_FLAGS := -m $(WIN_LD_EMULATION) -shared -Bdynamic -e $(WIN_LD_DLL_ENTRY) --enable-auto-image-base --allow-multiple-definition
+WIN_LD_EXE_FLAGS := -m $(WIN_LD_EMULATION) -Bdynamic --subsystem console -e $(WIN_LD_EXE_ENTRY)
+WIN_CRT_LIB := -lmsvcrt-os
+# libmsvcrt-os.a contains MinGW CRT objects that can refer back to
+# libmingw32.a/libmingwex.a; keep the selected CRT last.
+WIN_MINGW_CRT_LIBS := -lmingwex $(WIN_CRT_LIB) -lmingw32 -lmingwex $(WIN_CRT_LIB)
+WIN_LD_DLL_CRT_START := $(build_private_libdir)/dllcrt2.o $(build_private_libdir)/crtbegin.o
+WIN_LD_EXE_CRT_START := $(build_private_libdir)/crt2.o $(build_private_libdir)/crtbegin.o
+WIN_LD_CRT_END_OBJ := $(build_private_libdir)/crtend.o
+WIN_LD_CRT_END := $(WIN_MINGW_CRT_LIBS) $(WIN_LD_CRT_END_OBJ)
+WIN_LD_STDCXX := $(build_shlibdir)/$(call versioned_libname,libstdc++,6)
+WIN_LD_ATOMIC := $(build_shlibdir)/$(call versioned_libname,libatomic,1)
+WIN_SYSTEM_LIBS := -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 $(WIN_LD_ATOMIC) -lole32
+WIN_MINGW_LIBS := -lmingw32 -lgcc_s -lgcc -lmoldname $(WIN_MINGW_CRT_LIBS) -lkernel32 -lpthread -ladvapi32 -lshell32 -luser32
+OSLIBS += --export-all-symbols --version-script=$(BUILDROOT)/src/julia.expmap \
+	--no-whole-archive $(WIN_SYSTEM_LIBS) $(WIN_MINGW_LIBS)
 # N.B.: Unlike in the sysimage, we cannot -Wl,--disable-auto-import -Wl,--disable-runtime-pseudo-reloc here, because libstdc++/LLVM are not fully correct under
 # enforced visibility at this point.
-JLDFLAGS += -Wl,--stack,8388608
+JLDFLAGS += --stack 8388608
 ifeq ($(ARCH),i686)
-JLDFLAGS += -Wl,--large-address-aware
+JLDFLAGS += --large-address-aware
 endif
 JCPPFLAGS += -D_WIN32_WINNT=0x0602 # (0x0602 = _WIN32_WINNT_WIN8)
 UNTRUSTED_SYSTEM_LIBM := 1
@@ -1635,6 +1699,20 @@ WIN_MAKE_HARD_LINK := cp --dereference --link --force
 else
 WIN_MAKE_HARD_LINK := true -ignore
 endif # $(OS) == WINNT
+
+# Link commands that use $(LD) directly on Windows and the usual compiler driver
+# elsewhere. Arguments are:
+#   1: output, 2: Windows-only flags before -o, 3: Windows inputs after output,
+#   4: non-Windows command before -o, 5: non-Windows inputs after output.
+ifeq ($(OS), WINNT)
+WIN_LD_LIBPATHS := -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir)
+link-dll = $(LD) $(WIN_LD_SHARED_FLAGS) $(2) -o $(1) $(3)
+link-exe = $(LD) $(WIN_LD_EXE_FLAGS) $(2) -o $(1) $(3)
+else
+WIN_LD_LIBPATHS :=
+link-dll = $(4) -o $(1) $(5)
+link-exe = $(4) -o $(1) $(5)
+endif
 
 # Threads
 ifneq ($(JULIA_THREADS), 0)
@@ -1716,16 +1794,19 @@ endif
 CLANGSA_FLAGS :=
 CLANGSA_CXXFLAGS :=
 ifeq ($(OS), Darwin) # on new XCode, the files are hidden
- CLANGSA_FLAGS += -isysroot $(shell xcrun --show-sdk-path -sdk macosx)
+ CLANGSA_FLAGS += -isysroot $(shell xcrun --show-sdk-path --sdk macosx)
 endif
 ifeq ($(USEGCC),1)
 # try to help clang find the c++ files for CC by guessing the value for --prefix
 # by dropping lib/gcc/<platform>/<version> from the install directory it reports
 CLANGSA_CXXFLAGS += --gcc-toolchain="$(abspath $(shell LANG=C $(CC) -print-search-dirs | grep '^install: ' | sed -e "s/^install: //")/../../../..)"
-ifneq ($(OS), Darwin)
+# On Linux without system headers (e.g., BinaryBuilder containers), derive sysroot from GCC
+ifeq ($(OS), Linux)
 GCC_SYSROOT := $(shell $(CC) --print-sysroot 2>/dev/null)
 ifneq ($(GCC_SYSROOT),)
-CLANGSA_FLAGS += --sysroot=$(GCC_SYSROOT)
+ifeq ($(wildcard /usr/include/stdlib.h),)
+ CLANGSA_FLAGS += --sysroot=$(GCC_SYSROOT)
+endif
 endif
 endif
 endif

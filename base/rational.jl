@@ -244,11 +244,8 @@ julia> typeof(numerator(a))
 BigInt
 ```
 """
-function rationalize(::Type{T}, x::Union{AbstractFloat, Rational}, tol::Real) where T<:Integer
-    if tol < 0
-        throw(ArgumentError("negative tolerance $tol"))
-    end
-
+function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
+    tol < 0 && throw(ArgumentError("Tolerance can not be negative. tol=$tol"))
     T<:Unsigned && x < 0 && __throw_negate_unsigned()
     isnan(x) && return T(x)//one(T)
     isinf(x) && return unsafe_rational(x < 0 ? -one(T) : one(T), zero(T))
@@ -269,14 +266,18 @@ function rationalize(::Type{T}, x::Union{AbstractFloat, Rational}, tol::Real) wh
     while r > nt
         try
             ia = convert(T,a)
-
             np = checked_add(checked_mul(ia,p),pp)
             nq = checked_add(checked_mul(ia,q),qq)
             p, pp = np, p
             q, qq = nq, q
         catch e
             isa(e,InexactError) || isa(e,OverflowError) || rethrow()
-            return p // q
+            (a ≤ 2 || ((-p == p) && (p < 0))) && return p // q
+            # find best semiconvergent that fits in T
+            ia_p = iszero(p) ? typemax(T) : fld(typemax(T) - abs(pp), abs(p))
+            ia_q = iszero(q) ? typemax(T) : fld(typemax(T) - qq, q)
+            ia = min(ia_p, ia_q)
+            return ia > a/2 ? (ia*p + pp) // (ia*q + qq) : p // q
         end
 
         # naive approach of using
@@ -293,25 +294,38 @@ function rationalize(::Type{T}, x::Union{AbstractFloat, Rational}, tol::Real) wh
 
     # find optimal semiconvergent
     # smallest a such that x-a*y < a*t+tt
-    a = cld(x-tt,y+t)
+    a_min = cld(x-tt,y+t)
     try
-        ia = convert(T,a)
+        ia = convert(T,a_min)
         np = checked_add(checked_mul(ia,p),pp)
         nq = checked_add(checked_mul(ia,q),qq)
         return np // nq
     catch e
         isa(e,InexactError) || isa(e,OverflowError) || rethrow()
-        return p // q
+        (a ≤ 2 || ((-p == p) && (p < 0))) && return p // q
+        ia_p = iszero(p) ? typemax(T) : fld(typemax(T) - abs(pp), abs(p))
+        ia_q = iszero(q) ? typemax(T) : fld(typemax(T) - qq, q)
+        ia = min(ia_p, ia_q)
+        return ia > a/2 ? (ia*p + pp) // (ia*q + qq) : p // q
     end
 end
 rationalize(::Type{T}, x::AbstractFloat; tol::Real = eps(x)) where {T<:Integer} = rationalize(T, x, tol)
 rationalize(x::Real; kvs...) = rationalize(Int, x; kvs...)
 rationalize(::Type{T}, x::Complex; kvs...) where {T<:Integer} = Complex(rationalize(T, x.re; kvs...), rationalize(T, x.im; kvs...))
 rationalize(x::Complex; kvs...) = Complex(rationalize(Int, x.re; kvs...), rationalize(Int, x.im; kvs...))
-rationalize(::Type{T}, x::Rational; tol::Real = 0) where {T<:Integer} = rationalize(T, x, tol)
-rationalize(x::Rational; kvs...) = x
+rationalize(::Type{T}, x::Rational; tol::Real = eps(float(x))) where {T<:Integer} = rationalize(T, x, tol)
+rationalize(x::Rational{T}; kvs...) where {T<:Integer} = rationalize(T, x; kvs...)
+function rationalize(::Type{T}, x::Rational, tol::Real) where {T<:Integer}
+    T<:Unsigned && x < 0 && __throw_negate_unsigned()
+    if !hastypemax(T) || (typemin(T) ≤ x.num ≤ typemax(T) && x.den ≤ typemax(T))
+        return Rational{T}(x)
+    end
+    isfinite(float(x)) && tol ≥ eps(float(x))/2 || throw(InexactError(:rationalize, Rational{T}, x))
+    return rationalize(T, float(x), tol)
+end
 rationalize(x::Integer; kvs...) = Rational(x)
 function rationalize(::Type{T}, x::Integer; kvs...) where {T<:Integer}
+    T<:Unsigned && x < 0 && __throw_negate_unsigned()
     if Base.hastypemax(T) # BigInt doesn't
         x < typemin(T) && return unsafe_rational(-one(T), zero(T))
         x > typemax(T) && return unsafe_rational(one(T), zero(T))

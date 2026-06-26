@@ -6,7 +6,7 @@
 
 # true if Type{T} is inlineable as constant T
 # requires that T is a singleton, s.t. T == S implies T === S
-isconstType(@nospecialize t) = isType(t) && hasuniquerep(t.parameters[1])
+isconstType(@nospecialize t) = isType(t) && hasuniquerep(type_parameter(t))
 
 # test whether type T has a unique representation, s.t. T == S implies T === S
 function hasuniquerep(@nospecialize t)
@@ -15,6 +15,11 @@ function hasuniquerep(@nospecialize t)
     t === typeof(Union{}) && return false
     t === Union{} && return true
     isa(t, TypeVar) && return false # TypeVars are identified by address, not equality
+    if isType(t)
+        p = type_parameter(t)
+        (p === Union{} || p === typeof(Union{})) && return false
+        return !has_free_typevars(p)
+    end
     iskindtype(typeof(t)) || return true # non-types are always compared by egal in the type system
     isconcretetype(t) && return true # these are also interned and pointer comparable
     if isa(t, DataType) && t.name !== Tuple.name && !isvarargtype(t) # invariant DataTypes
@@ -32,8 +37,8 @@ we have `isa(S, DataType)`. In particular, if a statement is typed as `Type{t}`
 will be a `DataType` at runtime (and not e.g. a `Union` or `UnionAll` typeequal to it).
 """
 function isTypeDataType(@nospecialize t)
-    isa(t, DataType) || return false
     isType(t) && return false
+    isa(t, DataType) || return false
     # Could be Union{} at runtime
     t === Core.TypeofBottom && return false
     # Return true if `t` is not covariant
@@ -46,7 +51,7 @@ has_extended_info(@nospecialize x) = (!isa(x, Type) && !isvarargtype(x)) || isTy
 # some of these queries, this check can be used to somewhat protect against making incorrect
 # decisions based on incorrect subtyping. Note that this check, itself, is broken for
 # certain combinations of `a` and `b` where one/both isa/are `Union`/`UnionAll` type(s)s.
-isnotbrokensubtype(@nospecialize(a), @nospecialize(b)) = (!iskindtype(b) || !isType(a) || hasuniquerep(a.parameters[1]) || b <: a)
+isnotbrokensubtype(@nospecialize(a), @nospecialize(b)) = (!iskindtype(b) || !isType(a) || hasuniquerep(type_parameter(a)) || b <: a)
 
 function argtypes_to_type(argtypes::Vector{Any})
     argtypes = anymap(@nospecialize(a) -> isvarargtype(a) ? a : widenconst(a), argtypes)
@@ -76,11 +81,13 @@ function valid_as_lattice(@nospecialize(x), astag::Bool=false)
         # operations that might remove the Union itself)
         return true
     end
+    if isType(x)
+        p = type_parameter(x)
+        p isa Type || p isa TypeVar || return false
+        return true
+    end
     if x isa DataType
-        if isType(x)
-            p = x.parameters[1]
-            p isa Type || p isa TypeVar || return false
-        elseif astag && isstructtype(x)
+        if astag && isstructtype(x)
             datatype_fieldtypes(x) # force computation of has_concrete_subtype to be updated now
             return has_concrete_subtype(x)
         end
@@ -182,6 +189,7 @@ function _typename(a::Union)
 end
 _typename(union::UnionAll) = _typename(union.body)
 _typename(a::DataType) = Const(a.name)
+_typename(a::TypeEq) = Core.TypeName
 
 function tuple_tail_elem(𝕃::AbstractLattice, @nospecialize(init), ct::Vector{Any})
     t = init
@@ -192,16 +200,122 @@ function tuple_tail_elem(𝕃::AbstractLattice, @nospecialize(init), ct::Vector{
     return Vararg{widenconst(t)}
 end
 
+# Given `fargs` from `ArgInfo` and optionally `argtypes`, compute alias groups
+# for argument positions. Returns `nothing` when no aliasing is possible (both
+# callers treat this as the identity grouping), otherwise a `Vector{Int}` where
+# `groups[i]` is the index of the leader for position `i`. `groups[i] == i` means
+# leader (or non-aliased); `groups[i] < i` means follower.
+#
+# Aliasing is detected from two sources:
+# 1. IR identity: same `SlotNumber`/`SSAValue` in `fargs`
+# 2. `MustAlias` in `argtypes`: same `(slot, ssadef, fldidx)` means same value
+function compute_alias_groups(
+        na::Int,
+        fargs::Union{Nothing,Vector{Any}},
+        argtypes::Union{Nothing,Vector{Any}}
+    )
+    # Fast path: skip the allocation when no aliasing is possible (the common
+    # case on the inference hot path).
+    any_alias_candidate(na, fargs, argtypes) || return nothing
+    groups = Vector{Int}(undef, na)
+    for i = 1:na
+        groups[i] = i
+    end
+    fargs !== nothing && merge_fargs_alias_groups!(groups, fargs)
+    argtypes !== nothing && merge_mustalias_groups!(groups, argtypes)
+    return groups
+end
+
+# Cheap, non-allocating necessary condition for a non-identity grouping: a shared
+# `SlotNumber`/`SSAValue` in `fargs`, or at least two `MustAlias` in `argtypes`.
+# Over-approximating only costs a needless allocation, never correctness.
+function any_alias_candidate(
+        na::Int,
+        fargs::Union{Nothing,Vector{Any}},
+        argtypes::Union{Nothing,Vector{Any}}
+    )
+    if fargs !== nothing
+        for i = 1:na
+            arg_i = fargs[i]
+            if arg_i isa SlotNumber || arg_i isa SSAValue
+                for j in 1:i-1
+                    fargs[j] === arg_i && return true
+                end
+            end
+        end
+    end
+    if argtypes !== nothing
+        nmustalias = 0
+        for i = 1:na
+            if argtypes[i] isa MustAlias
+                nmustalias += 1
+                nmustalias == 2 && return true
+            end
+        end
+    end
+    return false
+end
+
+# Detect aliasing from IR identity: same `SlotNumber`/`SSAValue` in `fargs`.
+function merge_fargs_alias_groups!(groups::Vector{Int}, fargs::Vector{Any})
+    for i = 1:length(groups)
+        arg_i = fargs[i]
+        if arg_i isa SlotNumber || arg_i isa SSAValue
+            for j in 1:i-1
+                if fargs[j] === arg_i
+                    groups[i] = groups[j]
+                    break
+                end
+            end
+        end
+    end
+    return groups
+end
+
+# Detect additional aliasing from `MustAlias` lattice elements in `argtypes`:
+# two positions with the same `(slot, ssadef, fldidx)` must refer to the same value.
+function merge_mustalias_groups!(groups::Vector{Int}, argtypes::Vector{Any})
+    for i = 1:length(groups)
+        groups[i] == i || continue # already a follower
+        ti = argtypes[i]
+        ti isa MustAlias || continue
+        for j in 1:i-1
+            groups[j] == j || continue # only match against leaders
+            tj = argtypes[j]
+            tj isa MustAlias || continue
+            if ti.slot == tj.slot && ti.ssadef == tj.ssadef && ti.fldidx == tj.fldidx
+                # Merge: make j the leader for i, and re-point any
+                # existing followers of i to j as well
+                for k in i:length(groups)
+                    if groups[k] == i
+                        groups[k] = j
+                    end
+                end
+                break
+            end
+        end
+    end
+    return groups
+end
+
 # Gives a cost function over the effort to switch a tuple-union representation
 # as a cartesian product, relative to the size of the original representation.
 # Thus, we count the longest element as being roughly invariant to being inside
 # or outside of the Tuple/Union nesting, though somewhat more expensive to be
-# outside than inside because the representation is larger (because and it
+# outside than inside because the representation is larger (because it
 # informs the callee whether any splitting is possible).
-function unionsplitcost(𝕃::AbstractLattice, argtypes::Union{SimpleVector,Vector{Any}})
+function unionsplitcost(𝕃::AbstractLattice, argtypes::Union{SimpleVector,Vector{Any}};
+                        fargs::Union{Nothing,Vector{Any}}=nothing)
+    na = length(argtypes)
+    groups = compute_alias_groups(na, fargs, argtypes isa Vector{Any} ? argtypes : nothing)
     nu = 1
     max = 2
-    for ti in argtypes
+    for i in 1:na
+        # skip followers: their type is constrained by their leader
+        if groups !== nothing && groups[i] != i
+            continue
+        end
+        ti = argtypes[i]
         if has_extended_unionsplit(𝕃) && !isvarargtype(ti)
             ti = widenconst(ti)
         end
@@ -225,9 +339,15 @@ function switchtupleunion(@nospecialize(ty))
     return _switchtupleunion(JLTypeLattice(), Any[tparams...], length(tparams), [], ty)
 end
 
-switchtupleunion(𝕃::AbstractLattice, argtypes::Vector{Any}) = _switchtupleunion(𝕃, argtypes, length(argtypes), [], nothing)
+function switchtupleunion(𝕃::AbstractLattice, argtypes::Vector{Any};
+                          fargs::Union{Nothing,Vector{Any}}=nothing)
+    na = length(argtypes)
+    groups = compute_alias_groups(na, fargs, argtypes)
+    return _switchtupleunion(𝕃, argtypes, na, [], nothing, groups)
+end
 
-function _switchtupleunion(𝕃::AbstractLattice, t::Vector{Any}, i::Int, tunion::Vector{Any}, @nospecialize(origt))
+function _switchtupleunion(𝕃::AbstractLattice, t::Vector{Any}, i::Int, tunion::Vector{Any},
+                           @nospecialize(origt), groups::Union{Nothing,Vector{Int}}=nothing)
     if i == 0
         if origt === nothing
             push!(tunion, copy(t))
@@ -235,24 +355,53 @@ function _switchtupleunion(𝕃::AbstractLattice, t::Vector{Any}, i::Int, tunion
             tpl = rewrap_unionall(Tuple{t...}, origt)
             push!(tunion, tpl)
         end
+        return tunion
+    end
+
+    if groups !== nothing && groups[i] != i
+        # If this position is a follower (aliased to an earlier position),
+        # its type is already set by the leader — just recurse without iterating.
+        _switchtupleunion(𝕃, t, i - 1, tunion, origt, groups)
     else
         origti = ti = t[i]
-        # TODO remove this to implement callsite refinement of MustAlias
+        followers = Int[]
+        if groups !== nothing
+            for j in 1:length(t)
+                if groups[j] == i # Collect follower indices for this leader
+                    push!(followers, j)
+                end
+            end
+        end
+        # TODO Generalize this to allow callsite union-splitting of MustAlias
         if isa(ti, Union)
+            origtypes = Any[t[j] for j in followers]
             for ty in uniontypes(ti)
                 t[i] = ty
-                _switchtupleunion(𝕃, t, i - 1, tunion, origt)
+                for j in followers
+                    t[j] = ty
+                end
+                _switchtupleunion(𝕃, t, i - 1, tunion, origt, groups)
             end
             t[i] = origti
+            for (k, j) in enumerate(followers)
+                t[j] = origtypes[k]
+            end
         elseif (has_extended_unionsplit(𝕃) && !isa(ti, Const) && !isvarargtype(ti) &&
             (wty = widenconst(ti); isa(wty, Union)))
+            origtypes = Any[t[j] for j in followers]
             for ty in uniontypes(wty)
                 t[i] = ty
-                _switchtupleunion(𝕃, t, i - 1, tunion, origt)
+                for j in followers
+                    t[j] = ty
+                end
+                _switchtupleunion(𝕃, t, i - 1, tunion, origt, groups)
             end
             t[i] = origti
+            for (k, j) in enumerate(followers)
+                t[j] = origtypes[k]
+            end
         else
-            _switchtupleunion(𝕃, t, i - 1, tunion, origt)
+            _switchtupleunion(𝕃, t, i - 1, tunion, origt, groups)
         end
     end
     return tunion
@@ -331,6 +480,7 @@ function _is_immutable_type(@nospecialize ty)
     if isa(ty, Union)
         return _is_immutable_type(ty.a) && _is_immutable_type(ty.b)
     end
+    isType(ty) && return false
     return !isabstracttype(ty) && !ismutabletype(ty)
 end
 

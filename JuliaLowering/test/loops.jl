@@ -223,6 +223,21 @@ let
 end
 """) == [(1,2), (1,4), (2,2), (2,4)]
 
+# Labeled continue skips to next iteration of the named outer loop
+@test JuliaLowering.include_string(test_mod, """
+let
+    a = []
+    @label outer for i = 1:3
+        for j = 1:3
+            if j == 2
+                continue outer
+            end
+            push!(a, (i,j))
+        end
+    end
+    a
+end
+""") == [(1,1), (2,1), (3,1)]
 
 end
 

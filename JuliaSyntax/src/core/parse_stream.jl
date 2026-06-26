@@ -45,7 +45,7 @@ kind(head::SyntaxHead) = head.kind
 
 Return the flag bits of a syntactic construct. Prefer to query these with the
 predicates `is_trivia`, `is_prefix_call`, `is_infix_op_call`,
-`is_prefix_op_call`, `is_postfix_op_call`, `is_dotted`, `is_suffixed`,
+`is_prefix_op_call`, `is_postfix_op_call`, `is_dotted`,
 `is_decorated`.
 
 Or extract numeric portion of the flags with `numeric_flags`.
@@ -162,7 +162,7 @@ function _reset_node_head(node, k, f)
     else
         f = flags(node)
     end
-    h = SyntaxHead(isnothing(k) ? kind(node) : k, f)
+    return SyntaxHead(isnothing(k) ? kind(node) : k, f)
 end
 
 Base.summary(node::RawGreenNode) = summary(node.head)
@@ -326,7 +326,7 @@ function ParseStream(io::IO; version=VERSION)
     ParseStream(textbuf, textbuf, 1, version)
 end
 
-function Base.show(io::IO, mime::MIME"text/plain", stream::ParseStream)
+function Base.show(io::IO, ::MIME"text/plain", stream::ParseStream)
     println(io, "ParseStream at position $(stream.next_byte)")
 end
 
@@ -376,7 +376,10 @@ function _buffer_lookahead_tokens(lexer, lookahead)
         was_whitespace = is_whitespace(k)
         had_whitespace |= was_whitespace
         f = EMPTY_FLAGS
-        raw.suffix     && (f |= SUFFIXED_FLAG)
+        if k == K"Operator" && raw.op_precedence != Tokenize.PREC_NONE
+            # Store operator precedence in numeric flags
+            f |= set_numeric_flags(Int(raw.op_precedence))
+        end
         push!(lookahead, SyntaxToken(SyntaxHead(k, f), k,
                                      had_whitespace, raw.endbyte + 2))
         token_count += 1
@@ -592,7 +595,7 @@ function first_child_position(stream::ParseStream, pos::ParseStreamPosition)
 end
 
 """
-        first_child_position(stream::ParseStream, pos::ParseStreamPosition)
+        last_child_position(stream::ParseStream, pos::ParseStreamPosition)
 
     Find the last non-trivia child of this node (in the GreenTree/RedTree sense) and
     return its position (i.e. the position as if that child had been the last thing parsed).
@@ -601,7 +604,6 @@ function last_child_position(stream::ParseStream, pos::ParseStreamPosition)
     output = stream.output
     @assert pos.node_index > 0
     cursor = RedTreeCursor(GreenTreeCursor(output, pos.node_index), pos.byte_index-1)
-    candidate = nothing
     for child in reverse(cursor)
         is_trivia(child) && continue
         return ParseStreamPosition(child.byte_end+UInt32(1), child.green.position)

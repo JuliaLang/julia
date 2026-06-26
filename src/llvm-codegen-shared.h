@@ -194,7 +194,7 @@ static inline llvm::Value *get_current_signal_page_from_ptls(llvm::IRBuilder<> &
     auto T_ptr = builder.getPtrTy();
     auto i8 = builder.getInt8Ty();
     int nthfield = offsetof(jl_tls_states_t, safepoint);
-    llvm::Value *psafepoint = builder.CreateConstInBoundsGEP1_32(i8, ptls, nthfield);
+    llvm::Value *psafepoint = builder.CreateConstInBoundsGEP1_32(i8, ptls, nthfield, "safepoint_addr");
     LoadInst *ptls_load = builder.CreateAlignedLoad(
             T_ptr, psafepoint, Align(sizeof(void *)), "safepoint");
     ptls_load->setOrdering(AtomicOrdering::Monotonic);
@@ -248,7 +248,7 @@ static inline llvm::Value *emit_gc_state_set(llvm::IRBuilder<> &builder, llvm::T
                 return old_state;
     BasicBlock *passBB = BasicBlock::Create(builder.getContext(), "safepoint", builder.GetInsertBlock()->getParent());
     BasicBlock *exitBB = BasicBlock::Create(builder.getContext(), "after_safepoint", builder.GetInsertBlock()->getParent());
-    builder.CreateCondBr(builder.CreateICmpEQ(old_state, state, "is_new_state"), // Safepoint whenever we change the GC state
+    builder.CreateCondBr(builder.CreateICmpEQ(old_state, state, "is_new_state"), // Safepoint whenever we do not change the GC state
                          passBB, exitBB);
     builder.SetInsertPoint(passBB);
     MDNode *tbaa = get_tbaa_const(builder.getContext());
