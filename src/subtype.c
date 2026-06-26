@@ -1418,6 +1418,54 @@ static int var_occurs_covariant_only(jl_value_t *t, jl_tvar_t *var, int covarian
     return !jl_has_typevar(t, var);
 }
 
+static jl_value_t *subtype_unionall_envout_value(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e,
+                                                 jl_varbinding_t *vb, jl_value_t *lb,
+                                                 jl_value_t **new_tvar JL_REQUIRE_ROOTED_SLOT,
+                                                 int constrained)
+{
+    if (vb->intvalued && lb == (jl_value_t*)jl_any_type)
+        return (jl_value_t*)jl_wrap_vararg(NULL, NULL, 0, 0); // special token result that represents N::Int in the envout
+    if (!vb->occurs_inv && lb != jl_bottom_type) {
+        if (is_leaf_bound(lb))
+            return lb;
+        if (constrained && !jl_has_free_typevars(t) && !jl_has_free_typevars(lb) &&
+            (jl_is_concrete_type(t) ||
+             (jl_is_datatype(t) && ((jl_datatype_t*)t)->isdispatchtuple))) {
+            // If the LHS is concrete, e.g. Type{Tuple{Ref}} vs Type{Tuple{S}} where {S<:T}, we'd like to still
+            // choose the least solution like below, so that our `constrained` logic below is correct.
+            // Also accept dispatchtuples, which cover singleton-like LHSes such as
+            // `Tuple{typeof(f), Type{X}}` where the Type{} parameter pins to one runtime value.
+            // Refuse when `lb` references universally-quantified vars from the
+            // current subtype environment: exposing it directly would leak sibling
+            // `where`-bound typevars (e.g. `where {S, T>:S}` would expose `S`).
+            return lb;
+        }
+        if (jl_is_typevar(lb)) {
+            // The path below would produce `T_new <: T`. This is redundant for bounds purposes,
+            // although it could affect diagonality in downstream uses. However, it is problematic
+            // to introduce a new tvar for safety here, because intersection can blow up on that
+            // pattern.
+            return wrap_tvar_env(lb, constrained);
+        }
+        *new_tvar = (jl_value_t*)jl_new_typevar(u->var->name, jl_bottom_type, lb);
+        return wrap_tvar_env(*new_tvar, constrained);
+    }
+    if (lb == vb->ub || lb != jl_bottom_type) {
+        // TODO (lb != jl_bottom_type): for now return the least solution, which is what
+        // method parameters expect.
+        if (vb->tainted_inner || has_universal_typevar(lb, e))
+            return wrap_tvar_env(lb, constrained);
+        return lb;
+    }
+    if (lb == u->var->lb && vb->ub == u->var->ub && !*new_tvar)
+        return wrap_tvar_env((jl_value_t*)u->var, constrained);
+    if (!*new_tvar) {
+        *new_tvar = (jl_value_t*)jl_new_typevar(u->var->name, vb->lb, vb->ub);
+        return wrap_tvar_env(*new_tvar, constrained);
+    }
+    return wrap_tvar_env(*new_tvar, constrained);
+}
+
 static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, jl_param_pos_t param)
 {
     u = unalias_unionall(u, e);
@@ -1578,54 +1626,10 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
 
     // fill variable values into `envout` up to `envsz`
     if (R && ans && e->envidx < e->envsz) {
-        jl_value_t *val;
         jl_value_t *lb = widened_lb;
-        jl_value_t *eff_ub = vb.ub;
-        while (jl_is_typevar(eff_ub))
-            eff_ub = ((jl_tvar_t*)eff_ub)->ub;
         int eff_constrained = (vb.occurs_inv || (cov_count(&vb) && u->var->lb == jl_bottom_type));
-        if (vb.intvalued && lb == (jl_value_t*)jl_any_type)
-            val = (jl_value_t*)jl_wrap_vararg(NULL, NULL, 0, 0); // special token result that represents N::Int in the envout
-        else if (!vb.occurs_inv && lb != jl_bottom_type) {
-            if (is_leaf_bound(lb)) {
-                val = lb;
-            } else if (eff_constrained && !jl_has_free_typevars(t) && !jl_has_free_typevars(lb) &&
-                       (jl_is_concrete_type(t) ||
-                        (jl_is_datatype(t) && ((jl_datatype_t*)t)->isdispatchtuple))) {
-                // If the LHS is concrete, e.g. Type{Tuple{Ref}} vs Type{Tuple{S}} where {S<:T}, we'd like to still
-                // choose the least solution like below, so that our `eff_constrained` logic below is correct.
-                // Also accept dispatchtuples, which cover singleton-like LHSes such as
-                // `Tuple{typeof(f), Type{X}}` where the Type{} parameter pins to one runtime value.
-                // Refuse when `lb` references universally-quantified vars from the
-                // current subtype environment: exposing it directly would leak sibling
-                // `where`-bound typevars (e.g. `where {S, T>:S}` would expose `S`).
-                val = lb;
-            } else if (jl_is_typevar(lb)) {
-                // The path below would produce `T_new <: T`. This is redundant for bounds purposes,
-                // although it could affect diagonality in downstream uses. However, it is problematic
-                // to introduce a new tvar for safety here, because intersection can blow up on that
-                // pattern.
-                val = wrap_tvar_env(lb, eff_constrained);
-            } else {
-                val = wrap_tvar_env((jl_value_t*)jl_new_typevar(u->var->name, jl_bottom_type, lb), eff_constrained);
-            }
-        }
-        else if (lb == vb.ub || lb != jl_bottom_type)
-            // TODO (lb != jl_bottom_type): for now return the least solution, which is what
-            // method parameters expect.
-            if (vb.tainted_inner)
-                val = wrap_tvar_env(lb, eff_constrained);
-            else if (has_universal_typevar(lb, e))
-                val = wrap_tvar_env(lb, eff_constrained);
-            else
-                val = lb;
-        else if (lb == u->var->lb && vb.ub == u->var->ub && !new_tvar)
-            val = wrap_tvar_env((jl_value_t*)u->var, eff_constrained);
-        else {
-            if (!new_tvar)
-                new_tvar = (jl_value_t*)jl_new_typevar(u->var->name, vb.lb, vb.ub);
-            val = wrap_tvar_env(new_tvar, eff_constrained);
-        }
+        jl_value_t *val = subtype_unionall_envout_value(t, u, e, &vb, lb, &new_tvar,
+                                                        eff_constrained);
         jl_value_t *oldval = e->envout[e->envidx];
         // if we try to assign different variable values (due to checking
         // multiple union members), consider the value unknown. Use AND
