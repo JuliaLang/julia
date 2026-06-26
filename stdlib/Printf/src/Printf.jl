@@ -678,6 +678,65 @@ end
 # pointers
 fmt(buf, pos, arg, spec::Spec{Pointer}) = fmt(buf, pos, UInt64(arg), ptrfmt(spec, arg))
 
+# complex numbers
+function fmt(buf, pos, arg::Complex, spec::Spec{T}) where {T <: Floats}
+    leftalign, plus, space, hash, width, prec =
+        spec.leftalign, spec.plus, spec.space, spec.hash, spec.width, spec.precision
+
+    # Create a spec for formatting individual parts (no width/alignment - handled at end)
+    partspec = Spec{T}(false, plus, space, false, hash, 0, prec, false, false)
+
+    # Format real part
+    rpos = fmt(buf, pos, real(arg), partspec)
+
+    # Format separator and imaginary part
+    im_val = imag(arg)
+    if signbit(im_val) && !isnan(im_val)
+        # Negative: use " - " separator and format absolute value
+        buf[rpos] = UInt8(' ')
+        buf[rpos + 1] = UInt8('-')
+        buf[rpos + 2] = UInt8(' ')
+        rpos += 3
+        # Format with plus=false since we handled the sign
+        imspec = Spec{T}(false, false, false, false, hash, 0, prec, false, false)
+        rpos = fmt(buf, rpos, -im_val, imspec)
+    else
+        # Non-negative: use " + " separator
+        buf[rpos] = UInt8(' ')
+        buf[rpos + 1] = UInt8('+')
+        buf[rpos + 2] = UInt8(' ')
+        rpos += 3
+        imspec = Spec{T}(false, false, false, false, hash, 0, prec, false, false)
+        rpos = fmt(buf, rpos, im_val, imspec)
+    end
+
+    # Add "im" suffix
+    buf[rpos] = UInt8('i')
+    buf[rpos + 1] = UInt8('m')
+    rpos += 2
+
+    # Handle width padding
+    len = rpos - pos
+    if len < width
+        if leftalign
+            # Pad right with spaces
+            for _ = 1:(width - len)
+                buf[rpos] = UInt8(' ')
+                rpos += 1
+            end
+        else
+            # Shift content right, pad left with spaces
+            n = width - len
+            copyto!(buf, pos + n, buf, pos, len)
+            for i = pos:(pos + n - 1)
+                buf[i] = UInt8(' ')
+            end
+            rpos += n
+        end
+    end
+    return rpos
+end
+
 # position counters
 function fmt(buf, pos, arg::Ref{<:Integer}, ::Spec{PositionCounter})
     arg[] = pos - 1
@@ -896,6 +955,9 @@ plength(f::Spec{T}, x::AbstractFloat) where {T <: Ints} =
     max(f.width, f.hash + MAX_INTEGER_PART_WIDTH + 0 + MAX_FMT_CHARS_WIDTH)
 plength(f::Spec{T}, x) where {T <: Floats} =
     max(f.width, f.hash + MAX_INTEGER_PART_WIDTH + f.precision + MAX_FMT_CHARS_WIDTH)
+# For complex: real_part + " + " (3 chars) + imag_part + "im" (2 chars)
+plength(f::Spec{T}, x::Complex) where {T <: Floats} =
+    max(f.width, 2 * (f.hash + MAX_INTEGER_PART_WIDTH + f.precision + MAX_FMT_CHARS_WIDTH) + 3 + 2)
 plength(::Spec{PositionCounter}, x) = 0
 
 @inline function computelen(substringranges, formats, args)

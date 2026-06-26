@@ -1157,6 +1157,49 @@ end
     @test isempty(Docs.undocumented_names(Printf))
 end
 
+@testset "complex numbers" begin
+    # Basic complex formatting
+    @test Printf.@sprintf("%.2f", 1.0 + 2.0im) == "1.00 + 2.00im"
+    @test Printf.@sprintf("%.2f", 1.0 - 2.0im) == "1.00 - 2.00im"
+    @test Printf.@sprintf("%.2f", -1.0 + 2.0im) == "-1.00 + 2.00im"
+    @test Printf.@sprintf("%.2f", -1.0 - 2.0im) == "-1.00 - 2.00im"
+
+    # Different format specifiers
+    @test Printf.@sprintf("%.2e", 1.0 + 2.0im) == "1.00e+00 + 2.00e+00im"
+    @test Printf.@sprintf("%.2E", 1.0 + 2.0im) == "1.00E+00 + 2.00E+00im"
+    @test Printf.@sprintf("%g", 1.0 + 2.0im) == "1 + 2im"
+    @test Printf.@sprintf("%.4f", 3.14159 + 2.71828im) == "3.1416 + 2.7183im"
+
+    # Zero imaginary part
+    @test Printf.@sprintf("%.1f", 5.0 + 0.0im) == "5.0 + 0.0im"
+    @test Printf.@sprintf("%.1f", 5.0 - 0.0im) == "5.0 - 0.0im"
+
+    # Zero real part
+    @test Printf.@sprintf("%.1f", 0.0 + 3.0im) == "0.0 + 3.0im"
+    # Note: -0.0 + 3.0im is promoted to Complex{Float64}(0.0, 3.0) by Julia
+    @test Printf.@sprintf("%.1f", -0.0 + 3.0im) == "0.0 + 3.0im"
+
+    # Width specifier (output is 17 chars: "1.00 + 2.00im")
+    @test Printf.@sprintf("%25.2f", 1.0 + 2.0im) == "            1.00 + 2.00im"
+    @test Printf.@sprintf("%-25.2f", 1.0 + 2.0im) == "1.00 + 2.00im            "
+
+    # Special values
+    @test Printf.@sprintf("%f", Inf + 2.0im) == "Inf + 2.000000im"
+    @test Printf.@sprintf("%f", 1.0 + Inf*im) == "1.000000 + Infim"
+    @test Printf.@sprintf("%f", NaN + 2.0im) == "NaN + 2.000000im"
+    @test Printf.@sprintf("%f", 1.0 + NaN*im) == "1.000000 + NaNim"
+
+    # Integer complex (should convert to float)
+    @test Printf.@sprintf("%.2f", 1 + 2im) == "1.00 + 2.00im"
+
+    # Plus flag on real part
+    @test Printf.@sprintf("%+.2f", 1.0 + 2.0im) == "+1.00 + 2.00im"
+    @test Printf.@sprintf("%+.2f", -1.0 + 2.0im) == "-1.00 + 2.00im"
+
+    # Space flag
+    @test Printf.@sprintf("% .2f", 1.0 + 2.0im) == " 1.00 + 2.00im"
+end
+
 # issue #52749
 @test @sprintf("%.160g", 1.38e-23) == "1.380000000000000060010582465734078799297660966782642624395399644741944111814291318296454846858978271484375e-23"
 
