@@ -10613,6 +10613,10 @@ extern "C" void jl_init_llvm(void)
     clopt = llvmopts.lookup("combiner-store-merge-dependence-limit");
     if (clopt && clopt->getNumOccurrences() == 0)
         cl::ProvidePositionalOption(clopt, "4", 1);
+    // Enable VPlan native path for outer loop vectorization
+    clopt = llvmopts.lookup("enable-vplan-native-path");
+    if (clopt->getNumOccurrences() == 0)
+        cl::ProvidePositionalOption(clopt, "1", 1);
 
     // compiler-rt/libgcc only provide FP conversion libcalls (e.g. __floattidf,
     // __fixdfti) up to the widest integer type the platform supports natively
