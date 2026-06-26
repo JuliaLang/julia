@@ -61,8 +61,7 @@ static inline int jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, j
             }
             if (jl_egal(key, k2)) {
                 if (jl_atomic_load_relaxed(&tab[index + 1]) != NULL) {
-                    jl_atomic_store_release(&tab[index + 1], val);
-                    jl_gc_wb(a, val);
+                    jl_gc_write_atomic(a, tab[index + 1], jl_value_t, val, release);
                     return 0;
                 }
                 // `nothing` is our sentinel value for deletion, so need to keep searching if it's also our search key
@@ -80,10 +79,8 @@ static inline int jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, j
         } while (iter <= maxprobe && index != orig);
 
         if (empty_slot != -1) {
-            jl_atomic_store_release(&tab[empty_slot], key);
-            jl_gc_wb(a, key);
-            jl_atomic_store_release(&tab[empty_slot + 1], val);
-            jl_gc_wb(a, val);
+            jl_gc_write_atomic(a, tab[empty_slot], jl_value_t, key, release);
+            jl_gc_write_atomic(a, tab[empty_slot + 1], jl_value_t, val, release);
             return 1;
         }
 

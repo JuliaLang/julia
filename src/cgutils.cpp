@@ -2652,12 +2652,48 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                 r = ctx.builder.CreateZExt(r, elty);
         }
     }
+    // This pre-write barrier must be emitted before the store, while also not
+    // holding any local atomic locks.
+    auto emit_store_pre_barrier = [&](Value *r, const jl_cgval_t &rhs) {
+        if (parent == NULL || !tracked_pointers)
+            return;
+        if (isboxed) {
+            if (type_is_permalloc(rhs.typ))
+                return;
+            assert(r != nullptr);
+            emit_write_barrier(ctx, parent, r);
+        }
+        else if (r) {
+            Value *wbval = r;
+            if (realelty != elty)
+                wbval = ctx.builder.CreateTrunc(wbval, realelty);
+            if (intcast) {
+                ctx.builder.CreateStore(wbval, intcast);
+                wbval = ctx.builder.CreateLoad(intcast_eltyp, intcast);
+            }
+            else if (intcast_eltyp) {
+                // setfield doesn't use an intcast alloca, so reload rhs with the
+                // pointer-exposing type
+                wbval = emit_unbox(ctx, intcast_eltyp, rhs);
+            }
+            emit_write_multibarrier(ctx, parent, wbval, rhs.typ);
+        }
+        else {
+            assert(!isboxed);
+            assert(!rhs.inline_roots.empty());
+            emit_write_multibarrier(ctx, parent, rhs);
+        }
+    };
+    // For op == StoreKind::Modify the new value isn't known yet; its barrier is
+    // emitted later inside the loop, once `rhs`/`r` have been computed.
+    if (op != StoreKind::Modify)
+        emit_store_pre_barrier(r, rhs);
+    if (needlock)
+        emit_lockstate_value(ctx, needlock, true);
     Value *instr = nullptr;
     Value *Compare = nullptr;
     Value *Success = nullptr;
     BasicBlock *DoneBB = nullptr;
-    if (needlock)
-        emit_lockstate_value(ctx, needlock, true);
     jl_cgval_t oldval = rhs;
     // TODO: we should do Release ordering for anything with CountTrackedPointers(elty).count > 0, instead of just isboxed
     if (op == StoreKind::Set || (Order == AtomicOrdering::NotAtomic && op == StoreKind::Swap)) {
@@ -2875,6 +2911,10 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                 if (realelty != elty)
                     r = ctx.builder.CreateZExt(r, elty);
             }
+            // As an optimization, we could hoist this pre-write barrier after the cmpxchg
+            // loop if we had a barrier form that explicitly takes in `oldval`. However it
+            // only makes any difference under contention so has limited gains.
+            emit_store_pre_barrier(r, rhs);
             if (needlock)
                 emit_lockstate_value(ctx, needlock, true); // relock
             cmpop = oldval;
@@ -2990,40 +3030,6 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         ctx.builder.SetInsertPoint(DoneBB);
     if (needlock)
         emit_lockstate_value(ctx, needlock, false);
-    if (parent != NULL && tracked_pointers && (!isboxed || !type_is_permalloc(rhs.typ))) {
-        if (op == StoreKind::Replace || op == StoreKind::SetOnce) {
-            BasicBlock *BB = BasicBlock::Create(ctx.builder.getContext(), "xchg_wb", ctx.f);
-            DoneBB = BasicBlock::Create(ctx.builder.getContext(), "done_xchg_wb", ctx.f);
-            ctx.builder.CreateCondBr(Success, BB, DoneBB);
-            ctx.builder.SetInsertPoint(BB);
-        }
-        if (r) {
-            if (realelty != elty)
-                r = ctx.builder.Insert(CastInst::Create(Instruction::Trunc, r, realelty));
-            if (intcast) {
-                ctx.builder.CreateStore(r, intcast);
-                r = ctx.builder.CreateLoad(intcast_eltyp, intcast);
-            }
-            else if (!isboxed && intcast_eltyp) {
-                assert(op == StoreKind::Set);
-                // setfield doesn't use intcast, so need to reload rhs with the correct type
-                r = emit_unbox(ctx, intcast_eltyp, rhs);
-            }
-            if (!isboxed)
-                emit_write_multibarrier(ctx, parent, r, rhs.typ);
-            else
-                emit_write_barrier(ctx, parent, r);
-        }
-        else {
-            assert(!isboxed);
-            assert(!rhs.inline_roots.empty());
-            emit_write_multibarrier(ctx, parent, rhs);
-        }
-        if (op == StoreKind::Replace || op == StoreKind::SetOnce) {
-            ctx.builder.CreateBr(DoneBB);
-            ctx.builder.SetInsertPoint(DoneBB);
-        }
-    }
     switch (op) {
     case StoreKind::Modify: {
         const jl_cgval_t argv[2] = { oldval, rhs };

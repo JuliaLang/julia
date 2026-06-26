@@ -179,6 +179,7 @@
     XX(jl_gc_set_max_memory) \
     XX(jl_gc_sync_total_bytes) \
     XX(jl_gc_total_hrtime) \
+    XX(jl_gc_wb_cold) \
     XX(jl_gdblookup) \
     XX(jl_generating_output) \
     XX(jl_declare_const_gf) \

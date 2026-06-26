@@ -454,11 +454,11 @@ JL_DLLEXPORT void jl_memoryrefset(jl_genericmemoryref_t m, jl_value_t *rhs JL_RO
     }
     if (layout->flags.arrayelem_isboxed) {
         assert((char*)m.ptr_or_offset - (char*)m.mem->ptr < sizeof(jl_value_t*) * m.mem->length);
+        jl_gc_wb(jl_genericmemory_owner(m.mem), rhs);
         if (isatomic)
             jl_atomic_store((_Atomic(jl_value_t*)*)m.ptr_or_offset, rhs);
         else
             jl_atomic_store_release((_Atomic(jl_value_t*)*)m.ptr_or_offset, rhs);
-        jl_gc_wb(jl_genericmemory_owner(m.mem), rhs);
         return;
     }
     int hasptr;
@@ -483,6 +483,8 @@ JL_DLLEXPORT void jl_memoryrefset(jl_genericmemoryref_t m, jl_value_t *rhs JL_RO
         assert(data - (char*)m.mem->ptr < layout->size * m.mem->length);
         int needlock = layout->flags.arrayelem_islocked;
         size_t fsz = jl_datatype_size((jl_datatype_t*)jl_typeof(rhs)); // need to shrink-wrap the final copy
+        if (hasptr)
+            jl_gc_multi_wb(jl_genericmemory_owner(m.mem), rhs); // rhs is immutable
         if (isatomic && !needlock) {
             jl_atomic_store_bits(data, rhs, fsz);
         }
@@ -494,8 +496,6 @@ JL_DLLEXPORT void jl_memoryrefset(jl_genericmemoryref_t m, jl_value_t *rhs JL_RO
         else {
             memassign_safe(hasptr, data, rhs, fsz);
         }
-        if (hasptr)
-            jl_gc_multi_wb(jl_genericmemory_owner(m.mem), rhs); // rhs is immutable
     }
 }
 
@@ -512,11 +512,11 @@ JL_DLLEXPORT jl_value_t *jl_memoryrefswap(jl_genericmemoryref_t m, jl_value_t *r
     if (layout->flags.arrayelem_isboxed) {
         assert(data - (char*)m.mem->ptr < sizeof(jl_value_t*) * m.mem->length);
         jl_value_t *r;
+        jl_gc_wb(owner, rhs);
         if (isatomic)
             r = jl_atomic_exchange((_Atomic(jl_value_t*)*)data, rhs);
         else
             r = jl_atomic_exchange_release((_Atomic(jl_value_t*)*)data, rhs);
-        jl_gc_wb(owner, rhs);
         if (__unlikely(r == NULL))
             jl_throw(jl_undefref_exception);
         return r;
@@ -597,9 +597,8 @@ JL_DLLEXPORT jl_value_t *jl_memoryrefsetonce(jl_genericmemoryref_t m, jl_value_t
         assert(data - (char*)m.mem->ptr < sizeof(jl_value_t*) * m.mem->length);
         jl_value_t *r = NULL;
         _Atomic(jl_value_t*) *px = (_Atomic(jl_value_t*)*)data;
+        jl_gc_wb(owner, rhs);
         success = isatomic ? jl_atomic_cmpswap(px, &r, rhs) : jl_atomic_cmpswap_release(px, &r, rhs);
-        if (success)
-            jl_gc_wb(owner, rhs);
     }
     else {
         if (layout->flags.arrayelem_isunion) {
