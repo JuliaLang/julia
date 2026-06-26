@@ -7086,7 +7086,7 @@ end
 @test Base.infer_return_type() do
     oc = Base.Experimental.@opaque Tuple{Int}->Real x -> 2x
     Compiler.return_type(oc, Tuple{Int})
-end == Type{Real}
+end == Core.TypeEgal{Real}
 # When the OC is still a `PartialOpaque`, but its declared return type parameter is
 # not exact, do not use the source to recover the runtime-selected OC type.
 @test Base.infer_return_type() do
@@ -7095,7 +7095,7 @@ end == Type{Real}
 end == Type
 @test Base.infer_return_type((Core.OpaqueClosure{Tuple{Int},Real},)) do oc
     Compiler.return_type(oc, Tuple{Int})
-end == Type{Real}
+end == Core.TypeEgal{Real}
 @test Base.infer_return_type((Core.OpaqueClosure{Tuple{Int},<:Real},)) do oc
     Compiler.return_type(oc, Tuple{Int})
 end == Type{<:Real}
