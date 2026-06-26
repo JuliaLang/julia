@@ -789,13 +789,23 @@ function type_sptype_to_egal(@nospecialize(ty))
     end
 end
 
+function type_value_to_egal(@nospecialize(v), @nospecialize(fallback))
+    v isa Type || return fallback
+    try
+        return Core.TypeEgal{v}
+    catch ex
+        ex isa InterruptException && rethrow()
+        return fallback
+    end
+end
+
 # Compute the abstract value `ty` for a sparam whose inferred env entry carries
 # a TypeVar (either the sig's own `vᵢ` for unspecialized MIs, or a possibly
 # narrowed `output_tvar` from subtyping). First try to sharpen via
 # `arg::Type{vᵢ}` / `Vararg{_,vᵢ}` patterns in `sigtypes`; otherwise fall back
 # to `Type{output_tvar}` rewrapped against free typevars of `specTypes`.
 function sptype_for_tvar(vᵢ::TypeVar, output_tvar::TypeVar, sigtypes::Core.SimpleVector,
-                         @nospecialize(specTypes))
+                         @nospecialize(specTypes), v_egal::Bool=false)
     for j = 1:length(sigtypes)
         sⱼ = sigtypes[j]
         if isType(sⱼ) && type_parameter(sⱼ) === vᵢ
@@ -816,7 +826,8 @@ function sptype_for_tvar(vᵢ::TypeVar, output_tvar::TypeVar, sigtypes::Core.Sim
         # `X <: T <: X` pins the var to `X` up to type equality: an `S == X` rep
         # argument also matches this MethodInstance and would bind the var to `S`
         # (#61323)
-        return rewrap_free_typevars(TypeEq{output_tvar.lb}, find_free_typevars(specTypes))
+        ty = rewrap_free_typevars(TypeEq{output_tvar.lb}, find_free_typevars(specTypes))
+        return v_egal ? type_value_to_egal(output_tvar.lb, ty) : ty
     end
     return rewrap_free_typevars(TypeEq{output_tvar}, find_free_typevars(specTypes))
 end
@@ -954,9 +965,9 @@ function sptypes_from_meth_instance(mi::MethodInstance)
             vᵢ = (temp::UnionAll).var
             sigtypes = (unwrap_unionall(temp)::DataType).parameters
             if v_tvar !== nothing
-                ty = sptype_for_tvar(vᵢ, v_tvar, sigtypes, mi.specTypes)
-                v_constrained |= sparam_definitely_defined_from_spec(vᵢ, sigtypes, mi.specTypes)
                 v_egal = sparam_definitely_egal_from_spec(vᵢ, sigtypes, mi.specTypes)
+                ty = sptype_for_tvar(vᵢ, v_tvar, sigtypes, mi.specTypes, v_egal)
+                v_constrained |= sparam_definitely_defined_from_spec(vᵢ, sigtypes, mi.specTypes)
             else
                 ty = rewrap_free_typevars(TypeEq{v}, find_free_typevars(mi.specTypes))
                 v_egal = false

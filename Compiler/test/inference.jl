@@ -600,6 +600,17 @@ struct P62001{T,N} end
 const P62001Int4 = P62001{Int,4}
 @test only(Base.return_types(generated_type_sparam62001, Tuple{Core.TypeEgal{P62001Int4}})) === Val{Int}
 
+# Invariant datatype parameters preserve the exact runtime spelling of the
+# `Type{Union{}}`/`Core.TypeofBottom` alias family when forming static params.
+struct TypeofBottomParam62001{S} end
+typeofbottom_param62001(::Type{TypeofBottomParam62001{S}}) where {S} =
+    S === Type{Union{}} ? 1 : ""
+@test typeofbottom_param62001(TypeofBottomParam62001{Type{Union{}}}) == 1
+@test only(Base.return_types(typeofbottom_param62001,
+    Tuple{Type{TypeofBottomParam62001{Type{Union{}}}}})) === Int
+@test only(Base.return_types(typeofbottom_param62001,
+    Tuple{Core.TypeEgal{TypeofBottomParam62001{Type{Union{}}}}})) === Int
+
 # Structural TypeofVararg results should remain usable when constructing Tuple types.
 vararg_tail62001(X::Tuple{S,Vararg{S}}) where S =
     X[2:end]::Tuple{Vararg{eltype(X::Tuple{Any,Vararg{Any}})}}
