@@ -200,10 +200,8 @@ JL_DLLEXPORT jl_value_t *jl_genericmemory_to_string(jl_genericmemory_t *m, size_
         jl_genericmemory_data_owner_field(m) = NULL;
         if (how == 3 && jl_is_string(o) &&
              ((mlength + sizeof(void*) + 1 <= GC_MAX_SZCLASS) == (len + sizeof(void*) + 1 <= GC_MAX_SZCLASS))) {
-            if (jl_string_data(o)[len] != '\0')
-                jl_string_data(o)[len] = '\0';
-            if (*(size_t*)o != len)
-                *(size_t*)o = len;
+            jl_string_data(o)[len] = '\0';
+            *(size_t*)o = len;
             return o;
         }
         JL_GC_PUSH1(&o);
