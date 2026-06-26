@@ -2128,6 +2128,13 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
         setName(ctx.emission_context, val, "is_kind");
         return std::make_pair(val, false);
     }
+    if (jl_is_some_Type(type)) {
+        Value *vx = boxed(ctx, x);
+        Value *vtyp = track_pjlvalue(ctx, literal_pointer_val(ctx, type));
+        return std::make_pair(ctx.builder.CreateICmpNE(
+                ctx.builder.CreateCall(prepare_call(jlisa_func), { vx, vtyp }),
+                ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0)), false);
+    }
     // intersection with Type needs to be handled specially
     if (jl_has_intersect_type_not_kind(type) || jl_has_intersect_type_not_kind(intersected_type)) {
         Value *vx = boxed(ctx, x);

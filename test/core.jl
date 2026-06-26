@@ -8686,6 +8686,18 @@ end
 @test_broken Int isa Union{UnionAll, Type{Union{Int,T2} where {T2<:T1}} where {T1}}
 @test_broken Int isa Union{Union, Type{Union{Int,T1}} where {T1}}
 
+# Compiled `isa(::Type, ::Type{T})` must check the type value, not only `typeof`.
+@noinline isa_type_unionall_62001(v::Type) = v isa Type{UnionAll}
+@noinline isa_typeegal_unionall_62001(v::Type) = v isa Core.TypeEgal{UnionAll}
+@test isa_type_unionall_62001(UnionAll)
+@test isa_typeegal_unionall_62001(UnionAll)
+
+mutable struct TypeFieldUnionAll62001{T}
+    t::Type{T}
+end
+@noinline construct_typefield_unionall_62001(T::Type, v::Type) = T(v)
+@test construct_typefield_unionall_62001(TypeFieldUnionAll62001{UnionAll}, UnionAll).t === UnionAll
+
 let M = @__MODULE__
     Core.eval(M, :(global a_typed_global))
     @test Core.eval(M, :(global a_typed_global::$(Tuple{Union{Integer,Nothing}}))) === nothing
