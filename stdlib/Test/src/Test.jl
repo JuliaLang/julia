@@ -336,7 +336,7 @@ end
 
 # Types that appear in TestSetException.errors_and_fails we convert eagerly into strings
 # other types we convert lazily
-function Serialization.serialize(s::Serialization.AbstractSerializer, t::Pass)
+function Serialization.serialize(s::Serialization.AbstractJuliaSerializer, t::Pass)
     Serialization.serialize_type(s, typeof(t))
     Serialization.serialize(s, t.test_type)
     Serialization.serialize(s, t.orig_expr === nothing ? nothing : string(t.orig_expr))
@@ -347,7 +347,7 @@ function Serialization.serialize(s::Serialization.AbstractSerializer, t::Pass)
     nothing
 end
 
-function Serialization.serialize(s::Serialization.AbstractSerializer, t::Broken)
+function Serialization.serialize(s::Serialization.AbstractJuliaSerializer, t::Broken)
     Serialization.serialize_type(s, typeof(t))
     Serialization.serialize(s, t.test_type)
     Serialization.serialize(s, t.orig_expr === nothing ? nothing : string(t.orig_expr))
