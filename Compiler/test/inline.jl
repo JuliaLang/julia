@@ -2009,6 +2009,32 @@ let src = code_typed1(make_issue47349(Val{4}()), (Any,))
     end |> only == Core.TypeEgal{Int}
 end
 
+# JIT preparation should keep resolved invoke edges so inlined Type-argument
+# calls do not allocate.
+struct FastReadBuffer62001
+    data::Vector{UInt8}
+    position::Base.RefValue{Int}
+end
+FastReadBuffer62001() = FastReadBuffer62001(UInt8[0x01, 0x02], Ref(0))
+@inline function read_byte62001(buf::FastReadBuffer62001, ::Type{UInt8})
+    nextpos = buf.position[] + 1
+    nextpos > length(buf.data) && throw(EOFError())
+    buf.position[] = nextpos
+    @inbounds return buf.data[nextpos]
+end
+let buf = FastReadBuffer62001()
+    for _ in 1:5
+        buf.position[] = 0
+        read_byte62001(buf, UInt8)
+    end
+    for _ in 1:5
+        buf.position[] = 0
+        Base.allocated(read_byte62001, buf, UInt8)
+    end
+    buf.position[] = 0
+    @test Base.allocated(read_byte62001, buf, UInt8) == 0
+end
+
 # Test that irinterp can make use of constant results even if they're big
 # Check that pure functions with non-inlineable results still get deleted
 struct BigSemi
