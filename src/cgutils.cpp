@@ -2652,15 +2652,9 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                 r = ctx.builder.CreateZExt(r, elty);
         }
     }
-    Value *instr = nullptr;
-    Value *Compare = nullptr;
-    Value *Success = nullptr;
-    BasicBlock *DoneBB = nullptr;
-    if (needlock)
-        emit_lockstate_value(ctx, needlock, true);
-    jl_cgval_t oldval = rhs;
-    // Emit the write barrier for the new value *before* the store.
-    auto emit_store_pre_barrier = [&] {
+    // This pre-write barrier must be emitted before the store, while also not
+    // holding any local atomic locks.
+    auto emit_store_pre_barrier = [&](Value *r, const jl_cgval_t &rhs) {
         if (parent == NULL || !tracked_pointers)
             return;
         if (isboxed) {
@@ -2669,24 +2663,38 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             assert(r != nullptr);
             emit_write_barrier(ctx, parent, r);
         }
-        else if (!rhs.inline_roots.empty()) {
-            emit_write_multibarrier(ctx, parent, rhs);
+        else if (r) {
+            Value *wbval = r;
+            if (realelty != elty)
+                wbval = ctx.builder.CreateTrunc(wbval, realelty);
+            if (intcast) {
+                ctx.builder.CreateStore(wbval, intcast);
+                wbval = ctx.builder.CreateLoad(intcast_eltyp, intcast);
+            }
+            else if (intcast_eltyp) {
+                // setfield doesn't use an intcast alloca, so reload rhs with the
+                // pointer-exposing type
+                wbval = emit_unbox(ctx, intcast_eltyp, rhs);
+            }
+            emit_write_multibarrier(ctx, parent, wbval, rhs.typ);
         }
         else {
-            // Unbox to the field's storage type (concrete by construction), not
-            // rhs.typ which may be bottom for an unreachable store (e.g. a modify
-            // of an always-undef field) and would make emit_unbox return null.
-            // intcast_eltyp is the pointer-exposing type when the field was
-            // widened to an integer for atomics.
-            Type *wb_eltyp = intcast_eltyp ? intcast_eltyp : realelty;
-            Value *agg = emit_unbox(ctx, wb_eltyp, rhs);
-            emit_write_multibarrier(ctx, parent, agg, rhs.typ);
+            assert(!isboxed);
+            assert(!rhs.inline_roots.empty());
+            emit_write_multibarrier(ctx, parent, rhs);
         }
     };
     // For op == StoreKind::Modify the new value isn't known yet; its barrier is
-    // emitted later, once `rhs`/`r` have been computed.
+    // emitted later inside the loop, once `rhs`/`r` have been computed.
     if (op != StoreKind::Modify)
-        emit_store_pre_barrier();
+        emit_store_pre_barrier(r, rhs);
+    if (needlock)
+        emit_lockstate_value(ctx, needlock, true);
+    Value *instr = nullptr;
+    Value *Compare = nullptr;
+    Value *Success = nullptr;
+    BasicBlock *DoneBB = nullptr;
+    jl_cgval_t oldval = rhs;
     // TODO: we should do Release ordering for anything with CountTrackedPointers(elty).count > 0, instead of just isboxed
     if (op == StoreKind::Set || (Order == AtomicOrdering::NotAtomic && op == StoreKind::Swap)) {
         if (op == StoreKind::Swap) {
@@ -2903,9 +2911,12 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                 if (realelty != elty)
                     r = ctx.builder.CreateZExt(r, elty);
             }
+            // As an optimization, we could hoist this pre-write barrier after the cmpxchg
+            // loop if we had a barrier form that explicitly takes in `oldval`. However it
+            // only makes any difference under contention so has limited gains.
+            emit_store_pre_barrier(r, rhs);
             if (needlock)
                 emit_lockstate_value(ctx, needlock, true); // relock
-            emit_store_pre_barrier();
             cmpop = oldval;
         }
         Value *Done;
@@ -3019,7 +3030,6 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         ctx.builder.SetInsertPoint(DoneBB);
     if (needlock)
         emit_lockstate_value(ctx, needlock, false);
-    // Write barrier is emitted before the store (see emit_store_pre_barrier above).
     switch (op) {
     case StoreKind::Modify: {
         const jl_cgval_t argv[2] = { oldval, rhs };
