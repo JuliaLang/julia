@@ -1494,8 +1494,8 @@ let code = quote
                 @test_deprecated r"Not found in message" oldfunc()
             end
             @test length(fails) == 2
-            @test fails[1] isa Test.LogTestFailure
-            @test fails[2] isa Test.LogTestFailure
+            @test fails[1] isa Test.Fail
+            @test fails[2] isa Test.Fail
         end
 
         @testset "@test_deprecated broken/skip keywords" begin
