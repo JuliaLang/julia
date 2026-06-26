@@ -2235,6 +2235,7 @@ JL_DLLIMPORT void jl_get_llvm_cis(void *native_code, size_t *num_els,
                                   jl_code_instance_t **CIs);
 JL_DLLIMPORT void jl_init_codegen(void);
 JL_DLLIMPORT void jl_teardown_codegen(void) JL_NOTSAFEPOINT;
+JL_DLLIMPORT void jl_decorate_llvm_module(LLVMModuleRef m) JL_NOTSAFEPOINT;
 JL_DLLIMPORT int jl_getFunctionInfo(jl_frame_t **frames, uintptr_t pointer, int skipC, int noInline) JL_NOTSAFEPOINT;
 // n.b. this might be called from unmanaged thread:
 JL_DLLIMPORT uint64_t jl_getUnwindInfo(uint64_t dwBase) JL_NOTSAFEPOINT;

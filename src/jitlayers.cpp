@@ -164,7 +164,7 @@ void jl_dump_llvm_opt_impl(void *s)
     **jl_ExecutionEngine->get_dump_llvm_opt_stream() = (ios_t*)s;
 }
 
-static void jl_decorate_module(Module &M) JL_NOTSAFEPOINT;
+static void decorate_module(Module &M) JL_NOTSAFEPOINT;
 
 // convert local roots into global roots, if they are needed
 static void jl_promote_method_roots(jl_codegen_output_t &out, jl_method_instance_t *mi)
@@ -1459,7 +1459,7 @@ struct JuliaOJIT::JITPointersT {
         // Windows needs some inline asm to help
         // build unwind tables, if they have any functions to decorate
         if (!M.functions().empty())
-            jl_decorate_module(M);
+            decorate_module(M);
     }
     void operator()(Module &M, orc::MaterializationResponsibility &R) JL_NOTSAFEPOINT {
         return operator()(M);
@@ -2465,7 +2465,7 @@ TargetIRAnalysis JuliaOJIT::getTargetIRAnalysis() const {
     return TM->getTargetIRAnalysis();
 }
 
-static void jl_decorate_module(Module &M) {
+static void decorate_module(Module &M) {
     auto TT = Triple(M.getTargetTriple());
     if (TT.isOSWindows() && TT.getArch() == Triple::x86_64) {
         // Add special values used by debuginfo to build the UnwindData table registration for Win64
@@ -2528,6 +2528,12 @@ static void jl_decorate_module(Module &M) {
         M.appendModuleInlineAsm(inline_asm);
     }
 #undef ASM_USES_ELF
+}
+
+extern "C" JL_DLLEXPORT_CODEGEN
+void jl_decorate_llvm_module_impl(LLVMModuleRef m) JL_NOTSAFEPOINT
+{
+    decorate_module(*unwrap(m));
 }
 
 // helper function for adding a DLLImport (dlsym) address to the execution engine
