@@ -1,7 +1,16 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-function collect_limitations!(@nospecialize(typ), ::IRInterpretationState)
-    @assert !isa(typ, LimitedAccuracy) "irinterp is unable to handle heavy recursion correctly"
+function collect_limitations!(@nospecialize(typ), sv::IRInterpretationState)
+    if isa(typ, LimitedAccuracy)
+        parent = frame_parent(sv)
+        while parent isa IRInterpretationState
+            parent = frame_parent(parent)
+        end
+        if parent isa InferenceState
+            union!(parent.pclimitations, typ.causes)
+        end
+        return typ.typ
+    end
     return typ
 end
 

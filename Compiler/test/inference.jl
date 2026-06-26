@@ -2402,10 +2402,30 @@ end
 end
 
 @testset "`from_interprocedural!`: translate inter-procedural information" begin
-    # TODO come up with a test case to check the functionality of `collect_limitations!`
-    # one heavy test case would be to use https://github.com/aviatesk/JET.jl and
-    # check `julia /path/to/JET/jet /path/to/JET/src/JET.jl` doesn't result in errors
-    # because of nested `LimitedAccuracy`es
+    # LimitedAccuracy from nested IR interpretation should be recorded on the
+    # nearest enclosing inference frame.
+    limited_parent62001(x) = x
+    function make_irsv62001(interp, mi, argtypes, world)
+        src = Compiler.retrieve_code_info(mi, world)
+        spec_info = Compiler.SpecInfo(src)
+        ir = Compiler.inflate_ir(src, mi)
+        return Compiler.IRInterpretationState(interp, spec_info, ir, mi,
+            Any[argtypes...], UInt(1), world)
+    end
+    let interp = Compiler.NativeInterpreter(), world = Base.get_world_counter()
+        match = only(Base._methods_by_ftype(Tuple{typeof(limited_parent62001),Int}, -1, world))
+        mi = Compiler.specialize_method(match)
+        parent = Compiler.InferenceState(Compiler.InferenceResult(mi, Compiler.typeinf_lattice(interp)),
+            :global, interp)
+        child = make_irsv62001(interp, mi, (Core.Const(limited_parent62001), Int), world)
+        Compiler.assign_parentchild!(child, parent)
+        grandchild = make_irsv62001(interp, mi, (Core.Const(limited_parent62001), Int), world)
+        Compiler.assign_parentchild!(grandchild, child)
+        causes = IdSet{Compiler.InferenceState}()
+        push!(causes, parent)
+        @test Compiler.collect_limitations!(Compiler.LimitedAccuracy(String, causes), grandchild) === String
+        @test parent in parent.pclimitations
+    end
 
     # `InterConditional` handling: `abstract_invoke`
     ispositive(a) = isa(a, Int) && a > 0
