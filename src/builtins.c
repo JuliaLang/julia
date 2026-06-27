@@ -237,11 +237,6 @@ JL_DLLEXPORT int jl_types_struct_equiv(jl_value_t *a, jl_value_t *b)
     return egal_types(a, b, NULL, 0);
 }
 
-JL_DLLEXPORT int jl_types_egal(jl_value_t *a, jl_value_t *b)
-{
-    return jl_types_struct_equiv(a, b);
-}
-
 JL_DLLEXPORT int (jl_egal)(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT
 {
     // warning: a,b may NOT have been gc-rooted by the caller

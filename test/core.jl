@@ -429,8 +429,8 @@ end  |> only == Core.TypeEgal{typejoin(Int, UInt, Float64)}
 @test typejoin(Core.TypeEgal{Int}, Core.TypeEgal{String}) === DataType
 @test typejoin(Core.TypeEgal{Int}, DataType) === DataType
 @test typejoin(Core.TypeEgal{Int}, Type{String}) === DataType
-@test ccall(:jl_types_egal, Cint, (Any, Any), Int, Int) == 1
-@test ccall(:jl_types_egal, Cint, (Any, Any), Int, String) == 0
+@test ccall(:jl_types_struct_equiv, Cint, (Any, Any), Int, Int) == 1
+@test ccall(:jl_types_struct_equiv, Cint, (Any, Any), Int, String) == 0
 
 # `isType` covers both type-object kinds; use split predicates when exactness matters.
 @test Base.isType(Type{Int})
