@@ -1074,8 +1074,12 @@ let f = g -> x -> g(x)
     @test fieldtype(typeof(f(Rational{Int})), 1) === Core.TypeEgal{Rational{Int}}
     @test @inferred(f(Rational)) isa Function
     @test fieldtype(typeof(f(Rational)), 1) === Core.TypeEgal{Rational}
-    @test_broken @inferred(f(Rational{Core.TypeVar(:T)})) isa Function
+    @test f(Rational{Core.TypeVar(:T)}) isa Function
     @test fieldtype(typeof(f(Rational{Core.TypeVar(:T)})), 1) === DataType
+end
+let T = Core.TypeVar(:T), g = Base.Generator(Rational{T}, 1:1)
+    @test g.f === Rational{T}
+    @test fieldtype(typeof(g), :f) === DataType
 end
 let f() = (T = Rational{Core.TypeVar(:T)}; () -> T)
     @test f() isa Function

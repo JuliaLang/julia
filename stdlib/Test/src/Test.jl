@@ -2573,7 +2573,7 @@ function _inferred(ex, mod, allow = :(Union{}))
                         inftype = Base.infer_return_type($(esc(ex.args[1])), Base.typesof(args...))
                     end
                 end)
-                rettype = result isa Type ? Core.TypeEgal{result} : typeof(result)
+                rettype = Core.Typeof(result)
                 infsplit = typesplit(inftype, allow)
                 # a type-valued result also matches an inference of its `==`-class `Type{result}`
                 rettype <: allow || rettype == infsplit ||
