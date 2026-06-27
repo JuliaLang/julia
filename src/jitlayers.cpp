@@ -2226,15 +2226,15 @@ static void retargetLinkGraphEdges(jitlink::LinkGraph &G, jitlink::Symbol &From,
     jitlink::visitExistingEdges(G, RetargetEdgeVisitor{From, To});
 }
 
-static void
+static jitlink::Symbol *
 renameLinkGraphSymbol(jitlink::LinkGraph &G, jitlink::Symbol &Sym,
                       const orc::SymbolStringPtr &Name) JL_NOTSAFEPOINT
 {
     if (Sym.getName() == Name)
-        return;
+        return &Sym;
     if (!Sym.isExternal()) {
         Sym.setName(Name);
-        return;
+        return &Sym;
     }
     // External symbols are keyed by name inside LinkGraph, so retarget rather
     // than renaming in place and leaving the external symbol map stale.
@@ -2244,7 +2244,15 @@ renameLinkGraphSymbol(jitlink::LinkGraph &G, jitlink::Symbol &Sym,
         Dest->setCallable(Sym.isCallable());
         Dest->setTargetFlags(Sym.getTargetFlags());
     }
+    else if (Dest->isExternal()) {
+        Dest->setWeaklyReferenced(Dest->isWeaklyReferenced() && Sym.isWeaklyReferenced());
+        Dest->setCallable(Dest->isCallable() || Sym.isCallable());
+        Dest->setTargetFlags(Dest->getTargetFlags() | Sym.getTargetFlags());
+    }
     retargetLinkGraphEdges(G, Sym, *Dest);
+    if (Dest != &Sym)
+        G.removeExternalSymbol(Sym);
+    return Dest;
 }
 
 bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferRef ObjBuf,
@@ -2257,7 +2265,9 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
     // Rename the defined CI functions.
     auto RenameDef = [&](const SymbolStringPtr &Orig, const SymbolStringPtr &Dest)
                              JL_NOTSAFEPOINT {
-        renameLinkGraphSymbol(G, *Syms.at(Orig), Dest);
+        auto It = Syms.find(Orig);
+        assert(It != Syms.end());
+        It->second = renameLinkGraphSymbol(G, *It->second, Dest);
     };
     for (auto &[CI, Funcs] : Info->ci_funcs) {
         auto &S = CISymbols.at(CI);
@@ -2270,13 +2280,14 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
     // Rename referenced CIs in the workqueue.
     for (auto &[Call, T] : Info->call_targets) {
         auto [CI, API] = Call;
-        if (!Syms.contains(T))
+        auto It = Syms.find(T);
+        if (It == Syms.end())
             continue;
         JL_GC_PROMISE_ROOTED(CI);
         auto Dest = linkCallTarget(MR, CI, API);
         if (!Dest)
             return false;
-        renameLinkGraphSymbol(G, *Syms.at(T), Dest);
+        It->second = renameLinkGraphSymbol(G, *It->second, Dest);
     }
 
     // Rename globals and add mappings
@@ -2296,7 +2307,7 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
         auto It = Syms.find(Orig);
         if (It == Syms.end())
             continue;
-        renameLinkGraphSymbol(G, *It->second, Sym);
+        It->second = renameLinkGraphSymbol(G, *It->second, Sym);
         Ptrs[i] = Addr;
         GlobalSyms[Sym] = {ExecutorAddr::fromPtr(Ptrs + i), JITSymbolFlags::Exported};
         ++i;

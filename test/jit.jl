@@ -63,7 +63,7 @@ ci = compile_no_deps(M2.bar, (Int,))
     function jitlink_rename_reproducer(i)
         x = jitlink_rename_resolve(Base.inferencebarrier(true) ? (1,) :
             map(+, Tuple([]), (1, 1)), i, ((), (), ()))
-        y = x[1] == x[1] ? :a : :b
+        y = Base.inferencebarrier(true) ? :a : :b
         if y === :a; elseif y === :b
             jitlink_rename_reproducer(x[3])
         else
