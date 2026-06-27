@@ -1512,9 +1512,10 @@ static jl_value_t *subtype_unionall_envout_value(jl_value_t *t, jl_unionall_t *u
             // marks it *defined* (constrained) for every `==`-equal call.
             // Free-typevar values keep the legacy plain binding (#61242).
             if (jl_is_type(lb) && lb != jl_bottom_type && vb->lb_certainty < BOUND_EGAL &&
-                !jl_has_free_typevars(lb))
-                return wrap_tvar_env((jl_value_t*)jl_new_typevar(u->var->name, lb, lb),
-                                     constrained || vb->lb_certainty == BOUND_EQ);
+                !jl_has_free_typevars(lb)) {
+                *new_tvar = (jl_value_t*)jl_new_typevar(u->var->name, lb, lb);
+                return wrap_tvar_env(*new_tvar, constrained || vb->lb_certainty == BOUND_EQ);
+            }
             return lb;
         }
         if (constrained && !jl_has_free_typevars(t) && !jl_has_free_typevars(lb) &&
@@ -1545,9 +1546,10 @@ static jl_value_t *subtype_unionall_envout_value(jl_value_t *t, jl_unionall_t *u
         if (vb->tainted_inner || has_universal_typevar(lb, e))
             return wrap_tvar_env(lb, constrained);
         if (jl_is_type(lb) && lb != jl_bottom_type && vb->lb_certainty < BOUND_EGAL &&
-            !jl_has_free_typevars(lb))
-            return wrap_tvar_env((jl_value_t*)jl_new_typevar(u->var->name, lb, lb),
-                                 constrained || vb->lb_certainty == BOUND_EQ);
+            !jl_has_free_typevars(lb)) {
+            *new_tvar = (jl_value_t*)jl_new_typevar(u->var->name, lb, lb);
+            return wrap_tvar_env(*new_tvar, constrained || vb->lb_certainty == BOUND_EQ);
+        }
         return lb;
     }
     if (lb == u->var->lb && vb->ub == u->var->ub && !*new_tvar)
