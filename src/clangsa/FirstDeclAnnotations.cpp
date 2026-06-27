@@ -70,6 +70,19 @@
 // like the `uv_`/`unw_`/`_U` runtime helpers) are exempt, mirroring
 // GCChecker's own reasoning so sound conversions are not flagged.
 //
+// This check enforces a third, closely related rule for C++ virtual methods:
+// an overriding method must carry at least the Julia analyzer annotations of
+// every method it overrides -- it must be "stronger than" the original. The
+// analyzer assumes a virtual call made through a base-class reference carries
+// the overridden method's annotations (e.g. that an overridden JL_NOTSAFEPOINT
+// method does not hit a safepoint); if an override drops that annotation, calls
+// dispatched dynamically to it would be analyzed unsoundly. So an override that
+// provides fewer annotations than a method it overrides is diagnosed (without a
+// fix-it, for the same reason as the function-pointer case: the right
+// resolution is a judgement call). The same exemptions as the function-pointer
+// case apply -- a method the analyzer already treats as a non-safepoint without
+// an annotation is not flagged.
+//
 // Usage (see src/Makefile): clang-tidy foo.c --quiet \ -load
 // libFirstDeclAnnotationsPlugin.so \
 // --checks='-*,julia-first-decl-annotations' [--fix] \ -- <compiler flags>
@@ -89,6 +102,7 @@
 #include "clang-tidy/ClangTidyCheck.h"
 #include "clang-tidy/ClangTidyModule.h"
 #include "clang-tidy/ClangTidyModuleRegistry.h"
+#include "llvm/ADT/StringSet.h"
 
 using namespace clang;
 using namespace clang::tidy;
@@ -122,6 +136,11 @@ public:
                     ignoringParens(declRefExpr(to(functionDecl())))))
                 .bind("conv"),
             this);
+
+        // Match a C++ method that overrides one or more virtual methods; the
+        // annotations on the override are compared against the overridden
+        // methods in checkOverride().
+        Finder->addMatcher(cxxMethodDecl(isOverride()).bind("override"), this);
     }
 
     void check(const MatchFinder::MatchResult &Result) override {
@@ -129,6 +148,9 @@ public:
             checkFirstDecl(FD, Result);
         else if (const auto *Conv = Result.Nodes.getNodeAs<Expr>("conv"))
             checkFnPtrConversion(Conv, Result);
+        else if (const auto *MD =
+                     Result.Nodes.getNodeAs<CXXMethodDecl>("override"))
+            checkOverride(MD, Result);
     }
 
     void checkFirstDecl(const FunctionDecl *FD,
@@ -320,6 +342,46 @@ private:
             diag(FD->getFirstDecl()->getLocation(),
                  "%0 is declared here", DiagnosticIDs::Note)
                 << FD;
+        }
+    }
+
+    // A C++ method `MD` overrides one or more virtual methods. The analyzer
+    // assumes a virtual call dispatched through a base-class reference carries
+    // the overridden method's annotations, so the override must carry at least
+    // every annotation of the methods it overrides -- it must be "stronger
+    // than" the original.
+    void checkOverride(const CXXMethodDecl *MD,
+                       const MatchFinder::MatchResult &Result) {
+        SourceManager &SM = Result.Context->getSourceManager();
+
+        llvm::SmallVector<std::pair<std::string, const CXXMethodDecl *>, 2> Required;
+        llvm::StringSet<> Seen;
+        for (const CXXMethodDecl *Base : MD->overridden_methods())
+            for (const FunctionDecl *R : Base->redecls())
+                for (const auto *A : R->attrs()) {
+                    std::string Key = attrKey(A);
+                    if (!StringRef(Key).starts_with("annotate:"))
+                        continue;
+                    if (Seen.insert(Key).second)
+                        Required.emplace_back(std::move(Key), Base);
+                }
+
+        for (const auto &R : Required) {
+            StringRef Key = R.first;
+            if (functionProvidesAnnotation(MD, Key, SM))
+                continue;
+            // Strip the "annotate:" prefix added by attrKey() for the message.
+            StringRef Name = Key;
+            Name.consume_front("annotate:");
+            auto Diag = diag(MD->getLocation(),
+                 "%0 overrides a method that requires Julia annotation \"%1\", "
+                 "but %0 is not annotated \"%1\"; annotate the override so "
+                 "virtual calls through the base class are analyzed soundly");
+            Diag << MD << Name;
+            diag(R.second->getLocation(),
+                 "overridden method %0 requires the annotation here",
+                 DiagnosticIDs::Note)
+                << R.second;
         }
     }
 

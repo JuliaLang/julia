@@ -108,6 +108,19 @@ struct fda_cb_holder fda_cb_inst = { fda_cb_bad };
 // CHECK-CXX: warning: Julia annotation "julia_not_safepoint" is on this declaration of 'm' but missing from its first declaration
 struct fda_S { void m(void); };
 void fda_S::m(void) JL_NOTSAFEPOINT {}
+
+struct fda_Base {
+    virtual void fda_ovr_ok(void) JL_NOTSAFEPOINT;
+    virtual void fda_ovr_bad(void) JL_NOTSAFEPOINT;
+    virtual void fda_ovr_plain(void);
+};
+
+struct fda_Derived : fda_Base {
+    void fda_ovr_ok(void) JL_NOTSAFEPOINT override;
+    // CHECK-CXX: warning: 'fda_ovr_bad' overrides a method that requires Julia annotation "julia_not_safepoint", but 'fda_ovr_bad' is not annotated "julia_not_safepoint"
+    void fda_ovr_bad(void) override;
+    void fda_ovr_plain(void) override;
+};
 #endif
 
 // The system header is simulated with a GCC line marker whose '3' flag marks
