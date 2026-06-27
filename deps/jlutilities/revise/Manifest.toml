@@ -70,9 +70,9 @@ version = "1.11.0"
 
 [[deps.JuliaInterpreter]]
 deps = ["CodeTracking", "InteractiveUtils", "Random", "UUIDs"]
-git-tree-sha1 = "58927c485919bf17ea308d9d82156de1adf4b006"
-repo-rev = "master"
-repo-url = "https://github.com/JuliaDebug/JuliaInterpreter.jl.git"
+git-tree-sha1 = "7ee147ef71b6a0afe4b98d4b499154a500a549ca"
+repo-rev = "kf/typeegal-envout-markers-v0.10"
+repo-url = "https://github.com/KenoAIStaging/JuliaInterpreter.jl.git"
 uuid = "aa1ae85d-cabe-5617-a682-6adf51b2e16a"
 version = "0.10.12"
 
