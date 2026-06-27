@@ -909,6 +909,20 @@ let (ci, rt) = only(code_typed(() -> fieldtypes(Tuple{1:2, 3:4}), (); optimize=t
     @test rt == Tuple{UnitRange{Int}, UnitRange{Int}}
 end
 
+const FieldRep62001 = Tuple{Tuple{S}} where S<:Int
+mutable struct FieldRepA62001
+    x::FieldRep62001
+end
+mutable struct FieldRepB62001
+    x::Tuple{Tuple{Int}}
+end
+@test fieldtype(FieldRepA62001, :x) == fieldtype(FieldRepB62001, :x)
+@test fieldtype(FieldRepA62001, :x) !== fieldtype(FieldRepB62001, :x)
+let rt = Compiler.modifyfield!_tfunc(Compiler.fallback_lattice,
+        Union{FieldRepA62001, FieldRepB62001}, Compiler.Const(:x), Any, Any, Symbol)
+    @test rt == Pair{Tuple{Tuple{Int}}, Tuple{Tuple{Int}}}
+end
+
 # JuliaLang/julia#30807: malformed types like `NTuple{<:Any, 3}` should not crash `fieldtype_tfunc`
 struct Issue30807
     xs::NTuple{<:Any, 3}
