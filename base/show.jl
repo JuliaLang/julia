@@ -2567,7 +2567,7 @@ function show_signature_function(io::IO, @nospecialize(ft), demangle=false, farg
         end
         s = sprint(show_sym, (demangle ? demangle_function_name : identity)(uw.name.singletonname), context=io)
         print_within_stacktrace(io, s, bold=true)
-    elseif (isType(ft) || isa(ft, Core.TypeEgal)) && (f = type_parameter(ft); !isa(f, TypeVar))
+    elseif isType(ft) && (f = type_parameter(ft); !isa(f, TypeVar))
         uwf = unwrap_unionall(f)
         parens = isa(f, UnionAll) && !(isa(uwf, DataType) && f === uwf.name.wrapper)
         parens && print(io, "(")

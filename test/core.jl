@@ -432,6 +432,14 @@ end  |> only == Core.TypeEgal{typejoin(Int, UInt, Float64)}
 @test ccall(:jl_types_egal, Cint, (Any, Any), Int, Int) == 1
 @test ccall(:jl_types_egal, Cint, (Any, Any), Int, String) == 0
 
+# `isType` covers both type-object kinds; use split predicates when exactness matters.
+@test Base.isType(Type{Int})
+@test Base.isType(Core.TypeEgal{Int})
+@test Base.isTypeEq(Type{Int})
+@test !Base.isTypeEq(Core.TypeEgal{Int})
+@test !Base.isTypeEgal(Type{Int})
+@test Base.isTypeEgal(Core.TypeEgal{Int})
+
 # issue #61915: a method whose function type is `Type{Foo{...} where ...}` must derive its
 # name as `Foo`, not `:Any` (argument_datatypename has to unwrap the wrapped UnionAll).
 struct UA61915{T,N,A<:AbstractArray{T,N}}

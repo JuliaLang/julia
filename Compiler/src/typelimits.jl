@@ -53,7 +53,7 @@ function is_derived_type(@nospecialize(t), @nospecialize(c), mindepth::Int)
         # see if it is derived from the body
         # also handle the var here, since this construct bounds the mindepth to the smallest possible value
         return is_derived_type(t, c.var.ub, mindepth) || is_derived_type(t, c.body, mindepth)
-    elseif isType(c) || isa(c, Core.TypeEgal)
+    elseif isType(c)
         return is_derived_type(t, type_parameter(c), mindepth)
     elseif isa(c, DataType)
         if mindepth > 0
@@ -117,20 +117,20 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
             b = __limit_type_size(t.b, c.b, sources, depth, allowed_tuplelen)
             return Union{a, b}
         end
-    elseif isType(t) || isa(t, Core.TypeEgal)
+    elseif isType(t)
         # Type is fairly important, so do not widen it as fast as other types if avoidable
         # (a widened `TypeEgal` leaves egality space: its `Type` widenings are supertypes)
         tt = type_parameter(t)
         ttu = unwrap_unionall(tt) # TODO: use a helper that preserves nested Type structure after #50692 is fixed
         # must forbid nesting through this if we detect that potentially occurring
         # we already know !is_derived_type_from_any so refuse to recurse here
-        if isType(ttu) || isa(ttu, Core.TypeEgal)
+        if isType(ttu)
             return Type{<:Type}
         elseif !isa(ttu, DataType)
             return Type
         end
         # try to peek into c to get a comparison object, but if we can't perhaps t is already simple enough on its own
-        if isType(c) || isa(c, Core.TypeEgal)
+        if isType(c)
             ct = type_parameter(c)
         else
             ct = Union{}
@@ -268,11 +268,11 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
     elseif isa(t, Int) && isa(c, Int)
         return t !== 1 && !(0 <= t < c) # alternatively, could use !(abs(t) <= abs(c) || abs(t) < n) for some n
     end
-    if isType(t) || isa(t, Core.TypeEgal)
+    if isType(t)
         # Type is fairly important, so do not widen it as fast as other types if avoidable
         tt = type_parameter(t)
         # ttu = unwrap_unionall(tt) # TODO: use a helper that preserves nested Type structure after #50692 is fixed
-        if isType(c) || isa(c, Core.TypeEgal)
+        if isType(c)
             ct = type_parameter(c)
         else
             ct = Union{}
@@ -799,7 +799,7 @@ end
         if uw isa DataType
             ti <: uw.name.wrapper || return Any
             typenames[i] = uw.name
-        elseif isType(uw) || isa(uw, Core.TypeEgal)
+        elseif isType(uw)
             typenames[i] = TypeEq.name
             all_datatypes = false
         else

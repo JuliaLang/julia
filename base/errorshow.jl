@@ -672,7 +672,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
     # pool MethodErrors for these two functions.
     if f === convert && !isempty(arg_types_param)
         at1 = arg_types_param[1]
-        if (isType(at1) || isa(at1, Core.TypeEgal)) && !has_free_typevars(at1)
+        if isType(at1) && !has_free_typevars(at1)
             at1p = type_parameter(at1)
             if at1p isa Type
                 push!(funcs, (at1p, arg_types_param[2:end]))
@@ -1373,7 +1373,7 @@ function nonsetable_type_hint_handler(io, ex, arg_types, kwargs)
             print(io, "\nAre you trying to index into an array? For multi-dimensional arrays, separate the indices with commas: ")
             printstyled(io, "a[1, 2]", color=:cyan)
             print(io, " rather than a[1][2]")
-        elseif isType(T) || isa(T, Core.TypeEgal)
+        elseif isType(T)
             Tx = type_parameter(T)
             print(io, "\nYou attempted to index the type $Tx, rather than an instance of the type. Make sure you create the type using its constructor: ")
             printstyled(io, "d = $Tx([...])", color=:cyan)

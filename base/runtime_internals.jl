@@ -979,7 +979,7 @@ function ismutationfree(@nospecialize(t))
     t = unwrap_unionall(t)
     if isa(t, DataType)
         return datatype_ismutationfree(t)
-    elseif isa(t, TypeEq) || isa(t, Core.TypeEgal)
+    elseif isType(t)
         T = type_parameter(t)
         return isa(T, Type) && ismutationfree(typeof(T))
     elseif isa(t, Union)
@@ -1002,7 +1002,7 @@ function isidentityfree(@nospecialize(t))
     t = unwrap_unionall(t)
     if isa(t, DataType)
         return datatype_isidentityfree(t)
-    elseif isa(t, TypeEq)
+    elseif isType(t)
         T = type_parameter(t)
         return isa(T, Type) && isidentityfree(typeof(T))
     elseif isa(t, Union)
@@ -1054,10 +1054,35 @@ using Core: has_free_typevars
 # and is thus perhaps most similar to the old (pre-1.0) `isconcretetype` query
 function isdispatchelem(@nospecialize v)
     return (v === Bottom) || (v === typeof(Bottom)) || isconcretedispatch(v) ||
-        isa(v, Core.TypeEgal) || (isType(v) && type_parameter(v) === Union{})
+        isTypeEgal(v) || (isTypeEq(v) && type_parameter(v) === Union{})
 end
 
-isType(@nospecialize t) = isa(t, TypeEq)
+"""
+    Base.isType(t)
+
+Determine whether `t` is a kind whose values are Julia type objects. This is
+true for both equality-keyed `Type{T}`/`TypeEq{T}` kinds and egality-keyed
+`Core.TypeEgal{T}` kinds.
+
+Use [`Base.isTypeEq`](@ref) or [`Base.isTypeEgal`](@ref) when the distinction
+between equality and egality matters.
+"""
+isType(@nospecialize t) = isTypeEq(t) || isTypeEgal(t)
+
+"""
+    Base.isTypeEq(t)
+
+Determine whether `t` is an equality-keyed `Type{T}`/`TypeEq{T}` kind.
+"""
+isTypeEq(@nospecialize t) = isa(t, TypeEq)
+
+"""
+    Base.isTypeEgal(t)
+
+Determine whether `t` is an egality-keyed `Core.TypeEgal{T}` kind.
+"""
+isTypeEgal(@nospecialize t) = isa(t, Core.TypeEgal)
+
 type_parameter(t::TypeEq) = getfield(t, :T)
 type_parameter(t::Core.TypeEgal) = getfield(t, :T)
 

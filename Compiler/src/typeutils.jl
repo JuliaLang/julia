@@ -9,7 +9,7 @@
 # `S == T` with `S !== T` reps, e.g. `Union{U,V} where {U<:T,V<:T}` (#61323).
 # Use `Core.TypeEgal{T}` when that exactness is required; `Type{Union{}}` is the
 # exception, since the bottom object is unique.
-isconstType(@nospecialize t) = isa(t, Core.TypeEgal) || (isType(t) && type_parameter(t) === Union{})
+isconstType(@nospecialize t) = isTypeEgal(t) || (isTypeEq(t) && type_parameter(t) === Union{})
 
 """
     isTypeDataType(@nospecialize t)::Bool
@@ -28,7 +28,7 @@ function isTypeDataType(@nospecialize t)
     return t.name !== Tuple.name
 end
 
-has_extended_info(@nospecialize x) = (!isa(x, Type) && !isvarargtype(x)) || isType(x) || isa(x, Core.TypeEgal)
+has_extended_info(@nospecialize x) = (!isa(x, Type) && !isvarargtype(x)) || isType(x)
 
 # Subtyping currently intentionally answers certain queries incorrectly for kind types. For
 # some of these queries, this check can be used to somewhat protect against making incorrect
@@ -64,7 +64,7 @@ function valid_as_lattice(@nospecialize(x), astag::Bool=false)
         # operations that might remove the Union itself)
         return true
     end
-    if isType(x) || isa(x, Core.TypeEgal)
+    if isType(x)
         p = type_parameter(x)
         p isa Type || p isa TypeVar || return false
         return true
@@ -463,7 +463,7 @@ function _is_immutable_type(@nospecialize ty)
     if isa(ty, Union)
         return _is_immutable_type(ty.a) && _is_immutable_type(ty.b)
     end
-    (isType(ty) || isa(ty, Core.TypeEgal)) && return false
+    isType(ty) && return false
     return !isabstracttype(ty) && !ismutabletype(ty)
 end
 

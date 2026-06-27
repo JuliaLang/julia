@@ -836,7 +836,7 @@ end
 
 function type_arg_parameter(@nospecialize(t))
     t = unwrap_unionall(t)
-    (isType(t) || t isa Core.TypeEgal) || return nothing
+    isType(t) || return nothing
     return type_parameter(t)
 end
 
