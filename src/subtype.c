@@ -5611,7 +5611,7 @@ JL_DLLEXPORT jl_value_t *jl_type_intersection(jl_value_t *a, jl_value_t *b)
     return jl_type_intersection_env(a, b, NULL);
 }
 
-JL_DLLEXPORT jl_svec_t *jl_type_intersection_with_env_markers(jl_value_t *a, jl_value_t *b)
+JL_DLLEXPORT jl_svec_t *jl_type_intersection_with_env(jl_value_t *a, jl_value_t *b)
 {
     jl_svec_t *env = jl_emptysvec;
     jl_value_t *ti = NULL;
@@ -5620,11 +5620,6 @@ JL_DLLEXPORT jl_svec_t *jl_type_intersection_with_env_markers(jl_value_t *a, jl_
     jl_svec_t *pair = jl_svec2(ti, env);
     JL_GC_POP();
     return pair;
-}
-
-JL_DLLEXPORT jl_svec_t *jl_type_intersection_with_env(jl_value_t *a, jl_value_t *b)
-{
-    return jl_type_intersection_with_env_markers(a, b);
 }
 
 int jl_subtype_matching(jl_value_t *a, jl_value_t *b, jl_svec_t **penv)

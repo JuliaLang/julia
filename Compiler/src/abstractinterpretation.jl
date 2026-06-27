@@ -2531,7 +2531,7 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
         update_valid_age!(sv, our_world, valid_worlds)
         method = matched.method
     end
-    tienv = ccall(:jl_type_intersection_with_env_markers, Any, (Any, Any), nargtype, method.sig)::SimpleVector
+    tienv = ccall(:jl_type_intersection_with_env, Any, (Any, Any), nargtype, method.sig)::SimpleVector
     ti = tienv[1]
     env = tienv[2]::SimpleVector
     mresult = abstract_call_method(interp, method, ti, env, false, si, sv)::Future

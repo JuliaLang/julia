@@ -1594,8 +1594,7 @@ function rewrap_free_typevars(@nospecialize(t), pre=Core.svec())
 end
 
 function typeintersect_env(@nospecialize(a), @nospecialize(b))
-    # Keep the `svec(inner, constrained)` env uncertainty markers.
-    (ti, env) = ccall(:jl_type_intersection_with_env_markers, Any, (Any, Any), a, b)::SimpleVector
+    (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), a, b)::SimpleVector
     Pair{Any, SimpleVector}(ti, env)
 end
 

@@ -482,7 +482,6 @@
     XX(jl_type_error_rt) \
     XX(jl_type_intersection) \
     XX(jl_type_intersection_with_env) \
-    XX(jl_type_intersection_with_env_markers) \
     XX(jl_type_morespecific) \
     XX(jl_method_morespecific) \
     XX(jl_type_union) \
