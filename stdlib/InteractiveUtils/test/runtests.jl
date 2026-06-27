@@ -581,7 +581,7 @@ let errf = tempname(),
                 Internal error: encountered unexpected error during compilation of f_broken_code:
                 ErrorException(\"unsupported or misplaced expression \\\"invalid\\\" in function f_broken_code\")
                 """, errstr) context=errstr
-            @test occursin("\nlater\n", errstr) context=errstr
+            @test occursin("\nlater\nend\n", errstr) context=errstr
             @test endswith(errstr, "\nend\n") context=errstr
         end
         rm(errf)
