@@ -657,6 +657,14 @@ void jl_register_jit_object(const object::ObjectFile &Object,
                             std::function<uint64_t(const StringRef &)> getLoadAddress,
                             const jl_linker_info_t &Info);
 
+static bool isJITLinkEHFrameSection(StringRef Name) JL_NOTSAFEPOINT
+{
+    // EH-frame sections are handled by the EH-frame registration plugin. Its
+    // post-allocation graph state is not suitable for generic section range
+    // walks here.
+    return Name == ".eh_frame" || Name == "__eh_frame" || Name.ends_with(",__eh_frame");
+}
+
 void JLDebuginfoPlugin::notifyMaterializingWithInfo(
     orc::MaterializationResponsibility &MR, jitlink::LinkGraph &G,
     MemoryBufferRef InputObject, std::unique_ptr<jl_linker_info_t> LinkerInfo)
@@ -750,8 +758,12 @@ void JLDebuginfoPlugin::modifyPassConfig(MaterializationResponsibility &MR, jitl
 #else
             auto SecName = Sec.getName();
 #endif
+            if (isJITLinkEHFrameSection(SecName))
+                continue;
+            if (Sec.blocks().empty())
+                continue;
             // https://github.com/llvm/llvm-project/commit/118e953b18ff07d00b8f822dfbf2991e41d6d791
-           Info.SectionLoadAddresses[SecName] = jitlink::SectionRange(Sec).getStart().getValue();
+            Info.SectionLoadAddresses[SecName] = jitlink::SectionRange(Sec).getStart().getValue();
         }
         return Error::success();
     });
@@ -787,10 +799,21 @@ public:
             size_t graph_size = 0;
             size_t code_size = 0;
             size_t data_size = 0;
+            DenseSet<jitlink::Block *> SkippedBlocks;
+            for (auto &section : G.sections()) {
+                if (!isJITLinkEHFrameSection(section.getName()))
+                    continue;
+                for (auto block : section.blocks())
+                    SkippedBlocks.insert(block);
+            }
             for (auto block : G.blocks()) {
+                if (SkippedBlocks.contains(block))
+                    continue;
                 graph_size += block->getSize();
             }
             for (auto &section : G.sections()) {
+                if (isJITLinkEHFrameSection(section.getName()))
+                    continue;
                 size_t secsize = 0;
                 for (auto block : section.blocks()) {
                     secsize += block->getSize();
