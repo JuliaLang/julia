@@ -785,6 +785,7 @@ function type_sptype_to_egal(@nospecialize(ty))
         return Core.TypeEgal{p}
     catch ex
         ex isa InterruptException && rethrow()
+        ex isa TypeError || rethrow()
         return ty
     end
 end
@@ -795,6 +796,7 @@ function type_value_to_egal(@nospecialize(v), @nospecialize(fallback))
         return Core.TypeEgal{v}
     catch ex
         ex isa InterruptException && rethrow()
+        ex isa TypeError || rethrow()
         return fallback
     end
 end

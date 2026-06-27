@@ -500,6 +500,8 @@ function sizeof_nothrow(@nospecialize(x))
         x = widenconst(x)
         return !hasintersect(x, Type)
     end
+    xw = widenconst(x)
+    isType(xw) && !isconstType(xw) && return false
     x = unwrap_unionall(t)
     if isconcrete
         if isa(x, DataType) && x.layout != C_NULL
@@ -628,7 +630,9 @@ add_tfunc(Core._svec_ref, 2, 2, _svec_ref_tfunc, 1)
             lb = lb_arg.val
         else
             lb_arg = widenslotwrapper(lb_arg)
-            if isType(lb_arg)
+            if isa(lb_arg, Core.TypeEgal)
+                lb = type_parameter(lb_arg)
+            elseif isType(lb_arg)
                 lb = type_parameter(lb_arg)
                 lb_certain = false
             else
@@ -639,7 +643,9 @@ add_tfunc(Core._svec_ref, 2, 2, _svec_ref_tfunc, 1)
             ub = ub_arg.val
         else
             ub_arg = widenslotwrapper(ub_arg)
-            if isType(ub_arg)
+            if isa(ub_arg, Core.TypeEgal)
+                ub = type_parameter(ub_arg)
+            elseif isType(ub_arg)
                 ub = type_parameter(ub_arg)
                 ub_certain = false
             else
@@ -1068,7 +1074,7 @@ end
     if isa(s, Union)
         return getfield_nothrow(𝕃, rewrap_unionall(s.a, s00), name, boundscheck) &&
                getfield_nothrow(𝕃, rewrap_unionall(s.b, s00), name, boundscheck)
-    elseif isType(s) && isTypeDataType(type_parameter(s))
+    elseif isa(s, Core.TypeEgal) && isTypeDataType(type_parameter(s))
         s = s0 = DataType
     end
     if isa(s, DataType)
@@ -1477,6 +1483,14 @@ add_tfunc(modifyfield!, 4, 5, modifyfield!_tfunc, 3)
 add_tfunc(replacefield!, 4, 6, replacefield!_tfunc, 3)
 add_tfunc(setfieldonce!, 3, 5, setfieldonce!_tfunc, 3)
 
+function fieldtype_egal_lattice(@nospecialize(s0))
+    s = widenconst(s0)
+    if isa(s, Union)
+        return fieldtype_egal_lattice(s.a) && fieldtype_egal_lattice(s.b)
+    end
+    return isa(s, Core.TypeEgal)
+end
+
 @nospecs function fieldtype_nothrow(𝕃::AbstractLattice, s0, name)
     s0 === Bottom && return true # unreachable
     ⊑ = partialorder(𝕃)
@@ -1499,16 +1513,18 @@ add_tfunc(setfieldonce!, 3, 5, setfieldonce!_tfunc, 3)
 
     s, exact = instanceof_tfunc(s0, false)
     s === Bottom && return false # always
-    return _fieldtype_nothrow(s, exact, name)
+    egal = isa(s0, Const) || fieldtype_egal_lattice(s0)
+    return _fieldtype_nothrow(s, exact, egal, name)
 end
 
-function _fieldtype_nothrow(@nospecialize(s), exact::Bool, name::Const)
+function _fieldtype_nothrow(@nospecialize(s), exact::Bool, egal::Bool, name::Const)
     u = unwrap_unionall(s)
     if isa(u, Union)
-        a = _fieldtype_nothrow(u.a, exact, name)
-        b = _fieldtype_nothrow(u.b, exact, name)
+        a = _fieldtype_nothrow(u.a, exact, egal, name)
+        b = _fieldtype_nothrow(u.b, exact, egal, name)
         return exact ? (a || b) : (a && b)
     end
+    egal || return false
     u isa DataType || return false
     isabstracttype(u) && return false
     if u.name === _NAMEDTUPLE_NAME && !isconcretetype(u)
@@ -1753,17 +1769,15 @@ function typeeq_apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
     return TypeEq
 end
 
-# like `TypeEq`, but free typevars inside `T` make the construction throw
+# like `TypeEq`, but only closed type values are valid parameters
 function typeegal_apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any})
     length(argtypes) == 2 || return false
     ai = widenslotwrapper(widenconditional(argtypes[2]))
     if isa(ai, Const)
         v = ai.val
-        isa(v, TypeVar) && return false
-        isa(v, Type) && has_free_typevars(v) && return false
-        return isa(v, Type) || valid_tparam(v)
+        return isa(v, Type) && !has_free_typevars(v)
     end
-    # for a non-constant parameter we cannot rule out free typevars
+    # for a non-constant parameter we cannot rule out non-types or free typevars
     return false
 end
 
@@ -1772,8 +1786,7 @@ function typeegal_apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
     ai = widenslotwrapper(argtypes[2])
     if isa(ai, Const)
         v = ai.val
-        (isa(v, TypeVar) || (isa(v, Type) && has_free_typevars(v))) && return Bottom
-        (isa(v, Type) || valid_tparam(v)) || return Bottom
+        (isa(v, Type) && !has_free_typevars(v)) || return Bottom
         return Const(Core.apply_type(Core.TypeEgal, v))
     end
     return Core.TypeEgal

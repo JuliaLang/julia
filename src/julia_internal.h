@@ -858,6 +858,8 @@ STATIC_INLINE jl_value_t *jl_sparam_defined_value(jl_value_t *sp JL_PROPAGATES_R
         jl_value_t *inner = jl_svecref(sp, 0);
         if (!jl_is_typevar(inner))
             return NULL;
+        if (jl_svecref(sp, 1) != jl_true)
+            return NULL;
         jl_tvar_t *v = (jl_tvar_t*)inner;
         if (v->lb != v->ub) // pinned markers share one bound object
             return NULL;
@@ -974,6 +976,7 @@ jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t *
 jl_value_t *jl_type_intersection_env(jl_value_t *a, jl_value_t *b, jl_svec_t **penv);
 int jl_subtype_matching(jl_value_t *a, jl_value_t *b, jl_svec_t **penv);
 JL_DLLEXPORT int jl_types_struct_equiv(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_types_egal(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT;
 // specificity comparison assuming !(a <: b) and !(b <: a)
 JL_DLLEXPORT int jl_type_morespecific_no_subtype(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_instantiate_type_with(jl_value_t *t, jl_value_t **env, size_t n);

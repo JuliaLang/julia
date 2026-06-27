@@ -3248,6 +3248,9 @@ _typeegal_id(::Type{T}) where {T} = T
     @test !isa(Int, TE{Integer})
     @test isa(Vector, TE{Vector})
     @test isa(Union{Int,String}, TE{Union{Int,String}})
+    @test_throws TypeError TE{:a}
+    @test_throws TypeError TE{1}
+    @test_throws TypeError TE{TypeVar(:T)}
     # egal implies equal, but not the reverse
     @test TE{Int} <: Type{Int}
     @test !(Type{Int} <: TE{Int})

@@ -1517,7 +1517,7 @@ jl_value_t *jl_apply_type(jl_value_t *tc, jl_value_t **params, size_t n)
     if (tc == (jl_value_t*)jl_typeegal_type) {
         if (n != 1)
             jl_errorf("too many parameters for type `TypeEgal`: expected 1, got %zu", n);
-        if (!jl_valid_type_param(params[0]))
+        if (!jl_is_type(params[0]) || jl_has_free_typevars(params[0]))
             jl_type_error_rt("TypeEgal", "parameter", (jl_value_t*)jl_type_type, params[0]);
         return jl_wrap_TypeEgal(params[0]);
     }
@@ -3118,8 +3118,9 @@ jl_typeeq_t *jl_wrap_Type(jl_value_t *t)
 
 jl_value_t *jl_wrap_TypeEgal(jl_value_t *t)
 {
-    // free typevars are not allowed inside `TypeEgal`
-    if (jl_has_free_typevars(t))
+    // `TypeEgal` pins a type value by egality; non-type parameters and free
+    // typevars are not valid.
+    if (!jl_is_type(t) || jl_has_free_typevars(t))
         jl_type_error_rt("TypeEgal", "parameter", (jl_value_t*)jl_type_type, t);
     // `typeof(Union{})` already denotes exactly the single-instance set `{Union{}}`
     // (the bottom object is unique), so normalize to it

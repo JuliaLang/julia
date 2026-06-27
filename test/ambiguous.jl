@@ -352,6 +352,7 @@ end
 
 @testset "has_bottom_parameter with Union{} in tvar bound" begin
     @test Base.has_bottom_parameter(Ref{<:Union{}})
+    @test Base.has_bottom_parameter(Core.TypeEgal{Ref{Union{}}})
 end
 
 # test a case where specificity is not transitive over subtyping

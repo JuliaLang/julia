@@ -426,6 +426,11 @@ end  |> only == Core.TypeEgal{typejoin(Int, UInt, Float64)}
 @test_broken typejoin(Type{Int}, DataType) !== DataType
 @test typejoin(Symbol, Type{Int}) === typejoin(Type{Int}, Symbol)
 @test typejoin(DataType, Type{Int}) === typejoin(Type{Int}, DataType)
+@test typejoin(Core.TypeEgal{Int}, Core.TypeEgal{String}) === DataType
+@test typejoin(Core.TypeEgal{Int}, DataType) === DataType
+@test typejoin(Core.TypeEgal{Int}, Type{String}) === DataType
+@test ccall(:jl_types_egal, Cint, (Any, Any), Int, Int) == 1
+@test ccall(:jl_types_egal, Cint, (Any, Any), Int, String) == 0
 
 # issue #61915: a method whose function type is `Type{Foo{...} where ...}` must derive its
 # name as `Foo`, not `:Any` (argument_datatypename has to unwrap the wrapped UnionAll).
@@ -9070,6 +9075,8 @@ f_def_typevar_with_lowerbound(x::T) where {T>:Int} = @isdefined(T) ? T : false
 let r = f_def_typevar_with_lowerbound(1.0)
     @test r === false || r === Union{Int, Float64}
 end
+f_value_typevar_with_lowerbound(x::T) where {T>:Int} = T
+@test_throws UndefVarError(:T, :static_parameter) f_value_typevar_with_lowerbound(1.0)
 
 # Static parameters constrained indirectly through other static-parameter bounds
 # are defined.

@@ -1520,7 +1520,7 @@ function has_bottom_parameter(@nospecialize(t::Core.AnyType))
         for p in getfield(t, :parameters)
             has_bottom_parameter(p) && return true
         end
-    elseif ty === TypeEq
+    elseif ty === TypeEq || ty === Core.TypeEgal
         return has_bottom_parameter(type_parameter(t))
     elseif ty === UnionAll
         return has_bottom_parameter(unwrap_unionall(t))

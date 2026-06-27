@@ -237,6 +237,11 @@ JL_DLLEXPORT int jl_types_struct_equiv(jl_value_t *a, jl_value_t *b)
     return egal_types(a, b, NULL, 0);
 }
 
+JL_DLLEXPORT int jl_types_egal(jl_value_t *a, jl_value_t *b)
+{
+    return jl_types_struct_equiv(a, b);
+}
+
 JL_DLLEXPORT int (jl_egal)(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT
 {
     // warning: a,b may NOT have been gc-rooted by the caller
@@ -1710,7 +1715,7 @@ JL_CALLABLE(jl_f_apply_type)
     else if (args[0] == (jl_value_t*)jl_typeegal_type) {
         JL_NARGS(apply_type, 2, 2);
         jl_value_t *pi = args[1];
-        if (!jl_valid_type_param(pi))
+        if (!jl_is_type(pi) || jl_has_free_typevars(pi))
             jl_type_error_rt("TypeEgal", "parameter", (jl_value_t*)jl_type_type, pi);
         return jl_wrap_TypeEgal(pi);
     }
