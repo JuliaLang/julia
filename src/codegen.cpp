@@ -6328,8 +6328,11 @@ static void emit_varinfo_assign(jl_codectx_t &ctx, jl_varinfo_t &vi, const jl_cg
         if (allow_mismatch) {
             if (vi.pTIndex)
                 skip = ctx.builder.CreateIsNull(ctx.builder.CreateAnd(rval_info.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), ~UNION_BOX_MARKER)));
-            else
-                skip = ctx.builder.CreateNot(emit_exactly_isa(ctx, rhs, (jl_datatype_t *)vi.value.typ, true));
+            else {
+                jl_datatype_t *dt = is_typeofbottom_typealias(vi.value.typ) ?
+                    jl_typeofbottom_type : (jl_datatype_t*)vi.value.typ;
+                skip = ctx.builder.CreateNot(emit_exactly_isa(ctx, rhs, dt, true));
+            }
         }
         emit_guarded_test(ctx, skip ? ctx.builder.CreateNot(skip) : nullptr, nullptr, [&] {
             // internally this skips assignment if isboxed is true

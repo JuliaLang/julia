@@ -569,6 +569,18 @@ typeofbottom_sparam_call_62001() = typeofbottom_sparam_62001(Core.TypeofBottom.i
 @test precompile(Tuple{typeof(Base.typejoin), Core.TypeofBottom, Any})
 @test precompile(Tuple{typeof(Base.typejoin), Any, Core.TypeofBottom})
 
+# Exception edges carrying `Union{}` use a PhiC slot typed as the `Type{Union{}}` singleton.
+function typeofbottom_phic_62001(sig)
+    try
+        (Base.inferencebarrier(identity))(nothing)
+    catch
+        Base.inferencebarrier(sig)
+    end
+    return sig
+end
+@test precompile(Tuple{typeof(typeofbottom_phic_62001), Core.TypeofBottom})
+@test typeofbottom_phic_62001(Union{}) === Union{}
+
 # specializations are deduplicated by type equality (`Type == Core.AnyType`), so
 # `specTypes` carries whichever representation was interned first and
 # `jl_isa_compileable_sig` must accept both
