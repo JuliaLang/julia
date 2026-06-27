@@ -3082,6 +3082,26 @@ end
 let e = only(intersection_env(Tuple{Real}, Tuple{T} where T >: Int)[2])
     @test e isa Core.SimpleVector && e[1] isa TypeVar && !e[2]
 end
+# A fixed tuple prefix before a free vararg length guarantees a matching
+# right-side tuple element exists, but range and maybe-empty tuple tails do not.
+let rhs = Tuple{typeof(intersection_env), Type{<:Tuple{Vararg{E}}}} where E
+    fixed_prefix = only(intersection_env(Tuple{typeof(intersection_env),
+        Type{Tuple{Int, Vararg{Int, N}}}} where N, rhs)[2])
+    maybe_empty = only(intersection_env(Tuple{typeof(intersection_env),
+        Type{Tuple{Vararg{Int, N}}}} where N, rhs)[2])
+    range_arg = only(intersection_env(Tuple{typeof(intersection_env),
+        Type{<:Tuple{Int}}}, rhs)[2])
+    fixed_rhs = Tuple{typeof(intersection_env), Type{<:Tuple{E}}} where E
+    exact_fixed = only(intersection_env(Tuple{typeof(intersection_env),
+        Type{Tuple{Int}}}, fixed_rhs)[2])
+    fixed_range = only(intersection_env(Tuple{typeof(intersection_env),
+        Type{<:Tuple{Int}}}, fixed_rhs)[2])
+    @test fixed_prefix isa Core.SimpleVector && fixed_prefix[1] isa TypeVar && fixed_prefix[2]
+    @test maybe_empty isa Core.SimpleVector && maybe_empty[1] isa TypeVar && !maybe_empty[2]
+    @test range_arg isa Core.SimpleVector && range_arg[1] isa TypeVar && !range_arg[2]
+    @test exact_fixed isa Core.SimpleVector && exact_fixed[1] isa TypeVar && exact_fixed[2]
+    @test fixed_range isa Core.SimpleVector && fixed_range[1] isa TypeVar && !fixed_range[2]
+end
 
 # Env entries must not introduce a fresh `newvar<:vb.lb` wrapper when `vb.lb`
 # is already a TypeVar. The doubled `where T<:T_outer where T_outer` pattern

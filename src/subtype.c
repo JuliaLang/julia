@@ -116,6 +116,9 @@ typedef struct jl_varbinding_t {
                          // wrapped as an uncertainty marker in `envout`, with the
                          // marker `constrained` (defined for every `==`-equal query
                          // rep) iff the channel is at least BOUND_EQ
+    int8_t lb_required;  // a lower-bound contribution came from a covariant tuple
+                         // element that is present in every concrete member of
+                         // the current left-side branch
     int8_t tainted_inner; // 1 if this var's bounds reference a TypeVar from a vb that
                           // was pushed at depth0 *strictly greater* than this var's
                           // depth0 and has since been popped. Such "inner" tvars
@@ -164,6 +167,7 @@ typedef struct jl_stenv_t {
     int intersection;         // true iff subtype is being called from intersection
     int emptiness_only;       // true iff intersection only needs to test for emptiness
     int triangular;           // when intersecting Ref{X} with Ref{<:Y}
+    int ignore_lb_required;   // true while checking a variable's declared bound
     // Used to represent the length difference between 2 vararg.
     // intersect(X, Y) ==> X = Y + Loffset
     int Loffset;
@@ -346,8 +350,8 @@ static int current_env_length(jl_stenv_t *e)
 }
 
 // Per-var saved env layout:
-// [occurs_inv, occurs_cov, cov_diag, max_offset, lb_certainty].
-#define JL_SAVEDENV_BYTES_PER_VAR 5
+// [occurs_inv, occurs_cov, cov_diag, max_offset, lb_certainty, lb_required].
+#define JL_SAVEDENV_BYTES_PER_VAR 6
 
 // Combined covariance count used for diagonal-rule decisions: the max of the
 // counter for the current consistency-check scope and the largest count
@@ -361,7 +365,7 @@ static inline int8_t cov_count(const jl_varbinding_t *vb) JL_NOTSAFEPOINT
 typedef struct {
     int8_t *buf;
     int rdepth;
-    int8_t _space[40]; // == 8 * JL_SAVEDENV_BYTES_PER_VAR
+    int8_t _space[48]; // == 8 * JL_SAVEDENV_BYTES_PER_VAR
     jl_gcframe_t gcframe;
     jl_value_t *roots[24]; // == 8 * 3 (lb, ub, innervars)
 } jl_savedenv_t;
@@ -407,6 +411,7 @@ static void re_save_env(jl_stenv_t *e, jl_savedenv_t *se, int root)
         se->buf[j++] = v->cov_diag;
         se->buf[j++] = v->max_offset;
         se->buf[j++] = v->lb_certainty;
+        se->buf[j++] = v->lb_required;
         v = v->prev;
     }
     assert(i == nroots); (void)nroots;
@@ -502,6 +507,7 @@ static void restore_env(jl_stenv_t *e, jl_savedenv_t *se, int root) JL_NOTSAFEPO
         v->cov_diag = se->buf[j++];
         v->max_offset = se->buf[j++];
         v->lb_certainty = se->buf[j++];
+        v->lb_required = se->buf[j++];
         v = v->prev;
     }
     assert(i == nroots); (void)nroots;
@@ -878,6 +884,8 @@ static int env_unchanged(jl_stenv_t *e, jl_savedenv_t *se) JL_NOTSAFEPOINT
             int8_t saved_max = saved_cov > saved_diag ? saved_cov : saved_diag;
             if (is_leaf_typevar(v->var) && v->body_occurs_inv == 0 && cov_count(v) > 1 && saved_max <= 1)
                 return 0; // check if a variable became diagonal from non-diagonal
+            if (v->lb_required != se->buf[j+4])
+                return 0; // check if envout constrainedness changed
         }
         i += 3; // lb, ub, innervars
         j += JL_SAVEDENV_BYTES_PER_VAR;
@@ -1151,8 +1159,14 @@ static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t par
         bb->lb_certainty = e->bound_channel;
     if (bb->lb == a)
         return 1;
-    if (!((bb->ub == (jl_value_t*)jl_any_type && !jl_is_type(a) && !jl_is_typevar(a)) || subtype_ccheck(a, bb->ub, e)))
-        return 0;
+    if (!(bb->ub == (jl_value_t*)jl_any_type && !jl_is_type(a) && !jl_is_typevar(a))) {
+        int saved = e->ignore_lb_required;
+        e->ignore_lb_required = 1;
+        int ub_ok = subtype_ccheck(a, bb->ub, e);
+        e->ignore_lb_required = saved;
+        if (!ub_ok)
+            return 0;
+    }
     jl_value_t *lb = simple_join(bb->lb, a);
     JL_GC_PUSH1(&lb);
     if (!e->intersection || !jl_is_typevar(lb) || !reachable_var(lb, b, e))
@@ -1282,6 +1296,11 @@ static jl_value_t *wrap_tvar_env(jl_value_t *tvar, int constrained)
     return (jl_value_t*)jl_svec2(tvar, constrained ? jl_true : jl_false);
 }
 
+static int unionall_is_Type_range(jl_unionall_t *ua) JL_NOTSAFEPOINT
+{
+    return jl_is_some_Type(ua->body) && jl_some_Type_T(ua->body) == (jl_value_t*)ua->var;
+}
+
 // Static check mirroring Core.Compiler.constrains_param: is `var` guaranteed
 // to be pinned by any concrete leaftype subtype of `typ`? Conservative: a
 // false return is always safe. Used only on fast paths where we don't have
@@ -1292,7 +1311,10 @@ static int constrains_param_static(jl_tvar_t *var, jl_value_t *typ, int covarian
         return 1;
     while (jl_is_unionall(typ)) {
         jl_unionall_t *ua = (jl_unionall_t*)typ;
-        if (covariant && constrains_param_static(var, ua->var->ub, covariant))
+        // A Type{<:...} range can be inhabited by Union{}, which does not
+        // expose the structure of the range bound to static parameters.
+        if (covariant && !unionall_is_Type_range(ua) &&
+            constrains_param_static(var, ua->var->ub, covariant))
             return 1;
         // ua->var->lb doesn't constrain var
         typ = ua->body;
@@ -1343,6 +1365,17 @@ static int constrains_param_static(jl_tvar_t *var, jl_value_t *typ, int covarian
         }
     }
     return 0;
+}
+
+static void mark_required_tuple_element(jl_stenv_t *e, jl_value_t *rhs) JL_NOTSAFEPOINT
+{
+    if (e->ignore_lb_required)
+        return;
+    for (jl_varbinding_t *v = e->vars; v != NULL; v = v->prev) {
+        if (v->existential && v->lb != jl_bottom_type && !v->lb_required &&
+            constrains_param_static(v->var, rhs, 1))
+            v->lb_required = 1;
+    }
 }
 
 typedef int (*tvar_callback)(void*, int8_t, jl_stenv_t *, int);
@@ -1530,8 +1563,11 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
 {
     u = unalias_unionall(u, e);
     jl_value_t *new_tvar = NULL;
-    jl_varbinding_t vb = { NULL, NULL, NULL, R, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                           e->invdepth, NULL, e->vars };
+    jl_varbinding_t vb;
+    memset(&vb, 0, sizeof(vb));
+    vb.existential = R;
+    vb.depth0 = e->invdepth;
+    vb.prev = e->vars;
     JL_GC_PUSH5(&u, &vb.lb, &vb.ub, &vb.innervars, &new_tvar);
     if (jl_has_typevar(t, u->var))
         u = jl_rename_unionall(u);
@@ -1691,9 +1727,13 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
         // need not be pinned by every call: matching `Type{<:Tuple{Vararg{E}}}`
         // against `Type{S} where S<:NInt` reaches `E` through `S`'s bound, but the
         // `S = Tuple{}` member leaves `E` unbound. So its retained covariant
-        // occurrence count must not mark it defined.
+        // occurrence count must not mark it defined. A fixed prefix on the left,
+        // however, is present in every concrete member even when the tuple tail
+        // length is free, so a statically constraining right-side element at that
+        // position records `lb_required` while matching that tuple element.
         int eff_constrained = (vb.occurs_inv ||
-            (cov_count(&vb) && u->var->lb == jl_bottom_type && vb.lb_certainty > BOUND_PROXY));
+            (cov_count(&vb) && u->var->lb == jl_bottom_type &&
+             (vb.lb_certainty > BOUND_PROXY || vb.lb_required)));
         jl_value_t *val = subtype_unionall_envout_value(t, u, e, &vb, lb, &new_tvar,
                                                         eff_constrained);
         jl_value_t *oldval = e->envout[e->envidx];
@@ -1955,6 +1995,7 @@ static int subtype_tuple_tail(jl_datatype_t *xd, jl_datatype_t *yd, int8_t R, jl
 
         xi = vx ? jl_unwrap_vararg(xi) : xi;
         yi = vy ? jl_unwrap_vararg(yi) : yi;
+        int required_lhs_element = !vx && param == PARAM_COVARIANT;
         int x_same = vx > 1 || (lastx && obviously_egal(xi, lastx));
         int y_same = vy > 1 || (lasty && obviously_egal(yi, lasty));
         // keep track of number of consecutive identical subtyping
@@ -1979,6 +2020,8 @@ static int subtype_tuple_tail(jl_datatype_t *xd, jl_datatype_t *yd, int8_t R, jl
             if (!sub)
                 return 0;
         }
+        if (required_lhs_element)
+            mark_required_tuple_element(e, yi);
         lastx = xi; lasty = yi;
         if (i < lx-1 || !vx)
             i++;
@@ -2612,6 +2655,7 @@ static void init_stenv(jl_stenv_t *e, jl_value_t **env, int envsz)
     e->intersection = 0;
     e->emptiness_only = 0;
     e->triangular = 0;
+    e->ignore_lb_required = 0;
     e->Loffset = 0;
     e->Lunions.depth = 0;      e->Runions.depth = 0;
     e->Lunions.more = 0;       e->Runions.more = 0;
@@ -3119,6 +3163,7 @@ static int subtype_in_env(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
     e2.envsz = e->envsz;
     e2.envout = e->envout;
     e2.envidx = e->envidx;
+    e2.ignore_lb_required = e->ignore_lb_required;
     e2.Loffset = e->Loffset;
     return forall_exists_subtype(x, y, &e2, PARAM_NONE);
 }
@@ -4353,8 +4398,15 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
     jl_value_t *res = NULL;
     jl_savedenv_t se;
     int body_occurs_inv = var_occurs_invariant(u->body, u->var);
-    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, body_occurs_inv,
-                           e->invdepth, NULL, e->vars };
+    jl_varbinding_t vb;
+    memset(&vb, 0, sizeof(vb));
+    vb.var = u->var;
+    vb.lb = u->var->lb;
+    vb.ub = u->var->ub;
+    vb.existential = R;
+    vb.body_occurs_inv = body_occurs_inv;
+    vb.depth0 = e->invdepth;
+    vb.prev = e->vars;
     JL_GC_PUSH4(&res, &vb.lb, &vb.ub, &vb.innervars);
     save_env(e, &se, 1);
     int noinv = !body_occurs_inv;
@@ -5269,6 +5321,9 @@ static int merge_env(jl_stenv_t *e, jl_savedenv_t *me, jl_savedenv_t *se, int co
         // merge max_offset by min
         if (!v->intersected && v->max_offset < me->buf[m+3])
             me->buf[m+3] = v->max_offset;
+        // required lower-bound evidence must hold for every merged branch
+        if (!v->lb_required)
+            me->buf[m+5] = 0;
         m = m + JL_SAVEDENV_BYTES_PER_VAR;
         n = n + 3;
         v = v->prev;
@@ -5871,7 +5926,11 @@ static jl_value_t *_widen_diagonal(jl_value_t *t, jl_varbinding_t *troot) {
 
 static jl_value_t *widen_diagonal(jl_value_t *t, jl_unionall_t *u, jl_varbinding_t *troot)
 {
-    jl_varbinding_t vb = { u->var, NULL, NULL, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, NULL, troot };
+    jl_varbinding_t vb;
+    memset(&vb, 0, sizeof(vb));
+    vb.var = u->var;
+    vb.existential = 1;
+    vb.prev = troot;
     jl_value_t *nt = NULL;
     JL_GC_PUSH2(&vb.innervars, &nt);
     if (jl_is_unionall(u->body))
