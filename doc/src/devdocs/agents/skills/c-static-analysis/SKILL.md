@@ -29,13 +29,22 @@ Run static analysis checks:
 
 ## Fixing the GC-rooting checker (clang-sagc)
 
-If `clang-sagc-<file-stem>` fails, it may require adding `JL_GC_PUSH` statements,
-or `JL_GC_PROMISE_ROOTED` statements, or require fixing locks.
+If `clang-sagc-<file-stem>` fails, first look for fixes that establish real
+rooting, such as adding appropriate `JL_GC_PUSH`/`JL_GC_POP` scopes, or for
+lock/control-flow fixes.
+
+Do not add `JL_GC_PROMISE_ROOTED` without explicit user or maintainer
+confirmation. `JL_GC_PROMISE_ROOTED` asserts that a value is already rooted; it
+does not root the value. If it appears necessary, stop and ask for confirmation,
+showing the exact expression, the existing root that makes it safe, and the
+safepoints considered.
 
 - Remember arguments are assumed rooted, so check the callers to make sure that
   is handled.
-- If the value is being temporarily moved around in a struct or arraylist,
-  `JL_GC_PROMISE_ROOTED(struct->field)` may be needed as a statement (it returns
-  void) immediately after reloading the struct before any use of struct.
-- Put that promise as early in the code as is legal, near the definition not the
-  use.
+- As a diagnostic hint when asking for confirmation: if the value is temporarily
+  moved through a struct or arraylist and then reloaded, the promised expression
+  may need to refer to the reloaded field, such as
+  `JL_GC_PROMISE_ROOTED(struct->field)`, immediately after the reload and before
+  any use of that field.
+- If confirmed, put the promise as early in the code as is legal, near the
+  definition or reload rather than the use.
