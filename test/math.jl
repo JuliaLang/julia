@@ -652,7 +652,7 @@ end
             # issue #57450
             y = Complex{T}(0.5, 1000)
             @test isfinite(tanpi(y))
-            @test tanpi(b) ≈ im
+            @test tanpi(y) ≈ im
         end
     end
     scdm = sincosd(missing)
