@@ -2105,6 +2105,8 @@ public:
     }
 };
 
+static void jl_temporary_root(jl_codectx_t &ctx, jl_value_t *val);
+
 GlobalVariable *JuliaVariable::realize(jl_codectx_t &ctx) {
     return realize(jl_Module);
 }
@@ -2377,7 +2379,8 @@ static inline jl_cgval_t mark_julia_const(jl_codectx_t &ctx, jl_value_t *jv)
     if (jl_is_type(jv) && jv != jl_bottom_type) {
         // match `Compiler.widenconst`: a known type value has the egality kind
         typ = jl_has_free_typevars(jv) ? (jl_value_t*)jl_wrap_Type(jv)
-                                       : jl_wrap_TypeEgal(jv); // TODO: gc-root this?
+                                       : jl_wrap_TypeEgal(jv);
+        jl_temporary_root(ctx, typ);
     }
     else {
         typ = jl_typeof(jv);
@@ -3478,12 +3481,14 @@ static void simple_use_analysis(jl_codectx_t &ctx, jl_value_t *expr)
 
 static void jl_temporary_root(jl_codegen_output_t &ctx, jl_value_t *val)
 {
-    if (!jl_is_globally_rooted(val)) {
+    if (ctx.temporary_roots && !jl_is_globally_rooted(val)) {
+        JL_GC_PUSH1(&val);
         jl_array_t *roots = ctx.temporary_roots;
-        if (ctx.temporary_roots_set.find(val) != ctx.temporary_roots_set.end())
-            return;
-        jl_array_ptr_1d_push(roots, val);
-        ctx.temporary_roots_set.insert(val);
+        if (ctx.temporary_roots_set.find(val) == ctx.temporary_roots_set.end()) {
+            jl_array_ptr_1d_push(roots, val);
+            ctx.temporary_roots_set.insert(val);
+        }
+        JL_GC_POP();
     }
 }
 static void jl_temporary_root(jl_codectx_t &ctx, jl_value_t *val)
