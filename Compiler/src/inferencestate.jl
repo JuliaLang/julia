@@ -781,24 +781,14 @@ const EMPTY_SPTYPES = VarState[]
 function type_sptype_to_egal(@nospecialize(ty))
     isType(ty) || return ty
     p = type_parameter(ty)
-    try
-        return Core.TypeEgal{p}
-    catch ex
-        ex isa InterruptException && rethrow()
-        ex isa TypeError || rethrow()
-        return ty
-    end
+    p isa Type && !has_free_typevars(p) || return ty
+    return Core.TypeEgal{p}
 end
 
 function type_value_to_egal(@nospecialize(v), @nospecialize(fallback))
     v isa Type || return fallback
-    try
-        return Core.TypeEgal{v}
-    catch ex
-        ex isa InterruptException && rethrow()
-        ex isa TypeError || rethrow()
-        return fallback
-    end
+    has_free_typevars(v) && return fallback
+    return Core.TypeEgal{v}
 end
 
 # Compute the abstract value `ty` for a sparam whose inferred env entry carries
