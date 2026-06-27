@@ -2250,8 +2250,6 @@ renameLinkGraphSymbol(jitlink::LinkGraph &G, jitlink::Symbol &Sym,
         Dest->setTargetFlags(Dest->getTargetFlags() | Sym.getTargetFlags());
     }
     retargetLinkGraphEdges(G, Sym, *Dest);
-    if (Dest != &Sym)
-        G.removeExternalSymbol(Sym);
     return Dest;
 }
 
