@@ -1637,7 +1637,7 @@ end
 # collect a list of all code that is needed along with CodeInstance to codegen it fully
 function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vector{VarState};
                          invokelatest_queue::Union{CompilationQueue,Nothing} = nothing,
-                         resolve_invokes::Bool = false)
+                         enqueue_unprepared_invokes::Bool = false)
     src = ci.code
     for i = 1:length(src)
         stmt = src[i]
@@ -1645,14 +1645,11 @@ function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vec
         if isexpr(stmt, :invoke) || isexpr(stmt, :invoke_modify)
             edge = stmt.args[1]
             if edge isa CodeInstance && has_valid_abi_sparams(get_ci_mi(edge)) &&
-                    (ci_has_invoke(edge) || ci_has_source(workqueue.interp, edge))
+                    (enqueue_unprepared_invokes ||
+                     ci_has_invoke(edge) || ci_has_source(workqueue.interp, edge))
                 push!(workqueue, edge)
-            elseif resolve_invokes && edge isa MethodInstance && has_valid_abi_sparams(edge)
-                newedge = typeinf_ext(workqueue.interp, edge, SOURCE_MODE_ABI)
-                if newedge isa CodeInstance && ci_has_abi(workqueue.interp, newedge)
-                    stmt.args[1] = newedge
-                    push!(workqueue, newedge)
-                end
+            elseif enqueue_unprepared_invokes && edge isa MethodInstance && has_valid_abi_sparams(edge)
+                push!(workqueue, edge)
             end
         end
 
@@ -1735,7 +1732,7 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
         markinspected!(workqueue, callee)
         mi = get_ci_mi(callee)
         sptypes = sptypes_from_meth_instance(mi)
-        collectinvokes!(workqueue, src, sptypes; resolve_invokes=true)
+        collectinvokes!(workqueue, src, sptypes)
         if iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), mi, callee))
             cached = ccall(:jl_get_ci_equiv, Any, (Any, UInt), callee, get_inference_world(workqueue.interp))::CodeInstance
             if cached === callee
@@ -1770,6 +1767,7 @@ end
 
 function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
     invokelatest_queue::Union{CompilationQueue,Nothing} = nothing,
+    enqueue_unprepared_invokes::Bool = false,
 )
     interp = workqueue.interp
     world = get_inference_world(interp)
@@ -1828,7 +1826,8 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
             markinspected!(workqueue, callee)
             if src isa CodeInfo
                 sptypes = sptypes_from_meth_instance(mi)
-                collectinvokes!(workqueue, src, sptypes; invokelatest_queue)
+                collectinvokes!(workqueue, src, sptypes; invokelatest_queue,
+                                enqueue_unprepared_invokes)
                 # try to reuse an existing CodeInstance from before to avoid making duplicates in the cache
                 if iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), mi, callee))
                     cached = ccall(:jl_get_ci_equiv, Any, (Any, UInt), callee, world)::CodeInstance
@@ -1870,13 +1869,15 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
         )
 
         append!(workqueue, methods)
-        compile!(codeinfos, workqueue; invokelatest_queue)
+        compile!(codeinfos, workqueue; invokelatest_queue,
+                 enqueue_unprepared_invokes = trim_mode != TRIM_NO)
     end
 
     if invokelatest_queue !== nothing
         # This queue is intentionally aliased, to handle e.g. a `finalizer` calling `Core.finalizer`
         # (it will enqueue into itself and immediately drain)
-        compile!(codeinfos, invokelatest_queue; invokelatest_queue)
+        compile!(codeinfos, invokelatest_queue; invokelatest_queue,
+                 enqueue_unprepared_invokes = trim_mode != TRIM_NO)
     end
 
     if trim_mode != TRIM_NO && trim_mode != TRIM_UNSAFE
