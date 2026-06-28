@@ -819,7 +819,7 @@
         @test parsestmt("module A end"; version=v"1.13") ==
             Expr(:module, true,  :A, Expr(:block, LineNumberNode(1), LineNumberNode(1)))
         @test parsestmt("module A end"; version=v"1.14") ==
-            Expr(:module, v"1.14", true,  :A, Expr(:block, LineNumberNode(1), LineNumberNode(1)))
+            Expr(:module, GlobalRef(JuliaSyntax, :core_parser_hook_1_14), true,  :A, Expr(:block, LineNumberNode(1), LineNumberNode(1)))
         @test parsestmt("baremodule A end"; version=v"1.13") ==
             Expr(:module, false, :A, Expr(:block, LineNumberNode(1), LineNumberNode(1)))
     end

@@ -1287,7 +1287,7 @@ include(Core, "optimized_generics.jl")
 # Used only by the magic @VERSION macro
 struct MacroSource
     lno::Any # ::LineNumberNode, but needs to be a pointer
-    syntax_ver::Any # ::VersionNumber =#
+    syntax_ver::Any
     MacroSource(@nospecialize(lno), @nospecialize(syntax_ver)) = new(lno, syntax_ver)
 end
 
