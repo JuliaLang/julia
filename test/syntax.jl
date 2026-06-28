@@ -358,6 +358,14 @@ end
 @test_loweringerror(:(identity($(Expr(:(...), 1, 2, 3)))),
                     "wrong number of expressions following \"...\"")
 
+# issue #57733 - malformed "." expr
+@test_loweringerror(Expr(:.),
+                    "wrong number of arguments in `.` expression")
+@test_loweringerror(Expr(:., :a, :b, :c),
+                    "wrong number of arguments in `.` expression")
+@test_loweringerror(Expr(:., :a, :b, :c, :d),
+                    "wrong number of arguments in `.` expression")
+
 # issue #15830
 @test_loweringerror(Meta.parse("foo(y = (global x)) = y"), "misplaced \"global\" declaration")
 
