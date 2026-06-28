@@ -1440,6 +1440,8 @@ end
     m2 = 3
     @check_bit_operation maximum(b1, dims=(m1, m2)) BitArray{4}
     @check_bit_operation minimum(b1, dims=(m1, m2)) BitArray{4}
+    @check_bit_operation any(b1, dims=(m1, m2)) BitArray{4}
+    @check_bit_operation all(b1, dims=(m1, m2)) BitArray{4}
     @check_bit_operation sum(b1, dims=(m1, m2)) Array{Int,4}
 
     @check_bit_operation maximum(b1) Bool
@@ -1447,6 +1449,12 @@ end
     @check_bit_operation any(b1) Bool
     @check_bit_operation all(b1) Bool
     @check_bit_operation sum(b1) Int
+
+    let A = reshape(1:6, 6, 1) .== 3
+        r = all(A; dims=1)
+        @test r isa BitMatrix
+        @test r == falses(1, 1)
+    end
 
     b0 = falses(0)
     @check_bit_operation any(b0) Bool
@@ -1675,6 +1683,17 @@ timesofar("cat")
         @check_bit_operation findmin(b1)
         @check_bit_operation findmax(b1)
     end
+
+    b2 = BitArray([1 0; 0 1])
+    @check_bit_operation findmin(b2, dims=1)
+    @check_bit_operation findmin(b2, dims=2)
+    @check_bit_operation findmax(b2, dims=1)
+    @check_bit_operation findmax(b2, dims=2)
+
+    @test_throws ArgumentError findmax(falses(0, 2), dims=1)
+    @test isequal(findmax(falses(0, 2), dims=2), findmax(zeros(Bool, 0, 2), dims=2))
+    @test isequal(findmin(falses(2, 0), dims=1), findmin(zeros(Bool, 2, 0), dims=1))
+    @test_throws ArgumentError findmin(falses(2, 0), dims=2)
 end
 
 @testset "I/O" begin
