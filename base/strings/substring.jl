@@ -157,9 +157,24 @@ function iterate(s::SubString, i::Integer=firstindex(s))
     return c, i - s.offset
 end
 
+# Validate `i` in SubString coordinates so a StringIndexError reports the index
+# into the SubString, not into the parent (issue #55840). `i` is a valid char
+# boundary of the SubString iff `s.offset + i` is one of the parent, hence the
+# forwarded `getindex` on a valid `i` cannot itself throw a StringIndexError.
 function getindex(s::SubString, i::Integer)
     @boundscheck checkbounds(s, i)
+    @inbounds isvalid(s, i) || string_index_err(s, i)
     @inbounds return getindex(s.string, s.offset + i)
+end
+
+# The `SubString{String}` case mirrors the `String` getindex directly, keeping
+# the success path branch-free.
+function getindex(s::SubString{String}, i::Int)
+    @boundscheck checkbounds(s, i)
+    b = @inbounds codeunit(s, i)
+    u = UInt32(b) << 24
+    between(b, 0x80, 0xf7) || return reinterpret(Char, u)
+    return getindex_continued(s, i, u)
 end
 
 # `isascii(::AbstractVector)` reduces to `@inbounds codeunit(::SubString{String}, ::Int)`, total.
