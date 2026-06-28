@@ -509,6 +509,11 @@ end
 struct TrimFailure <: Exception
     TrimFailure() = new()
 end
+struct ImageLoadBlockedError <: Exception
+    ocachefile::String
+    errcode::UInt32
+    ImageLoadBlockedError(ocachefile::String, errcode::UInt32) = new(ocachefile, errcode)
+end
 
 String(s::String) = s  # no constructor yet
 

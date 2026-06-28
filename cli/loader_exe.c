@@ -27,6 +27,11 @@ JL_DLLEXPORT const char* __asan_default_options(void)
 #ifdef _OS_WINDOWS_
 int mainCRTStartup(void)
 {
+    // Allow Windows APIs such as `LoadLibrary` to return a useful error code
+    // to Julia for "critical" errors instead of creating an error pop-up for
+    // the user, which hangs Julia until it's dismissed.
+    SetErrorMode(SEM_FAILCRITICALERRORS);
+
     int argc;
     LPWSTR * wargv = CommandLineToArgv(GetCommandLine(), &argc);
     char ** argv = (char **)malloc(sizeof(char*) * (argc + 1));

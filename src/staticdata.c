@@ -4402,19 +4402,33 @@ JL_DLLEXPORT void jl_restore_system_image(jl_image_t *image, jl_image_buf_t buf)
     JL_SIGATOMIC_END();
 }
 
+#ifdef _OS_WINDOWS_
+#define APPLICATION_CONTROL_POLICY_ERROR 0x11C7
+#endif
+
 JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, jl_array_t *depmods, int completeinfo, const char *pkgname, int ignore_native)
 {
     void *pkgimg_handle = jl_dlopen(fname, JL_RTLD_LAZY);
     if (!pkgimg_handle) {
 #ifdef _OS_WINDOWS_
-        int err;
+        unsigned int err;
         char reason[256];
         err = GetLastError();
         win32_formatmessage(err, reason, sizeof(reason));
+        // Application control policies can refuse the load and the OS caches the verdict
+        // per-file, so throw an error to allow code loading to delete and rebuild the image.
+        if (err == APPLICATION_CONTROL_POLICY_ERROR && jl_imageloadblockederror_type != NULL) {
+            jl_value_t *path = NULL, *code = NULL;
+            JL_GC_PUSH2(&path, &code);
+            path = jl_cstr_to_string(fname);
+            code = jl_box_uint32(err);
+            jl_throw(jl_new_struct(jl_imageloadblockederror_type, path, code));
+        }
+        jl_errorf("Error opening package file %s (win32 error %u): %s\n", fname, err, reason);
 #else
         const char *reason = dlerror();
-#endif
         jl_errorf("Error opening package file %s: %s\n", fname, reason);
+#endif
     }
 
     jl_image_buf_t buf = get_image_buf(pkgimg_handle, /* is_pkgimage */ 1);
