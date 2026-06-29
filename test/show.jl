@@ -2965,3 +2965,64 @@ let m = only(methods(f_show_method))
         @test "f_show_method(x::T) where T<:Integer" == s
     end
 end
+
+@testset "issue #54028: Unstable SSA highlighting in code_warntype" begin
+    using InteractiveUtils
+
+    function foo_ssa_test(x)
+        y = x[1]
+        sin(y+1)
+    end
+
+    render_code_warntype(f, tt; color::Bool) = sprint(io -> begin
+        ioc = IOContext(io, :color => color)
+        code_warntype(ioc, f, tt)
+    end)
+
+    has_colored_ssa_lhs(str, color) =
+        occursin(Regex("(\\e\\[$(color)m\\e\\[1m|\\e\\[1m\\e\\[$(color)m)%\\d+(\\e\\[22m\\e\\[39m|\\e\\[39m\\e\\[22m)\\s*="), str)
+
+    has_colored_ssa_rhs(str, color) =
+        occursin(Regex("(\\e\\[$(color)m\\e\\[1m|\\e\\[1m\\e\\[$(color)m)%\\d+(\\e\\[22m\\e\\[39m|\\e\\[39m\\e\\[22m)(?!\\s*=)"), str)
+
+    @testset "strong SSA highlighted for Vector{Any}" begin
+        str = render_code_warntype(foo_ssa_test, (Vector{Any},); color=true)
+        @test has_colored_ssa_lhs(str, "91")
+        @test has_colored_ssa_rhs(str, "91")
+    end
+
+    @testset "strong SSA highlighted for Vector{Real}" begin
+        str = render_code_warntype(foo_ssa_test, (Vector{Real},); color=true)
+        @test has_colored_ssa_lhs(str, "91")
+        @test has_colored_ssa_rhs(str, "91")
+    end
+
+    @testset "mild SSA highlighted for Vector{Union{Int, Float64}}" begin
+        str = render_code_warntype(foo_ssa_test, (Vector{Union{Int, Float64}},); color=true)
+        @test has_colored_ssa_lhs(str, "33") || has_colored_ssa_lhs(str, "93")
+        @test has_colored_ssa_rhs(str, "33") || has_colored_ssa_rhs(str, "93")
+    end
+
+    @testset "no SSA highlighting with color=false" begin
+        str = render_code_warntype(foo_ssa_test, (Vector{Any},); color=false)
+        @test !contains(str, "\e[91m")
+        @test !contains(str, "\e[33m")
+        @test !contains(str, "\e[93m")
+    end
+
+    @testset "no SSA highlighting with InteractiveUtils.highlighting[:warntype]=false" begin
+        InteractiveUtils.highlighting[:warntype] = false
+        str = render_code_warntype(foo_ssa_test, (Vector{Any},); color=true)
+        @test !contains(str, "\e[91m")
+        @test !contains(str, "\e[33m")
+        @test !contains(str, "\e[93m")
+        InteractiveUtils.highlighting[:warntype] = true
+    end
+
+    @testset "stable input has no unstable highlighting" begin
+        str = render_code_warntype(foo_ssa_test, (Vector{Float64},); color=true)
+        @test !contains(str, "\e[91m")
+        @test !contains(str, "\e[33m")
+        @test !contains(str, "\e[93m")
+    end
+end
