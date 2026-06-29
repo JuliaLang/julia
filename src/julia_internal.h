@@ -836,8 +836,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
         uint32_t effects, jl_value_t *analysis_results,
         jl_debuginfo_t *di, jl_svec_t *edges /* , int absolute_max*/);
 JL_DLLEXPORT jl_code_instance_t *jl_get_ci_equiv(jl_code_instance_t *ci JL_PROPAGATES_ROOT, size_t target_world) JL_NOTSAFEPOINT;
-JL_DLLEXPORT int jl_link_ci_equiv(jl_code_instance_t *callee, jl_code_instance_t *cached);
-
+JL_DLLEXPORT int jl_is_ci_equiv(jl_code_instance_t *ci JL_PROPAGATES_ROOT, jl_code_instance_t *codeinst, size_t target_world) JL_NOTSAFEPOINT;
 STATIC_INLINE jl_method_instance_t *jl_get_ci_mi(jl_code_instance_t *ci JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
     jl_value_t *def = ci->def;

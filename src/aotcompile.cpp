@@ -810,22 +810,10 @@ static Function *emit_pkg_plt_thunk(jl_codegen_output_t &out, jl_code_instance_t
 
 static jl_compiled_functions_t::iterator get_ci_equiv_compiled(jl_code_instance_t *ci JL_PROPAGATES_ROOT, jl_compiled_functions_t &compiled_functions) JL_NOTSAFEPOINT
 {
-    jl_value_t *def = ci->def;
-    jl_value_t *owner = ci->owner;
-    jl_value_t *rettype = ci->rettype;
-    size_t min_world = jl_atomic_load_relaxed(&ci->min_world);
-    size_t max_world = jl_atomic_load_relaxed(&ci->max_world);
     for (auto it = compiled_functions.begin(), E = compiled_functions.end(); it != E; ++it) {
         auto codeinst = it->first;
-        if (codeinst != ci &&
-            jl_atomic_load_relaxed(&codeinst->inferred) != NULL &&
-            jl_atomic_load_relaxed(&codeinst->min_world) <= min_world &&
-            jl_atomic_load_relaxed(&codeinst->max_world) >= max_world &&
-            jl_egal(codeinst->def, def) &&
-            jl_egal(codeinst->owner, owner) &&
-            jl_egal(codeinst->rettype, rettype)) {
+        if (codeinst != ci && jl_is_ci_equiv(ci, codeinst, 0))
             return it;
-        }
     }
     return compiled_functions.end();
 }
@@ -844,9 +832,7 @@ static void aot_link_output(jl_codegen_output_t &out)
         if (it == out.ci_funcs.end()) {
             auto equiv = get_ci_equiv_compiled(ci, out.ci_funcs);
             if (equiv != out.ci_funcs.end())
-                // If ci is subject to invalidation, link it against equiv
-                if (jl_link_ci_equiv(ci, equiv->first))
-                    it = equiv;
+                it = equiv;
         }
         jl_codeinst_funcs_t<Value *> funcs;
         if (it != out.ci_funcs.end()) {
