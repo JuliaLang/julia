@@ -90,14 +90,14 @@ function builtin_call_has_dispatch(
 end
 
 function print_stmt(io::IO, idx::Int, @nospecialize(stmt), code::Union{IRCode,CodeInfo,IncrementalCompact},
-                    sptypes::Vector{VarState}, used::BitSet, maxlength_idx::Int, color::Bool, show_type::Bool, label_dynamic_calls::Bool)
+                    sptypes::Vector{VarState}, used::BitSet, maxlength_idx::Int, color::Bool, show_type::Bool, label_dynamic_calls::Bool, color_warntype::Bool)
     if idx in used
         idx_s = string(idx)
         pad = " "^(maxlength_idx - length(idx_s) + 1)
         cls = ssa_warn_type_class(io, idx)
-        if color && cls === SSA_WARN_TYPE_STRONG
+        if color && color_warntype && cls === SSA_WARN_TYPE_STRONG
             printstyled(io, "%", idx_s; color=:light_red, bold=true)
-        elseif color && cls === SSA_WARN_TYPE_MILD
+        elseif color && color_warntype && cls === SSA_WARN_TYPE_MILD
             printstyled(io, "%", idx_s; color=Base.warn_color(), bold=true)
         else
             print(io, "%", idx_s)
@@ -108,7 +108,7 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), code::Union{IRCode,Co
     end
     # TODO: `indent` is supposed to be the full width of the leader for correct alignment
     indent = 16
-    io = color ? io : IOContext(io, :color => false)
+    io = color_warntype ? io : Base.IOContext(io, :ssa_warn_levels => nothing)
     if !color && stmt isa PiNode
         # when the outer context is already colored (green, for pending nodes), don't use the usual coloring printer
         print(io, "π (")
@@ -747,7 +747,7 @@ function _print_ir_new_node(io::IO, node, code, sptypes::Vector{VarState}, used:
     @assert new_node_inst !== UNDEF # we filtered these out earlier
     show_type = should_print_ssa_type(new_node_inst)
     with_output_color(:green, io) do io′
-        print_stmt(io′, node_idx, new_node_inst, code, sptypes, used, maxlength_idx, false, show_type, label_dynamic_calls)
+        print_stmt(io′, node_idx, new_node_inst, code, sptypes, used, maxlength_idx, false, show_type, label_dynamic_calls, false)
     end
 
     if new_node_type === UNDEF
@@ -803,7 +803,7 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact},
             stmt = statement_indices_to_labels(stmt, cfg)
         end
         show_type = type !== nothing && should_print_ssa_type(stmt)
-        print_stmt(io, idx, stmt, code, sptypes, used, maxlength_idx, color_warntype, show_type, label_dynamic_calls)
+        print_stmt(io, idx, stmt, code, sptypes, used, maxlength_idx, true, show_type, label_dynamic_calls, color_warntype)
         if type !== nothing # ignore types for pre-inference code
             if type === UNDEF
                 # This is an error, but can happen if passes don't update their type information
