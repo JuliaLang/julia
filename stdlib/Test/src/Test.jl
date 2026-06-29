@@ -22,7 +22,8 @@ module Test
 
 export @test, @test_throws, @test_broken, @test_skip,
     @test_warn, @test_nowarn,
-    @test_logs, @test_deprecated
+    @test_logs, @test_deprecated,
+    @test_hygienic
 
 export @testset
 export @inferred
@@ -203,6 +204,9 @@ function Base.show(io::IO, t::Fail)
         # @test_nowarn failed: unexpected output was produced
         print(io, "\n  Expected stderr: ", data)
         print(io, "\n  Captured stderr: ", value)
+    elseif t.test_type === :test_hygienic
+        # @test_hygienic failed: macro leaked bindings
+        print(io, "\n  ", data, ": ", value)
     elseif t.test_type === :test
         if data !== nothing && t.orig_expr != data
             # The test was an expression, so display the term-by-term
@@ -2475,6 +2479,147 @@ end
 
 _args_and_call((args..., f)...; kwargs...) = (args, kwargs, f(args...; kwargs...))
 _materialize_broadcasted(f, args...) = Broadcast.materialize(Broadcast.broadcasted(f, args...))
+
+# =====================================================
+# Macro hygiene testing
+# =====================================================
+
+function _is_hygienic_sym(s::Symbol)
+    contains(string(s), '#')
+end
+
+function _collect_user_symbols!(syms::Set{Symbol}, @nospecialize(ex))
+    if ex isa Symbol
+        push!(syms, ex)
+    elseif ex isa Expr
+        for a in ex.args
+            _collect_user_symbols!(syms, a)
+        end
+    end
+end
+
+# Symbols that are compiler special forms, not variable references.
+const _SPECIAL_FORM_SYMS = Set{Symbol}((:ccall, :cglobal))
+
+# Collect non-gensymmed, non-user Symbol nodes from an expanded AST.
+# Skips hygienic-scope (resolved by the macro system), quote/inert/meta,
+# QuoteNode (field names), dotted expressions (qualified names like Base.sin),
+# compiler directives (inbounds/boundscheck), special-form names (ccall/cglobal),
+# and name positions (keyword names, named tuple keys).
+# Any remaining plain symbols are unhygienic: either leaked bindings or captured references.
+function _collect_unhygienic_symbols!(@nospecialize(syms::Vector{Symbol}), @nospecialize(ex), user_syms::Set{Symbol})
+    if ex isa Symbol
+        if !_is_hygienic_sym(ex) && !(ex in user_syms) && !(ex in _SPECIAL_FORM_SYMS)
+            push!(syms, ex)
+        end
+        return
+    end
+    ex isa Expr || return
+    h = ex.head
+    # hygienic-scope: resolved by the macro system; quote/inert: quoted code;
+    # meta: compiler annotations; (.): qualified names (e.g. Base.sin);
+    # inbounds/boundscheck/loopinfo: compiler directives with sentinel args
+    if h === Symbol("hygienic-scope") || h === :quote || h === :inert || h === :meta ||
+       h === :(.) || h === :inbounds || h === :boundscheck || h === :loopinfo
+        return
+    end
+    if h === :kw && length(ex.args) >= 2
+        # Skip keyword name (args[1]), check value (args[2])
+        _collect_unhygienic_symbols!(syms, ex.args[2], user_syms)
+        return
+    end
+    # Inside tuple/call/parameters, = means named tuple or kwarg — skip the name
+    if h === :tuple || h === :parameters || h === :call
+        for a in ex.args
+            if a isa Expr && a.head === :(=) && length(a.args) >= 2
+                _collect_unhygienic_symbols!(syms, a.args[2], user_syms)
+            else
+                a isa QuoteNode && continue
+                _collect_unhygienic_symbols!(syms, a, user_syms)
+            end
+        end
+        return
+    end
+    for a in ex.args
+        a isa QuoteNode && continue
+        _collect_unhygienic_symbols!(syms, a, user_syms)
+    end
+end
+
+function _check_macro_hygiene(mod::Module, @nospecialize(macrocall::Expr))
+    expanded = macroexpand(mod, macrocall)
+    user_syms = Set{Symbol}()
+    for i in 3:length(macrocall.args)
+        _collect_user_symbols!(user_syms, macrocall.args[i])
+    end
+    leaked = Symbol[]
+    _collect_unhygienic_symbols!(leaked, expanded, user_syms)
+    unique!(leaked)
+    return leaked
+end
+
+"""
+    @test_hygienic expr
+    @test_hygienic expr broken=cond
+    @test_hygienic expr skip=cond
+
+Test that the macro call `expr` is hygienic, i.e. it does not introduce
+unhygienic names into the expanded code. This checks that a macro properly uses
+gensymmed names for local variables and module-qualified references (`GlobalRef`)
+for external names.
+
+The test expands the macro and walks the resulting AST looking for plain
+(non-gensymmed) symbols that were not part of the original user expression and
+are not inside a `hygienic-scope` block. Both leaked bindings (assignments to
+unqualified names) and captured references (reads of caller-scope variables) are
+detected. If any unhygienic names are found, the test fails with a message
+listing them.
+
+# Examples
+
+```julia
+@test_hygienic @time 1+1      # passes: @time is hygienic
+```
+
+# Keyword Arguments
+
+* `broken=cond`: if `cond==true`, indicates a test that should pass but currently
+  consistently fails.
+* `skip=cond`: if `cond==true`, marks a test that should not be executed but should
+  be included in test summary reporting as `Broken`.
+
+!!! compat "Julia 1.14"
+    This macro requires at least Julia 1.14.
+"""
+macro test_hygienic(ex, kws...)
+    broken, skip, _ = extract_broken_skip_kws(kws, "@test_hygienic")
+    orig_expr = QuoteNode(ex)
+    src = QuoteNode(__source__)
+    mod = __module__
+    quote
+        if $(skip !== nothing && esc(skip))
+            record(get_testset(), Broken(:skipped, $orig_expr))
+            nothing
+        else
+            leaked = _check_macro_hygiene($mod, $orig_expr)
+            if isempty(leaked)
+                testres = if $(broken !== nothing && esc(broken))
+                    Error(:test_unbroken, $orig_expr, nothing, nothing, $src)
+                else
+                    Pass(:test_hygienic, $orig_expr, nothing, nothing, $src)
+                end
+            else
+                testres = if $(broken !== nothing && esc(broken))
+                    Broken(:test_hygienic, $orig_expr)
+                else
+                    Fail(:test_hygienic, $orig_expr, "Unhygienic names",
+                        join(leaked, ", "), nothing, $src, false)
+                end
+            end
+            record(get_testset(), testres)
+        end
+    end
+end
 
 """
     @inferred [AllowedType] f(x)
