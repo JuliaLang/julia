@@ -955,10 +955,17 @@ void trigger_profile_peek(void)
         profile_autostop_time = jl_hrtime() + (profile_peek_duration * 1e9);
 }
 
-#if !defined(JL_DISABLE_LIBUNWIND)
-
+// `signal_bt_data` and `signal_bt_size` are referenced by `signal_listener`
+// (signal_bt_size = 0; jl_exit_thread0(..., signal_bt_data, signal_bt_size);
+// and a print loop on critical signals) regardless of JL_DISABLE_LIBUNWIND,
+// so declare them unconditionally. With libunwind disabled they stay at zero
+// (no backtrace is ever recorded into them) and `jl_exit_thread0` receives
+// an empty buffer.
 static jl_bt_element_t signal_bt_data[JL_MAX_BT_SIZE + 1];
 static size_t signal_bt_size = 0;
+
+#if !defined(JL_DISABLE_LIBUNWIND)
+
 static void do_critical_profile(void)
 {
     bt_context_t signal_context;
