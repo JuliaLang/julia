@@ -572,6 +572,12 @@ JL_CALLABLE(jl_f_typeof)
     return jl_typeof(args[0]);
 }
 
+JL_CALLABLE(jl_f_has_free_typevars)
+{
+    JL_NARGS(has_free_typevars, 1, 1);
+    return jl_has_free_typevars(args[0]) ? jl_true : jl_false;
+}
+
 JL_CALLABLE(jl_f_sizeof)
 {
     JL_NARGS(sizeof, 1, 1);

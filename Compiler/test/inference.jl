@@ -5808,6 +5808,10 @@ let N = TypeVar(:N), T = TypeVar(:T)
     @test_throws MethodError typevar_length62001(NTuple{N, VecElement{T}})
 end
 
+# Closed type-valued arguments should make `Core.Typeof` infer the `TypeEgal` branch.
+@test @inferred(Core.has_free_typevars(Pair)) === false
+@test @inferred(Core.Typeof(Pair)) === Core.TypeEgal{Pair}
+
 function fapplicable end
 gapplicable() = Val(applicable(fapplicable))
 gapplicable(x) = Val(applicable(fapplicable; x))

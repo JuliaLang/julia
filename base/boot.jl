@@ -295,7 +295,7 @@ ccall(:jl_toplevel_eval_in, Any, (Any, Any),
       (f::typeof(Typeof))(x) = begin
           $(_expr(:meta,:nospecialize,:x))
           if isa(x,Type)
-              ccall(:jl_has_free_typevars, Bool, (Any,), x) ? Type{x} : TypeEgal{x}
+              has_free_typevars(x) ? Type{x} : TypeEgal{x}
           else
               typeof(x)
           end
@@ -368,8 +368,6 @@ unsafe_convert(::Type{T}, x::T) where {T} = x
 
 # will be inserted by the frontend for closures
 _typeof_captured_variable(@nospecialize t) = (@_total_meta; t isa Type && has_free_typevars(t) ? typeof(t) : Typeof(t))
-
-has_free_typevars(@nospecialize t) = (@_total_meta; ccall(:jl_has_free_typevars, Int32, (Any,), t) === Int32(1))
 
 # dispatch token indicating a kwarg (keyword sorter) call
 function kwcall end

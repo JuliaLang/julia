@@ -879,6 +879,20 @@ end
 end
 add_tfunc(typeof, 1, 1, typeof_tfunc, 1)
 
+@nospecs function has_free_typevars_tfunc(𝕃::AbstractLattice, t)
+    isa(t, Const) && return Const(has_free_typevars(t.val))
+    t = widenconst(t)
+    if isType(t)
+        return Const(has_free_typevars(type_parameter(t)))
+    elseif t === TypeVar
+        return Const(true)
+    elseif !hasintersect(t, Type) && !hasintersect(t, TypeVar) && !hasintersect(t, TypeofVararg)
+        return Const(false)
+    end
+    return Bool
+end
+add_tfunc(has_free_typevars, 1, 1, has_free_typevars_tfunc, 1)
+
 @nospecs function typeassert_tfunc(𝕃::AbstractLattice, v, t)
     t = instanceof_tfunc(t, true)[1]
     t === Any && return v
@@ -2584,6 +2598,7 @@ const _PURE_BUILTINS = Any[
     svec,
     ===,
     typeof,
+    has_free_typevars,
     nfields,
 ]
 
@@ -2592,6 +2607,7 @@ const _CONSISTENT_BUILTINS = Any[
     svec,  # SimpleVector is immutable, thus svecs of egal arguments are egal
     ===,
     typeof,
+    has_free_typevars,
     nfields,
     fieldtype,
     apply_type,
@@ -2652,6 +2668,7 @@ const _INACCESSIBLEMEM_BUILTINS = Any[
     tuple,
     typeassert,
     typeof,
+    has_free_typevars,
     compilerbarrier,
     Core._typevar,
     donotdelete,
@@ -2861,6 +2878,7 @@ const _EFFECTS_KNOWN_BUILTINS = Any[
     fieldtype,
     getfield,
     getglobal,
+    has_free_typevars,
     # invoke,
     isa,
     isdefined,
