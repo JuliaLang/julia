@@ -1021,6 +1021,7 @@ function show_ir(io::IO, ci::CodeInfo, config::IRShowConfig=default_config(io, c
     else EMPTY_SPTYPES end
     ssa_warn_levels = fill(SSA_WARN_TYPE_STABLE, length(ci.code))
     for idx in used
+        checkbounds(Bool, ssa_warn_levels, idx) || continue
         ssa_warn_levels[idx] = ssa_warntype_class(ci, idx)
     end
     let io = IOContext(io, :maxssaid=>length(ci.code), :ssa_warn_levels=>ssa_warn_levels)
