@@ -767,6 +767,13 @@ function rewrite_apply_exprargs!(todo::Vector{Pair{Int,Any}},
     return new_argtypes
 end
 
+function has_typeegal_slot(@nospecialize(atype))
+    for p in (atype::DataType).parameters
+        p isa Core.TypeEgal && return true
+    end
+    return false
+end
+
 function compileable_specialization(code::Union{MethodInstance,CodeInstance}, effects::Effects,
     et::InliningEdgeTracker, @nospecialize(info::CallInfo), state::InliningState)
     mi = code isa CodeInstance ? code.def : code
@@ -779,7 +786,6 @@ function compileable_specialization(code::Union{MethodInstance,CodeInstance}, ef
             (_, sparams) = typeintersect_env(new_atype, method.sig)
             mi_invoke = specialize_method(method, new_atype, sparams)
             mi_invoke === nothing && return nothing
-            code = mi_invoke
         end
     else
         # If this caller does not want us to optimize calls to use their
@@ -794,16 +800,24 @@ function compileable_specialization(code::Union{MethodInstance,CodeInstance}, ef
     end
     # prefer using a CodeInstance gotten from the cache, since that is where the invoke target should get compiled to normally
     # TODO: can this code be gotten directly from inference sometimes?
-    cached = get(code_cache(state), mi_invoke, nothing)
-    cached isa InferenceResult && (cached = cached.ci)
-    if cached isa CodeInstance
-        code = cached
-    elseif code isa CodeInstance && code.def === mi_invoke
-        # Keep a directly supplied inferred edge if the cache lookup missed.
+    if code isa CodeInstance && mi !== mi_invoke && has_typeegal_slot(atype)
+        # Keep the directly supplied inferred edge for the actual call
+        # signature. A normalized compileable signature may have a less precise
+        # ABI for TypeEgal arguments, and replacing this edge can force boxed
+        # argument passing for non-recursive invokes.
         nothing
     else
-        #println("missing code for ", mi_invoke, " for ", mi)
-        code = mi_invoke
+        cached = get(code_cache(state), mi_invoke, nothing)
+        cached isa InferenceResult && (cached = cached.ci)
+        if cached isa CodeInstance
+            code = cached
+        elseif code isa CodeInstance && code.def === mi_invoke
+            # Keep a directly supplied inferred edge if the cache lookup missed.
+            nothing
+        else
+            #println("missing code for ", mi_invoke, " for ", mi)
+            code = mi_invoke
+        end
     end
     add_inlining_edge!(et, code) # to the code and edges
     return InvokeCase(code, effects, info)

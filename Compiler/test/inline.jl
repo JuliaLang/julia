@@ -2023,6 +2023,14 @@ FastReadBuffer62001() = FastReadBuffer62001(UInt8[0x01, 0x02], Ref(0))
     @inbounds return buf.data[nextpos]
 end
 let buf = FastReadBuffer62001()
+    let src = code_typed1(Base.allocated,
+            Tuple{typeof(read_byte62001), FastReadBuffer62001, Core.TypeEgal{UInt8}})
+        @test count(src.code) do @nospecialize x
+            Meta.isexpr(x, :invoke) &&
+            (x.args[1]::Core.CodeInstance).def.specTypes ==
+                Tuple{typeof(read_byte62001), FastReadBuffer62001, Core.TypeEgal{UInt8}}
+        end == 1
+    end
     for _ in 1:5
         buf.position[] = 0
         read_byte62001(buf, UInt8)
