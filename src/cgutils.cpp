@@ -4169,7 +4169,7 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool is_promotab
                 originalAlloca->eraseFromParent();
             }
             else {
-                auto arg_typename = [&] JL_NOTSAFEPOINT {
+                auto arg_typename = [&]() JL_NOTSAFEPOINT {
                     return "box::" + std::string(jl_symbol_name(((jl_datatype_t*)(jt))->name->name));
                 };
                 box = emit_allocobj(ctx, (jl_datatype_t*)jt, true);
@@ -4438,7 +4438,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
     ++EmittedNewStructs;
     assert(jl_is_concrete_type(ty));
     jl_datatype_t *sty = (jl_datatype_t*)ty;
-    auto arg_typename = [&] JL_NOTSAFEPOINT {
+    auto arg_typename = [&]() JL_NOTSAFEPOINT {
         return "new::" + std::string(jl_symbol_name((sty)->name->name));
     };
     size_t nf = jl_datatype_nfields(sty);
@@ -4768,7 +4768,7 @@ static auto *emit_genericmemory_unchecked(jl_codectx_t &ctx, Value *cg_nbytes, V
 // on the allocation call, processed by late-gc-lowering
 static void emit_memory_stores(jl_codectx_t &ctx, jl_datatype_t *typ, Value* alloc, Value* nel)
 {
-    auto arg_typename = [&] JL_NOTSAFEPOINT {
+    auto arg_typename = [&]() JL_NOTSAFEPOINT {
         std::string type_str;
         auto eltype = jl_tparam1(typ);
         if (jl_is_datatype(eltype))

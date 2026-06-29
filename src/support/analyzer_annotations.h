@@ -29,8 +29,8 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-  void JL_GC_PROMISE_ROOTED(void *v) JL_NOTSAFEPOINT;
-  void jl_may_leak(void *v) JL_NOTSAFEPOINT;
+  void JL_GC_PROMISE_ROOTED(const void *v) JL_NOTSAFEPOINT;
+  void jl_may_leak(const void *v) JL_NOTSAFEPOINT;
 #ifdef __cplusplus
 }
 #endif

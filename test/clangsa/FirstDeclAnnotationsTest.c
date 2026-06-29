@@ -75,10 +75,52 @@ void fda_blockonly_caller2(void) {
     fda_blockonly();
 }
 
+// Function-pointer annotation compatibility. Converting a function to fda_cb_t
+// (which is JL_NOTSAFEPOINT) requires the function to carry that annotation, in
+// every context where the conversion happens.
+fda_cb_t fda_cb_okglobal = fda_cb_ok;
+
+// CHECK: warning: 'fda_cb_bad' is converted to a function pointer of type 'fda_cb_t'{{.*}}requires Julia annotation "julia_not_safepoint", but 'fda_cb_bad' is not annotated "julia_not_safepoint"
+fda_cb_t fda_cb_badglobal = fda_cb_bad;
+
+void fda_cb_uses(void) {
+    fda_cb_t a = fda_cb_ok;
+    fda_cb_t b = uv_fda_fake;
+    // CHECK: warning: 'fda_cb_bad' is converted to a function pointer of type 'fda_cb_t'{{.*}}"julia_not_safepoint"
+    fda_cb_t c = fda_cb_bad;
+    // CHECK: warning: 'fda_cb_bad' is converted to a function pointer of type 'fda_cb_t'{{.*}}"julia_not_safepoint"
+    a = fda_cb_bad;
+    // CHECK: warning: 'fda_cb_bad' is converted to a function pointer of type 'fda_cb_t'{{.*}}"julia_not_safepoint"
+    fda_take_cb(fda_cb_bad);
+    // CHECK: warning: 'fda_cb_bad' is converted to a function pointer of type 'fda_cb_t'{{.*}}"julia_not_safepoint"
+    fda_take_cb(&fda_cb_bad);
+    (void)a; (void)b; (void)c;
+}
+
+// CHECK: warning: 'fda_cb_bad' is converted to a function pointer of type 'fda_cb_t'{{.*}}"julia_not_safepoint"
+fda_cb_t fda_cb_ret(void) { return fda_cb_bad; }
+
+struct fda_cb_holder { fda_cb_t cb; };
+// CHECK: warning: 'fda_cb_bad' is converted to a function pointer of type 'fda_cb_t'{{.*}}"julia_not_safepoint"
+struct fda_cb_holder fda_cb_inst = { fda_cb_bad };
+
 #ifdef __cplusplus
 // CHECK-CXX: warning: Julia annotation "julia_not_safepoint" is on this declaration of 'm' but missing from its first declaration
 struct fda_S { void m(void); };
 void fda_S::m(void) JL_NOTSAFEPOINT {}
+
+struct fda_Base {
+    virtual void fda_ovr_ok(void) JL_NOTSAFEPOINT;
+    virtual void fda_ovr_bad(void) JL_NOTSAFEPOINT;
+    virtual void fda_ovr_plain(void);
+};
+
+struct fda_Derived : fda_Base {
+    void fda_ovr_ok(void) JL_NOTSAFEPOINT override;
+    // CHECK-CXX: warning: 'fda_ovr_bad' overrides a method that requires Julia annotation "julia_not_safepoint", but 'fda_ovr_bad' is not annotated "julia_not_safepoint"
+    void fda_ovr_bad(void) override;
+    void fda_ovr_plain(void) override;
+};
 #endif
 
 // The system header is simulated with a GCC line marker whose '3' flag marks

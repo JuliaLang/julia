@@ -274,8 +274,8 @@ extern "C" {
 #undef jl_atomic_exchange_relaxed
 #define jl_atomic_exchange(obj, desired) \
     (__extension__({ \
-            __typeof__((obj)) p__analyzer__ = (obj); \
-            __typeof__(*p__analyzer__) temp__analyzer__ = *p__analyzer__; \
+            __auto_type p__analyzer__ = (obj); \
+            __auto_type temp__analyzer__ = *p__analyzer__; \
             *p__analyzer__ = (desired); \
             temp__analyzer__; \
         }))
@@ -289,9 +289,9 @@ extern "C" {
 #undef jl_atomic_cmpswap_relaxed
 #define jl_atomic_cmpswap(obj, expected, desired) \
     (__extension__({ \
-            __typeof__((obj)) p__analyzer__ = (obj); \
-            __typeof__(*p__analyzer__) temp__analyzer__ = *p__analyzer__; \
-            __typeof__((expected)) x__analyzer__ = (expected); \
+            __auto_type p__analyzer__ = (obj); \
+            __auto_type temp__analyzer__ = *p__analyzer__; \
+            __auto_type x__analyzer__ = (expected); \
             int eq__analyzer__ = memcmp(&temp__analyzer__, x__analyzer__, sizeof(temp__analyzer__)) == 0; \
             if (eq__analyzer__) \
                 *p__analyzer__ = (desired); \
@@ -325,22 +325,22 @@ extern "C" {
 #undef jl_atomic_fetch_or_relaxed
 #define jl_atomic_fetch_add(obj, val) \
     (__extension__({ \
-            __typeof__((obj)) p__analyzer__ = (obj); \
-            __typeof__(*p__analyzer__) temp__analyzer__ = *p__analyzer__; \
+            __auto_type p__analyzer__ = (obj); \
+            __auto_type temp__analyzer__ = *p__analyzer__; \
             *(p__analyzer__) = temp__analyzer__ + (val); \
             temp__analyzer__; \
         }))
 #define jl_atomic_fetch_and(obj, val) \
     (__extension__({ \
-            __typeof__((obj)) p__analyzer__ = (obj); \
-            __typeof__(*p__analyzer__) temp__analyzer__ = *p__analyzer__; \
+            __auto_type p__analyzer__ = (obj); \
+            __auto_type temp__analyzer__ = *p__analyzer__; \
             *(p__analyzer__) = temp__analyzer__ & (val); \
             temp__analyzer__; \
         }))
 #define jl_atomic_fetch_or(obj, val) \
     (__extension__({ \
-            __typeof__((obj)) p__analyzer__ = (obj); \
-            __typeof__(*p__analyzer__) temp__analyzer__ = *p__analyzer__; \
+            __auto_type p__analyzer__ = (obj); \
+            __auto_type temp__analyzer__ = *p__analyzer__; \
             *(p__analyzer__) = temp__analyzer__ | (val); \
             temp__analyzer__; \
         }))

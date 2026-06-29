@@ -677,6 +677,7 @@ public:
     {
         assert(anon_hdl != -1);
     }
+    virtual ~DualMapAllocator() JL_NOTSAFEPOINT override = default;
     void finalize() override JL_NOTSAFEPOINT
     {
         for (auto &block : this->blocks) {
@@ -733,6 +734,7 @@ public:
     {
         assert(get_self_mem_fd() != -1);
     }
+    virtual ~SelfMemAllocator() JL_NOTSAFEPOINT override = default;
     void finalize() override JL_NOTSAFEPOINT
     {
         for (auto &block : this->blocks) {

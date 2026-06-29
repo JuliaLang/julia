@@ -4164,7 +4164,7 @@ void jl_init_types(void) JL_GC_DISABLED
     export_jl_sysimg_globals();
 }
 
-static jl_value_t *core(const char *name)
+static jl_value_t *core(const char *name) JL_GLOBALLY_ROOTED
 {
     return jl_get_global(jl_core_module, jl_symbol(name));
 }

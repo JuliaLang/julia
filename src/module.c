@@ -1986,7 +1986,7 @@ void jl_binding_deprecation_warning(jl_binding_t *b)
 
 // For a generally writable binding (checked using jl_check_binding_currently_writable in this world age), check whether
 // we can actually write the value `rhs` to it.
-jl_value_t *jl_check_binding_assign_value(jl_binding_t *b JL_PROPAGATES_ROOT, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs JL_MAYBE_UNROOTED, const char *msg)
+jl_value_t *jl_check_binding_assign_value(jl_binding_t *b JL_PROPAGATES_ROOT, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs, const char *msg)
 {
     JL_GC_PUSH1(&rhs); // callee-rooted
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
