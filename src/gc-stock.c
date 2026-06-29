@@ -1348,19 +1348,27 @@ void gc_free_pages(void) JL_NOTSAFEPOINT
     // If concurrent page sweeping is disabled, then `gc_free_pages` will be called in the stop-the-world
     // phase. We can guarantee, therefore, that there won't be any concurrent modifications to
     // `global_page_pool_lazily_freed`, so it's safe to assign `tmp` back to `global_page_pool_lazily_freed`.
-    // Otherwise, we need to use the thread-safe push_lf_back/pop_lf_back functions.
     if (jl_n_sweepthreads == 0) {
         global_page_pool_lazily_freed = tmp;
     }
     else {
+        // Concurrent page sweeping: this runs alongside mutators calling
+        // `jl_gc_alloc_page`, which pop `global_page_pool_lazily_freed` as their
+        // first source. Re-pushing the kept ("last few") pages back onto that
+        // stack here would reintroduce a popped node while concurrent pops are in
+        // flight, violating the no-ABA invariant the lock-free stack relies on
+        // (see gc-stock.h). That ABA hands the same page to two owners, so a live
+        // object's page can be madvise-freed -> its type tag is zeroed -> the next
+        // mark loop aborts on a corrupted object. Instead, actually reclaim the
+        // kept pages into `global_page_pool_freed`, which is only ever pushed (here)
+        // and popped (by the allocator) and so never makes a popped node reappear.
         while (1) {
             jl_gc_pagemeta_t *pg = pop_lf_back(&tmp);
             if (pg == NULL) {
                 break;
             }
-            assert((&global_page_pool_lazily_freed != &tmp) &&
-                "Cannot push back to the same stack we are popping from; see invariant of lock-free stack");
-            push_lf_back(&global_page_pool_lazily_freed, pg);
+            jl_gc_free_page(pg);
+            push_lf_back(&global_page_pool_freed, pg);
         }
     }
 }
