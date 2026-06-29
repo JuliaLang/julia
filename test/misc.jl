@@ -1681,3 +1681,107 @@ end
         end
     end
 end
+
+# Interrupt (SIGINT/Ctrl-C) delivery: an interrupt must reach user code, not be
+# swallowed by (or crash) the internal scheduler task (issue #58689).
+if !Sys.iswindows()
+    # "Internal Task ERROR" is uppercased by `emphasize` when color is off
+    has_internal_err(s) = occursin(r"internal task error"i, s)
+    expect_output(output, pat; timeout=60) =
+        timedwait(() -> occursin(pat, output[]), timeout) === :ok
+    function spawn_interrupt_test_repl()
+        cmd = addenv(`$(Base.julia_cmd()) -q -i --startup-file=no`, Dict("TERM" => "dumb"))
+        pts, ptm = Main.FakePTYs.open_fake_pty()
+        p = run(cmd, pts, pts, pts; wait=false)
+        Base.close_stdio(pts)
+        output = Ref("")
+        @async try
+            while !eof(ptm)
+                output[] *= String(readavailable(ptm))
+            end
+        catch
+        end
+        return p, ptm, output
+    end
+    function cleanup_interrupt_test_repl(p, ptm)
+        process_running(p) && kill(p, Base.SIGKILL)
+        close(ptm)
+        wait(p)
+    end
+
+    @testset "SIGINT at idle REPL prompt" begin
+        p, ptm, output = spawn_interrupt_test_repl()
+        try
+            @test expect_output(output, "julia>")
+            sleep(2)  # let the REPL go fully idle (thread parked in scheduler)
+            kill(p, 2) # SIGINT
+            sleep(3)
+            @test process_running(p)
+            @test !has_internal_err(output[])
+            write(ptm, "println(\"CHECK_\", 1+1)\n")
+            @test expect_output(output, "CHECK_2"; timeout=30)
+        finally
+            cleanup_interrupt_test_repl(p, ptm)
+        end
+    end
+
+    @testset "SIGINT during REPL evaluation of a sleep loop" begin
+        p, ptm, output = spawn_interrupt_test_repl()
+        try
+            @test expect_output(output, "julia>")
+            write(ptm, "while true; sleep(0.05); end\n")
+            sleep(3)  # let the loop start
+            kill(p, 2) # SIGINT
+            @test expect_output(output, "InterruptException"; timeout=30)
+            @test !has_internal_err(output[])
+            @test process_running(p)
+            write(ptm, "println(\"CHECK_\", 1+1)\n")
+            @test expect_output(output, "CHECK_2"; timeout=30)
+        finally
+            cleanup_interrupt_test_repl(p, ptm)
+        end
+    end
+
+    @testset "SIGINT to a non-interactive process blocked in sleep" begin
+        errfile = tempname()
+        p = run(pipeline(`$(Base.julia_cmd()) --startup-file=no -e "sleep(600)"`;
+                         stdout=devnull, stderr=errfile); wait=false)
+        sleep(3)  # ensure it is sleeping
+        # even 1.11 needed a 2nd SIGINT here, so allow a few attempts
+        for i in 1:3
+            kill(p, 2) # SIGINT
+            timedwait(() -> process_exited(p), 10) === :ok && break
+        end
+        @test process_exited(p)
+        err = read(errfile, String)
+        @test occursin("InterruptException", err)
+        @test !has_internal_err(err)
+        process_running(p) && kill(p, Base.SIGKILL)
+        wait(p)
+    end
+
+    if Base.identify_package("Distributed") !== nothing
+        @testset "Distributed.interrupt reaches a busy worker" begin
+            script = """
+                using Distributed
+                w = addprocs(1)[1]
+                r = remotecall(Core.eval, w, Main, :(sleep(20); "completed"))
+                sleep(3)
+                interrupt(w)
+                v = try
+                    fetch(r)
+                catch e
+                    e
+                end
+                exit((v isa RemoteException || v isa InterruptException) ? 0 : 1)
+                """
+            cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -e $script`,
+                         Dict("JULIA_LOAD_PATH" => "@stdlib"))
+            p = run(pipeline(cmd; stdout=devnull, stderr=devnull); wait=false)
+            exited = timedwait(() -> process_exited(p), 120) === :ok
+            @test exited && p.exitcode == 0
+            process_running(p) && kill(p, Base.SIGKILL)
+            wait(p)
+        end
+    end
+end

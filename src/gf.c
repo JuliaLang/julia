@@ -471,6 +471,9 @@ jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, uint8_
     // increase that limit, we'll need to
     // allocate another bit for the counter.
     ct->reentrant_timing += 0b10;
+    // An asynchronous InterruptException delivered in the middle of inference
+    // corrupts the compiler's state; defer it until inference has finished.
+    JL_SIGATOMIC_BEGIN();
     JL_TRY {
         ci = (jl_code_instance_t*)jl_apply(fargs, 5);
     }
@@ -513,6 +516,10 @@ jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, uint8_
         JL_GC_POP();
     }
 
+    // may rethrow a deferred InterruptException, now that the compiler state
+    // is consistent again; keep `ci` rooted across the safepoint
+    fargs[0] = (jl_value_t*)ci;
+    JL_SIGATOMIC_END();
     JL_GC_POP();
 #endif
 
