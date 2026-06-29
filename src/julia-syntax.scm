@@ -2237,12 +2237,20 @@
         ; expanded to a fuse op call
         (if (null? lhs)
             (expand-forms `(call (top materialize) ,(cdr e)))
-            (expand-forms `(call (top materialize!) ,lhs-view ,(cdr e))))
+            (let ((tmp (make-ssavalue)))
+              (expand-forms `(block
+                              (= ,tmp ,lhs-view)
+                              (call (top materialize!) ,tmp ,(cdr e))
+                              ,tmp))))
         ; expanded to something else (like a getfield)
         (if (null? lhs)
             (expand-forms e)
-            (expand-forms `(call (top materialize!) ,lhs-view
-                                 (call (top broadcasted) (top identity) ,e)))))))
+            (let ((tmp (make-ssavalue)))
+              (expand-forms `(block
+                              (= ,tmp ,lhs-view)
+                              (call (top materialize!) ,tmp
+                                    (call (top broadcasted) (top identity) ,e))
+                              ,tmp)))))))
 
 
 (define (expand-where body var)
