@@ -208,7 +208,7 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
                     // Don't use emit_gc_safe_leave here, as that introduces a new BB while iterating BBs
                     builder.SetInsertPoint(BB.getTerminator());
                     Value *ptls = get_current_ptls_from_task(builder, get_current_task_from_pgcstack(builder, phi), tbaa_gcframe);
- unsigned offset = offsetof(jl_tls_states_t, gc_state);
+                    unsigned offset = offsetof(jl_tls_states_t, gc_state);
                     Value *gc_state = builder.CreateConstInBoundsGEP1_32(Type::getInt8Ty(builder.getContext()), ptls, offset, "gc_state");
                     builder.CreateAlignedStore(last_gc_state, gc_state, Align(sizeof(void*)))->setOrdering(AtomicOrdering::Release);
                     emit_gc_safepoint(builder, T_size, ptls, tbaa, true);

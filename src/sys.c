@@ -1061,7 +1061,7 @@ JL_DLLEXPORT void jl_srand(uint64_t rngseed) JL_NOTSAFEPOINT
     jl_atomic_store_relaxed(&g_rngseed, rngseed);
 }
 
-void jl_init_rand(void) JL_NOTSAFEPOINT
+void jl_init_rand(void)
 {
     uint64_t rngseed;
     if (uv_random(NULL, NULL, &rngseed, sizeof(rngseed), 0, NULL)) {

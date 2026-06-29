@@ -777,7 +777,7 @@ jl_value_t *jl_code_or_ci_for_interpreter(jl_method_instance_t *mi, size_t world
                 // under the assumption that the interpreter may need to
                 // access it frequently. TODO: Have some sort of usage-based
                 // cache here.
-                jl_gc_write(m, m->source, src);
+                jl_gc_write(m, m->source, jl_value_t, (jl_value_t*)src);
             }
             ret = (jl_value_t*)src;
         }

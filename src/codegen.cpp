@@ -10318,8 +10318,7 @@ jl_code_info_t *jl_get_method_ir(jl_code_instance_t *ci)
 void emit_always_inline(jl_codegen_output_t &out,
                         unique_function<jl_code_info_t *(jl_code_instance_t *)> get_src)
 {
-    SmallVector<std::pair<jl_code_instance_t *, jl_invoke_api_t>>
-        queue;
+    SmallVector<std::pair<jl_code_instance_t *, jl_invoke_api_t>> queue;
     // We don't want to define externally-visible functions for CodeInstances
     // that are here for inlining only, so we'll restore the original ci_funcs
     // map after emitting everything necessary for inlining.
@@ -10511,7 +10510,7 @@ static void init_jit_functions(void)
     add_named_global(jlunlockfield_func, &jl_unlock_field);
     add_named_global(jlgetabiconverter_func, &jl_get_abi_converter);
 
-    jl_get_pgcstack_func *get_pgcstack;
+    jl_get_pgcstack_func_t get_pgcstack;
     jl_pgcstack_key_t pgcstack_key;
     jl_pgcstack_getkey(&get_pgcstack, &pgcstack_key);
     add_named_global("jl_get_pgcstack_resolved", get_pgcstack);

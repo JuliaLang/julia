@@ -1,4 +1,13 @@
+---
+name: buildkite-logs
+description: Fetch and inspect Julia Buildkite CI logs without web sign-in. Use when debugging Julia CI failures, reviewing Buildkite jobs, or when the Buildkite MCP is unavailable.
+---
+
 # Reviewing Buildkite CI logs
+
+Use this when investigating Julia Buildkite CI failures, especially if the
+Buildkite MCP is unavailable. The recipe requires `gh`, `curl`, `python3`, and
+network access to GitHub and Buildkite.
 
 Julia's CI runs on Buildkite (pipeline `julialang/julia-master`). The public web
 UI requires sign-in to download `raw_log`, but the Buildkite frontend's JSON log

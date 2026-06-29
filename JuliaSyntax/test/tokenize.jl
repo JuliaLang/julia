@@ -750,6 +750,9 @@ end
     @test toks("1...")   == ["1"=>K"Integer",  "."=>K".", "."=>K".", "."=>K"."]
     @test toks(".1..")   == [".1"=>K"Float",    "."=>K".", "."=>K"."]
     @test toks("0x01..") == ["0x01"=>K"HexInt", "."=>K".", "."=>K"."]
+    @test toks("1e1..2") == ["1e1"=>K"Float", "."=>K".", "."=>K".", "2"=>K"Integer"]
+    @test toks("1.1e1..2") == ["1.1e1"=>K"Float", "."=>K".", "."=>K".", "2"=>K"Integer"]
+    @test toks("0x1p3..2") == ["0x1p3"=>K"Float", "."=>K".", "."=>K".", "2"=>K"Integer"]
 
     # Dotted operators and other dotted suffixes
     @test toks("1234 .+1") == ["1234"=>K"Integer", " "=>K"Whitespace", "."=>K".", "+"=>K"+", "1"=>K"Integer"]
@@ -766,6 +769,7 @@ end
     @test toks("1.1.⫪")  == ["1.1"=>K"Float", "."=>K".", "⫪"=>K"Operator"]
     @test toks("1e1.−")  == ["1e1"=>K"Float", "."=>K".", "−"=>K"-"]
     @test toks("1.1.−")  == ["1.1"=>K"Float", "."=>K".", "−"=>K"-"]
+    @test toks("0x1p3.−") == ["0x1p3"=>K"Float", "."=>K".", "−"=>K"-"]
     # ... including operators which have their own kind rather than being in
     # the generic operator table
     @test toks("1e1.∈")  == ["1e1"=>K"Float", "."=>K".", "∈"=>K"∈"]

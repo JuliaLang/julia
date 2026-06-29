@@ -2,6 +2,7 @@
 
 #include "llvm-version.h"
 #include "platform.h"
+#include <pthread.h>
 #include <stdint.h>
 #include <string>
 
@@ -163,7 +164,7 @@ void jl_dump_llvm_opt_impl(void *s)
     **jl_ExecutionEngine->get_dump_llvm_opt_stream() = (ios_t*)s;
 }
 
-static void jl_decorate_module(Module &M) JL_NOTSAFEPOINT;
+static void decorate_module(Module &M) JL_NOTSAFEPOINT;
 
 // convert local roots into global roots, if they are needed
 static void jl_promote_method_roots(jl_codegen_output_t &out, jl_method_instance_t *mi)
@@ -290,7 +291,7 @@ jl_emitted_output_t jl_codegen_output_t::finish(std::unique_ptr<LLVMContext> ctx
                                                 orc::SymbolStringPool &SSP)
 {
     auto info = std::make_unique<jl_linker_info_t>();
-    auto intern = [&](StringRef name) {
+    auto intern = [&](StringRef name) JL_NOTSAFEPOINT {
         SmallString<128> buf;
         Mangler::getNameWithPrefix(buf, name, DL);
         return SSP.intern(buf);
@@ -425,7 +426,7 @@ static void jl_publish_compiled_ci(jl_code_instance_t *ci,
     }
 }
 
-static void jl_do_dump_compile(jl_code_instance_t *codeinst, uint64_t time)
+static void jl_do_dump_compile(jl_code_instance_t *codeinst, uint64_t time) JL_NOTSAFEPOINT
 {
     jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
     if (jl_is_method(mi->def.method)) {
@@ -551,10 +552,10 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
             ++UnspecFPtrCount;
             jl_svec_t *edges = (jl_svec_t*)src->edges;
             if (jl_is_svec(edges)) {
-                jl_gc_write_atomic(unspec, unspec->edges, edges, release); // n.b. this assumes the field was always empty svec(), which is not entirely true
+                jl_gc_write_atomic(unspec, unspec->edges, jl_svec_t, edges, release); // n.b. this assumes the field was always empty svec(), which is not entirely true
             }
             jl_debuginfo_t *debuginfo = src->debuginfo;
-            jl_gc_write_atomic(unspec, unspec->debuginfo, debuginfo, release); // n.b. this assumes the field was previously NULL, which is not entirely true
+            jl_gc_write_atomic(unspec, unspec->debuginfo, jl_debuginfo_t, debuginfo, release); // n.b. this assumes the field was previously NULL, which is not entirely true
             jl_emit_codeinsts_to_jit(&unspec, &src, 1);
             jl_ExecutionEngine->publishCIs(unspec, true);
         }
@@ -811,26 +812,7 @@ public:
         });
     }
 };
-
-// replace with [[maybe_unused]] when we get to C++17
-#ifdef _COMPILER_GCC_
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-function"
-#endif
-
-#ifdef _COMPILER_CLANG_
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wunused-function"
-#endif
-
-#ifdef _COMPILER_CLANG_
-#pragma clang diagnostic pop
-#endif
-
-#ifdef _COMPILER_GCC_
-#pragma GCC diagnostic pop
-#endif
-}
+} // namespace anonymous
 
 class JLMaterializationUnit : public orc::MaterializationUnit {
 public:
@@ -883,10 +865,9 @@ public:
     }
 
     // During materialization: finalizers disabled, GC safe
-    void materialize(std::unique_ptr<MaterializationResponsibility> R) override
+    void materialize(std::unique_ptr<MaterializationResponsibility> R) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER override
     {
         auto &ES = R->getExecutionSession();
-        jl_task_t *ct = jl_current_task;
 
         std::unique_ptr<MemoryBuffer> Obj;
         uint64_t start_time = jl_hrtime();
@@ -900,10 +881,11 @@ public:
             Out.module->addModuleFlag(Module::Warning, "julia.cpu.features",
                                       MDString::get(*Out.ctx,
                                                     JIT.getTargetFeatureString()));
-            Obj = JIT.OCache.get(*Out.module, [this](){
-                JIT.optimizeModule(*Out.module);
-                return JIT.compileModule(*Out.module);
-            });
+            Obj = JIT.OCache.get(*Out.module,
+                                 [this]() JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE {
+                                     JIT.optimizeModule(*Out.module);
+                                     return JIT.compileModule(*Out.module);
+                                 });
             if (!Obj) {
                 R->failMaterialization();
                 return;
@@ -914,21 +896,17 @@ public:
         }
         uint64_t end_time = jl_hrtime();
 
-#ifndef __clang_analyzer__
-        {
-            uint8_t state = jl_gc_unsafe_enter(ct->ptls);
-            for (auto [CI, _] : Out.linker_info->ci_funcs) {
-                JL_GC_PROMISE_ROOTED(CI);
-                jl_do_dump_compile(CI, end_time - start_time);
-            }
-            jl_gc_unsafe_leave(ct->ptls, state);
+        for (auto [CI, _] : Out.linker_info->ci_funcs) {
+            JL_GC_PROMISE_ROOTED(CI);
+            jl_do_dump_compile(CI, end_time - start_time);
         }
-#endif
 
         auto G = jitlink::createLinkGraphFromObject(Obj->getMemBufferRef(),
                                                     ES.getSymbolStringPool());
         if (!G) {
+#ifndef __clang_gcanalyzer__ // reportError runs an unknown callback, which cannot be annotated as safe here (but is)
             ES.reportError(G.takeError());
+#endif
             R->failMaterialization();
             return;
         }
@@ -937,7 +915,11 @@ public:
         SmallVector<jl_code_instance_t *> CIs;
         for (auto [CI, _] : Out.linker_info->ci_funcs)
             CIs.push_back(CI);
+
+        jl_task_t *ct = jl_current_task;
+        uint8_t gc_state = jl_gc_unsafe_enter(ct->ptls);
         JIT.publishCIs(CIs);
+        jl_gc_unsafe_leave(ct->ptls, gc_state);
 
         if (!JIT.linkOutput(*R, Obj->getMemBufferRef(), **G, std::move(Out.linker_info)))
             return;
@@ -984,7 +966,7 @@ public:
     };
 
     // During materialization: finalizers disabled, GC safe
-    void materialize(std::unique_ptr<MaterializationResponsibility> R) override
+    void materialize(std::unique_ptr<MaterializationResponsibility> R) JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE override
     {
         auto Ctx = std::make_unique<LLVMContext>();
         auto Mod =
@@ -1216,6 +1198,7 @@ namespace {
 
         TMCreator(TargetMachine &TM, int optlevel) JL_NOTSAFEPOINT
             : JTMB(createJTMBFromTM(TM, optlevel)) {}
+        ~TMCreator() JL_NOTSAFEPOINT = default;
 
         std::unique_ptr<TargetMachine> operator()() JL_NOTSAFEPOINT {
             auto TM = cantFail(JTMB.createTargetMachine());
@@ -1232,6 +1215,7 @@ namespace {
         bool cache_enabled;
         PMCreator(TargetMachine &TM, int optlevel, SmallVector<std::function<void()>, 0> &printers, std::mutex &llvm_printing_mutex, bool cache_enabled) JL_NOTSAFEPOINT
             : JTMB(createJTMBFromTM(TM, optlevel)), O(getOptLevel(optlevel)), printers(printers), llvm_printing_mutex(llvm_printing_mutex), cache_enabled(cache_enabled) {}
+        ~PMCreator() JL_NOTSAFEPOINT = default;
 
         auto operator()() JL_NOTSAFEPOINT {
             auto TM = cantFail(JTMB.createTargetMachine());
@@ -1372,7 +1356,8 @@ namespace {
     // shim for converting a unique_ptr to a TransformFunction to a TransformFunction
     template <typename T>
     struct IRTransformRef {
-        IRTransformRef(T &transform) : transform(transform) {}
+        IRTransformRef(T &transform) JL_NOTSAFEPOINT : transform(transform) {}
+        ~IRTransformRef() JL_NOTSAFEPOINT = default;
         OptimizerResultT operator()(orc::ThreadSafeModule TSM, orc::MaterializationResponsibility &R) JL_NOTSAFEPOINT {
             TSM.withModuleDo([&](Module &M) JL_NOTSAFEPOINT {
                 transform(M, R);
@@ -1678,7 +1663,7 @@ struct JuliaOJIT::DLSymOptimizer {
     bool named;
 };
 
-void optimizeDLSyms(Module &M) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER {
+void optimizeDLSyms(Module &M) {
     JuliaOJIT::DLSymOptimizer(true)(M);
 }
 
@@ -2061,7 +2046,7 @@ void JuliaOJIT::publishCIs(ArrayRef<jl_code_instance_t *> CIs, bool Wait)
     JuliaTaskDispatcher::future<void> F;
     auto Callback = [this, CIs = SmallVector<jl_code_instance_t *, 1>(CIs),
                      P = Wait ? std::optional(F.get_promise()) :
-                                std::nullopt](Expected<SymbolMap> SymsE) mutable {
+                                std::nullopt](Expected<SymbolMap> SymsE) JL_NOTSAFEPOINT {
         std::unique_lock Lock{LinkerMutex};
         if (!SymsE) {
             errs() << "Internal error: Lookup failed: " << SymsE.takeError() << "\n";
@@ -2253,10 +2238,14 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
 
     // Rename globals and add mappings
     // TODO: don't leak when we have a way to GC code
-#ifdef __clang_analyzer__
-    [[clang::suppress]]
-#endif
-    void **Ptrs = new void *[Info->global_targets.size()];
+    void **Ptrs;
+    #ifdef __clang_analyzer__
+    // hide this "leak" from clang-sa analysis
+    extern void** make_new_pointers(size_t) JL_NOTSAFEPOINT;
+    Ptrs = make_new_pointers(Info->global_targets.size());
+    #else
+    Ptrs = new void *[Info->global_targets.size()];
+    #endif
     size_t i = 0;
     orc::SymbolMap GlobalSyms;
     for (auto &[Addr, Orig] : Info->global_targets) {
@@ -2387,7 +2376,7 @@ void JuliaOJIT::optimizeModule(Module &M)
     // Windows needs some inline asm to help
     // build unwind tables, if they have any functions to decorate
     if (!M.functions().empty())
-        jl_decorate_module(M);
+        decorate_module(M);
 }
 
 std::unique_ptr<MemoryBuffer> JuliaOJIT::compileModule(Module &M)
@@ -2425,7 +2414,7 @@ void JuliaOJIT::printTimers()
     reportAndResetTimings();
 }
 
-void JuliaOJIT::optimizeDLSyms(Module &M) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER {
+void JuliaOJIT::optimizeDLSyms(Module &M) {
     (*DLSymOpt)(M);
 }
 
@@ -2476,7 +2465,7 @@ TargetIRAnalysis JuliaOJIT::getTargetIRAnalysis() const {
     return TM->getTargetIRAnalysis();
 }
 
-static void jl_decorate_module(Module &M) {
+static void decorate_module(Module &M) {
     auto TT = Triple(M.getTargetTriple());
     if (TT.isOSWindows() && TT.getArch() == Triple::x86_64) {
         // Add special values used by debuginfo to build the UnwindData table registration for Win64
@@ -2539,6 +2528,12 @@ static void jl_decorate_module(Module &M) {
         M.appendModuleInlineAsm(inline_asm);
     }
 #undef ASM_USES_ELF
+}
+
+extern "C" JL_DLLEXPORT_CODEGEN
+void jl_decorate_llvm_module_impl(LLVMModuleRef m) JL_NOTSAFEPOINT
+{
+    decorate_module(*unwrap(m));
 }
 
 // helper function for adding a DLLImport (dlsym) address to the execution engine

@@ -39,7 +39,7 @@ void jl_add_scanned_method(jl_module_t *m, jl_method_t *meth)
 {
     JL_LOCK(&m->lock);
     if (m->scanned_methods == jl_nothing) {
-        jl_gc_write(m, m->scanned_methods, (jl_value_t*)jl_alloc_vec_any(0));
+        jl_gc_write(m, m->scanned_methods, jl_value_t, (jl_value_t*)jl_alloc_vec_any(0));
     }
     jl_array_ptr_1d_push((jl_array_t*)m->scanned_methods, (jl_value_t*)meth);
     JL_UNLOCK(&m->lock);
@@ -205,7 +205,7 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
         if (typ == (jl_value_t*)jl_voidpointer_type) {
             jl_value_t *a = jl_exprarg(e, 1);
             JL_TYPECHK(cfunction method definition, quotenode, a);
-            jl_gc_write(a, *(jl_value_t**)a, jl_toplevel_eval(module, *(jl_value_t**)a));
+            jl_gc_write(a, *(jl_value_t**)a, jl_value_t, jl_toplevel_eval(module, *(jl_value_t**)a));
         }
         jl_value_t *rt = jl_exprarg(e, 2);
         jl_value_t *at = jl_exprarg(e, 3);
@@ -466,14 +466,14 @@ jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ir)
 
     jl_array_t *codelocs_any = (jl_array_t*)jl_exprarg(ir, 3);
     jl_array_t *linetable = (jl_array_t*)jl_exprarg(ir, 4);
-    jl_gc_write(li, li->debuginfo, jl_linetable_to_debuginfo(codelocs_any, linetable));
+    jl_gc_write(li, li->debuginfo, jl_debuginfo_t, jl_linetable_to_debuginfo(codelocs_any, linetable));
 
     assert(jl_is_expr(bodyex));
     jl_array_t *body = bodyex->args;
-    jl_gc_write(li, li->code, body);
+    jl_gc_write(li, li->code, jl_array_t, body);
     size_t n = jl_array_nrows(body);
     jl_value_t **bd = (jl_value_t**)jl_array_ptr_data((jl_array_t*)li->code);
-    jl_gc_write(li, li->ssaflags, jl_alloc_array_1d(jl_array_uint32_type, n));
+    jl_gc_write(li, li->ssaflags, jl_array_t, jl_alloc_array_1d(jl_array_uint32_type, n));
     int inbounds_depth = 0; // number of stacked inbounds
     // isempty(inline_flags): no user callsite inline annotation
     // last(inline_flags) == 1: callsite inline region
@@ -634,9 +634,9 @@ jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ir)
     jl_value_t *ssavalue_types = jl_array_ptr_ref(vinfo, 2);
     assert(jl_is_long(ssavalue_types));
     size_t nssavalue = jl_unbox_long(ssavalue_types);
-    jl_gc_write(li, li->slotnames, jl_alloc_array_1d(jl_array_symbol_type, nslots));
-    jl_gc_write(li, li->slotflags, jl_alloc_array_1d(jl_array_uint8_type, nslots));
-    jl_gc_write(li, li->ssavaluetypes, jl_box_long(nssavalue));
+    jl_gc_write(li, li->slotnames, jl_array_t, jl_alloc_array_1d(jl_array_symbol_type, nslots));
+    jl_gc_write(li, li->slotflags, jl_array_t, jl_alloc_array_1d(jl_array_uint8_type, nslots));
+    jl_gc_write(li, li->ssavaluetypes, jl_value_t, jl_box_long(nssavalue));
 
     // Flags that need to be copied to slotflags
     const uint8_t vinfo_mask = 8 | 16 | 32 | 64;
@@ -1008,7 +1008,7 @@ JL_DLLEXPORT void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
                     jl_error("duplicate @generated function body");
                 jl_value_t *gexpr = jl_exprarg(st, 1);
                 // the frontend would put (new (core GeneratedFunctionStub) funcname argnames sp) here, for example
-                jl_gc_write(m, m->generator, jl_toplevel_eval(m->module, gexpr));
+                jl_gc_write(m, m->generator, jl_value_t, jl_toplevel_eval(m->module, gexpr));
                 st = jl_nothing;
             }
             else if (nargs == 1 && jl_exprarg(st, 0) == (jl_value_t*)jl_generated_only_sym) {
@@ -1031,15 +1031,15 @@ JL_DLLEXPORT void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     if (src->nargs == 0)
         src->nargs = m->nargs;
     assert(m->nargs == src->nargs);
-    jl_gc_write(src, src->code, copy);
-    jl_gc_write(m, m->slot_syms, jl_compress_argnames(src->slotnames));
+    jl_gc_write(src, src->code, jl_array_t, copy);
+    jl_gc_write(m, m->slot_syms, jl_value_t, jl_compress_argnames(src->slotnames));
     if (gen_only) {
         m->source = NULL;
     }
     else {
-        jl_gc_write(m, m->debuginfo, src->debuginfo);
-        jl_gc_write(m, m->source, (jl_value_t*)src);
-        jl_gc_write(m, m->source, (jl_value_t*)jl_compress_ir(m, NULL));
+        jl_gc_write(m, m->debuginfo, jl_debuginfo_t, src->debuginfo);
+        jl_gc_write(m, m->source, jl_value_t, (jl_value_t*)src);
+        jl_gc_write(m, m->source, jl_value_t, (jl_value_t*)jl_compress_ir(m, NULL));
     }
     JL_GC_POP();
 }
@@ -1160,7 +1160,7 @@ void jl_mi_done_backedges(jl_method_instance_t *mi JL_PROPAGATES_ROOT, uint8_t o
             }
             if (insb == 0) {
                 // All were deleted
-                jl_gc_write(mi, mi->backedges, NULL);
+                jl_gc_write(mi, mi->backedges, jl_array_t, NULL);
             } else {
                 jl_array_del_end(backedges, n - insb);
             }
@@ -1192,7 +1192,7 @@ jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name
     m->file = jl_is_symbol(file) ? (jl_sym_t*)file : jl_empty_sym;
     m->line = jl_linenode_line(functionloc);
     if (isinferred) {
-        jl_gc_write(m, m->slot_syms, jl_compress_argnames(ci->slotnames));
+        jl_gc_write(m, m->slot_syms, jl_value_t, jl_compress_argnames(ci->slotnames));
     } else {
         jl_method_set_source(m, ci);
     }
@@ -1444,10 +1444,10 @@ static void add_root_block(jl_array_t *root_blocks, uint64_t modid, size_t len)
 static void prepare_method_for_roots(jl_method_t *m, uint64_t modid)
 {
     if (!m->roots) {
-        jl_gc_write(m, m->roots, jl_alloc_vec_any(0));
+        jl_gc_write(m, m->roots, jl_array_t, jl_alloc_vec_any(0));
     }
     if (!m->root_blocks && modid != 0) {
-        jl_gc_write(m, m->root_blocks, jl_alloc_array_1d(jl_array_uint64_type, 0));
+        jl_gc_write(m, m->root_blocks, jl_array_t, jl_alloc_array_1d(jl_array_uint64_type, 0));
     }
 }
 

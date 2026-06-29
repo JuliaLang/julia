@@ -833,7 +833,7 @@ static int OpInfoLookup(void *DisInfo, uint64_t PC,
 } // namespace
 
 // Stringify raw bytes as a comment string.
-std::string rawCodeComment(const llvm::ArrayRef<uint8_t>& Memory, const llvm::Triple& Triple)
+std::string rawCodeComment(const llvm::ArrayRef<uint8_t>& Memory, const llvm::Triple& Triple) JL_NOTSAFEPOINT
 {
     std::string Buffer{"; "};
     llvm::raw_string_ostream Stream{Buffer};

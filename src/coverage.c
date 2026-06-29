@@ -1,7 +1,6 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include <stdint.h>
-#include <pthread.h>
 #include <string.h>
 #include <stdio.h>
 #include <inttypes.h>
@@ -53,7 +52,7 @@ static logdata_vec_t *logdata_get_or_create(logdata_t *ld, const char *filename)
     return (logdata_vec_t *)*bp;
 }
 
-pthread_mutex_t coverage_lock = PTHREAD_MUTEX_INITIALIZER;
+static uv_mutex_t coverage_lock;
 
 static uint64_t *allocLine(logdata_vec_t *vec, int line) JL_NOTSAFEPOINT
 {
@@ -89,16 +88,16 @@ JL_DLLEXPORT void jl_coverage_alloc_line(const char *filename, int line) JL_NOTS
     assert(!codegen_imaging_mode());
     if (is_skip_filename(filename) || line < 0)
         return;
-    pthread_mutex_lock(&coverage_lock);
+    uv_mutex_lock(&coverage_lock);
     allocLine(logdata_get_or_create(&coverageData, filename), line);
-    pthread_mutex_unlock(&coverage_lock);
+    uv_mutex_unlock(&coverage_lock);
 }
 
 JL_DLLEXPORT uint64_t *jl_coverage_data_pointer(const char *filename, int line) JL_NOTSAFEPOINT
 {
-    pthread_mutex_lock(&coverage_lock);
+    uv_mutex_lock(&coverage_lock);
     uint64_t *ret = allocLine(logdata_get_or_create(&coverageData, filename), line);
-    pthread_mutex_unlock(&coverage_lock);
+    uv_mutex_unlock(&coverage_lock);
     return ret;
 }
 
@@ -109,11 +108,11 @@ JL_DLLEXPORT void jl_coverage_visit_line(const char *filename, size_t len, int l
     assert(filename[len] == '\0');
     if (codegen_imaging_mode() || is_skip_filename(filename) || line < 0)
         return;
-    pthread_mutex_lock(&coverage_lock);
+    uv_mutex_lock(&coverage_lock);
     logdata_vec_t *vec = logdata_get_or_create(&coverageData, filename);
     uint64_t *ptr = allocLine(vec, line);
     (*ptr)++;
-    pthread_mutex_unlock(&coverage_lock);
+    uv_mutex_unlock(&coverage_lock);
 }
 
 // Memory allocation log (malloc_log)
@@ -122,9 +121,9 @@ static logdata_t mallocData;
 
 JL_DLLEXPORT uint64_t *jl_malloc_data_pointer(const char *filename, int line) JL_NOTSAFEPOINT
 {
-    pthread_mutex_lock(&coverage_lock);
+    uv_mutex_lock(&coverage_lock);
     uint64_t *ret = allocLine(logdata_get_or_create(&mallocData, filename), line);
-    pthread_mutex_unlock(&coverage_lock);
+    uv_mutex_unlock(&coverage_lock);
     return ret;
 }
 
@@ -152,17 +151,17 @@ static void clear_log_data(logdata_t *logData, int resetValue) JL_NOTSAFEPOINT
 // Resets the malloc counts.
 JL_DLLEXPORT void jl_clear_malloc_data(void) JL_NOTSAFEPOINT
 {
-    pthread_mutex_lock(&coverage_lock);
+    uv_mutex_lock(&coverage_lock);
     clear_log_data(&mallocData, 1);
-    pthread_mutex_unlock(&coverage_lock);
+    uv_mutex_unlock(&coverage_lock);
 }
 
 // Resets the code coverage
 JL_DLLEXPORT void jl_clear_coverage_data(void) JL_NOTSAFEPOINT
 {
-    pthread_mutex_lock(&coverage_lock);
+    uv_mutex_lock(&coverage_lock);
     clear_log_data(&coverageData, 0);
-    pthread_mutex_unlock(&coverage_lock);
+    uv_mutex_unlock(&coverage_lock);
 }
 
 static void write_log_data(logdata_t *logData, const char *extension) JL_NOTSAFEPOINT
@@ -264,9 +263,9 @@ static void write_lcov_data(logdata_t *logData, const char *outfile) JL_NOTSAFEP
     fclose(outf);
 }
 
-JL_DLLEXPORT void jl_write_coverage_data(const char *output) JL_NOTSAFEPOINT
+JL_DLLEXPORT void jl_write_coverage_data(const char *output)
 {
-    pthread_mutex_lock(&coverage_lock);
+    uv_mutex_lock(&coverage_lock);
     if (output) {
         size_t len = strlen(output);
         if (len >= 5 && strcmp(output + len - 5, ".info") == 0) {
@@ -280,20 +279,21 @@ JL_DLLEXPORT void jl_write_coverage_data(const char *output) JL_NOTSAFEPOINT
         snprintf(stm, sizeof(stm), ".%d.cov", uv_os_getpid());
         write_log_data(&coverageData, stm);
     }
-    pthread_mutex_unlock(&coverage_lock);
+    uv_mutex_unlock(&coverage_lock);
 }
 
-void jl_write_malloc_log(void) JL_NOTSAFEPOINT
+void jl_write_malloc_log(void)
 {
-    pthread_mutex_lock(&coverage_lock);
+    uv_mutex_lock(&coverage_lock);
     char stm[32];
     snprintf(stm, sizeof(stm), ".%d.mem", uv_os_getpid());
     write_log_data(&mallocData, stm);
-    pthread_mutex_unlock(&coverage_lock);
+    uv_mutex_unlock(&coverage_lock);
 }
 
-void jl_init_coverage(void) JL_NOTSAFEPOINT
+void jl_init_coverage(void)
 {
+    uv_mutex_init(&coverage_lock);
     strhash_new(&coverageData, 0);
     strhash_new(&mallocData, 0);
 }

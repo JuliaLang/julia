@@ -179,6 +179,7 @@
     XX(jl_gc_set_max_memory) \
     XX(jl_gc_sync_total_bytes) \
     XX(jl_gc_total_hrtime) \
+    XX(jl_gc_wb_cold) \
     XX(jl_gdblookup) \
     XX(jl_generating_output) \
     XX(jl_declare_const_gf) \
@@ -542,6 +543,7 @@
     YY(jl_generate_fptr_for_unspecialized) \
     YY(jl_compile_codeinst) \
     YY(jl_teardown_codegen) \
+    YY(jl_decorate_llvm_module) \
     YY(jl_jit_total_bytes) \
     YY(jl_create_native) \
     YY(jl_dump_compiles) \

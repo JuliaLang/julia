@@ -24,7 +24,6 @@
 
 #include "htable.h"
 #include "arraylist.h"
-#include "analyzer_annotations.h"
 #include "jloptions.h"
 
 #include <setjmp.h>
@@ -1163,7 +1162,7 @@ extern void _JL_GC_PUSHARGS(jl_value_t **, size_t) JL_NOTSAFEPOINT;
   memset(rts_var, 0, sizeof(void*) * (n)); \
   _JL_GC_PUSHARGS(rts_var, (n));
 
-extern void JL_GC_POP() JL_NOTSAFEPOINT;
+extern void JL_GC_POP(void) JL_NOTSAFEPOINT;
 
 #else
 
@@ -1245,8 +1244,8 @@ void mtarraylist_push(small_arraylist_t *_a, void *elt) JL_NOTSAFEPOINT;
 #define jl_svec_data(t) ((jl_value_t**)((char*)(t) + sizeof(jl_svec_t)))
 
 #ifdef __clang_gcanalyzer__
-STATIC_INLINE jl_value_t *jl_svecref(void *t JL_PROPAGATES_ROOT, size_t i) JL_PROPAGATES_ROOT_INDEXED(0, 1) JL_NOTSAFEPOINT;
-STATIC_INLINE jl_value_t *jl_svecset(
+jl_value_t *jl_svecref(void *t JL_PROPAGATES_ROOT, size_t i) JL_PROPAGATES_ROOT_INDEXED(0, 1) JL_NOTSAFEPOINT;
+jl_value_t *jl_svecset(
     void *t JL_PROPAGATES_ROOT,
     size_t i, void *x JL_ROOTED_BY_ARG_INDEXED(0, 1)) JL_NOTSAFEPOINT;
 #else
@@ -1309,18 +1308,19 @@ STATIC_INLINE jl_value_t *jl_genericmemory_owner(jl_genericmemory_t *m JL_PROPAG
 
 // Utility for doing a basic write with the appropriate write barrier.
 // `parent` is the GC-tracked owner, `field` is an lvalue (e.g. obj->member),
-// and `val` is the new value to store. The barrier is emitted *before* the
-// store and receives the new value being stored.
-#define jl_gc_write(parent, field, val) do { \
-    void *_jl_write_val = (void*)(val); \
+// `type` is the pointed-to type of `field` (e.g. `jl_value_t` for a
+// `jl_value_t *` field), and `val` is the new value to store.
+#define jl_gc_write(parent, field, type, val) do { \
+    type *_jl_write_val = (val); \
     jl_gc_wb((parent), _jl_write_val); \
-    (field) = (__typeof__(field))_jl_write_val; \
+    (field) = _jl_write_val; \
 } while (0)
 
-// Atomic variant: `field` must be an _Atomic lvalue, `order` is relaxed or release.
-#define jl_gc_write_atomic(parent, field, val, order) do { \
-    __typeof__(jl_atomic_load_relaxed(&(field))) _jl_write_val = (__typeof__(jl_atomic_load_relaxed(&(field))))(val); \
-    jl_gc_wb((parent), (const void *)_jl_write_val); \
+// Atomic variant: `field` must be an _Atomic lvalue holding a `type *`, and
+// `order` is relaxed or release.
+#define jl_gc_write_atomic(parent, field, type, val, order) do { \
+    type *_jl_write_val = (val); \
+    jl_gc_wb((parent), _jl_write_val); \
     jl_atomic_store_##order(&(field), _jl_write_val); \
 } while (0)
 
@@ -1357,8 +1357,8 @@ JL_DLLEXPORT char *jl_genericmemory_typetagdata(jl_genericmemory_t *m) JL_NOTSAF
 
 #ifdef __clang_gcanalyzer__
 jl_value_t **jl_genericmemory_ptr_data(jl_genericmemory_t *m JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
-STATIC_INLINE jl_value_t *jl_genericmemory_ptr_ref(void *m JL_PROPAGATES_ROOT, size_t i) JL_PROPAGATES_ROOT_INDEXED(0, 1) JL_NOTSAFEPOINT;
-STATIC_INLINE jl_value_t *jl_genericmemory_ptr_set(
+jl_value_t *jl_genericmemory_ptr_ref(void *m JL_PROPAGATES_ROOT, size_t i) JL_PROPAGATES_ROOT_INDEXED(0, 1) JL_NOTSAFEPOINT;
+jl_value_t *jl_genericmemory_ptr_set(
     void *m, size_t i,
     void *x JL_ROOTED_BY_ARG_INDEXED(0, 1)) JL_NOTSAFEPOINT;
 #else
@@ -1377,7 +1377,7 @@ STATIC_INLINE jl_value_t *jl_genericmemory_ptr_set(
     jl_genericmemory_t *m_ = (jl_genericmemory_t*)m;
     assert(((jl_datatype_t*)jl_typetagof(m_))->layout->flags.arrayelem_isboxed);
     assert(i < m_->length);
-    jl_gc_write_atomic(m, ((_Atomic(jl_value_t*)*)(m_->ptr))[i], (jl_value_t*)x, release);
+    jl_gc_write_atomic(m, ((_Atomic(jl_value_t*)*)(m_->ptr))[i], jl_value_t, (jl_value_t*)x, release);
     return (jl_value_t*)x;
 }
 #endif
@@ -1404,8 +1404,8 @@ STATIC_INLINE jl_value_t *jl_array_owner(jl_array_t *a JL_PROPAGATES_ROOT) JL_NO
 
 #ifdef __clang_gcanalyzer__
 jl_value_t **jl_array_ptr_data(jl_array_t *a JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
-STATIC_INLINE jl_value_t *jl_array_ptr_ref(void *a JL_PROPAGATES_ROOT, size_t i) JL_PROPAGATES_ROOT_INDEXED(0, 1) JL_NOTSAFEPOINT;
-STATIC_INLINE jl_value_t *jl_array_ptr_set(
+jl_value_t *jl_array_ptr_ref(void *a JL_PROPAGATES_ROOT, size_t i) JL_PROPAGATES_ROOT_INDEXED(0, 1) JL_NOTSAFEPOINT;
+jl_value_t *jl_array_ptr_set(
     void *a, size_t i,
     void *x JL_ROOTED_BY_ARG_INDEXED(0, 1)) JL_NOTSAFEPOINT;
 #else
@@ -1422,7 +1422,7 @@ STATIC_INLINE jl_value_t *jl_array_ptr_set(
 {
     assert(((jl_datatype_t*)jl_typetagof(((jl_array_t*)a)->ref.mem))->layout->flags.arrayelem_isboxed);
     assert(i < jl_array_len(a));
-    jl_gc_write_atomic(jl_array_owner((jl_array_t*)a), jl_array_data(a, _Atomic(jl_value_t*))[i], (jl_value_t*)x, release);
+    jl_gc_write_atomic(jl_array_owner((jl_array_t*)a), jl_array_data(a, _Atomic(jl_value_t*))[i], jl_value_t, (jl_value_t*)x, release);
     return (jl_value_t*)x;
 }
 #endif
@@ -2269,14 +2269,14 @@ typedef struct {
 struct _jl_image_t;
 typedef struct _jl_image_t jl_image_t;
 
-JL_DLLIMPORT const char *jl_get_libdir(void);
+JL_DLLIMPORT const char *jl_get_libdir(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_init(void);
 JL_DLLEXPORT void jl_init_with_image_file(const char *julia_bindir,
                                           const char *image_path);
 JL_DLLEXPORT void jl_init_with_image_handle(void *handle);
-JL_DLLEXPORT const char *jl_get_default_sysimg_path(void);
-JL_DLLEXPORT int jl_is_initialized(void);
-JL_DLLEXPORT void jl_atexit_hook(int status);
+JL_DLLEXPORT const char *jl_get_default_sysimg_path(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_is_initialized(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_atexit_hook(int status) JL_NOTSAFEPOINT_ENTER;
 JL_DLLEXPORT void jl_task_wait_empty(void);
 JL_DLLEXPORT void jl_postoutput_hook(void);
 JL_DLLEXPORT void JL_NORETURN jl_exit(int status);
@@ -2287,7 +2287,7 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void);
 
 JL_DLLEXPORT int jl_deserialize_verify_header(ios_t *s);
 JL_DLLEXPORT jl_image_buf_t jl_preload_sysimg(const char *fname);
-JL_DLLEXPORT jl_image_buf_t jl_set_sysimg_so(void *handle);
+JL_DLLEXPORT jl_image_buf_t jl_set_sysimg_so(void *handle) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_create_system_image(void **, jl_array_t *worklist, bool_t emit_split, ios_t **s, ios_t **z, jl_array_t **udeps JL_REQUIRE_ROOTED_SLOT, int64_t *srctextpos, jl_array_t *module_init_order);
 JL_DLLEXPORT void jl_restore_system_image(jl_image_t *image, jl_image_buf_t buf);
 JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *depmods, int complete, const char *pkgimage);
@@ -2441,13 +2441,13 @@ struct _jl_handler_t {
 #define JL_TASK_STATE_FAILED   2
 
 JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t*, jl_value_t*, size_t);
-JL_DLLEXPORT void jl_switchto(jl_task_t **pt);
+JL_DLLEXPORT void jl_switchto(jl_task_t **pt) JL_NOTSAFEPOINT_ENTER;
 JL_DLLEXPORT int jl_set_task_tid(jl_task_t *task, int16_t tid) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_set_task_threadpoolid(jl_task_t *task, int8_t tpid) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void JL_NORETURN jl_throw(jl_value_t *e JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow(void);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED);
-JL_DLLEXPORT void JL_NORETURN jl_no_exc_handler(jl_value_t *e, jl_task_t *ct);
+JL_DLLEXPORT void JL_NORETURN jl_no_exc_handler(jl_value_t *e JL_MAYBE_UNROOTED, jl_task_t *ct);
 
 
 #ifdef __cplusplus
@@ -2640,14 +2640,14 @@ JL_DLLEXPORT void jl__(void *jl_value) JL_NOTSAFEPOINT;
 
 // julia options -----------------------------------------------------------
 
-JL_DLLEXPORT ssize_t jl_sizeof_jl_options(void);
+JL_DLLEXPORT ssize_t jl_sizeof_jl_options(void) JL_NOTSAFEPOINT;
 
 // Parse an argc/argv pair to extract general julia options, passing back out
 // any arguments that should be passed on to the script.
-JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp);
+JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp) JL_NOTSAFEPOINT;
 JL_DLLEXPORT char *jl_format_filename(const char *output_pattern) JL_NOTSAFEPOINT;
 
-uint64_t parse_heap_size_option(const char *optarg, const char *option_name, int allow_pct);
+uint64_t parse_heap_size_option(const char *optarg, const char *option_name, int allow_pct) JL_NOTSAFEPOINT;
 
 // Set julia-level ARGS array according to the arguments provided in
 // argc/argv

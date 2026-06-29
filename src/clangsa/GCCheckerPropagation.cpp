@@ -551,9 +551,7 @@ bool GCChecker::isSafepoint(const CallEvent &Call, CheckerContext &C) const {
     } else if (FD) {
       StringRef FDName =
           FD->getDeclName().isIdentifier() ? FD->getName() : "";
-      if (FDName == "sig_match_fast")
-        isCalleeSafepoint = false;
-      else if (FD->getBuiltinID() != 0 || FD->isTrivial())
+      if (FD->getBuiltinID() != 0 || FD->isTrivial())
         isCalleeSafepoint = false;
       else if ((FDName.starts_with("uv_") ||
                 FDName.starts_with("unw_") ||

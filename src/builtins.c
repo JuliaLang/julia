@@ -530,7 +530,9 @@ JL_DLLEXPORT inline uintptr_t jl_object_id_(uintptr_t tv, jl_value_t *v) JL_NOTS
     }
     else if (tv == jl_datatype_tag << 4) {
         jl_datatype_t *dtv = (jl_datatype_t*)v;
-        if (dtv->isconcretetype)
+        // dt->hash is an egal-consistent object id for any datatype (concrete ones already
+        // use it); reuse it for non-concrete ones too rather than rehashing on every call.
+        if (dtv->hash)
             return dtv->hash;
     }
     else if (tv == (uintptr_t)jl_typename_type) {
@@ -816,7 +818,7 @@ JL_CALLABLE(jl_f__apply_iterate)
                 // jl_fieldref may allocate.
                 jl_value_t *val = jl_fieldref(ai, j);
                 if (arg_heap)
-                    jl_gc_write(arg_heap, newargs[n], val);
+                    jl_gc_write(arg_heap, newargs[n], jl_value_t, val);
                 else
                     newargs[n] = val;
                 n++;
@@ -836,7 +838,7 @@ JL_CALLABLE(jl_f__apply_iterate)
                     if (__unlikely(arg == NULL))
                         jl_throw(jl_undefref_exception);
                     if (arg_heap)
-                        jl_gc_write(arg_heap, newargs[n], arg);
+                        jl_gc_write(arg_heap, newargs[n], jl_value_t, arg);
                     else
                         newargs[n] = arg;
                     n++;
@@ -846,7 +848,7 @@ JL_CALLABLE(jl_f__apply_iterate)
                 for (j = 0; j < al; j++) {
                     jl_value_t *val = jl_genericmemoryref(mem, j);
                     if (arg_heap)
-                        jl_gc_write(arg_heap, newargs[n], val);
+                        jl_gc_write(arg_heap, newargs[n], jl_value_t, val);
                     else
                         newargs[n] = val;
                     n++;
@@ -867,7 +869,7 @@ JL_CALLABLE(jl_f__apply_iterate)
                     if (__unlikely(arg == NULL))
                         jl_throw(jl_undefref_exception);
                     if (arg_heap)
-                        jl_gc_write(arg_heap, newargs[n], arg);
+                        jl_gc_write(arg_heap, newargs[n], jl_value_t, arg);
                     else
                         newargs[n] = arg;
                     n++;
@@ -877,7 +879,7 @@ JL_CALLABLE(jl_f__apply_iterate)
                 for (j = 0; j < al; j++) {
                     jl_value_t *val = jl_arrayref(aai, j);
                     if (arg_heap)
-                        jl_gc_write(arg_heap, newargs[n], val);
+                        jl_gc_write(arg_heap, newargs[n], jl_value_t, val);
                     else
                         newargs[n] = val;
                     n++;
@@ -2209,7 +2211,7 @@ static void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
     if (jl_is_datatype(super) && tt->name == ((jl_datatype_t*)super)->name)
         jl_errorf("invalid subtyping in definition of %s: a type cannot subtype itself.", type_name);
     jl_check_valid_supertype(super, type_name);
-    jl_gc_write(tt, tt->super, (jl_datatype_t*)super);
+    jl_gc_write(tt, tt->super, jl_datatype_t, (jl_datatype_t*)super);
 }
 
 JL_CALLABLE(jl_f__setsuper)
@@ -2424,7 +2426,7 @@ JL_CALLABLE(jl_f__typebody)
                 }
             }
         }
-        jl_gc_write(dt, dt->types, (jl_svec_t*)ft);
+        jl_gc_write(dt, dt->types, jl_svec_t, (jl_svec_t*)ft);
         // If a supertype can reference the same type, then we may not be
         // able to compute the layout of the object before needing to
         // publish it, so we must assume it cannot be inlined, if that
@@ -2604,7 +2606,7 @@ static void add_intrinsic(jl_module_t *inm, const char *name, enum intrinsic f) 
     jl_set_initial_const(inm, sym, i, 1);
 }
 
-void jl_init_intrinsic_properties(void) JL_GC_DISABLED
+void jl_init_intrinsic_properties(void)
 {
 #define ADD_I(name, nargs) add_intrinsic_properties(name, nargs, (void(*)(void))&jl_##name);
 #define ADD_HIDDEN ADD_I
@@ -2615,7 +2617,7 @@ void jl_init_intrinsic_properties(void) JL_GC_DISABLED
 #undef ALIAS
 }
 
-void jl_init_intrinsic_functions(void) JL_GC_DISABLED
+void jl_init_intrinsic_functions(void)
 {
     jl_module_t *inm = jl_new_module_(jl_symbol("Intrinsics"), jl_core_module, 0, 1);
     jl_set_initial_const(jl_core_module, jl_symbol("Intrinsics"), (jl_value_t*)inm, 0);

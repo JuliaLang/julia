@@ -1257,7 +1257,7 @@ static void cache_insert_type_set(jl_datatype_t *val, uint_t hv)
         else
             newsz = sz << 2;
         a = cache_rehash_set(a, newsz);
-        jl_gc_write_atomic(val->name, val->name->cache, a, release);
+        jl_gc_write_atomic(val->name, val->name->cache, jl_svec_t, a, release);
     }
 }
 
@@ -1294,7 +1294,7 @@ static void cache_insert_type_linear(jl_datatype_t *type, ssize_t insert_at)
     if (n == 0 || jl_svecref(cache, n - 1) != jl_nothing) {
         jl_svec_t *nc = jl_svec_fill(n < 4 ? 4 : n * 2, jl_nothing);
         memcpy(jl_svec_data(nc), jl_svec_data(cache), sizeof(void*) * n);
-        jl_gc_write_atomic(type->name, type->name->linearcache, nc, release);
+        jl_gc_write_atomic(type->name, type->name->linearcache, jl_svec_t, nc, release);
         cache = nc;
     }
     assert(jl_svecref(cache, insert_at) == jl_nothing);
@@ -1322,7 +1322,7 @@ void jl_cache_type_(jl_datatype_t *type)
         jl_value_t *uw = jl_unwrap_unionall(key[0]);
         if (jl_is_datatype(uw) && key[0] == ((jl_datatype_t*)uw)->name->wrapper) {
             jl_typename_t *tn2 = ((jl_datatype_t*)uw)->name;
-            jl_gc_write_atomic(tn2, tn2->Typeofwrapper, (jl_value_t*)type, release);
+            jl_gc_write_atomic(tn2, tn2->Typeofwrapper, jl_value_t, (jl_value_t*)type, release);
             return;
         }
     }
@@ -2332,7 +2332,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
             if (tw && tw != pi && (tn != jl_type_typename || jl_typeof(pi) == jl_typeof(tw)) &&
                     !jl_has_free_typevars(pi) && jl_types_equal(pi, tw)) {
                 if (p)
-                    jl_gc_write(p, iparams[i], tw);
+                    jl_gc_write(p, iparams[i], jl_value_t, tw);
                 else
                     iparams[i] = tw;
             }
@@ -2424,7 +2424,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
             jl_value_t *pi = iparams[i];
             jl_value_t *newp = normalize_unionalls(pi);
             if (newp != pi) {
-                jl_gc_write(p, iparams[i], newp);
+                jl_gc_write(p, iparams[i], jl_value_t, newp);
                 changed = 1;
             }
             if (istuple && cacheable && !jl_is_concrete_type(newp))
@@ -2459,7 +2459,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
             if (cacheable || !jl_has_free_typevars(pi)) {
                 pi = jl_as_global_root(pi, cacheable);
                 if (pi != NULL) {
-                    jl_gc_write(p, iparams[i], pi);
+                    jl_gc_write(p, iparams[i], jl_value_t, pi);
                 }
             }
         }
@@ -2490,9 +2490,9 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     top.tt = (jl_datatype_t*)ndt;
     top.prev = stack;
     stack = &top;
-    jl_gc_write(ndt, ndt->name, tn);
+    jl_gc_write(ndt, ndt->name, jl_typename_t, tn);
     ndt->super = NULL;
-    jl_gc_write(ndt, ndt->parameters, p);
+    jl_gc_write(ndt, ndt->parameters, jl_svec_t, p);
     ndt->types = NULL; // to be filled in below
     int invalid = 0;
     if (istuple) {
@@ -2525,7 +2525,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
                 if (invalid) break;
             }
             if (values_tt == jl_bottom_type && nf > 0) {
-                jl_gc_write(ndt, ndt->types, jl_svec_fill(nf, jl_bottom_type));
+                jl_gc_write(ndt, ndt->types, jl_svec_t, jl_svec_fill(nf, jl_bottom_type));
             }
             else {
                 if (!jl_is_datatype(values_tt)) {
@@ -2537,7 +2537,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
                         jl_error("NamedTuple names and field types must have matching lengths");
                     invalid = 1;
                 }
-                jl_gc_write(ndt, ndt->types, ((jl_datatype_t*)values_tt)->parameters);
+                jl_gc_write(ndt, ndt->types, jl_svec_t, ((jl_datatype_t*)values_tt)->parameters);
             }
         }
         else {
@@ -2581,7 +2581,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
             JL_GC_POP();
             return NULL;
         }
-        jl_gc_write(ndt, ndt->super, (jl_datatype_t *)super);
+        jl_gc_write(ndt, ndt->super, jl_datatype_t, (jl_datatype_t *)super);
     }
     jl_svec_t *ftypes = dt->types;
     if (ftypes == NULL)
@@ -2590,7 +2590,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
         // in the process of creating this type definition:
         // need to instantiate the super and types fields later
         if (tn->partial == NULL) {
-            jl_gc_write(tn, tn->partial, jl_alloc_vec_any(0));
+            jl_gc_write(tn, tn->partial, jl_array_t, jl_alloc_vec_any(0));
         }
         jl_array_ptr_1d_push(tn->partial, (jl_value_t*)ndt);
     }
@@ -2603,9 +2603,9 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
         else if (cacheable) {
             // recursively instantiate the types of the fields
             if (dt->types == NULL)
-                jl_gc_write(ndt, ndt->types, jl_compute_fieldtypes(ndt, stack, cacheable));
+                jl_gc_write(ndt, ndt->types, jl_svec_t, jl_compute_fieldtypes(ndt, stack, cacheable));
             else
-                jl_gc_write(ndt, ndt->types, inst_ftypes(ftypes, env, stack, cacheable));
+                jl_gc_write(ndt, ndt->types, jl_svec_t, inst_ftypes(ftypes, env, stack, cacheable));
         }
     }
 
@@ -2754,7 +2754,7 @@ static jl_value_t *inst_tuple_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_
             }
         }
         if (ip_heap)
-            jl_gc_write(ip_heap, iparams[i], pi);
+            jl_gc_write(ip_heap, iparams[i], jl_value_t, pi);
         else
             iparams[i] = pi;
         bound |= (pi != elt);
@@ -3003,7 +3003,7 @@ jl_typeeq_t *jl_wrap_Type(jl_value_t *t)
     jl_set_typetagof(te, jl_typeeq_tag, 0);
     te->T = t;
     if (t == jl_bottom_type && jl_typeofbottom_type && jl_typeofbottom_type->name) {
-        jl_gc_write_atomic(jl_typeofbottom_type->name, jl_typeofbottom_type->name->Typeofwrapper, (jl_value_t*)te, relaxed);
+        jl_gc_write_atomic(jl_typeofbottom_type->name, jl_typeofbottom_type->name->Typeofwrapper, jl_value_t, (jl_value_t*)te, relaxed);
     }
     JL_GC_POP();
     return te;
@@ -3085,7 +3085,7 @@ JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st JL_PROPAGATES_RO
     jl_typestack_t top;
     top.tt = st;
     top.prev = (jl_typestack_t*)stack;
-    jl_gc_write(st, st->types, inst_ftypes(wt->types, &env[n - 1], &top, cacheable));
+    jl_gc_write(st, st->types, jl_svec_t, inst_ftypes(wt->types, &env[n - 1], &top, cacheable));
     return st->types;
 }
 
@@ -3120,7 +3120,7 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
         for (i = 0; i < n; i++)
             env[i].val = jl_svecref(ndt->parameters, i);
 
-        jl_gc_write(ndt, ndt->super, (jl_datatype_t*)inst_type_w_((jl_value_t*)t->super, &env[n - 1], &top, 1, 0));
+        jl_gc_write(ndt, ndt->super, jl_datatype_t, (jl_datatype_t*)inst_type_w_((jl_value_t*)t->super, &env[n - 1], &top, 1, 0));
     }
 
     if (t->types != jl_emptysvec) {
@@ -3139,13 +3139,13 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
             jl_typestack_t ndt_top;
             ndt_top.tt = ndt;
             ndt_top.prev = &top;
-            jl_gc_write(ndt, ndt->types, inst_ftypes(t->types, &env[n - 1], &ndt_top, 1));
+            jl_gc_write(ndt, ndt->types, jl_svec_t, inst_ftypes(t->types, &env[n - 1], &ndt_top, 1));
             if (ndt->isconcretetype) { // cacheable
                 jl_compute_field_offsets(ndt);
             }
             jl_array_ptr_set(partial, j, NULL);
         }
-        jl_gc_write(t->name, t->name->partial, NULL);
+        jl_gc_write(t->name, t->name->partial, jl_array_t, NULL);
     }
     else {
         assert(jl_field_names(t) == jl_emptysvec);
@@ -4164,7 +4164,7 @@ void jl_init_types(void) JL_GC_DISABLED
     export_jl_sysimg_globals();
 }
 
-static jl_value_t *core(const char *name)
+static jl_value_t *core(const char *name) JL_GLOBALLY_ROOTED
 {
     return jl_get_global(jl_core_module, jl_symbol(name));
 }
@@ -4193,13 +4193,13 @@ void post_boot_hooks(void)
     jl_datatype_t *jl_unsigned_type = (jl_datatype_t*)core("Unsigned");
     jl_datatype_t *jl_integer_type = (jl_datatype_t*)core("Integer");
 
-    jl_gc_write(jl_bool_type, jl_bool_type->super, jl_integer_type);
-    jl_gc_write(jl_uint8_type, jl_uint8_type->super, jl_unsigned_type);
-    jl_gc_write(jl_uint16_type, jl_uint16_type->super, jl_unsigned_type);
-    jl_gc_write(jl_uint32_type, jl_uint32_type->super, jl_unsigned_type);
-    jl_gc_write(jl_uint64_type, jl_uint64_type->super, jl_unsigned_type);
-    jl_gc_write(jl_int32_type, jl_int32_type->super, jl_signed_type);
-    jl_gc_write(jl_int64_type, jl_int64_type->super, jl_signed_type);
+    jl_gc_write(jl_bool_type, jl_bool_type->super, jl_datatype_t, jl_integer_type);
+    jl_gc_write(jl_uint8_type, jl_uint8_type->super, jl_datatype_t, jl_unsigned_type);
+    jl_gc_write(jl_uint16_type, jl_uint16_type->super, jl_datatype_t, jl_unsigned_type);
+    jl_gc_write(jl_uint32_type, jl_uint32_type->super, jl_datatype_t, jl_unsigned_type);
+    jl_gc_write(jl_uint64_type, jl_uint64_type->super, jl_datatype_t, jl_unsigned_type);
+    jl_gc_write(jl_int32_type, jl_int32_type->super, jl_datatype_t, jl_signed_type);
+    jl_gc_write(jl_int64_type, jl_int64_type->super, jl_datatype_t, jl_signed_type);
 
     jl_stackovf_exception       = jl_new_struct_uninit((jl_datatype_t*)core("StackOverflowError"));
     jl_diverror_exception       = jl_new_struct_uninit((jl_datatype_t*)core("DivideError"));

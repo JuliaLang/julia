@@ -21,7 +21,7 @@ char *shlib_ext = ".so";
 
 /* This simple hand-crafted tolower exists to avoid locale-dependent effects in
  * behaviors (and utf8proc_tolower wasn't linking properly on all platforms) */
-static char ascii_tolower(char c)
+static char ascii_tolower(char c) JL_NOTSAFEPOINT
 {
     if ('A' <= c && c <= 'Z')
         return c - 'A' + 'a';
@@ -558,13 +558,13 @@ restart_switch:
             }
             break;
         case 'v': // version
-            jl_printf(JL_STDOUT, "julia version %s\n", JULIA_VERSION_STRING);
+            jl_safe_fprintf(ios_stdout, "julia version %s\n", JULIA_VERSION_STRING);
             exit(0);
         case 'h': // help
-            jl_printf(JL_STDOUT, "%s%s", usage, opts);
+            jl_safe_fprintf(ios_stdout, "%s%s", usage, opts);
             exit(0);
         case opt_help_hidden:
-            jl_printf(JL_STDOUT, "%s%s", usage, opts_hidden);
+            jl_safe_fprintf(ios_stdout, "%s%s", usage, opts_hidden);
             exit(0);
         case 'g': // debug info
             if (optarg != NULL) {
@@ -645,7 +645,7 @@ restart_switch:
                 if (jl_options.depwarn == JL_OPTIONS_DEPWARN_ERROR)
                     jl_errorf("julia: --sysimage-native-code=no is deprecated");
                 else if (jl_options.depwarn == JL_OPTIONS_DEPWARN_ON)
-                    jl_printf(JL_STDERR, "WARNING: --sysimage-native-code=no is deprecated\n");
+                    jl_safe_printf("WARNING: --sysimage-native-code=no is deprecated\n");
             }
             else {
                 jl_errorf("julia: invalid argument to --sysimage-native-code={yes|no} (%s)", optarg);

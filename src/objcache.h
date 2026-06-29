@@ -34,7 +34,8 @@ class ObjCache {
 public:
     ObjCache() = default;
     ~ObjCache() JL_NOTSAFEPOINT;
-    std::unique_ptr<llvm::MemoryBuffer> get(llvm::Module &M, CompileFn Compile);
+    std::unique_ptr<llvm::MemoryBuffer>
+    get(llvm::Module &M, CompileFn Compile) JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE;
     bool isEnabled() const JL_NOTSAFEPOINT;
     void shutdown() JL_NOTSAFEPOINT;
 

@@ -48,6 +48,20 @@ end
 
 const inlined_apply_iterate_types = Union{Array,Memory,Tuple,NamedTuple,Core.SimpleVector}
 
+# There is no @enum at this level of bootstrapping yet, so we use plain constants instead.
+const SSAWarnTypeClass = UInt8
+const SSA_WARN_TYPE_STABLE = SSAWarnTypeClass(0)
+const SSA_WARN_TYPE_MILD = SSAWarnTypeClass(1)
+const SSA_WARN_TYPE_STRONG = SSAWarnTypeClass(2)
+
+function ssa_warn_type_class(io::IO, idx::Int)
+    levels = get(io, :ssa_warn_levels, nothing)
+    if levels isa AbstractVector{SSAWarnTypeClass} && isassigned(levels, idx)
+        return levels[idx]
+    end
+    return SSA_WARN_TYPE_STABLE
+end
+
 function builtin_call_has_dispatch(
     @nospecialize(f),
     args::Vector{Any},
@@ -76,16 +90,25 @@ function builtin_call_has_dispatch(
 end
 
 function print_stmt(io::IO, idx::Int, @nospecialize(stmt), code::Union{IRCode,CodeInfo,IncrementalCompact},
-                    sptypes::Vector{VarState}, used::BitSet, maxlength_idx::Int, color::Bool, show_type::Bool, label_dynamic_calls::Bool)
+                    sptypes::Vector{VarState}, used::BitSet, maxlength_idx::Int, color::Bool, show_type::Bool, label_dynamic_calls::Bool, color_warntype::Bool)
     if idx in used
         idx_s = string(idx)
         pad = " "^(maxlength_idx - length(idx_s) + 1)
-        print(io, "%", idx_s, pad, "= ")
+        cls = ssa_warn_type_class(io, idx)
+        if color && color_warntype && cls === SSA_WARN_TYPE_STRONG
+            printstyled(io, "%", idx_s; color=:light_red, bold=true)
+        elseif color && color_warntype && cls === SSA_WARN_TYPE_MILD
+            printstyled(io, "%", idx_s; color=Base.warn_color(), bold=true)
+        else
+            print(io, "%", idx_s)
+        end
+        print(io, pad, "= ")
     else
         print(io, " "^(maxlength_idx + 4))
     end
     # TODO: `indent` is supposed to be the full width of the leader for correct alignment
     indent = 16
+    io = color_warntype ? io : Base.IOContext(io, :ssa_warn_levels => nothing)
     if !color && stmt isa PiNode
         # when the outer context is already colored (green, for pending nodes), don't use the usual coloring printer
         print(io, "π (")
@@ -598,6 +621,7 @@ end
   printed as part of the IR or not
 - `bb_color`: color used for printing the basic block brackets on the left
 - `label_dynamic_calls`: whether to label calls as dynamic / builtin / intrinsic
+- `color_warntype`: whether to color the SSA value index based on the stability of its type
 """
 struct IRShowConfig
     line_info_preprinter
@@ -605,19 +629,22 @@ struct IRShowConfig
     should_print_stmt
     bb_color::Symbol
     label_dynamic_calls::Bool
+    color_warntype::Bool
 
     IRShowConfig(
         line_info_preprinter,
         line_info_postprinter=default_expr_type_printer;
         should_print_stmt=Returns(true),
         bb_color::Symbol=:light_black,
-        label_dynamic_calls=true
+        label_dynamic_calls=true,
+        color_warntype=false
     ) = new(
         line_info_preprinter,
         line_info_postprinter,
         should_print_stmt,
         bb_color,
-        label_dynamic_calls
+        label_dynamic_calls,
+        color_warntype
     )
 end
 
@@ -676,7 +703,7 @@ end
 function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact}, idx::Int, config::IRShowConfig,
                       sptypes::Vector{VarState}, used::BitSet, cfg::CFG, bb_idx::Int; pop_new_node! = Returns(nothing), only_after::Bool=false)
     return show_ir_stmt(io, code, idx, config.line_info_preprinter, config.line_info_postprinter,
-                        sptypes, used, cfg, bb_idx; pop_new_node!, only_after, config.bb_color, config.label_dynamic_calls)
+                        sptypes, used, cfg, bb_idx; pop_new_node!, only_after, config.bb_color, config.label_dynamic_calls, config.color_warntype)
 end
 
 function _print_ir_indentation(io::IO, cfg::CFG, bb_idx::Int, max_bb_idx_size::Int, bb_color,
@@ -720,7 +747,7 @@ function _print_ir_new_node(io::IO, node, code, sptypes::Vector{VarState}, used:
     @assert new_node_inst !== UNDEF # we filtered these out earlier
     show_type = should_print_ssa_type(new_node_inst)
     with_output_color(:green, io) do io′
-        print_stmt(io′, node_idx, new_node_inst, code, sptypes, used, maxlength_idx, false, show_type, label_dynamic_calls)
+        print_stmt(io′, node_idx, new_node_inst, code, sptypes, used, maxlength_idx, false, show_type, label_dynamic_calls, false)
     end
 
     if new_node_type === UNDEF
@@ -735,7 +762,7 @@ end
 
 function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact}, idx::Int, line_info_preprinter, line_info_postprinter,
                       sptypes::Vector{VarState}, used::BitSet, cfg::CFG, bb_idx::Int; pop_new_node! = Returns(nothing), only_after::Bool=false,
-                      bb_color=:light_black, label_dynamic_calls::Bool=true)
+                      bb_color=:light_black, label_dynamic_calls::Bool=true, color_warntype::Bool=false)
     stmt = _stmt(code, idx)
     type = _type(code, idx)
     max_bb_idx_size = length(string(length(cfg.blocks)))
@@ -776,7 +803,7 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact},
             stmt = statement_indices_to_labels(stmt, cfg)
         end
         show_type = type !== nothing && should_print_ssa_type(stmt)
-        print_stmt(io, idx, stmt, code, sptypes, used, maxlength_idx, true, show_type, label_dynamic_calls)
+        print_stmt(io, idx, stmt, code, sptypes, used, maxlength_idx, true, show_type, label_dynamic_calls, color_warntype)
         if type !== nothing # ignore types for pre-inference code
             if type === UNDEF
                 # This is an error, but can happen if passes don't update their type information
@@ -967,6 +994,23 @@ function show_ir(io::IO, ir::IRCode, config::IRShowConfig=default_config(io, ir)
     finish_show_ir(io, cfg, config)
 end
 
+function warntype_type_class(@nospecialize(type))
+    if type isa Union && is_expected_union(type)
+        return SSA_WARN_TYPE_MILD
+    elseif type isa Type && (!Base.isdispatchelem(type) || type == Core.Box)
+        return SSA_WARN_TYPE_STRONG
+    else
+        return SSA_WARN_TYPE_STABLE
+    end
+end
+
+function ssa_warntype_class(code::CodeInfo, idx::Int)
+    types = code.ssavaluetypes
+    types isa Vector || return SSA_WARN_TYPE_STABLE
+    isassigned(types, idx) || return SSA_WARN_TYPE_STABLE
+    return warntype_type_class(types[idx])
+end
+
 function show_ir(io::IO, ci::CodeInfo, config::IRShowConfig=default_config(io, ci);
                  pop_new_node! = Returns(nothing))
     used = stmts_used(io, ci)
@@ -975,7 +1019,12 @@ function show_ir(io::IO, ci::CodeInfo, config::IRShowConfig=default_config(io, c
     sptypes = if parent isa MethodInstance
         sptypes_from_meth_instance(parent)
     else EMPTY_SPTYPES end
-    let io = IOContext(io, :maxssaid=>length(ci.code))
+    ssa_warn_levels = fill(SSA_WARN_TYPE_STABLE, length(ci.code))
+    for idx in used
+        checkbounds(Bool, ssa_warn_levels, idx) || continue
+        ssa_warn_levels[idx] = ssa_warntype_class(ci, idx)
+    end
+    let io = IOContext(io, :maxssaid=>length(ci.code), :ssa_warn_levels=>ssa_warn_levels)
         show_ir_stmts(io, ci, 1:length(ci.code), config, sptypes, used, cfg, 1; pop_new_node!)
     end
     finish_show_ir(io, cfg, config)

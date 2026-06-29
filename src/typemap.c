@@ -1325,7 +1325,7 @@ static jl_value_t *jl_method_convert_list_to_cache(
     JL_GC_PUSH4(&cache, &dblcache, &next, &ml);
     while (ml != (void*)jl_nothing) {
         next = jl_atomic_load_relaxed(&ml->next);
-        jl_gc_write_atomic(ml, ml->next, (jl_typemap_entry_t*)jl_nothing, relaxed);
+        jl_gc_write_atomic(ml, ml->next, jl_typemap_entry_t, (jl_typemap_entry_t*)jl_nothing, relaxed);
         // n.b. this is being done concurrently with lookups!
         // TODO: is it safe to be doing this concurrently with lookups?
         if (doublesplit) {
@@ -1368,7 +1368,7 @@ static void jl_typemap_list_insert_(
         l = jl_atomic_load_relaxed(&l->next);
     }
 
-    jl_gc_write_atomic(newrec, newrec->next, l, relaxed);
+    jl_gc_write_atomic(newrec, newrec->next, jl_typemap_entry_t, l, relaxed);
     jl_gc_wb(parent, newrec);
     jl_atomic_store_release(pml, newrec);
 }
