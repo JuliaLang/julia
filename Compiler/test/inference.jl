@@ -5792,6 +5792,22 @@ end
 @test_skip only(Base.return_types(issue49027_integer, (Type{Issue49027{TypeVar(:Ty,Int)}},))) >: Nothing
 @test_skip isnothing(issue49027_integer(Issue49027{TypeVar(:Ty,Int)}))
 
+struct TypeVarParam62001 end
+myeltype62001(::Type{Vector{T}}) where T = @isdefined(T) ? T : TypeVarParam62001
+paramtype62001(::Type{V}) where V<:Vector =
+    isa(V, UnionAll) ? myeltype62001(Base.unwrap_unionall(V)) : myeltype62001(V)
+# A static parameter may be exactly a TypeVar object from the input.
+typevar_length62001(::Type{NTuple{N, VecElement{T}}}) where {N, T} = N + 32
+let T = Base.unwrap_unionall(Vector).parameters[1]
+    @test myeltype62001(Base.unwrap_unionall(Vector)) === T
+    @test paramtype62001(Vector{Int8}) === Int8
+    @test paramtype62001(Vector) === T
+    @test only(Base.return_types(myeltype62001, (Type{Base.unwrap_unionall(Vector)},))) === TypeVar
+end
+let N = TypeVar(:N), T = TypeVar(:T)
+    @test_throws MethodError typevar_length62001(NTuple{N, VecElement{T}})
+end
+
 function fapplicable end
 gapplicable() = Val(applicable(fapplicable))
 gapplicable(x) = Val(applicable(fapplicable; x))

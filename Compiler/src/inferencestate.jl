@@ -815,6 +815,13 @@ function sptype_for_tvar(vᵢ::TypeVar, output_tvar::TypeVar, sigtypes::Core.Sim
         return Any
     end
     if output_tvar.lb === output_tvar.ub
+        if output_tvar.lb isa TypeVar
+            # TypeVars compare by identity, so a pinned TypeVar bound denotes
+            # a TypeVar value, not `Type{output_tvar.lb}`. The distinction is
+            # necessary because currently `!(TypeVar <: Type)`; if that changes,
+            # this can be revisited.
+            return TypeVar
+        end
         # `X <: T <: X` pins the var to `X` up to type equality: an `S == X` rep
         # argument also matches this MethodInstance and would bind the var to `S`
         # (#61323)
@@ -872,6 +879,13 @@ function sparam_definitely_egal_from_spec(v::TypeVar, sigtypes::Core.SimpleVecto
     return false
 end
 
+function is_free_typevar_in_spec(v::TypeVar, @nospecialize(specTypes))
+    for tv in find_free_typevars(specTypes)
+        tv === v && return true
+    end
+    return false
+end
+
 function sptypes_from_meth_instance(mi::MethodInstance)
     def = mi.def
     isa(def, Method) || return EMPTY_SPTYPES # toplevel
@@ -908,7 +922,11 @@ function sptypes_from_meth_instance(mi::MethodInstance)
                 v = v_inner
             end
         end
-        if v_tvar !== nothing || has_free_typevars(v)
+        if v isa TypeVar && is_free_typevar_in_spec(v, mi.specTypes)
+            ty = TypeVar
+            undef = false
+            v_egal = false
+        elseif v_tvar !== nothing || has_free_typevars(v)
             vᵢ = (temp::UnionAll).var
             sigtypes = (unwrap_unionall(temp)::DataType).parameters
             if v_tvar !== nothing

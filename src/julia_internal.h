@@ -846,10 +846,10 @@ STATIC_INLINE jl_method_instance_t *jl_get_ci_mi(jl_code_instance_t *ci JL_PROPA
 }
 
 // Resolve a static-parameter env slot for a direct (defined) read: a plain
-// closed value is itself; a pinned (lb == ub) env uncertainty marker
+// value is itself; a pinned (lb == ub) env uncertainty marker
 // (`svec(tvar, constrained)`, see `subtype.c`) is defined up to type equality
 // and reads as its `==`-representative `lb`. Returns NULL when the slot has no
-// statically defined value (unconstrained markers, free typevars).
+// statically defined value (unconstrained markers).
 STATIC_INLINE jl_value_t *jl_sparam_defined_value(jl_value_t *sp JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
     if (jl_is_svec(sp)) {
@@ -865,7 +865,7 @@ STATIC_INLINE jl_value_t *jl_sparam_defined_value(jl_value_t *sp JL_PROPAGATES_R
             return NULL;
         sp = v->lb;
     }
-    return jl_has_free_typevars(sp) ? NULL : sp;
+    return sp;
 }
 
 JL_DLLEXPORT jl_module_t *jl_debuginfo_module1(jl_value_t *debuginfo_def) JL_NOTSAFEPOINT;
