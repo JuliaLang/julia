@@ -2275,6 +2275,20 @@ static void retargetLinkGraphEdges(jitlink::LinkGraph &G, jitlink::Symbol &From,
 }
 
 static jitlink::Symbol *
+makeAnonymousLinkGraphSymbol(jitlink::LinkGraph &G,
+                             jitlink::Symbol &Sym) JL_NOTSAFEPOINT
+{
+    assert(Sym.isDefined());
+    auto &Anon = G.addAnonymousSymbol(Sym.getBlock(), Sym.getOffset(),
+                                      Sym.getSize(), Sym.isCallable(),
+                                      Sym.isLive());
+    Anon.setTargetFlags(Sym.getTargetFlags());
+    retargetLinkGraphEdges(G, Sym, Anon);
+    G.removeDefinedSymbol(Sym);
+    return &Anon;
+}
+
+static jitlink::Symbol *
 renameLinkGraphSymbol(jitlink::LinkGraph &G, jitlink::Symbol &Sym,
                       const orc::SymbolStringPtr &Name) JL_NOTSAFEPOINT
 {
@@ -2315,6 +2329,9 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
         assert(It != Syms.end());
         It->second = renameLinkGraphSymbol(G, *It->second, Dest);
     };
+    SmallSet<SymbolStringPtr, 2> OwnedSyms;
+    for (auto &KV : MR.getSymbols())
+        OwnedSyms.insert(KV.first);
     for (auto &[CI, Funcs] : Info->ci_funcs) {
         auto &S = CISymbols.at(CI);
         if (Funcs.invoke)
@@ -2329,11 +2346,41 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
         auto It = Syms.find(T);
         if (It == Syms.end())
             continue;
+        if (!It->second->isExternal()) {
+            // Non-primary call target bodies are local copies. Keep them out
+            // of ORC's public symbols instead of publishing duplicate CI
+            // definitions under the target's global name.
+            if (!OwnedSyms.contains(It->second->getName()))
+                It->second = makeAnonymousLinkGraphSymbol(G, *It->second);
+            continue;
+        }
         JL_GC_PROMISE_ROOTED(CI);
         auto Dest = linkCallTarget(MR, CI, API);
         if (!Dest)
             return false;
+        if (auto *DestSym = findLinkGraphSymbolByName(G, Dest);
+            DestSym && !DestSym->isExternal() && !OwnedSyms.contains(Dest))
+            makeAnonymousLinkGraphSymbol(G, *DestSym);
         It->second = renameLinkGraphSymbol(G, *It->second, Dest);
+    }
+    SmallSet<SymbolStringPtr, 0> KnownCISyms;
+    for (auto &KV : CISymbols) {
+        auto &S = KV.second;
+        if (S.invoke)
+            KnownCISyms.insert(S.invoke);
+        if (S.specptr)
+            KnownCISyms.insert(S.specptr);
+    }
+    SmallVector<jitlink::Symbol *, 0> DefinedSyms;
+    for (auto *Sym : G.defined_symbols())
+        DefinedSyms.push_back(Sym);
+    // Another thread may have claimed a CI after this module was emitted but
+    // before this materialization unit registered its interface. Any body that
+    // remains in this graph for that CI must not be exported here.
+    for (auto *Sym : DefinedSyms) {
+        if (Sym->hasName() && KnownCISyms.contains(Sym->getName()) &&
+            !OwnedSyms.contains(Sym->getName()))
+            makeAnonymousLinkGraphSymbol(G, *Sym);
     }
 
     // Rename globals and add mappings
