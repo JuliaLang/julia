@@ -106,6 +106,64 @@ JL_DLLEXPORT int32_t jl_nb_available(ios_t *s)
 JL_DLLEXPORT char *jl_uv_fs_t_ptr(uv_fs_t *req) { return (char*)req->ptr; }
 JL_DLLEXPORT char *jl_uv_fs_t_path(uv_fs_t *req) { return (char*)req->path; }
 
+// --- streaming directory iteration ---
+//
+// These helpers wrap uv_fs_opendir / uv_fs_readdir / uv_fs_closedir and hide
+// the uv_dir_t struct layout from Julia. Each runs one synchronous fs request
+// and cleans it up before returning, so callers only need to keep the opaque
+// uv_dir_t* alive between calls.
+
+JL_DLLEXPORT int jl_uv_fs_opendir(const char *path, uv_dir_t **dir_out)
+{
+    uv_fs_t req;
+    int ret = uv_fs_opendir(unused_uv_loop_arg, &req, path, NULL);
+    if (ret < 0) {
+        uv_fs_req_cleanup(&req);
+        *dir_out = NULL;
+        return ret;
+    }
+    uv_dir_t *dir = (uv_dir_t*)req.ptr;
+    // The dirents buffer is configured per-call in jl_uv_fs_readdir.
+    dir->dirents = NULL;
+    dir->nentries = 0;
+    *dir_out = dir;
+    uv_fs_req_cleanup(&req);
+    return 0;
+}
+
+// Reads up to `nentries` directory entries into the caller-provided `entries`
+// buffer. Returns the number of entries read on success, 0 on end-of-directory,
+// or a negative libuv error code. On success, each filled `entries[i].name` is
+// a strdup'd entry name owned by the caller, which must free() it. The caller
+// also owns the `entries` buffer itself.
+JL_DLLEXPORT ssize_t jl_uv_fs_readdir(uv_dir_t *dir, uv_dirent_t *entries, size_t nentries)
+{
+    uv_fs_t req;
+    // Clear caller's slots so a partial/failed read leaves no stale name
+    // pointers, and so we can safely skip them when detaching ownership below.
+    for (size_t i = 0; i < nentries; ++i) {
+        entries[i].name = NULL;
+        entries[i].type = UV_DIRENT_UNKNOWN;
+    }
+    dir->dirents = entries;
+    dir->nentries = nentries;
+    ssize_t r = uv_fs_readdir(unused_uv_loop_arg, &req, dir, NULL);
+    // Detach the entries from libuv's bookkeeping so uv_fs_req_cleanup
+    // doesn't free the strdup'd names; ownership now belongs to the caller.
+    dir->dirents = NULL;
+    dir->nentries = 0;
+    uv_fs_req_cleanup(&req);
+    return r;
+}
+
+JL_DLLEXPORT int jl_uv_fs_closedir(uv_dir_t *dir)
+{
+    uv_fs_t req;
+    int ret = uv_fs_closedir(unused_uv_loop_arg, &req, dir, NULL);
+    uv_fs_req_cleanup(&req);
+    return ret;
+}
+
 // --- stat ---
 JL_DLLEXPORT int jl_sizeof_stat(void) { return sizeof(uv_stat_t); }
 
