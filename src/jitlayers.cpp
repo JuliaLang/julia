@@ -2216,9 +2216,6 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
 
     // Pre-pass: find CI equivalents, call jl_link_ci_equiv for each, and build
     // EquivMap for use in the main pass to avoid re-running findCompatibleCI.
-    // This condition should match that in jl_add_codeinst_to_jit!, which will
-    // add a different, compatible CodeInstance to the JIT but not update the
-    // invoke statement.
     DenseMap<jl_code_instance_t *, jl_code_instance_t *> EquivMap;
     for (auto &[Call, T] : Info->call_targets) {
         auto [CI, API] = Call;
@@ -2232,6 +2229,7 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
             if (Equiv != CI) {
                 Lock.unlock();
                 int8_t gc_state = jl_gc_unsafe_enter(ct->ptls);
+                // If ci is subject to invalidation, link it against equiv
                 bool use_equiv = jl_link_ci_equiv(CI, Equiv);
                 jl_gc_unsafe_leave(ct->ptls, gc_state);
                 Lock.lock();

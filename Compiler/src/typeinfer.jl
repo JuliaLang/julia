@@ -818,8 +818,6 @@ function store_backedges(caller::CodeInstance, edges::SimpleVector)
     nothing
 end
 
-link_ci_equiv!(callee::CodeInstance, cached::CodeInstance) = !iszero(ccall(:jl_link_ci_equiv, Cint, (Any, Any), callee, cached))
-
 function compute_edges!(sv::InferenceState)
     edges = sv.edges
     for i in 1:length(sv.stmt_info)
@@ -1707,6 +1705,10 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
             markinspected!(workqueue, callee)
             continue
         end
+        let cached = ccall(:jl_get_ci_equiv, Any, (Any, UInt), callee, get_inference_world(workqueue.interp))::CodeInstance
+            markinspected!(workqueue, callee)
+            continue
+        end
         src = ci_get_source(interp, callee)
         if !isa(src, CodeInfo)
             newcallee = typeinf_ext(workqueue.interp, callee.def, source_mode) # always SOURCE_MODE_ABI
@@ -1724,16 +1726,14 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
         sptypes = sptypes_from_meth_instance(mi)
         collectinvokes!(workqueue, src, sptypes)
         if iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), mi, callee))
-            cached = ccall(:jl_get_ci_equiv, Any, (Any, UInt), callee, get_inference_world(workqueue.interp))::CodeInstance
+            cached = ccall(:jl_get_ci_equiv, Any, (Any, UInt), callee, 0x0)::CodeInstance
             if cached === callee
                 # make sure callee is gc-rooted and cached, as required by jl_add_codeinsts_to_jit
                 code_cache(workqueue.interp)[mi] = callee
             else
                 # use an existing CI from the cache, if there is available one that is compatible
-                if link_ci_equiv!(callee, cached)
-                    callee === ci && (ci = cached)
-                    callee = cached
-                end
+                callee === ci && (ci = cached)
+                callee = cached
             end
         end
         push!(codeinsts, callee)
@@ -1820,14 +1820,12 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
                 collectinvokes!(workqueue, src, sptypes; invokelatest_queue)
                 # try to reuse an existing CodeInstance from before to avoid making duplicates in the cache
                 if iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), mi, callee))
-                    cached = ccall(:jl_get_ci_equiv, Any, (Any, UInt), callee, world)::CodeInstance
+                    cached = ccall(:jl_get_ci_equiv, Any, (Any, UInt), callee, 0x0)::CodeInstance
                     if cached === callee
                         code_cache(interp)[mi] = callee
                     else
                         # Use an existing CI from the cache, if there is available one that is compatible
-                        if link_ci_equiv!(callee, cached)
-                            callee = cached
-                        end
+                        callee = cached
                     end
                 end
                 push!(codeinfos, callee)

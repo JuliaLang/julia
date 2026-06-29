@@ -616,23 +616,29 @@ JL_DLLEXPORT int jl_mi_cache_has_ci(jl_method_instance_t *mi,
     return 0;
 }
 
-// look for something with an egal ABI and properties that is already in the JIT for a whole edge (target_world=0) or can be added to the JIT with new source just for target_world.
+// look for something with an egal ABI and properties that is already in the JIT for the target_world, or could be added to the JIT instead of ci to satisfy the same invoke edge with the same src.
 JL_DLLEXPORT jl_code_instance_t *jl_get_ci_equiv(jl_code_instance_t *ci JL_PROPAGATES_ROOT, size_t target_world) JL_NOTSAFEPOINT
 {
     jl_value_t *def = ci->def;
     jl_method_instance_t *mi = jl_get_ci_mi(ci);
     jl_value_t *owner = ci->owner;
     jl_value_t *rettype = ci->rettype;
+    size_t min_world = target_world ? target_world : jl_atomic_load_relaxed(&ci->min_world);
+    size_t max_world = target_world ? target_world : jl_atomic_load_relaxed(&ci->max_world);
     jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mi->cache);
     while (codeinst) {
         if (codeinst != ci &&
             jl_atomic_load_relaxed(&codeinst->inferred) != NULL &&
-            jl_atomic_load_relaxed(&codeinst->min_world) <= target_world &&
-            jl_atomic_load_relaxed(&codeinst->max_world) >= target_world &&
             jl_egal(codeinst->def, def) &&
             jl_egal(codeinst->owner, owner) &&
             jl_egal(codeinst->rettype, rettype)) {
-            return codeinst;
+            if (!target_world || jl_atomic_load_relaxed(&codeinst->invoke) != NULL) {
+                size_t min_world2 = jl_atomic_load_relaxed(&codeinst->min_world);
+                size_t max_world2 = jl_atomic_load_relaxed(&codeinst->max_world);
+                if (target_world ? (min_world2 == min_world && max_world2 == max_world) :
+                                   (min_world2 <= min_world && max_world2 >= max_world))
+                    return codeinst;
+            }
         }
         codeinst = jl_atomic_load_relaxed(&codeinst->next);
     }
@@ -3727,11 +3733,15 @@ JL_DLLEXPORT int jl_link_ci_equiv(jl_code_instance_t *callee, jl_code_instance_t
 {
     if (callee == cached)
         return 1;
+    if (jl_atomic_load_relaxed(&callee->max_world) != ~(size_t)0)
+        return 1;
     jl_method_instance_t *mi = jl_get_ci_mi(cached);
     if (!jl_is_method(mi->def.method))
         return 1;
-    size_t world = jl_get_world_counter();
-    if (jl_atomic_load_relaxed(&callee->max_world) >= world) {
+    // Take a lock here to simplify the ordering needed here by ensuring worlds and edges don't change during these steps
+    JL_LOCK(&world_counter_lock);
+    int add_edge = jl_atomic_load_relaxed(&cached->max_world) == ~(size_t)0;
+    if (add_edge) {
         // Append cached to callee->edges so _invalidate_backedges can find it by identity
         int already_linked = 0;
         jl_svec_t *old_edges = jl_atomic_load_relaxed(&callee->edges);
@@ -3752,26 +3762,33 @@ JL_DLLEXPORT int jl_link_ci_equiv(jl_code_instance_t *callee, jl_code_instance_t
             jl_method_instance_add_backedge(mi, NULL, callee);
         }
     }
-    // after storing new backedges, use cached if it is still legal (covers wider world range)
-    return jl_atomic_load_relaxed(&cached->max_world) >= jl_atomic_load_relaxed(&callee->max_world);
+    JL_UNLOCK(&world_counter_lock);
+    return add_edge;
 }
 
 jl_code_instance_t *copy_to_mi_cache(jl_method_instance_t *mi JL_PROPAGATES_ROOT, jl_code_instance_t *codeinst2)
 {
     size_t current_world = jl_get_world_counter();
     size_t max_world2 = jl_atomic_load_relaxed(&codeinst2->max_world);
+    // if codeinst2 is still valid beyond current_world, link codeinst to
+    // it so that invalidation of codeinst2 also invalidates codeinst
+    jl_svec_t *copy_edge = jl_svec1(codeinst2);
+    // TODO: this should have been an invoke edge:
+    //jl_svec_t *copy_edge = jl_svec2(mi->sig, codeinst2);
     jl_code_instance_t *codeinst = jl_get_method_uninferred(
             mi, codeinst2->rettype,
             jl_atomic_load_relaxed(&codeinst2->min_world),
             max_world2 < current_world ? max_world2 : current_world,
             jl_atomic_load_relaxed(&codeinst2->debuginfo),
-            jl_atomic_load_relaxed(&codeinst2->edges));
+            copy_edge);
     if (jl_atomic_load_relaxed(&codeinst->invoke) == NULL) {
-        // if codeinst2 is still valid beyond current_world, link codeinst to it so
-        // that invalidation of codeinst2 also invalidates codeinst
         if (max_world2 == ~(size_t)0) {
-            if (jl_link_ci_equiv(codeinst, codeinst2))
-                jl_promote_ci_to_current(codeinst, current_world);
+            JL_LOCK(&world_counter_lock);
+            if (jl_atomic_load_relaxed(&codeinst2->max_world) == ~(size_t)0) {
+                jl_method_instance_add_backedge(mi, NULL, codeinst);
+                jl_atomic_store_relaxed(&codeinst->max_world, ~(size_t)0); // jl_promote_ci_to_current
+            }
+            JL_UNLOCK(&world_counter_lock);
         }
         jl_gc_write(codeinst, codeinst->rettype_const, jl_value_t, codeinst2->rettype_const);
         uint8_t specsigflags;
