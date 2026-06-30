@@ -197,15 +197,12 @@ JL_DLLEXPORT uint64_t jl_stat_blocks(char *statbuf)
     return ((uv_stat_t*)statbuf)->st_blocks;
 }
 
-/*
-// atime is stupid, let's not support it
 JL_DLLEXPORT double jl_stat_atime(char *statbuf)
 {
-  uv_stat_t *s;
-  s = (uv_stat_t*)statbuf;
-  return (double)s->st_atim.tv_sec + (double)s->st_atim.tv_nsec * 1e-9;
+    uv_stat_t *s;
+    s = (uv_stat_t*)statbuf;
+    return (double)s->st_atim.tv_sec + (double)s->st_atim.tv_nsec * 1e-9;
 }
-*/
 
 JL_DLLEXPORT double jl_stat_mtime(char *statbuf)
 {
