@@ -1588,9 +1588,7 @@ STATIC_INLINE uintptr_t gc_read_stack(void *_addr, uintptr_t offset,
 STATIC_INLINE void gc_assert_parent_validity(jl_value_t *parent, jl_value_t *child) JL_NOTSAFEPOINT
 {
 #if defined(GC_VERIFY) || defined(GC_ASSERT_PARENT_VALIDITY)
-    jl_taggedvalue_t *child_astagged = jl_astaggedvalue(child);
-    jl_taggedvalue_t *child_vtag = (jl_taggedvalue_t *)(child_astagged->header & ~(uintptr_t)0xf);
-    uintptr_t child_vt = (uintptr_t)child_vtag;
+    uintptr_t child_vt = jl_typetagof(child);
     if (child_vt == (jl_datatype_tag << 4) ||
         child_vt == (jl_unionall_tag << 4) ||
         child_vt == (jl_uniontype_tag << 4) ||
@@ -1613,7 +1611,7 @@ STATIC_INLINE void gc_assert_parent_validity(jl_value_t *parent, jl_value_t *chi
         jl_safe_static_show((JL_STREAM*)s, (jl_value_t *)jl_typeof(parent));
         jl_safe_fprintf(s, "While marking child at %p\n", (void *)child);
         jl_safe_fprintf(s, "of type:\n");
-        jl_safe_static_show((JL_STREAM*)s, (jl_value_t *)child_vtag);
+        jl_safe_static_show((JL_STREAM*)s, (jl_value_t *)child_vt);
         jl_gc_debug_fprint_critical_error(s);
         abort();
     }
