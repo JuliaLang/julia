@@ -14,7 +14,7 @@ export StylingPass, StylingContext, SyntaxHighlightPass, RegionHighlightPass,
 
 # Context information passed to all styling passes
 struct StylingContext
-    cursor_pos::Int
+    cursor_pos::Int     # -1 when cursor is not shown (e.g. after hitting enter)
     region_start::Int
     region_stop::Int
 end
