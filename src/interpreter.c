@@ -819,7 +819,7 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_gcframe_t **pgcstack, jl_value_t 
 
 JL_DLLEXPORT const jl_callptr_t jl_fptr_interpret_call_addr = &jl_fptr_interpret_call;
 
-jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **args, size_t nargs)
+jl_value_t *jl_interpret_opaque_closure(jl_gcframe_t **pgcstack, jl_opaque_closure_t *oc, jl_value_t **args, size_t nargs)
 {
     jl_method_t *source = oc->source;
     jl_code_info_t *code = NULL;

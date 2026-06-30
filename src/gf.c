@@ -4384,14 +4384,14 @@ JL_DLLEXPORT jl_value_t *jl_invoke_oneshot(jl_value_t *F, jl_value_t **args, uin
     return verify_type(res);
 }
 
-JL_DLLEXPORT jl_value_t *jl_invoke_oc(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc)
+JL_DLLEXPORT jl_value_t *jl_invoke_oc(jl_gcframe_t **pgcstack, jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc)
 {
     jl_opaque_closure_t *oc = (jl_opaque_closure_t*)F;
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
     size_t world = oc->world;
     ct->world_age = world;
-    jl_value_t *ret = _jl_invoke(jl_get_pgcstack(), F, args, nargs, mfunc, world, TRIGGER_NONE);
+    jl_value_t *ret = _jl_invoke(pgcstack, F, args, nargs, mfunc, world, TRIGGER_NONE);
     ct->world_age = last_age;
     return ret;
 }

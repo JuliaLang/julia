@@ -3,12 +3,12 @@
 #include "julia.h"
 #include "julia_internal.h"
 
-jl_value_t *jl_fptr_const_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **args, size_t nargs)
+jl_value_t *jl_fptr_const_opaque_closure(jl_gcframe_t **pgcstack, jl_opaque_closure_t *oc, jl_value_t **args, size_t nargs)
 {
     return oc->captures;
 }
 
-jl_value_t *jl_fptr_const_opaque_closure_typeerror(jl_opaque_closure_t *oc, jl_value_t **args, size_t nargs)
+jl_value_t *jl_fptr_const_opaque_closure_typeerror(jl_gcframe_t **pgcstack, jl_opaque_closure_t *oc, jl_value_t **args, size_t nargs)
 {
     jl_type_error("OpaqueClosure", jl_tparam1(jl_typeof(oc)), oc->captures);
 }
