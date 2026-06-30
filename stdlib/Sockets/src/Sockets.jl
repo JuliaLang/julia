@@ -306,7 +306,7 @@ function setopt(sock::UDPSocket; multicast_loop=nothing, multicast_ttl=nothing, 
         error("Cannot set options on uninitialized socket")
     end
     if multicast_loop !== nothing
-        uv_error("multicast_loop", ccall(:uv_udp_set_multicast_loop, Cint, (Ptr{Cvoid}, Cint), sock.handle, multicast_loop) < 0)
+        uv_error("multicast_loop", ccall(:uv_udp_set_multicast_loop, Cint, (Ptr{Cvoid}, Cint), sock.handle, multicast_loop))
     end
     if multicast_ttl !== nothing
         uv_error("multicast_ttl", ccall(:uv_udp_set_multicast_ttl, Cint, (Ptr{Cvoid}, Cint), sock.handle, multicast_ttl))
@@ -670,7 +670,9 @@ function trylisten(sock::LibuvServer; backlog::Integer=BACKLOG_DEFAULT)
     check_open(sock)
     err = ccall(:uv_listen, Cint, (Ptr{Cvoid}, Cint, Ptr{Cvoid}),
                 sock, backlog, @cfunction(uv_connectioncb, Cvoid, (Ptr{Cvoid}, Cint)))
-    sock.status = StatusActive
+    if err == 0
+        sock.status = StatusActive
+    end
     iolock_end()
     return err
 end
