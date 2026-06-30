@@ -808,6 +808,7 @@ public:
     orc::SymbolStringPtr mangle(StringRef Name) JL_NOTSAFEPOINT;
     void addGlobalMapping(StringRef Name, uint64_t Addr) JL_NOTSAFEPOINT;
     void addOutput(jl_emitted_output_t O) JL_NOTSAFEPOINT;
+    void addOutputs(MutableArrayRef<jl_emitted_output_t> Os) JL_NOTSAFEPOINT;
 
     // Methods mainly for the C API
     Error addExternalModule(orc::JITDylib &JD, orc::ThreadSafeModule TSM, bool ShouldOptimize = false) JL_NOTSAFEPOINT;
