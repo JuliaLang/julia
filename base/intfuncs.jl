@@ -1066,8 +1066,8 @@ function _base(base::Integer, x::Integer, pad::Int, neg::Bool)
     return str
 end
 
-split_sign(n::Integer) = unsigned(abs(n)), n < 0
-split_sign(n::Unsigned) = n, false
+split_sign(n::Integer) = (unsigned(abs(n)), n < 0)
+split_sign(n::Unsigned) = (n, false)
 
 """
     string(n::Integer; base::Integer = 10, pad::Integer = 1)
@@ -1096,6 +1096,7 @@ julia> @sprintf("%4i", 5)
 ```
 """
 function string(n::Integer; base::Integer = 10, pad::Integer = 1)
+    @constprop :aggressive
     pad = (min(max(pad, typemin(Int)), typemax(Int)) % Int)::Int
     if base == 2
         (n_positive, neg) = split_sign(n)
