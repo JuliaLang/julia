@@ -522,16 +522,20 @@ end
 
 allunique(f, xs) = allunique(Generator(f, xs))
 
-function _hashed_allunique(C)
+_hashed_allunique(C) = _hashed_allunique(C, haslength(C) ? length(C) : nothing)
+
+# `sz` is the element count when cheaply known; it gates the prefix scan that
+# defers `sizehint!` until a duplicate is unlikely to appear in the first 1000.
+function _hashed_allunique(C, sz::Union{Integer,Nothing})
     seen = Set{@default_eltype(C)}()
     x = iterate(C)
-    if haslength(C) && length(C) > 1000
+    if sz !== nothing && sz > 1000
         for i in OneTo(1000)
             v, s = something(x)
             in!(v, seen) && return false
             x = iterate(C, s)
         end
-        sizehint!(seen, length(C))
+        sizehint!(seen, sz)
     end
     while x !== nothing
         v, s = x
@@ -544,6 +548,14 @@ end
 allunique(::Union{AbstractSet,AbstractDict}) = true
 
 allunique(r::AbstractRange) = !iszero(step(r)) || length(r) <= 1
+
+function allunique(s::AbstractString)
+    # `ncodeunits` is an O(1) upper bound on the character count: fewer than 32
+    # code units guarantees fewer than 32 characters, so the indexed scan is
+    # picked without a `length` pass; the hashed path iterates anyway, so it can
+    # afford `length`, which it needs since iteration yields characters
+    ncodeunits(s) < 32 ? _indexed_allunique(s) : _hashed_allunique(s, length(s))
+end
 
 function allunique(A::StridedArray)
     if length(A) < 32
