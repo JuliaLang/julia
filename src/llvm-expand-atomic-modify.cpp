@@ -339,8 +339,7 @@ void expandAtomicModifyToCmpXchg(CallInst &Modify,
 
   ReplacementIRBuilder Builder(&Modify, Modify.getModule()->getDataLayout());
 
-  CallInst *ModifyOp;
-  {
+  auto CreateModifyOp = [&]() {
     SmallVector<Value*> Args(1 + Modify.arg_size() - user_arg_start);
     Args[0] = UndefValue::get(Ty); // Undef used as placeholder for Loaded / RMW;
     for (size_t argi = 0; argi < Modify.arg_size() - user_arg_start; ++argi) {
@@ -348,9 +347,11 @@ void expandAtomicModifyToCmpXchg(CallInst &Modify,
     }
     SmallVector<OperandBundleDef> Defs;
     Modify.getOperandBundlesAsDefs(Defs);
-    ModifyOp = Builder.CreateCall(Op, Args, Defs);
-    ModifyOp->setCallingConv(Op->getCallingConv());
-  }
+    CallInst *C = Builder.CreateCall(Op, Args, Defs);
+    C->setCallingConv(Op->getCallingConv());
+    return C;
+  };
+  CallInst *ModifyOp = CreateModifyOp();
   Use *LoadedOp = &ModifyOp->getOperandUse(0);
 
   Value *OldVal = nullptr;
@@ -394,6 +395,17 @@ void expandAtomicModifyToCmpXchg(CallInst &Modify,
           break;
       } else {
         assert(BinOp != decltype(BinOp)(true));
+        if (BinOp == decltype(BinOp)(false)) {
+          // inlining simplified the op into something unconvertible; recreate
+          // the call so the fallback cmpxchg loop has an op to expand (the
+          // leftover inlined code is dead and write-free, per canReorderWithRMW,
+          // so it is safe to disconnect it from RMW and let DCE remove it)
+          RMW->replaceAllUsesWith(UndefValue::get(Ty));
+          Builder.SetInsertPoint(&Modify);
+          ModifyOp = CreateModifyOp();
+          LoadedOp = &ModifyOp->getOperandUse(0);
+          break;
+        }
         auto RMWOp = std::get<AtomicRMWInst::BinOp>(BinOp);
         assert(RMWOp != AtomicRMWInst::BAD_BINOP);
         assert(isa<UndefValue>(RMW->getOperand(1))); // RMW was previously being used as the placeholder for Val
