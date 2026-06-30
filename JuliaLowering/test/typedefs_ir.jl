@@ -613,8 +613,10 @@ end
 41  TestMod.Union
 42  (call core.apply_type %₄₁)
 43  (call Base.Docs.doc! TestMod %₃₃ %₄₀ %₄₂)
-44  slot₁/val
-45  (return %₄₄)
+44  (gotoifnot true label₄₇)
+45  slot₁/val
+46  (return %₄₅)
+47  (return core.nothing)
 
 ########################################
 # Struct with outer constructor

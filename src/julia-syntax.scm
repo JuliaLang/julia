@@ -1395,34 +1395,39 @@
          `(call (core apply_type_or_typeapp) ,@(map replace-type-constructors (cddr expr))))
         (else (map replace-type-constructors expr))))
 
-;; Extract a struct definition from a typegroup block child.
+;; Hack: Extract a struct definition from a typegroup block child.
 ;; Returns (values struct-expr doc-calls) where doc-calls is a list of
 ;; documentation expressions to emit after the types are bound.
-;; A child may be a bare (struct ...) or a block from @doc macro expansion:
-;;   (block (= gensym (struct ...)) (call Docs.doc! ...) gensym)
+;; A child may be a bare (struct ...) or a block from @doc macro expansion
+;; (block (if true (= gensym (struct ...))) doc-calls... ignored_gensym)
 (define (typegroup-extract-struct x)
   (cond ((and (pair? x) (eq? (car x) 'struct))
          (values x '()))
+        ;; Expanded @doc block
         ((and (pair? x) (eq? (car x) 'block)
               (let ((body (cdr x)))
                 (and (pair? body)
-                     (pair? (car body))
-                     (eq? (caar body) '=)
-                     (pair? (cddar body))
-                     (let ((rhs (caddar body)))
-                       (and (pair? rhs) (eq? (car rhs) 'struct))))))
-         ;; Expanded @doc block: (block (= gensym (struct ...)) doc-calls... gensym)
-         (let* ((body (cdr x))
-                (struct-expr (caddar body))   ; the (struct ...) from (= gensym (struct ...))
-                (rest (cdr body))             ; everything after the assignment
-                ;; Drop the trailing gensym return value, keep the doc calls
-                (doc-calls (if (and (pair? rest) (not (null? (cdr rest))))
-                               (let loop ((r rest) (acc '()))
-                                 (if (null? (cdr r))
-                                     (reverse acc)  ; skip last element (the gensym)
-                                     (loop (cdr r) (cons (car r) acc))))
-                               '())))
-           (values struct-expr doc-calls)))
+                     (length= (car body) 3)
+                     (eq? (caar body) 'if)
+                     (equal? (cadar body) '(true))
+                     (let* ((doc-val-assign (caddar body)))
+                       (eq? (car doc-val-assign) '=)
+                       (pair? (cddr doc-val-assign))
+                       (let* ((rhs (caddr doc-val-assign)))
+                         (and (pair? rhs)
+                              (eq? (car rhs) 'struct)
+                              (cons rhs (cdr body))))))))
+         => (lambda (extracted)
+              (let* ((struct-expr (car extracted))
+                     (rest (cdr extracted))
+                     ;; Drop the trailing gensym return value, keep the doc calls
+                     (doc-calls (if (and (pair? rest) (not (null? (cdr rest))))
+                                    (let loop ((r rest) (acc '()))
+                                      (if (null? (cdr r))
+                                          (reverse acc)  ; skip last element (the gensym)
+                                          (loop (cdr r) (cons (car r) acc))))
+                                    '())))
+                (values struct-expr doc-calls))))
         (else
          (error (string "typegroup only supports struct definitions, got: " (deparse x))))))
 

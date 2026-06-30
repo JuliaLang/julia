@@ -1344,8 +1344,10 @@ end
 19  (call core.apply_type %₁₈)
 20  (call core.apply_type %₁₇ %₁₉)
 21  (call Base.Docs.doc! TestMod %₁₃ %₁₆ %₂₀)
-22  slot₁/val
-23  (return %₂₂)
+22  (gotoifnot true label₂₅)
+23  slot₁/val
+24  (return %₂₃)
+25  (return core.nothing)
 
 ########################################
 # Binding docs to callable type
@@ -1374,8 +1376,10 @@ end
 15  (call core.apply_type %₁₄)
 16  (call core.apply_type %₁₃ %₁₅)
 17  (call Base.Docs.doc! TestMod %₉ %₁₂ %₁₆)
-18  slot₁/val
-19  (return %₁₈)
+18  (gotoifnot true label₂₁)
+19  slot₁/val
+20  (return %₁₉)
+21  (return core.nothing)
 
 ########################################
 # Keyword function with defaults.
