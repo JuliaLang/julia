@@ -226,7 +226,7 @@ ifeq ($(OS),WINNT)
 COMMON_LIBPATHS := -L$(build_private_libdir) $(COMMON_LIBPATHS)
 RT_LIBS := $(call whole_archive,$(LIBUV)) $(call whole_archive,$(LIBUTF8PROC)) $(LIBUNWIND) $(RT_LLVMLINK) $(LIBTRACYCLIENT) $(LIBITTAPI) -lzstd -L$(build_libdir) $(LIBTARGET_PARSING) $(WIN_LD_STDCXX) $(OSLIBS)
 # NB: CG needs uv_mutex_* symbols, but we expect to export them from libjulia-internal
-CG_LIBS := $(LIBUNWIND) $(CG_LLVMLINK) $(LIBTRACYCLIENT) $(LIBITTAPI) $(WIN_LD_STDCXX) $(OSLIBS) $(LIBLMDB)
+CG_LIBS := $(LIBUNWIND) $(CG_LLVMLINK) $(LIBTRACYCLIENT) $(LIBITTAPI) $(WIN_LD_STDCXX) $(LIBLMDB) $(OSLIBS)
 else
 RT_LIBS := $(call whole_archive,$(LIBUV)) $(call whole_archive,$(LIBUTF8PROC)) $(LIBUNWIND) $(RT_LLVMLINK) $(OSLIBS) $(LIBTRACYCLIENT) $(LIBITTAPI) -lzstd -L$(build_libdir) $(LIBTARGET_PARSING)
 # NB: CG needs uv_mutex_* symbols, but we expect to export them from libjulia-internal
