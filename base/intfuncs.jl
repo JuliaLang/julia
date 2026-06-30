@@ -758,6 +758,7 @@ ndigits0znb(x::Bool, b::Integer) = x % Int
 
 # The suffix "pb" stands for "positive base"
 function ndigits0zpb(x::Integer, b::Integer)
+    @constprop :aggressive
     # precondition: b > 1
     x == 0 && return 0
     b = Int(b)
@@ -822,6 +823,7 @@ julia> Base.ndigits0z(10)
 See also [`ndigits`](@ref).
 """
 function ndigits0z(x::Integer, b::Integer)
+    @constprop :aggressive
     if b < -1
         ndigits0znb(x, b)
     elseif b > 1
