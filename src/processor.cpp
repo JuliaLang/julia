@@ -379,6 +379,47 @@ static std::pair<uint32_t, int> match_image_targets(
     return {(uint32_t)match.best_idx, match.vreg_size};
 }
 
+// Clamp a target spec's vector features to a maximum vector width (`vreg_limit`,
+// in bytes). On x86, AVX/AVX-512 change the ABI for VecElement tuples (they map
+// to xmm/ymm/zmm), so images that call into each other must agree on vector
+// width. Used both when loading the sysimage (clamp the JIT target to the
+// matched sysimage clone) and when building a pkgimage (clamp its clone targets
+// to the loaded sysimage's clone), so a pkgimage never requires/emits wider
+// vectors than the sysimage it runs against.
+static void clamp_vector_features(tp::LLVMTargetSpec &target, int vreg_limit)
+{
+#if defined(_CPU_X86_64_) || defined(_CPU_X86_)
+    if (vreg_limit < 64) {
+        static const char *avx512[] = {
+            "avx512f", "avx512dq", "avx512ifma", "avx512cd",
+            "avx512bw", "avx512vl", "avx512vbmi", "avx512vpopcntdq",
+            "avx512vbmi2", "avx512vnni", "avx512bitalg",
+            "avx512vp2intersect", "avx512bf16", "avx512fp16", nullptr
+        };
+        for (const char **f = avx512; *f; f++) {
+            const tp::FeatureEntry *fe = tp::find_feature(*f);
+            if (fe) feature_clear(&target.en_features, fe->bit);
+        }
+    }
+    if (vreg_limit < 32) {
+        static const char *avx[] = {
+            "avx", "avx2", "fma", "f16c", "fma4", "xop",
+            "vaes", "vpclmulqdq", nullptr
+        };
+        for (const char **f = avx; *f; f++) {
+            const tp::FeatureEntry *fe = tp::find_feature(*f);
+            if (fe) feature_clear(&target.en_features, fe->bit);
+        }
+    }
+    for (int w = 0; w < TARGET_FEATURE_WORDS; w++)
+        target.dis_features.bits[w] = tp::llvm_feature_mask.bits[w] & ~target.en_features.bits[w];
+    target.cpu_features = tp::build_llvm_feature_string(target.en_features, target.dis_features);
+#else
+    (void)target;
+    (void)vreg_limit;
+#endif
+}
+
 static uint32_t match_sysimg_target(void *ctx, const void *id, jl_value_t **rejection_reason)
 {
     const char *cpu_target = (const char *)ctx;
@@ -428,38 +469,8 @@ static uint32_t match_sysimg_target(void *ctx, const void *id, jl_value_t **reje
     // support.
     int matched_vreg = match_result.second;
     int host_vreg = tp::max_vector_size(target.en_features);
-#if defined(_CPU_X86_64_) || defined(_CPU_X86_)
-    if (matched_vreg != host_vreg) {
-        if (matched_vreg < 64) {
-            static const char *avx512[] = {
-                "avx512f", "avx512dq", "avx512ifma", "avx512cd",
-                "avx512bw", "avx512vl", "avx512vbmi", "avx512vpopcntdq",
-                "avx512vbmi2", "avx512vnni", "avx512bitalg",
-                "avx512vp2intersect", "avx512bf16", "avx512fp16", nullptr
-            };
-            for (const char **f = avx512; *f; f++) {
-                const tp::FeatureEntry *fe = tp::find_feature(*f);
-                if (fe) feature_clear(&target.en_features, fe->bit);
-            }
-        }
-        if (matched_vreg < 32) {
-            static const char *avx[] = {
-                "avx", "avx2", "fma", "f16c", "fma4", "xop",
-                "vaes", "vpclmulqdq", nullptr
-            };
-            for (const char **f = avx; *f; f++) {
-                const tp::FeatureEntry *fe = tp::find_feature(*f);
-                if (fe) feature_clear(&target.en_features, fe->bit);
-            }
-        }
-        for (int w = 0; w < TARGET_FEATURE_WORDS; w++)
-            target.dis_features.bits[w] = tp::llvm_feature_mask.bits[w] & ~target.en_features.bits[w];
-        target.cpu_features = tp::build_llvm_feature_string(target.en_features, target.dis_features);
-    }
-#else
-    (void)matched_vreg;
-    (void)host_vreg;
-#endif
+    if (matched_vreg != host_vreg)
+        clamp_vector_features(target, matched_vreg);
 
     jit_targets.push_back(std::move(target));
     return match_result.first;
@@ -469,6 +480,28 @@ static uint32_t match_pkgimg_target(void *ctx, const void *id, jl_value_t **reje
 {
     auto &target = jit_targets.front();
     auto result = match_image_targets(id, target, rejection_reason);
+    if (result.first == UINT32_MAX)
+        return UINT32_MAX;
+#if defined(_CPU_X86_64_) || defined(_CPU_X86_)
+    // ABI correctness: a pkgimage links directly into the base image / JIT, so
+    // its clone must have been built for the *same* vector width, not merely a
+    // compatible (narrower) one. `match_targets` only enforces an upper bound
+    // (a clone may not require features the JIT disabled), so it can select a
+    // clone narrower than the base -- e.g. a pkgimage built against a 256-bit
+    // sysimage being loaded against a 512-bit one (the pkgimage cache is keyed
+    // by the cpu_target string, not the sysimage's vector width). A width
+    // mismatch passes VecElement tuples in the wrong registers, so reject the
+    // cache (forcing recompilation at the correct width) rather than load it.
+    int jit_vreg = tp::max_vector_size(target.en_features);
+    if (result.second != jit_vreg) {
+        CF_DEBUG("[cpufeatures]   vreg mismatch: image=%d base=%d\n", result.second, jit_vreg);
+        if (rejection_reason) {
+            std::string msg = "Cached code image vector width does not match the base image.";
+            *rejection_reason = jl_pchar_to_string(msg.data(), msg.size());
+        }
+        return UINT32_MAX;
+    }
+#endif
     return result.first;
 }
 
@@ -658,6 +691,18 @@ extern "C" jl_clone_targets_t jl_get_llvm_clone_targets(const char *cpu_target)
 
     if (specs.empty())
         jl_error("No targets specified");
+
+    // When building a pkgimage incrementally on top of an already-loaded
+    // sysimage, its code only ever runs against the sysimage clone this process
+    // matched. Clamp the pkgimage clone targets to that clone's vector width so
+    // the pkgimage never requires (or emits) wider vectors than the sysimage it
+    // links against -- otherwise the resulting image would be unloadable, since
+    // the JIT/load target is itself clamped (see match_sysimg_target).
+    if (jl_options.incremental && !jit_targets.empty()) {
+        int sys_vreg = tp::max_vector_size(jit_targets.front().en_features);
+        for (auto &s : specs)
+            clamp_vector_features(s, sys_vreg);
+    }
 
     jl_clone_targets_t result;
 
