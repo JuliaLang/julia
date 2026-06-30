@@ -137,8 +137,6 @@ end
 @test Compiler.limit_type_size(Type{Union{Int,Type{Int}}}, Union{Type{Int},Type{Type{Int}}}, Union{}, 0, 0) == Type
 @test Compiler.limit_type_size(Type{Union{Int,Type{Int}}}, Type{Union{Type{Int},Type{Type{Int}}}}, Union{}, 0, 0) == Type{Union{Int, Type{Int}}}
 @test Compiler.limit_type_size(Type{Union{Int,Type{Int}}}, Type{Type{Int}}, Union{}, 0, 0) == Type
-
-
 @test Compiler.limit_type_size(Type{Any}, Union{}, Union{}, 0, 0) ==
       Compiler.limit_type_size(Type{Any}, Any, Union{}, 0, 0) ==
       Compiler.limit_type_size(Type{Any}, Type, Union{}, 0, 0) ==
@@ -1789,7 +1787,7 @@ let getfield_tfunc(@nospecialize xs...) =
     @test getfield_tfunc(ARef{Int},Const(:x),Bool,Bool) === Union{}
 end
 
-using Core: Const
+using Core: Const, PartialStruct
 mutable struct XY{X,Y}
     x::X
     y::Y
@@ -1819,6 +1817,7 @@ let setfield!_tfunc(@nospecialize xs...) =
     @test setfield!_tfunc(ABCDconst, Const(:c), Any) === Any
     @test setfield!_tfunc(ABCDconst, Const(3), Any) === Any
     @test setfield!_tfunc(ABCDconst, Symbol, Any) === Any
+    @test setfield!_tfunc(PartialStruct(Compiler.fallback_lattice, ABCDconst, Any[Const(42), Int, Any, Union{Int,Nothing}]), Const(:a), Int) === Union{}
     @test setfield!_tfunc(ABCDconst, Int, Any) === Any
     @test setfield!_tfunc(Union{Base.RefValue{Any},Some{Any}}, Const(:x), Int) === Int
     @test setfield!_tfunc(Union{Base.RefValue,Some{Any}}, Const(:x), Int) === Int
