@@ -34,6 +34,7 @@
 #include "julia_internal.h"
 #include "platform.h"
 #include "llvm-codegen-shared.h"
+#include "objcache.h"
 #include <stack>
 #include <queue>
 #include <tuple>
@@ -150,6 +151,7 @@ inline void add_fn_attrs_for_effects(CallInst *CI, uint32_t effects) JL_NOTSAFEP
 struct OptimizationOptions {
     bool lower_intrinsics;
     bool dump_native;
+    bool tls_getters;
     bool external_use;
     bool llvm_only;
     bool always_inline;
@@ -168,6 +170,7 @@ struct OptimizationOptions {
     static constexpr OptimizationOptions defaults(
         bool lower_intrinsics=true,
         bool dump_native=false,
+        bool tls_getters=false,
         bool external_use=false,
         bool llvm_only=false,
         bool always_inline=true,
@@ -195,12 +198,23 @@ struct OptimizationOptions {
         bool sanitize_address=false
 #endif
 ) JL_NOTSAFEPOINT {
-        return {lower_intrinsics, dump_native, external_use, llvm_only,
-                always_inline, enable_early_simplifications,
-                enable_early_optimizations, enable_scalar_optimizations,
-                enable_loop_optimizations, enable_vector_pipeline,
-                remove_ni, cleanup, warn_missed_transformations,
-                sanitize_memory, sanitize_thread, sanitize_address};
+        return {lower_intrinsics,
+                dump_native,
+                tls_getters,
+                external_use,
+                llvm_only,
+                always_inline,
+                enable_early_simplifications,
+                enable_early_optimizations,
+                enable_scalar_optimizations,
+                enable_loop_optimizations,
+                enable_vector_pipeline,
+                remove_ni,
+                cleanup,
+                warn_missed_transformations,
+                sanitize_memory,
+                sanitize_thread,
+                sanitize_address};
     }
 };
 
@@ -862,6 +876,8 @@ public:
     // (this lock strategy is unusual here, so the annotations aren't entirely correct)
     void optimizeDLSyms(Module &M) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER;
 
+    void shutdown() JL_NOTSAFEPOINT;
+
 protected:
     // Choose globally unique names for the functions defined by the given CI
     // and register the mapping in CISymbols.
@@ -900,7 +916,7 @@ protected:
     // returning a pointer into CISymbols or NULL if the CI is not compiled.
     CISymbolPtr *linkCISymbol(jl_code_instance_t *CI) JL_NOTSAFEPOINT;
 
-    void optimizeModule(Module &M) JL_NOTSAFEPOINT;
+    void optimizeModule(Module &M) JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE;
     std::unique_ptr<MemoryBuffer> compileModule(Module &M) JL_NOTSAFEPOINT;
 
 private:
@@ -932,6 +948,8 @@ private:
 
     std::mutex llvm_printing_mutex{};
     SmallVector<std::function<void()>, 0> PrintLLVMTimers;
+
+    ObjCache OCache;
 
     _Atomic(size_t) jit_bytes_size{0};
     _Atomic(size_t) jitcounter{0};

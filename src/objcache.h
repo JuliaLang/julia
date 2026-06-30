@@ -1,0 +1,68 @@
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
+#ifndef JL_OBJCACHE_H
+#define JL_OBJCACHE_H
+
+#include <atomic>
+#include <condition_variable>
+
+#include <llvm/ADT/FunctionExtras.h>
+#include <llvm/Bitcode/BitcodeWriter.h>
+#include <llvm/IR/Module.h>
+#include <llvm/Support/MemoryBuffer.h>
+#include <lmdb.h>
+#include <uv.h>
+
+#include "analyzer_annotations.h"
+
+/*
+ * Environment variable knobs:
+ *
+ * JULIA_OBJCACHE       Set to 0 to disable the objcache.
+ * JULIA_OBJCACHE_LOG   When set, logs cache hits/misses to the provided path.
+ * JULIA_OBJCACHE_PATH  When unset, the cache is stored in the depot, under
+ *                      /cache/<Julia version>.  It is useful to set this when
+ *                      bootstrapping Julia, since the depot path is not yet
+ *                      available.
+ */
+
+using CompileFn = llvm::unique_function<std::unique_ptr<llvm::MemoryBuffer>()>;
+
+class MDBTxn;
+
+class ObjCache {
+public:
+    ObjCache() = default;
+    ~ObjCache() JL_NOTSAFEPOINT;
+    std::unique_ptr<llvm::MemoryBuffer>
+    get(llvm::Module &M, CompileFn Compile) JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE;
+    bool isEnabled() const JL_NOTSAFEPOINT;
+    void shutdown() JL_NOTSAFEPOINT;
+
+    using Hash = std::array<uint8_t, 20>;
+
+protected:
+    void writerThread();
+    void initDB() JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE;
+    bool updateATime(MDBTxn &Txn, const Hash &H, int64_t Time, bool Fresh);
+    bool maybeEvictLRU(MDBTxn &Txn, size_t RoomFor);
+    size_t dbiSize(MDBTxn &Txn, MDB_dbi Dbi);
+
+private:
+    std::atomic<bool> Initialized = false;
+    MDB_env *Env = nullptr;
+    MDB_dbi ObjCacheDbi;
+    MDB_dbi ObjMetaDbi;
+    size_t PageSize;
+    uv_thread_t WriterThread;
+    bool Started = false;
+    bool Exiting = false;
+    // Non-null MemoryBuffer -> cache miss, want to write new entry
+    // Null MemoryBuffer     -> cache hit, want to update atime
+    std::vector<std::pair<Hash, std::unique_ptr<llvm::MemoryBuffer>>> ObjQueue;
+    std::mutex Mutex;
+    std::mutex LogMutex;
+    std::condition_variable QueueCond;
+};
+
+#endif // JL_OBJCACHE_H

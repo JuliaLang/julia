@@ -60,6 +60,7 @@ USE_SYSTEM_PATCHELF:=0
 USE_SYSTEM_LIBWHICH:=0
 USE_SYSTEM_ZLIB:=0
 USE_SYSTEM_ZSTD:=0
+USE_SYSTEM_LMDB:=0
 USE_SYSTEM_P7ZIP:=0
 USE_SYSTEM_LLD:=0
 
@@ -1303,6 +1304,13 @@ else ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
 JCFLAGS+=-DSYSTEM_LIBUNWIND
 JCPPFLAGS+=-DSYSTEM_LIBUNWIND
 endif
+endif
+
+ifeq ($(USE_SYSTEM_LMDB), 1)
+LIBLMDB := -llmdb
+else
+# statically link the archive we build in deps/lmdb.mk into libjulia-codegen
+LIBLMDB := $(build_libdir)/liblmdb.a
 endif
 
 ifeq ($(origin LLVM_CONFIG), undefined)
