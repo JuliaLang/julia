@@ -73,7 +73,8 @@ static std::optional<std::string> getCachePath()
         return {};
 
     return (llvm::Twine(jl_string_ptr(DepotStr)) + "/cache/v" +
-            llvm::Twine(JULIA_VERSION_MAJOR) + "." + llvm::Twine(JULIA_VERSION_MINOR))
+            llvm::Twine(JULIA_VERSION_MAJOR) + "." + llvm::Twine(JULIA_VERSION_MINOR) +
+            "/objcache")
         .str();
 }
 
