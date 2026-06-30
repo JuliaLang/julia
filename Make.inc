@@ -1309,7 +1309,8 @@ endif
 ifeq ($(USE_SYSTEM_LMDB), 1)
 LIBLMDB := -llmdb
 else
-LIBLMDB := -L$(build_shlibdir) -llmdb
+# statically link the archive we build in deps/lmdb.mk into libjulia-codegen
+LIBLMDB := $(build_libdir)/liblmdb.a
 endif
 
 ifeq ($(origin LLVM_CONFIG), undefined)
@@ -1504,7 +1505,7 @@ CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.35|GLIBCXX_3\.5\.|GLIBCXX_4\.
 # Note: we explicitly _do not_ define `CSL` here, since it requires some more
 # advanced techniques to decide whether it should be installed from a BB source
 # or not.  See `deps/csl.mk` for more detail.
-BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP OPENSSL LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB ZSTD LMDB P7ZIP LLD LIBTRACYCLIENT BOLT
+BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP OPENSSL LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB ZSTD P7ZIP LLD LIBTRACYCLIENT BOLT
 
 ifeq (${USE_THIRD_PARTY_GC},mmtk)
 BB_PROJECTS += MMTK_JULIA

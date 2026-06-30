@@ -1,11 +1,14 @@
 ## LMDB ##
-ifneq ($(USE_BINARYBUILDER_LMDB), 1)
+# LMDB is statically linked into libjulia-codegen (see src/objcache.cpp), so we
+# always build it from source as a static archive rather than consuming the
+# shared library shipped by LMDB_jll.
 LMDB_GIT_URL := https://github.com/LMDB/lmdb.git
 LMDB_TAR_URL = https://api.github.com/repos/LMDB/lmdb/tarball/$1
 $(eval $(call git-external,lmdb,LMDB,,,$(SRCCACHE)))
 
 LMDB_SRC_SUBDIR := libraries/liblmdb
 LMDB_BUILD_OPTS := CC="$(CC)" AR="$(AR)" prefix=$(abspath $(build_prefix))
+# -fPIC so the static archive can be linked into the libjulia-codegen shared library
 LMDB_BUILD_OPTS += XCFLAGS="$(CFLAGS) $(fPIC)"
 
 $(BUILDDIR)/$(LMDB_SRC_DIR)/build-configured: $(SRCCACHE)/$(LMDB_SRC_DIR)/source-extracted
@@ -13,13 +16,14 @@ $(BUILDDIR)/$(LMDB_SRC_DIR)/build-configured: $(SRCCACHE)/$(LMDB_SRC_DIR)/source
 	echo 1 > $@
 
 $(BUILDDIR)/$(LMDB_SRC_DIR)/build-compiled: $(BUILDDIR)/$(LMDB_SRC_DIR)/build-configured
-	$(MAKE) -C $(SRCCACHE)/$(LMDB_SRC_DIR)/$(LMDB_SRC_SUBDIR) $(MAKE_COMMON) $(LMDB_BUILD_OPTS) liblmdb.$(SHLIB_EXT)
+	$(MAKE) -C $(SRCCACHE)/$(LMDB_SRC_DIR)/$(LMDB_SRC_SUBDIR) $(MAKE_COMMON) $(LMDB_BUILD_OPTS) liblmdb.a
 	echo 1 > $@
 
 define LMDB_INSTALL
-	mkdir -p $2/$$(build_shlibdir)
-	cp $(SRCCACHE)/$(LMDB_SRC_DIR)/$(LMDB_SRC_SUBDIR)/liblmdb.$(SHLIB_EXT) $2/$$(build_shlibdir)/
-	$(INSTALL_NAME_CMD)liblmdb.$(SHLIB_EXT) $2/$$(build_shlibdir)/liblmdb.$(SHLIB_EXT)
+	mkdir -p $2/$$(build_libdir)
+	mkdir -p $2/$$(build_includedir)
+	cp $(SRCCACHE)/$(LMDB_SRC_DIR)/$(LMDB_SRC_SUBDIR)/liblmdb.a $2/$$(build_libdir)/
+	cp $(SRCCACHE)/$(LMDB_SRC_DIR)/$(LMDB_SRC_SUBDIR)/lmdb.h $2/$$(build_includedir)/
 endef
 $(eval $(call staged-install, \
 	lmdb,$(LMDB_SRC_DIR), \
@@ -35,9 +39,3 @@ configure-lmdb: $(BUILDDIR)/$(LMDB_SRC_DIR)/build-configured
 compile-lmdb: $(BUILDDIR)/$(LMDB_SRC_DIR)/build-compiled
 fastcheck-lmdb: check-lmdb
 check-lmdb: compile-lmdb
-
-else # USE_BINARYBUILDER_LMDB
-
-$(eval $(call bb-install,lmdb,LMDB,false))
-
-endif # USE_BINARYBUILDER_LMDB
