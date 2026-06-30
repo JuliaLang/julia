@@ -19,7 +19,11 @@ end
         yint == 0 && return 1.0
         use_power_by_squaring(yint) && return @noinline pow_body(x, yint)
     end
-    2*xu==0 && return abs(y)*Inf*(!(y>0)) # if x === +0.0 or -0.0 (Inf * false === 0.0)
+    if 2*xu==0 # x === +0.0 or -0.0 (Inf * false === 0.0)
+        v = abs(y)*Inf*(!(y>0))
+        # Odd integer exponents preserve the sign of -0.0
+        return yisint && isodd(yint) ? copysign(v, x) : v
+    end
     s = 1
     if x < 0
         !yisint && throw_exp_domainerror(x) # y isn't an integer
@@ -50,6 +54,9 @@ end
     if x < 0
         !yisint && throw_exp_domainerror(x) # y isn't an integer
         s = ifelse(isodd(yint), -1, 1)
+    elseif iszero(x) && signbit(x) && yisint && isodd(yint)
+        # x < 0 is false for -0.0 per IEEE 754, but odd powers of -0.0 must be negative
+        s = -1
     end
     !isfinite(x) && return copysign(x,s)*(y>0 || isnan(x)) # x is inf or NaN
     return copysign(pow_body(abs(x), y), s)
@@ -61,7 +68,7 @@ end
     if use_power_by_squaring(n)
         return pow_body(x, n)
     else
-        s = ifelse(x < 0 && isodd(n), -1.0, 1.0)
+        s = ifelse(signbit(x) && isodd(n), -1.0, 1.0)
         x = abs(x)
         y = float(n)
         if y == n
@@ -82,7 +89,7 @@ end
     # Note that NaN can pass through this, but that will end up fine.
     n == 0 && return one(x)
     use_power_by_squaring(n) && return pow_body(x, n)
-    s = ifelse(x < 0 && isodd(n), -one(T), one(T))
+    s = ifelse(signbit(x) && isodd(n), -one(T), one(T))
     x = abs(x)
     return pow_body(x, widen(T)(n))
 end
@@ -126,6 +133,9 @@ end
         x = rx
         n = -n
     end
+    # two_mul(±0.0, ±0.0) and two_mul(±Inf, ±Inf) lose sign information,
+    # so fall back to simple power_by_squaring for these edge cases.
+    (iszero(x) | !isfinite(x)) && return Base.power_by_squaring(x, n)
     while n > 1
         if n&1 > 0
             err = muladd(y, xnlo, x*ynlo)

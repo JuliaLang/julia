@@ -1651,6 +1651,57 @@ end
         end
     end
 
+    # IEEE 754: sign of zero/Inf for pow(−0, n) and pow(−∞, −n) with odd integer n
+    @testset "pow negative zero sign" begin
+        # pow_body compensated squaring (small exponents, integer path)
+        @testset "(-0.0)^n integer" begin
+            for n in (5, 7, 9, 11, 101)
+                @test (-0.0)^n === -0.0
+                @test (-0.0)^(-n) === -Inf
+            end
+            for n in (2, 4, 6, 100)
+                @test (-0.0)^n === 0.0
+                @test (-0.0)^(-n) === Inf
+            end
+        end
+        # pow_body compensated squaring via inv (small exponents)
+        @testset "(-Inf)^(-n) integer" begin
+            for n in (3, 5, 7, 101)
+                @test (-Inf)^(-n) === -0.0
+            end
+            for n in (2, 4, 6, 100)
+                @test (-Inf)^(-n) === 0.0
+            end
+        end
+        # Float-exponent dispatch paths
+        @testset "(-0.0)^n float exponent" begin
+            for n in (5.0, 7.0, 101.0)
+                @test (-0.0)^n === -0.0
+            end
+            for n in (2.0, 4.0, 100.0)
+                @test (-0.0)^n === 0.0
+            end
+        end
+        # Large exponents outside use_power_by_squaring range
+        @testset "(-0.0)^n large exponents" begin
+            @test (-0.0)^25001 === -0.0
+            @test (-0.0)^(-25001) === -Inf
+            @test (-0.0)^25001.0 === -0.0
+            @test (-0.0)^(-25001.0) === -Inf
+            @test (-0.0)^25000 === 0.0
+            @test (-0.0)^(-25000) === Inf
+        end
+        # Float32/Float16 paths
+        @testset "Float32/Float16 negative zero" begin
+            for T in (Float16, Float32)
+                @test T(-0.0)^5 === T(-0.0)
+                @test T(-0.0)^4 === T(0.0)
+            end
+            @test Float32(-0.0)^Float32(25001) === Float32(-0.0)
+            @test Float32(-0.0)^Float32(25000) === Float32(0.0)
+        end
+    end
+
     # issue #55633
     struct Issue55633_1 <: Number end
     struct Issue55633_3 <: Number end
