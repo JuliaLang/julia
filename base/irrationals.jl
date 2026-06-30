@@ -217,6 +217,10 @@ for op in Symbol[:+, :-, :*, :/, :^]
     @eval $op(x::AbstractIrrational, y::AbstractIrrational) = $op(Float64(x),Float64(y))
 end
 *(x::Bool, y::AbstractIrrational) = ifelse(x, Float64(y), 0.0)
+function ^(x::AbstractIrrational, y::Integer)
+    (z, y) = y >= 0 ? (Float64(x), y) : (Float64(inv(x)), -y)
+    power_by_squaring(z, y)
+end
 
 ^(x::AbstractIrrational, y::Integer) = float(x)^y
 
