@@ -79,40 +79,40 @@ static std::optional<std::string> getCachePath()
 
 #define checkMDB(Err) (checkMDB_(Err, __LINE__))
 
-static int checkMDB_(int Err, int Line)
+static int checkMDB_(int Err, int Line) JL_NOTSAFEPOINT
 {
     if (Err == 0)
         return Err;
-    jl_printf(JL_STDERR, "objcache error (%d): %s\n", Line, mdb_strerror(Err));
+    jl_safe_printf("objcache error (%d): %s\n", Line, mdb_strerror(Err));
     return Err;
 }
 
 class MDBTxn {
 public:
-    MDBTxn(MDB_env *Env, unsigned Flags = 0)
+    MDBTxn(MDB_env *Env, unsigned Flags = 0) JL_NOTSAFEPOINT
     {
         if (checkMDB(mdb_txn_begin(Env, nullptr, Flags, &Txn)))
             Txn = nullptr;
     }
-    ~MDBTxn()
+    ~MDBTxn() JL_NOTSAFEPOINT
     {
         if (Txn)
             mdb_txn_abort(Txn);
     }
     MDBTxn(const MDBTxn &) = delete;
     MDBTxn &operator=(const MDBTxn &) = delete;
-    MDBTxn(MDBTxn &&RHS) : Txn(std::exchange(RHS.Txn, nullptr)) {}
-    MDBTxn &operator=(MDBTxn &&RHS)
+    MDBTxn(MDBTxn &&RHS) JL_NOTSAFEPOINT : Txn(std::exchange(RHS.Txn, nullptr)) {}
+    MDBTxn &operator=(MDBTxn &&RHS) JL_NOTSAFEPOINT
     {
         std::swap(Txn, RHS.Txn);
         return *this;
     }
-    void abort()
+    void abort() JL_NOTSAFEPOINT
     {
         mdb_txn_abort(Txn);
         Txn = nullptr;
     }
-    int commit()
+    int commit() JL_NOTSAFEPOINT
     {
         int Ret = mdb_txn_commit(Txn);
         Txn = nullptr;
@@ -122,14 +122,14 @@ public:
 };
 
 template<typename T>
-MDB_val mdbVal(T &x)
+MDB_val mdbVal(T &x) JL_NOTSAFEPOINT
 {
     return {sizeof x, (void *)&x};
 }
 
 class MDBMemoryBuffer : public llvm::MemoryBuffer {
 public:
-    MDBMemoryBuffer(MDBTxn Txn, llvm::StringRef Data) : Txn(std::move(Txn))
+    MDBMemoryBuffer(MDBTxn Txn, llvm::StringRef Data) JL_NOTSAFEPOINT : Txn(std::move(Txn))
     {
         init(Data.begin(), Data.end(), false);
     }
@@ -141,13 +141,19 @@ private:
 
 void ObjCache::initDB()
 {
+    // Read DEPOT_PATH before taking ObjCache::Lock so we can enter a GC-unsafe
+    // region to read the global.
+    jl_task_t *ct = jl_current_task;
+    int8_t gc_state = jl_gc_unsafe_enter(ct->ptls);
+    const char *Enable = getenv("JULIA_OBJCACHE");
+    auto CachePath = getCachePath();
+    jl_gc_unsafe_leave(ct->ptls, gc_state);
+
     std::unique_lock<std::mutex> Lock{Mutex};
 
     if (Initialized.load(memory_order_acquire))
         return;
 
-    const char *Enable = getenv("JULIA_OBJCACHE");
-    auto CachePath = getCachePath();
     if (!CachePath || (Enable && !strcmp(Enable, "0")))
         goto done;
 
@@ -194,9 +200,12 @@ void ObjCache::initDB()
         checkMDB(Txn.commit());
     }
 
+
+#ifndef __clang_gcanalyzer__
     uv_thread_create(
         &WriterThread, [](void *arg) { static_cast<ObjCache *>(arg)->writerThread(); },
         this);
+#endif
     Started = true;
     goto done;
 
@@ -219,7 +228,7 @@ ObjCache::~ObjCache()
 
 static std::atomic<size_t> NWrite = 0, NRead = 0, NMiss = 0, NHit = 0, NEvicted = 0;
 
-static ObjCache::Hash hashModule(const llvm::Module &M)
+static ObjCache::Hash hashModule(const llvm::Module &M) JL_NOTSAFEPOINT
 {
     llvm::raw_null_ostream OS;
     llvm::BitcodeWriter BW{OS};
@@ -266,7 +275,7 @@ constexpr size_t METAKEY_SIZE = 2 + sizeof(int64_t) + sizeof(ObjCache::Hash);
 constexpr char OBJKEY_TAG = 'O';
 constexpr char METAKEY_TAG = 'M';
 
-std::array<uint8_t, OBJKEY_SIZE> toObjKey(const ObjCache::Hash &Hash)
+std::array<uint8_t, OBJKEY_SIZE> toObjKey(const ObjCache::Hash &Hash) JL_NOTSAFEPOINT
 {
     std::array<uint8_t, OBJKEY_SIZE> Ret;
     Ret[0] = OBJKEY_TAG;
@@ -275,7 +284,8 @@ std::array<uint8_t, OBJKEY_SIZE> toObjKey(const ObjCache::Hash &Hash)
     return Ret;
 }
 
-std::array<uint8_t, METAKEY_SIZE> toMetaKey(int64_t Time, const ObjCache::Hash &Hash)
+std::array<uint8_t, METAKEY_SIZE> toMetaKey(int64_t Time,
+                                            const ObjCache::Hash &Hash) JL_NOTSAFEPOINT
 {
     std::array<uint8_t, METAKEY_SIZE> Ret;
     Ret[0] = METAKEY_TAG;
@@ -285,7 +295,7 @@ std::array<uint8_t, METAKEY_SIZE> toMetaKey(int64_t Time, const ObjCache::Hash &
     return Ret;
 }
 
-std::pair<int64_t, ObjCache::Hash> fromMetaKey(const char *Key)
+std::pair<int64_t, ObjCache::Hash> fromMetaKey(const char *Key) JL_NOTSAFEPOINT
 {
     assert(Key[0] == METAKEY_TAG && Key[1] == 0);
     ObjCache::Hash Hash;
@@ -296,11 +306,20 @@ std::pair<int64_t, ObjCache::Hash> fromMetaKey(const char *Key)
 
 std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Compile)
 {
+    auto doCompile = [&]() JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE
+        -> std::unique_ptr<llvm::MemoryBuffer> {
+#ifndef __clang_gcanalyzer__
+        return Compile();
+#else
+        return nullptr;
+#endif
+    };
+
     if (!Initialized.load(memory_order_acquire))
         initDB();
 
     if (!Env)
-        return Compile();
+        return doCompile();
 
     size_t Weight = 0;
     if (LogFile) {
@@ -316,14 +335,14 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
 
     MDBTxn Txn{Env, MDB_RDONLY};
     if (!Txn.Txn)
-        return Compile();
+        return doCompile();
 
     MDB_val Data;
     MDB_val Key = mdbVal(ObjKey);
     if (int Err = mdb_get(Txn.Txn, ObjCacheDbi, &Key, &Data)) {
         if (Err != MDB_NOTFOUND) {
             checkMDB(Err);
-            return Compile();
+            return doCompile();
         }
         Txn.abort();
 
@@ -331,7 +350,7 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
 
         NMiss.fetch_add(1, memory_order_relaxed);
         uint64_t CompileStart = jl_hrtime();
-        auto Obj = Compile();
+        auto Obj = doCompile();
         double CompileMs = (jl_hrtime() - CompileStart) / 1.0e6;
         if (!Obj)
             return nullptr;

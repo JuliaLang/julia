@@ -43,7 +43,7 @@ public:
 
 protected:
     void writerThread();
-    void initDB();
+    void initDB() JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE;
     bool updateATime(MDBTxn &Txn, const Hash &H, int64_t Time, bool Fresh);
     bool maybeEvictLRU(MDBTxn &Txn, size_t RoomFor);
     size_t dbiSize(MDBTxn &Txn, MDB_dbi Dbi);
