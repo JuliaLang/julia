@@ -2658,8 +2658,12 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         if (parent == NULL || !tracked_pointers)
             return;
         if (isboxed) {
+            // Insertion-barrier optimization: skip when the new value is perm-allocated.
+            // Invalid under SATB (ConcurrentImmix), which must snapshot the old value.
+#ifndef MMTK_PLAN_CONCURRENTIMMIX
             if (type_is_permalloc(rhs.typ))
                 return;
+#endif
             assert(r != nullptr);
             emit_write_barrier(ctx, parent, r);
         }
@@ -4384,8 +4388,12 @@ static void emit_write_multibarrier(jl_codectx_t &ctx, Value *parent, Value *agg
                                     jl_value_t *jltype)
 {
     SmallVector<unsigned,4> perm_offsets;
+    // Insertion-barrier optimization: drop perm-allocated inline fields. Invalid under
+    // SATB (ConcurrentImmix), which must snapshot the overwritten old inline values.
+#ifndef MMTK_PLAN_CONCURRENTIMMIX
     if (jltype && jl_is_datatype(jltype) && ((jl_datatype_t*)jltype)->layout)
         find_perm_offsets((jl_datatype_t*)jltype, perm_offsets, 0);
+#endif
     auto ptrs = ExtractTrackedValues(ctx, agg, perm_offsets);
     emit_write_barrier(ctx, parent, ptrs);
 }

@@ -50,6 +50,20 @@ Value* FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
 
 void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
     auto parent = target->getArgOperand(0);
+    // A NULL child means a field is being cleared (e.g. memoryrefunset!): no
+    // young object is stored, so the generational barrier never needs to
+    // remember the parent for it. Skip such children and never load their tag
+    // (which would dereference null). If every child is NULL there is nothing
+    // to remember, so emit no barrier; the caller erases the call.
+    SmallVector<Value*, 8> children;
+    for (unsigned i = 1; i < target->arg_size(); i++) {
+        Value *child = target->getArgOperand(i);
+        if (isa<ConstantPointerNull>(child->stripPointerCasts()))
+            continue;
+        children.push_back(child);
+    }
+    if (children.empty())
+        return;
     IRBuilder<> builder(target);
     builder.SetCurrentDebugLocation(target->getDebugLoc());
     auto parTag = EmitLoadTag(builder, T_size, parent, tbaa_tag);
@@ -64,13 +78,12 @@ void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
     auto parInImage = builder.CreateAnd(parTag, ConstantInt::get(T_size, GC_IN_IMAGE | GC_IN_IMAGE_REMSET), "parent_in_image");
     auto parIsImage = builder.CreateICmpEQ(parInImage, ConstantInt::get(T_size, GC_IN_IMAGE_NOT_REMSET), "parent_is_image");
     Value *anyChldNotMarked = NULL;
-    for (unsigned i = 1; i < target->arg_size(); i++) {
-        Value *child = target->getArgOperand(i);
+    for (Value *child : children) {
         Value *chldBit = builder.CreateAnd(EmitLoadTag(builder, T_size, child, tbaa_tag), GC_MARKED, "child_bit");
         Value *chldNotMarked = builder.CreateICmpEQ(chldBit, ConstantInt::get(T_size, 0), "child_not_marked");
         anyChldNotMarked = anyChldNotMarked ? builder.CreateOr(anyChldNotMarked, chldNotMarked) : chldNotMarked;
     }
-    assert(anyChldNotMarked); // handled by all_of test above
+    assert(anyChldNotMarked); // children is non-empty
     auto shouldTrigger = builder.CreateOr(parIsImage, anyChldNotMarked, "should_trigger_wb");
     MDBuilder MDB(parent->getContext());
     SmallVector<uint32_t, 2> Weights{1, 9};

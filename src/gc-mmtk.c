@@ -51,7 +51,8 @@ static memsize_t max_total_memory = (memsize_t) MAX32HEAP;
 
 extern void mmtk_julia_copy_stack_check(int copy_stack);
 extern void mmtk_gc_init(uintptr_t min_heap_size, uintptr_t max_heap_size, uintptr_t n_gcthreads, uintptr_t header_size, uintptr_t tag);
-extern void mmtk_object_reference_write_post(void* mutator, const void* parent, const void* ptr);
+extern void mmtk_set_concurrent_marking_enabled(bool enabled);
+extern void mmtk_notify_task_resume(void *mutator, const void* task);
 extern void mmtk_object_reference_write_slow(void* mutator, const void* parent, const void* ptr);
 extern void* mmtk_alloc(void* mutator, size_t size, size_t align, size_t offset, int allocator);
 extern void mmtk_post_alloc(void* mutator, void* refer, size_t bytes, int allocator);
@@ -147,6 +148,12 @@ void jl_gc_init(void) {
 #endif
 
     mmtk_julia_copy_stack_check(copy_stacks);
+
+    // Disable concurrent marking when generating output to verify the task
+    // init fix; remove this once all concurrent-marking issues are confirmed
+    // fixed.
+    // if (jl_generating_output())
+    //     mmtk_set_concurrent_marking_enabled(0);
 
     // if only max size is specified initialize MMTk with a fixed size heap
     // TODO: We just assume mark threads means GC threads, and ignore the number of concurrent sweep threads.
@@ -266,6 +273,7 @@ JL_DLLEXPORT void jl_gc_prepare_to_collect(void)
     if (!jl_safepoint_start_gc(ct)) {
         jl_gc_state_set(ptls, old_state, JL_GC_STATE_WAITING);
         jl_safepoint_wait_thread_resume(ct); // block in thread-suspend now if requested, after clearing the gc_state
+        jl_gc_notify_task_resume(ct);
         return;
     }
 
@@ -305,6 +313,8 @@ JL_DLLEXPORT void jl_gc_prepare_to_collect(void)
 #endif
         JL_UNLOCK_NOGC(&finalizers_lock);
     }
+
+    jl_gc_notify_task_resume(ct);
 
     gc_n_threads = 0;
     gc_all_tls_states = NULL;
@@ -761,6 +771,16 @@ JL_DLLEXPORT void jl_gc_sweep_stack_pools_and_mtarraylist_buffers(jl_ptls_t ptls
 {
     jl_gc_mmtk_sweep_stack_pools();
     sweep_mtarraylist_buffers();
+}
+
+void jl_gc_notify_task_resume(jl_task_t *task) JL_NOTSAFEPOINT
+{
+#ifdef MMTK_PLAN_CONCURRENTIMMIX
+    if (task == NULL)
+        return;
+    jl_ptls_t ptls = jl_current_task->ptls;
+    mmtk_notify_task_resume(&ptls->gc_tls.mmtk_mutator, (const void*) task);
+#endif
 }
 
 JL_DLLEXPORT void* jl_gc_get_stackbase(int16_t tid) {

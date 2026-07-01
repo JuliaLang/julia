@@ -4312,7 +4312,10 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
         if (lock)
             emit_lockstate_value(ctx, lock, true);
-        // TODO: emit MMTK deletion barrier here for concurrent GC
+        // Deletion barrier before clearing the slot: a SATB collector must
+        // snapshot the overwritten reference. The barrier is keyed on the
+        // parent (the memory object), so a NULL child is fine.
+        emit_write_barrier(ctx, mem, Constant::getNullValue(ctx.types().T_prjlvalue));
         emit_aliased_store(ctx, Constant::getNullValue(elty), ptr, Align(al),
                            isboxed ? ctx.tbaa().tbaa_ptrarraybuf : ctx.tbaa().tbaa_arraybuf,
                            ctx.noalias().aliasscope.current, storeOrder);
@@ -6566,9 +6569,14 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
         }
         if (scope_to_restore) {
             Value *scope_ptr = get_scope_field(ctx);
+            // Deletion barrier before overwriting the scope: a SATB collector
+            // must snapshot the current task's old scope. Keyed on the parent
+            // (current task); a generational collector elides this since the
+            // current task is always a root.
+            emit_write_barrier(ctx, get_current_task(ctx), scope_to_restore);
             jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe).decorateInst(
                 ctx.builder.CreateAlignedStore(scope_to_restore, scope_ptr, ctx.types().alignof_ptr));
-            // NOTE: wb not needed here, due to store to current_task (see jl_gc_wb_current_task)
+            // NOTE: post-wb not needed here, due to store to current_task (see jl_gc_wb_current_task)
         }
     }
     else if (head == jl_pop_exception_sym) {

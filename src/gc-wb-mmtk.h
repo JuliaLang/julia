@@ -11,7 +11,7 @@
 extern "C" {
 #endif
 
-extern void mmtk_object_reference_write_post(void* mutator, const void* parent, const void* ptr);
+extern void mmtk_object_reference_write_pre(void* mutator, const void* parent, const void* ptr);
 extern void mmtk_object_reference_write_slow(void* mutator, const void* parent, const void* ptr);
 extern void* MMTK_SIDE_LOG_BIT_BASE_ADDRESS;
 
@@ -23,13 +23,21 @@ extern void* MMTK_SIDE_LOG_BIT_BASE_ADDRESS;
 #ifdef MMTK_PLAN_STICKYIMMIX
 #define MMTK_NEEDS_WRITE_BARRIER (1)
 #endif
+// ConcurrentImmix uses a SATB barrier. Since every write barrier is now emitted
+// before the store, the same inlined log-bit check works: when the parent's log
+// bit is set, the slow path can snapshot its still-current fields.
+#ifdef MMTK_PLAN_CONCURRENTIMMIX
+#define MMTK_NEEDS_WRITE_BARRIER (1)
+#endif
 
-// Directly call into MMTk for write barrier (debugging only)
+// Directly call into MMTk for write barrier (debugging only). The pre entry is
+// emitted before the store, which is correct for both StickyImmix and
+// ConcurrentImmix.
 STATIC_INLINE void mmtk_gc_wb_full(const void *parent, const void *ptr) JL_NOTSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
-    mmtk_object_reference_write_post(&ptls->gc_tls.mmtk_mutator, parent, ptr);
+    mmtk_object_reference_write_pre(&ptls->gc_tls.mmtk_mutator, parent, ptr);
 }
 
 // Inlined fastpath
