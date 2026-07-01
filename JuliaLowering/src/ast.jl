@@ -427,6 +427,51 @@ end
 
 name_hint(name) = CompileHints(:name_hint, name)
 
+"""
+    synthetic_ref(ref::SyntaxTree) -> SyntaxTree
+
+Return a copy of `ref` tagged with `:synthetic_ref => true` metadata, marking
+this `K"Identifier"` (or post-resolution `K"BindingId"`) as a reference
+emitted by the lowering pipeline rather than something the user wrote in the
+source.
+
+# Why this exists
+
+Lowering threads a user-visible binding through generated scaffolding, which
+produces many `BindingId` references that don't line up with anything the
+user wrote. Examples:
+
+- `[K"method" mtable …]` / `[K"function_type" name]` / `[K"removable" …]`
+  for function definitions
+- `_setsuper!`, `_typebody!`, `_equiv_typedef`, `_defaultctors` calls
+  for `struct` / `abstract type` / `primitive type` definitions
+- trailing "return-value" occurrences emitted by method-less
+  `function foo end`, keyword-function desugaring, `[K"=" name …]`
+  shims, and similar constructs
+
+Downstream analyzers that walk the lowered tree to collect binding uses —
+e.g. LSP-style find-references, rename, unused-binding or unused-import
+diagnostics in JETLS — should skip them.
+
+# How to use
+
+- On the emitter side: when constructing a `BindingId` reference that is
+  not user-written, wrap it with `synthetic_ref`. The metadata survives
+  `resolve_scopes`' `K"Identifier" → K"BindingId"` conversion (see
+  scope_analysis.jl).
+- On the consumer side: when walking stage-3 (post-scope-resolution)
+  trees and collecting `K"BindingId"` uses, read the marker with
+  `getmeta(ref, :synthetic_ref, false)` and filter out any reference for
+  which it is `true`.
+
+# Difference from `:is_internal`
+
+`setmeta(binding_decl, :is_internal, true)` is set for entire binding.
+`:synthetic_ref` is finer-grained and applies _per reference_, leaving
+the binding itself visible.
+"""
+synthetic_ref(ref::SyntaxTree) = setmeta(ref, :synthetic_ref, true)
+
 #-------------------------------------------------------------------------------
 # Predicates and accessors working on expression trees
 

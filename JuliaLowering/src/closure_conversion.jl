@@ -466,7 +466,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
             # Single-arg K"method" has the side effect of creating a global
             # binding for `func_name` if it doesn't exist.
             @ast ctx ex [K"block"
-                [K"method" func_name]
+                [K"method" synthetic_ref(func_name)]
                 ::K"TOMBSTONE" # <- function_decl should not be used in value position
             ]
         end
