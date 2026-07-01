@@ -1901,6 +1901,37 @@ let setfield!_nothrow(@nospecialize xs...) =
     @test !setfield!_nothrow(Any, Any, Int)
 end
 
+mutable struct AtomicFields
+    @atomic a::Int
+    b::Int
+    const c::Int
+end
+let modifyfield!_tfunc(@nospecialize xs...) =
+        Compiler.modifyfield!_tfunc(Compiler.fallback_lattice, xs...)
+    replacefield!_tfunc(@nospecialize xs...) =
+        Compiler.replacefield!_tfunc(Compiler.fallback_lattice, xs...)
+    cmpswap_Int = ccall(:jl_apply_cmpswap_type, Any, (Any,), Int)
+    # writable fields (`@atomic` and plain) of a mutable struct
+    @test modifyfield!_tfunc(AtomicFields, Const(:a), Any, Any) === Pair{Int,Int}
+    @test replacefield!_tfunc(AtomicFields, Const(:a), Int, Int) === cmpswap_Int
+    @test modifyfield!_tfunc(AtomicFields, Const(:b), Any, Any) === Pair{Int,Int}
+    @test replacefield!_tfunc(AtomicFields, Const(:b), Int, Int) === cmpswap_Int
+    # `replacefield!` type-checks the replacement value unconditionally, so a value that
+    # can never be stored always throws
+    @test replacefield!_tfunc(AtomicFields, Const(:a), Int, String) === Union{}
+    @test replacefield!_tfunc(AtomicFields, Const(:b), Int, String) === Union{}
+    # `const` fields can never be written, so the operation always throws
+    @test modifyfield!_tfunc(AtomicFields, Const(:c), Any, Any) === Union{}
+    @test modifyfield!_tfunc(AtomicFields, Const(3), Any, Any) === Union{}
+    @test replacefield!_tfunc(AtomicFields, Const(:c), Int, Int) === Union{}
+    @test replacefield!_tfunc(AtomicFields, Const(3), Int, Int) === Union{}
+    # immutable types can never be written, so the operation always throws
+    @test modifyfield!_tfunc(Some{Int}, Const(:value), Any, Any) === Union{}
+    @test replacefield!_tfunc(Some{Int}, Const(:value), Int, Int) === Union{}
+    @test modifyfield!_tfunc(Some, Const(:value), Any, Any) === Union{}
+    @test replacefield!_tfunc(Some, Const(:value), Any, Any) === Union{}
+end
+
 struct Foo_22708
     x::Ptr{Foo_22708}
 end
