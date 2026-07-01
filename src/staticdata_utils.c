@@ -894,13 +894,27 @@ static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size
             jl_typemap_entry_t *entry = (jl_typemap_entry_t*)obj;
             assert(jl_atomic_load_relaxed(&entry->min_world) == ~(size_t)0);
             assert(jl_atomic_load_relaxed(&entry->max_world) == WORLD_AGE_REVALIDATION_SENTINEL);
-            jl_atomic_store_release(&entry->min_world, world);
-            jl_atomic_store_release(&entry->max_world, ~(size_t)0);
+            if (jl_is_method(entry->func.value) && entry->func.method->external_mt) {
+                // Worklist-owned custom method tables are restored in place, so
+                // their methods are internal but still need dispatch_status fixup.
+                jl_method_t *m = entry->func.method;
+                size_t primary_world = jl_atomic_load_relaxed(&m->primary_world);
+                assert(primary_world == ~(size_t)0 || primary_world == world);
+                if (primary_world == ~(size_t)0)
+                    jl_atomic_store_release(&m->primary_world, world);
+                jl_method_table_activate(entry);
+            }
+            else {
+                jl_atomic_store_release(&entry->min_world, world);
+                jl_atomic_store_release(&entry->max_world, ~(size_t)0);
+            }
         }
         else if (jl_is_method(obj)) {
             jl_method_t *m = (jl_method_t*)obj;
-            assert(jl_atomic_load_relaxed(&m->primary_world) == ~(size_t)0);
-            jl_atomic_store_release(&m->primary_world, world);
+            size_t primary_world = jl_atomic_load_relaxed(&m->primary_world);
+            assert(primary_world == ~(size_t)0 || primary_world == world);
+            if (primary_world == ~(size_t)0)
+                jl_atomic_store_release(&m->primary_world, world);
         }
         else if (jl_is_code_instance(obj)) {
             jl_code_instance_t *ci = (jl_code_instance_t*)obj;

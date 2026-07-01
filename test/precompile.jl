@@ -1995,6 +1995,29 @@ precompile_test_harness("PkgCacheInspector") do load_path
     end
 end
 
+precompile_test_harness("custom MethodTable dispatch status") do load_path
+    # Custom method-table methods loaded from a package image need dispatch fast-path bits restored.
+    pkg = :OverlayDispatchStatus
+    write(joinpath(load_path, "OverlayDispatchStatus.jl"),
+        """
+        module OverlayDispatchStatus
+        function f end
+        Base.Experimental.@MethodTable(mt)
+        Base.Experimental.@overlay mt f(x::Int) = x + 1
+        end
+        """)
+    Base.compilecache(Base.PkgId(string(pkg)))
+    @eval using $pkg
+    M = invokelatest(getglobal, @__MODULE__, pkg)
+    invokelatest() do
+        ms = Base._methods_by_ftype(Tuple{typeof(M.f), Int}, M.mt, 1, Base.get_world_counter())
+        method = only(ms).method
+        @test method.module === M
+        @test !iszero(method.dispatch_status & Base.ReinferUtils.METHOD_SIG_LATEST_WHICH)
+        @test !iszero(method.dispatch_status & Base.ReinferUtils.METHOD_SIG_LATEST_ONLY)
+    end
+end
+
 precompile_test_harness("DynamicExpressions") do load_path
     # https://github.com/JuliaLang/julia/pull/47184#issuecomment-1364716312
     write(joinpath(load_path, "Float16MWE.jl"),
