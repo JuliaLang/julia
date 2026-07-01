@@ -923,3 +923,23 @@ end
     @test rationalize(BigInt, r) == Rational{BigInt}(r) == r
     @test rationalize(Int64, big(r)) == r
 end
+
+@testset "Rationalize irrational tolerance (#60772)" begin
+    for x in (π, ℯ, γ, catalan, φ)
+        for T in (Float16, Float32, Float64, BigFloat)
+            @test eps(T, x) == eps(T(x))
+        end
+        for p in 2 .^(6:11)
+            setprecision(p) do
+                @test eps(x) == eps(big(x))
+            end
+        end
+        for p in 288:32:384
+            tol = 2.0^(exponent(x) - p)
+            @test rationalize(BigInt, x, tol) == setprecision(p) do
+                rationalize(BigInt, x)
+            end
+        end
+        @test_throws ArgumentError rationalize(BigInt, x, 0)
+    end
+end
