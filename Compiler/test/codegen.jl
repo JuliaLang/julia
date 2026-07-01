@@ -20,8 +20,8 @@ function libjulia_codegen_name()
 end
 
 # The tests below assume a certain format and safepoint_on_entry=true breaks that.
-function get_llvm(@nospecialize(f), @nospecialize(t), raw=true, dump_module=false, optimize=true)
-    params = Base.CodegenParams(safepoint_on_entry=false, gcstack_arg = false, debug_info_level=Cint(2))
+function get_llvm(@nospecialize(f), @nospecialize(t), raw=true, dump_module=false, optimize=true;
+                  params=Base.CodegenParams(safepoint_on_entry=false, gcstack_arg=false, debug_info_level=Cint(2)))
     d = InteractiveUtils._dump_function(InteractiveUtils.ArgInfo(f, t), false, false, raw, dump_module, :att, optimize, :none, false, "", params)
     sprint(print, d)
 end
@@ -590,6 +590,41 @@ end
         return cond
     end
     @test occursin("llvm.julia.gc_preserve_begin", get_llvm(f4, Tuple{Bool}, true, false, false))
+end
+
+# Constant leaves of small isbits unions should be stored inline, not boxed,
+# when embedded object pointers are disabled (regression from #55045).
+# (use Int64(0) rather than 0 so the union is Union{Int32,Int64} regardless of the width of Int)
+function f_const_union_phi(cond::Bool, a::Int32)
+    x = cond ? a : Int64(0)
+    return x
+end
+function f_const_union_ifelse(cond::Bool, a::Int32)
+    return ifelse(cond, a, Int64(0))
+end
+function f_const_union_float(cond::Bool, a::Float32)
+    x = cond ? a : 1.0
+    return x
+end
+let ir = get_llvm(f_const_union_phi, Tuple{Bool, Int32})
+    @test only(Base.return_types(f_const_union_phi, Tuple{Bool, Int32})) === Union{Int32, Int64}
+    @test only(Base.return_types(f_const_union_ifelse, Tuple{Bool, Int32})) === Union{Int32, Int64}
+    @test only(Base.return_types(f_const_union_float, Tuple{Bool, Float32})) === Union{Float32, Float64}
+    @test !isempty(ir)
+    @test f_const_union_phi(true, Int32(7)) === Int32(7)
+    @test f_const_union_phi(false, Int32(7)) === Int64(0)
+    @test f_const_union_ifelse(true, Int32(7)) === Int32(7)
+    @test f_const_union_ifelse(false, Int32(7)) === Int64(0)
+    @test f_const_union_float(true, 7.0f0) === 7.0f0
+    @test f_const_union_float(false, 7.0f0) === 1.0
+
+    params = Base.CodegenParams(safepoint_on_entry=false, gcstack_arg=false,
+        debug_info_level=Cint(2), embed_pointers=false)
+    ir = get_llvm(f_const_union_phi, Tuple{Bool, Int32}; params)
+    @test occursin("store i64 0", ir)  # constant member stored inline
+    @test !occursin("jl_global", ir)   # not boxed (no embedded object pointer)
+    @test !occursin("jl_global", get_llvm(f_const_union_ifelse, Tuple{Bool, Int32}; params))
+    @test !occursin("jl_global", get_llvm(f_const_union_float, Tuple{Bool, Float32}; params))
 end
 
 # issue #32843

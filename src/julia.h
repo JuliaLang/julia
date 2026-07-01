@@ -2790,6 +2790,7 @@ typedef struct {
     int sanitize_address;
 
     int unique_names;   // Emit globally unique names
+    int embed_pointers; // May codegen embed pointers to host-resident boxed objects?
 } jl_cgparams_t;
 extern JL_DLLEXPORT int jl_default_debug_info_kind;
 extern JL_DLLEXPORT jl_cgparams_t jl_default_cgparams;
