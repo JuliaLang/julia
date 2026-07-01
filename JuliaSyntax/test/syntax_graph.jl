@@ -1,4 +1,4 @@
-using .JuliaSyntax: SyntaxGraph, SyntaxTree, SyntaxList, ensure_attributes, ensure_attributes!, delete_attributes, copy_ast, attrdefs, @stm, NodeId, SourceRef, SourceAttrType, Kind, syntax_graph, prov, prov_end, provenance, macro_prov, macro_prov_end, flattened_provenance, sourceref, unexpanded_sourceref, newleaf, mkleaf, mknode, mktree, setattr!, hasattr, SyntaxContext
+using .JuliaSyntax: SyntaxGraph, SyntaxTree, SyntaxList, ensure_attributes, ensure_attributes!, delete_attributes, copy_ast, attrdefs, @stm, NodeId, SourceRef, SourceAttrType, Kind, syntax_graph, prov, prov_end, provenance, macro_prov, macro_prov_end, flattened_provenance, sourceref, unexpanded_sourceref, newleaf, mkleaf, mknode, mktree, setattr!, hasattr, SyntaxContext, ScopeLayer
 
 "For filling required attrs in graphs created by hand"
 function testgraph(edge_ranges, edges, more_attrs...)

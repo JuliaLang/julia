@@ -297,7 +297,6 @@ function apply_expansion_layer(ctx, st, sc_in, lstack)
     out = apply_expansion_layer(
         ctx, st, sc_in, lstack,
         isnothing(lstack) ? nothing : Dict{ScopeLayer, Bool}(), true)
-    # @info "apply_expansion_layer" st out
     out
 end
 
@@ -406,8 +405,6 @@ end
         SyntaxContext(mod, (expr_compat_mode ?
             JL_OLD_SYNTAX_VERSION : JL_NEW_SYNTAX_VERSION))
     ctx = MacroExpansionContext(graph, sc, Bindings(), world, recursive)
-    # @warn "mx in" st
     st_out = expand_forms_1(ctx, apply_expansion_layer(ctx, st, sc, nothing))
-    # @warn "mx out" st_out
     return ctx, st_out
 end
