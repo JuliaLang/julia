@@ -584,6 +584,126 @@ static Function *aot_abi_converter(jl_codegen_output_t &out, jl_abi_t from_abi, 
     return F;
 }
 
+// Resolve the monomorphic target for `tr` at the build world, emit its ABI adapter
+// (`from_abi`), materialize the interned `ABIAdapter` record, point `tr->last_invoked` at it, and
+// register the adapter via `out.abi_adapter_records` so the record's `fptr` is wired to it on
+// load (no JIT). The record is serialized because it is reachable through `tr->last_invoked`; the
+// first post-load call restores `fptr` straight from it (jl_resolve_trampoline). AOT counterpart
+// of jl_resolve_trampoline, including its specptr shortcut: when the target's compiled ABI
+// already satisfies the declared C ABI, `last_invoked` is set to the bare `CodeInstance` and no
+// adapter is emitted (the load derives `fptr` from the CI's own specptr).
+static void emit_trampoline_adapter(jl_codegen_output_t &out, jl_dispatch_trampoline_t *tr,
+        jl_abi_t from_abi, DenseMap<jl_method_instance_t*, jl_code_instance_t*> &compiled_mi,
+        size_t latestworld)
+{
+    JL_GC_PROMISE_ROOTED(tr);
+    jl_value_t *sigt = from_abi.sigt;
+    JL_GC_PROMISE_ROOTED(sigt);
+    jl_value_t *declrt = from_abi.rt;
+    JL_GC_PROMISE_ROOTED(declrt);
+    jl_method_instance_t *mi = (jl_method_instance_t*)jl_get_specialization1((jl_tupletype_t*)sigt, latestworld);
+    jl_code_instance_t *codeinst = nullptr;
+    if ((jl_value_t*)mi != jl_nothing) {
+        auto it = compiled_mi.find(mi);
+        if (it != compiled_mi.end())
+            codeinst = it->second;
+    }
+    Function *F;
+    if (codeinst) {
+        JL_GC_PROMISE_ROOTED(codeinst);
+        jl_value_t *astrt = codeinst->rettype;
+        if (astrt != (jl_value_t*)jl_bottom_type &&
+            jl_type_intersection(astrt, declrt) == jl_bottom_type) {
+            // Do not warn if the function never returns since it is occasionally required by
+            // the C API (typically error callbacks) even though we're likely to encounter
+            // memory errors in that case.
+            jl_printf(JL_STDERR, "WARNING: cfunction: return type of %s does not match\n", name_from_method_instance(mi));
+        }
+        const auto &decls = out.ci_funcs.find(codeinst)->second;
+        // Shortcut (mirrors jl_abi_adapter_resolve_target): if the target's own compiled ABI
+        // already satisfies the declared C ABI, no adapter is needed. Point `last_invoked` at the
+        // bare CodeInstance so the first post-load call derives `fptr` from its (independently
+        // wired) specptr -- the AOT counterpart of the runtime specptr shortcut.
+        bool shortcut = false;
+        if (decls.invoke_api == JL_INVOKE_ARGS)
+            shortcut = !from_abi.specsig && jl_subtype(codeinst->rettype, declrt);
+        else if (decls.invoke_api == JL_INVOKE_SPECSIG)
+            shortcut = from_abi.specsig && jl_egal(mi->specTypes, sigt) && jl_egal(codeinst->rettype, declrt);
+        if (shortcut) {
+            tr->last_invoked = (jl_value_t*)codeinst; // bare CI: no adapter thunk emitted
+            jl_gc_wb(tr, codeinst);
+            return;
+        }
+        if (decls.invoke_api == JL_INVOKE_CONST) {
+            std::string n = emit_abi_constreturn(out, from_abi, codeinst->rettype_const);
+            F = out.get_module().getFunction(n);
+            assert(F);
+        }
+        else if (decls.invoke_api == JL_INVOKE_SPARAM) {
+            // no specptr prototype declared; route through jl_invoke via the dispatcher
+            F = aot_abi_converter(out, from_abi, codeinst, nullptr, nullptr, false);
+        }
+        else if (decls.invoke_api == JL_INVOKE_ARGS) {
+            assert(decls.specptr);
+            F = aot_abi_converter(out, from_abi, codeinst, nullptr, decls.specptr, false);
+        }
+        else {
+            assert(decls.specptr);
+            F = aot_abi_converter(out, from_abi, codeinst, nullptr, decls.specptr, true);
+        }
+    }
+    else {
+        // no method at the build world: emit the shared dynamic-dispatch adapter
+        F = aot_abi_converter(out, from_abi, nullptr, nullptr, nullptr, false);
+    }
+    // A real thunk was needed: materialize the interned ABIAdapter record (its `fptr` is wired
+    // from the fvar on load) and point the trampoline's `last_invoked` at it. The record is
+    // serialized because it is reachable through `last_invoked`; the first post-load call restores
+    // `fptr` straight from it.
+    jl_abi_adapter_t *rec = jl_new_abi_adapter_record(sigt, declrt, codeinst,
+            from_abi.specsig, from_abi.is_opaque_closure, from_abi.nargs, /*fptr*/nullptr);
+    tr->last_invoked = (jl_value_t*)rec; // rooted via the interned trampoline (in the live cache)
+    jl_gc_wb(tr, rec);
+    out.abi_adapter_records.push_back({rec, F});
+}
+
+// Emit the adapter for each @cfunction/@ccallable dispatch trampoline (kind=STD, so the
+// adapter sig is the call sig as-is). Replaces the old cfuncdata-array fill; the adapter is
+// now wired into the serialized trampoline's `fptr`.
+static void generate_cfunc_thunks(jl_codegen_output_t &out)
+{
+    if (out.cfuncs.empty())
+        return;
+    DenseMap<jl_method_instance_t*, jl_code_instance_t*> compiled_mi;
+    for (auto &[ci, _] : out.ci_funcs) {
+        jl_method_instance_t *mi = jl_get_ci_mi(ci);
+        if (ci->owner == jl_nothing && jl_atomic_load_relaxed(&ci->max_world) == ~(size_t)0 && ci->def == (jl_value_t*)mi)
+            compiled_mi[mi] = ci;
+    }
+    size_t latestworld = jl_atomic_load_acquire(&jl_world_counter);
+    for (cfunc_decl_t &cfunc : out.cfuncs) {
+        emit_trampoline_adapter(out, cfunc.tramp, cfunc.abi, compiled_mi, latestworld);
+        // Outside --trim, eagerly compile and enqueue the dynamic-dispatch ("unspecialized")
+        // adapter for this signature -- a ci == NULL adapter owned by no trampoline. This makes
+        // it available in the cache so a codegen-free run (e.g. the interpreter in a non-trimmed
+        // image) can dispatch this @cfunction/@ccallable even when the resolved target shifts,
+        // without JITing. It is reported via ext_foreign_code (see jl_create_native_impl) since
+        // no trampoline roots it. Under --trim, dynamic dispatch is unavailable, so skip it.
+        if (!jl_options.trim) {
+            Function *uf = aot_abi_converter(out, cfunc.abi, nullptr, nullptr, nullptr, false);
+            jl_abi_adapter_t *urec = jl_new_abi_adapter_record(cfunc.abi.sigt, cfunc.abi.rt,
+                    /*ci*/nullptr, cfunc.abi.specsig, cfunc.abi.is_opaque_closure, cfunc.abi.nargs,
+                    /*fptr*/nullptr);
+            JL_GC_PUSH1(&urec);
+            // Root through codegen (until it is reported to ext_foreign_code): the record is
+            // independent, so nothing else keeps it alive across the intervening allocations.
+            jl_array_ptr_1d_push(out.temporary_roots, (jl_value_t*)urec);
+            JL_GC_POP();
+            out.abi_adapter_records.push_back({urec, uf});
+        }
+    }
+}
+
 static bool canPartition(const Function &F)
 {
     return !F.hasFnAttribute(Attribute::AlwaysInline) &&
@@ -643,13 +763,23 @@ void *jl_create_native_impl(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int ex
     // Report each compiled ABI adapter as extra image code (via `ext_foreign_code`, like an
     // external CodeInstance) so it is rooted through the pre-dump GC and serialized + reinterned
     // on load even when no trampoline owns it. Adapters have no compiled-code edge of their own,
-    // so this explicit report is what makes them survive. The records are kept alive across
-    // emission in `data->out->temporary_roots`; re-root that array so the pushes are GC-safe.
-    if (ext_foreign_code && data->out && data->out->temporary_roots) {
-        jl_array_t *troots = data->out->temporary_roots;
-        JL_GC_PUSH1(&troots);
+    // so this explicit report is what makes them survive. The eager-`unspecialized` (ci == NULL)
+    // records in particular are owned by nothing else -- without this they are never serialized,
+    // so a codegen-free load could not dispatch the @cfunction/@ccallable (see #61949).
+    //
+    // The records live only in `data->pending_adapters` (raw pointers) here: they were de-rooted
+    // when jl_emit_native cleared `out.temporary_roots`, but no safepoint runs between there and
+    // this point, so they are still live. Snapshot them into a locals array before the pushes,
+    // since jl_array_ptr_1d_push may grow (and GC) the array.
+    if (ext_foreign_code && !data->pending_adapters.empty()) {
+        size_t nrec = data->pending_adapters.size();
+        jl_value_t **recs;
+        JL_GC_PUSHARGS(recs, nrec);
+        size_t ri = 0;
         for (auto &kv : data->pending_adapters)
-            jl_array_ptr_1d_push(ext_foreign_code, (jl_value_t*)kv.first);
+            recs[ri++] = (jl_value_t*)kv.first;
+        for (size_t i = 0; i < nrec; i++)
+            jl_array_ptr_1d_push(ext_foreign_code, recs[i]);
         JL_GC_POP();
     }
     JL_GC_POP();
@@ -907,6 +1037,8 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
     emit_llvmcall_modules(out);
     // finally, make sure all referenced methods get fixed up, particularly if the user declined to compile them
     aot_link_output(out);
+    // including generating cfunction thunks
+    generate_cfunc_thunks(out);
     aot_optimize_roots(out, method_roots);
     out.temporary_roots = nullptr;
     out.temporary_roots_set.clear();
@@ -2645,6 +2777,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
                     continue;
                 jl_emit_codedecls(output, codeinst);
             }
+            generate_cfunc_thunks(output);
             output.temporary_roots_set.clear();
             output.temporary_roots = nullptr;
             JL_GC_POP(); // GC the global_targets array contents now since reflection doesn't need it

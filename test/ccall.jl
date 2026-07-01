@@ -2085,3 +2085,152 @@ const sym = :ZSTD_versionString
 get_zstd_version() = prefix * unsafe_string(ccall((sym, libzstd), Cstring, ()))
 @test startswith(get_zstd_version(), "Zstd")
 end
+
+# ABI-adapter cache: cfunctions run end-to-end through the `jl_abi_adapters` cache (wired
+# via jl_jit_abi_converter), and the runtime cache stays bounded across repeated calls.
+# Signatures whose declared ABI matches the method's specsig exactly short-circuit to
+# `specptr` without producing an adapter, so the cache may legitimately stay empty for them.
+# The cases below cover the adapter branches reachable from `@cfunction`: specsig (widen/narrow),
+# const-return, and the boxed args ABI, plus the unresolved (codeinst == NULL) dispatcher (both a
+# missing method that throws and an abstract `Any` argument that dispatches at call time). The
+# JL_INVOKE_SPARAM branch is not exercisable here: `@cfunction` resolves its target via
+# jl_get_specialization1, which for a concrete signature returns a concrete specialization (whose
+# static parameters are baked in -> specsig) and for an abstract signature (e.g. an `Any` argument)
+# returns nothing -> the codeinst == NULL dispatcher. The generic `jl_fptr_sparam` entry is never
+# selected; it is only reachable when a generic CodeInstance is handed to the trampoline directly.
+# Targets for the ABI-adapter cache test (must be globals: `@cfunction` over a bare name
+# needs a compile-time-known function). `abi_match_target` matches its declared C ABI;
+# `abi_narrow_target` deliberately infers to `Any` (via compilerbarrier).
+abi_match_target(x::Cint) = x + Cint(1)                                   # Cint -> Cint
+abi_widen_target(x::Cint) = x                                             # well-inferred Cint
+abi_narrow_target(x::Cint) = Core.compilerbarrier(:type, x + Cint(1))     # inferred ::Any
+abi_const_target(x::Cint) = Cint(42)                                      # const-return (JL_INVOKE_CONST)
+abi_args_target(x::Cint...) = length(x) % Cint                            # vararg (JL_INVOKE_ARGS)
+abi_unresolved_target(x::Float64) = x                                     # no method for (Cint,)
+
+@testset "abi adapter cache" begin
+    adapter_count() = ccall(:jl_typemap_count, Csize_t, (Any,),
+                            getfield(Core.abi_adapters, :cache))
+
+    # (1) Matching ABI (Cint -> Cint, both specsig/isbits): jl_jit_abi_converter short-circuits
+    # to the method's specptr, so no adapter is emitted and the cache is untouched.
+    let cf = @cfunction(abi_match_target, Cint, (Cint,))
+        GC.@preserve cf begin
+            fptr = Base.unsafe_convert(Ptr{Cvoid}, cf)
+            n0 = adapter_count()
+            @test ccall(fptr, Cint, (Cint,), Cint(3)) == Cint(4)
+            @test adapter_count() == n0
+        end
+    end
+
+    # (2) Widening: an `Any` cfunction return over a well-inferred (Cint) CodeInstance forces
+    # a boxing adapter -- no specptr shortcut, so it is emitted and interned on first call, and
+    # re-resolving the same trampoline reuses `tr->fptr` without growing the cache.
+    let cf = @cfunction(abi_widen_target, Any, (Cint,))
+        GC.@preserve cf begin
+            fptr = Base.unsafe_convert(Ptr{Cvoid}, cf)
+            n0 = adapter_count()
+            @test ccall(fptr, Any, (Cint,), Cint(5)) === Cint(5)
+            n1 = adapter_count()
+            @test n1 > n0
+            @test ccall(fptr, Any, (Cint,), Cint(6)) === Cint(6)
+            @test adapter_count() == n1
+        end
+    end
+
+    # (3) Narrowing: a `Cint` cfunction return over an `Any`-returning CodeInstance forces an
+    # unbox/convert adapter (the boxed result is narrowed to the declared C type).
+    let cf = @cfunction(abi_narrow_target, Cint, (Cint,))
+        GC.@preserve cf begin
+            fptr = Base.unsafe_convert(Ptr{Cvoid}, cf)
+            n0 = adapter_count()
+            @test ccall(fptr, Cint, (Cint,), Cint(7)) == Cint(8)
+            @test adapter_count() > n0
+        end
+    end
+
+    # (4) Const-ABI: a const-return CodeInstance has no specptr to shortcut to, so the adapter
+    # is emitted via the const-return path (JL_INVOKE_CONST).
+    let cf = @cfunction(abi_const_target, Cint, (Cint,))
+        GC.@preserve cf begin
+            fptr = Base.unsafe_convert(Ptr{Cvoid}, cf)
+            n0 = adapter_count()
+            @test ccall(fptr, Cint, (Cint,), Cint(3)) == Cint(42)
+            @test adapter_count() > n0
+        end
+    end
+
+    # (5) Args-ABI: a vararg method is compiled to the boxed `jl_fptr_args` ABI, which never
+    # matches the declared C signature, so the adapter routes through the specptr (JL_INVOKE_ARGS).
+    let cf = @cfunction(abi_args_target, Cint, (Cint,))
+        GC.@preserve cf begin
+            fptr = Base.unsafe_convert(Ptr{Cvoid}, cf)
+            n0 = adapter_count()
+            @test ccall(fptr, Cint, (Cint,), Cint(9)) == Cint(1)
+            @test adapter_count() > n0
+        end
+    end
+
+    # (6) Unresolved target: no method matches the declared signature, so the trampoline resolves
+    # to the shared dynamic-dispatch adapter (codeinst == NULL), which throws on the missing method.
+    let cf = @cfunction(abi_unresolved_target, Cint, (Cint,))
+        GC.@preserve cf begin
+            fptr = Base.unsafe_convert(Ptr{Cvoid}, cf)
+            n0 = adapter_count()
+            @test_throws MethodError ccall(fptr, Cint, (Cint,), Cint(3))
+            @test adapter_count() > n0
+        end
+    end
+
+    # (7) Abstract argument: an `Any`-typed argument makes the signature non-concrete, so
+    # jl_get_specialization1 returns nothing and the same dynamic-dispatch adapter (codeinst ==
+    # NULL) is used -- here the dispatch succeeds at call time rather than throwing.
+    let cf = @cfunction(abi_match_target, Any, (Any,))
+        GC.@preserve cf begin
+            fptr = Base.unsafe_convert(Ptr{Cvoid}, cf)
+            n0 = adapter_count()
+            @test ccall(fptr, Any, (Any,), Cint(3)) === Cint(4)
+            @test adapter_count() > n0
+        end
+    end
+end
+
+# Regression test for the independent (ci == NULL, owned by no trampoline) ABI adapters that
+# generate_cfunc_thunks eagerly emits for each @cfunction/@ccallable site outside --trim (the
+# "unspecialized" dynamic-dispatch adapter). These are rooted for serialization only via
+# `ext_foreign_code`, so a full / non-worklist system image must still bake them -- otherwise a
+# codegen-free load cannot dispatch these calls without JITing an adapter (#61949). A freshly
+# started base image must therefore expose a non-empty `Core.abi_adapters` cache populated purely
+# from its own @cfunction/@ccallable sites. Checked in a subprocess: the cfunctions created by the
+# "abi adapter cache" testset above populate the cache in *this* process, which would otherwise
+# mask a regression back to an empty baked cache.
+@testset "eager-unspecialized adapters baked into the sysimage" begin
+    countexpr = "print(ccall(:jl_typemap_count, Csize_t, (Any,), getfield(Core.abi_adapters, :cache)))"
+    out = readchomp(`$(Base.julia_cmd()) --startup-file=no -e $countexpr`)
+    @test parse(Int, out) > 0
+end
+
+# DispatchTrampoline cache: `jl_new_cfunction_trampoline` interns a dispatch record per
+# (sigt, rt). Records sharing a `sigt` (differing only in `rt`) chain within one TypeMap
+# entry; a distinct `sigt` gets its own entry.
+@testset "dispatch trampoline cache" begin
+    tramp_target(x::Int) = x
+    entries() = ccall(:jl_typemap_count, Csize_t, (Any,),
+                      getfield(Core.dispatch_trampolines, :cache))
+    intern(sigt, rt) = ccall(:jl_new_cfunction_trampoline, Any,
+                             (Any, Any, Cint), sigt, rt, Cint(1))::Core.DispatchTrampoline
+    sigt = Tuple{typeof(tramp_target), Int}
+    n0 = entries()
+    a = intern(sigt, Int)
+    b = intern(sigt, Int)
+    @test a === b                       # interned: same (sigt, rt) -> same record
+    @test getfield(a, :sigt) === sigt
+    @test getfield(a, :rt) === Int
+    @test entries() == n0 + 1
+    c = intern(sigt, Float64)           # same sigt, different rt -> distinct record, same entry
+    @test c !== a
+    @test entries() == n0 + 1
+    d = intern(Tuple{typeof(tramp_target), Float64}, Int) # different sigt -> new entry
+    @test d !== a
+    @test entries() == n0 + 2
+end

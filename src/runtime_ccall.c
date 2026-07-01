@@ -336,17 +336,6 @@ jl_value_t *jl_get_cfunction_trampoline(
 }
 JL_GCC_IGNORE_STOP
 
-struct cfuncdata_t {
-    _Atomic(void *) fptr;
-    _Atomic(size_t) last_world;
-    jl_code_instance_t** plast_codeinst;
-    jl_code_instance_t* last_codeinst;
-    void *unspecialized;
-    jl_value_t *const *const declrt;
-    jl_value_t *const *const sigt;
-    size_t flags;
-};
-
 static inline const char *name_from_method_instance(jl_method_instance_t *mi) JL_NOTSAFEPOINT
 {
     assert(jl_is_method_instance(mi));
@@ -369,86 +358,143 @@ static jl_mutex_t cfun_lock;
 // dispatch site observes last_world == jl_world_counter then the loaded
 // fptr is consistent with both of them, meaning it was published for
 // exactly that world.
-JL_DLLEXPORT
-void *jl_get_abi_converter(jl_task_t *ct, void *data)
+// The resolved CodeInstance behind a trampoline's `last_invoked` (Union{CodeInstance,
+// ABIAdapter}): the ABIAdapter's target CI, the bare CodeInstance itself, or NULL (unresolved /
+// no method).
+static jl_code_instance_t *invoked_ci(jl_value_t *last_invoked) JL_NOTSAFEPOINT
 {
-    struct cfuncdata_t *cfuncdata = (struct cfuncdata_t*)data;
-    jl_value_t *sigt = *cfuncdata->sigt;
+    if (last_invoked == NULL)
+        return NULL;
+    if (jl_is_abi_adapter(last_invoked))
+        return ((jl_abi_adapter_t*)last_invoked)->ci;
+    return (jl_code_instance_t*)last_invoked; // a bare CodeInstance (declared ABI matched its specptr)
+}
+
+// Resolve (JIT or re-validate) the ABI adapter for a @cfunction/@ccallable dispatch
+// trampoline at the current world, publishing the resulting adapter in `tr->fptr`. Called
+// by the inline call-site poll (emit_abi_call) when its cached `last_world` is stale.
+JL_DLLEXPORT
+void *jl_resolve_trampoline(jl_task_t *ct, jl_dispatch_trampoline_t *tr)
+{
+    jl_value_t *sigt = tr->sigt;
     JL_GC_PROMISE_ROOTED(sigt);
-    jl_value_t *declrt = *cfuncdata->declrt;
-    JL_GC_PROMISE_ROOTED(declrt);
-    int specsig = cfuncdata->flags & 1;
+    jl_value_t *rt = tr->rt;
+    JL_GC_PROMISE_ROOTED(rt);
     size_t nargs = jl_nparams(sigt);
+    jl_abi_t from_abi = { sigt, rt, nargs, tr->specsig, /*is_opaque_closure*/0 };
     jl_value_t *mi;
     jl_code_instance_t *codeinst;
     size_t world;
-    // check first, while behind this lock, of the validity of the current contents of this cfunc thunk
     JL_LOCK(&cfun_lock);
     do {
-        size_t last_world_v = jl_atomic_load_relaxed(&cfuncdata->last_world);
-        void *f = jl_atomic_load_relaxed(&cfuncdata->fptr);
-        jl_code_instance_t *last_ci = cfuncdata->plast_codeinst ? *cfuncdata->plast_codeinst : NULL;
-        JL_GC_PROMISE_ROOTED(last_ci); // cached CI is retained by the MI cache or by an image literal root slot
+        size_t last_world_v = jl_atomic_load_relaxed(&tr->last_world);
+        void *f = jl_atomic_load_relaxed(&tr->fptr);
+        jl_value_t *last_invoked = tr->last_invoked;
+        JL_GC_PROMISE_ROOTED(last_invoked); // retained by the adapter/MI cache or an image root
+        jl_code_instance_t *last_ci = invoked_ci(last_invoked);
         world = jl_atomic_load_acquire(&jl_world_counter);
         ct->world_age = world;
-        if (world == last_world_v) {
+        if (f != NULL && world == last_world_v) {
             JL_UNLOCK(&cfun_lock);
             return f;
         }
         mi = jl_get_specialization1((jl_tupletype_t*)sigt, world);
-        if (f != NULL) {
-            if (last_ci == NULL) {
-                if (mi == jl_nothing) {
-                    jl_atomic_store_release(&cfuncdata->last_world, world);
-                    JL_UNLOCK(&cfun_lock);
-                    return f;
+        // Re-validate WITHOUT inferring: if `last_invoked` still matches the dispatch result for
+        // this world -- its CodeInstance's mi matches the freshly looked-up `mi` (or both indicate
+        // "no method") and that CI is still valid at `world` -- restore `fptr` straight from
+        // `last_invoked` (an ABIAdapter carries its compiled thunk's `fptr`; a bare CodeInstance
+        // means the declared ABI matched its specptr, so re-derive that). `jl_get_specialization1`
+        // is a method-table lookup (no inference/compilation), so this lets an AOT-compiled adapter
+        // be wired on the first call after load -- and survive a later world bump -- without
+        // re-JITing and without an adapter-cache lookup.
+        if (last_invoked != NULL) {
+            int still_valid = last_ci == NULL
+                ? (mi == jl_nothing)
+                : ((jl_value_t*)jl_get_ci_mi(last_ci) == mi &&
+                   jl_atomic_load_relaxed(&last_ci->max_world) >= world);
+            if (still_valid) {
+                void *nf = f;
+                if (nf == NULL) { // first call after load: restore fptr directly from `last_invoked`
+                    if (jl_is_abi_adapter(last_invoked)) {
+                        nf = ((jl_abi_adapter_t*)last_invoked)->fptr;
+                    }
+                    else {
+                        void *tgt; int ts; jl_callptr_t inv;
+                        nf = jl_abi_adapter_resolve_target(from_abi, last_ci, &tgt, &ts, &inv);
+                    }
                 }
-            }
-            else {
-                if ((jl_value_t*)jl_get_ci_mi(last_ci) == mi && jl_atomic_load_relaxed(&last_ci->max_world) >= world) { // same dispatch and source
-                    jl_atomic_store_release(&cfuncdata->last_world, world);
+                if (nf != NULL) {
+                    jl_atomic_store_release(&tr->fptr, nf);
+                    jl_atomic_store_release(&tr->last_world, world);
                     JL_UNLOCK(&cfun_lock);
-                    return f;
+                    return nf;
                 }
             }
         }
         JL_UNLOCK(&cfun_lock);
-        // next, try to figure out what the target should look like (outside of the lock since this is very slow)
+        // slow: infer the target outside the lock (this is very slow)
         codeinst = mi != jl_nothing ? jl_type_infer((jl_method_instance_t*)mi, world, SOURCE_MODE_ABI, jl_options.trim) : NULL;
-        // relock for the remainder of the function
+        // Compile the target now (the JIT path's job) so its specptr is available to the specptr
+        // shortcut in jl_abi_adapter_resolve_target. SOURCE_MODE_ABI only infers and sets up the
+        // ABI -- it can leave `invoke` as the wait-for-compiled sentinel, which the resolver (kept
+        // deliberately codegen-free so it is shared with the no-codegen fallback, #61949) reads
+        // back as unavailable and then hands a dynamic-dispatch adapter for an ABI the target's own
+        // specptr already satisfies. Doing the compile here keeps the resolver a pure metadata
+        // lookup while still taking the (adapter-free) shortcut whenever it applies.
+        if (codeinst != NULL)
+            jl_compile_codeinst(codeinst);
         JL_LOCK(&cfun_lock);
-    } while (jl_atomic_load_acquire(&jl_world_counter) != world); // restart entirely, since jl_world_counter changed thus jl_get_specialization1 might have changed
-    // double-check if the values were set on another thread
-    size_t last_world_v = jl_atomic_load_relaxed(&cfuncdata->last_world);
-    void *f = jl_atomic_load_relaxed(&cfuncdata->fptr);
-    if (world == last_world_v) {
+    } while (jl_atomic_load_acquire(&jl_world_counter) != world); // restart if the world moved under us
+    // double-check another thread didn't already install for this world
+    size_t lwv = jl_atomic_load_relaxed(&tr->last_world);
+    void *f = jl_atomic_load_relaxed(&tr->fptr);
+    if (f != NULL && world == lwv) {
         JL_UNLOCK(&cfun_lock);
-        return f; // another thread fixed this up while we were away
+        return f;
     }
-    int is_opaque_closure = 0;
-    jl_abi_t from_abi = { sigt, declrt, nargs, specsig, is_opaque_closure };
-    if (codeinst == NULL) {
-        // Generate an adapter to a dynamic dispatch
-        if (cfuncdata->unspecialized == NULL)
-            cfuncdata->unspecialized = jl_jit_abi_converter(ct, from_abi, NULL);
-
-        f = cfuncdata->unspecialized;
-    } else {
+    // If the world advanced but the dispatch target is unchanged from the one `fptr` was
+    // built for, the existing adapter is still correct -- reuse it (no re-JIT).
+    if (f != NULL && codeinst == invoked_ci(tr->last_invoked)) {
+        jl_atomic_store_release(&tr->last_world, world);
+        JL_UNLOCK(&cfun_lock);
+        return f;
+    }
+    // @cfunction warns when the declared C return type cannot match the resolved target's
+    // rettype (skip must-not-return targets, occasionally required by the C API for error
+    // callbacks even though memory errors are then likely).
+    if (codeinst != NULL) {
         jl_value_t *astrt = codeinst->rettype;
         if (astrt != (jl_value_t*)jl_bottom_type &&
-            jl_type_intersection(astrt, declrt) == jl_bottom_type) {
-            // Do not warn if the function never returns since it is
-            // occasionally required by the C API (typically error callbacks)
-            // even though we're likely to encounter memory errors in that case
-            jl_printf(JL_STDERR, "WARNING: cfunction: return type of %s does not match\n", name_from_method_instance((jl_method_instance_t*)mi));
-        }
-        f = jl_jit_abi_converter(ct, from_abi, codeinst);
+            jl_type_intersection(astrt, rt) == jl_bottom_type)
+            jl_printf(JL_STDERR, "WARNING: cfunction: return type of %s does not match\n",
+                      name_from_method_instance((jl_method_instance_t*)mi));
     }
-
-    cfuncdata->plast_codeinst = &cfuncdata->last_codeinst;
-    cfuncdata->last_codeinst = codeinst;
-    jl_atomic_store_release(&cfuncdata->fptr, f);
-    jl_atomic_store_release(&cfuncdata->last_world, world);
+    // Resolve the adapter and record `last_invoked` as a Union{CodeInstance, ABIAdapter}: a bare
+    // CodeInstance when the declared ABI already matches its specptr (no thunk needed), else the
+    // interned ABIAdapter record (jl_jit_abi_converter -> the ABIAdapter cache; a NULL codeinst
+    // yields the shared dynamic-dispatch adapter). The trampoline points at whichever it resolved
+    // to, so a later re-validation restores `fptr` straight from it.
+    void *tgt; int ts; jl_callptr_t inv;
+    void *shortcut = jl_abi_adapter_resolve_target(from_abi, codeinst, &tgt, &ts, &inv);
+    jl_value_t *new_invoked;
+    if (shortcut != NULL) {
+        f = shortcut;
+        new_invoked = (jl_value_t*)codeinst; // bare CI: no adapter thunk required
+    }
+    else {
+        f = jl_jit_abi_converter(ct, from_abi, codeinst);
+        new_invoked = (jl_value_t*)jl_lookup_abi_adapter(sigt, rt, codeinst, tr->specsig, /*is_opaque_closure*/0, nargs);
+    }
+    tr->last_invoked = new_invoked; // published before fptr/last_world; roots the target
+    if (new_invoked)
+        jl_gc_wb(tr, new_invoked);
+    // Publish `fptr` with *release*: the call-site poll acquire-loads it, and this release
+    // pairs with that acquire so observing this fptr also makes our prior acquire-load of
+    // `jl_world_counter` visible -- closing the window where a lock-free reader could pair a
+    // newer fptr with a stale counter. `last_world` (release, stored after fptr) gives the
+    // reader the lower bound.
+    jl_atomic_store_release(&tr->fptr, f);
+    jl_atomic_store_release(&tr->last_world, world);
     JL_UNLOCK(&cfun_lock);
     return f;
 }

@@ -361,10 +361,12 @@ struct jl_codegen_call_target_t {
     // neither = unused
 };
 
-// reification of a call to jl_jit_abi_convert, so that it isn't necessary to parse the Modules to recover this info
+// reification of a @cfunction/@ccallable construction: the interned dispatch trampoline
+// whose adapter generate_cfunc_thunks compiles into the image (replacing the old per-call-site
+// cfuncdata global), plus the caller ABI it was emitted for.
 struct cfunc_decl_t {
     jl_abi_t abi;
-    llvm::GlobalVariable *cfuncdata;
+    jl_dispatch_trampoline_t *tramp;
 };
 
 std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &ctx,

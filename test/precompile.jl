@@ -1167,6 +1167,91 @@ precompile_test_harness("precompiletools") do dir
     end
 end
 
+precompile_test_harness("cfunction adapter serialization") do dir
+    # A @cfunction whose declared C ABI differs from its target's specsig needs an ABI
+    # adapter. When the enclosing method is precompiled with native code, that adapter is
+    # compiled into the package image and its dispatch trampoline (jl_dispatch_trampoline_t) is
+    # serialized with the adapter wired into `fptr` -- exercising the trampoline serializer
+    # (jl_get_adapter_id / fptr_record) and jl_reintern_trampoline on load. Each adapter branch
+    # reachable from @cfunction is covered: specsig widening (well-inferred Cint boxed to `Any`)
+    # and narrowing (`Any`-returning target narrowed to `Cint`), const-return, the boxed args ABI
+    # (vararg target), and the codeinst == NULL dispatcher (both a missing method that throws and
+    # an abstract `Any` argument that dispatches at call time).
+    CFuncMod = :CFuncAdapter0x6f2c1d8a
+    write(joinpath(dir, "$CFuncMod.jl"),
+          """
+          module $CFuncMod
+              box_target(x::Cint) = x                                        # well-inferred Cint
+              any_target(x::Cint) = Core.compilerbarrier(:type, x + Cint(1)) # inferred ::Any
+              const_target(x::Cint) = Cint(42)                               # const-return
+              args_target(x::Cint...) = length(x) % Cint                     # vararg (boxed args ABI)
+              unresolved_target(x::Float64) = x                              # no method for (Cint,)
+              function run_widen(x::Cint)
+                  cf = @cfunction(box_target, Any, (Cint,))
+                  GC.@preserve cf ccall(Base.unsafe_convert(Ptr{Cvoid}, cf), Any, (Cint,), x)
+              end
+              function run_narrow(x::Cint)
+                  cf = @cfunction(any_target, Cint, (Cint,))
+                  GC.@preserve cf ccall(Base.unsafe_convert(Ptr{Cvoid}, cf), Cint, (Cint,), x)
+              end
+              function run_const(x::Cint)
+                  cf = @cfunction(const_target, Cint, (Cint,))
+                  GC.@preserve cf ccall(Base.unsafe_convert(Ptr{Cvoid}, cf), Cint, (Cint,), x)
+              end
+              function run_args(x::Cint)
+                  cf = @cfunction(args_target, Cint, (Cint,))
+                  GC.@preserve cf ccall(Base.unsafe_convert(Ptr{Cvoid}, cf), Cint, (Cint,), x)
+              end
+              function run_unresolved(x::Cint)
+                  cf = @cfunction(unresolved_target, Cint, (Cint,))
+                  GC.@preserve cf ccall(Base.unsafe_convert(Ptr{Cvoid}, cf), Cint, (Cint,), x)
+              end
+              function run_dispatch(x::Cint)      # abstract `Any` arg -> dynamic-dispatch adapter
+                  cf = @cfunction(box_target, Any, (Any,))
+                  GC.@preserve cf ccall(Base.unsafe_convert(Ptr{Cvoid}, cf), Any, (Any,), x)
+              end
+              function run_dup(x::Cint)           # two call sites, same (sigt, rt) -> one trampoline
+                  cf1 = @cfunction(box_target, Any, (Cint,))
+                  cf2 = @cfunction(box_target, Any, (Cint,))
+                  r1 = GC.@preserve cf1 ccall(Base.unsafe_convert(Ptr{Cvoid}, cf1), Any, (Cint,), x)
+                  r2 = GC.@preserve cf2 ccall(Base.unsafe_convert(Ptr{Cvoid}, cf2), Any, (Cint,), x)
+                  (r1, r2)
+              end
+              precompile(run_widen, (Cint,))
+              precompile(run_narrow, (Cint,))
+              precompile(run_const, (Cint,))
+              precompile(run_args, (Cint,))
+              precompile(run_unresolved, (Cint,))
+              precompile(run_dispatch, (Cint,))
+              precompile(run_dup, (Cint,))
+          end
+          """)
+    Base.compilecache(Base.PkgId(string(CFuncMod)))
+    M = Base.require(Main, CFuncMod)
+    adapter_count() = ccall(:jl_typemap_count, Csize_t, (Any,),
+                            getfield(Core.abi_adapters, :cache))
+    n0 = adapter_count()
+    # invokelatest: the run_* methods are defined in a world newer than this function's.
+    @test Base.invokelatest(M.run_widen, Cint(5)) === Cint(5)
+    @test Base.invokelatest(M.run_narrow, Cint(7)) == Cint(8)
+    @test Base.invokelatest(M.run_const, Cint(3)) == Cint(42)
+    @test Base.invokelatest(M.run_args, Cint(9)) == Cint(1)
+    @test_throws MethodError Base.invokelatest(M.run_unresolved, Cint(3))
+    @test Base.invokelatest(M.run_dispatch, Cint(5)) === Cint(5)
+    # Two @cfunction call sites with the same (sigt, rt) share one interned trampoline, so the
+    # image can emit duplicate adapter records for it. Each record gets its own fvar slot (just as
+    # each CodeInstance does), so `fptr_record` stays 1:1 and every record's fptr is wired -- a
+    # shared fvar slot would instead leave one record's fptr NULL (a null call after load).
+    @test Base.invokelatest(M.run_dup, Cint(5)) === (Cint(5), Cint(5))
+    # With pkgimage native code the adapters were compiled in and wired into the trampolines'
+    # `fptr`s, so these calls reuse them and never JIT a fresh adapter (the no-JIT path that
+    # --trim relies on). Without pkgimages nothing was precompiled to reuse, so only check the
+    # results above.
+    if Bool(Base.JLOptions().use_pkgimages)
+        @test adapter_count() == n0
+    end
+end
+
 precompile_test_harness("invoke") do dir
     InvokeModule = :Invoke0x030e7e97c2365aad
     CallerModule = :Caller0x030e7e97c2365aad
