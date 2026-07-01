@@ -1103,7 +1103,7 @@ precompiles only the given packages and their dependencies (unless
   multiple configs are provided, each package is precompiled for each configuration.
 
 - `io::IO`: Output stream for progress messages, warnings, and errors. Can be
-  redirected (e.g., to `devnull` when called from loading in non-interactive mode).
+  redirected (e.g., to `devnull` when called from loading in quiet mode).
 
 - `fancyprint::Bool`: Controls output format. When `true`, displays an animated progress
   bar with spinners. When `false`, instead enables `timing` mode. Automatically
@@ -2658,17 +2658,17 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
     default_num_tasks = min(default_num_tasks, 16) # limit for better stability on shared resource systems
     num_tasks = max(1, something(tryparse(Int, get(ENV, "JULIA_NUM_PRECOMPILE_TASKS", string(default_num_tasks))), 1))
 
-    # Suppress precompilation progress messages when precompiling for loading packages, except during
-    # interactive sessions, since the complicated IO can have disastrous consequences in the background (#59599)
+    # Suppress precompilation progress output in quiet mode when triggered from loading
     logio = io
     logcalls = nothing
     if _from_loading
-        if isinteractive()
-            logcalls = CoreLogging.Info
-        else
+        quiet = Base.JLOptions().quiet != 0
+        if quiet
             logio = IOContext{IO}(devnull)
             fancyprint′ = false
             logcalls = CoreLogging.Debug
+        else
+            logcalls = CoreLogging.Info
         end
     end
     fancyprint = fancyprint′
