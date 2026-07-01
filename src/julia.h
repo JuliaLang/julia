@@ -1070,6 +1070,28 @@ typedef struct _jl_abi_adapter_t {
     _Atomic(struct _jl_abi_adapter_t*) next;
 } jl_abi_adapter_t;
 
+// Latest-world dispatch "trampoline" (cache) for a single invoke target.
+typedef struct _jl_dispatch_trampoline_t {
+    JL_DATA_TYPE
+
+    // dispatch target
+    jl_value_t *sigt;
+
+    // fptr ABI
+    jl_value_t *rt;              // declared return type
+    uint8_t kind;                // invokee / fptr jl_abi_kind_t
+    uint8_t specsig;
+
+    // Note that `sigt` is *not* the same as the ABI / `sigt` corresponding to fptr.
+    // The invokee ABI is a fixed function of the target + ABI details above though.
+
+    jl_value_t *last_invokee;
+    _Atomic(void*) fptr;         // copied from last_invokee
+    _Atomic(size_t) last_world;  // world for which `fptr`/`last_invokee` are valid, 0 = unresolved
+
+    _Atomic(struct _jl_dispatch_trampoline_t*) next;
+} jl_dispatch_trampoline_t;
+
 #define JL_TYPEMAP_LIST_NO_HASHMAP (~(unsigned)0)
 
 // Named so the safepoint annotations attach to the function type itself: on a member
@@ -1096,6 +1118,13 @@ typedef struct _jl_abi_adapter_cache_t {
 // hidden fields:
     jl_mutex_t writelock;
 } jl_abi_adapter_cache_t;
+
+typedef struct _jl_dispatch_trampoline_cache_t {
+    JL_DATA_TYPE
+    jl_typemap_list_t cache;
+// hidden fields:
+    jl_mutex_t writelock;
+} jl_dispatch_trampoline_cache_t;
 
 typedef struct {
     JL_DATA_TYPE

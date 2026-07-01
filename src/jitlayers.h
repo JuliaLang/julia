@@ -465,7 +465,12 @@ public:
     // ABIAdapter records compiled for @cfunction/@ccallable serialization: each entry pairs a
     // materialized ABIAdapter record with the Function emitted for its resolved target, so the
     // serialized record's `fptr` is wired to that Function on load without a JIT.
-    SmallVector<std::pair<jl_abi_adapter_t*, Function*>, 0> abi_adapter_records;
+    SmallVector<std::pair<jl_abi_adapter_t*, Function*>, 0> adapter_funcs;
+    // The AOT-resolved target per @cfunction/@ccallable trampoline: Union{CodeInstance,
+    // ABIAdapter} (a bare CodeInstance when the declared ABI matches its specptr). The
+    // serializer's code edge for trampoline resolutions (jl_get_trampoline_invokee) in every
+    // image; materialized into the serialized `last_invokee` only for non-incremental images.
+    DenseMap<jl_dispatch_trampoline_t*, jl_value_t*> trampoline_invokees;
     std::map<void*, GlobalVariable*> global_targets;
     jl_array_t *temporary_roots = nullptr;
     SmallSet<jl_value_t *, 8> temporary_roots_set;

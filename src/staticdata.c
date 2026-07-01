@@ -762,6 +762,15 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         jl_abi_adapter_cache_t *c = (jl_abi_adapter_cache_t*)v;
         record_field_change((jl_value_t**)&c->cache.root, jl_nothing);
     }
+    if (jl_typetagis(v, jl_dispatch_trampoline_cache_type)) {
+        // Rebuilt from the reinserted DispatchTrampolines, drop it for now.
+        jl_dispatch_trampoline_cache_t *c = (jl_dispatch_trampoline_cache_t*)v;
+        record_field_change((jl_value_t**)&c->cache.root, jl_nothing);
+    }
+    if (jl_is_dispatch_trampoline(v)) {
+        jl_dispatch_trampoline_t *tr = (jl_dispatch_trampoline_t*)v;
+        record_field_change((jl_value_t**)&tr->next, NULL); // don't follow cache-only edge
+    }
     if (jl_is_abi_adapter(v)) {
         // Like the cache itself, the adapter's `sigt` bucket chain is process-local and
         // rebuilt on load (jl_insert_abi_adapter), so drop `next`.
@@ -1871,38 +1880,33 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                     arraylist_push(&s->relocs_list, (void*)(((uintptr_t)FunctionRef << RELOC_TAG_OFFSET) + BuiltinFunctionTag + builtin_id - 2)); // relocation target
                 }
             }
+            else if (jl_is_dispatch_trampoline(v)) {
+                assert(f == s->s);
+                // Invokee will be resolved on first-use after load, set the sentinel here.
+                jl_dispatch_trampoline_t *newtr = (jl_dispatch_trampoline_t*)&f->buf[reloc_offset];
+                jl_atomic_store_relaxed(&newtr->fptr, NULL);
+                jl_atomic_store_relaxed(&newtr->last_world, 0);
+                arraylist_push(&s->fixup_objs, (void*)reloc_offset);
+            }
             else if (jl_is_abi_adapter(v)) {
                 assert(f == s->s);
-                // The compiled adapter thunk lives in the image as an fvar. Null the record's
-                // process-local `fptr` and record the wiring in `fptr_record` keyed on that fvar
-                // id, so jl_update_all_fptrs sets `fptr` from the fvar on load (parallels the
-                // CodeInstance specptr; CI vs record disambiguated by the object's type tag).
-                jl_abi_adapter_t *newad = (jl_abi_adapter_t*)&f->buf[reloc_offset];
-                jl_atomic_store_relaxed(&newad->fptr, NULL);
+                jl_abi_adapter_t *newadapter = (jl_abi_adapter_t*)&f->buf[reloc_offset];
+                jl_atomic_store_relaxed(&newadapter->fptr, NULL);
                 int32_t invokeptr_id = 0, adapter_id = 0;
                 jl_get_function_id(native_functions, v, &invokeptr_id, &adapter_id);
                 assert(invokeptr_id == 0); (void)invokeptr_id; // adapters have no invoke wrapper
                 if (adapter_id > 0) {
-                    ios_ensureroom(s->fptr_record, adapter_id * sizeof(void*));
-                    ios_seek(s->fptr_record, (adapter_id - 1) * sizeof(void*));
-                    write_reloc_t(s->fptr_record, reloc_offset);
-#ifdef _P64
-                    if (sizeof(reloc_t) < 8)
-                        write_padding(s->fptr_record, 8 - sizeof(reloc_t));
-#endif
-                    // Re-insert this record into the running adapters cache on load. Records
-                    // with no fvar slot (adapter_id == 0, e.g. a runtime-created record
-                    // reached through user data) have no thunk to wire, so they serialize as
-                    // inert data and are never published to the cache.
+                    write_reloc_slot(s->fptr_record, adapter_id, reloc_offset);
                     arraylist_push(&s->fixup_objs, (void*)reloc_offset);
                 }
             }
             else if (jl_typetagis(v, jl_abi_adapter_cache_type)) {
                 assert(f == s->s);
-                // The cache's `writelock` is a hidden trailing C field (not a datatype field);
-                // pad the serialized object out to the full struct size so the restored lock
-                // is zero-initialized (mirrors the jl_method_t writelock handling above).
-                write_padding(f, sizeof(jl_abi_adapter_cache_t) - tot);
+                write_padding(f, sizeof(jl_abi_adapter_cache_t) - tot); // hidden fields
+            }
+            else if (jl_typetagis(v, jl_dispatch_trampoline_cache_type)) {
+                assert(f == s->s);
+                write_padding(f, sizeof(jl_dispatch_trampoline_cache_t) - tot); // hidden fields
             }
             else if (jl_is_datatype(v)) {
                 assert(f == s->s);
@@ -4279,8 +4283,6 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         o->bits.in_image = 1;
     }
     arraylist_free(&cleanup_list);
-    // Restored ABI-adapter records, re-inserted into the running cache after
-    // jl_update_all_fptrs below (see the comment there).
     arraylist_t reinsert_objs;
     arraylist_new(&reinsert_objs, 0);
     for (size_t i = 0; i < s.fixup_objs.len; i++) {
@@ -4290,8 +4292,8 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
             jl_array_ptr_1d_push(*internal_methods, obj);
             assert(s.incremental);
         }
-        else if (jl_is_abi_adapter(obj)) {
-            // Deferred (see reinsert_objs above): re-inserted after jl_update_all_fptrs.
+        else if (jl_is_dispatch_trampoline(obj) || jl_is_abi_adapter(obj)) {
+            // Re-insert into code cache after fptrs are restored
             arraylist_push(&reinsert_objs, (void*)obj);
         }
         else if (jl_is_method_instance(obj)) {
@@ -4404,16 +4406,24 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     jl_update_all_fptrs(&s, image); // fptr relocs and registration
     s.s = NULL;
 
-    if (!s.incremental)
+    if (!s.incremental) {
         jl_reinit_abi_adapter_cache(jl_abi_adapters);
+        jl_reinit_dispatch_trampoline_cache(jl_dispatch_trampolines);
+    }
 
     // This publication must happen only after fptr relocation.
     for (size_t i = 0; i < reinsert_objs.len; i++) {
-        // Only completed ABIAdapters enter the cache; skip any whose thunk was
-        // not wired (the JIT rebuilds them on demand).
-        jl_abi_adapter_t *adapter = (jl_abi_adapter_t*)reinsert_objs.items[i];
-        if (jl_atomic_load_relaxed(&adapter->fptr) != NULL)
-            jl_reinsert_abi_adapter(adapter);
+        jl_value_t *obj = (jl_value_t*)reinsert_objs.items[i];
+        if (jl_is_dispatch_trampoline(obj)) {
+            jl_insert_dispatch_trampoline((jl_dispatch_trampoline_t*)obj);
+        }
+        else {
+            // Only completed ABIAdapters enter the cache; skip any whose thunk was
+            // not wired (the JIT rebuilds them on demand).
+            jl_abi_adapter_t *adapter = (jl_abi_adapter_t*)obj;
+            if (jl_atomic_load_relaxed(&adapter->fptr) != NULL)
+                jl_reinsert_abi_adapter(adapter);
+        }
     }
     arraylist_free(&reinsert_objs);
 

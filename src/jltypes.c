@@ -3905,6 +3905,31 @@ void jl_init_types(void) JL_GC_DISABLED
     const static uint32_t abi_adapter_atomicfields[1] = { 0b1100000 }; // fptr (field 5), next (field 6)
     jl_abi_adapter_type->name->atomicfields = abi_adapter_atomicfields;
 
+    jl_dispatch_trampoline_type =
+        jl_new_datatype(jl_symbol("DispatchTrampoline"), core, jl_any_type, jl_emptysvec,
+                        jl_perm_symsvec(8,
+                            "sigt", // resolution sig (not the same as the fptr ABI sig)
+                            "rt",   // declared return type (declrt for @cfunction)
+                            "kind", // jl_abi_kind_t of the invokee / fptr ABI
+                            "specsig", // 1 if fptr is a specsig adapter
+                            "last_invokee", // resolved dispatch target: Union{CodeInstance, ABIAdapter}
+                            "fptr", // ABI adapter
+                            "last_world",
+                            "next"), // next DispatchTrampoline in the `sigt` bucket chain (may be NULL)
+                        jl_svec(8,
+                            jl_any_type,   // hash-consed Tuple type
+                            jl_any_type,   // hash-consed return type
+                            jl_uint8_type, // kind
+                            jl_uint8_type, // specsig
+                            jl_any_type,   // Union{CodeInstance, ABIAdapter} (may be #undef)
+                            pointer_void,  // cached resolved adapter (atomic)
+                            jl_ulong_type, // last_world (atomic)
+                            jl_any_type),  // next (atomic)
+                        jl_emptysvec,
+                        0, 1, 4);
+    const static uint32_t dispatch_trampoline_atomicfields[1] = { 0b11100000 };
+    jl_dispatch_trampoline_type->name->atomicfields = dispatch_trampoline_atomicfields;
+
     // N.B. `jl_abi_adapter_cache_t` has trailing hidden fields (typemap-list config,
     // writelock) excluded here, similar to jl_method_t
     jl_abi_adapter_cache_type =
@@ -3915,6 +3940,17 @@ void jl_init_types(void) JL_GC_DISABLED
                         0, 1, 1);
     const static uint32_t abi_adapter_cache_atomicfields[1] = { 0b1 }; // adapters
     jl_abi_adapter_cache_type->name->atomicfields = abi_adapter_cache_atomicfields;
+
+    // N.B. `jl_dispatch_trampoline_cache_t` has trailing hidden fields (typemap-list
+    // config, writelock) excluded here, similar to jl_method_t
+    jl_dispatch_trampoline_cache_type =
+        jl_new_datatype(jl_symbol("DispatchTrampolineCache"), core, jl_any_type, jl_emptysvec,
+                        jl_perm_symsvec(1, "cache"),
+                        jl_svec1(jl_any_type), // trampolines: TypeMap root (jl_nothing when empty)
+                        jl_emptysvec,
+                        0, 1, 1);
+    const static uint32_t dispatch_trampoline_cache_atomicfields[1] = { 0b1 }; // trampolines
+    jl_dispatch_trampoline_cache_type->name->atomicfields = dispatch_trampoline_cache_atomicfields;
 
     tv = jl_svec2(tvar("T"), tvar("N"));
     jl_abstractarray_type = (jl_unionall_t*)
@@ -3978,6 +4014,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_an_empty_vec_any = (jl_value_t*)jl_alloc_vec_any(0); // used internally
     jl_an_empty_memory_any = (jl_value_t*)jl_alloc_memory_any(0); // used internally
     jl_abi_adapters = jl_new_abi_adapter_cache(); // process-global ABI-adapter cache
+    jl_dispatch_trampolines = jl_new_dispatch_trampoline_cache(); // process-global @cfunction/@ccallable trampoline cache
 
     // finish initializing module Core
     core = jl_core_module;

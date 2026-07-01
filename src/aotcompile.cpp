@@ -178,6 +178,8 @@ typedef struct {
     // were presented in `codeinfos`; consumed by staticdata.c to rewrite each
     // MethodInstance's `cache` field into a `next`-linked list
     SmallVector<jl_code_instance_t*, 0> jl_ci_order;
+    // AOT-resolved trampoline targets retained for serialization.
+    std::map<jl_dispatch_trampoline_t*, jl_value_t*> trampoline_invokee_map;
 } jl_native_code_desc_t;
 
 // Look up the fvar IDs for a code-carrying object (CodeInstance or ABIAdapter).
@@ -195,6 +197,17 @@ void jl_get_function_id_impl(void *native_code, jl_value_t *codeinst_or_adapter,
             std::tie(*func_idx, *specfunc_idx) = it->second;
         }
     }
+}
+
+// Return the trampoline target (ABIAdapter / CodeInstance) eagerly emitted during code generation.
+extern "C" JL_DLLEXPORT_CODEGEN
+jl_value_t *jl_get_trampoline_invokee_impl(void *native_code, jl_dispatch_trampoline_t *tr)
+{
+    jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
+    if (!data)
+        return NULL;
+    auto it = data->trampoline_invokee_map.find(tr);
+    return it == data->trampoline_invokee_map.end() ? NULL : it->second;
 }
 
 extern "C" JL_DLLEXPORT_CODEGEN void
@@ -549,8 +562,91 @@ static Function *aot_abi_converter(jl_codegen_output_t &out, jl_abi_t from_abi, 
     return F;
 }
 
+// AOT counterpart of jl_resolve_trampoline: resolve the target for `tr` at the build world,
+// emit its ABI adapter, and record the materialized ABIAdapter record in
+// `out.trampoline_invokees` / `out.adapter_funcs`. When the target's compiled ABI already
+// satisfies the declared C ABI, `trampoline_invokees` maps to the bare `CodeInstance` instead and
+// no adapter is emitted.
+static void emit_trampoline_adapter(jl_codegen_output_t &out, jl_dispatch_trampoline_t *tr,
+        jl_abi_t from_abi, DenseMap<jl_method_instance_t*, jl_code_instance_t*> &compiled_mi,
+        size_t latestworld) JL_CANSAFEPOINT
+{
+    JL_GC_PROMISE_ROOTED(tr);
+    jl_value_t *sigt = from_abi.sigt;
+    JL_GC_PROMISE_ROOTED(sigt);
+    jl_value_t *declrt = from_abi.rt;
+    JL_GC_PROMISE_ROOTED(declrt);
+    jl_method_instance_t *mi = (jl_method_instance_t*)jl_get_specialization1((jl_tupletype_t*)sigt, latestworld);
+    jl_code_instance_t *codeinst = nullptr;
+    if ((jl_value_t*)mi != jl_nothing) {
+        auto it = compiled_mi.find(mi);
+        if (it != compiled_mi.end())
+            codeinst = it->second;
+    }
+    Function *F;
+    if (codeinst) {
+        JL_GC_PROMISE_ROOTED(codeinst);
+        jl_value_t *astrt = codeinst->rettype;
+        if (astrt != (jl_value_t*)jl_bottom_type &&
+            jl_type_intersection(astrt, declrt) == jl_bottom_type) {
+            // Do not warn if the function never returns since it is occasionally required by
+            // the C API (typically error callbacks) even though we're likely to encounter
+            // memory errors in that case.
+            jl_printf(JL_STDERR, "WARNING: cfunction: return type of %s does not match\n", name_from_method_instance(mi));
+        }
+        const auto &decls = out.ci_funcs.find(codeinst)->second;
+        // If the target's own compiled ABI already satisfies the declared C ABI, no adapter
+        // is needed: map to the bare CodeInstance so the first post-load call derives `fptr`
+        // from its (independently wired) specptr.
+        if (jl_abi_matches_invoke_api(from_abi, decls.invoke_api, mi, codeinst->rettype)) {
+            out.trampoline_invokees[tr] = (jl_value_t*)codeinst; // bare CI: no adapter thunk emitted
+            return;
+        }
+        if (decls.invoke_api == JL_INVOKE_CONST) {
+            std::string n = emit_abi_constreturn(out, from_abi, codeinst->rettype_const);
+            F = out.get_module().getFunction(n);
+            assert(F);
+        }
+        else if (decls.invoke_api == JL_INVOKE_SPARAM) {
+            // no specptr prototype declared; route through jl_invoke via the dispatcher
+            F = aot_abi_converter(out, from_abi, codeinst, nullptr, nullptr, false);
+        }
+        else if (decls.invoke_api == JL_INVOKE_ARGS) {
+            assert(decls.specptr);
+            F = aot_abi_converter(out, from_abi, codeinst, nullptr, decls.specptr, false);
+        }
+        else {
+            assert(decls.specptr);
+            F = aot_abi_converter(out, from_abi, codeinst, nullptr, decls.specptr, true);
+        }
+    }
+    else {
+        // no method at the build world: emit the shared dynamic-dispatch adapter
+        F = aot_abi_converter(out, from_abi, nullptr, nullptr, nullptr, false);
+    }
+    // A real thunk was needed: materialize the ABIAdapter record (its `fptr` is wired from the
+    // fvar on load) and map the trampoline to it. The record reaches the image via the
+    // serializer's `last_invokee` override (and `emitted_adapters`); the first post-load call
+    // restores `fptr` straight from it.
+    jl_abi_adapter_t *rec = jl_new_abi_adapter(sigt, declrt, codeinst,
+            from_abi.specsig, from_abi.kind, /*fptr*/nullptr);
+    // Nothing else roots the record until it is pushed to `emitted_adapters`.
+    JL_GC_PUSH1(&rec);
+    jl_array_ptr_1d_push(out.temporary_roots, (jl_value_t*)rec);
+    JL_GC_POP();
+    out.trampoline_invokees[tr] = (jl_value_t*)rec;
+    out.adapter_funcs.push_back({rec, F});
+}
+
+// Emit the adapter for each @cfunction/@ccallable dispatch trampoline (kind=STD, so the
+// adapter sig is the call sig as-is). Replaces the old cfuncdata-array fill; the serializer
+// wires the adapter into the image trampoline's `last_invokee` (jl_get_trampoline_invokee).
+// Call sites sharing one interned trampoline (same sigt/rt/specsig) are deduplicated here, so
+// each trampoline yields exactly one adapter record and one unspecialized record.
 static void generate_cfunc_thunks(jl_codegen_output_t &out) JL_CANSAFEPOINT
 {
+    if (out.cfuncs.empty())
+        return;
     DenseMap<jl_method_instance_t*, jl_code_instance_t*> compiled_mi;
     for (auto &[ci, _] : out.ci_funcs) {
         jl_method_instance_t *mi = jl_get_ci_mi(ci);
@@ -560,77 +656,25 @@ static void generate_cfunc_thunks(jl_codegen_output_t &out) JL_CANSAFEPOINT
     }
     size_t latestworld = jl_atomic_load_acquire(&jl_world_counter);
     for (cfunc_decl_t &cfunc : out.cfuncs) {
-        jl_value_t *sigt = cfunc.abi.sigt;
-        JL_GC_PROMISE_ROOTED(sigt);
-        jl_value_t *declrt = cfunc.abi.rt;
-        JL_GC_PROMISE_ROOTED(declrt);
-        Function *unspec = aot_abi_converter(out, cfunc.abi, nullptr, nullptr, nullptr, false);
-        jl_code_instance_t *codeinst = nullptr;
-        auto assign_fptr = [&out, &cfunc, &codeinst, &unspec](Function *f) JL_CANSAFEPOINT {
-            ConstantArray *init = cast<ConstantArray>(cfunc.cfuncdata->getInitializer());
-            SmallVector<Constant*,8> initvals;
-            for (unsigned i = 0; i < init->getNumOperands(); ++i)
-                initvals.push_back(init->getOperand(i));
-            assert(initvals.size() == 8);
-            assert(initvals[0]->isNullValue());
-            assert(initvals[2]->isNullValue());
-            if (codeinst) {
-                Constant *llvmcodeinst = literal_pointer_val_slot(out, (jl_value_t*)codeinst);
-                initvals[2] = llvmcodeinst; // plast_codeinst
-            }
-            assert(initvals[4]->isNullValue());
-            initvals[4] = unspec;
-            initvals[0] = f;
-            cfunc.cfuncdata->setInitializer(ConstantArray::get(init->getType(), initvals));
-        };
-        jl_method_instance_t *mi = (jl_method_instance_t*)jl_get_specialization1((jl_tupletype_t*)sigt, latestworld);
-        Function *func = nullptr;
-        if ((jl_value_t*)mi != jl_nothing) {
-            auto it = compiled_mi.find(mi);
-            if (it != compiled_mi.end()) {
-                codeinst = it->second;
-                JL_GC_PROMISE_ROOTED(codeinst);
-                const auto &decls = out.ci_funcs.find(codeinst)->second;
-                jl_value_t *astrt = codeinst->rettype;
-                if (astrt != (jl_value_t*)jl_bottom_type &&
-                    jl_type_intersection(astrt, declrt) == jl_bottom_type) {
-                    // Do not warn if the function never returns since it is
-                    // occasionally required by the C API (typically error callbacks)
-                    // even though we're likely to encounter memory errors in that case
-                    jl_printf(JL_STDERR, "WARNING: cfunction: return type of %s does not match\n", name_from_method_instance(mi));
-                }
-                if (decls.invoke_api == JL_INVOKE_CONST) {
-                    std::string gf_thunk_name = emit_abi_constreturn(out, cfunc.abi, codeinst->rettype_const);
-                    auto F = out.get_module().getFunction(gf_thunk_name);
-                    assert(F);
-                    assign_fptr(F);
-                    continue;
-                }
-                else if (decls.invoke_api == JL_INVOKE_ARGS) {
-                    assert(decls.specptr);
-                    if (!cfunc.abi.specsig && jl_subtype(astrt, declrt)) {
-                        assign_fptr(decls.specptr);
-                        continue;
-                    }
-                    assign_fptr(aot_abi_converter(out, cfunc.abi, codeinst, nullptr, decls.specptr, false));
-                    continue;
-                }
-                else if (decls.invoke_api == JL_INVOKE_SPARAM) {
-                    func = nullptr; // use jl_invoke instead for these, since we don't declare these prototypes
-                }
-                else {
-                    assert(decls.specptr);
-                    if (jl_egal(mi->specTypes, sigt) && jl_egal(declrt, astrt)) {
-                        assign_fptr(decls.specptr);
-                        continue;
-                    }
-                    assign_fptr(aot_abi_converter(out, cfunc.abi, codeinst, func, decls.specptr, true));
-                    continue;
-                }
-            }
+        if (out.trampoline_invokees.count(cfunc.trampoline))
+            continue; // another call site already emitted this trampoline's adapter
+        emit_trampoline_adapter(out, cfunc.trampoline, cfunc.abi, compiled_mi, latestworld);
+        // Outside --trim, also emit the dynamic-dispatch ("unspecialized", ci == NULL)
+        // adapter for this signature, so a codegen-free run can dispatch this
+        // @cfunction/@ccallable even when the resolved target shifts (julia#61949). No
+        // trampoline owns it; it survives via the `emitted_adapters` report (see
+        // jl_create_native_impl). Under --trim, dynamic dispatch is unavailable, so skip it.
+        if (!jl_options.trim) {
+            Function *uf = aot_abi_converter(out, cfunc.abi, nullptr, nullptr, nullptr, false);
+            jl_abi_adapter_t *urec = jl_new_abi_adapter(cfunc.abi.sigt, cfunc.abi.rt,
+                    /*ci*/nullptr, cfunc.abi.specsig, cfunc.abi.kind,
+                    /*fptr*/nullptr);
+            JL_GC_PUSH1(&urec);
+            // Nothing else roots the record until it is pushed to `emitted_adapters`.
+            jl_array_ptr_1d_push(out.temporary_roots, (jl_value_t*)urec);
+            JL_GC_POP();
+            out.adapter_funcs.push_back({urec, uf});
         }
-        Function *f = codeinst ? aot_abi_converter(out, cfunc.abi, codeinst, func, nullptr, false) : unspec;
-        assign_fptr(f);
     }
 }
 
@@ -960,7 +1004,7 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
     generate_cfunc_thunks(out);
     // Transfer the emitted ABIAdapters to the caller while temporary_roots still protects them.
     if (emitted_adapters)
-        for (auto &[adapter, F] : out.abi_adapter_records)
+        for (auto &[adapter, F] : out.adapter_funcs)
             jl_array_ptr_1d_push(emitted_adapters, (jl_value_t*)adapter);
     aot_optimize_roots(out, method_roots);
     out.temporary_roots = nullptr;
@@ -1006,10 +1050,12 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
         data->jl_fvar_map[(jl_value_t*)ci] = {invoke_id, specptr_id};
     }
     // Register one fvar per ABIAdapter
-    for (auto &[adapter, F] : out.abi_adapter_records) {
+    for (auto &[adapter, F] : out.adapter_funcs) {
         data->jl_sysimg_fvars.push_back(F);
         data->jl_fvar_map[(jl_value_t*)adapter] = {0, (uint32_t)data->jl_sysimg_fvars.size()};
     }
+    for (auto &[tr, invokee] : out.trampoline_invokees)
+        data->trampoline_invokee_map[tr] = invokee;
 }
 
 // also be used by extern consumers like GPUCompiler.jl to obtain a module containing

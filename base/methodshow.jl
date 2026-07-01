@@ -413,6 +413,8 @@ function _cache_item_count(c)
 end
 show(io::IO, c::Core.ABIAdapterCache) = print(io, "Core.ABIAdapterCache with ",
     _cache_item_count(c), " adapters.")
+show(io::IO, c::Core.DispatchTrampolineCache) = print(io, "Core.DispatchTrampolineCache with ",
+    _cache_item_count(c), " trampolines.")
 
 function inbase(m::Module)
     if m == Base
