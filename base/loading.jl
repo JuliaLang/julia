@@ -3406,7 +3406,10 @@ function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, outpu
            --startup-file=no --history-file=no --warn-overwrite=yes
            $(have_color === nothing ? "--color=auto" : have_color ? "--color=yes" : "--color=no")
            -`
-    cmd = addenv(cmd, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1)
+    # Launch the precompile child with one compute + one :interactive thread so the
+    # tiered-compilation worker (spawned on the :interactive pool) runs in parallel
+    # with the precompile workload rather than time-slicing with it.
+    cmd = addenv(cmd, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => "1,1")
     # Only request per-package timing reports when explicitly asked for (e.g. by
     # precompilepkgs), so that the marker lines don't leak into normal load logs.
     report_timing && (cmd = addenv(cmd, "JULIA_PRECOMP_REPORT_TIMING" => 1))

@@ -242,7 +242,7 @@ function lookup(ip::Base.InterpreterIP)
             def_local = lno.method
             def_local isa Union{Method,Core.CodeInstance,MethodInstance} || (def_local = nothing)
         else
-            def_local = codeinfo
+            def_local = code isa CodeInfo ? codeinfo : code
         end
         res[i] = StackFrame(IRShow.normalize_method_name(lno.method), lno.file, lno.line,
             def_local, false, inlined, 0)

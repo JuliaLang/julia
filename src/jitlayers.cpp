@@ -505,7 +505,8 @@ extern "C" JL_DLLEXPORT_CODEGEN
 int jl_compile_codeinst_impl(jl_code_instance_t *ci)
 {
     int newly_compiled = 0;
-    if (!jl_is_compiled_codeinst(ci)) {
+    int already_compiled = jl_is_compiled_codeinst(ci);
+    if (!already_compiled) {
         ++SpecFPtrCount;
         uint64_t start = jl_typeinf_timing_begin();
         jl_ExecutionEngine->publishCIs(ci, true);
@@ -514,6 +515,7 @@ int jl_compile_codeinst_impl(jl_code_instance_t *ci)
     }
     return newly_compiled;
 }
+
 
 extern "C" JL_DLLEXPORT_CODEGEN
 void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
@@ -839,6 +841,8 @@ public:
             if (jl_atomic_cmpswap_relaxed(&CI->invoke, &Expected,
                                           jl_fptr_wait_for_compiled_addr))
                 Unique = JIT.makeUniqueCIName(CI, Funcs);
+            if (Unique.invoke || Unique.specptr)
+                Out.linker_info->ci_renames[CI] = {Unique.invoke, Unique.specptr};
             if (Unique.invoke)
                 Syms[Unique.invoke] = JITSymbolFlags::Callable | JITSymbolFlags::Exported;
             if (Unique.specptr)
@@ -1700,6 +1704,10 @@ JuliaOJIT::JuliaOJIT()
     OptimizeLayer(ES, JITPointersLayer, IRTransformRef(*Optimizers)),
     DebuginfoPlugin(std::make_shared<JLDebuginfoPlugin>())
 {
+    // Wire up the work_until stall diagnostic (src/julia-task-dispatcher.h):
+    // without this the 30s "future not completed" path can never dump the
+    // ORC session state, which names the wedged symbol/query.
+    SessionForStallDump = &ES;
 #if JL_LLVM_VERSION < 210000
 # if defined(LLVM_SHLIB)
     // When dynamically linking against LLVM, use our custom EH frame registration code
@@ -2022,7 +2030,7 @@ void JuliaOJIT::publishCIs(ArrayRef<jl_code_instance_t *> CIs, bool Wait)
         for (auto CI : CIs) {
             auto It = CISymbols.find(CI);
             if (It == CISymbols.end())
-                return;
+                continue;
             auto CISym = It->second;
             if (CISym.invoke)
                 Exports.add(CISym.invoke);
@@ -2045,7 +2053,13 @@ void JuliaOJIT::publishCIs(ArrayRef<jl_code_instance_t *> CIs, bool Wait)
         auto Syms = std::move(*SymsE);
         for (auto [i, CI] : llvm::enumerate(CIs)) {
             jl_codeinst_funcs_t<void *> Addrs{};
-            const auto &S = CISymbols.at(CIs[i]);
+            // The CI may have been unregistered (e.g. a tier promotion
+            // superseded its symbols) while this lookup was in flight; its
+            // installed entry points are newer than ours, so skip it.
+            auto It = CISymbols.find(CIs[i]);
+            if (It == CISymbols.end())
+                continue;
+            const auto &S = It->second;
             Addrs.invoke_api = S.invoke_api;
             if (S.invoke)
                 Addrs.invoke = (void *)Syms.at(S.invoke).getAddress().getValue();
@@ -2205,11 +2219,28 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
     auto RenameDef = [&](const SymbolStringPtr &Orig, const SymbolStringPtr &Dest)
                              JL_NOTSAFEPOINT { Syms.at(Orig)->setName(Dest); };
     for (auto &[CI, Funcs] : Info->ci_funcs) {
-        auto &S = CISymbols.at(CI);
-        if (Funcs.invoke)
-            RenameDef(Funcs.invoke, S.invoke);
-        if (Funcs.specptr)
-            RenameDef(Funcs.specptr, S.specptr);
+        // No stash entry: this module lost the CI's ownership CAS (to
+        // another module, or to a non-MU owner such as the tier worker),
+        // so its definitions were never registered, are not in the MU
+        // interface, and nothing references them — demote to local scope
+        // or JITLink rejects them as unexpected definitions.
+        auto It = Info->ci_renames.find(CI);
+        if (It == Info->ci_renames.end()) {
+            auto Demote = [&](const SymbolStringPtr &Orig) JL_NOTSAFEPOINT {
+                auto SIt = Syms.find(Orig);
+                if (SIt != Syms.end())
+                    SIt->second->setScope(jitlink::Scope::Local);
+            };
+            if (Funcs.invoke)
+                Demote(Funcs.invoke);
+            if (Funcs.specptr)
+                Demote(Funcs.specptr);
+            continue;
+        }
+        if (Funcs.invoke && It->second.first)
+            RenameDef(Funcs.invoke, It->second.first);
+        if (Funcs.specptr && It->second.second)
+            RenameDef(Funcs.specptr, It->second.second);
     }
 
     // Rename referenced CIs in the workqueue.

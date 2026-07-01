@@ -203,6 +203,8 @@ JL_DLLEXPORT void jl_set_inference_entrance_backtraces(jl_value_t* _inference_en
 
 JL_DLLEXPORT void jl_push_inference_entrance_backtraces(jl_value_t* ci)
 {
+    if (jl_tier_in_promotion())
+        return;
     JL_LOCK(&inference_entrance_backtraces_mutex);
     if (inference_entrance_backtraces == NULL) {
         JL_UNLOCK(&inference_entrance_backtraces_mutex);

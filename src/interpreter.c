@@ -340,7 +340,9 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         assert(n > 0);
         if (s->sparam_vals && n <= jl_svec_len(s->sparam_vals)) {
             jl_value_t *sp = jl_svecref(s->sparam_vals, n - 1);
-            if ((jl_is_svec(sp) || jl_has_free_typevars(sp)) && !s->preevaluation) {
+            // Only the svec marker means undetermined (matches emit_sparam):
+            // a determined value may itself contain free typevars (#61242).
+            if (jl_is_svec(sp) && !s->preevaluation) {
                 // look up the parameter name from the method's signature
                 jl_unionall_t *sig = (jl_unionall_t*)s->mi->def.method->sig;
                 jl_tvar_t *var = NULL;
@@ -530,11 +532,75 @@ static size_t eval_phi(jl_array_t *stmts, interpreter_state *s, size_t ns, size_
     return ip;
 }
 
+// On-stack replacement (Truffle-style; see jl_tier_set_osr_hook in tiered.c).
+// Snapshot the frame's slots + ssavalues, hand them with the back-edge
+// target to the Base hook, which compiles (and caches) a continuation
+// specialized on the live values and runs the rest of the call. Returns the
+// call's result, or NULL to decline (frame keeps interpreting).
+static jl_value_t *eval_try_osr(interpreter_state *s, size_t target0)
+{
+    if (!jl_tier_enabled() || s->src == NULL || s->mi == NULL)
+        return NULL;
+    if (!jl_is_method(s->mi->def.method))
+        return NULL;
+    // Resolve the Base OSR helper dynamically rather than holding a Julia
+    // @cfunction reference to it. _tier_osr builds continuation IR at
+    // runtime (dynamic dispatch, Expr construction) and is fundamentally
+    // un-trimmable; a static reference from start_tier_worker would pull it
+    // into every juliac --trim build's reachable graph and fail verify.
+    // A trimmed binary never interprets, so this path is dead there.
+    static _Atomic(jl_value_t*) osr_fn_cache;
+    jl_value_t *osr_fn = jl_atomic_load_acquire(&osr_fn_cache);
+    if (osr_fn == NULL) {
+        if (jl_base_module == NULL)
+            return NULL;
+        osr_fn = jl_get_global(jl_base_module, jl_symbol("_tier_osr"));
+        if (osr_fn == NULL)
+            return NULL;
+        jl_atomic_store_release(&osr_fn_cache, osr_fn);
+    }
+    // The hook runs inference + codegen; deep interpreted recursion may
+    // have nearly exhausted the C stack by the time the budget fires.
+    jl_ptls_t ptls = jl_current_task->ptls;
+    char here;
+    if (ptls->stackbase != NULL &&
+        (char*)&here - ((char*)ptls->stackbase - ptls->stacksize) < (ptrdiff_t)(4 << 20))
+        return NULL;
+    jl_code_info_t *src = s->src;
+    size_t n = jl_source_nslots(src) + jl_source_nssavalues(src);
+    jl_array_t *state = NULL;
+    jl_value_t *ipbox = NULL, *res = NULL, *val = NULL;
+    JL_GC_PUSH4(&state, &ipbox, &res, &val);
+    state = jl_alloc_vec_any(n);
+    for (size_t i = 0; i < n; i++) {
+        jl_value_t *v = s->locals[i];
+        if (v != NULL)
+            jl_array_ptr_set(state, i, v);
+    }
+    ipbox = jl_box_long((ssize_t)target0 + 1); // 1-based statement index
+    jl_value_t *fargs[5] = { osr_fn, (jl_value_t*)src, (jl_value_t*)s->mi, ipbox, (jl_value_t*)state };
+    res = jl_apply(fargs, 5);
+    if (res != NULL && res != jl_nothing)
+        val = jl_fieldref(res, 0); // Some{Any}.value
+    JL_GC_POP();
+    return val;
+}
+
 static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip, int toplevel)
 {
     jl_handler_t __eh;
     size_t ns = jl_array_nrows(stmts);
     jl_task_t *ct = jl_current_task;
+    // OSR accounting, local to this dispatch loop. The budget counts
+    // STATEMENTS EXECUTED, not back-edges, so the trigger is weighted by
+    // loop body size and approximates interpreted work: a 300-statement
+    // body escapes ~100x sooner (in iterations) than a 3-statement one,
+    // wasting a comparable amount of wall clock either way. The budget is
+    // only checked at back-edges (the continuation needs a loop-head
+    // entry); it parks at -1 after a declined attempt. The threshold is
+    // loaded once per frame (env-derived and stable).
+    int64_t osr_work = 0;
+    int64_t osr_threshold = (!toplevel && s->mi != NULL) ? (int64_t)jl_tier_get_osr_threshold() : 0;
 
     while (1) {
         s->ip = ip;
@@ -542,6 +608,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
             jl_error("`body` expression must terminate in `return`. Use `block` instead.");
         jl_value_t *stmt = jl_array_ptr_ref(stmts, ip);
         assert(!jl_is_phinode(stmt));
+        osr_work++; // OSR work budget; negligible next to statement dispatch
         size_t next_ip = ip + 1;
         assert(!jl_is_phinode(stmt) && !jl_is_phicnode(stmt) && "malformed IR");
         if (jl_is_gotonode(stmt)) {
@@ -756,6 +823,16 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
         else {
             eval_stmt_value(stmt, s);
         }
+        // Back-edge: consider on-stack replacement for method frames once
+        // this frame has burned through its interpreted-statement budget.
+        if (next_ip < ip && osr_threshold && osr_work >= 0) {
+            if (osr_work >= osr_threshold) {
+                jl_value_t *osr_ret = eval_try_osr(s, next_ip);
+                if (osr_ret != NULL)
+                    return osr_ret;
+                osr_work = INT64_MIN; // declined; stop asking in this frame
+            }
+        }
         ip = eval_phi(stmts, s, ns, next_ip);
     }
     abort();
@@ -815,12 +892,31 @@ jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi, size_t world)
 
 // interpreter entry points
 
-jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *codeinst)
+jl_value_t *NOINLINE jl_interpret_mi(jl_value_t *f, jl_value_t **args, uint32_t nargs,
+                                     jl_method_instance_t *mi, size_t world, int allow_rescue)
 {
     interpreter_state *s;
-    jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
+    // Tiered compilation probe (counts toward promotion). Gated on
+    // jl_tier_enabled so the --compile=min/off cached interp stub, whose
+    // dispatch also lands here, never feeds the queue when tiering is off.
+    if (jl_tier_enabled())
+        jl_tier_enqueue_mi(mi);
     jl_task_t *ct = jl_current_task;
-    size_t world = ct->world_age;
+    // Interpreted frames are an order of magnitude larger on the C stack
+    // than compiled ones, so deep recursion overflows under T0 where
+    // compiled code survives. When headroom runs low, rescue the frame:
+    // compile real code and enter it instead of interpreting.
+    if (allow_rescue && jl_tier_enabled() && jl_is_method(mi->def.method)) {
+        jl_ptls_t ptls = ct->ptls;
+        char here;
+        if (ptls->stackbase != NULL &&
+            (char*)&here - ((char*)ptls->stackbase - ptls->stacksize) < (ptrdiff_t)(4 << 20)) {
+            jl_code_instance_t *native = jl_compile_method_internal(mi, world);
+            jl_callptr_t inv = native == NULL ? NULL : jl_atomic_load_acquire(&native->invoke);
+            if (native != NULL && inv != NULL && inv != jl_fptr_interpret_call_addr)
+                return inv(f, args, nargs, native);
+        }
+    }
     jl_code_info_t *src = NULL;
     jl_value_t *code = jl_code_or_ci_for_interpreter(mi, world);
     jl_code_instance_t *ci = NULL;
@@ -865,6 +961,13 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     jl_value_t *r = eval_body(stmts, s, 0, 0);
     JL_GC_POP();
     return r;
+}
+
+jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *codeinst)
+{
+    return jl_interpret_mi(f, args, nargs, jl_get_ci_mi(codeinst),
+                           jl_current_task->world_age,
+                           /*allow_rescue*/codeinst->owner == jl_nothing);
 }
 
 JL_DLLEXPORT const jl_callptr_t jl_fptr_interpret_call_addr = &jl_fptr_interpret_call;

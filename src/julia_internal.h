@@ -799,6 +799,7 @@ typedef union {
 // Also defined in typeinfer.jl - See documentation there.
 #define SOURCE_MODE_NOT_REQUIRED            0x0
 #define SOURCE_MODE_ABI                     0x1
+#define SOURCE_MODE_GET_SOURCE              0xf
 
 #define METHOD_SIG_LATEST_WHICH             0b0001
 #define METHOD_SIG_LATEST_ONLY              0b0010
@@ -855,6 +856,17 @@ JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types);
 jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *lam JL_PROPAGATES_ROOT, size_t world);
 jl_value_t *jl_code_or_ci_for_interpreter(jl_method_instance_t *lam JL_PROPAGATES_ROOT, size_t world);
 int jl_code_requires_compiler(jl_code_info_t *src, int include_force_compile);
+// Reasons a method body cannot be parked in the interpreter T0 tier
+// (bitmask returned by jl_code_info_interp_reject_reasons /
+// jl_tier_method_interp_reasons; 0 = interp-eligible).
+#define JL_TIER_REJECT_LOOPS     0x01
+#define JL_TIER_REJECT_CCALL     0x02
+#define JL_TIER_REJECT_OPAQUE    0x04
+#define JL_TIER_REJECT_FORCED    0x08
+#define JL_TIER_REJECT_GENERATED 0x10
+#define JL_TIER_REJECT_NOSOURCE  0x20
+JL_DLLEXPORT int jl_code_info_interp_reject_reasons(jl_code_info_t *src);
+JL_DLLEXPORT int jl_code_info_avoid_interp(jl_code_info_t *src);
 jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ast);
 JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void);
 JL_DLLEXPORT void jl_resolve_definition_effects_in_ir(jl_array_t *stmts, jl_module_t *m, jl_svec_t *sparam_vals, jl_value_t *binding_edge,
@@ -2203,6 +2215,7 @@ JL_DLLEXPORT uint32_t jl_crc32c(uint32_t crc, const char *buf, size_t len);
 
 JL_DLLIMPORT void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec);
 JL_DLLIMPORT int jl_compile_codeinst(jl_code_instance_t *unspec);
+JL_DLLEXPORT void jl_tier_drain(void);
 JL_DLLIMPORT void jl_emit_codeinsts_to_jit(jl_code_instance_t **codeinsts, jl_code_info_t **srcs, int len);
 
 typedef struct {
@@ -2242,6 +2255,45 @@ JL_DLLIMPORT int jl_getFunctionInfo(jl_frame_t **frames, uintptr_t pointer, int 
 JL_DLLIMPORT uint64_t jl_getUnwindInfo(uint64_t dwBase) JL_NOTSAFEPOINT;
 JL_DLLIMPORT void jl_jit_register_ci(jl_code_instance_t *ci) JL_NOTSAFEPOINT;
 JL_DLLIMPORT void jl_jit_unregister_ci(jl_code_instance_t *ci) JL_NOTSAFEPOINT;
+
+// Tiered compilation (see contrib/tiered_compilation_plan.md).
+// `jl_tier_enqueue_mi` is the entry point for promotion candidates. It performs a
+// one-shot fetch_or on the MethodInstance's JL_MI_FLAGS_TIER_QUEUED bit: at most
+// one call per MethodInstance observes the win. Called from the interpreter entry
+// and the dispatch interp path (never from compiled code); kept allocation- and
+// safepoint-free so the queue lock is never held across a safepoint (see the
+// header comment in tiered.c). Thread-safe.
+#define JL_TIER_MAX_INTERP_NARGS 128
+JL_DLLEXPORT void jl_tier_enqueue_mi(jl_method_instance_t *mi) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_tier_set_debug(int enabled) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_tier_get_stats(uint64_t *calls, uint64_t *wins) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_tier_get_queue_stats(uint64_t *pushes, uint64_t *pops, uint64_t *drops) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uint64_t jl_tier_get_swaps(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_tier_reset_stats(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_tier_enabled(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_tier_interp_loops_enabled(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_tier_set_interp_loops(int enabled) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_tier_set_osr_hook(void *f) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void *jl_tier_get_osr_hook(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uint32_t jl_tier_get_osr_threshold(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uint32_t jl_tier_get_threshold(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_tier_set_threshold(uint32_t n) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_tier_init(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_tier_start_worker(void);
+JL_DLLEXPORT void jl_tier_stop_worker(void);
+JL_DLLEXPORT jl_method_instance_t *jl_tier_worker_pop(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_tier_quiesce(void);
+JL_DLLEXPORT void jl_tier_resume(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_tier_promote(jl_method_instance_t *mi);
+JL_DLLEXPORT int jl_tier_in_promotion(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_tier_ci_avoid_interp(jl_code_instance_t *ci);
+JL_DLLEXPORT int jl_tier_method_avoid_interp(jl_method_t *m);
+JL_DLLEXPORT int jl_tier_method_interp_reasons(jl_method_t *m);
+JL_DLLEXPORT void jl_tier_note_root_infer(jl_method_t *m, uint64_t ns);
+JL_DLLEXPORT void jl_tier_get_root_infer_stats(uint64_t *counts, uint64_t *ns);
+JL_DLLEXPORT void jl_tier_get_class_stats(uint64_t *compile, uint64_t *interp, uint64_t *unknown) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_tier_add_promote_ns(uint64_t ns) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_tier_get_timing(uint64_t *classify_ns, uint64_t *promote_ns) JL_NOTSAFEPOINT;
 
 #ifdef __cplusplus
 }

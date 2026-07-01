@@ -9022,6 +9022,7 @@ static jl_llvm_functions_t
     if (out.safepoint_on_entry && JL_FEAT_TEST(ctx, safepoint_on_entry))
         emit_gc_safepoint(ctx.builder, ctx.types().T_size, get_current_ptls(ctx), ctx.tbaa().tbaa_const);
 
+
     Value *last_age = NULL;
     Value *world_age_field = NULL;
     if (ctx.is_opaque_closure) {
@@ -9519,6 +9520,7 @@ static jl_llvm_functions_t
     }
 
     Instruction &prologue_end = ctx.builder.GetInsertBlock()->back();
+
 
     // step 11. Do codegen in control flow order
     SmallVector<int, 0> workstack;

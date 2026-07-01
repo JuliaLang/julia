@@ -3768,14 +3768,27 @@ static jl_value_t *normalize_to_cacheable_sig(jl_method_instance_t *mi JL_PROPAG
 
 static jl_code_instance_t *jl_compile_method_very_internal(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world,
     jl_value_t *F, jl_value_t **args, uint32_t nargs,
-    enum internal_compilation_triggers cause)
+    enum internal_compilation_triggers cause, int allow_interp, jl_method_instance_t **interp_mi)
 {
     // Quick check if we already have a compiled result
     // (which also catches any builtin functions).
     jl_code_instance_t *codeinst = jl_method_compiled(mi, world);
     if (codeinst) {
-        promote_cache_method(F, args, nargs, world, mi, normalize_to_cacheable_sig(mi), cause);
-        return codeinst;
+        // Under --compile=min/off an interp stub (invoke==jl_fptr_interpret_call,
+        // owner==nothing) is cached in mi->cache (see the block at ~3906). A
+        // latching consumer (allow_interp==0: cfunction, opaque closures, ABI
+        // converters, explicit compiles) must not accept that stub as real code,
+        // so fall through to re-derive native code. The tiered-compilation T0
+        // stub is ephemeral and never cached, so this guard never fires on the
+        // tiering path — there promotion is keyed on the MethodInstance and the
+        // worker re-derives via jl_compile_method_internal.
+        if (!(!allow_interp &&
+              jl_atomic_load_relaxed(&codeinst->invoke) == jl_fptr_interpret_call_addr &&
+              codeinst->owner == jl_nothing)) {
+            promote_cache_method(F, args, nargs, world, mi, normalize_to_cacheable_sig(mi), cause);
+            return codeinst;
+        }
+        codeinst = NULL;
     }
 
     // And additionally we want to catch OpaqueClosure explicitly, since it is not a Builtin subtype,
@@ -3857,6 +3870,30 @@ static jl_code_instance_t *jl_compile_method_very_internal(jl_method_instance_t 
         }
     }
 
+    // Tiered compilation interpreter-T0: signal the caller to run interp-eligible
+    // methods in the interpreter WITHOUT running inference (no stub CodeInstance is
+    // manufactured; _jl_invoke calls jl_interpret_mi on the MethodInstance directly).
+    // Eager inference of the full call graph dominates what remains of cold-start
+    // time once codegen is deferred. Only callers that can interpret pass interp_mi
+    // (dynamic dispatch); latching consumers pass NULL and fall through to compile.
+    if (interp_mi != NULL && compile_option == JL_OPTIONS_COMPILE_DEFAULT &&
+        jl_tier_enabled() && allow_interp &&
+        jl_is_method(def) && def->source != NULL && def->source != jl_nothing) {
+        // Loop-bearing bodies may also be interpreted when JULIA_TIER_INTERP_LOOPS
+        // is on; they are enqueued for promotion immediately so the worker runs
+        // their inference + codegen off this thread while the first invocation
+        // interprets (on-stack replacement escapes a very long first loop).
+        int reasons = jl_tier_method_interp_reasons(def);
+        int loops_ok = jl_tier_interp_loops_enabled();
+        if (reasons == 0 || (loops_ok && (reasons & ~JL_TIER_REJECT_LOOPS) == 0)) {
+            if (reasons & JL_TIER_REJECT_LOOPS)
+                jl_tier_enqueue_mi(mi);
+            promote_cache_method(F, args, nargs, world, mi, mi == mi2 ? mi->specTypes : normalize_to_cacheable_sig(mi), cause);
+            *interp_mi = mi;
+            return NULL;
+        }
+    }
+
     // Ok, compilation is enabled. We'll need to try to compile something (probably).
     jl_atomic_store_relaxed(&mi->precompile, 1);
 
@@ -3881,8 +3918,18 @@ static jl_code_instance_t *jl_compile_method_very_internal(jl_method_instance_t 
     // Don't bother inferring toplevel thunks or macros - the performance cost of inference is likely
     // to significantly exceed the actual runtime.
     int should_skip_inference = !jl_is_method(mi->def.method) || jl_method_is_macro(mi->def.method);
-    if (!should_skip_inference)
-        codeinst = jl_type_infer(mi, world, SOURCE_MODE_ABI, jl_options.trim);
+    if (!should_skip_inference) {
+        if (jl_tier_enabled() && allow_interp) {
+            // Profiling (interp-T0 only): attribute root inference time to the
+            // reason the interp gate above declined to park this method.
+            uint64_t rt0 = jl_hrtime();
+            codeinst = jl_type_infer(mi, world, SOURCE_MODE_ABI, jl_options.trim);
+            jl_tier_note_root_infer(jl_is_method(def) ? def : NULL, jl_hrtime() - rt0);
+        }
+        else {
+            codeinst = jl_type_infer(mi, world, SOURCE_MODE_ABI, jl_options.trim);
+        }
+    }
 
     if (codeinst) {
         mi2 = jl_get_ci_mi(codeinst);
@@ -3922,7 +3969,7 @@ static jl_code_instance_t *jl_compile_method_very_internal(jl_method_instance_t 
         // and try to populate some caches
         mi2 = jl_normalize_to_compilable_mi(mi);
         if (mi != mi2) {
-            codeinst = jl_compile_method_very_internal(mi2, world, F, args, nargs, cause);
+            codeinst = jl_compile_method_very_internal(mi2, world, F, args, nargs, cause, allow_interp, NULL);
             if (need_copy_to_mi_cache(mi, mi2, cause)) {
                 codeinst = copy_to_mi_cache(mi, codeinst);
                 mi2 = mi;
@@ -3972,7 +4019,9 @@ static jl_code_instance_t *jl_compile_method_very_internal(jl_method_instance_t 
 
 jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t world)
 {
-    return jl_compile_method_very_internal(mi, world, NULL, NULL, 0, TRIGGER_FOREIGN);
+    // Latching entry point (cfunction, opaque closures, explicit precompile):
+    // must produce real code, never an interp-parked CI.
+    return jl_compile_method_very_internal(mi, world, NULL, NULL, 0, TRIGGER_FOREIGN, /*allow_interp*/0, NULL);
 }
 
 jl_value_t *jl_fptr_const_return(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *m)
@@ -4000,6 +4049,10 @@ jl_value_t *jl_fptr_wait_for_compiled(jl_value_t *f, jl_value_t **args, uint32_t
 {
     jl_callptr_t invoke = jl_atomic_load_acquire(&m->invoke);
     if (invoke == &jl_fptr_wait_for_compiled) {
+        // The tail call below retries until the owner publishes; without a
+        // safepoint the retry spin blocks stop-the-world, deadlocking against
+        // threads that must run for the owner to finish.
+        jl_gc_safepoint();
         int64_t last_alloc = jl_options.malloc_log ? jl_gc_diff_total_bytes() : 0;
         int last_errno = errno;
 #ifdef _OS_WINDOWS_
@@ -4306,7 +4359,12 @@ STATIC_INLINE jl_value_t *_jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t 
 {
     jl_code_instance_t *codeinst = NULL;
     jl_callptr_t invoke = jl_method_compiled_callptr(mfunc, world, &codeinst);
-    if (invoke) {
+    // Huge-arity calls must run compiled: every dynamic dispatch inside an
+    // interpreted frame redoes the typemap search in O(nargs), so an
+    // interpreted vararg callee turns one splat call into quadratic work.
+    int allow_interp = nargs < JL_TIER_MAX_INTERP_NARGS;
+    if (invoke && (allow_interp || invoke != jl_fptr_interpret_call_addr ||
+                   codeinst->owner != jl_nothing)) {
         jl_value_t *res = invoke(F, args, nargs, codeinst);
         return verify_type(res);
     }
@@ -4315,13 +4373,16 @@ STATIC_INLINE jl_value_t *_jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t 
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
 #endif
-    codeinst = jl_compile_method_very_internal(mfunc, world, F, args, nargs, cause);
+    jl_method_instance_t *interp_mi = NULL;
+    codeinst = jl_compile_method_very_internal(mfunc, world, F, args, nargs, cause, allow_interp, &interp_mi);
 #ifdef _OS_WINDOWS_
     SetLastError(last_error);
 #endif
     errno = last_errno;
     if (jl_options.malloc_log)
         jl_gc_sync_total_bytes(last_alloc); // discard allocation count from compilation
+    if (interp_mi)
+        return verify_type(jl_interpret_mi(F, args, nargs, interp_mi, world, /*allow_rescue*/1));
     invoke = jl_atomic_load_acquire(&codeinst->invoke);
     jl_value_t *res = invoke(F, args, nargs, codeinst);
     return verify_type(res);
@@ -4345,7 +4406,7 @@ JL_DLLEXPORT jl_value_t *jl_invoke_oneshot(jl_value_t *F, jl_value_t **args, uin
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
 #endif
-    jl_code_instance_t *codeinst = jl_compile_method_very_internal(mfunc, world, F, args, nargs, TRIGGER_NONE);
+    jl_code_instance_t *codeinst = jl_compile_method_very_internal(mfunc, world, F, args, nargs, TRIGGER_NONE, /*allow_interp*/1, NULL);
     if (jl_options.malloc_log)
         jl_gc_sync_total_bytes(last_alloc); // discard allocation count from compilation
     uint8_t specsigflags;

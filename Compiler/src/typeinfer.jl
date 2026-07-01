@@ -1041,6 +1041,9 @@ function return_cached_result(interp::AbstractInterpreter, method::Method, inf_r
     end
     effects = inf_result.ipo_effects
     codeinst = inf_result.ci
+    if !isdefined(inf_result, :ci_as_edge)
+        inf_result.ci_as_edge = codeinst
+    end
     update_valid_age!(caller, get_inference_world(interp), inf_result.valid_worlds)
     caller.time_caches += reinterpret(Float16, codeinst.time_infer_total)
     caller.time_caches += reinterpret(Float16, codeinst.time_infer_cache_saved)

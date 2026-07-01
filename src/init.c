@@ -253,6 +253,16 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
     if (jl_base_module) {
         size_t last_age = ct->world_age;
         ct->world_age = jl_get_world_counter();
+        // Stop the tiered-compilation worker before any teardown. It is an adopted
+        // OS thread that runs background promotion (inference + codegen), which can
+        // emit to JL_STDOUT/STDERR; in a precompile subprocess those are libuv pipes,
+        // so a write the worker queues could complete (jl_uv_writecb) after the stream
+        // fds are closed below, firing EBADF. Doing it here — before the Julia _atexit
+        // hooks, the stream finalizers, and the io-loop flush — closes that race at the
+        // C level independent of atexit-hook ordering. The worker only exists when
+        // Base is loaded, so guarding on jl_base_module misses nothing. Idempotent:
+        // the Base _atexit hook that also stops it then runs harmlessly.
+        jl_tier_stop_worker();
         jl_value_t *f = jl_get_global_value(jl_base_module, jl_symbol("_atexit"), ct->world_age);
         if (f != NULL) {
             jl_value_t **fargs;
@@ -591,6 +601,8 @@ static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, j
     jl_image_t parsed_image = jl_load_sysimg(sysimage, jl_options.cpu_target);
 
     jl_init_codegen();
+
+    jl_tier_init();
 
     if (sysimage.kind != JL_IMAGE_KIND_NONE) {
         // Load the .ji or .so sysimage

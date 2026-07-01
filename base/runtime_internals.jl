@@ -1742,6 +1742,11 @@ function _uncompressed_ir(m::Method)
     s = m.source
     if s isa String
         s = ccall(:jl_uncompress_ir, Ref{CodeInfo}, (Any, Ptr{Cvoid}, Any), m, C_NULL, s)
+    else
+        # The interpreter caches the uncompressed source on the method
+        # (jl_code_or_ci_for_interpreter); callers own the result and may
+        # mutate it, so never hand out the cached object itself.
+        s = copy(s::CodeInfo)
     end
     return s::CodeInfo
 end

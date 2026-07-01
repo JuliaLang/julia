@@ -228,6 +228,8 @@ typedef jl_value_t *(*jl_fptr_sparam_t)(jl_value_t*, jl_value_t**, uint32_t, jl_
 
 extern jl_call_t jl_fptr_interpret_call;
 JL_DLLEXPORT extern const jl_callptr_t jl_fptr_interpret_call_addr;
+jl_value_t *jl_interpret_mi(jl_value_t *f, jl_value_t **args, uint32_t nargs,
+                            jl_method_instance_t *mi, size_t world, int allow_rescue);
 
 JL_DLLEXPORT extern const jl_callptr_t jl_f_opaque_closure_call_addr;
 
@@ -445,12 +447,20 @@ struct _jl_method_instance_t {
     //   bit 1: dispatched
     //   bit 2: The ->backedges field is currently being walked higher up the stack - entries may be deleted, but not moved
     //   bit 3: The ->backedges field was modified and should be compacted when clearing bit 2
+    //   bit 4: tier promotion has been claimed for this MethodInstance — set once
+    //          (one-shot CAS via fetch_or) when first enqueued, never cleared, so it
+    //          gates all future enqueues (dedup in flight; no retry after done/failed)
+    // bit 4 is C-only (mi.flags is declared jl_bool_type in Julia) and is transient
+    // JIT-worker state: it is zeroed when serialized (staticdata.c).
     _Atomic(uint8_t) flags;
     _Atomic(uint8_t) dispatch_status; // bits defined in staticdata.jl
     _Atomic(uint8_t) precompile; // if set, this will be added to the output system image
+    _Atomic(uint32_t) tier_count; // T0 interpreted-call count toward the tier-promotion threshold; transient, zeroed on serialize
 };
 #define JL_MI_FLAGS_MASK_PRECOMPILED    0x01
 #define JL_MI_FLAGS_MASK_DISPATCHED     0x02
+// bits 0x04/0x08 are MI_FLAG_BACKEDGES_INUSE/DIRTY (julia_internal.h)
+#define JL_MI_FLAGS_TIER_QUEUED         0x10
 
 // OpaqueClosure
 typedef struct _jl_opaque_closure_t {
@@ -470,10 +480,13 @@ typedef struct _jl_opaque_closure_t {
 //   time_infer_total, time_infer_self
 
 // flags bits for CodeInstance
-#define JL_CI_FLAGS_SPECPTR_SPECIALIZED      0b0001
-#define JL_CI_FLAGS_INVOKE_MATCHES_SPECPTR   0b0010
-#define JL_CI_FLAGS_FROM_IMAGE               0b0100
-#define JL_CI_FLAGS_NATIVE_CACHE_VALID       0b1000
+#define JL_CI_FLAGS_SPECPTR_SPECIALIZED      0b00000001
+#define JL_CI_FLAGS_INVOKE_MATCHES_SPECPTR   0b00000010
+#define JL_CI_FLAGS_FROM_IMAGE               0b00000100
+#define JL_CI_FLAGS_NATIVE_CACHE_VALID       0b00001000
+// Tiered compilation keeps NO CodeInstance-level state: promotion is arbitrated
+// entirely on the MethodInstance (JL_MI_FLAGS_TIER_QUEUED). Bits 0b00010000 and
+// 0b00100000 are free. See contrib/tiered_compilation_plan.md
 
 typedef struct _jl_code_instance_t {
     JL_DATA_TYPE
