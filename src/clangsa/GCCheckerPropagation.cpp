@@ -302,12 +302,7 @@ bool GCChecker::isFDAnnotatedNotSafepoint(const clang::FunctionDecl *FD, const S
       return false;
   if (declHasAnnotation(FD, "julia_not_safepoint"))
       return true;
-  SourceLocation Loc = FD->getLocation();
-  StringRef Name = SM.getFilename(Loc);
-  Name = llvm::sys::path::filename(Name);
-  if (Name.starts_with("llvm-"))
-      return true;
-  return false;
+  return jl_clangsa::isInLLVMHeaderFile(FD->getLocation(), SM);
 }
 
 static bool isMutexLock(StringRef name) {
@@ -523,14 +518,9 @@ bool GCChecker::isSafepoint(const CallEvent &Call, CheckerContext &C) const {
       if (Decl == nullptr)
           Decl = CE->getCalleeDecl(); // ignores dyn_cast<FunctionDecl>, so it could also be a MemberDecl, etc.
     }
-    const DeclContext *DC = Decl ? Decl->getDeclContext() : nullptr;
-    while (DC) {
-      // Anything in llvm or std is not a safepoint
-      if (const NamespaceDecl *NDC = dyn_cast<NamespaceDecl>(DC))
-        if (NDC->getName() == "llvm" || NDC->getName() == "std" || NDC->getName() == "tp")
-          return false;
-      DC = DC->getParent();
-    }
+    // Anything in llvm, std, or tp is not a safepoint
+    if (Decl && jl_clangsa::isInNonSafepointNamespace(Decl->getDeclContext()))
+      return false;
     const FunctionDecl *FD = Decl ? Decl->getAsFunction() : nullptr;
     if (!Decl || !FD) {
       if (Callee == nullptr) {
@@ -553,10 +543,7 @@ bool GCChecker::isSafepoint(const CallEvent &Call, CheckerContext &C) const {
           FD->getDeclName().isIdentifier() ? FD->getName() : "";
       if (FD->getBuiltinID() != 0 || FD->isTrivial())
         isCalleeSafepoint = false;
-      else if ((FDName.starts_with("uv_") ||
-                FDName.starts_with("unw_") ||
-                FDName.starts_with("_U")) &&
-               FDName != "uv_run")
+      else if (jl_clangsa::nameIsNonSafepointRuntimeHelper(FDName))
         isCalleeSafepoint = false;
       else
         isCalleeSafepoint = !isFDAnnotatedNotSafepoint(FD, getSM(C));

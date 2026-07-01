@@ -18,6 +18,8 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/Debug.h"
 
+#include "HelpersCommon.hpp"
+
 #include <memory>
 #include <optional>
 #include <utility>

@@ -667,11 +667,15 @@ GC_CHECKER_SOURCES := \
 	$(SRCDIR)/clangsa/GCCheckerReporting.cpp \
 	$(SRCDIR)/clangsa/GCCheckerPropagation.cpp
 
-$(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT): $(GC_CHECKER_SOURCES) $(SRCDIR)/clangsa/GCChecker.h $(LLVM_CONFIG_ABSOLUTE)
+CLANGSA_PLUGIN_NAMES := GCChecker ImplicitAtomics FirstDeclAnnotations
+CLANGSA_PLUGINS := $(addsuffix Plugin.$(SHLIB_EXT),$(addprefix $(build_shlibdir)/lib,$(CLANGSA_PLUGIN_NAMES)))
+GCCHECKER_PLUGIN := $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT)
+
+$(GCCHECKER_PLUGIN): $(GC_CHECKER_SOURCES) $(SRCDIR)/clangsa/GCChecker.h $(SRCDIR)/clangsa/HelpersCommon.hpp $(LLVM_CONFIG_ABSOLUTE)
 	@$(call PRINT_CC, $(CXX) -g $(fPIC) -shared -o $@ -DCLANG_PLUGIN -I$(build_includedir) -L$(build_libdir) \
 		$(LLVM_CXXFLAGS) $(CLANG_LDFLAGS) $(CPPFLAGS) $(CXXFLAGS) $(LDFLAGS) $(CXXLDFLAGS) $(GC_CHECKER_SOURCES))
 
-$(build_shlibdir)/lib%Plugin.$(SHLIB_EXT): $(SRCDIR)/clangsa/%.cpp $(LLVM_CONFIG_ABSOLUTE)
+$(build_shlibdir)/lib%Plugin.$(SHLIB_EXT): $(SRCDIR)/clangsa/%.cpp $(SRCDIR)/clangsa/HelpersCommon.hpp $(LLVM_CONFIG_ABSOLUTE)
 	@$(call PRINT_CC, $(CXX) -g $(fPIC) -shared -o $@ -DCLANG_PLUGIN -I$(build_includedir) -L$(build_libdir) \
 		$(LLVM_CXXFLAGS) $(CLANG_LDFLAGS) $(CPPFLAGS) $(CXXFLAGS) $(LDFLAGS) $(CXXLDFLAGS) $<)
 
@@ -700,9 +704,7 @@ ifneq ($(BUILD_LLVM_CLANG),1)
 endif
 endif
 
-clangsa: $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT)
-clangsa: $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT)
-clangsa: $(build_shlibdir)/libFirstDeclAnnotationsPlugin.$(SHLIB_EXT)
+clangsa: $(CLANGSA_PLUGINS)
 
 # optarg is a required_argument for these
 SA_EXCEPTIONS-jloptions.c                   := -Xanalyzer -analyzer-config -Xanalyzer silence-checkers="core.NonNullParamChecker;unix.cstring.NullArg"
@@ -717,14 +719,14 @@ SKIP_GC_CHECK := codegen.cpp rtutils.c
 
 # make sure LLVM's invariant information is not discarded with -DNDEBUG
 clang-sagc-%: JCXXFLAGS_COMMON += -UNDEBUG
-clang-sagc-%: $(SRCDIR)/%.c $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) .FORCE | analyzegc-deps-check
+clang-sagc-%: $(SRCDIR)/%.c $(GCCHECKER_PLUGIN) .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang -D__clang_gcanalyzer__ --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text --analyzer-no-default-checks \
-		-Xclang -load -Xclang $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker \
+		-Xclang -load -Xclang $(GCCHECKER_PLUGIN) -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker \
 		$(SA_EXCEPTIONS-$(notdir $<)) \
 		$(CLANG_TOOLING_C_FLAGS) -fcolor-diagnostics -x c $<)
-clang-sagc-%: $(SRCDIR)/%.cpp $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) .FORCE | analyzegc-deps-check
+clang-sagc-%: $(SRCDIR)/%.cpp $(GCCHECKER_PLUGIN) .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang -D__clang_gcanalyzer__ --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text --analyzer-no-default-checks \
-		-Xclang -load -Xclang $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker \
+		-Xclang -load -Xclang $(GCCHECKER_PLUGIN) -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker \
 		$(SA_EXCEPTIONS-$(notdir $<)) \
 		$(CLANG_TOOLING_CXX_FLAGS) -fcolor-diagnostics -x c++ $<)
 
@@ -750,16 +752,18 @@ clang-sa-%: $(SRCDIR)/%.cpp .FORCE | analyzegc-deps-check
 # src/support/analyzer_annotations.h), so run the checks once in the normal
 # build configuration and once with the analyzer define active (when the
 # annotations are visible).
-TIDY_PLUGINS := -load $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT) -load $(build_shlibdir)/libFirstDeclAnnotationsPlugin.$(SHLIB_EXT)
-TIDY_CHECKS := -clang-analyzer-*$(COMMA)-clang-diagnostic-*$(COMMA)concurrency-implicit-atomics$(COMMA)julia-first-decl-annotations
-clang-tidy-%: $(SRCDIR)/%.c $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT) $(build_shlibdir)/libFirstDeclAnnotationsPlugin.$(SHLIB_EXT) .FORCE | analyzegc-deps-check
+TIDY_PLUGIN_NAMES := $(filter-out GCChecker,$(CLANGSA_PLUGIN_NAMES))
+TIDY_PLUGIN_LIBS := $(addsuffix Plugin.$(SHLIB_EXT),$(addprefix $(build_shlibdir)/lib,$(TIDY_PLUGIN_NAMES)))
+TIDY_PLUGINS := $(addprefix -load ,$(TIDY_PLUGIN_LIBS))
+TIDY_CHECKS := -clang-analyzer-*,-clang-diagnostic-*,concurrency-implicit-atomics,julia-first-decl-annotations
+clang-tidy-%: $(SRCDIR)/%.c $(TIDY_PLUGIN_LIBS) .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang-tidy $< -header-filter='.*' --quiet \
 		$(TIDY_PLUGINS) --checks='$(TIDY_CHECKS)' --warnings-as-errors='*' \
 		-- $(CLANG_TOOLING_C_FLAGS) -fcolor-diagnostics -fno-caret-diagnostics -x c)
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang-tidy $< -header-filter='.*' --quiet \
 		$(TIDY_PLUGINS) --checks='$(TIDY_CHECKS)' --warnings-as-errors='*' \
 		-- $(CLANG_TOOLING_C_FLAGS) -D__clang_gcanalyzer__ -fcolor-diagnostics -fno-caret-diagnostics -x c)
-clang-tidy-%: $(SRCDIR)/%.cpp $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT) $(build_shlibdir)/libFirstDeclAnnotationsPlugin.$(SHLIB_EXT) .FORCE | analyzegc-deps-check
+clang-tidy-%: $(SRCDIR)/%.cpp $(TIDY_PLUGIN_LIBS) .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang-tidy $< -header-filter='.*' --quiet \
 		$(TIDY_PLUGINS) --checks='$(TIDY_CHECKS)' --warnings-as-errors='*' \
 		-- $(CLANG_TOOLING_CXX_FLAGS) -fcolor-diagnostics --system-header-prefix=llvm -Wno-deprecated-declarations -fno-caret-diagnostics -x c++)
@@ -767,9 +771,6 @@ clang-tidy-%: $(SRCDIR)/%.cpp $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB
 		$(TIDY_PLUGINS) --checks='$(TIDY_CHECKS)' --warnings-as-errors='*' \
 		-- $(CLANG_TOOLING_CXX_FLAGS) -D__clang_gcanalyzer__ -fcolor-diagnostics --system-header-prefix=llvm -Wno-deprecated-declarations -fno-caret-diagnostics -x c++)
 
-# Flag functions with external linkage that are neither declared in a header nor
-# marked `static` (see src/clangsa/StaticOrDeclared.cpp). Kept as its own target
-# rather than folded into `clang-tidy-%` so it can be run independently.
 # Add C files as a target of `analyzesrc` and `analyzegc` and `tidysrc`
 .PHONY: tidysrc
 tidysrc: $(addprefix clang-tidy-,$(CODEGEN_SRCS) $(SRCS))
@@ -786,9 +787,7 @@ $(addprefix analyze-,$(filter-out $(basename $(SKIP_GC_CHECK)),$(CODEGEN_SRCS) $
 
 .PHONY: clean-analyzegc
 clean-analyzegc:
-	rm -f $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT)
-	rm -f $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT)
-	rm -f $(build_shlibdir)/libFirstDeclAnnotationsPlugin.$(SHLIB_EXT)
+	rm -f $(CLANGSA_PLUGINS)
 
 # Compilation database generation using existing clang infrastructure
 .PHONY: regenerate-compile_commands
