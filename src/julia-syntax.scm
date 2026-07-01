@@ -3716,6 +3716,11 @@
                           (vinfo:set-sa! vi #f)
                           (vinfo:set-sa! vi #t))
                       (vinfo:set-asgn! vi #t))))
+         ;; record SSAs bound to `(top broadcasted_kwsyntax)` so the
+         ;; matching kwcall below can recover the user `f`
+         (when (and (pair? (cadr e)) (eq? (car (cadr e)) 'ssavalue)
+                    (equal? (caddr e) '(top broadcasted_kwsyntax)))
+           (put! tab (cons 'kw-broadcast-ssa (cadr (cadr e))) #t))
          (unless (null? (cddr e))
            (analyze-vars (caddr e) env captvars sp tab)))
         ((call)
@@ -3730,6 +3735,21 @@
            ;; calls to functions with keyword args have head of `kwcall` first
            (if (and (length> e 3) (equal? (cadr e) '(core kwcall)))
                (let ((vi2 (get tab (cadddr e) #f)))
+                 (if vi2
+                     (vinfo:set-called! vi2 #t))))
+           ;; mark `f` called in `f.(x)` and `f.(x; kw=v)` so the
+           ;; arg-despecialization heuristic preserves its concrete type
+           (if (and (length> e 2)
+                    (equal? (cadr e) '(top broadcasted)))
+               (let ((vi2 (get tab (caddr e) #f)))
+                 (if vi2
+                     (vinfo:set-called! vi2 #t))))
+           (if (and (length> e 4)
+                    (equal? (cadr e) '(core kwcall))
+                    (pair? (cadddr e))
+                    (eq? (car (cadddr e)) 'ssavalue)
+                    (get tab (cons 'kw-broadcast-ssa (cadr (cadddr e))) #f))
+               (let ((vi2 (get tab (car (cddddr e)) #f)))
                  (if vi2
                      (vinfo:set-called! vi2 #t))))
            (for-each (lambda (x) (analyze-vars x env captvars sp tab))
