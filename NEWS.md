@@ -22,6 +22,11 @@ New language features
 Language changes
 ----------------
 
+  - The implementation of non-scalar indexed assignment (`A[I...] = X`) now matches its
+    documentation, throwing `DimensionMismatch` on incompatible shapes that the previous
+    implementation would permit, and allowing non-1-based axes on the right-hand value (`X`)
+    that would previously have been forbidden ([#59025]).
+
 Compiler/Runtime improvements
 -----------------------------
 
