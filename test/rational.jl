@@ -923,3 +923,27 @@ end
     @test rationalize(BigInt, r) == Rational{BigInt}(r) == r
     @test rationalize(Int64, big(r)) == r
 end
+
+@testset "rationalize(x; tol) accuracy (issue #61138)" begin
+    for T in (Float16, Float32, Float64, BigFloat)
+        tol = T(0.001)
+        for x in (T(0.96975), T(0.985375))
+            r = rationalize(x; tol)
+            @test abs(BigFloat(r) - x) ≤ tol
+        end
+
+        for n in (816, 17651, 3508340, 838336199, 4635432243531484, 9007199254740990, 9223372036854774784)
+            if n ≤ maxintfloat(T) # issue #49803
+                x = 1/T(n)
+                e = eps(x)
+                r1 = rationalize(Int64, x)
+                r2 = rationalize(Int64, x; tol=e/2)
+                @test abs(BigFloat(r1) - x) ≤ e
+                @test abs(BigFloat(r2) - x) ≤ e/2
+                if inv(x) == n
+                    @test r1 == r2 == 1//n
+                end
+            end
+        end
+    end
+end
