@@ -5,6 +5,8 @@
     XX(abi_adapter_type, jl_datatype_t*) \
     XX(abi_adapter_cache_type, jl_datatype_t*) \
     XX(abi_adapters, jl_abi_adapter_cache_t*) \
+    XX(dispatch_trampoline_cache_type, jl_datatype_t*) \
+    XX(dispatch_trampolines, jl_dispatch_trampoline_cache_t*) \
     XX(abioverride_type, jl_datatype_t*) \
     XX(abstractarray_type, jl_unionall_t*) \
     XX(abstractstring_type, jl_datatype_t*) \
@@ -129,6 +131,7 @@
     XX(top_module, jl_module_t*) \
     XX(trimfailure_type, jl_datatype_t*) \
     XX(tuple_typename, jl_typename_t*) \
+    XX(dispatch_trampoline_type, jl_datatype_t*) \
     XX(tvar_type, jl_datatype_t*) \
     XX(typeerror_type, jl_datatype_t*) \
     XX(typeeq_type, jl_datatype_t*) \

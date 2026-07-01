@@ -3610,6 +3610,33 @@ void jl_init_types(void) JL_GC_DISABLED
     const static uint32_t abi_adapter_atomicfields[1] = { 0b100000 }; // next (field 5)
     jl_abi_adapter_type->name->atomicfields = abi_adapter_atomicfields;
 
+    // The latest-world dispatch trampoline record (see jl_dispatch_trampoline_t in julia.h),
+    // used by @cfunction/@ccallable. Mutable; fptr/last_world are atomic (the latest-world
+    // polling protocol). The trailing fields may be #undef until first resolution.
+    jl_dispatch_trampoline_type =
+        jl_new_datatype(jl_symbol("DispatchTrampoline"), core, jl_any_type, jl_emptysvec,
+                        jl_perm_symsvec(7,
+                            "sigt", // resolution sig (also the adapter ABI sig)
+                            "rt",   // declared return type (declrt for @cfunction)
+                            "last_invoked", // resolved dispatch target: Union{CodeInstance, ABIAdapter}
+                            "fptr", // ABI adapter
+                            "last_world",
+                            "specsig", // 1 if fptr is a specsig adapter
+                            "next"), // next record in the `sigt` bucket chain (may be NULL)
+                        jl_svec(7,
+                            jl_any_type,   // hash-consed Tuple type
+                            jl_any_type,   // hash-consed return type
+                            jl_any_type,   // Union{CodeInstance, ABIAdapter} (may be #undef)
+                            pointer_void,  // cached resolved adapter (atomic)
+                            jl_ulong_type, // last_world (atomic)
+                            jl_uint8_type, // specsig
+                            jl_any_type),  // next (atomic)
+                        jl_emptysvec,
+                        0, 1, 2);
+    // fptr (field 3), last_world (field 4), next (field 6) are atomic (0-indexed).
+    const static uint32_t dispatch_trampoline_atomicfields[1] = { 0b1011000 };
+    jl_dispatch_trampoline_type->name->atomicfields = dispatch_trampoline_atomicfields;
+
     // Singleton ABIAdapterCache type: holds the `adapters` TypeMap root (jl_nothing /
     // TypeMapLevel / TypeMapEntry), replaced atomically on insert. The `jl_mutex_t writelock`
     // is a trailing hidden C field (not registered here), following jl_method_type's writelock.
@@ -3621,6 +3648,17 @@ void jl_init_types(void) JL_GC_DISABLED
                         0, 1, 1);
     const static uint32_t abi_adapter_cache_atomicfields[1] = { 0b1 }; // adapters
     jl_abi_adapter_cache_type->name->atomicfields = abi_adapter_cache_atomicfields;
+
+    // Singleton DispatchTrampolineCache type: sibling of ABIAdapterCache holding the `trampolines`
+    // TypeMap root, with its own trailing hidden `jl_mutex_t writelock` (separate lock).
+    jl_dispatch_trampoline_cache_type =
+        jl_new_datatype(jl_symbol("DispatchTrampolineCache"), core, jl_any_type, jl_emptysvec,
+                        jl_perm_symsvec(1, "cache"),
+                        jl_svec1(jl_any_type), // trampolines: TypeMap root (jl_nothing when empty)
+                        jl_emptysvec,
+                        0, 1, 1);
+    const static uint32_t dispatch_trampoline_cache_atomicfields[1] = { 0b1 }; // trampolines
+    jl_dispatch_trampoline_cache_type->name->atomicfields = dispatch_trampoline_cache_atomicfields;
 
     tv = jl_svec2(tvar("T"), tvar("N"));
     jl_abstractarray_type = (jl_unionall_t*)
@@ -3684,6 +3722,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_an_empty_vec_any = (jl_value_t*)jl_alloc_vec_any(0); // used internally
     jl_an_empty_memory_any = (jl_value_t*)jl_alloc_memory_any(0); // used internally
     jl_abi_adapters = jl_new_abi_adapter_cache(); // process-global ABI-adapter cache
+    jl_dispatch_trampolines = jl_new_dispatch_trampoline_cache(); // process-global @cfunction/@ccallable trampoline cache
 
     // finish initializing module Core
     core = jl_core_module;

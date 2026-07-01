@@ -64,6 +64,17 @@ JL_DLLEXPORT jl_abi_adapter_cache_t *jl_new_abi_adapter_cache(void)
     return c;
 }
 
+JL_DLLEXPORT jl_dispatch_trampoline_cache_t *jl_new_dispatch_trampoline_cache(void)
+{
+    jl_task_t *ct = jl_current_task;
+    jl_dispatch_trampoline_cache_t *c =
+        (jl_dispatch_trampoline_cache_t*)jl_gc_alloc(ct->ptls, sizeof(jl_dispatch_trampoline_cache_t),
+                                                   jl_dispatch_trampoline_cache_type);
+    jl_atomic_store_relaxed(&c->cache, (jl_typemap_t*)jl_nothing);
+    JL_MUTEX_INIT(&c->writelock, "jl_dispatch_trampolines->writelock");
+    return c;
+}
+
 JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *module)
 {
     jl_methcache_t *mc = jl_new_method_cache();

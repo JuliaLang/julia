@@ -675,6 +675,20 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         jl_abi_adapter_cache_t *c = (jl_abi_adapter_cache_t*)v;
         record_field_change((jl_value_t**)&c->cache, jl_nothing);
     }
+    if (jl_typetagis(v, jl_dispatch_trampoline_cache_type)) {
+        // Likewise the trampoline cache: serialize it empty and re-intern each restored
+        // trampoline on load.
+        jl_dispatch_trampoline_cache_t *c = (jl_dispatch_trampoline_cache_t*)v;
+        record_field_change((jl_value_t**)&c->cache, jl_nothing);
+    }
+    if (jl_is_dispatch_trampoline(v)) {
+        // The `sigt` bucket chain is a process-local runtime cache, rebuilt on load
+        // (jl_reintern_trampoline); drop `next` so we neither relocate it nor drag an
+        // unreachable sibling trampoline into the image (mirrors ci->next handling). `last_invoked`
+        // (a CodeInstance or ABIAdapter) is serialized normally so it can wire `fptr` on first use.
+        jl_dispatch_trampoline_t *tr = (jl_dispatch_trampoline_t*)v;
+        record_field_change((jl_value_t**)&tr->next, NULL);
+    }
     if (jl_is_abi_adapter(v)) {
         // Same as the trampoline chain: the adapter's `sigt` bucket chain is process-local and
         // rebuilt on load (jl_reintern_abi_adapter), so drop `next`.
@@ -1756,6 +1770,22 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                     arraylist_push(&s->relocs_list, (void*)(((uintptr_t)FunctionRef << RELOC_TAG_OFFSET) + BuiltinFunctionTag + builtin_id - 2)); // relocation target
                 }
             }
+            else if (jl_is_dispatch_trampoline(v)) {
+                assert(f == s->s);
+                // `fptr` is a process-local JIT'd adapter address and a redundant cache of
+                // `last_invoked`'s fptr; null it and reset `last_world` to the unresolved
+                // sentinel. `last_invoked` (a CodeInstance or ABIAdapter) is serialized as a
+                // normal reference, so the first call after load re-validates it and restores
+                // `fptr` from it without a JIT (jl_resolve_trampoline). The adapter thunk itself
+                // (when `last_invoked` is an ABIAdapter) is wired via that record's own
+                // fptr_record entry, not the trampoline's.
+                jl_dispatch_trampoline_t *newtr = (jl_dispatch_trampoline_t*)&f->buf[reloc_offset];
+                jl_atomic_store_relaxed(&newtr->fptr, NULL);
+                jl_atomic_store_relaxed(&newtr->last_world, 0);
+                // Re-intern this trampoline into the running cache on load, so a later
+                // @cfunction with the same (sigt, rt) shares it.
+                arraylist_push(&s->fixup_objs, (void*)reloc_offset);
+            }
             else if (jl_is_abi_adapter(v)) {
                 assert(f == s->s);
                 // The compiled adapter thunk lives in the image as an fvar. Null the record's
@@ -1778,14 +1808,16 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                 // Re-intern this record into the running adapters cache on load.
                 arraylist_push(&s->fixup_objs, (void*)reloc_offset);
             }
-            else if (jl_typetagis(v, jl_abi_adapter_cache_type)) {
+            else if (jl_typetagis(v, jl_abi_adapter_cache_type) || jl_typetagis(v, jl_dispatch_trampoline_cache_type)) {
                 assert(f == s->s);
                 // The cache's `writelock` is a hidden trailing C field (not a datatype field), so
                 // pad the serialized object out to the full struct size, zero-filling the lock
                 // (mirrors the jl_method_t writelock handling above). Without this, the restored
                 // singleton's writelock bytes are uninitialized and jl_mutex_lock spins forever on
-                // a bogus owner (deadlock on the first adapter lookup).
-                write_padding(f, sizeof(jl_abi_adapter_cache_t) - tot);
+                // a bogus owner (deadlock on the first @cfunction/@ccallable or adapter lookup).
+                size_t fullsz = jl_typetagis(v, jl_abi_adapter_cache_type)
+                    ? sizeof(jl_abi_adapter_cache_t) : sizeof(jl_dispatch_trampoline_cache_t);
+                write_padding(f, fullsz - tot);
             }
             else if (jl_is_datatype(v)) {
                 assert(f == s->s);
@@ -4162,6 +4194,11 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         if (jl_typetagis(obj, jl_typemap_entry_type) || jl_is_method(obj) || jl_is_code_instance(obj)) {
             jl_array_ptr_1d_push(*internal_methods, obj);
             assert(s.incremental);
+        }
+        else if (jl_is_dispatch_trampoline(obj)) {
+            // Re-intern the restored @cfunction/@ccallable trampoline into the running cache
+            // so a later construction with the same (sigt, rt) shares it.
+            jl_reintern_trampoline((jl_dispatch_trampoline_t*)obj);
         }
         else if (jl_is_abi_adapter(obj)) {
             // Re-intern the restored ABI-adapter record into the running adapters cache, so it is

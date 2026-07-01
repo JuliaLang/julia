@@ -1794,6 +1794,7 @@ JL_DLLIMPORT void *jl_jit_abi_converter(jl_task_t *ct, jl_abi_t from_abi, jl_cod
 // ABI-adapter / dispatch-trampoline caches (src/abi_adapters.c). The bucketed TypeMap
 // bookkeeping lives in libjulia-internal; the JIT half (jl_get_abi_adapter) is in codegen.
 JL_DLLEXPORT jl_abi_adapter_cache_t *jl_new_abi_adapter_cache(void);
+JL_DLLEXPORT jl_dispatch_trampoline_cache_t *jl_new_dispatch_trampoline_cache(void);
 JL_DLLEXPORT void *jl_abi_adapter_resolve_target(jl_abi_t from_abi, jl_code_instance_t *codeinst,
         void **target, int *target_specsig, jl_callptr_t *invoke);
 JL_DLLEXPORT jl_abi_adapter_t *jl_lookup_abi_adapter(jl_value_t *sigt, jl_value_t *rt,
@@ -1801,9 +1802,14 @@ JL_DLLEXPORT jl_abi_adapter_t *jl_lookup_abi_adapter(jl_value_t *sigt, jl_value_
 JL_DLLEXPORT void jl_install_abi_adapter(jl_abi_adapter_t *entry);
 JL_DLLEXPORT jl_abi_adapter_t *jl_new_abi_adapter_record(jl_value_t *sigt, jl_value_t *rt,
         jl_code_instance_t *ci, int specsig, int is_opaque_closure, size_t nargs, void *fptr);
+JL_DLLEXPORT jl_dispatch_trampoline_t *jl_new_cfunction_trampoline(jl_value_t *sigt, jl_value_t *rt, int specsig);
+JL_DLLEXPORT void jl_reintern_trampoline(jl_dispatch_trampoline_t *tr);
 // Re-install an image-restored adapter record into the cache (load fixup); the load-time
 // counterpart of jl_get_abi_adapter's interning. Handles adapters with no live trampoline.
 JL_DLLEXPORT void jl_reintern_abi_adapter(jl_abi_adapter_t *e);
+// The @cfunction/@ccallable dispatch-trampoline resolver (runtime_ccall.c); the codegen
+// poll calls it (as jlresolvetrampoline_func) when its cached world is stale.
+JL_DLLEXPORT void *jl_resolve_trampoline(jl_task_t *ct, jl_dispatch_trampoline_t *tr);
 
 
 // Special filenames used to refer to internal julia libraries
