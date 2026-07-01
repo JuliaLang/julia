@@ -768,6 +768,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst_uninit(jl_method_instance_t *mi
 JL_DLLEXPORT void jl_mi_cache_insert(jl_method_instance_t *mi,
                                      jl_code_instance_t *ci JL_MAYBE_UNROOTED)
 {
+    assert(ci->owner != jl_nothing || ci->def == (jl_value_t*)mi); // native CIs implement `mi`
     JL_GC_PUSH1(&ci);
     if (jl_is_method(mi->def.method))
         JL_LOCK(&mi->def.method->writelock);
@@ -827,6 +828,7 @@ JL_DLLEXPORT int jl_mi_try_insert(jl_method_instance_t *mi,
                                    jl_code_instance_t *expected_ci,
                                    jl_code_instance_t *ci JL_MAYBE_UNROOTED)
 {
+    assert(ci->owner != jl_nothing || ci->def == (jl_value_t*)mi); // native CIs implement `mi`
     JL_GC_PUSH1(&ci);
     if (jl_is_method(mi->def.method))
         JL_LOCK(&mi->def.method->writelock);
