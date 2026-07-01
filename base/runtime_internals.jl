@@ -1594,7 +1594,7 @@ tls_world_age() = ccall(:jl_get_tls_world_age, UInt, ())
 get_require_world() = unsafe_load(cglobal(:jl_require_world, UInt))
 
 """
-    propertynames(x, private=false)
+    propertynames(x; private::Bool=false)
 
 Get a tuple or a vector of the properties (`x.property`) of an object `x`.
 This is typically the same as [`fieldnames(typeof(x))`](@ref), but types
@@ -1603,26 +1603,33 @@ as well to get the properties of an instance of the type.
 
 `propertynames(x)` may return only "public" property names that are part
 of the documented interface of `x`.   If you want it to also return "private"
-property names intended for internal use, pass `true` for the optional second argument.
+property names intended for internal use, pass `private=true` as a keyword argument.
 REPL tab completion on `x.` shows only the `private=false` properties.
 
 See also [`hasproperty`](@ref), [`hasfield`](@ref).
 """
+propertynames(x; private::Bool=false) = propertynames(x)
 propertynames(x) = fieldnames(typeof(x))
-propertynames(m::Module) = names(m)
-propertynames(x, private::Bool) = propertynames(x) # ignore private flag by default
-propertynames(x::Array) = () # hide the fields from tab completion to discourage calling `x.size` instead of `size(x)`, even though they are equivalent
+propertynames(m::Module; private::Bool=false) = names(m; all=private)
+propertynames(x::Array; private::Bool=false) = () # hide the fields from tab completion to discourage calling `x.size` instead of `size(x)`, even though they are equivalent
 
 """
-    hasproperty(x, s::Symbol)
+    hasproperty(x, s::Symbol; private::Bool=false)
 
 Return a boolean indicating whether the object `x` has `s` as one of its own properties.
+
+If `private` is `true`, also check for "private" property names intended for internal use,
+as described in [`propertynames`](@ref).
 
 !!! compat "Julia 1.2"
      This function requires at least Julia 1.2.
 
+!!! compat "Julia 1.14"
+    The `private` keyword argument was added in Julia 1.14.
+
 See also [`propertynames`](@ref), [`hasfield`](@ref).
 """
+hasproperty(x, s::Symbol; private::Bool=false) = private ? s in propertynames(x; private=true) : hasproperty(x, s)
 hasproperty(x, s::Symbol) = s in propertynames(x)
 
 """
