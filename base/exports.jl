@@ -446,6 +446,7 @@ export
     fill!,
     fill,
     first,
+    flatten,
     hcat,
     hvcat,
     hvncat,
