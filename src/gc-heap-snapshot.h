@@ -34,6 +34,8 @@ void _gc_heap_snapshot_record_gc_roots(jl_value_t *root, char *name) JL_NOTSAFEP
 void _gc_heap_snapshot_record_finlist(jl_value_t *finlist, size_t index) JL_NOTSAFEPOINT;
 // Used for objects reachable from the binding partition pointer union
 void _gc_heap_snapshot_record_binding_partition_edge(jl_value_t *from, jl_value_t *to) JL_NOTSAFEPOINT;
+// Used for objects that are permanently allocated in an image
+int _gc_heap_snapshot_try_claim_image(jl_value_t *a) JL_NOTSAFEPOINT;
 
 extern int gc_heap_snapshot_enabled;
 extern int prev_sweep_full;

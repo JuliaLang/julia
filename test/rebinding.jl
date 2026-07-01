@@ -408,3 +408,38 @@ module Invalidate59272
     Core.eval(Foo, :(struct Bar; x; end))
     @test Bar(1) == Foo.Bar(1)
 end
+
+# Test that two const-prop'd pseudo `CodeInstance`s for the same `MethodInstance`
+# carrying *different* binding edges are both kept on the caller's edge list, so
+# that redefining either binding properly invalidates the caller (#61745).
+module Invalidate61745
+    using Test
+    module N
+        const foo = "foo_unchanged"
+        const bar = "bar_unchanged"
+    end
+    helper(s::Symbol) = getglobal(N, s)::String
+    caller_both() = helper(:foo) * helper(:bar)
+    @test caller_both() == "foo_unchangedbar_unchanged"
+    Core.eval(N, :(const foo = "foo_changed!"))
+    @test caller_both() == "foo_changed!bar_unchanged"
+    Core.eval(N, :(const bar = "bar_changed!"))
+    @test caller_both() == "foo_changed!bar_changed!"
+end
+
+# Test that codegen does not bake in a binding's value when there is no forward
+# edge from the `CodeInstance` to the binding. Without const-prop tracking the
+# `Module` argument, inference cannot record a `Binding` edge for `M.foo`, so
+# codegen must fall back to a runtime binding load to remain correct under
+# redefinition (#61745).
+module Invalidate61745_indirect
+    using Test
+    module M
+        const foo = "unchanged"
+    end
+    indirect_access(modref::Module) = Base.getproperty(modref, :foo)::String
+    caller() = indirect_access(M)
+    @test caller() == "unchanged"
+    Core.eval(M, :(const foo = "changed!"))
+    @test caller() == "changed!"
+end

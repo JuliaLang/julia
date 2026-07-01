@@ -1018,6 +1018,11 @@ end
     for x in (3, 3+13im, 1im), y in (2, 2+7im, 1im), z in (5, 5+11im, 0x01, 0x01 + 0x00*im)
         @test muladd(x,y,z) === x*y + z
     end
+    @test muladd(false, complex(NaN64), 2) == 2
+    @test muladd(complex(NaN64), false, 2) == 2
+    @test muladd(complex(NaN64), false, 2+7im) == 2+7im
+    @test muladd(false, NaN64, 2+7im) == 2+7im
+    @test muladd(NaN64, false, 2+7im) == 2+7im
 end
 
 @testset "issue #11839" begin

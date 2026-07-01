@@ -244,6 +244,11 @@ end
     @test muladd(big(1//1),2,3) == big(1//1)*2+3
     @test muladd(1.0,2,3) == 1.0*2+3
     @test muladd(big(1.0),2,3) == big(1.0)*2+3
+    @test muladd(Inf, false, 3) === 3.0
+    @test muladd(Inf, true, 3) === Inf
+    @test muladd(false, NaN, 3) === 3.0
+    @test muladd(true, NaN, 3) === NaN
+    @test muladd(true, true, 3) === 4
 end
 # lexing typemin(Int64)
 @test (-9223372036854775808)^1 == -9223372036854775808

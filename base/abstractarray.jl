@@ -1244,7 +1244,7 @@ iterate_starting_state(A, ::IndexLinear) = firstindex(A)
 iterate_starting_state(A, ::IndexStyle) = (eachindex(A),)
 @inline iterate(A::AbstractArray, state = iterate_starting_state(A)) = _iterate_abstractarray(A, state)
 @inline function _iterate_abstractarray(A::AbstractArray, state::Tuple)
-    y = iterate(state...)
+    y = iterate(state...)::Union{Nothing,Tuple}
     y === nothing && return nothing
     A[y[1]], (state[1], tail(y)...)
 end
