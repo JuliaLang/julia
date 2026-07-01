@@ -23,6 +23,20 @@ let ast = only(code_typed(f39082, Tuple{Rational, Vararg{Rational}}))[1]
     @test ast.slottypes == Any[Const(f39082), Tuple{Rational, Vararg{Rational}}]
 end
 
+# `widenconst` is a single-method wrapper forwarding to the `_widenconst` rule methods
+# (see `Compiler/src/typelattice.jl`); inference must union-split its body into a
+# devirtualized `isa`-chain rather than emitting a dynamic dispatch over the lattice
+# element types (a dynamic dispatch here made inference itself much slower).
+let src = code_typed1(Compiler.widenconst, (Any,))
+    function isdyndispatch(@nospecialize stmt)
+        isexpr(stmt, :(=)) && (stmt = stmt.args[2])
+        isexpr(stmt, :call) || return false
+        f = singleton_type(argextype(stmt.args[1], src))
+        return !(isa(f, Core.Builtin) || isa(f, Core.IntrinsicFunction))
+    end
+    @test !any(isdyndispatch, src.code)
+end
+
 # demonstrate some of the type-size limits
 @test Compiler.limit_type_size(Ref{Complex{T} where T}, Ref, Ref, 100, 0) == Ref
 @test Compiler.limit_type_size(Ref{Complex{T} where T}, Ref{Complex{T} where T}, Ref, 100, 0) == Ref{Complex{T} where T}

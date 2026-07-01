@@ -681,21 +681,29 @@ end
     return tmeet(widenlattice(𝕃), v, t)
 end
 
+# The widening rules live in `_widenconst`. `widenconst` itself is a single-method
+# wrapper, so callers never have to dynamically dispatch over the (megamorphic) set of
+# lattice element types. `_widenconst`'s `max_methods` is raised above its method count so
+# that inference union-splits the wrapper body into a devirtualized `isa`-chain rather than
+# falling back to a runtime method lookup.
+_widenconst(::AnyConditional) = Bool
+_widenconst(a::AnyMustAlias) = widenconst(widenmustalias(a))
+_widenconst(c::Const) = (v = c.val; isa(v, Type) ? Type{v} : typeof(v))
+_widenconst(::PartialTypeVar) = TypeVar
+_widenconst(t::Core.PartialStruct) = t.typ
+_widenconst(t::PartialOpaque) = t.typ
+@nospecializeinfer _widenconst(@nospecialize t::AnyType) = t
+_widenconst(::TypeVar) = error("unhandled TypeVar")
+_widenconst(::TypeofVararg) = error("unhandled Vararg")
+_widenconst(::LimitedAccuracy) = error("unhandled LimitedAccuracy")
+typeof(_widenconst).name.max_methods = UInt8(20)
+
 """
     widenconst(x) -> t::Type
 
 Widens extended lattice element `x` to native `Type` representation.
 """
-widenconst(::AnyConditional) = Bool
-widenconst(a::AnyMustAlias) = widenconst(widenmustalias(a))
-widenconst(c::Const) = (v = c.val; isa(v, Type) ? Type{v} : typeof(v))
-widenconst(::PartialTypeVar) = TypeVar
-widenconst(t::Core.PartialStruct) = t.typ
-widenconst(t::PartialOpaque) = t.typ
-@nospecializeinfer widenconst(@nospecialize t::AnyType) = t
-widenconst(::TypeVar) = error("unhandled TypeVar")
-widenconst(::TypeofVararg) = error("unhandled Vararg")
-widenconst(::LimitedAccuracy) = error("unhandled LimitedAccuracy")
+widenconst(@nospecialize x) = _widenconst(x)
 
 ####################
 # state management #
