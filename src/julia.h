@@ -986,6 +986,40 @@ typedef struct _jl_methtable_t {
     jl_genericmemory_t *backedges; // IdDict{top typenames, Vector{uncovered (sig => caller::CodeInstance)}}
 } jl_methtable_t;
 
+// One record of the global ABI-adapter cache (`jl_abi_adapters->adapters`): a JIT'd adapter
+// thunk that bridges the caller ABI (from_abi) to a target CodeInstance. Interned so
+// `jl_jit_abi_converter` emits one adapter per distinct key rather than one per call site.
+typedef struct _jl_abi_adapter_t {
+    JL_DATA_TYPE
+    // caller ABI
+    jl_value_t *sigt;            // hash-consed Julia type (Tuple type)
+    jl_value_t *rt;              // hash-consed Julia type (return type)
+    size_t specsig : 1;          // whether the caller passes args in specsig (vs. boxed) form
+    size_t is_opaque_closure : 1; // whether the adapter bridges an OpaqueClosure caller ABI
+    size_t nargs : 8 * sizeof(size_t) - 2; // number of arguments in `sigt`
+    
+    // callee target
+    jl_code_instance_t *ci;      // target CodeInstance; may be NULL for dispatcher adapters
+
+    // adapter function pointer
+    void *fptr;                  // JITed adapter address (not GC-tracked)
+    // Bucket chain: the adapters cache is a TypeMap keyed on `sigt`; records sharing one
+    // `sigt` entry are chained here and disambiguated by (rt, ci, specsig, is_opaque_closure,
+    // nargs). Append-only (the head in the TypeMap entry's value never changes), so the chain
+    // is safe to walk lock-free. NULL = tail.
+    _Atomic(struct _jl_abi_adapter_t*) next;
+} jl_abi_adapter_t;
+
+// Process-global cache of JIT'd ABI adapters. The singleton instance is `jl_abi_adapters`
+// (bound in Core as `abi_adapters`). Holds a TypeMap keyed on `sigt`, guarded by its own
+// `writelock`; reads are lock-free. `jl_nothing` is the empty cache.
+typedef struct _jl_abi_adapter_cache_t {
+    JL_DATA_TYPE
+    _Atomic(jl_typemap_t*) cache;    // (sigt) -> bucket of jl_abi_adapter_t
+// hidden fields:
+    jl_mutex_t writelock;               // guards mutation of the adapters cache
+} jl_abi_adapter_cache_t;
+
 typedef struct {
     JL_DATA_TYPE
     jl_sym_t *head;
@@ -1692,6 +1726,7 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 #define jl_is_module(v)      jl_typetagis(v,jl_module_tag<<4)
 #define jl_is_mtable(v)      jl_typetagis(v,jl_methtable_type)
 #define jl_is_mcache(v)      jl_typetagis(v,jl_methcache_type)
+#define jl_is_abi_adapter(v) jl_typetagis(v,jl_abi_adapter_type)
 #define jl_is_task(v)        jl_typetagis(v,jl_task_tag<<4)
 #define jl_is_string(v)      jl_typetagis(v,jl_string_tag<<4)
 #define jl_is_cpointer(v)    jl_is_cpointer_type(jl_typeof(v))

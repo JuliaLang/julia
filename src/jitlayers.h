@@ -448,6 +448,11 @@ public:
     SmallVector<std::pair<jl_code_instance_t *, GlobalVariable *>, 0> external_fns;
 
     SmallVector<cfunc_decl_t,0> cfuncs;
+    // Adapters compiled for @cfunction/@ccallable dispatch trampolines: each entry pairs a
+    // materialized ABIAdapter record (set as its trampoline's `last_invoked`) with the Function
+    // emitted for its resolved target, so the serialized record's `fptr` is wired to it on load
+    // without a JIT and the trampoline resolves straight from `last_invoked`.
+    SmallVector<std::pair<jl_abi_adapter_t*, Function*>, 0> abi_adapter_records;
     std::map<void*, GlobalVariable*> global_targets;
     jl_array_t *temporary_roots = nullptr;
     SmallSet<jl_value_t *, 8> temporary_roots_set;

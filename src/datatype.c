@@ -51,6 +51,19 @@ JL_DLLEXPORT jl_methcache_t *jl_new_method_cache(void)
     return mc;
 }
 
+JL_DLLEXPORT jl_abi_adapter_cache_t *jl_new_abi_adapter_cache(void)
+{
+    jl_task_t *ct = jl_current_task;
+    jl_abi_adapter_cache_t *c =
+        (jl_abi_adapter_cache_t*)jl_gc_alloc(ct->ptls, sizeof(jl_abi_adapter_cache_t),
+                                             jl_abi_adapter_cache_type);
+    // The cache is a TypeMap; jl_nothing is the empty map. `writelock` is a trailing hidden
+    // field (not part of the datatype); JL_MUTEX_INIT fully initializes it (owner/count).
+    jl_atomic_store_relaxed(&c->cache, (jl_typemap_t*)jl_nothing);
+    JL_MUTEX_INIT(&c->writelock, "jl_abi_adapters->writelock");
+    return c;
+}
+
 JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *module)
 {
     jl_methcache_t *mc = jl_new_method_cache();
