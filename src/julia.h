@@ -1098,6 +1098,23 @@ typedef struct JL_GC_TRACKED_TYPE _jl_abi_adapter_t {
     _Atomic(struct _jl_abi_adapter_t*) next;
 } jl_abi_adapter_t;
 
+// Caches the latest-world dispatch of `sigt` as an `fptr` with a fixed caller ABI.
+typedef struct JL_GC_TRACKED_TYPE _jl_dispatch_trampoline_t {
+    JL_DATA_TYPE
+
+    // caller ABI (`sigt` is also the dispatch signature)
+    jl_value_t *sigt;
+    jl_value_t *rt;              // declared return type
+    uint8_t specsig;
+    uint8_t kind;                // jl_abi_kind_t of the caller ABI
+
+    jl_value_t *last_invokee;    // CodeInstance or ABIAdapter that `fptr` came from
+    _Atomic(void*) fptr;         // copied from last_invokee
+    _Atomic(size_t) last_world;  // world for which `fptr`/`last_invokee` are valid, 0 = unresolved
+
+    _Atomic(struct _jl_dispatch_trampoline_t*) next;
+} jl_dispatch_trampoline_t;
+
 #define JL_TYPEMAP_LIST_NO_HASHMAP (~(unsigned)0)
 
 // typedef'd so the safepoint annotations apply to calls through the pointer
@@ -1123,6 +1140,13 @@ typedef struct JL_GC_TRACKED_TYPE _jl_abi_adapter_cache_t {
 // hidden fields:
     jl_mutex_t writelock;
 } jl_abi_adapter_cache_t;
+
+typedef struct JL_GC_TRACKED_TYPE _jl_dispatch_trampoline_cache_t {
+    JL_DATA_TYPE
+    jl_typemap_list_t cache;
+// hidden fields:
+    jl_mutex_t writelock;
+} jl_dispatch_trampoline_cache_t;
 
 typedef struct JL_GC_TRACKED_TYPE {
     JL_DATA_TYPE

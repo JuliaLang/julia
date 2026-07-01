@@ -43,6 +43,9 @@
     XX(debuginfo_type, jl_datatype_t*) \
     XX(densearray_type, jl_unionall_t*) \
     XX(diverror_exception, jl_value_t*) \
+    XX(dispatch_trampoline_cache_type, jl_datatype_t*) \
+    XX(dispatch_trampoline_type, jl_datatype_t*) \
+    XX(dispatch_trampolines, jl_dispatch_trampoline_cache_t*) \
     XX(emptysvec, jl_svec_t*) \
     XX(emptytuple, jl_value_t*) \
     XX(emptytuple_type, jl_datatype_t*) \

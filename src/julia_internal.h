@@ -1818,7 +1818,9 @@ JL_DLLEXPORT void *jl_get_abi_converter(jl_task_t *ct, void *data) JL_CANSAFEPOI
 JL_DLLIMPORT void *jl_jit_abi_converter(jl_task_t *ct, jl_abi_t from_abi, jl_code_instance_t *codeinst, jl_value_t **invokee) JL_CANSAFEPOINT;
 
 JL_DLLEXPORT jl_abi_adapter_cache_t *jl_new_abi_adapter_cache(void) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_dispatch_trampoline_cache_t *jl_new_dispatch_trampoline_cache(void) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_reinit_abi_adapter_cache(jl_abi_adapter_cache_t *c) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_reinit_dispatch_trampoline_cache(jl_dispatch_trampoline_cache_t *c) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_abi_matches_invoke_api(jl_abi_t from_abi, jl_invoke_api_t api,
         jl_code_instance_t *ci) JL_CANSAFEPOINT;
 JL_DLLEXPORT void *jl_lookup_abi_adapter(jl_abi_t from_abi, jl_code_instance_t *codeinst,
@@ -1827,7 +1829,11 @@ JL_DLLEXPORT void *jl_insert_abi_adapter(jl_abi_t from_abi, jl_code_instance_t *
         void *fptr, jl_value_t **invokee) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_abi_adapter_t *jl_new_abi_adapter(jl_value_t *sigt, jl_value_t *rt,
         jl_code_instance_t *ci, int specsig, jl_abi_kind_t kind, void *fptr) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_dispatch_trampoline_t *jl_get_dispatch_trampoline(jl_value_t *sigt, jl_value_t *rt, int specsig, jl_abi_kind_t kind) JL_CANSAFEPOINT;
+JL_DLLEXPORT void jl_insert_dispatch_trampoline(jl_dispatch_trampoline_t *tr) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_reinsert_abi_adapter(jl_abi_adapter_t *e) JL_CANSAFEPOINT;
+// Refresh a dispatch trampoline for dispatch in the current latest world.
+JL_DLLEXPORT void *jl_update_dispatch_trampoline(jl_task_t *ct, jl_dispatch_trampoline_t *tr) JL_CANSAFEPOINT;
 
 
 // Special filenames used to refer to internal julia libraries
