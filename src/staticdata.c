@@ -757,6 +757,17 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             }
         }
     }
+    if (jl_typetagis(v, jl_abi_adapter_cache_type)) {
+        // Rebuilt from the reinserted ABIAdapters, drop it for now.
+        jl_abi_adapter_cache_t *c = (jl_abi_adapter_cache_t*)v;
+        record_field_change((jl_value_t**)&c->cache.root, jl_nothing);
+    }
+    if (jl_is_abi_adapter(v)) {
+        // Like the cache itself, the adapter's `sigt` bucket chain is process-local and
+        // rebuilt on load (jl_insert_abi_adapter), so drop `next`.
+        jl_abi_adapter_t *ad = (jl_abi_adapter_t*)v;
+        record_field_change((jl_value_t**)&ad->next, NULL);
+    }
     if (jl_is_code_instance(v)) {
         jl_code_instance_t *ci = (jl_code_instance_t*)v;
         jl_method_instance_t *mi = jl_get_ci_mi(ci);
@@ -1094,6 +1105,17 @@ static void write_padding(ios_t *s, size_t nb) JL_NOTSAFEPOINT
     }
     if (nb != 0)
         ios_write(s, zeros, nb);
+}
+
+static void write_reloc_slot(ios_t *s, size_t fptr_id, uintptr_t reloc_id) JL_NOTSAFEPOINT
+{
+    ios_ensureroom(s, fptr_id * sizeof(void*));
+    ios_seek(s, (fptr_id - 1) * sizeof(void*));
+    write_reloc_t(s, reloc_id);
+#ifdef _P64
+    if (sizeof(reloc_t) < 8)
+        write_padding(s, 8 - sizeof(reloc_t));
+#endif
 }
 
 static void write_pointer(ios_t *s) JL_NOTSAFEPOINT
@@ -1822,29 +1844,17 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                         else {
                             int32_t invokeptr_id = 0;
                             int32_t specfptr_id = 0;
-                            jl_get_function_id(native_functions, ci, &invokeptr_id, &specfptr_id); // see if we generated code for it
+                            jl_get_function_id(native_functions, (jl_value_t*)ci, &invokeptr_id, &specfptr_id); // see if we generated code for it
                             if (invokeptr_id) {
                                 if (invokeptr_id < 0) {
                                     fptr_type = (jl_invoke_api_t)-invokeptr_id;
                                     assert(fptr_type != JL_INVOKE_SPECSIG);
                                 } else {
-                                    ios_ensureroom(s->fptr_record, invokeptr_id * sizeof(void*));
-                                    ios_seek(s->fptr_record, (invokeptr_id - 1) * sizeof(void*));
-                                    write_reloc_t(s->fptr_record, (reloc_t)~reloc_offset);
-#ifdef _P64
-                                    if (sizeof(reloc_t) < 8)
-                                        write_padding(s->fptr_record, 8 - sizeof(reloc_t));
-#endif
+                                    write_reloc_slot(s->fptr_record, invokeptr_id, (reloc_t)~reloc_offset);
                                 }
                                 if (specfptr_id) {
                                     assert(specfptr_id > invokeptr_id && specfptr_id > 0);
-                                    ios_ensureroom(s->fptr_record, specfptr_id * sizeof(void*));
-                                    ios_seek(s->fptr_record, (specfptr_id - 1) * sizeof(void*));
-                                    write_reloc_t(s->fptr_record, reloc_offset);
-#ifdef _P64
-                                    if (sizeof(reloc_t) < 8)
-                                        write_padding(s->fptr_record, 8 - sizeof(reloc_t));
-#endif
+                                    write_reloc_slot(s->fptr_record, specfptr_id, reloc_offset);
                                 }
                             }
                         }
@@ -1860,6 +1870,39 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                     arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_code_instance_t, specptr.fptr))); // relocation location
                     arraylist_push(&s->relocs_list, (void*)(((uintptr_t)FunctionRef << RELOC_TAG_OFFSET) + BuiltinFunctionTag + builtin_id - 2)); // relocation target
                 }
+            }
+            else if (jl_is_abi_adapter(v)) {
+                assert(f == s->s);
+                // The compiled adapter thunk lives in the image as an fvar. Null the record's
+                // process-local `fptr` and record the wiring in `fptr_record` keyed on that fvar
+                // id, so jl_update_all_fptrs sets `fptr` from the fvar on load (parallels the
+                // CodeInstance specptr; CI vs record disambiguated by the object's type tag).
+                jl_abi_adapter_t *newad = (jl_abi_adapter_t*)&f->buf[reloc_offset];
+                jl_atomic_store_relaxed(&newad->fptr, NULL);
+                int32_t invokeptr_id = 0, adapter_id = 0;
+                jl_get_function_id(native_functions, v, &invokeptr_id, &adapter_id);
+                assert(invokeptr_id == 0); (void)invokeptr_id; // adapters have no invoke wrapper
+                if (adapter_id > 0) {
+                    ios_ensureroom(s->fptr_record, adapter_id * sizeof(void*));
+                    ios_seek(s->fptr_record, (adapter_id - 1) * sizeof(void*));
+                    write_reloc_t(s->fptr_record, reloc_offset);
+#ifdef _P64
+                    if (sizeof(reloc_t) < 8)
+                        write_padding(s->fptr_record, 8 - sizeof(reloc_t));
+#endif
+                    // Re-insert this record into the running adapters cache on load. Records
+                    // with no fvar slot (adapter_id == 0, e.g. a runtime-created record
+                    // reached through user data) have no thunk to wire, so they serialize as
+                    // inert data and are never published to the cache.
+                    arraylist_push(&s->fixup_objs, (void*)reloc_offset);
+                }
+            }
+            else if (jl_typetagis(v, jl_abi_adapter_cache_type)) {
+                assert(f == s->s);
+                // The cache's `writelock` is a hidden trailing C field (not a datatype field);
+                // pad the serialized object out to the full struct size so the restored lock
+                // is zero-initialized (mirrors the jl_method_t writelock handling above).
+                write_padding(f, sizeof(jl_abi_adapter_cache_t) - tot);
             }
             else if (jl_is_datatype(v)) {
                 assert(f == s->s);
@@ -2309,10 +2352,7 @@ static void jl_update_all_fptrs(jl_serializer_state *s, jl_image_t *image)
                 specfunc = 0;
                 offset = ~offset;
             }
-            jl_code_instance_t *codeinst = (jl_code_instance_t*)(base + offset);
-            assert(jl_is_method(jl_get_ci_mi(codeinst)->def.method) && jl_atomic_load_relaxed(&codeinst->invoke) != jl_fptr_const_return);
-            assert(specfunc ? jl_atomic_load_relaxed(&codeinst->invoke) != NULL : jl_atomic_load_relaxed(&codeinst->invoke) == NULL);
-            linfos[i] = codeinst;
+            void *obj = (void*)(base + offset);
             void *fptr = fvars.ptrs[i];
             for (; clone_idx < fvars.nclones; clone_idx++) {
                 uint32_t idx = fvars.clone_idxs[clone_idx] & jl_sysimg_val_mask;
@@ -2322,17 +2362,30 @@ static void jl_update_all_fptrs(jl_serializer_state *s, jl_image_t *image)
                     fptr = fvars.clone_ptrs[clone_idx];
                 break;
             }
-            if (specfunc) {
-                uint8_t flags = jl_atomic_load_relaxed(&codeinst->flags);
-                flags |= JL_CI_FLAGS_INVOKE_MATCHES_SPECPTR | JL_CI_FLAGS_FROM_IMAGE;
-                if (jl_callptr_invoke_api(jl_atomic_load_relaxed(&codeinst->invoke)) ==
-                    JL_INVOKE_SPECSIG)
-                    flags |= JL_CI_FLAGS_SPECPTR_SPECIALIZED;
-                jl_atomic_store_relaxed(&codeinst->specptr.fptr, fptr);
-                jl_atomic_store_relaxed(&codeinst->flags, flags);
-            }
-            else {
-                jl_atomic_store_relaxed(&codeinst->invoke, (jl_callptr_t)fptr);
+            if (jl_is_abi_adapter(obj)) {
+                jl_abi_adapter_t *ad = (jl_abi_adapter_t*)obj;
+                assert(specfunc); // adapter slots are always specfunc
+                assert(jl_atomic_load_relaxed(&ad->fptr) == NULL && fptr != NULL);
+                jl_atomic_store_relaxed(&ad->fptr, fptr);
+            } else if (jl_is_code_instance(obj)) {
+                jl_code_instance_t *codeinst = (jl_code_instance_t*)obj;
+                assert(jl_is_method(jl_get_ci_mi(codeinst)->def.method) && jl_atomic_load_relaxed(&codeinst->invoke) != jl_fptr_const_return);
+                assert(specfunc ? jl_atomic_load_relaxed(&codeinst->invoke) != NULL : jl_atomic_load_relaxed(&codeinst->invoke) == NULL);
+                linfos[i] = codeinst;
+                if (specfunc) {
+                    uint8_t flags = jl_atomic_load_relaxed(&codeinst->flags);
+                    flags |= JL_CI_FLAGS_INVOKE_MATCHES_SPECPTR | JL_CI_FLAGS_FROM_IMAGE;
+                    if (jl_callptr_invoke_api(jl_atomic_load_relaxed(&codeinst->invoke)) ==
+                        JL_INVOKE_SPECSIG)
+                        flags |= JL_CI_FLAGS_SPECPTR_SPECIALIZED;
+                    jl_atomic_store_relaxed(&codeinst->specptr.fptr, fptr);
+                    jl_atomic_store_relaxed(&codeinst->flags, flags);
+                }
+                else {
+                    jl_atomic_store_relaxed(&codeinst->invoke, (jl_callptr_t)fptr);
+                }
+            } else {
+                jl_unreachable();
             }
         }
     }
@@ -2907,7 +2960,7 @@ static int jl_prune_internal_mtable(jl_methtable_t *mt, void *env)
 // In addition to the system image (where `worklist = NULL`), this can also save incremental images with external linkage
 static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
                                            jl_array_t *module_init_order, jl_array_t *worklist, jl_array_t *extext_methods,
-                                           jl_array_t *new_ext, jl_query_cache *query_cache) JL_CANSAFEPOINT
+                                           jl_array_t *new_ext, jl_array_t *emitted_adapters, jl_query_cache *query_cache) JL_CANSAFEPOINT
 {
     htable_new(&field_replace, 0);
     htable_new(&bits_replace, 0);
@@ -3112,8 +3165,13 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         if (extext_methods) {
             // Queue method extensions
             jl_queue_for_serialization(&s, extext_methods);
-            // Queue the new specializations
-            jl_queue_for_serialization(&s, new_ext);
+            for (size_t i = 0; i < jl_array_nrows(new_ext); i++)
+                jl_queue_for_serialization(&s, jl_array_ptr_ref(new_ext, i));
+        }
+        if (emitted_adapters) {
+            // Queue ABIAdapters (whether external or internal)
+            for (size_t i = 0; i < jl_array_nrows(emitted_adapters); i++)
+                jl_queue_for_serialization(&s, jl_array_ptr_ref(emitted_adapters, i));
         }
         jl_serialize_reachable(&s);
         // step 1.2: ensure all gvars are part of the sysimage too
@@ -3303,7 +3361,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             }
             jl_write_value(&s, module_init_order);
             jl_write_value(&s, extext_methods);
-            jl_write_value(&s, new_ext);
             jl_write_value(&s, s.method_roots_list);
         }
         write_uint32(f, jl_array_len(s.link_ids_gctags));
@@ -3406,20 +3463,21 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
         ff = f;
     }
 
-    jl_array_t *mod_array = NULL, *extext_methods = NULL, *new_ext = NULL, *ext_foreign_cis = NULL;
+    jl_array_t *mod_array = NULL, *extext_methods = NULL, *new_ext = NULL, *ext_foreign_cis = NULL, *emitted_adapters = NULL;
     int64_t checksumpos = 0;
     int64_t checksumpos_ff = 0;
     int64_t datastartpos = 0;
-    JL_GC_PUSH4(&mod_array, &extext_methods, &new_ext, &ext_foreign_cis);
+    JL_GC_PUSH5(&mod_array, &extext_methods, &new_ext, &ext_foreign_cis, &emitted_adapters);
 
     ext_foreign_cis = jl_alloc_vec_any(0);
+    emitted_adapters = jl_alloc_vec_any(0);
 
     mod_array = jl_get_loaded_modules();  // __toplevel__ modules loaded in this session (from Base.loaded_modules_array)
     if (worklist) {
         if (_native_data != NULL) {
             if (suppress_precompile)
                 newly_inferred = NULL;
-            *_native_data = jl_create_native(NULL, 0, 1, jl_atomic_load_acquire(&jl_world_counter), NULL, suppress_precompile ? (jl_array_t*)jl_an_empty_vec_any : worklist, 0, module_init_order, ext_foreign_cis);
+            *_native_data = jl_create_native(NULL, 0, 1, jl_atomic_load_acquire(&jl_world_counter), NULL, suppress_precompile ? (jl_array_t*)jl_an_empty_vec_any : worklist, 0, module_init_order, ext_foreign_cis, emitted_adapters);
         }
         jl_write_header_for_incremental(f, worklist, mod_array, udeps, srctextpos, &checksumpos);
         if (emit_split) {
@@ -3433,7 +3491,7 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
         }
     }
     else if (_native_data != NULL) {
-        *_native_data = jl_create_native(NULL, jl_options.trim, 0, jl_atomic_load_acquire(&jl_world_counter), mod_array, NULL, jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL, module_init_order, ext_foreign_cis);
+        *_native_data = jl_create_native(NULL, jl_options.trim, 0, jl_atomic_load_acquire(&jl_world_counter), mod_array, NULL, jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL, module_init_order, ext_foreign_cis, emitted_adapters);
     }
     if (_native_data != NULL)
         native_functions = *_native_data;
@@ -3490,7 +3548,7 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     jl_query_cache query_cache;
     init_query_cache(&query_cache);
     jl_finalize_precompile_inferred(worklist != NULL && _native_data != NULL && jl_options.outputo != NULL);
-    jl_save_system_image_to_stream(ff, mod_array, module_init_order, worklist, extext_methods, new_ext, &query_cache);
+    jl_save_system_image_to_stream(ff, mod_array, module_init_order, worklist, extext_methods, new_ext, emitted_adapters, &query_cache);
     if (_native_data != NULL)
         native_functions = NULL;
     // make sure we don't run any Julia code concurrently before this point
@@ -3897,7 +3955,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     ios_seek(f, LLT_ALIGN(ios_pos(f), 8));
     assert(!ios_eof(f));
     s.s = f;
-    uintptr_t offset_restored = 0, offset_init_order = 0, offset_extext_methods = 0, offset_new_ext = 0, offset_method_roots_list = 0;
+    uintptr_t offset_restored = 0, offset_init_order = 0, offset_extext_methods = 0, offset_method_roots_list = 0;
     if (!s.incremental) {
         size_t i;
         for (i = 0; tags[i] != NULL; i++) {
@@ -3932,7 +3990,6 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         offset_restored = jl_read_offset(&s);
         offset_init_order = jl_read_offset(&s);
         offset_extext_methods = jl_read_offset(&s);
-        offset_new_ext = jl_read_offset(&s);
         offset_method_roots_list = jl_read_offset(&s);
     }
     s.buildid_depmods_idxs = depmod_to_imageidx(depmods);
@@ -3962,7 +4019,6 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         *restored = (jl_array_t*)jl_delayed_reloc(&s, offset_restored);
         *init_order = (jl_array_t*)jl_delayed_reloc(&s, offset_init_order);
         *extext_methods = (jl_array_t*)jl_delayed_reloc(&s, offset_extext_methods);
-        (void)(jl_array_t*)jl_delayed_reloc(&s, offset_new_ext);
         *method_roots_list = (jl_array_t*)jl_delayed_reloc(&s, offset_method_roots_list);
         *internal_methods = jl_alloc_vec_any(0);
     }
@@ -4223,12 +4279,20 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         o->bits.in_image = 1;
     }
     arraylist_free(&cleanup_list);
+    // Restored ABI-adapter records, re-inserted into the running cache after
+    // jl_update_all_fptrs below (see the comment there).
+    arraylist_t reinsert_objs;
+    arraylist_new(&reinsert_objs, 0);
     for (size_t i = 0; i < s.fixup_objs.len; i++) {
         uintptr_t item = (uintptr_t)s.fixup_objs.items[i];
         jl_value_t *obj = (jl_value_t*)(image_base + item);
         if (jl_typetagis(obj, jl_typemap_entry_type) || jl_is_method(obj) || jl_is_code_instance(obj)) {
             jl_array_ptr_1d_push(*internal_methods, obj);
             assert(s.incremental);
+        }
+        else if (jl_is_abi_adapter(obj)) {
+            // Deferred (see reinsert_objs above): re-inserted after jl_update_all_fptrs.
+            arraylist_push(&reinsert_objs, (void*)obj);
         }
         else if (jl_is_method_instance(obj)) {
             jl_method_instance_t *newobj = jl_specializations_get_or_insert((jl_method_instance_t*)obj);
@@ -4339,6 +4403,19 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     s.s = &sysimg;
     jl_update_all_fptrs(&s, image); // fptr relocs and registration
     s.s = NULL;
+
+    if (!s.incremental)
+        jl_reinit_abi_adapter_cache(jl_abi_adapters);
+
+    // This publication must happen only after fptr relocation.
+    for (size_t i = 0; i < reinsert_objs.len; i++) {
+        // Only completed ABIAdapters enter the cache; skip any whose thunk was
+        // not wired (the JIT rebuilds them on demand).
+        jl_abi_adapter_t *adapter = (jl_abi_adapter_t*)reinsert_objs.items[i];
+        if (jl_atomic_load_relaxed(&adapter->fptr) != NULL)
+            jl_reinsert_abi_adapter(adapter);
+    }
+    arraylist_free(&reinsert_objs);
 
     ios_close(&fptr_record);
     ios_close(&sysimg);

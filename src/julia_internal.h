@@ -431,12 +431,29 @@ static inline void memassign_safe(int hasptr, char *dst, const jl_value_t *src, 
 #define GC_IN_IMAGE_NOT_REMSET (GC_IN_IMAGE) // permalloc'd and not yet modified
 
 // data structures for runtime codegen
+
+// ABI "bridge" behavior enum
+//
+// Beyond the caller ABI and invokee, an ABIAdapter is characterized by its
+// "internal" transformation, usually responsible for world-handling and arg0
+// unpacking (type-erasure).
+//
+// XXX: These responsibilities could be moved to the caller and we could remove
+// this from ABIAdapter, but it would require that we have a type-erased `arg0`
+// ABI by default, which would also allow us to omit ABIAdapters for
+// TypedCallable / OpaqueClosure in many cases.
+typedef enum {
+    // no special type-erasure or world-handling
+    JL_ABI_STD = 0,
+    // slot 0 of `sigt` is the captures environment and type-erased (::Any ABI)
+    JL_ABI_OPAQUE_CLOSURE = 1,
+} jl_abi_kind_t;
+
 typedef struct _jl_abi_t {
     jl_value_t *sigt;
     jl_value_t *rt;
     int specsig; // bool
-    // OpaqueClosure Methods override the first argument of their signature
-    int is_opaque_closure;
+    jl_abi_kind_t kind;
 } jl_abi_t;
 
 // The compiler uses the specific integer values returned by jl_invoke_api
@@ -1762,7 +1779,21 @@ JL_DLLEXPORT jl_value_t *jl_get_cfunction_trampoline(
     void *(*init_trampoline)(void *tramp, void **nval),
     jl_unionall_t *env, jl_value_t **vals) JL_CANSAFEPOINT;
 JL_DLLEXPORT void *jl_get_abi_converter(jl_task_t *ct, void *data) JL_CANSAFEPOINT;
-JL_DLLIMPORT void *jl_jit_abi_converter(jl_task_t *ct, jl_abi_t from_abi, jl_code_instance_t *codeinst) JL_CANSAFEPOINT;
+
+JL_DLLIMPORT void *jl_jit_abi_converter(jl_task_t *ct, jl_abi_t from_abi, jl_code_instance_t *codeinst, jl_value_t **invokee) JL_CANSAFEPOINT;
+
+JL_DLLEXPORT jl_abi_adapter_cache_t *jl_new_abi_adapter_cache(void) JL_CANSAFEPOINT;
+JL_DLLEXPORT void jl_reinit_abi_adapter_cache(jl_abi_adapter_cache_t *c) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_abi_matches_invoke_api(jl_abi_t from_abi, jl_invoke_api_t api,
+        jl_method_instance_t *mi, jl_value_t *rettype) JL_CANSAFEPOINT;
+JL_DLLEXPORT void *jl_abi_matching_specptr(jl_abi_t from_abi, jl_code_instance_t *codeinst) JL_CANSAFEPOINT;
+JL_DLLEXPORT void *jl_lookup_abi_adapter(jl_abi_t from_abi, jl_code_instance_t *codeinst,
+        void **target, int *target_specsig, jl_callptr_t *invoke, jl_value_t **invokee) JL_CANSAFEPOINT;
+JL_DLLEXPORT void *jl_insert_abi_adapter(jl_abi_t from_abi, jl_code_instance_t *codeinst,
+        void *fptr, jl_value_t **invokee) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_abi_adapter_t *jl_new_abi_adapter(jl_value_t *sigt, jl_value_t *rt,
+        jl_code_instance_t *ci, int specsig, jl_abi_kind_t kind, void *fptr) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_abi_adapter_t *jl_reinsert_abi_adapter(jl_abi_adapter_t *e) JL_CANSAFEPOINT;
 
 
 // Special filenames used to refer to internal julia libraries
@@ -2240,8 +2271,8 @@ JL_DLLIMPORT jl_value_t *jl_dump_function_ir(jl_llvmf_dump_t *dump, char strip_i
 JL_DLLIMPORT jl_value_t *jl_dump_function_asm(jl_llvmf_dump_t *dump, char emit_mc, const char* asm_variant, const char *debuginfo, char binary, char raw) JL_CANSAFEPOINT;
 
 typedef jl_value_t *(*jl_codeinstance_lookup_t)(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t min_world, size_t max_world);
-JL_DLLIMPORT void *jl_create_native(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int cache, size_t world, jl_array_t *mod_array, jl_array_t *worklist, int all, jl_array_t *module_init_order, jl_array_t *ext_foreign_cis) JL_CANSAFEPOINT;
-JL_DLLIMPORT void *jl_emit_native(jl_array_t *codeinfos, jl_array_t *ci_order, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _external_linkage) JL_CANSAFEPOINT;
+JL_DLLIMPORT void *jl_create_native(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int cache, size_t world, jl_array_t *mod_array, jl_array_t *worklist, int all, jl_array_t *module_init_order, jl_array_t *ext_foreign_cis, jl_array_t *emitted_adapters) JL_CANSAFEPOINT;
+JL_DLLIMPORT void *jl_emit_native(jl_array_t *codeinfos, jl_array_t *ci_order, jl_array_t *emitted_adapters, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _external_linkage) JL_CANSAFEPOINT;
 JL_DLLIMPORT void jl_dump_native(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,
         ios_t *z, ios_t *s, jl_emission_params_t *params);
@@ -2249,7 +2280,7 @@ JL_DLLIMPORT void jl_get_llvm_gvs(void *native_code, size_t *num_els, void **gvs
 JL_DLLIMPORT void jl_get_llvm_gv_inits(void *native_code, size_t *num_els, void **inits);
 JL_DLLIMPORT void jl_get_llvm_external_fns(void *native_code, size_t *num_els,
                                            jl_code_instance_t *fns);
-JL_DLLIMPORT void jl_get_function_id(void *native_code, jl_code_instance_t *ncode,
+JL_DLLIMPORT void jl_get_function_id(void *native_code, jl_value_t *codeinst_or_adapter,
         int32_t *func_idx, int32_t *specfunc_idx);
 JL_DLLIMPORT void jl_register_fptrs(uint64_t image_base, const struct _jl_image_fptrs_t *fptrs,
                                     jl_code_instance_t **linfos, size_t n);

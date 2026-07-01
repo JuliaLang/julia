@@ -1053,6 +1053,23 @@ typedef struct _jl_methtable_t {
     jl_genericmemory_t *backedges; // IdDict{top typenames, Vector{uncovered (sig => caller::CodeInstance)}}
 } jl_methtable_t;
 
+// A cached thunk from a caller ABI to a CodeInstance (or `jl_apply_generic`).
+typedef struct _jl_abi_adapter_t {
+    JL_DATA_TYPE
+
+    // caller ABI
+    jl_value_t *sigt;
+    jl_value_t *rt;
+    uint8_t specsig;
+    uint8_t kind;                // jl_abi_kind_t of the caller ABI
+
+    // callee target
+    jl_code_instance_t *ci;      // target CodeInstance - NULL for an adapter to dynamic dispatch (`jl_apply_generic`)
+    _Atomic(void*) fptr;         // adapter fptr
+
+    _Atomic(struct _jl_abi_adapter_t*) next;
+} jl_abi_adapter_t;
+
 #define JL_TYPEMAP_LIST_NO_HASHMAP (~(unsigned)0)
 
 // Named so the safepoint annotations attach to the function type itself: on a member
@@ -1072,6 +1089,13 @@ typedef struct _jl_typemap_list_t {
 // hidden fields:
     const jl_typemap_list_config_t *config;
 } jl_typemap_list_t;
+
+typedef struct _jl_abi_adapter_cache_t {
+    JL_DATA_TYPE
+    jl_typemap_list_t cache;
+// hidden fields:
+    jl_mutex_t writelock;
+} jl_abi_adapter_cache_t;
 
 typedef struct {
     JL_DATA_TYPE
@@ -1790,6 +1814,8 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 #define jl_is_module(v)      jl_typetagis(v,jl_module_tag<<4)
 #define jl_is_mtable(v)      jl_typetagis(v,jl_methtable_type)
 #define jl_is_mcache(v)      jl_typetagis(v,jl_methcache_type)
+#define jl_is_dispatch_trampoline(v)  jl_typetagis(v,jl_dispatch_trampoline_type)
+#define jl_is_abi_adapter(v) jl_typetagis(v,jl_abi_adapter_type)
 #define jl_is_task(v)        jl_typetagis(v,jl_task_tag<<4)
 #define jl_is_cancel_source(v) jl_typetagis(v,jl_cancel_source_tag<<4)
 #define jl_is_string(v)      jl_typetagis(v,jl_string_tag<<4)

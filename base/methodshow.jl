@@ -388,6 +388,32 @@ show(io::IO, ms::MethodList) = show_method_table(io, ms)
 show(io::IO, ::MIME"text/plain", ms::MethodList) = show_method_table(io, ms)
 show(io::IO, mt::Core.MethodTable) = print(io, mt.module, ".", mt.name, " is a Core.MethodTable with ", length(mt), " methods.")
 
+# Total ABIAdapters / DispatchTrampolines in a `jl_typemap_list_t`
+function _cache_item_count(c)
+    n = 0
+    function count_chain(@nospecialize r)
+        while true
+            n += 1
+            isdefined(r, :next, :acquire) || break
+            r = getfield(r, :next, :acquire)
+        end
+    end
+    function count_bucket(@nospecialize b)
+        if b isa Memory{Any}
+            for i in 1:2:length(b)
+                isassigned(b, i) && count_chain(b[i + 1])
+            end
+        else
+            count_chain(b)
+        end
+    end
+    tm = getfield(c, :cache)
+    tm === nothing || visit(count_bucket, tm)
+    return n
+end
+show(io::IO, c::Core.ABIAdapterCache) = print(io, "Core.ABIAdapterCache with ",
+    _cache_item_count(c), " adapters.")
+
 function inbase(m::Module)
     if m == Base
         true

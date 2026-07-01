@@ -462,6 +462,10 @@ public:
     SmallVector<std::pair<jl_code_instance_t *, GlobalVariable *>, 0> external_fns;
 
     SmallVector<cfunc_decl_t,0> cfuncs;
+    // ABIAdapter records compiled for @cfunction/@ccallable serialization: each entry pairs a
+    // materialized ABIAdapter record with the Function emitted for its resolved target, so the
+    // serialized record's `fptr` is wired to that Function on load without a JIT.
+    SmallVector<std::pair<jl_abi_adapter_t*, Function*>, 0> abi_adapter_records;
     std::map<void*, GlobalVariable*> global_targets;
     jl_array_t *temporary_roots = nullptr;
     SmallSet<jl_value_t *, 8> temporary_roots_set;

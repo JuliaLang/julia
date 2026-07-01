@@ -367,6 +367,8 @@ bool GCChecker::isGCTrackedType(QualType QT) {
                    Name.ends_with_insensitive("jl_unionall_t") ||
                    Name.ends_with_insensitive("jl_methtable_t") ||
                    Name.ends_with_insensitive("jl_methcache_t") ||
+                   Name.ends_with_insensitive("jl_abi_adapter_t") ||
+                   Name.ends_with_insensitive("jl_abi_adapter_cache_t") ||
                    Name.ends_with_insensitive("jl_cgval_t") ||
                    Name.ends_with_insensitive("jl_codectx_t") ||
                    Name.ends_with_insensitive("jl_code_instance_t") ||

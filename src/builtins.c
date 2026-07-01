@@ -2771,12 +2771,13 @@ void jl_init_primitives(void) JL_GC_DISABLED
 
     add_builtin("Module", (jl_value_t*)jl_module_type);
     add_builtin("MethodTable", (jl_value_t*)jl_methtable_type);
-    add_builtin("methodtable", (jl_value_t*)jl_method_table);
     add_builtin("MethodCache", (jl_value_t*)jl_methcache_type);
     add_builtin("Method", (jl_value_t*)jl_method_type);
     add_builtin("CodeInstance", (jl_value_t*)jl_code_instance_type);
     add_builtin("TypeMapEntry", (jl_value_t*)jl_typemap_entry_type);
     add_builtin("TypeMapLevel", (jl_value_t*)jl_typemap_level_type);
+    add_builtin("ABIAdapter", (jl_value_t*)jl_abi_adapter_type);
+    add_builtin("ABIAdapterCache", (jl_value_t*)jl_abi_adapter_cache_type);
     add_builtin("Symbol", (jl_value_t*)jl_symbol_type);
     add_builtin("SSAValue", (jl_value_t*)jl_ssavalue_type);
     add_builtin("SlotNumber", (jl_value_t*)jl_slotnumber_type);
@@ -2834,6 +2835,10 @@ void jl_init_primitives(void) JL_GC_DISABLED
 
     add_builtin("AbstractString", (jl_value_t*)jl_abstractstring_type);
     add_builtin("String", (jl_value_t*)jl_string_type);
+
+    // global cache singletons
+    add_builtin("abi_adapters", (jl_value_t*)jl_abi_adapters);
+    add_builtin("methodtable", (jl_value_t*)jl_method_table);
 
     // ensure that primitive types are fully allocated (since jl_init_types is incomplete)
     assert(jl_atomic_load_relaxed(&jl_world_counter) == 1);

@@ -169,7 +169,9 @@ typedef struct {
     std::unique_ptr<jl_codegen_output_t> out;
     SmallVector<GlobalValue*, 0> jl_sysimg_fvars;
     SmallVector<GlobalValue*, 0> jl_sysimg_gvars;
-    std::map<jl_code_instance_t*, std::tuple<uint32_t, uint32_t>> jl_fvar_map;
+    // CodeInstance / ABIAdapter -> {invoke, specptr} fvar IDs (ABIAdapters have no invoke wrapper)
+    // fvar slots are 1:1 with code-carrying objects (CIs / Adapters) - each corresponds to a unique LLVM Function
+    std::map<jl_value_t*, std::tuple<uint32_t, uint32_t>> jl_fvar_map;
     SmallVector<void*, 0> jl_value_to_llvm;
     SmallVector<jl_code_instance_t*, 0> jl_external_to_llvm;
     // ordered list of CodeInstances emitted for this image, in the order they
@@ -178,14 +180,17 @@ typedef struct {
     SmallVector<jl_code_instance_t*, 0> jl_ci_order;
 } jl_native_code_desc_t;
 
+// Look up the fvar IDs for a code-carrying object (CodeInstance or ABIAdapter).
+// CodeInstances yield {invoke, specptr} (invoke may be negative, encoding a
+// jl_invoke_api_t); ABIAdapters yield {0, fvar} since they have no invoke wrapper.
 extern "C" JL_DLLEXPORT_CODEGEN
-void jl_get_function_id_impl(void *native_code, jl_code_instance_t *codeinst,
+void jl_get_function_id_impl(void *native_code, jl_value_t *codeinst_or_adapter,
         int32_t *func_idx, int32_t *specfunc_idx)
 {
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
     if (data) {
         // get the function index in the fvar lookup table
-        auto it = data->jl_fvar_map.find(codeinst);
+        auto it = data->jl_fvar_map.find(codeinst_or_adapter);
         if (it != data->jl_fvar_map.end()) {
             std::tie(*func_idx, *specfunc_idx) = it->second;
         }
@@ -199,15 +204,19 @@ jl_get_llvm_cis_impl(void *native_code, size_t *num_elements, jl_code_instance_t
     auto &map = desc->jl_fvar_map;
 
     if (data == NULL) {
-        *num_elements = map.size();
+        size_t n = 0;
+        for (auto &e : map)
+            n += jl_is_code_instance(e.first);
+        *num_elements = n;
         return;
     }
 
-    assert(*num_elements == map.size());
     size_t i = 0;
-    for (auto &ci : map) {
-        data[i++] = ci.first;
+    for (auto &e : map) {
+        if (jl_is_code_instance(e.first))
+            data[i++] = (jl_code_instance_t*)e.first;
     }
+    assert(i == *num_elements);
 }
 
 // get the ordered list of CodeInstances that were emitted for this image, in
@@ -523,6 +532,11 @@ static void aot_optimize_roots(jl_codegen_output_t &out, egal_set &method_roots)
     }
 }
 
+// Emit a fresh, uniquely-named adapter Function. Like each CodeInstance, every ABIAdapter record
+// gets its own distinct Function, so the fvar table has no duplicates (get_fvars_gvars) and
+// `fptr_record` stays 1:1 (fvar id -> one record). Two @cfunctions resolving to equivalent adapters
+// emit their own thunks -- as CodeInstances do for equivalent code -- rather than sharing one
+// (which would break that 1:1 mapping); adapters are not deduplicated at emission.
 static Function *aot_abi_converter(jl_codegen_output_t &out, jl_abi_t from_abi, jl_code_instance_t *codeinst, Function *func, Function *specfunc, bool target_specsig) JL_CANSAFEPOINT
 {
     std::string gf_thunk_name;
@@ -630,7 +644,7 @@ static bool canPartition(const Function &F)
 // `external_linkage` create linkages between pkgimages.
 extern "C" JL_DLLEXPORT_CODEGEN
 void *jl_create_native_impl(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int external_linkage, size_t world,
-                           jl_array_t *mod_array, jl_array_t *worklist, int all, jl_array_t *module_init_order, jl_array_t *ext_foreign_cis)
+                           jl_array_t *mod_array, jl_array_t *worklist, int all, jl_array_t *module_init_order, jl_array_t *ext_foreign_cis, jl_array_t *emitted_adapters)
 {
     JL_TIMING(INFERENCE, INFERENCE);
     auto ct = jl_current_task;
@@ -682,7 +696,7 @@ void *jl_create_native_impl(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int ex
     jl_value_t *ci_order = jl_svecref(result, 1);
     JL_TYPECHK(jl_create_native, array_any, codeinfos);
     JL_TYPECHK(jl_create_native, array_any, ci_order);
-    auto data = (jl_native_code_desc_t *)jl_emit_native((jl_array_t*)codeinfos, (jl_array_t*)ci_order, llvmmod, NULL, external_linkage ? 1 : 0);
+    auto data = (jl_native_code_desc_t *)jl_emit_native((jl_array_t*)codeinfos, (jl_array_t*)ci_order, emitted_adapters, llvmmod, NULL, external_linkage ? 1 : 0);
     JL_GC_POP();
 
     // move everything inside, now that we've merged everything
@@ -868,7 +882,8 @@ static void aot_link_output(jl_codegen_output_t &out) JL_CANSAFEPOINT
 }
 
 static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *codeinfos,
-                                      jl_array_t *ci_order, const jl_cgparams_t *cgparams,
+                                      jl_array_t *ci_order, jl_array_t *emitted_adapters,
+                                      const jl_cgparams_t *cgparams,
                                       int external_linkage) JL_CANSAFEPOINT
 {
     jl_cgparams_t target_cgparams = *cgparams;
@@ -943,6 +958,10 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
     aot_link_output(out);
     // including generating cfunction thunks
     generate_cfunc_thunks(out);
+    // Transfer the emitted ABIAdapters to the caller while temporary_roots still protects them.
+    if (emitted_adapters)
+        for (auto &[adapter, F] : out.abi_adapter_records)
+            jl_array_ptr_1d_push(emitted_adapters, (jl_value_t*)adapter);
     aot_optimize_roots(out, method_roots);
     out.temporary_roots = nullptr;
     out.temporary_roots_set.clear();
@@ -984,14 +1003,19 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
             data->jl_sysimg_fvars.push_back(funcs.specptr);
             specptr_id = data->jl_sysimg_fvars.size();
         }
-        data->jl_fvar_map[ci] = {invoke_id, specptr_id};
+        data->jl_fvar_map[(jl_value_t*)ci] = {invoke_id, specptr_id};
+    }
+    // Register one fvar per ABIAdapter
+    for (auto &[adapter, F] : out.abi_adapter_records) {
+        data->jl_sysimg_fvars.push_back(F);
+        data->jl_fvar_map[(jl_value_t*)adapter] = {0, (uint32_t)data->jl_sysimg_fvars.size()};
     }
 }
 
 // also be used by extern consumers like GPUCompiler.jl to obtain a module containing
 // all reachable & inferrrable functions.
 extern "C" JL_DLLEXPORT_CODEGEN
-void *jl_emit_native_impl(jl_array_t *codeinfos, jl_array_t *ci_order, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int external_linkage)
+void *jl_emit_native_impl(jl_array_t *codeinfos, jl_array_t *ci_order, jl_array_t *emitted_adapters, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int external_linkage)
 {
     JL_TIMING(NATIVE_AOT, NATIVE_Create);
     ++CreateNativeCalls;
@@ -1013,7 +1037,7 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, jl_array_t *ci_order, LLVMOrcTh
 
     data->TSM_ref->withModuleDo([&](Module &M) JL_CANSAFEPOINT {
         data->out = std::make_unique<jl_codegen_output_t>(M);
-        jl_emit_native_to_output(data, codeinfos, ci_order, cgparams, external_linkage);
+        jl_emit_native_to_output(data, codeinfos, ci_order, emitted_adapters, cgparams, external_linkage);
     });
 
     return (void *)data;

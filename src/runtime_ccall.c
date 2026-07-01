@@ -429,7 +429,7 @@ void *jl_get_abi_converter(jl_task_t *ct, void *data)
     if (codeinst == NULL) {
         // Generate an adapter to a dynamic dispatch
         if (cfuncdata->unspecialized == NULL)
-            cfuncdata->unspecialized = jl_jit_abi_converter(ct, from_abi, NULL);
+            cfuncdata->unspecialized = jl_jit_abi_converter(ct, from_abi, NULL, NULL);
 
         f = cfuncdata->unspecialized;
     } else {
@@ -441,7 +441,7 @@ void *jl_get_abi_converter(jl_task_t *ct, void *data)
             // even though we're likely to encounter memory errors in that case
             jl_printf(JL_STDERR, "WARNING: cfunction: return type of %s does not match\n", name_from_method_instance((jl_method_instance_t*)mi));
         }
-        f = jl_jit_abi_converter(ct, from_abi, codeinst);
+        f = jl_jit_abi_converter(ct, from_abi, codeinst, NULL);
     }
 
     cfuncdata->plast_codeinst = &cfuncdata->last_codeinst;
