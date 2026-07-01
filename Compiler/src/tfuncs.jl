@@ -1356,6 +1356,8 @@ end
     return getfield_tfunc(𝕃, o, f)
 end
 @nospecs function modifyfield!_tfunc(𝕃::AbstractLattice, o, f, op, v, order=Symbol)
+    # the stored value is `op(o.f, v)`, so check only that `o.f` is writable at all
+    setfield!_tfunc(𝕃, o, f, Any) === Bottom && return Bottom
     o′ = widenconst(o)
     T = _fieldtype_tfunc(𝕃, o′, f, isconcretetype(o′))
     T === Bottom && return Bottom
@@ -1363,6 +1365,10 @@ end
     return instanceof_tfunc(apply_type_tfunc(𝕃, Any[PT, T, T]), true)[1]
 end
 @nospecs function replacefield!_tfunc(𝕃::AbstractLattice, o, f, x, v, success_order=Symbol, failure_order=Symbol)
+    # `replacefield!` type-checks the replacement `v` before the comparison, so a
+    # non-writable field or a `v` that cannot be stored always throws (even when the
+    # comparison would have failed)
+    setfield!_tfunc(𝕃, o, f, v) === Bottom && return Bottom
     o′ = widenconst(o)
     T = _fieldtype_tfunc(𝕃, o′, f, isconcretetype(o′))
     T === Bottom && return Bottom
