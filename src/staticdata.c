@@ -770,12 +770,16 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
     if (jl_is_dispatch_trampoline(v)) {
         jl_dispatch_trampoline_t *tr = (jl_dispatch_trampoline_t*)v;
         record_field_change((jl_value_t**)&tr->next, NULL); // don't follow cache-only edge
+        jl_value_t *invokee = native_functions ?
+            jl_get_trampoline_invokee(native_functions, tr) : NULL;
+        if (invokee)
+            jl_queue_for_serialization(s, invokee);
+        // Invokee is resolved on first use after load.
+        record_field_change((jl_value_t**)&tr->last_invokee, NULL);
     }
     if (jl_is_abi_adapter(v)) {
-        // Like the cache itself, the adapter's `sigt` bucket chain is process-local and
-        // rebuilt on load (jl_insert_abi_adapter), so drop `next`.
         jl_abi_adapter_t *ad = (jl_abi_adapter_t*)v;
-        record_field_change((jl_value_t**)&ad->next, NULL);
+        record_field_change((jl_value_t**)&ad->next, NULL); // don't follow cache-only edge
     }
     if (jl_is_code_instance(v)) {
         jl_code_instance_t *ci = (jl_code_instance_t*)v;

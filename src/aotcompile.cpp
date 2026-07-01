@@ -545,11 +545,7 @@ static void aot_optimize_roots(jl_codegen_output_t &out, egal_set &method_roots)
     }
 }
 
-// Emit a fresh, uniquely-named adapter Function. Like each CodeInstance, every ABIAdapter record
-// gets its own distinct Function, so the fvar table has no duplicates (get_fvars_gvars) and
-// `fptr_record` stays 1:1 (fvar id -> one record). Two @cfunctions resolving to equivalent adapters
-// emit their own thunks -- as CodeInstances do for equivalent code -- rather than sharing one
-// (which would break that 1:1 mapping); adapters are not deduplicated at emission.
+// Emit a distinct Function for each adapter
 static Function *aot_abi_converter(jl_codegen_output_t &out, jl_abi_t from_abi, jl_code_instance_t *codeinst, Function *func, Function *specfunc, bool target_specsig) JL_CANSAFEPOINT
 {
     std::string gf_thunk_name;
@@ -562,53 +558,56 @@ static Function *aot_abi_converter(jl_codegen_output_t &out, jl_abi_t from_abi, 
     return F;
 }
 
-// AOT counterpart of jl_resolve_trampoline: resolve the target for `tr` at the build world,
-// emit its ABI adapter, and record the materialized ABIAdapter record in
-// `out.trampoline_invokees` / `out.adapter_funcs`. When the target's compiled ABI already
-// satisfies the declared C ABI, `trampoline_invokees` maps to the bare `CodeInstance` instead and
-// no adapter is emitted.
-static void emit_trampoline_adapter(jl_codegen_output_t &out, jl_dispatch_trampoline_t *tr,
-        jl_abi_t from_abi, DenseMap<jl_method_instance_t*, jl_code_instance_t*> &compiled_mi,
+// Resolve a trampoline's invokee at the build world: the compiled CodeInstance for the
+// current dispatch target, or NULL if calls must go through dynamic dispatch (multiple
+// targets, ambiguous, or no matching method).
+static jl_code_instance_t *resolve_trampoline_invokee(jl_abi_t from_abi,
+        DenseMap<jl_method_instance_t*, jl_code_instance_t*> &compiled_mi,
         size_t latestworld) JL_CANSAFEPOINT
 {
-    JL_GC_PROMISE_ROOTED(tr);
     jl_value_t *sigt = from_abi.sigt;
     JL_GC_PROMISE_ROOTED(sigt);
     jl_value_t *declrt = from_abi.rt;
     JL_GC_PROMISE_ROOTED(declrt);
     jl_method_instance_t *mi = (jl_method_instance_t*)jl_get_specialization1((jl_tupletype_t*)sigt, latestworld);
-    jl_code_instance_t *codeinst = nullptr;
-    if ((jl_value_t*)mi != jl_nothing) {
-        auto it = compiled_mi.find(mi);
-        if (it != compiled_mi.end())
-            codeinst = it->second;
+    if ((jl_value_t*)mi == jl_nothing)
+        return nullptr;
+    auto it = compiled_mi.find(mi);
+    if (it == compiled_mi.end())
+        return nullptr;
+    jl_code_instance_t *codeinst = it->second;
+    JL_GC_PROMISE_ROOTED(codeinst);
+    jl_value_t *astrt = codeinst->rettype;
+    if (astrt != (jl_value_t*)jl_bottom_type &&
+        jl_type_intersection(astrt, declrt) == jl_bottom_type) {
+        // Do not warn if the function never returns since it is occasionally required by
+        // the C API (typically error callbacks) even though we're likely to encounter
+        // memory errors in that case.
+        jl_printf(JL_STDERR, "WARNING: cfunction: return type of %s does not match\n", name_from_method_instance(mi));
     }
+    return codeinst;
+}
+
+// Emit the ABI thunk and materialize the ABIAdapter for `codeinst`, or an
+// "unspecialized" adapter to dynamic dispatch if `codeinst` is NULL.
+static jl_abi_adapter_t *emit_abi_adapter(jl_codegen_output_t &out, jl_abi_t from_abi,
+        jl_code_instance_t *codeinst) JL_CANSAFEPOINT
+{
+    jl_value_t *sigt = from_abi.sigt;
+    JL_GC_PROMISE_ROOTED(sigt);
+    jl_value_t *declrt = from_abi.rt;
+    JL_GC_PROMISE_ROOTED(declrt);
     Function *F;
     if (codeinst) {
         JL_GC_PROMISE_ROOTED(codeinst);
-        jl_value_t *astrt = codeinst->rettype;
-        if (astrt != (jl_value_t*)jl_bottom_type &&
-            jl_type_intersection(astrt, declrt) == jl_bottom_type) {
-            // Do not warn if the function never returns since it is occasionally required by
-            // the C API (typically error callbacks) even though we're likely to encounter
-            // memory errors in that case.
-            jl_printf(JL_STDERR, "WARNING: cfunction: return type of %s does not match\n", name_from_method_instance(mi));
-        }
         const auto &decls = out.ci_funcs.find(codeinst)->second;
-        // If the target's own compiled ABI already satisfies the declared C ABI, no adapter
-        // is needed: map to the bare CodeInstance so the first post-load call derives `fptr`
-        // from its (independently wired) specptr.
-        if (jl_abi_matches_invoke_api(from_abi, decls.invoke_api, mi, codeinst->rettype)) {
-            out.trampoline_invokees[tr] = (jl_value_t*)codeinst; // bare CI: no adapter thunk emitted
-            return;
-        }
         if (decls.invoke_api == JL_INVOKE_CONST) {
             std::string n = emit_abi_constreturn(out, from_abi, codeinst->rettype_const);
             F = out.get_module().getFunction(n);
             assert(F);
         }
         else if (decls.invoke_api == JL_INVOKE_SPARAM) {
-            // no specptr prototype declared; route through jl_invoke via the dispatcher
+            // No specptr prototype; route through jl_invoke.
             F = aot_abi_converter(out, from_abi, codeinst, nullptr, nullptr, false);
         }
         else if (decls.invoke_api == JL_INVOKE_ARGS) {
@@ -621,28 +620,19 @@ static void emit_trampoline_adapter(jl_codegen_output_t &out, jl_dispatch_trampo
         }
     }
     else {
-        // no method at the build world: emit the shared dynamic-dispatch adapter
         F = aot_abi_converter(out, from_abi, nullptr, nullptr, nullptr, false);
     }
-    // A real thunk was needed: materialize the ABIAdapter record (its `fptr` is wired from the
-    // fvar on load) and map the trampoline to it. The record reaches the image via the
-    // serializer's `last_invokee` override (and `emitted_adapters`); the first post-load call
-    // restores `fptr` straight from it.
-    jl_abi_adapter_t *rec = jl_new_abi_adapter(sigt, declrt, codeinst,
+    jl_abi_adapter_t *adapter = jl_new_abi_adapter(sigt, declrt, codeinst,
             from_abi.specsig, from_abi.kind, /*fptr*/nullptr);
-    // Nothing else roots the record until it is pushed to `emitted_adapters`.
-    JL_GC_PUSH1(&rec);
-    jl_array_ptr_1d_push(out.temporary_roots, (jl_value_t*)rec);
+    // Nothing else roots the ABIAdapter until it is pushed to `emitted_adapters`.
+    JL_GC_PUSH1(&adapter);
+    jl_array_ptr_1d_push(out.temporary_roots, (jl_value_t*)adapter);
     JL_GC_POP();
-    out.trampoline_invokees[tr] = (jl_value_t*)rec;
-    out.adapter_funcs.push_back({rec, F});
+    out.adapter_funcs.push_back({adapter, F});
+    return adapter;
 }
 
-// Emit the adapter for each @cfunction/@ccallable dispatch trampoline (kind=STD, so the
-// adapter sig is the call sig as-is). Replaces the old cfuncdata-array fill; the serializer
-// wires the adapter into the image trampoline's `last_invokee` (jl_get_trampoline_invokee).
-// Call sites sharing one interned trampoline (same sigt/rt/specsig) are deduplicated here, so
-// each trampoline yields exactly one adapter record and one unspecialized record.
+// Emit each canonical trampoline's adapters.
 static void generate_cfunc_thunks(jl_codegen_output_t &out) JL_CANSAFEPOINT
 {
     if (out.cfuncs.empty())
@@ -655,26 +645,31 @@ static void generate_cfunc_thunks(jl_codegen_output_t &out) JL_CANSAFEPOINT
             compiled_mi[mi] = ci;
     }
     size_t latestworld = jl_atomic_load_acquire(&jl_world_counter);
-    for (cfunc_decl_t &cfunc : out.cfuncs) {
-        if (out.trampoline_invokees.count(cfunc.trampoline))
+    for (jl_dispatch_trampoline_t *tr : out.cfuncs) {
+        if (out.trampoline_invokees.count(tr))
             continue; // another call site already emitted this trampoline's adapter
-        emit_trampoline_adapter(out, cfunc.trampoline, cfunc.abi, compiled_mi, latestworld);
-        // Outside --trim, also emit the dynamic-dispatch ("unspecialized", ci == NULL)
-        // adapter for this signature, so a codegen-free run can dispatch this
-        // @cfunction/@ccallable even when the resolved target shifts (julia#61949). No
-        // trampoline owns it; it survives via the `emitted_adapters` report (see
-        // jl_create_native_impl). Under --trim, dynamic dispatch is unavailable, so skip it.
-        if (!jl_options.trim) {
-            Function *uf = aot_abi_converter(out, cfunc.abi, nullptr, nullptr, nullptr, false);
-            jl_abi_adapter_t *urec = jl_new_abi_adapter(cfunc.abi.sigt, cfunc.abi.rt,
-                    /*ci*/nullptr, cfunc.abi.specsig, cfunc.abi.kind,
-                    /*fptr*/nullptr);
-            JL_GC_PUSH1(&urec);
-            // Nothing else roots the record until it is pushed to `emitted_adapters`.
-            jl_array_ptr_1d_push(out.temporary_roots, (jl_value_t*)urec);
-            JL_GC_POP();
-            out.adapter_funcs.push_back({urec, uf});
-        }
+        jl_abi_t abi = jl_trampoline_abi(tr);
+        jl_code_instance_t *codeinst = nullptr;
+        // `ci_funcs` and `trampoline_invokees` are LLVM containers, so they root nothing.
+        // The CodeInstances reached through them are only incidentally alive (via `mi->cache`
+        // or the caller's array), and neither path is owned or checked here, so root locally.
+        JL_GC_PUSH1(&codeinst);
+        codeinst = resolve_trampoline_invokee(abi, compiled_mi, latestworld);
+        // If the target's own compiled ABI already satisfies the declared C ABI, no adapter
+        // is needed: map to the bare CodeInstance so the first post-load call derives `fptr`
+        // from its (independently wired) specptr.
+        if (codeinst && jl_abi_matches_invoke_api(abi, out.ci_funcs.find(codeinst)->second.invoke_api,
+                                                  jl_get_ci_mi(codeinst), codeinst->rettype))
+            out.trampoline_invokees[tr] = (jl_value_t*)codeinst;
+        else
+            out.trampoline_invokees[tr] = (jl_value_t*)emit_abi_adapter(out, abi, codeinst);
+        // Non-trimmed images rely on having "unspecialized" ABIAdapters (which branch directly
+        // to a dynamic dispatch) available in the cache. This is used to enter the interpreter
+        // from a compiled ABI if the JIT is unavailable and the invokee is invalidated.
+        // (If resolution failed above, the invokee adapter is already unspecialized.)
+        if (!jl_options.trim && codeinst != nullptr)
+            emit_abi_adapter(out, abi, nullptr);
+        JL_GC_POP();
     }
 }
 
@@ -2740,8 +2735,8 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
             // since otherwise it is challenging to see all relevant codes
             // jl_compiled_functions_t compiled_functions;
             size_t latestworld = jl_atomic_load_acquire(&jl_world_counter);
-            for (cfunc_decl_t &cfunc : output.cfuncs) {
-                jl_value_t *sigt = cfunc.abi.sigt;
+            for (jl_dispatch_trampoline_t *tr : output.cfuncs) {
+                jl_value_t *sigt = tr->sigt;
                 JL_GC_PROMISE_ROOTED(sigt);
                 jl_value_t *mi = jl_get_specialization1((jl_tupletype_t*)sigt, latestworld);
                 if (mi == jl_nothing)

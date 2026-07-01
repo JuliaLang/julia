@@ -432,8 +432,6 @@ static inline void memassign_safe(int hasptr, char *dst, const jl_value_t *src, 
 
 // data structures for runtime codegen
 
-// ABI "bridge" behavior enum
-//
 // Beyond the caller ABI and invokee, an ABIAdapter is characterized by its
 // "internal" transformation, usually responsible for world-handling and arg0
 // unpacking (type-erasure).
@@ -1778,10 +1776,8 @@ JL_DLLEXPORT jl_value_t *jl_get_cfunction_trampoline(
     jl_value_t *fobj, jl_datatype_t *result, htable_t *cache, jl_svec_t *fill,
     void *(*init_trampoline)(void *tramp, void **nval),
     jl_unionall_t *env, jl_value_t **vals) JL_CANSAFEPOINT;
-JL_DLLEXPORT void *jl_get_abi_converter(jl_task_t *ct, void *data) JL_CANSAFEPOINT;
 
 JL_DLLIMPORT void *jl_jit_abi_converter(jl_task_t *ct, jl_abi_t from_abi, jl_code_instance_t *codeinst, jl_value_t **invokee) JL_CANSAFEPOINT;
-
 JL_DLLEXPORT jl_abi_adapter_cache_t *jl_new_abi_adapter_cache(void) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_dispatch_trampoline_cache_t *jl_new_dispatch_trampoline_cache(void) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_reinit_abi_adapter_cache(jl_abi_adapter_cache_t *c) JL_NOTSAFEPOINT;
@@ -1798,7 +1794,6 @@ JL_DLLEXPORT jl_abi_adapter_t *jl_new_abi_adapter(jl_value_t *sigt, jl_value_t *
 JL_DLLEXPORT jl_dispatch_trampoline_t *jl_get_dispatch_trampoline(jl_value_t *sigt, jl_value_t *rt, int specsig, jl_abi_kind_t kind) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_dispatch_trampoline_t *jl_insert_dispatch_trampoline(jl_dispatch_trampoline_t *tr) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_abi_adapter_t *jl_reinsert_abi_adapter(jl_abi_adapter_t *e) JL_CANSAFEPOINT;
-// Refresh a dispatch trampoline for dispatch in the current latest world.
 JL_DLLEXPORT void *jl_update_dispatch_trampoline(jl_task_t *ct, jl_dispatch_trampoline_t *tr) JL_CANSAFEPOINT;
 
 
@@ -2288,6 +2283,7 @@ JL_DLLIMPORT void jl_get_llvm_external_fns(void *native_code, size_t *num_els,
                                            jl_code_instance_t *fns);
 JL_DLLIMPORT void jl_get_function_id(void *native_code, jl_value_t *codeinst_or_adapter,
         int32_t *func_idx, int32_t *specfunc_idx);
+JL_DLLIMPORT jl_value_t *jl_get_trampoline_invokee(void *native_code, jl_dispatch_trampoline_t *tr);
 JL_DLLIMPORT void jl_register_fptrs(uint64_t image_base, const struct _jl_image_fptrs_t *fptrs,
                                     jl_code_instance_t **linfos, size_t n);
 JL_DLLIMPORT void jl_get_llvm_cis(void *native_code, size_t *num_els,
