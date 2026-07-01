@@ -110,6 +110,13 @@ end
 widen_call_result(::AbstractInterpreter, si::StmtInfo, state::CallInferenceState, ::AbsIntState) =
     call_result_unused(si) && !(state.rettype === Bottom)
 
+struct CallSiteInfo
+    pc::Int
+    arginfo::ArgInfo
+end
+callsite_info(arginfo::ArgInfo, sv::AbsIntState) =
+    sv isa InferenceState ? CallSiteInfo(sv.currpc, arginfo) : nothing
+
 function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(func),
                                   arginfo::ArgInfo, si::StmtInfo, @nospecialize(atype),
                                   sv::AbsIntState, max_methods::Int)
@@ -167,7 +174,10 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
             #        handle1(...)
             #    end
             #end
-            mresult = abstract_call_method(interp, method, sig, match.sparams, multiple_matches, si, sv)::Future
+            local matches = state.matches
+            this_argtypes = isa(matches, MethodMatches) ? argtypes : matches.applicable_argtypes[state.inferidx]
+            this_arginfo = ArgInfo(arginfo.fargs, this_argtypes)
+            mresult = abstract_call_method(interp, method, sig, match.sparams, multiple_matches, si, sv, callsite_info(this_arginfo, sv))::Future
             function handle1(interp, sv)
                 local (; rt, exct, effects, edge, volatile_inf_result) = mresult[]
                 this_conditional = ignorelimited(rt)
@@ -175,9 +185,6 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                 this_exct = exct
                 # try constant propagation with argtypes for this match
                 # this is in preparation for inlining, or improving the return result
-                local matches = state.matches
-                this_argtypes = isa(matches, MethodMatches) ? argtypes : matches.applicable_argtypes[state.inferidx]
-                this_arginfo = ArgInfo(arginfo.fargs, this_argtypes)
                 const_call_result = abstract_call_method_with_const_args(interp,
                     mresult[], state.func, this_arginfo, si, match, sv)
                 const_result = volatile_inf_result
@@ -322,7 +329,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                             #println(sig, " changed to ", csig, " for ", method)
                             sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), csig, method.sig)::SimpleVector
                             sparams = sp_[2]::SimpleVector
-                            mresult = abstract_call_method(interp, method, csig, sparams, multiple_matches, StmtInfo(false, false), sv)::Future
+                            mresult = abstract_call_method(interp, method, csig, sparams,
+                                multiple_matches, StmtInfo(false, false), sv, nothing)::Future
                             isready(mresult) || return false # wait for mresult Future to resolve off the callstack before continuing
                         end
                     end
@@ -601,7 +609,8 @@ const RECURSION_MSG_HARDLIMIT = "Bounded recursion detected under hardlimit. Cal
 
 function abstract_call_method(interp::AbstractInterpreter,
                               method::Method, @nospecialize(sig), sparams::SimpleVector,
-                              hardlimit::Bool, si::StmtInfo, sv::AbsIntState)
+                              hardlimit::Bool, si::StmtInfo, sv::AbsIntState,
+                              callsite::Union{Nothing,CallSiteInfo} = nothing)
     sigtuple = unwrap_unionall(sig)
     sigtuple isa DataType ||
         return Future(MethodCallResult(Any, Any, Effects(), nothing, false, false))
@@ -2303,7 +2312,7 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
     tienv = ccall(:jl_type_intersection_with_env, Any, (Any, Any), nargtype, method.sig)::SimpleVector
     ti = tienv[1]
     env = tienv[2]::SimpleVector
-    mresult = abstract_call_method(interp, method, ti, env, false, si, sv)::Future
+    mresult = abstract_call_method(interp, method, ti, env, false, si, sv, callsite_info(arginfo, sv))
     match = MethodMatch(ti, env, method, argtype <: method.sig)
     ft′_box = Core.Box(ft′)
     lookupsig_box = Core.Box(lookupsig)
@@ -2818,7 +2827,7 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter,
         return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
     end
     match = MethodMatch(sig, Core.svec(), ocmethod, sig <: ocsig)
-    mresult = abstract_call_method(interp, ocmethod, sig, Core.svec(), false, si, sv)
+    mresult = abstract_call_method(interp, ocmethod, sig, Core.svec(), false, si, sv, callsite_info(arginfo, sv))
     ocsig_box = Core.Box(ocsig)
     return Future{CallMeta}(mresult, interp, sv) do result, interp, sv
         (; rt, exct, effects, volatile_inf_result, edge, edgecycle) = result
