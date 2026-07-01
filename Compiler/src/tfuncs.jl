@@ -1161,6 +1161,7 @@ end
                 if nv < 1
                     return Bottom
                 elseif nv ≤ length(s00.fields)
+                    setfield && isconst(sty, nv) && return Bottom
                     return unwrapva(s00.fields[nv])
                 end
             end
