@@ -4,7 +4,7 @@
 # Must outline anything that can throw, e.g. globalrefs, static params
 function is_valid_ir_argument(ctx, ex)
     k = kind(ex)
-    if is_simple_atom(ctx, ex) || k in KSet"inert inert_syntaxtree top core quote static_eval foreignsymbol"
+    if is_simple_atom(ctx, ex) || k in KSet"inert syntaxinert top core quote static_eval foreignsymbol"
         true
     elseif k == K"BindingId"
         binfo = get_binding(ctx, ex)
@@ -115,7 +115,7 @@ end
 function is_simple_arg(ctx, ex)
     k = kind(ex)
     return is_simple_atom(ctx, ex) || k == K"BindingId" || k == K"quote" ||
-        k == K"inert" || k == K"inert_syntaxtree" || k == K"top" ||
+        k == K"inert" || k == K"syntaxinert" || k == K"top" ||
         k == K"core" || k == K"globalref" || k == K"static_eval" ||
         k == K"foreignsymbol"
 end
@@ -133,7 +133,7 @@ function is_const_read_arg(ctx, ex)
     # Even if we have side effects, we know that singly-assigned
     # locals cannot be affected by them so we can inline them anyway.
     # TODO from flisp: "We could also allow const globals here"
-    return k == K"inert" || k == K"inert_syntaxtree" || k == K"top" ||
+    return k == K"inert" || k == K"syntaxinert" || k == K"top" ||
         k == K"core" || k == K"static_eval" || k == K"foreignsymbol" ||
         is_simple_atom(ctx, ex) || is_single_assign_var(ctx, ex)
 end
@@ -620,7 +620,7 @@ end
 function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     k = kind(ex)
     if k == K"BindingId" || is_literal(k) || k == K"nothing" ||
-            k == K"inert" || k == K"inert_syntaxtree" || k == K"top" ||
+            k == K"inert" || k == K"syntaxinert" || k == K"top" ||
             k == K"core" || k == K"Value" || k == K"Symbol" ||
             k == K"SourceLocation" || k == K"static_eval" ||
             k == K"foreignsymbol" || k == K"static_parameter"

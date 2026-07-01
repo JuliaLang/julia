@@ -31,8 +31,8 @@ function expr_to_est(@nospecialize(e),
     expr_to_est(graph, e, lnn)
 end
 
-function expr_to_est(graph::SyntaxGraph, @nospecialize(e), lnn::LineNumberNode)
-    SyntaxTree(graph, _expr_to_est(graph, e, lnn)[1])
+function expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::SourceAttrType)
+    SyntaxTree(graph, _expr_to_est(graph, e, src)[1])
 end
 
 function _get_inner_lnn(e::Expr, default::LineNumberNode)
@@ -57,17 +57,12 @@ function is_expr_value(st::SyntaxTree)
     return JuliaSyntax.is_literal(k) || k === K"Value"
 end
 
-function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
+function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::SourceAttrType)
     st = if e isa Symbol
         setattr!(newleaf(graph, src, K"Identifier"), :name_val, String(e))
     elseif e isa QuoteNode
         cid, _ = _expr_to_est(graph, e.value, src)
         newnode(graph, src, K"inert", NodeId[cid])
-    elseif e isa Expr && e.head === :scope_layer
-        @assert length(e.args) === 2 && e.args[1] isa Symbol
-        ident = newleaf(graph, src, K"Identifier")
-        setattr!(ident, :name_val, String(e.args[1]::Symbol))
-        setattr!(ident, :scope_layer, e.args[2])
     elseif e isa Expr && e.head === :lambda && length(e.args) == 2
         argnames = e.args[1]::Vector{Any}
         arg_cs = NodeId[]
@@ -86,11 +81,11 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
     elseif e isa Expr
         head_s = string(e.head)
         st_k = find_kind(head_s)
-        src = old_src = _get_inner_lnn(e, src)
+        src = old_src = src isa LineNumberNode ? _get_inner_lnn(e, src) : src
         cs = NodeId[]
         rm_linenodes = e.head in (:block, :toplevel)
         for arg in e.args
-            if rm_linenodes && arg isa LineNumberNode
+            if rm_linenodes && arg isa LineNumberNode && src isa LineNumberNode
                 src = arg
             else
                 cid, src = _expr_to_est(graph, arg, src)
@@ -109,7 +104,7 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
         # We may want additional special cases for other types where
         # `Base.isa_ast_node(e)`, but `K"Value"` should be fine for most, since
         # most are produced in or after lowering
-        if e isa LineNumberNode
+        if e isa LineNumberNode && src isa LineNumberNode
             # linenode outside of block or toplevel
             src = e
         end
@@ -126,11 +121,10 @@ end
 function est_to_expr(st::SyntaxTree, suppress_linenodes=false)
     k = kind(st)
     if kind(st) === K"Identifier"
+        # @jl_assert scope layer is base
         n = Symbol(st.name_val::String)
         mod = get(st, :mod, nothing)
-        !isnothing(mod) ? GlobalRef(mod, n) :
-            hasattr(st, :scope_layer) ? Expr(:scope_layer, n, st.scope_layer) :
-            n
+        !isnothing(mod) ? GlobalRef(mod, n) : n
     elseif is_leaf(st) && is_expr_value(st)
         v = st.value
         # Let `st.value isa Symbol` (or other AST node).  Since we enforce that
@@ -318,7 +312,7 @@ end
 split_generated(st::SyntaxTree, gen_part) = @stm st begin
     (_, when=is_leaf(st)||is_quoted(st)) -> st
     [K"if" [K"generated"] gen nongen] -> if gen_part
-        @ast(st._graph, st, [K"$" gen])
+        @ast(st._graph, st, [K"syntaxunquote" gen])
     else
         nongen
     end
@@ -419,7 +413,6 @@ We can assume `st` has passed `valid_st1`.  Errors arising from invalid AST
 function est_to_dst(st::SyntaxTree)
     g = ensure_macro_attributes!(st._graph)
     rec = var"#self#"
-
     return @stm st begin
         [K"Identifier"] -> _est_to_dst_ident(st)
         [K"Value"] -> st.value === nothing ? newleaf(g, st, K"nothing") : st
@@ -432,7 +425,6 @@ function est_to_dst(st::SyntaxTree)
 
              op_leaf = newleaf(g, st, K"Identifier")
              setattr!(op_leaf, :name_val, op_s)
-             setattr!(op_leaf, :scope_layer, st.scope_layer)
              @ast g st [out_k rec(l) op_leaf rec(r)]
          end
         [K"comparison" cs0...] -> let cs = copy(cs0)
@@ -442,15 +434,13 @@ function est_to_dst(st::SyntaxTree)
             mknode(st, cs)
         end
         [K"'" x] ->
-            @ast g st [K"call" "'"::K"Identifier"(scope_layer=st.scope_layer) rec(x)]
+            @ast g st [K"call" "'"::K"Identifier"(st) rec(x)]
         [K"." f [K"tuple" args...]] -> _expand_literal_pow(
             @ast g st [K"dotcall" rec(f) _dst_sink_parameters(args)...])
         ([K"inert" [K"Identifier"]], when=!hasattr(st[1], :mod)) ->
             @ast g st st[1]=>K"Symbol"
-        ([K"inert_syntaxtree" [K"Identifier"]], when=!hasattr(st[1], :mod)) ->
-            @ast g st st[1]=>K"Symbol"
+        [K"syntaxinert" _] -> st
         [K"inert" _] -> st
-        [K"inert_syntaxtree" _] -> st
         [K"module" _...] -> st
         [K"toplevel" _...] -> st
         [K"for" [K"=" _ _] body] ->
@@ -521,7 +511,7 @@ function est_to_dst(st::SyntaxTree)
             l = apply_arglist_meta(l, collect_body_arg_meta(r))
             if has_if_generated(r)
                 gen, nongen = split_generated(r, true), split_generated(r, false)
-                r2 = @ast g st [K"_generated_body" [K"quote" gen] rec(nongen)]
+                r2 = @ast g st [K"_generated_body" [K"syntaxquote" gen] rec(nongen)]
             else
                 r2 = rec(r)
             end
@@ -531,7 +521,7 @@ function est_to_dst(st::SyntaxTree)
             l = apply_arglist_meta(_dst_fix_arglist(l), collect_body_arg_meta(r))
             if has_if_generated(r)
                 gen, nongen = split_generated(r, true), split_generated(r, false)
-                r2 = @ast g st [K"_generated_body" [K"quote" gen] rec(nongen)]
+                r2 = @ast g st [K"_generated_body" [K"syntaxquote" gen] rec(nongen)]
             else
                 r2 = rec(r)
             end
@@ -541,7 +531,7 @@ function est_to_dst(st::SyntaxTree)
             l = apply_arglist_meta(_dst_fix_arglist(l), collect_body_arg_meta(r))
             if has_if_generated(r)
                 gen, nongen = split_generated(r, true), split_generated(r, false)
-                r2 = @ast g st [K"_generated_body" [K"quote" gen] rec(nongen)]
+                r2 = @ast g st [K"_generated_body" [K"syntaxquote" gen] rec(nongen)]
             else
                 r2 = rec(r)
             end
@@ -591,8 +581,7 @@ function est_to_dst(st::SyntaxTree)
         [K"top" x] -> setattr!(mkleaf(st), :name_val, x.name_val)
         [K"static_parameter" x] -> setattr!(mkleaf(st), :var_id, x.value::IdTag)
         [K"copyast" [K"inert" ex]] -> @ast g st [K"call"
-            interpolate_ast::K"Value"
-            Expr::K"Value"
+            interpolate_expr::K"Value"
             [K"inert"(st[1]) ex]
         ]
         [K"symbolicgoto" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
@@ -623,7 +612,8 @@ function est_to_dst(st::SyntaxTree)
             # forms (e.g. function definitions) stay inert.
             out_fptr = if kind(fptr) == K"inert" && numchildren(fptr) == 1 &&
                           kind(fptr[1]) == K"Identifier"
-                ident = setattr!(mkleaf(fptr[1]), :scope_layer, 1)
+                ident = mkleaf(fptr[1])
+                # TODO: relayer if unhygienic
                 @ast g fptr [K"static_eval"(fptr) ident]
             else
                 rec(fptr)

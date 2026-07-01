@@ -1,6 +1,7 @@
 module JuxtuposeTest
+    using ..JuliaLowering
     macro emit_juxtupose()
-        :(10x)
+        JuliaLowering.@legacy_quote_to_syntax :(10x)
     end
 end
 
@@ -314,7 +315,7 @@ end
 5   (call %₃ %₄)
 6   TestMod.f
 7   (call core.tuple %₆)
-8   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (call ($ f) x y)) %₇)
+8   (call JuliaLowering.interpolate_syntax (syntaxinert (call (syntaxunquote f) x y)) %₇)
 9   (= slot₁/eval_result (call core.kwcall %₅ %₁ TestMod %₈))
 10  latestworld
 11  slot₁/eval_result
@@ -332,11 +333,12 @@ end
 6   TestMod.mod
 7   TestMod.f
 8   (call core.tuple %₇)
-9   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (call ($ f) x y)) %₈)
-10  (= slot₁/eval_result (call core.kwcall %₅ %₁ %₆ %₉))
-11  latestworld
-12  slot₁/eval_result
-13  (return %₁₂)
+9   (call JuliaLowering.interpolate_syntax (syntaxinert (call (syntaxunquote f) x y)) %₈)
+10  (call JuliaSyntax.remove_context %₉)
+11  (= slot₁/eval_result (call core.kwcall %₅ %₁ %₆ %₁₀))
+12  latestworld
+13  slot₁/eval_result
+14  (return %₁₃)
 
 ########################################
 # Juxtaposition
@@ -348,14 +350,7 @@ end
 4   (return %₃)
 
 ########################################
-# Juxtaposition - check the juxtapose multiply is resolved to `JuxtuposeTest.*` when
-# emitted by the macro in the JuxtuposeTest module.
-#
-# This is consistent with Julia's existing system but it's not entirely clear
-# this is good - perhaps we should resolve to Base.* instead? Resolving to the
-# module-local version makes it exactly equivalent to `*`. But one might argue
-# this is confusing because the symbol `*` appears nowhere in the user's source
-# code.
+# Juxtaposition - resolve to macro's mod's `JuxtuposeTest.*`
 JuxtuposeTest.@emit_juxtupose
 #---------------------
 1   TestMod.JuxtuposeTest.*

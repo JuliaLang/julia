@@ -2067,7 +2067,7 @@ end
 6   latestworld
 7   TestMod.#f_only_generated@generator#0
 8   (call core.Typeof %₇)
-9   (call core.svec %₈ JuliaLowering.MacroContext core.Any core.Any core.Any)
+9   (call core.svec %₈ JuliaSyntax.SyntaxContext core.Any core.Any core.Any)
 10  (call core.svec)
 11  SourceLocation::1:21
 12  (call core.svec %₉ %₁₀ %₁₁)
@@ -2077,7 +2077,7 @@ end
     2   TestMod.generator_code
     3   (call %₂ slot₄/x slot₅/y)
     4   (call core.tuple %₃)
-    5   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block ($ (block (call generator_code x y))))) %₄)
+    5   (call JuliaLowering.interpolate_syntax (syntaxinert (block (syntaxunquote (block (call generator_code x y))))) %₄)
     6   (return %₅)
 14  latestworld
 15  TestMod.f_only_generated
@@ -2088,7 +2088,7 @@ end
 20  (call core.svec %₁₇ %₁₈ %₁₉)
 21  --- method TestMod.f_only_generated %₂₀
     slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/y(!read)]
-    1   (meta :generated (new JuliaLowering.GeneratedFunctionStub false TestMod.#f_only_generated@generator#0 SourceRef::1:1 (call core.svec :#self# :x :y) (call core.svec)))
+    1   (meta :generated (new JuliaLowering.GeneratedFunctionStub JuliaSyntax.SyntaxContext(SL(TestMod,), nothing, v"1.14.0", false) TestMod.#f_only_generated@generator#0 SourceRef::1:1 (call core.svec :#self# :x :y) (call core.svec)))
     2   (meta :generated_only)
     3   (return core.nothing)
 22  latestworld
@@ -2117,16 +2117,16 @@ end
 6   latestworld
 7   TestMod.#f_partially_generated@generator#0
 8   (call core.Typeof %₇)
-9   (call core.svec %₈ JuliaLowering.MacroContext core.Any core.Any core.Any)
+9   (call core.svec %₈ JuliaSyntax.SyntaxContext core.Any core.Any core.Any)
 10  (call core.svec)
 11  SourceLocation::1:10
 12  (call core.svec %₉ %₁₀ %₁₁)
 13  --- method TestMod.#f_partially_generated@generator#0 %₁₂
     slots: [slot₁/#self#(!read) slot₂/__context__(!read) slot₃/#self#(nospecialize,!read) slot₄/x(nospecialize,!read) slot₅/y(nospecialize,!read)]
     1   (meta :nospecialize slot₃/#self# slot₄/x slot₅/y)
-    2   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (= maybe_gen_stuff (call some_gen_stuff x y)))))
+    2   (call JuliaLowering.interpolate_expr (inert (block (= maybe_gen_stuff (call some_gen_stuff x y)))))
     3   (call core.tuple %₂)
-    4   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (= nongen_stuff (call bothgen x y)) ($ (block (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (= maybe_gen_stuff (call some_gen_stuff x y))))))) (tuple-p nongen_stuff maybe_gen_stuff))) %₃)
+    4   (call JuliaLowering.interpolate_syntax (syntaxinert (block (= nongen_stuff (call bothgen x y)) (syntaxunquote (block (call JuliaLowering.interpolate_expr (inert (block (= maybe_gen_stuff (call some_gen_stuff x y))))))) (tuple-p nongen_stuff maybe_gen_stuff))) %₃)
     5   (return %₄)
 14  latestworld
 15  TestMod.f_partially_generated
@@ -2137,7 +2137,7 @@ end
 20  (call core.svec %₁₇ %₁₈ %₁₉)
 21  --- method TestMod.f_partially_generated %₂₀
     slots: [slot₁/#self#(!read) slot₂/x slot₃/y slot₄/maybe_gen_stuff(single_assign) slot₅/nongen_stuff(single_assign)]
-    1   (meta :generated (new JuliaLowering.GeneratedFunctionStub false TestMod.#f_partially_generated@generator#0 SourceRef::1:37 (call core.svec :#self# :x :y) (call core.svec)))
+    1   (meta :generated (new JuliaLowering.GeneratedFunctionStub JuliaSyntax.SyntaxContext(SL(TestMod,), nothing, v"1.14.0", false) TestMod.#f_partially_generated@generator#0 SourceRef::1:37 (call core.svec :#self# :x :y) (call core.svec)))
     2   TestMod.bothgen
     3   (= slot₅/nongen_stuff (call %₂ slot₂/x slot₃/y))
     4   TestMod.some_nongen_stuff

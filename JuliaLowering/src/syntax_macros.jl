@@ -15,6 +15,10 @@
 # `JuliaLowering.include()` or something. Then we'll be in the fun little world
 # of bootstrapping but it shouldn't be too painful :)
 
+function var"@identity"(__context__::MacroContext, st::SyntaxTree)
+    st
+end
+
 function Base.var"@nospecialize"(__context__::MacroContext, exs::SyntaxTree...)
     if length(exs) == 0
         @ast __context__ __context__.macrocall [K"meta"
@@ -237,22 +241,21 @@ function Base.Experimental.var"@opaque"(__context__::MacroContext, ex)
     ]
 end
 
-function _at_eval_code(ctx, srcref, mod, ex)
-    @ast ctx srcref [K"block"
+function Base.var"@eval"(__context__::MacroContext, ex)
+    @ast __context__ __context__.macrocall [K"block"
         [K"local"
             [K"="
                 "eval_result"::K"Identifier"
                 [K"call"
-                    # TODO: Call "eval"::K"core" here
                     JuliaLowering.eval::K"Value"
                     [K"parameters"
                         [K"kw"
                             "expr_compat_mode"::K"Identifier"
-                            ctx.expr_compat_mode::K"Bool"
+                            is_flisp_compat(__context__.macrocall)::K"Bool"
                         ]
                     ]
-                    mod
-                    [K"quote" ex]
+                    syntax_module(__context__.macrocall)::K"Value"
+                    [K"syntaxquote" _legacy_quote_to_syntax(ex, 1)]
                 ]
             ]
         ]
@@ -261,13 +264,28 @@ function _at_eval_code(ctx, srcref, mod, ex)
     ]
 end
 
-function Base.var"@eval"(__context__::MacroContext, ex)
-    mod = @ast __context__ __context__.macrocall __context__.scope_layer.mod::K"Value"
-    _at_eval_code(__context__, __context__.macrocall, mod, ex)
-end
-
 function Base.var"@eval"(__context__::MacroContext, mod, ex)
-    _at_eval_code(__context__, __context__.macrocall, mod, ex)
+    @ast __context__ __context__.macrocall [K"block"
+        [K"local"
+            [K"="
+                "eval_result"::K"Identifier"
+                [K"call"
+                    JuliaLowering.eval::K"Value"
+                    [K"parameters"
+                        [K"kw"
+                            "expr_compat_mode"::K"Identifier"
+                            is_flisp_compat(__context__.macrocall)::K"Bool"
+                        ]
+                    ]
+                    mod
+                    [K"call" remove_context::K"Value"
+                        [K"syntaxquote" _legacy_quote_to_syntax(ex, 1)]]
+                ]
+            ]
+        ]
+        [K"unknown_head"(name_val="latestworld-if-toplevel")]
+        "eval_result"::K"Identifier"
+    ]
 end
 
 #--------------------------------------------------------------------------------
@@ -336,4 +354,65 @@ quote+quasiquote 😅
 function var"@inert"(__context__::MacroContext, ex)
     @jl_assert kind(ex) == K"quote" ex
     @ast __context__ __context__.macrocall [K"inert" ex]
+end
+
+# The following will ideally be replaced by surface syntax
+
+# `quote`/`inert` for syntaxtree
+function var"@syntaxinert"(__context__::MacroContext, st)
+    @ast __context__ __context__.macrocall [K"syntaxinert" st]
+end
+function var"@syntaxquote"(__context__::MacroContext, st)
+    @ast __context__ __context__.macrocall [K"syntaxquote" st]
+end
+# not particularly good or useful, as @syntaxquote must expand first
+function var"@syntaxunquote"(__context__::MacroContext, st)
+    @ast __context__ __context__.macrocall [K"syntaxunquote" st]
+end
+
+# If the syntax version allows, convert quote/$ to syntaxquote/syntaxunquote.
+# This is just a convenient way to create SyntaxTree with full provenance
+# without dedicated surface syntax, mainly for testing metaprogramming in JL.
+# It is insufficient in many ways, e.g. not all forms can be expressed, and
+# interpolation of locals into top-level forms
+function var"@legacy_quote_to_syntax"(__context__::MacroContext, st)
+    @jl_assert kind(st) === K"quote" || kind(st) === K"inert" st
+    if is_flisp_compat(__context__.macrocall)
+        st
+    elseif kind(st) === K"inert"
+        # parser simplifies quote to inert
+        setattr(st, :kind, K"syntaxinert")
+    else
+        _legacy_quote_to_syntax(st, 0)
+    end
+end
+function _legacy_quote_to_syntax(st::SyntaxTree, depth)
+    k = kind(st)
+    if k === K"quote" && depth == 0
+        @jl_assert numchildren(st) == 1 st
+        cs = mapsyntax(c->_legacy_quote_to_syntax(c, depth+1), children(st))
+        setattr(mknode(st, cs), :kind, K"syntaxquote")
+    elseif k === K"$" && depth == 1
+        @jl_assert numchildren(st) == 1 (st, "bad multi-syntaxunquote")
+        cs = mapsyntax(c->_legacy_quote_to_syntax(c, depth-1), children(st))
+        setattr(mknode(st, cs), :kind, K"syntaxunquote")
+    else
+        depth2 = k === K"quote" ? depth + 1 : k === K"$" ? depth - 1 : depth
+        cs = SyntaxList(st._graph)
+        for c in children(st)
+            # Convert multi-unquote to single unquote
+            if depth2 == 1 && kind(c) === K"$" && numchildren(c) > 1
+                for c2 in children(c)
+                    push!(cs, @ast st._graph c [K"$" c2])
+                end
+            else
+                push!(cs, c)
+            end
+        end
+        cs_out = mapsyntax(c->_legacy_quote_to_syntax(c, depth2), cs)
+        cs_out == children(st) ? st : mknode(st, cs_out)
+    end
+end
+macro legacy_quote_to_syntax(x)
+    esc(x)
 end

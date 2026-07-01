@@ -364,6 +364,18 @@ function reduce_any_failing_toplevel(mod::Module, filename::AbstractString; do_e
     nothing
 end
 
+function expr_structure_eq(e1,e2)
+    @nospecialize
+    typeof(e1) == typeof(e2) || return false
+    e1 isa Expr || return e1 == e2
+    e1.head === e2.head || return false
+    length(e1.args) == length(e2.args) || return false
+    for (a, b) in Iterators.zip(e1.args, e2.args)
+        expr_structure_eq(a,b) || return false
+    end
+    true
+end
+
 function fl_macroexpand(mod::Module, x::Expr)
     ccall(:jl_macroexpand, Any, (Any, Any, Cint, Cint, Cint), x, mod, true, false, true)
 end
@@ -377,7 +389,7 @@ function fl_eval(mod::Module, x::Expr)
 end
 
 function jl_macroexpand(mod::Module, x::SyntaxTree; expr_compat_mode=false)
-    JuliaLowering.expand_forms_1(mod, x, expr_compat_mode, Base.get_world_counter())[2]
+    JuliaLowering.expand_forms_1(mod, x, expr_compat_mode, Base.get_world_counter(), true)[2]
 end
 
 function jl_lower(mod::Module, st::SyntaxTree; expr_compat_mode=false)

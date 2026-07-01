@@ -5,16 +5,12 @@ Key to use when transforming names into bindings
 """
 struct NameKey
     name::String
-    layer::LayerId
-end
-
-function Base.isless(a::NameKey, b::NameKey)
-    (a.name, a.layer) < (b.name, b.layer)
+    layer::ScopeLayer
 end
 
 function NameKey(ex::SyntaxTree)
     @jl_assert kind(ex) === K"Identifier" ex
-    NameKey(ex.name_val, ex.scope_layer)
+    NameKey(ex.name_val, ex.context.layer)
 end
 
 struct ScopeInfo
@@ -43,12 +39,6 @@ struct ScopeInfo
     # See `LambdaBindings`. Nothing if not a lambda scope.  This is the final
     # collecting place for locals going in to closure conversion.
     locals_capt::Union{Nothing, Dict{IdTag,Bool}}
-    # Globals declared at the base scope layer instead of the apparent scope
-    # layer due to hygiene_compat rules.  Macros generally an expect explicit
-    # global declaration (and any initialization in the same expression) to be
-    # unhygienic, but JL is more generous than flisp in resolving references to
-    # the rescoped global.
-    rescoped_globals::Set{NameKey}
 end
 
 function ScopeInfo(ctx, parent_id, ex::SyntaxTree)
@@ -69,27 +59,26 @@ function ScopeInfo(ctx, parent_id, ex::SyntaxTree)
     s = ScopeInfo(
         id, parent_id, lambda_id, ex._id, is_permeable, is_lifted,
         Dict{IdTag, NodeId}(), Dict{NameKey, NodeId}(), Dict{NameKey,IdTag}(),
-        kind(ex) === K"lambda" ? Dict{IdTag,Bool}() : nothing, Set{NameKey}())
+        kind(ex) === K"lambda" ? Dict{IdTag,Bool}() : nothing)
     push!(ctx.scopes, s)
     return s
 end
 
 struct ScopeResolutionContext{Attrs} <: AbstractLoweringContext
     graph::SyntaxGraph{Attrs}
+    syntax_context::SyntaxContext
     bindings::Bindings
-    mod::Module
+    # Purely for display and deterministic ordering of scope layers
+    layer_ids::Dict{ScopeLayer, Int}
     # Every lexical scope, indexed by ScopeId
     scopes::Vector{ScopeInfo}
     # Current stack of scopes to look for names in, innermost scope last
     scope_stack::Vector{ScopeId}
-    # Macro hygienic scopes (confusing name here)
-    scope_layers::Vector{ScopeLayer}
     # Usually, globals in the top scope are ignored.  This is a subset that may
     # be assigned to without the `global` keyword in soft scopes due to being
     # assigned to at top level, or passing the defined-and-owned-global check.
     soft_assignable_globals::Set{NameKey}
     enable_soft_scopes::Bool
-    expr_compat_mode::Bool
     world::UInt
 end
 
@@ -129,19 +118,6 @@ function explicit_declare_in_scope!(ctx, scope::ScopeInfo, ex, new_k::Symbol)
     elseif kind(ex) === K"Placeholder"
         return nothing
     end
-    if new_k === :global && (sl = ctx.scope_layers[ex.scope_layer]; sl.hygiene_compat)
-        # Check no conflict in the original scope before rescoping
-        bid_conflict = get(scope.vars, NameKey(ex), nothing)
-        !isnothing(bid_conflict) && throw(LoweringError(ex, """
-            unhygienic global name `$(NameKey(ex).name)` conflicts with an \
-            existing $(_var_str(get_binding(ctx, bid_conflict).kind))"""))
-        push!(scope.rescoped_globals, NameKey(ex))
-        ex = setattr(ex, :scope_layer, base_layer(ctx, sl).id)
-    elseif NameKey(ex) in scope.rescoped_globals
-        throw(LoweringError(ex, """
-            $(_var_str(new_k)) name `$(NameKey(ex).name)` conflicts with an \
-            existing unhygienic global"""))
-    end
     bid = get(scope.vars, NameKey(ex), nothing)
     old_k = isnothing(bid) ? nothing : get_binding(ctx, bid).kind
     if isnothing(old_k)
@@ -166,20 +142,18 @@ function explicit_declare_in_scope!(ctx, scope::ScopeInfo, ex, new_k::Symbol)
 end
 
 # globals are added to both `scope` and the top scope (mainly so we can get the
-# same binding for many unrelated global references, which doesn't apply to
-# rescoped globals).
+# same binding for many unrelated global references).
 function declare_in_scope!(ctx, scope::ScopeInfo, ex, bk::Symbol; kws...)
     nk = NameKey(ex)
     if bk === :global
-        mod = hasattr(ex, :mod) ? ex.mod::Module :
-            ctx.scope_layers[ex.scope_layer::LayerId].mod
-        declaration_scope = nk in scope.rescoped_globals ? scope : top_scope(ctx)
+        mod = syntax_module(ex)
+        declaration_scope = top_scope(ctx)
     else
         declaration_scope = scope
         mod = hasattr(ex, :mod) ?
             throw(LoweringError(ex, "cannot use GlobalRef as local identifier")) : nothing
     end
-    is_internal = ctx.scope_layers[nk.layer].is_internal ||
+    is_internal = (ex.context::SyntaxContext).internal ||
         getmeta(ex, :is_internal, false)::Bool
     b = _new_binding(ctx, ex, nk.name, bk; mod, is_internal, kws...)
     declaration_scope.vars[nk] = b.id
@@ -233,25 +207,18 @@ function resolve_name(ctx, ex; exclude_toplevel_globals=false)
             return b
         end
     end
-    # hygiene compat: retry at the base layer for rescoped globals only
-    if (sl = ctx.scope_layers[nk.layer]; sl.hygiene_compat && !is_base_layer(sl))
-        for sid in Iterators.reverse(ctx.scope_stack)
-            scope = ctx.scopes[sid]
-            if nk in scope.rescoped_globals
-                nk2 = NameKey(nk.name, base_layer(ctx, sl).id)
-                bid = get(scope.vars, nk2, nothing)
-                @jl_assert !isnothing(bid) && get_binding(ctx, bid).kind === :global ex
-                if (!exclude_toplevel_globals || sid !== top_scope(ctx).id)
-                    return get_binding(ctx, bid)
-                end
-            end
-        end
-    end
     return nothing
+end
+
+function _record_layer!(ctx, ex)
+    !hasattr(ex, :context) && return
+    sl = (ex.context::SyntaxContext).layer
+    get!(ctx.layer_ids, sl, length(ctx.layer_ids)+1)
 end
 
 function _find_scope_decls!(ctx, scope, ex)
     k = kind(ex)
+    _record_layer!(ctx, ex)
     if k === K"local" && kind(ex[1]) === K"Identifier"
         var_k = getmeta(ex, :is_destructured_arg, false) ?
             :destructured_arg : :local
@@ -260,6 +227,7 @@ function _find_scope_decls!(ctx, scope, ex)
         explicit_declare_in_scope!(ctx, scope, ex[1], :global)
     elseif k === K"function_decl"
         k1 = kind(ex[1])
+        _record_layer!(ctx, ex[1])
         if k1 === K"BindingId"
             b = get_binding(ctx, ex[1])
             @jl_assert b.is_ssa || b.kind === :global (
@@ -268,16 +236,25 @@ function _find_scope_decls!(ctx, scope, ex)
         elseif k1 === K"Identifier"
             hasattr(ex[1], :mod) && explicit_declare_in_scope!(ctx, scope, ex[1], :global)
             get!(scope.assignments, NameKey(ex[1]), ex[1]._id)
+            get!(ctx.layer_ids, (ex[1].context::SyntaxContext).layer,
+                 length(ctx.layer_ids)+1)
         else
             @jl_assert false (ex, "unknown kind in assignment")
         end
     elseif k in KSet"= constdecl assign_or_constdecl_if_global"
         k1 = kind(ex[1])
-        if k1 === K"BindingId"
+        _record_layer!(ctx, ex[1])
+        sc = ex[1].context::SyntaxContext
+        if k === K"constdecl" && is_flisp_compat(ex[1]) &&
+            is_top_scope(scope) && sc !== ctx.syntax_context
+            # hack: flisp declares a mangled global in expansion; we must not error
+            explicit_declare_in_scope!(ctx, scope, ex[1], :global)
+        elseif k1 === K"BindingId"
             b = get_binding(ctx, ex[1])
             get!(scope.binding_assignments, b.id, ex[1]._id)
         elseif k1 === K"Identifier"
-            get!(scope.assignments, NameKey(ex[1]), ex[1]._id)
+            !hasattr(ex[1], :mod) &&
+                get!(scope.assignments, NameKey(ex[1]), ex[1]._id)
         elseif k1 === K"Placeholder"
             # nothing to declare
         else
@@ -291,6 +268,7 @@ function _find_scope_decls!(ctx, scope, ex)
             _find_scope_decls!(ctx, scope, e)
         end
     end
+    nothing
 end
 
 # Produce a complete ScopeInfo and add it to the stack of active scopes.  This
@@ -334,17 +312,22 @@ function enter_scope!(ctx, ex)
         b = get_binding(ctx, bid)
         b.lambda_id != 0 || add_lambda_local!(ctx, scope, b)
     end
-    for (vk, node_id) in sort!(collect(scope.assignments))
+    for (vk, node_id) in sort!(collect(scope.assignments);
+                               by=x->let nk=x[1]; (nk.name, ctx.layer_ids[nk.layer]); end)
         local ex = SyntaxTree(ctx.graph, node_id)
         b = resolve_name(ctx, ex)
         if b === nothing
-            sl = ctx.scope_layers[vk.layer]
-            if is_toplevel_thunk && is_base_layer(sl)
+            sc = ex.context::SyntaxContext
+            # Top-level assignments are locals in hygienic expansions.  We may
+            # need to adjust this, as flisp makes them name-mangled globals.
+            hygienic_toplevel = !is_base_layer(sc) && sc !== ctx.syntax_context
+            if is_toplevel_thunk && !hygienic_toplevel
                 # top-level assignments in no scope and no expansion
                 push!(ctx.soft_assignable_globals, vk)
                 declare_in_scope!(ctx, top_scope(ctx), ex, :global)
-            elseif scope.is_permeable && is_base_layer(sl) &&
-                is_defined_and_owned_global(sl.mod, Symbol(vk.name), ctx.world)
+            elseif scope.is_permeable && !hygienic_toplevel &&
+                is_defined_and_owned_global(
+                    syntax_module(sc), Symbol(vk.name), ctx.world)
                 # special soft scope rules: existing global variables are assigned to
                 if ctx.enable_soft_scopes
                     push!(ctx.soft_assignable_globals, vk)
@@ -572,6 +555,14 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
             @jl_assert false (ex, "unknown syntax assertion")
         end
         newleaf(ctx, ex, K"TOMBSTONE")
+    elseif k === K"relayered_global"
+        bid = get(scope.vars, NameKey(ex[1]), nothing)
+        !isnothing(bid) && let b = get_binding(ctx, bid)
+            b.kind !== :global && throw(LoweringError(ex, string(
+                "unhygienic global name `$(NameKey(ex[1]).name)` conflicts ",
+                "with an existing $(_var_str(b.kind))")))
+        end
+        newleaf(ctx, ex, K"TOMBSTONE")
     elseif k == K"function_decl"
         resolved = mapchildren(e->_resolve_scopes(ctx, e, scope), ctx, ex)
         name = resolved[1]
@@ -630,8 +621,8 @@ ClosureBindings(name_stack) = ClosureBindings(name_stack, Vector{LambdaBindings}
 
 struct VariableAnalysisContext{Attrs} <: AbstractLoweringContext
     graph::SyntaxGraph{Attrs}
+    syntax_context::SyntaxContext
     bindings::Bindings
-    mod::Module
     scopes::Vector{ScopeInfo}
     lambda_bindings::LambdaBindings
     # Stack of method definitions for closure naming
@@ -777,8 +768,8 @@ function analyze_variables!(ctx, ex)
             end
         end
         ctx2 = VariableAnalysisContext(
-            ctx.graph, ctx.bindings, ctx.mod, ctx.scopes, lambda_bindings,
-            ctx.method_def_stack, ctx.closure_bindings)
+            ctx.graph, ctx.syntax_context, ctx.bindings, ctx.scopes,
+            lambda_bindings, ctx.method_def_stack, ctx.closure_bindings)
         foreach(e->analyze_variables!(ctx2, e), ex[3:end]) # body & return type
     else
         foreach(e->analyze_variables!(ctx, e), children(ex))
@@ -819,14 +810,14 @@ enclosing lambda form and information about variables captured by closures.
     graph = ensure_scope_attributes!(copy_attrs(ctx.graph))
     ex = reparent(graph, ex)
     enable_soft_scopes = soft_scope !== nothing ? soft_scope : contains_softscope_marker(ex)
-    ctx2 = ScopeResolutionContext(graph, ctx.bindings, ctx.mod,
+    ctx2 = ScopeResolutionContext(graph, ctx.syntax_context, ctx.bindings,
+                                  Dict{ScopeLayer, Int}(),
                                   Vector{ScopeInfo}(), Vector{ScopeId}(),
-                                  ctx.scope_layers, Set{NameKey}(),
+                                  Set{NameKey}(),
                                   enable_soft_scopes,
-                                  ctx.expr_compat_mode,
                                   world)
     ex2 = resolve_scopes(ctx2, ex)
-    ctx3 = VariableAnalysisContext(graph, ctx2.bindings, ctx2.mod,
+    ctx3 = VariableAnalysisContext(graph, ctx2.syntax_context, ctx2.bindings,
                                    ctx2.scopes, ex2.lambda_bindings,
                                    SyntaxList(graph),
                                    Dict{IdTag,ClosureBindings}())

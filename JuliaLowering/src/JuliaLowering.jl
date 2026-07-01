@@ -18,7 +18,10 @@ using .JuliaSyntax: @KSet_str, @stm, Kind, NodeId, SourceAttrType, SourceRef, Sy
     flattened_provenance, hasattr, head, highlight, is_compatible_graph,
     is_leaf, is_literal, kind, last_byte, mapchildren, mapsyntax, mkleaf, mknode, newleaf,
     newnode, node_string, numchildren, provenance, reparent, setattr, setattr!,
-    source_location, sourcefile, sourceref, syntax_graph, tree_ids, mapindex, mktree
+    source_location, sourcefile, sourceref, syntax_graph, tree_ids, mapindex, mktree,
+    ScopeLayer, SyntaxContext, is_base_layer, base_layer, escape_layer,
+    syntax_module, is_flisp_compat, adopt_context, remove_context,
+    JL_NEW_SYNTAX_VERSION, JL_OLD_SYNTAX_VERSION
 
 const DEBUG = true
 

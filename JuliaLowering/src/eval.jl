@@ -3,7 +3,7 @@
 
 function lower(mod::Module, ex0::SyntaxTree; expr_compat_mode::Bool=false, world::UInt=Base.get_world_counter(),
                soft_scope::Union{Nothing,Bool}=nothing)
-     ctx1, ex1 = expand_forms_1(  mod,  ex0, expr_compat_mode, world)
+     ctx1, ex1 = expand_forms_1(  mod,  ex0, expr_compat_mode, world, true)
      ctx2, ex2 = expand_forms_2(  ctx1, ex1)
      ctx3, ex3 = resolve_scopes(  ctx2, ex2; soft_scope)
      ctx4, ex4 = convert_closures(ctx3, ex3)
@@ -12,7 +12,12 @@ function lower(mod::Module, ex0::SyntaxTree; expr_compat_mode::Bool=false, world
 end
 
 function macroexpand(mod::Module, ex::SyntaxTree; expr_compat_mode::Bool=false, world::UInt=Base.get_world_counter())
-    _ctx1, ex1 = expand_forms_1(mod, ex, expr_compat_mode, world)
+    _ctx1, ex1 = expand_forms_1(mod, ex, expr_compat_mode, world, true)
+    ex1
+end
+
+function macroexpand1(mod::Module, ex::SyntaxTree; expr_compat_mode::Bool=false, world::UInt=Base.get_world_counter())
+    _ctx1, ex1 = expand_forms_1(mod, ex, expr_compat_mode, world, false)
     ex1
 end
 
@@ -64,7 +69,7 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
 
     k = kind(ex)
     if !(k in KSet"toplevel module")
-        ctx1, ex = expand_forms_1(mod, ex, iter.expr_compat_mode, world)
+        ctx1, ex = expand_forms_1(mod, ex, iter.expr_compat_mode, world, true)
         k = kind(ex)
     end
     if k == K"toplevel"
@@ -312,10 +317,13 @@ function _di_pos(st::SyntaxTree)
 end
 
 # TODO sourcefile(::LNN) should return Symbol, not LNN
-_di_sourcefile(st) =
-    let x = JuliaSyntax.unexpanded_sourceref(st)
-        x isa LineNumberNode ? x.file : x.file[]::SourceFile
-    end
+function _di_sourcefile(st)
+    # if st.context.unexpanded isa SyntaxTree
+    #     @jl_assert st.context.unexpanded._graph === st._graph (st, "bad unexpanded: different graph") (st.context.unexpanded, "this is the unexpanded tree")
+    # end
+    x = JuliaSyntax.unexpanded_sourceref(st)
+    x isa LineNumberNode ? x.file : x.file[]::SourceFile
+end
 
 # A single pass over all IR to collect unique byte/line positions and CodeInfos
 function collect_locs!(node_sources, codeinfos, top_sf, st)
@@ -578,10 +586,12 @@ function _to_lowered_expr(ex::SyntaxTree)
     elseif k == K"SSAValue"
         Core.SSAValue(ex.var_id::IdTag)
     elseif k == K"return"
-        Core.ReturnNode(_to_lowered_expr(ex[1]))
+        v = _to_lowered_expr(ex[1])
+        @jl_assert Base.Compiler.is_valid_return(v) ex
+        Core.ReturnNode(v)
     elseif k == K"inert"
-        est_to_expr(remove_scope_layer!(ex))
-    elseif k == K"inert_syntaxtree"
+        est_to_expr(ex)
+    elseif k == K"syntaxinert"
         ex[1]
     elseif k == K"code_info"
         ir = to_code_info(ex, ex.slots, ex.meta)
@@ -591,10 +601,9 @@ function _to_lowered_expr(ex::SyntaxTree)
             ir
         end
     elseif k == K"Value"
-        # TODO: we still do this in some interpolation, genfunc situations
-        # @jl_assert !isa_lowering_ast_node(ex.value) (
-        #     ex, string("smuggling AST through Value is asking for trouble; ",
-        #                "find a SyntaxTree representation"))
+        @jl_assert !isa_lowering_ast_node(ex.value) (
+            ex, string("smuggling AST through Value is asking for trouble; ",
+                       "find a SyntaxTree representation"))
         ex.value isa LineNumberNode ? QuoteNode(ex.value) : ex.value
     elseif k == K"goto"
         Core.GotoNode(ex[1].id)

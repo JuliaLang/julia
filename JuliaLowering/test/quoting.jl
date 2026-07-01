@@ -1,10 +1,205 @@
 test_mod = Module()
 
+@eval test_mod import JuliaLowering.@legacy_quote_to_syntax
+
+@testset "basic quoting and dollar-interpolation" begin
+    @eval test_mod global interpolated_var
+
+    @testset for run in [
+        (x::String)->fl_eval(test_mod, Expr(:block, JuliaSyntax.parsestmt(Expr, x))),
+        (x::String)->jl_eval(test_mod, JuliaSyntax.parsestmt(SyntaxTree, x); expr_compat_mode=true),
+        (x::String)->jl_eval(test_mod, JuliaSyntax.parsestmt(SyntaxTree, x); expr_compat_mode=false),
+        ]
+        @test run(raw":x") == :x
+        @test run(raw":(:x)") == QuoteNode(:x)
+        @test run(raw":(:(:x))") == Expr(:quote, (QuoteNode(:x)))
+        @test run(raw":(:($x))") == Expr(:quote, Expr(:$, :x))
+        @test run(raw":($(:($(:x))))") == :x
+        @test run(raw":($(:(:($x))))") == Expr(:quote, Expr(:$, :x))
+        @test run(raw":(:($(:($x))))") == Expr(:quote, Expr(:$, Expr(:quote, Expr(:$, :x))))
+
+        @testset for ivar_val in [:y, Symbol(""), GlobalRef(Base, :push!), Expr(:call, :identity, 2), 1, nothing],
+            ivar in [ivar_val, Expr(:quote, ivar_val), Expr(:inert, ivar_val), QuoteNode(ivar_val)]
+
+            Base.setglobal!(test_mod, :interpolated_var, ivar)
+
+            @test run(raw"interpolated_var") == ivar
+            @test run(raw":($interpolated_var)") == ivar
+            @test run(raw":($(:($interpolated_var)))") == ivar
+            @test run(raw":(:($$interpolated_var))") == Expr(:quote, Expr(:$, ivar))
+            @test run(raw":(:($($interpolated_var)))") == Expr(:quote, Expr(:$, ivar))
+            @test run(raw":(identity($interpolated_var))") == Expr(:call, :identity, ivar)
+        end
+    end
+end
+
+@testset "self-quoting forms" for
+    form in [1, true, "string", [], nothing,],
+    quoted in [Expr(:quote, form), Expr(:inert, form), QuoteNode(form)]
+
+    @test fl_eval(test_mod, Expr(:block, quoted)) == form
+    @test jl_eval(test_mod, Expr(:block, quoted); expr_compat_mode=true) == form
+    @test jl_eval(test_mod, Expr(:block, quoted); expr_compat_mode=false) == form
+end
+@testset "self-quoting forms, interpolated into quote" for
+    form in [1, true, "string", [], nothing,],
+    quoted in [form, Expr(:quote, form), Expr(:inert, form), QuoteNode(form)]
+
+    @test fl_eval(test_mod, Expr(:quote, Expr(:$, quoted))) == form
+    @test jl_eval(test_mod, Expr(:quote, Expr(:$, quoted)); expr_compat_mode=true) == form
+    @test jl_eval(test_mod, Expr(:quote, Expr(:$, quoted)); expr_compat_mode=false) == form
+end
+
+@eval test_mod global quotesplatvar = [1,[2,[3,[4]]]]
+@testset "unquote-splicing `...`" for run in [
+    (x)->fl_eval(test_mod, x),
+    (x)->jl_eval(test_mod, x; expr_compat_mode=true),
+    (x)->jl_eval(test_mod, x; expr_compat_mode=false),
+    ]
+    @test expr_structure_eq(
+        run(
+            Expr(:quote,
+                 Expr(:call, Base.vect,
+                      Expr(:$,
+                           Expr(:..., :quotesplatvar))))),
+        Expr(:call, Base.vect, 1, [2, [3, [4]]]))
+    @test expr_structure_eq(
+        run(
+            Expr(:quote,
+                 Expr(:quote,
+                      Expr(:$,
+                           Expr(:...,  # A quoted `...` is left unchanged
+                                Expr(:$,
+                                     Expr(:..., :quotesplatvar))))))),
+        Expr(:quote, Expr(:$, Expr(:..., 1, [2, [3, [4]]]))))
+    @test expr_structure_eq(
+        run(
+            Expr(:quote,
+                 Expr(:quote,
+                      Expr(:$,
+                           Expr(:$,
+                                Expr(:...,
+                                     Expr(:..., :quotesplatvar))))))),
+        Expr(:quote, Expr(:$, 1, 2, [3, [4]])))
+    @test expr_structure_eq(
+        run(
+            Expr(:quote,
+                 Expr(:quote,
+                      Expr(:$,
+                           Expr(:$,
+                                Expr(:...,
+                                     Expr(:...,
+                                          Expr(:..., :quotesplatvar)))))))),
+        Expr(:quote, Expr(:$, 1, 2, 3, [4])))
+end
+
+@testset "@legacy_quote_to_syntax" begin
+    @test JuliaLowering.include_string(
+        test_mod, raw"@legacy_quote_to_syntax :x") isa SyntaxTree
+    @test JuliaLowering.include_string(
+        test_mod, raw"@legacy_quote_to_syntax :x") |> kind === K"Identifier"
+    @test JuliaLowering.include_string(
+        test_mod, raw"@legacy_quote_to_syntax :($1)") isa SyntaxTree
+    @test JuliaLowering.include_string(
+        test_mod, raw"@legacy_quote_to_syntax :($1)") |> kind === K"Value"
+
+    @test JuliaLowering.include_string(
+        test_mod, raw"@legacy_quote_to_syntax :(x+1)") isa SyntaxTree
+    @test JuliaLowering.include_string(
+        test_mod, raw"@legacy_quote_to_syntax :(x+1)") |> kind === K"call"
+
+    # compat mode makes standard quote
+    @test JuliaLowering.include_string(
+        test_mod, raw"@legacy_quote_to_syntax :x"; expr_compat_mode=true) == :x
+    @test JuliaLowering.include_string(
+        test_mod, raw"@legacy_quote_to_syntax :(x+1)"; expr_compat_mode=true) ==
+            Expr(:call, :+, :x, 1)
+
+    # syntaxunquote does not support the equivalent of Expr(:$, :a, :b), but
+    # legacy_quote_to_syntax can convert it
+    @test expr_structure_eq(
+        jl_eval(
+            test_mod,
+            Expr(:let, Expr(:block, Expr(:(=), :a, 1), Expr(:(=), :b, [2, [3, [4]]])),
+                 Expr(:macrocall,
+                      Symbol("@legacy_quote_to_syntax"),
+                      LineNumberNode(1),
+                      Expr(:quote,
+                           Expr(:call, Base.vect,
+                                Expr(:$, :a, :b)))))
+            ; expr_compat_mode=true),
+        Expr(:call, Base.vect, 1, [2, [3, [4]]]))
+    # splat :b
+    @test expr_structure_eq(
+        jl_eval(
+            test_mod,
+            Expr(:let, Expr(:block, Expr(:(=), :a, 1), Expr(:(=), :b, [2, [3, [4]]])),
+                 Expr(:macrocall,
+                      Symbol("@legacy_quote_to_syntax"),
+                      LineNumberNode(1),
+                      Expr(:quote,
+                           Expr(:call, Base.vect,
+                                Expr(:$, :a, Expr(:..., :b))))))
+            ; expr_compat_mode=true),
+        Expr(:call, Base.vect, 1, 2, [3, [4]]))
+    # double-splat :b
+    @test expr_structure_eq(
+        jl_eval(
+            test_mod,
+            Expr(:let, Expr(:block, Expr(:(=), :a, 1), Expr(:(=), :b, [2, [3, [4]]])),
+                 Expr(:macrocall,
+                      Symbol("@legacy_quote_to_syntax"),
+                      LineNumberNode(1),
+                      Expr(:quote,
+                           Expr(:call, Base.vect,
+                                Expr(:$, :a, Expr(:..., Expr(:..., :b)))))))
+            ; expr_compat_mode=true),
+        Expr(:call, Base.vect, 1, 2, 3, [4]))
+
+    # with compat=false
+    st = jl_eval(
+        test_mod,
+        Expr(:let, Expr(:block, Expr(:(=), :a, 1), Expr(:(=), :b, [2, [3, [4]]])),
+             Expr(:macrocall,
+                  Symbol("@legacy_quote_to_syntax"),
+                  LineNumberNode(1),
+                  Expr(:quote,
+                       Expr(:call, Base.vect,
+                            Expr(:$, :a, :b)))))
+        ; expr_compat_mode=false)
+    @test st isa SyntaxTree
+    @test JuliaSyntax.numchildren(st) == 3
+    st = jl_eval(
+        test_mod,
+        Expr(:let, Expr(:block, Expr(:(=), :a, 1), Expr(:(=), :b, [2, [3, [4]]])),
+             Expr(:macrocall,
+                  Symbol("@legacy_quote_to_syntax"),
+                  LineNumberNode(1),
+                  Expr(:quote,
+                       Expr(:call, Base.vect,
+                            Expr(:$, :a, Expr(:..., :b))))))
+        ; expr_compat_mode=false)
+    @test st isa SyntaxTree
+    @test JuliaSyntax.numchildren(st) == 4
+    st = jl_eval(
+        test_mod,
+        Expr(:let, Expr(:block, Expr(:(=), :a, 1), Expr(:(=), :b, [2, [3, [4]]])),
+             Expr(:macrocall,
+                  Symbol("@legacy_quote_to_syntax"),
+                  LineNumberNode(1),
+                  Expr(:quote,
+                       Expr(:call, Base.vect,
+                            Expr(:$, :a, Expr(:..., Expr(:..., :b)))))))
+        ; expr_compat_mode=false)
+    @test st isa SyntaxTree
+    @test JuliaSyntax.numchildren(st) == 5
+end
+
 ex = JuliaLowering.include_string(test_mod, """
 begin
     x = 10
-    y = :(g(z))
-    quote
+    y = @legacy_quote_to_syntax :(g(z))
+    @legacy_quote_to_syntax quote
         f(\$(x+1), \$y)
     end
 end
@@ -21,81 +216,21 @@ end
 ]
 @test sourcetext(ex[1]) == "f(\$(x+1), \$y)"
 @test sourcetext(ex[1][2]) == "\$(x+1)"
-@test sourcetext.(flattened_provenance(ex[1][3])) == ["\$y", "g(z)"]
-@test sprint(io->JuliaLowering._show_provtree(io, ex[1][3], "")) == raw"""
-(call g z)
-├─ (call g z)
-│  └─ (call g z)
-│     └─ (call g ✘ z ✘)
-│        └─ @ string:3
-└─ ($ y)
-   └─ ($ y)
-      └─ ($ ::K"$" y)
-         └─ @ string:5
-"""
-@test sprint(io->showprov(io, ex[1][3])) == raw"""
-    begin
-        x = 10
-        y = :(g(z))
-    #         └──┘ ── in source
-        quote
-            f($(x+1), $y)
-    # @ string:3
-
-        y = :(g(z))
-        quote
-            f($(x+1), $y)
-    #                 └┘ ── interpolated here
-        end
-    end
-    # @ string:5"""
-@test sprint(io->showprov(io, ex[1][3]; note="foo")) == raw"""
-    begin
-        x = 10
-        y = :(g(z))
-    #         └──┘ ── foo
-        quote
-            f($(x+1), $y)
-    # @ string:3
-
-        y = :(g(z))
-        quote
-            f($(x+1), $y)
-    #                 └┘ ── foo
-        end
-    end
-    # @ string:5"""
-
-
-# Test expression flags are preserved during interpolation
-@test JuliaSyntax.is_infix_op_call(JuliaLowering.include_string(test_mod, """
-let
-    x = 1
-    :(\$x + \$x)
-end
-"""))
-
-# Test that trivial interpolation without any nesting works.
-ex = JuliaLowering.include_string(test_mod, """
-let
-    x = 123
-    :(\$x)
-end
-""")
-@test kind(ex) == K"Value"
-@test ex.value == 123
 
 # Test that interpolation with field access works
 # (the field name can be interpolated after the dot).
-ex = JuliaLowering.include_string(test_mod, """
+@test JuliaLowering.include_string(test_mod, """
 let
-    field_name = :(a)
-    :(x.\$field_name)
+    field_name = @legacy_quote_to_syntax :(a)
+    @legacy_quote_to_syntax :(x.\$field_name)
 end
-""")
-@test kind(ex[2]) == K"inert"
-@test kind(ex[2][1]) == K"Identifier"
-@test ex[2][1].name_val == "a"
+""") ≈ @ast_ [K"." "x"::K"Identifier" [K"inert" "a"::K"Identifier"]]
+@test JuliaLowering.include_string(test_mod, """
+let
+    field_name = @legacy_quote_to_syntax :(a)
+    @legacy_quote_to_syntax :(x.\$field_name)
+end
+"""; expr_compat_mode=true) == Expr(:., :x, QuoteNode(:a))
 
 # Test quoted property access syntax like `Core.:(foo)` and `Core.:(!==)`
 @test JuliaLowering.include_string(test_mod, """
@@ -137,37 +272,14 @@ let
     end
 end
 """)
-@test ex ≈ @ast_ [K"block"
-    [K"="
-        "x"::K"Identifier"
-        1::K"Integer"
-    ]
-    [K"="
-        "y"::K"Identifier"
-        2::K"Integer"
-    ]
-    [K"quote"
-        [K"block"
-            [K"call"
-                "f"::K"Identifier"
-                [K"$"
-                    [K"tuple" "x"::K"Identifier" "x"::K"Identifier"]
-                    [K"tuple" "y"::K"Identifier" "y"::K"Identifier"]
-                ]
-            ]
-        ]
-    ]
-]
-@test sourcetext(ex[3][1][1][2]) == "\$\$(args...)"
-@test sourcetext(ex[3][1][1][2][1]) == "(x,x)"
-@test sourcetext(ex[3][1][1][2][2]) == "(y,y)"
-
-ex2 = JuliaLowering.eval(test_mod, ex)
-@test sourcetext(ex2[1][2]) == "(x,x)"
-@test sourcetext(ex2[1][3]) == "(y,y)"
-
-@test JuliaLowering.include_string(test_mod, ":x") isa Symbol
-@test JuliaLowering.include_string(test_mod, ":(x)") isa Symbol
+@test Base.remove_linenums!(ex) ==
+    Expr(:block,
+         Expr(:(=), :x, 1),
+         Expr(:(=), :y, 2),
+         Expr(:quote,
+              Expr(:block,
+                   Expr(:call, :f, Expr(:$, Expr(:tuple, :x, :x),
+                                        Expr(:tuple, :y, :y))))))
 
 # Double interpolation
 double_interp_ex = JuliaLowering.include_string(test_mod, raw"""
@@ -178,8 +290,7 @@ end
 """)
 Base.eval(test_mod, :(xxx = 111))
 dinterp_eval = JuliaLowering.eval(test_mod, double_interp_ex)
-@test kind(dinterp_eval) == K"Value"
-@test dinterp_eval.value == 111
+@test dinterp_eval == 111
 
 multi_interp_ex = JuliaLowering.include_string(test_mod, raw"""
 let
@@ -206,13 +317,13 @@ catch exc
 end
 @test contains(err, raw"More than one value in bare `$` expression")
 
-# Interpolation of SyntaxTree Identifier vs plain Symbol
+# Symbol should be interpolated (converted from expr)
 @eval test_mod using JuliaLowering
 symbol_interp = JuliaLowering.include_string(test_mod, """
 let
-    x = :xx    # Plain Symbol
-    y = JuliaLowering.parsestmt(JuliaLowering.SyntaxTree, "yy")  # SyntaxTree K"Identifier"
-    :(f(\$x, \$y, z))
+    x = :xx
+    y = @legacy_quote_to_syntax :yy
+    @legacy_quote_to_syntax :(f(\$x, \$y, z))
 end
 """)
 @test symbol_interp ≈ @ast_ [K"call"
@@ -221,26 +332,16 @@ end
     "yy"::K"Identifier"
     "z"::K"Identifier"
 ]
-@test sourcetext(symbol_interp[2]) == "\$x" # No provenance for plain Symbol
+@test sourcetext(symbol_interp[2]) == raw"$x"
 @test sourcetext(symbol_interp[3]) == "yy"
 
-# Mixing Expr into a SyntaxTree doesn't graft it onto the SyntaxTree AST but
-# treats it as a plain old value. (This is the conservative API choice and also
-# encourages ASTs to be written in the new form. However we may choose to
-# change this if necessary for compatibility.)
-expr_interp_is_value = JuliaLowering.include_string(test_mod, raw"""
+# (may change) Expr interpolated into SyntaxTree
+@test_throws LoweringError JuliaLowering.include_string(test_mod, raw"""
 let
     x = Expr(:call, :f, :x)
-    :(g($x))
+    @legacy_quote_to_syntax :(g($x))
 end
-""")
-@test expr_interp_is_value ≈ @ast_ [K"call"
-    "g"::K"Identifier"
-    Expr(:call, :f, :x)::K"Value"
-    # ^^ NB not [K"call" "f"::K"Identifier" "x"::K"Identifier"]
-]
-@test JuliaLowering.est_to_expr(expr_interp_is_value) ==
-    Expr(:call, :g, QuoteNode(Expr(:call, :f, :x)))
+""") broken=true
 
 @testset "Interpolation in Expr compat mode" begin
     expr_interp = JuliaLowering.include_string(test_mod, raw"""
@@ -277,42 +378,27 @@ end
     """; expr_compat_mode=true) == Base.push!
 end
 
-@testset "self-quoting forms" for expr_compat_mode in [true, false],
-    form in [1, true, "string", [], nothing, :symbol],
-    quoted in [Expr(:quote, form), Expr(:inert, form), QuoteNode(form)]
-
-    @test fl_eval(test_mod, Expr(:block, quoted)) == form
-    @test jl_eval(test_mod, Expr(:block, quoted); expr_compat_mode) == form
-
-end
-
-@testset "self-quoting forms, interpolated into quote, expr compat" for
-    form in [1, true, "string", [], nothing, :symbol],
-    quoted in [Expr(:quote, form), Expr(:inert, form), QuoteNode(form)]
-
-    @test fl_eval(test_mod, Expr(:quote, Expr(:$, quoted))) == form
-    @test jl_eval(test_mod, Expr(:quote, Expr(:$, quoted)); expr_compat_mode=true) == form
-
-    # Just to track behaviour
-    @test jl_eval(test_mod, Expr(:quote, Expr(:$, quoted)); expr_compat_mode=false) isa SyntaxTree
-end
-
 # (. l r) should pass lowering only when r is one of:
 # - simple identifier (resolved variable)
 # - any simple atom, bare, inert, or in quote
 # - anything else if inert (not evaluated)
+# - any valid `r` wrapped in unquote, then quote
 #
 # note Expr(:block) is to avoid the special top-level evaluation of Expr(:.) in
 # flisp, which skips handling :quote
-@testset "getproperty quoting" begin
-    @eval test_mod begin
-        struct GetProperty; gs_field; end
-        Base.getproperty(::GetProperty, x) = ("got", x)
-        Base.getproperty(::GetProperty, x::Symbol) = ("got", x) # avoid ambiguity
+@eval test_mod begin
+    struct GetProperty; gs_field; end
+    Base.getproperty(::GetProperty, x) = ("got", x)
+    Base.getproperty(::GetProperty, x::Symbol) = ("got", x) # avoid ambiguity
 
-        global gs = GetProperty([])
-        global outer_field = :gs_field
-    end
+    global gs = GetProperty([])
+    global outer_field = :gs_field
+end
+@testset "getproperty quoting" for wrap_quote in [
+    identity,
+    x->Expr(:quote, Expr(:$, x)),
+    x->Expr(:quote, Expr(:$, Expr(:quote, Expr(:$, x))))]
+
     @testset "arg2 unquoted identifier" for expr_compat_mode in [true, false]
         local field = :outer_field
 
@@ -375,4 +461,58 @@ end
         @test_throws LoweringError jl_eval(
             test_mod, Expr(:block, Expr(:., test_mod.gs, field)))
     end
+end
+
+@testset "syntax context in macro body should be discarded" begin
+    # Both `x`s should have argument context in the macrocall, not new-syntax
+    # context (resulting in (99, 2))
+    @test JuliaLowering.include_string(test_mod, raw"""
+        macro set_value(name, body)
+            @legacy_quote_to_syntax(quote
+                $name = 1
+                $body
+            end)
+        end
+        (function ()
+            x = 99
+            r = @set_value x x + 1
+            (x, r)
+        end)()
+   """) == (1,2)
+
+    @test JuliaLowering.include_string(test_mod, raw"""
+    macro addone_value(name, body)
+        @legacy_quote_to_syntax(quote
+            x = 99 # hygienic
+            $name += 1
+            $body
+        end)
+    end
+    (function ()
+         x = 0
+         out = []
+         push!(out, (x, @addone_value x x + 1))
+         push!(out, (x, @addone_value x x + 1))
+         push!(out, (x, @addone_value x x + 1))
+         out
+     end)()
+    """) == [(0, 2), (1, 3), (2, 4)]
+
+    @test JuliaLowering.include_string(test_mod, raw"""
+    macro addone_value_quote2(name, body)
+        @legacy_quote_to_syntax(quote
+            x = 99 # hygienic
+            $(:($name)) += 1
+            $(:($body))
+        end)
+    end
+    (function ()
+         x = 0
+         out = []
+         push!(out, (x, @addone_value_quote2 x x + 1))
+         push!(out, (x, @addone_value_quote2 x x + 1))
+         push!(out, (x, @addone_value_quote2 x x + 1))
+         out
+     end)()
+    """) == [(0, 2), (1, 3), (2, 4)]
 end
