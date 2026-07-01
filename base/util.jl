@@ -582,7 +582,15 @@ Stacktrace:
 ```
 """
 macro kwdef(expr)
-    expr = macroexpand(__module__, expr) # to expand @static
+    if isexpr(expr, :struct)
+        fieldsblock = expr.args[3]
+        # Handle top-level @atomic fields
+        for (i, item) in pairs(fieldsblock.args)
+            fieldsblock.args[i] = kwdef_restructure_atomic_default(item)
+        end
+    end
+
+    expr = macroexpand(__module__, expr; recursive=false, legacyscope=false) # to expand @static
     isexpr(expr, :struct) || error("Invalid usage of @kwdef")
     _, T, fieldsblock = expr.args
     if T isa Expr && T.head === :<:
@@ -635,6 +643,16 @@ macro kwdef(expr)
     end
 end
 
+# Transform `@atomic (x::Int = 1)` into `(@atomic x::Int) = 1`, so that @atomic
+# doesn't misinterpret the `=` as an atomic modify operation during macroexpand.
+function kwdef_restructure_atomic_default(ex)
+    if isexpr(ex, :macrocall) && ex.args[1] === Symbol("@atomic") && isexpr(ex.args[end], :(=))
+        lhs, rhs = ex.args[end].args
+        return Expr(:(=), Expr(:macrocall, ex.args[1:end-1]..., lhs), rhs)
+    end
+    return ex
+end
+
 # @kwdef helper function
 # mutates arguments inplace
 function extract_names_and_defvals_from_kwdef_fieldblock!(block, names, defvals)
@@ -659,6 +677,11 @@ function extract_names_and_defvals_from_kwdef_fieldblock!(block, names, defvals)
 end
 
 function def_name_defval_from_kwdef_fielddef(kwdef)
+    # Normalize @atomic macrocalls with defaults before processing, so the :(=) branch
+    # handles the default extraction. This covers unexpanded @atomic macrocalls from
+    # inside @static blocks that were not expanded due to recursive=false.
+    kwdef = kwdef_restructure_atomic_default(kwdef)
+
     if kwdef isa Symbol
         return kwdef, kwdef, nothing
     elseif isexpr(kwdef, :(::))
@@ -671,6 +694,9 @@ function def_name_defval_from_kwdef_fielddef(kwdef)
     elseif kwdef isa Expr && kwdef.head in (:const, :atomic)
         def, name, defval = @something(def_name_defval_from_kwdef_fielddef(kwdef.args[1]), return nothing)
         return Expr(kwdef.head, def), name, defval
+    elseif isexpr(kwdef, :macrocall) && kwdef.args[1] === Symbol("@atomic")
+        def, name, defval = @something(def_name_defval_from_kwdef_fielddef(kwdef.args[end]), return nothing)
+        return Expr(:macrocall, kwdef.args[1:end-1]..., def), name, defval
     elseif kwdef isa Expr && kwdef.head in (:escape, :var"hygienic-scope")
         def, name, defval = @something(def_name_defval_from_kwdef_fielddef(kwdef.args[1]), return nothing)
         return Expr(kwdef.head, def), name, isnothing(defval) ? defval : Expr(kwdef.head, defval)
