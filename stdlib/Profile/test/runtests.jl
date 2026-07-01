@@ -423,6 +423,32 @@ end
     @test !contains(sshot, "redact_this")
 
     rm(fname)
+
+    # `max_generation` controls how much of the generational heap is recorded:
+    # `:young` ⊆ `:old` ⊆ `:immortal`, with synthetic frontier nodes marking the
+    # boundaries of each collapsed older generation.
+    node_count(s) = parse(Int, match(r"\"node_count\":(\d+)", s).captures[1])
+    function snapshot_with(gen)
+        fpath = joinpath(tmpdir, "snap_$(gen).heapsnapshot")
+        Profile.take_heap_snapshot(fpath; max_generation=gen)
+        s = read(fpath, String)
+        rm(fpath; force=true)
+        return s
+    end
+    young = snapshot_with(:young)
+    old = snapshot_with(:old)
+    immortal = snapshot_with(:immortal)
+    # The `[remset]` (old -> young) frontier is present in every mode; the
+    # `[image]` (immortal -> old) frontier only once the old generation is recorded.
+    @test contains(young, "[remset]") && !contains(young, "[image]")
+    @test contains(old, "[remset]") && contains(old, "[image]")
+    @test contains(immortal, "[remset]") && contains(immortal, "[image]")
+    # Recording an older generation is strictly additive; the sysimage dominates
+    # the immortal generation, so it adds many nodes over `:old`.
+    @test node_count(young) <= node_count(old) < node_count(immortal)
+    # Unknown generations are rejected.
+    @test_throws ArgumentError Profile.take_heap_snapshot(joinpath(tmpdir, "bad.heapsnapshot"); max_generation=:bogus)
+
     rm(tmpdir, force = true, recursive = true)
 end
 end

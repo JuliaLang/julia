@@ -181,14 +181,29 @@ typedef struct {
     size_t internal_root_idx; // node index of the internal root node
     size_t _gc_root_idx; // node index of the GC roots node
     size_t _gc_finlist_root_idx; // node index of the GC finlist roots node
-    size_t _gc_image_node_idx; // node index of the combined [image] node
+    size_t _gc_image_node_idx; // node index of the [image] frontier node (immortal -> old)
+    size_t _gc_remset_node_idx; // node index of the [remset] frontier node (old -> young)
 } HeapSnapshot;
+
+#define HEAP_SNAPSHOT_NODE_SKIP ((size_t)-1)
 
 // global heap snapshot, mutated by garbage collector
 // when snapshotting is on.
 int gc_heap_snapshot_enabled = 0;
+int gc_heap_snapshot_max_generation = JL_SNAPSHOT_GENERATION_IMMORTAL;
+int gc_heap_snapshot_recording = 0;
 int gc_heap_snapshot_redact_data = 0;
 static HeapSnapshot *g_snapshot = NULL;
+
+static inline int heap_generation_of(jl_value_t *a) JL_NOTSAFEPOINT
+{
+    uintptr_t tag = jl_astaggedvalue(a)->header;
+    if (tag & GC_IN_IMAGE)
+        return JL_SNAPSHOT_GENERATION_IMMORTAL;
+    if (tag & GC_OLD)
+        return JL_SNAPSHOT_GENERATION_OLD;
+    return JL_SNAPSHOT_GENERATION_YOUNG;
+}
 // mutex for gc-heap-snapshot.
 jl_mutex_t heapsnapshot_lock;
 
@@ -200,7 +215,7 @@ static void _add_synthetic_root_entries(HeapSnapshot *snapshot) JL_NOTSAFEPOINT;
 
 
 JL_DLLEXPORT void jl_gc_take_heap_snapshot(ios_t *nodes, ios_t *edges,
-    ios_t *strings, ios_t *json, char all_one, char redact_data)
+    ios_t *strings, ios_t *json, char all_one, char redact_data, char max_generation)
 {
     HeapSnapshot snapshot;
     memset(&snapshot, 0, sizeof(snapshot));
@@ -215,21 +230,35 @@ JL_DLLEXPORT void jl_gc_take_heap_snapshot(ios_t *nodes, ios_t *edges,
     snapshot._gc_root_idx = 1;
     snapshot._gc_finlist_root_idx = 2;
 
+    int generation = (int)max_generation;
+    if (generation < JL_SNAPSHOT_GENERATION_YOUNG || generation > JL_SNAPSHOT_GENERATION_IMMORTAL)
+        generation = JL_SNAPSHOT_GENERATION_IMMORTAL;
+
     jl_mutex_lock(&heapsnapshot_lock);
 
     // Enable snapshotting
     g_snapshot = &snapshot;
     gc_heap_snapshot_redact_data = redact_data;
+    gc_heap_snapshot_max_generation = generation;
     gc_heap_snapshot_enabled = 1;
 
     _add_synthetic_root_entries(&snapshot);
 
-    // Do a full GC mark (and incremental sweep), which will invoke our callbacks on `g_snapshot`
-    jl_gc_collect(JL_GC_FULL);
+    // All generations record during a full mark (which traces the whole heap);
+    // the requested generation is applied as a recording filter. `_jl_gc_collect`
+    // arms `gc_heap_snapshot_recording` for the full-mark pass (invoking our
+    // callbacks on `g_snapshot`) and clears `gc_heap_snapshot_enabled` once it has
+    // recorded. JL_GC_FULL guarantees a full mark, recollecting if the previous
+    // sweep was not full; we loop until the request has been serviced.
+    int guard = 0;
+    while (gc_heap_snapshot_enabled && guard++ < 4)
+        jl_gc_collect(JL_GC_FULL);
 
     // Disable snapshotting
     gc_heap_snapshot_enabled = 0;
+    gc_heap_snapshot_recording = 0;
     gc_heap_snapshot_redact_data = 0;
+    gc_heap_snapshot_max_generation = JL_SNAPSHOT_GENERATION_IMMORTAL;
     g_snapshot = NULL;
 
     jl_mutex_unlock(&heapsnapshot_lock);
@@ -273,14 +302,19 @@ static void serialize_edge(HeapSnapshot *snapshot, Edge edge) JL_NOTSAFEPOINT
 }
 
 // Helper to insert into the pointer->index map, returning existing index if present.
-// Returns 1 if newly inserted, 0 if already present. *out_index is set either way.
-static int snapshot_insert_node(HeapSnapshot *snapshot, void *ptr, size_t *out_index) JL_NOTSAFEPOINT
+// Returns 1 if newly inserted, 0 if already present, -1 if skipped because the
+// object is older than the requested generation. *out_index is set for 0 and 1.
+// `force` bypasses the generation filter; it must be set for non-GC-object nodes
+// (synthetic frontier/pointer/frame nodes) whose tag bits are not meaningful.
+static int snapshot_insert_node(HeapSnapshot *snapshot, void *ptr, size_t *out_index, int force) JL_NOTSAFEPOINT
 {
     void **bp = ptrhash_bp(&snapshot->node_ptr_to_index_map, ptr);
     if (*bp != HT_NOTFOUND) {
         *out_index = (size_t)*bp - (size_t)HT_NOTFOUND - 1;
         return 0; // already present
     }
+    if (!force && heap_generation_of((jl_value_t *)ptr) > gc_heap_snapshot_max_generation)
+        return -1; // newly seen, but outside the requested generation range
     size_t idx = snapshot->num_nodes;
     *bp = (void *)((size_t)HT_NOTFOUND + idx + 1);
     *out_index = idx;
@@ -341,36 +375,67 @@ static void _add_synthetic_root_entries(HeapSnapshot *snapshot) JL_NOTSAFEPOINT
     };
     serialize_edge(snapshot, root_to_gc_finlist_roots);
 
-    // Add a synthetic node representing all sysimage/pkgimage objects.
-    // Image objects are permanently marked and never traced by the GC mark
-    // phase, so we collapse them into a single node rather than recording
-    // their internal structure.
-    snapshot->_gc_image_node_idx = snapshot->num_nodes;
-    Node gc_image_node = {
-        (uint8_t)st_find_or_create(&snapshot->node_types, "synthetic"),
-        st_find_or_serialize(&snapshot->names, snapshot->strings, "[image]"), // name
-        snapshot->_gc_image_node_idx, // id
-        0, // size (image memory is not GC-managed)
+    // Add a synthetic node for the old -> young generational frontier. Old
+    // objects that reference young ones are tracked in the GC remset; when a
+    // young snapshot collapses the old generation, those remset entries are
+    // rooted here so the young objects they keep alive remain reachable.
+    snapshot->_gc_remset_node_idx = snapshot->num_nodes;
+    Node gc_remset_node = {
+        (uint32_t)st_find_or_create(&snapshot->node_types, "synthetic"),
+        st_find_or_serialize(&snapshot->names, snapshot->strings, "[remset]"), // name
+        snapshot->_gc_remset_node_idx, // id
+        0, // size
         0, // size_t trace_node_id (unused)
         0 // int detachedness;  // 0 - unknown,  1 - attached;  2 - detached
     };
-    serialize_node(snapshot, gc_image_node);
-    Edge root_to_image = {
-        (uint8_t)st_find_or_create(&snapshot->edge_types, "internal"),
-        st_find_or_serialize(&snapshot->names, snapshot->strings, "[image]"), // edge label
+    serialize_node(snapshot, gc_remset_node);
+    Edge root_to_remset = {
+        (uint32_t)st_find_or_create(&snapshot->edge_types, "internal"),
+        st_find_or_serialize(&snapshot->names, snapshot->strings, "[remset]"), // edge label
         snapshot->internal_root_idx, // from
-        snapshot->_gc_image_node_idx // to
+        snapshot->_gc_remset_node_idx // to
     };
-    serialize_edge(snapshot, root_to_image);
+    serialize_edge(snapshot, root_to_remset);
+
+    // Add a synthetic node for the immortal -> old generational frontier. When a
+    // snapshot collapses the sysimage/pkgimage ("permalloc") generation, the
+    // mutated image objects tracked in the image remset are rooted here. (A
+    // young snapshot collapses the old generation too, so this frontier is not
+    // meaningful there and is omitted.)
+    if (gc_heap_snapshot_max_generation != JL_SNAPSHOT_GENERATION_YOUNG) {
+        snapshot->_gc_image_node_idx = snapshot->num_nodes;
+        Node gc_image_node = {
+            (uint32_t)st_find_or_create(&snapshot->node_types, "synthetic"),
+            st_find_or_serialize(&snapshot->names, snapshot->strings, "[image]"), // name
+            snapshot->_gc_image_node_idx, // id
+            0, // size (image memory is not GC-managed)
+            0, // size_t trace_node_id (unused)
+            0 // int detachedness;  // 0 - unknown,  1 - attached;  2 - detached
+        };
+        serialize_node(snapshot, gc_image_node);
+        Edge root_to_image = {
+            (uint32_t)st_find_or_create(&snapshot->edge_types, "internal"),
+            st_find_or_serialize(&snapshot->names, snapshot->strings, "[image]"), // edge label
+            snapshot->internal_root_idx, // from
+            snapshot->_gc_image_node_idx // to
+        };
+        serialize_edge(snapshot, root_to_image);
+    }
 }
 
 // mimicking https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/src/profiler/heap-snapshot-generator.cc#L597-L597
-// returns the index of the new node
-size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
+// returns the index of the new node, or HEAP_SNAPSHOT_NODE_SKIP if `a` is older
+// than the requested generation (callers must propagate the sentinel). When
+// `force` is set the object is recorded regardless of generation, used to root
+// the remset frontier entries that describe a collapsed older generation.
+static size_t record_node_to_gc_snapshot_(jl_value_t *a, int force) JL_NOTSAFEPOINT
 {
     size_t idx;
-    if (!snapshot_insert_node(g_snapshot, a, &idx))
+    int inserted = snapshot_insert_node(g_snapshot, a, &idx, force);
+    if (inserted == 0)
         return idx;
+    if (inserted < 0)
+        return HEAP_SNAPSHOT_NODE_SKIP;
 
     ios_t str_;
     int ios_need_close = 0;
@@ -465,25 +530,66 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
     if (ios_need_close)
         ios_close(&str_);
 
-    // Image objects are permanently marked and never traced by the GC mark
-    // phase, so they would otherwise appear as orphan nodes. Root them under
-    // the synthetic [image] node with a label indicating which image they belong to.
-    if (jl_astaggedvalue(a)->bits.in_image) {
-        jl_value_t *top_mod = jl_object_top_module(a);
-        const char *label = "[image]";
-        if (top_mod != (jl_value_t*)jl_nothing && jl_is_module((jl_module_t*)top_mod))
-            label = jl_symbol_name_(((jl_module_t*)top_mod)->name);
-        _record_gc_just_edge("internal", g_snapshot->_gc_image_node_idx, idx,
-                             st_find_or_serialize(&g_snapshot->names, g_snapshot->strings, label));
-    }
-
     return idx;
+}
+
+size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
+{
+    return record_node_to_gc_snapshot_(a, /*force=*/0);
+}
+
+// Root `entry` (an old object referencing a younger one) under the synthetic
+// `[remset]` node. The entry is force-recorded so the old -> young frontier is
+// visible even when the old generation is otherwise collapsed; its own
+// out-edges are recorded normally and filtered to the requested generation.
+void _gc_heap_snapshot_record_remset_entry(jl_value_t *entry) JL_NOTSAFEPOINT
+{
+    size_t idx = record_node_to_gc_snapshot_(entry, /*force=*/1);
+    _record_gc_just_edge("internal", g_snapshot->_gc_remset_node_idx, idx,
+                         st_find_or_serialize(&g_snapshot->names, g_snapshot->strings, "[remset]"));
+}
+
+// Root `entry` (a mutated image object referencing a younger one) under the
+// synthetic `[image]` node, labelled with the image it belongs to. As above,
+// the entry is force-recorded to surface the immortal -> old frontier.
+void _gc_heap_snapshot_record_image_remset_entry(jl_value_t *entry) JL_NOTSAFEPOINT
+{
+    // A young snapshot collapses the old generation too, so the immortal -> old
+    // frontier is not meaningful and the `[image]` node is not even created.
+    if (gc_heap_snapshot_max_generation == JL_SNAPSHOT_GENERATION_YOUNG)
+        return;
+    size_t idx = record_node_to_gc_snapshot_(entry, /*force=*/1);
+    jl_value_t *top_mod = jl_object_top_module(entry);
+    const char *label = "[image]";
+    if (top_mod != (jl_value_t*)jl_nothing && jl_is_module((jl_module_t*)top_mod))
+        label = jl_symbol_name_(((jl_module_t*)top_mod)->name);
+    _record_gc_just_edge("internal", g_snapshot->_gc_image_node_idx, idx,
+                         st_find_or_serialize(&g_snapshot->names, g_snapshot->strings, label));
+}
+
+// Consulted by the mark loop (only while recording an `:immortal` snapshot) when
+// it reaches an already-marked image object. Returns 1 the first time a given
+// image object is seen so the mark loop descends into it, and 0 thereafter.
+// Dedup relies on the snapshot node map; marking is single-threaded while a
+// snapshot is being recorded, so no synchronization is needed and GC tag bits
+// are never touched.
+int _gc_heap_snapshot_try_claim_image(jl_value_t *a) JL_NOTSAFEPOINT
+{
+    // Descend into `a` only the first time we see it. Recording its node now
+    // (rather than waiting for the edge that points at it) inserts it into the
+    // node map immediately, so any other reference to `a` -- and thus any repeat
+    // call here -- short-circuits, guaranteeing each image object is traversed at
+    // most once. Marking is single-threaded while recording, so this is race-free.
+    if (ptrhash_get(&g_snapshot->node_ptr_to_index_map, a) != HT_NOTFOUND)
+        return 0;
+    record_node_to_gc_snapshot_(a, /*force=*/0);
+    return 1;
 }
 
 static size_t record_pointer_to_gc_snapshot(void *a, size_t bytes, const char *name) JL_NOTSAFEPOINT
 {
     size_t idx;
-    if (!snapshot_insert_node(g_snapshot, a, &idx))
+    if (!snapshot_insert_node(g_snapshot, a, &idx, /*force=*/1))
         return idx;
 
     Node node = {
@@ -559,7 +665,7 @@ void _gc_heap_snapshot_record_finlist(jl_value_t *obj, size_t index) JL_NOTSAFEP
 size_t _record_stack_frame_node(HeapSnapshot *snapshot, void *frame) JL_NOTSAFEPOINT
 {
     size_t idx;
-    if (!snapshot_insert_node(g_snapshot, frame, &idx))
+    if (!snapshot_insert_node(g_snapshot, frame, &idx, /*force=*/1))
         return idx;
 
     Node node = {
@@ -667,6 +773,10 @@ static inline void _record_gc_edge(const char *edge_type, jl_value_t *a,
 
 static void _record_gc_just_edge(const char *edge_type, size_t from_idx, size_t to_idx, size_t name_or_idx) JL_NOTSAFEPOINT
 {
+    // Drop edges to/from objects that were filtered out of this snapshot's
+    // generation range (see `record_node_to_gc_snapshot`).
+    if (from_idx == HEAP_SNAPSHOT_NODE_SKIP || to_idx == HEAP_SNAPSHOT_NODE_SKIP)
+        return;
     Edge edge = {
         (uint32_t)st_find_or_create(&g_snapshot->edge_types, edge_type),
         name_or_idx, // edge label
