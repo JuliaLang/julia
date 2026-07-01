@@ -51,7 +51,7 @@ end
 
 const INT_INF = typemax(Int) # integer infinity
 
-const N_IFUNC = reinterpret(Int32, have_fma) + 1
+const N_IFUNC = reinterpret(Int32, cpu_supports) + 1
 const T_IFUNC = Vector{Tuple{Int, Int, Any}}(undef, N_IFUNC)
 const T_IFUNC_COST = Vector{Int}(undef, N_IFUNC)
 const T_FFUNC_KEY = Vector{Any}()
@@ -328,6 +328,7 @@ end
 add_tfunc(Core.Intrinsics.cglobal, 1, 2, cglobal_tfunc, 5)
 
 add_tfunc(Core.Intrinsics.have_fma, 1, 1, @nospecs((𝕃::AbstractLattice, x)->Bool), 1)
+add_tfunc(Core.Intrinsics.cpu_supports, 1, 1, @nospecs((𝕃::AbstractLattice, x)->Bool), 1)
 
 # builtin functions
 # =================
@@ -3112,6 +3113,11 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
         return Union{}
     end
 
+    if f === Intrinsics.cpu_supports
+        argtypes[1] ⊑ Symbol || return TypeError
+        return Union{}
+    end
+
     if f === Intrinsics.add_ptr || f === Intrinsics.sub_ptr
         if !(argtypes[1] ⊑ Ptr && argtypes[2] ⊑ UInt)
             return TypeError
@@ -3162,6 +3168,7 @@ function is_pure_intrinsic_infer(f::IntrinsicFunction, is_effect_free::Union{Not
             f === Intrinsics.pointerref ||            # this one is volatile
             f === Intrinsics.sqrt_llvm_fast ||        # this one may differ at runtime (by a few ulps)
             f === Intrinsics.have_fma ||              # this one depends on the runtime environment
+            f === Intrinsics.cpu_supports ||          # this one depends on the runtime environment
             f === Intrinsics.cglobal)                 # cglobal lookup answer changes at runtime
 end
 

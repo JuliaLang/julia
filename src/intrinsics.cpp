@@ -37,6 +37,7 @@ STATISTIC(Emitted_fptrunc, "Number of fptrunc calls emitted");
 STATISTIC(Emitted_fpext, "Number of fpext calls emitted");
 STATISTIC(Emitted_not_int, "Number of not_int calls emitted");
 STATISTIC(Emitted_have_fma, "Number of have_fma calls emitted");
+STATISTIC(Emitted_cpu_supports, "Number of cpu_supports calls emitted");
 STATISTIC(EmittedUntypedIntrinsics, "Number of untyped intrinsics emitted");
 
 using namespace JL_I;
@@ -1466,6 +1467,22 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         else
             return emit_runtime_call(ctx, f, argv, nargs);
 
+        FunctionCallee intr = jl_Module->getOrInsertFunction(intr_name, getInt1Ty(ctx.builder.getContext()));
+        auto ret = ctx.builder.CreateCall(intr);
+        return mark_julia_type(ctx, ret, false, jl_bool_type);
+    }
+
+    case cpu_supports: {
+        ++Emitted_cpu_supports;
+        assert(nargs == 1);
+        const jl_cgval_t &x = argv[0];
+        if (!x.constant || !jl_is_symbol(x.constant))
+            return emit_runtime_call(ctx, f, argv, nargs);
+        const char *feat = jl_symbol_name((jl_sym_t*)x.constant);
+        if (*feat == '\0')
+            return emit_runtime_call(ctx, f, argv, nargs);
+        std::string intr_name = "julia.cpu.supports.";
+        intr_name += feat;
         FunctionCallee intr = jl_Module->getOrInsertFunction(intr_name, getInt1Ty(ctx.builder.getContext()));
         auto ret = ctx.builder.CreateCall(intr);
         return mark_julia_type(ctx, ret, false, jl_bool_type);

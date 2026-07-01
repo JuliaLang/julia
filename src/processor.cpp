@@ -706,6 +706,17 @@ extern "C" int jl_test_cpu_feature(jl_cpu_feature_t feature)
     return feature_test(&host_feats, feature);
 }
 
+// Whether the JIT target supports `feature_name`. Backs the
+// jl_cpu_supports runtime fallback.
+extern "C" JL_DLLEXPORT int jl_host_cpu_supports(const char *feature_name)
+{
+    if (!feature_name || !*feature_name)
+        return 0;
+    if (jit_targets.empty())
+        return 0;
+    return tp::has_feature(jit_targets[0].en_features, feature_name);
+}
+
 // ============================================================================
 // Cross-architecture CPU/feature queries
 // ============================================================================
@@ -729,6 +740,26 @@ extern "C" JL_DLLEXPORT int jl_cpufeatures_lookup(const char *cpu_name,
         hw.bits[i] = entry->features.bits[i] & tp::llvm_feature_mask.bits[i];
     memcpy(features_out, &hw, sizeof(tp::FeatureBits));
     return 0;
+}
+
+// Expand a CPU name to its JIT-ready features (comma-separated LLVM
+// names). Returns jl_nothing for unknown names. Backs Base.@cpu_supports.
+extern "C" JL_DLLEXPORT jl_value_t *jl_cpu_uarch_expand_features(const char *cpu_name)
+{
+    if (cpu_name == nullptr || *cpu_name == '\0')
+        return jl_nothing;
+    auto specs = tp::resolve_targets_for_llvm(cpu_name);
+    if (specs.empty() || (specs[0].flags & tp::TF_UNKNOWN_NAME))
+        return jl_nothing;
+    std::string names;
+    for (unsigned i = 0; i < num_features; i++) {
+        if (feature_test(&specs[0].en_features, feature_table[i].bit)) {
+            if (!names.empty())
+                names += ',';
+            names += feature_table[i].name;
+        }
+    }
+    return jl_pchar_to_string(names.data(), names.size());
 }
 
 extern "C" JL_DLLEXPORT void jl_cpufeatures_host(uint8_t *features_out, size_t bufsize)

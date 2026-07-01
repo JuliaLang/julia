@@ -17,3 +17,5 @@ config.environment['HOME'] = "/tmp"
 
 if platform.machine() == "x86_64":
     config.available_features.add('x86_64')
+elif platform.machine() in ("aarch64", "arm64"):
+    config.available_features.add('aarch64')

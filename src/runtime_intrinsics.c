@@ -1744,6 +1744,7 @@ un_fintrinsic(rint_float,rint_llvm)
 un_fintrinsic(sqrt_float,sqrt_llvm)
 un_fintrinsic(sqrt_float,sqrt_llvm_fast)
 jl_value_t *jl_cpu_has_fma(int bits);
+int jl_host_cpu_supports(const char *feature_name);
 
 JL_DLLEXPORT jl_value_t *jl_have_fma(jl_value_t *typ)
 {
@@ -1754,6 +1755,12 @@ JL_DLLEXPORT jl_value_t *jl_have_fma(jl_value_t *typ)
         return jl_cpu_has_fma(64);
     else
         return jl_false;
+}
+
+JL_DLLEXPORT jl_value_t *jl_cpu_supports(jl_value_t *feat)
+{
+    JL_TYPECHK(cpu_supports, symbol, feat);
+    return jl_host_cpu_supports(jl_symbol_name((jl_sym_t*)feat)) ? jl_true : jl_false;
 }
 
 JL_DLLEXPORT jl_value_t *jl_add_ptr(jl_value_t *ptr, jl_value_t *offset)

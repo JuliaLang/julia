@@ -1899,6 +1899,7 @@ JL_DLLEXPORT jl_value_t *jl_copysign_float(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_flipsign_int(jl_value_t *a, jl_value_t *b);
 
 JL_DLLEXPORT jl_value_t *jl_have_fma(jl_value_t *a);
+JL_DLLEXPORT jl_value_t *jl_cpu_supports(jl_value_t *feat);
 JL_DLLEXPORT int jl_stored_inline(jl_value_t *el_type);
 JL_DLLEXPORT jl_value_t *(jl_array_data_owner)(jl_array_t *a);
 JL_DLLEXPORT jl_array_t *jl_array_copy(jl_array_t *ary);
