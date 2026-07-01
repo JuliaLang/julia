@@ -89,7 +89,7 @@ const TAGS = Any[
 const NTAGS = length(TAGS)
 @assert NTAGS == 255
 
-const ser_version = 30 # do not make changes without bumping the version #!
+const ser_version = 31 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
@@ -331,13 +331,45 @@ function serialize(s::AbstractSerializer, x::Symbol)
     nothing
 end
 
-function serialize_array_data(s::IO, a)
+_bitsunion_tag(::T, ::Type{Ts}) where {T,Ts} = _bitsunion_tag(T, Ts, Val(fieldcount(Ts)))
+_bitsunion_tag(::Type{T}, ::Type{Ts}, ::Val{0}) where {T,Ts} = error("type ", T, " is not a serialized bits-union component")
+
+function _bitsunion_tag(::Type{T}, ::Type{Ts}, ::Val{N}) where {T,Ts,N}
+    T === fieldtype(Ts, N) && return UInt8(N - 1)
+    return _bitsunion_tag(T, Ts, Val(N - 1))
+end
+
+function _bitsunion_tags!(tag_buf::Vector{UInt8}, a, ::Type{Ts}) where {Ts}
+    @inbounds for i in 1:length(a)
+        tag_buf[i] = _bitsunion_tag(a[i], Ts)
+    end
+    return tag_buf
+end
+
+_cat_tuptype(::Type{A}, ::Type{B}) where {A<:Tuple,B<:Tuple} = Tuple{fieldtypes(A)..., fieldtypes(B)...}
+_uniontuple(::Type{U}) where {U} = U isa Union ? _cat_tuptype(_uniontuple(U.a), _uniontuple(U.b)) : Tuple{U}
+
+function _serialize_bitsunion_array(s::AbstractSerializer, a)
+    Ts = _uniontuple(eltype(a))
+    elsz = Base.elsize(a)
+    serialize(s, DataType[fieldtypes(Ts)...])
+    serialize(s, elsz)
+    n = length(a)
+    GC.@preserve a unsafe_write(s.io, Ptr{UInt8}(pointer(a)), UInt(n * elsz))
+    tag_buf = Vector{UInt8}(undef, n)
+    _bitsunion_tags!(tag_buf, a, Ts)
+    write(s.io, tag_buf)
+end
+
+function _serialize_isbits_array(s::IO, a)
     require_one_based_indexing(a)
     isempty(a) && return 0
-    if eltype(a) === Bool
+    n = length(a)
+    elty = eltype(a)
+    if elty === Bool
         last = a[1]::Bool
         count = 1
-        for i = 2:length(a)
+        for i = 2:n
             if a[i]::Bool != last || count == 127
                 write(s, UInt8((UInt8(last) << 7) | count))
                 last = a[i]::Bool
@@ -347,10 +379,13 @@ function serialize_array_data(s::IO, a)
             end
         end
         write(s, UInt8((UInt8(last) << 7) | count))
-    else
+    else # isbits && !Bool
         write(s, a)
     end
 end
+
+serialize_array_data(s::AbstractSerializer, a) =
+    Base.isbitsunion(eltype(a)) ? _serialize_bitsunion_array(s, a) : _serialize_isbits_array(s.io, a)
 
 function _serialize_non_bits_elements!(s::AbstractSerializer, a)
     _sizehint_cycle!(s, div(length(a), 4))  # prepare for lots of pointers
@@ -375,8 +410,8 @@ function serialize(s::AbstractSerializer, a::Array)
     else
         serialize(s, length(a))
     end
-    if isbitstype(elty)
-        serialize_array_data(s.io, a)
+    if isbitstype(elty) || Base.isbitsunion(elty)
+        serialize_array_data(s, a)
     else
         _serialize_non_bits_elements!(s, a)
     end
@@ -394,8 +429,8 @@ function serialize(s::AbstractSerializer, m::Memory)
     serialize_cycle_header(s, m) && return
     serialize(s, length(m))
     elty = eltype(m)
-    if isbitstype(elty)
-        serialize_array_data(s.io, m)
+    if isbitstype(elty) || Base.isbitsunion(elty)
+        serialize_array_data(s, m)
     else
         _serialize_non_bits_elements!(s, m)
     end
@@ -1442,6 +1477,104 @@ else
 const OtherInt = Int64
 end
 
+function _deserialize_isbits_array!(s::IO, a)
+    require_one_based_indexing(a)
+    isempty(a) && return a
+    n = length(a)
+    elty = eltype(a)
+    if elty === Bool
+        i = 1
+        while i <= n
+            b = read(s, UInt8)::UInt8
+            v = (b >> 7) != 0
+            count = b & 0x7f
+            nxt = i + count
+            nxt <= n + 1 || throw(BoundsError(a, nxt - 1))
+            while i < nxt
+                @inbounds a[i] = v
+                i += 1
+            end
+        end
+    else # isbits && !Bool
+        read!(s, a)
+    end
+    return a
+end
+
+function _deserialize_bitsunion_dynamic!(a, tags::Vector{UInt8}, src, src_stride::Int, n::Int, types_read::Vector)
+    for T in types_read
+        # only hit if T is redefined between ser - de, but we'd prefer an error than illegal `unsafe_load`
+        T isa DataType && isbitstype(T) && sizeof(T)::Int <= src_stride ||
+            error("incompatible layout for serialized type ", T)
+    end
+    @inbounds for i in 1:n
+        tag = tags[i]
+        Int(tag) < length(types_read) || error("invalid bits-union tag byte ", tag, " for eltype ", eltype(a))
+        T = types_read[Int(tag) + 1]::DataType
+        if sizeof(T) == 0
+            a[i] = T.instance
+        else
+            val = GC.@preserve src unsafe_load(Ptr{T}(pointer(src) + (i-1) * src_stride))
+            a[i] = val
+        end
+    end
+    nothing
+end
+
+function _deserialize_bitsunion_ifelse!(a::AbstractArray, tags::Vector{UInt8}, n::Int, elsz::Int, ::Type{Ts}) where {Ts}
+    @inbounds for i in 1:n
+        tag = tags[i]
+        _deserialize_bitsunion_ifelse!(a, tag, i, elsz, Ts, Val(fieldcount(Ts)))
+    end
+    return nothing
+end
+
+_deserialize_bitsunion_ifelse!(a::AbstractArray, tag::UInt8, i::Int, elsz::Int, ::Type{Ts}, ::Val{0}) where {Ts} =
+    error("invalid bits-union tag byte ", tag, " for eltype ", eltype(a))
+
+function _deserialize_bitsunion_ifelse!(a::AbstractArray, tag::UInt8, i::Int, elsz::Int, ::Type{Ts}, ::Val{N}) where {Ts,N}
+    if tag == UInt8(N - 1)
+        T = fieldtype(Ts, N)
+        if sizeof(T) == 0
+            a[i] = T.instance
+        else
+            a[i] = GC.@preserve a unsafe_load(Ptr{T}(pointer(a) + (i-1) * elsz))
+        end
+    else
+        _deserialize_bitsunion_ifelse!(a, tag, i, elsz, Ts, Val(N - 1))
+    end
+    return nothing
+end
+
+function _deserialize_bitsunion_array!(s::AbstractSerializer, a::AbstractArray{U}) where {U}
+    types_read = deserialize(s)::Vector
+    elsz_read = Int(deserialize(s))::Int
+    elsz = Base.elsize(a)
+    n = length(a)
+    types_local = Base.uniontypes(U)
+    if elsz_read == elsz
+        GC.@preserve a unsafe_read(s.io, Ptr{UInt8}(pointer(a)), UInt(n * elsz))
+        tags = Vector{UInt8}(undef, n)
+        read!(s.io, tags)
+        _ut = _uniontuple(U)
+        if fieldcount(_ut) <= 32 && types_read == types_local
+            _deserialize_bitsunion_ifelse!(a, tags, n, elsz, _ut)
+        else
+            _deserialize_bitsunion_dynamic!(a, tags, a, elsz, n, types_read)
+        end
+    else
+        buf = Vector{UInt8}(undef, n * elsz_read)
+        read!(s.io, buf)
+        tags = Vector{UInt8}(undef, n)
+        read!(s.io, tags)
+        _deserialize_bitsunion_dynamic!(a, tags, buf, elsz_read, n, types_read)
+    end
+    return a
+end
+
+deserialize_array_data!(s::AbstractSerializer, a) =
+    (Base.isbitsunion(eltype(a)) ? _deserialize_bitsunion_array!(s, a) : _deserialize_isbits_array!(s.io, a); a)
+
 function deserialize_array(s::AbstractSerializer)
     slot = s.counter; s.counter += 1
     d1 = deserialize(s)
@@ -1456,6 +1589,11 @@ function deserialize_array(s::AbstractSerializer)
             a = Vector{elty}(undef, d1)
             _setbackref!(s, slot, a)
             return read!(s.io, a)
+        elseif Base.isbitsunion(elty) && (format_version(s) >= 31)
+            a = Vector{elty}(undef, d1)
+            _setbackref!(s, slot, a)
+            _deserialize_bitsunion_array!(s, a)
+            return a
         end
         dims = (Int(d1),)
     elseif d1 isa Dims
@@ -1463,25 +1601,10 @@ function deserialize_array(s::AbstractSerializer)
     else
         dims = convert(Dims, d1::Tuple{Vararg{OtherInt}})::Dims
     end
-    if isbitstype(elty)
-        n = prod(dims)::Int
-        if elty === Bool && n > 0
-            A = Array{Bool, length(dims)}(undef, dims)
-            i = 1
-            while i <= n
-                b = read(s.io, UInt8)::UInt8
-                v = (b >> 7) != 0
-                count = b & 0x7f
-                nxt = i + count
-                while i < nxt
-                    A[i] = v
-                    i += 1
-                end
-            end
-        else
-            A = read!(s.io, Array{elty}(undef, dims))
-        end
+    if isbitstype(elty) || (Base.isbitsunion(elty) && format_version(s) >= 31)
+        A = Array{elty, length(dims)}(undef, dims)
         _setbackref!(s, slot, A)
+        deserialize_array_data!(s, A)
         return A
     end
     A = Array{elty, length(dims)}(undef, dims)
@@ -1505,24 +1628,10 @@ function deserialize(s::AbstractSerializer, X::Type{Memory{T}} where T)
     slot = pop!(s.pending_refs) # e.g. deserialize_cycle
     n = deserialize(s)::Int
     elty = eltype(X)
-    if isbitstype(elty)
+    if isbitstype(elty) || (Base.isbitsunion(elty) && format_version(s) >= 31)
         A = X(undef, n)
-        if X === Memory{Bool}
-            i = 1
-            while i <= n
-                b = read(s.io, UInt8)::UInt8
-                v = (b >> 7) != 0
-                count = b & 0x7f
-                nxt = i + count
-                while i < nxt
-                    A[i] = v
-                    i += 1
-                end
-            end
-        else
-            A = read!(s.io, A)::X
-        end
         _setbackref!(s, slot, A)
+        deserialize_array_data!(s, A)
         return A
     end
     A = X(undef, n)
