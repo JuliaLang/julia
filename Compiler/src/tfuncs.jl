@@ -1147,12 +1147,9 @@ end
         sty = unwrap_unionall(s)::DataType
         if isa(name, Const)
             nv = _getfield_fieldindex(sty, name)
-            if isa(nv, Int)
-                if nv < 1
-                    return Bottom
-                elseif nv ≤ length(s00.fields)
-                    return unwrapva(s00.fields[nv])
-                end
+            if isa(nv, Int) && 1 <= nv <= length(s00.fields)
+                setfield && isconst(sty, nv) && return Bottom
+                return unwrapva(s00.fields[nv])
             end
         end
         s00 = s
