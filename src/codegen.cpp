@@ -6256,7 +6256,7 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_code_instance_t 
 {
     jl_method_instance_t *mi = jl_get_ci_mi(ci);
     bool is_opaque_closure = jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure;
-    return emit_call_specfun_other(ctx, is_opaque_closure, get_ci_abi(ci), ci->rettype, NULL,
+    return emit_call_specfun_other(ctx, is_opaque_closure, jl_get_ci_abi(ci), ci->rettype, NULL,
         specFunctionObject, argv, nargs, cc, return_roots, inferred_retty,
         jl_atomic_load_relaxed(&ci->ipo_purity_bits));
 }
@@ -6337,7 +6337,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
                 }
                 else {
                     bool specsig, needsparams;
-                    std::tie(specsig, needsparams) = uses_specsig(get_ci_abi(codeinst), mi, codeinst->rettype, ctx.params->prefer_specsig);
+                    std::tie(specsig, needsparams) = uses_specsig(jl_get_ci_abi(codeinst), mi, codeinst->rettype, ctx.params->prefer_specsig);
                     if (needsparams) {
                         Value *r = emit_jlcall(ctx, jlinvoke_func, track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)mi)), argv, nargs, julia_call2);
                         result = mark_julia_type(ctx, r, true, rt);
@@ -8163,7 +8163,7 @@ Function *emit_specsig_to_fptr1(jl_codegen_output_t &out, jl_code_instance_t *ci
         get_function_name(true, false, name_from_method_instance(mi), out.TargetTriple);
     gf_thunk_name += "_gfthunk";
 
-    jl_value_t *specTypes = get_ci_abi(ci);
+    jl_value_t *specTypes = jl_get_ci_abi(ci);
     jl_returninfo_t info =
         get_specsig_function(out, &out.get_module(), nullptr, gf_thunk_name, specTypes,
                              ci->rettype, is_opaque_closure);
@@ -8232,23 +8232,24 @@ std::string emit_abi_converter(jl_codegen_output_t &out, jl_abi_t from_abi, jl_c
     // build a args1 -> specsig converter thunk (gen_invoke_wrapper)
     // build a args1 -> args1 converter thunk (to add typeassert on result)
     Module *M = &out.get_module();
+    bool is_opaque_closure = from_abi.kind == JL_ABI_OPAQUE_CLOSURE;
     bool needsparams = false;
     bool target_is_opaque_closure = false;
     jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
     std::string gf_thunk_name = get_function_name(from_abi.specsig, needsparams, name_from_method_instance(mi), out.TargetTriple);
     gf_thunk_name += "_gfthunk";
     if (target_specsig) {
-        jl_value_t *abi = get_ci_abi(codeinst);
+        jl_value_t *abi = jl_get_ci_abi(codeinst);
         jl_returninfo_t targetspec = get_specsig_function(out, M, target, "", abi, codeinst->rettype, target_is_opaque_closure);
         if (from_abi.specsig)
-            emit_specsig_to_specsig(M, gf_thunk_name, from_abi.sigt, from_abi.rt, from_abi.is_opaque_closure, out,
+            emit_specsig_to_specsig(M, gf_thunk_name, from_abi.sigt, from_abi.rt, is_opaque_closure, out,
                     target, mi->specTypes, codeinst->rettype, &targetspec, nullptr);
         else
-            gen_invoke_wrapper(mi, abi, codeinst->rettype, from_abi.rt, targetspec, -1, from_abi.is_opaque_closure, gf_thunk_name, M, out);
+            gen_invoke_wrapper(mi, abi, codeinst->rettype, from_abi.rt, targetspec, -1, is_opaque_closure, gf_thunk_name, M, out);
     }
     else {
         if (from_abi.specsig)
-            emit_specsig_to_specsig(M, gf_thunk_name, from_abi.sigt, from_abi.rt, from_abi.is_opaque_closure, out,
+            emit_specsig_to_specsig(M, gf_thunk_name, from_abi.sigt, from_abi.rt, is_opaque_closure, out,
                     target, mi->specTypes, codeinst->rettype, nullptr, nullptr);
         else
             emit_fptr1_wrapper(M, gf_thunk_name, target, nullptr, from_abi.rt, codeinst->rettype, out);
@@ -8264,6 +8265,7 @@ std::string emit_abi_dispatcher(jl_codegen_output_t &out, jl_abi_t from_abi, jl_
     // build a args1 -> args1 call (emit_fptr1_wrapper)
     // build a args1 -> invoke call (emit_tojlinvoke)
     Module *M = &out.get_module();
+    bool is_opaque_closure = from_abi.kind == JL_ABI_OPAQUE_CLOSURE;
     Value *target;
     if (!codeinst)
         target = prepare_call_in(M, jlapplygeneric_func);
@@ -8276,7 +8278,7 @@ std::string emit_abi_dispatcher(jl_codegen_output_t &out, jl_abi_t from_abi, jl_
         raw_string_ostream(gf_thunk_name) << JL_SYM_PROTO_SPECSIG;
     raw_string_ostream(gf_thunk_name) << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1) << "_gfthunk";
     if (from_abi.specsig)
-        emit_specsig_to_specsig(M, gf_thunk_name, from_abi.sigt, from_abi.rt, from_abi.is_opaque_closure, out,
+        emit_specsig_to_specsig(M, gf_thunk_name, from_abi.sigt, from_abi.rt, is_opaque_closure, out,
                 target, from_abi.sigt, codeinst ? codeinst->rettype : (jl_value_t*)jl_any_type, nullptr, nullptr);
     else
         emit_fptr1_wrapper(M, gf_thunk_name, target, nullptr, from_abi.rt, codeinst ? codeinst->rettype : (jl_value_t*)jl_any_type, out);
@@ -8286,10 +8288,11 @@ std::string emit_abi_dispatcher(jl_codegen_output_t &out, jl_abi_t from_abi, jl_
 std::string emit_abi_constreturn(jl_codegen_output_t &out, jl_abi_t from_abi, jl_value_t *rettype_const)
 {
     Module *M = &out.get_module();
+    bool is_opaque_closure = from_abi.kind == JL_ABI_OPAQUE_CLOSURE;
     std::string gf_thunk_name;
     raw_string_ostream(gf_thunk_name) << JL_SYM_SPECPTR_CONST << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
     if (from_abi.specsig) {
-        emit_specsig_to_specsig(M, gf_thunk_name, from_abi.sigt, from_abi.rt, from_abi.is_opaque_closure, out,
+        emit_specsig_to_specsig(M, gf_thunk_name, from_abi.sigt, from_abi.rt, is_opaque_closure, out,
                 nullptr, from_abi.sigt, jl_typeof(rettype_const), nullptr, rettype_const);
     }
     else {
@@ -8300,13 +8303,13 @@ std::string emit_abi_constreturn(jl_codegen_output_t &out, jl_abi_t from_abi, jl
 
 std::string emit_abi_constreturn(jl_codegen_output_t &out, bool specsig, jl_code_instance_t *codeinst)
 {
-    jl_value_t *sigt = get_ci_abi(codeinst);
+    jl_value_t *sigt = jl_get_ci_abi(codeinst);
     jl_value_t *rt = codeinst->rettype;
 
     jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
     bool is_opaque_closure = jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure;
 
-    jl_abi_t abi = {sigt, rt, specsig, is_opaque_closure};
+    jl_abi_t abi = {sigt, rt, specsig, is_opaque_closure ? JL_ABI_OPAQUE_CLOSURE : JL_ABI_STD};
 
     return emit_abi_constreturn(out, abi, codeinst->rettype_const);
 }
@@ -8331,7 +8334,8 @@ static jl_cgval_t emit_abi_call(jl_codectx_t &ctx, jl_value_t *declrt, jl_value_
         jl_temporary_root(ctx, sigt);
         assert(nargs == jl_nparams(sigt));
         bool needsparams = false;
-        bool is_opaque_closure = false;
+        jl_abi_kind_t kind = JL_ABI_STD;
+        bool is_opaque_closure = kind == JL_ABI_OPAQUE_CLOSURE;
         bool specsig = uses_specsig(sigt, needsparams, declrt, ctx.params->prefer_specsig);
         PointerType *T_ptr = ctx.types().T_ptr;
         Type *T_size = ctx.types().T_size;
@@ -8364,7 +8368,7 @@ static jl_cgval_t emit_abi_call(jl_codectx_t &ctx, jl_value_t *declrt, jl_value_
                 cw->setAttributes(getcaller->getAttributes());
                 return cw;
             });
-        jl_abi_t cfuncabi = {sigt, declrt, specsig, is_opaque_closure};
+        jl_abi_t cfuncabi = {sigt, declrt, specsig, kind};
         ctx.emission_context.cfuncs.push_back({cfuncabi, cfuncdata});
         if (specsig) {
             // TODO: could we force this to guarantee passing a box for `f` here (since we
@@ -11017,7 +11021,7 @@ jl_llvm_functions_t jl_emit_codedecls(jl_codegen_output_t &out,
     jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
     bool specsig, needsparams;
     std::tie(specsig, needsparams) = uses_specsig(
-        get_ci_abi(codeinst), mi, codeinst->rettype, out.params->prefer_specsig);
+        jl_get_ci_abi(codeinst), mi, codeinst->rettype, out.params->prefer_specsig);
     if (jl_atomic_load_relaxed(&codeinst->invoke) == jl_fptr_const_return_addr) {
         decls.invoke_api = JL_INVOKE_CONST;
     }
@@ -11108,7 +11112,7 @@ std::optional<jl_llvm_functions_t> jl_emit_codeinst(
         decls = jl_emit_oc_wrapper(out, mi, codeinst->rettype);
     } else {
         //assert(jl_egal((jl_value_t*)jl_atomic_load_relaxed(&codeinst->debuginfo), (jl_value_t*)src->debuginfo) && "trying to generate code for a codeinst for an incompatible src");
-        decls = jl_emit_code(out, mi, src, get_ci_abi(codeinst), codeinst->rettype, codeinst);
+        decls = jl_emit_code(out, mi, src, jl_get_ci_abi(codeinst), codeinst->rettype, codeinst);
     }
     if (!decls)
         return {};
