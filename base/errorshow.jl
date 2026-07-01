@@ -255,6 +255,8 @@ function show_convert_error(io::IO, ex::MethodError, arg_types_param)
     end
 end
 
+_is_anonymous_function(@nospecialize(f)) = isa(f, Function) && isgensym(nameof(f))
+
 function showerror(io::IO, ex::MethodError)
     @nospecialize io
     # ex.args is a tuple type if it was thrown from `invoke` and is
@@ -308,8 +310,13 @@ function showerror(io::IO, ex::MethodError)
         end
         buf = IOBuffer()
         iob = IOContext(buf, io)     # for type abbreviation as in #49795; some, like `convert(T, x)`, should not abbreviate
-        show_signature_function(iob, Core.Typeof(f))
-        show_tuple_as_call(iob, :function, arg_types; hasfirst=false, kwargs = isempty(kwargs) ? nothing : kwargs)
+        if _is_anonymous_function(f)
+            show_tuple_as_call(iob, :function, arg_types; hasfirst=false, kwargs = isempty(kwargs) ? nothing : kwargs)
+            print(iob, "->⬚")
+        else
+            show_signature_function(iob, Core.Typeof(f))
+            show_tuple_as_call(iob, :function, arg_types; hasfirst=false, kwargs = isempty(kwargs) ? nothing : kwargs)
+        end
         str = takestring!(buf)
         str = type_limited_string_from_context(io, str)
         print(io, str)
@@ -704,10 +711,10 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
             if !isa(func, rewrap_unionall(s1, method.sig))
                 # function itself doesn't match
                 continue
-            else
-                print(iob, "  ")
-                show_signature_function(iob, s1)
             end
+            print(iob, "  ")
+            candidate_is_anon = _is_anonymous_function(func)
+            candidate_is_anon || show_signature_function(iob, s1)
             print(iob, "(")
             t_i = copy(arg_types_param)
             right_matches = 0
@@ -803,6 +810,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
                 join(iob, kwords, ", ")
             end
             print(iob, ")")
+            candidate_is_anon && print(iob, "->⬚")
             show_method_params(iob0, tv)
             file, line = updated_methodloc(method)
             if file === nothing
