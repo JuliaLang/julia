@@ -1178,6 +1178,7 @@ end
         if isa(name, Const)
             nv = _getfield_fieldindex(sty, name)
             if isa(nv, Int) && 1 <= nv <= length(s00.fields)
+                setfield && isconst(sty, nv) && return Bottom
                 return unwrapva(s00.fields[nv])
             end
         end
