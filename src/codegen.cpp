@@ -2626,14 +2626,14 @@ static void store_def_flag(jl_codectx_t &ctx, const jl_varinfo_t &vi, bool val)
 {
     assert((!vi.boxroot || vi.pTIndex) && "undef check is null pointer for boxed things");
     assert(vi.usedUndef && vi.defFlag && "undef flag codegen corrupted");
-    ctx.builder.CreateStore(ConstantInt::get(getInt1Ty(ctx.builder.getContext()), val), vi.defFlag, vi.isVolatile);
+    ctx.builder.CreateStore(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), val), vi.defFlag, vi.isVolatile);
 }
 
 static void alloc_def_flag(jl_codectx_t &ctx, jl_varinfo_t& vi)
 {
     assert((!vi.boxroot || vi.pTIndex) && "undef check is null pointer for boxed things");
     if (vi.usedUndef) {
-        vi.defFlag = emit_static_alloca(ctx, getInt1Ty(ctx.builder.getContext()), Align(1));
+        vi.defFlag = emit_static_alloca(ctx, getInt8Ty(ctx.builder.getContext()), Align(1));
         setName(ctx.emission_context, vi.defFlag, "isdefined");
         store_def_flag(ctx, vi, false);
     }
@@ -3759,7 +3759,7 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const
 {
     ++EmittedBitsCompares;
     if (arg1.typ == jl_bottom_type || arg2.typ == jl_bottom_type)
-        return UndefValue::get(getInt1Ty(ctx.builder.getContext()));
+        return PoisonValue::get(getInt1Ty(ctx.builder.getContext()));
 
     jl_value_t *argty = (arg1.constant ? jl_typeof(arg1.constant) : arg1.typ);
     bool isboxed;
@@ -5954,7 +5954,11 @@ static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym, int allow_i
             return mark_julia_const(ctx, jl_true);
         if (vi.boxroot == NULL || vi.pTIndex != NULL) {
             assert(vi.defFlag);
-            isnull = ctx.builder.CreateAlignedLoad(getInt1Ty(ctx.builder.getContext()), vi.defFlag, Align(1), vi.isVolatile);
+            // Load i8 and truncate to i1: LLVM recommends against loads/stores of
+            // non-byte-sized types like i1 (see Frontend/PerformanceTips.rst)
+            isnull = ctx.builder.CreateTrunc(
+                ctx.builder.CreateAlignedLoad(getInt8Ty(ctx.builder.getContext()), vi.defFlag, Align(1), vi.isVolatile),
+                getInt1Ty(ctx.builder.getContext()));
         }
         if (vi.boxroot != NULL) {
             Value *boxed = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, vi.boxroot, Align(sizeof(void*)), vi.isVolatile);
@@ -6049,7 +6053,11 @@ static jl_cgval_t emit_varinfo(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_sym_t *va
         }
         if (vi.usedUndef) {
             assert(vi.defFlag);
-            isnull = ctx.builder.CreateAlignedLoad(getInt1Ty(ctx.builder.getContext()), vi.defFlag, Align(1), vi.isVolatile);
+            // Load i8 and truncate to i1: LLVM recommends against loads/stores of
+            // non-byte-sized types like i1 (see Frontend/PerformanceTips.rst)
+            isnull = ctx.builder.CreateTrunc(
+                ctx.builder.CreateAlignedLoad(getInt8Ty(ctx.builder.getContext()), vi.defFlag, Align(1), vi.isVolatile),
+                getInt1Ty(ctx.builder.getContext()));
         }
     }
     if (vi.boxroot != NULL) {
@@ -6108,8 +6116,10 @@ static void emit_vi_assignment_unboxed(jl_codectx_t &ctx, jl_varinfo_t &vi, Valu
         assert(vi.inline_roots || vi.value.ispointer() || (vi.pTIndex && vi.value.V == NULL));
         assert(jl_egal(vi.value.typ, rval_info.typ));
         // store value
-        if (vi.pTIndex && vi.value.V) // TODO: use lifetime-end here instead
-            ctx.builder.CreateStore(UndefValue::get(cast<AllocaInst>(vi.value.V)->getAllocatedType()), vi.value.V);
+        if (vi.pTIndex && vi.value.V) {
+            ctx.builder.CreateLifetimeEnd(vi.value.V);
+            ctx.builder.CreateLifetimeStart(vi.value.V);
+        }
         // Sometimes we can get into situations where the LHS and RHS
         // are the same slot. We're not allowed to memcpy in that case
         // due to LLVM bugs.
@@ -6476,7 +6486,7 @@ static Value *emit_condition(jl_codectx_t &ctx, const jl_cgval_t &condV, const T
             track_pjlvalue(ctx, literal_pointer_val(ctx, jl_false)));
     }
     // not a boolean (unreachable dead code)
-    return UndefValue::get(getInt1Ty(ctx.builder.getContext()));
+    return PoisonValue::get(getInt1Ty(ctx.builder.getContext()));
 }
 
 static Value *emit_condition(jl_codectx_t &ctx, jl_value_t *cond, const Twine &msg)
@@ -8417,6 +8427,7 @@ jl_returninfo_t get_specsig_function(jl_codegen_output_t &out, Module *M, Value 
             param.addAttribute(Attribute::SwiftSelf);
         param.addAttribute("gcstack");
         param.addAttribute(Attribute::NonNull);
+        param.addAttribute(Attribute::NoUndef);
         attrs.push_back(AttributeSet::get(M->getContext(), param));
         fsig.push_back(PointerType::get(M->getContext(), 0));
         argnames.push_back("pgcstack_arg");
@@ -8436,6 +8447,7 @@ jl_returninfo_t get_specsig_function(jl_codegen_output_t &out, Module *M, Value 
                 continue;
         }
         AttrBuilder param(M->getContext());
+        param.addAttribute(Attribute::NoUndef);
         Type *ty = et;
         if (et == nullptr || et->isAggregateType()) { // aggregate types are passed by pointer
             addNoCaptureAttr(param);
@@ -10100,7 +10112,7 @@ static jl_llvm_functions_t
                 continue;
             ctx.builder.SetInsertPoint(FromBB->getTerminator());
             // PHI is undef on this branch. But still may need to put a valid pointer in place.
-            Value *RTindex = TindexN ? UndefValue::get(getInt8Ty(ctx.builder.getContext())) : NULL;
+            Value *RTindex = TindexN ? PoisonValue::get(getInt8Ty(ctx.builder.getContext())) : NULL;
             if (VN) {
                 Value *undef = undef_value_for_type(VN->getType());
                 VN->addIncoming(undef, FromBB);
@@ -10119,7 +10131,7 @@ static jl_llvm_functions_t
 
     for (PHINode *PN : ToDelete) {
         // This basic block is statically unreachable, thus so is this PHINode
-        PN->replaceAllUsesWith(UndefValue::get(PN->getType()));
+        PN->replaceAllUsesWith(PoisonValue::get(PN->getType()));
         PN->eraseFromParent();
     }
 
