@@ -1497,7 +1497,7 @@ let effects = Base.infer_effects(Core.Intrinsics.atomic_pointermodify, Tuple{Var
 end
 
 # JuliaLang/julia#57780
-let effects = Base.infer_effects(Base._unsetindex!, (MemoryRef{String},))
+let effects = Base.infer_effects(Base.unsetindex!, (MemoryRef{String},))
     @test !Compiler.is_effect_free(effects)
 end
 

@@ -1494,7 +1494,19 @@ function _setindex!(::IndexCartesian, A::AbstractArray, v, I::Vararg{Int,M}) whe
     r
 end
 
-_unsetindex!(A::AbstractArray, i::Integer) = _unsetindex!(A, to_index(i))
+"""
+    unsetindex!(A::AbstractArray, i::Integer) -> A
+
+Unset the reference from `A` at index `i` to its value and return `A`.
+The value left in `A[i]`, if any, is implementation-dependent, but after
+calling this function, `A` at index `i` cannot hold a reference to its value,
+which protects its underlying resources from being freed (i.e. garbage collected,
+or finalizers run).
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+"""
+unsetindex!(A::AbstractArray, i::Integer) = unsetindex!(A, to_index(i))
 
 """
     parent(A)

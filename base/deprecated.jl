@@ -655,4 +655,7 @@ end
     SubString{T}(ss)
 end
 
+@deprecate _unsetindex!(A) Base.unsetindex!(A) false
+@deprecate _unsetindex!(A, i) Base.unsetindex!(A, i) false
+
 # END 1.14 deprecations

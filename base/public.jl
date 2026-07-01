@@ -35,6 +35,7 @@ public
     has_offset_axes,
     require_one_based_indexing,
     memoryindex,
+    unsetindex!,
 
 # collections
     IteratorEltype,

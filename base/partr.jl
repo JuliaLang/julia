@@ -218,7 +218,7 @@ function multiq_deletemin()
     ntasks = heap.ntasks
     @atomic :monotonic heap.ntasks = ntasks - Int32(1)
     heap.tasks[1] = heap.tasks[ntasks]
-    Base._unsetindex!(heap.tasks, Int(ntasks))
+    Base.unsetindex!(heap.tasks, Int(ntasks))
     prio1 = typemax(UInt16)
     if ntasks > 1
         multiq_sift_down(heap, Int32(1))
