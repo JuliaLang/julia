@@ -1406,11 +1406,12 @@ static const auto jlgetcfunctiontrampoline_func = new JuliaFunction<>{
             Attributes(C, {Attribute::NonNull}),
             {}); },
 };
-static const auto jlgetabiconverter_func = new JuliaFunction<TypeFnContextAndSizeT>{
-    XSTR(jl_get_abi_converter),
-    [](LLVMContext &C, Type *T_size) {
+static const auto jlupdatetrampoline_func = new JuliaFunction<>{
+    XSTR(jl_update_dispatch_trampoline),
+    [](LLVMContext &C) {
         Type *T_ptr = getPointerTy(C);
-        return FunctionType::get(T_ptr, {T_ptr, T_ptr}, false);
+        Type *T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
+        return FunctionType::get(T_ptr, {T_ptr, T_prjlvalue}, false);
     },
     nullptr,
 };
@@ -7604,7 +7605,7 @@ std::string emit_abi_converter(jl_codegen_output_t &out, jl_abi_t from_abi, jl_c
     bool target_is_opaque_closure = false;
     jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
     std::string gf_thunk_name = get_function_name(from_abi.specsig, needsparams, name_from_method_instance(mi), out.TargetTriple);
-    gf_thunk_name += "_gfthunk";
+    raw_string_ostream(gf_thunk_name) << "_" << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1) << "_gfthunk";
     if (target_specsig) {
         jl_value_t *abi = get_ci_abi(codeinst);
         jl_returninfo_t targetspec = get_specsig_function(out, M, target, "", abi, codeinst->rettype, target_is_opaque_closure);
@@ -7704,41 +7705,34 @@ static jl_cgval_t emit_abi_call(jl_codectx_t &ctx, jl_value_t *declrt, jl_value_
         jl_abi_kind_t kind = JL_ABI_STD;
         bool is_opaque_closure = kind == JL_ABI_OPAQUE_CLOSURE;
         bool specsig = uses_specsig(sigt, needsparams, declrt, ctx.params->prefer_specsig);
-        PointerType *T_ptr = ctx.types().T_ptr;
         Type *T_size = ctx.types().T_size;
-        Constant *Vnull = ConstantPointerNull::get(T_ptr);
         Module *M = jl_Module;
-        ArrayType *T_cfuncdata = ArrayType::get(T_ptr, 8);
-        size_t flags = specsig;
-        GlobalVariable *cfuncdata = new GlobalVariable(*M, T_cfuncdata, false,
-                GlobalVariable::PrivateLinkage,
-                ConstantArray::get(T_cfuncdata, {
-                    Vnull,
-                    Vnull,
-                    Vnull,
-                    Vnull,
-                    Vnull,
-                    literal_pointer_val_slot(ctx.emission_context, declrt),
-                    literal_pointer_val_slot(ctx.emission_context, sigt),
-                    literal_static_pointer_val((void*)flags, T_ptr)}));
-        Value *last_world_p = ctx.builder.CreateConstInBoundsGEP1_32(ctx.types().T_size, cfuncdata, 1);
-        LoadInst *last_world_v = ctx.builder.CreateAlignedLoad(T_size, last_world_p, ctx.types().alignof_ptr);
+        // Share one latest-world trampoline per sigt + ABI (return type, adapter kind, etc.)
+        jl_dispatch_trampoline_t *tr = NULL;
+        JL_GC_PUSH1(&tr);
+        tr = jl_get_dispatch_trampoline(sigt, declrt, specsig, kind);
+        jl_temporary_root(ctx, (jl_value_t*)tr); // keep alive through codegen + serialization
+        JL_GC_POP();
+        ctx.emission_context.cfuncs.push_back(tr);
+        Value *trampoline_box = boxed(ctx, mark_julia_const(ctx, (jl_value_t*)tr));
+        Value *trampoline_d = decay_derived(ctx, trampoline_box);
+        Value *lw_p = emit_ptrgep(ctx, trampoline_d, offsetof(jl_dispatch_trampoline_t, last_world));
+        LoadInst *last_world_v = ctx.builder.CreateAlignedLoad(T_size, lw_p, ctx.types().alignof_ptr);
         last_world_v->setOrdering(AtomicOrdering::Acquire);
-        LoadInst *callee = ctx.builder.CreateAlignedLoad(T_ptr, cfuncdata, ctx.types().alignof_ptr);
-        callee->setOrdering(AtomicOrdering::Acquire);
-        LoadInst *world_v = ctx.builder.CreateAlignedLoad(ctx.types().T_size,
+        Value *fptr_p = emit_ptrgep(ctx, trampoline_d, offsetof(jl_dispatch_trampoline_t, fptr));
+        LoadInst *cached_fptr = ctx.builder.CreateAlignedLoad(ctx.types().T_ptr, fptr_p, ctx.types().alignof_ptr);
+        cached_fptr->setOrdering(AtomicOrdering::Acquire);
+        LoadInst *world_v = ctx.builder.CreateAlignedLoad(T_size,
             prepare_global_in(M, jlgetworld_global), ctx.types().alignof_ptr);
         world_v->setOrdering(AtomicOrdering::Monotonic);
         ctx.builder.CreateStore(world_v, world_age_field);
         Value *age_not_ok = ctx.builder.CreateICmpNE(last_world_v, world_v);
-        Value *target = emit_guarded_test(ctx, age_not_ok, callee, [&] () {
-                Function *getcaller = prepare_call(jlgetabiconverter_func);
-                CallInst *cw = ctx.builder.CreateCall(getcaller, {get_current_task(ctx), cfuncdata});
-                cw->setAttributes(getcaller->getAttributes());
+        Value *target = emit_guarded_test(ctx, age_not_ok, cached_fptr, [&] () {
+                Function *resolver = prepare_call(jlupdatetrampoline_func);
+                CallInst *cw = ctx.builder.CreateCall(resolver, {get_current_task(ctx), trampoline_box});
+                cw->setAttributes(resolver->getAttributes());
                 return cw;
             });
-        jl_abi_t cfuncabi = {sigt, declrt, specsig, kind};
-        ctx.emission_context.cfuncs.push_back({cfuncabi, cfuncdata});
         if (specsig) {
             // TODO: could we force this to guarantee passing a box for `f` here (since we
             // know we had it here) and on the receiver end (emit_abi_converter /
@@ -10668,7 +10662,7 @@ static void init_jit_functions(void)
     add_named_global(jlunlockvalue_func, &jl_unlock_value);
     add_named_global(jllockfield_func, &jl_lock_field);
     add_named_global(jlunlockfield_func, &jl_unlock_field);
-    add_named_global(jlgetabiconverter_func, &jl_get_abi_converter);
+    add_named_global(jlupdatetrampoline_func, &jl_update_dispatch_trampoline);
 
     jl_get_pgcstack_func_t get_pgcstack;
     jl_pgcstack_key_t pgcstack_key;
