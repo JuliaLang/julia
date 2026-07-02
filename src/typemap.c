@@ -412,6 +412,24 @@ exit:
     }
 }
 
+static int typemap_count_visitor(jl_typemap_entry_t *l, void *closure) JL_NOTSAFEPOINT
+{
+    (void)l;
+    (*(size_t*)closure)++;
+    return 1;
+}
+
+// Number of entries in a TypeMap (`jl_nothing` => 0). Note: for caches that chain
+// multiple records per entry (e.g. the ABI-adapter bucket chains), this counts
+// distinct entries, not total records.
+JL_DLLEXPORT size_t jl_typemap_count(jl_typemap_t *cache)
+{
+    size_t n = 0;
+    if (cache != NULL && (jl_value_t*)cache != jl_nothing)
+        jl_typemap_visitor(cache, typemap_count_visitor, (void*)&n);
+    return n;
+}
+
 static unsigned jl_supertype_height(jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
     unsigned height = 1;

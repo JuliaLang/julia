@@ -317,43 +317,31 @@ jl_emitted_output_t jl_codegen_output_t::finish(std::unique_ptr<LLVMContext> ctx
 //
 // If `codeinst` is NULL, the returned specptr instead performs a standard `apply_generic`
 // call via a dynamic dispatch.
-extern "C" JL_DLLEXPORT_CODEGEN
-void *jl_jit_abi_converter_impl(jl_task_t *ct, jl_abi_t from_abi,
-                                jl_code_instance_t *codeinst)
+
+// Allocate an ABI-adapter cache record for (from_abi, ci) with the JIT'd `fptr`.
+static jl_abi_adapter_t *adapter_alloc_entry(jl_task_t *ct, jl_abi_t abi,
+                                             jl_code_instance_t *ci, void *fptr)
 {
-    void *target = nullptr;
-    bool target_specsig = false;
-    jl_callptr_t invoke = nullptr;
-    if (codeinst != nullptr) {
-        uint8_t specsigflags;
-        jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
-        void *specptr = nullptr;
-        jl_read_codeinst_invoke(codeinst, &specsigflags, &invoke, &specptr, /* waitcompile */ 1);
-        if (invoke != nullptr) {
-            if (invoke == jl_fptr_const_return_addr) {
-                target = nullptr;
-                target_specsig = false;
-            }
-            else if (invoke == jl_fptr_args_addr) {
-                assert(specptr != nullptr);
-                if (!from_abi.specsig && jl_subtype(codeinst->rettype, from_abi.rt))
-                    return specptr; // no adapter required
+    // Bypass the libjulia-internal-only `jl_gc_alloc_` macro fast-path by calling the
+    // exported function form directly.
+    jl_abi_adapter_t *e = (jl_abi_adapter_t*)(jl_gc_alloc)(ct->ptls,
+            sizeof(jl_abi_adapter_t), jl_abi_adapter_type);
+    e->rt = abi.rt;
+    e->ci = ci;
+    e->specsig = abi.specsig ? 1 : 0;
+    e->is_opaque_closure = abi.is_opaque_closure ? 1 : 0;
+    e->nargs = abi.nargs;
+    e->fptr = fptr;
+    e->sigt = abi.sigt;
+    jl_atomic_store_relaxed(&e->next, (jl_abi_adapter_t*)nullptr); // bucket-chain tail
+    return e;
+}
 
-                target = specptr;
-                target_specsig = false;
-            }
-            else if (specsigflags & JL_CI_FLAGS_SPECPTR_SPECIALIZED) {
-                assert(specptr != nullptr);
-                if (from_abi.specsig && jl_egal(mi->specTypes, from_abi.sigt) && jl_egal(codeinst->rettype, from_abi.rt))
-                    return specptr; // no adapter required
-
-                target = specptr;
-                target_specsig = true;
-            }
-        }
-    }
-
-    orc::ThreadSafeModule result_m;
+// JIT the adapter thunk bridging `from_abi` to `codeinst` (via `target`/`invoke`), returning
+// its address. Split out of jl_get_abi_adapter so the JIT happens under the writelock.
+static void *jit_adapter(jl_abi_t from_abi, jl_code_instance_t *codeinst,
+                         void *target, bool target_specsig, jl_callptr_t invoke)
+{
     std::string gf_thunk_name;
     auto ctx = std::make_unique<LLVMContext>();
     auto mod = jl_create_llvm_module("gfthunk", *ctx, jl_ExecutionEngine->getDataLayout(),
@@ -381,6 +369,54 @@ void *jl_jit_abi_converter_impl(jl_task_t *ct, jl_abi_t from_abi,
     uintptr_t Addr = jl_ExecutionEngine->getFunctionAddress(gf_thunk_name);
     assert(Addr);
     return (void*)Addr;
+}
+
+// Resolve + intern the ABI adapter for (from_abi, codeinst). Interning (in the
+// `jl_abi_adapters->cache` cache) means one adapter is JIT'd per distinct key rather than
+// one per call site. Some paths short-circuit to the CI's own specptr without a wrapping
+// adapter (and so aren't cached).
+static void *jl_get_abi_adapter(jl_task_t *ct, jl_abi_t from_abi, jl_code_instance_t *codeinst)
+{
+    // Step 1: resolve target/invoke from codeinst, short-circuiting to the target's own
+    // specptr when no adapter is required. Shared (codegen-free) with the fallback path.
+    void *target = nullptr;
+    int target_specsig = 0;
+    jl_callptr_t invoke = nullptr;
+    void *shortcut = jl_abi_adapter_resolve_target(from_abi, codeinst, &target, &target_specsig, &invoke);
+    if (shortcut != nullptr)
+        return shortcut;
+
+    // Step 2: lock-free lookup in the adapters cache.
+    jl_abi_adapter_t *e = jl_lookup_abi_adapter(from_abi.sigt, from_abi.rt, codeinst,
+            from_abi.specsig, from_abi.is_opaque_closure, from_abi.nargs);
+    if (e != nullptr)
+        return e->fptr;
+
+    // Step 3: miss -- take the writelock and re-check (another thread may have installed it).
+    JL_LOCK(&jl_abi_adapters->writelock);
+    e = jl_lookup_abi_adapter(from_abi.sigt, from_abi.rt, codeinst,
+            from_abi.specsig, from_abi.is_opaque_closure, from_abi.nargs);
+    if (e != nullptr) {
+        JL_UNLOCK(&jl_abi_adapters->writelock);
+        return e->fptr;
+    }
+
+    // Step 4: JIT the adapter under the lock (so JITs for the same key aren't duplicated),
+    // allocate the record, and install it.
+    void *fptr = jit_adapter(from_abi, codeinst, target, target_specsig, invoke);
+    jl_abi_adapter_t *entry = adapter_alloc_entry(ct, from_abi, codeinst, fptr);
+    JL_GC_PUSH1(&entry);
+    jl_install_abi_adapter(entry);
+    JL_GC_POP();
+    JL_UNLOCK(&jl_abi_adapters->writelock);
+    return fptr;
+}
+
+extern "C" JL_DLLEXPORT_CODEGEN
+void *jl_jit_abi_converter_impl(jl_task_t *ct, jl_abi_t from_abi,
+                                jl_code_instance_t *codeinst)
+{
+    return jl_get_abi_adapter(ct, from_abi, codeinst);
 }
 
   // lock for places where only single threaded behavior is implemented, so we need GC support

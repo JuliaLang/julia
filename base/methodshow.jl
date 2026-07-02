@@ -365,6 +365,10 @@ end
 show(io::IO, ms::MethodList) = show_method_table(io, ms)
 show(io::IO, ::MIME"text/plain", ms::MethodList) = show_method_table(io, ms)
 show(io::IO, mt::Core.MethodTable) = print(io, mt.module, ".", mt.name, " is a Core.MethodTable with ", length(mt), " methods.")
+show(io::IO, c::Core.ABIAdapterCache) = print(io, "Core.ABIAdapterCache with ",
+    ccall(:jl_typemap_count, Csize_t, (Any,), getfield(c, :cache)), " entries.")
+show(io::IO, c::Core.DispatchTrampolineCache) = print(io, "Core.DispatchTrampolineCache with ",
+    ccall(:jl_typemap_count, Csize_t, (Any,), getfield(c, :cache)), " entries.")
 
 function inbase(m::Module)
     if m == Base

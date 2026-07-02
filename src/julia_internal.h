@@ -1789,8 +1789,27 @@ JL_DLLEXPORT jl_value_t *jl_get_cfunction_trampoline(
     jl_value_t *fobj, jl_datatype_t *result, htable_t *cache, jl_svec_t *fill,
     void *(*init_trampoline)(void *tramp, void **nval),
     jl_unionall_t *env, jl_value_t **vals);
-JL_DLLEXPORT void *jl_get_abi_converter(jl_task_t *ct, void *data);
 JL_DLLIMPORT void *jl_jit_abi_converter(jl_task_t *ct, jl_abi_t from_abi, jl_code_instance_t *codeinst);
+
+// ABI-adapter / dispatch-trampoline caches (src/abi_adapters.c). The bucketed TypeMap
+// bookkeeping lives in libjulia-internal; the JIT half (jl_get_abi_adapter) is in codegen.
+JL_DLLEXPORT jl_abi_adapter_cache_t *jl_new_abi_adapter_cache(void);
+JL_DLLEXPORT jl_dispatch_trampoline_cache_t *jl_new_dispatch_trampoline_cache(void);
+JL_DLLEXPORT void *jl_abi_adapter_resolve_target(jl_abi_t from_abi, jl_code_instance_t *codeinst,
+        void **target, int *target_specsig, jl_callptr_t *invoke);
+JL_DLLEXPORT jl_abi_adapter_t *jl_lookup_abi_adapter(jl_value_t *sigt, jl_value_t *rt,
+        jl_code_instance_t *ci, int specsig, int is_opaque_closure, size_t nargs);
+JL_DLLEXPORT void jl_install_abi_adapter(jl_abi_adapter_t *entry);
+JL_DLLEXPORT jl_abi_adapter_t *jl_new_abi_adapter_record(jl_value_t *sigt, jl_value_t *rt,
+        jl_code_instance_t *ci, int specsig, int is_opaque_closure, size_t nargs, void *fptr);
+JL_DLLEXPORT jl_dispatch_trampoline_t *jl_new_cfunction_trampoline(jl_value_t *sigt, jl_value_t *rt, int specsig);
+JL_DLLEXPORT void jl_reintern_trampoline(jl_dispatch_trampoline_t *tr);
+// Re-install an image-restored adapter record into the cache (load fixup); the load-time
+// counterpart of jl_get_abi_adapter's interning. Handles adapters with no live trampoline.
+JL_DLLEXPORT void jl_reintern_abi_adapter(jl_abi_adapter_t *e);
+// The @cfunction/@ccallable dispatch-trampoline resolver (runtime_ccall.c); the codegen
+// poll calls it (as jlresolvetrampoline_func) when its cached world is stale.
+JL_DLLEXPORT void *jl_resolve_trampoline(jl_task_t *ct, jl_dispatch_trampoline_t *tr);
 
 
 // Special filenames used to refer to internal julia libraries
@@ -2219,7 +2238,7 @@ JL_DLLIMPORT jl_value_t *jl_dump_function_ir(jl_llvmf_dump_t *dump, char strip_i
 JL_DLLIMPORT jl_value_t *jl_dump_function_asm(jl_llvmf_dump_t *dump, char emit_mc, const char* asm_variant, const char *debuginfo, char binary, char raw);
 
 typedef jl_value_t *(*jl_codeinstance_lookup_t)(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t min_world, size_t max_world);
-JL_DLLIMPORT void *jl_create_native(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int cache, size_t world, jl_array_t *mod_array, jl_array_t *worklist, int all, jl_array_t *module_init_order, jl_array_t *ext_foreign_cis);
+JL_DLLIMPORT void *jl_create_native(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int cache, size_t world, jl_array_t *mod_array, jl_array_t *worklist, int all, jl_array_t *module_init_order, jl_array_t *ext_foreign_code);
 JL_DLLIMPORT void *jl_emit_native(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _external_linkage);
 JL_DLLIMPORT void jl_dump_native(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,
@@ -2230,6 +2249,8 @@ JL_DLLIMPORT void jl_get_llvm_external_fns(void *native_code, size_t *num_els,
                                            jl_code_instance_t *fns);
 JL_DLLIMPORT void jl_get_function_id(void *native_code, jl_code_instance_t *ncode,
         int32_t *func_idx, int32_t *specfunc_idx);
+JL_DLLIMPORT void jl_get_adapter_id(void *native_code, jl_abi_adapter_t *rec,
+        int32_t *adapter_idx);
 JL_DLLIMPORT void jl_register_fptrs(uint64_t image_base, const struct _jl_image_fptrs_t *fptrs,
                                     jl_code_instance_t **linfos, size_t n);
 JL_DLLIMPORT void jl_get_llvm_cis(void *native_code, size_t *num_els,
