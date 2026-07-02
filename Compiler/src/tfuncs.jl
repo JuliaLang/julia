@@ -1709,11 +1709,9 @@ end
     else
         ft = ftypes[fld]
         if !(isa(ft, Type) || isa(ft, TypeVar)) && u.name === Tuple.name
-            # A genuine tuple field may be a value parameter (e.g. `Tuple{1:2}`);
-            # `fieldtype` returns that value rather than throwing. Type identity
-            # compares non-type parameters by egality, so the stored value is
-            # `===` the parameter even when the argument type is only `==`-certain
-            # (#61323) -- that ambiguity is specific to type-valued fields.
+            # a value parameter in a genuine tuple field (see the loop above):
+            # non-type parameters are compared by egality, so this is `Const`
+            # even for an `==`-only argument
             return Const(ft)
         end
     end
@@ -1724,8 +1722,7 @@ end
     exactft = exact || (!has_free_typevars(ft) && u.name !== Tuple.name)
     ft = rewrap_unionall(ft, s)
     if exactft
-        # `fieldtype` returns exactly (`===`) the stored type, but only an
-        # egality-certain argument pins which stored rep is returned
+        # only an egality-certain argument pins the stored rep (see above)
         return egal ? Const(ft) : Type{ft}
     end
     if u.name === Tuple.name && ft === Any
@@ -1937,8 +1934,9 @@ function apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any};
                 aty = type_parameter(ai)
             elseif isTypeEq(ai)
                 aty = type_parameter(ai)
-                # `Union` does not instantiate-normalize (`Union{S} === S`), so an
-                # `==`-only argument leaves the result non-constant
+                # `Union` instantiation does not canonicalize its arguments the
+                # way datatype instantiation does (`Union{S}` is `S` itself), so
+                # an `==`-only argument leaves the result only `==`-certain
                 allconst = false
             else
                 aty = (ai::Const).val
@@ -2034,9 +2032,9 @@ end
             canconst &= !has_free_typevars(aip1)
             anyeq = true
             push!(tparams, aip1)
-        elseif istuple && partial_typeofvararg_value(ai) !== nothing
+        elseif istuple && (pva = partial_typeofvararg_value(ai)) !== nothing
             anyeq = true
-            push!(tparams, partial_typeofvararg_value(ai))
+            push!(tparams, pva)
         elseif isa(ai, Const) && (isa(ai.val, Type) || isa(ai.val, TypeVar) ||
                                   valid_tparam(ai.val) || (istuple && isvarargtype(ai.val)))
             push!(tparams, ai.val)
@@ -2045,12 +2043,10 @@ end
             push!(tparams, ai.tv)
         else
             if widenconst(ai) <: TypeVar && widenconst(ai) !== Union{}
-                # A runtime TypeVar value of unknown identity used as a type
-                # parameter (e.g. `Vector{tv}`, `Tuple{tv}`) yields a type with
-                # a free typevar. `jl_isa` excludes such types from every
-                # closed `Type{...}` form this function could construct (free
-                # typevars are rigid in subtyping), so an invented existential
-                # would be unsound; only the top kind forms are safe.
+                # A TypeVar value of unknown identity used as a type parameter
+                # yields a type with a free typevar, which `jl_isa` excludes
+                # from every closed `Type{...}` form this function could
+                # construct; only the top kind forms are sound here.
                 return isvarargtype(headtype) ? TypeofVararg : Type
             end
             uncertain = true

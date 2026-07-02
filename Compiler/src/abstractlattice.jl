@@ -197,7 +197,8 @@ end
     isa(t, PartialTypeVar) && return true
     if isa(t, Const)
         val = t.val
-        # a type-valued `Const` adds `=== val` over its `Type{val}` widening
+        # a type-valued `Const` may pin `=== val` beyond its widening (which for
+        # an open `val` is only the `==`-class `Type{val}`)
         return !issingletontype(typeof(val))
     end
     return has_nontrivial_extended_info(widenlattice(𝕃), t)

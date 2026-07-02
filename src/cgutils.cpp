@@ -2129,6 +2129,8 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
         return std::make_pair(val, false);
     }
     if (jl_is_some_Type(type)) {
+        // an `==`-keyed `Type{X}` (or a `TypeEgal{X}` without a pointer-egal
+        // parameter) has no cheap tag test; defer to the runtime `jl_isa`
         Value *vx = boxed(ctx, x);
         Value *vtyp = track_pjlvalue(ctx, literal_pointer_val(ctx, type));
         return std::make_pair(ctx.builder.CreateICmpNE(

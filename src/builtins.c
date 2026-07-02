@@ -211,8 +211,10 @@ static int egal_types(const jl_value_t *a, const jl_value_t *b, jl_typeenv_t *en
             egal_types(((jl_uniontype_t*)a)->b, ((jl_uniontype_t*)b)->b, env, tvar_names);
     }
     if (dtag == jl_typeegal_tag << 4) {
-        // `jl_types_struct_equiv` (tvar_names==0) needs to imply equality, but
-        // this is not true for `TypeEgal`, so we can't ignore tvar names here.
+        // `TypeEgal` parameters are egality keys: alpha-renamed parameters are
+        // `==` but not `===`, so their `TypeEgal`s are distinct types. The
+        // name-insensitive mode (tvar_names==0) must therefore still compare
+        // the parameter by name.
         return egal_types(((jl_typeeq_t*)a)->T, ((jl_typeeq_t*)b)->T, env, 1);
     }
     if (dtag == jl_typeeq_tag << 4)

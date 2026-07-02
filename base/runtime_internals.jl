@@ -1519,8 +1519,9 @@ end
 
 function signature_type(@nospecialize(f), @nospecialize(argtypes))
     argtypes = to_tuple_type(argtypes)
-    # Match the dispatch tuple constructed by `jl_inst_arg_tuple_type`.
-    ft = isa(f, Type) && !has_free_typevars(f) ? Core.TypeEgal{f} : Core.Typeof(f)
+    # `Core.Typeof` matches the per-argument key of the dispatch tuple
+    # constructed by `jl_inst_arg_tuple_type`.
+    ft = Core.Typeof(f)
     u = unwrap_unionall(argtypes)::DataType
     return rewrap_unionall(Tuple{ft, u.parameters...}, argtypes)
 end

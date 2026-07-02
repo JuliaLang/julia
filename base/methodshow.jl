@@ -84,6 +84,9 @@ function kwarg_decl(m::Method, kwtype = nothing)
         sig = rewrap_unionall(Tuple{kwtype, NamedTuple, sig_params...}, m.sig)
         kwli = ccall(:jl_methtable_lookup, Any, (Any, UInt), sig, get_world_counter())
         if kwli === nothing
+            # a compiled keyword sorter is specialized on the dispatch (egality)
+            # spelling of closed type-valued slots, so retry the lookup with
+            # `Type{X}` slots as `Core.TypeEgal{X}`
             new_params = Any[kwtype, NamedTuple]
             changed = false
             for p in sig_params

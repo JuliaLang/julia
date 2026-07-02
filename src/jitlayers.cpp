@@ -2371,6 +2371,7 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
         if (S.specptr)
             KnownCISyms.insert(S.specptr);
     }
+    // copy first: anonymizing a symbol removes it from `defined_symbols`
     SmallVector<jitlink::Symbol *, 0> DefinedSyms;
     for (auto *Sym : G.defined_symbols())
         DefinedSyms.push_back(Sym);

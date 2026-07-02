@@ -802,7 +802,7 @@ function f34459(args...)
     Base.pointerset(args[1], 1, 1, 1)
     return
 end
-# only the egality type `TypeEgal{Int}` is a ghost codegen can elide (#61323)
+# only the egality type `TypeEgal{Int}` is a ghost that codegen can elide (#61323)
 @test !occursin("jl_f_tuple", get_llvm(f34459, Tuple{Ptr{Int}, Core.TypeEgal{Int}}, true, false, false))
 
 # issue #48394: incorrectly-inferred getproperty shouldn't introduce invalid cgval_t
