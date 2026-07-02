@@ -138,6 +138,9 @@ typedef struct jl_stenv_t {
     // Used to represent the length difference between 2 vararg.
     // intersect(X, Y) ==> X = Y + Loffset
     int Loffset;
+    // free typevars may occur in the inputs or were created during this query;
+    // guards the typevar aliasing checks in *_unionall (see #61876)
+    int maybe_free_tvars;
 } jl_stenv_t;
 
 // state manipulation utilities
@@ -1327,6 +1330,7 @@ static jl_unionall_t *unalias_unionall(jl_unionall_t *u, jl_stenv_t *e)
         }
         if (aliased) {
             u = jl_rename_unionall(u);
+            e->maybe_free_tvars = 1;
             break;
         }
         btemp = btemp->prev;
@@ -1447,6 +1451,7 @@ static jl_value_t *subtype_unionall_envout_value(jl_value_t *t, jl_unionall_t *u
             return wrap_tvar_env(lb, constrained);
         }
         *new_tvar = (jl_value_t*)jl_new_typevar(u->var->name, jl_bottom_type, lb);
+        e->maybe_free_tvars = 1;
         return wrap_tvar_env(*new_tvar, constrained);
     }
     if (lb == vb->ub || lb != jl_bottom_type) {
@@ -1460,6 +1465,7 @@ static jl_value_t *subtype_unionall_envout_value(jl_value_t *t, jl_unionall_t *u
         return wrap_tvar_env((jl_value_t*)u->var, constrained);
     if (!*new_tvar) {
         *new_tvar = (jl_value_t*)jl_new_typevar(u->var->name, vb->lb, vb->ub);
+        e->maybe_free_tvars = 1;
         return wrap_tvar_env(*new_tvar, constrained);
     }
     return wrap_tvar_env(*new_tvar, constrained);
@@ -1472,7 +1478,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     jl_varbinding_t vb = { NULL, NULL, NULL, R, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                            e->invdepth, NULL, e->vars };
     JL_GC_PUSH5(&u, &vb.lb, &vb.ub, &vb.innervars, &new_tvar);
-    if (jl_has_typevar(t, u->var))
+    if (e->maybe_free_tvars && jl_has_typevar(t, u->var))
         u = jl_rename_unionall(u);
     int body_occurs_inv = var_occurs_invariant(u->body, u->var);
     vb.var = u->var;
@@ -1588,6 +1594,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
             // anymore, that code path does not know that it needs to do any renaming.
             if (!new_tvar) {
                 new_tvar = (jl_value_t*)jl_new_typevar(vb.var->name, vb.lb, vb.ub);
+                e->maybe_free_tvars = 1;
                 if (outermost != NULL)
                     push_innervar(outermost, new_tvar);
             }
@@ -2512,6 +2519,7 @@ static void init_stenv(jl_stenv_t *e, jl_value_t **env, int envsz)
     }
     e->envidx = 0;
     e->invdepth = 0;
+    e->maybe_free_tvars = 1;
     e->intersection = 0;
     e->emptiness_only = 0;
     e->triangular = 0;
@@ -2521,6 +2529,12 @@ static void init_stenv(jl_stenv_t *e, jl_value_t **env, int envsz)
     e->Lunions.used = 0;       e->Runions.used = 0;
     e->Lunions.stack.next = NULL;
     e->Runions.stack.next = NULL;
+}
+
+// allow skipping the typevar aliasing checks when the inputs are closed
+static void stenv_input_free_tvars(jl_stenv_t *e, jl_value_t *x, jl_value_t *y)
+{
+    e->maybe_free_tvars = jl_has_free_typevars(x) || jl_has_free_typevars(y);
 }
 
 // subtyping entry points
@@ -2986,6 +3000,7 @@ JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env, 
         obvious_subtype = 3;
     }
     init_stenv(&e, env, envsz);
+    stenv_input_free_tvars(&e, x, y);
     int subtype = forall_exists_subtype(x, y, &e, PARAM_NONE);
     free_stenv(&e);
     assert(obvious_subtype == 3 || obvious_subtype == subtype || jl_has_free_typevars(x) || jl_has_free_typevars(y));
@@ -3000,6 +3015,7 @@ static int subtype_in_env(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 {
     jl_stenv_t e2;
     init_stenv(&e2, NULL, 0);
+    e2.maybe_free_tvars = e->maybe_free_tvars;
     e2.vars = e->vars;
     e2.intersection = e->intersection;
     e2.invdepth = e->invdepth;
@@ -3068,6 +3084,7 @@ JL_DLLEXPORT int jl_types_equal(jl_value_t *a, jl_value_t *b)
 #endif
     {
         init_stenv(&e, NULL, 0);
+        stenv_input_free_tvars(&e, a, b);
         int subtype = forall_exists_subtype(a, b, &e, PARAM_NONE);
         free_stenv(&e);
         assert(subtype_ab == 3 || subtype_ab == subtype || jl_has_free_typevars(a) || jl_has_free_typevars(b));
@@ -3085,6 +3102,7 @@ JL_DLLEXPORT int jl_types_equal(jl_value_t *a, jl_value_t *b)
 #endif
     {
         init_stenv(&e, NULL, 0);
+        stenv_input_free_tvars(&e, a, b);
         int subtype = forall_exists_subtype(b, a, &e, PARAM_NONE);
         free_stenv(&e);
         assert(subtype_ba == 3 || subtype_ba == subtype || jl_has_free_typevars(a) || jl_has_free_typevars(b));
@@ -3369,6 +3387,7 @@ static jl_value_t *bound_var_below(jl_tvar_t *tv, jl_varbinding_t *bb, jl_stenv_
         jl_value_t *ntv = NULL;
         JL_GC_PUSH1(&ntv);
         ntv = (jl_value_t *)jl_new_typevar(tv->name, jl_bottom_type, (jl_value_t *)jl_any_type);
+        e->maybe_free_tvars = 1;
         jl_array_ptr_1d_push(bb->innervars, ntv);
         JL_GC_POP();
         return ntv;
@@ -3810,8 +3829,10 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
     }
 
     // TODO: this can prevent us from matching typevar identities later
-    if (!varval && (vb->lb != vb->var->lb || vb->ub != vb->var->ub))
+    if (!varval && (vb->lb != vb->var->lb || vb->ub != vb->var->ub)) {
         newvar = jl_new_typevar(vb->var->name, vb->lb, vb->ub);
+        e->maybe_free_tvars = 1;
+    }
 
     // flatten all innervar into a (reversed) list
     size_t icount = 0;
@@ -3906,6 +3927,8 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
             assert(btemp->root->var == ivar || bdepth0 == vb->depth0);
             if (vb->ub == (jl_value_t*)ivar) {
                 *btemp->ub = omit_bad_union(iub, vb->var);
+                if (*btemp->ub != iub)
+                    e->maybe_free_tvars = 1;
                 if (*btemp->ub == jl_bottom_type && *btemp->ub != *btemp->lb) {
                     JL_GC_POP();
                     JL_GC_POP();
@@ -4025,6 +4048,7 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
         int isinnervar = btemp1->root->var != ivar;
         if (isinnervar && (ivar->lb != ilb || ivar->ub != iub)) {
             nivar = (jl_value_t *)jl_new_typevar(ivar->name, ilb, iub);
+            e->maybe_free_tvars = 1;
             if (jl_has_typevar(res, ivar))
                 res = jl_substitute_var(res, ivar, nivar);
             for (jl_ivarbinding_t *btemp2 = btemp1->next; btemp2 != NULL; btemp2 = btemp2->next) {
@@ -4097,8 +4121,10 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
         }
         else {
             // re-fresh newvar if bounds changed.
-            if (vb->lb != newvar->lb || vb->ub != newvar->ub)
+            if (vb->lb != newvar->lb || vb->ub != newvar->ub) {
                 newvar = jl_new_typevar(newvar->name, vb->lb, vb->ub);
+                e->maybe_free_tvars = 1;
+            }
             if (newvar != vb->var)
                 res = jl_substitute_var(res, vb->var, (jl_value_t*)newvar);
             varval = (jl_value_t*)newvar;
@@ -4132,7 +4158,7 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
     }
     u = unalias_unionall(u, e);
     JL_GC_PUSH1(&u);
-    if (jl_has_typevar(t, u->var))
+    if (e->maybe_free_tvars && jl_has_typevar(t, u->var))
         u = jl_rename_unionall(u);
     vb->var = u->var;
     e->vars = vb;
@@ -4183,7 +4209,10 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
         }
         else {
             JL_GC_PUSH1(&res);
+            jl_value_t *oldub = vb->ub;
             vb->ub = omit_bad_union(vb->ub, u->var);
+            if (vb->ub != oldub)
+                e->maybe_free_tvars = 1;
             JL_GC_POP();
             if (vb->ub == jl_bottom_type && vb->ub != vb->lb)
                 res = jl_bottom_type;
@@ -5221,6 +5250,7 @@ static jl_value_t *intersect_types(jl_value_t *x, jl_value_t *y, int emptiness_o
             return jl_bottom_type;
     }
     init_stenv(&e, NULL, 0);
+    stenv_input_free_tvars(&e, x, y);
     e.intersection = 1;
     e.emptiness_only = emptiness_only;
     jl_value_t *ans = intersect_all(x, y, &e);
@@ -5398,6 +5428,7 @@ jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t *
             goto bot;
         jl_stenv_t e;
         init_stenv(&e, NULL, 0);
+        stenv_input_free_tvars(&e, a, b);
         e.intersection = 1;
         e.envout = env;
         if (szb)
@@ -5866,6 +5897,7 @@ static int eq_msp(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_value_t *b0, 
 #endif
     {
         init_stenv(&e, NULL, 0);
+        stenv_input_free_tvars(&e, a, b);
         int subtype = forall_exists_subtype(a, b, &e, PARAM_NONE);
         assert(subtype_ab == 3 || subtype_ab == subtype || jl_has_free_typevars(a) || jl_has_free_typevars(b));
 #ifndef NDEBUG
@@ -5884,6 +5916,7 @@ static int eq_msp(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_value_t *b0, 
 #endif
     {
         init_stenv(&e, NULL, 0);
+        stenv_input_free_tvars(&e, a, b);
         int subtype = forall_exists_subtype(b, a, &e, PARAM_NONE);
         assert(subtype_ba == 3 || subtype_ba == subtype || jl_has_free_typevars(a) || jl_has_free_typevars(b));
 #ifndef NDEBUG
@@ -5927,6 +5960,7 @@ static int sub_msp(jl_value_t *x, jl_value_t *y, jl_value_t *y0, jl_typeenv_t *e
         env = env->prev;
     }
     init_stenv(&e, NULL, 0);
+    stenv_input_free_tvars(&e, x, y);
     int subtype = forall_exists_subtype(x, y, &e, PARAM_NONE);
     assert(obvious_sub == 3 || obvious_sub == subtype || jl_has_free_typevars(x) || jl_has_free_typevars(y));
 #ifndef NDEBUG
