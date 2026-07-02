@@ -39,7 +39,7 @@ JCFLAGS_COMMON += -Wold-style-definition -Wstrict-prototypes -Wc++-compat
 
 # Add common flags that apply to both compilers
 ifeq (${USE_THIRD_PARTY_GC},mmtk)
-FLAGS_COMMON += -I$(MMTK_API_INC)
+FLAGS_COMMON := -I$(SRCDIR)/gc-mmtk -I$(MMTK_API_INC) $(FLAGS_COMMON)
 endif
 
 FLAGS_COMMON += -DJL_BUILD_ARCH='"$(ARCH)"'
@@ -77,7 +77,6 @@ ifeq ($(JULIACODEGEN),LLVM)
 # Currently these files are used by both GCs. But we should make the list specific to stock, and MMTk should have its own implementation.
 GC_CODEGEN_SRCS := llvm-final-gc-lowering llvm-late-gc-lowering llvm-gc-invariant-verifier
 ifeq (${USE_THIRD_PARTY_GC},mmtk)
-FLAGS_COMMON += -I$(MMTK_API_INC)
 GC_CODEGEN_SRCS += llvm-final-gc-lowering-mmtk
 else
 GC_CODEGEN_SRCS += llvm-final-gc-lowering-stock
@@ -132,7 +131,7 @@ UV_HEADERS += uv/*.h
 endif
 PUBLIC_HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,work-stealing-queue.h gc-interface.h gc-tls-common.h julia.h julia_assert.h julia_threads.h julia_fasttls.h julia_locks.h julia_atomics.h jloptions.h jl_exported_data.inc)
 ifeq (${USE_THIRD_PARTY_GC},mmtk)
-	PUBLIC_HEADERS += $(addprefix $(SRCDIR)/,gc-tls-mmtk.h gc-wb-mmtk.h)
+	PUBLIC_HEADERS += $(addprefix $(SRCDIR)/gc-mmtk/,gc-tls-mmtk.h gc-wb-mmtk.h)
 else
 	PUBLIC_HEADERS += $(addprefix $(SRCDIR)/,gc-tls-stock.h gc-wb-stock.h)
 endif
@@ -336,6 +335,14 @@ $(BUILDDIR)/%.o: $(SRCDIR)/%.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLVM_CONF
 	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(SHIPFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(CXX_DISABLE_ASSERTION) -c $< -o $@)
 $(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(DEBUGFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) -c $< -o $@)
+$(BUILDDIR)/gc-mmtk.o: $(SRCDIR)/gc-mmtk/gc-mmtk.c $(HEADERS) | $(BUILDDIR)
+	@$(call PRINT_CC, $(CC) $(LLVM_CFLAGS) $(SHIPFLAGS) $(JCPPFLAGS) $(JCFLAGS) $(DISABLE_ASSERTIONS) -c $< -o $@)
+$(BUILDDIR)/gc-mmtk.dbg.obj: $(SRCDIR)/gc-mmtk/gc-mmtk.c $(HEADERS) | $(BUILDDIR)
+	@$(call PRINT_CC, $(CC) $(LLVM_CFLAGS) $(DEBUGFLAGS) $(JCPPFLAGS) $(JCFLAGS) -c $< -o $@)
+$(BUILDDIR)/llvm-final-gc-lowering-mmtk.o: $(SRCDIR)/gc-mmtk/llvm-final-gc-lowering-mmtk.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR)
+	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(SHIPFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(CXX_DISABLE_ASSERTION) -c $< -o $@)
+$(BUILDDIR)/llvm-final-gc-lowering-mmtk.dbg.obj: $(SRCDIR)/gc-mmtk/llvm-final-gc-lowering-mmtk.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR)
+	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(DEBUGFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) -c $< -o $@)
 $(BUILDDIR)/%.o : $(SRCDIR)/%.d
 	@$(call PRINT_DTRACE, $(DTRACE) -G -s $< -o $@)
 $(BUILDDIR)/%.dbg.obj : $(SRCDIR)/%.d
@@ -445,7 +452,7 @@ $(BUILDDIR)/debuginfo.o $(BUILDDIR)/debuginfo.dbg.obj: $(addprefix $(SRCDIR)/,de
 $(BUILDDIR)/disasm.o $(BUILDDIR)/disasm.dbg.obj: $(SRCDIR)/debuginfo.h $(SRCDIR)/processor.h
 $(BUILDDIR)/gc-debug.o $(BUILDDIR)/gc-debug.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h
 $(BUILDDIR)/gc-pages.o $(BUILDDIR)/gc-pages.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h
-$(BUILDDIR)/gc-mmtk.o $(BUILDDIR)/gc-mmtk.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-heap-snapshot.h $(SRCDIR)/gc-alloc-profiler.h
+$(BUILDDIR)/gc-mmtk.o $(BUILDDIR)/gc-mmtk.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-heap-snapshot.h $(SRCDIR)/gc-alloc-profiler.h $(SRCDIR)/gc-mmtk/gc-tls-mmtk.h $(SRCDIR)/gc-mmtk/gc-wb-mmtk.h
 $(BUILDDIR)/gc-stacks.o $(BUILDDIR)/gc-stacks.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h
 $(BUILDDIR)/gc-stock.o $(BUILDDIR)/gc.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h $(SRCDIR)/gc-heap-snapshot.h $(SRCDIR)/gc-alloc-profiler.h $(SRCDIR)/gc-page-profiler.h
 $(BUILDDIR)/gc-heap-snapshot.o $(BUILDDIR)/gc-heap-snapshot.dbg.obj: $(SRCDIR)/gc-heap-snapshot.h
