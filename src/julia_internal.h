@@ -1442,6 +1442,9 @@ void jl_gc_safe_enter_from_nonmutator(jl_ptls_t ptls) JL_CANSAFEPOINT_LEAVE;
 JL_DLLEXPORT uint8_t jl_object_in_image(jl_value_t* v) JL_NOTSAFEPOINT;
 // GC configuration baked into generated code; must match between an image and the runtime that loads it.
 JL_DLLEXPORT const char *jl_gc_image_abi(void) JL_NOTSAFEPOINT;
+size_t jl_external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT;
+extern JL_DLLEXPORT jl_genericmemory_t *jl_method_contributors JL_GLOBALLY_ROOTED;
+JL_DLLEXPORT void jl_set_loading_closure_blobs(size_t *bits, size_t nblobs);
 
 // the first argument to jl_idtable_rehash is used to return a value
 // make sure it is rooted if it is used after the function returns
