@@ -112,7 +112,7 @@ static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s)
 
 // expression evaluator
 
-static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpreter_state *s)
+static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpreter_state *s, uint32_t callsite)
 {
     jl_value_t **argv;
     assert(nargs >= 1);
@@ -120,7 +120,7 @@ static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpreter_state *s
     size_t i;
     for (i = 0; i < nargs; i++)
         argv[i] = eval_value(args[i], s);
-    jl_value_t *result = jl_apply(argv, nargs);
+    jl_value_t *result = jl_apply_generic_callsite(argv[0], &argv[1], nargs - 1, callsite);
     JL_GC_POP();
     return result;
 }
@@ -256,13 +256,13 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     size_t nargs = jl_array_nrows(ex->args);
     jl_sym_t *head = ex->head;
     if (head == jl_call_sym) {
-        return do_call(args, nargs, s);
+        return do_call(args, nargs, s, jl_int32hash_fast((uint32_t)(uintptr_t)ex));
     }
     else if (head == jl_invoke_sym) {
         return do_invoke(args, nargs, s);
     }
     else if (head == jl_invoke_modify_sym) {
-        return do_call(args + 1, nargs - 1, s);
+        return do_call(args + 1, nargs - 1, s, jl_int32hash_fast((uint32_t)(uintptr_t)ex));
     }
     else if (head == jl_isdefined_sym) {
         jl_value_t *sym = args[0];

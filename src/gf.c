@@ -4377,6 +4377,8 @@ JL_DLLEXPORT jl_value_t *jl_invoke_oc(jl_value_t *F, jl_value_t **args, uint32_t
 STATIC_INLINE int sig_match_fast(jl_value_t *arg1t, jl_value_t **args, jl_value_t **sig, size_t n) JL_NOTSAFEPOINT
 {
     // NOTE: This function is a huge performance hot spot!!
+    // Matches a dispatch-tuple signature: each slot is a concrete type (matched by
+    // `typeof(a)`) or `Type{X}` (matched by the type value `X`). Types are hash-consed.
     if (arg1t != sig[0])
         return 0;
     size_t i;
@@ -4384,11 +4386,9 @@ STATIC_INLINE int sig_match_fast(jl_value_t *arg1t, jl_value_t **args, jl_value_
         jl_value_t *decl = sig[i];
         jl_value_t *a = args[i - 1];
         if (jl_typeof(a) != decl) {
-            /*
-              we are only matching concrete types here, and those types are
-              hash-consed, so pointer comparison should work.
-            */
-            return 0;
+            // a `Type{X}` slot is matched by the type value `X` itself
+            if (!(jl_is_typeeq(decl) && a == jl_typeeq_T(decl)))
+                return 0;
         }
     }
     return 1;
@@ -4494,9 +4494,14 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
                 }
             }
         }
-        if (entry != NULL && entry->isleafsig && entry->simplesig == (void*)jl_nothing && entry->guardsigs == jl_emptysvec) {
-            // put the entry into the cache if it's valid for a leafsig lookup,
-            // using pick_which to slightly randomize where it ends up
+        if (entry != NULL && jl_is_datatype((jl_value_t*)entry->sig) &&
+                ((jl_datatype_t*)entry->sig)->isdispatchtuple && !entry->va &&
+                entry->guardsigs == jl_emptysvec) {
+            // Cache any fixed-arity dispatch-tuple signature with no guards: it is
+            // maximally specific (concrete or `Type{X}` slots), so `sig_match_fast`
+            // validates a hit exactly. Unlike isleafsig this also covers `Type{}` slots,
+            // so dispatch on type-valued arguments can hit the cache, not the typemap walk.
+            // Use pick_which to slightly randomize where it ends up
             // (intentionally not atomically synchronized, since we're just using it for randomness)
             // TODO: use the thread's `cong` instead as a source of randomness
             int which = jl_atomic_load_relaxed(&pick_which[cache_idx[0]]) + 1;
@@ -4554,14 +4559,20 @@ jl_method_instance_t *jl_apply_lookup(jl_value_t **args, size_t nargs, size_t wo
             jl_int32hash_fast(jl_return_address()), world, 0);
 }
 
-JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint32_t nargs)
+// jl_apply_generic with an explicit call-cache key. The interpreter passes the call
+// site (Expr) identity so each interpreted call site keys its own cache slots, rather
+// than all sharing the one return address of the interpreter's apply site.
+JL_DLLEXPORT jl_value_t *jl_apply_generic_callsite(jl_value_t *F, jl_value_t **args, uint32_t nargs, uint32_t callsite)
 {
     size_t world = jl_current_task->world_age;
-    jl_method_instance_t *mfunc = jl_lookup_generic_(F, args, nargs,
-                                                     jl_int32hash_fast(jl_return_address()),
-                                                     world, 1);
+    jl_method_instance_t *mfunc = jl_lookup_generic_(F, args, nargs, callsite, world, 1);
     JL_GC_PROMISE_ROOTED(mfunc);
     return _jl_invoke(F, args, nargs, mfunc, world, TRIGGER_DISPATCH);
+}
+
+JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint32_t nargs)
+{
+    return jl_apply_generic_callsite(F, args, nargs, jl_int32hash_fast(jl_return_address()));
 }
 
 // buggy way to lookup a method given a list of arguments
