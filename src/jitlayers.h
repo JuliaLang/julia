@@ -38,34 +38,20 @@
 #include <queue>
 #include <tuple>
 
-// As of LLVM 13, there are two runtime JIT linker implementations, the older
-// RuntimeDyld (used via orc::RTDyldObjectLinkingLayer) and the newer JITLink
-// (used via orc::ObjectLinkingLayer).
-//
-// JITLink is not only more flexible (which isn't of great importance for us, as
-// we do only single-threaded in-process codegen), but crucially supports using
-// the Small code model, where the linker needs to fix up relocations between
-// object files that end up far apart in address space. RuntimeDyld can't do
-// that and relies on the Large code model instead, which is broken on
-// aarch64-darwin (macOS on ARM64), and not likely to ever be supported there
-// (see https://bugs.llvm.org/show_bug.cgi?id=52029).
-//
-// JITLink is now used on all platforms by default.  The support for RuntimeDyld
-// will be removed when we need the ability to manipulate JITLink LinkGraphs.
-//
-// Of the supported profilers, only OProfile has not been ported to JITLink.
+// The JIT is linked with JITLink (orc::ObjectLinkingLayer) on all platforms:
+// we rely on manipulating JITLink LinkGraphs (see linkOutput), on the Small
+// code model, and on JITLink-based stub redirection for call edges to
+// still-compiling targets. The older RuntimeDyld linker is not supported.
 
 #if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_)
 # define HAS_SANITIZER
 #endif
 
-#ifndef JL_USE_OPROFILE_JITEVENTS
-#define JL_USE_JITLINK
+#ifdef JL_USE_OPROFILE_JITEVENTS
+#error "OProfile JIT events were only supported by RuntimeDyld, which is no longer used"
 #endif
 
-# include <llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h>
-# include <llvm/ExecutionEngine/RTDyldMemoryManager.h>
-# include <llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h>
+#include <llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h>
 
 using namespace llvm;
 
@@ -802,7 +788,6 @@ public:
 
     void enableJITDebuggingSupport();
     void enableIntelJITEventListener() JL_NOTSAFEPOINT;
-    void enableOProfileJITEventListener() JL_NOTSAFEPOINT;
     void enablePerfJITEventListener() JL_NOTSAFEPOINT;
 
     orc::SymbolStringPtr mangle(StringRef Name) JL_NOTSAFEPOINT;

@@ -2121,11 +2121,6 @@ void JuliaOJIT::enableIntelJITEventListener()
 #endif
 }
 
-void JuliaOJIT::enableOProfileJITEventListener()
-{
-    // implement when available in LLVM
-}
-
 void JuliaOJIT::enablePerfJITEventListener()
 {
 #if JL_LLVM_VERSION >= 180000
