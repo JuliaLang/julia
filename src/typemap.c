@@ -566,13 +566,27 @@ static int jl_typemap_intersection_node_visitor(jl_typemap_entry_t *ml, struct t
             continue;
         if (closure->min_valid > jl_atomic_load_relaxed(&ml->max_world))
             continue;
-        jl_svec_t **penv = NULL;
-        if (closure->env) {
-            closure->env = jl_emptysvec;
-            penv = &closure->env;
+        int nonempty;
+        if (closure->emptiness_only) {
+            // The callback consumes only the match verdict and `issubty`; skip
+            // materializing the intersection type and the typevar environment.
+            // (`issubty` matches the full path: jl_type_intersection_env_s
+            // reports `type <: ml->sig`; the emptiness verdict is the same
+            // conservative one the full intersection would give.)
+            closure->issubty = jl_subtype(closure->type, (jl_value_t*)ml->sig);
+            nonempty = closure->issubty || !jl_has_empty_intersection(closure->type, (jl_value_t*)ml->sig);
+            closure->ti = nonempty ? (jl_value_t*)jl_any_type : jl_bottom_type;
         }
-        closure->ti = jl_type_intersection_env_s(closure->type, (jl_value_t*)ml->sig, penv, &closure->issubty);
-        if (closure->ti != (jl_value_t*)jl_bottom_type) {
+        else {
+            jl_svec_t **penv = NULL;
+            if (closure->env) {
+                closure->env = jl_emptysvec;
+                penv = &closure->env;
+            }
+            closure->ti = jl_type_intersection_env_s(closure->type, (jl_value_t*)ml->sig, penv, &closure->issubty);
+            nonempty = closure->ti != (jl_value_t*)jl_bottom_type;
+        }
+        if (nonempty) {
             // In some corner cases type intersection is conservative and returns something
             // for intersect(A, B) even though A is a dispatch tuple and !(A <: B).
             // For dispatch purposes in such a case we know there's no match. This check

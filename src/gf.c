@@ -2177,7 +2177,8 @@ static jl_value_t *get_intersect_matches(jl_typemap_t *defs, jl_typemap_entry_t 
     // search for all intersecting methods active in the previous world, to determine the changes needed to be made for the next world
     struct matches_env env = {{get_intersect_visitor, (jl_value_t*)type, va, /* .search_slurp = */ 0,
             /* .min_valid = */ world, /* .max_valid = */ world,
-            /* .ti = */ NULL, /* .env = */ jl_emptysvec, /* .issubty = */ 0},
+            /* .ti = */ NULL, /* .env = */ NULL, /* .issubty = */ 0,
+            /* .emptiness_only = */ 1},
         /* .newentry = */ newentry, /* .shadowed */ NULL, /* .replaced */ NULL};
     JL_GC_PUSH3(&env.match.env, &env.match.ti, &env.shadowed);
     jl_typemap_intersection_visitor(defs, 0, &env.match);

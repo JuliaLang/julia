@@ -1987,6 +1987,9 @@ struct typemap_intersection_env {
     jl_value_t *ti; // intersection type
     jl_svec_t *env; // intersection env (initialize to null to perform intersection without an environment)
     int issubty;    // if `a <: b` is true in `intersect(a,b)`
+    int emptiness_only; // if set, `ti` and `env` are not materialized (`ti` is only a
+                        // nonempty/bottom placeholder); the callback may consume just
+                        // the match verdict and `issubty`
 };
 int jl_typemap_intersection_visitor(jl_typemap_t *a, int offs, struct typemap_intersection_env *closure);
 void typemap_slurp_search(jl_typemap_entry_t *ml, struct typemap_intersection_env *closure);
