@@ -2287,7 +2287,7 @@ struct matches_env {
 
 static int current_activation_clean = 0;
 static int method_in_loading_closure(jl_method_t *m);
-extern JL_DLLEXPORT uint64_t jl_contrib_stats[8];
+extern JL_DLLEXPORT uint64_t jl_contrib_stats[12];
 
 static int get_intersect_visitor(jl_typemap_entry_t *oldentry, struct typemap_intersection_env *closure0) JL_CANSAFEPOINT
 {
@@ -2735,7 +2735,7 @@ static void _typename_add_backedge(jl_typename_t *tn, int explct, void *env0) JL
 // closure, then the image sees the same methods its precompile worker saw.
 JL_DLLEXPORT jl_genericmemory_t *jl_method_contributors = NULL;
 JL_DLLEXPORT jl_genericmemory_t *jl_activation_certs = NULL; // only filled in the precompile worker
-JL_DLLEXPORT uint64_t jl_contrib_stats[8];
+JL_DLLEXPORT uint64_t jl_contrib_stats[12];
 
 static int activate_replay_mode(void)
 {
@@ -2847,6 +2847,26 @@ static void _typename_check_contributor(jl_typename_t *tn, int explct, void *env
             return;
         }
     }
+}
+
+// Is `sig`'s method-matching world provably unchanged relative to the loading
+// image's precompile worker? (all contributors to its typenames lie within the
+// dependency closure). Returns the replay mode when so, 0 otherwise.
+JL_DLLEXPORT int jl_edge_sig_replayable(jl_value_t *sig)
+{
+    int mode = activate_replay_mode();
+    if (mode < 1 || jl_loading_closure_bits == NULL)
+        return 0;
+    int clean = 1;
+    jl_contrib_stats[8]++;
+    if (!jl_foreach_top_typename_for(_typename_check_contributor, sig, 1, &clean) || !clean) {
+        jl_value_t *usig = jl_unwrap_unionall(sig);
+        if (jl_is_datatype(usig) && jl_nparams(usig) > 0 && jl_is_typeeq(jl_tparam(usig, 0)))
+            jl_contrib_stats[10]++; // dirty with Type{...} first arg (constructor call)
+        return 0;
+    }
+    jl_contrib_stats[9]++;
+    return mode;
 }
 
 static void contributor_tag_method(jl_method_t *method)
