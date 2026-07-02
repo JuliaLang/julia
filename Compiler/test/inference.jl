@@ -5807,6 +5807,26 @@ end
 let N = TypeVar(:N), T = TypeVar(:T)
     @test_throws MethodError typevar_length62001(NTuple{N, VecElement{T}})
 end
+# A TypeVar-valued sparam used in type application: the result is a type with
+# a free typevar, which no closed `Type{...}`/existential form contains, so
+# inference must keep the typevar's identity (or give up to the top kind
+# forms) rather than invent a fresh existential.
+applysparam62001(::Type{Vector{T}}) where T = Vector{T}
+let v = Base.unwrap_unionall(Vector)
+    @test applysparam62001(v) === v
+    @test only(Base.return_types(applysparam62001, (Type{v},))) == Type{v}
+end
+# Identityless TypeVar values as type parameters widen to the top kind forms.
+applytypevar62001(tv::TypeVar) = Vector{tv}
+applytypevar62001b(tv::TypeVar) = isa(Vector{tv}, Type{Vector{_A}} where _A)
+applytypevar62001c(tv::TypeVar) = Vararg{tv}
+let x = TypeVar(:x)
+    @test applytypevar62001(x).parameters[1] === x
+    @test applytypevar62001b(x) === false
+    @test applytypevar62001c(x) isa Core.TypeofVararg
+    @test only(Base.return_types(applytypevar62001, (TypeVar,))) == Type
+    @test only(Base.return_types(applytypevar62001c, (TypeVar,))) == Core.TypeofVararg
+end
 
 # Closed type-valued arguments should make `Core.Typeof` infer the `TypeEgal` branch.
 @test @inferred(Core.has_free_typevars(Pair)) === false

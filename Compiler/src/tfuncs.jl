@@ -2044,6 +2044,15 @@ end
             canconst = false
             push!(tparams, ai.tv)
         else
+            if widenconst(ai) <: TypeVar && widenconst(ai) !== Union{}
+                # A runtime TypeVar value of unknown identity used as a type
+                # parameter (e.g. `Vector{tv}`, `Tuple{tv}`) yields a type with
+                # a free typevar. `jl_isa` excludes such types from every
+                # closed `Type{...}` form this function could construct (free
+                # typevars are rigid in subtyping), so an invented existential
+                # would be unsound; only the top kind forms are safe.
+                return isvarargtype(headtype) ? TypeofVararg : Type
+            end
             uncertain = true
             unw = unwrap_unionall(ai)
             isT = isType(unw)

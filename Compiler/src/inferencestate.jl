@@ -816,11 +816,15 @@ function sptype_for_tvar(vᵢ::TypeVar, output_tvar::TypeVar, sigtypes::Core.Sim
     end
     if output_tvar.lb === output_tvar.ub
         if output_tvar.lb isa TypeVar
-            # TypeVars compare by identity, so a pinned TypeVar bound denotes
-            # a TypeVar value, not `Type{output_tvar.lb}`. The distinction is
-            # necessary because currently `!(TypeVar <: Type)`; if that changes,
-            # this can be revisited.
-            return TypeVar
+            # TypeVars compare by identity (`==` is `===` for them), so a
+            # pinned TypeVar bound denotes exactly that TypeVar object, not
+            # `Type{output_tvar.lb}`. Keep the identity as a `Const`: the
+            # runtime sparam read constant-folds to this same object
+            # (`jl_sparam_defined_value`), and consumers like `apply_type_tfunc`
+            # need the identity to type `Vector{T}` soundly (a bare `TypeVar`
+            # would make them invent a fresh existential that provably excludes
+            # the typevar-parameterized result).
+            return Const(output_tvar.lb)
         end
         # `X <: T <: X` pins the var to `X` up to type equality: an `S == X` rep
         # argument also matches this MethodInstance and would bind the var to `S`
@@ -923,7 +927,11 @@ function sptypes_from_meth_instance(mi::MethodInstance)
             end
         end
         if v isa TypeVar && is_free_typevar_in_spec(v, mi.specTypes)
-            ty = TypeVar
+            # A plain TypeVar env entry that is free in `specTypes` is the
+            # exact runtime value of this sparam (bound from a typevar
+            # embedded in the call's argument types). Keep its identity as a
+            # `Const` so type application on it stays sound and precise.
+            ty = Const(v)
             undef = false
             v_egal = false
         elseif v_tvar !== nothing || has_free_typevars(v)
