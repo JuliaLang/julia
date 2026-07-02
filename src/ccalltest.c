@@ -40,7 +40,7 @@ DLLEXPORT complex double cgtest(complex double a) {
 }
 
 DLLEXPORT complex double *cgptest(complex double *a) {
-    //Unpack a ComplexPair{Float64} struct
+    //Unpack a ComplexPair{Float64} struct pointer
     if (verbose) fprintf(stderr,"%g + %g i\n", creal(*a), cimag(*a));
     *a += 1 - (2.0*I);
     return a;
@@ -54,7 +54,7 @@ DLLEXPORT complex float cftest(complex float a) {
 }
 
 DLLEXPORT complex float *cfptest(complex float *a) {
-    //Unpack a ComplexPair{Float64} struct
+    //Unpack a ComplexPair{Float32} struct pointer
     if (verbose) fprintf(stderr,"%g + %g i\n", creal(*a), cimag(*a));
     *a += 1 - (2.0*I);
     return a;

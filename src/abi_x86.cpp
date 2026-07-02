@@ -72,6 +72,11 @@ bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx, Type *T
     size_t size = jl_datatype_size(dt);
     if (is_complex64(dt) || is_complex128(dt) || (jl_is_primitivetype(dt) && size <= 8))
         return false;
+    // Avoid using i128 directly as a byval type since LLVM gives it 16-byte
+    // stack alignment on x86-32, while the C ABI uses 4-byte alignment.
+    // Use an array of i32 instead, which naturally has 4-byte alignment.
+    if (Ty->isIntegerTy() && Ty->getIntegerBitWidth() > 64)
+        Ty = ArrayType::get(Type::getInt32Ty(ctx), size / 4);
     ab.addByValAttr(Ty);
     return true;
 }

@@ -322,7 +322,7 @@ byteenv(env::AbstractArray{<:AbstractString}) =
 byteenv(env::AbstractDict) =
     String[cstr(string(k)*"="*string(v)) for (k,v) in env]
 byteenv(env::Nothing) = nothing
-byteenv(env::Union{AbstractVector{Pair{T,V}}, Tuple{Vararg{Pair{T,V}}}}) where {T<:AbstractString,V} =
+byteenv(env::Union{AbstractVector{<:Pair{<:AbstractString}}, Tuple{Vararg{Pair{<:AbstractString}}}}) =
     String[cstr(k*"="*string(v)) for (k,v) in env]
 
 """

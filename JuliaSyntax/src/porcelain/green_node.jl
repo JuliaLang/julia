@@ -152,7 +152,7 @@ function GreenNode(cursor::GreenTreeCursor)
 end
 
 function build_tree(::Type{GreenNode}, stream::ParseStream;
-                    # unused, but required since `_parse` is written generic
+                    # unused, but required since `_parse` is written generically
                     filename=nothing, first_line=1, keep_parens=false)
     cursor = GreenTreeCursor(stream)
     if has_toplevel_siblings(cursor)

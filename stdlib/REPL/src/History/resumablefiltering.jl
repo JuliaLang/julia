@@ -342,9 +342,10 @@ function matchregions(spec::FilterSpec, candidate::AbstractString)
     for (i, match) in enumerate(matches)
         i == length(matches) && break
         nextmatch = matches[i + 1]
-        if last(match) + 1 == first(nextmatch) - 1 && candidate[last(match)+1] == ' '
+        nxt = nextind(candidate, last(match))
+        if nextind(candidate, nxt) == first(nextmatch) && candidate[nxt] == ' '
             matches[i] = first(match):last(nextmatch)
-            matches[i+1] = last(nextmatch)+1:last(nextmatch)
+            matches[i+1] = nextind(candidate, last(nextmatch)):last(nextmatch)
         end
     end
     filter!(!isempty, matches)

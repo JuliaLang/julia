@@ -26,17 +26,58 @@ unsafe_convert(::Type{Ptr{Int8}}, s::DenseStringViewAndSub) = convert(Ptr{Int8},
 cconvert(::Type{Ptr{UInt8}}, s::DenseStringViewAndSub) = s
 cconvert(::Type{Ptr{Int8}}, s::DenseStringViewAndSub) = s
 
-function reverse(s::StringViewAndSub)
-    mem = Memory{UInt8}(undef, ncodeunits(s))
+"""
+    reverse(s::AbstractString)::AbstractString
+
+Reverses a string. Technically, this function reverses the codepoints in a string and its
+main utility is for reversed-order string processing, especially for reversed
+regular-expression searches. See also [`reverseind`](@ref) to convert indices in `s` to
+indices in `reverse(s)` and vice-versa, and `graphemes` from module `Unicode` to
+operate on user-visible "characters" (graphemes) rather than codepoints.
+See also [`Iterators.reverse`](@ref) for
+reverse-order iteration without making a copy. Custom string types must implement the
+`reverse` function themselves and should typically return a string with the same normalization
+and encoding to ensure that `reverseind` works; if they return a string with a different encoding,
+they must also override `reverseind` for that string type to satisfy `s[reverseind(s,i)] == reverse(s)[i]`.
+
+# Examples
+```jldoctest
+julia> reverse("JuliaLang")
+"gnaLailuJ"
+```
+
+!!! note
+    The examples below may be rendered differently on different systems.
+    The comments indicate how they're supposed to be rendered
+
+Combining characters can lead to surprising results:
+
+```jldoctest
+julia> reverse("ax̂e") # hat is above x in the input, above e in the output
+"êxa"
+
+julia> using Unicode
+
+julia> join(reverse(collect(graphemes("ax̂e")))) # reverses graphemes; hat is above x in both in- and output
+"ex̂a"
+```
+"""
+function reverse(s::UTF8String)::String
+    # Read characters forwards from `s` and write backwards to `out`
+    out = _string_n(sizeof(s))
     offs = sizeof(s) + 1
     for c in s
         offs -= ncodeunits(c)
-        # Since StringView is generic over the wrapped array, we could invoke UB
-        # if we don't validate the array behaves as expected.
-        offs < 1 && error("Invalid implementation of vector length")
-        __unsafe_string!(mem, c, offs)
+        if s isa StringViewAndSub
+            # Since StringView is generic over the wrapped array, we could invoke UB
+            # if we don't validate the array behaves as expected.
+            offs < 1 && error("Invalid implementation of vector length")
+        end
+        __unsafe_string!(out, c, offs)
     end
-    return StringView(mem)
+    # note that for StringViewAndSub, we cannot return the same type of StringView
+    # anyway since the data type may not be mutable, so we just return String
+    return out
 end
 
 sizeof(s::StringView) = length(s.data)
@@ -104,10 +145,7 @@ function chomp(s::StringViewAndSub)
         has_cr = has_lf & two_bytes & (cu[ncu - two_bytes] == 0x0d)
         ncu - (has_lf + has_cr)
     end
-    off = s isa StringView ? 0 : s.offset
-    par = s isa StringView ? s : s.string
-    T = s isa SubString ? typeof(s) : SubString{typeof(s)}
-    return @inbounds @inline T(par, off, len, Val{:noshift}())
+    @inbounds raw_substring(s, 1, len)
 end
 
 function replace(io::IO, s::DenseStringViewAndSub, pat_f::Pair...; count = typemax(Int))

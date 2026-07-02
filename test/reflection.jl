@@ -365,6 +365,53 @@ let defaultset = Set((:A,))
     @test Set(names(TestMod54609.A, all=true, imported=true, usings=true)) == allset ∪ imported ∪ usings
 end
 
+module _TestModNamesNoMaterialize
+    export foo, bar, baz
+    foo() = 1
+    bar() = 2
+    baz() = 3
+end
+module _TestModNamesNoMaterializeUser
+    using .._TestModNamesNoMaterialize
+end
+@testset "names does not materialize binding partitions" begin
+    # names(m) should not materialize binding partitions for implicit imports,
+    # as doing so can trigger unnecessary invalidation cascades during
+    # subsequent `using` statements.
+    B = _TestModNamesNoMaterializeUser
+    # Create bindings in B for the using'd exports without materializing partitions
+    for sym in (:foo, :bar, :baz)
+        ccall(:jl_get_module_binding, Ref{Core.Binding}, (Any, Any, Cint), B, sym, Cint(1))
+    end
+    names(B)
+    # Verify partitions were not materialized as a side effect
+    for sym in (:foo, :bar, :baz)
+        b = ccall(:jl_get_module_binding_or_nothing, Any, (Any, Any), B, sym)
+        @test b !== nothing
+        @test !isdefined(b, :partitions)
+    end
+end
+
+@testset "names world argument" begin
+    # `names(M; all=true)` walks bindings and filters by partition kind at the
+    # given world. A binding that doesn't yet have a GLOBAL/CONST/DECLARED
+    # partition in the queried world should be excluded.
+    # Note: this can only be tested via plain assignment (not `export`/`public`,
+    # which set a non-partitioned per-binding flag that is world-insensitive).
+    M = @eval module $(gensym())
+        early_name = 1
+    end
+    world_mid = Base.get_world_counter()
+    @eval M late_name = 2
+    world_end = Base.get_world_counter()
+
+    @test :early_name ∈ names(M; all=true, world=world_end)
+    @test :late_name ∈ names(M; all=true, world=world_end)
+
+    @test :early_name ∈ names(M; all=true, world=world_mid)
+    @test :late_name ∉ names(M; all=true, world=world_mid)
+end
+
 let
     using .TestMod7648
     @test Base.binding_module(@__MODULE__, :a9475) == TestMod7648.TestModSub9475
@@ -410,6 +457,38 @@ const a_value = 1
 @test Base.ispublic(@__MODULE__, :this_is_not_defined)
 @test Base.ispublic(@__MODULE__, :this_is_public)
 @test !Base.ispublic(@__MODULE__, :this_is_not_exported)
+end
+
+# set_binding_visibility!
+module TestBindingVisibility
+using Test
+public a_public_name
+a_public_name() = 1
+export an_exported_name
+an_exported_name() = 2
+no_decl() = 3
+
+@test Base.isexported(@__MODULE__, :an_exported_name)
+@test Base.ispublic(@__MODULE__, :a_public_name) && !Base.isexported(@__MODULE__, :a_public_name)
+@test !Base.ispublic(@__MODULE__, :no_decl)
+
+# public <-> none round trip
+Base.set_binding_visibility!(@__MODULE__, :a_public_name, :none)
+@test !Base.ispublic(@__MODULE__, :a_public_name)
+Base.set_binding_visibility!(@__MODULE__, :a_public_name, :public)
+@test Base.ispublic(@__MODULE__, :a_public_name)
+
+# an exported name is reported public; lowering it to :public clears only the export
+@test Base.ispublic(@__MODULE__, :an_exported_name)
+Base.set_binding_visibility!(@__MODULE__, :an_exported_name, :public)
+@test !Base.isexported(@__MODULE__, :an_exported_name)
+@test Base.ispublic(@__MODULE__, :an_exported_name)
+
+# promote an undeclared name to export
+Base.set_binding_visibility!(@__MODULE__, :no_decl, :export)
+@test Base.isexported(@__MODULE__, :no_decl)
+
+@test_throws ArgumentError Base.set_binding_visibility!(@__MODULE__, :no_decl, :bogus)
 end
 
 # PR 13825
@@ -468,6 +547,15 @@ tlayout = TLayout(5,7,11)
 @test_throws ArgumentError fieldnames(NamedTuple{T,Tuple{Int,Int}} where T)
 @test_throws ArgumentError fieldnames(Real)
 @test_throws ArgumentError fieldnames(AbstractArray)
+
+# Common-field unions keep field-index queries structural without choosing a representative arm.
+@test fieldindex(Union{Base.RefValue{Int},Base.RefValue{Float64}}, :x) == 1
+@test hasfield(Union{Base.RefValue{Int},Base.RefValue{Float64}}, :x)
+@test Core.Compiler.try_compute_fieldidx(Union{Base.RefValue{Int},Base.RefValue{Float64}}, :x) == 1
+@test Core.Compiler.try_compute_fieldidx(Type{Base.RefValue{Int}}, :x) === nothing
+@test fieldindex(Union{Ref{Int},Ref{Float64}}, :x, false) == 0
+@test !hasfield(Union{Ref{Int},Ref{Float64}}, :x)
+@test_throws FieldError fieldindex(Union{Ref{Int},Ref{Float64}}, :x)
 
 @test fieldtype((NamedTuple{T,Tuple{Int,String}} where T), 1) === Int
 @test fieldtype((NamedTuple{T,Tuple{Int,String}} where T), 2) === String
@@ -787,6 +875,9 @@ end
 @test !isabstracttype(ReflectionExample)
 @test !isabstracttype(Int)
 @test !isabstracttype(TLayout)
+# PR #61915: `Type{T}` (a `TypeEq` kind) is still reported abstract
+@test isabstracttype(Type)
+@test isabstracttype(Type{<:Integer})
 
 @test !isprimitivetype(Union{})
 @test !isprimitivetype(Union{Int,Float64})
@@ -861,6 +952,14 @@ end
 @test_throws ArgumentError fieldcount(Real)
 @test_throws ArgumentError fieldcount(AbstractArray)
 @test_throws ArgumentError fieldcount(Tuple{Any,Vararg{Any}})
+
+# Common-field unions are definite only when all alternatives share the field count.
+@test fieldcount(Union{Tuple{Int,Float64},Tuple{Int,Int}}) == 2
+@test fieldtypes(Union{Tuple{Int,Float64},Tuple{Int,Int}}) == (Int, Union{Float64,Int})
+@test_throws(ArgumentError("type does not have a definite number of fields"),
+             fieldcount(Union{Tuple{Int},Tuple{Int,Int}}))
+@test_throws(ArgumentError("type does not have a definite number of fields"),
+             fieldtypes(Union{Tuple{Int},Tuple{Int,Int}}))
 
 # PR #22979
 
@@ -1227,7 +1326,6 @@ end
     @test mi1.def.name == :+
     mi2 = Base.method_instance((typeof(+), Int, Int))
     @test mi2.def.name == :+
-    # Note `jl_method_lookup` doesn't return CNull if not found
     mi3 = @ccall jl_method_lookup(Any[+, 1, 1]::Ptr{Any}, 3::Csize_t, Base.get_world_counter()::Csize_t)::Ref{Core.MethodInstance}
     @test mi1 == mi3
     @test mi2 == mi3

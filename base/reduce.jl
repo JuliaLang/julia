@@ -198,9 +198,10 @@ foldl(op, itr; kw...) = mapfoldl(identity, op, itr; kw...)
 ## foldr & mapfoldr
 
 function mapfoldr_impl(f, op, nt, itr)
-    op′, itr′ = _xfadjoint(BottomRF(FlipArgs(op)), Generator(f, itr))
-    return foldl_impl(op′, nt, _reverse_iter(itr′))
+    op′, itr′ = _xfadjoint(BottomRF(FlipArgs(op)), Generator(f, _reverse_iter(itr)))
+    return foldl_impl(op′, nt, itr′)
 end
+
 
 _reverse_iter(itr) = Iterators.reverse(itr)
 _reverse_iter(itr::Union{Tuple,NamedTuple}) = length(itr) <= 32 ? reverse(itr) : Iterators.reverse(itr) #33235

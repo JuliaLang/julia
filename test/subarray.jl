@@ -2,6 +2,9 @@
 
 using Test, Random, LinearAlgebra
 
+isdefined(Main, :StridedArrays) || @eval Main include("testhelpers/StridedArrays.jl")
+using .Main.StridedArrays
+
 ######## Utilities ###########
 
 # Generate an array similar to A[indx1, indx2, ...], but only call
@@ -107,7 +110,6 @@ end
 
 # Testing equality of AbstractArrays, using several different methods to access values
 function test_cartesian(@nospecialize(A), @nospecialize(B))
-    isgood = true
     for (IA, IB) in zip(CartesianIndices(A), CartesianIndices(B))
         @test A[IA] == B[IB]
         if A isa StridedArray
@@ -120,7 +122,6 @@ end
 
 function test_linear(@nospecialize(A), @nospecialize(B))
     @test length(A) == length(B)
-    isgood = true
     for (iA, iB) in zip(1:length(A), 1:length(B))
         @test A[iA] == B[iB]
         if A isa StridedArray
@@ -1130,6 +1131,25 @@ end
     expected = collect(P)
     copyto!(A, P)
     @test A == expected
+
+    A = [1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0]
+    P = PermutedDimsArray(A, (2, 1))
+    expected = collect(A)
+    copyto!(P, A)
+    @test P == expected
+
+    M = fill(-1.0, 4, 4)
+    P = PermutedDimsArray(view(M, 1:2, 1:2), (2, 1))
+    @test_throws BoundsError copyto!(P, ones(Int, 3, 3))
+    @test all(==(-1.0), M[3:4, :])
+    @test all(==(-1.0), M[:, 3:4])
+end
+
+@testset "issue #61554" begin
+    P = PermutedDimsArray(zeros(2, 2), (2, 1))
+    copyto!(P, [1.0, 2.0, 3.0, 4.0])
+    @test collect(P) == [1.0 3.0; 2.0 4.0]
+    @test_throws BoundsError copyto!(P, [1.0, 2.0, 3.0, 4.0, 5.0])
 end
 
 @test @views quote var"begin" + var"end" end isa Expr
@@ -1186,45 +1206,8 @@ end
     end
 end
 
-@testset "strided array interface for subarrays" begin
-    # Create a type to test strided array interface edge cases.
-    # This array is memory backed, but the MyStridedTestArrayCConvert wrapper hides this.
-    struct MyStridedTestArray{T, N} <: AbstractArray{T, N}
-        a::Array{T, N}
-    end
-    Base.size(A::MyStridedTestArray) = size(A.a)
-    function Base.getindex(A::MyStridedTestArray{T, N}, I::Vararg{Int, N}) where {T, N}
-        getindex(A.a, I...)
-    end
-    struct MyStridedTestArrayCConvert{C}
-        c::C
-    end
-    function Base.cconvert(::Type{Ptr{T}}, A::MyStridedTestArray{T}) where T
-        MyStridedTestArrayCConvert(Base.cconvert(Ptr{T}, A.a))
-    end
-    function Base.unsafe_convert(::Type{Ptr{T}}, c::MyStridedTestArrayCConvert) where T
-        Base.unsafe_convert(Ptr{T}, c.c)
-    end
-    function Base.elsize(::Type{MyStridedTestArray{T, N}}) where {T, N}
-        Base.elsize(Array{T, N})
-    end
-    Base.strides(A::MyStridedTestArray) = Base.strides(A.a)
-    function test_strided_vs_getindex(A::AbstractArray)
-        @assert isbitstype(eltype(A))
-        for I in CartesianIndices(A)
-            @test unsafe_strided_getindex(A, Tuple(I)...) === A[I]
-        end
-    end
-
-    test_strided_vs_getindex(rand(10))
-    test_strided_vs_getindex(rand(3, 10))
-    test_strided_vs_getindex(rand(2, 3, 10))
-    test_strided_vs_getindex(view(rand(10, 10), 2:2:6, 1:3:9))
-    test_strided_vs_getindex(view(transpose(view(rand(10, 10), 2:2:6, 1:3:9)), 2:3, 3:-1:1))
-
-    test_strided_vs_getindex(MyStridedTestArray(rand(10)))
-    test_strided_vs_getindex(MyStridedTestArray(rand(3, 10)))
-    test_strided_vs_getindex(MyStridedTestArray(rand(2, 3, 10)))
-    test_strided_vs_getindex(view(MyStridedTestArray(rand(10, 10)), 2:2:6, 1:3:9))
-    test_strided_vs_getindex(view(transpose(view(MyStridedTestArray(rand(10, 10)), 2:2:6, 1:3:9)), 2:3, 3:-1:1))
+# issue #57003
+@testset "copyto! @inbounds propagation" begin
+    @test @inbounds(copyto!(Vector{Int}(undef, 10), 1, collect(1:10), 1, 10)) == 1:10
+    @test_throws BoundsError copyto!(Vector{Int}(undef, 5), 1, collect(1:10), 1, 10)
 end

@@ -44,7 +44,7 @@ Base.@assume_effects :removable :inaccessiblememonly :notaskstate function rand_
     return val % UInt32
 end
 
-# This implementation is based on OpenSSLs implementation of rand_uniform
+# This implementation is based on OpenSSL's implementation of rand_uniform
 # https://github.com/openssl/openssl/blob/1d2cbd9b5a126189d5e9bc78a3bdb9709427d02b/crypto/rand/rand_uniform.c#L13-L99
 # Comments are vendored from their implementation as well.
 # For the original developer check the PR to swift https://github.com/apple/swift/pull/39143.

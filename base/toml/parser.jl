@@ -789,7 +789,7 @@ isvalid_binary(c::Char) = '0' <= c <= '1'
 
 const ValidSigs = Union{typeof(isvalid_hex), typeof(isvalid_oct), typeof(isvalid_binary), typeof(isdigit)}
 # This function eats things accepted by `f` but also allows eating `_` in between
-# digits. Returns if it ate at lest one character and if it ate an underscore
+# digits. Returns if it ate at least one character and if it ate an underscore
 function accept_batch_underscore(l::Parser, f::ValidSigs, fail_if_underscore=true)::Err{Tuple{Bool, Bool}}
     contains_underscore = false
     at_least_one = false
@@ -1180,8 +1180,8 @@ function parse_string_start(l::Parser, quoted::Bool; allow_multiline::Bool=true)
         if !allow_multiline
             return ParserError(ErrMultilineStringAsKey)
         end
-        accept(l, '\r') # Eat third quote
-        accept(l, '\n') # Eat third quote
+        accept(l, '\r') # Eat optional carriage return after opening triple quote
+        accept(l, '\n') # Eat optional newline after opening triple quote
         multiline = true
     end
     return parse_string_continue(l, multiline, quoted)

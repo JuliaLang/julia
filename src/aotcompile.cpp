@@ -22,7 +22,11 @@
 #include <llvm/IR/Verifier.h>
 #include <llvm/Transforms/Utils/ModuleUtils.h>
 #include <llvm/Passes/PassBuilder.h>
-#include <llvm/Passes/PassPlugin.h>
+#if JL_LLVM_VERSION >= 220000
+#  include <llvm/Plugins/PassPlugin.h>
+#else
+#  include <llvm/Passes/PassPlugin.h>
+#endif
 #if defined(USE_POLLY)
 #include <polly/RegisterPasses.h>
 #include <polly/LinkAllPasses.h>
@@ -47,6 +51,9 @@
 
 using namespace llvm;
 
+#include <atomic>
+#include <mutex>
+
 #include <zstd.h>
 
 #include "jitlayers.h"
@@ -54,7 +61,93 @@ using namespace llvm;
 #include "julia_assert.h"
 #include "processor.h"
 
+#ifdef _OS_WINDOWS_
+#include <windows.h>
+#else
+#include <semaphore.h>
+#include <fcntl.h>
+#endif
+
+#ifdef USE_TRACY
+#include "tracy/TracyC.h"
+#endif
+
 #define DEBUG_TYPE "julia_aotcompile"
+
+// Client for the precompile jobserver (see JuliaLang/julia#58591). The
+// orchestrator creates a named semaphore whose tokens form a single CPU-thread
+// budget shared across all parallel workers and holds one baseline token per
+// CPU-active worker; each worker opens it by name (via JULIA_PRECOMPILE_JOBSERVER)
+// to acquire extra tokens for its imaging phase. The worker's main thread sleeps
+// while its imaging threads run, so that baseline token doubles as the imaging
+// phase's first codegen thread. The pool is elastic (see add_output), letting a
+// lone worker expand to all cores while concurrent workers share the budget.
+namespace {
+struct JobserverClient {
+#ifdef _OS_WINDOWS_
+    HANDLE sem = NULL;
+#else
+    sem_t *sem = SEM_FAILED;
+#endif
+    bool open() {
+        const char *name = getenv("JULIA_PRECOMPILE_JOBSERVER");
+        if (!name || !*name)
+            return false;
+#ifdef _OS_WINDOWS_
+        sem = OpenSemaphoreA(SEMAPHORE_MODIFY_STATE | SYNCHRONIZE, FALSE, name);
+        return sem != NULL;
+#else
+        sem = sem_open(name, 0);
+        return sem != SEM_FAILED;
+#endif
+    }
+    bool active() const {
+#ifdef _OS_WINDOWS_
+        return sem != NULL;
+#else
+        return sem != SEM_FAILED;
+#endif
+    }
+    // Acquire up to `want` tokens without blocking; returns the number acquired.
+    unsigned acquire(unsigned want) {
+        if (!active())
+            return 0;
+        unsigned got = 0;
+        for (; got < want; got++) {
+#ifdef _OS_WINDOWS_
+            if (WaitForSingleObject(sem, 0) != WAIT_OBJECT_0)
+                break;
+#else
+            if (sem_trywait(sem) != 0)
+                break;
+#endif
+        }
+        return got;
+    }
+    void release(unsigned n) {
+        if (!active())
+            return;
+        for (unsigned i = 0; i < n; i++) {
+#ifdef _OS_WINDOWS_
+            ReleaseSemaphore(sem, 1, NULL);
+#else
+            sem_post(sem);
+#endif
+        }
+    }
+    void close() {
+        if (!active())
+            return;
+#ifdef _OS_WINDOWS_
+        CloseHandle(sem);
+        sem = NULL;
+#else
+        sem_close(sem);
+        sem = SEM_FAILED;
+#endif
+    }
+};
+} // namespace
 
 STATISTIC(CreateNativeCalls, "Number of jl_create_native calls made");
 STATISTIC(CreateNativeMethods, "Number of methods compiled for jl_create_native");
@@ -338,10 +431,15 @@ public:
     egal_set() = default;
     void insert(jl_value_t *val)
     {
+        // list/keyset are GC-rooted by the caller via JL_GC_PUSH
+        JL_GC_PROMISE_ROOTED(val);
+        JL_GC_PROMISE_ROOTED(list);
+        JL_GC_PROMISE_ROOTED(keyset);
         jl_value_t *rval = jl_idset_get(list, keyset, val);
         if (rval == NULL) {
             ssize_t idx;
             list = jl_idset_put_key(list, val, &idx);
+            JL_GC_PROMISE_ROOTED(list);
             keyset = jl_idset_put_idx(list, keyset, idx);
         }
     }
@@ -472,7 +570,7 @@ static void generate_cfunc_thunks(jl_codegen_output_t &out)
             initvals[0] = f;
             cfunc.cfuncdata->setInitializer(ConstantArray::get(init->getType(), initvals));
         };
-        jl_method_instance_t *mi = (jl_method_instance_t*)jl_get_specialization1((jl_tupletype_t*)sigt, latestworld, 0);
+        jl_method_instance_t *mi = (jl_method_instance_t*)jl_get_specialization1((jl_tupletype_t*)sigt, latestworld);
         Function *func = nullptr;
         if ((jl_value_t*)mi != jl_nothing) {
             auto it = compiled_mi.find(mi);
@@ -881,7 +979,7 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
     }
 }
 
-// also be used be extern consumers like GPUCompiler.jl to obtain a module containing
+// also be used by extern consumers like GPUCompiler.jl to obtain a module containing
 // all reachable & inferrrable functions.
 extern "C" JL_DLLEXPORT_CODEGEN
 void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int external_linkage)
@@ -1349,13 +1447,31 @@ struct ImageTimer {
     uint64_t elapsed = 0;
     std::string name;
     std::string desc;
+#ifdef USE_TRACY
+    TracyCZoneCtx tracy_ctx;
+#endif
 
     void startTimer() {
         elapsed = jl_hrtime();
+#ifdef USE_TRACY
+        // Emit a Tracy zone for this stage. The AOT image shards run on libuv
+        // worker threads that lack a Julia task/ptls, so JL_TIMING cannot be
+        // used here; the raw Tracy C API works on any thread. `desc` is used as
+        // the zone name so stages aggregate across shards (the shard is
+        // distinguished by the named worker thread).
+        uint64_t srcloc = ___tracy_alloc_srcloc_name(
+            __LINE__, __FILE__, sizeof(__FILE__) - 1,
+            "add_output", sizeof("add_output") - 1,
+            desc.c_str(), desc.size(), 0);
+        tracy_ctx = ___tracy_emit_zone_begin_alloc(srcloc, 1);
+#endif
     }
 
     void stopTimer() {
         elapsed = jl_hrtime() - elapsed;
+#ifdef USE_TRACY
+        ___tracy_emit_zone_end(tracy_ctx);
+#endif
     }
 
     void init(const Twine &name, const Twine &desc) {
@@ -1746,10 +1862,14 @@ static inline void schedule_uv_thread(uv_thread_t *worker, CB &&cb)
 }
 
 // Entrypoint to optionally-multithreaded image compilation. This handles global coordination of the threading,
-// as well as partitioning, serialization, and deserialization.
+// as well as partitioning, serialization, and deserialization. `threads` is the
+// partition (shard) count and the ceiling on concurrency; when `jobserver` is
+// non-null the actual thread pool is rationed elastically from the shared
+// imaging token budget.
 template<typename ModuleReleasedFunc>
 static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, StringRef name, unsigned threads,
-                bool unopt_out, bool opt_out, bool obj_out, bool asm_out, ModuleReleasedFunc module_released) {
+                bool unopt_out, bool opt_out, bool obj_out, bool asm_out,
+                JobserverClient *jobserver, ModuleReleasedFunc module_released) {
     SmallVector<AOTOutputs, 16> outputs(threads);
     assert(threads);
     assert(unopt_out || opt_out || obj_out || asm_out);
@@ -1837,54 +1957,120 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
 
     output_timer.startTimer();
 
-    // Start all of the worker threads
+    // Compile the partitions with a pool of worker threads pulling from a
+    // shared queue. The partition count fixes the shard layout; the pool size
+    // only controls how many compile concurrently. Without a jobserver the pool
+    // is one thread per partition. With one it is elastic: it starts with the
+    // baseline thread plus whatever tokens are free, polls for tokens released
+    // by sibling workers while unclaimed partitions remain, and returns each
+    // token as soon as its thread runs out of work.
     {
         JL_TIMING(NATIVE_AOT, NATIVE_Opt);
+        std::atomic<unsigned> next_partition{0};
+        std::mutex pool_mutex; // guards held_tokens and live_threads
+        unsigned held_tokens = 0;
+        unsigned live_threads = 0;
         std::vector<uv_thread_t> workers(threads);
-        for (unsigned i = 0; i < threads; i++) {
-            schedule_uv_thread(&workers[i], [&, i]() {
+        unsigned spawned = 0;
+        auto spawn_worker = [&]() {
+            unsigned t = spawned++;
+            schedule_uv_thread(&workers[t], [&, t]() {
                 // Initialize time trace profiler for this thread if enabled
                 if (jl_is_timing_trace)
-                    timeTraceProfilerInitialize(jl_timing_trace_granularity, ("shard_" + std::to_string(i)).c_str());
-                LLVMContext ctx;
-                ctx.setDiscardValueNames(true);
-                // Lazily deserialize the entire module
-                timers[i].deserialize.startTimer();
-                auto EM = getLazyBitcodeModule(MemoryBufferRef(StringRef(serialized.data(), serialized.size()), "Optimized"), ctx);
-                // Make sure this also fails with only julia, but not LLVM assertions enabled,
-                // otherwise, the first error we hit is the LLVM module verification failure,
-                // which will look very confusing, because the module was partially deserialized.
-                bool deser_succeeded = (bool)EM;
-                auto M = cantFail(std::move(EM), "Error loading module");
-                assert(deser_succeeded); (void)deser_succeeded;
-                timers[i].deserialize.stopTimer();
+                    timeTraceProfilerInitialize(jl_timing_trace_granularity, ("aot_thread_" + std::to_string(t)).c_str());
+#ifdef USE_TRACY
+                std::string tracy_thread_name = "AOT thread " + std::to_string(t);
+                TracyCSetThreadName(tracy_thread_name.c_str());
+#endif
+                while (true) {
+                    unsigned i = next_partition.fetch_add(1, std::memory_order_relaxed);
+                    if (i >= threads)
+                        break;
+                    LLVMContext ctx;
+                    ctx.setDiscardValueNames(true);
+                    // Lazily deserialize the entire module
+                    timers[i].deserialize.startTimer();
+                    auto EM = getLazyBitcodeModule(MemoryBufferRef(StringRef(serialized.data(), serialized.size()), "Optimized"), ctx);
+                    // Make sure this also fails with only julia, but not LLVM assertions enabled,
+                    // otherwise, the first error we hit is the LLVM module verification failure,
+                    // which will look very confusing, because the module was partially deserialized.
+                    bool deser_succeeded = (bool)EM;
+                    auto M = cantFail(std::move(EM), "Error loading module");
+                    assert(deser_succeeded); (void)deser_succeeded;
+                    timers[i].deserialize.stopTimer();
 
-                timers[i].materialize.startTimer();
-                materializePreserved(*M, partitions[i]);
-                timers[i].materialize.stopTimer();
+                    timers[i].materialize.startTimer();
+                    materializePreserved(*M, partitions[i]);
+                    timers[i].materialize.stopTimer();
 
-                timers[i].construct.startTimer();
-                std::string suffix = "_" + std::to_string(i);
-                construct_vars(*M, partitions[i], suffix);
-                M->setModuleFlag(Module::Error, "julia.mv.suffix", MDString::get(M->getContext(), suffix));
-                // The DICompileUnit file is not used for anything, but ld64 requires it be a unique string per object file
-                // or it may skip emitting debug info for that file. Here set it to ./julia#N
-                DIFile *topfile = DIFile::get(M->getContext(), "julia#" + std::to_string(i), ".");
-                if (M->getNamedMetadata("llvm.dbg.cu"))
-                    for (auto CU: M->getNamedMetadata("llvm.dbg.cu")->operands())
-                        CU->replaceOperandWith(0, topfile);
-                timers[i].construct.stopTimer();
+                    timers[i].construct.startTimer();
+                    std::string suffix = "_" + std::to_string(i);
+                    construct_vars(*M, partitions[i], suffix);
+                    M->setModuleFlag(Module::Error, "julia.mv.suffix", MDString::get(M->getContext(), suffix));
+                    // The DICompileUnit file is not used for anything, but ld64 requires it be a unique string per object file
+                    // or it may skip emitting debug info for that file. Here set it to ./julia#N
+                    DIFile *topfile = DIFile::get(M->getContext(), "julia#" + std::to_string(i), ".");
+                    if (M->getNamedMetadata("llvm.dbg.cu"))
+                        for (auto CU: M->getNamedMetadata("llvm.dbg.cu")->operands())
+                            CU->replaceOperandWith(0, topfile);
+                    timers[i].construct.stopTimer();
 
-                outputs[i] = add_output_impl(*M, TM, timers[i], unopt_out, opt_out, obj_out, asm_out);
+                    outputs[i] = add_output_impl(*M, TM, timers[i], unopt_out, opt_out, obj_out, asm_out);
+                }
                 // Merge this thread's time trace into the main thread
                 if (jl_is_timing_trace)
                     timeTraceProfilerFinishThread();
+                if (jobserver) {
+                    // Out of work: return the surplus token so siblings can scale
+                    // into it. The baseline token covers one thread, so keep
+                    // held_tokens at live_threads - 1.
+                    std::lock_guard<std::mutex> lock(pool_mutex);
+                    live_threads--;
+                    if (held_tokens > 0 && held_tokens >= live_threads) {
+                        held_tokens--;
+                        jobserver->release(1);
+                    }
+                }
             });
+        };
+
+        unsigned initial_pool = threads;
+        if (jobserver) {
+            // The orchestrator already holds this worker's baseline token (its
+            // main thread only sleeps/polls below); ration the rest from the pool.
+            held_tokens = jobserver->acquire(threads - 1);
+            initial_pool = 1 + held_tokens;
+        }
+        live_threads = initial_pool;
+        while (spawned < initial_pool)
+            spawn_worker();
+
+        // Elastic scale-up: while unclaimed partitions remain, grow the pool
+        // as sibling precompile workers return tokens to the budget.
+        while (jobserver && spawned < threads) {
+            unsigned claimed = next_partition.load(std::memory_order_relaxed);
+            if (claimed >= threads)
+                break;
+            unsigned want = std::min(threads - claimed, threads - spawned);
+            unsigned got = jobserver->acquire(want);
+            if (got) {
+                {
+                    std::lock_guard<std::mutex> lock(pool_mutex);
+                    held_tokens += got;
+                    live_threads += got;
+                }
+                for (unsigned k = 0; k < got; k++)
+                    spawn_worker();
+            }
+            else {
+                uv_sleep(100);
+            }
         }
 
         // Wait for all of the worker threads to finish
-        for (unsigned i = 0; i < threads; i++)
-            uv_thread_join(&workers[i]);
+        for (unsigned t = 0; t < spawned; t++)
+            uv_thread_join(&workers[t]);
+        assert(held_tokens == 0 && "precompile jobserver tokens leaked");
     }
 
     output_timer.stopTimer();
@@ -1910,7 +2096,8 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
     return outputs;
 }
 
-static unsigned compute_image_thread_count(const ModuleInfo &info) {
+static unsigned compute_image_thread_count(const ModuleInfo &info, bool jobserver_active, bool &explicit_override) {
+    explicit_override = false;
     // 32-bit systems are very memory-constrained
 #ifdef _P32
     LLVM_DEBUG(dbgs() << "32-bit systems are restricted to a single thread\n");
@@ -1925,7 +2112,12 @@ static unsigned compute_image_thread_count(const ModuleInfo &info) {
         return 1;
     }
 
-    unsigned threads = std::max(jl_effective_threads() / 2, 1);
+    // With a jobserver coordinating across parallel workers, aim for all
+    // effective cores (the jobserver bounds the actual total); otherwise fall
+    // back to the conservative half-cores default to avoid oversubscription.
+    unsigned threads = jobserver_active
+        ? std::max(jl_effective_threads(), 1)
+        : std::max(jl_effective_threads() / 2, 1);
 
     auto max_threads = info.globals / 100;
     if (max_threads < threads) {
@@ -1963,6 +2155,10 @@ static unsigned compute_image_thread_count(const ModuleInfo &info) {
     }
 
     threads = std::max(threads, 1u);
+
+    // An explicit JULIA_IMAGE_THREADS request takes precedence over the
+    // jobserver: honor the user's fixed count rather than rationing tokens.
+    explicit_override = env_threads_set;
 
     return threads;
 }
@@ -2014,19 +2210,15 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
             jl_ExecutionEngine->getTargetOptions(),
             RelocModel,
             CMModel,
-#if JL_LLVM_VERSION >= 180000
-            CodeGenOptLevel::Aggressive // -O3 TODO: respect command -O0 flag?
-#else
-            CodeGenOpt::Aggressive // -O3 TODO: respect command -O0 flag?
-#endif
+            CodeGenOptLevelFor(jl_options.opt_level) // respect the command-line -O flag
             ));
     fixupTM(*SourceTM);
     auto DL = jl_create_datalayout(*SourceTM);
     std::string StackProtectorGuard = dataM.getStackProtectorGuard().str();
     unsigned OverrideStackAlignment = dataM.getOverrideStackAlignment();
 
-    auto compile = [&](Module &M, StringRef name, unsigned threads, auto module_released) {
-        return add_output(M, *SourceTM, name, threads, !!unopt_bc_fname, !!bc_fname, !!obj_fname, !!asm_fname, module_released);
+    auto compile = [&](Module &M, StringRef name, unsigned threads, JobserverClient *jobserver, auto module_released) {
+        return add_output(M, *SourceTM, name, threads, !!unopt_bc_fname, !!bc_fname, !!obj_fname, !!asm_fname, jobserver, module_released);
     };
 
     SmallVector<AOTOutputs, 16> sysimg_outputs;
@@ -2100,13 +2292,20 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
         // Note that we don't set z to null, this allows the check in WRITE_ARCHIVE
         // to function as expected
         // no need to free the module/context, destructor handles that
-        sysimg_outputs = compile(sysimgM, "sysimg", 1, [](Module &) {});
+        sysimg_outputs = compile(sysimgM, "sysimg", 1, nullptr, [](Module &) {});
     }
 
     const bool imaging_mode = true;
     unsigned threads = 1;
     unsigned nfvars = 0;
     unsigned ngvars = 0;
+
+    // Coordinate AOT codegen parallelism with other precompile workers via the
+    // precompile jobserver (JuliaLang/julia#58591). When active, add_output sizes
+    // its thread pool elastically against the shared token budget.
+    JobserverClient jobserver;
+    jobserver.open();
+    JobserverClient *text_jobserver = nullptr;
 
     // Reset the target triple to make sure it matches the new target machine
 
@@ -2152,8 +2351,15 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
                 << "    clones: " << module_info.clones << "\n"
                 << "    weight: " << module_info.weight << "\n"
             );
-            threads = compute_image_thread_count(module_info);
-            LLVM_DEBUG(dbgs() << "Using " << threads << " to emit aot image\n");
+            bool explicit_threads = false;
+            threads = compute_image_thread_count(module_info, jobserver.active(), explicit_threads);
+            if (jobserver.active() && !explicit_threads && threads > 1) {
+                // `threads` is the partition count and concurrency ceiling;
+                // add_output rations the actual pool size from the shared
+                // token budget, growing it as sibling workers finish.
+                text_jobserver = &jobserver;
+            }
+            LLVM_DEBUG(dbgs() << "Using up to " << threads << " threads to emit aot image\n");
             nfvars = data->jl_sysimg_fvars.size();
             ngvars = data->jl_sysimg_gvars.size();
             emit_table(dataM, data->jl_sysimg_gvars, "jl_gvars", T_psize);
@@ -2196,12 +2402,16 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
         // auto lock = TSCtx.getLock();
         // auto dataM = data->M.getModuleUnlocked();
 
-        data_outputs = compile(dataM, "text", threads, [data](Module &) {
+        data_outputs = compile(dataM, "text", threads, text_jobserver, [data](Module &) {
             // Delete data when add_output thinks it's done with it
             // Saves memory for use when multithreading
             delete data;
         });
     }
+
+    // All imaging tokens were returned to the shared pool as add_output's
+    // worker threads ran out of work.
+    jobserver.close();
 
     if (params->emit_metadata) {
         JL_TIMING(NATIVE_AOT, NATIVE_Metadata);
@@ -2247,8 +2457,8 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
             builder.CreateRet(ConstantInt::get(T_int32, 1));
         }
         if (imaging_mode) {
-            auto targets = jl_get_llvm_clone_targets(jl_options.cpu_target);
-            auto &data = targets.data;
+            jl_clone_targets_t targets = jl_get_llvm_clone_targets(jl_options.cpu_target);
+            ArrayRef<uint8_t> data(targets.data, targets.data_size);
             auto value = ConstantDataArray::get(Context, data);
             auto target_ids = new GlobalVariable(metadataM, value->getType(), true,
                                         GlobalVariable::InternalLinkage,
@@ -2266,7 +2476,9 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
 
             // Create CPU target string constant.
             // Don't store "sysimage" keyword — store the actual resolved target string.
-            std::string cpu_target_str = jl_expand_sysimage_keyword(jl_options.cpu_target);
+            char *expanded = jl_expand_sysimage_keyword(jl_options.cpu_target);
+            std::string cpu_target_str(expanded);
+            free(expanded);
             auto cpu_target_data = ConstantDataArray::getString(Context, cpu_target_str, true);
             auto cpu_target_global = new GlobalVariable(metadataM, cpu_target_data->getType(), true,
                                                        GlobalVariable::InternalLinkage,
@@ -2289,10 +2501,11 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
                 write_int32(s, data.size());
                 ios_write(s, (const char *)data.data(), data.size());
             }
+            jl_free_clone_targets(&targets);
         }
 
         // no need to free module/context, destructor handles that
-        metadata_outputs = compile(metadataM, "data", 1, [](Module &) {});
+        metadata_outputs = compile(metadataM, "data", 1, nullptr, [](Module &) {});
     }
 
     {
@@ -2414,6 +2627,7 @@ extern "C" JL_DLLEXPORT_CODEGEN
 void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_code_info_t *src, char getwrapper, char optimize, const char *llvm_options, const jl_cgparams_t params)
 {
     // emit this function into a new llvm module
+    jl_task_t *ct = jl_current_task;
     dump->F = nullptr;
     dump->TSM = nullptr;
     dump->pass_output = nullptr;
@@ -2444,7 +2658,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
             for (cfunc_decl_t &cfunc : output.cfuncs) {
                 jl_value_t *sigt = cfunc.abi.sigt;
                 JL_GC_PROMISE_ROOTED(sigt);
-                jl_value_t *mi = jl_get_specialization1((jl_tupletype_t*)sigt, latestworld, 0);
+                jl_value_t *mi = jl_get_specialization1((jl_tupletype_t*)sigt, latestworld);
                 if (mi == jl_nothing)
                     continue;
                 jl_code_instance_t *codeinst = jl_type_infer((jl_method_instance_t*)mi, latestworld, SOURCE_MODE_NOT_REQUIRED, jl_options.trim);
@@ -2464,7 +2678,9 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
                 decl_names.specptr = decls->specptr ? decls->specptr->getName() : "";
                 // if compilation succeeded, prepare to return the result
                 if (!jl_options.image_codegen) {
+                    int8_t gc_state = jl_gc_safe_enter(ct->ptls);
                     optimizeDLSyms(output.get_module());
+                    jl_gc_safe_leave(ct->ptls, gc_state);
                 }
                 assert(!verifyLLVMIR(output.get_module()));
                 if (optimize) {
@@ -2496,6 +2712,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
                 else
                     fname = &decl_names.invoke;
                 F = output.get_module().getFunction(*fname);
+                assert(F);
             }
             if (measure_compile_time_enabled) {
                 auto end = jl_hrtime();
@@ -2505,7 +2722,6 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
         if (F) {
             dump->TSM = wrap(new orc::ThreadSafeModule(std::move(mod), std::move(ctx)));
             dump->F = wrap(F);
-            return;
-        }
+       }
     }
 }

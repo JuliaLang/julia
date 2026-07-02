@@ -393,7 +393,7 @@ For a detailed definition of `:consistent`-cy, consult the corresponding section
 !!! note
     Note that the requirements for `:consistent`-cy include not only that the return values
     are egal, but also that the manner of termination is the same. However, it's important
-    to aware that when they throw exceptions, the exceptions themselves don't necessarily
+    to be aware that when they throw exceptions, the exceptions themselves don't necessarily
     have to be egal. In other words, if ``fᵢ(x)`` throws an exception, ``fᵢ′(x)`` is
     required to also throw one, but the exact exceptions may differ.
 
@@ -777,7 +777,7 @@ end
 """
     Base.Experimental.@set_syntax_version ver
 
-Sets the syntax version to the current module to `ver`. This overrides settings of `syntax.julia_version` or
+Sets the syntax version of the current module to `ver`. This overrides settings of `syntax.julia_version` or
 `compat.julia` from Project.toml.
 
 !!! compat "Julia 1.14"

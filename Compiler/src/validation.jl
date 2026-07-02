@@ -21,6 +21,7 @@ const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange{Int}}(
     :copyast => 1:1,
     :meta => 0:typemax(Int),
     :foreigncall => 5:typemax(Int), # name, RT, AT, nreq, (cconv, effects, gc_safe), args..., roots...
+    :foreignglobal => 1:1, # name
     :cfunction => 5:5,
     :isdefined => 1:2,
     :code_coverage_effect => 0:0,
@@ -83,16 +84,11 @@ end
 function _validate_val!(@nospecialize(x), errors, ssavals::BitSet)
     if isa(x, Expr)
         if x.head === :call || x.head === :invoke || x.head === :invoke_modify
-            f = x.args[1]
-            if f isa GlobalRef && (f.name === :cglobal) && x.head === :call
-                # TODO: these are not yet linearized
-            else
-                for arg in x.args
-                    if !is_valid_argument(arg)
-                        push!(errors, InvalidCodeError(INVALID_CALL_ARG, arg))
-                    else
-                        _validate_val!(arg, errors, ssavals)
-                    end
+            for arg in x.args
+                if !is_valid_argument(arg)
+                    push!(errors, InvalidCodeError(INVALID_CALL_ARG, arg))
+                else
+                    _validate_val!(arg, errors, ssavals)
                 end
             end
         end
@@ -143,7 +139,7 @@ function validate_code!(errors::Vector{InvalidCodeError}, c::CodeInfo, is_top_le
                 validate_val!(rhs)
             elseif head === :call || head === :invoke || x.head === :invoke_modify ||
                 head === :gc_preserve_end || head === :meta ||
-                head === :inbounds || head === :foreigncall || head === :cfunction ||
+                head === :inbounds || head === :foreigncall || head === :foreignglobal || head === :cfunction ||
                 head === :leave || head === :pop_exception ||
                 head === :method || head === :static_parameter ||
                 head === :new || head === :splatnew || head === :thunk || head === :loopinfo ||
@@ -242,7 +238,7 @@ is_valid_lvalue(@nospecialize(x)) = isa(x, SlotNumber) || isa(x, GlobalRef)
 
 function is_valid_argument(@nospecialize(x))
     if isa(x, SlotNumber) || isa(x, Argument) || isa(x, SSAValue) ||
-       isa(x, GlobalRef) || isa(x, QuoteNode) || (isa(x, Expr) && is_value_pos_expr_head(x.head))  ||
+       isa(x, GlobalRef) || isa(x, QuoteNode) ||
        isa(x, Number) || isa(x, AbstractString) || isa(x, AbstractChar) || isa(x, Tuple) ||
        isa(x, Type) || isa(x, Core.Box) || isa(x, Module) || x === nothing
         return true
@@ -255,7 +251,7 @@ end
 function is_valid_rvalue(@nospecialize(x))
     is_valid_argument(x) && return true
     if isa(x, Expr) && x.head in (:new, :splatnew, :the_exception, :isdefined, :call,
-        :invoke, :invoke_modify, :foreigncall, :cfunction, :gc_preserve_begin, :copyast,
+        :invoke, :invoke_modify, :foreigncall, :foreignglobal, :cfunction, :gc_preserve_begin, :copyast,
         :new_opaque_closure)
         return true
     end

@@ -569,7 +569,7 @@
 
         s = "abævø∩\0c"
         @test reverse(StringView(collect(codeunits(s)))) == reverse(s)
-        @test reverse(StringView(codeunits(s))) isa StringView{Memory{UInt8}}
+        @test reverse(StringView(codeunits(s))) isa String
 
         # reverse returns same value as String reverse and same type
         b = Vector{UInt8}("foobar")
@@ -582,7 +582,7 @@
             @test reverse(str) == reverse(String(str))
 
             # Not guaranteed, but let's test it anyway, to reduce breakage
-            @test reverse(str) isa StringView{Memory{UInt8}}
+            @test reverse(str) isa String
         end
     end
 

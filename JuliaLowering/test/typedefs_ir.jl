@@ -571,50 +571,53 @@ struct X
 end
 #---------------------
 1   (newvar slot₁/val)
-2   (call core.declare_global TestMod :X false)
-3   latestworld
-4   (call core.svec)
-5   (call core.svec :a :b)
-6   (call core.svec)
-7   (call core._structtype TestMod :X %₄ %₅ %₆ false 2)
-8   (= slot₂/X %₇)
-9   (call core._setsuper! %₇ core.Any)
-10  (call core.isdefinedglobal TestMod :X false)
-11  (gotoifnot %₁₀ label₁₅)
-12  TestMod.X
-13  (= slot₃/if_val (call core._equiv_typedef %₁₂ %₇))
-14  (goto label₁₆)
-15  (= slot₃/if_val false)
-16  slot₃/if_val
-17  (gotoifnot %₁₆ label₂₁)
-18  TestMod.X
-19  (= slot₄/if_val %₁₈)
-20  (goto label₂₂)
-21  (= slot₄/if_val false)
-22  slot₄/if_val
-23  (gotoifnot %₁₆ label₂₄)
-24  (call core.svec core.Any core.Any)
-25  (call core._typebody! %₂₂ %₇ %₂₄)
-26  (call core.declare_const TestMod :X %₂₅)
-27  latestworld
-28  TestMod.X
-29  SourceLocation:none:1:0
-30  (call top._defaultctors %₂₈ %₂₉)
-31  latestworld
-32  (= slot₁/val core.nothing)
-33  (call Base.Docs.Binding TestMod :X)
-34  (call Core.svec "X docs\n")
-35  (call Pair{Symbol, Any} :a "field a docs")
-36  (call Pair{Symbol, Any} :b "field b docs")
-37  (call Dict{Symbol, Any} %₃₅ %₃₆)
-38  (call Pair :fields %₃₇)
-39  (call Dict{Symbol, Any} :path => "none" :linenumber => 1 :module => TestMod %₃₈)
-40  (call Base.Docs.docstr %₃₄ %₃₉)
-41  TestMod.Union
-42  (call core.apply_type %₄₁)
-43  (call Base.Docs.doc! TestMod %₃₃ %₄₀ %₄₂)
-44  slot₁/val
-45  (return %₄₄)
+2   (gotoifnot true label₃₄)
+3   (call core.declare_global TestMod :X false)
+4   latestworld
+5   (call core.svec)
+6   (call core.svec :a :b)
+7   (call core.svec)
+8   (call core._structtype TestMod :X %₅ %₆ %₇ false 2)
+9   (= slot₂/X %₈)
+10  (call core._setsuper! %₈ core.Any)
+11  (call core.isdefinedglobal TestMod :X false)
+12  (gotoifnot %₁₁ label₁₆)
+13  TestMod.X
+14  (= slot₃/if_val (call core._equiv_typedef %₁₃ %₈))
+15  (goto label₁₇)
+16  (= slot₃/if_val false)
+17  slot₃/if_val
+18  (gotoifnot %₁₇ label₂₂)
+19  TestMod.X
+20  (= slot₄/if_val %₁₉)
+21  (goto label₂₃)
+22  (= slot₄/if_val false)
+23  slot₄/if_val
+24  (gotoifnot %₁₇ label₂₅)
+25  (call core.svec core.Any core.Any)
+26  (call core._typebody! %₂₃ %₈ %₂₅)
+27  (call core.declare_const TestMod :X %₂₆)
+28  latestworld
+29  TestMod.X
+30  SourceLocation:none:1:0
+31  (call top._defaultctors %₂₉ %₃₀)
+32  latestworld
+33  (= slot₁/val core.nothing)
+34  (call Base.Docs.Binding TestMod :X)
+35  (call Core.svec "X docs\n")
+36  (call Pair{Symbol, Any} :a "field a docs")
+37  (call Pair{Symbol, Any} :b "field b docs")
+38  (call Dict{Symbol, Any} %₃₆ %₃₇)
+39  (call Pair :fields %₃₈)
+40  (call Dict{Symbol, Any} :path => "none" :linenumber => 1 :module => TestMod %₃₉)
+41  (call Base.Docs.docstr %₃₅ %₄₀)
+42  TestMod.Union
+43  (call core.apply_type %₄₂)
+44  (call Base.Docs.doc! TestMod %₃₄ %₄₁ %₄₃)
+45  (gotoifnot true label₄₈)
+46  slot₁/val
+47  (return %₄₆)
+48  (return core.nothing)
 
 ########################################
 # Struct with outer constructor
@@ -814,16 +817,16 @@ end
 65  (call core.svec %₆₂ %₆₃ %₆₄)
 66  --- method core.nothing %₆₅
     slots: [slot₁/#ctor-self# slot₂/y slot₃/z slot₄/tmp(!read)]
-    1   slot₁/#ctor-self#
-    2   TestMod.+
-    3   (call %₂ slot₂/y slot₃/z)
-    4   TestMod.ReallyXIPromise
-    5   (= slot₄/tmp (new %₁ %₃))
-    6   (call core.isa slot₄/tmp %₄)
+    1   TestMod.ReallyXIPromise
+    2   slot₁/#ctor-self#
+    3   TestMod.+
+    4   (call %₃ slot₂/y slot₃/z)
+    5   (= slot₄/tmp (new %₂ %₄))
+    6   (call core.isa slot₄/tmp %₁)
     7   (gotoifnot %₆ label₉)
     8   (goto label₁₁)
-    9   (call top.convert %₄ slot₄/tmp)
-    10  (= slot₄/tmp (call core.typeassert %₉ %₄))
+    9   (call top.convert %₁ slot₄/tmp)
+    10  (= slot₄/tmp (call core.typeassert %₉ %₁))
     11  slot₄/tmp
     12  (return %₁₁)
 67  latestworld

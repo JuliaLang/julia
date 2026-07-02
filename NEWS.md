@@ -34,9 +34,19 @@ Compiler/Runtime improvements
     effect tracking; for those, the recommended pattern remains storing the field value in
     a local variable before the check (e.g. `val = x.field; if !isnothing(val) ... end`)
     ([#41199], [#47574]).
+  - Stack traces now show full method signatures with argument types for inlined
+    frames, matching the display of non-inlined frames ([#53925]).
+  - Parallel package precompilation now coordinates CPU usage across both the
+    precompile worker processes and the LLVM threads each spawns to compile its
+    native image, sharing a single thread budget so idle cores are filled during
+    the long tail without oversubscribing the machine when many packages compile
+    at once. The total budget can be set with the new `JULIA_PRECOMPILE_THREADS`
+    environment variable ([#61958]).
 
 Command-line option changes
 ---------------------------
+
+  - `-P <project>` is now a shorthand for `--project <project>` ([#59867]).
 
 Multi-threading changes
 -----------------------
@@ -51,6 +61,9 @@ Multi-threading changes
     (`:static`, `:dynamic`, `:greedy`) are supported. Results preserve element order for `:static`
     and `:dynamic` scheduling; `:greedy` does not guarantee order. Non-indexable iterators are
     also supported. ([#59019])
+  - The task scheduler now avoids O(nthreads) wake overhead on every `@spawn`, significantly reducing
+    threading overhead particularly on highly oversubscribed machines. Benchmarks show up to 1000x
+    reduction in spawn time in such scenarios ([#61826]).
 
 Build system changes
 --------------------
@@ -58,22 +71,36 @@ Build system changes
 New library functions
 ---------------------
 
-- `Base.generating_output()` has been made `public` (but not exported) to allow
+* `tap(f)` creates a function that calls `f(x)` for side effects and returns `x`. ([#61340]).
+* `Base.set_binding_visibility!` sets the declared visibility (`:none`, `:public`, or
+  `:export`) of a name in a module, allowing an `export` or `public` declaration to be
+  retracted programmatically ([#62131]).
+* `Base.generating_output()` has been made `public` (but not exported) to allow
   checking whether the current process is performing compilation for a
   pkgimage/sysimage ([#61224]).
+- `Base.raw_substring` is an unexported, public constructor to build a `SubString`
+  without checking for valid string indices.
+- `Base.unannotate(::AnnotatedString)` returns the underlying un-annotated string
+  of the input string.
 
 New library features
 --------------------
 
 * `IOContext` supports a new boolean `hexunsigned` option that allows for
   printing unsigned integers in decimal instead of hexadecimal ([#60267]).
+* `lazy"..."` strings now support a flag `lazy"..."c` that adds `compact` and `limit` flags
+  to the `IOContext` for final output-string generation ([#61887]).
 * The `StringView` type wraps an `AbstractVector{UInt8}` and interprets it as a UTF-8 encoded string,
   superseding the [StringViews.jl](https://github.com/JuliaStrings/StringViews.jl) package ([#60526]).
-
 * Package precompilation now supports running precompilation in
   a background task and has new interactive keyboard controls:
   `c` to cleanly cancel immediately, `d` to detach, `i` for a profile peek,
   `v` to toggle verbose mode showing elapsed time, CPU%, and memory usage, and `?` for help. ([#60943]).
+* Instances of an `Enum` can now be given their own docstrings within the `@enum` definition ([#61955]).
+* New methods `readdir(path, DirEntry)` and `readdir(::DirEntry, DirEntry)` return directory contents
+  along with the type of the entries in a vector of new `DirEntry` objects to provide more efficient `isfile`
+  etc. checks. `readdir(::DirEntry)` accepts a `DirEntry` as input and, like `readdir(::AbstractString)`,
+  returns a `Vector{String}` of names. `DirEntry` is exported from `Base` ([#55358]).
 
 Standard library changes
 ------------------------
@@ -117,6 +144,8 @@ Standard library changes
 * `unix2datetime` now accepts a keyword argument `localtime=true` to use the host system's local time zone instead of UTC ([#50296]).
 
 #### InteractiveUtils
+
+* `less`/`@less` and `edit`/`@edit` are now supported for documented variables ([#53539]).
 
 #### Dates
 

@@ -89,7 +89,7 @@ let
             :SHA, # transitive through Random
             :Sockets, # used by stream.jl
 
-            # Transitive through LingAlg
+            # Transitive through LinearAlgebra
             # OpenBLAS_jll
             # libblastrampoline_jll
 
@@ -104,7 +104,7 @@ let
     tot_time_stdlib = 0.0
     # use a temp module to avoid leaving the type of this closure in Main
     push!(empty!(LOAD_PATH), "@stdlib")
-    m = Core.Module()
+    m = Module()
     GC.@preserve m begin
         print_time = @eval m (mod, t) -> (print(rpad(string(mod) * "  ", $maxlen + 3, "─"));
                                           Base.time_print(stdout, t * 10^9); println())

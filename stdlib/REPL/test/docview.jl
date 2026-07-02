@@ -176,6 +176,75 @@ end
 # Issue #51344, don't print "internal binding" warning for non-existent bindings.
 @test string(eval(REPL.helpmode("Base.no_such_symbol"))) == "No documentation found.\n\nBinding `Base.no_such_symbol` does not exist.\n"
 
+module AliasUsingTests
+    using Base: sum as sun
+end
+@testset "alias in using" begin
+    docstr = string(eval(REPL.helpmode(IOBuffer(), "sun", AliasUsingTests)))
+    @test contains(docstr, "sum")
+    @test !contains(docstr, "No documentation found.")
+end
+
+# Regression: by-name re-exports without `as`-rename must keep normalising
+# the binding through the full import chain.
+module ChainedReexportInner
+    """
+        target
+
+    chained re-export docstring
+    """
+    const target = 42
+end
+module ChainedReexportMid
+    import ..ChainedReexportInner: target
+end
+module ChainedReexportOuter
+    import ..ChainedReexportMid: target
+end
+@testset "chained by-name re-export resolves docstring" begin
+    docstr = string(eval(REPL.helpmode(IOBuffer(), "target", ChainedReexportOuter)))
+    @test contains(docstr, "chained re-export docstring")
+    @test !contains(docstr, "No documentation found")
+    # All three modules in the chain must produce the same canonical Binding.
+    inner_b = Base.Docs.Binding(ChainedReexportInner, :target)
+    outer_b = Base.Docs.Binding(ChainedReexportOuter, :target)
+    @test inner_b.mod === outer_b.mod
+    @test inner_b.var === outer_b.var
+end
+
+# Regression: `as`-rename composed with a plain re-export, in either order.
+module RenameOrigin
+    """
+        renamed_origin
+
+    renamed_origin docstring
+    """
+    renamed_origin() = 1
+end
+module RenameThenReexportMid
+    using ..RenameOrigin: renamed_origin as renamed_alias
+end
+module RenameThenReexportOuter
+    using ..RenameThenReexportMid: renamed_alias
+end
+module ReexportThenRenameMid
+    using ..RenameOrigin: renamed_origin
+end
+module ReexportThenRenameOuter
+    using ..ReexportThenRenameMid: renamed_origin as renamed_alias
+end
+@testset "chained renamed re-exports resolve docstring" begin
+    origin_b = Base.Docs.Binding(RenameOrigin, :renamed_origin)
+    for outr in (RenameThenReexportOuter, ReexportThenRenameOuter)
+        b = Base.Docs.Binding(outr, :renamed_alias)
+        @test b.mod === origin_b.mod
+        @test b.var === origin_b.var
+        docstr = string(eval(REPL.helpmode(IOBuffer(), "renamed_alias", outr)))
+        @test contains(docstr, "renamed_origin docstring")
+        @test !contains(docstr, "No documentation found")
+    end
+end
+
 module TestSuggestPublic
     export dingo
     public dango

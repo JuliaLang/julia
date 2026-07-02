@@ -260,7 +260,6 @@ function open_exclusive(path::String;
         end
     end
     # fall-back: wait for the lock
-    watch = Lockable(Core.Box(nothing))
     while true
         # now try again to create it
         # try to start the file-watcher prior to checking for the pidfile existence

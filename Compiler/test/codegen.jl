@@ -1152,3 +1152,69 @@ end
     ir = get_llvm(f_srettest, Tuple{Float32}, true, true, true)
     @test occursin(r"sret\([^)]+\) align \d+", ir)
 end
+
+# ipo_purity_bits are translated into LLVM call-site attributes
+function _fib_cse_test(n::Int)
+    n <= 1 && return n
+    n == 2 && return 1
+    return _fib_cse_test(n-1) + _fib_cse_test(n-2)
+end
+_bench_cse_test() = _fib_cse_test(40)
+_fib_cse_test(5); _bench_cse_test()
+@noinline _pure_effects_attrtest(x::Float64) = x * x + 1.0
+_pure_effects_attrcaller(x::Float64) = _pure_effects_attrtest(x) + 1.0
+_pure_effects_attrtest(1.0); _pure_effects_attrcaller(1.0)
+@noinline _pure_effects_licmcallee(x::Float64) = x * x * x + 2.0 * x * x + x + 1.0
+function _pure_effects_licmloop(A::Vector{Float64}, x::Float64)
+    for i in eachindex(A)
+        A[i] = _pure_effects_licmcallee(x)
+    end
+    return A
+end
+function _blackbox_licmloop(A::Vector{Float64}, x::Float64)
+    for i in eachindex(A)
+        A[i] = _pure_effects_licmcallee(Base.blackbox(x))
+    end
+    return A
+end
+function _blackbox_licmloop_simple(x::Float64)
+    for i in 1:5
+        y = Base.blackbox(x)
+        z = _pure_effects_licmcallee(y)
+        Base.donotdelete(z)
+    end
+    return nothing
+end
+_pure_effects_licmcallee(1.0); _pure_effects_licmloop(Float64[0.0], 1.0)
+_blackbox_licmloop(Float64[0.0], 1.0)
+_blackbox_licmloop_simple(1.0)
+@testset "effects to LLVM attributes" begin
+    # CSE: duplicate fib call eliminated by GVN using memory(argmem: read)
+    ir_bench = get_llvm(_bench_cse_test, Tuple{}, true, false, true)
+    @test count(r"call (swiftcc )?i\d+ @j__fib", ir_bench) == 3  # 4 calls reduced to 3
+
+    # Attribute emission: ipo_purity_bits translated to LLVM attrs on pure @noinline calls
+    ir_attrs = get_llvm(_pure_effects_attrcaller, Tuple{Float64}, true, true, false)
+    @test occursin("nounwind", ir_attrs)
+    @test occursin("willreturn", ir_attrs)
+    @test occursin("memory(argmem: read)", ir_attrs)
+
+    re_licmcall = r"call\b.*@j__pure_effects_licmcallee"
+    re_raw_arg = r"@j__pure_effects_licmcallee\w*\(double %\"x::Float64\"\)"
+
+    # LICM: loop-invariant pure call hoisted out of loop (takes raw argument)
+    ir_licm = get_llvm(_pure_effects_licmloop, Tuple{Vector{Float64}, Float64}, true, false, true)
+    @test count(re_licmcall, ir_licm) == 1
+    @test occursin(re_raw_arg, ir_licm)
+
+    # blackbox prevents LICM: the callee takes the asm barrier output instead
+    # of the raw argument, proving it depends on the barrier.
+    ir_bb = get_llvm(_blackbox_licmloop, Tuple{Vector{Float64}, Float64}, true, false, true)
+    @test count(re_licmcall, ir_bb) == 1
+    @test !occursin(re_raw_arg, ir_bb)
+
+    # blackbox prevents LICM in a simple loop without memory writes
+    ir_bb_simple = get_llvm(_blackbox_licmloop_simple, Tuple{Float64}, true, false, true)
+    @test count(re_licmcall, ir_bb_simple) == 5  # unrolled, not hoisted
+    @test !occursin(re_raw_arg, ir_bb_simple)
+end

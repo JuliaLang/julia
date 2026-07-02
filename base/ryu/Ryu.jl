@@ -72,7 +72,7 @@ Various options for the output format include:
   * `plus`: for positive `x`, prefix decimal string with a `'+'` character
   * `space`: for positive `x`, prefix decimal string with a `' '` character; overridden if `plus=true`
   * `hash`: whether the decimal point should be written, even if no additional digits are needed for precision
-  * `precision`: minimum number of significant digits to be included in the decimal string; extra `'0'` characters will be added for padding if necessary
+  * `precision`: exact number of digits after the decimal point to be included in the decimal string; extra `'0'` characters will be added for padding if necessary
   * `decchar`: decimal point character to be used
   * `trimtrailingzeros`: whether trailing zeros of fractional part should be removed
 """
@@ -100,7 +100,7 @@ Various options for the output format include:
   * `plus`: for positive `x`, prefix decimal string with a `'+'` character
   * `space`: for positive `x`, prefix decimal string with a `' '` character; overridden if `plus=true`
   * `hash`: whether the decimal point should be written, even if no additional digits are needed for precision
-  * `precision`: minimum number of significant digits to be included in the decimal string; extra `'0'` characters will be added for padding if necessary
+  * `precision`: exact number of digits after the decimal point to be included in the decimal string; extra `'0'` characters will be added for padding if necessary
   * `expchar`: character to use exponent component in scientific notation
   * `decchar`: decimal point character to be used
   * `trimtrailingzeros`: whether trailing zeros should be removed

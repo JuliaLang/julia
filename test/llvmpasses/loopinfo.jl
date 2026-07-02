@@ -7,7 +7,7 @@
 # RUN: cat %t/module.ll | FileCheck %s -check-prefix=FINAL
 
 ## Notes:
-# This script uses the `emit` function (defined llvmpasses.jl) to emit either
+# This script uses the `emit` function (defined in llvmpasses.jl) to emit either
 # optimized or unoptimized LLVM IR. Each function is emitted individually and
 # `llvm-link` is used to create a single module that can be passed to opt.
 # The order in which files are emitted and linked is important since `lit` will

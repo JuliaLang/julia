@@ -177,7 +177,7 @@ iterate(s::Set, i...)       = iterate(KeySet(s.dict), i...)
 
 @propagate_inbounds Iterators.only(s::Set) = Iterators._only(s, first)
 
-# In case the size(s) is smaller than size(t) its more efficient to iterate through
+# In case the size(s) is smaller than size(t) it's more efficient to iterate through
 # elements of s instead and only delete the ones also contained in t.
 # The threshold for this decision boils down to a tradeoff between
 # size(s) * cost(in() + delete!()) ≶ size(t) * cost(delete!())
@@ -669,7 +669,7 @@ function allequal(f, xs::Tuple)
         n = fieldcount(xs)
         if n <= 32
             n <= 1 && return true
-            checks = [:(isequal(val, f(getfield(xs, $i)))) for i in 2:n]
+            checks = Expr[:(isequal(val, f(getfield(xs, $i)))) for i in 2:n]
             expr = foldr((a, b) -> :($a && $b), checks)
             return quote
                 val = f(getfield(xs, 1))

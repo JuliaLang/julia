@@ -434,7 +434,7 @@ end
     start_repl_backend(backend::REPLBackend)
 
     Call directly to run backend loop on current Task.
-    Use @async for run backend on new Task.
+    Use @async to run backend on new Task.
 
     Does not return backend until loop is finished.
 """
@@ -456,7 +456,9 @@ function repl_backend_loop(backend::REPLBackend, get_module::Function)
             # exit flag
             break
         end
-        if show_value == 2 # 2 indicates a function to be called
+        # Mark this task as the foreground task while running user work, so that
+        # components like the precompile keyboard menu know who owns interactive stdin.
+        Base.@as_foreground_task if show_value == 2 # 2 indicates a function to be called
             f = ast_or_func
             try
                 ret = f()

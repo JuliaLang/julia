@@ -31,7 +31,7 @@ simdThreshold(::Type{Bool}) = 640
     x, y)
 
 # `_bits2float(x::UInt64, T)` takes `x::UInt64` as input, it splits it in `N` parts where
-# `N = sizeof(UInt64) / sizeof(T)` (`N = 1` for `Float64`, `N = 2` for `Float32, etc...), it
+# `N = sizeof(UInt64) / sizeof(T)` (`N = 1` for `Float64`, `N = 2` for `Float32`, etc.), it
 # truncates each part to the unsigned type of the same size as `T`, scales all of these
 # numbers to a value of type `T` in the range [0,1) with `_uint2float`, and then
 # recomposes another `UInt64` using all these parts.
@@ -292,7 +292,8 @@ end
     return i
 end
 
-const MutableDenseArray = Union{Base.MutableDenseArrayType{T}, UnsafeView{T}} where {T}
+const MutableDenseArray = Union{Base.MutableDenseArrayType{T}, UnsafeView{T},
+                                Base.NonReshapedReinterpretArray{T,N,S,<:Base.MutableDenseArrayType{S}} where {N,S}} where {T}
 
 function rand!(rng::Union{TaskLocalRNG, Xoshiro}, dst::MutableDenseArray{T}, ::SamplerTrivial{CloseOpen01{T}}) where {T<:Union{Float16,Float32,Float64}}
     GC.@preserve dst xoshiro_bulk(rng, convert(Ptr{UInt8}, pointer(dst)), length(dst)*sizeof(T), T, xoshiroWidth(), _bits2float)

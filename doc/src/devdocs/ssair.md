@@ -28,7 +28,7 @@ using InteractiveUtils
 ```llvm
 CodeInfo(
 1 ─ %1 = invoke Main.sin(x::Float64)::Float64
-│   %2 = Base.lt_float(x, 5.0)::Bool
+│   %2 = Base.lt_float(5.0, x)::Bool
 └──      goto #3 if not %2
 2 ─ %4 = invoke Main.cos(x::Float64)::Float64
 └── %5 = Base.add_float(%1, %4)::Float64
@@ -42,7 +42,7 @@ In this example, we can see all of these changes.
 1. The first basic block is everything in
 ```llvm
 1 ─ %1 = invoke Main.sin(x::Float64)::Float64
-│   %2 = Base.lt_float(x, 5.0)::Bool
+│   %2 = Base.lt_float(5.0, x)::Bool
 └──      goto #3 if not %2
 ```
 2. The `if` statement is translated into `goto #3 if not %2` which goes to the 3rd basic block if `x>5` isn't met and otherwise goes to the second basic block.

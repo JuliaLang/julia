@@ -18,7 +18,7 @@ function compile_no_deps(f, argtypes)
     )
     # Insert the CI into the global cache (necessary before adding to JIT)
     ccall(:jl_mi_cache_insert, Cvoid, (Any, Any), mi, ci)
-    ccall(:jl_add_codeinst_to_jit, Cvoid, (Any, Any), ci, source)
+    ccall(:jl_add_codeinsts_to_jit, Cvoid, (Any, Any), Any[ci], Any[source])
     ci
 end
 

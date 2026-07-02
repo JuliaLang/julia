@@ -93,7 +93,7 @@ limited_worker_rss && move_to_node1("Distributed")
 
 # Move LinearAlgebra and Pkg tests to the front, because they take a while, so we might
 # as well get them all started early. JuliaLowering_stdlibs both takes a while and
-# uses a lot of a memory at the beginning so try to run it early to keep total memory
+# uses a lot of memory at the beginning so try to run it early to keep total memory
 # use flatter.
 for prependme in ["LinearAlgebra", "Pkg", "JuliaLowering_stdlibs"]
     prependme_test_ids = findall(x->occursin(prependme, x), tests)
@@ -404,7 +404,7 @@ cd(@__DIR__) do
     end
 
     #=
-`   Construct a testset on the master node which will hold results from all the
+    Construct a testset on the master node which will hold results from all the
     test files run on workers and on node1. The loop goes through the results,
     inserting them as children of the overall testset if they are testsets,
     handling errors otherwise.
