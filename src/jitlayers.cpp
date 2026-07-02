@@ -1007,8 +1007,17 @@ public:
         jl_task_t *ct = jl_current_task;
         uint8_t state = jl_gc_unsafe_enter(ct->ptls);
         Function *F = emit_tojlinvoke(CI, "", Out);
-        if (API == JL_INVOKE_SPECSIG)
+        if (API == JL_INVOKE_SPECSIG) {
             F = emit_specsig_to_fptr1(Out, CI, F); // may safepoint
+            // This trampoline exists because the edge had to be linked before
+            // its target finished compiling; recheck the target on each call
+            // and forward to its compiled specsig once published, so the edge
+            // stops boxing through `jl_invoke`.
+            Function *Healed = emit_specsig_healing_wrapper(Out, CI, F);
+            if (Healed != F)
+                F->setLinkage(GlobalValue::InternalLinkage);
+            F = Healed;
+        }
         jl_gc_unsafe_leave(ct->ptls, state);
         F->setLinkage(GlobalValue::ExternalLinkage);
         F->setName(*Sym);

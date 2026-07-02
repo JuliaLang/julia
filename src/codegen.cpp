@@ -960,6 +960,14 @@ static const auto jlinvoke_func = new JuliaFunction<>{
     get_func2_sig,
     get_func_attrs,
 };
+static const auto jlspecsigfptrifcompiled_func = new JuliaFunction<>{
+    XSTR(jl_specsig_fptr_if_compiled),
+    [](LLVMContext &C) {
+        return FunctionType::get(PointerType::getUnqual(C),
+            {JuliaType::get_prjlvalue_ty(C)}, false);
+    },
+    nullptr,
+};
 static const auto jlinvokeoc_func = new JuliaFunction<>{
     XSTR(jl_invoke_oc),
     get_func2_sig,
@@ -7441,6 +7449,62 @@ Function *emit_specsig_to_fptr1(jl_codegen_output_t &out, jl_code_instance_t *ci
     return spec_func;
 }
 
+// Helper for JIT linking: a specsig entry point that tail-calls the compiled
+// specsig of `ci` once it is published, and `fallback` (a specsig-to-fptr1
+// thunk dispatching through `jl_invoke`) until then. A trampoline is created
+// when a call edge must be linked before its target finishes compiling;
+// without the recheck the edge would box its arguments on every call forever.
+Function *emit_specsig_healing_wrapper(jl_codegen_output_t &out, jl_code_instance_t *ci,
+                                       Function *fallback)
+{
+    jl_method_instance_t *mi = jl_get_ci_mi(ci);
+    bool is_opaque_closure =
+        jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure;
+    std::string name =
+        get_function_name(true, false, name_from_method_instance(mi), out.TargetTriple);
+    name += "_healing";
+    jl_value_t *specTypes = get_ci_abi(ci);
+    jl_returninfo_t info = get_specsig_function(out, &out.get_module(), nullptr, name,
+                                                specTypes, ci->rettype, is_opaque_closure);
+    if (info.return_roots != 0 ||
+        (info.cc != jl_returninfo_t::Boxed && info.cc != jl_returninfo_t::Register &&
+         info.cc != jl_returninfo_t::Ghosts)) {
+        // The late GC lowering pass requires `julia.return_roots`/sret buffer
+        // arguments to be locally-allocated, so those cannot simply be
+        // forwarded; leave such (rarer) signatures on the fallback.
+        return fallback;
+    }
+    Function *F = cast<Function>(info.decl.getCallee());
+    assert(F->getFunctionType() == fallback->getFunctionType());
+    jl_codectx_t ctx(out, ci);
+    ctx.f = F;
+    BasicBlock *top = BasicBlock::Create(out.get_context(), "top", F);
+    BasicBlock *healed = BasicBlock::Create(out.get_context(), "healed", F);
+    BasicBlock *fallbb = BasicBlock::Create(out.get_context(), "fallback", F);
+    ctx.builder.SetInsertPoint(top);
+    Value *theCI = track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)ci));
+    Value *target = ctx.builder.CreateCall(prepare_call(jlspecsigfptrifcompiled_func), {theCI});
+    Value *isnull = ctx.builder.CreateICmpEQ(target, Constant::getNullValue(target->getType()));
+    ctx.builder.CreateCondBr(isnull, fallbb, healed);
+    SmallVector<Value*, 0> args;
+    for (auto &arg : F->args())
+        args.push_back(&arg);
+    auto emit_forward = [&](Value *callee) {
+        CallInst *call = ctx.builder.CreateCall(F->getFunctionType(), callee, args);
+        call->setCallingConv(F->getCallingConv());
+        call->setAttributes(F->getAttributes());
+        if (F->getReturnType()->isVoidTy())
+            ctx.builder.CreateRetVoid();
+        else
+            ctx.builder.CreateRet(call);
+    };
+    ctx.builder.SetInsertPoint(healed);
+    emit_forward(target);
+    ctx.builder.SetInsertPoint(fallbb);
+    emit_forward(fallback);
+    return F;
+}
+
 static void emit_fptr1_wrapper(Module *M, StringRef gf_thunk_name, Value *target, jl_value_t *rettype_const, jl_value_t *declrt, jl_value_t *jlrettype, jl_codegen_output_t &out)
 {
     Function *w = Function::Create(get_func_sig(M->getContext()), GlobalVariable::ExternalLinkage, gf_thunk_name, M);
@@ -10484,6 +10548,7 @@ static void init_jit_functions(void)
         add_named_global(jl_builtin_f_names[i], jl_builtin_f_addrs[i]);
     add_named_global(jlapplygeneric_func, &jl_apply_generic);
     add_named_global(jlinvoke_func, &jl_invoke);
+    add_named_global(jlspecsigfptrifcompiled_func, &jl_specsig_fptr_if_compiled);
     add_named_global(jltopeval_func, &jl_toplevel_eval);
     add_named_global(jlcopyast_func, &jl_copy_ast);
     //add_named_global(jlnsvec_func, &jl_svec);

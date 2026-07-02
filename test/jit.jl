@@ -54,6 +54,21 @@ ci = compile_no_deps(M2.bar, (Int,))
 @test check_edges_not_compiled(ci, M2.foo)
 @test invoke(M2.bar, ci, 5) == 210
 
+# A specsig tojlinvoke trampoline must heal once its target is compiled:
+# after the target publishes its specsig, the edge forwards the caller's
+# unboxed arguments instead of boxing through `jl_invoke`.
+module M2b
+    @noinline foo(x) = x + 100
+    bar(x) = 2 * foo(x)
+end
+let ci = compile_no_deps(M2b.bar, (Int,))
+    @test check_edges_not_compiled(ci, M2b.foo)
+    # The first call dispatches through `jl_invoke`, compiling the target.
+    @test invoke(M2b.bar, ci, 5) == 210
+    invoke(M2b.bar, ci, 5) # warm the measurement path
+    @test (@allocations invoke(M2b.bar, ci, 5)) == 0
+end
+
 # External symbol renames must keep JITLink's external symbol map consistent.
 @testset "JITLink external symbol rename" begin
     jitlink_rename_resolve(chunks, i, x) =
