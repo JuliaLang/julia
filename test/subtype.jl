@@ -1389,6 +1389,9 @@ let a = Tuple{Float64,T3,T4} where T4 where T3,
     @test I2 <: I1
     @test I1 <: a
     @test I2 <: a
+    # regressed by the covariant-occurrence scoping changes (#61940-era):
+    # T3's bound Tuple{S3} is no longer tightened to equality; the result is
+    # sound but not a subtype of `b`
     @test_broken I1 <: b
     @test_broken I2 <: b
 end
@@ -1411,6 +1414,7 @@ let a = Tuple{5,T4,T5} where T4 where T5,
     @test I2 <: I1
     @test I1 <: a
     @test I2 <: a
+    # regressed by the covariant-occurrence scoping changes (#61940-era); sound but not tight
     @test_broken I1 <: b
     @test_broken I2 <: b
 end
@@ -1426,6 +1430,7 @@ let a = Tuple{Tuple{T2,4},T6} where T2 where T6,
     @test I2 <: I1
     @test I1 <: a
     @test I2 <: a
+    # regressed by the covariant-occurrence scoping changes (#61940-era); sound but not tight
     @test_broken I1 <: b
     @test_broken I2 <: b
 end
@@ -1439,8 +1444,8 @@ let a = Tuple{T1,Val{T2},T2} where T2 where T1,
     I2 = typeintersect(b, a)
     @test I1 <: I2
     @test I2 <: I1
-    @test_broken I1 <: a
-    @test_broken I2 <: a
+    @test I1 <: a
+    @test I2 <: a
     @test I1 <: b
     @test I2 <: b
 end
@@ -1450,8 +1455,8 @@ let a = Tuple{T1,Val{T2},T2} where T2 where T1,
     I2 = typeintersect(b, a)
     @test I1 <: I2
     @test I2 <: I1
-    @test_broken I1 <: a
-    @test_broken I2 <: a
+    @test I1 <: a
+    @test I2 <: a
     @test I1 <: b
     @test I2 <: b
 end
@@ -1481,6 +1486,7 @@ let a = Tuple{T1,T2,T2} where T1 where T2,
     @test I2 <: I1
     @test I1 <: a
     @test I2 <: a
+    # regressed by the covariant-occurrence scoping changes (#61940-era); sound but not tight
     @test_broken I1 <: b
     @test_broken I2 <: b
 end
@@ -2675,6 +2681,113 @@ let T = Ref{NTuple{8, Ref{Union{Int, P}}}} where P,
     @test T <: Union{Int, S}
 end
 
+# issue #61773 (dual diagonal): typeintersect was order-dependent and exploded
+# into a 16-element Union for the original reproducer.
+function test_diagonal_intersection_witnesses(@nospecialize(A), @nospecialize(B),
+                                              @nospecialize(expected), witnesses...)
+    @testintersect(A, B, expected)
+    I1 = typeintersect(A, B)
+    I2 = typeintersect(B, A)
+    for X in witnesses
+        @test X <: A && X <: B
+        @test X <: I1
+        @test X <: I2
+    end
+    @test I1 <: A
+    @test I1 <: B
+    @test I2 <: A
+    @test I2 <: B
+end
+
+@testintersect(Tuple{A, A, B} where {A, B<:A},
+               Tuple{Int, C, C} where C,
+               Tuple{Int, Int, Int})
+@testintersect(Tuple{A, A, B} where {A<:Tuple, B<:A},
+               Tuple{Tuple{Int}, C, C} where C,
+               Tuple{Tuple{Int}, Tuple{Int}, Tuple{Int}})
+# Repeated diagonal occurrences must unify structural witnesses with free variables.
+struct Box61787{T} end
+test_diagonal_intersection_witnesses(
+    Tuple{T, T} where T,
+    Tuple{Box61787{S}, Box61787{R}} where {S, R},
+    Tuple{T, T} where {S, T<:Box61787{S}},
+    Tuple{Box61787{Real}, Box61787{Real}})
+test_diagonal_intersection_witnesses(
+    Tuple{Union{T, Int}, T} where T,
+    Tuple{C, C} where C,
+    Tuple{C, C} where C,
+    Tuple{String, String},
+    Tuple{Int, Int})
+test_diagonal_intersection_witnesses(
+    Tuple{T, T} where T,
+    Tuple{Tuple{S}, Tuple{R}} where {S, R},
+    Tuple{T, T} where {S, T<:Tuple{S}},
+    Tuple{Tuple{Int}, Tuple{Int}})
+struct Box61787B{T} end
+test_diagonal_intersection_witnesses(
+    Tuple{Box61787B{S}, Box61787B{R}} where {S, R},
+    Tuple{C, C} where C,
+    Tuple{C, C} where {S, C<:Box61787B{S}},
+    Tuple{Box61787B{Real}, Box61787B{Real}})
+# Diagonal witness collection must handle an arbitrary number of occurrences.
+let n = 17
+    A = TypeVar(:A, Bottom, Tuple)
+    B = TypeVar(:B, Bottom, A)
+    C = TypeVar(:C)
+    left = UnionAll(A, UnionAll(B, Tuple{ntuple(_ -> A, n)..., B}))
+    right = UnionAll(C, Tuple{Tuple{Int}, ntuple(_ -> C, n)...})
+    expected = Tuple{ntuple(_ -> Tuple{Int}, n + 1)...}
+    @testintersect(left, right, expected)
+end
+
+# Regressions of the deferred-narrowing machinery found in review: former
+# nontermination, wrong Union{}, self-referential bounds, and lost constraints.
+let A = Tuple{A, A, B} where {A, B<:A}, B2 = Tuple{Union{Int,Char}, C, C} where C
+    I1 = typeintersect(A, B2)  # used to hang in finish_unionall's innervar re-sort
+    I2 = typeintersect(B2, A)
+    @test Tuple{Int,Int,Int} <: I1
+    @test Tuple{Char,Char,Char} <: I1
+    @test Tuple{Int,Int,Int} <: I2
+    @test Tuple{Char,Char,Char} <: I2
+end
+let A = Tuple{B, A, A} where {A, B<:A}, B2 = Tuple{C, C, Int} where C
+    I1 = typeintersect(A, B2)  # used to hang
+    I2 = typeintersect(B2, A)
+    @test Tuple{Int,Int,Int} <: I1
+    @test Tuple{Int,Int,Int} <: I2
+end
+@testintersect(Tuple{T,T} where T,
+               Tuple{Tuple{Vararg{Int}}, Tuple{Int}},  # used to give Union{}
+               Tuple{T, Tuple{Int}} where T<:Tuple{Int})
+@testintersect(Tuple{T4,S3,S3} where {S3, T4<:S3},
+               Tuple{Int,String,String},  # used to lose the T4<:S3 constraint
+               Union{})
+let a = Tuple{Int,V1,V1,V1,V2} where {V1,V2}, b = Tuple{Int,W2,W1,W1,Int} where {W1,W2}
+    I1 = typeintersect(a, b)  # witness must be recorded on both vars
+    I2 = typeintersect(b, a)
+    @test I1 <: a && I1 <: b
+    @test Tuple{Int,Int,Int,Int,Int} <: I2
+end
+let T = Tuple{T, T} where T,
+    S = Union{Tuple{T, Vector{T}}, Tuple{T, Vector{Int64}}} where T
+    I = typeintersect(T, S)  # used to produce a self-referential T<:Vector{T} bound
+    I2 = typeintersect(S, T)
+    @test !Base.has_free_typevars(I)
+    @test (I <: I2) && (I2 <: I)
+    @test Tuple{Vector{Any},Vector{Any}} <: I
+end
+
+# Covariant intersection through chains of typevar upper bounds; the reverse
+# direction does not yet propagate the meet through the chain (sound, not tight).
+let a = Tuple{Union{Signed, Tuple{Any}}},
+    b = Tuple{T3} where {T1<:Real, T2<:T1, T3<:T2}
+    I1 = typeintersect(a, b)
+    I2 = typeintersect(b, a)
+    @test I2 == (Tuple{T} where T<:Signed)
+    @test Tuple{Int} <: I1
+    @test_broken I1 == (Tuple{T} where T<:Signed)
+end
+
 # issue #61602
 struct W61602{T, N} x::Array{T, N} end
 let A = W61602{T, 1} where T<:(Union{Missing, S} where S),
@@ -2689,8 +2802,8 @@ let A = W61602{T, 1} where T<:(Union{Missing, S} where S),
     @test !(Tuple{C, String} <: E)
     @test Tuple{C, Int64} <: typeintersect(D, E)
     @test Tuple{C, Int64} <: typeintersect(E, D)
-    @test_broken !(Tuple{C, String} <: typeintersect(D, E))
-    @test_broken !(Tuple{C, String} <: typeintersect(E, D))
+    @test !(Tuple{C, String} <: typeintersect(D, E))
+    @test !(Tuple{C, String} <: typeintersect(E, D))
 end
 
 # try to fool a greedy algorithm that picks X=Int, Y=String here
