@@ -1737,6 +1737,19 @@ struct SSASubstitute
     arg_replacements::Vector{Any}
     spvals_ssa::Union{Nothing,SSAValue}
     inlined_at::NTuple{3,Int32} # TODO: add a map also, so that ssaidx doesn't need to equal inlined_idx?
+    # lazily-computed `sptypes_from_meth_instance(mi)`, shared across all
+    # marker-sparam substitutions of this inlined item
+    sptypes_cache::RefValue{Union{Nothing,Vector{VarState}}}
+end
+SSASubstitute(mi::MethodInstance, arg_replacements::Vector{Any},
+              spvals_ssa::Union{Nothing,SSAValue}, inlined_at::NTuple{3,Int32}) =
+    SSASubstitute(mi, arg_replacements, spvals_ssa, inlined_at,
+                  RefValue{Union{Nothing,Vector{VarState}}}(nothing))
+
+function cached_sptypes(ssa_substitute::SSASubstitute)
+    sptypes = ssa_substitute.sptypes_cache[]
+    sptypes === nothing || return sptypes
+    return ssa_substitute.sptypes_cache[] = sptypes_from_meth_instance(ssa_substitute.mi)
 end
 
 function insert_spval!(insert_node!::Inserter, spvals_ssa::SSAValue, spidx::Int,
@@ -1774,7 +1787,7 @@ function ssa_substitute_op!(insert_node!::Inserter, subst_inst::Instruction, @no
             else
                 flag = subst_inst[:flag]
                 if isa(val, SimpleVector)
-                    spstate = sptypes_from_meth_instance(ssa_substitute.mi)[spidx]
+                    spstate = cached_sptypes(ssa_substitute)[spidx]
                     maybe_undef = spstate.undef && !has_flag(flag, IR_FLAG_NOTHROW)
                     typ = spstate.undef ? Any : spstate.typ
                 else
