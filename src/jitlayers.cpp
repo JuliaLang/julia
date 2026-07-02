@@ -796,21 +796,12 @@ public:
                           jitlink::LinkGraph &,
                           jitlink::PassConfiguration &Config) override {
         Config.PostAllocationPasses.push_back([this](jitlink::LinkGraph &G) {
+            // `G.blocks()` is exactly the union of the sections' blocks, so a
+            // single pass over the (non-EH-frame) sections counts every block
+            // once; `graph_size == code_size + data_size`
             size_t graph_size = 0;
             size_t code_size = 0;
             size_t data_size = 0;
-            DenseSet<jitlink::Block *> SkippedBlocks;
-            for (auto &section : G.sections()) {
-                if (!isJITLinkEHFrameSection(section.getName()))
-                    continue;
-                for (auto block : section.blocks())
-                    SkippedBlocks.insert(block);
-            }
-            for (auto block : G.blocks()) {
-                if (SkippedBlocks.contains(block))
-                    continue;
-                graph_size += block->getSize();
-            }
             for (auto &section : G.sections()) {
                 if (isJITLinkEHFrameSection(section.getName()))
                     continue;
