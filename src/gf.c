@@ -2328,7 +2328,13 @@ static int get_intersect_visitor(jl_typemap_entry_t *oldentry, struct typemap_in
     return 1;
 }
 
-static jl_value_t *get_intersect_matches(jl_typemap_t *defs, jl_typemap_entry_t *newentry, jl_typemap_entry_t **replaced, size_t world) JL_CANSAFEPOINT
+static int intersect_entry_foreign(jl_typemap_entry_t *ml, struct typemap_intersection_env *closure)
+{
+    // only methods the precompile worker could not have seen
+    return !method_in_loading_closure(ml->func.method);
+}
+
+static jl_value_t *get_intersect_matches(jl_typemap_t *defs, jl_typemap_entry_t *newentry, jl_typemap_entry_t **replaced, size_t world, int foreign_only) JL_CANSAFEPOINT
 {
     jl_tupletype_t *type = newentry->sig;
     jl_tupletype_t *ttypes = (jl_tupletype_t*)jl_unwrap_unionall((jl_value_t*)type);
@@ -2345,7 +2351,8 @@ static jl_value_t *get_intersect_matches(jl_typemap_t *defs, jl_typemap_entry_t 
     struct matches_env env = {{get_intersect_visitor, (jl_value_t*)type, va, /* .search_slurp = */ 0,
             /* .min_valid = */ world, /* .max_valid = */ world,
             /* .ti = */ NULL, /* .env = */ NULL, /* .issubty = */ 0,
-            /* .emptiness_only = */ 1},
+            /* .emptiness_only = */ 1,
+            /* .entry_filter = */ foreign_only ? intersect_entry_foreign : NULL},
         /* .newentry = */ newentry, /* .shadowed */ NULL, /* .replaced */ NULL};
     JL_GC_PUSH3(&env.match.env, &env.match.ti, &env.shadowed);
     jl_typemap_intersection_visitor(defs, 0, &env.match);
@@ -2727,7 +2734,38 @@ static void _typename_add_backedge(jl_typename_t *tn, int explct, void *env0) JL
 // If every contributor to an image's typenames is in that image's dependency
 // closure, then the image sees the same methods its precompile worker saw.
 JL_DLLEXPORT jl_genericmemory_t *jl_method_contributors = NULL;
+JL_DLLEXPORT jl_genericmemory_t *jl_activation_certs = NULL; // only filled in the precompile worker
 JL_DLLEXPORT uint64_t jl_contrib_stats[8];
+
+static int activate_replay_mode(void)
+{
+    static int mode = -1;
+    if (mode == -1) {
+        const char *e = getenv("JULIA_ACTIVATE_REPLAY");
+        mode = e == NULL ? 0 : (e[0] == '2' ? 2 : (e[0] == '1' ? 1 : 0));
+    }
+    return mode;
+}
+
+static void record_activation_cert(jl_method_t *method, jl_svec_t *cert)
+{
+    if (jl_activation_certs == NULL) {
+        if (jl_an_empty_memory_any == NULL)
+            return;
+        jl_activation_certs = (jl_genericmemory_t*)jl_an_empty_memory_any;
+    }
+    jl_genericmemory_t *newtable = jl_eqtable_put(jl_activation_certs, (jl_value_t*)method, (jl_value_t*)cert, NULL);
+    if (newtable != jl_activation_certs)
+        jl_activation_certs = newtable;
+}
+
+JL_DLLEXPORT jl_value_t *jl_get_activation_cert(jl_method_t *method)
+{
+    if (jl_activation_certs == NULL)
+        return jl_nothing;
+    jl_value_t *cert = jl_eqtable_get(jl_activation_certs, (jl_value_t*)method, NULL);
+    return cert == NULL ? jl_nothing : cert;
+}
 
 static size_t *jl_loading_closure_bits = NULL; // one bit per linkage blob
 static size_t jl_loading_closure_nblobs = 0;
@@ -3327,6 +3365,11 @@ cleanup:
 
 void jl_method_table_activate(jl_typemap_entry_t *newentry)
 {
+    jl_method_table_activate_with_cert(newentry, NULL);
+}
+
+void jl_method_table_activate_with_cert(jl_typemap_entry_t *newentry, jl_svec_t *cert)
+{
     JL_TIMING(ADD_METHOD, ADD_METHOD);
     jl_method_t *method = newentry->func.method;
     jl_methtable_t *mt = jl_method_get_table(method);
@@ -3349,7 +3392,9 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
     jl_value_t *isect = NULL;
     jl_value_t *isect2 = NULL;
     jl_genericmemory_t *interferences = NULL;
-    JL_GC_PUSH6(&oldvalue, &oldmi, &loctag, &isect, &isect2, &interferences);
+    jl_svec_t *newcert = NULL;
+    JL_GC_PUSH7(&oldvalue, &oldmi, &loctag, &isect, &isect2, &interferences, &newcert);
+    int record_cert = jl_generating_output() && jl_options.incremental && mt == jl_method_table;
     int closure_clean = 0;
     if (jl_loading_closure_bits != NULL && mt == jl_method_table) {
         int clean = 1;
@@ -3363,10 +3408,21 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
         jl_contrib_stats[closure_clean ? 0 : 1]++;
     }
     jl_typemap_entry_t *replaced = NULL;
-    // Check what entries this intersects with in the prior world.
+    int replaying = cert != NULL && jl_svec_len(cert) == 4 && activate_replay_mode() >= 1;
+    // With a certificate, we replay what the precompile worker found for methods in
+    // the closure, and only scan the methods it could not have seen. Each pass sees
+    // only part of the intersecting methods. The replacement and missing-edge checks
+    // can only invalidate more when given fewer methods, never less, so this is safe.
     current_activation_clean = closure_clean;
-    oldvalue = get_intersect_matches(jl_atomic_load_relaxed(&mt->defs), newentry, &replaced, max_world);
+    oldvalue = get_intersect_matches(jl_atomic_load_relaxed(&mt->defs), newentry, &replaced, max_world, replaying);
     current_activation_clean = 0;
+    record_cert = record_cert && !replaying;
+    if (replaying && replaced != NULL) {
+        // a method from outside the closure has the exact same signature, so the
+        // certificate does not apply; do the full scan
+        replaying = 0;
+        oldvalue = get_intersect_matches(jl_atomic_load_relaxed(&mt->defs), newentry, &replaced, max_world, 0);
+    }
     jl_method_t *const *d;
     size_t j, n;
     if (oldvalue == NULL) {
@@ -3393,7 +3449,161 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
     // is covered by another method that is morespecific than both, causing them
     // to have no relevant type intersection for sorting).
     interferences = (jl_genericmemory_t*)jl_atomic_load_relaxed(&method->interferences);
+    if (replaying) {
+        jl_value_t *foreign_oldvalue = oldvalue;
+        // The precompile worker saw the same methods under these typenames, so we
+        // can reuse its intersecting set, specificity flags and invalidations.
+        jl_value_t *cd = jl_svecref(cert, 0);
+        jl_array_t *cflags = (jl_array_t*)jl_svecref(cert, 1);
+        jl_value_t *cmis = jl_svecref(cert, 2);
+        dispatch_bits = jl_unbox_int32(jl_svecref(cert, 3)) | METHOD_SIG_LATEST_WHICH;
+        if (cd != jl_nothing) {
+            oldvalue = cd;
+            d = (jl_method_t**)jl_array_ptr_data(oldvalue);
+            n = jl_array_nrows(oldvalue);
+            oldmi = jl_alloc_vec_any(0);
+            int32_t *fl = jl_array_data(cflags, int32_t);
+            char *morespec = (char*)alloca(n);
+            for (j = 0; j < n; j++)
+                morespec[j] = (char)(fl[j] & 1);
+            for (j = 0; j < n; j++) {
+                jl_method_t *m = d[j];
+                char ambig = (char)((fl[j] >> 1) & 1);
+                int m_dispatch = jl_atomic_load_relaxed(&m->dispatch_status);
+                if (morespec[j] || ambig) {
+                    ssize_t idx;
+                    if (!has_key(interferences, (jl_value_t*)m))
+                        interferences = jl_idset_put_key(interferences, (jl_value_t*)m, &idx);
+                }
+                if (!morespec[j]) {
+                    m_dispatch &= ~METHOD_SIG_LATEST_ONLY;
+                    jl_genericmemory_t *m_interferences = jl_atomic_load_relaxed(&m->interferences);
+                    ssize_t idx;
+                    m_interferences = jl_idset_put_key(m_interferences, (jl_value_t*)method, &idx);
+                    jl_gc_write_atomic(m, m->interferences, m_interferences, release);
+                }
+                jl_atomic_store_relaxed(&m->dispatch_status, m_dispatch);
+                if (morespec[j])
+                    continue;
+                jl_method_instance_t *unspec = jl_atomic_load_relaxed(&m->unspecialized);
+                if (unspec)
+                    jl_array_ptr_1d_push(oldmi, (jl_value_t*)unspec);
+                // scan only the specializations the worker could not have seen
+                loctag = jl_atomic_load_relaxed(&m->specializations);
+                _Atomic(jl_method_instance_t*) *data;
+                size_t l;
+                if (jl_is_svec(loctag)) {
+                    data = (_Atomic(jl_method_instance_t*)*)jl_svec_data(loctag);
+                    l = jl_svec_len(loctag);
+                }
+                else {
+                    data = (_Atomic(jl_method_instance_t*)*)&loctag;
+                    l = 1;
+                }
+                for (size_t i = 0; i < l; i++) {
+                    jl_method_instance_t *mi = jl_atomic_load_relaxed(&data[i]);
+                    if ((jl_value_t*)mi == jl_nothing)
+                        continue;
+                    if (method_in_loading_closure((jl_method_t*)mi))
+                        continue; // the certificate already covers it
+                    if (jl_type_intersection2(type, mi->specTypes, &isect, &isect2)) {
+                        int replaced_dispatch = is_replacing(ambig, type, m, d, n, isect, isect2, morespec);
+                        int invalidatedmi = _invalidate_dispatch_backedges(mi, type, m, d, n, replaced_dispatch, ambig, max_world, morespec);
+                        if (replaced_dispatch) {
+                            jl_atomic_store_relaxed(&mi->dispatch_status, 0);
+                            jl_array_ptr_1d_push(oldmi, (jl_value_t*)mi);
+                        }
+                        invalidated |= invalidatedmi;
+                    }
+                    isect = NULL;
+                    isect2 = NULL;
+                }
+            }
+            // invalidations the worker recorded for specializations in the image
+            if (cmis != jl_nothing) {
+                jl_array_t *cma = (jl_array_t*)cmis;
+                for (size_t i = 0, lc = jl_array_nrows(cma); i < lc; i += 2) {
+                    jl_method_instance_t *mi = (jl_method_instance_t*)jl_array_ptr_ref(cma, i);
+                    int replaced_dispatch = jl_unbox_int32(jl_array_ptr_ref(cma, i + 1));
+                    jl_method_t *m = mi->def.method;
+                    char ambig = 0;
+                    for (j = 0; j < n; j++) {
+                        if (d[j] == m) {
+                            ambig = (char)((fl[j] >> 1) & 1);
+                            break;
+                        }
+                    }
+                    int invalidatedmi = _invalidate_dispatch_backedges(mi, type, m, d, n, replaced_dispatch, ambig, max_world, morespec);
+                    if (replaced_dispatch) {
+                        jl_atomic_store_relaxed(&mi->dispatch_status, 0);
+                        jl_array_ptr_1d_push(oldmi, (jl_value_t*)mi);
+                    }
+                    invalidated |= invalidatedmi;
+                }
+            }
+        }
+        jl_contrib_stats[7]++; // replayed activations
+        if (activate_replay_mode() == 2) {
+            // verify: recompute the full intersecting set and check that it is
+            // exactly certificate ∪ foreign scan, with matching flags
+            jl_typemap_entry_t *vrepl = NULL;
+            loctag = get_intersect_matches(jl_atomic_load_relaxed(&mt->defs), newentry, &vrepl, max_world, 0);
+            size_t vn = loctag == NULL ? 0 : jl_array_nrows(loctag);
+            jl_method_t **vdd = loctag == NULL ? NULL : (jl_method_t**)jl_array_ptr_data(loctag);
+            int mism = 0;
+            for (size_t i = 0; i < vn; i++) {
+                jl_method_t *m = vdd[i];
+                int found = 0;
+                for (j = 0; j < n && !found; j++)
+                    found = d[j] == m;
+                if (!found && foreign_oldvalue) {
+                    jl_method_t **fdd = (jl_method_t**)jl_array_ptr_data(foreign_oldvalue);
+                    for (size_t k = 0, fn = jl_array_nrows(foreign_oldvalue); k < fn && !found; k++)
+                        found = fdd[k] == m;
+                }
+                if (!found && !method_in_loading_closure(m)) {
+                    // a closure-owned extra only reflects the worker's legal
+                    // domination truncation (interference sets are documented
+                    // under-approximations); a foreign extra is a real hole
+                    mism++;
+                    jl_safe_printf("  vd-extra (foreign!): %s.%s\n",
+                                   jl_symbol_name(m->module->name), jl_symbol_name(m->name));
+                }
+            }
+            if (cd != jl_nothing) {
+                int32_t *vfl = jl_array_data(cflags, int32_t);
+                for (j = 0; j < n; j++) {
+                    jl_method_t *m = d[j];
+                    int ms = jl_type_morespecific(m->sig, type);
+                    int am = !ms && !jl_type_morespecific(type, m->sig);
+                    if (((vfl[j] & 1) != (ms ? 1 : 0)) || (((vfl[j] >> 1) & 1) != (am ? 1 : 0))) {
+                        mism++;
+                        if (jl_contrib_stats[4] < 20)
+                            jl_safe_printf("  flag-mismatch: %s.%s cert=%d live=(%d,%d)\n",
+                                           jl_symbol_name(m->module->name), jl_symbol_name(m->name),
+                                           (int)vfl[j], ms, am);
+                    }
+                }
+            }
+            if (mism) {
+                jl_contrib_stats[4] += mism;
+                jl_safe_printf("CERT VERIFY MISMATCH (%d) for %s.%s\n", mism,
+                               jl_symbol_name(method->module->name), jl_symbol_name(method->name));
+            }
+            loctag = NULL;
+        }
+        oldvalue = foreign_oldvalue;
+        if (oldvalue)
+            oldmi = oldmi == NULL ? jl_alloc_vec_any(0) : oldmi;
+    }
     if (oldvalue) {
+        // when replaying, this only covers methods from outside the closure
+        if (replaying) {
+            d = (jl_method_t**)jl_array_ptr_data(oldvalue);
+            n = jl_array_nrows(oldvalue);
+            if (oldmi == NULL)
+                oldmi = jl_alloc_vec_any(0);
+        }
         assert(n > 0);
         if (replaced) {
             oldvalue = (jl_value_t*)replaced;
@@ -3461,10 +3671,20 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
             // Compute all morespec values upfront
             for (j = 0; j < n; j++)
                 morespec[j] = (char)jl_type_morespecific(d[j]->sig, type);
+            if (record_cert) {
+                newcert = jl_alloc_svec(4);
+                jl_svecset(newcert, 0, oldvalue);
+                jl_value_t *cf = (jl_value_t*)jl_alloc_array_1d(jl_array_int32_type, n);
+                jl_svecset(newcert, 1, cf);
+                jl_svecset(newcert, 2, jl_alloc_vec_any(0));
+            }
             for (j = 0; j < n; j++) {
                 jl_method_t *m = d[j];
                 // Compute ambig state: is there an ambiguity between new method and old m?
                 char ambig = !morespec[j] && !jl_type_morespecific(type, m->sig);
+                if (newcert)
+                    jl_array_data((jl_array_t*)jl_svecref(newcert, 1), int32_t)[j] =
+                        (int32_t)((morespec[j] ? 1 : 0) | (ambig ? 2 : 0));
                 // Compute updates to the dispatch state bits
                 int m_dispatch = jl_atomic_load_relaxed(&m->dispatch_status);
                 if (morespec[j] || ambig) {
@@ -3517,6 +3737,12 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
                         // such that everything in `morespecific` dominates everything in `ambiguous`, and everything in `ambiguous` dominates everything in `lessspecific`
                         // And then compute where each isect falls, and whether it changed group--necessitating invalidation--or not.
                         int replaced_dispatch = is_replacing(ambig, type, m, d, n, isect, isect2, morespec);
+                        if (newcert) {
+                            jl_array_t *cmis = (jl_array_t*)jl_svecref(newcert, 2);
+                            jl_array_ptr_1d_push(cmis, (jl_value_t*)mi);
+                            loctag = jl_box_int32(replaced_dispatch);
+                            jl_array_ptr_1d_push(cmis, loctag);
+                        }
                         // found that this specialization dispatch got replaced by m
                         // call invalidate_backedges(mi, max_world, "jl_method_table_insert");
                         // but ignore invoke-type edges
@@ -3589,6 +3815,17 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
     jl_atomic_store_relaxed(&newentry->max_world, ~(size_t)0);
     jl_atomic_store_relaxed(&method->dispatch_status, dispatch_bits); // TODO: this should be sequenced fully after the world counter store
     jl_gc_write_atomic(method, method->interferences, jl_genericmemory_t, interferences, release);
+    if (record_cert && !replaced) {
+        if (newcert == NULL) { // no intersecting methods: record just the dispatch bits
+            newcert = jl_alloc_svec(4);
+            jl_svecset(newcert, 0, jl_nothing);
+            jl_svecset(newcert, 1, jl_nothing);
+            jl_svecset(newcert, 2, jl_nothing);
+        }
+        loctag = jl_box_int32(dispatch_bits);
+        jl_svecset(newcert, 3, loctag);
+        record_activation_cert(method, newcert);
+    }
     JL_GC_POP();
 }
 
