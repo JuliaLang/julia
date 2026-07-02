@@ -212,6 +212,46 @@ size_t jl_external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT
     return external_blob_index(v);
 }
 
+// Install the dependency-closure blob bitset (sysimage, each dependency image,
+// and the loading image itself, identified from the first image-owned anchor)
+// for the certificate-replay checks; used around pkgimage edge verification.
+static size_t *loading_closure_bits_owned = NULL;
+JL_DLLEXPORT void jl_set_loading_closure_from_depmods(jl_array_t *depmods, jl_array_t *anchors)
+{
+    size_t nblobs = n_linkage_blobs();
+    size_t nwords = (nblobs + 8 * sizeof(size_t) - 1) / (8 * sizeof(size_t));
+    size_t *bits = (size_t*)calloc_s(nwords ? nwords * sizeof(size_t) : sizeof(size_t));
+    bits[0] |= 1;
+    if (depmods) {
+        for (size_t i = 0, ld = jl_array_nrows(depmods); i < ld; i++) {
+            size_t idx = external_blob_index(jl_array_ptr_ref(depmods, i));
+            if (idx < nblobs)
+                bits[idx / (8 * sizeof(size_t))] |= (size_t)1 << (idx % (8 * sizeof(size_t)));
+        }
+    }
+    if (anchors) {
+        for (size_t i = 0, la = jl_array_nrows(anchors); i < la; i++) {
+            jl_value_t *a = jl_array_ptr_ref(anchors, i);
+            if (a && jl_object_in_image(a)) {
+                size_t idx = external_blob_index(a);
+                if (idx < nblobs)
+                    bits[idx / (8 * sizeof(size_t))] |= (size_t)1 << (idx % (8 * sizeof(size_t)));
+                break;
+            }
+        }
+    }
+    assert(loading_closure_bits_owned == NULL);
+    loading_closure_bits_owned = bits;
+    jl_set_loading_closure_blobs(bits, nblobs);
+}
+
+JL_DLLEXPORT void jl_clear_loading_closure(void)
+{
+    jl_set_loading_closure_blobs(NULL, 0);
+    free(loading_closure_bits_owned);
+    loading_closure_bits_owned = NULL;
+}
+
 JL_DLLEXPORT uint8_t jl_object_in_image(jl_value_t *obj) JL_NOTSAFEPOINT
 {
     if (obj == NULL)

@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using ..Compiler.Base
-using ..Compiler: _findsup, store_backedges, JLOptions, get_world_counter,
+using ..Compiler: Compiler, _findsup, store_backedges, JLOptions, get_world_counter,
     _methods_by_ftype, get_methodtable, get_ci_mi, should_instrument,
     morespecific, RefValue, get_require_world, Vector, IdDict
 using .Core: CodeInstance, MethodInstance
@@ -72,9 +72,9 @@ function insert_backedges(internal_methods::Vector{Any})
     # determine which CodeInstance objects are still valid in our image
     # to enable any applicable new codes
     backedges_only = unsafe_load(cglobal(:jl_first_image_replacement_world, UInt)) == typemax(UInt)
-    scan_new_methods!(internal_methods, backedges_only)
+    Compiler.@zone "LOAD_ScanNewMethods" scan_new_methods!(internal_methods, backedges_only)
     workspace = VerifyMethodWorkspace()
-    scan_new_code!(internal_methods, workspace)
+    Compiler.@zone "LOAD_ScanNewCode" scan_new_code!(internal_methods, workspace)
     nothing
 end
 
@@ -92,13 +92,20 @@ function scan_new_code!(internal_methods::Vector{Any}, workspace::VerifyMethodWo
     end
 end
 
+# 0: verify this edge normally; 1: its match world is provably unchanged since
+# the precompile worker (skip); 2: skip would be legal, but verify and compare
+@inline function edge_replay_mode(@nospecialize(sig))
+    _jl_debug_method_invalidation[] === nothing || return Int32(0)
+    return ccall(:jl_edge_sig_replayable, Int32, (Any,), sig)
+end
+
 function verify_method_graph(codeinst::CodeInstance, validation_world::UInt, workspace::VerifyMethodWorkspace)
     @assert isempty(workspace.stack) "workspace corrupted"
     @assert isempty(workspace.visiting) "workspace corrupted"
     @assert isempty(workspace.initial_states) "workspace corrupted"
     @assert isempty(workspace.work_states) "workspace corrupted"
     @assert isempty(workspace.result_states) "workspace corrupted"
-    child_cycle, minworld, maxworld = verify_method(codeinst, validation_world, workspace)
+    child_cycle, minworld, maxworld = Compiler.@zone "VERIFY_MethodGraph" verify_method(codeinst, validation_world, workspace)
     @assert child_cycle == 0
     @assert isempty(workspace.stack) "workspace corrupted"
     @assert isempty(workspace.visiting) "workspace corrupted"
@@ -228,13 +235,29 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
 
                     if edge isa MethodInstance
                         sig = edge.specTypes
-                        min_valid2, max_valid2 = verify_call(sig, initial.callees, j, 1, world, true, matches)
+                        r = edge_replay_mode(sig)
+                        if r == 1
+                            min_valid2, max_valid2 = get_require_world(), validation_world
+                        else
+                            min_valid2, max_valid2 = verify_call(sig, initial.callees, j, 1, world, true, matches)
+                            if r == 2 && max_valid2 < validation_world
+                                ccall(:jl_safe_printf, Cvoid, (Ptr{UInt8},), "EDGE VERIFY MISMATCH (call)\n")
+                            end
+                        end
                         j += 1
                     elseif edge isa Int
                         sig = initial.callees[j+1]
                         nmatches = abs(edge)
                         fully_covers = edge > 0
-                        min_valid2, max_valid2 = verify_call(sig, initial.callees, j+2, nmatches, world, fully_covers, matches)
+                        r = edge_replay_mode(sig)
+                        if r == 1
+                            min_valid2, max_valid2 = get_require_world(), validation_world
+                        else
+                            min_valid2, max_valid2 = verify_call(sig, initial.callees, j+2, nmatches, world, fully_covers, matches)
+                            if r == 2 && max_valid2 < validation_world
+                                ccall(:jl_safe_printf, Cvoid, (Ptr{UInt8},), "EDGE VERIFY MISMATCH (call)\n")
+                            end
+                        end
                         j += 2 + nmatches
                         edge = sig
                     elseif edge isa Core.Binding
@@ -264,7 +287,15 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
                         else
                             meth = callee::Method
                         end
-                        min_valid2, max_valid2 = verify_invokesig(edge, meth, world, matches)
+                        r = edge_replay_mode(edge)
+                        if r == 1
+                            min_valid2, max_valid2 = get_require_world(), validation_world
+                        else
+                            min_valid2, max_valid2 = verify_invokesig(edge, meth, world, matches)
+                            if r == 2 && max_valid2 < validation_world
+                                ccall(:jl_safe_printf, Cvoid, (Ptr{UInt8},), "EDGE VERIFY MISMATCH (invoke)\n")
+                            end
+                        end
                         j += 2
                     end
 

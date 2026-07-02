@@ -1484,6 +1484,9 @@ extern JL_DLLEXPORT jl_genericmemory_t *jl_method_contributors JL_GLOBALLY_ROOTE
 JL_DLLEXPORT void jl_set_loading_closure_blobs(size_t *bits, size_t nblobs);
 void jl_method_table_activate_with_cert(jl_typemap_entry_t *newentry, jl_svec_t *cert);
 JL_DLLEXPORT jl_value_t *jl_get_activation_cert(jl_method_t *method);
+JL_DLLEXPORT int jl_edge_sig_replayable(jl_value_t *sig);
+JL_DLLEXPORT void jl_set_loading_closure_from_depmods(jl_array_t *depmods, jl_array_t *anchors);
+JL_DLLEXPORT void jl_clear_loading_closure(void);
 extern JL_DLLEXPORT jl_genericmemory_t *jl_activation_certs JL_GLOBALLY_ROOTED;
 
 // the first argument to jl_idtable_rehash is used to return a value
