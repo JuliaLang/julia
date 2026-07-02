@@ -1344,6 +1344,7 @@ void jl_init_types(void) JL_GC_DISABLED;
 void jl_init_flisp(void);
 void jl_init_common_symbols(void) JL_NOTSAFEPOINT;
 void jl_init_primitives(void) JL_GC_DISABLED;
+void jl_init_builtin_dmap(void);
 void jl_init_llvm(void);
 void jl_init_runtime_ccall(void);
 void jl_init_intrinsic_functions(void) JL_GC_DISABLED;
