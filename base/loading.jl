@@ -1494,7 +1494,12 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
         sv = sv::SimpleVector
         internal_methods = sv[3]::Vector{Any}
         Compiler.@zone "CC: INSERT_BACKEDGES" begin
-            ReinferUtils.insert_backedges_typeinf(internal_methods)
+            ccall(:jl_set_loading_closure_from_depmods, Cvoid, (Any, Any), depmods, internal_methods)
+            try
+                ReinferUtils.insert_backedges_typeinf(internal_methods)
+            finally
+                ccall(:jl_clear_loading_closure, Cvoid, ())
+            end
         end
         restored = register_restored_modules(sv, pkg, path)
 
@@ -4605,7 +4610,10 @@ end
 @constprop :none function stale_cachefile(modspec::PkgLoadSpec, cachefile::String; ignore_loaded::Bool = false, requested_flags::CacheFlags=CacheFlags(), reasons=nothing, verify_checksums::Bool=true)
     return stale_cachefile(PkgId(""), UInt128(0), modspec, cachefile; ignore_loaded, requested_flags, reasons, verify_checksums)
 end
-@constprop :none function stale_cachefile(modkey::PkgId, build_id::UInt128, modspec::PkgLoadSpec, cachefile::String;
+@constprop :none function stale_cachefile(modkey::PkgId, build_id::UInt128, modspec::PkgLoadSpec, cachefile::String; kwargs...)
+    Compiler.@zone "STALECHECK" _stale_cachefile(modkey, build_id, modspec, cachefile; kwargs...)
+end
+@constprop :none function _stale_cachefile(modkey::PkgId, build_id::UInt128, modspec::PkgLoadSpec, cachefile::String;
                                           ignore_loaded::Bool=false, requested_flags::CacheFlags=CacheFlags(),
                                           reasons::Union{Dict{Symbol,Int},Nothing}=nothing, stalecheck::Bool=true,
                                           verify_checksums::Bool=true)
