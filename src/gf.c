@@ -2368,6 +2368,25 @@ static void _invalidate_backedges(jl_method_instance_t *replaced_mi, jl_code_ins
 static int jl_type_intersection2(jl_value_t *t1, jl_value_t *t2, jl_value_t **isect JL_REQUIRE_ROOTED_SLOT, jl_value_t **isect2 JL_REQUIRE_ROOTED_SLOT)
 {
     *isect2 = NULL;
+    // Fast path: a dispatch tuple is a concrete leaf type, so its intersection with any
+    // other type is just itself (when it is a subtype) or empty. This avoids full type
+    // intersection for the common case of concrete specialization/backedge signatures.
+    if (jl_is_dispatch_tupletype(t2)) {
+        if (jl_subtype(t2, t1)) {
+            *isect = t2;
+            return 1;
+        }
+        *isect = jl_bottom_type;
+        return 0;
+    }
+    if (jl_is_dispatch_tupletype(t1)) {
+        if (jl_subtype(t1, t2)) {
+            *isect = t1;
+            return 1;
+        }
+        *isect = jl_bottom_type;
+        return 0;
+    }
     int is_subty = 0;
     *isect = jl_type_intersection_env_s(t1, t2, NULL, &is_subty);
     if (*isect == jl_bottom_type)
