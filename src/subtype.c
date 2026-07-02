@@ -2220,6 +2220,16 @@ static int check_vararg_length(jl_value_t *v, ssize_t n, jl_stenv_t *e)
 
 static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e);
 
+// `x == y || jl_subtype(x, y)` for closed arguments: identical objects are
+// subtypes by reflexivity, so the identity check is purely a performance
+// optimization (it skips a redundant top-level query, e.g. for the function
+// type slot shared by two signatures of the same generic function); it never
+// changes the result.
+STATIC_INLINE int egal_or_subtype(jl_value_t *x, jl_value_t *y)
+{
+    return x == y || jl_subtype(x, y);
+}
+
 static int subtype_tuple_varargs(
     jl_vararg_t *vtx, jl_vararg_t *vty,
     jl_value_t *lastx, jl_value_t *lasty,
@@ -2280,7 +2290,7 @@ static int subtype_tuple_varargs(
         }
         else if ((e->Runions.depth == 0 ? !jl_has_free_typevars(xp0) : jl_is_concrete_type(xp0)) && !jl_has_free_typevars(yp0)) {
             // fast path for separable sub-formulas
-            if (!jl_subtype(xp0, yp0))
+            if (!egal_or_subtype(xp0, yp0))
                 return 0;
         }
         else {
@@ -2446,8 +2456,7 @@ static int subtype_tuple_tail(jl_datatype_t *xd, jl_datatype_t *yd, int8_t R, jl
         }
         else if ((e->Runions.depth == 0 ? !jl_has_free_typevars(xi) : jl_is_concrete_type(xi)) && !jl_has_free_typevars(yi)) {
             // fast path for separable sub-formulas
-            int sub = jl_subtype(xi, yi);
-            if (!sub)
+            if (!egal_or_subtype(xi, yi))
                 return 0;
         }
         else {
@@ -2880,7 +2889,7 @@ static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t 
     int kindx = !jl_has_free_typevars(x);
     int kindy = !jl_has_free_typevars(y);
     if (kindx && kindy)
-        return jl_subtype(x, y);
+        return egal_or_subtype(x, y);
     int has_exists = (!kindx && has_existential_typevar(x, e)) ||
                      (!kindy && has_existential_typevar(y, e));
     if (!has_exists) {
@@ -5628,7 +5637,7 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_par
         return intersect_var((jl_tvar_t*)y, x, e, 1, param);
     }
     if (e->Loffset == 0 && !jl_has_free_typevars(x) && !jl_has_free_typevars(y)) {
-        if (jl_subtype(x, y)) return x;
+        if (egal_or_subtype(x, y)) return x;
         if (jl_subtype(y, x)) return y;
     }
     if (jl_is_uniontype(x)) {
