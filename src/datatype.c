@@ -515,7 +515,7 @@ static int is_type_identityfree(jl_value_t *t)
 void jl_get_genericmemory_layout(jl_datatype_t *st)
 {
     jl_value_t *kind = jl_tparam0(st);
-    jl_value_t *eltype = jl_tparam1(st);
+    jl_value_t *eltype = normalize_typeofbottom_layout_alias(jl_tparam1(st));
     jl_value_t *addrspace = jl_tparam2(st);
     if (!st->isconcretetype) {
         // Since parent dt has an opaque layout, we may end up here being asked to copy that layout to subtypes,
