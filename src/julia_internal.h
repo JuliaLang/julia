@@ -1479,6 +1479,9 @@ void jl_set_gc_and_wait(jl_task_t *ct);
 
 // Query if this object is perm-allocated in an image.
 JL_DLLEXPORT uint8_t jl_object_in_image(jl_value_t* v) JL_NOTSAFEPOINT;
+size_t jl_external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT;
+extern JL_DLLEXPORT jl_genericmemory_t *jl_method_contributors JL_GLOBALLY_ROOTED;
+JL_DLLEXPORT void jl_set_loading_closure_blobs(size_t *bits, size_t nblobs);
 
 // the first argument to jl_idtable_rehash is used to return a value
 // make sure it is rooted if it is used after the function returns

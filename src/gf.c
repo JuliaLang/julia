@@ -2182,10 +2182,21 @@ struct matches_env {
     jl_typemap_entry_t *replaced;
 };
 
+// nonzero while scanning for an activation whose typename contributors were
+// all within the loading image's dependency closure (measurement)
+static int current_activation_clean = 0;
+static int method_in_loading_closure(jl_method_t *m);
+extern JL_DLLEXPORT uint64_t jl_contrib_stats[8];
+
 static int get_intersect_visitor(jl_typemap_entry_t *oldentry, struct typemap_intersection_env *closure0)
 {
     struct matches_env *closure = container_of(closure0, struct matches_env, match);
     jl_method_t *oldmethod = oldentry->func.method;
+    if (current_activation_clean) {
+        jl_contrib_stats[4]++;
+        if (!method_in_loading_closure(oldmethod))
+            jl_contrib_stats[3]++; // invariant violation: clean typename, foreign method
+    }
     assert(oldentry != closure->newentry && "entry already added");
     assert(jl_atomic_load_relaxed(&oldentry->min_world) <= jl_atomic_load_relaxed(&closure->newentry->min_world) && "old method cannot be newer than new method");
     //assert(jl_atomic_load_relaxed(&oldentry->max_world) != jl_atomic_load_relaxed(&closure->newentry->min_world) && "method cannot be added at the same time as method deleted");
@@ -2540,6 +2551,7 @@ static int _invalidate_dispatch_backedges(jl_method_instance_t *mi, jl_value_t *
 // invalidate cached methods that overlap this definition
 static void invalidate_backedges(jl_method_instance_t *replaced_mi, size_t max_world, const char *why)
 {
+    JL_TIMING(ADD_METHOD, INVALIDATE_Backedges);
     // Reset dispatch_status when method instance is replaced
     JL_LOCK(&replaced_mi->def.method->writelock);
     _invalidate_backedges(replaced_mi, NULL, max_world, 1);
@@ -2628,6 +2640,105 @@ static void _typename_add_backedge(jl_typename_t *tn, int explct, void *env0)
     }
     jl_array_ptr_1d_push(backedges, env->typ);
     jl_array_ptr_1d_push(backedges, env->caller);
+}
+
+// ---- method-table contributor tracking ----
+// For every generic function (keyed by the same top-typename decomposition the
+// mt-backedge table uses), track which sources have contributed (or deleted)
+// methods under it: the linkage blob index for pkgimage-owned methods, -1 for
+// run-time sources (eval, deletion). A pkgimage activation whose typenames'
+// contributors all lie within the image's dependency closure faces exactly the
+// prior world its precompile worker analyzed.
+JL_DLLEXPORT jl_genericmemory_t *jl_method_contributors = NULL;
+JL_DLLEXPORT uint64_t jl_contrib_stats[8];
+
+static size_t *jl_loading_closure_bits = NULL; // bitset over linkage blobs
+static size_t jl_loading_closure_nblobs = 0;
+
+JL_DLLEXPORT void jl_set_loading_closure_blobs(size_t *bits, size_t nblobs)
+{
+    jl_loading_closure_bits = bits;
+    jl_loading_closure_nblobs = nblobs;
+}
+
+static int blob_in_loading_closure(size_t idx)
+{
+    if (idx >= jl_loading_closure_nblobs)
+        return 0;
+    return (jl_loading_closure_bits[idx / (8 * sizeof(size_t))] >>
+            (idx % (8 * sizeof(size_t)))) & 1;
+}
+
+static int method_in_loading_closure(jl_method_t *m)
+{
+    if (!jl_object_in_image((jl_value_t*)m))
+        return 0;
+    return blob_in_loading_closure(jl_external_blob_index((jl_value_t*)m));
+}
+
+static void contributor_add_tag(jl_typename_t *tn, int32_t tag)
+{
+    if (jl_method_contributors == NULL) {
+        if (jl_an_empty_memory_any == NULL)
+            return; // too early in bootstrap to track (table is per-session anyway)
+        jl_method_contributors = (jl_genericmemory_t*)jl_an_empty_memory_any;
+    }
+    jl_array_t *tags = (jl_array_t*)jl_eqtable_get(jl_method_contributors, (jl_value_t*)tn, NULL);
+    if (tags == NULL) {
+        tags = jl_alloc_array_1d(jl_array_int32_type, 0);
+        JL_GC_PUSH1(&tags);
+        jl_genericmemory_t *newtable = jl_eqtable_put(jl_method_contributors, (jl_value_t*)tn, (jl_value_t*)tags, NULL);
+        JL_GC_POP();
+        if (newtable != jl_method_contributors)
+            jl_method_contributors = newtable;
+    }
+    size_t l = jl_array_nrows(tags);
+    int32_t *d = jl_array_data(tags, int32_t);
+    for (size_t i = 0; i < l; i++)
+        if (d[i] == tag)
+            return;
+    jl_array_grow_end(tags, 1);
+    jl_array_data(tags, int32_t)[l] = tag;
+}
+
+static void _typename_tag_contributor(jl_typename_t *tn, int explct, void *env0)
+{
+    // like the mt-backedge table: store only under explicitly encountered
+    // typenames; checks consult every callback. Exception: the shared Type
+    // typename is tagged unconditionally, because Type-signatures of
+    // unrelated families still intersect one another (every abstract-bounded
+    // constructor admits Type{Union{}}), so the per-family top typename is
+    // not a complete key for them.
+    if (!explct && tn != jl_type_typename)
+        return;
+    contributor_add_tag(tn, *(int32_t*)env0);
+}
+
+static void _typename_check_contributor(jl_typename_t *tn, int explct, void *env0)
+{
+    int *clean = (int*)env0;
+    (void)explct;
+    if (!*clean || jl_method_contributors == NULL)
+        return;
+    jl_array_t *tags = (jl_array_t*)jl_eqtable_get(jl_method_contributors, (jl_value_t*)tn, NULL);
+    if (tags == NULL)
+        return; // only (pre-session) sysimage contributions
+    size_t l = jl_array_nrows(tags);
+    int32_t *d = jl_array_data(tags, int32_t);
+    for (size_t i = 0; i < l; i++) {
+        if (d[i] < 0 || !blob_in_loading_closure((size_t)d[i])) {
+            jl_contrib_stats[d[i] < 0 ? 5 : 6]++; // dirty cause: session / foreign blob
+            *clean = 0;
+            return;
+        }
+    }
+}
+
+static void contributor_tag_method(jl_method_t *method)
+{
+    int32_t tag = jl_object_in_image((jl_value_t*)method) ?
+        (int32_t)jl_external_blob_index((jl_value_t*)method) : -1;
+    jl_foreach_top_typename_for(_typename_tag_contributor, (jl_value_t*)method->sig, 0, &tag);
 }
 
 // add a backedge from a non-existent signature to caller
@@ -2917,6 +3028,10 @@ JL_DLLEXPORT void jl_method_table_disable(jl_method_t *method)
         assert(jl_atomic_load_relaxed(&methodentry->max_world) == ~(size_t)0);
         jl_atomic_store_relaxed(&methodentry->max_world, world);
         jl_method_table_invalidate(method, world);
+        if (jl_method_get_table(method) == jl_method_table) {
+            int32_t tag = -1; // deletions poison the typename for certificate replay
+            jl_foreach_top_typename_for(_typename_tag_contributor, (jl_value_t*)method->sig, 0, &tag);
+        }
         jl_atomic_store_release(&jl_world_counter, world + 1);
     }
     JL_UNLOCK(&world_counter_lock);
@@ -2940,8 +3055,10 @@ jl_typemap_entry_t *jl_method_table_add(jl_methtable_t *mt, jl_method_t *method,
     newentry = jl_typemap_alloc((jl_tupletype_t*)method->sig, simpletype, jl_emptysvec, (jl_value_t*)method, ~(size_t)0, 1);
     jl_typemap_insert(&mt->defs, (jl_value_t*)mt, newentry, 0);
 
-    if (mt == jl_method_table)
+    if (mt == jl_method_table) {
         update_max_args(method->sig);
+        contributor_tag_method(method);
+    }
     JL_UNLOCK(&mt->cache->writelock);
     JL_GC_POP();
     return newentry;
@@ -3125,9 +3242,23 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
     jl_value_t *isect2 = NULL;
     jl_genericmemory_t *interferences = NULL;
     JL_GC_PUSH6(&oldvalue, &oldmi, &loctag, &isect, &isect2, &interferences);
+    int closure_clean = 0;
+    if (jl_loading_closure_bits != NULL && mt == jl_method_table) {
+        int clean = 1;
+        if (jl_foreach_top_typename_for(_typename_check_contributor, type, 1, &clean)) {
+            closure_clean = clean;
+        }
+        else {
+            jl_contrib_stats[2]++; // cannot decompose: full-table semantics
+            closure_clean = 0;
+        }
+        jl_contrib_stats[closure_clean ? 0 : 1]++;
+    }
     jl_typemap_entry_t *replaced = NULL;
     // Check what entries this intersects with in the prior world.
+    current_activation_clean = closure_clean;
     oldvalue = get_intersect_matches(jl_atomic_load_relaxed(&mt->defs), newentry, &replaced, max_world);
+    current_activation_clean = 0;
     jl_method_t *const *d;
     size_t j, n;
     if (oldvalue == NULL) {

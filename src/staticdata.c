@@ -207,6 +207,11 @@ static size_t external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT
     return meta ? meta->idx : (size_t)-1;
 }
 
+size_t jl_external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT
+{
+    return external_blob_index(v);
+}
+
 JL_DLLEXPORT uint8_t jl_object_in_image(jl_value_t *obj) JL_NOTSAFEPOINT
 {
     if (obj == NULL)
@@ -2032,6 +2037,7 @@ static void jl_write_arraylist(ios_t *s, arraylist_t *list)
 
 static void jl_read_reloclist(jl_serializer_state *s, jl_array_t *link_ids, uint8_t bits)
 {
+    JL_TIMING(LOAD_IMAGE, LOAD_Relocs);
     uintptr_t base = (uintptr_t)s->s->buf;
     uintptr_t last_pos = 0;
     uint8_t *current = (uint8_t *)(s->relocs->buf + s->relocs->bpos);
@@ -2245,6 +2251,7 @@ static uint32_t write_gvars(jl_serializer_state *s, arraylist_t *globals, arrayl
 // Pointer relocation for native-code referenced global variables
 static void jl_update_all_gvars(jl_serializer_state *s, jl_image_t *image, uint32_t external_fns_begin)
 {
+    JL_TIMING(LOAD_IMAGE, LOAD_Gvars);
     if (image->gvars_base == NULL)
         return;
     uintptr_t base = (uintptr_t)s->s->buf;
@@ -3864,6 +3871,15 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     arraylist_new(&cleanup_list, 0);
     arraylist_t delay_list;
     arraylist_new(&delay_list, 0);
+#ifdef ENABLE_TIMINGS
+    // Hand-rolled sub-region zone (no cleanup attribute: ends explicitly below)
+    static jl_timing_event_t *uniquing_timing_event = NULL;
+    if (!uniquing_timing_event)
+        uniquing_timing_event = jl_timing_event_create("LOAD_IMAGE", "LOAD_Uniquing", __func__, __FILE__, __LINE__, 0);
+    jl_timing_block_t uniquing_timing_block = { 0 };
+    uniquing_timing_block.event = uniquing_timing_event;
+    jl_timing_block_start(&uniquing_timing_block);
+#endif
     JL_LOCK(&typecache_lock); // Might GC--prevent other threads from changing any type caches while we inspect them all
     for (size_t i = 0; i < s.uniquing_types.len; i++) {
         uintptr_t item = (uintptr_t)s.uniquing_types.items[i];
@@ -4076,6 +4092,15 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         o->bits.in_image = 1;
     }
     arraylist_free(&cleanup_list);
+#ifdef ENABLE_TIMINGS
+    jl_timing_block_end(&uniquing_timing_block);
+    static jl_timing_event_t *fixup_timing_event = NULL;
+    if (!fixup_timing_event)
+        fixup_timing_event = jl_timing_event_create("LOAD_IMAGE", "LOAD_Fixup", __func__, __FILE__, __LINE__, 0);
+    jl_timing_block_t fixup_timing_block = { 0 };
+    fixup_timing_block.event = fixup_timing_event;
+    jl_timing_block_start(&fixup_timing_block);
+#endif
     for (size_t i = 0; i < s.fixup_objs.len; i++) {
         uintptr_t item = (uintptr_t)s.fixup_objs.items[i];
         jl_value_t *obj = (jl_value_t*)(image_base + item);
@@ -4146,6 +4171,9 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     }
     arraylist_free(&s.fixup_types);
     arraylist_free(&s.fixup_objs);
+#ifdef ENABLE_TIMINGS
+    jl_timing_block_end(&fixup_timing_block);
+#endif
 
     if (s.incremental)
         jl_root_new_gvars(&s, image, external_fns_begin);
@@ -4325,7 +4353,7 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
             size_t world = jl_atomic_load_relaxed(&jl_world_counter);
             if (new_methods)
                 world += 1;
-            jl_activate_methods(extext_methods, internal_methods, world, pkgname);
+            jl_activate_methods(extext_methods, internal_methods, world, pkgname, depmods);
             // TODO: inject internal_methods into caches here, so the system can see them immediately as potential candidates (before validation)
             // allow users to start running in this updated world
             if (new_methods)

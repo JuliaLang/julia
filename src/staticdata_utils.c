@@ -884,8 +884,32 @@ static void jl_add_methods(jl_array_t *external)
 }
 
 extern _Atomic(int) allow_new_worlds;
-static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size_t world, const char *pkgname)
+static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size_t world, const char *pkgname, jl_array_t *depmods)
 {
+    JL_TIMING(LOAD_IMAGE, LOAD_ActivateMethods);
+    // Install the dependency-closure blob bitset for contributor-cleanliness
+    // classification: sysimage (blob 0), every dependency image, and this
+    // image itself (its methods' blob).
+    size_t nblobs = n_linkage_blobs();
+    size_t nwords = (nblobs + 8 * sizeof(size_t) - 1) / (8 * sizeof(size_t));
+    size_t *closure_bits = (size_t*)calloc_s(nwords ? nwords * sizeof(size_t) : sizeof(size_t));
+    closure_bits[0] |= 1; // the sysimage
+    if (depmods) {
+        for (size_t i = 0, ld = jl_array_nrows(depmods); i < ld; i++) {
+            size_t idx = external_blob_index(jl_array_ptr_ref(depmods, i));
+            if (idx < nblobs)
+                closure_bits[idx / (8 * sizeof(size_t))] |= (size_t)1 << (idx % (8 * sizeof(size_t)));
+        }
+    }
+    for (size_t i = 0, le = jl_array_nrows(external); i < le; i++) {
+        jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_array_ptr_ref(external, i);
+        size_t idx = external_blob_index((jl_value_t*)entry->func.method);
+        if (idx < nblobs)
+            closure_bits[idx / (8 * sizeof(size_t))] |= (size_t)1 << (idx % (8 * sizeof(size_t)));
+    }
+    jl_set_loading_closure_blobs(closure_bits, nblobs);
+    if (pkgname)
+        jl_timing_puts(JL_TIMING_DEFAULT_BLOCK, pkgname);
     size_t i, l = jl_array_nrows(internal);
     for (i = 0; i < l; i++) {
         // allow_new_worlds doesn't matter here, since we aren't actually changing anything external
@@ -917,6 +941,8 @@ static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size
     if (l) {
         if (!jl_atomic_load_relaxed(&allow_new_worlds)) {
             jl_printf(JL_STDERR, "WARNING: Method changes for %s have been disabled via a call to disable_new_worlds.\n", pkgname);
+            jl_set_loading_closure_blobs(NULL, 0);
+            free(closure_bits);
             return;
         }
         for (i = 0; i < l; i++) {
@@ -928,6 +954,8 @@ static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size
             //jl_printf(JL_STDERR, "\n");
         }
     }
+    jl_set_loading_closure_blobs(NULL, 0);
+    free(closure_bits);
 }
 
 static int jl_copy_roots(jl_array_t *method_roots_list, uint64_t key)
