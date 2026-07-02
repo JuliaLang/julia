@@ -1769,11 +1769,16 @@ include("threads_comprehensions.jl")
 #     call f()
 #       f() already materialized
 #
-# We can tell the trampoline was generated if calling f() with a large integer
-# allocates (the trampoline will box the integer).
+# The property #60241 asks for is that these edges stay direct: no tojlinvoke
+# trampoline may be created at all, which the trampoline counter checks
+# directly. Allocations alone can no longer tell (a trampoline's PLT stub is
+# patched to the compiled specsig and stops boxing once g() publishes), but
+# still guard that patching behavior: a trampoline, if any existed, must not
+# box after its target compiles.
 
 @testset "Race invoke trampolines" begin
     for i=1:10
+        c0 = ccall(:jl_tojlinvoke_trampoline_count, UInt64, ())
         @eval begin
             @noinline function g(x)
                 x = @big_expr(4000, x)
@@ -1797,7 +1802,10 @@ include("threads_comprehensions.jl")
             wait(t)
         end
 
+        # See above: allocations guard the (healed) boxing behavior, the
+        # counter guards that batching/claiming kept the edges direct.
         @test @eval @allocations(f(10000)) == 0
+        @test ccall(:jl_tojlinvoke_trampoline_count, UInt64, ()) == c0
     end
 end
 

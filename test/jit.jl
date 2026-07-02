@@ -61,10 +61,15 @@ module M2b
     @noinline foo(x) = x + 100
     bar(x) = 2 * foo(x)
 end
-let ci = compile_no_deps(M2b.bar, (Int,))
+let c0 = ccall(:jl_tojlinvoke_trampoline_count, UInt64, ())
+    ci = compile_no_deps(M2b.bar, (Int,))
     @test check_edges_not_compiled(ci, M2b.foo)
     # The first call dispatches through `jl_invoke`, compiling the target.
     @test invoke(M2b.bar, ci, 5) == 210
+    # The edge to the (deliberately) not-compiled target must have gone
+    # through a counted trampoline; this keeps the counter assertion in the
+    # threads_exec.jl race test honest.
+    @test ccall(:jl_tojlinvoke_trampoline_count, UInt64, ()) > c0
     invoke(M2b.bar, ci, 5) # warm the measurement path
     @test (@allocations invoke(M2b.bar, ci, 5)) == 0
 end

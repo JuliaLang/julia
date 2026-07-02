@@ -2412,6 +2412,17 @@ void JuliaOJIT::armStubSlot(jl_code_instance_t *CI, _Atomic(void*) *Slot)
     }
 }
 
+// Number of tojlinvoke trampolines defined by linkCallTarget, i.e. of call
+// edges that had to be linked while their target was not compiled (or had the
+// wrong invoke API). Exposed for tests: compilation schemes that batch or
+// claim work so that call edges stay direct must not define any.
+static _Atomic(uint64_t) tojlinvoke_trampolines_created{0};
+
+extern "C" JL_DLLEXPORT uint64_t jl_tojlinvoke_trampoline_count(void) JL_NOTSAFEPOINT
+{
+    return jl_atomic_load_relaxed(&tojlinvoke_trampolines_created);
+}
+
 // Must hold LinkerMutex.
 orc::SymbolStringPtr JuliaOJIT::linkCallTarget(orc::MaterializationResponsibility &MR,
                                                jl_code_instance_t *CI, jl_invoke_api_t API)
@@ -2467,6 +2478,7 @@ orc::SymbolStringPtr JuliaOJIT::linkCallTarget(orc::MaterializationResponsibilit
             MR.failMaterialization();
             return {};
         }
+        jl_atomic_fetch_add_relaxed(&tojlinvoke_trampolines_created, 1);
     }
 
     assert(Sym->invoke_api == API);
