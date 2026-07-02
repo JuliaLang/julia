@@ -2884,16 +2884,43 @@ static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
     return sub;
 }
 
-static int exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_savedenv_t *se, jl_param_pos_t param)
+// If `probe`, first re-run with the ∃ decision vector left in `e->Runions` by
+// the previous ∀ branch before enumerating from scratch; `*niter` is set to
+// the number of leaf evaluations the from-scratch enumeration used to find a
+// witness (0 if the probe hit or no witness was found).
+static int exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_savedenv_t *se, jl_param_pos_t param, int probe, int *niter)
 {
-    e->Runions.used = 0;
-    while (1) {
+    *niter = 0;
+    if (probe) {
+        // ∃-witness caching (the oracle analogue of solution/phase saving and
+        // of the incremental per-block solvers in CEGAR-style QBF solving):
+        // before enumerating the ∃ decision space from scratch, re-run with
+        // the decision vector that satisfied the previous ∀ branch --
+        // adjacent branches often admit the same witness. A hit needs no
+        // further justification, since success requires only one witness and
+        // any successful run corresponds to a leaf the enumeration below
+        // would eventually reach. On a miss, fall back to the full
+        // enumeration (which may revisit the probed vector once).
         e->Runions.depth = 0;
         e->Runions.more = 0;
         e->Lunions.depth = 0;
         e->Lunions.more = 0;
         if (subtype(x, y, e, param))
             return 1;
+        restore_env(e, se, 1);
+    }
+    e->Runions.used = 0;
+    int count = 0;
+    while (1) {
+        e->Runions.depth = 0;
+        e->Runions.more = 0;
+        e->Lunions.depth = 0;
+        e->Lunions.more = 0;
+        count++;
+        if (subtype(x, y, e, param)) {
+            *niter = count;
+            return 1;
+        }
         if (next_union_state(e, 1)) {
             // We preserve `envout` here as `subtype_unionall` needs previous assigned env values.
             int oldidx = e->envidx;
@@ -2920,11 +2947,30 @@ static int forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl
 
     e->Lunions.used = 0;
     int sub;
+    // Adaptive ∃-witness caching across ∀ branches (see exists_subtype).
+    // Probe only when the last from-scratch search was deep enough that a hit
+    // saves work (a probe miss costs one extra leaf evaluation), and stop
+    // after two consecutive misses (branches whose witnesses track the ∀
+    // decisions, e.g. per-arm union matches, would miss every time). Not
+    // applied when environment output is requested, where the choice of
+    // witness is user-visible through the computed variable values.
+    int misses = 0, deep = 0;
     while (1) {
-        sub = exists_subtype(x, y, e, &se, param);
+        int probe = deep && misses < 2 && e->envsz == 0;
+        int niter = 0;
+        sub = exists_subtype(x, y, e, &se, param, probe, &niter);
         if (!sub || !next_union_state(e, 0))
             break;
         re_save_env(e, &se, 1);
+        if (niter > 0) {
+            // a from-scratch enumeration ran (no probe, or probe missed)
+            deep = niter > 2;
+            if (probe)
+                misses++;
+        }
+        else if (probe) {
+            misses = 0; // probe hit
+        }
     }
 
     free_env(&se);
