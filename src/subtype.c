@@ -1417,6 +1417,15 @@ static int var_occurs_covariant_only(jl_value_t *t, jl_tvar_t *var, int covarian
     return !jl_has_typevar(t, var);
 }
 
+// Test whether every occurrence of `var` in `t` is covariant, treating the top
+// level of `t` as a covariant position. Exposed for the compiler, which uses the
+// same notion of covariance to reason about when a `∀` variable's union upper
+// bound distributes over its arms (see `subtype_unionall`).
+JL_DLLEXPORT int jl_var_occurs_covariant_only(jl_value_t *t, jl_tvar_t *var) JL_NOTSAFEPOINT
+{
+    return var_occurs_covariant_only(t, var, 1);
+}
+
 static jl_value_t *subtype_unionall_envout_value(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e,
                                                  jl_varbinding_t *vb, jl_value_t *lb,
                                                  jl_value_t **new_tvar JL_REQUIRE_ROOTED_SLOT,

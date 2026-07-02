@@ -3301,7 +3301,7 @@ function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
     if atype === Union{}
         rt = Union{} # accidentally unreachable code
     else
-        matches = find_method_matches(interp, argtypes, atype; max_methods)
+        matches = find_method_matches(interp, ArgInfo(nothing, argtypes), atype, sv; max_methods)
         info = NoCallInfo()
         if isa(matches, FailedMethodMatch)
             rt = Bool # too many matches to analyze
