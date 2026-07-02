@@ -231,6 +231,62 @@ static void statestack_set(jl_unionstate_t *st, int i, int val) JL_NOTSAFEPOINT
         stack->data[i>>5] &= ~(1u<<(i&31));
 }
 
+// Memo for closed x closed top-level subtype queries. Large derivations
+// decompose into closed slot/component sub-queries (the separable fast
+// paths, intersection's per-level closed shortcut, invariant-parameter
+// equality, variable-bound conformance checks) whose small working set
+// repeats millions of times while loading packages: ~72% of the top-level
+// closed queries issued by a large package load are exact repeats.
+//
+// Soundness: for closed arguments the result is a pure, world-independent
+// function of the two type object identities. Entries are tagged with the
+// GC collection count and honored only in the epoch that wrote them, so a
+// stored pointer can never have been freed (no collection has run since).
+// Entries are two words written and read with relaxed atomics; each word is
+// mixed with the pair's hash, so a torn or stale entry fails validation
+// (up to a 2^-64 hash collision, the same order as hash-consing assumes).
+// The memo stays disabled until Base is fully initialized: during bootstrap
+// (and sysimage builds generally) type objects are completed incrementally
+// after creation, so a result cached against a partially-initialized type
+// would go stale under the same pointer, which the GC epoch cannot detect.
+JL_DLLEXPORT int jl_subtype_memo_enabled = 0;
+JL_DLLEXPORT void jl_enable_subtype_memo(void)
+{
+    jl_subtype_memo_enabled = 1;
+}
+#define JL_SUBTYPE_MEMO_BITS 20
+static _Atomic(uint64_t) jl_subtype_memo_tab[1 << JL_SUBTYPE_MEMO_BITS][2];
+STATIC_INLINE void jl_subtype_memo_keys(jl_value_t *x, jl_value_t *y, uint64_t *k1, uint64_t *k2)
+{
+    uint64_t a = (uint64_t)(uintptr_t)x * 0x9e3779b97f4a7c15ULL;
+    uint64_t b = (uint64_t)(uintptr_t)y * 0xc6a4a7935bd1e995ULL;
+    *k1 = a ^ (b >> 7) ^ (b << 41);
+    *k2 = b ^ (a >> 9) ^ (a << 37);
+}
+static int jl_subtype_memo_lookup(jl_value_t *x, jl_value_t *y, uint64_t epoch, int *res)
+{
+    uint64_t k1, k2;
+    jl_subtype_memo_keys(x, y, &k1, &k2);
+    size_t i = (k1 ^ k2) & ((1 << JL_SUBTYPE_MEMO_BITS) - 1);
+    uint64_t w0 = jl_atomic_load_relaxed(&jl_subtype_memo_tab[i][0]);
+    uint64_t w1 = jl_atomic_load_relaxed(&jl_subtype_memo_tab[i][1]);
+    if (w0 != k1)
+        return 0;
+    uint64_t meta = w1 ^ k2;
+    if ((meta >> 2) != epoch || !(meta & 1))
+        return 0;
+    *res = (meta >> 1) & 1;
+    return 1;
+}
+static void jl_subtype_memo_store(jl_value_t *x, jl_value_t *y, uint64_t epoch, int res)
+{
+    uint64_t k1, k2;
+    jl_subtype_memo_keys(x, y, &k1, &k2);
+    size_t i = (k1 ^ k2) & ((1 << JL_SUBTYPE_MEMO_BITS) - 1);
+    jl_atomic_store_relaxed(&jl_subtype_memo_tab[i][0], k1);
+    jl_atomic_store_relaxed(&jl_subtype_memo_tab[i][1], k2 ^ ((epoch << 2) | ((uint64_t)(res != 0) << 1) | 1));
+}
+
 #define has_next_union_state(e, R) ((((R) ? &(e)->Runions : &(e)->Lunions)->more) != 0)
 
 static int next_union_state(jl_stenv_t *e, int8_t R) JL_NOTSAFEPOINT
@@ -2955,6 +3011,15 @@ JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env, 
     jl_stenv_t e;
     if (y == (jl_value_t*)jl_any_type || x == jl_bottom_type)
         return 1;
+    uint64_t memo_epoch = 0;
+    int memo_active = jl_subtype_memo_enabled && envsz == 0 &&
+                      !jl_has_free_typevars(x) && !jl_has_free_typevars(y);
+    if (memo_active) {
+        int memo_res;
+        memo_epoch = (uint64_t)jl_gc_num().pause;
+        if (jl_subtype_memo_lookup(x, y, memo_epoch, &memo_res))
+            return memo_res;
+    }
     if (x == y ||
         (jl_typeof(x) == jl_typeof(y) &&
          (jl_is_unionall(y) || jl_is_uniontype(y) || jl_is_typeeq(y)) &&
@@ -2969,7 +3034,7 @@ JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env, 
                 ua = (jl_unionall_t*)ua->body;
             }
         }
-        return 1;
+        { int jl_memo_res = (1); if (memo_active) jl_subtype_memo_store(x, y, memo_epoch, jl_memo_res); return jl_memo_res; }
     }
     if (jl_is_typeapp(x) || jl_is_typeapp(y))
         jl_error("internal error: TypeApp in subtyping");
@@ -2977,9 +3042,9 @@ JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env, 
     if (jl_obvious_subtype(x, y, &obvious_subtype)) {
 #ifdef NDEBUG
         if (obvious_subtype == 0)
-            return obvious_subtype;
+            { int jl_memo_res = (obvious_subtype); if (memo_active) jl_subtype_memo_store(x, y, memo_epoch, jl_memo_res); return jl_memo_res; }
         else if (envsz == 0)
-            return obvious_subtype;
+            { int jl_memo_res = (obvious_subtype); if (memo_active) jl_subtype_memo_store(x, y, memo_epoch, jl_memo_res); return jl_memo_res; }
 #endif
     }
     else {
@@ -2993,7 +3058,7 @@ JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env, 
     if (obvious_subtype == 0 || (obvious_subtype == 1 && envsz == 0))
         subtype = obvious_subtype; // this ensures that running in a debugger doesn't change the result
 #endif
-    return subtype;
+    { int jl_memo_res = (subtype); if (memo_active) jl_subtype_memo_store(x, y, memo_epoch, jl_memo_res); return jl_memo_res; }
 }
 
 static int subtype_in_env(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)

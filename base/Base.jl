@@ -392,6 +392,7 @@ end
 
 function __init__()
     # Base library init
+    ccall(:jl_enable_subtype_memo, Cvoid, ())
     global _atexit_hooks_finished = false
     Filesystem.__postinit__()
     reinit_stdio()
