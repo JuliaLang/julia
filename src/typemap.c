@@ -584,6 +584,8 @@ static int jl_typemap_intersection_node_visitor(jl_typemap_entry_t *ml, struct t
             continue;
         if (closure->min_valid > jl_atomic_load_relaxed(&ml->max_world))
             continue;
+        if (closure->entry_filter && !closure->entry_filter(ml, closure))
+            continue;
         int nonempty;
         if (closure->emptiness_only) {
             // The callback consumes only the match verdict and `issubty`; skip

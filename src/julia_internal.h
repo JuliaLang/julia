@@ -1482,6 +1482,9 @@ JL_DLLEXPORT uint8_t jl_object_in_image(jl_value_t* v) JL_NOTSAFEPOINT;
 size_t jl_external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT;
 extern JL_DLLEXPORT jl_genericmemory_t *jl_method_contributors JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT void jl_set_loading_closure_blobs(size_t *bits, size_t nblobs);
+void jl_method_table_activate_with_cert(jl_typemap_entry_t *newentry, jl_svec_t *cert);
+JL_DLLEXPORT jl_value_t *jl_get_activation_cert(jl_method_t *method);
+extern JL_DLLEXPORT jl_genericmemory_t *jl_activation_certs JL_GLOBALLY_ROOTED;
 
 // the first argument to jl_idtable_rehash is used to return a value
 // make sure it is rooted if it is used after the function returns
@@ -2030,6 +2033,9 @@ struct typemap_intersection_env {
     int emptiness_only; // if set, `ti` and `env` are not materialized (`ti` is only a
                         // nonempty/bottom placeholder); the callback may consume just
                         // the match verdict and `issubty`
+    int (*entry_filter)(jl_typemap_entry_t *ml, struct typemap_intersection_env *closure);
+                        // if set, entries for which this returns 0 are skipped without
+                        // performing any intersection
 };
 int jl_typemap_intersection_visitor(jl_typemap_t *a, int offs, struct typemap_intersection_env *closure);
 void typemap_slurp_search(jl_typemap_entry_t *ml, struct typemap_intersection_env *closure);

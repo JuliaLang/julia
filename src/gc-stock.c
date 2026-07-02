@@ -2905,6 +2905,7 @@ static void gc_mark_roots(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
     }
     gc_try_claim_and_push(mq, _jl_debug_method_invalidation, NULL);
     gc_try_claim_and_push(mq, jl_method_contributors, NULL);
+    gc_try_claim_and_push(mq, jl_activation_certs, NULL);
     gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_method_contributors, "method_contributors");
     gc_heap_snapshot_record_gc_roots((jl_value_t*)_jl_debug_method_invalidation, "debug_method_invalidation");
     // constants

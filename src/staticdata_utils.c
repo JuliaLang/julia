@@ -576,8 +576,20 @@ static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure)
     jl_array_t *s = (jl_array_t*)closure;
     jl_method_t *m = ml->func.method;
     if (!jl_object_in_image((jl_value_t*)m->module)) {
-        if (s)
+        if (s) {
             jl_array_ptr_1d_push(s, (jl_value_t*)m); // extext
+            jl_value_t *cert = jl_get_activation_cert(m);
+            if (cert != jl_nothing) {
+                // refresh the dispatch bits to the worker-final state: later
+                // activations may have cleared LATEST_ONLY after this method's
+                // own activation recorded its bits, and replay order does not
+                // preserve activation order
+                jl_value_t *bits = jl_box_int32(jl_atomic_load_relaxed(&m->dispatch_status) &
+                                                (METHOD_SIG_LATEST_WHICH | METHOD_SIG_LATEST_ONLY));
+                jl_svecset((jl_svec_t*)cert, 3, bits);
+            }
+            jl_array_ptr_1d_push(s, cert); // paired activation certificate
+        }
     }
     return 1;
 }
@@ -694,7 +706,7 @@ static const char *jl_git_commit(void)
 
 
 // "magic" string and version header of .ji file
-static const int JI_FORMAT_VERSION = 13;
+static const int JI_FORMAT_VERSION = 14; // extext_methods carries (method, activation cert) pairs
 static const char JI_MAGIC[] = "\373jli\r\n\032\n"; // based on PNG signature
 static const uint16_t BOM = 0xFEFF; // byte-order marker
 static int64_t write_header(ios_t *s, uint8_t pkgimage)
@@ -872,7 +884,7 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
 static void jl_add_methods(jl_array_t *external)
 {
     size_t i, l = jl_array_nrows(external);
-    for (i = 0; i < l; i++) {
+    for (i = 0; i < l; i += 2) { // (method, activation certificate) pairs
         jl_method_t *meth = (jl_method_t*)jl_array_ptr_ref(external, i);
         assert(jl_is_method(meth));
         assert(!meth->is_for_opaque_closure);
@@ -901,7 +913,7 @@ static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size
                 closure_bits[idx / (8 * sizeof(size_t))] |= (size_t)1 << (idx % (8 * sizeof(size_t)));
         }
     }
-    for (size_t i = 0, le = jl_array_nrows(external); i < le; i++) {
+    for (size_t i = 0, le = jl_array_nrows(external); i < le; i += 2) {
         jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_array_ptr_ref(external, i);
         size_t idx = external_blob_index((jl_value_t*)entry->func.method);
         if (idx < nblobs)
@@ -945,10 +957,11 @@ static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size
             free(closure_bits);
             return;
         }
-        for (i = 0; i < l; i++) {
+        for (i = 0; i < l; i += 2) {
             jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_array_ptr_ref(external, i);
+            jl_value_t *cert = jl_array_ptr_ref(external, i + 1);
             //uint64_t t0 = uv_hrtime();
-            jl_method_table_activate(entry);
+            jl_method_table_activate_with_cert(entry, cert == jl_nothing ? NULL : (jl_svec_t*)cert);
             //jl_printf(JL_STDERR, "%f ", (double)(uv_hrtime() - t0) / 1e6);
             //jl_static_show(JL_STDERR, entry->func.value);
             //jl_printf(JL_STDERR, "\n");
