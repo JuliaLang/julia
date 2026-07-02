@@ -659,6 +659,11 @@ function _tier_osr_impl(src::Core.CodeInfo, mi::Core.MethodInstance, ip::Int, st
               Core.Typeof(state[nslots + j]) : Nothing)
     end
     length(argtypes) <= 64 || return nothing
+    # Core.Typeof of a type-valued slot can carry free typevars, which would
+    # make the OpaqueClosure type non-concrete; decline and keep interpreting.
+    for t in argtypes
+        ccall(:jl_has_free_typevars, Cint, (Any,), t) == 0 || return nothing
+    end
     entry = _tier_osr_build(src, mi, ip, defined, argtypes, plan)
     entry === nothing && return nothing
     oc, ssalist = entry
