@@ -8031,7 +8031,26 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
 
     jl_array_t *closure_types = NULL;
     jl_value_t *sigt = NULL; // dispatch-sig = type signature with Ref{} annotations removed and applied to the env
-    JL_GC_PUSH4(&declrt, &sigt, &rt, &closure_types);
+    jl_svec_t *argt_inst = NULL;
+    JL_GC_PUSH5(&declrt, &sigt, &rt, &closure_types, &argt_inst);
+    // Substitute known static-parameter values into the declared argument
+    // types up front: the ABI and argument-unpacking decisions below must be
+    // made on the same types the call sites use, and `gen_cfun_wrapper` cannot
+    // substitute them itself when `unionall_env` is dropped for the
+    // non-closure case. (A raw `Ref{S}` element would be unpacked as a plain
+    // `jl_value_t*`, while a call site with `S = Any` passes a `jl_value_t**`.)
+    if (unionall_env && sparam_vals) {
+        for (size_t i = 0; i < nargt; i++) {
+            jl_value_t *jargty = jl_svecref(argt, i);
+            if (jl_has_typevar_from_unionall(jargty, unionall_env)) {
+                if (!argt_inst)
+                    argt_inst = jl_svec_copy(argt);
+                jl_svecset(argt_inst, i, jl_instantiate_type_in_env(jargty, unionall_env, jl_svec_data(sparam_vals)));
+            }
+        }
+        if (argt_inst)
+            argt = argt_inst;
+    }
     Type *lrt;
     bool retboxed;
     bool static_rt;
