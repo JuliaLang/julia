@@ -1497,6 +1497,23 @@ static int var_occurs_covariant_only(jl_value_t *t, jl_tvar_t *var, int covarian
     return !jl_has_typevar(t, var);
 }
 
+// A (closed) type value bound only through equality (`Type{X}`) positions is
+// only known up to `==` (#61323); record it as a pinned (lb == ub) typevar
+// marker. A BOUND_EQ channel still marks it *defined* (constrained) for every
+// `==`-equal call. Returns NULL for other values: free-typevar values keep the
+// legacy plain binding (#61242), egality-certain values stay unwrapped.
+static jl_value_t *eq_pinned_envout_marker(jl_unionall_t *u, jl_varbinding_t *vb, jl_value_t *lb,
+                                           jl_value_t **new_tvar JL_REQUIRE_ROOTED_SLOT,
+                                           int constrained)
+{
+    if (jl_is_type(lb) && lb != jl_bottom_type && vb->lb_certainty < BOUND_EGAL &&
+        !jl_has_free_typevars(lb)) {
+        *new_tvar = (jl_value_t*)jl_new_typevar(u->var->name, lb, lb);
+        return wrap_tvar_env(*new_tvar, constrained || vb->lb_certainty == BOUND_EQ);
+    }
+    return NULL;
+}
+
 static jl_value_t *subtype_unionall_envout_value(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e,
                                                  jl_varbinding_t *vb, jl_value_t *lb,
                                                  jl_value_t **new_tvar JL_REQUIRE_ROOTED_SLOT,
@@ -1506,16 +1523,9 @@ static jl_value_t *subtype_unionall_envout_value(jl_value_t *t, jl_unionall_t *u
         return (jl_value_t*)jl_wrap_vararg(NULL, NULL, 0, 0); // special token result that represents N::Int in the envout
     if (!vb->occurs_inv && lb != jl_bottom_type) {
         if (is_leaf_bound(lb)) {
-            // a (closed) type value pinned only through equality (`Type{X}`)
-            // positions is only known up to `==` (#61323); record it as a
-            // pinned (lb == ub) typevar marker. A BOUND_EQ channel still
-            // marks it *defined* (constrained) for every `==`-equal call.
-            // Free-typevar values keep the legacy plain binding (#61242).
-            if (jl_is_type(lb) && lb != jl_bottom_type && vb->lb_certainty < BOUND_EGAL &&
-                !jl_has_free_typevars(lb)) {
-                *new_tvar = (jl_value_t*)jl_new_typevar(u->var->name, lb, lb);
-                return wrap_tvar_env(*new_tvar, constrained || vb->lb_certainty == BOUND_EQ);
-            }
+            jl_value_t *marker = eq_pinned_envout_marker(u, vb, lb, new_tvar, constrained);
+            if (marker)
+                return marker;
             return lb;
         }
         if (constrained && !jl_has_free_typevars(t) && !jl_has_free_typevars(lb) &&
@@ -1545,11 +1555,9 @@ static jl_value_t *subtype_unionall_envout_value(jl_value_t *t, jl_unionall_t *u
         // method parameters expect.
         if (vb->tainted_inner || has_universal_typevar(lb, e))
             return wrap_tvar_env(lb, constrained);
-        if (jl_is_type(lb) && lb != jl_bottom_type && vb->lb_certainty < BOUND_EGAL &&
-            !jl_has_free_typevars(lb)) {
-            *new_tvar = (jl_value_t*)jl_new_typevar(u->var->name, lb, lb);
-            return wrap_tvar_env(*new_tvar, constrained || vb->lb_certainty == BOUND_EQ);
-        }
+        jl_value_t *marker = eq_pinned_envout_marker(u, vb, lb, new_tvar, constrained);
+        if (marker)
+            return marker;
         return lb;
     }
     if (lb == u->var->lb && vb->ub == u->var->ub && !*new_tvar)
