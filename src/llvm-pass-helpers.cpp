@@ -78,6 +78,13 @@ void JuliaPassContext::initAll(Module &M)
 
 llvm::Value *JuliaPassContext::getPGCstack(llvm::Function &F) const
 {
+    for (auto &arg : F.args()) {
+        // Check for the "gcstack" attribute
+        AttributeSet attrs = F.getAttributes().getParamAttrs(arg.getArgNo());
+        if (attrs.hasAttribute("gcstack")) {
+            return &arg;
+        }
+    }
     if (pgcstack_getter || adoptthread_func) {
         for (auto &I : F.getEntryBlock()) {
             if (CallInst *callInst = dyn_cast<CallInst>(&I)) {
@@ -87,13 +94,6 @@ llvm::Value *JuliaPassContext::getPGCstack(llvm::Function &F) const
                     return callInst;
                 }
             }
-        }
-    }
-    for (auto &arg : F.args()) {
-        // Check for the "gcstack" attribute
-        AttributeSet attrs = F.getAttributes().getParamAttrs(arg.getArgNo());
-        if (attrs.hasAttribute("gcstack")) {
-            return &arg;
         }
     }
     return nullptr;

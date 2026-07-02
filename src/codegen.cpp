@@ -637,7 +637,8 @@ static AttributeList get_func_attrs(LLVMContext &C)
     return AttributeList::get(C,
             AttributeSet(),
             Attributes(C, {Attribute::NonNull}),
-            {AttributeSet(),
+             {Attributes(C, {Attribute::NonNull}, {Attribute::get(C, "gcstack")}),
+             AttributeSet(),
              Attributes(C, {Attribute::NoAlias, Attribute::ReadOnly, Attribute::NoUndef}, {NoCaptureAttr(C)})});
 }
 
@@ -775,7 +776,7 @@ static const auto jladoptthread_func = new JuliaFunction<>{
 // Symbols are not gc-tracked, but we'll treat them as callee rooted anyway,
 // because they may come from a gc-rooted location
 static const auto jlnew_func = new JuliaFunction<>{
-    XSTR(jl_new_structv),
+    XSTR(jl_f_new_structv),
     get_func_sig,
     get_func_attrs,
 };
@@ -3043,19 +3044,21 @@ std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &conte
 
 static void jl_name_jlfunc_args(jl_codegen_output_t &out, Function *F) JL_NOTSAFEPOINT
 {
-    assert(F->arg_size() == 3);
-    F->getArg(0)->setName("function::Core.Function");
-    F->getArg(1)->setName("args::Any[]");
-    F->getArg(2)->setName("nargs::UInt32");
+    assert(F->arg_size() == 4);
+    F->getArg(0)->setName("pgcstack");
+    F->getArg(1)->setName("function::Core.Function");
+    F->getArg(2)->setName("args::Any[]");
+    F->getArg(3)->setName("nargs::UInt32");
 }
 
 static void jl_name_jlfuncparams_args(jl_codegen_output_t &out, Function *F) JL_NOTSAFEPOINT
 {
-    assert(F->arg_size() == 4);
-    F->getArg(0)->setName("function::Core.Function");
-    F->getArg(1)->setName("args::Any[]");
-    F->getArg(2)->setName("nargs::UInt32");
-    F->getArg(3)->setName("sparams::Any");
+    assert(F->arg_size() == 5);
+    F->getArg(0)->setName("pgcstack");
+    F->getArg(1)->setName("function::Core.Function");
+    F->getArg(2)->setName("args::Any[]");
+    F->getArg(3)->setName("nargs::UInt32");
+    F->getArg(4)->setName("sparams::Any");
 }
 
 void jl_init_function(Function *F, const jl_codegen_output_t &params) JL_NOTSAFEPOINT
@@ -4487,7 +4490,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     nva = ctx.builder.CreateTrunc(nva, getInt32Ty(ctx.builder.getContext()));
 #endif
                     Value *theArgs = emit_ptrgep(ctx, ctx.argArray, ctx.nReqArgs * sizeof(jl_value_t*));
-                    Value *r = ctx.builder.CreateCall(prepare_call(jlapplygeneric_func), { theF, theArgs, nva });
+                    Value *r = ctx.builder.CreateCall(prepare_call(jlapplygeneric_func), { ctx.pgcstack, theF, theArgs, nva });
                     *ret = mark_julia_type(ctx, r, true, jl_any_type);
                     return true;
                 }
@@ -4504,7 +4507,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
 #endif
             Value *svec_data = emit_ptrgep(ctx, emit_pointer_from_objref(ctx, svec_val), ctx.types().sizeof_ptr);
             OperandBundleDef OpBundle("jl_roots", svec_val);
-            Value *r = ctx.builder.CreateCall(prepare_call(jlapplygeneric_func), { theF, svec_data, svec_len }, OpBundle);
+            Value *r = ctx.builder.CreateCall(prepare_call(jlapplygeneric_func), { ctx.pgcstack, theF, svec_data, svec_len }, OpBundle);
             *ret = mark_julia_type(ctx, r, true, jl_any_type);
             return true;
         }
@@ -7231,7 +7234,7 @@ Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Value *theFunc, jl_codeg
     }
     theFarg = track_pjlvalue(ctx, theFarg);
     auto args = f->arg_begin();
-    CallInst *r = ctx.builder.CreateCall(FunctionCallee(jlinvoke_func->_type(out.get_context()), theFunc), { &*args, &*++args, &*++args, theFarg });
+    CallInst *r = ctx.builder.CreateCall(FunctionCallee(jlinvoke_func->_type(out.get_context()), theFunc), { args, args + 1, args + 2, args + 3, theFarg });
     r->setAttributes(jlinvoke_func->_attrs(out.get_context()));
     ctx.builder.CreateRet(r);
     return f;
@@ -7467,7 +7470,7 @@ static void emit_fptr1_wrapper(Module *M, StringRef gf_thunk_name, Value *target
     if (target) {
         FunctionCallee theFunc(w->getFunctionType(), target);
         auto args = w->arg_begin();
-        CallInst *r = ctx.builder.CreateCall(theFunc, { &*args, &*++args, &*++args }); // cf emit_tojlinvoke
+        CallInst *r = ctx.builder.CreateCall(theFunc, { args, args + 1, args + 2, args + 3 }); // cf emit_tojlinvoke
         assert(++args == w->arg_end());
         r->setAttributes(w->getAttributes());
         gf_retval = mark_julia_type(ctx, r, true, jlrettype);
@@ -8228,6 +8231,7 @@ static void gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *abi, jl_va
     w->addFnAttr(Attribute::OptimizeNone);
     w->addFnAttr(Attribute::NoInline);
     Function::arg_iterator AI = w->arg_begin();
+    Value *argPgcstack = &*AI++;
     Value *funcArg = &*AI++;
     Value *argArray = &*AI++;
     Value *argCount = &*AI++; (void)argCount; // unused
@@ -8238,6 +8242,7 @@ static void gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *abi, jl_va
     ctx.f = w;
     ctx.linfo = lam;
     ctx.rettype = jlretty;
+    ctx.pgcstack = argPgcstack;
 
     BasicBlock *b0 = BasicBlock::Create(ctx.builder.getContext(), "top", w);
     ctx.builder.SetInsertPoint(b0);
@@ -8961,6 +8966,7 @@ static jl_llvm_functions_t
     Value *fArg=NULL, *argArray=NULL, *pargArray=NULL, *argCount=NULL;
     if (!specsig) {
         Function::arg_iterator AI = f->arg_begin();
+        ctx.pgcstack = AI++;
         fArg = &*AI++;
         argArray = &*AI++;
         pargArray = ctx.builder.CreateAlloca(argArray->getType());
@@ -9336,7 +9342,8 @@ static jl_llvm_functions_t
             Function *F = prepare_call(jltuple_func);
             restTuple =
                 ctx.builder.CreateCall(F,
-                        { Constant::getNullValue(ctx.types().T_prjlvalue),
+                        { ctx.pgcstack,
+                          Constant::getNullValue(ctx.types().T_prjlvalue),
                           emit_ptrgep(ctx, argArray, (nreq - 1) * sizeof(jl_value_t*)),
                           ctx.builder.CreateSub(argCount, ctx.builder.getInt32(nreq - 1)) });
             restTuple->setAttributes(F->getAttributes());
@@ -10456,7 +10463,7 @@ static void init_jit_functions(void)
     add_named_global(jlboundserror_func, &jl_bounds_error_int);
     add_named_global(jlvboundserror_func, &jl_bounds_error_tuple_int);
     add_named_global(jluboundserror_func, &jl_bounds_error_unboxed_int);
-    add_named_global(jlnew_func, &jl_new_structv);
+    add_named_global(jlnew_func, &jl_f_new_structv);
     add_named_global(jlsplatnew_func, &jl_new_structt);
     add_named_global(setjmp_func, &jl_setjmp_f);
     add_named_global(memcmp_func, &memcmp);

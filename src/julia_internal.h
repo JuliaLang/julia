@@ -907,7 +907,7 @@ JL_DLLEXPORT jl_value_t *jl_get_exceptionf(jl_datatype_t *exception_type, const 
 JL_DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t);
 
 #define JL_CALLABLE(name)                                               \
-    JL_DLLEXPORT jl_value_t *name(jl_value_t *F, jl_value_t **args, uint32_t nargs)
+    JL_DLLEXPORT jl_value_t *name(jl_gcframe_t **pgcstack, jl_value_t *F, jl_value_t **args, uint32_t nargs)
 
 JL_CALLABLE(jl_f_tuple);
 void jl_install_default_signal_handlers(void);
@@ -1041,7 +1041,7 @@ jl_value_t *jl_eval_global_var(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *e, s
 JL_DLLEXPORT jl_value_t *jl_eval_globalref(jl_globalref_t *g, size_t world);
 jl_value_t *jl_get_globalref_value(jl_globalref_t *gr, size_t world);
 jl_value_t *jl_get_global_value(jl_module_t *m, jl_sym_t *var, size_t world);
-jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *clos, jl_value_t **args, size_t nargs);
+jl_value_t *jl_interpret_opaque_closure(jl_gcframe_t **, jl_opaque_closure_t *clos, jl_value_t **args, size_t nargs);
 jl_value_t *jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t *src);
 jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
                                           jl_code_info_t *src,

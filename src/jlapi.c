@@ -342,7 +342,7 @@ JL_DLLEXPORT jl_value_t *jl_call0(jl_value_t *f)
         JL_GC_PUSH1(&f);
         size_t last_age = ct->world_age;
         ct->world_age = jl_get_world_counter();
-        v = jl_apply_generic(f, NULL, 0);
+        v = jl_apply_generic(jl_get_pgcstack(), f, NULL, 0);
         ct->world_age = last_age;
         JL_GC_POP();
         _jl_exception_clear(ct);

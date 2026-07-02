@@ -1702,6 +1702,12 @@ JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, 
     return jv;
 }
 
+// Wrapper around jl_new_structv for use with @julia.call in codegen
+JL_DLLEXPORT jl_value_t *jl_f_new_structv(jl_gcframe_t **pgcstack, jl_value_t *type, jl_value_t **args, uint32_t na)
+{
+    return jl_new_structv((jl_datatype_t *)type, args, na);
+}
+
 JL_DLLEXPORT jl_value_t *jl_new_structt(jl_datatype_t *type, jl_value_t *tup)
 {
     jl_task_t *ct = jl_current_task;
@@ -2044,7 +2050,7 @@ inline jl_value_t *modify_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_valu
     args[0] = r;
     while (1) {
         args[1] = rhs;
-        jl_value_t *y = jl_apply_generic(op, args, 2);
+        jl_value_t *y = jl_apply_generic(jl_get_pgcstack(), op, args, 2);
         args[1] = y;
         if (b)
             jl_check_binding_assign_value(b, mod, name, y, "modifyglobal!");
@@ -2103,7 +2109,7 @@ inline jl_value_t *modify_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_
             jl_throw(jl_undefref_exception);
         args[0] = r;
         args[1] = rhs;
-        jl_value_t *y = jl_apply_generic(op, args, 2);
+        jl_value_t *y = jl_apply_generic(jl_get_pgcstack(), op, args, 2);
         args[1] = y;
         if (!jl_isa(y, ty)) {
             jl_type_error(jl_is_genericmemory(parent) ? "memoryrefmodify!" : "modifyfield!", ty, y);
@@ -2660,7 +2666,7 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
 {
     size_t n = jl_svec_len(typevars);
     if (n == 0)
-        return jl_f_tuple(NULL, NULL, 0);
+        return jl_f_tuple(jl_get_pgcstack(), NULL, NULL, 0);
 
     // Allocate arrays for tracking
     jl_datatype_t **datatypes = (jl_datatype_t**)alloca(n * sizeof(jl_datatype_t*));
@@ -2877,7 +2883,7 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
     } }
 
     // Build result tuple
-    jl_value_t *result = jl_f_tuple(NULL, results, n);
+    jl_value_t *result = jl_f_tuple(jl_get_pgcstack(), NULL, results, n);
     JL_GC_POP();
     return result;
 }

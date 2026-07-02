@@ -146,16 +146,16 @@ static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interpreter_state 
             invoke = jl_atomic_load_acquire(&codeinst->invoke);
         }
         if (invoke) {
-            result = invoke(argv[0], nargs == 2 ? NULL : &argv[1], nargs - 2, codeinst);
+            result = invoke(jl_get_pgcstack(), argv[0], nargs == 2 ? NULL : &argv[1], nargs - 2, codeinst);
 
         } else {
             if (codeinst->owner != jl_nothing) {
                 jl_error("Failed to invoke or compile external codeinst");
             }
-            result = jl_invoke(argv[0], nargs == 2 ? NULL : &argv[1], nargs - 2, jl_get_ci_mi(codeinst));
+            result = jl_invoke(jl_get_pgcstack(), argv[0], nargs == 2 ? NULL : &argv[1], nargs - 2, jl_get_ci_mi(codeinst));
         }
     } else {
-        result = jl_invoke(argv[0], nargs == 2 ? NULL : &argv[1], nargs - 2, (jl_method_instance_t*)c);
+        result = jl_invoke(jl_get_pgcstack(), argv[0], nargs == 2 ? NULL : &argv[1], nargs - 2, (jl_method_instance_t*)c);
     }
     JL_GC_POP();
     return result;
@@ -815,7 +815,7 @@ jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi, size_t world)
 
 // interpreter entry points
 
-jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *codeinst)
+jl_value_t *NOINLINE jl_fptr_interpret_call(jl_gcframe_t **pgcstack, jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *codeinst)
 {
     interpreter_state *s;
     jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
@@ -853,7 +853,7 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
             s->locals[i] = args[i - 1];
         if (isva) {
             assert(defargs >= 2);
-            s->locals[defargs - 1] = jl_f_tuple(NULL, &args[defargs - 2], nargs + 2 - defargs);
+            s->locals[defargs - 1] = jl_f_tuple(pgcstack, NULL, &args[defargs - 2], nargs + 2 - defargs);
         }
     }
     s->sparam_vals = mi->sparam_vals;
@@ -869,7 +869,7 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
 
 JL_DLLEXPORT const jl_callptr_t jl_fptr_interpret_call_addr = &jl_fptr_interpret_call;
 
-jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **args, size_t nargs)
+jl_value_t *jl_interpret_opaque_closure(jl_gcframe_t **pgcstack, jl_opaque_closure_t *oc, jl_value_t **args, size_t nargs)
 {
     jl_method_t *source = oc->source;
     jl_code_info_t *code = NULL;
@@ -918,7 +918,7 @@ jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **ar
         s->locals[i] = args[i - 1];
     if (isva) {
         assert(defargs >= 2);
-        s->locals[defargs - 1] = jl_f_tuple(NULL, &args[defargs - 2], nargs + 2 - defargs);
+        s->locals[defargs - 1] = jl_f_tuple(jl_get_pgcstack(), NULL, &args[defargs - 2], nargs + 2 - defargs);
     }
     JL_GC_ENABLEFRAME(s);
     jl_value_t *r = eval_body(code->code, s, 0, 0);

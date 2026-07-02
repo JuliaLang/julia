@@ -1579,7 +1579,7 @@ jl_datatype_t *jl_apply_cmpswap_type(jl_value_t *ty)
     if (names == NULL) {
         params[0] = (jl_value_t*)jl_symbol("old");
         params[1] = (jl_value_t*)jl_symbol("success");
-        jl_value_t *lnames = jl_f_tuple(NULL, params, 2);
+        jl_value_t *lnames = jl_f_tuple(jl_get_pgcstack(), NULL, params, 2);
         if (jl_atomic_cmpswap(&cmpswap_names, &names, lnames))
             names = jl_atomic_load_relaxed(&cmpswap_names); // == lnames
     }

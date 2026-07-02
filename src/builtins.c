@@ -736,11 +736,11 @@ JL_CALLABLE(jl_f__apply_iterate)
             if (jl_is_tuple(args[1]))
                 return args[1];
             if (jl_is_svec(args[1]))
-                return jl_f_tuple(NULL, jl_svec_data(args[1]), jl_svec_len(args[1]));
+                return jl_f_tuple(pgcstack, NULL, jl_svec_data(args[1]), jl_svec_len(args[1]));
         }
         // optimization for `f(svec...)`
         if (jl_is_svec(args[1]))
-            return jl_apply_generic(f, jl_svec_data(args[1]), jl_svec_len(args[1]));
+            return jl_apply_generic(pgcstack, f, jl_svec_data(args[1]), jl_svec_len(args[1]));
     }
     // estimate how many real arguments we appear to have
     size_t precount = 1;
@@ -890,7 +890,7 @@ JL_CALLABLE(jl_f__apply_iterate)
             assert(extra > 0);
             jl_value_t *args[2];
             args[0] = ai;
-            jl_value_t *next = jl_apply_generic(iterate, args, 1);
+            jl_value_t *next = jl_apply_generic(jl_get_pgcstack(), iterate, args, 1);
             while (next != jl_nothing) {
                 roots[stackalloc] = next;
                 jl_value_t *value = jl_get_nth_field_checked(next, 0);
@@ -905,7 +905,7 @@ JL_CALLABLE(jl_f__apply_iterate)
                 roots[stackalloc + 1] = NULL;
                 JL_GC_ASSERT_LIVE(state);
                 args[1] = state;
-                next = jl_apply_generic(iterate, args, 2);
+                next = jl_apply_generic(jl_get_pgcstack(), iterate, args, 2);
             }
             roots[stackalloc] = NULL;
             extra -= 1;
@@ -1090,7 +1090,7 @@ JL_CALLABLE(jl_f_getfield)
     jl_value_t *v = args[0];
     jl_value_t *vt = jl_typeof(v);
     if (vt == (jl_value_t*)jl_module_type)
-        return jl_f_getglobal(NULL, args, 2); // we just ignore the atomic order and boundschecks
+        return jl_f_getglobal(pgcstack, NULL, args, 2); // we just ignore the atomic order and boundschecks
     jl_datatype_t *st = (jl_datatype_t*)vt;
     size_t idx = get_checked_fieldindex("getfield", st, v, args[1], 0);
     int isatomic = jl_field_isatomic(st, idx);
@@ -1773,18 +1773,18 @@ JL_CALLABLE(jl_f_invoke)
             invoke = jl_atomic_load_acquire(&codeinst->invoke);
         }
         if (invoke) {
-            return invoke(args[0], &args[2], nargs - 2, codeinst);
+            return invoke(pgcstack, args[0], &args[2], nargs - 2, codeinst);
         } else {
             if (codeinst->owner != jl_nothing) {
                 jl_error("Failed to invoke or compile external codeinst");
             }
-            return jl_invoke(args[0], &args[2], nargs - 2, mi);
+            return jl_invoke(pgcstack, args[0], &args[2], nargs - 2, mi);
         }
     }
     if (!jl_is_tuple_type(jl_unwrap_unionall(argtypes)))
         jl_type_error("invoke", (jl_value_t*)jl_anytuple_type_type, argtypes);
     if (!jl_tuple_isa(&args[2], nargs - 2, (jl_datatype_t*)argtypes))
-        jl_type_error("invoke: argument type error", argtypes, jl_f_tuple(NULL, &args[2], nargs - 2));
+        jl_type_error("invoke: argument type error", argtypes, jl_f_tuple(pgcstack, NULL, &args[2], nargs - 2));
     return jl_gf_invoke(argtypes, args[0], &args[2], nargs - 1);
 }
 

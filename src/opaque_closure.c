@@ -3,12 +3,12 @@
 #include "julia.h"
 #include "julia_internal.h"
 
-jl_value_t *jl_fptr_const_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **args, size_t nargs)
+jl_value_t *jl_fptr_const_opaque_closure(jl_gcframe_t **pgcstack, jl_opaque_closure_t *oc, jl_value_t **args, size_t nargs)
 {
     return oc->captures;
 }
 
-jl_value_t *jl_fptr_const_opaque_closure_typeerror(jl_opaque_closure_t *oc, jl_value_t **args, size_t nargs)
+jl_value_t *jl_fptr_const_opaque_closure_typeerror(jl_gcframe_t **pgcstack, jl_opaque_closure_t *oc, jl_value_t **args, size_t nargs)
 {
     jl_type_error("OpaqueClosure", jl_tparam1(jl_typeof(oc)), oc->captures);
 }
@@ -138,7 +138,7 @@ static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t 
 jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *rt_lb, jl_value_t *rt_ub,
     jl_value_t *source_, jl_value_t **env, size_t nenv, int do_compile)
 {
-    jl_value_t *captures = jl_f_tuple(NULL, env, nenv);
+    jl_value_t *captures = jl_f_tuple(jl_get_pgcstack(), NULL, env, nenv);
     JL_GC_PUSH1(&captures);
     jl_opaque_closure_t *oc = new_opaque_closure(argt, rt_lb, rt_ub, source_, captures, do_compile, jl_current_task->world_age);
     JL_GC_POP();
@@ -225,5 +225,5 @@ JL_CALLABLE(jl_f_opaque_closure_call)
             typ = jl_unwrap_vararg(typ);
         jl_typeassert(args[i], typ);
     }
-    return oc->invoke(F, args, nargs);
+    return oc->invoke(pgcstack, F, args, nargs);
 }

@@ -2129,11 +2129,12 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                     nframeargs -= 2;
                 else
                     nframeargs -= 1;
-                SmallVector<Value*, 4> ReplacementArgs;
+                SmallVector<Value*, 5> ReplacementArgs;
                 auto arg_it = CI->arg_begin();
                 assert(arg_it != CI->arg_end());
                 Value *new_callee = *(arg_it++);
                 assert(arg_it != CI->arg_end());
+                ReplacementArgs.push_back(pgcstack);
                 ReplacementArgs.push_back(*(arg_it++));
                 if (callee == call2_func) {
                     assert(arg_it != CI->arg_end());
@@ -2156,9 +2157,9 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                     Builder.CreateAddrSpaceCast(Frame, PointerType::getUnqual(T_prjlvalue->getContext())));
                 ReplacementArgs.push_back(ConstantInt::get(T_int32, nframeargs));
                 if (callee == call2_func) {
-                    // move trailing arg to the end now
-                    Value *front = ReplacementArgs.front();
-                    ReplacementArgs.erase(ReplacementArgs.begin());
+                    // move MethodInstance arg to the end now
+                    Value *front = ReplacementArgs[1];
+                    ReplacementArgs.erase(ReplacementArgs.begin() + 1);
                     ReplacementArgs.push_back(front);
                 }
                 FunctionType *FTy = callee == call3_func ? JuliaType::get_jlfunc3_ty(CI->getContext()) :
