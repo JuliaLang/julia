@@ -5163,7 +5163,11 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_par
             jl_value_t *ii = R ? intersect_invariant(yp, A, e) : intersect_invariant(A, yp, e);
             return (ii == NULL || ii == jl_bottom_type) ? jl_bottom_type : x;
         }
-        if (param != PARAM_INVARIANT && jl_typeof(A) == y)
+        // `A` lies in `y` iff the singleton `typeof(A)` does; `jl_subtype` also
+        // covers abstract supertypes (e.g. `AnyType`) when the closed-types
+        // fast path above was skipped
+        if (param != PARAM_INVARIANT && !jl_has_free_typevars(y) &&
+            jl_subtype(jl_typeof(A), y))
             return x;
         return jl_bottom_type;
     }
