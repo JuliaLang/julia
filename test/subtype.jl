@@ -3082,6 +3082,26 @@ end
 let e = only(intersection_env(Tuple{Real}, Tuple{T} where T >: Int)[2])
     @test e isa Core.SimpleVector && e[1] isa TypeVar && !e[2]
 end
+# A fixed tuple prefix before a free vararg length guarantees a matching
+# right-side tuple element exists, but range and maybe-empty tuple tails do not.
+let rhs = Tuple{typeof(intersection_env), Type{<:Tuple{Vararg{E}}}} where E
+    fixed_prefix = only(intersection_env(Tuple{typeof(intersection_env),
+        Type{Tuple{Int, Vararg{Int, N}}}} where N, rhs)[2])
+    maybe_empty = only(intersection_env(Tuple{typeof(intersection_env),
+        Type{Tuple{Vararg{Int, N}}}} where N, rhs)[2])
+    range_arg = only(intersection_env(Tuple{typeof(intersection_env),
+        Type{<:Tuple{Int}}}, rhs)[2])
+    fixed_rhs = Tuple{typeof(intersection_env), Type{<:Tuple{E}}} where E
+    exact_fixed = only(intersection_env(Tuple{typeof(intersection_env),
+        Type{Tuple{Int}}}, fixed_rhs)[2])
+    fixed_range = only(intersection_env(Tuple{typeof(intersection_env),
+        Type{<:Tuple{Int}}}, fixed_rhs)[2])
+    @test fixed_prefix isa Core.SimpleVector && fixed_prefix[1] isa TypeVar && fixed_prefix[2]
+    @test maybe_empty isa Core.SimpleVector && maybe_empty[1] isa TypeVar && !maybe_empty[2]
+    @test range_arg isa Core.SimpleVector && range_arg[1] isa TypeVar && !range_arg[2]
+    @test exact_fixed isa Core.SimpleVector && exact_fixed[1] isa TypeVar && exact_fixed[2]
+    @test fixed_range isa Core.SimpleVector && fixed_range[1] isa TypeVar && !fixed_range[2]
+end
 
 # Env entries must not introduce a fresh `newvar<:vb.lb` wrapper when `vb.lb`
 # is already a TypeVar. The doubled `where T<:T_outer where T_outer` pattern
@@ -3235,4 +3255,60 @@ let rejects(@nospecialize(x), @nospecialize(y)) =
     @test rejects(Int, Type{T} where T)
     @test rejects(Int, Type{Int})
     @test rejects(String, Type{Int})
+end
+
+# `TypeEgal{T}`: the egality-based dual of `Type{T}`, whose only instance is `T`
+# itself (`===`); free typevars are disallowed
+_typeegal_id(::Type{T}) where {T} = T
+@testset "TypeEgal" begin
+    TE = Core.TypeEgal
+    # membership is by egality (`===`), not type equality
+    @test isa(Int, TE{Int})
+    @test !isa(Integer, TE{Int})
+    @test !isa(Int, TE{Integer})
+    @test isa(Vector, TE{Vector})
+    @test isa(Union{Int,String}, TE{Union{Int,String}})
+    @test_throws TypeError TE{:a}
+    @test_throws TypeError TE{1}
+    @test_throws TypeError TE{TypeVar(:T)}
+    # egal implies equal, but not the reverse
+    @test TE{Int} <: Type{Int}
+    @test !(Type{Int} <: TE{Int})
+    @test TE{Int} <: TE{Int}
+    @test !(TE{Int} <: TE{Integer})
+    @test !(TE{Integer} <: TE{Int})
+    @test TE{Int} <: Core.TypeEq{Int}
+    @test TE{Int} != Type{Int}
+    @test TE{Int} !== Type{Int}
+    # a `TypeEgal{T}` dispatches as the singleton `typeof(T)`
+    @test TE{Int} <: DataType
+    @test !(TE{Int} <: UnionAll)
+    @test TE{Vector} <: UnionAll
+    @test TE{Int} <: Any
+    @test TE{Int} <: Type
+    @test TE{Int} <: Core.AnyType
+    # nothing but `Union{}` and egal `TypeEgal`s is a subtype of `TypeEgal{T}`
+    @test !(DataType <: TE{Int})
+    @test !(Type{Int} <: TE{Int})
+    @test Union{} <: TE{Int}
+    @test Base.iskindtype(TE)
+    # free typevars are disallowed inside `TypeEgal`, but closed parameters are fine
+    @test_throws TypeError TE{TypeVar(:T)}
+    @test isa(TE{Vector{S} where S}, TE)
+    @test isa(Vector{S} where S, TE{Vector{S} where S})
+    # intersection keeps the more-specific `TypeEgal`; wrappers are freshly
+    # allocated, so compare by mutual subtyping
+    tyeq(@nospecialize(a), @nospecialize(b)) = a <: b && b <: a
+    @test tyeq(typeintersect(TE{Int}, Type{Int}), TE{Int})
+    @test tyeq(typeintersect(Type{Int}, TE{Int}), TE{Int})
+    @test tyeq(typeintersect(TE{Int}, DataType), TE{Int})
+    @test typeintersect(TE{Int}, Type{Integer}) === Union{}
+    @test tyeq(typeintersect(TE{Int}, TE{Int}), TE{Int})
+    @test typeintersect(TE{Int}, TE{Integer}) === Union{}
+    @test tyeq(typeintersect(TE{Int}, (Type{T} where T)), TE{Int})
+    @test tyeq(typeintersect(TE{Int}, Any), TE{Int})
+    # the dispatch cache specializes type-valued arguments through `TypeEgal`
+    @test _typeegal_id(Int) === Int
+    @test _typeegal_id(Vector) === Vector
+    @test _typeegal_id(Union{Int,String}) === Union{Int,String}
 end

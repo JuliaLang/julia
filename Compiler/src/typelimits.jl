@@ -119,6 +119,7 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
         end
     elseif isType(t)
         # Type is fairly important, so do not widen it as fast as other types if avoidable
+        # (this branch also covers `TypeEgal`, whose `Type{...}` widenings are supertypes)
         tt = type_parameter(t)
         ttu = unwrap_unionall(tt) # TODO: use a helper that preserves nested Type structure after #50692 is fixed
         # must forbid nesting through this if we detect that potentially occurring

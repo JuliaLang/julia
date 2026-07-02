@@ -822,6 +822,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_get_method_uninferred(
         size_t min_world, size_t max_world, jl_debuginfo_t *di, jl_svec_t *edges);
 JL_DLLEXPORT int jl_mi_cache_has_ci(jl_method_instance_t *mi, jl_code_instance_t *ci) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_read_codeinst_invoke(jl_code_instance_t *ci, uint8_t *specsigflags, jl_callptr_t *invoke, void **specptr, int waitcompile);
+JL_DLLEXPORT void *jl_specsig_fptr_if_compiled(jl_code_instance_t *ci);
 JL_DLLEXPORT void jl_add_codeinsts_to_jit(jl_array_t *codeinsts, jl_array_t *srcs);
 
 JL_DLLEXPORT jl_value_t *jl_invoke_oneshot(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *meth);
@@ -843,6 +844,29 @@ STATIC_INLINE jl_method_instance_t *jl_get_ci_mi(jl_code_instance_t *ci JL_PROPA
         return ((jl_abi_override_t*)def)->def;
     assert(jl_is_method_instance(def));
     return (jl_method_instance_t*)def;
+}
+
+// Resolve a static-parameter env slot for a direct (defined) read: a plain
+// value is itself; a pinned (lb == ub) env uncertainty marker
+// (`svec(tvar, constrained)`, see `subtype.c`) is defined up to type equality
+// and reads as its `==`-representative `lb`. Returns NULL when the slot has no
+// statically defined value (unconstrained markers).
+STATIC_INLINE jl_value_t *jl_sparam_defined_value(jl_value_t *sp JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    if (jl_is_svec(sp)) {
+        if (jl_svec_len(sp) != 2)
+            return NULL;
+        jl_value_t *inner = jl_svecref(sp, 0);
+        if (!jl_is_typevar(inner))
+            return NULL;
+        if (jl_svecref(sp, 1) != jl_true)
+            return NULL;
+        jl_tvar_t *v = (jl_tvar_t*)inner;
+        if (v->lb != v->ub) // pinned markers share one bound object
+            return NULL;
+        sp = v->lb;
+    }
+    return sp;
 }
 
 JL_DLLEXPORT jl_module_t *jl_debuginfo_module1(jl_value_t *debuginfo_def) JL_NOTSAFEPOINT;
@@ -952,7 +976,7 @@ jl_svec_t *jl_outer_unionall_vars(jl_value_t *u);
 jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t **penv, int *issubty);
 jl_value_t *jl_type_intersection_env(jl_value_t *a, jl_value_t *b, jl_svec_t **penv);
 int jl_subtype_matching(jl_value_t *a, jl_value_t *b, jl_svec_t **penv);
-JL_DLLEXPORT int jl_types_egal(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_types_struct_equiv(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT;
 // specificity comparison assuming !(a <: b) and !(b <: a)
 JL_DLLEXPORT int jl_type_morespecific_no_subtype(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_instantiate_type_with(jl_value_t *t, jl_value_t **env, size_t n);
@@ -972,6 +996,7 @@ jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_module_t *module,
 jl_datatype_t *jl_new_uninitialized_datatype(void);
 void jl_precompute_memoized_dt(jl_datatype_t *dt, int cacheable);
 JL_DLLEXPORT jl_typeeq_t *jl_wrap_Type(jl_value_t *t);  // x -> Type{x}
+JL_DLLEXPORT jl_value_t *jl_wrap_TypeEgal(jl_value_t *t);  // x -> TypeEgal{x} (egality, no free typevars)
 jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n, int check, int nothrow);
 void jl_reinstantiate_inner_types(jl_datatype_t *t);
 jl_datatype_t *jl_lookup_cache_type_(jl_datatype_t *type);

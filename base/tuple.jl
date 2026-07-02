@@ -273,7 +273,10 @@ first(t::Tuple) = t[1]
 # eltype
 
 # the <: here makes the runtime a bit more complicated (needing to check isdefined), but really helps inference
-_eltype_ntuple(t::Type{<:Tuple{Vararg{E}}}) where {E} = @isdefined(E) ? (E isa Type ? E : Union{}) : _compute_eltype(t)
+# `E` is undefined either when the `Vararg` matched vacuously (`t == Tuple{}`,
+# eltype `Union{}`) or when a non-concrete element type left the diagonal var
+# unpinned, where `_compute_eltype` recovers the join
+_eltype_ntuple(t::Type{<:Tuple{Vararg{E}}}) where {E} = @isdefined(E) ? (E isa Type ? E : Union{}) : (t <: Tuple{} ? Union{} : _compute_eltype(t))
 const _eltype_ntuple_sig_condition = (Type{<:Tuple{Vararg{E}}} where E)
 # We'd like to be able to infer eltype(::Tuple), so keep the number of eltype(::Type{<:Tuple}) methods at max_methods!
 function eltype(t::Type{<:Tuple})

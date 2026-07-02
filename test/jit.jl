@@ -54,6 +54,40 @@ ci = compile_no_deps(M2.bar, (Int,))
 @test check_edges_not_compiled(ci, M2.foo)
 @test invoke(M2.bar, ci, 5) == 210
 
+# A specsig tojlinvoke trampoline must heal once its target is compiled:
+# after the target publishes its specsig, the edge forwards the caller's
+# unboxed arguments instead of boxing through `jl_invoke`.
+module M2b
+    @noinline foo(x) = x + 100
+    bar(x) = 2 * foo(x)
+end
+let ci = compile_no_deps(M2b.bar, (Int,))
+    @test check_edges_not_compiled(ci, M2b.foo)
+    # The first call dispatches through `jl_invoke`, compiling the target.
+    @test invoke(M2b.bar, ci, 5) == 210
+    invoke(M2b.bar, ci, 5) # warm the measurement path
+    @test (@allocations invoke(M2b.bar, ci, 5)) == 0
+end
+
+# External symbol renames must keep JITLink's external symbol map consistent.
+@testset "JITLink external symbol rename" begin
+    jitlink_rename_resolve(chunks, i, x) =
+        jitlink_rename_resolve(Base.tail(chunks), i,
+            map(tuple, x, i[1] === Colon() ? (1, (), 1) : (1, 1, ())))
+    jitlink_rename_resolve(::Tuple{}, i, x) = x
+    function jitlink_rename_reproducer(i)
+        x = jitlink_rename_resolve(Base.inferencebarrier(true) ? (1,) :
+            map(+, Tuple([]), (1, 1)), i, ((), (), ()))
+        y = Base.inferencebarrier(true) ? :a : :b
+        if y === :a; elseif y === :b
+            jitlink_rename_reproducer(x[3])
+        else
+            0[x[2]]
+        end
+    end
+    @test precompile(jitlink_rename_reproducer, (Tuple{Colon},))
+end
+
 # Each `eval` must compile (because of the ccall) a top-level thunk.  The
 # CodeInstance for this thunk becomes garbage-collectable after being invoked,
 # but before returning, because of wait().  If the invoke must return for the

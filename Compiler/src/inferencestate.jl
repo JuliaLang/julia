@@ -778,13 +778,26 @@ end
 
 const EMPTY_SPTYPES = VarState[]
 
+function type_sptype_to_egal(@nospecialize(ty))
+    isType(ty) || return ty
+    p = type_parameter(ty)
+    p isa Type && !has_free_typevars(p) || return ty
+    return Core.TypeEgal{p}
+end
+
+function type_value_to_egal(@nospecialize(v), @nospecialize(fallback))
+    v isa Type || return fallback
+    has_free_typevars(v) && return fallback
+    return Core.TypeEgal{v}
+end
+
 # Compute the abstract value `ty` for a sparam whose inferred env entry carries
 # a TypeVar (either the sig's own `vᵢ` for unspecialized MIs, or a possibly
 # narrowed `output_tvar` from subtyping). First try to sharpen via
 # `arg::Type{vᵢ}` / `Vararg{_,vᵢ}` patterns in `sigtypes`; otherwise fall back
 # to `Type{output_tvar}` rewrapped against free typevars of `specTypes`.
 function sptype_for_tvar(vᵢ::TypeVar, output_tvar::TypeVar, sigtypes::Core.SimpleVector,
-                         @nospecialize(specTypes))
+                         @nospecialize(specTypes), v_egal::Bool=false)
     for j = 1:length(sigtypes)
         sⱼ = sigtypes[j]
         if isType(sⱼ) && type_parameter(sⱼ) === vᵢ
@@ -801,7 +814,76 @@ function sptype_for_tvar(vᵢ::TypeVar, output_tvar::TypeVar, sigtypes::Core.Sim
         # `Bottom <: T <: Any` additionally allows non-Type tvars
         return Any
     end
+    if output_tvar.lb === output_tvar.ub
+        if output_tvar.lb isa TypeVar
+            # TypeVars compare by identity (`==` is `===` for them), so a pinned
+            # TypeVar bound denotes exactly that TypeVar object, not
+            # `Type{output_tvar.lb}`; the runtime sparam read
+            # (`jl_sparam_defined_value`) yields this same object.
+            return Const(output_tvar.lb)
+        end
+        # `X <: T <: X` pins the var to `X` up to type equality: an `S == X` rep
+        # argument also matches this MethodInstance and would bind the var to `S`
+        # (#61323)
+        ty = rewrap_free_typevars(TypeEq{output_tvar.lb}, find_free_typevars(specTypes))
+        return v_egal ? type_value_to_egal(output_tvar.lb, ty) : ty
+    end
     return rewrap_free_typevars(TypeEq{output_tvar}, find_free_typevars(specTypes))
+end
+
+function type_arg_parameter(@nospecialize(t))
+    t = unwrap_unionall(t)
+    isType(t) || return nothing
+    return type_parameter(t)
+end
+
+function has_invariant_sparam_occurrence(@nospecialize(t), v::TypeVar)
+    t = unwrap_unionall(t)
+    t isa DataType || return false
+    t.name === Tuple.name && return false
+    for p in t.parameters
+        has_typevar(p, v) && return true
+    end
+    return false
+end
+
+function sparam_definitely_egal_from_spec(v::TypeVar, sigtypes::Core.SimpleVector,
+                                          @nospecialize(specTypes))
+    spec = unwrap_unionall(specTypes)
+    spec isa DataType || return false
+    for i = 1:min(length(sigtypes), length(spec.parameters))
+        sigarg = sigtypes[i]
+        specarg = spec.parameters[i]
+        sigarg_unwrapped = unwrap_unionall(sigarg)
+        if sigarg_unwrapped === v
+            isdispatchelem(specarg) && return true
+            continue
+        end
+        if sigarg_unwrapped isa TypeVar && has_invariant_sparam_occurrence(sigarg_unwrapped.ub, v)
+            return true
+        end
+        if has_invariant_sparam_occurrence(sigarg, v)
+            return true
+        end
+        sig_type_arg = type_arg_parameter(sigarg)
+        sig_type_arg === nothing && continue
+        if sig_type_arg === v
+            specarg isa Core.TypeEgal && return true
+            continue
+        end
+        if sig_type_arg isa TypeVar && has_invariant_sparam_occurrence(sig_type_arg.ub, v)
+            return true
+        end
+        has_invariant_sparam_occurrence(sig_type_arg, v) && return true
+    end
+    return false
+end
+
+function is_free_typevar_in_spec(v::TypeVar, @nospecialize(specTypes))
+    for tv in find_free_typevars(specTypes)
+        tv === v && return true
+    end
+    return false
 end
 
 function sptypes_from_meth_instance(mi::MethodInstance)
@@ -840,14 +922,23 @@ function sptypes_from_meth_instance(mi::MethodInstance)
                 v = v_inner
             end
         end
-        if v_tvar !== nothing || has_free_typevars(v)
+        if v isa TypeVar && is_free_typevar_in_spec(v, mi.specTypes)
+            # A plain TypeVar env entry that is free in `specTypes` is the exact
+            # runtime value of this sparam (bound from a typevar embedded in the
+            # call's argument types); TypeVars compare by identity, so `Const(v)`
+            # — not `Type{v}` — is its precise abstraction.
+            ty = Const(v)
+            undef = false
+            v_egal = false
+        elseif v_tvar !== nothing || has_free_typevars(v)
             vᵢ = (temp::UnionAll).var
+            sigtypes = (unwrap_unionall(temp)::DataType).parameters
             if v_tvar !== nothing
-                ty = sptype_for_tvar(vᵢ, v_tvar,
-                                     (unwrap_unionall(temp)::DataType).parameters,
-                                     mi.specTypes)
+                v_egal = sparam_definitely_egal_from_spec(vᵢ, sigtypes, mi.specTypes)
+                ty = sptype_for_tvar(vᵢ, v_tvar, sigtypes, mi.specTypes, v_egal)
             else
                 ty = rewrap_free_typevars(TypeEq{v}, find_free_typevars(mi.specTypes))
+                v_egal = false
             end
             undef = !v_constrained
         elseif isvarargtype(v)
@@ -855,9 +946,14 @@ function sptypes_from_meth_instance(mi::MethodInstance)
             # so the type is known to be `Int`
             ty = Int
             undef = false
+            v_egal = false
         else
             ty = Const(v)
             undef = false
+            v_egal = false
+        end
+        if !undef && v_egal
+            ty = type_sptype_to_egal(ty)
         end
         sptypes[i] = VarState(ty, typemin(Int), undef)
         temp = (temp::UnionAll).body

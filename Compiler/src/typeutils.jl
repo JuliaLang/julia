@@ -4,29 +4,12 @@
 # lattice utilities #
 #####################
 
-# true if Type{T} is inlineable as constant T
-# requires that T is a singleton, s.t. T == S implies T === S
-isconstType(@nospecialize t) = isType(t) && hasuniquerep(type_parameter(t))
-
-# test whether type T has a unique representation, s.t. T == S implies T === S
-function hasuniquerep(@nospecialize t)
-    # typeof(Bottom) is special since even though it is a leaftype,
-    # at runtime, it might be Type{Union{}} instead, so don't attempt inference of it
-    t === typeof(Union{}) && return false
-    t === Union{} && return true
-    isa(t, TypeVar) && return false # TypeVars are identified by address, not equality
-    if isType(t)
-        p = type_parameter(t)
-        (p === Union{} || p === typeof(Union{})) && return false
-        return !has_free_typevars(p)
-    end
-    iskindtype(typeof(t)) || return true # non-types are always compared by egal in the type system
-    isconcretetype(t) && return true # these are also interned and pointer comparable
-    if isa(t, DataType) && t.name !== Tuple.name && !isvarargtype(t) # invariant DataTypes
-        return all(hasuniquerep, t.parameters)
-    end
-    return false
-end
+# true if a value of this type is known to be exactly (`===`) the type `T`, so it
+# is inlineable as the constant `T`. A general `Type{T}` is not: it also matches
+# `S == T` with `S !== T` reps, e.g. `Union{U,V} where {U<:T,V<:T}` (#61323).
+# Use `Core.TypeEgal{T}` when that exactness is required; `Type{Union{}}` is the
+# exception, since the bottom object is unique.
+isconstType(@nospecialize t) = isTypeEgal(t) || (isTypeEq(t) && type_parameter(t) === Union{})
 
 """
     isTypeDataType(@nospecialize t)::Bool
@@ -51,7 +34,7 @@ has_extended_info(@nospecialize x) = (!isa(x, Type) && !isvarargtype(x)) || isTy
 # some of these queries, this check can be used to somewhat protect against making incorrect
 # decisions based on incorrect subtyping. Note that this check, itself, is broken for
 # certain combinations of `a` and `b` where one/both isa/are `Union`/`UnionAll` type(s)s.
-isnotbrokensubtype(@nospecialize(a), @nospecialize(b)) = (!iskindtype(b) || !isType(a) || hasuniquerep(type_parameter(a)) || b <: a)
+isnotbrokensubtype(@nospecialize(a), @nospecialize(b)) = (!iskindtype(b) || !isType(a) || b <: a)
 
 function argtypes_to_type(argtypes::Vector{Any})
     argtypes = anymap(@nospecialize(a) -> isvarargtype(a) ? a : widenconst(a), argtypes)

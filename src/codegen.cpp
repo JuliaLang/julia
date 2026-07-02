@@ -478,34 +478,13 @@ static bool type_is_ghost(Type *ty)
     return (ty == getVoidTy(ty->getContext()) || ty->isEmptyTy());
 }
 
-// should agree with `Core.Compiler.hasuniquerep`
-static bool type_has_unique_rep(jl_value_t *t)
-{
-    if (t == (jl_value_t*)jl_typeofbottom_type)
-        return false;
-    if (t == jl_bottom_type)
-        return true;
-    if (jl_is_typevar(t))
-        return false;
-    if (!jl_is_kind(jl_typeof(t)))
-        return true;
-    if (jl_is_concrete_type(t))
-        return true;
-    if (jl_is_datatype(t)) {
-        jl_datatype_t *dt = (jl_datatype_t*)t;
-        if (dt->name != jl_tuple_typename) {
-            for (size_t i = 0; i < jl_nparams(dt); i++)
-                if (!type_has_unique_rep(jl_tparam(dt, i)))
-                    return false;
-            return true;
-        }
-    }
-    return false;
-}
-
+// whether values of this type are exactly (`===`) the type `T`, so they may be
+// inlined as the constant `T`; other `Type{T}` also admit `==`-but-non-egal reps
+// (#61323). Should agree with `Compiler.isconstType` modulo `Type{Union{}}`,
+// which threads through the `jl_bottom_type` special cases instead.
 static bool is_uniquerep_Type(jl_value_t *t)
 {
-    return jl_is_typeeq(t) && type_has_unique_rep(jl_typeeq_T(t));
+    return jl_is_typeegal(t);
 }
 
 class jl_codectx_t;
@@ -980,6 +959,14 @@ static const auto jlinvoke_func = new JuliaFunction<>{
     XSTR(jl_invoke),
     get_func2_sig,
     get_func_attrs,
+};
+static const auto jlspecsigfptrifcompiled_func = new JuliaFunction<>{
+    XSTR(jl_specsig_fptr_if_compiled),
+    [](LLVMContext &C) {
+        return FunctionType::get(PointerType::getUnqual(C),
+            {JuliaType::get_prjlvalue_ty(C)}, false);
+    },
+    nullptr,
 };
 static const auto jlinvokeoc_func = new JuliaFunction<>{
     XSTR(jl_invoke_oc),
@@ -1626,8 +1613,10 @@ static _Atomic(uint64_t) globalUniqueGeneratedNames{1};
 
 static MDNode *best_tbaa(jl_tbaacache_t &tbaa_cache, jl_value_t *jt) {
     jt = jl_unwrap_unionall(jt);
+    // only an egality-pinned type value is known to be represented as a
+    // DataType; an `==`-only `Type{X}` also admits e.g. UnionAll reps (#61323)
     if (jt == (jl_value_t*)jl_datatype_type ||
-        (jl_is_typeeq(jt) && jl_is_datatype(jl_typeeq_T(jt))))
+        (is_uniquerep_Type(jt) && jl_is_datatype(jl_some_Type_T(jt))))
         return tbaa_cache.tbaa_datatype;
     if (!jl_is_datatype(jt))
         return tbaa_cache.tbaa_value;
@@ -2124,6 +2113,8 @@ public:
     }
 };
 
+static void jl_temporary_root(jl_codectx_t &ctx, jl_value_t *val);
+
 GlobalVariable *JuliaVariable::realize(jl_codectx_t &ctx) {
     return realize(jl_Module);
 }
@@ -2374,11 +2365,11 @@ static inline jl_cgval_t ghostValue(jl_codectx_t &ctx, jl_value_t *typ)
         // normalize TypeofBottom to Type{Union{}}
         typ = jl_atomic_load_relaxed(&jl_typeofbottom_type->name->Typeofwrapper);
     }
-    if (jl_is_typeeq(typ)) {
-        assert(is_uniquerep_Type(typ));
-        // replace T::Type{T} with T, by assuming that T must be a leaftype of some sort
+    if (jl_is_some_Type(typ)) {
+        // only `TypeEgal{T}` and `Type{Union{}}` have a single (constant) value
+        assert(is_uniquerep_Type(typ) || jl_some_Type_T(typ) == jl_bottom_type);
         jl_cgval_t constant(NULL, true, typ, NULL, best_tbaa(ctx.tbaa(), typ), jl_gc_roots_t());
-        constant.constant = jl_typeeq_T(typ);
+        constant.constant = jl_some_Type_T(typ);
         if (constant.constant == jl_bottom_type)
             constant.isghost = true;
         return constant;
@@ -2394,7 +2385,10 @@ static inline jl_cgval_t mark_julia_const(jl_codectx_t &ctx, jl_value_t *jv)
 {
     jl_value_t *typ;
     if (jl_is_type(jv) && jv != jl_bottom_type) {
-        typ = (jl_value_t*)jl_wrap_Type(jv); // TODO: gc-root this?
+        // match `Compiler.widenconst`: a known type value has the egality kind
+        typ = jl_has_free_typevars(jv) ? (jl_value_t*)jl_wrap_Type(jv)
+                                       : jl_wrap_TypeEgal(jv);
+        jl_temporary_root(ctx, typ);
     }
     else {
         typ = jl_typeof(jv);
@@ -2488,7 +2482,7 @@ static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, const jl_cgval_t &v
 
 static inline jl_cgval_t mark_julia_type(jl_codectx_t &ctx, Value *v, bool isboxed, jl_value_t *typ)
 {
-    if (jl_is_typeeq(typ)) {
+    if (jl_is_some_Type(typ)) {
         if (is_uniquerep_Type(typ)) {
             // replace T::Type{T} with T
             return ghostValue(ctx, typ);
@@ -3322,9 +3316,7 @@ static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex)
             size_t idx = jl_unbox_long(jl_exprarg(e, 0));
             if (idx <= jl_svec_len(ctx.linfo->sparam_vals)) {
                 jl_value_t *e = jl_svecref(ctx.linfo->sparam_vals, idx - 1);
-                if (jl_is_svec(e) || jl_has_free_typevars(e))
-                    return NULL;
-                return e;
+                return jl_sparam_defined_value(e);
             }
         }
         return NULL;
@@ -3497,12 +3489,14 @@ static void simple_use_analysis(jl_codectx_t &ctx, jl_value_t *expr)
 
 static void jl_temporary_root(jl_codegen_output_t &ctx, jl_value_t *val)
 {
-    if (!jl_is_globally_rooted(val)) {
+    if (ctx.temporary_roots && !jl_is_globally_rooted(val)) {
+        JL_GC_PUSH1(&val);
         jl_array_t *roots = ctx.temporary_roots;
-        if (ctx.temporary_roots_set.find(val) != ctx.temporary_roots_set.end())
-            return;
-        jl_array_ptr_1d_push(roots, val);
-        ctx.temporary_roots_set.insert(val);
+        if (ctx.temporary_roots_set.find(val) == ctx.temporary_roots_set.end()) {
+            jl_array_ptr_1d_push(roots, val);
+            ctx.temporary_roots_set.insert(val);
+        }
+        JL_GC_POP();
     }
 }
 static void jl_temporary_root(jl_codectx_t &ctx, jl_value_t *val)
@@ -4439,8 +4433,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     else if (f == BUILTIN(typeassert) && nargs == 2) {
         const jl_cgval_t &arg = argv[1];
         const jl_cgval_t &ty = argv[2];
-        if (jl_is_typeeq(ty.typ) && !jl_has_free_typevars(ty.typ)) {
-            jl_value_t *tp0 = jl_typeeq_T(ty.typ);
+        if (jl_is_some_Type(ty.typ) && !jl_has_free_typevars(ty.typ)) {
+            jl_value_t *tp0 = jl_some_Type_T(ty.typ);
             emit_typecheck(ctx, arg, tp0, "typeassert");
             *ret = update_julia_type(ctx, arg, tp0);
             return true;
@@ -4457,8 +4451,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     else if (f == BUILTIN(isa) && nargs == 2) {
         const jl_cgval_t &arg = argv[1];
         const jl_cgval_t &ty = argv[2];
-        if (jl_is_typeeq(ty.typ) && !jl_has_free_typevars(ty.typ)) {
-            jl_value_t *tp0 = jl_typeeq_T(ty.typ);
+        if (jl_is_some_Type(ty.typ) && !jl_has_free_typevars(ty.typ)) {
+            jl_value_t *tp0 = jl_some_Type_T(ty.typ);
             Value *isa_result = emit_isa(ctx, arg, tp0, Twine()).first;
             *ret = mark_julia_type(ctx, isa_result, false, jl_bool_type);
             return true;
@@ -4468,9 +4462,9 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     else if (f == BUILTIN(issubtype) && nargs == 2) {
         const jl_cgval_t &ta = argv[1];
         const jl_cgval_t &tb = argv[2];
-        if (jl_is_typeeq(ta.typ) && !jl_has_free_typevars(ta.typ) &&
-            jl_is_typeeq(tb.typ) && !jl_has_free_typevars(tb.typ)) {
-            int issub = jl_subtype(jl_typeeq_T(ta.typ), jl_typeeq_T(tb.typ));
+        if (jl_is_some_Type(ta.typ) && !jl_has_free_typevars(ta.typ) &&
+            jl_is_some_Type(tb.typ) && !jl_has_free_typevars(tb.typ)) {
+            int issub = jl_subtype(jl_some_Type_T(ta.typ), jl_some_Type_T(tb.typ));
             *ret = mark_julia_type(ctx, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), issub), false, jl_bool_type);
             return true;
         }
@@ -4878,8 +4872,10 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
 
         jl_datatype_t *utt = (jl_datatype_t*)jl_unwrap_unionall(obj.typ);
-        if (jl_is_typeeq((jl_value_t*)utt) && jl_is_concrete_type(jl_typeeq_T((jl_value_t*)utt)))
-            utt = (jl_datatype_t*)jl_typeof(jl_typeeq_T((jl_value_t*)utt));
+        // requires an egality-pinned type value: an `==`-only `Type{X}` element
+        // admits reps whose representation differs from `typeof(X)` (#61323)
+        if (is_uniquerep_Type((jl_value_t*)utt) && jl_is_concrete_type(jl_some_Type_T((jl_value_t*)utt)))
+            utt = (jl_datatype_t*)jl_typeof(jl_some_Type_T((jl_value_t*)utt));
 
         if (fld.constant && jl_is_symbol(fld.constant)) {
             jl_sym_t *name = (jl_sym_t*)fld.constant;
@@ -5082,8 +5078,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         if (obj.constant) {
             nf = jl_datatype_nfields(jl_typeof(obj.constant));
         }
-        else if (jl_is_typeeq(obj.typ)) {
-            jl_value_t *tp0 = jl_typeeq_T(obj.typ);
+        else if (is_uniquerep_Type(obj.typ)) {
+            jl_value_t *tp0 = jl_some_Type_T(obj.typ);
             if (jl_is_datatype(tp0) && jl_is_datatype_singleton((jl_datatype_t*)tp0))
                 nf = jl_datatype_nfields((jl_value_t*)jl_datatype_type);
         }
@@ -5102,7 +5098,9 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     else if (f == BUILTIN(fieldtype) && (nargs == 2 || nargs == 3)) {
         const jl_cgval_t &typ = argv[1];
         const jl_cgval_t &fld = argv[2];
-        if ((jl_is_typeeq(typ.typ) && jl_is_concrete_type(jl_typeeq_T(typ.typ))) ||
+        // requires an egality-pinned type value: an `==`-only `Type{X}` element
+        // admits e.g. UnionAll reps without DataType field layout (#61323)
+        if ((is_uniquerep_Type(typ.typ) && jl_is_concrete_type(jl_some_Type_T(typ.typ))) ||
                 (typ.constant && jl_is_concrete_type(typ.constant))) {
             if (fld.typ == (jl_value_t*)jl_long_type) {
                 assert(typ.isboxed);
@@ -5224,11 +5222,12 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         const jl_cgval_t &fld = argv[2];
         jl_datatype_t *stt = (jl_datatype_t*)obj.typ;
         ssize_t fieldidx = -1;
-        if (jl_is_typeeq((jl_value_t*)stt)) {
-            // the representation type of Type{T} is either typeof(T), or unknown
+        if (is_uniquerep_Type((jl_value_t*)stt)) {
+            // the representation type of an egality-pinned `TypeEgal{T}` is
+            // typeof(T); an `==`-only `Type{T}` element admits other reps (#61323)
             // TODO: could use `issingletontype` predicate here, providing better type knowledge
             // than only handling DataType
-            jl_value_t *tp0 = jl_typeeq_T((jl_value_t*)stt);
+            jl_value_t *tp0 = jl_some_Type_T((jl_value_t*)stt);
             if (jl_is_concrete_type(tp0))
                 stt = (jl_datatype_t*)jl_typeof(tp0);
             else
@@ -5925,8 +5924,8 @@ static jl_cgval_t emit_checked_var(jl_codectx_t &ctx, Value *bp, jl_sym_t *name,
 static jl_cgval_t emit_sparam(jl_codectx_t &ctx, size_t i)
 {
     if (jl_svec_len(ctx.linfo->sparam_vals) > 0) {
-        jl_value_t *e = jl_svecref(ctx.linfo->sparam_vals, i);
-        if (!jl_is_svec(e) && !jl_has_free_typevars(e)) {
+        jl_value_t *e = jl_sparam_defined_value(jl_svecref(ctx.linfo->sparam_vals, i));
+        if (e != NULL) {
             return mark_julia_const(ctx, e);
         }
     }
@@ -5978,7 +5977,7 @@ static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym, int allow_i
         size_t i = jl_unbox_long(jl_exprarg(sym, 0)) - 1;
         if (jl_svec_len(ctx.linfo->sparam_vals) > 0) {
             jl_value_t *e = jl_svecref(ctx.linfo->sparam_vals, i);
-            if (!jl_is_svec(e) && !jl_has_free_typevars(e)) {
+            if (jl_sparam_defined_value(e) != NULL) {
                 return mark_julia_const(ctx, jl_true);
             }
         }
@@ -6342,8 +6341,11 @@ static void emit_varinfo_assign(jl_codectx_t &ctx, jl_varinfo_t &vi, const jl_cg
         if (allow_mismatch) {
             if (vi.pTIndex)
                 skip = ctx.builder.CreateIsNull(ctx.builder.CreateAnd(rval_info.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), ~UNION_BOX_MARKER)));
-            else
-                skip = ctx.builder.CreateNot(emit_exactly_isa(ctx, rhs, (jl_datatype_t *)vi.value.typ, true));
+            else {
+                jl_datatype_t *dt = is_typeofbottom_typealias(vi.value.typ) ?
+                    jl_typeofbottom_type : (jl_datatype_t*)vi.value.typ;
+                skip = ctx.builder.CreateNot(emit_exactly_isa(ctx, rhs, dt, true));
+            }
         }
         emit_guarded_test(ctx, skip ? ctx.builder.CreateNot(skip) : nullptr, nullptr, [&] {
             // internally this skips assignment if isboxed is true
@@ -6844,10 +6846,12 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
             argv[i] = emit_expr(ctx, args[i]);
         }
         jl_value_t *ty = argv[0].typ;
-        if (jl_is_typeeq(ty) &&
-                jl_is_datatype(jl_typeeq_T(ty)) &&
-                jl_is_concrete_type(jl_typeeq_T(ty))) {
-            jl_value_t *tp0 = jl_typeeq_T(ty);
+        // requires an egality-pinned type value: the constructed instance must
+        // have exactly the runtime type object, not an `==`-equal rep (#61323)
+        if (is_uniquerep_Type(ty) &&
+                jl_is_datatype(jl_some_Type_T(ty)) &&
+                jl_is_concrete_type(jl_some_Type_T(ty))) {
+            jl_value_t *tp0 = jl_some_Type_T(ty);
             assert(nargs <= jl_datatype_nfields(tp0) + 1);
             jl_cgval_t res = emit_new_struct(ctx, tp0, nargs - 1, ArrayRef<jl_cgval_t>(argv).drop_front(), is_promotable);
             if (is_promotable && res.promotion_point && res.promotion_ssa==-1)
@@ -7310,7 +7314,7 @@ static void emit_specsig_to_specsig(
             et = julia_type_to_llvm(ctx, jt);
         }
         if (is_uniquerep_Type(jt)) {
-            myargs[i] = mark_julia_const(ctx, jl_typeeq_T(jt));
+            myargs[i] = mark_julia_const(ctx, jl_some_Type_T(jt));
         }
         else if (type_is_ghost(et)) {
             assert(jl_is_datatype(jt) && jl_is_datatype_singleton((jl_datatype_t*)jt));
@@ -7443,6 +7447,62 @@ Function *emit_specsig_to_fptr1(jl_codegen_output_t &out, jl_code_instance_t *ci
     emit_specsig_to_fptr1(spec_func, info.cc, info.return_roots, specTypes, ci->rettype,
                           is_opaque_closure, nrealargs, out, func);
     return spec_func;
+}
+
+// Helper for JIT linking: a specsig entry point that tail-calls the compiled
+// specsig of `ci` once it is published, and `fallback` (a specsig-to-fptr1
+// thunk dispatching through `jl_invoke`) until then. A trampoline is created
+// when a call edge must be linked before its target finishes compiling;
+// without the recheck the edge would box its arguments on every call forever.
+Function *emit_specsig_healing_wrapper(jl_codegen_output_t &out, jl_code_instance_t *ci,
+                                       Function *fallback)
+{
+    jl_method_instance_t *mi = jl_get_ci_mi(ci);
+    bool is_opaque_closure =
+        jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure;
+    std::string name =
+        get_function_name(true, false, name_from_method_instance(mi), out.TargetTriple);
+    name += "_healing";
+    jl_value_t *specTypes = get_ci_abi(ci);
+    jl_returninfo_t info = get_specsig_function(out, &out.get_module(), nullptr, name,
+                                                specTypes, ci->rettype, is_opaque_closure);
+    if (info.return_roots != 0 ||
+        (info.cc != jl_returninfo_t::Boxed && info.cc != jl_returninfo_t::Register &&
+         info.cc != jl_returninfo_t::Ghosts)) {
+        // The late GC lowering pass requires `julia.return_roots`/sret buffer
+        // arguments to be locally-allocated, so those cannot simply be
+        // forwarded; leave such (rarer) signatures on the fallback.
+        return fallback;
+    }
+    Function *F = cast<Function>(info.decl.getCallee());
+    assert(F->getFunctionType() == fallback->getFunctionType());
+    jl_codectx_t ctx(out, ci);
+    ctx.f = F;
+    BasicBlock *top = BasicBlock::Create(out.get_context(), "top", F);
+    BasicBlock *healed = BasicBlock::Create(out.get_context(), "healed", F);
+    BasicBlock *fallbb = BasicBlock::Create(out.get_context(), "fallback", F);
+    ctx.builder.SetInsertPoint(top);
+    Value *theCI = track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)ci));
+    Value *target = ctx.builder.CreateCall(prepare_call(jlspecsigfptrifcompiled_func), {theCI});
+    Value *isnull = ctx.builder.CreateICmpEQ(target, Constant::getNullValue(target->getType()));
+    ctx.builder.CreateCondBr(isnull, fallbb, healed);
+    SmallVector<Value*, 0> args;
+    for (auto &arg : F->args())
+        args.push_back(&arg);
+    auto emit_forward = [&](Value *callee) {
+        CallInst *call = ctx.builder.CreateCall(F->getFunctionType(), callee, args);
+        call->setCallingConv(F->getCallingConv());
+        call->setAttributes(F->getAttributes());
+        if (F->getReturnType()->isVoidTy())
+            ctx.builder.CreateRetVoid();
+        else
+            ctx.builder.CreateRet(call);
+    };
+    ctx.builder.SetInsertPoint(healed);
+    emit_forward(target);
+    ctx.builder.SetInsertPoint(fallbb);
+    emit_forward(fallback);
+    return F;
 }
 
 static void emit_fptr1_wrapper(Module *M, StringRef gf_thunk_name, Value *target, jl_value_t *rettype_const, jl_value_t *declrt, jl_value_t *jlrettype, jl_codegen_output_t &out)
@@ -8035,7 +8095,26 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
 
     jl_array_t *closure_types = NULL;
     jl_value_t *sigt = NULL; // dispatch-sig = type signature with Ref{} annotations removed and applied to the env
-    JL_GC_PUSH4(&declrt, &sigt, &rt, &closure_types);
+    jl_svec_t *argt_inst = NULL;
+    JL_GC_PUSH5(&declrt, &sigt, &rt, &closure_types, &argt_inst);
+    // Substitute known static-parameter values into the declared argument
+    // types up front: the ABI and argument-unpacking decisions below must be
+    // made on the same types the call sites use, and `gen_cfun_wrapper` cannot
+    // substitute them itself when `unionall_env` is dropped for the
+    // non-closure case. (A raw `Ref{S}` element would be unpacked as a plain
+    // `jl_value_t*`, while a call site with `S = Any` passes a `jl_value_t**`.)
+    if (unionall_env && sparam_vals) {
+        for (size_t i = 0; i < nargt; i++) {
+            jl_value_t *jargty = jl_svecref(argt, i);
+            if (jl_has_typevar_from_unionall(jargty, unionall_env)) {
+                if (!argt_inst)
+                    argt_inst = jl_svec_copy(argt);
+                jl_svecset(argt_inst, i, jl_instantiate_type_in_env(jargty, unionall_env, jl_svec_data(sparam_vals)));
+            }
+        }
+        if (argt_inst)
+            argt = argt_inst;
+    }
     Type *lrt;
     bool retboxed;
     bool static_rt;
@@ -8542,7 +8621,7 @@ static jl_datatype_t *compute_va_type(jl_value_t *sig, size_t nreq)
         jl_value_t *argType = jl_nth_slot_type(sig, i);
         // n.b. specTypes is required to be a datatype by construction for specsig
         if (is_uniquerep_Type(argType))
-            argType = jl_typeof(jl_typeeq_T(argType));
+            argType = jl_typeof(jl_some_Type_T(argType));
         else if (jl_has_intersect_type_not_kind(argType)) {
             jl_value_t *ts[2] = {argType, (jl_value_t*)jl_type_type};
             argType = jl_type_union(ts, 2);
@@ -9174,7 +9253,7 @@ static jl_llvm_functions_t
             return ghostValue(ctx, argType);
         }
         else if (is_uniquerep_Type(argType)) {
-            return mark_julia_const(ctx, jl_typeeq_T(argType));
+            return mark_julia_const(ctx, jl_some_Type_T(argType));
         }
         Argument *Arg = &*AI;
         ++AI;
@@ -10468,6 +10547,7 @@ static void init_jit_functions(void)
         add_named_global(jl_builtin_f_names[i], jl_builtin_f_addrs[i]);
     add_named_global(jlapplygeneric_func, &jl_apply_generic);
     add_named_global(jlinvoke_func, &jl_invoke);
+    add_named_global(jlspecsigfptrifcompiled_func, &jl_specsig_fptr_if_compiled);
     add_named_global(jltopeval_func, &jl_toplevel_eval);
     add_named_global(jlcopyast_func, &jl_copy_ast);
     //add_named_global(jlnsvec_func, &jl_svec);

@@ -657,6 +657,14 @@ void jl_register_jit_object(const object::ObjectFile &Object,
                             std::function<uint64_t(const StringRef &)> getLoadAddress,
                             const jl_linker_info_t &Info);
 
+static bool isJITLinkEHFrameSection(StringRef Name) JL_NOTSAFEPOINT
+{
+    // EH-frame sections are handled by the EH-frame registration plugin. Its
+    // post-allocation graph state is not suitable for generic section range
+    // walks here.
+    return Name == ".eh_frame" || Name == "__eh_frame" || Name.ends_with(",__eh_frame");
+}
+
 void JLDebuginfoPlugin::notifyMaterializingWithInfo(
     orc::MaterializationResponsibility &MR, jitlink::LinkGraph &G,
     MemoryBufferRef InputObject, std::unique_ptr<jl_linker_info_t> LinkerInfo)
@@ -750,8 +758,12 @@ void JLDebuginfoPlugin::modifyPassConfig(MaterializationResponsibility &MR, jitl
 #else
             auto SecName = Sec.getName();
 #endif
+            if (isJITLinkEHFrameSection(SecName))
+                continue;
+            if (Sec.blocks().empty())
+                continue;
             // https://github.com/llvm/llvm-project/commit/118e953b18ff07d00b8f822dfbf2991e41d6d791
-           Info.SectionLoadAddresses[SecName] = jitlink::SectionRange(Sec).getStart().getValue();
+            Info.SectionLoadAddresses[SecName] = jitlink::SectionRange(Sec).getStart().getValue();
         }
         return Error::success();
     });
@@ -784,13 +796,15 @@ public:
                           jitlink::LinkGraph &,
                           jitlink::PassConfiguration &Config) override {
         Config.PostAllocationPasses.push_back([this](jitlink::LinkGraph &G) {
+            // `G.blocks()` is exactly the union of the sections' blocks, so a
+            // single pass over the (non-EH-frame) sections counts every block
+            // once; `graph_size == code_size + data_size`
             size_t graph_size = 0;
             size_t code_size = 0;
             size_t data_size = 0;
-            for (auto block : G.blocks()) {
-                graph_size += block->getSize();
-            }
             for (auto &section : G.sections()) {
+                if (isJITLinkEHFrameSection(section.getName()))
+                    continue;
                 size_t secsize = 0;
                 for (auto block : section.blocks()) {
                     secsize += block->getSize();
@@ -965,8 +979,17 @@ public:
         jl_task_t *ct = jl_current_task;
         uint8_t state = jl_gc_unsafe_enter(ct->ptls);
         Function *F = emit_tojlinvoke(CI, "", Out);
-        if (API == JL_INVOKE_SPECSIG)
+        if (API == JL_INVOKE_SPECSIG) {
             F = emit_specsig_to_fptr1(Out, CI, F); // may safepoint
+            // This trampoline exists because the edge had to be linked before
+            // its target finished compiling; recheck the target on each call
+            // and forward to its compiled specsig once published, so the edge
+            // stops boxing through `jl_invoke`.
+            Function *Healed = emit_specsig_healing_wrapper(Out, CI, F);
+            if (Healed != F)
+                F->setLinkage(GlobalValue::InternalLinkage);
+            F = Healed;
+        }
         jl_gc_unsafe_leave(ct->ptls, state);
         F->setLinkage(GlobalValue::ExternalLinkage);
         F->setName(*Sym);
@@ -2194,6 +2217,79 @@ linkGraphSymbols(jitlink::LinkGraph &G) JL_NOTSAFEPOINT
     return Syms;
 }
 
+static jitlink::Symbol *
+findLinkGraphSymbolByName(jitlink::LinkGraph &G,
+                          const orc::SymbolStringPtr &Name) JL_NOTSAFEPOINT
+{
+    if (auto *Sym = G.findDefinedSymbolByName(Name))
+        return Sym;
+    if (auto *Sym = G.findExternalSymbolByName(Name))
+        return Sym;
+    if (auto *Sym = G.findAbsoluteSymbolByName(Name))
+        return Sym;
+    return nullptr;
+}
+
+static void retargetLinkGraphEdges(jitlink::LinkGraph &G, jitlink::Symbol &From,
+                                   jitlink::Symbol &To) JL_NOTSAFEPOINT
+{
+    struct RetargetEdgeVisitor {
+        jitlink::Symbol &From;
+        jitlink::Symbol &To;
+
+        bool visitEdge(jitlink::LinkGraph &, jitlink::Block *,
+                       jitlink::Edge &Edge) JL_NOTSAFEPOINT
+        {
+            if (&Edge.getTarget() != &From)
+                return false;
+            Edge.setTarget(To);
+            return true;
+        }
+    };
+    jitlink::visitExistingEdges(G, RetargetEdgeVisitor{From, To});
+}
+
+static jitlink::Symbol *
+makeAnonymousLinkGraphSymbol(jitlink::LinkGraph &G,
+                             jitlink::Symbol &Sym) JL_NOTSAFEPOINT
+{
+    assert(Sym.isDefined());
+    auto &Anon = G.addAnonymousSymbol(Sym.getBlock(), Sym.getOffset(),
+                                      Sym.getSize(), Sym.isCallable(),
+                                      Sym.isLive());
+    Anon.setTargetFlags(Sym.getTargetFlags());
+    retargetLinkGraphEdges(G, Sym, Anon);
+    G.removeDefinedSymbol(Sym);
+    return &Anon;
+}
+
+static jitlink::Symbol *
+renameLinkGraphSymbol(jitlink::LinkGraph &G, jitlink::Symbol &Sym,
+                      const orc::SymbolStringPtr &Name) JL_NOTSAFEPOINT
+{
+    if (Sym.getName() == Name)
+        return &Sym;
+    if (!Sym.isExternal()) {
+        Sym.setName(Name);
+        return &Sym;
+    }
+    // External symbols are keyed by name inside LinkGraph, so retarget rather
+    // than renaming in place and leaving the external symbol map stale.
+    auto *Dest = findLinkGraphSymbolByName(G, Name);
+    if (!Dest) {
+        Dest = &G.addExternalSymbol(Name, Sym.getSize(), Sym.isWeaklyReferenced());
+        Dest->setCallable(Sym.isCallable());
+        Dest->setTargetFlags(Sym.getTargetFlags());
+    }
+    else if (Dest->isExternal()) {
+        Dest->setWeaklyReferenced(Dest->isWeaklyReferenced() && Sym.isWeaklyReferenced());
+        Dest->setCallable(Dest->isCallable() || Sym.isCallable());
+        Dest->setTargetFlags(Dest->getTargetFlags() | Sym.getTargetFlags());
+    }
+    retargetLinkGraphEdges(G, Sym, *Dest);
+    return Dest;
+}
+
 bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferRef ObjBuf,
                            jitlink::LinkGraph &G, std::unique_ptr<jl_linker_info_t> Info)
 {
@@ -2203,7 +2299,14 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
 
     // Rename the defined CI functions.
     auto RenameDef = [&](const SymbolStringPtr &Orig, const SymbolStringPtr &Dest)
-                             JL_NOTSAFEPOINT { Syms.at(Orig)->setName(Dest); };
+                             JL_NOTSAFEPOINT {
+        auto It = Syms.find(Orig);
+        assert(It != Syms.end());
+        It->second = renameLinkGraphSymbol(G, *It->second, Dest);
+    };
+    SmallSet<SymbolStringPtr, 2> OwnedSyms;
+    for (auto &KV : MR.getSymbols())
+        OwnedSyms.insert(KV.first);
     for (auto &[CI, Funcs] : Info->ci_funcs) {
         auto &S = CISymbols.at(CI);
         if (Funcs.invoke)
@@ -2215,13 +2318,45 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
     // Rename referenced CIs in the workqueue.
     for (auto &[Call, T] : Info->call_targets) {
         auto [CI, API] = Call;
-        if (!Syms.contains(T))
+        auto It = Syms.find(T);
+        if (It == Syms.end())
             continue;
+        if (!It->second->isExternal()) {
+            // Non-primary call target bodies are local copies. Keep them out
+            // of ORC's public symbols instead of publishing duplicate CI
+            // definitions under the target's global name.
+            if (!OwnedSyms.contains(It->second->getName()))
+                It->second = makeAnonymousLinkGraphSymbol(G, *It->second);
+            continue;
+        }
         JL_GC_PROMISE_ROOTED(CI);
         auto Dest = linkCallTarget(MR, CI, API);
         if (!Dest)
             return false;
-        Syms.at(T)->setName(Dest);
+        if (auto *DestSym = findLinkGraphSymbolByName(G, Dest);
+            DestSym && !DestSym->isExternal() && !OwnedSyms.contains(Dest))
+            makeAnonymousLinkGraphSymbol(G, *DestSym);
+        It->second = renameLinkGraphSymbol(G, *It->second, Dest);
+    }
+    SmallSet<SymbolStringPtr, 0> KnownCISyms;
+    for (auto &KV : CISymbols) {
+        auto &S = KV.second;
+        if (S.invoke)
+            KnownCISyms.insert(S.invoke);
+        if (S.specptr)
+            KnownCISyms.insert(S.specptr);
+    }
+    // copy first: anonymizing a symbol removes it from `defined_symbols`
+    SmallVector<jitlink::Symbol *, 0> DefinedSyms;
+    for (auto *Sym : G.defined_symbols())
+        DefinedSyms.push_back(Sym);
+    // Another thread may have claimed a CI after this module was emitted but
+    // before this materialization unit registered its interface. Any body that
+    // remains in this graph for that CI must not be exported here.
+    for (auto *Sym : DefinedSyms) {
+        if (Sym->hasName() && KnownCISyms.contains(Sym->getName()) &&
+            !OwnedSyms.contains(Sym->getName()))
+            makeAnonymousLinkGraphSymbol(G, *Sym);
     }
 
     // Rename globals and add mappings
@@ -2241,7 +2376,7 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
         auto It = Syms.find(Orig);
         if (It == Syms.end())
             continue;
-        It->second->setName(Sym);
+        It->second = renameLinkGraphSymbol(G, *It->second, Sym);
         Ptrs[i] = Addr;
         GlobalSyms[Sym] = {ExecutorAddr::fromPtr(Ptrs + i), JITSymbolFlags::Exported};
         ++i;
