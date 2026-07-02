@@ -667,7 +667,7 @@ GC_CHECKER_SOURCES := \
 	$(SRCDIR)/clangsa/GCCheckerReporting.cpp \
 	$(SRCDIR)/clangsa/GCCheckerPropagation.cpp
 
-CLANGSA_PLUGIN_NAMES := GCChecker ImplicitAtomics FirstDeclAnnotations
+CLANGSA_PLUGIN_NAMES := GCChecker ImplicitAtomics FirstDeclAnnotations StaticOrDeclared
 CLANGSA_PLUGINS := $(addsuffix Plugin.$(SHLIB_EXT),$(addprefix $(build_shlibdir)/lib,$(CLANGSA_PLUGIN_NAMES)))
 GCCHECKER_PLUGIN := $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT)
 
@@ -742,11 +742,7 @@ clang-sa-%: $(SRCDIR)/%.cpp .FORCE | analyzegc-deps-check
 		$(SA_EXCEPTIONS-$(notdir $<)) \
 		$(CLANG_TOOLING_CXX_FLAGS) -fcolor-diagnostics -Werror -x c++ $<)
 
-# Run the clang-tidy plugins: concurrency-implicit-atomics (see
-# src/clangsa/ImplicitAtomics.cpp) and julia-first-decl-annotations, which flags
-# Julia annotations (JL_NOTSAFEPOINT, JL_PROPAGATES_ROOT, ...) written only on a
-# redeclaration instead of on the first declaration (see
-# src/clangsa/FirstDeclAnnotations.cpp). `-header-filter='.*'` so the first
+# Run clang-tidy with our plugins: `-header-filter='.*'` so the first
 # (header) declarations participate in the comparison. The annotation macros
 # only expand to an `annotate` attribute under `-D__clang_gcanalyzer__` (see
 # src/support/analyzer_annotations.h), so run the checks once in the normal
@@ -755,7 +751,7 @@ clang-sa-%: $(SRCDIR)/%.cpp .FORCE | analyzegc-deps-check
 TIDY_PLUGIN_NAMES := $(filter-out GCChecker,$(CLANGSA_PLUGIN_NAMES))
 TIDY_PLUGIN_LIBS := $(addsuffix Plugin.$(SHLIB_EXT),$(addprefix $(build_shlibdir)/lib,$(TIDY_PLUGIN_NAMES)))
 TIDY_PLUGINS := $(addprefix -load ,$(TIDY_PLUGIN_LIBS))
-TIDY_CHECKS := -clang-analyzer-*,-clang-diagnostic-*,concurrency-implicit-atomics,julia-first-decl-annotations
+TIDY_CHECKS := -clang-analyzer-*,-clang-diagnostic-*,concurrency-implicit-atomics,julia-first-decl-annotations,julia-static-or-declared
 clang-tidy-%: $(SRCDIR)/%.c $(TIDY_PLUGIN_LIBS) .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang-tidy $< -header-filter='.*' --quiet \
 		$(TIDY_PLUGINS) --checks='$(TIDY_CHECKS)' --warnings-as-errors='*' \

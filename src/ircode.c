@@ -630,8 +630,6 @@ static jl_genericmemory_t *jl_decode_value_memory(jl_ircode_state *s, jl_value_t
     return m;
 }
 
-JL_DLLEXPORT jl_array_t *jl_alloc_array_nd(jl_value_t *atype, size_t *dims, size_t ndims);
-
 static jl_value_t *jl_decode_value_array1d(jl_ircode_state *s, uint8_t tag)
 {
     int16_t ndims = 1;

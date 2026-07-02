@@ -326,7 +326,7 @@ JL_DLLEXPORT void jl_resolve_definition_effects_in_ir(jl_array_t *stmts, jl_modu
     }
 }
 
-jl_value_t *expr_arg1(jl_value_t *expr) {
+static jl_value_t *expr_arg1(jl_value_t *expr) {
     jl_array_t *args = ((jl_expr_t*)expr)->args;
     return jl_array_ptr_ref(args, 0);
 }
@@ -404,7 +404,7 @@ static void add_edge(arraylist_t *edges_list, arraylist_t *inlinestack, int32_t 
     *p_pc = (i - 2) / 3 + 1;
 }
 
-jl_debuginfo_t *jl_linetable_to_debuginfo(jl_array_t *codelocs_any, jl_array_t *linetable)
+static jl_debuginfo_t *jl_linetable_to_debuginfo(jl_array_t *codelocs_any, jl_array_t *linetable)
 {
     size_t nlocs = jl_array_nrows(codelocs_any);
     jl_value_t *toplocinfo = jl_array_ptr_ref(linetable, 0);

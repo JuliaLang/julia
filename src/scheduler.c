@@ -95,9 +95,6 @@ void jl_init_threadinginfra(void)
     }
 }
 
-
-void JL_NORETURN jl_finish_task(jl_task_t *ct);
-
 // thread function: used by all mutator threads except the main thread
 void jl_threadfun(void *arg)
 {
@@ -240,7 +237,7 @@ static void wake_libuv(void) JL_NOTSAFEPOINT
     JULIA_DEBUG_SLEEPWAKE( io_wakeup_leave = cycleclock() );
 }
 
-void wakeup_thread(jl_task_t *ct, int16_t tid) JL_NOTSAFEPOINT { // Pass in ptls when we have it already available to save a lookup
+static void wakeup_thread(jl_task_t *ct, int16_t tid) JL_NOTSAFEPOINT { // Pass in ptls when we have it already available to save a lookup
     int16_t self = jl_atomic_load_relaxed(&ct->tid);
     if (tid != self)
         jl_fence(); // [^store_buffering_1]
@@ -388,8 +385,6 @@ static int check_empty(jl_value_t *checkempty)
 }
 
 jl_task_t *wait_empty JL_GLOBALLY_ROOTED;
-void jl_wait_empty_begin(void);
-void jl_wait_empty_end(void);
 
 void jl_task_wait_empty(void)
 {

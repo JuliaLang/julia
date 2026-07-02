@@ -2389,9 +2389,6 @@ static void jl_prune_binding_backedges(jl_array_t *backedges)
     jl_array_del_end(backedges, n - ins);
 }
 
-uint_t bindingkey_hash(size_t idx, jl_value_t *data);
-uint_t speccache_hash(size_t idx, jl_value_t *data);
-
 static void jl_prune_idset(_Atomic(jl_svec_t*) *pkeys, _Atomic(jl_genericmemory_t*) *pkeyset, uint_t (*key_hash)(size_t, jl_value_t*), jl_value_t *parent) JL_GC_DISABLED
 {
     jl_svec_t *keys = jl_atomic_load_relaxed(pkeys);
@@ -3570,9 +3567,6 @@ JL_DLLEXPORT jl_image_buf_t jl_set_sysimg_so(void *handle)
 //     return jl_subtype((jl_value_t*)a, (jl_value_t*)b) && jl_subtype((jl_value_t*)b, (jl_value_t*)a);
 // }
 #endif
-
-extern void export_jl_small_typeof(void);
-extern void export_jl_sysimg_globals(void);
 
 // When an image is loaded with ignore_native, all subsequent image loads must ignore
 // native code in the cache-file since we can't gurantuee that there are no call edges

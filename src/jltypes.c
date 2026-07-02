@@ -619,7 +619,7 @@ static void isort_union(jl_value_t **a, size_t len) JL_NOTSAFEPOINT
     }
 }
 
-static int simple_subtype(jl_value_t *a, jl_value_t *b, int hasfree, int isUnion)
+int simple_subtype(jl_value_t *a, jl_value_t *b, int hasfree, int isUnion)
 {
     assert(hasfree == (jl_has_free_typevars(a) | (jl_has_free_typevars(b) << 1)));
     if (a == jl_bottom_type || b == (jl_value_t*)jl_any_type)
@@ -858,8 +858,6 @@ jl_value_t *simple_union(jl_value_t *a, jl_value_t *b)
     JL_GC_POP();
     return tu;
 }
-
-int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity) JL_NOTSAFEPOINT;
 
 jl_value_t *simple_intersect(jl_value_t *a, jl_value_t *b, int overesi)
 {

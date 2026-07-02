@@ -366,7 +366,7 @@ static void _add_synthetic_root_entries(HeapSnapshot *snapshot) JL_NOTSAFEPOINT
 
 // mimicking https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/src/profiler/heap-snapshot-generator.cc#L597-L597
 // returns the index of the new node
-size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
+static size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
 {
     size_t idx;
     if (!snapshot_insert_node(g_snapshot, a, &idx))
@@ -556,7 +556,7 @@ void _gc_heap_snapshot_record_finlist(jl_value_t *obj, size_t index) JL_NOTSAFEP
 // Each task points at a stack frame, which points at the stack frame of
 // the function it's currently calling, forming a linked list.
 // Stack frame nodes point at the objects they have as local variables.
-size_t _record_stack_frame_node(HeapSnapshot *snapshot, void *frame) JL_NOTSAFEPOINT
+static size_t _record_stack_frame_node(HeapSnapshot *snapshot, void *frame) JL_NOTSAFEPOINT
 {
     size_t idx;
     if (!snapshot_insert_node(g_snapshot, frame, &idx))

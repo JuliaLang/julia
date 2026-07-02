@@ -47,8 +47,6 @@
 
 using namespace llvm;
 
-extern std::optional<bool> always_have_fma(Function&, const Triple &TT);
-
 // Per-function clone categories (set by IR analysis)
 enum {
     JL_CLONE_LOOP     = 1 << 0,
@@ -1220,7 +1218,7 @@ static bool runMultiVersioning(Module &M, bool allow_bad_fvars)
 
 } // anonymous namespace
 
-void multiversioning_preannotate(Module &M)
+extern void multiversioning_preannotate(Module &M)
 {
     annotate_module_clones(M);
     M.addModuleFlag(Module::ModFlagBehavior::Error, "julia.mv.enable", 1);

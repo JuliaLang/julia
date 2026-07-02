@@ -714,9 +714,6 @@ extern int gc_verifying;
 #define gc_verifying (0)
 #endif
 
-int gc_slot_to_fieldidx(void *_obj, void *slot, jl_datatype_t *vt) JL_NOTSAFEPOINT;
-int gc_slot_to_arrayidx(void *_obj, void *begin) JL_NOTSAFEPOINT;
-
 #ifdef GC_DEBUG_ENV
 JL_DLLEXPORT extern jl_gc_debug_env_t jl_gc_debug_env;
 int jl_gc_debug_check_other(void);

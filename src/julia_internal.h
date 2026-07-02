@@ -933,6 +933,7 @@ enum atomic_kind {
 };
 
 JL_DLLEXPORT int jl_has_intersect_type_not_kind(jl_value_t *t);
+int jl_has_intersect_kind_not_type(jl_value_t *t);
 int jl_subtype_invariant(jl_value_t *a, jl_value_t *b, int ta);
 JL_DLLEXPORT int jl_has_concrete_subtype(jl_value_t *typ);
 jl_tupletype_t *jl_inst_arg_tuple_type(jl_value_t *arg1, jl_value_t **args, size_t nargs, int leaf);
@@ -1154,88 +1155,7 @@ struct restriction_kind_pair {
 };
 JL_DLLEXPORT int jl_get_binding_leaf_partitions_restriction_kind(jl_binding_t *b JL_PROPAGATES_ROOT, struct restriction_kind_pair *rkp, size_t min_world, size_t max_world) JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_value_t *jl_get_binding_leaf_partitions_value_if_const(jl_binding_t *b JL_PROPAGATES_ROOT, int *maybe_depwarn, size_t min_world, size_t max_world);
-
-#ifndef __clang_analyzer__
-STATIC_INLINE void jl_walk_binding_inplace(jl_binding_t **bnd, jl_binding_partition_t **bpart, size_t world) JL_NOTSAFEPOINT
-{
-    while (1) {
-        enum jl_partition_kind kind = jl_binding_kind(*bpart);
-        if (!jl_bkind_is_some_explicit_import(kind) && kind != PARTITION_KIND_IMPLICIT_GLOBAL)
-            return;
-        *bnd = (jl_binding_t*)(*bpart)->restriction;
-        *bpart = jl_get_binding_partition(*bnd, world);
-    }
-}
-
-STATIC_INLINE void jl_walk_binding_inplace_depwarn(jl_binding_t **bnd, jl_binding_partition_t **bpart, size_t world, int *depwarn) JL_NOTSAFEPOINT
-{
-    int passed_explicit = 0;
-    while (1) {
-        enum jl_partition_kind kind = jl_binding_kind(*bpart);
-        if (!jl_bkind_is_some_explicit_import(kind) && kind != PARTITION_KIND_IMPLICIT_GLOBAL) {
-            if (!passed_explicit && depwarn)
-                *depwarn |= (*bpart)->kind & PARTITION_FLAG_DEPWARN;
-            return;
-        }
-        if (!passed_explicit && depwarn)
-            *depwarn |= (*bpart)->kind & PARTITION_FLAG_DEPWARN;
-        if (kind != PARTITION_KIND_IMPLICIT_GLOBAL)
-            passed_explicit = 1;
-        *bnd = (jl_binding_t*)(*bpart)->restriction;
-        *bpart = jl_get_binding_partition(*bnd, world);
-    }
-}
-
-
-STATIC_INLINE void jl_walk_binding_inplace_all(jl_binding_t **bnd, jl_binding_partition_t **bpart, int *depwarn, size_t min_world, size_t max_world) JL_NOTSAFEPOINT
-{
-    int passed_explicit = 0;
-    while (*bpart) {
-        enum jl_partition_kind kind = jl_binding_kind(*bpart);
-        if (!jl_bkind_is_some_explicit_import(kind) && kind != PARTITION_KIND_IMPLICIT_GLOBAL) {
-            if (!passed_explicit && depwarn)
-                *depwarn |= (*bpart)->kind & PARTITION_FLAG_DEPWARN;
-            return;
-        }
-        if (!passed_explicit && depwarn)
-            *depwarn |= (*bpart)->kind & PARTITION_FLAG_DEPWARN;
-        if (kind != PARTITION_KIND_IMPLICIT_GLOBAL)
-            passed_explicit = 1;
-        *bnd = (jl_binding_t*)(*bpart)->restriction;
-        *bpart = jl_get_binding_partition_all(*bnd, min_world, max_world);
-    }
-}
-
-STATIC_INLINE void jl_walk_binding_inplace_worlds(jl_binding_t **bnd, jl_binding_partition_t **bpart, size_t *min_world, size_t *max_world, int *depwarn, size_t world) JL_NOTSAFEPOINT
-{
-    int passed_explicit = 0;
-    while (*bpart) {
-        if (*min_world < (*bpart)->min_world)
-            *min_world = (*bpart)->min_world;
-        size_t bpart_max_world = jl_atomic_load_relaxed(&(*bpart)->max_world);
-        if (*max_world > bpart_max_world)
-            *max_world = bpart_max_world;
-        enum jl_partition_kind kind = jl_binding_kind(*bpart);
-        if (!jl_bkind_is_some_explicit_import(kind) && kind != PARTITION_KIND_IMPLICIT_GLOBAL) {
-            if (!passed_explicit && depwarn)
-                *depwarn |= (*bpart)->kind & PARTITION_FLAG_DEPWARN;
-            return;
-        }
-        if (!passed_explicit && depwarn)
-            *depwarn |= (*bpart)->kind & PARTITION_FLAG_DEPWARN;
-        if (kind != PARTITION_KIND_IMPLICIT_GLOBAL)
-            passed_explicit = 1;
-        *bnd = (jl_binding_t*)(*bpart)->restriction;
-        *bpart = jl_get_binding_partition(*bnd, world);
-    }
-}
-#endif
-
-void jl_walk_binding_inplace(jl_binding_t **bnd, jl_binding_partition_t **bpart JL_PROPAGATES_ROOT, size_t world) JL_NOTSAFEPOINT;
-void jl_walk_binding_inplace_depwarn(jl_binding_t **bnd, jl_binding_partition_t **bpart, size_t world, int *depwarn) JL_NOTSAFEPOINT;
-void jl_walk_binding_inplace_all(jl_binding_t **bnd, jl_binding_partition_t **bpart JL_PROPAGATES_ROOT, int *depwarn, size_t min_world, size_t max_world) JL_NOTSAFEPOINT;
-void jl_walk_binding_inplace_worlds(jl_binding_t **bnd, jl_binding_partition_t **bpart, size_t *min_world, size_t *max_world, int *depwarn, size_t world) JL_NOTSAFEPOINT;
-
+void check_safe_newbinding(jl_module_t *m, jl_sym_t *var);
 
 STATIC_INLINE int is10digit(char c) JL_NOTSAFEPOINT
 {
@@ -1658,7 +1578,6 @@ JL_DLLEXPORT jl_value_t *jl_get_backtrace(void);
 JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp, int skip);
 void jl_fprint_critical_error(ios_t *t, int sig, int si_code, bt_context_t *context, jl_task_t *ct);
 JL_DLLEXPORT void jl_raise_debugger(void) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_gdblookup(void* ip) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_print_task_backtraces(int show_done) JL_NOTSAFEPOINT;
 void jl_fprint_native_codeloc(ios_t *s, uintptr_t ip) JL_NOTSAFEPOINT;
 void jl_fprint_bt_entry_codeloc(ios_t *s, jl_bt_element_t *bt_data) JL_NOTSAFEPOINT;
@@ -1910,6 +1829,9 @@ JL_DLLEXPORT void jl_set_next_task(jl_task_t *task) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint16_t julia_double_to_half(double param) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint16_t julia_float_to_half(float param) JL_NOTSAFEPOINT;
 JL_DLLEXPORT float julia_half_to_float(uint16_t param) JL_NOTSAFEPOINT;
+uint16_t julia_float_to_bfloat(float param) JL_NOTSAFEPOINT;
+float julia_bfloat_to_float(uint16_t param) JL_NOTSAFEPOINT;
+
 
 // -- synchronization utilities -- //
 
@@ -2146,6 +2068,42 @@ JL_DLLEXPORT void jl_write_coverage_data(const char*) JL_NOTSAFEPOINT;
 
 extern uv_mutex_t symtab_lock;
 jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
+
+// This prevents `ct` from returning via error handlers or other unintentional
+// means by destroying some old state before we start destroying that state in atexit hooks.
+void post_boot_hooks(void);
+JL_DLLEXPORT jl_genericmemory_t *jl_genericmemory_copy_slice(jl_genericmemory_t *mem, void *data, size_t len);
+int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity) JL_NOTSAFEPOINT;
+JL_CALLABLE(jl_f_opaque_closure_call);
+uint_t bindingkey_hash(size_t idx, jl_value_t *data);
+uint_t speccache_hash(size_t idx, jl_value_t *data);
+void JL_NORETURN jl_finish_task(jl_task_t *ct);
+void jl_wait_empty_begin(void);
+void jl_wait_empty_end(void);
+// concurrent reads are permitted, using the same pattern as mtsmall_arraylist
+// it is implemented separately because the API of direct jl_all_tls_states use is already widely prevalent
+void jl_init_thread_scheduler(jl_ptls_t ptls) JL_NOTSAFEPOINT;
+void jl_lisp_prompt(void);
+void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT;
+void scheduler_delete_thread(jl_ptls_t ptls) JL_NOTSAFEPOINT;
+void surprise_wakeup(jl_ptls_t ptls) JL_NOTSAFEPOINT;
+void _jl_free_stack(jl_ptls_t ptls, void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_id_start_char(uint32_t wc) JL_NOTSAFEPOINT; // declared also in flisp.h
+JL_DLLEXPORT int jl_id_char(uint32_t wc) JL_NOTSAFEPOINT; // declared also in flisp.h
+jl_value_t *simple_union(jl_value_t *a, jl_value_t *b);
+jl_value_t *simple_intersect(jl_value_t *a, jl_value_t *b, int overesi);
+int simple_subtype(jl_value_t *a, jl_value_t *b, int hasfree, int isUnion);
+void jl_rng_split(uint64_t dst[JL_RNG_SIZE], uint64_t src[JL_RNG_SIZE]) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_coverage_alloc_line(const char *filename, int line) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uint64_t *jl_coverage_data_pointer(const char *filename, int line) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uint64_t *jl_malloc_data_pointer(const char *filename, int line) JL_NOTSAFEPOINT;
+JL_DLLEXPORT NOINLINE int failed_to_sample_task_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT;
+JL_DLLEXPORT NOINLINE int failed_to_stop_thread_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT;
+int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c) JL_NOTSAFEPOINT;
+void export_jl_small_typeof(void);
+void export_jl_sysimg_globals(void);
+
+
 
 // Tools for locally disabling spurious compiler warnings
 //

@@ -844,41 +844,6 @@ JL_DLLEXPORT void jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED)
     throw_internal(ct, NULL);
 }
 
-/* This is xoshiro256++ 1.0, used for tasklocal random number generation in Julia.
-   This implementation is intended for embedders and internal use by the runtime, and is
-   based on the reference implementation at https://prng.di.unimi.it
-
-   Credits go to David Blackman and Sebastiano Vigna for coming up with this PRNG.
-   They described xoshiro256++ in "Scrambled Linear Pseudorandom Number Generators",
-   ACM Trans. Math. Softw., 2021.
-
-   There is a pure Julia implementation in stdlib that tends to be faster when used from
-   within Julia, due to inlining and more aggressive architecture-specific optimizations.
-*/
-uint64_t jl_genrandom(uint64_t rngState[4]) JL_NOTSAFEPOINT
-{
-    uint64_t s0 = rngState[0];
-    uint64_t s1 = rngState[1];
-    uint64_t s2 = rngState[2];
-    uint64_t s3 = rngState[3];
-
-    uint64_t t = s1 << 17;
-    uint64_t tmp = s0 + s3;
-    uint64_t res = ((tmp << 23) | (tmp >> 41)) + s0;
-    s2 ^= s0;
-    s3 ^= s1;
-    s1 ^= s2;
-    s0 ^= s3;
-    s2 ^= t;
-    s3 = (s3 << 45) | (s3 >> 19);
-
-    rngState[0] = s0;
-    rngState[1] = s1;
-    rngState[2] = s2;
-    rngState[3] = s3;
-    return res;
-}
-
 /*
 The jl_rng_split function forks a task's RNG state in a way that is essentially
 guaranteed to avoid collisions between the RNG streams of all tasks. The main

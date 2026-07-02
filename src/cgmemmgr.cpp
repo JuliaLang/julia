@@ -7,6 +7,7 @@
 #include <llvm/ExecutionEngine/JITLink/JITLinkMemoryManager.h>
 #include <llvm/ExecutionEngine/Orc/MapperJITLinkMemoryManager.h>
 #include <llvm/ExecutionEngine/SectionMemoryManager.h>
+#include "llvm-codegen-shared.h"
 
 #include "julia.h"
 #include "julia_internal.h"
@@ -786,151 +787,6 @@ get_preferred_allocators() JL_NOTSAFEPOINT
     return {};
 }
 
-class RTDyldMemoryManagerJL : public SectionMemoryManager {
-    struct EHFrame {
-        uint8_t *addr;
-        size_t size;
-    };
-    RTDyldMemoryManagerJL(const RTDyldMemoryManagerJL&) = delete;
-    void operator=(const RTDyldMemoryManagerJL&) = delete;
-    SmallVector<EHFrame, 16> pending_eh;
-    RWAllocator rw_alloc;
-    std::unique_ptr<ROAllocator> ro_alloc;
-    std::unique_ptr<ROAllocator> exe_alloc;
-    size_t total_allocated;
-
-public:
-    RTDyldMemoryManagerJL() JL_NOTSAFEPOINT
-        : SectionMemoryManager(),
-          pending_eh(),
-          rw_alloc(),
-          total_allocated(0)
-    {
-        std::tie(ro_alloc, exe_alloc) = get_preferred_allocators();
-    }
-    ~RTDyldMemoryManagerJL() override JL_NOTSAFEPOINT
-    {
-    }
-    size_t getTotalBytes() JL_NOTSAFEPOINT { return total_allocated; }
-    void registerEHFrames(uint8_t *Addr, uint64_t LoadAddr,
-                          size_t Size) override JL_NOTSAFEPOINT;
-#if 0
-    // Disable for now since we are not actually using this.
-    void deregisterEHFrames(uint8_t *Addr, uint64_t LoadAddr,
-                            size_t Size) override;
-#endif
-    uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment,
-                                 unsigned SectionID,
-                                 StringRef SectionName) override JL_NOTSAFEPOINT;
-    uint8_t *allocateDataSection(uintptr_t Size, unsigned Alignment,
-                                 unsigned SectionID, StringRef SectionName,
-                                 bool isReadOnly) override JL_NOTSAFEPOINT;
-    using SectionMemoryManager::notifyObjectLoaded;
-    void notifyObjectLoaded(RuntimeDyld &Dyld,
-                            const object::ObjectFile &Obj) override JL_NOTSAFEPOINT;
-    bool finalizeMemory(std::string *ErrMsg = nullptr) override JL_NOTSAFEPOINT;
-    template <typename DL, typename Alloc>
-    void mapAddresses(DL &Dyld, Alloc &&allocator) JL_NOTSAFEPOINT
-    {
-        for (auto &alloc: allocator->allocations) {
-            if (alloc.rt_addr == alloc.wr_addr || alloc.relocated)
-                continue;
-            alloc.relocated = true;
-            Dyld.mapSectionAddress(alloc.wr_addr, (uintptr_t)alloc.rt_addr);
-        }
-    }
-    template <typename DL>
-    void mapAddresses(DL &Dyld) JL_NOTSAFEPOINT
-    {
-        if (!ro_alloc)
-            return;
-        mapAddresses(Dyld, ro_alloc);
-        mapAddresses(Dyld, exe_alloc);
-    }
-};
-
-uint8_t *RTDyldMemoryManagerJL::allocateCodeSection(uintptr_t Size,
-                                                    unsigned Alignment,
-                                                    unsigned SectionID,
-                                                    StringRef SectionName) JL_NOTSAFEPOINT
-{
-    // allocating more than one code section can confuse libunwind.
-    total_allocated += Size;
-    jl_timing_counter_inc(JL_TIMING_COUNTER_JITSize, Size);
-    jl_timing_counter_inc(JL_TIMING_COUNTER_JITCodeSize, Size);
-    if (exe_alloc)
-        return (uint8_t*)exe_alloc->alloc(Size, Alignment).wr_addr;
-    return SectionMemoryManager::allocateCodeSection(Size, Alignment, SectionID,
-                                                     SectionName);
-}
-
-uint8_t *RTDyldMemoryManagerJL::allocateDataSection(uintptr_t Size,
-                                                    unsigned Alignment,
-                                                    unsigned SectionID,
-                                                    StringRef SectionName,
-                                                    bool isReadOnly) JL_NOTSAFEPOINT
-{
-    total_allocated += Size;
-    jl_timing_counter_inc(JL_TIMING_COUNTER_JITSize, Size);
-    jl_timing_counter_inc(JL_TIMING_COUNTER_JITDataSize, Size);
-    if (!isReadOnly)
-        return (uint8_t*)rw_alloc.alloc(Size, Alignment).wr_addr;
-    if (ro_alloc)
-        return (uint8_t*)ro_alloc->alloc(Size, Alignment).wr_addr;
-    return SectionMemoryManager::allocateDataSection(Size, Alignment, SectionID,
-                                                     SectionName, isReadOnly);
-}
-
-void RTDyldMemoryManagerJL::notifyObjectLoaded(RuntimeDyld &Dyld,
-                                               const object::ObjectFile &Obj) JL_NOTSAFEPOINT
-{
-    if (!ro_alloc) {
-        assert(!exe_alloc);
-        SectionMemoryManager::notifyObjectLoaded(Dyld, Obj);
-        return;
-    }
-    assert(exe_alloc);
-    mapAddresses(Dyld);
-}
-
-bool RTDyldMemoryManagerJL::finalizeMemory(std::string *ErrMsg) JL_NOTSAFEPOINT
-{
-    if (ro_alloc) {
-        ro_alloc->finalize();
-        assert(exe_alloc);
-        exe_alloc->finalize();
-        for (auto &frame: pending_eh)
-            register_eh_frames(frame.addr, frame.size);
-        pending_eh.clear();
-        return false;
-    }
-    else {
-        assert(!exe_alloc);
-        return SectionMemoryManager::finalizeMemory(ErrMsg);
-    }
-}
-
-void RTDyldMemoryManagerJL::registerEHFrames(uint8_t *Addr,
-                                             uint64_t LoadAddr,
-                                             size_t Size) JL_NOTSAFEPOINT
-{
-    if (uintptr_t(Addr) == LoadAddr) {
-        register_eh_frames(Addr, Size);
-    }
-    else {
-        pending_eh.push_back(EHFrame{(uint8_t*)(uintptr_t)LoadAddr, Size});
-    }
-}
-
-#if 0
-void RTDyldMemoryManagerJL::deregisterEHFrames(uint8_t *Addr,
-                                               uint64_t LoadAddr,
-                                               size_t Size) JL_NOTSAFEPOINT
-{
-    deregister_eh_frames((uint8_t*)LoadAddr, Size);
-}
-#endif
-
 class JLJITLinkMemoryManager : public jitlink::JITLinkMemoryManager {
     using OnFinalizedFunction =
         jitlink::JITLinkMemoryManager::InFlightAlloc::OnFinalizedFunction;
@@ -945,7 +801,7 @@ class JLJITLinkMemoryManager : public jitlink::JITLinkMemoryManager {
 public:
     class InFlightAlloc;
 
-    static std::unique_ptr<JITLinkMemoryManager> Create()
+    static std::unique_ptr<JITLinkMemoryManager> Create() JL_NOTSAFEPOINT
     {
         auto [ROAlloc, ExeAlloc] = get_preferred_allocators();
         if (ROAlloc && ExeAlloc)
@@ -969,7 +825,7 @@ public:
 
 protected:
     JLJITLinkMemoryManager(std::unique_ptr<ROAllocator> ROAlloc,
-                           std::unique_ptr<ROAllocator> ExeAlloc)
+                           std::unique_ptr<ROAllocator> ExeAlloc) JL_NOTSAFEPOINT
       : ROAlloc(std::move(ROAlloc)), ExeAlloc(std::move(ExeAlloc))
     {
     }
@@ -1001,9 +857,11 @@ class JLJITLinkMemoryManager::InFlightAlloc
     jitlink::LinkGraph &G;
 
 public:
-    InFlightAlloc(JLJITLinkMemoryManager &MM, jitlink::LinkGraph &G) : MM(MM), G(G) {}
+    InFlightAlloc(JLJITLinkMemoryManager &MM, jitlink::LinkGraph &G) JL_NOTSAFEPOINT
+        : MM(MM), G(G) {}
 
-    void abandon(OnAbandonedFunction OnAbandoned) override {
+    void abandon(OnAbandonedFunction OnAbandoned) override
+    {
         OnAbandoned(Error::success());
     }
 
@@ -1074,17 +932,7 @@ void JLJITLinkMemoryManager::allocate(const jitlink::JITLinkDylib *JD,
 }
 }
 
-RTDyldMemoryManager* createRTDyldMemoryManager() JL_NOTSAFEPOINT
-{
-    return new RTDyldMemoryManagerJL();
-}
-
-size_t getRTDyldMemoryManagerTotalBytes(RTDyldMemoryManager *mm) JL_NOTSAFEPOINT
-{
-    return ((RTDyldMemoryManagerJL*)mm)->getTotalBytes();
-}
-
-std::unique_ptr<jitlink::JITLinkMemoryManager> createJITLinkMemoryManager()
+std::unique_ptr<jitlink::JITLinkMemoryManager> createJITLinkMemoryManager() JL_NOTSAFEPOINT
 {
     return JLJITLinkMemoryManager::Create();
 }

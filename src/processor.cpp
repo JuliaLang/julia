@@ -550,7 +550,7 @@ JL_DLLEXPORT jl_value_t *jl_check_pkgimage_clones(char *data)
     return jl_nothing;
 }
 
-JL_DLLEXPORT jl_value_t *jl_cpu_has_fma(int bits)
+jl_value_t *jl_cpu_has_fma(int bits)
 {
 #if defined(_CPU_X86_64_) || defined(_CPU_X86_)
     if ((bits == 32 || bits == 64) && !jit_targets.empty()) {
@@ -889,7 +889,6 @@ JL_DLLEXPORT jl_value_t *jl_get_cpu_features(void)
     return jl_cstr_to_string(get_host_feature_string().c_str());
 }
 
-#ifndef __clang_analyzer__
 extern "C" JL_DLLEXPORT jl_value_t* jl_reflect_clone_targets() {
     // Return the actual JIT target(s) chosen after sysimage matching, so that
     // debug output reflects what pkgimage clones are compared against rather
@@ -907,7 +906,6 @@ extern "C" JL_DLLEXPORT jl_value_t* jl_reflect_clone_targets() {
     memcpy(out, data.data(), data.size());
     return arr;
 }
-#endif
 
 extern "C" JL_DLLEXPORT jl_value_t *jl_get_sysimage_cpu_target(void) {
     if (sysimage_cpu_target.empty()) {

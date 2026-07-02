@@ -181,7 +181,7 @@ static int layout_eq(void *_l1, void *_l2, void *unused) JL_NOTSAFEPOINT
 static void **layoutcache_lookup_bp_r_impl(htable_t *h, void *key, void *ctx, int key_owned) JL_NOTSAFEPOINT;
 static void **layoutcache_lookup_bp_r(htable_t *h, void *key, void *ctx) JL_NOTSAFEPOINT;
 static void **layoutcache_peek_bp_r(htable_t *h, void *key, void *ctx) JL_NOTSAFEPOINT;
-HTPROT_R(layoutcache)
+HTPROT_R(layoutcache, static JL_UNUSED)
 HTIMPL_R(layoutcache, _hash_layout_djb2, layout_eq, _HTIMPL_IDENTITY_KEYALLOC, _HTIMPL_NOOP_KEYFREE)
 static htable_t layoutcache;
 static int layoutcache_initialized = 0;
@@ -512,7 +512,7 @@ static int is_type_identityfree(jl_value_t *t)
 }
 
 // make a copy of the layout of st, but with nfields=0
-void jl_get_genericmemory_layout(jl_datatype_t *st)
+static void jl_get_genericmemory_layout(jl_datatype_t *st)
 {
     jl_value_t *kind = jl_tparam0(st);
     jl_value_t *eltype = jl_tparam1(st);
@@ -1493,7 +1493,7 @@ JL_DLLEXPORT int jl_atomic_storeonce_bits(jl_datatype_t *dt, char *dst, const jl
 }
 
 #define PERMBOXN_FUNC(nb)                                                  \
-    jl_value_t *jl_permbox##nb(jl_datatype_t *t, uintptr_t tag, uint##nb##_t x) JL_NOTSAFEPOINT \
+    extern jl_value_t *jl_permbox##nb(jl_datatype_t *t, uintptr_t tag, uint##nb##_t x) JL_NOTSAFEPOINT \
     {   /* n.b. t must be a concrete isbits datatype of the right size */               \
         jl_task_t *ct = jl_current_task;                                                \
         jl_value_t *v = jl_gc_permobj(ct->ptls, LLT_ALIGN(nb, sizeof(void*)), t, 0);    \
@@ -2368,7 +2368,7 @@ JL_DLLEXPORT size_t jl_get_field_offset(jl_datatype_t *ty, int field)
     return jl_field_offset(ty, field - 1);
 }
 
-jl_value_t *get_nth_pointer(jl_value_t *v, size_t i)
+static jl_value_t *get_nth_pointer(jl_value_t *v, size_t i)
 {
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(v);
     const jl_datatype_layout_t *ly = dt->layout;

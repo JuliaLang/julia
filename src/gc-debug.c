@@ -18,8 +18,8 @@
 extern "C" {
 #endif
 
-// Useful function in debugger to find page metadata
-jl_gc_pagemeta_t *jl_gc_page_metadata(void *data)
+// Useful function in debugger to find page metadata.
+JL_DLLEXPORT jl_gc_pagemeta_t *jl_gc_page_metadata(void *data)
 {
     return page_metadata(data);
 }
@@ -1080,7 +1080,8 @@ static void gc_count_pool_pagetable(void)
     }
 }
 
-void gc_count_pool(void)
+// Useful function in debugger to inspect memory-leak-like issues.
+JL_DLLEXPORT void gc_count_pool(void)
 {
     memset(&poolobj_sizes, 0, sizeof(poolobj_sizes));
     empty_pages = 0;
