@@ -1937,10 +1937,13 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
         // this path off the diagonal rule (`diagonal` below is 0 when
         // body_occurs_inv is set) and leaves covariant-only variables to the
         // cheaper arm-split above.
-        else if (!e->intersection && vb.lb == jl_bottom_type && body_occurs_inv &&
-                 !var_occurs_in_vararg_len(u->body, u->var)) {
+        else if (!e->intersection && vb.lb == jl_bottom_type && body_occurs_inv) {
             int natoms = 0, nother = 0;
-            if (classify_union_arms(vb.ub, 4, &natoms, &nother) && natoms >= 1) {
+            // classify_union_arms first: it is the cheap, highly selective
+            // check; the body walk for Vararg-length occurrences only runs
+            // once the bound is known to be enumerable.
+            if (classify_union_arms(vb.ub, 4, &natoms, &nother) && natoms >= 1 &&
+                !var_occurs_in_vararg_len(u->body, u->var)) {
                 vb.ub = pick_atom_subset(vb.ub, &rest, e);
                 int residual = nother >= 1 && !pick_union_decision(e, 0);
                 if (residual) {
