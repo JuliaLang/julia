@@ -193,7 +193,10 @@ end
 
 struct AndAnd end
 const andand = AndAnd()
+
 broadcasted(::AndAnd, a, b) = broadcasted((a, b) -> a && b, a, b)
+typeof(broadcasted).name.max_methods = UInt8(1)
+
 function broadcasted(::AndAnd, a, bc::Broadcasted)
     bcf = flatten(bc)
     # Vararg type signature to specialize on args count. This is necessary for performance
