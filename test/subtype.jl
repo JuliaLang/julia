@@ -3407,3 +3407,36 @@ end
 @test !((Tuple{T,Ref{T}} where T<:Union{DataType,String}) <:
         Union{Tuple{DataType,Ref{DataType}}, Tuple{String,Ref{String}},
               Tuple{Union{DataType,String},Ref{Union{DataType,String}}}})
+
+# Hybrid enumeration: atom arms plus a universal residual variable standing
+# for the abstract arms, covering the common Union{Nothing,<:Abstract} bound.
+let LHS = Tuple{T,Ref{T}} where T<:Union{Nothing,Integer},
+    RHS = Union{Tuple{Nothing,Ref{Nothing}},
+                Tuple{S,Ref{S}} where S<:Integer,
+                Tuple{Union{Nothing,S},Ref{Union{Nothing,S}}} where S<:Integer}
+    @test LHS <: RHS
+    @test LHS == RHS
+    # a missing residual-only arm must fail
+    @test !(LHS <: Union{Tuple{Nothing,Ref{Nothing}},
+                         Tuple{Union{Nothing,S},Ref{Union{Nothing,S}}} where S<:Integer})
+end
+@test (Ref{T} where T<:Union{Nothing,Integer}) <:
+    Union{Ref{Nothing}, Ref{S} where S<:Integer, Ref{Union{Nothing,S}} where S<:Integer}
+# ... but the mixed atom+residual instantiations must be covered
+@test !((Ref{T} where T<:Union{Nothing,Integer}) <:
+    Union{Ref{Nothing}, Ref{S} where S<:Integer})
+# two atoms and an abstract arm: all four atom subsets, each with and without
+# the residual
+@test (Ref{T} where T<:Union{Nothing,Missing,Integer}) <:
+    Union{Ref{Nothing}, Ref{Missing}, Ref{Union{Nothing,Missing}},
+          Ref{S} where S<:Integer, Ref{Union{Nothing,S}} where S<:Integer,
+          Ref{Union{Missing,S}} where S<:Integer,
+          Ref{Union{Nothing,Missing,S}} where S<:Integer}
+# reflexivity survives the residual enumeration
+@test (Ref{T} where T<:Union{Nothing,Integer}) == (Ref{S} where S<:Union{Nothing,Integer})
+@test (Vector{Ref{T}} where T<:Union{Nothing,Integer}) ==
+      (Vector{Ref{S}} where S<:Union{Nothing,Integer})
+# a bound with no atom arms is not enumerated: mixed abstract instantiations
+# (e.g. Union{Int64,String}) are not expressible as a finite case split
+@test !((Tuple{T,Ref{T}} where T<:Union{Integer,AbstractString}) <:
+    Union{Tuple{S,Ref{S}} where S<:Integer, Tuple{S,Ref{S}} where S<:AbstractString})

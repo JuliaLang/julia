@@ -1658,20 +1658,22 @@ static int is_atom_type(jl_value_t *a) JL_NOTSAFEPOINT
     return 1;
 }
 
-// Count the arms of union `u`, returning 0 if any arm is not an atom or if
-// there are more than `limit` arms.
-static int count_atom_arms(jl_value_t *u, int limit) JL_NOTSAFEPOINT
+// Classify the arms of union `u` for the exhaustive ∀ enumeration below:
+// count atom arms (see is_atom_type) and non-atom arms. Returns 0 if there
+// are more than `limit` arms in total, 1 otherwise.
+static int classify_union_arms(jl_value_t *u, int limit, int *natoms, int *nother) JL_NOTSAFEPOINT
 {
     if (jl_is_uniontype(u)) {
-        int a = count_atom_arms(((jl_uniontype_t*)u)->a, limit);
-        if (a == 0)
-            return 0;
-        int b = count_atom_arms(((jl_uniontype_t*)u)->b, limit - a);
-        if (b == 0)
-            return 0;
-        return a + b;
+        return classify_union_arms(((jl_uniontype_t*)u)->a, limit, natoms, nother) &&
+               classify_union_arms(((jl_uniontype_t*)u)->b, limit, natoms, nother);
     }
-    return (limit >= 1 && is_atom_type(u)) ? 1 : 0;
+    if (*natoms + *nother >= limit)
+        return 0;
+    if (is_atom_type(u))
+        (*natoms)++;
+    else
+        (*nother)++;
+    return 1;
 }
 
 // Does `var` occur in a Vararg length position anywhere within `t`? Such a
@@ -1740,41 +1742,59 @@ static int bottom_inst_uninhabited(jl_value_t *t, jl_tvar_t *var) JL_NOTSAFEPOIN
     return 0;
 }
 
-// Consume one left-union decision per arm of `u` (0 = keep the arm, 1 = drop
-// it) and return the union of the kept arms: Union{} if all are dropped, `u`
-// itself if all are kept. The enclosing ∀∃ loop enumerates all 2^n subsets.
-static jl_value_t *pick_union_subset(jl_value_t *u, jl_stenv_t *e)
+// Walk the arms of `u`, consuming one left-union decision per atom arm
+// (0 = keep the arm, 1 = drop it), and return the union of the kept atom
+// arms: Union{} if all are dropped, `u` itself if everything is kept.
+// Non-atom arms are accumulated as a union into `*rest`, which must be a
+// GC-rooted slot holding NULL on entry. The enclosing ∀∃ loop enumerates
+// all subsets of the atom arms.
+static jl_value_t *pick_atom_subset(jl_value_t *u, jl_value_t **rest, jl_stenv_t *e)
 {
-    if (!jl_is_uniontype(u))
+    if (jl_is_uniontype(u)) {
+        jl_uniontype_t *uu = (jl_uniontype_t*)u;
+        jl_value_t *a = NULL, *b = NULL;
+        JL_GC_PUSH2(&a, &b);
+        a = pick_atom_subset(uu->a, rest, e);
+        b = pick_atom_subset(uu->b, rest, e);
+        jl_value_t *res;
+        if (a == jl_bottom_type)
+            res = b;
+        else if (b == jl_bottom_type)
+            res = a;
+        else if (a == uu->a && b == uu->b)
+            res = u;
+        else
+            res = jl_new_struct(jl_uniontype_type, a, b);
+        JL_GC_POP();
+        return res;
+    }
+    if (is_atom_type(u))
         return pick_union_decision(e, 0) ? jl_bottom_type : u;
-    jl_uniontype_t *uu = (jl_uniontype_t*)u;
-    jl_value_t *a = NULL, *b = NULL;
-    JL_GC_PUSH2(&a, &b);
-    a = pick_union_subset(uu->a, e);
-    b = pick_union_subset(uu->b, e);
-    jl_value_t *res;
-    if (a == jl_bottom_type)
-        res = b;
-    else if (b == jl_bottom_type)
-        res = a;
-    else if (a == uu->a && b == uu->b)
-        res = u;
-    else
-        res = jl_new_struct(jl_uniontype_type, a, b);
-    JL_GC_POP();
-    return res;
+    *rest = *rest == NULL ? u : jl_new_struct(jl_uniontype_type, *rest, u);
+    return jl_bottom_type;
 }
 
 static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, jl_param_pos_t param)
 {
     u = unalias_unionall(u, e);
     jl_value_t *new_tvar = NULL;
+    jl_value_t *new_rtvar = NULL;
+    jl_value_t *rest = NULL;
     jl_varbinding_t vb;
     memset(&vb, 0, sizeof(vb));
     vb.existential = R;
     vb.depth0 = e->invdepth;
     vb.prev = e->vars;
-    JL_GC_PUSH5(&u, &vb.lb, &vb.ub, &vb.innervars, &new_tvar);
+    // binding for the residual variable of the exhaustive ∀ enumeration
+    // below; inactive (never linked into e->vars) unless rvb.var != NULL.
+    // rvb.lb is always Union{} and rvb.ub always aliases `rest`, which are
+    // rooted, so the binding's own fields need no separate roots.
+    jl_varbinding_t rvb;
+    memset(&rvb, 0, sizeof(rvb));
+    rvb.depth0 = e->invdepth;
+    rvb.prev = &vb;
+    JL_GC_PUSH8(&u, &vb.lb, &vb.ub, &vb.innervars, &new_tvar,
+                &rvb.var, &rest, &new_rtvar);
     if (jl_has_typevar(t, u->var))
         u = jl_rename_unionall(u);
     int body_occurs_inv = var_occurs_invariant(u->body, u->var);
@@ -1805,37 +1825,69 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
             vb.ub = pick_union_element(vb.ub, e, 0);
             ans = subtype(u->body, t, e, param);
         }
-        // Exhaustiveness certificate: when every arm of the upper bound is an
-        // atom (see is_atom_type), every admissible instantiation of the
-        // variable equals a sub-union of the arms -- including Union{} itself
-        // (non-type values do not qualify since the bound is not Any, cf.
-        // var_gt). The ∀ judgment is therefore decided exactly by re-checking
-        // the body with the variable pinned (lb == ub) to each of the 2^n
-        // subsets, consuming one left-union decision per arm so the enclosing
-        // ∀∃ loop enumerates them. Unlike the covariant arm-split above, this
-        // handles invariant occurrences, e.g. it proves
+        // Exhaustiveness certificate: every admissible instantiation of the
+        // variable decomposes as Union{S, X}, where S is a subset of the atom
+        // arms of the upper bound (see is_atom_type) and X is some subtype of
+        // the union of the non-atom arms: unions are covered arm-wise,
+        // covariant tuples distribute over their union-typed slots into atom
+        // tuples, and any other type lands wholly below a single arm. (S may
+        // be empty and X may be Union{}; non-type values never qualify since
+        // the bound is not Any, cf. var_gt.) The ∀ judgment is therefore
+        // decided exactly by re-checking the body with the variable pinned
+        // (lb == ub) to Union{S}, or to Union{S, TR} where TR is a fresh
+        // universal "residual" variable ranging below the non-atom arms, for
+        // every subset S -- consuming one left-union decision per atom arm
+        // plus one for the residual, so the enclosing ∀∃ loop enumerates all
+        // combinations. Unlike the covariant arm-split above, this handles
+        // invariant occurrences, e.g. it proves
         //   (Tuple{T,Ref{T}} where T<:Union{Float64,Int64}) <:
         //       Union{Tuple{Float64,Ref{Float64}}, Tuple{Int64,Ref{Int64}},
         //             Tuple{Union{Float64,Int64},Ref{Union{Float64,Int64}}}}
-        // Pinning to Union{} would wrongly reject bodies that the substitution
-        // makes uninhabited (slots are compared independently), so that branch
-        // is short-circuited when the body is statically known to become
-        // empty. Integer-valued variables (Vararg length positions) do not
-        // range over the subtypes of their bound and are excluded. Gating on
-        // the static occurs-invariantly bit keeps this path off the diagonal
-        // rule (`diagonal` below is 0 when body_occurs_inv is set) and leaves
-        // covariant-only variables to the cheaper arm-split above.
+        // and, with a residual variable for the abstract arm,
+        //   (Ref{T} where T<:Union{Nothing,Integer}) <:
+        //       Union{Ref{Nothing}, Ref{S} where S<:Integer,
+        //             Ref{Union{Nothing,S}} where S<:Integer}
+        // With no atom arms the enumeration proves nothing new (the T == ub
+        // instantiation forces a single covering component on the right,
+        // which the ordinary variable machinery already finds), so at least
+        // one atom is required. Pinning to Union{} would wrongly reject
+        // bodies that the substitution makes uninhabited (slots are compared
+        // independently), so that branch is short-circuited when the body is
+        // statically known to become empty. Integer-valued variables (Vararg
+        // length positions) do not range over the subtypes of their bound and
+        // are excluded. Gating on the static occurs-invariantly bit keeps
+        // this path off the diagonal rule (`diagonal` below is 0 when
+        // body_occurs_inv is set) and leaves covariant-only variables to the
+        // cheaper arm-split above.
         else if (!e->intersection && vb.lb == jl_bottom_type && body_occurs_inv &&
-                 count_atom_arms(vb.ub, 4) > 0 &&
                  !var_occurs_in_vararg_len(u->body, u->var)) {
-            vb.ub = pick_union_subset(vb.ub, e);
-            if (vb.ub == jl_bottom_type && bottom_inst_uninhabited(u->body, u->var)) {
-                // the body instantiates to an uninhabited type; this branch of
-                // the enumeration holds vacuously
-                ans = 1;
+            int natoms = 0, nother = 0;
+            if (classify_union_arms(vb.ub, 4, &natoms, &nother) && natoms >= 1) {
+                vb.ub = pick_atom_subset(vb.ub, &rest, e);
+                int residual = nother >= 1 && !pick_union_decision(e, 0);
+                if (residual) {
+                    rvb.lb = jl_bottom_type;
+                    rvb.ub = rest;
+                    rvb.var = jl_new_typevar(u->var->name, rvb.lb, rvb.ub);
+                    if (vb.ub == jl_bottom_type)
+                        vb.ub = (jl_value_t*)rvb.var;
+                    else
+                        vb.ub = jl_new_struct(jl_uniontype_type, vb.ub, (jl_value_t*)rvb.var);
+                    vb.lb = vb.ub;
+                    e->vars = &rvb;
+                    ans = subtype(u->body, t, e, param);
+                }
+                else if (vb.ub == jl_bottom_type && bottom_inst_uninhabited(u->body, u->var)) {
+                    // the body instantiates to an uninhabited type; this
+                    // branch of the enumeration holds vacuously
+                    ans = 1;
+                }
+                else {
+                    vb.lb = vb.ub;
+                    ans = subtype(u->body, t, e, param);
+                }
             }
             else {
-                vb.lb = vb.ub;
                 ans = subtype(u->body, t, e, param);
             }
         }
@@ -1872,6 +1924,13 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
             ans = 0;
         }
     }
+    // A residual enumeration variable stands for arbitrary, possibly
+    // abstract, subtypes of the non-atom arms; a constraint forcing it
+    // concrete is therefore unsatisfiable over the whole branch unless its
+    // bound is itself concrete, matching the conservative rule for an
+    // unsplit variable above.
+    if (ans && rvb.var != NULL && rvb.concrete && !is_leaf_bound(rvb.ub))
+        ans = 0;
     e->vars = vb.prev;
 
     if (!ans) {
@@ -1961,6 +2020,38 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
                 JL_GC_POP();
             }
             JL_GC_POP();
+        }
+    }
+
+    // The pinned value of the enumeration variable may have leaked its
+    // residual variable into outer existential bounds (directly, or via the
+    // substitution above); rename it the same way.
+    if (rvb.var != NULL) {
+        for (jl_varbinding_t *btemp = vb.prev; btemp; btemp = btemp->prev) {
+            if (!btemp->existential)
+                continue;
+            int ub_has_var = jl_has_typevar(btemp->ub, rvb.var);
+            int lb_has_var = jl_has_typevar(btemp->lb, rvb.var);
+            if (!ub_has_var && !lb_has_var)
+                continue;
+            if (btemp->depth0 != rvb.depth0) {
+                // as for the enumeration variable itself: the residual is
+                // universally quantified over a nontrivial range, which a
+                // single existential value cannot span across an invariant
+                // constructor boundary
+                JL_GC_POP();
+                return 0;
+            }
+            btemp->tainted_inner = 1;
+            if (!new_rtvar) {
+                new_rtvar = (jl_value_t*)jl_new_typevar(rvb.var->name, rvb.lb, rvb.ub);
+                if (outermost != NULL)
+                    push_innervar(outermost, new_rtvar);
+            }
+            if (ub_has_var)
+                btemp->ub = jl_substitute_var(btemp->ub, rvb.var, new_rtvar);
+            if (lb_has_var)
+                btemp->lb = jl_substitute_var(btemp->lb, rvb.var, new_rtvar);
         }
     }
 
