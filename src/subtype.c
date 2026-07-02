@@ -1628,6 +1628,143 @@ static jl_value_t *subtype_unionall_envout_value(jl_value_t *t, jl_unionall_t *u
     return wrap_tvar_env(*new_tvar, constrained);
 }
 
+// Helpers for the exhaustive enumeration ("exhaustiveness certificate") of a
+// `∀` variable whose upper bound is a union of atoms in `subtype_unionall`
+// below.
+//
+// A type is an "atom" if it has no proper nonempty subtypes: any X <: A is
+// equal either to A or to Union{}. Values of a concrete non-kind datatype A
+// satisfy typeof(v) == A exactly, so atoms have pairwise disjoint value sets
+// and any type contains either all or none of each atom's values. Kinds are
+// excluded (Type{X} <: DataType is proper and nonempty); TypeEq nodes are not
+// datatypes. A concrete Tuple additionally requires atom parameters: e.g.
+// Tuple{DataType} has the proper nonempty subtype Tuple{Type{Int}}. (Concrete
+// tuples of atoms do have proper subtypes like Tuple{Union{A,B}} below
+// Union{Tuple{A},Tuple{B}}, but those are *equal* to unions of atom tuples,
+// which a sub-union enumeration covers up to type equality.)
+static int is_atom_type(jl_value_t *a) JL_NOTSAFEPOINT
+{
+    if (!jl_is_datatype(a))
+        return 0;
+    jl_datatype_t *d = (jl_datatype_t*)a;
+    if (!d->isconcretetype || jl_is_kind(a))
+        return 0;
+    if (d->name == jl_tuple_typename) {
+        for (size_t i = 0; i < jl_nparams(d); i++) {
+            if (!is_atom_type(jl_tparam(d, i)))
+                return 0;
+        }
+    }
+    return 1;
+}
+
+// Count the arms of union `u`, returning 0 if any arm is not an atom or if
+// there are more than `limit` arms.
+static int count_atom_arms(jl_value_t *u, int limit) JL_NOTSAFEPOINT
+{
+    if (jl_is_uniontype(u)) {
+        int a = count_atom_arms(((jl_uniontype_t*)u)->a, limit);
+        if (a == 0)
+            return 0;
+        int b = count_atom_arms(((jl_uniontype_t*)u)->b, limit - a);
+        if (b == 0)
+            return 0;
+        return a + b;
+    }
+    return (limit >= 1 && is_atom_type(u)) ? 1 : 0;
+}
+
+// Does `var` occur in a Vararg length position anywhere within `t`? Such a
+// variable is integer-valued rather than ranging over the subtypes of its
+// upper bound, so the exhaustive enumeration below does not apply to it.
+static int var_occurs_in_vararg_len(jl_value_t *t, jl_tvar_t *var) JL_NOTSAFEPOINT
+{
+    if (jl_is_uniontype(t) || jl_is_intersecttype(t)) {
+        return var_occurs_in_vararg_len(((jl_uniontype_t*)t)->a, var) ||
+               var_occurs_in_vararg_len(((jl_uniontype_t*)t)->b, var);
+    }
+    else if (jl_is_unionall(t)) {
+        jl_unionall_t *ua = (jl_unionall_t*)t;
+        if (ua->var == var)
+            return 0;
+        return var_occurs_in_vararg_len(ua->var->lb, var) ||
+               var_occurs_in_vararg_len(ua->var->ub, var) ||
+               var_occurs_in_vararg_len(ua->body, var);
+    }
+    else if (jl_is_vararg(t)) {
+        jl_vararg_t *vm = (jl_vararg_t*)t;
+        if (vm->N && jl_has_typevar(vm->N, var))
+            return 1;
+        return vm->T != NULL && var_occurs_in_vararg_len(vm->T, var);
+    }
+    else if (jl_is_typeeq(t)) {
+        return var_occurs_in_vararg_len(jl_typeeq_T(t), var);
+    }
+    else if (jl_is_datatype(t)) {
+        for (size_t i = 0; i < jl_nparams(t); i++) {
+            if (var_occurs_in_vararg_len(jl_tparam(t, i), var))
+                return 1;
+        }
+    }
+    return 0;
+}
+
+// Would substituting Union{} for `var` make `t` uninhabited? Union{} in a
+// fixed covariant Tuple slot (or in the element of a Vararg of positive
+// constant length) empties the tuple, while under an invariant constructor
+// the type stays inhabited (Ref{Union{}} has instances). Conservative:
+// returning 0 causes the Union{} branch of the enumeration below to be
+// checked rather than skipped, which can only lose precision, not soundness.
+static int bottom_inst_uninhabited(jl_value_t *t, jl_tvar_t *var) JL_NOTSAFEPOINT
+{
+    if (t == (jl_value_t*)var)
+        return 1;
+    if (jl_is_uniontype(t)) {
+        return bottom_inst_uninhabited(((jl_uniontype_t*)t)->a, var) &&
+               bottom_inst_uninhabited(((jl_uniontype_t*)t)->b, var);
+    }
+    if (jl_is_datatype(t) && jl_is_tuple_type(t)) {
+        for (size_t i = 0; i < jl_nparams(t); i++) {
+            jl_value_t *p = jl_tparam(t, i);
+            if (jl_is_vararg(p)) {
+                jl_vararg_t *vm = (jl_vararg_t*)p;
+                if (vm->T && vm->N && jl_is_long(vm->N) && jl_unbox_long(vm->N) > 0 &&
+                    bottom_inst_uninhabited(vm->T, var))
+                    return 1;
+            }
+            else if (bottom_inst_uninhabited(p, var)) {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+// Consume one left-union decision per arm of `u` (0 = keep the arm, 1 = drop
+// it) and return the union of the kept arms: Union{} if all are dropped, `u`
+// itself if all are kept. The enclosing ∀∃ loop enumerates all 2^n subsets.
+static jl_value_t *pick_union_subset(jl_value_t *u, jl_stenv_t *e)
+{
+    if (!jl_is_uniontype(u))
+        return pick_union_decision(e, 0) ? jl_bottom_type : u;
+    jl_uniontype_t *uu = (jl_uniontype_t*)u;
+    jl_value_t *a = NULL, *b = NULL;
+    JL_GC_PUSH2(&a, &b);
+    a = pick_union_subset(uu->a, e);
+    b = pick_union_subset(uu->b, e);
+    jl_value_t *res;
+    if (a == jl_bottom_type)
+        res = b;
+    else if (b == jl_bottom_type)
+        res = a;
+    else if (a == uu->a && b == uu->b)
+        res = u;
+    else
+        res = jl_new_struct(jl_uniontype_type, a, b);
+    JL_GC_POP();
+    return res;
+}
+
 static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, jl_param_pos_t param)
 {
     u = unalias_unionall(u, e);
@@ -1664,9 +1801,47 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
         // Split the bound here by registering one ordinary left-union decision
         // per Union node, so that the enclosing ∀∃ loop enumerates all arms.
         if (!e->intersection && vb.lb == jl_bottom_type && jl_is_uniontype(vb.ub) &&
-            !body_occurs_inv && var_occurs_covariant_only(u->body, u->var, 1))
+            !body_occurs_inv && var_occurs_covariant_only(u->body, u->var, 1)) {
             vb.ub = pick_union_element(vb.ub, e, 0);
-        ans = subtype(u->body, t, e, param);
+            ans = subtype(u->body, t, e, param);
+        }
+        // Exhaustiveness certificate: when every arm of the upper bound is an
+        // atom (see is_atom_type), every admissible instantiation of the
+        // variable equals a sub-union of the arms -- including Union{} itself
+        // (non-type values do not qualify since the bound is not Any, cf.
+        // var_gt). The ∀ judgment is therefore decided exactly by re-checking
+        // the body with the variable pinned (lb == ub) to each of the 2^n
+        // subsets, consuming one left-union decision per arm so the enclosing
+        // ∀∃ loop enumerates them. Unlike the covariant arm-split above, this
+        // handles invariant occurrences, e.g. it proves
+        //   (Tuple{T,Ref{T}} where T<:Union{Float64,Int64}) <:
+        //       Union{Tuple{Float64,Ref{Float64}}, Tuple{Int64,Ref{Int64}},
+        //             Tuple{Union{Float64,Int64},Ref{Union{Float64,Int64}}}}
+        // Pinning to Union{} would wrongly reject bodies that the substitution
+        // makes uninhabited (slots are compared independently), so that branch
+        // is short-circuited when the body is statically known to become
+        // empty. Integer-valued variables (Vararg length positions) do not
+        // range over the subtypes of their bound and are excluded. Gating on
+        // the static occurs-invariantly bit keeps this path off the diagonal
+        // rule (`diagonal` below is 0 when body_occurs_inv is set) and leaves
+        // covariant-only variables to the cheaper arm-split above.
+        else if (!e->intersection && vb.lb == jl_bottom_type && body_occurs_inv &&
+                 count_atom_arms(vb.ub, 4) > 0 &&
+                 !var_occurs_in_vararg_len(u->body, u->var)) {
+            vb.ub = pick_union_subset(vb.ub, e);
+            if (vb.ub == jl_bottom_type && bottom_inst_uninhabited(u->body, u->var)) {
+                // the body instantiates to an uninhabited type; this branch of
+                // the enumeration holds vacuously
+                ans = 1;
+            }
+            else {
+                vb.lb = vb.ub;
+                ans = subtype(u->body, t, e, param);
+            }
+        }
+        else {
+            ans = subtype(u->body, t, e, param);
+        }
     }
 
     // handle the "diagonal dispatch" rule, which says that a type var occurring more

@@ -3361,3 +3361,49 @@ _typeegal_id(::Type{T}) where {T} = T
         end
     end
 end
+
+# Exhaustiveness certificate: a `∀` variable whose upper bound is a union of
+# atoms (types with no proper nonempty subtypes) ranges over exactly the
+# sub-unions of the arms (including Union{}), so the check can enumerate all
+# of them even for invariant occurrences of the variable.
+let LHS = Tuple{T,Ref{T}} where T<:Union{Float64,Int64},
+    RHS = Union{Tuple{Int64,Ref{Int64}}, Tuple{Float64,Ref{Float64}},
+                Tuple{Union{Int64,Float64},Ref{Union{Int64,Float64}}}}
+    @test LHS <: RHS
+    @test LHS == RHS
+    # a missing mixed-union arm must still fail
+    @test !(LHS <: Union{Tuple{Int64,Ref{Int64}}, Tuple{Float64,Ref{Float64}}})
+end
+# Union{} is an admissible instantiation: with the variable only under an
+# invariant constructor the body stays inhabited, so Ref{Union{}} is required
+@test !((Ref{T} where T<:Union{Float64,Int64}) <:
+        Union{Ref{Float64},Ref{Int64},Ref{Union{Float64,Int64}}})
+@test (Ref{T} where T<:Union{Float64,Int64}) <:
+        Union{Ref{Union{}},Ref{Float64},Ref{Int64},Ref{Union{Float64,Int64}}}
+# ... but a fixed covariant slot makes the Union{} instantiation uninhabited
+@test (Tuple{T,Ref{T}} where T<:Int64) <: Tuple{Int64,Ref{Int64}}
+@test (Tuple{T,Ref{T}} where T<:Int64) == Tuple{Int64,Ref{Int64}}
+# reflexivity survives the enumeration
+@test (Ref{T} where T<:Union{Float64,Int64}) == (Ref{S} where S<:Union{Float64,Int64})
+@test (Tuple{T,Ref{T}} where T<:Union{Float64,Int64}) ==
+      (Tuple{S,Ref{S}} where S<:Union{Float64,Int64})
+# three atoms: all 2^3 subsets are enumerated
+@test (Tuple{T,Ref{T}} where T<:Union{Int8,Int16,Int32}) <:
+    Union{Tuple{Int8,Ref{Int8}}, Tuple{Int16,Ref{Int16}}, Tuple{Int32,Ref{Int32}},
+          Tuple{Union{Int8,Int16},Ref{Union{Int8,Int16}}},
+          Tuple{Union{Int8,Int32},Ref{Union{Int8,Int32}}},
+          Tuple{Union{Int16,Int32},Ref{Union{Int16,Int32}}},
+          Tuple{Union{Int8,Int16,Int32},Ref{Union{Int8,Int16,Int32}}}}
+@test !((Tuple{T,Ref{T}} where T<:Union{Int8,Int16,Int32}) <:
+    Union{Tuple{Int8,Ref{Int8}}, Tuple{Int16,Ref{Int16}}, Tuple{Int32,Ref{Int32}},
+          Tuple{Union{Int8,Int32},Ref{Union{Int8,Int32}}},
+          Tuple{Union{Int16,Int32},Ref{Union{Int16,Int32}}},
+          Tuple{Union{Int8,Int16,Int32},Ref{Union{Int8,Int16,Int32}}}})
+# abstract arms are not atoms: mixed instantiations are not enumerable
+@test !((Tuple{T,Ref{T}} where T<:Union{Integer,AbstractString}) <:
+        Union{Tuple{Integer,Ref{Integer}}, Tuple{AbstractString,Ref{AbstractString}},
+              Tuple{Union{Integer,AbstractString},Ref{Union{Integer,AbstractString}}}})
+# kinds are not atoms (Type{Int} <: DataType is a proper nonempty subtype)
+@test !((Tuple{T,Ref{T}} where T<:Union{DataType,String}) <:
+        Union{Tuple{DataType,Ref{DataType}}, Tuple{String,Ref{String}},
+              Tuple{Union{DataType,String},Ref{Union{DataType,String}}}})
