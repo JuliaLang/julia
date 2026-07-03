@@ -4251,13 +4251,14 @@ static jl_value_t *jl_fptr_wait_for_compiled(jl_value_t *f, jl_value_t **args, u
             jl_method_instance_t *mi = jl_get_ci_mi(m);
             jl_method_t *def = mi->def.method;
             if (jl_is_method(def) && def->source != NULL && def->source != jl_nothing) {
-                // Unlike the T0 parking gate, this is a capability test, not
-                // policy: loops/ccall/generated interpret fine for the wait's
-                // duration; only no-source, opaque-closure, and @force_compile
-                // methods must genuinely block for native code.
+                // Same eligibility as T0 parking, except loops always qualify:
+                // interpreting a loop for the wait's duration beats blocking.
+                // ccall/cfunction/llvmcall bodies must block — the interpreter
+                // cannot execute :foreigncall (interpreter.c "requires the
+                // compiler") — as must generated (body unscanned), no-source,
+                // opaque-closure, and @force_compile methods.
                 int reasons = jl_tier_method_interp_reasons(def);
-                if ((reasons & (JL_TIER_REJECT_NOSOURCE | JL_TIER_REJECT_OPAQUE |
-                                JL_TIER_REJECT_FORCED)) == 0)
+                if ((reasons & ~JL_TIER_REJECT_LOOPS) == 0)
                     return jl_interpret_mi(f, args, nargs, mi, jl_current_task->world_age, /*allow_rescue*/0);
             }
         }
