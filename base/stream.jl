@@ -459,7 +459,7 @@ function closewrite(s::LibuvStream)
         # try-finally unwinds the sigatomic level, so need to repeat sigatomic_end
         sigatomic_end()
         iolock_begin()
-        q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
+        q = ct.queue; q === nothing || Base.list_deletefirst!(q, ct)
         if uv_req_data(req) != C_NULL
             # req is still alive,
             # so make sure we won't get spurious notifications later
@@ -1063,29 +1063,61 @@ end
 uv_write(s::LibuvStream, p::Vector{UInt8}) = GC.@preserve p uv_write(s, pointer(p), UInt(sizeof(p)))
 
 # caller must have acquired the iolock
-function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
-    uvw = uv_write_async(s, p, n)
+function uv_write_noncancel(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
+    # Establish the wait object early, so that a cancellation that raced with
+    # this write request is observed before we hand anything to libuv.
     ct = current_task()
+    ct.queue = s
+
+    cr = pre_sleep_cancellation_request()
+    if cr !== nothing
+        ct.queue = nothing
+        return 0
+    end
+
+    local uvw, lastn
+    try
+        uvw, lastn = uv_write_async(s, p, n)
+    catch
+        # E.g. the stream was (or gets) closed. We still hold the iolock, so
+        # this cannot race a concurrent cancel_wait!.
+        ct.queue = nothing
+        rethrow()
+    end
+    # If the write was split into multiple requests, only the last one can be
+    # cancelled; the earlier chunks are already owned by the OS.
+    ct.next = uvw
     preserve_handle(ct)
     sigatomic_begin()
     uv_req_set_data(uvw, ct)
     iolock_end()
-    local status
+    local nwritten
     try
         sigatomic_end()
         # wait for the last chunk to complete (or error)
         # assume that any errors would be sticky,
         # (so we don't need to monitor the error status of the intermediate writes)
-        status = wait()::Cint
+        nwritten = wait()::Csize_t
         sigatomic_begin()
     finally
         # try-finally unwinds the sigatomic level, so need to repeat sigatomic_end
         sigatomic_end()
         iolock_begin()
-        q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
+        if ct.queue === s
+            # Only happens in unexpected error cases (e.g. resumption by an
+            # unexpected `throwto`). Both completion and cancellation queue a
+            # proper callback, which unsets this.
+            ct.next = nothing
+            ct.queue = nothing
+        end
         if uv_req_data(uvw) != C_NULL
-            # uvw is still alive,
-            # so make sure we won't get spurious notifications later
+            # uvw is still alive - likely because we got some unexpected throwto
+            # exception. Try to cancel the request, so that the write does not
+            # keep spamming the stream if the user is looking at it. Note that
+            # regular cancellation does not go through this path and instead
+            # returns the number of written bytes to the caller.
+            ccall(:uv_cancel, Cint, (Ptr{Cvoid},), uvw) # ignore any errors
+            # make sure we won't get spurious notifications later
             uv_req_set_data(uvw, C_NULL)
         else
             # done with uvw
@@ -1094,14 +1126,44 @@ function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
         iolock_end()
         unpreserve_handle(ct)
     end
-    if status < 0
-        throw(_UVError("write", status))
-    end
-    return Int(n)
+    return Int(n - lastn + nwritten)
 end
 
-# helper function for uv_write that returns the uv_write_t struct for the write
-# rather than waiting on it, caller must hold the iolock
+function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
+    nb = uv_write_noncancel(s, p, n)
+    @cancel_check
+    @assert nb == n
+    return nb
+end
+
+function cancel_wait!(s::LibuvStream, t::Task, @nospecialize(creq))
+    iolock_begin()
+    if t.queue !== s
+        iolock_end()
+        return false
+    end
+    uvw = t.next
+    @assert uvw isa Ptr{Cvoid} && uvw != C_NULL
+    # The completion callback (with UV_ECANCELED status and the partial write
+    # count) resumes the waiting task.
+    ccall(:uv_cancel, Cint, (Ptr{Cvoid},), uvw) # ignore any errors
+    iolock_end()
+    return true
+end
+
+# The write-wait protocol above stores the stream itself (not a list) in
+# `t.queue`; there is no queue to delete from on cleanup paths.
+function list_deletefirst!(s::LibuvStream, t::Task)
+    if t.queue === s
+        t.next = nothing
+        t.queue = nothing
+    end
+    nothing
+end
+
+# helper function for uv_write that returns the uv_write_t struct of the last
+# chunk's write (and that chunk's size) rather than waiting on it, caller must
+# hold the iolock
 function uv_write_async(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
     check_open(s)
     while true
@@ -1121,7 +1183,7 @@ function uv_write_async(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
         n -= nwrite
         p += nwrite
         if n == 0
-            return uvw
+            return uvw, nwrite
         end
     end
 end
@@ -1195,7 +1257,15 @@ function uv_writecb_task(req::Ptr{Cvoid}, status::Cint)
     if d != C_NULL
         uv_req_set_data(req, C_NULL) # let the Task know we got the writecb
         t = unsafe_pointer_to_objref(d)::Task
-        schedule(t, status)
+        t.next = nothing
+        t.queue = nothing
+        if status != 0 && status != UV_ECANCELED
+            schedule(t, _UVError("write", status); error=true)
+        else
+            # For cancelled writes, this is the partial write count.
+            nwritten = ccall(:uv_write_nwritten, Csize_t, (Ptr{Cvoid},), req)
+            schedule(t, nwritten)
+        end
     else
         # no owner for this req, safe to just free it
         Libc.free(req)
