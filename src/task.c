@@ -1256,6 +1256,10 @@ CFI_NORETURN
                 if (creq == jl_nothing)
                     break;
                 _handle_start_task_cancellation(creq);
+                // If the handler returned without throwing (e.g. an already
+                // acknowledged request), do not spin on it.
+                if (jl_atomic_load_relaxed(&ct->cancellation_request) == creq)
+                    break;
             }
             res = jl_apply(&ct->start, 1);
         }
@@ -1677,6 +1681,13 @@ JL_NORETURN void jl_abandon_task_cb(void)
     // 3. Waiters will see the state change when they poll istaskdone()
     // The caller of jl_abandon_task is responsible for waking up any waiters
     // after the abandon signal has been processed.
+
+    // The root task's stack is the system stack, not a pooled buffer - it must
+    // not be released into the task-stack pool for reuse by ctx_switch below.
+    if (ct == ptls->root_task) {
+        ct->ctx.stkbuf = NULL;
+        ct->ctx.bufsz = 0;
+    }
 
     // Set the next task's thread ID to this thread before switching.
     // This is normally done by jl_switch but we're bypassing that.

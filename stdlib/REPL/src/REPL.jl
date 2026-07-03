@@ -445,21 +445,35 @@ function start_repl_backend(backend::REPLBackend,  @nospecialize(consumer = x ->
     return backend
 end
 
+# If we had to abandon the REPL's backend task, we're now in an inconsistent state.
+# Inform the frontend of what happened and re-initialize the REPL backend.
+function maybe_rescue_REPL_after_sigint()
+    backend = Base.active_repl_backend
+    backend === nothing && return nothing
+    if backend.backend_task.state === :abandoned
+        # Inform the frontend what happened to its backend
+        exc = Base.ExceptionStack(Any[(exception = Base.CANCEL_REQUEST_ABANDON_ALL, backtrace = Any[])])
+        put!(backend.response_channel, Pair{Any, Bool}(exc, true))
+        # Re-initialize the REPL backend.
+        setglobal!(Base, :active_repl_backend,
+            start_repl_backend(backend.repl_channel, backend.response_channel))
+    end
+    return nothing
+end
+
 function repl_backend_loop(backend::REPLBackend, get_module::Function)
     # include looks at this to determine the relative include path
     # nothing means cwd
     while true
         tls = task_local_storage()
         tls[:SOURCE_PATH] = nothing
-        ast_or_func, show_value = try
-            take!(backend.repl_channel)
-        catch e
-            # An asynchronous interrupt may be forwarded to this task if user code
-            # finished evaluating just as Ctrl-C arrived (issue #58689); ignore it
-            # rather than tearing down the REPL session.
-            e isa InterruptException && continue
-            rethrow()
-        end
+        # Control is back with the REPL: clear any still-pending cancellation
+        # request (e.g. a ^C that raced the end of the previous evaluation,
+        # issue #58689). Under cancellation semantics no InterruptException is
+        # ever forwarded to this task, so no catch guard is needed here.
+        # TODO: Support proper cancellation scopes for non-root tasks
+        Base.reset_cancellation!()
+        ast_or_func, show_value = take!(backend.repl_channel)
         if show_value == -1
             # exit flag
             break

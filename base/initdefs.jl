@@ -515,6 +515,10 @@ function _atexit(exitcode::Cint)
     # to minimize scheduler issues later
     ct = current_task()
     q = ct.queue; q === nothing || list_deletefirst!(q, ct)
+    # We are exiting: a still-pending cancellation request on this task is moot
+    # and would only disrupt the atexit hooks (any wait would refuse to sleep).
+    @atomic :release ct.cancellation_request = nothing
+    ccall(:jl_disarm_sigint_rescue_timer, Cvoid, ())
     # Don't hold the lock around the iteration, just in case any other thread executing in
     # parallel tries to register a new atexit hook while this is running. We don't want to
     # block that thread from proceeding, and we can allow it to register its hook which we

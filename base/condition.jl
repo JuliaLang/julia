@@ -168,6 +168,8 @@ function wait(c::GenericCondition; first::Bool=false, waitee=c, expected_cancell
 end
 
 function cancel_wait!(c::GenericCondition, creq; waitee = c)
+    # We are delivering the request to ourselves as an exception.
+    acknowledge_cancellation!(current_task(), creq)
     throw(creq)
 end
 
@@ -178,6 +180,8 @@ function cancel_wait!(c::GenericCondition, t::Task, @nospecialize(creq); waitee 
         return false
     end
     Base.list_deletefirst!(ILLRef(waitqueue(c), waitee), t)
+    # The request is being delivered to the task as an exception.
+    acknowledge_cancellation!(t, creq)
     schedule(t, conform_cancellation_request(creq), error=true)
     unlock(c)
     return true
