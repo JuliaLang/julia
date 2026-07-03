@@ -656,7 +656,7 @@ void jl_thread_resume(int tid)
 
 // Send a signal to the specified thread to longjmp to its reset_ctx if available.
 // This is used for task cancellation to interrupt a running task at a safe point.
-JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid)
+JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
     if (ptls2 == NULL)
@@ -677,7 +677,7 @@ JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid)
 // Send a signal to the specified thread to abandon the current task.
 // The target task to switch to must already be set in ptls2->abandon_to,
 // and the task's state must already be set to JL_TASK_STATE_ABANDONED.
-void jl_send_abandon_signal(int16_t tid)
+void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
     if (ptls2 == NULL)

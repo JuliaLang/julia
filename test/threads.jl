@@ -17,14 +17,14 @@ let lk = ReentrantLock()
     wait(c1)
     wait(c2)
     # wait for the task to park in the queue (it may be spinning)
-    @test timedwait(() -> t1.queue === lk.cond_wait.waitq, 1.0) == :ok
-    @test t2.queue !== lk.cond_wait.waitq
+    @test timedwait(() -> t1.queue === lk.cond_wait, 1.0) == :ok
+    @test t2.queue !== lk.cond_wait
     @test istaskdone(t2)
     @test !fetch(t2)
     unlock(lk)
-    @test t1.queue === lk.cond_wait.waitq
+    @test t1.queue === lk.cond_wait
     unlock(lk)
-    @test t1.queue !== lk.cond_wait.waitq
+    @test t1.queue !== lk.cond_wait
     @test fetch(t1)
 end
 

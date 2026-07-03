@@ -581,18 +581,19 @@ static jl_task_t *jl_check_sigint_rescue_abandon(void)
 #endif
 
 #ifndef _OS_WINDOWS_
-static void deliver_sigint_notification(void)
+static void deliver_sigint_notification(void) JL_NOTSAFEPOINT
 {
-    if (JL_TRYLOCK_NOGC(&sigint_state_lock)) {
-        if (sigint_cond_loc != NULL) {
-            uv_async_send(sigint_cond_loc);
-            // IO only runs on one thread, which may currently be busy - try
-            // to preempt it, so that the IO loop has a chance to run and deliver
-            // this notification.
-            jl_preempt_thread_task(jl_atomic_load_relaxed(&io_loop_tid));
-        }
-        JL_UNLOCK_NOGC(&sigint_state_lock);
+    // N.B.: This runs on the dedicated signal listener thread (not in an
+    // async signal handler), so briefly blocking on the state lock is fine.
+    JL_LOCK_NOGC(&sigint_state_lock);
+    if (sigint_cond_loc != NULL) {
+        uv_async_send(sigint_cond_loc);
+        // IO only runs on one thread, which may currently be busy - try
+        // to preempt it, so that the IO loop has a chance to run and deliver
+        // this notification.
+        jl_preempt_thread_task(jl_atomic_load_relaxed(&io_loop_tid));
     }
+    JL_UNLOCK_NOGC(&sigint_state_lock);
 }
 #endif
 

@@ -1657,9 +1657,10 @@ JL_DLLEXPORT int8_t jl_get_task_threadpoolid(jl_task_t *t)
     return t->threadpoolid;
 }
 
-JL_DLLEXPORT void jl_preempt_thread_task(int16_t tid)
+JL_DLLEXPORT void jl_preempt_thread_task(int16_t tid) JL_NOTSAFEPOINT
 {
-    jl_task_t *task = jl_atomic_load_relaxed(&jl_all_tls_states[tid]->current_task);
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    jl_task_t *task = jl_atomic_load_relaxed(&ptls2->current_task);
     jl_value_t *expected = jl_nothing;
     // If the task is already being cancelled, that's good enough for preemption
     jl_atomic_cmpswap(&task->cancellation_request, &expected, jl_box_uint8(0x5));
@@ -1717,7 +1718,7 @@ JL_NORETURN void jl_abandon_task_cb(void)
 // Send an abandon signal to task t, causing it to switch to next_task.
 // This is used for CANCEL_REQUEST_ABANDON_ALL where we need to forcibly
 // abandon a task without waiting for it to reach a cancellation point.
-JL_DLLEXPORT void jl_abandon_task(jl_task_t *t, jl_task_t *next_task)
+JL_DLLEXPORT void jl_abandon_task(jl_task_t *t, jl_task_t *next_task) JL_NOTSAFEPOINT
 {
     // Get the thread running the task
     int16_t tid = jl_atomic_load_relaxed(&t->tid);
