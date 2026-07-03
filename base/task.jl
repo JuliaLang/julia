@@ -1623,6 +1623,25 @@ function cancel!(t::Task, crequest=CANCEL_REQUEST_SAFE)
         end
         return true
     end
+    # If the task registered an asynchronous cancellation hook (it may be
+    # blocked in an external operation the runtime cannot interrupt), invoke it
+    # on the task's behalf. The barrier above pairs with the fence in
+    # `with_cancellation_hook`: either we observe the hook here, or the task
+    # observes the pending request before entering the hooked region.
+    hook = @atomic :acquire t.cancellation_hook
+    if hook !== nothing && !istaskdone(t)
+        handler, state = hook::Tuple{Any, Any}
+        try
+            invokelatest(handler, state, t)
+        catch err
+            # A failing hook must not disrupt the rest of request delivery.
+            try
+                showerror(stderr, err, catch_backtrace())
+                println(stderr)
+            catch
+            end
+        end
+    end
     # Try to interrupt the task. The barrier above synchronizes with the establishment
     # of a wait object and guarantees that either:
     # 1. We have the wait object in t.queue, or
@@ -1691,6 +1710,54 @@ end
 # start or its next cancellation point), so the request does not count as
 # delivered.
 cancel_wait!(q::StickyWorkqueue, t::Task, @nospecialize(creq)) = false
+
+"""
+    Base.with_cancellation_hook(f, handler, state)
+
+Run `f()` with an asynchronous cancellation hook `(handler, state)` registered
+for the current task, restoring the previous hook afterwards.
+
+If cancellation of the task is requested while `f` is running, [`cancel!`](@ref)
+additionally invokes `handler(state, task)` on the *cancelling* thread,
+concurrently with the task. This gives `f` a chance to be interrupted while
+blocked in an operation that is opaque to the runtime - typically a foreign
+call into a native library. The handler performs the library-specific work to
+abort that operation; the operation then returns early and the task observes
+the pending cancellation request at its next cancellation point (this function
+includes one after `f` returns).
+
+The handler must be safe to call from any thread and must tolerate spurious
+invocations: it runs once per `cancel!` call (so possibly multiple times), it
+may run after `f` has already returned and the hook was deregistered or
+replaced, and it may run before the external operation has actually started.
+If the handler needs to distinguish these cases, it can revalidate `state`
+against the current state of the task object it is passed.
+
+A cancellation request that was already pending when the hook is being
+registered is thrown by the cancellation point at the start of the protected
+region, before `f` runs.
+"""
+function with_cancellation_hook(f, handler, @nospecialize(state))
+    ct = current_task()
+    old = @atomicswap :acquire_release ct.cancellation_hook = (handler, state)
+    # Pairs with atomic_fence_heavy in cancel!: either the canceller observes
+    # the hook we just registered, or the cancellation point below observes
+    # its request.
+    Threads.atomic_fence_light()
+    local ret
+    try
+        req = Core.cancellation_point!()
+        req !== nothing && handle_cancellation!(req)
+        ret = f()
+    finally
+        @atomic :release ct.cancellation_hook = old
+    end
+    # Observe a request that raced the completion of `f` (its external
+    # operation may have been aborted part-way).
+    req = Core.cancellation_point!()
+    req !== nothing && handle_cancellation!(req)
+    return ret
+end
 
 """
     Base.reset_cancellation!()

@@ -267,6 +267,11 @@ typedef struct _jl_task_t {
     // Cancellation request - can be an arbitrary julia value, but the runtime recognizes
     // CANCEL_REQUEST_ enum values.
     _Atomic(jl_value_t *) cancellation_request;
+    // Asynchronous cancellation hook - `nothing` or a `(handler, state)` tuple.
+    // When a cancellation is requested for this task, `cancel!` additionally
+    // invokes `handler(state, task)` on the *cancelling* thread, so that
+    // external libraries the task may be blocked in can be interrupted.
+    _Atomic(jl_value_t *) cancellation_hook;
 // hidden state:
 
     // id of owning thread - does not need to be defined until the task runs
