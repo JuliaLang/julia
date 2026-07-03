@@ -1260,7 +1260,7 @@ static const auto jl_cancellation_point_func = new JuliaFunction<>{
     [](LLVMContext &C) { return AttributeList::get(C,
             Attributes(C, {Attribute::ReturnsTwice}),
             AttributeSet(),
-            None); }
+            {}); }
 };
 
 static const auto jlisa_func = new JuliaFunction<>{
@@ -2307,7 +2307,7 @@ static void mark_reset_safe(jl_codectx_t &ctx, CallInst *call)
 {
     if (call && current_stmt_is_reset_safe(ctx)) {
         LLVMContext &llvmctx = ctx.builder.getContext();
-        MDNode *md = MDNode::get(llvmctx, None);
+        MDNode *md = MDNode::get(llvmctx, {});
         call->setMetadata("julia.reset_safe", md);
     }
 }
