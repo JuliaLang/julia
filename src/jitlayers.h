@@ -38,34 +38,20 @@
 #include <queue>
 #include <tuple>
 
-// As of LLVM 13, there are two runtime JIT linker implementations, the older
-// RuntimeDyld (used via orc::RTDyldObjectLinkingLayer) and the newer JITLink
-// (used via orc::ObjectLinkingLayer).
-//
-// JITLink is not only more flexible (which isn't of great importance for us, as
-// we do only single-threaded in-process codegen), but crucially supports using
-// the Small code model, where the linker needs to fix up relocations between
-// object files that end up far apart in address space. RuntimeDyld can't do
-// that and relies on the Large code model instead, which is broken on
-// aarch64-darwin (macOS on ARM64), and not likely to ever be supported there
-// (see https://bugs.llvm.org/show_bug.cgi?id=52029).
-//
-// JITLink is now used on all platforms by default.  The support for RuntimeDyld
-// will be removed when we need the ability to manipulate JITLink LinkGraphs.
-//
-// Of the supported profilers, only OProfile has not been ported to JITLink.
+// The JIT is linked with JITLink (orc::ObjectLinkingLayer) on all platforms:
+// we rely on manipulating JITLink LinkGraphs (see linkOutput), on the Small
+// code model, and on JITLink-based stub redirection for call edges to
+// still-compiling targets. The older RuntimeDyld linker is not supported.
 
 #if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_)
 # define HAS_SANITIZER
 #endif
 
-#ifndef JL_USE_OPROFILE_JITEVENTS
-#define JL_USE_JITLINK
+#ifdef JL_USE_OPROFILE_JITEVENTS
+#error "OProfile JIT events were only supported by RuntimeDyld, which is no longer used"
 #endif
 
-# include <llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h>
-# include <llvm/ExecutionEngine/RTDyldMemoryManager.h>
-# include <llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h>
+#include <llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h>
 
 using namespace llvm;
 
@@ -394,7 +380,15 @@ private:
     StringMap<unsigned> counter;
 };
 
+class JLPLTPlugin;
+
 struct jl_linker_info_t {
+    // For tojlinvoke trampoline modules: the target CodeInstance plus the
+    // thunk/stub symbols, used to synthesize a patchable PLT stub into the
+    // module's LinkGraph (see JLMaterializationUnit::materialize).
+    jl_code_instance_t *plt_target_ci = nullptr;
+    orc::SymbolStringPtr plt_thunk_sym;
+    orc::SymbolStringPtr plt_stub_sym;
     DenseMap<jl_code_instance_t *, jl_codeinst_funcs_t<orc::SymbolStringPtr>> ci_funcs;
     DenseMap<std::pair<jl_code_instance_t *, jl_invoke_api_t>, orc::SymbolStringPtr>
         call_targets;
@@ -656,6 +650,7 @@ public:
 class JuliaOJIT {
     friend JLMaterializationUnit;
     friend JLTrampolineMaterializationUnit;
+    friend class JLPLTPlugin;
 private:
     // any verification the user wants to do when adding an OwningResource to the pool
     template <typename AnyT>
@@ -802,7 +797,6 @@ public:
 
     void enableJITDebuggingSupport();
     void enableIntelJITEventListener() JL_NOTSAFEPOINT;
-    void enableOProfileJITEventListener() JL_NOTSAFEPOINT;
     void enablePerfJITEventListener() JL_NOTSAFEPOINT;
 
     orc::SymbolStringPtr mangle(StringRef Name) JL_NOTSAFEPOINT;
@@ -828,6 +822,9 @@ public:
     // entries in CISymbols, to prevent invokes to a new CodeInstance with the
     // same address from being linked to old symbol.
     void unregisterCI(jl_code_instance_t *CI) JL_NOTSAFEPOINT;
+    // Stub-side half of the PLT patching handshake, called when a stub graph
+    // has been emitted (see JLPLTPlugin); takes LinkerMutex.
+    void armStubSlot(jl_code_instance_t *CI, _Atomic(void*) *Slot);
 
     orc::ThreadSafeContext makeContext() JL_NOTSAFEPOINT;
     const DataLayout& getDataLayout() const JL_NOTSAFEPOINT;
@@ -915,13 +912,28 @@ private:
     std::mutex SharedBytesMutex{};
     SharedBytesT SharedBytes;
 
-    // LinkerMutex protects CISymbols, Names
+    // LinkerMutex protects CISymbols, Names, PendingStubs
     std::mutex LinkerMutex;
     // CISymbols maps CodeInstance pointers to their ORC symbols.  If a
     // CodeInstance is eligible for garbage collection, it must be removed from
     // this map first, with unregisterCI.
     CISymbolMap CISymbols;
     jl_name_counter_t Names;
+    // PLT-style stubs for specsig tojlinvoke trampolines: call edges to a
+    // not-yet-compiled CodeInstance link against a jump stub (synthesized into
+    // the trampoline's own LinkGraph) that jumps through a pointer slot. The
+    // slot initially holds the boxing thunk and is repointed directly at the
+    // target's compiled specsig when both the stub graph has been emitted and
+    // the target has published, whichever happens last (see linkCallTarget,
+    // publishCIs and armStubSlot).
+    struct PendingStubInfo {
+        orc::SymbolStringPtr Sym;       // caller-facing stub symbol
+        _Atomic(void*) *Slot = nullptr; // stub pointer slot, set once emitted
+    };
+    DenseMap<jl_code_instance_t*, PendingStubInfo> PendingStubs;
+    jitlink::AnonymousPointerCreator PLTPointerCreator;
+    jitlink::PointerJumpStubCreator PLTStubCreator;
+    std::shared_ptr<JLPLTPlugin> PLTPlugin;
 
     std::unique_ptr<DLSymOptimizer> DLSymOpt;
 

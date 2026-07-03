@@ -3672,6 +3672,24 @@ void jl_read_codeinst_invoke(jl_code_instance_t *ci, uint8_t *specsigflags, jl_c
     }
 }
 
+// Return the compiled specsig entry point of `ci` if one has been published,
+// NULL otherwise. Used by the JIT's stub-patching handshake: a call edge that
+// must be linked while its target is still compiling goes through a
+// redirectable jump stub, which is repointed from the boxing `tojlinvoke`
+// thunk to the target's compiled specsig once it publishes (see
+// `JuliaOJIT::patchPendingStub`).
+JL_DLLEXPORT void *jl_specsig_fptr_if_compiled(jl_code_instance_t *ci)
+{
+    uint8_t specsigflags;
+    jl_callptr_t invoke;
+    void *specptr;
+    jl_read_codeinst_invoke(ci, &specsigflags, &invoke, &specptr, 0);
+    if ((specsigflags & JL_CI_FLAGS_SPECPTR_SPECIALIZED) &&
+        (specsigflags & JL_CI_FLAGS_INVOKE_MATCHES_SPECPTR))
+        return specptr;
+    return NULL;
+}
+
 JL_DLLEXPORT jl_method_instance_t *jl_normalize_to_compilable_mi(jl_method_instance_t *mi JL_PROPAGATES_ROOT);
 
 JL_DLLEXPORT void jl_add_codeinsts_to_jit(jl_array_t *codeinsts, jl_array_t *srcs)

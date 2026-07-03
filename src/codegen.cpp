@@ -10541,10 +10541,6 @@ static void init_jit_functions(void)
 char jl_using_intel_jitevents = 0; // Non-zero if running under Intel VTune Amplifier
 #endif
 
-#ifdef JL_USE_OPROFILE_JITEVENTS
-char jl_using_oprofile_jitevents = 0; // Non-zero if running under OProfile
-#endif
-
 #ifdef JL_USE_PERF_JITEVENTS
 char jl_using_perf_jitevents = 0;
 #endif
@@ -10656,7 +10652,6 @@ extern "C" void jl_init_llvm(void)
         jl_ExecutionEngine->enableJITDebuggingSupport();
 
 #if defined(JL_USE_INTEL_JITEVENTS) || \
-    defined(JL_USE_OPROFILE_JITEVENTS) || \
     defined(JL_USE_PERF_JITEVENTS)
     const char *jit_profiling = getenv("ENABLE_JITPROFILING");
 
@@ -10674,12 +10669,6 @@ extern "C" void jl_init_llvm(void)
     }
 #endif
 
-#if defined(JL_USE_OPROFILE_JITEVENTS)
-    if (jit_profiling && atoi(jit_profiling)) {
-        jl_using_oprofile_jitevents = 1;
-    }
-#endif
-
 #if defined(JL_USE_PERF_JITEVENTS)
     if (jit_profiling && atoi(jit_profiling)) {
         jl_using_perf_jitevents = 1;
@@ -10689,11 +10678,6 @@ extern "C" void jl_init_llvm(void)
 #ifdef JL_USE_INTEL_JITEVENTS
     if (jl_using_intel_jitevents)
         jl_ExecutionEngine->enableIntelJITEventListener();
-#endif
-
-#ifdef JL_USE_OPROFILE_JITEVENTS
-    if (jl_using_oprofile_jitevents)
-        jl_ExecutionEngine->enableOProfileJITEventListener();
 #endif
 
 #ifdef JL_USE_PERF_JITEVENTS

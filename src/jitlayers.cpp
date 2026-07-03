@@ -814,6 +814,81 @@ public:
 };
 } // namespace anonymous
 
+// Tracks trampoline modules carrying a synthesized PLT stub: captures the
+// stub's pointer-slot address once the graph's fixups have run, and arms the
+// slot for patching (JuliaOJIT::armStubSlot) once the graph has been emitted,
+// so a patch can never race the linker's own writes to the slot.
+class JLPLTPlugin : public orc::ObjectLinkingLayer::Plugin {
+public:
+    JLPLTPlugin(JuliaOJIT &JIT) JL_NOTSAFEPOINT : JIT(JIT) {}
+
+    // Called (with LinkerMutex held) before the trampoline module is emitted.
+    void expectStub(orc::MaterializationResponsibility &MR, jl_code_instance_t *CI) JL_NOTSAFEPOINT
+    {
+        std::lock_guard<std::mutex> Lock(PluginMutex);
+        Pending[&MR] = {CI, orc::ExecutorAddr()};
+    }
+
+    void modifyPassConfig(orc::MaterializationResponsibility &MR, jitlink::LinkGraph &,
+                          jitlink::PassConfiguration &PassConfig) override
+    {
+        {
+            std::lock_guard<std::mutex> Lock(PluginMutex);
+            if (!Pending.count(&MR))
+                return;
+        }
+        PassConfig.PostFixupPasses.push_back([this, &MR](jitlink::LinkGraph &G) -> Error {
+            for (auto &Sec : G.sections()) {
+                if (Sec.getName() != "$__jl_plt.ptr")
+                    continue;
+                for (auto *B : Sec.blocks()) {
+                    std::lock_guard<std::mutex> Lock(PluginMutex);
+                    auto It = Pending.find(&MR);
+                    if (It != Pending.end())
+                        It->second.second = B->getAddress();
+                }
+            }
+            return Error::success();
+        });
+    }
+
+    Error notifyEmitted(orc::MaterializationResponsibility &MR) override
+    {
+        jl_code_instance_t *CI = nullptr;
+        orc::ExecutorAddr Addr;
+        {
+            std::lock_guard<std::mutex> Lock(PluginMutex);
+            auto It = Pending.find(&MR);
+            if (It == Pending.end())
+                return Error::success();
+            std::tie(CI, Addr) = It->second;
+            Pending.erase(It);
+        }
+        if (Addr)
+            JIT.armStubSlot(CI, Addr.toPtr<_Atomic(void*)*>());
+        return Error::success();
+    }
+
+    Error notifyFailed(orc::MaterializationResponsibility &MR) override
+    {
+        std::lock_guard<std::mutex> Lock(PluginMutex);
+        Pending.erase(&MR);
+        return Error::success();
+    }
+
+    Error notifyRemovingResources(orc::JITDylib &, orc::ResourceKey) override
+    {
+        return Error::success();
+    }
+
+    void notifyTransferringResources(orc::JITDylib &, orc::ResourceKey, orc::ResourceKey) override {}
+
+private:
+    JuliaOJIT &JIT;
+    std::mutex PluginMutex;
+    DenseMap<orc::MaterializationResponsibility*, std::pair<jl_code_instance_t*, orc::ExecutorAddr>> Pending;
+};
+
 class JLMaterializationUnit : public orc::MaterializationUnit {
 public:
     // Must hold LinkerMutex when calling Create and until the
@@ -861,6 +936,10 @@ public:
             Syms[S] = Flags;
         }
 
+        if (Out.linker_info->plt_stub_sym)
+            Syms[Out.linker_info->plt_stub_sym] =
+                JITSymbolFlags::Exported | JITSymbolFlags::Callable;
+
         return JLMaterializationUnit{JIT, OL, std::move(Out), std::move(I)};
     }
 
@@ -898,6 +977,33 @@ public:
 #endif
             R->failMaterialization();
             return;
+        }
+
+        if (Out.linker_info->plt_target_ci) {
+            // Synthesize the PLT stub for this tojlinvoke thunk directly into
+            // its LinkGraph: a pointer slot initialized (by relocation) to the
+            // thunk, and an exported jump stub through it. The slot's address
+            // is captured post-fixup and armed for patching once the graph is
+            // emitted (see JLPLTPlugin), after which either side of the
+            // publish handshake repoints it at the target's compiled specsig.
+            jitlink::Symbol *Thunk = nullptr;
+            for (auto *S : (*G)->defined_symbols()) {
+                if (S->hasName() && S->getName() == Out.linker_info->plt_thunk_sym) {
+                    Thunk = S;
+                    break;
+                }
+            }
+            assert(Thunk && "trampoline module lost its thunk symbol");
+            auto &PtrSec = (*G)->createSection("$__jl_plt.ptr",
+                                               orc::MemProt::Read | orc::MemProt::Write);
+            auto &StubSec = (*G)->createSection("$__jl_plt.stub",
+                                                orc::MemProt::Read | orc::MemProt::Exec);
+            auto &Ptr = JIT.PLTPointerCreator(**G, PtrSec, Thunk, 0);
+            auto &Stub = JIT.PLTStubCreator(**G, StubSec, Ptr);
+            Stub.setName(Out.linker_info->plt_stub_sym);
+            Stub.setScope(jitlink::Scope::Default);
+            Stub.setLive(true);
+            JIT.PLTPlugin->expectStub(*R, Out.linker_info->plt_target_ci);
         }
 
         // Causes the invoke/specptr to be published when the symbols are emitted
@@ -941,18 +1047,29 @@ class JLTrampolineMaterializationUnit : public orc::MaterializationUnit {
 public:
     JLTrampolineMaterializationUnit(JuliaOJIT &JIT, ObjectLinkingLayer &OL,
                                     SymbolStringPtr Sym, jl_code_instance_t *CI,
-                                    jl_invoke_api_t API) JL_NOTSAFEPOINT
-      : orc::MaterializationUnit({{{JIT.mangle(*Sym),
-                                    JITSymbolFlags::Exported | JITSymbolFlags::Callable}},
-                                  {}}),
+                                    jl_invoke_api_t API,
+                                    SymbolStringPtr StubSym = nullptr) JL_NOTSAFEPOINT
+      : orc::MaterializationUnit(MakeInterface(JIT, Sym, StubSym)),
         JIT(JIT),
         OL(OL),
         Sym(Sym),
+        StubSym(std::move(StubSym)),
         CI(CI),
         API(API)
     {
         assert(API == JL_INVOKE_ARGS || API == JL_INVOKE_SPECSIG);
+        assert(!this->StubSym || API == JL_INVOKE_SPECSIG);
     };
+
+    static Interface MakeInterface(JuliaOJIT &JIT, const SymbolStringPtr &Sym,
+                                   const SymbolStringPtr &StubSym) JL_NOTSAFEPOINT
+    {
+        SymbolFlagsMap Syms;
+        Syms[JIT.mangle(*Sym)] = JITSymbolFlags::Exported | JITSymbolFlags::Callable;
+        if (StubSym)
+            Syms[StubSym] = JITSymbolFlags::Exported | JITSymbolFlags::Callable;
+        return Interface(std::move(Syms), nullptr);
+    }
 
     // During materialization: finalizers disabled, GC safe
     void materialize(std::unique_ptr<MaterializationResponsibility> R) JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE override
@@ -971,12 +1088,17 @@ public:
         F->setLinkage(GlobalValue::ExternalLinkage);
         F->setName(*Sym);
 
+        auto Emitted = Out.finish(std::move(Ctx), std::move(Mod),
+                                  *R->getExecutionSession().getSymbolStringPool());
+        if (StubSym) {
+            Emitted.linker_info->plt_target_ci = CI;
+            Emitted.linker_info->plt_thunk_sym = JIT.mangle(*Sym);
+            Emitted.linker_info->plt_stub_sym = StubSym;
+        }
         std::unique_lock Lock{JIT.LinkerMutex};
         if (auto Err = R->replace(
                 std::make_unique<JLMaterializationUnit>(JLMaterializationUnit::Create(
-                    JIT, OL,
-                    Out.finish(std::move(Ctx), std::move(Mod),
-                               *R->getExecutionSession().getSymbolStringPool()))))) {
+                    JIT, OL, std::move(Emitted))))) {
             R->getExecutionSession().reportError(std::move(Err));
             R->failMaterialization();
         }
@@ -990,6 +1112,7 @@ private:
     JuliaOJIT &JIT;
     ObjectLinkingLayer &OL;
     SymbolStringPtr Sym;
+    SymbolStringPtr StubSym;
     jl_code_instance_t *CI;
     jl_invoke_api_t API;
 };
@@ -1725,6 +1848,18 @@ JuliaOJIT::JuliaOJIT()
     ObjectLayer.addPlugin(DebuginfoPlugin);
     ObjectLayer.addPlugin(std::make_unique<JLMemoryUsagePlugin>(&jit_bytes_size));
 
+    // Pointer jump stubs are supported by JITLink on all of our targets; hard
+    // error if a new target ever lacks them, rather than silently linking
+    // permanently-boxing tojlinvoke thunks into callers.
+    PLTPointerCreator = jitlink::getAnonymousPointerCreator(TM->getTargetTriple());
+    PLTStubCreator = jitlink::getPointerJumpStubCreator(TM->getTargetTriple());
+    if (!PLTPointerCreator || !PLTStubCreator) {
+        jl_safe_printf("fatal: no jump-stub support for this target\n");
+        abort();
+    }
+    PLTPlugin = std::make_shared<JLPLTPlugin>(*this);
+    ObjectLayer.addPlugin(PLTPlugin);
+
     SetVector<void*> libhandles;
     // Make sure that libjulia-internal is loaded and placed first in the
     // DynamicLibrary order so that calls to runtime intrinsics are resolved
@@ -2052,6 +2187,16 @@ void JuliaOJIT::publishCIs(ArrayRef<jl_code_instance_t *> CIs, bool Wait)
             if (S.specptr)
                 Addrs.specptr = (void *)Syms.at(S.specptr).getAddress().getValue();
             jl_publish_compiled_ci(CI, Addrs);
+            // Repoint any armed PLT stub at the published specsig, so calls
+            // through the edge stop going through the tojlinvoke thunk.
+            if (Addrs.invoke_api == JL_INVOKE_SPECSIG && Addrs.specptr) {
+                auto PIt = PendingStubs.find(CI);
+                if (PIt != PendingStubs.end() && PIt->second.Slot) {
+                    jl_atomic_store_release(PIt->second.Slot, Addrs.specptr);
+                    PendingStubs.erase(PIt);
+                }
+                // else: armStubSlot patches once the stub graph is emitted
+            }
         }
         if (P)
             P->set_value();
@@ -2077,6 +2222,7 @@ void JuliaOJIT::unregisterCI(jl_code_instance_t *CI)
 {
     std::unique_lock Lock{LinkerMutex};
     CISymbols.erase(CI);
+    PendingStubs.erase(CI);
 }
 
 #define addAbsoluteToMap(map,name) \
@@ -2119,11 +2265,6 @@ void JuliaOJIT::enableIntelJITEventListener()
             ES.getExecutorProcessControl(), RegisterImplAddr, UnregisterImplAddr, EmitDebugInfo));
     }
 #endif
-}
-
-void JuliaOJIT::enableOProfileJITEventListener()
-{
-    // implement when available in LLVM
 }
 
 void JuliaOJIT::enablePerfJITEventListener()
@@ -2253,6 +2394,35 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
     return true;
 }
 
+// Record the (finalized) pointer slot of the PLT stub for `CI` and patch it
+// immediately if the target has already published its compiled specsig. The
+// other half of the handshake lives in publishCIs.
+void JuliaOJIT::armStubSlot(jl_code_instance_t *CI, _Atomic(void*) *Slot)
+{
+    std::unique_lock Lock{LinkerMutex};
+    auto PIt = PendingStubs.find(CI);
+    if (PIt == PendingStubs.end())
+        return; // unregistered
+    PIt->second.Slot = Slot;
+    // n.b. the pending entry guarantees `CI` has not been unregistered/freed
+    void *fptr = jl_specsig_fptr_if_compiled(CI);
+    if (fptr) {
+        jl_atomic_store_release(Slot, fptr);
+        PendingStubs.erase(PIt);
+    }
+}
+
+// Number of tojlinvoke trampolines defined by linkCallTarget, i.e. of call
+// edges that had to be linked while their target was not compiled (or had the
+// wrong invoke API). Exposed for tests: compilation schemes that batch or
+// claim work so that call edges stay direct must not define any.
+static _Atomic(uint64_t) tojlinvoke_trampolines_created{0};
+
+extern "C" JL_DLLEXPORT uint64_t jl_tojlinvoke_trampoline_count(void) JL_NOTSAFEPOINT
+{
+    return jl_atomic_load_relaxed(&tojlinvoke_trampolines_created);
+}
+
 // Must hold LinkerMutex.
 orc::SymbolStringPtr JuliaOJIT::linkCallTarget(orc::MaterializationResponsibility &MR,
                                                jl_code_instance_t *CI, jl_invoke_api_t API)
@@ -2276,12 +2446,31 @@ orc::SymbolStringPtr JuliaOJIT::linkCallTarget(orc::MaterializationResponsibilit
     // We also generate a tojlinvoke to handle args1 -> specsig.
     CISymbolPtr Trampoline;
     if (!Sym || Sym->invoke_api != API) {
+        if (API == JL_INVOKE_SPECSIG) {
+            // Reuse the existing pending stub for this CI, if any.
+            auto PIt = PendingStubs.find(CI);
+            if (PIt != PendingStubs.end()) {
+                Trampoline.specptr = PIt->second.Sym;
+                Trampoline.invoke_api = API;
+                return Trampoline.specptr;
+            }
+        }
         auto TSym = ES.intern(Names("tojlinvoke#", name_from_method_instance(jl_get_ci_mi(CI)), "#"));
         Trampoline.specptr = mangle(*TSym);
         Trampoline.invoke_api = API;
         Sym = &Trampoline;
+        SymbolStringPtr StubSym;
+        if (API == JL_INVOKE_SPECSIG) {
+            // Interpose a patchable jump stub over the thunk (synthesized into
+            // the trampoline's LinkGraph), so the edge can be repointed
+            // directly at the target's compiled specsig (same ABI) once it
+            // exists (see publishCIs / armStubSlot).
+            StubSym = mangle(Names("plt.tojlinvoke#", name_from_method_instance(jl_get_ci_mi(CI)), "#"));
+            PendingStubs[CI] = {StubSym, nullptr};
+            Trampoline.specptr = StubSym;
+        }
         auto Err = JD.define(std::make_unique<JLTrampolineMaterializationUnit>(
-            *this, ObjectLayer, TSym, CI, API));
+            *this, ObjectLayer, TSym, CI, API, StubSym));
         if (Err) {
 #ifndef __clang_analyzer__ // reportError calls an arbitrary function, which the static analyzer thinks might be a safepoint
             MR.getExecutionSession().reportError(std::move(Err));
@@ -2289,6 +2478,7 @@ orc::SymbolStringPtr JuliaOJIT::linkCallTarget(orc::MaterializationResponsibilit
             MR.failMaterialization();
             return {};
         }
+        jl_atomic_fetch_add_relaxed(&tojlinvoke_trampolines_created, 1);
     }
 
     assert(Sym->invoke_api == API);
