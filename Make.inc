@@ -1511,6 +1511,12 @@ BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP OPENSSL 
 # at startup; the current LibUV_jll does not provide them, so force the source
 # build until a matching JLL exists.
 USE_BINARYBUILDER_LIBUV := 0
+# TEMPORARY: likewise, force the OpenBLAS source build so that the
+# operation-cancellation patch (deps/patches/openblas-cancellation.patch) is
+# present and ^C can interrupt in-flight BLAS calls; with the stock
+# OpenBLAS_jll the feature would silently be unavailable. Requires a working
+# fortran compiler; drop once an OpenBLAS_jll with the patch exists.
+USE_BINARYBUILDER_OPENBLAS := 0
 
 define SET_BB_DEFAULT
 # First, check to see if BB is disabled on a global setting
