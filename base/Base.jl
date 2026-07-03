@@ -392,6 +392,7 @@ end
 
 function sigint_listener(cond::AsyncCondition)
     while _trywait(cond)
+      try # an error while processing one ^C must not disable the ^C machinery
         # The SIGINT handler should have set a cancellation request on the roottask
         cr = @atomic :acquire roottask.cancellation_request
         cr === nothing && continue
@@ -413,6 +414,31 @@ function sigint_listener(cond::AsyncCondition)
         if (REPL = REPL_MODULE_REF[]) !== Base
             invokelatest(REPL.maybe_rescue_REPL_after_sigint)
         end
+        if target.state === :abandoned
+            # A forcibly abandoned task never goes through the regular task
+            # completion path, so wake up anyone waiting on it explicitly.
+            # (The root task's donenotify may be `nothing`.)
+            donenotify = target.donenotify
+            if donenotify isa ThreadSynchronizer
+                lock(donenotify)
+                notify(donenotify)
+                unlock(donenotify)
+            end
+            # If the abandonment left the process without an interactive
+            # evaluator (script mode, or the REPL could not be rescued),
+            # nothing can resume normal operation - exit as ^C would.
+            backend = active_repl_backend
+            if target === roottask && (backend === nothing || istaskdone(backend.backend_task::Task))
+                exit(128 + 2) # 128 + SIGINT
+            end
+        end
+      catch ex
+        try
+            @invokelatest showerror(stderr, ex, catch_backtrace())
+            println(stderr)
+        catch
+        end
+      end
     end
     nothing
 end
@@ -431,7 +457,11 @@ const _sigint_rescue_task = Ref{Union{Task, Nothing}}(nothing)
 
 function start_sigint_listener()
     cond = AsyncCondition()
-    uv_unref(cond.handle)
+    # N.B.: The condition is deliberately kept ref'd: pending async events on
+    # unreferenced handles are not dispatched once the loop has no live
+    # handles left (as in a headless script), which would make the ^C
+    # notification undeliverable exactly when it matters. The atexit hook
+    # below closes the handle before the event loop is drained for exit.
     t = errormonitor(Threads.@spawn(sigint_listener(cond)))
     atexit() do
         # destroy this callback when exiting

@@ -81,6 +81,69 @@ spin(n=4) = for _ in 1:n; yield(); end
     @test istaskdone(t_in) && istaskfailed(t_in)
 end
 
+@testset "cancellation of lock and condition waits" begin
+    # Task blocked in lock(::ReentrantLock)
+    lk = ReentrantLock()
+    lock(lk)
+    t = @async lock(lk)
+    spin()
+    # let it spin through the fast path and park
+    @test timedwait(() -> t.queue !== nothing, 5.0) == :ok
+    cancel!(t)
+    @test_throws TaskFailedException wait(t)
+    @test t.result isa CancellationRequest
+    # the lock remains functional
+    unlock(lk)
+    @test trylock(lk)
+    unlock(lk)
+    t2 = @async (lock(lk); unlock(lk); true)
+    @test fetch(t2)
+
+    # Task blocked in put! on a full channel
+    c = Channel{Int}(1)
+    put!(c, 1)
+    t = @async put!(c, 2)
+    spin()
+    cancel!(t)
+    @test_throws TaskFailedException wait(t)
+    @test t.result isa CancellationRequest
+    @test take!(c) == 1
+    put!(c, 3) # channel remains functional
+    @test take!(c) == 3
+
+    # Task blocked in wait(::Threads.Condition)
+    cond = Threads.Condition()
+    t = @async @lock cond wait(cond)
+    spin()
+    cancel!(t)
+    @test_throws TaskFailedException wait(t)
+    @test t.result isa CancellationRequest
+    @lock cond notify(cond) # still functional (no waiters)
+
+    # Task blocked in wait(::Base.Process); the process itself keeps running
+    p = run(`sleep 1000`; wait=false)
+    t = @async wait(p)
+    spin()
+    cancel!(t)
+    @test_throws TaskFailedException wait(t)
+    @test t.result isa CancellationRequest
+    @test process_running(p)
+    kill(p); wait(p)
+
+    # Task blocked in waitany
+    t1 = @async sleep(1000)
+    t2 = @async sleep(1000)
+    t = @async waitany([t1, t2])
+    spin()
+    cancel!(t)
+    @test_throws TaskFailedException wait(t)
+    @test t.result isa CancellationRequest
+    # the awaited tasks remain unaffected and cancellable
+    cancel!(t1); cancel!(t2)
+    @test_throws TaskFailedException wait(t1)
+    @test_throws TaskFailedException wait(t2)
+end
+
 @testset "cancellation of computing tasks" begin
     # Polling cancellation via @cancel_check
     t = Threads.@spawn find_collatz_counterexample()
@@ -149,6 +212,33 @@ end
     @test fetch(t)
 end
 
+@testset "task abandonment wakes waiters" begin
+    if Threads.nthreads() > 1
+        started = Base.Event()
+        victim = Threads.@spawn begin
+            notify(started)
+            x = Ref(1.0)
+            while true
+                x[] = x[] * 1.0000001 + 0.1
+            end
+        end
+        wait(started)
+        watcher = @async wait(victim)
+        spin()
+        sleep(0.5) # make sure the victim is actually spinning on its thread
+        rescue = Task(() -> (while true; wait(); end))
+        rescue.sticky = false
+        Base.unsafe_abandon!(victim, rescue)
+        @test timedwait(() -> istaskdone(victim), 5.0) == :ok
+        @test victim.state === :abandoned
+        @test istaskfailed(victim)
+        # the watcher must be woken (abandoned tasks skip the regular
+        # completion path)
+        @test timedwait(() -> istaskdone(watcher), 5.0) == :ok
+        @test_throws TaskFailedException fetch(watcher)
+    end
+end
+
 @testset "^C" begin
     function run_with_sigint(code::String, delays; forcekill::Bool=false)
         out = Pipe()
@@ -206,7 +296,8 @@ end
     @test p.exitcode == 0
 
     # Escalation: an unresponsive process warns after 1s, and a second ^C
-    # abandons the stuck task (leaving a script with nothing left to run)
+    # abandons the stuck task; with the interactive evaluator gone, the
+    # process exits like an uncaught ^C
     output, p = run_with_sigint("""
         x = Ref(1.0)
         while true
@@ -215,4 +306,5 @@ end
         """, [1.0, 2.5]; forcekill=true)
     @test occursin("failed to acknowledge SIGINT", output)
     @test occursin("Abandoning current task", output)
+    @test p.exitcode == 128 + 2
 end

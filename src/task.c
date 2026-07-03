@@ -1678,6 +1678,12 @@ JL_NORETURN void jl_abandon_task_cb(void)
     // Clear abandon_to now that we have it
     ptls->abandon_to = NULL;
 
+    // The handler only invokes us for a still-current abandoned task with a
+    // target set; we cannot return from here (the fake signal frame has no
+    // return path).
+    if (next_task == NULL)
+        abort();
+
     // The task state was already set to ABANDONED by the caller of jl_abandon_task.
     // We don't attempt to notify waiters here because:
     // 1. We're in a signal-handler-triggered context with limited safe operations

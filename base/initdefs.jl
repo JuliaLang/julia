@@ -514,7 +514,15 @@ function _atexit(exitcode::Cint)
     # this exit came from a signal for example), then try to clear that state
     # to minimize scheduler issues later
     ct = current_task()
-    q = ct.queue; q === nothing || list_deletefirst!(q, ct)
+    q = ct.queue
+    if q !== nothing
+        try
+            list_deletefirst!(q, ct)
+        catch
+            # the waitee may not implement the waitqueue protocol; this is
+            # best-effort cleanup on the way out
+        end
+    end
     # We are exiting: a still-pending cancellation request on this task is moot
     # and would only disrupt the atexit hooks (any wait would refuse to sleep).
     @atomic :release ct.cancellation_request = nothing

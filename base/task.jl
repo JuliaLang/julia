@@ -531,16 +531,29 @@ function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=fal
         end
     end
 
-    while nremaining > 0
-        exception && failfast && break
-        i = take!(chan)
-        t = tasks[i]
-        waiter_tasks[i] = sentinel
-        done_mask[i] = true
-        exception |= istaskfailed(t)
-        nremaining -= 1
-        # stop early if requested
-        all || break
+    try
+        while nremaining > 0
+            exception && failfast && break
+            i = take!(chan)
+            t = tasks[i]
+            waiter_tasks[i] = sentinel
+            done_mask[i] = true
+            exception |= istaskfailed(t)
+            nremaining -= 1
+            # stop early if requested
+            all || break
+        end
+    catch
+        # The wait was interrupted (e.g. by cancellation of the current task):
+        # deregister our waiter tasks before propagating.
+        for i in findall(.~done_mask)
+            waiter = waiter_tasks[i]
+            waiter === sentinel && continue
+            donenotify = tasks[i].donenotify::ThreadSynchronizer
+            @lock donenotify list_deletefirst!(waitqueue(tasks[i]), waiter)
+        end
+        close(chan)
+        rethrow()
     end
 
     close(chan)
@@ -1674,16 +1687,11 @@ function cancel!(t::Task, crequest=CANCEL_REQUEST_SAFE)
     return delivered
 end
 
-function cancel_wait!(q::StickyWorkqueue, t::Task, @nospecialize(creq))
-    # Tasks in the workqueue are runnable - we do not cancel the wait,
-    # but we do need to check whether it's in there
-    lock(q.lock)
-    try
-        return (t in q.queue)
-    finally
-        unlock(q.lock)
-    end
-end
+# Tasks in a workqueue are runnable, not waiting: there is no wait to
+# interrupt, and the task will only observe the request once it runs (at task
+# start or its next cancellation point), so the request does not count as
+# delivered.
+cancel_wait!(q::StickyWorkqueue, t::Task, @nospecialize(creq)) = false
 
 """
     Base.reset_cancellation!()
@@ -1725,6 +1733,18 @@ frozen without waiting for it to reach a safe cancellation point.
 """
 function unsafe_abandon!(t::Task, next_task::Task)
     ccall(:jl_abandon_task, Cvoid, (Any, Any), t, next_task)
+    if t.state === :abandoned
+        # An abandoned task never goes through the regular task completion
+        # path, so wake up anyone waiting on it. (The waiters observe the
+        # already-stored abandoned state; they do not touch the task's stack.
+        # The root task's donenotify may be `nothing`.)
+        donenotify = t.donenotify
+        if donenotify isa ThreadSynchronizer
+            lock(donenotify)
+            notify(donenotify)
+            unlock(donenotify)
+        end
+    end
     return nothing
 end
 
