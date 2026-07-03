@@ -357,6 +357,10 @@ static void buildEarlySimplificationPipeline(ModulePassManager &MPM, PassBuilder
       MPM.addPass(ConstantMergePass());
       {
           FunctionPassManager FPM;
+          // Mark branches whose successors split into a may-return side and an
+          // always-unreachable side as cold. Run before SimplifyCFG so that
+          // downstream layout/folding sees the cold weights.
+          JULIA_PASS(FPM.addPass(ColdUnreachableBranchesPass()));
           FPM.addPass(LowerExpectIntrinsicPass());
           if (O.getSpeedupLevel() >= 2) {
               JULIA_PASS(FPM.addPass(PropagateJuliaAddrspacesPass()));
@@ -488,6 +492,7 @@ static void buildScalarOptimizerPipeline(FunctionPassManager &FPM, PassBuilder *
     FPM.addPass(BeforeScalarOptimizationMarkerPass());
     if (options.enable_scalar_optimizations) {
         if (O.getSpeedupLevel() >= 2) {
+            JULIA_PASS(FPM.addPass(ColdUnreachableBranchesPass())); // Rerun to make sure any new branches added are annotated as cold
             JULIA_PASS(FPM.addPass(AllocOptPass()));
             FPM.addPass(SROAPass(SROAOptions::ModifyCFG));
             FPM.addPass(VectorCombinePass(/*TryEarlyFoldsOnly=*/true));
