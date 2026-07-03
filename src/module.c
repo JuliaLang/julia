@@ -2078,6 +2078,13 @@ jl_value_t *jl_check_binding_assign_value(jl_binding_t *b JL_PROPAGATES_ROOT, jl
     return old_ty;
 }
 
+// #62154: the deoptimization sentinel that the GOT entries of statically compiled code
+// are repointed to when the declared type of their binding changes. It permanently
+// holds NULL, so a read through such an entry takes its (pre-existing) null path,
+// which re-evaluates the access with `invokelatest` semantics; a write checks that its
+// entry still points at the binding's value field before using its inline fast path.
+JL_DLLEXPORT _Atomic(jl_value_t*) jl_binding_deopt_slot;
+
 JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs)
 {
     if (jl_check_binding_assign_value(b, mod, var, rhs, "setglobal!") != NULL) {

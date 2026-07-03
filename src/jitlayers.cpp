@@ -834,30 +834,43 @@ public:
     }
 };
 
-// --- #62154: patch sites for re-typed global bindings ---
+// --- #62154: deoptimization of code compiled against a superseded global type ---
 //
 // Code compiled while a typed global's declared type has never been changed guards each
-// access with a nop-sized patch site (see emit_retype_guard in codegen.cpp) and records
-// it in a `jl_bpatch` section (see BindingPatchRecord: an asm-emitted site record,
-// joined by index to an IR-emitted slot-map record that locates the slot through which
-// the code references the binding). JIT records are collected by the plugin below as
-// linked; records of statically compiled code are registered when a system or package
-// image is loaded (jl_register_binding_patch_sites). When the declared type of a
-// binding is changed, jl_patch_retyped_binding_sites rewrites each registered nop into
-// a direct jump to its cold path, which re-validates the access against the type the
-// code was compiled for. Each rewrite is a single naturally-aligned atomic store
-// performed while other threads keep running: a concurrently fetching core observes
-// either the old nop or the new jump. A core may also keep executing a stale pre-store
-// copy of the nop until it passes a context synchronization event -- which is harmless
-// while the value slot still holds the old (conforming) value -- so the caller issues
-// jl_membarrier_sync_core() after the walk, before installing the new value.
-// BINDING_FLAG_RETYPED is sticky, so a site is patched at most once and is dropped from
-// the table afterwards; code compiled once the flag is set validates its accesses
-// unconditionally and emits no patch site.
+// access (see emit_retype_guard in codegen.cpp), describing the guard in `jl_bpatch`
+// section records (see BindingPatchRecord). JIT records are collected by the plugin
+// below as objects are linked; records of statically compiled code are registered when
+// a system or package image is loaded (jl_register_binding_patch_sites). When the
+// declared type of a binding is changed, jl_patch_retyped_binding_sites activates every
+// registered guard:
+//
+//  - JIT code carries a nop-sized patch site, rewritten into a direct jump to its cold
+//    path, which re-validates the access against the type the code was compiled for.
+//    Each rewrite is a single naturally-aligned atomic store performed while other
+//    threads keep running: a concurrently fetching core observes either the old nop or
+//    the new jump.
+//  - Statically compiled code accesses the value through a GOT entry (initialized at
+//    registration to the address of the binding's value field), which is repointed at
+//    jl_binding_deopt_slot: reads then observe NULL and take their ordinary null path,
+//    which re-evaluates the access with `invokelatest` semantics, and writes recognize
+//    that the entry no longer points at the value field.
+//
+// In both cases an access that began before the activation may still complete against
+// the old state, which is harmless while the value slot still holds the old
+// (conforming) value; the caller therefore quiesces every thread after the walk,
+// before installing the new value. BINDING_FLAG_RETYPED is sticky, so each guard is
+// activated at most once and dropped from the table afterwards; JIT code compiled once
+// the flag is set validates its accesses unconditionally and emits no records, while
+// image registration leaves the GOT entries of such bindings deoptimized.
 
 struct BindingPatchSite {
     uint64_t site;
     uint64_t target;
+};
+
+struct BindingPatchInfo {
+    SmallVector<BindingPatchSite, 4> sites; // JIT nop sites to rewrite
+    SmallVector<uintptr_t, 4> got_entries;  // image GOT entries to repoint
 };
 
 // Guarded by bpatch_lock, which is also held across the patching itself: concurrent
@@ -865,10 +878,10 @@ struct BindingPatchSite {
 // pages, whose write protection is toggled around the stores. The binding keys are used
 // purely as identities and are never dereferenced: a binding stays reachable from its
 // module at least as long as compiled code referencing it, and JIT code is never
-// deallocated, so at worst a site belonging to unreachable code gets patched, which is
-// harmless.
+// deallocated, so at worst a guard belonging to unreachable code gets activated, which
+// is harmless.
 static std::mutex bpatch_lock;
-static DenseMap<jl_binding_t*, SmallVector<BindingPatchSite, 4>> bpatch_sites;
+static DenseMap<jl_binding_t*, BindingPatchInfo> bpatch_info;
 
 #if defined(_CPU_X86_64_)
 typedef uint64_t bpatch_word_t; // an aligned 8-byte nop, patched to `jmp rel32; nop3`
@@ -882,8 +895,8 @@ typedef uint32_t bpatch_word_t; // one A64 instruction, `nop` patched to `b <tar
 // below), the page stays executable and other threads keep running; a thread may still
 // execute a stale copy of the old instruction until it passes a context
 // synchronization event, and the caller is responsible for forcing one on every
-// thread (jl_membarrier_sync_core) before the patch must be observed. The caller must
-// hold bpatch_lock (concurrent rewrites may share pages).
+// thread (the safepoint quiesce in jl_declare_global) before the patch must be
+// observed. The caller must hold bpatch_lock (concurrent rewrites may share pages).
 static void bpatch_apply(const BindingPatchSite &s)
 {
 #if !(defined(_CPU_X86_64_) || defined(_CPU_AARCH64_))
@@ -920,14 +933,13 @@ static void bpatch_apply(const BindingPatchSite &s)
     uintptr_t first = s.site & ~(pagesz - 1);
     size_t protlen = ((s.site + nbytes - 1) & ~(pagesz - 1)) - first + pagesz;
 #if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
-    // No code page can be writable and executable at once on Apple Silicon: image text
-    // is signed and file-backed, and JIT memory is either MAP_JIT (writable only
-    // through the per-thread toggle) or plain pages. Briefly suspend all other threads
-    // -- none can then be executing the page -- and enable writing by whichever
-    // mechanism applies. Executing the modified pages afterwards relies on the
-    // allow-jit/allow-unsigned-executable-memory entitlements julia is distributed
-    // with. (Making this path suspension-free would require establishing a second,
-    // writable mapping of the page to store through instead.)
+    // No code page can be writable and executable at once on Apple Silicon. Patch
+    // sites only exist in JIT code (statically compiled code uses GOT entries
+    // instead), whose memory is either MAP_JIT (writable only through the per-thread
+    // toggle) or plain pages, depending on how it was allocated. Briefly suspend all
+    // other threads -- none can then be executing the page -- and enable writing by
+    // whichever mechanism applies. (Making this path suspension-free would require
+    // establishing a second, writable mapping of the page to store through instead.)
     jl_task_t *ct = jl_current_task;
     jl_safepoint_suspend_all_threads(ct);
     int used_mprotect = mprotect((void*)first, protlen, PROT_READ | PROT_WRITE) == 0;
@@ -970,27 +982,46 @@ static void bpatch_register(jl_binding_t *b, const BindingPatchSite &s)
     if (jl_atomic_load_relaxed(&b->flags) & BINDING_FLAG_RETYPED)
         bpatch_apply(s);
     else
-        bpatch_sites[b].push_back(s);
+        bpatch_info[b].sites.push_back(s);
 }
 
-// A raw `jl_bpatch` section record (see emit_retype_guard). Site records are emitted
-// by the patch-site inline asm; slot-map records are emitted as plain IR data and
-// resolve a site's index to the address slot through which its code references the
-// binding (the slot itself is filled by JIT linking or image loading).
+// Publish a parsed GOT entry for `b`, pointing it at the binding's value field. If the
+// binding has already been re-typed, the entry is instead left pointing at the
+// deoptimization sentinel forever: this code was compiled against *some* declared type
+// of the binding, and the sticky flag cannot tell whether it is still the current one.
+static void bpatch_register_got(jl_binding_t *b, uintptr_t entry)
+{
+    std::lock_guard<std::mutex> lock(bpatch_lock);
+    _Atomic(void*) *cell = (_Atomic(void*)*)entry;
+    if (jl_atomic_load_relaxed(&b->flags) & BINDING_FLAG_RETYPED) {
+        jl_atomic_store_relaxed(cell, (void*)&jl_binding_deopt_slot);
+    }
+    else {
+        jl_atomic_store_relaxed(cell, (void*)&b->value);
+        bpatch_info[b].got_entries.push_back(entry);
+    }
+}
+
+// A raw `jl_bpatch` section record (see emit_retype_guard and
+// julia_binding_got_entry). Site records are emitted by the patch-site inline asm; the
+// other kinds are emitted as plain IR data. A slot-map record resolves a record index
+// to the address slot through which the code references the binding (the slot itself
+// is filled by JIT linking or image loading).
 struct BindingPatchRecord {
     uint64_t f0;
     uint64_t f1;
     uint64_t f2;
-    uint64_t kind; // 0/1 (read/write site): f0 = site, f1 = target, f2 = index
+    uint64_t kind; // 0/1 (read/write JIT site): f0 = site, f1 = target, f2 = index
                    // 2 (slot map): f0 = index, f1 = address of the binding's slot
                    // 3 (sentinel): ignored (guarantees the section exists on Mach-O)
+                   // 4 (GOT entry): f0 = address of the entry, f2 = index
                    // additionally, all-zero records are skipped: COFF bounds the
                    // section with zero marker records and its linker may insert
                    // padding between grouped-section contributions
 };
 
-// Register a batch of records (all sites of one linked object or image, together with
-// their slot-map records), dereferencing each binding from its address slot.
+// Register a batch of records (everything from one linked object or image, together
+// with its slot-map records), dereferencing each binding from its address slot.
 static void bpatch_register_records(ArrayRef<BindingPatchRecord> records)
 {
     SmallDenseMap<uint64_t, uint64_t, 8> slots;
@@ -999,18 +1030,23 @@ static void bpatch_register_records(ArrayRef<BindingPatchRecord> records)
             slots[r.f0] = r.f1;
     }
     for (const BindingPatchRecord &r : records) {
-        if (r.kind > 1)
+        if (r.kind != 0 && r.kind != 1 && r.kind != 4)
             continue; // slot map or sentinel
         if (r.f0 == 0)
             continue; // zero marker record or linker padding
         auto it = slots.find(r.f2);
-        assert(it != slots.end() && "patch site without a matching slot-map record");
+        assert(it != slots.end() && "patch record without a matching slot-map record");
         if (it == slots.end())
             continue;
         jl_binding_t *b = *(jl_binding_t**)(uintptr_t)it->second;
         assert(b != NULL);
-        BindingPatchSite site = { r.f0, r.f1 };
-        bpatch_register(b, site);
+        if (r.kind == 4) {
+            bpatch_register_got(b, (uintptr_t)r.f0);
+        }
+        else {
+            BindingPatchSite site = { r.f0, r.f1 };
+            bpatch_register(b, site);
+        }
     }
 }
 
@@ -1098,30 +1134,27 @@ public:
 };
 } // namespace anonymous
 
-// Activate the re-type guards of all patchable sites registered for `b`. Called (with
-// the world counter lock held) when the declared type of `b` is changed, after
-// BINDING_FLAG_RETYPED is set and before the new value is stored. On return, every
-// thread is guaranteed to observe the patched sites; until then a thread may still
-// execute a stale nop, which is harmless because the value slot still holds the old
-// value, which conforms to every previously declared type.
+// Activate the re-type guards registered for `b`: rewrite its JIT patch sites and
+// repoint the GOT entries of statically compiled code at the deoptimization sentinel.
+// Called (with the world counter lock held) when the declared type of `b` is changed,
+// after BINDING_FLAG_RETYPED is set and before the new value is stored. A thread may
+// still complete an access it began against the pre-activation state -- executing a
+// stale copy of a nop, or holding an already-loaded GOT entry value -- which is
+// harmless because the value slot still holds the old value, conforming to every
+// previously declared type; the caller quiesces every thread before installing the
+// new value, after which no such access can still be in flight.
 extern "C" JL_DLLEXPORT_CODEGEN void jl_patch_retyped_binding_sites_impl(jl_binding_t *b)
 {
     std::lock_guard<std::mutex> lock(bpatch_lock);
-    auto it = bpatch_sites.find(b);
-    if (it == bpatch_sites.end())
+    auto it = bpatch_info.find(b);
+    if (it == bpatch_info.end())
         return;
-    SmallVector<BindingPatchSite, 4> sites = std::move(it->second);
-    bpatch_sites.erase(it);
-    if (sites.empty())
-        return;
-    for (auto &s : sites)
+    BindingPatchInfo info = std::move(it->second);
+    bpatch_info.erase(it);
+    for (auto &s : info.sites)
         bpatch_apply(s);
-    // The stores above are visible in memory, but other threads may keep executing
-    // stale copies of the previous instructions until their next context
-    // synchronization event (AArch64 explicitly permits this, and x86 provides no
-    // documented bound without a serializing operation). Our caller issues
-    // jl_membarrier_sync_core() before publishing the new value, which forces one on
-    // every thread, so no fast path can still be taken unverified afterwards.
+    for (uintptr_t e : info.got_entries)
+        jl_atomic_store_release((_Atomic(void*)*)e, (void*)&jl_binding_deopt_slot);
 }
 
 // Register the `jl_bpatch` records of a loaded system or package image: [start, end)

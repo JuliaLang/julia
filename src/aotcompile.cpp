@@ -1369,6 +1369,16 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
                 assert(val->getName().starts_with("llvm."));
                 continue;
             }
+            if (auto GV = dyn_cast<GlobalVariable>(val)) {
+                // `jl_bpatch` records (#62154) reference code and data purely so that
+                // the runtime can register them; without this exception, their shared
+                // llvm.compiler.used cluster would transitively merge every function
+                // that accesses a typed global into a single partition. Their
+                // references resolve fine across partitions (the referents are
+                // promoted to hidden external linkage above).
+                if (GV->hasSection() && GV->getSection().contains("jl_bpatch"))
+                    continue;
+            }
             partitioner.merge(i, idx->second);
         }
     }

@@ -3522,38 +3522,137 @@ static void jl_temporary_root(jl_codectx_t &ctx, jl_value_t *val)
 
 // --- generating function calls ---
 
-// Whether this compilation can guard typed-global accesses with statically patchable
-// sites (see jl_patch_retyped_binding_sites in jitlayers.cpp): an architecture the
-// runtime patcher knows how to rewrite, and an object format the site table can be
-// emitted for with `.pushsection`. The sites of system and package images are
-// registered at load time through section bounds obtained per format: ELF
+// Whether `jl_bpatch` records can be emitted for this object format: the runtime must
+// be able to find them again, either as a JIT object is linked (the plugin in
+// jitlayers.cpp) or through the per-format section bounds of a loaded image (ELF
 // `__start_`/`__stop_` symbols, Mach-O `section$start$`/`section$end$` symbols, or
-// COFF `$`-grouped-section markers (see the jl_image_pointers emission in
-// aotcompile.cpp). Patching Darwin image code (which is signed) relies on the
-// allow-jit/allow-unsigned-executable-memory entitlements that julia is distributed
-// with.
+// COFF `$`-grouped-section markers; see the jl_image_pointers emission in
+// aotcompile.cpp).
+static bool binding_records_supported(const Triple &TT)
+{
+    return TT.isOSBinFormatELF() || TT.isOSBinFormatMachO() || TT.isOSBinFormatCOFF();
+}
+
+// Whether JIT-compiled typed-global accesses can be guarded with statically patchable
+// no-op sites (see jl_patch_retyped_binding_sites in jitlayers.cpp): an architecture
+// the runtime patcher knows how to rewrite, plus record support.
 static bool binding_patch_sites_supported(jl_codectx_t &ctx)
 {
+    if (ctx.emission_context.imaging_mode)
+        return false;
     const Triple &TT = ctx.emission_context.TargetTriple;
     if (TT.getArch() != Triple::x86_64 && TT.getArch() != Triple::aarch64)
         return false;
-    return TT.isOSBinFormatELF() || TT.isOSBinFormatMachO() || TT.isOSBinFormatCOFF();
+    return binding_records_supported(TT);
+}
+
+// Whether statically compiled (image) typed-global accesses go through a
+// runtime-managed GOT entry (see julia_binding_got_entry): a pure data mechanism, so
+// any 64-bit architecture qualifies (the record layout embeds pointers in 64-bit
+// fields, which a 32-bit target could not relocate) plus record support.
+static bool binding_got_supported(jl_codectx_t &ctx)
+{
+    const Triple &TT = ctx.emission_context.TargetTriple;
+    return ctx.emission_context.imaging_mode && TT.isArch64Bit() &&
+           binding_records_supported(TT);
+}
+
+static const char *bpatch_section_name(const Triple &TT)
+{
+    return TT.isOSBinFormatMachO() ? "__DATA,__jl_bpatch"
+         : TT.isOSBinFormatCOFF()  ? "jl_bpatch$B"
+                                   : "jl_bpatch";
+}
+
+// Allocate a fresh record index and emit the kind-2 slot-map record for `bnd` (see
+// BindingPatchRecord in jitlayers.cpp), which lets record registration find the
+// binding: the record's initializer references the binding's address slot, and unlike
+// a symbol name that reference survives being rewritten into the image's gvars table.
+// The record needs no symbol at all, so it is immune to the image partitioner's
+// linkage manipulation, and is protected from GlobalDCE (nothing references it) via
+// llvm.compiler.used.
+static uint64_t emit_bpatch_slotmap(jl_codectx_t &ctx, jl_binding_t *bnd)
+{
+    static std::atomic<uint64_t> bpatch_index{0};
+    uint64_t idx = bpatch_index.fetch_add(1, std::memory_order_relaxed);
+    LLVMContext &C = ctx.builder.getContext();
+    const Triple &TT = ctx.emission_context.TargetTriple;
+    Constant *slot = julia_binding_pgv(ctx, bnd);
+    Type *T_i64 = getInt64Ty(C);
+    StructType *RT = StructType::get(T_i64, slot->getType(), T_i64, T_i64);
+    Constant *rec = ConstantStruct::get(RT, {ConstantInt::get(T_i64, idx), slot,
+            ConstantInt::get(T_i64, 0), ConstantInt::get(T_i64, 2)});
+    GlobalVariable *slotmap = new GlobalVariable(*jl_Module, RT, /*isConstant*/false,
+            GlobalVariable::PrivateLinkage, rec,
+            "jl_bpatch_slotmap" + std::to_string(idx));
+    slotmap->setSection(bpatch_section_name(TT));
+    slotmap->setAlignment(Align(TT.isOSBinFormatCOFF() ? 32 : 8));
+    appendToCompilerUsed(*jl_Module, {slotmap});
+    return idx;
+}
+
+// The runtime-managed GOT entry through which statically compiled code accesses the
+// value of `bnd` (#62154): a pointer cell in the image that record registration
+// initializes to the address of the binding's value field when the image is loaded.
+// Re-typing the binding repoints superseded entries at jl_binding_deopt_slot, which
+// permanently holds NULL: a read through the entry then takes its ordinary null path,
+// which re-evaluates the access with `invokelatest` semantics, and a write recognizes
+// the sentinel's address as its deoptimization check. One entry is shared by all
+// accesses of `bnd` in this compilation unit; a kind-4 record identifies it to
+// registration. The entry is emitted holding NULL, so an access can never observe an
+// uninitialized entry as anything but a (correct, merely unnecessary) deoptimization.
+static GlobalVariable *julia_binding_got_entry(jl_codectx_t &ctx, jl_binding_t *bnd)
+{
+    GlobalVariable *&entry = ctx.emission_context.bgot_targets[bnd];
+    if (entry)
+        return entry;
+    LLVMContext &C = ctx.builder.getContext();
+    const Triple &TT = ctx.emission_context.TargetTriple;
+    PointerType *T_ptr = PointerType::getUnqual(C);
+    uint64_t idx = emit_bpatch_slotmap(ctx, bnd);
+    entry = new GlobalVariable(*jl_Module, T_ptr, /*isConstant*/false,
+            GlobalVariable::InternalLinkage, Constant::getNullValue(T_ptr),
+            "jl_bgot" + std::to_string(idx));
+    entry->setAlignment(Align(sizeof(void*)));
+    Type *T_i64 = getInt64Ty(C);
+    StructType *RT = StructType::get(T_ptr, T_i64, T_i64, T_i64);
+    Constant *rec = ConstantStruct::get(RT, {entry, ConstantInt::get(T_i64, 0),
+            ConstantInt::get(T_i64, idx), ConstantInt::get(T_i64, 4)});
+    GlobalVariable *recgv = new GlobalVariable(*jl_Module, RT, /*isConstant*/false,
+            GlobalVariable::PrivateLinkage, rec,
+            "jl_bpatch_got" + std::to_string(idx));
+    recgv->setSection(bpatch_section_name(TT));
+    recgv->setAlignment(Align(TT.isOSBinFormatCOFF() ? 32 : 8));
+    appendToCompilerUsed(*jl_Module, {recgv});
+    return entry;
+}
+
+// Load `bnd`'s GOT entry: the address of the binding's value field, or of
+// jl_binding_deopt_slot once this code's view of the binding's declared type has been
+// superseded (or NULL before the entry is initialized).
+static LoadInst *emit_binding_got_slot(jl_codectx_t &ctx, jl_binding_t *bnd)
+{
+    GlobalVariable *entry = julia_binding_got_entry(ctx, bnd);
+    LoadInst *slotp = ctx.builder.CreateAlignedLoad(
+            PointerType::getUnqual(ctx.builder.getContext()), entry, Align(sizeof(void*)));
+    slotp->setOrdering(AtomicOrdering::Monotonic); // repointed concurrently on re-type
+    setName(ctx.emission_context, slotp, entry->getName());
+    return slotp;
 }
 
 // Emit a guard that diverts to a cold block once the declared type of `bnd` is changed
 // (i.e. once BINDING_FLAG_RETYPED, which is clear at compile time here, becomes set;
-// see #62154). On supported targets this emits a nop-sized patch site plus `jl_bpatch`
-// section records (see BindingPatchRecord in jitlayers.cpp) identifying the site, its
+// see #62154). For JIT code this emits a nop-sized patch site plus `jl_bpatch` section
+// records (see BindingPatchRecord in jitlayers.cpp) identifying the site, its
 // cold-path target and its binding; re-typing the binding rewrites the nop into a jump
 // to the cold block (jl_patch_retyped_binding_sites), so the fast path pays no dynamic
-// check. The binding is identified through its address slot (which JIT linking or
-// image loading fills in) rather than by value, so the same form works for JIT code
-// and for statically compiled images. The nop is sized and aligned so that the rewrite
-// is a single naturally-aligned atomic store: a concurrently fetching core observes
-// either the old nop or the new jump, never a torn instruction. Elsewhere the guard
-// degrades to testing the binding's flags at runtime. Returns the (empty,
-// unterminated) cold block; the builder is left at the start of the fast-path
-// continuation block.
+// check. The nop is sized and aligned so that the rewrite is a single naturally-
+// aligned atomic store: a concurrently fetching core observes either the old nop or
+// the new jump, never a torn instruction. Statically compiled code tests whether the
+// binding's GOT entry still points at its value field (re-typing repoints it at
+// jl_binding_deopt_slot), and other targets test the binding's flags at runtime.
+// Returns the (empty, unterminated) cold block; the builder is left at the start of
+// the fast-path continuation block.
 static BasicBlock *emit_retype_guard(jl_codectx_t &ctx, jl_binding_t *bnd, Value *bp, bool is_write)
 {
     LLVMContext &C = ctx.builder.getContext();
@@ -3578,42 +3677,23 @@ static BasicBlock *emit_retype_guard(jl_codectx_t &ctx, jl_binding_t *bnd, Value
         }
         // The section is writable because record fields hold absolute addresses, which
         // require load-time relocation in position-independent images. The flags must
-        // match what LLVM uses for the slot-map globals below, so that both are
-        // emitted into a single section. On COFF the records live in the `$B` group of
-        // the section and are 32-aligned: the linker sorts and concatenates the groups
-        // (bounded by marker records in `$A` and `$C`, see aotcompile.cpp) and may pad
-        // between contributions, which record parsing skips as all-zero records.
+        // match what LLVM uses for the record globals (see emit_bpatch_slotmap), so
+        // that both are emitted into a single section. On COFF the records live in the
+        // `$B` group of the section and are 32-aligned: the linker sorts and
+        // concatenates the groups (bounded by marker records in `$A` and `$C`, see
+        // aotcompile.cpp) and may pad between contributions, which record parsing
+        // skips as all-zero records.
         bool coff = TT.isOSBinFormatCOFF();
-        const char *secname = TT.isOSBinFormatMachO() ? "__DATA,__jl_bpatch"
-                            : coff                    ? "jl_bpatch$B"
-                                                      : "jl_bpatch";
+        const char *secname = bpatch_section_name(TT);
         if (TT.isOSBinFormatMachO())
             OS << "\t.pushsection " << secname << "\n";
         else if (coff)
             OS << "\t.pushsection jl_bpatch$$B,\"dw\"\n"; // $$ is a literal $ in asm text
         else
             OS << "\t.pushsection " << secname << ",\"aw\"," << (aarch64 ? "%progbits" : "@progbits") << "\n";
-        // The site record joins to its binding through a small index: the asm text can
-        // only carry link-time constants, and the binding's address slot has no symbol
-        // of its own in imaging mode (it is rewritten into the image's gvars table).
-        // A companion slot-map record (kind 2, see BindingPatchRecord) is emitted as
-        // plain IR data into the same section, with an initializer that participates
-        // in that rewriting; it needs no symbol at all, so it is immune to the image
-        // partitioner's linkage manipulation, and is protected from GlobalDCE (nothing
-        // references it) via llvm.compiler.used.
-        static std::atomic<uint64_t> bpatch_index{0};
-        uint64_t idx = bpatch_index.fetch_add(1, std::memory_order_relaxed);
-        Constant *slot = julia_binding_pgv(ctx, bnd);
-        Type *T_i64 = getInt64Ty(C);
-        StructType *RT = StructType::get(T_i64, slot->getType(), T_i64, T_i64);
-        Constant *rec = ConstantStruct::get(RT, {ConstantInt::get(T_i64, idx), slot,
-                ConstantInt::get(T_i64, 0), ConstantInt::get(T_i64, 2)});
-        GlobalVariable *slotmap = new GlobalVariable(*jl_Module, RT, /*isConstant*/false,
-                GlobalVariable::PrivateLinkage, rec,
-                "jl_bpatch_slotmap" + std::to_string(idx));
-        slotmap->setSection(secname);
-        slotmap->setAlignment(Align(coff ? 32 : 8));
-        appendToCompilerUsed(*jl_Module, {slotmap});
+        // The site record joins to its binding through a small index and its slot-map
+        // record: the asm text can only carry link-time constants.
+        uint64_t idx = emit_bpatch_slotmap(ctx, bnd);
         OS << (coff ? "\t.balign 32\n" : "\t.balign 8\n")
            << "\t.quad 1b\n"
            << "\t.quad ${0:l}\n"
@@ -3623,6 +3703,16 @@ static BasicBlock *emit_retype_guard(jl_codectx_t &ctx, jl_binding_t *bnd, Value
         FunctionType *FT = FunctionType::get(getVoidTy(C), false);
         InlineAsm *IA = InlineAsm::get(FT, OS.str(), "!i", /*hasSideEffects*/true);
         ctx.builder.CreateCallBr(FT, IA, fastBB, {coldBB});
+    }
+    else if (binding_got_supported(ctx)) {
+        // Statically compiled code: deoptimized once the binding's GOT entry no longer
+        // points at its value field. Comparing against the value field's address (from
+        // the already-loaded binding pointer) also covers the not-yet-initialized NULL
+        // state, not just the jl_binding_deopt_slot sentinel.
+        Value *slotp = emit_binding_got_slot(ctx, bnd);
+        Value *deopt = ctx.builder.CreateICmpNE(slotp,
+                emit_ptrgep(ctx, bp, offsetof(jl_binding_t, value)));
+        ctx.builder.CreateCondBr(deopt, coldBB, fastBB);
     }
     else {
         LoadInst *bflags = ctx.builder.CreateAlignedLoad(getInt8Ty(C),
@@ -3713,20 +3803,51 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
     if (bnd != rkp.binding_if_global)
         bp = julia_binding_gv(ctx, rkp.binding_if_global);
     jl_value_t *ty = rkp.restriction;
-    Value *bpval = julia_binding_pvalue(ctx, bp);
     if (ty == nullptr)
         ty = (jl_value_t*)jl_any_type;
-    jl_cgval_t v = emit_checked_var(ctx, bpval, name, (jl_value_t*)mod, false, ctx.tbaa().tbaa_binding);
+    jl_binding_t *holder = rkp.binding_if_global;
     // #62154: if the declared type of this global is changed, the (single, shared) value
     // slot may hold a value of a type other than `ty` -- either written by code compiled
     // against a later type, or observed by this code after a redefinition that happened
-    // on the stack. Verify the value against the type we were compiled for, so that such
-    // an access errors rather than returning an ill-typed value. As long as the binding
-    // has never been re-typed the verification is dead: on supported targets it sits
-    // behind a patchable no-op that is only activated if the type ever changes, and
-    // elsewhere behind a test of the binding's flags.
+    // on the stack. Such an access must error rather than return an ill-typed value.
+    if (ty != (jl_value_t*)jl_any_type && binding_got_supported(ctx)) {
+        // Statically compiled code accesses the value through the binding's GOT entry.
+        // Once the entry is repointed at jl_binding_deopt_slot (which permanently holds
+        // NULL), the loaded value is NULL and the cold path re-evaluates the access
+        // with `invokelatest` semantics -- reading the (single, latest) value slot
+        // through the runtime and verifying the result against the type this code was
+        // compiled for -- or raises the ordinary undefined-variable error. A NULL in
+        // the value slot itself (the binding is undefined) takes the same path.
+        LLVMContext &C = ctx.builder.getContext();
+        Value *slotp = emit_binding_got_slot(ctx, holder);
+        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_binding);
+        LoadInst *fastv = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, slotp,
+                Align(sizeof(void*)));
+        fastv->setOrdering(AtomicOrdering::Unordered);
+        ai.decorateInst(fastv);
+        BasicBlock *fastBB = ctx.builder.GetInsertBlock();
+        BasicBlock *coldBB = BasicBlock::Create(C, "got_deopt", ctx.f);
+        BasicBlock *contBB = BasicBlock::Create(C, "got_cont", ctx.f);
+        ctx.builder.CreateCondBr(ctx.builder.CreateIsNull(fastv), coldBB, contBB);
+        ctx.builder.SetInsertPoint(coldBB);
+        Value *coldv = ctx.builder.CreateCall(prepare_call(jlgetbindingvalue_func), { bp });
+        undef_var_error_ifnot(ctx, ctx.builder.CreateIsNotNull(coldv), name, (jl_value_t*)mod);
+        emit_typecheck(ctx, mark_julia_type(ctx, coldv, true, (jl_value_t*)jl_any_type), ty,
+                "getglobal");
+        BasicBlock *coldEnd = ctx.builder.GetInsertBlock();
+        ctx.builder.CreateBr(contBB);
+        ctx.builder.SetInsertPoint(contBB);
+        PHINode *phi = ctx.builder.CreatePHI(ctx.types().T_prjlvalue, 2);
+        phi->addIncoming(fastv, fastBB);
+        phi->addIncoming(coldv, coldEnd);
+        return mark_julia_type(ctx, phi, true, ty);
+    }
+    Value *bpval = julia_binding_pvalue(ctx, bp);
+    jl_cgval_t v = emit_checked_var(ctx, bpval, name, (jl_value_t*)mod, false, ctx.tbaa().tbaa_binding);
+    // As long as the binding has never been re-typed the verification is dead: in JIT
+    // code it sits behind a patchable no-op that is only activated if the type ever
+    // changes, and elsewhere behind a test of the binding's flags.
     if (ty != (jl_value_t*)jl_any_type) {
-        jl_binding_t *holder = rkp.binding_if_global;
         if (jl_atomic_load_relaxed(&holder->flags) & BINDING_FLAG_RETYPED) {
             // Already re-typed: this code may be compiled for an older world range whose
             // declared type differs from the latest one, so always verify.
@@ -3838,6 +3959,13 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
                 return jl_cgval_t();
         }
         int retyped = jl_atomic_load_relaxed(&bnd->flags) & BINDING_FLAG_RETYPED;
+        if (binding_got_supported(ctx)) {
+            // The GOT entry tracks the binding's type epoch: registration points it at
+            // the value field only while the declared type is unchanged since this code
+            // was compiled (and leaves it deoptimized otherwise), so image code always
+            // uses the guarded inline path, regardless of the flag at compile time.
+            retyped = 0;
+        }
         if (!retyped) {
             bool isboxed = true;
             bool maybe_null = jl_atomic_load_relaxed(&bnd->value) == NULL;

@@ -73,10 +73,9 @@ exception frames, and taking/releasing locks.
 * `jl_module_t.lock`
 * `newly_inferred_mutex`
 * `JLDebuginfoPlugin.PluginMutex` (`std::mutex`)
-* `bpatch_lock` (`std::mutex`): guards the table of binding re-type patch sites and the
-  patching itself (jitlayers.cpp). `jl_membarrier_sync_core` runs under it, so its
-  fallback may briefly suspend and resume each thread (via the profiler suspension
-  machinery) while it is held; no other lock is acquired under it.
+* `bpatch_lock` (`std::mutex`): guards the table of binding re-type guards (JIT patch
+  sites and image GOT entries) and their activation itself (jitlayers.cpp); no other
+  lock is acquired under it.
 * `precompile_field_replace_lock`
 * `live_tasks_lock` (`uv_mutex_t`)
 * `heapsnapshot_lock`

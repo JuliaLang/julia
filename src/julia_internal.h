@@ -937,11 +937,6 @@ JL_CALLABLE(jl_f_tuple);
 void jl_install_default_signal_handlers(void);
 void restore_signals(void);
 void jl_install_thread_signal_handler(jl_ptls_t ptls);
-// Asymmetric fence: like jl_membarrier (the heavy side of an asymmetric memory barrier
-// against every thread of the process), but additionally forces every thread through a
-// core-serializing instruction, synchronizing its instruction stream with prior writes
-// to code (cross-modifying code, cf. jl_patch_retyped_binding_sites).
-JL_DLLEXPORT void jl_membarrier_sync_core(void);
 
 extern uv_loop_t *jl_io_loop;
 JL_DLLEXPORT void jl_uv_flush(uv_stream_t *stream);
@@ -2229,8 +2224,13 @@ JL_DLLIMPORT void jl_init_codegen(void);
 JL_DLLIMPORT void jl_teardown_codegen(void) JL_NOTSAFEPOINT;
 // #62154: activate the re-type verification guards in code compiled against a previous
 // declared type of `b` (must be called with the world counter lock held, after setting
-// BINDING_FLAG_RETYPED and before publishing the new value)
+// BINDING_FLAG_RETYPED and before publishing the new value): JIT patch sites are
+// rewritten and the GOT entries of statically compiled code are repointed at
+// jl_binding_deopt_slot
 JL_DLLIMPORT void jl_patch_retyped_binding_sites(jl_binding_t *b);
+// #62154: the deoptimization sentinel for the GOT entries of statically compiled code;
+// it permanently holds NULL (see module.c)
+JL_DLLEXPORT extern _Atomic(jl_value_t*) jl_binding_deopt_slot;
 // #62154: register the re-type patch sites of a loaded system or package image (the
 // bounds of its `jl_bpatch` section); must be called after its global slots have been
 // relocated and before its code can run

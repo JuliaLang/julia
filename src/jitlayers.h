@@ -463,6 +463,9 @@ public:
 
     SmallVector<cfunc_decl_t,0> cfuncs;
     std::map<void*, GlobalVariable*> global_targets;
+    // the GOT entries through which statically compiled code accesses typed globals,
+    // one per binding (#62154; see julia_binding_got_entry)
+    std::map<jl_binding_t*, GlobalVariable*> bgot_targets;
     jl_array_t *temporary_roots = nullptr;
     SmallSet<jl_value_t *, 8> temporary_roots_set;
     std::map<jl_datatype_t*, DIType*> ditypes;

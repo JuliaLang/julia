@@ -439,16 +439,19 @@ check_type: ;
             if (retyped) {
                 jl_atomic_fetch_or_relaxed(&b->flags, BINDING_FLAG_RETYPED);
                 jl_patch_retyped_binding_sites(b);
-                // Guarantee that every thread observes both the flag and the patched
-                // sites before the value swap below can be observed. Without this,
-                // native code that guards its accesses with a runtime test of the flag
-                // (system/package image code, and targets without patchable sites)
-                // could, on a weakly-ordered machine, observe the new value while its
-                // program-order-later load of the flag still sees it clear, skipping
-                // the verification. The fence interrupts every thread, so any access
-                // that can observe the value swap re-executes its guard afterwards;
-                // stale accesses before the fence observe the old, conforming value.
-                jl_membarrier_sync_core();
+                // Quiesce every thread before the value swap below: an access that
+                // began against the pre-activation state (a stale copy of a patched
+                // nop, an already-loaded GOT entry, or a flag test that a weakly
+                // ordered machine let read ahead of the value load) may still
+                // complete, which is correct only while the slot holds the old,
+                // conforming value. Threads park at safepoint polls or run in GC-safe
+                // regions -- never in the middle of a compiled global access -- so
+                // after this rendezvous no such access is still in flight; resuming
+                // from it also resynchronizes each thread's instruction stream with
+                // the patched sites.
+                jl_task_t *ct = jl_current_task;
+                jl_safepoint_suspend_all_threads(ct);
+                jl_safepoint_resume_all_threads(ct);
             }
         }
     }
