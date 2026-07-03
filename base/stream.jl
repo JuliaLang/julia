@@ -449,10 +449,22 @@ function closewrite(s::LibuvStream)
     preserve_handle(ct)
     sigatomic_begin()
     uv_req_set_data(req, ct)
+    # Register as a cancellable stream wait. `t.next = C_NULL` (rather than a
+    # uv_write_t) marks this as a shutdown wait: the request itself cannot be
+    # cancelled, but the wait can be interrupted (the finally block below
+    # orphans the request, and the completion callback frees it).
+    ct.queue = s
+    ct.next = C_NULL
     iolock_end()
     local status
     try
         sigatomic_end()
+        cr = pre_sleep_cancellation_request()
+        if cr !== nothing
+            # A cancellation request is already pending: don't park.
+            acknowledge_cancellation!(ct, cr)
+            throw(cr)
+        end
         status = wait()::Cint
         sigatomic_begin()
     finally
@@ -1143,7 +1155,18 @@ function cancel_wait!(s::LibuvStream, t::Task, @nospecialize(creq))
         return false
     end
     uvw = t.next
-    @assert uvw isa Ptr{Cvoid} && uvw != C_NULL
+    @assert uvw isa Ptr{Cvoid}
+    if uvw == C_NULL
+        # A shutdown (closewrite) wait: uv_cancel does not support shutdown
+        # requests, but the wait can be interrupted - the waiter's cleanup
+        # orphans the request and its completion callback frees it.
+        list_deletefirst!(s, t)
+        # The request is being delivered to the task as an exception.
+        acknowledge_cancellation!(t, creq)
+        schedule(t, conform_cancellation_request(creq), error=true)
+        iolock_end()
+        return true
+    end
     # The completion callback (with UV_ECANCELED status and the partial write
     # count) resumes the waiting task.
     ccall(:uv_cancel, Cint, (Ptr{Cvoid},), uvw) # ignore any errors
@@ -1278,6 +1301,8 @@ function uv_shutdowncb_task(req::Ptr{Cvoid}, status::Cint)
     if d != C_NULL
         uv_req_set_data(req, C_NULL) # let the Task know we got the shutdowncb
         t = unsafe_pointer_to_objref(d)::Task
+        t.next = nothing
+        t.queue = nothing
         schedule(t, status)
     else
         # no owner for this req, safe to just free it
