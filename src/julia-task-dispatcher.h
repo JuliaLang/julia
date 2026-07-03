@@ -43,6 +43,12 @@ private:
   SmallVector<std::unique_ptr<Task>> TaskQueue;
   std::mutex DispatchMutex;
   std::condition_variable WorkFinishedCV;
+  /// Forward-progress signals for work_until's stall diagnostic: how many
+  /// tasks are running right now, and how many have completed overall. A
+  /// waiter whose future takes a long time is not wedged while another
+  /// thread is still executing a task (e.g. a large batch-module compile).
+  std::atomic<int> ActiveRuns{0};
+  std::atomic<uint64_t> TasksCompleted{0};
   /// Track whether the current thread is inside work_until/process_tasks.
   /// When false, dispatch runs tasks inline to avoid deadlock with callers
   /// that block on std::future (e.g. LocalTrampolinePool::reenter).
@@ -378,7 +384,10 @@ void JuliaTaskDispatcher::dispatch(std::unique_ptr<Task> T) { // NOLINT(julia-fi
     InCooperativeContext = true;
     {
       dispatcher_sigdefer_guard defer;
+      ActiveRuns.fetch_add(1, std::memory_order_relaxed);
       T->run();
+      ActiveRuns.fetch_sub(1, std::memory_order_relaxed);
+      TasksCompleted.fetch_add(1, std::memory_order_relaxed);
       jl_unique_gcsafe_lock Lock{DispatchMutex};
       process_tasks(Lock);
     }
@@ -403,6 +412,7 @@ void JuliaTaskDispatcher::work_until(future_base &F) {
   jl_unique_gcsafe_lock Lock{DispatchMutex};
   int StalledSeconds = 0;
   bool DumpedStall = false;
+  uint64_t LastCompleted = TasksCompleted.load(std::memory_order_relaxed);
   while (!F.ready()) {
     process_tasks(Lock);
 
@@ -414,12 +424,21 @@ void JuliaTaskDispatcher::work_until(future_base &F) {
     // We need to wait for other threads to finish work that should
     // complete our future. Wait in slices and self-diagnose: if the
     // future's completion is lost (wedged materialization, dropped
-    // notification), this would otherwise hang silently — after ~30s of
-    // no progress, dump the dispatcher and ORC session state (symbol
-    // states and pending queries) to stderr once, then keep waiting.
+    // notification), this would otherwise hang silently — after ~30s
+    // WITHOUT FORWARD PROGRESS anywhere in the dispatcher (no task
+    // running, none completed), dump the dispatcher and ORC session
+    // state (symbol states and pending queries) to stderr once, then
+    // keep waiting. A long wait while another thread is still executing
+    // a task (e.g. a large batch-module compile) is not a wedge.
     if (Lock.wait_for(WorkFinishedCV, std::chrono::seconds(1)) ==
         std::cv_status::timeout) {
-      if (++StalledSeconds >= 30 && !DumpedStall) {
+      uint64_t Completed = TasksCompleted.load(std::memory_order_relaxed);
+      if (Completed != LastCompleted ||
+          ActiveRuns.load(std::memory_order_relaxed) > 0) {
+        LastCompleted = Completed;
+        StalledSeconds = 0;
+      }
+      else if (++StalledSeconds >= 30 && !DumpedStall) {
         DumpedStall = true;
         errs() << "==== JuliaTaskDispatcher: work_until stalled for "
                << StalledSeconds << "s; future not completed ====\n"
@@ -451,7 +470,10 @@ void JuliaTaskDispatcher::process_tasks(jl_unique_gcsafe_lock &Lock) JL_NO_SAFEP
         // cooperative wait; the task itself allocates (materialization,
         // jl_register_jit_object), so it must run GC_UNSAFE.
         int8_t gc_state = jl_gc_unsafe_enter(jl_current_task->ptls);
+        ActiveRuns.fetch_add(1, std::memory_order_relaxed);
         T->run(); // n.b. JL_CANCALLBACK
+        ActiveRuns.fetch_sub(1, std::memory_order_relaxed);
+        TasksCompleted.fetch_add(1, std::memory_order_relaxed);
         jl_gc_unsafe_leave(jl_current_task->ptls, gc_state);
         Lock.native.lock();
 
