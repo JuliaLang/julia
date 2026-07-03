@@ -1292,21 +1292,39 @@ function ensure_rescheduled(othertask::Task)
     nothing
 end
 
+function discard_stale_workqueue_task(t::Task)
+    # A task that was cancelled before it first ran is completed in-place by
+    # `cancel!`, but remains in the workqueue it was scheduled to; discard it
+    # here. Any other non-runnable state means the task somehow got queued
+    # twice - probably broken now, but try discarding this switch and keep
+    # going. We can't throw here, because it's probably not the fault of the
+    # caller to wait, and don't want to use print() here, because that may try
+    # to incur a task switch.
+    if t._state !== task_state_cancelled
+        ccall(:jl_safe_printf, Cvoid, (Ptr{UInt8}, Int32...),
+            "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state !== :runnable\n")
+    end
+    nothing
+end
+
 function trypoptask(W::StickyWorkqueue)
     while !isempty(W)
         t = popfirst!(W)
         if t._state !== task_state_runnable
-            # assume this somehow got queued twice,
-            # probably broken now, but try discarding this switch and keep going
-            # can't throw here, because it's probably not the fault of the caller to wait
-            # and don't want to use print() here, because that may try to incur a task switch
-            ccall(:jl_safe_printf, Cvoid, (Ptr{UInt8}, Int32...),
-                "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state !== :runnable\n")
+            discard_stale_workqueue_task(t)
             continue
         end
         return t
     end
-    return Partr.multiq_deletemin()
+    while true
+        t = Partr.multiq_deletemin()
+        t === nothing && return nothing
+        if t._state !== task_state_runnable
+            discard_stale_workqueue_task(t)
+            continue
+        end
+        return t
+    end
 end
 
 checktaskempty = Partr.multiq_check_empty
