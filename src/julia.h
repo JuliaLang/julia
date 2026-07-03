@@ -1165,6 +1165,15 @@ extern void _JL_GC_PUSHARGS(jl_value_t **, size_t) JL_NOTSAFEPOINT;
 
 extern void JL_GC_POP() JL_NOTSAFEPOINT;
 
+// Variants that take an explicit pgcstack pointer (e.g. the callee argument
+// of the jl_call_t calling convention) instead of loading it from TLS.
+// For the analyzer these are equivalent to the plain versions (but still
+// evaluate pgcstack, to avoid unused-variable warnings).
+#define JL_GC_PUSH1_(pgcstack, arg1) (void)(pgcstack); JL_GC_PUSH1(arg1)
+#define JL_GC_PUSH2_(pgcstack, arg1, arg2) (void)(pgcstack); JL_GC_PUSH2(arg1, arg2)
+#define JL_GC_PUSHARGS_(pgcstack, rts_var, n) (void)(pgcstack); JL_GC_PUSHARGS(rts_var, n)
+#define JL_GC_POP_(pgcstack) ((void)(pgcstack), JL_GC_POP())
+
 #else
 
 #define JL_GC_PUSH1(arg1)                                                                               \
@@ -1212,6 +1221,26 @@ extern void JL_GC_POP() JL_NOTSAFEPOINT;
   jl_pgcstack = (jl_gcframe_t*)&(((void**)rts_var)[-2])
 
 #define JL_GC_POP() (jl_pgcstack = jl_pgcstack->prev)
+
+// Variants of the above that take an explicit pgcstack pointer (e.g. the
+// callee argument of the jl_call_t calling convention) instead of loading
+// it from thread-local state.
+#define JL_GC_PUSH1_(pgcstack, arg1)                                                                    \
+  void *__gc_stkf[] = {(void*)JL_GC_ENCODE_PUSH(1), *(pgcstack), arg1};                                 \
+  *(pgcstack) = (jl_gcframe_t*)__gc_stkf;
+
+#define JL_GC_PUSH2_(pgcstack, arg1, arg2)                                                              \
+  void *__gc_stkf[] = {(void*)JL_GC_ENCODE_PUSH(2), *(pgcstack), arg1, arg2};                           \
+  *(pgcstack) = (jl_gcframe_t*)__gc_stkf;
+
+#define JL_GC_PUSHARGS_(pgcstack, rts_var, n)                                                           \
+  rts_var = ((jl_value_t**)alloca(((n)+2)*sizeof(jl_value_t*)))+2;                                      \
+  ((void**)rts_var)[-2] = (void*)JL_GC_ENCODE_PUSHARGS(n);                                              \
+  ((void**)rts_var)[-1] = *(pgcstack);                                                                  \
+  memset((void*)rts_var, 0, (n)*sizeof(jl_value_t*));                                                   \
+  *(pgcstack) = (jl_gcframe_t*)&(((void**)rts_var)[-2])
+
+#define JL_GC_POP_(pgcstack) (*(pgcstack) = (*(pgcstack))->prev)
 
 #endif
 

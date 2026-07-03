@@ -138,10 +138,11 @@ static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t 
 jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *rt_lb, jl_value_t *rt_ub,
     jl_value_t *source_, jl_value_t **env, size_t nenv, int do_compile)
 {
-    jl_value_t *captures = jl_f_tuple(jl_get_pgcstack(), NULL, env, nenv);
-    JL_GC_PUSH1(&captures);
-    jl_opaque_closure_t *oc = new_opaque_closure(argt, rt_lb, rt_ub, source_, captures, do_compile, jl_current_task->world_age);
-    JL_GC_POP();
+    jl_task_t *ct = jl_current_task;
+    jl_value_t *captures = jl_f_tuple(&ct->gcstack, NULL, env, nenv);
+    JL_GC_PUSH1_(&ct->gcstack, &captures);
+    jl_opaque_closure_t *oc = new_opaque_closure(argt, rt_lb, rt_ub, source_, captures, do_compile, ct->world_age);
+    JL_GC_POP_(&ct->gcstack);
     return oc;
 }
 

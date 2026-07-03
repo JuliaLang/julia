@@ -641,7 +641,7 @@ JL_CALLABLE(jl_f_throw)
 JL_CALLABLE(jl_f_throw_methoderror)
 {
     JL_NARGSV(throw_methoderror, 1);
-    size_t world = jl_get_tls_world_age();
+    size_t world = container_of(pgcstack, jl_task_t, gcstack)->world_age;
     jl_method_error(args[0], &args[1], nargs, world);
     return jl_nothing;
 }
@@ -656,7 +656,7 @@ JL_CALLABLE(jl_f_ifelse)
 JL_CALLABLE(jl_f_current_scope)
 {
     JL_NARGS(current_scope, 0, 0);
-    return jl_current_task->scope;
+    return container_of(pgcstack, jl_task_t, gcstack)->scope;
 }
 
 // apply ----------------------------------------------------------------------
@@ -712,21 +712,21 @@ JL_CALLABLE(jl_f__apply_iterate)
                 jl_genericmemory_t *mem = (jl_genericmemory_t*)args[1];
                 size_t n = mem->length;
                 jl_svec_t *t = jl_alloc_svec(n);
-                JL_GC_PUSH1(&t);
+                JL_GC_PUSH1_(pgcstack, &t);
                 for (size_t i = 0; i < n; i++) {
                     jl_svecset(t, i, jl_genericmemoryref(mem, i));
                 }
-                JL_GC_POP();
+                JL_GC_POP_(pgcstack);
                 return (jl_value_t*)t;
             }
             if (jl_is_array(args[1])) {
                 size_t n = jl_array_len(args[1]);
                 jl_svec_t *t = jl_alloc_svec(n);
-                JL_GC_PUSH1(&t);
+                JL_GC_PUSH1_(pgcstack, &t);
                 for (size_t i = 0; i < n; i++) {
                     jl_svecset(t, i, jl_arrayref((jl_array_t*)args[1], i));
                 }
-                JL_GC_POP();
+                JL_GC_POP_(pgcstack);
                 return (jl_value_t*)t;
             }
         }
@@ -770,7 +770,7 @@ JL_CALLABLE(jl_f__apply_iterate)
     size_t stackalloc = onstack ? (precount + 4 * extra + (extra ? 16 : 0)) : 1;
     size_t n_alloc;
     jl_value_t **roots;
-    JL_GC_PUSHARGS(roots, stackalloc + (extra ? 2 : 0));
+    JL_GC_PUSHARGS_(pgcstack, roots, stackalloc + (extra ? 2 : 0));
     jl_value_t **newargs;
     jl_svec_t *arg_heap = NULL;
     if (onstack) {
@@ -888,7 +888,7 @@ JL_CALLABLE(jl_f__apply_iterate)
             assert(extra > 0);
             jl_value_t *args[2];
             args[0] = ai;
-            jl_value_t *next = jl_apply_generic(jl_get_pgcstack(), iterate, args, 1);
+            jl_value_t *next = jl_apply_generic(pgcstack, iterate, args, 1);
             while (next != jl_nothing) {
                 roots[stackalloc] = next;
                 jl_value_t *value = jl_get_nth_field_checked(next, 0);
@@ -903,7 +903,7 @@ JL_CALLABLE(jl_f__apply_iterate)
                 roots[stackalloc + 1] = NULL;
                 JL_GC_ASSERT_LIVE(state);
                 args[1] = state;
-                next = jl_apply_generic(jl_get_pgcstack(), iterate, args, 2);
+                next = jl_apply_generic(pgcstack, iterate, args, 2);
             }
             roots[stackalloc] = NULL;
             extra -= 1;
@@ -915,8 +915,8 @@ JL_CALLABLE(jl_f__apply_iterate)
         ((void**)roots)[-2] = (void*)JL_GC_ENCODE_PUSHARGS(1);
 #endif
     }
-    jl_value_t *result = jl_apply(newargs, n);
-    JL_GC_POP();
+    jl_value_t *result = jl_apply_generic(pgcstack, newargs[0], &newargs[1], n - 1);
+    JL_GC_POP_(pgcstack);
     return result;
 }
 
@@ -924,11 +924,11 @@ JL_CALLABLE(jl_f__apply_iterate)
 JL_CALLABLE(jl_f_invokelatest)
 {
     JL_NARGSV(invokelatest, 1);
-    jl_task_t *ct = jl_current_task;
+    jl_task_t *ct = container_of(pgcstack, jl_task_t, gcstack);
     size_t last_age = ct->world_age;
     if (!ct->ptls->in_pure_callback)
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-    jl_value_t *ret = jl_apply(args, nargs);
+    jl_value_t *ret = jl_apply_generic(pgcstack, args[0], &args[1], nargs - 1);
     ct->world_age = last_age;
     return ret;
 }
@@ -938,7 +938,7 @@ JL_CALLABLE(jl_f_invokelatest)
 JL_CALLABLE(jl_f_invoke_in_world)
 {
     JL_NARGSV(invoke_in_world, 2);
-    jl_task_t *ct = jl_current_task;
+    jl_task_t *ct = container_of(pgcstack, jl_task_t, gcstack);
     size_t last_age = ct->world_age;
     JL_TYPECHK(invoke_in_world, ulong, args[0]);
     size_t world = jl_unbox_ulong(args[0]);
@@ -947,7 +947,7 @@ JL_CALLABLE(jl_f_invoke_in_world)
         if (ct->world_age > world)
             ct->world_age = world;
     }
-    jl_value_t *ret = jl_apply(&args[1], nargs - 1);
+    jl_value_t *ret = jl_apply_generic(pgcstack, args[1], &args[2], nargs - 2);
     ct->world_age = last_age;
     return ret;
 }
@@ -956,7 +956,7 @@ JL_CALLABLE(jl_f__call_in_world_total)
 {
     JL_NARGSV(_call_in_world_total, 2);
     JL_TYPECHK(_call_in_world_total, ulong, args[0]);
-    jl_task_t *ct = jl_current_task;
+    jl_task_t *ct = container_of(pgcstack, jl_task_t, gcstack);
     int last_in = ct->ptls->in_pure_callback;
     jl_value_t *ret = NULL;
     size_t last_age = ct->world_age;
@@ -966,7 +966,7 @@ JL_CALLABLE(jl_f__call_in_world_total)
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         if (ct->world_age > world)
             ct->world_age = world;
-        ret = jl_apply(&args[1], nargs - 1);
+        ret = jl_apply_generic(pgcstack, args[1], &args[2], nargs - 2);
         ct->world_age = last_age;
         ct->ptls->in_pure_callback = last_in;
     }
@@ -979,14 +979,14 @@ JL_CALLABLE(jl_f__call_in_world_total)
 
 // tuples ---------------------------------------------------------------------
 
-static jl_value_t *arg_tuple(jl_value_t *a1, jl_value_t **args, size_t nargs)
+static jl_value_t *arg_tuple(jl_gcframe_t **pgcstack, jl_value_t *a1, jl_value_t **args, size_t nargs)
 {
     size_t i;
     jl_datatype_t *tt = jl_inst_arg_tuple_type(a1, args, nargs, 0);
     JL_GC_PROMISE_ROOTED(tt); // it is a concrete type
     if (tt->instance != NULL)
         return tt->instance;
-    jl_task_t *ct = jl_current_task;
+    jl_task_t *ct = container_of(pgcstack, jl_task_t, gcstack);
     jl_value_t *jv = jl_gc_alloc(ct->ptls, jl_datatype_size(tt), tt);
     for (i = 0; i < nargs; i++)
         set_nth_field(tt, jv, i, i == 0 ? a1 : args[i - 1], 0);
@@ -997,7 +997,7 @@ JL_CALLABLE(jl_f_tuple)
 {
     if (nargs == 0)
         return (jl_value_t*)jl_emptytuple;
-    return arg_tuple(args[0], &args[1], nargs);
+    return arg_tuple(pgcstack, args[0], &args[1], nargs);
 }
 
 JL_CALLABLE(jl_f_svec)
@@ -1226,14 +1226,14 @@ JL_CALLABLE(jl_f_setfieldonce)
     return success ? jl_true : jl_false;
 }
 
-static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f, int dothrow)
+static jl_value_t *get_fieldtype(jl_gcframe_t **pgcstack, jl_value_t *t, jl_value_t *f, int dothrow)
 {
     if (jl_is_unionall(t)) {
         jl_value_t *u = t;
-        JL_GC_PUSH1(&u);
-        u = get_fieldtype(((jl_unionall_t*)t)->body, f, dothrow);
+        JL_GC_PUSH1_(pgcstack, &u);
+        u = get_fieldtype(pgcstack, ((jl_unionall_t*)t)->body, f, dothrow);
         u = jl_type_unionall(((jl_unionall_t*)t)->var, u);
-        JL_GC_POP();
+        JL_GC_POP_(pgcstack);
         return u;
     }
     if (jl_is_uniontype(t)) {
@@ -1241,16 +1241,16 @@ static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f, int dothrow)
         jl_value_t *r;
         jl_value_t *a = ((jl_uniontype_t*)t)->a;
         jl_value_t *b = ((jl_uniontype_t*)t)->b;
-        JL_GC_PUSHARGS(u, 2);
-        u[0] = jl_is_typeeq(a) ? jl_bottom_type : get_fieldtype(a, f, 0);
-        u[1] = jl_is_typeeq(b) ? jl_bottom_type : get_fieldtype(b, f, 0);
+        JL_GC_PUSHARGS_(pgcstack, u, 2);
+        u[0] = jl_is_typeeq(a) ? jl_bottom_type : get_fieldtype(pgcstack, a, f, 0);
+        u[1] = jl_is_typeeq(b) ? jl_bottom_type : get_fieldtype(pgcstack, b, f, 0);
         if (u[0] == jl_bottom_type && u[1] == jl_bottom_type && dothrow) {
             // error if all types in the union might have
-            get_fieldtype(a, f, 1);
-            get_fieldtype(b, f, 1);
+            get_fieldtype(pgcstack, a, f, 1);
+            get_fieldtype(pgcstack, b, f, 1);
         }
         r = jl_type_union(u, 2);
-        JL_GC_POP();
+        JL_GC_POP_(pgcstack);
         return r;
     }
     if (!jl_is_datatype(t)) {
@@ -1285,11 +1285,11 @@ static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f, int dothrow)
             return (jl_value_t*)jl_any_type;
         if (tt == (jl_value_t*)jl_bottom_type)
             return (jl_value_t*)jl_bottom_type;
-        JL_GC_PUSH1(&f);
+        JL_GC_PUSH1_(pgcstack, &f);
         if (jl_is_symbol(f))
             f = jl_box_long(field_index+1);
-        jl_value_t *ft = get_fieldtype(tt, f, dothrow);
-        JL_GC_POP();
+        jl_value_t *ft = get_fieldtype(pgcstack, tt, f, dothrow);
+        JL_GC_POP_(pgcstack);
         return ft;
     }
     jl_svec_t *types = jl_get_fieldtypes(st);
@@ -1314,7 +1314,7 @@ JL_CALLABLE(jl_f_fieldtype)
     if (nargs == 3) {
         JL_TYPECHK(fieldtype, bool, args[2]);
     }
-    return get_fieldtype(args[0], args[1], 1);
+    return get_fieldtype(pgcstack, args[0], args[1], 1);
 }
 
 JL_CALLABLE(jl_f_nfields)
@@ -1397,7 +1397,7 @@ JL_CALLABLE(jl_f_getglobal)
         jl_atomic_error("getglobal: module binding cannot be read non-atomically");
     else if (order >= jl_memory_order_seq_cst)
         jl_fence();
-    jl_value_t *v = jl_eval_global_var(mod, sym, jl_current_task->world_age); // relaxed load
+    jl_value_t *v = jl_eval_global_var(mod, sym, container_of(pgcstack, jl_task_t, gcstack)->world_age); // relaxed load
     if (order >= jl_memory_order_acquire)
         jl_fence();
     return v;
@@ -1605,8 +1605,9 @@ JL_CALLABLE(jl_f__import)
     JL_TYPECHK(_import, module, args[0]);
     JL_TYPECHK(_import, module, args[1]);
     JL_TYPECHK(_import, symbol, args[2]);
+    jl_task_t *ct = container_of(pgcstack, jl_task_t, gcstack);
     if (nargs == 3) {
-        jl_import_module(jl_current_task, (jl_module_t *)args[0], (jl_module_t *)args[1],
+        jl_import_module(ct, (jl_module_t *)args[0], (jl_module_t *)args[1],
                          (jl_sym_t *)args[2]);
     }
     else if (nargs == 4) {
@@ -1615,7 +1616,7 @@ JL_CALLABLE(jl_f__import)
     else if (nargs == 5) {
         JL_TYPECHK(_import, symbol, args[3]);
         JL_TYPECHK(_import, bool, args[4]);
-        jl_module_import(jl_current_task, (jl_module_t *)args[0], (jl_module_t *)args[1],
+        jl_module_import(ct, (jl_module_t *)args[0], (jl_module_t *)args[1],
                          (jl_sym_t *)args[2], (jl_sym_t *)args[3], args[4] == jl_true);
     }
     return jl_nothing;
@@ -1733,7 +1734,7 @@ JL_CALLABLE(jl_f_apply_type)
 JL_CALLABLE(jl_f_applicable)
 {
     JL_NARGSV(applicable, 1);
-    size_t world = jl_current_task->world_age;
+    size_t world = container_of(pgcstack, jl_task_t, gcstack)->world_age;
     return jl_apply_lookup(args, nargs, world) != NULL ? jl_true : jl_false;
 }
 
@@ -1744,8 +1745,8 @@ JL_CALLABLE(jl_f_invoke)
     if (jl_is_method(argtypes)) {
         jl_method_t *m = (jl_method_t*)argtypes;
         if (!jl_tuple1_isa(args[0], &args[2], nargs - 1, (jl_datatype_t*)m->sig))
-            jl_type_error("invoke: argument type error", argtypes, arg_tuple(args[0], &args[2], nargs - 1));
-        return jl_gf_invoke_by_method(m, args[0], &args[2], nargs - 1);
+            jl_type_error("invoke: argument type error", argtypes, arg_tuple(pgcstack, args[0], &args[2], nargs - 1));
+        return jl_gf_invoke_by_method(pgcstack, m, args[0], &args[2], nargs - 1);
     } else if (jl_is_code_instance(argtypes)) {
         jl_code_instance_t *codeinst = (jl_code_instance_t*)args[1];
         jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
@@ -1754,16 +1755,17 @@ JL_CALLABLE(jl_f_invoke)
         if (jl_is_abioverride(codeinst->def)) {
             jl_datatype_t *abi = (jl_datatype_t*)((jl_abi_override_t*)(codeinst->def))->abi;
             if (!jl_tuple1_isa(args[0], &args[2], nargs - 1, abi)) {
-                jl_type_error("invoke: argument type error (ABI overwrite)", (jl_value_t*)abi, arg_tuple(args[0], &args[2], nargs - 1));
+                jl_type_error("invoke: argument type error (ABI overwrite)", (jl_value_t*)abi, arg_tuple(pgcstack, args[0], &args[2], nargs - 1));
             }
         } else {
             if (!jl_tuple1_isa(args[0], &args[2], nargs - 1, (jl_datatype_t*)mi->specTypes) ||
                 (jl_is_method(mi->def.value) && !jl_tuple1_isa(args[0], &args[2], nargs - 1, (jl_datatype_t*)mi->def.method->sig))) {
-                jl_type_error("invoke: argument type error", mi->specTypes, arg_tuple(args[0], &args[2], nargs - 1));
+                jl_type_error("invoke: argument type error", mi->specTypes, arg_tuple(pgcstack, args[0], &args[2], nargs - 1));
             }
         }
-        if (jl_atomic_load_relaxed(&codeinst->min_world) > jl_current_task->world_age ||
-            jl_current_task->world_age > jl_atomic_load_relaxed(&codeinst->max_world)) {
+        size_t world = container_of(pgcstack, jl_task_t, gcstack)->world_age;
+        if (jl_atomic_load_relaxed(&codeinst->min_world) > world ||
+            world > jl_atomic_load_relaxed(&codeinst->max_world)) {
             jl_error("invoke: CodeInstance not valid for this world");
         }
         if (!invoke) {
@@ -1783,7 +1785,7 @@ JL_CALLABLE(jl_f_invoke)
         jl_type_error("invoke", (jl_value_t*)jl_anytuple_type_type, argtypes);
     if (!jl_tuple_isa(&args[2], nargs - 2, (jl_datatype_t*)argtypes))
         jl_type_error("invoke: argument type error", argtypes, jl_f_tuple(pgcstack, NULL, &args[2], nargs - 2));
-    return jl_gf_invoke(argtypes, args[0], &args[2], nargs - 1);
+    return jl_gf_invoke(pgcstack, argtypes, args[0], &args[2], nargs - 1);
 }
 
 // Expr constructor for internal use ------------------------------------------
@@ -1803,18 +1805,18 @@ jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
 
 JL_CALLABLE(jl_f__expr)
 {
-    jl_task_t *ct = jl_current_task;
+    jl_task_t *ct = container_of(pgcstack, jl_task_t, gcstack);
     JL_NARGSV(Expr, 1);
     JL_TYPECHK(Expr, symbol, args[0]);
     jl_array_t *ar = jl_alloc_vec_any(nargs-1);
-    JL_GC_PUSH1(&ar);
+    JL_GC_PUSH1_(pgcstack, &ar);
     for(size_t i=0; i < nargs-1; i++)
         jl_array_ptr_set(ar, i, args[i+1]);
     jl_expr_t *ex = (jl_expr_t*)jl_gc_alloc(ct->ptls, sizeof(jl_expr_t),
                                             jl_expr_type);
     ex->head = (jl_sym_t*)args[0];
     ex->args = ar;
-    JL_GC_POP();
+    JL_GC_POP_(pgcstack);
     return (jl_value_t*)ex;
 }
 
@@ -2244,7 +2246,7 @@ JL_CALLABLE(jl_f_finalizer)
 {
     // NOTE the compiler may temporarily insert additional argument for the later inlining pass
     JL_NARGS(finalizer, 2, 4);
-    jl_task_t *ct = jl_current_task;
+    jl_task_t *ct = container_of(pgcstack, jl_task_t, gcstack);
     jl_gc_add_finalizer_(ct->ptls, args[1], args[0]);
     return jl_nothing;
 }
@@ -2256,9 +2258,9 @@ JL_CALLABLE(jl_f__compute_sparams)
     JL_TYPECHK(_compute_sparams, method, (jl_value_t*)m);
     jl_datatype_t *tt = jl_inst_arg_tuple_type(args[1], &args[2], nargs-1, 1);
     jl_svec_t *env = jl_emptysvec;
-    JL_GC_PUSH2(&env, &tt);
+    JL_GC_PUSH2_(pgcstack, &env, &tt);
     jl_type_intersection_env((jl_value_t*)tt, m->sig, &env);
-    JL_GC_POP();
+    JL_GC_POP_(pgcstack);
     return (jl_value_t*)env;
 }
 
@@ -2397,7 +2399,7 @@ JL_CALLABLE(jl_f__typebody)
             // a parameter (e.g. `v::Vector{T}`) are recognized as equivalent.
             jl_svec_t *ft_subst = (jl_svec_t*)ft;
             jl_value_t *sub = NULL;
-            JL_GC_PUSH2(&ft_subst, &sub);
+            JL_GC_PUSH2_(pgcstack, &ft_subst, &sub);
             for (size_t i = 0; i < nf; i++) {
                 jl_value_t *fld = jl_svecref(ft, i);
                 sub = jl_substitute_datatype(fld, dt, prev_dt);
@@ -2408,7 +2410,7 @@ JL_CALLABLE(jl_f__typebody)
                 }
             }
             int eq = equiv_field_types((jl_value_t*)prev_dt->types, (jl_value_t*)ft_subst);
-            JL_GC_POP();
+            JL_GC_POP_(pgcstack);
             if (eq) {
                 tret = prev;
                 goto have_type;
@@ -2458,7 +2460,7 @@ have_type:
 }
 
 // this is a heuristic for allowing "redefining" a type to something identical
-static int equiv_type(jl_value_t *ta, jl_value_t *tb)
+static int equiv_type(jl_gcframe_t **pgcstack, jl_value_t *ta, jl_value_t *tb)
 {
     jl_datatype_t *dta = (jl_datatype_t*)jl_unwrap_unionall(ta);
     if (!jl_is_datatype(dta))
@@ -2484,7 +2486,7 @@ static int equiv_type(jl_value_t *ta, jl_value_t *tb)
         return 0;
     jl_value_t *a=NULL, *b=NULL;
     int ok = 1;
-    JL_GC_PUSH2(&a, &b);
+    JL_GC_PUSH2_(pgcstack, &a, &b);
     a = jl_rewrap_unionall((jl_value_t*)dta->super, dta->name->wrapper);
     b = jl_rewrap_unionall((jl_value_t*)dtb->super, dtb->name->wrapper);
     // if tb recursively refers to itself in its supertype, assume that it refers to ta
@@ -2514,17 +2516,17 @@ static int equiv_type(jl_value_t *ta, jl_value_t *tb)
         a = jl_instantiate_unionall(ua, (jl_value_t*)ub->var);
         b = ub->body;
     }
-    JL_GC_POP();
+    JL_GC_POP_(pgcstack);
     return 1;
  no:
-    JL_GC_POP();
+    JL_GC_POP_(pgcstack);
     return 0;
 }
 
 JL_CALLABLE(jl_f__equiv_typedef)
 {
     JL_NARGS(_equiv_typedef, 2, 2);
-    return equiv_type(args[0], args[1]) ? jl_true : jl_false;
+    return equiv_type(pgcstack, args[0], args[1]) ? jl_true : jl_false;
 }
 
 // IntrinsicFunctions ---------------------------------------------------------

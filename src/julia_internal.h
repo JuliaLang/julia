@@ -1054,8 +1054,8 @@ jl_method_instance_t *jl_builtin_method_lookup(jl_value_t *builtin);
 JL_DLLEXPORT jl_method_instance_t *jl_method_lookup(jl_value_t **args, size_t nargs, size_t world);
 jl_method_instance_t *jl_apply_lookup(jl_value_t **args, size_t nargs, size_t world);
 
-jl_value_t *jl_gf_invoke_by_method(jl_method_t *method, jl_value_t *gf, jl_value_t **args, size_t nargs);
-jl_value_t *jl_gf_invoke(jl_value_t *types, jl_value_t *f, jl_value_t **args, size_t nargs);
+jl_value_t *jl_gf_invoke_by_method(jl_gcframe_t **pgcstack, jl_method_t *method, jl_value_t *gf, jl_value_t **args, size_t nargs);
+jl_value_t *jl_gf_invoke(jl_gcframe_t **pgcstack, jl_value_t *types, jl_value_t *f, jl_value_t **args, size_t nargs);
 JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup_worlds(jl_value_t *types, jl_value_t *mt, size_t world, size_t *min_world, size_t *max_world);
 JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, jl_value_t *mt, int lim, int include_ambiguous,
                                              size_t world, size_t *min_valid, size_t *max_valid, int *ambig);
