@@ -458,7 +458,7 @@ function cache_PATH()
     this_PATH_cache = Set{String}()
 
     @debug "caching PATH files" PATH=path
-    pathdirs = split(path, @static Sys.iswindows() ? ";" : ":")
+    pathdirs = split(path, Base.Filesystem.path_list_separator)
 
     next_yield_time = time() + 0.01
 
