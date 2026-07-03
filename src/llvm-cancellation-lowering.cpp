@@ -42,8 +42,9 @@ struct CancellationLowering {
     Function *cancel_point_func;
     Value *pgcstack;
     Value *reset_ctx_ptr;  // Computed once in entry block, dominates all uses
+    Value *ptls_field_ptr; // Pointer to task->ptls, computed alongside reset_ctx_ptr
 
-    CancellationLowering(Module &M) : cancel_point_func(nullptr), pgcstack(nullptr), reset_ctx_ptr(nullptr) {
+    CancellationLowering(Module &M) : cancel_point_func(nullptr), pgcstack(nullptr), reset_ctx_ptr(nullptr), ptls_field_ptr(nullptr) {
         cancel_point_func = M.getFunction("julia.cancellation_point");
     }
 
@@ -92,6 +93,10 @@ void CancellationLowering::computeResetCtxPtr(Function &F, Instruction *insertAf
     reset_ctx_ptr = Builder.CreateGEP(I8Ty, task_ptr,
                                        ConstantInt::get(I64Ty, reset_ctx_offset),
                                        "reset_ctx_ptr");
+
+    ptls_field_ptr = Builder.CreateGEP(I8Ty, task_ptr,
+                                       ConstantInt::get(I64Ty, offsetof(jl_task_t, ptls)),
+                                       "ptls_field_ptr");
 }
 
 bool CancellationLowering::runOnFunction(Function &F) {
@@ -190,6 +195,15 @@ bool CancellationLowering::runOnFunction(Function &F) {
         StoreInst *unpub = Builder.CreateAlignedStore(null_ptr0, reset_ctx_ptr, Align(sizeof(void*)));
         unpub->setOrdering(AtomicOrdering::Release);
 
+        // A cancellation point is also a GC safepoint: code that polls for
+        // cancellation in a hot loop must not starve a stop-the-world request.
+        // This must be emitted while reset_ctx is unpublished, so that a
+        // concurrently delivered cancellation signal cannot longjmp us out of
+        // the safepoint wait.
+        Value *ptls = Builder.CreateAlignedLoad(PtrTy, ptls_field_ptr, Align(sizeof(void*)), "ptls");
+        Type *T_size = F.getParent()->getDataLayout().getIntPtrType(LLVMCtx);
+        emit_gc_safepoint(Builder, T_size, ptls, nullptr, false);
+
         // Call setjmp on the uc_mcontext field (which is at offset 0 of the struct)
         // Use the platform-specific setjmp function name defined in julia.h
         FunctionType *SetjmpTy = FunctionType::get(I32Ty, {PtrTy, I32Ty}, false);
@@ -261,8 +275,9 @@ bool CancellationLowering::runOnFunction(Function &F) {
                             continue;
                         }
                     }
-                    // Skip the setjmp calls we just created
-                    if (Callee && Callee->getName() == jl_setjmp_name)
+                    // Skip the setjmp and safepoint calls we just created
+                    if (Callee && (Callee->getName() == jl_setjmp_name ||
+                                   Callee->getName() == "julia.safepoint"))
                         continue;
                     UnsafePoints.push_back(CI);
                 }
