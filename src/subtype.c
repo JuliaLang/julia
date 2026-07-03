@@ -5285,7 +5285,7 @@ jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t *
     }
     if (jl_is_typeapp(a) || jl_is_typeapp(b))
         jl_error("internal error: TypeApp in type intersection");
-    int szb = jl_subtype_env_size(b);
+    int szb = penv ? jl_subtype_env_size(b) : 0;
     int sz = 0, i = 0;
     jl_value_t **env, **ans;
     JL_GC_PUSHARGS(env, szb+1);
