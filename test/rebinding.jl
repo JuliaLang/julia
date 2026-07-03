@@ -870,3 +870,80 @@ end
     @test_throws TypeError Base.invoke_in_world(w7, TGRW7.repl, 7, 8)
     @test TGRW7.r === 8
 end
+
+@testset "global to constant transition (#62154)" begin
+    # direct global -> const with a conforming value: re-type plus assignment,
+    # so stale readers observe the constant's value (verified against their type)
+    @eval module GTC1
+        global x::Int = 1
+        readx() = x
+    end
+    @test GTC1.readx() === 1
+    w = Base.get_world_counter()
+    Core.eval(GTC1, :(const x = 2))
+    @test Base.binding_kind(GTC1, :x) == Base.PARTITION_KIND_CONST
+    @test isconst(GTC1, :x)
+    @test invokelatest(() -> GTC1.x) === 2
+    @test Base.invoke_in_world(w, GTC1.readx) === 2
+
+    # direct global -> const with a non-conforming value: stale readers now verify
+    @eval module GTC2
+        global y::Int = 1
+        ready() = y
+        writey(v) = setglobal!(@__MODULE__, :y, v)
+    end
+    @test GTC2.ready() === 1
+    @test GTC2.writey(3) === 3
+    w = Base.get_world_counter()
+    Core.eval(GTC2, :(const y = "now const"))
+    @test invokelatest(() -> GTC2.y) == "now const"
+    @test_throws TypeError Base.invoke_in_world(w, GTC2.ready)
+    # a stale write still validates against its own epoch's type ("narrow, never
+    # expand"); if it conforms it lands in the now-superseded slot, where only
+    # stale readers of that epoch observe it -- the constant itself is unaffected
+    @test_throws TypeError Base.invoke_in_world(w, GTC2.writey, 1.5)
+    @test Base.invoke_in_world(w, GTC2.writey, 7) === 7
+    @test Base.invoke_in_world(w, GTC2.ready) === 7
+    @test invokelatest(() -> GTC2.y) == "now const"
+
+    # new code sees the constant (and can infer it)
+    @eval module GTC3
+        global z::Int = 1
+        readz() = z
+    end
+    Core.eval(GTC3, :(const z = 42))
+    @test GTC3.readz() === 42
+    @test only(Base.return_types(GTC3.readz, ())) === Int
+
+    # the reverse transition is still rejected
+    @test_throws ErrorException Core.eval(GTC1, :(global x::Int))
+    @test_throws ErrorException Core.eval(GTC1, :(x = 3))
+
+    # delete_binding of a declared global activates the re-type guards
+    @eval module GTC4
+        global d::Int = 1
+        readd() = d
+    end
+    @test GTC4.readd() === 1
+    let b = convert(Core.Binding, GlobalRef(GTC4, :d))
+        @test (b.flags & 0x10) == 0x00
+        w = Base.get_world_counter()
+        Base.delete_binding(GTC4, :d)
+        @test (b.flags & 0x10) == 0x10
+        # the slot still holds the old, conforming value: stale reads verify and pass
+        @test Base.invoke_in_world(w, GTC4.readd) === 1
+        # a subsequent const does not assign to the severed global epoch's slot
+        Core.eval(GTC4, :(const d = "fresh"))
+        @test invokelatest(() -> GTC4.d) == "fresh"
+        @test Base.invoke_in_world(w, GTC4.readd) === 1
+    end
+
+    # deleting an undeclared or constant binding does not set the flag
+    @eval module GTC5
+        const c = 1
+    end
+    let b = convert(Core.Binding, GlobalRef(GTC5, :c))
+        Base.delete_binding(GTC5, :c)
+        @test (b.flags & 0x10) == 0x00
+    end
+end

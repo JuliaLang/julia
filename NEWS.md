@@ -37,7 +37,8 @@ Language changes
     they were compiled against. A bare `global x::T` re-declaration is rejected when the value
     the binding currently holds is not an instance of `T`, so that the value is never silently
     dropped; use the `global x::T = v` form to change the type and value together (this installs
-    both atomically) ([#62154]).
+    both atomically). A declared global may also be replaced by a constant, provided the `const`
+    declaration carries a value; the reverse transition remains an error ([#62154]).
 
 Compiler/Runtime improvements
 -----------------------------

@@ -652,6 +652,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(
     if (!b) {
         b = jl_get_module_binding(mod, var, 1);
     }
+    int was_global = 0;
     jl_binding_partition_t *new_bpart = NULL;
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, new_world);
     while (!new_bpart) {
@@ -671,8 +672,14 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(
             jl_errorf("cannot declare %s.%s constant; it was already declared as an import",
                       jl_symbol_name(mod->name), jl_symbol_name(var));
         } else if (kind == PARTITION_KIND_GLOBAL) {
-            jl_errorf("cannot declare %s.%s constant; it was already declared global",
-                      jl_symbol_name(mod->name), jl_symbol_name(var));
+            // #62154: replacing a declared global by a constant is permitted when the
+            // declaration carries a value; it is treated as a re-type plus an
+            // assignment of that value to the binding (see below). A valueless
+            // constant declaration has no value to assign, so it stays an error.
+            if (!val)
+                jl_errorf("cannot declare %s.%s constant; it was already declared global",
+                          jl_symbol_name(mod->name), jl_symbol_name(var));
+            was_global = 1;
         }
         if (jl_atomic_load_relaxed(&bpart->min_world) == new_world) {
             bpart->kind = constant_kind | (bpart->kind & PARTITION_MASK_FLAG);
@@ -724,6 +731,22 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(
             }
             jl_gc_write_atomic(new_bpart, new_bpart->next, jl_binding_partition_t, new_prev_bpart, release);
         }
+    }
+    if (was_global) {
+        // #62154: this constant supersedes a global epoch, whose compiled code may
+        // still run (in frames already on the stack, or via `Base.invoke_in_world`)
+        // and reads the binding's (single, shared) value slot. Treat the transition
+        // as a re-type plus an assignment: activate the verification guards, then
+        // store the constant's value into the slot, so stale readers observe it
+        // verified against the type they were compiled for. The same write-side
+        // protocol as jl_declare_global applies: guards are activated and every
+        // thread is fenced before the slot is written, and our caller publishes
+        // new_world only after we return.
+        assert(val);
+        jl_atomic_fetch_or_relaxed(&b->flags, BINDING_FLAG_RETYPED);
+        jl_patch_retyped_binding_sites(b);
+        jl_membarrier();
+        jl_gc_write_atomic(b, b->value, jl_value_t, val, release);
     }
     JL_GC_POP();
     return new_bpart;
@@ -1918,19 +1941,32 @@ JL_DLLEXPORT void jl_disable_binding(jl_globalref_t *gr)
     if (!b)
         b = jl_get_module_binding(gr->mod, gr->name, 1);
 
-    for (;;) {
-        jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_atomic_load_acquire(&jl_world_counter));
+    JL_LOCK(&world_counter_lock);
+    size_t new_world = jl_atomic_load_relaxed(&jl_world_counter) + 1;
+    jl_binding_partition_t *bpart = jl_get_binding_partition(b, new_world);
 
-        if (jl_binding_kind(bpart) == PARTITION_KIND_GUARD) {
-            // Already guard
-            return;
-        }
-
-        if (!jl_replace_binding(b, bpart, NULL, PARTITION_KIND_GUARD))
-            continue;
-
+    if (jl_binding_kind(bpart) == PARTITION_KIND_GUARD) {
+        // Already guard
+        JL_UNLOCK(&world_counter_lock);
         return;
     }
+
+    if (jl_binding_kind(bpart) == PARTITION_KIND_GLOBAL) {
+        // #62154: deleting a declared global ends its epoch: whatever the binding is
+        // re-established as next (a constant, an import, a global of another type) is
+        // not required to keep the value slot conforming to this epoch's type, so code
+        // compiled against it must verify its accesses from now on. Activate the
+        // guards before the deletion is published (the slot still holds the epoch's
+        // old, conforming value, so early activation is harmless).
+        jl_atomic_fetch_or_relaxed(&b->flags, BINDING_FLAG_RETYPED);
+        jl_patch_retyped_binding_sites(b);
+        jl_membarrier();
+    }
+
+    jl_binding_partition_t *new_bpart = jl_replace_binding_locked(b, bpart, NULL, PARTITION_KIND_GUARD, new_world);
+    if (new_bpart && jl_atomic_load_relaxed(&new_bpart->min_world) == new_world)
+        jl_atomic_store_release(&jl_world_counter, new_world);
+    JL_UNLOCK(&world_counter_lock);
 }
 
 JL_DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var)
