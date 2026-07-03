@@ -645,6 +645,17 @@ JL_DLLEXPORT void jl_reset_sigint_rescue_timer(void) JL_NOTSAFEPOINT
     sigint_rescue_timer_expired = 0;
 }
 
+// Set while a ^C notification has been posted to the event loop but not yet
+// picked up by the julia-side sigint listener. While set, idle threads take
+// over running the event loop if its owning thread cannot (e.g. it is blocked
+// in a long-running foreign call) - see jl_task_get_next.
+_Atomic(int) jl_sigint_dispatch_pending = 0;
+
+JL_DLLEXPORT void jl_clear_sigint_dispatch_pending(void) JL_NOTSAFEPOINT
+{
+    jl_atomic_store_relaxed(&jl_sigint_dispatch_pending, 0);
+}
+
 static void deliver_sigint_notification(void) JL_NOTSAFEPOINT
 {
     // N.B.: This runs on a dedicated (non-Julia) thread - the signal listener
@@ -652,14 +663,27 @@ static void deliver_sigint_notification(void) JL_NOTSAFEPOINT
     // thread - so briefly blocking on the state lock is fine.
     JL_LOCK_NOGC(&sigint_state_lock);
     if (sigint_cond_loc != NULL) {
+        jl_atomic_store_release(&jl_sigint_dispatch_pending, 1);
         uv_async_send(sigint_cond_loc);
         // The IO-owning thread may be parked on the scheduler condvar (e.g.
         // when the event loop has no active handles), where an async send
         // alone cannot reach it - wake it up properly.
-        jl_wakeup_thread_from_foreign(jl_atomic_load_relaxed(&io_loop_tid));
+        int16_t io_tid = jl_atomic_load_relaxed(&io_loop_tid);
+        jl_wakeup_thread_from_foreign(io_tid);
         // It may also be busy running a task - try to preempt it, so that
         // the IO loop has a chance to run and deliver this notification.
-        jl_preempt_thread_task(jl_atomic_load_relaxed(&io_loop_tid));
+        jl_preempt_thread_task(io_tid);
+        // The IO-owning thread may even be stuck in a long-running foreign
+        // call, unable to run the event loop at all. Wake all other threads
+        // too: an idle worker's scheduler will take over the (then-free)
+        // event loop and dispatch this notification, so that the sigint
+        // listener can run - and e.g. fire the blocked task's cancellation
+        // hook - while the foreign call is still executing.
+        int nthreads = jl_atomic_load_acquire(&jl_n_threads);
+        for (int16_t tid = 0; tid < nthreads; tid++) {
+            if (tid != io_tid)
+                jl_wakeup_thread_from_foreign(tid);
+        }
     }
     JL_UNLOCK_NOGC(&sigint_state_lock);
 }
