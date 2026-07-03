@@ -1623,11 +1623,29 @@ function cancel!(t::Task, crequest=CANCEL_REQUEST_SAFE)
     tid = Threads.threadid(t)
     delivered = false
     if !istaskdone(t)
-        waitee = t.queue
-        if waitee !== nothing
-            delivered = invokelatest(cancel_wait!, waitee, t, crequest) === true
-        elseif tid != 0
-            ccall(:jl_send_cancellation_signal, Cvoid, (Int16,), (tid - 1) % Int16)
+        # The signal-based delivery to a running task is inherently racy: it
+        # only interrupts the task while a reset point is published, and
+        # reset_ctx is transiently unpublished (around non-reset-safe code, or
+        # while a previous interruption is being processed). A missed signal
+        # would otherwise never be retried - the request only remains visible
+        # to explicit cancellation points - so retry delivery briefly.
+        for attempt in 1:20
+            waitee = t.queue
+            if waitee !== nothing
+                delivered = invokelatest(cancel_wait!, waitee, t, crequest) === true
+                break
+            elseif tid != 0
+                ccall(:jl_send_cancellation_signal, Cvoid, (Int16,), (tid - 1) % Int16)
+                if istaskdone(t) || (@atomic :acquire t.cancellation_request) === CANCEL_REQUEST_ACK
+                    delivered = true
+                    break
+                end
+                tid = Threads.threadid(t) # the task may have migrated
+                tid == 0 && break
+                Libc.systemsleep(5e-5) # let the target re-publish its reset point
+            else
+                break
+            end
         end
     end
     if t.sticky
