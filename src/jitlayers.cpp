@@ -523,26 +523,6 @@ int jl_compile_codeinst_impl(jl_code_instance_t *ci)
     return newly_compiled;
 }
 
-// Like jl_compile_codeinst, but does not wait for the CI's symbols to reach
-// the Ready state: an unclaimed materialization still runs inline on this
-// thread, but if the module (or one it depends on) is already being compiled
-// elsewhere, the publish completes asynchronously via the lookup callback
-// instead of blocking here.
-extern "C" JL_DLLEXPORT_CODEGEN
-int jl_compile_codeinst_nowait_impl(jl_code_instance_t *ci)
-{
-    int newly_compiled = 0;
-    int already_compiled = jl_is_compiled_codeinst(ci);
-    if (!already_compiled) {
-        ++SpecFPtrCount;
-        uint64_t start = jl_typeinf_timing_begin();
-        jl_ExecutionEngine->publishCIs(ci, false);
-        jl_typeinf_timing_end(start, 0);
-        newly_compiled = 1;
-    }
-    return newly_compiled;
-}
-
 
 extern "C" JL_DLLEXPORT_CODEGEN
 void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)

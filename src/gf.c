@@ -4131,11 +4131,7 @@ static jl_code_instance_t *jl_compile_method_very_internal(jl_method_instance_t 
         }
 
         JL_GC_PUSH1(&codeinst);
-        // Tier promotions must not park the worker behind a batch another
-        // thread is compiling (Ready-state waits propagate through module
-        // dependencies); the lookup callback publishes when the batch lands.
-        int did_compile = jl_tier_in_promotion() ? jl_compile_codeinst_nowait(codeinst)
-                                                 : jl_compile_codeinst(codeinst);
+        int did_compile = jl_compile_codeinst(codeinst);
         double compile_time = jl_hrtime() - compilation_start;
 
         if (jl_atomic_load_relaxed(&codeinst->invoke) == NULL) {
