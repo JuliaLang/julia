@@ -73,8 +73,11 @@ exception frames, and taking/releasing locks.
 * `jl_module_t.lock`
 * `newly_inferred_mutex`
 * `JLDebuginfoPlugin.PluginMutex` (`std::mutex`)
-* `bpatch_lock` (`std::mutex`): guards the table of binding re-type guards (JIT patch
-  sites and image GOT entries) and their activation itself (jitlayers.cpp); no other
+* `bgot_lock` (`jl_mutex_t`): guards the registry of the GOT entries through which
+  statically compiled code accesses typed globals, and their deoptimization (module.c);
+  no other lock is acquired under it.
+* `bpatch_lock` (`std::mutex`): guards the table of the nop patch sites JIT code guards
+  its typed-global accesses with, and the patching itself (jitlayers.cpp); no other
   lock is acquired under it.
 * `precompile_field_replace_lock`
 * `live_tasks_lock` (`uv_mutex_t`)

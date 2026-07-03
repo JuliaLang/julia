@@ -2134,6 +2134,113 @@ jl_value_t *jl_check_binding_assign_value(jl_binding_t *b JL_PROPAGATES_ROOT, jl
 // entry still points at the binding's value field before using its inline fast path.
 JL_DLLEXPORT _Atomic(jl_value_t*) jl_binding_deopt_slot;
 
+// The registry of not-yet-deoptimized GOT entries of loaded images: binding -> list of
+// entry cells. This lives in the runtime proper (not libjulia-codegen) because
+// statically compiled programs must register and deoptimize their images' entries even
+// when no compiler is loaded; the nop patch sites of JIT code have their own registry
+// in jitlayers.cpp. Guarded by bgot_lock. The binding keys are used purely as
+// identities and are never dereferenced through the table: a binding stays reachable
+// from its module at least as long as compiled code referencing it, so at worst an
+// entry belonging to unreachable code gets repointed, which is harmless.
+jl_mutex_t bgot_lock;
+static htable_t bgot_table; // jl_binding_t* -> arraylist_t* of entry cell addresses
+static int bgot_table_inited = 0;
+
+// A raw `jl_bpatch` section record (see emit_bpatch_slotmap and julia_binding_got_entry
+// in codegen.cpp, and BindingPatchRecord in jitlayers.cpp, which parses the records of
+// JIT-compiled objects). Image sections only contain the data kinds parsed here; the
+// nop patch sites (kinds 0/1) exist only in JIT objects.
+typedef struct {
+    uint64_t f0;
+    uint64_t f1;
+    uint64_t f2;
+    uint64_t kind; // 2 (slot map): f0 = index, f1 = address of the binding's slot
+                   // 3 (sentinel): ignored (guarantees the section exists on Mach-O)
+                   // 4 (GOT entry): f0 = address of the entry, f2 = index
+                   // additionally, all-zero records are skipped: COFF bounds the
+                   // section with zero marker records and its linker may insert
+                   // padding between grouped-section contributions
+} jl_bpatch_record_t;
+
+// Register the GOT entries of a loaded system or package image (the bounds of its
+// `jl_bpatch` section): point each entry at its binding's value field, so the image's
+// typed-global accesses use their inline fast paths -- or, if the binding has already
+// been re-typed, leave the entry at the deoptimization sentinel forever (this code was
+// compiled against *some* declared type of the binding, and the sticky flag cannot
+// tell whether it is still the current one). Must be called after the image's global
+// slots have been relocated and before its code can run.
+JL_DLLEXPORT void jl_register_binding_patch_sites(const void *start, const void *end)
+{
+    const jl_bpatch_record_t *recs = (const jl_bpatch_record_t*)start;
+    size_t n = ((const char*)end - (const char*)start) / sizeof(jl_bpatch_record_t);
+    if (n == 0)
+        return;
+    JL_LOCK(&bgot_lock);
+    if (!bgot_table_inited) {
+        htable_new(&bgot_table, 0);
+        bgot_table_inited = 1;
+    }
+    for (size_t i = 0; i < n; i++) {
+        const jl_bpatch_record_t *r = &recs[i];
+        if (r->kind != 4 || r->f0 == 0)
+            continue; // slot map, sentinel, or zero marker/padding
+        // resolve the entry's binding through its slot-map record
+        jl_binding_t *b = NULL;
+        for (size_t j = 0; j < n; j++) {
+            if (recs[j].kind == 2 && recs[j].f0 == r->f2) {
+                b = *(jl_binding_t**)(uintptr_t)recs[j].f1;
+                break;
+            }
+        }
+        assert(b != NULL && "GOT entry record without a matching slot-map record");
+        if (b == NULL)
+            continue;
+        _Atomic(void*) *entry = (_Atomic(void*)*)(uintptr_t)r->f0;
+        // The flag load is ordered after any concurrent re-type walk by the lock
+        // acquisition, so an entry can never be registered behind a completed walk.
+        if (jl_atomic_load_relaxed(&b->flags) & BINDING_FLAG_RETYPED) {
+            jl_atomic_store_relaxed(entry, (void*)&jl_binding_deopt_slot);
+        }
+        else {
+            jl_atomic_store_relaxed(entry, (void*)&b->value);
+            arraylist_t *entries = (arraylist_t*)ptrhash_get(&bgot_table, b);
+            if (entries == HT_NOTFOUND) {
+                entries = (arraylist_t*)malloc_s(sizeof(arraylist_t));
+                arraylist_new(entries, 0);
+                ptrhash_put(&bgot_table, b, entries);
+            }
+            arraylist_push(entries, (void*)entry);
+        }
+    }
+    JL_UNLOCK(&bgot_lock);
+}
+
+// Activate the re-type guards of code compiled against a previous declared type of
+// `b` (#62154): repoint the GOT entries of statically compiled code at the
+// deoptimization sentinel, and rewrite the nop patch sites of JIT code (a no-op
+// without libjulia-codegen, which is also the only way such sites can exist). Must be
+// called with the world counter lock held, after BINDING_FLAG_RETYPED is set and
+// before the new value is published; see the quiesce comment in jl_declare_global for
+// the write-side protocol.
+void jl_patch_retyped_binding_sites(jl_binding_t *b)
+{
+    JL_LOCK(&bgot_lock);
+    if (bgot_table_inited) {
+        arraylist_t *entries = (arraylist_t*)ptrhash_get(&bgot_table, b);
+        if (entries != HT_NOTFOUND) {
+            ptrhash_remove(&bgot_table, b);
+            for (size_t i = 0; i < entries->len; i++) {
+                _Atomic(void*) *entry = (_Atomic(void*)*)entries->items[i];
+                jl_atomic_store_release(entry, (void*)&jl_binding_deopt_slot);
+            }
+            arraylist_free(entries);
+            free(entries);
+        }
+    }
+    JL_UNLOCK(&bgot_lock);
+    jl_patch_retyped_binding_jit_sites(b);
+}
+
 JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs)
 {
     if (jl_check_binding_assign_value(b, mod, var, rhs, "setglobal!") != NULL) {

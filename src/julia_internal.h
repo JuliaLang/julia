@@ -1869,6 +1869,7 @@ float julia_bfloat_to_float(uint16_t param) JL_NOTSAFEPOINT;
 
 extern jl_mutex_t typecache_lock;
 extern jl_mutex_t world_counter_lock;
+extern jl_mutex_t bgot_lock;
 
 // -- smallintset.c -- //
 
@@ -2231,17 +2232,21 @@ JL_DLLIMPORT void jl_init_codegen(void);
 JL_DLLIMPORT void jl_teardown_codegen(void) JL_NOTSAFEPOINT;
 // #62154: activate the re-type verification guards in code compiled against a previous
 // declared type of `b` (must be called with the world counter lock held, after setting
-// BINDING_FLAG_RETYPED and before publishing the new value): JIT patch sites are
-// rewritten and the GOT entries of statically compiled code are repointed at
-// jl_binding_deopt_slot
-JL_DLLIMPORT void jl_patch_retyped_binding_sites(jl_binding_t *b);
+// BINDING_FLAG_RETYPED and before publishing the new value): the GOT entries of
+// statically compiled code are repointed at jl_binding_deopt_slot and JIT patch sites
+// are rewritten (see module.c)
+void jl_patch_retyped_binding_sites(jl_binding_t *b);
+// #62154: rewrite the nop patch sites JIT code guards its accesses of `b` with (the
+// JIT-side half of jl_patch_retyped_binding_sites; a no-op without libjulia-codegen,
+// which is also the only way such sites can exist)
+JL_DLLIMPORT void jl_patch_retyped_binding_jit_sites(jl_binding_t *b);
 // #62154: the deoptimization sentinel for the GOT entries of statically compiled code;
 // it permanently holds NULL (see module.c)
 JL_DLLEXPORT extern _Atomic(jl_value_t*) jl_binding_deopt_slot;
-// #62154: register the re-type patch sites of a loaded system or package image (the
-// bounds of its `jl_bpatch` section); must be called after its global slots have been
-// relocated and before its code can run
-JL_DLLIMPORT void jl_register_binding_patch_sites(const void *start, const void *end);
+// #62154: register the GOT entries of a loaded system or package image (the bounds of
+// its `jl_bpatch` section); must be called after its global slots have been relocated
+// and before its code can run (see module.c)
+JL_DLLEXPORT void jl_register_binding_patch_sites(const void *start, const void *end);
 JL_DLLIMPORT void jl_decorate_llvm_module(LLVMModuleRef m) JL_NOTSAFEPOINT;
 JL_DLLIMPORT int jl_getFunctionInfo(jl_frame_t **frames, uintptr_t pointer, int skipC, int noInline) JL_NOTSAFEPOINT;
 // n.b. this might be called from unmanaged thread:

@@ -84,18 +84,11 @@ JL_DLLEXPORT void jl_teardown_codegen_fallback(void) JL_NOTSAFEPOINT
 {
 }
 
-JL_DLLEXPORT void jl_patch_retyped_binding_sites_fallback(jl_binding_t *b)
+JL_DLLEXPORT void jl_patch_retyped_binding_jit_sites_fallback(jl_binding_t *b)
 {
-    // without codegen there is no compiled code, hence no patch sites to rewrite
+    // without codegen there is no JIT code, hence no patch sites to rewrite; the GOT
+    // entries of statically compiled code are handled by the runtime proper (module.c)
     (void)b;
-}
-
-JL_DLLEXPORT void jl_register_binding_patch_sites_fallback(const void *start, const void *end)
-{
-    // without codegen, the native code of images is not used either (jl_register_fptrs
-    // is a no-op), so its patch sites can never execute and need no registration
-    (void)start;
-    (void)end;
 }
 
 JL_DLLEXPORT void jl_decorate_llvm_module_fallback(LLVMModuleRef m) JL_NOTSAFEPOINT
