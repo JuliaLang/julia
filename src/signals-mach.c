@@ -639,6 +639,69 @@ static void jl_try_deliver_sigint(void)
     HANDLE_MACH_ERROR("thread_resume", ret);
 }
 
+// Interrupt the target thread's current task at its cancellation reset point,
+// if it has one established (used for task cancellation).
+JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT
+{
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    if (ptls2 == NULL)
+        return;
+    jl_task_t *ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
+    if (ct2 == NULL || ct2->reset_ctx == NULL)
+        return;
+    mach_port_t thread = pthread_mach_thread_np(ptls2->system_id);
+    kern_return_t ret = thread_suspend(thread);
+    HANDLE_MACH_ERROR("thread_suspend", ret);
+    // Re-check now that the thread cannot run
+    ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
+    _jl_ucontext_t *reset_ctx = ct2 == NULL ? NULL : (_jl_ucontext_t*)ct2->reset_ctx;
+    if (reset_ctx != NULL) {
+        // Consume the reset point (prevents a double reset)
+        ct2->reset_ctx = NULL;
+        host_thread_state_t state;
+        unsigned int count = MACH_THREAD_STATE_COUNT;
+        memset(&state, 0, sizeof(state));
+        ret = thread_get_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, &count);
+        HANDLE_MACH_ERROR("thread_get_state", ret);
+        jl_longjmp_in_state(&state, reset_ctx->uc_mcontext);
+        ret = thread_set_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, count);
+        HANDLE_MACH_ERROR("thread_set_state", ret);
+    }
+    ret = thread_resume(thread);
+    HANDLE_MACH_ERROR("thread_resume", ret);
+}
+
+// Switch the target thread's current (already ABANDONED-marked) task to
+// ptls->abandon_to (used to implement task abandonment).
+void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
+{
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    if (ptls2 == NULL)
+        return;
+    mach_port_t thread = pthread_mach_thread_np(ptls2->system_id);
+    kern_return_t ret = thread_suspend(thread);
+    HANDLE_MACH_ERROR("thread_suspend", ret);
+    jl_task_t *ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
+    if (ct2 != NULL && jl_atomic_load_relaxed(&ct2->_state) == JL_TASK_STATE_ABANDONED &&
+        ptls2->abandon_to != NULL) {
+        host_thread_state_t state;
+        unsigned int count = MACH_THREAD_STATE_COUNT;
+        memset(&state, 0, sizeof(state));
+        ret = thread_get_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, &count);
+        HANDLE_MACH_ERROR("thread_get_state", ret);
+        jl_noreturn_call_in_state(&state, (void (*)(void))&jl_abandon_task_cb, 0, 0);
+        ret = thread_set_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, count);
+        HANDLE_MACH_ERROR("thread_set_state", ret);
+    }
+    else {
+        // The thread switched tasks in the meantime; the marked victim
+        // already exited through ctx_switch's killed path.
+        ptls2->abandon_to = NULL;
+    }
+    ret = thread_resume(thread);
+    HANDLE_MACH_ERROR("thread_resume", ret);
+}
+
 static void jl_exit_thread0_cb(int signo)
 {
     jl_fprint_critical_error(ios_safe_stderr, signo, 0, NULL, jl_current_task);
