@@ -33,8 +33,8 @@ Language changes
     declaration. For example, after `global x::Int = 1`, both `global x::Float64 = 2.0` and a
     bare `global x::Real` are now accepted rather than raising an error. The latest declaration
     governs every access to the binding; code compiled against the previous type is recompiled,
-    and accesses in older world ages begin to error where the value no longer matches the type
-    they were compiled against. A bare `global x::T` re-declaration is rejected when the value
+    and reads in older world ages begin to error where the value no longer matches the type they
+    were compiled against, as do writes once the binding is no longer a writable global. A bare `global x::T` re-declaration is rejected when the value
     the binding currently holds is not an instance of `T`, so that the value is never silently
     dropped; use the `global x::T = v` form to change the type and value together (this installs
     both atomically). A declared global may also be replaced by a constant, provided the `const`

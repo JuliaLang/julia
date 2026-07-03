@@ -898,12 +898,14 @@ end
     Core.eval(GTC2, :(const y = "now const"))
     @test invokelatest(() -> GTC2.y) == "now const"
     @test_throws TypeError Base.invoke_in_world(w, GTC2.ready)
-    # a stale write still validates against its own epoch's type ("narrow, never
-    # expand"); if it conforms it lands in the now-superseded slot, where only
-    # stale readers of that epoch observe it -- the constant itself is unaffected
+    # a stale write errors: a value that fails the type the code was compiled
+    # against is rejected first ("narrow, never expand"), and a conforming value
+    # then hits the `invokelatest` writability check, since in the latest world
+    # the binding is no longer a writable global
     @test_throws TypeError Base.invoke_in_world(w, GTC2.writey, 1.5)
-    @test Base.invoke_in_world(w, GTC2.writey, 7) === 7
-    @test Base.invoke_in_world(w, GTC2.ready) === 7
+    err = try Base.invoke_in_world(w, GTC2.writey, 7); nothing catch e; e end
+    @test err isa ErrorException
+    @test occursin("invalid assignment to constant", err.msg)
     @test invokelatest(() -> GTC2.y) == "now const"
 
     # new code sees the constant (and can infer it)
@@ -923,8 +925,10 @@ end
     @eval module GTC4
         global d::Int = 1
         readd() = d
+        writed(v) = setglobal!(@__MODULE__, :d, v)
     end
     @test GTC4.readd() === 1
+    @test GTC4.writed(1) === 1
     let b = convert(Core.Binding, GlobalRef(GTC4, :d))
         @test (b.flags & 0x10) == 0x00
         w = Base.get_world_counter()
@@ -932,6 +936,8 @@ end
         @test (b.flags & 0x10) == 0x10
         # the slot still holds the old, conforming value: stale reads verify and pass
         @test Base.invoke_in_world(w, GTC4.readd) === 1
+        # but stale writes error: the binding is not writable in the latest world
+        @test_throws ErrorException Base.invoke_in_world(w, GTC4.writed, 2)
         # a subsequent const does not assign to the severed global epoch's slot
         Core.eval(GTC4, :(const d = "fresh"))
         @test invokelatest(() -> GTC4.d) == "fresh"

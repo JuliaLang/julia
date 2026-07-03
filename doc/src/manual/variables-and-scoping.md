@@ -843,14 +843,17 @@ runs after an on-the-stack redefinition, or an access replayed in an older world
 [`Base.invoke_in_world`](@ref) — verifies the value against the type it was compiled for and raises a
 [`TypeError`](@ref) rather than returning an ill-typed value. Similarly, a write from such code must
 satisfy both the type it was compiled against and the latest declared type (a re-declaration can
-narrow the set of accesses that succeed, but never expand it). This verification is activated only
+narrow the set of accesses that succeed, but never expand it), and it raises an error outright if
+the binding is no longer a writable global in the latest world age (for example, after it was
+replaced by a constant or deleted). This verification is activated only
 once a binding's declared type is actually changed; accesses to globals whose declared type never
 changes are not affected by it.
 
 A declared global may also be replaced by a constant, provided the `const` declaration carries a
 value. The transition behaves like a re-declaration whose value is the constant's value: new code
-observes the constant, while code compiled against the global epoch observes the constant's value
-through the same verification described above. The reverse transition — re-declaring a constant as
+observes the constant, while reads from code compiled against the global epoch observe the
+constant's value through the same verification described above, and writes from such code raise an
+error. The reverse transition — re-declaring a constant as
 a global — remains an error. Deleting a declared global with `Base.delete_binding` likewise ends
 its epoch: accesses from code compiled against it verify from then on, and whatever the binding is
 re-established as afterwards is independent of the deleted global.
