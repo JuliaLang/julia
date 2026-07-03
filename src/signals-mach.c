@@ -301,17 +301,6 @@ static void jl_throw_in_state(jl_ptls_t ptls2, host_thread_state_t *state, jl_va
     }
 }
 
-static void jl_throw_in_thread(jl_ptls_t ptls2, mach_port_t thread, jl_value_t *exception)
-{
-    host_thread_state_t state;
-    unsigned int count = MACH_THREAD_STATE_COUNT;
-    kern_return_t ret = thread_get_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, &count);
-    HANDLE_MACH_ERROR("thread_get_state", ret);
-    jl_throw_in_state(ptls2, &state, exception);
-    ret = thread_set_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, count);
-    HANDLE_MACH_ERROR("thread_set_state", ret);
-}
-
 // Trampoline that runs on the faulting thread after being hijacked by the
 // Mach exception handler for a safepoint hit. This uses the same codepath
 // as the Unix signal handler (jl_set_gc_and_wait), so the faulting thread
@@ -607,37 +596,6 @@ void jl_thread_resume(int tid)
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
     mach_port_t thread = pthread_mach_thread_np(ptls2->system_id);
     kern_return_t ret = thread_resume(thread);
-    HANDLE_MACH_ERROR("thread_resume", ret);
-}
-
-// Throw jl_interrupt_exception if the master thread is in a signal async region
-// or if SIGINT happens too often.
-static void jl_try_deliver_sigint(void)
-{
-    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
-    mach_port_t thread = pthread_mach_thread_np(ptls2->system_id);
-
-    kern_return_t ret = thread_suspend(thread);
-    HANDLE_MACH_ERROR("thread_suspend", ret);
-
-    // This aborts `sleep` and other syscalls.
-    ret = thread_abort(thread);
-    HANDLE_MACH_ERROR("thread_abort", ret);
-
-    jl_safepoint_enable_sigint();
-    int force = jl_check_force_sigint();
-    if (force || (!ptls2->defer_signal && ptls2->io_wait)) {
-        jl_safepoint_consume_sigint();
-        if (force)
-            jl_safe_printf("WARNING: Force throwing a SIGINT\n");
-        jl_clear_force_sigint();
-        jl_throw_in_thread(ptls2, thread, jl_interrupt_exception);
-    }
-    else {
-        jl_wake_libuv();
-    }
-
-    ret = thread_resume(thread);
     HANDLE_MACH_ERROR("thread_resume", ret);
 }
 
