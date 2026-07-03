@@ -878,12 +878,13 @@ typedef uint32_t bpatch_word_t; // one A64 instruction, `nop` patched to `b <tar
 
 // Rewrite the nop at `s.site` into a direct jump to `s.target` with a single
 // naturally-aligned atomic store (the site is emitted suitably sized and aligned, see
-// emit_retype_guard), briefly making its page writable but never non-executable: other
-// threads keep running. A thread may still execute a stale copy of the old instruction
-// until it passes a context synchronization event; the caller is responsible for
-// forcing one on every thread (jl_membarrier_sync_core) before the patch must be
-// observed. The caller must hold bpatch_lock (concurrent rewrites may share pages).
-static void bpatch_apply(const BindingPatchSite &s) JL_NOTSAFEPOINT
+// emit_retype_guard), briefly making its page writable. Except on Apple Silicon (see
+// below), the page stays executable and other threads keep running; a thread may still
+// execute a stale copy of the old instruction until it passes a context
+// synchronization event, and the caller is responsible for forcing one on every
+// thread (jl_membarrier_sync_core) before the patch must be observed. The caller must
+// hold bpatch_lock (concurrent rewrites may share pages).
+static void bpatch_apply(const BindingPatchSite &s)
 {
 #if !(defined(_CPU_X86_64_) || defined(_CPU_AARCH64_))
     (void)s;
@@ -918,38 +919,50 @@ static void bpatch_apply(const BindingPatchSite &s) JL_NOTSAFEPOINT
     uintptr_t pagesz = jl_page_size;
     uintptr_t first = s.site & ~(pagesz - 1);
     size_t protlen = ((s.site + nbytes - 1) & ~(pagesz - 1)) - first + pagesz;
-    int used_mprotect = mprotect((void*)first, protlen, PROT_READ | PROT_WRITE | PROT_EXEC) == 0;
 #if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
-    // MAP_JIT memory (hardened runtime) rejects writable protections from mprotect;
-    // use the per-thread write-protection toggle for it instead.
+    // No code page can be writable and executable at once on Apple Silicon: image text
+    // is signed and file-backed, and JIT memory is either MAP_JIT (writable only
+    // through the per-thread toggle) or plain pages. Briefly suspend all other threads
+    // -- none can then be executing the page -- and enable writing by whichever
+    // mechanism applies. Executing the modified pages afterwards relies on the
+    // allow-jit/allow-unsigned-executable-memory entitlements julia is distributed
+    // with. (Making this path suspension-free would require establishing a second,
+    // writable mapping of the page to store through instead.)
+    jl_task_t *ct = jl_current_task;
+    jl_safepoint_suspend_all_threads(ct);
+    int used_mprotect = mprotect((void*)first, protlen, PROT_READ | PROT_WRITE) == 0;
     if (!used_mprotect)
         pthread_jit_write_protect_np(0);
-#else
-    if (!used_mprotect)
-        abort();
-#endif
     jl_atomic_store_relaxed((_Atomic(bpatch_word_t)*)s.site, word);
     if (used_mprotect) {
         if (mprotect((void*)first, protlen, PROT_READ | PROT_EXEC))
             abort();
     }
-#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
     else {
         pthread_jit_write_protect_np(1);
     }
-#endif
+    __builtin___clear_cache((char*)s.site, (char*)(s.site + nbytes));
+    jl_safepoint_resume_all_threads(ct);
+#else
+    // The page stays executable throughout (other threads keep running).
+    if (mprotect((void*)first, protlen, PROT_READ | PROT_WRITE | PROT_EXEC))
+        abort();
+    jl_atomic_store_relaxed((_Atomic(bpatch_word_t)*)s.site, word);
+    if (mprotect((void*)first, protlen, PROT_READ | PROT_EXEC))
+        abort();
     // Make the new bytes visible to instruction fetch (a no-op on x86, where the
     // instruction caches are coherent; broadcast cache maintenance on AArch64).
     __builtin___clear_cache((char*)s.site, (char*)(s.site + nbytes));
-#endif
-#endif
+#endif // _OS_DARWIN_ && _CPU_AARCH64_
+#endif // _OS_WINDOWS_
+#endif // !(_CPU_X86_64_ || _CPU_AARCH64_)
 }
 
 // Publish a parsed site for `b`, or apply it immediately if the binding has already
 // been re-typed. In the latter case no cross-thread instruction-stream synchronization
 // is needed: the containing object has not been published yet, so the only way another
 // thread can reach the site is through the publication of the materialized code itself.
-static void bpatch_register(jl_binding_t *b, const BindingPatchSite &s) JL_NOTSAFEPOINT
+static void bpatch_register(jl_binding_t *b, const BindingPatchSite &s)
 {
     std::lock_guard<std::mutex> lock(bpatch_lock);
     // The flag load is ordered after any concurrent jl_patch_retyped_binding_sites walk
@@ -970,11 +983,15 @@ struct BindingPatchRecord {
     uint64_t f2;
     uint64_t kind; // 0/1 (read/write site): f0 = site, f1 = target, f2 = index
                    // 2 (slot map): f0 = index, f1 = address of the binding's slot
+                   // 3 (sentinel): ignored (guarantees the section exists on Mach-O)
+                   // additionally, all-zero records are skipped: COFF bounds the
+                   // section with zero marker records and its linker may insert
+                   // padding between grouped-section contributions
 };
 
 // Register a batch of records (all sites of one linked object or image, together with
 // their slot-map records), dereferencing each binding from its address slot.
-static void bpatch_register_records(ArrayRef<BindingPatchRecord> records) JL_NOTSAFEPOINT
+static void bpatch_register_records(ArrayRef<BindingPatchRecord> records)
 {
     SmallDenseMap<uint64_t, uint64_t, 8> slots;
     for (const BindingPatchRecord &r : records) {
@@ -983,7 +1000,9 @@ static void bpatch_register_records(ArrayRef<BindingPatchRecord> records) JL_NOT
     }
     for (const BindingPatchRecord &r : records) {
         if (r.kind > 1)
-            continue;
+            continue; // slot map or sentinel
+        if (r.f0 == 0)
+            continue; // zero marker record or linker padding
         auto it = slots.find(r.f2);
         assert(it != slots.end() && "patch site without a matching slot-map record");
         if (it == slots.end())

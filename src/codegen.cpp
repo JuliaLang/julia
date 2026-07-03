@@ -3525,20 +3525,19 @@ static void jl_temporary_root(jl_codectx_t &ctx, jl_value_t *val)
 // Whether this compilation can guard typed-global accesses with statically patchable
 // sites (see jl_patch_retyped_binding_sites in jitlayers.cpp): an architecture the
 // runtime patcher knows how to rewrite, and an object format the site table can be
-// emitted for with `.pushsection`. For JIT compilation that is ELF (which the JIT also
-// uses on Windows) or Mach-O; the sites of system and package images are registered at
-// load time through linker-provided `__start_jl_bpatch`/`__stop_jl_bpatch` section
-// bounds, which is an ELF linker feature, so images on other formats (and on Darwin,
-// where image code is signed and cannot generally be written to at runtime) keep the
-// runtime flag test instead.
+// emitted for with `.pushsection`. The sites of system and package images are
+// registered at load time through section bounds obtained per format: ELF
+// `__start_`/`__stop_` symbols, Mach-O `section$start$`/`section$end$` symbols, or
+// COFF `$`-grouped-section markers (see the jl_image_pointers emission in
+// aotcompile.cpp). Patching Darwin image code (which is signed) relies on the
+// allow-jit/allow-unsigned-executable-memory entitlements that julia is distributed
+// with.
 static bool binding_patch_sites_supported(jl_codectx_t &ctx)
 {
     const Triple &TT = ctx.emission_context.TargetTriple;
     if (TT.getArch() != Triple::x86_64 && TT.getArch() != Triple::aarch64)
         return false;
-    if (ctx.emission_context.imaging_mode)
-        return TT.isOSBinFormatELF() && !TT.isOSWindows();
-    return TT.isOSBinFormatELF() || TT.isOSBinFormatMachO();
+    return TT.isOSBinFormatELF() || TT.isOSBinFormatMachO() || TT.isOSBinFormatCOFF();
 }
 
 // Emit a guard that diverts to a cold block once the declared type of `bnd` is changed
@@ -3577,13 +3576,21 @@ static BasicBlock *emit_retype_guard(jl_codectx_t &ctx, jl_binding_t *bnd, Value
             OS << "\t.balign 8\n"
                << "1:\n\t.byte 0x0f,0x1f,0x84,0x00,0x00,0x00,0x00,0x00\n";
         }
-        // The section is writable ("w") because record fields hold absolute addresses,
-        // which require load-time relocation in position-independent images. The flags
-        // must match what LLVM uses for the slot-map globals below, so that both are
-        // emitted into a single section.
-        const char *secname = TT.isOSBinFormatMachO() ? "__DATA,__jl_bpatch" : "jl_bpatch";
+        // The section is writable because record fields hold absolute addresses, which
+        // require load-time relocation in position-independent images. The flags must
+        // match what LLVM uses for the slot-map globals below, so that both are
+        // emitted into a single section. On COFF the records live in the `$B` group of
+        // the section and are 32-aligned: the linker sorts and concatenates the groups
+        // (bounded by marker records in `$A` and `$C`, see aotcompile.cpp) and may pad
+        // between contributions, which record parsing skips as all-zero records.
+        bool coff = TT.isOSBinFormatCOFF();
+        const char *secname = TT.isOSBinFormatMachO() ? "__DATA,__jl_bpatch"
+                            : coff                    ? "jl_bpatch$B"
+                                                      : "jl_bpatch";
         if (TT.isOSBinFormatMachO())
             OS << "\t.pushsection " << secname << "\n";
+        else if (coff)
+            OS << "\t.pushsection jl_bpatch$$B,\"dw\"\n"; // $$ is a literal $ in asm text
         else
             OS << "\t.pushsection " << secname << ",\"aw\"," << (aarch64 ? "%progbits" : "@progbits") << "\n";
         // The site record joins to its binding through a small index: the asm text can
@@ -3605,9 +3612,9 @@ static BasicBlock *emit_retype_guard(jl_codectx_t &ctx, jl_binding_t *bnd, Value
                 GlobalVariable::PrivateLinkage, rec,
                 "jl_bpatch_slotmap" + std::to_string(idx));
         slotmap->setSection(secname);
-        slotmap->setAlignment(Align(8));
+        slotmap->setAlignment(Align(coff ? 32 : 8));
         appendToCompilerUsed(*jl_Module, {slotmap});
-        OS << "\t.balign 8\n"
+        OS << (coff ? "\t.balign 32\n" : "\t.balign 8\n")
            << "\t.quad 1b\n"
            << "\t.quad ${0:l}\n"
            << "\t.quad " << idx << "\n"

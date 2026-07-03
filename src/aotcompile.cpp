@@ -2490,16 +2490,73 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
                                                        cpu_target_data, "jl_cpu_target_string");
 
             // Bounds of the image's `jl_bpatch` section (binding re-type patch site
-            // records, #62154). The linker defines these symbols when the section is
-            // present; the references are weak, so they are NULL otherwise.
-            auto bpatch_start = new GlobalVariable(metadataM, Type::getInt8Ty(Context), true,
-                                                   GlobalVariable::ExternalWeakLinkage,
-                                                   nullptr, "__start_jl_bpatch");
-            bpatch_start->setVisibility(GlobalValue::HiddenVisibility);
-            auto bpatch_stop = new GlobalVariable(metadataM, Type::getInt8Ty(Context), true,
+            // records, #62154), obtained per object format.
+            Constant *bpatch_start = nullptr;
+            Constant *bpatch_stop = nullptr;
+            auto T_i64 = Type::getInt64Ty(Context);
+            if (TheTriple.isOSBinFormatELF()) {
+                // The linker defines these symbols when the section is present; the
+                // references are weak, so they are NULL otherwise.
+                auto startgv = new GlobalVariable(metadataM, Type::getInt8Ty(Context), true,
                                                   GlobalVariable::ExternalWeakLinkage,
-                                                  nullptr, "__stop_jl_bpatch");
-            bpatch_stop->setVisibility(GlobalValue::HiddenVisibility);
+                                                  nullptr, "__start_jl_bpatch");
+                startgv->setVisibility(GlobalValue::HiddenVisibility);
+                auto stopgv = new GlobalVariable(metadataM, Type::getInt8Ty(Context), true,
+                                                 GlobalVariable::ExternalWeakLinkage,
+                                                 nullptr, "__stop_jl_bpatch");
+                stopgv->setVisibility(GlobalValue::HiddenVisibility);
+                bpatch_start = startgv;
+                bpatch_stop = stopgv;
+            }
+            else if (TheTriple.isOSBinFormatMachO()) {
+                // ld64's magic section-bound symbols (the \01 prefix suppresses the
+                // platform's leading-underscore mangling). They are only defined when
+                // the section exists, so a sentinel record (kind 3, ignored by record
+                // parsing) guarantees that it does.
+                auto ST = StructType::get(T_i64, T_i64, T_i64, T_i64);
+                auto sentinel = new GlobalVariable(metadataM, ST, false,
+                        GlobalVariable::PrivateLinkage,
+                        ConstantStruct::get(ST, {ConstantInt::get(T_i64, 0),
+                                ConstantInt::get(T_i64, 0), ConstantInt::get(T_i64, 0),
+                                ConstantInt::get(T_i64, 3)}),
+                        "jl_bpatch_sentinel");
+                sentinel->setSection("__DATA,__jl_bpatch");
+                sentinel->setAlignment(Align(8));
+                appendToCompilerUsed(metadataM, {sentinel});
+                bpatch_start = new GlobalVariable(metadataM, Type::getInt8Ty(Context), true,
+                        GlobalVariable::ExternalLinkage, nullptr,
+                        "\01section$start$__DATA$__jl_bpatch");
+                bpatch_stop = new GlobalVariable(metadataM, Type::getInt8Ty(Context), true,
+                        GlobalVariable::ExternalLinkage, nullptr,
+                        "\01section$end$__DATA$__jl_bpatch");
+            }
+            else if (TheTriple.isOSBinFormatCOFF()) {
+                // COFF has no linker-provided section bounds, but it sorts and merges
+                // grouped sections by their `$` suffix, so all-zero marker records in
+                // `jl_bpatch$A` and `jl_bpatch$C` bound the records in `jl_bpatch$B`.
+                // The linker may pad between contributions; record parsing skips the
+                // padding as all-zero records.
+                auto AT_marker = ArrayType::get(T_i64, 4);
+                auto mkmarker = [&](const char *sec, const char *name) {
+                    auto g = new GlobalVariable(metadataM, AT_marker, false,
+                            GlobalVariable::PrivateLinkage,
+                            Constant::getNullValue(AT_marker), name);
+                    g->setSection(sec);
+                    g->setAlignment(Align(32));
+                    return g;
+                };
+                auto startm = mkmarker("jl_bpatch$A", "jl_bpatch_start_marker");
+                auto endm = mkmarker("jl_bpatch$C", "jl_bpatch_end_marker");
+                appendToCompilerUsed(metadataM, {startm, endm});
+                // one past the start marker
+                bpatch_start = ConstantExpr::getGetElementPtr(AT_marker, startm,
+                        ConstantInt::get(T_i64, 1));
+                bpatch_stop = endm;
+            }
+            else {
+                bpatch_start = Constant::getNullValue(PointerType::getUnqual(Context));
+                bpatch_stop = bpatch_start;
+            }
 
             AT = ArrayType::get(T_psize, 8);
             auto pointers = new GlobalVariable(metadataM, AT, false,
