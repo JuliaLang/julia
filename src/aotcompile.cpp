@@ -1249,6 +1249,10 @@ static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partiti
                 dbgs() << "Global " << GV.getName() << " is a declaration but is in partition " << GVNames[GV.getName()] << "\n";
             }
         } else {
+            // `llvm.` specials (such as llvm.compiler.used) are exempt from
+            // partitioning; materializePreserved keeps them whole in every partition
+            if (GV.getName().starts_with("llvm."))
+                continue;
             // Local global values are not partitioned
             if (!GVNames.count(GV.getName())) {
                 bad = true;
@@ -1256,6 +1260,17 @@ static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partiti
             }
             for (ConstantUses<GlobalValue> uses(const_cast<GlobalValue*>(&GV), const_cast<Module&>(M)); !uses.done(); uses.next()) {
                 auto val = uses.get_info().val;
+                // Mirror the exemptions of the partitioner's merge loop (see
+                // partitionModule): `llvm.` specials are not partitioned, and
+                // `jl_bpatch` records (#62154) deliberately reference globals across
+                // partitions (their referents are promoted to hidden external
+                // linkage, so the references resolve at link time).
+                if (val->getName().starts_with("llvm."))
+                    continue;
+                if (auto GVu = dyn_cast<GlobalVariable>(val)) {
+                    if (GVu->hasSection() && GVu->getSection().contains("jl_bpatch"))
+                        continue;
+                }
                 if (!GVNames.count(val->getName())) {
                     bad = true;
                     dbgs() << "Global " << val->getName() << " used by " << GV.getName() << ", which is not in any partition\n";
