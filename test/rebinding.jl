@@ -947,12 +947,15 @@ for round in 1:25
     Core.eval(m, :(hammer() = (modifyglobal!(@__MODULE__, :g, +, 1),
                                swapglobal!(@__MODULE__, :g, 5),
                                replaceglobal!(@__MODULE__, :g, 5, 6))))
-    Base.invokelatest(m.hammer) # compile the inline fast paths (guards not yet activated)
+    # capture the function itself: reading `m.hammer` from this (older) world age
+    # would warn (or throw, under --depwarn=error)
+    hammerf = Base.invokelatest(getglobal, m, :hammer)
+    Base.invokelatest(hammerf) # compile the inline fast paths (guards not yet activated)
     stop = Atomic{Bool}(false)
     ts = [Threads.@spawn begin # runs at the pre-re-type world age: stale fast paths
             while !stop[]
                 try
-                    r = m.hammer()
+                    r = hammerf()
                     # any value that is *returned* (rather than a verification error
                     # thrown) must be of the type the code was compiled against
                     if !(r[1] isa Pair{Int,Int} && r[2] isa Int && r[3].old isa Int)

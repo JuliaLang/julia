@@ -4003,7 +4003,17 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
                             nullptr,
                             /*retype_bp*/bp,
                             /*retype_deoptBB*/coldBB);
-            assert(res.typ != jl_bottom_type); // boxed stores have no early-bottom path
+            if (res.typ == jl_bottom_type) {
+                // The inline operation cannot complete -- the modify `op` is inferred
+                // to never return -- so only the deoptimized runtime path (which
+                // reaches the same `op` through a dynamic call) can produce a result;
+                // emit it as the sole continuation.
+                assert(op == StoreKind::Modify);
+                ctx.builder.CreateUnreachable();
+                ctx.builder.SetInsertPoint(coldBB);
+                Value *coldV = emit_globalop_runtime_call(ctx, op, bp, mod, sym, rval, cmp);
+                return mark_verified_globalop_result(ctx, op, coldV, global_op_rettyp(op, ty), fname);
+            }
             // Merge with the deoptimized path. Set returns `rval` itself, which dominates
             // both paths, so it needs no merge; the other kinds merge the boxed results.
             jl_value_t *rettyp = op == StoreKind::Set ? NULL : global_op_rettyp(op, ty);
