@@ -9,6 +9,20 @@
 #include <unistd.h>
 #ifndef _OS_WINDOWS_
 #include <sys/mman.h>
+#include <signal.h>
+#include <time.h>
+#include <string.h>
+#endif
+
+// Platform detection for the SIGINT rescue timer mechanism.
+// TODO: Implement kevent (macOS/OpenBSD) and Windows based rescue timers.
+#if defined(__APPLE__)
+#define JL_HAVE_MACH
+#define JL_HAVE_KEVENT
+#elif defined(__OpenBSD__)
+#define JL_HAVE_KEVENT
+#elif !defined(_OS_WINDOWS_)
+#define JL_HAVE_POSIX_TIMER
 #endif
 
 #ifdef __cplusplus
@@ -440,6 +454,144 @@ static void jl_check_profile_autostop(void)
         JL_UNLOCK_NOGC(&profile_show_peek_cond_lock);
     }
 }
+
+// State for delegating SIGINT handling to a dedicated listener task (similar
+// to the profile listener above): the signal listener sets a cancellation
+// request on the root task and pings this async condition; the Base-side
+// listener task then drives the cancellation state machine.
+jl_mutex_t sigint_state_lock;
+static uv_async_t *sigint_cond_loc = NULL;
+JL_DLLEXPORT void jl_set_sigint_cond(uv_async_t *cond)
+{
+    JL_LOCK_NOGC(&sigint_state_lock);
+    sigint_cond_loc = cond;
+    JL_UNLOCK_NOGC(&sigint_state_lock);
+}
+
+#ifdef JL_HAVE_POSIX_TIMER
+// The rescue timer implements the escalation state machine for ^C: if the
+// process does not acknowledge a cancellation request within the timeout, the
+// timer raises SIGINT again (distinguished by SI_TIMER/sival_int == 1), which
+// warns the user and enables abandonment of the stuck task (switching the
+// thread to the rescue task) on the next user-sent ^C.
+// N.B.: The task is rooted on the Julia side (Base keeps a global reference).
+static jl_task_t *sigint_rescue_task = NULL;
+static timer_t sigint_rescue_timer;
+static int sigint_rescue_timer_created = 0;
+static volatile int sigint_rescue_timer_expired = 0;
+
+JL_DLLEXPORT void jl_set_sigint_rescue_task(jl_task_t *t)
+{
+    JL_LOCK_NOGC(&sigint_state_lock);
+    if (!sigint_rescue_timer_created) {
+        struct sigevent ev;
+        memset(&ev, 0, sizeof(ev));
+        ev.sigev_notify = SIGEV_SIGNAL;
+        ev.sigev_signo = SIGINT;
+        ev.sigev_value.sival_int = 1;
+        if (timer_create(CLOCK_MONOTONIC, &ev, &sigint_rescue_timer) == 0) {
+            sigint_rescue_timer_created = 1;
+        }
+    }
+    sigint_rescue_task = t;
+    JL_UNLOCK_NOGC(&sigint_state_lock);
+}
+
+static void jl_arm_sigint_rescue_timer(void)
+{
+    if (!sigint_rescue_timer_created)
+        return;
+    struct itimerspec its;
+    its.it_interval.tv_sec = 0;
+    its.it_interval.tv_nsec = 0;
+    its.it_value.tv_sec = 1; // 1s
+    its.it_value.tv_nsec = 0;
+    timer_settime(sigint_rescue_timer, 0, &its, NULL);
+}
+
+JL_DLLEXPORT void jl_disarm_sigint_rescue_timer(void)
+{
+    if (!sigint_rescue_timer_created)
+        return;
+    struct itimerspec its;
+    its.it_interval.tv_sec = 0;
+    its.it_interval.tv_nsec = 0;
+    its.it_value.tv_sec = 0;
+    its.it_value.tv_nsec = 0;
+    timer_settime(sigint_rescue_timer, 0, &its, NULL);
+}
+
+// Called when the rescue timer expires - marks that we should use aggressive
+// cancellation on the next user-sent SIGINT.
+static void jl_sigint_rescue_timer_expired(void)
+{
+    sigint_rescue_timer_expired = 1;
+}
+
+// Check if the rescue timer has expired and we should abandon the current task.
+// Returns the rescue task if abandonment should proceed, NULL otherwise.
+// Clears the expired flag if it was set.
+static jl_task_t *jl_check_sigint_rescue_abandon(void)
+{
+    if (!sigint_rescue_timer_expired)
+        return NULL;
+    sigint_rescue_timer_expired = 0;
+    return sigint_rescue_task;
+}
+
+// Reset the rescue timer state (e.g. when cancellation succeeds)
+JL_DLLEXPORT void jl_reset_sigint_rescue_timer(void)
+{
+    jl_disarm_sigint_rescue_timer();
+    sigint_rescue_timer_expired = 0;
+}
+#else
+// Stub implementations for platforms without POSIX timers
+JL_DLLEXPORT void jl_set_sigint_rescue_task(jl_task_t *t)
+{
+    (void)t;
+}
+
+JL_DLLEXPORT void jl_disarm_sigint_rescue_timer(void)
+{
+}
+
+JL_DLLEXPORT void jl_reset_sigint_rescue_timer(void)
+{
+}
+
+#ifndef _OS_WINDOWS_
+// These are only called from the signal listener thread (signals-unix.c)
+static void jl_arm_sigint_rescue_timer(void)
+{
+}
+
+static void jl_sigint_rescue_timer_expired(void)
+{
+}
+
+static jl_task_t *jl_check_sigint_rescue_abandon(void)
+{
+    return NULL;
+}
+#endif
+#endif
+
+#ifndef _OS_WINDOWS_
+static void deliver_sigint_notification(void)
+{
+    if (JL_TRYLOCK_NOGC(&sigint_state_lock)) {
+        if (sigint_cond_loc != NULL) {
+            uv_async_send(sigint_cond_loc);
+            // IO only runs on one thread, which may currently be busy - try
+            // to preempt it, so that the IO loop has a chance to run and deliver
+            // this notification.
+            jl_preempt_thread_task(jl_atomic_load_relaxed(&io_loop_tid));
+        }
+        JL_UNLOCK_NOGC(&sigint_state_lock);
+    }
+}
+#endif
 
 static void stack_overflow_warning(void)
 {

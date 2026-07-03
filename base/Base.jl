@@ -390,6 +390,68 @@ function start_profile_listener()
     ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), cond.handle)
 end
 
+function sigint_listener(cond::AsyncCondition)
+    while _trywait(cond)
+        # The SIGINT handler should have set a cancellation request on the roottask
+        cr = @atomic :acquire roottask.cancellation_request
+        cr === nothing && continue
+        # If the root task was previously abandoned, interactive evaluation has
+        # moved to a freshly created REPL backend task - target that instead.
+        # TODO: Support proper cancellation scopes for non-root tasks
+        target = roottask
+        backend = active_repl_backend
+        if backend !== nothing
+            bt = backend.backend_task::Task
+            istaskdone(bt) || (target = bt)
+        end
+        delivered = cancel!(target, conform_cancellation_request(cr))
+        # If the wait was successfully interrupted, the request is in the
+        # target's hands now - stand down the escalation timer. Otherwise the
+        # target is compute-bound and has to discover the request itself; leave
+        # the timer armed so we escalate if it does not.
+        delivered && ccall(:jl_reset_sigint_rescue_timer, Cvoid, ())
+        if (REPL = REPL_MODULE_REF[]) !== Base
+            invokelatest(REPL.maybe_rescue_REPL_after_sigint)
+        end
+    end
+    nothing
+end
+
+# The rescue task exists to give a thread whose current task got forcibly
+# abandoned (because it failed to acknowledge ^C) something runnable to switch
+# to; it simply enters the scheduler.
+function sigint_rescue_loop()
+    while true
+        wait()
+    end
+end
+
+# Keeps the rescue task rooted while the C runtime holds a reference to it
+const _sigint_rescue_task = Ref{Union{Task, Nothing}}(nothing)
+
+function start_sigint_listener()
+    cond = AsyncCondition()
+    uv_unref(cond.handle)
+    t = errormonitor(Threads.@spawn(sigint_listener(cond)))
+    atexit() do
+        # destroy this callback when exiting
+        ccall(:jl_set_sigint_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
+        # this will prompt any ongoing or pending event to flush also
+        close(cond)
+        # error-propagation is not needed, since the errormonitor will handle printing that better
+        t === current_task() || _wait(t)
+    end
+    finalizer(cond) do c
+        # if something goes south, still make sure we aren't keeping a reference in C to this
+        ccall(:jl_set_sigint_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
+    end
+    ccall(:jl_set_sigint_cond, Cvoid, (Ptr{Cvoid},), cond.handle)
+    rescue = Task(sigint_rescue_loop)
+    rescue.sticky = false
+    _sigint_rescue_task[] = rescue
+    ccall(:jl_set_sigint_rescue_task, Cvoid, (Any,), rescue)
+end
+
 function __init__()
     # Base library init
     global _atexit_hooks_finished = false
@@ -413,6 +475,7 @@ function __init__()
         # triggering a profile via signals is not implemented on windows
         start_profile_listener()
     end
+    start_sigint_listener()
     _require_world_age[] = get_world_counter()
     # Prevent spawned Julia process from getting stuck waiting on Tracy to connect.
     delete!(ENV, "JULIA_WAIT_FOR_TRACY")

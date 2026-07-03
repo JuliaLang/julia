@@ -543,7 +543,6 @@ JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context)
         }
         else if (jl_safepoint_consume_sigint()) {
             jl_clear_force_sigint();
-            jl_throw_in_ctx(ct, jl_interrupt_exception, sig, context);
         }
         return;
     }
@@ -653,21 +652,6 @@ void jl_thread_resume(int tid)
     eventfd_t got = 1;
     err = write(exit_signal_cond, &got, sizeof(eventfd_t));
     if (err != sizeof(eventfd_t)) abort();
-    pthread_mutex_unlock(&in_signal_lock);
-}
-
-// Throw jl_interrupt_exception if the master thread is in a signal async region
-// or if SIGINT happens too often.
-static void jl_try_deliver_sigint(void)
-{
-    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
-    jl_safepoint_enable_sigint();
-    jl_wake_libuv();
-    pthread_mutex_lock(&in_signal_lock);
-    signals_inflight++;
-    jl_atomic_store_release(&ptls2->signal_request, 2);
-    // This also makes sure `sleep` is aborted.
-    pthread_kill(ptls2->system_id, SIGUSR2);
     pthread_mutex_unlock(&in_signal_lock);
 }
 
@@ -1098,7 +1082,7 @@ static void do_profile(void)
 static void *signal_listener(void *arg)
 {
     sigset_t sset;
-    int sig, critical, profile;
+    int sig, critical, profile, doexit = 0, rescue_bt = 0;
     jl_sigsetset(&sset);
 #if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L
     siginfo_t info;
@@ -1165,6 +1149,31 @@ static void *signal_listener(void *arg)
 #endif
 
         if (sig == SIGINT) {
+#if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L
+            // Check if this SIGINT came from our rescue timer (si_code == SI_TIMER
+            // and sival_int == 1). This means the process failed to respond to
+            // the cancellation request in time.
+            if (info.si_code == SI_TIMER && info.si_value.sival_int == 1) {
+                jl_safe_printf("\nWARNING: Process failed to acknowledge SIGINT within 1s.\n"
+                                 "         You (or a package author) may need to add more @cancel_check's.\n"
+                                 "         Attempting to collect backtraces of running threads.\n"
+#ifdef SIGINFO
+                                 "         Send SIGINFO (Ctrl-T) to trigger additional profiles.\n"
+#else
+                                 "         Send SIGUSR1 to trigger additional profiles.\n"
+#endif
+                                 "         Re-Send SIGINT to begin (potentially unsafe) aggressive termination.\n");
+                // Mark that the timer has expired - the next SIGINT will trigger abandonment
+                jl_sigint_rescue_timer_expired();
+                // Collect backtraces of *running* threads.
+                // N.B.: It doesn't make sense to profile suspended threads - we only get to this case
+                //       if a task is spinning in CPU-bound code without any yield/cancellation points.
+                critical = 1;
+                doexit = 0;
+                rescue_bt = 1;
+                goto noexit_critical;
+            }
+#endif
             if (jl_ignore_sigint()) {
                 continue;
             }
@@ -1172,7 +1181,35 @@ static void *signal_listener(void *arg)
                 critical = 1;
             }
             else {
-                jl_try_deliver_sigint();
+                // Check if the rescue timer has already expired (from a previous SIGINT
+                // cycle). If so, the user is pressing Ctrl-C again after the warning -
+                // time to abandon the stuck task.
+                jl_task_t *rescue_task = jl_check_sigint_rescue_abandon();
+                if (rescue_task != NULL) {
+                    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
+                    jl_task_t *ct = jl_atomic_load_relaxed(&ptls2->current_task);
+                    if (ct != NULL && ct != rescue_task) {
+                        jl_safe_printf("\nWARNING: Abandoning current task and switching to rescue task.\n"
+                                         "         This may leave the process in an inconsistent state.\n");
+                        jl_abandon_task(ct, rescue_task);
+                        continue;
+                    }
+                }
+
+                jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
+                // Set the cancellation request, then notify the sigint listener
+                // that we want to cancel - if the task is not currently running,
+                // the sigint listener will take care of safely moving us through
+                // the cancellation state machine.
+                // TODO: If there is only one thread, we may need to ask the currently
+                // running task to yield, so that the sigint listener can run.
+                jl_atomic_store_release(&ptls2->root_task->cancellation_request,
+                    jl_box_uint8(0x00));
+                // Set a 1s timer for the libuv event loop to run and process the
+                // cancellation. If this does not happen, we will advance to
+                // more aggressive cancellation.
+                jl_arm_sigint_rescue_timer();
+                deliver_sigint_notification();
                 continue;
             }
         }
@@ -1189,7 +1226,7 @@ static void *signal_listener(void *arg)
         critical |= (sig == SIGUSR1 && !profile);
 #endif
 
-        int doexit = critical;
+        doexit = critical;
 #ifdef SIGINFO
         if (sig == SIGINFO) {
             if (profile_running != 1)
@@ -1228,6 +1265,9 @@ static void *signal_listener(void *arg)
             }
         }
 
+#if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L
+noexit_critical:
+#endif
         signal_bt_size = 0;
 #if !defined(JL_DISABLE_LIBUNWIND)
         if (critical) {
@@ -1285,7 +1325,10 @@ static void *signal_listener(void *arg)
             }
             jl_safe_printf("\n");
             // Enable trace compilation to stderr with timing during profile collection
-            jl_force_trace_compile_timing_enable();
+            // (not wanted for the automated ^C-escalation backtrace collection)
+            if (!rescue_bt)
+                jl_force_trace_compile_timing_enable();
+            rescue_bt = 0;
         }
     }
     return NULL;
