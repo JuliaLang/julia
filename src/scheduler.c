@@ -523,9 +523,20 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                     // If trylock would have succeeded, that may have been our
                     // responsibility, so need to make sure thread 0 will take care
                     // of us.
-                    if (jl_atomic_load_relaxed(&jl_uv_mutex.owner) == NULL) // aka trylock
-                        jl_wakeup_thread(jl_atomic_load_relaxed(&io_loop_tid));
-
+                    if (jl_atomic_load_relaxed(&jl_uv_mutex.owner) == NULL) { // aka trylock
+                        int16_t io_tid = jl_atomic_load_relaxed(&io_loop_tid);
+                        jl_wakeup_thread(io_tid);
+                        // If the io thread cannot currently run the event loop
+                        // - it is executing foreign code (gc-safe state, e.g.
+                        // a gc_safe ccall), or a ^C notification is stuck
+                        // waiting for dispatch (the io thread may be inside a
+                        // long-running foreign call that only that
+                        // notification can interrupt) - take the loop over.
+                        jl_ptls_t io_ptls = jl_atomic_load_relaxed(&jl_all_tls_states)[io_tid];
+                        if (jl_atomic_load_relaxed(&io_ptls->gc_state) == JL_GC_STATE_SAFE ||
+                            jl_atomic_load_relaxed(&jl_sigint_dispatch_pending))
+                            uvlock = jl_mutex_trylock(&jl_uv_mutex);
+                    }
                 }
                 if (uvlock) {
                     int enter_eventloop = may_sleep(ptls);

@@ -939,6 +939,8 @@ void restore_signals(void);
 void jl_install_thread_signal_handler(jl_ptls_t ptls);
 void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_wakeup_thread_from_foreign(int16_t tid) JL_NOTSAFEPOINT;
+extern _Atomic(int) jl_sigint_dispatch_pending;
+JL_DLLEXPORT void jl_clear_sigint_dispatch_pending(void) JL_NOTSAFEPOINT;
 
 extern uv_loop_t *jl_io_loop;
 JL_DLLEXPORT void jl_uv_flush(uv_stream_t *stream);

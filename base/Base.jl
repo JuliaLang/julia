@@ -392,6 +392,9 @@ end
 
 function sigint_listener(cond::AsyncCondition)
     while _trywait(cond)
+      # The notification reached us - idle threads no longer need to help
+      # dispatch it (see jl_sigint_dispatch_pending in the scheduler).
+      ccall(:jl_clear_sigint_dispatch_pending, Cvoid, ())
       try # an error while processing one ^C must not disable the ^C machinery
         # The SIGINT handler should have set a cancellation request on the roottask
         cr = @atomic :acquire roottask.cancellation_request
