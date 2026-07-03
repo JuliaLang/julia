@@ -1137,24 +1137,33 @@ public:
 // Activate the re-type guards registered for `b`: rewrite its JIT patch sites and
 // repoint the GOT entries of statically compiled code at the deoptimization sentinel.
 // Called (with the world counter lock held) when the declared type of `b` is changed,
-// after BINDING_FLAG_RETYPED is set and before the new value is stored. A thread may
-// still complete an access it began against the pre-activation state -- executing a
-// stale copy of a nop, or holding an already-loaded GOT entry value -- which is
+// after BINDING_FLAG_RETYPED is set and before the new value is stored. When any JIT
+// site was patched, other threads may keep executing stale copies of the previous
+// instructions until their next context synchronization event (AArch64 explicitly
+// permits this, and x86 provides no documented bound without a serializing operation),
+// so this issues jl_membarrier_sync_core() before returning, which forces one on every
+// thread; an access that completes against the pre-activation state before then is
 // harmless because the value slot still holds the old value, conforming to every
-// previously declared type; the caller quiesces every thread before installing the
-// new value, after which no such access can still be in flight.
+// previously declared type. GOT repoints are plain data: the caller's asymmetric fence
+// orders them against the value swap.
 extern "C" JL_DLLEXPORT_CODEGEN void jl_patch_retyped_binding_sites_impl(jl_binding_t *b)
 {
-    std::lock_guard<std::mutex> lock(bpatch_lock);
-    auto it = bpatch_info.find(b);
-    if (it == bpatch_info.end())
-        return;
-    BindingPatchInfo info = std::move(it->second);
-    bpatch_info.erase(it);
-    for (auto &s : info.sites)
-        bpatch_apply(s);
-    for (uintptr_t e : info.got_entries)
-        jl_atomic_store_release((_Atomic(void*)*)e, (void*)&jl_binding_deopt_slot);
+    bool patched = false;
+    {
+        std::lock_guard<std::mutex> lock(bpatch_lock);
+        auto it = bpatch_info.find(b);
+        if (it == bpatch_info.end())
+            return;
+        BindingPatchInfo info = std::move(it->second);
+        bpatch_info.erase(it);
+        for (auto &s : info.sites)
+            bpatch_apply(s);
+        for (uintptr_t e : info.got_entries)
+            jl_atomic_store_release((_Atomic(void*)*)e, (void*)&jl_binding_deopt_slot);
+        patched = !info.sites.empty();
+    }
+    if (patched)
+        jl_membarrier_sync_core();
 }
 
 // Register the `jl_bpatch` records of a loaded system or package image: [start, end)

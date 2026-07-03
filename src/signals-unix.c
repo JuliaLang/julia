@@ -1501,12 +1501,15 @@ static _Atomic(enum membarrier_implementation) membarrier_impl = MEMBARRIER_IMPL
 #   include <sys/syscall.h>
 #   if defined(__NR_membarrier)
 enum membarrier_cmd {
-    MEMBARRIER_CMD_QUERY                        = 0,
-    MEMBARRIER_CMD_PRIVATE_EXPEDITED            = (1 << 3),
-    MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED   = (1 << 4),
+    MEMBARRIER_CMD_QUERY                                 = 0,
+    MEMBARRIER_CMD_PRIVATE_EXPEDITED                     = (1 << 3),
+    MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED            = (1 << 4),
+    MEMBARRIER_CMD_PRIVATE_EXPEDITED_SYNC_CORE           = (1 << 5),
+    MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED_SYNC_CORE  = (1 << 6),
 };
 #    define membarrier(...) syscall(__NR_membarrier, __VA_ARGS__)
 #    define HAVE_MEMBARRIER_SYSCALL
+#    define HAVE_MEMBARRIER_SYNC_CORE_CMDS
 #  else
 #    warning "Missing linux kernel headers for membarrier syscall, support disabled"
 #  endif
@@ -1515,8 +1518,17 @@ enum membarrier_cmd {
 #  if __FreeBSD_version >= 1401500
 #    include <sys/membarrier.h>
 #    define HAVE_MEMBARRIER_SYSCALL
+#    ifdef MEMBARRIER_CMD_PRIVATE_EXPEDITED_SYNC_CORE
+#      define HAVE_MEMBARRIER_SYNC_CORE_CMDS
+#    endif
 #  endif
 #endif
+
+// Whether the membarrier syscall additionally supports (and we have registered for) the
+// SYNC_CORE flavor, which also executes a core-serializing instruction on every thread of
+// the process, synchronizing their instruction streams (needed when patching code that
+// other threads may be concurrently executing, see jl_membarrier_sync_core).
+static _Atomic(int) membarrier_sync_core_available = 0;
 
 static enum membarrier_implementation jl_init_membarrier(void) {
 #ifdef HAVE_MEMBARRIER_SYSCALL
@@ -1526,6 +1538,14 @@ static enum membarrier_implementation jl_init_membarrier(void) {
         // supported
         if (membarrier(MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED, 0, 0) == 0) {
             // working
+#ifdef HAVE_MEMBARRIER_SYNC_CORE_CMDS
+            int needed_sync = MEMBARRIER_CMD_PRIVATE_EXPEDITED_SYNC_CORE |
+                              MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED_SYNC_CORE;
+            if ((ret & needed_sync) == needed_sync &&
+                membarrier(MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED_SYNC_CORE, 0, 0) == 0) {
+                jl_atomic_store_relaxed(&membarrier_sync_core_available, 1);
+            }
+#endif
             jl_atomic_store_relaxed(&membarrier_impl, MEMBARRIER_IMPLEMENTATION_SYS_MEMBARRIER);
             return MEMBARRIER_IMPLEMENTATION_SYS_MEMBARRIER;
         }
@@ -1570,4 +1590,29 @@ JL_DLLEXPORT void jl_membarrier(void) {
     }
 }
 
+// Like jl_membarrier, but additionally guarantees that every thread of the process
+// executes a core-serializing instruction (context synchronization event), so that no
+// thread can keep executing a stale copy of code modified before the call once it
+// returns. Used when patching instructions other threads may be concurrently executing
+// (see jl_patch_retyped_binding_sites). The mprotect trick is not specified to
+// synchronize instruction streams (its TLB shootdown IPIs may skip lazy-TLB cores), so
+// only the SYNC_CORE membarrier flavor or the per-thread suspension bounce (signal
+// delivery and return serialize the target core) are used here.
+JL_DLLEXPORT void jl_membarrier_sync_core(void) {
+    enum membarrier_implementation impl = jl_atomic_load_relaxed(&membarrier_impl);
+    if (impl == MEMBARRIER_IMPLEMENTATION_UNKNOWN) {
+        impl = jl_init_membarrier();
+    }
+    (void)impl;
+#ifdef HAVE_MEMBARRIER_SYNC_CORE_CMDS
+    if (impl == MEMBARRIER_IMPLEMENTATION_SYS_MEMBARRIER &&
+        jl_atomic_load_relaxed(&membarrier_sync_core_available)) {
+        int ret = membarrier(MEMBARRIER_CMD_PRIVATE_EXPEDITED_SYNC_CORE, 0, 0);
+        assert(ret == 0);
+        (void)ret;
+        return;
+    }
+#endif
+    jl_thread_suspend_membarrier();
+}
 #endif // !_OS_DARWIN_
