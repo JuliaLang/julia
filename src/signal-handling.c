@@ -14,14 +14,14 @@
 #include <string.h>
 #endif
 
-// Platform detection for the SIGINT rescue timer mechanism.
-// TODO: Implement kevent (macOS/OpenBSD) and Windows based rescue timers.
-#if defined(__APPLE__)
-#define JL_HAVE_MACH
-#define JL_HAVE_KEVENT
-#elif defined(__OpenBSD__)
-#define JL_HAVE_KEVENT
-#elif !defined(_OS_WINDOWS_)
+// Platform selection for the SIGINT rescue timer mechanism (keep in sync
+// with the HAVE_MACH/HAVE_KEVENT/HAVE_TIMER selection in signals-unix.c).
+#if defined(__APPLE__) || defined(__OpenBSD__)
+#define JL_HAVE_KEVENT_TIMER
+#include <sys/event.h>
+#elif defined(_OS_WINDOWS_)
+#define JL_HAVE_WIN32_TIMER
+#else
 #define JL_HAVE_POSIX_TIMER
 #endif
 
@@ -464,26 +464,29 @@ static void jl_check_profile_autostop(void) JL_NOTSAFEPOINT
 // listener task then drives the cancellation state machine.
 jl_mutex_t sigint_state_lock;
 static uv_async_t *sigint_cond_loc = NULL;
-JL_DLLEXPORT void jl_set_sigint_cond(uv_async_t *cond)
+JL_DLLEXPORT void jl_set_sigint_cond(uv_async_t *cond) JL_NOTSAFEPOINT
 {
     JL_LOCK_NOGC(&sigint_state_lock);
     sigint_cond_loc = cond;
     JL_UNLOCK_NOGC(&sigint_state_lock);
 }
 
-#ifdef JL_HAVE_POSIX_TIMER
 // The rescue timer implements the escalation state machine for ^C: if the
-// process does not acknowledge a cancellation request within the timeout, the
-// timer raises SIGINT again (distinguished by SI_TIMER/sival_int == 1), which
-// warns the user and enables abandonment of the stuck task (switching the
-// thread to the rescue task) on the next user-sent ^C.
-// N.B.: The task is rooted on the Julia side (Base keeps a global reference).
+// process does not acknowledge a cancellation request within the timeout,
+// the user gets a warning, and the next user-sent ^C abandons the stuck task
+// (switching the thread to the rescue task).
+// N.B.: The rescue task is rooted on the Julia side (Base keeps a global
+// reference).
 static jl_task_t *sigint_rescue_task = NULL;
-static timer_t sigint_rescue_timer;
-static int sigint_rescue_timer_created = 0;
 static volatile int sigint_rescue_timer_expired = 0;
 
-JL_DLLEXPORT void jl_set_sigint_rescue_task(jl_task_t *t)
+#if defined(JL_HAVE_POSIX_TIMER)
+// The timer raises SIGINT, distinguished from a user ^C by
+// SI_TIMER/sival_int == 1, which the signal listener thread handles.
+static timer_t sigint_rescue_timer;
+static int sigint_rescue_timer_created = 0;
+
+JL_DLLEXPORT void jl_set_sigint_rescue_task(jl_task_t *t) JL_NOTSAFEPOINT
 {
     JL_LOCK_NOGC(&sigint_state_lock);
     if (!sigint_rescue_timer_created) {
@@ -500,7 +503,7 @@ JL_DLLEXPORT void jl_set_sigint_rescue_task(jl_task_t *t)
     JL_UNLOCK_NOGC(&sigint_state_lock);
 }
 
-static void jl_arm_sigint_rescue_timer(void)
+static void jl_arm_sigint_rescue_timer(void) JL_NOTSAFEPOINT
 {
     if (!sigint_rescue_timer_created)
         return;
@@ -512,7 +515,7 @@ static void jl_arm_sigint_rescue_timer(void)
     timer_settime(sigint_rescue_timer, 0, &its, NULL);
 }
 
-JL_DLLEXPORT void jl_disarm_sigint_rescue_timer(void)
+JL_DLLEXPORT void jl_disarm_sigint_rescue_timer(void) JL_NOTSAFEPOINT
 {
     if (!sigint_rescue_timer_created)
         return;
@@ -524,17 +527,110 @@ JL_DLLEXPORT void jl_disarm_sigint_rescue_timer(void)
     timer_settime(sigint_rescue_timer, 0, &its, NULL);
 }
 
+#elif defined(JL_HAVE_KEVENT_TIMER)
+// The timer is an EVFILT_TIMER event on the signal listener's kqueue
+// (created in signals-unix.c, which stores the fd here).
+static int sigint_rescue_kq = -1;
+#define JL_SIGINT_RESCUE_TIMER_IDENT ((uintptr_t)0x51C4)
+
+JL_DLLEXPORT void jl_set_sigint_rescue_task(jl_task_t *t) JL_NOTSAFEPOINT
+{
+    JL_LOCK_NOGC(&sigint_state_lock);
+    sigint_rescue_task = t;
+    JL_UNLOCK_NOGC(&sigint_state_lock);
+}
+
+static void jl_arm_sigint_rescue_timer(void) JL_NOTSAFEPOINT
+{
+    if (sigint_rescue_kq == -1)
+        return;
+    struct kevent ev;
+    EV_SET(&ev, JL_SIGINT_RESCUE_TIMER_IDENT, EVFILT_TIMER,
+           EV_ADD | EV_ONESHOT, 0, 1000 /* ms */, 0);
+    kevent(sigint_rescue_kq, &ev, 1, NULL, 0, NULL);
+}
+
+JL_DLLEXPORT void jl_disarm_sigint_rescue_timer(void) JL_NOTSAFEPOINT
+{
+    if (sigint_rescue_kq == -1)
+        return;
+    struct kevent ev;
+    EV_SET(&ev, JL_SIGINT_RESCUE_TIMER_IDENT, EVFILT_TIMER, EV_DELETE, 0, 0, 0);
+    kevent(sigint_rescue_kq, &ev, 1, NULL, 0, NULL); // ignore ENOENT
+}
+
+#elif defined(JL_HAVE_WIN32_TIMER)
+// The timer is a timer-queue timer; its callback (on a system pool thread)
+// warns the user and marks the escalation state.
+static HANDLE sigint_rescue_timer_handle = NULL;
+
+JL_DLLEXPORT void jl_set_sigint_rescue_task(jl_task_t *t) JL_NOTSAFEPOINT
+{
+    JL_LOCK_NOGC(&sigint_state_lock);
+    sigint_rescue_task = t;
+    JL_UNLOCK_NOGC(&sigint_state_lock);
+}
+
+static VOID CALLBACK sigint_rescue_timer_cb(PVOID param, BOOLEAN fired)
+{
+    (void)param; (void)fired;
+    sigint_rescue_timer_expired = 1;
+    jl_safe_printf("\nWARNING: Process failed to acknowledge SIGINT within 1s.\n"
+                     "         You (or a package author) may need to add more @cancel_check's.\n"
+                     "         Re-Send SIGINT to begin (potentially unsafe) aggressive termination.\n");
+}
+
+static void jl_arm_sigint_rescue_timer(void) JL_NOTSAFEPOINT
+{
+    JL_LOCK_NOGC(&sigint_state_lock);
+    if (sigint_rescue_timer_handle == NULL) {
+        if (!CreateTimerQueueTimer(&sigint_rescue_timer_handle, NULL,
+                                   sigint_rescue_timer_cb, NULL, 1000, 0,
+                                   WT_EXECUTEONLYONCE))
+            sigint_rescue_timer_handle = NULL;
+    }
+    JL_UNLOCK_NOGC(&sigint_state_lock);
+}
+
+JL_DLLEXPORT void jl_disarm_sigint_rescue_timer(void) JL_NOTSAFEPOINT
+{
+    JL_LOCK_NOGC(&sigint_state_lock);
+    if (sigint_rescue_timer_handle != NULL) {
+        DeleteTimerQueueTimer(NULL, sigint_rescue_timer_handle, NULL);
+        sigint_rescue_timer_handle = NULL;
+    }
+    JL_UNLOCK_NOGC(&sigint_state_lock);
+}
+
+#else
+JL_DLLEXPORT void jl_set_sigint_rescue_task(jl_task_t *t) JL_NOTSAFEPOINT
+{
+    (void)t;
+}
+
+static void jl_arm_sigint_rescue_timer(void) JL_NOTSAFEPOINT
+{
+}
+
+JL_DLLEXPORT void jl_disarm_sigint_rescue_timer(void) JL_NOTSAFEPOINT
+{
+}
+#endif
+
+#if !defined(JL_HAVE_WIN32_TIMER)
 // Called when the rescue timer expires - marks that we should use aggressive
-// cancellation on the next user-sent SIGINT.
-static void jl_sigint_rescue_timer_expired(void)
+// cancellation on the next user-sent SIGINT. (On Windows the timer callback
+// records this itself.)
+static void jl_sigint_rescue_timer_expired(void) JL_NOTSAFEPOINT
 {
     sigint_rescue_timer_expired = 1;
 }
+#endif
 
 // Check if the rescue timer has expired and we should abandon the current task.
 // Returns the rescue task if abandonment should proceed, NULL otherwise.
 // Clears the expired flag if it was set.
-static jl_task_t *jl_check_sigint_rescue_abandon(void)
+static jl_task_t *jl_check_sigint_rescue_abandon(void) JL_NOTSAFEPOINT
 {
     if (!sigint_rescue_timer_expired)
         return NULL;
@@ -543,59 +639,46 @@ static jl_task_t *jl_check_sigint_rescue_abandon(void)
 }
 
 // Reset the rescue timer state (e.g. when cancellation succeeds)
-JL_DLLEXPORT void jl_reset_sigint_rescue_timer(void)
+JL_DLLEXPORT void jl_reset_sigint_rescue_timer(void) JL_NOTSAFEPOINT
 {
     jl_disarm_sigint_rescue_timer();
     sigint_rescue_timer_expired = 0;
 }
-#else
-// Stub implementations for platforms without POSIX timers
-JL_DLLEXPORT void jl_set_sigint_rescue_task(jl_task_t *t)
-{
-    (void)t;
-}
 
-JL_DLLEXPORT void jl_disarm_sigint_rescue_timer(void)
-{
-}
-
-JL_DLLEXPORT void jl_reset_sigint_rescue_timer(void)
-{
-}
-
-#ifndef _OS_WINDOWS_
-// These are only called from the signal listener thread (signals-unix.c)
-static void jl_arm_sigint_rescue_timer(void)
-{
-}
-
-static void jl_sigint_rescue_timer_expired(void)
-{
-}
-
-static jl_task_t *jl_check_sigint_rescue_abandon(void)
-{
-    return NULL;
-}
-#endif
-#endif
-
-#ifndef _OS_WINDOWS_
 static void deliver_sigint_notification(void) JL_NOTSAFEPOINT
 {
-    // N.B.: This runs on the dedicated signal listener thread (not in an
-    // async signal handler), so briefly blocking on the state lock is fine.
+    // N.B.: This runs on a dedicated (non-Julia) thread - the signal listener
+    // thread, a Win32 console ctrl handler thread, or a timer callback
+    // thread - so briefly blocking on the state lock is fine.
     JL_LOCK_NOGC(&sigint_state_lock);
     if (sigint_cond_loc != NULL) {
         uv_async_send(sigint_cond_loc);
-        // IO only runs on one thread, which may currently be busy - try
-        // to preempt it, so that the IO loop has a chance to run and deliver
-        // this notification.
+        // The IO-owning thread may be parked on the scheduler condvar (e.g.
+        // when the event loop has no active handles), where an async send
+        // alone cannot reach it - wake it up properly.
+        jl_wakeup_thread_from_foreign(jl_atomic_load_relaxed(&io_loop_tid));
+        // It may also be busy running a task - try to preempt it, so that
+        // the IO loop has a chance to run and deliver this notification.
         jl_preempt_thread_task(jl_atomic_load_relaxed(&io_loop_tid));
     }
     JL_UNLOCK_NOGC(&sigint_state_lock);
 }
-#endif
+
+// Shared entry point for a user-initiated interrupt (^C): set a safe
+// cancellation request on the root task, arm the escalation timer, and
+// notify the sigint listener task, which drives the cancellation state
+// machine. Callable from non-Julia threads.
+void jl_sigint_request_cancellation(void) JL_NOTSAFEPOINT
+{
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
+    jl_atomic_store_release(&ptls2->root_task->cancellation_request,
+        jl_box_uint8(0x00)); // CANCEL_REQUEST_SAFE
+    // Set a timer for the event loop to run and process the cancellation. If
+    // this does not happen in time, we will advance to more aggressive
+    // cancellation.
+    jl_arm_sigint_rescue_timer();
+    deliver_sigint_notification();
+}
 
 static void stack_overflow_warning(void)
 {

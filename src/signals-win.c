@@ -27,23 +27,14 @@ void __cdecl fpreset (void);
 #define _FPE_STACKUNDERFLOW 0x8b
 #define _FPE_EXPLICITGEN    0x8c    /* raise( SIGFPE ); */
 
-static void jl_try_throw_sigint(void)
-{
-    jl_task_t *ct = jl_current_task;
-    jl_safepoint_enable_sigint();
-    jl_wake_libuv();
-    int force = jl_check_force_sigint();
-    if (force || (!ct->ptls->defer_signal && ct->ptls->io_wait)) {
-        jl_safepoint_consume_sigint();
-        if (force)
-            jl_safe_printf("WARNING: Force throwing a SIGINT\n");
-        // Force a throw
-        jl_clear_force_sigint();
-        jl_throw(jl_interrupt_exception);
-    }
-}
-
-void __cdecl crt_sig_handler(int sig, int num)
+    case SIGINT:
+        signal(SIGINT, (void (__cdecl *)(int))crt_sig_handler);
+        if (!jl_ignore_sigint()) {
+            if (exit_on_sigint)
+                jl_exit(130); // 128 + SIGINT
+            jl_sigint_request_cancellation();
+        }
+        break;void __cdecl crt_sig_handler(int sig, int num)
 {
     CONTEXT Context;
     switch (sig) {
@@ -67,7 +58,7 @@ void __cdecl crt_sig_handler(int sig, int num)
         if (!jl_ignore_sigint()) {
             if (exit_on_sigint)
                 jl_exit(130); // 128 + SIGINT
-            jl_try_throw_sigint();
+            jl_sigint_request_cancellation();
         }
         break;
     default: // SIGSEGV, SIGTERM, SIGILL, SIGABRT
@@ -236,7 +227,29 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
     if (!jl_ignore_sigint()) {
         if (exit_on_sigint)
             jl_exit(128 + sig); // 128 + SIGINT
-        jl_try_deliver_sigint();
+        if (sig == SIGINT) {
+            // If the escalation timer has expired, this repeated ^C abandons
+            // the stuck task.
+            jl_task_t *rescue_task = jl_check_sigint_rescue_abandon();
+            if (rescue_task != NULL) {
+                jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
+                jl_task_t *ct = jl_atomic_load_relaxed(&ptls2->current_task);
+                if (ct != NULL && ct != rescue_task) {
+                    jl_safe_printf("\nWARNING: Abandoning current task and switching to rescue task.\n"
+                                     "         This may leave the process in an inconsistent state.\n");
+                    jl_abandon_task(ct, rescue_task);
+                    // Let the sigint listener task perform the Julia-side cleanup.
+                    deliver_sigint_notification();
+                    return 1;
+                }
+            }
+            // Request cancellation of the root task and notify the sigint
+            // listener, which drives the cancellation state machine.
+            jl_sigint_request_cancellation();
+        }
+        else {
+            jl_try_deliver_sigint();
+        }
     }
     return 1;
 }
@@ -671,19 +684,83 @@ JL_DLLEXPORT void jl_membarrier(void) {
     FlushProcessWriteBuffers();
 }
 
-// Send a signal to the specified thread to longjmp to its reset_ctx if available.
-// This is used for task cancellation to interrupt a running task at a safe point.
-// TODO: Implement Windows support using SuspendThread/GetThreadContext/SetThreadContext
+// Task abandonment callback - defined in task.c
+extern JL_NORETURN void jl_abandon_task_cb(void);
+
+// Interrupt the target thread's current task at its cancellation reset point,
+// if it has one established (used for task cancellation).
 JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT
 {
-    // Not yet implemented on Windows
-    (void)tid;
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    if (ptls2 == NULL)
+        return;
+    jl_task_t *ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
+    if (ct2 == NULL || ct2->reset_ctx == NULL)
+        return;
+    HANDLE hThread = ptls2->system_id;
+    if ((DWORD)-1 == SuspendThread(hThread))
+        return;
+    // Re-check now that the thread cannot run
+    ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
+    _jl_ucontext_t *reset_ctx = ct2 == NULL ? NULL : (_jl_ucontext_t*)ct2->reset_ctx;
+    if (reset_ctx != NULL) {
+        CONTEXT ctxThread;
+        memset(&ctxThread, 0, sizeof(CONTEXT));
+        ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+        if (GetThreadContext(hThread, &ctxThread)) {
+            // Consume the reset point (prevents a double reset)
+            ct2->reset_ctx = NULL;
+            if (jl_simulate_longjmp(reset_ctx->uc_mcontext, &ctxThread)) {
+                ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+                SetThreadContext(hThread, &ctxThread);
+            }
+        }
+    }
+    ResumeThread(hThread);
 }
 
-// Send a signal to the specified thread to abandon the current task.
-// TODO: Implement Windows support using SuspendThread/GetThreadContext/SetThreadContext
+// Switch the target thread's current (already ABANDONED-marked) task to
+// ptls->abandon_to (used to implement task abandonment).
 void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
 {
-    // Not yet implemented on Windows
-    (void)tid;
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    if (ptls2 == NULL)
+        return;
+    HANDLE hThread = ptls2->system_id;
+    if ((DWORD)-1 == SuspendThread(hThread))
+        return;
+    jl_task_t *ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
+    if (ct2 != NULL && jl_atomic_load_relaxed(&ct2->_state) == JL_TASK_STATE_ABANDONED &&
+        ptls2->abandon_to != NULL) {
+        CONTEXT ctxThread;
+        memset(&ctxThread, 0, sizeof(CONTEXT));
+        ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+        if (GetThreadContext(hThread, &ctxThread)) {
+            // Redirect the thread to call jl_abandon_task_cb (which never
+            // returns) on a minimal fake frame.
+#if defined(_CPU_X86_64_)
+            uintptr_t sp = (uintptr_t)ctxThread.Rsp;
+            sp = (sp - 256) & ~(uintptr_t)15; // skip resume data, realign
+            sp -= sizeof(uintptr_t); // fake return address slot
+            *(uintptr_t*)sp = 0;
+            ctxThread.Rsp = (DWORD64)sp;
+            ctxThread.Rip = (DWORD64)&jl_abandon_task_cb;
+#elif defined(_CPU_X86_)
+            uintptr_t sp = (uintptr_t)ctxThread.Esp;
+            sp = (sp - 64) & ~(uintptr_t)15;
+            sp -= sizeof(uintptr_t); // fake return address slot
+            *(uintptr_t*)sp = 0;
+            ctxThread.Esp = (DWORD)sp;
+            ctxThread.Eip = (DWORD)&jl_abandon_task_cb;
+#endif
+            ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+            SetThreadContext(hThread, &ctxThread);
+        }
+    }
+    else {
+        // The thread switched tasks in the meantime; the marked victim
+        // already exited through ctx_switch's killed path.
+        ptls2->abandon_to = NULL;
+    }
+    ResumeThread(hThread);
 }

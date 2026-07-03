@@ -786,7 +786,10 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx) JL_CANSAFEPOINT
         jl_call_in_ctx(ct->ptls, jl_exit_thread0_cb, sig, ctx);
     }
     else if (request == 5) {
-        // Longjmp to reset_ctx for task cancellation
+        // Longjmp to reset_ctx for task cancellation. N.B.: reset_ctx is only
+        // ever consumed for the thread's *current* task, whose stack is live
+        // at its canonical address (copied stacks are swapped in before a
+        // task becomes current), so the buffer address is valid here.
         _jl_ucontext_t *reset_ctx = (_jl_ucontext_t*)ct->reset_ctx;
         if (reset_ctx != NULL) {
             // Clear reset_ctx before longjmp to prevent double-longjmp
@@ -795,10 +798,19 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx) JL_CANSAFEPOINT
         }
     }
     else if (request == 6) {
-        // Task abandonment - call the abandon callback which will switch tasks
-        // The task state has already been set to ABANDONED by the caller.
-        // The target task is in ptls->abandon_to.
-        jl_call_in_ctx(ct->ptls, jl_abandon_task_cb, sig, ctx);
+        // Task abandonment - call the abandon callback (which must not
+        // return) to switch to ptls->abandon_to. The task state has already
+        // been set to ABANDONED by the caller. If this thread switched tasks
+        // between the abandon request and this signal, the marked victim
+        // already exited through ctx_switch's killed path and there is
+        // nothing left to do here.
+        if (jl_atomic_load_relaxed(&ct->_state) == JL_TASK_STATE_ABANDONED &&
+            ct->ptls->abandon_to != NULL) {
+            jl_call_in_ctx(ct->ptls, jl_abandon_task_cb, sig, ctx);
+        }
+        else {
+            ct->ptls->abandon_to = NULL;
+        }
     }
     errno = errno_save;
 }
@@ -1101,10 +1113,14 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
                 signal(*sig, SIG_DFL);
         }
     }
+    // The ^C escalation timer is delivered through this kqueue
+    sigint_rescue_kq = sigqueue;
 #endif
+    int rescue_timer_fired;
     while (1) {
         sig = 0;
         errno = 0;
+        rescue_timer_fired = 0;
 #ifdef HAVE_KEVENT
         if (sigqueue != -1) {
             int nevents = kevent(sigqueue, NULL, 0, &ev, 1, NULL);
@@ -1116,11 +1132,21 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
             if (nevents != 1) {
                 close(sigqueue);
                 sigqueue = -1;
+                sigint_rescue_kq = -1;
                 for (const int *sig = sigwait_sigs; *sig; sig++)
                     signal(*sig, SIG_DFL);
                 continue;
             }
-            sig = ev.ident;
+            if (ev.filter == EVFILT_TIMER) {
+                // the ^C escalation (rescue) timer expired
+                if (ev.ident != JL_SIGINT_RESCUE_TIMER_IDENT)
+                    continue;
+                sig = SIGINT;
+                rescue_timer_fired = 1;
+            }
+            else {
+                sig = ev.ident;
+            }
         }
         else
 #endif
@@ -1148,11 +1174,14 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
 #endif
 
         if (sig == SIGINT) {
-#if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L
+#if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L && !defined(HAVE_KEVENT)
             // Check if this SIGINT came from our rescue timer (si_code == SI_TIMER
             // and sival_int == 1). This means the process failed to respond to
             // the cancellation request in time.
-            if (info.si_code == SI_TIMER && info.si_value.sival_int == 1) {
+            if (info.si_code == SI_TIMER && info.si_value.sival_int == 1)
+                rescue_timer_fired = 1;
+#endif
+            if (rescue_timer_fired) {
                 jl_safe_printf("\nWARNING: Process failed to acknowledge SIGINT within 1s.\n"
                                  "         You (or a package author) may need to add more @cancel_check's.\n"
                                  "         Attempting to collect backtraces of running threads.\n"
@@ -1172,7 +1201,6 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
                 rescue_bt = 1;
                 goto noexit_critical;
             }
-#endif
             if (jl_ignore_sigint()) {
                 continue;
             }
@@ -1191,24 +1219,21 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
                         jl_safe_printf("\nWARNING: Abandoning current task and switching to rescue task.\n"
                                          "         This may leave the process in an inconsistent state.\n");
                         jl_abandon_task(ct, rescue_task);
+                        // Let the sigint listener task perform the Julia-side
+                        // cleanup (waking the abandoned task's waiters and
+                        // re-initializing or shutting down the session).
+                        deliver_sigint_notification();
                         continue;
                     }
                 }
 
-                jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
-                // Set the cancellation request, then notify the sigint listener
-                // that we want to cancel - if the task is not currently running,
-                // the sigint listener will take care of safely moving us through
-                // the cancellation state machine.
+                // Request cancellation of the root task and notify the sigint
+                // listener - if the task is not currently running, the sigint
+                // listener will take care of safely moving us through the
+                // cancellation state machine.
                 // TODO: If there is only one thread, we may need to ask the currently
                 // running task to yield, so that the sigint listener can run.
-                jl_atomic_store_release(&ptls2->root_task->cancellation_request,
-                    jl_box_uint8(0x00));
-                // Set a 1s timer for the libuv event loop to run and process the
-                // cancellation. If this does not happen, we will advance to
-                // more aggressive cancellation.
-                jl_arm_sigint_rescue_timer();
-                deliver_sigint_notification();
+                jl_sigint_request_cancellation();
                 continue;
             }
         }
@@ -1264,7 +1289,7 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
             }
         }
 
-#if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L
+#if (defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L) || defined(HAVE_KEVENT)
 noexit_critical:
 #endif
         signal_bt_size = 0;
