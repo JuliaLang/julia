@@ -58,24 +58,43 @@ function sync_end(c::Channel{Any})
         return
     end
     nremaining::Int = 0
-    while true
-        event = take!(c)
-        if event === :__completion__
-            nremaining -= 1
-            if nremaining == 0
-                break
-            end
-        else
-            nremaining += 1
-            schedule(Task(()->begin
-                try
-                    wait(event)
-                    put!(c, :__completion__)
-                catch e
-                    close(c, e)
+    seen = Any[]
+    try
+        while true
+            event = take!(c)
+            if event === :__completion__
+                nremaining -= 1
+                if nremaining == 0
+                    break
                 end
-            end))
+            else
+                push!(seen, event)
+                nremaining += 1
+                schedule(Task(()->begin
+                    try
+                        wait(event)
+                        put!(c, :__completion__)
+                    catch e
+                        close(c, e)
+                    end
+                end))
+            end
         end
+    catch e
+        if e isa Base.CancellationRequest
+            # Cancellation of the waiting task propagates to the awaited
+            # tasks. Per this macro's contract the exception is rethrown
+            # immediately - we do not wait for the children to finish dying.
+            while isready(c)
+                event = take!(c)
+                event === :__completion__ || push!(seen, event)
+            end
+            for event in seen
+                event isa Task && !istaskdone(event) && Base.cancel!(event, e)
+            end
+        end
+        close(c, e isa Exception ? e : ErrorException("sync_end interrupted"))
+        rethrow()
     end
     close(c)
     nothing
