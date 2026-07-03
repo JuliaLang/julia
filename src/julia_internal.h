@@ -2231,6 +2231,10 @@ JL_DLLIMPORT void jl_teardown_codegen(void) JL_NOTSAFEPOINT;
 // declared type of `b` (must be called with the world counter lock held, after setting
 // BINDING_FLAG_RETYPED and before publishing the new value)
 JL_DLLIMPORT void jl_patch_retyped_binding_sites(jl_binding_t *b);
+// #62154: register the re-type patch sites of a loaded system or package image (the
+// bounds of its `jl_bpatch` section); must be called after its global slots have been
+// relocated and before its code can run
+JL_DLLIMPORT void jl_register_binding_patch_sites(const void *start, const void *end);
 JL_DLLIMPORT void jl_decorate_llvm_module(LLVMModuleRef m) JL_NOTSAFEPOINT;
 JL_DLLIMPORT int jl_getFunctionInfo(jl_frame_t **frames, uintptr_t pointer, int skipC, int noInline) JL_NOTSAFEPOINT;
 // n.b. this might be called from unmanaged thread:

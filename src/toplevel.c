@@ -439,6 +439,16 @@ check_type: ;
             if (retyped) {
                 jl_atomic_fetch_or_relaxed(&b->flags, BINDING_FLAG_RETYPED);
                 jl_patch_retyped_binding_sites(b);
+                // Guarantee that every thread observes both the flag and the patched
+                // sites before the value swap below can be observed. Without this,
+                // native code that guards its accesses with a runtime test of the flag
+                // (system/package image code, and targets without patchable sites)
+                // could, on a weakly-ordered machine, observe the new value while its
+                // program-order-later load of the flag still sees it clear, skipping
+                // the verification. The fence interrupts every thread, so any access
+                // that can observe the value swap re-executes its guard afterwards;
+                // stale accesses before the fence observe the old, conforming value.
+                jl_membarrier_sync_core();
             }
         }
     }

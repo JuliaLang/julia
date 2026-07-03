@@ -4179,6 +4179,10 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     }
 
     s.s = &sysimg;
+    // Register the image's binding re-type patch sites (#62154), now that its global
+    // slots hold the final (uniqued) binding pointers, and before jl_update_all_fptrs
+    // makes its code reachable.
+    jl_register_binding_patch_sites(image->bpatch_start, image->bpatch_end);
     jl_update_all_fptrs(&s, image); // fptr relocs and registration
     s.s = NULL;
 

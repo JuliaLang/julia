@@ -544,6 +544,7 @@
     YY(jl_compile_codeinst) \
     YY(jl_teardown_codegen) \
     YY(jl_patch_retyped_binding_sites) \
+    YY(jl_register_binding_patch_sites) \
     YY(jl_decorate_llvm_module) \
     YY(jl_jit_total_bytes) \
     YY(jl_create_native) \

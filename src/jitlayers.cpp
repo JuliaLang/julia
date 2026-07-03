@@ -838,16 +838,19 @@ public:
 //
 // Code compiled while a typed global's declared type has never been changed guards each
 // access with a nop-sized patch site (see emit_retype_guard in codegen.cpp) and records
-// it in a `.jl_bpatch` section: { site address, jump target, binding, kind }. The
-// plugin below collects those records as objects are linked. When the declared type of
-// a binding is changed, jl_patch_retyped_binding_sites rewrites each registered nop
-// into a direct jump to its cold path, which re-validates the access against the type
-// the code was compiled for. Each rewrite is a single naturally-aligned atomic store
+// it in a `jl_bpatch` section (see BindingPatchRecord: an asm-emitted site record,
+// joined by index to an IR-emitted slot-map record that locates the slot through which
+// the code references the binding). JIT records are collected by the plugin below as
+// linked; records of statically compiled code are registered when a system or package
+// image is loaded (jl_register_binding_patch_sites). When the declared type of a
+// binding is changed, jl_patch_retyped_binding_sites rewrites each registered nop into
+// a direct jump to its cold path, which re-validates the access against the type the
+// code was compiled for. Each rewrite is a single naturally-aligned atomic store
 // performed while other threads keep running: a concurrently fetching core observes
 // either the old nop or the new jump. A core may also keep executing a stale pre-store
 // copy of the nop until it passes a context synchronization event -- which is harmless
-// while the value slot still holds the old (conforming) value -- so the walk ends with
-// jl_membarrier_sync_core(), and only after that does its caller install the new value.
+// while the value slot still holds the old (conforming) value -- so the caller issues
+// jl_membarrier_sync_core() after the walk, before installing the new value.
 // BINDING_FLAG_RETYPED is sticky, so a site is patched at most once and is dropped from
 // the table afterwards; code compiled once the flag is set validates its accesses
 // unconditionally and emits no patch site.
@@ -957,10 +960,45 @@ static void bpatch_register(jl_binding_t *b, const BindingPatchSite &s) JL_NOTSA
         bpatch_sites[b].push_back(s);
 }
 
+// A raw `jl_bpatch` section record (see emit_retype_guard). Site records are emitted
+// by the patch-site inline asm; slot-map records are emitted as plain IR data and
+// resolve a site's index to the address slot through which its code references the
+// binding (the slot itself is filled by JIT linking or image loading).
+struct BindingPatchRecord {
+    uint64_t f0;
+    uint64_t f1;
+    uint64_t f2;
+    uint64_t kind; // 0/1 (read/write site): f0 = site, f1 = target, f2 = index
+                   // 2 (slot map): f0 = index, f1 = address of the binding's slot
+};
+
+// Register a batch of records (all sites of one linked object or image, together with
+// their slot-map records), dereferencing each binding from its address slot.
+static void bpatch_register_records(ArrayRef<BindingPatchRecord> records) JL_NOTSAFEPOINT
+{
+    SmallDenseMap<uint64_t, uint64_t, 8> slots;
+    for (const BindingPatchRecord &r : records) {
+        if (r.kind == 2)
+            slots[r.f0] = r.f1;
+    }
+    for (const BindingPatchRecord &r : records) {
+        if (r.kind > 1)
+            continue;
+        auto it = slots.find(r.f2);
+        assert(it != slots.end() && "patch site without a matching slot-map record");
+        if (it == slots.end())
+            continue;
+        jl_binding_t *b = *(jl_binding_t**)(uintptr_t)it->second;
+        assert(b != NULL);
+        BindingPatchSite site = { r.f0, r.f1 };
+        bpatch_register(b, site);
+    }
+}
+
 static jitlink::Section *bpatch_find_section(jitlink::LinkGraph &G) JL_NOTSAFEPOINT
 {
     // The ELF and Mach-O spellings of the section name (see emit_retype_guard)
-    if (jitlink::Section *S = G.findSectionByName(".jl_bpatch"))
+    if (jitlink::Section *S = G.findSectionByName("jl_bpatch"))
         return S;
     return G.findSectionByName("__DATA,__jl_bpatch");
 }
@@ -968,26 +1006,27 @@ static jitlink::Section *bpatch_find_section(jitlink::LinkGraph &G) JL_NOTSAFEPO
 class JLBindingPatchPlugin : public ObjectLinkingLayer::Plugin {
 private:
     std::mutex PluginMutex;
-    // Sites parsed at post-fixup time, keyed by materialization. They are only published
-    // to the global table once the object is successfully emitted (and dropped if the
-    // materialization fails), so no table entry can point into deallocated memory.
+    // Records parsed at post-fixup time, keyed by materialization. They are only
+    // published to the global table once the object is successfully emitted (and
+    // dropped if the materialization fails), so no table entry can point into
+    // deallocated memory; the binding slots they reference are also guaranteed to be
+    // filled by then.
     std::map<orc::MaterializationResponsibility*,
-             SmallVector<std::pair<jl_binding_t*, BindingPatchSite>, 0>> Pending;
+             SmallVector<BindingPatchRecord, 0>> Pending;
 
 public:
     Error notifyEmitted(orc::MaterializationResponsibility &MR) override
     {
-        SmallVector<std::pair<jl_binding_t*, BindingPatchSite>, 0> sites;
+        SmallVector<BindingPatchRecord, 0> records;
         {
             std::lock_guard<std::mutex> lock(PluginMutex);
             auto it = Pending.find(&MR);
             if (it == Pending.end())
                 return Error::success();
-            sites = std::move(it->second);
+            records = std::move(it->second);
             Pending.erase(it);
         }
-        for (auto &entry : sites)
-            bpatch_register(entry.first, entry.second);
+        bpatch_register_records(records);
         return Error::success();
     }
     Error notifyFailed(orc::MaterializationResponsibility &MR) override
@@ -1019,22 +1058,20 @@ public:
             jitlink::Section *S = bpatch_find_section(G);
             if (!S)
                 return Error::success();
-            SmallVector<std::pair<jl_binding_t*, BindingPatchSite>, 0> sites;
+            SmallVector<BindingPatchRecord, 0> records;
             for (auto *B : S->blocks()) {
                 ArrayRef<char> content = B->getContent();
-                assert(content.size() % (4 * sizeof(uint64_t)) == 0);
-                for (size_t i = 0; i + 4 * sizeof(uint64_t) <= content.size();
-                     i += 4 * sizeof(uint64_t)) {
-                    uint64_t entry[4];
-                    memcpy(entry, content.data() + i, sizeof(entry));
-                    assert(entry[3] <= 1); // kind: 0 = read, 1 = write
-                    BindingPatchSite site = { entry[0], entry[1] };
-                    sites.push_back({ (jl_binding_t*)(uintptr_t)entry[2], site });
+                assert(content.size() % sizeof(BindingPatchRecord) == 0);
+                for (size_t i = 0; i + sizeof(BindingPatchRecord) <= content.size();
+                     i += sizeof(BindingPatchRecord)) {
+                    BindingPatchRecord r;
+                    memcpy(&r, content.data() + i, sizeof(r));
+                    records.push_back(r);
                 }
             }
-            if (!sites.empty()) {
+            if (!records.empty()) {
                 std::lock_guard<std::mutex> lock(PluginMutex);
-                Pending[&MR] = std::move(sites);
+                Pending[&MR] = std::move(records);
             }
             return Error::success();
         });
@@ -1063,10 +1100,30 @@ extern "C" JL_DLLEXPORT_CODEGEN void jl_patch_retyped_binding_sites_impl(jl_bind
     // The stores above are visible in memory, but other threads may keep executing
     // stale copies of the previous instructions until their next context
     // synchronization event (AArch64 explicitly permits this, and x86 provides no
-    // documented bound without a serializing operation). Force one on every thread
-    // now, so that once our caller publishes the new value, no fast path can still be
-    // taken unverified.
-    jl_membarrier_sync_core();
+    // documented bound without a serializing operation). Our caller issues
+    // jl_membarrier_sync_core() before publishing the new value, which forces one on
+    // every thread, so no fast path can still be taken unverified afterwards.
+}
+
+// Register the `jl_bpatch` records of a loaded system or package image: [start, end)
+// are its section bounds (as linker-provided `__start_jl_bpatch`/`__stop_jl_bpatch`
+// symbols, or NULL if the image has no such section). Must be called after the image's
+// global slots have been relocated (the records reference bindings through them) and
+// before its code can run: a record whose binding is already marked as re-typed is
+// patched immediately.
+extern "C" JL_DLLEXPORT_CODEGEN void jl_register_binding_patch_sites_impl(const void *start, const void *end)
+{
+    if (start == NULL || end == NULL)
+        return;
+    assert(((const char*)end - (const char*)start) % sizeof(BindingPatchRecord) == 0);
+    SmallVector<BindingPatchRecord, 0> records;
+    for (const char *p = (const char*)start; p + sizeof(BindingPatchRecord) <= (const char*)end;
+         p += sizeof(BindingPatchRecord)) {
+        BindingPatchRecord r;
+        memcpy(&r, p, sizeof(r));
+        records.push_back(r);
+    }
+    bpatch_register_records(records);
 }
 
 class JLMaterializationUnit : public orc::MaterializationUnit {

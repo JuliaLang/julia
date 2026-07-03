@@ -223,6 +223,9 @@ static inline jl_image_t load_sysimg_target(jl_image_buf_t image, F &&callback, 
 
     res.jl_small_typeof = pointers->jl_small_typeof;
 
+    res.bpatch_start = pointers->bpatch_start;
+    res.bpatch_end = pointers->bpatch_end;
+
     return res;
 }
 

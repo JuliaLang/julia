@@ -90,6 +90,14 @@ JL_DLLEXPORT void jl_patch_retyped_binding_sites_fallback(jl_binding_t *b)
     (void)b;
 }
 
+JL_DLLEXPORT void jl_register_binding_patch_sites_fallback(const void *start, const void *end)
+{
+    // without codegen, the native code of images is not used either (jl_register_fptrs
+    // is a no-op), so its patch sites can never execute and need no registration
+    (void)start;
+    (void)end;
+}
+
 JL_DLLEXPORT void jl_decorate_llvm_module_fallback(LLVMModuleRef m) JL_NOTSAFEPOINT
 {
     (void)m;

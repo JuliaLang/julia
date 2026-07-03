@@ -782,12 +782,20 @@ static Value *julia_binding_pvalue(jl_codectx_t &ctx, Value *bv)
     return ctx.builder.CreateInBoundsGEP(ctx.types().T_prjlvalue, bv, offset);
 }
 
+// the address slot (pgv) through which a jl_binding_t is referenced; the slot is filled
+// with the binding's address when the containing code is linked (JIT) or loaded
+// (system/package image)
+static Constant *julia_binding_pgv(jl_codectx_t &ctx, jl_binding_t *b)
+{
+    // binding->value are prefixed with *
+    jl_globalref_t *gr = b->globalref;
+    return gr ? julia_pgv(ctx.emission_context, jl_Module, "*", gr->name, gr->mod, b) : julia_pgv(ctx.emission_context, jl_Module, "*jl_bnd#", b);
+}
+
 static Value *julia_binding_gv(jl_codectx_t &ctx, jl_binding_t *b)
 {
     // emit a literal_pointer_val to a jl_binding_t
-    // binding->value are prefixed with *
-    jl_globalref_t *gr = b->globalref;
-    Value *pgv = gr ? julia_pgv(ctx.emission_context, jl_Module, "*", gr->name, gr->mod, b) : julia_pgv(ctx.emission_context, jl_Module, "*jl_bnd#", b);
+    Constant *pgv = julia_binding_pgv(ctx, b);
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
     auto load = ai.decorateInst(ctx.builder.CreateAlignedLoad(ctx.types().T_pjlvalue, pgv, Align(sizeof(void*))));
     setName(ctx.emission_context, load, pgv->getName());

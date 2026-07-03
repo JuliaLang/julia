@@ -200,6 +200,68 @@ module RebindingPrecompile
         end
     end
 
+    precompile_test_harness("typed global re-type with image native code (#62154)") do load_path
+        write(joinpath(load_path, "RetypeGlobalPkg.jl"),
+              """
+              module RetypeGlobalPkg
+                global x::Int = 1
+                readx() = x
+                writex(v) = (global x = v)
+                function onstack_retype()
+                    a = x
+                    Core.eval(RetypeGlobalPkg, :(global x::Float64 = 2.5))
+                    return (a, x)   # the second read happens in this (now stale) frame
+                end
+                precompile(readx, ())
+                precompile(writex, (Int,))
+                precompile(onstack_retype, ())
+              end
+              """)
+        Base.compilecache(Base.PkgId("RetypeGlobalPkg"))
+        @eval using RetypeGlobalPkg
+        invokelatest() do
+            # These run the image-compiled native code, whose re-type guards are patch
+            # sites in the image's text (or runtime flag tests on other platforms).
+            @test RetypeGlobalPkg.readx() === 1
+            @test RetypeGlobalPkg.writex(2) === 2
+            w = Base.get_world_counter()
+            # a re-type while the image-compiled frame is on the stack: its second
+            # read must observe the activated verification and throw
+            @test_throws TypeError RetypeGlobalPkg.onstack_retype()
+            # stale image code, replayed in the old world, verifies its accesses too
+            @test_throws TypeError Base.invoke_in_world(w, RetypeGlobalPkg.readx)
+            @test_throws TypeError Base.invoke_in_world(w, RetypeGlobalPkg.writex, 3)
+            invokelatest() do
+                @test RetypeGlobalPkg.readx() === 2.5
+                @test RetypeGlobalPkg.writex(3.5) === 3.5
+                @test RetypeGlobalPkg.x === 3.5
+            end
+        end
+
+        # a re-type that happened during precompilation: BINDING_FLAG_RETYPED and the
+        # (single) value slot semantics survive serialization
+        write(joinpath(load_path, "RetypedAtPrecompile.jl"),
+              """
+              module RetypedAtPrecompile
+                global y::Int = 1
+                global y::Float64 = 2.0
+                ready() = y
+                precompile(ready, ())
+              end
+              """)
+        Base.compilecache(Base.PkgId("RetypedAtPrecompile"))
+        @eval using RetypedAtPrecompile
+        invokelatest() do
+            @test RetypedAtPrecompile.ready() === 2.0
+            w = Base.get_world_counter()
+            Core.eval(RetypedAtPrecompile, :(global y::Int32 = Int32(3)))
+            invokelatest() do
+                @test RetypedAtPrecompile.ready() === Int32(3)
+            end
+            @test_throws TypeError Base.invoke_in_world(w, RetypedAtPrecompile.ready)
+        end
+    end
+
     precompile_test_harness("export change") do load_path
         write(joinpath(load_path, "Export1.jl"),
               """

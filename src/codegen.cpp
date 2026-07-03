@@ -53,6 +53,7 @@
 #include <llvm/Support/SourceMgr.h> // for llvmcall
 #include <llvm/Transforms/Utils/Cloning.h> // for llvmcall inlining
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
+#include <llvm/Transforms/Utils/ModuleUtils.h> // for appendToCompilerUsed
 #include <llvm/IR/Verifier.h> // for llvmcall validation
 #include <llvm/IR/PassTimingInfo.h>
 #include <llvm/Bitcode/BitcodeWriter.h>
@@ -3522,31 +3523,38 @@ static void jl_temporary_root(jl_codectx_t &ctx, jl_value_t *val)
 // --- generating function calls ---
 
 // Whether this compilation can guard typed-global accesses with statically patchable
-// sites (see jl_patch_retyped_binding_sites in jitlayers.cpp): JIT compilation only
-// (imaging code can neither bake binding addresses nor be patched in place), an object
-// format the site table can be emitted for with `.pushsection` (ELF -- which the JIT
-// also uses on Windows -- or Mach-O), and an architecture the runtime patcher knows
-// how to rewrite.
+// sites (see jl_patch_retyped_binding_sites in jitlayers.cpp): an architecture the
+// runtime patcher knows how to rewrite, and an object format the site table can be
+// emitted for with `.pushsection`. For JIT compilation that is ELF (which the JIT also
+// uses on Windows) or Mach-O; the sites of system and package images are registered at
+// load time through linker-provided `__start_jl_bpatch`/`__stop_jl_bpatch` section
+// bounds, which is an ELF linker feature, so images on other formats (and on Darwin,
+// where image code is signed and cannot generally be written to at runtime) keep the
+// runtime flag test instead.
 static bool binding_patch_sites_supported(jl_codectx_t &ctx)
 {
-    if (ctx.emission_context.imaging_mode)
-        return false;
     const Triple &TT = ctx.emission_context.TargetTriple;
-    if (!TT.isOSBinFormatELF() && !TT.isOSBinFormatMachO())
+    if (TT.getArch() != Triple::x86_64 && TT.getArch() != Triple::aarch64)
         return false;
-    return TT.getArch() == Triple::x86_64 || TT.getArch() == Triple::aarch64;
+    if (ctx.emission_context.imaging_mode)
+        return TT.isOSBinFormatELF() && !TT.isOSWindows();
+    return TT.isOSBinFormatELF() || TT.isOSBinFormatMachO();
 }
 
 // Emit a guard that diverts to a cold block once the declared type of `bnd` is changed
 // (i.e. once BINDING_FLAG_RETYPED, which is clear at compile time here, becomes set;
-// see #62154). On supported JIT targets this emits a nop-sized patch site plus a
-// `.jl_bpatch` section record {site, target, binding, kind}; re-typing the binding
-// rewrites the nop into a jump to the cold block (jl_patch_retyped_binding_sites), so
-// the fast path pays no dynamic check. The nop is sized and aligned so that the rewrite
+// see #62154). On supported targets this emits a nop-sized patch site plus `jl_bpatch`
+// section records (see BindingPatchRecord in jitlayers.cpp) identifying the site, its
+// cold-path target and its binding; re-typing the binding rewrites the nop into a jump
+// to the cold block (jl_patch_retyped_binding_sites), so the fast path pays no dynamic
+// check. The binding is identified through its address slot (which JIT linking or
+// image loading fills in) rather than by value, so the same form works for JIT code
+// and for statically compiled images. The nop is sized and aligned so that the rewrite
 // is a single naturally-aligned atomic store: a concurrently fetching core observes
 // either the old nop or the new jump, never a torn instruction. Elsewhere the guard
-// degrades to testing the binding's flags at runtime. Returns the (empty, unterminated)
-// cold block; the builder is left at the start of the fast-path continuation block.
+// degrades to testing the binding's flags at runtime. Returns the (empty,
+// unterminated) cold block; the builder is left at the start of the fast-path
+// continuation block.
 static BasicBlock *emit_retype_guard(jl_codectx_t &ctx, jl_binding_t *bnd, Value *bp, bool is_write)
 {
     LLVMContext &C = ctx.builder.getContext();
@@ -3569,14 +3577,40 @@ static BasicBlock *emit_retype_guard(jl_codectx_t &ctx, jl_binding_t *bnd, Value
             OS << "\t.balign 8\n"
                << "1:\n\t.byte 0x0f,0x1f,0x84,0x00,0x00,0x00,0x00,0x00\n";
         }
+        // The section is writable ("w") because record fields hold absolute addresses,
+        // which require load-time relocation in position-independent images. The flags
+        // must match what LLVM uses for the slot-map globals below, so that both are
+        // emitted into a single section.
+        const char *secname = TT.isOSBinFormatMachO() ? "__DATA,__jl_bpatch" : "jl_bpatch";
         if (TT.isOSBinFormatMachO())
-            OS << "\t.pushsection __DATA,__jl_bpatch\n";
+            OS << "\t.pushsection " << secname << "\n";
         else
-            OS << "\t.pushsection .jl_bpatch,\"a\"," << (aarch64 ? "%progbits" : "@progbits") << "\n";
+            OS << "\t.pushsection " << secname << ",\"aw\"," << (aarch64 ? "%progbits" : "@progbits") << "\n";
+        // The site record joins to its binding through a small index: the asm text can
+        // only carry link-time constants, and the binding's address slot has no symbol
+        // of its own in imaging mode (it is rewritten into the image's gvars table).
+        // A companion slot-map record (kind 2, see BindingPatchRecord) is emitted as
+        // plain IR data into the same section, with an initializer that participates
+        // in that rewriting; it needs no symbol at all, so it is immune to the image
+        // partitioner's linkage manipulation, and is protected from GlobalDCE (nothing
+        // references it) via llvm.compiler.used.
+        static std::atomic<uint64_t> bpatch_index{0};
+        uint64_t idx = bpatch_index.fetch_add(1, std::memory_order_relaxed);
+        Constant *slot = julia_binding_pgv(ctx, bnd);
+        Type *T_i64 = getInt64Ty(C);
+        StructType *RT = StructType::get(T_i64, slot->getType(), T_i64, T_i64);
+        Constant *rec = ConstantStruct::get(RT, {ConstantInt::get(T_i64, idx), slot,
+                ConstantInt::get(T_i64, 0), ConstantInt::get(T_i64, 2)});
+        GlobalVariable *slotmap = new GlobalVariable(*jl_Module, RT, /*isConstant*/false,
+                GlobalVariable::PrivateLinkage, rec,
+                "jl_bpatch_slotmap" + std::to_string(idx));
+        slotmap->setSection(secname);
+        slotmap->setAlignment(Align(8));
+        appendToCompilerUsed(*jl_Module, {slotmap});
         OS << "\t.balign 8\n"
            << "\t.quad 1b\n"
            << "\t.quad ${0:l}\n"
-           << "\t.quad " << (uintptr_t)bnd << "\n"
+           << "\t.quad " << idx << "\n"
            << "\t.quad " << (is_write ? 1 : 0) << "\n"
            << "\t.popsection";
         FunctionType *FT = FunctionType::get(getVoidTy(C), false);

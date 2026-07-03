@@ -670,6 +670,11 @@ void *jl_create_native_impl(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int ex
         }
         for (GlobalObject &G : M.global_objects()) {
             if (!G.isDeclaration()) {
+                // Internalizing or renaming globals in the reserved `llvm.` namespace
+                // (e.g. `llvm.compiler.used`, which protects the #62154 patch-site
+                // slot-map records from GlobalDCE) would destroy their special semantics.
+                if (G.getName().starts_with("llvm."))
+                    continue;
                 G.setLinkage(GlobalValue::InternalLinkage);
                 G.setDSOLocal(true);
                 makeSafeName(G);
@@ -1333,6 +1338,11 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
     for (auto &G : M.global_values()) {
         if (G.isDeclaration())
             continue;
+        // Globals in the reserved `llvm.` namespace (e.g. `llvm.compiler.used`) have
+        // special semantics tied to their name and linkage and are not partitioned;
+        // materializePreserved keeps them, whole, in every partition.
+        if (G.getName().starts_with("llvm."))
+            continue;
         // Currently ccallable global aliases have extern linkage, we only want to make the
         // internally linked functions/global variables extern+hidden
         if (G.hasLocalLinkage()) {
@@ -1352,9 +1362,13 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
         for (ConstantUses<GlobalValue> uses(partitioner.nodes[i].GV, M); !uses.done(); uses.next()) {
             auto val = uses.get_info().val;
             auto idx = partitioner.node_map.find(val);
-            // This can fail if we can't partition a global, but it uses something we can partition
-            // This should be fixed by altering canPartition to not permit partitioning this global
-            assert(idx != partitioner.node_map.end());
+            if (idx == partitioner.node_map.end()) {
+                // Users that are not themselves partitioned (`llvm.` specials such as
+                // llvm.compiler.used, which are kept in every partition) impose no
+                // clustering constraints.
+                assert(val->getName().starts_with("llvm."));
+                continue;
+            }
             partitioner.merge(i, idx->second);
         }
     }
@@ -1729,6 +1743,11 @@ static void materializePreserved(Module &M, Partition &partition) {
         if (Preserve.contains(&GV))
             continue;
         if (GV.hasLocalLinkage())
+            continue;
+        // Keep `llvm.` specials (e.g. llvm.compiler.used) whole in every partition:
+        // stripping one to a declaration (or changing its linkage) is invalid, and
+        // entries that point to another partition's declarations are harmless.
+        if (GV.getName().starts_with("llvm."))
             continue;
         GV.setInitializer(nullptr);
         GV.setLinkage(GlobalValue::ExternalLinkage);
@@ -2470,7 +2489,19 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
                                                        GlobalVariable::InternalLinkage,
                                                        cpu_target_data, "jl_cpu_target_string");
 
-            AT = ArrayType::get(T_psize, 6);
+            // Bounds of the image's `jl_bpatch` section (binding re-type patch site
+            // records, #62154). The linker defines these symbols when the section is
+            // present; the references are weak, so they are NULL otherwise.
+            auto bpatch_start = new GlobalVariable(metadataM, Type::getInt8Ty(Context), true,
+                                                   GlobalVariable::ExternalWeakLinkage,
+                                                   nullptr, "__start_jl_bpatch");
+            bpatch_start->setVisibility(GlobalValue::HiddenVisibility);
+            auto bpatch_stop = new GlobalVariable(metadataM, Type::getInt8Ty(Context), true,
+                                                  GlobalVariable::ExternalWeakLinkage,
+                                                  nullptr, "__stop_jl_bpatch");
+            bpatch_stop->setVisibility(GlobalValue::HiddenVisibility);
+
+            AT = ArrayType::get(T_psize, 8);
             auto pointers = new GlobalVariable(metadataM, AT, false,
                                             GlobalVariable::ExternalLinkage,
                                             ConstantArray::get(AT, {
@@ -2479,7 +2510,9 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
                                                     ConstantExpr::getBitCast(ptls, T_psize),
                                                     ConstantExpr::getBitCast(jl_small_typeof_copy, T_psize),
                                                     ConstantExpr::getBitCast(target_ids, T_psize),
-                                                    ConstantExpr::getBitCast(cpu_target_global, T_psize)
+                                                    ConstantExpr::getBitCast(cpu_target_global, T_psize),
+                                                    ConstantExpr::getBitCast(bpatch_start, T_psize),
+                                                    ConstantExpr::getBitCast(bpatch_stop, T_psize)
                                             }),
                                             "jl_image_pointers");
             addComdat(pointers, TheTriple);
