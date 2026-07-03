@@ -702,4 +702,109 @@ end
     Core.eval(TGRV3, :(global z::Int = 7))             # 7 isa Number too
     @test TGRV3.zr() === 7
     @test Base.invoke_in_world(wz, TGRV3.zr) === 7
+
+    # a re-type interleaved with `Base.delete_binding` must also activate verification,
+    # even though the new typed partition does not directly replace the old one
+    @eval module TGRV4 end
+    Core.eval(TGRV4, :(global d::Int = 5))
+    Core.eval(TGRV4, :(readd() = d))
+    Core.eval(TGRV4, :(readd()))
+    wd = Base.get_world_counter()
+    Base.delete_binding(TGRV4, :d)
+    Core.eval(TGRV4, :(global d::Float64 = 2.5))
+    @test TGRV4.readd() === 2.5
+    @test_throws TypeError Base.invoke_in_world(wd, TGRV4.readd)
+end
+
+# #62154: writes from code compiled against a previous declared type must validate against
+# both the compile-time type ("a later declaration can narrow the set of accesses that
+# succeed, but never expand it") and the latest declared type (which governs the single
+# value slot).
+@testset "typed global re-type write verification (#62154)" begin
+    # widening re-type: the compile-time type is still enforced in the stale frame
+    @eval module TGRW1 end
+    Core.eval(TGRW1, :(global w::Int = 1))
+    Core.eval(TGRW1, :(setw(x) = setglobal!(TGRW1, :w, x)))
+    @test TGRW1.setw(2) === 2                           # compile `setw` trusting Int
+    w1 = Base.get_world_counter()
+    Core.eval(TGRW1, :(global w::Number = 10))
+    @test_throws TypeError Base.invoke_in_world(w1, TGRW1.setw, 2.5) # !isa Int (compile type)
+    @test TGRW1.w === 10
+    @test Base.invoke_in_world(w1, TGRW1.setw, 5) === 5              # isa Int and isa Number
+    @test TGRW1.w === 5
+
+    # narrowing re-type: the latest declared type is enforced by the runtime store the
+    # stale write diverts to
+    @eval module TGRW2 end
+    Core.eval(TGRW2, :(global v::Number = 1))
+    Core.eval(TGRW2, :(setv(x) = (global v = x)))
+    @test TGRW2.setv(2) === 2                           # compile `setv` trusting Number
+    w2 = Base.get_world_counter()
+    Core.eval(TGRW2, :(global v::Int = 3))
+    @test_throws TypeError Base.invoke_in_world(w2, TGRW2.setv, 2.5) # isa Number, !isa Int (latest)
+    @test TGRW2.v === 3
+    @test Base.invoke_in_world(w2, TGRW2.setv, 4) === 4
+    @test TGRW2.v === 4
+
+    # a stale write in a frame that is on the stack across the redefinition
+    @eval module TGRW3 end
+    Core.eval(TGRW3, :(global u::Number = 1))
+    Core.eval(TGRW3, :(function f()
+        global u = 2
+        Core.eval(TGRW3, :(global u::Int = 3))
+        global u = 0.5      # isa Number, but the slot is now governed by Int
+        return u
+    end))
+    @test_throws TypeError TGRW3.f()
+    @test TGRW3.u === 3
+
+    # modifyglobal! validates against the latest declared type even when invoked from an
+    # older world (jl_checked_modify used to consult only the caller's world)
+    @eval module TGRW4 end
+    Core.eval(TGRW4, :(global m::Number = 1))
+    wm = Base.get_world_counter()
+    Core.eval(TGRW4, :(global m::Int = 5))
+    # dynamic modifyglobal! from the old world: `+` produces 5.5, which conforms to the
+    # old declared type (Number) but not to the latest one (Int)
+    @test_throws TypeError Base.invoke_in_world(wm, modifyglobal!, TGRW4, :m, +, 0.5)
+    @test TGRW4.m === 5
+
+    # swapglobal! from a stale frame: the store obeys both type checks, and the returned
+    # old value is verified against the compile-time type like a read
+    @eval module TGRW5 end
+    Core.eval(TGRW5, :(global s::Number = 1))
+    Core.eval(TGRW5, :(swaps(x) = swapglobal!(TGRW5, :s, x)))
+    @test TGRW5.swaps(2) === 1
+    w5 = Base.get_world_counter()
+    Core.eval(TGRW5, :(global s::Int = 7))
+    @test Base.invoke_in_world(w5, TGRW5.swaps, 3) === 7  # 7 isa Number: result verifies
+    @test TGRW5.s === 3
+    @test_throws TypeError Base.invoke_in_world(w5, TGRW5.swaps, 2.5) # !isa Int (latest)
+    @test TGRW5.s === 3
+
+    # ... and when the old value does not conform to the compile-time type, the swap
+    # itself succeeds (it is valid in the latest world) but the result errors
+    @eval module TGRW6 end
+    Core.eval(TGRW6, :(global t::Int = 1))
+    Core.eval(TGRW6, :(swapt(x) = swapglobal!(TGRW6, :t, x)))
+    @test TGRW6.swapt(2) === 1
+    w6 = Base.get_world_counter()
+    Core.eval(TGRW6, :(global t::Number = 2.5))
+    @test_throws TypeError Base.invoke_in_world(w6, TGRW6.swapt, 5) # old value 2.5 !isa Int
+    @test TGRW6.t === 5
+
+    # replaceglobal! from a stale frame: the result container (a NamedTuple, which is
+    # invariant in the value type) is built by the runtime at the latest declared type,
+    # so once the binding is re-typed the stale result conservatively errors -- after
+    # the replacement itself (which is valid in the latest world) took effect
+    @eval module TGRW7 end
+    Core.eval(TGRW7, :(global r::Number = 1))
+    Core.eval(TGRW7, :(repl(old, new) = replaceglobal!(TGRW7, :r, old, new)))
+    let res = TGRW7.repl(1, 2)
+        @test res.old === 1 && res.success
+    end
+    w7 = Base.get_world_counter()
+    Core.eval(TGRW7, :(global r::Int = 7))
+    @test_throws TypeError Base.invoke_in_world(w7, TGRW7.repl, 7, 8)
+    @test TGRW7.r === 8
 end

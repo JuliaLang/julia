@@ -841,4 +841,8 @@ Code compiled against the previous type is recompiled to observe the new one. Co
 against an earlier type but still observes the value slot after the change — for example a read that
 runs after an on-the-stack redefinition, or an access replayed in an older world age via
 [`Base.invoke_in_world`](@ref) — verifies the value against the type it was compiled for and raises a
-[`TypeError`](@ref) rather than returning an ill-typed value.
+[`TypeError`](@ref) rather than returning an ill-typed value. Similarly, a write from such code must
+satisfy both the type it was compiled against and the latest declared type (a re-declaration can
+narrow the set of accesses that succeed, but never expand it). This verification is activated only
+once a binding's declared type is actually changed; accesses to globals whose declared type never
+changes are not affected by it.

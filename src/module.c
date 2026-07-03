@@ -2109,6 +2109,15 @@ JL_DLLEXPORT jl_value_t *jl_checked_modify(jl_binding_t *b, jl_module_t *mod, jl
     if (jl_bkind_is_some_constant(kind))
         jl_errorf("invalid assignment to constant %s.%s",
                   jl_symbol_name(mod->name), jl_symbol_name(var));
+    // #62154: like jl_check_binding_assign_value, the stored value must conform to the
+    // type declared by the *latest*-world partition, which governs what latest-world
+    // readers may observe in the single value slot (the caller may be running in an
+    // older world whose declared type differs).
+    size_t latest_world = jl_atomic_load_acquire(&jl_world_counter);
+    jl_binding_partition_t *latest_bpart = jl_get_binding_partition(b, latest_world);
+    enum jl_partition_kind latest_kind = jl_binding_kind(latest_bpart);
+    if (latest_kind == PARTITION_KIND_GLOBAL || latest_kind == PARTITION_KIND_DECLARED)
+        bpart = latest_bpart;
     jl_value_t *ty = bpart->restriction;
     JL_GC_PROMISE_ROOTED(ty);
     return modify_value(ty, &b->value, (jl_value_t*)b, op, rhs, 1, b, mod, var);

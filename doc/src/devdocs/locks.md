@@ -73,6 +73,8 @@ exception frames, and taking/releasing locks.
 * `jl_module_t.lock`
 * `newly_inferred_mutex`
 * `JLDebuginfoPlugin.PluginMutex` (`std::mutex`)
+* `bpatch_lock` (`std::mutex`): guards the table of binding re-type patch sites
+  (jitlayers.cpp); it is a leaf lock and is released before any thread suspension
 * `precompile_field_replace_lock`
 * `live_tasks_lock` (`uv_mutex_t`)
 * `heapsnapshot_lock`

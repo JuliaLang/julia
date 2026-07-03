@@ -68,6 +68,10 @@ using namespace llvm;
 #include "processor.h"
 #include "julia-task-dispatcher.h"
 
+#ifndef _OS_WINDOWS_
+#include <sys/mman.h> // mprotect, for the binding patch sites (#62154)
+#endif
+
 #if JL_LLVM_VERSION >= 180000
 # include <llvm/ExecutionEngine/Orc/Debugging/DebuggerSupportPlugin.h>
 #else
@@ -829,7 +833,193 @@ public:
         });
     }
 };
+
+// --- #62154: patch sites for re-typed global bindings ---
+//
+// Code compiled while a typed global's declared type has never been changed guards each
+// access with a nop-sized patch site (see emit_retype_guard in codegen.cpp) and records
+// it in a `.jl_bpatch` section: { site address, jump target, binding, kind }. The
+// plugin below collects those records as objects are linked. When the declared type of
+// a binding is changed, jl_patch_retyped_binding_sites rewrites each registered nop
+// into a direct jump to its cold path, which re-validates the access against the type
+// the code was compiled for. BINDING_FLAG_RETYPED is sticky, so a site is patched at
+// most once and is dropped from the table afterwards; code compiled once the flag is
+// set validates its accesses unconditionally and emits no patch site.
+
+struct BindingPatchSite {
+    uint64_t site;
+    uint64_t target;
+};
+
+// Guarded by bpatch_lock. The binding keys are used purely as identities and are never
+// dereferenced: a binding stays reachable from its module at least as long as compiled
+// code referencing it, and JIT code is never deallocated, so at worst a site belonging
+// to unreachable code gets patched, which is harmless.
+static std::mutex bpatch_lock;
+static DenseMap<jl_binding_t*, SmallVector<BindingPatchSite, 4>> bpatch_sites;
+
+// Rewrite the nop at `s.site` into a direct jump to `s.target`. The caller must ensure
+// that no thread can be executing JIT code (either by suspending all other threads, or
+// because the object containing the site has not been published yet).
+static void bpatch_apply(const BindingPatchSite &s) JL_NOTSAFEPOINT
+{
+#if defined(_OS_WINDOWS_) || !(defined(_CPU_X86_64_) || defined(_CPU_AARCH64_))
+    (void)s;
+    abort(); // no patch sites are emitted on this platform (binding_patch_sites_supported)
+#else
+#if defined(_CPU_X86_64_)
+    const size_t nbytes = 5;
+    uint8_t insn[5] = { 0xe9, 0, 0, 0, 0 }; // jmp rel32
+    int64_t rel = (int64_t)s.target - (int64_t)(s.site + 5);
+    int32_t rel32 = (int32_t)rel;
+    assert(rel == rel32 && "patch target out of range"); // target is in the same function
+    memcpy(&insn[1], &rel32, sizeof(rel32));
+#else // _CPU_AARCH64_
+    const size_t nbytes = 4;
+    int64_t off = (int64_t)s.target - (int64_t)s.site;
+    assert((off & 3) == 0 && off >= -(1ll << 27) && off < (1ll << 27) &&
+           "patch target out of range"); // target is in the same function
+    uint32_t b_insn = 0x14000000u | (((uint64_t)off >> 2) & 0x03ffffffu); // b <target>
+    uint8_t insn[4];
+    memcpy(insn, &b_insn, sizeof(b_insn));
+#endif
+    uintptr_t pagesz = jl_page_size;
+    uintptr_t first = s.site & ~(pagesz - 1);
+    uintptr_t last = (s.site + nbytes - 1) & ~(pagesz - 1);
+    size_t protlen = last - first + pagesz;
+    // Nothing can be executing these pages (see above), so it is safe to briefly take
+    // the execute permission away rather than mapping them writable and executable.
+    if (mprotect((void*)first, protlen, PROT_READ | PROT_WRITE))
+        abort();
+    memcpy((void*)s.site, insn, nbytes);
+    if (mprotect((void*)first, protlen, PROT_READ | PROT_EXEC))
+        abort();
+    // Flush the instruction cache (a no-op on x86). Suspended threads resume through a
+    // kernel entry (signal return / context switch), which resynchronizes their
+    // instruction streams with the patched memory.
+    __builtin___clear_cache((char*)s.site, (char*)(s.site + nbytes));
+#endif
+}
+
+// Publish a parsed site for `b`, or apply it immediately if the binding has already
+// been re-typed (the containing object has not been published yet in that case, so it
+// is safe to patch without suspending other threads).
+static void bpatch_register(jl_binding_t *b, const BindingPatchSite &s) JL_NOTSAFEPOINT
+{
+    std::lock_guard<std::mutex> lock(bpatch_lock);
+    // The flag load is ordered after any concurrent jl_patch_retyped_binding_sites walk
+    // by the lock acquisition, so a site can never be registered behind a completed walk.
+    if (jl_atomic_load_relaxed(&b->flags) & BINDING_FLAG_RETYPED)
+        bpatch_apply(s);
+    else
+        bpatch_sites[b].push_back(s);
+}
+
+class JLBindingPatchPlugin : public ObjectLinkingLayer::Plugin {
+private:
+    std::mutex PluginMutex;
+    // Sites parsed at post-fixup time, keyed by materialization. They are only published
+    // to the global table once the object is successfully emitted (and dropped if the
+    // materialization fails), so no table entry can point into deallocated memory.
+    std::map<orc::MaterializationResponsibility*,
+             SmallVector<std::pair<jl_binding_t*, BindingPatchSite>, 0>> Pending;
+
+public:
+    Error notifyEmitted(orc::MaterializationResponsibility &MR) override
+    {
+        SmallVector<std::pair<jl_binding_t*, BindingPatchSite>, 0> sites;
+        {
+            std::lock_guard<std::mutex> lock(PluginMutex);
+            auto it = Pending.find(&MR);
+            if (it == Pending.end())
+                return Error::success();
+            sites = std::move(it->second);
+            Pending.erase(it);
+        }
+        for (auto &entry : sites)
+            bpatch_register(entry.first, entry.second);
+        return Error::success();
+    }
+    Error notifyFailed(orc::MaterializationResponsibility &MR) override
+    {
+        std::lock_guard<std::mutex> lock(PluginMutex);
+        Pending.erase(&MR);
+        return Error::success();
+    }
+    Error notifyRemovingResources(JITDylib &JD, orc::ResourceKey K) override
+    {
+        return Error::success();
+    }
+    void notifyTransferringResources(JITDylib &JD, orc::ResourceKey DstKey,
+                                     orc::ResourceKey SrcKey) override {}
+
+    void modifyPassConfig(orc::MaterializationResponsibility &MR,
+                          jitlink::LinkGraph &,
+                          jitlink::PassConfiguration &Config) override
+    {
+        Config.PrePrunePasses.push_back([](jitlink::LinkGraph &G) -> Error {
+            // Pin the site records: nothing references them, so they would be pruned.
+            if (jitlink::Section *S = G.findSectionByName(".jl_bpatch")) {
+                for (auto *B : S->blocks())
+                    G.addAnonymousSymbol(*B, 0, B->getSize(), false, true);
+            }
+            return Error::success();
+        });
+        Config.PostFixupPasses.push_back([this, &MR](jitlink::LinkGraph &G) -> Error {
+            jitlink::Section *S = G.findSectionByName(".jl_bpatch");
+            if (!S)
+                return Error::success();
+            SmallVector<std::pair<jl_binding_t*, BindingPatchSite>, 0> sites;
+            for (auto *B : S->blocks()) {
+                ArrayRef<char> content = B->getContent();
+                assert(content.size() % (4 * sizeof(uint64_t)) == 0);
+                for (size_t i = 0; i + 4 * sizeof(uint64_t) <= content.size();
+                     i += 4 * sizeof(uint64_t)) {
+                    uint64_t entry[4];
+                    memcpy(entry, content.data() + i, sizeof(entry));
+                    assert(entry[3] <= 1); // kind: 0 = read, 1 = write
+                    BindingPatchSite site = { entry[0], entry[1] };
+                    sites.push_back({ (jl_binding_t*)(uintptr_t)entry[2], site });
+                }
+            }
+            if (!sites.empty()) {
+                std::lock_guard<std::mutex> lock(PluginMutex);
+                Pending[&MR] = std::move(sites);
+            }
+            return Error::success();
+        });
+    }
+};
 } // namespace anonymous
+
+// Activate the re-type guards of all patchable sites registered for `b`. Called (with
+// the world counter lock held) when the declared type of `b` is changed, after
+// BINDING_FLAG_RETYPED is set and before the new value is stored: until the value is
+// swapped, the old value keeps the activated guards passing, so there is no
+// intermediate state in which a stale access can misbehave.
+extern "C" JL_DLLEXPORT_CODEGEN void jl_patch_retyped_binding_sites_impl(jl_binding_t *b)
+{
+    SmallVector<BindingPatchSite, 4> sites;
+    {
+        std::lock_guard<std::mutex> lock(bpatch_lock);
+        auto it = bpatch_sites.find(b);
+        if (it == bpatch_sites.end())
+            return;
+        sites = std::move(it->second);
+        bpatch_sites.erase(it);
+    }
+    if (sites.empty())
+        return;
+    // No thread may be executing JIT code while it is rewritten. Suspended threads can
+    // still run GC-safe regions (e.g. foreign calls), but Julia code only runs in the
+    // GC-unsafe state, and re-entering it requires a GC state transition that traps on
+    // the suspension safepoint until the thread is resumed.
+    jl_task_t *ct = jl_current_task;
+    jl_safepoint_suspend_all_threads(ct);
+    for (auto &s : sites)
+        bpatch_apply(s);
+    jl_safepoint_resume_all_threads(ct);
+}
 
 class JLMaterializationUnit : public orc::MaterializationUnit {
 public:
@@ -1752,6 +1942,7 @@ JuliaOJIT::JuliaOJIT()
 
     ObjectLayer.addPlugin(DebuginfoPlugin);
     ObjectLayer.addPlugin(std::make_unique<JLMemoryUsagePlugin>(&jit_bytes_size));
+    ObjectLayer.addPlugin(std::make_unique<JLBindingPatchPlugin>());
 
     SetVector<void*> libhandles;
     // Make sure that libjulia-internal is loaded and placed first in the

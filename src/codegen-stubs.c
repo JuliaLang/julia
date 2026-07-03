@@ -84,6 +84,12 @@ JL_DLLEXPORT void jl_teardown_codegen_fallback(void) JL_NOTSAFEPOINT
 {
 }
 
+JL_DLLEXPORT void jl_patch_retyped_binding_sites_fallback(jl_binding_t *b)
+{
+    // without codegen there is no compiled code, hence no patch sites to rewrite
+    (void)b;
+}
+
 JL_DLLEXPORT void jl_decorate_llvm_module_fallback(LLVMModuleRef m) JL_NOTSAFEPOINT
 {
     (void)m;

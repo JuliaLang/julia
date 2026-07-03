@@ -404,17 +404,43 @@ check_type: ;
                 // against the old type. The world counter is bumped below, after the value
                 // is swapped in, so the retype and the new value become visible together.
                 jl_replace_binding_locked(b, bpart, set_type, PARTITION_KIND_GLOBAL, new_world);
-                // The declared type of a typed global has now actually changed. Mark the
-                // binding so that generated code verifies accesses against the type it was
-                // compiled for: code compiled against the old type may still run (on the
-                // stack across this redefinition, or via `invoke_in_world`) and would
-                // otherwise read/write the shared value slot at the wrong type (#62154).
-                jl_atomic_fetch_or_relaxed(&b->flags, BINDING_FLAG_RETYPED);
                 replaced = 1;
                 break;
             }
         }
         break;
+    }
+    // #62154: if this declaration leaves the binding as a typed global while some world has
+    // seen it as a typed global of a *different* type, mark it as re-typed and activate the
+    // verification guards embedded in already-compiled code: such code may still run (in
+    // frames already on the stack across this redefinition, or via `Base.invoke_in_world`)
+    // and would otherwise access the shared value slot at the wrong type. Scanning all
+    // partitions, rather than just a directly replaced one, also covers re-declarations
+    // interleaved with `Base.delete_binding`. The sites are patched *before* the new value
+    // is swapped in below: until the swap the slot holds the old value, which conforms to
+    // every previously declared type, so there is no intermediate state in which a stale
+    // access can spuriously fail or observe an ill-typed value.
+    if (strong) {
+        jl_binding_partition_t *cur = jl_get_binding_partition(b, new_world);
+        if (jl_binding_kind(cur) == PARTITION_KIND_GLOBAL) {
+            jl_value_t *cur_ty = cur->restriction;
+            JL_GC_PROMISE_ROOTED(cur_ty);
+            int retyped = 0;
+            for (jl_binding_partition_t *p = jl_atomic_load_relaxed(&b->partitions); p != NULL;
+                 p = jl_atomic_load_relaxed(&p->next)) {
+                jl_value_t *p_ty = p->restriction;
+                JL_GC_PROMISE_ROOTED(p_ty);
+                if (p != cur && jl_binding_kind(p) == PARTITION_KIND_GLOBAL &&
+                    !jl_types_equal(p_ty, cur_ty)) {
+                    retyped = 1;
+                    break;
+                }
+            }
+            if (retyped) {
+                jl_atomic_fetch_or_relaxed(&b->flags, BINDING_FLAG_RETYPED);
+                jl_patch_retyped_binding_sites(b);
+            }
+        }
     }
     // Atomically swap in the carried value *before* publishing the new partition (by bumping
     // the world counter), so there is never an observable state where the new type is visible
