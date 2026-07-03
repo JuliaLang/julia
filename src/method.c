@@ -724,6 +724,14 @@ static jl_value_t *jl_call_staged(jl_method_t *def, jl_value_t *generator,
     gargs[0] = jl_box_ulong(world);
     gargs[1] = (jl_value_t*)def;
     memcpy(&gargs[2], jl_svec_data(sparam_vals), n_sparams * sizeof(void*));
+    // Generators receive the sparam values; a pinned env uncertainty marker is
+    // defined up to type equality and reads as its `==`-representative
+    // (genuinely undefined sparams still pass their marker through).
+    for (size_t i = 0; i < n_sparams; i++) {
+        jl_value_t *v = jl_sparam_defined_value(gargs[2 + i]);
+        if (v != NULL)
+            gargs[2 + i] = v;
+    }
     memcpy(&gargs[2 + n_sparams], args, (def->nargs - def->isva) * sizeof(void*));
     if (def->isva)
         gargs[totargs - 1] = jl_f_tuple(NULL, &args[def->nargs - 1], nargs - def->nargs + 1);
@@ -1276,8 +1284,19 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     jl_sym_t *name;
     jl_method_t *m = NULL;
     jl_value_t *argtype = NULL;
-    JL_GC_PUSH4(&ft, &f, &m, &argtype);
+    jl_svec_t *new_atypes = NULL;
+    JL_GC_PUSH5(&ft, &f, &m, &argtype, &new_atypes);
     size_t i, na = jl_svec_len(atypes);
+
+    if (jl_is_typeegal(ft)) {
+        // Lowering spells callable-value method definitions with `Core.Typeof`.
+        // Type-valued callees still define methods at the equality level, so
+        // equal UnionAll spellings share the constructor method they define.
+        ft = (jl_value_t*)jl_wrap_Type(jl_typeegal_T(ft));
+        new_atypes = jl_svec_copy(atypes);
+        jl_svecset(new_atypes, 0, ft);
+        atypes = new_atypes;
+    }
 
     argtype = jl_apply_tuple_type(atypes, 1);
     if (!jl_is_datatype(argtype))

@@ -359,6 +359,10 @@ void *jl_jit_abi_converter_impl(jl_task_t *ct, jl_abi_t from_abi,
     auto mod = jl_create_llvm_module("gfthunk", *ctx, jl_ExecutionEngine->getDataLayout(),
                                      jl_ExecutionEngine->getTargetTriple());
     jl_codegen_output_t out{*mod};
+    // root the wrapper types that `mark_julia_const` mints for egality-pinned
+    // (`TypeEgal`) argument slots while the thunk is emitted
+    out.temporary_roots = jl_alloc_array_1d(jl_array_any_type, 0);
+    JL_GC_PUSH1(&out.temporary_roots);
     {
         ctx->setDiscardValueNames(true);
         out.imaging_mode = 0;
@@ -377,6 +381,9 @@ void *jl_jit_abi_converter_impl(jl_task_t *ct, jl_abi_t from_abi,
     }
     auto &ES = jl_ExecutionEngine->getExecutionSession();
     auto emitted = out.finish(std::move(ctx), std::move(mod), *ES.getSymbolStringPool());
+    out.temporary_roots = nullptr;
+    out.temporary_roots_set.clear();
+    JL_GC_POP();
     jl_ExecutionEngine->addOutput(std::move(emitted));
     uintptr_t Addr = jl_ExecutionEngine->getFunctionAddress(gf_thunk_name);
     assert(Addr);

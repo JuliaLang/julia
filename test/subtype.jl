@@ -3082,6 +3082,26 @@ end
 let e = only(intersection_env(Tuple{Real}, Tuple{T} where T >: Int)[2])
     @test e isa Core.SimpleVector && e[1] isa TypeVar && !e[2]
 end
+# A fixed tuple prefix before a free vararg length guarantees a matching
+# right-side tuple element exists, but range and maybe-empty tuple tails do not.
+let rhs = Tuple{typeof(intersection_env), Type{<:Tuple{Vararg{E}}}} where E
+    fixed_prefix = only(intersection_env(Tuple{typeof(intersection_env),
+        Type{Tuple{Int, Vararg{Int, N}}}} where N, rhs)[2])
+    maybe_empty = only(intersection_env(Tuple{typeof(intersection_env),
+        Type{Tuple{Vararg{Int, N}}}} where N, rhs)[2])
+    range_arg = only(intersection_env(Tuple{typeof(intersection_env),
+        Type{<:Tuple{Int}}}, rhs)[2])
+    fixed_rhs = Tuple{typeof(intersection_env), Type{<:Tuple{E}}} where E
+    exact_fixed = only(intersection_env(Tuple{typeof(intersection_env),
+        Type{Tuple{Int}}}, fixed_rhs)[2])
+    fixed_range = only(intersection_env(Tuple{typeof(intersection_env),
+        Type{<:Tuple{Int}}}, fixed_rhs)[2])
+    @test fixed_prefix isa Core.SimpleVector && fixed_prefix[1] isa TypeVar && fixed_prefix[2]
+    @test maybe_empty isa Core.SimpleVector && maybe_empty[1] isa TypeVar && !maybe_empty[2]
+    @test range_arg isa Core.SimpleVector && range_arg[1] isa TypeVar && !range_arg[2]
+    @test exact_fixed isa Core.SimpleVector && exact_fixed[1] isa TypeVar && exact_fixed[2]
+    @test fixed_range isa Core.SimpleVector && fixed_range[1] isa TypeVar && !fixed_range[2]
+end
 
 # Env entries must not introduce a fresh `newvar<:vb.lb` wrapper when `vb.lb`
 # is already a TypeVar. The doubled `where T<:T_outer where T_outer` pattern
@@ -3235,4 +3255,109 @@ let rejects(@nospecialize(x), @nospecialize(y)) =
     @test rejects(Int, Type{T} where T)
     @test rejects(Int, Type{Int})
     @test rejects(String, Type{Int})
+end
+
+# `TypeEgal{T}`: the egality-based dual of `Type{T}`, whose only instance is `T`
+# itself (`===`); free typevars are disallowed
+_typeegal_id(::Type{T}) where {T} = T
+@testset "TypeEgal" begin
+    TE = Core.TypeEgal
+    # membership is by egality (`===`), not type equality
+    @test isa(Int, TE{Int})
+    @test !isa(Integer, TE{Int})
+    @test !isa(Int, TE{Integer})
+    @test isa(Vector, TE{Vector})
+    @test isa(Union{Int,String}, TE{Union{Int,String}})
+    @test_throws TypeError TE{:a}
+    @test_throws TypeError TE{1}
+    # egal implies equal, but not the reverse
+    @test TE{Int} <: Type{Int}
+    @test !(Type{Int} <: TE{Int})
+    @test TE{Int} <: TE{Int}
+    @test !(TE{Int} <: TE{Integer})
+    @test !(TE{Integer} <: TE{Int})
+    @test TE{Int} <: Core.TypeEq{Int}
+    @test TE{Int} != Type{Int}
+    @test TE{Int} !== Type{Int}
+    # a `TypeEgal{T}` dispatches as the singleton `typeof(T)`
+    @test TE{Int} <: DataType
+    @test !(TE{Int} <: UnionAll)
+    @test TE{Vector} <: UnionAll
+    @test TE{Int} <: Any
+    @test TE{Int} <: Type
+    @test TE{Int} <: Core.AnyType
+    # nothing but `Union{}` and egal `TypeEgal`s is a subtype of `TypeEgal{T}`
+    @test !(DataType <: TE{Int})
+    @test !(Type{Int} <: TE{Int})
+    @test Union{} <: TE{Int}
+    @test Base.iskindtype(TE)
+    # free typevars are disallowed inside `TypeEgal`, but closed parameters are fine
+    @test_throws TypeError TE{TypeVar(:T)}
+    @test isa(TE{Vector{S} where S}, TE)
+    @test isa(Vector{S} where S, TE{Vector{S} where S})
+    # intersection keeps the more-specific `TypeEgal`; wrappers are freshly
+    # allocated, so compare by mutual subtyping
+    tyeq(@nospecialize(a), @nospecialize(b)) = a <: b && b <: a
+    @test tyeq(typeintersect(TE{Int}, Type{Int}), TE{Int})
+    @test tyeq(typeintersect(Type{Int}, TE{Int}), TE{Int})
+    @test tyeq(typeintersect(TE{Int}, DataType), TE{Int})
+    @test typeintersect(TE{Int}, Type{Integer}) === Union{}
+    @test tyeq(typeintersect(TE{Int}, TE{Int}), TE{Int})
+    @test typeintersect(TE{Int}, TE{Integer}) === Union{}
+    @test tyeq(typeintersect(TE{Int}, (Type{T} where T)), TE{Int})
+    @test tyeq(typeintersect(TE{Int}, Any), TE{Int})
+    # the dispatch cache specializes type-valued arguments through `TypeEgal`
+    @test _typeegal_id(Int) === Int
+    @test _typeegal_id(Vector) === Vector
+    @test _typeegal_id(Union{Int,String}) === Union{Int,String}
+    # An egal-pinned (dispatch-tuple) query pins sparams by identity even when
+    # they bind through a nested equality wrapper (`Type{<:Type{Val{S}}}`): the
+    # bound being consistency-checked is a concrete type object, not an
+    # argument-slot spelling, so its structural descent keeps identity. An
+    # `==`-only `Type`-slotted query must still produce a pinned uncertainty
+    # marker (`svec(tvar, constrained)`).
+    let sig = Tuple{Type{<:Type{Val{S}}}, Type{<:Type{Val{f}}}} where {S,f}
+        X = Tuple{Tuple{Int}}
+        _, E = intersection_env(Tuple{TE{Type{Val{X}}}, TE{Type{Val{:x}}}}, sig)
+        @test E[1] === X
+        @test E[2] === :x
+        _, E = intersection_env(Tuple{Type{Type{Val{X}}}, TE{Type{Val{:x}}}}, sig)
+        @test E[1] isa Core.SimpleVector
+        let tv = E[1][1]::TypeVar
+            @test tv.lb === tv.ub === X && E[1][2] === true
+        end
+        @test E[2] === :x
+    end
+    # a bare argument value seen through an equality wrapper is only
+    # `==`-authoritative for the spelling of a binding: it must not displace
+    # the canonical spelling pinned by an invariant (type-tag) position, in
+    # either recording order
+    let W = Union{S1,S2} where {S1<:Int,S2<:Int}
+        @test W == Int && W !== Int
+        _, E = intersection_env(Tuple{Ref{Int}, TE{W}}, Tuple{Ref{T}, Type{T}} where T)
+        @test E[1] === Int
+        _, E = intersection_env(Tuple{TE{W}, Ref{Int}}, Tuple{Type{T}, Ref{T}} where T)
+        @test E[1] === Int
+        # with no canonical contributor, the value's own spelling binds
+        _, E = intersection_env(Tuple{TE{W}}, Tuple{Type{T}} where T)
+        @test E[1] === W
+    end
+    # LHS union branches that pin a variable through different certainty
+    # spellings (an `==`-pinned marker from the `Type{Int}` branch, a plain
+    # value from the `Int` branch) agree on the binding and must merge to the
+    # weaker (marker) spelling, not degrade the variable to unbound
+    let env = Any[nothing]
+        GC.@preserve env begin
+            r = ccall(:jl_subtype_env, Cint, (Any, Any, Ptr{Any}, Cint),
+                      Tuple{Union{Type{Int}, Int}}, Tuple{Union{Type{T}, T}} where {T}, env, 1)
+            @test r == 1
+            sp = env[1]
+            if sp isa Core.SimpleVector
+                tv = sp[1]::TypeVar
+                @test tv.lb === Int && tv.ub === Int && sp[2] === true
+            else
+                @test sp === Int
+            end
+        end
+    end
 end

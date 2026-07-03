@@ -2184,7 +2184,8 @@ precompile_test_harness("Pre-compile Core methods") do load_path
     ji, ofile = Base.compilecache(Base.PkgId("CorePrecompilation"))
     @eval using CorePrecompilation
     invokelatest() do
-        let tt = Tuple{Type{Vector{CorePrecompilation.Foo}}, UndefInitializer, Tuple{Int}},
+        # the compiled (dispatch) specialization is the `TypeEgal`-keyed one
+        let tt = Tuple{Core.TypeEgal{Vector{CorePrecompilation.Foo}}, UndefInitializer, Tuple{Int}},
             match = first(Base._methods_by_ftype(tt, -1, Base.get_world_counter())),
             mi = Base.specialize_method(match)
             @test isdefined(mi, :cache)

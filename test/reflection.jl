@@ -856,11 +856,11 @@ let
 end
 
 # code_typed_by_type
-@test Base.code_typed_by_type(Tuple{Type{<:Val}})[2][2] == Val
+@test any(code -> code[2] == Val, Base.code_typed_by_type(Tuple{Type{<:Val}}))
 @test Base.code_typed_by_type(Tuple{typeof(sin), Float64})[1][2] === Float64
 
 # signature-based code_typed(...)
-@test Base.code_typed((Type{<:Val},))[2][2] == Val
+@test any(code -> code[2] == Val, Base.code_typed((Type{<:Val},)))
 @test Base.code_typed((typeof(sin), Float64))[1][2] === Float64
 
 # New reflection methods in 0.6

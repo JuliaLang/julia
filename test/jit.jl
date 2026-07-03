@@ -54,6 +54,69 @@ ci = compile_no_deps(M2.bar, (Int,))
 @test check_edges_not_compiled(ci, M2.foo)
 @test invoke(M2.bar, ci, 5) == 210
 
+# Compilation batches must stay closed under invoke edges whose CodeInstance is
+# globally cached but whose source is only visible to another interpreter:
+# `return_types` infers `bar` (and its edge `foo`) into the global cache without
+# compiling anything, so the subsequent `precompile` batch sees `foo` as a
+# sourceless cached edge. It must compile `foo` alongside `bar` rather than
+# linking the call as a permanently-boxing `tojlinvoke` trampoline.
+module M3
+    @noinline foo(x) = x+1
+    bar(x) = foo(x)
+end
+Base.return_types(M3.bar, (Int,))
+let mi = Base.method_instance(M3.foo, (Int,))
+    ci = mi.cache
+    # Precondition for the scenario: inference cached foo's CodeInstance without
+    # compiling it. If this fails, the setup no longer produces a sourceless
+    # cached edge and the test needs a new way to construct one.
+    @test ci isa CodeInstance
+    @test ci.invoke == Ptr{Nothing}(0)
+    @test precompile(M3.bar, (Int,))
+    @test ci.invoke != Ptr{Nothing}(0)
+    @test ci.specptr != Ptr{Nothing}(0)
+end
+
+# When runtime dispatch caches compiled code onto an exact-signature
+# MethodInstance by copying it from the widened compileable MethodInstance
+# (`copy_to_mi_cache`), a specsig specptr must not be adopted: it is ABI'd to
+# the widened signature, and the copy would advertise
+# JL_CI_FLAGS_INVOKE_MATCHES_SPECPTR without JL_CI_FLAGS_SPECPTR_SPECIALIZED,
+# tripping the flag-consistency assert in `JuliaOJIT::linkCISymbol` when a
+# batch later links a call target to it. Only the boxed-ABI invoke wrapper may
+# be copied.
+@noinline copyspecsig(@nospecialize(x)) = x === nothing ? 0 : 1
+let m = only(methods(copyspecsig))
+    # the exact (non-normalized) specialization runtime dispatch would mint
+    mi = ccall(:jl_specializations_get_linfo, Ref{MethodInstance},
+               (Any, Any, Any), m, Tuple{typeof(copyspecsig), Int}, Core.svec())
+    args = Any[1]
+    # TRIGGER_FOREIGN forces the copy onto `mi` even for matching sparams
+    @test ccall(:jl_invoke, Any, (Any, Ptr{Any}, UInt32, Any),
+                copyspecsig, args, length(args), mi) === 1
+    known_invokes = Ptr{Cvoid}[
+        unsafe_load(cglobal(:jl_fptr_args_addr, Ptr{Cvoid})),
+        unsafe_load(cglobal(:jl_fptr_const_return_addr, Ptr{Cvoid})),
+        unsafe_load(cglobal(:jl_fptr_sparam_addr, Ptr{Cvoid})),
+        unsafe_load(cglobal(:jl_fptr_interpret_call_addr, Ptr{Cvoid})),
+        unsafe_load(cglobal(:jl_fptr_wait_for_compiled_addr, Ptr{Cvoid})),
+    ]
+    for spec in Base.specializations(m)
+        ci = isdefined(spec, :cache, :acquire) ? (@atomic :acquire spec.cache) : nothing
+        while ci isa CodeInstance
+            flags = @atomic :acquire ci.flags
+            invoke = @atomic :acquire ci.invoke
+            specptr = @atomic :acquire ci.specptr
+            if !iszero(flags & 0x02) && invoke != C_NULL && specptr != C_NULL
+                # INVOKE_MATCHES_SPECPTR requires SPECPTR_SPECIALIZED to agree
+                # with the invoke pointer's api
+                @test (invoke ∉ known_invokes) == !iszero(flags & 0x01)
+            end
+            ci = isdefined(ci, :next, :acquire) ? (@atomic :acquire ci.next) : nothing
+        end
+    end
+end
+
 # External symbol renames must keep JITLink's external symbol map consistent.
 @testset "JITLink external symbol rename" begin
     jitlink_rename_resolve(chunks, i, x) =

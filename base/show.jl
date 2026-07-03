@@ -580,7 +580,6 @@ end
 
 print(io::IO, f::Core.IntrinsicFunction) = print(io, nameof(f))
 
-show(io::IO, ::Core.TypeofBottom) = print(io, "Union{}")
 show(io::IO, ::MIME"text/plain", ::Core.TypeofBottom) = print(io, "Union{}")
 
 function print_without_params(@nospecialize(x))
@@ -600,11 +599,14 @@ io_has_tvar_name(io::IO, name::Symbol, @nospecialize(x)) = false
 
 modulesof!(s::Set{Module}, x::TypeVar) = modulesof!(s, x.ub)
 modulesof!(s::Set{Module}, x::TypeEq) = modulesof!(s, type_parameter(x))
+modulesof!(s::Set{Module}, x::Core.TypeEgal) = modulesof!(s, type_parameter(x))
 function modulesof!(s::Set{Module}, x::Type)
     x = unwrap_unionall(x)
     if x isa DataType
         push!(s, parentmodule(x))
     elseif x isa TypeEq
+        modulesof!(s, x)
+    elseif x isa Core.TypeEgal
         modulesof!(s, x)
     elseif x isa Union
         modulesof!(s, x.a)
@@ -738,8 +740,8 @@ function show_typeparams(io::IO, env::SimpleVector, orig::SimpleVector, wheres::
     elide = length(wheres)
     function egal_var(p::TypeVar, @nospecialize o)
         return o isa TypeVar &&
-            ccall(:jl_types_egal, Cint, (Any, Any), p.ub, o.ub) != 0 &&
-            ccall(:jl_types_egal, Cint, (Any, Any), p.lb, o.lb) != 0
+            ccall(:jl_types_struct_equiv, Cint, (Any, Any), p.ub, o.ub) != 0 &&
+            ccall(:jl_types_struct_equiv, Cint, (Any, Any), p.lb, o.lb) != 0
     end
     for i = n:-1:1
         p = env[i]
@@ -1019,8 +1021,22 @@ function show(io::IO, ::MIME"text/plain", @nospecialize(x::Type))
     end
 end
 
-show(io::IO, @nospecialize(x::TypeEq)) = show_typeeq(io, x)
-show(io::IO, @nospecialize(x::Core.AnyType)) = _show_type(io, inferencebarrier(x))
+function show_typeegal(io::IO, @nospecialize(x::Core.TypeEgal))
+    print(io, "Core.TypeEgal{")
+    show(io, type_parameter(x))
+    print(io, "}")
+end
+function show(io::IO, @nospecialize(x::Core.AnyType))
+    if x isa Core.TypeofBottom
+        print(io, "Union{}")
+    elseif x isa Core.TypeEgal
+        show_typeegal(io, x)
+    elseif x isa TypeEq
+        show_typeeq(io, x)
+    else
+        _show_type(io, inferencebarrier(x))
+    end
+end
 # `Type{T}` is the familiar user-facing spelling and is used for all normal
 # (compact) printing. In non-compact contexts (e.g. the REPL's `text/plain`
 # display) the canonical kind name `TypeEq{T}` is shown instead, so that a
@@ -1031,7 +1047,10 @@ function show_typeeq(io::IO, @nospecialize(x::TypeEq))
     print(io, "}")
 end
 function _show_type(io::IO, @nospecialize(x::Type))
-    if print_without_params(x)
+    if x isa Core.TypeEgal
+        show_typeegal(io, x)
+        return
+    elseif print_without_params(x)
         show_type_name(io, (unwrap_unionall(x)::DataType).name)
         return
     elseif get(io, :compact, true)::Bool && show_typealias(io, x)

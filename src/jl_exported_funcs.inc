@@ -20,6 +20,7 @@
     XX(jl_apply_type) \
     XX(jl_apply_type1) \
     XX(jl_apply_type2) \
+    XX(jl_arg_slot_type) \
     XX(jl_argument_datatype) \
     XX(jl_argument_datatypename) \
     XX(jl_array_del_end) \
@@ -428,6 +429,7 @@
     XX(jl_sigatomic_begin) \
     XX(jl_sigatomic_end) \
     XX(jl_spawn) \
+    XX(jl_sparam_slot_value) \
     XX(jl_specializations_get_linfo) \
     XX(jl_specializations_lookup) \
     XX(jl_static_show) \
