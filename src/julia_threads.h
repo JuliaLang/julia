@@ -264,7 +264,7 @@ typedef struct _jl_task_t {
     // timestamp this task finished (i.e. entered state DONE or FAILED).
     _Atomic(uint64_t) finished_at;
 
-    // Cancellation request - can be an arbitary julia value, but the runtime recognizes
+    // Cancellation request - can be an arbitrary julia value, but the runtime recognizes
     // CANCEL_REQUEST_ enum values.
     _Atomic(jl_value_t *) cancellation_request;
 // hidden state:

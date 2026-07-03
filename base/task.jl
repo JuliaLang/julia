@@ -1575,7 +1575,7 @@ end
 
 Like [`cancellation_request`](@ref), but additionally gives the optimizer license
 to establish this point as a cancellation reset point. If safe to do, the runtime
-will attempt to unwind execution to the nearest preceeding cancellation point
+will attempt to unwind execution to the nearest preceding cancellation point
 when a cancellation is requested.
 """
 Core.cancellation_point!
