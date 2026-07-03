@@ -2251,7 +2251,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                     builder.CreateAlignedStore(last_gc_state, gc_state, Align(sizeof(void*)))->setOrdering(AtomicOrdering::Release);
                     emit_gc_safepoint(builder, T_size, ptls, tbaa, false);
                 }
-                if (CI->arg_size() == CI->getNumOperands()) {
+                if (!CI->hasOperandBundles()) {
                     /* No operand bundle to lower */
                     ++it;
                     continue;
