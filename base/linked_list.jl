@@ -1,11 +1,18 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 mutable struct IntrusiveLinkedList{T}
-    # Invasive list requires that T have a field `.next >: U{T, Nothing}` and `.queue >: U{ILL{T}, Nothing}`
+    # Invasive list requires that T have a field `.next >: U{T, Nothing}` and `.queue::Any`
     head::Union{T, Nothing}
     tail::Union{T, Nothing}
     IntrusiveLinkedList{T}() where {T} = new{T}(nothing, nothing)
 end
+
+struct ILLRef{T}
+    list::IntrusiveLinkedList{T}
+    waitee::Any # Invariant: waitqueue(waitee).list === list
+end
+ILLRef(ref::ILLRef, @nospecialize(waitee)) = typeof(ref)(ref.list, waitee)
+waitqueue(list::IntrusiveLinkedList{T}) where {T} = ILLRef(list, list)
 
 #const list_append!! = append!
 #const list_deletefirst! = delete!
@@ -49,9 +56,13 @@ function list_append!!(q::IntrusiveLinkedList{T}, q2::IntrusiveLinkedList{T}) wh
     return q
 end
 
-function push!(q::IntrusiveLinkedList{T}, val::T) where T
+isempty(qr::ILLRef{T}) where T = isempty(qr.list)
+length(qr::ILLRef{T}) where T = length(qr.list)
+
+function push!(qr::ILLRef{T}, val::T) where T
     val.queue === nothing || error("val already in a list")
-    val.queue = q
+    val.queue = qr.waitee
+    q = qr.list
     tail = q.tail
     if tail === nothing
         q.head = q.tail = val
@@ -62,9 +73,10 @@ function push!(q::IntrusiveLinkedList{T}, val::T) where T
     return q
 end
 
-function pushfirst!(q::IntrusiveLinkedList{T}, val::T) where T
+function pushfirst!(qr::ILLRef{T}, val::T) where T
     val.queue === nothing || error("val already in a list")
-    val.queue = q
+    val.queue = qr.waitee
+    q = qr.list
     head = q.head
     if head === nothing
         q.head = q.tail = val
@@ -75,21 +87,29 @@ function pushfirst!(q::IntrusiveLinkedList{T}, val::T) where T
     return q
 end
 
-function pop!(q::IntrusiveLinkedList{T}) where {T}
-    val = q.tail::T
-    list_deletefirst!(q, val) # expensive!
+function pop!(qr::ILLRef{T}) where {T}
+    val = qr.list.tail::T
+    _list_deletefirst!(qr.list, val) # expensive!
     return val
 end
 
-function popfirst!(q::IntrusiveLinkedList{T}) where {T}
-    val = q.head::T
-    list_deletefirst!(q, val) # cheap
+function popfirst!(qr::ILLRef{T}) where {T}
+    val = qr.list.head::T
+    _list_deletefirst!(qr.list, val) # cheap
     return val
+end
+
+# Delete `val` from the list, but only if it is actually in it, as indicated by
+# `val.queue` holding the ILLRef's waitee. This makes deletion a no-op if `val`
+# was concurrently notified/popped, matching the behavior various cleanup paths
+# rely upon.
+function list_deletefirst!(qr::ILLRef{T}, val::T) where T
+    val.queue === qr.waitee || return qr.list
+    return _list_deletefirst!(qr.list, val)
 end
 
 # this function assumes `val` is found in `q`
-function list_deletefirst!(q::IntrusiveLinkedList{T}, val::T) where T
-    val.queue === q || return
+function _list_deletefirst!(q::IntrusiveLinkedList{T}, val::T) where T
     head = q.head::T
     if head === val
         if q.tail::T === val
@@ -114,6 +134,29 @@ function list_deletefirst!(q::IntrusiveLinkedList{T}, val::T) where T
     val.queue = nothing
     return q
 end
+
+function in(val::T, list::IntrusiveLinkedList{T}) where T
+    head = list.head
+    while head !== nothing
+        if val === head
+            return true
+        end
+        head = head.next
+    end
+    return false
+end
+
+# TODO: Delete this compatibility wrapper
+list_deletefirst!(q::IntrusiveLinkedList{T}, val::T) where T = list_deletefirst!(ILLRef(q, q), val)
+push!(q::IntrusiveLinkedList{T}, val::T) where T = push!(ILLRef(q, q), val)
+pushfirst!(q::IntrusiveLinkedList{T}, val::T) where T = pushfirst!(ILLRef(q, q), val)
+pop!(q::IntrusiveLinkedList{T}) where T = pop!(ILLRef(q, q))
+popfirst!(q::IntrusiveLinkedList{T}) where T = popfirst!(ILLRef(q, q))
+
+# Generic cleanup entry point: delete `val` from the wait queue of whatever
+# waitee it is currently queued on (no-op if it is not queued). Requires
+# `waitqueue(waitee)` to be defined for the waitee.
+list_deletefirst!(@nospecialize(waitee), val) = list_deletefirst!(ILLRef(waitqueue(waitee), waitee), val)
 
 #function list_deletefirst!(q::Array{T}, val::T) where T
 #    i = findfirst(isequal(val), q)

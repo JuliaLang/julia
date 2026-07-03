@@ -669,7 +669,7 @@ millisecond.
 """
 function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real=0.0)
     ct = current_task()
-    Base._wait2(c, ct, first)
+    Base._wait2(c, ct, c, first)
     token = Base.unlockall(c.lock)
 
     timer::Union{Timer, Nothing} = nothing
@@ -692,7 +692,7 @@ function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real
         end
         return res
     catch
-        q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
+        q = ct.queue; q === nothing || Base.list_deletefirst!(q, ct)
         rethrow()
     finally
         Base.relockall(c.lock, token)
@@ -713,9 +713,9 @@ function _wait_with_timeout_task(c::GenericCondition, ct::Task, timer::Timer,
         # Confirm that the waiting task is still in the wait queue and remove it. If
         # the task is not in the wait queue, it must have been notified already so we
         # don't do anything here.
-        if !waiter_left[] && ct.queue === c.waitq
+        if !waiter_left[] && ct.queue === c
             dosched = true
-            Base.list_deletefirst!(c.waitq, ct)
+            Base.list_deletefirst!(Base.waitqueue(c), ct)
         end
         unlock(c.lock)
         # send the waiting task a timeout
