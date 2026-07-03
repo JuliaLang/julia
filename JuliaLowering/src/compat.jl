@@ -467,10 +467,13 @@ function est_to_dst(st::SyntaxTree)
                        _dst_sink_parameters(children(st)[2:end])...]
         # tuple arg should not be converted or desugared
         [K"foreigncall" [K"tuple" _...] args...] ->
-            @ast g st [K"foreigncall" [K"foreigncall_arg1" st[1]] args...]
+            @ast g st [K"foreigncall" [K"foreignsymbol" st[1]] args...]
+        [K"foreignglobal" [K"tuple" _...]] ->
+            @ast g st [K"foreignglobal" [K"foreignsymbol" st[1]]]
         ([K"call" [K"Identifier"] sym args...],
-         when=st[1].name_val::String === "ccall") -> if kind(sym) === K"tuple"
-             @ast g st [K"call" st[1] [K"foreigncall_arg1" st[2]] mapsyntax(rec, args)...]
+         when=(st[1].name_val::String === "ccall" ||
+               st[1].name_val::String === "cglobal")) -> if kind(sym) === K"tuple"
+             @ast g st [K"call" st[1] [K"foreignsymbol" st[2]] mapsyntax(rec, args)...]
          else
              @ast g st [K"call" st[1] rec(sym) mapsyntax(rec, args)...]
          end

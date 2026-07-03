@@ -656,6 +656,12 @@ function aligned_sizeof(@nospecialize T::Type)
             return LLT_ALIGN(sz, al)
         end
     elseif allocatedinline(T)
+        if T === Type{Union{}}
+            # allocated with the layout of the `typeof(Union{})` singleton
+            # (cf. `normalize_typeofbottom_layout_alias`), which is what the
+            # `DataType`-only layout queries below expect
+            T = Core.TypeofBottom
+        end
         al = datatype_alignment(T)
         return LLT_ALIGN(Core.sizeof(T), al)
     end

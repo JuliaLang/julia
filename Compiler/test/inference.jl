@@ -137,8 +137,6 @@ end
 @test Compiler.limit_type_size(Type{Union{Int,Type{Int}}}, Union{Type{Int},Type{Type{Int}}}, Union{}, 0, 0) == Type
 @test Compiler.limit_type_size(Type{Union{Int,Type{Int}}}, Type{Union{Type{Int},Type{Type{Int}}}}, Union{}, 0, 0) == Type{Union{Int, Type{Int}}}
 @test Compiler.limit_type_size(Type{Union{Int,Type{Int}}}, Type{Type{Int}}, Union{}, 0, 0) == Type
-
-
 @test Compiler.limit_type_size(Type{Any}, Union{}, Union{}, 0, 0) ==
       Compiler.limit_type_size(Type{Any}, Any, Union{}, 0, 0) ==
       Compiler.limit_type_size(Type{Any}, Type, Union{}, 0, 0) ==
@@ -1789,7 +1787,7 @@ let getfield_tfunc(@nospecialize xs...) =
     @test getfield_tfunc(ARef{Int},Const(:x),Bool,Bool) === Union{}
 end
 
-using Core: Const
+using Core: Const, PartialStruct
 mutable struct XY{X,Y}
     x::X
     y::Y
@@ -1819,6 +1817,7 @@ let setfield!_tfunc(@nospecialize xs...) =
     @test setfield!_tfunc(ABCDconst, Const(:c), Any) === Any
     @test setfield!_tfunc(ABCDconst, Const(3), Any) === Any
     @test setfield!_tfunc(ABCDconst, Symbol, Any) === Any
+    @test setfield!_tfunc(PartialStruct(Compiler.fallback_lattice, ABCDconst, Any[Const(42), Int, Any, Union{Int,Nothing}]), Const(:a), Int) === Union{}
     @test setfield!_tfunc(ABCDconst, Int, Any) === Any
     @test setfield!_tfunc(Union{Base.RefValue{Any},Some{Any}}, Const(:x), Int) === Int
     @test setfield!_tfunc(Union{Base.RefValue,Some{Any}}, Const(:x), Int) === Int
@@ -1900,6 +1899,37 @@ let setfield!_nothrow(@nospecialize xs...) =
     @test !setfield!_nothrow(Any, Symbol, Int)
     @test !setfield!_nothrow(Any, Int, Int)
     @test !setfield!_nothrow(Any, Any, Int)
+end
+
+mutable struct AtomicFields
+    @atomic a::Int
+    b::Int
+    const c::Int
+end
+let modifyfield!_tfunc(@nospecialize xs...) =
+        Compiler.modifyfield!_tfunc(Compiler.fallback_lattice, xs...)
+    replacefield!_tfunc(@nospecialize xs...) =
+        Compiler.replacefield!_tfunc(Compiler.fallback_lattice, xs...)
+    cmpswap_Int = ccall(:jl_apply_cmpswap_type, Any, (Any,), Int)
+    # writable fields (`@atomic` and plain) of a mutable struct
+    @test modifyfield!_tfunc(AtomicFields, Const(:a), Any, Any) === Pair{Int,Int}
+    @test replacefield!_tfunc(AtomicFields, Const(:a), Int, Int) === cmpswap_Int
+    @test modifyfield!_tfunc(AtomicFields, Const(:b), Any, Any) === Pair{Int,Int}
+    @test replacefield!_tfunc(AtomicFields, Const(:b), Int, Int) === cmpswap_Int
+    # `replacefield!` type-checks the replacement value unconditionally, so a value that
+    # can never be stored always throws
+    @test replacefield!_tfunc(AtomicFields, Const(:a), Int, String) === Union{}
+    @test replacefield!_tfunc(AtomicFields, Const(:b), Int, String) === Union{}
+    # `const` fields can never be written, so the operation always throws
+    @test modifyfield!_tfunc(AtomicFields, Const(:c), Any, Any) === Union{}
+    @test modifyfield!_tfunc(AtomicFields, Const(3), Any, Any) === Union{}
+    @test replacefield!_tfunc(AtomicFields, Const(:c), Int, Int) === Union{}
+    @test replacefield!_tfunc(AtomicFields, Const(3), Int, Int) === Union{}
+    # immutable types can never be written, so the operation always throws
+    @test modifyfield!_tfunc(Some{Int}, Const(:value), Any, Any) === Union{}
+    @test replacefield!_tfunc(Some{Int}, Const(:value), Int, Int) === Union{}
+    @test modifyfield!_tfunc(Some, Const(:value), Any, Any) === Union{}
+    @test replacefield!_tfunc(Some, Const(:value), Any, Any) === Union{}
 end
 
 struct Foo_22708
@@ -3996,7 +4026,7 @@ apply_fargs(f, args...) = f(args...)
 @test only(Base.return_types(apply_fargs, Tuple{typeof(Core.apply_type), Vararg})) == Any
 @test only(Base.return_types(apply_fargs, Tuple{typeof(Core.apply_type), Any, Vararg})) == Any
 @test only(Base.return_types(apply_fargs, Tuple{typeof(Core.apply_type), Any, Any, Vararg})) == Any
-f_apply_cglobal(args...) = cglobal(args...)
+f_apply_cglobal(args...) = Core.Intrinsics.cglobal(args...)
 @test only(Base.return_types(f_apply_cglobal, Tuple{Vararg{Type{Int}}})) == Ptr
 @test only(Base.return_types(f_apply_cglobal, Tuple{Any, Vararg{Type{Int}}})) == Ptr
 @test only(Base.return_types(f_apply_cglobal, Tuple{Any, Type{Int}, Vararg{Type{Int}}})) == Ptr{Int}

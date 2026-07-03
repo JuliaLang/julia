@@ -1811,7 +1811,14 @@ function show_unquoted(io::IO, val::SSAValue, ::Int, ::Int)
         # invalid SSAValue, print this in red for better recognition
         printstyled(io, "%", val.id; color=:red)
     else
-        print(io, "%", val.id)
+        cls = Base.Compiler.IRShow.ssa_warn_type_class(io, val.id)
+        if cls === Base.Compiler.IRShow.SSA_WARN_TYPE_STRONG
+            printstyled(io, "%", val.id; color=:light_red, bold=true)
+        elseif cls === Base.Compiler.IRShow.SSA_WARN_TYPE_MILD
+            printstyled(io, "%", val.id; color=warn_color(), bold=true)
+        else
+            print(io, "%", val.id)
+        end
     end
 end
 show_unquoted(io::IO, sym::Symbol, ::Int, ::Int)        = show_sym(io, sym, allow_macroname=false)

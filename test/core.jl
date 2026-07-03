@@ -9042,3 +9042,26 @@ let T = TypeVar(:T)
     a = UnionAll(T, Union{Vector{T}, Int64})
     @test Union{T, a} == Union{a, T} == Union{T, Int64, Vector}
 end
+
+# Vector/Memory with Type{Union{}} elements: the element layout aliases the
+# typeof(Union{}) singleton (cf. normalize_typeofbottom_layout_alias), so the
+# elements are stored inline with zero size and reads produce the value
+# Union{} itself
+let v = Vector{Type{Union{}}}()
+    push!(v, Union{})
+    @test v[1] === Union{}
+    @test length(v) == 1
+    @test Base.elsize(typeof(v)) == 0
+    @test Base.aligned_sizeof(Type{Union{}}) == 0
+    @test copy(v)[1] === Union{}
+    @test eltype(similar(v)) == Type{Union{}}
+    # the type object Type{Union{}} is not an element of Type{Union{}}
+    @test_throws MethodError push!(v, Type{Union{}})
+    m = Memory{Type{Union{}}}(undef, 2)
+    m[1] = Union{}
+    @test m[1] === Union{} && m[2] === Union{}
+    u = Vector{Union{Type{Union{}},Int}}()
+    push!(u, 3)
+    push!(u, Union{})
+    @test u[1] === 3 && u[2] === Union{}
+end

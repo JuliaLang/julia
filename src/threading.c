@@ -59,7 +59,7 @@ JL_DLLEXPORT void *jl_get_ptls_states(void)
     return jl_current_task->ptls;
 }
 
-static void jl_delete_thread(void*);
+static void jl_delete_thread(void*) JL_NOTSAFEPOINT_ENTER;
 
 #if !defined(_OS_WINDOWS_)
 static pthread_key_t jl_task_exit_key;
@@ -189,14 +189,14 @@ void jl_set_pgcstack(jl_gcframe_t **pgcstack) JL_NOTSAFEPOINT
     TlsSetValue(jl_pgcstack_key, (void*)pgcstack);
 }
 
-void jl_pgcstack_getkey(jl_get_pgcstack_func **f, DWORD *k)
+void jl_pgcstack_getkey(jl_get_pgcstack_func_t *f, DWORD *k)
 {
     // for codegen
     *f = jl_get_pgcstack;
     *k = jl_pgcstack_key;
 }
 
-JL_DLLEXPORT void jl_pgcstack_setkey(jl_get_pgcstack_func *f, DWORD k)
+JL_DLLEXPORT void jl_pgcstack_setkey(jl_get_pgcstack_func_t *f, DWORD k)
 {
     jl_safe_printf("ERROR: Attempt to change TLS address.\n");
 }
@@ -218,7 +218,7 @@ JL_DLLEXPORT void jl_pgcstack_setkey(jl_get_pgcstack_func *f, DWORD k)
 // fallback provided for embedding
 static jl_pgcstack_key_t jl_pgcstack_key;
 static __thread jl_gcframe_t **pgcstack_;
-static jl_gcframe_t **jl_get_pgcstack_fallback(void) JL_NOTSAFEPOINT
+static jl_gcframe_t **jl_get_pgcstack_fallback(void) JL_NOTSAFEPOINT JL_GLOBALLY_ROOTED
 {
     return pgcstack_;
 }
@@ -230,8 +230,9 @@ void jl_set_pgcstack(jl_gcframe_t **pgcstack) JL_NOTSAFEPOINT
 {
     *jl_pgcstack_key() = pgcstack;
 }
-static jl_gcframe_t **jl_get_pgcstack_init(void);
-static jl_get_pgcstack_func *jl_get_pgcstack_cb = jl_get_pgcstack_init;
+
+static jl_gcframe_t **jl_get_pgcstack_init(void) JL_NOTSAFEPOINT JL_GLOBALLY_ROOTED;
+static jl_get_pgcstack_func_t jl_get_pgcstack_cb = jl_get_pgcstack_init;
 static jl_gcframe_t **jl_get_pgcstack_init(void)
 {
     // This 2-step initialization is used to detect calling
@@ -247,7 +248,7 @@ static jl_gcframe_t **jl_get_pgcstack_init(void)
     return jl_get_pgcstack_cb();
 }
 
-JL_DLLEXPORT void jl_pgcstack_setkey(jl_get_pgcstack_func *f, jl_pgcstack_key_t k)
+JL_DLLEXPORT void jl_pgcstack_setkey(jl_get_pgcstack_func_t f, jl_pgcstack_key_t k)
 {
     if (f == jl_get_pgcstack_cb || !f)
         return;
@@ -260,19 +261,15 @@ JL_DLLEXPORT void jl_pgcstack_setkey(jl_get_pgcstack_func *f, jl_pgcstack_key_t 
     jl_pgcstack_key = k;
 }
 
-JL_DLLEXPORT jl_gcframe_t **jl_get_pgcstack(void) JL_GLOBALLY_ROOTED
+JL_DLLEXPORT jl_gcframe_t **jl_get_pgcstack(void)
 {
-#ifndef __clang_gcanalyzer__
     return jl_get_pgcstack_cb();
-#endif
 }
 
-void jl_pgcstack_getkey(jl_get_pgcstack_func **f, jl_pgcstack_key_t *k)
+void jl_pgcstack_getkey(jl_get_pgcstack_func_t *f, jl_pgcstack_key_t *k)
 {
-#ifndef __clang_gcanalyzer__
     if (jl_get_pgcstack_cb == jl_get_pgcstack_init)
         jl_get_pgcstack_init();
-#endif
     // for codegen
     *f = jl_get_pgcstack_cb;
     *k = jl_pgcstack_key;
@@ -495,7 +492,7 @@ void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT;
 void scheduler_delete_thread(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 void _jl_free_stack(jl_ptls_t ptls, void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT;
 
-static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
+static void jl_delete_thread(void *value)
 {
 #ifndef _OS_WINDOWS_
     pthread_setspecific(jl_task_exit_key, NULL);
@@ -662,7 +659,7 @@ static int check_tls_cb(struct dl_phdr_info *info, size_t size, void *_data)
 
 static void jl_check_tls(void)
 {
-    jl_get_pgcstack_func *f;
+    jl_get_pgcstack_func_t f;
     jl_gcframe_t ***(*k)(void);
     jl_pgcstack_getkey(&f, &k);
     jl_gcframe_t ***k0 = k();

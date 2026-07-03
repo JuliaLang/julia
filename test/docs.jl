@@ -1672,3 +1672,28 @@ Bar59949{T}
 """
 Bar59949{T} = Foo59949{T}
 @test docstrings_equal(@doc(Bar59949), doc"Bar59949{T}")
+
+# https://github.com/JuliaLang/julia/issues/60871
+"""
+    Bug60871(; x)
+
+kw constructor for `struct Bug60871`
+"""
+@kwdef struct Bug60871
+    x
+
+    @doc """
+        Bug60871(x)
+
+    normal constructor with input check
+    """
+    function Bug60871(x)
+        @assert x == 1
+        return new(x)
+    end
+end
+
+@test Bug60871 isa DataType
+@test Bug60871(1).x == 1
+@test_throws AssertionError Bug60871(2)
+@test length(fieldnames(Bug60871)) == 1

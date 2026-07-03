@@ -623,7 +623,7 @@ static void reset_thread_gc_counts(void) JL_NOTSAFEPOINT
     }
 }
 
-void jl_gc_reset_alloc_count(void) JL_NOTSAFEPOINT
+void jl_gc_reset_alloc_count(void)
 {
     combine_thread_gc_counts(&gc_num, 0);
     int64_t alloc_increment = gc_num.deferred_alloc + gc_num.allocd;
@@ -1513,6 +1513,16 @@ JL_DLLEXPORT void jl_gc_queue_root(const jl_value_t *ptr)
             }
         }
     }
+}
+
+JL_DLLEXPORT void jl_gc_wb_cold(const void *parent, const void *ptr) JL_NOTSAFEPOINT
+{
+    if (ptr == NULL)
+        return;
+    if (jl_astaggedvalue(parent)->bits.in_image != 1 /* GC_IN_IMAGE_NOT_REMSET */ && // parent is not an unmarked image object
+        (jl_astaggedvalue(ptr)->bits.gc & 1 /* GC_MARKED */) != 0) // ptr is old
+        return;
+    jl_gc_queue_root((jl_value_t*)parent);
 }
 
 void jl_gc_queue_multiroot(const jl_value_t *parent, const void *ptr, jl_datatype_t *dt) JL_NOTSAFEPOINT
@@ -3548,14 +3558,12 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
 
     if (!jl_atomic_load_acquire(&jl_gc_disable_counter)) {
         JL_LOCK_NOGC(&finalizers_lock); // all the other threads are stopped, so this does not make sense, right? otherwise, failing that, this seems like plausibly a deadlock
-#ifndef __clang_gcanalyzer__
         if (_jl_gc_collect(ptls, collection)) {
             // recollect
             int ret = _jl_gc_collect(ptls, JL_GC_AUTO);
             (void)ret;
             assert(!ret);
         }
-#endif
         JL_UNLOCK_NOGC(&finalizers_lock);
     }
 

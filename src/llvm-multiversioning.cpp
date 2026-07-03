@@ -292,7 +292,6 @@ static void annotate_module_clones(Module &M) {
     if (auto maybe_specs = get_target_specs(M)) {
         specs = std::move(*maybe_specs);
     } else {
-#ifndef __clang_analyzer__
         jl_clone_targets_t full = jl_get_llvm_clone_targets(jl_options.cpu_target);
         specs.reserve(full.nspecs);
         for (size_t i = 0; i < full.nspecs; i++) {
@@ -305,7 +304,6 @@ static void annotate_module_clones(Module &M) {
         }
         jl_free_clone_targets(&full);
         set_target_specs(M, specs);
-#endif
     }
     SmallVector<APInt, 0> clones(orig_funcs.size(), APInt(specs.size(), 0));
     BitVector subtarget_cloned(orig_funcs.size());

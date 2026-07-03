@@ -110,7 +110,7 @@ const MAX_NESTING_DEPTH = 1
 
 function is_call_expr(codeinfo::CodeInfo, @nospecialize(stmt))
     stmt = unwrap_stmt(codeinfo, stmt)
-    return stmt isa Expr && stmt.head ∈ (:call, :invoke, :foreigncall, :new)
+    return stmt isa Expr && stmt.head ∈ (:call, :invoke, :foreigncall, :foreignglobal, :new)
 end
 
 function has_unstable_arg(codeinfo::CodeInfo, sptypes::Vector{VarState}, args, startidx::Int)

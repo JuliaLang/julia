@@ -785,6 +785,14 @@ function check_no_return(ex)
     end
 end
 
+function lhs_local_defs(ctx, lhs)
+    defs = SyntaxList(ctx)
+    foreach_lhs_name(lhs) do var
+        push!(defs, @ast ctx var [K"local" var])
+    end
+    return defs
+end
+
 # Return the anonymous function taking an iterated value, for use with the
 # first argument to `Base.Generator`
 function func_for_generator(ctx, body, iter_value_destructuring)
@@ -798,6 +806,7 @@ function func_for_generator(ctx, body, iter_value_destructuring)
         @ast ctx body [K"->"
             [K"tuple" arg]
             [K"block"
+                lhs_local_defs(ctx, iter_value_destructuring)...
                 [K"=" iter_value_destructuring arg]
                 body]]
     else
@@ -1701,8 +1710,8 @@ function expand_ccall_argtype(ctx, ex)
     end
 end
 
-# Expand the (sym,lib) argument to ccall
-function expand_C_library_symbol(ctx, ex)
+# Expand the (sym, lib) argument to ccall / cglobal
+function expand_csymbol(ctx, ex)
     @stm ex begin
         [K"static_eval" _] -> ex # already done
         _ -> expand_forms_2(ctx, ex)
@@ -1822,7 +1831,7 @@ function expand_ccall(ctx, ex)
     @ast ctx ex [K"block"
         sctx.stmts...
         [K"foreigncall"
-            expand_C_library_symbol(ctx, cfunc_name)
+            expand_csymbol(ctx, cfunc_name)
             [K"static_eval"(meta=name_hint("ccall return type"))
                 expand_forms_2(ctx, return_type)
             ]
@@ -1846,6 +1855,24 @@ function expand_ccall(ctx, ex)
             gc_roots... # GC roots
         ]
     ]
+end
+
+function expand_cglobal(ctx, ex)
+    if numchildren(ex) == 2
+        # cglobal(name) -> foreignglobal(name)
+        return @ast ctx ex [K"foreignglobal"
+            expand_csymbol(ctx, ex[2])
+        ]
+    elseif numchildren(ex) == 3
+        # cglobal(name, T) -> bitcast(Ptr{T}, foreignglobal(name))
+        return @ast ctx ex [K"call"
+            "bitcast"::K"top"
+            [K"call" "apply_type"::K"core" "Ptr"::K"top" expand_forms_2(ctx, ex[3])]
+            [K"foreignglobal" expand_csymbol(ctx, ex[2])]
+        ]
+    else
+        throw(LoweringError(ex, "wrong number of arguments to cglobal"))
+    end
 end
 
 function remove_kw_args!(ctx, args::SyntaxList)
@@ -1888,13 +1915,7 @@ function expand_call(ctx, ex)
     if kind(farg) === K"Identifier" && farg.name_val === "ccall"
         return expand_ccall(ctx, ex)
     elseif kind(farg) === K"Identifier" && farg.name_val === "cglobal"
-        return @ast ctx ex [K"call"
-            [K"static_eval" ex[1]] # just so the globalref is inlined
-            expand_forms_2(ctx, ex[2])
-            if numchildren(ex) == 3
-                expand_forms_2(ctx, ex[3])
-            end
-        ]
+        return expand_cglobal(ctx, ex)
     end
     args = copy(ex[2:end])
     kws = remove_kw_args!(ctx, args)
@@ -4333,8 +4354,10 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
                 ]
             ]
         ]
-    elseif k == K"inert" || k == K"inert_syntaxtree" || k == K"foreigncall_arg1"
+    elseif k == K"inert" || k == K"inert_syntaxtree" || k == K"foreignsymbol"
         ex
+    elseif k == K"foreignglobal"
+        @ast ctx ex [K"foreignglobal" expand_csymbol(ctx, ex[1])]
     elseif k == K"foreigncall"
         # Assume user macros may produce this, but static_eval means desugaring
         # has already occurred.
@@ -4349,7 +4372,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
                 push!(args, expand_forms_2(ctx, c))
             end
         end
-        @ast ctx ex [K"foreigncall" expand_C_library_symbol(ctx, ex[1]) args...]
+        @ast ctx ex [K"foreigncall" expand_csymbol(ctx, ex[1]) args...]
     elseif k == K"gc_preserve"
         @ast ctx ex [K"block"
             s := [K"gc_preserve_begin" children(ex)[2:end]...]

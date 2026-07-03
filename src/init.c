@@ -230,7 +230,7 @@ JL_DLLEXPORT void jl_raise(int signo)
 #endif
 }
 
-JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
+JL_DLLEXPORT void jl_atexit_hook(int exitcode)
 {
     uv_tty_reset_mode();
 

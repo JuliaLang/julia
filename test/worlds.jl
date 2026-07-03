@@ -627,3 +627,17 @@ let
     @test rettype_side_effect == "blah"
     ccall(:strlen, rettype_with_side_effect(), (Cstring,), "xx")
 end
+
+# issue #62022 - missing invalidation with CI equivalence swaps during expansive recursion
+# When inference hits recursion limits and reuses cached CIs, the swapped CIs must have
+# proper edges/backedges so that subsequent method additions correctly invalidate them.
+struct W62022{T}; x::T; end
+@noinline leaf62022() = true
+# grow the type up to a fixed limit (inference's recursion limits will trigger first)
+@noinline foo62022(w::W62022)::Bool = foo62022(W62022(w))
+@noinline foo62022(::W62022{W62022{W62022{W62022{W62022{W62022{T}}}}}}) where {T} = leaf62022()
+@test foo62022(W62022(1)) === true # trigger compilation
+# add a new method that bottoms out the recursion earlier, but after the limit
+@noinline foo62022(::W62022{W62022{W62022{W62022{Int}}}}) = false
+@test foo62022(W62022(1)) === false # test for invalidation
+@test foo62022(W62022(W62022(W62022(1)))) === false

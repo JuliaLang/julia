@@ -1082,7 +1082,15 @@ sinpi(x::AbstractFloat) = sin(pi*x)
 cospi(x::AbstractFloat) = cos(pi*x)
 sincospi(x::AbstractFloat) = sincos(pi*x)
 tanpi(x::AbstractFloat) = tan(pi*x)
-tanpi(x::Complex) = sinpi(x) / cospi(x) # Is there a better way to do this?
+
+function tanpi(z::Complex)
+    zr, zi = reim(z)
+    iszero(zi) && return Complex(tanpi(zr))
+    sr, cr = sincospi(zr)
+    ti = tanh(zi * pi)
+    cz = Complex(cr, ti * sr)
+    Complex(sr, ti * cr) * cz / abs2(cz)
+end
 
 function sinpi(z::Complex{T}) where T
     F = float(T)

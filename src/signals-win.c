@@ -27,21 +27,6 @@ void __cdecl fpreset (void);
 #define _FPE_STACKUNDERFLOW 0x8b
 #define _FPE_EXPLICITGEN    0x8c    /* raise( SIGFPE ); */
 
-static char *strsignal(int sig)
-{
-    switch (sig) {
-    case SIGINT:         return "SIGINT"; break;
-    case SIGILL:         return "SIGILL"; break;
-    case SIGABRT_COMPAT: return "SIGABRT_COMPAT"; break;
-    case SIGFPE:         return "SIGFPE"; break;
-    case SIGSEGV:        return "SIGSEGV"; break;
-    case SIGTERM:        return "SIGTERM"; break;
-    case SIGBREAK:       return "SIGBREAK"; break;
-    case SIGABRT:        return "SIGABRT"; break;
-    }
-    return "?";
-}
-
 static void jl_try_throw_sigint(void)
 {
     jl_task_t *ct = jl_current_task;

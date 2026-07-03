@@ -164,9 +164,7 @@ static void push_innervar(jl_varbinding_t *b, jl_value_t *v)
     jl_array_ptr_1d_push(b->innervars, v);
 }
 
-#ifdef __clang_gcanalyzer__
-static jl_varbinding_t *lookup_binding(jl_stenv_t *e, jl_tvar_t *v, int *innervar) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
-#else
+#ifndef __clang_gcanalyzer__
 static jl_varbinding_t *lookup_binding(jl_stenv_t *e, jl_tvar_t *v, int *innervar) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT
 {
     jl_varbinding_t *b = e->vars;
@@ -192,6 +190,7 @@ static jl_varbinding_t *lookup_binding(jl_stenv_t *e, jl_tvar_t *v, int *innerva
     return NULL;
 }
 #endif
+jl_varbinding_t *lookup_binding(jl_stenv_t *e, jl_tvar_t *v, int *innervar) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
 
 static jl_varbinding_t *lookup(jl_stenv_t *e, jl_tvar_t *v) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT
 {
@@ -1418,6 +1417,54 @@ static int var_occurs_covariant_only(jl_value_t *t, jl_tvar_t *var, int covarian
     return !jl_has_typevar(t, var);
 }
 
+static jl_value_t *subtype_unionall_envout_value(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e,
+                                                 jl_varbinding_t *vb, jl_value_t *lb,
+                                                 jl_value_t **new_tvar JL_REQUIRE_ROOTED_SLOT,
+                                                 int constrained)
+{
+    if (vb->intvalued && lb == (jl_value_t*)jl_any_type)
+        return (jl_value_t*)jl_wrap_vararg(NULL, NULL, 0, 0); // special token result that represents N::Int in the envout
+    if (!vb->occurs_inv && lb != jl_bottom_type) {
+        if (is_leaf_bound(lb))
+            return lb;
+        if (constrained && !jl_has_free_typevars(t) && !jl_has_free_typevars(lb) &&
+            (jl_is_concrete_type(t) ||
+             (jl_is_datatype(t) && ((jl_datatype_t*)t)->isdispatchtuple))) {
+            // If the LHS is concrete, e.g. Type{Tuple{Ref}} vs Type{Tuple{S}} where {S<:T}, we'd like to still
+            // choose the least solution like below, so that our `constrained` logic below is correct.
+            // Also accept dispatchtuples, which cover singleton-like LHSes such as
+            // `Tuple{typeof(f), Type{X}}` where the Type{} parameter pins to one runtime value.
+            // Refuse when `lb` references universally-quantified vars from the
+            // current subtype environment: exposing it directly would leak sibling
+            // `where`-bound typevars (e.g. `where {S, T>:S}` would expose `S`).
+            return lb;
+        }
+        if (jl_is_typevar(lb)) {
+            // The path below would produce `T_new <: T`. This is redundant for bounds purposes,
+            // although it could affect diagonality in downstream uses. However, it is problematic
+            // to introduce a new tvar for safety here, because intersection can blow up on that
+            // pattern.
+            return wrap_tvar_env(lb, constrained);
+        }
+        *new_tvar = (jl_value_t*)jl_new_typevar(u->var->name, jl_bottom_type, lb);
+        return wrap_tvar_env(*new_tvar, constrained);
+    }
+    if (lb == vb->ub || lb != jl_bottom_type) {
+        // TODO (lb != jl_bottom_type): for now return the least solution, which is what
+        // method parameters expect.
+        if (vb->tainted_inner || has_universal_typevar(lb, e))
+            return wrap_tvar_env(lb, constrained);
+        return lb;
+    }
+    if (lb == u->var->lb && vb->ub == u->var->ub && !*new_tvar)
+        return wrap_tvar_env((jl_value_t*)u->var, constrained);
+    if (!*new_tvar) {
+        *new_tvar = (jl_value_t*)jl_new_typevar(u->var->name, vb->lb, vb->ub);
+        return wrap_tvar_env(*new_tvar, constrained);
+    }
+    return wrap_tvar_env(*new_tvar, constrained);
+}
+
 static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, jl_param_pos_t param)
 {
     u = unalias_unionall(u, e);
@@ -1519,89 +1566,69 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
         int ub_has_var = jl_has_typevar(btemp->ub, vb.var);
         int lb_has_var = jl_has_typevar(btemp->lb, vb.var);
 
-        if (!ub_has_var && !lb_has_var)
-            continue;
-
-        if (btemp->depth0 != vb.depth0) {
-            // If we've passed through an invariant constructor, the bounds of the outer var can never
-            // be satisfied. Consider (ignoring normalization) Ref{T where T} <: Ref{S} where S. This ends
-            // up as T<:S<:T. Since `T` is universally qualified over its bounds, this would require `S` to
-            // take the full range. However, the `∃` qualifier needs a single value, so unless `T` is similarly
-            // constrained, this is unsatisfiable.
-            if (vb.lb != vb.ub) {
-                JL_GC_POP();
-                return 0;
-            }
-        }
-        btemp->tainted_inner = 1;
-
-        // We need to rename the typevar to prevent confusion. Ordinarily typevar identity conflicts
-        // are taken care of by jl_rename_unionall, but of course if the tvar is not in the environment
-        // anymore, that code path does not know that it needs to do any renaming.
-        if (!new_tvar) {
-            new_tvar = (jl_value_t*)jl_new_typevar(vb.var->name, vb.lb, vb.ub);
-            if (outermost != NULL)
-                push_innervar(outermost, new_tvar);
-        }
         jl_tvar_t *old_tvar = vb.var;
         // Rooted by `u` in `vb`'s frame
         JL_GC_PROMISE_ROOTED(old_tvar);
-        if (ub_has_var)
-            btemp->ub = jl_substitute_var(btemp->ub, old_tvar, (jl_value_t*)new_tvar);
-        if (lb_has_var)
-            btemp->lb = jl_substitute_var(btemp->lb, old_tvar, (jl_value_t*)new_tvar);
+        if (ub_has_var || lb_has_var) {
+            if (btemp->depth0 != vb.depth0) {
+                // If we've passed through an invariant constructor, the bounds of the outer var can never
+                // be satisfied. Consider (ignoring normalization) Ref{T where T} <: Ref{S} where S. This ends
+                // up as T<:S<:T. Since `T` is universally qualified over its bounds, this would require `S` to
+                // take the full range. However, the `∃` qualifier needs a single value, so unless `T` is similarly
+                // constrained, this is unsatisfiable.
+                if (vb.lb != vb.ub) {
+                    JL_GC_POP();
+                    return 0;
+                }
+            }
+            btemp->tainted_inner = 1;
+
+            // We need to rename the typevar to prevent confusion. Ordinarily typevar identity conflicts
+            // are taken care of by jl_rename_unionall, but of course if the tvar is not in the environment
+            // anymore, that code path does not know that it needs to do any renaming.
+            if (!new_tvar) {
+                new_tvar = (jl_value_t*)jl_new_typevar(vb.var->name, vb.lb, vb.ub);
+                if (outermost != NULL)
+                    push_innervar(outermost, new_tvar);
+            }
+            if (ub_has_var)
+                btemp->ub = jl_substitute_var(btemp->ub, old_tvar, (jl_value_t*)new_tvar);
+            if (lb_has_var)
+                btemp->lb = jl_substitute_var(btemp->lb, old_tvar, (jl_value_t*)new_tvar);
+        }
+
+        if (new_tvar && btemp->innervars != NULL) {
+            jl_array_t *innervars = btemp->innervars;
+            JL_GC_PUSH1(&innervars);
+            for (size_t i = 0; i < jl_array_nrows(innervars); i++) {
+                jl_tvar_t *ivar = (jl_tvar_t*)jl_array_ptr_ref(innervars, i);
+                jl_value_t *lb = NULL;
+                jl_value_t *ub = NULL;
+                JL_GC_PUSH2(&lb, &ub);
+                if (jl_has_typevar(ivar->lb, old_tvar)) {
+                    lb = ivar->lb;
+                    lb = jl_substitute_var(lb, old_tvar, (jl_value_t*)new_tvar);
+                    ivar->lb = lb;
+                    jl_gc_wb((jl_value_t*)ivar, lb);
+                }
+                if (jl_has_typevar(ivar->ub, old_tvar)) {
+                    ub = ivar->ub;
+                    ub = jl_substitute_var(ub, old_tvar, (jl_value_t*)new_tvar);
+                    ivar->ub = ub;
+                    jl_gc_wb((jl_value_t*)ivar, ub);
+                }
+                JL_GC_POP();
+            }
+            JL_GC_POP();
+        }
     }
 
     // fill variable values into `envout` up to `envsz`
     if (R && ans && e->envidx < e->envsz) {
-        jl_value_t *val;
         jl_value_t *lb = widened_lb;
-        jl_value_t *eff_ub = vb.ub;
-        while (jl_is_typevar(eff_ub))
-            eff_ub = ((jl_tvar_t*)eff_ub)->ub;
         int eff_constrained = (vb.occurs_inv || (cov_count(&vb) && u->var->lb == jl_bottom_type));
-        if (vb.intvalued && lb == (jl_value_t*)jl_any_type)
-            val = (jl_value_t*)jl_wrap_vararg(NULL, NULL, 0, 0); // special token result that represents N::Int in the envout
-        else if (!vb.occurs_inv && lb != jl_bottom_type) {
-            if (is_leaf_bound(lb)) {
-                val = lb;
-            } else if (eff_constrained && !jl_has_free_typevars(t) && !jl_has_free_typevars(lb) &&
-                       (jl_is_concrete_type(t) ||
-                        (jl_is_datatype(t) && ((jl_datatype_t*)t)->isdispatchtuple))) {
-                // If the LHS is concrete, e.g. Type{Tuple{Ref}} vs Type{Tuple{S}} where {S<:T}, we'd like to still
-                // choose the least solution like below, so that our `eff_constrained` logic below is correct.
-                // Also accept dispatchtuples, which cover singleton-like LHSes such as
-                // `Tuple{typeof(f), Type{X}}` where the Type{} parameter pins to one runtime value.
-                // Refuse when `lb` references universally-quantified vars from the
-                // current subtype environment: exposing it directly would leak sibling
-                // `where`-bound typevars (e.g. `where {S, T>:S}` would expose `S`).
-                val = lb;
-            } else if (jl_is_typevar(lb)) {
-                // The path below would produce `T_new <: T`. This is redundant for bounds purposes,
-                // although it could affect diagonality in downstream uses. However, it is problematic
-                // to introduce a new tvar for safety here, because intersection can blow up on that
-                // pattern.
-                val = wrap_tvar_env(lb, eff_constrained);
-            } else {
-                val = wrap_tvar_env((jl_value_t*)jl_new_typevar(u->var->name, jl_bottom_type, lb), eff_constrained);
-            }
-        }
-        else if (lb == vb.ub || lb != jl_bottom_type)
-            // TODO (lb != jl_bottom_type): for now return the least solution, which is what
-            // method parameters expect.
-            if (vb.tainted_inner)
-                val = wrap_tvar_env(lb, eff_constrained);
-            else if (has_universal_typevar(lb, e))
-                val = wrap_tvar_env(lb, eff_constrained);
-            else
-                val = lb;
-        else if (lb == u->var->lb && vb.ub == u->var->ub && !new_tvar)
-            val = wrap_tvar_env((jl_value_t*)u->var, eff_constrained);
-        else {
-            if (!new_tvar)
-                new_tvar = (jl_value_t*)jl_new_typevar(u->var->name, vb.lb, vb.ub);
-            val = wrap_tvar_env(new_tvar, eff_constrained);
-        }
+        jl_value_t *val = subtype_unionall_envout_value(t, u, e, &vb, lb, &new_tvar,
+                                                        eff_constrained);
         jl_value_t *oldval = e->envout[e->envidx];
         // if we try to assign different variable values (due to checking
         // multiple union members), consider the value unknown. Use AND
@@ -2689,6 +2716,24 @@ static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *su
         *subtype = 0;
         return 1;
     }
+    // `Type{T}` is a `TypeEq`, not a `DataType`, so the `jl_is_datatype` cases
+    // below miss it; decide the obvious `X <: Type{T}` rejections here.
+    if (jl_is_typeeq(y) && !jl_is_typeeq(x) && jl_is_datatype(x) &&
+            x != (jl_value_t*)jl_typeofbottom_type) {
+        jl_value_t *t0 = jl_typeeq_T(y);
+        if (jl_is_typevar(t0)) {
+            if (!is_kind_or_anytype(x)) {
+                *subtype = 0;    // an ordinary type value is never a subtype of `Type{T}`
+                return 1;
+            }
+            return 0;            // a kind may be: `Type <: Type{T}` is handled by `subtype`
+        }
+        if (!jl_is_typeeq(t0)) {
+            *subtype = 0;        // `X <: Type{ConcreteType}` (X not a `Type{}`) is never true
+            return 1;
+        }
+        // `Type{Type{...}}`: leave to `subtype`
+    }
     if (jl_is_datatype(y)) {
         int istuple = (((jl_datatype_t*)y)->name == jl_tuple_typename);
         int iscov = istuple;
@@ -2707,21 +2752,6 @@ static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *su
             //}
             int uncertain = 0;
             if (((jl_datatype_t*)x)->name != ((jl_datatype_t*)y)->name) {
-                if (jl_is_typeeq(x) && jl_is_kind(y)) {
-                    jl_value_t *t0 = jl_typeeq_T(x);
-                    if (jl_is_typevar(t0))
-                        return 0;
-                    *subtype = jl_typeof(t0) == y;
-                    return 1;
-                }
-                if (jl_is_typeeq(y)) {
-                    jl_value_t *t0 = jl_typeeq_T(y);
-                    assert(!jl_is_typeeq(x));
-                    if ((jl_is_kind(x) && jl_is_typevar(t0)) || (x == (jl_value_t*)jl_typeofbottom_type))
-                        return 0;
-                    *subtype = 0;
-                    return 1;
-                }
                 jl_datatype_t *temp = (jl_datatype_t*)x;
                 while (temp->name != ((jl_datatype_t*)y)->name) {
                     temp = temp->super;
