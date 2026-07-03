@@ -1,0 +1,563 @@
+diff --git a/cblas.h b/cblas.h
+index 8395f1b..d517ad9 100644
+--- a/cblas.h
++++ b/cblas.h
+@@ -59,6 +59,29 @@ typedef void (*openblas_dojob_callback)(int thread_num, void *jobdata, int dojob
+ typedef void (*openblas_threads_callback)(int sync, openblas_dojob_callback dojob, int numjobs, size_t jobdata_elsize, void *jobdata, int dojob_data);
+ void openblas_set_threads_callback_function(openblas_threads_callback callback);
+ 
++/* Cooperative cancellation of in-flight operations.
++ *
++ * Bind a token to the calling thread with openblas_cancel_token_bind();
++ * the binding is sticky and applies to all subsequent calls made by that
++ * thread until it is replaced (bind NULL to unbind).  Cancelling the token
++ * from any other thread with openblas_cancel() makes supported compute
++ * drivers (currently the level-3 GEMM drivers) return early.  A cancelled
++ * operation leaves its output in an unspecified, partially-updated state;
++ * the caller must discard the result.  The library itself stays consistent
++ * and can service further calls.  Reset the flag with
++ * openblas_cancel_reset() to reuse a token.  These symbols are exported
++ * without any symbol prefix/suffix decoration. */
++#ifndef OPENBLAS_CANCEL_TOKEN_DEFINED
++#define OPENBLAS_CANCEL_TOKEN_DEFINED
++typedef struct openblas_cancel_token openblas_cancel_token_t;
++#endif
++openblas_cancel_token_t *openblas_cancel_token_new(void);
++void openblas_cancel_token_free(openblas_cancel_token_t *token);
++void openblas_cancel_token_bind(openblas_cancel_token_t *token);
++void openblas_cancel(openblas_cancel_token_t *token);
++void openblas_cancel_reset(openblas_cancel_token_t *token);
++int openblas_cancel_token_cancelled(openblas_cancel_token_t *token);
++
+ #ifdef OPENBLAS_OS_LINUX
+ /* Sets thread affinity for OpenBLAS threads. `thread_idx` is in [0, openblas_get_num_threads()-1]. */
+ int openblas_setaffinity(int thread_idx, size_t cpusetsize, cpu_set_t* cpu_set);
+diff --git a/common.h b/common.h
+index 4746633..b381ce3 100644
+--- a/common.h
++++ b/common.h
+@@ -720,6 +720,26 @@ int get_node_equal (void);
+ 
+ void goto_set_num_threads(int);
+ 
++/* Cooperative cancellation of in-flight operations
++ * (implemented in driver/others/openblas_cancel.c).  These symbols are
++ * exported without SYMBOLPREFIX/SYMBOLSUFFIX decoration. */
++#ifndef OPENBLAS_CANCEL_TOKEN_DEFINED
++#define OPENBLAS_CANCEL_TOKEN_DEFINED
++typedef struct openblas_cancel_token openblas_cancel_token_t;
++#endif
++
++openblas_cancel_token_t *openblas_cancel_token_new(void);
++void openblas_cancel_token_free(openblas_cancel_token_t *);
++void openblas_cancel_token_bind(openblas_cancel_token_t *);
++void openblas_cancel(openblas_cancel_token_t *);
++void openblas_cancel_reset(openblas_cancel_token_t *);
++int  openblas_cancel_token_cancelled(openblas_cancel_token_t *);
++
++/* Internal helpers for polling from compute drivers. */
++openblas_cancel_token_t *openblas_cancel_get_bound(void);
++int  openblas_cancel_poll(openblas_cancel_token_t *);
++int  openblas_cancel_poll_bound(void);
++
+ void gotoblas_affinity_init(void);
+ void gotoblas_affinity_quit(void);
+ void gotoblas_dynamic_init(void);
+diff --git a/common_macro.h b/common_macro.h
+index 4051cb3..09b47ac 100644
+--- a/common_macro.h
++++ b/common_macro.h
+@@ -2763,6 +2763,12 @@ typedef struct {
+   void * routine;
+   int routine_mode;
+ 
++  /* Cancellation token bound to the thread that issued this operation
++     (see driver/others/openblas_cancel.c), or NULL.  Consulted only by
++     the level-3 thread drivers; must be set explicitly wherever it is
++     to be observed. */
++  void * cancel_token;
++
+ } blas_arg_t;
+ #endif
+ 
+diff --git a/driver/level3/level3.c b/driver/level3/level3.c
+index 78bc6aa..7b99f09 100644
+--- a/driver/level3/level3.c
++++ b/driver/level3/level3.c
+@@ -214,6 +214,12 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n,
+   double total;
+ #endif
+ 
++  /* Cancellation token bound to the calling thread (NULL when this driver
++   * is run on a BLAS worker thread on behalf of another operation).  The
++   * token is polled at block granularity only; on cancellation the
++   * operation returns early, leaving C partially updated. */
++  openblas_cancel_token_t *cancel_token = openblas_cancel_get_bound();
++
+   k = K;
+ 
+   a = (IFLOAT *)A;
+@@ -303,11 +309,15 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n,
+ #endif
+ 
+   for(js = n_from; js < n_to; js += GEMM_R){
++    if (openblas_cancel_poll(cancel_token)) return 0;
++
+     min_j = n_to - js;
+     if (min_j > GEMM_R) min_j = GEMM_R;
+ 
+     for(ls = 0; ls < k; ls += min_l){
+ 
++      if (openblas_cancel_poll(cancel_token)) return 0;
++
+       min_l = k - ls;
+ 
+       if (min_l >= GEMM_Q * 2) {
+@@ -354,6 +364,8 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n,
+ 
+ #else
+       for(jjs = js; jjs < js + min_j; jjs += min_jj){
++	if (openblas_cancel_poll(cancel_token)) return 0;
++
+ 	min_jj = min_j + js - jjs;
+ #if defined(SKYLAKEX) || defined(COOPERLAKE) || defined(SAPPHIRERAPIDS)
+ 	/* the current AVX512 s/d/c/z GEMM kernel requires n>=6*GEMM_UNROLL_N to achieve best performance */
+@@ -391,6 +403,8 @@ int CNAME(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n,
+ #endif
+ 
+       for(is = m_from + min_i; is < m_to; is += min_i){
++	if (openblas_cancel_poll(cancel_token)) return 0;
++
+ 	min_i = m_to - is;
+ 
+ 	if (min_i >= GEMM_P * 2) {
+diff --git a/driver/level3/level3_thread.c b/driver/level3/level3_thread.c
+index 2657bbc..3d0b5a9 100644
+--- a/driver/level3/level3_thread.c
++++ b/driver/level3/level3_thread.c
+@@ -250,6 +250,16 @@ static int inner_thread(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n,
+   FLOAT *c;
+   job_t *job = (job_t *)args -> common;
+ 
++  /* Cancellation token forwarded (by gemm_driver) from the thread that
++   * issued this operation, or NULL.  Once cancellation is observed the
++   * remaining compute (copy/kernel calls) is skipped, but every
++   * synchronization point - buffer publication and flag clearing - is
++   * still executed, so sibling threads never deadlock and the operation
++   * finishes quickly with C left in an unspecified, partially-updated
++   * state. */
++  openblas_cancel_token_t *cancel_token = (openblas_cancel_token_t *)args -> cancel_token;
++  int cancelled = 0;
++
+   BLASLONG nthreads_m;
+   BLASLONG mypos_m, mypos_n;
+   BLASLONG divide_rate = DIVIDE_RATE;
+@@ -314,8 +324,10 @@ static int inner_thread(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n,
+     n_to   = range_n[mypos + 1];
+   }
+ 
+-  /* Multiply C by beta if needed */
+-  if (beta) {
++  cancelled = openblas_cancel_poll(cancel_token);
++
++  /* Multiply C by beta if needed (skipped when cancelled) */
++  if (beta && !cancelled) {
+ #ifndef COMPLEX
+     if (beta[0] != ONE)
+ #else
+@@ -342,6 +354,9 @@ static int inner_thread(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n,
+   /* Iterate through steps of k */
+   for(ls = 0; ls < k; ls += min_l){
+ 
++    /* Poll for cancellation at block granularity */
++    if (!cancelled) cancelled = openblas_cancel_poll(cancel_token);
++
+     /* Determine step size in k */
+     min_l = k - ls;
+     if (min_l >= GEMM_Q * 2) {
+@@ -371,10 +386,12 @@ static int inner_thread(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n,
+       }
+     }
+ 
+-    /* Copy local region of A into workspace */
+-    START_RPCC();
+-    ICOPY_OPERATION(min_l, min_i, a, lda, ls, m_from, sa);
+-    STOP_RPCC(copy_A);
++    /* Copy local region of A into workspace (skipped when cancelled) */
++    if (!cancelled) {
++      START_RPCC();
++      ICOPY_OPERATION(min_l, min_i, a, lda, ls, m_from, sa);
++      STOP_RPCC(copy_A);
++    }
+ 
+     /* Copy local region of B into workspace and apply kernel */
+     div_n = (n_to - n_from + divide_rate - 1) / divide_rate;
+@@ -389,9 +406,13 @@ static int inner_thread(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n,
+ 
+ #if defined(FUSED_GEMM) && !defined(TIMING)
+ 
+-      /* Fused operation to copy region of B into workspace and apply kernel */
+-      FUSED_KERNEL_OPERATION(min_i, MIN(n_to, js + div_n) - js, min_l, alpha,
+-			     sa, buffer[bufferside], b, ldb, c, ldc, m_from, js, ls);
++      /* Fused operation to copy region of B into workspace and apply kernel
++       * (skipped when cancelled; the buffer is still published below so
++       * sibling threads do not stall) */
++      if (!cancelled) cancelled = openblas_cancel_poll(cancel_token);
++      if (!cancelled)
++        FUSED_KERNEL_OPERATION(min_i, MIN(n_to, js + div_n) - js, min_l, alpha,
++			       sa, buffer[bufferside], b, ldb, c, ldc, m_from, js, ls);
+ 
+ #else
+ 
+@@ -410,6 +431,12 @@ static int inner_thread(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n,
+ */
+             if (min_jj > GEMM_UNROLL_N) min_jj = GEMM_UNROLL_N;
+ #endif
++        /* Poll for cancellation between blocks; when cancelled, skip the
++         * copy and kernel but keep iterating so the buffer is still
++         * published below and sibling threads do not stall */
++	if (!cancelled) cancelled = openblas_cancel_poll(cancel_token);
++	if (!cancelled) {
++
+         /* Copy part of local region of B into workspace */
+ 	START_RPCC();
+ 	OCOPY_OPERATION(min_l, min_jj, b, ldb, ls, jjs,
+@@ -427,6 +454,8 @@ static int inner_thread(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n,
+         ops += 2 * min_i * min_jj * min_l;
+ #endif
+ 
++	}
++
+       }
+ #endif
+ 
+@@ -456,7 +485,10 @@ static int inner_thread(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n,
+ 	  STOP_RPCC(waiting2);
+ 	  MB;
+ 
+-          /* Apply kernel with local region of A and part of other region of B */
++          /* Apply kernel with local region of A and part of other region of B
++           * (skipped when cancelled; the flag is still cleared below) */
++	  if (!cancelled) cancelled = openblas_cancel_poll(cancel_token);
++	  if (!cancelled) {
+ 	  START_RPCC();
+ 	  KERNEL_OPERATION(min_i, MIN(range_n[current + 1]  - js,  div_n), min_l, alpha,
+ 			   sa, (IFLOAT *)job[current].working[mypos][CACHE_LINE_SIZE * bufferside],
+@@ -466,6 +498,7 @@ static int inner_thread(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n,
+ #ifdef TIMING
+ 	  ops += 2 * min_i * MIN(range_n[current + 1]  - js,  div_n) * min_l;
+ #endif
++	  }
+ 	}
+ 
+         /* Clear synchronization flag if this thread is done with other region of B */
+@@ -476,9 +509,12 @@ static int inner_thread(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n,
+       }
+     } while (current != mypos);
+ 
+-    /* Iterate through steps of m 
++    /* Iterate through steps of m
+      * Note: First step has already been finished */
+     for(is = m_from + min_i; is < m_to; is += min_i){
++      /* Poll for cancellation between blocks */
++      if (!cancelled) cancelled = openblas_cancel_poll(cancel_token);
++
+       min_i = m_to - is;
+       if (min_i >= GEMM_P * 2) {
+ 	min_i = GEMM_P;
+@@ -487,10 +523,12 @@ static int inner_thread(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n,
+ 	  min_i = (((min_i + 1) / 2 + GEMM_UNROLL_M - 1)/GEMM_UNROLL_M) * GEMM_UNROLL_M;
+ 	}
+ 
+-      /* Copy local region of A into workspace */
+-      START_RPCC();
+-      ICOPY_OPERATION(min_l, min_i, a, lda, ls, is, sa);
+-      STOP_RPCC(copy_A);
++      /* Copy local region of A into workspace (skipped when cancelled) */
++      if (!cancelled) {
++	START_RPCC();
++	ICOPY_OPERATION(min_l, min_i, a, lda, ls, is, sa);
++	STOP_RPCC(copy_A);
++      }
+ 
+       /* Get regions of B and apply kernel */
+       current = mypos;
+@@ -500,17 +538,20 @@ static int inner_thread(blas_arg_t *args, BLASLONG *range_m, BLASLONG *range_n,
+ 	div_n = (range_n[current + 1]  - range_n[current] + divide_rate - 1) / divide_rate;
+ 	for (js = range_n[current], bufferside = 0; js < range_n[current + 1]; js += div_n, bufferside ++) {
+ 
+-          /* Apply kernel with local region of A and part of region of B */
++          /* Apply kernel with local region of A and part of region of B
++           * (skipped when cancelled; the flag is still cleared below) */
++	  if (!cancelled) {
+ 	  START_RPCC();
+ 	  KERNEL_OPERATION(min_i, MIN(range_n[current + 1] - js, div_n), min_l, alpha,
+ 			   sa, (IFLOAT *)job[current].working[mypos][CACHE_LINE_SIZE * bufferside],
+ 			   c, ldc, is, js);
+           STOP_RPCC(kernel);
+-          
++
+ #ifdef TIMING
+           ops += 2 * min_i * MIN(range_n[current + 1]  - js, div_n) * min_l;
+ #endif
+-          
++	  }
++
+           /* Clear synchronization flag if this thread is done with region of B */
+           if (is + min_i >= m_to) {
+             WMB;
+@@ -688,6 +729,11 @@ static int gemm_driver(blas_arg_t *args, BLASLONG *range_m, BLASLONG
+   newarg.beta     = args -> beta;
+   newarg.nthreads = args -> nthreads;
+   newarg.common   = (void *)job;
++
++  /* Forward the cancellation token bound to this (the calling) thread to
++   * the worker threads executing inner_thread; they cannot see our
++   * thread-local binding themselves. */
++  newarg.cancel_token = (void *)openblas_cancel_get_bound();
+ #ifdef PARAMTEST
+   newarg.gemm_p   = args -> gemm_p;
+   newarg.gemm_q   = args -> gemm_q;
+@@ -791,6 +837,11 @@ static int gemm_driver(blas_arg_t *args, BLASLONG *range_m, BLASLONG
+     WMB;
+     /* Execute parallel computation */
+     exec_blas(nthreads, queue);
++
++    /* Skip the remaining column blocks once this operation has been
++     * cancelled.  Each exec_blas() round is a full barrier, so bailing
++     * out between rounds leaves the library in a consistent state. */
++    if (openblas_cancel_poll((openblas_cancel_token_t *)newarg.cancel_token)) break;
+   }
+ 
+ #ifdef USE_ALLOC_HEAP
+diff --git a/driver/others/CMakeLists.txt b/driver/others/CMakeLists.txt
+index 72abdc4..b25337d 100644
+--- a/driver/others/CMakeLists.txt
++++ b/driver/others/CMakeLists.txt
+@@ -41,6 +41,7 @@ set(COMMON_SOURCES
+   openblas_env.c
+   openblas_get_num_procs.c
+   openblas_get_num_threads.c
++  openblas_cancel.c
+   blas_server_callback.c
+ )
+ 
+diff --git a/driver/others/Makefile b/driver/others/Makefile
+index 0a1bcff..52a893e 100644
+--- a/driver/others/Makefile
++++ b/driver/others/Makefile
+@@ -1,7 +1,7 @@
+ TOPDIR	= ../..
+ include ../../Makefile.system
+ 
+-COMMONOBJS	 = memory.$(SUFFIX) xerbla.$(SUFFIX) c_abs.$(SUFFIX) z_abs.$(SUFFIX) openblas_set_num_threads.$(SUFFIX) openblas_get_num_threads.$(SUFFIX) openblas_get_num_procs.$(SUFFIX) openblas_get_config.$(SUFFIX) openblas_get_parallel.$(SUFFIX) openblas_error_handle.$(SUFFIX) openblas_env.$(SUFFIX) blas_server_callback.$(SUFFIX)
++COMMONOBJS	 = memory.$(SUFFIX) xerbla.$(SUFFIX) c_abs.$(SUFFIX) z_abs.$(SUFFIX) openblas_set_num_threads.$(SUFFIX) openblas_get_num_threads.$(SUFFIX) openblas_get_num_procs.$(SUFFIX) openblas_get_config.$(SUFFIX) openblas_get_parallel.$(SUFFIX) openblas_error_handle.$(SUFFIX) openblas_env.$(SUFFIX) openblas_cancel.$(SUFFIX) blas_server_callback.$(SUFFIX)
+ 
+ #COMMONOBJS	+= slamch.$(SUFFIX) slamc3.$(SUFFIX) dlamch.$(SUFFIX)  dlamc3.$(SUFFIX)
+ 
+@@ -172,6 +172,9 @@ openblas_error_handle.$(SUFFIX) : openblas_error_handle.c
+ openblas_env.$(SUFFIX) : openblas_env.c
+ 	$(CC) $(CFLAGS) -c $< -o $(@F)
+ 
++openblas_cancel.$(SUFFIX) : openblas_cancel.c ../../common.h
++	$(CC) $(CFLAGS) -c $< -o $(@F)
++
+ blasL1thread.$(SUFFIX) : blas_l1_thread.c ../../common.h ../../common_thread.h
+ 	$(CC) $(CFLAGS) -c $< -o $(@F)
+ 
+diff --git a/driver/others/openblas_cancel.c b/driver/others/openblas_cancel.c
+new file mode 100644
+index 0000000..f09f29a
+--- /dev/null
++++ b/driver/others/openblas_cancel.c
+@@ -0,0 +1,132 @@
++/*****************************************************************************
++Copyright (c) 2026, The OpenBLAS Project
++All rights reserved.
++
++Redistribution and use in source and binary forms, with or without
++modification, are permitted provided that the following conditions are
++met:
++
++   1. Redistributions of source code must retain the above copyright
++      notice, this list of conditions and the following disclaimer.
++
++   2. Redistributions in binary form must reproduce the above copyright
++      notice, this list of conditions and the following disclaimer in
++      the documentation and/or other materials provided with the
++      distribution.
++   3. Neither the name of the OpenBLAS project nor the names of
++      its contributors may be used to endorse or promote products
++      derived from this software without specific prior written
++      permission.
++
++THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
++AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
++LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
++SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
++CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
++OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
++USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++
++**********************************************************************************/
++
++#include <stdlib.h>
++#include "common.h"
++
++/* Cooperative cancellation of in-flight OpenBLAS operations.
++ *
++ * A cancellation token is bound to the calling ("user") thread via
++ * thread-local storage.  Long-running compute drivers poll the token at
++ * block granularity and bail out early once the token has been cancelled
++ * (from any thread).  A cancelled operation returns quickly but leaves its
++ * output buffers in an unspecified, partially-updated state; the caller is
++ * responsible for discarding the result.  The library itself remains in a
++ * consistent state and can service further calls, including from the same
++ * thread with the same (reset) or another token.
++ *
++ * These symbols are deliberately exported without any SYMBOLPREFIX /
++ * SYMBOLSUFFIX decoration, like the other openblas_* utility functions
++ * that are not per-precision entry points.
++ */
++
++struct openblas_cancel_token {
++  volatile int cancelled;
++};
++
++#if defined(_MSC_VER) && !defined(__clang__)
++#define OPENBLAS_CANCEL_TLS __declspec(thread)
++#else
++#define OPENBLAS_CANCEL_TLS __thread
++#endif
++
++/* Token bound to the current thread, if any.  BLAS worker threads never
++ * have a binding of their own; the level-3 thread driver forwards the
++ * binding of the thread that issued the operation through the job
++ * arguments (blas_arg_t.cancel_token). */
++static OPENBLAS_CANCEL_TLS openblas_cancel_token_t *openblas_cancel_bound = NULL;
++
++#if defined(__GNUC__) || defined(__clang__)
++#define OPENBLAS_CANCEL_LOAD(PTR)       __atomic_load_n((PTR), __ATOMIC_RELAXED)
++#define OPENBLAS_CANCEL_STORE(PTR, VAL) __atomic_store_n((PTR), (VAL), __ATOMIC_RELEASE)
++#else
++#define OPENBLAS_CANCEL_LOAD(PTR)       (*(PTR))
++#define OPENBLAS_CANCEL_STORE(PTR, VAL) do { WMB; *(PTR) = (VAL); } while (0)
++#endif
++
++/* Allocate a fresh, un-cancelled token. */
++openblas_cancel_token_t *openblas_cancel_token_new(void) {
++  openblas_cancel_token_t *token = (openblas_cancel_token_t *)malloc(sizeof(*token));
++  if (token != NULL) token->cancelled = 0;
++  return token;
++}
++
++/* Free a token.  The token must not be bound to any thread nor observable
++ * by any in-flight operation anymore. */
++void openblas_cancel_token_free(openblas_cancel_token_t *token) {
++  free(token);
++}
++
++/* Bind TOKEN to the calling thread; subsequent BLAS calls made by this
++ * thread observe it.  The binding is sticky: it stays in effect for this
++ * thread until replaced by another call.  Passing NULL unbinds. */
++void openblas_cancel_token_bind(openblas_cancel_token_t *token) {
++  openblas_cancel_bound = token;
++}
++
++/* Mark TOKEN as cancelled.  May be called from any thread. */
++void openblas_cancel(openblas_cancel_token_t *token) {
++  if (token == NULL) return;
++  OPENBLAS_CANCEL_STORE(&token->cancelled, 1);
++}
++
++/* Clear the cancelled flag so the token can be reused.  Only do this while
++ * no operation observing the token is in flight. */
++void openblas_cancel_reset(openblas_cancel_token_t *token) {
++  if (token == NULL) return;
++  OPENBLAS_CANCEL_STORE(&token->cancelled, 0);
++}
++
++/* Return nonzero iff TOKEN has been cancelled. */
++int openblas_cancel_token_cancelled(openblas_cancel_token_t *token) {
++  if (token == NULL) return 0;
++  return OPENBLAS_CANCEL_LOAD(&token->cancelled) != 0;
++}
++
++/* --- internal helpers (not part of the public API) --------------------- */
++
++/* Token bound to the calling thread, or NULL. */
++openblas_cancel_token_t *openblas_cancel_get_bound(void) {
++  return openblas_cancel_bound;
++}
++
++/* Cheap poll usable from compute drivers; TOKEN may be NULL. */
++int openblas_cancel_poll(openblas_cancel_token_t *token) {
++  if (token == NULL) return 0;
++  return OPENBLAS_CANCEL_LOAD(&token->cancelled) != 0;
++}
++
++/* Poll the calling thread's own binding. */
++int openblas_cancel_poll_bound(void) {
++  return openblas_cancel_poll(openblas_cancel_bound);
++}
+diff --git a/exports/gensymbol b/exports/gensymbol
+index 6284e6b..6ee7868 100755
+--- a/exports/gensymbol
++++ b/exports/gensymbol
+@@ -186,6 +186,19 @@ misc_no_underscore_objs="
+ 
+ misc_underscore_objs=""
+ 
++# Symbols that are exported exactly as spelled, without any SYMBOLPREFIX /
++# SYMBOLSUFFIX decoration (like the openblas_* utility functions, these are
++# not per-precision entry points).  They are therefore deliberately left out
++# of the objcopy/objconv rename lists.
++misc_no_suffix_objs="
++    openblas_cancel
++    openblas_cancel_reset
++    openblas_cancel_token_bind
++    openblas_cancel_token_cancelled
++    openblas_cancel_token_free
++    openblas_cancel_token_new
++"
++
+ # These routines are provided by OpenBLAS.
+ lapackobjss="
+     sgesv
+@@ -4010,6 +4023,10 @@ case "$p1" in
+         for obj in $no_underscore_objs; do
+             printf '_%s%s%s\n' "$symbolprefix" "$obj" "$symbolsuffix"
+         done
++
++        for obj in $misc_no_suffix_objs; do
++            printf '_%s\n' "$obj"
++        done
+     ;;
+ 
+     aix)
+@@ -4115,6 +4132,11 @@ case "$p1" in
+                 "$symbolprefix" "$obj" "$symbolsuffix" "$obj" "$count"
+             count=`expr $count + 1`
+         done
++
++        for obj in $misc_no_suffix_objs; do
++            printf '\t%s  @%s\n' "$obj" "$count"
++            count=`expr $count + 1`
++        done
+     ;;
+ 
+     win2khpl)
+@@ -4167,6 +4189,10 @@ case "$p1" in
+                 "$symbolprefix" "$uppercase" "$symbolsuffix" "$obj" "$count"
+             count=`expr $count + 1`
+         done
++
++        for obj in $misc_no_suffix_objs; do
++            printf '\t%s\n' "$obj"
++        done
+     ;;
+ 
+     linktest)
