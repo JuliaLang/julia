@@ -181,17 +181,27 @@ bool CancellationLowering::runOnFunction(Function &F) {
         AllocaInst *UContextBuf = AllocaBuilder.CreateAlloca(UContextTy, nullptr, "cancel_ucontext");
         UContextBuf->setAlignment(Align(UContextAlign));
 
-        // Store the ucontext address to reset_ctx with atomic release ordering
-        StoreInst *store = Builder.CreateAlignedStore(UContextBuf, reset_ctx_ptr, Align(sizeof(void*)));
-        store->setOrdering(AtomicOrdering::Release);
+        // N.B.: The buffer may only be published in `reset_ctx` while its
+        // contents are valid; a cancellation signal arriving in between would
+        // otherwise longjmp into garbage. Since `setjmp` below (re-)writes the
+        // buffer (cancellation points in loops re-execute it), unpublish the
+        // buffer first, then write it, then publish it.
+        Value *null_ptr0 = ConstantPointerNull::get(cast<PointerType>(PtrTy));
+        StoreInst *unpub = Builder.CreateAlignedStore(null_ptr0, reset_ctx_ptr, Align(sizeof(void*)));
+        unpub->setOrdering(AtomicOrdering::Release);
 
         // Call setjmp on the uc_mcontext field (which is at offset 0 of the struct)
         // Use the platform-specific setjmp function name defined in julia.h
-        FunctionType *SetjmpTy = FunctionType::get(I32Ty, {PtrTy}, false);
+        FunctionType *SetjmpTy = FunctionType::get(I32Ty, {PtrTy, I32Ty}, false);
         FunctionCallee SetjmpFn = F.getParent()->getOrInsertFunction(jl_setjmp_name, SetjmpTy);
 
-        CallInst *SetjmpCall = Builder.CreateCall(SetjmpFn, {UContextBuf});
+        CallInst *SetjmpCall = Builder.CreateCall(SetjmpFn, {UContextBuf, ConstantInt::get(I32Ty, 0)});
         SetjmpCall->addFnAttr(Attribute::ReturnsTwice);
+
+        // Publish the now-valid buffer address to reset_ctx (release, so that
+        // the buffer contents are visible before the pointer).
+        StoreInst *store = Builder.CreateAlignedStore(UContextBuf, reset_ctx_ptr, Align(sizeof(void*)));
+        store->setOrdering(AtomicOrdering::Release);
 
         // Replace uses and remove the intrinsic
         CI->replaceAllUsesWith(SetjmpCall);

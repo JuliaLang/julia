@@ -15,8 +15,11 @@ entry:
 ; CHECK: %pgcstack = call ptr @julia.get_pgcstack()
 ; CHECK: %current_task = getelementptr i8, ptr %pgcstack
 ; CHECK: %reset_ctx_ptr = getelementptr i8, ptr %current_task
-; CHECK: store atomic ptr %cancel_ucontext, ptr %reset_ctx_ptr release
-; CHECK: %{{.*}} = call i32 @{{.*}}setjmp{{.*}}(ptr %cancel_ucontext)
+; The buffer may only be published while its contents are valid: unpublish,
+; write it (setjmp), then publish it
+; CHECK: store atomic ptr null, ptr %reset_ctx_ptr release
+; CHECK-NEXT: %{{.*}} = call i32 @{{.*}}setjmp{{.*}}(ptr %cancel_ucontext, i32 0)
+; CHECK-NEXT: store atomic ptr %cancel_ucontext, ptr %reset_ctx_ptr release
 ; CHECK-NOT: call i32 @julia.cancellation_point()
 ; CHECK: store atomic ptr null, ptr %reset_ctx_ptr release
 ; CHECK-NEXT: ret i32
@@ -33,8 +36,8 @@ entry:
 ; CHECK: %pgcstack = call ptr @julia.get_pgcstack()
 ; CHECK: %current_task = getelementptr i8, ptr %pgcstack
 ; CHECK: %reset_ctx_ptr = getelementptr i8, ptr %current_task
-; CHECK: store atomic ptr %cancel_ucontext, ptr %reset_ctx_ptr release
 ; CHECK: call i32 @{{.*}}setjmp
+; CHECK-NEXT: store atomic ptr %cancel_ucontext, ptr %reset_ctx_ptr release
 ; The unsafe call should have reset_ctx = NULL before it
 ; CHECK: store atomic ptr null, ptr %reset_ctx_ptr release
 ; CHECK-NEXT: call void @some_unsafe_call()

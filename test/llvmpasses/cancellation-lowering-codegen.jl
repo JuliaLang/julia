@@ -13,8 +13,8 @@ include(joinpath("..", "testhelpers", "llvmpasses.jl"))
 # CHECK-LABEL: @julia_test_cancel_check
 # CHECK: %cancel_ucontext = alloca
 # CHECK: %reset_ctx_ptr = getelementptr
-# CHECK: store atomic ptr {{.*}}, ptr %reset_ctx_ptr release
-# CHECK: call i32 @{{.*}}setjmp{{.*}}(ptr {{.*}}) #[[ATTR:[0-9]+]]
+# CHECK: call i32 @{{.*}}setjmp{{.*}}(ptr {{.*}}, i32 0) #[[ATTR:[0-9]+]]
+# CHECK-NEXT: store atomic ptr %cancel_ucontext, ptr %reset_ctx_ptr release
 # CHECK: store atomic ptr null, ptr %reset_ctx_ptr release
 # CHECK: ret
 # CHECK: attributes #[[ATTR]] = {{{.*}}returns_twice{{.*}}}
