@@ -151,17 +151,6 @@ end
     cancel!(t)
     @test_throws TaskFailedException wait(t)
     @test t.result isa CancellationRequest
-
-    # Asynchronous interruption of a checkless loop through the reset_ctx
-    # mechanism (requires an extra thread to run the cancellation from)
-    if Threads.nthreads() > 1
-        t = Threads.@spawn find_collatz_counterexample2()
-        sleep(0.5)
-        cancel!(t)
-        sleep(0.5)
-        @test_throws TaskFailedException wait(t)
-        @test t.result isa CancellationRequest
-    end
 end
 
 @testset "structured cancellation of @sync" begin
@@ -212,31 +201,12 @@ end
     @test fetch(t)
 end
 
-@testset "task abandonment wakes waiters" begin
-    if Threads.nthreads() > 1
-        started = Base.Event()
-        victim = Threads.@spawn begin
-            notify(started)
-            x = Ref(1.0)
-            while true
-                x[] = x[] * 1.0000001 + 0.1
-            end
-        end
-        wait(started)
-        watcher = @async wait(victim)
-        spin()
-        sleep(0.5) # make sure the victim is actually spinning on its thread
-        rescue = Task(() -> (while true; wait(); end))
-        rescue.sticky = false
-        Base.unsafe_abandon!(victim, rescue)
-        @test timedwait(() -> istaskdone(victim), 5.0) == :ok
-        @test victim.state === :abandoned
-        @test istaskfailed(victim)
-        # the watcher must be woken (abandoned tasks skip the regular
-        # completion path)
-        @test timedwait(() -> istaskdone(watcher), 5.0) == :ok
-        @test_throws TaskFailedException fetch(watcher)
-    end
+# Tests that need real thread parallelism (asynchronous interruption through
+# the reset_ctx mechanism, task abandonment) always run with 2 threads,
+# regardless of how the test driver was started.
+@testset "threaded cancellation (subprocess with -t2)" begin
+    cmd = `$(Base.julia_cmd()) --depwarn=error --startup-file=no --threads=2 $(joinpath(@__DIR__, "cancellation_exec.jl"))`
+    @test success(pipeline(cmd, stdout=stdout, stderr=stderr))
 end
 
 @testset "^C" begin
