@@ -3523,15 +3523,16 @@ static void jl_temporary_root(jl_codectx_t &ctx, jl_value_t *val)
 
 // Whether this compilation can guard typed-global accesses with statically patchable
 // sites (see jl_patch_retyped_binding_sites in jitlayers.cpp): JIT compilation only
-// (imaging code can neither bake binding addresses nor be patched in place), an ELF
-// object format (the site table is emitted with `.pushsection`), POSIX memory
-// protection, and an architecture the runtime patcher knows how to rewrite.
+// (imaging code can neither bake binding addresses nor be patched in place), an object
+// format the site table can be emitted for with `.pushsection` (ELF -- which the JIT
+// also uses on Windows -- or Mach-O), and an architecture the runtime patcher knows
+// how to rewrite.
 static bool binding_patch_sites_supported(jl_codectx_t &ctx)
 {
     if (ctx.emission_context.imaging_mode)
         return false;
     const Triple &TT = ctx.emission_context.TargetTriple;
-    if (!TT.isOSBinFormatELF() || TT.isOSWindows())
+    if (!TT.isOSBinFormatELF() && !TT.isOSBinFormatMachO())
         return false;
     return TT.getArch() == Triple::x86_64 || TT.getArch() == Triple::aarch64;
 }
@@ -3541,24 +3542,38 @@ static bool binding_patch_sites_supported(jl_codectx_t &ctx)
 // see #62154). On supported JIT targets this emits a nop-sized patch site plus a
 // `.jl_bpatch` section record {site, target, binding, kind}; re-typing the binding
 // rewrites the nop into a jump to the cold block (jl_patch_retyped_binding_sites), so
-// the fast path pays no dynamic check. Elsewhere it degrades to testing the binding's
-// flags at runtime. Returns the (empty, unterminated) cold block; the builder is left
-// at the start of the fast-path continuation block.
+// the fast path pays no dynamic check. The nop is sized and aligned so that the rewrite
+// is a single naturally-aligned atomic store: a concurrently fetching core observes
+// either the old nop or the new jump, never a torn instruction. Elsewhere the guard
+// degrades to testing the binding's flags at runtime. Returns the (empty, unterminated)
+// cold block; the builder is left at the start of the fast-path continuation block.
 static BasicBlock *emit_retype_guard(jl_codectx_t &ctx, jl_binding_t *bnd, Value *bp, bool is_write)
 {
     LLVMContext &C = ctx.builder.getContext();
     BasicBlock *fastBB = BasicBlock::Create(C, "retype_fast", ctx.f);
     BasicBlock *coldBB = BasicBlock::Create(C, "retype_deopt", ctx.f);
     if (binding_patch_sites_supported(ctx)) {
-        bool aarch64 = ctx.emission_context.TargetTriple.getArch() == Triple::aarch64;
+        const Triple &TT = ctx.emission_context.TargetTriple;
+        bool aarch64 = TT.getArch() == Triple::aarch64;
         std::string Asm;
         raw_string_ostream OS(Asm);
-        if (aarch64)
-            OS << "1:\n\tnop\n"; // patched to `b <target>` (same-function, so always in range)
+        if (aarch64) {
+            // A64 instructions are naturally 4-byte aligned; patched to `b <target>`
+            // (same-function, so always in range), which the architecture permits to
+            // concurrently replace a nop.
+            OS << "1:\n\tnop\n";
+        }
+        else {
+            // An aligned 8-byte nop, patched (as one atomic 8-byte store) to
+            // `jmp rel32; 3-byte nop`.
+            OS << "\t.balign 8\n"
+               << "1:\n\t.byte 0x0f,0x1f,0x84,0x00,0x00,0x00,0x00,0x00\n";
+        }
+        if (TT.isOSBinFormatMachO())
+            OS << "\t.pushsection __DATA,__jl_bpatch\n";
         else
-            OS << "1:\n\t.byte 0x0f,0x1f,0x44,0x00,0x00\n"; // 5-byte nop, patched to `jmp rel32`
-        OS << "\t.pushsection .jl_bpatch,\"a\"," << (aarch64 ? "%progbits" : "@progbits") << "\n"
-           << "\t.balign 8\n"
+            OS << "\t.pushsection .jl_bpatch,\"a\"," << (aarch64 ? "%progbits" : "@progbits") << "\n";
+        OS << "\t.balign 8\n"
            << "\t.quad 1b\n"
            << "\t.quad ${0:l}\n"
            << "\t.quad " << (uintptr_t)bnd << "\n"
