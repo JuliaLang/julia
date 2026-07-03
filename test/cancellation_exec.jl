@@ -5,6 +5,7 @@
 # itself is single-threaded).
 
 using Test
+using Libdl
 using Base: cancel!, CancellationRequest
 
 @assert Threads.nthreads() > 1
@@ -60,6 +61,132 @@ end
     # completion path)
     @test timedwait(() -> istaskdone(watcher), 5.0) == :ok
     @test_throws TaskFailedException fetch(watcher)
+end
+
+@testset "asynchronous cancellation hooks" begin
+    # The handler runs on the cancelling thread, with the registered state and
+    # the cancelled task as arguments.
+    seen = Channel{Any}(4)
+    entered = Base.Event()
+    t = Threads.@spawn Base.with_cancellation_hook(
+        () -> (notify(entered); sleep(1000)),
+        (st, tsk) -> put!(seen, (st, tsk)), :mystate)
+    wait(entered) # `f` runs only after the hook is registered
+    cancel!(t)
+    @test timedwait(() -> istaskdone(t), 10.0) == :ok
+    @test istaskfailed(t)
+    @test t.result isa CancellationRequest
+    st, tsk = take!(seen)
+    @test st === :mystate
+    @test tsk === t
+
+    # The hook is deregistered when the protected region exits.
+    fired = Threads.Atomic{Int}(0)
+    entered2 = Base.Event()
+    t2 = Threads.@spawn begin
+        Base.with_cancellation_hook(() -> nothing, (st, tsk) -> Threads.atomic_add!(fired, 1), nothing)
+        notify(entered2)
+        sleep(1000)
+    end
+    wait(entered2)
+    cancel!(t2)
+    @test timedwait(() -> istaskdone(t2), 10.0) == :ok
+    @test fired[] == 0
+
+    # A request already pending at registration is thrown before `f` runs.
+    t3 = Threads.@spawn begin
+        @atomic current_task().cancellation_request = Base.CANCEL_REQUEST_SAFE
+        ran = false
+        threw = try
+            Base.with_cancellation_hook(() -> (ran = true), (st, tsk) -> nothing, nothing)
+            false
+        catch e
+            e isa CancellationRequest || rethrow()
+            true
+        end
+        (ran, threw)
+    end
+    @test fetch(t3) === (false, true)
+end
+
+@testset "BLAS cancellation via cancellation hooks" begin
+    # Requires an OpenBLAS with the cancellation patch (source build); the
+    # BinaryBuilder library does not have it, so skip gracefully.
+    blas = Libdl.dlopen_e("libopenblas64_")
+    tok_new = blas == C_NULL ? C_NULL : Libdl.dlsym_e(blas, :openblas_cancel_token_new)
+    if tok_new == C_NULL
+        @warn "patched OpenBLAS not available; skipping BLAS cancellation tests"
+    else
+        bind_f = Libdl.dlsym(blas, :openblas_cancel_token_bind)
+        cancel_f = Libdl.dlsym(blas, :openblas_cancel)
+        reset_f = Libdl.dlsym(blas, :openblas_cancel_reset)
+        free_f = Libdl.dlsym(blas, :openblas_cancel_token_free)
+        dgemm_f = Libdl.dlsym(blas, :dgemm_64_)
+
+        function gemm!(C::Matrix{Float64}, A::Matrix{Float64}, B::Matrix{Float64})
+            m = Int64(size(A, 1)); k = Int64(size(A, 2)); n = Int64(size(B, 2))
+            ccall(dgemm_f, Cvoid,
+                  (Ref{UInt8}, Ref{UInt8}, Ref{Int64}, Ref{Int64}, Ref{Int64},
+                   Ref{Float64}, Ptr{Float64}, Ref{Int64}, Ptr{Float64}, Ref{Int64},
+                   Ref{Float64}, Ptr{Float64}, Ref{Int64}, Clong, Clong),
+                  UInt8('N'), UInt8('N'), m, n, k, 1.0, A, m, B, k, 0.0, C, m, 1, 1)
+            return C
+        end
+
+        # correctness sanity + timing baseline
+        n = 12000
+        A = rand(n, n); B = rand(n, n); C = zeros(n, n)
+        gemm!(C, A, B) # warm up the thread pool
+        tbase = @elapsed gemm!(C, A, B)
+
+        tok = ccall(tok_new, Ptr{Cvoid}, ())
+        # The canceller-side handler: abort whatever operation observes `tok`.
+        blas_cancel_handler = (state, task) -> ccall(cancel_f, Cvoid, (Ptr{Cvoid},), state)
+
+        # A bystander BLAS operation with no binding must be unaffected.
+        nb = 4000
+        A2 = rand(nb, nb); B2 = rand(nb, nb); C2 = zeros(nb, nb)
+        bystander_started = Base.Event()
+        bystander = Threads.@spawn (notify(bystander_started); gemm!(C2, A2, B2))
+
+        started = Base.Event()
+        t = Threads.@spawn begin
+            Base.with_cancellation_hook(blas_cancel_handler, tok) do
+                # Bind on the executing OS thread; no yields between here and
+                # the ccall, so the binding cannot be separated from it.
+                ccall(bind_f, Cvoid, (Ptr{Cvoid},), tok)
+                try
+                    notify(started)
+                    gemm!(C, A, B)
+                finally
+                    ccall(bind_f, Cvoid, (Ptr{Cvoid},), C_NULL)
+                end
+            end
+        end
+        wait(bystander_started)
+        wait(started)
+        telapsed = @elapsed begin
+            cancel!(t)
+            @test timedwait(() -> istaskdone(t), 60.0) == :ok
+        end
+        @test istaskfailed(t)
+        @test t.result isa CancellationRequest
+        # The gemm was abandoned early (block-granularity latency; give slack
+        # for scheduling noise)
+        @test telapsed < tbase * 0.75
+
+        # The bystander completed unharmed with a correct result.
+        wait(bystander)
+        r, c = rand(1:nb), rand(1:nb)
+        @test isapprox(C2[r, c], @views sum(A2[r, :] .* B2[:, c]); rtol=1e-8)
+
+        # The library stays healthy for subsequent (uncancelled) use.
+        ccall(reset_f, Cvoid, (Ptr{Cvoid},), tok)
+        a = rand(16, 16); b = rand(16, 16); c2 = zeros(16, 16)
+        gemm!(c2, a, b)
+        @test c2 ≈ [sum(a[i, l] * b[l, j] for l in 1:16) for i in 1:16, j in 1:16]
+        ccall(free_f, Cvoid, (Ptr{Cvoid},), tok)
+    end
 end
 
 @testset "cancel storm" begin
