@@ -69,6 +69,9 @@ static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size)
 int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c) JL_NOTSAFEPOINT;
 static void jl_longjmp_in_ctx(int sig, void *_ctx, jl_jmp_buf jmpbuf);
 
+// Task abandonment callback - defined in task.c
+extern JL_NORETURN void jl_abandon_task_cb(void);
+
 #if !defined(_OS_DARWIN_)
 extern void jl_fake_signal_return(void);
 // Create a trampoline function that does the stack manipulations for jl_call_in_ctx/jl_call_in_state
@@ -668,6 +671,41 @@ static void jl_try_deliver_sigint(void)
     pthread_mutex_unlock(&in_signal_lock);
 }
 
+// Send a signal to the specified thread to longjmp to its reset_ctx if available.
+// This is used for task cancellation to interrupt a running task at a safe point.
+JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid)
+{
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    if (ptls2 == NULL)
+        return;
+    jl_task_t *ct = jl_atomic_load_relaxed(&ptls2->current_task);
+    if (ct == NULL)
+        return;
+    // Only send if the task has a reset_ctx set (i.e., is at a cancellation point)
+    if (ct->reset_ctx == NULL)
+        return;
+    pthread_mutex_lock(&in_signal_lock);
+    signals_inflight++;
+    jl_atomic_store_release(&ptls2->signal_request, 5);
+    pthread_kill(ptls2->system_id, SIGUSR2);
+    pthread_mutex_unlock(&in_signal_lock);
+}
+
+// Send a signal to the specified thread to abandon the current task.
+// The target task to switch to must already be set in ptls2->abandon_to,
+// and the task's state must already be set to JL_TASK_STATE_ABANDONED.
+void jl_send_abandon_signal(int16_t tid)
+{
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    if (ptls2 == NULL)
+        return;
+    pthread_mutex_lock(&in_signal_lock);
+    signals_inflight++;
+    jl_atomic_store_release(&ptls2->signal_request, 6);
+    pthread_kill(ptls2->system_id, SIGUSR2);
+    pthread_mutex_unlock(&in_signal_lock);
+}
+
 // Write only by signal handling thread, read only by main thread
 // no sync necessary.
 static int thread0_exit_signo = 0;
@@ -705,6 +743,8 @@ static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size)
 //     is reached
 //  3: raise `thread0_exit_signo` and try to exit
 //  4: no-op
+//  5: longjmp to reset_ctx if available (for task cancellation)
+//  6: abandon the current task and switch to ptls->abandon_to
 void usr2_handler(int sig, siginfo_t *info, void *ctx)
 {
     jl_task_t *ct = jl_get_current_task();
@@ -761,6 +801,21 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx)
     }
     else if (request == 3) {
         jl_call_in_ctx(ct->ptls, jl_exit_thread0_cb, sig, ctx);
+    }
+    else if (request == 5) {
+        // Longjmp to reset_ctx for task cancellation
+        _jl_ucontext_t *reset_ctx = (_jl_ucontext_t*)ct->reset_ctx;
+        if (reset_ctx != NULL) {
+            // Clear reset_ctx before longjmp to prevent double-longjmp
+            ct->reset_ctx = NULL;
+            jl_longjmp_in_ctx(sig, ctx, reset_ctx->uc_mcontext);
+        }
+    }
+    else if (request == 6) {
+        // Task abandonment - call the abandon callback which will switch tasks
+        // The task state has already been set to ABANDONED by the caller.
+        // The target task is in ptls->abandon_to.
+        jl_call_in_ctx(ct->ptls, jl_abandon_task_cb, sig, ctx);
     }
     errno = errno_save;
 }

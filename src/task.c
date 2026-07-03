@@ -1155,6 +1155,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t *start, jl_value_t *completion_fu
     jl_atomic_store_relaxed(&t->running_time_ns, 0);
     jl_atomic_store_relaxed(&t->finished_at, 0);
     jl_timing_task_init(t);
+    jl_atomic_store_relaxed(&t->cancellation_request, jl_nothing);
 
     if (t->ctx.copy_stack)
         t->ctx.copy_ctx = NULL;
@@ -1212,6 +1213,17 @@ void jl_init_tasks(void) JL_GC_DISABLED
 #if defined(_COMPILER_ASAN_ENABLED_)
 static void NOINLINE JL_NORETURN _start_task(void);
 #endif
+
+static void NOINLINE _handle_start_task_cancellation(jl_value_t *creq)
+{
+    jl_value_t *cancel_handler = jl_get_global(jl_base_module, jl_symbol("handle_cancellation!"));
+    if (!cancel_handler) {
+        jl_safe_printf("Task cancellation requested but Base.handle_cancellation! is not defined\n");
+        jl_exit(1);
+    }
+    jl_value_t *fargs[2] = { cancel_handler, creq };
+    jl_apply(fargs, 2);
+}
 
 static void NOINLINE JL_NORETURN JL_NO_ASAN start_task(void)
 {
@@ -1273,6 +1285,12 @@ CFI_NORETURN
                 jl_sigint_safepoint(ptls);
             }
             JL_TIMING(ROOT, ROOT);
+            for (;;) {
+                jl_value_t *creq = jl_atomic_load_relaxed(&ct->cancellation_request);
+                if (creq == jl_nothing)
+                    break;
+                _handle_start_task_cancellation(creq);
+            }
             res = jl_apply(&ct->start, 1);
         }
         JL_CATCH {
@@ -1607,6 +1625,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
         jl_atomic_store_relaxed(&ct->first_enqueued_at, 0);
         jl_atomic_store_relaxed(&ct->last_started_running_at, 0);
     }
+    jl_atomic_store_relaxed(&ct->cancellation_request, jl_nothing);
     ptls->root_task = ct;
     jl_atomic_store_relaxed(&ptls->current_task, ct);
     JL_GC_PROMISE_ROOTED(ct);
@@ -1665,6 +1684,94 @@ JL_DLLEXPORT int8_t jl_get_task_threadpoolid(jl_task_t *t)
     return t->threadpoolid;
 }
 
+JL_DLLEXPORT void jl_preempt_thread_task(int16_t tid)
+{
+    jl_task_t *task = jl_atomic_load_relaxed(&jl_all_tls_states[tid]->current_task);
+    jl_value_t *expected = jl_nothing;
+    // If the task is already being cancelled, that's good enough for preemption
+    jl_atomic_cmpswap(&task->cancellation_request, &expected, jl_box_uint8(0x5));
+    jl_send_cancellation_signal(tid);
+}
+
+// Callback for task abandonment - called via jl_call_in_ctx from signal handler.
+// This function must not return.
+JL_NORETURN void jl_abandon_task_cb(void)
+{
+    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = ct->ptls;
+    jl_task_t *next_task = ptls->abandon_to;
+
+    // Clear abandon_to now that we have it
+    ptls->abandon_to = NULL;
+
+    // The task state was already set to ABANDONED by the caller of jl_abandon_task.
+    // We don't attempt to notify waiters here because:
+    // 1. We're in a signal-handler-triggered context with limited safe operations
+    // 2. The donenotify lock might already be held (would cause deadlock)
+    // 3. Waiters will see the state change when they poll istaskdone()
+    // The caller of jl_abandon_task is responsible for waking up any waiters
+    // after the abandon signal has been processed.
+
+    // Set the next task's thread ID to this thread before switching.
+    // This is normally done by jl_switch but we're bypassing that.
+    int16_t tid = jl_atomic_load_relaxed(&ct->tid);
+    jl_set_task_tid(next_task, tid);
+
+    // Set up the next task and switch to it
+    ptls->next_task = next_task;
+
+    // Clear state that might cause issues during switch
+    ptls->in_finalizer = 0;
+    ptls->in_pure_callback = 0;
+
+    // Call ctx_switch directly - the task state is already set to abandoned
+    // so ctx_switch will treat it as killed and do proper cleanup
+    // (release stack, clear gcstack and eh pointers).
+    JL_PROBE_RT_PAUSE_TASK(ct);
+    ctx_switch(ct);
+
+    // If we somehow return, something went very wrong
+    abort();
+}
+
+// Send an abandon signal to task t, causing it to switch to next_task.
+// This is used for CANCEL_REQUEST_ABANDON_ALL where we need to forcibly
+// abandon a task without waiting for it to reach a cancellation point.
+JL_DLLEXPORT void jl_abandon_task(jl_task_t *t, jl_task_t *next_task)
+{
+    // Get the thread running the task
+    int16_t tid = jl_atomic_load_relaxed(&t->tid);
+    if (tid < 0)
+        return; // Task not assigned to a thread yet
+
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    if (ptls2 == NULL)
+        return;
+
+    // Check that the task is actually the current task on that thread
+    jl_task_t *ct = jl_atomic_load_relaxed(&ptls2->current_task);
+    if (ct != t)
+        return; // Task is not currently running
+
+    // Store the target task and set up the abandoned task's state
+    ptls2->abandon_to = next_task;
+
+    // Set the cancellation request to CANCEL_REQUEST_ABANDON_ALL (0x4)
+    jl_value_t *creq = jl_atomic_load_relaxed(&t->cancellation_request);
+    if (creq == jl_nothing || creq == NULL) {
+        creq = jl_box_uint8(0x4); // CANCEL_REQUEST_ABANDON_ALL
+    }
+    t->result = creq;
+    jl_gc_wb(t, creq);
+    jl_atomic_store_relaxed(&t->_isexception, 1);
+
+    // Mark the task as abandoned - this must happen before the signal
+    // so that ctx_switch knows to do cleanup
+    jl_atomic_store_release(&t->_state, JL_TASK_STATE_ABANDONED);
+
+    // Send the abandon signal (request 6)
+    jl_send_abandon_signal(tid);
+}
 
 #ifdef _OS_WINDOWS_
 #if defined(_CPU_X86_)
