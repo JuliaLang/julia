@@ -659,7 +659,7 @@ JL_DLLEXPORT void jl_membarrier(void) {
 // Send a signal to the specified thread to longjmp to its reset_ctx if available.
 // This is used for task cancellation to interrupt a running task at a safe point.
 // TODO: Implement Windows support using SuspendThread/GetThreadContext/SetThreadContext
-JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid)
+JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT
 {
     // Not yet implemented on Windows
     (void)tid;
@@ -667,7 +667,7 @@ JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid)
 
 // Send a signal to the specified thread to abandon the current task.
 // TODO: Implement Windows support using SuspendThread/GetThreadContext/SetThreadContext
-void jl_send_abandon_signal(int16_t tid)
+void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
 {
     // Not yet implemented on Windows
     (void)tid;
