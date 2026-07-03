@@ -647,6 +647,13 @@ millisecond.
 function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real=0.0)
     ct = current_task()
     Base._wait2(c, ct, c, first)
+    cr = Base.pre_sleep_cancellation_request()
+    if cr !== nothing
+        # A cancellation request is already pending: don't park.
+        Base.list_deletefirst!(Base.ILLRef(Base.waitqueue(c), c), ct)
+        Base.acknowledge_cancellation!(ct, cr)
+        throw(cr)
+    end
     token = Base.unlockall(c.lock)
 
     timer::Union{Timer, Nothing} = nothing

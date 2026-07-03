@@ -299,6 +299,23 @@ JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
     wakeup_thread(ct, tid);
 }
 
+// Like jl_wakeup_thread, but callable from non-Julia threads (e.g. the signal
+// listener), which have no task context.
+JL_DLLEXPORT void jl_wakeup_thread_from_foreign(int16_t tid) JL_NOTSAFEPOINT
+{
+    if (tid < 0)
+        return;
+    jl_fence(); // [^store_buffering_1]
+    if (wake_thread(tid)) {
+        // check if we need to notify uv_run too
+        jl_fence();
+        jl_ptls_t other = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+        jl_task_t *tid_task = jl_atomic_load_relaxed(&other->current_task);
+        if (jl_atomic_load_relaxed(&jl_uv_mutex.owner) == tid_task)
+            wake_libuv();
+    }
+}
+
 // Round-robin start hint for jl_wakeup_threadpool, sharded across cache-line-padded
 // stripes so concurrent producers don't contend on a single counter.
 #define POOL_WAKE_HINT_STRIPES 64
