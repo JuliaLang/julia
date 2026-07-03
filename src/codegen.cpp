@@ -3825,6 +3825,9 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
                 Align(sizeof(void*)));
         fastv->setOrdering(AtomicOrdering::Unordered);
         ai.decorateInst(fastv);
+        // No guard re-check is needed after the value load: the sequence from the
+        // entry load to the value load contains no safepoint, so the write-side
+        // quiesce (see jl_declare_global) cannot observe a thread between them.
         BasicBlock *fastBB = ctx.builder.GetInsertBlock();
         BasicBlock *coldBB = BasicBlock::Create(C, "got_deopt", ctx.f);
         BasicBlock *contBB = BasicBlock::Create(C, "got_cont", ctx.f);
@@ -3995,12 +3998,43 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
                             modifyop,
                             fname,
                             mod,
-                            sym);
+                            sym,
+                            nullptr,
+                            nullptr,
+                            /*retype_bp*/bp,
+                            /*retype_deoptBB*/coldBB);
             assert(res.typ != jl_bottom_type); // boxed stores have no early-bottom path
             // Merge with the deoptimized path. Set returns `rval` itself, which dominates
             // both paths, so it needs no merge; the other kinds merge the boxed results.
             jl_value_t *rettyp = op == StoreKind::Set ? NULL : global_op_rettyp(op, ty);
             Value *fastV = op == StoreKind::Set ? nullptr : boxed(ctx, res);
+            if (op == StoreKind::Swap) {
+                // Re-check the guard after the swap commits: the boxing of `rval`
+                // inside the guarded region can allocate, so the thread can park at a
+                // safepoint there while the binding is re-declared around it, and the
+                // unconditional exchange then commits against the post-re-declaration
+                // slot, whose value is no longer known to be of the compiled-against
+                // type. This re-check is emitted after the exchange with no safepoint
+                // in between, so it reliably observes the sticky flag; the returned
+                // value is verified on that (cold) path. The swap's effect on the
+                // slot is benign either way: the stored value was validated against
+                // the compiled-against type, and every access of the slot after a
+                // re-type verifies what it loads. The other kinds need no re-check
+                // here: Set and SetOnce return no slot value, and Replace/Modify
+                // commit through a compare-exchange whose compared value was
+                // re-checked at the top of the iteration (see typed_store) -- a
+                // re-declaration that swaps the slot in between makes the
+                // compare-exchange fail into a re-checked retry.
+                LLVMContext &C = ctx.builder.getContext();
+                Value *retyped2 = emit_retype_recheck(ctx, bp);
+                BasicBlock *verifyBB = BasicBlock::Create(C, "recheck_verify", ctx.f);
+                BasicBlock *okBB = BasicBlock::Create(C, "recheck_ok", ctx.f);
+                ctx.builder.CreateCondBr(retyped2, verifyBB, okBB);
+                ctx.builder.SetInsertPoint(verifyBB);
+                mark_verified_globalop_result(ctx, op, fastV, rettyp, fname);
+                ctx.builder.CreateBr(okBB);
+                ctx.builder.SetInsertPoint(okBB);
+            }
             BasicBlock *fastEnd = ctx.builder.GetInsertBlock();
             BasicBlock *doneBB = BasicBlock::Create(ctx.builder.getContext(), "retype_done", ctx.f);
             ctx.builder.CreateBr(doneBB);

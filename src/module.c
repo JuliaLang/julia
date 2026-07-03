@@ -739,13 +739,15 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(
         // as a re-type plus an assignment: activate the verification guards, then
         // store the constant's value into the slot, so stale readers observe it
         // verified against the type they were compiled for. The same write-side
-        // protocol as jl_declare_global applies: guards are activated and every
-        // thread is fenced before the slot is written, and our caller publishes
-        // new_world only after we return.
+        // protocol as jl_declare_global applies (see the quiesce comment there):
+        // guards are activated and every thread is quiesced before the slot is
+        // written, and our caller publishes new_world only after we return.
         assert(val);
         jl_atomic_fetch_or_relaxed(&b->flags, BINDING_FLAG_RETYPED);
         jl_patch_retyped_binding_sites(b);
-        jl_membarrier();
+        jl_task_t *ct = jl_current_task;
+        jl_safepoint_suspend_all_threads(ct);
+        jl_safepoint_resume_all_threads(ct);
         jl_gc_write_atomic(b, b->value, jl_value_t, val, release);
     }
     JL_GC_POP();
@@ -1969,7 +1971,9 @@ JL_DLLEXPORT void jl_disable_binding(jl_globalref_t *gr)
         // old, conforming value, so early activation is harmless).
         jl_atomic_fetch_or_relaxed(&b->flags, BINDING_FLAG_RETYPED);
         jl_patch_retyped_binding_sites(b);
-        jl_membarrier();
+        jl_task_t *ct = jl_current_task;
+        jl_safepoint_suspend_all_threads(ct);
+        jl_safepoint_resume_all_threads(ct);
     }
 
     jl_binding_partition_t *new_bpart = jl_replace_binding_locked(b, bpart, NULL, PARTITION_KIND_GUARD, new_world);

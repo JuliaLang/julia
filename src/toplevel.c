@@ -439,17 +439,24 @@ check_type: ;
             if (retyped) {
                 jl_atomic_fetch_or_relaxed(&b->flags, BINDING_FLAG_RETYPED);
                 jl_patch_retyped_binding_sites(b);
-                // Asymmetric fence (heavy side) between the guard activation above
-                // and the value swap below: every thread is forced through a full
-                // barrier, so an access whose guard could still observe the
-                // pre-activation state (a not-yet-repointed GOT entry, or a flag test
-                // that a weakly ordered machine let read ahead of the value load)
-                // cannot observe the new value, and stale accesses before the fence
-                // observe the old, conforming value. The instruction-stream
-                // synchronization that JIT patch sites additionally require
-                // (jl_membarrier_sync_core) is issued by the walk above when it
-                // patches any site.
-                jl_membarrier();
+                // Quiesce every thread between the guard activation above and the
+                // value swap below. Threads park only at safepoint polls (or are in
+                // GC-safe regions, i.e. not executing compiled accesses), and the
+                // emitted guard+access sequences contain no polls, so a thread stops
+                // either entirely before an access -- resuming to see the activated
+                // guard -- or entirely after it, its access having observed the old,
+                // conforming value. The exceptions are the guarded RMW regions, whose
+                // op calls and allocations do contain safepoints; a thread parked
+                // there completes its operation after we resume it, which is why
+                // those fast paths re-check the flag after any slot value they trust
+                // (see emit_retype_recheck in cgutils.cpp). Resuming from the park
+                // also serializes each parked thread's instruction stream with the
+                // JIT patches; a thread that spent the whole rendezvous in a GC-safe
+                // region never parks, which is why the patch walk above additionally
+                // issues jl_membarrier_sync_core when it rewrites any site.
+                jl_task_t *ct = jl_current_task;
+                jl_safepoint_suspend_all_threads(ct);
+                jl_safepoint_resume_all_threads(ct);
             }
         }
     }

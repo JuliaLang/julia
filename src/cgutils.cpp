@@ -2549,6 +2549,29 @@ static Function *emit_modifyhelper(jl_codectx_t &ctx2, const jl_cgval_t &op, con
 static void emit_unionmove(jl_codectx_t &ctx, Value *dest, jl_value_t *desttype,
         MDNode *tbaa_dst, const jl_cgval_t &src, Value *tindex, Value *skip, bool isVolatile=false);
 
+// Re-load BINDING_FLAG_RETYPED, program-order after a preceding access of a binding's
+// value slot (#62154). Pairs with the write side of a re-declaration (see
+// jl_declare_global), which activates the guards, quiesces every thread at a
+// safepoint, and only then installs the new value: a thread whose access observed a
+// post-re-declaration slot must have parked inside the guarded region (there are no
+// polls between an access and its re-check), so it resumed after the flag was set and
+// this re-check observes it. The single-thread fence costs nothing at runtime; it only
+// keeps the compiler from hoisting the flag load above the access.
+static Value *emit_retype_recheck(jl_codectx_t &ctx, Value *bp)
+{
+    ctx.builder.CreateFence(AtomicOrdering::Acquire, SyncScope::SingleThread);
+    LoadInst *bflags = ctx.builder.CreateAlignedLoad(getInt8Ty(ctx.builder.getContext()),
+            emit_ptrgep(ctx, bp, offsetof(jl_binding_t, flags)), Align(1));
+    // Monotonic (not Unordered) so the optimizer cannot merge this load with an
+    // earlier load of the flags (e.g. the guard itself on flag-guard targets), which
+    // would defeat the re-check
+    bflags->setOrdering(AtomicOrdering::Monotonic);
+    setName(ctx.emission_context, bflags, "retype_recheck");
+    return ctx.builder.CreateICmpNE(
+            ctx.builder.CreateAnd(bflags, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), BINDING_FLAG_RETYPED)),
+            ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0));
+}
+
 static jl_cgval_t typed_store(jl_codectx_t &ctx,
         Value *ptr, jl_cgval_t rhs, jl_cgval_t cmpop,
         jl_value_t *jltype, MDNode *tbaa, MDNode *aliasscope,
@@ -2558,7 +2581,11 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         bool maybe_null_if_boxed, const jl_cgval_t *modifyop, const Twine &fname,
         jl_module_t *mod, jl_sym_t *var,
         // Union type support (set ptindex non-null for union stores)
-        Value *ptindex = nullptr, MDNode *tbaa_ptindex = nullptr)
+        Value *ptindex = nullptr, MDNode *tbaa_ptindex = nullptr,
+        // Re-type guard re-checking for global bindings (#62154, see emit_globalop):
+        // when set, Replace/Modify re-check `retype_bp`'s flags before each use of a
+        // value loaded from the slot and divert to `retype_deoptBB` once re-typed
+        Value *retype_bp = nullptr, BasicBlock *retype_deoptBB = nullptr)
 {
     auto newval = [&](const jl_cgval_t &lhs) { // for ismodifyfield
         const jl_cgval_t argv[3] = { cmpop, lhs, rhs };
@@ -2886,6 +2913,21 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                 CmpPhi->addIncoming(Compare, From);
                 Compare = CmpPhi;
             }
+        }
+        if (retype_deoptBB && (op == StoreKind::Modify || op == StoreKind::Replace)) {
+            assert(isboxed && retype_bp && !is_union);
+            // Global bindings only (#62154): re-check the re-type guard at the top of
+            // every iteration, after the load that produced `Compare` and before that
+            // value is compared or passed to `op` typed as `jltype`. The thread may
+            // have parked at a safepoint inside `op` or an allocation while the
+            // binding was re-declared around it, after which a value reloaded from
+            // the slot is no longer known to be of the declared type
+            // this code was compiled against. Nothing has been committed at this
+            // point, so the whole operation can still divert to the runtime path.
+            Value *retyped = emit_retype_recheck(ctx, retype_bp);
+            BasicBlock *ContBB = BasicBlock::Create(ctx.builder.getContext(), "recheck_cont", ctx.f);
+            ctx.builder.CreateCondBr(retyped, retype_deoptBB, ContBB);
+            ctx.builder.SetInsertPoint(ContBB);
         }
         if (op == StoreKind::Modify) {
             // Load old value for Modify

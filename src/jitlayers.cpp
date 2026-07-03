@@ -857,11 +857,13 @@ public:
 //
 // In both cases an access that began before the activation may still complete against
 // the old state, which is harmless while the value slot still holds the old
-// (conforming) value; the caller therefore quiesces every thread after the walk,
-// before installing the new value. BINDING_FLAG_RETYPED is sticky, so each guard is
-// activated at most once and dropped from the table afterwards; JIT code compiled once
-// the flag is set validates its accesses unconditionally and emits no records, while
-// image registration leaves the GOT entries of such bindings deoptimized.
+// (conforming) value; the caller therefore fences every thread after the walk, before
+// installing the new value, and fast paths re-check the flag after any slot access
+// whose value they trust (see emit_retype_recheck and the protocol comment in
+// jl_declare_global). BINDING_FLAG_RETYPED is sticky, so each guard is activated at
+// most once and dropped from the table afterwards; JIT code compiled once the flag is
+// set validates its accesses unconditionally and emits no records, while image
+// registration leaves the GOT entries of such bindings deoptimized.
 
 struct BindingPatchSite {
     uint64_t site;
