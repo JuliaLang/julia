@@ -4131,7 +4131,11 @@ static jl_code_instance_t *jl_compile_method_very_internal(jl_method_instance_t 
         }
 
         JL_GC_PUSH1(&codeinst);
-        int did_compile = jl_compile_codeinst(codeinst);
+        // Tier promotions must not park the worker behind a batch another
+        // thread is compiling (Ready-state waits propagate through module
+        // dependencies); the lookup callback publishes when the batch lands.
+        int did_compile = jl_tier_in_promotion() ? jl_compile_codeinst_nowait(codeinst)
+                                                 : jl_compile_codeinst(codeinst);
         double compile_time = jl_hrtime() - compilation_start;
 
         if (jl_atomic_load_relaxed(&codeinst->invoke) == NULL) {
@@ -4237,6 +4241,26 @@ static jl_value_t *jl_fptr_wait_for_compiled(jl_value_t *f, jl_value_t **args, u
 {
     jl_callptr_t invoke = jl_atomic_load_acquire(&m->invoke);
     if (invoke == &jl_fptr_wait_for_compiled) {
+        // Under tiering, the batch owner (typically the tier worker) may spend
+        // many seconds compiling the large module this CI was emitted into;
+        // interpret this call at T0 instead of blocking on the whole batch.
+        // allow_rescue=0: the rescue path re-enters compilation and would
+        // recurse right back here while the batch is still in flight.
+        if (jl_tier_enabled() && nargs < JL_TIER_MAX_INTERP_NARGS &&
+            m->owner == jl_nothing) {
+            jl_method_instance_t *mi = jl_get_ci_mi(m);
+            jl_method_t *def = mi->def.method;
+            if (jl_is_method(def) && def->source != NULL && def->source != jl_nothing) {
+                // Unlike the T0 parking gate, this is a capability test, not
+                // policy: loops/ccall/generated interpret fine for the wait's
+                // duration; only no-source, opaque-closure, and @force_compile
+                // methods must genuinely block for native code.
+                int reasons = jl_tier_method_interp_reasons(def);
+                if ((reasons & (JL_TIER_REJECT_NOSOURCE | JL_TIER_REJECT_OPAQUE |
+                                JL_TIER_REJECT_FORCED)) == 0)
+                    return jl_interpret_mi(f, args, nargs, mi, jl_current_task->world_age, /*allow_rescue*/0);
+            }
+        }
         // The tail call below retries until the owner publishes; without a
         // safepoint the retry spin blocks stop-the-world, deadlocking against
         // threads that must run for the owner to finish.

@@ -52,6 +52,11 @@ JL_DLLEXPORT int jl_compile_codeinst_fallback(jl_code_instance_t *unspec)
     return 0;
 }
 
+JL_DLLEXPORT int jl_compile_codeinst_nowait_fallback(jl_code_instance_t *unspec)
+{
+    return 0;
+}
+
 
 JL_DLLEXPORT void jl_emit_codeinsts_to_jit_fallback(jl_code_instance_t **codeinsts, jl_code_info_t **srcs, int len)
 {

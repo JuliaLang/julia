@@ -581,6 +581,13 @@ JL_DLLEXPORT int jl_tier_promote(jl_method_instance_t *mi)
     if (mi == NULL)
         return 0;
     JL_GC_PROMISE_ROOTED(mi);
+    // Already emitted into a batch another thread is compiling: joining would
+    // block this worker on that (possibly large) module compile. The batch
+    // owner publishes the native code; until then dispatch interprets via the
+    // jl_fptr_wait_for_compiled fallback.
+    jl_code_instance_t *claimed = jl_method_compiled(mi, jl_get_world_counter());
+    if (claimed && jl_atomic_load_relaxed(&claimed->invoke) == jl_fptr_wait_for_compiled_addr)
+        return 1;
     jl_code_instance_t *result = NULL;
     tier_in_promotion = 1;
     JL_TRY {
@@ -595,7 +602,8 @@ JL_DLLEXPORT int jl_tier_promote(jl_method_instance_t *mi)
     tier_in_promotion = 0;
     int ok = 0;
     jl_callptr_t got = result == NULL ? NULL : jl_atomic_load_acquire(&result->invoke);
-    if (result != NULL && got != NULL && got != jl_fptr_interpret_call_addr) {
+    if (result != NULL && got != NULL && got != jl_fptr_interpret_call_addr &&
+        got != jl_fptr_wait_for_compiled_addr) {
         jl_atomic_fetch_add_relaxed(&tier_swaps, 1);
         ok = 1;
         if (tier_debug_enabled())

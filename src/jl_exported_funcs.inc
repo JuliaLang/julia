@@ -556,6 +556,7 @@
     YY(jl_register_fptrs) \
     YY(jl_generate_fptr_for_unspecialized) \
     YY(jl_compile_codeinst) \
+    YY(jl_compile_codeinst_nowait) \
     YY(jl_teardown_codegen) \
     YY(jl_decorate_llvm_module) \
     YY(jl_jit_total_bytes) \
