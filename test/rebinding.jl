@@ -580,3 +580,126 @@ module ReexportTests
     end
     @test User3.same_name == 42
 end
+
+# #62154: replacement of mutable typed globals
+@testset "typed global replacement (#62154)" begin
+    # first definition and re-typing via the value-carrying form (installed atomically)
+    @eval module TGR1 end
+    @test Core.eval(TGR1, :(global x::Int = 5)) === 5
+    @test TGR1.x === 5
+    @test Core.get_binding_type(TGR1, :x) === Int
+    @test Core.eval(TGR1, :(global x::Float64 = 3.0)) === 3.0
+    @test TGR1.x === 3.0
+    @test Core.get_binding_type(TGR1, :x) === Float64
+    @test Core.eval(TGR1, :(global x::Real = 7)) === 7      # widening, with a value
+    @test TGR1.x === 7
+
+    # the value-carrying form replaces an incompatible value (the bare form would error)
+    @eval module TGR8 end
+    Core.eval(TGR8, :(global q::Int = 5))
+    @test Core.eval(TGR8, :(global q::String = "ok")) === "ok"
+    @test TGR8.q == "ok"
+    @test Core.get_binding_type(TGR8, :q) === String
+
+    # bare re-type: an incompatible existing value is an error (value is preserved)
+    @eval module TGR2 end
+    Core.eval(TGR2, :(global y::Int = 5))
+    @test_throws ErrorException Core.eval(TGR2, :(global y::String))
+    @test TGR2.y === 5
+    @test Core.get_binding_type(TGR2, :y) === Int
+    # bare re-type: a value that still conforms (widening) is retained
+    @test Core.eval(TGR2, :(global y::Integer)) === nothing
+    @test TGR2.y === 5
+    @test Core.get_binding_type(TGR2, :y) === Integer
+
+    # bare re-type of an undefined binding is always allowed
+    @eval module TGR3 end
+    Core.eval(TGR3, :(global z::Int))
+    @test Core.eval(TGR3, :(global z::Float64)) === nothing
+    @test Core.get_binding_type(TGR3, :z) === Float64
+    @test !isdefined(TGR3, :z)
+
+    # setglobal! and assignment check the latest declared type
+    @eval module TGR4 end
+    Core.eval(TGR4, :(global w::Int = 1))
+    Core.eval(TGR4, :(global w::Float64 = 2.0))
+    @test_throws TypeError setglobal!(TGR4, :w, 3)
+    @test setglobal!(TGR4, :w, 3.0) === 3.0
+    @test TGR4.w === 3.0
+
+    # a reader is recompiled after re-typing (binding invalidation)
+    @eval module TGR5
+        global v::Int = 10
+        f() = v
+    end
+    @test TGR5.f() === 10
+    @test only(Base.return_types(TGR5.f, ())) === Int
+    Core.eval(TGR5, :(global v::Float64 = 2.5))
+    @test TGR5.f() === 2.5
+    @test only(Base.return_types(TGR5.f, ())) === Float64
+
+    # the value-carrying form never leaves the binding transiently undefined
+    @eval module TGR6 end
+    Core.eval(TGR6, :(global p::Int = 100))
+    Core.eval(TGR6, :(global p::String = "hi"))
+    @test TGR6.p == "hi"
+    @test isdefined(TGR6, :p)
+
+    # constants and imports still cannot be re-typed this way
+    @eval module TGR7 end
+    Core.eval(TGR7, :(const c = 5))
+    @test_throws ErrorException Core.eval(TGR7, :(global c::Int))
+
+    # compound assignment to a typed global keeps the declared type (the joint-form lowering
+    # must only apply to plain `=`, not `+=` and friends, or the type decl would be lost)
+    @eval module TGR9 end
+    Core.eval(TGR9, :(global cc::Int = 5))
+    Core.eval(TGR9, :(global cc::Int += 3))
+    @test TGR9.cc === 8
+    @test Core.get_binding_type(TGR9, :cc) === Int
+
+    # a typed global assignment whose value references a surrounding local (in a loop at top
+    # level) installs the value in place rather than hoisting it out of scope
+    @eval module TGR10 end
+    Core.eval(TGR10, :(acc = Ref(0)))
+    Core.eval(TGR10, :(for i in 1:3; global lv::Int = i; acc[] += lv; end))
+    @test TGR10.lv === 3
+    @test TGR10.acc[] === 6
+    @test Core.get_binding_type(TGR10, :lv) === Int
+end
+
+# #62154: generated code that observes a global's value slot after its type has changed must
+# verify the value against the type it was compiled for, so that a stale access errors rather
+# than returning an ill-typed value (a memory-unsafe type confusion).
+@testset "typed global re-type access verification (#62154)" begin
+    @eval module TGRV1 end
+    Core.eval(TGRV1, :(global x::Int = 5))
+    Core.eval(TGRV1, :(g() = x))
+    Core.eval(TGRV1, :(g()))                           # compile `g` trusting Int
+    w1 = Base.get_world_counter()
+    @test TGRV1.g() === 5
+    Core.eval(TGRV1, :(global x::Number = 2.5))        # re-type Int -> Number (value 2.5)
+    @test TGRV1.g() === 2.5                             # latest read recompiled, sound
+    # old native code, replayed for the pre-re-type world, errors instead of returning garbage
+    @test_throws TypeError Base.invoke_in_world(w1, TGRV1.g)
+
+    # a re-type happening while a frame is on the stack: the later read in the same frame errors
+    @eval module TGRV2 end
+    Core.eval(TGRV2, :(global y::Int = 5))
+    Core.eval(TGRV2, :(function f()
+        a = y
+        Core.eval(TGRV2, :(global y::Number = 2.5))
+        return (a, y)
+    end))
+    @test_throws TypeError TGRV2.f()
+
+    # a narrowing re-type stays sound without erroring: the value still conforms to the old type
+    @eval module TGRV3 end
+    Core.eval(TGRV3, :(global z::Number = 3))
+    Core.eval(TGRV3, :(zr() = z))
+    Core.eval(TGRV3, :(zr()))
+    wz = Base.get_world_counter()
+    Core.eval(TGRV3, :(global z::Int = 7))             # 7 isa Number too
+    @test TGRV3.zr() === 7
+    @test Base.invoke_in_world(wz, TGRV3.zr) === 7
+end

@@ -3600,7 +3600,27 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
     Value *bpval = julia_binding_pvalue(ctx, bp);
     if (ty == nullptr)
         ty = (jl_value_t*)jl_any_type;
-    return update_julia_type(ctx, emit_checked_var(ctx, bpval, name, (jl_value_t*)mod, false, ctx.tbaa().tbaa_binding), ty);
+    jl_cgval_t v = emit_checked_var(ctx, bpval, name, (jl_value_t*)mod, false, ctx.tbaa().tbaa_binding);
+    // #62154: if the declared type of this global has ever been changed, the (single,
+    // shared) value slot may hold a value of a type other than `ty` -- either written by
+    // code compiled against a later type, or observed by this code after a redefinition
+    // that happened on the stack. Verify the value against the type we were compiled for so
+    // that such an access errors rather than returning an ill-typed value. The check is
+    // gated on a per-binding flag, so bindings whose type never changes keep the fast path.
+    if (ty != (jl_value_t*)jl_any_type) {
+        LLVMContext &C = ctx.builder.getContext();
+        LoadInst *bflags = ctx.builder.CreateAlignedLoad(getInt8Ty(C),
+                emit_ptrgep(ctx, bp, offsetof(jl_binding_t, flags)), Align(1));
+        bflags->setOrdering(AtomicOrdering::Unordered);
+        Value *retyped = ctx.builder.CreateICmpNE(
+                ctx.builder.CreateAnd(bflags, ConstantInt::get(getInt8Ty(C), BINDING_FLAG_RETYPED)),
+                ConstantInt::get(getInt8Ty(C), 0));
+        emit_guarded_test(ctx, retyped, true, [&]() -> Value* {
+            emit_typecheck(ctx, v, ty, "getglobal");
+            return ConstantInt::get(getInt1Ty(C), 1);
+        });
+    }
+    return update_julia_type(ctx, v, ty);
 }
 
 static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *sym, jl_cgval_t rval, const jl_cgval_t &cmp,
@@ -3615,7 +3635,12 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
         if (jl_binding_kind(bpart) == PARTITION_KIND_GLOBAL) {
             int possibly_deprecated = bpart->kind & PARTITION_FLAG_DEPWARN;
             jl_value_t *ty = bpart->restriction;
-            if (ty != nullptr) {
+            // #62154: once a global's type has been changed, `bpart->restriction` is only
+            // the type for *this* world range; a store must conform to the latest-world
+            // type instead (which this code may not have been compiled for). Route such
+            // bindings through the runtime store, which validates against the latest type.
+            int retyped = jl_atomic_load_relaxed(&bnd->flags) & BINDING_FLAG_RETYPED;
+            if (ty != nullptr && !retyped) {
                 const char *fname = store_kind_name(op, "global");
                 if (op != StoreKind::Modify) {
                     emit_typecheck(ctx, rval, ty, fname);

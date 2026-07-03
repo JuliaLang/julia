@@ -1579,10 +1579,12 @@ JL_CALLABLE(jl_f_setglobalonce)
     return old == NULL ? jl_true : jl_false;
 }
 
-// declare_global(module::Module, name::Symbol, [strong::Bool=false, [ty::Type]])
+// declare_global(module::Module, name::Symbol, [strong::Bool=false, [ty::Type, [value::Any]]])
+// When `value` is supplied (the `global x::T = v` form), the type declaration and the value
+// assignment are installed together as a single atomic step (#62154).
 JL_CALLABLE(jl_f_declare_global)
 {
-    JL_NARGS(declare_global, 3, 4);
+    JL_NARGS(declare_global, 3, 5);
     JL_TYPECHK(declare_global, module, args[0]);
     JL_TYPECHK(declare_global, symbol, args[1]);
     JL_TYPECHK(declare_global, bool, args[2]);
@@ -1592,7 +1594,13 @@ JL_CALLABLE(jl_f_declare_global)
         JL_TYPECHK(declare_global, type, args[3]);
         set_type = args[3];
     }
-    jl_declare_global((jl_module_t *)args[0], args[1], set_type, strong);
+    jl_value_t *newval = NULL;
+    if (nargs >= 5) {
+        if (!strong || set_type == NULL)
+            jl_error("declare_global: a value may only be supplied together with a type");
+        newval = args[4];
+    }
+    jl_declare_global((jl_module_t *)args[0], args[1], set_type, strong, newval);
     return jl_nothing;
 }
 

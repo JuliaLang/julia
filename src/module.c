@@ -2052,8 +2052,22 @@ void jl_binding_deprecation_warning(jl_binding_t *b)
 jl_value_t *jl_check_binding_assign_value(jl_binding_t *b JL_PROPAGATES_ROOT, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs, const char *msg)
 {
     JL_GC_PUSH1(&rhs); // callee-rooted
-    jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
+    // The store obeys "invokelatest" semantics: since the type of a global may be
+    // replaced (#62154) but there is only one value slot per binding, the value must
+    // conform to the type declared by the *latest*-world partition, which governs what
+    // latest-world readers are permitted to observe. In the common case the caller is
+    // already running in the latest world and this is the same partition it would see at
+    // its own world age.
+    size_t latest_world = jl_atomic_load_acquire(&jl_world_counter);
+    jl_binding_partition_t *bpart = jl_get_binding_partition(b, latest_world);
     enum jl_partition_kind kind = jl_binding_kind(bpart);
+    if (kind != PARTITION_KIND_GLOBAL && kind != PARTITION_KIND_DECLARED) {
+        // The latest partition is no longer a writable global (e.g. it was replaced by a
+        // constant or an import). Fall back to the caller-world partition; any writability
+        // error is raised separately by jl_check_binding_currently_writable.
+        bpart = jl_get_binding_partition(b, jl_current_task->world_age);
+        kind = jl_binding_kind(bpart);
+    }
     assert(kind == PARTITION_KIND_DECLARED || kind == PARTITION_KIND_GLOBAL);
     jl_value_t *old_ty = kind == PARTITION_KIND_DECLARED ? (jl_value_t*)jl_any_type : bpart->restriction;
     JL_GC_PROMISE_ROOTED(old_ty);
