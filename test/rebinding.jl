@@ -871,6 +871,121 @@ end
     @test TGRW7.r === 8
 end
 
+@testset "re-type during an in-flight RMW (#62154)" begin
+    # The modify `op` callback runs at a safepoint inside the guarded RMW fast path, so
+    # re-declaring the binding from inside it exercises exactly the window the re-type
+    # guards' re-checks protect (see emit_retype_recheck in cgutils.cpp): the guard was
+    # checked before `op` ran, and the operation commits after the re-declaration.
+
+    # op re-types incompatibly (with a value): the value swap makes the compare-exchange
+    # fail, the retry re-check diverts to the runtime path, which applies `op` to the
+    # latest value, and the result (now at the new type) fails verification against the
+    # type this code was compiled for
+    @eval module GRMW1
+        global x::Int = 1
+        const did = Ref(false)
+        retype_op(old, v) = (did[] || (did[] = true; Core.eval(GRMW1, :(global x::Float64 = 2.5))); old + v)
+        domod(v) = modifyglobal!(@__MODULE__, :x, retype_op, v)
+    end
+    @test_throws TypeError GRMW1.domod(1)
+    @test invokelatest(() -> GRMW1.x) === 3.5 # the runtime path applied op at the latest type
+    @test Core.get_binding_type(GRMW1, :x) === Float64
+
+    # op widens with a bare re-declaration: the slot is untouched, so the
+    # compare-exchange succeeds -- the modify linearizes before the re-declaration
+    @eval module GRMW2
+        global y::Int = 1
+        const did = Ref(false)
+        widen_op(old, v) = (did[] || (did[] = true; Core.eval(GRMW2, :(global y::Integer))); old + v)
+        domod(v) = modifyglobal!(@__MODULE__, :y, widen_op, v)
+    end
+    let r = GRMW2.domod(1)
+        @test r == (1 => 2)
+    end
+    @test invokelatest(() -> GRMW2.y) === 2
+    @test Core.get_binding_type(GRMW2, :y) === Integer
+
+    # op deletes the binding: the slot is untouched, so the modify likewise linearizes
+    # before the deletion
+    @eval module GRMW3
+        global z::Int = 1
+        const did = Ref(false)
+        del_op(old, v) = (did[] || (did[] = true; Base.delete_binding(GRMW3, :z)); old + v)
+        domod(v) = modifyglobal!(@__MODULE__, :z, del_op, v)
+    end
+    let r = GRMW3.domod(1)
+        @test r == (1 => 2)
+    end
+    @test Base.binding_kind(GRMW3, :z) == Base.PARTITION_KIND_GUARD
+
+    # op re-declares the binding as a constant: the constant's value lands in the slot,
+    # the compare-exchange fails, and the diverted runtime path raises the
+    # not-writable error; the constant is unaffected
+    @eval module GRMW4
+        global w::Int = 1
+        const did = Ref(false)
+        const_op(old, v) = (did[] || (did[] = true; Core.eval(GRMW4, :(const w = 100))); old + v)
+        domod(v) = modifyglobal!(@__MODULE__, :w, const_op, v)
+    end
+    let err = try GRMW4.domod(1); nothing catch e; e end
+        @test err isa ErrorException
+        @test occursin("invalid assignment to constant", err.msg)
+    end
+    @test invokelatest(() -> GRMW4.w) === 100
+    @test isconst(GRMW4, :w)
+
+    # threaded stress: hammer the inline RMW fast paths of a fresh binding while the
+    # main thread re-types and then deletes it mid-flight; any value the stale code
+    # *returns* (rather than throwing a verification error) must be correctly typed
+    let script = raw"""
+using Base.Threads
+bad = Atomic{Bool}(false)
+allowed(e) = e isa TypeError || e isa ErrorException
+for round in 1:25
+    m = Module()
+    Core.eval(m, :(global g::Int = 1))
+    Core.eval(m, :(hammer() = (modifyglobal!(@__MODULE__, :g, +, 1),
+                               swapglobal!(@__MODULE__, :g, 5),
+                               replaceglobal!(@__MODULE__, :g, 5, 6))))
+    Base.invokelatest(m.hammer) # compile the inline fast paths (guards not yet activated)
+    stop = Atomic{Bool}(false)
+    ts = [Threads.@spawn begin # runs at the pre-re-type world age: stale fast paths
+            while !stop[]
+                try
+                    r = m.hammer()
+                    # any value that is *returned* (rather than a verification error
+                    # thrown) must be of the type the code was compiled against
+                    if !(r[1] isa Pair{Int,Int} && r[2] isa Int && r[3].old isa Int)
+                        println(stderr, "ill-typed RMW result escaped: ", r)
+                        bad[] = true
+                        stop[] = true
+                    end
+                catch e
+                    if !allowed(e)
+                        showerror(stderr, e)
+                        bad[] = true
+                        stop[] = true
+                    end
+                end
+            end
+        end for _ in 1:3]
+    sleep(0.01)
+    Core.eval(m, :(global g::Float64 = 2.5)) # re-type mid-flight
+    sleep(0.005)
+    Base.delete_binding(m, :g)               # then delete mid-flight
+    sleep(0.002)
+    stop[] = true
+    foreach(wait, ts)
+    bad[] && break
+end
+println(bad[] ? "STRESS FAIL" : "STRESS OK")
+exit(bad[] ? 1 : 0)
+"""
+        cmd = `$(Base.julia_cmd()) --startup-file=no -t4 -e $script`
+        @test success(pipeline(cmd; stdout=devnull, stderr=stderr))
+    end
+end
+
 @testset "global to constant transition (#62154)" begin
     # direct global -> const with a conforming value: re-type plus assignment,
     # so stale readers observe the constant's value (verified against their type)
