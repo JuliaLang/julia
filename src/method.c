@@ -212,6 +212,11 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
         if (!jl_is_type(rt)) {
             JL_TRY {
                 rt = jl_interpret_toplevel_expr_in(module, rt, NULL, sparam_vals);
+                // static parameters evaluate to their def-time TypeVar objects;
+                // store the signature-relative de Bruijn form instead
+                JL_GC_PUSH1(&rt);
+                rt = jl_translate_sparams_to_refs(rt, sparam_vals);
+                JL_GC_POP();
             }
             JL_CATCH {
                 if (jl_typetagis(jl_current_exception(ct), jl_errorexception_type))
@@ -224,6 +229,17 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
         if (!jl_is_svec(at)) {
             JL_TRY {
                 at = jl_interpret_toplevel_expr_in(module, at, NULL, sparam_vals);
+                if (jl_is_svec(at)) {
+                    JL_GC_PUSH1(&at);
+                    size_t nat = jl_svec_len((jl_svec_t*)at);
+                    for (size_t i_ = 0; i_ < nat; i_++) {
+                        jl_value_t *ati = jl_svecref(at, i_);
+                        jl_value_t *newati = jl_translate_sparams_to_refs(ati, sparam_vals);
+                        if (newati != ati)
+                            jl_svecset(at, i_, newati);
+                    }
+                    JL_GC_POP();
+                }
             }
             JL_CATCH {
                 if (jl_typetagis(jl_current_exception(ct), jl_errorexception_type))
@@ -247,6 +263,11 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
         if (!jl_is_type(rt)) {
             JL_TRY {
                 rt = jl_interpret_toplevel_expr_in(module, rt, NULL, sparam_vals);
+                // static parameters evaluate to their def-time TypeVar objects;
+                // store the signature-relative de Bruijn form instead
+                JL_GC_PUSH1(&rt);
+                rt = jl_translate_sparams_to_refs(rt, sparam_vals);
+                JL_GC_POP();
             }
             JL_CATCH {
                 if (jl_typetagis(jl_current_exception(ct), jl_errorexception_type))
@@ -259,6 +280,17 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
         if (!jl_is_svec(at)) {
             JL_TRY {
                 at = jl_interpret_toplevel_expr_in(module, at, NULL, sparam_vals);
+                if (jl_is_svec(at)) {
+                    JL_GC_PUSH1(&at);
+                    size_t nat = jl_svec_len((jl_svec_t*)at);
+                    for (size_t i_ = 0; i_ < nat; i_++) {
+                        jl_value_t *ati = jl_svecref(at, i_);
+                        jl_value_t *newati = jl_translate_sparams_to_refs(ati, sparam_vals);
+                        if (newati != ati)
+                            jl_svecset(at, i_, newati);
+                    }
+                    JL_GC_POP();
+                }
             }
             JL_CATCH {
                 if (jl_typetagis(jl_current_exception(ct), jl_errorexception_type))
@@ -1324,7 +1356,7 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
                               line);
             elt = jl_unwrap_vararg(elt);
         }
-        int isvalid = (jl_is_type(elt) || jl_is_typevar(elt) || jl_is_vararg(elt)) && elt != jl_bottom_type;
+        int isvalid = (jl_is_type(elt) || jl_is_typevar(elt) || jl_is_tvarref(elt) || jl_is_vararg(elt)) && elt != jl_bottom_type;
         if (!isvalid) {
             jl_sym_t *argname = (jl_sym_t*)jl_array_ptr_ref(f->slotnames, i);
             if (argname == jl_unused_sym)
@@ -1347,14 +1379,18 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
         jl_value_t *tv = jl_svecref(tvars, i - 1);
         if (!jl_is_typevar(tv))
             jl_type_error("method signature", (jl_value_t*)jl_tvar_type, tv);
-        if (!jl_has_typevar(argtype, (jl_tvar_t*)tv)) // deprecate this to an error in v2
+        if (!jl_has_typevar(argtype, (jl_tvar_t*)tv) &&
+            !jl_tvarref_occurs(argtype, 1)) // deprecate this to an error in v2
             jl_printf(JL_STDERR,
                       "WARNING: method definition for %s at %s:%d declares type variable %s but does not use it.\n",
                       jl_symbol_name(name),
                       jl_symbol_name(file),
                       line,
                       jl_symbol_name(((jl_tvar_t*)tv)->name));
-        argtype = jl_new_struct(jl_unionall_type, tv, argtype);
+        // n.b. built raw (not via jl_type_unionall) to preserve unused binders
+        argtype = jl_translate_var_to_ref(argtype, (jl_tvar_t*)tv, 1);
+        argtype = jl_new_struct(jl_unionall_type, ((jl_tvar_t*)tv)->name,
+                                ((jl_tvar_t*)tv)->lb, ((jl_tvar_t*)tv)->ub, argtype);
     }
     if (jl_has_free_typevars(argtype)) {
         jl_exceptionf(jl_argumenterror_type,

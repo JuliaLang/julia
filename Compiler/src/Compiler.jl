@@ -62,7 +62,7 @@ using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospeciali
     isbitsunion, isconcretedispatch, isdispatchelem, isexpr, isfieldatomic, isidentityfree,
     iskindtype, ismutabletypename, ismutationfree, issingletontype, isvarargtype, isvatuple,
     kwerr, lookup_binding_partition, may_invoke_generator, methods, midpoint, moduleroot,
-    partition_restriction, quoted, rename_unionall, rewrap_unionall, specialize_method,
+    partition_restriction, quoted, rename_unionall, rewrap_unionall, specialize_method, unionall_open,
     structdiff, tls_world_age, type_parameter, unconstrain_vararg_length, unionlen, uniontype_layout,
     uniontypes, unsafe_convert, unwrap_unionall, unwrapva, vect, widen_diagonal,
     _uncompressed_ir, datatype_min_ninitialized,

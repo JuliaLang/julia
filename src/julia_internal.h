@@ -985,7 +985,22 @@ JL_DLLEXPORT jl_value_t *jl_instantiate_type_with(jl_value_t *t, jl_value_t **en
 JL_DLLEXPORT jl_value_t *jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_t *env, jl_value_t **vals) JL_CANSAFEPOINT;
 jl_value_t *jl_substitute_var(jl_value_t *t, jl_tvar_t *var, jl_value_t *val) JL_CANSAFEPOINT;
 jl_value_t *jl_substitute_var_nothrow(jl_value_t *t, jl_tvar_t *var, jl_value_t *val, int nothrow) JL_CANSAFEPOINT;
-jl_unionall_t *jl_rename_unionall(jl_unionall_t *u) JL_CANSAFEPOINT;
+// substitute the dangling TypeVarRef with root-index `idx` in `t` by `val`
+jl_value_t *jl_substitute_tvarref(jl_value_t *t, size_t idx, jl_value_t *val) JL_CANSAFEPOINT;
+// translate free occurrences of vars[j] (outermost binder first) into de Bruijn
+// references with root index (nvars - j)
+jl_value_t *jl_translate_vars_to_refs(jl_value_t *t, jl_svec_t *vars, size_t nvars) JL_CANSAFEPOINT;
+// translate free occurrences of `var` into de Bruijn references with root index `baseidx`
+jl_value_t *jl_translate_var_to_ref(jl_value_t *t, jl_tvar_t *var, size_t baseidx) JL_CANSAFEPOINT;
+jl_value_t *jl_instantiate_unionall_nothrow(jl_unionall_t *u, jl_value_t *p, int nothrow) JL_CANSAFEPOINT;
+// shift every dangling TypeVarRef in `t` by `inc` (may be negative; caller must
+// ensure no index underflows the binder depth)
+jl_value_t *jl_shift_dangling_refs(jl_value_t *t, ssize_t inc) JL_CANSAFEPOINT;
+// whether a TypeVarRef with root-index `idx` (adjusted under binders) occurs in `t`
+JL_DLLEXPORT int jl_tvarref_occurs(jl_value_t *t, size_t idx) JL_NOTSAFEPOINT;
+// rewrap `t` (derived from `u->body` at the same binder depth) in a copy of `u`'s
+// binder, dropping the binder (with a downward shift) if it is unused
+jl_value_t *jl_rewrap_unionall_one(jl_value_t *t, jl_unionall_t *u) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_unwrap_unionall(jl_value_t *v JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_rewrap_unionall(jl_value_t *t, jl_value_t *u) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_rewrap_unionall_(jl_value_t *t, jl_value_t *u) JL_CANSAFEPOINT;
@@ -1000,6 +1015,7 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt, int cacheable);
 JL_DLLEXPORT jl_typeeq_t *jl_wrap_Type(jl_value_t *t) JL_CANSAFEPOINT;  // x -> Type{x}
 JL_DLLEXPORT jl_value_t *jl_wrap_TypeEgal(jl_value_t *t) JL_CANSAFEPOINT;  // x -> TypeEgal{x} (egality, no free typevars)
 jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n, int check, int nothrow) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_translate_sparams_to_refs(jl_value_t *t, jl_svec_t *vars) JL_CANSAFEPOINT;
 void jl_reinstantiate_inner_types(jl_datatype_t *t) JL_CANSAFEPOINT;
 jl_datatype_t *jl_lookup_cache_type_(jl_datatype_t *type) JL_CANSAFEPOINT;
 jl_value_t *jl_lookup_foreignsymbol(jl_value_t *v) JL_CANSAFEPOINT;

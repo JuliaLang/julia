@@ -5983,7 +5983,7 @@ static jl_cgval_t emit_sparam(jl_codectx_t &ctx, size_t i)
         sparam = (jl_unionall_t*)sparam->body;
         assert(jl_is_unionall(sparam));
     }
-    undef_var_error_ifnot(ctx, isdef, sparam->var->name, (jl_value_t*)jl_static_parameter_sym);
+    undef_var_error_ifnot(ctx, isdef, sparam->name, (jl_value_t*)jl_static_parameter_sym);
     return mark_julia_type(ctx, spval, true, jl_any_type);
 }
 
@@ -8056,6 +8056,81 @@ static const char *derive_sigt_name(jl_value_t *jargty)
 // Get the LLVM Function* for the C-callable entry point for a certain function
 // and argument types.
 // here argt does not include the leading function type argument
+// `@cfunction` type tuples are evaluated at method-definition time, in the
+// scope where the `where` clause's TypeVar objects were still identity-bound
+// let-variables; the resulting svec can therefore contain free def-time
+// TypeVars even though the method signature stores de Bruijn binders. Match
+// such vars to the signature's binders by name (innermost shadows) and
+// substitute the corresponding static-parameter values.
+static jl_value_t *cfun_substitute_deftime_tvars(jl_value_t *ty, jl_unionall_t *env, jl_svec_t *vals)
+{
+    if (jl_is_typevar(ty)) {
+        jl_sym_t *nm = ((jl_tvar_t*)ty)->name;
+        jl_value_t *hit = NULL;
+        size_t i = 0;
+        jl_value_t *ua = (jl_value_t*)env;
+        while (jl_is_unionall(ua) && i < jl_svec_len(vals)) {
+            if (((jl_unionall_t*)ua)->name == nm) {
+                jl_value_t *sp = jl_svecref(vals, i);
+                jl_value_t *def = jl_sparam_defined_value(sp);
+                if (def)
+                    hit = def; // keep scanning: an inner binder shadows
+            }
+            ua = ((jl_unionall_t*)ua)->body;
+            i++;
+        }
+        return hit ? hit : ty;
+    }
+    if (jl_is_unionall(ty)) {
+        jl_unionall_t *u = (jl_unionall_t*)ty;
+        jl_value_t *lb = cfun_substitute_deftime_tvars(u->lb, env, vals);
+        jl_value_t *ub = NULL, *body = NULL;
+        JL_GC_PUSH3(&lb, &ub, &body);
+        ub = cfun_substitute_deftime_tvars(u->ub, env, vals);
+        body = cfun_substitute_deftime_tvars(u->body, env, vals);
+        jl_value_t *res = ty;
+        if (lb != u->lb || ub != u->ub || body != u->body)
+            res = jl_new_unionall_type((jl_sym_t*)u->name, lb, ub, body);
+        JL_GC_POP();
+        return res;
+    }
+    if (jl_is_uniontype(ty)) {
+        jl_uniontype_t *u = (jl_uniontype_t*)ty;
+        jl_value_t *a = cfun_substitute_deftime_tvars(u->a, env, vals);
+        JL_GC_PUSH1(&a);
+        jl_value_t *b = cfun_substitute_deftime_tvars(u->b, env, vals);
+        jl_value_t *res = ty;
+        if (a != u->a || b != u->b) {
+            JL_GC_PUSH1(&b);
+            jl_value_t *ts[2] = {a, b};
+            res = jl_type_union(ts, 2);
+            JL_GC_POP();
+        }
+        JL_GC_POP();
+        return res;
+    }
+    if (jl_is_datatype(ty)) {
+        jl_datatype_t *dt = (jl_datatype_t*)ty;
+        size_t np = jl_nparams(dt);
+        if (np == 0 || !jl_has_free_typevars(ty))
+            return ty;
+        jl_value_t **newp;
+        JL_GC_PUSHARGS(newp, np);
+        int changed = 0;
+        for (size_t i = 0; i < np; i++) {
+            jl_value_t *pi = jl_tparam(dt, i);
+            newp[i] = cfun_substitute_deftime_tvars(pi, env, vals);
+            changed |= (newp[i] != pi);
+        }
+        jl_value_t *res = ty;
+        if (changed)
+            res = jl_apply_type(dt->name->wrapper, newp, np);
+        JL_GC_POP();
+        return res;
+    }
+    return ty;
+}
+
 static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, const jl_cgval_t &fexpr_val, jl_value_t *declrt, jl_svec_t *argt)
 {
     jl_unionall_t *unionall_env = (jl_is_method(ctx.linfo->def.method) && jl_is_unionall(ctx.linfo->def.method->sig))
@@ -8094,10 +8169,18 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
     if (unionall_env && sparam_vals) {
         for (size_t i = 0; i < nargt; i++) {
             jl_value_t *jargty = jl_svecref(argt, i);
-            if (jl_has_typevar_from_unionall(jargty, unionall_env)) {
+            if (jl_has_dangling_tvarrefs(jargty)) {
                 if (!argt_inst)
                     argt_inst = jl_svec_copy(argt);
                 jl_svecset(argt_inst, i, jl_instantiate_type_in_env(jargty, unionall_env, jl_svec_data(sparam_vals)));
+            }
+            else if (jl_has_free_typevars(jargty)) {
+                jl_value_t *inst = cfun_substitute_deftime_tvars(jargty, unionall_env, sparam_vals);
+                if (inst != jargty) {
+                    if (!argt_inst)
+                        argt_inst = jl_svec_copy(argt);
+                    jl_svecset(argt_inst, i, inst);
+                }
             }
         }
         if (argt_inst)

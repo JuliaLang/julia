@@ -598,6 +598,7 @@ end
 io_has_tvar_name(io::IO, name::Symbol, @nospecialize(x)) = false
 
 modulesof!(s::Set{Module}, x::TypeVar) = modulesof!(s, x.ub)
+modulesof!(s::Set{Module}, x::Core.TypeVarRef) = s # detached reference: no module
 modulesof!(s::Set{Module}, x::TypeEq) = modulesof!(s, type_parameter(x))
 modulesof!(s::Set{Module}, x::Core.TypeEgal) = modulesof!(s, type_parameter(x))
 function modulesof!(s::Set{Module}, x::Type)
@@ -637,10 +638,10 @@ end
 # references an outer binder is rewritten consistently with that binder.
 function unbounded_typealias(@nospecialize(alias))
     alias isa UnionAll || return alias
-    body = unbounded_typealias(alias.body)
-    var = alias.var
+    var, body0 = unionall_open(alias)
+    body = unbounded_typealias(body0)
     if var.lb === Union{} && var.ub === Any
-        body === alias.body && return alias
+        body === body0 && return alias
         return UnionAll(var, body)
     end
     newvar = TypeVar(var.name)
@@ -806,8 +807,8 @@ function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector, whe
     orig = getfield(name.mod, name.name)
     vars = TypeVar[]
     while orig isa UnionAll
-        push!(vars, orig.var)
-        orig = orig.body
+        v, orig = unionall_open(orig)
+        push!(vars, v)
     end
     show_typeparams(io, env, Core.svec(vars...), wheres)
     nothing
@@ -825,17 +826,32 @@ function make_wheres(io::IO, env::SimpleVector, @nospecialize(x::Type))
         end
     end
     # record things in x to print outermost
+    # (opening materializes fresh TypeVars, so intersection-env entries that
+    # denote the same binder are only alpha-copies; track them for dedup below)
+    opened = TypeVar[]
     while x isa UnionAll
-        if !(x.var in seen)
-            push!(seen, x.var)
-            push!(wheres, x.var)
+        v, x = unionall_open(x)
+        if !(v in seen)
+            push!(seen, v)
+            push!(wheres, v)
+            push!(opened, v)
         end
-        x = x.body
     end
     # record remaining things in env to print innermost
     for i = length(env):-1:1
         p = env[i]
         if p isa TypeVar && !(p in seen)
+            k = findfirst(q -> q.name === p.name && q.lb == p.lb && q.ub == p.ub, opened)
+            if k !== nothing
+                # alpha-copy of a binder recorded above: print the env's object
+                # (referenced by the body) in its place
+                ok = opened[k]
+                wi = findfirst(q -> q === ok, wheres)::Int
+                wheres[wi] = p
+                deleteat!(opened, k)
+                push!(seen, p)
+                continue
+            end
             push!(seen, p)
             pushfirst!(wheres, p)
         end
@@ -1077,7 +1093,7 @@ function _show_type(io::IO, @nospecialize(x::Type))
     wheres = TypeVar[]
     let io = IOContext(io)
         while x isa UnionAll
-            var = x.var
+            var, xbody = unionall_open(x)
             if var.name === :_ || io_has_tvar_name(io, var.name, x)
                 counter = 1
                 while true
@@ -1090,7 +1106,7 @@ function _show_type(io::IO, @nospecialize(x::Type))
                     counter += 1
                 end
             else
-                x = x.body
+                x = xbody
             end
             push!(wheres, var)
             io = IOContext(io, :unionall_env => var)
@@ -2611,9 +2627,9 @@ function show_tuple_as_call(out::IO, name::Symbol, sig::Type;
     io = IOContext(buf, out)
     env_io = io
     while isa(sig, UnionAll)
-        push!(tv, sig.var)
-        env_io = IOContext(env_io, :unionall_env => sig.var)
-        sig = sig.body
+        v, sig = unionall_open(sig)
+        push!(tv, v)
+        env_io = IOContext(env_io, :unionall_env => v)
     end
     n = 1
     sig = (sig::DataType).parameters

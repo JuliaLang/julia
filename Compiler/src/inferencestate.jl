@@ -730,8 +730,8 @@ parameters, however, some callers would like to ignore this corner case.
 function constrains_param(var::TypeVar, @nospecialize(typ), covariant::Bool, type_constrains::Bool=false)
     typ === var && return true
     while typ isa UnionAll
-        covariant && constrains_param(var, typ.var.ub, covariant, type_constrains) && return true
-        # typ.var.lb doesn't constrain var
+        covariant && constrains_param(var, typ.ub, covariant, type_constrains) && return true
+        # typ.lb doesn't constrain var
         typ = typ.body
     end
     if typ isa Union
@@ -909,6 +909,8 @@ function sptypes_from_meth_instance(mi::MethodInstance)
     sptypes = Vector{VarState}(undef, nvals)
     temp = sig
     for i = 1:nvals
+        # open this binder (fresh free TypeVar substituted for its references)
+        v_opened, opened = unionall_open(temp::UnionAll)
         v = spvals[i]
         undef = true
         # An `svec(inner, constrained)` marker from subtyping/intersection
@@ -941,8 +943,8 @@ function sptypes_from_meth_instance(mi::MethodInstance)
             undef = false
             v_egal = false
         elseif v_tvar !== nothing || has_free_typevars(v)
-            vᵢ = (temp::UnionAll).var
-            sigtypes = (unwrap_unionall(temp)::DataType).parameters
+            vᵢ = v_opened
+            sigtypes = (unwrap_unionall(opened)::DataType).parameters
             if v_tvar !== nothing
                 v_egal = sparam_definitely_egal_from_spec(vᵢ, sigtypes, mi.specTypes)
                 ty = sptype_for_tvar(vᵢ, v_tvar, sigtypes, mi.specTypes, v_egal)
@@ -966,7 +968,8 @@ function sptypes_from_meth_instance(mi::MethodInstance)
             ty = type_sptype_to_egal(ty)
         end
         sptypes[i] = VarState(ty, typemin(Int), undef)
-        temp = (temp::UnionAll).body
+        # peel via the opened body so the remaining chain's bounds are resolved
+        temp = opened
     end
     return sptypes
 end
@@ -987,26 +990,28 @@ function sptypes_from_unspecialized(@nospecialize sig)
     sptypes = Vector{VarState}(undef, nvals)
     temp = sig
     for i = 1:nvals
-        vᵢ = (temp::UnionAll).var
+        vᵢ, opened = unionall_open(temp::UnionAll)
         ty = sptype_for_tvar(vᵢ, vᵢ,
-                             (unwrap_unionall(temp)::DataType).parameters,
+                             (unwrap_unionall(opened)::DataType).parameters,
                              sig)
-        undef = !(let sig=sig
+        undef = !(let opened=opened
             @assert !has_free_typevars(sig)
-            vᵢ.lb === Bottom && constrains_param(vᵢ, sig, #=covariant=#true)
+            vᵢ.lb === Bottom && constrains_param(vᵢ, opened, #=covariant=#true)
         end)
         sptypes[i] = VarState(ty, typemin(Int), undef)
-        temp = (temp::UnionAll).body
+        temp = opened
     end
     return sptypes
 end
 
 function sp_at_idx(sig::UnionAll, idx::Int)
-    while idx != 1
-        sig = sig.body::UnionAll
+    local v
+    while true
+        v, body = unionall_open(sig)
+        idx == 1 && return v
+        sig = body::UnionAll
         idx -= 1
     end
-    return sig.var
 end
 
 function va_from_vatuple(@nospecialize(t))

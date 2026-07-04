@@ -716,7 +716,7 @@ function test_properties()
 
         # equality under renaming
         if isa(T, UnionAll)
-            lb, ub = T.var.lb, T.var.ub
+            lb, ub = T.lb, T.ub
             @test isequal_type(T, (@UnionAll lb<:Y<:ub T{Y}))
         end
 
@@ -1285,9 +1285,8 @@ end
 end
 
 
-let S = ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), UnionAll, [TypeVar(:T), Any], 2),
-    VS = TypeVar(:T),
-    T = ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), UnionAll, [VS, VS], 2)
+let S = ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), UnionAll, Any[:T, Union{}, Any, Any], 4),
+    T = ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), UnionAll, Any[:T, Union{}, Any, Core.TypeVarRef(1)], 4)
     # check (T where T) == (Any where T)
     # these types are not normally valid, but check them just to make sure subtyping is robust
     @test T <: S
@@ -2458,7 +2457,7 @@ let
     e1 = env_tuple(Tuple{TT1,Missing}, TT0)
     e2 = env_tuple(Tuple{TT1,Nothing}, TT0)
     e3 = env_tuple(Tuple{TT1,Int}, TT0)
-    @test equal_envs(e1, e2) && equal_envs(e2, e3) && equal_envs(e3, Core.svec(TT0.var))
+    @test equal_envs(e1, e2) && equal_envs(e2, e3) && equal_envs(e3, Core.svec(TypeVar(TT0.name, TT0.lb, TT0.ub)))
 
     TT0 = Tuple{T1,T2,Union{Real,Missing,Nothing}} where {T1,T2}
     TT1 = Tuple{T1,T2,Union{Real,Missing,Nothing}} where {T2,T1}
@@ -2733,7 +2732,7 @@ struct S48695{T, N, H<:AbstractArray{T, N}} <: AbstractArray{T, N} end
 let S = Tuple{Type{S48695{T, 2, T48695{B, 2, C}}} where {T<:(Union{Missing, A} where A), B, C}, T48695{T, 2} where T},
     T = Tuple{Type{S48695{T, N, H}}, H} where {T, N, H<:AbstractArray{T, N}}
     V = typeintersect(S, T)
-    vars_in_unionall(s) = s isa UnionAll ? (s.var, vars_in_unionall(s.body)...) : ()
+    vars_in_unionall(s) = s isa UnionAll ? (((v, b) = Base.unionall_open(s); (v, vars_in_unionall(b)...))) : ()
     @test V != Union{}
     @test allunique(vars_in_unionall(V))
     @test typeintersect(V, T) != Union{}
@@ -2807,7 +2806,8 @@ end
 #issue 53366
 let Y = Tuple{Val{T}, Val{Val{T}}} where T
     A = Val{Val{T}} where T
-    T = TypeVar(:T, UnionAll(A.var, Val{A.var}))
+    Avar, _ = Base.unionall_open(A)
+    T = TypeVar(:T, UnionAll(Avar, Val{Avar}))
     B = UnionAll(T, Val{T})
     X = Tuple{A, B}
     @testintersect(X, Y, !Union{})
@@ -3070,7 +3070,7 @@ end
 # Same issue but with the unused typevar in the middle — exercises the wrong-index
 # case where dropping the inner UnionAll would shift later typevars to the wrong slot.
 @test_warn "declares type variable pad but does not use it" @eval g61634(::Type{TW}, ::AbstractArray{T,N}) where {N, pad, TW<:Real, T} = T
-let sig = methods(g61634)[1].sig, N_var = sig.var
+let sig = methods(g61634)[1].sig, (N_var, _) = Base.unionall_open(sig)
     # Force a rename of `b`'s outer typevar by sharing its identity with `x`,
     # which is what causes `inst_type_w_` to rebuild the body and (without the
     # fix) drop the unused inner UnionAll for `pad`.

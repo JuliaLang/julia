@@ -51,8 +51,8 @@ function is_derived_type(@nospecialize(t), @nospecialize(c), mindepth::Int)
         return is_derived_type(t, c.a, mindepth) || is_derived_type(t, c.b, mindepth)
     elseif isa(c, UnionAll)
         # see if it is derived from the body
-        # also handle the var here, since this construct bounds the mindepth to the smallest possible value
-        return is_derived_type(t, c.var.ub, mindepth) || is_derived_type(t, c.body, mindepth)
+        # also handle the binder's bound here, since this construct bounds the mindepth to the smallest possible value
+        return is_derived_type(t, c.ub, mindepth) || is_derived_type(t, c.body, mindepth)
     elseif isType(c)
         return is_derived_type(t, type_parameter(c), mindepth)
     elseif isa(c, DataType)
@@ -86,6 +86,9 @@ end
 # The goal of this function is to return a type of greater "size" and less "complexity" than
 # both `t` or `c` over the lattice defined by `sources`, `depth`, and `allowed_tuplelen`.
 function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVector, depth::Int, allowed_tuplelen::Int)
+    # a bound-variable reference is a size-1 leaf (cf. the TypeVar handling)
+    isa(t, TypeVarRef) && return t
+    isa(c, TypeVarRef) && (c = Any)
     @assert isa(t, AnyType) && isa(c, AnyType) "unhandled TypeVar / Vararg"
     if t === c
         return t # quick egal test
@@ -110,7 +113,8 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
     if isa(t, UnionAll)
         tbody = __limit_type_size(t.body, c, sources, depth, allowed_tuplelen)
         tbody === t.body && return t
-        return UnionAll(t.var, tbody)::AnyType
+        # raw re-wrap: the transformed body keeps its bound-variable references
+        return UnionAll(t.name, t.lb, t.ub, tbody)::AnyType
     elseif isa(t, Union)
         if isa(c, Union)
             a = __limit_type_size(t.a, c.a, sources, depth, allowed_tuplelen)
@@ -227,7 +231,9 @@ end
 
 function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVector, depth::Int, tupledepth::Int, allowed_tuplelen::Int)
     # detect cases where the comparison is trivial
-    if t === c
+    if isa(t, TypeVarRef)
+        return false # a bound-variable reference is a size-1 leaf
+    elseif t === c
         return false
     elseif t === Union{}
         return false # Bottom is as simple as they come

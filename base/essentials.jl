@@ -551,10 +551,7 @@ end
 
 function rewrap_unionall(@nospecialize(t), @nospecialize(u))
     @_foldable_meta
-    if !isa(u, UnionAll)
-        return t
-    end
-    return UnionAll(u.var, rewrap_unionall(t, u.body))
+    return ccall(:jl_rewrap_unionall, Any, (Any, Any), t, u)
 end
 
 function rewrap_unionall(t::Core.TypeofVararg, @nospecialize(u))
@@ -564,21 +561,36 @@ function rewrap_unionall(t::Core.TypeofVararg, @nospecialize(u))
         return t
     end
     T = rewrap_unionall(t.T, u)
-    if !isdefined(t, :N) || t.N === u.var
+    if !isdefined(t, :N) || (t.N isa TypeVarRef && (t.N::TypeVarRef).depth == unionall_depth(u))
+        # the length was bound by the outermost enclosing binder
         return Vararg{T}
     end
     return Vararg{T, t.N}
 end
 
-# replace TypeVars in all enclosing UnionAlls with fresh TypeVars
-function rename_unionall(@nospecialize(u))
-    if !isa(u, UnionAll)
-        return u
+# number of binders in a `where` chain
+function unionall_depth(@nospecialize(u))
+    @_foldable_meta
+    n = 0
+    while u isa UnionAll
+        n += 1
+        u = u.body
     end
-    var = u.var::TypeVar
-    body = UnionAll(var, rename_unionall(u.body))
-    nv = TypeVar(var.name, var.lb, var.ub)
-    return UnionAll(nv, body{nv})
+    return n
+end
+
+# under the de Bruijn representation alpha-equivalent types are already
+# structurally identical, so there are no variable identities to freshen
+rename_unionall(@nospecialize(u)) = u
+
+# Open a `where` binder: make a fresh (free) TypeVar carrying the binder's name
+# and bounds and substitute it for the binder's bound-variable references.
+# Returns `(var, body)`. Opening nested binders outside-in keeps every
+# extracted subterm free of dangling references.
+function unionall_open(u::UnionAll)
+    v = ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), u.name, u.lb, u.ub)
+    body = ccall(:jl_instantiate_unionall, Any, (Any, Any), u, v)
+    return v, body
 end
 
 # remove concrete constraint on diagonal TypeVar if it comes from troot
@@ -1265,8 +1277,11 @@ has_typevar(@nospecialize(t), v::TypeVar) = ccall(:jl_has_typevar, Int32, (Any, 
 # Called by lowered code from struct definitions (both flisp and JuliaLowering).
 # Uses jl_method_def directly with type objects, avoiding type-to-expression conversion.
 
+# whether a de Bruijn reference with root-index `i` occurs in `t`
+has_typevarref(@nospecialize(t), i::Int) = ccall(:jl_tvarref_occurs, Int32, (Any, Int), t, i) !== Int32(0)
+
 function _defaultctors(@nospecialize(ty), functionloc)
-    # Walk the UnionAll chain to collect type variables and get the DataType
+    # Walk the UnionAll chain to materialize the binders and get the DataType
     nparams = 0
     ua = ty
     while isa(ua, UnionAll)
@@ -1274,12 +1289,15 @@ function _defaultctors(@nospecialize(ty), functionloc)
         ua = ua.body
     end
     dt = ua::DataType
+    # n.b. the materialized TypeVars carry the raw (de Bruijn) bounds; they only
+    # provide names and bounds for re-wrapping the constructor signatures below
     tvars = Array{Any,1}(Core.undef, nparams)
     ua = ty
     i = 1
     while i !== nparams + 1
-        @inbounds tvars[i] = (ua::UnionAll).var
-        ua = (ua::UnionAll).body
+        u = ua::UnionAll
+        @inbounds tvars[i] = ccall(:jl_new_typevar, Any, (Any, Any, Any), u.name, u.lb, u.ub)
+        ua = u.body
         i = i + 1
     end
 
@@ -1312,12 +1330,13 @@ function _defaultctors(@nospecialize(ty), functionloc)
     constrains_all = true
     i = nparams
     while i !== 0
-        @inbounds tv = tvars[i]::TypeVar
+        # binder i (outermost-first) is referenced from field types (which sit
+        # inside all nparams binders) with index nparams - i + 1
         constrained = false
         j = 1
         while j !== n + 1
             ft = fts[j]
-            if has_typevar(ft, tv)
+            if has_typevarref(ft, (nparams - i) + 1)
                 constrained = true
                 break
             end
@@ -1327,13 +1346,11 @@ function _defaultctors(@nospecialize(ty), functionloc)
             j = i + 1
             remaining = nparams - i
             while remaining !== 0
+                # binder j's bound sits inside binders 1..j-1, so it references
+                # binder i with index j - i
                 @inbounds tv2 = tvars[j]::TypeVar
-                if has_typevar(tv2.ub, tv)
+                if has_typevarref(tv2.ub, j - i)
                     constrained = true
-                    break
-                end
-                if tv2 === tv
-                    constrained = false
                     break
                 end
                 j = j + 1
@@ -1450,7 +1467,9 @@ function _defaultctors(@nospecialize(ty), functionloc)
     typedt = Core.apply_type(Type, dt)
     i = nparams
     while i !== 0
-        @inbounds typedt = UnionAll(tvars[i], typedt)
+        # raw re-wrap: Type{dt} references the binders positionally already
+        @inbounds tv = tvars[i]::TypeVar
+        typedt = UnionAll(tv.name, tv.lb, tv.ub, typedt)
         i = i - 1
     end
     @inbounds inner_atypes_arr[1] = typedt

@@ -356,7 +356,7 @@ function new_expr_effect_flags(𝕃ₒ::AbstractLattice, args::Vector{Any}, src:
         farg = args[fidx + 1]
         eT = argextype(farg, src)
         fT = fieldtype(typ, fidx)
-        if !isexact && has_free_typevars(fT)
+        if has_free_typevars(fT) || has_dangling_typevar_refs(fT)
             if pattern_match !== nothing && pattern_match(src, typ, fidx, Targ, farg)
                 continue
             end

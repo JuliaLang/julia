@@ -2972,7 +2972,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
     elseif isa(f, Core.OpaqueClosure)
         # calling an OpaqueClosure about which we have no information returns no information
         return Future(CallMeta(typeof(f).parameters[2], Any, Effects(), NoCallInfo()))
-    elseif f === UnionAll
+    elseif f === UnionAll && la == 3
         let call = abstract_call_gf_by_type(interp, f, ArgInfo(nothing, Any[Const(UnionAll), Any, Any]), si, Tuple{Type{UnionAll}, Any, Any}, vtypes, sv, max_methods)::Future
             return Future{CallMeta}(call, interp, sv) do call, interp, sv
                 return abstract_call_unionall(interp, argtypes, call)

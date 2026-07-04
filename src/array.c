@@ -80,6 +80,14 @@ STATIC_INLINE jl_array_t *new_array(jl_value_t *atype, uint32_t ndims, size_t *d
     if (*(size_t*)jl_tparam1(atype) != ndims)
         jl_exceptionf(jl_argumenterror_type, "invalid Array dimensions");
     jl_value_t *mtype = jl_field_type_concrete((jl_datatype_t*)jl_field_type_concrete((jl_datatype_t*)atype, 0), 1);
+    if (!((jl_datatype_t*)mtype)->isconcretetype) {
+        jl_safe_printf("DEBUG new_array atype=");
+        jl_(atype);
+        jl_safe_printf("DEBUG field0=");
+        jl_(jl_field_type_concrete((jl_datatype_t*)atype, 0));
+        jl_safe_printf("DEBUG mtype=");
+        jl_(mtype);
+    }
     // extra byte for all julia allocated byte vectors
     jl_genericmemory_t *mem = jl_alloc_genericmemory(mtype, nel);
     JL_GC_PUSH1(&mem);

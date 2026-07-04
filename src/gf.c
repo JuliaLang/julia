@@ -1129,7 +1129,7 @@ static jl_value_t *inst_varargp_in_env(jl_value_t *decl, jl_svec_t *sparams) JL_
     jl_value_t *vm = jl_tparam(unw, jl_nparams(unw) - 1);
     assert(jl_is_vararg(vm));
     int nsp = jl_svec_len(sparams);
-    if (nsp > 0 && jl_has_free_typevars(vm)) {
+    if (nsp > 0 && (jl_has_free_typevars(vm) || jl_has_dangling_tvarrefs(vm))) {
         jl_value_t *Nroot = NULL;
         JL_GC_PUSH2(&vm, &Nroot);
         assert(jl_subtype_env_size(decl) == nsp);
@@ -1167,6 +1167,14 @@ static jl_value_t *inst_varargp_in_env(jl_value_t *decl, jl_svec_t *sparams) JL_
     return vm;
 }
 
+// does this declared (method-signature) slot depend on the method's typevars?
+// Under the de Bruijn representation such slots carry dangling TypeVarRefs
+// rather than free TypeVars.
+static int slot_has_bound_vars(jl_value_t *decl_i) JL_NOTSAFEPOINT
+{
+    return jl_has_free_typevars(decl_i) || jl_has_dangling_tvarrefs(decl_i);
+}
+
 static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
                               jl_tupletype_t *type, int lim, int include_ambiguous,
                               int intersections, size_t world, int cache_result_recursion,
@@ -1184,7 +1192,7 @@ static void egal_normalize_slot(jl_tupletype_t *tt, size_t i, jl_value_t *decl_i
 {
     jl_value_t *elt = jl_tparam(tt, i);
     if (jl_is_typeegal(elt) && !jl_has_free_typevars(elt) &&
-        jl_is_typeeq(decl_i) && !jl_has_free_typevars(decl_i)) {
+        jl_is_typeeq(decl_i) && !slot_has_bound_vars(decl_i)) {
         if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
         jl_svecset(*newparams, i, jl_wrap_Type(jl_some_Type_T(elt)));
     }
@@ -1275,7 +1283,7 @@ static void jl_compilation_sig(
             // and the result of matching the type signature
             // needs to be restricted to the concrete type 'kind'
             jl_value_t *kind = jl_typeof(jl_some_Type_T(elt));
-            if (!jl_has_free_typevars(decl_i) &&
+            if (!slot_has_bound_vars(decl_i) &&
                     jl_subtype(kind, type_i) && !jl_subtype((jl_value_t*)jl_type_type, type_i)) {
                 // if we can prove the match was against the kind (not a Type)
                 // it's simpler (and thus better) to put that cache instead
@@ -1307,7 +1315,7 @@ static void jl_compilation_sig(
 
         if (i_arg > 0 && i_arg <= sizeof(definition->nospecialize) * 8 &&
                 (definition->nospecialize & (1 << (i_arg - 1)))) {
-            if (!jl_has_free_typevars(decl_i) && !jl_is_kind(decl_i)) {
+            if (!slot_has_bound_vars(decl_i) && !jl_is_kind(decl_i)) {
                 if (decl_i != elt) {
                     if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
                     // n.b. it is possible here that !(elt <: decl_i), if elt was something unusual from intersection
@@ -1329,7 +1337,7 @@ static void jl_compilation_sig(
             jl_svecset(*newparams, i, jl_type_type);
         }
         else if (jl_is_some_Type(elt)) { // elt isa Type{T} / TypeEgal{T}
-            if (!jl_has_free_typevars(decl_i) && very_general_type(type_i)) {
+            if (!slot_has_bound_vars(decl_i) && very_general_type(type_i)) {
                 /*
                   Here's a fairly simple heuristic: if this argument slot's
                   declared type is general (Type or Any),
@@ -1357,7 +1365,7 @@ static void jl_compilation_sig(
             }
             else if (jl_is_some_Type(jl_some_Type_T(elt)) &&
                      // try to give up on specializing type parameters for Type{Type{Type{...}}}
-                     (jl_is_some_Type(jl_some_Type_T(jl_some_Type_T(elt))) || !jl_has_free_typevars(decl_i))) {
+                     (jl_is_some_Type(jl_some_Type_T(jl_some_Type_T(elt))) || !slot_has_bound_vars(decl_i))) {
                 /*
                   actual argument was Type{...}, we computed its type as
                   Type{Type{...}}. we like to avoid unbounded nesting here, so
@@ -1383,7 +1391,7 @@ static void jl_compilation_sig(
         }
 
         int notcalled_func = (i_arg > 0 && i_arg <= 8 && !(definition->called & (1 << (i_arg - 1))) &&
-                              !jl_has_free_typevars(decl_i) &&
+                              !slot_has_bound_vars(decl_i) &&
                               jl_subtype(elt, (jl_value_t*)jl_function_type));
         if (notcalled_func && (jl_subtype((jl_value_t*)jl_function_type, type_i))) {
             // and attempt to despecialize types marked as a supertype of Function (i.e.
@@ -1525,7 +1533,7 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
 
         if (i_arg > 0 && i_arg <= sizeof(definition->nospecialize) * 8 &&
                 (definition->nospecialize & (1 << (i_arg - 1)))) {
-            if (!jl_has_free_typevars(decl_i) && !jl_is_kind(decl_i)) {
+            if (!slot_has_bound_vars(decl_i) && !jl_is_kind(decl_i)) {
                 if (jl_egal(elt, decl_i))
                     continue;
                 JL_GC_POP();
@@ -1541,7 +1549,7 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
         // its `Type`, so the equality spelling is exact (and `TypeEgal{Union{}}`
         // cannot be spelled; it normalizes to `typeof(Union{})`).
         if (!jl_is_vararg(jl_tparam(type, i)) && !jl_has_free_typevars(elt)) {
-            int decl_concrete = jl_is_typeeq(decl_i) && !jl_has_free_typevars(decl_i);
+            int decl_concrete = jl_is_typeeq(decl_i) && !slot_has_bound_vars(decl_i);
             if ((jl_is_typeeq(elt) && !decl_concrete && jl_typeeq_T(elt) != jl_bottom_type) ||
                 (jl_is_typeegal(elt) && decl_concrete)) {
                 JL_GC_POP();
@@ -1573,7 +1581,7 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
         // jl_type_type)` path; an `AnyType` elt must not reach `jl_some_Type_T` below
         if (jl_is_some_Type(jl_unwrap_unionall(elt)) || elt == (jl_value_t*)jl_anytype_type) {
             int iscalled = (i_arg > 0 && i_arg <= 8 && (definition->called & (1 << (i_arg - 1)))) ||
-                           jl_has_free_typevars(decl_i);
+                           slot_has_bound_vars(decl_i);
             if (jl_types_equal(elt, (jl_value_t*)jl_type_type)) {
                 if (!iscalled && very_general_type(type_i))
                     continue;
@@ -1600,7 +1608,7 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
                 JL_GC_POP();
                 return 0; // Type{Union{}} gets normalized to typeof(Union{})
             }
-            if (!jl_has_free_typevars(decl_i) &&
+            if (!slot_has_bound_vars(decl_i) &&
                     jl_subtype(kind, type_i) && !jl_subtype((jl_value_t*)jl_type_type, type_i)) {
                 JL_GC_POP();
                 return 0; // gets turned into a kind
@@ -1608,7 +1616,7 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
 
             else if (jl_is_some_Type(jl_some_Type_T(elt)) &&
                      // give up on specializing static parameters for Type{Type{Type{...}}}
-                     (jl_is_some_Type(jl_some_Type_T(jl_some_Type_T(elt))) || !jl_has_free_typevars(decl_i))) {
+                     (jl_is_some_Type(jl_some_Type_T(jl_some_Type_T(elt))) || !slot_has_bound_vars(decl_i))) {
                 /*
                   actual argument was Type{...}, we computed its type as
                   Type{Type{...}}. we must avoid unbounded nesting here, so
@@ -1638,7 +1646,7 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
         }
 
         int notcalled_func = (i_arg > 0 && i_arg <= 8 && !(definition->called & (1 << (i_arg - 1))) &&
-                              !jl_has_free_typevars(decl_i) &&
+                              !slot_has_bound_vars(decl_i) &&
                               jl_subtype(elt, (jl_value_t*)jl_function_type));
         if (notcalled_func && jl_subtype((jl_value_t*)jl_function_type, type_i)) {
             // and attempt to despecialize types marked as a supertype of Function (i.e.

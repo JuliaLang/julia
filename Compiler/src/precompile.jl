@@ -47,7 +47,7 @@ function compile_all_tvar_union(methsig)
             return false
         end
         idx[i] = 1
-        var = sigbody.var
+        var, sigbody = unionall_open(sigbody)
         env[2*i - 1] = var
 
         # Get upper bound
@@ -61,7 +61,6 @@ function compile_all_tvar_union(methsig)
         end
 
         env[2*i] = tv
-        sigbody = sigbody.body
     end
 
     all_success = true

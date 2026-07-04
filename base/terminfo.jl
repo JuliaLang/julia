@@ -320,7 +320,6 @@ else
         haskey(current_terminfo(), :setaf)
     end
 end
-
 """
     ttyhastruecolor()
 

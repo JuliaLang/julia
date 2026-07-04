@@ -1123,8 +1123,7 @@ end
     # TODO: More general structural analysis of the intersection
     sig = m.sig
     isa(sig, UnionAll) || return nothing
-    tvar = sig.var
-    sig = sig.body
+    tvar, sig = unionall_open(sig)
     isa(sig, DataType) || return nothing
     sig.name === Tuple.name || return nothing
     sig_parameters = sig.parameters::SimpleVector
@@ -1163,8 +1162,7 @@ end
     isa(applyT, UnionAll) || return nothing
     # N.B.: At the moment we only lift the valI == 1 case, so we
     # only need to look at the outermost tvar.
-    applyTvar = applyT.var
-    applyTbody = applyT.body
+    applyTvar, applyTbody = unionall_open(applyT)
 
     arg = unwrap_unionall(arg)
     applyTbody = unwrap_unionall(applyTbody)
@@ -1206,8 +1204,7 @@ function pattern_match_typeof(compact::IncrementalCompact, typ::DataType, fidx::
     applyT = applyT.val
     tvars = Any[]
     while isa(applyT, UnionAll)
-        applyTvar = applyT.var
-        applyT = applyT.body
+        applyTvar, applyT = unionall_open(applyT)
         push!(tvars, applyTvar)
     end
 

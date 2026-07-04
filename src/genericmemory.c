@@ -85,8 +85,13 @@ JL_DLLEXPORT jl_genericmemory_t *jl_alloc_genericmemory(jl_value_t *mtype, size_
         jl_value_t *addrspace = jl_tparam2((jl_datatype_t*)mtype);
         if (!jl_is_addrspacecore(addrspace) || jl_unbox_uint8(addrspace) != 0)
             jl_error("GenericMemory addrspace must be Core.CPU");
-        if (!((jl_datatype_t*)mtype)->has_concrete_subtype || layout == NULL)
+        if (!((jl_datatype_t*)mtype)->has_concrete_subtype || layout == NULL) {
+            jl_safe_printf("DEBUG jl_alloc_genericmemory: hcs=%d layout=%p concrete=%d mtype=",
+                           (int)((jl_datatype_t*)mtype)->has_concrete_subtype, (void*)layout,
+                           (int)((jl_datatype_t*)mtype)->isconcretetype);
+            jl_(mtype);
             jl_type_error_rt("GenericMemory", "element type", (jl_value_t*)jl_type_type, jl_tparam1(mtype));
+        }
         abort(); // this is checked already by jl_get_genericmemory_layout
     }
     assert(((jl_datatype_t*)mtype)->has_concrete_subtype && layout != NULL);

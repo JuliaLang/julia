@@ -433,7 +433,8 @@ fill_to_length(t::Tuple{}, val, ::Val{2}) = (val, val)
 function tuple_type_tail(T::Type)
     @_foldable_meta # TODO: this method is wrong (and not :foldable)
     if isa(T, UnionAll)
-        return UnionAll(T.var, tuple_type_tail(T.body))
+        v, body = unionall_open(T)
+        return UnionAll(v, tuple_type_tail(body))
     elseif isa(T, Union)
         return Union{tuple_type_tail(T.a), tuple_type_tail(T.b)}
     else

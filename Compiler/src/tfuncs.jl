@@ -109,8 +109,6 @@ function instanceof_tfunc(@nospecialize(t), astag::Bool=false, @nospecialize(tro
     troot = widenconst(troot)
     if t === Bottom
         return Bottom, true, true, false # runtime unreachable
-    elseif t === typeof(Bottom) || !hasintersect(t, Type)
-        return Bottom, true, false, false # literal Bottom or non-Type
     elseif isTypeEgal(t)
         # the value is exactly (`===`) the closed type `tp`
         tp = type_parameter(t)
@@ -119,12 +117,18 @@ function instanceof_tfunc(@nospecialize(t), astag::Bool=false, @nospecialize(tro
     elseif isTypeEq(t)
         tp = type_parameter(t)
         valid_as_lattice(tp, astag) || return Bottom, true, false, false # runtime unreachable / throws on non-Type
-        if troot isa UnionAll
+        if troot isa UnionAll && !isa(tp, TypeVarRef)
             # Free `TypeVar`s inside `Type` has violated the "diagonal" rule.
             # Widen them before `UnionAll` rewraping to relax concrete constraint.
+            # (A bare bound-variable reference has no diagonal constraint here.)
             tp = widen_diagonal(tp, troot)
         end
-        return tp, !has_free_typevars(tp), isconcretetype(tp), true
+        # a dangling de Bruijn reference stands for the enclosing binder's
+        # variable: like a free TypeVar it makes the result inexact
+        exact = !has_free_typevars(tp) && !has_dangling_typevar_refs(tp)
+        return tp, exact, isconcretetype(tp), true
+    elseif t === typeof(Bottom) || !hasintersect(t, Type)
+        return Bottom, true, false, false # literal Bottom or non-Type
     elseif isa(t, UnionAll)
         t′ = unwrap_unionall(t)
         t′′, isexact, isconcrete, istype = instanceof_tfunc(t′, astag, rewrap_unionall(t, troot))
@@ -1136,6 +1140,20 @@ end
     _getfield_tfunc(𝕃, s00, name, false)
 end
 
+# A constant that carries dangling de Bruijn references (e.g. a `UnionAll`
+# body, or a template field-types entry) poisons downstream `isa`/`<:` folds;
+# fall back to widened inference for such values.
+function _const_or_widen(@nospecialize r)
+    if isa(r, Core.SimpleVector)
+        for x in r
+            (isa(x, Type) || isa(x, TypeVarRef)) && has_dangling_typevar_refs(x) && return nothing
+        end
+    elseif (isa(r, Type) || isa(r, TypeVarRef)) && has_dangling_typevar_refs(r)
+        return nothing
+    end
+    return Const(r)
+end
+
 function _getfield_fieldindex(s::DataType, name::Const)
     nv = name.val
     if isa(nv, Symbol)
@@ -1151,11 +1169,11 @@ function _getfield_tfunc_const(@nospecialize(sv), name::Const)
     nv = _getfield_fieldindex(typeof(sv), name)
     nv === nothing && return Bottom
     if isa(sv, DataType) && nv == DATATYPE_TYPES_FIELDINDEX && isdefined(sv, nv)
-        return Const(getfield(sv, nv))
+        return _const_or_widen(getfield(sv, nv))
     end
     if !isa(sv, Module) && isconst(typeof(sv), nv)
         if isdefined(sv, nv)
-            return Const(getfield(sv, nv))
+            return _const_or_widen(getfield(sv, nv))
         end
         return Bottom
     end
@@ -1308,7 +1326,13 @@ end
                 _ft = unwrapva(ftypes[i])
                 valid_as_lattice(_ft, true) || continue
                 setfield && isconst(s, i) && continue
-                t = tmerge(t, rewrap_unionall(_ft, s00))
+                rft = rewrap_unionall(_ft, s00)
+                if isa(rft, TypeVarRef) || has_dangling_typevar_refs(rft)
+                    # unresolvable bound-variable reference: unknown field type
+                    t = Any
+                else
+                    t = tmerge(t, rft)
+                end
                 t === Any && break
             end
             return t
@@ -1645,7 +1669,8 @@ end
         exact && return Bottom
         # Type{...} without free typevars has no subtypes, so it is actually
         # exact, even if `exact` is false.
-        isType(u) && !has_free_typevars(type_parameter(u)) && return Bottom
+        isType(u) && !has_free_typevars(type_parameter(u)) &&
+            !has_dangling_typevar_refs(type_parameter(u)) && return Bottom
         return Any
     end
     if u.name === _NAMEDTUPLE_NAME && !isconcretetype(u)
@@ -1666,7 +1691,7 @@ end
         for i in 1:length(ftypes)
             fti = ftypes[i]
             ft1 = unwrapva(fti)
-            if !(isa(ft1, Type) || isa(ft1, TypeVar))
+            if !(isa(ft1, Type) || isa(ft1, TypeVar) || isa(ft1, TypeVarRef))
                 if !isvarargtype(fti) && u.name === Tuple.name
                     # A genuine tuple field may be a value parameter (e.g.
                     # `Tuple{1:2}`); `fieldtype` returns that value rather than
@@ -1682,7 +1707,8 @@ end
                 # components (e.g., `3`); `fieldtype` would throw at runtime.
                 continue
             end
-            exactft1 = exact || (!has_free_typevars(ft1) && u.name !== Tuple.name)
+            exactft1 = exact || (!has_free_typevars(ft1) && !has_dangling_typevar_refs(ft1) &&
+                                 u.name !== Tuple.name)
             ft1 = rewrap_unionall(ft1, s)
             if exactft1
                 # `fieldtype` returns exactly (`===`) the stored type, but only
@@ -1718,18 +1744,19 @@ end
         return Bottom
     else
         ft = ftypes[fld]
-        if !(isa(ft, Type) || isa(ft, TypeVar)) && u.name === Tuple.name
+        if !(isa(ft, Type) || isa(ft, TypeVar) || isa(ft, TypeVarRef)) && u.name === Tuple.name
             # a value parameter in a genuine tuple field (see the loop above):
             # non-type parameters are compared by egality, so this is `Const`
             # even for an `==`-only argument
             return Const(ft)
         end
     end
-    if !(isa(ft, Type) || isa(ft, TypeVar))
+    if !(isa(ft, Type) || isa(ft, TypeVar) || isa(ft, TypeVarRef))
         return Bottom # see non-`Const` case above
     end
 
-    exactft = exact || (!has_free_typevars(ft) && u.name !== Tuple.name)
+    exactft = exact || (!has_free_typevars(ft) && !has_dangling_typevar_refs(ft) &&
+                        u.name !== Tuple.name)
     ft = rewrap_unionall(ft, s)
     if exactft
         # only an egality-certain argument pins the stored rep (see above)
@@ -1838,25 +1865,27 @@ function apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospe
     # TODO: implement optimization for isvarargtype(u) and istuple occurrences (which are valid but are not UnionAll)
     for i = 2:length(argtypes)
         isa(u, UnionAll) || return false
+        # open the binder so its bounds are resolved against the outer binders
+        uvar, ubody = unionall_open(u)
         ai = widenconditional(argtypes[i])
         if ⊑(𝕃, ai, TypeVar) || ai === DataType
             # We don't know anything about the bounds of this typevar, but as
             # long as the UnionAll is not constrained, that's ok.
-            if !(u.var.lb === Union{} && u.var.ub === Any)
+            if !(uvar.lb === Union{} && uvar.ub === Any)
                 return false
             end
         elseif (isa(ai, Const) && isa(ai.val, Type)) || isconstType(ai)
             ai = isa(ai, Const) ? ai.val : type_parameter(ai)
-            if has_free_typevars(u.var.lb) || has_free_typevars(u.var.ub)
+            if has_free_typevars(uvar.lb) || has_free_typevars(uvar.ub)
                 return false
             end
-            if !(u.var.lb <: ai <: u.var.ub)
+            if !(uvar.lb <: ai <: uvar.ub)
                 return false
             end
         else
             T, exact, _, istype = instanceof_tfunc(ai, false)
             if T === Bottom
-                if !(u.var.lb === Union{} && u.var.ub === Any)
+                if !(uvar.lb === Union{} && uvar.ub === Any)
                     return false
                 end
                 if !valid_tparam_type(widenconst(ai))
@@ -1864,22 +1893,22 @@ function apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospe
                 end
             else
                 istype || return false
-                if isa(u.var.ub, TypeVar)
+                if isa(uvar.ub, TypeVar)
                     return false
                 end
                 Tub = T
                 while isa(Tub, TypeVar)
                     Tub = Tub.ub
                 end
-                if !(Tub <: u.var.ub)
+                if !(Tub <: uvar.ub)
                     return false
                 end
-                if exact ? !(u.var.lb <: T) : !(u.var.lb === Bottom)
+                if exact ? !(uvar.lb <: T) : !(uvar.lb === Bottom)
                     return false
                 end
             end
         end
-        u = u.body
+        u = ubody
     end
     return true
 end
@@ -2023,12 +2052,22 @@ end
     outervars = TypeVar[]
 
     # first push the tailing vars from headtype into outervars
+    nbinders = 0
+    let ua = headtype
+        while isa(ua, UnionAll)
+            nbinders += 1
+            ua = ua.body
+        end
+    end
     outer_start, ua = 0, headtype
     while isa(ua, UnionAll)
         if (outer_start += 1) > largs - 1
-            push!(outervars, ua.var)
+            v_, body_ = unionall_open(ua)
+            push!(outervars, v_)
+            ua = body_
+        else
+            ua = ua.body
         end
-        ua = ua.body
     end
     if largs - 1 > outer_start && isa(headtype, UnionAll) # e.g. !isvarargtype(ua) && !istuple
         return Bottom # too many arguments
@@ -2103,25 +2142,18 @@ end
                 end
                 push!(tparams, ub)
             elseif isT
-                tai = ai
-                while isa(tai, UnionAll)
-                    # make sure vars introduced here are unique
-                    if contains_is(outervars, tai.var)
-                        ai = rename_unionall(ai)
-                        unw = unwrap_unionall(ai)
-                        # ub = rewrap_unionall(unw, ai)
-                        break
-                    end
-                    tai = tai.body
-                end
-                push!(tparams, type_parameter(unw))
+                # open the argument's binders: the fresh free TypeVars are
+                # unique by construction and can be re-bound around the result
                 while isa(ai, UnionAll)
-                    push!(outervars, ai.var)
-                    ai = ai.body
+                    v_, ai = unionall_open(ai)
+                    push!(outervars, v_)
                 end
+                unw = ai
+                push!(tparams, type_parameter(unw))
             else
                 # Is this the second parameter to a NamedTuple?
-                if isa(uw, DataType) && uw.name === _NAMEDTUPLE_NAME && isa(ua, UnionAll) && uw.parameters[2] === ua.var
+                if isa(uw, DataType) && uw.name === _NAMEDTUPLE_NAME && isa(ua, UnionAll) &&
+                   uw.parameters[2] isa TypeVarRef && (uw.parameters[2]::TypeVarRef).depth == nbinders - i + 2
                     # If the names are known, keep the upper bound, but otherwise widen to Tuple.
                     # This is a widening heuristic to avoid keeping type information
                     # that's unlikely to be useful.
@@ -2169,8 +2201,8 @@ end
         if isa(appl, UnionAll)
             for _ = 2:largs
                 appl = appl::UnionAll
-                push!(outervars, appl.var)
-                appl = appl.body
+                v_, appl = unionall_open(appl)
+                push!(outervars, v_)
             end
         end
     end
@@ -2344,7 +2376,7 @@ add_tfunc(memoryref_isassigned, 3, 3, memoryref_isassigned_tfunc, 20)
             A = unw.parameters[1]
             T = unw.parameters[2]
             AS = unw.parameters[3]
-            T isa Type || T isa TypeVar || return Bottom
+            T isa Type || T isa TypeVar || T isa TypeVarRef || return Bottom
             return rewrap_unionall(GenericMemoryRef{A, T, AS}, a)
         end
     end
@@ -2380,14 +2412,11 @@ end
 @nospecs function memoryref_elemtype(mem)
     m = widenconst(mem)
     if !has_free_typevars(m) && m <: GenericMemoryRef
-        m0 = m
-        if isa(m, UnionAll)
-            m = unwrap_unionall(m0)
-        end
+        m, vars = unionall_open_all(m)
         if isa(m, DataType)
             T = m.parameters[2]
             valid_as_lattice(T, true) || return Bottom
-            return rewrap_unionall(T, m0)
+            return rebind_opened(T, vars)
         end
     end
     return Any
@@ -2396,15 +2425,12 @@ end
 @nospecs function _memoryref_elemtype(mem)
     m = widenconst(mem)
     if !has_free_typevars(m) && m <: GenericMemoryRef
-        m0 = m
-        if isa(m, UnionAll)
-            m = unwrap_unionall(m0)
-        end
+        m, vars = unionall_open_all(m)
         if isa(m, DataType)
             T = m.parameters[2]
             valid_as_lattice(T, true) || return Bottom
             has_free_typevars(T) || return Const(T)
-            return rewrap_unionall(Type{T}, m0)
+            return rebind_opened(Type{T}, vars)
         end
     end
     return Type

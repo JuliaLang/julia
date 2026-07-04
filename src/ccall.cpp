@@ -1365,32 +1365,31 @@ static bool verify_ref_type(jl_codectx_t &ctx, jl_value_t* ref, jl_unionall_t *u
         emit_error(ctx, make_errmsg(fname, n, rt_err_msg_notany));
         return false;
     }
-    else if (jl_is_typevar(ref)) {
+    else if (jl_is_typevar(ref) || jl_is_tvarref(ref)) {
         bool always_error = true;
-        if (unionall_env) {
-            int i;
-            jl_unionall_t *ua = unionall_env;
-            for (i = 0; jl_is_unionall(ua); i++) {
-                if (ua->var == (jl_tvar_t*)ref) {
-                    jl_cgval_t runtime_sp = emit_sparam(ctx, i);
-                    if (n > 0) {
-                        always_error = false;
-                    }
-                    else if (runtime_sp.constant) {
-                        if (runtime_sp.constant != (jl_value_t*)jl_any_type)
-                            always_error = false;
-                    }
-                    else {
-                        Value *notany = ctx.builder.CreateICmpNE(
-                                boxed(ctx, runtime_sp),
-                                track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)jl_any_type)));
-                        setName(ctx.emission_context, notany, "any_type.not");
-                        error_unless(ctx, notany, make_errmsg(fname, n, rt_err_msg_notany));
-                        always_error = false;
-                    }
-                    break;
+        if (unionall_env && jl_is_tvarref(ref)) {
+            // `ref` was extracted from directly under the signature's binder
+            // chain, so its de Bruijn index maps to a static parameter slot
+            size_t nb = jl_subtype_env_size((jl_value_t*)unionall_env);
+            size_t depth = jl_tvarref_depth(ref);
+            if (depth >= 1 && depth <= nb) {
+                int i = (int)(nb - depth);
+                jl_cgval_t runtime_sp = emit_sparam(ctx, i);
+                if (n > 0) {
+                    always_error = false;
                 }
-                ua = (jl_unionall_t*)ua->body;
+                else if (runtime_sp.constant) {
+                    if (runtime_sp.constant != (jl_value_t*)jl_any_type)
+                        always_error = false;
+                }
+                else {
+                    Value *notany = ctx.builder.CreateICmpNE(
+                            boxed(ctx, runtime_sp),
+                            track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)jl_any_type)));
+                    setName(ctx.emission_context, notany, "any_type.not");
+                    error_unless(ctx, notany, make_errmsg(fname, n, rt_err_msg_notany));
+                    always_error = false;
+                }
             }
         }
         if (always_error) {

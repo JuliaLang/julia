@@ -346,17 +346,25 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
             if (!s->preevaluation) {
                 // look up the parameter name from the method's signature
                 jl_unionall_t *sig = (jl_unionall_t*)s->mi->def.method->sig;
-                jl_tvar_t *var = NULL;
+                jl_sym_t *name = NULL;
                 for (ssize_t i = n; i > 0; i--) {
                     if (jl_is_unionall(sig)) {
-                        var = sig->var;
+                        name = sig->name;
                         sig = (jl_unionall_t*)sig->body;
                     }
                     else {
                         jl_error("malformed method signature");
                     }
                 }
-                jl_undefined_var_error(var->name, (jl_value_t*)jl_static_parameter_sym);
+                {
+                    jl_safe_printf("DEBUG undef sparam %d val=", (int)n);
+                    jl_(sp);
+                    jl_safe_printf("DEBUG mi=");
+                    jl_(s->mi->specTypes);
+                    jl_safe_printf("DEBUG sig=");
+                    jl_((jl_value_t*)s->mi->def.method->sig);
+                }
+                jl_undefined_var_error(name, (jl_value_t*)jl_static_parameter_sym);
             }
             return sp;
         }

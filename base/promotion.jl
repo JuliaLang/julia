@@ -51,9 +51,11 @@ function typejoin(@nospecialize(a), @nospecialize(b))
     elseif b <: a
         return a
     elseif isa(a, UnionAll)
-        return UnionAll(a.var, typejoin(a.body, b))
+        va, abody = unionall_open(a)
+        return UnionAll(va, typejoin(abody, b))
     elseif isa(b, UnionAll)
-        return UnionAll(b.var, typejoin(a, b.body))
+        vb, bbody = unionall_open(b)
+        return UnionAll(vb, typejoin(a, bbody))
     elseif isa(a, Union)
         return typejoin(typejoin(a.a, a.b), b)
     elseif isa(b, Union)
@@ -143,10 +145,11 @@ function typejoin(@nospecialize(a), @nospecialize(b))
                     aprimary = aprimary{ai}
                 else
                     aprimary = aprimary::UnionAll
-                    # pushfirst!(vars, aprimary.var)
+                    # substitute a fresh TypeVar for the body and record it for rewrapping
+                    v, aprimary = unionall_open(aprimary)
+                    # pushfirst!(vars, v)
                     _growbeg!(vars, 1)
-                    vars[1] = aprimary.var
-                    aprimary = aprimary.body
+                    vars[1] = v
                 end
             end
             for v in vars

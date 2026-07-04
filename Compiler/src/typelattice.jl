@@ -692,11 +692,14 @@ widenconst(a::AnyMustAlias) = widenconst(widenmustalias(a))
 # keys runtime dispatch (`Const(v) ⊑ TypeEgal{v} ⊑ Type{v}`); an open one only to its
 # `==`-class `Type{v}`
 widenconst(c::Const) = (v = c.val; isa(v, Type) ?
-    (has_free_typevars(v) ? Type{v} : Core.TypeEgal{v}) : typeof(v))
+    (has_free_typevars(v) ? Type{v} :
+     has_dangling_typevar_refs(v) ? typeof(v) : Core.TypeEgal{v}) : typeof(v))
 widenconst(::PartialTypeVar) = TypeVar
 widenconst(t::Core.PartialStruct) = t.typ
 widenconst(t::PartialOpaque) = t.typ
 @nospecializeinfer widenconst(@nospecialize t::AnyType) = t
+# a detached bound-variable reference stands for an unknown type
+widenconst(::TypeVarRef) = Any
 widenconst(::TypeVar) = error("unhandled TypeVar")
 widenconst(::TypeofVararg) = error("unhandled Vararg")
 widenconst(::LimitedAccuracy) = error("unhandled LimitedAccuracy")

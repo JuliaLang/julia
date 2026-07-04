@@ -697,9 +697,9 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
                 sig0 = method.sig
             end
             while isa(sig0, UnionAll)
-                push!(tv, sig0.var)
-                iob = IOContext(iob, :unionall_env => sig0.var)
-                sig0 = sig0.body
+                v0, sig0 = unionall_open(sig0)
+                push!(tv, v0)
+                iob = IOContext(iob, :unionall_env => v0)
             end
             sig0 = sig0::DataType
             s1 = sig0.parameters[1]

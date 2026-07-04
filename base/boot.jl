@@ -51,8 +51,14 @@
 #end
 
 #struct UnionAll <: AnyType
-#    var::TypeVar
+#    name::Symbol
+#    lb
+#    ub
 #    body
+#end
+
+#struct TypeVarRef
+#    depth::Int
 #end
 
 #struct Nothing
@@ -217,7 +223,7 @@
 export
     # key types
     Any, TypeEq, Type, DataType, Vararg, NTuple,
-    Tuple, UnionAll, TypeVar, Union, Nothing, Cvoid,
+    Tuple, UnionAll, TypeVar, TypeVarRef, Union, Nothing, Cvoid,
     AbstractArray, DenseArray, NamedTuple, Pair,
     # special objects
     Function, Method, Module, Symbol, Task, UndefInitializer, undef, WeakRef, VecElement,
@@ -295,7 +301,15 @@ ccall(:jl_toplevel_eval_in, Any, (Any, Any),
       (f::typeof(Typeof))(x) = begin
           $(_expr(:meta,:nospecialize,:x))
           if isa(x,Type)
-              has_free_typevars(x) ? Type{x} : TypeEgal{x}
+              if has_free_typevars(x)
+                  Type{x}
+              elseif Intrinsics.eq_int(ccall(:jl_has_dangling_tvarrefs, Int32, (Any,), x), Intrinsics.trunc_int(Int32, 0))
+                  TypeEgal{x}
+              else
+                  # a detached subterm with bound-variable references cannot be
+                  # a (layoutable) type parameter; fall back to the kind
+                  typeof(x)
+              end
           else
               typeof(x)
           end
@@ -366,6 +380,9 @@ TypeVar(@nospecialize(n)) = _typevar(n::Symbol, Union{}, Any)
 TypeVar(@nospecialize(n), @nospecialize(ub)) = _typevar(n::Symbol, Union{}, ub)
 TypeVar(@nospecialize(n), @nospecialize(lb), @nospecialize(ub)) = _typevar(n::Symbol, lb, ub)
 UnionAll(@nospecialize(v), @nospecialize(t)) = ccall(:jl_type_unionall, Any, (Any, Any), v::TypeVar, t)
+UnionAll(n::Symbol, @nospecialize(lb), @nospecialize(ub), @nospecialize(t)) =
+    ccall(:jl_new_unionall_type, Any, (Any, Any, Any, Any), n, lb, ub, t)
+TypeVarRef(depth::Int) = ccall(:jl_new_tvarref, Any, (Int,), depth)
 
 const Memory{T} = GenericMemory{:not_atomic, T, CPU}
 const MemoryRef{T} = GenericMemoryRef{:not_atomic, T, CPU}

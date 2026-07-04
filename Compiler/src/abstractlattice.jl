@@ -112,6 +112,10 @@ function tmeet(::JLTypeLattice, @nospecialize(a::AnyType), @nospecialize(b::AnyT
     valid_as_lattice(ti, true) || return Bottom
     return ti
 end
+# a detached bound-variable reference stands for an unknown type (≡ `Any` here)
+tmeet(::JLTypeLattice, ::TypeVarRef, @nospecialize(b::AnyType)) = b
+tmeet(::JLTypeLattice, @nospecialize(a::AnyType), ::TypeVarRef) = a
+tmeet(::JLTypeLattice, a::TypeVarRef, ::TypeVarRef) = a
 
 """
     tmerge(𝕃::AbstractLattice, a, b)
@@ -151,6 +155,10 @@ If `𝕃` is `JLTypeLattice`, this is equivalent to subtyping.
 function ⊑ end
 
 @nospecializeinfer ⊑(::JLTypeLattice, @nospecialize(a::AnyType), @nospecialize(b::AnyType)) = a <: b
+# a detached bound-variable reference stands for an unknown type (≡ `Any` here)
+@nospecializeinfer ⊑(::JLTypeLattice, ::TypeVarRef, @nospecialize(b::AnyType)) = b === Any
+@nospecializeinfer ⊑(::JLTypeLattice, @nospecialize(a::AnyType), ::TypeVarRef) = true
+⊑(::JLTypeLattice, ::TypeVarRef, ::TypeVarRef) = true
 
 """
     ⊏(𝕃::AbstractLattice, a, b)::Bool

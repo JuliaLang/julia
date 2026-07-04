@@ -55,9 +55,41 @@ has_concrete_subtype(d::DataType) = d.flags & 0x0020 == 0x0020 # n.b. often comp
 # For example, Type{v} is not valid if v is a value
 # Accepts TypeVars and has_free_typevar also, since it assumes the user will rewrap it correctly
 # If astag is true, then also requires that it be a possible type tag for a valid object
+# whether `t` contains de Bruijn references into enclosing (stripped) binders
+has_dangling_typevar_refs(@nospecialize t) =
+    ccall(:jl_has_dangling_tvarrefs, Cint, (Any,), t) !== Int32(0)
+
+# Open all binders of `t` (substituting fresh free TypeVars, cf. `unionall_open`),
+# returning the fully-opened body and the opened vars outermost-first. Use with
+# `rebind_opened` as the de Bruijn replacement for the old
+# `unwrap_unionall`/`.parameters[i]`/`rewrap_unionall` idiom.
+function unionall_open_all(@nospecialize t)
+    vars = TypeVar[]
+    while isa(t, UnionAll)
+        v, t = unionall_open(t)
+        push!(vars, v)
+    end
+    return t, vars
+end
+
+# re-bind the (occurring) opened vars around `t`; a bare opened var normalizes
+# to its upper bound (`T where T` has no distinguishable identity left)
+function rebind_opened(@nospecialize(t), vars::Vector{TypeVar})
+    for i = length(vars):-1:1
+        v = vars[i]
+        if (isa(t, Type) || isa(t, TypeVar)) && has_typevar(t, v)
+            t = UnionAll(v, t)
+        end
+    end
+    return t
+end
+
 function valid_as_lattice(@nospecialize(x), astag::Bool=false)
     x === Bottom && false
     x isa TypeVar && return valid_as_lattice(x.ub, astag)
+    # a bound-variable reference (from an unwrapped UnionAll body): treat like
+    # a TypeVar whose bound is unknown here; callers rewrap into its binder
+    x isa TypeVarRef && return true
     x isa UnionAll && (x = unwrap_unionall(x))
     if x isa Union
         # the Union constructor ensures this (and we'll recheck after
@@ -66,7 +98,7 @@ function valid_as_lattice(@nospecialize(x), astag::Bool=false)
     end
     if isType(x)
         p = type_parameter(x)
-        p isa Type || p isa TypeVar || return false
+        p isa Type || p isa TypeVar || p isa TypeVarRef || return false
         return true
     end
     if x isa DataType
@@ -162,6 +194,7 @@ end
 
 _typename(@nospecialize a) = Union{}
 _typename(::TypeVar) = Core.TypeName
+_typename(::TypeVarRef) = Core.TypeName # dangling bound-variable reference: unknown type
 function _typename(a::Union)
     ta = _typename(a.a)
     tb = _typename(a.b)
@@ -404,7 +437,7 @@ function _unioncomplexity(@nospecialize x)
     elseif isa(x, Union)
         return unioncomplexity(x.a) + unioncomplexity(x.b) + 1
     elseif isa(x, UnionAll)
-        return max(unioncomplexity(x.body), unioncomplexity(x.var.ub))
+        return max(unioncomplexity(x.body), unioncomplexity(x.ub))
     elseif isa(x, TypeofVararg)
         return isdefined(x, :T) ? unioncomplexity(x.T) + 1 : 1
     else

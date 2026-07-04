@@ -346,6 +346,10 @@
     XX(jl_new_task) \
     XX(jl_new_typename_in) \
     XX(jl_new_typevar) \
+    XX(jl_new_tvarref) \
+    XX(jl_new_unionall_type) \
+    XX(jl_tvarref_occurs) \
+    XX(jl_has_dangling_tvarrefs) \
     XX(jl_next_from_addrinfo) \
     XX(jl_normalize_to_compilable_sig) \
     XX(jl_no_exc_handler) \

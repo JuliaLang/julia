@@ -868,7 +868,7 @@ function isprimitivetype(@nospecialize t)
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
     isa(t, DataType) || return false
-    return (t.flags & 0x0080) == 0x0080
+    return (t.flags & 0x00000080) == 0x00000080
 end
 
 """
@@ -895,7 +895,7 @@ julia> isbitstype(Complex)
 false
 ```
 """
-isbitstype(@nospecialize t) = (@_total_meta; isa(t, DataType) && (t.flags & 0x0008) == 0x0008)
+isbitstype(@nospecialize t) = (@_total_meta; isa(t, DataType) && (t.flags & 0x00000008) == 0x00000008)
 
 """
     isbits(x)
@@ -968,9 +968,9 @@ julia> isdispatchtuple(Tuple{Type})
 false
 ```
 """
-isdispatchtuple(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && (t.flags & 0x0004) == 0x0004)
+isdispatchtuple(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && (t.flags & 0x00000004) == 0x00000004)
 
-datatype_ismutationfree(dt::DataType) = (@_total_meta; (dt.flags & 0x0100) == 0x0100)
+datatype_ismutationfree(dt::DataType) = (@_total_meta; (dt.flags & 0x00000100) == 0x00000100)
 
 """
     Base.ismutationfree(T)
@@ -995,7 +995,7 @@ function ismutationfree(@nospecialize(t))
     return false
 end
 
-datatype_isidentityfree(dt::DataType) = (@_total_meta; (dt.flags & 0x0200) == 0x0200)
+datatype_isidentityfree(dt::DataType) = (@_total_meta; (dt.flags & 0x00000200) == 0x00000200)
 
 """
     Base.isidentityfree(T)
@@ -1139,7 +1139,7 @@ julia> isconcretetype(Tuple{T} where T<:Int)
 false
 ```
 """
-isconcretetype(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && (t.flags & 0x0002) == 0x0002)
+isconcretetype(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && (t.flags & 0x00000002) == 0x00000002)
 
 """
     isabstracttype(T)
@@ -1903,7 +1903,7 @@ function subst_trivial_bounds(@nospecialize(atype))
     if !isa(atype, UnionAll)
         return atype
     end
-    v = atype.var
+    v, body = unionall_open(atype)
     if isconcretetype(v.ub) || v.lb === v.ub
         subst = try
             atype{v.ub}
@@ -1915,7 +1915,9 @@ function subst_trivial_bounds(@nospecialize(atype))
             return subst_trivial_bounds(subst)
         end
     end
-    return UnionAll(v, subst_trivial_bounds(atype.body))
+    body′ = subst_trivial_bounds(body)
+    body′ === body && return atype
+    return UnionAll(v, body′)
 end
 
 # If removing trivial vars from atype results in an equivalent type, use that

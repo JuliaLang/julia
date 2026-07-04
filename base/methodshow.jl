@@ -56,8 +56,8 @@ function arg_decl_parts(m::Method, html=false)
     tv = Any[]
     sig = m.sig
     while isa(sig, UnionAll)
-        push!(tv, sig.var)
-        sig = sig.body
+        v, sig = unionall_open(sig)
+        push!(tv, v)
     end
     file, line = updated_methodloc(m)
     argnames = method_argnames(m)
