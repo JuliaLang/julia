@@ -1025,8 +1025,11 @@ static void bpatch_register_records(ArrayRef<BindingPatchRecord> records)
 
 static jitlink::Section *bpatch_find_section(jitlink::LinkGraph &G) JL_NOTSAFEPOINT
 {
-    // The ELF and Mach-O spellings of the section name (see emit_retype_guard)
+    // The ELF, Mach-O and COFF spellings of the section name (see emit_retype_guard
+    // and bpatch_section_name in codegen.cpp)
     if (jitlink::Section *S = G.findSectionByName("jl_bpatch"))
+        return S;
+    if (jitlink::Section *S = G.findSectionByName("jl_bpatch$B"))
         return S;
     return G.findSectionByName("__DATA,__jl_bpatch");
 }
