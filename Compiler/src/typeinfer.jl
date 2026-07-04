@@ -1157,7 +1157,7 @@ function lookup_cached_edge(interp::AbstractInterpreter, method::Method,
         return return_cached_result(interp, method, local_result, nothing, caller,
             edgecycle, edgelimited, edgerecursed), nothing
     end
-    @assert codeinst.def === mi "MethodInstance for cached edge does not match"
+    @assert ci_def(codeinst) === mi "MethodInstance for cached edge does not match"
 
     if local_result !== nothing
         return return_cached_result(interp, method, local_result, codeinst, caller,
@@ -1229,6 +1229,18 @@ function completed_inference_result(interp::AbstractInterpreter, frame::Inferenc
             Core.svec(internal_result_edges(frame)...))
     end
     return LocalInferenceResult(result, proof, get_inference_world(interp))
+end
+
+function codeinst_edges_sub(existing_edge::CodeInstance, min_world::UInt, max_world::UInt,
+                            edges::Union{SimpleVector, Core.InternedCodeInstance})
+    # return if the existing edge has more restrictions than the other arguments (more edges and narrower worlds)
+    # (compact image edge lists compare by identity, which can only miss a chance to reuse)
+    if existing_edge.min_world >= min_world &&
+       existing_edge.max_world <= max_world &&
+       existing_edge.edges == edges
+        return true
+    end
+    return false
 end
 
 function _schedule_edge_infer_task!(caller::AbsIntState, frame::InferenceState, result::InferenceResult,
@@ -1426,6 +1438,10 @@ for the code of a function that inference has found to just return a constant. F
 stored - the constant is used directly. However, because this is an ABI implementation detail, it is nice to maintain
 consistency and just synthesize a CodeInfo when the reflection APIs ask for them - this function does that.
 """
+ci_edges_svec(edges::SimpleVector) = edges
+ci_edges_svec(edges::Core.InternedCodeInstance) =
+    ccall(:jl_ici_to_svec, Core.SimpleVector, (Any,), edges)
+
 function codeinfo_for_const(::AbstractInterpreter, mi::MethodInstance, worlds::WorldRange, edges::SimpleVector, @nospecialize(val))
     method = mi.def::Method
     tree = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
@@ -1590,7 +1606,7 @@ function ci_get_source(interp::AbstractInterpreter, code::CodeInstance, @nospeci
         inf === nothing || return inf
     end
     if use_const_api(code)
-        return codeinfo_for_const(interp, get_ci_mi(code), WorldRange(code.min_world, code.max_world), code.edges, code.rettype_const)
+        return codeinfo_for_const(interp, get_ci_mi(code), WorldRange(code.min_world, code.max_world), ci_edges_svec(code.edges), code.rettype_const)
     end
     if isa(src, String)
         src = _uncompressed_ir(code, src)
@@ -1634,12 +1650,12 @@ end
 
 function ci_cache_head(mi::MethodInstance)
     isdefined(mi, :cache, :acquire) || return nothing
-    return @atomic :acquire mi.cache
+    return ci_materialize!(@atomic :acquire mi.cache)
 end
 
 function ci_cache_next(code::CodeInstance)
     isdefined(code, :next, :acquire) || return nothing
-    return @atomic :acquire code.next
+    return ci_materialize!(@atomic :acquire code.next)
 end
 
 function find_cached_ci(interp::AbstractInterpreter, mi::MethodInstance,
@@ -1694,7 +1710,7 @@ function ci_is_equivalent_winner(candidate::CodeInstance, ci::CodeInstance,
                                  valid_worlds::WorldRange)
     return (candidate !== ci &&
         ci_worlds_cover(candidate, valid_worlds) &&
-        candidate.def === ci.def &&
+        ci_def(candidate) === ci_def(ci) &&
         candidate.owner === ci.owner &&
         isdefined(candidate, :inferred, :acquire) &&
         isdefined(candidate, :rettype) &&
@@ -2139,7 +2155,7 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
             end
             # now make sure everything has source code, if desired
             if use_const_api(callee)
-                src = codeinfo_for_const(interp, mi, WorldRange(callee.min_world, callee.max_world), callee.edges, callee.rettype_const)
+                src = codeinfo_for_const(interp, mi, WorldRange(callee.min_world, callee.max_world), ci_edges_svec(callee.edges), callee.rettype_const)
             else
                 src = get(interp.codegen, callee, nothing)
                 if src === nothing
@@ -2256,7 +2272,7 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
         while i <= length(cis)
             ci = cis[i]::CodeInstance
             if isdefined(ci, :edges)
-                edges = ci.edges
+                edges = ci_edges_svec(ci.edges)
                 for j = 1:length(edges)
                     isassigned(edges, j) || continue
                     edge = edges[j]

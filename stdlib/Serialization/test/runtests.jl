@@ -850,6 +850,8 @@ end
     a, b = deserialize(buf)
     @test a === b && Base._nslots(a) == 4
     GC.gc(true)
+end
+
 # Type{Union{}} is a TypeEq node that used to dispatch (incorrectly) to the
 # DataType serialize method and crash on its layout
 @testset "Type{Union{}} round trip" begin

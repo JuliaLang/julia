@@ -171,6 +171,8 @@ function ==(stmt1::CodeInfo, stmt2::CodeInfo)
 end
 
 function ==(x::DebugInfo, y::DebugInfo)
+    ccall(:jl_di_materialize_all, Cvoid, (Any,), x) # decode image fields before the raw reads below
+    ccall(:jl_di_materialize_all, Cvoid, (Any,), y)
     for i in 1:nfields(x)
         getfield(x, i) == getfield(y, i) || return false
     end
