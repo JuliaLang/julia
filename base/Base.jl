@@ -390,6 +390,24 @@ function start_profile_listener()
     ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), cond.handle)
 end
 
+# The severity for the next ^C delivery, given the target's current
+# cancellation request: no active request starts a fresh SAFE cancellation; a
+# repeat ^C during an active (pending or acknowledged) request escalates it
+# (SAFE -> ABANDON_EXTERNAL -> ABANDON_ALL).
+function escalated_sigint_severity(@nospecialize(tcr))
+    tcr === nothing && return CANCEL_REQUEST_SAFE
+    # The C-side ^C handler plants a raw boxed UInt8 marker, meaning "a ^C
+    # arrived and has not been processed yet": that is the fresh episode this
+    # very notification is about - deliver it as SAFE. Requests stored by our
+    # own previous deliveries (or their acknowledged forms) are typed
+    # CancellationRequest; a further ^C while one is active escalates.
+    tcr isa UInt8 && return CANCEL_REQUEST_SAFE
+    r = tcr isa CancellationRequest ? tcr.request : 0x00
+    sev = r & 0x7f
+    (sev == 0x03 || sev == 0x04) && return CANCEL_REQUEST_ABANDON_ALL
+    return CANCEL_REQUEST_ABANDON_EXTERNAL
+end
+
 function sigint_listener(cond::AsyncCondition)
     while _trywait(cond)
       # The notification reached us - idle threads no longer need to help
@@ -399,16 +417,49 @@ function sigint_listener(cond::AsyncCondition)
         # The SIGINT handler should have set a cancellation request on the roottask
         cr = @atomic :acquire roottask.cancellation_request
         cr === nothing && continue
+        # If the current episode's stuck task was already forcibly abandoned
+        # (by our ABANDON_ALL escalation below, or by the C-side fallback when
+        # no thread was available to run this listener), finish its cleanup
+        # instead of delivering anything new.
+        backend = active_repl_backend
+        abandoned = nothing
+        if backend !== nothing && (backend.backend_task::Task).state === :abandoned
+            abandoned = backend.backend_task::Task
+        elseif roottask.state === :abandoned && (backend === nothing || istaskdone(backend.backend_task::Task))
+            # N.B.: an abandoned root task is the *permanent* state of a
+            # rescued session (with the default REPL, evaluation initially
+            # runs on the root task); it only needs cleanup while there is no
+            # live backend to hand the session to.
+            abandoned = roottask
+        end
+        if abandoned !== nothing
+            cleanup_abandoned_sigint_target(abandoned)
+            continue
+        end
         # If the root task was previously abandoned, interactive evaluation has
         # moved to a freshly created REPL backend task - target that instead.
         # TODO: Support proper cancellation scopes for non-root tasks
         target = roottask
-        backend = active_repl_backend
         if backend !== nothing
             bt = backend.backend_task::Task
             istaskdone(bt) || (target = bt)
         end
-        delivered = cancel!(target, conform_cancellation_request(cr))
+        tcr = target === roottask ? cr : (@atomic :acquire target.cancellation_request)
+        sev = escalated_sigint_severity(tcr)
+        if sev === CANCEL_REQUEST_ABANDON_ALL
+            print(stderr, "\nWARNING: Cancellation is being ignored - abandoning the current task.\n",
+                            "         This may leave the process in an inconsistent state.\n")
+        elseif sev === CANCEL_REQUEST_ABANDON_EXTERNAL
+            print(stderr, "\nWARNING: Cancellation is taking too long - ceasing to wait for external resources.\n")
+        end
+        delivered = cancel!(target, sev)
+        if target !== roottask
+            # Mirror the escalation state onto the root task's request marker
+            # (in acknowledged form, so the root's own cancellation points
+            # stay quiescent): the C side consults it to decide whether a
+            # further ^C may abandon the stuck task directly.
+            @atomic :release roottask.cancellation_request = CancellationRequest(0x80 | sev.request)
+        end
         # If the wait was successfully interrupted, the request is in the
         # target's hands now - stand down the escalation timer. Otherwise the
         # target is compute-bound and has to discover the request itself; leave
@@ -417,24 +468,8 @@ function sigint_listener(cond::AsyncCondition)
         if (REPL = REPL_MODULE_REF[]) !== Base
             invokelatest(REPL.maybe_rescue_REPL_after_sigint)
         end
-        if target.state === :abandoned
-            # A forcibly abandoned task never goes through the regular task
-            # completion path, so wake up anyone waiting on it explicitly.
-            # (The root task's donenotify may be `nothing`.)
-            donenotify = target.donenotify
-            if donenotify isa ThreadSynchronizer
-                lock(donenotify)
-                notify(donenotify)
-                unlock(donenotify)
-            end
-            # If the abandonment left the process without an interactive
-            # evaluator (script mode, or the REPL could not be rescued),
-            # nothing can resume normal operation - exit as ^C would.
-            backend = active_repl_backend
-            if target === roottask && (backend === nothing || istaskdone(backend.backend_task::Task))
-                exit(128 + 2) # 128 + SIGINT
-            end
-        end
+        # Our own ABANDON_ALL rung may just have frozen the target.
+        target.state === :abandoned && cleanup_abandoned_sigint_target(target)
       catch ex
         try
             @invokelatest showerror(stderr, ex, catch_backtrace())
@@ -442,6 +477,37 @@ function sigint_listener(cond::AsyncCondition)
         catch
         end
       end
+    end
+    nothing
+end
+
+# Post-abandonment cleanup for a ^C target that was forcibly frozen (by the
+# ABANDON_ALL escalation rung, or by the C-side fallback).
+function cleanup_abandoned_sigint_target(t::Task)
+    # A forcibly abandoned task never goes through the regular task completion
+    # path, so wake up anyone waiting on it explicitly. (The root task's
+    # donenotify may be `nothing`.)
+    donenotify = t.donenotify
+    if donenotify isa ThreadSynchronizer
+        lock(donenotify)
+        notify(donenotify)
+        unlock(donenotify)
+    end
+    if (REPL = REPL_MODULE_REF[]) !== Base
+        invokelatest(REPL.maybe_rescue_REPL_after_sigint)
+    end
+    # The episode is resolved: stand down the escalation timer and reset the
+    # escalation marker so that the next ^C starts a fresh SAFE cancellation.
+    # (Even when the abandoned task is the root task itself: its request field
+    # keeps serving as the ^C episode mailbox for the rescued session.)
+    ccall(:jl_reset_sigint_rescue_timer, Cvoid, ())
+    @atomic :release roottask.cancellation_request = nothing
+    # If the abandonment left the process without an interactive evaluator
+    # (script mode, or the REPL could not be rescued), nothing can resume
+    # normal operation - exit as ^C would.
+    backend = active_repl_backend
+    if t === roottask && (backend === nothing || istaskdone(backend.backend_task::Task))
+        exit(128 + 2) # 128 + SIGINT
     end
     nothing
 end
@@ -457,6 +523,8 @@ end
 
 # Keeps the rescue task rooted while the C runtime holds a reference to it
 const _sigint_rescue_task = Ref{Union{Task, Nothing}}(nothing)
+# The listener task itself, for diagnostics.
+const _sigint_listener_task = Ref{Union{Task, Nothing}}(nothing)
 
 function start_sigint_listener()
     cond = AsyncCondition()
@@ -466,6 +534,7 @@ function start_sigint_listener()
     # notification undeliverable exactly when it matters. The atexit hook
     # below closes the handle before the event loop is drained for exit.
     t = errormonitor(Threads.@spawn(sigint_listener(cond)))
+    _sigint_listener_task[] = t
     atexit() do
         # destroy this callback when exiting
         ccall(:jl_set_sigint_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
