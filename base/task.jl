@@ -1167,8 +1167,10 @@ end
 
 # The scheduler task on each thread remembers the last user task that went idle on it,
 # as the best victim for an InterruptException that would otherwise be delivered to
-# (and swallowed by) the scheduler task itself (issue #58689). Done tasks are never
-# recorded, so this does not delay collection of completed tasks (see #57544).
+# (and swallowed by) the scheduler task itself (issue #58689). To limit how long a
+# completed task can be kept from collection by this reference (see #57544), it is
+# cleared when the recorded task finishes on this same thread (task_done_hook); a task
+# that finishes elsewhere remains referenced until the next task goes idle here.
 const last_idle_task = OncePerThread{RefValue{Union{Task,Nothing}}}() do
     RefValue{Union{Task,Nothing}}(nothing)
 end
