@@ -9,4 +9,4 @@ LIBUV_VER := 2
 # the KenoAIStaging fork until the upstream PR lands (see also LIBUV_GIT_URL override
 # in libuv.mk). Requires USE_BINARYBUILDER_LIBUV=0 until a matching JLL is built.
 LIBUV_BRANCH=kf/julia-writecancel-2
-LIBUV_SHA1=8aee7834c89fba2e5c7832cf084b4b3ed4416239
+LIBUV_SHA1=b6c586522925388295731b0ff0926e821a712405
