@@ -4161,12 +4161,45 @@ void jl_init_types(void) JL_GC_DISABLED
     ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_namedtuple_type))->layout = NULL;
     jl_namedtuple_typename = ntt->name;
 
+    jl_cancel_source_type = (jl_datatype_t*)
+        jl_new_datatype(jl_symbol("CancellationTokenSource"), core, jl_any_type,
+                        jl_emptysvec,
+                        jl_perm_symsvec(10,
+                                        "parent",
+                                        "nextsib",
+                                        "prevsib",
+                                        "children",
+                                        "waiters_head",
+                                        "waiters_tail",
+                                        "state",
+                                        "_lock",
+                                        "delivered",
+                                        "flags"),
+                        jl_svec(10,
+                                jl_any_type,
+                                jl_any_type,
+                                jl_any_type,
+                                jl_any_type,
+                                jl_any_type,
+                                jl_any_type,
+                                jl_uint8_type,
+                                jl_uint8_type,
+                                jl_uint8_type,
+                                jl_uint8_type),
+                        jl_emptysvec,
+                        0, 1, 10);
+    // Field 1 (parent) is const; fields 7-9 (state, _lock, delivered) are atomic
+    const static uint32_t cancel_source_constfields[1]  = { 0b0000000001 };
+    const static uint32_t cancel_source_atomicfields[1] = { 0b0111000000 };
+    jl_cancel_source_type->name->constfields = cancel_source_constfields;
+    jl_cancel_source_type->name->atomicfields = cancel_source_atomicfields;
+
     jl_task_type = (jl_datatype_t*)
         jl_new_datatype(jl_symbol("Task"),
                         NULL,
                         jl_any_type,
                         jl_emptysvec,
-                        jl_perm_symsvec(29,
+                        jl_perm_symsvec(31,
                                         "next",
                                         "queue",
                                         "storage",
@@ -4178,7 +4211,7 @@ void jl_init_types(void) JL_GC_DISABLED
                                         "sticky",
                                         "priority",
                                         "_isexception",
-                                        "pad00",
+                                        "preempt_request",
                                         "pad01",
                                         "pad02",
                                         "rngState0",
@@ -4194,9 +4227,11 @@ void jl_init_types(void) JL_GC_DISABLED
                                         "last_started_running_at",
                                         "running_time_ns",
                                         "finished_at",
-                                        "cancellation_request",
-                                        "cancellation_hook"),
-                        jl_svec(29,
+                                        "bound_cancel_token",
+                                        "cancellation_hook",
+                                        "cancellation_ack",
+                                        "waitnode"),
+                        jl_svec(31,
                                 jl_any_type,
                                 jl_any_type,
                                 jl_any_type,
@@ -4225,15 +4260,18 @@ void jl_init_types(void) JL_GC_DISABLED
                                 jl_uint64_type,
                                 jl_uint64_type,
                                 jl_any_type,
+                                jl_any_type,
+                                jl_any_type,
                                 jl_any_type),
                         jl_emptysvec,
                         0, 1, 6);
     XX(task);
     // Set field 20 (metrics_enabled) as const
-    // Set fields 8 (_state) and 24-27 (metric counters), 28 (cancellation_request),
-    // 29 (cancellation_hook) as atomic
-    const static uint32_t task_constfields[1]  = { 0b00000000000010000000000000000000 };
-    const static uint32_t task_atomicfields[1] = { 0b00011111100000000000000010000000 };
+    // Set fields 8 (_state), 12 (preempt_request), 24-27 (metric counters),
+    // 28 (bound_cancel_token), 29 (cancellation_hook), 30 (cancellation_ack)
+    // as atomic
+    const static uint32_t task_constfields[1]  = { 0b0000000000010000000000000000000 };
+    const static uint32_t task_atomicfields[1] = { 0b0111111100000000000100010000000 };
     jl_task_type->name->constfields = task_constfields;
     jl_task_type->name->atomicfields = task_atomicfields;
 

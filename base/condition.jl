@@ -61,12 +61,12 @@ Abstract implementation of a condition object
 for synchronizing task objects with a given lock.
 """
 struct GenericCondition{L<:AbstractLock}
-    waitq::IntrusiveLinkedList{Task}
+    waitq::IntrusiveLinkedList{WaitNode}
     lock::L
 
-    GenericCondition{L}() where {L<:AbstractLock} = new{L}(IntrusiveLinkedList{Task}(), L())
-    GenericCondition{L}(l::L) where {L<:AbstractLock} = new{L}(IntrusiveLinkedList{Task}(), l)
-    GenericCondition(l::AbstractLock) = new{typeof(l)}(IntrusiveLinkedList{Task}(), l)
+    GenericCondition{L}() where {L<:AbstractLock} = new{L}(IntrusiveLinkedList{WaitNode}(), L())
+    GenericCondition{L}(l::L) where {L<:AbstractLock} = new{L}(IntrusiveLinkedList{WaitNode}(), l)
+    GenericCondition(l::AbstractLock) = new{typeof(l)}(IntrusiveLinkedList{WaitNode}(), l)
 end
 
 waitqueue(c::GenericCondition) = ILLRef(c.waitq, c)
@@ -81,14 +81,18 @@ islocked(c::GenericCondition) = islocked(c.lock)
 
 lock(f, c::GenericCondition) = lock(f, c.lock)
 
-# have waiter wait for c
+# have waiter wait for c: enqueue the waiter's cached WaitNode on c's wait
+# queue (with `waitee` recorded as the queue identity), arming it for a
+# completion wake. Returns the node.
 function _wait2(c::GenericCondition, waiter::Task, waitee=c, first::Bool=false)
     ct = current_task()
     assert_havelock(c)
+    w = getwaitnode(waiter)
+    @atomic :monotonic w.state = WAITNODE_WAITING
     if first
-        pushfirst!(ILLRef(waitqueue(c), waitee), waiter)
+        pushfirst!(ILLRef(waitqueue(c), waitee), w)
     else
-        push!(ILLRef(waitqueue(c), waitee), waiter)
+        push!(ILLRef(waitqueue(c), waitee), w)
     end
     # since _wait2 is similar to schedule, we should observe the sticky bit now
     if waiter.sticky && Threads.threadid(waiter) == 0 && !GC.in_finalizer()
@@ -101,7 +105,7 @@ function _wait2(c::GenericCondition, waiter::Task, waitee=c, first::Bool=false)
         tid = Threads.threadid()
         ccall(:jl_set_task_tid, Cint, (Any, Cint), waiter, tid-1)
     end
-    return
+    return w
 end
 
 """
@@ -127,29 +131,38 @@ proceeding.
 """
 function wait end
 
-macro cancel_check()
-    quote
-        local req = Core.cancellation_point!()
-        req !== nothing && handle_cancellation!(req)
-    end
-end
-
 """
-    wait(c::GenericCondition; first::Bool=false)
+    wait(c::GenericCondition; first::Bool=false, cancel=Base.DEFAULT_CANCEL)
 
 Wait for [`notify`](@ref) on `c` and return the `val` parameter passed to `notify`.
 
 If the keyword `first` is set to `true`, the waiter will be put _first_
 in line to wake up on `notify`. Otherwise, `wait` has first-in-first-out (FIFO) behavior.
-"""
-function wait(c::GenericCondition; first::Bool=false, waitee=c, expected_cancellation=nothing)
-    ct = current_task()
-    _wait2(c, ct, waitee, first)
 
-    cr = pre_sleep_cancellation_request()
-    if cr !== expected_cancellation
-        Base.list_deletefirst!(ILLRef(waitqueue(c), waitee), ct)
-        return invokelatest(cancel_wait!, waitee, cr)
+The `cancel` keyword argument controls which cancellation token may interrupt
+the wait (throwing the [`CancellationRequest`](@ref) into the waiter): by
+default the scoped token (see `Base.CANCEL_TOKEN`); pass a
+[`CancellationToken`](@ref) to override it, or `nothing` to make the wait
+non-cancellable.
+"""
+wait(c::GenericCondition; first::Bool=false, waitee=c,
+     cancel::CancelTokenArg=DEFAULT_CANCEL, min_severity::UInt8=0x00) =
+    wait(c, resolve_cancel_token(cancel); first, waitee, min_severity)
+
+function wait(c::GenericCondition, tok::MaybeToken; first::Bool=false, waitee=c,
+              min_severity::UInt8=0x00)
+    ct = current_task()
+    assert_havelock(c)
+    src = tok === nothing ? nothing : tok.source
+    # entry check: throw before enqueueing anything (skipped for teardown
+    # waits that re-park after acknowledging a severity)
+    src === nothing || min_severity != 0x00 || checkcancel(src)
+    w = _wait2(c, ct, waitee, first)
+    if src !== nothing && !register_cancellation!(src, w; min_severity=min_severity)
+        list_deletefirst!(ILLRef(waitqueue(c), waitee), w)
+        @atomic :monotonic w.state = WAITNODE_IDLE
+        checkcancel(src) # delivers the cancellation (acknowledge + throw)
+        error("cancellation registration refused, but the source is not cancelled")
     end
     token = unlockall(c.lock)
 
@@ -157,46 +170,20 @@ function wait(c::GenericCondition; first::Bool=false, waitee=c, expected_cancell
         wait()
     catch
         relockall(c.lock, token)
-        # This cleans up our entry in the waitqueue if we were resumed from an
-        # unexpected `throwto`. Modern code should generally avoid this pattern.
-        Base.list_deletefirst!(ILLRef(waitqueue(c), waitee), ct)
+        src === nothing || unregister_cancellation!(src, w)
+        # This cleans up our entry in the waitqueue if we were cancelled or
+        # resumed from an unexpected `throwto`; a no-op if a completion
+        # already popped the node.
+        list_deletefirst!(ILLRef(waitqueue(c), waitee), w)
+        @atomic :monotonic w.state = WAITNODE_IDLE
         rethrow()
     end
 
     relockall(c.lock, token)
+    src === nothing || unregister_cancellation!(src, w)
+    list_deletefirst!(ILLRef(waitqueue(c), waitee), w)
+    @atomic :monotonic w.state = WAITNODE_IDLE
     return ret
-end
-
-function cancel_wait!(c::GenericCondition, creq; waitee = c)
-    # We are delivering the request to ourselves as an exception.
-    acknowledge_cancellation!(current_task(), creq)
-    throw(creq)
-end
-
-function cancel_wait!(c::GenericCondition, t::Task, @nospecialize(creq); waitee = c)
-    lock(c)
-    if t.queue !== waitee
-        unlock(c)
-        return false
-    end
-    Base.list_deletefirst!(ILLRef(waitqueue(c), waitee), t)
-    # The request is being delivered to the task as an exception.
-    acknowledge_cancellation!(t, creq)
-    schedule(t, conform_cancellation_request(creq), error=true)
-    unlock(c)
-    return true
-end
-
-function cancel_wait!(c::GenericCondition, t::Task, @nospecialize(creq), @nospecialize(val); waitee=c)
-    lock(c)
-    if t.queue !== waitee
-        unlock(c)
-        return false
-    end
-    Base.list_deletefirst!(ILLRef(waitqueue(c), waitee), t)
-    schedule(t, val)
-    unlock(c)
-    return true
 end
 
 """
@@ -213,8 +200,12 @@ function notify(c::GenericCondition, @nospecialize(arg), all, error)
     assert_havelock(c)
     cnt = 0
     while !isempty(waitqueue(c))
-        t = popfirst!(waitqueue(c))
-        schedule(t, arg, error=error)
+        w = popfirst!(waitqueue(c))
+        # A node whose wake was already claimed by a canceller does not count
+        # as woken: continue to the next waiter (the cancelled task resumes
+        # via the exception the canceller scheduled).
+        (@atomicreplace w.state WAITNODE_WAITING => WAITNODE_NOTIFIED).success || continue
+        schedule(w.task, arg, error=error)
         cnt += 1
         all || break
     end

@@ -480,28 +480,34 @@ function repl_backend_loop(backend::REPLBackend, get_module::Function)
     while true
         tls = task_local_storage()
         tls[:SOURCE_PATH] = nothing
-        # Control is back with the REPL: clear any still-pending cancellation
-        # request (e.g. a ^C that raced the end of the previous evaluation).
-        # TODO: Support proper cancellation scopes for non-root tasks
-        Base.reset_cancellation!()
-        ast_or_func, show_value = take!(backend.repl_channel)
+        # Control is back with the REPL: install a fresh ^C episode source
+        # (this also stands down the escalation machinery of the previous
+        # evaluation) and run the next evaluation in its scope, so that ^C
+        # cancels exactly that evaluation and everything it spawns.
+        tok = Base.sigint_new_episode!()
+        # the idle wait for frontend input is not cancellable: a ^C between
+        # evaluations cancels the (idle) episode source, which is simply
+        # replaced on the next round
+        ast_or_func, show_value = take!(backend.repl_channel; cancel=nothing)
         if show_value == -1
             # exit flag
             break
         end
         # Mark this task as the foreground task while running user work, so that
         # components like the precompile keyboard menu know who owns interactive stdin.
-        Base.@as_foreground_task if show_value == 2 # 2 indicates a function to be called
-            f = ast_or_func
-            try
-                ret = f()
-                put!(backend.response_channel, Pair{Any, Bool}(ret, false))
-            catch
-                put!(backend.response_channel, Pair{Any, Bool}(current_exceptions(), true))
+        Base.ScopedValues.@with Base.CANCEL_TOKEN => tok begin
+            Base.@as_foreground_task if show_value == 2 # 2 indicates a function to be called
+                f = ast_or_func
+                try
+                    ret = f()
+                    put!(backend.response_channel, Pair{Any, Bool}(ret, false))
+                catch
+                    put!(backend.response_channel, Pair{Any, Bool}(current_exceptions(), true))
+                end
+            else
+                ast = ast_or_func
+                eval_user_input(ast, backend, get_module())
             end
-        else
-            ast = ast_or_func
-            eval_user_input(ast, backend, get_module())
         end
     end
     return nothing

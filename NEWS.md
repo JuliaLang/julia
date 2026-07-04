@@ -18,6 +18,18 @@ New language features
     `continue name` to continue a labeled loop ([#60481]).
   - `typegroup` blocks allow defining mutually recursive struct types that reference each other in their
     field types. All types in the group are resolved atomically at the end of the block ([#60569]).
+  - Task cancellation is now supported, organized around cancellation tokens:
+    `Base.CancellationTokenSource` is a level-triggered, tree-structured cancellation scope
+    (cancelling a source cancels its whole subtree, at monotonically escalating severities), and
+    `Base.CancellationToken` is its observe/wait view. The token governing a computation is carried
+    as a scoped value (`Base.CANCEL_TOKEN`) that propagates to child tasks; blocking operations
+    (`wait`, `lock`, Channel operations, `sleep`, stream I/O, ...) accept a `cancel` keyword
+    argument defaulting to the scoped token and throw a `Base.CancellationRequest` when it is
+    cancelled. `@sync` and `Threads.@threads` blocks form cancellation scopes, so cancelling an
+    enclosing scope reaches everything spawned within. Compute-bound code can opt into cancellation
+    with the `Base.@cancel_check` cancellation point. In interactive sessions, ^C now cancels the
+    current evaluation's cancellation scope, with graded escalation
+    (safe unwind -> abandoning external waits -> abandoning tasks) on repeated presses.
 
 Language changes
 ----------------

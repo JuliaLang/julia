@@ -418,13 +418,36 @@ function uv_recvcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid}, addr::P
     nothing
 end
 
+# completion callback for UDP sends: like Base.uv_writecb_task, but delivers
+# the raw status (a UDP send has no partial write count)
+function uv_sendcb_task(req::Ptr{Cvoid}, status::Cint)
+    d = uv_req_data(req)
+    if d == C_NULL || d == Base.UV_REQ_DETACHED
+        # No owner for this req (the waiter departed and left the freeing to us).
+        Libc.free(req)
+    else
+        # Mark the callback as done; the waiter (which inspects the req under
+        # the iolock) owns freeing it.
+        uv_req_set_data(req, C_NULL)
+        w = unsafe_pointer_to_objref(d)::Base.WaitNode
+        if (@atomicreplace w.state Base.WAITNODE_WAITING => Base.WAITNODE_NOTIFIED).success
+            w.queue = nothing
+            w.uvreq = C_NULL
+            schedule(w.task, status)
+        end
+        # CAS failure: a canceller claimed the wake; the waiter's teardown
+        # observes data == C_NULL and takes over the request.
+    end
+    nothing
+end
+
 function _send_async(sock::UDPSocket, ipaddr::Union{IPv4, IPv6}, port::UInt16, buf)
     req = Libc.malloc(Base._sizeof_uv_udp_send)
     uv_req_set_data(req, C_NULL) # in case we get interrupted before arriving at the wait call
     host_in = Ref(hton(ipaddr.host))
     err = ccall(:jl_udp_send, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, UInt16, Ptr{Cvoid}, Ptr{UInt8}, Csize_t, Ptr{Cvoid}, Cint),
                 req, sock, hton(port), host_in, buf, sizeof(buf),
-                @cfunction(Base.uv_writecb_task, Cvoid, (Ptr{Cvoid}, Cint)),
+                @cfunction(uv_sendcb_task, Cvoid, (Ptr{Cvoid}, Cint)),
                 ipaddr isa IPv6)
     if err < 0
         Libc.free(req)
@@ -438,36 +461,94 @@ end
 
 Send `msg` over `socket` to `host:port`.
 """
-function send(sock::UDPSocket, ipaddr::IPAddr, port::Integer, msg)
+function send(sock::UDPSocket, ipaddr::IPAddr, port::Integer, msg;
+              cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
     # If the socket has not been bound, it will be bound implicitly to ::0 and a random port
     iolock_begin()
     if sock.status != StatusInit && sock.status != StatusOpen && sock.status != StatusActive
         error("UDPSocket is not initialized and open")
     end
-    uvw = _send_async(sock, ipaddr, UInt16(port), msg)
     ct = current_task()
+    tok = Base.resolve_cancel_token(cancel)
+    src = tok === nothing ? nothing : tok.source
+    if Base.cancel_pending(src, ct)
+        # The governing token is already cancelled: throw before handing
+        # anything to libuv.
+        iolock_end()
+        Base.checkcancel(src)
+        iolock_begin() # the pending cancellation was covered concurrently
+    end
+    uvw = _send_async(sock, ipaddr, UInt16(port), msg)
+    if Base.abandoning_external_waits(ct)
+        # Unwinding from an ABANDON_EXTERNAL (or stronger) cancellation:
+        # issue the send, but do not wait for its completion (data stays
+        # C_NULL, so the completion callback frees the request).
+        iolock_end()
+        return nothing
+    end
+    w = Base.getwaitnode(ct)
+    @atomic :monotonic w.state = Base.WAITNODE_WAITING
+    w.queue = sock
+    w.uvreq = uvw
     preserve_handle(ct)
     Base.sigatomic_begin()
-    uv_req_set_data(uvw, ct)
-    iolock_end()
-    status = try
-        Base.sigatomic_end()
-        wait()::Cint
-    finally
-        Base.sigatomic_end()
-        iolock_begin()
-        q = ct.queue; q === nothing || Base.list_deletefirst!(q::Base.IntrusiveLinkedList{Task}, ct)
-        if uv_req_data(uvw) != C_NULL
-            # uvw is still alive,
-            # so make sure we won't get spurious notifications later
-            uv_req_set_data(uvw, C_NULL)
-        else
-            # done with uvw
-            Libc.free(uvw)
-        end
+    uv_req_set_data(uvw, Base.pointer_from_objref(w))
+    if src !== nothing && !Base.register_cancellation!(src, w)
+        # The token was cancelled since the entry check: don't park; detach
+        # the request (its completion callback frees it) and deliver.
+        uv_req_set_data(uvw, Base.UV_REQ_DETACHED)
+        w.queue = nothing
+        w.uvreq = C_NULL
+        @atomic :monotonic w.state = Base.WAITNODE_IDLE
         iolock_end()
+        Base.sigatomic_end()
         unpreserve_handle(ct)
+        Base.checkcancel(src)
+        error("cancellation registration refused, but the source is not cancelled")
     end
+    iolock_end()
+    local status
+    try
+        Base.sigatomic_end()
+        status = wait()::Cint
+        Base.sigatomic_begin()
+    catch
+        # (catch restored the sigatomic level from the try entry)
+        iolock_begin()
+        src === nothing || Base.unregister_cancellation!(src, w)
+        if uv_req_data(uvw) == C_NULL
+            # the completion callback already ran; the request is ours
+            Libc.free(uvw)
+        else
+            # a UDP send cannot be cancelled; detach the request (its
+            # completion callback frees it)
+            uv_req_set_data(uvw, Base.UV_REQ_DETACHED)
+        end
+        w.queue = nothing
+        w.uvreq = C_NULL
+        @atomic :monotonic w.state = Base.WAITNODE_IDLE
+        iolock_end()
+        Base.sigatomic_end()
+        unpreserve_handle(ct)
+        rethrow()
+    end
+    Base.sigatomic_end()
+    iolock_begin()
+    src === nothing || Base.unregister_cancellation!(src, w)
+    w.queue = nothing
+    w.uvreq = C_NULL
+    @atomic :monotonic w.state = Base.WAITNODE_IDLE
+    if uv_req_data(uvw) == C_NULL
+        # done with uvw (the completion callback already ran)
+        Libc.free(uvw)
+    else
+        # resumed without the completion callback having run (unexpected
+        # `schedule`): make sure we won't get spurious notifications later
+        # and leave the freeing to the callback
+        uv_req_set_data(uvw, Base.UV_REQ_DETACHED)
+    end
+    iolock_end()
+    unpreserve_handle(ct)
     uv_error("send", status)
     nothing
 end

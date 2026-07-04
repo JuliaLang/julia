@@ -232,6 +232,33 @@ typedef struct _jl_excstack_t jl_excstack_t;
 
 typedef struct _jl_handler_t jl_handler_t;
 
+// Cancellation token source: a node in the level-triggered cancellation tree
+// (`Core.CancellationTokenSource`). Cancelling a node cancels its whole
+// subtree; the state is monotonic and never de-escalates. The layout must be
+// kept in sync with the registration in jltypes.c.
+typedef struct _jl_cancel_source_t {
+    JL_DATA_TYPE
+    // Tree links. `parent` is const after construction, so lock-free
+    // parent-chain walks (e.g. subtree-membership tests from signal context)
+    // are safe. A node's child list - its `children` head and each child's
+    // `nextsib`/`prevsib` - is guarded by that node's `_lock`.
+    jl_value_t *parent;      // Union{Nothing, CancellationTokenSource}
+    jl_value_t *nextsib;     // sibling links, guarded by the parent's `_lock`
+    jl_value_t *prevsib;
+    jl_value_t *children;    // first child, guarded by this node's `_lock`
+    // Parked waiters (an intrusive `Base.WaitNode` list), guarded by `_lock`.
+    jl_value_t *waiters_head;
+    jl_value_t *waiters_tail;
+    // 0x00 = live; (0x80 | sev) = cancelled at severity sev (0x0 SAFE,
+    // 0x3 ABANDON_EXTERNAL, 0x4 ABANDON_ALL). Monotonic (CAS-max).
+    _Atomic(uint8_t) state;
+    _Atomic(uint8_t) _lock;  // spinlock guarding the lists above
+    // Bitmask (1 << sev) of severities some task has acknowledged; feeds the
+    // ^C episode state machine.
+    _Atomic(uint8_t) delivered;
+    uint8_t flags;           // bit 0: closed (detached from its parent)
+} jl_cancel_source_t;
+
 typedef struct _jl_task_t {
     JL_DATA_TYPE
     // This invasive linked list is used by the scheduler. The fields are protected
@@ -248,7 +275,11 @@ typedef struct _jl_task_t {
     uint8_t sticky; // record whether this Task can be migrated to a new thread
     uint16_t priority;
     _Atomic(uint8_t) _isexception; // set if `result` is an exception to throw or that we exited with
-    uint8_t pad0[3];
+    // Set to request that this task yields at its next cancellation point
+    // (so that e.g. a canceller sharing the thread can run); cleared by the
+    // task itself when it honors the request.
+    _Atomic(uint8_t) preempt_request;
+    uint8_t pad0[2];
     // === 64 bytes (cache line)
     uint64_t rngState[JL_RNG_SIZE];
     // flag indicating whether or not to record timing metrics for this task
@@ -264,14 +295,27 @@ typedef struct _jl_task_t {
     // timestamp this task finished (i.e. entered state DONE or FAILED).
     _Atomic(uint64_t) finished_at;
 
-    // Cancellation request - can be an arbitrary julia value, but the runtime recognizes
-    // CANCEL_REQUEST_ enum values.
-    _Atomic(jl_value_t *) cancellation_request;
+    // The cancellation token source last published by a cancellation point on
+    // this task ("the token governing the compute currently running here").
+    // `nothing`, or a `Core.CancellationTokenSource`. Read by cancellers
+    // scanning for running computations governed by a cancelled subtree; may
+    // be stale between cancellation points (benign: level-triggered recovery
+    // at the next check).
+    _Atomic(jl_value_t *) bound_cancel_token;
     // Asynchronous cancellation hook - `nothing` or a `(handler, state)` tuple.
-    // When a cancellation is requested for this task, `cancel!` additionally
-    // invokes `handler(state, task)` on the *cancelling* thread, so that
-    // external libraries the task may be blocked in can be interrupted.
+    // When a cancellation is requested for a token this task is bound to,
+    // `cancel!` additionally invokes `handler(state, task)` on the
+    // *cancelling* thread, so that external libraries the task may be blocked
+    // in can be interrupted.
     _Atomic(jl_value_t *) cancellation_hook;
+    // Per-consumer acknowledgement state: `nothing`, or a `Base.CancelAck`
+    // recording which token source (and severity) this task has already
+    // acknowledged, so cancellation points do not re-throw while the request
+    // is being handled. Severity escalation re-triggers.
+    _Atomic(jl_value_t *) cancellation_ack;
+    // Cached per-task wait node (`Base.WaitNode` or `nothing`); only the task
+    // itself touches this.
+    jl_value_t *waitnode;
 // hidden state:
 
     // id of owning thread - does not need to be defined until the task runs

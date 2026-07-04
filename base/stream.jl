@@ -431,11 +431,21 @@ function wait_readnb(x::LibuvStream, nb::Int)
     nothing
 end
 
-function closewrite(s::LibuvStream)
+function closewrite(s::LibuvStream; cancel::CancelTokenArg=DEFAULT_CANCEL)
     iolock_begin()
     if !iswritable(s)
         iolock_end()
         return
+    end
+    ct = current_task()
+    tok = resolve_cancel_token(cancel)
+    src = tok === nothing ? nothing : tok.source
+    if cancel_pending(src, ct)
+        # The governing token is already cancelled: throw before issuing the
+        # shutdown request.
+        iolock_end()
+        checkcancel(src)
+        iolock_begin() # the pending cancellation was covered concurrently
     end
     req = Libc.malloc(_sizeof_uv_shutdown)
     uv_req_set_data(req, C_NULL) # in case we get interrupted before arriving at the wait call
@@ -445,59 +455,86 @@ function closewrite(s::LibuvStream)
         Libc.free(req)
         uv_error("shutdown", err)
     end
-    ct = current_task()
+    if abandoning_external_waits(ct)
+        # Unwinding from an ABANDON_EXTERNAL (or stronger) cancellation: the
+        # shutdown was issued; do not wait for its completion. The request's
+        # data stays C_NULL (no waiter), so its completion callback frees it.
+        iolock_end()
+        if isopen(s) && ccall(:uv_is_readable, Cint, (Ptr{Cvoid},), s.handle) == 0
+            close(s)
+        end
+        return
+    end
     preserve_handle(ct)
     sigatomic_begin()
-    uv_req_set_data(req, ct)
-    # Register as a cancellable stream wait. The tag bit on `t.next` marks
+    # Register as a cancellable stream wait. The tag bit on `w.uvreq` marks
     # this as a shutdown wait (rather than a write wait, which stores an
-    # untagged uv_write_t): the request itself cannot be cancelled, but the
-    # wait can be interrupted, detaching the request (its completion callback
-    # frees it).
-    ct.queue = s
-    ct.next = Ptr{Cvoid}(UInt(req) | 0x1)
+    # untagged uv_write_t): the request itself cannot be cancelled, so an
+    # interrupted wait detaches the request (its completion callback frees
+    # it).
+    w = getwaitnode(ct)
+    @atomic :monotonic w.state = WAITNODE_WAITING
+    w.queue = s
+    w.uvreq = Ptr{Cvoid}(UInt(req) | 0x1)
+    uv_req_set_data(req, pointer_from_objref(w))
+    if src !== nothing && !register_cancellation!(src, w)
+        # The token was cancelled since the entry check: don't park; detach
+        # the request (its completion callback frees it) and deliver.
+        uv_req_set_data(req, UV_REQ_DETACHED)
+        w.queue = nothing
+        w.uvreq = C_NULL
+        @atomic :monotonic w.state = WAITNODE_IDLE
+        iolock_end()
+        sigatomic_end()
+        unpreserve_handle(ct)
+        checkcancel(src)
+        error("cancellation registration refused, but the source is not cancelled")
+    end
     iolock_end()
     local status
     try
         sigatomic_end()
-        cr = pre_sleep_cancellation_request()
-        if cr !== nothing
-            # A cancellation request is already pending: don't park.
-            acknowledge_cancellation!(ct, cr)
-            throw(cr)
-        end
-        if abandoning_external_waits(ct)
-            # Unwinding from an ABANDON_EXTERNAL (or stronger) cancellation:
-            # the shutdown was issued; do not wait for its completion.
-            status = Int32(0)
-        else
-            status = wait()::Cint
-        end
+        status = wait()::Cint
         sigatomic_begin()
-    finally
-        # try-finally unwinds the sigatomic level, so need to repeat sigatomic_end
-        sigatomic_end()
+    catch err
+        # (catch restored the sigatomic level from the try entry)
         iolock_begin()
-        q = ct.queue; q === nothing || Base.list_deletefirst!(q, ct)
+        src === nothing || unregister_cancellation!(src, w)
         d = uv_req_data(req)
-        if d == UV_REQ_CANCEL_ORPHANED
-            # A canceller detached the request while resuming us and the
-            # completion callback has not run yet: hand the freeing duty to
-            # it. (Exactly one of us transitions the data field from the
-            # sentinel to C_NULL; the other observes C_NULL and frees - both
-            # run under the iolock.)
-            uv_req_set_data(req, C_NULL)
-        elseif d != C_NULL
-            # req is still alive,
-            # so make sure we won't get spurious notifications later
-            uv_req_set_data(req, C_NULL)
-        else
-            # done with req (the completion callback already ran)
+        if d == C_NULL
+            # The completion callback already ran (it lost the wake to the
+            # canceller): we own the request.
             Libc.free(req)
+        else
+            # Detach the request: the completion callback frees it.
+            uv_req_set_data(req, UV_REQ_DETACHED)
         end
+        w.queue = nothing
+        w.uvreq = C_NULL
+        @atomic :monotonic w.state = WAITNODE_IDLE
         iolock_end()
+        sigatomic_end()
         unpreserve_handle(ct)
+        rethrow()
     end
+    # normal completion: the callback set the request's data to C_NULL and it
+    # is ours to free
+    sigatomic_end()
+    iolock_begin()
+    src === nothing || unregister_cancellation!(src, w)
+    w.queue = nothing
+    w.uvreq = C_NULL
+    @atomic :monotonic w.state = WAITNODE_IDLE
+    if uv_req_data(req) == C_NULL
+        Libc.free(req)
+    else
+        # resumed without the completion callback having run (unexpected
+        # `schedule`): make sure we won't get spurious notifications later
+        # and leave the freeing to the callback
+        uv_req_set_data(req, UV_REQ_DETACHED)
+    end
+    iolock_end()
+    unpreserve_handle(ct)
     if isopen(s)
         if status < 0 || ccall(:uv_is_readable, Cint, (Ptr{Cvoid},), s.handle) == 0
             close(s)
@@ -1092,43 +1129,45 @@ end
 
 uv_write(s::LibuvStream, p::Vector{UInt8}) = GC.@preserve p uv_write(s, pointer(p), UInt(sizeof(p)))
 
-# caller must have acquired the iolock
-function uv_write_noncancel(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
-    # Establish the wait object early, so that a cancellation that raced with
-    # this write request is observed before we hand anything to libuv.
+# caller must have acquired the iolock (which is released before returning)
+function uv_write_noncancel(s::LibuvStream, p::Ptr{UInt8}, n::UInt,
+                            tok::MaybeToken=default_cancel_token())
     ct = current_task()
-    ct.queue = s
-
-    cr = pre_sleep_cancellation_request()
-    if cr !== nothing
-        ct.queue = nothing
-        return 0
+    src = tok === nothing ? nothing : tok.source
+    if cancel_pending(src, ct)
+        # The governing token is already cancelled: throw before handing
+        # anything to libuv.
+        iolock_end()
+        checkcancel(src)
+        iolock_begin() # the pending cancellation was covered concurrently
     end
     if abandoning_external_waits(ct)
         # Unwinding from an ABANDON_EXTERNAL (or stronger) cancellation:
         # issue the write, but do not wait for its completion. The request's
         # data stays C_NULL (no waiter), so its completion callback frees it.
-        ct.queue = nothing
         uv_write_async(s, p, n)
         iolock_end()
         return Int(n)
     end
 
-    local uvw, lastn
-    try
-        uvw, lastn = uv_write_async(s, p, n)
-    catch
-        # E.g. the stream was (or gets) closed. We still hold the iolock, so
-        # this cannot race a concurrent cancel_wait!.
-        ct.queue = nothing
-        rethrow()
-    end
+    uvw, lastn = uv_write_async(s, p, n)
     # If the write was split into multiple requests, only the last one can be
     # cancelled; the earlier chunks are already owned by the OS.
-    ct.next = uvw
+    w = getwaitnode(ct)
+    @atomic :monotonic w.state = WAITNODE_WAITING
+    w.queue = s
+    w.uvreq = uvw
     preserve_handle(ct)
     sigatomic_begin()
-    uv_req_set_data(uvw, ct)
+    uv_req_set_data(uvw, pointer_from_objref(w))
+    if src !== nothing && !register_cancellation!(src, w)
+        # The token was cancelled since the entry check: don't park. Ask
+        # libuv to cancel the write and await its completion callback below
+        # (the buffer must stay live while the OS may still use it); the
+        # post-write cancellation point in `uv_write` delivers the request.
+        ccall(:uv_cancel, Cint, (Ptr{Cvoid},), uvw) # ignore any errors
+        src = nothing
+    end
     iolock_end()
     local nwritten
     try
@@ -1138,108 +1177,122 @@ function uv_write_noncancel(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
         # (so we don't need to monitor the error status of the intermediate writes)
         nwritten = wait()::Csize_t
         sigatomic_begin()
-    finally
-        # try-finally unwinds the sigatomic level, so need to repeat sigatomic_end
-        sigatomic_end()
-        iolock_begin()
-        if ct.queue === s
-            # Only happens in unexpected error cases (e.g. resumption by an
-            # unexpected `throwto`). Both completion and cancellation queue a
-            # proper callback, which unsets this.
-            ct.next = nothing
-            ct.queue = nothing
-        end
-        d = uv_req_data(uvw)
-        if d == UV_REQ_CANCEL_ORPHANED
-            # An ABANDON_EXTERNAL canceller detached the request while
-            # resuming us and the completion callback has not run yet: hand
-            # the freeing duty to it. (Exactly one of us transitions the data
-            # field from the sentinel to C_NULL; the other observes C_NULL
-            # and frees - both run under the iolock.)
-            uv_req_set_data(uvw, C_NULL)
-        elseif d != C_NULL
-            # uvw is still alive - likely because we got some unexpected throwto
-            # exception. Try to cancel the request, so that the write does not
-            # keep spamming the stream if the user is looking at it. Note that
-            # regular cancellation does not go through this path and instead
-            # returns the number of written bytes to the caller.
-            ccall(:uv_cancel, Cint, (Ptr{Cvoid},), uvw) # ignore any errors
-            # make sure we won't get spurious notifications later
-            uv_req_set_data(uvw, C_NULL)
-        else
-            # done with uvw (the completion callback already ran)
-            Libc.free(uvw)
-        end
-        iolock_end()
-        unpreserve_handle(ct)
+    catch err
+        # (catch restored the sigatomic level from the try entry; the
+        # teardown helper unwinds it)
+        _uv_write_cancelled_teardown!(s, w, uvw, err, src, ct)
+        rethrow()
     end
+    # normal completion (or the wake lost the race to a completion that ran
+    # anyway): clean up the request and our registration
+    sigatomic_end()
+    iolock_begin()
+    src === nothing || unregister_cancellation!(src, w)
+    w.queue = nothing
+    w.uvreq = C_NULL
+    @atomic :monotonic w.state = WAITNODE_IDLE
+    d = uv_req_data(uvw)
+    if d == C_NULL
+        # done with uvw (the completion callback already ran)
+        Libc.free(uvw)
+    else
+        # resumed without the completion callback having run (unexpected
+        # `schedule`): try to cancel the request, so that the write does not
+        # keep spamming the stream, and leave the freeing to the callback.
+        ccall(:uv_cancel, Cint, (Ptr{Cvoid},), uvw) # ignore any errors
+        uv_req_set_data(uvw, UV_REQ_DETACHED)
+    end
+    iolock_end()
+    unpreserve_handle(ct)
     return Int(n - lastn + nwritten)
 end
 
-function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
-    nb = uv_write_noncancel(s, p, n)
-    @cancel_check
+# Waiter-side teardown of a cancelled (or otherwise interrupted) write wait:
+# resolve the ownership of the uv request, for SAFE severities awaiting the
+# completion callback (the written buffer must stay live while the OS may
+# still access it). Runs on the waiter's stack; the caller rethrows.
+function _uv_write_cancelled_teardown!(s::LibuvStream, w::WaitNode, uvw::Ptr{Cvoid},
+                                       @nospecialize(err), src, ct::Task)
+    iolock_begin()
+    d = uv_req_data(uvw)
+    if d == C_NULL
+        # The completion callback already ran (it lost the wake claim): the
+        # request is ours to free.
+        src === nothing || unregister_cancellation!(src, w)
+        w.queue = nothing
+        w.uvreq = C_NULL
+        @atomic :monotonic w.state = WAITNODE_IDLE
+        Libc.free(uvw)
+        iolock_end()
+        sigatomic_end()
+        unpreserve_handle(ct)
+        return
+    end
+    # The write is still in flight: ask libuv to cancel it.
+    ccall(:uv_cancel, Cint, (Ptr{Cvoid},), uvw) # ignore any errors
+    detach = true
+    if err isa CancellationRequest && severity(err) < CANCEL_REQUEST_ABANDON_EXTERNAL.request &&
+       src isa CancellationTokenSource
+        # SAFE cancellation: await the completion callback, so that the
+        # caller's buffer is provably no longer in use when we unwind. Only a
+        # severity escalation may interrupt this bounded teardown wait.
+        @atomic :monotonic w.state = WAITNODE_WAITING
+        if register_cancellation!(src, w; min_severity=severity(err) + 0x01)
+            iolock_end()
+            local ok = false
+            try
+                wait() # the callback delivers the partial write count; the caller rethrows the cancellation
+                ok = true
+            catch
+                # escalated during teardown: fall through to detach
+            end
+            iolock_begin()
+            unregister_cancellation!(src, w)
+            if ok
+                # the callback ran (it claimed the re-parked wake)
+                w.queue = nothing
+                w.uvreq = C_NULL
+                @atomic :monotonic w.state = WAITNODE_IDLE
+                Libc.free(uvw)
+                iolock_end()
+                sigatomic_end()
+                unpreserve_handle(ct)
+                return
+            end
+            d = uv_req_data(uvw)
+            detach = d != C_NULL
+            detach || Libc.free(uvw)
+        end
+    else
+        src === nothing || unregister_cancellation!(src, w)
+    end
+    if detach
+        # Abandoning severities (or an escalation during teardown): detach
+        # the request - the completion callback frees it.
+        uv_req_set_data(uvw, UV_REQ_DETACHED)
+    end
+    w.queue = nothing
+    w.uvreq = C_NULL
+    @atomic :monotonic w.state = WAITNODE_IDLE
+    iolock_end()
+    sigatomic_end()
+    unpreserve_handle(ct)
+    return
+end
+
+function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    tok = resolve_cancel_token(cancel)
+    nb = uv_write_noncancel(s, p, n, tok)
+    @cancel_check(tok)
     @assert nb == n
     return nb
 end
 
-# Sentinel for a uv request's data field: the wait was interrupted and the
-# canceller detached the request while resuming the waiter. The completion
-# callback frees such a request; the waiter's cleanup must not touch it.
-# (A plain C_NULL data means the completion callback already ran.)
-const UV_REQ_CANCEL_ORPHANED = Ptr{Cvoid}(UInt(0x1))
-
-function cancel_wait!(s::LibuvStream, t::Task, @nospecialize(creq))
-    iolock_begin()
-    if t.queue !== s
-        iolock_end()
-        return false
-    end
-    uvw = t.next
-    @assert uvw isa Ptr{Cvoid} && uvw != C_NULL
-    if (UInt(uvw) & 0x1) == 0x1
-        # A shutdown (closewrite) wait, storing the tagged uv_shutdown_t (see
-        # closewrite): uv_cancel does not support shutdown requests, so the
-        # wait is interrupted without cancelling the operation. Detach the
-        # request under the iolock - its completion callback frees it and,
-        # crucially, will not try to resume the task we are resuming here.
-        req = Ptr{Cvoid}(UInt(uvw) & ~UInt(0x1))
-        uv_req_set_data(req, UV_REQ_CANCEL_ORPHANED)
-        list_deletefirst!(s, t)
-        # The request is being delivered to the task as an exception.
-        acknowledge_cancellation!(t, creq)
-        schedule(t, conform_cancellation_request(creq), error=true)
-        iolock_end()
-        return true
-    end
-    if conform_cancellation_request(creq) === CANCEL_REQUEST_ABANDON_EXTERNAL
-        # Issue the cancellation of the write, but do not wait for it to
-        # complete: detach the request (the completion callback frees it) and
-        # resume the task right away.
-        ccall(:uv_cancel, Cint, (Ptr{Cvoid},), uvw) # ignore any errors
-        uv_req_set_data(uvw, UV_REQ_CANCEL_ORPHANED)
-        list_deletefirst!(s, t)
-        acknowledge_cancellation!(t, creq)
-        schedule(t, conform_cancellation_request(creq), error=true)
-        iolock_end()
-        return true
-    end
-    # The completion callback (with UV_ECANCELED status and the partial write
-    # count) resumes the waiting task.
-    ccall(:uv_cancel, Cint, (Ptr{Cvoid},), uvw) # ignore any errors
-    iolock_end()
-    return true
-end
-
-# The write-wait protocol above stores the stream itself (not a list) in
-# `t.queue`; there is no queue to delete from on cleanup paths.
-function list_deletefirst!(s::LibuvStream, t::Task)
-    if t.queue === s
-        t.next = nothing
-        t.queue = nothing
-    end
-    nothing
-end
+# Sentinel for a uv request's data field: the waiter departed (its wait was
+# interrupted, or it detached a fire-and-forget request) and the completion
+# callback owns freeing the request. (A plain C_NULL data means the
+# completion callback already ran and the waiter owns the request.)
+const UV_REQ_DETACHED = Ptr{Cvoid}(UInt(0x1))
 
 # helper function for uv_write that returns the uv_write_t struct of the last
 # chunk's write (and that chunk's size) rather than waiting on it, caller must
@@ -1334,46 +1387,50 @@ end
 
 function uv_writecb_task(req::Ptr{Cvoid}, status::Cint)
     d = uv_req_data(req)
-    if d == C_NULL
-        # No owner for this req - free it.
+    if d == C_NULL || d == UV_REQ_DETACHED
+        # No owner for this req (a fire-and-forget write, or the waiter
+        # departed and left the freeing to us).
         Libc.free(req)
-    elseif d == UV_REQ_CANCEL_ORPHANED
-        # A canceller detached this req while resuming its waiter, which may
-        # not have finished its cleanup yet (it inspects the req under the
-        # iolock). Mark the callback as done and leave the freeing to it.
-        uv_req_set_data(req, C_NULL)
     else
-        uv_req_set_data(req, C_NULL) # let the Task know we got the writecb
-        t = unsafe_pointer_to_objref(d)::Task
-        t.next = nothing
-        t.queue = nothing
-        if status != 0 && status != UV_ECANCELED
-            schedule(t, _UVError("write", status); error=true)
-        else
-            # For cancelled writes, this is the partial write count.
-            nwritten = ccall(:uv_write_nwritten, Csize_t, (Ptr{Cvoid},), req)
-            schedule(t, nwritten)
+        # Mark the callback as done; the waiter (which inspects the req under
+        # the iolock) owns freeing it.
+        uv_req_set_data(req, C_NULL)
+        w = unsafe_pointer_to_objref(d)::WaitNode
+        if (@atomicreplace w.state WAITNODE_WAITING => WAITNODE_NOTIFIED).success
+            w.queue = nothing
+            w.uvreq = C_NULL
+            if status != 0 && status != UV_ECANCELED
+                schedule(w.task, _UVError("write", status); error=true)
+            else
+                # For cancelled writes, this is the partial write count.
+                nwritten = ccall(:uv_write_nwritten, Csize_t, (Ptr{Cvoid},), req)
+                schedule(w.task, nwritten)
+            end
         end
+        # CAS failure: a canceller claimed the wake; the waiter's teardown
+        # observes data == C_NULL and takes over the request.
     end
     nothing
 end
 
 function uv_shutdowncb_task(req::Ptr{Cvoid}, status::Cint)
     d = uv_req_data(req)
-    if d == C_NULL
-        # No owner for this req - free it.
+    if d == C_NULL || d == UV_REQ_DETACHED
+        # No owner for this req (a fire-and-forget shutdown, or the waiter
+        # departed and left the freeing to us).
         Libc.free(req)
-    elseif d == UV_REQ_CANCEL_ORPHANED
-        # A canceller detached this req while resuming its waiter, which may
-        # not have finished its cleanup yet (it inspects the req under the
-        # iolock). Mark the callback as done and leave the freeing to it.
-        uv_req_set_data(req, C_NULL)
     else
-        uv_req_set_data(req, C_NULL) # let the Task know we got the shutdowncb
-        t = unsafe_pointer_to_objref(d)::Task
-        t.next = nothing
-        t.queue = nothing
-        schedule(t, status)
+        # Mark the callback as done; the waiter (which inspects the req under
+        # the iolock) owns freeing it.
+        uv_req_set_data(req, C_NULL)
+        w = unsafe_pointer_to_objref(d)::WaitNode
+        if (@atomicreplace w.state WAITNODE_WAITING => WAITNODE_NOTIFIED).success
+            w.queue = nothing
+            w.uvreq = C_NULL
+            schedule(w.task, status)
+        end
+        # CAS failure: a canceller claimed the wake; the waiter's teardown
+        # observes data == C_NULL and takes over the request.
     end
     nothing
 end
