@@ -243,7 +243,6 @@ end
 
 # aliased load forwarding
 # -----------------------
-# TODO fix broken examples with EscapeAnalysis
 
 # OK: immutable(immutable(...)) case
 let src = code_typed1((Any,Any,Any)) do x, y, z
@@ -307,16 +306,16 @@ let # this is a simple end to end test case, which demonstrates allocation elimi
     # compiled code for `simple_sroa`, otherwise everything can be folded even without SROA
     @test @allocated(simple_sroa(s)) == 0
 end
-let # FIXME: some nested example
+let # nested mutable fields handled by EA-backed field forwarding
     src = code_typed1((Int,)) do x
         Ref(Ref(x))[][]
     end
-    @test_broken is_scalar_replaced(src)
+    @test is_scalar_replaced(src)
 
     src = code_typed1((Int,)) do x
         Ref(Ref(Ref(Ref(Ref(Ref(Ref(Ref(Ref(Ref((x)))))))))))[][][][][][][][][][]
     end
-    @test_broken is_scalar_replaced(src)
+    @test is_scalar_replaced(src)
 end
 
 # FIXME: immutable(mutable(...)) case
@@ -327,13 +326,13 @@ let src = code_typed1((Any,Any,Any)) do x, y, z
     end
     @test_broken !any(isnew, src.code)
 end
-# FIXME: mutable(mutable(...)) case
+# mutable(mutable(...)) case
 let src = code_typed1((Any,Any,Any)) do x, y, z
         xyz = MutableXYZ(x, y, z)
         outer = MutableOuter(xyz, xyz, xyz)
         outer.x.x, outer.y.y, outer.z.z
     end
-    @test_broken !any(isnew, src.code)
+    @test !any(isnew, src.code)
 end
 
 let # should work with constant globals
@@ -475,6 +474,24 @@ let src = code_typed1((Bool, Any,)) do cnd, a
     end
     @test count(isnew, src.code) == 1
     @test count(iscall((src, setfield!)), src.code) == 1
+end
+
+let # nested mutable fields handled by EA-backed `isdefined` forwarding
+    src = code_typed1() do
+        r = Ref(Ref{String}())
+        return isdefined(r[], :x)
+    end
+    @test count(iscall((src, isdefined)), src.code) == 0
+    @test only(x for x in src.code if x isa ReturnNode).val === false
+
+    src = code_typed1((String,)) do s
+        inner = Ref{String}()
+        inner[] = s
+        r = Ref(inner)
+        return isdefined(r[], :x)
+    end
+    @test count(iscall((src, isdefined)), src.code) == 0
+    @test only(x for x in src.code if x isa ReturnNode).val === true
 end
 
 callit(f, args...) = f(args...)

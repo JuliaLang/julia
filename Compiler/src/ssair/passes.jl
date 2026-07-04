@@ -80,6 +80,106 @@ function try_compute_fieldidx_stmt(ir::Union{IncrementalCompact,IRCode}, stmt::E
     return try_compute_fieldidx(typ, field)
 end
 
+function is_ea_forwardable_field_ordering(@nospecialize(field_ordering))
+    return field_ordering === :unspecified ||
+        (field_ordering isa Const && field_ordering.val === :not_atomic)
+end
+
+function is_ea_forwardable_field_query(ir::Union{IncrementalCompact,IRCode}, stmt::Expr)
+    is_getfield = is_known_call(stmt, getfield, ir)
+    is_isdefined = !is_getfield && is_known_call(stmt, isdefined, ir)
+    (is_getfield || is_isdefined) || return false
+    nargs = length(stmt.args)
+    if is_getfield
+        3 <= nargs <= 5 || return false
+    else
+        3 <= nargs <= 4 || return false
+    end
+    field_ordering = :unspecified
+    if is_getfield && nargs == 5
+        field_ordering = argextype(stmt.args[5], ir)
+    elseif nargs == 4
+        field_ordering = argextype(stmt.args[4], ir)
+        widenconst(field_ordering) === Bool && (field_ordering = :unspecified)
+    end
+    is_ea_forwardable_field_ordering(field_ordering) || return false
+    val = stmt.args[2]
+    val isa SSAValue || return false
+    struct_typ = argextype_widened(val, ir)
+    struct_typ_name = argument_datatypename(struct_typ)
+    struct_typ_name === nothing && return false
+    struct_typ_name === typename(Array) && return false
+    struct_typ_name.atomicfields == C_NULL || return false
+    return ismutabletypename(struct_typ_name)
+end
+
+const EA_FORWARD_FIELD_QUERY_LIMIT = 32
+
+function has_ea_forwardable_field_query(ir::IRCode)
+    nqueries = 0
+    for idx = 1:length(ir.stmts)
+        stmt = ir[SSAValue(idx)][:stmt]
+        stmt isa Expr || continue
+        is_ea_forwardable_field_query(ir, stmt) || continue
+        nqueries += 1
+        # This consumer runs whole-method EA. If many residual field queries remain,
+        # the current implementation is usually looking at general mutable data
+        # structure accesses rather than a small local SROA opportunity.
+        nqueries > EA_FORWARD_FIELD_QUERY_LIMIT && return false
+    end
+    return nqueries > 0
+end
+
+function ea_forwarded_load_value(eresult::EscapeAnalysis.EscapeResult, idx::Int)
+    haskey(eresult.ssamemoryinfo, idx) || return nothing
+    memoryinfo = eresult.ssamemoryinfo[idx]
+    memoryinfo isa EscapeAnalysis.ConflictedMemory && return nothing
+    memoryinfo isa EscapeAnalysis.UnknownMemory && return nothing
+    memoryinfo isa EscapeAnalysis.UninitializedMemory && return nothing
+    return Const(memoryinfo)
+end
+
+function ea_forwarded_load_replacement(@nospecialize(val))
+    val isa SSAValue && return val
+    val isa Argument && return val
+    is_inlineable_constant(val) && return quoted(val)
+    return nothing
+end
+
+function ea_value_dominates_load(ir::IRCode, domtree::DomTree, idx::Int, @nospecialize(val))
+    val isa SSAValue || return true
+    1 ≤ val.id ≤ length(ir.stmts) || return false
+    val.id == idx && return false
+    valbb = block_for_inst(ir.cfg, val.id)
+    idxbb = block_for_inst(ir.cfg, idx)
+    return valbb == idxbb ? val.id < idx : dominates(domtree, valbb, idxbb)
+end
+
+ea_no_escape_cache(@nospecialize(_)) = false
+
+function ea_forward_field_queries(ir::IRCode, inlining::Union{Nothing,InliningState})
+    has_ea_forwardable_field_query(ir) || return ir
+    get_escape_cache′ = inlining === nothing ? ea_no_escape_cache : get_escape_cache(inlining.interp)
+    eresult = EscapeAnalysis.analyze_escapes(ir, length(ir.argtypes), get_escape_cache′)
+    isempty(eresult.ssamemoryinfo) && return ir
+    domtree = construct_domtree(ir.cfg.blocks)
+    for idx = 1:length(ir.stmts)
+        inst = ir[SSAValue(idx)]
+        stmt = inst[:stmt]
+        stmt isa Expr || continue
+        is_ea_forwardable_field_query(ir, stmt) || continue
+        loadval = ea_forwarded_load_value(eresult, idx)
+        loadval === nothing && continue
+        val = loadval.val
+        ea_value_dominates_load(ir, domtree, idx, val) || continue
+        replacement = ea_forwarded_load_replacement(val)
+        replacement === nothing && continue
+        inst[:stmt] = replacement
+        add_flag!(inst, IR_FLAG_REFINED)
+    end
+    return ir
+end
+
 function find_curblock(domtree::DomTree, allblocks::BitSet, curblock::Int)
     # TODO: This can be much faster by looking at current level and only
     # searching for those blocks in a sorted order
@@ -1622,10 +1722,10 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             filter!(x -> ir[SSAValue(x.idx)][:stmt] !== nothing, defuse.uses)
         end
         sroa_mutables!(ir, defuses, used_ssas, lazydomtree, inlining)
-        return ir
+        return ea_forward_field_queries(ir, inlining)
     else
         simple_dce!(compact)
-        return complete(compact)
+        return ea_forward_field_queries(complete(compact), inlining)
     end
 end
 
@@ -1682,6 +1782,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
 end
 
 is_nothrow(ir::IRCode, ssa::SSAValue) = has_flag(ir[ssa], IR_FLAG_NOTHROW)
+is_nothrow(ir::IRCode, id::Int) = is_nothrow(ir, SSAValue(id))
 
 function reachable_blocks(cfg::CFG, from_bb::Int, to_bb::Int)
     worklist = Int[from_bb]
@@ -1849,16 +1950,19 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int,Tuple{SPCSet,SSADefUse}}
             finalizer_useidx = find_finalizer_useidx(defuse)
             if finalizer_useidx isa Int
                 nargs = length(ir.argtypes) # COMBAK this might need to be `Int(opt.src.nargs)`
-                estate = EscapeAnalysis.analyze_escapes(ir, nargs, 𝕃ₒ, get_escape_cache(inlining.interp))
+                eresult = EscapeAnalysis.analyze_escapes(ir, nargs, get_escape_cache(inlining.interp))
                 # disable finalizer inlining when this allocation is aliased to somewhere,
                 # mostly likely to edges of `PhiNode`
-                hasaliases = EscapeAnalysis.getaliases(SSAValue(defidx), estate) !== nothing
-                einfo = estate[SSAValue(defidx)]
+                hasaliases = EscapeAnalysis.getaliases(eresult, SSAValue(defidx)) !== nothing
+                einfo = eresult[SSAValue(defidx)]
                 if !hasaliases && EscapeAnalysis.has_no_escape(einfo)
                     already = BitSet(use.idx for use in defuse.uses)
-                    for idx = einfo.Liveness
-                        if idx ∉ already
-                            push!(defuse.uses, SSAUse(:EALiveness, idx))
+                    Liveness = einfo.Liveness
+                    if Liveness isa EscapeAnalysis.PCLiveness
+                        for idx = Liveness.pcs
+                            if idx ∉ already
+                                push!(defuse.uses, SSAUse(:EALiveness, idx))
+                            end
                         end
                     end
                     finalizer_idx = defuse.uses[finalizer_useidx].idx
