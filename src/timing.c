@@ -71,6 +71,10 @@ static int cmp_counts_events(const void *a, const void *b) {
 void jl_print_timings(void)
 {
 #ifdef USE_TIMING_COUNTS
+    // opt-in: the exit dump breaks tests that assert on subprocess stderr
+    char *e = getenv("JULIA_TIMINGS");
+    if (e == NULL || strcmp(e, "1") != 0)
+        return;
     qsort(jl_timing_counts_events.items, jl_timing_counts_events.len,
           sizeof(jl_timing_counts_event_t *), cmp_counts_events);
 
