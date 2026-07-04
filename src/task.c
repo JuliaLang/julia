@@ -1742,6 +1742,14 @@ JL_DLLEXPORT void jl_abandon_task(jl_task_t *t, jl_task_t *next_task) JL_NOTSAFE
     if (ct != t)
         return; // Task is not currently running
 
+    // Refuse to abandon a task whose thread holds runtime locks (e.g. it is
+    // parked in the event loop holding the uv lock, or mid-allocation):
+    // switching away would leave the lock held forever and trips
+    // ctx_switch's lock invariant. (Racy read - the caller retries or falls
+    // back to marking the task in place.)
+    if (ptls2->locks.len != 0)
+        return;
+
     // Store the target task and set up the abandoned task's state
     ptls2->abandon_to = next_task;
 

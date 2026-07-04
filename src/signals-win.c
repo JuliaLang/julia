@@ -233,10 +233,14 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
             // (SAFE -> ABANDON_EXTERNAL -> ABANDON_ALL) can still make
             // progress on it.
             jl_task_t *rescue_task = NULL;
-            if (jl_sigint_rescue_timer_expired_peek() && jl_sigint_direct_abandon_allowed())
+            jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
+            // See signals-unix.c: only abandon a thread busy in managed
+            // compute - a GC-safe thread is parked, not the stuck victim.
+            if (jl_atomic_load_relaxed(&ptls2->gc_state) == 0 &&
+                ptls2->locks.len == 0 && // e.g. parked in the event loop holding the uv lock
+                jl_sigint_rescue_timer_expired_peek() && jl_sigint_direct_abandon_allowed())
                 rescue_task = jl_check_sigint_rescue_abandon(); // consumes the expiry
             if (rescue_task != NULL) {
-                jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
                 jl_task_t *ct = jl_atomic_load_relaxed(&ptls2->current_task);
                 if (ct != NULL && ct != rescue_task) {
                     jl_safe_printf("\nWARNING: Abandoning current task and switching to rescue task.\n"

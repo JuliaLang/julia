@@ -1206,30 +1206,34 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
                 jl_sigint_rescue_timer_expired();
                 if (est == 2) {
                     jl_safe_printf("\nWARNING: Cancellation is in progress, but has not completed within 1s.\n"
-                                     "         Press ^C again to also stop waiting for external resources (e.g. in-flight I/O).\n");
+                                     "         You (or a package author) may need to add more @cancel_check's.\n"
+                                     "         Press ^C again to also stop waiting for external resources (e.g. in-flight I/O).\n"
+#ifdef SIGINFO
+                                     "         Press ^T to print thread backtraces.\n");
+#else
+                                     "         Send SIGUSR1 to print thread backtraces.\n");
+#endif
                     continue;
                 }
                 if (est == 3) {
                     jl_safe_printf("\nWARNING: Cancellation has still not completed.\n"
-                                     "         Press ^C again to forcibly abandon the current task (unsafe; may leak resources).\n");
+                                     "         Press ^C again to forcibly abandon the current task (unsafe; may leak resources).\n"
+#ifdef SIGINFO
+                                     "         Press ^T to print thread backtraces.\n");
+#else
+                                     "         Send SIGUSR1 to print thread backtraces.\n");
+#endif
                     continue;
                 }
                 jl_safe_printf("\nWARNING: Process failed to acknowledge SIGINT within 1s.\n"
                                  "         You (or a package author) may need to add more @cancel_check's.\n"
-                                 "         Attempting to collect backtraces of running threads.\n"
 #ifdef SIGINFO
-                                 "         Send SIGINFO (Ctrl-T) to trigger additional profiles.\n"
+                                 "         Press ^T to print thread backtraces.\n"
 #else
-                                 "         Send SIGUSR1 to trigger additional profiles.\n"
+                                 "         Send SIGUSR1 to print thread backtraces.\n"
 #endif
                                  "         Press ^C again to (unsafely) abandon the current task.\n");
-                // Collect backtraces of *running* threads.
-                // N.B.: It doesn't make sense to profile suspended threads - we only get to this case
-                //       if a task is spinning in CPU-bound code without any yield/cancellation points.
-                critical = 1;
-                doexit = 0;
-                rescue_bt = 1;
-                goto noexit_critical;
+                continue;
             }
             if (jl_ignore_sigint()) {
                 continue;
@@ -1244,10 +1248,18 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
                 // escalation (SAFE -> ABANDON_EXTERNAL -> ABANDON_ALL) can
                 // still make progress on it.
                 jl_task_t *rescue_task = NULL;
-                if (jl_sigint_rescue_timer_expired_peek() && jl_sigint_direct_abandon_allowed())
+                jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
+                // Direct abandonment rips away whatever thread 0 is currently
+                // running, which is only legitimate when that is the stuck
+                // victim monopolizing the thread in managed compute. A thread
+                // in GC-safe state is parked in the scheduler or a foreign
+                // call (possibly holding the uv loop lock!) - not the victim;
+                // and an idle thread 0 means the julia-side listener can act.
+                if (jl_atomic_load_relaxed(&ptls2->gc_state) == 0 &&
+                    ptls2->locks.len == 0 && // e.g. parked in the event loop holding the uv lock
+                    jl_sigint_rescue_timer_expired_peek() && jl_sigint_direct_abandon_allowed())
                     rescue_task = jl_check_sigint_rescue_abandon(); // consumes the expiry
                 if (rescue_task != NULL) {
-                    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
                     jl_task_t *ct = jl_atomic_load_relaxed(&ptls2->current_task);
                     if (ct != NULL && ct != rescue_task) {
                         jl_safe_printf("\nWARNING: Abandoning current task and switching to rescue task.\n"
@@ -1287,12 +1299,28 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
         doexit = critical;
 #ifdef SIGINFO
         if (sig == SIGINFO) {
+            if (jl_sigint_episode_state() != 0) {
+                // On-demand thread backtraces during a ^C episode.
+                critical = 1;
+                doexit = 0;
+                rescue_bt = 1;
+                goto noexit_critical;
+            }
             if (profile_running != 1)
                 trigger_profile_peek();
             doexit = 0;
         }
 #else
         if (sig == SIGUSR1) {
+#if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L
+            if (jl_sigint_episode_state() != 0) {
+                // On-demand thread backtraces during a ^C episode.
+                critical = 1;
+                doexit = 0;
+                rescue_bt = 1;
+                goto noexit_critical;
+            }
+#endif
             if (profile_running != 1 && timer_graceperiod_elapsed())
                 trigger_profile_peek();
             doexit = 0;
