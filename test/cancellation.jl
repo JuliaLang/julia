@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base: cancel!, CancellationRequest, CANCEL_REQUEST_SAFE, CANCEL_REQUEST_ACK
+using Base: cancel!, CancellationRequest, CANCEL_REQUEST_SAFE, CANCEL_REQUEST_ACK,
+    CANCEL_REQUEST_ABANDON_EXTERNAL, CANCEL_REQUEST_ABANDON_ALL
 
 const collatz_code = quote
     collatz(n) = (n & 1) == 1 ? (3n + 1) : (n ÷ 2)
@@ -228,6 +229,113 @@ end
     @test length(t.result.exceptions) == 2
 end
 
+@testset "unfriendly cancellation modes" begin
+    # Acknowledgment preserves the request's severity.
+    seen = Ref{Any}(nothing)
+    t = @async try
+        sleep(1000)
+    catch e
+        seen[] = (e, Base.acknowledged_cancellation_severity(), Base.abandoning_external_waits())
+        rethrow()
+    end
+    spin()
+    cancel!(t, CANCEL_REQUEST_ABANDON_EXTERNAL)
+    @test timedwait(() -> istaskdone(t), 10.0) == :ok
+    e, sev, abandoning = seen[]
+    @test e === CANCEL_REQUEST_ABANDON_EXTERNAL
+    @test sev === CANCEL_REQUEST_ABANDON_EXTERNAL
+    @test abandoning
+
+    # SAFE acknowledgments report SAFE severity and permit external waits.
+    seen2 = Ref{Any}(nothing)
+    t2 = @async try
+        sleep(1000)
+    catch
+        seen2[] = (Base.acknowledged_cancellation_severity(), Base.abandoning_external_waits())
+        rethrow()
+    end
+    spin()
+    cancel!(t2)
+    @test timedwait(() -> istaskdone(t2), 10.0) == :ok
+    @test seen2[] === (CANCEL_REQUEST_SAFE, false)
+
+    # ABANDON_ALL freezes a parked task immediately: no unwind, no cleanup.
+    cleanup_ran = Ref(false)
+    t3 = @async try
+        sleep(1000)
+    finally
+        cleanup_ran[] = true
+    end
+    spin()
+    @test cancel!(t3, CANCEL_REQUEST_ABANDON_ALL)
+    @test istaskdone(t3)
+    @test t3.state === :abandoned
+    @test istaskfailed(t3)
+    @test !cleanup_ran[]
+    @test_throws TaskFailedException wait(t3)
+
+    # ABANDON_ALL of a never-started task completes it too.
+    t4 = @task nothing
+    @test cancel!(t4, CANCEL_REQUEST_ABANDON_ALL)
+    @test istaskdone(t4)
+
+    # ABANDON_EXTERNAL interrupts a blocked stream write without waiting for
+    # the write's cancellation to complete.
+    p = Pipe()
+    Base.link_pipe!(p, reader_supports_async=true, writer_supports_async=true)
+    try
+        big = zeros(UInt8, 200_000_000)
+        tw = @async write(p, big)
+        spin()
+        cancel!(tw, CANCEL_REQUEST_ABANDON_EXTERNAL)
+        @test timedwait(() -> istaskdone(tw), 10.0) == :ok
+        @test istaskfailed(tw)
+        @test tw.result === CANCEL_REQUEST_ABANDON_EXTERNAL
+    finally
+        close(p)
+    end
+
+    # Escalation helper: severity ladder for repeat ^C.
+    @test Base.escalated_sigint_severity(nothing) === CANCEL_REQUEST_SAFE
+    @test Base.escalated_sigint_severity(UInt8(0x00)) === CANCEL_REQUEST_SAFE # fresh C-side ^C marker
+    @test Base.escalated_sigint_severity(CANCEL_REQUEST_SAFE) === CANCEL_REQUEST_ABANDON_EXTERNAL
+    @test Base.escalated_sigint_severity(CancellationRequest(0x80)) === CANCEL_REQUEST_ABANDON_EXTERNAL
+    @test Base.escalated_sigint_severity(CANCEL_REQUEST_ABANDON_EXTERNAL) === CANCEL_REQUEST_ABANDON_ALL
+    @test Base.escalated_sigint_severity(CancellationRequest(0x83)) === CANCEL_REQUEST_ABANDON_ALL
+    @test Base.escalated_sigint_severity(CANCEL_REQUEST_ABANDON_ALL) === CANCEL_REQUEST_ABANDON_ALL
+end
+
+@testset "unfriendly cancellation of Experimental.@sync" begin
+    # ABANDON_EXTERNAL propagates to the children, which are internal and
+    # therefore awaited.
+    t1 = Ref{Task}(); t2 = Ref{Task}()
+    t = @async begin
+        Base.Experimental.@sync begin
+            t1[] = @async sleep(1000)
+            t2[] = @async sleep(1000)
+        end
+    end
+    spin()
+    cancel!(t, CANCEL_REQUEST_ABANDON_EXTERNAL)
+    @test_throws TaskFailedException wait(t)
+    @test timedwait(() -> istaskdone(t1[]) && istaskdone(t2[]), 10.0) == :ok
+    @test istaskfailed(t1[]) && istaskfailed(t2[])
+
+    # ABANDON_ALL freezes the parent, which never even begins propagation -
+    # the children must be frozen by the caller's own escalation if desired.
+    t3 = Ref{Task}()
+    tp = @async begin
+        Base.Experimental.@sync begin
+            t3[] = @async sleep(1000)
+        end
+    end
+    spin()
+    @test cancel!(tp, CANCEL_REQUEST_ABANDON_ALL)
+    @test tp.state === :abandoned
+    @test cancel!(t3[], CANCEL_REQUEST_ABANDON_ALL)
+    @test t3[].state === :abandoned
+end
+
 @testset "structured cancellation of Experimental.@sync" begin
     t1 = Ref{Task}(); t2 = Ref{Task}()
     t = @async begin
@@ -294,7 +402,7 @@ end
         # The request was delivered (and acknowledged); this task can still
         # perform IO and sleep.
         sleep(0.01)
-        (@atomic :acquire current_task().cancellation_request) === CANCEL_REQUEST_ACK
+        Base.conform_cancellation_request(@atomic :acquire current_task().cancellation_request) === CANCEL_REQUEST_ACK
     end
     spin()
     cancel!(t)

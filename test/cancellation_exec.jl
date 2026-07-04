@@ -63,6 +63,24 @@ end
     @test_throws TaskFailedException fetch(watcher)
 end
 
+@testset "ABANDON_ALL freezes a running task" begin
+    started = Base.Event()
+    victim = Threads.@spawn begin
+        notify(started)
+        # No cancellation points: only freezing can stop this promptly.
+        x = Ref(1.0)
+        while x[] > 0
+            x[] = x[] * 1.0000001 + 0.1
+        end
+    end
+    wait(started)
+    sleep(0.5) # make sure it is spinning on its thread
+    @test cancel!(victim, Base.CANCEL_REQUEST_ABANDON_ALL)
+    @test timedwait(() -> istaskdone(victim), 10.0) == :ok
+    @test victim.state === :abandoned
+    @test istaskfailed(victim)
+end
+
 @testset "asynchronous cancellation hooks" begin
     # The handler runs on the cancelling thread, with the registered state and
     # the cancelled task as arguments.
