@@ -1165,7 +1165,7 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
     manifest_file === nothing && return nothing # manifest not found--keep searching LOAD_PATH
     d = get_deps(parsed_toml(manifest_file))
     for (dep_name, entries) in d
-        entries::Vector{Any}
+        entries = entries::Vector{Any}
         for entry in entries
             entry = entry::Dict{String, Any}
             uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
@@ -1493,10 +1493,11 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
 
         sv = sv::SimpleVector
         internal_methods = sv[3]::Vector{Any}
+        backedge_log = sv[4]
         Compiler.@zone "CC: INSERT_BACKEDGES" begin
             ccall(:jl_set_loading_closure_from_depmods, Cvoid, (Any, Any), depmods, internal_methods)
             try
-                ReinferUtils.insert_backedges_typeinf(internal_methods)
+                ReinferUtils.insert_backedges_typeinf(internal_methods, backedge_log)
             finally
                 ccall(:jl_clear_loading_closure, Cvoid, ())
             end
@@ -1761,7 +1762,7 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
         manifest_file === nothing && return
         d = get_deps(parsed_toml(manifest_file))
         for (dep_name, entries) in d
-            entries::Vector{Any}
+            entries = entries::Vector{Any}
             for entry in entries
                 entry = entry::Dict{String, Any}
                 uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
@@ -1776,7 +1777,7 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
                         deps′_expanded = Dict{String, Any}()
                         for (dep_name, entries) in d
                             dep_name in deps′ || continue
-                            entries::Vector{Any}
+                            entries = entries::Vector{Any}
                             if length(entries) != 1
                                 error("expected a single entry for $(repr(dep_name)) in $(repr(project_file))")
                             end

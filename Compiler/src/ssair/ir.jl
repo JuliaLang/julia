@@ -243,7 +243,12 @@ function edge_debuginfo(di, pc::Int)
     _, eid::Int, epc::Int = getdebugidx(di, pc)
     # XXX: eid > 0 should imply epc > 0
     (eid > 0 && epc > 0) || return (nothing, 0)
-    (di.edges[eid]::DebugInfo, epc)
+    es = di.edges
+    # image DebugInfos carry their inlinee list in the interned word form
+    # (a DebugInfoStream holds a Vector, a runtime DebugInfo a SimpleVector)
+    e = es isa Core.InternedCodeInstance ?
+        ccall(:jl_ici_ref, Any, (Any, Csize_t), es, eid - 1) : es[eid]
+    (e::DebugInfo, epc)
 end
 
 # All 1-based.  0 if unavailable.

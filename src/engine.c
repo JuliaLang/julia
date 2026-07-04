@@ -185,14 +185,14 @@ void jl_engine_fulfill(jl_code_instance_t *ci, jl_code_info_t *src)
     jl_task_t *ct = jl_current_task;
     uv_mutex_lock(&engine_lock);
     jl_method_instance_t *mi = jl_get_ci_mi(ci);
-    reservation_info_t *info = get_reservation(mi, ci->owner);
+    reservation_info_t *info = get_reservation(mi, jl_ci_owner(ci));
     if (info == HT_NOTFOUND || info->ci != ci) {
         uv_mutex_unlock(&engine_lock);
         return;
     }
     assert(jl_atomic_load_relaxed(&ct->tid) == info->tid);
     ct->ptls->engine_nqueued--; // re-enables finalizers, but doesn't immediately try to run them
-    remove_reservation(mi, ci->owner);
+    remove_reservation(mi, jl_ci_owner(ci));
     free(info);
     uv_cond_broadcast(&engine_wait);
     uv_mutex_unlock(&engine_lock);
