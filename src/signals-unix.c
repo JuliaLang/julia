@@ -761,10 +761,16 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx) JL_CANSAFEPOINT
         usr2_signal_context = NULL;
         assert(request == 2 || request == 3 || request == 4);
     }
-    int err;
-    eventfd_t got = 1;
-    err = write(signal_caught_cond, &got, sizeof(eventfd_t));
-    if (err != sizeof(eventfd_t)) abort();
+    if (request != 5 && request != 6) {
+        // Acknowledge the request to its synchronously waiting sender. The
+        // cancellation and abandon senders (requests 5 and 6) are
+        // fire-and-forget and never consume the token; writing it would
+        // poison the next suspend handshake with a stale acknowledgment.
+        int err;
+        eventfd_t got = 1;
+        err = write(signal_caught_cond, &got, sizeof(eventfd_t));
+        if (err != sizeof(eventfd_t)) abort();
+    }
     sig_atomic_t processing = -1;
     jl_atomic_cmpswap(&ptls->signal_request, &processing, 0);
     if (request == 2) {
@@ -1210,9 +1216,11 @@ static void *signal_listener(void *arg) JL_NOTSAFEPOINT
             else {
                 // Check if the rescue timer has already expired (from a previous SIGINT
                 // cycle). If so, the user is pressing Ctrl-C again after the warning -
-                // time to abandon the stuck task.
+                // time to abandon the stuck task, unless the julia-side
+                // escalation (SAFE -> ABANDON_EXTERNAL -> ABANDON_ALL) can
+                // still make progress on it.
                 jl_task_t *rescue_task = jl_check_sigint_rescue_abandon();
-                if (rescue_task != NULL) {
+                if (rescue_task != NULL && jl_sigint_direct_abandon_allowed()) {
                     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
                     jl_task_t *ct = jl_atomic_load_relaxed(&ptls2->current_task);
                     if (ct != NULL && ct != rescue_task) {
