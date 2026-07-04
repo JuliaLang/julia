@@ -687,6 +687,13 @@ JL_DLLEXPORT void jl_clear_sigint_dispatch_pending(void) JL_NOTSAFEPOINT
     jl_atomic_store_relaxed(&jl_sigint_dispatch_pending, 0);
 }
 
+// Atomically claim a pending ^C notification: the sigint listener (one per
+// threadpool) that wins the claim processes the episode; others re-park.
+JL_DLLEXPORT int jl_claim_sigint_dispatch(void) JL_NOTSAFEPOINT
+{
+    return jl_atomic_exchange_relaxed(&jl_sigint_dispatch_pending, 0);
+}
+
 static void deliver_sigint_notification(void) JL_NOTSAFEPOINT
 {
     // N.B.: This runs on a dedicated (non-Julia) thread - the signal listener

@@ -498,14 +498,17 @@ end
 end
 
 if Sys.isunix()
-    @testset "^C escalation ladder in the REPL (pty)" begin
+    @testset "^C escalation ladder in the REPL (pty), $(isempty(tflags) ? "default threads" : join(tflags, " "))" for tflags in ([], ["-t2"])
         isdefined(Main, :FakePTYs) || @eval Main include("testhelpers/FakePTYs.jl")
         pts, ptm = Main.FakePTYs.open_fake_pty()
         env = copy(ENV)
         env["TERM"] = "dumb"
         env["JULIA_HISTORY"] = tempname()
-        # -t2 so the sigint listener can act while the victim hogs a thread
-        p = run(detach(setenv(`$(Base.julia_cmd()) -i -q --startup-file=no --color=no -t2`, env)),
+        # Cover both thread topologies: the default session (a single default
+        # thread, which the rescued backend monopolizes in episode 2 - only
+        # the interactive-pool listener can escalate) and -t2 (the victim and
+        # the listener compete inside a wider default pool).
+        p = run(detach(setenv(`$(Base.julia_cmd()) -i -q --startup-file=no --color=no $tflags`, env)),
                 pts, pts, pts; wait=false)
         ccall(:close, Cint, (Cint,), pts) # only the child owns the pts now
 
