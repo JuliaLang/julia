@@ -2173,8 +2173,8 @@ JL_DLLEXPORT void jl_register_binding_patch_sites(const void *start, const void 
 {
     const jl_bpatch_record_t *recs = (const jl_bpatch_record_t*)start;
     size_t n = ((const char*)end - (const char*)start) / sizeof(jl_bpatch_record_t);
-    if (n == 0)
-        return;
+    size_t nslotmap = 0, ngot = 0, nregistered = 0, ndeopt = 0, nunresolved = 0;
+    if (n != 0) {
     JL_LOCK(&bgot_lock);
     if (!bgot_table_inited) {
         htable_new(&bgot_table, 0);
@@ -2182,8 +2182,11 @@ JL_DLLEXPORT void jl_register_binding_patch_sites(const void *start, const void 
     }
     for (size_t i = 0; i < n; i++) {
         const jl_bpatch_record_t *r = &recs[i];
+        if (r->kind == 2)
+            nslotmap++;
         if (r->kind != 4 || r->f0 == 0)
             continue; // slot map, sentinel, or zero marker/padding
+        ngot++;
         // resolve the entry's binding through its slot-map record
         jl_binding_t *b = NULL;
         for (size_t j = 0; j < n; j++) {
@@ -2193,13 +2196,16 @@ JL_DLLEXPORT void jl_register_binding_patch_sites(const void *start, const void 
             }
         }
         assert(b != NULL && "GOT entry record without a matching slot-map record");
-        if (b == NULL)
+        if (b == NULL) {
+            nunresolved++;
             continue;
+        }
         _Atomic(void*) *entry = (_Atomic(void*)*)(uintptr_t)r->f0;
         // The flag load is ordered after any concurrent re-type walk by the lock
         // acquisition, so an entry can never be registered behind a completed walk.
         if (jl_atomic_load_relaxed(&b->flags) & BINDING_FLAG_RETYPED) {
             jl_atomic_store_relaxed(entry, (void*)&jl_binding_deopt_slot);
+            ndeopt++;
         }
         else {
             jl_atomic_store_relaxed(entry, (void*)&b->value);
@@ -2210,9 +2216,28 @@ JL_DLLEXPORT void jl_register_binding_patch_sites(const void *start, const void 
                 ptrhash_put(&bgot_table, b, entries);
             }
             arraylist_push(entries, (void*)entry);
+            nregistered++;
         }
     }
     JL_UNLOCK(&bgot_lock);
+    }
+    // An unresolved GOT entry stays NULL and the code reading through it will crash:
+    // report it loudly instead of leaving only the eventual fault to debug.
+    if (nunresolved) {
+        jl_safe_printf("WARNING: jl_bpatch: %d of %d GOT entry records have no "
+                       "matching slot-map record (image records %p-%p)\n",
+                       (int)nunresolved, (int)ngot, start, end);
+        for (size_t i = 0; i < n && i < 8; i++)
+            jl_safe_printf("  record %d: {0x%" PRIx64 ", 0x%" PRIx64 ", 0x%" PRIx64 ", %d}\n",
+                           (int)i, recs[i].f0, recs[i].f1, recs[i].f2, (int)recs[i].kind);
+    }
+    // Temporary diagnostic for the Windows CI sysimage crash (#62257): summarize what
+    // registration saw whenever generating output, so the build log shows it.
+    if (jl_generating_output() || getenv("JL_BPATCH_DEBUG"))
+        jl_safe_printf("jl_bpatch: image records %p-%p: %d records (%d slotmap, "
+                       "%d got), %d registered, %d deopt, %d unresolved\n",
+                       start, end, (int)n, (int)nslotmap, (int)ngot,
+                       (int)nregistered, (int)ndeopt, (int)nunresolved);
 }
 
 // Activate the re-type guards of code compiled against a previous declared type of
