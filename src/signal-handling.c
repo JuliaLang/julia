@@ -729,20 +729,47 @@ static void deliver_sigint_notification(void) JL_NOTSAFEPOINT
     JL_UNLOCK_NOGC(&sigint_state_lock);
 }
 
-// Shared entry point for a user-initiated interrupt (^C): set a safe
-// cancellation request on the root task, arm the escalation timer, and
-// notify the sigint listener task, which drives the cancellation state
-// machine. Callable from non-Julia threads.
+// The cancellation token source governing the current interactive foreground
+// evaluation (the "^C episode source"). Owned and kept alive by Base (the
+// REPL backend / script driver installs a fresh source per episode via
+// jl_set_sigint_source and holds its own rooted reference); this global is
+// only a mirror for async-signal-safe reads from the C side.
+static _Atomic(jl_cancel_source_t *) jl_sigint_source = NULL;
+
+// Set when a ^C arrived but the julia-side sigint listener has not yet
+// translated it into a cancellation of the episode source.
+static _Atomic(uint8_t) sigint_pending = 0;
+
+JL_DLLEXPORT void jl_set_sigint_source(jl_value_t *src) JL_NOTSAFEPOINT
+{
+    jl_cancel_source_t *newsrc = (src == NULL || src == jl_nothing) ?
+        NULL : (jl_cancel_source_t*)src;
+    jl_atomic_store_release(&jl_sigint_source, newsrc);
+    // A fresh episode source stands the escalation machinery down.
+    jl_atomic_store_relaxed(&sigint_pending, 0);
+    jl_reset_sigint_rescue_timer();
+}
+
+JL_DLLEXPORT jl_value_t *jl_get_sigint_source(void) JL_NOTSAFEPOINT
+{
+    jl_cancel_source_t *src = jl_atomic_load_relaxed(&jl_sigint_source);
+    return src == NULL ? jl_nothing : (jl_value_t*)src;
+}
+
+// The sigint listener consumes the pending marker when it delivers the
+// cancellation to the episode source.
+JL_DLLEXPORT int jl_consume_sigint_pending(void) JL_NOTSAFEPOINT
+{
+    return jl_atomic_exchange_relaxed(&sigint_pending, 0);
+}
+
+// Shared entry point for a user-initiated interrupt (^C): mark the interrupt
+// as pending, arm the escalation timer, and notify the sigint listener task,
+// which drives the cancellation state machine. Callable from non-Julia
+// threads; must not touch julia objects.
 void jl_sigint_request_cancellation(void) JL_NOTSAFEPOINT
 {
-    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
-    // Only plant a fresh SAFE request if there is no active request. Repeat
-    // ^C presses just (re-)notify the listener, which escalates the severity
-    // of the ongoing cancellation itself
-    // (SAFE -> ABANDON_EXTERNAL -> ABANDON_ALL).
-    jl_value_t *expected = jl_nothing;
-    jl_atomic_cmpswap(&ptls2->root_task->cancellation_request, &expected,
-        jl_box_uint8(0x00)); // CANCEL_REQUEST_SAFE
+    jl_atomic_store_release(&sigint_pending, 1);
     // Set a timer for the event loop to run and process the cancellation. If
     // this does not happen in time, we will advance to more aggressive
     // cancellation.
@@ -752,29 +779,26 @@ void jl_sigint_request_cancellation(void) JL_NOTSAFEPOINT
 
 // Episode states:
 //  0 - no active ^C episode
-//  1 - a request that its target never observed: the C-planted marker, or a
-//      listener-delivered SAFE request that was never acknowledged (e.g. the
-//      target is compute-bound with no cancellation points)
+//  1 - a request that its target never observed: the pending marker, or a
+//      listener-delivered SAFE cancellation that was never acknowledged
+//      (e.g. the target is compute-bound with no cancellation points)
 //  2 - SAFE severity acknowledged (the target is unwinding, but stuck)
 //  3 - ABANDON_EXTERNAL severity active
 //  4 - ABANDON_ALL severity active
-//  5 - unrecognized (an arbitrary user-supplied request value)
 static int jl_sigint_episode_state(void) JL_NOTSAFEPOINT
 {
-    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
-    jl_value_t *creq = jl_atomic_load_relaxed(&ptls2->root_task->cancellation_request);
-    if (creq == NULL || creq == jl_nothing)
-        return 0;
-    if (jl_typetagis(creq, jl_uint8_type))
-        return 1; // planted by jl_sigint_request_cancellation, never delivered
-    jl_datatype_t *t = (jl_datatype_t*)jl_typeof(creq);
-    if (!jl_is_datatype(t) || jl_datatype_size(t) != 1)
-        return 5;
-    uint8_t raw = *(uint8_t*)jl_data_ptr(creq);
-    uint8_t v = raw & 0x7f;
-    if (v == 0x00)
-        return (raw & 0x80) ? 2 : 1; // un-acknowledged SAFE was never observed
-    return v == 0x03 ? 3 : v == 0x04 ? 4 : 5;
+    jl_cancel_source_t *src = jl_atomic_load_relaxed(&jl_sigint_source);
+    uint8_t pending = jl_atomic_load_relaxed(&sigint_pending);
+    if (src == NULL)
+        return pending ? 1 : 0;
+    uint8_t st = jl_atomic_load_relaxed(&src->state);
+    if (!(st & 0x80))
+        return pending ? 1 : 0;
+    uint8_t sev = st & 0x7f;
+    uint8_t delivered = jl_atomic_load_relaxed(&src->delivered);
+    if (sev == 0x00)
+        return (delivered & 0x01) ? 2 : 1; // undelivered SAFE was never observed
+    return sev == 0x03 ? 3 : 4;
 }
 
 // Whether the C side may abandon the interrupted task directly (bypassing the

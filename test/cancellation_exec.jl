@@ -6,9 +6,18 @@
 
 using Test
 using Libdl
-using Base: cancel!, CancellationRequest
+using Base: cancel!, close!, CancellationRequest, CancellationToken, CancellationTokenSource
 
 @assert Threads.nthreads() > 1
+
+# Start `f` as a task governed by a fresh cancellation source (non-sticky,
+# explicitly on the default pool - a compute-bound victim must not land on
+# the interactive/io thread).
+function cancellable_spawn(f)
+    src = CancellationTokenSource()
+    t = Base.with_cancel_token(() -> Threads.@spawn(f()), CancellationToken(src))
+    return t, src
+end
 
 @noinline function find_collatz_counterexample_inner()
     collatz(n) = (n & 1) == 1 ? (3n + 1) : (n ÷ 2)
@@ -31,9 +40,9 @@ function find_collatz_counterexample2()
 end
 
 @testset "async interruption of checkless loops (reset_ctx)" begin
-    t = Threads.@spawn find_collatz_counterexample2()
+    t, src = cancellable_spawn(find_collatz_counterexample2)
     sleep(0.5)
-    cancel!(t)
+    cancel!(src)
     sleep(0.5)
     @test_throws TaskFailedException wait(t)
     @test t.result isa CancellationRequest
@@ -65,9 +74,11 @@ end
 
 @testset "ABANDON_ALL freezes a running task" begin
     started = Base.Event()
-    victim = Threads.@spawn begin
+    # The victim has no cancellation points in its loop: only freezing can
+    # stop it promptly. The task-start check published its binding to the
+    # scope's token, which is how the cancellation walk finds it.
+    victim, src = cancellable_spawn() do
         notify(started)
-        # No cancellation points: only freezing can stop this promptly.
         x = Ref(1.0)
         while x[] > 0
             x[] = x[] * 1.0000001 + 0.1
@@ -75,7 +86,7 @@ end
     end
     wait(started)
     sleep(0.5) # make sure it is spinning on its thread
-    @test cancel!(victim, Base.CANCEL_REQUEST_ABANDON_ALL)
+    @test cancel!(src, Base.CANCEL_REQUEST_ABANDON_ALL)
     @test timedwait(() -> istaskdone(victim), 10.0) == :ok
     @test victim.state === :abandoned
     @test istaskfailed(victim)
@@ -86,11 +97,11 @@ end
     # the cancelled task as arguments.
     seen = Channel{Any}(4)
     entered = Base.Event()
-    t = Threads.@spawn Base.with_cancellation_hook(
+    t, src = cancellable_spawn(() -> Base.with_cancellation_hook(
         () -> (notify(entered); sleep(1000)),
-        (st, tsk) -> put!(seen, (st, tsk)), :mystate)
+        (st, tsk) -> put!(seen, (st, tsk)), :mystate))
     wait(entered) # `f` runs only after the hook is registered
-    cancel!(t)
+    cancel!(src)
     @test timedwait(() -> istaskdone(t), 10.0) == :ok
     @test istaskfailed(t)
     @test t.result isa CancellationRequest
@@ -101,22 +112,25 @@ end
     # The hook is deregistered when the protected region exits.
     fired = Threads.Atomic{Int}(0)
     entered2 = Base.Event()
-    t2 = Threads.@spawn begin
+    t2, src2 = cancellable_spawn() do
         Base.with_cancellation_hook(() -> nothing, (st, tsk) -> Threads.atomic_add!(fired, 1), nothing)
         notify(entered2)
         sleep(1000)
     end
     wait(entered2)
-    cancel!(t2)
+    cancel!(src2)
     @test timedwait(() -> istaskdone(t2), 10.0) == :ok
     @test fired[] == 0
 
-    # A request already pending at registration is thrown before `f` runs.
+    # A cancellation already pending at registration is thrown before `f` runs.
     t3 = Threads.@spawn begin
-        @atomic current_task().cancellation_request = Base.CANCEL_REQUEST_SAFE
+        src3 = CancellationTokenSource()
+        cancel!(src3)
         ran = false
         threw = try
-            Base.with_cancellation_hook(() -> (ran = true), (st, tsk) -> nothing, nothing)
+            Base.with_cancel_token(CancellationToken(src3)) do
+                Base.with_cancellation_hook(() -> (ran = true), (st, tsk) -> nothing, nothing)
+            end
             false
         catch e
             e isa CancellationRequest || rethrow()
@@ -178,7 +192,7 @@ end
         bystander = Threads.@spawn (notify(bystander_started); gemm!(C2, A2, B2))
 
         started = Base.Event()
-        t = Threads.@spawn begin
+        t, tsrc = cancellable_spawn() do
             scope = BlasCancelScope(C_NULL)
             Base.with_cancellation_hook(blas_cancel_handler, scope) do
                 # Fetch the slot on the executing OS thread; no yields between
@@ -197,7 +211,7 @@ end
         wait(bystander_started)
         wait(started)
         telapsed = @elapsed begin
-            cancel!(t)
+            cancel!(tsrc)
             @test timedwait(() -> istaskdone(t), 60.0) == :ok
         end
         @test istaskfailed(t)
@@ -255,32 +269,40 @@ end
     end
     held = ReentrantLock()
     lock(held)
-    make_victims() = Task[
-        @async(sleep(1000)),            # timer wait
-        @async(take!(Channel{Int}(0))), # condition wait
-        @async(lock(held)),             # lock wait (the test holds `held`)
-        Threads.@spawn(polling_loop()),
-        Threads.@spawn(checkless_loop()),
-        @task(nothing),                 # never scheduled
-    ]
+    function make_victims()
+        src = CancellationTokenSource()
+        late = Ref{Task}()
+        ts = Base.with_cancel_token(CancellationToken(src)) do
+            late[] = Task(() -> nothing) # scheduled only after the cancellation
+            Task[
+                @async(sleep(1000)),            # timer wait
+                @async(take!(Channel{Int}(0))), # condition wait
+                @async(lock(held)),             # lock wait (the test holds `held`)
+                Threads.@spawn(polling_loop()),
+                Threads.@spawn(checkless_loop()),
+                late[],
+            ]
+        end
+        return ts, src, late[]
+    end
     deadline = time() + 10
     rounds = 0
     failures = 0
     while time() < deadline
-        ts = make_victims()
-        # vary the delivery window: sometimes cancel immediately (task not
-        # yet started), sometimes after it has parked/started spinning
+        ts, src, late = make_victims()
+        # vary the delivery window: sometimes cancel immediately (tasks not
+        # yet started/parked), sometimes after they have parked/started
+        # spinning
         rounds % 2 == 0 && sleep(0.05)
-        for t in ts
-            cancel!(t)
-        end
-        for t in ts
-            cancel!(t) # double-cancellation must be harmless
-        end
+        cancel!(src)
+        cancel!(src) # double-cancellation must be harmless
+        Base.redeliver!(src) # explicit redelivery must be harmless too
+        # a task scheduled into an already-cancelled scope dies at start
+        schedule(late)
         for t in ts
             if timedwait(() -> istaskdone(t), 20.0) !== :ok
                 failures += 1
-                @error "cancelled task failed to complete" t t.state t.queue
+                @error "cancelled task failed to complete" t t.state
             end
         end
         rounds += 1

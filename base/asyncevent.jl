@@ -161,7 +161,10 @@ unsafe_convert(::Type{Ptr{Cvoid}}, async::AsyncCondition) = async.handle
 
 # if this returns true, the object has been signaled
 # if this returns false, the object is closed
-function _trywait(t::Union{Timer, AsyncCondition})
+# a cancellation of the governing token is thrown as a CancellationRequest
+_trywait(t::Union{Timer, AsyncCondition}; cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    _trywait(t, resolve_cancel_token(cancel))
+function _trywait(t::Union{Timer, AsyncCondition}, tok::MaybeToken)
     set = t.set
     if set
         # full barrier now for AsyncCondition
@@ -183,7 +186,7 @@ function _trywait(t::Union{Timer, AsyncCondition})
                 set = t.set
                 if !set && t.handle != C_NULL # wait for set or handle, but not the isopen flag
                     iolock_end()
-                    set = wait(t.cond; waitee=t)
+                    set = wait(t.cond, tok; waitee=t)
                     unlock(t.cond)
                     iolock_begin()
                     lock(t.cond)
@@ -201,13 +204,11 @@ end
 
 waitqueue(t::Union{Timer, AsyncCondition}) = ILLRef(waitqueue(t.cond), t)
 
-cancel_wait!(t::Union{Timer, AsyncCondition}, @nospecialize(creq)) = false
-cancel_wait!(t::Union{Timer, AsyncCondition}, task::Task, @nospecialize(creq)) =
-    cancel_wait!(t.cond, task, creq, false; waitee=t)
-
-function wait(t::Union{Timer, AsyncCondition})
-    ok = _trywait(t)
-    @cancel_check
+wait(t::Union{Timer, AsyncCondition}; cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    wait(t, resolve_cancel_token(cancel))
+function wait(t::Union{Timer, AsyncCondition}, tok::MaybeToken)
+    ok = _trywait(t, tok)
+    @cancel_check(tok)
     ok || throw(EOFError())
     nothing
 end
@@ -319,14 +320,23 @@ function uv_timercb(handle::Ptr{Cvoid})
 end
 
 """
-    sleep(seconds)
+    sleep(seconds; cancel=Base.DEFAULT_CANCEL)
 
 Block the current task for a specified number of seconds. The minimum sleep time is 1
 millisecond or input of `0.001`.
+
+A cancellation of the governing token (by default the scoped token, see
+[`CancellationToken`](@ref)) interrupts the sleep by throwing the
+[`CancellationRequest`](@ref).
 """
-function sleep(sec::Real)
+function sleep(sec::Real; cancel::CancelTokenArg=DEFAULT_CANCEL)
     sec ≥ 0 || throw(ArgumentError("cannot sleep for $sec seconds"))
-    wait(Timer(sec))
+    t = Timer(sec)
+    try
+        wait(t, resolve_cancel_token(cancel))
+    finally
+        close(t)
+    end
     nothing
 end
 

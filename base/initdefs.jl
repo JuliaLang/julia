@@ -517,15 +517,31 @@ function _atexit(exitcode::Cint)
     q = ct.queue
     if q !== nothing
         try
-            list_deletefirst!(q, ct)
+            list_deletefirst!(q::StickyWorkqueue, ct)
         catch
-            # the waitee may not implement the waitqueue protocol; this is
             # best-effort cleanup on the way out
         end
     end
-    # We are exiting: a still-pending cancellation request on this task is moot
-    # and would only disrupt the atexit hooks (any wait would refuse to sleep).
-    @atomic :release ct.cancellation_request = nothing
+    w = ct.waitnode
+    if w isa WaitNode
+        # If this task's wait node is still registered somewhere (e.g. this
+        # exit came from a signal while parked), best-effort detach it.
+        tok = w.token
+        if tok isa CancellationTokenSource
+            try
+                unregister_cancellation!(tok, w)
+            catch
+            end
+        end
+        @atomic :monotonic w.state = WAITNODE_IDLE
+    end
+    # We are exiting: any pending cancellation of this task's scope is moot and
+    # would only disrupt the atexit hooks (waits would refuse to sleep) - mark
+    # the strongest severity as already delivered to this task.
+    s = default_cancel_source()
+    if s !== nothing
+        ack!(ct, s, CANCEL_REQUEST_ABANDON_ALL.request)
+    end
     ccall(:jl_disarm_sigint_rescue_timer, Cvoid, ())
     # Don't hold the lock around the iteration, just in case any other thread executing in
     # parallel tries to register a new atexit hook while this is running. We don't want to

@@ -5470,48 +5470,100 @@ isdefined_unknown_idx:
         return true;
     }
 
-    else if (f == BUILTIN(cancellation_point) && nargs == 0) {
-        // Emit the cancellation point intrinsic call first
+    else if (f == BUILTIN(cancellation_point) && nargs == 1) {
+        // Only lower inline when the argument is statically known to be a
+        // token source or nothing; fall back to the runtime builtin (which
+        // also type-checks) otherwise.
+        jl_value_t *srct = argv[1].typ;
+        auto ok_arm = [](jl_value_t *t) {
+            return t == (jl_value_t*)jl_nothing_type ||
+                   jl_subtype(t, (jl_value_t*)jl_cancel_source_type);
+        };
+        bool known_src = jl_subtype(srct, (jl_value_t*)jl_cancel_source_type);
+        bool known_nothing = srct == (jl_value_t*)jl_nothing_type;
+        bool known_union = known_src || known_nothing ||
+            (jl_is_uniontype(srct) && ok_arm(((jl_uniontype_t*)srct)->a) &&
+             ok_arm(((jl_uniontype_t*)srct)->b));
+        if (!known_union)
+            return false; // emit as a runtime call for the dynamic type check
+
+        // Emit the cancellation point intrinsic call first (this is what the
+        // CancellationLowering pass expands into the reset_ctx publication).
         ctx.builder.CreateCall(prepare_call(jl_cancellation_point_func));
 
-        // Now do the same as the runtime version:
-        // 1. Load cancellation_request with relaxed ordering for fast path check
         Value *ct = get_current_task(ctx);
-        Value *cr_ptr = emit_ptrgep(ctx, ct, offsetof(jl_task_t, cancellation_request), "cancellation_request");
+        Value *src = boxed(ctx, argv[1]);
+        Value *bound_ptr = emit_ptrgep(ctx, ct, offsetof(jl_task_t, bound_cancel_token), "bound_cancel_token");
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
-        LoadInst *cr_relaxed = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, cr_ptr, ctx.types().alignof_ptr);
-        cr_relaxed->setOrdering(AtomicOrdering::Monotonic);
-        ai.decorateInst(cr_relaxed);
-
-        // 2. Check if cr == NULL || cr == jl_nothing
-        Value *is_null = ctx.builder.CreateIsNull(cr_relaxed);
         Value *nothing_val = track_pjlvalue(ctx, literal_pointer_val(ctx, jl_nothing));
-        Value *is_nothing = ctx.builder.CreateICmpEQ(decay_derived(ctx, cr_relaxed), decay_derived(ctx, nothing_val));
-        Value *no_cancel = ctx.builder.CreateOr(is_null, is_nothing);
+        Type *T_int8 = getInt8Ty(ctx.builder.getContext());
 
-        // Save current basic block before branching
-        BasicBlock *currBB = ctx.builder.GetInsertBlock();
+        BasicBlock *src_bb = BasicBlock::Create(ctx.builder.getContext(), "cancel_pt_src", ctx.f);
+        BasicBlock *rebind_bb = BasicBlock::Create(ctx.builder.getContext(), "cancel_pt_rebind", ctx.f);
+        BasicBlock *loadst_bb = BasicBlock::Create(ctx.builder.getContext(), "cancel_pt_state", ctx.f);
+        BasicBlock *nothing_bb = BasicBlock::Create(ctx.builder.getContext(), "cancel_pt_nothing", ctx.f);
+        BasicBlock *clear_bb = BasicBlock::Create(ctx.builder.getContext(), "cancel_pt_clear", ctx.f);
+        BasicBlock *merge_bb = BasicBlock::Create(ctx.builder.getContext(), "cancel_pt_merge", ctx.f);
 
-        // Create basic blocks for the branch
-        BasicBlock *has_cancel_bb = BasicBlock::Create(ctx.builder.getContext(), "has_cancellation", ctx.f);
-        BasicBlock *merge_bb = BasicBlock::Create(ctx.builder.getContext(), "cancellation_merge", ctx.f);
+        Value *is_nothing = known_src ? ConstantInt::getFalse(ctx.builder.getContext()) :
+            known_nothing ? ConstantInt::getTrue(ctx.builder.getContext()) :
+            ctx.builder.CreateICmpEQ(decay_derived(ctx, src), decay_derived(ctx, nothing_val));
+        ctx.builder.CreateCondBr(is_nothing, nothing_bb, src_bb);
 
-        ctx.builder.CreateCondBr(no_cancel, merge_bb, has_cancel_bb);
+        // src === nothing: clear a stale binding (store only on change)
+        ctx.builder.SetInsertPoint(nothing_bb);
+        LoadInst *bound0 = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bound_ptr, ctx.types().alignof_ptr);
+        bound0->setOrdering(AtomicOrdering::Monotonic);
+        ai.decorateInst(bound0);
+        Value *already_clear = ctx.builder.CreateICmpEQ(decay_derived(ctx, bound0), decay_derived(ctx, nothing_val));
+        ctx.builder.CreateCondBr(already_clear, merge_bb, clear_bb);
 
-        // In the has_cancel case, do an acquire load
-        ctx.builder.SetInsertPoint(has_cancel_bb);
-        LoadInst *cr_acquire = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, cr_ptr, ctx.types().alignof_ptr);
-        cr_acquire->setOrdering(AtomicOrdering::Acquire);
-        ai.decorateInst(cr_acquire);
+        ctx.builder.SetInsertPoint(clear_bb);
+        StoreInst *clear_store = ctx.builder.CreateAlignedStore(nothing_val, bound_ptr, ctx.types().alignof_ptr);
+        clear_store->setOrdering(AtomicOrdering::Monotonic);
+        ai.decorateInst(clear_store);
         ctx.builder.CreateBr(merge_bb);
 
-        // Merge the results
-        ctx.builder.SetInsertPoint(merge_bb);
-        PHINode *result = ctx.builder.CreatePHI(ctx.types().T_prjlvalue, 2);
-        result->addIncoming(nothing_val, currBB);
-        result->addIncoming(cr_acquire, has_cancel_bb);
+        // src is a token source: publish the binding (store only on rebind,
+        // so steady-state checks in a loop do not dirty the cache line), then
+        // load its cancellation state
+        ctx.builder.SetInsertPoint(src_bb);
+        LoadInst *bound1 = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bound_ptr, ctx.types().alignof_ptr);
+        bound1->setOrdering(AtomicOrdering::Monotonic);
+        ai.decorateInst(bound1);
+        Value *same = ctx.builder.CreateICmpEQ(decay_derived(ctx, bound1), decay_derived(ctx, src));
+        ctx.builder.CreateCondBr(same, loadst_bb, rebind_bb);
 
-        *ret = mark_julia_type(ctx, result, /*boxed*/ true, rt);
+        ctx.builder.SetInsertPoint(rebind_bb);
+        StoreInst *bind_store = ctx.builder.CreateAlignedStore(src, bound_ptr, ctx.types().alignof_ptr);
+        bind_store->setOrdering(AtomicOrdering::Release);
+        ai.decorateInst(bind_store);
+        emit_write_barrier(ctx, ct, src);
+        ctx.builder.CreateBr(loadst_bb);
+
+        ctx.builder.SetInsertPoint(loadst_bb);
+        Value *state_ptr = emit_ptrgep(ctx, decay_derived(ctx, src), offsetof(jl_cancel_source_t, state), "cancel_state");
+        LoadInst *st_load = ctx.builder.CreateAlignedLoad(T_int8, state_ptr, Align(1));
+        st_load->setOrdering(AtomicOrdering::Monotonic);
+        jl_aliasinfo_t ai_src = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_mutab);
+        ai_src.decorateInst(st_load);
+        ctx.builder.CreateBr(merge_bb);
+
+        // Merge and fold in the preempt-request bit (0x40)
+        ctx.builder.SetInsertPoint(merge_bb);
+        PHINode *st = ctx.builder.CreatePHI(T_int8, 3);
+        st->addIncoming(ConstantInt::get(T_int8, 0), nothing_bb);
+        st->addIncoming(ConstantInt::get(T_int8, 0), clear_bb);
+        st->addIncoming(st_load, loadst_bb);
+        Value *preempt_ptr = emit_ptrgep(ctx, ct, offsetof(jl_task_t, preempt_request), "preempt_request");
+        LoadInst *preempt = ctx.builder.CreateAlignedLoad(T_int8, preempt_ptr, Align(1));
+        preempt->setOrdering(AtomicOrdering::Monotonic);
+        ai.decorateInst(preempt);
+        Value *has_preempt = ctx.builder.CreateICmpNE(preempt, ConstantInt::get(T_int8, 0));
+        Value *pbit = ctx.builder.CreateSelect(has_preempt, ConstantInt::get(T_int8, 0x40), ConstantInt::get(T_int8, 0));
+        Value *result = ctx.builder.CreateOr(st, pbit);
+
+        *ret = mark_julia_type(ctx, result, /*boxed*/ false, (jl_value_t*)jl_uint8_type);
         return true;
     }
 

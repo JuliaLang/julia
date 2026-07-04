@@ -697,7 +697,8 @@ function process_status(s::Process)
            error("process status error")
 end
 
-function wait(x::Process, syncd::Bool=true)
+function wait(x::Process, syncd::Bool=true; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    tok = resolve_cancel_token(cancel)
     if !process_exited(x)
         iolock_begin()
         if !process_exited(x)
@@ -705,7 +706,7 @@ function wait(x::Process, syncd::Bool=true)
             lock(x.exitnotify)
             iolock_end()
             try
-                wait(x.exitnotify)
+                wait(x.exitnotify, tok)
             finally
                 unlock(x.exitnotify)
                 unpreserve_handle(x)
@@ -716,12 +717,13 @@ function wait(x::Process, syncd::Bool=true)
     end
     # and make sure all sync'd Tasks are complete too
     syncd && for t in x.syncd
-        wait(t)
+        wait(t, tok)
     end
     nothing
 end
 
-wait(x::ProcessChain, syncd::Bool=true) = foreach(p -> wait(p, syncd), x.processes)
+wait(x::ProcessChain, syncd::Bool=true; cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    foreach(p -> wait(p, syncd; cancel), x.processes)
 
 show(io::IO, p::Process) = print(io, "Process(", p.cmd, ", ", process_status(p), ")")
 
