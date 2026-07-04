@@ -3522,15 +3522,35 @@ static void jl_temporary_root(jl_codectx_t &ctx, jl_value_t *val)
 
 // --- generating function calls ---
 
+// The object format `jl_bpatch` records will actually be emitted in. The codegen
+// target triple's object format is what the JIT links (on Windows it carries the
+// FORCE_ELF override, see the TargetMachine setup in jitlayers.cpp), but image code is
+// re-targeted to the OS's native format by jl_dump_native before emission -- records
+// destined for an image must be named for the format the linker will see, or the COFF
+// `$`-grouped-section markers will not bound them (the plain ELF spelling sorts before
+// the `$A` start marker).
+static Triple::ObjectFormatType bpatch_object_format(jl_codectx_t &ctx)
+{
+    const Triple &TT = ctx.emission_context.TargetTriple;
+    if (!ctx.emission_context.imaging_mode)
+        return TT.getObjectFormat();
+    // mirror the re-targeting in jl_dump_native
+    if (TT.isOSWindows())
+        return Triple::COFF;
+    if (TT.isOSDarwin())
+        return Triple::MachO;
+    return TT.getObjectFormat();
+}
+
 // Whether `jl_bpatch` records can be emitted for this object format: the runtime must
 // be able to find them again, either as a JIT object is linked (the plugin in
 // jitlayers.cpp) or through the per-format section bounds of a loaded image (ELF
 // `__start_`/`__stop_` symbols, Mach-O `section$start$`/`section$end$` symbols, or
 // COFF `$`-grouped-section markers; see the jl_image_pointers emission in
 // aotcompile.cpp).
-static bool binding_records_supported(const Triple &TT)
+static bool binding_records_supported(Triple::ObjectFormatType OF)
 {
-    return TT.isOSBinFormatELF() || TT.isOSBinFormatMachO() || TT.isOSBinFormatCOFF();
+    return OF == Triple::ELF || OF == Triple::MachO || OF == Triple::COFF;
 }
 
 // Whether JIT-compiled typed-global accesses can be guarded with statically patchable
@@ -3543,7 +3563,7 @@ static bool binding_patch_sites_supported(jl_codectx_t &ctx)
     const Triple &TT = ctx.emission_context.TargetTriple;
     if (TT.getArch() != Triple::x86_64 && TT.getArch() != Triple::aarch64)
         return false;
-    return binding_records_supported(TT);
+    return binding_records_supported(bpatch_object_format(ctx));
 }
 
 // Whether statically compiled (image) typed-global accesses go through a
@@ -3554,14 +3574,14 @@ static bool binding_got_supported(jl_codectx_t &ctx)
 {
     const Triple &TT = ctx.emission_context.TargetTriple;
     return ctx.emission_context.imaging_mode && TT.isArch64Bit() &&
-           binding_records_supported(TT);
+           binding_records_supported(bpatch_object_format(ctx));
 }
 
-static const char *bpatch_section_name(const Triple &TT)
+static const char *bpatch_section_name(Triple::ObjectFormatType OF)
 {
-    return TT.isOSBinFormatMachO() ? "__DATA,__jl_bpatch"
-         : TT.isOSBinFormatCOFF()  ? "jl_bpatch$B"
-                                   : "jl_bpatch";
+    return OF == Triple::MachO ? "__DATA,__jl_bpatch"
+         : OF == Triple::COFF  ? "jl_bpatch$B"
+                               : "jl_bpatch";
 }
 
 // Allocate a fresh record index and emit the kind-2 slot-map record for `bnd` (see
@@ -3576,7 +3596,7 @@ static uint64_t emit_bpatch_slotmap(jl_codectx_t &ctx, jl_binding_t *bnd)
     static std::atomic<uint64_t> bpatch_index{0};
     uint64_t idx = bpatch_index.fetch_add(1, std::memory_order_relaxed);
     LLVMContext &C = ctx.builder.getContext();
-    const Triple &TT = ctx.emission_context.TargetTriple;
+    Triple::ObjectFormatType OF = bpatch_object_format(ctx);
     Constant *slot = julia_binding_pgv(ctx, bnd);
     Type *T_i64 = getInt64Ty(C);
     StructType *RT = StructType::get(T_i64, slot->getType(), T_i64, T_i64);
@@ -3585,8 +3605,8 @@ static uint64_t emit_bpatch_slotmap(jl_codectx_t &ctx, jl_binding_t *bnd)
     GlobalVariable *slotmap = new GlobalVariable(*jl_Module, RT, /*isConstant*/false,
             GlobalVariable::PrivateLinkage, rec,
             "jl_bpatch_slotmap" + std::to_string(idx));
-    slotmap->setSection(bpatch_section_name(TT));
-    slotmap->setAlignment(Align(TT.isOSBinFormatCOFF() ? 32 : 8));
+    slotmap->setSection(bpatch_section_name(OF));
+    slotmap->setAlignment(Align(OF == Triple::COFF ? 32 : 8));
     appendToCompilerUsed(*jl_Module, {slotmap});
     return idx;
 }
@@ -3607,7 +3627,7 @@ static GlobalVariable *julia_binding_got_entry(jl_codectx_t &ctx, jl_binding_t *
     if (entry)
         return entry;
     LLVMContext &C = ctx.builder.getContext();
-    const Triple &TT = ctx.emission_context.TargetTriple;
+    Triple::ObjectFormatType OF = bpatch_object_format(ctx);
     PointerType *T_ptr = PointerType::getUnqual(C);
     uint64_t idx = emit_bpatch_slotmap(ctx, bnd);
     entry = new GlobalVariable(*jl_Module, T_ptr, /*isConstant*/false,
@@ -3621,8 +3641,8 @@ static GlobalVariable *julia_binding_got_entry(jl_codectx_t &ctx, jl_binding_t *
     GlobalVariable *recgv = new GlobalVariable(*jl_Module, RT, /*isConstant*/false,
             GlobalVariable::PrivateLinkage, rec,
             "jl_bpatch_got" + std::to_string(idx));
-    recgv->setSection(bpatch_section_name(TT));
-    recgv->setAlignment(Align(TT.isOSBinFormatCOFF() ? 32 : 8));
+    recgv->setSection(bpatch_section_name(OF));
+    recgv->setAlignment(Align(OF == Triple::COFF ? 32 : 8));
     appendToCompilerUsed(*jl_Module, {recgv});
     return entry;
 }
@@ -3683,9 +3703,10 @@ static BasicBlock *emit_retype_guard(jl_codectx_t &ctx, jl_binding_t *bnd, Value
         // concatenates the groups (bounded by marker records in `$A` and `$C`, see
         // aotcompile.cpp) and may pad between contributions, which record parsing
         // skips as all-zero records.
-        bool coff = TT.isOSBinFormatCOFF();
-        const char *secname = bpatch_section_name(TT);
-        if (TT.isOSBinFormatMachO())
+        Triple::ObjectFormatType OF = bpatch_object_format(ctx);
+        bool coff = OF == Triple::COFF;
+        const char *secname = bpatch_section_name(OF);
+        if (OF == Triple::MachO)
             OS << "\t.pushsection " << secname << "\n";
         else if (coff)
             OS << "\t.pushsection jl_bpatch$$B,\"dw\"\n"; // $$ is a literal $ in asm text
