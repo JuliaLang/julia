@@ -405,11 +405,20 @@ function sigint_active_severity(@nospecialize(tcr))
     return CANCEL_REQUEST_SAFE
 end
 
+# One listener task runs per nonempty threadpool (a pool's threads cannot run
+# another pool's tasks, and any pool may be monopolized by the stuck victim -
+# e.g. a rescued backend on the only default thread). The listeners race to
+# claim each notification; the pass itself is level-based (it re-reads the
+# episode state), so serializing claims through the lock is enough.
+const sigint_pass_lock = ReentrantLock()
+
 function sigint_listener(cond::AsyncCondition)
     while _trywait(cond)
-      # The notification reached us - idle threads no longer need to help
-      # dispatch it (see jl_sigint_dispatch_pending in the scheduler).
-      ccall(:jl_clear_sigint_dispatch_pending, Cvoid, ())
+      # Claim the notification - the winner also tells idle threads they no
+      # longer need to help dispatch it (see jl_sigint_dispatch_pending in
+      # the scheduler); the losing pool's listener just re-parks.
+      ccall(:jl_claim_sigint_dispatch, Cint, ()) != 0 || continue
+      lock(sigint_pass_lock)
       try # an error while processing one ^C must not disable the ^C machinery
         # The SIGINT handler should have set a cancellation request on the roottask
         cr = @atomic :acquire roottask.cancellation_request
@@ -495,6 +504,8 @@ function sigint_listener(cond::AsyncCondition)
             println(stderr)
         catch
         end
+      finally
+        unlock(sigint_pass_lock)
       end
     end
     nothing
@@ -552,15 +563,20 @@ function start_sigint_listener()
     # handles left (as in a headless script), which would make the ^C
     # notification undeliverable exactly when it matters. The atexit hook
     # below closes the handle before the event loop is drained for exit.
-    t = errormonitor(Threads.@spawn(sigint_listener(cond)))
-    _sigint_listener_task[] = t
+    listeners = Task[]
+    Threads.threadpoolsize(:interactive) > 0 &&
+        push!(listeners, errormonitor(Threads.@spawn :interactive sigint_listener(cond)))
+    push!(listeners, errormonitor(Threads.@spawn :default sigint_listener(cond)))
+    _sigint_listener_task[] = listeners[end]
     atexit() do
         # destroy this callback when exiting
         ccall(:jl_set_sigint_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
         # this will prompt any ongoing or pending event to flush also
         close(cond)
         # error-propagation is not needed, since the errormonitor will handle printing that better
-        t === current_task() || _wait(t)
+        for t in listeners
+            t === current_task() || _wait(t)
+        end
     end
     finalizer(cond) do c
         # if something goes south, still make sure we aren't keeping a reference in C to this
