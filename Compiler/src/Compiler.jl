@@ -231,6 +231,23 @@ else
     # During bootstrap, skip including these files and defer to base/show.jl to include it later
 end
 
+# The Compiler sources use Julia 1.14 syntax (`typegroup` blocks; see the
+# `[syntax]` section in Compiler/Project.toml). When built into the sysimg this
+# module bypasses package loading, so install the module parser binding
+# consulted by `Base.parser_for_module` directly; without it, `Meta.parse`-style
+# reparsing of Compiler sources (e.g. by Revise) uses unversioned syntax and
+# rejects `typegroup` blocks. `Base.JuliaSyntax` and `Base.VersionNumber` only
+# need to exist by the time this is called, not when it is defined, so this is
+# safe to define this early in bootstrap. When loaded as a package instead,
+# package loading has already declared an equivalent binding from the project's
+# `[syntax]` entry (and defining over it would error), so skip it then.
+if !isdefined(@__MODULE__, Symbol("#_internal_julia_parse"))
+function var"#_internal_julia_parse"(code, filename::String, lineno::Int, offset::Int, options::Symbol)
+    return Base.JuliaSyntax.core_parser_hook(code, filename, lineno, offset, options;
+                                             syntax_version=Base.VersionNumber(1, 14, 0))
+end
+end
+
 end # baremodule Compiler
 
 end # if isdefined(Base, :generating_output) && ...
