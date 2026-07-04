@@ -4242,8 +4242,15 @@ f(x) = yt(x)
                     #t
                     (begin (restore prev) #f)))))
             ((eq? (car e) '=)
-             (begin0 (visit (caddr e))
-                     (assign! (cadr e))))
+             ;; the lhs of the joint typed assignment `x::T = rhs` is `(:: x T)`
+             ;; (#62154): the assigned variable sits behind the decl, and the declared
+             ;; type is an evaluated expression, so visit it like the rhs
+             (let ((lhs (cadr e)))
+               (if (and (pair? lhs) (eq? (car lhs) '|::|))
+                   (begin0 (eager-any visit (list (caddr e) (caddr lhs)))
+                           (assign! (cadr lhs)))
+                   (begin0 (visit (caddr e))
+                           (assign! lhs)))))
             ((eq? (car e) 'local)
              (declare! (cadr e))
              #f)
