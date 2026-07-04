@@ -669,9 +669,14 @@ JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT
     if (ct->reset_ctx == NULL)
         return;
     pthread_mutex_lock(&in_signal_lock);
-    signals_inflight++;
-    jl_atomic_store_release(&ptls2->signal_request, 5);
-    pthread_kill(ptls2->system_id, SIGUSR2);
+    // This request is best-effort and produces no acknowledgment token (see
+    // the handler): do not count it in signals_inflight, and never clobber a
+    // request that is already pending or being processed - blindly storing
+    // over an in-flight suspend handshake (or an abandon request) would lose
+    // it; our caller retries delivery anyway.
+    sig_atomic_t expected = 0;
+    if (jl_atomic_cmpswap(&ptls2->signal_request, &expected, 5))
+        pthread_kill(ptls2->system_id, SIGUSR2);
     pthread_mutex_unlock(&in_signal_lock);
 }
 
@@ -684,9 +689,14 @@ void jl_send_abandon_signal(int16_t tid) JL_NOTSAFEPOINT
     if (ptls2 == NULL)
         return;
     pthread_mutex_lock(&in_signal_lock);
-    signals_inflight++;
-    jl_atomic_store_release(&ptls2->signal_request, 6);
-    pthread_kill(ptls2->system_id, SIGUSR2);
+    // Like the cancellation signal, this produces no acknowledgment token.
+    // Abandonment overrides a pending best-effort cancellation signal (5),
+    // but must not disturb a suspend handshake in progress (requests 1-4 /
+    // processing) - jl_abandon_task re-sends until the switch is observed.
+    sig_atomic_t expected = 0;
+    if (jl_atomic_cmpswap(&ptls2->signal_request, &expected, 6) ||
+        (expected == 5 && jl_atomic_cmpswap(&ptls2->signal_request, &expected, 6)))
+        pthread_kill(ptls2->system_id, SIGUSR2);
     pthread_mutex_unlock(&in_signal_lock);
 }
 
@@ -1189,6 +1199,22 @@ static void *signal_listener(void *arg)
                 rescue_timer_fired = 1;
 #endif
             if (rescue_timer_fired) {
+                int est = jl_sigint_episode_state();
+                if (est == 0)
+                    continue; // the episode already completed - stand down
+                // Mark that the timer has expired - the next SIGINT escalates
+                // (via the listener, or the direct abandonment below).
+                jl_sigint_rescue_timer_expired();
+                if (est == 2) {
+                    jl_safe_printf("\nWARNING: Cancellation is in progress, but has not completed within 1s.\n"
+                                     "         Press ^C again to also stop waiting for external resources (e.g. in-flight I/O).\n");
+                    continue;
+                }
+                if (est == 3) {
+                    jl_safe_printf("\nWARNING: Cancellation has still not completed.\n"
+                                     "         Press ^C again to forcibly abandon the current task (unsafe; may leak resources).\n");
+                    continue;
+                }
                 jl_safe_printf("\nWARNING: Process failed to acknowledge SIGINT within 1s.\n"
                                  "         You (or a package author) may need to add more @cancel_check's.\n"
                                  "         Attempting to collect backtraces of running threads.\n"
@@ -1197,9 +1223,7 @@ static void *signal_listener(void *arg)
 #else
                                  "         Send SIGUSR1 to trigger additional profiles.\n"
 #endif
-                                 "         Re-Send SIGINT to begin (potentially unsafe) aggressive termination.\n");
-                // Mark that the timer has expired - the next SIGINT will trigger abandonment
-                jl_sigint_rescue_timer_expired();
+                                 "         Press ^C again to (unsafely) abandon the current task.\n");
                 // Collect backtraces of *running* threads.
                 // N.B.: It doesn't make sense to profile suspended threads - we only get to this case
                 //       if a task is spinning in CPU-bound code without any yield/cancellation points.
@@ -1220,8 +1244,10 @@ static void *signal_listener(void *arg)
                 // time to abandon the stuck task, unless the julia-side
                 // escalation (SAFE -> ABANDON_EXTERNAL -> ABANDON_ALL) can
                 // still make progress on it.
-                jl_task_t *rescue_task = jl_check_sigint_rescue_abandon();
-                if (rescue_task != NULL && jl_sigint_direct_abandon_allowed()) {
+                jl_task_t *rescue_task = NULL;
+                if (jl_sigint_rescue_timer_expired_peek() && jl_sigint_direct_abandon_allowed())
+                    rescue_task = jl_check_sigint_rescue_abandon(); // consumes the expiry
+                if (rescue_task != NULL) {
                     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
                     jl_task_t *ct = jl_atomic_load_relaxed(&ptls2->current_task);
                     if (ct != NULL && ct != rescue_task) {

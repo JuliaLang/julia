@@ -477,6 +477,11 @@ JL_DLLEXPORT void jl_set_sigint_cond(uv_async_t *cond) JL_NOTSAFEPOINT
 static jl_task_t *sigint_rescue_task = NULL;
 static volatile int sigint_rescue_timer_expired = 0;
 
+// Classifies the ^C episode state recorded on the root task's cancellation
+// request (see base/Base.jl's sigint listener), for escalation decisions and
+// the rescue-timer warning text. Defined below, after the shared state.
+static int jl_sigint_episode_state(void) JL_NOTSAFEPOINT;
+
 #if defined(JL_HAVE_POSIX_TIMER)
 // The timer raises SIGINT, distinguished from a user ^C by
 // SI_TIMER/sival_int == 1, which the signal listener thread handles.
@@ -571,10 +576,23 @@ JL_DLLEXPORT void jl_set_sigint_rescue_task(jl_task_t *t) JL_NOTSAFEPOINT
 static VOID CALLBACK sigint_rescue_timer_cb(PVOID param, BOOLEAN fired)
 {
     (void)param; (void)fired;
+    int est = jl_sigint_episode_state();
+    if (est == 0)
+        return; // the episode already completed - stand down
     sigint_rescue_timer_expired = 1;
-    jl_safe_printf("\nWARNING: Process failed to acknowledge SIGINT within 1s.\n"
-                     "         You (or a package author) may need to add more @cancel_check's.\n"
-                     "         Re-Send SIGINT to begin (potentially unsafe) aggressive termination.\n");
+    if (est == 2) {
+        jl_safe_printf("\nWARNING: Cancellation is in progress, but has not completed within 1s.\n"
+                         "         Press ^C again to also stop waiting for external resources (e.g. in-flight I/O).\n");
+    }
+    else if (est == 3) {
+        jl_safe_printf("\nWARNING: Cancellation has still not completed.\n"
+                         "         Press ^C again to forcibly abandon the current task (unsafe; may leak resources).\n");
+    }
+    else {
+        jl_safe_printf("\nWARNING: Process failed to acknowledge SIGINT within 1s.\n"
+                         "         You (or a package author) may need to add more @cancel_check's.\n"
+                         "         Press ^C again to (unsafely) abandon the current task.\n");
+    }
 }
 
 static void jl_arm_sigint_rescue_timer(void) JL_NOTSAFEPOINT
@@ -633,6 +651,22 @@ static jl_task_t *jl_check_sigint_rescue_abandon(void) JL_NOTSAFEPOINT
         return NULL;
     sigint_rescue_timer_expired = 0;
     return sigint_rescue_task;
+}
+
+// Non-consuming query of the rescue timer expiry: the julia-side listener
+// only escalates the severity of an active cancellation once its grace
+// period has passed.
+JL_DLLEXPORT int jl_sigint_rescue_timer_expired_peek(void) JL_NOTSAFEPOINT
+{
+    return sigint_rescue_timer_expired;
+}
+
+// An escalated severity was just delivered: consume the expiry and start a
+// fresh grace period for the next rung.
+JL_DLLEXPORT void jl_sigint_escalation_delivered(void) JL_NOTSAFEPOINT
+{
+    sigint_rescue_timer_expired = 0;
+    jl_arm_sigint_rescue_timer();
 }
 
 // Reset the rescue timer state (e.g. when cancellation succeeds)
@@ -706,24 +740,51 @@ void jl_sigint_request_cancellation(void) JL_NOTSAFEPOINT
     deliver_sigint_notification();
 }
 
-// Whether the C side may abandon the interrupted task directly (bypassing the
-// julia-side escalation): either the initial SAFE request was never even
-// acknowledged (no thread was available to run the sigint listener, e.g. a
-// single-threaded session with the thread stuck in compute), or the listener
-// already escalated to an abandoning severity and the task still did not
-// yield. Severities live in the low bits of the (possibly acknowledged)
-// request value - see base/task.jl.
-static int jl_sigint_direct_abandon_allowed(void) JL_NOTSAFEPOINT
+// Episode states:
+//  0 - no active ^C episode
+//  1 - a request that its target never observed: the C-planted marker, or a
+//      listener-delivered SAFE request that was never acknowledged (e.g. the
+//      target is compute-bound with no cancellation points)
+//  2 - SAFE severity acknowledged (the target is unwinding, but stuck)
+//  3 - ABANDON_EXTERNAL severity active
+//  4 - ABANDON_ALL severity active
+//  5 - unrecognized (an arbitrary user-supplied request value)
+static int jl_sigint_episode_state(void) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
     jl_value_t *creq = jl_atomic_load_relaxed(&ptls2->root_task->cancellation_request);
     if (creq == NULL || creq == jl_nothing)
         return 0;
+    if (jl_typetagis(creq, jl_uint8_type))
+        return 1; // planted by jl_sigint_request_cancellation, never delivered
     jl_datatype_t *t = (jl_datatype_t*)jl_typeof(creq);
     if (!jl_is_datatype(t) || jl_datatype_size(t) != 1)
-        return 0; // an arbitrary user request value - let julia handle it
-    uint8_t v = *(uint8_t*)jl_data_ptr(creq);
-    return v == 0x00 /* pending, unacknowledged SAFE */ || (v & 0x7f) >= 0x03;
+        return 5;
+    uint8_t raw = *(uint8_t*)jl_data_ptr(creq);
+    uint8_t v = raw & 0x7f;
+    if (v == 0x00)
+        return (raw & 0x80) ? 2 : 1; // un-acknowledged SAFE was never observed
+    return v == 0x03 ? 3 : v == 0x04 ? 4 : 5;
+}
+
+// Whether the C side may abandon the interrupted task directly (bypassing the
+// julia-side escalation): either the initial SAFE request was never even
+// delivered (no thread was available to run the sigint listener, e.g. a
+// single-threaded session with the thread stuck in compute), or the listener
+// already escalated to an abandoning severity and the task still did not
+// yield.
+static int jl_sigint_direct_abandon_allowed(void) JL_NOTSAFEPOINT
+{
+    int est = jl_sigint_episode_state();
+    if (est == 1)
+        return 1; // the initial request was never even delivered
+    // For delivered episodes the julia-side listener drives the graded
+    // escalation - unless it is starved (its previous notification is still
+    // undispatched, e.g. a single-threaded session whose only thread is
+    // stuck in compute during cancellation cleanup).
+    if (est >= 2 && est <= 4 && jl_atomic_load_relaxed(&jl_sigint_dispatch_pending))
+        return 1;
+    return 0;
 }
 
 static void stack_overflow_warning(void)
