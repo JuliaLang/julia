@@ -1596,9 +1596,6 @@ end
 
 # This is the slow path of @cancel_check
 @noinline function handle_cancellation!(@nospecialize(_req))
-    # A cancellation request is being processed - the ^C escalation timer (if
-    # armed) may stand down.
-    ccall(:jl_reset_sigint_rescue_timer, Cvoid, ())
     req = conform_cancellation_request(_req)
     if req === CANCEL_REQUEST_YIELD
         @atomicreplace :sequentially_consistent :monotonic current_task().cancellation_request _req => nothing
@@ -1887,14 +1884,16 @@ function freeze_task!(t::Task, @nospecialize(crequest))
         acknowledge_cancellation!(t, crequest)
         throw(conform_cancellation_request(crequest))
     end
+    attempts = 0
     while true
         istaskdone(t) && return true
         waitee = t.queue
         tid = Threads.threadid(t)
-        if waitee === nothing && tid != 0
+        if waitee === nothing && tid != 0 && (attempts += 1) <= 100
             # Likely running on a thread - rip it away. unsafe_abandon! is a
             # no-op if the task is not current on that thread anymore (it may
-            # have parked or migrated in the meantime) - re-examine and retry.
+            # have parked or migrated in the meantime) - re-examine and retry,
+            # eventually falling through to freezing it in place.
             rescue = Task(() -> (while true; wait(); end))
             rescue.sticky = false
             unsafe_abandon!(t, rescue)

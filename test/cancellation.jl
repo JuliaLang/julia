@@ -295,14 +295,15 @@ end
         close(p)
     end
 
-    # Escalation helper: severity ladder for repeat ^C.
-    @test Base.escalated_sigint_severity(nothing) === CANCEL_REQUEST_SAFE
-    @test Base.escalated_sigint_severity(UInt8(0x00)) === CANCEL_REQUEST_SAFE # fresh C-side ^C marker
-    @test Base.escalated_sigint_severity(CANCEL_REQUEST_SAFE) === CANCEL_REQUEST_ABANDON_EXTERNAL
-    @test Base.escalated_sigint_severity(CancellationRequest(0x80)) === CANCEL_REQUEST_ABANDON_EXTERNAL
-    @test Base.escalated_sigint_severity(CANCEL_REQUEST_ABANDON_EXTERNAL) === CANCEL_REQUEST_ABANDON_ALL
-    @test Base.escalated_sigint_severity(CancellationRequest(0x83)) === CANCEL_REQUEST_ABANDON_ALL
-    @test Base.escalated_sigint_severity(CANCEL_REQUEST_ABANDON_ALL) === CANCEL_REQUEST_ABANDON_ALL
+    # Episode classification for the ^C escalation ladder.
+    @test Base.sigint_active_severity(nothing) === nothing
+    @test Base.sigint_active_severity(UInt8(0x00)) === nothing # fresh C-side ^C marker
+    @test Base.sigint_active_severity(CANCEL_REQUEST_SAFE) === CANCEL_REQUEST_SAFE
+    @test Base.sigint_active_severity(CancellationRequest(0x80)) === CANCEL_REQUEST_SAFE
+    @test Base.sigint_active_severity(CANCEL_REQUEST_ABANDON_EXTERNAL) === CANCEL_REQUEST_ABANDON_EXTERNAL
+    @test Base.sigint_active_severity(CancellationRequest(0x83)) === CANCEL_REQUEST_ABANDON_EXTERNAL
+    @test Base.sigint_active_severity(CANCEL_REQUEST_ABANDON_ALL) === CANCEL_REQUEST_ABANDON_ALL
+    @test Base.sigint_active_severity(CancellationRequest(0x84)) === CANCEL_REQUEST_ABANDON_ALL
 end
 
 @testset "unfriendly cancellation of Experimental.@sync" begin
@@ -497,6 +498,68 @@ end
 end
 
 if Sys.isunix()
+    @testset "^C escalation ladder in the REPL (pty)" begin
+        isdefined(Main, :FakePTYs) || @eval Main include("testhelpers/FakePTYs.jl")
+        pts, ptm = Main.FakePTYs.open_fake_pty()
+        env = copy(ENV)
+        env["TERM"] = "dumb"
+        env["JULIA_HISTORY"] = tempname()
+        # -t2 so the sigint listener can act while the victim hogs a thread
+        p = run(detach(setenv(`$(Base.julia_cmd()) -i -q --startup-file=no --color=no -t2`, env)),
+                pts, pts, pts; wait=false)
+        ccall(:close, Cint, (Cint,), pts) # only the child owns the pts now
+
+        transcript_lock = ReentrantLock()
+        transcript = UInt8[]
+        reader = @async try
+            while true
+                chunk = readavailable(ptm)
+                isempty(chunk) && break
+                @lock transcript_lock append!(transcript, chunk)
+            end
+        catch # pty closes when the child exits
+        end
+        cursor = Ref(1)
+        snapshot() = @lock transcript_lock String(copy(transcript))
+        function expect(needle::String; timeout::Real=30.0)
+            status = timedwait(timeout; pollint=0.05) do
+                idx = findnext(needle, snapshot(), cursor[])
+                idx === nothing && return false
+                cursor[] = last(idx) + 1
+                return true
+            end
+            if status !== :ok
+                @error "expect timed out" needle tail=snapshot()[max(1, cursor[]):end]
+            end
+            @test status == :ok
+        end
+        sendline(s) = write(ptm, s * "\n")
+
+        expect("julia> ")
+        # A task that acknowledges SAFE cancellation but hangs in its cleanup:
+        # walks the full escalation ladder with a guided message per rung.
+        sendline("try; sleep(1000); finally; x = Ref(1.0); while x[] > 0; x[] = x[] * 1.0000001 + 0.1; end; end")
+        sleep(1.0)
+        kill(p, Base.SIGINT) # press 1: SAFE, delivered silently
+        expect("Press ^C again to also stop waiting for external resources"; timeout=6.0)
+        kill(p, Base.SIGINT) # press 2: ABANDON_EXTERNAL
+        expect("No longer waiting for external resources")
+        expect("Press ^C again to forcibly abandon"; timeout=6.0)
+        kill(p, Base.SIGINT) # press 3: ABANDON_ALL freezes the task
+        expect("Abandoning the current task")
+        expect("CancellationRequest")
+        expect("julia> ")
+        # the rescued session works, and exits cleanly
+        sendline("1 + 1")
+        expect("2")
+        expect("julia> ")
+        sendline("exit()")
+        @test timedwait(() -> process_exited(p), 15.0) == :ok
+        @test success(p)
+        close(ptm)
+        wait(reader)
+    end
+
     @testset "^C in the REPL (pty)" begin
         isdefined(Main, :FakePTYs) || @eval Main include("testhelpers/FakePTYs.jl")
         pts, ptm = Main.FakePTYs.open_fake_pty()

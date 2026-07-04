@@ -390,22 +390,19 @@ function start_profile_listener()
     ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), cond.handle)
 end
 
-# The severity for the next ^C delivery, given the target's current
-# cancellation request: no active request starts a fresh SAFE cancellation; a
-# repeat ^C during an active (pending or acknowledged) request escalates it
-# (SAFE -> ABANDON_EXTERNAL -> ABANDON_ALL).
-function escalated_sigint_severity(@nospecialize(tcr))
-    tcr === nothing && return CANCEL_REQUEST_SAFE
-    # The C-side ^C handler plants a raw boxed UInt8 marker, meaning "a ^C
-    # arrived and has not been processed yet": that is the fresh episode this
-    # very notification is about - deliver it as SAFE. Requests stored by our
-    # own previous deliveries (or their acknowledged forms) are typed
-    # CancellationRequest; a further ^C while one is active escalates.
-    tcr isa UInt8 && return CANCEL_REQUEST_SAFE
-    r = tcr isa CancellationRequest ? tcr.request : 0x00
-    sev = r & 0x7f
-    (sev == 0x03 || sev == 0x04) && return CANCEL_REQUEST_ABANDON_ALL
-    return CANCEL_REQUEST_ABANDON_EXTERNAL
+# The severity of the target's active cancellation episode, or `nothing` if
+# there is none. The C-side ^C handler plants a raw boxed UInt8 marker,
+# meaning "a ^C arrived and has not been delivered yet" - that is the fresh
+# episode this very notification is about, not an active one. Requests stored
+# by our own previous deliveries (and their acknowledged forms) are typed
+# CancellationRequest.
+function sigint_active_severity(@nospecialize(tcr))
+    tcr === nothing && return nothing
+    tcr isa UInt8 && return nothing
+    r = (tcr isa CancellationRequest ? tcr.request : 0x00) & 0x7f
+    r == 0x03 && return CANCEL_REQUEST_ABANDON_EXTERNAL
+    r == 0x04 && return CANCEL_REQUEST_ABANDON_ALL
+    return CANCEL_REQUEST_SAFE
 end
 
 function sigint_listener(cond::AsyncCondition)
@@ -445,12 +442,34 @@ function sigint_listener(cond::AsyncCondition)
             istaskdone(bt) || (target = bt)
         end
         tcr = target === roottask ? cr : (@atomic :acquire target.cancellation_request)
-        sev = escalated_sigint_severity(tcr)
-        if sev === CANCEL_REQUEST_ABANDON_ALL
-            print(stderr, "\nWARNING: Cancellation is being ignored - abandoning the current task.\n",
+        active = sigint_active_severity(tcr)
+        acked = tcr isa CancellationRequest && (tcr.request & 0x80) != 0x00
+        if active === nothing
+            sev = CANCEL_REQUEST_SAFE
+        elseif ccall(:jl_sigint_rescue_timer_expired_peek, Cint, ()) != 0
+            # The grace period for the active severity has passed (the rescue
+            # timer announced the escalation option to the user) - climb one
+            # rung, and start a fresh grace period for the next one.
+            sev = active === CANCEL_REQUEST_SAFE ? CANCEL_REQUEST_ABANDON_EXTERNAL :
+                  CANCEL_REQUEST_ABANDON_ALL
+            ccall(:jl_sigint_escalation_delivered, Cvoid, ())
+        elseif !acked
+            # The active request was never observed by the target - a repeat
+            # ^C within the grace period retries its delivery.
+            sev = active
+        else
+            # The target acknowledged and is working on the cancellation; a
+            # repeat ^C within the grace period does nothing (once the grace
+            # period lapses, the rescue timer offers escalation).
+            continue
+        end
+        # N.B.: these warnings must not park this task (the victim may be
+        # hogging our only thread) - Core.print writes directly.
+        if sev === CANCEL_REQUEST_ABANDON_ALL && active !== CANCEL_REQUEST_ABANDON_ALL
+            Core.print(Core.stderr, "\nWARNING: Abandoning the current task.\n",
                             "         This may leave the process in an inconsistent state.\n")
-        elseif sev === CANCEL_REQUEST_ABANDON_EXTERNAL
-            print(stderr, "\nWARNING: Cancellation is taking too long - ceasing to wait for external resources.\n")
+        elseif sev === CANCEL_REQUEST_ABANDON_EXTERNAL && active === CANCEL_REQUEST_SAFE
+            Core.print(Core.stderr, "\nWARNING: No longer waiting for external resources to complete cancellation.\n")
         end
         delivered = cancel!(target, sev)
         if target !== roottask
@@ -460,11 +479,11 @@ function sigint_listener(cond::AsyncCondition)
             # further ^C may abandon the stuck task directly.
             @atomic :release roottask.cancellation_request = CancellationRequest(0x80 | sev.request)
         end
-        # If the wait was successfully interrupted, the request is in the
-        # target's hands now - stand down the escalation timer. Otherwise the
-        # target is compute-bound and has to discover the request itself; leave
-        # the timer armed so we escalate if it does not.
-        delivered && ccall(:jl_reset_sigint_rescue_timer, Cvoid, ())
+        # The escalation timer keeps running until the episode closes (the
+        # session resumes normal operation and calls reset_cancellation!, or
+        # an abandoned target is cleaned up): if the cancellation stalls at
+        # any stage - including cleanup after a successful delivery - the
+        # timer offers the next rung.
         if (REPL = REPL_MODULE_REF[]) !== Base
             invokelatest(REPL.maybe_rescue_REPL_after_sigint)
         end

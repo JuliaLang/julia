@@ -1758,8 +1758,19 @@ JL_DLLEXPORT void jl_abandon_task(jl_task_t *t, jl_task_t *next_task) JL_NOTSAFE
     // so that ctx_switch knows to do cleanup
     jl_atomic_store_release(&t->_state, JL_TASK_STATE_ABANDONED);
 
-    // Send the abandon signal (request 6)
-    jl_send_abandon_signal(tid);
+    // Send the abandon signal (request 6). The request slot is shared with
+    // best-effort cancellation/preemption signals and signal deliveries
+    // coalesce, so a single send can be lost (or skipped while another
+    // request holds the slot); re-send until the thread has observably
+    // switched away from the abandoned task.
+    for (int attempt = 0; attempt < 200; attempt++) {
+        jl_send_abandon_signal(tid);
+        for (int spin = 0; spin < 10; spin++) {
+            if (jl_atomic_load_acquire(&ptls2->current_task) != t)
+                return;
+            uv_sleep(1);
+        }
+    }
 }
 
 #ifdef _OS_WINDOWS_
