@@ -2231,9 +2231,7 @@ JL_DLLEXPORT void jl_register_binding_patch_sites(const void *start, const void 
             jl_safe_printf("  record %d: {0x%" PRIx64 ", 0x%" PRIx64 ", 0x%" PRIx64 ", %d}\n",
                            (int)i, recs[i].f0, recs[i].f1, recs[i].f2, (int)recs[i].kind);
     }
-    // Temporary diagnostic for the Windows CI sysimage crash (#62257): summarize what
-    // registration saw whenever generating output, so the build log shows it.
-    if (jl_generating_output() || getenv("JL_BPATCH_DEBUG"))
+    if (getenv("JL_BPATCH_DEBUG"))
         jl_safe_printf("jl_bpatch: image records %p-%p: %d records (%d slotmap, "
                        "%d got), %d registered, %d deopt, %d unresolved\n",
                        start, end, (int)n, (int)nslotmap, (int)ngot,
