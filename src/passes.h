@@ -9,6 +9,8 @@
 
 using namespace llvm;
 
+namespace llvm { class TargetMachine; }
+
 // Function Passes
 struct DemoteFloat16Pass : PassInfoMixin<DemoteFloat16Pass> {
     PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
@@ -50,6 +52,8 @@ struct ExpandAtomicModifyPass : PassInfoMixin<ExpandAtomicModifyPass> {
 
 // Module Passes
 struct CPUFeaturesPass : PassInfoMixin<CPUFeaturesPass> {
+    const TargetMachine *TM;
+    explicit CPUFeaturesPass(const TargetMachine *TM = nullptr) JL_NOTSAFEPOINT : TM(TM) {}
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) JL_NOTSAFEPOINT;
     static bool isRequired() { return true; }
 };

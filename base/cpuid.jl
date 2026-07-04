@@ -178,6 +178,144 @@ const ISAs_by_family = Dict(
 # Test a CPU feature exists on the currently-running host
 test_cpu_feature(feature::UInt32) = ccall(:jl_test_cpu_feature, Bool, (UInt32,), feature)
 
+# Architectures recognised as an arch prefix in `@cpu_supports`.
+const _KNOWN_ARCHES = (:x86_64, :aarch64, :arm64, :riscv64)
+
+_normalize_arch(a::Symbol) = a === :arm64 ? :aarch64 : a
+
+# Per-arch LLVM feature-name table for `@cpu_supports` parse-time validation.
+const _KNOWN_CPU_FEATURES_BY_ARCH = OncePerProcess{Dict{Symbol,Set{Symbol}}}() do
+    d = Dict{Symbol,Set{Symbol}}()
+    for a in ("x86_64", "aarch64", "riscv64")
+        s = Set{Symbol}()
+        for (_, name) in _build_bit_to_name(a)
+            push!(s, Symbol(name))
+        end
+        d[Symbol(a)] = s
+    end
+    d
+end
+
+# Host-arch shorthand.
+_KNOWN_CPU_FEATURES() = get(_KNOWN_CPU_FEATURES_BY_ARCH(), _normalize_arch(Sys.ARCH), Set{Symbol}())
+
+# Expand a CPU name to its JIT-relevant feature set via the same
+# `resolve_targets_for_llvm` path multiversioning uses. Returns
+# `nothing` for unknown names.
+function _lookup_cpu_features(name::String)
+    result = ccall(:jl_cpu_uarch_expand_features, Any, (Cstring,), name)
+    result === nothing && return nothing
+    feature_str = result::String
+    isempty(feature_str) && return Symbol[]
+    return sort!([Symbol(f) for f in split(feature_str, ',')])
+end
+
+@noinline _bad_feature_arg(x) =
+    error("@cpu_supports: expected literal feature names (Symbol or String), got $(repr(x))")
+
+# Parse a single macro argument as a feature Symbol.
+function _parse_feature_arg(feature)
+    if feature isa Symbol
+        return feature
+    elseif feature isa QuoteNode && feature.value isa Symbol
+        return feature.value
+    elseif feature isa AbstractString
+        return Symbol(feature)
+    else
+        _bad_feature_arg(feature)
+    end
+end
+
+"""
+    Base.@cpu_supports arch name1 [name2 ...] -> Bool
+
+Compile-time CPU capability query, ANDed across names. `arch` is a literal
+architecture name (`x86_64`, `aarch64`, or `riscv64`) that scopes the
+query; each `nameN` is a literal naming an LLVM target feature (`avx2`,
+`fma`, `"sse4.2"`) or a CPU model (`haswell`, `znver4`, `"x86-64-v3"`).
+Strings are required for names that contain `-` or `.`. CPU-model names
+expand to their JIT-relevant feature set. Unknown names error at
+macro-expansion time.
+
+On a host whose arch doesn't match the prefix, the call folds to `false`
+at parse time — letting you write cross-arch dispatch in a single source
+file.
+
+Mirrors GCC/Clang's `__builtin_cpu_supports`, folded against the function's
+effective `target-features` / `target-cpu` (so multiversioning clones get
+per-clone answers automatically).
+
+# Patterns
+
+Dispatch — the dead branch is eliminated:
+```julia
+function dot(xs, ys)
+    if @cpu_supports x86_64 avx2 fma
+        ...  # 256-bit path
+    elseif @cpu_supports aarch64 neon
+        ...  # NEON path
+    else
+        ...  # fallback
+    end
+end
+```
+
+Specialized kernel guard — the body after the assert is DCE'd on clones
+that don't satisfy it, so target-specific intrinsics inside never reach
+backend lowering:
+```julia
+function kernel_avx512(xs)
+    @assert @cpu_supports x86_64 avx512f
+    ...
+end
+```
+"""
+macro cpu_supports(names...)
+    isempty(names) && error("@cpu_supports: at least one name required")
+    # Arch-independent sentinel.
+    if length(names) == 1 && _parse_feature_arg(names[1]) === :__never__
+        return :(Core.Intrinsics.cpu_supports(:__never__))
+    end
+    length(names) < 2 && error("@cpu_supports: syntax is `@cpu_supports <arch> <name>...` where <arch> ∈ $(_KNOWN_ARCHES)")
+    arch_sym = _parse_feature_arg(names[1])
+    arch_sym in _KNOWN_ARCHES || error("@cpu_supports: first argument must be an architecture name (one of $(_KNOWN_ARCHES)), got `$arch_sym`")
+    arch = _normalize_arch(arch_sym)
+    names = names[2:end]
+    if arch !== _normalize_arch(Sys.ARCH)
+        # Arch doesn't match host — fold to false at parse time. No further
+        # validation of the feature names (we can't validate cross-arch CPU
+        # models on a host of a different arch anyway).
+        return false
+    end
+    feature_set = get(_KNOWN_CPU_FEATURES_BY_ARCH(), arch, Set{Symbol}())
+
+    exprs = Expr[]
+    for name in names
+        sym = _parse_feature_arg(name)
+        if sym === :__never__
+            # Sentinel: always folds to false via the pass's unknown-name
+            # handling. For lit-test use.
+            push!(exprs, :(Core.Intrinsics.cpu_supports($(QuoteNode(sym)))))
+            continue
+        end
+        if sym in feature_set
+            push!(exprs, :(Core.Intrinsics.cpu_supports($(QuoteNode(sym)))))
+            continue
+        end
+        # Try as a CPU model (host-arch lookup only).
+        features = _lookup_cpu_features(String(sym))
+        if features !== nothing
+            isempty(features) && error("@cpu_supports: CPU model `$sym` has no hw features (vacuously true)")
+            for f in features
+                push!(exprs, :(Core.Intrinsics.cpu_supports($(QuoteNode(f)))))
+            end
+            continue
+        end
+        error("@cpu_supports: unknown feature or CPU model `$sym` for $(Sys.ARCH)")
+    end
+    return foldr((a, b) -> :($a & $b), exprs)
+end
+
 # Normalize some variation in ARCH values (which typically come from `uname -m`)
 function normalize_arch(arch::String)
     arch = lowercase(arch)
