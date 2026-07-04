@@ -568,6 +568,21 @@ static int union_sort_cmp(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT
     else {
         if (jl_is_datatype(b))
             return 1;
+        // `Type{T}`/`TypeEgal{T}` wrappers sort like the `Type` datatypes they
+        // used to be: after other datatypes, but before typevars and unionalls,
+        // so that e.g. `Union{T, Type{T}}` keeps its historical component order
+        // (the subtype environment binds a variable from the first matching
+        // branch, and `foo(::Union{T, Type{T}}) where T` must bind `T` from the
+        // `Type{T}` component when both match, #62141)
+        if (jl_is_some_Type(a)) {
+            if (!jl_is_some_Type(b))
+                return -1;
+            // order two wrappers by their parameters, as the parameter
+            // comparison loop used to
+            return datatype_name_cmp(jl_some_Type_T(a), jl_some_Type_T(b));
+        }
+        if (jl_is_some_Type(b))
+            return 1;
         return datatype_name_cmp(jl_unwrap_unionall(a), jl_unwrap_unionall(b));
     }
 }
@@ -663,11 +678,11 @@ static int simple_subtype(jl_value_t *a, jl_value_t *b, int hasfree, int isUnion
         hasfree &= ((jl_has_free_typevars(nb) << 1) | 1);
         return simple_subtype(a, nb, hasfree, isUnion);
     }
-    if (b==(jl_value_t*)jl_datatype_type || b==(jl_value_t*)jl_typeofbottom_type) {
-        // This branch is not valid for `Union`/`UnionAll`, e.g.
-        // (Type{Union{Int,T2} where {T2<:T1}} where {T1}){Int} == Type{Int64}
-        // (Type{Union{Int,T1}} where {T1}){Int} == Type{Int64}
-        return jl_is_typeeq(a) && jl_typeof(jl_typeeq_T(a)) == b;
+    if (b == (jl_value_t*)jl_typeofbottom_type) {
+        // `Type{Union{}} == TypeofBottom` (the bottom object is unique). No
+        // other `Type{T}` lies in a kind: its members include `UnionAll`
+        // spellings of `T` (#33136).
+        return jl_is_typeeq(a) && jl_typeeq_T(a) == jl_bottom_type;
     }
     return 0;
 }

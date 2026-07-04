@@ -22,6 +22,14 @@ New language features
 Language changes
 ----------------
 
+  - `Type{T} <: S` now holds only if every type `==` to `T` is an instance of `S`, fixing a
+    long-standing soundness hole where e.g. `Type{Int} <: DataType` held even though types like
+    `Tuple{S} where S<:Int` are `==` (and `isa`) their canonical spelling without being `DataType`s.
+    In particular `Type{T}` is no longer a subtype of any single kind: use a union of kinds instead
+    (e.g. `Type{Int} <: Union{DataType,UnionAll}` holds). `isa` and dispatch of type *values* are
+    unaffected, and a method on `Type{Int}` remains more specific than one on `DataType`
+    ([#33136], [#62141]).
+
 Compiler/Runtime improvements
 -----------------------------
 
