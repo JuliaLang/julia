@@ -100,7 +100,11 @@ include("set.jl")
 include("io.jl")
 include("iobuffer.jl")
 
+# Dynamic scopes (types only; the ScopedValues API is included much later)
+include("scope.jl")
+
 # Concurrency (part 1)
+include("cancellation.jl")
 include("linked_list.jl")
 include("condition.jl")
 include("threads.jl")
@@ -390,16 +394,54 @@ function start_profile_listener()
     ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), cond.handle)
 end
 
-# The severity of the target's active cancellation episode, or `nothing` if
-# there is none. The C-side ^C handler plants a raw boxed UInt8 marker,
-# meaning "a ^C arrived and has not been delivered yet" - that is the fresh
-# episode this very notification is about, not an active one. Requests stored
-# by our own previous deliveries (and their acknowledged forms) are typed
-# CancellationRequest.
-function sigint_active_severity(@nospecialize(tcr))
-    tcr === nothing && return nothing
-    tcr isa UInt8 && return nothing
-    r = (tcr isa CancellationRequest ? tcr.request : 0x00) & 0x7f
+# The ^C episode source: the cancellation token source governing the current
+# interactive foreground evaluation. A fresh source is installed per
+# evaluation (severities are monotonic, so a cancelled source is never
+# reused); this Ref keeps it rooted while the C side mirrors a raw pointer to
+# it for async-signal-safe reads.
+const _sigint_source = Ref{Union{Nothing, CancellationTokenSource}}(nothing)
+# The task driving the current foreground evaluation (the caller of
+# sigint_new_episode!). The escalation ladder falls back to targeting it
+# directly when the running computation has no published token binding (e.g.
+# an interpreted top-level loop, which executes no compiled cancellation
+# points).
+const _sigint_foreground_task = Ref{Union{Nothing, Task}}(nothing)
+
+"""
+    Base.sigint_new_episode!() -> CancellationToken
+
+Install a fresh ^C episode source and return its token. The owner of an
+interactive session (e.g. the REPL backend, or the script driver) calls this
+before each foreground evaluation and runs the evaluation in a dynamic scope
+carrying the returned token (`@with Base.CANCEL_TOKEN => tok ...`), so that
+^C cancels exactly that evaluation. Also stands down the ^C escalation
+machinery of the previous episode.
+"""
+function sigint_new_episode!()
+    src = CancellationTokenSource()
+    _sigint_source[] = src
+    _sigint_foreground_task[] = current_task()
+    # also disarms the rescue timer and clears a stale pending marker
+    ccall(:jl_set_sigint_source, Cvoid, (Any,), src)
+    return CancellationToken(src)
+end
+
+# Close the ^C episode without installing a new source (e.g. after an
+# abandoned target was cleaned up; the resumed session installs a fresh
+# source before its next evaluation).
+function sigint_close_episode!()
+    _sigint_source[] = nothing
+    _sigint_foreground_task[] = nothing
+    ccall(:jl_set_sigint_source, Cvoid, (Any,), nothing)
+    nothing
+end
+
+# The active severity of the episode source, or `nothing` if it has not been
+# cancelled.
+function sigint_active_severity(src::CancellationTokenSource)
+    st = @atomic :acquire src.state
+    st == 0x00 && return nothing
+    r = st & SEVERITY_MASK
     r == 0x03 && return CANCEL_REQUEST_ABANDON_EXTERNAL
     r == 0x04 && return CANCEL_REQUEST_ABANDON_ALL
     return CANCEL_REQUEST_SAFE
@@ -420,9 +462,7 @@ function sigint_listener(cond::AsyncCondition)
       ccall(:jl_claim_sigint_dispatch, Cint, ()) != 0 || continue
       lock(sigint_pass_lock)
       try # an error while processing one ^C must not disable the ^C machinery
-        # The SIGINT handler should have set a cancellation request on the roottask
-        cr = @atomic :acquire roottask.cancellation_request
-        cr === nothing && continue
+        pending = ccall(:jl_consume_sigint_pending, Cint, ()) != 0
         # If the current episode's stuck task was already forcibly abandoned
         # (by our ABANDON_ALL escalation below, or by the C-side fallback when
         # no thread was available to run this listener), finish its cleanup
@@ -442,17 +482,24 @@ function sigint_listener(cond::AsyncCondition)
             cleanup_abandoned_sigint_target(abandoned)
             continue
         end
-        # If the root task was previously abandoned, interactive evaluation has
-        # moved to a freshly created REPL backend task - target that instead.
-        # TODO: Support proper cancellation scopes for non-root tasks
-        target = roottask
-        if backend !== nothing
-            bt = backend.backend_task::Task
-            istaskdone(bt) || (target = bt)
+        src = _sigint_source[]
+        if src === nothing
+            # No episode source is installed. In an interactive session this
+            # is a between-evaluations window (a fresh source arrives with the
+            # next prompt) - ignore the press. Without a live interactive
+            # evaluator nothing can be cancelled or resumed - exit as an
+            # unhandled ^C would.
+            pending || continue
+            if backend !== nothing && !istaskdone(backend.backend_task::Task)
+                continue
+            end
+            roottask.state === :abandoned || istaskdone(roottask) || continue
+            exit(128 + 2) # 128 + SIGINT
         end
-        tcr = target === roottask ? cr : (@atomic :acquire target.cancellation_request)
-        active = sigint_active_severity(tcr)
-        acked = tcr isa CancellationRequest && (tcr.request & 0x80) != 0x00
+        active = sigint_active_severity(src)
+        # has any task acknowledged (started handling) the active severity?
+        delivered_bits = @atomic :monotonic src.delivered
+        acked = active !== nothing && (delivered_bits & (0x01 << active.request)) != 0x00
         if active === nothing
             sev = CANCEL_REQUEST_SAFE
         elseif ccall(:jl_sigint_rescue_timer_expired_peek, Cint, ()) != 0
@@ -463,11 +510,11 @@ function sigint_listener(cond::AsyncCondition)
                   CANCEL_REQUEST_ABANDON_ALL
             ccall(:jl_sigint_escalation_delivered, Cvoid, ())
         elseif !acked
-            # The active request was never observed by the target - a repeat
+            # The active severity was never observed by any task - a repeat
             # ^C within the grace period retries its delivery.
             sev = active
         else
-            # The target acknowledged and is working on the cancellation; a
+            # The cancellation was acknowledged and is being handled; a
             # repeat ^C within the grace period does nothing (once the grace
             # period lapses, the rescue timer offers escalation).
             continue
@@ -480,24 +527,39 @@ function sigint_listener(cond::AsyncCondition)
         elseif sev === CANCEL_REQUEST_ABANDON_EXTERNAL && active === CANCEL_REQUEST_SAFE
             Core.print(Core.stderr, "\nWARNING: No longer waiting for external resources to complete cancellation.\n")
         end
-        delivered = cancel!(target, sev)
-        if target !== roottask
-            # Mirror the escalation state onto the root task's request marker
-            # (in acknowledged form, so the root's own cancellation points
-            # stay quiescent): the C side consults it to decide whether a
-            # further ^C may abandon the stuck task directly.
-            @atomic :release roottask.cancellation_request = CancellationRequest(0x80 | sev.request)
+        if sev === active
+            redeliver!(src)
+        else
+            cancel!(src, sev)
+        end
+        # Fallback for a foreground task running code without a published
+        # token binding (e.g. an interpreted top-level loop): target it
+        # directly.
+        fg = _sigint_foreground_task[]
+        if fg isa Task && !istaskdone(fg)
+            if sev === CANCEL_REQUEST_ABANDON_ALL
+                freeze_task!(fg, sev, src)
+            else
+                # best-effort acceleration of asynchronous delivery
+                tid = ccall(:jl_get_task_tid, Int16, (Any,), fg)
+                tid >= 0 && ccall(:jl_send_cancellation_signal, Cvoid, (Int16,), tid)
+            end
         end
         # The escalation timer keeps running until the episode closes (the
-        # session resumes normal operation and calls reset_cancellation!, or
-        # an abandoned target is cleaned up): if the cancellation stalls at
-        # any stage - including cleanup after a successful delivery - the
-        # timer offers the next rung.
+        # session resumes normal operation and installs a fresh episode
+        # source, or an abandoned target is cleaned up): if the cancellation
+        # stalls at any stage - including cleanup after a successful
+        # delivery - the timer offers the next rung.
         if (REPL = REPL_MODULE_REF[]) !== Base
             invokelatest(REPL.maybe_rescue_REPL_after_sigint)
         end
-        # Our own ABANDON_ALL rung may just have frozen the target.
-        target.state === :abandoned && cleanup_abandoned_sigint_target(target)
+        # Our own ABANDON_ALL rung may just have frozen the foreground task.
+        backend = active_repl_backend
+        if backend !== nothing && (backend.backend_task::Task).state === :abandoned
+            cleanup_abandoned_sigint_target(backend.backend_task::Task)
+        elseif roottask.state === :abandoned && (backend === nothing || istaskdone(backend.backend_task::Task))
+            cleanup_abandoned_sigint_target(roottask)
+        end
       catch ex
         try
             @invokelatest showerror(stderr, ex, catch_backtrace())
@@ -526,12 +588,10 @@ function cleanup_abandoned_sigint_target(t::Task)
     if (REPL = REPL_MODULE_REF[]) !== Base
         invokelatest(REPL.maybe_rescue_REPL_after_sigint)
     end
-    # The episode is resolved: stand down the escalation timer and reset the
-    # escalation marker so that the next ^C starts a fresh SAFE cancellation.
-    # (Even when the abandoned task is the root task itself: its request field
-    # keeps serving as the ^C episode mailbox for the rescued session.)
-    ccall(:jl_reset_sigint_rescue_timer, Cvoid, ())
-    @atomic :release roottask.cancellation_request = nothing
+    # The episode is resolved: stand down the escalation timer and close the
+    # episode so that the next ^C starts fresh (the resumed session installs
+    # a new episode source before its next evaluation).
+    sigint_close_episode!()
     # If the abandonment left the process without an interactive evaluator
     # (script mode, or the REPL could not be rescued), nothing can resume
     # normal operation - exit as ^C would.
