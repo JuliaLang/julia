@@ -1165,7 +1165,7 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
     manifest_file === nothing && return nothing # manifest not found--keep searching LOAD_PATH
     d = get_deps(parsed_toml(manifest_file))
     for (dep_name, entries) in d
-        entries::Vector{Any}
+        entries = entries::Vector{Any}
         for entry in entries
             entry = entry::Dict{String, Any}
             uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
@@ -1475,10 +1475,11 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
 
         sv = sv::SimpleVector
         internal_methods = sv[3]::Vector{Any}
+        backedge_log = sv[4]
         Compiler.@zone "CC: INSERT_BACKEDGES" begin
             ccall(:jl_set_loading_closure_from_depmods, Cvoid, (Any, Any), depmods, internal_methods)
             try
-                ReinferUtils.insert_backedges_typeinf(internal_methods)
+                ReinferUtils.insert_backedges_typeinf(internal_methods, backedge_log)
             finally
                 ccall(:jl_clear_loading_closure, Cvoid, ())
             end
@@ -1694,7 +1695,7 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
         manifest_file === nothing && return
         d = get_deps(parsed_toml(manifest_file))
         for (dep_name, entries) in d
-            entries::Vector{Any}
+            entries = entries::Vector{Any}
             for entry in entries
                 entry = entry::Dict{String, Any}
                 uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
@@ -1709,7 +1710,7 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
                         deps′_expanded = Dict{String, Any}()
                         for (dep_name, entries) in d
                             dep_name in deps′ || continue
-                            entries::Vector{Any}
+                            entries = entries::Vector{Any}
                             if length(entries) != 1
                                 error("expected a single entry for $(repr(dep_name)) in $(repr(project_file))")
                             end
@@ -3573,11 +3574,15 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
             cachefile = compilecache_path(pkg, prefs_blob; flags=cacheflags)
             ocachefile = cache_objects ? ocachefile_from_cachefile(cachefile) : nothing
 
-            # append checksum for so to the end of the .ji file:
-            crc_so = if cache_objects
-                open(_crc32c, tmppath_so, "r")
-            else
-                UInt32(0)
+            # append checksum and stat identity for so to the end of the .ji file:
+            crc_so = UInt32(0)
+            so_fsize = UInt64(0)
+            so_mtime = UInt64(0)
+            if cache_objects
+                crc_so = open(_crc32c, tmppath_so, "r")
+                so_st = stat(tmppath_so)
+                so_fsize = UInt64(so_st.size)
+                so_mtime = reinterpret(UInt64, Float64(so_st.mtime))
             end
 
             # append extra crc to the end of the .ji file:
@@ -3586,6 +3591,8 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
                     error("Incompatible header for $(repr("text/plain", pkg)) in new cache file $(repr(tmppath)).")
                 end
                 seekend(f)
+                write(f, so_fsize)
+                write(f, so_mtime)
                 write(f, crc_so)
                 seekstart(f)
                 write(f, _crc32c(f))
@@ -3690,8 +3697,17 @@ isvalid_file_crc(f::IOStream) = (_crc32c(seekstart(f), filesize(f) - 4) == read(
 
 function isvalid_pkgimage_crc(f::IOStream, ocachefile::String)
     seekstart(f) # TODO necessary
-    seek(f, filesize(f) - 8)
+    seek(f, filesize(f) - 24)
+    expected_fsize = read(f, UInt64)
+    expected_mtime = read(f, UInt64)
     expected_crc_so = read(f, UInt32)
+    # a size+mtime match identifies the image the cache was built with (the
+    # same identity source files trust); hash it only when that disagrees
+    st = stat(ocachefile)
+    ispath(st) || return false
+    if UInt64(st.size) == expected_fsize && reinterpret(UInt64, Float64(st.mtime)) == expected_mtime
+        return true
+    end
     crc_so = open(_crc32c, ocachefile, "r")
     expected_crc_so == crc_so
 end

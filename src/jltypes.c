@@ -3908,7 +3908,7 @@ void jl_init_types(void) JL_GC_DISABLED
                         jl_svec(4,
                             jl_any_type, // union(jl_method_instance_type, jl_method_type, jl_symbol_type),
                             jl_any_type, // union(jl_nothing, jl_debuginfo_type)
-                            jl_simplevector_type, // memory{debuginfo}
+                            jl_any_type, // simplevector of debuginfo, or InternedCodeInstance in images
                             jl_string_type),
                         jl_emptysvec, 0, 0, 4);
     jl_debuginfo_type->name->mayinlinealloc = 0;
@@ -4112,7 +4112,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_any_type,
                             jl_any_type,
                             jl_debuginfo_type,
-                            jl_simplevector_type,
+                            jl_any_type, // edges: SimpleVector, or InternedCodeInstance in images
                             jl_any_type,
                             jl_uint32_type,
                             jl_uint16_type,
@@ -4132,6 +4132,17 @@ void jl_init_types(void) JL_GC_DISABLED
     // and there is no way to tell (during inference) if their value is finalized yet (to wait for them to be narrowed if applicable)
     jl_code_instance_type->name->constfields = code_instance_constfields;
     jl_code_instance_type->name->atomicfields = code_instance_atomicfields;
+
+    // Relocation-free serialized form of a CodeInstance's forward-edge list:
+    // one declared length field, then `nedges` opaque machine words appended
+    // to the same allocation (see staticdata.c; the words encode image
+    // objects as (image, offset) pairs and never require GC tracing since
+    // they only ever refer to immortal image memory).
+    jl_interned_code_instance_type = jl_new_datatype(jl_symbol("InternedCodeInstance"), core, jl_any_type, jl_emptysvec,
+                                                     jl_perm_symsvec(3, "nedges", "defword", "fieldmask"),
+                                                     jl_svec(3, jl_long_type, jl_ulong_type, jl_ulong_type),
+                                                     jl_emptysvec, 0, 1, 3);
+
 
     jl_method_match_type = jl_new_datatype(jl_symbol("MethodMatch"), core, jl_any_type, jl_emptysvec,
                                        jl_perm_symsvec(4, "spec_types", "sparams", "method", "fully_covers"),

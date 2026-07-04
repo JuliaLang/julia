@@ -434,7 +434,7 @@ void *jl_get_abi_converter(jl_task_t *ct, void *data)
 
         f = cfuncdata->unspecialized;
     } else {
-        jl_value_t *astrt = codeinst->rettype;
+        jl_value_t *astrt = jl_ci_rettype(codeinst);
         if (astrt != (jl_value_t*)jl_bottom_type &&
             jl_type_intersection(astrt, declrt) == jl_bottom_type) {
             // Do not warn if the function never returns since it is

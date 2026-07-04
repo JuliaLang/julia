@@ -2409,6 +2409,15 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
             }
             else {
                 jl_datatype_t *vt = ijl_small_typeof[vtag / sizeof(*ijl_small_typeof)];
+                if (vt == NULL || vt->layout == NULL) {
+                    extern void jl_ici_debug_whereis(void *obj) JL_NOTSAFEPOINT;
+                    jl_safe_printf("GC BAD SMALLTAG: vtag=%zx vt=%p obj=%p hdr=%zx prevwords=%zx %zx\n",
+                                   (size_t)vtag, (void*)vt, (void*)new_obj,
+                                   (size_t)o->header,
+                                   ((size_t*)new_obj)[-2], ((size_t*)new_obj)[-3]);
+                    jl_ici_debug_whereis((void*)new_obj);
+                    gc_dump_queue_and_abort(ptls, vt);
+                }
                 size_t dtsz = jl_datatype_size(vt);
                 if (update_meta)
                     gc_setmark(ptls, o, bits, dtsz);
@@ -2905,7 +2914,10 @@ static void gc_mark_roots(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
     }
     gc_try_claim_and_push(mq, _jl_debug_method_invalidation, NULL);
     gc_try_claim_and_push(mq, jl_method_contributors, NULL);
+    gc_try_claim_and_push(mq, jl_method_contributor_methods, NULL);
     gc_try_claim_and_push(mq, jl_activation_certs, NULL);
+    gc_try_claim_and_push(mq, jl_backedge_log, NULL);
+    gc_try_claim_and_push(mq, jl_sig_tn_table, NULL);
     gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_method_contributors, "method_contributors");
     gc_heap_snapshot_record_gc_roots((jl_value_t*)_jl_debug_method_invalidation, "debug_method_invalidation");
     // constants

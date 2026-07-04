@@ -1787,10 +1787,38 @@ function _uncompressed_ir(m::Method)
 end
 
 _uncompressed_ir(codeinst::CodeInstance, s::String) =
-    ccall(:jl_uncompress_ir, Ref{CodeInfo}, (Any, Any, Any), codeinst.def.def::Method, codeinst, s)
+    ccall(:jl_uncompress_ir, Ref{CodeInfo}, (Any, Any, Any), (get_ci_mi(codeinst).def)::Method, codeinst, s)
+
+# image CodeInstances and DebugInfos may carry pointer fields in the interned
+# edge container; always go through the C accessors: the fields read as
+# undefined until rematerialized, and `isdefined` const-folds to true.
+ci_def(codeinst::CodeInstance) = ccall(:jl_ci_def, Any, (Any,), codeinst)
+
+# (`next` is never interned: it is runtime-mutable cache-chain state)
+const _ci_interned_fields = (:def, :owner, :rettype, :exctype,
+                             :rettype_const, :inferred, :debuginfo, :analysis_results)
+
+# NOTE: `isdefined` const-folds to true for these always-constructed fields,
+# so the probe must be the unconditional C call (whose fast path is a single
+# branch when nothing is interned)
+function getproperty(ci::CodeInstance, name::Symbol)
+    name in _ci_interned_fields && ccall(:jl_ci_materialize_all, Cvoid, (Any,), ci)
+    return getfield(ci, name)
+end
+function getproperty(ci::CodeInstance, name::Symbol, order::Symbol)
+    name in _ci_interned_fields && ccall(:jl_ci_materialize_all, Cvoid, (Any,), ci)
+    return getfield(ci, name, order)
+end
+
+function getproperty(di::Core.DebugInfo, name::Symbol)
+    if name === :def || name === :linetable || name === :codelocs || name === :edges
+        ccall(:jl_di_materialize_all, Cvoid, (Any,), di)
+    end
+    return getfield(di, name)
+end
 
 function get_ci_mi(codeinst::CodeInstance)
-    def = codeinst.def
+    def = ci_def(codeinst)
     if def isa Core.ABIOverride
         return def.def
     else

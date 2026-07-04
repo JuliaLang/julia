@@ -35,7 +35,7 @@ extern "C" {
 #define TAG_EDGE               18
 #define TAG_STRING             19
 #define TAG_SHORT_INT64        20
-//#define TAG_UNUSED           21
+#define TAG_IMAGE_ROOT         21
 #define TAG_CNULL              22
 #define TAG_ARRAY1D            23
 #define TAG_SINGLETON          24
@@ -86,7 +86,7 @@ typedef struct {
     size_t ssaid;
     // method we're compressing for
     jl_method_t *method;
-    jl_svec_t *edges;
+    jl_value_t *edges; // SimpleVector, or InternedCodeInstance for image CodeInstances
     jl_ptls_t ptls;
     uint8_t relocatability;
 } jl_ircode_state;
@@ -146,7 +146,8 @@ static void literal_val_id(rle_reference *rr, jl_ircode_state *s, jl_value_t *v)
                 return tagged_root(rr, s, i);
         }
     }
-    for (size_t i = 0; i < jl_svec_len(s->edges); i++) {
+    size_t nedges = jl_is_svec(s->edges) ? jl_svec_len(s->edges) : 0; // never encode against interned edges
+    for (size_t i = 0; i < nedges; i++) {
         if (jl_svecref(s->edges, i) == v) {
             rr->index = i;
             return;
@@ -168,12 +169,47 @@ static void jl_encode_int32(jl_ircode_state *s, int32_t x)
     }
 }
 
+// identity-stable image objects can be referenced from compressed IR
+// directly as (image, offset). Uniquing-class objects (types, typenames,
+// MethodInstances, methods, modules, bindings, singletons, symbols) are
+// excluded: their canonical copy is load-order dependent, so a fixed offset
+// may name a superseded stub in another process.
+static int image_ref_eligible(jl_value_t *v) JL_NOTSAFEPOINT
+{
+    if (jl_is_symbol(v) || jl_is_type(v) || jl_is_typevar(v) ||
+        jl_is_method_instance(v) || jl_is_method(v) || jl_is_module(v) ||
+        jl_is_binding(v) || jl_is_globalref(v) || jl_is_code_instance(v) ||
+        jl_typetagis(v, jl_typename_type))
+        return 0;
+    jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
+    if (t->instance == v)
+        return 0; // singleton instance
+    return 1;
+}
+
 static void jl_encode_as_indexed_root(jl_ircode_state *s, jl_value_t *v)
 {
     rle_reference rr = {.key = -1, .index = -1};
 
     if (jl_is_string(v))
         v = jl_as_global_root(v, 1);
+    // no direct image references while generating a non-incremental output:
+    // sysimage stages re-serialize this IR into a NEW image whose layout the
+    // recorded offsets would not match (package precompiles are safe: their
+    // dependency files stay byte-identical and build_id-verified)
+    if (jl_object_in_image(v) && image_ref_eligible(v) &&
+        !(jl_generating_output() && !jl_options.incremental)) {
+        uint64_t key, off;
+        int kind = jl_image_ref_of(v, &key, &off);
+        if (kind != 0 && (off & 7) == 0 && (off >> 3) <= UINT32_MAX) {
+            write_uint8(s->s, TAG_IMAGE_ROOT);
+            write_uint8(s->s, kind == 2 ? 1 : 0); // flags: bit0 = sysimage
+            if (kind != 2)
+                write_uint64(s->s, key);
+            write_uint32(s->s, (uint32_t)(off >> 3));
+            return;
+        }
+    }
     literal_val_id(&rr, s, v);
     int id = rr.index;
     assert(id >= 0);
@@ -801,14 +837,34 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s)
         assert(index >= 0);
         return lookup_root(s->method, key, index);
     }
+    case TAG_IMAGE_ROOT: {
+        int flags = read_uint8(s->s);
+        uint64_t k = (flags & 1) ? 0 : read_uint64(s->s);
+        uint64_t off = ((uint64_t)read_uint32(s->s)) << 3;
+        jl_value_t *v = jl_image_ref_resolve(flags & 1, k, off);
+        if (v == NULL)
+            jl_errorf("compressed IR references image %llx which is not loaded",
+                      (unsigned long long)k);
+        return v;
+    }
     case TAG_METHODROOT:
         return lookup_root(s->method, 0, read_uint8(s->s));
     case TAG_LONG_METHODROOT:
         return lookup_root(s->method, 0, read_uint32(s->s));
     case TAG_EDGE:
-        return jl_svecref(s->edges, read_uint8(s->s));
+        {
+            size_t edge_i = read_uint8(s->s);
+            if (jl_is_svec(s->edges))
+                return jl_svecref(s->edges, edge_i);
+            return jl_ici_ref((jl_interned_code_instance_t*)s->edges, edge_i);
+        }
     case TAG_LONG_EDGE:
-        return jl_svecref(s->edges, read_uint32(s->s));
+        {
+            size_t edge_i = read_uint32(s->s);
+            if (jl_is_svec(s->edges))
+                return jl_svecref(s->edges, edge_i);
+            return jl_ici_ref((jl_interned_code_instance_t*)s->edges, edge_i);
+        }
     case TAG_SVEC: JL_FALLTHROUGH; case TAG_LONG_SVEC:
         return jl_decode_value_svec(s, tag);
     case TAG_COMMONSYM:
@@ -1015,7 +1071,7 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
         code = (jl_code_info_t*)m->source;
     assert(jl_is_method(m));
     assert(jl_is_code_info(code));
-    assert(jl_array_nrows(code->code) == codelocs_nstmts(code->debuginfo->codelocs) || jl_string_len(code->debuginfo->codelocs) == 0);
+    assert(jl_array_nrows(code->code) == codelocs_nstmts(jl_di_codelocs_ro(code->debuginfo)) || jl_string_len(jl_di_codelocs_ro(code->debuginfo)) == 0);
     ios_t dest;
     ios_mem(&dest, 0);
 
@@ -1027,7 +1083,7 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
         &dest,
         0,
         m,
-        (!isdef && jl_is_svec(edges)) ? (jl_svec_t*)edges : jl_emptysvec,
+        (!isdef && jl_is_svec(edges)) ? edges : (jl_value_t*)jl_emptysvec,
         jl_current_task->ptls,
         1
     };
@@ -1121,7 +1177,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
         &src,
         0,
         m,
-        metadata == NULL ? NULL : jl_atomic_load_relaxed(&metadata->edges),
+        metadata == NULL ? NULL : (jl_value_t*)jl_atomic_load_relaxed(&metadata->edges),
         jl_current_task->ptls,
         1
     };
@@ -1176,13 +1232,15 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     jl_gc_write(code, code->slotnames, jl_array_t, jl_uncompress_argnames(slotnames));
 
     if (metadata) {
-        jl_debuginfo_t *new_debuginfo = jl_atomic_load_relaxed(&metadata->debuginfo);
+        jl_debuginfo_t *new_debuginfo = jl_ci_debuginfo(metadata);
+        if (new_debuginfo != NULL)
+            jl_di_materialize_all(new_debuginfo); // hand-out: raw readers walk this tree
         jl_gc_wb(code, new_debuginfo);
         code->debuginfo = new_debuginfo;
     } else
         jl_gc_write(code, code->debuginfo, jl_debuginfo_t, m->debuginfo);
     assert(code->debuginfo);
-    assert(jl_array_nrows(code->code) == codelocs_nstmts(code->debuginfo->codelocs) || jl_string_len(code->debuginfo->codelocs) == 0);
+    assert(jl_array_nrows(code->code) == codelocs_nstmts(jl_di_codelocs_ro(code->debuginfo)) || jl_string_len(jl_di_codelocs_ro(code->debuginfo)) == 0);
 
     (void) read_uint8(s.s);   // relocatability
     assert(!ios_eof(s.s));
@@ -1192,10 +1250,15 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     JL_UNLOCK(&m->writelock); // Might GC
     if (metadata) {
         jl_gc_write(code, code->parent, jl_method_instance_t, jl_get_ci_mi(metadata));
-        jl_gc_write(code, code->rettype, jl_value_t, metadata->rettype);
+        jl_gc_write(code, code->rettype, jl_value_t, jl_ci_rettype(metadata));
         code->min_world = jl_atomic_load_relaxed(&metadata->min_world);
         code->max_world = jl_atomic_load_relaxed(&metadata->max_world);
-        jl_gc_write(code, code->edges, jl_value_t, (jl_value_t*)s.edges);
+        {
+            jl_value_t *medges = s.edges;
+            if (medges != NULL && jl_typetagis(medges, jl_interned_code_instance_type))
+                medges = (jl_value_t*)jl_ici_to_svec((jl_interned_code_instance_t*)medges);
+            jl_gc_write(code, code->edges, jl_value_t, medges);
+        }
     }
     JL_GC_POP();
 
@@ -1425,7 +1488,7 @@ static const struct jl_codeloc_t badloc = {-1, 0, 0};
 
 JL_DLLEXPORT struct jl_codeloc_t jl_uncompress1_codeloc(jl_debuginfo_t *di, size_t pc) JL_NOTSAFEPOINT
 {
-    jl_string_t *cl = di->codelocs;
+    jl_string_t *cl = (jl_string_t*)jl_di_codelocs_ro(di);
     assert(jl_is_string(cl));
     int loc_offset, loc_bytes, to_bytes;
     size_t nstmts = codelocs_parseheader(cl, &loc_offset, &loc_bytes, &to_bytes);
@@ -1457,15 +1520,15 @@ static void cdi_deref(jl_debuginfo_t **p_di, int32_t *p_pc, int recursive) JL_NO
     int32_t pc = 0;
     if (!p_pc)
         p_pc = &pc;
-    if (jl_is_debuginfo(di->linetable)) {
+    if (jl_is_debuginfo(jl_di_linetable_ro(di))) {
         assert(*p_pc >= 0);
         *p_pc = jl_uncompress1_codeloc(di, *p_pc).loc;
-        *p_di = (jl_debuginfo_t *)di->linetable;
+        *p_di = (jl_debuginfo_t *)jl_di_linetable_ro(di);
         if (recursive) {
             cdi_deref(p_di, p_pc, recursive);
         }
     } else {
-        assert(jl_is_string(di->linetable) || jl_is_nothing(di->linetable));
+        assert(jl_is_string(jl_di_linetable_ro(di)) || jl_is_nothing(jl_di_linetable_ro(di)));
     }
 }
 
@@ -1474,7 +1537,7 @@ JL_DLLEXPORT jl_locspan_t jl_cdi_bytespan(jl_debuginfo_t *di, int32_t pc) JL_NOT
     cdi_deref(&di, &pc, 1);
     pc = jl_uncompress1_codeloc(di, pc).loc;
     jl_sourcebytetable_header_t h;
-    const char *ptr = sbt_parseheader(di->linetable, &h);
+    const char *ptr = sbt_parseheader(jl_di_linetable_ro(di), &h);
     if (pc <= 0 || pc > h.nlocs) {
         return (jl_locspan_t){-1, -1};
     }
@@ -1490,11 +1553,11 @@ JL_DLLEXPORT jl_locspan_t jl_cdi_byte_to_xy(jl_debuginfo_t *di, int32_t b) JL_NO
 {
     cdi_deref(&di, NULL, 1);
     jl_sourcebytetable_header_t h;
-    sbt_parseheader(di->linetable, &h);
+    sbt_parseheader(jl_di_linetable_ro(di), &h);
     size_t off = SBT_HEADER_SIZE + h.nlocs * (h.byte_encl + h.span_encl);
-    size_t n_lines = (jl_string_len(di->linetable) - off) / h.byte_encl;
+    size_t n_lines = (jl_string_len(jl_di_linetable_ro(di)) - off) / h.byte_encl;
     jl_locspan_t out = {h.line_offset-1, -1};
-    const char *ptr = jl_string_data(di->linetable) + off;
+    const char *ptr = jl_string_data(jl_di_linetable_ro(di)) + off;
     for (int i = 0; i < n_lines; i++) {
         int32_t line_start = _take_u32(&ptr, h.byte_encl);
         if (line_start + h.byte_offset <= b) {
@@ -1515,9 +1578,9 @@ JL_DLLEXPORT jl_locspan_t jl_cdi_firstxy(jl_debuginfo_t *di, int32_t pc) JL_NOTS
     assert(pc > 0);
     cdi_deref(&di, &pc, 1);
     jl_locspan_t out = {-1, -1};
-    if (jl_is_nothing(di->linetable)) {
+    if (jl_is_nothing(jl_di_linetable_ro(di))) {
         out.first = jl_uncompress1_codeloc(di, pc).loc;
-    } else if (jl_is_string(di->linetable)) {
+    } else if (jl_is_string(jl_di_linetable_ro(di))) {
         out = jl_cdi_byte_to_xy(di, jl_cdi_bytespan(di, pc).first);
     }
     return out;
@@ -1532,10 +1595,10 @@ JL_DLLEXPORT int32_t jl_cdi_external_firstline(jl_debuginfo_t *di) JL_NOTSAFEPOI
 {
     int32_t pc = 0;
     cdi_deref(&di, &pc, 1);
-    if (jl_is_nothing(di->linetable)) {
+    if (jl_is_nothing(jl_di_linetable_ro(di))) {
         int32_t out = jl_uncompress1_codeloc(di, 0).loc;
         return out > 0 ? out : -1;
-    } else if (jl_is_string(di->linetable)) {
+    } else if (jl_is_string(jl_di_linetable_ro(di))) {
         return -1;
     }
     jl_unreachable();
@@ -1555,11 +1618,12 @@ JL_DLLEXPORT int32_t jl_cdi_firstline_all(jl_debuginfo_t *di) JL_NOTSAFEPOINT
 JL_DLLEXPORT const char *jl_cdi_file(jl_debuginfo_t *di) JL_NOTSAFEPOINT
 {
     cdi_deref(&di, NULL, 1);
-    if (jl_is_symbol(di->def)) {
-        return jl_symbol_name((jl_sym_t*)di->def);
-    } else if (jl_is_method_instance(di->def)) {
+    jl_value_t *didef = jl_di_def_ro(di);
+    if (jl_is_symbol(didef)) {
+        return jl_symbol_name((jl_sym_t*)didef);
+    } else if (jl_is_method_instance(didef)) {
         // reachable with hand-crafted CodeInstances in base tests
-        jl_value_t *m = ((jl_method_instance_t *)di->def)->def.value;
+        jl_value_t *m = ((jl_method_instance_t *)didef)->def.value;
         assert(jl_is_method(m) && "unimplemented");
         return jl_symbol_name(((jl_method_t*)m)->file);
     } else {
@@ -1704,7 +1768,7 @@ JL_DLLEXPORT jl_string_t *jl_compress_codelocs(int32_t firstloc, jl_value_t *cod
 
 JL_DLLEXPORT jl_value_t *jl_uncompress_codelocs(jl_debuginfo_t *di, size_t nstmts) // Memory{UInt8} => Vector{Int32}
 {
-    jl_string_t *cl = di->codelocs;
+    jl_string_t *cl = (jl_string_t*)jl_di_codelocs_ro(di);
     assert(jl_is_string(cl));
     int loc_offset, loc_bytes, to_bytes;
     size_t nlocs = codelocs_parseheader(cl, &loc_offset, &loc_bytes, &to_bytes);

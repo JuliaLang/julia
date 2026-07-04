@@ -743,7 +743,7 @@ static jl_value_t *jl_call_staged(jl_method_t *def, jl_value_t *generator,
 JL_DLLEXPORT jl_code_instance_t *jl_cached_uninferred(jl_code_instance_t *codeinst, size_t world)
 {
     for (; codeinst; codeinst = jl_atomic_load_relaxed(&codeinst->next)) {
-        if (codeinst->owner != (void*)jl_uninferred_sym)
+        if (jl_ci_owner(codeinst) != (void*)jl_uninferred_sym)
             continue;
         if (jl_atomic_load_relaxed(&codeinst->min_world) <= world && world <= jl_atomic_load_relaxed(&codeinst->max_world)) {
             return codeinst;

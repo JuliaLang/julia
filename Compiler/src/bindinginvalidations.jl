@@ -44,6 +44,18 @@ end
 function scan_edge_list(ci::Core.CodeInstance, binding::Core.Binding)
     isdefined(ci, :edges) || return false
     edges = ci.edges
+    if edges isa Core.InternedCodeInstance
+        # image CodeInstances carry their edges as relocation-free words
+        i = 1
+        while i <= getfield(edges, :nedges)
+            if ccall(:jl_ici_ref, Any, (Any, Csize_t), edges, i - 1) === binding
+                return true
+            end
+            i += 1
+        end
+        return false
+    end
+    edges = edges::Core.SimpleVector
     i = 1
     while i <= length(edges)
         if isassigned(edges, i) && edges[i] === binding
@@ -190,14 +202,52 @@ function scan_new_method!(method::Method, image_backedges_only::Bool)
     @atomic method.did_scan_source |= 0x1
 end
 
+const _scan_stats = zeros(UInt64, 4) # methods, gated-in, uncompress ns, walk ns
+
+function scan_new_method_timed!(method::Method, image_backedges_only::Bool)
+    isdefined(method, :source) || return
+    isa(method.source, MaybeCompressed) || return
+    if image_backedges_only && !has_image_globalref(method)
+        return
+    end
+    _scan_stats[2] += 1
+    t0 = time_ns()
+    src = _uncompressed_ir(method)
+    t1 = time_ns()
+    _scan_stats[3] += t1 - t0
+    foreachgr(src) do gr::GlobalRef
+        b = convert(Core.Binding, gr)
+        if binding_was_invalidated(b)
+            @assert !image_backedges_only
+            @atomic method.did_scan_source |= 0x4
+        end
+        maybe_add_binding_backedge!(b, method)
+    end
+    _scan_stats[4] += time_ns() - t1
+    @atomic method.did_scan_source |= 0x1
+    return
+end
+
 function scan_new_methods!(internal_methods::Vector{Any}, image_backedges_only::Bool)
     if image_backedges_only && generating_output(true)
         # Replacing image bindings is forbidden during incremental precompilation - skip backedge insertion
         return
     end
+    debug = ccall(:jl_get_ici_debug_enabled, Cint, ()) != 0
     for method in internal_methods
         if isa(method, Method)
-           scan_new_method!(method, image_backedges_only)
+            if debug
+                _scan_stats[1] += 1
+                scan_new_method_timed!(method, image_backedges_only)
+            else
+                scan_new_method!(method, image_backedges_only)
+            end
         end
+    end
+    if debug
+        ccall(:jl_safe_printf, Cvoid, (Ptr{UInt8}, Clong, Clong, Clong, Clong),
+              "SCANSTATS: methods=%ld gated=%ld uncmp_ms=%ld walk_ms=%ld\n",
+              Int(_scan_stats[1]) % Clong, Int(_scan_stats[2]) % Clong,
+              div(Int(_scan_stats[3]), 1000000) % Clong, div(Int(_scan_stats[4]), 1000000) % Clong)
     end
 end

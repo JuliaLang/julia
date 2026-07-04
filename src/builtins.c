@@ -1777,8 +1777,9 @@ JL_CALLABLE(jl_f_invoke)
         jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
         jl_callptr_t invoke = jl_atomic_load_acquire(&codeinst->invoke);
         // N.B.: specTypes need not be a subtype of the method signature. We need to check both.
-        if (jl_is_abioverride(codeinst->def)) {
-            jl_datatype_t *abi = (jl_datatype_t*)((jl_abi_override_t*)(codeinst->def))->abi;
+        jl_value_t *cidef = jl_ci_defobj(codeinst);
+        if (jl_is_abioverride(cidef)) {
+            jl_datatype_t *abi = (jl_datatype_t*)((jl_abi_override_t*)cidef)->abi;
             if (!jl_tuple1_isa(args[0], &args[2], nargs - 1, abi)) {
                 jl_type_error("invoke: argument type error (ABI overwrite)", (jl_value_t*)abi, arg_tuple(args[0], &args[2], nargs - 1));
             }
@@ -2728,6 +2729,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("MethodCache", (jl_value_t*)jl_methcache_type);
     add_builtin("Method", (jl_value_t*)jl_method_type);
     add_builtin("CodeInstance", (jl_value_t*)jl_code_instance_type);
+    add_builtin("InternedCodeInstance", (jl_value_t*)jl_interned_code_instance_type);
     add_builtin("TypeMapEntry", (jl_value_t*)jl_typemap_entry_type);
     add_builtin("TypeMapLevel", (jl_value_t*)jl_typemap_level_type);
     add_builtin("Symbol", (jl_value_t*)jl_symbol_type);

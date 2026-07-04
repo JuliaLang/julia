@@ -683,7 +683,15 @@ end
     typebound_nothrow(𝕃, ub) || return false
     return true
 end
-add_tfunc(Core._typevar, 3, 3, typevar_tfunc, 100)
+@nospecs function typevar_tfunc(𝕃::AbstractLattice, n, lb_arg, ub_arg, strict)
+    strict isa Const || return TypeVar
+    strictval = strict.val
+    strictval isa Bool || return Union{}
+    # strict vars carry a flag that PartialTypeVar cannot represent; stay imprecise
+    strictval && return TypeVar
+    return typevar_tfunc(𝕃, n, lb_arg, ub_arg)
+end
+add_tfunc(Core._typevar, 3, 4, typevar_tfunc, 100)
 
 struct MemoryOrder x::Cint end
 const MEMORY_ORDER_UNSPECIFIED = MemoryOrder(-2)

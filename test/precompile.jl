@@ -1990,7 +1990,10 @@ precompile_test_harness("PkgCacheInspector") do load_path
     end
     @test any(internal_methods) do ci
         ci isa Core.CodeInstance || return false
-        mi = ci.def::Core.MethodInstance
+        # image CodeInstances carry `def` in the interned edge container;
+        # the raw field is not readable until rematerialized
+        mi = Base.ci_def(ci)
+        mi isa Core.MethodInstance || return false
         return mi.specTypes == Tuple{typeof(Base.repl_cmd), Int, String}
     end
 end

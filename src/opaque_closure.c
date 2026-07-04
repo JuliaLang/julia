@@ -75,7 +75,7 @@ static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t 
         jl_read_codeinst_invoke(ci, &specsigflags, &invoke, &specptr, 1);
         callptr = (jl_fptr_args_t)invoke; // codegen puts the object (or a jl_fptr_interpret_call token )here for us, even though it was the wrong type to put here
 
-        selected_rt = ci->rettype;
+        selected_rt = jl_ci_rettype(ci);
         // If we're not allowed to generate a specsig with this, rt, fall
         // back to the invoke wrapper. We could instead generate a specsig->specsig
         // wrapper, but lets leave that for later.
@@ -84,10 +84,10 @@ static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t 
             // correct rt check here (or we could codegen a wrapper).
             specptr = NULL; // this will force codegen of the unspecialized version
             callptr = (jl_fptr_args_t)jl_interpret_opaque_closure;
-            jl_value_t *ts[2] = {rt_lb, (jl_value_t*)ci->rettype};
+            jl_value_t *ts[2] = {rt_lb, (jl_value_t*)jl_ci_rettype(ci)};
             selected_rt = jl_type_union(ts, 2);
         }
-        if (!jl_subtype(ci->rettype, rt_ub)) {
+        if (!jl_subtype(jl_ci_rettype(ci), rt_ub)) {
             // TODO: It would be better to try to get a specialization with the
             // correct rt check here (or we could codegen a wrapper).
             specptr = NULL; // this will force codegen of the unspecialized version
@@ -102,10 +102,10 @@ static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t 
             callptr = (jl_fptr_args_t)specptr;
         }
         else if (callptr == (jl_fptr_args_t)jl_fptr_const_return) {
-            callptr = jl_isa(ci->rettype_const, selected_rt) ?
+            callptr = jl_isa(jl_ci_rettype_const(ci), selected_rt) ?
                 (jl_fptr_args_t)jl_fptr_const_opaque_closure :
                 (jl_fptr_args_t)jl_fptr_const_opaque_closure_typeerror;
-            captures = ci->rettype_const;
+            captures = jl_ci_rettype_const(ci);
         }
     }
 

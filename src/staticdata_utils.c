@@ -138,9 +138,9 @@ JL_DLLEXPORT void jl_finalize_precompile_inferred(int8_t cleanup_keep_ir)
         jl_code_instance_t *ci = (jl_code_instance_t*)jl_array_ptr_ref(newly_inferred, i);
         if (ci == NULL)
             continue;
-        if (ci->owner != jl_nothing)
+        if (jl_ci_owner(ci) != jl_nothing)
             continue; // foreign interpreters own their cached IR
-        jl_value_t *inferred = jl_atomic_load_relaxed(&ci->inferred);
+        jl_value_t *inferred = jl_ci_inferred(ci);
         if (inferred == NULL || !jl_is_code_info(inferred))
             continue;
         jl_method_instance_t *mi = jl_get_ci_mi(ci);
@@ -540,7 +540,7 @@ static jl_array_t *queue_external(jl_array_t *list, jl_query_cache *query_cache)
             int dispatch_status = jl_atomic_load_relaxed(&m->dispatch_status);
             if (!(dispatch_status & METHOD_SIG_LATEST_WHICH))
                 continue; // ignore replaced methods
-            if (jl_atomic_load_relaxed(&ci->inferred) && jl_is_method(m) && jl_object_in_image((jl_value_t*)m->module)) {
+            if (jl_ci_inferred(ci) && jl_is_method(m) && jl_object_in_image((jl_value_t*)m->module)) {
                 int found = has_backedge_to_worklist(mi, &visited, &stack, query_cache);
                 assert(found == 0 || found == 1 || found == 2);
                 assert(stack.len == 0);
@@ -706,7 +706,7 @@ static const char *jl_git_commit(void)
 
 
 // "magic" string and version header of .ji file
-static const int JI_FORMAT_VERSION = 14; // extext_methods carries (method, activation cert) pairs
+static const int JI_FORMAT_VERSION = 27; // did_scan_source 0x2 masked at save (scanned_methods lists are session state)
 static const char JI_MAGIC[] = "\373jli\r\n\032\n"; // based on PNG signature
 static const uint16_t BOM = 0xFEFF; // byte-order marker
 static int64_t write_header(ios_t *s, uint8_t pkgimage)
