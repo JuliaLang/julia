@@ -3414,4 +3414,58 @@ precompile_test_harness("Type{Union{}} inline field") do dir
     @test (@eval $TypeBottomField.X.t) === Union{}
 end
 
+# Cache rejection reasons and how they are reported when loading triggers precompilation:
+# caches left behind by another version of Julia collapse into one generic message, while
+# actionable reasons (e.g. changed source) are reported by name without version noise.
+precompile_test_harness("cache rejection reasons") do dir
+    pkgfile = joinpath(dir, "RejectReasons.jl")
+    write(pkgfile,
+          """
+          module RejectReasons
+          end
+          """)
+    cachefile, _ = Base.compilecache(Base.PkgId("RejectReasons"))
+
+    # fresh cache: nothing recorded, nothing reported
+    reasons = Dict{Symbol,Int}()
+    @test Base.stale_cachefile(pkgfile, cachefile; reasons) !== true
+    @test isempty(reasons)
+    @test Base.list_reasons(reasons) == ""
+
+    # a cache left in the depot after updating Julia fails the header check, which
+    # embeds the Julia version and commit (simulated here with junk bytes); that
+    # alone reports only the generic version message
+    oldcache = joinpath(dirname(cachefile), "RejectReasons_oldversion.ji")
+    write(oldcache, fill(0xff, 1024))
+    reasons = Dict{Symbol,Int}()
+    @test Base.stale_cachefile(pkgfile, oldcache; reasons) === true
+    @test reasons == Dict(:incompatible_header => 1)
+    @test Base.list_reasons(reasons) == " (no compatible cache for this version of Julia)"
+
+    # changing the source makes the compatible cache stale for an actionable reason
+    write(pkgfile,
+          """
+          module RejectReasons
+          f() = 1
+          end
+          """)
+    reasons = Dict{Symbol,Int}()
+    @test Base.stale_cachefile(pkgfile, cachefile; reasons) === true
+    @test length(reasons) == 1
+    @test only(keys(reasons)) in (:mtime_changed, :fsize_changed, :content_changed)
+    msg = Base.list_reasons(reasons)
+    @test startswith(msg, " (cache not reused: ")
+
+    # actionable reasons are reported over rejections of other-version caches
+    Base.record_reason(reasons, :incompatible_header)
+    @test Base.list_reasons(reasons) == msg
+
+    # rejections of caches that weren't the ones searched for are never reported
+    @test Base.list_reasons(Dict(:buildid_mismatch => 2)) == ""
+    @test Base.list_reasons(nothing) == ""
+
+    # the full counted list, including internal reasons, is available at debug level
+    @test_logs (:debug, r"Caches not reused: 2 for different build identifier") min_level=Logging.Debug match_mode=:any Base.list_reasons(Dict(:buildid_mismatch => 2))
+end
+
 finish_precompile_test!()
