@@ -695,13 +695,38 @@ static void deliver_sigint_notification(void) JL_NOTSAFEPOINT
 void jl_sigint_request_cancellation(void) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
-    jl_atomic_store_release(&ptls2->root_task->cancellation_request,
+    // Only plant a fresh SAFE request if there is no active request. Repeat
+    // ^C presses just (re-)notify the listener, which escalates the severity
+    // of the ongoing cancellation itself
+    // (SAFE -> ABANDON_EXTERNAL -> ABANDON_ALL).
+    jl_value_t *expected = jl_nothing;
+    jl_atomic_cmpswap(&ptls2->root_task->cancellation_request, &expected,
         jl_box_uint8(0x00)); // CANCEL_REQUEST_SAFE
     // Set a timer for the event loop to run and process the cancellation. If
     // this does not happen in time, we will advance to more aggressive
     // cancellation.
     jl_arm_sigint_rescue_timer();
     deliver_sigint_notification();
+}
+
+// Whether the C side may abandon the interrupted task directly (bypassing the
+// julia-side escalation): either the initial SAFE request was never even
+// acknowledged (no thread was available to run the sigint listener, e.g. a
+// single-threaded session with the thread stuck in compute), or the listener
+// already escalated to an abandoning severity and the task still did not
+// yield. Severities live in the low bits of the (possibly acknowledged)
+// request value - see base/task.jl.
+static int jl_sigint_direct_abandon_allowed(void) JL_NOTSAFEPOINT
+{
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
+    jl_value_t *creq = jl_atomic_load_relaxed(&ptls2->root_task->cancellation_request);
+    if (creq == NULL || creq == jl_nothing)
+        return 0;
+    jl_datatype_t *t = (jl_datatype_t*)jl_typeof(creq);
+    if (!jl_is_datatype(t) || jl_datatype_size(t) != 1)
+        return 0; // an arbitrary user request value - let julia handle it
+    uint8_t v = *(uint8_t*)jl_data_ptr(creq);
+    return v == 0x00 /* pending, unacknowledged SAFE */ || (v & 0x7f) >= 0x03;
 }
 
 static void stack_overflow_warning(void)
