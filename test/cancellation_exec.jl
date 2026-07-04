@@ -127,18 +127,19 @@ end
     @test fetch(t3) === (false, true)
 end
 
+mutable struct BlasCancelScope
+    @atomic slot::Ptr{Csize_t}
+end
+
 @testset "BLAS cancellation via cancellation hooks" begin
     # Requires an OpenBLAS with the cancellation patch (source build); the
     # BinaryBuilder library does not have it, so skip gracefully.
     blas = Libdl.dlopen_e("libopenblas64_")
-    tok_new = blas == C_NULL ? C_NULL : Libdl.dlsym_e(blas, :openblas_cancel_token_new)
-    if tok_new == C_NULL
+    tok_f = blas == C_NULL ? C_NULL : Libdl.dlsym_e(blas, :openblas_cancel_token)
+    if tok_f == C_NULL
         @warn "patched OpenBLAS not available; skipping BLAS cancellation tests"
     else
-        bind_f = Libdl.dlsym(blas, :openblas_cancel_token_bind)
         cancel_f = Libdl.dlsym(blas, :openblas_cancel)
-        reset_f = Libdl.dlsym(blas, :openblas_cancel_reset)
-        free_f = Libdl.dlsym(blas, :openblas_cancel_token_free)
         dgemm_f = Libdl.dlsym(blas, :dgemm_64_)
 
         function gemm!(C::Matrix{Float64}, A::Matrix{Float64}, B::Matrix{Float64})
@@ -157,9 +158,18 @@ end
         gemm!(C, A, B) # warm up the thread pool
         tbase = @elapsed gemm!(C, A, B)
 
-        tok = ccall(tok_new, Ptr{Cvoid}, ())
-        # The canceller-side handler: abort whatever operation observes `tok`.
-        blas_cancel_handler = (state, task) -> ccall(cancel_f, Cvoid, (Ptr{Cvoid},), state)
+        # The canceller-side handler: load the issuing thread's current
+        # generation, re-check the protected call is still in flight, and
+        # cancel exactly that generation (stale requests are neutralized by
+        # the library's compare-exchange).
+        blas_cancel_handler = function (scope::BlasCancelScope, @nospecialize(task))
+            slot = @atomic :acquire scope.slot
+            slot == C_NULL && return
+            loaded = unsafe_load(slot)
+            (@atomic :acquire scope.slot) == slot || return
+            ccall(cancel_f, Cvoid, (Ptr{Csize_t}, Csize_t), slot, loaded)
+            nothing
+        end
 
         # A bystander BLAS operation with no binding must be unaffected.
         nb = 4000
@@ -169,15 +179,18 @@ end
 
         started = Base.Event()
         t = Threads.@spawn begin
-            Base.with_cancellation_hook(blas_cancel_handler, tok) do
-                # Bind on the executing OS thread; no yields between here and
-                # the ccall, so the binding cannot be separated from it.
-                ccall(bind_f, Cvoid, (Ptr{Cvoid},), tok)
+            scope = BlasCancelScope(C_NULL)
+            Base.with_cancellation_hook(blas_cancel_handler, scope) do
+                # Fetch the slot on the executing OS thread; no yields between
+                # here and the ccall, so it is the slot the BLAS driver's
+                # generation bump targets.
+                slot = ccall(tok_f, Ptr{Csize_t}, ())
+                @atomic :release scope.slot = slot
                 try
                     notify(started)
                     gemm!(C, A, B)
                 finally
-                    ccall(bind_f, Cvoid, (Ptr{Cvoid},), C_NULL)
+                    @atomic :release scope.slot = C_NULL
                 end
             end
         end
@@ -198,12 +211,11 @@ end
         r, c = rand(1:nb), rand(1:nb)
         @test isapprox(C2[r, c], @views sum(A2[r, :] .* B2[:, c]); rtol=1e-8)
 
-        # The library stays healthy for subsequent (uncancelled) use.
-        ccall(reset_f, Cvoid, (Ptr{Cvoid},), tok)
+        # The library stays healthy for subsequent (uncancelled) use - no
+        # reset needed: the next operation advances past the dead generation.
         a = rand(16, 16); b = rand(16, 16); c2 = zeros(16, 16)
         gemm!(c2, a, b)
         @test c2 ≈ [sum(a[i, l] * b[l, j] for l in 1:16) for i in 1:16, j in 1:16]
-        ccall(free_f, Cvoid, (Ptr{Cvoid},), tok)
     end
 end
 
