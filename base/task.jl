@@ -1022,11 +1022,17 @@ workqueue_for(tid::Int) = Workqueues[tid]
 function enq_work(t::Task)
     state = t._state
     if state === task_state_cancelled
-        # When canelled, we allow `enq_work`, but simply transition to failed state.
+        # When cancelled, we allow `enq_work`, but simply transition to failed state.
         # All other task cleanup is already done.
         state = (@atomicreplace t._state task_state_cancelled => task_state_failed).old
         # Catch double `schedule` calls on cancelled tasks.
         state === task_state_cancelled && return
+    end
+    if state === task_state_abandoned
+        # A task frozen by ABANDON_ALL leaves its waitqueue registrations
+        # behind by design; a later notify of such a stale entry lands here.
+        # The wakeup is consumed by the frozen task - drop it silently.
+        return
     end
     if !(state === task_state_runnable && t.queue === nothing)
         error("schedule: Task not runnable")
@@ -1293,14 +1299,16 @@ function ensure_rescheduled(othertask::Task)
 end
 
 function discard_stale_workqueue_task(t::Task)
-    # A task that was cancelled before it first ran is completed in-place by
-    # `cancel!`, but remains in the workqueue it was scheduled to; discard it
-    # here. Any other non-runnable state means the task somehow got queued
-    # twice - probably broken now, but try discarding this switch and keep
-    # going. We can't throw here, because it's probably not the fault of the
-    # caller to wait, and don't want to use print() here, because that may try
-    # to incur a task switch.
-    if t._state !== task_state_cancelled
+    # A task that was cancelled before it first ran, or frozen in place by an
+    # ABANDON_ALL request, is completed by `cancel!` but remains in whatever
+    # queue it was registered with (a workqueue, or a waitqueue whose later
+    # notify re-enqueues it here); discard it. Any other non-runnable state
+    # means the task somehow got queued twice - probably broken now, but try
+    # discarding this switch and keep going. We can't throw here, because it's
+    # probably not the fault of the caller to wait, and don't want to use
+    # print() here, because that may try to incur a task switch.
+    state = t._state
+    if state !== task_state_cancelled && state !== task_state_abandoned
         ccall(:jl_safe_printf, Cvoid, (Ptr{UInt8}, Int32...),
             "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state !== :runnable\n")
     end
@@ -1481,7 +1489,48 @@ function conform_cancellation_request(@nospecialize(cr))
     if isa(cr, UInt8)
         return CancellationRequest(cr)
     end
+    if isa(cr, CancellationRequest) && (cr.request & 0x80) != 0x00
+        # An acknowledged request preserves its original severity in the low
+        # bits (see acknowledge_cancellation!); it conforms to plain ACK.
+        return CANCEL_REQUEST_ACK
+    end
     return cr
+end
+
+"""
+    acknowledged_cancellation_severity(t::Task = current_task())
+
+If `t` has an acknowledged cancellation request, return the severity of the
+original request (e.g. `CANCEL_REQUEST_SAFE` or
+`CANCEL_REQUEST_ABANDON_EXTERNAL`); otherwise return `nothing`. Cleanup code
+running during cancellation unwind can use this to decide whether it may still
+block: an acknowledged `CANCEL_REQUEST_ABANDON_EXTERNAL` (or stronger) forbids
+parking on external resources again.
+"""
+function acknowledged_cancellation_severity(t::Task = current_task())
+    cr = @atomic :acquire t.cancellation_request
+    cr isa CancellationRequest || return nothing
+    if (cr.request & 0x80) == 0x00
+        # Plain ACK (an acknowledged non-CancellationRequest value, or a
+        # legacy acknowledgment) has no recorded severity - treat as SAFE.
+        return cr === CANCEL_REQUEST_ACK ? CANCEL_REQUEST_SAFE : nothing
+    end
+    return CancellationRequest(cr.request & 0x7f)
+end
+
+"""
+    abandoning_external_waits(t::Task = current_task())
+
+Whether `t` has a pending or acknowledged cancellation request of severity
+`CANCEL_REQUEST_ABANDON_EXTERNAL` or stronger. External wait entry points
+consult this: when true, they must not park waiting for external resources
+(they issue their operation, if any, and return immediately).
+"""
+function abandoning_external_waits(t::Task = current_task())
+    cr = @atomic :monotonic t.cancellation_request
+    cr isa CancellationRequest || return false
+    r = cr.request & 0x7f
+    return r == 0x03 || r == 0x04
 end
 
 """
@@ -1496,8 +1545,14 @@ request is not (an equivalent of) `creq` anymore.
 """
 function acknowledge_cancellation!(t::Task, @nospecialize(creq))
     _cr = @atomic :monotonic t.cancellation_request
-    if conform_cancellation_request(_cr) === conform_cancellation_request(creq)
-        @atomicreplace :sequentially_consistent :monotonic t.cancellation_request _cr => CANCEL_REQUEST_ACK
+    c = conform_cancellation_request(creq)
+    c === CANCEL_REQUEST_ACK && return nothing # already acknowledged
+    if conform_cancellation_request(_cr) === c
+        # Preserve the request's severity through acknowledgment (see
+        # acknowledged_cancellation_severity): cleanup code needs to know
+        # whether it may still block on external resources.
+        acked = c isa CancellationRequest ? CancellationRequest(0x80 | c.request) : CANCEL_REQUEST_ACK
+        @atomicreplace :sequentially_consistent :monotonic t.cancellation_request _cr => acked
     end
     nothing
 end
@@ -1642,6 +1697,12 @@ function cancel!(t::Task, crequest=CANCEL_REQUEST_SAFE)
             end
         end
     end
+    # An explicit ABANDON_ALL request freezes the task immediately rather than
+    # giving it a chance to unwind. Escalating callers (e.g. ^C handling) are
+    # expected to have tried the gentler request severities first.
+    if conform_cancellation_request(crequest) === CANCEL_REQUEST_ABANDON_ALL
+        return freeze_task!(t, crequest)
+    end
     # Try to interrupt the task. The barrier above synchronizes with the establishment
     # of a wait object and guarantees that either:
     # 1. We have the wait object in t.queue, or
@@ -1673,7 +1734,7 @@ function cancel!(t::Task, crequest=CANCEL_REQUEST_SAFE)
                 break
             elseif tid != 0
                 ccall(:jl_send_cancellation_signal, Cvoid, (Int16,), (tid - 1) % Int16)
-                if istaskdone(t) || (@atomic :acquire t.cancellation_request) === CANCEL_REQUEST_ACK
+                if istaskdone(t) || conform_cancellation_request(@atomic :acquire t.cancellation_request) === CANCEL_REQUEST_ACK
                     delivered = true
                     break
                 end
@@ -1775,6 +1836,51 @@ function reset_cancellation!()
     nothing
 end
 
+# CANCEL_REQUEST_ABANDON_ALL: freeze `t` without letting it unwind. A task
+# running on a thread is ripped away with unsafe_abandon!; a parked or queued
+# task is marked abandoned in place. In the latter case its waitqueue
+# registrations are left stale: they are silently discarded when notified
+# (schedule of a non-runnable task enqueues it and the scheduler drops it),
+# and a directed notify consumed by a frozen task is lost. That, like leaked
+# locks, is part of ABANDON_ALL's documented collateral.
+function freeze_task!(t::Task, @nospecialize(crequest))
+    if t === current_task()
+        # Self-cancellation with ABANDON_ALL: no need to freeze - the task can
+        # simply unwind with the request.
+        acknowledge_cancellation!(t, crequest)
+        throw(conform_cancellation_request(crequest))
+    end
+    while true
+        istaskdone(t) && return true
+        waitee = t.queue
+        tid = Threads.threadid(t)
+        if waitee === nothing && tid != 0
+            # Likely running on a thread - rip it away. unsafe_abandon! is a
+            # no-op if the task is not current on that thread anymore (it may
+            # have parked or migrated in the meantime) - re-examine and retry.
+            rescue = Task(() -> (while true; wait(); end))
+            rescue.sticky = false
+            unsafe_abandon!(t, rescue)
+            t.state === :abandoned && return true
+            Libc.systemsleep(5e-5)
+            continue
+        end
+        # Parked (waitee set) or queued but not running: freeze in place.
+        if (@atomicreplace :sequentially_consistent :monotonic t._state task_state_runnable => task_state_abandoned).success
+            t.result = crequest
+            t._isexception = true
+            donenotify = t.donenotify
+            if donenotify isa ThreadSynchronizer
+                lock(donenotify)
+                notify(donenotify)
+                unlock(donenotify)
+            end
+            return true
+        end
+        # Lost a race with completion or another state transition - re-examine.
+    end
+end
+
 """
     unsafe_abandon!(t::Task, next_task::Task)
 
@@ -1794,8 +1900,9 @@ frozen without waiting for it to reach a safe cancellation point.
     are unable to process cancellation.
 
 !!! note
-    This function only works on Unix-like systems. On Windows, it is a no-op.
-    The task must be currently running on a thread for this to have effect.
+    The task must be currently running on a thread for this to have effect;
+    use [`cancel!`](@ref) with `CANCEL_REQUEST_ABANDON_ALL` to also freeze
+    parked or queued tasks.
 """
 function unsafe_abandon!(t::Task, next_task::Task)
     ccall(:jl_abandon_task, Cvoid, (Any, Any), t, next_task)
@@ -1814,10 +1921,11 @@ function unsafe_abandon!(t::Task, next_task::Task)
     return nothing
 end
 
-function propagate_cancellation!(t::Task, crequest)
-    if crequest != CANCEL_REQUEST_SAFE
-        error("Not yet supported")
-    end
+function propagate_cancellation!(t::Task, @nospecialize(crequest))
+    # All severities propagate as-is: an ABANDON_ALL request freezes `t`
+    # immediately (making the wait below trivial), ABANDON_EXTERNAL interrupts
+    # its external waits without awaiting their completion, and internal
+    # cancellation work is awaited in all modes.
     cancel!(t, crequest)
     _wait(t; expected_cancellation=crequest)
     # The cancellation was propagated; the caller reports the outcome (e.g. as
@@ -1827,9 +1935,6 @@ function propagate_cancellation!(t::Task, crequest)
 end
 
 @noinline function sync_cancel!(c::Channel{Any}, t::Task, @nospecialize(cr), c_ex::CompositeException)
-    if cr !== CANCEL_REQUEST_SAFE
-        error("Not yet supported")
-    end
     waitees = Any[t]
     cancel!(t, cr)
     while isready(c)
@@ -1840,11 +1945,16 @@ end
     close(c)
     for r in waitees
         if isa(r, Task)
+            # Tasks are internal: their cancellation is awaited in all modes
+            # (for ABANDON_ALL, cancel! froze them and this is trivial).
             _wait(r; expected_cancellation=cr)
             if istaskfailed(r)
                 push!(c_ex, TaskFailedException(r))
             end
         else
+            # Non-task waitees are external - the ABANDON_* severities cease
+            # waiting for external resources.
+            conform_cancellation_request(cr) === CANCEL_REQUEST_SAFE || continue
             try
                 wait(r)
             catch e
