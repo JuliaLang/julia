@@ -600,6 +600,25 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                 JULIA_DEBUG_SLEEPWAKE( ptls->sleep_enter = cycleclock() );
                 int8_t gc_state = jl_safepoint_take_sleep_lock(ptls); // This puts the thread in GC_SAFE and takes the sleep lock
                 while (may_sleep(ptls)) {
+                    if (jl_atomic_load_relaxed(&jl_sigint_dispatch_pending) && wait_empty == NULL) {
+                        // (When the process is draining for exit, sleep
+                        // normally: staying awake would inflate
+                        // n_threads_running and stall jl_task_wait_empty.)
+                        // A ^C notification awaits dispatch to the sigint
+                        // listener task. Its wakeup is racy (the enqueue may
+                        // happen after we checked the queues but before we
+                        // commit to sleeping, and pool-restricted threads
+                        // cannot dispatch it for us) - stay awake and keep
+                        // polling the queues until it is dispatched (the
+                        // listener clears the flag when it runs).
+                        if (set_not_sleeping(ptls)) {
+                            // we own this wakeup: restore the running count
+                            // we gave up before entering the sleep loop
+                            jl_atomic_fetch_add_relaxed(&n_threads_running, 1);
+                            JL_PROBE_RT_SLEEP_CHECK_TASK_WAKE(ptls);
+                        }
+                        break;
+                    }
                     if (ptls->tid == 0) {
                         task = wait_empty;
                         if (task && jl_atomic_load_relaxed(&n_threads_running) == 0) {

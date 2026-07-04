@@ -538,22 +538,34 @@ if Sys.isunix()
         expect("julia> ")
         # A task that acknowledges SAFE cancellation but hangs in its cleanup:
         # walks the full escalation ladder with a guided message per rung.
-        sendline("try; sleep(1000); finally; x = Ref(1.0); while x[] > 0; x[] = x[] * 1.0000001 + 0.1; end; end")
-        sleep(1.0)
-        kill(p, Base.SIGINT) # press 1: SAFE, delivered silently
-        expect("Press ^C again to also stop waiting for external resources"; timeout=6.0)
-        kill(p, Base.SIGINT) # press 2: ABANDON_EXTERNAL
-        expect("No longer waiting for external resources")
-        expect("Press ^C again to forcibly abandon"; timeout=6.0)
-        kill(p, Base.SIGINT) # press 3: ABANDON_ALL freezes the task
-        expect("Abandoning the current task")
-        expect("CancellationRequest")
-        expect("julia> ")
-        # the rescued session works, and exits cleanly
-        sendline("1 + 1")
-        expect("2")
-        expect("julia> ")
-        sendline("exit()")
+        # Two episodes: the second exercises the ladder on a *rescued*
+        # session (fresh backend task, abandoned root task).
+        for episode in 1:2
+            sendline("println(\"EVAL-START\"); try; sleep(1000); finally; x = Ref(1.0); while x[] > 0; x[] = x[] * 1.0000001 + 0.1; end; end")
+            expect("EVAL-START") # the evaluation is running (robust under load)
+            sleep(0.5)           # ... and parked in sleep(1000)
+            kill(p, Base.SIGINT) # press 1: SAFE, delivered silently
+            expect("Press ^C again to also stop waiting for external resources"; timeout=6.0)
+            if episode == 1
+                # On-demand thread backtraces during the episode (^T sends
+                # SIGINFO where the tty supports it - BSD/mac; SIGUSR1 elsewhere)
+                kill(p, Sys.isbsd() ? Base.SIGINFO : Base.SIGUSR1)
+                expect("signal ("; timeout=10.0) # the backtrace dump header
+            end
+            kill(p, Base.SIGINT) # press 2: ABANDON_EXTERNAL
+            expect("No longer waiting for external resources")
+            expect("Press ^C again to forcibly abandon"; timeout=6.0)
+            kill(p, Base.SIGINT) # press 3: ABANDON_ALL freezes the task
+            expect("Abandoning the current task")
+            expect("CancellationRequest")
+            expect("julia> ")
+            # the rescued session works
+            sendline("$episode + $episode")
+            expect(string(2episode))
+            expect("julia> ")
+        end
+        # ... and the session exits cleanly on ^D
+        write(ptm, "\x04") # ^D (EOF)
         @test timedwait(() -> process_exited(p), 15.0) == :ok
         @test success(p)
         close(ptm)
@@ -601,8 +613,9 @@ if Sys.isunix()
         expect("julia> ")
 
         # ^C interrupts a sleeping REPL evaluation and reports it
-        sendline("sleep(1000)")
-        sleep(1.0) # let the evaluation park
+        sendline("println(\"EVAL-1\"); sleep(1000)")
+        expect("EVAL-1") # the evaluation is running (robust under load)
+        sleep(0.5)       # ... and parked in sleep(1000)
         kill(p, Base.SIGINT)
         expect("CancellationRequest")
         expect("julia> ")
@@ -614,8 +627,9 @@ if Sys.isunix()
 
         # a spinning evaluation triggers the escalation warning; the second
         # ^C abandons it and the REPL is rescued with a fresh backend
-        sendline("xr = Ref(1.0); while true; xr[] = xr[] * 1.0000001 + 0.1; end")
-        sleep(1.0) # let it start spinning
+        sendline("println(\"EVAL-2\"); xr = Ref(1.0); while true; xr[] = xr[] * 1.0000001 + 0.1; end")
+        expect("EVAL-2") # the evaluation is running (robust under load)
+        sleep(0.5)       # ... and spinning
         kill(p, Base.SIGINT)
         expect("failed to acknowledge SIGINT"; timeout=15.0)
         kill(p, Base.SIGINT)
@@ -628,8 +642,9 @@ if Sys.isunix()
         expect("julia> ")
 
         # and ^C still works after the rescue
-        sendline("sleep(1000)")
-        sleep(1.0)
+        sendline("println(\"EVAL-3\"); sleep(1000)")
+        expect("EVAL-3")
+        sleep(0.5)
         kill(p, Base.SIGINT)
         expect("CancellationRequest")
         expect("julia> ")
