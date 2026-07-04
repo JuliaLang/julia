@@ -139,6 +139,11 @@ typedef struct jl_varbinding_t {
                             // rule (since #34272). Unlike the dynamic `occurs_inv`
                             // counter, this is a pure structural property of the
                             // UnionAll body and does not change during traversal.
+    int8_t in_ccheck;   // a bound-consistency check for this binding is in flight.
+                        // Under intersection the accumulated bounds can reach the
+                        // variable itself through pinned variables (a graph the
+                        // per-write guards cannot rule out); a re-entrant check is
+                        // then answered coinductively instead of recursing forever.
     int16_t depth0;         // # of invariant constructors nested around the UnionAll type for this var
     // array of typevars that our bounds depend on, whose UnionAlls need to be
     // moved outside ours.
@@ -1241,7 +1246,21 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t par
     }
     if (bb->ub == a)
         return 1;
-    if (!((bb->lb == jl_bottom_type && !jl_is_type(a) && !jl_is_typevar(a)) || subtype_ccheck(bb->lb, a, e)))
+    int lb_ok = (bb->lb == jl_bottom_type && !jl_is_type(a) && !jl_is_typevar(a));
+    if (!lb_ok) {
+        if (e->intersection && bb->in_ccheck) {
+            // this binding's consistency check is already pending above us
+            // (its bounds reach the variable itself through pinned variables);
+            // assume it holds coinductively — the outer check decides
+            lb_ok = 1;
+        }
+        else {
+            bb->in_ccheck = 1;
+            lb_ok = subtype_ccheck(bb->lb, a, e);
+            bb->in_ccheck = 0;
+        }
+    }
+    if (!lb_ok)
         return 0;
     // for this to work we need to compute issub(left,right) before issub(right,left),
     // since otherwise the issub(a, bb.ub) check in var_gt becomes vacuous.
@@ -1297,10 +1316,19 @@ static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t par
         return 1;
     }
     if (!(bb->ub == (jl_value_t*)jl_any_type && !jl_is_type(a) && !jl_is_typevar(a))) {
-        int saved = e->ignore_lb_required;
-        e->ignore_lb_required = 1;
-        int ub_ok = subtype_ccheck(a, bb->ub, e);
-        e->ignore_lb_required = saved;
+        int ub_ok;
+        if (e->intersection && bb->in_ccheck) {
+            // see var_lt: answer a re-entrant consistency check coinductively
+            ub_ok = 1;
+        }
+        else {
+            int saved = e->ignore_lb_required;
+            e->ignore_lb_required = 1;
+            bb->in_ccheck = 1;
+            ub_ok = subtype_ccheck(a, bb->ub, e);
+            bb->in_ccheck = 0;
+            e->ignore_lb_required = saved;
+        }
         if (!ub_ok)
             return 0;
     }
@@ -3518,6 +3546,14 @@ static int concrete_min(jl_value_t *t)
     return 1; // a non-Type is also considered concrete
 }
 
+// "not structurally ground" for obvious_subtype purposes: a dangling de Bruijn
+// reference constrains a parameter just like a free typevar does, but is not
+// seen by `jl_has_free_typevars`
+static int has_free_or_dangling_typevars(jl_value_t *v) JL_NOTSAFEPOINT
+{
+    return jl_has_free_typevars(v) || jl_has_dangling_tvarrefs(v);
+}
+
 // quickly compute if x seems like a possible subtype of y
 // especially optimized for x isa concrete type
 // returns true if it could be easily determined, with the result in subtype
@@ -3802,7 +3838,7 @@ static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *su
                     if (obvious_subtype(a, b, y0, subtype)) {
                         if (!*subtype)
                             return 1;
-                        if (jl_has_free_typevars(b)) // b is actually more constrained that this
+                        if (has_free_or_dangling_typevars(b)) // b is actually more constrained that this
                             uncertain = 1;
                     }
                     else {
@@ -3814,16 +3850,16 @@ static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *su
                         if (obvious_subtype(a, b, y0, subtype)) {
                             if (!*subtype)
                                 return 1;
-                            if (jl_has_free_typevars(b)) // b is actually more constrained that this
+                            if (has_free_or_dangling_typevars(b)) // b is actually more constrained that this
                                 uncertain = 1;
                         }
                         else {
                             uncertain = 1;
                         }
-                        if (!jl_has_free_typevars(b) && obvious_subtype(b, a, y0, subtype)) {
+                        if (!has_free_or_dangling_typevars(b) && obvious_subtype(b, a, y0, subtype)) {
                             if (!*subtype)
                                 return 1;
-                            if (jl_has_free_typevars(a)) // a is actually more constrained that this
+                            if (has_free_or_dangling_typevars(a)) // a is actually more constrained that this
                                 uncertain = 1;
                         }
                         else {
@@ -3874,7 +3910,7 @@ static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *su
                             if (obvious_subtype(a2, a1, y0, subtype)) {
                                 if (!*subtype)
                                     return 1;
-                                if (jl_has_free_typevars(a1)) // a1 is actually more constrained that this
+                                if (has_free_or_dangling_typevars(a1)) // a1 is actually more constrained that this
                                     uncertain = 1;
                             }
                             else {
@@ -3883,7 +3919,7 @@ static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *su
                             if (obvious_subtype(a1, a2, y0, subtype)) {
                                 if (!*subtype)
                                     return 1;
-                                if (jl_has_free_typevars(a2)) // a2 is actually more constrained that this
+                                if (has_free_or_dangling_typevars(a2)) // a2 is actually more constrained that this
                                     uncertain = 1;
                             }
                             else {
@@ -3894,7 +3930,7 @@ static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *su
                     if (obvious_subtype(a, b, y0, subtype)) {
                         if (!*subtype)
                             return 1;
-                        if (jl_has_free_typevars(b)) // b is actually more constrained that this
+                        if (has_free_or_dangling_typevars(b)) // b is actually more constrained that this
                             uncertain = 1;
                     }
                     else {

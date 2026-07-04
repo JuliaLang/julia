@@ -588,9 +588,8 @@ rename_unionall(@nospecialize(u)) = u
 # Returns `(var, body)`. Opening nested binders outside-in keeps every
 # extracted subterm free of dangling references.
 function unionall_open(u::UnionAll)
-    v = ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), u.name, u.lb, u.ub)
-    body = ccall(:jl_instantiate_unionall, Any, (Any, Any), u, v)
-    return v, body
+    pair = ccall(:jl_unionall_open2, Any, (Any,), u)::Core.SimpleVector
+    return pair[1]::TypeVar, pair[2]
 end
 
 # remove concrete constraint on diagonal TypeVar if it comes from troot

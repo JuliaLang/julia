@@ -800,9 +800,16 @@ static void isort_union(jl_value_t **a, size_t len) JL_NOTSAFEPOINT
     }
 }
 
+// free typevars and dangling de Bruijn references both mean "not ground":
+// subtype-based comparisons are not defined for either
+static int has_free_or_dangling_typevars(jl_value_t *v) JL_NOTSAFEPOINT
+{
+    return jl_has_free_typevars(v) || jl_has_dangling_tvarrefs(v);
+}
+
 int simple_subtype(jl_value_t *a, jl_value_t *b, int hasfree, int isUnion)
 {
-    assert(hasfree == (jl_has_free_typevars(a) | (jl_has_free_typevars(b) << 1)));
+    assert(hasfree == (has_free_or_dangling_typevars(a) | (has_free_or_dangling_typevars(b) << 1)));
     if (a == jl_bottom_type || b == (jl_value_t*)jl_any_type)
         return 1;
     if (jl_egal(a, b))
@@ -816,7 +823,7 @@ int simple_subtype(jl_value_t *a, jl_value_t *b, int hasfree, int isUnion)
     }
     if (jl_is_typevar(a)) {
         jl_value_t *na = ((jl_tvar_t*)a)->ub;
-        hasfree &= (jl_has_free_typevars(na) | 2);
+        hasfree &= (has_free_or_dangling_typevars(na) | 2);
         return simple_subtype(na, b, hasfree, isUnion);
     }
     if (jl_is_typevar(b)) {
@@ -826,7 +833,7 @@ int simple_subtype(jl_value_t *a, jl_value_t *b, int hasfree, int isUnion)
         // Tuple{Union{Int,T},T} where {T>:Int} != Tuple{T,T} where {T>:Int}
         if (is_leaf_bound(nb))
             return 0;
-        hasfree &= ((jl_has_free_typevars(nb) << 1) | 1);
+        hasfree &= ((has_free_or_dangling_typevars(nb) << 1) | 1);
         return simple_subtype(a, nb, hasfree, isUnion);
     }
     if (b == (jl_value_t*)jl_typeofbottom_type) {
@@ -909,10 +916,10 @@ JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n)
     assert(count == nt);
     size_t j;
     for (i = 0; i < nt; i++) {
-        int has_free = temp[i] != NULL && (jl_has_free_typevars(temp[i]) || jl_has_dangling_tvarrefs(temp[i]));
+        int has_free = temp[i] != NULL && has_free_or_dangling_typevars(temp[i]);
         for (j = 0; j < nt; j++) {
             if (j != i && temp[i] && temp[j]) {
-                int has_free2 = has_free | ((jl_has_free_typevars(temp[j]) || jl_has_dangling_tvarrefs(temp[j])) << 1);
+                int has_free2 = has_free | (has_free_or_dangling_typevars(temp[j]) << 1);
                 if (simple_subtype(temp[i], temp[j], has_free2, 1))
                     temp[i] = NULL;
             }
@@ -939,7 +946,7 @@ JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n)
 
 static int simple_subtype2(jl_value_t *a, jl_value_t *b, int hasfree, int isUnion) JL_CANSAFEPOINT
 {
-    assert(hasfree == (jl_has_free_typevars(a) | (jl_has_free_typevars(b) << 1)));
+    assert(hasfree == (has_free_or_dangling_typevars(a) | (has_free_or_dangling_typevars(b) << 1)));
     int subab = 0, subba = 0;
     if (jl_egal(a, b)) {
         subab = subba = 1;
@@ -984,10 +991,10 @@ jl_value_t *simple_union(jl_value_t *a, jl_value_t *b)
     // first remove cross-redundancy and check if `a >: b` or `a <: b`.
     for (i = 0; i < nta; i++) {
         if (temp[i] == NULL) continue;
-        int has_free = jl_has_free_typevars(temp[i]);
+        int has_free = has_free_or_dangling_typevars(temp[i]);
         for (j = nta; j < nt; j++) {
             if (temp[j] == NULL) continue;
-            int has_free2 = has_free | (jl_has_free_typevars(temp[j]) << 1);
+            int has_free2 = has_free | (has_free_or_dangling_typevars(temp[j]) << 1);
             int subs = simple_subtype2(temp[i], temp[j], has_free2, 0);
             int subab = subs & 1, subba = subs >> 1;
             if (subab) {
@@ -1013,12 +1020,12 @@ jl_value_t *simple_union(jl_value_t *a, jl_value_t *b)
     }
     // then remove self-redundancy
     for (i = 0; i < nt; i++) {
-        int has_free = temp[i] != NULL && jl_has_free_typevars(temp[i]);
+        int has_free = temp[i] != NULL && has_free_or_dangling_typevars(temp[i]);
         size_t jmin = i < nta ? 0 : nta;
         size_t jmax = i < nta ? nta : nt;
         for (j = jmin; j < jmax; j++) {
             if (j != i && temp[i] && temp[j]) {
-                int has_free2 = has_free | (jl_has_free_typevars(temp[j]) << 1);
+                int has_free2 = has_free | (has_free_or_dangling_typevars(temp[j]) << 1);
                 if (simple_subtype(temp[i], temp[j], has_free2, 0))
                     temp[i] = NULL;
             }
@@ -1059,10 +1066,10 @@ jl_value_t *simple_intersect(jl_value_t *a, jl_value_t *b, int overesi)
     // first remove disjoint elements.
     memset(stemp, 0, count);
     for (i = 0; i < nta; i++) {
-        int hasfree = jl_has_free_typevars(temp[i]);
+        int hasfree = has_free_or_dangling_typevars(temp[i]);
         for (j = nta; j < nt; j++) {
             if (!stemp[i] || !stemp[j]) {
-                int intersect = !hasfree && !jl_has_free_typevars(temp[j]);
+                int intersect = !hasfree && !has_free_or_dangling_typevars(temp[j]);
                 if (!(intersect ? jl_has_empty_intersection(temp[i], temp[j]) : obviously_disjoint(temp[i], temp[j], 0)))
                     stemp[i] = stemp[j] = 1;
             }
@@ -1080,10 +1087,10 @@ jl_value_t *simple_intersect(jl_value_t *a, jl_value_t *b, int overesi)
     for (i = 0; i < nta; i++) {
         if (temp[i] == NULL) continue;
         all_disjoint = 0;
-        int has_free = jl_has_free_typevars(temp[i]);
+        int has_free = has_free_or_dangling_typevars(temp[i]);
         for (j = nta; j < nt; j++) {
             if (temp[j] == NULL) continue;
-            int has_free2 = has_free | (jl_has_free_typevars(temp[j]) << 1);
+            int has_free2 = has_free | (has_free_or_dangling_typevars(temp[j]) << 1);
             int subs = simple_subtype2(temp[i], temp[j], has_free2, 0);
             int subab = subs & 1, subba = subs >> 1;
             if (subba && !subab) {
@@ -1289,6 +1296,15 @@ static int typekey_eq(jl_datatype_t *tt, jl_value_t **key, size_t n) JL_CANSAFEP
             }
             if (jl_type_equality_is_identity(tj, kj))
                 return 0;
+            if (jl_has_dangling_tvarrefs(tj) || jl_has_dangling_tvarrefs(kj)) {
+                // parameters carrying dangling bound-variable references are
+                // fragments of an enclosing binder still under construction;
+                // subtype-based equality is not defined for them, so compare
+                // structurally (references match by index)
+                if (!jl_types_struct_equiv(tj, kj))
+                    return 0;
+                continue;
+            }
             if (!jl_types_equal(tj, kj))
                 return 0;
         }
@@ -1702,8 +1718,8 @@ static int within_typevar(jl_value_t *t, jl_value_t *vlb, jl_value_t *vub) JL_CA
     else if (!jl_is_type(t)) {
         return vlb == jl_bottom_type && vub == (jl_value_t*)jl_any_type;
     }
-    return ((jl_has_free_typevars(vlb) || jl_subtype(vlb, lb)) &&
-            (jl_has_free_typevars(vub) || jl_subtype(ub, vub)));
+    return ((has_free_or_dangling_typevars(vlb) || jl_subtype(vlb, lb)) &&
+            (has_free_or_dangling_typevars(vub) || jl_subtype(ub, vub)));
 }
 
 struct _jl_typestack_t;
@@ -1885,10 +1901,30 @@ JL_DLLEXPORT jl_value_t *jl_unionall_open(jl_unionall_t *u, jl_tvar_t **vout)
 {
     jl_tvar_t *v = jl_new_typevar(u->name, u->lb, u->ub);
     JL_GC_PUSH1(&v);
-    jl_value_t *body = jl_instantiate_unionall(u, (jl_value_t*)v);
+    // The body was validity-checked when the UnionAll was constructed; the
+    // re-instantiation here must tolerate bound fragments that only become
+    // checkable now that surrounding parameters are concrete (nothrow=2 drops
+    // union arms that fail their bounds, matching what an eager substitution
+    // at construction time would have produced).
+    jl_typeenv_t env = { NULL, (jl_value_t*)v, NULL };
+    jl_value_t *body = inst_type_w_(u->body, &env, NULL, 1, 2);
+    if (body == NULL)
+        body = jl_instantiate_unionall(u, (jl_value_t*)v); // re-run to raise the error
     JL_GC_POP();
     *vout = v;
     return body;
+}
+
+// variant of `jl_unionall_open` returning `svec(var, body)`, for use from Julia
+JL_DLLEXPORT jl_value_t *jl_unionall_open2(jl_unionall_t *u)
+{
+    jl_tvar_t *v = NULL;
+    jl_value_t *body = NULL;
+    JL_GC_PUSH2(&v, &body);
+    body = jl_unionall_open(u, &v);
+    jl_svec_t *pair = jl_svec2((jl_value_t*)v, body);
+    JL_GC_POP();
+    return (jl_value_t*)pair;
 }
 
 // substitute the dangling TypeVarRef with root-index `idx` in `t` by `val`
@@ -3501,9 +3537,9 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
         b = inst_type_w_(u->b, env, stack, check, nothrow);
         if (nothrow) {
             // ensure jl_type_union nothrow.
-            if (a && !(jl_is_typevar(a) || jl_is_type(a)))
+            if (a && !(jl_is_typevar(a) || jl_is_tvarref(a) || jl_is_type(a)))
                 a = NULL;
-            if (b && !(jl_is_typevar(b) || jl_is_type(b)))
+            if (b && !(jl_is_typevar(b) || jl_is_tvarref(b) || jl_is_type(b)))
                 b = NULL;
         }
         if (a != u->a || b != u->b) {
@@ -4147,6 +4183,18 @@ void jl_init_types(void) JL_GC_DISABLED
     XX(tvarref);
     const static uint32_t tvarref_constfields[1] = { 0x00000001 };
     jl_tvarref_type->name->constfields = tvarref_constfields;
+
+    // Inside a `where` body, the wrapped parameter of `TypeEq`/`TypeEgal` is a
+    // de Bruijn reference (see `jl_type_type` just below), so the declared
+    // field type must admit it or inference-driven dispatch miscompiles
+    // consumers of the field
+    {
+        jl_value_t *type_field_types[3] = { (jl_value_t*)jl_anytype_type, (jl_value_t*)jl_tvar_type,
+                                            (jl_value_t*)jl_tvarref_type };
+        jl_value_t *kind_typevar_or_ref_type = jl_type_union(type_field_types, 3);
+        jl_svecset(jl_typeeq_type->types, 0, kind_typevar_or_ref_type);
+        jl_svecset(jl_typeegal_type->types, 0, kind_typevar_or_ref_type);
+    }
 
     // `Type{T}` (as TypeEq{T} where T), with a de Bruijn body
     {

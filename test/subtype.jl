@@ -3165,7 +3165,12 @@ end
 abstract type Wrapper61876{X<:Real} end
 struct Sub61876A{T<:Real} <: Wrapper61876{T} end
 struct Sub61876B{T<:Real} <: Wrapper61876{T} end
-@test !(Sub61876A.body <: Wrapper61876)
+let T = TypeVar(:T, Union{}, Real)
+    @test !(Sub61876A{T} <: Wrapper61876)
+end
+# under the de Bruijn representation the unwrapped body carries a positional
+# reference rather than a bounded free TypeVar, and is the wrapper's own body
+@test Sub61876A.body <: Wrapper61876
 @test typejoin(Sub61876A, Sub61876B) <: Wrapper61876
 
 # issue #61876: typeintersect with an innervar whose bound references the

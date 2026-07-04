@@ -597,21 +597,27 @@ function io_has_tvar_name(io::IOContext, name::Symbol, @nospecialize(x))
 end
 io_has_tvar_name(io::IO, name::Symbol, @nospecialize(x)) = false
 
-modulesof!(s::Set{Module}, x::TypeVar) = modulesof!(s, x.ub)
-modulesof!(s::Set{Module}, x::Core.TypeVarRef) = s # detached reference: no module
-modulesof!(s::Set{Module}, x::TypeEq) = modulesof!(s, type_parameter(x))
-modulesof!(s::Set{Module}, x::Core.TypeEgal) = modulesof!(s, type_parameter(x))
-function modulesof!(s::Set{Module}, x::Type)
+# `seen` guards against typevars with cyclic bounds (e.g. from intersection
+# results), which would otherwise recurse forever through `x.ub`
+function modulesof!(s::Set{Module}, x::TypeVar, seen::IdSet{TypeVar}=IdSet{TypeVar}())
+    x in seen && return s
+    push!(seen, x)
+    modulesof!(s, x.ub, seen)
+end
+modulesof!(s::Set{Module}, x::Core.TypeVarRef, seen::IdSet{TypeVar}=IdSet{TypeVar}()) = s # detached reference: no module
+modulesof!(s::Set{Module}, x::TypeEq, seen::IdSet{TypeVar}=IdSet{TypeVar}()) = modulesof!(s, type_parameter(x), seen)
+modulesof!(s::Set{Module}, x::Core.TypeEgal, seen::IdSet{TypeVar}=IdSet{TypeVar}()) = modulesof!(s, type_parameter(x), seen)
+function modulesof!(s::Set{Module}, x::Type, seen::IdSet{TypeVar}=IdSet{TypeVar}())
     x = unwrap_unionall(x)
     if x isa DataType
         push!(s, parentmodule(x))
     elseif x isa TypeEq
-        modulesof!(s, x)
+        modulesof!(s, x, seen)
     elseif x isa Core.TypeEgal
-        modulesof!(s, x)
+        modulesof!(s, x, seen)
     elseif x isa Union
-        modulesof!(s, x.a)
-        modulesof!(s, x.b)
+        modulesof!(s, x.a, seen)
+        modulesof!(s, x.b, seen)
     end
     s
 end
