@@ -296,7 +296,9 @@ struct AUnionParam{T<:Union{Nothing,Float32,Float64}} end
 @test AUnionParam.body.hash == 0
 @test Base._jl_type_cache_hash(Type{AUnionParam}) != 0
 @test Base._jl_type_cache_hash(Type{AUnionParam{<:Union{Float32,Float64}}}) == 0
-@test Type{AUnionParam{<:Union{Nothing,Float32,Float64}}} === Type{AUnionParam}
+# A full inclusive bound recovers the wrapper, while strict shorthand excludes Bottom.
+@test Type{AUnionParam{<:Union{Nothing,Float32,Float64}}} !== Type{AUnionParam}
+@test Type{AUnionParam{T} where T<:Union{Nothing,Float32,Float64}} === Type{AUnionParam}
 @test Base._jl_type_cache_hash(Type{AUnionParam.body}) == 0
 @test Base._jl_type_cache_hash(Type{Base.Broadcast.Broadcasted}) != 0
 

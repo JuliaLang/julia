@@ -321,6 +321,7 @@ julia> valtype(Dict(Int32(1) => "foo"))
 String
 ```
 """
+valtype(::Type{<:AbstractDict{Union{},V}}) where {V} = V
 valtype(::Type{<:AbstractDict{<:Any,V}}) where {V} = V
 valtype(a::AbstractDict) = valtype(typeof(a))
 

@@ -3921,7 +3921,8 @@ function expand_wheres(ctx, ex)
     body
 end
 
-# Match implicit where parameters for `Foo{<:Bar}` ==> `Foo{T} where T<:Bar`
+# Match implicit where parameters for
+# `Foo{<:Bar}` ==> `Foo{T} where Core.Epsilon<:T<:Bar`
 function expand_curly(ctx, ex)
     @jl_assert kind(ex) == K"curly" ex
     check_no_parameters(ex, "unexpected semicolon in type parameter list")
@@ -3940,7 +3941,7 @@ function expand_curly(ctx, ex)
             i += 1
             any = @ast ctx ex "Any"::K"core"
             typevar = k == K"<:" ?
-                _bounds_to_typevar(ctx, e, name, any, e[1]) :
+                _bounds_to_typevar(ctx, e, name, @ast(ctx, e, "Epsilon"::K"core"), e[1]) :
                 _bounds_to_typevar(ctx, e, name, e[1], any)
             arg = emit_assign_tmp(typevar_stmts, ctx, typevar)
             push!(implicit_typevars, arg)

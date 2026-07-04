@@ -948,7 +948,7 @@ const NonleafHandlingStyles = Union{DefaultArrayStyle,ArrayConflict}
     # The typeassert gives inference a helping hand on the element type and dimensionality
     # (work-around for #28382)
     ElType′ = ElType === Union{} ? Any : ElType <: Type ? Type : ElType
-    RT = dest isa AbstractArray ? AbstractArray{<:ElType′, ndims(dest)} : Any
+    RT = dest isa AbstractArray ? (AbstractArray{T, ndims(dest)} where {T<:ElType′}) : Any
     return copyto_nonleaf!(dest, bc′, iter, state, 1)::RT
 end
 

@@ -63,8 +63,9 @@ Month, and Day, and `T(0)` for Hour, Minute, Second, and Millisecond.
 """
 function default end
 
-default(p::Union{T,Type{T}}) where {T<:DatePeriod} = T(1)
-default(p::Union{T,Type{T}}) where {T<:TimePeriod} = T(0)
+# strict lower bounds keep these disjoint at the uninhabited `T == Union{}`
+default(p::Union{T,Type{T}}) where {Core.Epsilon<:T<:DatePeriod} = T(1)
+default(p::Union{T,Type{T}}) where {Core.Epsilon<:T<:TimePeriod} = T(0)
 
 (-)(x::P) where {P<:Period} = P(-value(x))
 ==(x::P, y::P) where {P<:Period} = value(x) == value(y)

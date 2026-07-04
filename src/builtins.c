@@ -201,6 +201,8 @@ static int egal_types(const jl_value_t *a, const jl_value_t *b, jl_typeenv_t *en
         jl_unionall_t *ub = (jl_unionall_t*)b;
         if (tvar_names && ua->var->name != ub->var->name)
             return 0;
+        if (ua->var->flags != ub->var->flags)
+            return 0;
         if (!(egal_types(ua->var->lb, ub->var->lb, env, tvar_names) && egal_types(ua->var->ub, ub->var->ub, env, tvar_names)))
             return 0;
         jl_typeenv_t e = { ua->var, (jl_value_t*)ub->var, env };
@@ -423,6 +425,7 @@ static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOIN
     if (tv == jl_unionall_type) {
         jl_unionall_t *u = (jl_unionall_t*)v;
         uintptr_t h = u->var->name->hash;
+        h = bitmix(h, u->var->flags);
         h = bitmix(h, type_object_id_(u->var->lb, env));
         h = bitmix(h, type_object_id_(u->var->ub, env));
         jl_varidx_t e = { u->var, env };
@@ -1844,12 +1847,20 @@ JL_CALLABLE(jl_f__expr)
 // Typevar constructor for internal use
 JL_DLLEXPORT jl_tvar_t *jl_new_typevar(jl_sym_t *name, jl_value_t *lb, jl_value_t *ub)
 {
+    uint8_t flags = 0;
+    if (lb == jl_epsilon) {
+        // an `Epsilon` lower bound spells lb == Union{}, with Union{} itself
+        // excluded from the admissible values
+        lb = jl_bottom_type;
+        flags = JL_TVAR_STRICT_LB;
+    }
     if (lb != jl_bottom_type && !jl_is_type(lb) && !jl_is_typevar(lb))
         jl_type_error_rt("TypeVar", "lower bound", (jl_value_t *)jl_type_type, lb);
     if (ub != (jl_value_t *)jl_any_type && !jl_is_type(ub) && !jl_is_typevar(ub))
         jl_type_error_rt("TypeVar", "upper bound", (jl_value_t *)jl_type_type, ub);
     jl_task_t *ct = jl_current_task;
     jl_tvar_t *tv = (jl_tvar_t *)jl_gc_alloc(ct->ptls, sizeof(jl_tvar_t), jl_tvar_type);
+    tv->flags = flags;
     jl_set_typetagof(tv, jl_tvar_tag, 0);
     tv->name = name;
     tv->lb = lb;
@@ -2698,6 +2709,8 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("Type", (jl_value_t*)jl_type_type);
     add_builtin("Nothing", (jl_value_t*)jl_nothing_type);
     add_builtin("nothing", (jl_value_t*)jl_nothing);
+    add_builtin("TypeofEpsilon", (jl_value_t*)jl_typeofepsilon_type);
+    add_builtin("Epsilon", jl_epsilon);
     add_builtin("TypeName", (jl_value_t*)jl_typename_type);
     add_builtin("DataType", (jl_value_t*)jl_datatype_type);
     add_builtin("TypeVar", (jl_value_t*)jl_tvar_type);

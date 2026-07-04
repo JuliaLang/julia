@@ -229,7 +229,7 @@ end
 end
 
 # Reshaping a ReshapedArray
-_reshape(v::ReshapedArray{<:Any,1}, dims::Dims{1}) = _reshape(v.parent, dims)
+_reshape(v::ReshapedArray{T,1}, dims::Dims{1}) where {T} = _reshape(v.parent, dims)
 _reshape(R::ReshapedArray, dims::Dims) = _reshape(R.parent, dims)
 
 function __reshape(p::Tuple{AbstractArray,IndexStyle}, dims::Dims)

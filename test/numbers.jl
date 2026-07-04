@@ -2358,6 +2358,13 @@ end
 
     # Check that the widen() fallback doesn't trigger a StackOverflowError
     @test_throws MethodError widen(String)
+
+    # `widen(Union{})` is a plain MethodError (the abstract-bounded methods use
+    # strict `>:Core.Epsilon` lower bounds), not an ambiguity
+    @test_throws MethodError widen(Union{})
+    @test widen(Char) === Char
+    @test widen(typeof(π)) === typeof(π)
+    @test Base.has_strict_lb((which(widen, Tuple{Type{Char}}).sig::UnionAll).var)
 end
 @testset ".//" begin
     @test [1,2,3] // 4 == [1//4, 2//4, 3//4]

@@ -333,6 +333,9 @@ end
     @test Dates.default(Dates.Millisecond) == zero(Dates.Millisecond)
     @test Dates.default(Dates.Microsecond) == zero(Dates.Microsecond)
     @test Dates.default(Dates.Nanosecond) == zero(Dates.Nanosecond)
+    # strict `>:Core.Epsilon` lower bounds; also accepts a period value
+    @test Dates.default(Dates.Day(7)) == d
+    @test Base.has_strict_lb((which(Dates.default, Tuple{Type{Dates.Day}}).sig::UnionAll).var)
 end
 @testset "Conversions" begin
     @test Dates.toms(1499 * us) == 1

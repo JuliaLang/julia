@@ -3148,7 +3148,7 @@ let apply_type_tfunc = Compiler.apply_type_tfunc
 end
 @test only(Base.return_types(keys, (Dict{String},))) == Base.KeySet{String, T} where T<:(Dict{String})
 @test only(Base.return_types((r)->similar(Array{typeof(r[])}, 1), (Base.RefValue{Array{Int}},))) == Vector{Array{Int, N}} where N
-@test only(Base.return_types((r)->similar(Array{typeof(r[])}, 1), (Base.RefValue{Array{<:Real}},))) == Vector{Array{T, N}} where {T<:Real, N}
+@test only(Base.return_types((r)->similar(Array{typeof(r[])}, 1), (Base.RefValue{Array{<:Real}},))) == Vector{Array{T, N}} where {Core.Epsilon<:T<:Real, N}
 # test complexity limit on apply_type on a function capturing functions returning functions
 @test only(Base.return_types(Base.afoldl, (typeof((m, n) -> () -> Returns(nothing)(m, n)), Function, Function, Vararg{Function}))) === Function
 
@@ -5285,7 +5285,7 @@ end
 
     a = Val{Union{}}
     a = Compiler.tmerge(Compiler.JLTypeLattice(), Val{<:a}, a)
-    @test_broken a != Val{<:Val{Union{}}}
+    @test a != Val{<:Val{Union{}}}
     @test_broken a == Val{<:Val} || a == Val
 
     a = Tuple{Vararg{Tuple{}}}
@@ -7224,7 +7224,7 @@ end == Core.TypeEgal{Real}
 @test Base.infer_return_type() do
     oc = Base.Experimental.@opaque x::Int -> 2x
     Compiler.return_type(oc, Tuple{Int})
-end == Type
+end == Type{<:Any}
 @test Base.infer_return_type((Core.OpaqueClosure{Tuple{Int},Real},)) do oc
     Compiler.return_type(oc, Tuple{Int})
 end == Core.TypeEgal{Real}

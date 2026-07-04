@@ -1578,7 +1578,8 @@ struct var"%X%" end  # Invalid name without '#'
 # (Just to make this test more sustainable,) we don't necessarily need to test the exact
 # output format, just ensure that it prints at least the parts we expect:
 @test occursin(".var\"#X#\"", static_shown(var"#X#"))  # Leading `.` tests it printed a module name.
-@test occursin(r"Set{var\"[^\"]+\"} where var\"[^\"]+\"", static_shown(Set{<:Any}))
+@test occursin(r"Set{var\"[^\"]+\"} where Core\.Epsilon<:var\"[^\"]+\"<:Any",
+               static_shown(Set{<:Any}))
 
 # Test that static_shown is returning valid, correct julia expressions
 @testset "static_show() prints valid julia" begin
@@ -1937,8 +1938,8 @@ is_juliarepr(x) = eval(Meta.parse(repr(x))) == x
     @test is_juliarepr(UnionAll(z, UnionAll(x, UnionAll(y, Tuple{x,y,z}))))
 
     # shortened typevar printing
-    @test repr(Ref{<:Any}) == "Ref"
-    @test repr(Pair{1, <:Any}) == "Pair{1}"
+    @test repr(Ref{<:Any}) == "Ref{<:Any}"
+    @test repr(Pair{1, <:Any}) == "Pair{1, <:Any}"
     @test repr(Ref{<:Number}) == "Ref{<:Number}"
     @test repr(Pair{1, <:Number}) == "Pair{1, <:Number}"
     @test repr(Ref{<:Ref}) == "Ref{<:Ref}"
@@ -3025,4 +3026,41 @@ end
         @test !contains(str, "\e[33m")
         @test !contains(str, "\e[93m")
     end
+end
+
+@testset "show of strict (Core.Epsilon) typevar bounds (#62265)" begin
+    @test repr(Core.Epsilon) == "Core.Epsilon"
+    @test repr(Core.TypeofEpsilon) == "Core.TypeofEpsilon"
+    let tv = TypeVar(:T, Core.Epsilon, Any)
+        @test sprint(show, tv) == "T>:Core.Epsilon"
+    end
+    let tv = TypeVar(:T, Core.Epsilon, Integer)
+        @test sprint(show, tv) == "Core.Epsilon<:T<:Integer"
+    end
+    # round trip through repr
+    for U in (Vector{T} where T>:Core.Epsilon,
+              Type{T} where T>:Core.Epsilon,
+              Vector{T} where {Core.Epsilon<:T<:Integer})
+        @test eval(Meta.parse(repr(U))) === U
+    end
+    # a strict gensym var uses the `Vector{<:X}` shorthand, which now
+    # re-spells the Epsilon lower bound faithfully
+    let tv = TypeVar(Symbol("#s62265"), Core.Epsilon, Integer)
+        U = UnionAll(tv, Vector{tv})
+        @test repr(U) == "Vector{<:Integer}"
+        R = eval(Meta.parse(repr(U)))
+        @test R == U
+        @test Base.has_strict_lb((R::UnionAll).var)
+    end
+    let tv = TypeVar(Symbol("#s62265"), Core.Epsilon, Any)
+        U = UnionAll(tv, Vector{tv})
+        @test repr(U) == "Vector{<:Any}"
+        # the shorthand drops the (gensym) var name, so compare semantically
+        # and check the strict flag survives the round trip
+        R = eval(Meta.parse(repr(U)))
+        @test R == U
+        @test Base.has_strict_lb((R::UnionAll).var)
+    end
+    # static show stays eval-able
+    @test occursin("Core.Epsilon", static_shown(Vector{T} where T>:Core.Epsilon))
 end

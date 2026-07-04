@@ -955,8 +955,9 @@ julia> widen(1.5f0)
 ```
 """
 widen(x::T) where {T} = convert(widen(T), x)
+# catches `Type{Union{}}` too: the abstract-bounded `widen` methods use strict
+# (`>:Core.Epsilon`) lower bounds, so no dedicated `Type{Union{}}` method is needed
 widen(x::Type{T}) where {T} = throw(MethodError(widen, (T,)))
-widen(x::Type{Union{}}, slurp...) = throw(MethodError(widen, (Union{},)))
 
 # function pipelining
 

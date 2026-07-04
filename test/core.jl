@@ -25,7 +25,7 @@ for (T, c) in (
         (Core.TypeMapLevel, []),
         (Core.TypeName, [:name, :module, :names, :wrapper, :hash, :n_uninitialized, :flags]),
         (DataType, [:name, :super, :parameters, :instance, :hash]),
-        (TypeVar, [:name, :ub, :lb]),
+        (TypeVar, [:name, :ub, :lb, :flags]),
         (Core.Memory, [:length, :ptr]),
         (Core.GenericMemoryRef, [:mem, :ptr_or_offset]),
         (Task, [:metrics_enabled]),
@@ -256,14 +256,20 @@ let S = Tuple{S2} where S2<:Int
     @test feq(Type{Tuple{Int}}[S, Tuple{Int}], 2) === Int
     @test feq(Type{<:Tuple{Vararg{Int,N}} where N}[Tuple{}], 1) === :undef
 end
-# the same rule is a property of the `Type{<:X}` *range*, not of `Vararg`: a
-# fixed-length tuple range still admits the `Union{}` (Bottom) member, which
-# binds no parameter, so a barrier call through it folds `@isdefined` to false
-# rather than leaking the env-uncertainty marker (#61323)
-let frng(t::Type{<:Tuple{E}}) where E = @isdefined(E) ? E : :undef
+# the same rule is a property of an explicit `Type{T} where T<:X` range, not of
+# `Vararg`: a fixed-length tuple range still admits the `Union{}` (Bottom)
+# member, which binds no parameter, so a barrier call through it folds
+# `@isdefined` to false rather than leaking the env-uncertainty marker (#61323)
+let frng(t::Type{T}) where {E,T<:Tuple{E}} = @isdefined(E) ? E : :undef
     feqr(tarr, i) = frng(tarr[i])
-    @test feqr(Type{<:Tuple{Int}}[Tuple{Int}], 1) === Int
-    @test feqr(Type{<:Tuple{Int}}[Union{}], 1) === :undef
+    R = Type{T} where T<:Tuple{Int}
+    @test feqr(R[Tuple{Int}], 1) === Int
+    @test feqr(R[Union{}], 1) === :undef
+
+    # In contrast, the anonymous `<:X` shorthand has an Epsilon lower bound.
+    A = Type{<:Tuple{Int}}
+    @test Base.has_strict_lb((A::UnionAll).var)
+    @test !(Type{Union{}} <: A)
 end
 
 # show that we don't make the cache confused by using alternative representations
@@ -5369,7 +5375,8 @@ end
 
 # `where` syntax in constructor definitions
 (A12238{T} where T<:Real)(x) = 0
-@test A12238{<:Real}(0) == 0
+@test (A12238{T} where T<:Real)(0) == 0
+@test_throws MethodError A12238{<:Real}(0)
 @test_throws MethodError A12238{<:Integer}(0)
 
 # issue #16315

@@ -116,7 +116,7 @@ X{A,B,C}
 X{<:A}
 #---------------------
 1   TestMod.A
-2   (call core.TypeVar :#T1 %₁)
+2   (call core.TypeVar :#T1 core.Epsilon %₁)
 3   TestMod.X
 4   (call core.apply_type %₃ %₂)
 5   (call core.UnionAll %₂ %₄)
@@ -138,7 +138,7 @@ X{>:A}
 X{S, <:A, T, >:B}
 #---------------------
 1   TestMod.A
-2   (call core.TypeVar :#T1 %₁)
+2   (call core.TypeVar :#T1 core.Epsilon %₁)
 3   TestMod.B
 4   (call core.TypeVar :#T2 %₃ core.Any)
 5   TestMod.X
@@ -1164,7 +1164,7 @@ end
 A{<:Real}() = A(1)
 #---------------------
 1   TestMod.Real
-2   (call core.TypeVar :#T1 %₁)
+2   (call core.TypeVar :#T1 core.Epsilon %₁)
 3   TestMod.A
 4   (call core.apply_type %₃ %₂)
 5   (call core.UnionAll %₂ %₄)

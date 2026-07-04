@@ -1373,7 +1373,8 @@ end
     @eval test_mod struct A12238{T} end
     Core.@latestworld
     @test JL.include_string(test_mod, "(A12238{T} where T<:Real)(x) = 0") === nothing
-    @test test_mod.A12238{<:Real}(0) == 0
+    @test (test_mod.A12238{T} where T<:Real)(0) == 0
+    @test_throws MethodError test_mod.A12238{<:Real}(0)
     @test_throws MethodError test_mod.A12238{<:Integer}(0)
 
     # Nested where

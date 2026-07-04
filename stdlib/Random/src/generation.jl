@@ -16,7 +16,7 @@
 
 ### random floats
 
-Sampler(::Type{RNG}, ::Type{T}, n::Repetition) where {RNG<:AbstractRNG,T<:AbstractFloat} =
+Sampler(::Type{RNG}, ::Type{T}, n::Repetition) where {Core.Epsilon<:RNG<:AbstractRNG,T<:AbstractFloat} =
     Sampler(RNG, CloseOpen01(T), n)
 
 # generic random generation function which can be used by RNG implementers
@@ -181,13 +181,13 @@ end
 
 ### random tuples
 
-function Sampler(::Type{RNG}, ::Type{T}, n::Repetition) where {T<:Tuple, RNG<:AbstractRNG}
+function Sampler(::Type{RNG}, ::Type{T}, n::Repetition) where {T<:Tuple, Core.Epsilon<:RNG<:AbstractRNG}
     tail_sp_ = Sampler(RNG, Tuple{Base.tail(fieldtypes(T))...}, n)
     SamplerTag{Ref{T}}((Sampler(RNG, fieldtype(T, 1), n), tail_sp_.data...))
     # Ref so that the gentype is `T` in SamplerTag's constructor
 end
 
-function Sampler(::Type{RNG}, ::Type{Tuple{Vararg{T, N}}}, n::Repetition) where {T, N, RNG<:AbstractRNG}
+function Sampler(::Type{RNG}, ::Type{Tuple{Vararg{T, N}}}, n::Repetition) where {T, N, Core.Epsilon<:RNG<:AbstractRNG}
     if N > 0
         SamplerTag{Ref{Tuple{Vararg{T, N}}}}((Sampler(RNG, T, n),))
     else
@@ -201,7 +201,7 @@ end
 
 ### random pairs
 
-function Sampler(::Type{RNG}, ::Type{Pair{A, B}}, n::Repetition) where {RNG<:AbstractRNG, A, B}
+function Sampler(::Type{RNG}, ::Type{Pair{A, B}}, n::Repetition) where {Core.Epsilon<:RNG<:AbstractRNG, A, B}
     sp1 = Sampler(RNG, A, n)
     sp2 = A === B ? sp1 : Sampler(RNG, B, n)
     SamplerTag{Ref{Pair{A,B}}}(sp1 => sp2) # Ref so that the gentype is Pair{A, B}
@@ -428,7 +428,7 @@ function SamplerBigInt(::Type{RNG}, r::AbstractUnitRange{BigInt}, N::Repetition=
     return SamplerBigInt(first(r), m, nlimbs, nlimbsmax, highsp)
 end
 
-Sampler(::Type{RNG}, r::AbstractUnitRange{BigInt}, N::Repetition) where {RNG<:AbstractRNG} =
+Sampler(::Type{RNG}, r::AbstractUnitRange{BigInt}, N::Repetition) where {Core.Epsilon<:RNG<:AbstractRNG} =
     SamplerBigInt(RNG, r, N)
 
 rand(rng::AbstractRNG, sp::SamplerBigInt) =
@@ -466,7 +466,7 @@ end
 
 ## random values from AbstractArray
 
-Sampler(::Type{RNG}, r::AbstractArray, n::Repetition) where {RNG<:AbstractRNG} =
+Sampler(::Type{RNG}, r::AbstractArray, n::Repetition) where {Core.Epsilon<:RNG<:AbstractRNG} =
     SamplerSimple(r, Sampler(RNG, firstindex(r):lastindex(r), n))
 
 rand(rng::AbstractRNG, sp::SamplerSimple{<:AbstractArray,<:Sampler}) =
@@ -475,7 +475,7 @@ rand(rng::AbstractRNG, sp::SamplerSimple{<:AbstractArray,<:Sampler}) =
 
 ## random values from Dict
 
-function Sampler(::Type{RNG}, t::Dict, ::Repetition) where RNG<:AbstractRNG
+function Sampler(::Type{RNG}, t::Dict, ::Repetition) where Core.Epsilon<:RNG<:AbstractRNG
     isempty(t) && empty_collection_error()
     # we use Val(Inf) below as rand is called repeatedly internally
     # even for generating only one random value from t
@@ -497,7 +497,7 @@ rand(rng::AbstractRNG, sp::SamplerTrivial{<:Base.ValueIterator{<:Dict}}) =
 
 ## random values from Set
 
-Sampler(::Type{RNG}, t::Set{T}, n::Repetition) where {RNG<:AbstractRNG,T} =
+Sampler(::Type{RNG}, t::Set{T}, n::Repetition) where {Core.Epsilon<:RNG<:AbstractRNG,T} =
     SamplerTag{Set{T}}(Sampler(RNG, t.dict, n))
 
 rand(rng::AbstractRNG, sp::SamplerTag{<:Set,<:Sampler}) = rand(rng, sp.data).first

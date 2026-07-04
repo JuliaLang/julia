@@ -2427,10 +2427,12 @@ end
 # row/column/slice iterator tests
 @testset "row/column/slice iterators" begin
     # check type aliases
-    @test RowSlices <: AbstractSlices{<:AbstractVector, 1} <: AbstractVector{<:AbstractVector}
+    @test RowSlices <: (AbstractSlices{S, 1} where S<:AbstractVector) <:
+        (AbstractVector{S} where S<:AbstractVector)
     @test eachrow(ones(3)) isa RowSlices
     @test eachrow(ones(3,3)) isa RowSlices
-    @test ColumnSlices <: AbstractSlices{<:AbstractVector, 1} <: AbstractVector{<:AbstractVector}
+    @test ColumnSlices <: (AbstractSlices{S, 1} where S<:AbstractVector) <:
+        (AbstractVector{S} where S<:AbstractVector)
     @test eachcol(ones(3)) isa ColumnSlices
     @test eachcol(ones(3,3)) isa ColumnSlices
 
