@@ -1644,6 +1644,8 @@ JL_DLLEXPORT jl_value_t *jl_instantiate_unionall(jl_unionall_t *u, jl_value_t *p
 jl_unionall_t *jl_rename_unionall(jl_unionall_t *u)
 {
     jl_tvar_t *v = jl_new_typevar(u->var->name, u->var->lb, u->var->ub);
+    v->flags = u->var->flags;
+    v->flags = u->var->flags;
     jl_value_t *t = NULL;
     JL_GC_PUSH2(&v, &t);
     jl_typeenv_t env = { u->var, (jl_value_t *)v, NULL };
@@ -1784,6 +1786,8 @@ jl_value_t *jl_substitute_datatype(jl_value_t *t, jl_datatype_t * x, jl_datatype
         body = jl_substitute_datatype(ut->body, x, y);
         if (lb != ut->var->lb || ub != ut->var->ub) {
             jl_tvar_t *newtvar = jl_new_typevar(ut->var->name, lb, ub);
+            newtvar->flags = ut->var->flags;
+            newtvar->flags = ut->var->flags;
             JL_GC_PUSH1(&newtvar);
             body = jl_substitute_var(body, ut->var, (jl_value_t*)newtvar);
             t = jl_new_struct(jl_unionall_type, newtvar, body);
@@ -3460,12 +3464,17 @@ void jl_init_types(void) JL_GC_DISABLED
     XX(nothing);
     jl_nothing_type->instance = jl_nothing;
 
+    // created early because TypeVar's flags field needs it
+    jl_uint8_type = jl_new_primitivetype((jl_value_t*)jl_symbol("UInt8"), core,
+                                         jl_any_type, jl_emptysvec, 8);
+    XX(uint8);
+
     jl_tvar_type = jl_new_datatype(jl_symbol("TypeVar"), core, jl_any_type, jl_emptysvec,
-                                   jl_perm_symsvec(3, "name", "lb", "ub"),
-                                   jl_svec(3, jl_symbol_type, jl_any_type, jl_any_type),
-                                   jl_emptysvec, 0, 1, 3);
+                                   jl_perm_symsvec(4, "name", "lb", "ub", "flags"),
+                                   jl_svec(4, jl_symbol_type, jl_any_type, jl_any_type, jl_uint8_type),
+                                   jl_emptysvec, 0, 1, 4);
     XX(tvar);
-    const static uint32_t tvar_constfields[1] = { 0x00000007 }; // all fields are constant, even though TypeVar itself has identity
+    const static uint32_t tvar_constfields[1] = { 0x0000000f }; // all fields are constant, even though TypeVar itself has identity
     jl_tvar_type->name->constfields = tvar_constfields;
 
     jl_typeofbottom_type = jl_new_datatype(jl_symbol("TypeofBottom"), core, jl_anytype_type, jl_emptysvec,
@@ -3569,9 +3578,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_uint64_type = jl_new_primitivetype((jl_value_t*)jl_symbol("UInt64"), core,
                                           jl_any_type, jl_emptysvec, 64);
     XX(uint64);
-    jl_uint8_type = jl_new_primitivetype((jl_value_t*)jl_symbol("UInt8"), core,
-                                         jl_any_type, jl_emptysvec, 8);
-    XX(uint8);
+    // n.b. jl_uint8_type was created earlier, before jl_tvar_type
     jl_uint16_type = jl_new_primitivetype((jl_value_t*)jl_symbol("UInt16"), core,
                                           jl_any_type, jl_emptysvec, 16);
     XX(uint16);

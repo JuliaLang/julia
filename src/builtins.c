@@ -201,6 +201,8 @@ static int egal_types(const jl_value_t *a, const jl_value_t *b, jl_typeenv_t *en
         jl_unionall_t *ub = (jl_unionall_t*)b;
         if (tvar_names && ua->var->name != ub->var->name)
             return 0;
+        if (ua->var->flags != ub->var->flags)
+            return 0;
         if (!(egal_types(ua->var->lb, ub->var->lb, env, tvar_names) && egal_types(ua->var->ub, ub->var->ub, env, tvar_names)))
             return 0;
         jl_typeenv_t e = { ua->var, (jl_value_t*)ub->var, env };
@@ -423,6 +425,7 @@ static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOIN
     if (tv == jl_unionall_type) {
         jl_unionall_t *u = (jl_unionall_t*)v;
         uintptr_t h = u->var->name->hash;
+        h = bitmix(h, u->var->flags);
         h = bitmix(h, type_object_id_(u->var->lb, env));
         h = bitmix(h, type_object_id_(u->var->ub, env));
         jl_varidx_t e = { u->var, env };
@@ -1850,6 +1853,7 @@ JL_DLLEXPORT jl_tvar_t *jl_new_typevar(jl_sym_t *name, jl_value_t *lb, jl_value_
         jl_type_error_rt("TypeVar", "upper bound", (jl_value_t *)jl_type_type, ub);
     jl_task_t *ct = jl_current_task;
     jl_tvar_t *tv = (jl_tvar_t *)jl_gc_alloc(ct->ptls, sizeof(jl_tvar_t), jl_tvar_type);
+    tv->flags = 0;
     jl_set_typetagof(tv, jl_tvar_tag, 0);
     tv->name = name;
     tv->lb = lb;
@@ -1859,9 +1863,17 @@ JL_DLLEXPORT jl_tvar_t *jl_new_typevar(jl_sym_t *name, jl_value_t *lb, jl_value_
 
 JL_CALLABLE(jl_f__typevar)
 {
-    JL_NARGS(TypeVar, 3, 3);
+    JL_NARGS(TypeVar, 3, 4);
     JL_TYPECHK(TypeVar, symbol, args[0]);
-    return (jl_value_t *)jl_new_typevar((jl_sym_t*)args[0], args[1], args[2]);
+    int strict = 0;
+    if (nargs == 4) {
+        JL_TYPECHK(TypeVar, bool, args[3]);
+        strict = (args[3] == jl_true);
+    }
+    jl_tvar_t *tv = jl_new_typevar((jl_sym_t*)args[0], args[1], args[2]);
+    if (strict)
+        tv->flags |= JL_TVAR_STRICT_LB;
+    return (jl_value_t*)tv;
 }
 
 // genericmemory ---------------------------------------------------------------------
