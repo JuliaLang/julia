@@ -4199,7 +4199,7 @@ void jl_init_types(void) JL_GC_DISABLED
                         NULL,
                         jl_any_type,
                         jl_emptysvec,
-                        jl_perm_symsvec(31,
+                        jl_perm_symsvec(30,
                                         "next",
                                         "queue",
                                         "storage",
@@ -4229,9 +4229,8 @@ void jl_init_types(void) JL_GC_DISABLED
                                         "finished_at",
                                         "bound_cancel_token",
                                         "cancellation_hook",
-                                        "cancellation_ack",
                                         "waitnode"),
-                        jl_svec(31,
+                        jl_svec(30,
                                 jl_any_type,
                                 jl_any_type,
                                 jl_any_type,
@@ -4261,17 +4260,15 @@ void jl_init_types(void) JL_GC_DISABLED
                                 jl_uint64_type,
                                 jl_any_type,
                                 jl_any_type,
-                                jl_any_type,
                                 jl_any_type),
                         jl_emptysvec,
                         0, 1, 6);
     XX(task);
     // Set field 20 (metrics_enabled) as const
     // Set fields 8 (_state), 12 (preempt_request), 24-27 (metric counters),
-    // 28 (bound_cancel_token), 29 (cancellation_hook), 30 (cancellation_ack)
-    // as atomic
-    const static uint32_t task_constfields[1]  = { 0b0000000000010000000000000000000 };
-    const static uint32_t task_atomicfields[1] = { 0b0111111100000000000100010000000 };
+    // 28 (bound_cancel_token), 29 (cancellation_hook) as atomic
+    const static uint32_t task_constfields[1]  = { 0b000000000010000000000000000000 };
+    const static uint32_t task_atomicfields[1] = { 0b011111100000000000100010000000 };
     jl_task_type->name->constfields = task_constfields;
     jl_task_type->name->atomicfields = task_atomicfields;
 

@@ -1489,7 +1489,7 @@ function freeze_task!(t::Task, creq::CancellationRequest,
     if t === current_task()
         # Self-cancellation with ABANDON_ALL: no need to freeze - the task can
         # simply unwind with the request.
-        src === nothing || ack!(t, src, severity(creq))
+        src === nothing || _mark_delivered!(src, severity(creq))
         throw(creq)
     end
     attempts = 0

@@ -23,13 +23,18 @@ New language features
     (cancelling a source cancels its whole subtree, at monotonically escalating severities), and
     `Base.CancellationToken` is its observe/wait view. The token governing a computation is carried
     as a scoped value (`Base.CANCEL_TOKEN`) that propagates to child tasks; blocking operations
-    (`wait`, `lock`, Channel operations, `sleep`, stream I/O, ...) accept a `cancel` keyword
-    argument defaulting to the scoped token and throw a `Base.CancellationRequest` when it is
-    cancelled. `@sync` and `Threads.@threads` blocks form cancellation scopes, so cancelling an
-    enclosing scope reaches everything spawned within. Compute-bound code can opt into cancellation
-    with the `Base.@cancel_check` cancellation point. In interactive sessions, ^C now cancels the
-    current evaluation's cancellation scope, with graded escalation
-    (safe unwind -> abandoning external waits -> abandoning tasks) on repeated presses.
+    (`wait`, `lock`, Channel operations, `sleep`, stream and command I/O, Sockets, FileWatching,
+    ...) accept a `cancel` keyword argument defaulting to the scoped token and throw a
+    `Base.CancellationRequest` while it is cancelled. Cancellation is uniformly level-triggered:
+    cleanup code that must block under a cancelled scope shields itself with `cancel = nothing`
+    (or `Base.with_cancel_token(f, nothing)`). `@sync` and `Threads.@threads` blocks form
+    cancellation scopes, so cancelling an enclosing scope reaches everything spawned within.
+    Compute-bound code can opt into cancellation with the `Base.@cancel_check` cancellation
+    point. In interactive sessions, ^C cancels the current evaluation's cancellation scope, with
+    graded escalation (safe unwind -> abandoning external waits -> abandoning tasks) on repeated
+    presses, and a fresh ^C epoch is re-armed at each prompt; a script that catches a ^C
+    cancellation continues under the cancelled scope unless it re-arms one itself
+    (`Base.with_cancel_token(f, Base.sigint_new_episode!())`).
 
 Language changes
 ----------------

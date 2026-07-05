@@ -238,7 +238,9 @@ function close(t::Union{Timer, AsyncCondition})
         try
             while t.handle != C_NULL
                 iolock_end()
-                wait(t.cond)
+                # close is the cleanup primitive: its (bounded) completion
+                # wait is shielded from cancellation
+                wait(t.cond, nothing)
                 unlock(t.cond)
                 iolock_begin()
                 lock(t.cond)

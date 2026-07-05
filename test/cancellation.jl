@@ -92,8 +92,9 @@ spin(n=4) = for _ in 1:n; yield(); end
     @test Base.iscancelled(kept)
     @test !Base.iscancelled(detached)
 
-    # escalation re-wakes a waiter that re-parked after acknowledging a
-    # lower severity
+    # cancellation is uniformly level-triggered: after catching the request,
+    # unshielded waits under the cancelled scope keep throwing; shielded
+    # cleanup proceeds
     src = CancellationTokenSource()
     phase = Ref{Any}(:init)
     t = Base.with_cancel_token(CancellationToken(src)) do
@@ -101,23 +102,31 @@ spin(n=4) = for _ in 1:n; yield(); end
             sleep(1000)
         catch e
             e isa CancellationRequest || rethrow()
-            phase[] = :acked
-            try
-                sleep(1000) # permitted: this task acknowledged SAFE
-                phase[] = :notreached
+            phase[] = :caught
+            rethrew = try
+                sleep(1000)
+                false
             catch e2
-                phase[] = (e2 isa CancellationRequest) ? Base.severity(e2) : :wrong
-                rethrow()
+                e2 isa CancellationRequest
             end
+            sleep(0.01; cancel=nothing) # shielded cleanup is permitted
+            phase[] = rethrew ? :done : :no_retrigger
         end
     end
     spin()
     cancel!(src)
-    @test timedwait(() -> phase[] === :acked, 10.0) == :ok
-    spin()
-    cancel!(src, CANCEL_REQUEST_ABANDON_EXTERNAL)
     @test timedwait(() -> istaskdone(t), 10.0) == :ok
-    @test phase[] === CANCEL_REQUEST_ABANDON_EXTERNAL.request
+    @test phase[] === :done
+
+    # an internal teardown re-park (min_severity) is woken only by escalation
+    srcm = CancellationTokenSource()
+    cancel!(srcm)
+    inner = @async sleep(5)
+    tm = @async Base._wait(inner, CancellationToken(srcm); min_severity=0x01)
+    spin()
+    cancel!(srcm, CANCEL_REQUEST_ABANDON_EXTERNAL)
+    @test_throws TaskFailedException wait(tm)
+    @test tm.result isa CancellationRequest
 
     # the current scoped token is discoverable
     tok = CancellationToken(CancellationTokenSource())
@@ -147,13 +156,13 @@ end
     @test_throws TaskFailedException wait(t)
     @test t.result isa CancellationRequest
 
-    # After catching (acknowledging) the request, cleanup code may still park
+    # After catching the request, cleanup that must block shields itself
     t2, src2 = cancellable() do
         try
             sleep(1000)
         catch e
             e isa CancellationRequest || rethrow()
-            sleep(0.01) # acknowledged: parking for cleanup is permitted
+            sleep(0.01; cancel=nothing) # shielded: parking for cleanup
             return :cleanup_ok
         end
     end
@@ -461,7 +470,7 @@ end
         try
             sleep(1000)
         catch e
-            seen[] = (e, Base.acknowledged_cancellation_severity(), Base.abandoning_external_waits())
+            seen[] = (e, Base.ambient_cancel_severity(), Base.abandoning_external_waits())
             rethrow()
         end
     end
@@ -479,7 +488,7 @@ end
         try
             sleep(1000)
         catch
-            seen2[] = (Base.acknowledged_cancellation_severity(), Base.abandoning_external_waits())
+            seen2[] = (Base.ambient_cancel_severity(), Base.abandoning_external_waits())
             rethrow()
         end
     end
@@ -630,17 +639,24 @@ end
     end
 end
 
-@testset "acknowledged requests do not re-trigger" begin
+@testset "cancelled scopes are level-triggered" begin
     t, src = cancellable() do
         try
             sleep(1000)
         catch e
             e isa CancellationRequest || rethrow()
         end
-        # The request was delivered (and acknowledged); this task can still
-        # perform IO and sleep.
-        sleep(0.01)
-        Base.acknowledged_cancellation_severity() === CANCEL_REQUEST_SAFE
+        # The scope stays cancelled: unshielded blocking operations keep
+        # throwing until the task leaves the scope or shields.
+        rethrew = try
+            sleep(0.01)
+            false
+        catch e
+            e isa CancellationRequest
+        end
+        # Shielded IO still works, and the severity remains observable.
+        sleep(0.01; cancel=nothing)
+        rethrew && Base.ambient_cancel_severity() === CANCEL_REQUEST_SAFE
     end
     spin()
     cancel!(src)
@@ -686,15 +702,19 @@ end
         return fetch(reader), p
     end
 
-    # Catching ^C in a script
+    # Catching ^C in a script: continuing requires re-arming a fresh ^C
+    # epoch (the script's cancelled scope stays cancelled otherwise)
     output, p = run_with_sigint("""
         try
             sleep(100)
             println("FAIL: not cancelled")
         catch e
-            println("caught: ", typeof(e))
+            Base.with_cancel_token(Base.sigint_new_episode!()) do
+                println("caught: ", typeof(e))
+                println("continued")
+                sleep(0.1) # cancellable operations work again
+            end
         end
-        println("continued")
     """, [1.0])
     @test occursin("caught: Base.CancellationRequest", output)
     @test occursin("continued", output)
@@ -714,7 +734,9 @@ end
                 @async find_collatz_counterexample()
             end
         catch e
-            println(typeof(e))
+            Base.with_cancel_token(Base.sigint_new_episode!()) do
+                println(typeof(e))
+            end
         end
         """, [1.5])
     @test occursin("CompositeException", output)
