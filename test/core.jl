@@ -702,6 +702,24 @@ let m = only(methods(barekindcalled))
     tienv = ccall(:jl_type_intersection_with_env, Any, (Any, Any), sig, m.sig)
     @test ccall(:jl_isa_compileable_sig, Cint, (Any, Any, Any), sig, tienv[2], m) == 0
 end
+# a slot that accepts every type object widens to `Type`, like `::Any`/`::Type`
+# slots, rather than specializing per type value
+verygeneralspec(x::Union{Type,Missing}) = x
+let m = only(methods(verygeneralspec))
+    for i in 1:20
+        @test verygeneralspec(Tuple{Val{i}}) === Tuple{Val{i}}
+    end
+    @test verygeneralspec(Vector) === Vector
+    @test verygeneralspec(missing) === missing
+    @test length(Base.specializations(m)) <= 5
+    widened = Tuple{typeof(verygeneralspec), Type}
+    tienv = ccall(:jl_type_intersection_with_env, Any, (Any, Any), widened, m.sig)
+    @test ccall(:jl_isa_compileable_sig, Cint, (Any, Any, Any), widened, tienv[2], m) == 1
+    exact = Tuple{typeof(verygeneralspec), Core.TypeEgal{Int}}
+    tienv = ccall(:jl_type_intersection_with_env, Any, (Any, Any), exact, m.sig)
+    @test ccall(:jl_normalize_to_compilable_sig, Any, (Any, Any, Any, Cint),
+                exact, tienv[2], m, 1) == widened
+end
 
 @test promote_type(Bool,Bottom) === Bool
 

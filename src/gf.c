@@ -1075,7 +1075,8 @@ JL_DLLEXPORT void jl_set_compile_and_emit_func(jl_value_t *f)
 
 static int very_general_type(jl_value_t *t)
 {
-    return (t == (jl_value_t*)jl_any_type || jl_types_equal(t, (jl_value_t*)jl_type_type));
+    // accepts every type object: `Any`, `Type`, `Union{Type, Missing}`, ...
+    return jl_subtype((jl_value_t*)jl_type_type, t);
 }
 
 jl_value_t *jl_nth_slot_type(jl_value_t *sig, size_t i) JL_NOTSAFEPOINT
@@ -1298,7 +1299,7 @@ static void jl_compilation_sig(
             // be spelled; it normalizes to `typeof(Union{})`).
             jl_value_t *kind = jl_typeof(jl_some_Type_T(elt));
             if (!jl_has_free_typevars(decl_i) &&
-                    jl_subtype(kind, type_i) && !jl_subtype((jl_value_t*)jl_type_type, type_i)) {
+                    jl_subtype(kind, type_i) && !very_general_type(type_i)) {
                 // if the declared type was not Any or Union{Type, ...},
                 // then the match must been with the kind (e.g. UnionAll or DataType)
                 // and it's simpler (and thus better) to put that in the cache instead
@@ -1330,7 +1331,7 @@ static void jl_compilation_sig(
                 // Preserve the singleton `Type{Union{}}` dispatch key. Widening it to
                 // `Type` loses static parameters for compiled calls to `::Type{T}`.
             }
-            else if (!(jl_subtype(elt, type_i) && !jl_subtype((jl_value_t*)jl_type_type, type_i))) {
+            else if (!(jl_subtype(elt, type_i) && !very_general_type(type_i))) {
                 if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
                 elt = (jl_value_t*)jl_type_type;
                 jl_svecset(*newparams, i, elt);
@@ -1591,7 +1592,7 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
             if (elt == (jl_value_t*)jl_typeofbottom_type && jl_subtype(elt, type_i))
                 continue;
             // kind slots always get guard entries (checking for subtypes of Type)
-            if (jl_subtype(elt, type_i) && !jl_subtype((jl_value_t*)jl_type_type, type_i))
+            if (jl_subtype(elt, type_i) && !very_general_type(type_i))
                 continue;
             // jl_compilation_sig keeps a slot declared as a concrete kind (e.g.
             // `::DataType`) equal to that kind, making it the canonical form
@@ -1645,7 +1646,7 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
                 return 0; // Type{Union{}} gets normalized to typeof(Union{})
             }
             if (!jl_has_free_typevars(decl_i) &&
-                    jl_subtype(kind, type_i) && !jl_subtype((jl_value_t*)jl_type_type, type_i)) {
+                    jl_subtype(kind, type_i) && !very_general_type(type_i)) {
                 JL_GC_POP();
                 return 0; // gets turned into a kind
             }
