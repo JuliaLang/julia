@@ -3490,6 +3490,18 @@ static jl_value_t *inst_tuple_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_
                     if (ttN && jl_is_tvarref(ttN) && jl_tvarref_depth(ttN) == binderidx)
                         N = e->val;
                 }
+                else if (e->val == jl_binder_marker_sentinel) {
+                    // the binder remains in place: the reference itself is the
+                    // resolved value (cf. the identity substitution the TypeVar
+                    // case uses), so a known-length `NTuple{n, T}` expands even
+                    // while `T` is still bound (matching the eager expansion
+                    // the TypeVar representation performed, which inference's
+                    // `nfields` reasoning relies on)
+                    if (ttT && jl_is_tvarref(ttT) && jl_tvarref_depth(ttT) == binderidx)
+                        T = ttT;
+                    if (ttN && jl_is_tvarref(ttN) && jl_tvarref_depth(ttN) == binderidx)
+                        N = ttN;
+                }
                 binderidx++;
             }
             else if ((jl_value_t*)e->var == ttT)

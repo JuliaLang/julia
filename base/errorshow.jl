@@ -702,8 +702,18 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
                 iob = IOContext(iob, :unionall_env => v0)
             end
             sig0 = sig0::DataType
+            # re-close signature fragments over the binders opened above;
+            # `method.sig`'s own binders are positional and cannot rebind the
+            # fresh variables
+            function rewrap_tv(@nospecialize t)
+                for k in length(tv):-1:1
+                    v = tv[k]::TypeVar
+                    (t === v || has_typevar(t, v)) && (t = UnionAll(v, t))
+                end
+                return t
+            end
             s1 = sig0.parameters[1]
-            if !isa(func, rewrap_unionall(s1, method.sig))
+            if !isa(func, rewrap_tv(s1))
                 # function itself doesn't match
                 continue
             else
@@ -727,8 +737,8 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
                     j = i
                 end
                 # Checks if the type of arg 1:i of the input intersects with the current method
-                t_in = typeintersect(rewrap_unionall(Tuple{sig[1:i]...}, method.sig),
-                                     rewrap_unionall(Tuple{t_i[1:j]...}, method.sig))
+                t_in = typeintersect(rewrap_tv(Tuple{sig[1:i]...}),
+                                     rewrap_tv(Tuple{t_i[1:j]...}))
                 # If the function is one of the special cased then it should break the loop if
                 # the type of the first argument is not matched.
                 t_in === Union{} && special && i == 1 && break
@@ -765,7 +775,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
                 # It ensures that methods like f(a::AbstractString...) gets the correct
                 # number of right_matches
                 for t in arg_types_param[length(sig):end]
-                    if t <: rewrap_unionall(unwrapva(unwrap_unionall(sig[end])), method.sig)
+                    if t <: rewrap_tv(unwrapva(unwrap_unionall(sig[end])))
                         right_matches += 1
                     end
                 end

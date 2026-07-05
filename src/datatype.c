@@ -2595,6 +2595,22 @@ static jl_value_t *resolve_type_refs(jl_value_t *t, htable_t *subst_map)
         return result;
     }
 
+    // Vararg -> resolve the element type and length: unlike the deferred
+    // `TypeApp` spelling, an eagerly-built `NTuple{n, X}` keeps its
+    // placeholder inside a materialized `Vararg`
+    if (jl_is_vararg(t)) {
+        jl_vararg_t *vm = (jl_vararg_t*)t;
+        jl_value_t *T = NULL, *N = NULL;
+        JL_GC_PUSH2(&T, &N);
+        T = vm->T ? resolve_type_refs(vm->T, subst_map) : NULL;
+        N = vm->N ? resolve_type_refs(vm->N, subst_map) : NULL;
+        jl_value_t *result = t;
+        if (T != vm->T || N != vm->N)
+            result = (jl_value_t*)jl_wrap_vararg(T, N, 0, 0);
+        JL_GC_POP();
+        return result;
+    }
+
     // Regular Union -> resolve each member if needed
     if (jl_is_uniontype(t)) {
         jl_uniontype_t *u = (jl_uniontype_t*)t;
