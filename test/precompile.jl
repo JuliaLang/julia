@@ -230,8 +230,12 @@ precompile_test_harness(false) do dir
 
               const x28297 = Result(missing)
 
-              const d29936a = UnionAll(Dict.var, UnionAll(Dict.body.var, Dict.body.body))
-              const d29936b = UnionAll(Dict.body.var, UnionAll(Dict.var, Dict.body.body))
+              const d29936a, d29936b = let (K, b1) = Base.unionall_open(Dict),
+                                               (V, body) = Base.unionall_open(b1)
+                  # reconstructed in-order (canonicalizes back to `Dict`) and
+                  # with the binders swapped
+                  (UnionAll(K, UnionAll(V, body)), UnionAll(V, UnionAll(K, body)))
+              end
 
               # issue #28998
               const x28998 = [missing, 2, missing, 6, missing,

@@ -583,6 +583,12 @@ JL_CALLABLE(jl_f_has_free_typevars)
     return jl_has_free_typevars(args[0]) ? jl_true : jl_false;
 }
 
+JL_CALLABLE(jl_f_has_dangling_tvarrefs)
+{
+    JL_NARGS(has_dangling_tvarrefs, 1, 1);
+    return jl_has_dangling_tvarrefs(args[0]) ? jl_true : jl_false;
+}
+
 JL_CALLABLE(jl_f_sizeof)
 {
     JL_NARGS(sizeof, 1, 1);

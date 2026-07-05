@@ -312,12 +312,12 @@ ccall(:jl_toplevel_eval_in, Any, (Any, Any),
           if isa(x,Type)
               if has_free_typevars(x)
                   Type{x}
-              elseif Intrinsics.eq_int(ccall(:jl_has_dangling_tvarrefs, Int32, (Any,), x), Intrinsics.trunc_int(Int32, 0))
-                  TypeEgal{x}
-              else
+              elseif has_dangling_tvarrefs(x)
                   # a detached subterm with bound-variable references cannot be
                   # a (layoutable) type parameter; fall back to the kind
                   typeof(x)
+              else
+                  TypeEgal{x}
               end
           else
               typeof(x)

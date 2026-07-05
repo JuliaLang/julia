@@ -1497,8 +1497,10 @@ end
 #             @eval if false; ccall(:fn, Tuple{Val{T}} where T, ()); end)
 @test_throws(ErrorException("ccall method definition: return type doesn't correspond to a C type"),
              @eval if false; ccall(:fn, Tuple{Val}, ()); end)
-@test_throws(TypeError, @eval if false; ccall(:fn, Some.var, ()); end)
-@test_throws(TypeError, @eval if false; ccall(:fn, Cvoid, (Some.var,), Some(0)); end)
+let tv = Base.unionall_open(Some)[1] # a materialized TypeVar (`Some.var` is positional)
+    @test_throws(TypeError, @eval if false; ccall(:fn, $tv, ()); end)
+    @test_throws(TypeError, @eval if false; ccall(:fn, Cvoid, ($tv,), Some(0)); end)
+end
 @test_throws(ErrorException("ccall method definition: Vararg not allowed for argument list"),
              @eval ccall(:fn, Int, (Vararg{Int},), 1))
 @test_throws(ErrorException("ccall method definition: argument 1 type doesn't correspond to a C type"),

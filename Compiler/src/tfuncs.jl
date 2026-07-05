@@ -146,7 +146,8 @@ function instanceof_tfunc(@nospecialize(t), astag::Bool=false, @nospecialize(tro
         end
         # If this is a NamedTuple type with known names but an unknown tuple type
         # parameter, use the length of the names to constrain the tuple type.
-        if t′′ isa DataType && t′′.name === _NAMEDTUPLE_NAME && t′′.parameters[1] isa Tuple && has_free_typevars(t′′)
+        if t′′ isa DataType && t′′.name === _NAMEDTUPLE_NAME && t′′.parameters[1] isa Tuple &&
+           (has_free_typevars(t′′) || has_dangling_typevar_refs(t′′))
             names = t′′.parameters[1]::Tuple
             n = length(names)
             nt_bound = NamedTuple{names, T} where T<:NTuple{n, Any}
@@ -912,6 +913,23 @@ add_tfunc(typeof, 1, 1, typeof_tfunc, 1)
     return Bool
 end
 add_tfunc(has_free_typevars, 1, 1, has_free_typevars_tfunc, 1)
+
+@nospecs function has_dangling_tvarrefs_tfunc(𝕃::AbstractLattice, t)
+    isa(t, Const) && return Const(Core.has_dangling_tvarrefs(t.val))
+    t = widenconst(t)
+    if isType(t)
+        p = type_parameter(t)
+        # a free typevar in the lattice element stands for closed runtime values
+        has_free_typevars(p) && return Bool
+        return Const(Core.has_dangling_tvarrefs(p))
+    elseif t === TypeVar || t === TypeVarRef
+        return Const(false)
+    elseif !hasintersect(t, Type) && !hasintersect(t, TypeVar) && !hasintersect(t, TypeofVararg)
+        return Const(false)
+    end
+    return Bool
+end
+add_tfunc(Core.has_dangling_tvarrefs, 1, 1, has_dangling_tvarrefs_tfunc, 1)
 
 @nospecs function typeassert_tfunc(𝕃::AbstractLattice, v, t)
     t = instanceof_tfunc(t, true)[1]
@@ -2657,6 +2675,7 @@ const _PURE_BUILTINS = Any[
     ===,
     typeof,
     has_free_typevars,
+    Core.has_dangling_tvarrefs,
     nfields,
 ]
 
@@ -2666,6 +2685,7 @@ const _CONSISTENT_BUILTINS = Any[
     ===,
     typeof,
     has_free_typevars,
+    Core.has_dangling_tvarrefs,
     nfields,
     fieldtype,
     apply_type,
@@ -2727,6 +2747,7 @@ const _INACCESSIBLEMEM_BUILTINS = Any[
     typeassert,
     typeof,
     has_free_typevars,
+    Core.has_dangling_tvarrefs,
     compilerbarrier,
     Core._typevar,
     donotdelete,
@@ -2937,6 +2958,7 @@ const _EFFECTS_KNOWN_BUILTINS = Any[
     getfield,
     getglobal,
     has_free_typevars,
+    Core.has_dangling_tvarrefs,
     # invoke,
     isa,
     isdefined,
