@@ -825,6 +825,12 @@ if Sys.isunix()
             sendline("$episode + $episode")
             expect(string(2episode))
             expect("julia> ")
+            # The rescued backend closes the completed episode, standing the
+            # escalation timer down: no stray warnings after the prompt
+            # (regression test for an errant "failed to acknowledge" print
+            # from the still-armed rescue timer of the final ^C press).
+            sleep(1.5)
+            @test !occursin("WARNING", snapshot()[cursor[]:end])
         end
         # ... and the session exits cleanly on ^D
         write(ptm, "\x04") # ^D (EOF)
