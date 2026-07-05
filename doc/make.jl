@@ -263,6 +263,7 @@ Manual = [
     "manual/networking-and-streams.md",
     "manual/parallel-computing.md",
     "manual/asynchronous-programming.md",
+    "manual/cancellation.md",
     "manual/multi-threading.md",
     "manual/distributed-computing.md",
     "manual/running-external-programs.md",
