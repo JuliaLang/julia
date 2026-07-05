@@ -356,14 +356,6 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
                         jl_error("malformed method signature");
                     }
                 }
-                {
-                    jl_safe_printf("DEBUG undef sparam %d val=", (int)n);
-                    jl_(sp);
-                    jl_safe_printf("DEBUG mi=");
-                    jl_(s->mi->specTypes);
-                    jl_safe_printf("DEBUG sig=");
-                    jl_((jl_value_t*)s->mi->def.method->sig);
-                }
                 jl_undefined_var_error(name, (jl_value_t*)jl_static_parameter_sym);
             }
             return sp;

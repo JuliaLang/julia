@@ -3213,8 +3213,14 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
         if (ftypes == jl_emptysvec) {
             ndt->types = ftypes;
         }
-        else if (cacheable) {
-            // recursively instantiate the types of the fields
+        else if (cacheable && !jl_has_dangling_tvarrefs((jl_value_t*)ndt)) {
+            // recursively instantiate the types of the fields.
+            // A fragment carrying dangling bound-variable references (which,
+            // unlike free typevars, do not disqualify caching) must defer this
+            // like a free-typevar instantiation would: re-instantiating its
+            // field types re-frames the dangling references one binder deeper
+            // at each level, so a self-referential field type (e.g.
+            // `struct C{T,N}; v::C{T,M} where M; end`) would recurse forever.
             if (dt->types == NULL)
                 jl_gc_write(ndt, ndt->types, jl_svec_t, jl_compute_fieldtypes(ndt, stack, cacheable));
             else
@@ -3865,7 +3871,9 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
         jl_gc_write(ndt, ndt->super, jl_datatype_t, (jl_datatype_t*)inst_type_w_((jl_value_t*)t->super, &env[n - 1], &top, 1, 0));
     }
 
-    if (t->types != jl_emptysvec) {
+    // n.b. an abstract template's field types may still be unset (NULL) here;
+    // there is nothing to instantiate for it, like the empty list
+    if (t->types != NULL && t->types != jl_emptysvec) {
         for (j = 0; j < jl_array_nrows(partial); j++) {
             jl_datatype_t *ndt = (jl_datatype_t*)jl_array_ptr_ref(partial, j);
             if (ndt == NULL)
@@ -3895,7 +3903,7 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
         jl_gc_write(t->name, t->name->partial, jl_array_t, NULL);
     }
     else {
-        assert(jl_field_names(t) == jl_emptysvec);
+        assert(t->types == NULL || jl_field_names(t) == jl_emptysvec);
     }
 }
 

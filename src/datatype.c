@@ -1012,6 +1012,29 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
         // scaffolding for the translation
         t = (jl_datatype_t*)jl_unwrap_unionall(wrapper);
         JL_GC_POP();
+        // If field types were supplied here (deserialization and other direct
+        // callers; lowering passes an empty list and supplies them later via
+        // `_typebody!`), the rebuilt template must carry them in de Bruijn
+        // form: nothing further is coming to set them. Plain translation does
+        // not recurse into nested fragments, so this cannot diverge on
+        // self-referential field types.
+        if (t->types == NULL && ftypes != NULL) {
+            size_t nf = jl_svec_len(ftypes), i;
+            if (nf == 0) {
+                jl_gc_write(t, t->types, jl_svec_t, jl_emptysvec);
+            }
+            else {
+                jl_svec_t *tft = jl_alloc_svec(nf);
+                JL_GC_PUSH1(&tft);
+                for (i = 0; i < nf; i++) {
+                    jl_value_t *fti = jl_translate_vars_to_refs(jl_svecref(ftypes, i), parameters,
+                                                                jl_svec_len(parameters));
+                    jl_svecset(tft, i, fti);
+                }
+                jl_gc_write(t, t->types, jl_svec_t, tft);
+                JL_GC_POP();
+            }
+        }
     }
 
     // n.b. the layout is computed on the template, after the wrapper exists
