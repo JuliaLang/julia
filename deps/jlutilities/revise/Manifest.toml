@@ -47,7 +47,7 @@ version = "0.1.1"
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
-version = "1.5.5+2"
+version = "1.5.3+0"
 
     [deps.CompilerSupportLibraries_jll.syntax]
     julia_version = "1.6.0"
@@ -212,7 +212,7 @@ version = "1.11.0"
 
 [[deps.Revise]]
 deps = ["CRC32c", "CodeTracking", "FileWatching", "JuliaInterpreter", "LibGit2", "LoweredCodeUtils", "OrderedCollections", "Preferences", "REPL", "UUIDs"]
-git-tree-sha1 = "b538d2f1e3b04f30c313df84d8e58de74f0bc2e7"
+git-tree-sha1 = "b5cd84845f2f7c892d4ad0b89f6b8ee0427727e9"
 repo-rev = "master"
 repo-url = "https://github.com/timholy/Revise.jl.git"
 uuid = "295af30f-e4ad-537b-8983-00126c2a3abe"
