@@ -123,8 +123,11 @@ static int sig_match_by_type_leaf(jl_value_t **types, jl_tupletype_t *sig, size_
     for (i = 0; i < n; i++) {
         jl_value_t *decl = jl_tparam(sig, i);
         jl_value_t *a = types[i];
-        if (jl_is_some_Type(a)) // decl is not Type, because it wouldn't be leafsig
+        if (jl_is_some_Type(a)) { // decl is not Type, because it would not be leafsig
+            if (jl_is_typeeq(a) && jl_is_bottom_singleton_class(jl_typeeq_T(a)))
+                return 0; // spans two kinds, so it matches no concrete kind decl
             a = jl_typeof(jl_some_Type_T(a));
+        }
         if (!jl_types_equal(a, decl))
             return 0;
     }
@@ -186,6 +189,8 @@ static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t
         else {
             assert(jl_is_concrete_type(decl));
             if (jl_is_some_Type(a)) { // decl is not TypeEq/TypeEgal or AnyType, because it would be caught above, so it must be concrete
+                if (jl_is_typeeq(a) && jl_is_bottom_singleton_class(jl_typeeq_T(a)))
+                    return 0; // spans two kinds, so it matches no concrete kind decl
                 a = jl_typeof(jl_some_Type_T(a));
             }
             if (!jl_types_equal(a, decl))

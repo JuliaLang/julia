@@ -850,4 +850,15 @@ end
     a, b = deserialize(buf)
     @test a === b && Base._nslots(a) == 4
     GC.gc(true)
+# Type{Union{}} is a TypeEq node that used to dispatch (incorrectly) to the
+# DataType serialize method and crash on its layout
+@testset "Type{Union{}} round trip" begin
+    # n.b. Vector{Type{Union{}}} still crashes in array element layout, a
+    # separate pre-existing bug in the TypeofBottom layout aliasing
+    for t in (Type{Union{}}, Ref{Tuple{Type{Union{}}, Int}})
+        b = IOBuffer()
+        serialize(b, t)
+        seekstart(b)
+        @test deserialize(b) == t
+    end
 end
