@@ -148,7 +148,7 @@ iscancelled(tok::CancellationToken) = iscancelled(tok.source)
 @eval function _new_cancel_source(parent::Union{Nothing, CancellationTokenSource})
     return $(Expr(:new, :CancellationTokenSource,
                   :parent, nothing, nothing, nothing,
-                  0x00, 0x00, 0x00, 0x00))
+                  0x00, 0x00, 0x00, nothing))
 end
 
 """
@@ -370,6 +370,53 @@ function _unlink_waiter!(src::CancellationTokenSource, w::Task)
     return nothing
 end
 
+# Watcher (`wait(::CancellationToken)`) registration: park `w` on `src`'s
+# watcher list, whose parked tasks the cancellation walk *completes* -
+# delivering the `CancellationRequest` as a value - in contrast to the
+# waiter list above, whose parked tasks it interrupts with the request as
+# an exception. Watchers link singly through the task's `wait_next` field,
+# with `wait_queue` identifying the source as the waitee; the task's level
+# half (`wait_token`/`wait_tnext`/`wait_tprev`) stays free for the ordinary
+# registration on the wait's own governing token. Returns `false` (without
+# parking) if `src` is already cancelled.
+function _register_watcher!(src::CancellationTokenSource, w::Task)
+    _lock_source(src)
+    st = @atomic :monotonic src.state
+    if st != 0x00
+        _unlock_source(src)
+        return false
+    end
+    w.wait_queue = src
+    w.wait_next = src.watchers
+    src.watchers = w
+    _unlock_source(src)
+    return true
+end
+
+# Remove `w` from `src`'s watcher list; a no-op if the cancellation walk
+# already emptied it.
+function _unregister_watcher!(src::CancellationTokenSource, w::Task)
+    _lock_source(src)
+    p = src.watchers
+    if p === w
+        src.watchers = w.wait_next
+    else
+        while p !== nothing
+            p = p::Task
+            n = p.wait_next
+            if n === w
+                p.wait_next = w.wait_next
+                break
+            end
+            p = n
+        end
+    end
+    w.wait_next = nothing
+    w.wait_queue = nothing
+    _unlock_source(src)
+    return nothing
+end
+
 ## Cancellation
 
 """
@@ -435,6 +482,7 @@ function _cancel_walk!(node::CancellationTokenSource, sev::UInt8)
     creq = CancellationRequest(sev)
     children = nothing
     towake = nothing
+    tonotify = nothing
     _lock_source(node)
     # Claim and unlink waiters at this node. The actual wakes happen after
     # the lock is released: waking may take other locks (a frozen task's
@@ -456,6 +504,25 @@ function _cancel_walk!(node::CancellationTokenSource, sev::UInt8)
         end
         w = wnext
     end
+    # Claim and unlink watchers (tasks in `wait(::CancellationToken)`). This
+    # cancellation is the event they wait *for*, so they are woken with the
+    # request as a value - and, unlike waiters, never frozen: a watcher
+    # observes this source but does not run under it.
+    w = node.watchers
+    while w !== nothing
+        w = w::Task
+        wnext = w.wait_next
+        claimed = (@atomicreplace w.wait_state WAITNODE_WAITING => WAITNODE_NOTIFIED).success
+        w.wait_next = nothing
+        w.wait_queue = nothing
+        if claimed
+            tonotify = (w, tonotify)
+        end
+        # !claimed: the wait's own governing token was cancelled first (or
+        # its task frozen); its epilogue unlinks nothing - we just did.
+        w = wnext
+    end
+    node.watchers = nothing
     # Snapshot the live children (compacting away collected ones), then
     # recurse without holding this node's lock.
     kids = node.children
@@ -488,6 +555,11 @@ function _cancel_walk!(node::CancellationTokenSource, sev::UInt8)
             _mark_delivered!(node, sev)
             schedule(t, creq, error=true)
         end
+    end
+    while tonotify !== nothing
+        (t, tonotify) = tonotify::Tuple{Task, Any}
+        _mark_delivered!(node, sev)
+        schedule(t, creq)
     end
     while children !== nothing
         (c, children) = children::Tuple{CancellationTokenSource, Any}
@@ -741,4 +813,69 @@ end
     cancel === DEFAULT_CANCEL && return f()
     tok = check_cancel_arg(cancel)
     return _run_with_cancel_token(f, tok)
+end
+
+## Waiting for cancellation as an event
+
+"""
+    wait(tok::CancellationToken; cancel=...)
+
+Block until `tok`'s source is cancelled, and return the corresponding
+[`CancellationRequest`](@ref) as an ordinary value; return immediately if it
+already is. This inverts the usual delivery - cancellation of `tok` is the
+event this operation waits *for*, not an interruption of it - and is the
+building block of the watcher-task ("cancellation callback") pattern; see
+the manual chapter on [Task Cancellation](@ref man-cancellation).
+
+The wait itself accepts the standard `cancel` keyword argument (defaulting
+to the scoped token) and is interrupted by that token like any other
+blocking operation. Waiting on the token that also governs the wait is
+refused with an `ArgumentError`, since completing and interrupting the wait
+would be the same event; pass `cancel = nothing` to wait for `tok`
+unconditionally.
+"""
+function wait(tok::CancellationToken; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    src = tok.source
+    gov = resolve_cancel_token(cancel)
+    govsrc = gov === nothing ? nothing : gov.source
+    if govsrc === src
+        throw(ArgumentError(
+            "cannot wait for a token's cancellation under the same governing token; " *
+            "pass `cancel = nothing` to wait for it unconditionally"))
+    end
+    govsrc === nothing || checkcancel(govsrc)
+    st = @atomic :acquire src.state
+    if st != 0x00
+        sev = st & SEVERITY_MASK
+        _mark_delivered!(src, sev)
+        return CancellationRequest(sev)
+    end
+    ct = current_task()
+    @atomic :monotonic ct.wait_state = WAITNODE_WAITING
+    if !_register_watcher!(src, ct)
+        # cancelled between the fast path and registration
+        @atomic :monotonic ct.wait_state = WAITNODE_IDLE
+        st = @atomic :acquire src.state
+        sev = st & SEVERITY_MASK
+        _mark_delivered!(src, sev)
+        return CancellationRequest(sev)
+    end
+    if govsrc !== nothing && !register_cancellation!(govsrc, ct)
+        _unregister_watcher!(src, ct)
+        @atomic :monotonic ct.wait_state = WAITNODE_IDLE
+        checkcancel(govsrc) # delivers the cancellation (throws)
+        error("cancellation registration refused, but the source is not cancelled")
+    end
+    ret = try
+        wait()
+    catch
+        govsrc === nothing || unregister_cancellation!(govsrc, ct)
+        _unregister_watcher!(src, ct)
+        @atomic :monotonic ct.wait_state = WAITNODE_IDLE
+        rethrow()
+    end
+    govsrc === nothing || unregister_cancellation!(govsrc, ct)
+    _unregister_watcher!(src, ct)
+    @atomic :monotonic ct.wait_state = WAITNODE_IDLE
+    return ret::CancellationRequest
 end

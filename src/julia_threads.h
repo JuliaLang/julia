@@ -258,7 +258,13 @@ typedef struct _jl_cancel_source_t {
     // Bitmask (1 << sev) of severities whose delivery some task observed;
     // feeds the ^C episode state machine.
     _Atomic(uint8_t) delivered;
-    uint8_t flags;           // (unused)
+    // Parked watcher tasks awaiting cancellation of *this* source as an
+    // event (`wait(::CancellationToken)`): `nothing`, or the head of a
+    // singly-linked list through the tasks' `wait_next` fields (their
+    // `wait_queue` points back here), guarded by `_lock`. Distinct from
+    // `waiters_head`: the cancellation walk *completes* these waits,
+    // delivering the request as a value rather than as an exception.
+    jl_value_t *watchers;    // Union{Nothing, Task}
 } jl_cancel_source_t;
 
 typedef struct _jl_task_t {

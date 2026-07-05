@@ -170,6 +170,45 @@ Simple resource release usually needs no shielding: [`close`](@ref) is designed 
 under a cancelled scope, and non-blocking cleanup is unaffected. Shield the exceptional
 blocking cleanup step, not entire `finally` blocks.
 
+## Reacting to cancellation: watcher tasks
+
+Every operation above treats cancellation of the governing token as an *interruption*. Code
+that instead wants to perform an action when cancellation strikes — closing a listening
+socket to unblock an accept loop, telling a foreign library to stop, flipping a flag polled
+by external code — can wait for a token directly: `wait(tok)` on a
+[`Base.CancellationToken`](@ref) blocks until the token's source is cancelled and returns
+the [`Base.CancellationRequest`](@ref) as an ordinary value, immediately if it already is.
+Spawning a task that performs such a wait is the cancellation-callback pattern:
+
+```julia
+src = Base.CancellationTokenSource(Base.CANCEL_TOKEN[])   # fires with the enclosing scope
+watcher = Threads.@spawn begin
+    wait(Base.CancellationToken(src); cancel = nothing)   # shielded: survives to do its duty
+    stop_engine!(engine)    # e.g. unblock foreign code that cannot observe tokens itself
+end
+try
+    run_engine(engine)      # the work the callback protects
+finally
+    Base.cancel!(src)       # normal completion also releases the watcher
+    wait(watcher)
+end
+```
+
+Three points make this pattern reliable. The watched source is created as a *child* of the
+enclosing scope, so cancelling the enclosing scope (a ^C, a timeout) fires it — but so does
+the `finally`, which guarantees the watcher is released when the work completes normally
+instead of lingering forever. The watcher's own wait is *shielded* (`cancel = nothing`):
+its whole purpose is to survive into the cancellation and perform its action, so the
+surrounding cancellation must complete this wait rather than unwind it. And the action
+itself should be of a kind that is harmless on the normal-completion path (like [`close`](@ref)
+or an idempotent "stop" request), since the watcher runs in both cases; check
+[`Base.iscancelled`](@ref) on the enclosing token when the two cases must be distinguished.
+
+When not shielded, `wait(tok)` takes the ordinary `cancel` keyword argument and an unrelated
+governing token interrupts it like any other blocking operation. Waiting on the very token
+that governs the wait is refused with an `ArgumentError`: completing and interrupting such
+a wait would be the same event.
+
 ## Compute-bound code
 
 A computation that never blocks never observes cancellation on its own. Loops that can run
