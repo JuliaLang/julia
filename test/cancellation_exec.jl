@@ -6,7 +6,9 @@
 
 using Test
 using Libdl
-using Base: cancel!, CancellationRequest, CancellationToken, CancellationTokenSource
+using Base: cancel!, CancellationRequest, CancellationToken, CancellationTokenSource,
+    CANCEL_TOKEN
+using Base.ScopedValues: with
 
 @assert Threads.nthreads() > 1
 
@@ -15,7 +17,7 @@ using Base: cancel!, CancellationRequest, CancellationToken, CancellationTokenSo
 # the interactive/io thread).
 function cancellable_spawn(f)
     src = CancellationTokenSource()
-    t = Base.with_cancel_token(() -> Threads.@spawn(f()), CancellationToken(src))
+    t = with(() -> Threads.@spawn(f()), CANCEL_TOKEN => CancellationToken(src))
     return t, src
 end
 
@@ -128,7 +130,7 @@ end
         cancel!(src3)
         ran = false
         threw = try
-            Base.with_cancel_token(CancellationToken(src3)) do
+            with(CANCEL_TOKEN => CancellationToken(src3)) do
                 Base.with_cancellation_hook(() -> (ran = true), (st, tsk) -> nothing, nothing)
             end
             false
@@ -272,7 +274,7 @@ end
     function make_victims()
         src = CancellationTokenSource()
         late = Ref{Task}()
-        ts = Base.with_cancel_token(CancellationToken(src)) do
+        ts = with(CANCEL_TOKEN => CancellationToken(src)) do
             late[] = Task(() -> nothing) # scheduled only after the cancellation
             Task[
                 @async(sleep(1000)),            # timer wait

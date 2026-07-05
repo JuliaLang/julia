@@ -85,13 +85,18 @@ operation non-cancellable.
 ## The scoped token
 
 Threading a token through every call would be invasive, so the governing token of a
-computation travels implicitly, as a [scoped value](@ref scoped-values). Establish it with
-[`Base.with_cancel_token`](@ref); every blocking operation inside the call — however deeply
-nested, and including all tasks spawned inside — defaults to it:
+computation travels implicitly, in the [`Base.CANCEL_TOKEN`](@ref) [scoped
+value](@ref scoped-values). Establish it with the standard scoped-value API
+([`with`](@ref Base.ScopedValues.with) or [`@with`](@ref Base.ScopedValues.@with)); every
+blocking operation
+inside the scope — however deeply nested, and including all tasks spawned inside — defaults
+to it:
 
 ```julia
+using Base.ScopedValues
+
 src = Base.CancellationTokenSource()
-t = Base.with_cancel_token(Base.CancellationToken(src)) do
+t = with(Base.CANCEL_TOKEN => Base.CancellationToken(src)) do
     Threads.@spawn begin
         for item in items
             result = fetch_and_process(item)   # any blocking call in here observes `src`
@@ -106,9 +111,9 @@ Base.cancel!(src)
 wait(t)   # throws TaskFailedException wrapping the CancellationRequest
 ```
 
-The current scope's token can be retrieved with [`Base.cancellation_token`](@ref), for
-example to hand it across a boundary that does not preserve dynamic scope (a `ccall`
-callback, a queue consumed by unrelated tasks, another process).
+The current scope's token can be read back with `Base.CANCEL_TOKEN[]`, for example to hand
+it across a boundary that does not preserve dynamic scope (a `ccall` callback, a queue
+consumed by unrelated tasks, another process).
 
 Structured-concurrency blocks participate automatically: an [`@sync`](@ref) block forms a
 cancellation scope of its own, nested in the enclosing one. Cancelling an enclosing scope
@@ -145,12 +150,15 @@ one-shot event that could be accidentally swallowed by an over-broad `catch`.
 
 The consequence: cleanup that must *block* (flushing a log, awaiting a confirmation, taking a
 lock) while its own scope is being cancelled must *shield* itself, either per operation with
-`cancel = nothing`, or for a whole block by scoping the token out:
+`cancel = nothing`, or for a whole block by scoping the token out with
+`Base.CANCEL_TOKEN => nothing`:
 
 ```jldoctest
+julia> using Base.ScopedValues
+
 julia> src = Base.CancellationTokenSource(); Base.cancel!(src);
 
-julia> Base.with_cancel_token(Base.CancellationToken(src)) do
+julia> with(Base.CANCEL_TOKEN => Base.CancellationToken(src)) do
            # ... the cancelled computation would unwind through here ...
            sleep(0.01; cancel = nothing)  # shielded: completes despite the cancelled scope
            "cleanup done"
@@ -169,7 +177,7 @@ for a long time opt in with [`Base.@cancel_check`](@ref), which throws the pendi
 `CancellationRequest` if the scope's token has been cancelled:
 
 ```julia
-function solve!(model; cancel = Base.cancellation_token())
+function solve!(model; cancel = Base.CANCEL_TOKEN[])
     while !converged(model)
         Base.@cancel_check cancel
         step!(model)

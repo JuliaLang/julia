@@ -179,7 +179,7 @@ function threading_run(fun, static)
     src = Base.CancellationTokenSource(Base.default_cancel_token())
     tok = Base.CancellationToken(src)
     try
-        Base.with_cancel_token(tok) do
+        Base.ScopedValues.with(Base.CANCEL_TOKEN => tok) do
             for i = 1:n
                 t = Task(() -> fun(i)) # pass in tid
                 t.sticky = static
