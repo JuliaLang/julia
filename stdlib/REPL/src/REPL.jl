@@ -333,7 +333,9 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend, mod::Module)
         try
             Base.sigatomic_end()
             if lasterr !== nothing
-                put!(backend.response_channel, Pair{Any, Bool}(lasterr, true))
+                # REPL machinery: reporting the result must work even when
+                # the evaluation's epoch was cancelled
+                put!(backend.response_channel, Pair{Any, Bool}(lasterr, true); cancel=nothing)
             else
                 backend.in_eval = true
                 for xf in backend.ast_transforms
@@ -342,7 +344,7 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend, mod::Module)
                 value = toplevel_eval_with_hooks(mod, ast)
                 backend.in_eval = false
                 setglobal!(Base.MainInclude, :ans, value)
-                put!(backend.response_channel, Pair{Any, Bool}(value, false))
+                put!(backend.response_channel, Pair{Any, Bool}(value, false); cancel=nothing)
             end
             break
         catch err
@@ -480,20 +482,21 @@ function repl_backend_loop(backend::REPLBackend, get_module::Function)
     while true
         tls = task_local_storage()
         tls[:SOURCE_PATH] = nothing
-        # Control is back with the REPL: install a fresh ^C episode source
-        # (this also stands down the escalation machinery of the previous
-        # evaluation) and run the next evaluation in its scope, so that ^C
-        # cancels exactly that evaluation and everything it spawns.
-        tok = Base.sigint_new_episode!()
         # the idle wait for frontend input is not cancellable: a ^C between
         # evaluations (or one that raced the end of the previous evaluation,
-        # issue #58689) cancels the (idle) episode source, which is simply
-        # replaced on the next round
+        # issue #58689) cancels the stale episode source, which is replaced
+        # below before anything runs under it
         ast_or_func, show_value = take!(backend.repl_channel; cancel=nothing)
         if show_value == -1
             # exit flag
             break
         end
+        # Re-arm ^C: install a fresh episode source (standing down the
+        # escalation machinery of - and detaching any work still unwinding
+        # from - the previous epoch) and run this evaluation or display
+        # request in its scope, so that ^C cancels exactly this epoch and
+        # everything it spawns.
+        tok = Base.sigint_new_episode!()
         # Mark this task as the foreground task while running user work, so that
         # components like the precompile keyboard menu know who owns interactive stdin.
         Base.ScopedValues.@with Base.CANCEL_TOKEN => tok begin

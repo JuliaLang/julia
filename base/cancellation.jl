@@ -302,99 +302,42 @@ end
     return w
 end
 
-## Per-task acknowledgement
+## Delivery semantics
 #
-# Delivery of a cancellation to a task acknowledges it: the task's
-# `cancellation_ack` field records (source, severity), and cancellation
-# points do not re-throw a request the task is already handling. Escalation
-# (a higher severity) re-triggers. The recorded source and the source being
-# checked are compared along the parent chain: while unwinding, cleanup code
-# runs under intermediate scopes whose sources were cancelled by the same
-# tree walk (ancestors of the acknowledged source), and may itself open new
-# child scopes (born cancelled, descendants) - neither must re-throw.
+# Cancellation is uniformly level-triggered: while the governing token is
+# cancelled, every cancellation point and every blocking-operation entry
+# check throws the `CancellationRequest`. There is no per-task
+# acknowledgement state; cleanup code that must block under a cancelled
+# scope explicitly shields itself (`cancel = nothing`, or
+# `with_cancel_token(f, nothing)`), and the interactive machinery re-arms
+# with a *fresh* episode source between epochs (see `sigint_new_episode!`),
+# detaching any still-unwinding work from the ^C target.
 
-struct CancelAck
-    source::CancellationTokenSource
-    severity::UInt8
-end
-
-# Whether `a` and `b` lie on a common parent chain (either may be the
-# ancestor). `parent` links are const, so this walk is safe without locks.
-function _on_parent_chain(a::CancellationTokenSource, b::CancellationTokenSource)
-    s = b
-    while true
-        s === a && return true
-        p = s.parent
-        p === nothing && break
-        s = p::CancellationTokenSource
-    end
-    s = a
-    while true
-        s === b && return true
-        p = s.parent
-        p === nothing && return false
-        s = p::CancellationTokenSource
-    end
-end
-
-function ack_covers(t::Task, src::CancellationTokenSource, sev::UInt8)
-    ack = @atomic :acquire t.cancellation_ack
-    ack === nothing && return false
-    ack = ack::CancelAck
-    ack.severity >= sev || return false
-    return _on_parent_chain(ack.source, src)
-end
-
-# Record that `t` has (or is being) delivered severity `sev` of `src`'s
-# cancellation. May be called by the task itself (at a cancellation point)
-# or by a canceller waking the parked task; CAS resolves the race in favor
-# of the higher severity. Also records the delivery on the source (feeding
-# e.g. the ^C episode state machine).
+# Record that a cancellation of `src` at severity `sev` was delivered to
+# (observed by) some task: either thrown at one of its cancellation points,
+# or handed to it by the cancellation walk waking its parked wait. Feeds the
+# ^C episode state machine ("was the request ever seen?").
 # TODO: propagate the delivered bits up the parent chain, so that a delivery
 # against a nested scope's source is visible on the episode source too.
-function ack!(t::Task, src::CancellationTokenSource, sev::UInt8)
+function _mark_delivered!(src::CancellationTokenSource, sev::UInt8)
     @atomic :monotonic src.delivered |= (0x01 << sev)
-    new = CancelAck(src, sev)
-    old = @atomic :acquire t.cancellation_ack
-    while true
-        if old !== nothing && (old::CancelAck).severity > sev
-            return nothing
-        end
-        old, success = @atomicreplace :acquire_release :acquire t.cancellation_ack old => new
-        success && return nothing
-    end
+    return nothing
 end
 
-"""
-    cancelled_token()::Union{Nothing, CancellationToken}
-
-While handling a `CancellationRequest`, returns the token whose cancellation
-the current task most recently acknowledged (i.e. the token whose
-cancellation is being handled). Returns `nothing` if the task has never
-acknowledged a cancellation.
-"""
-function cancelled_token(t::Task=current_task())
-    ack = @atomic :acquire t.cancellation_ack
-    ack === nothing && return nothing
-    return CancellationToken((ack::CancelAck).source)
+# The severity of the current dynamic scope's cancellation, or `nothing` if
+# the scope is not cancelled (or there is no scoped token).
+function ambient_cancel_severity()
+    src = default_cancel_source()
+    src === nothing && return nothing
+    return cancel_severity(src)
 end
 
-# The severity the current task has acknowledged for the request it is
-# currently handling (or nothing).
-function acknowledged_cancellation_severity(t::Task=current_task())
-    ack = @atomic :acquire t.cancellation_ack
-    ack === nothing && return nothing
-    return CancellationRequest((ack::CancelAck).severity)
-end
-
-# Whether the current task is unwinding from (or continuing under) a
-# cancellation whose severity directs it to abandon external (I/O) waits
-# without safe teardown. External wait entry points consult this to skip
-# parking entirely.
+# Whether the current dynamic scope was cancelled at a severity that directs
+# it to abandon external (I/O) waits without safe teardown. Shielded
+# external teardown consults this to skip waiting for completions entirely.
 function abandoning_external_waits(t::Task=current_task())
-    ack = @atomic :monotonic t.cancellation_ack
-    ack === nothing && return false
-    return (ack::CancelAck).severity >= CANCEL_REQUEST_ABANDON_EXTERNAL.request
+    sev = ambient_cancel_severity()
+    return sev !== nothing && sev.request >= CANCEL_REQUEST_ABANDON_EXTERNAL.request
 end
 
 ## Waiter registration (level half)
@@ -405,9 +348,8 @@ end
 
 Register `w` on `src`'s waiter list so that cancellation of `src` (or an
 ancestor) wakes `w.task`. Returns `false` - without registering - if `src`
-is already cancelled at a severity `>= min_severity` that the task has not
-already acknowledged (level trigger for late registrants: the caller must
-deliver the cancellation instead of parking).
+is already cancelled at a severity `>= min_severity` (level trigger for late
+registrants: the caller must deliver the cancellation instead of parking).
 """
 function register_cancellation!(src::CancellationTokenSource, w::WaitNode;
                                 min_severity::UInt8=0x00)
@@ -415,7 +357,7 @@ function register_cancellation!(src::CancellationTokenSource, w::WaitNode;
     st = @atomic :monotonic src.state
     if st != 0x00
         sev = st & SEVERITY_MASK
-        if sev >= min_severity && !ack_covers(w.task, src, sev)
+        if sev >= min_severity
             _unlock_source(src)
             return false
         end
@@ -539,7 +481,7 @@ function _cancel_walk!(node::CancellationTokenSource, sev::UInt8)
     while w !== nothing
         w = w::WaitNode
         wnext = w.tnext
-        if w.min_severity <= sev && !ack_covers(w.task, node, sev)
+        if w.min_severity <= sev
             claimed = (@atomicreplace w.state WAITNODE_WAITING => WAITNODE_CANCELLED).success
             _unlink_waiter!(node, w)
             w.token = nothing
@@ -570,7 +512,7 @@ function _cancel_walk!(node::CancellationTokenSource, sev::UInt8)
             # do not wake the task; freeze it in place
             freeze_task!(t, creq, node)
         else
-            ack!(t, node, sev)
+            _mark_delivered!(node, sev)
             schedule(t, creq, error=true)
         end
     end
@@ -613,7 +555,7 @@ function _cancel_running!(src::CancellationTokenSource, sev::UInt8)
         # This handler is called on the *cancelling* thread; the handler
         # contract requires thread safety and tolerance of spurious/multiple
         # invocation.
-        ack_covers(t, src, sev) || _invoke_cancellation_hook!(t)
+        _invoke_cancellation_hook!(t)
         if t === ct
             # The canceller itself is governed by the cancelled subtree;
             # deliver to ourselves last (below), so that the remaining tasks
@@ -631,9 +573,9 @@ function _cancel_running!(src::CancellationTokenSource, sev::UInt8)
             end
         end
     end
-    if self_bound && sev >= CANCEL_REQUEST_ABANDON_ALL.request && !ack_covers(ct, src, sev)
+    if self_bound && sev >= CANCEL_REQUEST_ABANDON_ALL.request
         # Self-cancellation with ABANDON_ALL: unwind with the request.
-        ack!(ct, src, sev)
+        _mark_delivered!(src, sev)
         throw(creq)
     end
     # A SAFE/ABANDON_EXTERNAL self-cancellation is observed at the caller's
@@ -660,8 +602,7 @@ end
     src = src::CancellationTokenSource
     st = @atomic :acquire src.state
     sev = st & SEVERITY_MASK
-    ack_covers(ct, src, sev) && return nothing
-    ack!(ct, src, sev)
+    _mark_delivered!(src, sev)
     throw(CancellationRequest(sev))
 end
 
@@ -698,11 +639,11 @@ macro cancel_check(tok)
     end
 end
 
-# Throw (with acknowledgement) if `src` is cancelled and the current task is
-# not already handling that cancellation. This is the entry check of every
-# blocking API taking a `cancel` keyword argument: it must run *before* the
-# operation has any side effects. Unlike `@cancel_check` this is not a
-# compiled cancellation point (it opens no async-interruptible region).
+# Throw the `CancellationRequest` if `src` is cancelled (level-triggered:
+# no per-task state is consulted). This is the entry check of every blocking
+# API taking a `cancel` keyword argument: it must run *before* the operation
+# has any side effects. Unlike `@cancel_check` this is not a compiled
+# cancellation point (it opens no async-interruptible region).
 @inline function checkcancel(src::CancellationTokenSource)
     st = @atomic :monotonic src.state
     st == 0x00 && return nothing
@@ -711,16 +652,6 @@ end
 end
 checkcancel(::Nothing) = nothing
 checkcancel(tok::CancellationToken) = checkcancel(tok.source)
-
-# Whether `src` is cancelled at a severity `t` has not acknowledged - i.e.
-# whether `checkcancel(src)` would throw. For blocking APIs that must release
-# resources (locks) before delivering the cancellation.
-function cancel_pending(src::CancellationTokenSource, t::Task=current_task())
-    st = @atomic :monotonic src.state
-    st == 0x00 && return false
-    return !ack_covers(t, src, st & SEVERITY_MASK)
-end
-cancel_pending(::Nothing, t::Task=current_task()) = false
 
 # Called by the runtime when a task starts under a dynamic scope, before its
 # body runs: a task spawned into an already-cancelled scope observes the
@@ -794,25 +725,12 @@ const MaybeToken = Union{Nothing, CancellationToken}
 @inline resolve_cancel_token(::UseDefaultToken) = default_cancel_token()
 @inline resolve_cancel_token(tok::Union{CancellationToken, Nothing}) = tok
 
-# The entry check of a public API taking a `cancel` keyword argument,
-# returning the resolved token. The two forms differ deliberately:
-#  - the scoped default is acknowledgement-gated (`checkcancel`): a task
-#    already handling the cancellation of its scope may still perform
-#    blocking cleanup work under it;
-#  - an *explicitly* passed token that is already cancelled always throws:
-#    passing `cancel = tok` states that this operation must not run once
-#    `tok` fired, no matter who asks.
+# The entry check of a public API taking a `cancel` keyword argument:
+# resolve the token and throw if it is already cancelled (uniformly
+# level-triggered for the scoped default and explicit tokens alike).
 @inline function check_cancel_arg(cancel::CancelTokenArg)
-    if cancel === DEFAULT_CANCEL
-        tok = default_cancel_token()
-        tok === nothing || checkcancel(tok.source)
-        return tok
-    end
     tok = resolve_cancel_token(cancel)
-    if tok !== nothing
-        st = @atomic :acquire tok.source.state
-        st == 0x00 || throw(CancellationRequest(st & SEVERITY_MASK))
-    end
+    tok === nothing || checkcancel(tok.source)
     return tok
 end
 

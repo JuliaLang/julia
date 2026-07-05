@@ -147,7 +147,11 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
             if lasterr !== nothing
                 lasterr = scrub_repl_backtrace(lasterr)
                 istrivialerror(lasterr) || setglobal!(Base.MainInclude, :err, lasterr)
-                invokelatest(display_error, errio, lasterr)
+                # error display (user-extensible show methods) runs in a
+                # fresh ^C epoch: the failed evaluation's cancelled epoch
+                # must not poison it, and a stuck printout is cancellable
+                with_cancel_token(() -> invokelatest(display_error, errio, lasterr),
+                                  sigint_new_episode!())
                 errcount = 0
                 lasterr = nothing
             else
@@ -482,7 +486,9 @@ function run_fallback_repl(interactive::Bool)
                             break
                         end
                     end
-                    eval_user_input(stderr, ex, true)
+                    # each interactive input is a fresh ^C epoch
+                    with_cancel_token(() -> eval_user_input(stderr, ex, true),
+                                      sigint_new_episode!())
                 catch err
                     isa(err, InterruptException) ? print("\n\n") : rethrow()
                 end
@@ -620,7 +626,11 @@ function _start()
         end
     catch
         ret = Cint(1)
-        invokelatest(display_error, scrub_repl_backtrace(current_exceptions()))
+        # report the error in a fresh ^C epoch (the script's epoch may be
+        # the very cancellation being reported)
+        local errs = scrub_repl_backtrace(current_exceptions())
+        with_cancel_token(() -> invokelatest(display_error, errs),
+                          sigint_new_episode!())
     end
     if is_interactive && get(stdout, :color, false)
         print(color_normal)

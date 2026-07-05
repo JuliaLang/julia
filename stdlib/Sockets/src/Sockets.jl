@@ -473,12 +473,11 @@ function send(sock::UDPSocket, ipaddr::IPAddr, port::Integer, msg;
     ct = current_task()
     tok = cancel === Base.DEFAULT_CANCEL ? Base.resolve_cancel_token(cancel) : Base.check_cancel_arg(cancel)
     src = tok === nothing ? nothing : tok.source
-    if Base.cancel_pending(src, ct)
+    if src !== nothing && Base.iscancelled(src)
         # The governing token is already cancelled: throw before handing
         # anything to libuv.
         iolock_end()
         Base.checkcancel(src)
-        iolock_begin() # the pending cancellation was covered concurrently
     end
     uvw = _send_async(sock, ipaddr, UInt16(port), msg)
     if Base.abandoning_external_waits(ct)

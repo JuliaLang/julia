@@ -308,11 +308,6 @@ typedef struct _jl_task_t {
     // *cancelling* thread, so that external libraries the task may be blocked
     // in can be interrupted.
     _Atomic(jl_value_t *) cancellation_hook;
-    // Per-consumer acknowledgement state: `nothing`, or a `Base.CancelAck`
-    // recording which token source (and severity) this task has already
-    // acknowledged, so cancellation points do not re-throw while the request
-    // is being handled. Severity escalation re-triggers.
-    _Atomic(jl_value_t *) cancellation_ack;
     // Cached per-task wait node (`Base.WaitNode` or `nothing`); only the task
     // itself touches this.
     jl_value_t *waitnode;
