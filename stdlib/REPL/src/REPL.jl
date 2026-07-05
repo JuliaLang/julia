@@ -482,9 +482,12 @@ function repl_backend_loop(backend::REPLBackend, get_module::Function)
     while true
         tls = task_local_storage()
         tls[:SOURCE_PATH] = nothing
-        # the idle wait for frontend input is not cancellable: a ^C between
-        # evaluations cancels the stale episode source, which is replaced
-        # below before anything runs under it
+        # Control is back with the REPL: close the previous work item's ^C
+        # episode. This stands down the escalation machinery (in particular
+        # the rescue timer, which otherwise keeps offering escalation rungs
+        # for an episode that already completed) and makes a ^C at the idle
+        # prompt a no-op. The idle wait itself is not cancellable.
+        Base.sigint_close_episode!()
         ast_or_func, show_value = take!(backend.repl_channel; cancel=nothing)
         if show_value == -1
             # exit flag
