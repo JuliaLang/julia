@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base: cancel!, close!, CancellationRequest, CancellationToken, CancellationTokenSource,
+using Base: cancel!, CancellationRequest, CancellationToken, CancellationTokenSource,
     CANCEL_REQUEST_SAFE, CANCEL_REQUEST_ABANDON_EXTERNAL, CANCEL_REQUEST_ABANDON_ALL
 
 # Start `f` as an @async-style (sticky, co-scheduled) task governed by a
@@ -82,15 +82,24 @@ spin(n=4) = for _ in 1:n; yield(); end
     @test Base.cancel_severity(grandchild) === CANCEL_REQUEST_ABANDON_EXTERNAL
     @test !cancel!(grandchild, CANCEL_REQUEST_SAFE) # never de-escalates
 
-    # close! detaches: cancellation no longer reaches a closed child
+    # children are held weakly: a child that becomes unreachable simply
+    # drops out of the tree, while an escaped token keeps its source
+    # attached (cancellation still reaches whoever can observe it)
+    @noinline function make_children(root)
+        CancellationTokenSource(CancellationToken(root)) # unreachable after return
+        c = CancellationTokenSource(CancellationToken(root))
+        return CancellationToken(c) # only the token escapes
+    end
     root2 = CancellationTokenSource()
     kept = CancellationTokenSource(CancellationToken(root2))
-    detached = CancellationTokenSource(CancellationToken(root2))
-    close!(detached)
-    close!(detached) # idempotent
-    cancel!(root2)
+    escaped_tok = make_children(root2)
+    GC.gc()
+    cancel!(root2) # the delivery walk prunes the collected child
     @test Base.iscancelled(kept)
-    @test !Base.iscancelled(detached)
+    @test Base.iscancelled(escaped_tok)
+    kids = root2.children::Vector{WeakRef}
+    @test length(kids) == 2 # kept + escaped; the dead child was pruned
+    @test all(w -> w.value !== nothing, kids)
 
     # cancellation is uniformly level-triggered: after catching the request,
     # unshielded waits under the cancelled scope keep throwing; shielded

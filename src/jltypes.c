@@ -4164,10 +4164,8 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_cancel_source_type = (jl_datatype_t*)
         jl_new_datatype(jl_symbol("CancellationTokenSource"), core, jl_any_type,
                         jl_emptysvec,
-                        jl_perm_symsvec(10,
+                        jl_perm_symsvec(8,
                                         "parent",
-                                        "nextsib",
-                                        "prevsib",
                                         "children",
                                         "waiters_head",
                                         "waiters_tail",
@@ -4175,9 +4173,7 @@ void jl_init_types(void) JL_GC_DISABLED
                                         "_lock",
                                         "delivered",
                                         "flags"),
-                        jl_svec(10,
-                                jl_any_type,
-                                jl_any_type,
+                        jl_svec(8,
                                 jl_any_type,
                                 jl_any_type,
                                 jl_any_type,
@@ -4187,10 +4183,10 @@ void jl_init_types(void) JL_GC_DISABLED
                                 jl_uint8_type,
                                 jl_uint8_type),
                         jl_emptysvec,
-                        0, 1, 10);
-    // Field 1 (parent) is const; fields 7-9 (state, _lock, delivered) are atomic
-    const static uint32_t cancel_source_constfields[1]  = { 0b0000000001 };
-    const static uint32_t cancel_source_atomicfields[1] = { 0b0111000000 };
+                        0, 1, 8);
+    // Field 1 (parent) is const; fields 5-7 (state, _lock, delivered) are atomic
+    const static uint32_t cancel_source_constfields[1]  = { 0b00000001 };
+    const static uint32_t cancel_source_atomicfields[1] = { 0b01110000 };
     jl_cancel_source_type->name->constfields = cancel_source_constfields;
     jl_cancel_source_type->name->atomicfields = cancel_source_atomicfields;
 

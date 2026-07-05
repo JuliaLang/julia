@@ -30,11 +30,21 @@
 const CancellationTokenSource = Core.CancellationTokenSource
 
 """
-    CancellationToken
+    CancellationToken(src::CancellationTokenSource)
 
-The observe/wait view of a [`CancellationTokenSource`](@ref). Code holding
-only a token can check for, and wait on, cancellation of the associated
-source, but cannot request cancellation itself.
+The observe side of a [`CancellationTokenSource`](@ref): code holding a
+token can be interrupted by - and can query ([`iscancelled`](@ref)) -
+cancellation of the associated source, but cannot request cancellation
+itself. Only the holder of the *source* can call [`cancel!`](@ref).
+
+A token takes effect in one of two ways: pass it as the `cancel` keyword
+argument of a specific blocking operation, or establish it as the governing
+token of a whole computation with [`with_cancel_token`](@ref) (spawned tasks
+inherit it). Either way, once the source is cancelled the affected
+operations throw a [`CancellationRequest`](@ref).
+
+See the manual chapter on [Task Cancellation](@ref man-cancellation) for an
+overview.
 """
 struct CancellationToken
     source::CancellationTokenSource
@@ -43,8 +53,9 @@ end
 """
     CancellationRequest
 
-The exception thrown into (or returned to) code whose governing cancellation
-token has been cancelled. The `request` field records the severity
+The exception thrown by blocking operations and cancellation points whose
+governing cancellation token has been cancelled. The `request` field records
+the severity
 ([`CANCEL_REQUEST_SAFE`](@ref), [`CANCEL_REQUEST_ABANDON_EXTERNAL`](@ref) or
 [`CANCEL_REQUEST_ABANDON_ALL`](@ref)) as observed at delivery time; the
 source may escalate afterwards.
@@ -83,9 +94,9 @@ const CANCEL_REQUEST_ABANDON_EXTERNAL = CancellationRequest(0x3)
 """
     CANCEL_REQUEST_ABANDON_ALL
 
-Request a cancellation that will cease waiting for all external resources and
-all unacknowledged internal tasks. Such tasks will be frozen and become
-unschedulable in the future.
+Request a cancellation that will cease waiting for all external resources,
+and give up on tasks that have not responded to the cancellation: they are
+frozen in place and never scheduled again.
 
 !!! warning
     If any cancelled task has acquired locks or other resources that are
@@ -133,11 +144,10 @@ iscancelled(tok::CancellationToken) = iscancelled(tok.source)
 
 ## Source construction and tree linkage
 
-const SOURCE_CLOSED_BIT = 0x01
 
 @eval function _new_cancel_source(parent::Union{Nothing, CancellationTokenSource})
     return $(Expr(:new, :CancellationTokenSource,
-                  :parent, nothing, nothing, nothing, nothing, nothing,
+                  :parent, nothing, nothing, nothing,
                   0x00, 0x00, 0x00, 0x00))
 end
 
@@ -151,8 +161,10 @@ so that cancellation of the parent (or any of its ancestors) also cancels the
 new source. A source created under an already-cancelled parent is born
 cancelled.
 
-Call [`close!`](@ref) when the source's scope ends to unlink it from its
-parent; otherwise it remains reachable from (and kept alive by) the parent.
+A child source stays linked to its parent for exactly as long as it is
+reachable - a held token, waiting or running work governed by it all keep it
+alive. Once nothing can observe it any more, it is garbage collected and
+thereby drops out of the tree; there is no explicit detach operation.
 
 Use [`CancellationToken`](@ref)`(src)` for the observe/wait view, and
 [`cancel!`](@ref)`(src)` to request cancellation.
@@ -185,53 +197,30 @@ _unlock_source(src::CancellationTokenSource) = (@atomic :release src._lock = 0x0
 # draining it, this makes registration level-triggered under concurrent
 # cancellation.
 function attach_child!(parent::CancellationTokenSource, child::CancellationTokenSource)
+    wr = WeakRef(child) # allocated outside the spinlock
     _lock_source(parent)
     pst = @atomic :monotonic parent.state
     if pst != 0x00
         _raise_state!(child, pst & SEVERITY_MASK)
     end
-    first = parent.children
-    child.nextsib = first
-    child.prevsib = nothing
-    if first !== nothing
-        (first::CancellationTokenSource).prevsib = child
+    kids = parent.children
+    if kids === nothing
+        kids = WeakRef[]
+        parent.children = kids
+    else
+        kids = kids::Vector{WeakRef}
+        # Amortized pruning: whenever the list length reaches a power of two,
+        # drop entries whose child has been garbage collected. This bounds
+        # the list at roughly twice the live-child count with O(1) amortized
+        # attach cost, without any explicit detach operation.
+        n = length(kids)
+        if n >= 8 && (n & (n - 1)) == 0
+            filter!(w -> w.value !== nothing, kids)
+        end
     end
-    parent.children = child
+    push!(kids, wr)
     _unlock_source(parent)
     return child
-end
-
-"""
-    close!(src::CancellationTokenSource)
-
-Unlink `src` from its parent source, ending its participation in the
-cancellation tree. This is the deterministic disposal point for sources
-created for a dynamic scope (e.g. a `@sync` block): without it, the source
-would remain linked (and alive) until its parent dies. Idempotent. The
-source's own cancelled state is unaffected, as are its children.
-"""
-function close!(src::CancellationTokenSource)
-    parent = src.parent
-    parent === nothing && return nothing
-    parent = parent::CancellationTokenSource
-    _lock_source(parent)
-    if src.flags & SOURCE_CLOSED_BIT == 0x00
-        src.flags |= SOURCE_CLOSED_BIT
-        prev = src.prevsib
-        next = src.nextsib
-        if prev === nothing
-            parent.children = next
-        else
-            (prev::CancellationTokenSource).nextsib = next
-        end
-        if next !== nothing
-            (next::CancellationTokenSource).prevsib = prev
-        end
-        src.nextsib = nothing
-        src.prevsib = nothing
-    end
-    _unlock_source(parent)
-    return nothing
 end
 
 # CAS-max the source's state to (STATE_CANCELLED_BIT | sev). Returns true if
@@ -395,11 +384,11 @@ they *escalate* the severity ([`CANCEL_REQUEST_SAFE`](@ref) ->
 [`CANCEL_REQUEST_ABANDON_ALL`](@ref)), re-notifying waiters at the higher
 severity. Returns whether the call changed the state.
 
-Parked tasks waiting under the subtree are woken with a
-[`CancellationRequest`](@ref) thrown into them; running computations bound
-to a subtree token (via their cancellation points) are interrupted
-asynchronously and their [`with_cancellation_hook`](@ref) handlers are
-invoked; at `CANCEL_REQUEST_ABANDON_ALL` tasks are frozen/abandoned instead.
+Tasks blocked in cancellable operations governed by a token of the subtree
+are woken with a [`CancellationRequest`](@ref) thrown into them, and running
+computations are interrupted at their cancellation points (see
+[`@cancel_check`](@ref)). At `CANCEL_REQUEST_ABANDON_ALL`, tasks are not
+woken but frozen in place instead.
 """
 function cancel!(src::CancellationTokenSource,
                  request::CancellationRequest=CANCEL_REQUEST_SAFE)
@@ -467,13 +456,23 @@ function _cancel_walk!(node::CancellationTokenSource, sev::UInt8)
         end
         w = wnext
     end
-    # snapshot children, then recurse without holding this node's lock
-    c = node.children
-    while c !== nothing
-        c = c::CancellationTokenSource
-        _raise_state!(c, sev)
-        children = (c, children)
-        c = c.nextsib
+    # Snapshot the live children (compacting away collected ones), then
+    # recurse without holding this node's lock.
+    kids = node.children
+    if kids !== nothing
+        kids = kids::Vector{WeakRef}
+        n = length(kids)
+        i = 1
+        for j in 1:n
+            c = kids[j].value
+            c === nothing && continue
+            kids[i] = kids[j]
+            i += 1
+            c = c::CancellationTokenSource
+            _raise_state!(c, sev)
+            children = (c, children)
+        end
+        i <= n && resize!(kids, i - 1)
     end
     _unlock_source(node)
     while towake !== nothing
@@ -717,8 +716,12 @@ end
     with_cancel_token(f, tok::Union{Nothing, CancellationToken})
 
 Run `f()` in a new dynamic scope in which `tok` is the governing cancellation
-token (the closure equivalent of `@with Base.CANCEL_TOKEN => tok f()`,
-available during early bootstrap).
+token: blocking operations inside default to it, [`@cancel_check`](@ref)
+checks it, and tasks spawned inside inherit it.
+
+Passing `nothing` shields `f()` from an outer (possibly cancelled) token:
+its blocking operations become non-cancellable. Use this for cleanup that
+must complete even while the surrounding computation is being cancelled.
 """
 with_cancel_token
 

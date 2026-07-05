@@ -724,13 +724,9 @@ macro sync(block)
     quote
         let var"#sync_src#" = CancellationTokenSource(default_cancel_token()),
             $var = Channel(Inf)
-            try
-                v = $scoped_block
-                sync_end($var, var"#sync_src#")
-                v
-            finally
-                close!(var"#sync_src#")
-            end
+            v = $scoped_block
+            sync_end($var, var"#sync_src#")
+            v
         end
     end
 end

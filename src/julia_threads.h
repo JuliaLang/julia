@@ -240,12 +240,13 @@ typedef struct _jl_cancel_source_t {
     JL_DATA_TYPE
     // Tree links. `parent` is const after construction, so lock-free
     // parent-chain walks (e.g. subtree-membership tests from signal context)
-    // are safe. A node's child list - its `children` head and each child's
-    // `nextsib`/`prevsib` - is guarded by that node's `_lock`.
+    // are safe. `children` - `nothing`, or a `Vector{WeakRef}` of child
+    // sources, guarded by this node's `_lock` - holds children *weakly*: a
+    // child stays linked for exactly as long as it is reachable (a token, a
+    // registered waiter or a running binding all keep it alive), and is
+    // pruned after it has been garbage collected.
     jl_value_t *parent;      // Union{Nothing, CancellationTokenSource}
-    jl_value_t *nextsib;     // sibling links, guarded by the parent's `_lock`
-    jl_value_t *prevsib;
-    jl_value_t *children;    // first child, guarded by this node's `_lock`
+    jl_value_t *children;    // Union{Nothing, Vector{WeakRef}}
     // Parked waiter tasks (an intrusive list through their `wait_tnext`/
     // `wait_tprev` fields), guarded by `_lock`.
     jl_value_t *waiters_head;
@@ -254,10 +255,10 @@ typedef struct _jl_cancel_source_t {
     // 0x3 ABANDON_EXTERNAL, 0x4 ABANDON_ALL). Monotonic (CAS-max).
     _Atomic(uint8_t) state;
     _Atomic(uint8_t) _lock;  // spinlock guarding the lists above
-    // Bitmask (1 << sev) of severities some task has acknowledged; feeds the
-    // ^C episode state machine.
+    // Bitmask (1 << sev) of severities whose delivery some task observed;
+    // feeds the ^C episode state machine.
     _Atomic(uint8_t) delivered;
-    uint8_t flags;           // bit 0: closed (detached from its parent)
+    uint8_t flags;           // (unused)
 } jl_cancel_source_t;
 
 typedef struct _jl_task_t {
