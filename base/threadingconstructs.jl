@@ -213,7 +213,6 @@ function threading_run(fun, static)
             end
         end
     finally
-        Base.close!(src)
         ccall(:jl_exit_threaded_region, Cvoid, ())
     end
     failed_tasks = filter!(istaskfailed, tasks)

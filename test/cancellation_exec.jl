@@ -6,7 +6,7 @@
 
 using Test
 using Libdl
-using Base: cancel!, close!, CancellationRequest, CancellationToken, CancellationTokenSource
+using Base: cancel!, CancellationRequest, CancellationToken, CancellationTokenSource
 
 @assert Threads.nthreads() > 1
 
