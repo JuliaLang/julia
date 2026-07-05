@@ -331,7 +331,7 @@ function _wait(t::Task, tok::MaybeToken; min_severity::UInt8=0x00)
     nothing
 end
 
-waitqueue(t::Task) = ILLRef(waitqueue(t.donenotify::ThreadSynchronizer), t)
+waitqueue(t::Task) = withwaitee(waitqueue(t.donenotify::ThreadSynchronizer), t)
 
 # have `waiter` wait for `t`
 function _wait2(t::Task, waiter::Task)
@@ -351,9 +351,8 @@ function _wait2(t::Task, waiter::Task)
         donenotify = t.donenotify::ThreadSynchronizer
         lock(donenotify)
         if !istaskdone(t)
-            w = getwaitnode(waiter)
-            @atomic :monotonic w.state = WAITNODE_WAITING
-            push!(waitqueue(t), w)
+            @atomic :monotonic waiter.wait_state = WAITNODE_WAITING
+            push!(waitqueue(t), waiter)
             unlock(donenotify)
             return nothing
         else
@@ -528,7 +527,7 @@ function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=fal
             waiter = waiter_tasks[i]
             waiter === sentinel && continue
             donenotify = tasks[i].donenotify::ThreadSynchronizer
-            @lock donenotify list_deletefirst!(waitqueue(tasks[i]), getwaitnode(waiter))
+            @lock donenotify list_deletefirst!(waitqueue(tasks[i]), waiter)
         end
         close(chan)
         rethrow()
@@ -565,7 +564,7 @@ function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=fal
             waiter = waiter_tasks[i]
             waiter === sentinel && continue
             donenotify = tasks[i].donenotify::ThreadSynchronizer
-            @lock donenotify list_deletefirst!(waitqueue(tasks[i]), getwaitnode(waiter))
+            @lock donenotify list_deletefirst!(waitqueue(tasks[i]), waiter)
         end
         done_tasks = tasks[done_mask]
         if throwexc && exception
@@ -1153,7 +1152,7 @@ function schedule(t::Task, @nospecialize(arg); error=false)
     if state === task_state_runnable
         if error
             # a task's `queue` is only ever a sticky workqueue now (parked
-            # tasks enqueue their WaitNode instead)
+            # tasks enqueue on the wait-queue link set instead)
             q = t.queue
             q === nothing || list_deletefirst!(q::StickyWorkqueue, t)
             setfield!(t, :result, arg)
@@ -1533,9 +1532,7 @@ function freeze_task!(t::Task, creq::CancellationRequest,
     while true
         istaskdone(t) && return true
         tid = Threads.threadid(t)
-        w = t.waitnode
-        parked = t.queue !== nothing ||
-            (w isa WaitNode && w.queue !== nothing)
+        parked = t.queue !== nothing || t.wait_queue !== nothing
         if !parked && tid != 0 && (attempts += 1) <= 100
             # Likely running on a thread - rip it away. unsafe_abandon! is a
             # no-op if the task is not current on that thread anymore (it may

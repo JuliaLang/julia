@@ -257,8 +257,8 @@ function wait_no_relock(c::GenericCondition, tok::MaybeToken=default_cancel_toke
         # The governing token is already cancelled (e.g. it was cancelled
         # while we were still spinning and thus not interruptibly waiting):
         # don't park.
-        list_deletefirst!(ILLRef(waitqueue(c), c), w)
-        @atomic :monotonic w.state = WAITNODE_IDLE
+        list_deletefirst!(withwaitee(waitqueue(c), c), w)
+        @atomic :monotonic w.wait_state = WAITNODE_IDLE
         unlock(c.lock)
         checkcancel(src)
         error("cancellation registration refused, but the source is not cancelled")
@@ -267,16 +267,16 @@ function wait_no_relock(c::GenericCondition, tok::MaybeToken=default_cancel_toke
     try
         ret = wait()
         src === nothing || unregister_cancellation!(src, w)
-        @atomic :monotonic w.state = WAITNODE_IDLE
+        @atomic :monotonic w.wait_state = WAITNODE_IDLE
         return ret
     catch
         # Unlink our node if it is still queued (cancellation or unexpected
         # throwto); this requires the waitee lock, which we do not hold here.
         lock(c.lock)
-        list_deletefirst!(ILLRef(waitqueue(c), c), w)
+        list_deletefirst!(withwaitee(waitqueue(c), c), w)
         unlock(c.lock)
         src === nothing || unregister_cancellation!(src, w)
-        @atomic :monotonic w.state = WAITNODE_IDLE
+        @atomic :monotonic w.wait_state = WAITNODE_IDLE
         rethrow()
     end
 end

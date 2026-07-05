@@ -12,7 +12,7 @@ let lk = ReentrantLock()
     c2 = Event()
     # whether `t` is parked on `waitee` (its wait node is enqueued there)
     parked_on(t::Task, @nospecialize(waitee)) =
-        (w = t.waitnode; w isa Base.WaitNode && w.queue === waitee)
+        t.wait_queue === waitee
     @test trylock(lk)
     @test trylock(lk)
     t1 = @async (notify(c1); lock(lk); unlock(lk); trylock(lk))

@@ -247,60 +247,34 @@ function _raise_state!(src::CancellationTokenSource, sev::UInt8)
     end
 end
 
-## The per-task wait node (the "combined waitable")
+## The per-task wait state (the "wait node", folded into `Task`)
 #
-# A `WaitNode` fuses the two halves of a cancellable wait into one object:
-#  - the *edge* half: intrusive `next`/`queue` links that enqueue the node in
-#    a waitee's wait queue (`IntrusiveLinkedList{WaitNode}`), where a
-#    completion (`notify`, a libuv callback, task termination) finds it;
-#  - the *level* half: intrusive `tnext`/`tprev` links that register the node
-#    in a cancellation token source's waiter list, where the cancellation
-#    walk finds it.
-# The `state` byte arbitrates the wake: whoever CASes WAITING -> (NOTIFIED |
-# CANCELLED) owns waking the task; the loser does nothing. One node is cached
-# per task (`getwaitnode`) and reused across waits - a task only ever waits
-# on one thing at a time - so steady-state blocking waits allocate nothing.
+# Every task carries the two halves of a cancellable wait as dedicated
+# fields (a task only ever waits on one thing at a time):
+#  - the *edge* half: intrusive `wait_next`/`wait_queue` links that enqueue
+#    the task in a waitee's wait queue (a `WaitQueue`), where a completion
+#    (`notify`, a libuv callback, task termination) finds it;
+#  - the *level* half: intrusive `wait_tnext`/`wait_tprev` links that
+#    register the task in a cancellation token source's waiter list, where
+#    the cancellation walk finds it.
+# These are deliberately distinct from the scheduler's `next`/`queue` links:
+# a canceller claims a parked waiter and schedules it *without* holding the
+# waitee's lock, so the task sits in a workqueue while its wait-queue entry
+# is still linked (stale entries are unlinked lazily).
+# The `wait_state` byte arbitrates the wake: whoever CASes WAITING ->
+# (NOTIFIED | CANCELLED) owns waking the task; the loser does nothing.
+# Steady-state blocking waits allocate nothing.
 #
-# Lifecycle invariant: the *waiter* always unlinks its own node from both
-# halves (under the respective locks) before leaving the wait function, so
-# the cached node is free for reuse. The cancellation walk unlinks from the
-# waiter list when it claims a node; `notify`/completions unlink from the
-# wait queue when they pop one. Both unlink operations tolerate the node
-# already being gone.
+# Lifecycle invariant: the *waiter* always unlinks itself from both halves
+# (under the respective locks) before leaving the wait function. The
+# cancellation walk unlinks from the waiter list when it claims a task;
+# `notify`/completions unlink from the wait queue when they pop one. Both
+# unlink operations tolerate the entry already being gone.
 
 const WAITNODE_IDLE      = 0x00
 const WAITNODE_WAITING   = 0x01  # enqueued; wake not yet claimed
 const WAITNODE_NOTIFIED  = 0x02  # completion claimed the wake
 const WAITNODE_CANCELLED = 0x03  # cancellation claimed the wake
-
-mutable struct WaitNode
-    const task::Task
-    # edge half (waitee queue; protected by the waitee's lock)
-    next::Union{WaitNode, Nothing}
-    queue::Any
-    # level half (token waiter list; protected by the source's `_lock`)
-    token::Union{Nothing, CancellationTokenSource}
-    tnext::Union{WaitNode, Nothing}
-    tprev::Union{WaitNode, Nothing}
-    # minimum severity that may interrupt this wait (used by cancellation
-    # *teardown* waits, which re-park after acknowledging a severity and must
-    # only be woken by an escalation)
-    min_severity::UInt8
-    @atomic state::UInt8
-    # for waits on raw libuv requests: the uv request pointer (low bit tags a
-    # shutdown request)
-    uvreq::Ptr{Cvoid}
-    WaitNode(t::Task) = new(t, nothing, nothing, nothing, nothing, nothing,
-                            0x00, WAITNODE_IDLE, C_NULL)
-end
-
-@inline function getwaitnode(ct::Task=current_task())
-    w = ct.waitnode
-    w === nothing || return w::WaitNode
-    w = WaitNode(ct)
-    ct.waitnode = w
-    return w
-end
 
 ## Delivery semantics
 #
@@ -343,15 +317,15 @@ end
 ## Waiter registration (level half)
 
 """
-    register_cancellation!(src::CancellationTokenSource, w::WaitNode;
+    register_cancellation!(src::CancellationTokenSource, w::Task;
                            min_severity::UInt8=0x00)::Bool
 
-Register `w` on `src`'s waiter list so that cancellation of `src` (or an
-ancestor) wakes `w.task`. Returns `false` - without registering - if `src`
+Register the waiting task `w` on `src`'s waiter list so that cancellation
+of `src` (or an ancestor) wakes it. Returns `false` - without registering - if `src`
 is already cancelled at a severity `>= min_severity` (level trigger for late
 registrants: the caller must deliver the cancellation instead of parking).
 """
-function register_cancellation!(src::CancellationTokenSource, w::WaitNode;
+function register_cancellation!(src::CancellationTokenSource, w::Task;
                                 min_severity::UInt8=0x00)
     _lock_source(src)
     st = @atomic :monotonic src.state
@@ -362,14 +336,14 @@ function register_cancellation!(src::CancellationTokenSource, w::WaitNode;
             return false
         end
     end
-    w.token = src
-    w.min_severity = min_severity
-    w.tprev = src.waiters_tail
-    w.tnext = nothing
+    w.wait_token = src
+    w.wait_min_severity = min_severity
+    w.wait_tprev = src.waiters_tail
+    w.wait_tnext = nothing
     if src.waiters_tail === nothing
         src.waiters_head = w
     else
-        (src.waiters_tail::WaitNode).tnext = w
+        (src.waiters_tail::Task).wait_tnext = w
     end
     src.waiters_tail = w
     _unlock_source(src)
@@ -378,32 +352,32 @@ end
 
 # Remove `w` from `src`'s waiter list; a no-op if the cancellation walk
 # already unlinked it.
-function unregister_cancellation!(src::CancellationTokenSource, w::WaitNode)
+function unregister_cancellation!(src::CancellationTokenSource, w::Task)
     _lock_source(src)
-    if w.tprev !== nothing || w.tnext !== nothing || src.waiters_head === w
+    if w.wait_tprev !== nothing || w.wait_tnext !== nothing || src.waiters_head === w
         _unlink_waiter!(src, w)
     end
-    w.token = nothing
+    w.wait_token = nothing
     _unlock_source(src)
     return nothing
 end
 
 # caller must hold src's lock and have checked membership
-function _unlink_waiter!(src::CancellationTokenSource, w::WaitNode)
-    prev = w.tprev
-    next = w.tnext
+function _unlink_waiter!(src::CancellationTokenSource, w::Task)
+    prev = w.wait_tprev
+    next = w.wait_tnext
     if prev === nothing
         src.waiters_head = next
     else
-        (prev::WaitNode).tnext = next
+        (prev::Task).wait_tnext = next
     end
     if next === nothing
         src.waiters_tail = prev
     else
-        (next::WaitNode).tprev = prev
+        (next::Task).wait_tprev = prev
     end
-    w.tnext = nothing
-    w.tprev = nothing
+    w.wait_tnext = nothing
+    w.wait_tprev = nothing
     return nothing
 end
 
@@ -479,14 +453,14 @@ function _cancel_walk!(node::CancellationTokenSource, sev::UInt8)
     # lock, so waking under it could deadlock.
     w = node.waiters_head
     while w !== nothing
-        w = w::WaitNode
-        wnext = w.tnext
-        if w.min_severity <= sev
-            claimed = (@atomicreplace w.state WAITNODE_WAITING => WAITNODE_CANCELLED).success
+        w = w::Task
+        wnext = w.wait_tnext
+        if w.wait_min_severity <= sev
+            claimed = (@atomicreplace w.wait_state WAITNODE_WAITING => WAITNODE_CANCELLED).success
             _unlink_waiter!(node, w)
-            w.token = nothing
+            w.wait_token = nothing
             if claimed
-                towake = (w.task, towake)
+                towake = (w, towake)
             end
             # !claimed: a completion won the race; the waiter resumes
             # normally and unregisters its (now unlinked) node itself.

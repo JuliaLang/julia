@@ -700,8 +700,8 @@ function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real
     w = Base._wait2(c, ct, c, first)
     if src !== nothing && !Base.register_cancellation!(src, w)
         # The governing token is already cancelled: don't park.
-        Base.list_deletefirst!(Base.ILLRef(Base.waitqueue(c), c), w)
-        @atomic :monotonic w.state = Base.WAITNODE_IDLE
+        Base.list_deletefirst!(Base.withwaitee(Base.waitqueue(c), c), w)
+        @atomic :monotonic w.wait_state = Base.WAITNODE_IDLE
         Base.checkcancel(src)
         error("cancellation registration refused, but the source is not cancelled")
     end
@@ -729,8 +729,8 @@ function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real
             waiter_left[] = true
         end
         src === nothing || Base.unregister_cancellation!(src, w)
-        Base.list_deletefirst!(Base.ILLRef(Base.waitqueue(c), c), w)
-        @atomic :monotonic w.state = Base.WAITNODE_IDLE
+        Base.list_deletefirst!(Base.withwaitee(Base.waitqueue(c), c), w)
+        @atomic :monotonic w.wait_state = Base.WAITNODE_IDLE
         rethrow()
     end
     Base.relockall(c.lock, token)
@@ -739,12 +739,12 @@ function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real
         waiter_left[] = true
     end
     src === nothing || Base.unregister_cancellation!(src, w)
-    Base.list_deletefirst!(Base.ILLRef(Base.waitqueue(c), c), w)
-    @atomic :monotonic w.state = Base.WAITNODE_IDLE
+    Base.list_deletefirst!(Base.withwaitee(Base.waitqueue(c), c), w)
+    @atomic :monotonic w.wait_state = Base.WAITNODE_IDLE
     return res
 end
 
-function _wait_with_timeout_task(c::GenericCondition, ct::Task, w::Base.WaitNode, timer::Timer,
+function _wait_with_timeout_task(c::GenericCondition, ct::Task, w::Task, timer::Timer,
     waiter_left::Threads.Atomic{Bool})
     return Task() do
         try
@@ -761,8 +761,8 @@ function _wait_with_timeout_task(c::GenericCondition, ct::Task, w::Base.WaitNode
         # claim its wake, and remove it. If the wake was already claimed (by
         # notify or a canceller) or the node was reused for a later wait
         # (waiter_left), do nothing.
-        if !waiter_left[] && w.queue === c &&
-           (@atomicreplace w.state Base.WAITNODE_WAITING => Base.WAITNODE_NOTIFIED).success
+        if !waiter_left[] && w.wait_queue === c &&
+           (@atomicreplace w.wait_state Base.WAITNODE_WAITING => Base.WAITNODE_NOTIFIED).success
             dosched = true
             Base.list_deletefirst!(Base.waitqueue(c), w)
         end

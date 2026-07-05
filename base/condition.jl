@@ -61,15 +61,15 @@ Abstract implementation of a condition object
 for synchronizing task objects with a given lock.
 """
 struct GenericCondition{L<:AbstractLock}
-    waitq::IntrusiveLinkedList{WaitNode}
+    waitq::WaitQueue
     lock::L
 
-    GenericCondition{L}() where {L<:AbstractLock} = new{L}(IntrusiveLinkedList{WaitNode}(), L())
-    GenericCondition{L}(l::L) where {L<:AbstractLock} = new{L}(IntrusiveLinkedList{WaitNode}(), l)
-    GenericCondition(l::AbstractLock) = new{typeof(l)}(IntrusiveLinkedList{WaitNode}(), l)
+    GenericCondition{L}() where {L<:AbstractLock} = new{L}(WaitQueue(), L())
+    GenericCondition{L}(l::L) where {L<:AbstractLock} = new{L}(WaitQueue(), l)
+    GenericCondition(l::AbstractLock) = new{typeof(l)}(WaitQueue(), l)
 end
 
-waitqueue(c::GenericCondition) = ILLRef(c.waitq, c)
+waitqueue(c::GenericCondition) = WaitQueueRef(c.waitq, c)
 
 show(io::IO, c::GenericCondition) = print(io, GenericCondition, "(", c.lock, ")")
 
@@ -81,18 +81,18 @@ islocked(c::GenericCondition) = islocked(c.lock)
 
 lock(f, c::GenericCondition) = lock(f, c.lock)
 
-# have waiter wait for c: enqueue the waiter's cached WaitNode on c's wait
-# queue (with `waitee` recorded as the queue identity), arming it for a
-# completion wake. Returns the node.
+# have waiter wait for c: enqueue the waiter on c's wait queue (with
+# `waitee` recorded as the queue identity), arming it for a completion wake.
+# Returns the waiter.
 function _wait2(c::GenericCondition, waiter::Task, waitee=c, first::Bool=false)
     ct = current_task()
     assert_havelock(c)
-    w = getwaitnode(waiter)
-    @atomic :monotonic w.state = WAITNODE_WAITING
+    w = waiter
+    @atomic :monotonic w.wait_state = WAITNODE_WAITING
     if first
-        pushfirst!(ILLRef(waitqueue(c), waitee), w)
+        pushfirst!(withwaitee(waitqueue(c), waitee), w)
     else
-        push!(ILLRef(waitqueue(c), waitee), w)
+        push!(withwaitee(waitqueue(c), waitee), w)
     end
     # since _wait2 is similar to schedule, we should observe the sticky bit now
     if waiter.sticky && Threads.threadid(waiter) == 0 && !GC.in_finalizer()
@@ -159,8 +159,8 @@ function wait(c::GenericCondition, tok::MaybeToken; first::Bool=false, waitee=c,
     src === nothing || min_severity != 0x00 || checkcancel(src)
     w = _wait2(c, ct, waitee, first)
     if src !== nothing && !register_cancellation!(src, w; min_severity=min_severity)
-        list_deletefirst!(ILLRef(waitqueue(c), waitee), w)
-        @atomic :monotonic w.state = WAITNODE_IDLE
+        list_deletefirst!(withwaitee(waitqueue(c), waitee), w)
+        @atomic :monotonic w.wait_state = WAITNODE_IDLE
         checkcancel(src) # delivers the cancellation (acknowledge + throw)
         error("cancellation registration refused, but the source is not cancelled")
     end
@@ -174,15 +174,15 @@ function wait(c::GenericCondition, tok::MaybeToken; first::Bool=false, waitee=c,
         # This cleans up our entry in the waitqueue if we were cancelled or
         # resumed from an unexpected `throwto`; a no-op if a completion
         # already popped the node.
-        list_deletefirst!(ILLRef(waitqueue(c), waitee), w)
-        @atomic :monotonic w.state = WAITNODE_IDLE
+        list_deletefirst!(withwaitee(waitqueue(c), waitee), w)
+        @atomic :monotonic w.wait_state = WAITNODE_IDLE
         rethrow()
     end
 
     relockall(c.lock, token)
     src === nothing || unregister_cancellation!(src, w)
-    list_deletefirst!(ILLRef(waitqueue(c), waitee), w)
-    @atomic :monotonic w.state = WAITNODE_IDLE
+    list_deletefirst!(withwaitee(waitqueue(c), waitee), w)
+    @atomic :monotonic w.wait_state = WAITNODE_IDLE
     return ret
 end
 
@@ -204,8 +204,8 @@ function notify(c::GenericCondition, @nospecialize(arg), all, error)
         # A node whose wake was already claimed by a canceller does not count
         # as woken: continue to the next waiter (the cancelled task resumes
         # via the exception the canceller scheduled).
-        (@atomicreplace w.state WAITNODE_WAITING => WAITNODE_NOTIFIED).success || continue
-        schedule(w.task, arg, error=error)
+        (@atomicreplace w.wait_state WAITNODE_WAITING => WAITNODE_NOTIFIED).success || continue
+        schedule(w, arg, error=error)
         cnt += 1
         all || break
     end

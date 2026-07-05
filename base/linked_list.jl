@@ -156,7 +156,126 @@ popfirst!(q::IntrusiveLinkedList{T}) where T = popfirst!(ILLRef(q, q))
 # Generic cleanup entry point: delete `val` from the wait queue of whatever
 # waitee it is currently queued on (no-op if it is not queued). Requires
 # `waitqueue(waitee)` to be defined for the waitee.
-list_deletefirst!(@nospecialize(waitee), val) = list_deletefirst!(ILLRef(waitqueue(waitee), waitee), val)
+list_deletefirst!(@nospecialize(waitee), val) = list_deletefirst!(withwaitee(waitqueue(waitee), waitee), val)
+
+## The wait-queue flavor of the intrusive list: the elements are parked
+## `Task`s, linked through their dedicated `wait_next`/`wait_queue` fields
+## (the scheduler owns `next`/`queue`; see the wait-state comment in
+## cancellation.jl for why the two link sets must be disjoint). Structure
+## and semantics mirror IntrusiveLinkedList/ILLRef above.
+
+mutable struct WaitQueue
+    head::Union{Task, Nothing}
+    tail::Union{Task, Nothing}
+    WaitQueue() = new(nothing, nothing)
+end
+
+struct WaitQueueRef
+    list::WaitQueue
+    waitee::Any # Invariant: waitqueue(waitee).list === list
+end
+
+withwaitee(r::ILLRef, @nospecialize(waitee)) = typeof(r)(r.list, waitee)
+withwaitee(r::WaitQueueRef, @nospecialize(waitee)) = WaitQueueRef(r.list, waitee)
+
+eltype(::Type{WaitQueue}) = Task
+
+iterate(q::WaitQueue) = (h = q.head; h === nothing ? nothing : (h, h))
+iterate(q::WaitQueue, v::Task) = (h = v.wait_next; h === nothing ? nothing : (h::Task, h::Task))
+
+isempty(q::WaitQueue) = (q.head === nothing)
+
+function length(q::WaitQueue)
+    i = 0
+    head = q.head
+    while head !== nothing
+        i += 1
+        head = (head::Task).wait_next
+    end
+    return i
+end
+
+isempty(qr::WaitQueueRef) = isempty(qr.list)
+length(qr::WaitQueueRef) = length(qr.list)
+
+function push!(qr::WaitQueueRef, val::Task)
+    val.wait_queue === nothing || error("val already in a list")
+    val.wait_queue = qr.waitee
+    q = qr.list
+    tail = q.tail
+    if tail === nothing
+        q.head = q.tail = val
+    else
+        tail.wait_next = val
+        q.tail = val
+    end
+    return q
+end
+
+function pushfirst!(qr::WaitQueueRef, val::Task)
+    val.wait_queue === nothing || error("val already in a list")
+    val.wait_queue = qr.waitee
+    q = qr.list
+    head = q.head
+    if head === nothing
+        q.head = q.tail = val
+    else
+        val.wait_next = head
+        q.head = val
+    end
+    return q
+end
+
+function pop!(qr::WaitQueueRef)
+    val = qr.list.tail::Task
+    _list_deletefirst!(qr.list, val) # expensive!
+    return val
+end
+
+function popfirst!(qr::WaitQueueRef)
+    val = qr.list.head::Task
+    _list_deletefirst!(qr.list, val) # cheap
+    return val
+end
+
+# Delete `val` from the list, but only if it is actually in it, as indicated
+# by `val.wait_queue` holding the ref's waitee; a no-op if `val` was
+# concurrently notified/popped.
+function list_deletefirst!(qr::WaitQueueRef, val::Task)
+    val.wait_queue === qr.waitee || return qr.list
+    return _list_deletefirst!(qr.list, val)
+end
+
+# Raw-list convenience (the unbuffered-channel handoff pops the first
+# parked taker without caring about the recorded waitee identity).
+popfirst!(q::WaitQueue) = popfirst!(WaitQueueRef(q, q))
+
+# this function assumes `val` is found in `q`
+function _list_deletefirst!(q::WaitQueue, val::Task)
+    head = q.head::Task
+    if head === val
+        if q.tail::Task === val
+            q.head = q.tail = nothing
+        else
+            q.head = val.wait_next::Task
+        end
+    else
+        head_next = head.wait_next::Task
+        while head_next !== val
+            head = head_next
+            head_next = head.wait_next::Task
+        end
+        if q.tail::Task === val
+            head.wait_next = nothing
+            q.tail = head
+        else
+            head.wait_next = val.wait_next::Task
+        end
+    end
+    val.wait_next = nothing
+    val.wait_queue = nothing
+    return q
+end
 
 #function list_deletefirst!(q::Array{T}, val::T) where T
 #    i = findfirst(isequal(val), q)

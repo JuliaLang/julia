@@ -1124,7 +1124,14 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t *start, jl_value_t *completion_fu
     jl_atomic_store_relaxed(&t->bound_cancel_token, jl_nothing);
     jl_atomic_store_relaxed(&t->cancellation_hook, jl_nothing);
     jl_atomic_store_relaxed(&t->preempt_request, 0);
-    t->waitnode = jl_nothing;
+    t->wait_queue = jl_nothing;
+    t->wait_next = jl_nothing;
+    t->wait_token = jl_nothing;
+    t->wait_tnext = jl_nothing;
+    t->wait_tprev = jl_nothing;
+    t->wait_uvreq = NULL;
+    t->wait_min_severity = 0;
+    jl_atomic_store_relaxed(&t->wait_state, 0);
     t->reset_ctx = NULL;
 
     if (t->ctx.copy_stack)
@@ -1598,7 +1605,14 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     jl_atomic_store_relaxed(&ct->bound_cancel_token, jl_nothing);
     jl_atomic_store_relaxed(&ct->cancellation_hook, jl_nothing);
     jl_atomic_store_relaxed(&ct->preempt_request, 0);
-    ct->waitnode = jl_nothing;
+    ct->wait_queue = jl_nothing;
+    ct->wait_next = jl_nothing;
+    ct->wait_token = jl_nothing;
+    ct->wait_tnext = jl_nothing;
+    ct->wait_tprev = jl_nothing;
+    ct->wait_uvreq = NULL;
+    ct->wait_min_severity = 0;
+    jl_atomic_store_relaxed(&ct->wait_state, 0);
     ct->reset_ctx = NULL;
     ptls->abandon_to = NULL;
     ptls->root_task = ct;

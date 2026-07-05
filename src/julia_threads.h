@@ -246,7 +246,8 @@ typedef struct _jl_cancel_source_t {
     jl_value_t *nextsib;     // sibling links, guarded by the parent's `_lock`
     jl_value_t *prevsib;
     jl_value_t *children;    // first child, guarded by this node's `_lock`
-    // Parked waiters (an intrusive `Base.WaitNode` list), guarded by `_lock`.
+    // Parked waiter tasks (an intrusive list through their `wait_tnext`/
+    // `wait_tprev` fields), guarded by `_lock`.
     jl_value_t *waiters_head;
     jl_value_t *waiters_tail;
     // 0x00 = live; (0x80 | sev) = cancelled at severity sev (0x0 SAFE,
@@ -308,9 +309,31 @@ typedef struct _jl_task_t {
     // *cancelling* thread, so that external libraries the task may be blocked
     // in can be interrupted.
     _Atomic(jl_value_t *) cancellation_hook;
-    // Cached per-task wait node (`Base.WaitNode` or `nothing`); only the task
-    // itself touches this.
-    jl_value_t *waitnode;
+    // The parked-wait state (a "wait node" folded into the task). Note that
+    // this is a *second* link set, disjoint from the scheduler's
+    // `next`/`queue` above: a canceller claims a parked waiter and schedules
+    // it without holding the waitee's lock, so the task is enqueued in a
+    // workqueue while its wait-queue entry is still linked (stale entries
+    // are unlinked lazily, by the waiter or by a later notify).
+    // Edge half: the waitee's wait queue (protected by the waitee's lock).
+    // `wait_queue` holds the waitee's identity while enqueued (the
+    // "am I parked" witness), `nothing` otherwise.
+    jl_value_t *wait_queue;
+    jl_value_t *wait_next;
+    // Level half: the cancellation token source's waiter list (protected by
+    // the source's `_lock`).
+    jl_value_t *wait_token;
+    jl_value_t *wait_tnext;
+    jl_value_t *wait_tprev;
+    // For waits on raw libuv requests: the uv request pointer (low bit tags
+    // a shutdown request).
+    void *wait_uvreq;
+    // Minimum severity that may interrupt this wait (used by cancellation
+    // *teardown* waits, which may only be woken by an escalation).
+    uint8_t wait_min_severity;
+    // WAITNODE_IDLE/WAITING/NOTIFIED/CANCELLED; whoever CASes WAITING ->
+    // (NOTIFIED | CANCELLED) owns waking the task.
+    _Atomic(uint8_t) wait_state;
 // hidden state:
 
     // id of owning thread - does not need to be defined until the task runs
