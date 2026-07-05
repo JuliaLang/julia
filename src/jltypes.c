@@ -2870,6 +2870,59 @@ static jl_value_t *jl_tupletype_fill(size_t n, jl_value_t *t, int check, int not
 
 static jl_value_t *_jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_t *env, jl_value_t **vals, jl_typeenv_t *prev, jl_typestack_t *stack) JL_CANSAFEPOINT;
 
+static int typename_on_stack(jl_typestack_t *stack, jl_typename_t *tn) JL_NOTSAFEPOINT
+{
+    while (stack != NULL) {
+        if (stack->tt && stack->tt->name == tn)
+            return 1;
+        stack = stack->prev;
+    }
+    return 0;
+}
+
+// does `t` (a type or parameter value) mention an application of `tn`? Used to
+// recognize self-referential definitions, whose supertype/field-type graph has
+// no finite materialization in positional-reference form (each level re-frames
+// the dangling references one binder deeper) and must be completed lazily.
+static int typename_occurs_in(jl_value_t *t, jl_typename_t *tn) JL_NOTSAFEPOINT
+{
+    if (t == NULL)
+        return 0;
+    if (jl_is_svec(t)) {
+        size_t i, l = jl_svec_len(t);
+        for (i = 0; i < l; i++) {
+            if (typename_occurs_in(jl_svecref(t, i), tn))
+                return 1;
+        }
+        return 0;
+    }
+    if (jl_is_datatype(t)) {
+        if (((jl_datatype_t*)t)->name == tn)
+            return 1;
+        return typename_occurs_in((jl_value_t*)((jl_datatype_t*)t)->parameters, tn);
+    }
+    if (jl_is_unionall(t)) {
+        jl_unionall_t *u = (jl_unionall_t*)t;
+        return typename_occurs_in(u->lb, tn) || typename_occurs_in(u->ub, tn) ||
+               typename_occurs_in(u->body, tn);
+    }
+    if (jl_is_uniontype(t)) {
+        return typename_occurs_in(((jl_uniontype_t*)t)->a, tn) ||
+               typename_occurs_in(((jl_uniontype_t*)t)->b, tn);
+    }
+    if (jl_is_vararg(t)) {
+        jl_vararg_t *vm = (jl_vararg_t*)t;
+        return typename_occurs_in(vm->T, tn) || typename_occurs_in(vm->N, tn);
+    }
+    if (jl_is_typeeq(t))
+        return typename_occurs_in(jl_typeeq_T(t), tn);
+    if (jl_is_typeegal(t))
+        return typename_occurs_in(jl_typeegal_T(t), tn);
+    // n.b. TypeVar bounds are not walked: templates are in reference form, and
+    // materialized typevar bound graphs may be cyclic
+    return 0;
+}
+
 static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **iparams, size_t ntp,
                                        jl_typestack_t *stack, jl_typeenv_t *env, int check, int nothrow)
 {
@@ -3183,11 +3236,63 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     if (primarydt->layout)
         jl_compute_field_offsets(ndt);
 
+    // A fragment carrying dangling bound-variable references (which, unlike
+    // free typevars, do not disqualify caching) cannot eagerly instantiate its
+    // supertype or field types while an instantiation of the same typename is
+    // already in flight above us: a self-referential definition (issue #54757,
+    // or `struct C{T,N}; v::C{T,M} where M; end`) re-frames the dangling
+    // references one binder deeper at every level, so its reference-form
+    // supertype/field-type graph has no finite materialization. Such fragments
+    // defer (leaving the fields unset) and are completed from the primary
+    // template when instantiated at the next application (below).
+    // n.b. the check=0 walks (the wrapper rebuild in `jl_setup_type_wrapper`
+    // and renaming) construct the canonical template itself and must stay
+    // eager; their definition-time self-references terminate through the
+    // `partial` machinery instead.
+    // n.b. `stack` already has `ndt` itself on top (pushed above for field
+    // self-references); "in flight above us" means the frames before it. A
+    // self-referential definition (its own typename occurring in its
+    // supertype/field-type graph) always defers: instantiation contexts that
+    // lose the stack (e.g. `jl_unionall_open` under subtype normalization)
+    // would otherwise rebuild eagerly and recurse without bound.
+    int defer_selfref = check && ndt->hasescapingrefs &&
+        (typename_on_stack(top.prev, tn) ||
+         typename_occurs_in((jl_value_t*)primarydt->super, tn) ||
+         typename_occurs_in((jl_value_t*)primarydt->types, tn));
+    jl_typestack_t stop = { ndt, stack };
     if (istuple || isnamedtuple) {
         ndt->super = jl_any_type;
     }
+    else if (defer_selfref) {
+        // deferred (see above)
+    }
     else if (dt->super) {
-        jl_value_t *super = inst_type_w_((jl_value_t*)dt->super, env, stack, check, nothrow);
+        jl_value_t *super = inst_type_w_((jl_value_t*)dt->super, env, &stop, check, nothrow);
+        if (nothrow && super == NULL) {
+            if (cacheable)
+                JL_UNLOCK(&typecache_lock);
+            JL_GC_POP();
+            return NULL;
+        }
+        jl_gc_write(ndt, ndt->super, jl_datatype_t, (jl_datatype_t *)super);
+    }
+    else if (primarydt->super && primarydt != ndt && !typename_on_stack(top.prev, tn) &&
+             !typename_occurs_in((jl_value_t*)primarydt->super, tn)) {
+        // `dt` was a fragment whose supertype was deferred; rebuild it from
+        // the primary template under this instantiation's parameters. If an
+        // instantiation of this typename is already in flight above us, defer
+        // once more: a self-referential supertype graph has no finite
+        // materialization in positional-reference form.
+        size_t nparams = jl_svec_len(ndt->parameters), pi;
+        jl_typeenv_t *penv = (jl_typeenv_t*)alloca(nparams * sizeof(jl_typeenv_t));
+        for (pi = 0; pi < nparams; pi++) {
+            penv[pi].var = NULL;
+            penv[pi].val = jl_svecref(ndt->parameters, pi);
+            penv[pi].prev = pi == 0 ? NULL : &penv[pi - 1];
+        }
+        jl_value_t *super = inst_type_w_((jl_value_t*)primarydt->super,
+                                         nparams == 0 ? NULL : &penv[nparams - 1],
+                                         &stop, check, nothrow);
         if (nothrow && super == NULL) {
             if (cacheable)
                 JL_UNLOCK(&typecache_lock);
@@ -3199,7 +3304,10 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     jl_svec_t *ftypes = dt->types;
     if (ftypes == NULL)
         ftypes = primarydt->types;
-    if (ftypes == NULL || dt->super == NULL) {
+    if (defer_selfref) {
+        // deferred (see above)
+    }
+    else if (ftypes == NULL || ndt->super == NULL) {
         // in the process of creating this type definition:
         // need to instantiate the super and types fields later
         if (tn->partial == NULL) {
@@ -3213,18 +3321,12 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
         if (ftypes == jl_emptysvec) {
             ndt->types = ftypes;
         }
-        else if (cacheable && !jl_has_dangling_tvarrefs((jl_value_t*)ndt)) {
-            // recursively instantiate the types of the fields.
-            // A fragment carrying dangling bound-variable references (which,
-            // unlike free typevars, do not disqualify caching) must defer this
-            // like a free-typevar instantiation would: re-instantiating its
-            // field types re-frames the dangling references one binder deeper
-            // at each level, so a self-referential field type (e.g.
-            // `struct C{T,N}; v::C{T,M} where M; end`) would recurse forever.
+        else if (cacheable) {
+            // recursively instantiate the types of the fields
             if (dt->types == NULL)
-                jl_gc_write(ndt, ndt->types, jl_svec_t, jl_compute_fieldtypes(ndt, stack, cacheable));
+                jl_gc_write(ndt, ndt->types, jl_svec_t, jl_compute_fieldtypes(ndt, &stop, cacheable));
             else
-                jl_gc_write(ndt, ndt->types, jl_svec_t, inst_ftypes(ftypes, env, stack, cacheable));
+                jl_gc_write(ndt, ndt->types, jl_svec_t, inst_ftypes(ftypes, env, &stop, cacheable));
         }
     }
 
@@ -3801,6 +3903,36 @@ jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n, int check, int nothrow
     }
     JL_GC_POP();
     return vm;
+}
+
+// Complete the deferred supertype of a fragment carrying dangling
+// bound-variable references (see inst_datatype_inner: eager instantiation of a
+// self-referential definition's supertype graph would not terminate, so it is
+// materialized lazily, one level per demand). Returns NULL if the type's
+// definition is still in progress.
+JL_DLLEXPORT jl_datatype_t *jl_datatype_compute_super(jl_datatype_t *ndt JL_PROPAGATES_ROOT)
+{
+    jl_datatype_t *super = ndt->super;
+    if (super != NULL)
+        return super;
+    if (ndt->name->wrapper == NULL)
+        return NULL; // too early in bootstrap
+    jl_datatype_t *primarydt = (jl_datatype_t*)jl_unwrap_unionall(ndt->name->wrapper);
+    if (primarydt == ndt || primarydt->super == NULL)
+        return NULL; // definition in progress
+    size_t nparams = jl_svec_len(ndt->parameters), pi;
+    jl_typeenv_t *penv = (jl_typeenv_t*)alloca(nparams * sizeof(jl_typeenv_t));
+    for (pi = 0; pi < nparams; pi++) {
+        penv[pi].var = NULL;
+        penv[pi].val = jl_svecref(ndt->parameters, pi);
+        penv[pi].prev = pi == 0 ? NULL : &penv[pi - 1];
+    }
+    jl_typestack_t stop = { ndt, NULL };
+    jl_value_t *s = inst_type_w_((jl_value_t*)primarydt->super,
+                                 nparams == 0 ? NULL : &penv[nparams - 1],
+                                 &stop, 1, 0);
+    jl_gc_write(ndt, ndt->super, jl_datatype_t, (jl_datatype_t*)s);
+    return ndt->super;
 }
 
 JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st JL_PROPAGATES_ROOT, void *stack, int cacheable)

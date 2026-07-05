@@ -1399,7 +1399,10 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
                       jl_symbol_name(file),
                       line);
     }
-    ft = jl_rewrap_unionall(ft, argtype);
+    // n.b. take the first-argument type from the translated `argtype` (the
+    // original `ft` still spells the binders as free TypeVars, which the
+    // rewrap below would treat as non-occurring and drop)
+    ft = jl_rewrap_unionall(jl_tparam0(jl_unwrap_unionall(argtype)), argtype);
     if (!external_mt && !jl_has_empty_intersection(ft, (jl_value_t*)jl_builtin_type)) // disallow adding methods to Any, Function, Builtin, and subtypes, or Unions of those
         jl_errorf("cannot add methods to builtin function `%s`", jl_symbol_name(name));
 

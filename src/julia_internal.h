@@ -990,6 +990,7 @@ jl_value_t *jl_substitute_tvarref(jl_value_t *t, size_t idx, jl_value_t *val) JL
 // translate free occurrences of vars[j] (outermost binder first) into de Bruijn
 // references with root index (nvars - j)
 jl_value_t *jl_translate_vars_to_refs(jl_value_t *t, jl_svec_t *vars, size_t nvars) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_datatype_t *jl_datatype_compute_super(jl_datatype_t *ndt JL_PROPAGATES_ROOT) JL_CANSAFEPOINT;
 // translate free occurrences of `var` into de Bruijn references with root index `baseidx`
 jl_value_t *jl_translate_var_to_ref(jl_value_t *t, jl_tvar_t *var, size_t baseidx) JL_CANSAFEPOINT;
 jl_value_t *jl_instantiate_unionall_nothrow(jl_unionall_t *u, jl_value_t *p, int nothrow) JL_CANSAFEPOINT;

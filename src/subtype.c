@@ -824,12 +824,16 @@ int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity) JL_NOTSAFE
         jl_datatype_t *ad = (jl_datatype_t*)a, *bd = (jl_datatype_t*)b;
         if (ad->name != bd->name) {
             jl_datatype_t *temp = ad;
-            while (temp != jl_any_type && temp->name != bd->name)
+            while (temp != NULL && temp != jl_any_type && temp->name != bd->name)
                 temp = temp->super;
+            if (temp == NULL) // deferred supertype: not obviously disjoint
+                return 0;
             if (temp == jl_any_type) {
                 temp = bd;
-                while (temp != jl_any_type && temp->name != ad->name)
+                while (temp != NULL && temp != jl_any_type && temp->name != ad->name)
                     temp = temp->super;
+                if (temp == NULL)
+                    return 0;
                 if (temp == jl_any_type)
                     return 1;
                 bd = temp;
@@ -3183,6 +3187,14 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
         while (xd != jl_any_type && xd->name != yd->name) {
             if (xd->super == NULL) {
                 assert(xd->parameters && jl_is_typename(xd->name));
+                // an instantiation whose supertype was deferred (a fragment of
+                // a self-referential definition, or one created while its
+                // definition was still in progress) is completed on demand;
+                // only a still-incomplete definition remains an error
+                if (jl_datatype_compute_super(xd) != NULL) {
+                    xd = xd->super;
+                    continue;
+                }
                 jl_errorf("circular type parameter constraint in definition of %s", jl_symbol_name(xd->name->name));
             }
             xd = xd->super;
@@ -5613,6 +5625,8 @@ static jl_value_t *intersect_sub_datatype(jl_datatype_t *xd, jl_datatype_t *yd, 
     // if that attempt fails, then return bottom
     // otherwise return xd (finish_unionall will later handle propagating those constraints)
     assert(e->Loffset == 0);
+    if (xd->super == NULL && jl_datatype_compute_super(xd) == NULL)
+        return jl_bottom_type; // deferred supertype; definition still in progress
     jl_value_t *isuper = R ? intersect((jl_value_t*)yd, (jl_value_t*)xd->super, e, param) :
                              intersect((jl_value_t*)xd->super, (jl_value_t*)yd, e, param);
     if (isuper == jl_bottom_type)
@@ -6140,12 +6154,17 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_par
             return res;
         }
         if (param == PARAM_INVARIANT) return jl_bottom_type;
-        while (xd != jl_any_type && xd->name != yd->name)
-            xd = xd->super;
+        // deferred supertypes (self-referential definitions) materialize on demand
+        while (xd != NULL && xd != jl_any_type && xd->name != yd->name)
+            xd = xd->super != NULL ? xd->super : jl_datatype_compute_super(xd);
+        if (xd == NULL)
+            return jl_bottom_type; // definition still in progress
         if (xd == jl_any_type) {
             xd = (jl_datatype_t*)x;
-            while (yd != jl_any_type && yd->name != xd->name)
-                yd = yd->super;
+            while (yd != NULL && yd != jl_any_type && yd->name != xd->name)
+                yd = yd->super != NULL ? yd->super : jl_datatype_compute_super(yd);
+            if (yd == NULL)
+                return jl_bottom_type;
             if (yd == jl_any_type)
                 return jl_bottom_type;
             return intersect_sub_datatype((jl_datatype_t*)y, xd, e, 1, param);
@@ -7446,7 +7465,11 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_v
                     return 0;
                 return ascore > bscore || adiag > bdiag;
             }
-            tta = tta->super; super = 1;
+            // deferred supertypes (self-referential definitions) materialize on demand
+            tta = tta->super != NULL ? tta->super : jl_datatype_compute_super(tta);
+            if (tta == NULL)
+                return 0; // definition still in progress
+            super = 1;
         }
         return 0;
     }

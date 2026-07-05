@@ -503,10 +503,13 @@ exit:
     }
 }
 
+// returns 0 if the chain reaches a deferred (unset) supertype
 static unsigned jl_supertype_height(jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
     unsigned height = 1;
     while (dt != jl_any_type) {
+        if (dt == NULL)
+            return 0; // deferred supertype of a self-referential fragment
         height++;
         dt = dt->super;
     }
@@ -518,6 +521,8 @@ static int tname_intersection_dt(jl_datatype_t *a, jl_typename_t *bname, unsigne
 {
     if (a == jl_any_type)
         return 1;
+    if (ha == 0)
+        return 1; // deferred supertype somewhere in the chain: conservatively visit
     jl_datatype_t *b = (jl_datatype_t*)jl_unwrap_unionall(bname->wrapper);
     unsigned hb = 1;
     while (b != jl_any_type) {
@@ -1354,6 +1359,8 @@ jl_typemap_entry_t *jl_typemap_level_assoc_exact(jl_typemap_level_t *cache, jl_v
                     if (a1 == (jl_value_t*)jl_any_type)
                         break;
                     a1 = (jl_value_t*)((jl_datatype_t*)a1)->super;
+                    if (a1 == NULL) // deferred supertype of a self-referential fragment
+                        break;
                 }
             }
             else {

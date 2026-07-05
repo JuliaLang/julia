@@ -698,12 +698,15 @@ struct D21923{T,N}; v::D21923{T}; end
 # issue #22624, more circular definitions
 struct T22624{A,B,C}; v::Vector{T22624{Int64,A}}; end
 let ft = Base.datatype_fieldtypes
-    elT = T22624.body.body.body.types[1].parameters[1]
-    @test elT == T22624{Int64, T22624.var, C} where C
-    elT2 = ft(elT.body)[1].parameters[1]
+    A22624, b1 = Base.unionall_open(T22624)
+    B22624, b2 = Base.unionall_open(b1)
+    C22624, tbody = Base.unionall_open(b2)
+    elT = ft(tbody)[1].parameters[1]
+    @test elT == T22624{Int64, A22624, C} where C
+    elT2 = ft(Base.unionall_open(elT)[2])[1].parameters[1]
     @test elT2 == T22624{Int64, Int64, C} where C
-    @test ft(elT2.body)[1].parameters[1] === elT2
-    @test Base.isconcretetype(ft(elT2.body)[1])
+    @test ft(Base.unionall_open(elT2)[2])[1].parameters[1] === elT2
+    @test Base.isconcretetype(ft(Base.unionall_open(elT2)[2])[1])
 end
 struct S22624{A,B,C} <: Ref{S22624{Int,A}}; end
 @test sizeof(S22624) == sizeof(S22624{Int,Int,Int}) == 0
@@ -1225,11 +1228,14 @@ function count11167()
         return count(!isnothing, cache)
     end
 end
-@test count11167() == 0
-Type11167{Int,2}
-@test count11167() == 1
-Type11167{Float32,5}
-@test count11167() == 2
+# under the de Bruijn representation the typename cache may already hold
+# reference-bearing fragments from the definition itself; count relative
+let base11167 = count11167()
+    Type11167{Int,2}
+    @test count11167() == base11167 + 1
+    Type11167{Float32,5}
+    @test count11167() == base11167 + 2
+end
 
 # dispatch
 let
