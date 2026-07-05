@@ -3361,3 +3361,82 @@ _typeegal_id(::Type{T}) where {T} = T
         end
     end
 end
+
+# Exhaustiveness certificate: a `∀` variable whose upper bound is a union of
+# atoms (types with no proper nonempty subtypes) ranges over exactly the
+# sub-unions of the arms (including Union{}), so the check can enumerate all
+# of them even for invariant occurrences of the variable.
+let LHS = Tuple{T,Ref{T}} where T<:Union{Float64,Int64},
+    RHS = Union{Tuple{Int64,Ref{Int64}}, Tuple{Float64,Ref{Float64}},
+                Tuple{Union{Int64,Float64},Ref{Union{Int64,Float64}}}}
+    @test LHS <: RHS
+    @test LHS == RHS
+    # a missing mixed-union arm must still fail
+    @test !(LHS <: Union{Tuple{Int64,Ref{Int64}}, Tuple{Float64,Ref{Float64}}})
+end
+# Union{} is an admissible instantiation: with the variable only under an
+# invariant constructor the body stays inhabited, so Ref{Union{}} is required
+@test !((Ref{T} where T<:Union{Float64,Int64}) <:
+        Union{Ref{Float64},Ref{Int64},Ref{Union{Float64,Int64}}})
+@test (Ref{T} where T<:Union{Float64,Int64}) <:
+        Union{Ref{Union{}},Ref{Float64},Ref{Int64},Ref{Union{Float64,Int64}}}
+# ... but a fixed covariant slot makes the Union{} instantiation uninhabited
+@test (Tuple{T,Ref{T}} where T<:Int64) <: Tuple{Int64,Ref{Int64}}
+@test (Tuple{T,Ref{T}} where T<:Int64) == Tuple{Int64,Ref{Int64}}
+# reflexivity survives the enumeration
+@test (Ref{T} where T<:Union{Float64,Int64}) == (Ref{S} where S<:Union{Float64,Int64})
+@test (Tuple{T,Ref{T}} where T<:Union{Float64,Int64}) ==
+      (Tuple{S,Ref{S}} where S<:Union{Float64,Int64})
+# three atoms: all 2^3 subsets are enumerated
+@test (Tuple{T,Ref{T}} where T<:Union{Int8,Int16,Int32}) <:
+    Union{Tuple{Int8,Ref{Int8}}, Tuple{Int16,Ref{Int16}}, Tuple{Int32,Ref{Int32}},
+          Tuple{Union{Int8,Int16},Ref{Union{Int8,Int16}}},
+          Tuple{Union{Int8,Int32},Ref{Union{Int8,Int32}}},
+          Tuple{Union{Int16,Int32},Ref{Union{Int16,Int32}}},
+          Tuple{Union{Int8,Int16,Int32},Ref{Union{Int8,Int16,Int32}}}}
+@test !((Tuple{T,Ref{T}} where T<:Union{Int8,Int16,Int32}) <:
+    Union{Tuple{Int8,Ref{Int8}}, Tuple{Int16,Ref{Int16}}, Tuple{Int32,Ref{Int32}},
+          Tuple{Union{Int8,Int32},Ref{Union{Int8,Int32}}},
+          Tuple{Union{Int16,Int32},Ref{Union{Int16,Int32}}},
+          Tuple{Union{Int8,Int16,Int32},Ref{Union{Int8,Int16,Int32}}}})
+# abstract arms are not atoms: mixed instantiations are not enumerable
+@test !((Tuple{T,Ref{T}} where T<:Union{Integer,AbstractString}) <:
+        Union{Tuple{Integer,Ref{Integer}}, Tuple{AbstractString,Ref{AbstractString}},
+              Tuple{Union{Integer,AbstractString},Ref{Union{Integer,AbstractString}}}})
+# kinds are not atoms (Type{Int} <: DataType is a proper nonempty subtype)
+@test !((Tuple{T,Ref{T}} where T<:Union{DataType,String}) <:
+        Union{Tuple{DataType,Ref{DataType}}, Tuple{String,Ref{String}},
+              Tuple{Union{DataType,String},Ref{Union{DataType,String}}}})
+
+# Hybrid enumeration: atom arms plus a universal residual variable standing
+# for the abstract arms, covering the common Union{Nothing,<:Abstract} bound.
+let LHS = Tuple{T,Ref{T}} where T<:Union{Nothing,Integer},
+    RHS = Union{Tuple{Nothing,Ref{Nothing}},
+                Tuple{S,Ref{S}} where S<:Integer,
+                Tuple{Union{Nothing,S},Ref{Union{Nothing,S}}} where S<:Integer}
+    @test LHS <: RHS
+    @test LHS == RHS
+    # a missing residual-only arm must fail
+    @test !(LHS <: Union{Tuple{Nothing,Ref{Nothing}},
+                         Tuple{Union{Nothing,S},Ref{Union{Nothing,S}}} where S<:Integer})
+end
+@test (Ref{T} where T<:Union{Nothing,Integer}) <:
+    Union{Ref{Nothing}, Ref{S} where S<:Integer, Ref{Union{Nothing,S}} where S<:Integer}
+# ... but the mixed atom+residual instantiations must be covered
+@test !((Ref{T} where T<:Union{Nothing,Integer}) <:
+    Union{Ref{Nothing}, Ref{S} where S<:Integer})
+# two atoms and an abstract arm: all four atom subsets, each with and without
+# the residual
+@test (Ref{T} where T<:Union{Nothing,Missing,Integer}) <:
+    Union{Ref{Nothing}, Ref{Missing}, Ref{Union{Nothing,Missing}},
+          Ref{S} where S<:Integer, Ref{Union{Nothing,S}} where S<:Integer,
+          Ref{Union{Missing,S}} where S<:Integer,
+          Ref{Union{Nothing,Missing,S}} where S<:Integer}
+# reflexivity survives the residual enumeration
+@test (Ref{T} where T<:Union{Nothing,Integer}) == (Ref{S} where S<:Union{Nothing,Integer})
+@test (Vector{Ref{T}} where T<:Union{Nothing,Integer}) ==
+      (Vector{Ref{S}} where S<:Union{Nothing,Integer})
+# a bound with no atom arms is not enumerated: mixed abstract instantiations
+# (e.g. Union{Int64,String}) are not expressible as a finite case split
+@test !((Tuple{T,Ref{T}} where T<:Union{Integer,AbstractString}) <:
+    Union{Tuple{S,Ref{S}} where S<:Integer, Tuple{S,Ref{S}} where S<:AbstractString})

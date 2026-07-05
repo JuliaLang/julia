@@ -1260,7 +1260,8 @@ static void jl_compilation_sig(
             // and the result of matching the type signature
             // needs to be restricted to the concrete type 'kind'
             jl_value_t *kind = jl_typeof(jl_some_Type_T(elt));
-            if (!jl_has_free_typevars(decl_i) &&
+            if (!(jl_is_typeeq(elt) && jl_is_bottom_singleton_class(jl_typeeq_T(elt))) &&
+                    !jl_has_free_typevars(decl_i) &&
                     jl_subtype(kind, type_i) && !jl_subtype((jl_value_t*)jl_type_type, type_i)) {
                 // if we can prove the match was against the kind (not a Type)
                 // it's simpler (and thus better) to put that cache instead
@@ -1581,9 +1582,10 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
             // and the result of matching the type signature
             // needs to be corrected to the concrete type 'kind' (and not to Type)
             jl_value_t *kind = jl_typeof(jl_some_Type_T(elt));
-            if (kind == jl_bottom_type) {
+            if (kind == jl_bottom_type ||
+                (jl_is_typeeq(elt) && jl_is_bottom_singleton_class(jl_typeeq_T(elt)))) {
                 JL_GC_POP();
-                return 0; // Type{Union{}} gets normalized to typeof(Union{})
+                return 0; // the bottom singleton class is under no single kind
             }
             if (!jl_has_free_typevars(decl_i) &&
                     jl_subtype(kind, type_i) && !jl_subtype((jl_value_t*)jl_type_type, type_i)) {

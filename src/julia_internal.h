@@ -1345,6 +1345,18 @@ STATIC_INLINE jl_value_t *normalize_typeofbottom_layout_alias(jl_value_t *ty JL_
     return ty;
 }
 
+// `Type{Union{}}` and `typeof(Union{})` denote the same singleton set
+// {Union{}} but with different kinds (a `TypeEq` node vs the `TypeofBottom`
+// `DataType`), so the type-equality class of the bottom singleton type spans
+// more than one kind: `Type{typeof(Union{})}` contains both a `DataType`
+// instance and `TypeEq` instances, and `TypeEq(T) <: kind(typeof(T))`
+// reasoning (subtyping, method matching, cache guards) does not apply to it.
+STATIC_INLINE int jl_is_bottom_singleton_class(jl_value_t *t) JL_NOTSAFEPOINT
+{
+    return t == (jl_value_t*)jl_typeofbottom_type ||
+           (jl_is_typeeq(t) && jl_typeeq_T(t) == jl_bottom_type);
+}
+
 STATIC_INLINE size_t jl_vararg_length(jl_value_t *v) JL_NOTSAFEPOINT
 {
     assert(jl_is_vararg(v));
