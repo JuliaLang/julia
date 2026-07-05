@@ -374,9 +374,31 @@ Base.isequal(x::CompoundPeriod, y::Period) = isequal(x, CompoundPeriod(y))
 Base.isequal(x::Period, y::CompoundPeriod) = isequal(y, x)
 Base.isequal(x::CompoundPeriod, y::CompoundPeriod) = isequal(x.periods, y.periods)
 
-# Capture TimeType+-Period methods
-(+)(a::TimeType, b::Period, c::Period) = (+)(a, b + c)
-(+)(a::TimeType, b::Period, c::Period, d::Period...) = (+)((+)(a, b + c), d...)
+# Capture chained additions such as `dt + Day(1) + Month(1)`, which Julia parses as a
+# single n-ary call `+(dt, Day(1), Month(1))`. The periods are grouped by type and
+# applied from the coarsest type to the finest, independent of the order in which they
+# are given, so that the result is order-independent and matches `dt + CompoundPeriod(...)`
+# without ever constructing a `CompoundPeriod`.
+
+# Total value of the periods in `ps` whose type is exactly `P`.
+@inline _sumperiods(::Type{P}, ::Tuple{}) where {P<:Period} = 0
+@inline _sumperiods(::Type{P}, ps::Tuple) where {P<:Period} =
+    (first(ps) isa P ? value(first(ps)) : 0) + _sumperiods(P, Base.tail(ps))
+
+@inline _addperiods(x::TimeType, ::Tuple{}, ::Tuple) = x
+@inline function _addperiods(x::TimeType, types::Tuple, ps::Tuple)
+    P = first(types)
+    s = _sumperiods(P, ps)
+    # Types with a zero total are skipped, so absent types produce no code and a zero
+    # total never forces an invalid addition (e.g. a `Year` onto a `Time`).
+    x = iszero(s) ? x : x + P(s)
+    return _addperiods(x, Base.tail(types), ps)
+end
+
+# `PERIOD_TYPES` is a compile-time constant, so its element types stay known to the
+# compiler and `_addperiods` unrolls and constant-folds.
+(+)(x::TimeType, p1::Period, p2::Period, ps::Period...) =
+    _addperiods(x, PERIOD_TYPES, (p1, p2, ps...))
 
 function (+)(x::TimeType, y::CompoundPeriod)
     for p in y.periods

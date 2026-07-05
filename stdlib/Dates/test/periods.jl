@@ -220,6 +220,27 @@ end
     @test Dates.Date(2014, 1, 29) + Dates.Month(1) + Dates.Day(1) + Dates.Month(1) + Dates.Day(1) ==
         Dates.Date(2014, 1, 29) + Dates.Day(1) + Dates.Month(1) + Dates.Month(1) + Dates.Day(1)
     @test Dates.Date(2014, 1, 29) + Dates.Month(1) + Dates.Day(1) == Dates.Date(2014, 1, 29) + Dates.Day(1) + Dates.Month(1)
+    # Periods are applied by type from coarsest to finest, independent of their order,
+    # so both orderings apply the Month before the Day.
+    @test Dates.Date(2014, 1, 29) + Dates.Day(1) + Dates.Month(1) == Dates.Date(2014, 3, 1)
+    @test Dates.Date(2014, 1, 29) + Dates.Month(1) + Dates.Day(1) == Dates.Date(2014, 3, 1)
+    # Equal types are merged before being applied: Day(1) + Day(1) becomes Day(2), applied
+    # after the Month.
+    @test Dates.Date(2014, 1, 29) + Dates.Day(1) + Dates.Day(1) + Dates.Month(1) == Dates.Date(2014, 3, 2)
+    # Merging equal types matters across leap years: Year(1) + Year(3) becomes Year(4),
+    # landing on the leap day, unlike applying Year(1) and Year(3) separately.
+    @test Dates.Date(2020, 2, 29) + Dates.Year(1) + Dates.Year(3) == Dates.Date(2024, 2, 29)
+end
+@testset "PERIOD_TYPES ordering invariant" begin
+    # `+(::TimeType, ::Period...)` applies periods in `PERIOD_TYPES` order, which must stay
+    # coarsest-to-finest, matching the order `CompoundPeriod` sorts by (descending
+    # `tons ∘ oneunit`). Otherwise the two addition paths would disagree.
+    types = collect(Dates.PERIOD_TYPES)
+    @test types == sort(types; by = T -> Dates.tons(oneunit(T)), rev = true)
+    # `PERIOD_TYPES` is the concatenation of the two conversion groups' types.
+    @test Dates.PERIOD_TYPES == (Dates.OTHER_PERIOD_TYPES..., Dates.FIXED_PERIOD_TYPES...)
+    @test Dates.OTHER_PERIOD_TYPES == map(first, Dates.OTHER_PERIOD_CONVERSIONS)
+    @test Dates.FIXED_PERIOD_TYPES == map(first, Dates.FIXED_PERIOD_CONVERSIONS)
 end
 @testset "traits" begin
     @test Dates._units(Dates.Year(0)) == " years"
