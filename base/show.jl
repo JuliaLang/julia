@@ -742,18 +742,36 @@ function show_can_elide(p::TypeVar, wheres::Vector, elide::Int, env::SimpleVecto
     return true
 end
 
-function show_typeparams(io::IO, env::SimpleVector, orig::SimpleVector, wheres::Vector)
+function show_typeparams(io::IO, env::SimpleVector, wrapper::Type, wheres::Vector)
     n = length(env)
+    # instantiate each binder's bounds with the actual leading parameters (by
+    # progressive partial application of the wrapper), so that a parameter that
+    # merely restates its binder can be compared structurally and elided
+    origb = Vector{Any}(undef, n)
+    let w = wrapper
+        for i = 1:n
+            if w isa UnionAll
+                origb[i] = (w.lb, w.ub)
+                w = try
+                    w{env[i]}
+                catch
+                    nothing
+                end
+            else
+                origb[i] = nothing
+            end
+        end
+    end
     elide = length(wheres)
     function egal_var(p::TypeVar, @nospecialize o)
-        return o isa TypeVar &&
-            ccall(:jl_types_struct_equiv, Cint, (Any, Any), p.ub, o.ub) != 0 &&
-            ccall(:jl_types_struct_equiv, Cint, (Any, Any), p.lb, o.lb) != 0
+        o isa Tuple{Any,Any} || return false
+        return ccall(:jl_types_struct_equiv, Cint, (Any, Any), p.ub, o[2]) != 0 &&
+            ccall(:jl_types_struct_equiv, Cint, (Any, Any), p.lb, o[1]) != 0
     end
     for i = n:-1:1
         p = env[i]
         if p isa TypeVar
-            if i == n && egal_var(p, orig[i]) && show_can_elide(p, wheres, elide, env, i)
+            if i == n && egal_var(p, origb[i]) && show_can_elide(p, wheres, elide, env, i)
                 n -= 1
                 elide -= 1
             elseif p.lb === Union{} && isgensym(p.name) && show_can_elide(p, wheres, elide, env, i)
@@ -810,14 +828,37 @@ function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector, whe
     for p in wheres
         io = IOContext(io, :unionall_env => p)
     end
-    orig = getfield(name.mod, name.name)
-    vars = TypeVar[]
-    while orig isa UnionAll
-        v, orig = unionall_open(orig)
-        push!(vars, v)
-    end
-    show_typeparams(io, env, Core.svec(vars...), wheres)
+    show_typeparams(io, env, getfield(name.mod, name.name), wheres)
     nothing
+end
+
+# structural bound equality modulo a pairing of free TypeVars (`amap` maps
+# variables that may appear on the `a` side to their counterparts on the `b`
+# side); used to recognize alpha-copies of binders in `make_wheres`
+function _alpha_eq_bound(@nospecialize(a), @nospecialize(b), amap::IdDict{TypeVar,TypeVar})
+    a === b && return true
+    if a isa TypeVar
+        return get(amap, a, a) === b
+    end
+    typeof(a) === typeof(b) || return a == b
+    if a isa DataType
+        b = b::DataType
+        a.name === b.name || return false
+        ap, bp = a.parameters, b.parameters
+        length(ap) === length(bp) || return false
+        for i in eachindex(ap)
+            _alpha_eq_bound(ap[i], bp[i], amap) || return false
+        end
+        return true
+    elseif a isa Union
+        b = b::Union
+        return _alpha_eq_bound(a.a, b.a, amap) && _alpha_eq_bound(a.b, b.b, amap)
+    elseif a isa UnionAll
+        b = b::UnionAll
+        return _alpha_eq_bound(a.lb, b.lb, amap) && _alpha_eq_bound(a.ub, b.ub, amap) &&
+               _alpha_eq_bound(a.body, b.body, amap)
+    end
+    return a == b
 end
 
 function make_wheres(io::IO, env::SimpleVector, @nospecialize(x::Type))
@@ -843,21 +884,36 @@ function make_wheres(io::IO, env::SimpleVector, @nospecialize(x::Type))
             push!(opened, v)
         end
     end
+    # match intersection-env entries against the binders opened above: an env
+    # entry that alpha-matches a binder (bounds compared modulo already-matched
+    # binder pairs, so dependent bounds line up) replaces it in the output.
+    # Iterate to a fixpoint since a match can enable further matches.
+    amap = IdDict{TypeVar,TypeVar}()
+    changed = true
+    while changed
+        changed = false
+        for i = length(env):-1:1
+            p = env[i]
+            if p isa TypeVar && !(p in seen)
+                k = findfirst(q -> q.name === p.name &&
+                                   _alpha_eq_bound(q.lb, p.lb, amap) &&
+                                   _alpha_eq_bound(q.ub, p.ub, amap), opened)
+                if k !== nothing
+                    ok = opened[k]
+                    wi = findfirst(q -> q === ok, wheres)::Int
+                    wheres[wi] = p
+                    deleteat!(opened, k)
+                    push!(seen, p)
+                    amap[ok] = p
+                    changed = true
+                end
+            end
+        end
+    end
     # record remaining things in env to print innermost
     for i = length(env):-1:1
         p = env[i]
         if p isa TypeVar && !(p in seen)
-            k = findfirst(q -> q.name === p.name && q.lb == p.lb && q.ub == p.ub, opened)
-            if k !== nothing
-                # alpha-copy of a binder recorded above: print the env's object
-                # (referenced by the body) in its place
-                ok = opened[k]
-                wi = findfirst(q -> q === ok, wheres)::Int
-                wheres[wi] = p
-                deleteat!(opened, k)
-                push!(seen, p)
-                continue
-            end
             push!(seen, p)
             pushfirst!(wheres, p)
         end
@@ -1327,7 +1383,7 @@ function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[])
     end
 
     show_type_name(io, x.name)
-    show_typeparams(io, parameters, (unwrap_unionall(x.name.wrapper)::DataType).parameters, wheres)
+    show_typeparams(io, parameters, x.name.wrapper, wheres)
 end
 
 function show_at_namedtuple(io::IO, syms::Tuple, types::DataType)

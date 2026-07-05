@@ -1856,6 +1856,21 @@ JL_CALLABLE(jl_f__expr)
     return (jl_value_t*)ex;
 }
 
+// TypeVar constructor without bound validation, for internal protocols that
+// carry raw de Bruijn bounds in the lb/ub slots (the method-definition tvars
+// materialized by `_defaultctors` in base/essentials.jl); such variables must
+// not escape into ordinary types
+JL_DLLEXPORT jl_tvar_t *jl_new_typevar_raw(jl_sym_t *name, jl_value_t *lb, jl_value_t *ub)
+{
+    jl_task_t *ct = jl_current_task;
+    jl_tvar_t *tv = (jl_tvar_t *)jl_gc_alloc(ct->ptls, sizeof(jl_tvar_t), jl_tvar_type);
+    jl_set_typetagof(tv, jl_tvar_tag, 0);
+    tv->name = name;
+    tv->lb = lb;
+    tv->ub = ub;
+    return tv;
+}
+
 // Typevar constructor for internal use
 JL_DLLEXPORT jl_tvar_t *jl_new_typevar(jl_sym_t *name, jl_value_t *lb, jl_value_t *ub)
 {

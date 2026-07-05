@@ -113,7 +113,10 @@ static int jl_type_extract_name_precise(jl_value_t *t1, int invariant)
 // resolve a parameter extracted from directly under `origsig`'s binder chain:
 // a bound-variable reference resolves (iteratively) to its binder's upper
 // bound, re-framed to the extraction depth
-static jl_value_t *resolve_param_ub(jl_value_t *ty, jl_value_t *origsig)
+// The result is always rooted through the arguments (or stronger): it is
+// either `ty` itself, a binder bound extracted from `origsig`, `jl_any_type`,
+// or a freshly-built bound interned as a permanent global root below.
+static jl_value_t *resolve_param_ub(jl_value_t *ty JL_PROPAGATES_ROOT, jl_value_t *origsig JL_PROPAGATES_ROOT)
 {
     if (!jl_is_tvarref(ty))
         return ty;

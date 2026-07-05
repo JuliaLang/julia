@@ -2417,7 +2417,7 @@ static inline jl_cgval_t mark_julia_const(jl_codectx_t &ctx, jl_value_t *jv) JL_
     jl_value_t *typ;
     if (jl_is_type(jv) && jv != jl_bottom_type) {
         // match `Compiler.widenconst`: a known type value has the egality kind
-        typ = jl_has_free_typevars(jv) ? (jl_value_t*)jl_wrap_Type(jv)
+        typ = jl_has_free_or_dangling_typevars(jv) ? (jl_value_t*)jl_wrap_Type(jv)
                                        : jl_wrap_TypeEgal(jv);
         jl_temporary_root(ctx, typ);
     }
@@ -3165,7 +3165,7 @@ static std::pair<bool, bool> uses_specsig(jl_value_t *abi, jl_method_instance_t 
             needsparams = true;
         for (size_t i = 0; i < jl_svec_len(lam->sparam_vals); ++i) {
             jl_value_t *sp = jl_svecref(lam->sparam_vals, i);
-            if (jl_is_svec(sp) || jl_has_free_typevars(sp))
+            if (jl_is_svec(sp) || jl_has_free_or_dangling_typevars(sp))
                 needsparams = true;
         }
     }
@@ -4119,7 +4119,7 @@ static bool emit_f_opfield(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
         if (idx != -1) {
             jl_value_t *ft = jl_field_type(uty, idx);
-            if (!jl_has_free_typevars(ft)) {
+            if (!jl_has_free_or_dangling_typevars(ft)) {
                 if (op != StoreKind::Modify) {
                     emit_typecheck(ctx, val, ft, fname);
                     val = update_julia_type(ctx, val, ft);
@@ -4462,7 +4462,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     else if (f == BUILTIN(typeassert) && nargs == 2) {
         const jl_cgval_t &arg = argv[1];
         const jl_cgval_t &ty = argv[2];
-        if (jl_is_some_Type(ty.typ) && !jl_has_free_typevars(ty.typ)) {
+        if (jl_is_some_Type(ty.typ) && !jl_has_free_or_dangling_typevars(ty.typ)) {
             jl_value_t *tp0 = jl_some_Type_T(ty.typ);
             emit_typecheck(ctx, arg, tp0, "typeassert");
             *ret = update_julia_type(ctx, arg, tp0);
@@ -4480,7 +4480,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     else if (f == BUILTIN(isa) && nargs == 2) {
         const jl_cgval_t &arg = argv[1];
         const jl_cgval_t &ty = argv[2];
-        if (jl_is_some_Type(ty.typ) && !jl_has_free_typevars(ty.typ)) {
+        if (jl_is_some_Type(ty.typ) && !jl_has_free_or_dangling_typevars(ty.typ)) {
             jl_value_t *tp0 = jl_some_Type_T(ty.typ);
             Value *isa_result = emit_isa(ctx, arg, tp0, Twine()).first;
             *ret = mark_julia_type(ctx, isa_result, false, jl_bool_type);
@@ -4491,8 +4491,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     else if (f == BUILTIN(issubtype) && nargs == 2) {
         const jl_cgval_t &ta = argv[1];
         const jl_cgval_t &tb = argv[2];
-        if (jl_is_some_Type(ta.typ) && !jl_has_free_typevars(ta.typ) &&
-            jl_is_some_Type(tb.typ) && !jl_has_free_typevars(tb.typ)) {
+        if (jl_is_some_Type(ta.typ) && !jl_has_free_or_dangling_typevars(ta.typ) &&
+            jl_is_some_Type(tb.typ) && !jl_has_free_or_dangling_typevars(tb.typ)) {
             int issub = jl_subtype(jl_some_Type_T(ta.typ), jl_some_Type_T(tb.typ));
             *ret = mark_julia_type(ctx, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), issub), false, jl_bool_type);
             return true;
@@ -4915,7 +4915,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
 
             if (jl_is_datatype(utt) && jl_struct_try_layout(utt)) {
                 ssize_t idx = jl_field_index(utt, name, 0);
-                if (idx != -1 && !jl_has_free_typevars(jl_field_type(utt, idx))) {
+                if (idx != -1 && !jl_has_free_or_dangling_typevars(jl_field_type(utt, idx))) {
                     *ret = emit_getfield_knownidx(ctx, obj, idx, utt, order);
                     return true;
                 }
@@ -4950,7 +4950,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     // integer index
                     size_t idx;
                     if (fld.constant && (idx = jl_unbox_long(fld.constant) - 1) < nfields) {
-                        if (!jl_has_free_typevars(jl_field_type(utt, idx))) {
+                        if (!jl_has_free_or_dangling_typevars(jl_field_type(utt, idx))) {
                             // known index
                             *ret = emit_getfield_knownidx(ctx, obj, idx, utt, order);
                             return true;
@@ -8112,7 +8112,7 @@ static jl_value_t *cfun_substitute_deftime_tvars(jl_value_t *ty, jl_unionall_t *
     if (jl_is_datatype(ty)) {
         jl_datatype_t *dt = (jl_datatype_t*)ty;
         size_t np = jl_nparams(dt);
-        if (np == 0 || !jl_has_free_typevars(ty))
+        if (np == 0 || !jl_has_free_or_dangling_typevars(ty))
             return ty;
         jl_value_t **newp;
         JL_GC_PUSHARGS(newp, np);
@@ -8174,7 +8174,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
                     argt_inst = jl_svec_copy(argt);
                 jl_svecset(argt_inst, i, jl_instantiate_type_in_env(jargty, unionall_env, jl_svec_data(sparam_vals)));
             }
-            else if (jl_has_free_typevars(jargty)) {
+            else if (jl_has_free_or_dangling_typevars(jargty)) {
                 jl_value_t *inst = cfun_substitute_deftime_tvars(jargty, unionall_env, sparam_vals);
                 if (inst != jargty) {
                     if (!argt_inst)

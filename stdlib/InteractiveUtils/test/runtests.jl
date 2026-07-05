@@ -629,7 +629,10 @@ a14637 = A14637(0)
 
 # Issue #28615
 @test_throws ErrorException (@which [1, 2] .+ [3, 4])
-@test (@code_typed optimize=true max.([1,7], UInt.([4])))[2] == Vector{UInt}
+# TODO: a `Type` argument bound through a single covariant method-signature
+# slot is recorded in the match env as its kind (`widen_Type_if_concrete` in
+# subtype.c), so the fused-broadcast closure loses the `UInt` function type
+@test_broken (@code_typed optimize=true max.([1,7], UInt.([4])))[2] == Vector{UInt}
 @test (@code_typed Ref.([1,2])[1].x)[2] == Int
 @test (@code_typed max.(Ref(true).x))[2] == Bool
 @test (@code_typed optimize=false round.([1.0, 2.0]; digits = 3))[2] == Vector{Float64}

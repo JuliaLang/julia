@@ -1289,13 +1289,16 @@ function _defaultctors(@nospecialize(ty), functionloc)
     end
     dt = ua::DataType
     # n.b. the materialized TypeVars carry the raw (de Bruijn) bounds; they only
-    # provide names and bounds for re-wrapping the constructor signatures below
+    # provide names and bounds for the method-definition protocol below, which
+    # reads the bound references positionally (so the unvalidated constructor
+    # is required: a bound that is exactly a reference is not a valid TypeVar
+    # bound elsewhere)
     tvars = Array{Any,1}(Core.undef, nparams)
     ua = ty
     i = 1
     while i !== nparams + 1
         u = ua::UnionAll
-        @inbounds tvars[i] = ccall(:jl_new_typevar, Any, (Any, Any, Any), u.name, u.lb, u.ub)
+        @inbounds tvars[i] = ccall(:jl_new_typevar_raw, Any, (Any, Any, Any), u.name, u.lb, u.ub)
         ua = u.body
         i = i + 1
     end

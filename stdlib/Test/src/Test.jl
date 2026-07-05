@@ -2795,8 +2795,7 @@ end
 
 function has_unbound_vars(@nospecialize sig)
     while sig isa UnionAll
-        var = sig.var
-        sig = sig.body
+        var, sig = Base.unionall_open(sig)
         if !Core.Compiler.constrains_param(var, sig, #=covariant=#true, #=type_constrains=#true)
             return true
         end

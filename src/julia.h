@@ -2038,6 +2038,12 @@ JL_DLLEXPORT jl_value_t *jl_new_unionall_type(jl_sym_t *name, jl_value_t *lb, jl
 JL_DLLEXPORT jl_value_t *jl_instantiate_unionall(jl_unionall_t *u, jl_value_t *p) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_unionall_open(jl_unionall_t *u, jl_tvar_t **vout) JL_CANSAFEPOINT;
 JL_DLLEXPORT int jl_has_dangling_tvarrefs(jl_value_t *v) JL_NOTSAFEPOINT;
+// "not structurally ground": free typevars and dangling de Bruijn references
+// both disqualify a type from layout/subtype-based reasoning
+STATIC_INLINE int jl_has_free_or_dangling_typevars(jl_value_t *v) JL_NOTSAFEPOINT
+{
+    return jl_has_free_typevars(v) || jl_has_dangling_tvarrefs(v);
+}
 JL_DLLEXPORT jl_value_t *jl_apply_type(jl_value_t *tc, jl_value_t **params, size_t n) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_apply_type1(jl_value_t *tc, jl_value_t *p1) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_apply_type2(jl_value_t *tc, jl_value_t *p1, jl_value_t *p2) JL_CANSAFEPOINT;

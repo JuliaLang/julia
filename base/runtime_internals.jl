@@ -1513,7 +1513,7 @@ function to_tuple_type(@nospecialize(t))
             if isa(p, Core.TypeofVararg)
                 p = unwrapva(p)
             end
-            if !(isa(p, Core.AnyType) || isa(p, TypeVar))
+            if !(isa(p, Core.AnyType) || isa(p, TypeVar) || isa(p, Core.TypeVarRef))
                 error("argument tuple type must contain only types")
             end
         end

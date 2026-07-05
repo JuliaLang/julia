@@ -639,14 +639,28 @@ end
 function serialize_typename(s::AbstractSerializer, t::Core.TypeName)
     serialize(s, t.name)
     serialize(s, t.names)
-    primary = unwrap_unionall(t.wrapper)
+    # open the wrapper's binders so the serialized primary references free
+    # TypeVar objects (which is what `jl_new_datatype` expects when the type
+    # is reconstructed) rather than de Bruijn bound-variable references
+    vars = TypeVar[]
+    primary = t.wrapper
+    while primary isa UnionAll
+        v, primary = Base.unionall_open(primary)
+        push!(vars, v)
+    end
+    primary = primary::DataType
     serialize(s, primary.super)
-    serialize(s, primary.parameters)
-    serialize(s, primary.types)
+    serialize(s, Core.svec(vars...))
+    # field types may not have been computed yet on the freshly-opened body
+    # (and are not computable for abstract/incomplete types, where they are
+    # an empty list)
+    ftypes = isdefined(primary, :types) ? primary.types :
+             isabstracttype(primary) ? Core.svec() : Base.datatype_fieldtypes(primary)
+    serialize(s, ftypes)
     serialize(s, Base.issingletontype(primary))
     serialize(s, t.flags & 0x1 == 0x1) # .abstract
     serialize(s, t.flags & 0x2 == 0x2) # .mutable
-    serialize(s, Int32(length(primary.types) - t.n_uninitialized))
+    serialize(s, Int32(length(ftypes) - t.n_uninitialized))
     serialize(s, t.max_methods)
     ms = Base.matches_to_methods(Base._methods_by_ftype(Tuple{t.wrapper, Vararg}, -1, Base.get_world_counter()), t, nothing).ms
     if t.singletonname !== t.name || !isempty(ms)
@@ -776,8 +790,11 @@ function serialize(s::AbstractSerializer, u::UnionAll)
         serialize(s, t)
     else
         write(s.io, UInt8(0))
-        serialize(s, u.var)
-        serialize(s, u.body)
+        # ship the binder as a free TypeVar plus the opened body; the
+        # deserializer's `UnionAll(var, body)` re-binds it
+        v, body = Base.unionall_open(u)
+        serialize(s, v)
+        serialize(s, body)
     end
 end
 
