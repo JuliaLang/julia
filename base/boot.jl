@@ -300,6 +300,15 @@ ccall(:jl_toplevel_eval_in, Any, (Any, Any),
       Core, quote
       (f::typeof(Typeof))(x) = begin
           $(_expr(:meta,:nospecialize,:x))
+          # the total-purity override lets inference fold through the
+          # dangling-reference ccall (a pure predicate); without it a constant
+          # type argument stops folding to a constant `TypeEgal`
+          $(_expr(:meta, _expr(:purity,
+              #=:consistent=#true, #=:effect_free=#true, #=:nothrow=#true,
+              #=:terminates_globally=#true, #=:terminates_locally=#false,
+              #=:notaskstate=#true, #=:inaccessiblememonly=#true,
+              #=:noub=#true, #=:noub_if_noinbounds=#false,
+              #=:consistent_overlay=#false, #=:nortcall=#true)))
           if isa(x,Type)
               if has_free_typevars(x)
                   Type{x}
