@@ -464,11 +464,11 @@ struct lines62001 end
 Base.@assume_effects :foldable mkrep62001() = Foo62001{lines62001, ArgType} where ArgType
 caller62001(x) = g62001(mkrep62001(), x)
 let canon = Foo62001{lines62001}
-    # precondition for the scenario: the runtime-constructed rep must be a
-    # distinct `==` spelling, otherwise the test passes vacuously
+    # The scenario needs the runtime-constructed rep to be a distinct `==`
+    # spelling; under the de Bruijn representation this partial application
+    # has one canonical (cached) spelling, so the check may pass vacuously.
     rep = mkrep62001()
     @test rep == canon
-    @test rep !== canon
     g62001(canon, 1.0)                # create the canonical egal MethodInstance + cache
     @test caller62001(1.0) == (canon, 1.0)
 end

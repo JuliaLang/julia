@@ -2112,8 +2112,30 @@ static jl_value_t *shift_refs_(jl_value_t *t, ssize_t inc, size_t depth)
             iparams[i] = shift_refs_(elt, inc, depth);
             bound |= (iparams[i] != elt);
         }
-        if (bound)
-            t = inst_datatype_inner(dt, NULL, iparams, ntp, NULL, NULL, 0, 0);
+        if (bound) {
+            // Rebuild from the primary template under the shifted parameters:
+            // `dt`'s own supertype/field types are framed for the original
+            // reference depths, so an env-free rebuild would copy them
+            // verbatim onto the re-framed instance (and poison the cache with
+            // a dangling supertype).
+            jl_typename_t *tn = dt->name;
+            jl_datatype_t *primary = NULL;
+            if (tn->wrapper != NULL)
+                primary = (jl_datatype_t*)jl_unwrap_unionall(tn->wrapper);
+            if (primary != NULL && primary != dt && tn != jl_tuple_typename &&
+                tn != jl_namedtuple_typename && ntp > 0) {
+                jl_typeenv_t *penv = (jl_typeenv_t*)alloca(ntp * sizeof(jl_typeenv_t));
+                for (i = 0; i < ntp; i++) {
+                    penv[i].var = NULL;
+                    penv[i].val = iparams[i];
+                    penv[i].prev = i == 0 ? NULL : &penv[i - 1];
+                }
+                t = inst_datatype_inner(primary, NULL, iparams, ntp, NULL, &penv[ntp - 1], 0, 0);
+            }
+            else {
+                t = inst_datatype_inner(dt, NULL, iparams, ntp, NULL, NULL, 0, 0);
+            }
+        }
         JL_GC_POP();
         return t;
     }
@@ -3061,7 +3083,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
         if (va1 && jl_is_long(va1)) {
             ssize_t nt = jl_unbox_long(va1);
             assert(nt >= 0);
-            if (nt == 0 || !jl_has_free_typevars(va0)) {
+            if (nt == 0 || !jl_has_free_or_dangling_typevars(va0)) {
                 if (ntp == 1) {
                     JL_GC_POP();
                     return jl_tupletype_fill(nt, va0, 0, 0);
