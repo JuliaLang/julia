@@ -4172,7 +4172,7 @@ void jl_init_types(void) JL_GC_DISABLED
                                         "state",
                                         "_lock",
                                         "delivered",
-                                        "flags"),
+                                        "watchers"),
                         jl_svec(8,
                                 jl_any_type,
                                 jl_any_type,
@@ -4181,7 +4181,7 @@ void jl_init_types(void) JL_GC_DISABLED
                                 jl_uint8_type,
                                 jl_uint8_type,
                                 jl_uint8_type,
-                                jl_uint8_type),
+                                jl_any_type),
                         jl_emptysvec,
                         0, 1, 8);
     // Field 1 (parent) is const; fields 5-7 (state, _lock, delivered) are atomic

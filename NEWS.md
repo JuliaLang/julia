@@ -32,7 +32,10 @@ New language features
     `Threads.@threads` blocks form
     cancellation scopes, so cancelling an enclosing scope reaches everything spawned within.
     Compute-bound code can opt into cancellation with the `Base.@cancel_check` cancellation
-    point. In interactive sessions, ^C cancels the current evaluation's cancellation scope, with
+    point. A task can also wait for a token's cancellation as an event -
+    `wait(tok::Base.CancellationToken)` returns the request as a value instead of throwing it -
+    which is the building block for cancellation callbacks (watcher tasks).
+    In interactive sessions, ^C cancels the current evaluation's cancellation scope, with
     graded escalation (safe unwind -> abandoning external waits -> abandoning tasks) on repeated
     presses, and a fresh ^C epoch is re-armed at each prompt; a script that catches a ^C
     cancellation continues under the cancelled scope unless it re-arms one itself
