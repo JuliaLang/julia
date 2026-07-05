@@ -349,10 +349,18 @@ macro nospecializeinfer() Expr(:meta, :nospecializeinfer) end
 
 macro _boundscheck() Expr(:boundscheck) end
 
+# Passing `Epsilon` as the lower bound in TypeVar construction gives a var whose
+# lb is Union{}, but which excludes Union{} itself from the admissible values.
+struct TypeofEpsilon
+    TypeofEpsilon() = new()
+end
+const Epsilon = TypeofEpsilon()
+
 # n.b. the effects and model of these is refined in inference abstractinterpretation.jl
 TypeVar(@nospecialize(n)) = _typevar(n::Symbol, Union{}, Any)
 TypeVar(@nospecialize(n), @nospecialize(ub)) = _typevar(n::Symbol, Union{}, ub)
-TypeVar(@nospecialize(n), @nospecialize(lb), @nospecialize(ub)) = _typevar(n::Symbol, lb, ub)
+TypeVar(@nospecialize(n), @nospecialize(lb), @nospecialize(ub)) =
+    lb === Epsilon ? _typevar(n::Symbol, Union{}, ub, true) : _typevar(n::Symbol, lb, ub)
 UnionAll(@nospecialize(v), @nospecialize(t)) = ccall(:jl_type_unionall, Any, (Any, Any), v::TypeVar, t)
 
 const Memory{T} = GenericMemory{:not_atomic, T, CPU}

@@ -1732,6 +1732,7 @@ JL_DLLEXPORT int jl_maybe_add_binding_backedge(jl_binding_t *b, jl_value_t *edge
 {
     if (!edge)
         return 0;
+    jl_record_binding_backedge(b, edge);
     jl_module_t *defining_module = for_method->module;
     // N.B.: The logic for evaluating whether a backedge is required must
     // match the invalidation logic.

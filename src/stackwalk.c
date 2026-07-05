@@ -902,18 +902,25 @@ const char *jl_debuginfo_name(jl_value_t *func)
 // func == NULL : macro expansion
 static void jl_fprint_debugloc(ios_t *s, jl_debuginfo_t *debuginfo, jl_value_t *func, size_t ip, int inlined) JL_NOTSAFEPOINT
 {
-    if (!jl_is_symbol(debuginfo->def)) // this is a path or
-        func = debuginfo->def; // this is inlined code
+    jl_value_t *didef = jl_di_def_ro(debuginfo);
+    if (!jl_is_symbol(didef)) // this is a path or
+        func = didef; // this is inlined code
     struct jl_codeloc_t stmt = jl_uncompress1_codeloc(debuginfo, ip);
     intptr_t edges_idx = stmt.to;
     if (edges_idx) {
-        jl_debuginfo_t *edge = (jl_debuginfo_t*)jl_svecref(debuginfo->edges, edges_idx - 1);
+        jl_value_t *edges = (jl_value_t*)debuginfo->edges;
+        // inlinee lists never contain literal words, so the nobox accessor is
+        // total here and keeps this path allocation-free
+        jl_debuginfo_t *edge = (jl_debuginfo_t*)(jl_is_svec(edges) ?
+            jl_svecref(edges, edges_idx - 1) :
+            jl_ici_ref_nobox((jl_interned_code_instance_t*)edges, edges_idx - 1));
         assert(jl_typetagis(edge, jl_debuginfo_type));
         jl_fprint_debugloc(s, edge, NULL, stmt.pc, 1);
     }
     intptr_t ip2 = stmt.loc;
-    if (ip2 >= 0 && ip > 0 && jl_is_debuginfo(debuginfo->linetable)) {
-        jl_fprint_debugloc(s, (jl_debuginfo_t*)debuginfo->linetable, func, ip2, 0);
+    jl_value_t *dilt = jl_di_linetable_ro(debuginfo);
+    if (ip2 >= 0 && ip > 0 && jl_is_debuginfo(dilt)) {
+        jl_fprint_debugloc(s, (jl_debuginfo_t*)dilt, func, ip2, 0);
     }
     else {
         if (ip2 < 0) // set broken debug info to ignored
@@ -937,8 +944,8 @@ void jl_fprint_bt_entry_codeloc(ios_t *s, jl_bt_element_t *bt_entry) JL_NOTSAFEP
         jl_value_t *def = (jl_value_t*)jl_core_module; // just used as a token here that isa Module
         if (jl_is_code_instance(code)) {
             jl_code_instance_t *ci = (jl_code_instance_t*)code;
-            def = (jl_value_t*)ci->def;
-            code = jl_atomic_load_relaxed(&ci->inferred);
+            def = jl_ci_def_ro(ci); // no write-back: may run in a signal context
+            code = jl_ci_inferred(ci); // materializing is fine here: not the signal path
         } else if (jl_is_method_instance(code)) {
             jl_method_instance_t *mi = (jl_method_instance_t*)code;
             def = code;

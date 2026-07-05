@@ -303,7 +303,7 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
                 haskey(parents, edge) || (parents[edge] = (codeinst, i))
                 edge in inspected && continue
                 edge_mi = get_ci_mi(edge)
-                if edge_mi === edge.def
+                if edge_mi === ci_def(edge)
                     ci = get(caches, edge_mi, nothing)
                     ci isa CodeInstance && continue # assume that only this_world matters for trim
                 end

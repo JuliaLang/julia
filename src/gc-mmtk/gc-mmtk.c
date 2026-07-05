@@ -556,6 +556,16 @@ JL_DLLEXPORT void jl_gc_scan_vm_specific_roots(RootsWorkClosure* closure)
 
     // add global_method_table
     add_node_to_roots_buffer(closure, &buf, &len, jl_method_table);
+    if (jl_method_contributors)
+        add_node_to_roots_buffer(closure, &buf, &len, jl_method_contributors);
+    if (jl_method_contributor_methods)
+        add_node_to_roots_buffer(closure, &buf, &len, jl_method_contributor_methods);
+    if (jl_activation_certs)
+        add_node_to_roots_buffer(closure, &buf, &len, jl_activation_certs);
+    if (jl_sig_tn_table)
+        add_node_to_roots_buffer(closure, &buf, &len, jl_sig_tn_table);
+    if (jl_backedge_log)
+        add_node_to_roots_buffer(closure, &buf, &len, jl_backedge_log);
 
     // builtin values
     add_node_to_roots_buffer(closure, &buf, &len, jl_an_empty_vec_any);

@@ -763,7 +763,10 @@ fLargeTable(::Type{<:DataType}) = "DataType"
 @test fLargeTable(Type{UnionAll}) == "DataType"
 @test fLargeTable(Type{Int}) == "DataType"
 @test fLargeTable(Type{Vector}) == "Type"
-@test fLargeTable(Type{Type{Union{}}}) == "DataType"
+# the bottom singleton class spans two kinds (Type{Union{}} vs typeof(Union{})),
+# so Type{Type{Union{}}} is excluded from `TypeEq(T) <: kind(typeof(T))`
+# reasoning and dispatches like `Type` itself
+@test fLargeTable(Type{Type{Union{}}}) == "Type"
 @test fLargeTable(Type{Union{}}) == "Type"
 @test fLargeTable(Union{}) == "DataType"
 @test fLargeTable(Type{<:DataType}) == "Type"
@@ -771,7 +774,7 @@ fLargeTable(::Type{<:UnionAll}) = "UnionAll"
 @test fLargeTable(UnionAll) == "UnionAll"
 @test fLargeTable(Type{Vector}) == "UnionAll"
 @test fLargeTable(Type{Int}) == "DataType"
-@test fLargeTable(Type{Type{Union{}}}) == "DataType"
+@test fLargeTable(Type{Type{Union{}}}) == "Type"
 @test fLargeTable(Type{Union{}}) == "Type"
 @test_throws MethodError fLargeTable(Union{})
 @test fLargeTable(Type{<:DataType}) == "Type"

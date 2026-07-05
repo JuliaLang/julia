@@ -3028,6 +3028,11 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         2 ≤ la ≤ 4 || return Future{CallMeta}(call, sv, interp) do call, sv, interp
             return CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo())
         end
+        if la == 4 && hasintersect(widenconst(argtypes[3]), Core.TypeofEpsilon)
+            # the strict lower-bound (Epsilon) branch of the constructor is not
+            # modeled here; fall back to the generic inference result
+            return call
+        end
         # make sure generic code is prepared for inlining if needed later
         let T = Any[Type{TypeVar}, Any, Any, Any]
             resize!(T, la)

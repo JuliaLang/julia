@@ -138,9 +138,9 @@ JL_DLLEXPORT void jl_finalize_precompile_inferred(int8_t cleanup_keep_ir)
         jl_code_instance_t *ci = (jl_code_instance_t*)jl_array_ptr_ref(newly_inferred, i);
         if (ci == NULL)
             continue;
-        if (ci->owner != jl_nothing)
+        if (jl_ci_owner(ci) != jl_nothing)
             continue; // foreign interpreters own their cached IR
-        jl_value_t *inferred = jl_atomic_load_relaxed(&ci->inferred);
+        jl_value_t *inferred = jl_ci_inferred(ci);
         if (inferred == NULL || !jl_is_code_info(inferred))
             continue;
         jl_method_instance_t *mi = jl_get_ci_mi(ci);
@@ -540,7 +540,7 @@ static jl_array_t *queue_external(jl_array_t *list, jl_query_cache *query_cache)
             int dispatch_status = jl_atomic_load_relaxed(&m->dispatch_status);
             if (!(dispatch_status & METHOD_SIG_LATEST_WHICH))
                 continue; // ignore replaced methods
-            if (jl_atomic_load_relaxed(&ci->inferred) && jl_is_method(m) && jl_object_in_image((jl_value_t*)m->module)) {
+            if (jl_ci_inferred(ci) && jl_is_method(m) && jl_object_in_image((jl_value_t*)m->module)) {
                 int found = has_backedge_to_worklist(mi, &visited, &stack, query_cache);
                 assert(found == 0 || found == 1 || found == 2);
                 assert(stack.len == 0);
@@ -576,8 +576,20 @@ static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure)
     jl_array_t *s = (jl_array_t*)closure;
     jl_method_t *m = ml->func.method;
     if (!jl_object_in_image((jl_value_t*)m->module)) {
-        if (s)
+        if (s) {
             jl_array_ptr_1d_push(s, (jl_value_t*)m); // extext
+            jl_value_t *cert = jl_get_activation_cert(m);
+            if (cert != jl_nothing) {
+                // refresh the dispatch bits to the worker-final state: later
+                // activations may have cleared LATEST_ONLY after this method's
+                // own activation recorded its bits, and replay order does not
+                // preserve activation order
+                jl_value_t *bits = jl_box_int32(jl_atomic_load_relaxed(&m->dispatch_status) &
+                                                (METHOD_SIG_LATEST_WHICH | METHOD_SIG_LATEST_ONLY));
+                jl_svecset((jl_svec_t*)cert, 3, bits);
+            }
+            jl_array_ptr_1d_push(s, cert); // paired activation certificate
+        }
     }
     return 1;
 }
@@ -694,7 +706,7 @@ static const char *jl_git_commit(void)
 
 
 // "magic" string and version header of .ji file
-static const int JI_FORMAT_VERSION = 13;
+static const int JI_FORMAT_VERSION = 27; // did_scan_source 0x2 masked at save (scanned_methods lists are session state)
 static const char JI_MAGIC[] = "\373jli\r\n\032\n"; // based on PNG signature
 static const uint16_t BOM = 0xFEFF; // byte-order marker
 static int64_t write_header(ios_t *s, uint8_t pkgimage)
@@ -872,7 +884,7 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
 static void jl_add_methods(jl_array_t *external)
 {
     size_t i, l = jl_array_nrows(external);
-    for (i = 0; i < l; i++) {
+    for (i = 0; i < l; i += 2) { // (method, activation certificate) pairs
         jl_method_t *meth = (jl_method_t*)jl_array_ptr_ref(external, i);
         assert(jl_is_method(meth));
         assert(!meth->is_for_opaque_closure);
@@ -884,8 +896,32 @@ static void jl_add_methods(jl_array_t *external)
 }
 
 extern _Atomic(int) allow_new_worlds;
-static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size_t world, const char *pkgname)
+static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size_t world, const char *pkgname, jl_array_t *depmods)
 {
+    JL_TIMING(LOAD_IMAGE, LOAD_ActivateMethods);
+    // Install the dependency-closure blob bitset for contributor-cleanliness
+    // classification: sysimage (blob 0), every dependency image, and this
+    // image itself (its methods' blob).
+    size_t nblobs = n_linkage_blobs();
+    size_t nwords = (nblobs + 8 * sizeof(size_t) - 1) / (8 * sizeof(size_t));
+    size_t *closure_bits = (size_t*)calloc_s(nwords ? nwords * sizeof(size_t) : sizeof(size_t));
+    closure_bits[0] |= 1; // the sysimage
+    if (depmods) {
+        for (size_t i = 0, ld = jl_array_nrows(depmods); i < ld; i++) {
+            size_t idx = external_blob_index(jl_array_ptr_ref(depmods, i));
+            if (idx < nblobs)
+                closure_bits[idx / (8 * sizeof(size_t))] |= (size_t)1 << (idx % (8 * sizeof(size_t)));
+        }
+    }
+    for (size_t i = 0, le = jl_array_nrows(external); i < le; i += 2) {
+        jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_array_ptr_ref(external, i);
+        size_t idx = external_blob_index((jl_value_t*)entry->func.method);
+        if (idx < nblobs)
+            closure_bits[idx / (8 * sizeof(size_t))] |= (size_t)1 << (idx % (8 * sizeof(size_t)));
+    }
+    jl_set_loading_closure_blobs(closure_bits, nblobs);
+    if (pkgname)
+        jl_timing_puts(JL_TIMING_DEFAULT_BLOCK, pkgname);
     size_t i, l = jl_array_nrows(internal);
     for (i = 0; i < l; i++) {
         // allow_new_worlds doesn't matter here, since we aren't actually changing anything external
@@ -917,17 +953,22 @@ static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size
     if (l) {
         if (!jl_atomic_load_relaxed(&allow_new_worlds)) {
             jl_printf(JL_STDERR, "WARNING: Method changes for %s have been disabled via a call to disable_new_worlds.\n", pkgname);
+            jl_set_loading_closure_blobs(NULL, 0);
+            free(closure_bits);
             return;
         }
-        for (i = 0; i < l; i++) {
+        for (i = 0; i < l; i += 2) {
             jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_array_ptr_ref(external, i);
+            jl_value_t *cert = jl_array_ptr_ref(external, i + 1);
             //uint64_t t0 = uv_hrtime();
-            jl_method_table_activate(entry);
+            jl_method_table_activate_with_cert(entry, cert == jl_nothing ? NULL : (jl_svec_t*)cert);
             //jl_printf(JL_STDERR, "%f ", (double)(uv_hrtime() - t0) / 1e6);
             //jl_static_show(JL_STDERR, entry->func.value);
             //jl_printf(JL_STDERR, "\n");
         }
     }
+    jl_set_loading_closure_blobs(NULL, 0);
+    free(closure_bits);
 }
 
 static int jl_copy_roots(jl_array_t *method_roots_list, uint64_t key)

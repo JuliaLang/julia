@@ -743,7 +743,7 @@ static jl_value_t *jl_call_staged(jl_method_t *def, jl_value_t *generator,
 JL_DLLEXPORT jl_code_instance_t *jl_cached_uninferred(jl_code_instance_t *codeinst, size_t world)
 {
     for (; codeinst; codeinst = jl_atomic_load_relaxed(&codeinst->next)) {
-        if (codeinst->owner != (void*)jl_uninferred_sym)
+        if (jl_ci_owner(codeinst) != (void*)jl_uninferred_sym)
             continue;
         if (jl_atomic_load_relaxed(&codeinst->min_world) <= world && world <= jl_atomic_load_relaxed(&codeinst->max_world)) {
             return codeinst;
@@ -1264,6 +1264,53 @@ JL_DLLEXPORT jl_methcache_t *jl_method_get_cache(jl_method_t *method JL_PROPAGAT
     return jl_method_get_table(method)->cache;
 }
 
+// Rebuild `t`, replacing the binding of `v` with a strict-lower-bound copy.
+static jl_value_t *strictify_var_in(jl_value_t *t, jl_tvar_t *v)
+{
+    if (!jl_is_unionall(t))
+        return t;
+    jl_unionall_t *ua = (jl_unionall_t*)t;
+    jl_value_t *body = NULL;
+    if (ua->var == v) {
+        jl_tvar_t *newv = jl_new_typevar(v->name, v->lb, v->ub);
+        newv->flags = v->flags | JL_TVAR_STRICT_LB;
+        JL_GC_PUSH2(&newv, &body);
+        body = jl_instantiate_unionall(ua, (jl_value_t*)newv);
+        body = jl_new_struct(jl_unionall_type, newv, body);
+        JL_GC_POP();
+        return body;
+    }
+    body = strictify_var_in(ua->body, v);
+    if (body == ua->body)
+        return t;
+    JL_GC_PUSH1(&body);
+    body = jl_new_struct(jl_unionall_type, ua->var, body);
+    JL_GC_POP();
+    return body;
+}
+
+// For constructor-like method signatures — the first argument slot is
+// `Type{T}` (TypeEq) for a signature-bound var `T` with lb == Union{} —
+// make the var's lower bound strict, so that the method is not applicable
+// to `Type{Union{}}`. Union{} is not constructible, so such methods can
+// never apply to it; encoding that in the signature keeps unrelated
+// constructor families disjoint under intersection.
+static jl_value_t *jl_strictify_ctor_var(jl_value_t *argtype)
+{
+    jl_value_t *body = argtype;
+    while (jl_is_unionall(body))
+        body = ((jl_unionall_t*)body)->body;
+    if (!jl_is_datatype(body) || !jl_is_tuple_type(body) || jl_nparams(body) == 0)
+        return argtype;
+    jl_value_t *ft = jl_tparam0(body);
+    if (!jl_is_typeeq(ft) || !jl_is_typevar(jl_typeeq_T(ft)))
+        return argtype;
+    jl_tvar_t *v = (jl_tvar_t*)jl_typeeq_T(ft);
+    if (v->lb != jl_bottom_type || (v->flags & JL_TVAR_STRICT_LB))
+        return argtype;
+    return strictify_var_in(argtype, v);
+}
+
 JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
                                         jl_methtable_t *mt,
                                         jl_code_info_t *f,
@@ -1374,6 +1421,7 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
                       jl_symbol_name(file),
                       line);
     }
+    argtype = jl_strictify_ctor_var(argtype);
     ft = jl_rewrap_unionall(ft, argtype);
     if (!external_mt && !jl_has_empty_intersection(ft, (jl_value_t*)jl_builtin_type)) // disallow adding methods to Any, Function, Builtin, and subtypes, or Unions of those
         jl_errorf("cannot add methods to builtin function `%s`", jl_symbol_name(name));

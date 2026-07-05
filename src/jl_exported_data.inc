@@ -33,6 +33,7 @@
     XX(char_type, jl_datatype_t*) \
     XX(code_info_type, jl_datatype_t*) \
     XX(code_instance_type, jl_datatype_t*) \
+    XX(interned_code_instance_type, jl_datatype_t*) \
     XX(const_type, jl_datatype_t*) \
     XX(core_module, jl_module_t*) \
     XX(datatype_type, jl_datatype_t*) \

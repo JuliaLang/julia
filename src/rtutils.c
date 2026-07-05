@@ -1000,15 +1000,19 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
             out, "CodeInstance(min_world=0x%zx, max_world=0x%zx) for ",
             jl_atomic_load_relaxed(&ci->min_world),
             jl_atomic_load_relaxed(&ci->max_world));
-        if (jl_is_method_instance(ci->def)) {
-            n += jl_static_show_x(out, ci->def, depth, ctx);
+        jl_value_t *cidef = jl_ci_def_ro(ci);
+        if (cidef != NULL && jl_is_method_instance(cidef)) {
+            n += jl_static_show_x(out, cidef, depth, ctx);
         }
-        else if (jl_is_abioverride(ci->def)) {
-            jl_abi_override_t* def = (jl_abi_override_t*)ci->def;
+        else if (cidef != NULL && jl_is_abioverride(cidef)) {
+            jl_abi_override_t* def = (jl_abi_override_t*)cidef;
             n += jl_static_show_x(out, (jl_value_t*)def->def, depth, ctx);
             n += jl_printf(out, " (ABI overridden)");
         }
-        if (ci->owner != jl_nothing) {
+        jl_value_t *ciowner = ci->owner;
+        if (ciowner == NULL) // interned; decode without writing (dump context)
+            ciowner = jl_ici_fieldref((jl_value_t*)jl_atomic_load_relaxed(&ci->edges), JL_ICI_CI_OWNER);
+        if (ciowner != NULL && ciowner != jl_nothing) {
             n += jl_printf(out, " (foreign)");
         }
     }
