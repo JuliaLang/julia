@@ -583,6 +583,7 @@ print(io::IO, f::Core.IntrinsicFunction) = print(io, nameof(f))
 show(io::IO, ::MIME"text/plain", ::Core.TypeofBottom) = print(io, "Union{}")
 
 function print_without_params(@nospecialize(x))
+    x === Type && return true # its body is the `TypeEq` kind, not a DataType
     b = unwrap_unionall(x)
     return isa(b, DataType) && b.name.wrapper === x
 end
@@ -1129,7 +1130,11 @@ function _show_type(io::IO, @nospecialize(x::Type))
         show_typeegal(io, x)
         return
     elseif print_without_params(x)
-        show_type_name(io, (unwrap_unionall(x)::DataType).name)
+        if x === Type
+            print(io, "Type") # `Core.Type`, whose body is the `TypeEq` kind
+        else
+            show_type_name(io, (unwrap_unionall(x)::DataType).name)
+        end
         return
     elseif get(io, :compact, true)::Bool && show_typealias(io, x)
         return

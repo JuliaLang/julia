@@ -869,12 +869,23 @@ end
                         simplify[j] = false
                     else
                         wr = ijname.wrapper
-                        uw = unwrap_unionall(wr)::DataType
-                        ui = unwrap_unionall(ti)::DataType
+                        # materialize all binders (cf. `unionall_openall`):
+                        # positional references from two different types would
+                        # otherwise compare `===` without denoting an agreed
+                        # parameter value
+                        wrvars = TypeVar[]
+                        uwb = wr
+                        while uwb isa UnionAll
+                            opened = Base.unionall_open(uwb)
+                            push!(wrvars, opened[1])
+                            uwb = opened[2]
+                        end
+                        uw = uwb::DataType
+                        ui = unionall_openall(ti)::DataType
                         while ui.name !== ijname
                             ui = ui.super
                         end
-                        uj = unwrap_unionall(tj)::DataType
+                        uj = unionall_openall(tj)::DataType
                         while uj.name !== ijname
                             uj = uj.super
                         end
@@ -891,7 +902,11 @@ end
                             end
                         end
                         if usep
-                            widen = rewrap_unionall(wr{p...}, wr)
+                            widen = wr{p...}
+                            for idx in length(wrvars):-1:1
+                                v = wrvars[idx]
+                                has_typevar(widen, v) && (widen = UnionAll(v, widen))
+                            end
                             widen <: wr || (widen = wr) # sometimes there are cross-constraints on wr that we may lose in this process, but that would cause future calls to this to need to return Any, which is undesirable
                         end
                         simplify[j] = !usep

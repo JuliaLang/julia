@@ -338,9 +338,18 @@ function summarize(io::IO, λ::Function, binding::Binding)
     println(io, "```\n", methods(λ), "\n```")
 end
 
+# materialize all binders so the body displays with named, bounded typevars
+# (a bare `unwrap_unionall` body shows positional references)
+function _openall(@nospecialize T)
+    while T isa UnionAll
+        T = Base.unionall_open(T)[2]
+    end
+    return T
+end
+
 function summarize(io::IO, TT::Type, binding::Binding)
     println(io, "# Summary")
-    T = Base.unwrap_unionall(TT)
+    T = _openall(TT)
     if T isa DataType
         println(io, "```")
         print(io,
@@ -365,7 +374,7 @@ function summarize(io::IO, TT::Type, binding::Binding)
             println(io, "# Subtypes")
             println(io, "```")
             for t in subt
-                println(io, Base.unwrap_unionall(t))
+                println(io, _openall(t))
             end
             println(io, "```")
         end

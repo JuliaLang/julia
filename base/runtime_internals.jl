@@ -1555,7 +1555,9 @@ function has_bottom_parameter(@nospecialize(t::Core.AnyType))
     elseif ty === TypeEq || ty === Core.TypeEgal
         return has_bottom_parameter(type_parameter(t))
     elseif ty === UnionAll
-        return has_bottom_parameter(unwrap_unionall(t))
+        # materialize the binder: an occurrence must expose its upper bound
+        # (e.g. `Ref{<:Union{}}`), which a bare reference cannot
+        return has_bottom_parameter(unionall_open(t)[2])
     elseif ty === Union
         return has_bottom_parameter(getfield(t, :a)) & has_bottom_parameter(getfield(t, :b))
     end
