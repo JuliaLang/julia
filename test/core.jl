@@ -655,6 +655,54 @@ let m = only(methods(anytype_compilesig_61915))
     end
 end
 
+# a slot declared as a bare method typevar (`key::K`) matches type-valued
+# arguments against the kind — the typevar binds `typeof(arg)`, not the type's
+# identity — so the kind-widened signature is the compileable, cached form and
+# distinct type values do not each mint (and compile) a fresh specialization
+barekindspec(h::Dict{K,V}, key::K) where {K,V} = (K, V)
+let m = only(methods(barekindspec))
+    exact = Tuple{typeof(barekindspec), Dict{Any,Nothing}, Core.TypeEgal{Int}}
+    widened = Tuple{typeof(barekindspec), Dict{Any,Nothing}, DataType}
+    tienv = ccall(:jl_type_intersection_with_env, Any, (Any, Any), exact, m.sig)
+    @test ccall(:jl_normalize_to_compilable_sig, Any, (Any, Any, Any, Cint),
+                exact, tienv[2], m, 1) == widened
+    tienv = ccall(:jl_type_intersection_with_env, Any, (Any, Any), widened, m.sig)
+    @test ccall(:jl_isa_compileable_sig, Cint, (Any, Any, Any), widened, tienv[2], m) == 1
+    # dynamic dispatch caches through the widened entry: distinct type values
+    # do not accumulate specializations
+    d = Dict{Any,Nothing}()
+    for i in 1:40
+        @test barekindspec(d, Tuple{Val{i}}) === (Any, Nothing)
+    end
+    @test barekindspec(d, Vector) === (Any, Nothing) # UnionAll values use their own kind
+    @test length(Base.specializations(m)) <= 6
+    # when the typevar is pinned to a Type-structured key type, the slot does
+    # dispatch on type identity and must keep exact specialization
+    for KT in (Type{Int}, Core.TypeEgal{Int})
+        exact2 = Tuple{typeof(barekindspec), Dict{KT,Nothing}, Core.TypeEgal{Int}}
+        tienv2 = ccall(:jl_type_intersection_with_env, Any, (Any, Any), exact2, m.sig)
+        @test ccall(:jl_normalize_to_compilable_sig, Any, (Any, Any, Any, Cint),
+                    exact2, tienv2[2], m, 0) == exact2
+        widened2 = Tuple{typeof(barekindspec), Dict{KT,Nothing}, DataType}
+        tienv2 = ccall(:jl_type_intersection_with_env, Any, (Any, Any), widened2, m.sig)
+        @test ccall(:jl_isa_compileable_sig, Cint, (Any, Any, Any), widened2, tienv2[2], m) == 0
+    end
+    # an equality-keyed elt (`Type{X}`) covers every `==`-equal spelling of X,
+    # whose kinds may differ, so only egality-keyed elts kind-widen
+    exact3 = Tuple{typeof(barekindspec), Dict{Any,Nothing}, Type{Int}}
+    tienv3 = ccall(:jl_type_intersection_with_env, Any, (Any, Any), exact3, m.sig)
+    @test ccall(:jl_normalize_to_compilable_sig, Any, (Any, Any, Any, Cint),
+                exact3, tienv3[2], m, 0) == exact3
+end
+# but a called bare-typevar slot keeps exact specialization (issue #36783)
+barekindcalled(T::K, x) where {K} = T(x)
+let m = only(methods(barekindcalled))
+    @test barekindcalled(Int, 3.0) === 3
+    sig = Tuple{typeof(barekindcalled), DataType, Float64}
+    tienv = ccall(:jl_type_intersection_with_env, Any, (Any, Any), sig, m.sig)
+    @test ccall(:jl_isa_compileable_sig, Cint, (Any, Any, Any), sig, tienv[2], m) == 0
+end
+
 @test promote_type(Bool,Bottom) === Bool
 
 # type declarations
