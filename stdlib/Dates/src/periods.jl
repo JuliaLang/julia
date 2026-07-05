@@ -115,6 +115,27 @@ coarserperiod(::Type{Hour}) = (Day, 24)
 coarserperiod(::Type{Day}) = (Week, 7)
 coarserperiod(::Type{Month}) = (Year, 12)
 
+# Period types paired with the number of the next-finer period they contain, in
+# coarsest-to-finest order. The `OtherPeriod`s (Year, Quarter, Month) come first, followed
+# by the `FixedPeriod`s (Week down to Nanosecond). These tuples are the single source of
+# truth for the period ordering, the `FixedPeriod`/`OtherPeriod` unions, and the unit
+# conversions defined by `define_conversions`.
+const OTHER_PERIOD_CONVERSIONS = ((Year, 4), (Quarter, 3), (Month, 1))
+const FIXED_PERIOD_CONVERSIONS = ((Week, 7), (Day, 24), (Hour, 60), (Minute, 60),
+                                  (Second, 1000), (Millisecond, 1000), (Microsecond, 1000), (Nanosecond, 1))
+const OTHER_PERIOD_TYPES = map(first, OTHER_PERIOD_CONVERSIONS)
+const FIXED_PERIOD_TYPES = map(first, FIXED_PERIOD_CONVERSIONS)
+# All period types coarsest to finest; the order matches `CompoundPeriod`'s sort
+# (descending `tons ∘ oneunit`).
+const PERIOD_TYPES = (OTHER_PERIOD_TYPES..., FIXED_PERIOD_TYPES...)
+
+# A `FixedPeriod` is a fixed multiple of a day, so it has a constant length in the storage
+# unit (a week is always 7 days, an hour always 3600 seconds). An `OtherPeriod` is a
+# multiple of a month, whose length in days is not constant (28–31); they are exactly
+# convertible among themselves but not to a fixed number of days.
+const FixedPeriod = Union{FIXED_PERIOD_TYPES...}
+const OtherPeriod = Union{OTHER_PERIOD_TYPES...}
+
 # Stores multiple periods in greatest to least order by type, not values,
 # canonicalized to eliminate zero periods, merge equal period types,
 # and convert more-precise periods to less-precise periods when possible
@@ -375,10 +396,6 @@ end
 Base.iszero(x::CompoundPeriod) = isempty(canonicalize(x).periods)
 Base.zero(::Union{CompoundPeriod,Type{CompoundPeriod}}) = CompoundPeriod()
 
-# Fixed-value Periods (periods corresponding to a well-defined time interval,
-# as opposed to variable calendar intervals like Year).
-const FixedPeriod = Union{Week, Day, Hour, Minute, Second, Millisecond, Microsecond, Nanosecond}
-
 # like div but throw an error if remainder is nonzero
 function divexact(x, y)
     q, r = divrem(x, y)
@@ -414,12 +431,13 @@ function define_conversions(periods)
         end
     end
 end
-define_conversions([(:Week, 7), (:Day, 24), (:Hour, 60), (:Minute, 60), (:Second, 1000),
-                    (:Millisecond, 1000), (:Microsecond, 1000), (:Nanosecond, 1)])
-define_conversions([(:Year, 4), (:Quarter, 3), (:Month, 1)])
+# Two separate calls, one per group: conversions are exact within a group but must not
+# exist across the boundary (a month is not a fixed number of days), so `FixedPeriod`s and
+# `OtherPeriod`s are deliberately never made convertible to each other.
+define_conversions(FIXED_PERIOD_CONVERSIONS)
+define_conversions(OTHER_PERIOD_CONVERSIONS)
 
 # fixed is not comparable to other periods, except when both are zero (#37459)
-const OtherPeriod = Union{Month, Quarter, Year}
 (==)(x::FixedPeriod, y::OtherPeriod) = iszero(x) & iszero(y)
 (==)(x::OtherPeriod, y::FixedPeriod) = y == x
 
