@@ -794,6 +794,28 @@ const MaybeToken = Union{Nothing, CancellationToken}
 @inline resolve_cancel_token(::UseDefaultToken) = default_cancel_token()
 @inline resolve_cancel_token(tok::Union{CancellationToken, Nothing}) = tok
 
+# The entry check of a public API taking a `cancel` keyword argument,
+# returning the resolved token. The two forms differ deliberately:
+#  - the scoped default is acknowledgement-gated (`checkcancel`): a task
+#    already handling the cancellation of its scope may still perform
+#    blocking cleanup work under it;
+#  - an *explicitly* passed token that is already cancelled always throws:
+#    passing `cancel = tok` states that this operation must not run once
+#    `tok` fired, no matter who asks.
+@inline function check_cancel_arg(cancel::CancelTokenArg)
+    if cancel === DEFAULT_CANCEL
+        tok = default_cancel_token()
+        tok === nothing || checkcancel(tok.source)
+        return tok
+    end
+    tok = resolve_cancel_token(cancel)
+    if tok !== nothing
+        st = @atomic :acquire tok.source.state
+        st == 0x00 || throw(CancellationRequest(st & SEVERITY_MASK))
+    end
+    return tok
+end
+
 @eval function with_cancel_token(f, tok::Union{Nothing, CancellationToken})
     $(Expr(:tryfinally, :(f()), nothing,
            :(Scope(Core.current_scope()::Union{Nothing, Scope}, CANCEL_TOKEN => tok))))
@@ -807,3 +829,18 @@ token (the closure equivalent of `@with Base.CANCEL_TOKEN => tok f()`,
 available during early bootstrap).
 """
 with_cancel_token
+
+# Implementation of a `cancel` keyword argument as dynamic-scope sugar: with
+# the default sentinel, run `f()` as-is (zero overhead; `f`'s blocking points
+# resolve the scoped token themselves); with an explicit argument, check it
+# (throwing before any side effect) and run `f()` in a scope governed by it.
+# This composes with *any* implementation underneath `f` - including methods
+# of user-defined types that know nothing about cancellation keywords - as
+# long as its blocking points use the standard wait machinery. Passing
+# `cancel = nothing` shadows an outer token, making `f`'s waits
+# non-cancellable.
+@inline function _with_cancel_arg(f, cancel::CancelTokenArg)
+    cancel === DEFAULT_CANCEL && return f()
+    tok = check_cancel_arg(cancel)
+    return with_cancel_token(f, tok)
+end

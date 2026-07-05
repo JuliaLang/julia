@@ -324,6 +324,113 @@ end
     @test fetch(fut) == 1
 end
 
+@testset "explicit cancel keyword arguments" begin
+    Sockets = Base.require(Base.PkgId(Base.UUID("6462fe0b-24de-5631-8697-dd941f90decc"), "Sockets"))
+    FileWatching = Base.require(Base.PkgId(Base.UUID("7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"), "FileWatching"))
+    cancelled_src = CancellationTokenSource()
+    cancel!(cancelled_src)
+    ctok = CancellationToken(cancelled_src)
+
+    # a pre-cancelled token throws at entry, before any side effect
+    p = Pipe()
+    Base.link_pipe!(p, reader_supports_async=true, writer_supports_async=true)
+    @test_throws CancellationRequest read(p.out, 10; cancel=ctok)
+    @test_throws CancellationRequest read(p.out; cancel=ctok)
+    @test_throws CancellationRequest read(p.out, String; cancel=ctok)
+    @test_throws CancellationRequest read(p.out, UInt8; cancel=ctok)
+    @test_throws CancellationRequest read!(p.out, zeros(UInt8, 4); cancel=ctok)
+    @test_throws CancellationRequest readbytes!(p.out, zeros(UInt8, 4); cancel=ctok)
+    @test_throws CancellationRequest readline(p.out; cancel=ctok)
+    @test_throws CancellationRequest readuntil(p.out, 0x0a; cancel=ctok)
+    @test_throws CancellationRequest readavailable(p.out; cancel=ctok)
+    @test_throws CancellationRequest eof(p.out; cancel=ctok)
+    @test_throws CancellationRequest write(p.in, zeros(UInt8, 8); cancel=ctok)
+    @test_throws CancellationRequest write(p.in, "hello"; cancel=ctok)
+    @test_throws CancellationRequest write(p.in, "a", "b"; cancel=ctok)
+    @test_throws CancellationRequest flush(p.in; cancel=ctok)
+    @test_throws CancellationRequest sleep(10; cancel=ctok)
+    @test_throws CancellationRequest wait(Timer(10); cancel=ctok)
+    @test_throws CancellationRequest run(`sleep 5`; cancel=ctok)
+    @test_throws CancellationRequest success(`sleep 5`; cancel=ctok)
+    @test_throws CancellationRequest read(`sleep 5`; cancel=ctok)
+    @test_throws CancellationRequest readchomp(`sleep 5`; cancel=ctok)
+    @test_throws CancellationRequest Sockets.getalladdrinfo("localhost"; cancel=ctok)
+    @test_throws CancellationRequest Sockets.getaddrinfo("localhost"; cancel=ctok)
+    @test_throws CancellationRequest Sockets.getnameinfo(Sockets.localhost; cancel=ctok)
+    @test_throws CancellationRequest FileWatching.watch_file(tempdir(), 5.0; cancel=ctok)
+    @test_throws CancellationRequest FileWatching.poll_fd(Base._fd(p.out), 5.0; readable=true, cancel=ctok)
+
+    # `cancel = nothing` shadows an (already cancelled) outer scope
+    write(p.in, "ab\n")
+    Base.with_cancel_token(ctok) do
+        @test read(p.out, 2; cancel=nothing) == b"ab"
+    end
+    close(p)
+
+    # live cancellation through an explicit token: blocked read
+    p2 = Pipe()
+    Base.link_pipe!(p2, reader_supports_async=true, writer_supports_async=true)
+    src = CancellationTokenSource()
+    t = @async read(p2.out, 10; cancel=CancellationToken(src))
+    spin()
+    cancel!(src)
+    @test_throws TaskFailedException wait(t)
+    @test t.result isa CancellationRequest
+    close(p2)
+
+    # live cancellation: blocked write
+    p3 = Pipe()
+    Base.link_pipe!(p3, reader_supports_async=true, writer_supports_async=true)
+    src3 = CancellationTokenSource()
+    big = zeros(UInt8, 200_000_000)
+    t3 = @async write(p3.in, big; cancel=CancellationToken(src3))
+    sleep(0.5)
+    cancel!(src3)
+    @test_throws TaskFailedException wait(t3)
+    @test t3.result isa CancellationRequest
+    close(p3)
+
+    # live cancellation: Sockets.accept and recv with explicit tokens
+    port, server = Sockets.listenany(Sockets.localhost, 0)
+    src4 = CancellationTokenSource()
+    t4 = @async Sockets.accept(server; cancel=CancellationToken(src4))
+    spin()
+    cancel!(src4)
+    @test_throws TaskFailedException wait(t4)
+    @test t4.result isa CancellationRequest
+    close(server)
+
+    udp = Sockets.UDPSocket()
+    Sockets.bind(udp, Sockets.localhost, 0)
+    src5 = CancellationTokenSource()
+    t5 = @async Sockets.recv(udp; cancel=CancellationToken(src5))
+    spin()
+    cancel!(src5)
+    @test_throws TaskFailedException wait(t5)
+    @test t5.result isa CancellationRequest
+    close(udp)
+
+    # live cancellation: FileWatching.watch_file with an explicit token
+    path = tempname()
+    touch(path)
+    src6 = CancellationTokenSource()
+    t6 = @async FileWatching.watch_file(path, 100.0; cancel=CancellationToken(src6))
+    spin()
+    cancel!(src6)
+    @test_throws TaskFailedException wait(t6)
+    @test t6.result isa CancellationRequest
+    rm(path)
+
+    # live cancellation: run with an explicit token; the child process is
+    # not reaped by the cancelled wait
+    src7 = CancellationTokenSource()
+    t7 = @async run(`sleep 5`; cancel=CancellationToken(src7))
+    sleep(0.5)
+    cancel!(src7)
+    @test_throws TaskFailedException wait(t7)
+    @test t7.result isa CancellationRequest
+end
+
 @testset "cancellation of computing tasks" begin
     # Polling cancellation via @cancel_check
     t, src = cancellable_spawn(find_collatz_counterexample)

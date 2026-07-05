@@ -205,7 +205,7 @@ end
 waitqueue(t::Union{Timer, AsyncCondition}) = ILLRef(waitqueue(t.cond), t)
 
 wait(t::Union{Timer, AsyncCondition}; cancel::CancelTokenArg=DEFAULT_CANCEL) =
-    wait(t, resolve_cancel_token(cancel))
+    wait(t, check_cancel_arg(cancel))
 function wait(t::Union{Timer, AsyncCondition}, tok::MaybeToken)
     ok = _trywait(t, tok)
     @cancel_check(tok)
@@ -331,9 +331,10 @@ A cancellation of the governing token (by default the scoped token, see
 """
 function sleep(sec::Real; cancel::CancelTokenArg=DEFAULT_CANCEL)
     sec ≥ 0 || throw(ArgumentError("cannot sleep for $sec seconds"))
+    tok = check_cancel_arg(cancel)
     t = Timer(sec)
     try
-        wait(t, resolve_cancel_token(cancel))
+        wait(t, tok)
     finally
         close(t)
     end
