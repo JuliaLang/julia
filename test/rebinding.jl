@@ -2,6 +2,11 @@
 
 using Test
 
+# Temporary diagnostic for a Windows CI hang (#62257): mark progress on stderr so a
+# hang can be localized in the CI log.
+rebinding_progress(name) = (println(stderr, "rebinding progress: ", name); flush(stderr))
+rebinding_progress("start")
+
 module Rebinding
     using Test
     make_foo() = Foo(1)
@@ -643,7 +648,10 @@ module ReexportTests
     @test User3.same_name == 42
 end
 
+rebinding_progress("pre-62154 tests")
+
 # #62154: replacement of mutable typed globals
+rebinding_progress("at typed global replacement (#62154)")
 @testset "typed global replacement (#62154)" begin
     # first definition and re-typing via the value-carrying form (installed atomically)
     @eval module TGR1 end
@@ -733,6 +741,7 @@ end
 # #62154: generated code that observes a global's value slot after its type has changed must
 # verify the value against the type it was compiled for, so that a stale access errors rather
 # than returning an ill-typed value (a memory-unsafe type confusion).
+rebinding_progress("at typed global re-type access verification (#62154)")
 @testset "typed global re-type access verification (#62154)" begin
     @eval module TGRV1 end
     Core.eval(TGRV1, :(global x::Int = 5))
@@ -782,6 +791,7 @@ end
 # both the compile-time type ("a later declaration can narrow the set of accesses that
 # succeed, but never expand it") and the latest declared type (which governs the single
 # value slot).
+rebinding_progress("at typed global re-type write verification (#62154)")
 @testset "typed global re-type write verification (#62154)" begin
     # widening re-type: the compile-time type is still enforced in the stale frame
     @eval module TGRW1 end
@@ -871,6 +881,7 @@ end
     @test TGRW7.r === 8
 end
 
+rebinding_progress("at re-type during an in-flight RMW (#62154)")
 @testset "re-type during an in-flight RMW (#62154)" begin
     # The modify `op` callback runs at a safepoint inside the guarded RMW fast path, so
     # re-declaring the binding from inside it exercises exactly the window the re-type
@@ -984,11 +995,21 @@ end
 println(bad[] ? "STRESS FAIL" : "STRESS OK")
 exit(bad[] ? 1 : 0)
 """
-        cmd = `$(Base.julia_cmd()) --startup-file=no -t4 -e $script`
-        @test success(pipeline(cmd; stdout=devnull, stderr=stderr))
+        cmd = `$(Base.julia_cmd()) --startup-file=no -t4 --timeout-for-safepoint-straggler=30 -e $script`
+        # bound the subprocess so a runtime deadlock fails this test with output
+        # instead of hanging the whole suite until the CI job timeout (#62257)
+        p = run(pipeline(cmd; stdout=devnull, stderr=stderr); wait=false)
+        if timedwait(() -> process_exited(p), 600.0) === :timed_out
+            println(stderr, "rebinding: threaded stress subprocess timed out, killing it")
+            kill(p)
+            @test false
+        else
+            @test success(p)
+        end
     end
 end
 
+rebinding_progress("at global to constant transition (#62154)")
 @testset "global to constant transition (#62154)" begin
     # direct global -> const with a conforming value: re-type plus assignment,
     # so stale readers observe the constant's value (verified against their type)
@@ -1071,3 +1092,5 @@ end
         @test (b.flags & 0x10) == 0x00
     end
 end
+
+rebinding_progress("done")
