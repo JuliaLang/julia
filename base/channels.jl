@@ -452,8 +452,8 @@ function put_unbuffered(c::Channel, v, cancel::CancelTokenArg=DEFAULT_CANCEL)
             check_channel_state(c)
             # unfair scheduled version of: notify(c.cond_take, v, false, false); yield()
             w = popfirst!(c.cond_take.waitq)
-            if (@atomicreplace w.state WAITNODE_WAITING => WAITNODE_NOTIFIED).success
-                taker = w.task
+            if (@atomicreplace w.wait_state WAITNODE_WAITING => WAITNODE_NOTIFIED).success
+                taker = w
                 break
             end
             # this waiter's wake was already claimed by a canceller - skip it

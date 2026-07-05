@@ -29,16 +29,16 @@ function uv_getaddrinfocb(req::Ptr{Cvoid}, status::Cint, addrinfo::Ptr{Cvoid})
     # Mark the callback as done; the waiter (which inspects the req under the
     # iolock) owns freeing it.
     uv_req_set_data(req, C_NULL)
-    w = unsafe_pointer_to_objref(data)::Base.WaitNode
-    if !(@atomicreplace w.state Base.WAITNODE_WAITING => Base.WAITNODE_NOTIFIED).success
+    w = unsafe_pointer_to_objref(data)::Task
+    if !(@atomicreplace w.wait_state Base.WAITNODE_WAITING => Base.WAITNODE_NOTIFIED).success
         # a canceller claimed the wake; drop the result
         addrinfo == C_NULL || ccall(:uv_freeaddrinfo, Cvoid, (Ptr{Cvoid},), addrinfo)
         return nothing
     end
-    w.queue = nothing
-    w.uvreq = C_NULL
+    w.wait_queue = nothing
+    w.wait_uvreq = C_NULL
     if status != 0 || addrinfo == C_NULL
-        schedule(w.task, _UVError("getaddrinfo", status))
+        schedule(w, _UVError("getaddrinfo", status))
     else
         freeaddrinfo = addrinfo
         addrs = IPAddr[]
@@ -55,7 +55,7 @@ function uv_getaddrinfocb(req::Ptr{Cvoid}, status::Cint, addrinfo::Ptr{Cvoid})
             addrinfo = ccall(:jl_next_from_addrinfo, Ptr{Cvoid}, (Ptr{Cvoid},), addrinfo)
         end
         ccall(:uv_freeaddrinfo, Cvoid, (Ptr{Cvoid},), freeaddrinfo)
-        schedule(w.task, addrs)
+        schedule(w, addrs)
     end
     nothing
 end
@@ -118,9 +118,9 @@ getalladdrinfo(host::AbstractString; cancel::Base.CancelTokenArg=Base.DEFAULT_CA
 function _wait_dns_req(req::Ptr{Cvoid}, tok::Base.MaybeToken)
     ct = current_task()
     src = tok === nothing ? nothing : tok.source
-    w = Base.getwaitnode(ct)
-    @atomic :monotonic w.state = Base.WAITNODE_WAITING
-    w.uvreq = req
+    w = ct
+    @atomic :monotonic w.wait_state = Base.WAITNODE_WAITING
+    w.wait_uvreq = req
     preserve_handle(ct)
     Base.sigatomic_begin()
     uv_req_set_data(req, Base.pointer_from_objref(w))
@@ -130,8 +130,8 @@ function _wait_dns_req(req::Ptr{Cvoid}, tok::Base.MaybeToken)
         # callback frees it).
         ccall(:uv_cancel, Int32, (Ptr{Cvoid},), req)
         uv_req_set_data(req, Base.UV_REQ_DETACHED)
-        w.uvreq = C_NULL
-        @atomic :monotonic w.state = Base.WAITNODE_IDLE
+        w.wait_uvreq = C_NULL
+        @atomic :monotonic w.wait_state = Base.WAITNODE_IDLE
         iolock_end()
         Base.sigatomic_end()
         unpreserve_handle(ct)
@@ -157,8 +157,8 @@ function _wait_dns_req(req::Ptr{Cvoid}, tok::Base.MaybeToken)
             ccall(:uv_cancel, Int32, (Ptr{Cvoid},), req)
             uv_req_set_data(req, Base.UV_REQ_DETACHED)
         end
-        w.uvreq = C_NULL
-        @atomic :monotonic w.state = Base.WAITNODE_IDLE
+        w.wait_uvreq = C_NULL
+        @atomic :monotonic w.wait_state = Base.WAITNODE_IDLE
         iolock_end()
         Base.sigatomic_end()
         unpreserve_handle(ct)
@@ -167,8 +167,8 @@ function _wait_dns_req(req::Ptr{Cvoid}, tok::Base.MaybeToken)
     Base.sigatomic_end()
     iolock_begin()
     src === nothing || Base.unregister_cancellation!(src, w)
-    w.uvreq = C_NULL
-    @atomic :monotonic w.state = Base.WAITNODE_IDLE
+    w.wait_uvreq = C_NULL
+    @atomic :monotonic w.wait_state = Base.WAITNODE_IDLE
     if uv_req_data(req) == C_NULL
         # done with req (the completion callback already ran)
         Libc.free(req)
@@ -237,14 +237,14 @@ function uv_getnameinfocb(req::Ptr{Cvoid}, status::Cint, hostname::Cstring, serv
     # Mark the callback as done; the waiter (which inspects the req under the
     # iolock) owns freeing it.
     uv_req_set_data(req, C_NULL)
-    w = unsafe_pointer_to_objref(data)::Base.WaitNode
-    if (@atomicreplace w.state Base.WAITNODE_WAITING => Base.WAITNODE_NOTIFIED).success
-        w.queue = nothing
-        w.uvreq = C_NULL
+    w = unsafe_pointer_to_objref(data)::Task
+    if (@atomicreplace w.wait_state Base.WAITNODE_WAITING => Base.WAITNODE_NOTIFIED).success
+        w.wait_queue = nothing
+        w.wait_uvreq = C_NULL
         if status != 0
-            schedule(w.task, _UVError("getnameinfo", status))
+            schedule(w, _UVError("getnameinfo", status))
         else
-            schedule(w.task, unsafe_string(hostname))
+            schedule(w, unsafe_string(hostname))
         end
     end
     nothing

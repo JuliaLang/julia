@@ -522,19 +522,16 @@ function _atexit(exitcode::Cint)
             # best-effort cleanup on the way out
         end
     end
-    w = ct.waitnode
-    if w isa WaitNode
-        # If this task's wait node is still registered somewhere (e.g. this
-        # exit came from a signal while parked), best-effort detach it.
-        tok = w.token
-        if tok isa CancellationTokenSource
-            try
-                unregister_cancellation!(tok, w)
-            catch
-            end
+    # If this task's wait state is still registered somewhere (e.g. this
+    # exit came from a signal while parked), best-effort detach it.
+    tok = ct.wait_token
+    if tok isa CancellationTokenSource
+        try
+            unregister_cancellation!(tok, ct)
+        catch
         end
-        @atomic :monotonic w.state = WAITNODE_IDLE
     end
+    @atomic :monotonic ct.wait_state = WAITNODE_IDLE
     # We are exiting: any pending cancellation of this task's scope is moot
     # and would only disrupt the atexit hooks - run them in a shielded scope.
     ccall(:jl_disarm_sigint_rescue_timer, Cvoid, ())

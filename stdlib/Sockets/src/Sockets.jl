@@ -431,11 +431,11 @@ function uv_sendcb_task(req::Ptr{Cvoid}, status::Cint)
         # Mark the callback as done; the waiter (which inspects the req under
         # the iolock) owns freeing it.
         uv_req_set_data(req, C_NULL)
-        w = unsafe_pointer_to_objref(d)::Base.WaitNode
-        if (@atomicreplace w.state Base.WAITNODE_WAITING => Base.WAITNODE_NOTIFIED).success
-            w.queue = nothing
-            w.uvreq = C_NULL
-            schedule(w.task, status)
+        w = unsafe_pointer_to_objref(d)::Task
+        if (@atomicreplace w.wait_state Base.WAITNODE_WAITING => Base.WAITNODE_NOTIFIED).success
+            w.wait_queue = nothing
+            w.wait_uvreq = C_NULL
+            schedule(w, status)
         end
         # CAS failure: a canceller claimed the wake; the waiter's teardown
         # observes data == C_NULL and takes over the request.
@@ -487,10 +487,10 @@ function send(sock::UDPSocket, ipaddr::IPAddr, port::Integer, msg;
         iolock_end()
         return nothing
     end
-    w = Base.getwaitnode(ct)
-    @atomic :monotonic w.state = Base.WAITNODE_WAITING
-    w.queue = sock
-    w.uvreq = uvw
+    w = ct
+    @atomic :monotonic w.wait_state = Base.WAITNODE_WAITING
+    w.wait_queue = sock
+    w.wait_uvreq = uvw
     preserve_handle(ct)
     Base.sigatomic_begin()
     uv_req_set_data(uvw, Base.pointer_from_objref(w))
@@ -498,9 +498,9 @@ function send(sock::UDPSocket, ipaddr::IPAddr, port::Integer, msg;
         # The token was cancelled since the entry check: don't park; detach
         # the request (its completion callback frees it) and deliver.
         uv_req_set_data(uvw, Base.UV_REQ_DETACHED)
-        w.queue = nothing
-        w.uvreq = C_NULL
-        @atomic :monotonic w.state = Base.WAITNODE_IDLE
+        w.wait_queue = nothing
+        w.wait_uvreq = C_NULL
+        @atomic :monotonic w.wait_state = Base.WAITNODE_IDLE
         iolock_end()
         Base.sigatomic_end()
         unpreserve_handle(ct)
@@ -525,9 +525,9 @@ function send(sock::UDPSocket, ipaddr::IPAddr, port::Integer, msg;
             # completion callback frees it)
             uv_req_set_data(uvw, Base.UV_REQ_DETACHED)
         end
-        w.queue = nothing
-        w.uvreq = C_NULL
-        @atomic :monotonic w.state = Base.WAITNODE_IDLE
+        w.wait_queue = nothing
+        w.wait_uvreq = C_NULL
+        @atomic :monotonic w.wait_state = Base.WAITNODE_IDLE
         iolock_end()
         Base.sigatomic_end()
         unpreserve_handle(ct)
@@ -536,9 +536,9 @@ function send(sock::UDPSocket, ipaddr::IPAddr, port::Integer, msg;
     Base.sigatomic_end()
     iolock_begin()
     src === nothing || Base.unregister_cancellation!(src, w)
-    w.queue = nothing
-    w.uvreq = C_NULL
-    @atomic :monotonic w.state = Base.WAITNODE_IDLE
+    w.wait_queue = nothing
+    w.wait_uvreq = C_NULL
+    @atomic :monotonic w.wait_state = Base.WAITNODE_IDLE
     if uv_req_data(uvw) == C_NULL
         # done with uvw (the completion callback already ran)
         Libc.free(uvw)

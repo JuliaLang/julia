@@ -19,9 +19,9 @@ function cancellable_spawn(f)
     return t, src
 end
 
-# whether `t` is parked (its wait node is enqueued on some waitee)
-is_parked(t::Task) = (w = t.waitnode; w isa Base.WaitNode && w.queue !== nothing)
-parked_on(t::Task, @nospecialize(x)) = (w = t.waitnode; w isa Base.WaitNode && w.queue === x)
+# whether `t` is parked (its wait links are enqueued on some waitee)
+is_parked(t::Task) = t.wait_queue !== nothing
+parked_on(t::Task, @nospecialize(x)) = t.wait_queue === x
 
 const collatz_code = quote
     collatz(n) = (n & 1) == 1 ? (3n + 1) : (n ÷ 2)
