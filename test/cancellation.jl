@@ -1,13 +1,15 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base: cancel!, CancellationRequest, CancellationToken, CancellationTokenSource,
-    CANCEL_REQUEST_SAFE, CANCEL_REQUEST_ABANDON_EXTERNAL, CANCEL_REQUEST_ABANDON_ALL
+    CANCEL_REQUEST_SAFE, CANCEL_REQUEST_ABANDON_EXTERNAL, CANCEL_REQUEST_ABANDON_ALL,
+    CANCEL_TOKEN
+using Base.ScopedValues: with, ScopedValue
 
 # Start `f` as an @async-style (sticky, co-scheduled) task governed by a
 # fresh cancellation source; returns (task, source).
 function cancellable(f)
     src = CancellationTokenSource()
-    t = Base.with_cancel_token(() -> @async(f()), CancellationToken(src))
+    t = with(() -> @async(f()), CANCEL_TOKEN => CancellationToken(src))
     return t, src
 end
 
@@ -15,7 +17,7 @@ end
 # a compute-bound victim must not land on the interactive/io thread).
 function cancellable_spawn(f)
     src = CancellationTokenSource()
-    t = Base.with_cancel_token(() -> Threads.@spawn(f()), CancellationToken(src))
+    t = with(() -> Threads.@spawn(f()), CANCEL_TOKEN => CancellationToken(src))
     return t, src
 end
 
@@ -106,7 +108,7 @@ spin(n=4) = for _ in 1:n; yield(); end
     # cleanup proceeds
     src = CancellationTokenSource()
     phase = Ref{Any}(:init)
-    t = Base.with_cancel_token(CancellationToken(src)) do
+    t = with(CANCEL_TOKEN => CancellationToken(src)) do
         @async try
             sleep(1000)
         catch e
@@ -137,9 +139,15 @@ spin(n=4) = for _ in 1:n; yield(); end
     @test_throws TaskFailedException wait(tm)
     @test tm.result isa CancellationRequest
 
-    # the current scoped token is discoverable
+    # the current scoped token is discoverable, and `=> nothing` scopes it out
     tok = CancellationToken(CancellationTokenSource())
-    @test Base.with_cancel_token(Base.cancellation_token, tok) === tok
+    @test with(() -> CANCEL_TOKEN[], CANCEL_TOKEN => tok) === tok
+    @test with(() -> CANCEL_TOKEN[], CANCEL_TOKEN => nothing) === nothing
+    # an unrelated nested scope inherits the governing token
+    inherited = with(CANCEL_TOKEN => tok) do
+        with(() -> CANCEL_TOKEN[], ScopedValue(0) => 1)
+    end
+    @test inherited === tok
 end
 
 @testset "cancellation of waiting tasks" begin
@@ -147,7 +155,7 @@ end
     # cancellation before running any user code
     src = CancellationTokenSource()
     body_ran = Ref(false)
-    t = Base.with_cancel_token(CancellationToken(src)) do
+    t = with(CANCEL_TOKEN => CancellationToken(src)) do
         @task (body_ran[] = true)
     end
     @test cancel!(src)
@@ -380,7 +388,7 @@ end
 
     # `cancel = nothing` shadows an (already cancelled) outer scope
     write(p.in, "ab\n")
-    Base.with_cancel_token(ctok) do
+    with(CANCEL_TOKEN => ctok) do
         @test read(p.out, 2; cancel=nothing) == b"ab"
     end
     close(p)
@@ -526,7 +534,7 @@ end
     # A task spawned into an ABANDON_ALL-cancelled scope never runs its body.
     src4 = CancellationTokenSource()
     body_ran = Ref(false)
-    t4 = Base.with_cancel_token(() -> @task(body_ran[] = true), CancellationToken(src4))
+    t4 = with(() -> @task(body_ran[] = true), CANCEL_TOKEN => CancellationToken(src4))
     @test cancel!(src4, CANCEL_REQUEST_ABANDON_ALL)
     schedule(t4)
     @test timedwait(() -> istaskdone(t4), 10.0) == :ok
@@ -718,7 +726,7 @@ end
             sleep(100)
             println("FAIL: not cancelled")
         catch e
-            Base.with_cancel_token(Base.sigint_new_episode!()) do
+            Base.ScopedValues.with(Base.CANCEL_TOKEN => Base.sigint_new_episode!()) do
                 println("caught: ", typeof(e))
                 println("continued")
                 sleep(0.1) # cancellable operations work again
@@ -743,7 +751,7 @@ end
                 @async find_collatz_counterexample()
             end
         catch e
-            Base.with_cancel_token(Base.sigint_new_episode!()) do
+            Base.ScopedValues.with(Base.CANCEL_TOKEN => Base.sigint_new_episode!()) do
                 println(typeof(e))
             end
         end

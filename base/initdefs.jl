@@ -535,7 +535,7 @@ function _atexit(exitcode::Cint)
     # We are exiting: any pending cancellation of this task's scope is moot
     # and would only disrupt the atexit hooks - run them in a shielded scope.
     ccall(:jl_disarm_sigint_rescue_timer, Cvoid, ())
-    return with_cancel_token(() -> _run_atexit_hooks(exitcode), nothing)
+    return ScopedValues.@with(CANCEL_TOKEN => nothing, _run_atexit_hooks(exitcode))
 end
 
 function _run_atexit_hooks(exitcode::Cint)

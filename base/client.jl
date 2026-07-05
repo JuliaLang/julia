@@ -151,8 +151,8 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
                 # fresh ^C epoch: the failed evaluation's cancelled epoch
                 # must not poison it, and a stuck printout is cancellable
                 try
-                    with_cancel_token(() -> invokelatest(display_error, errio, lasterr),
-                                      sigint_new_episode!())
+                    ScopedValues.@with(CANCEL_TOKEN => sigint_new_episode!(),
+                                       invokelatest(display_error, errio, lasterr))
                 finally
                     sigint_close_episode!()
                 end
@@ -492,8 +492,8 @@ function run_fallback_repl(interactive::Bool)
                     end
                     # each interactive input is a fresh ^C epoch
                     try
-                        with_cancel_token(() -> eval_user_input(stderr, ex, true),
-                                          sigint_new_episode!())
+                        ScopedValues.@with(CANCEL_TOKEN => sigint_new_episode!(),
+                                           eval_user_input(stderr, ex, true))
                     finally
                         sigint_close_episode!()
                     end
@@ -638,8 +638,8 @@ function _start()
         # the very cancellation being reported)
         local errs = scrub_repl_backtrace(current_exceptions())
         try
-            with_cancel_token(() -> invokelatest(display_error, errs),
-                              sigint_new_episode!())
+            ScopedValues.@with(CANCEL_TOKEN => sigint_new_episode!(),
+                               invokelatest(display_error, errs))
         finally
             sigint_close_episode!()
         end

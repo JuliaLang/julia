@@ -38,8 +38,8 @@ cancellation of the associated source, but cannot request cancellation
 itself. Only the holder of the *source* can call [`cancel!`](@ref).
 
 A token takes effect in one of two ways: pass it as the `cancel` keyword
-argument of a specific blocking operation, or establish it as the governing
-token of a whole computation with [`with_cancel_token`](@ref) (spawned tasks
+argument of a specific blocking operation, or scope it over a whole
+computation via the [`CANCEL_TOKEN`](@ref) scoped value (spawned tasks
 inherit it). Either way, once the source is cancelled the affected
 operations throw a [`CancellationRequest`](@ref).
 
@@ -271,8 +271,8 @@ const WAITNODE_CANCELLED = 0x03  # cancellation claimed the wake
 # cancelled, every cancellation point and every blocking-operation entry
 # check throws the `CancellationRequest`. There is no per-task
 # acknowledgement state; cleanup code that must block under a cancelled
-# scope explicitly shields itself (`cancel = nothing`, or
-# `with_cancel_token(f, nothing)`), and the interactive machinery re-arms
+# scope explicitly shields itself (`cancel = nothing`, or scoping
+# `CANCEL_TOKEN => nothing` over a block), and the interactive machinery re-arms
 # with a *fresh* episode source between epochs (see `sigint_new_episode!`),
 # detaching any still-unwinding work from the ^C target.
 
@@ -650,9 +650,31 @@ struct CancelTokenKey <: AbstractScopedValue{Union{Nothing, CancellationToken}} 
     CANCEL_TOKEN
 
 The scoped value carrying the [`CancellationToken`](@ref) that governs the
-current dynamic extent. Blocking APIs default their `cancel` keyword
-argument to this token, and [`@cancel_check`](@ref) checks it. Scope a token
-over a computation with `@with(Base.CANCEL_TOKEN => tok, ...)`.
+current dynamic extent, or `nothing` if there is none. Blocking operations
+default their `cancel` keyword argument to it, [`@cancel_check`](@ref)
+checks it, and tasks spawned within a scope inherit it.
+
+Establish a governing token with the standard scoped-value API
+([`ScopedValues.@with`](@ref) / [`ScopedValues.with`](@ref)):
+
+```julia
+using Base.ScopedValues
+
+src = Base.CancellationTokenSource()
+with(Base.CANCEL_TOKEN => Base.CancellationToken(src)) do
+    ...   # blocking operations in here are cancellable via `cancel!(src)`
+end
+```
+
+Scoping `Base.CANCEL_TOKEN => nothing` instead *shields* the enclosed code
+from an outer (possibly cancelled) token, making its blocking operations
+non-cancellable; use this for cleanup that must complete while the
+surrounding computation is being cancelled.
+
+The current value can be read with `Base.CANCEL_TOKEN[]`, for example to
+hand the governing token across a boundary that does not preserve dynamic
+scope (a `ccall` callback, a queue consumed by unrelated tasks, another
+process).
 """
 const CANCEL_TOKEN = CancelTokenKey()
 
@@ -669,15 +691,6 @@ end
     tok === nothing && return nothing
     return (tok::CancellationToken).source
 end
-
-"""
-    cancellation_token()::Union{Nothing, CancellationToken}
-
-The [`CancellationToken`](@ref) governing the current dynamic extent, or
-`nothing` if there is none. Pass this to another task or thread to let it
-observe cancellation of the current scope.
-"""
-cancellation_token() = default_cancel_token()
 
 ## `cancel` keyword-argument plumbing
 
@@ -707,23 +720,13 @@ const MaybeToken = Union{Nothing, CancellationToken}
     return tok
 end
 
-@eval function with_cancel_token(f, tok::Union{Nothing, CancellationToken})
+# Run `f()` in a dynamic scope governed by `tok` - the raw `Scope` form of
+# `ScopedValues.@with(CANCEL_TOKEN => tok, f())`, which is not yet available
+# at this point of bootstrap.
+@eval function _run_with_cancel_token(f, tok::Union{Nothing, CancellationToken})
     $(Expr(:tryfinally, :(f()), nothing,
            :(Scope(Core.current_scope()::Union{Nothing, Scope}, CANCEL_TOKEN => tok))))
 end
-
-"""
-    with_cancel_token(f, tok::Union{Nothing, CancellationToken})
-
-Run `f()` in a new dynamic scope in which `tok` is the governing cancellation
-token: blocking operations inside default to it, [`@cancel_check`](@ref)
-checks it, and tasks spawned inside inherit it.
-
-Passing `nothing` shields `f()` from an outer (possibly cancelled) token:
-its blocking operations become non-cancellable. Use this for cleanup that
-must complete even while the surrounding computation is being cancelled.
-"""
-with_cancel_token
 
 # Implementation of a `cancel` keyword argument as dynamic-scope sugar: with
 # the default sentinel, run `f()` as-is (zero overhead; `f`'s blocking points
@@ -737,5 +740,5 @@ with_cancel_token
 @inline function _with_cancel_arg(f, cancel::CancelTokenArg)
     cancel === DEFAULT_CANCEL && return f()
     tok = check_cancel_arg(cancel)
-    return with_cancel_token(f, tok)
+    return _run_with_cancel_token(f, tok)
 end
