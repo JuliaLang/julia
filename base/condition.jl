@@ -147,7 +147,7 @@ non-cancellable.
 """
 wait(c::GenericCondition; first::Bool=false, waitee=c,
      cancel::CancelTokenArg=DEFAULT_CANCEL, min_severity::UInt8=0x00) =
-    wait(c, resolve_cancel_token(cancel); first, waitee, min_severity)
+    wait(c, check_cancel_arg(cancel); first, waitee, min_severity)
 
 function wait(c::GenericCondition, tok::MaybeToken; first::Bool=false, waitee=c,
               min_severity::UInt8=0x00)

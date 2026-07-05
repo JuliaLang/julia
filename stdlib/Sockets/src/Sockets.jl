@@ -150,7 +150,8 @@ Accepts a connection on the given server and returns a connection to the client.
 uninitialized client stream may be provided, in which case it will be used instead of
 creating a new stream.
 """
-accept(server::TCPServer) = accept(server, TCPSocket())
+accept(server::TCPServer; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL) =
+    accept(server, TCPSocket(); cancel)
 
 function accept(callback, server::LibuvServer)
     task = @async try
@@ -326,8 +327,8 @@ end
 
 Read a UDP packet from the specified socket, and return the bytes received. This call blocks.
 """
-function recv(sock::UDPSocket)
-    addr, data = recvfrom(sock)
+function recv(sock::UDPSocket; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
+    addr, data = recvfrom(sock; cancel)
     return data
 end
 
@@ -343,7 +344,8 @@ Read a UDP packet from the specified socket, returning a tuple of `(host_port, d
     Prior to Julia version 1.3, the first returned value was an address (`IPAddr`).
     In version 1.3 it was changed to an `InetAddr`.
 """
-function recvfrom(sock::UDPSocket)
+function recvfrom(sock::UDPSocket; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
+    tok = Base.check_cancel_arg(cancel)
     iolock_begin()
     # If the socket has not been bound, it will be bound implicitly to ::0 and a random port
     if sock.status != StatusInit && sock.status != StatusOpen && sock.status != StatusActive
@@ -362,7 +364,7 @@ function recvfrom(sock::UDPSocket)
     try
         From = Union{InetAddr{IPv4}, InetAddr{IPv6}}
         Data = Vector{UInt8}
-        from, data = wait(sock.recvnotify)::Tuple{From, Data}
+        from, data = wait(sock.recvnotify, tok)::Tuple{From, Data}
         return (from, data)
     finally
         unlock(sock.recvnotify)
@@ -469,7 +471,7 @@ function send(sock::UDPSocket, ipaddr::IPAddr, port::Integer, msg;
         error("UDPSocket is not initialized and open")
     end
     ct = current_task()
-    tok = Base.resolve_cancel_token(cancel)
+    tok = cancel === Base.DEFAULT_CANCEL ? Base.resolve_cancel_token(cancel) : Base.check_cancel_arg(cancel)
     src = tok === nothing ? nothing : tok.source
     if Base.cancel_pending(src, ct)
         # The governing token is already cancelled: throw before handing
@@ -608,7 +610,7 @@ end
 
 connect!(sock::TCPSocket, addr::InetAddr) = connect!(sock, addr.host, addr.port)
 
-function wait_connected(x::LibuvStream)
+function wait_connected(x::LibuvStream, tok::Base.MaybeToken=Base.default_cancel_token())
     iolock_begin()
     check_open(x)
     isopen(x) || x.readerror === nothing || throw(x.readerror)
@@ -617,7 +619,7 @@ function wait_connected(x::LibuvStream)
     try
         while x.status == StatusConnecting
             iolock_end()
-            wait(x.cond)
+            wait(x.cond, tok)
             unlock(x.cond)
             iolock_begin()
             lock(x.cond)
@@ -638,13 +640,16 @@ end
 
 Connect to the host `host` on port `port`.
 """
-connect(sock::TCPSocket, port::Integer) = connect(sock, localhost, port)
-connect(port::Integer) = connect(localhost, port)
+connect(sock::TCPSocket, port::Integer; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL) =
+    connect(sock, localhost, port; cancel)
+connect(port::Integer; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL) = connect(localhost, port; cancel)
 
 # Valid connect signatures for TCP
-connect(host::AbstractString, port::Integer) = connect(TCPSocket(), host, port)
-connect(addr::IPAddr, port::Integer) = connect(TCPSocket(), addr, port)
-connect(addr::InetAddr) = connect(TCPSocket(), addr)
+connect(host::AbstractString, port::Integer; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL) =
+    connect(TCPSocket(), host, port; cancel)
+connect(addr::IPAddr, port::Integer; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL) =
+    connect(TCPSocket(), addr, port; cancel)
+connect(addr::InetAddr; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL) = connect(TCPSocket(), addr; cancel)
 
 function connect!(sock::TCPSocket, host::AbstractString, port::Integer)
     if sock.status != StatusInit
@@ -655,9 +660,10 @@ function connect!(sock::TCPSocket, host::AbstractString, port::Integer)
     return sock
 end
 
-function connect(sock::LibuvStream, args...)
+function connect(sock::LibuvStream, args::Vararg{Any, N}; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL) where {N}
+    tok = Base.check_cancel_arg(cancel)
     connect!(sock, args...)
-    wait_connected(sock)
+    wait_connected(sock, tok)
     return sock
 end
 
@@ -777,7 +783,8 @@ function accept_nonblock(server::TCPServer)
     return client
 end
 
-function accept(server::LibuvServer, client::LibuvStream)
+function accept(server::LibuvServer, client::LibuvStream; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
+    tok = Base.check_cancel_arg(cancel)
     iolock_begin()
     if server.status != StatusActive && server.status != StatusClosing && server.status != StatusClosed
         throw(ArgumentError("server not connected, make sure \"listen\" has been called"))
@@ -794,7 +801,7 @@ function accept(server::LibuvServer, client::LibuvStream)
         lock(server.cond)
         iolock_end()
         try
-            wait(server.cond)
+            wait(server.cond, tok)
         finally
             unlock(server.cond)
             unpreserve_handle(server)

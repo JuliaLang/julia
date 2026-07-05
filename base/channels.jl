@@ -395,7 +395,8 @@ task.
 function put!(c::Channel{T}, v; cancel::CancelTokenArg=DEFAULT_CANCEL) where T
     check_channel_state(c)
     v = convert(T, v)
-    return isbuffered(c) ? put_buffered(c, v, cancel) : put_unbuffered(c, v, cancel)
+    tok = cancel === DEFAULT_CANCEL ? cancel : check_cancel_arg(cancel)
+    return isbuffered(c) ? put_buffered(c, v, tok) : put_unbuffered(c, v, tok)
 end
 
 # Atomically update channel n_avail, *assuming* we hold the channel lock.
@@ -491,8 +492,10 @@ julia> collect(c)  # item is not removed
  3
 ```
 """
-fetch(c::Channel; cancel::CancelTokenArg=DEFAULT_CANCEL) =
-    isbuffered(c) ? fetch_buffered(c, cancel) : fetch_unbuffered(c)
+function fetch(c::Channel; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    tok = cancel === DEFAULT_CANCEL ? cancel : check_cancel_arg(cancel)
+    return isbuffered(c) ? fetch_buffered(c, tok) : fetch_unbuffered(c)
+end
 function fetch_buffered(c::Channel, cancel::CancelTokenArg=DEFAULT_CANCEL)
     lock(c)
     try
@@ -540,8 +543,10 @@ julia> take!(c)
 1
 ```
 """
-take!(c::Channel; cancel::CancelTokenArg=DEFAULT_CANCEL) =
-    isbuffered(c) ? take_buffered(c, cancel) : take_unbuffered(c, cancel)
+function take!(c::Channel; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    tok = cancel === DEFAULT_CANCEL ? cancel : check_cancel_arg(cancel)
+    return isbuffered(c) ? take_buffered(c, tok) : take_unbuffered(c, tok)
+end
 function take_buffered(c::Channel, cancel::CancelTokenArg=DEFAULT_CANCEL)
     lock(c)
     try
@@ -689,6 +694,7 @@ true
 ```
 """
 function wait(c::Channel; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel === DEFAULT_CANCEL || (cancel = check_cancel_arg(cancel))
     isready(c) && return
     lock(c)
     try

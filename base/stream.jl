@@ -101,7 +101,8 @@ end
 
 bytesavailable(s::LibuvStream) = bytesavailable(s.buffer)
 
-function eof(s::LibuvStream)
+function eof(s::LibuvStream; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel === DEFAULT_CANCEL || return _with_cancel_arg(() -> eof(s), cancel)
     bytesavailable(s) > 0 && return false
     wait_readnb(s, 1)
     # This function is race-y if used from multiple threads, but we guarantee
@@ -438,7 +439,7 @@ function closewrite(s::LibuvStream; cancel::CancelTokenArg=DEFAULT_CANCEL)
         return
     end
     ct = current_task()
-    tok = resolve_cancel_token(cancel)
+    tok = cancel === DEFAULT_CANCEL ? resolve_cancel_token(cancel) : check_cancel_arg(cancel)
     src = tok === nothing ? nothing : tok.source
     if cancel_pending(src, ct)
         # The governing token is already cancelled: throw before issuing the
@@ -984,7 +985,8 @@ end
 # bulk read / write
 
 readbytes!(s::LibuvStream, a::Vector{UInt8}, nb = length(a)) = readbytes!(s, a, Int(nb))
-function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int)
+function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel === DEFAULT_CANCEL || return _with_cancel_arg(() -> readbytes!(s, a, nb), cancel)
     iolock_begin()
     sbuf = s.buffer
     @assert sbuf.seekable == false "buffer should not be seekable"
@@ -1024,7 +1026,8 @@ function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int)
     return nread
 end
 
-function read(stream::LibuvStream)
+function read(stream::LibuvStream; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel === DEFAULT_CANCEL || return _with_cancel_arg(() -> read(stream), cancel)
     wait_readnb(stream, typemax(Int))
     iolock_begin()
     bytes = take!(stream.buffer)
@@ -1032,7 +1035,8 @@ function read(stream::LibuvStream)
     return bytes
 end
 
-function unsafe_read(s::LibuvStream, p::Ptr{UInt8}, nb::UInt)
+function unsafe_read(s::LibuvStream, p::Ptr{UInt8}, nb::UInt; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel === DEFAULT_CANCEL || return _with_cancel_arg(() -> unsafe_read(s, p, nb), cancel)
     iolock_begin()
     sbuf = s.buffer
     @assert sbuf.seekable == false "buffer should not be seekable"
@@ -1068,7 +1072,8 @@ function unsafe_read(s::LibuvStream, p::Ptr{UInt8}, nb::UInt)
     nothing
 end
 
-function read(this::LibuvStream, ::Type{UInt8})
+function read(this::LibuvStream, ::Type{UInt8}; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel === DEFAULT_CANCEL || return _with_cancel_arg(() -> read(this, UInt8), cancel)
     iolock_begin()
     sbuf = this.buffer
     @assert sbuf.seekable == false "buffer should not be seekable"
@@ -1082,7 +1087,8 @@ function read(this::LibuvStream, ::Type{UInt8})
     return c
 end
 
-function readavailable(this::LibuvStream)
+function readavailable(this::LibuvStream; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel === DEFAULT_CANCEL || return _with_cancel_arg(() -> readavailable(this), cancel)
     wait_readnb(this, 1) # unlike the other `read` family of functions, this one doesn't guarantee error reporting
     iolock_begin()
     buf = this.buffer
@@ -1092,7 +1098,8 @@ function readavailable(this::LibuvStream)
     return bytes
 end
 
-function copyuntil(out::IO, x::LibuvStream, c::UInt8; keep::Bool=false)
+function copyuntil(out::IO, x::LibuvStream, c::UInt8; keep::Bool=false, cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel === DEFAULT_CANCEL || return _with_cancel_arg(() -> copyuntil(out, x, c; keep), cancel)
     iolock_begin()
     buf = x.buffer
     @assert buf.seekable == false "buffer should not be seekable"
@@ -1326,7 +1333,8 @@ end
 # - smaller writes are buffered, final uv write on flush or when buffer full
 # - large isbits arrays are unbuffered and written directly
 
-function unsafe_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
+function unsafe_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel === DEFAULT_CANCEL || return _with_cancel_arg(() -> unsafe_write(s, p, n), cancel)
     while true
         # try to add to the send buffer
         iolock_begin()
@@ -1347,7 +1355,8 @@ function unsafe_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
     return uv_write(s, p, n)
 end
 
-function flush(s::LibuvStream)
+function flush(s::LibuvStream; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel === DEFAULT_CANCEL || return _with_cancel_arg(() -> flush(s), cancel)
     iolock_begin()
     buf = s.sendbuf
     if buf !== nothing
@@ -1753,14 +1762,16 @@ end
 uvfinalize(s::BufferStream) = nothing
 setup_stdio(stream::BufferStream, child_readable::Bool) = invoke(setup_stdio, Tuple{IO, Bool}, stream, child_readable)
 
-function read(s::BufferStream, ::Type{UInt8})
+function read(s::BufferStream, ::Type{UInt8}; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel === DEFAULT_CANCEL || return _with_cancel_arg(() -> read(s, UInt8), cancel)
     nread = lock(s.cond) do
         wait_readnb(s, 1)
         read(s.buffer, UInt8)
     end
     return nread
 end
-function unsafe_read(s::BufferStream, a::Ptr{UInt8}, nb::UInt)
+function unsafe_read(s::BufferStream, a::Ptr{UInt8}, nb::UInt; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel === DEFAULT_CANCEL || return _with_cancel_arg(() -> unsafe_read(s, a, nb), cancel)
     lock(s.cond) do
         wait_readnb(s, Int(nb))
         unsafe_read(s.buffer, a, nb)
@@ -1780,7 +1791,8 @@ function wait_readnb(s::BufferStream, nb::Int)
     end
 end
 
-function readavailable(this::BufferStream)
+function readavailable(this::BufferStream; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel === DEFAULT_CANCEL || return _with_cancel_arg(() -> readavailable(this), cancel)
     bytes = lock(this.cond) do
         wait_readnb(this, 1)
         buf = this.buffer
@@ -1790,7 +1802,8 @@ function readavailable(this::BufferStream)
     return bytes
 end
 
-function read(stream::BufferStream)
+function read(stream::BufferStream; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel === DEFAULT_CANCEL || return _with_cancel_arg(() -> read(stream), cancel)
     bytes = lock(stream.cond) do
         wait_close(stream)
         take!(stream.buffer)

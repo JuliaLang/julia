@@ -381,7 +381,7 @@ unaffected: cancellation reaches `t` only through its own governing token
 Throws a `ConcurrencyViolationError` if `t` is the currently running task, to prevent deadlocks.
 """
 wait(t::Task; throw=true, cancel::CancelTokenArg=DEFAULT_CANCEL) =
-    wait(t, resolve_cancel_token(cancel); throw)
+    wait(t, check_cancel_arg(cancel); throw)
 function wait(t::Task, tok::MaybeToken; throw=true)
     _wait(t, tok)
     if throw && istaskfailed(t)
@@ -413,7 +413,7 @@ completed tasks, and the other consists of uncompleted tasks.
     This function requires at least Julia 1.12.
 """
 waitany(tasks; throw=true, cancel::CancelTokenArg=DEFAULT_CANCEL) =
-    _wait_multiple(collect_tasks(tasks), throw, false, false, resolve_cancel_token(cancel))
+    _wait_multiple(collect_tasks(tasks), throw, false, false, check_cancel_arg(cancel))
 
 """
     waitall(tasks; failfast=true, throw=true) -> (done_tasks, remaining_tasks)
@@ -434,7 +434,7 @@ completed tasks, and the other consists of uncompleted tasks.
     This function requires at least Julia 1.12.
 """
 waitall(tasks; failfast=true, throw=true, cancel::CancelTokenArg=DEFAULT_CANCEL) =
-    _wait_multiple(collect_tasks(tasks), throw, true, failfast, resolve_cancel_token(cancel))
+    _wait_multiple(collect_tasks(tasks), throw, true, failfast, check_cancel_arg(cancel))
 
 function collect_tasks(waiting_tasks)
     tasks = Task[]

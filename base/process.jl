@@ -484,7 +484,8 @@ end
 
 Run `command` and return the resulting output as an array of bytes.
 """
-function read(cmd::AbstractCmd)
+function read(cmd::AbstractCmd; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel === DEFAULT_CANCEL || return _with_cancel_arg(() -> read(cmd), cancel)
     procs = open(cmd, "r", devnull)
     bytes = read(procs.out)
     success(procs) || pipeline_error(procs)
@@ -496,7 +497,8 @@ end
 
 Run `command` and return the resulting output as a `String`.
 """
-read(cmd::AbstractCmd, ::Type{String}) = String(read(cmd))::String
+read(cmd::AbstractCmd, ::Type{String}; cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    String(read(cmd; cancel))::String
 
 """
     run(command, args...; wait::Bool = true)
@@ -519,7 +521,8 @@ Use [`pipeline`](@ref) to control I/O redirection.
 
 See also: [`Cmd`](@ref).
 """
-function run(cmds::AbstractCmd, args...; wait::Bool = true)
+function run(cmds::AbstractCmd, args...; wait::Bool = true, cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel === DEFAULT_CANCEL || return _with_cancel_arg(() -> run(cmds, args...; wait), cancel)
     if wait
         ps = _spawn(cmds, spawn_opts_inherit(args...))
         success(ps) || pipeline_error(ps)
@@ -580,7 +583,8 @@ Run a command object, constructed with backticks (see the [Running External Prog
 section in the manual), and tell whether it was successful (exited with a code of 0).
 An exception is raised if the process cannot be started.
 """
-success(cmd::AbstractCmd) = success(_spawn(cmd))
+success(cmd::AbstractCmd; cancel::CancelTokenArg=DEFAULT_CANCEL) =
+    _with_cancel_arg(() -> success(_spawn(cmd)), cancel)
 
 
 """
@@ -698,7 +702,7 @@ function process_status(s::Process)
 end
 
 function wait(x::Process, syncd::Bool=true; cancel::CancelTokenArg=DEFAULT_CANCEL)
-    tok = resolve_cancel_token(cancel)
+    tok = check_cancel_arg(cancel)
     if !process_exited(x)
         iolock_begin()
         if !process_exited(x)

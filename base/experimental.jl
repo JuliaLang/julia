@@ -672,9 +672,8 @@ millisecond.
 function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real=0.0,
                            cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
     ct = current_task()
-    tok = Base.resolve_cancel_token(cancel)
+    tok = Base.check_cancel_arg(cancel)
     src = tok === nothing ? nothing : tok.source
-    src === nothing || Base.checkcancel(src)
     w = Base._wait2(c, ct, c, first)
     if src !== nothing && !Base.register_cancellation!(src, w)
         # The governing token is already cancelled: don't park.

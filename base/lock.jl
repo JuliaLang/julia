@@ -192,6 +192,7 @@ wait for it to become available.
 Each `lock` must be matched by an [`unlock`](@ref).
 """
 @inline function lock(rl::ReentrantLock; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel === DEFAULT_CANCEL || (cancel = check_cancel_arg(cancel))
     trylock(rl) || (@noinline function slowlock(rl::ReentrantLock, cancel::CancelTokenArg)
         Threads.lock_profiling() && Threads.inc_lock_conflict_count()
         # resolve the scoped default once; a cancelled acquisition throws the
@@ -548,6 +549,7 @@ Wait for one of the `sem_size` permits to be available,
 blocking until one can be acquired.
 """
 function acquire(s::Semaphore; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel === DEFAULT_CANCEL || (cancel = check_cancel_arg(cancel))
     lock(s.cond_wait)
     try
         if s.curr_cnt >= s.sem_size
@@ -674,6 +676,7 @@ mutable struct Event
 end
 
 function wait(e::Event; cancel::CancelTokenArg=DEFAULT_CANCEL)
+    cancel === DEFAULT_CANCEL || (cancel = check_cancel_arg(cancel))
     if e.autoreset
         (@atomicswap :acquire_release e.set = false) && return
     else
