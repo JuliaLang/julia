@@ -1109,8 +1109,8 @@ jl_value_t *jl_nth_slot_type(jl_value_t *sig, size_t i) JL_NOTSAFEPOINT
 //    return 1;
 //}
 
-// look up the value bound for method typevar `tv` in the ordered environment
-// `sparams` (which parallels the unionall binders of `decl`); NULL if absent
+// the value bound to method typevar `tv` in `sparams` (ordered as the
+// unionall binders of `decl`), or NULL
 static jl_value_t *env_lookup_tvar(jl_value_t *decl, jl_svec_t *sparams JL_PROPAGATES_ROOT, jl_tvar_t *tv) JL_NOTSAFEPOINT
 {
     size_t i = 0;
@@ -1124,15 +1124,11 @@ static jl_value_t *env_lookup_tvar(jl_value_t *decl, jl_svec_t *sparams JL_PROPA
     return NULL;
 }
 
-// whether a slot declared as the bare method typevar `tv` binds the typevar
-// through `typeof` for an argument of type `kind`, making the kind the exact
-// specialization key for such arguments (no Type structure in the declaration
-// means the typevar cannot capture the type's identity, only its tag).
-// The environment's binding for `tv` decides: if it is itself Type-structured
-// (e.g. `K == Type{Int}` or `K == TypeEgal{Int}` pinned by a `Dict{K,V}`
-// argument), the slot does dispatch on type identity and must keep exact
-// specialization; requiring `kind <: binding` also keeps the widened
-// signature inside the method signature.
+// whether a slot declared as the bare method typevar `tv` binds only the kind
+// of a type-valued argument: true unless the environment pins `tv` to a
+// Type-structured type (e.g. `K == Type{Int}` via another argument), in which
+// case the slot does dispatch on type identity. `kind <: binding` also keeps
+// the widened signature inside the method signature.
 static int typevar_slot_binds_kind(jl_value_t *decl, jl_svec_t *sparams, jl_tvar_t *tv, jl_value_t *kind)
 {
     if (tv->lb != jl_bottom_type)
@@ -1290,19 +1286,16 @@ static void jl_compilation_sig(
         }
         else if (jl_is_typeegal(elt) ||
                  (jl_is_typeeq(elt) && jl_typeeq_T(elt) == jl_bottom_type)) {
-            // Only an egality-keyed slot pins the argument's kind: `TypeEgal{X}`'s
-            // sole member is the object X, of kind `typeof(X)`. An equality-keyed
-            // `Type{X}` covers every `==`-equal spelling of X, whose kinds may
-            // differ (e.g. `Union{S1,S2} where {S1<:Int,S2<:Int} == Int` is a
-            // UnionAll). `Type{Union{}}` is exempt: the bottom object is the
-            // unique member of its `==` class (and `TypeEgal{Union{}}` cannot
-            // be spelled; it normalizes to `typeof(Union{})`).
+            // only an egality-keyed slot pins the argument's kind: a `Type{X}`
+            // matches every `==`-equal spelling of X, whose kinds may differ
+            // (except `Type{Union{}}`, which is alone in its `==` class)
             jl_value_t *kind = jl_typeof(jl_some_Type_T(elt));
             if (!jl_has_free_typevars(decl_i) &&
                     jl_subtype(kind, type_i) && !very_general_type(type_i)) {
-                // if the declared type was not Any or Union{Type, ...},
-                // then the match must been with the kind (e.g. UnionAll or DataType)
-                // and it's simpler (and thus better) to put that in the cache instead
+                // the declared type does not accept all type objects (that case
+                // takes the `Type`-widening path below), so the match must have been
+                // with the kind (e.g. UnionAll or DataType) and it's simpler (and
+                // thus better) to put that in the cache instead
                 if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
                 elt = kind;
                 jl_svecset(*newparams, i, elt);
@@ -1311,13 +1304,10 @@ static void jl_compilation_sig(
                      typevar_slot_binds_kind(decl, sparams, (jl_tvar_t*)decl_i, kind) &&
                      !(i_arg > 0 && i_arg <= 8 && (definition->called & (1 << (i_arg - 1))))) {
                 // a slot declared as a bare method typevar (e.g. the `key::K` of
-                // `setindex!(h::Dict{K,V}, v0, key::K)`) also matches type-valued
-                // arguments against the kind: with no Type structure in the
-                // effective slot type, the typevar binds `typeof(arg)`, not the
-                // type's identity, so the kind is the exact cache key. Without
-                // this we would specialize (and compile) such methods once per
-                // distinct type value passed. Skip called slots, as for the
-                // Type slot heuristic below (issue #36783).
+                // `setindex!(h::Dict{K,V}, v0, key::K)`) binds only the kind of a
+                // type-valued argument, so cache the kind rather than specializing
+                // on every distinct type value passed (unless the argument is
+                // called, as for the heuristic below, issue #36783)
                 if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
                 elt = kind;
                 jl_svecset(*newparams, i, elt);

@@ -655,10 +655,9 @@ let m = only(methods(anytype_compilesig_61915))
     end
 end
 
-# a slot declared as a bare method typevar (`key::K`) matches type-valued
-# arguments against the kind — the typevar binds `typeof(arg)`, not the type's
-# identity — so the kind-widened signature is the compileable, cached form and
-# distinct type values do not each mint (and compile) a fresh specialization
+# a slot declared as a bare method typevar (`key::K`) binds only the kind of a
+# type-valued argument, so the kind-widened signature is the compileable form
+# and distinct type values don't each mint (and compile) a fresh specialization
 barekindspec(h::Dict{K,V}, key::K) where {K,V} = (K, V)
 let m = only(methods(barekindspec))
     exact = Tuple{typeof(barekindspec), Dict{Any,Nothing}, Core.TypeEgal{Int}}
