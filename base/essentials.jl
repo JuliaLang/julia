@@ -1279,6 +1279,12 @@ has_typevar(@nospecialize(t), v::TypeVar) = ccall(:jl_has_typevar, Int32, (Any, 
 # whether a de Bruijn reference with root-index `i` occurs in `t`
 has_typevarref(@nospecialize(t), i::Int) = ccall(:jl_tvarref_occurs, Int32, (Any, Int), t, i) !== Int32(0)
 
+# whether `t` contains a bound-variable reference whose binder is not part of
+# `t` itself (i.e. `t` is a subterm detached from under its binders); such
+# fragments are invisible to `has_free_typevars`
+has_dangling_typevarrefs(@nospecialize t) =
+    (@_total_meta; ccall(:jl_has_dangling_tvarrefs, Int32, (Any,), t) !== Int32(0))
+
 function _defaultctors(@nospecialize(ty), functionloc)
     # Walk the UnionAll chain to materialize the binders and get the DataType
     nparams = 0

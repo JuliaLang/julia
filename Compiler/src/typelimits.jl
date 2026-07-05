@@ -977,6 +977,8 @@ function tuplemerge(a::DataType, b::DataType)
                 while ti isa TypeVar
                     ti = ti.ub
                 end
+                # a bare bound-variable reference has an unreachable bound
+                ti isa TypeVarRef && (ti = Any)
                 # compare (ti <-> tail), (wrapper ti <-> tail), (ti <-> wrapper tail), then (wrapper ti <-> wrapper tail)
                 # until we find the first element that contains the other in the pair
                 # TODO: this result would be more stable (and more associative and more commutative)
@@ -985,7 +987,7 @@ function tuplemerge(a::DataType, b::DataType)
                 #   e.g. consider the results of `tuplemerge(Tuple{Complex}, Tuple{Number, Int})` and of
                 #   `tuplemerge(Tuple{Int}, Tuple{String}, Tuple{Int, String})`
                 #   c.f. tname_intersect in the algorithm above
-                hasfree = has_free_typevars(ti)
+                hasfree = has_free_typevars(ti) || has_dangling_typevar_refs(ti)
                 if hasfree || !(ti <: tail)
                     if !hasfree && tail <: ti
                         tail = ti # widen to ti

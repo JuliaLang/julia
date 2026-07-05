@@ -349,7 +349,12 @@ end
 
 function summarize(io::IO, TT::Type, binding::Binding)
     println(io, "# Summary")
-    T = _openall(TT)
+    T = TT
+    opened_vars = TypeVar[]
+    while T isa UnionAll
+        v, T = Base.unionall_open(T)
+        push!(opened_vars, v)
+    end
     if T isa DataType
         println(io, "```")
         print(io,
@@ -389,7 +394,13 @@ function summarize(io::IO, TT::Type, binding::Binding)
         println(io, "`", binding, "` is of type `", typeof(TT), "`.\n")
         println(io, "# Union Composed of Types")
         for T1 in Base.uniontypes(T)
-            println(io, " - `", Base.rewrap_unionall(T1, TT), "`")
+            # re-close each arm over the binders opened above (they cannot be
+            # rebound against `TT`'s positional chain)
+            for k in length(opened_vars):-1:1
+                v = opened_vars[k]
+                Base.has_typevar(T1, v) && (T1 = UnionAll(v, T1))
+            end
+            println(io, " - `", T1, "`")
         end
     else # unreachable?
         println(io, "`", binding, "` is of type `", typeof(TT), "`.\n")

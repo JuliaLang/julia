@@ -92,7 +92,7 @@ function kwarg_decl(m::Method, kwtype = nothing)
             for p in sig_params
                 if p isa TypeEq
                     tp = type_parameter(p)
-                    if tp isa Type && !has_free_typevars(tp)
+                    if tp isa Type && !has_free_typevars(tp) && !has_dangling_typevarrefs(tp)
                         p = Core.TypeEgal{tp}
                         changed = true
                     end

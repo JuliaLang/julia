@@ -1672,7 +1672,7 @@ let nfields_tfunc(@nospecialize xs...) =
     # only the egality kind `TypeEgal{X}` pins the value to exactly `X` (#61323)
     @test nfields_tfunc(Type{Type{Int}}) === Int
     @test nfields_tfunc(Core.TypeEgal{Type{Int}}) === Const(nfields(Type{Int}))
-    @test nfields_tfunc(UnionAll) === Const(2)
+    @test nfields_tfunc(UnionAll) === Const(4) # name, lb, ub, body
     @test nfields_tfunc(DataType) === Const(nfields(DataType))
     @test nfields_tfunc(Type{Int}) === Int
     @test nfields_tfunc(Core.TypeEgal{Int}) === Const(nfields(DataType))
@@ -3153,11 +3153,10 @@ end
 @test only(Base.return_types(Base.afoldl, (typeof((m, n) -> () -> Returns(nothing)(m, n)), Function, Function, Vararg{Function}))) === Function
 
 let A = Tuple{A,B,C,D,E,F,G,H} where {A,B,C,D,E,F,G,H}
+    # binders are positional, so renaming is the identity and alpha-equal
+    # spellings are one object
     B = Compiler.rename_unionall(A)
-    for i in 1:8
-        @test A.var != B.var && (i == 1 ? A == B : A != B)
-        A, B = A.body, B.body
-    end
+    @test A === B
 end
 
 # PR 27351, make sure optimized type intersection for method invalidation handles typevars
@@ -5831,11 +5830,15 @@ paramtype62001(::Type{V}) where V<:Vector =
     isa(V, UnionAll) ? myeltype62001(Base.unwrap_unionall(V)) : myeltype62001(V)
 # A static parameter may be exactly a TypeVar object from the input.
 typevar_length62001(::Type{NTuple{N, VecElement{T}}}) where {N, T} = N + 32
-let T = Base.unwrap_unionall(Vector).parameters[1]
-    @test myeltype62001(Base.unwrap_unionall(Vector)) === T
+let b = Base.unwrap_unionall(Vector)
+    # under positional binders a detached wrapper body carries bound-variable
+    # references, not TypeVar objects, and as a dispatch key it is pinned to
+    # its own identity: it no longer matches the `Type{Vector{T}}` pattern
+    @test b.parameters[1] isa Core.TypeVarRef
+    @test_throws MethodError myeltype62001(b)
     @test paramtype62001(Vector{Int8}) === Int8
-    @test paramtype62001(Vector) === T
-    @test only(Base.return_types(myeltype62001, (Type{Base.unwrap_unionall(Vector)},))) === TypeVar
+    @test_throws MethodError paramtype62001(Vector)
+    @test isempty(Base.return_types(myeltype62001, (Type{b},)))
 end
 let N = TypeVar(:N), T = TypeVar(:T)
     @test_throws MethodError typevar_length62001(NTuple{N, VecElement{T}})
@@ -5846,8 +5849,9 @@ end
 # forms) rather than invent a fresh existential.
 applysparam62001(::Type{Vector{T}}) where T = Vector{T}
 let v = Base.unwrap_unionall(Vector)
-    @test applysparam62001(v) === v
-    @test only(Base.return_types(applysparam62001, (Type{v},))) == Type{v}
+    # see above: the detached body is not a `Type{Vector{T}}` match
+    @test_throws MethodError applysparam62001(v)
+    @test isempty(Base.return_types(applysparam62001, (Type{v},)))
 end
 # Identityless TypeVar values as type parameters widen to the top kind forms.
 applytypevar62001(tv::TypeVar) = Vector{tv}

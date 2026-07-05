@@ -859,18 +859,31 @@ end
         b = widenconst(_typeof_tfunc(𝕃, t.b))
         return Union{a, b}
     elseif isa(t, UnionAll)
-        u = unwrap_unionall(t)
+        # materialize the binders: the recursion (e.g. into Union arms) must
+        # see TypeVars, not bare references, and the result is re-closed over
+        # the variables that survive into it
+        vars = TypeVar[]
+        u = t
+        while u isa UnionAll
+            v, u = Base.unionall_open(u)
+            push!(vars, v)
+        end
+        local r
         if isa(u, DataType) && !isabstracttype(u)
             if u.name === Tuple.name
                 uu = typeof_concrete_vararg(u)
-                if uu !== nothing
-                    return rewrap_unionall(uu, t)
-                end
+                r = uu === nothing ? widenconst(typeof_tfunc(𝕃, u)) : uu
             else
-                return rewrap_unionall(Type{u}, t)
+                r = Type{u}
             end
+        else
+            r = widenconst(typeof_tfunc(𝕃, u))
         end
-        return rewrap_unionall(widenconst(typeof_tfunc(𝕃, u)), t)
+        for k in length(vars):-1:1
+            v = vars[k]
+            (r === v || has_typevar(r, v)) && (r = UnionAll(v, r))
+        end
+        return r
     end
     return DataType # typeof(anything)::DataType
 end

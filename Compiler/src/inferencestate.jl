@@ -944,7 +944,14 @@ function sptypes_from_meth_instance(mi::MethodInstance)
             v_egal = false
         elseif v_tvar !== nothing || has_free_typevars(v)
             vᵢ = v_opened
-            sigtypes = (unwrap_unionall(opened)::DataType).parameters
+            # materialize the whole remaining binder chain: an occurrence of
+            # `vᵢ` may live in a later binder's bound (`SA <: Wrapper{vᵢ}`),
+            # which a bare unwrap would discard
+            opened_all = opened
+            while opened_all isa UnionAll
+                opened_all = unionall_open(opened_all)[2]
+            end
+            sigtypes = (opened_all::DataType).parameters
             if v_tvar !== nothing
                 v_egal = sparam_definitely_egal_from_spec(vᵢ, sigtypes, mi.specTypes)
                 ty = sptype_for_tvar(vᵢ, v_tvar, sigtypes, mi.specTypes, v_egal)
