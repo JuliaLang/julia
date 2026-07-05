@@ -14,8 +14,20 @@ const MAX_TYPEUNION_LENGTH = 3
 # limit the complexity of type `t` to be simpler than the comparison type `compare`
 # no new values may be introduced, so the parameter `source` encodes the set of all values already present
 # the outermost tuple type is permitted to have up to `allowed_tuplelen` parameters
+# materialize all binders: unlike `unwrap_unionall`, occurrences keep their
+# bounds (as fresh TypeVars). Distinct bounded forms must stay distinguishable
+# here: their unwrapped bodies are one shared reference-form object (e.g. every
+# `W{T} where T<:...` unwraps to the cached `W{TypeVarRef(1)}`), which would
+# make a deeper form compare identical to its comparison and escape limiting.
+function unionall_openall(@nospecialize t)
+    while isa(t, UnionAll)
+        t = Base.unionall_open(t)[2]
+    end
+    return t
+end
+
 function limit_type_size(@nospecialize(t), @nospecialize(compare), @nospecialize(source), allowed_tupledepth::Int, allowed_tuplelen::Int)
-    source = svec(unwrap_unionall(compare), unwrap_unionall(source))
+    source = svec(unionall_openall(compare), unionall_openall(source))
     source[1] === source[2] && (source = svec(source[1]))
     type_more_complex(t, compare, source, 1, allowed_tupledepth, allowed_tuplelen) || return t
     r = _limit_type_size(t, compare, source, 1, allowed_tuplelen)
@@ -97,7 +109,7 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
     elseif isa(t, DataType) && isempty(t.parameters)
         return t # fast path: unparameterized are always simple
     else
-        ut = unwrap_unionall(t)
+        ut = unionall_openall(t)
         if is_derived_type_from_any(ut, sources, depth)
             return t # t isn't something new
         end
@@ -107,14 +119,21 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
     # by peeling off meaningless non-matching wrappers of comparison one at a time
     # then unwrap `t`
     # NOTE that `TypeVar` / `Vararg` are handled separately to catch the logic errors
+    # n.b. binders are materialized (not merely unwrapped) so that occurrences
+    # carry their bounds: the nesting that decides complexity/limiting lives in
+    # the binder's `ub` under the positional representation, and the TypeVar
+    # rules below must see it (through `t.ub`/`c.ub`) or the limited sequence
+    # never stabilizes (e.g. the deepening `W{T} where T<:(W{T} where T<:...)`
+    # sigs of a growing self-call, issue #62022's test).
     if isa(c, UnionAll)
-        return __limit_type_size(t, c.body, sources, depth, allowed_tuplelen)::AnyType
+        copened = Base.unionall_open(c)
+        return __limit_type_size(t, copened[2], sources, depth, allowed_tuplelen)::AnyType
     end
     if isa(t, UnionAll)
-        tbody = __limit_type_size(t.body, c, sources, depth, allowed_tuplelen)
-        tbody === t.body && return t
-        # raw re-wrap: the transformed body keeps its bound-variable references
-        return UnionAll(t.name, t.lb, t.ub, tbody)::AnyType
+        topened = Base.unionall_open(t)
+        tbody = __limit_type_size(topened[2], c, sources, depth, allowed_tuplelen)
+        tbody === topened[2] && return t
+        return UnionAll(topened[1]::TypeVar, tbody)::AnyType
     elseif isa(t, Union)
         if isa(c, Union)
             a = __limit_type_size(t.a, c.a, sources, depth, allowed_tuplelen)
@@ -239,7 +258,7 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
         return false # Bottom is as simple as they come
     elseif isa(t, DataType) && isempty(t.parameters)
         return false # fastpath: unparameterized types are always finite
-    elseif is_derived_type_from_any(unwrap_unionall(t), sources, depth)
+    elseif is_derived_type_from_any(unionall_openall(t), sources, depth)
         return false # t isn't something new
     end
     # peel off wrappers
@@ -250,11 +269,11 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
         if !isa(t, UnionAll) && tupledepth == 0
             return true
         end
-        c = unwrap_unionall(c)
+        # materialize binders so occurrences carry their bounds (see
+        # `_limit_type_size`): the complexity to be counted lives in `ub`
+        c = unionall_openall(c)
     end
-    if isa(t, UnionAll)
-        t = unwrap_unionall(t)
-    end
+    t = unionall_openall(t)
     # rules for various comparison types
     if isa(c, TypeVar)
         tupledepth = 1

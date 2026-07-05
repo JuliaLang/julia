@@ -1233,20 +1233,34 @@ JL_DLLEXPORT jl_value_t *jl_translate_sparams_to_refs(jl_value_t *t, jl_svec_t *
     size_t n = jl_svec_len(vars);
     jl_typeenv_t *envs = (jl_typeenv_t*)alloca(n * sizeof(jl_typeenv_t));
     jl_typeenv_t *env = NULL;
+    size_t m = 0;
+    for (size_t i = 0; i < n; i++) {
+        if (jl_is_typevar(jl_svecref(vars, i)))
+            m++;
+    }
+    if (m == 0)
+        return t;
+    // the i-th of the `m` binders (outermost first) sits above `m - i - 1`
+    // further binders, so its occurrences translate to index `m - i`
+    // (innermost = 1); the refs are dangling values here, so the substitution
+    // re-points them across any binders the walk crosses in front of them
+    jl_value_t **refs;
+    JL_GC_PUSHARGS(refs, m);
     size_t k = 0;
     for (size_t i = 0; i < n; i++) {
         jl_value_t *vi = jl_svecref(vars, i);
         if (!jl_is_typevar(vi))
             continue;
+        refs[k] = jl_new_tvarref(m - k);
         envs[k].var = (jl_tvar_t*)vi;
-        envs[k].val = jl_tvarref_translate_sentinel;
+        envs[k].val = refs[k];
         envs[k].prev = env;
         env = &envs[k];
         k++;
     }
-    if (env == NULL)
-        return t;
-    return inst_type_w_(t, env, NULL, 0, 0);
+    t = inst_type_w_(t, env, NULL, 0, 0);
+    JL_GC_POP();
+    return t;
 }
 
 // raw constructor: `body` must already be in de Bruijn form for the new binder
