@@ -34,7 +34,7 @@ typedef struct _jl_image_fptrs_t {
     // function pointers
     void **ptrs;
 
-    // Following fields contains the information about the selected target.
+    // Following fields contain the information about the selected target.
     // All of these fields are 0 if the selected targets have all the functions cloned.
     // Instead the offsets are stored in `nptrs` and `ptrs`.
 
@@ -185,10 +185,10 @@ JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void);
 JL_DLLEXPORT jl_value_t *jl_get_cpu_features(void);
 // Return the CPU target string used to build the current sysimage
 JL_DLLEXPORT jl_value_t *jl_get_sysimage_cpu_target(void);
-// Dump the name and feature set of the host CPU
-JL_DLLEXPORT jl_value_t *jl_cpu_has_fma(int bits);
 // Check if the CPU has native FMA instructions;
 // For debugging only
+JL_DLLEXPORT jl_value_t *jl_cpu_has_fma(int bits);
+// Dump the name and feature set of the host CPU
 JL_DLLEXPORT void jl_dump_host_cpu(void);
 JL_DLLEXPORT jl_value_t* jl_check_pkgimage_clones(char* data);
 
@@ -204,8 +204,8 @@ JL_DLLEXPORT int32_t jl_get_default_nans(void);
  * libjulia-* and the sysimage together (see null_sysimage.c), in which
  * case they allow accessing the local copy of the sysimage.
  **/
-typedef void jl_image_unpack_func_t(void *handle, jl_image_buf_t *image);
-extern jl_image_unpack_func_t *jl_image_unpack;
+typedef void (JL_NOTSAFEPOINT *jl_image_unpack_func_t)(void *handle, jl_image_buf_t *image);
+extern jl_image_unpack_func_t jl_image_unpack;
 
 /**
  * CPU name and feature string for LLVM.

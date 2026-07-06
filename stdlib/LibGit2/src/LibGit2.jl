@@ -375,8 +375,9 @@ end
 """
     branch(repo::GitRepo)
 
-Equivalent to `git branch`.
-Create a new branch from the current HEAD.
+Equivalent to `git branch --show-current`.
+Return the name of the current branch (HEAD reference).
+Throw if no branch is checked out.
 """
 function branch(repo::GitRepo)
     head_ref = head(repo)
@@ -455,7 +456,7 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
 
     branch_ref′ = branch_ref # Avoids boxing `branch_ref`
     try
-        #TODO: what if branch tracks other then "origin" remote
+        #TODO: what if branch tracks other than "origin" remote
         if !isempty(track) # setup tracking
             try
                 with(GitConfig, repo) do cfg

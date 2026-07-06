@@ -36,7 +36,7 @@ function check_presence(mi, token)
         # CI should have been validated
         @test ci.max_world != Base.ReinferUtils.WORLD_AGE_REVALIDATION_SENTINEL
         @test ci.min_world != ~zero(UInt)
-        # Chose a CI with the right owner and current validity.
+        # Choose a CI with the right owner and current validity.
         if ci.owner === token && ci.max_world == typemax(UInt)
             return ci
         end

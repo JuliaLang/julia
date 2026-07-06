@@ -383,7 +383,7 @@ let effects = Base.infer_effects(f_glob_assign_int, (); optimize=false)
     @test !Compiler.is_effect_free(effects)
     @test Compiler.is_nothrow(effects)
 end
-# effects modeling for for setglobal!
+# effects modeling for setglobal!
 global SETGLOBAL!_NOTHROW::Int = 0
 let effects = Base.infer_effects(; optimize=false) do
         setglobal!(@__MODULE__, :SETGLOBAL!_NOTHROW, 42)
@@ -1022,6 +1022,19 @@ end
 @test @eval Base.infer_effects() do
     @isdefined($(gensym("some_undef_symbol")))
 end |> !Compiler.is_consistent
+
+# `@isdefined`-guarded read of a slot whose value is a `MustAlias` must still refine
+# the slot's `undef` info
+function isdefined_alias_loop(t::Tuple)
+    local prev
+    s = ""
+    for x in t
+        @isdefined(prev) && (s = prev)
+        prev = x
+    end
+    return s
+end
+@test Compiler.is_nothrow(Base.infer_effects(isdefined_alias_loop, (Tuple{String,String},)))
 
 # Effects of Base.hasfield (#50198)
 hf50198(s) = hasfield(typeof((;x=1, y=2)), s)

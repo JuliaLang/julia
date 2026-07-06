@@ -76,6 +76,7 @@ extern "C" {
     XX(tuple,"tuple") \
     XX(typeassert,"typeassert") \
     XX(typeof,"typeof") \
+    XX(has_free_typevars,"has_free_typevars")
 
 #define DECLARE_BUILTIN(cname,jlname) \
     JL_CALLABLE(jl_f_##cname);

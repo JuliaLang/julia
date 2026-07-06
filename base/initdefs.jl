@@ -200,8 +200,7 @@ the [`JULIA_LOAD_PATH`](@ref JULIA_LOAD_PATH) environment variable if set;
 otherwise it defaults to `["@", "@v#.#", "@stdlib"]`. Entries starting with `@`
 have special meanings:
 
-- `@` refers to the "current active environment", the initial value of which is
-  initially determined by the [`JULIA_PROJECT`](@ref JULIA_PROJECT) environment
+- `@` refers to the "current active environment", whose value is determined by the [`JULIA_PROJECT`](@ref JULIA_PROJECT) environment
   variable or the `--project` command-line option.
 
 - `@stdlib` expands to the absolute path of the current Julia installation's

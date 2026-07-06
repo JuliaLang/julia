@@ -37,7 +37,7 @@
 using namespace llvm;
 
 // This pass takes fake call instructions that look like this which were emitted by the front end:
-//   (oldval, newval) = call atomicmodify.iN(ptr %op, ptr align(N) %ptr, i8 immarg %SSID, i8 immarg %Ordering, ...) !rmwattributes
+//   (oldval, newval) = call atomicmodify.iN(ptr align(N) %ptr, ptr %op, i8 immarg %Ordering, i8 immarg %SSID, ...) !rmwattributes
 //   where op is a function with a prototype of `iN (iN arg, ...)`
 // Then rewrite that to
 //   oldval = atomicrmw op ptr, val ordering syncscope

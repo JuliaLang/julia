@@ -1204,7 +1204,7 @@ Read at most `nb` bytes from `s`, returning a `Vector{UInt8}` of the bytes read.
 """
 function read(s::IO, nb::Integer = typemax(Int))
     # Let readbytes! grow the array progressively by default
-    # instead of taking of risk of over-allocating
+    # instead of taking the risk of over-allocating
     b = Vector{UInt8}(undef, nb == typemax(Int) ? 1024 : nb)
     nr = readbytes!(s, b, nb)
     return resize!(b, nr)
@@ -1415,7 +1415,8 @@ readeach(stream::IOT, T::Type) where IOT<:IO = ReadEachIterator{T,IOT}(stream)
 iterate(itr::ReadEachIterator{T}, state=nothing) where T =
     eof(itr.stream) ? nothing : (read(itr.stream, T), nothing)
 
-eltype(::Type{ReadEachIterator{T}}) where T = T
+eltype(::Type{<:ReadEachIterator{T}}) where {T} = T
+eltype(::Type{ReadEachIterator}) = Any
 
 IteratorSize(::Type{<:ReadEachIterator}) = SizeUnknown()
 

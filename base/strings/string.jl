@@ -338,7 +338,7 @@ end
                     as seen by all 1s in that column of table below
             3 -> One valid continuation byte needed to return to state 0
         4,5,6 -> Two valid continuation bytes needed to return to state 0
-        7,8,9 -> Three valids continuation bytes needed to return to state 0
+        7,8,9 -> Three valid continuation bytes needed to return to state 0
 
                         Current State
                     0̲  1̲  2̲  3̲  4̲  5̲  6̲  7̲  8̲  9̲
@@ -360,7 +360,7 @@ end
     The shifts that represent each state were derived using the SMT solver Z3, to ensure when encoded into
     the rows the correct shift was a result.
 
-    Each character class row is encoding 10 states with shifts as defined above. By shifting the bitsof a row by
+    Each character class row is encoding 10 states with shifts as defined above. By shifting the bits of a row by
     the current state then masking the result with 0x11110 give the shift for the new state
 
 

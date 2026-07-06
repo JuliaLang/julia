@@ -303,7 +303,7 @@ static void gc_verify_tags_page(jl_gc_pagemeta_t *pg)
         memset(freelist_map, 0, sizeof(freelist_map));
         freelist_zerod = 1;
     }
-    // check for p in new newpages list
+    // check for p in newpages list
     jl_taggedvalue_t *halfpages = p->newpages;
     if (halfpages) {
         char *cur_page = gc_page_data((char*)halfpages - 1);

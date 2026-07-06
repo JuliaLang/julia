@@ -54,7 +54,7 @@ end
 """
     LibGit2.addblob!(repo::GitRepo, path::AbstractString)
 
-Read the file at `path` and adds it to the object database of `repo` as a loose blob.
+Read the file at `path` and add it to the object database of `repo` as a loose blob.
 Return the [`GitHash`](@ref) of the resulting blob.
 
 # Examples

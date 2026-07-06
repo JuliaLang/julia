@@ -2,7 +2,7 @@
 
 # This file implements the Semi-NCA (SNCA) dominator tree construction
 # described in Georgiadis' PhD thesis [LG05], which itself is a simplification
-# of the Simple Lenguare-Tarjan (SLT) algorithm [LG79]. This algorithm matches
+# of the Simple Lengauer-Tarjan (SLT) algorithm [LG79]. This algorithm matches
 # the algorithm choice in LLVM and seems to be a sweet spot in implementation
 # simplicity and efficiency.
 #
@@ -669,7 +669,7 @@ end
 
 bb_unreachable(domtree::DomTree, bb::BBNumber) = bb != 1 && domtree.dfs_tree.to_pre[bb] == 0
 
-"Iterable data structure that walks though all dominated blocks"
+"Iterable data structure that walks through all dominated blocks"
 struct DominatedBlocks
     domtree::DomTree
     worklist::Vector{BBNumber}

@@ -185,7 +185,7 @@ function convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names}) where {name
 end
 
 function convert(::Type{NT}, nt::NamedTuple{names}) where {names, NT<:NamedTuple{names}}
-    # converting abstract NT to an abstract Tuple type, to a concrete NT1, is not straightforward, so this could just be an error, but we define it anyways
+    # converting abstract NT to an abstract Tuple type, to a concrete NT1, is not straightforward, so this could just be an error, but we define it anyway
     # _tuple_error(NT, nt)
     T1 = Tuple{ntuple(i -> fieldtype(NT, i), Val(length(names)))...}
     NT1 = NamedTuple{names, T1}

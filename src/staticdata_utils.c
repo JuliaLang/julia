@@ -39,8 +39,8 @@ int must_be_new_dt(jl_value_t *t, htable_t *news, char *image_base, size_t sizeo
         return must_be_new_dt(tv->lb, news, image_base, sizeof_sysimg) ||
                must_be_new_dt(tv->ub, news, image_base, sizeof_sysimg);
     }
-    else if (jl_is_typeeq(t)) {
-        return must_be_new_dt(jl_typeeq_T(t), news, image_base, sizeof_sysimg);
+    else if (jl_is_some_Type(t)) {
+        return must_be_new_dt(jl_some_Type_T(t), news, image_base, sizeof_sysimg);
     }
     else if (jl_is_vararg(t)) {
         jl_vararg_t *tv = (jl_vararg_t*)t;
@@ -484,7 +484,7 @@ static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited,
                 // If we are the top of the current cycle, now mark all other parts of
                 // our cycle with what we found.
                 // Or if we found a backedge, also mark all of the other parts of the
-                // cycle as also having an backedge.
+                // cycle as also having a backedge.
                 while (stack->len >= current->depth) {
                     void *mi_ptr = arraylist_pop(stack);
                     void **bp = ptrhash_bp(visited, mi_ptr);

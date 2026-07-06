@@ -128,7 +128,7 @@ JL_DLLEXPORT void jl_stop_alloc_profile(void)
 JL_DLLEXPORT void jl_free_alloc_profile(void)
 {
     // Free any allocs that remain in the per-thread profiles, that haven't
-    // been combined yet (which happens in fetch_alloc_profiles()).
+    // been combined yet (which happens in jl_fetch_alloc_profile()).
     for (size_t i = 0; i < g_alloc_profile.num_profiles; i++) {
         alloc_array_t *allocs = &g_alloc_profile.per_thread_profiles[i].allocs;
         for (size_t j = 0; j < allocs->len; j++) {

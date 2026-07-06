@@ -39,7 +39,7 @@ each threadpool.
     The default number of threads changed in Julia 1.12. Prior versions default to 1 (default thread pool) thread.
     If the number of threads is set to 1 by either doing `-t1` or `JULIA_NUM_THREADS=1` an interactive thread will not be spawned.
 
-Lets start Julia with 4 threads:
+Let's start Julia with 4 threads:
 
 ```bash
 $ julia --threads 4
@@ -85,7 +85,7 @@ julia> Threads.threadid()
 ### Multiple GC Threads
 
 The Garbage Collector (GC) can use multiple threads. The amount used by default matches the compute
-worker threads or can configured by either the `--gcthreads` command line argument or by using the
+worker threads or can be configured by either the `--gcthreads` command line argument or by using the
 [`JULIA_NUM_GC_THREADS`](@ref JULIA_NUM_GC_THREADS) environment variable.
 
 !!! compat "Julia 1.10"
@@ -216,7 +216,7 @@ Note that [`Threads.@threads`](@ref) does not have an optional reduction paramet
 
 The concept of a data-race is elaborated on in ["Communication and data races between threads"](@ref man-communication-and-data-races). For now, just know that a data race can result in incorrect results and dangerous errors.
 
-Lets say we want to make the function `sum_single` below multithreaded.
+Let's say we want to make the function `sum_single` below multithreaded.
 ```julia-repl
 julia> function sum_single(a)
            s = 0
@@ -341,7 +341,7 @@ julia> begin
 100
 ```
 
-All three options are equivalent. Note how the final version requires an explicit `try`-block to ensure that the lock is always unlocked, whereas the first two version do this internally. One should always use the lock pattern above when changing data (such as assigning
+All three options are equivalent. Note how the final version requires an explicit `try`-block to ensure that the lock is always unlocked, whereas the first two versions do this internally. One should always use the lock pattern above when changing data (such as assigning
 to a global or closure variable) accessed by other threads. Failing to do this could have unforeseen and serious consequences.
 
 #### [Using Base.Lockable to associate a lock and a value](@id man-lockable)

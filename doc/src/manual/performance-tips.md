@@ -666,7 +666,7 @@ g(f, x) = f(...)
 g(f) = g(f, 1)
 ```
 
-With this rewrite, the second method that passes along the default argument value does no longer use `f`, calling `g(f)` may therefore not specialize on `f`.
+With this rewrite, the second method that passes along the default argument value no longer uses `f`, calling `g(f)` may therefore not specialize on `f`.
 Writing the original definition as
 
 ```julia
@@ -821,7 +821,7 @@ The numbered boxes are labels and represent targets for jumps (via `goto`) in yo
 Looking at the body, you can see that the first thing that happens is that `pos` is called and the
 return value has been inferred as the `Union` type `Union{Float64, Int64}` shown in uppercase since
 it is a non-concrete type. This means that we cannot know the exact return type of `pos` based on the
-input types. However, the result of `y*x`is a `Float64` no matter if `y` is a `Float64` or `Int64`
+input types. However, the result of `y*x` is a `Float64` no matter if `y` is a `Float64` or `Int64`
 The net result is that `f(x::Float64)` will not be type-unstable
 in its output, even if some of the intermediate computations are type-unstable.
 
@@ -938,7 +938,7 @@ inner function. The second technique recovers full language performance
 in the presence of captured variables. Note that this is a rapidly
 evolving aspect of the compiler, and it is likely that future releases
 will not require this degree of programmer annotation to attain performance.
-In the mean time, some user-contributed packages like
+In the meantime, some user-contributed packages like
 [FastClosures](https://github.com/c42f/FastClosures.jl) automate the
 insertion of `let` statements as in `abmult3`.
 
@@ -1555,14 +1555,14 @@ from the manifest, then revert the change with `pkg> undo`.
 If loading time is dominated by slow `__init__()` methods having compilation, one verbose way to identify what is being
 compiled is to use the julia args `--trace-compile=stderr --trace-compile-timing` which will report a [`precompile`](@ref)
 statement each time a method is compiled, along with how long compilation took. The InteractiveUtils macro
-[`@trace_compile`](@ref) provides a way to enable those args for a specific call. So a call for a complete report report would look like:
+[`@trace_compile`](@ref) provides a way to enable those args for a specific call. So a call for a complete report would look like:
 
 ```julia-repl
 julia> @time @time_imports @trace_compile using CustomPackage
 ...
 ```
 
-Note the `--startup-file=no` which helps isolate the test from packages you may have in your `startup.jl`.
+For a more isolated test at the command line, consider using `--startup-file=no` to avoid interference from packages you may have in your `startup.jl`.
 
 More analysis of the reasons for recompilation can be achieved with the
 [`SnoopCompile`](https://github.com/timholy/SnoopCompile.jl) package.

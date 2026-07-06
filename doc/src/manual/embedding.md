@@ -48,7 +48,7 @@ gcc -o test -fPIC -I$JULIA_DIR/include/julia -L$JULIA_DIR/lib -Wl,-rpath,$JULIA_
 ```
 
 Alternatively, look at the `embedding.c` program in the Julia source tree in the `test/embedding/` folder.
-The file `cli/loader_exe.c` program is another simple example of how to set `jl_options` options while
+The `cli/loader_exe.c` program is another simple example of how to set `jl_options` options while
 linking against `libjulia`.
 
 The first thing that must be done before calling any other Julia C function is to
@@ -113,7 +113,7 @@ Usage: julia-config [--cflags|--ldflags|--ldlibs]
 
 If the above example source is saved in the file `embed_example.c`, then the following
 command will compile it into an executable program on Linux and Windows (MSYS2 environment).
-On macOS, substitute `clang` for `gcc`.:
+On macOS, substitute `clang` for `gcc`:
 
 ```
 /usr/local/julia/share/julia/julia-config.jl --cflags --ldflags --ldlibs | xargs gcc embed_example.c

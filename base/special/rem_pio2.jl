@@ -82,7 +82,7 @@ end
         y1 = r-w
         high = highword(y1)
         i = j-((high>>20)&0x7ff)
-        if i>49 # 3rd iteration need, 151 bits acc
+        if i>49 # 3rd iteration needed, 151 bits acc
             t  = r # will cover all possible cases
             w  = fn*pio2_3
             r  = t-w

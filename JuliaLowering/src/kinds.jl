@@ -27,6 +27,8 @@ function _register_kinds()
             "popaliasscope"
             # Call into foreign code
             "foreigncall"
+            # Look up a symbol in foreign code
+            "foreignglobal"
             # ccall convention
             "cconv"
             # Special form for constructing a function callable from C
@@ -113,7 +115,7 @@ function _register_kinds()
             # Declare a zero-method generic function with global `name` or
             # creates a closure object and assigns it to the local `name`.
             "function_decl"
-            # [K"function_type name]
+            # [K"function_type" name]
             # Evaluates to the type of the function or closure with given `name`
             "function_type"
             # [K"method_defs" name block]
@@ -153,10 +155,10 @@ function _register_kinds()
             # Pre-lowered SSA value reference from Expr(:ssavalue, N).
             # Translated to a BindingId during desugaring.
             "ssavalue"
-            # Wraps the first argument of a foreigncall when it should not be
-            # lowered (and should mostly be treated as :inert), but requires
-            # scope resolution and special conversion to Expr.
-            "foreigncall_arg1"
+            # Wraps the first argument of a foreigncall / foreignglobal when it
+            # should not be lowered (and should mostly be treated as :inert), but
+            # requires scope resolution and special conversion to Expr.
+            "foreignsymbol"
         "END_LOWERING_KINDS"
 
         # The following kinds are emitted by lowering and used in Julia's untyped IR

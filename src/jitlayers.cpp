@@ -2,6 +2,7 @@
 
 #include "llvm-version.h"
 #include "platform.h"
+#include <pthread.h>
 #include <stdint.h>
 #include <string>
 
@@ -81,7 +82,7 @@ using namespace llvm;
 
 STATISTIC(LinkedGlobals, "Number of globals linked");
 STATISTIC(SpecFPtrCount, "Number of specialized function pointers compiled");
-STATISTIC(UnspecFPtrCount, "Number of specialized function pointers compiled");
+STATISTIC(UnspecFPtrCount, "Number of unspecialized function pointers compiled");
 STATISTIC(ModulesAdded, "Number of modules added to the JIT");
 STATISTIC(ModulesOptimized, "Number of modules optimized by the JIT");
 STATISTIC(OptO0, "Number of modules optimized at level -O0");
@@ -163,7 +164,7 @@ void jl_dump_llvm_opt_impl(void *s)
     **jl_ExecutionEngine->get_dump_llvm_opt_stream() = (ios_t*)s;
 }
 
-static void jl_decorate_module(Module &M) JL_NOTSAFEPOINT;
+static void decorate_module(Module &M) JL_NOTSAFEPOINT;
 
 // convert local roots into global roots, if they are needed
 static void jl_promote_method_roots(jl_codegen_output_t &out, jl_method_instance_t *mi)
@@ -290,14 +291,14 @@ jl_emitted_output_t jl_codegen_output_t::finish(std::unique_ptr<LLVMContext> ctx
                                                 orc::SymbolStringPool &SSP)
 {
     auto info = std::make_unique<jl_linker_info_t>();
-    auto intern = [&](StringRef name) {
+    auto intern = [&](StringRef name) JL_NOTSAFEPOINT {
         SmallString<128> buf;
         Mangler::getNameWithPrefix(buf, name, DL);
         return SSP.intern(buf);
     };
 
     // Mangle and intern each part of the linking metadata, before all the
-    // pointers to LLVM values are invaliated.
+    // pointers to LLVM values are invalidated.
     for (auto &[ci, funcs] : ci_funcs) {
         info->ci_funcs[ci] = {funcs.invoke_api,
                               funcs.invoke ? intern(funcs.invoke->getName()) : nullptr,
@@ -358,6 +359,10 @@ void *jl_jit_abi_converter_impl(jl_task_t *ct, jl_abi_t from_abi,
     auto mod = jl_create_llvm_module("gfthunk", *ctx, jl_ExecutionEngine->getDataLayout(),
                                      jl_ExecutionEngine->getTargetTriple());
     jl_codegen_output_t out{*mod};
+    // root the wrapper types that `mark_julia_const` mints for egality-pinned
+    // (`TypeEgal`) argument slots while the thunk is emitted
+    out.temporary_roots = jl_alloc_array_1d(jl_array_any_type, 0);
+    JL_GC_PUSH1(&out.temporary_roots);
     {
         ctx->setDiscardValueNames(true);
         out.imaging_mode = 0;
@@ -376,6 +381,9 @@ void *jl_jit_abi_converter_impl(jl_task_t *ct, jl_abi_t from_abi,
     }
     auto &ES = jl_ExecutionEngine->getExecutionSession();
     auto emitted = out.finish(std::move(ctx), std::move(mod), *ES.getSymbolStringPool());
+    out.temporary_roots = nullptr;
+    out.temporary_roots_set.clear();
+    JL_GC_POP();
     jl_ExecutionEngine->addOutput(std::move(emitted));
     uintptr_t Addr = jl_ExecutionEngine->getFunctionAddress(gf_thunk_name);
     assert(Addr);
@@ -425,7 +433,7 @@ static void jl_publish_compiled_ci(jl_code_instance_t *ci,
     }
 }
 
-static void jl_do_dump_compile(jl_code_instance_t *codeinst, uint64_t time)
+static void jl_do_dump_compile(jl_code_instance_t *codeinst, uint64_t time) JL_NOTSAFEPOINT
 {
     jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
     if (jl_is_method(mi->def.method)) {
@@ -551,12 +559,10 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
             ++UnspecFPtrCount;
             jl_svec_t *edges = (jl_svec_t*)src->edges;
             if (jl_is_svec(edges)) {
-                jl_atomic_store_release(&unspec->edges, edges); // n.b. this assumes the field was always empty svec(), which is not entirely true
-                jl_gc_wb(unspec, edges);
+                jl_gc_write_atomic(unspec, unspec->edges, jl_svec_t, edges, release); // n.b. this assumes the field was always empty svec(), which is not entirely true
             }
             jl_debuginfo_t *debuginfo = src->debuginfo;
-            jl_atomic_store_release(&unspec->debuginfo, debuginfo); // n.b. this assumes the field was previously NULL, which is not entirely true
-            jl_gc_wb(unspec, debuginfo);
+            jl_gc_write_atomic(unspec, unspec->debuginfo, jl_debuginfo_t, debuginfo, release); // n.b. this assumes the field was previously NULL, which is not entirely true
             jl_emit_codeinsts_to_jit(&unspec, &src, 1);
             jl_ExecutionEngine->publishCIs(unspec, true);
         }
@@ -658,6 +664,14 @@ void jl_register_jit_object(const object::ObjectFile &Object,
                             std::function<uint64_t(const StringRef &)> getLoadAddress,
                             const jl_linker_info_t &Info);
 
+static bool isJITLinkEHFrameSection(StringRef Name) JL_NOTSAFEPOINT
+{
+    // EH-frame sections are handled by the EH-frame registration plugin. Its
+    // post-allocation graph state is not suitable for generic section range
+    // walks here.
+    return Name == ".eh_frame" || Name == "__eh_frame" || Name.ends_with(",__eh_frame");
+}
+
 void JLDebuginfoPlugin::notifyMaterializingWithInfo(
     orc::MaterializationResponsibility &MR, jitlink::LinkGraph &G,
     MemoryBufferRef InputObject, std::unique_ptr<jl_linker_info_t> LinkerInfo)
@@ -751,8 +765,12 @@ void JLDebuginfoPlugin::modifyPassConfig(MaterializationResponsibility &MR, jitl
 #else
             auto SecName = Sec.getName();
 #endif
+            if (isJITLinkEHFrameSection(SecName))
+                continue;
+            if (Sec.blocks().empty())
+                continue;
             // https://github.com/llvm/llvm-project/commit/118e953b18ff07d00b8f822dfbf2991e41d6d791
-           Info.SectionLoadAddresses[SecName] = jitlink::SectionRange(Sec).getStart().getValue();
+            Info.SectionLoadAddresses[SecName] = jitlink::SectionRange(Sec).getStart().getValue();
         }
         return Error::success();
     });
@@ -785,13 +803,15 @@ public:
                           jitlink::LinkGraph &,
                           jitlink::PassConfiguration &Config) override {
         Config.PostAllocationPasses.push_back([this](jitlink::LinkGraph &G) {
+            // `G.blocks()` is exactly the union of the sections' blocks, so a
+            // single pass over the (non-EH-frame) sections counts every block
+            // once; `graph_size == code_size + data_size`
             size_t graph_size = 0;
             size_t code_size = 0;
             size_t data_size = 0;
-            for (auto block : G.blocks()) {
-                graph_size += block->getSize();
-            }
             for (auto &section : G.sections()) {
+                if (isJITLinkEHFrameSection(section.getName()))
+                    continue;
                 size_t secsize = 0;
                 for (auto block : section.blocks()) {
                     secsize += block->getSize();
@@ -813,26 +833,7 @@ public:
         });
     }
 };
-
-// replace with [[maybe_unused]] when we get to C++17
-#ifdef _COMPILER_GCC_
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-function"
-#endif
-
-#ifdef _COMPILER_CLANG_
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wunused-function"
-#endif
-
-#ifdef _COMPILER_CLANG_
-#pragma clang diagnostic pop
-#endif
-
-#ifdef _COMPILER_GCC_
-#pragma GCC diagnostic pop
-#endif
-}
+} // namespace anonymous
 
 class JLMaterializationUnit : public orc::MaterializationUnit {
 public:
@@ -884,20 +885,11 @@ public:
         return JLMaterializationUnit{JIT, OL, std::move(Out), std::move(I)};
     }
 
-    // During materializtion: finalizers disabled, GC safe
-    void materialize(std::unique_ptr<MaterializationResponsibility> R) override
+    // During materialization: finalizers disabled, GC safe
+    void materialize(std::unique_ptr<MaterializationResponsibility> R) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER override
     {
         auto &ES = R->getExecutionSession();
-        jl_task_t *ct = jl_current_task;
-
-        // TODO: Tell GCChecker that materialize can have safepoints.
-#ifndef __clang_analyzer__
-        {
-            uint8_t state = jl_gc_unsafe_enter(ct->ptls);
-            JIT.optimizeDLSyms(*Out.module); // May safepoint
-            jl_gc_unsafe_leave(ct->ptls, state);
-        }
-#endif
+        JIT.optimizeDLSyms(*Out.module);
         std::unique_ptr<MemoryBuffer> Obj;
         uint64_t start_time = jl_hrtime();
         {
@@ -914,21 +906,17 @@ public:
         }
         uint64_t end_time = jl_hrtime();
 
-#ifndef __clang_analyzer__
-        {
-            uint8_t state = jl_gc_unsafe_enter(ct->ptls);
-            for (auto [CI, _] : Out.linker_info->ci_funcs) {
-                JL_GC_PROMISE_ROOTED(CI);
-                jl_do_dump_compile(CI, end_time - start_time);
-            }
-            jl_gc_unsafe_leave(ct->ptls, state);
+        for (auto [CI, _] : Out.linker_info->ci_funcs) {
+            JL_GC_PROMISE_ROOTED(CI);
+            jl_do_dump_compile(CI, end_time - start_time);
         }
-#endif
 
         auto G = jitlink::createLinkGraphFromObject(Obj->getMemBufferRef(),
                                                     ES.getSymbolStringPool());
         if (!G) {
+#ifndef __clang_gcanalyzer__ // reportError runs an unknown callback, which cannot be annotated as safe here (but is)
             ES.reportError(G.takeError());
+#endif
             R->failMaterialization();
             return;
         }
@@ -937,7 +925,11 @@ public:
         SmallVector<jl_code_instance_t *> CIs;
         for (auto [CI, _] : Out.linker_info->ci_funcs)
             CIs.push_back(CI);
+
+        jl_task_t *ct = jl_current_task;
+        uint8_t gc_state = jl_gc_unsafe_enter(ct->ptls);
         JIT.publishCIs(CIs);
+        jl_gc_unsafe_leave(ct->ptls, gc_state);
 
         if (!JIT.linkOutput(*R, Obj->getMemBufferRef(), **G, std::move(Out.linker_info)))
             return;
@@ -983,8 +975,8 @@ public:
         assert(API == JL_INVOKE_ARGS || API == JL_INVOKE_SPECSIG);
     };
 
-    // During materializtion: finalizers disabled, GC safe
-    void materialize(std::unique_ptr<MaterializationResponsibility> R) override
+    // During materialization: finalizers disabled, GC safe
+    void materialize(std::unique_ptr<MaterializationResponsibility> R) JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE override
     {
         auto Ctx = std::make_unique<LLVMContext>();
         auto Mod =
@@ -1216,6 +1208,7 @@ namespace {
 
         TMCreator(TargetMachine &TM, int optlevel) JL_NOTSAFEPOINT
             : JTMB(createJTMBFromTM(TM, optlevel)) {}
+        ~TMCreator() JL_NOTSAFEPOINT = default;
 
         std::unique_ptr<TargetMachine> operator()() JL_NOTSAFEPOINT {
             auto TM = cantFail(JTMB.createTargetMachine());
@@ -1231,6 +1224,7 @@ namespace {
         std::mutex &llvm_printing_mutex;
         PMCreator(TargetMachine &TM, int optlevel, SmallVector<std::function<void()>, 0> &printers, std::mutex &llvm_printing_mutex) JL_NOTSAFEPOINT
             : JTMB(createJTMBFromTM(TM, optlevel)), O(getOptLevel(optlevel)), printers(printers), llvm_printing_mutex(llvm_printing_mutex) {}
+        ~PMCreator() JL_NOTSAFEPOINT = default;
 
         auto operator()() JL_NOTSAFEPOINT {
             auto TM = cantFail(JTMB.createTargetMachine());
@@ -1367,7 +1361,8 @@ namespace {
     // shim for converting a unique_ptr to a TransformFunction to a TransformFunction
     template <typename T>
     struct IRTransformRef {
-        IRTransformRef(T &transform) : transform(transform) {}
+        IRTransformRef(T &transform) JL_NOTSAFEPOINT : transform(transform) {}
+        ~IRTransformRef() JL_NOTSAFEPOINT = default;
         OptimizerResultT operator()(orc::ThreadSafeModule TSM, orc::MaterializationResponsibility &R) JL_NOTSAFEPOINT {
             TSM.withModuleDo([&](Module &M) JL_NOTSAFEPOINT {
                 transform(M, R);
@@ -1458,7 +1453,7 @@ struct JuliaOJIT::JITPointersT {
         // Windows needs some inline asm to help
         // build unwind tables, if they have any functions to decorate
         if (!M.functions().empty())
-            jl_decorate_module(M);
+            decorate_module(M);
     }
     void operator()(Module &M, orc::MaterializationResponsibility &R) JL_NOTSAFEPOINT {
         return operator()(M);
@@ -1678,7 +1673,7 @@ struct JuliaOJIT::DLSymOptimizer {
     bool named;
 };
 
-void optimizeDLSyms(Module &M) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER {
+void optimizeDLSyms(Module &M) {
     JuliaOJIT::DLSymOptimizer(true)(M);
 }
 
@@ -2060,7 +2055,7 @@ void JuliaOJIT::publishCIs(ArrayRef<jl_code_instance_t *> CIs, bool Wait)
     JuliaTaskDispatcher::future<void> F;
     auto Callback = [this, CIs = SmallVector<jl_code_instance_t *, 1>(CIs),
                      P = Wait ? std::optional(F.get_promise()) :
-                                std::nullopt](Expected<SymbolMap> SymsE) mutable {
+                                std::nullopt](Expected<SymbolMap> SymsE) JL_NOTSAFEPOINT {
         std::unique_lock Lock{LinkerMutex};
         if (!SymsE) {
             errs() << "Internal error: Lookup failed: " << SymsE.takeError() << "\n";
@@ -2220,6 +2215,79 @@ linkGraphSymbols(jitlink::LinkGraph &G) JL_NOTSAFEPOINT
     return Syms;
 }
 
+static jitlink::Symbol *
+findLinkGraphSymbolByName(jitlink::LinkGraph &G,
+                          const orc::SymbolStringPtr &Name) JL_NOTSAFEPOINT
+{
+    if (auto *Sym = G.findDefinedSymbolByName(Name))
+        return Sym;
+    if (auto *Sym = G.findExternalSymbolByName(Name))
+        return Sym;
+    if (auto *Sym = G.findAbsoluteSymbolByName(Name))
+        return Sym;
+    return nullptr;
+}
+
+static void retargetLinkGraphEdges(jitlink::LinkGraph &G, jitlink::Symbol &From,
+                                   jitlink::Symbol &To) JL_NOTSAFEPOINT
+{
+    struct RetargetEdgeVisitor {
+        jitlink::Symbol &From;
+        jitlink::Symbol &To;
+
+        bool visitEdge(jitlink::LinkGraph &, jitlink::Block *,
+                       jitlink::Edge &Edge) JL_NOTSAFEPOINT
+        {
+            if (&Edge.getTarget() != &From)
+                return false;
+            Edge.setTarget(To);
+            return true;
+        }
+    };
+    jitlink::visitExistingEdges(G, RetargetEdgeVisitor{From, To});
+}
+
+static jitlink::Symbol *
+makeAnonymousLinkGraphSymbol(jitlink::LinkGraph &G,
+                             jitlink::Symbol &Sym) JL_NOTSAFEPOINT
+{
+    assert(Sym.isDefined());
+    auto &Anon = G.addAnonymousSymbol(Sym.getBlock(), Sym.getOffset(),
+                                      Sym.getSize(), Sym.isCallable(),
+                                      Sym.isLive());
+    Anon.setTargetFlags(Sym.getTargetFlags());
+    retargetLinkGraphEdges(G, Sym, Anon);
+    G.removeDefinedSymbol(Sym);
+    return &Anon;
+}
+
+static jitlink::Symbol *
+renameLinkGraphSymbol(jitlink::LinkGraph &G, jitlink::Symbol &Sym,
+                      const orc::SymbolStringPtr &Name) JL_NOTSAFEPOINT
+{
+    if (Sym.getName() == Name)
+        return &Sym;
+    if (!Sym.isExternal()) {
+        Sym.setName(Name);
+        return &Sym;
+    }
+    // External symbols are keyed by name inside LinkGraph, so retarget rather
+    // than renaming in place and leaving the external symbol map stale.
+    auto *Dest = findLinkGraphSymbolByName(G, Name);
+    if (!Dest) {
+        Dest = &G.addExternalSymbol(Name, Sym.getSize(), Sym.isWeaklyReferenced());
+        Dest->setCallable(Sym.isCallable());
+        Dest->setTargetFlags(Sym.getTargetFlags());
+    }
+    else if (Dest->isExternal()) {
+        Dest->setWeaklyReferenced(Dest->isWeaklyReferenced() && Sym.isWeaklyReferenced());
+        Dest->setCallable(Dest->isCallable() || Sym.isCallable());
+        Dest->setTargetFlags(Dest->getTargetFlags() | Sym.getTargetFlags());
+    }
+    retargetLinkGraphEdges(G, Sym, *Dest);
+    return Dest;
+}
+
 bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferRef ObjBuf,
                            jitlink::LinkGraph &G, std::unique_ptr<jl_linker_info_t> Info)
 {
@@ -2229,7 +2297,14 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
 
     // Rename the defined CI functions.
     auto RenameDef = [&](const SymbolStringPtr &Orig, const SymbolStringPtr &Dest)
-                             JL_NOTSAFEPOINT { Syms.at(Orig)->setName(Dest); };
+                             JL_NOTSAFEPOINT {
+        auto It = Syms.find(Orig);
+        assert(It != Syms.end());
+        It->second = renameLinkGraphSymbol(G, *It->second, Dest);
+    };
+    SmallSet<SymbolStringPtr, 2> OwnedSyms;
+    for (auto &KV : MR.getSymbols())
+        OwnedSyms.insert(KV.first);
     for (auto &[CI, Funcs] : Info->ci_funcs) {
         auto &S = CISymbols.at(CI);
         if (Funcs.invoke)
@@ -2241,21 +2316,56 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
     // Rename referenced CIs in the workqueue.
     for (auto &[Call, T] : Info->call_targets) {
         auto [CI, API] = Call;
-        if (!Syms.contains(T))
+        auto It = Syms.find(T);
+        if (It == Syms.end())
             continue;
+        if (!It->second->isExternal()) {
+            // Non-primary call target bodies are local copies. Keep them out
+            // of ORC's public symbols instead of publishing duplicate CI
+            // definitions under the target's global name.
+            if (!OwnedSyms.contains(It->second->getName()))
+                It->second = makeAnonymousLinkGraphSymbol(G, *It->second);
+            continue;
+        }
         JL_GC_PROMISE_ROOTED(CI);
         auto Dest = linkCallTarget(MR, CI, API);
         if (!Dest)
             return false;
-        Syms.at(T)->setName(Dest);
+        if (auto *DestSym = findLinkGraphSymbolByName(G, Dest);
+            DestSym && !DestSym->isExternal() && !OwnedSyms.contains(Dest))
+            makeAnonymousLinkGraphSymbol(G, *DestSym);
+        It->second = renameLinkGraphSymbol(G, *It->second, Dest);
+    }
+    SmallSet<SymbolStringPtr, 0> KnownCISyms;
+    for (auto &KV : CISymbols) {
+        auto &S = KV.second;
+        if (S.invoke)
+            KnownCISyms.insert(S.invoke);
+        if (S.specptr)
+            KnownCISyms.insert(S.specptr);
+    }
+    SmallVector<jitlink::Symbol *, 0> DefinedSyms;
+    for (auto *Sym : G.defined_symbols())
+        DefinedSyms.push_back(Sym);
+    // Another thread may have claimed a CI after this module was emitted but
+    // before this materialization unit registered its interface. Any body that
+    // remains in this graph for that CI must not be exported here.
+    for (auto *Sym : DefinedSyms) {
+        if (Sym->hasName() && KnownCISyms.contains(Sym->getName()) &&
+            !OwnedSyms.contains(Sym->getName()))
+            makeAnonymousLinkGraphSymbol(G, *Sym);
     }
 
     // Rename globals and add mappings
     // TODO: don't leak when we have a way to GC code
-#ifdef __clang_analyzer__
-    [[clang::suppress]]
-#endif
-    void **Ptrs = new void *[Info->global_targets.size()];
+    void **Ptrs;
+    #ifdef __clang_analyzer__
+    // hide this "leak" from clang-sa analysis
+    extern void** make_new_pointers(size_t) JL_NOTSAFEPOINT;
+    Ptrs = make_new_pointers(Info->global_targets.size());
+    #else
+    Ptrs = new void *[Info->global_targets.size()];
+    #endif
     size_t i = 0;
     orc::SymbolMap GlobalSyms;
     for (auto &[Addr, Orig] : Info->global_targets) {
@@ -2263,7 +2373,7 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
         auto It = Syms.find(Orig);
         if (It == Syms.end())
             continue;
-        It->second->setName(Sym);
+        It->second = renameLinkGraphSymbol(G, *It->second, Sym);
         Ptrs[i] = Addr;
         GlobalSyms[Sym] = {ExecutorAddr::fromPtr(Ptrs + i), JITSymbolFlags::Exported};
         ++i;
@@ -2418,7 +2528,7 @@ void JuliaOJIT::printTimers()
     reportAndResetTimings();
 }
 
-void JuliaOJIT::optimizeDLSyms(Module &M) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER {
+void JuliaOJIT::optimizeDLSyms(Module &M) {
     (*DLSymOpt)(M);
 }
 
@@ -2464,7 +2574,7 @@ TargetIRAnalysis JuliaOJIT::getTargetIRAnalysis() const {
     return TM->getTargetIRAnalysis();
 }
 
-static void jl_decorate_module(Module &M) {
+static void decorate_module(Module &M) {
     auto TT = Triple(M.getTargetTriple());
     if (TT.isOSWindows() && TT.getArch() == Triple::x86_64) {
         // Add special values used by debuginfo to build the UnwindData table registration for Win64
@@ -2527,6 +2637,12 @@ static void jl_decorate_module(Module &M) {
         M.appendModuleInlineAsm(inline_asm);
     }
 #undef ASM_USES_ELF
+}
+
+extern "C" JL_DLLEXPORT_CODEGEN
+void jl_decorate_llvm_module_impl(LLVMModuleRef m) JL_NOTSAFEPOINT
+{
+    decorate_module(*unwrap(m));
 }
 
 // helper function for adding a DLLImport (dlsym) address to the execution engine

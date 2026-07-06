@@ -658,14 +658,14 @@ end
     @test eltype(copysign(-1//2,-1//2)) <: Rational
 
     # Verify type stability with rational (x is positive)
-    @test eltype(copysign(-1//2,1)) <: Rational
-    @test eltype(copysign(-1//2,BigInt(1))) <: Rational
-    @test eltype(copysign(-1//2,1.0)) <: Rational
-    @test eltype(copysign(-1//2,1//2)) <: Rational
-    @test eltype(copysign(-1//2,-1)) <: Rational
-    @test eltype(copysign(-1//2,-BigInt(1))) <: Rational
-    @test eltype(copysign(-1//2,-1.0)) <: Rational
-    @test eltype(copysign(-1//2,-1//2)) <: Rational
+    @test eltype(copysign(1//2,1)) <: Rational
+    @test eltype(copysign(1//2,BigInt(1))) <: Rational
+    @test eltype(copysign(1//2,1.0)) <: Rational
+    @test eltype(copysign(1//2,1//2)) <: Rational
+    @test eltype(copysign(1//2,-1)) <: Rational
+    @test eltype(copysign(1//2,-BigInt(1))) <: Rational
+    @test eltype(copysign(1//2,-1.0)) <: Rational
+    @test eltype(copysign(1//2,-1//2)) <: Rational
 
     # test x = NaN
     @test isnan(copysign(0/0,1))

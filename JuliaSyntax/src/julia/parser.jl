@@ -1133,7 +1133,7 @@ function parse_where(ps::ParseState, down)
     end
 end
 
-# Juxtaposition. Kinda ugh but soo useful for units and Field identities like `im`
+# Juxtaposition. Kinda ugh but so useful for units and field identities like `im`
 #
 # flisp: parse-juxtapose
 function parse_juxtapose(ps::ParseState)
