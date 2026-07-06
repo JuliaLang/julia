@@ -33,6 +33,29 @@ static const int16_t sleeping_like_the_dead JL_UNUSED = 2;
 // n.b. this may temporarily exceed jl_n_threads
 _Atomic(int) n_threads_running = 0;
 
+// Spinner accounting, following Go's nmspinning protocol. A thread that
+// fails to pop work may become a "spinner": it busy-polls the scheduler
+// queues for up to sleep_threshold ns before parking. At most half of a
+// threadpool's threads may spin at once; a thread denied a spinner slot
+// parks immediately instead of polling, so an idle pool converges to a
+// bounded set of searchers instead of a herd hammering the queues of
+// whichever thread is producing work.
+//  - jl_wakeup_threadpool skips waking anyone while a spinner exists in the
+//    pool (the spinner will find the work). This cannot lose a wakeup:
+//    a spinner leaving to park decrements n_spinning *before* its
+//    sleeping-store + fence + queue recheck, pairing with the enqueuer's
+//    store + fence + n_spinning load ([^store_buffering_1]).
+//  - The last spinner to exit *with work* must wake a successor, so a
+//    burst of enqueues that was absorbed by one spinner still fans out
+//    (and a single post-batch wake can service a whole batch).
+// n.b. like Go, the count may briefly overshoot the cap (load-then-add).
+#define JL_SCHED_MAX_POOLS 8
+typedef struct {
+    _Atomic(int32_t) v;
+    char pad[64 - sizeof(_Atomic(int32_t))];
+} padded_spin_count_t;
+static padded_spin_count_t n_spinning[JL_SCHED_MAX_POOLS];
+
 // invariant: No thread is ever asleep unless sleep_check_state is sleeping (or we have a wakeup signal pending).
 // invariant: Any particular thread is not asleep unless that thread's sleep_check_state is sleeping.
 // invariant: The transition of a thread state to sleeping must be followed by a check that there wasn't work pending for it.
@@ -347,6 +370,15 @@ JL_DLLEXPORT void jl_wakeup_threadpool(int8_t tpid)
     if (uvlock == ct)
         uv_stop(jl_global_event_loop());
 
+    // If a spinner is searching this pool, it will find the new work; do
+    // not wake another thread. The fence above pairs with the spinner's
+    // decrement-then-fence-then-recheck exit protocol, so this skip cannot
+    // strand the work (see n_spinning).
+    if (tpid < JL_SCHED_MAX_POOLS && jl_atomic_load_relaxed(&n_spinning[tpid].v) > 0) {
+        JULIA_DEBUG_SLEEPWAKE( wakeup_leave = cycleclock() );
+        return;
+    }
+
     // [lo, lo+n) tid range of the target pool
     int16_t lo = 0;
     for (int8_t i = 0; i < tpid; i++)
@@ -441,28 +473,63 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
 {
     jl_task_t *ct = jl_current_task;
     uint64_t start_cycles = 0;
+    int8_t tpid = jl_threadpoolid(jl_atomic_load_relaxed(&ct->tid));
+    if (tpid >= JL_SCHED_MAX_POOLS)
+        tpid = -1; // treat as unpooled: legacy spin/sleep behavior
+    int spinning = 0;
 
     while (1) {
         jl_task_t *task = get_next_task(trypoptask, q);
-        if (task)
+        if (task) {
+            if (spinning) {
+                spinning = 0;
+                int32_t prev = jl_atomic_fetch_add_relaxed(&n_spinning[tpid].v, -1);
+                assert(prev > 0);
+                if (prev == 1)
+                    // last spinner leaving with work: wake a successor so a
+                    // burst absorbed by us still fans out to other threads
+                    jl_wakeup_threadpool(tpid);
+            }
             return task;
+        }
+
+        jl_ptls_t ptls = ct->ptls;
+        int is_io_thread = ptls->tid == jl_atomic_load_relaxed(&io_loop_tid);
+        if (!spinning && tpid >= 0 && !is_io_thread) {
+            int32_t ns = jl_atomic_load_relaxed(&n_spinning[tpid].v);
+            if (2 * ns < jl_n_threads_per_pool[tpid]) {
+                jl_atomic_fetch_add_relaxed(&n_spinning[tpid].v, 1);
+                spinning = 1;
+            }
+        }
+        // A pooled thread that could not get a spinner slot parks without
+        // polling; enough other threads are already searching, and the
+        // post-fence get_next_task retry below (paired with the enqueuer's
+        // fence) keeps the park race-free.
+        int force_park = tpid >= 0 && !spinning && !is_io_thread;
 
         // quick, race-y check to see if there seems to be any stuff in there
         jl_cpu_pause();
-        if (!check_empty(checkempty)) {
+        if (!force_park && !check_empty(checkempty)) {
             start_cycles = 0;
             continue;
         }
 
         jl_cpu_pause();
-        jl_ptls_t ptls = ct->ptls;
-        if (sleep_check_after_threshold(&start_cycles) || (ptls->tid == jl_atomic_load_relaxed(&io_loop_tid) && (!jl_atomic_load_relaxed(&_threadedregion) || wait_empty))) {
+        if (force_park || sleep_check_after_threshold(&start_cycles) || (is_io_thread && (!jl_atomic_load_relaxed(&_threadedregion) || wait_empty))) {
+            if (spinning) {
+                // exit spinning before the sleeping store + fence, so an
+                // enqueuer that skips the wakeup based on n_spinning is
+                // ordered against our queue recheck below
+                spinning = 0;
+                jl_atomic_fetch_add_relaxed(&n_spinning[tpid].v, -1);
+            }
             // acquire sleep-check lock
             assert(jl_atomic_load_relaxed(&ptls->sleep_check_state) == not_sleeping);
             jl_atomic_store_relaxed(&ptls->sleep_check_state, sleeping);
             jl_fence(); // [^store_buffering_1]
             JL_PROBE_RT_SLEEP_CHECK_SLEEP(ptls);
-            if (!check_empty(checkempty)) { // uses relaxed loads
+            if (!force_park && !check_empty(checkempty)) { // uses relaxed loads
                 if (set_not_sleeping(ptls)) {
                     JL_PROBE_RT_SLEEP_CHECK_TASKQ_WAKE(ptls);
                 }
