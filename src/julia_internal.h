@@ -987,6 +987,7 @@ jl_value_t *jl_substitute_var(jl_value_t *t, jl_tvar_t *var, jl_value_t *val) JL
 jl_value_t *jl_substitute_var_nothrow(jl_value_t *t, jl_tvar_t *var, jl_value_t *val, int nothrow) JL_CANSAFEPOINT;
 // substitute the dangling TypeVarRef with root-index `idx` in `t` by `val`
 jl_value_t *jl_substitute_tvarref(jl_value_t *t, size_t idx, jl_value_t *val) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_substitute_tvarref_nothrow(jl_value_t *t, size_t idx, jl_value_t *val) JL_CANSAFEPOINT;
 // translate free occurrences of vars[j] (outermost binder first) into de Bruijn
 // references with root index (nvars - j)
 jl_value_t *jl_translate_vars_to_refs(jl_value_t *t, jl_svec_t *vars, size_t nvars) JL_CANSAFEPOINT;

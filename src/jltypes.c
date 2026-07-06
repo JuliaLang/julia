@@ -1965,7 +1965,6 @@ JL_DLLEXPORT jl_value_t *jl_unionall_open2(jl_unionall_t *u)
 static jl_value_t *substitute_tvarref(jl_value_t *t, size_t idx, jl_value_t *val, int nothrow)
 {
     assert(idx > 0);
-    nothrow = (jl_is_typevar(val) || jl_is_tvarref(val)) ? 0 : nothrow;
     jl_typeenv_t *env = (jl_typeenv_t*)alloca(idx * sizeof(jl_typeenv_t));
     size_t i;
     // idx-1 leading pure markers (keep those refs), then the substitution entry
@@ -1980,6 +1979,14 @@ static jl_value_t *substitute_tvarref(jl_value_t *t, size_t idx, jl_value_t *val
 jl_value_t *jl_substitute_tvarref(jl_value_t *t, size_t idx, jl_value_t *val)
 {
     return substitute_tvarref(t, idx, val, 0);
+}
+
+// tolerant variant: a `Union` bound arm that becomes invalid under the
+// substitution is dropped (cf. the body instantiation in `jl_unionall_open`);
+// returns NULL if the substituted term is invalid beyond repair
+JL_DLLEXPORT jl_value_t *jl_substitute_tvarref_nothrow(jl_value_t *t, size_t idx, jl_value_t *val)
+{
+    return substitute_tvarref(t, idx, val, 2);
 }
 
 // rebuild `t`, translating each free occurrence of `var` into a de Bruijn
@@ -2746,7 +2753,8 @@ static int check_datatype_parameters(jl_typename_t *tn, jl_value_t **params, siz
                 // `nothrow == 2` or `nothrow == 0`. If `nothrow` is initially set to 1
                 // then we might miss some inner error, perhaps the normal path should
                 // also follow this rule？
-                jl_value_t *nb = substitute_tvarref(bj, j/2 - i, params[i], nothrow ? (isub ? 2 : 1) : 0);
+                jl_value_t *nb = substitute_tvarref(bj, j/2 - i, params[i],
+                                                    jl_is_typevar(params[i]) ? 0 : nothrow ? (isub ? 2 : 1) : 0);
                 if (nb == NULL) {
                     assert(nothrow);
                     JL_GC_POP();
