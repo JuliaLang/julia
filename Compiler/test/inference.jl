@@ -1672,7 +1672,7 @@ let nfields_tfunc(@nospecialize xs...) =
     # only the egality kind `TypeEgal{X}` pins the value to exactly `X` (#61323)
     @test nfields_tfunc(Type{Type{Int}}) === Int
     @test nfields_tfunc(Core.TypeEgal{Type{Int}}) === Const(nfields(Type{Int}))
-    @test nfields_tfunc(UnionAll) === Const(4) # name, lb, ub, body
+    @test nfields_tfunc(UnionAll) === Const(5) # name, lb, ub, body, flags
     @test nfields_tfunc(DataType) === Const(nfields(DataType))
     @test nfields_tfunc(Type{Int}) === Int
     @test nfields_tfunc(Core.TypeEgal{Int}) === Const(nfields(DataType))

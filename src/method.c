@@ -1389,7 +1389,7 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
                       jl_symbol_name(((jl_tvar_t*)tv)->name));
         // n.b. built raw (not via jl_type_unionall) to preserve unused binders
         argtype = jl_translate_var_to_ref(argtype, (jl_tvar_t*)tv, 1);
-        argtype = jl_new_struct(jl_unionall_type, ((jl_tvar_t*)tv)->name,
+        argtype = jl_new_unionall_raw(((jl_tvar_t*)tv)->name,
                                 ((jl_tvar_t*)tv)->lb, ((jl_tvar_t*)tv)->ub, argtype);
     }
     if (jl_has_free_typevars(argtype)) {

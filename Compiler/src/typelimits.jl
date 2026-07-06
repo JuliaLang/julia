@@ -14,28 +14,16 @@ const MAX_TYPEUNION_LENGTH = 3
 # limit the complexity of type `t` to be simpler than the comparison type `compare`
 # no new values may be introduced, so the parameter `source` encodes the set of all values already present
 # the outermost tuple type is permitted to have up to `allowed_tuplelen` parameters
-# materialize all binders: unlike `unwrap_unionall`, occurrences keep their
-# bounds (as fresh TypeVars). Distinct bounded forms must stay distinguishable
-# here: their unwrapped bodies are one shared reference-form object (e.g. every
-# `W{T} where T<:...` unwraps to the cached `W{TypeVarRef(1)}`), which would
-# make a deeper form compare identical to its comparison and escape limiting.
-function unionall_openall(@nospecialize t)
-    while isa(t, UnionAll)
-        t = Base.unionall_open(t)[2]
-    end
-    return t
-end
-
 function limit_type_size(@nospecialize(t), @nospecialize(compare), @nospecialize(source), allowed_tupledepth::Int, allowed_tuplelen::Int)
-    source = svec(unionall_openall(compare), unionall_openall(source))
+    source = svec(unwrap_unionall(compare), unwrap_unionall(source))
     source[1] === source[2] && (source = svec(source[1]))
-    type_more_complex(t, compare, source, 1, allowed_tupledepth, allowed_tuplelen) || return t
-    r = _limit_type_size(t, compare, source, 1, allowed_tuplelen)
+    type_more_complex(t, compare, source, 1, allowed_tupledepth, allowed_tuplelen, nothing, nothing) || return t
+    r = _limit_type_size(t, compare, source, 1, allowed_tuplelen, nothing, nothing)
     #@assert t <: r # this may fail if t contains a typevar in invariant and multiple times
         # in covariant position and r looses the occurrence in invariant position (see #36407)
     if !(t <: r) # ideally, this should never happen
         # widen to minimum complexity to obtain a valid result
-        r = _limit_type_size(t, Any, source, 1, allowed_tuplelen)
+        r = _limit_type_size(t, Any, source, 1, allowed_tuplelen, nothing, nothing)
         t <: r || (r = Any) # final escape hatch
     end
     #@assert r === _limit_type_size(r, t, source) # this monotonicity constraint is slightly stronger than actually required,
@@ -47,10 +35,13 @@ end
 # try to find `type` somewhere in `comparison` type
 # at a minimum nesting depth of `mindepth`
 function is_derived_type(@nospecialize(t), @nospecialize(c), mindepth::Int)
-    if has_free_typevars(t) || has_free_typevars(c)
-        # Don't allow finding types with free typevars. These strongly depend
-        # on identity and we do not make any effort to make sure this returns
-        # sensible results in that case.
+    if has_free_typevars(t) || has_free_typevars(c) ||
+       has_dangling_typevar_refs(t) || has_dangling_typevar_refs(c)
+        # Don't allow finding types with free typevars (or detached
+        # bound-variable references, their positional analog: all unwrapped
+        # bodies of one wrapper share a single reference-form object). These
+        # strongly depend on identity and we do not make any effort to make
+        # sure this returns sensible results in that case.
         return false
     end
     if t === c
@@ -95,21 +86,41 @@ function is_derived_type_from_any(@nospecialize(t), sources::SimpleVector, minde
     return false
 end
 
+# The walk carries, for each side, the stack of `UnionAll` binders crossed,
+# as an immutable linked chain (innermost first, one small node per crossing):
+# a bound-variable reference of depth `d` resolves to the `d`-th node, and that
+# binder's own bounds are framed under the node's own `prev` chain. Immutable
+# sharing matters: descending into a bound truncates the frame to a prefix
+# that the enclosing walk is still using (a mutable stack would alias it).
+struct BinderFrame
+    u::UnionAll
+    prev::Union{BinderFrame, Nothing}
+end
+const MaybeBinderFrame = Union{BinderFrame, Nothing}
+
+function resolve_ref(f::MaybeBinderFrame, d::Int)
+    while f !== nothing && d > 1
+        d -= 1
+        f = f.prev
+    end
+    return f # nothing: the reference dangles past the walked prefix
+end
+
 # The goal of this function is to return a type of greater "size" and less "complexity" than
 # both `t` or `c` over the lattice defined by `sources`, `depth`, and `allowed_tuplelen`.
-function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVector, depth::Int, allowed_tuplelen::Int)
-    # a bound-variable reference is a size-1 leaf (cf. the TypeVar handling)
-    isa(t, TypeVarRef) && return t
-    isa(c, TypeVarRef) && (c = Any)
-    @assert isa(t, AnyType) && isa(c, AnyType) "unhandled TypeVar / Vararg"
-    if t === c
-        return t # quick egal test
+function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVector, depth::Int, allowed_tuplelen::Int,
+                          tf::MaybeBinderFrame, cf::MaybeBinderFrame)
+    @assert isa(t, AnyType) && isa(c, AnyType) "unhandled TypeVar / TypeVarRef / Vararg"
+    if t === c && !has_dangling_typevar_refs(t)
+        # quick egal test -- but identical reference-form bodies reached under
+        # different binder prefixes do not denote identical types
+        return t
     elseif t === Union{}
         return t # easy case
     elseif isa(t, DataType) && isempty(t.parameters)
         return t # fast path: unparameterized are always simple
     else
-        ut = unionall_openall(t)
+        ut = unwrap_unionall(t)
         if is_derived_type_from_any(ut, sources, depth)
             return t # t isn't something new
         end
@@ -119,25 +130,21 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
     # by peeling off meaningless non-matching wrappers of comparison one at a time
     # then unwrap `t`
     # NOTE that `TypeVar` / `Vararg` are handled separately to catch the logic errors
-    # n.b. binders are materialized (not merely unwrapped) so that occurrences
-    # carry their bounds: the nesting that decides complexity/limiting lives in
-    # the binder's `ub` under the positional representation, and the TypeVar
-    # rules below must see it (through `t.ub`/`c.ub`) or the limited sequence
-    # never stabilizes (e.g. the deepening `W{T} where T<:(W{T} where T<:...)`
-    # sigs of a growing self-call, issue #62022's test).
     if isa(c, UnionAll)
-        copened = Base.unionall_open(c)
-        return __limit_type_size(t, copened[2], sources, depth, allowed_tuplelen)::AnyType
+        return __limit_type_size(t, c.body, sources, depth, allowed_tuplelen,
+                                 tf, BinderFrame(c, cf))::AnyType
     end
     if isa(t, UnionAll)
-        topened = Base.unionall_open(t)
-        tbody = __limit_type_size(topened[2], c, sources, depth, allowed_tuplelen)
-        tbody === topened[2] && return t
-        return UnionAll(topened[1]::TypeVar, tbody)::AnyType
+        body = __limit_type_size(t.body, c, sources, depth, allowed_tuplelen,
+                                 BinderFrame(t, tf), cf)
+        body === t.body && return t
+        # a binder whose occurrences were all widened away is dropped by the
+        # constructor, re-binding the body's outer references
+        return UnionAll(t.name, t.lb, t.ub, body)::AnyType
     elseif isa(t, Union)
         if isa(c, Union)
-            a = __limit_type_size(t.a, c.a, sources, depth, allowed_tuplelen)
-            b = __limit_type_size(t.b, c.b, sources, depth, allowed_tuplelen)
+            a = __limit_type_size(t.a, c.a, sources, depth, allowed_tuplelen, tf, cf)
+            b = __limit_type_size(t.b, c.b, sources, depth, allowed_tuplelen, tf, cf)
             return Union{a, b}
         end
     elseif isType(t)
@@ -158,13 +165,16 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
         else
             ct = Union{}
         end
-        Qt = __limit_type_size(tt, ct, sources, depth + 1, 0)
+        Qt = __limit_type_size(tt, ct, sources, depth + 1, 0, tf, cf)
         Qt === tt && return t
         Qt === Any && return Type
         # Can't form Type{<:Qt} just yet, without first make sure we limited the depth
         # enough, since this moves Qt outside of Type for is_derived_type_from_any
-        Qt = __limit_type_size(tt, ct, sources, depth + 2, 0)
+        Qt = __limit_type_size(tt, ct, sources, depth + 2, 0, tf, cf)
         Qt === Any && return Type
+        # `Type{<:Qt}` adds a binder; references inside `Qt` cannot be
+        # re-framed under it
+        has_dangling_typevar_refs(Qt) && return Type
         return Type{<:Qt}
     elseif isa(t, DataType)
         if isa(c, DataType)
@@ -192,7 +202,7 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
                         else
                             cPi = Any
                         end
-                        Q[i] = __limit_type_size(Q[i], cPi, sources, depth + 1, 0)
+                        Q[i] = __limit_type_size(Q[i], cPi, sources, depth + 1, 0, tf, cf)
                     end
                     return Tuple{Q...}
                 end
@@ -203,6 +213,12 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
             return Any
         end
         widert = t.name.wrapper
+        if has_dangling_typevar_refs(t)
+            # a detached fragment cannot be queried against the wrapper (the
+            # subtype machinery would materialize its inner binders); the
+            # `limit_type_size` entry re-checks `t <: r` on the closed whole
+            return widert
+        end
         if !(t <: widert) # XXX: we should call has_free_typevars(t) here, but usually t does not have those wrappers by the time it got here
             # This can happen when a typevar has bounds too wide for its context, e.g.
             # `Complex{T} where T` is not a subtype of `Complex`. In that case widen even
@@ -214,8 +230,14 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
     return Any
 end
 
-# helper function of `_limit_type_size`, which has the right to take and return `TypeVar` / `Vararg`
 function __limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVector, depth::Int, allowed_tuplelen::Int)
+    return __limit_type_size(t, c, sources, depth, allowed_tuplelen, nothing, nothing)
+end
+
+# helper function of `_limit_type_size`, which has the right to take and return
+# `TypeVar` / `TypeVarRef` / `Vararg`
+function __limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVector, depth::Int, allowed_tuplelen::Int,
+                           tf::MaybeBinderFrame, cf::MaybeBinderFrame)
     isa(t, SimpleVector) && (t = t[1])
     isa(c, SimpleVector) && (c = c[1])
     cN = 0
@@ -223,42 +245,101 @@ function __limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVe
         isdefined(c, :N) && (cN = c.N)
         c = unwrapva(c)
     end
+    if isa(c, TypeVarRef)
+        cnode = resolve_ref(cf, c.depth)
+        if cnode !== nothing
+            cu = cnode.u
+            if isa(t, TypeVarRef)
+                tnode = resolve_ref(tf, t.depth)
+                if tnode !== nothing
+                    tu = tnode.u
+                    # the TypeVar identity rule below: matching (closed) bounds
+                    # mean the occurrence can be kept as-is
+                    if tu.ub === cu.ub && !has_dangling_typevar_refs(tu.ub) &&
+                       (tu.lb === Union{} || tu.lb === cu.lb)
+                        return t
+                    end
+                end
+            end
+            # the comparison becomes the binder's bound, at the bound's own frame
+            return __limit_type_size(t, cu.ub, sources, depth, allowed_tuplelen, tf, cnode.prev)
+        end
+        c = Any # a dangling comparison reference carries no information
+    end
+    if isa(t, TypeVarRef)
+        tnode = resolve_ref(tf, t.depth)
+        tnode === nothing && return t # dangling: an inert leaf
+        # don't have a matching reference in comparison, so we keep just the
+        # upper bound; it is framed under the binder's own prefix, so a bound
+        # that itself references outer binders cannot be moved into this
+        # position and must widen
+        ub = tnode.u.ub
+        has_dangling_typevar_refs(ub) && return Any
+        return __limit_type_size(ub, c, sources, depth, allowed_tuplelen, tnode.prev, cf)
+    end
     if isa(c, TypeVar)
         if isa(t, TypeVar) && t.ub === c.ub && (t.lb === Union{} || t.lb === c.lb)
             return t # it's ok to change the name, or widen `lb` to Union{}, so we can handle this immediately here
         end
-        return __limit_type_size(t, c.ub, sources, depth, allowed_tuplelen)
+        return __limit_type_size(t, c.ub, sources, depth, allowed_tuplelen, tf, cf)
     elseif isa(t, TypeVar)
         # don't have a matching TypeVar in comparison, so we keep just the upper bound
-        return __limit_type_size(t.ub, c, sources, depth, allowed_tuplelen)
+        return __limit_type_size(t.ub, c, sources, depth, allowed_tuplelen, tf, cf)
     elseif isvarargtype(t)
         # Tuple{Vararg{T,N}} --> Tuple{Vararg{S,M}} is OK
         # Tuple{T} --> Tuple{Vararg{T}} is OK
         # but S must be more limited than T, and must not introduce a new number for M
-        VaT = __limit_type_size(unwrapva(t), c, sources, depth + 1, 0)
+        VaT = __limit_type_size(unwrapva(t), c, sources, depth + 1, 0, tf, cf)
         if isdefined(t, :N)
             tN = t.N
-            if isa(tN, TypeVar) || tN === cN
+            if isa(tN, TypeVar) || isa(tN, TypeVarRef) || tN === cN
                 return Vararg{VaT, tN}
             end
         end
         return Vararg{VaT}
     else
-        return _limit_type_size(t, c, sources, depth, allowed_tuplelen)
+        return _limit_type_size(t, c, sources, depth, allowed_tuplelen, tf, cf)
     end
 end
 
 function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVector, depth::Int, tupledepth::Int, allowed_tuplelen::Int)
+    return type_more_complex(t, c, sources, depth, tupledepth, allowed_tuplelen, nothing, nothing)
+end
+
+function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVector, depth::Int, tupledepth::Int, allowed_tuplelen::Int,
+                           tf::MaybeBinderFrame, cf::MaybeBinderFrame)
     # detect cases where the comparison is trivial
+    # (occurrences are compared through their binders' bounds, at the bounds'
+    # own frames, mirroring the TypeVar rules below; complexity results are
+    # plain booleans, so no re-framing concerns arise here)
     if isa(t, TypeVarRef)
-        return false # a bound-variable reference is a size-1 leaf
-    elseif t === c
+        tnode = resolve_ref(tf, t.depth)
+        tnode === nothing && return false # dangling: an inert leaf
+        tu = tnode.u
+        if isa(c, TypeVarRef)
+            cnode = resolve_ref(cf, c.depth)
+            if cnode !== nothing
+                cu = cnode.u
+                return !(tu.lb === Union{} || tu.lb === cu.lb) || # simplify lb towards Union{}
+                       type_more_complex(tu.ub, cu.ub, sources, depth + 1, 1, 0, tnode.prev, cnode.prev)
+            end
+        end
+        # no matching comparison reference (cf. a bare TypeVar reaching the
+        # base rules below)
+        return true
+    elseif isa(c, TypeVarRef)
+        cnode = resolve_ref(cf, c.depth)
+        cnode === nothing && return true # a dangling comparison provides no budget
+        cu = cnode.u
+        cu.lb === Union{} || return true
+        return type_more_complex(t, cu.ub, sources, depth, 1, 0, tf, cnode.prev)
+    elseif t === c && !has_dangling_typevar_refs(t)
         return false
     elseif t === Union{}
         return false # Bottom is as simple as they come
     elseif isa(t, DataType) && isempty(t.parameters)
         return false # fastpath: unparameterized types are always finite
-    elseif is_derived_type_from_any(unionall_openall(t), sources, depth)
+    elseif is_derived_type_from_any(unwrap_unionall(t), sources, depth)
         return false # t isn't something new
     end
     # peel off wrappers
@@ -269,27 +350,33 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
         if !isa(t, UnionAll) && tupledepth == 0
             return true
         end
-        # materialize binders so occurrences carry their bounds (see
-        # `_limit_type_size`): the complexity to be counted lives in `ub`
-        c = unionall_openall(c)
+        while isa(c, UnionAll)
+            cf = BinderFrame(c, cf)
+            c = c.body
+        end
     end
-    t = unionall_openall(t)
+    while isa(t, UnionAll)
+        tf = BinderFrame(t, tf)
+        t = t.body
+    end
+    (isa(t, TypeVarRef) || isa(c, TypeVarRef)) &&
+        return type_more_complex(t, c, sources, depth, tupledepth, allowed_tuplelen, tf, cf)
     # rules for various comparison types
     if isa(c, TypeVar)
         tupledepth = 1
         if isa(t, TypeVar)
             return !(t.lb === Union{} || t.lb === c.lb) || # simplify lb towards Union{}
-                   type_more_complex(t.ub, c.ub, sources, depth + 1, tupledepth, 0)
+                   type_more_complex(t.ub, c.ub, sources, depth + 1, tupledepth, 0, tf, cf)
         end
         c.lb === Union{} || return true
-        return type_more_complex(t, c.ub, sources, depth, tupledepth, 0)
+        return type_more_complex(t, c.ub, sources, depth, tupledepth, 0, tf, cf)
     elseif isa(c, Union)
         if isa(t, Union)
-            return type_more_complex(t.a, c.a, sources, depth, tupledepth, allowed_tuplelen) ||
-                   type_more_complex(t.b, c.b, sources, depth, tupledepth, allowed_tuplelen)
+            return type_more_complex(t.a, c.a, sources, depth, tupledepth, allowed_tuplelen, tf, cf) ||
+                   type_more_complex(t.b, c.b, sources, depth, tupledepth, allowed_tuplelen, tf, cf)
         end
-        return type_more_complex(t, c.a, sources, depth, tupledepth, allowed_tuplelen) &&
-               type_more_complex(t, c.b, sources, depth, tupledepth, allowed_tuplelen)
+        return type_more_complex(t, c.a, sources, depth, tupledepth, allowed_tuplelen, tf, cf) &&
+               type_more_complex(t, c.b, sources, depth, tupledepth, allowed_tuplelen, tf, cf)
     elseif isa(t, Int) && isa(c, Int)
         return t !== 1 && !(0 <= t < c) # alternatively, could use !(abs(t) <= abs(c) || abs(t) < n) for some n
     end
@@ -309,7 +396,7 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
         else
             tupledepth = 0
         end
-        return type_more_complex(tt, ct, sources, depth + 1, tupledepth, 0)
+        return type_more_complex(tt, ct, sources, depth + 1, tupledepth, 0, tf, cf)
     end
     # base case for data types
     if isa(t, DataType)
@@ -329,7 +416,7 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
             for i = 1:length(tP)
                 tPi = tP[i]
                 cPi = cP[i + ntail]
-                type_more_complex(tPi, cPi, sources, depth + 1, tupledepth, 0) && return true
+                type_more_complex(tPi, cPi, sources, depth + 1, tupledepth, 0, tf, cf) && return true
             end
             return false
         end
@@ -337,12 +424,13 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
     return true
 end
 
+
 union_count_abstract(x::Union) = union_count_abstract(x.a) + union_count_abstract(x.b)
 union_count_abstract(@nospecialize(x)) = !isdispatchelem(x)
 
 function issimpleenoughtype(@nospecialize t)
     ut = unwrap_unionall(t)
-    ut isa DataType && ut.name.wrapper == t && return true
+    ut isa DataType && !has_dangling_typevar_refs(t) && ut.name.wrapper == t && return true
     return max(unionlen(t), union_count_abstract(t) + 1) <= MAX_TYPEUNION_LENGTH &&
            unioncomplexity(t) <= MAX_TYPEUNION_COMPLEXITY
 end
@@ -869,23 +957,12 @@ end
                         simplify[j] = false
                     else
                         wr = ijname.wrapper
-                        # materialize all binders (cf. `unionall_openall`):
-                        # positional references from two different types would
-                        # otherwise compare `===` without denoting an agreed
-                        # parameter value
-                        wrvars = TypeVar[]
-                        uwb = wr
-                        while uwb isa UnionAll
-                            opened = Base.unionall_open(uwb)
-                            push!(wrvars, opened[1])
-                            uwb = opened[2]
-                        end
-                        uw = uwb::DataType
-                        ui = unionall_openall(ti)::DataType
+                        uw = unwrap_unionall(wr)::DataType
+                        ui = unwrap_unionall(ti)::DataType
                         while ui.name !== ijname
                             ui = ui.super
                         end
-                        uj = unionall_openall(tj)::DataType
+                        uj = unwrap_unionall(tj)::DataType
                         while uj.name !== ijname
                             uj = uj.super
                         end
@@ -894,7 +971,11 @@ end
                         widen = wr
                         for k = 1:length(uw.parameters)
                             ui_k = ui.parameters[k]
-                            if ui_k === uj.parameters[k] && !has_free_typevars(ui_k)
+                            # references from two different types compare `===`
+                            # (they are interned positionally) without denoting
+                            # an agreed parameter value
+                            if ui_k === uj.parameters[k] && !has_free_typevars(ui_k) &&
+                               !isa(ui_k, TypeVarRef) && !has_dangling_typevar_refs(ui_k)
                                 p[k] = ui_k
                                 usep = true
                             else
@@ -902,11 +983,9 @@ end
                             end
                         end
                         if usep
-                            widen = wr{p...}
-                            for idx in length(wrvars):-1:1
-                                v = wrvars[idx]
-                                has_typevar(widen, v) && (widen = UnionAll(v, widen))
-                            end
+                            # the unagreed slots keep the wrapper's own binder
+                            # references, so rewrapping re-binds them
+                            widen = rewrap_unionall(wr{p...}, wr)
                             widen <: wr || (widen = wr) # sometimes there are cross-constraints on wr that we may lose in this process, but that would cause future calls to this to need to return Any, which is undesirable
                         end
                         simplify[j] = !usep

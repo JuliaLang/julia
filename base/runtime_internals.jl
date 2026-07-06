@@ -1555,9 +1555,10 @@ function has_bottom_parameter(@nospecialize(t::Core.AnyType))
     elseif ty === TypeEq || ty === Core.TypeEgal
         return has_bottom_parameter(type_parameter(t))
     elseif ty === UnionAll
-        # materialize the binder: an occurrence must expose its upper bound
-        # (e.g. `Ref{<:Union{}}`), which a bare reference cannot
-        return has_bottom_parameter(unionall_open(t)[2])
+        # occurrences of the binder are inert references; account for their
+        # bound once, at the binder, when any exist (bit 0 of `flags` is the memoized occurs bit)
+        u = t::UnionAll
+        return (u.flags % Bool && has_bottom_parameter(u.ub)) || has_bottom_parameter(u.body)
     elseif ty === Union
         return has_bottom_parameter(getfield(t, :a)) & has_bottom_parameter(getfield(t, :b))
     end
@@ -1905,10 +1906,12 @@ function subst_trivial_bounds(@nospecialize(atype))
     if !isa(atype, UnionAll)
         return atype
     end
-    v, body = unionall_open(atype)
-    if isconcretetype(v.ub) || v.lb === v.ub
+    ub = atype.ub
+    # a bound that references an outer binder cannot be substituted in this
+    # frame; keep the binder in that (rare) case
+    if (isconcretetype(ub) || atype.lb === ub) && !has_dangling_typevarrefs(ub)
         subst = try
-            atype{v.ub}
+            atype{ub}
         catch
             # Note in rare cases a var bound might not be valid to substitute.
             nothing
@@ -1917,9 +1920,9 @@ function subst_trivial_bounds(@nospecialize(atype))
             return subst_trivial_bounds(subst)
         end
     end
-    body′ = subst_trivial_bounds(body)
-    body′ === body && return atype
-    return UnionAll(v, body′)
+    body′ = subst_trivial_bounds(atype.body)
+    body′ === atype.body && return atype
+    return rewrap_unionall_one(body′, atype)
 end
 
 # If removing trivial vars from atype results in an equivalent type, use that
@@ -1972,7 +1975,12 @@ function specialize_method(match::Core.MethodMatch; kwargs...)
     return specialize_method(match.method, match.spec_types, match.sparams; kwargs...)
 end
 
-hasintersect(@nospecialize(a), @nospecialize(b)) = typeintersect(a, b) !== Bottom
+function hasintersect(@nospecialize(a), @nospecialize(b))
+    # the intersection lattice cannot take detached fragments (their binders,
+    # and so their bounds, live elsewhere); conservatively report overlap
+    (has_dangling_typevarrefs(a) || has_dangling_typevarrefs(b)) && return true
+    return typeintersect(a, b) !== Bottom
+end
 
 ###########
 # scoping #

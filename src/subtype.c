@@ -4733,7 +4733,7 @@ static jl_value_t *omit_bad_union(jl_value_t *u, jl_tvar_t *t) JL_CANSAFEPOINT
             }
             else if (obviously_egal(ua->lb, ub)) {
                 // the binder is pinned; substitute its bound for it
-                jl_value_t *tmp = jl_new_struct(jl_unionall_type, ua->name, ua->lb, ub, body);
+                jl_value_t *tmp = jl_new_unionall_raw(ua->name, ua->lb, ub, body);
                 JL_GC_PUSH1(&tmp);
                 res = jl_instantiate_unionall_nothrow((jl_unionall_t*)tmp, ub, 2);
                 JL_GC_POP();
@@ -4742,7 +4742,7 @@ static jl_value_t *omit_bad_union(jl_value_t *u, jl_tvar_t *t) JL_CANSAFEPOINT
             }
             else {
                 // only the bound changed; the body's references are unaffected
-                res = jl_new_struct(jl_unionall_type, ua->name, ua->lb, ub, body);
+                res = jl_new_unionall_raw(ua->name, ua->lb, ub, body);
             }
         }
         JL_GC_POP();
@@ -6773,7 +6773,7 @@ static jl_value_t *insert_nondiagonal(jl_value_t *type, jl_varbinding_t *troot, 
         // n.b. we do not widen lb, since that would be the wrong direction
         newub = insert_nondiagonal(ua->ub, troot, widen2ub);
         if (newbody != ua->body || newub != ua->ub)
-            type = jl_new_struct(jl_unionall_type, ua->name, ua->lb, newub, newbody);
+            type = jl_new_unionall_raw(ua->name, ua->lb, newub, newbody);
         JL_GC_POP();
     }
     else if (jl_is_uniontype(type)) {

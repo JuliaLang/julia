@@ -86,8 +86,8 @@ DenseVector (alias for DenseArray{T, 1} where T)
 supertype(T::DataType) = (@_total_meta; T.super)
 function supertype(T::UnionAll)
     @_foldable_meta
-    v, body = unionall_open(T)
-    return UnionAll(v, supertype(body))
+    # a fragment's supertype is framed for the same binder chain
+    return rewrap_unionall_one(supertype(T.body), T)
 end
 
 ## generic comparison ##

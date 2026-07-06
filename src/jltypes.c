@@ -1216,7 +1216,7 @@ JL_DLLEXPORT jl_value_t *jl_type_unionall(jl_tvar_t *v, jl_value_t *body)
     jl_typeenv_t env = { v, jl_tvarref_translate_sentinel, NULL };
     jl_value_t *newbody = inst_type_w_(body, &env, NULL, 0, 0);
     JL_GC_PUSH1(&newbody);
-    jl_value_t *ua = jl_new_struct(jl_unionall_type, v->name, v->lb, v->ub, newbody);
+    jl_value_t *ua = jl_new_unionall_raw(v->name, v->lb, v->ub, newbody);
     JL_GC_POP();
     return ua;
 }
@@ -1263,6 +1263,22 @@ JL_DLLEXPORT jl_value_t *jl_translate_sparams_to_refs(jl_value_t *t, jl_svec_t *
     return t;
 }
 
+// allocate a UnionAll, memoizing whether the binder occurs in `body`
+JL_DLLEXPORT jl_value_t *jl_new_unionall_raw(jl_sym_t *name, jl_value_t *lb, jl_value_t *ub,
+                                             jl_value_t *body)
+{
+    jl_task_t *ct = jl_current_task;
+    jl_unionall_t *u = (jl_unionall_t*)jl_gc_alloc(ct->ptls, sizeof(jl_unionall_t),
+                                                   jl_unionall_type);
+    jl_set_typetagof(u, jl_unionall_tag, 0);
+    u->name = name;
+    u->lb = lb;
+    u->ub = ub;
+    u->body = body;
+    u->flags = jl_tvarref_occurs(body, 1) ? JL_UNIONALL_VAROCCURS : 0;
+    return (jl_value_t*)u;
+}
+
 // raw constructor: `body` must already be in de Bruijn form for the new binder
 JL_DLLEXPORT jl_value_t *jl_new_unionall_type(jl_sym_t *name, jl_value_t *lb, jl_value_t *ub, jl_value_t *body)
 {
@@ -1277,7 +1293,10 @@ JL_DLLEXPORT jl_value_t *jl_new_unionall_type(jl_sym_t *name, jl_value_t *lb, jl
     // normalize `T where T<:S` => S, matching the translating constructor
     if (jl_is_tvarref(body) && jl_tvarref_depth(body) == 1)
         return ub;
-    return jl_new_struct(jl_unionall_type, name, lb, ub, body);
+    // drop a vacuous binder, rebinding the body's outer references
+    if (!jl_tvarref_occurs(body, 1))
+        return jl_shift_dangling_refs(body, -1);
+    return jl_new_unionall_raw(name, lb, ub, body);
 }
 
 // --- type instantiation and cache ---
@@ -1946,7 +1965,7 @@ JL_DLLEXPORT jl_value_t *jl_unionall_open2(jl_unionall_t *u)
 static jl_value_t *substitute_tvarref(jl_value_t *t, size_t idx, jl_value_t *val, int nothrow)
 {
     assert(idx > 0);
-    nothrow = jl_is_typevar(val) ? 0 : nothrow;
+    nothrow = (jl_is_typevar(val) || jl_is_tvarref(val)) ? 0 : nothrow;
     jl_typeenv_t *env = (jl_typeenv_t*)alloca(idx * sizeof(jl_typeenv_t));
     size_t i;
     // idx-1 leading pure markers (keep those refs), then the substitution entry
@@ -2045,7 +2064,7 @@ static jl_value_t *shift_refs_(jl_value_t *t, ssize_t inc, size_t depth)
         ub = shift_refs_(ua->ub, inc, depth);
         body = shift_refs_(ua->body, inc, depth + 1);
         if (lb != ua->lb || ub != ua->ub || body != ua->body)
-            t = jl_new_struct(jl_unionall_type, ua->name, lb, ub, body);
+            t = jl_new_unionall_raw(ua->name, lb, ub, body);
         JL_GC_POP();
         return t;
     }
@@ -2151,7 +2170,7 @@ jl_value_t *jl_shift_dangling_refs(jl_value_t *t, ssize_t inc)
 
 // wrap `t` (derived from `u->body` at the same binder depth) in a copy of `u`'s
 // binder, applying the same normalizations as jl_type_unionall
-jl_value_t *jl_rewrap_unionall_one(jl_value_t *t, jl_unionall_t *u)
+JL_DLLEXPORT jl_value_t *jl_rewrap_unionall_one(jl_value_t *t, jl_unionall_t *u)
 {
     // normalize `T where T<:S` => S
     if (jl_is_tvarref(t) && jl_tvarref_depth(t) == 1)
@@ -2160,7 +2179,7 @@ jl_value_t *jl_rewrap_unionall_one(jl_value_t *t, jl_unionall_t *u)
     if (!jl_tvarref_occurs(t, 1))
         return jl_shift_dangling_refs(t, -1);
     JL_GC_PUSH1(&t);
-    t = jl_new_struct(jl_unionall_type, u->name, u->lb, u->ub, t);
+    t = jl_new_unionall_raw(u->name, u->lb, u->ub, t);
     JL_GC_POP();
     return t;
 }
@@ -2187,7 +2206,7 @@ jl_value_t *jl_rewrap_unionall_(jl_value_t *t, jl_value_t *u)
     t = jl_rewrap_unionall_(t, ((jl_unionall_t*)u)->body);
     jl_unionall_t *ua = (jl_unionall_t*)u;
     JL_GC_PUSH1(&t);
-    t = jl_new_struct(jl_unionall_type, ua->name, ua->lb, ua->ub, t);
+    t = jl_new_unionall_raw(ua->name, ua->lb, ua->ub, t);
     JL_GC_POP();
     return t;
 }
@@ -2262,7 +2281,7 @@ jl_value_t *jl_substitute_datatype(jl_value_t *t, jl_datatype_t * x, jl_datatype
         ub = jl_substitute_datatype(ut->ub, x, y);
         body = jl_substitute_datatype(ut->body, x, y);
         if (lb != ut->lb || ub != ut->ub || body != ut->body) {
-            t = jl_new_struct(jl_unionall_type, ut->name, lb, ub, body);
+            t = jl_new_unionall_raw(ut->name, lb, ub, body);
         }
         JL_GC_POP();
     }
@@ -2693,7 +2712,12 @@ static int check_datatype_parameters(jl_typename_t *tn, jl_value_t **params, siz
     for (i = 0; i < np; i++) {
         assert(jl_is_unionall(wrapper));
         jl_unionall_t *ua = (jl_unionall_t*)wrapper;
-        if (!within_typevar(params[i], bounds[2*i], bounds[2*i+1])) {
+        // a parameter (or a bound) that still carries references to binders
+        // outside this application cannot be checked yet; the check is
+        // deferred until those references are resolved
+        int checkable = !(jl_is_tvarref(params[i]) || jl_has_dangling_tvarrefs(params[i]) ||
+                          jl_has_dangling_tvarrefs(bounds[2*i]) || jl_has_dangling_tvarrefs(bounds[2*i+1]));
+        if (checkable && !within_typevar(params[i], bounds[2*i], bounds[2*i+1])) {
             if (nothrow) {
                 JL_GC_POP();
                 return 1;
@@ -2705,7 +2729,12 @@ static int check_datatype_parameters(jl_typename_t *tn, jl_value_t **params, siz
             jl_type_error_rt(jl_symbol_name(tn->name), jl_symbol_name(tv->name), (jl_value_t*)tv, params[i]);
         }
         int j;
-        for (j = 2*i + 2; j < 2*np; j++) {
+        // substituting a value that itself carries dangling references would
+        // let the later substitutions capture them (they are positionally
+        // indistinguishable from the bound's own references); leave the
+        // reference in place instead, which defers that bound's checks
+        int substitutable = !(jl_is_tvarref(params[i]) || jl_has_dangling_tvarrefs(params[i]));
+        for (j = 2*i + 2; substitutable && j < 2*np; j++) {
             jl_value_t *bj = bounds[j];
             if (bj != (jl_value_t*)jl_any_type && bj != jl_bottom_type) {
                 int isub = j & 1;
@@ -2853,7 +2882,7 @@ static jl_value_t *normalize_unionalls(jl_value_t *t) JL_CANSAFEPOINT
         jl_value_t *body = normalize_unionalls(u->body);
         JL_GC_PUSH2(&body, &t);
         if (body != u->body) {
-            t = jl_new_struct(jl_unionall_type, u->name, u->lb, u->ub, body);
+            t = jl_new_unionall_raw(u->name, u->lb, u->ub, body);
             u = (jl_unionall_t*)t;
         }
 
@@ -3679,7 +3708,7 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
             }
             else if (newbody != ua->body || lb != ua->lb || ub != ua->ub) {
                 // if t's parameters are not bound in the environment, return it uncopied (#9378)
-                t = jl_new_struct(jl_unionall_type, ua->name, lb, ub, newbody);
+                t = jl_new_unionall_raw(ua->name, lb, ub, newbody);
             }
         }
         JL_GC_POP();
@@ -4275,11 +4304,12 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_typeofbottom_type->instance = jl_bottom_type;
 
     jl_unionall_type = jl_new_datatype(jl_symbol("UnionAll"), core, jl_anytype_type, jl_emptysvec,
-                                       jl_perm_symsvec(4, "name", "lb", "ub", "body"),
-                                       jl_svec(4, jl_symbol_type, jl_any_type, jl_any_type, jl_any_type),
-                                       jl_emptysvec, 0, 0, 4);
+                                       jl_perm_symsvec(5, "name", "lb", "ub", "body", "flags"),
+                                       jl_svec(5, jl_symbol_type, jl_any_type, jl_any_type, jl_any_type,
+                                               jl_any_type /*jl_uint32_type*/),
+                                       jl_emptysvec, 0, 0, 5);
     XX(unionall);
-    const static uint32_t unionall_constfields[1] = { 0x0000000f }; // all fields are constant
+    const static uint32_t unionall_constfields[1] = { 0x0000001f }; // all fields are constant
     jl_unionall_type->name->constfields = unionall_constfields;
     // It seems like we probably usually end up needing the box for kinds (often used in an Any context), so force it to exist
     jl_unionall_type->name->mayinlinealloc = 0;
@@ -4388,7 +4418,7 @@ void jl_init_types(void) JL_GC_DISABLED
     {
         jl_value_t *typeeq_body = (jl_value_t*)jl_wrap_Type(jl_new_tvarref(1));
         JL_GC_PUSH1(&typeeq_body);
-        jl_type_type = (jl_unionall_t*)jl_new_struct(jl_unionall_type, jl_symbol("T"),
+        jl_type_type = (jl_unionall_t*)jl_new_unionall_raw(jl_symbol("T"),
                                                      jl_bottom_type, (jl_value_t*)jl_any_type,
                                                      typeeq_body);
         JL_GC_POP();
@@ -4976,7 +5006,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_llvmpointer_typename = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_llvmpointer_type))->name;
 
     // Type{T} where T<:Tuple
-    jl_anytuple_type_type = (jl_unionall_t*)jl_new_struct(jl_unionall_type,
+    jl_anytuple_type_type = (jl_unionall_t*)jl_new_unionall_raw(
                                                           jl_symbol("T"), jl_bottom_type,
                                                           (jl_value_t*)jl_anytuple_type,
                                                           (jl_value_t*)jl_wrap_Type(jl_new_tvarref(1)));
@@ -5101,6 +5131,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_svecset(jl_binding_type->types, 0, jl_globalref_type);
     jl_svecset(jl_binding_type->types, 3, jl_array_any_type);
     jl_svecset(jl_binding_partition_type->types, 3, jl_binding_partition_type);
+    jl_svecset(jl_unionall_type->types, 4, jl_uint32_type);
 
     jl_compute_field_offsets(jl_datatype_type);
     jl_compute_field_offsets(jl_typename_type);

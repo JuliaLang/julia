@@ -554,6 +554,15 @@ function rewrap_unionall(@nospecialize(t), @nospecialize(u))
     return ccall(:jl_rewrap_unionall, Any, (Any, Any), t, u)
 end
 
+# re-close exactly one binder (that of `u`) over a body derived from `u.body`
+# with its reference framing preserved; normalizes like the `where` constructor
+# (drops a vacuous binder, `T where T<:S` => `S`)
+function rewrap_unionall_one(@nospecialize(t), u::UnionAll)
+    @_foldable_meta
+    t === u.body && return u
+    return ccall(:jl_rewrap_unionall_one, Any, (Any, Any), t, u)
+end
+
 function rewrap_unionall(t::Core.TypeofVararg, @nospecialize(u))
     @_foldable_meta
     isdefined(t, :T) || return t

@@ -950,7 +950,7 @@ static void jl_setup_type_wrapper(jl_typename_t *tn, jl_svec_t *parameters, jl_v
         // earlier (outer) parameters
         lb = jl_translate_vars_to_refs(v->lb, parameters, i);
         ub = jl_translate_vars_to_refs(v->ub, parameters, i);
-        *wrapper = jl_new_struct(jl_unionall_type, v->name, lb, ub, *wrapper);
+        *wrapper = jl_new_unionall_raw(v->name, lb, ub, *wrapper);
         JL_GC_POP();
         jl_gc_write(tn, tn->wrapper, jl_value_t, *wrapper);
     }
@@ -2590,7 +2590,7 @@ static jl_value_t *resolve_type_refs(jl_value_t *t, htable_t *subst_map)
         body = resolve_type_refs(ua->body, subst_map);
         jl_value_t *result = t;
         if (lb != ua->lb || ub != ua->ub || body != ua->body)
-            result = jl_new_struct(jl_unionall_type, ua->name, lb, ub, body);
+            result = jl_new_unionall_raw(ua->name, lb, ub, body);
         JL_GC_POP();
         return result;
     }

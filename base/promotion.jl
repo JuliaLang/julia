@@ -42,6 +42,12 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         return typejoin(a.ub, b)
     elseif isa(b, TypeVar)
         return typejoin(a, b.ub)
+    elseif isa(a, Core.TypeVarRef) || isa(b, Core.TypeVarRef)
+        # a reference leaf can only be reached here when the two sides come
+        # from different binder chains (a join of a type with itself returns
+        # at the `===` fast path before any binder is stripped), so identity
+        # carries no meaning and the join must widen
+        return Any
     elseif a === b
         return a
     elseif !isa(a, Type) || !isa(b, Type)
@@ -51,11 +57,11 @@ function typejoin(@nospecialize(a), @nospecialize(b))
     elseif b <: a
         return a
     elseif isa(a, UnionAll)
-        va, abody = unionall_open(a)
-        return UnionAll(va, typejoin(abody, b))
+        # the join preserves the body's binder references (a reference leaf
+        # joins to `Any`); re-close the binder over the result
+        return rewrap_unionall_one(typejoin(a.body, b), a)
     elseif isa(b, UnionAll)
-        vb, bbody = unionall_open(b)
-        return UnionAll(vb, typejoin(a, bbody))
+        return rewrap_unionall_one(typejoin(a, b.body), b)
     elseif isa(a, Union)
         return typejoin(typejoin(a.a, a.b), b)
     elseif isa(b, Union)
@@ -138,22 +144,33 @@ function typejoin(@nospecialize(a), @nospecialize(b))
             if n == 0
                 return aprimary
             end
-            vars = []
+            vars = TypeVar[]
             for i = 1:n
                 ai, bi = a.parameters[i], b.parameters[i]
-                if ai === bi || (isa(ai,Type) && isa(bi,Type) && ai <: bi && bi <: ai)
+                # references from two different chains compare `===` (they are
+                # interned positionally) without denoting an agreed value
+                agree = !(ai isa Core.TypeVarRef || bi isa Core.TypeVarRef ||
+                          Core.has_dangling_tvarrefs(ai) || Core.has_dangling_tvarrefs(bi)) &&
+                        (ai === bi || (isa(ai,Type) && isa(bi,Type) && ai <: bi && bi <: ai))
+                if agree
                     aprimary = aprimary{ai}
                 else
+                    # an agreeing (applied) slot must substitute into the
+                    # bounds of later kept binders, so the kept binder is
+                    # materialized from the partially-applied wrapper (through
+                    # the foldable primitive: the fresh variable is re-closed
+                    # below, keeping the result egal across calls)
                     aprimary = aprimary::UnionAll
-                    # substitute a fresh TypeVar for the body and record it for rewrapping
                     v, aprimary = unionall_open(aprimary)
-                    # pushfirst!(vars, v)
-                    _growbeg!(vars, 1)
-                    vars[1] = v
+                    push!(vars, v)
                 end
             end
-            for v in vars
-                aprimary = UnionAll(v, aprimary)
+            k = length(vars)
+            while k > 0
+                # (a plain countdown: a StepRange would drag overflow-check
+                # branches into this foldable callgraph)
+                aprimary = UnionAll(vars[k], aprimary)
+                k -= 1
             end
             return aprimary
         end
