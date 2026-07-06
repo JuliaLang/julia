@@ -181,9 +181,11 @@ the [`Base.CancellationRequest`](@ref) as an ordinary value, immediately if it a
 Spawning a task that performs such a wait is the cancellation-callback pattern:
 
 ```julia
+using Base.ScopedValues
+
 src = Base.CancellationTokenSource(Base.CANCEL_TOKEN[])   # fires with the enclosing scope
-watcher = Threads.@spawn begin
-    wait(Base.CancellationToken(src); cancel = nothing)   # shielded: survives to do its duty
+watcher = Threads.@spawn with(Base.CANCEL_TOKEN => nothing) do   # shielded watcher
+    wait(Base.CancellationToken(src))
     stop_engine!(engine)    # e.g. unblock foreign code that cannot observe tokens itself
 end
 try
@@ -197,12 +199,14 @@ end
 Three points make this pattern reliable. The watched source is created as a *child* of the
 enclosing scope, so cancelling the enclosing scope (a ^C, a timeout) fires it — but so does
 the `finally`, which guarantees the watcher is released when the work completes normally
-instead of lingering forever. The watcher's own wait is *shielded* (`cancel = nothing`):
-its whole purpose is to survive into the cancellation and perform its action, so the
-surrounding cancellation must complete this wait rather than unwind it. And the action
-itself should be of a kind that is harmless on the normal-completion path (like [`close`](@ref)
-or an idempotent "stop" request), since the watcher runs in both cases; check
-[`Base.iscancelled`](@ref) on the enclosing token when the two cases must be distinguished.
+instead of lingering forever. The watcher runs its *entire body* under a shield
+(`Base.CANCEL_TOKEN => nothing`): both the wait — whose whole purpose is to survive into the
+cancellation — and the action, which the spawned task would otherwise perform under the
+inherited, by-then-cancelled scope, where its own blocking operations would throw instead of
+running. And the action itself should be of a kind that is harmless on the normal-completion
+path (like [`close`](@ref) or an idempotent "stop" request), since the watcher runs in both
+cases; check [`Base.iscancelled`](@ref) on the enclosing token when the two cases must be
+distinguished.
 
 When not shielded, `wait(tok)` takes the ordinary `cancel` keyword argument and an unrelated
 governing token interrupts it like any other blocking operation. Waiting on the very token

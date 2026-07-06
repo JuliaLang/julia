@@ -794,10 +794,16 @@ end
 end
 
 @testset "^C" begin
-    function run_with_sigint(code::String, delays; forcekill::Bool=false)
+    function run_with_sigint(code::String, delays; forcekill::Bool=false,
+                             open_stdin::Bool=false, threads::Int=0)
         out = Pipe()
-        p = run(pipeline(`$(Base.julia_cmd()) --startup-file=no -e $code`, stdout=out, stderr=out), wait=false)
+        cmd = threads > 0 ?
+            `$(Base.julia_cmd()) --startup-file=no --threads=$threads -e $code` :
+            `$(Base.julia_cmd()) --startup-file=no -e $code`
+        inpipe = open_stdin ? Pipe() : devnull
+        p = run(pipeline(cmd, stdin=inpipe, stdout=out, stderr=out), wait=false)
         close(out.in)
+        open_stdin && close(inpipe.out)
         reader = @async read(out, String)
         killer = @async begin
             for d in delays
@@ -811,6 +817,7 @@ end
             end
         end
         wait(p)
+        open_stdin && close(inpipe.in)
         wait(killer)
         return fetch(reader), p
     end
@@ -867,6 +874,125 @@ end
     @test occursin("failed to acknowledge SIGINT", output)
     @test occursin("Abandoning current task", output)
     @test p.exitcode == 128 + 2
+
+    # ^C with a stray @async task pending is catchable and the script exits
+    # cleanly - historically a "fatal: error thrown and no exception handler
+    # available" (issues #29369, #45055)
+    output, p = run_with_sigint("""
+        @async println("Hello!")
+        try
+            println("Hit ctrl-c!")
+            sleep(10)
+        catch err
+            Base.ScopedValues.with(Base.CANCEL_TOKEN => Base.sigint_new_episode!()) do
+                showerror(stdout, err); println()
+                println("done")
+            end
+        end
+    """, [1.0])
+    @test occursin("Hello!", output)
+    @test occursin("CancellationRequest", output)
+    @test occursin("done", output)
+    @test !occursin("fatal", output)
+    @test p.exitcode == 0
+
+    # ^C during a blocked read from stdin reports and exits - historically a
+    # fatal unhandled InterruptException on the second press (issue #43451)
+    output, p = run_with_sigint("read(stdin)", [1.0]; open_stdin=true)
+    @test occursin("CancellationRequest", output)
+    @test !occursin("fatal", output)
+    @test p.exitcode == 1
+
+    # A rapid second press while the first cancellation is still unwinding
+    # or reporting must not crash the process (issue #50045). The second
+    # press may cancel the error-report epoch itself, in which case the
+    # fallback note appears instead of the report.
+    output, p = run_with_sigint("sleep(100)", [1.0, 0.1])
+    @test occursin("CancellationRequest", output) ||
+        occursin("displaying the error report failed", output)
+    @test !occursin("fatal", output)
+    @test p.exitcode == 1
+
+    # A catch-all loop that swallows every CancellationRequest cannot hide
+    # from ^C (issue #4037): while the scope stays cancelled the request is
+    # re-thrown at every blocking operation (the warning shows the
+    # delivered-but-not-completed flavor), and the escalation ladder still
+    # progresses to the point of abandoning the task. The abandonment rung
+    # itself is a hail mary that may leave the process inconsistent, so this
+    # asserts only that it is reached and announced - not any process
+    # behavior after the freeze (the watchdog reaps the process).
+    output, p = run_with_sigint("""
+        while true
+            try
+                sleep(10)
+            catch
+            end
+        end
+    """, [1.0, 2.5, 2.5]; forcekill=true)
+    @test occursin("Cancellation is in progress, but has not completed", output)
+    @test occursin("Abandoning the current task", output)
+
+    # ^C stops a swarm of print-flooding tasks and the script continues
+    # (issue #47839)
+    output, p = run_with_sigint("""
+        ts = [@async (while true; println("hi"); end) for _ in 1:20]
+        try
+            sleep(100)
+        catch e
+            Base.ScopedValues.with(Base.CANCEL_TOKEN => Base.sigint_new_episode!()) do
+                for t in ts
+                    try; wait(t); catch; end
+                end
+                println("ALL-STOPPED")
+            end
+        end
+    """, [1.5])
+    @test occursin("ALL-STOPPED", output)
+    @test !occursin("fatal", output)
+    @test p.exitcode == 0
+
+    # ^C on a Threads.@threads loop raises a catchable CompositeException
+    # instead of killing the process (issue #56462)
+    output, p = run_with_sigint("""
+        try
+            Threads.@threads for i in 1:8
+                sleep(100)
+            end
+        catch e
+            Base.ScopedValues.with(Base.CANCEL_TOKEN => Base.sigint_new_episode!()) do
+                println("caught: ", typeof(e))
+                println("session-alive")
+            end
+        end
+    """, [1.5]; threads=4)
+    @test occursin("caught: CompositeException", output)
+    @test occursin("session-alive", output)
+    @test !occursin("fatal", output)
+    @test !occursin("attempt to switch to exited task", output)
+    @test p.exitcode == 0
+
+    # A watcher task on the ^C episode token is the supported shape for a
+    # user-defined interrupt handler (superseding the design of #49541): the
+    # ^C completes - rather than unwinds - its wait, and its reaction runs
+    # under its own shielded scope
+    output, p = run_with_sigint("""
+        tok = Base.CANCEL_TOKEN[]
+        w = Threads.@spawn Base.ScopedValues.with(Base.CANCEL_TOKEN => nothing) do
+            req = wait(tok)
+            println("HANDLER-RAN ", typeof(req))
+        end
+        try
+            sleep(100)
+        catch e
+            Base.ScopedValues.with(Base.CANCEL_TOKEN => Base.sigint_new_episode!()) do
+                wait(w)
+                println("DONE")
+            end
+        end
+    """, [1.0])
+    @test occursin("HANDLER-RAN Base.CancellationRequest", output)
+    @test occursin("DONE", output)
+    @test p.exitcode == 0
 end
 
 if Sys.isunix()
@@ -993,6 +1119,14 @@ if Sys.isunix()
 
         expect("julia> ")
 
+        # a SIGINT at an idle prompt (^C or an external `kill -INT`) must
+        # not disturb the session (issue #42072)
+        kill(p, Base.SIGINT)
+        sleep(0.5)
+        sendline("20 + 21")
+        expect("41")
+        expect("julia> ")
+
         # ^C interrupts a sleeping REPL evaluation and reports it
         sendline("println(\"EVAL-1\"); sleep(1000)")
         expect("EVAL-1") # the evaluation is running (robust under load)
@@ -1028,6 +1162,58 @@ if Sys.isunix()
         sleep(0.5)
         kill(p, Base.SIGINT)
         expect("CancellationRequest")
+        expect("julia> ")
+
+        # a background task from an earlier evaluation belongs to an earlier
+        # ^C epoch: interrupting the current evaluation leaves it running
+        # (issue #25790)
+        sendline("global bgc = Ref(0); global bg = @async while true; sleep(0.01); bgc[] += 1; end; println(\"BG-UP\")")
+        expect("BG-UP")
+        expect("julia> ")
+        sendline("println(\"EVAL-4\"); sleep(1000)")
+        expect("EVAL-4")
+        sleep(0.5)
+        kill(p, Base.SIGINT)
+        expect("CancellationRequest")
+        expect("julia> ")
+        sendline("print(\"bg-done=\", istaskdone(bg)); c0 = bgc[]; sleep(0.3); println(\"; bg-alive=\", bgc[] > c0)")
+        expect("bg-done=false; bg-alive=true")
+        expect("julia> ")
+
+        # ^C during an in-evaluation terminal read recovers the prompt
+        # (the class of issue #58105's "Install package?" prompt)
+        sendline("println(\"EVAL-5\"); readline()")
+        expect("EVAL-5")
+        sleep(0.5)
+        kill(p, Base.SIGINT)
+        expect("CancellationRequest")
+        expect("julia> ")
+
+        # ^C while parked in a server accept recovers, leaving the server
+        # usable (the class of issue #58689)
+        sendline("using Sockets; global srv = listen(Sockets.localhost, 0); println(\"LISTENING\"); accept(srv)")
+        expect("LISTENING")
+        sleep(0.5)
+        kill(p, Base.SIGINT)
+        expect("CancellationRequest")
+        expect("julia> ")
+        sendline("println(\"srv-open=\", isopen(srv)); close(srv)")
+        expect("srv-open=true")
+        expect("julia> ")
+
+        # cancelling a BigInt computation never yanks control out of libgmp
+        # internals the way the old asynchronous InterruptException delivery
+        # could (corrupting the heap - issue #56545): the request is
+        # delivered at the loop's cancellation point, between GMP calls, and
+        # BigInt arithmetic in the session works correctly afterwards
+        sendline("println(\"EVAL-6\"); let b = big(3); while true; Base.@cancel_check; b = b*b % (big(10)^200); end; end")
+        expect("EVAL-6")
+        sleep(0.5)
+        kill(p, Base.SIGINT)
+        expect("CancellationRequest")
+        expect("julia> ")
+        sendline("println(string(factorial(big(30))))")
+        expect("265252859812191058636308480000000")
         expect("julia> ")
 
         sendline("exit()")
