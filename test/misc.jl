@@ -1729,10 +1729,16 @@ if !Sys.iswindows()
         p, ptm, output = spawn_interrupt_test_repl()
         try
             @test expect_output(output, "julia>")
+            # compile the error-display path up front; on a loaded machine doing it
+            # lazily can delay the InterruptException output past the timeout below
+            write(ptm, "error(\"warmup_display\")\n")
+            # the pty echoes the input line (which also contains "warmup_display"),
+            # so wait for the error display to finish and the prompt to return
+            @test expect_output(output, r"ERROR.*warmup_display.*julia>"s)
             write(ptm, "while true; sleep(0.05); end\n")
             sleep(3)  # let the loop start
             kill(p, 2) # SIGINT
-            @test expect_output(output, "InterruptException"; timeout=30)
+            @test expect_output(output, "InterruptException")
             @test !has_internal_err(output[])
             @test process_running(p)
             write(ptm, "println(\"CHECK_\", 1+1)\n")
