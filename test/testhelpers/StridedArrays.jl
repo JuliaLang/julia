@@ -140,7 +140,7 @@ function Base.cconvert(::Type{Ptr{T}}, S::Strider{T}) where {T}
 end
 
 # Create a type to test strided array interface edge cases.
-# This array is memory backed, but the MyStridedTestArrayCConvert wrapper hides this.
+# This array is memory backed, but the NonMemStridedArrayCConvert wrapper hides this.
 struct NonMemStridedArray{T, N} <: AbstractArray{T, N}
     a::Array{T, N}
 end

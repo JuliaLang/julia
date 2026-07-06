@@ -166,3 +166,18 @@ end
     ]
     @test vst1_ok(e)
 end
+
+@testset "import/using path" begin
+    # `.` after identifier
+    @test !vst1_ok(Expr(:import, Expr(:., :A, :., :B)))
+    # leading `.` on a name
+    @test !vst1_ok(Expr(:import, Expr(:(:), Expr(:., :M), Expr(:., :., :a))))
+    # non-identifier rename
+    @test !vst1_ok(Expr(:import, Expr(:(:), Expr(:., :M),
+                                      Expr(:as, Expr(:., :a), Expr(:call, :f)))))
+    # empty path
+    @test !vst1_ok(Expr(:import, Expr(:.)))
+    # not an import path
+    @test !vst1_ok(Expr(:import, Expr(:call, :f)))
+    @test !vst1_ok(Expr(:import, 42))
+end

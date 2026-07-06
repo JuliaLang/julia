@@ -503,7 +503,7 @@ function run_std_repl(REPL::Module, quiet::Bool, banner::Symbol, history_file::B
         repl = REPL.LineEditREPL(term, get(stdout, :color, false), true)
         repl.history_file = history_file
     end
-    # Make sure any displays pushed in .julia/config/startup.jl ends up above the
+    # Make sure any displays pushed in .julia/config/startup.jl end up above the
     # REPLDisplay
     d = REPL.REPLDisplay(repl)
     last_active_repl = @isdefined(active_repl) ? active_repl : nothing

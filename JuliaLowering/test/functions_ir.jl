@@ -261,18 +261,6 @@ end
 20  (return %₁₉)
 
 ########################################
-# Error: Static parameter which is unused
-function f(::T) where {T,S}
-    (T,S)
-end
-#---------------------
-LoweringError:
-function f(::T) where {T,S}
-#                        ╙ ── method definition declares type variable but does not use it in the type of any function parameter
-    (T,S)
-end
-
-########################################
 # Return types
 function f(x)::Int
     if x
@@ -291,16 +279,76 @@ end
 8   (call core.svec %₅ %₆ %₇)
 9   --- method TestMod.f %₈
     slots: [slot₁/#self#(!read) slot₂/x slot₃/tmp(!read)]
-    1   (gotoifnot slot₂/x label₂)
-    2   TestMod.Int
+    1   TestMod.Int
+    2   (gotoifnot slot₂/x label₃)
     3   (= slot₃/tmp 0xff)
-    4   (call core.isa slot₃/tmp %₂)
+    4   (call core.isa slot₃/tmp %₁)
     5   (gotoifnot %₄ label₇)
     6   (goto label₉)
-    7   (call top.convert %₂ slot₃/tmp)
-    8   (= slot₃/tmp (call core.typeassert %₇ %₂))
+    7   (call top.convert %₁ slot₃/tmp)
+    8   (= slot₃/tmp (call core.typeassert %₇ %₁))
     9   slot₃/tmp
     10  (return %₉)
+10  latestworld
+11  TestMod.f
+12  (return %₁₁)
+
+########################################
+# Complex return types
+function f(c,b1,b2)::Union{Vector{<:Integer}, Int}
+    if b1
+        return 1
+    elseif b2
+        2
+    else
+        3
+    end
+end
+#---------------------
+1   (method TestMod.f)
+2   latestworld
+3   TestMod.f
+4   (call core.Typeof %₃)
+5   (call core.svec %₄ core.Any core.Any core.Any)
+6   (call core.svec)
+7   SourceLocation::1:10
+8   (call core.svec %₅ %₆ %₇)
+9   --- method TestMod.f %₈
+    slots: [slot₁/#self#(!read) slot₂/c(!read) slot₃/b1 slot₄/b2 slot₅/tmp(!read) slot₆/tmp(!read) slot₇/tmp(!read)]
+    1   TestMod.Union
+    2   TestMod.Integer
+    3   (call core.TypeVar :#T1 %₂)
+    4   TestMod.Vector
+    5   (call core.apply_type %₄ %₃)
+    6   (call core.UnionAll %₃ %₅)
+    7   TestMod.Int
+    8   (call core.apply_type %₁ %₆ %₇)
+    9   (gotoifnot slot₃/b1 label₁₈)
+    10  (= slot₅/tmp 1)
+    11  (call core.isa slot₅/tmp %₈)
+    12  (gotoifnot %₁₁ label₁₄)
+    13  (goto label₁₆)
+    14  (call top.convert %₈ slot₅/tmp)
+    15  (= slot₅/tmp (call core.typeassert %₁₄ %₈))
+    16  slot₅/tmp
+    17  (return %₁₆)
+    18  (gotoifnot slot₄/b2 label₂₇)
+    19  (= slot₆/tmp 2)
+    20  (call core.isa slot₆/tmp %₈)
+    21  (gotoifnot %₂₀ label₂₃)
+    22  (goto label₂₅)
+    23  (call top.convert %₈ slot₆/tmp)
+    24  (= slot₆/tmp (call core.typeassert %₂₃ %₈))
+    25  slot₆/tmp
+    26  (return %₂₅)
+    27  (= slot₇/tmp 3)
+    28  (call core.isa slot₇/tmp %₈)
+    29  (gotoifnot %₂₈ label₃₁)
+    30  (goto label₃₃)
+    31  (call top.convert %₈ slot₇/tmp)
+    32  (= slot₇/tmp (call core.typeassert %₃₁ %₈))
+    33  slot₇/tmp
+    34  (return %₃₃)
 10  latestworld
 11  TestMod.f
 12  (return %₁₁)
@@ -892,7 +940,7 @@ end
 12  (return %₁₁)
 
 ########################################
-# Function argument destructuring combined with splats, types and and defaults
+# Function argument destructuring combined with splats, types and defaults
 function f((x,)::T...=rhs)
 end
 #---------------------
@@ -1064,7 +1112,7 @@ function f(x=(1,2)...,y=(3,4)...); end
 #            └──────┘ ── splat only allowed on final positional default arg
 
 ########################################
-# Function argument destructuring combined with splats, types and and defaults
+# Function argument destructuring combined with splats, types and defaults
 function f(x=default_x)::T
 end
 #---------------------
@@ -1172,7 +1220,7 @@ end
 12  (return %₁₁)
 
 ########################################
-# Error: nospecialize should be outermost expr in arg
+# FIXME: Error: nospecialize should be outermost expr in arg
 function f_bad_nospecialize(@nospecialize(x)=1); end
 #---------------------
 LoweringError:
@@ -1188,7 +1236,7 @@ function f_bad_nospecialize(;@nospecialize(x)=1); end
 #                            └──────────────┘ ── expected identifier or `identifier::type`
 
 ########################################
-# Error: nospecialize should be outermost expr in arg
+# FIXME: Error: nospecialize should be outermost expr in arg
 function f_bad_nospecialize(@nospecialize(x)...); end
 #---------------------
 LoweringError:
@@ -1273,31 +1321,35 @@ some docs
 function f()
 end
 #---------------------
-1   (method TestMod.f)
-2   latestworld
-3   TestMod.f
-4   (call core.Typeof %₃)
-5   (call core.svec %₄)
-6   (call core.svec)
-7   SourceLocation:nothing:4:0
-8   (call core.svec %₅ %₆ %₇)
-9   --- method TestMod.f %₈
+1   (newvar slot₁/val)
+2   (gotoifnot true label₁₅)
+3   (method TestMod.f)
+4   latestworld
+5   TestMod.f
+6   (call core.Typeof %₅)
+7   (call core.svec %₆)
+8   (call core.svec)
+9   SourceLocation:nothing:4:0
+10  (call core.svec %₇ %₈ %₉)
+11  --- method TestMod.f %₁₀
     slots: [slot₁/#self#(!read)]
     1   (return core.nothing)
-10  latestworld
-11  TestMod.f
-12  (= slot₁/val %₁₁)
-13  (call Base.Docs.Binding TestMod :f)
-14  (call Core.svec "some docs\n")
-15  (call Dict{Symbol, Any} :path => "none" :linenumber => 1 :module => TestMod)
-16  (call Base.Docs.docstr %₁₄ %₁₅)
-17  TestMod.Union
-18  TestMod.Tuple
-19  (call core.apply_type %₁₈)
-20  (call core.apply_type %₁₇ %₁₉)
-21  (call Base.Docs.doc! TestMod %₁₃ %₁₆ %₂₀)
-22  slot₁/val
-23  (return %₂₂)
+12  latestworld
+13  TestMod.f
+14  (= slot₁/val %₁₃)
+15  (call Base.Docs.Binding TestMod :f)
+16  (call Core.svec "some docs\n")
+17  (call Dict{Symbol, Any} :path => "none" :linenumber => 1 :module => TestMod)
+18  (call Base.Docs.docstr %₁₆ %₁₇)
+19  TestMod.Union
+20  TestMod.Tuple
+21  (call core.apply_type %₂₀)
+22  (call core.apply_type %₁₉ %₂₁)
+23  (call Base.Docs.doc! TestMod %₁₅ %₁₈ %₂₂)
+24  (gotoifnot true label₂₇)
+25  slot₁/val
+26  (return %₂₅)
+27  (return core.nothing)
 
 ########################################
 # Binding docs to callable type
@@ -1307,27 +1359,31 @@ some docs
 function (x::T)()
 end
 #---------------------
-1   TestMod.T
-2   (call core.svec %₁)
-3   (call core.svec)
-4   SourceLocation:nothing:4:0
-5   (call core.svec %₂ %₃ %₄)
-6   --- method core.nothing %₅
+1   (newvar slot₁/val)
+2   (gotoifnot true label₁₁)
+3   TestMod.T
+4   (call core.svec %₃)
+5   (call core.svec)
+6   SourceLocation:nothing:4:0
+7   (call core.svec %₄ %₅ %₆)
+8   --- method core.nothing %₇
     slots: [slot₁/x(!read)]
     1   (return core.nothing)
-7   latestworld
-8   (= slot₁/val core.nothing)
-9   (call Base.Docs.Binding TestMod :T)
-10  (call Core.svec "some docs\n")
-11  (call Dict{Symbol, Any} :path => "none" :linenumber => 1 :module => TestMod)
-12  (call Base.Docs.docstr %₁₀ %₁₁)
-13  TestMod.Union
-14  TestMod.Tuple
-15  (call core.apply_type %₁₄)
-16  (call core.apply_type %₁₃ %₁₅)
-17  (call Base.Docs.doc! TestMod %₉ %₁₂ %₁₆)
-18  slot₁/val
-19  (return %₁₈)
+9   latestworld
+10  (= slot₁/val core.nothing)
+11  (call Base.Docs.Binding TestMod :T)
+12  (call Core.svec "some docs\n")
+13  (call Dict{Symbol, Any} :path => "none" :linenumber => 1 :module => TestMod)
+14  (call Base.Docs.docstr %₁₂ %₁₃)
+15  TestMod.Union
+16  TestMod.Tuple
+17  (call core.apply_type %₁₆)
+18  (call core.apply_type %₁₅ %₁₇)
+19  (call Base.Docs.doc! TestMod %₁₁ %₁₄ %₁₈)
+20  (gotoifnot true label₂₃)
+21  slot₁/val
+22  (return %₂₁)
+23  (return core.nothing)
 
 ########################################
 # Keyword function with defaults.
@@ -1868,18 +1924,6 @@ end
 44  latestworld
 45  TestMod.f_kw_sparams
 46  (return %₄₅)
-
-########################################
-# Error: Static parameter which is unused in keyword body arg types
-function f_kw_sparams(x::X; a::A) where {X,Y,A}
-    (X,A)
-end
-#---------------------
-LoweringError:
-function f_kw_sparams(x::X; a::A) where {X,Y,A}
-#                                          ╙ ── method definition declares type variable but does not use it in the type of any function parameter
-    (X,A)
-end
 
 ########################################
 # Keyword @nospecialize

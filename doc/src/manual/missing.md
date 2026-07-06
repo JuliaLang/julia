@@ -412,8 +412,7 @@ julia> isequal([1, 2, missing], [1, missing, 2])
 false
 ```
 
-Functions [`any`](@ref) and [`all`](@ref) also follow the rules of
-three-valued logic. Thus, returning `missing` when the result cannot be determined:
+Functions [`any`](@ref) and [`all`](@ref) also follow the rules of three-valued logic, thus returning `missing` when the result cannot be determined:
 
 ```jldoctest
 julia> all([true, missing])

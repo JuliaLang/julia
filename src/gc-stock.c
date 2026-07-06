@@ -88,7 +88,7 @@ static _Atomic(int) support_conservative_marking = 0;
  *
  * Before starting the mark phase the GC thread calls `jl_safepoint_start_gc()`
  * and `jl_gc_wait_for_the_world()`
- * to make sure all the thread are in a safe state for the GC. The function
+ * to make sure all the threads are in a safe state for the GC. The function
  * activates the safepoint and wait for all the threads to get ready for the
  * GC (`gc_state != 0`). It also acquires the `finalizers` lock so that no
  * other thread will access them when the GC is running.
@@ -623,7 +623,7 @@ static void reset_thread_gc_counts(void) JL_NOTSAFEPOINT
     }
 }
 
-void jl_gc_reset_alloc_count(void) JL_NOTSAFEPOINT
+void jl_gc_reset_alloc_count(void)
 {
     combine_thread_gc_counts(&gc_num, 0);
     int64_t alloc_increment = gc_num.deferred_alloc + gc_num.allocd;
@@ -1515,6 +1515,16 @@ JL_DLLEXPORT void jl_gc_queue_root(const jl_value_t *ptr)
     }
 }
 
+JL_DLLEXPORT void jl_gc_wb_cold(const void *parent, const void *ptr) JL_NOTSAFEPOINT
+{
+    if (ptr == NULL)
+        return;
+    if (jl_astaggedvalue(parent)->bits.in_image != 1 /* GC_IN_IMAGE_NOT_REMSET */ && // parent is not an unmarked image object
+        (jl_astaggedvalue(ptr)->bits.gc & 1 /* GC_MARKED */) != 0) // ptr is old
+        return;
+    jl_gc_queue_root((jl_value_t*)parent);
+}
+
 void jl_gc_queue_multiroot(const jl_value_t *parent, const void *ptr, jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
     const jl_datatype_layout_t *ly = dt->layout;
@@ -1585,6 +1595,7 @@ STATIC_INLINE void gc_assert_parent_validity(jl_value_t *parent, jl_value_t *chi
         child_vt == (jl_unionall_tag << 4) ||
         child_vt == (jl_uniontype_tag << 4) ||
         child_vt == (jl_typeeq_tag << 4) ||
+        child_vt == (jl_typeegal_tag << 4) ||
         child_vt == (jl_tvar_tag << 4) ||
         child_vt == (jl_vararg_tag << 4)) {
         // Skip, since these wouldn't hit the object assert anyway
@@ -2286,6 +2297,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
             vtag == (jl_unionall_tag << 4) ||
             vtag == (jl_uniontype_tag << 4) ||
             vtag == (jl_typeeq_tag << 4) ||
+            vtag == (jl_typeegal_tag << 4) ||
             vtag == (jl_tvar_tag << 4) ||
             vtag == (jl_vararg_tag << 4) ||
             vtag == (jl_globalref_tag << 4) ||
@@ -3065,7 +3077,7 @@ void _report_gc_finished(uint64_t pause, uint64_t freed, int full, int recollect
     jl_safe_printf("Heap stats: bytes_mapped %.2f MB, bytes_resident %.2f MB,\nheap_size %.2f MB, heap_target %.2f MB, Fragmentation %.3f\n",
         jl_atomic_load_relaxed(&gc_heap_stats.bytes_mapped)/(double)(1<<20),
         jl_atomic_load_relaxed(&gc_heap_stats.bytes_resident)/(double)(1<<20),
-        // live_bytes/(double)(1<<20), live byes tracking is not accurate.
+        // live_bytes/(double)(1<<20), live bytes tracking is not accurate.
         jl_atomic_load_relaxed(&gc_heap_stats.heap_size)/(double)(1<<20),
         jl_atomic_load_relaxed(&gc_heap_stats.heap_target)/(double)(1<<20),
         (double)live_bytes/(double)jl_atomic_load_relaxed(&gc_heap_stats.heap_size)
@@ -3548,14 +3560,12 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
 
     if (!jl_atomic_load_acquire(&jl_gc_disable_counter)) {
         JL_LOCK_NOGC(&finalizers_lock); // all the other threads are stopped, so this does not make sense, right? otherwise, failing that, this seems like plausibly a deadlock
-#ifndef __clang_gcanalyzer__
         if (_jl_gc_collect(ptls, collection)) {
             // recollect
             int ret = _jl_gc_collect(ptls, JL_GC_AUTO);
             (void)ret;
             assert(!ret);
         }
-#endif
         JL_UNLOCK_NOGC(&finalizers_lock);
     }
 

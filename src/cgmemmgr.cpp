@@ -315,7 +315,7 @@ ssize_t pwrite_addr(int fd, const void *buf, size_t nbyte, uintptr_t addr) JL_NO
         // we have invalid input value. Use syscall directly to be sure.
         syscall(SYS_lseek, (long)fd, addr, (long)SEEK_SET);
         // The return value can be -1 when the glibc syscall function
-        // think we have an error return with and `addr` that's too large.
+        // thinks we have an error return with an `addr` that's too large.
         // Ignore the return value for now.
         return write(fd, buf, nbyte);
     }
@@ -677,6 +677,7 @@ public:
     {
         assert(anon_hdl != -1);
     }
+    virtual ~DualMapAllocator() JL_NOTSAFEPOINT override = default;
     void finalize() override JL_NOTSAFEPOINT
     {
         for (auto &block : this->blocks) {
@@ -733,6 +734,7 @@ public:
     {
         assert(get_self_mem_fd() != -1);
     }
+    virtual ~SelfMemAllocator() JL_NOTSAFEPOINT override = default;
     void finalize() override JL_NOTSAFEPOINT
     {
         for (auto &block : this->blocks) {

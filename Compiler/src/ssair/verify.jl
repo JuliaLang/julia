@@ -397,14 +397,8 @@ function verify_ir(ir::IRCode, print::Bool=true,
                     # blocks, which isn't allowed for regular SSA values, so
                     # we skip the validation below.
                     continue
-                elseif stmt.head === :foreigncall
+                elseif stmt.head === :foreigncall || stmt.head === :foreignglobal
                     isforeigncall = true
-                elseif stmt.head === :call
-                    f = stmt.args[1]
-                    if f isa GlobalRef && f.name === :cglobal
-                        # TODO: these are not yet linearized
-                        continue
-                    end
                 elseif stmt.head === :leave
                     for i in 1:length(stmt.args)
                         arg = stmt.args[i]

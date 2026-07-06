@@ -82,10 +82,6 @@ extern jl_gc_callback_list_t *gc_cblist_notify_gc_pressure;
         } \
     } while (0)
 
-#ifdef __cplusplus
-}
-#endif
-
 // =========================================================================== //
 // malloc wrappers, aligned allocation
 // =========================================================================== //
@@ -226,5 +222,9 @@ extern int gc_logging_enabled;
 
 void _jl_free_stack(jl_ptls_t ptls, void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT;
 void sweep_mtarraylist_buffers(void) JL_NOTSAFEPOINT;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // JL_GC_COMMON_H

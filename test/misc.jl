@@ -54,7 +54,7 @@ let
         @test occursin("random_object", ex.msg)
     end
 end
-# if the second argument is an expression, c
+# if the second argument is an expression, call it to generate the error message
 let deepthought(x, y) = 42
     try
         @assert 1 == 2 string("the answer to the ultimate question: ",

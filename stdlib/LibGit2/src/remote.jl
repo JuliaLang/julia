@@ -3,7 +3,7 @@
 """
     GitRemote(repo::GitRepo, rmt_name::AbstractString, rmt_url::AbstractString)::GitRemote
 
-Look up a remote git repository using its name and URL. Uses the default fetch refspec.
+Create a remote git repository entry using its name and URL. Uses the default fetch refspec.
 
 # Examples
 ```julia
@@ -23,7 +23,7 @@ end
 """
     GitRemote(repo::GitRepo, rmt_name::AbstractString, rmt_url::AbstractString, fetch_spec::AbstractString)::GitRemote
 
-Look up a remote git repository using the repository's name and URL,
+Create a remote git repository entry using the repository's name and URL,
 as well as specifications for how to fetch from the remote
 (e.g. which remote branch to fetch from).
 
@@ -46,7 +46,7 @@ end
 """
     GitRemoteAnon(repo::GitRepo, url::AbstractString)::GitRemote
 
-Look up a remote git repository using only its URL, not its name.
+Create a remote git repository using only its URL, not its name.
 
 # Examples
 ```julia

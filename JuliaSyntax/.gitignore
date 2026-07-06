@@ -1,4 +1,5 @@
 /Manifest.toml
+/Manifest-v*.toml
 /tools/pkgs
 /tools/pkg_tars
 /tools/logs.txt

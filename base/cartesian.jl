@@ -236,7 +236,7 @@ end
 
 Generates a sequence of `if ... elseif ... else ... end` statements. For example:
 
-    @nif 3 d->(i_d >= size(A,d)) d->(error("Dimension ", d, " too big")) d->println("All OK")
+    @nif 3 d->(i_d > size(A,d)) d->(error("Dimension ", d, " too big")) d->println("All OK")
 
 would generate:
 

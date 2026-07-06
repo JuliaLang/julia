@@ -39,7 +39,7 @@ end
 """
     LibGit2.init(path::AbstractString, bare::Bool=false)::GitRepo
 
-Open a new git repository at `path`. If `bare` is `false`,
+Initialize a new git repository at `path`. If `bare` is `false`,
 the working tree will be created in `path/.git`. If `bare`
 is `true`, no working directory will be created.
 """
@@ -103,7 +103,7 @@ end
 """
     isattached(repo::GitRepo)::Bool
 
-Determine if `repo` is detached - that is, whether its HEAD points to a commit
+Determine if `repo` is attached - that is, whether its HEAD points to a commit
 (detached) or whether HEAD points to a branch tip (attached).
 """
 function isattached(repo::GitRepo)

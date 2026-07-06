@@ -72,7 +72,7 @@ void *jl_lazy_load_and_lookup(jl_value_t *lib_val, jl_value_t *f_name)
     else if (jl_is_string(f_name))
         fname_str = jl_string_data(f_name);
     else
-        jl_type_error("ccall function name", (jl_value_t*)jl_symbol_type, f_name);
+        jl_type_error("cglobal/ccall function name", (jl_value_t*)jl_symbol_type, f_name);
 
     if (lib_val) {
         if (jl_is_symbol(lib_val))
@@ -82,7 +82,7 @@ void *jl_lazy_load_and_lookup(jl_value_t *lib_val, jl_value_t *f_name)
         else if (jl_libdl_dlopen_func != NULL) {
             lib_ptr = jl_unbox_voidpointer(jl_apply_generic(jl_libdl_dlopen_func, &lib_val, 1));
         } else
-            jl_type_error("ccall", (jl_value_t*)jl_symbol_type, lib_val);
+            jl_type_error("cglobal/ccall", (jl_value_t*)jl_symbol_type, lib_val);
     }
     else {
         // If the user didn't supply a library name, try to find it now from the runtime value of f_name
@@ -347,15 +347,6 @@ struct cfuncdata_t {
     size_t flags;
 };
 
-JL_DLLEXPORT
-void *jl_jit_abi_converter_fallback(jl_task_t *ct, void *unspecialized, jl_value_t *declrt, jl_value_t *sigt, size_t nargs, int specsig,
-                                    jl_code_instance_t *codeinst, jl_callptr_t invoke, void *target, int target_specsig)
-{
-    if (unspecialized)
-        return unspecialized;
-    jl_errorf("cfunction not available in this build of Julia");
-}
-
 static inline const char *name_from_method_instance(jl_method_instance_t *mi) JL_NOTSAFEPOINT
 {
     assert(jl_is_method_instance(mi));
@@ -363,13 +354,21 @@ static inline const char *name_from_method_instance(jl_method_instance_t *mi) JL
 }
 
 static jl_mutex_t cfun_lock;
+
+// (get_abi_converter / method table mutating thread)
 // release jl_world_counter
-// store theFptr
+// release theFptr
 // release last_world_v
 //
+// (dispatch site)
 // acquire last_world_v
-// read theFptr
-// acquire jl_world_counter
+// acquire theFptr
+// read jl_world_counter
+//
+// The above ordering requirements are intended to guarantee that if the
+// dispatch site observes last_world == jl_world_counter then the loaded
+// fptr is consistent with both of them, meaning it was published for
+// exactly that world.
 JL_DLLEXPORT
 void *jl_get_abi_converter(jl_task_t *ct, void *data)
 {
@@ -396,7 +395,7 @@ void *jl_get_abi_converter(jl_task_t *ct, void *data)
             JL_UNLOCK(&cfun_lock);
             return f;
         }
-        mi = jl_get_specialization1((jl_tupletype_t*)sigt, world, 0);
+        mi = jl_get_specialization1((jl_tupletype_t*)sigt, world);
         if (f != NULL) {
             if (last_ci == NULL) {
                 if (mi == jl_nothing) {
@@ -448,7 +447,7 @@ void *jl_get_abi_converter(jl_task_t *ct, void *data)
 
     cfuncdata->plast_codeinst = &cfuncdata->last_codeinst;
     cfuncdata->last_codeinst = codeinst;
-    jl_atomic_store_relaxed(&cfuncdata->fptr, f);
+    jl_atomic_store_release(&cfuncdata->fptr, f);
     jl_atomic_store_release(&cfuncdata->last_world, world);
     JL_UNLOCK(&cfun_lock);
     return f;

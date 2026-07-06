@@ -601,8 +601,8 @@ end
 end
 
 @testset "Issue #10561, two-digit year parsing ambiguities" begin
-    # All two-digit dates (whether full or resulting from truncation, e.g. 2010 -> 10)
-    # encoded in two digit year format YY are parsed as year 00YY
+    # All dates encoded in two digit year format YY are parsed as year 00YY
+    # for as many digits are there are in the input string (at least two).
 
     for test_year in ("00", "01", "99", "2021")
         @test Date(test_year, dateformat"yy") == Date(parse(Int, test_year))

@@ -991,18 +991,18 @@ JL_UNUSED static uintptr_t ptr_demangle(uintptr_t p) JL_NOTSAFEPOINT
 {
 #if defined(__GLIBC__)
 #if defined(_CPU_X86_)
-// from https://github.com/bminor/glibc/blame/master/sysdeps/unix/sysv/linux/i386/sysdep.h
+// from https://github.com/bminor/glibc/blame/master/sysdeps/unix/sysv/linux/i386/pointer_guard.h
 // last changed for GLIBC_2.6 on 2007-02-01
     asm(" rorl $9, %0\n"
         " xorl %%gs:0x18, %0"
         : "=r"(p) : "0"(p) : );
 #elif defined(_CPU_X86_64_)
-// from https://github.com/bminor/glibc/blame/master/sysdeps/unix/sysv/linux/i386/sysdep.h
+// from https://github.com/bminor/glibc/blob/master/sysdeps/unix/sysv/linux/x86_64/pointer_guard.h
     asm(" rorq $17, %0\n"
         " xorq %%fs:0x30, %0"
         : "=r"(p) : "0"(p) : );
 #elif defined(_CPU_AARCH64_)
-// from https://github.com/bminor/glibc/blame/master/sysdeps/unix/sysv/linux/aarch64/sysdep.h
+// from https://github.com/bminor/glibc/blame/master/sysdeps/unix/sysv/linux/aarch64/pointer_guard.h
 // We need to use a trick like this (from GCC/LLVM TSAN) to get access to it:
 // https://github.com/llvm/llvm-project/commit/daa3ebce283a753f280c549cdb103fbb2972f08e
     static pthread_once_t once = PTHREAD_ONCE_INIT;

@@ -143,7 +143,7 @@ typedef struct {
 ```
 
 However, in other cases, the tuple may be converted to an anonymous [`isbits`](@ref) type and
-stored unboxed, or it may not stored at all (if it is not being used in a generic context as a
+stored unboxed, or it may not be stored at all (if it is not being used in a generic context as a
 `jl_value_t*`).
 
 Symbols:

@@ -9,7 +9,7 @@ struct Q{T}
     b::T
 end
 
-# Memoy use is ~512MB
+# Memory use is ~512MB
 let
     A = [Q(rand(T), rand(T)) for _ in 1:N]
 end

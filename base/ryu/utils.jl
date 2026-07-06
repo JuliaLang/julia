@@ -37,12 +37,12 @@ log10pow5(e) = (e * 732923) >> 20
 """
     Ryu.pow5bits(e)
 
-Compute `e == 0 ? 1 : ceil(log2(5^e))`. This is valid for `e < 3529` (if performend in `Int32` arithmetic).
+Compute `e == 0 ? 1 : ceil(log2(5^e))`. This is valid for `e < 3529` (if performed in `Int32` arithmetic).
 """
 pow5bits(e) = ((e * 1217359) >> 19) + 1
 
 """"
-     Ryu.mulshift(m::U, mula, j) where {U<:Unsigned}
+     Ryu.mulshift(m::U, mul, j) where {U<:Unsigned}
 
 Compute `(m * mul) >> j`, where `j >= 8*sizeof(U)`. The type of the results is the larger of `U` or `UInt32`.
 """
