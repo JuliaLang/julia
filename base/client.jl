@@ -640,6 +640,12 @@ function _start()
         try
             ScopedValues.@with(CANCEL_TOKEN => sigint_new_episode!(),
                                invokelatest(display_error, errs))
+        catch
+            # The report itself failed - e.g. a further ^C cancelled the
+            # display epoch, or a user-defined `show` method errored. The
+            # exit code already reflects the original failure; leave a bare
+            # note rather than dying with an unhandled exception.
+            Core.print(Core.stderr, "\nSYSTEM: displaying the error report failed\n")
         finally
             sigint_close_episode!()
         end
