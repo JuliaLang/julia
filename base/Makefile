@@ -64,6 +64,7 @@ ifeq ($(USE_GPL_LIBS), 1)
 else
 	@printf "%s\n" "const USE_GPL_LIBS = false" >> $@
 endif
+	@printf "%s\n" "const JULIA_SCHEDULER = :$(JULIA_SCHEDULER)" >> $@
 	@printf "%s\n" "const libllvm_version_string = \"$$($(LLVM_CONFIG_HOST) --version)\"" >> $@
 	@printf "%s\n" "const libllvm_name = \"$(LLVM_SHARED_LIB_NAME)\"" >> $@
 	@printf "%s\n" "const VERSION_STRING = \"$(JULIA_VERSION)\"" >> $@

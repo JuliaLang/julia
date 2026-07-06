@@ -57,13 +57,18 @@ Base.@assume_effects :total function rand_uniform_max_int32(max::UInt32, seed::U
 end
 
 include("scheduler/partr.jl")
+include("scheduler/workstealing.jl")
 
-const ChosenScheduler = Partr
-
-# Scheduler interface:
+# Scheduler interface — a scheduler implementation provides:
 #   enqueue!(t::Task)  push a runnable Task into the scheduler
 #   dequeue!()         pop a runnable Task from the scheduler, or `nothing` if none
 #   checktaskempty()   return true if the scheduler has no available Tasks
+# The scheduler backend is selected at build time with the JULIA_SCHEDULER
+# make variable; changing it requires rebuilding the system image.
+const ChosenScheduler =
+    Base.JULIA_SCHEDULER === :partr ? Partr :
+    Base.JULIA_SCHEDULER === :workstealing ? Workstealing :
+    error("unknown JULIA_SCHEDULER: ", Base.JULIA_SCHEDULER)
 
 enqueue!(t::Task) = ChosenScheduler.enqueue!(t)
 dequeue!() = ChosenScheduler.dequeue!()

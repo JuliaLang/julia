@@ -274,6 +274,9 @@ endif
 # Whether to use GPL libraries or not.
 USE_GPL_LIBS ?= 1
 
+# Task scheduler backend: partr (default) or workstealing
+JULIA_SCHEDULER ?= partr
+
 # Whether to install Julia as a framework on Darwin (Apple) platforms.
 DARWIN_FRAMEWORK ?= 0
 
