@@ -238,14 +238,16 @@ typedef struct _jl_handler_t jl_handler_t;
 // kept in sync with the registration in jltypes.c.
 typedef struct _jl_cancel_source_t {
     JL_DATA_TYPE
-    // Tree links. `parent` is const after construction, so lock-free
-    // parent-chain walks (e.g. subtree-membership tests from signal context)
-    // are safe. `children` - `nothing`, or a `Vector{WeakRef}` of child
+    // Graph links. `parents` - `nothing` (a root), a single parent source,
+    // or a SimpleVector of parent sources (a "linked" source, making the
+    // structure a DAG) - is const after construction, so lock-free ancestor
+    // walks (e.g. subtree-membership tests on the cancellation path) are
+    // safe. `children` - `nothing`, or a `Vector{WeakRef}` of child
     // sources, guarded by this node's `_lock` - holds children *weakly*: a
     // child stays linked for exactly as long as it is reachable (a token, a
     // registered waiter or a running binding all keep it alive), and is
     // pruned after it has been garbage collected.
-    jl_value_t *parent;      // Union{Nothing, CancellationTokenSource}
+    jl_value_t *parents;     // Union{Nothing, CancellationTokenSource, SimpleVector}
     jl_value_t *children;    // Union{Nothing, Vector{WeakRef}}
     // Parked waiter tasks (an intrusive list through their `wait_tnext`/
     // `wait_tprev` fields), guarded by `_lock`.

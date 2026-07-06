@@ -1673,14 +1673,45 @@ JL_DLLEXPORT int8_t jl_get_task_threadpoolid(jl_task_t *t)
     return t->threadpoolid;
 }
 
+// Whether `src` is `node` itself or one of its (transitive) parents.
+// `parents` edges are const after construction, so the walk needs no locks.
+// Multi-parent ("linked") sources make this a DAG search; the work is
+// bounded so that a pathological diamond lattice cannot stall the canceller
+// - on overflow the node is conservatively treated as a non-member, and the
+// cancellation is recovered level-triggered at the task's next cancellation
+// point.
+static int cancel_source_subtree_member(jl_value_t *node, jl_value_t *src) JL_NOTSAFEPOINT
+{
+    jl_value_t *stack[32];
+    size_t top = 0;
+    int steps = 0;
+    while (node != NULL && node != jl_nothing) {
+        if (node == src)
+            return 1;
+        if (++steps >= 256)
+            return 0;
+        jl_value_t *up = ((jl_cancel_source_t*)node)->parents;
+        if (up != NULL && jl_is_svec(up)) {
+            size_t n = jl_svec_len(up);
+            for (size_t i = 1; i < n; i++) {
+                if (top < sizeof(stack) / sizeof(stack[0]))
+                    stack[top++] = jl_svecref(up, i);
+            }
+            up = n == 0 ? NULL : jl_svecref(up, 0);
+        }
+        node = up;
+        if ((node == NULL || node == jl_nothing) && top > 0)
+            node = stack[--top];
+    }
+    return 0;
+}
+
 // Collect the tasks currently running on some thread whose published bound
 // cancellation token lies in the subtree rooted at `src` (i.e. `src` is an
-// ancestor of, or equal to, the task's bound token source). `parent` links
-// are const after construction, so the chain walk needs no locks. The
-// result is a snapshot: tasks may migrate or rebind concurrently; callers
-// must tolerate both misses (recovered level-triggered at the task's next
-// cancellation point) and stale hits (the interrupt re-checks and is
-// harmless).
+// ancestor of, or equal to, the task's bound token source). The result is a
+// snapshot: tasks may migrate or rebind concurrently; callers must tolerate
+// both misses (recovered level-triggered at the task's next cancellation
+// point) and stale hits (the interrupt re-checks and is harmless).
 JL_DLLEXPORT jl_value_t *jl_cancel_collect_bound(jl_value_t *src)
 {
     jl_array_t *out = jl_alloc_vec_any(0);
@@ -1695,12 +1726,9 @@ JL_DLLEXPORT jl_value_t *jl_cancel_collect_bound(jl_value_t *src)
         if (t == NULL)
             continue;
         jl_value_t *bound = jl_atomic_load_acquire(&t->bound_cancel_token);
-        while (bound != NULL && bound != jl_nothing) {
-            if (bound == src) {
-                jl_array_ptr_1d_push(out, (jl_value_t*)t);
-                break;
-            }
-            bound = ((jl_cancel_source_t*)bound)->parent;
+        if (bound != NULL && bound != jl_nothing &&
+            cancel_source_subtree_member(bound, src)) {
+            jl_array_ptr_1d_push(out, (jl_value_t*)t);
         }
     }
     JL_GC_POP();

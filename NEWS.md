@@ -19,9 +19,11 @@ New language features
   - `typegroup` blocks allow defining mutually recursive struct types that reference each other in their
     field types. All types in the group are resolved atomically at the end of the block ([#60569]).
   - Task cancellation is now supported, organized around cancellation tokens:
-    `Base.CancellationTokenSource` is a level-triggered, tree-structured cancellation scope
-    (cancelling a source cancels its whole subtree, at monotonically escalating severities), and
-    `Base.CancellationToken` is its observe/wait view. The token governing a computation is carried
+    `Base.CancellationTokenSource` is a level-triggered cancellation scope
+    (cancelling a source cancels everything linked beneath it, at monotonically escalating
+    severities), and `Base.CancellationToken` is its observe/wait view. Sources form a tree -
+    or, when a source is linked under several parent tokens at once, a DAG: the linked source
+    is cancelled as soon as any of its parents is. The token governing a computation is carried
     as a scoped value (`Base.CANCEL_TOKEN`, established with the standard `ScopedValues` API) that
     propagates to child tasks; blocking operations
     (`wait`, `lock`, Channel operations, `sleep`, stream and command I/O, Sockets, FileWatching,

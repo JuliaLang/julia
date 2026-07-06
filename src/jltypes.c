@@ -4165,7 +4165,7 @@ void jl_init_types(void) JL_GC_DISABLED
         jl_new_datatype(jl_symbol("CancellationTokenSource"), core, jl_any_type,
                         jl_emptysvec,
                         jl_perm_symsvec(8,
-                                        "parent",
+                                        "parents",
                                         "children",
                                         "waiters_head",
                                         "waiters_tail",
@@ -4184,7 +4184,7 @@ void jl_init_types(void) JL_GC_DISABLED
                                 jl_any_type),
                         jl_emptysvec,
                         0, 1, 8);
-    // Field 1 (parent) is const; fields 5-7 (state, _lock, delivered) are atomic
+    // Field 1 (parents) is const; fields 5-7 (state, _lock, delivered) are atomic
     const static uint32_t cancel_source_constfields[1]  = { 0b00000001 };
     const static uint32_t cancel_source_atomicfields[1] = { 0b01110000 };
     jl_cancel_source_type->name->constfields = cancel_source_constfields;
