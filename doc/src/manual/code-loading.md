@@ -464,6 +464,20 @@ The syntax version for a package is determined by the loading mechanism in the f
 
 3. If neither is specified, the current Julia version is used.
 
+The parser implementation can be selected separately with `syntax.version`, whose value is the name of a package
+listed in `[deps]`. That package must define a `core_parser_hook` entry point with Julia's internal parser hook
+signature. Modules parsed with that project use the dependency's parser entry point for nested `include` calls and
+submodules:
+
+```toml
+name = "MyPackage"
+uuid = "..."
+syntax.version = "MyParser"
+
+[deps]
+MyParser = "..."
+```
+
 #### In scripts and the REPL
 
 Scripts and the REPL use the active project's syntax version. This determination happens:

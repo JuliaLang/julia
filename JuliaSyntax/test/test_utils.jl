@@ -66,9 +66,9 @@ function remove_macro_linenums!(ex)
 end
 
 function remove_module_versions!(ex)
-    # In v1.14+, JuliaSyntax adds a version as the first argument to module expressions.
+    # In v1.14+, JuliaSyntax adds a parser ref as the first argument to module expressions.
     # Remove it for comparison with flisp output.
-    if Meta.isexpr(ex, :module) && length(ex.args) >= 1 && ex.args[1] isa VersionNumber
+    if Meta.isexpr(ex, :module) && length(ex.args) >= 1 && ex.args[1] isa GlobalRef
         deleteat!(ex.args, 1)
     end
     if ex isa Expr
@@ -187,9 +187,9 @@ function exprs_roughly_equal(fl_ex, ex)
         # The flisp parser adds an extra block around `w` in the following case
         # f(::g(z) = w) = 1
         fl_args[2] = fl_args[2].args[2]
-    elseif h == :module && length(args) == length(fl_args) + 1 && args[1] isa VersionNumber
-        # In v1.14+, JuliaSyntax adds a version as the first argument to module expressions.
-        # Skip the version when comparing.
+    elseif h == :module && length(args) == length(fl_args) + 1 && args[1] isa GlobalRef
+        # In v1.14+, JuliaSyntax adds a parser ref as the first argument to module expressions.
+        # Skip the parser ref when comparing.
         args = args[2:end]
     end
     if length(fl_args) != length(args)

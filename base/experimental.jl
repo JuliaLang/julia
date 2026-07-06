@@ -767,9 +767,13 @@ function (vp::VersionedLower)(@nospecialize(code), mod::Module,
 end
 
 function Base.set_syntax_version(m::Module, ver::VersionNumber)
-    parser = Base.VersionedParse(ver)
-    Core.declare_const(m, Symbol("#_internal_julia_parse"), parser)
-    #lowerer = VersionedLower(ver)
+    Base.set_syntax_version(m, Base.syntax_parser_ref(ver))
+    nothing
+end
+
+function Base.set_syntax_version(m::Module, parser_ref::GlobalRef)
+    Core.declare_const(m, Symbol("#_internal_julia_parse"), Base.VersionedParse(parser_ref))
+    #lowerer = ...
     #Core.declare_const(m, :_internal_julia_lower, lowerer)
     nothing
 end
