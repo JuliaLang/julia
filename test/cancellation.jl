@@ -139,6 +139,53 @@ spin(n=4) = for _ in 1:n; yield(); end
     @test_throws TaskFailedException wait(tm)
     @test tm.result isa CancellationRequest
 
+    # linked sources: a source with several parents is cancelled by any of
+    # them (the graph is a DAG, not just a tree)
+    la = CancellationTokenSource()
+    lb = CancellationTokenSource()
+    linked = CancellationTokenSource(CancellationToken(la), CancellationToken(lb))
+    @test !Base.iscancelled(CancellationToken(linked))
+    @test cancel!(lb)
+    @test Base.iscancelled(CancellationToken(linked))
+    @test !Base.iscancelled(CancellationToken(la))
+    # escalation propagates through the other parent too
+    @test cancel!(la, CANCEL_REQUEST_ABANDON_EXTERNAL)
+    @test Base.cancel_severity(linked) === CANCEL_REQUEST_ABANDON_EXTERNAL
+
+    # born cancelled at the highest severity among the parents
+    lc = CancellationTokenSource()
+    ld = CancellationTokenSource()
+    cancel!(ld, CANCEL_REQUEST_ABANDON_EXTERNAL)
+    born = CancellationTokenSource(CancellationToken(lc), CancellationToken(ld))
+    @test Base.cancel_severity(born) === CANCEL_REQUEST_ABANDON_EXTERNAL
+
+    # a diamond converges: the shared descendant is cancelled (once) from
+    # the root, and a watcher parked on it completes normally
+    droot = CancellationTokenSource()
+    dl = CancellationTokenSource(CancellationToken(droot))
+    dr = CancellationTokenSource(CancellationToken(droot))
+    dd = CancellationTokenSource(CancellationToken(dl), CancellationToken(dr))
+    dt = @async wait(CancellationToken(dd); cancel=nothing)
+    @test timedwait(() -> parked_on(dt, dd), 10.0) == :ok
+    cancel!(droot)
+    @test timedwait(() -> istaskdone(dt), 10.0) == :ok
+    @test fetch(dt) isa CancellationRequest
+
+    # duplicate parents collapse to the single-parent form
+    dup = CancellationTokenSource(CancellationToken(droot), CancellationToken(droot))
+    @test dup.parents === droot
+    @test Base.iscancelled(CancellationToken(dup)) # born under the cancelled root
+
+    # a blocking operation under a linked scope is interrupted via either parent
+    lp1 = CancellationTokenSource()
+    lp2 = CancellationTokenSource()
+    lchild = CancellationTokenSource(CancellationToken(lp1), CancellationToken(lp2))
+    lt = @async sleep(1000; cancel=CancellationToken(lchild))
+    @test timedwait(() -> is_parked(lt), 10.0) == :ok
+    cancel!(lp2)
+    @test timedwait(() -> istaskdone(lt), 10.0) == :ok
+    @test lt.result isa CancellationRequest
+
     # the current scoped token is discoverable, and `=> nothing` scopes it out
     tok = CancellationToken(CancellationTokenSource())
     @test with(() -> CANCEL_TOKEN[], CANCEL_TOKEN => tok) === tok

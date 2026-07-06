@@ -145,26 +145,29 @@ iscancelled(tok::CancellationToken) = iscancelled(tok.source)
 ## Source construction and tree linkage
 
 
-@eval function _new_cancel_source(parent::Union{Nothing, CancellationTokenSource})
+@eval function _new_cancel_source(parents::Union{Nothing, CancellationTokenSource, Core.SimpleVector})
     return $(Expr(:new, :CancellationTokenSource,
-                  :parent, nothing, nothing, nothing,
+                  :parents, nothing, nothing, nothing,
                   0x00, 0x00, 0x00, nothing))
 end
 
 """
     CancellationTokenSource() -> CancellationTokenSource
-    CancellationTokenSource(parent::CancellationToken)
+    CancellationTokenSource(parents::CancellationToken...)
 
 Create a new cancellation token source. With no arguments the source is a
-standalone root; given a parent token, the new source is linked underneath it
-so that cancellation of the parent (or any of its ancestors) also cancels the
-new source. A source created under an already-cancelled parent is born
-cancelled.
+standalone root; given one or more parent tokens, the new source is linked
+underneath each of them, so that cancellation of *any* parent (or any of its
+ancestors) also cancels the new source - at the highest severity requested
+among them. Sources therefore form a directed acyclic graph; a source
+created under an already-cancelled parent is born cancelled. Linking one
+source under several parents is how an operation respects two independent
+lifetimes at once (say, a request scope and the connection it arrived on).
 
-A child source stays linked to its parent for exactly as long as it is
+A child source stays linked to its parents for exactly as long as it is
 reachable - a held token, waiting or running work governed by it all keep it
 alive. Once nothing can observe it any more, it is garbage collected and
-thereby drops out of the tree; there is no explicit detach operation.
+thereby drops out of the graph; there is no explicit detach operation.
 
 Use [`CancellationToken`](@ref)`(src)` for the observe/wait view, and
 [`cancel!`](@ref)`(src)` to request cancellation.
@@ -173,6 +176,18 @@ function CancellationTokenSource(parent::CancellationToken)
     src = _new_cancel_source(parent.source)
     attach_child!(parent.source, src)
     return src
+end
+function CancellationTokenSource(parent::CancellationToken, rest::CancellationToken...)
+    srcs = CancellationTokenSource[parent.source]
+    for tok in rest
+        any(s -> s === tok.source, srcs) || push!(srcs, tok.source)
+    end
+    length(srcs) == 1 && return CancellationTokenSource(parent)
+    child = _new_cancel_source(Core.svec(srcs...))
+    for p in srcs
+        attach_child!(p, child)
+    end
+    return child
 end
 CancellationTokenSource(::Nothing) = _new_cancel_source(nothing)
 CancellationTokenSource() = _new_cancel_source(nothing)

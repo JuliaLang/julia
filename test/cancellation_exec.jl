@@ -48,6 +48,21 @@ end
     sleep(0.5)
     @test_throws TaskFailedException wait(t)
     @test t.result isa CancellationRequest
+
+    # The same, arriving through the second parent of a linked source: the
+    # running-compute scan walks the parent DAG (not just a chain) to find
+    # the bound task.
+    p1 = CancellationTokenSource()
+    p2 = CancellationTokenSource()
+    lsrc = CancellationTokenSource(CancellationToken(p1), CancellationToken(p2))
+    tl = with(CANCEL_TOKEN => CancellationToken(lsrc)) do
+        Threads.@spawn find_collatz_counterexample2()
+    end
+    sleep(0.5)
+    cancel!(p2)
+    sleep(0.5)
+    @test_throws TaskFailedException wait(tl)
+    @test tl.result isa CancellationRequest
 end
 
 @testset "task abandonment wakes waiters" begin

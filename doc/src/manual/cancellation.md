@@ -53,11 +53,28 @@ julia> Base.iscancelled(child)
 true
 ```
 
+More generally, a source may be linked under *several* parent tokens at once, making the
+structure a directed acyclic graph: the linked source is cancelled as soon as any one of its
+parents is, at the highest severity requested among them. Use this when one operation must
+respect two independent lifetimes — say, a per-request scope and the connection it arrived on:
+
+```jldoctest
+julia> request = Base.CancellationTokenSource(); connection = Base.CancellationTokenSource();
+
+julia> linked = Base.CancellationTokenSource(Base.CancellationToken(request),
+                                             Base.CancellationToken(connection));
+
+julia> Base.cancel!(connection);
+
+julia> Base.iscancelled(linked)
+true
+```
+
 A source created under an already-cancelled parent is born cancelled. There is no operation
-for detaching a source from the tree: a child stays attached for exactly as long as it is
+for detaching a source from the graph: a child stays attached for exactly as long as it is
 *reachable*. Held tokens, tasks blocked under it and running work governed by it all keep it
 alive; once nothing can observe a source's cancellation any more, it is garbage collected and
-thereby drops out of the tree.
+thereby drops out of the graph.
 
 ## Cancelling blocking operations
 
