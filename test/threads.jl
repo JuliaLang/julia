@@ -605,3 +605,29 @@ let code = """
     # JULIA_COPY_STACKS is broken on Windows (#35147)
     @test read(cmd, String) == "75025" skip=Sys.iswindows()
 end
+
+# A task blocked in take!/fetch hosts its thread's sleep logic, so its tid
+# stays pinned while that thread parks. A dequeuer that cannot claim such a
+# task must wake the pinned thread directly: pool wakes are gated by the
+# dequeuer's own spinner slot, so the task can otherwise cycle between the
+# dequeuer and the injection queue forever while every worker sleeps.
+let code = """
+    c1 = Channel{Int}(0); c2 = Channel{Int}(0)
+    t = Threads.@spawn for _ in 1:5000
+        put!(c2, take!(c1))
+    end
+    for i in 1:5000
+        put!(c1, i)
+        take!(c2)
+    end
+    wait(t)
+    """
+    p = run(pipeline(`$(Base.julia_cmd()) --startup-file=no -t4,1 -e $code`; stdout=devnull); wait=false)
+    @test timedwait(() -> process_exited(p), 120) === :ok
+    if process_running(p)
+        kill(p, Base.SIGKILL)
+        wait(p)
+    else
+        @test success(p)
+    end
+end
