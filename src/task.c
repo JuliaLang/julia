@@ -713,7 +713,7 @@ JL_DLLEXPORT void jl_switch(void) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
     jl_gc_unsafe_leave(ptls, gc_state);
 }
 
-JL_DLLEXPORT void jl_switchto(jl_task_t **pt) JL_NOTSAFEPOINT_ENTER // n.b. this does not actually enter a safepoint
+JL_DLLEXPORT void jl_switchto(jl_task_t **pt) // n.b. this does not actually enter a safepoint
 {
     jl_set_next_task(*pt);
     jl_switch();
@@ -842,41 +842,6 @@ JL_DLLEXPORT void jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED)
     jl_excstack_raw(excstack)[excstack->top-1].jlvalue = e;
     JL_GC_PROMISE_ROOTED(e);
     throw_internal(ct, NULL);
-}
-
-/* This is xoshiro256++ 1.0, used for tasklocal random number generation in Julia.
-   This implementation is intended for embedders and internal use by the runtime, and is
-   based on the reference implementation at https://prng.di.unimi.it
-
-   Credits go to David Blackman and Sebastiano Vigna for coming up with this PRNG.
-   They described xoshiro256++ in "Scrambled Linear Pseudorandom Number Generators",
-   ACM Trans. Math. Softw., 2021.
-
-   There is a pure Julia implementation in stdlib that tends to be faster when used from
-   within Julia, due to inlining and more aggressive architecture-specific optimizations.
-*/
-uint64_t jl_genrandom(uint64_t rngState[4]) JL_NOTSAFEPOINT
-{
-    uint64_t s0 = rngState[0];
-    uint64_t s1 = rngState[1];
-    uint64_t s2 = rngState[2];
-    uint64_t s3 = rngState[3];
-
-    uint64_t t = s1 << 17;
-    uint64_t tmp = s0 + s3;
-    uint64_t res = ((tmp << 23) | (tmp >> 41)) + s0;
-    s2 ^= s0;
-    s3 ^= s1;
-    s1 ^= s2;
-    s0 ^= s3;
-    s2 ^= t;
-    s3 = (s3 << 45) | (s3 >> 19);
-
-    rngState[0] = s0;
-    rngState[1] = s1;
-    rngState[2] = s2;
-    rngState[3] = s3;
-    return res;
 }
 
 /*
@@ -1282,7 +1247,7 @@ CFI_NORETURN
         }
 skip_pop_exception:;
     }
-    jl_gc_write(ct, ct->result, res);
+    jl_gc_write(ct, ct->result, jl_value_t, res);
     jl_finish_task(ct);
     jl_gc_debug_fprint_critical_error(ios_safe_stderr);
     abort();

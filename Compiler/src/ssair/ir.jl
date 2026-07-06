@@ -661,7 +661,7 @@ function is_relevant_expr(e::Expr)
     return e.head in (:call, :invoke, :invoke_modify,
                       :new, :splatnew, :(=), :(&),
                       :gc_preserve_begin, :gc_preserve_end,
-                      :foreigncall, :isdefined, :copyast,
+                      :foreigncall, :foreignglobal, :isdefined, :copyast,
                       :throw_undef_if_not,
                       :cfunction, :method, :pop_exception,
                       :leave,

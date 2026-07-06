@@ -297,11 +297,12 @@ cancel_beep(::ModeState) = nothing
 
 for f in Union{Symbol,Expr}[
           :terminal, :on_enter, :add_history, :_buffer, :(Base.isempty),
-          :replace_line, :refresh_multi_line, :input_string, :update_display_buffer,
+          :replace_line, :input_string, :update_display_buffer,
           :empty_undo, :push_undo, :pop_undo, :options, :cancel_beep, :beep,
           :deactivate_region, :activate_region, :is_region_active, :region_active]
     @eval ($f)(s::MIState, args...) = $(f)(state(s), args...)
 end
+refresh_multi_line(s::MIState, args...; kwargs...) = refresh_multi_line(state(s), args...; kwargs...)
 
 for f in [:edit_insert, :edit_insert_newline, :edit_backspace, :edit_move_left,
           :edit_move_word_left, :edit_move_word_right]  # :edit_move_right is handled separately
@@ -632,7 +633,7 @@ refresh_multi_line(termbuf::TerminalBuffer, term, s::ModeState; kw...) = (@asser
 
 function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf::IOBuffer,
                             state::InputAreaState, prompt = "";
-                            indent::Int = 0, region_active::Bool = false)
+                            indent::Int = 0, region_active::Bool = false, show_cursor::Bool = true)
     _clear_input_area(termbuf, state)
 
     cols = width(terminal)
@@ -673,7 +674,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
         full_input = String(buf.data[1:buf.size])
         if !isempty(full_input)
             passes = StylingPass[]
-            context = StylingContext(buf_pos + 1, regstart + 1, regstop) # StylingContext positions are 1-based
+            context = StylingContext(show_cursor ? buf_pos + 1 : -1, regstart + 1, regstop)
 
             # Add prompt-specific styling passes if the prompt has them and styling is enabled
             enable_style_input = prompt_obj === nothing ? false :
@@ -2353,11 +2354,12 @@ function show(io::IO, s::PrefixSearchState)
 end
 
 function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal,
-                            s::Union{PromptState,PrefixSearchState}; beeping::Bool=false)
+                            s::Union{PromptState,PrefixSearchState}; beeping::Bool=false, show_cursor::Bool=true)
     beeping || cancel_beep(s)
     ias = refresh_multi_line(termbuf, terminal, buffer(s), s.ias, s;
                              indent = s.indent,
-                             region_active = is_region_active(s))
+                             region_active = is_region_active(s),
+                             show_cursor)
     s.ias = ias
     return ias
 end
@@ -2521,7 +2523,7 @@ end
 function commit_line(s::MIState)
     cancel_beep(s)
     move_input_end(s)
-    refresh_line(s)
+    refresh_multi_line(s; show_cursor=false)
     println(terminal(s))
     add_history(s)
     ias = InputAreaState(0, 0)

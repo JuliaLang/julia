@@ -197,7 +197,9 @@ end
     isa(t, PartialTypeVar) && return true
     if isa(t, Const)
         val = t.val
-        return !issingletontype(typeof(val)) && !(isa(val, Type) && hasuniquerep(val))
+        # a type-valued `Const` may pin `=== val` beyond its widening (which for
+        # an open `val` is only the `==`-class `Type{val}`)
+        return !issingletontype(typeof(val))
     end
     return has_nontrivial_extended_info(widenlattice(𝕃), t)
 end

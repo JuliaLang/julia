@@ -1005,7 +1005,7 @@ function lex_digit(l::Lexer, kind)
             accept(l, "+-−")
             if accept_batch(l, isdigit)
                 pc,ppc = dpeekchar(l)
-                if pc === '.' && !is_dottable_operator_start_char(ppc)
+                if pc === '.' && ppc != '.' && !is_dottable_operator_start_char(ppc)
                     readchar(l)
                     return emit(l, K"ErrorInvalidNumericConstant") # `1.e1.`
                 end
@@ -1026,7 +1026,7 @@ function lex_digit(l::Lexer, kind)
         accept(l, "+-−")
         if accept_batch(l, isdigit)
             pc,ppc = dpeekchar(l)
-            if pc === '.' && !is_dottable_operator_start_char(ppc)
+            if pc === '.' && ppc != '.' && !is_dottable_operator_start_char(ppc)
                 accept(l, '.')
                 return emit(l, K"ErrorInvalidNumericConstant") # `1e1.`
             end
@@ -1055,8 +1055,8 @@ function lex_digit(l::Lexer, kind)
                 end
                 # Check for invalid trailing decimal point
                 # https://github.com/JuliaLang/julia/issues/60189
-                pc = peekchar(l)
-                if pc == '.'
+                pc,ppc = dpeekchar(l)
+                if pc == '.' && ppc != '.' && !is_dottable_operator_start_char(ppc)
                     accept_batch(l, c->(c == '.' || isdigit(c)))
                     # `0x1p3.` `0x1p3.2` `0x1.5p2.3`
                     return emit(l, K"ErrorInvalidNumericConstant")

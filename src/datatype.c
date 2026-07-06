@@ -181,7 +181,7 @@ static int layout_eq(void *_l1, void *_l2, void *unused) JL_NOTSAFEPOINT
 static void **layoutcache_lookup_bp_r_impl(htable_t *h, void *key, void *ctx, int key_owned) JL_NOTSAFEPOINT;
 static void **layoutcache_lookup_bp_r(htable_t *h, void *key, void *ctx) JL_NOTSAFEPOINT;
 static void **layoutcache_peek_bp_r(htable_t *h, void *key, void *ctx) JL_NOTSAFEPOINT;
-HTPROT_R(layoutcache)
+HTPROT_R(layoutcache, static JL_UNUSED)
 HTIMPL_R(layoutcache, _hash_layout_djb2, layout_eq, _HTIMPL_IDENTITY_KEYALLOC, _HTIMPL_NOOP_KEYFREE)
 static htable_t layoutcache;
 static int layoutcache_initialized = 0;
@@ -357,7 +357,7 @@ STATIC_INLINE void jl_maybe_allocate_singleton_instance(jl_datatype_t *st) JL_NO
         return;
     if (jl_is_datatype_make_singleton(st)) {
         jl_task_t *ct = jl_current_task;
-        jl_gc_write(st, st->instance, jl_gc_permobj(ct->ptls, 0, st, 0));
+        jl_gc_write(st, st->instance, jl_value_t, jl_gc_permobj(ct->ptls, 0, st, 0));
     }
 }
 
@@ -452,15 +452,16 @@ int jl_pointer_egal(jl_value_t *t)
         !jl_is_kind(t))
         return 1;
     if ((jl_is_datatype(t) && jl_is_datatype_singleton((jl_datatype_t*)t)) ||
-        (jl_is_typeeq(t) && jl_typeeq_T(t) == jl_bottom_type))
+        (jl_is_some_Type(t) && jl_some_Type_T(t) == jl_bottom_type))
         return 1;
-    if (jl_is_typeeq(t) && jl_is_datatype(jl_typeeq_T(t))) {
-        // need to use typeseq for most types
-        // but can compare some types by pointer
-        jl_datatype_t *dt = (jl_datatype_t*)jl_typeeq_T(t);
+    if (jl_is_typeegal(t) && jl_is_datatype(jl_typeegal_T(t))) {
+        // The sole inhabitant of `TypeEgal{T}` is `T` itself, so values compare by
+        // pointer whenever `T` is pointer-unique. `Type{T}` values do not: distinct
+        // copies of an `S == T` rep are `===` at distinct addresses (#61323).
+        jl_datatype_t *dt = (jl_datatype_t*)jl_typeegal_T(t);
         // `Core.TypeofBottom` and `Type{Union{}}` are used interchangeably
         // with different pointer values even though `Core.TypeofBottom` is a concrete type.
-        // See `Core.Compiler.hasuniquerep`
+        // (the same `Union{}` special case appears in `is_uniquerep_Type` in codegen.cpp)
         if (dt != jl_typeofbottom_type &&
             (dt->isconcretetype || jl_svec_len(dt->parameters) == 0)) {
             // Concrete types have unique pointer values
@@ -512,10 +513,10 @@ static int is_type_identityfree(jl_value_t *t)
 }
 
 // make a copy of the layout of st, but with nfields=0
-void jl_get_genericmemory_layout(jl_datatype_t *st)
+static void jl_get_genericmemory_layout(jl_datatype_t *st)
 {
     jl_value_t *kind = jl_tparam0(st);
-    jl_value_t *eltype = jl_tparam1(st);
+    jl_value_t *eltype = normalize_typeofbottom_layout_alias(jl_tparam1(st));
     jl_value_t *addrspace = jl_tparam2(st);
     if (!st->isconcretetype) {
         // Since parent dt has an opaque layout, we may end up here being asked to copy that layout to subtypes,
@@ -628,7 +629,7 @@ void jl_get_genericmemory_layout(jl_datatype_t *st)
             zeroinst->ptr = (char*)zeroinst + JL_SMALL_BYTE_ALIGNMENT;
             memset(zeroinst->ptr, 0, elsz ? elsz : isunion);
             assert(!st->instance);
-            jl_gc_write(st, st->instance, (jl_value_t*)zeroinst);
+            jl_gc_write(st, st->instance, jl_value_t, (jl_value_t*)zeroinst);
         }
     }
 }
@@ -929,11 +930,11 @@ static void jl_process_field_attrs(jl_svec_t *fattrs, jl_svec_t *fnames, int mut
 // Caller must handle GC rooting of wrapper across this call
 static void jl_setup_type_wrapper(jl_typename_t *tn, jl_svec_t *parameters, jl_value_t **wrapper)
 {
-    jl_gc_write(tn, tn->wrapper, *wrapper);
+    jl_gc_write(tn, tn->wrapper, jl_value_t, *wrapper);
     int np = jl_svec_len(parameters);
     for (int i = np - 1; i >= 0; i--) {
         *wrapper = jl_new_struct(jl_unionall_type, jl_svecref(parameters, i), *wrapper);
-        jl_gc_write(tn, tn->wrapper, *wrapper);
+        jl_gc_write(tn, tn->wrapper, jl_value_t, *wrapper);
     }
 }
 
@@ -956,9 +957,9 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
 
     // init enough before possibly calling jl_new_typename_in
     t = jl_new_uninitialized_datatype();
-    jl_gc_write(t, t->super, super);
-    jl_gc_write(t, t->parameters, parameters);
-    jl_gc_write(t, t->types, ftypes);
+    jl_gc_write(t, t->super, jl_datatype_t, super);
+    jl_gc_write(t, t->parameters, jl_svec_t, parameters);
+    jl_gc_write(t, t->types, jl_svec_t, ftypes);
 
     t->name = NULL;
     if (jl_is_typename(name)) {
@@ -970,8 +971,8 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
     else {
         tn = jl_new_typename_in((jl_sym_t*)name, module, abstract, mutabl);
     }
-    jl_gc_write(t, t->name, tn);
-    jl_gc_write(t->name, t->name->names, fnames);
+    jl_gc_write(t, t->name, jl_typename_t, tn);
+    jl_gc_write(t->name, t->name->names, jl_svec_t, fnames);
     tn->n_uninitialized = jl_svec_len(fnames) - ninitialized;
 
     uint32_t *atomicfields = NULL;
@@ -1059,7 +1060,7 @@ JL_DLLEXPORT jl_datatype_t * jl_new_foreign_type(jl_sym_t *name,
     desc->markfunc = markfunc;
     desc->sweepfunc = sweepfunc;
     bt->layout = layout;
-    jl_gc_write(bt, bt->instance, NULL);
+    jl_gc_write(bt, bt->instance, jl_value_t, NULL);
     return bt;
 }
 
@@ -1493,7 +1494,7 @@ JL_DLLEXPORT int jl_atomic_storeonce_bits(jl_datatype_t *dt, char *dst, const jl
 }
 
 #define PERMBOXN_FUNC(nb)                                                  \
-    jl_value_t *jl_permbox##nb(jl_datatype_t *t, uintptr_t tag, uint##nb##_t x) JL_NOTSAFEPOINT \
+    extern jl_value_t *jl_permbox##nb(jl_datatype_t *t, uintptr_t tag, uint##nb##_t x) JL_NOTSAFEPOINT \
     {   /* n.b. t must be a concrete isbits datatype of the right size */               \
         jl_task_t *ct = jl_current_task;                                                \
         jl_value_t *v = jl_gc_permobj(ct->ptls, LLT_ALIGN(nb, sizeof(void*)), t, 0);    \
@@ -1910,7 +1911,7 @@ inline void set_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t
         return;
     }
     if (jl_field_isptr(st, i)) {
-        jl_gc_write_atomic(v, ((_Atomic(jl_value_t*)*)((char*)v + offs))[0], rhs, release);
+        jl_gc_write_atomic(v, ((_Atomic(jl_value_t*)*)((char*)v + offs))[0], jl_value_t, rhs, release);
     }
     else {
         jl_value_t *ty = jl_field_type_concrete(st, i);
@@ -2124,7 +2125,7 @@ inline jl_value_t *modify_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_
                 success = jl_egal__bits((jl_value_t*)px, r, (jl_datatype_t*)rty);
             if (success) {
                 if (isunion) {
-                    success = (rty == jl_nth_union_component(ty, *psel));
+                    success = (rty == normalize_typeofbottom_layout_alias(jl_nth_union_component(ty, *psel)));
                     if (success) {
                         unsigned nth = 0;
                         if (!jl_find_union_component(ty, yty, &nth))
@@ -2368,7 +2369,7 @@ JL_DLLEXPORT size_t jl_get_field_offset(jl_datatype_t *ty, int field)
     return jl_field_offset(ty, field - 1);
 }
 
-jl_value_t *get_nth_pointer(jl_value_t *v, size_t i)
+static jl_value_t *get_nth_pointer(jl_value_t *v, size_t i)
 {
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(v);
     const jl_datatype_layout_t *ly = dt->layout;
@@ -2614,7 +2615,7 @@ void jl_check_valid_supertype(jl_value_t *super, const char *type_name)
         jl_errorf("invalid subtyping in definition of %s: cannot subtype a Union type.", type_name);
     if (jl_is_typevar(super))
         jl_errorf("invalid subtyping in definition of %s: cannot subtype a type variable.", type_name);
-    if (jl_is_typeeq(super))
+    if (jl_is_some_Type(super))
         jl_errorf("invalid subtyping in definition of %s: cannot add subtypes to Type.", type_name);
     if (!jl_is_datatype(super)) {
         ios_t buf;
@@ -2697,8 +2698,8 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
 
             // Create typename
             jl_typename_t *tn = jl_new_typename_in(name, module, abstract, mutabl);
-            jl_gc_write(datatypes[i], datatypes[i]->name, tn);
-            jl_gc_write(tn, tn->names, fieldnames);
+            jl_gc_write(datatypes[i], datatypes[i]->name, jl_typename_t, tn);
+            jl_gc_write(tn, tn->names, jl_svec_t, fieldnames);
             tn->n_uninitialized = (int32_t)(jl_svec_len(fieldnames) - min_initialized);
 
             // Set up initial values
@@ -2717,7 +2718,7 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
             jl_svec_t *info = (jl_svec_t*)jl_svecref(struct_infos, i);
             jl_svec_t *params = (jl_svec_t*)jl_svecref(info, 0);
 
-            jl_gc_write(datatypes[i], datatypes[i]->parameters, params);
+            jl_gc_write(datatypes[i], datatypes[i]->parameters, jl_svec_t, params);
 
             // Create wrapper UnionAll chain
             if (datatypes[i]->name->wrapper == NULL) {
@@ -2752,7 +2753,7 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
                     datatypes[i]->name == ((jl_datatype_t*)resolved_super)->name)
                     jl_errorf("invalid subtyping in definition of %s: a type cannot subtype itself.", type_name);
                 jl_check_valid_supertype(resolved_super, type_name);
-                jl_gc_write(datatypes[i], datatypes[i]->super, (jl_datatype_t*)resolved_super);
+                jl_gc_write(datatypes[i], datatypes[i]->super, jl_datatype_t, (jl_datatype_t*)resolved_super);
                 JL_GC_POP();
             }
         }
@@ -2787,7 +2788,7 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
             jl_tvar_t *tv = (jl_tvar_t*)jl_svecref(typevars, i);
             jl_check_field_types(ftypes, tv->name);
             jl_datatype_t *dt = unwrap_to_datatype(results[i]);
-            jl_gc_write(dt, dt->types, ftypes);
+            jl_gc_write(dt, dt->types, jl_svec_t, ftypes);
             JL_GC_POP();
         }
     }

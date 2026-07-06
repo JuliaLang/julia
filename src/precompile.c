@@ -21,7 +21,7 @@ JL_DLLEXPORT int jl_generating_output(void)
     return jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc || jl_options.outputji || jl_options.outputasm;
 }
 
-void write_srctext(ios_t *f, jl_array_t *udeps, int64_t srctextpos) {
+static void write_srctext(ios_t *f, jl_array_t *udeps, int64_t srctextpos) {
     // Write the source-text for the dependent files
     if (udeps) {
         // Go back and update the source-text position to point to the current position

@@ -157,6 +157,8 @@ tests = [
     ],
     JuliaSyntax.parse_range => [
         "a..b"       => "(call-i a (DotsIdentifier-2) b)"
+        "-1e10..2"   => "(call-i -1.0e10 (DotsIdentifier-2) 2)"
+        "0x1p3..2"   => "(call-i 8.0 (DotsIdentifier-2) 2)"
         "a..+b"      => "(call-i a (DotsIdentifier-2) (error-t) (call-pre + b))"
         # `..` may be directly followed by the operand-starting operators `: :: $ '`
         "a..:b"      => "(call-i a (DotsIdentifier-2) (quote-: b))"

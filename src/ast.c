@@ -45,7 +45,7 @@ typedef struct _jl_ast_context_t {
 static jl_ast_context_t jl_ast_main_ctx;
 
 #ifdef __clang_gcanalyzer__
-jl_ast_context_t *jl_ast_ctx(fl_context_t *fl) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
+extern jl_ast_context_t *jl_ast_ctx(fl_context_t *fl) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
 #else
 #define jl_ast_ctx(fl_ctx) container_of(fl_ctx, jl_ast_context_t, fl)
 #endif
@@ -235,10 +235,12 @@ void jl_init_common_symbols(void)
     jl_invoke_sym = jl_symbol("invoke");
     jl_invoke_modify_sym = jl_symbol("invoke_modify");
     jl_foreigncall_sym = jl_symbol("foreigncall");
+    jl_foreignglobal_sym = jl_symbol("foreignglobal");
     jl_cfunction_sym = jl_symbol("cfunction");
     jl_quote_sym = jl_symbol("quote");
     jl_inert_sym = jl_symbol("inert");
     jl_top_sym = jl_symbol("top");
+    jl_tuple_sym = jl_symbol("tuple");
     jl_core_sym = jl_symbol("core");
     jl_globalref_sym = jl_symbol("globalref");
     jl_line_sym = jl_symbol("line");
@@ -330,7 +332,7 @@ void jl_init_common_symbols(void)
     jl_latestworld_sym = jl_symbol("latestworld");
 }
 
-JL_DLLEXPORT void jl_lisp_prompt(void)
+void jl_lisp_prompt(void)
 {
     // Make `--lisp` sigatomic in order to avoid triggering the sigint safepoint.
     // We don't have our signal handler registered in that case anyway...
@@ -843,13 +845,13 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
                 jl_array_ptr_ref(new_code, i)
             ));
         }
-        jl_gc_write(new_ci, new_ci->code, new_code);
-        jl_gc_write(new_ci, new_ci->slotnames, jl_array_copy(new_ci->slotnames));
-        jl_gc_write(new_ci, new_ci->slotflags, jl_array_copy(new_ci->slotflags));
-        jl_gc_write(new_ci, new_ci->ssaflags, jl_array_copy(new_ci->ssaflags));
+        jl_gc_write(new_ci, new_ci->code, jl_array_t, new_code);
+        jl_gc_write(new_ci, new_ci->slotnames, jl_array_t, jl_array_copy(new_ci->slotnames));
+        jl_gc_write(new_ci, new_ci->slotflags, jl_array_t, jl_array_copy(new_ci->slotflags));
+        jl_gc_write(new_ci, new_ci->ssaflags, jl_array_t, jl_array_copy(new_ci->ssaflags));
 
         if (jl_is_array(new_ci->ssavaluetypes)) {
-            jl_gc_write(new_ci, new_ci->ssavaluetypes, (jl_value_t*)jl_array_copy((jl_array_t*)new_ci->ssavaluetypes));
+            jl_gc_write(new_ci, new_ci->ssavaluetypes, jl_value_t, (jl_value_t*)jl_array_copy((jl_array_t*)new_ci->ssavaluetypes));
         }
         JL_GC_POP();
         return (jl_value_t*)new_ci;
@@ -987,7 +989,7 @@ static int is_self_escaping_expr(jl_expr_t *e) JL_NOTSAFEPOINT
 
 // any AST, except those that cannot contain symbols
 // and have no side effects
-int need_esc_node(jl_value_t *e) JL_NOTSAFEPOINT
+static int need_esc_node(jl_value_t *e) JL_NOTSAFEPOINT
 {
     if (jl_is_linenode(e)
         || jl_is_ssavalue(e)

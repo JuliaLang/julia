@@ -119,8 +119,9 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
         end
     elseif isType(t)
         # Type is fairly important, so do not widen it as fast as other types if avoidable
+        # (this branch also covers `TypeEgal`, whose `Type{...}` widenings are supertypes)
         tt = type_parameter(t)
-        ttu = unwrap_unionall(tt) # TODO: use argument_datatype(tt) after #50692 fixed
+        ttu = unwrap_unionall(tt) # TODO: use a helper that preserves nested Type structure after #50692 is fixed
         # must forbid nesting through this if we detect that potentially occurring
         # we already know !is_derived_type_from_any so refuse to recurse here
         if isType(ttu)
@@ -270,7 +271,7 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
     if isType(t)
         # Type is fairly important, so do not widen it as fast as other types if avoidable
         tt = type_parameter(t)
-        # ttu = unwrap_unionall(tt) # TODO: use argument_datatype(tt) after #50692 fixed
+        # ttu = unwrap_unionall(tt) # TODO: use a helper that preserves nested Type structure after #50692 is fixed
         if isType(c)
             ct = type_parameter(c)
         else

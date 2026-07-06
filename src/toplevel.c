@@ -145,7 +145,7 @@ JL_DLLEXPORT jl_module_t *jl_begin_new_module(jl_module_t *parent_module, jl_sym
     JL_UNLOCK(&jl_modules_mutex);
     // copy parent environment info into submodule
     newm->uuid = parent_module->uuid;
-    jl_gc_write(newm, newm->file, jl_symbol(filename));
+    jl_gc_write(newm, newm->file, jl_sym_t, jl_symbol(filename));
     newm->line = lineno;
 
     // add standard imports unless baremodule
@@ -286,7 +286,6 @@ static jl_value_t *jl_eval_dot_expr(jl_task_t *ct, jl_module_t *m, jl_value_t *x
     return args[0];
 }
 
-extern void check_safe_newbinding(jl_module_t *m, jl_sym_t *var);
 void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, int strong) {
     // create uninitialized mutable binding for "global x" decl sometimes or probably
     jl_module_t *gm;
@@ -324,7 +323,7 @@ void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, in
                 check_safe_newbinding(gm, gs);
                 if (jl_atomic_load_relaxed(&bpart->min_world) == new_world) {
                     bpart->kind = new_kind | (bpart->kind & PARTITION_MASK_FLAG);
-                    jl_gc_write(bpart, bpart->restriction, global_type);
+                    jl_gc_write(bpart, bpart->restriction, jl_value_t, global_type);
                     continue;
                 } else {
                     jl_replace_binding_locked(b, bpart, global_type, new_kind, new_world);
@@ -493,7 +492,7 @@ int jl_is_toplevel_only_expr(jl_value_t *e) JL_NOTSAFEPOINT
          ((jl_expr_t*)e)->head == jl_incomplete_sym);
 }
 
-int jl_needs_lowering(jl_value_t *e) JL_NOTSAFEPOINT
+static int jl_needs_lowering(jl_value_t *e) JL_NOTSAFEPOINT
 {
     if (!jl_is_expr(e))
         return 0;
@@ -529,7 +528,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_method_instance_for_thunk(jl_code_info_t *
     JL_GC_PUSH1(&mi);
 
     jl_code_instance_t *ci = jl_new_codeinst_for_uninferred(mi, src);
-    jl_gc_write_atomic(mi, mi->cache, ci, relaxed);
+    jl_gc_write_atomic(mi, mi->cache, jl_code_instance_t, ci, relaxed);
 
     JL_GC_POP();
     return mi;

@@ -1472,6 +1472,17 @@ In most cases, this simply results in a call to `convert(argtype, argvalue)`.
 kw"ccall"
 
 """
+    cglobal((symbol, library) [, type=Cvoid])
+
+Obtain a pointer to a global variable in a C-exported shared library, specified
+exactly as in [`ccall`](@ref).
+Returns a `Ptr{Type}`, defaulting to `Ptr{Cvoid}` if no `Type` argument is supplied.
+The values can be read or written by [`unsafe_load`](@ref) or [`unsafe_store!`](@ref),
+respectively.
+"""
+Core.Intrinsics.cglobal
+
+"""
     llvmcall(fun_ir::String, returntype, Tuple{argtype1, ...}, argvalue1, ...)
     llvmcall((mod_ir::String, entry_fn::String), returntype, Tuple{argtype1, ...}, argvalue1, ...)
     llvmcall((mod_bc::Vector{UInt8}, entry_fn::String), returntype, Tuple{argtype1, ...}, argvalue1, ...)
@@ -1630,7 +1641,19 @@ kw"typegroup"
     new, or new{A,B,...}
 
 Special function available to inner constructors which creates a new object
-of the type. The form new{A,B,...} explicitly specifies values of parameters for parametric types.
+of the type.
+
+The form `new{A,B,...}` explicitly specifies values of parameters for parametric types.
+
+For constructors that have all of their type parameters after the function name, the
+contents between the `{...}` are passed on to the short form `new()` automatically:
+
+```julia
+struct NewExample{A,B}
+    NewExample{A,B}() where {A,B} = new()
+end
+```
+
 See the manual section on [Inner Constructor Methods](@ref man-inner-constructor-methods)
 for more information.
 """

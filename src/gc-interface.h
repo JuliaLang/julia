@@ -263,11 +263,11 @@ struct _jl_value_t *jl_gc_permobj(struct _jl_tls_states_t *ptls, size_t sz, void
 // This function notifies the GC about memory addresses that are set when loading the boot image.
 // The GC may use that information to, for instance, determine that such objects should
 // be treated as marked and belonged to the old generation in nursery collections.
-void jl_gc_notify_image_load(const char* img_data, size_t len);
+void jl_gc_notify_image_load(const char* img_data, size_t len) JL_NOTSAFEPOINT;
 // This function notifies the GC about memory addresses that are set when allocating the boot image.
 // The GC may use that information to, for instance, determine that all objects in that chunk of memory should
 // be treated as marked and belonged to the old generation in nursery collections.
-void jl_gc_notify_image_alloc(const char* img_data, size_t len);
+void jl_gc_notify_image_alloc(const char* img_data, size_t len) JL_NOTSAFEPOINT;
 
 // ========================================================================= //
 // Runtime Write-Barriers
@@ -276,6 +276,9 @@ void jl_gc_notify_image_alloc(const char* img_data, size_t len);
 // Write barrier slow-path. If a generational collector is used,
 // it may enqueue an old object into the remembered set of the calling thread.
 JL_DLLEXPORT void jl_gc_queue_root(const struct _jl_value_t *ptr) JL_NOTSAFEPOINT;
+// Dedicated slow-path for `jl_gc_wb`. If a generational collector is used,
+// it may enqueue an old object into the remembered set of the calling thread.
+JL_DLLEXPORT void jl_gc_wb_cold(const void *parent, const void *ptr) JL_NOTSAFEPOINT;
 // In a generational collector is used, this function walks over the fields of the
 // object specified by the second parameter (as defined by the data type in the third
 // parameter). If a field points to a young object, the first parameter is enqueued into the

@@ -205,7 +205,21 @@ If set to `true`, this indicates to the package server that any package operatio
 
 ### [`JULIA_NUM_PRECOMPILE_TASKS`](@id JULIA_NUM_PRECOMPILE_TASKS)
 
-The number of parallel tasks to use when precompiling packages. See [`Pkg.precompile`](https://pkgdocs.julialang.org/v1/api/#Pkg.precompile).
+The number of parallel tasks (worker subprocesses) to use when precompiling
+packages. See [`Pkg.precompile`](https://pkgdocs.julialang.org/v1/api/#Pkg.precompile).
+
+### [`JULIA_PRECOMPILE_THREADS`](@id JULIA_PRECOMPILE_THREADS)
+
+An unsigned integer that sets the total CPU-thread budget shared across all
+parallel precompile worker subprocesses, keeping the combined number of active
+threads bounded no matter how many workers run. Defaults to one more than the
+number of effective CPU threads.
+
+Unlike [`JULIA_NUM_PRECOMPILE_TASKS`](@ref JULIA_NUM_PRECOMPILE_TASKS) (which caps
+worker *processes*) and [`JULIA_IMAGE_THREADS`](@ref JULIA_IMAGE_THREADS) (which
+pins a *per-worker* thread count), this is the shared total. Setting
+`JULIA_IMAGE_THREADS` bypasses the budget, so `JULIA_PRECOMPILE_THREADS` then has
+no effect.
 
 ### [`JULIA_PKG_DEVDIR`](@id JULIA_PKG_DEVDIR)
 
@@ -388,6 +402,12 @@ compilation in this Julia process. The value of this variable may be
 ignored if the module is a small module. If left unspecified, the smaller
 of the value of [`JULIA_CPU_THREADS`](@ref JULIA_CPU_THREADS) or half the
 number of logical CPU cores is used in its place.
+
+During parallel package precompilation, workers instead coordinate their CPU
+usage through a shared token pool sized by
+[`JULIA_PRECOMPILE_THREADS`](@ref JULIA_PRECOMPILE_THREADS), so their combined
+thread count stays bounded. Setting `JULIA_IMAGE_THREADS` overrides that
+coordination and pins the given codegen-thread count for every worker.
 
 ### [`JULIA_IMAGE_TIMINGS`](@id JULIA_IMAGE_TIMINGS)
 

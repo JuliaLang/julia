@@ -206,6 +206,10 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"generator" _...] -> vst1_generator(vcx, st)
     [K"comprehension" [K"flatten" g]] -> vst1_generator(vcx, g)
     [K"comprehension" g] -> vst1_generator(vcx, g)
+    [K"comprehension" xs...] ->
+        # HACK: We shouldn't be creating trees here, but this is extremely rare
+        # (deprecated even in 2016)
+        vst1_generator(vcx, @ast st._graph st [K"generator" xs...])
     [K"typed_comprehension" t [K"flatten" g]] ->
         vst1(vcx, t) & vst1_generator(vcx, g)
     [K"typed_comprehension" t g] ->
@@ -279,6 +283,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         vst1(vcx, at) &
         vst1(vcx, cconv) &
         all(vst1, vcx, roots_args)
+    [K"foreignglobal" fname] -> vst1(vcx, fname) # TODO: could be stricter
     [K"cfunction" [K"Value"] f rt at [K"inert" [K"Identifier"]]] ->
         vst1(vcx, f) & vst1(vcx, rt) & vst1(vcx, at)
     [K"cconv" tup nreq] -> (get(tup, :value, nothing) isa Tuple &&
@@ -809,13 +814,13 @@ vst1_pparam_and_default(vcx, st; eq_is_kw, allow_val_splat) = @stm st begin
         vst1_pparam_typed_tuple(vcx, id) & @stm val begin
             [K"..." v] -> allow_val_splat ? vst1(vcx, v) :
                 @fail(val, "splat only allowed on final positional default arg")
-            _ -> vst1(vcx, val)
+            _ -> vst1(with(vcx; return_ok=true), val)
         end
     ([K"=" id val], when=eq_is_kw) ->
         vst1_pparam_typed_tuple(vcx, id) & @stm val begin
             [K"..." v] -> allow_val_splat ? vst1(vcx, v) :
                 @fail(val, "splat only allowed on final positional default arg")
-            _ -> vst1(vcx, val)
+            _ -> vst1(with(vcx; return_ok=true), val)
         end
     _ -> @fail(st, "malformed optional positional parameter; expected `=`")
 end
@@ -836,6 +841,7 @@ vst1_param_varkw(vcx, st) = @stm st begin
     _ -> @fail(st, "expected identifier")
 end
 
+# note no return_ok in default val, unlike positional defaults, due to bugs
 vst1_param_kw(vcx, st) = @stm (st=strip_arg_meta(st)) begin
     [K"kw" id val] ->
         vst1_param(vcx, id) & vst1(vcx, val)
@@ -1058,12 +1064,14 @@ vst1_generator(vcx, st) = let
         [K"generator" val is...] ->
             vst1(vcx, val) & all(vst1_iter, vcx, is)
         [K"generator" _...] -> @fail(st, "malformed `generator`")
-        _ -> unknown()
+        _ -> @fail(st, "expected `generator`")
     end
 end
 
 vst1_iter(vcx, st) = @stm st begin
     [K"=" [K"outer" i] v] -> vst1_assign_lhs(vcx, i) & vst1(vcx, v)
+    # rare, malformed, happens to work in desugaring
+    [K"=" i [K"..." v]] -> vst1_assign_lhs(vcx, i) & vst1(vcx, v)
     [K"=" i v] -> vst1_assign_lhs(vcx, i) & vst1(vcx, v)
     _ -> @fail(st, "expected one of `=`, `in`, `∈`")
 end
@@ -1300,6 +1308,7 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
          vst2(vcx, at) &
          vst2(vcx, cconv) &
          all(vst2, vcx, roots_args)
+    [K"foreignglobal" _] -> pass()
     [K"cfunction" [K"Value"] [K"static_eval" fptr] [K"static_eval" rt] [K"static_eval" at] [K"Symbol"]] ->
          vst2(vcx, fptr) & vst2(vcx, rt) & vst2(vcx, at)
     [K"cfunction" [K"Value"] fptr [K"static_eval" rt] [K"static_eval" at] [K"Symbol"]] ->

@@ -29,6 +29,7 @@ const __internal_changes_list = (
     :printcodeinfocalls,
     :syntacticccall, #59165
     :svectvar, #61645
+    :syntacticcglobal, #61709
     # Add new change names above this line
 )
 
@@ -629,6 +630,63 @@ end
 @noinline function isabstracttype(x::TypeEq)
     depwarn_if_not_pure("calling `isabstracttype` on a `Type{...}` is deprecated; `Type{}` is now a kind. If for detection, use `Base.isType(x)`.", :isabstracttype)
     return true
+end
+
+@noinline function getproperty(x::Core.TypeEgal, s::Symbol)
+    if s === :parameters
+        depwarn_if_not_pure("accessing `Type.parameters` is deprecated; use `Base.type_parameter(x)` instead", :getproperty)
+        return Core.svec(type_parameter(x))
+    elseif s === :name
+        depwarn_if_not_pure("accessing `Type.name` is deprecated without replacement. If for detection, use `Base.isType(x)`.", :getproperty)
+        return TypeEq.name
+    elseif s === :hash
+        depwarn_if_not_pure("accessing `Type.hash` is deprecated; use `Base._jl_type_cache_hash(x)` instead", :getproperty)
+        return reinterpret(Int32, UInt32(_jl_type_cache_hash(x)))
+    end
+    return getfield(x, s)
+end
+
+@noinline function typename(x::Core.TypeEgal)
+    depwarn_if_not_pure("calling `typename` on `Type` is deprecated. If for detection, use `Base.isType(x)`.", :typename)
+    return TypeEq.name
+end
+
+@noinline function nameof(x::Core.TypeEgal)
+    depwarn_if_not_pure("calling `nameof` on `Type` is deprecated. If for detection, use `Base.isType(x)`.", :nameof)
+    return :Type
+end
+
+@noinline function parentmodule(x::Core.TypeEgal)
+    depwarn_if_not_pure("calling `parentmodule` on `Type` is deprecated. If for detection, use `Base.isType(x)`.", :parentmodule)
+    return Core
+end
+
+@noinline function isabstracttype(x::Core.TypeEgal)
+    depwarn_if_not_pure("calling `isabstracttype` on a `Type{...}` is deprecated; `Type{}` is now a kind. If for detection, use `Base.isType(x)`.", :isabstracttype)
+    return true
+end
+
+@deprecate SubString{T}(s::T, i::Int, j::Int, ::Val{:noshift}) where {T <: AbstractString} begin
+    @boundscheck if !(i == j == 0)
+        si, sj = i + 1, prevind(s, j + i + 1)
+        @inbounds isvalid(s, si) || string_index_err(s, si)
+        @inbounds isvalid(s, sj) || string_index_err(s, sj)
+    end
+    @inbounds raw_substring(s, i + 1, j)
+end
+
+# This method is slightly different because it returns a SubString{SubString},
+# therefore it requires an explicit SubString{T}(ss) call at the end.
+# We discourage creating substrings of substrings, but the deprecated method
+# allowed it.
+@deprecate SubString{T}(s::T, i::Int, j::Int, ::Val{:noshift}) where {T <: SubString} begin
+    @boundscheck if !(i == j == 0)
+        si, sj = i + 1, prevind(s, j + i + 1)
+        @inbounds isvalid(s, si) || string_index_err(s, si)
+        @inbounds isvalid(s, sj) || string_index_err(s, sj)
+    end
+    ss = @inbounds raw_substring(s, i + 1, j)
+    SubString{T}(ss)
 end
 
 # END 1.14 deprecations

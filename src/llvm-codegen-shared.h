@@ -6,6 +6,7 @@
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/Support/Debug.h>
 #include <llvm/IR/Attributes.h>
+#include <llvm/IR/Module.h>
 #include <llvm/IR/DebugLoc.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/MDBuilder.h>
@@ -516,3 +517,12 @@ void ConstantUses<U>::forward()
     }
 }
 }
+
+
+void multiversioning_preannotate(llvm::Module &M);
+std::optional<bool> always_have_fma(Function&, const Triple &TT) JL_NOTSAFEPOINT;
+
+namespace llvm::jitlink {
+    class JITLinkMemoryManager;
+}
+std::unique_ptr<jitlink::JITLinkMemoryManager> createJITLinkMemoryManager() JL_NOTSAFEPOINT;

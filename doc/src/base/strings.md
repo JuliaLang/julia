@@ -23,6 +23,7 @@ Base.ispunct
 Base.isspace
 Base.isuppercase
 Base.isxdigit
+Base.raw_substring
 ```
 
 ## String Basics
@@ -237,4 +238,5 @@ Base.AnnotatedChar
 Base.annotatedstring
 Base.annotations
 Base.annotate!
+Base.unannotate
 ```
