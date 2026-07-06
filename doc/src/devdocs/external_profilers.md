@@ -140,9 +140,9 @@ Julia emits the same `JL_TIMING` zones used by Tracy and ITTAPI as NVTX ranges, 
 
 NVTX is header-only and its calls are cheap no-ops unless a tool is actively attached and capturing, so building with NVTX support does not require a CUDA toolkit installation and has minimal overhead when no profiler is attached.
 
-### Building Julia with NVTX
+### Building Julia with NVTX support
 
-To enable NVTX integration, build Julia with the extra option `WITH_NVTX := 1` in the `Make.user` file, or with `make ... WITH_NVTX=1` from the command line.
+To enable NVTX instrumentation of the Julia runtime, build Julia with the extra option `WITH_NVTX := 1` in the `Make.user` file, or with `make ... WITH_NVTX=1` from the command line.
 
 ### Profiling Julia with Nsight Systems
 
@@ -153,6 +153,11 @@ nsys profile -o my_julia_trace ./julia -e '...'
 ```
 
 Open the resulting `my_julia_trace.nsys-rep` file in the Nsight Systems UI to view Julia's timing zones on the NVTX row of the timeline, grouped and colored by subsystem in the same way as with Tracy.
+
+### Instrumenting arbitrary Julia code
+
+If you want to additionally annotate your Julia code with custom markers see [`NVTX.jl`](https://github.com/JuliaGPU/NVTX.jl), which works independently of the `WITH_NVTX=1` build option.
+You can still use the Nsight Systems profiler as explained above.
 
 ## Apple Instruments (OSLog)
 
