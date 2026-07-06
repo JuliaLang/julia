@@ -1802,7 +1802,10 @@ g23024(TT::Tuple{DataType}) = f23024(TT[1], v23024)
 
 @test !Compiler.isconstType(Type{typeof(Union{})}) # could be Core.TypeofBottom or Type{Union{}} at runtime
 @test !isa(Compiler.getfield_tfunc(Compiler.fallback_lattice, Type{Core.TypeofBottom}, Compiler.Const(:name)), Compiler.Const)
-@test Base.return_types(supertype, (Type{typeof(Union{})},)) == Any[Type{Core.AnyType}]
+# values of `Type{typeof(Union{})}` include `UnionAll` spellings (#33136), so
+# `supertype(::UnionAll)` is applicable too; the egal-pinned type stays precise
+@test Base.return_types(supertype, (Type{typeof(Union{})},)) == Any[Any, Type{Core.AnyType}]
+@test Base.return_types(supertype, (Core.TypeEgal{typeof(Union{})},)) == Any[Core.TypeEgal{Core.AnyType}]
 
 # issue #23685
 struct Node23685{T}

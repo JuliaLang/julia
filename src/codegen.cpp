@@ -10590,9 +10590,67 @@ char jl_using_oprofile_jitevents = 0; // Non-zero if running under OProfile
 char jl_using_perf_jitevents = 0;
 #endif
 
+#ifdef _OS_WINDOWS_
+#include <psapi.h>
+#else
+#include <sys/resource.h>
+#endif
+#ifdef _OS_LINUX_
+#include <sys/sysinfo.h>
+#endif
+
+// Called by LLVM when an allocation inside it fails (report_bad_alloc_error).
+// Reproduce LLVM's default output, then append the system and process memory
+// state so that a genuine out-of-memory abort can be told apart from other
+// allocation failures, e.g. commit-charge exhaustion on Windows (which has no
+// overcommit, so malloc fails while physical memory is still available) or an
+// absurdly-sized request. Allocation just failed: this must not allocate, and
+// it must not return.
+static void jl_report_llvm_bad_alloc(void *user_data, const char *reason, bool gen_crash_diag) JL_NOTSAFEPOINT
+{
+    (void)user_data; (void)gen_crash_diag;
+    jl_safe_printf("LLVM ERROR: out of memory\n%s\n", reason);
+#if defined(_OS_WINDOWS_)
+    MEMORYSTATUSEX mstat;
+    mstat.dwLength = sizeof(mstat);
+    if (GlobalMemoryStatusEx(&mstat))
+        jl_safe_printf("system memory: %" PRIu64 " MiB of %" PRIu64 " MiB physical available, "
+                       "%" PRIu64 " MiB of %" PRIu64 " MiB commit limit available\n",
+                       (uint64_t)(mstat.ullAvailPhys >> 20), (uint64_t)(mstat.ullTotalPhys >> 20),
+                       (uint64_t)(mstat.ullAvailPageFile >> 20), (uint64_t)(mstat.ullTotalPageFile >> 20));
+    PROCESS_MEMORY_COUNTERS_EX pmc;
+    pmc.cb = sizeof(pmc);
+    if (GetProcessMemoryInfo(GetCurrentProcess(), (PROCESS_MEMORY_COUNTERS*)&pmc, sizeof(pmc)))
+        jl_safe_printf("this process: %" PRIu64 " MiB working set, %" PRIu64 " MiB commit charge\n",
+                       (uint64_t)(pmc.WorkingSetSize >> 20), (uint64_t)(pmc.PrivateUsage >> 20));
+#else
+#if defined(_OS_LINUX_)
+    struct sysinfo sinfo;
+    if (sysinfo(&sinfo) == 0)
+        jl_safe_printf("system memory: %" PRIu64 " MiB of %" PRIu64 " MiB physical available, "
+                       "%" PRIu64 " MiB of %" PRIu64 " MiB swap available\n",
+                       (uint64_t)(sinfo.freeram * sinfo.mem_unit >> 20),
+                       (uint64_t)(sinfo.totalram * sinfo.mem_unit >> 20),
+                       (uint64_t)(sinfo.freeswap * sinfo.mem_unit >> 20),
+                       (uint64_t)(sinfo.totalswap * sinfo.mem_unit >> 20));
+#endif
+    struct rusage rusage;
+    if (getrusage(RUSAGE_SELF, &rusage) == 0)
+#if defined(_OS_DARWIN_)
+        jl_safe_printf("this process: %" PRIu64 " MiB peak resident set size\n",
+                       (uint64_t)rusage.ru_maxrss >> 20); // bytes on Darwin
+#else
+        jl_safe_printf("this process: %" PRIu64 " MiB peak resident set size\n",
+                       (uint64_t)rusage.ru_maxrss >> 10); // KiB elsewhere
+#endif
+#endif
+    abort();
+}
+
 extern "C" void jl_init_llvm(void)
 {
     jl_page_size = jl_getpagesize();
+    install_bad_alloc_error_handler(jl_report_llvm_bad_alloc);
     jl_default_debug_info_kind = jl_default_cgparams.debug_info_kind = (int) DICompileUnit::DebugEmissionKind::FullDebug;
     jl_default_cgparams.debug_info_level = (int) jl_options.debug_level;
     InitializeNativeTarget();

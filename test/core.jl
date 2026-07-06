@@ -423,12 +423,12 @@ end  |> only == Core.TypeEgal{typejoin(Int, UInt, Float64)}
 @test typejoin(Type{Int}, String) === Any
 @test typejoin(Type{Int}, Type{Float64}) === Type
 @test typejoin(Type{Int}, Type) === Type
-@test_broken typejoin(Type{Int}, DataType) !== DataType
+@test typejoin(Type{Int}, DataType) === Type
 @test typejoin(Symbol, Type{Int}) === typejoin(Type{Int}, Symbol)
 @test typejoin(DataType, Type{Int}) === typejoin(Type{Int}, DataType)
 @test typejoin(Core.TypeEgal{Int}, Core.TypeEgal{String}) === DataType
 @test typejoin(Core.TypeEgal{Int}, DataType) === DataType
-@test typejoin(Core.TypeEgal{Int}, Type{String}) === DataType
+@test typejoin(Core.TypeEgal{Int}, Type{String}) === Type
 @test ccall(:jl_types_struct_equiv, Cint, (Any, Any), Int, Int) == 1
 @test ccall(:jl_types_struct_equiv, Cint, (Any, Any), Int, String) == 0
 
@@ -8762,8 +8762,8 @@ end
 @test Int isa Type{Union{Int,T1}} where {T1}
 @test Int isa Union{UnionAll, Type{Union{Int,T2} where {T2<:T1}}} where {T1}
 @test Int isa Union{Union, Type{Union{Int,T1}}} where {T1}
-@test_broken Int isa Union{UnionAll, Type{Union{Int,T2} where {T2<:T1}} where {T1}}
-@test_broken Int isa Union{Union, Type{Union{Int,T1}} where {T1}}
+@test Int isa Union{UnionAll, Type{Union{Int,T2} where {T2<:T1}} where {T1}}
+@test Int isa Union{Union, Type{Union{Int,T1}} where {T1}}
 
 # Compiled `isa(::Type, ::Type{T})` must check the type value, not only `typeof`.
 @noinline isa_type_unionall_62001(v::Type) = v isa Type{UnionAll}
