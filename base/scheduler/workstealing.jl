@@ -117,7 +117,6 @@ mutable struct Ring
     const _pad3::NTuple{15,UInt64}
     lifo_streak::UInt8                    # owner-only
     tick::UInt32                          # owner-only, fairness counter
-    fails::UInt32                         # owner-only, consecutive empty dequeues
     const _pad4::NTuple{15,UInt64}
     const tpid::Int8
     const tp_idx::Int32                   # position within the pool's Rings
@@ -128,7 +127,7 @@ mutable struct Ring
             Core.memoryrefset!(memoryref(buf, i), nothing, :monotonic, false)
         end
         pad = ntuple(_ -> UInt64(0), 15)
-        return new(UInt64(0), pad, UInt32(0), pad, nothing, pad, 0x00, UInt32(0), UInt32(0), pad, tpid, tp_idx % Int32, buf)
+        return new(UInt64(0), pad, UInt32(0), pad, nothing, pad, 0x00, UInt32(0), pad, tpid, tp_idx % Int32, buf)
     end
 end
 
@@ -327,20 +326,6 @@ const Injects = [InjectQueue(), InjectQueue()]
 
 inject_for(tpid::Int8) = Injects[Int(tpid) + 1]
 
-# Throttle on concurrent thieves, one per pool. Unthrottled searching is
-# net-negative: idle workers sweeping every ring CAS the very cache lines
-# a producer is publishing through, roughly doubling its enqueue cost (and
-# Go/Tokio cap spinning workers for the same reason). At most half the
-# pool's threads sweep at once; the rest pause-wait for a slot and go
-# toward sleep if none frees up. Skipping the sweep is safe: the C sleep
-# path re-checks every queue via checktaskempty before parking.
-mutable struct SearchGate
-    @atomic n::Int
-    const _pad::NTuple{15,UInt64}
-    SearchGate() = new(0, ntuple(_ -> UInt64(0), 15))
-end
-const Searchers = [SearchGate(), SearchGate()]
-
 function rings_for(tpid::Int8)
     rs = Rings[Int(tpid) + 1]
     n = Int(Threads._nthreads_in_pool(tpid))
@@ -399,13 +384,6 @@ function enqueue!(t::Task)
     return nothing
 end
 
-# Claim `t` for this thread and clear the owner's failure streak.
-function claimed!(r::Ring, t::Task)
-    c = tryclaim(t)
-    c === nothing || (r.fails = UInt32(0))
-    return c
-end
-
 function dequeue!()
     rp = own_ring_and_pool()
     rp === nothing && return nothing
@@ -419,12 +397,12 @@ function dequeue!()
     # avoid resonating with application periodicity).
     if r.tick % UInt32(61) == UInt32(0)
         t = inject_popbatch!(inj, r, nt)
-        t === nothing || (c = claimed!(r, t); c === nothing || return c)
+        t === nothing || (c = tryclaim(t); c === nothing || return c)
     end
     if r.lifo_streak < LIFO_CAP
         t = lifo_pop!(r)
         if t !== nothing
-            c = claimed!(r, t::Task)
+            c = tryclaim(t::Task)
             if c !== nothing
                 r.lifo_streak += 0x01
                 return c
@@ -433,46 +411,18 @@ function dequeue!()
     end
     r.lifo_streak = 0x00
     t = pop_local!(r)
-    t === nothing || (c = claimed!(r, t); c === nothing || return c)
+    t === nothing || (c = tryclaim(t); c === nothing || return c)
     # The ring is empty; take the LIFO slot even if it was streak-capped.
     t = lifo_pop!(r)
-    t === nothing || (c = claimed!(r, t::Task); c === nothing || return c)
+    t === nothing || (c = tryclaim(t::Task); c === nothing || return c)
     t = inject_popbatch!(inj, r, nt)
-    t === nothing || (c = claimed!(r, t); c === nothing || return c)
-    # Steal, gated: after repeated empty dequeues back off before probing
-    # other rings, and let at most half the pool sweep concurrently.
+    t === nothing || (c = tryclaim(t); c === nothing || return c)
+    # Steal (how many threads are searching at all is bounded by the C
+    # runtime's spinner accounting in jl_task_get_next).
     if nt > 1
-        if r.fails > UInt32(0)
-            backoff = min(Int(r.fails) << 3, 512)
-            for _ in 1:backoff
-                GC.safepoint()
-                ccall(:jl_cpu_pause, Cvoid, ())
-            end
-        end
-        gate = Searchers[Int(r.tpid) + 1]
-        limit = max(1, nt >> 1)
-        spins = 0
-        ok = true
-        while (@atomic :acquire gate.n) >= limit
-            if (spins += 1) > 256
-                ok = false
-                break
-            end
-            GC.safepoint()
-            ccall(:jl_cpu_pause, Cvoid, ())
-        end
-        if ok
-            @atomic :acquire_release gate.n += 1
-            t = steal_sweep!(rs, r, nt)
-            @atomic :acquire_release gate.n -= 1
-            if t !== nothing
-                r.fails = UInt32(0)
-                return t
-            end
-        end
-        # fall through: over quota or swept empty
+        t = steal_sweep!(rs, r, nt)
+        t === nothing || return t
     end
-    r.fails = min(r.fails + UInt32(1), UInt32(64))
     return nothing
 end
 
