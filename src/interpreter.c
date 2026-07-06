@@ -282,7 +282,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
             assert(n > 0);
             if (s->sparam_vals && n <= jl_svec_len(s->sparam_vals)) {
                 jl_value_t *sp = jl_svecref(s->sparam_vals, n - 1);
-                defined = !jl_is_svec(sp) && !jl_has_free_typevars(sp);
+                defined = jl_sparam_defined_value(sp) != NULL;
             }
             else {
                 // static parameter val unknown needs to be an error for ccall
@@ -340,7 +340,10 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         assert(n > 0);
         if (s->sparam_vals && n <= jl_svec_len(s->sparam_vals)) {
             jl_value_t *sp = jl_svecref(s->sparam_vals, n - 1);
-            if ((jl_is_svec(sp) || jl_has_free_typevars(sp)) && !s->preevaluation) {
+            jl_value_t *defval = jl_sparam_defined_value(sp);
+            if (defval != NULL)
+                return defval;
+            if (!s->preevaluation) {
                 // look up the parameter name from the method's signature
                 jl_unionall_t *sig = (jl_unionall_t*)s->mi->def.method->sig;
                 jl_tvar_t *var = NULL;

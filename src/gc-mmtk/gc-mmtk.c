@@ -3,6 +3,7 @@
 #include "gc-wb-mmtk.h"
 #include "mmtkMutator.h"
 #include "threading.h"
+#include <string.h>
 
 #ifdef _COMPILER_TSAN_ENABLED_
 #include <sanitizer/tsan_interface.h>
@@ -74,30 +75,6 @@ void jl_gc_init(void) {
     gc_num.max_pause = 0;
     gc_num.max_memory = 0;
 
-    // Necessary if we want to use Julia heap resizing heuristics
-    uint64_t mem_reserve = 250*1024*1024; // LLVM + other libraries need some amount of memory
-    uint64_t min_heap_size_hint = mem_reserve + 1*1024*1024;
-    uint64_t hint = jl_options.heap_size_hint;
-
-    // check if heap size specified on command line
-    if (jl_options.heap_size_hint == 0) {
-        char *cp = getenv(HEAP_SIZE_HINT);
-        if (cp)
-            hint = parse_heap_size_option(cp, "JULIA_HEAP_SIZE_HINT=\"<size>[<unit>]\"", 1);
-    }
-#ifdef _P64
-    if (hint == 0) {
-        uint64_t constrained_mem = uv_get_constrained_memory();
-        if (constrained_mem > 0 && constrained_mem < uv_get_total_memory())
-            hint = constrained_mem;
-    }
-#endif
-    if (hint) {
-        if (hint < min_heap_size_hint)
-            hint = min_heap_size_hint;
-        jl_gc_set_max_memory(hint - mem_reserve);
-    }
-
     // MMTK supports setting the heap size using the
     // MMTK_MIN_HSIZE and MMTK_MAX_HSIZE environment variables
     long long min_heap_size;
@@ -134,6 +111,10 @@ void jl_gc_init(void) {
         max_heap_size = 0;
     }
 
+    int has_mmtk_min_heap_sizing = min_size_def != NULL || min_size_gb != NULL;
+    int has_mmtk_max_heap_sizing = max_size_def != NULL || max_size_gb != NULL;
+    int use_mmtk_heap_sizing = has_mmtk_min_heap_sizing || has_mmtk_max_heap_sizing;
+
     // Assert that the number of stock GC threads is 0; MMTK uses the number of threads in jl_options.ngcthreads
     assert(jl_n_gcthreads == 0);
 
@@ -148,14 +129,63 @@ void jl_gc_init(void) {
 
     mmtk_julia_copy_stack_check(copy_stacks);
 
-    // if only max size is specified initialize MMTk with a fixed size heap
+    if (!use_mmtk_heap_sizing) {
+        // Necessary if we want to use Julia heap resizing heuristics
+        uint64_t mem_reserve = 250*1024*1024; // LLVM + other libraries need some amount of memory
+        uint64_t min_heap_size_hint = mem_reserve + 1*1024*1024;
+        uint64_t hint = jl_options.heap_size_hint;
+
+        // check if heap size specified on command line
+        if (jl_options.heap_size_hint == 0) {
+            char *cp = getenv(HEAP_SIZE_HINT);
+            if (cp)
+                hint = parse_heap_size_option(cp, "JULIA_HEAP_SIZE_HINT=\"<size>[<unit>]\"", 1);
+        }
+#ifdef _P64
+        if (hint == 0) {
+            uint64_t constrained_mem = uv_get_constrained_memory();
+            if (constrained_mem > 0 && constrained_mem < uv_get_total_memory())
+                hint = constrained_mem;
+        }
+#endif
+        if (hint) {
+            if (hint < min_heap_size_hint)
+                hint = min_heap_size_hint;
+            jl_gc_set_max_memory(hint - mem_reserve);
+        }
+    }
+    if (use_mmtk_heap_sizing && has_mmtk_min_heap_sizing != has_mmtk_max_heap_sizing) {
+        jl_safe_printf("Both MMTK_MIN_HSIZE[_G] and MMTK_MAX_HSIZE[_G] must be set together.\n");
+        exit(1);
+    }
+
+    // if min and max are the same initialize MMTk with a fixed size heap
+    // otherwise use a dynamic heap between min and max
     // TODO: We just assume mark threads means GC threads, and ignore the number of concurrent sweep threads.
     // If the two values are the same, we can use either. Otherwise, we need to be careful.
     uintptr_t gcthreads = jl_options.nmarkthreads;
-    if (max_size_def != NULL || (max_size_gb != NULL && (min_size_def == NULL && min_size_gb == NULL))) {
-        mmtk_gc_init(0, max_heap_size, gcthreads, (sizeof(jl_taggedvalue_t)), jl_buff_tag);
-    } else {
+    if (!use_mmtk_heap_sizing) {
+        mmtk_gc_init(0, 0, gcthreads, (sizeof(jl_taggedvalue_t)), jl_buff_tag);
+    }
+    else if (min_heap_size != max_heap_size) {
         mmtk_gc_init(min_heap_size, max_heap_size, gcthreads, (sizeof(jl_taggedvalue_t)), jl_buff_tag);
+    } else {
+        mmtk_gc_init(0, min_heap_size, gcthreads, (sizeof(jl_taggedvalue_t)), jl_buff_tag);
+    }
+
+    if ((int)mmtk_is_moving() != MMTK_MOVING) {
+        jl_safe_printf("FATAL: libmmtk_julia was built moving=%d, but the Julia runtime expects "
+                       "MMTK_MOVING=%d.\nRebuild the binding with a matching MMTK_MOVING.\n",
+                       (int)mmtk_is_moving(), (MMTK_MOVING));
+        exit(1);
+    }
+
+    const char *mmtk_plan = mmtk_get_plan_name();
+    if (strcmp(mmtk_plan, MMTK_PLAN) != 0) {
+        jl_safe_printf("FATAL: libmmtk_julia was built for plan \"%s\", but the Julia runtime "
+                       "expects plan \"%s\".\nRebuild the binding with a matching MMTK_PLAN.\n",
+                       mmtk_plan, MMTK_PLAN);
+        exit(1);
     }
 }
 
@@ -201,6 +231,11 @@ JL_DLLEXPORT uint64_t jl_gc_get_max_memory(void)
     // FIXME: We should return the max heap size set in MMTk
     // when not using Julia's heap resizing heuristics
     return max_total_memory;
+}
+
+JL_DLLEXPORT uint64_t jl_gc_get_hard_heap_limit(void)
+{
+    return jl_options.hard_heap_limit;
 }
 
 STATIC_INLINE void maybe_collect(jl_ptls_t ptls)
@@ -868,7 +903,7 @@ STATIC_INLINE void* mmtk_immix_alloc_fast(MMTkMutatorContext* mutator, size_t si
     return bump_alloc_fast(mutator, (uintptr_t*)&allocator->cursor, (intptr_t)allocator->limit, size, align, offset, 0);
 }
 
-inline void mmtk_immix_post_alloc_slow(MMTkMutatorContext* mutator, void* obj, size_t size) {
+STATIC_INLINE void mmtk_immix_post_alloc_slow(MMTkMutatorContext* mutator, void* obj, size_t size) {
     mmtk_post_alloc(mutator, obj, size, 0);
 }
 
@@ -882,7 +917,7 @@ STATIC_INLINE void* mmtk_immortal_alloc_fast(MMTkMutatorContext* mutator, size_t
     return bump_alloc_fast(mutator, (uintptr_t*)&allocator->cursor, (uintptr_t)allocator->limit, size, align, offset, 1);
 }
 
-inline void mmtk_set_side_metadata(const void* side_metadata_base, void* obj) {
+STATIC_INLINE void mmtk_set_side_metadata(const void* side_metadata_base, void* obj) {
         intptr_t addr = (intptr_t) obj;
         uint8_t* meta_addr = (uint8_t*) side_metadata_base + (addr >> 6);
         intptr_t shift = (addr >> 3) & 0b111;

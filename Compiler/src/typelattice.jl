@@ -688,7 +688,11 @@ Widens extended lattice element `x` to native `Type` representation.
 """
 widenconst(::AnyConditional) = Bool
 widenconst(a::AnyMustAlias) = widenconst(widenmustalias(a))
-widenconst(c::Const) = (v = c.val; isa(v, Type) ? Type{v} : typeof(v))
+# a closed type value widens to the egality kind, mirroring how `jl_inst_arg_tuple_type`
+# keys runtime dispatch (`Const(v) ⊑ TypeEgal{v} ⊑ Type{v}`); an open one only to its
+# `==`-class `Type{v}`
+widenconst(c::Const) = (v = c.val; isa(v, Type) ?
+    (has_free_typevars(v) ? Type{v} : Core.TypeEgal{v}) : typeof(v))
 widenconst(::PartialTypeVar) = TypeVar
 widenconst(t::Core.PartialStruct) = t.typ
 widenconst(t::PartialOpaque) = t.typ

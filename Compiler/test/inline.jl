@@ -2006,7 +2006,41 @@ let src = code_typed1(make_issue47349(Val{4}()), (Any,))
     end
     @test Base.return_types((Int,)) do x
         make_issue47349(Val(4))((x,nothing,Int))
-    end |> only === Type{Int}
+    end |> only == Core.TypeEgal{Int}
+end
+
+# JIT preparation should keep resolved invoke edges so inlined Type-argument
+# calls do not allocate.
+struct FastReadBuffer62001
+    data::Vector{UInt8}
+    position::Base.RefValue{Int}
+end
+FastReadBuffer62001() = FastReadBuffer62001(UInt8[0x01, 0x02], Ref(0))
+@inline function read_byte62001(buf::FastReadBuffer62001, ::Type{UInt8})
+    nextpos = buf.position[] + 1
+    nextpos > length(buf.data) && throw(EOFError())
+    buf.position[] = nextpos
+    @inbounds return buf.data[nextpos]
+end
+let buf = FastReadBuffer62001()
+    let src = code_typed1(Base.allocated,
+            Tuple{typeof(read_byte62001), FastReadBuffer62001, Core.TypeEgal{UInt8}})
+        @test count(src.code) do @nospecialize x
+            Meta.isexpr(x, :invoke) &&
+            (x.args[1]::Core.CodeInstance).def.specTypes ==
+                Tuple{typeof(read_byte62001), FastReadBuffer62001, Core.TypeEgal{UInt8}}
+        end == 1
+    end
+    for _ in 1:5
+        buf.position[] = 0
+        read_byte62001(buf, UInt8)
+    end
+    for _ in 1:5
+        buf.position[] = 0
+        Base.allocated(read_byte62001, buf, UInt8)
+    end
+    buf.position[] = 0
+    @test Base.allocated(read_byte62001, buf, UInt8) == 0
 end
 
 # Test that irinterp can make use of constant results even if they're big
@@ -2315,13 +2349,15 @@ end
 path = Ref{Symbol}(:unknown)
 function f59018_generator(x)
     if @generated
-        if x isa Core.TypeEq
+        # a runtime-dispatched type-valued argument reaches the generator as the
+        # egality kind `Core.TypeEgal{T}`; by-type expansion uses `Type{T}`
+        if x isa Core.TypeEq || x isa Core.TypeEgal
             path[] = :generator
-            return Core.sizeof(x.T)
+            return Core.sizeof(Base.type_parameter(x))
         end
     else
         path[] = :fallback
-        return Core.sizeof(x isa Core.TypeEq ? Base.type_parameter(x) : x.parameters[1])
+        return Core.sizeof(x isa Union{Core.TypeEq, Core.TypeEgal} ? Base.type_parameter(x) : x.parameters[1])
     end
 end
 f59018() = f59018_generator(Base.inferencebarrier(Int64))

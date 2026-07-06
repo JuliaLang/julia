@@ -347,6 +347,24 @@ From this point, you should
 Then add all the [build dependencies](#required-build-tools-and-external-libraries), a console-based editor of your choice, `git`, and anything else you'll need (e.g., `gdb`, `rr`, etc). Pick a directory to work in and `git clone` Julia, check out the branch you wish to debug, and build Julia as usual.
 
 
+## Building Julia with MMTk GC
+
+Julia allows different GC implementations through a GC interface. GC is currently selected at build time,
+so switching between the stock GC and any other GC implementation requires rebuilding Julia.
+
+MMTk is one of the GCs integrated with this interface. The MMTk binding is built from source as part of the Julia build
+and requires a Rust toolchain. The simplest way to build Julia with MMTk is:
+```sh
+WITH_THIRD_PARTY_GC=mmtk make
+```
+
+An example of a more advanced configuration that customizes the plan / GC type is:
+```sh
+WITH_THIRD_PARTY_GC=mmtk MMTK_PLAN=StickyImmix MMTK_MOVING=0 MMTK_BUILD_MODE=release make
+```
+
+The default MMTk build uses the `StickyImmix` plan (similar to Julia's generational mark sweep), and a release build of the Rust binding. Further build options can be set either on the command line or in `Make.user`. For details, see [Julia + MMTk](../gc-mmtk.md).
+
 ## Update the version number of a dependency
 
 There are two types of builds

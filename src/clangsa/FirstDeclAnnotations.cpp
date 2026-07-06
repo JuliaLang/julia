@@ -104,6 +104,8 @@
 #include "clang-tidy/ClangTidyModuleRegistry.h"
 #include "llvm/ADT/StringSet.h"
 
+#include "HelpersCommon.hpp"
+
 using namespace clang;
 using namespace clang::tidy;
 using namespace clang::ast_matchers;
@@ -158,6 +160,14 @@ public:
         if (!FD || FD->isImplicit())
             return;
 
+        // Never act on a template instantiation: its declarations are generated
+        // from the pattern and their locations map back to it, so a fix here
+        // would edit (and could duplicate at) the pattern's source. The pattern
+        // itself and explicit specializations are not instantiations and are
+        // still handled.
+        if (FD->isTemplateInstantiation())
+            return;
+
         const FunctionDecl *First = FD->getFirstDecl();
         if (First == FD)
             return;
@@ -188,10 +198,10 @@ public:
         const LangOptions &LO = getLangOpts();
 
         // Function-level annotations (e.g. JL_NOTSAFEPOINT) are written after
-        // the parameter list, so the fix inserts them just after the first
-        // declaration's closing `)`.
+        // the parameter list and any trailing qualifiers, so the fix inserts
+        // them just after the first declaration's declarator suffix.
         checkDecl(FD, First, FD, /*ParamIndex=*/-1,
-                  endOfToken(functionRParenLoc(First), SM, LO), SM, LO);
+                  endOfToken(declaratorSuffixEnd(First, SM), SM, LO), SM, LO);
 
         // Parameter-level annotations (e.g. JL_PROPAGATES_ROOT,
         // JL_ROOTED_BY_ARG). Compare by position; redeclarations of the same
@@ -539,24 +549,14 @@ private:
         const FunctionDecl *First = FD->getFirstDecl();
         if (SM.isInSystemHeader(First->getLocation()))
             return true;
-        StringRef File = llvm::sys::path::filename(
-            SM.getFilename(First->getLocation()));
-        if (File.starts_with("llvm-"))
+        if (jl_clangsa::isInLLVMHeaderFile(First->getLocation(), SM))
             return true;
-        for (const DeclContext *DC = FD->getDeclContext(); DC;
-             DC = DC->getParent())
-            if (const auto *NS = dyn_cast<NamespaceDecl>(DC))
-                if (NS->getName() == "llvm" || NS->getName() == "std" ||
-                    NS->getName() == "tp")
-                    return true;
+        if (jl_clangsa::isInNonSafepointNamespace(FD->getDeclContext()))
+            return true;
         if (FD->getBuiltinID() != 0)
             return true;
         StringRef Name = FD->getDeclName().isIdentifier() ? FD->getName() : "";
-        if ((Name.starts_with("uv_") || Name.starts_with("unw_") ||
-             Name.starts_with("_U")) &&
-            Name != "uv_run")
-            return true;
-        return false;
+        return jl_clangsa::nameIsNonSafepointRuntimeHelper(Name);
     }
 
     // True if the function has a global prototype: some declaration other
@@ -580,15 +580,41 @@ private:
         return Lexer::getLocForEndOfToken(Loc, 0, SM, LO);
     }
 
-    // The closing `)` of a function declaration's parameter list, or an invalid
-    // location if it cannot be determined.
-    static SourceLocation functionRParenLoc(const FunctionDecl *FD) {
-        if (TypeSourceInfo *TSI = FD->getTypeSourceInfo()) {
-            TypeLoc TL = TSI->getTypeLoc().IgnoreParens();
-            if (auto FTL = TL.getAs<FunctionTypeLoc>())
-                return FTL.getRParenLoc();
-        }
-        return SourceLocation();
+    // The later of two locations in the translation unit (ignoring invalid
+    // ones), used to find the last token of a function's declarator suffix.
+    static SourceLocation later(SourceLocation A, SourceLocation B,
+                                SourceManager &SM) {
+        if (A.isInvalid())
+            return B;
+        if (B.isInvalid())
+            return A;
+        return SM.isBeforeInTranslationUnit(A, B) ? B : A;
+    }
+
+    // The start of the last token of the function declarator's suffix -- the
+    // parameter list's `)` plus any trailing qualifiers that a function-level
+    // annotation must follow: cv-/ref-qualifiers and the exception specification
+    // (carried by the FunctionTypeLoc), and the `override`/`final` virt
+    // specifiers (carried as attributes). A member function `f() const` thus
+    // gets its annotation after `const` (`f() const JL_NOTSAFEPOINT`) rather
+    // than the ill-formed `f() JL_NOTSAFEPOINT const`. Reading this from the AST
+    // avoids re-lexing the source, which could be confused by macros.
+    static SourceLocation declaratorSuffixEnd(const FunctionDecl *FD,
+                                              SourceManager &SM) {
+        TypeSourceInfo *TSI = FD->getTypeSourceInfo();
+        if (!TSI)
+            return SourceLocation();
+        auto FTL = TSI->getTypeLoc().IgnoreParens().getAs<FunctionTypeLoc>();
+        if (!FTL)
+            return SourceLocation();
+        SourceLocation End = later(FTL.getRParenLoc(), FTL.getLocalRangeEnd(), SM);
+        if (auto FPTL = FTL.getAs<FunctionProtoTypeLoc>())
+            End = later(End, FPTL.getExceptionSpecRange().getEnd(), SM);
+        if (const auto *A = FD->getAttr<OverrideAttr>())
+            End = later(End, A->getLocation(), SM);
+        if (const auto *A = FD->getAttr<FinalAttr>())
+            End = later(End, A->getLocation(), SM);
+        return End;
     }
 
     // Identify which attributes this check governs and how to compare them

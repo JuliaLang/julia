@@ -446,6 +446,113 @@ static void stack_overflow_warning(void)
     jl_safe_printf("Warning: detected a stack overflow; program state may be corrupted, so further execution might be unreliable.\n");
 }
 
+// Async-signal-safe replacement for libc strsignal(). We call this from fatal-signal
+// handlers, and glibc's strsignal() is not async-signal-safe: it routes through gettext
+// (to localize the description), which calls malloc(). If the interrupted thread already
+// held the malloc arena lock, that reentrant malloc() self-deadlocks. A fixed table of
+// string literals avoids gettext/malloc entirely and is portable across libc flavors
+// (musl/BSD/macOS lack glibc's sigdescr_np/sigabbrev_np). Cases are #ifdef-guarded so this
+// compiles wherever a given signal is (or is not) defined.
+static const char *jl_strsignal(int sig) JL_NOTSAFEPOINT
+{
+    switch (sig) {
+#ifdef SIGHUP
+    case SIGHUP:     return "Hangup";
+#endif
+#ifdef SIGINT
+    case SIGINT:     return "Interrupt";
+#endif
+#ifdef SIGQUIT
+    case SIGQUIT:    return "Quit";
+#endif
+#ifdef SIGILL
+    case SIGILL:     return "Illegal instruction";
+#endif
+#ifdef SIGTRAP
+    case SIGTRAP:    return "Trace/breakpoint trap";
+#endif
+#ifdef SIGABRT
+    case SIGABRT:    return "Aborted";
+#endif
+#if defined(SIGABRT_COMPAT) && (!defined(SIGABRT) || SIGABRT_COMPAT != SIGABRT)
+    case SIGABRT_COMPAT: return "Aborted";
+#endif
+#ifdef SIGBUS
+    case SIGBUS:     return "Bus error";
+#endif
+#ifdef SIGFPE
+    case SIGFPE:     return "Floating point exception";
+#endif
+#ifdef SIGKILL
+    case SIGKILL:    return "Killed";
+#endif
+#ifdef SIGUSR1
+    case SIGUSR1:    return "User defined signal 1";
+#endif
+#ifdef SIGSEGV
+    case SIGSEGV:    return "Segmentation fault";
+#endif
+#ifdef SIGUSR2
+    case SIGUSR2:    return "User defined signal 2";
+#endif
+#ifdef SIGPIPE
+    case SIGPIPE:    return "Broken pipe";
+#endif
+#ifdef SIGALRM
+    case SIGALRM:    return "Alarm clock";
+#endif
+#ifdef SIGTERM
+    case SIGTERM:    return "Terminated";
+#endif
+#ifdef SIGBREAK
+    case SIGBREAK:   return "Break";
+#endif
+#ifdef SIGSTKFLT
+    case SIGSTKFLT:  return "Stack fault";
+#endif
+#ifdef SIGCHLD
+    case SIGCHLD:    return "Child exited";
+#endif
+#ifdef SIGCONT
+    case SIGCONT:    return "Continued";
+#endif
+#ifdef SIGSTOP
+    case SIGSTOP:    return "Stopped (signal)";
+#endif
+#ifdef SIGTSTP
+    case SIGTSTP:    return "Stopped";
+#endif
+#ifdef SIGTTIN
+    case SIGTTIN:    return "Stopped (tty input)";
+#endif
+#ifdef SIGTTOU
+    case SIGTTOU:    return "Stopped (tty output)";
+#endif
+#ifdef SIGURG
+    case SIGURG:     return "Urgent I/O condition";
+#endif
+#ifdef SIGXCPU
+    case SIGXCPU:    return "CPU time limit exceeded";
+#endif
+#ifdef SIGXFSZ
+    case SIGXFSZ:    return "File size limit exceeded";
+#endif
+#ifdef SIGVTALRM
+    case SIGVTALRM:  return "Virtual timer expired";
+#endif
+#ifdef SIGPROF
+    case SIGPROF:    return "Profiling timer expired";
+#endif
+#ifdef SIGWINCH
+    case SIGWINCH:   return "Window changed";
+#endif
+#ifdef SIGSYS
+    case SIGSYS:     return "Bad system call";
+#endif
+    default:         return "Unknown signal";
+    }
+}
+
 #if defined(_WIN32)
 #include "signals-win.c"
 #else
@@ -636,9 +743,9 @@ void jl_fprint_critical_error(ios_t *s, int sig, int si_code, bt_context_t *cont
         pthread_sigmask(SIG_UNBLOCK, &sset, NULL);
 #endif
         if (si_code)
-            jl_safe_fprintf(s, "\n[%d] signal %d (%d): %s\n", getpid(), sig, si_code, strsignal(sig));
+            jl_safe_fprintf(s, "\n[%d] signal %d (%d): %s\n", getpid(), sig, si_code, jl_strsignal(sig));
         else
-            jl_safe_fprintf(s, "\n[%d] signal %d: %s\n", getpid(), sig, strsignal(sig));
+            jl_safe_fprintf(s, "\n[%d] signal %d: %s\n", getpid(), sig, jl_strsignal(sig));
         if (sig == SIGQUIT) {
             jl_print_task_backtraces(0);
         }

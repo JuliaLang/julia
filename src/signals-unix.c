@@ -1223,7 +1223,7 @@ static void *signal_listener(void *arg)
             jl_safe_printf("\ncmd: %s %d running %d of %d\n", jl_options.julia_bin ? jl_options.julia_bin : "julia", uv_os_getpid(), n_threads_running, nthreads);
 #endif
 
-            jl_safe_printf("\nsignal (%d): %s\n", sig, strsignal(sig));
+            jl_safe_printf("\nsignal (%d): %s\n", sig, jl_strsignal(sig));
             size_t i;
             for (i = 0; i < signal_bt_size; i += jl_bt_entry_size(signal_bt_data + i)) {
                 jl_fprint_bt_entry_codeloc(ios_safe_stderr, signal_bt_data + i);

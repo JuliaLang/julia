@@ -632,6 +632,40 @@ end
     return true
 end
 
+@noinline function getproperty(x::Core.TypeEgal, s::Symbol)
+    if s === :parameters
+        depwarn_if_not_pure("accessing `Type.parameters` is deprecated; use `Base.type_parameter(x)` instead", :getproperty)
+        return Core.svec(type_parameter(x))
+    elseif s === :name
+        depwarn_if_not_pure("accessing `Type.name` is deprecated without replacement. If for detection, use `Base.isType(x)`.", :getproperty)
+        return TypeEq.name
+    elseif s === :hash
+        depwarn_if_not_pure("accessing `Type.hash` is deprecated; use `Base._jl_type_cache_hash(x)` instead", :getproperty)
+        return reinterpret(Int32, UInt32(_jl_type_cache_hash(x)))
+    end
+    return getfield(x, s)
+end
+
+@noinline function typename(x::Core.TypeEgal)
+    depwarn_if_not_pure("calling `typename` on `Type` is deprecated. If for detection, use `Base.isType(x)`.", :typename)
+    return TypeEq.name
+end
+
+@noinline function nameof(x::Core.TypeEgal)
+    depwarn_if_not_pure("calling `nameof` on `Type` is deprecated. If for detection, use `Base.isType(x)`.", :nameof)
+    return :Type
+end
+
+@noinline function parentmodule(x::Core.TypeEgal)
+    depwarn_if_not_pure("calling `parentmodule` on `Type` is deprecated. If for detection, use `Base.isType(x)`.", :parentmodule)
+    return Core
+end
+
+@noinline function isabstracttype(x::Core.TypeEgal)
+    depwarn_if_not_pure("calling `isabstracttype` on a `Type{...}` is deprecated; `Type{}` is now a kind. If for detection, use `Base.isType(x)`.", :isabstracttype)
+    return true
+end
+
 @deprecate SubString{T}(s::T, i::Int, j::Int, ::Val{:noshift}) where {T <: AbstractString} begin
     @boundscheck if !(i == j == 0)
         si, sj = i + 1, prevind(s, j + i + 1)

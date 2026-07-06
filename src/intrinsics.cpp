@@ -529,10 +529,14 @@ static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dest
 
 static jl_datatype_t *staticeval_bitstype(const jl_cgval_t &targ)
 {
-    // evaluate an argument at compile time to determine what type it is
-    jl_value_t *unw = jl_unwrap_unionall(targ.typ);
-    if (jl_is_typeeq(unw)) {
-        jl_value_t *bt = jl_typeeq_T(unw);
+    // evaluate an argument at compile time to determine what type it is.
+    // The result becomes the constructed value's type tag, so it must be
+    // exactly the runtime type object: only egality-pinned (`TypeEgal`)
+    // knowledge qualifies; `==`-only (`Type`) knowledge admits a distinct
+    // (possibly not even concrete) runtime spelling and falls back to the
+    // runtime call, which tags with (and checks) the argument itself.
+    if (is_uniquerep_Type(targ.typ)) {
+        jl_value_t *bt = jl_some_Type_T(targ.typ);
         if (jl_is_primitivetype(bt))
             return (jl_datatype_t*)bt;
     }
