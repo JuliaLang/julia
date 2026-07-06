@@ -4186,7 +4186,9 @@ jl_value_t *jl_get_specialization1(jl_tupletype_t *types, size_t world)
         return jl_nothing;
     JL_GC_PUSH1(&matches);
     jl_method_match_t *match = (jl_method_match_t*)jl_array_ptr_ref(matches, 0);
-    jl_value_t *mi = jl_method_match_to_mi(match, world, min_valid2, max_valid2);
+    jl_value_t *mi = jl_nothing;
+    if (match->fully_covers)
+        mi = jl_method_match_to_mi(match, world, min_valid2, max_valid2);
     JL_GC_POP();
     return mi;
 }
