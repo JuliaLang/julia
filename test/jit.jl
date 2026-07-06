@@ -92,8 +92,9 @@ let m = only(methods(copyspecsig))
                (Any, Any, Any), m, Tuple{typeof(copyspecsig), Int}, Core.svec())
     args = Any[1]
     # TRIGGER_FOREIGN forces the copy onto `mi` even for matching sparams
-    @test ccall(:jl_invoke, Any, (Any, Ptr{Any}, UInt32, Any),
-                copyspecsig, args, length(args), mi) === 1
+    pgcstack = ccall(:jl_get_pgcstack, Ptr{Cvoid}, ())
+    @test ccall(:jl_invoke, Any, (Ptr{Cvoid}, Any, Ptr{Any}, UInt32, Any),
+                pgcstack, copyspecsig, args, length(args), mi) === 1
     known_invokes = Ptr{Cvoid}[
         unsafe_load(cglobal(:jl_fptr_args_addr, Ptr{Cvoid})),
         unsafe_load(cglobal(:jl_fptr_const_return_addr, Ptr{Cvoid})),
