@@ -2035,6 +2035,7 @@ JL_DLLEXPORT int jl_isa_compileable_sig(jl_tupletype_t *type, jl_svec_t *sparams
 // type constructors
 JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *inmodule, int abstract, int mutabl) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_tvar_t *jl_new_typevar(jl_sym_t *name, jl_value_t *lb, jl_value_t *ub) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_tvar_t *jl_new_typevar_raw(jl_sym_t *name, jl_value_t *lb, jl_value_t *ub) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_new_tvarref(size_t depth) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_new_unionall_type(jl_sym_t *name, jl_value_t *lb, jl_value_t *ub, jl_value_t *body) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_instantiate_unionall(jl_unionall_t *u, jl_value_t *p) JL_CANSAFEPOINT;
