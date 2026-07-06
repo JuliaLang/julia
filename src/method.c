@@ -1297,6 +1297,13 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
         jl_svecset(new_atypes, 0, ft);
         atypes = new_atypes;
     }
+    else if (jl_kwcall_type && ft == (jl_value_t*)jl_kwcall_type && nargs >= 3 &&
+             jl_is_typeegal(jl_svecref(atypes, 2))) {
+        // likewise for a keyword sorter, whose callee self-type is argument 2
+        new_atypes = jl_svec_copy(atypes);
+        jl_svecset(new_atypes, 2, jl_wrap_Type(jl_typeegal_T(jl_svecref(new_atypes, 2))));
+        atypes = new_atypes;
+    }
 
     argtype = jl_apply_tuple_type(atypes, 1);
     if (!jl_is_datatype(argtype))
