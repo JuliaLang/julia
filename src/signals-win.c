@@ -345,8 +345,21 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
     default:
         jl_safe_fprintf(&summary, "UNKNOWN"); break;
     }
-    jl_safe_fprintf(&summary, " at 0x%zx -- ", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
+    jl_safe_fprintf(&summary, " at 0x%zx", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
+    if (ExceptionInfo->ExceptionRecord->ExceptionCode == EXCEPTION_ACCESS_VIOLATION ||
+        ExceptionInfo->ExceptionRecord->ExceptionCode == EXCEPTION_IN_PAGE_ERROR) {
+        jl_safe_fprintf(&summary, " (%s 0x%zx)",
+                        ExceptionInfo->ExceptionRecord->ExceptionInformation[0] == 1 ? "writing" :
+                        ExceptionInfo->ExceptionRecord->ExceptionInformation[0] == 8 ? "executing" : "reading",
+                        (size_t)ExceptionInfo->ExceptionRecord->ExceptionInformation[1]);
+    }
+    jl_safe_fprintf(&summary, " -- ");
     jl_fprint_native_codeloc(&summary, (uintptr_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
+    // runtime state that distinguishes crash classes (e.g. a NULL task->ptls
+    // from a corrupted pointer) without needing a debugger on the machine
+    jl_safe_fprintf(&summary, "current task: 0x%zx (ptls 0x%zx, eh 0x%zx)\n", (size_t)ct,
+                    (size_t)(ct == NULL ? NULL : (void*)ct->ptls),
+                    (size_t)(ct == NULL ? NULL : (void*)ct->eh));
     ios_write(&full_error, summary.buf, ios_pos(&summary));
     ios_puts("\nSee Application log in Event Viewer for more information.\n", &summary);
 
