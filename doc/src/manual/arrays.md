@@ -472,7 +472,7 @@ This is typically done with [`UndefInitializer`](@ref) and its singleton value [
 
 ### Uninitialized isbits data
 When the element type is stored inline in the array, as is the case for bitstypes
-and small unions of bitstypes, the value stored will created from arbitrary bitpatterns:
+and small unions of bitstypes, the value stored will created from arbitrary bit patterns:
 
 ```jldoctest; filter = r"-?[0-9]+"
 julia> A = Vector{Int}(undef, 3)
@@ -486,11 +486,11 @@ While the values are created from arbitrary bits, they are just ordinary values;
 specifically, loading them multiple times will always result in the same value.
 
 Beware that the values are constructed circumventing any inner constructors.
-This means that for custom types whose constructors enforces certain bitpatterns,
-these checks will not be upheld.
+This means that for custom types whose constructors enforce constraints on the values,
+these checks will not be enforced.
 
 For example, in the code below, the `NeverZero` values in `A` might be invalid,
-as they may have been created from all-zeros.
+as `undef` initialization may yield all-zero bits.
 
 ```
 struct NeverZero
@@ -515,7 +515,7 @@ A = Vector{NeverZero}(undef, 10)
 
 ### Uninitialized non-isbits data
 When the element type is not stored inline, as is the case when the element type
-is not isbits, attempting to access the data will throw an `UndefRefError`:
+is not `isbits`, attempting to access the data will throw an `UndefRefError`:
 
 ```jldoctest
 julia> A = Vector{String}(undef, 2)

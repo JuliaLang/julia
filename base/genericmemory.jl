@@ -91,7 +91,7 @@ pointer(mem::GenericMemoryRef) = unsafe_convert(Ptr{Cvoid}, mem) # no bounds che
 """
     Base.unsetindex!(ref::MemoryRef) -> ref
 
-Unset the reference from the `Memory` undetlying `ref` to its value, leaving it
+Unset the reference from `ref` to its underlying value, leaving it
 as if uninitialized, and return `ref`.
 This is equivalent to `Base.unsetindex!(parent(ref), Base.memoryindex(ref))`.
 
@@ -121,7 +121,7 @@ unsetindex!(A::MemoryRef) = (@_propagate_inbounds_meta; Core.memoryrefunset!(A, 
 """
     unsetindex!(A::Union{Memory, Array}, i::Int) -> A
 
-Unset the reference from `A`'s at index `i` to its underlying value and return `A`.
+Unset the reference from `A` at index `i` to its underlying value and return `A`.
 This leaves the slot as it was uninitialized.
 
 See the section of uninitialized memory in the manual for more details.

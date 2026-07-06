@@ -1499,8 +1499,8 @@ end
 
 Unset the reference from `A` at index `i` to its value and return `A`.
 The value left in `A[i]`, if any, is implementation-dependent, but after
-calling this function, `A` at index `i` cannot hold a reference to its value,
-which protects its underlying resources from being freed (i.e. garbage collected,
+calling this function, `A` at index `i` no longer holds any reference to a value,
+so it no longer protects any underlying resources from being freed (i.e. garbage collected,
 or finalizers run).
 
 !!! compat "Julia 1.14"
