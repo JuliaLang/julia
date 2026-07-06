@@ -984,8 +984,8 @@ function enq_work(t::Task)
             ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid-1)
             push!(workqueue_for(tid), t)
         else
-            # Otherwise, put the task in the multiqueue.
-            Partr.multiq_insert(t, t.priority)
+            # Otherwise, put the task in the scheduler's queue.
+            Scheduler.enqueue!(t)
             # Wake one sleeping thread in the task's pool rather than all of them. See #61820, #50425.
             ccall(:jl_wakeup_threadpool, Cvoid, (Int8,), Threads._sym_to_tpid(tp))
             return t
@@ -1220,10 +1220,10 @@ function trypoptask(W::StickyWorkqueue)
         end
         return t
     end
-    return Partr.multiq_deletemin()
+    return Scheduler.dequeue!()
 end
 
-checktaskempty = Partr.multiq_check_empty
+checktaskempty = Scheduler.checktaskempty
 
 function wait()
     ct = current_task()
