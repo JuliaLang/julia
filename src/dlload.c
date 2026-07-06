@@ -97,7 +97,7 @@ void win32_formatmessage(DWORD code, char *reason, int len) JL_NOTSAFEPOINT
 }
 #endif
 
-typedef void* (*dlopen_prototype)(const char* filename, int flags) JL_NOTSAFEPOINT;
+typedef void* (*dlopen_prototype)(const char* filename, int flags) JL_CANCALLBACK;
 
 #if defined(_COMPILER_MSAN_ENABLED_) || defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_)
 struct link_map;
@@ -152,7 +152,7 @@ void ForEachMappedRegion(struct link_map *map, void (*cb)(const volatile void *,
 #endif
 
 #if defined(_OS_WINDOWS_)
-JL_DLLEXPORT void *jl_dlopen(const char *filename, unsigned flags) JL_NOTSAFEPOINT
+void *jl_dlopen(const char *filename, unsigned flags)
 {
     ssize_t len = uv_wtf8_length_as_utf16(filename);
     if (len < 0) return NULL;
@@ -218,7 +218,7 @@ static int jl_use_rtld_deepbind(int recheck) JL_NOTSAFEPOINT
    instead using the real dlopen directly from the current shared library.
    Of course, this does mean that we need to manually perform the work that
    the sanitizers would otherwise do. */
-static JL_NO_SANITIZE dlopen_prototype resolve_dlopen(void) JL_NOTSAFEPOINT
+static JL_NO_SANITIZE dlopen_prototype resolve_dlopen(void) JL_CANCALLBACK
 {
 #if defined(__GLIBC__)
     // When a sanitizer is active, bypass its dlopen interposition by resolving and
@@ -243,7 +243,7 @@ static JL_NO_SANITIZE dlopen_prototype resolve_dlopen(void) JL_NOTSAFEPOINT
     return &dlopen;
 }
 
-JL_DLLEXPORT JL_NO_SANITIZE void *jl_dlopen(const char *filename, unsigned flags) JL_NOTSAFEPOINT
+JL_NO_SANITIZE void *jl_dlopen(const char *filename, unsigned flags)
 {
     dlopen_prototype dlopen_fptr = resolve_dlopen();
     if (dlopen_fptr == NULL)
@@ -275,8 +275,29 @@ JL_DLLEXPORT JL_NO_SANITIZE void *jl_dlopen(const char *filename, unsigned flags
 }
 #endif
 
+static void jl_dlopen_throw(int err, const char *filename) {
+#ifdef _OS_WINDOWS_
+    char reason[256];
+    win32_formatmessage(err, reason, sizeof(reason));
+#else
+    const char *reason = dlerror();
+#endif
+    jl_errorf("could not load library \"%s\"\n%s", filename, reason);
+}
 
-JL_DLLEXPORT int jl_dlclose(void *handle) JL_NOTSAFEPOINT
+extern jl_libhandle jl_dlopen_e(const char *filename, unsigned flags) JL_NO_SAFEPOINT_ANALYSIS
+#ifdef __clang_gcanalyzer__
+; // function used when we know that jl_dlopen will not safepoint
+#else
+{
+    void *handle = jl_dlopen(filename, flags);
+    if (!handle)
+        jl_dlopen_throw(errno, filename);
+    return handle;
+}
+#endif
+
+int jl_dlclose(void *handle)
 {
 #ifdef _OS_WINDOWS_
     if (!handle) {
@@ -321,13 +342,11 @@ void *jl_find_dynamic_library_by_addr(void *symbol, int throw_err, int close) JL
     return handle;
 }
 
-JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, int throw_err)
+JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, int throw_err) JL_CANSAFEPOINT
 {
     ios_t path, relocated;
     int i;
-#ifdef _OS_WINDOWS_
-    int err;
-#endif
+    int err = 0;
     uv_stat_t stbuf;
     void *handle;
     int abspath;
@@ -448,15 +467,9 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
 
 notfound:
     if (throw_err) {
-#ifdef _OS_WINDOWS_
-        char reason[256];
-        win32_formatmessage(err, reason, sizeof(reason));
-#else
-        const char *reason = dlerror();
-#endif
         ios_close(&relocated);
         ios_close(&path);
-        jl_errorf("could not load library \"%s\"\n%s", modname, reason);
+        jl_dlopen_throw(err, modname);
     }
     handle = NULL;
 

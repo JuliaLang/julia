@@ -451,7 +451,7 @@ public:
     egal_set(egal_set&) = delete;
     egal_set(egal_set&&) = delete;
     egal_set() = default;
-    void insert(jl_value_t *val)
+    void insert(jl_value_t *val) JL_CANSAFEPOINT
     {
         // list/keyset are GC-rooted by the caller via JL_GC_PUSH
         JL_GC_PROMISE_ROOTED(val);
@@ -474,7 +474,7 @@ public:
 using ::egal_set;
 typedef DenseMap<jl_code_instance_t*, jl_llvm_functions_t> jl_compiled_functions_t;
 
-static void record_method_roots(egal_set &method_roots, jl_method_instance_t *mi)
+static void record_method_roots(egal_set &method_roots, jl_method_instance_t *mi) JL_CANSAFEPOINT
 {
     jl_method_t *m = mi->def.method;
     if (!jl_is_method(m))
@@ -493,14 +493,14 @@ static void record_method_roots(egal_set &method_roots, jl_method_instance_t *mi
     JL_UNLOCK(&m->writelock);
 }
 
-static void aot_optimize_roots(jl_codegen_output_t &out, egal_set &method_roots)
+static void aot_optimize_roots(jl_codegen_output_t &out, egal_set &method_roots) JL_CANSAFEPOINT
 {
     for (size_t i = 0; i < jl_array_dim0(out.temporary_roots); i++) {
         jl_value_t *val = jl_array_ptr_ref(out.temporary_roots, i);
         auto ref = out.global_targets.find((void*)val);
         if (ref == out.global_targets.end())
             continue;
-        auto get_global_root = [val, &method_roots]() {
+        auto get_global_root = [val, &method_roots]() JL_CANSAFEPOINT {
             if (jl_is_globally_rooted(val))
                 return val;
             jl_value_t *mval = method_roots.get(val);
@@ -523,7 +523,7 @@ static void aot_optimize_roots(jl_codegen_output_t &out, egal_set &method_roots)
     }
 }
 
-static Function *aot_abi_converter(jl_codegen_output_t &out, jl_abi_t from_abi, jl_code_instance_t *codeinst, Function *func, Function *specfunc, bool target_specsig)
+static Function *aot_abi_converter(jl_codegen_output_t &out, jl_abi_t from_abi, jl_code_instance_t *codeinst, Function *func, Function *specfunc, bool target_specsig) JL_CANSAFEPOINT
 {
     std::string gf_thunk_name;
     if (specfunc)
@@ -535,7 +535,7 @@ static Function *aot_abi_converter(jl_codegen_output_t &out, jl_abi_t from_abi, 
     return F;
 }
 
-static void generate_cfunc_thunks(jl_codegen_output_t &out)
+static void generate_cfunc_thunks(jl_codegen_output_t &out) JL_CANSAFEPOINT
 {
     DenseMap<jl_method_instance_t*, jl_code_instance_t*> compiled_mi;
     for (auto &[ci, _] : out.ci_funcs) {
@@ -552,7 +552,7 @@ static void generate_cfunc_thunks(jl_codegen_output_t &out)
         JL_GC_PROMISE_ROOTED(declrt);
         Function *unspec = aot_abi_converter(out, cfunc.abi, nullptr, nullptr, nullptr, false);
         jl_code_instance_t *codeinst = nullptr;
-        auto assign_fptr = [&out, &cfunc, &codeinst, &unspec](Function *f) {
+        auto assign_fptr = [&out, &cfunc, &codeinst, &unspec](Function *f) JL_CANSAFEPOINT {
             ConstantArray *init = cast<ConstantArray>(cfunc.cfuncdata->getInitializer());
             SmallVector<Constant*,8> initvals;
             for (unsigned i = 0; i < init->getNumOperands(); ++i)
@@ -837,7 +837,7 @@ static jl_compiled_functions_t::iterator get_ci_equiv_compiled(jl_code_instance_
 }
 
 // Static version of JuliaOJIT::linkOutput
-static void aot_link_output(jl_codegen_output_t &out)
+static void aot_link_output(jl_codegen_output_t &out) JL_CANSAFEPOINT
 {
     for (auto &[call, target] : out.call_targets) {
         auto [ci, api] = call;
@@ -878,7 +878,7 @@ static void aot_link_output(jl_codegen_output_t &out)
 
 static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *codeinfos,
                                       jl_array_t *ci_order, const jl_cgparams_t *cgparams,
-                                      int external_linkage)
+                                      int external_linkage) JL_CANSAFEPOINT
 {
     jl_cgparams_t target_cgparams = *cgparams;
     target_cgparams.sanitize_memory = jl_options.target_sanitize_memory;
@@ -1020,7 +1020,7 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, jl_array_t *ci_order, LLVMOrcTh
         data->TSM_ref = &data->TSM;
     }
 
-    data->TSM_ref->withModuleDo([&](Module &M) {
+    data->TSM_ref->withModuleDo([&](Module &M) JL_CANSAFEPOINT {
         data->out = std::make_unique<jl_codegen_output_t>(M);
         jl_emit_native_to_output(data, codeinfos, ci_order, cgparams, external_linkage);
     });
@@ -2603,7 +2603,7 @@ void jl_dump_native_impl(void *native_code,
 
 
 // sometimes in GDB you want to find out what code would be created from a mi
-extern "C" JL_DLLEXPORT_CODEGEN jl_code_info_t *jl_gdbdumpcode(jl_method_instance_t *mi)
+extern "C" JL_DLLEXPORT_CODEGEN jl_code_info_t *jl_gdbdumpcode(jl_method_instance_t *mi) JL_CANSAFEPOINT
 {
     jl_llvmf_dump_t llvmf_dump;
     size_t world = jl_current_task->world_age;

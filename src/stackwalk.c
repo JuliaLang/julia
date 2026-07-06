@@ -85,7 +85,8 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
         skip--;
     }
 #endif
-    jl_lock_profile();
+    if (!jl_trylock_profile())
+        return 0;
 #endif
 #if !defined(_OS_WINDOWS_) // no point on windows, since RtlVirtualUnwind won't give us a second chance if the segfault happens in ntdll
     jl_jmp_buf *old_buf = jl_get_safe_restore();
@@ -320,7 +321,7 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp, int skip)
 
 static void decode_backtrace(jl_bt_element_t *bt_data, size_t bt_size,
                              jl_array_t **btout JL_REQUIRE_ROOTED_SLOT,
-                             jl_array_t **bt2out JL_REQUIRE_ROOTED_SLOT)
+                             jl_array_t **bt2out JL_REQUIRE_ROOTED_SLOT) JL_CANSAFEPOINT
 {
     jl_array_t *bt, *bt2;
     if (array_ptr_void_type == NULL) {
@@ -371,7 +372,7 @@ JL_DLLEXPORT jl_value_t *jl_get_backtrace(void)
 // with the top of the stack and returning up to `max_entries`. If requested by
 // setting the `include_bt` flag, backtrace data in bt,bt2 format is
 // interleaved.
-JL_DLLEXPORT jl_value_t *jl_get_excstack(jl_task_t* task, int include_bt, int max_entries)
+JL_DLLEXPORT jl_value_t *jl_get_excstack(jl_task_t* task, int include_bt, int max_entries) JL_CANSAFEPOINT
 {
     JL_TYPECHK(current_exceptions, task, (jl_value_t*)task);
     JL_TIMING(STACKWALK, STACKWALK_Excstack);
@@ -790,7 +791,7 @@ static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *
 }
 #endif
 
-JL_DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
+JL_DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC) JL_CANSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
     jl_frame_t *frames = NULL;
@@ -1427,21 +1428,45 @@ return 0;
 #endif
 }
 
-JL_DLLEXPORT size_t jl_try_record_thread_backtrace(jl_ptls_t ptls2, jl_bt_element_t *bt_data, size_t max_bt_size) JL_NOTSAFEPOINT
+JL_DLLEXPORT size_t jl_try_record_thread_backtrace(jl_ptls_t ptls2, jl_bt_element_t *bt_data, size_t max_bt_size)
 {
     int16_t tid = ptls2->tid;
     jl_task_t *t = NULL;
     bt_context_t *context = NULL;
     bt_context_t c;
-    if (!jl_thread_suspend(tid, &c)) {
-        return 0;
+    size_t bt_size = 0;
+    if (jl_thread_suspend(tid, &c)) {
+        // thread is stopped, safe to read the task it was running before we stopped it
+        t = jl_atomic_load_relaxed(&ptls2->current_task);
+        context = &c;
+        bt_size = rec_backtrace_ctx(bt_data, max_bt_size, context, ptls2->previous_task ? NULL : t->gcstack);
+        jl_thread_resume(tid);
     }
-    // thread is stopped, safe to read the task it was running before we stopped it
-    t = jl_atomic_load_relaxed(&ptls2->current_task);
-    context = &c;
-    size_t bt_size = rec_backtrace_ctx(bt_data, max_bt_size, context, ptls2->previous_task ? NULL : t->gcstack);
-    jl_thread_resume(tid);
     return bt_size;
+}
+
+static size_t rec_backtrace_task(jl_task_t *t, bt_context_t *c, int use_ctx,  jl_bt_element_t *bt_data, size_t max_bt_size, int all_tasks_profiler) JL_NOTSAFEPOINT
+{
+    if (!use_ctx && !t->ctx.copy_stack && t->ctx.started && t->ctx.ctx != NULL) {
+        // need to read the context from the task stored state
+        jl_jmp_buf *mctx = &t->ctx.ctx->uc_mcontext;
+#if defined(JL_TASK_SWITCH_WINDOWS)
+        memset(c, 0, sizeof(*c));
+        if (jl_simulate_longjmp(*mctx, c))
+            use_ctx = 1;
+#elif defined(JL_TASK_SWITCH_LIBUNWIND)
+        context = t->ctx.ctx;
+#elif defined(JL_TASK_SWITCH_ASM)
+        memset(c, 0, sizeof(*c));
+        if (jl_simulate_longjmp(*mctx, c))
+            use_ctx = 1;
+#else
+     #pragma message("jl_record_backtrace not defined for unknown task system")
+#endif
+    }
+    if (use_ctx)
+        return rec_backtrace_ctx(bt_data, max_bt_size, c, all_tasks_profiler ? NULL : t->gcstack);
+    return 0;
 }
 
 JL_DLLEXPORT jl_record_backtrace_result_t jl_record_backtrace(jl_task_t *t, jl_bt_element_t *bt_data, size_t max_bt_size, int all_tasks_profiler) JL_NOTSAFEPOINT
@@ -1461,11 +1486,14 @@ JL_DLLEXPORT jl_record_backtrace_result_t jl_record_backtrace(jl_task_t *t, jl_b
         result.tid = tid;
         return result;
     }
-    bt_context_t *context = NULL;
     bt_context_t c;
     int16_t old;
-    for (old = -1; !jl_atomic_cmpswap(&t->tid, &old, tid) && old != tid; old = -1) {
-        // if this task is already running somewhere, we need to stop the thread it is running on and query its state
+    while (1) {
+        old = INT16_MAX;
+        // Try to lock this task, if free, otherwise get the id of the thread running it
+        if (jl_atomic_cmpswap(&t->tid, &old, tid) || old == tid)
+            break;
+        // Try to stop that thread
         if (!jl_thread_suspend(old, &c)) {
             if (jl_atomic_load_relaxed(&t->tid) != old)
                 continue;
@@ -1473,43 +1501,25 @@ JL_DLLEXPORT jl_record_backtrace_result_t jl_record_backtrace(jl_task_t *t, jl_b
         }
         if (jl_atomic_load_relaxed(&t->tid) == old) {
             jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[old];
+            int use_ctx = 0;
             if (ptls2->previous_task == t || // we might print the wrong stack here, since we can't know whether we executed the swapcontext yet or not, but it at least avoids trying to access the state inside uc_mcontext which might not be set yet
                 (ptls2->previous_task == NULL && jl_atomic_load_relaxed(&ptls2->current_task) == t)) { // this case should be always accurate
                 // use the thread context for the unwind state
-                context = &c;
+                use_ctx = 1;
             }
-            break;
+            result.bt_size = rec_backtrace_task(t, &c, use_ctx, bt_data, max_bt_size, all_tasks_profiler);
+            result.tid = old;
+            jl_thread_resume(old);
+            return result;
         }
         // got the wrong thread stopped, try again
         jl_thread_resume(old);
     }
-    if (context == NULL && (!t->ctx.copy_stack && t->ctx.started && t->ctx.ctx != NULL)) {
-        // need to read the context from the task stored state
-        jl_jmp_buf *mctx = &t->ctx.ctx->uc_mcontext;
-#if defined(JL_TASK_SWITCH_WINDOWS)
-        memset(&c, 0, sizeof(c));
-        if (jl_simulate_longjmp(*mctx, &c))
-            context = &c;
-#elif defined(JL_TASK_SWITCH_LIBUNWIND)
-        context = t->ctx.ctx;
-#elif defined(JL_TASK_SWITCH_ASM)
-        memset(&c, 0, sizeof(c));
-        if (jl_simulate_longjmp(*mctx, &c))
-            context = &c;
-#else
-     #pragma message("jl_record_backtrace not defined for unknown task system")
-#endif
-    }
-    size_t bt_size = 0;
-    if (context) {
-        bt_size = rec_backtrace_ctx(bt_data, max_bt_size, context, all_tasks_profiler ? NULL : t->gcstack);
-    }
-    if (old == -1)
-        jl_atomic_store_relaxed(&t->tid, old);
-    else if (old != tid)
-        jl_thread_resume(old);
-    result.bt_size = bt_size;
+    // This task is locked to our thread
+    result.bt_size = rec_backtrace_task(t, &c, 0, bt_data, max_bt_size, all_tasks_profiler);
     result.tid = old;
+    if (old == INT16_MAX)
+        jl_atomic_store_relaxed(&t->tid, old);
     return result;
 }
 

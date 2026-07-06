@@ -180,22 +180,22 @@ jl_image_t jl_load_pkgimg(jl_image_buf_t image);
 void jl_set_sysimage_cpu_target(const char *cpu_target) JL_NOTSAFEPOINT;
 
 // Return the name of the host CPU as a julia string.
-JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void);
+JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void) JL_CANSAFEPOINT;
 // Return the features of the host CPU as a julia string.
-JL_DLLEXPORT jl_value_t *jl_get_cpu_features(void);
+JL_DLLEXPORT jl_value_t *jl_get_cpu_features(void) JL_CANSAFEPOINT;
 // Return the CPU target string used to build the current sysimage
-JL_DLLEXPORT jl_value_t *jl_get_sysimage_cpu_target(void);
+JL_DLLEXPORT jl_value_t *jl_get_sysimage_cpu_target(void) JL_CANSAFEPOINT;
 // Check if the CPU has native FMA instructions;
 // For debugging only
 JL_DLLEXPORT jl_value_t *jl_cpu_has_fma(int bits);
 // Dump the name and feature set of the host CPU
 JL_DLLEXPORT void jl_dump_host_cpu(void);
-JL_DLLEXPORT jl_value_t* jl_check_pkgimage_clones(char* data);
+JL_DLLEXPORT jl_value_t* jl_check_pkgimage_clones(char* data) JL_CANSAFEPOINT;
 
-JL_DLLEXPORT int32_t jl_set_zero_subnormals(int8_t isZero);
-JL_DLLEXPORT int32_t jl_get_zero_subnormals(void);
-JL_DLLEXPORT int32_t jl_set_default_nans(int8_t isDefault);
-JL_DLLEXPORT int32_t jl_get_default_nans(void);
+JL_DLLEXPORT int32_t jl_set_zero_subnormals(int8_t isZero) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int32_t jl_get_zero_subnormals(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int32_t jl_set_default_nans(int8_t isDefault) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int32_t jl_get_default_nans(void) JL_NOTSAFEPOINT;
 
 /**
  * System image contents.
@@ -286,8 +286,8 @@ extern "C" JL_DLLEXPORT jl_llvm_target_t jl_get_llvm_target(const char *cpu_targ
  */
 extern "C" JL_DLLEXPORT jl_llvm_target_t jl_get_llvm_disasm_target(void) JL_NOTSAFEPOINT;
 
-extern "C" JL_DLLEXPORT jl_value_t* jl_reflect_clone_targets();
-extern "C" JL_DLLEXPORT jl_value_t *jl_feature_bits_to_string(const uint8_t *bits, int32_t nwords);
+extern "C" JL_DLLEXPORT jl_value_t* jl_reflect_clone_targets() JL_CANSAFEPOINT;
+extern "C" JL_DLLEXPORT jl_value_t *jl_feature_bits_to_string(const uint8_t *bits, int32_t nwords) JL_CANSAFEPOINT;
 #endif
 
 #endif

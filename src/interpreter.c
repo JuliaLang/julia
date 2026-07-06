@@ -72,12 +72,12 @@ extern void JL_GC_ENABLEFRAME(interpreter_state*) JL_NOTSAFEPOINT;
 #endif
 
 
-static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s);
-static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip, int toplevel);
+static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s) JL_CANSAFEPOINT;
+static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip, int toplevel) JL_CANSAFEPOINT;
 
 // method definition form
 
-static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s)
+static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s) JL_CANSAFEPOINT
 {
     jl_value_t **args = jl_array_ptr_data(ex->args);
 
@@ -112,7 +112,7 @@ static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s)
 
 // expression evaluator
 
-static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpreter_state *s)
+static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpreter_state *s) JL_CANSAFEPOINT
 {
     jl_value_t **argv;
     assert(nargs >= 1);
@@ -125,7 +125,7 @@ static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpreter_state *s
     return result;
 }
 
-static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interpreter_state *s)
+static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interpreter_state *s) JL_CANSAFEPOINT
 {
     jl_value_t **argv;
     assert(nargs >= 2);
@@ -189,13 +189,13 @@ static int jl_source_nssavalues(jl_code_info_t *src) JL_NOTSAFEPOINT
     return jl_is_long(src->ssavaluetypes) ? jl_unbox_long(src->ssavaluetypes) : jl_array_nrows(src->ssavaluetypes);
 }
 
-static void eval_stmt_value(jl_value_t *stmt, interpreter_state *s)
+static void eval_stmt_value(jl_value_t *stmt, interpreter_state *s) JL_CANSAFEPOINT
 {
     jl_value_t *res = eval_value(stmt, s);
     s->locals[jl_source_nslots(s->src) + s->ip] = res;
 }
 
-static jl_value_t *eval_expr_tuple(jl_expr_t *ex, interpreter_state *s)
+static jl_value_t *eval_expr_tuple(jl_expr_t *ex, interpreter_state *s) JL_CANSAFEPOINT
 {
     // evaluate Expr(:tuple, ...)
     // only appears in post-lowered IR in foreignglobal / foreigncall
@@ -430,7 +430,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
 }
 
 // phi nodes don't behave like proper instructions, so we require a special interpreter to handle them
-static size_t eval_phi(jl_array_t *stmts, interpreter_state *s, size_t ns, size_t to)
+static size_t eval_phi(jl_array_t *stmts, interpreter_state *s, size_t ns, size_t to) JL_CANSAFEPOINT
 {
     size_t from = s->ip;
     size_t ip = to;
@@ -766,7 +766,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
 
 // preparing method IR for interpreter
 
-jl_value_t *jl_code_or_ci_for_interpreter(jl_method_instance_t *mi, size_t world)
+jl_value_t *jl_code_or_ci_for_interpreter(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world)
 {
     jl_value_t *ret = NULL;
     jl_code_info_t *src = NULL;

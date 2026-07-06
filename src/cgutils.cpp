@@ -101,9 +101,9 @@ static Value *mark_callee_rooted(jl_codectx_t &ctx, Value *V)
         PointerType::get(V->getContext(), AddressSpace::CalleeRooted));
 }
 
-static Constant *julia_const_to_llvm(jl_codectx_t &ctx, jl_value_t *e);
+static Constant *julia_const_to_llvm(jl_codectx_t &ctx, jl_value_t *e) JL_CANSAFEPOINT;
 
-static Value *data_pointer(jl_codectx_t &ctx, const jl_cgval_t &x)
+static Value *data_pointer(jl_codectx_t &ctx, const jl_cgval_t &x) JL_CANSAFEPOINT
 {
     assert(x.ispointer());
     Value *data;
@@ -172,7 +172,7 @@ static Value *stringConstPtr(
 
 
 // --- MDNode ---
-Metadata *to_md_tree(jl_value_t *val, LLVMContext &ctxt) {
+Metadata *to_md_tree(jl_value_t *val, LLVMContext &ctxt) JL_CANSAFEPOINT {
     if (val == jl_nothing)
         return nullptr;
     Metadata *MD = nullptr;
@@ -344,8 +344,8 @@ static Value *emit_pointer_from_objref(jl_codectx_t &ctx, Value *V)
     return Call;
 }
 
-static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, MaybeAlign align = MaybeAlign());
-static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value* dest, MDNode *tbaa_dest, MaybeAlign align_src, Align align_dst, bool isVolatile=false);
+static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, MaybeAlign align = MaybeAlign()) JL_CANSAFEPOINT;
+static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value* dest, MDNode *tbaa_dest, MaybeAlign align_src, Align align_dst, bool isVolatile=false) JL_CANSAFEPOINT;
 
 static bool type_is_permalloc(jl_value_t *typ)
 {
@@ -361,7 +361,7 @@ static bool type_is_permalloc(jl_value_t *typ)
 
 // find the offset of pointer fields which never need a write barrier since their type-analysis
 // shows they are permanently rooted
-static void find_perm_offsets(jl_datatype_t *typ, SmallVectorImpl<unsigned> &res, unsigned offset)
+static void find_perm_offsets(jl_datatype_t *typ, SmallVectorImpl<unsigned> &res, unsigned offset) JL_CANSAFEPOINT
 {
     // This is a inlined field at `offset`.
     if (!typ->layout || typ->layout->npointers == 0)
@@ -489,7 +489,7 @@ static llvm::SmallVector<Value*,0> extract_gc_roots(jl_codectx_t &ctx, Value *da
     return gcroots;
 }
 
-static llvm::SmallVector<Value*,0> extract_gc_roots(jl_codectx_t &ctx, const jl_cgval_t &val, size_t npointers)
+static llvm::SmallVector<Value*,0> extract_gc_roots(jl_codectx_t &ctx, const jl_cgval_t &val, size_t npointers) JL_CANSAFEPOINT
 {
     SmallVector<Value*,0> gcroots;
     if (npointers) {
@@ -531,7 +531,7 @@ static jl_gc_roots_t make_lazy_gc_roots(Value *inline_roots_ptr, size_t npointer
 }
 
 // inlined bool indicates whether this must return the inlined roots inside x separately, or whether x itself may be used as the root (if x is already isboxed)
-static llvm::SmallVector<Value*,0> get_gc_roots_for(jl_codectx_t &ctx, const jl_cgval_t &x, bool inlined=false)
+static llvm::SmallVector<Value*,0> get_gc_roots_for(jl_codectx_t &ctx, const jl_cgval_t &x, bool inlined=false) JL_CANSAFEPOINT
 {
     if (x.constant || x.typ == jl_bottom_type)
         return {};
@@ -569,9 +569,6 @@ static llvm::SmallVector<Value*,0> get_gc_roots_for(jl_codectx_t &ctx, const jl_
 }
 
 // --- emitting pointers directly into code ---
-
-static void jl_temporary_root(jl_codegen_output_t &ctx, jl_value_t *val);
-static void jl_temporary_root(jl_codectx_t &ctx, jl_value_t *val);
 
 static Constant *julia_pgv(jl_codegen_output_t &params, Module *M, const char *cname, void *addr)
 {
@@ -677,7 +674,7 @@ Constant *literal_pointer_val_slot(jl_codegen_output_t &params, jl_value_t *p)
     return julia_pgv(params, M, "jl_global#", p);
 }
 
-static size_t dereferenceable_size(jl_value_t *jt)
+static size_t dereferenceable_size(jl_value_t *jt) JL_CANSAFEPOINT
 {
     if (jl_is_datatype(jt) && jl_struct_try_layout((jl_datatype_t*)jt)) {
         return jl_datatype_size(jt);
@@ -701,7 +698,7 @@ static unsigned julia_alignment(jl_value_t *jt)
     return alignment;
 }
 
-static inline void maybe_mark_argument_dereferenceable(AttrBuilder &B, jl_value_t *jt)
+static inline void maybe_mark_argument_dereferenceable(AttrBuilder &B, jl_value_t *jt) JL_CANSAFEPOINT
 {
     B.addAttribute(Attribute::NonNull);
     B.addAttribute(Attribute::NoUndef);
@@ -733,7 +730,7 @@ static inline Instruction *maybe_mark_load_dereferenceable(Instruction *LI, bool
     return LI;
 }
 
-static inline Instruction *maybe_mark_load_dereferenceable(Instruction *LI, bool can_be_null, jl_value_t *jt)
+static inline Instruction *maybe_mark_load_dereferenceable(Instruction *LI, bool can_be_null, jl_value_t *jt) JL_CANSAFEPOINT
 {
     size_t size = dereferenceable_size(jt);
     unsigned alignment = 1;
@@ -809,7 +806,7 @@ static unsigned convert_struct_offset(jl_codectx_t &ctx, Type *lty, unsigned byt
     return convert_struct_offset(ctx.builder.GetInsertBlock()->getModule()->getDataLayout(), lty, byte_offset);
 }
 
-static Type *_julia_struct_to_llvm(jl_codegen_output_t *ctx, LLVMContext &ctxt, jl_value_t *jt, bool *isboxed, bool llvmcall=false);
+static Type *_julia_struct_to_llvm(jl_codegen_output_t *ctx, LLVMContext &ctxt, jl_value_t *jt, bool *isboxed, bool llvmcall=false) JL_CANSAFEPOINT;
 
 static bool is_typeofbottom_typealias(jl_value_t *jt)
 {
@@ -820,7 +817,7 @@ static bool is_typeofbottom_typealias(jl_value_t *jt)
            (jl_is_some_Type(jt) && jl_some_Type_T(jt) == jl_bottom_type);
 }
 
-static Type *_julia_type_to_llvm(jl_codegen_output_t *ctx, LLVMContext &ctxt, jl_value_t *jt, bool *isboxed, bool no_boxing)
+static Type *_julia_type_to_llvm(jl_codegen_output_t *ctx, LLVMContext &ctxt, jl_value_t *jt, bool *isboxed, bool no_boxing) JL_CANSAFEPOINT
 {
     // this function converts a Julia Type into the equivalent LLVM type
     if (isboxed) *isboxed = false;
@@ -843,14 +840,14 @@ static Type *julia_type_to_llvm(jl_codectx_t &ctx, jl_value_t *jt, bool *isboxed
 }
 
 extern "C" JL_DLLEXPORT_CODEGEN
-Type *jl_type_to_llvm_impl(jl_value_t *jt, LLVMContextRef ctxt, bool *isboxed)
+Type *jl_type_to_llvm_impl(jl_value_t *jt, LLVMContextRef ctxt, bool *isboxed) JL_CANSAFEPOINT
 {
     return _julia_type_to_llvm(NULL, *unwrap(ctxt), jt, isboxed, false);
 }
 
 
 extern "C" JL_DLLEXPORT_CODEGEN
-Type *jl_struct_to_llvm_impl(jl_value_t *jt, LLVMContextRef ctxt, bool *isboxed)
+Type *jl_struct_to_llvm_impl(jl_value_t *jt, LLVMContextRef ctxt, bool *isboxed) JL_CANSAFEPOINT
 {
     return _julia_type_to_llvm(NULL, *unwrap(ctxt), jt, isboxed, true);
 }
@@ -1082,7 +1079,7 @@ static Type *_julia_struct_to_llvm(jl_codegen_output_t *ctx, LLVMContext &ctxt, 
     return JuliaType::get_prjlvalue_ty(ctxt);
 }
 
-static Type *julia_struct_to_llvm(jl_codectx_t &ctx, jl_value_t *jt, bool *isboxed)
+static Type *julia_struct_to_llvm(jl_codectx_t &ctx, jl_value_t *jt, bool *isboxed) JL_CANSAFEPOINT
 {
     return _julia_struct_to_llvm(&ctx.emission_context, ctx.builder.getContext(), jt, isboxed);
 }
@@ -1125,7 +1122,7 @@ static bool is_tupletype_homogeneous(jl_svec_t *t, bool allow_va = false)
 static bool for_each_uniontype_small(
         llvm::function_ref<void(unsigned, jl_datatype_t*)> f,
         jl_value_t *ty,
-        unsigned &counter)
+        unsigned &counter) JL_CANSAFEPOINT
 {
     if (counter > 127)
         return false;
@@ -1144,13 +1141,13 @@ static bool for_each_uniontype_small(
     return false;
 }
 
-static bool is_uniontype_allunboxed(jl_value_t *typ)
+static bool is_uniontype_allunboxed(jl_value_t *typ) JL_CANSAFEPOINT
 {
     unsigned counter = 0;
     return for_each_uniontype_small([&](unsigned, jl_datatype_t*) {}, typ, counter);
 }
 
-static bool is_uniontype_anyunboxed(jl_value_t *typ)
+static bool is_uniontype_anyunboxed(jl_value_t *typ) JL_CANSAFEPOINT
 {
     unsigned counter = 0;
     for_each_uniontype_small([&](unsigned, jl_datatype_t*) {}, typ, counter);
@@ -1158,8 +1155,8 @@ static bool is_uniontype_anyunboxed(jl_value_t *typ)
 }
 
 
-static Value *emit_typeof(jl_codectx_t &ctx, Value *v, bool maybenull, bool justtag, bool notag=false);
-static Value *emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p, bool maybenull=false, bool justtag=false);
+static Value *emit_typeof(jl_codectx_t &ctx, Value *v, bool maybenull, bool justtag, bool notag=false) JL_CANSAFEPOINT;
+static Value *emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p, bool maybenull=false, bool justtag=false) JL_CANSAFEPOINT;
 
 static unsigned get_box_tindex(jl_datatype_t *jt, jl_value_t *ut)
 {
@@ -1215,7 +1212,7 @@ static void emit_memcpy(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const &dst
 
 template<typename T1>
 static void emit_memcpy(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const &dst_ai, const jl_cgval_t &src,
-                        T1 &&sz, Align align_dst, Align align_src, bool is_volatile=false)
+                        T1 &&sz, Align align_dst, Align align_src, bool is_volatile=false) JL_CANSAFEPOINT
 {
     auto src_ai = jl_aliasinfo_t::fromTBAA(ctx, src.tbaa);
     emit_memcpy_llvm(ctx, dst, dst_ai, data_pointer(ctx, src), src_ai, sz, align_dst, align_src, is_volatile);
@@ -1252,7 +1249,7 @@ static void store_all_roots(jl_codectx_t &ctx, const jl_gc_roots_t &inline_roots
 }
 
 // take a value `x` and split its bits into dst and the roots into inline_roots
-static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align_src, Value *dst, Align align_dst, jl_aliasinfo_t const &dst_ai, Value *inline_roots_ptr, jl_aliasinfo_t const &roots_ai, bool isVolatileStore=false)
+static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align_src, Value *dst, Align align_dst, jl_aliasinfo_t const &dst_ai, Value *inline_roots_ptr, jl_aliasinfo_t const &roots_ai, bool isVolatileStore=false) JL_CANSAFEPOINT
 {
     if (x.isghost)
         return;
@@ -1315,7 +1312,7 @@ static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align
     }
 }
 
-static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align_src, Value *dst, Align align_dst, jl_aliasinfo_t const &dst_ai, bool isVolatileStore)
+static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align_src, Value *dst, Align align_dst, jl_aliasinfo_t const &dst_ai, bool isVolatileStore) JL_CANSAFEPOINT
 {
     if (x.isghost)
         return;
@@ -1365,7 +1362,7 @@ static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align
     }
 }
 
-static std::tuple<Value*, jl_gc_roots_t, MDNode*> split_value(jl_codectx_t &ctx, const jl_cgval_t &x, Align x_alignment, bool copy_required)
+static std::tuple<Value*, jl_gc_roots_t, MDNode*> split_value(jl_codectx_t &ctx, const jl_cgval_t &x, Align x_alignment, bool copy_required) JL_CANSAFEPOINT
 {
     jl_datatype_t *typ = (jl_datatype_t*)x.typ;
     auto sizes = split_value_size(typ);
@@ -1395,7 +1392,7 @@ static std::tuple<Value*, jl_gc_roots_t, MDNode*> split_value(jl_codectx_t &ctx,
 }
 
 // Return the offset values corresponding to jl_field_offset, but into the two buffers for a split value (or -1)
-static std::pair<ssize_t,ssize_t> split_value_field(jl_datatype_t *typ, unsigned idx)
+static std::pair<ssize_t,ssize_t> split_value_field(jl_datatype_t *typ, unsigned idx) JL_CANSAFEPOINT
 {
     size_t fldoff = jl_field_offset(typ, idx);
     assert(typ->layout->first_ptr >= 0);
@@ -1456,7 +1453,7 @@ static void recombine_value(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dst, 
     }
 }
 
-static Value *emit_tagfrom(jl_codectx_t &ctx, jl_datatype_t *dt)
+static Value *emit_tagfrom(jl_codectx_t &ctx, jl_datatype_t *dt) JL_CANSAFEPOINT
 {
     if (dt->smalltag)
         return ConstantInt::get(ctx.types().T_size, dt->smalltag << 4);
@@ -1479,7 +1476,7 @@ static Value *emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p, bool maybenull
             return emit_tagfrom(ctx, dt);
         return track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)dt));
     }
-    auto notag = [justtag] (jl_value_t *typ) {
+    auto notag = [justtag] (jl_value_t *typ) JL_CANSAFEPOINT {
         // compute if the tag is always a type (not a builtin tag)
         // based on having no intersection with one of the special types
         // this doesn't matter if the user just wants the tag value
@@ -1513,7 +1510,7 @@ static Value *emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p, bool maybenull
         Value *datatype_or_p = Constant::getNullValue(PointerType::getUnqual(expr_type->getContext()));
         unsigned counter = 0;
         for_each_uniontype_small(
-            [&](unsigned idx, jl_datatype_t *jt) {
+            [&](unsigned idx, jl_datatype_t *jt) JL_CANSAFEPOINT {
                 Value *cmp = ctx.builder.CreateICmpEQ(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), idx));
                 Constant *ptr;
                 if (justtag && jt->smalltag) {
@@ -1760,7 +1757,7 @@ static void raise_exception_unless(jl_codectx_t &ctx, Value *cond, Value *exc)
     raise_exception(ctx, exc, passBB);
 }
 
-static void undef_var_error_ifnot(jl_codectx_t &ctx, Value *ok, jl_sym_t *name, jl_value_t *scope)
+static void undef_var_error_ifnot(jl_codectx_t &ctx, Value *ok, jl_sym_t *name, jl_value_t *scope) JL_CANSAFEPOINT
 {
     ++EmittedUndefVarErrors;
     BasicBlock *err = BasicBlock::Create(ctx.builder.getContext(), "err", ctx.f);
@@ -1804,7 +1801,7 @@ static Value *null_pointer_cmp(jl_codectx_t &ctx, Value *v)
 
 // If `nullcheck` is not NULL and a pointer NULL check is necessary
 // store the pointer to be checked in `*nullcheck` instead of checking it
-static void null_pointer_check(jl_codectx_t &ctx, Value *v, Value **nullcheck)
+static void null_pointer_check(jl_codectx_t &ctx, Value *v, Value **nullcheck) JL_CANSAFEPOINT
 {
     if (nullcheck) {
         *nullcheck = v;
@@ -1815,7 +1812,7 @@ static void null_pointer_check(jl_codectx_t &ctx, Value *v, Value **nullcheck)
 }
 
 
-static void null_load_check(jl_codectx_t &ctx, Value *v, jl_module_t *scope, jl_sym_t *name)
+static void null_load_check(jl_codectx_t &ctx, Value *v, jl_module_t *scope, jl_sym_t *name) JL_CANSAFEPOINT
 {
     Value *notnull = null_pointer_cmp(ctx, v);
     if (name && scope)
@@ -1827,7 +1824,7 @@ static void null_load_check(jl_codectx_t &ctx, Value *v, jl_module_t *scope, jl_
 // ifnot == nullptr && return func()
 // return (ifnot ? func() : defval)
 template<typename Func>
-static void emit_guarded_test(jl_codectx_t &ctx, Value *ifnot, MutableArrayRef<Value*> defval, Func &&func)
+static void emit_guarded_test(jl_codectx_t &ctx, Value *ifnot, MutableArrayRef<Value*> defval, Func &&func) JL_CANSAFEPOINT
 {
     if (ifnot == nullptr) {
         auto res = func();
@@ -1866,10 +1863,10 @@ static void emit_guarded_test(jl_codectx_t &ctx, Value *ifnot, MutableArrayRef<V
 }
 
 template<typename Func>
-static Value *emit_guarded_test(jl_codectx_t &ctx, Value *ifnot, Value *defval, Func &&func)
+static Value *emit_guarded_test(jl_codectx_t &ctx, Value *ifnot, Value *defval, Func &&func) JL_CANSAFEPOINT
 {
     MutableArrayRef res(&defval, defval == nullptr ? 0 : 1);
-    auto funcwrap = [&func] () -> SmallVector<Value*,1> {
+    auto funcwrap = [&func] () JL_CANSAFEPOINT -> SmallVector<Value*,1> {
         auto res = func();
         if (res == nullptr)
             return {};
@@ -1882,13 +1879,13 @@ static Value *emit_guarded_test(jl_codectx_t &ctx, Value *ifnot, Value *defval, 
 }
 
 template<typename Func>
-static Value *emit_guarded_test(jl_codectx_t &ctx, Value *ifnot, bool defval, Func &&func)
+static Value *emit_guarded_test(jl_codectx_t &ctx, Value *ifnot, bool defval, Func &&func) JL_CANSAFEPOINT
 {
     return emit_guarded_test(ctx, ifnot, ConstantInt::get(getInt1Ty(ctx.builder.getContext()), defval), func);
 }
 
 template<typename Func>
-static Value *emit_nullcheck_guard(jl_codectx_t &ctx, Value *nullcheck, Func &&func)
+static Value *emit_nullcheck_guard(jl_codectx_t &ctx, Value *nullcheck, Func &&func) JL_CANSAFEPOINT
 {
     if (!nullcheck)
         return func();
@@ -1897,7 +1894,7 @@ static Value *emit_nullcheck_guard(jl_codectx_t &ctx, Value *nullcheck, Func &&f
 
 template<typename Func>
 static Value *emit_nullcheck_guard2(jl_codectx_t &ctx, Value *nullcheck1,
-                                    Value *nullcheck2, Func &&func)
+                                    Value *nullcheck2, Func &&func) JL_CANSAFEPOINT
 {
     if (!nullcheck1)
         return emit_nullcheck_guard(ctx, nullcheck2, func);
@@ -1906,7 +1903,7 @@ static Value *emit_nullcheck_guard2(jl_codectx_t &ctx, Value *nullcheck1,
     nullcheck1 = null_pointer_cmp(ctx, nullcheck1);
     nullcheck2 = null_pointer_cmp(ctx, nullcheck2);
     // If both are NULL, return true.
-    return emit_guarded_test(ctx, ctx.builder.CreateOr(nullcheck1, nullcheck2), true, [&] {
+    return emit_guarded_test(ctx, ctx.builder.CreateOr(nullcheck1, nullcheck2), true, [&] () JL_CANSAFEPOINT {
         return emit_guarded_test(ctx, ctx.builder.CreateAnd(nullcheck1, nullcheck2),
                                  false, func);
     });
@@ -1922,7 +1919,7 @@ static Value *emit_typeof(jl_codectx_t &ctx, Value *v, bool maybenull, bool just
     assert(v != NULL && !isa<AllocaInst>(v) && "expected a conditionally boxed value");
     Value *nonnull = maybenull ? null_pointer_cmp(ctx, v) : ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 1);
     Function *typeof = prepare_call(jl_typeof_func);
-    auto val = emit_guarded_test(ctx, nonnull, Constant::getNullValue(justtag ? ctx.types().T_size : typeof->getReturnType()), [&] {
+    auto val = emit_guarded_test(ctx, nonnull, Constant::getNullValue(justtag ? ctx.types().T_size : typeof->getReturnType()), [&] () JL_CANSAFEPOINT {
         // e.g. emit_typeof(ctx, v)
         Value *typetag = ctx.builder.CreateCall(typeof, {v});
         if (notag)
@@ -1931,7 +1928,7 @@ static Value *emit_typeof(jl_codectx_t &ctx, Value *v, bool maybenull, bool just
         if (justtag)
             return tag;
         auto issmall = ctx.builder.CreateICmpULT(tag, ConstantInt::get(tag->getType(), (uintptr_t)jl_max_tags << 4));
-        return emit_guarded_test(ctx, issmall, typetag, [&] {
+        return emit_guarded_test(ctx, issmall, typetag, [&] () JL_CANSAFEPOINT {
             // we lied a bit: this wasn't really an object (though it was valid for GC rooting)
             // and we need to use it as an index to get the real object now
             Module *M = jl_Module;
@@ -1946,16 +1943,16 @@ static Value *emit_typeof(jl_codectx_t &ctx, Value *v, bool maybenull, bool just
     return val;
 }
 
-static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &v,  bool is_promotable=false);
+static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &v,  bool is_promotable=false) JL_CANSAFEPOINT;
 
-static void just_emit_type_error(jl_codectx_t &ctx, const jl_cgval_t &x, Value *type, const Twine &msg)
+static void just_emit_type_error(jl_codectx_t &ctx, const jl_cgval_t &x, Value *type, const Twine &msg) JL_CANSAFEPOINT
 {
     Value *msg_val = stringConstPtr(ctx.emission_context, ctx.builder, msg);
     ctx.builder.CreateCall(prepare_call(jltypeerror_func),
                        { msg_val, maybe_decay_untracked(ctx, type), mark_callee_rooted(ctx, boxed(ctx, x))});
 }
 
-static void emit_type_error(jl_codectx_t &ctx, const jl_cgval_t &x, Value *type, const Twine &msg)
+static void emit_type_error(jl_codectx_t &ctx, const jl_cgval_t &x, Value *type, const Twine &msg) JL_CANSAFEPOINT
 {
     just_emit_type_error(ctx, x, type, msg);
     ctx.builder.CreateUnreachable();
@@ -1964,7 +1961,7 @@ static void emit_type_error(jl_codectx_t &ctx, const jl_cgval_t &x, Value *type,
 }
 
 // Should agree with `emit_isa` below
-static bool _can_optimize_isa(jl_value_t *type, int &counter)
+static bool _can_optimize_isa(jl_value_t *type, int &counter) JL_CANSAFEPOINT
 {
     if (counter > 127)
         return false;
@@ -1988,7 +1985,7 @@ static bool _can_optimize_isa(jl_value_t *type, int &counter)
     return false;
 }
 
-static bool can_optimize_isa_union(jl_uniontype_t *type)
+static bool can_optimize_isa_union(jl_uniontype_t *type) JL_CANSAFEPOINT
 {
     int counter = 1;
     return (_can_optimize_isa(type->a, counter) && _can_optimize_isa(type->b, counter));
@@ -2051,7 +2048,7 @@ static Value *emit_exactly_isa(jl_codectx_t &ctx, const jl_cgval_t &arg, jl_data
         // its sole instance is the pinned type object, which is always boxed
         if (!arg.isboxed)
             return Vfalse;
-        return emit_guarded_test(ctx, isnull, Vfalse, [&]{
+        return emit_guarded_test(ctx, isnull, Vfalse, [&] () JL_CANSAFEPOINT {
             auto isa = ctx.builder.CreateICmpEQ(
                 decay_derived(ctx, arg.Vboxed),
                 decay_derived(ctx, literal_pointer_val(ctx, jl_some_Type_T((jl_value_t*)dt))));
@@ -2059,7 +2056,7 @@ static Value *emit_exactly_isa(jl_codectx_t &ctx, const jl_cgval_t &arg, jl_data
             return isa;
         });
     }
-    return emit_guarded_test(ctx, isnull, Vfalse, [&]{
+    return emit_guarded_test(ctx, isnull, Vfalse, [&] () JL_CANSAFEPOINT{
         auto isa = ctx.builder.CreateICmpEQ(emit_typeof(ctx, arg, false, true), emit_tagfrom(ctx, dt));
         setName(ctx.emission_context, isa, "exactly_isa");
         return isa;
@@ -2067,10 +2064,10 @@ static Value *emit_exactly_isa(jl_codectx_t &ctx, const jl_cgval_t &arg, jl_data
 }
 
 static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x,
-                                        jl_value_t *type, const Twine &msg);
+                                        jl_value_t *type, const Twine &msg) JL_CANSAFEPOINT;
 
 static void emit_isa_union(jl_codectx_t &ctx, const jl_cgval_t &x, jl_value_t *type,
-                           SmallVectorImpl<std::pair<std::pair<BasicBlock*,BasicBlock*>,Value*>> &bbs)
+                           SmallVectorImpl<std::pair<std::pair<BasicBlock*,BasicBlock*>,Value*>> &bbs) JL_CANSAFEPOINT
 {
     ++EmittedIsaUnions;
     if (jl_is_uniontype(type)) {
@@ -2212,15 +2209,15 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
 //
 // n.b. It is also possible the value is a ghost of some sort, and we will
 // declare that the pointer is legal (for zero bytes) even though it might be undef.
-static Value *emit_isa_and_defined(jl_codectx_t &ctx, const jl_cgval_t &val, jl_value_t *typ)
+static Value *emit_isa_and_defined(jl_codectx_t &ctx, const jl_cgval_t &val, jl_value_t *typ) JL_CANSAFEPOINT
 {
-    return emit_nullcheck_guard(ctx, val.inline_roots.empty() && val.ispointer() ? val.V : nullptr, [&] {
+    return emit_nullcheck_guard(ctx, val.inline_roots.empty() && val.ispointer() ? val.V : nullptr, [&] () JL_CANSAFEPOINT {
         return emit_isa(ctx, val, typ, Twine()).first;
     });
 }
 
 
-static void emit_typecheck(jl_codectx_t &ctx, const jl_cgval_t &x, jl_value_t *type, const Twine &msg)
+static void emit_typecheck(jl_codectx_t &ctx, const jl_cgval_t &x, jl_value_t *type, const Twine &msg) JL_CANSAFEPOINT
 {
     Value *istype;
     bool handled_msg;
@@ -2252,7 +2249,7 @@ static Value *emit_isconcrete(jl_codectx_t &ctx, Value *typ)
     return isconcrete;
 }
 
-static void emit_concretecheck(jl_codectx_t &ctx, Value *typ, const Twine &msg)
+static void emit_concretecheck(jl_codectx_t &ctx, Value *typ, const Twine &msg) JL_CANSAFEPOINT
 {
     ++EmittedConcretechecks;
     assert(typ->getType() == ctx.types().T_prjlvalue);
@@ -2275,7 +2272,7 @@ static bool bounds_check_enabled(jl_codectx_t &ctx, jl_value_t *inbounds) {
 #endif
 }
 
-static Value *emit_bounds_check(jl_codectx_t &ctx, const jl_cgval_t &ainfo, jl_value_t *ty, Value *i, Value *len, jl_value_t *boundscheck)
+static Value *emit_bounds_check(jl_codectx_t &ctx, const jl_cgval_t &ainfo, jl_value_t *ty, Value *i, Value *len, jl_value_t *boundscheck) JL_CANSAFEPOINT
 {
     Value *im1 = ctx.builder.CreateSub(i, ConstantInt::get(ctx.types().T_size, 1));
     if (bounds_check_enabled(ctx, boundscheck)) {
@@ -2323,8 +2320,8 @@ static Value *emit_bounds_check(jl_codectx_t &ctx, const jl_cgval_t &ainfo, jl_v
 
 static void emit_write_barrier(jl_codectx_t&, Value*, ArrayRef<Value*>);
 static void emit_write_barrier(jl_codectx_t&, Value*, Value*);
-static void emit_write_multibarrier(jl_codectx_t&, Value*, Value*, jl_value_t*);
-static void emit_write_multibarrier(jl_codectx_t &ctx, Value *parent, const jl_cgval_t &x);
+static void emit_write_multibarrier(jl_codectx_t&, Value*, Value*, jl_value_t*) JL_CANSAFEPOINT;
+static void emit_write_multibarrier(jl_codectx_t &ctx, Value *parent, const jl_cgval_t &x) JL_CANSAFEPOINT;
 
 SmallVector<unsigned, 0> first_ptr(Type *T)
 {
@@ -2383,7 +2380,7 @@ static void emit_lockstate_value(jl_codectx_t &ctx, Value *strct, bool newstate)
 static LoadInst *emit_aliased_load(jl_codectx_t &ctx, Type *elty, Value *ptr, Align alignment,
                                    MDNode *tbaa, MDNode *aliasscope, AtomicOrdering Order,
                                    bool maybe_mark_dereferenceable = false, bool maybe_null = true,
-                                   jl_value_t *jltype_for_dereferenceable = nullptr)
+                                   jl_value_t *jltype_for_dereferenceable = nullptr) JL_CANSAFEPOINT
 {
     LoadInst *load = ctx.builder.CreateAlignedLoad(elty, ptr, alignment, false);
     load->setOrdering(Order);
@@ -2425,7 +2422,7 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
                              MDNode *tbaa, MDNode *aliasscope, bool isboxed, AtomicOrdering Order,
                              bool maybe_null_if_boxed = true, unsigned alignment = 0,
                              Value **nullcheck = nullptr,
-                             Value *ptindex = nullptr, MDNode *tbaa_ptindex = nullptr)
+                             Value *ptindex = nullptr, MDNode *tbaa_ptindex = nullptr) JL_CANSAFEPOINT
 {
     // Handle union types (when ptindex is provided)
     if (ptindex != nullptr) {
@@ -2537,9 +2534,9 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
         return mark_julia_slot(intcast, jltype, NULL, ctx.tbaa().tbaa_stack);
 }
 
-static Function *emit_modifyhelper(jl_codectx_t &ctx2, const jl_cgval_t &op, const jl_cgval_t &modifyop, jl_value_t *jltype, Type *elty, jl_cgval_t rhs, const Twine &fname, bool gcstack_arg);
+static Function *emit_modifyhelper(jl_codectx_t &ctx2, const jl_cgval_t &op, const jl_cgval_t &modifyop, jl_value_t *jltype, Type *elty, jl_cgval_t rhs, const Twine &fname, bool gcstack_arg) JL_CANSAFEPOINT;
 static void emit_unionmove(jl_codectx_t &ctx, Value *dest, jl_value_t *desttype,
-        MDNode *tbaa_dst, const jl_cgval_t &src, Value *tindex, Value *skip, bool isVolatile=false);
+        MDNode *tbaa_dst, const jl_cgval_t &src, Value *tindex, Value *skip, bool isVolatile=false) JL_CANSAFEPOINT;
 
 static jl_cgval_t typed_store(jl_codectx_t &ctx,
         Value *ptr, jl_cgval_t rhs, jl_cgval_t cmpop,
@@ -2550,9 +2547,9 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         bool maybe_null_if_boxed, const jl_cgval_t *modifyop, const Twine &fname,
         jl_module_t *mod, jl_sym_t *var,
         // Union type support (set ptindex non-null for union stores)
-        Value *ptindex = nullptr, MDNode *tbaa_ptindex = nullptr)
+        Value *ptindex = nullptr, MDNode *tbaa_ptindex = nullptr) JL_CANSAFEPOINT
 {
-    auto newval = [&](const jl_cgval_t &lhs) { // for ismodifyfield
+    auto newval = [&](const jl_cgval_t &lhs) JL_CANSAFEPOINT { // for ismodifyfield
         const jl_cgval_t argv[3] = { cmpop, lhs, rhs };
         jl_cgval_t ret;
         if (modifyop) {
@@ -2582,7 +2579,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                 return jl_cgval_t();
         }
     }
-    auto store_union = [&](const jl_cgval_t &val, const jl_cgval_t &val_union) {
+    auto store_union = [&](const jl_cgval_t &val, const jl_cgval_t &val_union) JL_CANSAFEPOINT {
         Value *tindex = ctx.builder.CreateAnd(val_union.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), ~UNION_BOX_MARKER));
         Value *stindex = ctx.builder.CreateNUWSub(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 1));
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa_tindex);
@@ -2590,7 +2587,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         if (!val.isghost)
             emit_unionmove(ctx, ptr, jltype, tbaa, val, tindex, /*skip*/nullptr);
     };
-    auto load_union = [&]() {
+    auto load_union = [&]() JL_CANSAFEPOINT {
         return typed_load(ctx, ptr, NULL, jltype, tbaa, nullptr, false,
                 AtomicOrdering::NotAtomic, false, 0, nullptr, ptindex, tbaa_tindex);
     };
@@ -2678,7 +2675,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
     }
     // This pre-write barrier must be emitted before the store, while also not
     // holding any local atomic locks.
-    auto emit_store_pre_barrier = [&](Value *r, const jl_cgval_t &rhs) {
+    auto emit_store_pre_barrier = [&](Value *r, const jl_cgval_t &rhs) JL_CANSAFEPOINT {
         if (parent == NULL || !tracked_pointers)
             return;
         if (isboxed) {
@@ -3027,7 +3024,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                 else {
                     // Done = Success || first_ptr == NULL || oldval == cmpop)
                     // Done = !(!Success && (first_ptr != NULL && oldval == cmpop))
-                    Done = emit_guarded_test(ctx, ctx.builder.CreateNot(Success), false, [&] {
+                    Done = emit_guarded_test(ctx, ctx.builder.CreateNot(Success), false, [&] () JL_CANSAFEPOINT {
                         Value *first_ptr = nullptr;
                         if (maybe_null_if_boxed)
                             first_ptr = isboxed ? realinstr : extract_first_ptr(ctx, realinstr);
@@ -3105,7 +3102,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
 // --- convert boolean value to julia ---
 
 // Returns ctx.types().T_pjlvalue
-static Value *julia_bool(jl_codectx_t &ctx, Value *cond)
+static Value *julia_bool(jl_codectx_t &ctx, Value *cond) JL_CANSAFEPOINT
 {
     auto boolean = ctx.builder.CreateSelect(cond, literal_pointer_val(ctx, jl_true),
                                           literal_pointer_val(ctx, jl_false));
@@ -3122,9 +3119,9 @@ static void emit_atomic_error(jl_codectx_t &ctx, const Twine &msg)
 
 static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &strct,
                                          unsigned idx, jl_datatype_t *jt,
-                                         enum jl_memory_order order, Value **nullcheck=nullptr);
+                                         enum jl_memory_order order, Value **nullcheck=nullptr) JL_CANSAFEPOINT;
 
-static bool field_may_be_null(const jl_cgval_t &strct, jl_datatype_t *stt, size_t idx)
+static bool field_may_be_null(const jl_cgval_t &strct, jl_datatype_t *stt, size_t idx) JL_CANSAFEPOINT
 {
     size_t nfields = jl_datatype_nfields(stt);
     if (idx < nfields - (unsigned)stt->name->n_uninitialized)
@@ -3138,7 +3135,7 @@ static bool field_may_be_null(const jl_cgval_t &strct, jl_datatype_t *stt, size_
     return true;
 }
 
-static bool field_may_be_null(const jl_cgval_t &strct, jl_datatype_t *stt)
+static bool field_may_be_null(const jl_cgval_t &strct, jl_datatype_t *stt) JL_CANSAFEPOINT
 {
     size_t nfields = jl_datatype_nfields(stt);
     for (size_t i = 0; i < (unsigned)stt->name->n_uninitialized; i++) {
@@ -3153,12 +3150,12 @@ static bool field_may_be_null(const jl_cgval_t &strct, jl_datatype_t *stt)
 static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
         jl_cgval_t *ret, jl_cgval_t strct,
         Value *idx, jl_datatype_t *stt, jl_value_t *inbounds,
-        enum jl_memory_order order)
+        enum jl_memory_order order) JL_CANSAFEPOINT
 {
     ++EmittedGetfieldUnknowns;
     size_t nfields = jl_datatype_nfields(stt);
     bool maybe_null = field_may_be_null(strct, stt);
-    auto idx0 = [&]() {
+    auto idx0 = [&]() JL_CANSAFEPOINT {
         return emit_bounds_check(ctx, strct, (jl_value_t*)stt, idx, ConstantInt::get(ctx.types().T_size, nfields), inbounds);
     };
     if (nfields == 0) {
@@ -3621,7 +3618,7 @@ static Value *emit_n_varargs(jl_codectx_t &ctx)
 #endif
 }
 
-static Value *emit_genericmemoryelsize(jl_codectx_t &ctx, Value *v, jl_value_t *typ, bool add_isunion)
+static Value *emit_genericmemoryelsize(jl_codectx_t &ctx, Value *v, jl_value_t *typ, bool add_isunion) JL_CANSAFEPOINT
 {
     ++EmittedArrayElsize;
     jl_datatype_t *sty = (jl_datatype_t*)jl_unwrap_unionall(typ);
@@ -3700,7 +3697,7 @@ static Value *emit_genericmemoryptr(jl_codectx_t &ctx, Value *mem, const jl_data
     return ptr;
 }
 
-static Value *emit_genericmemoryowner(jl_codectx_t &ctx, Value *t)
+static Value *emit_genericmemoryowner(jl_codectx_t &ctx, Value *t) JL_CANSAFEPOINT
 {
     Value *m = decay_derived(ctx, t);
     Value *addr = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, m, 1);
@@ -3712,7 +3709,7 @@ static Value *emit_genericmemoryowner(jl_codectx_t &ctx, Value *t)
     aliasinfo_mem.decorateInst(LI);
     addr = emit_ptrgep(ctx, m, JL_SMALL_BYTE_ALIGNMENT);
     Value *foreign = ctx.builder.CreateICmpNE(addr, decay_derived(ctx, LI));
-    return emit_guarded_test(ctx, foreign, t, [&] {
+    return emit_guarded_test(ctx, foreign, t, [&] () JL_CANSAFEPOINT {
             addr = ctx.builder.CreateConstInBoundsGEP1_32(ctx.types().T_jlgenericmemory, m, 1);
             LoadInst *owner = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, addr, Align(sizeof(void*)));
             jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_memoryptr);
@@ -3723,7 +3720,7 @@ static Value *emit_genericmemoryowner(jl_codectx_t &ctx, Value *t)
 
 // --- boxing ---
 
-static Value *emit_allocobj(jl_codectx_t &ctx, jl_datatype_t *jt, bool fully_initialized);
+static Value *emit_allocobj(jl_codectx_t &ctx, jl_datatype_t *jt, bool fully_initialized) JL_CANSAFEPOINT;
 
 static void init_bits_value(jl_codectx_t &ctx, Value *newv, Value *v, MDNode *tbaa,
                             Align alignment = Align(sizeof(void*))) // min alignment in julia's gc is pointer-aligned
@@ -3733,7 +3730,7 @@ static void init_bits_value(jl_codectx_t &ctx, Value *newv, Value *v, MDNode *tb
     ai.decorateInst(ctx.builder.CreateAlignedStore(v, newv, alignment));
 }
 
-static void init_bits_cgval(jl_codectx_t &ctx, Value *newv, const jl_cgval_t &v)
+static void init_bits_cgval(jl_codectx_t &ctx, Value *newv, const jl_cgval_t &v) JL_CANSAFEPOINT
 {
     MDNode *tbaa = jl_is_mutable(v.typ) ? ctx.tbaa().tbaa_mutab : ctx.tbaa().tbaa_immut;
     unsigned alignment = julia_alignment(v.typ);
@@ -3742,7 +3739,7 @@ static void init_bits_cgval(jl_codectx_t &ctx, Value *newv, const jl_cgval_t &v)
     emit_unbox_store(ctx, v, newv, tbaa, Align(alignment), Align(newv_align));
 }
 
-static jl_value_t *static_constant_instance(const llvm::DataLayout &DL, Constant *constant, jl_value_t *jt)
+static jl_value_t *static_constant_instance(const llvm::DataLayout &DL, Constant *constant, jl_value_t *jt) JL_CANSAFEPOINT
 {
     assert(constant != NULL && jl_is_concrete_type(jt));
     jl_datatype_t *jst = (jl_datatype_t*)jt;
@@ -3826,13 +3823,13 @@ static Value *call_with_attrs(jl_codectx_t &ctx, JuliaFunction<TypeFn_t> *intr, 
     return Call;
 }
 
-static Value *as_value(jl_codectx_t &ctx, Type *to, const jl_cgval_t &v)
+static Value *as_value(jl_codectx_t &ctx, Type *to, const jl_cgval_t &v) JL_CANSAFEPOINT
 {
     assert(!v.isboxed);
     return emit_unbox(ctx, to, v);
 }
 
-static Value *load_i8box(jl_codectx_t &ctx, Value *v, jl_datatype_t *ty)
+static Value *load_i8box(jl_codectx_t &ctx, Value *v, jl_datatype_t *ty) JL_CANSAFEPOINT
 {
     auto jvar = ty == jl_int8_type ? jlboxed_int8_cache : jlboxed_uint8_cache;
     GlobalVariable *gv = prepare_global_in(jl_Module, jvar);
@@ -3846,7 +3843,7 @@ static Value *load_i8box(jl_codectx_t &ctx, Value *v, jl_datatype_t *ty)
 
 // some types have special boxing functions with small-value caches
 // Returns ctx.types().T_prjlvalue
-static Value *_boxed_special(jl_codectx_t &ctx, const jl_cgval_t &vinfo, Type *t)
+static Value *_boxed_special(jl_codectx_t &ctx, const jl_cgval_t &vinfo, Type *t) JL_CANSAFEPOINT
 {
     jl_value_t *jt = vinfo.typ;
     if (jt == (jl_value_t*)jl_bool_type)
@@ -3909,18 +3906,18 @@ static Value *_boxed_special(jl_codectx_t &ctx, const jl_cgval_t &vinfo, Type *t
     return box;
 }
 
-static Value *compute_box_tindex(jl_codectx_t &ctx, const jl_cgval_t &val, jl_value_t *ut, bool maybenull=false)
+static Value *compute_box_tindex(jl_codectx_t &ctx, const jl_cgval_t &val, jl_value_t *ut, bool maybenull=false) JL_CANSAFEPOINT
 {
     jl_value_t *supertype = val.typ;
     Value *datatype_tag = NULL;
-    auto maybe_setup_union_isa = [&]() {
+    auto maybe_setup_union_isa = [&]() JL_CANSAFEPOINT {
         if (datatype_tag == nullptr)
             datatype_tag = emit_typeof(ctx, val, maybenull, true);
     };
     Value *tindex = ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0);
     unsigned counter = 0;
     for_each_uniontype_small(
-            [&](unsigned idx, jl_datatype_t *jt) {
+            [&](unsigned idx, jl_datatype_t *jt) JL_CANSAFEPOINT {
                 if (jl_subtype((jl_value_t*)jt, supertype)) {
                     maybe_setup_union_isa();
                     Value *cmp = ctx.builder.CreateICmpEQ(emit_tagfrom(ctx, jt), datatype_tag);
@@ -3935,7 +3932,7 @@ static Value *compute_box_tindex(jl_codectx_t &ctx, const jl_cgval_t &val, jl_va
 }
 
 // get the runtime tindex value, assuming val is already converted to type typ if it has a TIndex
-static Value *compute_tindex_unboxed(jl_codectx_t &ctx, const jl_cgval_t &val, jl_value_t *typ, bool maybenull=false)
+static Value *compute_tindex_unboxed(jl_codectx_t &ctx, const jl_cgval_t &val, jl_value_t *typ, bool maybenull=false) JL_CANSAFEPOINT
 {
     if (val.typ == jl_bottom_type)
         return UndefValue::get(getInt8Ty(ctx.builder.getContext()));
@@ -3957,7 +3954,7 @@ static void union_alloca_type(jl_uniontype_t *ut,
     // compute the size of the union alloca that could hold this type
     unsigned counter = 0;
     allunbox = for_each_uniontype_small(
-            [&](unsigned idx, jl_datatype_t *jt) {
+            [&](unsigned idx, jl_datatype_t *jt) JL_CANSAFEPOINT {
                 if (!jl_is_datatype_singleton(jt)) {
                     //auto [nb1, n_roots] = split_value_size(jt); // TODO: deal with using this later
                     size_t nb1 = jl_datatype_size(jt);
@@ -3981,7 +3978,7 @@ static void union_alloca_type(jl_uniontype_t *ut,
         align = JL_HEAP_ALIGNMENT;
 }
 
-static AllocaInst *try_emit_union_alloca(jl_codectx_t &ctx, jl_uniontype_t *ut, bool &allunbox, size_t &min_align, size_t &nbytes, size_t &inline_roots)
+static AllocaInst *try_emit_union_alloca(jl_codectx_t &ctx, jl_uniontype_t *ut, bool &allunbox, size_t &min_align, size_t &nbytes, size_t &inline_roots) JL_CANSAFEPOINT
 {
     size_t align;
     union_alloca_type(ut, allunbox, nbytes, align, min_align, inline_roots);
@@ -4003,7 +4000,7 @@ static AllocaInst *try_emit_union_alloca(jl_codectx_t &ctx, jl_uniontype_t *ut, 
  * `vinfo` is already an unknown boxed union (union tag UNION_BOX_MARKER).
  */
 // Returns ctx.types().T_prjlvalue
-static Value *box_union(jl_codectx_t &ctx, const jl_cgval_t &vinfo, const SmallBitVector &skip)
+static Value *box_union(jl_codectx_t &ctx, const jl_cgval_t &vinfo, const SmallBitVector &skip) JL_CANSAFEPOINT
 {
     // given vinfo::Union{T, S}, emit IR of the form:
     //   ...
@@ -4028,7 +4025,7 @@ static Value *box_union(jl_codectx_t &ctx, const jl_cgval_t &vinfo, const SmallB
     PHINode *box_merge = ctx.builder.CreatePHI(ctx.types().T_prjlvalue, 2);
     unsigned counter = 0;
     for_each_uniontype_small(
-            [&](unsigned idx, jl_datatype_t *jt) {
+            [&](unsigned idx, jl_datatype_t *jt) JL_CANSAFEPOINT {
                 if (idx < skip.size() && skip[idx])
                     return;
                 Type *t = julia_type_to_llvm(ctx, (jl_value_t*)jt);
@@ -4218,7 +4215,7 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, jl_value_t *desttype,
         jl_value_t *typ = jl_typeof(src.constant);
         assert(skip || deserves_stack(typ));
         if (jl_is_concrete_immutable(typ)) {
-            emit_guarded_test(ctx, skip ? ctx.builder.CreateNot(skip) : nullptr, nullptr, [&] {
+            emit_guarded_test(ctx, skip ? ctx.builder.CreateNot(skip) : nullptr, nullptr, [&] () JL_CANSAFEPOINT {
                 unsigned alignment = julia_alignment(typ);
                 split_value_into(ctx, mark_julia_const(ctx, src.constant), Align(alignment), dest, Align(alignment), dest_ai, isVolatile);
                 return nullptr;
@@ -4228,7 +4225,7 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, jl_value_t *desttype,
     else if (jl_is_concrete_type(src.typ)) {
         assert(skip || deserves_stack(src.typ));
         if (jl_is_concrete_immutable(src.typ)) {
-            emit_guarded_test(ctx, skip ? ctx.builder.CreateNot(skip) : nullptr, nullptr, [&] {
+            emit_guarded_test(ctx, skip ? ctx.builder.CreateNot(skip) : nullptr, nullptr, [&] () JL_CANSAFEPOINT {
                 unsigned alignment = julia_alignment(src.typ);
                 split_value_into(ctx, src, Align(alignment), dest, Align(alignment), dest_ai, isVolatile);
                 return nullptr;
@@ -4245,7 +4242,7 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, jl_value_t *desttype,
         ctx.builder.SetInsertPoint(postBB);
         unsigned counter = 0;
         bool allunboxed = for_each_uniontype_small(
-                [&](unsigned idx, jl_datatype_t *jt) {
+                [&](unsigned idx, jl_datatype_t *jt) JL_CANSAFEPOINT {
                     if (!jl_subtype((jl_value_t*)jt, src.typ))
                         return;
                     unsigned nb = jl_datatype_size(jt);
@@ -4286,7 +4283,7 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, jl_value_t *desttype,
 }
 
 
-static void emit_cpointercheck(jl_codectx_t &ctx, const jl_cgval_t &x, const Twine &msg)
+static void emit_cpointercheck(jl_codectx_t &ctx, const jl_cgval_t &x, const Twine &msg) JL_CANSAFEPOINT
 {
     ++EmittedCPointerChecks;
     Value *t = emit_typeof(ctx, x, false, false);
@@ -4425,7 +4422,7 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
         jl_cgval_t rhs, jl_cgval_t cmp,
         bool wb, AtomicOrdering Order, AtomicOrdering FailOrder,
         Value *needlock, StoreKind op,
-        const jl_cgval_t *modifyop, const Twine &fname)
+        const jl_cgval_t *modifyop, const Twine &fname) JL_CANSAFEPOINT
 {
     auto get_objname = [&]() {
         return strct.V ? strct.V->getName() : StringRef("");
@@ -4813,7 +4810,7 @@ static void emit_memory_stores(jl_codectx_t &ctx, jl_datatype_t *typ, Value* all
 }
 
 
-static jl_cgval_t emit_const_len_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, size_t nel, jl_genericmemory_t *inst)
+static jl_cgval_t emit_const_len_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, size_t nel, jl_genericmemory_t *inst) JL_CANSAFEPOINT
 {
     if (nel == 0) {
         Value *empty_alloc = track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)inst));
@@ -4875,7 +4872,7 @@ static jl_cgval_t emit_const_len_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ
     return mark_julia_type(ctx, alloc, true, typ);
 }
 
-static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, jl_cgval_t nel, jl_genericmemory_t *inst)
+static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, jl_cgval_t nel, jl_genericmemory_t *inst) JL_CANSAFEPOINT
 {
     emit_typecheck(ctx, nel, (jl_value_t*)jl_long_type, "memorynew");
     nel = update_julia_type(ctx, nel, (jl_value_t*)jl_long_type);
@@ -4956,7 +4953,7 @@ static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, jl_cgval
     return mark_julia_type(ctx, phi, true, typ);
 }
 
-static jl_cgval_t _emit_memoryref(jl_codectx_t &ctx, Value *mem, Value *data, const jl_datatype_layout_t *layout, jl_value_t *typ)
+static jl_cgval_t _emit_memoryref(jl_codectx_t &ctx, Value *mem, Value *data, const jl_datatype_layout_t *layout, jl_value_t *typ) JL_CANSAFEPOINT
 {
     //jl_cgval_t argv[] = {
     //    mark_julia_type(ctx, mem, true, jl_any_type),
@@ -4970,7 +4967,7 @@ static jl_cgval_t _emit_memoryref(jl_codectx_t &ctx, Value *mem, Value *data, co
     return mark_julia_type(ctx, ref, false, typ);
 }
 
-static jl_cgval_t _emit_memoryref(jl_codectx_t &ctx, const jl_cgval_t &mem, const jl_datatype_layout_t *layout, jl_value_t *typ)
+static jl_cgval_t _emit_memoryref(jl_codectx_t &ctx, const jl_cgval_t &mem, const jl_datatype_layout_t *layout, jl_value_t *typ) JL_CANSAFEPOINT
 {
     bool isboxed = layout->flags.arrayelem_isboxed;
     bool isunion = layout->flags.arrayelem_isunion;
@@ -4979,7 +4976,7 @@ static jl_cgval_t _emit_memoryref(jl_codectx_t &ctx, const jl_cgval_t &mem, cons
     return _emit_memoryref(ctx, boxed(ctx, mem), data, layout, typ);
 }
 
-static jl_cgval_t emit_memoryref_direct(jl_codectx_t &ctx, const jl_cgval_t &mem, jl_cgval_t idx, jl_value_t *typ, jl_value_t *inbounds, const jl_datatype_layout_t *layout)
+static jl_cgval_t emit_memoryref_direct(jl_codectx_t &ctx, const jl_cgval_t &mem, jl_cgval_t idx, jl_value_t *typ, jl_value_t *inbounds, const jl_datatype_layout_t *layout) JL_CANSAFEPOINT
 {
     bool isboxed = layout->flags.arrayelem_isboxed;
     bool isunion = layout->flags.arrayelem_isunion;
@@ -5024,7 +5021,7 @@ static jl_cgval_t emit_memoryref_direct(jl_codectx_t &ctx, const jl_cgval_t &mem
     return _emit_memoryref(ctx, boxmem, data, layout, typ);
 }
 
-static Value *emit_memoryref_FCA(jl_codectx_t &ctx, const jl_cgval_t &ref, const jl_datatype_layout_t *layout)
+static Value *emit_memoryref_FCA(jl_codectx_t &ctx, const jl_cgval_t &ref, const jl_datatype_layout_t *layout) JL_CANSAFEPOINT
 {
     if (!ref.inline_roots.empty()) {
         LLVMContext &C = ctx.builder.getContext();
@@ -5053,7 +5050,7 @@ static Value *emit_memoryref_FCA(jl_codectx_t &ctx, const jl_cgval_t &ref, const
     }
 }
 
-static jl_cgval_t emit_memoryref(jl_codectx_t &ctx, const jl_cgval_t &ref, jl_cgval_t idx, jl_value_t *inbounds, const jl_datatype_layout_t *layout)
+static jl_cgval_t emit_memoryref(jl_codectx_t &ctx, const jl_cgval_t &ref, jl_cgval_t idx, jl_value_t *inbounds, const jl_datatype_layout_t *layout) JL_CANSAFEPOINT
 {
     ++EmittedArrayNdIndex;
     emit_typecheck(ctx, idx, (jl_value_t*)jl_long_type, "memoryrefnew");
@@ -5183,7 +5180,7 @@ static jl_cgval_t emit_memoryref(jl_codectx_t &ctx, const jl_cgval_t &ref, jl_cg
     return _emit_memoryref(ctx, mem, newdata, layout, ref.typ);
 }
 
-static jl_cgval_t emit_memoryref_offset(jl_codectx_t &ctx, const jl_cgval_t &ref, const jl_datatype_layout_t *layout)
+static jl_cgval_t emit_memoryref_offset(jl_codectx_t &ctx, const jl_cgval_t &ref, const jl_datatype_layout_t *layout) JL_CANSAFEPOINT
 {
     Value *offset;
     Value *V = emit_memoryref_FCA(ctx, ref, layout);
@@ -5207,7 +5204,7 @@ static jl_cgval_t emit_memoryref_offset(jl_codectx_t &ctx, const jl_cgval_t &ref
     return mark_julia_type(ctx, offset, false, jl_long_type);
 }
 
-static Value *emit_memoryref_mem(jl_codectx_t &ctx, const jl_cgval_t &ref, const jl_datatype_layout_t *layout)
+static Value *emit_memoryref_mem(jl_codectx_t &ctx, const jl_cgval_t &ref, const jl_datatype_layout_t *layout) JL_CANSAFEPOINT
 {
     Value *V = emit_memoryref_FCA(ctx, ref, layout);
     V = CreateSimplifiedExtractValue(ctx, V, 1);
@@ -5215,7 +5212,7 @@ static Value *emit_memoryref_mem(jl_codectx_t &ctx, const jl_cgval_t &ref, const
     return V;
 }
 
-static Value *emit_memoryref_ptr(jl_codectx_t &ctx, const jl_cgval_t &ref, const jl_datatype_layout_t *layout)
+static Value *emit_memoryref_ptr(jl_codectx_t &ctx, const jl_cgval_t &ref, const jl_datatype_layout_t *layout) JL_CANSAFEPOINT
 {
     assert(!layout->flags.arrayelem_isunion && layout->size != 0);
     Value *newref = emit_memoryref_FCA(ctx, ref, layout);

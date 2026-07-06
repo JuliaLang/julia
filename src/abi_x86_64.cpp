@@ -115,7 +115,7 @@ struct Classification {
         // make sure other half knows about it too:
         accum.addField(offset+16, ComplexX87);
     } */
-void classifyType(Classification& accum, jl_datatype_t *dt, uint64_t offset) const
+void classifyType(Classification& accum, jl_datatype_t *dt, uint64_t offset) const JL_CANSAFEPOINT
 {
     // Floating point types
     if (dt == jl_float64_type || dt == jl_float32_type || dt == jl_float16_type ||
@@ -166,14 +166,14 @@ void classifyType(Classification& accum, jl_datatype_t *dt, uint64_t offset) con
     }
 }
 
-Classification classify(jl_datatype_t *dt) const
+Classification classify(jl_datatype_t *dt) const JL_CANSAFEPOINT
 {
     Classification cl;
     classifyType(cl, dt, 0);
     return cl;
 }
 
-bool use_sret(jl_datatype_t *dt, LLVMContext &ctx) override
+bool use_sret(jl_datatype_t *dt, LLVMContext &ctx) override JL_CANSAFEPOINT
 {
     int sret = classify(dt).isMemory;
     if (sret) {
@@ -183,7 +183,7 @@ bool use_sret(jl_datatype_t *dt, LLVMContext &ctx) override
     return sret;
 }
 
-bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx, Type *Ty) override
+bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx, Type *Ty) override JL_CANSAFEPOINT
 {
     Classification cl = classify(dt);
     if (cl.isMemory) {
@@ -215,7 +215,7 @@ bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx, Type *T
 
 // Called on behalf of ccall to determine preferred LLVM representation
 // for an argument or return value.
-Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const override
+Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const override JL_CANSAFEPOINT
 {
     (void) isret;
     // no need to rewrite these types (they are returned as pointers anyways)

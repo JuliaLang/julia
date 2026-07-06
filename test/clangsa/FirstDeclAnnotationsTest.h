@@ -12,26 +12,24 @@
 #define JL_DLLEXPORT __attribute__((visibility("default")))
 #define JL_HIDDEN __attribute__((visibility("hidden")))
 
-// Annotation present here: definitions may repeat it or inherit it -> OK.
-void fda_ok_both(void) JL_NOTSAFEPOINT;
-void fda_ok_header_only(void) JL_NOTSAFEPOINT;
+void fda_ok_both(void) JL_CANSAFEPOINT;
+void fda_ok_header_only(void) JL_CANSAFEPOINT;
 int fda_ok_param(int *p JL_PROPAGATES_ROOT);
 
-// No annotation here: a definition that adds one is what the check flags.
 void fda_missing_func(void);
 int fda_missing_param(int *p);
 
-// Visibility attribute (as JL_DLLEXPORT/JL_HIDDEN expand to) present here -> OK;
-// absent here but added on the definition is what the check flags.
+int fda_ok_cbparam(void (*cb)(int) JL_CANSAFEPOINT);
+int fda_missing_cbparam(void (*cb)(int));
+
 void fda_ok_vis(void) JL_DLLEXPORT;
 void fda_missing_vis(void);
 void fda_raw_vis(void);
 
-// Function-pointer annotation compatibility: a function converted to this
-// typedef must carry at least its JL_NOTSAFEPOINT, or calls through the pointer
-// would be analyzed unsoundly.
-typedef void (*fda_cb_t)(int) JL_NOTSAFEPOINT;
-void fda_cb_ok(int x) JL_NOTSAFEPOINT;
-void fda_cb_bad(int x);
+typedef void (*fda_cb_t)(int);
+typedef void (*fda_cb_safepoint_t)(int) JL_CANSAFEPOINT;
+void fda_cb_ok(int x);
+void fda_cb_bad(int x) JL_CANSAFEPOINT;
 void uv_fda_fake(int x);
 void fda_take_cb(fda_cb_t cb);
+void fda_take_cansafepoint_cb(void (*cb)(int) JL_CANSAFEPOINT);

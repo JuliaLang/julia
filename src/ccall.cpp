@@ -152,7 +152,7 @@ static Value *runtime_sym_lookup(
         jl_codectx_t *pctx,
         const native_sym_arg_t &symarg, Function *f,
         GlobalVariable *libptrgv,
-        GlobalVariable *llvmgv, bool runtime_lib)
+        GlobalVariable *llvmgv, bool runtime_lib) JL_CANSAFEPOINT
 {
     ++RuntimeSymLookups;
     // in pseudo-code, this function emits the following if libptrgv is set:
@@ -241,7 +241,7 @@ static Value *runtime_sym_lookup(
 
 static Value *runtime_sym_lookup(
         jl_codectx_t &ctx,
-        const native_sym_arg_t &symarg, Function *f)
+        const native_sym_arg_t &symarg, Function *f) JL_CANSAFEPOINT
 {
     GlobalVariable *libptrgv;
     GlobalVariable *llvmgv;
@@ -260,7 +260,7 @@ static GlobalVariable *emit_plt_thunk(
         FunctionType *functype, const AttributeList &attrs,
         CallingConv::ID cc, const native_sym_arg_t &symarg,
         GlobalVariable *libptrgv, GlobalVariable *llvmgv,
-        bool runtime_lib)
+        bool runtime_lib) JL_CANSAFEPOINT
 {
     ++PLTThunks;
     bool shared = libptrgv != nullptr;
@@ -341,7 +341,7 @@ static Value *emit_plt(
         jl_codectx_t &ctx,
         FunctionType *functype,
         const AttributeList &attrs,
-        CallingConv::ID cc, const native_sym_arg_t &symarg)
+        CallingConv::ID cc, const native_sym_arg_t &symarg) JL_CANSAFEPOINT
 {
     ++PLT;
     // Don't do this for vararg functions so that the `musttail` is only
@@ -377,13 +377,13 @@ static Value *emit_plt(
 class AbiLayout {
 public:
     virtual ~AbiLayout() {}
-    virtual bool use_sret(jl_datatype_t *ty, LLVMContext &ctx) = 0;
-    virtual bool needPassByRef(jl_datatype_t *ty, AttrBuilder&, LLVMContext &ctx, Type* llvm_t) = 0;
-    virtual Type *preferred_llvm_type(jl_datatype_t *ty, bool isret, LLVMContext &ctx) const = 0;
+    virtual bool use_sret(jl_datatype_t *ty, LLVMContext &ctx) JL_CANSAFEPOINT = 0;
+    virtual bool needPassByRef(jl_datatype_t *ty, AttrBuilder&, LLVMContext &ctx, Type* llvm_t) JL_CANSAFEPOINT = 0;
+    virtual Type *preferred_llvm_type(jl_datatype_t *ty, bool isret, LLVMContext &ctx) const JL_CANSAFEPOINT = 0;
 };
 
 // Determine if object of bitstype ty maps to a native x86 SIMD type (__m128, __m256, or __m512) in C
-static bool is_native_simd_type(jl_datatype_t *dt) {
+static bool is_native_simd_type(jl_datatype_t *dt) JL_CANSAFEPOINT {
     size_t size = jl_datatype_size(dt);
     if (size != 16 && size != 32 && size != 64)
         // Wrong size for xmm, ymm, or zmm register.
@@ -496,7 +496,7 @@ static Value *llvm_type_rewrite(
 // --- argument passing and scratch space utilities ---
 
 // Returns ctx.types().T_prjlvalue
-static Value *runtime_apply_type_env(jl_codectx_t &ctx, jl_value_t *ty)
+static Value *runtime_apply_type_env(jl_codectx_t &ctx, jl_value_t *ty) JL_CANSAFEPOINT
 {
     // box if concrete type was not statically known
     Value *args[] = {
@@ -545,7 +545,7 @@ static jl_cgval_t drop_inline_roots(const jl_cgval_t &x)
 // bitcast whatever Ptr kind x might be (even if it is part of a union) into Ptr{Cvoid},
 // emitting a cpointercheck (reporting msg) first if x is not statically known to be a
 // pointer, so that the conversion is guaranteed to be valid on this runtime branch
-static jl_cgval_t voidpointer_update(jl_codectx_t &ctx, const jl_cgval_t &x, const Twine &msg)
+static jl_cgval_t voidpointer_update(jl_codectx_t &ctx, const jl_cgval_t &x, const Twine &msg) JL_CANSAFEPOINT
 {
     if (x.typ == (jl_value_t*)jl_voidpointer_type)
         return x;
@@ -561,7 +561,7 @@ static jl_cgval_t voidpointer_update(jl_codectx_t &ctx, const jl_cgval_t &x, con
     return mark_julia_type(ctx, emit_unbox(ctx, ctx.types().T_ptr, drop_inline_roots(x)), false, jl_voidpointer_type);
 }
 
-static jl_cgval_t typeassert_input(jl_codectx_t &ctx, const jl_cgval_t &jvinfo, jl_value_t *jlto, jl_unionall_t *jlto_env, int argn)
+static jl_cgval_t typeassert_input(jl_codectx_t &ctx, const jl_cgval_t &jvinfo, jl_value_t *jlto, jl_unionall_t *jlto_env, int argn) JL_CANSAFEPOINT
 {
     if (jlto != (jl_value_t*)jl_any_type && !jl_subtype(jvinfo.typ, jlto)) {
         if (jlto == (jl_value_t*)jl_voidpointer_type) {
@@ -604,7 +604,7 @@ static Value *julia_to_native(
         jl_codectx_t &ctx,
         Type *to, bool toboxed, jl_value_t *jlto, jl_unionall_t *jlto_env,
         jl_cgval_t jvinfo,
-        bool byRef, int argn)
+        bool byRef, int argn) JL_CANSAFEPOINT
 {
     // We're passing Any
     if (toboxed) {
@@ -626,7 +626,7 @@ static Value *julia_to_native(
     return slot;
 }
 
-static void interpret_foreignsymbol(jl_codectx_t &ctx, native_sym_arg_t &out, jl_value_t *arg)
+static void interpret_foreignsymbol(jl_codectx_t &ctx, native_sym_arg_t &out, jl_value_t *arg) JL_CANSAFEPOINT
 {
     // Initialize all fields to safe defaults
     out.f_name = nullptr;
@@ -715,9 +715,9 @@ static void interpret_foreignsymbol(jl_codectx_t &ctx, native_sym_arg_t &out, jl
 
 // --- code generator for cglobal ---
 
-static jl_cgval_t emit_runtime_call(jl_codectx_t &ctx, JL_I::intrinsic f, ArrayRef<jl_cgval_t> argv, size_t nargs);
+static jl_cgval_t emit_runtime_call(jl_codectx_t &ctx, JL_I::intrinsic f, ArrayRef<jl_cgval_t> argv, size_t nargs) JL_CANSAFEPOINT;
 
-static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
+static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t nargs) JL_CANSAFEPOINT
 {
     ++EmittedCGlobals;
     assert(nargs == 1);
@@ -740,7 +740,7 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
 
 // --- code generator for llvmcall ---
 
-static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
+static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs) JL_CANSAFEPOINT
 {
     ++EmittedLLVMCalls;
     // parse and validate arguments
@@ -1141,7 +1141,7 @@ static Value *box_ccall_result(jl_codectx_t &ctx, Value *result, Value *runtime_
     return strct;
 }
 
-static jl_cgval_t mark_or_box_ccall_result(jl_codectx_t &ctx, Value *result, bool isboxed, jl_value_t *rt, jl_unionall_t *unionall, bool static_rt)
+static jl_cgval_t mark_or_box_ccall_result(jl_codectx_t &ctx, Value *result, bool isboxed, jl_value_t *rt, jl_unionall_t *unionall, bool static_rt) JL_CANSAFEPOINT
 {
     if (!static_rt) {
         assert(!isboxed && jl_is_datatype(rt) && ctx.spvals_ptr && unionall);
@@ -1176,7 +1176,7 @@ public:
     size_t nreqargs; // number of required arguments in ccall function definition
     jl_codegen_output_t *ctx;
 
-    function_sig_t(const char *fname, Type *lrt, jl_value_t *rt, bool retboxed, bool gc_safe, jl_svec_t *at, jl_unionall_t *unionall_env, size_t nreqargs, CallingConv::ID cc, bool llvmcall, jl_codegen_output_t *ctx)
+    function_sig_t(const char *fname, Type *lrt, jl_value_t *rt, bool retboxed, bool gc_safe, jl_svec_t *at, jl_unionall_t *unionall_env, size_t nreqargs, CallingConv::ID cc, bool llvmcall, jl_codegen_output_t *ctx) JL_CANSAFEPOINT
       : lrt(lrt), retboxed(retboxed), gc_safe(gc_safe),
         prt(NULL), sret(0), cc(cc), llvmcall(llvmcall),
         at(at), rt(rt), unionall_env(unionall_env),
@@ -1199,10 +1199,10 @@ public:
             const native_sym_arg_t &symarg,
             jl_cgval_t *argv,
             SmallVectorImpl<Value*> &gc_uses,
-            bool static_rt) const;
+            bool static_rt) const JL_CANSAFEPOINT;
 
 private:
-std::string generate_func_sig(const char *fname)
+std::string generate_func_sig(const char *fname) JL_CANSAFEPOINT
 {
     assert(rt && !jl_is_abstract_ref_type(rt));
 
@@ -1357,7 +1357,7 @@ static std::pair<CallingConv::ID, bool> convert_cconv(jl_sym_t *lhd)
     jl_errorf("ccall: invalid calling convention %s", jl_symbol_name(lhd));
 }
 
-static bool verify_ref_type(jl_codectx_t &ctx, jl_value_t* ref, jl_unionall_t *unionall_env, int n, const char *fname)
+static bool verify_ref_type(jl_codectx_t &ctx, jl_value_t* ref, jl_unionall_t *unionall_env, int n, const char *fname) JL_CANSAFEPOINT
 {
     // emit verification that the tparam for Ref isn't Any or a TypeVar
     const char rt_err_msg_notany[] = " type Ref{Any} is invalid. Use Any or Ptr{Any} instead.";
@@ -1405,7 +1405,7 @@ static const std::string verify_ccall_sig(jl_value_t *&rt, jl_value_t *at,
                                           jl_unionall_t *unionall_env, jl_svec_t *sparam_vals,
                                           jl_codegen_output_t *ctx,
                                           Type *&lrt, LLVMContext &ctxt,
-                                          bool &retboxed, bool &static_rt, bool llvmcall=false)
+                                          bool &retboxed, bool &static_rt, bool llvmcall=false) JL_CANSAFEPOINT
 {
     JL_TYPECHK(ccall, type, rt);
     JL_TYPECHK(ccall, simplevector, at);
@@ -1445,7 +1445,7 @@ static const std::string verify_ccall_sig(jl_value_t *&rt, jl_value_t *at,
 const int fc_args_start = 6;
 
 // Expr(:foreigncall, pointer, rettype, (argtypes...), nreq, gc_safe, [cconv | (cconv, effects)], args..., roots...)
-static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
+static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs) JL_CANSAFEPOINT
 {
     JL_NARGSV(ccall, 5);
     args -= 1;

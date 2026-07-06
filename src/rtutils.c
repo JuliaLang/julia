@@ -32,7 +32,7 @@ extern "C" {
 
 // exceptions -----------------------------------------------------------------
 
-JL_DLLEXPORT void JL_NORETURN jl_error(const char *str)
+JL_DLLEXPORT void JL_NORETURN JL_NO_SAFEPOINT_ANALYSIS jl_error(const char *str)
 {
     if (jl_errorexception_type == NULL) {
         jl_printf(JL_STDERR, "ERROR: %s\n", str);
@@ -70,7 +70,7 @@ jl_value_t *jl_vexceptionf(jl_datatype_t *exception_type,
     return e;
 }
 
-JL_DLLEXPORT void JL_NORETURN jl_errorf(const char *fmt, ...)
+JL_DLLEXPORT void JL_NORETURN JL_NO_SAFEPOINT_ANALYSIS jl_errorf(const char *fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
@@ -79,7 +79,7 @@ JL_DLLEXPORT void JL_NORETURN jl_errorf(const char *fmt, ...)
     jl_throw(e);
 }
 
-JL_DLLEXPORT void JL_NORETURN jl_exceptionf(jl_datatype_t *exception_type,
+JL_DLLEXPORT void JL_NORETURN JL_NO_SAFEPOINT_ANALYSIS jl_exceptionf(jl_datatype_t *exception_type,
                                             const char *fmt, ...)
 {
     va_list args;
@@ -99,18 +99,18 @@ jl_value_t *jl_get_exceptionf(jl_datatype_t *exception_type,
     return e;
 }
 
-JL_DLLEXPORT void JL_NORETURN jl_too_few_args(const char *fname, int min)
+JL_DLLEXPORT void JL_NORETURN JL_NO_SAFEPOINT_ANALYSIS jl_too_few_args(const char *fname, int min)
 {
     jl_exceptionf(jl_argumenterror_type, "%s: too few arguments (expected %d)", fname, min);
 }
 
-JL_DLLEXPORT void JL_NORETURN jl_too_many_args(const char *fname, int max)
+JL_DLLEXPORT void JL_NORETURN JL_NO_SAFEPOINT_ANALYSIS jl_too_many_args(const char *fname, int max)
 {
     jl_exceptionf(jl_argumenterror_type, "%s: too many arguments (expected %d)", fname, max);
 }
 
 // with function name / location description, plus extra context
-JL_DLLEXPORT void JL_NORETURN jl_type_error_rt(const char *fname, const char *context,
+JL_DLLEXPORT void JL_NORETURN JL_NO_SAFEPOINT_ANALYSIS jl_type_error_rt(const char *fname, const char *context,
                                                jl_value_t *expected JL_MAYBE_UNROOTED,
                                                jl_value_t *got JL_MAYBE_UNROOTED)
 {
@@ -121,7 +121,7 @@ JL_DLLEXPORT void JL_NORETURN jl_type_error_rt(const char *fname, const char *co
     jl_throw(ex);
 }
 
-JL_DLLEXPORT void JL_NORETURN jl_type_error_global(const char *fname, jl_module_t *mod, jl_sym_t *sym,
+JL_DLLEXPORT void JL_NORETURN JL_NO_SAFEPOINT_ANALYSIS jl_type_error_global(const char *fname, jl_module_t *mod, jl_sym_t *sym,
                                                jl_value_t *expected JL_MAYBE_UNROOTED,
                                                jl_value_t *got JL_MAYBE_UNROOTED)
 {
@@ -133,14 +133,14 @@ JL_DLLEXPORT void JL_NORETURN jl_type_error_global(const char *fname, jl_module_
 
 
 // with function name or description only
-JL_DLLEXPORT void JL_NORETURN jl_type_error(const char *fname,
+JL_DLLEXPORT void JL_NORETURN JL_NO_SAFEPOINT_ANALYSIS jl_type_error(const char *fname,
                                             jl_value_t *expected JL_MAYBE_UNROOTED,
                                             jl_value_t *got JL_MAYBE_UNROOTED)
 {
     jl_type_error_rt(fname, "", expected, got);
 }
 
-JL_DLLEXPORT void JL_NORETURN jl_undefined_var_error(jl_sym_t *var, jl_value_t *scope)
+JL_DLLEXPORT void JL_NORETURN JL_NO_SAFEPOINT_ANALYSIS jl_undefined_var_error(jl_sym_t *var, jl_value_t *scope)
 {
     if (!jl_undefvarerror_type) {
         const char *s1 = "";
@@ -167,19 +167,19 @@ JL_DLLEXPORT void JL_NORETURN jl_undefined_var_error(jl_sym_t *var, jl_value_t *
     jl_throw(jl_new_struct(jl_undefvarerror_type, var, active_age, scope));
 }
 
-JL_DLLEXPORT void JL_NORETURN jl_has_no_field_error(jl_datatype_t *t, jl_sym_t *var)
+JL_DLLEXPORT void JL_NORETURN JL_NO_SAFEPOINT_ANALYSIS jl_has_no_field_error(jl_datatype_t *t, jl_sym_t *var)
 {
     jl_throw(jl_new_struct(jl_fielderror_type, t, var));
 }
 
-JL_DLLEXPORT void JL_NORETURN jl_argument_error(char *str) // == jl_exceptionf(jl_argumenterror_type, "%s", str)
+JL_DLLEXPORT void JL_NORETURN JL_NO_SAFEPOINT_ANALYSIS jl_argument_error(char *str) // == jl_exceptionf(jl_argumenterror_type, "%s", str)
 {
     jl_value_t *msg = jl_pchar_to_string((char*)str, strlen(str));
     JL_GC_PUSH1(&msg);
     jl_throw(jl_new_struct(jl_argumenterror_type, msg));
 }
 
-JL_DLLEXPORT void JL_NORETURN jl_atomic_error(char *str) // == jl_exceptionf(jl_atomicerror_type, "%s", str)
+JL_DLLEXPORT void JL_NORETURN JL_NO_SAFEPOINT_ANALYSIS jl_atomic_error(char *str) // == jl_exceptionf(jl_atomicerror_type, "%s", str)
 {
     jl_value_t *msg = jl_pchar_to_string((char*)str, strlen(str));
     JL_GC_PUSH1(&msg);
@@ -187,13 +187,13 @@ JL_DLLEXPORT void JL_NORETURN jl_atomic_error(char *str) // == jl_exceptionf(jl_
 }
 
 
-JL_DLLEXPORT void JL_NORETURN jl_bounds_error(jl_value_t *v, jl_value_t *t)
+JL_DLLEXPORT void JL_NORETURN JL_NO_SAFEPOINT_ANALYSIS jl_bounds_error(jl_value_t *v, jl_value_t *t)
 {
     JL_GC_PUSH2(&v, &t); // root arguments so the caller doesn't need to
     jl_throw(jl_new_struct((jl_datatype_t*)jl_boundserror_type, v, t));
 }
 
-JL_DLLEXPORT void JL_NORETURN jl_bounds_error_v(jl_value_t *v, jl_value_t **idxs, size_t nidxs)
+JL_DLLEXPORT void JL_NORETURN JL_NO_SAFEPOINT_ANALYSIS jl_bounds_error_v(jl_value_t *v, jl_value_t **idxs, size_t nidxs)
 {
     jl_value_t *t = NULL;
     // items in idxs are assumed to already be rooted
@@ -202,13 +202,13 @@ JL_DLLEXPORT void JL_NORETURN jl_bounds_error_v(jl_value_t *v, jl_value_t **idxs
     jl_throw(jl_new_struct((jl_datatype_t*)jl_boundserror_type, v, t));
 }
 
-JL_DLLEXPORT void JL_NORETURN jl_bounds_error_tuple_int(jl_value_t **v, size_t nv, size_t i)
+JL_DLLEXPORT void JL_NORETURN JL_NO_SAFEPOINT_ANALYSIS jl_bounds_error_tuple_int(jl_value_t **v, size_t nv, size_t i)
 {
     // values in v are expected to already be gc-rooted
     jl_bounds_error_int(jl_f_tuple(NULL, v, nv), i);
 }
 
-JL_DLLEXPORT void JL_NORETURN jl_bounds_error_unboxed_int(void *data, jl_value_t *vt, size_t i)
+JL_DLLEXPORT void JL_NORETURN JL_NO_SAFEPOINT_ANALYSIS jl_bounds_error_unboxed_int(void *data, jl_value_t *vt, size_t i)
 {
     jl_value_t *t = NULL, *v = NULL;
     // data is expected to be gc-safe (either gc-rooted, or alloca)
@@ -219,7 +219,7 @@ JL_DLLEXPORT void JL_NORETURN jl_bounds_error_unboxed_int(void *data, jl_value_t
     jl_throw(jl_new_struct((jl_datatype_t*)jl_boundserror_type, v, t));
 }
 
-JL_DLLEXPORT void JL_NORETURN jl_bounds_error_int(jl_value_t *v JL_MAYBE_UNROOTED, size_t i)
+JL_DLLEXPORT void JL_NORETURN JL_NO_SAFEPOINT_ANALYSIS jl_bounds_error_int(jl_value_t *v JL_MAYBE_UNROOTED, size_t i)
 {
     jl_value_t *t = NULL;
     JL_GC_PUSH2(&v, &t); // root arguments so the caller doesn't need to
@@ -227,7 +227,7 @@ JL_DLLEXPORT void JL_NORETURN jl_bounds_error_int(jl_value_t *v JL_MAYBE_UNROOTE
     jl_throw(jl_new_struct((jl_datatype_t*)jl_boundserror_type, v, t));
 }
 
-JL_DLLEXPORT void JL_NORETURN jl_bounds_error_ints(jl_value_t *v JL_MAYBE_UNROOTED,
+JL_DLLEXPORT void JL_NORETURN JL_NO_SAFEPOINT_ANALYSIS jl_bounds_error_ints(jl_value_t *v JL_MAYBE_UNROOTED,
                                                    size_t *idxs, size_t nidxs)
 {
     size_t i;
@@ -281,7 +281,8 @@ JL_DLLEXPORT void jl_enter_handler(jl_task_t *ct, jl_handler_t *eh)
 // * We leave a try block through normal control flow
 // * An exception causes a nonlocal jump to the catch block. In this case
 //   there's additional cleanup required, eg pushing the exception stack.
-JL_DLLEXPORT void jl_eh_restore_state(jl_task_t *ct, jl_handler_t *eh)
+// Safepoint analysis will be confused by the jl_mutex_unlock_nogc here, so disable it
+JL_DLLEXPORT void jl_eh_restore_state(jl_task_t *ct, jl_handler_t *eh) JL_NO_SAFEPOINT_ANALYSIS
 {
 #ifdef _OS_WINDOWS_
     if (ct->ptls->needs_resetstkoflw) {
@@ -385,7 +386,7 @@ static void jl_copy_excstack(jl_excstack_t *dest, jl_excstack_t *src) JL_NOTSAFE
 }
 
 static void jl_reserve_excstack(jl_task_t *ct, jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT,
-                                size_t reserved_size)
+                                size_t reserved_size) JL_CANSAFEPOINT
 {
     jl_excstack_t *s = *stack;
     if (s && s->reserved_size >= reserved_size)
@@ -588,7 +589,7 @@ JL_DLLEXPORT void jl_flush_cstdio(void) JL_NOTSAFEPOINT
     fflush(stderr);
 }
 
-JL_DLLEXPORT jl_value_t *jl_stderr_obj(void) JL_NOTSAFEPOINT
+JL_DLLEXPORT jl_value_t *jl_stderr_obj(void)
 {
     if (jl_base_module == NULL)
         return NULL;
@@ -602,6 +603,19 @@ struct recur_list {
     struct recur_list *prev;
     jl_value_t *v;
 };
+
+// redeclare jl_printf as NOTSAFEPOINT so that analysis ignores it
+// this is safe if the user doesn't pass libuv objects here
+#ifdef __clang_safetyanalysis__
+#undef jl_printf
+#undef jl_is_operator
+#define jl_printf jl_printf_nosafepoint
+JL_DLLEXPORT int jl_printf(struct uv_stream_s *s, const char *format, ...) JL_NOTSAFEPOINT;
+#define jl_uv_puts jl_uv_puts_nosafepoint
+JL_DLLEXPORT void jl_uv_puts(struct uv_stream_s *stream, const char *str, size_t n) JL_NOTSAFEPOINT;
+#define jl_is_operator jl_is_operator_unsound
+JL_DLLEXPORT int jl_is_operator(const char *sym) JL_NOTSAFEPOINT;
+#endif
 
 static size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, struct recur_list *depth, jl_static_show_config_t ctx) JL_NOTSAFEPOINT;
 static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt, struct recur_list *depth, jl_static_show_config_t ctx) JL_NOTSAFEPOINT;
@@ -741,7 +755,14 @@ static int is_globname_binding(jl_value_t *v, jl_datatype_t *dv) JL_NOTSAFEPOINT
 {
     jl_sym_t *globname = dv->name->singletonname;
     if (globname && dv->name->module) {
+#ifdef __clang_safetyanalysis__
+#define jl_get_module_binding jl_get_module_binding_nosafepoint
+JL_DLLEXPORT jl_binding_t *jl_get_module_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, int alloc) JL_NOTSAFEPOINT;
+#endif
         jl_binding_t *b = jl_get_module_binding(dv->name->module, globname, 0);
+#ifdef __clang_safetyanalysis__
+#undef jl_get_module_binding
+#endif
         jl_value_t *bv = jl_get_latest_binding_value_if_resolved_and_const_debug_only(b);
         if (bv && ((jl_value_t*)dv == v ? jl_typeof(bv) == v : bv == v))
             return 1;
@@ -1713,6 +1734,14 @@ JL_DLLEXPORT void jl__(void *jl_value) JL_NOTSAFEPOINT
     jl_static_show_config_t ctx = { /* verbosity */ JL_STATIC_SHOW_VERBOSITY_FULL };
     jl_safe_static_show_((JL_STREAM*)STDERR_FILENO, (jl_value_t*)jl_value, ctx);
 }
+
+#ifdef __clang_safetyanalysis__
+#undef jl_printf
+#undef jl_uv_puts
+#undef jl_is_operator
+#define jl_printf ijl_printf
+#define jl_is_operator ijl_is_operator
+#endif
 
 JL_DLLEXPORT void jl_breakpoint(jl_value_t *v)
 {
