@@ -623,7 +623,7 @@ function datatype_min_ninitialized(@nospecialize t0)
         if names isa Tuple
             return length(names)
         end
-        t = argument_datatype(types)
+        t = unwrap_unionall(types)
         t isa DataType || return 0
         t.name === Tuple.name || return 0
     end
@@ -1621,7 +1621,7 @@ end
 _resolve_in_world(world::Integer, gr::GlobalRef) =
     invoke_in_world(UInt(world), Core.getglobal, gr.mod, gr.name)
 
-# Special constprop heuristics for various binary opes
+# Special constprop heuristics for various binary ops
 typename(typeof(function + end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC
 typename(typeof(function - end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC
 typename(typeof(function * end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC

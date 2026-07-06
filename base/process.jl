@@ -36,9 +36,9 @@ end
 pipe_reader(p::ProcessChain) = p.out
 pipe_writer(p::ProcessChain) = p.in
 
-# a lightweight pair of a child OS_HANDLE and associated Task that will
+# A lightweight pair of a child OS_HANDLE and associated Task that will
 # complete only after all content has been read from it for synchronizing
-# state without the kernel to aide
+# state without the kernel to aid.
 struct SyncCloseFD
     fd
     t::Task

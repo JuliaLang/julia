@@ -154,7 +154,7 @@ function _insertdims(A::AbstractArray{T, N}, dims::NTuple{M, Int}) where {T, N, 
     end
 
     # acc is a tuple, where the first entry is the final shape
-    # the second entry off acc is a counter for the axes of A
+    # the second entry of acc is a counter for the axes of A
     inds= Base._foldoneto((acc, i) ->
                             i ∈ dims
                                 ? ((acc[1]..., Base.OneTo(1)), acc[2])

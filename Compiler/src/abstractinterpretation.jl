@@ -118,6 +118,9 @@ mutable struct CallInferenceState
     end
 end
 
+widen_call_result(::AbstractInterpreter, si::StmtInfo, state::CallInferenceState, ::AbsIntState) =
+    call_result_unused(si) && !(state.rettype === Bottom)
+
 function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(func),
                                   arginfo::ArgInfo, si::StmtInfo, @nospecialize(atype),
                                   vtypes::Union{VarTable,Nothing}, sv::AbsIntState, max_methods::Int)
@@ -128,6 +131,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
         add_remark!(interp, sv, "Cannot infer call, because we previously saw :latestworld")
         return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
     end
+    current_world = get_world_counter()
     matches = find_method_matches(interp, argtypes, atype; max_methods, fargs=arginfo.fargs)
     if isa(matches, FailedMethodMatch)
         add_remark!(interp, sv, matches.reason)
@@ -277,14 +281,13 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                 state.slotrefinements = collect_slot_refinements(𝕃ᵢ, applicable, argtypes, fargs, sv)
             end
             state.rettype = from_interprocedural!(interp, state.rettype, sv, arginfo, state.conditionals, vtypes)
-            if call_result_unused(si) && !(state.rettype === Bottom)
-                add_remark!(interp, sv, "Call result type was widened because the return value is unused")
-                # We're mainly only here because the optimizer might want this code,
-                # but we ourselves locally don't typically care about it locally
-                # (beyond checking if it always throws).
-                # So avoid adding an edge, since we don't want to bother attempting
-                # to improve our result even if it does change (to always throw),
-                # and avoid keeping track of a more complex result type.
+            if widen_call_result(interp, si, state, sv)
+                add_remark!(interp, sv, "Call result type was widened")
+                # Encode the decision as a local `Any` in `state.rettype`, which flows into
+                # `ssavaluetypes[pc]` of the enclosing frame. Downstream `=== Any` gates
+                # (most notably the cycle backedge revisit filter in `update_cycle_worklists!`)
+                # then treat this call site as needing no further refinement. By default
+                # `Bottom` is excluded so that "always throws" remains observable.
                 state.rettype = Any
             end
             # if from_interprocedural added any pclimitations to the set inherited from the arguments,
@@ -301,7 +304,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
             state.all_effects = Effects()
         end
 
-        # Also considering inferring the compilation signature for this method, so
+        # Also consider inferring the compilation signature for this method, so
         # it is available to the compiler in case it ends up needing it for the invoke.
         if (isa(sv, InferenceState) && infer_compilation_signature(interp) &&
             (!is_removable_if_unused(state.all_effects) || !call_result_unused(si)))
@@ -314,7 +317,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                     inferidx[] += 1
                     local method = match.method
                     local sig = match.spec_types
-                    mi = specialize_method(match; preexisting=true)
+                    local mi = specialize_method(match; preexisting=true)
                     local call_result = call_results[edge_idx]
                     if mi === nothing || !(call_result isa InferenceResult) || !const_prop_methodinstance_heuristic(interp, call_result, mi, arginfo, sv)
                         csig = get_compileable_sig(method, sig, match.sparams)
@@ -322,7 +325,22 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                             #println(sig, " changed to ", csig, " for ", method)
                             (_, sparams) = typeintersect_env(csig, method.sig)
                             mresult = abstract_call_method(interp, method, csig, sparams, multiple_matches, StmtInfo(false, false), sv)::Future
-                            isready(mresult) || return false # wait for mresult Future to resolve off the callstack before continuing
+                            function infercalls3(interp, sv)
+                                local edge = mresult[].edge
+                                if edge !== nothing
+                                    local sig = match.spec_types
+                                    local mi = get_ci_mi(edge)
+                                    local vw = matches.valid_worlds
+                                    ccall(:jl_recache_method_by_type, Cvoid, (Any, Any, Any, UInt, UInt, UInt, UInt),
+                                            sig, mi, mi.specTypes, get_inference_world(interp),
+                                            first(vw), last(vw), current_world)
+                                end
+                                return true
+                            end
+                            if !isready(mresult) || !infercalls3(interp, sv)
+                                push!(sv.tasks, infercalls3)
+                                return false # wait for mresult Future to resolve off the callstack before continuing
+                            end
                         end
                     end
                 end
@@ -419,7 +437,7 @@ In such cases `maybecondinfo` should be either of:
 - `maybecondinfo::Tuple{Vector{Any},Vector{Any}}`: precomputed argument type refinement information
 - method call signature tuple type
 When we deal with multiple `MethodMatch`es, it's better to precompute `maybecondinfo` by
-`tmerge`ing argument signature type of each method call.
+`tmerge`ing argument signature types of each method call.
 """
 function from_interprocedural!(interp::AbstractInterpreter, @nospecialize(rt), sv::AbsIntState,
                                arginfo::ArgInfo, @nospecialize(maybecondinfo), vtypes::Union{VarTable,Nothing})
@@ -707,8 +725,8 @@ function abstract_call_method(interp::AbstractInterpreter,
                 # if we don't (typically) actually care about this result,
                 # don't bother trying to examine some complex abstract signature
                 # since it's very unlikely that we'll try to inline this,
-                # or want make an invoke edge to its calling convention return type.
-                # (non-typically, this means that we lose the ability to detect a guaranteed StackOverflow in some cases)
+                # or want to make an invoke edge to its calling convention return type.
+                # (atypically, this means that we lose the ability to detect a guaranteed StackOverflow in some cases)
                 return Future(MethodCallResult(Any, Any, Effects(), nothing, true, true))
             end
             add_remark!(interp, sv, washardlimit ? RECURSION_MSG_HARDLIMIT : RECURSION_MSG)
@@ -860,7 +878,7 @@ function is_constprop_method_recursed(method::Method, caller::AbsIntState)
     end
 end
 
-# keeps result and context information of abstract_method_call, which will later be used for
+# keeps result and context information of abstract_call_method, which will later be used for
 # backedge computation, and concrete evaluation or constant-propagation
 struct MethodCallResult
     rt
@@ -1107,7 +1125,7 @@ function _concrete_eval_call(
         Core._call_in_world_total(world, f, args...)
     catch
         # The evaluation threw. By :consistent-cy, we're guaranteed this would have happened at runtime.
-        # Howevever, at present, :consistency does not mandate the type of the exception
+        # However, at present, :consistency does not mandate the type of the exception
         concrete_result = ConcreteResult(edge, effects)
         return ConstCallResult(Bottom, Any, concrete_result, effects, #=const_edge=#nothing)
     end
@@ -1245,7 +1263,7 @@ function find_constrained_arg(cnd::Conditional, fargs::Vector{Any}, sv::Inferenc
     return nothing
 end
 
-# checks if all argtypes has additional information other than what `Type` can provide
+# checks if all argtypes have additional information other than what `Type` can provide
 function is_all_overridden(interp::AbstractInterpreter, (; fargs, argtypes)::ArgInfo, sv::AbsIntState)
     𝕃ᵢ = typeinf_lattice(interp)
     for i in 1:length(argtypes)
@@ -2412,6 +2430,9 @@ function abstract_call_unionall(interp::AbstractInterpreter, argtypes::Vector{An
     canconst = true
     if isa(a3, Const)
         body = a3.val
+    elseif isconstType(a3)
+        # the body value is pinned exactly (`===`)
+        body = type_parameter(a3)
     elseif isType(a3)
         body = type_parameter(a3)
         canconst = false
@@ -2951,38 +2972,6 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
     elseif isa(f, Core.OpaqueClosure)
         # calling an OpaqueClosure about which we have no information returns no information
         return Future(CallMeta(typeof(f).parameters[2], Any, Effects(), NoCallInfo()))
-    elseif f === TypeVar && !isvarargtype(argtypes[end])
-        # Manually look through the definition of TypeVar to
-        # make sure to be able to get `PartialTypeVar`s out.
-        2 ≤ la ≤ 4 || return Future(CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo()))
-        # make sure generic code is prepared for inlining if needed later
-        let T = Any[Type{TypeVar}, Any, Any, Any]
-            resize!(T, la)
-            atype = Tuple{T...}
-            T[1] = Const(TypeVar)
-            let call = abstract_call_gf_by_type(interp, f, ArgInfo(nothing, T), si, atype, vtypes, sv, max_methods)::Future
-                return Future{CallMeta}(call, interp, sv) do call, interp, sv
-                    n = argtypes[2]
-                    ub_var = Const(Any)
-                    lb_var = Const(Union{})
-                    if la == 4
-                        ub_var = argtypes[4]
-                        lb_var = argtypes[3]
-                    elseif la == 3
-                        ub_var = argtypes[3]
-                    end
-                    pT = typevar_tfunc(𝕃ᵢ, n, lb_var, ub_var)
-                    typevar_argtypes = Any[n, lb_var, ub_var]
-                    effects = builtin_effects(𝕃ᵢ, Core._typevar, typevar_argtypes, pT)
-                    if effects.nothrow
-                        exct = Union{}
-                    else
-                        exct = builtin_exct(𝕃ᵢ, Core._typevar, typevar_argtypes, pT)
-                    end
-                    return CallMeta(pT, exct, effects, call.info)
-                end
-            end
-        end
     elseif f === UnionAll
         let call = abstract_call_gf_by_type(interp, f, ArgInfo(nothing, Any[Const(UnionAll), Any, Any]), si, Tuple{Type{UnionAll}, Any, Any}, vtypes, sv, max_methods)::Future
             return Future{CallMeta}(call, interp, sv) do call, interp, sv
@@ -3012,22 +3001,69 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             end
         end
     elseif la == 3 && f === Core.:(>:)
-        # mark issupertype as a exact alias for issubtype
+        # mark issupertype as an exact alias for issubtype
         # swap T1 and T2 arguments and call <:
-        if fargs !== nothing && length(fargs) == 3
-            fargs = Any[<:, fargs[3], fargs[2]]
-        else
-            fargs = nothing
+        atype = argtypes_to_type(argtypes)
+        let call = abstract_call_gf_by_type(interp, f, ArgInfo(fargs, Any[Const(f), Any, Any]), si, Tuple{typeof(f), Any, Any}, vtypes, sv, max_methods)::Future
+            if fargs !== nothing && length(fargs) == 3
+                fargs_reverse = Any[<:, fargs[3], fargs[2]]
+            else
+                fargs_reverse = nothing
+            end
+            argtypes_reverse = Any[typeof(<:), argtypes[3], argtypes[2]]
+            call_reverse = abstract_call_known(interp, <:, ArgInfo(fargs_reverse, argtypes_reverse), si, vtypes, sv, max_methods)
+            return Future{CallMeta}(isready(call) && isready(call_reverse), interp, sv) do interp, sv
+                return call_reverse[]
+            end
         end
-        argtypes = Any[typeof(<:), argtypes[3], argtypes[2]]
-        return abstract_call_known(interp, <:, ArgInfo(fargs, argtypes), si, vtypes, sv, max_methods)
-    elseif la == 2 && f === Core.typename
-        return Future(CallMeta(typename_static(argtypes[2]), Bottom, EFFECTS_TOTAL, MethodResultPure()))
-    elseif f === Core._hasmethod
-        return Future(_hasmethod_tfunc(interp, argtypes, sv))
     end
     atype = argtypes_to_type(argtypes)
-    return abstract_call_gf_by_type(interp, f, arginfo, si, atype, vtypes, sv, max_methods)::Future
+    call = abstract_call_gf_by_type(interp, f, arginfo, si, atype, vtypes, sv, max_methods)::Future
+    # Improve some results with custom tfuncs,
+    # now that we've inferred the target function to generate source code,
+    # which might be needed for inlining / invoke / dispatch.
+    if f === TypeVar && !isvarargtype(argtypes[end])
+        # Manually look through the definition of TypeVar to
+        # make sure to be able to get `PartialTypeVar`s out.
+        2 ≤ la ≤ 4 || return Future{CallMeta}(call, sv, interp) do call, sv, interp
+            return CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo())
+        end
+        # make sure generic code is prepared for inlining if needed later
+        let T = Any[Type{TypeVar}, Any, Any, Any]
+            resize!(T, la)
+            atype = Tuple{T...}
+            T[1] = Const(TypeVar)
+            return Future{CallMeta}(call, interp, sv) do call, interp, sv
+                n = argtypes[2]
+                ub_var = Const(Any)
+                lb_var = Const(Union{})
+                if la == 4
+                    ub_var = argtypes[4]
+                    lb_var = argtypes[3]
+                elseif la == 3
+                    ub_var = argtypes[3]
+                end
+                pT = typevar_tfunc(𝕃ᵢ, n, lb_var, ub_var)
+                typevar_argtypes = Any[n, lb_var, ub_var]
+                effects = builtin_effects(𝕃ᵢ, Core._typevar, typevar_argtypes, pT)
+                if effects.nothrow
+                    exct = Union{}
+                else
+                    exct = builtin_exct(𝕃ᵢ, Core._typevar, typevar_argtypes, pT)
+                end
+                return CallMeta(pT, exct, effects, call.info)
+            end
+        end
+    elseif la == 2 && f === Core.typename
+        return Future{CallMeta}(call, interp, sv) do call, interp, sv
+            return CallMeta(typename_static(argtypes[2]), Bottom, EFFECTS_TOTAL, MethodResultPure())
+        end
+    elseif f === Core._hasmethod
+        return Future{CallMeta}(call, interp, sv) do call, interp, sv
+            return _hasmethod_tfunc(interp, argtypes, sv)
+        end
+    end
+    return call
 end
 
 function abstract_call_opaque_closure(interp::AbstractInterpreter, closure::PartialOpaque,
@@ -3223,16 +3259,11 @@ function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(
 end
 
 function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, sv::AbsIntState)
-    if e.head === :call && length(e.args) ≥ 1
-        # TODO: We still have non-linearized cglobal
-        @assert e.args[1] === Core.tuple || e.args[1] === GlobalRef(Core, :tuple)
-    else
-        @assert e.head !== :(=)
-        # Some of our tests expect us to handle invalid IR here and error later
-        # - permit that for now.
-        # @assert false "Unexpected EXPR head in value position"
-        merge_effects!(interp, sv, EFFECTS_UNKNOWN)
-    end
+    @assert e.head !== :(=)
+    # Some of our tests expect us to handle invalid IR here and error later
+    # - permit that for now.
+    # @assert false "Unexpected EXPR head in value position"
+    merge_effects!(interp, sv, EFFECTS_UNKNOWN)
     return Any
 end
 
@@ -3333,7 +3364,7 @@ function abstract_eval_new(interp::AbstractInterpreter, e::Expr, sstate::Stateme
         else
             consistent = ALWAYS_TRUE # immutable allocation is consistent
         end
-        # `:new` can carry `PartialStruct` even when `rt` isn't isconcretedispatch` —
+        # `:new` can carry `PartialStruct` even when `rt` isn't `isconcretedispatch` —
         # partially-instantiated parametric types (e.g. `Generator{Vector{Int}, F<:OC{Tuple{Int}, T} where T}`) still
         # have well-defined field count, and field-level extended lattice elements carry
         # information beyond the declared type.
@@ -3676,6 +3707,8 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, ssta
         return abstract_eval_new_opaque_closure(interp, e, sstate, sv)
     elseif ehead === :foreigncall
         return abstract_eval_foreigncall(interp, e, sstate, sv)
+    elseif ehead === :foreignglobal
+        return abstract_eval_foreignglobal(interp, e, sstate, sv)
     elseif ehead === :cfunction
         return abstract_eval_cfunction(interp, e, sstate, sv)
     elseif ehead === :method
@@ -3763,6 +3796,21 @@ function abstract_eval_foreigncall(interp::AbstractInterpreter, e::Expr, sstate:
         effects = override_effects(effects, override)
     end
     return RTEffects(t, Any, effects)
+end
+
+function abstract_eval_foreignglobal(interp::AbstractInterpreter, e::Expr, sstate::StatementState, sv::AbsIntState)
+    arg = e.args[1]
+    # Evaluate the arguments to constrain the world for codegen
+    if isexpr(arg, :tuple)
+        for elt in arg.args
+            abstract_eval_value(interp, elt, sstate, sv)
+            #TODO: implement abstract_eval_nonlinearized_foreigncall_name correctly?
+            #      (see foreigncall implementation above)
+        end
+    else
+        abstract_eval_value(interp, arg, sstate, sv)
+    end
+    return RTEffects(Ptr{Cvoid}, Any, EFFECTS_UNKNOWN)
 end
 
 function abstract_eval_phi(interp::AbstractInterpreter, phi::PhiNode, sstate::StatementState, sv::AbsIntState)
@@ -4878,6 +4926,10 @@ function conditional_change(𝕃ᵢ::AbstractLattice, currstate::VarTable, condt
         # approximate test for `typ ∩ oldtyp` being better than `oldtyp`
         # since we probably formed these types with `typesubstract`,
         # the comparison is likely simple
+    elseif condt.isdefined && then_or_else === :then && vtype.undef
+         # For `@isdefined slot`, the type may not be a refinement
+         # but the `.undef` information still can be
+         return StateRefinement(condt.slot, oldtyp, #= undef =# false)
     else
         return nothing
     end

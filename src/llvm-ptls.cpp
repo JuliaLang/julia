@@ -286,7 +286,7 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
     }
     else {
         // use the address of the actual getter function directly
-        jl_get_pgcstack_func *f;
+        jl_get_pgcstack_func_t f;
         jl_pgcstack_key_t k;
         jl_pgcstack_getkey(&f, &k);
         Constant *val = ConstantInt::get(T_size, (uintptr_t)f);

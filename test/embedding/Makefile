@@ -52,15 +52,56 @@ $(BIN)/LocalModule.jl: $(SRCDIR)/LocalModule.jl
 	cp $< $@
 endif
 
-check: $(BIN)/embedding$(EXE) $(BIN)/libdl-embedding$(EXE) $(BIN)/LocalModule.jl
+check: check-embedding
+
+check-embedding: $(BIN)/embedding$(EXE) $(BIN)/libdl-embedding$(EXE) $(BIN)/LocalModule.jl
 	$(BIN)/libdl-embedding$(EXE) # run w/o error
 	$(JULIA) --depwarn=error $(SRCDIR)/embedding-test.jl $<
 	@echo SUCCESS
 
-clean:
-	-rm -f $(BIN)/embedding-debug$(EXE) $(BIN)/embedding$(EXE)
+#=============================================================================
+# ASan host test: embeds the *stock* (non-sanitizer) Julia build inside an
+# AddressSanitizer-instrumented host (a configuration not covered by the
+# full-ASan CI job). See asan-embedding.c for details.
 
-.PHONY: release debug clean check
+ASANFLAGS := -g -O1 -fno-omit-frame-pointer -fsanitize=address
+
+CC_SUPPORTS_STATIC_ASAN := $(shell echo 'int main(void){return 0;}' | \
+	$(CC) -x c - -fsanitize=address -static-libasan -o /dev/null 2>/dev/null && echo 1)
+CC_SUPPORTS_ASAN := $(shell echo 'int main(void){return 0;}' | \
+	$(CC) -x c - -fsanitize=address -o /dev/null 2>/dev/null && echo 1)
+
+ASAN_TEST_ENV := \
+	ASAN_OPTIONS="detect_leaks=0:allow_user_segv_handler=1:abort_on_error=1" \
+	LBT_USE_RTLD_DEEPBIND=0
+
+$(BIN)/asan-embedding$(EXE): $(SRCDIR)/asan-embedding.c
+	$(CC) $^ -o $@ $(ASANFLAGS) $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS) $(LDFLAGS_ADD) $(LDFLAGS)
+
+# baseline without ASan, to prove the test logic and the Julia build are healthy
+$(BIN)/asan-embedding-plain$(EXE): $(SRCDIR)/asan-embedding.c
+	$(CC) $^ -o $@ -g -O1 $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS) $(LDFLAGS_ADD) $(LDFLAGS)
+
+ifeq ($(shell uname)-$(CC_SUPPORTS_STATIC_ASAN),Linux-1)
+ASANFLAGS += -static-libasan
+check: check-asan
+else ifeq ($(shell uname)-$(CC_SUPPORTS_ASAN),Linux-1)
+check: check-asan
+endif
+
+# JULIA_ASAN_COMPAT=0 (workarounds forced off) is expected to crash and can be
+# run manually as a negative control.
+check-asan: $(BIN)/asan-embedding-plain$(EXE) $(BIN)/asan-embedding$(EXE)
+	$(BIN)/asan-embedding-plain$(EXE)
+	env $(ASAN_TEST_ENV) $(BIN)/asan-embedding$(EXE)
+	env $(ASAN_TEST_ENV) JULIA_ASAN_COMPAT=1 $(BIN)/asan-embedding$(EXE)
+	@echo SUCCESS
+
+clean:
+	-rm -f $(BIN)/embedding-debug$(EXE) $(BIN)/embedding$(EXE) \
+		$(BIN)/asan-embedding$(EXE) $(BIN)/asan-embedding-plain$(EXE)
+
+.PHONY: release debug clean check check-embedding check-asan
 
 # Makefile debugging trick:
 # call print-VARIABLE to see the runtime value of any variable

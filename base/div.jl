@@ -358,7 +358,7 @@ See also [`fld`](@ref), [`cld`](@ref), [`fldmod1`](@ref).
 """
 fldmod(x, y) = divrem(x, y, RoundDown)
 
-# We definite generic rounding methods for other rounding modes in terms of
+# We define generic rounding methods for other rounding modes in terms of
 # RoundToZero.
 function div(x::Signed, y::Unsigned, ::typeof(RoundDown))
     (q, r) = divrem(x, y)

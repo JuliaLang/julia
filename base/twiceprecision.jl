@@ -112,7 +112,7 @@ julia> Float64(hi) + Float64(lo)
 ```
 """
 function mul12(x::T, y::T) where {T<:AbstractFloat}
-    (h, l) = Math.two_mul(x, y)
+    (h, l) = two_mul(x, y)
     ifelse(!isfinite(h), (h, h), (h, l))
 end
 mul12(x::T, y::T) where {T} = (p = x * y; (p, zero(p)))
@@ -252,7 +252,7 @@ nbitslen(r::StepRangeLen) = nbitslen(eltype(r), length(r), r.offset)
 nbitslen(::Type{T}, len, offset) where {T<:IEEEFloat} =
     min(cld(precision(T), 2), nbitslen(len, offset))
 # The +1 here is for safety, because the precision of the significand
-# is 1 bit higher than the number that are explicitly stored.
+# is 1 bit higher than the number that is explicitly stored.
 nbitslen(len, offset) = len < 2 ? 0 : top_set_bit(max(offset-1, len-offset) - 1) + 1
 
 eltype(::Type{TwicePrecision{T}}) where {T} = T

@@ -71,16 +71,16 @@ end
 """
     alias::MustAlias
 
-This lattice element wraps a reference to object field while recoding the identity of the
+This lattice element wraps a reference to object field while recording the identity of the
 parent object. It allows certain constraints that can be imposed on the object field type
 by built-in functions like `isa` and `===` to be propagated to another reference to the
 same object field.
 One important note is that this lattice element assumes the invariant that the field of
 wrapped slot object never changes until the slot object is re-assigned. This means, the
 wrapped object field should be constant as inference currently doesn't track any memory
-effects on per-object basis. Particularly `maybe_const_fldidx` takes the lift to check if
+effects on per-object basis. Particularly `maybe_const_fldidx` has the task of checking if
 a given lattice element is eligible to be wrapped by `MustAlias`. Example:
-```juila
+```julia
 let alias = getfield(x::Some{Union{Nothing,String}}, :value)::MustAlias(x, Some{Union{Nothing,String}}, 1, Union{Nothing,String})
     if alias === nothing
         # May assume `getfield(x, :value)` is `nothing` now
@@ -688,7 +688,11 @@ Widens extended lattice element `x` to native `Type` representation.
 """
 widenconst(::AnyConditional) = Bool
 widenconst(a::AnyMustAlias) = widenconst(widenmustalias(a))
-widenconst(c::Const) = (v = c.val; isa(v, Type) ? Type{v} : typeof(v))
+# a closed type value widens to the egality kind, mirroring how `jl_inst_arg_tuple_type`
+# keys runtime dispatch (`Const(v) ⊑ TypeEgal{v} ⊑ Type{v}`); an open one only to its
+# `==`-class `Type{v}`
+widenconst(c::Const) = (v = c.val; isa(v, Type) ?
+    (has_free_typevars(v) ? Type{v} : Core.TypeEgal{v}) : typeof(v))
 widenconst(::PartialTypeVar) = TypeVar
 widenconst(t::Core.PartialStruct) = t.typ
 widenconst(t::PartialOpaque) = t.typ

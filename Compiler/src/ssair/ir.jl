@@ -208,8 +208,14 @@ Core.DebugInfo(di::DebugInfoStream, nstmts::Int) =
     DebugInfo(something(di.def), di.linetable, Core.svec(di.edges...),
         ccall(:jl_compress_codelocs, Any, (Int32, Any, Int), di.firstline, di.codelocs, nstmts)::String)
 
-getdebugidx(debuginfo::DebugInfo, pc::Int) =
-    ccall(:jl_uncompress1_codeloc, NTuple{3,Int32}, (Any, Int), debuginfo, pc)
+function getdebugidx(debuginfo::DebugInfo, pc::Int)
+    if debuginfo.linetable isa String
+        # drop provenance for compatibility
+        ((pc <= 0 ? -1 : source_location(debuginfo, pc).line), 0, 0)
+    else
+        ccall(:jl_uncompress1_codeloc, NTuple{3,Int32}, (Any, Int), debuginfo, pc)
+    end
+end
 
 function getdebugidx(debuginfo::DebugInfoStream, pc::Int)
     if 3 <= 3pc <= length(debuginfo.codelocs)
@@ -221,6 +227,53 @@ function getdebugidx(debuginfo::DebugInfoStream, pc::Int)
     end
 end
 
+has_prev_debuginfo(di, pc::Int) = prev_debuginfo(di, pc)[1] !== nothing
+has_edge_debuginfo(di, pc::Int) = edge_debuginfo(di, pc)[1] !== nothing
+
+"(debuginfo, nextpc) from the previous step in the compiler"
+function prev_debuginfo(di, pc::Int)
+    di.linetable isa Core.DebugInfo || return (nothing, 0)
+    pc > 0 || return (nothing, 0)
+    nextpc::Int = getdebugidx(di, pc)[1]
+    (di.linetable, nextpc)
+end
+
+"(debuginfo, nextpc) of inlinee"
+function edge_debuginfo(di, pc::Int)
+    _, eid::Int, epc::Int = getdebugidx(di, pc)
+    # XXX: eid > 0 should imply epc > 0
+    (eid > 0 && epc > 0) || return (nothing, 0)
+    (di.edges[eid]::DebugInfo, epc)
+end
+
+# All 1-based.  0 if unavailable.
+struct SourceLocation
+    byte::Int
+    byte_end::Int
+    col::Int
+    col_end::Int
+    line::Int
+    line_end::Int
+end
+
+function source_location(di::Union{DebugInfo,DebugInfoStream}, pc::Int)
+    while has_prev_debuginfo(di, pc)
+        di, pc = prev_debuginfo(di, pc)
+    end
+    if di isa DebugInfoStream
+        # DebugInfoStream with linetable=nothing does not contain source
+        # information on its own.
+        return SourceLocation(0,0,0,0,0,0)
+    end
+    @assert pc > 0 "no source for pc<=0"
+    (l1, c1) = ccall(:jl_cdi_firstxy, NTuple{2, Int32}, (Any, Int32), di, pc)
+    if c1 <= 0
+        return SourceLocation(0,0,0,0,l1,0)
+    end
+    (b1, b2) = ccall(:jl_cdi_bytespan, NTuple{2, Int32}, (Any, Int32), di, pc)
+    (l2, c2) = ccall(:jl_cdi_byte_to_xy, NTuple{2, Int32}, (Any, Int32), di, b2)
+    return SourceLocation(b1,b2,c1,c2,l1,l2)
+end
 
 # SSA values that need renaming
 struct OldSSAValue
@@ -242,7 +295,7 @@ on where they appear:
     ii. a `NewSSAValue` with negative `id` refers to post-compaction `new_node` node.
 
 2. In non-compacted nodes,
-    i. a `NewSSAValue` with positive `id` refers to the index of an already-compacted instructions.
+    i. a `NewSSAValue` with positive `id` refers to the index of an already-compacted instruction.
     ii. a `NewSSAValue` with negative `id` has the same meaning as in compacted nodes.
 """
 struct NewSSAValue
@@ -608,7 +661,7 @@ function is_relevant_expr(e::Expr)
     return e.head in (:call, :invoke, :invoke_modify,
                       :new, :splatnew, :(=), :(&),
                       :gc_preserve_begin, :gc_preserve_end,
-                      :foreigncall, :isdefined, :copyast,
+                      :foreigncall, :foreignglobal, :isdefined, :copyast,
                       :throw_undef_if_not,
                       :cfunction, :method, :pop_exception,
                       :leave,
@@ -724,6 +777,9 @@ struct CFGTransformState
     bb_rename_pred::Vector{Int}
     bb_rename_succ::Vector{Int}
     domtree::Union{Nothing, DomTree}
+    # Scratch buffers reused for the in-place domtree updates performed while
+    # killing edges. Non-`nothing` exactly when `domtree` is.
+    domtree_cache::Union{Nothing, DomTreeCache}
 end
 
 # N.B.: Takes ownership of the CFG array
@@ -759,14 +815,18 @@ function CFGTransformState!(blocks::Vector{BasicBlock}, allow_cfg_transforms::Bo
         let blocks = blocks, bb_rename = bb_rename
             result_bbs = BasicBlock[blocks[i] for i = 1:length(blocks) if bb_rename[i] != -1]
         end
+        # Reuse the same cache for the initial construction and any later
+        # in-place updates while killing edges during compaction.
+        domtree_cache = DomTreeCache()
         # TODO: This could be done by just renaming the domtree
-        domtree = construct_domtree(result_bbs)
+        domtree = construct_domtree(result_bbs; cache=domtree_cache)
     else
         bb_rename = Vector{Int}()
         result_bbs = blocks
         domtree = nothing
+        domtree_cache = nothing
     end
-    return CFGTransformState(allow_cfg_transforms, allow_cfg_transforms, result_bbs, bb_rename, bb_rename, domtree)
+    return CFGTransformState(allow_cfg_transforms, allow_cfg_transforms, result_bbs, bb_rename, bb_rename, domtree, domtree_cache)
 end
 
 mutable struct IncrementalCompact
@@ -822,7 +882,7 @@ mutable struct IncrementalCompact
         bb_rename = Vector{Int}()
         pending_nodes = NewNodeStream()
         pending_perm = Int[]
-        return new(code, parent.result, CFGTransformState(false, false, parent.cfg_transform.result_bbs, bb_rename, bb_rename, nothing),
+        return new(code, parent.result, CFGTransformState(false, false, parent.cfg_transform.result_bbs, bb_rename, bb_rename, nothing, nothing),
             ssa_rename, parent.used_ssas,
             parent.late_fixup, perm, 1,
             parent.new_new_nodes, parent.new_new_used_ssas, pending_nodes, pending_perm,
@@ -1423,13 +1483,14 @@ scan the compacted prefix when `to == active_bb`. `from` and `to` are non-rename
 """
 function kill_edge_terminator!(compact::IncrementalCompact, active_bb::Int, from::Int, to::Int)
     # Note: We recursively kill as many edges as are obviously dead.
-    (; bb_rename_pred, bb_rename_succ, result_bbs, domtree) = compact.cfg_transform
+    (; bb_rename_pred, bb_rename_succ, result_bbs, domtree, domtree_cache) = compact.cfg_transform
     preds = result_bbs[bb_rename_succ[to]].preds
     succs = result_bbs[bb_rename_pred[from]].succs
     deleteat!(preds, findfirst(x::Int->x==bb_rename_pred[from], preds)::Int)
     deleteat!(succs, findfirst(x::Int->x==bb_rename_succ[to], succs)::Int)
     if domtree !== nothing
-        domtree_delete_edge!(domtree, result_bbs, bb_rename_pred[from], bb_rename_succ[to])
+        domtree_delete_edge!(domtree, result_bbs, bb_rename_pred[from], bb_rename_succ[to];
+                             cache=domtree_cache::DomTreeCache)
     end
     # Check if the block is now dead
     if length(preds) == 0 || (domtree !== nothing && bb_unreachable(domtree, bb_rename_succ[to]))

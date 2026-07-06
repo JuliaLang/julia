@@ -8,7 +8,7 @@
 # Functions/types used by code emitted from lowering, but not called by it directly
 
 # Return the current exception. In JuliaLowering we use this rather than the
-# special form `K"the_exception"` to reduces the number of special forms.
+# special form `K"the_exception"` to reduce the number of special forms.
 Base.@assume_effects :removable function current_exception()
     @ccall jl_current_exception(current_task()::Any)::Any
 end
@@ -345,11 +345,10 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
         ex0 = newleaf(syntax_graph(ctx1), g.srcref, K"Value", ex0)
     end
     # Expand any macros emitted by the generator
-    ex1 = expand_forms_1(ctx1, reparent(ctx1, ex0))
+    ex1 = expand_forms_1(ctx1, reparent(ctx1, ex0), layer)
     ctx1 = MacroExpansionContext(delete_attributes(graph, :__macro_ctx__),
                                  ctx1.bindings, ctx1.scope_layers,
-                                 ctx1.scope_layer_stack, g.expr_compat_mode,
-                                 macro_world)
+                                 g.expr_compat_mode, macro_world)
     ex1 = reparent(ctx1, ex1)
 
     # Desugaring

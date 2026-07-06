@@ -380,6 +380,14 @@ mapreduce_empty_iter(f::F, op::F2, itr, ItrEltype) where {F,F2} =
 
 @inline reduce_empty_iter(op, itr) = reduce_empty_iter(op, itr, IteratorEltype(itr))
 @inline reduce_empty_iter(op, itr, ::HasEltype) = reduce_empty(op, eltype(itr))
+# a homogeneous tuple binds the element type as a static parameter, which stays
+# precise for abstract `Tuple{Vararg{T}}` queries where `eltype` of the
+# `@nospecialize`d tuple type does not (#61323). `T` is undefined only for the
+# empty tuple (vacuous `Vararg` match), whose eltype is `Union{}`; the
+# `@isdefined` guard keeps this method's intentional unbound sparam (see the
+# `detect_unbound_args` allow-list in test/ambiguous.jl), like `_eltype_ntuple`.
+@inline reduce_empty_iter(op, itr::Tuple{Vararg{T}}, ::HasEltype) where {T} =
+    reduce_empty(op, @isdefined(T) ? T : Union{})
 reduce_empty_iter(op, itr, ::EltypeUnknown) = throw(ArgumentError("""
     reducing over an empty collection of unknown element type is not allowed.
     You may be able to prevent this error by supplying an `init` value to the reducer."""))

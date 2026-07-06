@@ -697,7 +697,7 @@ by putting it before the function call, like this:
 
 * Set assembly syntax by setting `syntax` to `:intel` (default) for Intel syntax or `:att` for AT&T syntax.
 * Specify verbosity of code comments by setting `debuginfo` to `:source` (default) or `:none`.
-* If `binary` is `true`, also print the binary machine code for each instruction precedented by an abbreviated address.
+* If `binary` is `true`, also print the binary machine code for each instruction preceded by an abbreviated address.
 * If `dump_module` is `false`, do not print metadata such as rodata or directives.
 
 See also: [`code_native`](@ref), [`@code_warntype`](@ref), [`@code_typed`](@ref), [`@code_lowered`](@ref), [`@code_llvm`](@ref).
@@ -787,7 +787,7 @@ When using `@activate`, additional options for a component may be specified in
 square brackets `@activate Compiler[:option1, :option]`
 
 Currently `Compiler` and `JuliaLowering` are the only available components that
-may be activatived.
+may be activated.
 
 For `@activate Compiler`, the following options are available:
 1. `:reflection` - Activate the compiler for reflection purposes only.

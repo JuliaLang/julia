@@ -619,7 +619,7 @@ for important details on how to modify these fields safely.
 
   * `backedges`
 
-    We store the reverse-list of cache dependencies for efficient tracking of incremental reanalysis/recompilation work that may be needed after a new method definitions.
+    We store the reverse-list of cache dependencies for efficient tracking of incremental reanalysis/recompilation work that may be needed after new method definitions.
     This works by keeping a list of the other `MethodInstance` that have been inferred or optimized to contain a possible call to this `MethodInstance`.
     Those optimization results might be stored somewhere in the `cache`, or it might have been the result of something we didn't want to cache, such as constant propagation.
     Thus we merge all of those backedges to various cache entries here (there's almost always only the one applicable cache entry with a sentinel value for max_world anyways).
@@ -627,6 +627,10 @@ for important details on how to modify these fields safely.
   * `cache`
 
     Cache of `CodeInstance` objects that share this template instantiation.
+
+  * `precompile`
+
+    If set, this `MethodInstance` will be compiled and added to the output system image.
 
 ### CodeInstance
 
@@ -649,7 +653,7 @@ for important details on how to modify these fields safely.
     May contain a cache of the inferred source for this function,
     or it could be set to `nothing` to just indicate `rettype` is inferred.
 
-  * `ftpr`
+  * `fptr`
 
     The generic jlcall entry point.
 

@@ -304,7 +304,7 @@ typedef enum { T_INT8, T_UINT8, T_INT16, T_UINT16, T_INT32, T_UINT32,
 #define JL_FALLTHROUGH __attribute__((fallthrough))
 #elif defined(__cplusplus) && defined(__clang_major__) && \
     defined(__clang_minor__) && (__clang_major__ > 4 || __clang_minor__ >= 5)
-// We require at least clang 3.x
+// We require at least clang 3.5
 #define JL_FALLTHROUGH [[clang::fallthrough]]
 #else
 #define JL_FALLTHROUGH

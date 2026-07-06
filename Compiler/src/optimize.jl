@@ -66,7 +66,7 @@ has_flag(curr::UInt32, flag::UInt32) = (curr & flag) == flag
 function iscallstmt(@nospecialize stmt)
     stmt isa Expr || return false
     head = stmt.head
-    return head === :call || head === :invoke || head === :foreigncall
+    return head === :call || head === :invoke || head === :foreigncall || head === :foreignglobal
 end
 
 function flags_for_effects(effects::Effects)
@@ -393,7 +393,7 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             f = argextype(args[1], src)
             f = singleton_type(f)
             f === nothing && return (false, false, false)
-            if f === Intrinsics.cglobal || f === Intrinsics.llvmcall
+            if f === Intrinsics.llvmcall
                 # TODO: these are not yet linearized
                 return (false, false, false)
             end
@@ -420,6 +420,8 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             terminates = is_terminates(effects)
             removable = effect_free & nothrow & terminates
             return (consistent, removable, nothrow)
+        elseif head === :foreignglobal
+            return (false, false, false)
         elseif head === :new_opaque_closure
             length(args) < 4 && return (false, false, false)
             typ = argextype(args[1], src)
@@ -460,7 +462,7 @@ function recompute_effects_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), 
     end
     if !iscallstmt(stmt)
         # There is a bit of a subtle point here, which is that some non-call
-        # statements (e.g. PiNode) can be UB:, however, we consider it
+        # statements (e.g. PiNode) can be UB, however, we consider it
         # illegal to introduce such statements that actually cause UB (for any
         # input). Ideally that'd be handled at insertion time (TODO), but for
         # the time being just do that here.
@@ -819,7 +821,7 @@ function scan_non_dataflow_flags!(inst::Instruction, sv::PostOptAnalysisState)
     stmt = inst[:stmt]
     if !needs_ea_validation
         if !isterminator(stmt) && stmt !== nothing
-            # ignore control flow node – they are not removable on their own and thus not
+            # ignore control flow nodes – they are not removable on their own and thus do not
             # have `IR_FLAG_EFFECT_FREE` but still do not taint `:effect_free`-ness of
             # the whole method invocation
             sv.all_effect_free &= has_flag(flag, IR_FLAG_EFFECT_FREE)
@@ -1066,7 +1068,7 @@ function run_passes_ipo_safe(
 
     __stage__ = 0  # used by @pass
     # NOTE: The pass name MUST be unique for `optimize_until::String` to work
-    @pass "CC: CONVERT"   ir = convert_to_ircode(ci, sv)
+    @pass "CC: CONVERT"   ir = convert_to_ircode!(ci, sv)
     @pass "CC: SLOT2REG"  ir = slot2reg(ir, ci, sv)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
     @pass "CC: COMPACT_1" ir = compact!(ir)
@@ -1149,10 +1151,11 @@ function changed_lineinfo(di::DebugInfo, codeloc::Int, prevloc::Int)
     end
 end
 
-function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
+function convert_to_ircode!(ci::CodeInfo, sv::OptimizationState)
     # Update control-flow to reflect any unreachable branches.
     ssavaluetypes = ci.ssavaluetypes::Vector{Any}
-    ci.code = code = copy_exprargs(ci.code)
+    # ci is always a fresh private copy so we can reuse it here.
+    code = ci.code
     di = DebugInfoStream(sv.linfo, ci.debuginfo, length(code))
     codelocs = di.codelocs
     ssaflags = ci.ssaflags
@@ -1385,8 +1388,8 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
                     # and are likely to combine with the operations around them,
                     # so reduce their cost by half.
                     cost = T_IFUNC_COST[iidx]
-                    if cost == 0 || nargs < 3 ||
-                       (f === Intrinsics.cglobal || f === Intrinsics.llvmcall) # these hold malformed IR, so argextype will crash on them
+                    if cost == 0 || nargs < 3 || f === Intrinsics.llvmcall
+                        # holds malformed IR, so argextype will crash on it
                         return cost
                     end
                     aty2 = widenconditional(argextype(ex.args[2], src, sptypes))
@@ -1451,6 +1454,8 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
             end
         end
         return 20
+    elseif head === :foreignglobal
+        return 1
     elseif head === :invoke || head === :invoke_modify
         # Calls whose "return type" is Union{} do not actually return:
         # they are errors. Since these are not part of the typical

@@ -14,7 +14,7 @@ using .Base:
     @propagate_inbounds, @isdefined, @boundscheck, @inbounds, Generator, IdDict,
     AbstractRange, AbstractUnitRange, UnitRange, LinearIndices, TupleOrBottom,
     (:), |, +, -, *, !==, !, ==, !=, <=, <, >, >=, =>, missing,
-    any, _counttuple, eachindex, ntuple, zero, prod, reduce, in, firstindex, lastindex,
+    any, eachindex, ntuple, zero, prod, reduce, in, firstindex, lastindex,
     tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape, LazyString,
     afoldl, mod1, @default_eltype
 using .Core
@@ -411,13 +411,21 @@ _promote_tuple_shape((m,)::Tuple{Integer}, (n,)::Tuple{Integer}) = (min(m, n),)
 _promote_tuple_shape(a, b) = promote_shape(a, b)
 _promote_tuple_shape(a, b...) = _promote_tuple_shape(a, _promote_tuple_shape(b...))
 _promote_tuple_shape(a) = a
-eltype(::Type{Zip{Is}}) where {Is<:Tuple} = TupleOrBottom(map(eltype, fieldtypes(Is))...)
+# bind the tuple length `N` as a static parameter: `fieldtypes` needs an
+# egality-pinned `Is` to fold, while the sparam binds through `==` (#61323).
+# NOTE: an indefinite-length `Is` (e.g. `Tuple{Vararg{Vector{Int}}}`) matches
+# no `N`, so type-level queries on such (necessarily abstract) `Zip`/`Product`
+# types skip these methods and fall back to the generic trait defaults (they
+# used to raise a TypeError from `_counttuple`)
+eltype(::Type{Zip{Is}}) where {N, Is<:Tuple{Vararg{Any, N}}} = TupleOrBottom(ntuple(n -> eltype(fieldtype(Is, n)), N)...)
 #eltype(::Type{Zip{Tuple{}}}) = Tuple{}
 #eltype(::Type{Zip{Tuple{A}}}) where {A} = Tuple{eltype(A)}
 #eltype(::Type{Zip{Tuple{A, B}}}) where {A, B} = Tuple{eltype(A), eltype(B)}
+
 @inline isdone(z::Zip) = _zip_any_isdone(z.is, Base.map(_ -> (), z.is))
 @inline isdone(z::Zip, ss) = _zip_any_isdone(z.is, Base.map(tuple, ss))
-@inline function _zip_any_isdone(is, ss)
+
+@inline function _zip_any_isdone(is::Tuple, ss::Tuple)
     d1 = isdone(is[1], ss[1]...)
     d1 === true && return true
     return d1 | _zip_any_isdone(tail(is), tail(ss))
@@ -441,36 +449,36 @@ end
     return _zip_iterate_interleave(xs1, xs2, ds)
 end
 
-@propagate_inbounds function _zip_iterate_some(is, ss, ds::Tuple{T,Vararg{Any}}, f::T) where T
+@propagate_inbounds function _zip_iterate_some(is::Tuple, ss::Tuple, ds::Tuple{T,Vararg{Any}}, f::T) where T
     x = iterate(is[1], ss[1]...)
     x === nothing && return nothing
     y = _zip_iterate_some(tail(is), tail(ss), tail(ds), f)
     y === nothing && return nothing
     return (x, y...)
 end
-@propagate_inbounds _zip_iterate_some(is, ss, ds::Tuple{Any,Vararg{Any}}, f) =
+@propagate_inbounds _zip_iterate_some(is::Tuple, ss::Tuple, ds::Tuple{Any,Vararg{Any}}, f) =
     _zip_iterate_some(tail(is), tail(ss), tail(ds), f)
 _zip_iterate_some(::Tuple{}, ::Tuple{}, ::Tuple{}, ::Any) = ()
 
-function _zip_iterate_interleave(xs1, xs2, ds)
+function _zip_iterate_interleave(xs1::Tuple, xs2::Tuple, ds::Tuple)
     t = _zip_iterate_interleave(tail(xs1), xs2, tail(ds))
     ((xs1[1][1], t[1]...), (xs1[1][2], t[2]...))
 end
-function _zip_iterate_interleave(xs1, xs2, ds::Tuple{Bool,Vararg{Any}})
+function _zip_iterate_interleave(xs1::Tuple, xs2::Tuple, ds::Tuple{Bool,Vararg{Any}})
     t = _zip_iterate_interleave(xs1, tail(xs2), tail(ds))
     ((xs2[1][1], t[1]...), (xs2[1][2], t[2]...))
 end
 _zip_iterate_interleave(::Tuple{}, ::Tuple{}, ::Tuple{}) = ((), ())
 
-function _zip_isdone(is, ss)
+function _zip_isdone(is::Tuple, ss::Tuple)
     d = isdone(is[1], ss[1]...)
     d´, ds = _zip_isdone(tail(is), tail(ss))
     return (d === true || d´, (d, ds...))
 end
 _zip_isdone(::Tuple{}, ::Tuple{}) = (false, ())
 
-IteratorSize(::Type{Zip{Is}}) where {Is<:Tuple} = zip_iteratorsize(ntuple(n -> IteratorSize(fieldtype(Is, n)), _counttuple(Is)::Int)...)
-IteratorEltype(::Type{Zip{Is}}) where {Is<:Tuple} = zip_iteratoreltype(ntuple(n -> IteratorEltype(fieldtype(Is, n)), _counttuple(Is)::Int)...)
+IteratorSize(::Type{Zip{Is}}) where {N, Is<:Tuple{Vararg{Any, N}}} = zip_iteratorsize(ntuple(n -> IteratorSize(fieldtype(Is, n)), N)...)
+IteratorEltype(::Type{Zip{Is}}) where {N, Is<:Tuple{Vararg{Any, N}}} = zip_iteratoreltype(ntuple(n -> IteratorEltype(fieldtype(Is, n)), N)...)
 
 zip_iteratorsize() = IsInfinite()
 zip_iteratorsize(I) = I
@@ -871,7 +879,7 @@ end
 """
     takewhile(pred, iter)
 
-An iterator that generates element from `iter` as long as predicate `pred` is true,
+An iterator that generates elements from `iter` as long as predicate `pred` is true,
 afterwards, drops every element.
 
 !!! compat "Julia 1.4"
@@ -918,7 +926,7 @@ end
 """
     dropwhile(pred, iter)
 
-An iterator that drops element from `iter` as long as predicate `pred` is true,
+An iterator that drops elements from `iter` as long as predicate `pred` is true,
 afterwards, returns every element.
 
 !!! compat "Julia 1.4"
@@ -1117,8 +1125,8 @@ true
 product(iters...) = ProductIterator(iters)
 
 IteratorSize(::Type{ProductIterator{Tuple{}}}) = HasShape{0}()
-IteratorSize(::Type{ProductIterator{T}}) where {T<:Tuple} =
-    prod_iteratorsize(ntuple(n -> IteratorSize(fieldtype(T, n)), _counttuple(T)::Int)..., HasShape{0}())
+IteratorSize(::Type{ProductIterator{T}}) where {N, T<:Tuple{Vararg{Any, N}}} =
+    prod_iteratorsize(ntuple(n -> IteratorSize(fieldtype(T, n)), N)..., HasShape{0}())
 
 prod_iteratorsize() = HasShape{0}()
 prod_iteratorsize(I) = I
@@ -1157,15 +1165,15 @@ length(P::ProductIterator) = reduce(checked_mul, size(P); init=1)
 IteratorEltype(::Type{ProductIterator{Tuple{}}}) = HasEltype()
 IteratorEltype(::Type{ProductIterator{Tuple{I}}}) where {I} = IteratorEltype(I)
 
-function IteratorEltype(::Type{ProductIterator{T}}) where {T<:Tuple}
-    E = ntuple(n -> IteratorEltype(fieldtype(T, n)), _counttuple(T)::Int)
+function IteratorEltype(::Type{ProductIterator{T}}) where {N, T<:Tuple{Vararg{Any, N}}}
+    E = ntuple(n -> IteratorEltype(fieldtype(T, n)), N)
     any(I -> I == EltypeUnknown(), E) && return EltypeUnknown()
     return E[end]
 end
 
 eltype(::Type{ProductIterator{I}}) where {I} = _prod_eltype(I)
 _prod_eltype(::Type{Tuple{}}) = Tuple{}
-_prod_eltype(::Type{I}) where {I<:Tuple} = TupleOrBottom(ntuple(n -> eltype(fieldtype(I, n)), _counttuple(I)::Int)...)
+_prod_eltype(::Type{I}) where {N, I<:Tuple{Vararg{Any, N}}} = TupleOrBottom(ntuple(n -> eltype(fieldtype(I, n)), N)...)
 
 iterate(::ProductIterator{Tuple{}}) = (), true
 iterate(::ProductIterator{Tuple{}}, state) = nothing
@@ -1262,8 +1270,12 @@ flatten(itr) = Flatten(itr)
 eltype(::Type{Flatten{I}}) where {I} = eltype(eltype(I))
 
 # For tuples, we statically know the element type of each index, so we can compute
-# this at compile time.
-function eltype(::Type{Flatten{I}}) where {I<:Union{Tuple,NamedTuple}}
+# this at compile time. Like `Zip`'s `eltype`, bind the length `N` as a static
+# parameter: `fieldtypes` needs an egality-pinned `I` to fold (#61323).
+function eltype(::Type{Flatten{I}}) where {N, I<:Tuple{Vararg{Any, N}}}
+    afoldl((T, i) -> promote_typejoin(T, eltype(i)), Union{}, ntuple(n -> fieldtype(I, n), N)...)
+end
+function eltype(::Type{Flatten{I}}) where {I<:NamedTuple}
     afoldl((T, i) -> promote_typejoin(T, eltype(i)), Union{}, fieldtypes(I)...)
 end
 

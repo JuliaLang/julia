@@ -129,14 +129,14 @@ be computed, then waits for its process to finish, then repeats until we run out
 that the feeder tasks do not begin to execute until the main task reaches the end of the [`@sync`](@ref)
 block, at which point it surrenders control and waits for all the local tasks to complete before
 returning from the function.
-As for v0.7 and beyond, the feeder tasks are able to share state via `nextidx` because
+The feeder tasks are able to share state via `nextidx` because
 they all run on the same process.
 Even if `Tasks` are scheduled cooperatively, locking may still be required in some contexts, as in
 [asynchronous I/O](@ref faq-async-io).
 This means context switches only occur at well-defined points: in this case,
 when [`remotecall_fetch`](@ref) is called. This is the current state of implementation and it may change
 for future Julia versions, as it is intended to make it possible to run up to N `Tasks` on M `Process`, aka
-[M:N Threading](https://en.wikipedia.org/wiki/Thread_(computing)#Models). Then a lock acquiring\releasing
+[M:N Threading](https://en.wikipedia.org/wiki/Thread_(computing)#Models). Then a lock acquiring/releasing
 model for `nextidx` will be needed, as it is not safe to let multiple processes read-write a resource at
 the same time.
 
@@ -529,7 +529,7 @@ The remote object referred to by a [`Future`](@ref Distributed.Future) is stored
 [`RemoteChannel`](@ref), which is rewritable, can point to any type and size of channels, or any
 other implementation of an `AbstractChannel`.
 
-The constructor `RemoteChannel(f::Function, pid)()` allows us to construct references to channels
+The constructor `RemoteChannel(f::Function, pid)` allows us to construct references to channels
 holding more than one value of a specific type. `f` is a function executed on `pid` and it must
 return an `AbstractChannel`.
 
@@ -1291,7 +1291,7 @@ requirements for the inbuilt `LocalManager` and `SSHManager`:
 All processes in a cluster share the same cookie which, by default, is a randomly generated string
 on the master process:
 
-  * [`cluster_cookie()`](@ref) returns the cookie, while `cluster_cookie(cookie)()` sets
+  * [`cluster_cookie()`](@ref) returns the cookie, while `cluster_cookie(cookie)` sets
     it and returns the new cookie.
   * All connections are authenticated on both sides to ensure that only workers started by the master
     are allowed to connect to each other.
@@ -1449,7 +1449,7 @@ To end this short exposure to external packages, we can consider `MPI.jl`, a Jul
 of the MPI protocol. As it would take too long to consider every inner function, it would be better
 to simply appreciate the approach used to implement the protocol.
 
-Consider this toy script which simply calls each subprocess, instantiate its rank and when the master
+Consider this toy script which simply calls each subprocess, instantiates its rank and when the master
 process is reached, performs the ranks' sum
 
 ```julia

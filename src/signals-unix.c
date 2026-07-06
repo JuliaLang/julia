@@ -1026,7 +1026,7 @@ static void do_profile(void)
         // store cpu cycle clock
         profile_bt_data_prof[profile_bt_size_cur++].uintptr = cycleclock();
 
-        // store whether thread is sleeping (don't ever encode a state as `0` since is preserved to indicate end of block)
+        // store whether thread is sleeping (don't ever encode a state as `0` since it is preserved to indicate end of block)
         int state = jl_atomic_load_relaxed(&ptls2->sleep_check_state) == 0 ? PROFILE_STATE_THREAD_NOT_SLEEPING : PROFILE_STATE_THREAD_SLEEPING;
         profile_bt_data_prof[profile_bt_size_cur++].uintptr = state;
 
@@ -1223,7 +1223,7 @@ static void *signal_listener(void *arg)
             jl_safe_printf("\ncmd: %s %d running %d of %d\n", jl_options.julia_bin ? jl_options.julia_bin : "julia", uv_os_getpid(), n_threads_running, nthreads);
 #endif
 
-            jl_safe_printf("\nsignal (%d): %s\n", sig, strsignal(sig));
+            jl_safe_printf("\nsignal (%d): %s\n", sig, jl_strsignal(sig));
             size_t i;
             for (i = 0; i < signal_bt_size; i += jl_bt_entry_size(signal_bt_data + i)) {
                 jl_fprint_bt_entry_codeloc(ios_safe_stderr, signal_bt_data + i);

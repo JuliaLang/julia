@@ -79,7 +79,7 @@ These implementations assume that NaNs, infinities and zeros have already been f
 end
 
 @inline function _improve_cbrt(x::Float32, t::Float32)
-    # Newton iterations solving
+    # Halley iterations solving
     #   t^2 - x/t == 0
     # with update
     #   t <- t*(t^3 + 2*x)/(2*t^3 + x)
@@ -107,7 +107,7 @@ end
     #
     # where P(r) is a polynomial of degree 4 that approximates 1/cbrt(r)
     # to within 2^-23.5 when |r - 1| < 1/10.  The rough approximation
-    # has produced t such than |t/cbrt(x) - 1| ~< 1/32, and cubing this
+    # has produced t such that |t/cbrt(x) - 1| ~< 1/32, and cubing this
     # gives us bounds for r = t^3/x.
 
     r = (t*t)*(t/x)

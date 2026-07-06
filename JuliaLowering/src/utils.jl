@@ -460,7 +460,7 @@ function _flatten_blocks(st::SyntaxTree)
     end
 end
 
-# Splat the contents of any block whose parent is also a block
+# Splat the contents of any block in `st` whose parent is also a block
 function flatten_blocks(st::SyntaxTree)
     if kind(st) === K"block"
         mknode(st, _flatten_blocks(st))

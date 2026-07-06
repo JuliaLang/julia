@@ -58,15 +58,19 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         return typejoin(typejoin(a.a, a.b), b)
     elseif isa(b, Union)
         return typejoin(a, typejoin(b.a, b.b))
-    elseif isa(a, TypeEq) || isa(b, TypeEq)
+    elseif isTypeEgal(a) || isTypeEgal(b)
+        a = isTypeEgal(a) ? typeof(type_parameter(a)) : a
+        b = isTypeEgal(b) ? typeof(type_parameter(b)) : b
+        return typejoin(a, b)
+    elseif isTypeEq(a) || isTypeEq(b)
         # At least one operand is a `Type{X}` kind. We have already ruled out
         # `a <: b`, `b <: a`, and any `UnionAll`/`Union`/`TypeVar`. The least supertype
         # of a `Type{X}` kind is the abstract `Type`, so widen each kind to `Type` and
         # join the two by subtyping. We compare directly instead of recursing through
         # `typejoin`, because `Type === (Type{T} where T)` would re-enter this branch and
         # not terminate.
-        a = isa(a, TypeEq) ? Type : a
-        b = isa(b, TypeEq) ? Type : b
+        a = isTypeEq(a) ? Type : a
+        b = isTypeEq(b) ? Type : b
         return a <: b ? b :
                b <: a ? a : Any
     end
@@ -499,7 +503,11 @@ true
 ^(x::Number, y::Number) = ^(promote(x,y)...)
 
 fma(x::Number, y::Number, z::Number) = fma(promote(x,y,z)...)
-muladd(x::Number, y::Number, z::Number) = muladd(promote(x,y,z)...)
+function muladd(a::Number, b::Number, c::Number)
+    _a, _b, _c = promote(a, b, c)
+    ((a === false) || (b === false)) && return _c
+    return muladd(_a, _b, _c)
+end
 
 ==(x::Number, y::Number) = (==)(promote(x,y)...)
 <( x::Real, y::Real)     = (< )(promote(x,y)...)

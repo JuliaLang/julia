@@ -4,7 +4,7 @@
 # Must outline anything that can throw, e.g. globalrefs, static params
 function is_valid_ir_argument(ctx, ex)
     k = kind(ex)
-    if is_simple_atom(ctx, ex) || k in KSet"inert inert_syntaxtree top core quote static_eval foreigncall_arg1"
+    if is_simple_atom(ctx, ex) || k in KSet"inert inert_syntaxtree top core quote static_eval foreignsymbol"
         true
     elseif k == K"BindingId"
         binfo = get_binding(ctx, ex)
@@ -69,7 +69,7 @@ struct LinearIRContext{Attrs} <: AbstractLoweringContext
     is_toplevel_thunk::Bool
     lambda_bindings::LambdaBindings
     argmap::Dict{IdTag, IdTag}
-    return_type::Union{Nothing, SyntaxTree{Attrs}}
+    rettype_ssa::Ref{NodeId}
     break_targets::Dict{String, JumpTarget{Attrs}}
     break_label_stack::Vector{String}  # tracks nesting order of symbolicblock labels
     handler_token_stack::SyntaxList{Attrs, Vector{NodeId}}
@@ -82,12 +82,17 @@ struct LinearIRContext{Attrs} <: AbstractLoweringContext
     mod::Module
 end
 
-function LinearIRContext(graph, ctx, is_toplevel_thunk, lambda_bindings, return_type)
-    rett = isnothing(return_type) ? nothing : reparent(graph, return_type)
+function rettype(ctx::LinearIRContext)
+    let r = ctx.rettype_ssa[]
+        r == 0 ? nothing : SyntaxTree(ctx.graph, r)
+    end
+end
+
+function LinearIRContext(graph, ctx, is_toplevel_thunk, lambda_bindings)
     Attrs = typeof(graph.attributes)
     LinearIRContext(graph, SyntaxList(ctx), ctx.bindings, Ref(0),
-                    is_toplevel_thunk, lambda_bindings, Dict{IdTag,IdTag}(), rett,
-                    Dict{String,JumpTarget{Attrs}}(), String[],
+                    is_toplevel_thunk, lambda_bindings, Dict{IdTag,IdTag}(),
+                    Ref(0), Dict{String,JumpTarget{Attrs}}(), String[],
                     SyntaxList(ctx), SyntaxList(ctx),
                     Vector{FinallyHandler{Attrs}}(), Dict{String,JumpTarget{Attrs}}(),
                     Vector{JumpOrigin{Attrs}}(), Set{String}(), Dict{Symbol, Any}(), ctx.mod)
@@ -112,7 +117,7 @@ function is_simple_arg(ctx, ex)
     return is_simple_atom(ctx, ex) || k == K"BindingId" || k == K"quote" ||
         k == K"inert" || k == K"inert_syntaxtree" || k == K"top" ||
         k == K"core" || k == K"globalref" || k == K"static_eval" ||
-        k == K"foreigncall_arg1"
+        k == K"foreignsymbol"
 end
 
 # flisp note: arguments are always counted as single-assign, so effects on
@@ -129,7 +134,7 @@ function is_const_read_arg(ctx, ex)
     # locals cannot be affected by them so we can inline them anyway.
     # TODO from flisp: "We could also allow const globals here"
     return k == K"inert" || k == K"inert_syntaxtree" || k == K"top" ||
-        k == K"core" || k == K"static_eval" || k == K"foreigncall_arg1" ||
+        k == K"core" || k == K"static_eval" || k == K"foreignsymbol" ||
         is_simple_atom(ctx, ex) || is_single_assign_var(ctx, ex)
 end
 
@@ -138,7 +143,7 @@ function is_valid_ir_rvalue(ctx, lhs, rhs)
            is_valid_ir_argument(ctx, rhs) ||
            (kind(lhs) == K"BindingId" &&
             # FIXME: add: invoke ?
-            kind(rhs) in KSet"new splatnew cfunction isdefined call foreigncall gc_preserve_begin new_opaque_closure")
+            kind(rhs) in KSet"new splatnew cfunction isdefined call foreigncall foreignglobal gc_preserve_begin new_opaque_closure")
 end
 
 function check_no_local_bindings(ctx, ex, msg)
@@ -245,8 +250,7 @@ end
 # Helper function for emit_return
 function _actually_return(ctx, ex)
     # TODO: Handle the implicit return coverage hack for #53354 ?
-    rett = ctx.return_type
-    if !isnothing(rett)
+    if (rett = rettype(ctx); !isnothing(rett))
         ex = compile(ctx, convert_for_type_decl(ctx, rett, ex, rett, true), true, false)
     end
     simple_ret_val = isempty(ctx.catch_token_stack) ?
@@ -619,7 +623,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             k == K"inert" || k == K"inert_syntaxtree" || k == K"top" ||
             k == K"core" || k == K"Value" || k == K"Symbol" ||
             k == K"SourceLocation" || k == K"static_eval" ||
-            k == K"foreigncall_arg1" || k == K"static_parameter"
+            k == K"foreignsymbol" || k == K"static_parameter"
         ex1 = ex
         if kind(ex1) == K"BindingId"
             binfo = get_binding(ctx, ex1)
@@ -646,7 +650,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         @jl_assert !needs_value (ex,"TOMBSTONE encountered in value position")
         nothing
     elseif k == K"call" || k == K"new" || k == K"splatnew" || k == K"foreigncall" ||
-            k == K"new_opaque_closure" || k == K"cfunction"
+            k == K"foreignglobal" || k == K"new_opaque_closure" || k == K"cfunction"
         callex = newnode(ctx, ex, k, compile_args(ctx, children(ex)))
         if in_tail_pos
             emit_return(ctx, ex, callex)
@@ -913,8 +917,9 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             end
         end
     elseif k == K"inbounds" || k == K"inbounds_pop" ||
-        k == K"inline" || k == K"noinline" || k == K"purity"
-        emit(ctx, ex) # converted to nothing later
+        k == K"inline" || k == K"noinline" || k == K"purity" ||
+        k == K"aliasscope" || k == K"popaliasscope"
+        emit(ctx, ex) # if absorbed in flags, converted to nothing later
         if needs_value
             val = @ast ctx ex (::K"nothing")
             if in_tail_pos
@@ -966,11 +971,16 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     elseif k == K"latestworld_if_toplevel"
         ctx.is_toplevel_thunk && emit_latestworld(ctx, ex)
     elseif k == K"unused_only"
-        if needs_value && !(in_tail_pos && ctx.is_toplevel_thunk)
-            throw(LoweringError(ex,
-                "global declaration doesn't read the variable and can't return a value"))
+        if needs_value && !in_tail_pos
+            throw(LoweringError(
+                ex, "global declaration doesn't read the variable and can't return a value"))
         end
-        compile(ctx, ex[1], needs_value, in_tail_pos)
+        if needs_value && in_tail_pos && !ctx.is_toplevel_thunk
+            compile(ctx, ex[1], false, false)
+            compile(ctx, @ast(ctx, ex, (::K"nothing")), needs_value, in_tail_pos)
+        else
+            compile(ctx, ex[1], needs_value, in_tail_pos)
+        end
     else
         throw(LoweringError(ex, "Invalid syntax; $(repr(k))"))
     end
@@ -1167,10 +1177,14 @@ end
 function compile_lambda(outer_ctx, ex)
     lambda_args = ex[1]
     static_parameters = ex[2]
-    ret_var = numchildren(ex) == 4 ? ex[4] : nothing
     lambda_bindings = ex.lambda_bindings
-    ctx = LinearIRContext(outer_ctx.graph, outer_ctx, ex.is_toplevel_thunk,
-                          lambda_bindings, ret_var)
+    ctx = LinearIRContext(
+        outer_ctx.graph, outer_ctx, ex.is_toplevel_thunk, lambda_bindings)
+    if numchildren(ex) == 4
+        tmp = ssavar(ctx, ex[4], "rett")
+        ctx.rettype_ssa[] = tmp._id
+        compile(ctx, @ast(ctx, ex[4], [K"=" tmp ex[4]]), false, false)
+    end
     for arg in children(lambda_args)
         kind(arg) == K"Placeholder" && continue
         @jl_assert kind(arg) == K"BindingId" ex
@@ -1262,14 +1276,14 @@ ensure_linearization_attributes!(graph) = ensure_attributes!(
 This pass converts nested ASTs in the body of a lambda into a list of
 statements (ie, Julia's linear/untyped IR).
 
-Most of the compliexty of this pass is in lowering structured control flow (if,
+Most of the complexity of this pass is in lowering structured control flow (if,
 loops, etc) to gotos and exception handling to enter/leave. We also convert
 `K"BindingId"` into `K"slot"`, `K"globalref"` or `K"SSAValue"` as appropriate.
 """
 @fzone "JL: linearize" function linearize_ir(ctx::ClosureConversionCtx, ex)
     graph = ensure_linearization_attributes!(copy_attrs(ctx.graph))
     ex = reparent(graph, ex)
-    ctx_out = LinearIRContext(graph, ctx, false, LambdaBindings(), nothing)
+    ctx_out = LinearIRContext(graph, ctx, false, LambdaBindings())
     ex_out = compile_lambda(ctx_out, ex)
     ctx_out, ex_out
 end

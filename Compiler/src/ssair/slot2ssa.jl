@@ -218,7 +218,7 @@ so it needs a ϕ-node.
 Now, the key insight of that algorithm is that we have two defs, in blocks `A` and `B`,
 and `A` dominates `B`, then we do not need to recurse into `B`, because the set of
 potential backedges from a subtree rooted at `B` (to outside the subtree) is a strict
-subset of those backedges from a subtree rooted at `A` (out outside the subtree rooted
+subset of those backedges from a subtree rooted at `A` (outside the subtree rooted
 at `A`). Note however that this does not work the other way. Thus, the algorithm
 needs to make sure that we always visit `B` before `A`.
 

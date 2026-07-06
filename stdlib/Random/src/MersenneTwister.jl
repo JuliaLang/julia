@@ -110,7 +110,7 @@ function show(io::IO, rng::MersenneTwister)
               sep, s ? rng.idxF : zero(rng.idxF))
     end
     if rng.adv_ints != -1
-        idxI = (length(rng.ints)*16 - rng.idxI) / 8 # 8 represents one Int64
+        idxI = (length(rng.ints)*16 - rng.idxI) / 8 # 8 = sizeof(Int64)
         idxI = Int(idxI) # idxI should always be an integer when using public APIs
         print(io, sep, rng.adv_ints, sep, idxI)
     end

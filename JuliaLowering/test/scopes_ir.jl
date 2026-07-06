@@ -10,14 +10,14 @@ let x::T = rhs
 end
 #---------------------
 1   TestMod.rhs
-2   TestMod.T
-3   (newvar slot₂/T)
+2   (newvar slot₂/T)
+3   slot₂/T
 4   (= slot₃/tmp %₁)
-5   (call core.isa slot₃/tmp %₂)
+5   (call core.isa slot₃/tmp %₃)
 6   (gotoifnot %₅ label₈)
 7   (goto label₁₀)
-8   (call top.convert %₂ slot₃/tmp)
-9   (= slot₃/tmp (call core.typeassert %₈ %₂))
+8   (call top.convert %₃ slot₃/tmp)
+9   (= slot₃/tmp (call core.typeassert %₈ %₃))
 10  slot₃/tmp
 11  (= slot₁/x %₁₀)
 12  (= slot₂/T 1)
