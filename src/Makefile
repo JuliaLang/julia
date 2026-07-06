@@ -39,7 +39,7 @@ JCFLAGS_COMMON += -Wold-style-definition -Wstrict-prototypes -Wc++-compat
 
 # Add common flags that apply to both compilers
 ifeq (${USE_THIRD_PARTY_GC},mmtk)
-FLAGS_COMMON += -I$(MMTK_API_INC)
+FLAGS_COMMON := -I$(SRCDIR)/gc-mmtk -I$(MMTK_API_INC) $(FLAGS_COMMON)
 endif
 
 FLAGS_COMMON += -DJL_BUILD_ARCH='"$(ARCH)"'
@@ -77,7 +77,6 @@ ifeq ($(JULIACODEGEN),LLVM)
 # Currently these files are used by both GCs. But we should make the list specific to stock, and MMTk should have its own implementation.
 GC_CODEGEN_SRCS := llvm-final-gc-lowering llvm-late-gc-lowering llvm-gc-invariant-verifier
 ifeq (${USE_THIRD_PARTY_GC},mmtk)
-FLAGS_COMMON += -I$(MMTK_API_INC)
 GC_CODEGEN_SRCS += llvm-final-gc-lowering-mmtk
 else
 GC_CODEGEN_SRCS += llvm-final-gc-lowering-stock
@@ -132,7 +131,7 @@ UV_HEADERS += uv/*.h
 endif
 PUBLIC_HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,work-stealing-queue.h gc-interface.h gc-tls-common.h julia.h julia_assert.h julia_threads.h julia_fasttls.h julia_locks.h julia_atomics.h jloptions.h jl_exported_data.inc)
 ifeq (${USE_THIRD_PARTY_GC},mmtk)
-	PUBLIC_HEADERS += $(addprefix $(SRCDIR)/,gc-tls-mmtk.h gc-wb-mmtk.h)
+	PUBLIC_HEADERS += $(addprefix $(SRCDIR)/gc-mmtk/,gc-tls-mmtk.h gc-wb-mmtk.h)
 else
 	PUBLIC_HEADERS += $(addprefix $(SRCDIR)/,gc-tls-stock.h gc-wb-stock.h)
 endif
@@ -336,6 +335,14 @@ $(BUILDDIR)/%.o: $(SRCDIR)/%.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLVM_CONF
 	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(SHIPFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(CXX_DISABLE_ASSERTION) -c $< -o $@)
 $(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(DEBUGFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) -c $< -o $@)
+$(BUILDDIR)/gc-mmtk.o: $(SRCDIR)/gc-mmtk/gc-mmtk.c $(HEADERS) | $(BUILDDIR)
+	@$(call PRINT_CC, $(CC) $(LLVM_CFLAGS) $(SHIPFLAGS) $(JCPPFLAGS) $(JCFLAGS) $(DISABLE_ASSERTIONS) -c $< -o $@)
+$(BUILDDIR)/gc-mmtk.dbg.obj: $(SRCDIR)/gc-mmtk/gc-mmtk.c $(HEADERS) | $(BUILDDIR)
+	@$(call PRINT_CC, $(CC) $(LLVM_CFLAGS) $(DEBUGFLAGS) $(JCPPFLAGS) $(JCFLAGS) -c $< -o $@)
+$(BUILDDIR)/llvm-final-gc-lowering-mmtk.o: $(SRCDIR)/gc-mmtk/llvm-final-gc-lowering-mmtk.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR)
+	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(SHIPFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(CXX_DISABLE_ASSERTION) -c $< -o $@)
+$(BUILDDIR)/llvm-final-gc-lowering-mmtk.dbg.obj: $(SRCDIR)/gc-mmtk/llvm-final-gc-lowering-mmtk.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR)
+	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(DEBUGFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) -c $< -o $@)
 $(BUILDDIR)/%.o : $(SRCDIR)/%.d
 	@$(call PRINT_DTRACE, $(DTRACE) -G -s $< -o $@)
 $(BUILDDIR)/%.dbg.obj : $(SRCDIR)/%.d
@@ -445,7 +452,7 @@ $(BUILDDIR)/debuginfo.o $(BUILDDIR)/debuginfo.dbg.obj: $(addprefix $(SRCDIR)/,de
 $(BUILDDIR)/disasm.o $(BUILDDIR)/disasm.dbg.obj: $(SRCDIR)/debuginfo.h $(SRCDIR)/processor.h
 $(BUILDDIR)/gc-debug.o $(BUILDDIR)/gc-debug.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h
 $(BUILDDIR)/gc-pages.o $(BUILDDIR)/gc-pages.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h
-$(BUILDDIR)/gc-mmtk.o $(BUILDDIR)/gc-mmtk.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-heap-snapshot.h $(SRCDIR)/gc-alloc-profiler.h
+$(BUILDDIR)/gc-mmtk.o $(BUILDDIR)/gc-mmtk.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-heap-snapshot.h $(SRCDIR)/gc-alloc-profiler.h $(SRCDIR)/gc-mmtk/gc-tls-mmtk.h $(SRCDIR)/gc-mmtk/gc-wb-mmtk.h
 $(BUILDDIR)/gc-stacks.o $(BUILDDIR)/gc-stacks.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h
 $(BUILDDIR)/gc-stock.o $(BUILDDIR)/gc.dbg.obj: $(SRCDIR)/gc-common.h $(SRCDIR)/gc-stock.h $(SRCDIR)/gc-heap-snapshot.h $(SRCDIR)/gc-alloc-profiler.h $(SRCDIR)/gc-page-profiler.h
 $(BUILDDIR)/gc-heap-snapshot.o $(BUILDDIR)/gc-heap-snapshot.dbg.obj: $(SRCDIR)/gc-heap-snapshot.h
@@ -593,12 +600,14 @@ libjulia-codegen-debug libjulia-codegen-release: $(PUBLIC_HEADER_TARGETS)
 $(OBJS) $(DOBJS): FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_INTERNAL -DBUILDING_UV_SHARED
 $(CODEGEN_OBJS) $(CODEGEN_DOBJS): FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_CODEGEN -DUSING_UV_SHARED
 # set the exports for the source files based on where they are getting linked
-$(addprefix clang-sa-,$(SRCS)):      FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_INTERNAL
-$(addprefix clang-sagc-,$(SRCS)):    FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_INTERNAL
-$(addprefix clang-tidy-,$(SRCS)):    FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_INTERNAL
-$(addprefix clang-sa-,$(CODEGEN_SRCS)):   FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_CODEGEN
-$(addprefix clang-sagc-,$(CODEGEN_SRCS)): FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_CODEGEN
-$(addprefix clang-tidy-,$(CODEGEN_SRCS)): FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_CODEGEN
+$(addprefix clang-sa-,$(SRCS)) \
+$(addprefix clang-sagc-,$(SRCS)) \
+$(addprefix clang-tidy-,$(SRCS)): \
+	FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_INTERNAL
+$(addprefix clang-sa-,$(CODEGEN_SRCS)) \
+$(addprefix clang-sagc-,$(CODEGEN_SRCS)) \
+$(addprefix clang-tidy-,$(CODEGEN_SRCS)): \
+	FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_CODEGEN
 
 # Common flag patterns for all clang tooling (clang-sa, clang-tidy, compile-database)
 CLANG_TOOLING_C_FLAGS = $(CLANGSA_FLAGS) $(LLVM_CFLAGS) $(DEBUGFLAGS_CLANG) $(JCPPFLAGS_CLANG) $(JCFLAGS_CLANG)
@@ -665,11 +674,15 @@ GC_CHECKER_SOURCES := \
 	$(SRCDIR)/clangsa/GCCheckerReporting.cpp \
 	$(SRCDIR)/clangsa/GCCheckerPropagation.cpp
 
-$(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT): $(GC_CHECKER_SOURCES) $(SRCDIR)/clangsa/GCChecker.h $(LLVM_CONFIG_ABSOLUTE)
+CLANGSA_PLUGIN_NAMES := GCChecker ImplicitAtomics FirstDeclAnnotations StaticOrDeclared
+CLANGSA_PLUGINS := $(addsuffix Plugin.$(SHLIB_EXT),$(addprefix $(build_shlibdir)/lib,$(CLANGSA_PLUGIN_NAMES)))
+GCCHECKER_PLUGIN := $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT)
+
+$(GCCHECKER_PLUGIN): $(GC_CHECKER_SOURCES) $(SRCDIR)/clangsa/GCChecker.h $(SRCDIR)/clangsa/HelpersCommon.hpp $(LLVM_CONFIG_ABSOLUTE)
 	@$(call PRINT_CC, $(CXX) -g $(fPIC) -shared -o $@ -DCLANG_PLUGIN -I$(build_includedir) -L$(build_libdir) \
 		$(LLVM_CXXFLAGS) $(CLANG_LDFLAGS) $(CPPFLAGS) $(CXXFLAGS) $(LDFLAGS) $(CXXLDFLAGS) $(GC_CHECKER_SOURCES))
 
-$(build_shlibdir)/lib%Plugin.$(SHLIB_EXT): $(SRCDIR)/clangsa/%.cpp $(LLVM_CONFIG_ABSOLUTE)
+$(build_shlibdir)/lib%Plugin.$(SHLIB_EXT): $(SRCDIR)/clangsa/%.cpp $(SRCDIR)/clangsa/HelpersCommon.hpp $(LLVM_CONFIG_ABSOLUTE)
 	@$(call PRINT_CC, $(CXX) -g $(fPIC) -shared -o $@ -DCLANG_PLUGIN -I$(build_includedir) -L$(build_libdir) \
 		$(LLVM_CXXFLAGS) $(CLANG_LDFLAGS) $(CPPFLAGS) $(CXXFLAGS) $(LDFLAGS) $(CXXLDFLAGS) $<)
 
@@ -698,8 +711,7 @@ ifneq ($(BUILD_LLVM_CLANG),1)
 endif
 endif
 
-clangsa: $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT)
-clangsa: $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT)
+clangsa: $(CLANGSA_PLUGINS)
 
 # optarg is a required_argument for these
 SA_EXCEPTIONS-jloptions.c                   := -Xanalyzer -analyzer-config -Xanalyzer silence-checkers="core.NonNullParamChecker;unix.cstring.NullArg"
@@ -714,14 +726,14 @@ SKIP_GC_CHECK := codegen.cpp rtutils.c
 
 # make sure LLVM's invariant information is not discarded with -DNDEBUG
 clang-sagc-%: JCXXFLAGS_COMMON += -UNDEBUG
-clang-sagc-%: $(SRCDIR)/%.c $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) .FORCE | analyzegc-deps-check
+clang-sagc-%: $(SRCDIR)/%.c $(GCCHECKER_PLUGIN) .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang -D__clang_gcanalyzer__ --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text --analyzer-no-default-checks \
-		-Xclang -load -Xclang $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker \
+		-Xclang -load -Xclang $(GCCHECKER_PLUGIN) -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker \
 		$(SA_EXCEPTIONS-$(notdir $<)) \
 		$(CLANG_TOOLING_C_FLAGS) -fcolor-diagnostics -x c $<)
-clang-sagc-%: $(SRCDIR)/%.cpp $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) .FORCE | analyzegc-deps-check
+clang-sagc-%: $(SRCDIR)/%.cpp $(GCCHECKER_PLUGIN) .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang -D__clang_gcanalyzer__ --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text --analyzer-no-default-checks \
-		-Xclang -load -Xclang $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker \
+		-Xclang -load -Xclang $(GCCHECKER_PLUGIN) -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker \
 		$(SA_EXCEPTIONS-$(notdir $<)) \
 		$(CLANG_TOOLING_CXX_FLAGS) -fcolor-diagnostics -x c++ $<)
 
@@ -737,14 +749,30 @@ clang-sa-%: $(SRCDIR)/%.cpp .FORCE | analyzegc-deps-check
 		$(SA_EXCEPTIONS-$(notdir $<)) \
 		$(CLANG_TOOLING_CXX_FLAGS) -fcolor-diagnostics -Werror -x c++ $<)
 
-clang-tidy-%: $(SRCDIR)/%.c $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT) .FORCE | analyzegc-deps-check
+# Run clang-tidy with our plugins: `-header-filter='.*'` so the first
+# (header) declarations participate in the comparison. The annotation macros
+# only expand to an `annotate` attribute under `-D__clang_gcanalyzer__` (see
+# src/support/analyzer_annotations.h), so run the checks once in the normal
+# build configuration and once with the analyzer define active (when the
+# annotations are visible).
+TIDY_PLUGIN_NAMES := $(filter-out GCChecker,$(CLANGSA_PLUGIN_NAMES))
+TIDY_PLUGIN_LIBS := $(addsuffix Plugin.$(SHLIB_EXT),$(addprefix $(build_shlibdir)/lib,$(TIDY_PLUGIN_NAMES)))
+TIDY_PLUGINS := $(addprefix -load ,$(TIDY_PLUGIN_LIBS))
+TIDY_CHECKS := -clang-analyzer-*,-clang-diagnostic-*,concurrency-implicit-atomics,julia-first-decl-annotations,julia-static-or-declared
+clang-tidy-%: $(SRCDIR)/%.c $(TIDY_PLUGIN_LIBS) .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang-tidy $< -header-filter='.*' --quiet \
-		-load $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT) --checks='-clang-analyzer-*$(COMMA)-clang-diagnostic-*$(COMMA)concurrency-implicit-atomics' --warnings-as-errors='*' \
+		$(TIDY_PLUGINS) --checks='$(TIDY_CHECKS)' --warnings-as-errors='*' \
 		-- $(CLANG_TOOLING_C_FLAGS) -fcolor-diagnostics -fno-caret-diagnostics -x c)
-clang-tidy-%: $(SRCDIR)/%.cpp $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT) .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang-tidy $< -header-filter='.*' --quiet \
-		-load $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT) --checks='-clang-analyzer-*$(COMMA)-clang-diagnostic-*$(COMMA)concurrency-implicit-atomics' --warnings-as-errors='*' \
+		$(TIDY_PLUGINS) --checks='$(TIDY_CHECKS)' --warnings-as-errors='*' \
+		-- $(CLANG_TOOLING_C_FLAGS) -D__clang_gcanalyzer__ -fcolor-diagnostics -fno-caret-diagnostics -x c)
+clang-tidy-%: $(SRCDIR)/%.cpp $(TIDY_PLUGIN_LIBS) .FORCE | analyzegc-deps-check
+	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang-tidy $< -header-filter='.*' --quiet \
+		$(TIDY_PLUGINS) --checks='$(TIDY_CHECKS)' --warnings-as-errors='*' \
 		-- $(CLANG_TOOLING_CXX_FLAGS) -fcolor-diagnostics --system-header-prefix=llvm -Wno-deprecated-declarations -fno-caret-diagnostics -x c++)
+	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang-tidy $< -header-filter='.*' --quiet \
+		$(TIDY_PLUGINS) --checks='$(TIDY_CHECKS)' --warnings-as-errors='*' \
+		-- $(CLANG_TOOLING_CXX_FLAGS) -D__clang_gcanalyzer__ -fcolor-diagnostics --system-header-prefix=llvm -Wno-deprecated-declarations -fno-caret-diagnostics -x c++)
 
 # Add C files as a target of `analyzesrc` and `analyzegc` and `tidysrc`
 .PHONY: tidysrc
@@ -762,8 +790,7 @@ $(addprefix analyze-,$(filter-out $(basename $(SKIP_GC_CHECK)),$(CODEGEN_SRCS) $
 
 .PHONY: clean-analyzegc
 clean-analyzegc:
-	rm -f $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT)
-	rm -f $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT)
+	rm -f $(CLANGSA_PLUGINS)
 
 # Compilation database generation using existing clang infrastructure
 .PHONY: regenerate-compile_commands

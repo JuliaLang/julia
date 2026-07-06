@@ -817,7 +817,7 @@ static bool is_typeofbottom_typealias(jl_value_t *jt)
         return false;
     return jt == (jl_value_t*)jl_bottom_type ||
            jt == (jl_value_t*)jl_typeofbottom_type ||
-           (jl_is_typeeq(jt) && jl_typeeq_T(jt) == jl_bottom_type);
+           (jl_is_some_Type(jt) && jl_some_Type_T(jt) == jl_bottom_type);
 }
 
 static Type *_julia_type_to_llvm(jl_codegen_output_t *ctx, LLVMContext &ctxt, jl_value_t *jt, bool *isboxed, bool no_boxing)
@@ -1975,7 +1975,8 @@ static bool _can_optimize_isa(jl_value_t *type, int &counter)
     }
     if (type == (jl_value_t*)jl_type_type)
         return true;
-    if (jl_is_typeeq(type) && jl_pointer_egal(type))
+    // a pointer test is only valid for the egality kind (#61323)
+    if (is_uniquerep_Type(type) && jl_pointer_egal(type))
         return true;
     if (jl_has_intersect_type_not_kind(type))
         return false;
@@ -2023,7 +2024,7 @@ static Value *emit_exactly_isa(jl_codectx_t &ctx, const jl_cgval_t &arg, jl_data
             ctx.builder.SetInsertPoint(isaBB);
             Value *istype_boxed = NULL;
             if (is_uniquerep_Type((jl_value_t*)dt)) {
-                istype_boxed = ctx.builder.CreateICmpEQ(decay_derived(ctx, arg.Vboxed), decay_derived(ctx, literal_pointer_val(ctx, jl_typeeq_T((jl_value_t*)dt))));
+                istype_boxed = ctx.builder.CreateICmpEQ(decay_derived(ctx, arg.Vboxed), decay_derived(ctx, literal_pointer_val(ctx, jl_some_Type_T((jl_value_t*)dt))));
             } else {
                 istype_boxed = ctx.builder.CreateICmpEQ(emit_typeof(ctx, arg.Vboxed, false, true), emit_tagfrom(ctx, dt));
             }
@@ -2045,6 +2046,19 @@ static Value *emit_exactly_isa(jl_codectx_t &ctx, const jl_cgval_t &arg, jl_data
         isnull = null_pointer_cmp(ctx, arg.Vboxed);
     }
     Constant *Vfalse = ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0);
+    if (is_uniquerep_Type((jl_value_t*)dt)) {
+        // `dt` is not a datatype, so it has no type tag to compare against;
+        // its sole instance is the pinned type object, which is always boxed
+        if (!arg.isboxed)
+            return Vfalse;
+        return emit_guarded_test(ctx, isnull, Vfalse, [&]{
+            auto isa = ctx.builder.CreateICmpEQ(
+                decay_derived(ctx, arg.Vboxed),
+                decay_derived(ctx, literal_pointer_val(ctx, jl_some_Type_T((jl_value_t*)dt))));
+            setName(ctx.emission_context, isa, "exactly_isa");
+            return isa;
+        });
+    }
     return emit_guarded_test(ctx, isnull, Vfalse, [&]{
         auto isa = ctx.builder.CreateICmpEQ(emit_typeof(ctx, arg, false, true), emit_tagfrom(ctx, dt));
         setName(ctx.emission_context, isa, "exactly_isa");
@@ -2101,10 +2115,9 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
         return std::make_pair(ConstantInt::get(getInt1Ty(ctx.builder.getContext()), *known_isa), true);
     }
 
-    if (jl_is_typeeq(intersected_type) && jl_pointer_egal(intersected_type)) {
-        // Use the check in `jl_pointer_egal` to see if the type enclosed
-        // has unique pointer value.
-        auto ptr = track_pjlvalue(ctx, literal_pointer_val(ctx, jl_typeeq_T(intersected_type)));
+    if (is_uniquerep_Type(intersected_type) && jl_pointer_egal(intersected_type)) {
+        // `TypeEgal{X}` with pointer-egal `X`: `isa(x, T)` is the pointer test `x === X`
+        auto ptr = track_pjlvalue(ctx, literal_pointer_val(ctx, jl_some_Type_T(intersected_type)));
         return {ctx.builder.CreateICmpEQ(boxed(ctx, x), ptr), false};
     }
     if (intersected_type == (jl_value_t*)jl_type_type) {
@@ -2116,8 +2129,10 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
         Value *typ = emit_typeof(ctx, x, false, true);
         auto val = ctx.builder.CreateOr(
             ctx.builder.CreateOr(
-                ctx.builder.CreateICmpEQ(typ, emit_tagfrom(ctx, jl_uniontype_type)),
-                ctx.builder.CreateICmpEQ(typ, emit_tagfrom(ctx, jl_datatype_type))),
+                ctx.builder.CreateOr(
+                    ctx.builder.CreateICmpEQ(typ, emit_tagfrom(ctx, jl_uniontype_type)),
+                    ctx.builder.CreateICmpEQ(typ, emit_tagfrom(ctx, jl_datatype_type))),
+                ctx.builder.CreateICmpEQ(typ, emit_tagfrom(ctx, jl_typeegal_type))),
             ctx.builder.CreateOr(
                 ctx.builder.CreateICmpEQ(typ, emit_tagfrom(ctx, jl_unionall_type)),
                 ctx.builder.CreateOr(
@@ -2125,6 +2140,15 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
                     ctx.builder.CreateICmpEQ(typ, emit_tagfrom(ctx, jl_typeofbottom_type)))));
         setName(ctx.emission_context, val, "is_kind");
         return std::make_pair(val, false);
+    }
+    if (jl_is_some_Type(type)) {
+        // an `==`-keyed `Type{X}` (or a `TypeEgal{X}` without a pointer-egal
+        // parameter) has no cheap tag test; defer to the runtime `jl_isa`
+        Value *vx = boxed(ctx, x);
+        Value *vtyp = track_pjlvalue(ctx, literal_pointer_val(ctx, type));
+        return std::make_pair(ctx.builder.CreateICmpNE(
+                ctx.builder.CreateCall(prepare_call(jlisa_func), { vx, vtyp }),
+                ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0)), false);
     }
     // intersection with Type needs to be handled specially
     if (jl_has_intersect_type_not_kind(type) || jl_has_intersect_type_not_kind(intersected_type)) {
@@ -2652,15 +2676,9 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                 r = ctx.builder.CreateZExt(r, elty);
         }
     }
-    Value *instr = nullptr;
-    Value *Compare = nullptr;
-    Value *Success = nullptr;
-    BasicBlock *DoneBB = nullptr;
-    if (needlock)
-        emit_lockstate_value(ctx, needlock, true);
-    jl_cgval_t oldval = rhs;
-    // Emit the write barrier for the new value *before* the store.
-    auto emit_store_pre_barrier = [&] {
+    // This pre-write barrier must be emitted before the store, while also not
+    // holding any local atomic locks.
+    auto emit_store_pre_barrier = [&](Value *r, const jl_cgval_t &rhs) {
         if (parent == NULL || !tracked_pointers)
             return;
         if (isboxed) {
@@ -2669,24 +2687,38 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             assert(r != nullptr);
             emit_write_barrier(ctx, parent, r);
         }
-        else if (!rhs.inline_roots.empty()) {
-            emit_write_multibarrier(ctx, parent, rhs);
+        else if (r) {
+            Value *wbval = r;
+            if (realelty != elty)
+                wbval = ctx.builder.CreateTrunc(wbval, realelty);
+            if (intcast) {
+                ctx.builder.CreateStore(wbval, intcast);
+                wbval = ctx.builder.CreateLoad(intcast_eltyp, intcast);
+            }
+            else if (intcast_eltyp) {
+                // setfield doesn't use an intcast alloca, so reload rhs with the
+                // pointer-exposing type
+                wbval = emit_unbox(ctx, intcast_eltyp, rhs);
+            }
+            emit_write_multibarrier(ctx, parent, wbval, rhs.typ);
         }
         else {
-            // Unbox to the field's storage type (concrete by construction), not
-            // rhs.typ which may be bottom for an unreachable store (e.g. a modify
-            // of an always-undef field) and would make emit_unbox return null.
-            // intcast_eltyp is the pointer-exposing type when the field was
-            // widened to an integer for atomics.
-            Type *wb_eltyp = intcast_eltyp ? intcast_eltyp : realelty;
-            Value *agg = emit_unbox(ctx, wb_eltyp, rhs);
-            emit_write_multibarrier(ctx, parent, agg, rhs.typ);
+            assert(!isboxed);
+            assert(!rhs.inline_roots.empty());
+            emit_write_multibarrier(ctx, parent, rhs);
         }
     };
     // For op == StoreKind::Modify the new value isn't known yet; its barrier is
-    // emitted later, once `rhs`/`r` have been computed.
+    // emitted later inside the loop, once `rhs`/`r` have been computed.
     if (op != StoreKind::Modify)
-        emit_store_pre_barrier();
+        emit_store_pre_barrier(r, rhs);
+    if (needlock)
+        emit_lockstate_value(ctx, needlock, true);
+    Value *instr = nullptr;
+    Value *Compare = nullptr;
+    Value *Success = nullptr;
+    BasicBlock *DoneBB = nullptr;
+    jl_cgval_t oldval = rhs;
     // TODO: we should do Release ordering for anything with CountTrackedPointers(elty).count > 0, instead of just isboxed
     if (op == StoreKind::Set || (Order == AtomicOrdering::NotAtomic && op == StoreKind::Swap)) {
         if (op == StoreKind::Swap) {
@@ -2903,9 +2935,12 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                 if (realelty != elty)
                     r = ctx.builder.CreateZExt(r, elty);
             }
+            // As an optimization, we could hoist this pre-write barrier after the cmpxchg
+            // loop if we had a barrier form that explicitly takes in `oldval`. However it
+            // only makes any difference under contention so has limited gains.
+            emit_store_pre_barrier(r, rhs);
             if (needlock)
                 emit_lockstate_value(ctx, needlock, true); // relock
-            emit_store_pre_barrier();
             cmpop = oldval;
         }
         Value *Done;
@@ -3019,7 +3054,6 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         ctx.builder.SetInsertPoint(DoneBB);
     if (needlock)
         emit_lockstate_value(ctx, needlock, false);
-    // Write barrier is emitted before the store (see emit_store_pre_barrier above).
     switch (op) {
     case StoreKind::Modify: {
         const jl_cgval_t argv[2] = { oldval, rhs };
@@ -4159,7 +4193,7 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool is_promotab
                 originalAlloca->eraseFromParent();
             }
             else {
-                auto arg_typename = [&] JL_NOTSAFEPOINT {
+                auto arg_typename = [&]() JL_NOTSAFEPOINT {
                     return "box::" + std::string(jl_symbol_name(((jl_datatype_t*)(jt))->name->name));
                 };
                 box = emit_allocobj(ctx, (jl_datatype_t*)jt, true);
@@ -4428,7 +4462,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
     ++EmittedNewStructs;
     assert(jl_is_concrete_type(ty));
     jl_datatype_t *sty = (jl_datatype_t*)ty;
-    auto arg_typename = [&] JL_NOTSAFEPOINT {
+    auto arg_typename = [&]() JL_NOTSAFEPOINT {
         return "new::" + std::string(jl_symbol_name((sty)->name->name));
     };
     size_t nf = jl_datatype_nfields(sty);
@@ -4758,7 +4792,7 @@ static auto *emit_genericmemory_unchecked(jl_codectx_t &ctx, Value *cg_nbytes, V
 // on the allocation call, processed by late-gc-lowering
 static void emit_memory_stores(jl_codectx_t &ctx, jl_datatype_t *typ, Value* alloc, Value* nel)
 {
-    auto arg_typename = [&] JL_NOTSAFEPOINT {
+    auto arg_typename = [&]() JL_NOTSAFEPOINT {
         std::string type_str;
         auto eltype = jl_tparam1(typ);
         if (jl_is_datatype(eltype))

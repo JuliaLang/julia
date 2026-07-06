@@ -40,8 +40,7 @@ export # not exported by Base
     Algorithm,
     DEFAULT_UNSTABLE,
     DEFAULT_STABLE,
-    SMALL_ALGORITHM,
-    SMALL_THRESHOLD
+    SMALL_ALGORITHM
 
 abstract type Algorithm end
 

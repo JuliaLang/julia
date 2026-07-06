@@ -75,7 +75,7 @@ static bool have_fma(Function &intr, Function &caller, const Triple &TT) JL_NOTS
     return false;
 }
 
-void lowerHaveFMA(Function &intr, Function &caller, const Triple &TT, CallInst *I) JL_NOTSAFEPOINT {
+static void lowerHaveFMA(Function &intr, Function &caller, const Triple &TT, CallInst *I) JL_NOTSAFEPOINT {
     if (have_fma(intr, caller, TT)) {
         ++LoweredWithFMA;
         I->replaceAllUsesWith(ConstantInt::get(I->getType(), 1));
@@ -86,7 +86,7 @@ void lowerHaveFMA(Function &intr, Function &caller, const Triple &TT, CallInst *
     return;
 }
 
-bool lowerCPUFeatures(Module &M) JL_NOTSAFEPOINT
+static bool lowerCPUFeatures(Module &M) JL_NOTSAFEPOINT
 {
     auto TT = Triple(M.getTargetTriple());
     SmallVector<Instruction*,6> Materialized;

@@ -142,21 +142,47 @@ end
     @test cg !== C_NULL
     @test unsafe_load(cg) == 1
 
+    # the pointer-vs-name choice is syntactic, not value-based: a runtime
+    # variable holding a tuple takes the pointer form, which errors
     @eval test_mod global cglobal_tuple = (:global_var, libccalltest_var)
-    cg = JuliaLowering.include_string(test_mod, """
+    @test_throws TypeError JuliaLowering.include_string(test_mod, """
         cglobal(cglobal_tuple, Cint)
     """)
-    @test cg isa Ptr{Cint}
-    @test cg !== C_NULL
-    @test unsafe_load(cg) == 1
-    cg = JuliaLowering.include_string(test_mod, """
+    @test_throws TypeError JuliaLowering.include_string(test_mod, """
         let local_tuple = (:global_var, libccalltest_var)
             cglobal(local_tuple, Cint)
         end
     """)
+
+    # unlike the argtypes / rettype of a ccall, cglobal(name, T) should allow
+    # rettype T to be any runtime expression
+    cg = JuliaLowering.include_string(test_mod, """
+        function cglobal_runtime_type(T)
+            cglobal((:global_var, libccalltest_var), T)
+        end
+        cglobal_runtime_type(Cint)
+    """)
     @test cg isa Ptr{Cint}
-    @test cg !== C_NULL
     @test unsafe_load(cg) == 1
+
+    # invalid foreignsymbol (tuple) forms should error for cglobal
+    @test_throws ErrorException JuliaLowering.include_string(test_mod, "cglobal((:a, :b, :c))")
+    @test_throws ErrorException JuliaLowering.include_string(test_mod, "cglobal(())")
+    @test_throws TypeError JuliaLowering.include_string(test_mod, "cglobal((1,))")
+
+    # cglobal(name) with a non-static name errors, just like ccall
+    @test_throws TypeError JuliaLowering.include_string(test_mod, """
+        function cglobal_non_static1()
+            sym = (:global_var, libccalltest_var)
+            cglobal(sym)
+        end
+        cglobal_non_static1()
+    """)
+    @eval test_mod global the_sym = (:global_var, libccalltest_var)
+    @test_throws TypeError JuliaLowering.include_string(test_mod, """
+        cglobal_non_static2() = cglobal(the_sym)
+        cglobal_non_static2()
+    """)
 end
 
 # ccall

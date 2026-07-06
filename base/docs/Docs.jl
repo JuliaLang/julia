@@ -413,10 +413,12 @@ function objectdoc(__source__, __module__, str, def, expr, sig = :(Union{}))
                 exdef = Expr(:block, exdef)
             end
             val = :val
-            exdef = Expr(:(=), val, exdef)
+            # if-true hack: val should not be recognized as a struct field,
+            # including by @kwdef
+            exdef = Expr(:if, true, Expr(:(=), val, exdef))
         end
         # Note: we want to avoid introducing line number nodes here (issue #24468) for def
-        return Expr(:block, exdef, docex, val)
+        return Expr(:block, exdef, docex, Expr(:if, true, val))
     end
 end
 

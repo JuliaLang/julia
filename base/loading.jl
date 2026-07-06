@@ -2823,7 +2823,7 @@ function __require_prelocked(pkg::PkgId, env)
     set_pkgorigin_version_path(pkg, path)
 
     parallel_precompile_attempted = Ref(false) # being safe to avoid getting stuck in a precompilepkgs loop
-    reasons = Dict{String,Int}()
+    reasons = Dict{Symbol,Int}()
     # attempt to load the module file via the precompile cache locations
     if JLOptions().use_compiled_modules != 0
         @label load_from_cache
@@ -4228,22 +4228,74 @@ function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String; stale_age=compilec
     end
 end
 
-function record_reason(reasons::Dict{String,Int}, reason::String)
+function record_reason(reasons::Dict{Symbol,Int}, reason::Symbol)
     reasons[reason] = get(reasons, reason, 0) + 1
 end
-record_reason(::Nothing, ::String) = nothing
-function list_reasons(reasons::Dict{String,Int})
+record_reason(::Nothing, ::Symbol) = nothing
+
+# Reasons why a candidate cache file may be rejected, mapped to a category and a
+# human-readable description for the loading log message.
+#   :actionable  — an otherwise-usable cache was rejected, so the details are useful
+#   :wrong_julia — the cache was built by a different version or build of Julia, which
+#                  is expected when switching versions, so it is collapsed into a single
+#                  generic message and only reported if nothing actionable was seen
+#   :internal    — the candidate simply wasn't the cache being searched for; not reported
+const CACHE_REJECT_REASONS = Dict{Symbol,Pair{Symbol,String}}(
+    :unresolved_depot        => :actionable  => "file location uses unresolved depot path",
+    :source_missing          => :actionable  => "source file not found",
+    :mtime_changed           => :actionable  => "file modification time changed",
+    :fsize_changed           => :actionable  => "file size changed",
+    :content_changed         => :actionable  => "file content changed",
+    :flags_mismatch          => :actionable  => "different compilation options",
+    :pkgimages_disabled      => :actionable  => "native code caching disabled",
+    :cpu_target              => :actionable  => "different system or CPU target",
+    :ocachefile_missing      => :actionable  => "native code cache file not found",
+    :dep_loaded_incompatible => :actionable  => "different version of dependency already loaded",
+    :dep_missing             => :actionable  => "dependency source file not found",
+    :source_path_changed     => :actionable  => "different source file path",
+    :dep_identity_changed    => :actionable  => "dependency identifier changed",
+    :checksum_invalid        => :actionable  => "cache file checksum is invalid",
+    :ocache_checksum_invalid => :actionable  => "native code cache checksum is invalid",
+    :preferences_changed     => :actionable  => "package preferences changed",
+    :incompatible_header     => :wrong_julia => "incompatible cache header",
+    :julia_version           => :wrong_julia => "different Julia version",
+    :syntax_version          => :wrong_julia => "different Julia syntax version",
+    :pkgid_mismatch          => :internal    => "different package identifier",
+    :buildid_mismatch        => :internal    => "different build identifier",
+    :dep_buildid_mismatch    => :internal    => "different dependency build identifier",
+)
+
+function list_reasons(reasons::Dict{Symbol,Int})
     isempty(reasons) && return ""
-    return " (caches not reused: $(join(("$v for $k" for (k,v) in reasons), ", ")))"
+    actionable = String[]
+    wrong_julia = false
+    verbose = String[]
+    for (key, count) in reasons
+        category, desc = get(CACHE_REJECT_REASONS, key, :actionable => String(key))
+        push!(verbose, "$count for $desc")
+        if category === :actionable
+            push!(actionable, desc)
+        elseif category === :wrong_julia
+            wrong_julia = true
+        end
+    end
+    @debug "Caches not reused: $(join(verbose, ", "))"
+    if !isempty(actionable)
+        return " (cache not reused: $(join(sort!(actionable), ", ")))"
+    elseif wrong_julia
+        return " (no compatible cache for this version of Julia)"
+    else
+        return ""
+    end
 end
 list_reasons(::Nothing) = ""
 
-function any_includes_stale(includes::Vector{CacheHeaderIncludes}, cachefile::String, reasons::Union{Dict{String,Int},Nothing}=nothing)
+function any_includes_stale(includes::Vector{CacheHeaderIncludes}, cachefile::String, reasons::Union{Dict{Symbol,Int},Nothing}=nothing)
     for chi in includes
         f, fsize_req, hash_req, ftime_req = chi.filename, chi.fsize, chi.hash, chi.mtime
         if startswith(f, string("@depot", Filesystem.pathsep()))
             @debug("Rejecting stale cache file $cachefile because its depot could not be resolved")
-            record_reason(reasons, "file location uses unresolved depot path")
+            record_reason(reasons, :unresolved_depot)
             return true
         end
         if !ispath(f)
@@ -4252,7 +4304,7 @@ function any_includes_stale(includes::Vector{CacheHeaderIncludes}, cachefile::St
                 continue
             end
             @debug "Rejecting stale cache file $cachefile because file $f does not exist"
-            record_reason(reasons, "source file not found")
+            record_reason(reasons, :source_missing)
             return true
         end
         if ftime_req >= 0.0
@@ -4266,7 +4318,7 @@ function any_includes_stale(includes::Vector{CacheHeaderIncludes}, cachefile::St
                        !( 0 < (ftime_req - ftime) < 1e-6 )        # PR #45552: Compensate for Windows tar giving mtimes that may be incorrect by up to one microsecond
             if is_stale
                 @debug "Rejecting stale cache file $cachefile because mtime of include_dependency $f has changed (mtime $ftime, before $ftime_req)"
-                record_reason(reasons, "file modification time changed")
+                record_reason(reasons, :mtime_changed)
                 return true
             end
         else
@@ -4274,13 +4326,13 @@ function any_includes_stale(includes::Vector{CacheHeaderIncludes}, cachefile::St
             fsize = filesize(fstat)
             if fsize != fsize_req
                 @debug "Rejecting stale cache file $cachefile because file size of $f has changed (file size $fsize, before $fsize_req)"
-                record_reason(reasons, "file size changed")
+                record_reason(reasons, :fsize_changed)
                 return true
             end
             hash = isdir(fstat) ? _crc32c(join(readdir(f))) : open(_crc32c, f, "r")
             if hash != hash_req
                 @debug "Rejecting stale cache file $cachefile because hash of $f has changed (hash $hash, before $hash_req)"
-                record_reason(reasons, "file content changed")
+                record_reason(reasons, :content_changed)
                 return true
             end
         end
@@ -4350,7 +4402,7 @@ end
 end
 @constprop :none function stale_cachefile(modkey::PkgId, build_id::UInt128, modspec::PkgLoadSpec, cachefile::String;
                                           ignore_loaded::Bool=false, requested_flags::CacheFlags=CacheFlags(),
-                                          reasons::Union{Dict{String,Int},Nothing}=nothing, stalecheck::Bool=true)
+                                          reasons::Union{Dict{Symbol,Int},Nothing}=nothing, stalecheck::Bool=true)
     # n.b.: this function does nearly all of the file validation, not just those checks related to stale, so the name is potentially unclear
     io = try
         open(cachefile, "r")
@@ -4363,7 +4415,7 @@ end
         checksum = isvalid_cache_header(io)
         if iszero(checksum)
             @debug "Rejecting cache file $cachefile due to it containing an incompatible cache header"
-            record_reason(reasons, "different Julia build configuration")
+            record_reason(reasons, :incompatible_header)
             return true # incompatible cache file
         end
         modules, (includes, _, requires), required_modules, srctextpos, prefs_blob, clone_targets, actual_flags, syntax_version = parse_cache_header(io, cachefile)
@@ -4376,12 +4428,12 @@ end
               requested flags: $(requested_flags) [$(_cacheflag_to_uint8(requested_flags))]
               cache file:      $(CacheFlags(actual_flags)) [$actual_flags]
             """
-            record_reason(reasons, "different compilation options")
+            record_reason(reasons, :flags_mismatch)
             return true
         end
         if stalecheck && syntax_version != cache_syntax_version(modspec.julia_syntax_version)
             @debug "Rejecting cache file $cachefile for $modkey since it was parsed for a different Julia syntax version"
-            record_reason(reasons, "different Julia syntax version")
+            record_reason(reasons, :syntax_version)
             return true
         end
         pkgimage = !isempty(clone_targets)
@@ -4390,7 +4442,7 @@ end
             if JLOptions().use_pkgimages == 0
                 # presence of clone_targets means native code cache
                 @debug "Rejecting cache file $cachefile for $modkey since it would require usage of pkgimage"
-                record_reason(reasons, "native code caching disabled")
+                record_reason(reasons, :pkgimages_disabled)
                 return true
             end
             rejection_reasons = check_clone_targets(clone_targets)
@@ -4399,12 +4451,12 @@ end
                     Reasons=rejection_reasons,
                     var"Image Targets"=parse_image_targets(clone_targets),
                     var"Current Targets"=current_image_targets())
-                record_reason(reasons, "different system or CPU target")
+                record_reason(reasons, :cpu_target)
                 return true
             end
             if !isfile(ocachefile)
                 @debug "Rejecting cache file $cachefile for $modkey since pkgimage $ocachefile was not found"
-                record_reason(reasons, "native code cache file not found")
+                record_reason(reasons, :ocachefile_missing)
                 return true
             end
         else
@@ -4413,7 +4465,7 @@ end
         id = first(modules)
         if id.first != modkey && modkey != PkgId("")
             @debug "Rejecting cache file $cachefile for $modkey since it is for $id instead"
-            record_reason(reasons, "different package identifier")
+            record_reason(reasons, :pkgid_mismatch)
             return true
         end
         id_build = id.second
@@ -4421,7 +4473,7 @@ end
         if build_id != UInt128(0)
             if id_build != build_id
                 @debug "Ignoring cache file $cachefile for $modkey ($(UUID(id_build))) since it does not provide desired build_id ($((UUID(build_id))))"
-                record_reason(reasons, "different build identifier")
+                record_reason(reasons, :buildid_mismatch)
                 return true
             end
         end
@@ -4447,20 +4499,20 @@ end
                     continue
                 elseif M == Core
                     @debug "Rejecting cache file $cachefile because it was made with a different julia version"
-                    record_reason(reasons, "different Julia version")
+                    record_reason(reasons, :julia_version)
                     return true # Won't be able to fulfill dependency
                 elseif ignore_loaded || !stalecheck
                     # Used by Pkg.precompile given that there it's ok to precompile different versions of loaded packages
                 else
                     @debug "Rejecting cache file $cachefile because module $req_key is already loaded and incompatible."
-                    record_reason(reasons, "different dependency version already loaded")
+                    record_reason(reasons, :dep_loaded_incompatible)
                     return true # Won't be able to fulfill dependency
                 end
             end
             spec = locate_package_load_spec(req_key) # TODO: add env and/or skip this when stalecheck is false
             if spec === nothing
                 @debug "Rejecting cache file $cachefile because dependency $req_key not found."
-                record_reason(reasons, "dependency source file not found")
+                record_reason(reasons, :dep_missing)
                 return true # Won't be able to fulfill dependency
             end
             depmods[i] = (spec, req_key, req_build_id)
@@ -4479,7 +4531,7 @@ end
                         break
                     end
                     @debug "Rejecting cache file $cachefile because it provides the wrong build_id (got $((UUID(build_id)))) for $req_key (want $(UUID(req_build_id)))"
-                    record_reason(reasons, "different dependency build identifier")
+                    record_reason(reasons, :dep_buildid_mismatch)
                     return true # cachefile doesn't provide the required version of the dependency
                 end
             end
@@ -4494,7 +4546,7 @@ end
                 stdlib_path = fixup_stdlib_path(includes[1].filename)
                 if !(isreadable(stdlib_path) && samefile(stdlib_path, modspec.path))
                     @debug "Rejecting cache file $cachefile because it is for file $(includes[1].filename) not file $(modspec.path)"
-                    record_reason(reasons, "different source file path")
+                    record_reason(reasons, :source_path_changed)
                     return true # cache file was compiled from a different path
                 end
             end
@@ -4503,7 +4555,7 @@ end
                 pkg = identify_package(modkey, req_modkey.name)
                 if pkg != req_modkey
                     @debug "Rejecting cache file $cachefile because uuid mapping for $modkey => $req_modkey has changed, expected $modkey => $(repr("text/plain", pkg))"
-                    record_reason(reasons, "dependency identifier changed")
+                    record_reason(reasons, :dep_identity_changed)
                     return true
                 end
             end
@@ -4514,21 +4566,21 @@ end
 
         if !isvalid_file_crc(io)
             @debug "Rejecting cache file $cachefile because it has an invalid checksum"
-            record_reason(reasons, "cache file checksum is invalid")
+            record_reason(reasons, :checksum_invalid)
             return true
         end
 
         if pkgimage
             if !isvalid_pkgimage_crc(io, ocachefile::String)
                 @debug "Rejecting cache file $cachefile because $ocachefile has an invalid checksum"
-                record_reason(reasons, "native code cache checksum is invalid")
+                record_reason(reasons, :ocache_checksum_invalid)
                 return true
             end
         end
 
         if stale_prefs(prefs_blob)
             @debug "Rejecting cache file $cachefile because preferences have changed"
-            record_reason(reasons, "package preferences changed")
+            record_reason(reasons, :preferences_changed)
             return true
         end
 

@@ -222,12 +222,10 @@ is_no_constprop(method::Union{Method,CodeInfo}) = method.constprop == 0x02
 end
 
 @nospecializeinfer function maybe_singleton_const(@nospecialize(t))
-    if isa(t, DataType)
-        if issingletontype(t)
-            return Const(t.instance)
-        elseif isconstType(t)
-            return Const(type_parameter(t))
-        end
+    if isa(t, DataType) && issingletontype(t)
+        return Const(t.instance)
+    elseif isconstType(t)
+        return Const(type_parameter(t))
     end
     return t
 end

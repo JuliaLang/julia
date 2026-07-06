@@ -2430,6 +2430,9 @@ function abstract_call_unionall(interp::AbstractInterpreter, argtypes::Vector{An
     canconst = true
     if isa(a3, Const)
         body = a3.val
+    elseif isconstType(a3)
+        # the body value is pinned exactly (`===`)
+        body = type_parameter(a3)
     elseif isType(a3)
         body = type_parameter(a3)
         canconst = false
@@ -3256,16 +3259,11 @@ function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(
 end
 
 function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, sv::AbsIntState)
-    if e.head === :call && length(e.args) ≥ 1
-        # TODO: We still have non-linearized cglobal
-        @assert e.args[1] === Core.tuple || e.args[1] === GlobalRef(Core, :tuple)
-    else
-        @assert e.head !== :(=)
-        # Some of our tests expect us to handle invalid IR here and error later
-        # - permit that for now.
-        # @assert false "Unexpected EXPR head in value position"
-        merge_effects!(interp, sv, EFFECTS_UNKNOWN)
-    end
+    @assert e.head !== :(=)
+    # Some of our tests expect us to handle invalid IR here and error later
+    # - permit that for now.
+    # @assert false "Unexpected EXPR head in value position"
+    merge_effects!(interp, sv, EFFECTS_UNKNOWN)
     return Any
 end
 
@@ -3709,6 +3707,8 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, ssta
         return abstract_eval_new_opaque_closure(interp, e, sstate, sv)
     elseif ehead === :foreigncall
         return abstract_eval_foreigncall(interp, e, sstate, sv)
+    elseif ehead === :foreignglobal
+        return abstract_eval_foreignglobal(interp, e, sstate, sv)
     elseif ehead === :cfunction
         return abstract_eval_cfunction(interp, e, sstate, sv)
     elseif ehead === :method
@@ -3796,6 +3796,21 @@ function abstract_eval_foreigncall(interp::AbstractInterpreter, e::Expr, sstate:
         effects = override_effects(effects, override)
     end
     return RTEffects(t, Any, effects)
+end
+
+function abstract_eval_foreignglobal(interp::AbstractInterpreter, e::Expr, sstate::StatementState, sv::AbsIntState)
+    arg = e.args[1]
+    # Evaluate the arguments to constrain the world for codegen
+    if isexpr(arg, :tuple)
+        for elt in arg.args
+            abstract_eval_value(interp, elt, sstate, sv)
+            #TODO: implement abstract_eval_nonlinearized_foreigncall_name correctly?
+            #      (see foreigncall implementation above)
+        end
+    else
+        abstract_eval_value(interp, arg, sstate, sv)
+    end
+    return RTEffects(Ptr{Cvoid}, Any, EFFECTS_UNKNOWN)
 end
 
 function abstract_eval_phi(interp::AbstractInterpreter, phi::PhiNode, sstate::StatementState, sv::AbsIntState)
@@ -4911,6 +4926,10 @@ function conditional_change(𝕃ᵢ::AbstractLattice, currstate::VarTable, condt
         # approximate test for `typ ∩ oldtyp` being better than `oldtyp`
         # since we probably formed these types with `typesubstract`,
         # the comparison is likely simple
+    elseif condt.isdefined && then_or_else === :then && vtype.undef
+         # For `@isdefined slot`, the type may not be a refinement
+         # but the `.undef` information still can be
+         return StateRefinement(condt.slot, oldtyp, #= undef =# false)
     else
         return nothing
     end

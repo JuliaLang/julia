@@ -396,7 +396,7 @@ static void jl_reserve_excstack(jl_task_t *ct, jl_excstack_t **stack JL_REQUIRE_
     new_s->reserved_size = reserved_size;
     if (s)
         jl_copy_excstack(new_s, s);
-    jl_gc_write(ct, *stack, new_s);
+    jl_gc_write(ct, *stack, jl_excstack_t, new_s);
 }
 
 void jl_push_excstack(jl_task_t *ct, jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT,
@@ -622,9 +622,6 @@ static size_t jl_show_svec(JL_STREAM *out, jl_svec_t *t, const char *head, const
     return n;
 }
 
-JL_DLLEXPORT int jl_id_start_char(uint32_t wc) JL_NOTSAFEPOINT;
-JL_DLLEXPORT int jl_id_char(uint32_t wc) JL_NOTSAFEPOINT;
-
 JL_DLLEXPORT int jl_is_identifier(const char *str) JL_NOTSAFEPOINT
 {
     size_t i = 0;
@@ -650,10 +647,10 @@ static jl_datatype_t *nth_arg_datatype(jl_value_t *a JL_PROPAGATES_ROOT, int n) 
         }
         return NULL;
     }
-    else if (jl_is_typeeq(a)) {
+    else if (jl_is_some_Type(a)) {
         if (n != 0)
             return NULL;
-        jl_value_t *T = jl_typeeq_T(a);
+        jl_value_t *T = jl_some_Type_T(a);
         if (T == jl_bottom_type)
             return jl_typeofbottom_type;
         if (jl_is_datatype(T))
@@ -1213,6 +1210,12 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_static_show_x(out, ((jl_typeeq_t*)v)->T, depth, ctx);
         n += jl_printf(out, "}");
     }
+    else if (vt == jl_typeegal_type) {
+        // qualified so the output stays eval-able, e.g. in `--trace-compile` output
+        n += jl_printf(out, "Core.TypeEgal{");
+        n += jl_static_show_x(out, ((jl_typeeq_t*)v)->T, depth, ctx);
+        n += jl_printf(out, "}");
+    }
     else if (vt == jl_typename_type) {
         n += jl_printf(out, "typename(");
         n += jl_static_show_x(out, jl_unwrap_unionall(((jl_typename_t*)v)->wrapper), depth, ctx);
@@ -1624,7 +1627,7 @@ size_t jl_static_show_func_sig_(JL_STREAM *s, jl_value_t *type, jl_static_show_c
         return n;
     }
     if ((jl_nparams(ftype) == 0 || ftype == ((jl_datatype_t*)ftype)->name->wrapper) &&
-            !jl_is_typeeq(ftype) && !jl_is_typeeq((jl_value_t*)((jl_datatype_t*)ftype)->super)) { // aka !iskind
+            !jl_is_some_Type(ftype) && !jl_is_some_Type((jl_value_t*)((jl_datatype_t*)ftype)->super)) { // aka !iskind
         n += jl_static_show_symbol(s, ((jl_datatype_t*)ftype)->name->singletonname);
     }
     else {

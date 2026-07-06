@@ -231,7 +231,7 @@ NOINLINE size_t rec_backtrace(jl_bt_element_t *bt_data, size_t maxsize, int skip
     return bt_size;
 }
 
-NOINLINE int failed_to_sample_task_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT
+JL_DLLEXPORT NOINLINE int failed_to_sample_task_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT
 {
     if (maxsize < 1) {
         return 0;
@@ -240,7 +240,7 @@ NOINLINE int failed_to_sample_task_fun(jl_bt_element_t *bt_data, size_t maxsize,
     return 1;
 }
 
-NOINLINE int failed_to_stop_thread_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT
+JL_DLLEXPORT NOINLINE int failed_to_stop_thread_fun(jl_bt_element_t *bt_data, size_t maxsize, int skip) JL_NOTSAFEPOINT
 {
     if (maxsize < 1) {
         return 0;
@@ -1117,8 +1117,6 @@ _os_ptr_munge(uintptr_t ptr) JL_NOTSAFEPOINT
 #endif
 
 
-extern bt_context_t *jl_to_bt_context(void *sigctx) JL_NOTSAFEPOINT;
-
 // Some notes: this simulates a longjmp call occurring in context `c`, as if the
 // user was to set the PC in `c` to call longjmp and the PC in the longjmp to
 // return here. This helps work around many cases where siglongjmp out of a
@@ -1518,7 +1516,7 @@ JL_DLLEXPORT jl_record_backtrace_result_t jl_record_backtrace(jl_task_t *t, jl_b
 //--------------------------------------------------
 // Tools for interactive debugging in gdb
 
-JL_DLLEXPORT void jl_gdblookup(void* ip)
+JL_DLLEXPORT void jl_gdblookup(void* ip) JL_NOTSAFEPOINT
 {
     jl_fprint_native_codeloc(ios_safe_stderr, (uintptr_t)ip);
 }

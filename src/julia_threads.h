@@ -17,7 +17,7 @@
 #include "gc-tls-common.h"
 #include "julia_atomics.h"
 #ifndef _OS_WINDOWS_
-#include "pthread.h"
+#include <pthread.h>
 #endif
 // threading ------------------------------------------------------------------
 
@@ -376,8 +376,8 @@ JL_DLLEXPORT void jl_gc_run_pending_finalizers(struct _jl_task_t *ct);
 extern JL_DLLEXPORT _Atomic(int) jl_gc_have_pending_finalizers;
 JL_DLLEXPORT int8_t jl_gc_is_in_finalizer(void) JL_NOTSAFEPOINT;
 
-JL_DLLEXPORT void jl_wakeup_thread(int16_t tid);
-JL_DLLEXPORT void jl_wakeup_threadpool(int8_t tpid);
+JL_DLLEXPORT void jl_wakeup_thread(int16_t tid) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_wakeup_threadpool(int8_t tpid) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT int jl_getaffinity(int16_t tid, char *mask, int cpumasksize);
 JL_DLLEXPORT int jl_setaffinity(int16_t tid, char *mask, int cpumasksize);

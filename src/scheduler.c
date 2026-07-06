@@ -95,9 +95,6 @@ void jl_init_threadinginfra(void)
     }
 }
 
-
-void JL_NORETURN jl_finish_task(jl_task_t *ct);
-
 // thread function: used by all mutator threads except the main thread
 void jl_threadfun(void *arg)
 {
@@ -240,7 +237,7 @@ static void wake_libuv(void) JL_NOTSAFEPOINT
     JULIA_DEBUG_SLEEPWAKE( io_wakeup_leave = cycleclock() );
 }
 
-void wakeup_thread(jl_task_t *ct, int16_t tid) JL_NOTSAFEPOINT { // Pass in ptls when we have it already available to save a lookup
+static void wakeup_thread(jl_task_t *ct, int16_t tid) JL_NOTSAFEPOINT { // Pass in ptls when we have it already available to save a lookup
     int16_t self = jl_atomic_load_relaxed(&ct->tid);
     if (tid != self)
         jl_fence(); // [^store_buffering_1]
@@ -293,7 +290,7 @@ void wakeup_thread(jl_task_t *ct, int16_t tid) JL_NOTSAFEPOINT { // Pass in ptls
 }
 
 /* ensure thread tid is awake if necessary */
-JL_DLLEXPORT void jl_wakeup_thread(int16_t tid) JL_NOTSAFEPOINT
+JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
 {
     jl_task_t *ct = jl_current_task;
     wakeup_thread(ct, tid);
@@ -313,7 +310,7 @@ static pool_wake_hint_t pool_wake_hints[POOL_WAKE_HINT_STRIPES];
 // candidate's sleep_check_state under a fence ([^store_buffering_1]); do not
 // short-circuit on n_threads_running, which can be stale and is not pool-local.
 // See devdocs/scheduler-wakeup.
-JL_DLLEXPORT void jl_wakeup_threadpool(int8_t tpid) JL_NOTSAFEPOINT
+JL_DLLEXPORT void jl_wakeup_threadpool(int8_t tpid)
 {
     if (tpid < 0 || tpid >= jl_n_threadpools) {
         wakeup_thread(jl_current_task, -1);
@@ -389,8 +386,6 @@ static int check_empty(jl_value_t *checkempty)
 }
 
 jl_task_t *wait_empty JL_GLOBALLY_ROOTED;
-void jl_wait_empty_begin(void);
-void jl_wait_empty_end(void);
 
 void jl_task_wait_empty(void)
 {
