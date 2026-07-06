@@ -540,7 +540,7 @@ function sigint_listener(cond::AsyncCondition)
         fg = _sigint_foreground_task[]
         if fg isa Task && !istaskdone(fg)
             if sev === CANCEL_REQUEST_ABANDON_ALL
-                freeze_task!(fg, sev, src)
+                freeze_task!(fg, CancellationRequest(sev.request, _origin_token(src)), src)
             else
                 # best-effort acceleration of asynchronous delivery
                 tid = ccall(:jl_get_task_tid, Int16, (Any,), fg)

@@ -197,6 +197,92 @@ spin(n=4) = for _ in 1:n; yield(); end
     @test inherited === tok
 end
 
+@testset "origin attribution (caused_by)" begin
+    # a directly cancelled source is its own origin
+    src = CancellationTokenSource()
+    cancel!(src)
+    req = wait(CancellationToken(src); cancel=nothing)
+    @test Base.caused_by(req, src)
+    @test Base.caused_by(req, CancellationToken(src))
+    @test !Base.caused_by(req, CancellationTokenSource())
+
+    # cancellation through an ancestor is attributed to the ancestor, not to
+    # the descendant it was delivered at - `iscancelled` cannot make this
+    # distinction (the descendant is cancelled too), `caused_by` can
+    parent = CancellationTokenSource()
+    child = CancellationTokenSource(CancellationToken(parent))
+    cancel!(parent)
+    req = wait(CancellationToken(child); cancel=nothing)
+    @test Base.caused_by(req, parent)
+    @test !Base.caused_by(req, child)
+    @test Base.iscancelled(child) # which is why iscancelled is insufficient
+
+    # a source born under an already-cancelled parent inherits the origin
+    born = CancellationTokenSource(CancellationToken(parent))
+    req = wait(CancellationToken(born); cancel=nothing)
+    @test Base.caused_by(req, parent)
+    @test !Base.caused_by(req, born)
+
+    # the entry check of a blocking operation attributes through the scope
+    e = try
+        sleep(0; cancel=CancellationToken(child))
+        nothing
+    catch e
+        e
+    end
+    @test e isa CancellationRequest
+    @test Base.caused_by(e, parent)
+    @test !Base.caused_by(e, child)
+
+    # a parked waiter woken by the cancellation walk sees the same origin,
+    # and it unwraps through TaskFailedException and CompositeException
+    wparent = CancellationTokenSource()
+    wchild = CancellationTokenSource(CancellationToken(wparent))
+    t = @async sleep(1000; cancel=CancellationToken(wchild))
+    @test timedwait(() -> is_parked(t), 10.0) == :ok
+    cancel!(wparent)
+    tfe = try
+        wait(t)
+        nothing
+    catch e
+        e
+    end
+    @test tfe isa TaskFailedException
+    @test Base.caused_by(tfe, wparent)
+    @test !Base.caused_by(tfe, wchild)
+    @test Base.caused_by(CompositeException([tfe]), wparent)
+    @test !Base.caused_by(CompositeException([tfe]), wchild)
+
+    # non-cancellation exceptions and severity constants have no origin
+    @test !Base.caused_by(ErrorException("x"), wparent)
+    @test !Base.caused_by(CANCEL_REQUEST_SAFE, wparent)
+
+    # severity escalation keeps the original origin
+    esc = CancellationTokenSource()
+    cancel!(esc)
+    cancel!(esc, CANCEL_REQUEST_ABANDON_EXTERNAL)
+    req = wait(CancellationToken(esc); cancel=nothing)
+    @test req.request == CANCEL_REQUEST_ABANDON_EXTERNAL.request
+    @test Base.caused_by(req, esc)
+
+    # the boundary pattern: absorb your own cancellation, rethrow an
+    # enclosing scope's
+    outer = CancellationTokenSource()
+    inner = CancellationTokenSource(CancellationToken(outer))
+    absorb(src) = try
+        sleep(0; cancel=CancellationToken(src))
+        :completed
+    catch e
+        Base.caused_by(e, src) || rethrow()
+        :absorbed
+    end
+    cancel!(inner)
+    @test absorb(inner) === :absorbed        # own timeout: absorbed
+    cancel!(outer)
+    inner2 = CancellationTokenSource(CancellationToken(outer))
+    @test_throws CancellationRequest absorb(inner2) # ambient cancellation: rethrown
+end
+
 # Park a shielded watcher on a fresh child of `parent`; the child source
 # escapes this frame only through the parked watcher task.
 @noinline function _spawn_watcher_on_child(parent)
@@ -638,7 +724,9 @@ end
     cancel!(src, CANCEL_REQUEST_ABANDON_EXTERNAL)
     @test timedwait(() -> istaskdone(t), 10.0) == :ok
     e, sev, abandoning = seen[]
-    @test e === CANCEL_REQUEST_ABANDON_EXTERNAL
+    @test e isa CancellationRequest
+    @test e.request == CANCEL_REQUEST_ABANDON_EXTERNAL.request
+    @test Base.caused_by(e, src)
     @test sev === CANCEL_REQUEST_ABANDON_EXTERNAL
     @test abandoning
 
@@ -694,7 +782,9 @@ end
         cancel!(srcw, CANCEL_REQUEST_ABANDON_EXTERNAL)
         @test timedwait(() -> istaskdone(tw), 10.0) == :ok
         @test istaskfailed(tw)
-        @test tw.result === CANCEL_REQUEST_ABANDON_EXTERNAL
+        @test tw.result isa CancellationRequest
+        @test (tw.result::CancellationRequest).request == CANCEL_REQUEST_ABANDON_EXTERNAL.request
+        @test Base.caused_by(tw.result, srcw)
     finally
         close(p)
     end

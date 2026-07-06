@@ -187,6 +187,38 @@ Simple resource release usually needs no shielding: [`close`](@ref) is designed 
 under a cancelled scope, and non-blocking cleanup is unaffected. Shield the exceptional
 blocking cleanup step, not entire `finally` blocks.
 
+## Distinguishing whose cancellation it was
+
+Code that cancels a scope it created — a timeout being the typical case — needs to tell its
+own cancellation apart from one of an enclosing scope that happens to surface at the same
+`catch`. The two are not distinguishable by severity, and not by querying the owned source
+either: cancelling an enclosing scope also cancels every source linked under it, so
+[`Base.iscancelled`](@ref) on the owned source is `true` in both cases. Each delivered
+`CancellationRequest` therefore records its *origin* — the source [`Base.cancel!`](@ref) was
+originally invoked on — and [`Base.caused_by`](@ref) tests it, looking through
+[`TaskFailedException`](@ref) and `CompositeException` wrappers:
+
+```julia
+using Base.ScopedValues
+
+inner = Base.CancellationTokenSource(Base.CANCEL_TOKEN[])
+Timer(t -> Base.cancel!(inner), 2.0)
+try
+    with(Base.CANCEL_TOKEN => Base.CancellationToken(inner)) do
+        fetch_slowly()
+    end
+catch e
+    Base.caused_by(e, inner) || rethrow()   # not ours: an enclosing scope is unwinding
+    FALLBACK
+end
+```
+
+Absorbing only what `caused_by` attributes to your own source is what makes such a boundary
+safe: an enclosing scope's cancellation (a ^C, an outer timeout) passes through instead of
+being converted into a fallback value. When in doubt, rethrow — because cancellation is
+level-triggered, a mistakenly swallowed ambient cancellation resurfaces at the next
+cancellable operation, but code in between will have run under a cancelled scope.
+
 ## Reacting to cancellation: watcher tasks
 
 Every operation above treats cancellation of the governing token as an *interruption*. Code
@@ -222,8 +254,10 @@ cancellation — and the action, which the spawned task would otherwise perform 
 inherited, by-then-cancelled scope, where its own blocking operations would throw instead of
 running. And the action itself should be of a kind that is harmless on the normal-completion
 path (like [`close`](@ref) or an idempotent "stop" request), since the watcher runs in both
-cases; check [`Base.iscancelled`](@ref) on the enclosing token when the two cases must be
-distinguished.
+cases; when the two must be distinguished, check [`Base.iscancelled`](@ref) on the enclosing
+token, or test the request returned by the wait with [`Base.caused_by`](@ref) — its origin is
+the enclosing scope when the episode was cancelled from outside, and the watched source
+itself when the `finally` released the watcher.
 
 When not shielded, `wait(tok)` takes the ordinary `cancel` keyword argument and an unrelated
 governing token interrupts it like any other blocking operation. Waiting on the very token

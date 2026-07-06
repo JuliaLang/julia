@@ -1394,16 +1394,25 @@ end
 
 function showerror(io::IO, cr::CancellationRequest)
     print(io, "CancellationRequest: ")
-    if cr === CANCEL_REQUEST_SAFE
+    sev = severity(cr)
+    if sev == CANCEL_REQUEST_SAFE.request
         print(io, "Safe Cancellation (CANCEL_REQUEST_SAFE)")
-    elseif cr === CANCEL_REQUEST_ABANDON_EXTERNAL
+    elseif sev == CANCEL_REQUEST_ABANDON_EXTERNAL.request
         print(io, "Abandonment of External Resources (CANCEL_REQUEST_ABANDON_EXTERNAL)")
-    elseif cr === CANCEL_REQUEST_ABANDON_ALL
+    elseif sev == CANCEL_REQUEST_ABANDON_ALL.request
         print(io, "Task Abandonment (CANCEL_REQUEST_ABANDON_ALL)")
     else
         print(io, "Unknown ($(cr.request))")
     end
 end
+
+# `caused_by` methods for the wrappers cancellations surface through when
+# they cross task boundaries (the core methods live in cancellation.jl,
+# which is included before these types exist).
+caused_by(exc::TaskFailedException, src::CancellationTokenSource) =
+    caused_by(exc.task.result, src)
+caused_by(exc::CompositeException, src::CancellationTokenSource) =
+    any(e -> caused_by(e, src), exc.exceptions)
 
 """
     Core.cancellation_point!(src::Union{Nothing, Core.CancellationTokenSource})::UInt8

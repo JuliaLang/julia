@@ -267,6 +267,13 @@ typedef struct _jl_cancel_source_t {
     // `waiters_head`: the cancellation walk *completes* these waits,
     // delivering the request as a value rather than as an exception.
     jl_value_t *watchers;    // Union{Nothing, Task}
+    // The node the cancellation request was originally directed at: the
+    // source `cancel!` was invoked on, propagated unchanged down the subtree
+    // walk (first write wins; severity escalations keep it). Written before
+    // the `state` CAS publishes the cancellation, so a reader that
+    // acquire-loads a cancelled `state` also observes the origin. Read only
+    // from Julia (for attribution in delivered `CancellationRequest`s).
+    _Atomic(jl_value_t*) origin; // Union{Nothing, CancellationTokenSource}
 } jl_cancel_source_t;
 
 typedef struct _jl_task_t {
