@@ -984,8 +984,8 @@ function enq_work(t::Task)
             ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid-1)
             push!(workqueue_for(tid), t)
         else
-            # Otherwise, put the task in the multiqueue.
-            Partr.multiq_insert(t, t.priority)
+            # Otherwise, put the task in the scheduler's queue.
+            Scheduler.enqueue!(t)
             tid = Threads.threadid(t)
             if tid != 0 && tid != Threads.threadid()
                 # The task's tid is pinned to another thread: typically it is that
@@ -1253,10 +1253,10 @@ function trypoptask(W::StickyWorkqueue)
         end
         return t
     end
-    return Partr.multiq_deletemin()
+    return Scheduler.dequeue!()
 end
 
-checktaskempty = Partr.multiq_check_empty
+checktaskempty = Scheduler.checktaskempty
 
 function wait()
     ct = current_task()
