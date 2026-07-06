@@ -132,7 +132,10 @@ impl GCTriggerPolicy<JuliaVM> for JuliaGCTrigger {
 
         let alloc_diff = self.before_free_heap_size.load(Ordering::Relaxed)
             - self.old_heap_size.load(Ordering::Relaxed);
-        let freed_diff = self.before_free_heap_size.load(Ordering::Relaxed) - heap_size;
+        let freed_diff = self
+            .before_free_heap_size
+            .load(Ordering::Relaxed)
+            .wrapping_sub(heap_size);
         self.old_heap_size.store(heap_size, Ordering::Relaxed);
 
         let gc_auto = !mmtk.is_user_triggered_collection();

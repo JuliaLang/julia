@@ -32,6 +32,9 @@ pub extern "C" fn mmtk_gc_init(
         crate::JULIA_BUFF_TAG = buffer_tag;
     };
 
+    // We don't need the env var, as we will overwrite the plan with the defined feature.
+    std::env::remove_var("MMTK_PLAN");
+
     {
         let mut builder = BUILDER.lock().unwrap();
 
@@ -45,6 +48,8 @@ pub extern "C" fn mmtk_gc_init(
             Some(PlanSelector::Immix)
         } else if cfg!(feature = "stickyimmix") {
             Some(PlanSelector::StickyImmix)
+        } else if cfg!(feature = "concurrentimmix") {
+            Some(PlanSelector::ConcurrentImmix)
         } else {
             None
         };
@@ -174,6 +179,30 @@ pub extern "C" fn mmtk_destroy_mutator(mutator: *mut Mutator<JuliaVM>) {
 
     // Remove from our hashmap
     mutators.remove(&key);
+}
+
+#[no_mangle]
+pub extern "C" fn mmtk_notify_task_resume(
+    mutator: *mut Mutator<JuliaVM>,
+    task: *const crate::julia_types::_jl_task_t,
+) {
+    #[cfg(feature = "concurrentimmix")]
+    {
+        if !crate::collection::CONCURRENT_MARKING_ACTIVE.load(Ordering::SeqCst)
+            || task.is_null()
+            || mutator.is_null()
+        {
+            return;
+        }
+
+        crate::scanning::GC_STACK_SNAPSHOTS.resume_barrier_scan_task(task);
+    }
+
+    #[cfg(not(feature = "concurrentimmix"))]
+    {
+        let _ = (mutator, task);
+        panic!("mmtk_notify_task_resume should not be called for non-concurrent plans");
+    }
 }
 
 #[no_mangle]
@@ -491,6 +520,21 @@ fn set_side_log_bit_for_region(start: Address, size: usize) {
 }
 
 #[no_mangle]
+pub extern "C" fn mmtk_object_reference_write_pre(
+    mutator: *mut Mutator<JuliaVM>,
+    src: ObjectReference,
+    target: NullableObjectReference,
+) {
+    let mutator = unsafe { &mut *mutator };
+    memory_manager::object_reference_write_pre(
+        mutator,
+        src,
+        crate::slots::JuliaVMSlot::Simple(mmtk::vm::slot::SimpleSlot::from_address(Address::ZERO)),
+        target.into(),
+    )
+}
+
+#[no_mangle]
 pub extern "C" fn mmtk_object_reference_write_post(
     mutator: *mut Mutator<JuliaVM>,
     src: ObjectReference,
@@ -607,6 +651,26 @@ pub extern "C" fn mmtk_unpin_object(_object: ObjectReference) -> bool {
 #[no_mangle]
 pub extern "C" fn mmtk_is_pinned(_object: ObjectReference) -> bool {
     false
+}
+
+#[no_mangle]
+pub extern "C" fn mmtk_set_concurrent_marking_enabled(enabled: bool) {
+    #[cfg(feature = "concurrentimmix")]
+    {
+        let mut builder = BUILDER.lock().unwrap();
+        let success = builder
+            .options
+            .concurrent_immix_disable_concurrent_marking
+            .set(!enabled);
+        assert!(
+            success,
+            "Failed to set concurrent_immix_disable_concurrent_marking"
+        );
+    }
+    #[cfg(not(feature = "concurrentimmix"))]
+    {
+        let _ = enabled;
+    }
 }
 
 #[no_mangle]
