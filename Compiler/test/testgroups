@@ -4,6 +4,7 @@ codegen
 compact
 contextual
 datastructures
+effect_split
 effects
 inference
 inline
