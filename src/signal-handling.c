@@ -763,12 +763,45 @@ JL_DLLEXPORT int jl_consume_sigint_pending(void) JL_NOTSAFEPOINT
     return jl_atomic_exchange_relaxed(&sigint_pending, 0);
 }
 
-// Shared entry point for a user-initiated interrupt (^C): mark the interrupt
-// as pending, arm the escalation timer, and notify the sigint listener task,
-// which drives the cancellation state machine. Callable from non-Julia
-// threads; must not touch julia objects.
+// Shared entry point for a user-initiated interrupt (^C): mark the episode
+// source cancelled, mark the interrupt as pending, arm the escalation timer,
+// and notify the sigint listener task, which drives the rest of the
+// cancellation state machine. Callable from non-Julia threads; must not
+// allocate or take Julia-side locks.
 void jl_sigint_request_cancellation(void) JL_NOTSAFEPOINT
 {
+    // Set the episode source's cancellation state to SAFE severity directly:
+    // the state byte is the level that every cancellation point and every
+    // signal-delivery gate reads, so writing it here makes the signal-based
+    // delivery below sufficient on its own. The julia-side listener normally
+    // performs this step, but it may never get to run - a single-threaded
+    // session, or every thread stuck in a long foreign call with nobody able
+    // to service the event loop - which is exactly the situation ^C must cut
+    // through. When the listener does run, it finds the already-cancelled
+    // source and performs the remaining bookkeeping (waking parked waiters;
+    // see `Base.redeliver!`). The source object is rooted by Base for the
+    // whole episode, so this raw pointer stays valid.
+    jl_cancel_source_t *src = jl_atomic_load_acquire(&jl_sigint_source);
+    if (src != NULL) {
+        uint8_t st = jl_atomic_load_relaxed(&src->state);
+        while (!(st & 0x80)) {
+            if (jl_atomic_cmpswap(&src->state, &st, (uint8_t)0x80))
+                break;
+        }
+        // Pair with the compiler-order-only publication of task token
+        // bindings at cancellation points (mirrors the fence in
+        // `Base.cancel!`): after this fence, either the sends below observe
+        // a running task's binding, or the task's next cancellation point
+        // observes the state write above.
+        jl_fence();
+        // Interrupt asynchronously-interruptible regions right away, on
+        // every thread: the request-5 dispatch delivers only to a task
+        // whose own bound token is cancelled, so this is a no-op for
+        // threads running unrelated (or no) work.
+        int nthreads = jl_atomic_load_acquire(&jl_n_threads);
+        for (int16_t tid = 0; tid < (int16_t)nthreads; tid++)
+            jl_send_cancellation_signal(tid);
+    }
     jl_atomic_store_release(&sigint_pending, 1);
     // Set a timer for the event loop to run and process the cancellation. If
     // this does not happen in time, we will advance to more aggressive
