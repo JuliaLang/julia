@@ -284,6 +284,11 @@ annotated this way — combined with allocation hooks that briefly defer a cance
 delivered while inside the allocator itself, a bignum loop with no cancellation points of
 its own cancels cleanly at the first ^C.
 
+See [Long-Running Foreign Calls: GC and Cancellation](@ref man-foreign-calls-gc-cancellation)
+for the wrapper author's guide to these annotations (including `gc_safe`, which keeps the
+rest of the runtime — GC and the ^C machinery included — responsive while a foreign call
+runs) and a complete worked example.
+
 ## Interactive sessions and ^C
 
 In the REPL, every evaluation runs under a fresh cancellation scope, and pressing ^C cancels
