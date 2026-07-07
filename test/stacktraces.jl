@@ -134,7 +134,7 @@ module StackTracesTestMod
     filtered_stacktrace() = StackTraces.remove_frames!(stacktrace(), StackTracesTestMod)
 end
 
-# Test that `removes_frames!` can correctly remove frames from within the module
+# Test that `remove_frames!` can correctly remove frames from within the module
 trace = StackTracesTestMod.unfiltered_stacktrace()
 @test occursin("unfiltered_stacktrace", string(trace))
 

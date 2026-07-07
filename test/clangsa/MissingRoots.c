@@ -623,7 +623,7 @@ void global_copy() {
     JL_GC_POP();
 }
 
-// Check that rooting the same value twice uses to oldest scope
+// Check that rooting the same value twice uses the oldest scope
 void scopes() {
     jl_value_t *val = (jl_value_t*)jl_svec1(NULL);
     JL_GC_PUSH1(&val);

@@ -70,7 +70,7 @@ namespace jl_alloc {
         bool escaped:1;
         // Address is leaked to functions that doesn't care where the object is allocated.
         bool addrescaped:1;
-        // There are reader of the memory
+        // There are readers of the memory
         bool hasload:1;
         // There are uses in gc_preserve intrinsics or ccall roots
         bool haspreserve:1;
@@ -78,7 +78,7 @@ namespace jl_alloc {
         bool refload:1;
         // There are objects fields being stored
         bool refstore:1;
-        // There are typeof call
+        // There are typeof calls
         // This can be optimized without optimizing out the allocation itself
         bool hastypeof:1;
         // There are store/load/memset on this object with offset or size (or value for memset)

@@ -157,6 +157,8 @@ tests = [
     ],
     JuliaSyntax.parse_range => [
         "a..b"       => "(call-i a (DotsIdentifier-2) b)"
+        "-1e10..2"   => "(call-i -1.0e10 (DotsIdentifier-2) 2)"
+        "0x1p3..2"   => "(call-i 8.0 (DotsIdentifier-2) 2)"
         "a..+b"      => "(call-i a (DotsIdentifier-2) (error-t) (call-pre + b))"
         # `..` may be directly followed by the operand-starting operators `: :: $ '`
         "a..:b"      => "(call-i a (DotsIdentifier-2) (quote-: b))"
@@ -179,7 +181,7 @@ tests = [
         "a + b + c"  => "(call-i a + b c)"
         "a + b .+ c" => "(dotcall-i (call-i a + b) + c)"
         # parse_with_chains:
-        # The following is two elements of a hcat
+        # The following are two elements of an hcat
         "[x +y]"     =>  "(hcat x (call-pre + y))"
         "[x+y +z]"   =>  "(hcat (call-i x + y) (call-pre + z))"
         # Conversely the following are infix calls

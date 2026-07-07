@@ -153,7 +153,7 @@ end
 
 Register new `annotations` in `io`, applying an `offset` to their regions.
 
-The largely consists of simply shifting the regions of `annotations` by `offset`
+This largely consists of simply shifting the regions of `annotations` by `offset`
 and pushing them onto `io`'s annotations. However, when it is possible to merge
 the new annotations with recent annotations in accordance with the semantics
 outlined in [`AnnotatedString`](@ref), we do so. More specifically, when there
@@ -302,7 +302,7 @@ function replace(out::AnnotatedIOBuffer, str::AnnotatedString, pat_f::Pair...; c
             by = r -> first(r.region))
         priorrep, postrep = replacements[prioridx], replacements[postidx]
         if prioridx == postidx && start >= first(priorrep.region) && stop <= last(priorrep.region)
-            # Region contained with a replacement
+            # Region contained within a replacement
             continue
         elseif postidx - prioridx <= 1 && start > last(priorrep.region) && stop < first(postrep.region)
             # Lies between replacements

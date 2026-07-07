@@ -8,6 +8,12 @@
 #    T
 #end
 #const Type = TypeEq(T) where T
+# TypeEgal{T} is the egality-based dual of TypeEq{T}: its only instance is `T`
+# itself (matched by `===`), used internally for dispatch-cache specialization.
+# Free typevars are disallowed inside TypeEgal.
+#struct TypeEgal <: AnyType
+#    T
+#end
 
 #abstract type Vararg{T} end
 
@@ -286,7 +292,14 @@ end
 function Typeof end
 ccall(:jl_toplevel_eval_in, Any, (Any, Any),
       Core, quote
-      (f::typeof(Typeof))(x) = ($(_expr(:meta,:nospecialize,:x)); isa(x,Type) ? Type{x} : typeof(x))
+      (f::typeof(Typeof))(x) = begin
+          $(_expr(:meta,:nospecialize,:x))
+          if isa(x,Type)
+              has_free_typevars(x) ? Type{x} : TypeEgal{x}
+          else
+              typeof(x)
+          end
+      end
       end)
 
 function iterate end
@@ -355,8 +368,6 @@ unsafe_convert(::Type{T}, x::T) where {T} = x
 
 # will be inserted by the frontend for closures
 _typeof_captured_variable(@nospecialize t) = (@_total_meta; t isa Type && has_free_typevars(t) ? typeof(t) : Typeof(t))
-
-has_free_typevars(@nospecialize t) = (@_total_meta; ccall(:jl_has_free_typevars, Int32, (Any,), t) === Int32(1))
 
 # dispatch token indicating a kwarg (keyword sorter) call
 function kwcall end
@@ -873,8 +884,8 @@ struct CoreSTDERR <: IO
 end
 const stdout = CoreSTDOUT()
 const stderr = CoreSTDERR()
-io_pointer(::CoreSTDOUT) = Intrinsics.pointerref(Intrinsics.cglobal(:jl_uv_stdout, Ptr{Cvoid}), 1, 1)
-io_pointer(::CoreSTDERR) = Intrinsics.pointerref(Intrinsics.cglobal(:jl_uv_stderr, Ptr{Cvoid}), 1, 1)
+io_pointer(::CoreSTDOUT) = Intrinsics.pointerref(cglobal(:jl_uv_stdout, Ptr{Cvoid}), 1, 1)
+io_pointer(::CoreSTDERR) = Intrinsics.pointerref(cglobal(:jl_uv_stderr, Ptr{Cvoid}), 1, 1)
 
 unsafe_write(io::IO, x::Ptr{UInt8}, nb::UInt) =
     (ccall(:jl_uv_puts, Cvoid, (Ptr{Cvoid}, Ptr{UInt8}, UInt), io_pointer(io), x, nb); nb)
@@ -1277,14 +1288,14 @@ function typename(a::Union)
 end
 typename(union::UnionAll) = typename(union.body)
 
-# Special inference support to avoid execess specialization of these methods.
+# Special inference support to avoid excess specialization of these methods.
 # TODO: Replace this by a generic heuristic.
 (>:)(@nospecialize(a), @nospecialize(b)) = (b <: a)
 (!==)(@nospecialize(a), @nospecialize(b)) = Intrinsics.not_int(a === b)
 
 include(Core, "optimized_generics.jl")
 
-# Used only be the magic @VERSION macro
+# Used only by the magic @VERSION macro
 struct MacroSource
     lno::Any # ::LineNumberNode, but needs to be a pointer
     syntax_ver::Any # ::VersionNumber =#

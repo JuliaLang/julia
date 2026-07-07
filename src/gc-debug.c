@@ -18,8 +18,8 @@
 extern "C" {
 #endif
 
-// Useful function in debugger to find page metadata
-jl_gc_pagemeta_t *jl_gc_page_metadata(void *data)
+// Useful function in debugger to find page metadata.
+JL_DLLEXPORT jl_gc_pagemeta_t *jl_gc_page_metadata(void *data)
 {
     return page_metadata(data);
 }
@@ -303,7 +303,7 @@ static void gc_verify_tags_page(jl_gc_pagemeta_t *pg)
         memset(freelist_map, 0, sizeof(freelist_map));
         freelist_zerod = 1;
     }
-    // check for p in new newpages list
+    // check for p in newpages list
     jl_taggedvalue_t *halfpages = p->newpages;
     if (halfpages) {
         char *cur_page = gc_page_data((char*)halfpages - 1);
@@ -1080,7 +1080,8 @@ static void gc_count_pool_pagetable(void)
     }
 }
 
-void gc_count_pool(void)
+// Useful function in debugger to inspect memory-leak-like issues.
+JL_DLLEXPORT void gc_count_pool(void)
 {
     memset(&poolobj_sizes, 0, sizeof(poolobj_sizes));
     empty_pages = 0;

@@ -523,14 +523,22 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
                                     ctx.closure_bindings, capture_rewrites, ctx.lambda_bindings,
                                     false, ctx.toplevel_pure, ctx.toplevel_stmts, ctx.closure_infos)
 
+        argt = _convert_closures(ctx, ex[2])
+        rt_lb = _convert_closures(ctx, ex[3])
+        rt_ub = _convert_closures(ctx, ex[4])
+
         init_closure_args = SyntaxList(ctx)
         for id in field_orig_bindings
-            push!(init_closure_args, binding_ex(ctx, id))
+            init_arg = binding_ex(ctx, id)
+            if is_self_captured(ctx, init_arg)
+                init_arg = captured_var_access(ctx, init_arg)
+            end
+            push!(init_closure_args, init_arg)
         end
         @ast ctx ex [K"new_opaque_closure"
-            ex[2] # arg type tuple
-            ex[3] # return_lower_bound
-            ex[4] # return_upper_bound
+            argt # arg type tuple
+            rt_lb # return_lower_bound
+            rt_ub # return_upper_bound
             ex[5] # allow_partial
             [K"opaque_closure_method"
                 (::K"nothing")
@@ -614,7 +622,7 @@ end
 """
 Closure conversion and lowering of bindings
 
-This pass does a few things things:
+This pass does a few things:
 * Deal with typed variables (K"decl") and their assignments
 * Deal with const and non-const global assignments
 * Convert closures into types

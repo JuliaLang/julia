@@ -92,7 +92,7 @@ for (i, intvl) in enumerate(intvls)
             sleep(0.1)
         end
         ready = 0
-        # tickle only the odd ones, but test for writablity for everyone
+        # tickle only the odd ones, but test for writability for everyone
         for idx in 1:n
             event = poll_fd(pipe_fds[idx][2], 0.001; readable=true, writable=true)
             @test !event.timedout

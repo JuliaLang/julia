@@ -197,7 +197,9 @@ end
     isa(t, PartialTypeVar) && return true
     if isa(t, Const)
         val = t.val
-        return !issingletontype(typeof(val)) && !(isa(val, Type) && hasuniquerep(val))
+        # a type-valued `Const` may pin `=== val` beyond its widening (which for
+        # an open `val` is only the `==`-class `Type{val}`)
+        return !issingletontype(typeof(val))
     end
     return has_nontrivial_extended_info(widenlattice(𝕃), t)
 end
@@ -264,7 +266,7 @@ end
 
 Appropriately converts inferred type of a return value `rt` to such a type
 that we know we can store in the cache and is valid and good inter-procedurally,
-E.g. if `rt isa Conditional` then `rt` should be converted to `InterConditional`
+e.g. if `rt isa Conditional` then `rt` should be converted to `InterConditional`
 or the other cacheable lattice element.
 
 External lattice `𝕃ᵢ::ExternalLattice` may overload:

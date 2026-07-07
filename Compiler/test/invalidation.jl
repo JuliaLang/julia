@@ -301,7 +301,7 @@ begin take!(GLOBAL_BUFFER)
     @test "42" == String(take!(GLOBAL_BUFFER))
 
     # test that we added the backedge from `pr48932_callee_inlined` to `pr48932_caller_inlined`:
-    # this redefinition below should invalidate the cache of `pr48932_callee_inlined` but not that of `pr48932_caller_inlined`
+    # this redefinition below should invalidate the cache of both `pr48932_callee_inlined` and `pr48932_caller_inlined`
     @noinline pr48932_callee_inlined(@nospecialize x) = (print(GLOBAL_BUFFER, x); nothing)
 
     @test isempty(Base.specializations(Base.only(Base.methods(pr48932_callee_inlined, Tuple{Any}))))

@@ -26,7 +26,7 @@ wrapper functions to automate this process.
 
 The system image can be compiled simultaneously for multiple CPU microarchitectures
 under the same instruction set architecture (ISA). Multiple versions of the same function
-may be created with minimum dispatch point inserted into shared functions
+may be created with minimal dispatch points inserted into shared functions
 in order to take advantage of different ISA extensions or other microarchitecture features.
 The version that offers the best performance will be selected automatically at runtime
 based on available CPU features.

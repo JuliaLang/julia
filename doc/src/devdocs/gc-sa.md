@@ -4,7 +4,7 @@
 
 The analyzer plugin that drives the analysis ships with julia. Its
 source code can be found in `src/clangsa`. Running it requires
-the clang dependency to be build. Set the `BUILD_LLVM_CLANG` variable
+the clang dependency to be built. Set the `BUILD_LLVM_CLANG` variable
 in your Make.user in order to build an appropriate version of clang.
 You may also want to use the prebuilt binaries using the
 `USE_BINARYBUILDER_LLVM` options.
@@ -276,7 +276,7 @@ void example() {
 This annotation implies that a given value is always globally rooted.
 It can be applied to global variable declarations, in which case it
 will apply to the value of those variables (or values if the declaration
-if for an array), or to functions, in which case it will apply to the
+is for an array), or to functions, in which case it will apply to the
 return value of such functions (e.g. for functions that always return
 some private, globally rooted value).
 
@@ -288,8 +288,8 @@ jl_ast_context_t *jl_ast_ctx(fl_context_t *fl) JL_GLOBALLY_ROOTED;
 
 ### `JL_ALWAYS_LEAFTYPE`
 
-This annotations is essentially equivalent to `JL_GLOBALLY_ROOTED`, except that
-is should only be used if those values are globally rooted by virtue of being
+This annotation is essentially equivalent to `JL_GLOBALLY_ROOTED`, except that
+it should only be used if those values are globally rooted by virtue of being
 a leaftype. The rooting of leaftypes is a bit complicated. They are generally
 rooted through `cache` field of the corresponding `TypeName`, which itself is
 rooted by the containing module (so they're rooted as long as the containing

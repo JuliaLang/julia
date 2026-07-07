@@ -110,7 +110,7 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
         # `Base.isa_ast_node(e)`, but `K"Value"` should be fine for most, since
         # most are produced in or after lowering
         if e isa LineNumberNode
-            # linenode oustside of block or toplevel
+            # linenode outside of block or toplevel
             src = e
         end
         setattr!(newleaf(graph, src, K"Value"), :value, e)
@@ -372,7 +372,7 @@ function apply_arglist_meta(st, meta::Union{Nothing, Symbol, Dict{String, Symbol
             fixed == x ? st : @ast g st [K"::" fixed t]
         end
         [K"call" f args...] -> mapchildren(x->
-            x == f ? f : apply_arg_meta(x, meta), st._graph, st)
+            x == f ? strip_arg_meta(f) : apply_arg_meta(x, meta), st._graph, st)
         [K"tuple" _...] -> mapchildren(x->apply_arg_meta(x, meta), st._graph, st)
     end
 end
@@ -467,10 +467,13 @@ function est_to_dst(st::SyntaxTree)
                        _dst_sink_parameters(children(st)[2:end])...]
         # tuple arg should not be converted or desugared
         [K"foreigncall" [K"tuple" _...] args...] ->
-            @ast g st [K"foreigncall" [K"foreigncall_arg1" st[1]] args...]
+            @ast g st [K"foreigncall" [K"foreignsymbol" st[1]] args...]
+        [K"foreignglobal" [K"tuple" _...]] ->
+            @ast g st [K"foreignglobal" [K"foreignsymbol" st[1]]]
         ([K"call" [K"Identifier"] sym args...],
-         when=st[1].name_val::String === "ccall") -> if kind(sym) === K"tuple"
-             @ast g st [K"call" st[1] [K"foreigncall_arg1" st[2]] mapsyntax(rec, args)...]
+         when=(st[1].name_val::String === "ccall" ||
+               st[1].name_val::String === "cglobal")) -> if kind(sym) === K"tuple"
+             @ast g st [K"call" st[1] [K"foreignsymbol" st[2]] mapsyntax(rec, args)...]
          else
              @ast g st [K"call" st[1] rec(sym) mapsyntax(rec, args)...]
          end
@@ -507,6 +510,10 @@ function est_to_dst(st::SyntaxTree)
             push!(out_iters, _dst_iterspec(next, next[2:end]))
             @ast g st [K"generator" rec(next[1]) out_iters...]
         end
+        [K"comprehension" _ _ _...] -> let
+            arg = rec(@ast g st [K"generator" children(st)...])
+            @ast g st [K"comprehension" arg]
+        end
         [K"generator" body iters...] ->
             @ast g st [K"generator" rec(body) _dst_iterspec(st, iters)]
         ([K"=" l r], when=(is_eventually_call(l))) -> let
@@ -539,6 +546,10 @@ function est_to_dst(st::SyntaxTree)
                 r2 = rec(r)
             end
             @ast g st [K"->" rec(l) r2]
+        end
+        [K"macro" l r] -> let
+            l = apply_arglist_meta(l, collect_body_arg_meta(r))
+            @ast g st [K"macro" rec(l) rec(r)]
         end
         [K"do" [K"call" f args...] lam] -> let
             @ast g st [K"call" rec(f) rec(lam) _dst_sink_parameters(args)...]

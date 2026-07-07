@@ -35,7 +35,7 @@ Set for K"quote" for the short form `:x` as opposed to long form `quote x end`
 const COLON_QUOTE = RawFlags(1<<8)
 
 """
-Set for K"toplevel" which is delimited by parentheses
+Set for K"toplevel" which is delimited by semicolons
 """
 const TOPLEVEL_SEMICOLONS_FLAG = RawFlags(1<<8)
 

@@ -5,7 +5,7 @@ In programming language design, it is prudent to separate the concepts of a lang
 To illustrate the distinction, consider a statement like `print(Ref(1).x)`. The language semantics may specify that the observable behavior of this statement is that the value `1` is printed to `stdout`. However, whether or not the object `Ref` is actually allocated may not be semantically observable (even though it may be implicitly observable by looking at memory use, number of allocations, generated code, etc.). Because of this, the implementation is allowed to replace this statement with `print(1)`, which preserves all semantically observable behaviors.
 
 The julia compiler leverages this rule heavily to perform speculative execution. Where the compiler can prove
-that a function has no side effect (e.g. because it is a purely mathmetical computation), the compiler may
+that a function has no side effect (e.g. because it is a purely mathematical computation), the compiler may
 evaluate all or part of a function invocation during the compilation of that function's caller. The validity
 of this optimization is another way of thinking about which behaviors are observable.
 

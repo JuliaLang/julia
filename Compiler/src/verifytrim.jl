@@ -110,7 +110,7 @@ const MAX_NESTING_DEPTH = 1
 
 function is_call_expr(codeinfo::CodeInfo, @nospecialize(stmt))
     stmt = unwrap_stmt(codeinfo, stmt)
-    return stmt isa Expr && stmt.head ∈ (:call, :invoke, :foreigncall, :new)
+    return stmt isa Expr && stmt.head ∈ (:call, :invoke, :foreigncall, :foreignglobal, :new)
 end
 
 function has_unstable_arg(codeinfo::CodeInfo, sptypes::Vector{VarState}, args, startidx::Int)
@@ -307,6 +307,9 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
                     ci = get(caches, edge_mi, nothing)
                     ci isa CodeInstance && continue # assume that only this_world matters for trim
                 end
+            elseif edge isa MethodInstance
+                ci = get(caches, edge, nothing)
+                ci isa CodeInstance && continue
             end
             # TODO: check for calls to Base.atexit?
         elseif isexpr(stmt, :call)
