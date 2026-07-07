@@ -473,8 +473,8 @@ Write a text representation of a value `x` to the output stream `io`. New types 
 should overload `show(io::IO, x::T)`. The representation used by `show` generally
 includes Julia-specific formatting and type information.
 
-The output *should* be parseable Julia code that, after parsing and evaluation,
-is equal to the value: that is, `eval(Meta.parse(repr(x))) == x` *should*
+The output should typically be parseable Julia code that, after parsing and evaluation,
+is equal to the value: that is, `eval(Meta.parse(repr(x))) == x` should typically
 be `true`. However, there are occasional counter-examples of types where
 this is impractical, such as self-referential data structures or cases
 where accurate parsing would require a verbose and awkward `show` format.
