@@ -341,7 +341,6 @@ function enqueue_specialization!(all::Bool, worklist, mi::MethodInstance)
 end
 
 # Main unified compilation and emission function
-# This replaces the functionality from jl_precompile
 function compile_and_emit_native(worlds::Vector{UInt},
                                  trim_mode::UInt8,
                                  external_linkage::Bool,
@@ -350,6 +349,7 @@ function compile_and_emit_native(worlds::Vector{UInt},
                                  all::Bool,
                                  module_init_order::Vector{Any}, # Vector{Module}
                                  ext_foreign_cis::Vector{Any}) # Vector{CodeInstance}
+    @nospecialize
     latestworld = worlds[end]
 
     # Step 1: Precompile all __init__ methods that will be required
@@ -426,7 +426,10 @@ function compile_and_emit_native(worlds::Vector{UInt},
     end
 
     # Step 4: Perform type inference on tocompile to create codeinfos
-    codeinfos = try
+    # Returns svec(codeinfos, cis): the interleaved CodeInstance/CodeInfo work
+    # list for codegen, plus the ordered CodeInstances to place in the method
+    # caches of the output image.
+    result = try
         typeinf_ext_toplevel(tocompile, worlds, trim_mode)
     catch exc
         # Handle trimming failures
@@ -436,7 +439,7 @@ function compile_and_emit_native(worlds::Vector{UInt},
         invokelatest(invokelatest(getglobal, Base, :exit), 1)
     end
 
-    return codeinfos
+    return result
 
 end
 

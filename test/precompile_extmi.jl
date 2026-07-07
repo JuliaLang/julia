@@ -64,9 +64,11 @@ precompile_test_harness() do load_path
         using ExampleUser
         cache_owner = :ExampleInterpreter
 
+        # square is not tagged, so all garbage should be discarded
         mi_square = Base.method_instance(ExampleUser.square, (Float64,))
-        @test check_presence(mi_square, :ExampleInterpreter) !== nothing
+        @test check_presence(mi_square, :ExampleInterpreter) === nothing
 
+        # identity might be tagged, so any garbage should be preserved
         mi_identity = Base.method_instance(identity, (Float64,))
         @test check_presence(mi_identity, :ExampleInterpreter) !== nothing
     end

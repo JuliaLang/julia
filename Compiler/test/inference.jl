@@ -7063,7 +7063,7 @@ function tt57873(a::Vector{String}, pref)
     end
     return ret
 end
-let code = Compiler.typeinf_ext_toplevel(Any[Core.svec(Any,Tuple{typeof(tt57873),Vector{String},Tuple{String}})], [Base.get_world_counter()], Base.Compiler.TRIM_NO)
+let code = Compiler.typeinf_ext_toplevel(Any[Core.svec(Any,Tuple{typeof(tt57873),Vector{String},Tuple{String}})], [Base.get_world_counter()], Base.Compiler.TRIM_NO)[1]
     @test !isempty(code)
     ## If we were to run trim here, we should fail with:
     #    Verifier error #1: unresolved invoke from statement tt57873(::Vector{String}, ::Tuple{String, String})::Vector{String}

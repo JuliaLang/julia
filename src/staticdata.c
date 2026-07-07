@@ -429,6 +429,12 @@ static void record_field_change(jl_value_t **addr, jl_value_t *newval) JL_NOTSAF
         ptrhash_put(&field_replace, (void*)addr, newval);
 }
 
+// whether `record_field_change` has already registered a replacement for `addr`
+static int has_field_change(jl_value_t **addr) JL_NOTSAFEPOINT
+{
+    return ptrhash_get(&field_replace, (void*)addr) != HT_NOTFOUND;
+}
+
 static jl_value_t *get_replaceable_field(jl_value_t **addr, int mutabl) JL_GC_DISABLED
 {
     jl_value_t *fld = (jl_value_t*)ptrhash_get(&field_replace, addr);
@@ -445,6 +451,49 @@ static jl_value_t *get_replaceable_field(jl_value_t **addr, int mutabl) JL_GC_DI
         return fld;
     }
     return fld;
+}
+
+// Rewrite the `cache` field of each MethodInstance (and the `next` chain of the
+// CodeInstances it points to) so the image stores exactly the ordered list of
+// CodeInstances `cis` that codegen produced, converted to a linked list via the
+// `next` field, instead of whatever the live runtime cache happened to contain.
+// CodeInstances are grouped by their owning MethodInstance, preserving the order
+// in which they appear in `cis`. These changes are recorded through the normal
+// `field_replace` machinery, so they must be applied before the serialization
+// queue pass runs (both queueing and writing consult `get_replaceable_field`).
+static void jl_rewrite_mi_caches(jl_code_instance_t **cis, size_t n) JL_GC_DISABLED
+{
+    htable_t mi_last; // MethodInstance -> last CodeInstance recorded for it
+    htable_t seen;    // CodeInstances already placed, to guard against duplicates
+    htable_new(&mi_last, 0);
+    htable_new(&seen, 0);
+    for (size_t i = 0; i < n; i++) {
+        jl_code_instance_t *ci = cis[i];
+        // ignore any repeated CodeInstance: chaining it twice would corrupt the list
+        if (ptrhash_get(&seen, ci) != HT_NOTFOUND)
+            continue;
+        ptrhash_put(&seen, ci, ci);
+        jl_method_instance_t *mi = jl_get_ci_mi(ci);
+        // this CodeInstance terminates its MethodInstance's chain, unless a
+        // later CodeInstance for the same MethodInstance extends it below
+        record_field_change((jl_value_t**)&ci->next, NULL);
+        void **bp = ptrhash_bp(&mi_last, mi);
+        // Register unconditionally (not via record_field_change) so this
+        // cache rebuilds correctly, even if it matches what was there (which would
+        // accidentally excise the item with the next write to field_replace).
+        if (*bp == HT_NOTFOUND) {
+            // first CodeInstance seen for this MethodInstance becomes the head.
+            ptrhash_put(&field_replace, (void*)&mi->cache, (void*)ci);
+        }
+        else {
+            // link this CodeInstance after the previous one for the same MethodInstance
+            jl_code_instance_t *prev = (jl_code_instance_t*)*bp;
+            ptrhash_put(&field_replace, (void*)&prev->next, (void*)ci);
+        }
+        *bp = ci;
+    }
+    htable_free(&seen);
+    htable_free(&mi_last);
 }
 
 static uintptr_t jl_fptr_id(void *fptr)
@@ -586,6 +635,21 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             // prevent this from happening, so we do not need to detect that user
             // error now.
         }
+        // Only the CodeInstances deliberately selected for the image caches
+        // should be reachable through `cache`; jl_rewrite_mi_caches records the
+        // chosen ordering for those MethodInstances. Any MethodInstance whose
+        // cache was not rewritten gets an empty cache here, rather than leaking
+        // whatever the live runtime cache happened to contain. Builtin functions
+        // are an exception: their cache is not part of the codegen ordering and
+        // is not repopulated at load, so keep it. Builtins are recognized by
+        // their method having neither source nor a generator (cf. the
+        // jl_is_builtinfunc heuristic in gf.c).
+        jl_value_t *midef = mi->def.value;
+        int is_builtin = jl_is_method(midef) &&
+            ((jl_method_t*)midef)->source == NULL &&
+            ((jl_method_t*)midef)->generator == NULL;
+        if (!is_builtin && !has_field_change((jl_value_t**)&mi->cache))
+            record_field_change((jl_value_t**)&mi->cache, NULL);
         // don't recurse into all backedges memory (yet)
         jl_value_t *backedges = get_replaceable_field((jl_value_t**)&mi->backedges, 1);
         if (backedges) {
@@ -2827,6 +2891,16 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
 
     int en = jl_gc_enable(0);
     if (native_functions) {
+        // Rewrite each MethodInstance's cache to the ordered list of
+        // CodeInstances codegen emitted for this image (see jl_rewrite_mi_caches).
+        size_t num_ci_order = 0;
+        jl_get_llvm_mi_cache_order(native_functions, &num_ci_order, NULL);
+        if (num_ci_order) {
+            jl_code_instance_t **ci_order = (jl_code_instance_t**)malloc_s(num_ci_order * sizeof(jl_code_instance_t*));
+            jl_get_llvm_mi_cache_order(native_functions, &num_ci_order, ci_order);
+            jl_rewrite_mi_caches(ci_order, num_ci_order);
+            free(ci_order);
+        }
         size_t num_gvars, num_external_fns;
         jl_get_llvm_gv_inits(native_functions, &num_gvars, NULL);
         arraylist_grow(&gvars, num_gvars);

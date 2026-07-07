@@ -1324,9 +1324,9 @@ precompile_test_harness("invoke") do dir
         end
 
         m = get_method_for_type(M.h, Real)
-        @test nvalid(m.specializations::Core.MethodInstance) == 1
+        @test m.specializations === Core.svec()
         m = get_method_for_type(M.hnc, Real)
-        @test nvalid(m.specializations::Core.MethodInstance) == 1
+        @test m.specializations === Core.svec()
         m = only(methods(M.callq))
         @test nvalid(m.specializations::Core.MethodInstance) == 1
         m = only(methods(M.callqnc))
