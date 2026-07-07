@@ -163,6 +163,75 @@ macro max_methods(n::Int, fdef::Expr)
 end
 
 """
+    Experimental.@sealed f
+    Experimental.@sealed SomeType
+    Experimental.@sealed SomeModule [public=false] [exclude=[f, SomeType]]
+
+Declare the method set of a function (or of a type's constructors and callable
+instances) closed: methods are not expected to be added to it from outside its
+owning module. The compiler may then rely on the current set of methods when
+optimizing calls whose argument types are not fully known, without risking
+invalidation of that compiled code by future method definitions.
+
+The module form seals every function and type owned by the module except its
+`public`/`export`ed bindings, which form the module's declared extension
+interface. Pass `public=true` to seal those as well, and `exclude` to keep
+specific functions or types extensible. Place it after the definitions it
+should cover, typically at the end of the module.
+
+Extending a sealed function from another package remains legal and behaves
+correctly (dependent compiled code is invalidated as usual), but it defeats the
+optimization. Set the environment variable `JULIA_WARN_SEALED=1` to emit a
+warning when this happens, or `JULIA_WARN_SEALED=error` to make it an error
+(useful in package CI).
+"""
+macro sealed(ex, opts...)
+    kwargs = Expr[]
+    for o in opts
+        Meta.isexpr(o, :(=), 2) && o.args[1] isa Symbol ||
+            error("@sealed options must be of the form `key=value`")
+        push!(kwargs, Expr(:kw, o.args[1], esc(o.args[2])))
+    end
+    return quote
+        let x = $(esc(ex))
+            if x isa Module
+                seal_module(x; $(kwargs...))
+            else
+                $(isempty(kwargs) || :(error("@sealed options only apply to the module form")))
+                t = x isa Type ? Base.unwrap_unionall(x) : typeof(x)
+                t isa DataType || error("@sealed requires a function, a type, or a module")
+                ccall(:jl_typename_set_sealed, Cvoid, (Any, Cint), t.name, 1)
+            end
+            x
+        end
+    end
+end
+
+sealable_typename(@nospecialize x) =
+    x isa Type ? (t = Base.unwrap_unionall(x); t isa DataType ? t.name : nothing) :
+    x isa Function ? typeof(x).name : nothing
+
+function seal_module(m::Module; public::Bool = false, exclude = ())
+    excluded = IdSet{Core.TypeName}()
+    for x in exclude
+        tn = sealable_typename(x)
+        tn === nothing && error("cannot exclude $x: not a function or type")
+        push!(excluded, tn)
+    end
+    for name in names(m; all = true)
+        isdefined(m, name) || continue
+        Base.isdeprecated(m, name) && continue
+        tn = sealable_typename(getglobal(m, name))
+        tn === nothing && continue
+        tn.module === m || continue
+        public || !Base.ispublic(m, tn.singletonname) || continue
+        tn in excluded && continue
+        ccall(:jl_typename_set_sealed, Cvoid, (Any, Cint), tn, 1)
+    end
+    return m
+end
+
+"""
     Experimental.@compiler_options optimize={0,1,2,3} compile={yes,no,all,min} infer={true,false} max_methods={default,1,2,3,4}
 
 Set compiler options for code in the enclosing module. Options correspond directly to

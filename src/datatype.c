@@ -86,6 +86,7 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     tn->abstract = abstract;
     tn->mutabl = mutabl;
     tn->mayinlinealloc = 0;
+    tn->sealed = 0;
     tn->partial = NULL;
     tn->atomicfields = NULL;
     tn->constfields = NULL;
@@ -94,6 +95,11 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     jl_atomic_store_relaxed(&tn->cache_entry_count, 0);
     tn->constprop_heustic = 0;
     return tn;
+}
+
+JL_DLLEXPORT void jl_typename_set_sealed(jl_typename_t *tn, int sealed)
+{
+    tn->sealed = !!sealed;
 }
 
 // allocating DataTypes -----------------------------------------------------------
