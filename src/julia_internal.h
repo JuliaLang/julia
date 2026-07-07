@@ -1903,6 +1903,7 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(
 
 jl_typemap_entry_t *jl_typemap_level_assoc_exact(jl_typemap_level_t *cache, jl_value_t *arg1, jl_value_t **args, size_t n, int8_t offs, size_t world);
 jl_typemap_entry_t *jl_typemap_entry_assoc_exact(jl_typemap_entry_t *mn, jl_value_t *arg1, jl_value_t **args, size_t n, size_t world);
+int jl_typemap_entry_sig_match(jl_typemap_entry_t *ml, jl_value_t *arg1, jl_value_t **args, size_t n, size_t world);
 STATIC_INLINE jl_typemap_entry_t *jl_typemap_assoc_exact(
     jl_typemap_t *ml_or_cache JL_PROPAGATES_ROOT,
     jl_value_t *arg1, jl_value_t **args, size_t n, int8_t offs, size_t world)
