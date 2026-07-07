@@ -64,6 +64,41 @@ Scanning `sleep_check_state` avoids both problems: that flag is set in step 1,
 *before* the re-check, so a scan never misses a worker in the danger window, and
 it is inspected per-pool.
 
+
+## Spinner accounting
+
+`jl_task_get_next` maintains a per-pool count of *spinners* — threads
+busy-polling the queues after failing to pop work. At most half of a pool may
+spin at once; a thread denied a spinner slot parks immediately. While a spinner
+exists in a pool, `jl_wakeup_threadpool` wakes nobody: the spinner will find
+the work. Two orderings make this sound, and both are modeled:
+
+1. **Exit-to-park releases the slot first.** A spinner heading to sleep
+   decrements `n_spinning` *before* its `sleep_check_state = sleeping` store,
+   fence, and queue re-check. Paired with the enqueuer's *insert, fence, read
+   `n_spinning`* sequence (the same `[^store_buffering_1]` dance), an enqueuer
+   that skips the wake on a stale non-zero count is ordered before the
+   spinner's re-check, which therefore observes the task.
+2. **Exit-with-work propagates.** The last spinner to leave *with a task*
+   runs the wakeup policy once, so a burst of enqueues absorbed by one spinner
+   still fans out. This is a parallelism property rather than a safety one
+   (the worker holding the task is awake), but it is part of the protocol and
+   is included in the model.
+
+`SchedulerWake.tla` models spinners with per-thread slot state, the pool
+counter, the gated `Wakeup`, and the slot release (`SpinExit`) as a separate
+atomic step from the sleeping-store (`SleepBegin`), so TLC explores the race
+window between them. `MCFixed` passes the full state space with no deadlock,
+no `NoLostWakeup` violation, and `SpinCountOK` (the counter always matches the
+slots held).
+
+Toggling the model to the unsound variant — releasing the spinner slot at
+`ParkCommit` instead of before `SleepBegin` (and letting spinners reach
+`SleepBegin` while still holding the slot) — makes TLC report a
+`NoLostWakeup` violation: a producer reads the stale non-zero count, skips the
+wake, and the "spinner" it is trusting has already parked. That is the danger
+window item 1 closes.
+
 ## TLA+ model
 
 The directory [`scheduler-wakeup/`](https://github.com/JuliaLang/julia/tree/master/doc/src/devdocs/scheduler-wakeup)
