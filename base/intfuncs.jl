@@ -186,6 +186,9 @@ function gcd(abc::AbstractArray{<:Integer})
     return a
 end
 
+_gcdx_update(s0::T, q::T, s1::T) where {T<:Unsigned} = s0 -% q *% s1
+_gcdx_update(s0, q, s1) = s0 - q*s1
+
 # return (gcd(a, b), x, y) such that ax+by == gcd(a, b)
 """
     gcdx(a, b...)
@@ -229,9 +232,6 @@ julia> gcdx(15, 12, 20)
     their `typemax`, and the identity then holds only via the unsigned
     integers' modulo arithmetic.
 """
-_gcdx_update(s0::T, q::T, s1::T) where {T<:Unsigned} = s0 -% q *% s1
-_gcdx_update(s0, q, s1) = s0 - q*s1
-
 Base.@assume_effects :terminates_locally function gcdx(a::T, b::T) where {T<:Integer}
     if iszero(a) && iszero(b)
         return (zero(T), zero(T), zero(T))

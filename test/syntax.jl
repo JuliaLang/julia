@@ -979,7 +979,7 @@ end
              Meta.parse("module B
                         using ..x,
                               ..y
-                    end").args[3].args)[1] ==
+                    end").args[end].args)[1] ==
       Expr(:using,
            Expr(:., :., :., :x),
            Expr(:., :., :., :y))
@@ -988,7 +988,7 @@ end
              Meta.parse("module A
                         using .B,
                               .C
-                    end").args[3].args)[1] ==
+                    end").args[end].args)[1] ==
       Expr(:using,
            Expr(:., :., :B),
            Expr(:., :., :C))
@@ -3766,22 +3766,23 @@ end
 
 @testset "public keyword" begin
     p(str) = Base.remove_linenums!(Meta.parse(str))
+    parsed_module(name, body...) = Expr(:module, Base.thisminor(VERSION), true, name, Expr(:block, body...))
     # tests ported from JuliaSyntax.jl
     @test p("function f(public)\n    public + 3\nend") == Expr(:function, Expr(:call, :f, :public), Expr(:block, Expr(:call, :+, :public, 3)))
     @test p("public A, B") == Expr(:public, :A, :B)
     @test p("if true \n public *= 4 \n end") == Expr(:if, true, Expr(:block, Expr(:*=, :public, 4)))
-    @test p("module Mod\n public A, B \n end") == Expr(:module, true, :Mod, Expr(:block, Expr(:public, :A, :B)))
-    @test p("module Mod2\n a = 3; b = 6; public a, b\n end") == Expr(:module, true, :Mod2, Expr(:block, Expr(:(=), :a, 3), Expr(:(=), :b, 6), Expr(:public, :a, :b)))
+    @test p("module Mod\n public A, B \n end") == parsed_module(:Mod, Expr(:public, :A, :B))
+    @test p("module Mod2\n a = 3; b = 6; public a, b\n end") == parsed_module(:Mod2, Expr(:(=), :a, 3), Expr(:(=), :b, 6), Expr(:public, :a, :b))
     @test p("a = 3; b = 6; public a, b") == Expr(:toplevel, Expr(:(=), :a, 3), Expr(:(=), :b, 6), Expr(:public, :a, :b))
     @test_throws Meta.ParseError p("begin \n public A, B \n end")
     @test_throws Meta.ParseError p("if true \n public A, B \n end")
     @test_throws Meta.ParseError p("public export=true foo, bar")
     @test_throws Meta.ParseError p("public experimental=true foo, bar")
     @test p("public(x::String) = false") == Expr(:(=), Expr(:call, :public, Expr(:(::), :x, :String)), Expr(:block, false))
-    @test p("module M; export @a; end") == Expr(:module, true, :M, Expr(:block, Expr(:export, :var"@a")))
-    @test p("module M; public @a; end") == Expr(:module, true, :M, Expr(:block, Expr(:public, :var"@a")))
-    @test p("module M; export ⤈; end") == Expr(:module, true, :M, Expr(:block, Expr(:export, :⤈)))
-    @test p("module M; public ⤈; end") == Expr(:module, true, :M, Expr(:block, Expr(:public, :⤈)))
+    @test p("module M; export @a; end") == parsed_module(:M, Expr(:export, :var"@a"))
+    @test p("module M; public @a; end") == parsed_module(:M, Expr(:public, :var"@a"))
+    @test p("module M; export ⤈; end") == parsed_module(:M, Expr(:export, :⤈))
+    @test p("module M; public ⤈; end") == parsed_module(:M, Expr(:public, :⤈))
     @test p("public = 4") == Expr(:(=), :public, 4)
     @test p("public[7] = 5") == Expr(:(=), Expr(:ref, :public, 7), 5)
     @test p("public() = 6") == Expr(:(=), Expr(:call, :public), Expr(:block, 6))
