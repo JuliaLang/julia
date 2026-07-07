@@ -62,6 +62,23 @@ struct UnionSplit
         new(handled_all_cases, fully_covered, atype, cases, Int[])
 end
 
+# Inlining of `Core.invoke_split_effects(which, f, args...)` with a usable precondition:
+# emits `precond(f, args...) ? <assume_case> : <else_case>` where both cases perform
+# the `f(args...)` call, but the assume case's effects are upgraded by the effects
+# named in the precondition.
+struct EffectSplit
+    check::Any  # the precondition check function
+    check_case  # Union{InliningTodo, InvokeCase, ConstantCase}
+    assume_case # Union{InliningTodo, InvokeCase, ConstantCase}
+    else_case   # Union{InliningTodo, InvokeCase, ConstantCase}
+    bbs::Vector{Int}
+    EffectSplit(@nospecialize(check), @nospecialize(check_case), @nospecialize(assume_case), @nospecialize(else_case)) =
+        new(check, check_case, assume_case, else_case, Int[])
+end
+
+copy(todo::InliningTodo) =
+    InliningTodo(todo.mi, copy(todo.ir), todo.spec_info, todo.di, todo.linear_inline_eligible, todo.effects)
+
 struct InliningEdgeTracker
     edges::Vector{Any}
     InliningEdgeTracker(state::InliningState) = new(state.edges)
@@ -247,6 +264,47 @@ function cfg_inline_unionsplit!(ir::IRCode, idx::Int, union_split::UnionSplit,
     #      since in the latter case we inline `Core.throw_methoderror` into the fallback
     #      block, which is must-throw, making the subsequent code path unreachable.
     !handled_all_cases && push!(from_bbs, length(state.new_cfg_blocks))
+    # This block will be the block everyone returns to
+    push!(state.new_cfg_blocks, BasicBlock(StmtRange(idx, idx), from_bbs, orig_succs))
+    join_bb = length(state.new_cfg_blocks)
+    push!(state.split_targets, join_bb)
+    push!(bbs, join_bb)
+    for bb in from_bbs
+        push!(state.new_cfg_blocks[bb].succs, join_bb)
+    end
+end
+
+function cfg_inline_effectsplit!(ir::IRCode, idx::Int, item::EffectSplit,
+                                 state::CFGInliningState, params::OptimizationParams)
+    (; check_case, assume_case, else_case, bbs) = item
+    inline_into_block!(state, block_for_inst(ir, idx))
+    # The check gets inlined into the current block(s), its result feeding the branch
+    if isa(check_case, InliningTodo) && !check_case.linear_inline_eligible
+        cfg_inline_item!(ir, idx, check_case, state, true)
+    end
+    from_bbs = Int[]
+    delete!(state.split_targets, length(state.new_cfg_blocks))
+    orig_succs = copy(state.new_cfg_blocks[end].succs)
+    empty!(state.new_cfg_blocks[end].succs)
+    for case in (assume_case, else_case)
+        # The condition gets sunk into the previous block
+        # Add a block for the case body
+        push!(state.new_cfg_blocks, BasicBlock(StmtRange(idx, idx)))
+        cond_bb = length(state.new_cfg_blocks)-1
+        push!(state.new_cfg_blocks[end].preds, cond_bb)
+        push!(state.new_cfg_blocks[cond_bb].succs, cond_bb+1)
+        if isa(case, InliningTodo) && !case.linear_inline_eligible
+            cfg_inline_item!(ir, idx, case, state, true)
+        end
+        push!(from_bbs, length(state.new_cfg_blocks))
+        if case === assume_case
+            # This block will have the else case
+            push!(state.new_cfg_blocks, BasicBlock(StmtRange(idx, idx)))
+            push!(state.new_cfg_blocks[cond_bb].succs, length(state.new_cfg_blocks))
+            push!(state.new_cfg_blocks[end].preds, cond_bb)
+            push!(bbs, length(state.new_cfg_blocks))
+        end
+    end
     # This block will be the block everyone returns to
     push!(state.new_cfg_blocks, BasicBlock(StmtRange(idx, idx), from_bbs, orig_succs))
     join_bb = length(state.new_cfg_blocks)
@@ -616,6 +674,78 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int, argexprs::
     return insert_node_here!(compact, NewInstruction(pn, typ, line))
 end
 
+function ir_inline_case_here!(compact::IncrementalCompact, idx::Int, argexprs::Vector{Any},
+                              @nospecialize(case), boundscheck::Symbol,
+                              todo_bbs::Vector{Tuple{Int,Int}}, @nospecialize(typ), line,
+                              extra_flag::UInt32=IR_FLAG_NULL)
+    if isa(case, InliningTodo)
+        return ir_inline_item!(compact, idx, argexprs, case, boundscheck, todo_bbs)
+    elseif isa(case, InvokeCase)
+        inst = Expr(:invoke, case.invoke, argexprs...)
+        flag = flags_for_effects(case.effects) | extra_flag
+        return insert_node_here!(compact, NewInstruction(inst, typ, case.info, line, flag))
+    else
+        case = case::ConstantCase
+        return case.val
+    end
+end
+
+function ir_inline_effectsplit!(compact::IncrementalCompact, idx::Int, argexprs::Vector{Any},
+                                item::EffectSplit, boundscheck::Symbol,
+                                todo_bbs::Vector{Tuple{Int,Int}})
+    (; check, check_case, assume_case, else_case, bbs) = item
+    typ, line = compact.result[idx][:type], compact.result[idx][:line]
+    next_cond_bb, join_bb = bbs
+
+    # Inline the precondition check, branching to the else case if it fails
+    inner_argexprs = argexprs[3:end]
+    if check === nothing
+        # Synthesized check: takes the same arguments as the callee itself
+        check_argexprs = inner_argexprs
+    else
+        check_argexprs = Any[quoted(check), inner_argexprs...]
+    end
+    # NB: temporarily retype the call statement to Bool so that a phi node created
+    # for a multi-block inlined check gets the check's type, not the callee's
+    orig_type = compact.result[idx][:type]
+    compact.result[idx][:type] = Bool
+    val = ir_inline_case_here!(compact, idx, check_argexprs, check_case, boundscheck, todo_bbs, Bool, line)
+    compact.result[idx][:type] = orig_type
+    insert_node_here!(compact, NewInstruction(GotoIfNot(val, next_cond_bb), Any, line))
+    finish_current_bb!(compact, 0)
+
+    pn = PhiNode()
+    # Both cases have the same semantics as the plain call, so the effects that
+    # inference proved for this statement apply to them as well (in addition to
+    # any effects the inliner determined for the resolved case itself). The
+    # assume case additionally gets the effects the passing check permits.
+    stmt_effects_flag = compact.result[idx][:flag] & IR_FLAGS_EFFECTS
+    local bb
+    for case in (assume_case, else_case)
+        if case === else_case
+            # `next_cond_bb` is an empty block that falls through to the else body
+            # (mirroring the union-split CFG shape)
+            bb = join_bb - 1
+            finish_current_bb!(compact, 0)
+        else
+            bb = next_cond_bb - 1
+        end
+        val = ir_inline_case_here!(compact, idx, inner_argexprs, case, boundscheck, todo_bbs, typ, line,
+                                   stmt_effects_flag)
+        if !isempty(compact.cfg_transform.result_bbs[bb].preds)
+            push!(pn.edges, bb)
+            push!(pn.values, val)
+            insert_node_here!(compact, NewInstruction(GotoNode(join_bb), Any, line))
+        else
+            insert_node_here!(compact, NewInstruction(ReturnNode(), Union{}, line))
+        end
+        finish_current_bb!(compact, 0)
+    end
+
+    # We're now in the join block.
+    return insert_node_here!(compact, NewInstruction(pn, typ, line))
+end
+
 function batch_inline!(ir::IRCode, todo::Vector{Pair{Int,Any}}, propagate_inbounds::Bool, interp::AbstractInterpreter)
     params = OptimizationParams(interp)
     # Compute the new CFG first (modulo statement ranges, which will be computed below)
@@ -623,6 +753,8 @@ function batch_inline!(ir::IRCode, todo::Vector{Pair{Int,Any}}, propagate_inboun
     for (idx, item) in todo
         if isa(item, UnionSplit)
             cfg_inline_unionsplit!(ir, idx, item, state, params)
+        elseif isa(item, EffectSplit)
+            cfg_inline_effectsplit!(ir, idx, item, state, params)
         else
             item = item::InliningTodo
             # A linear inline does not modify the CFG
@@ -663,6 +795,8 @@ function batch_inline!(ir::IRCode, todo::Vector{Pair{Int,Any}}, propagate_inboun
                     compact.ssa_rename[old_idx] = ir_inline_item!(compact, idx, argexprs, item, boundscheck, state.todo_bbs)
                 elseif isa(item, UnionSplit)
                     compact.ssa_rename[old_idx] = ir_inline_unionsplit!(compact, idx, argexprs, item, boundscheck, state.todo_bbs, interp)
+                elseif isa(item, EffectSplit)
+                    compact.ssa_rename[old_idx] = ir_inline_effectsplit!(compact, idx, argexprs, item, boundscheck, state.todo_bbs)
                 end
                 compact[idx] = nothing
                 refinish && finish_current_bb!(compact, 0)
@@ -1260,6 +1394,7 @@ function process_simple!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, flag
     if is_builtin(optimizer_lattice(state.interp), sig)
         let f = sig.f
             if (f !== Core.invoke &&
+                f !== Core.invoke_split_effects &&
                 f !== Core.finalizer &&
                 f !== modifyfield! &&
                 f !== Core.modifyglobal! &&
@@ -1552,6 +1687,290 @@ function handle_finalizer_call!(ir::IRCode, idx::Int, stmt::Expr, info::Finalize
     return nothing
 end
 
+function apply_effects_overrides(effects::Effects, override::EffectsOverride)
+    override.consistent && (effects = Effects(effects; consistent=ALWAYS_TRUE))
+    override.effect_free && (effects = Effects(effects; effect_free=ALWAYS_TRUE))
+    override.nothrow && (effects = Effects(effects; nothrow=true))
+    override.terminates_globally && (effects = Effects(effects; terminates=true))
+    override.notaskstate && (effects = Effects(effects; notaskstate=true))
+    override.inaccessiblememonly && (effects = Effects(effects; inaccessiblememonly=ALWAYS_TRUE))
+    override.noub && (effects = Effects(effects; noub=ALWAYS_TRUE))
+    override.nortcall && (effects = Effects(effects; nortcall=true))
+    return effects
+end
+
+function analyze_invoke_split_effects(ir::IRCode, idx::Int, stmt::Expr, info::InvokeSplitEffectsInfo,
+    flag::UInt32, sig::Signature, state::InliningState)
+    # Compute the inlining cases of the equivalent plain call
+    inner_argtypes = sig.argtypes[3:end]
+    isempty(inner_argtypes) && return nothing
+    inner_ft = inner_argtypes[1]
+    has_free_typevars(inner_ft) && return nothing
+    inner_sig = Signature(singleton_type(inner_ft), inner_ft, inner_argtypes)
+    base_cases = compute_inlining_cases(info.info, flag, inner_sig, state)
+    base_cases === nothing && return nothing
+    base_cases, base_handled_all, base_fully_covered, _ = base_cases
+    (base_handled_all && base_fully_covered && length(base_cases) == 1) || return nothing
+    else_case = base_cases[1].item
+    # A constant result doesn't benefit from the split; use the regular path
+    isa(else_case, ConstantCase) && return nothing
+
+    # Compute the inlining cases of the precondition check call
+    check_argtypes = Any[Const(info.precond), inner_argtypes...]
+    check_sig = Signature(info.precond, Const(info.precond), check_argtypes)
+    check_cases = compute_inlining_cases(info.check_info, #=flag=#UInt32(0), check_sig, state)
+    check_cases === nothing && return nothing
+    check_cases, check_handled_all, check_fully_covered, _ = check_cases
+    (check_handled_all && check_fully_covered && length(check_cases) == 1) || return nothing
+
+    if isa(else_case, InvokeCase)
+        assume_case = InvokeCase(else_case.invoke,
+            apply_effects_overrides(else_case.effects, info.cond_effects), else_case.info)
+    else
+        # Inline a copy of the callee in the assume case, simplified under the
+        # assumed effects (deleting paths that throw) when possible, and outline
+        # the fallback into a call
+        else_todo = else_case::InliningTodo
+        assumed_effects = apply_effects_overrides(else_todo.effects, info.cond_effects)
+        if info.cond_effects.nothrow && scan_nothrow_split_ir(else_todo.ir)
+            assume_case = InliningTodo(else_todo.mi, assume_nothrow_ir(else_todo.ir),
+                else_todo.spec_info, else_todo.di, assumed_effects)
+        else
+            assume_case = copy(else_todo)
+        end
+        outlined = outline_case(else_todo, info.info, state)
+        outlined !== nothing && (else_case = outlined)
+    end
+    return EffectSplit(info.precond, check_cases[1].item, assume_case, else_case)
+end
+
+# Check that the callee IR consists only of statements that the nothrow
+# effect-split transformations below can handle: any statement that may throw
+# must either deterministically throw with no other side effects (these are
+# replaced by the transformations), or be one of the known-safe node kinds.
+function scan_nothrow_split_ir(ir::IRCode)
+    for i = 1:length(ir.stmts)
+        inst = ir.stmts[i]
+        stmt = inst[:stmt]
+        if stmt === nothing || isa(stmt, ReturnNode) || isa(stmt, GotoNode) ||
+           isa(stmt, PhiNode) || isa(stmt, PiNode) || isa(stmt, QuoteNode)
+            continue
+        end
+        isa(stmt, EnterNode) && return false # exception handlers not supported
+        has_flag(inst[:flag], IR_FLAG_NOTHROW) && continue
+        if isa(stmt, Expr) && inst[:type] === Union{} &&
+           has_flag(inst[:flag], IR_FLAG_EFFECT_FREE | IR_FLAG_TERMINATES)
+            continue # deterministically-throwing statement with no other effects
+        end
+        return false
+    end
+    return true
+end
+
+# Synthesize a `:nothrow` precondition check ("nothrow shadow") from the callee's
+# IR: deterministically-throwing statements become no-ops, the unreachable
+# terminators after them become `return false`, and value returns become
+# `return true`. The CFG is left unchanged. The result is `true` only if the
+# callee, called with the same arguments, takes a path that does not throw.
+function synthesize_nothrow_check_ir(ir0::IRCode)
+    ir = copy(ir0)
+    for i = 1:length(ir.stmts)
+        inst = ir.stmts[i]
+        stmt = inst[:stmt]
+        if isa(stmt, ReturnNode)
+            # NB: do not touch the flags of terminators - a "removable" flag can
+            # get them DCE'd by `compact!`
+            if isdefined(stmt, :val)
+                inst[:stmt] = ReturnNode(true)
+            else
+                inst[:stmt] = ReturnNode(false)
+            end
+        elseif isa(stmt, Expr) && inst[:type] === Union{} && !has_flag(inst[:flag], IR_FLAG_NOTHROW)
+            inst[:stmt] = nothing
+            inst[:type] = Nothing
+            inst[:flag] = IR_FLAGS_REMOVABLE
+        end
+    end
+    return compact!(ir)
+end
+
+# Compute the set of blocks all of whose paths lead to a deterministically-
+# throwing statement (the "must-throw region"). Under a nothrow assumption,
+# these blocks are unreachable.
+function must_throw_region(ir::IRCode)
+    nblocks = length(ir.cfg.blocks)
+    region = falses(nblocks)
+    # Seed with the blocks that contain a (deletable) must-throw statement and
+    # end in an unreachable terminator
+    for bbidx = 1:nblocks
+        bb = ir.cfg.blocks[bbidx]
+        term = ir.stmts[last(bb.stmts)][:stmt]
+        (isa(term, ReturnNode) && !isdefined(term, :val)) || continue
+        for i in bb.stmts
+            inst = ir.stmts[i]
+            stmt = inst[:stmt]
+            if isa(stmt, Expr) && inst[:type] === Union{} && !has_flag(inst[:flag], IR_FLAG_NOTHROW)
+                region[bbidx] = true
+                break
+            end
+        end
+    end
+    # Backward closure: add blocks all of whose successors are in the region
+    changed = true
+    while changed
+        changed = false
+        for bbidx = 1:nblocks
+            region[bbidx] && continue
+            bbidx == 1 && continue # never fold the entry block
+            succs = ir.cfg.blocks[bbidx].succs
+            isempty(succs) && continue
+            if all(succ::Int->region[succ], succs)
+                region[bbidx] = true
+                changed = true
+            end
+        end
+    end
+    return region
+end
+
+# Rewrite the callee's IR under the assumption that it does not throw: the
+# conditional branches guarding the must-throw region are folded to their
+# non-throwing side, making the region unreachable and its guarding condition
+# computations dead.
+function assume_nothrow_ir(ir0::IRCode)
+    ir = copy(ir0)
+    region = must_throw_region(ir)
+    any(region) || return ir
+    # PhiNodes inside the region would need extra bookkeeping when only some of
+    # a block's incoming edges get killed; give up on folding if there are any.
+    for bbidx = 1:length(ir.cfg.blocks)
+        region[bbidx] || continue
+        for i in ir.cfg.blocks[bbidx].stmts
+            isa(ir.stmts[i][:stmt], PhiNode) && return ir
+        end
+    end
+    # Fold the conditional entry edges into the region. To keep the CFG simple,
+    # a block's incoming external edges are folded only if all of them are
+    # foldable `GotoIfNot`s.
+    for tbb = 1:length(ir.cfg.blocks)
+        region[tbb] || continue
+        extpreds = Int[pbb for pbb in ir.cfg.blocks[tbb].preds if !region[pbb]]
+        isempty(extpreds) && continue
+        all(extpreds) do pbb::Int
+            term = ir.stmts[last(ir.cfg.blocks[pbb].stmts)][:stmt]
+            return isa(term, GotoIfNot) && (term.dest == tbb || pbb + 1 == tbb)
+        end || continue
+        for pbb in extpreds
+            terminst = ir.stmts[last(ir.cfg.blocks[pbb].stmts)]
+            term = terminst[:stmt]::GotoIfNot
+            # NB: do not touch the flags of the replacement terminators - a
+            # "removable" flag can get them DCE'd by `compact!`
+            if term.dest == tbb
+                # branch to the throwing region not taken; fall through
+                terminst[:stmt] = nothing
+                terminst[:type] = Nothing
+            else
+                # fall-through throws; the branch is always taken
+                terminst[:stmt] = GotoNode(term.dest)
+                terminst[:type] = Any
+            end
+            kill_edge!(ir, pbb, tbb)
+        end
+    end
+    # Clear out the now-unreachable region blocks (also avoids dangling
+    # references for the verifier)
+    for tbb = 1:length(ir.cfg.blocks)
+        (region[tbb] && isempty(ir.cfg.blocks[tbb].preds)) || continue
+        bb = ir.cfg.blocks[tbb]
+        for i in bb.stmts
+            inst = ir.stmts[i]
+            if i == last(bb.stmts)
+                inst[:stmt] = ReturnNode() # unreachable
+            else
+                inst[:stmt] = nothing
+                inst[:type] = Nothing
+                inst[:flag] = IR_FLAGS_REMOVABLE
+            end
+        end
+    end
+    return compact!(ir, true)
+end
+
+# Convert an InliningTodo into an InvokeCase (an outlined call of the same
+# code). Used for the else case of an effect split: keeping the fallback as a
+# call both avoids inlining the callee body twice and prevents LLVM from
+# tail-merging the (cleaned-up) assume case back together with the fallback.
+function outline_case(todo::InliningTodo, @nospecialize(info::CallInfo), state::InliningState)
+    et = InliningEdgeTracker(state)
+    code = get(code_cache(state), todo.mi, nothing)
+    code isa InferenceResult && (code = code.ci)
+    if !(code isa CodeInstance)
+        code = todo.mi
+    end
+    return compileable_specialization(code, todo.effects, et, info, state)
+end
+
+# Attempt to synthesize a `:nothrow` precondition for a call that has no
+# user-declared precondition, using the "nothrow shadow" of the callee's IR.
+function analyze_invoke_split_effects_synthesis(ir::IRCode, idx::Int, stmt::Expr,
+    @nospecialize(info::CallInfo), flag::UInt32, sig::Signature, state::InliningState)
+    which = stmt.args[2]
+    isa(which, QuoteNode) && (which = which.value)
+    which === :nothrow || return nothing
+    inner_argtypes = sig.argtypes[3:end]
+    isempty(inner_argtypes) && return nothing
+    inner_ft = inner_argtypes[1]
+    has_free_typevars(inner_ft) && return nothing
+    inner_sig = Signature(singleton_type(inner_ft), inner_ft, inner_argtypes)
+    cases = compute_inlining_cases(info, flag, inner_sig, state)
+    cases === nothing && return nothing
+    cases, handled_all_cases, fully_covered, _ = cases
+    (handled_all_cases && fully_covered && length(cases) == 1) || return nothing
+    else_todo = cases[1].item
+    # We need the callee's IR to synthesize the check from
+    isa(else_todo, InliningTodo) || return nothing
+    # If the callee is already nothrow, there is nothing to split
+    is_nothrow(else_todo.effects) && return nothing
+    scan_nothrow_split_ir(else_todo.ir) || return nothing
+    assumed_effects = Effects(else_todo.effects; nothrow=true)
+    check_case = InliningTodo(else_todo.mi, synthesize_nothrow_check_ir(else_todo.ir),
+        else_todo.spec_info, else_todo.di, assumed_effects)
+    assume_case = InliningTodo(else_todo.mi, assume_nothrow_ir(else_todo.ir),
+        else_todo.spec_info, else_todo.di, assumed_effects)
+    else_case = outline_case(else_todo, info, state)
+    else_case === nothing && (else_case = else_todo)
+    return EffectSplit(nothing, check_case, assume_case, else_case)
+end
+
+function handle_invoke_split_effects_call!(todo::Vector{Pair{Int,Any}},
+    ir::IRCode, idx::Int, stmt::Expr, @nospecialize(info::CallInfo), flag::UInt32,
+    sig::Signature, state::InliningState)
+    if isa(info, InvokeSplitEffectsInfo)
+        item = analyze_invoke_split_effects(ir, idx, stmt, info, flag, sig, state)
+        if item !== nothing
+            push!(todo, idx=>item)
+            return nothing
+        end
+        info = info.info
+    else
+        # No user-declared precondition; try to synthesize one from the callee's IR
+        item = analyze_invoke_split_effects_synthesis(ir, idx, stmt, info, flag, sig, state)
+        if item !== nothing
+            push!(todo, idx=>item)
+            return nothing
+        end
+    end
+    # Fall back to regular handling of the (semantically equivalent) plain
+    # `f(args...)` call
+    deleteat!(stmt.args, 1:2)
+    ir.stmts[idx][:info] = info
+    info === NoCallInfo() && return nothing
+    sig = call_sig(ir, stmt)
+    sig === nothing && return nothing
+    handle_call!(todo, ir, idx, stmt, info, flag, sig, state)
+    return nothing
+end
+
 # the special resolver for :invoke-d call
 function handle_invoke_expr!(todo::Vector{Pair{Int,Any}}, ir::IRCode,
     idx::Int, stmt::Expr, @nospecialize(info::CallInfo), flag::UInt32, sig::Signature, state::InliningState)
@@ -1621,6 +2040,8 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
             handle_modifyop!_call!(ir, idx, stmt, info, state)
         elseif sig.f === Core.invoke
             handle_invoke_call!(todo, ir, idx, stmt, info, flag, sig, state)
+        elseif sig.f === Core.invoke_split_effects
+            handle_invoke_split_effects_call!(todo, ir, idx, stmt, info, flag, sig, state)
         elseif isa(info, FinalizerInfo)
             handle_finalizer_call!(ir, idx, stmt, info, state)
         else

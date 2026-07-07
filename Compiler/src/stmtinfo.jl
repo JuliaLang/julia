@@ -469,6 +469,26 @@ struct ModifyOpInfo <: CallInfo
 end
 add_edges_impl(edges::Vector{Any}, info::ModifyOpInfo) = add_edges!(edges, info.info)
 
+"""
+    info::InvokeSplitEffectsInfo <: CallInfo
+
+Represents a resolved call of `Core.invoke_split_effects(which, f, args...)` for which
+a usable precondition was found. `info.info` wraps the call information of the plain
+`f(args...)` call. `info.precond` is the precondition check function, whose call
+`precond(f, args...)` has the information `info.check_info`, and which, if it returns
+`true`, permits assuming the effects in `info.cond_effects` for the `f(args...)` call.
+"""
+struct InvokeSplitEffectsInfo <: CallInfo
+    info::CallInfo               # the callinfo for the `f(args...)` call
+    precond::Any                 # the precondition check function
+    cond_effects::EffectsOverride # effects that may be assumed if the check passes
+    check_info::CallInfo         # the callinfo for the `precond(f, args...)` call
+end
+function add_edges_impl(edges::Vector{Any}, info::InvokeSplitEffectsInfo)
+    add_edges!(edges, info.info)
+    add_edges!(edges, info.check_info)
+end
+
 struct VirtualMethodMatchInfo <: CallInfo
     info::Union{MethodMatchInfo,UnionSplitInfo,InvokeCallInfo}
 end
