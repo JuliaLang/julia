@@ -1832,6 +1832,9 @@ function shadow_branch_plan(ir::IRCode)
     for tbb = 1:nblocks
         region[tbb] || continue
         for pbb in ir.cfg.blocks[tbb].preds
+            # a virtual entry/exception edge (pred 0) into the region is not
+            # analyzable
+            pbb == 0 && return nothing
             if !region[pbb]
                 # the check itself branching on data cannot be forced soundly
                 isdatabranch[pbb] && return nothing
@@ -1852,7 +1855,7 @@ function shadow_branch_plan(ir::IRCode)
     for tbb = 1:nblocks
         region[tbb] || continue
         for pbb in copy(blocks[tbb].preds)
-            region[pbb] && continue
+            (pbb == 0 || region[pbb]) && continue
             deleteat!(blocks[pbb].succs, findfirst(==(tbb), blocks[pbb].succs)::Int)
             deleteat!(blocks[tbb].preds, findfirst(==(pbb), blocks[tbb].preds)::Int)
         end
@@ -2088,6 +2091,7 @@ function assume_nothrow_ir(ir0::IRCode)
     # foldable `GotoIfNot`s.
     for tbb = 1:length(ir.cfg.blocks)
         region[tbb] || continue
+        any(==(0), ir.cfg.blocks[tbb].preds) && continue # entry/exception edge
         extpreds = Int[pbb for pbb in ir.cfg.blocks[tbb].preds if !region[pbb]]
         isempty(extpreds) && continue
         all(extpreds) do pbb::Int
