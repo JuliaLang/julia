@@ -988,7 +988,7 @@ function _replace!(new::Callable, t::Dict{K,V}, A::AbstractDict, count::Int) whe
             if isequal(k1, k2)
                 t.keys[i] = k2
                 t.vals[i] = v2
-                t.age +%= 1
+                t.age += 1
             else
                 _delete!(t, i)
                 push!(news, x2)

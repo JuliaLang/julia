@@ -141,7 +141,7 @@ end
     oldv = h.vals
     sz = length(olds)
     newsz = _tablesz(newsz)
-    h.age +%= 1
+    h.age += 1
     h.idxfloor = 1
     if h.count == 0
         # TODO: tryresize
@@ -181,7 +181,7 @@ end
     end
 
     @assert h.age == age0 "Multiple concurrent writes to Dict detected!"
-    h.age +%= 1
+    h.age += 1
     h.slots = slots
     h.keys = keys
     h.vals = vals
@@ -229,7 +229,7 @@ function empty!(h::Dict{K,V}) where V where K
     h.ndel = 0
     h.count = 0
     h.maxprobe = 0
-    h.age +%= 1
+    h.age += 1
     h.idxfloor = max(1, sz)
     return h
 end
@@ -327,7 +327,7 @@ ht_keyindex2!(h::Dict, key) = ht_keyindex2_shorthash!(h, key)[1]
     h.keys[index] = key
     h.vals[index] = v
     h.count += 1
-    h.age +%= 1
+    h.age += 1
     if index < h.idxfloor
         h.idxfloor = index
     end
@@ -358,7 +358,7 @@ function setindex!(h::Dict{K,V}, v0, key::K) where V where K
     index, sh = ht_keyindex2_shorthash!(h, key)
 
     if index > 0
-        h.age +%= 1
+        h.age += 1
         @inbounds h.keys[index] = key
         @inbounds h.vals[index] = v
     else
@@ -373,7 +373,7 @@ function setindex!(h::Dict{K,Any}, v, key::K) where K
     index, sh = ht_keyindex2_shorthash!(h, key)
 
     if index > 0
-        h.age +%= 1
+        h.age += 1
         @inbounds h.keys[index] = key
         @inbounds h.vals[index] = v
     else
@@ -465,7 +465,7 @@ function get!(default::Callable, h::Dict{K,V}, key::K) where V where K
         index, sh = ht_keyindex2_shorthash!(h, key)
     end
     if index > 0
-        h.age +%= 1
+        h.age += 1
         @inbounds h.keys[index] = key
         @inbounds h.vals[index] = v
     else
@@ -645,7 +645,7 @@ function _delete!(h::Dict{K,V}, index) where {K,V}
     end
     h.ndel += ndel
     h.count -= 1
-    h.age +%= 1
+    h.age += 1
     return h
     end
 end

@@ -416,7 +416,7 @@ function +%(x::Rational, y::Rational)
         return xp
     end
     xd, yd = divgcd(promote(x.den, y.den)...)
-    Rational(+%(+*(x.num,yd), +*(y.num,xd)), +*(x.den,yd))
+    Rational(+%(*%(x.num,yd), *%(y.num,xd)), *%(x.den,yd))
 end
 
 function -(x::Rational, y::Rational)

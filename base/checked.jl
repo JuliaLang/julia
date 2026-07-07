@@ -173,7 +173,7 @@ The overflow protection may impose a perceptible performance penalty.
 function checked_add(x::T, y::T) where T<:Integer
     @inline
     zb = add_with_overflow(x, y)
-    # Avoid use of tuple destructuring, which uses aritmetic internally,
+    # Avoid use of tuple destructuring, which uses arithmetic internally,
     # so that this can be used as a replacement for +
     z = getfield(zb, 1)
     b = getfield(zb, 2)
