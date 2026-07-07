@@ -278,12 +278,16 @@ function cfg_inline_effectsplit!(ir::IRCode, idx::Int, item::EffectSplit,
                                  state::CFGInliningState, params::OptimizationParams)
     (; check_case, assume_case, else_case, bbs) = item
     inline_into_block!(state, block_for_inst(ir, idx))
+    # Deregister the current tail block (it may be the join block of an earlier
+    # split in the same original block, whose successors are about to be rewired
+    # to new blocks) BEFORE any block gets appended, or `finish_cfg_inline!`
+    # would try to rename its new-block successor ids through `bb_rename`
+    delete!(state.split_targets, length(state.new_cfg_blocks))
     # The check gets inlined into the current block(s), its result feeding the branch
     if isa(check_case, InliningTodo) && !check_case.linear_inline_eligible
         cfg_inline_item!(ir, idx, check_case, state, true)
     end
     from_bbs = Int[]
-    delete!(state.split_targets, length(state.new_cfg_blocks))
     orig_succs = copy(state.new_cfg_blocks[end].succs)
     empty!(state.new_cfg_blocks[end].succs)
     for case in (assume_case, else_case)
@@ -1744,10 +1748,218 @@ function analyze_invoke_split_effects(ir::IRCode, idx::Int, stmt::Expr, info::In
     return EffectSplit(info.precond, check_cases[1].item, assume_case, else_case)
 end
 
+function is_known_call_of(ir::IRCode, @nospecialize(stmt), @nospecialize(f))
+    isexpr(stmt, :call) || return false
+    ft = argextype(stmt.args[1], ir)
+    return singleton_type(ft) === f
+end
+
+# A statement that stores into a `Memory`'s elements: this is the only kind of
+# side effect the nothrow shadow can soundly delete, since it cannot affect the
+# lengths, types or field loads that feed control flow (a `Memory` cannot be
+# resized), only element loads, which `shadow_control_flow_safe` checks for.
+is_element_store(ir::IRCode, @nospecialize(stmt)) =
+    is_known_call_of(ir, stmt, Core.memoryrefset!) || is_known_call_of(ir, stmt, Core.memoryrefunset!)
+
+# A statement that loads from a `Memory`'s elements
+is_element_load(ir::IRCode, @nospecialize(stmt)) =
+    is_known_call_of(ir, stmt, Core.memoryrefget) || is_known_call_of(ir, stmt, Core.memoryref_isassigned)
+
+# The nothrow shadow deletes element stores, so the values observed by element
+# loads may differ between the shadow and the real execution, and any branch
+# whose condition (transitively) depends on a loaded element value may diverge.
+# That is harmless as long as such "data branches" cannot change WHICH checks
+# execute. When checks are control-dependent on a data branch through exactly
+# one of its arms, the shadow can conservatively FORCE that arm (checking a
+# superset of what the real execution checks - a spuriously false check merely
+# takes the always-correct fallback). Returns `nothing` if some data branch has
+# checks under both arms (no sound forcing exists), otherwise the list of
+# `branch_block => forced_successor` pairs the shadow must apply.
+function has_element_stores(ir::IRCode)
+    for i = 1:length(ir.stmts)
+        is_element_store(ir, ir.stmts[i][:stmt]) && return true
+    end
+    return false
+end
+
+function shadow_branch_plan(ir::IRCode)
+    # without deleted stores the shadow observes exactly what the real
+    # execution observes, so no branch can diverge
+    has_element_stores(ir) || return Pair{Int,Int}[]
+    nstmts = length(ir.stmts)
+    # SSA values (transitively) derived from element loads
+    taint = falses(nstmts)
+    changed = true
+    while changed
+        changed = false
+        for i = 1:nstmts
+            taint[i] && continue
+            stmt = ir.stmts[i][:stmt]
+            t = is_element_load(ir, stmt)
+            if !t
+                for useref in userefs(stmt)
+                    v = useref[]
+                    if isa(v, SSAValue) && taint[v.id]
+                        t = true
+                        break
+                    end
+                end
+            end
+            if t
+                taint[i] = true
+                changed = true
+            end
+        end
+    end
+    # branches whose condition depends on loaded element values
+    nblocks = length(ir.cfg.blocks)
+    isdatabranch = falses(nblocks)
+    anydata = false
+    for bbidx = 1:nblocks
+        term = ir.stmts[last(ir.cfg.blocks[bbidx].stmts)][:stmt]
+        if isa(term, GotoIfNot)
+            cond = term.cond
+            if isa(cond, SSAValue) && taint[cond.id]
+                isdatabranch[bbidx] = true
+                anydata = true
+            end
+        end
+    end
+    anydata || return Pair{Int,Int}[]
+    # the guard branches into the must-throw region (i.e. the checks)
+    region = must_throw_region(ir)
+    inset = falses(nblocks) # guards + blocks their execution is control-dependent on
+    for tbb = 1:nblocks
+        region[tbb] || continue
+        for pbb in ir.cfg.blocks[tbb].preds
+            if !region[pbb]
+                # the check itself branching on data cannot be forced soundly
+                isdatabranch[pbb] && return nothing
+                inset[pbb] = true
+            end
+        end
+    end
+    # transitive control dependence: a block `g` is control-dependent on branch
+    # block `b` (via successor `s`) if `g` postdominates `s` but not `b`. Data
+    # branches with check-relevant blocks under exactly one arm get that arm
+    # forced; under both arms we must give up.
+    # NB: compute post-dominance on the CFG as the shadow will see it: edges
+    # into the must-throw region are removed (in the shadow a failed check
+    # simply returns false, so nothing downstream of it matters) - otherwise
+    # every check's throw exit makes all later code spuriously control-dependent
+    # on it.
+    blocks = BasicBlock[copy(b) for b in ir.cfg.blocks]
+    for tbb = 1:nblocks
+        region[tbb] || continue
+        for pbb in copy(blocks[tbb].preds)
+            region[pbb] && continue
+            deleteat!(blocks[pbb].succs, findfirst(==(tbb), blocks[pbb].succs)::Int)
+            deleteat!(blocks[tbb].preds, findfirst(==(pbb), blocks[tbb].preds)::Int)
+        end
+    end
+    pdt = construct_postdomtree(blocks)
+    # first converge the set of check-relevant blocks
+    changed = true
+    while changed
+        changed = false
+        for b = 1:nblocks
+            inset[b] && continue
+            term = ir.stmts[last(ir.cfg.blocks[b].stmts)][:stmt]
+            isa(term, GotoIfNot) || continue
+            for g = 1:nblocks
+                inset[g] || continue
+                postdominates(pdt, g, b) && continue
+                for s in ir.cfg.blocks[b].succs
+                    if postdominates(pdt, g, s)
+                        inset[b] = true
+                        changed = true
+                        break
+                    end
+                end
+                inset[b] && break
+            end
+        end
+    end
+    # then decide the forced arm for each data branch against the full set
+    plan = Pair{Int,Int}[]
+    for b = 1:nblocks
+        isdatabranch[b] || continue
+        term = ir.stmts[last(ir.cfg.blocks[b].stmts)][:stmt]
+        isa(term, GotoIfNot) || continue
+        local via::Int = 0
+        for g = 1:nblocks
+            inset[g] || continue
+            postdominates(pdt, g, b) && continue
+            for s in ir.cfg.blocks[b].succs
+                if postdominates(pdt, g, s)
+                    if via == 0
+                        via = s
+                    elseif via != s
+                        return nothing # check-relevant blocks under both arms
+                    end
+                end
+            end
+        end
+        via == 0 && continue
+        push!(plan, b => via)
+    end
+    return plan
+end
+
+# Apply a shadow branch plan: replace each data branch by an unconditional
+# branch to the forced successor, killing the other edge (and any phi entries
+# for it in the abandoned successor chain)
+function force_shadow_branches!(ir::IRCode, plan::Vector{Pair{Int,Int}})
+    stripper = (from::Int, to::Int) -> begin
+        for i in ir.cfg.blocks[to].stmts
+            stmt = ir.stmts[i][:stmt]
+            isa(stmt, PhiNode) || continue
+            idx = findfirst(==(Int32(from)), stmt.edges)
+            idx === nothing && continue
+            deleteat!(stmt.edges, idx)
+            deleteat!(stmt.values, idx)
+        end
+    end
+    for (bb, keep) in plan
+        block = ir.cfg.blocks[bb]
+        terminst = ir.stmts[last(block.stmts)]
+        term = terminst[:stmt]
+        # an earlier forcing may have already disconnected this branch
+        isa(term, GotoIfNot) || continue
+        other = term.dest == keep ? bb + 1 : term.dest
+        (keep in block.succs && other in block.succs) || continue
+        if keep == bb + 1
+            terminst[:stmt] = nothing
+            terminst[:type] = Nothing
+        else
+            terminst[:stmt] = GotoNode(keep)
+            terminst[:type] = Any
+        end
+        kill_edge!(ir, bb, other, stripper)
+    end
+    # clear out blocks that became unreachable (verifier hygiene)
+    for bbidx = 2:length(ir.cfg.blocks)
+        bb = ir.cfg.blocks[bbidx]
+        isempty(bb.preds) || continue
+        for i in bb.stmts
+            inst = ir.stmts[i]
+            if i == last(bb.stmts)
+                inst[:stmt] = ReturnNode() # unreachable
+            else
+                inst[:stmt] = nothing
+                inst[:type] = Nothing
+                inst[:flag] = IR_FLAGS_REMOVABLE
+            end
+        end
+    end
+    return ir
+end
+
 # Check that the callee IR consists only of statements that the nothrow
 # effect-split transformations below can handle: any statement that may throw
 # must either deterministically throw with no other side effects (these are
-# replaced by the transformations), or be one of the known-safe node kinds.
+# replaced by the transformations), or be one of the known-safe node kinds;
+# any non-throwing side effect must be a deletable element store.
 function scan_nothrow_split_ir(ir::IRCode)
     for i = 1:length(ir.stmts)
         inst = ir.stmts[i]
@@ -1757,9 +1969,23 @@ function scan_nothrow_split_ir(ir::IRCode)
             continue
         end
         isa(stmt, EnterNode) && return false # exception handlers not supported
-        has_flag(inst[:flag], IR_FLAG_NOTHROW) && continue
+        if isexpr(stmt, :loopinfo) || isexpr(stmt, :gc_preserve_begin) || isexpr(stmt, :gc_preserve_end)
+            continue # metadata-like statements, kept as-is in the shadow
+        end
+        flag = inst[:flag]
+        if isa(stmt, GotoIfNot)
+            has_flag(flag, IR_FLAG_NOTHROW) || return false
+            continue
+        end
+        if has_flag(flag, IR_FLAG_NOTHROW)
+            has_flag(flag, IR_FLAG_EFFECT_FREE) && continue
+            # A non-throwing statement with side effects cannot become part of
+            # the (freely insertable) check unless the shadow can delete it
+            is_element_store(ir, stmt) && continue
+            return false
+        end
         if isa(stmt, Expr) && inst[:type] === Union{} &&
-           has_flag(inst[:flag], IR_FLAG_EFFECT_FREE | IR_FLAG_TERMINATES)
+           has_flag(flag, IR_FLAG_EFFECT_FREE | IR_FLAG_TERMINATES)
             continue # deterministically-throwing statement with no other effects
         end
         return false
@@ -1768,12 +1994,14 @@ function scan_nothrow_split_ir(ir::IRCode)
 end
 
 # Synthesize a `:nothrow` precondition check ("nothrow shadow") from the callee's
-# IR: deterministically-throwing statements become no-ops, the unreachable
-# terminators after them become `return false`, and value returns become
-# `return true`. The CFG is left unchanged. The result is `true` only if the
-# callee, called with the same arguments, takes a path that does not throw.
-function synthesize_nothrow_check_ir(ir0::IRCode)
+# IR: data-dependent branches are forced per `plan`, deterministically-throwing
+# statements and element stores become no-ops, the unreachable terminators after
+# throws become `return false`, and value returns become `return true`. The
+# result is `true` only if the callee, called with the same arguments, takes a
+# path that does not throw.
+function synthesize_nothrow_check_ir(ir0::IRCode, plan::Vector{Pair{Int,Int}})
     ir = copy(ir0)
+    isempty(plan) || force_shadow_branches!(ir, plan)
     for i = 1:length(ir.stmts)
         inst = ir.stmts[i]
         stmt = inst[:stmt]
@@ -1789,9 +2017,15 @@ function synthesize_nothrow_check_ir(ir0::IRCode)
             inst[:stmt] = nothing
             inst[:type] = Nothing
             inst[:flag] = IR_FLAGS_REMOVABLE
+        elseif is_element_store(ir, stmt)
+            # side effects are not part of the check (`shadow_branch_plan`
+            # established that deleting them cannot change which checks run)
+            inst[:stmt] = nothing
+            inst[:type] = Nothing
+            inst[:flag] = IR_FLAGS_REMOVABLE
         end
     end
-    return compact!(ir)
+    return compact!(ir, true)
 end
 
 # Compute the set of blocks all of whose paths lead to a deterministically-
@@ -1922,7 +2156,11 @@ function analyze_invoke_split_effects_synthesis(ir::IRCode, idx::Int, stmt::Expr
     inner_ft = inner_argtypes[1]
     has_free_typevars(inner_ft) && return nothing
     inner_sig = Signature(singleton_type(inner_ft), inner_ft, inner_argtypes)
-    cases = compute_inlining_cases(info, flag, inner_sig, state)
+    # Force inline-eligibility for the split analysis: without `@inbounds`, a
+    # kernel's checked body often exceeds the inlining cost threshold, but the
+    # assume case will be inlined WITHOUT the checks (roughly the size the
+    # inliner would have accepted) and the fallback is outlined into a call
+    cases = compute_inlining_cases(info, flag | IR_FLAG_INLINE, inner_sig, state)
     cases === nothing && return nothing
     cases, handled_all_cases, fully_covered, _ = cases
     (handled_all_cases && fully_covered && length(cases) == 1) || return nothing
@@ -1932,8 +2170,10 @@ function analyze_invoke_split_effects_synthesis(ir::IRCode, idx::Int, stmt::Expr
     # If the callee is already nothrow, there is nothing to split
     is_nothrow(else_todo.effects) && return nothing
     scan_nothrow_split_ir(else_todo.ir) || return nothing
+    plan = shadow_branch_plan(else_todo.ir)
+    plan === nothing && return nothing
     assumed_effects = Effects(else_todo.effects; nothrow=true)
-    check_case = InliningTodo(else_todo.mi, synthesize_nothrow_check_ir(else_todo.ir),
+    check_case = InliningTodo(else_todo.mi, synthesize_nothrow_check_ir(else_todo.ir, plan),
         else_todo.spec_info, else_todo.di, assumed_effects)
     assume_case = InliningTodo(else_todo.mi, assume_nothrow_ir(else_todo.ir),
         else_todo.spec_info, else_todo.di, assumed_effects)

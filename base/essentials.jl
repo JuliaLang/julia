@@ -944,6 +944,33 @@ macro inbounds(blk)
 end
 
 """
+    @split_effects which f(args...)
+
+Evaluate `f(args...)`, hinting to the compiler that it may split the call into
+a fast path under which the effect `which` (currently only `:nothrow`) is
+assumed, guarded by a precondition check that establishes the assumption, and
+a fallback to the plain call. The precondition is either declared on the
+method of `f` with the conditional-effects form of [`Base.@assume_effects`](@ref),
+or synthesized by the compiler from the method's code.
+
+Unlike [`@inbounds`](@ref), this is always safe: if no usable precondition is
+found, the call behaves exactly like `f(args...)`.
+
+See also [`Core.invoke_split_effects`](@ref).
+"""
+macro split_effects(which, ex)
+    isa(which, QuoteNode) && (which = which.value)
+    isa(which, Symbol) || throw(ArgumentError("`@split_effects` expects an effect name Symbol as its first argument"))
+    (isa(ex, Expr) && ex.head === :call) || throw(ArgumentError("`@split_effects` expects a function call"))
+    for a in ex.args
+        if isa(a, Expr) && (a.head === :parameters || a.head === :kw)
+            throw(ArgumentError("`@split_effects` does not support keyword arguments"))
+        end
+    end
+    return esc(Expr(:call, GlobalRef(Core, :invoke_split_effects), QuoteNode(which), ex.args...))
+end
+
+"""
     @label name
 
 Labels a statement with the symbolic label `name`. The label marks the end-point

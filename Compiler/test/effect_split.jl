@@ -138,4 +138,68 @@ end
     @test occursin("esplit_sum_partial", ir_split) # the outlined fallback
 end
 
+function esplit_incr!(A::Vector{Int}, n::Int)
+    for i = 1:n
+        A[i] += 1
+    end
+    return nothing
+end
+esplit_incr_caller!(A, n) = Core.invoke_split_effects(:nothrow, esplit_incr!, A, n)
+
+@testset "store-tolerant shadow: read-modify-write kernel" begin
+    A = zeros(Int, 10)
+    esplit_incr_caller!(A, 10)
+    @test all(==(1), A) # the shadow must not re-run the stores
+    @test_throws BoundsError esplit_incr_caller!(A, 11)
+    @test all(==(2), A[1:10]) # the fallback ran the loop exactly once
+end
+
+function esplit_fminmax!(R::Vector{Float64}, A::Vector{Float64}, n::Int)
+    for i = 1:n
+        v = A[i]
+        if v > R[1] # data-dependent branch guarding a store (and its check)
+            R[1] = v
+        end
+    end
+    return R
+end
+esplit_fminmax_caller!(R, A, n) = Core.invoke_split_effects(:nothrow, esplit_fminmax!, R, A, n)
+
+@testset "multiple splits in one block" begin
+    # two straight-line effect splits in a single basic block used to crash
+    # the CFG bookkeeping in batch_inline! (stale split_targets entry)
+    two_gets(A, i, j) = Core.invoke_split_effects(:nothrow, getindex, A, i) +
+                        Core.invoke_split_effects(:nothrow, getindex, A, j)
+    A = [10, 20, 30]
+    @test two_gets(A, 1, 3) === 40
+    @test_throws BoundsError two_gets(A, 1, 4)
+    function get_set!(B, i, j)
+        x = Core.invoke_split_effects(:nothrow, getindex, B, i)
+        Core.invoke_split_effects(:nothrow, setindex!, B, x, j)
+        return B
+    end
+    @test get_set!(copy(A), 1, 2) == [10, 10, 30]
+    @test_throws BoundsError get_set!(A, 1, 4)
+end
+
+@testset "shadow branch forcing: reduction kernel" begin
+    R = [-Inf]; A = [1.0, 3.0, 2.0]
+    esplit_fminmax_caller!(R, A, 3)
+    @test R[1] == 3.0
+    @test_throws BoundsError esplit_fminmax_caller!(R, A, 4)
+    @test_throws BoundsError esplit_fminmax_caller!(Float64[], A, 1)
+end
+
+if !CHECK_BOUNDS_OFF && !COVERAGE
+    @testset "store shadows: optimized IR structure" begin
+        for (caller, callee, tt) in ((esplit_incr_caller!, :esplit_incr!, (Vector{Int}, Int)),
+                                     (esplit_fminmax_caller!, :esplit_fminmax!, (Vector{Float64}, Vector{Float64}, Int)))
+            src = code_typed1(caller, tt)
+            @test count(@nospecialize(x)->invoked_name(x) === callee, src.code) == 1
+            ir = sprint(code_llvm, caller, tt)
+            @test !occursin("throw_boundserror", ir)
+        end
+    end
+end
+
 end # !CHECK_BOUNDS_OFF && !COVERAGE
