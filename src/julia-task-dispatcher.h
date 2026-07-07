@@ -410,9 +410,11 @@ void JuliaTaskDispatcher::work_until(future_base &F) {
   InCooperativeContext = true;
   dispatcher_sigdefer_guard defer;
   jl_unique_gcsafe_lock Lock{DispatchMutex};
+#ifndef _OS_WINDOWS_
   int StalledSeconds = 0;
   bool DumpedStall = false;
   uint64_t LastCompleted = TasksCompleted.load(std::memory_order_relaxed);
+#endif
   while (!F.ready()) {
     process_tasks(Lock);
 
@@ -420,6 +422,13 @@ void JuliaTaskDispatcher::work_until(future_base &F) {
     if (F.ready())
       break;
 
+#ifdef _OS_WINDOWS_
+    // A timed condition-variable wait would reference the 64-bit-time
+    // pthread_cond_timedwait, which Julia's winpthreads import library
+    // does not provide, so the stall diagnostic's periodic tick is
+    // unavailable here: wait untimed for other threads to finish work.
+    Lock.wait(WorkFinishedCV);
+#else
     // If we get here, our queue is empty but the future isn't ready.
     // We need to wait for other threads to finish work that should
     // complete our future. Wait in slices and self-diagnose: if the
@@ -456,6 +465,7 @@ void JuliaTaskDispatcher::work_until(future_base &F) {
     else {
       StalledSeconds = 0;
     }
+#endif
   }
   InCooperativeContext = WasCooperative;
 }
