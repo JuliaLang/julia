@@ -1284,26 +1284,8 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     jl_sym_t *name;
     jl_method_t *m = NULL;
     jl_value_t *argtype = NULL;
-    jl_svec_t *new_atypes = NULL;
-    JL_GC_PUSH5(&ft, &f, &m, &argtype, &new_atypes);
+    JL_GC_PUSH4(&ft, &f, &m, &argtype);
     size_t i, na = jl_svec_len(atypes);
-
-    if (jl_is_typeegal(ft)) {
-        // Lowering spells callable-value method definitions with `Core.Typeof`.
-        // Type-valued callees still define methods at the equality level, so
-        // equal UnionAll spellings share the constructor method they define.
-        ft = (jl_value_t*)jl_wrap_Type(jl_typeegal_T(ft));
-        new_atypes = jl_svec_copy(atypes);
-        jl_svecset(new_atypes, 0, ft);
-        atypes = new_atypes;
-    }
-    else if (jl_kwcall_type && ft == (jl_value_t*)jl_kwcall_type && nargs >= 3 &&
-             jl_is_typeegal(jl_svecref(atypes, 2))) {
-        // likewise for a keyword sorter, whose callee self-type is argument 2
-        new_atypes = jl_svec_copy(atypes);
-        jl_svecset(new_atypes, 2, jl_wrap_Type(jl_typeegal_T(jl_svecref(new_atypes, 2))));
-        atypes = new_atypes;
-    }
 
     argtype = jl_apply_tuple_type(atypes, 1);
     if (!jl_is_datatype(argtype))

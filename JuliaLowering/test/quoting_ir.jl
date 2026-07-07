@@ -77,7 +77,7 @@ function Base.:(==)() end
 #---------------------
 1   TestMod.Base
 2   (call top.getproperty %₁ :==)
-3   (call core.Typeof %₂)
+3   (call core.TypeEqOf %₂)
 4   (call core.svec %₃)
 5   (call core.svec)
 6   SourceLocation::1:10

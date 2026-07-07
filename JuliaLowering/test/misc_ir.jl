@@ -560,7 +560,7 @@ const f(x::Int)::Int = x+1
 1   (method TestMod.f)
 2   latestworld
 3   TestMod.f
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   TestMod.Int
 6   (call core.svec %₄ %₅)
 7   (call core.svec)

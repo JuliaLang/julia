@@ -17,7 +17,7 @@ end
 1   (method TestMod.f)
 2   latestworld
 3   TestMod.f
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄ core.Any core.Any core.Any)
 6   (call core.svec)
 7   SourceLocation::1:10
@@ -40,7 +40,7 @@ end
 1   (method TestMod.f)
 2   latestworld
 3   TestMod.f
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   TestMod.T
 6   (call core.svec %₄ %₅ core.Any)
 7   (call core.svec)
@@ -63,7 +63,7 @@ end
 1   (method TestMod.f)
 2   latestworld
 3   TestMod.f
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   TestMod.T
 6   (call core.svec %₄ core.Any %₅)
 7   (call core.svec)
@@ -86,7 +86,7 @@ end
 1   (method TestMod.f)
 2   latestworld
 3   TestMod.f
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   (call core.apply_type core.Vararg core.Any)
 6   (call core.svec %₄ core.Any %₅)
 7   (call core.svec)
@@ -109,7 +109,7 @@ end
 1   (method TestMod.f)
 2   latestworld
 3   TestMod.f
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   TestMod.T
 6   (call core.apply_type core.Vararg %₅)
 7   (call core.svec %₄ core.Any %₆)
@@ -148,7 +148,7 @@ end
 4   (= slot₂/V (call core.TypeVar :V))
 5   (= slot₃/T (call core.TypeVar :T))
 6   TestMod.f
-7   (call core.Typeof %₆)
+7   (call core.TypeEqOf %₆)
 8   slot₃/T
 9   slot₁/U
 10  slot₂/V
@@ -182,7 +182,7 @@ end
 4   TestMod.Y
 5   (= slot₁/T (call core.TypeVar :T %₃ %₄))
 6   TestMod.f
-7   (call core.Typeof %₆)
+7   (call core.TypeEqOf %₆)
 8   TestMod.S
 9   slot₁/T
 10  (call core.apply_type %₈ %₉)
@@ -210,7 +210,7 @@ end
 3   TestMod.X
 4   (= slot₁/T (call core.TypeVar :T %₃ core.Any))
 5   TestMod.f
-6   (call core.Typeof %₅)
+6   (call core.TypeEqOf %₅)
 7   TestMod.S
 8   slot₁/T
 9   (call core.apply_type %₇ %₈)
@@ -242,7 +242,7 @@ end
 6   (call core.apply_type %₄ %₅)
 7   (= slot₂/S (call core.TypeVar :S %₆))
 8   TestMod.f
-9   (call core.Typeof %₈)
+9   (call core.TypeEqOf %₈)
 10  slot₂/S
 11  (call core.svec %₉ core.Any %₁₀)
 12  slot₁/T
@@ -272,7 +272,7 @@ end
 1   (method TestMod.f)
 2   latestworld
 3   TestMod.f
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄ core.Any)
 6   (call core.svec)
 7   SourceLocation::1:10
@@ -308,7 +308,7 @@ end
 1   (method TestMod.f)
 2   latestworld
 3   TestMod.f
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄ core.Any core.Any core.Any)
 6   (call core.svec)
 7   SourceLocation::1:10
@@ -418,7 +418,7 @@ end
 #---------------------
 1   TestMod.A
 2   (call top.getproperty %₁ :f)
-3   (call core.Typeof %₂)
+3   (call core.TypeEqOf %₂)
 4   (call core.svec %₃)
 5   (call core.svec)
 6   SourceLocation::1:10
@@ -456,7 +456,7 @@ function var".f"(); end
 1   (method TestMod..f)
 2   latestworld
 3   TestMod..f
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄)
 6   (call core.svec)
 7   SourceLocation::1:10
@@ -487,7 +487,7 @@ end
 1   (method TestMod.f)
 2   latestworld
 3   TestMod.f
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   TestMod.T
 6   (call core.svec %₄ %₅)
 7   (call core.svec)
@@ -501,7 +501,7 @@ end
     4   (return %₃)
 11  latestworld
 12  TestMod.f
-13  (call core.Typeof %₁₂)
+13  (call core.TypeEqOf %₁₂)
 14  TestMod.T
 15  TestMod.S
 16  (call core.svec %₁₃ %₁₄ %₁₅)
@@ -514,7 +514,7 @@ end
     2   (return %₁)
 21  latestworld
 22  TestMod.f
-23  (call core.Typeof %₂₂)
+23  (call core.TypeEqOf %₂₂)
 24  TestMod.T
 25  TestMod.S
 26  TestMod.U
@@ -539,7 +539,7 @@ end
 1   (method TestMod.f)
 2   latestworld
 3   TestMod.f
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄)
 6   (call core.svec)
 7   SourceLocation::1:10
@@ -553,7 +553,7 @@ end
     5   (return %₄)
 10  latestworld
 11  TestMod.f
-12  (call core.Typeof %₁₁)
+12  (call core.TypeEqOf %₁₁)
 13  (call core.svec %₁₂ core.Any)
 14  (call core.svec)
 15  SourceLocation::1:10
@@ -564,7 +564,7 @@ end
     2   (return %₁)
 18  latestworld
 19  TestMod.f
-20  (call core.Typeof %₁₉)
+20  (call core.TypeEqOf %₁₉)
 21  (call core.svec %₂₀ core.Any core.Any)
 22  (call core.svec)
 23  SourceLocation::1:10
@@ -586,7 +586,7 @@ end
 1   (method TestMod.f)
 2   latestworld
 3   TestMod.f
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   TestMod.Int
 6   (call core.svec %₄ %₅)
 7   (call core.svec)
@@ -600,7 +600,7 @@ end
     4   (return %₃)
 11  latestworld
 12  TestMod.f
-13  (call core.Typeof %₁₂)
+13  (call core.TypeEqOf %₁₂)
 14  TestMod.Int
 15  (call core.svec %₁₃ %₁₄ core.Any)
 16  (call core.svec)
@@ -612,7 +612,7 @@ end
     2   (return %₁)
 20  latestworld
 21  TestMod.f
-22  (call core.Typeof %₂₁)
+22  (call core.TypeEqOf %₂₁)
 23  TestMod.Int
 24  (call core.svec %₂₂ %₂₃ core.Any core.Any)
 25  (call core.svec)
@@ -635,7 +635,7 @@ end
 1   (method TestMod.f)
 2   latestworld
 3   TestMod.f
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   TestMod.Int
 6   (call core.svec %₄ %₅)
 7   (call core.svec)
@@ -647,7 +647,7 @@ end
     2   (return %₁)
 11  latestworld
 12  TestMod.f
-13  (call core.Typeof %₁₂)
+13  (call core.TypeEqOf %₁₂)
 14  TestMod.Int
 15  (call core.svec %₁₃ %₁₄ core.Any)
 16  (call core.svec)
@@ -671,7 +671,7 @@ end
 2   latestworld
 3   (= slot₁/T (call core.TypeVar :T))
 4   TestMod.f
-5   (call core.Typeof %₄)
+5   (call core.TypeEqOf %₄)
 6   slot₁/T
 7   (call core.svec %₅ %₆)
 8   slot₁/T
@@ -689,7 +689,7 @@ end
 15  slot₁/T
 16  (= slot₂/S (call core.TypeVar :S %₁₅))
 17  TestMod.f
-18  (call core.Typeof %₁₇)
+18  (call core.TypeEqOf %₁₇)
 19  slot₁/T
 20  slot₂/S
 21  (call core.svec %₁₈ %₁₉ %₂₀)
@@ -709,7 +709,7 @@ end
 32  slot₂/S
 33  (= slot₃/U (call core.TypeVar :U %₃₂))
 34  TestMod.f
-35  (call core.Typeof %₃₄)
+35  (call core.TypeEqOf %₃₄)
 36  slot₁/T
 37  slot₂/S
 38  slot₃/U
@@ -739,7 +739,7 @@ end
 1   (method TestMod.f)
 2   latestworld
 3   TestMod.f
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄ core.Any)
 6   (call core.svec)
 7   SourceLocation::1:10
@@ -757,7 +757,7 @@ end
 14  (call core.apply_type %₁₂ %₁₃)
 15  (= slot₂/S (call core.TypeVar :S %₁₄))
 16  TestMod.f
-17  (call core.Typeof %₁₆)
+17  (call core.TypeEqOf %₁₆)
 18  slot₂/S
 19  (call core.svec %₁₇ core.Any %₁₈)
 20  slot₁/T
@@ -777,7 +777,7 @@ end
 31  (= slot₂/S (call core.TypeVar :S %₃₀))
 32  (= slot₃/U (call core.TypeVar :U))
 33  TestMod.f
-34  (call core.Typeof %₃₃)
+34  (call core.TypeEqOf %₃₃)
 35  slot₂/S
 36  slot₃/U
 37  (call core.svec %₃₄ core.Any %₃₅ %₃₆)
@@ -807,7 +807,7 @@ end
 1   (method TestMod.f)
 2   latestworld
 3   TestMod.f
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄)
 6   (call core.svec)
 7   SourceLocation::1:10
@@ -818,7 +818,7 @@ end
     2   (return %₁)
 10  latestworld
 11  TestMod.f
-12  (call core.Typeof %₁₁)
+12  (call core.TypeEqOf %₁₁)
 13  (call core.apply_type core.Vararg core.Any)
 14  (call core.svec %₁₂ core.Any %₁₃)
 15  (call core.svec)
@@ -853,7 +853,7 @@ end
 1   (method TestMod.f)
 2   latestworld
 3   TestMod.f
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄)
 6   (call core.svec)
 7   SourceLocation::1:10
@@ -864,7 +864,7 @@ end
     2   (return %₁)
 10  latestworld
 11  TestMod.f
-12  (call core.Typeof %₁₁)
+12  (call core.TypeEqOf %₁₁)
 13  (call core.apply_type core.Vararg core.Any)
 14  (call core.svec %₁₂ %₁₃)
 15  (call core.svec)
@@ -887,7 +887,7 @@ end
 1   (method TestMod.f)
 2   latestworld
 3   TestMod.f
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄)
 6   (call core.svec)
 7   SourceLocation::1:10
@@ -899,7 +899,7 @@ end
     3   (return %₂)
 10  latestworld
 11  TestMod.f
-12  (call core.Typeof %₁₁)
+12  (call core.TypeEqOf %₁₁)
 13  (call core.apply_type core.Vararg core.Any)
 14  (call core.svec %₁₂ %₁₃)
 15  (call core.svec)
@@ -921,7 +921,7 @@ end
 1   (method TestMod.f)
 2   latestworld
 3   TestMod.f
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄ core.Any core.Any core.Any)
 6   (call core.svec)
 7   SourceLocation::1:10
@@ -947,7 +947,7 @@ end
 1   (method TestMod.f)
 2   latestworld
 3   TestMod.f
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄)
 6   (call core.svec)
 7   SourceLocation::1:10
@@ -959,7 +959,7 @@ end
     3   (return %₂)
 10  latestworld
 11  TestMod.f
-12  (call core.Typeof %₁₁)
+12  (call core.TypeEqOf %₁₁)
 13  TestMod.T
 14  (call core.apply_type core.Vararg %₁₃)
 15  (call core.svec %₁₂ %₁₄)
@@ -1119,7 +1119,7 @@ end
 1   (method TestMod.f)
 2   latestworld
 3   TestMod.f
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄)
 6   (call core.svec)
 7   SourceLocation::1:10
@@ -1131,7 +1131,7 @@ end
     3   (return %₂)
 10  latestworld
 11  TestMod.f
-12  (call core.Typeof %₁₁)
+12  (call core.TypeEqOf %₁₁)
 13  (call core.svec %₁₂ core.Any)
 14  (call core.svec)
 15  SourceLocation::1:10
@@ -1158,7 +1158,7 @@ function f(_, _); end
 1   (method TestMod.f)
 2   latestworld
 3   TestMod.f
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄ core.Any core.Any)
 6   (call core.svec)
 7   SourceLocation::1:10
@@ -1178,7 +1178,7 @@ end
 1   (method TestMod.f)
 2   latestworld
 3   TestMod.f
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄ core.Any core.Any)
 6   (call core.svec)
 7   SourceLocation::1:10
@@ -1203,7 +1203,7 @@ end
 1   (method TestMod.f)
 2   latestworld
 3   TestMod.f
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄ core.Any core.Any core.Any)
 6   (call core.svec)
 7   SourceLocation::1:10
@@ -1277,7 +1277,7 @@ end
 1   (method TestMod.f)
 2   latestworld
 3   TestMod.f
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄)
 6   (call core.svec)
 7   SourceLocation::1:10
@@ -1300,7 +1300,7 @@ end
 1   (method TestMod.f)
 2   latestworld
 3   TestMod.f
-4   (call core.Typeof %₃)
+4   (call core.TypeEqOf %₃)
 5   (call core.svec %₄)
 6   (call core.svec)
 7   SourceLocation::1:10
@@ -1326,7 +1326,7 @@ end
 3   (method TestMod.f)
 4   latestworld
 5   TestMod.f
-6   (call core.Typeof %₅)
+6   (call core.TypeEqOf %₅)
 7   (call core.svec %₆)
 8   (call core.svec)
 9   SourceLocation:nothing:4:0
@@ -1404,11 +1404,11 @@ end
 3   (method TestMod.f_kw_simple)
 4   latestworld
 5   TestMod.#kw_body#f_kw_simple#0
-6   (call core.Typeof %₅)
+6   (call core.TypeEqOf %₅)
 7   TestMod.Char
 8   TestMod.Bool
 9   TestMod.f_kw_simple
-10  (call core.Typeof %₉)
+10  (call core.TypeEqOf %₉)
 11  TestMod.Int
 12  TestMod.Float64
 13  (call core.svec %₆ %₇ %₈ %₁₀ %₁₁ %₁₂)
@@ -1422,7 +1422,7 @@ end
     3   (return %₂)
 18  latestworld
 19  TestMod.f_kw_simple
-20  (call core.Typeof %₁₉)
+20  (call core.TypeEqOf %₁₉)
 21  (call core.svec %₂₀)
 22  (call core.svec)
 23  SourceLocation::1:10
@@ -1435,7 +1435,7 @@ end
     4   (return %₃)
 26  latestworld
 27  TestMod.f_kw_simple
-28  (call core.Typeof %₂₇)
+28  (call core.TypeEqOf %₂₇)
 29  TestMod.Int
 30  (call core.svec %₂₈ %₂₉)
 31  (call core.svec)
@@ -1447,7 +1447,7 @@ end
     2   (return %₁)
 35  latestworld
 36  TestMod.f_kw_simple
-37  (call core.Typeof %₃₆)
+37  (call core.TypeEqOf %₃₆)
 38  TestMod.Int
 39  TestMod.Float64
 40  (call core.svec %₃₇ %₃₈ %₃₉)
@@ -1462,7 +1462,7 @@ end
 45  latestworld
 46  (call core.typeof core.kwcall)
 47  TestMod.f_kw_simple
-48  (call core.Typeof %₄₇)
+48  (call core.TypeEqOf %₄₇)
 49  (call core.svec %₄₆ core.NamedTuple %₄₈)
 50  (call core.svec)
 51  SourceLocation::1:10
@@ -1476,7 +1476,7 @@ end
 54  latestworld
 55  (call core.typeof core.kwcall)
 56  TestMod.f_kw_simple
-57  (call core.Typeof %₅₆)
+57  (call core.TypeEqOf %₅₆)
 58  TestMod.Int
 59  (call core.svec %₅₅ core.NamedTuple %₅₇ %₅₈)
 60  (call core.svec)
@@ -1489,7 +1489,7 @@ end
 64  latestworld
 65  (call core.typeof core.kwcall)
 66  TestMod.f_kw_simple
-67  (call core.Typeof %₆₆)
+67  (call core.TypeEqOf %₆₆)
 68  TestMod.Int
 69  TestMod.Float64
 70  (call core.svec %₆₅ core.NamedTuple %₆₇ %₆₈ %₆₉)
@@ -1553,9 +1553,9 @@ function f_kw_placeholders(; _=1, _=2); end
 3   (method TestMod.f_kw_placeholders)
 4   latestworld
 5   TestMod.#kw_body#f_kw_placeholders#0
-6   (call core.Typeof %₅)
+6   (call core.TypeEqOf %₅)
 7   TestMod.f_kw_placeholders
-8   (call core.Typeof %₇)
+8   (call core.TypeEqOf %₇)
 9   (call core.svec %₆ core.Any core.Any %₈)
 10  (call core.svec)
 11  SourceLocation::1:10
@@ -1566,7 +1566,7 @@ function f_kw_placeholders(; _=1, _=2); end
     2   (return core.nothing)
 14  latestworld
 15  TestMod.f_kw_placeholders
-16  (call core.Typeof %₁₅)
+16  (call core.TypeEqOf %₁₅)
 17  (call core.svec %₁₆)
 18  (call core.svec)
 19  SourceLocation::1:10
@@ -1579,7 +1579,7 @@ function f_kw_placeholders(; _=1, _=2); end
 22  latestworld
 23  (call core.typeof core.kwcall)
 24  TestMod.f_kw_placeholders
-25  (call core.Typeof %₂₄)
+25  (call core.TypeEqOf %₂₄)
 26  (call core.svec %₂₃ core.NamedTuple %₂₅)
 27  (call core.svec)
 28  SourceLocation::1:10
@@ -1624,10 +1624,10 @@ end
 3   (method TestMod.f_kw_slurp_simple)
 4   latestworld
 5   TestMod.#kw_body#f_kw_slurp_simple#0
-6   (call core.Typeof %₅)
+6   (call core.TypeEqOf %₅)
 7   (call top.pairs core.NamedTuple)
 8   TestMod.f_kw_slurp_simple
-9   (call core.Typeof %₈)
+9   (call core.TypeEqOf %₈)
 10  (call core.svec %₆ %₇ %₉)
 11  (call core.svec)
 12  SourceLocation::1:10
@@ -1639,7 +1639,7 @@ end
     3   (return %₂)
 15  latestworld
 16  TestMod.f_kw_slurp_simple
-17  (call core.Typeof %₁₆)
+17  (call core.TypeEqOf %₁₆)
 18  (call core.svec %₁₇)
 19  (call core.svec)
 20  SourceLocation::1:10
@@ -1654,7 +1654,7 @@ end
 23  latestworld
 24  (call core.typeof core.kwcall)
 25  TestMod.f_kw_slurp_simple
-26  (call core.Typeof %₂₅)
+26  (call core.TypeEqOf %₂₅)
 27  (call core.svec %₂₄ core.NamedTuple %₂₆)
 28  (call core.svec)
 29  SourceLocation::1:10
@@ -1680,10 +1680,10 @@ end
 3   (method TestMod.f_kw_slurp)
 4   latestworld
 5   TestMod.#kw_body#f_kw_slurp#0
-6   (call core.Typeof %₅)
+6   (call core.TypeEqOf %₅)
 7   (call top.pairs core.NamedTuple)
 8   TestMod.f_kw_slurp
-9   (call core.Typeof %₈)
+9   (call core.TypeEqOf %₈)
 10  (call core.svec %₆ core.Any %₇ %₉)
 11  (call core.svec)
 12  SourceLocation::1:10
@@ -1695,7 +1695,7 @@ end
     3   (return %₂)
 15  latestworld
 16  TestMod.f_kw_slurp
-17  (call core.Typeof %₁₆)
+17  (call core.TypeEqOf %₁₆)
 18  (call core.svec %₁₇)
 19  (call core.svec)
 20  SourceLocation::1:10
@@ -1711,7 +1711,7 @@ end
 23  latestworld
 24  (call core.typeof core.kwcall)
 25  TestMod.f_kw_slurp
-26  (call core.Typeof %₂₅)
+26  (call core.TypeEqOf %₂₅)
 27  (call core.svec %₂₄ core.NamedTuple %₂₆)
 28  (call core.svec)
 29  SourceLocation::1:10
@@ -1752,10 +1752,10 @@ end
 3   (method TestMod.f_kw_slurp_dep)
 4   latestworld
 5   TestMod.#kw_body#f_kw_slurp_dep#0
-6   (call core.Typeof %₅)
+6   (call core.TypeEqOf %₅)
 7   (call top.pairs core.NamedTuple)
 8   TestMod.f_kw_slurp_dep
-9   (call core.Typeof %₈)
+9   (call core.TypeEqOf %₈)
 10  (call core.svec %₆ core.Any core.Any %₇ %₉)
 11  (call core.svec)
 12  SourceLocation::1:10
@@ -1767,7 +1767,7 @@ end
     3   (return %₂)
 15  latestworld
 16  TestMod.f_kw_slurp_dep
-17  (call core.Typeof %₁₆)
+17  (call core.TypeEqOf %₁₆)
 18  (call core.svec %₁₇)
 19  (call core.svec)
 20  SourceLocation::1:10
@@ -1786,7 +1786,7 @@ end
 23  latestworld
 24  (call core.typeof core.kwcall)
 25  TestMod.f_kw_slurp_dep
-26  (call core.Typeof %₂₅)
+26  (call core.TypeEqOf %₂₅)
 27  (call core.svec %₂₄ core.NamedTuple %₂₆)
 28  (call core.svec)
 29  SourceLocation::1:10
@@ -1837,11 +1837,11 @@ end
 5   (= slot₁/X (call core.TypeVar :X))
 6   (= slot₂/A (call core.TypeVar :A))
 7   TestMod.#kw_body#f_kw_sparams#0
-8   (call core.Typeof %₇)
+8   (call core.TypeEqOf %₇)
 9   slot₂/A
 10  slot₁/X
 11  TestMod.f_kw_sparams
-12  (call core.Typeof %₁₁)
+12  (call core.TypeEqOf %₁₁)
 13  slot₁/X
 14  (call core.svec %₈ %₉ %₁₀ %₁₂ %₁₃)
 15  slot₁/X
@@ -1859,7 +1859,7 @@ end
 21  latestworld
 22  (= slot₃/X (call core.TypeVar :X))
 23  TestMod.f_kw_sparams
-24  (call core.Typeof %₂₃)
+24  (call core.TypeEqOf %₂₃)
 25  slot₃/X
 26  (call core.svec %₂₄ %₂₅)
 27  slot₃/X
@@ -1877,7 +1877,7 @@ end
 33  (= slot₄/X (call core.TypeVar :X))
 34  (call core.typeof core.kwcall)
 35  TestMod.f_kw_sparams
-36  (call core.Typeof %₃₅)
+36  (call core.TypeEqOf %₃₅)
 37  slot₄/X
 38  (call core.svec %₃₄ core.NamedTuple %₃₆ %₃₇)
 39  slot₄/X
@@ -1936,10 +1936,10 @@ end
 3   (method TestMod.f_kw_slurp)
 4   latestworld
 5   TestMod.#kw_body#f_kw_slurp#1
-6   (call core.Typeof %₅)
+6   (call core.TypeEqOf %₅)
 7   (call top.pairs core.NamedTuple)
 8   TestMod.f_kw_slurp
-9   (call core.Typeof %₈)
+9   (call core.TypeEqOf %₈)
 10  (call core.svec %₆ core.Any core.Any %₇ %₉ core.Any)
 11  (call core.svec)
 12  SourceLocation::1:10
@@ -1951,7 +1951,7 @@ end
     3   (return core.nothing)
 15  latestworld
 16  TestMod.f_kw_slurp
-17  (call core.Typeof %₁₆)
+17  (call core.TypeEqOf %₁₆)
 18  (call core.svec %₁₇ core.Any)
 19  (call core.svec)
 20  SourceLocation::1:10
@@ -1969,7 +1969,7 @@ end
 23  latestworld
 24  (call core.typeof core.kwcall)
 25  TestMod.f_kw_slurp
-26  (call core.Typeof %₂₅)
+26  (call core.TypeEqOf %₂₅)
 27  (call core.svec %₂₄ core.NamedTuple %₂₆ core.Any)
 28  (call core.svec)
 29  SourceLocation::1:10
@@ -2074,7 +2074,7 @@ end
 5   (method TestMod.#f_only_generated@generator#0)
 6   latestworld
 7   TestMod.#f_only_generated@generator#0
-8   (call core.Typeof %₇)
+8   (call core.TypeEqOf %₇)
 9   (call core.svec %₈ JuliaLowering.MacroContext core.Any core.Any core.Any)
 10  (call core.svec)
 11  SourceLocation::1:21
@@ -2089,7 +2089,7 @@ end
     6   (return %₅)
 14  latestworld
 15  TestMod.f_only_generated
-16  (call core.Typeof %₁₅)
+16  (call core.TypeEqOf %₁₅)
 17  (call core.svec %₁₆ core.Any core.Any)
 18  (call core.svec)
 19  SourceLocation::1:21
@@ -2124,7 +2124,7 @@ end
 5   (method TestMod.#f_partially_generated@generator#0)
 6   latestworld
 7   TestMod.#f_partially_generated@generator#0
-8   (call core.Typeof %₇)
+8   (call core.TypeEqOf %₇)
 9   (call core.svec %₈ JuliaLowering.MacroContext core.Any core.Any core.Any)
 10  (call core.svec)
 11  SourceLocation::1:10
@@ -2138,7 +2138,7 @@ end
     5   (return %₄)
 14  latestworld
 15  TestMod.f_partially_generated
-16  (call core.Typeof %₁₅)
+16  (call core.TypeEqOf %₁₅)
 17  (call core.svec %₁₆ core.Any core.Any)
 18  (call core.svec)
 19  SourceLocation::1:10
