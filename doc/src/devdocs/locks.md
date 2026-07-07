@@ -149,7 +149,7 @@ the same level:
 
 The following locks are broken:
 
-* `loading.jl`: `require` and `register_root_module`
+* `require.jl`: `require` and `register_root_module`
 
    This file potentially has numerous problems. (fix: needs locks)
 
