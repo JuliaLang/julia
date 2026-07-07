@@ -238,6 +238,20 @@ JL_DLLEXPORT uint64_t jl_gc_get_hard_heap_limit(void)
     return jl_options.hard_heap_limit;
 }
 
+JL_DLLEXPORT void jl_gc_disable_no_ptls_no_safepoint(void)
+{
+    mmtk_disable_collection();
+    // Make sure a collection that is already pending or in progress (including the
+    // concurrent marking phase of a concurrent GC) has fully finished before returning,
+    // so the caller can rely on no collection touching memory from this point on.
+    mmtk_wait_for_no_collection_in_progress();
+}
+
+JL_DLLEXPORT void jl_gc_enable_no_ptls_no_safepoint(void)
+{
+    mmtk_enable_collection();
+}
+
 STATIC_INLINE void maybe_collect(jl_ptls_t ptls)
 {
     // Just do a safe point for general maybe_collect
@@ -265,7 +279,7 @@ static inline void malloc_maybe_collect(jl_ptls_t ptls, size_t sz)
 JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection) {
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
-    if (jl_atomic_load_acquire(&jl_gc_disable_counter)) {
+    if (!mmtk_is_collection_enabled()) {
         size_t localbytes = jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.allocd) + gc_num.interval;
         jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd, -(int64_t)gc_num.interval);
         static_assert(sizeof(_Atomic(uint64_t)) == sizeof(gc_num.deferred_alloc), "");
@@ -286,7 +300,7 @@ JL_DLLEXPORT void jl_gc_prepare_to_collect(void)
 
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
-    if (jl_atomic_load_acquire(&jl_gc_disable_counter)) {
+    if (!mmtk_is_collection_enabled()) {
         size_t localbytes = jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.allocd) + gc_num.interval;
         jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd, -(int64_t)gc_num.interval);
         static_assert(sizeof(_Atomic(uint64_t)) == sizeof(gc_num.deferred_alloc), "");
@@ -333,7 +347,7 @@ JL_DLLEXPORT void jl_gc_prepare_to_collect(void)
     gc_num.time_to_safepoint = duration;
     gc_num.total_time_to_safepoint += duration;
 
-    if (!jl_atomic_load_acquire(&jl_gc_disable_counter)) {
+    if (mmtk_is_collection_enabled()) {
         JL_LOCK_NOGC(&finalizers_lock); // all the other threads are stopped, so this does not make sense, right? otherwise, failing that, this seems like plausibly a deadlock
 #ifndef __clang_gcanalyzer__
         mmtk_block_thread_for_gc();

@@ -3493,6 +3493,16 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
     return recollect;
 }
 
+JL_DLLEXPORT void jl_gc_disable_no_ptls_no_safepoint(void)
+{
+    jl_atomic_fetch_add(&jl_gc_disable_counter, 1);
+}
+
+JL_DLLEXPORT void jl_gc_enable_no_ptls_no_safepoint(void)
+{
+    jl_atomic_fetch_add(&jl_gc_disable_counter, -1);
+}
+
 JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
 {
     JL_PROBE_GC_BEGIN(collection);

@@ -79,9 +79,6 @@ pub static BLOCK_FOR_GC: AtomicBool = AtomicBool::new(false);
 pub static WORLD_HAS_STOPPED: AtomicBool = AtomicBool::new(false);
 
 #[no_mangle]
-pub static DISABLED_GC: AtomicBool = AtomicBool::new(false);
-
-#[no_mangle]
 pub static USER_TRIGGERED_GC: AtomicIsize = AtomicIsize::new(0);
 
 lazy_static! {
@@ -104,7 +101,6 @@ extern "C" {
     pub fn jl_gc_scan_julia_exc_obj(obj: Address, closure: Address, process_slot: ProcessSlotFn);
     pub fn jl_gc_get_stackbase(tid: i16) -> usize;
     pub fn jl_throw_out_of_memory_error();
-    pub fn jl_get_gc_disable_counter() -> u32;
     pub fn jl_gc_mmtk_sweep_malloced_memory();
     pub fn jl_gc_sweep_stack_pools_and_mtarraylist_buffers();
     pub fn jl_hrtime() -> u64;

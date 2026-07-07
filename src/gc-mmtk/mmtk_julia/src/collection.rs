@@ -1,7 +1,6 @@
 use crate::SINGLETON;
 use crate::{
-    jl_gc_prepare_to_collect, jl_gc_update_stats, jl_get_gc_disable_counter, jl_hrtime,
-    jl_throw_out_of_memory_error,
+    jl_gc_prepare_to_collect, jl_gc_update_stats, jl_hrtime, jl_throw_out_of_memory_error,
 };
 use crate::{JuliaVM, USER_TRIGGERED_GC};
 use log::{info, trace};
@@ -49,6 +48,11 @@ impl Collection<JuliaVM> for VMCollection {
             // Stay here while the world has not stopped
             // FIXME add wait var
         }
+
+        assert!(
+            crate::api::mmtk_is_collection_enabled(),
+            "Collection is disabled when threads are stopped for a GC. This is a concurrency bug, see https://github.com/mmtk/mmtk-julia/issues/278."
+        );
 
         trace!("Stopped the world!");
 
@@ -142,10 +146,6 @@ impl Collection<JuliaVM> for VMCollection {
 
     fn vm_live_bytes() -> usize {
         crate::api::JULIA_MALLOC_BYTES.load(Ordering::SeqCst)
-    }
-
-    fn is_collection_enabled() -> bool {
-        unsafe { jl_get_gc_disable_counter() == 0 }
     }
 
     fn create_gc_trigger() -> Box<dyn GCTriggerPolicy<JuliaVM>> {
