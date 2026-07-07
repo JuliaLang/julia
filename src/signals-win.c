@@ -686,9 +686,12 @@ JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT
     HANDLE hThread = ptls2->system_id;
     if ((DWORD)-1 == SuspendThread(hThread))
         return;
-    // Re-check now that the thread cannot run
+    // Re-check now that the thread cannot run. A published handler region
+    // (task->cancel_handler_ctx) suppresses the reset: its span (e.g. a
+    // protected allocator) is exactly where a longjmp must not land.
     ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
-    jl_reset_ctx_t *reset_ctx = ct2 == NULL ? NULL : (jl_reset_ctx_t*)ct2->reset_ctx;
+    jl_reset_ctx_t *reset_ctx = (ct2 == NULL || ct2->cancel_handler_ctx != NULL) ?
+        NULL : (jl_reset_ctx_t*)ct2->reset_ctx;
     if (reset_ctx != NULL && reset_ctx->sp != 0) {
         CONTEXT ctxThread;
         memset(&ctxThread, 0, sizeof(CONTEXT));

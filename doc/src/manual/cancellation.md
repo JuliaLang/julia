@@ -277,6 +277,13 @@ discipline — no allocation, locks, yields or I/O — and must tolerate spuriou
 invocation; see [`@ccall`](@ref) for the full contract. This is the hook by which BLAS
 wrappers can make a long matrix multiplication respond to ^C.
 
+A library that has been audited for asynchronous unwinding can go further with
+`@ccall reset_safe=true ...`, which lets a cancellation unwind the foreign computation at
+an arbitrary instruction instead of waiting for it to return. `BigInt` (GMP) arithmetic is
+annotated this way — combined with allocation hooks that briefly defer a cancellation
+delivered while inside the allocator itself, a bignum loop with no cancellation points of
+its own cancels cleanly at the first ^C.
+
 ## Interactive sessions and ^C
 
 In the REPL, every evaluation runs under a fresh cancellation scope, and pressing ^C cancels

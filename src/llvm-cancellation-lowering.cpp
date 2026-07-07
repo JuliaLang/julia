@@ -293,6 +293,15 @@ bool CancellationLowering::runOnFunction(Function &F) {
                     if (Callee && (Callee->getName() == jl_setjmp_name ||
                                    Callee->getName() == "julia.safepoint"))
                         continue;
+                    // Known-safe julia runtime intrinsics: pure address
+                    // computations that neither observe nor publish state a
+                    // reset could tear. These commonly appear as ccall
+                    // argument-conversion glue (unsafe_convert of a mutable
+                    // object), and must not invalidate a reset region
+                    // published across an adjacent reset-safe foreign call.
+                    if (Callee && (Callee->getName() == "julia.pointer_from_objref" ||
+                                   Callee->getName() == "julia.gc_loaded"))
+                        continue;
                     UnsafePoints.push_back(CI);
                 }
             }

@@ -1249,11 +1249,15 @@ if Sys.isunix()
         expect("julia> ")
 
         # cancelling a BigInt computation never yanks control out of libgmp
-        # internals the way the old asynchronous InterruptException delivery
-        # could (corrupting the heap - issue #56545): the request is
-        # delivered at the loop's cancellation point, between GMP calls, and
-        # BigInt arithmetic in the session works correctly afterwards
-        sendline("println(\"EVAL-6\"); let b = big(3); while true; Base.@cancel_check; b = b*b % (big(10)^200); end; end")
+        # in an unsafe spot the way the old asynchronous InterruptException
+        # delivery could (corrupting the heap - issue #56545): the loop is
+        # deliberately checkless - delivery lands either on an MPZ entry
+        # point's own cancellation point, asynchronously inside audited
+        # libgmp compute (unwound via the reset region published across the
+        # annotated call), or inside the allocation hooks (deferred and
+        # chained into the reset on exit) - and BigInt arithmetic in the
+        # session works correctly afterwards
+        sendline("println(\"EVAL-6\"); let b = big(3); while true; b = b*b % (big(10)^200); end; end")
         expect("EVAL-6")
         sleep(0.5)
         kill(p, Base.SIGINT)

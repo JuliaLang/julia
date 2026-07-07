@@ -1188,7 +1188,8 @@ public:
             jl_cgval_t *argv,
             SmallVectorImpl<Value*> &gc_uses,
             bool static_rt,
-            const jl_cgval_t *cancel_guard) const; // NULL, or (fn, state, src)
+            const jl_cgval_t *cancel_guard, // NULL, or (fn, state, src)
+            bool reset_safe_call) const;
 
 private:
 std::string generate_func_sig(const char *fname)
@@ -1452,6 +1453,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     jl_sym_t *cc_sym = NULL;
     bool gc_safe = false;
     bool cancel_guard = false;
+    bool reset_safe_call = false;
     if (jl_is_symbol(jlcc)) {
         cc_sym = (jl_sym_t*)jlcc;
     }
@@ -1460,6 +1462,8 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         gc_safe = jl_unbox_bool(jl_get_nth_field_checked(jlcc, 2));
         if (jl_nfields(jlcc) > 3)
             cancel_guard = jl_unbox_bool(jl_get_nth_field_checked(jlcc, 3));
+        if (jl_nfields(jlcc) > 4)
+            reset_safe_call = jl_unbox_bool(jl_get_nth_field_checked(jlcc, 4));
     }
     assert(jl_is_symbol(cc_sym));
     native_sym_arg_t symarg = {};
@@ -2008,7 +2012,8 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             argv.data(),
             gc_uses,
             static_rt,
-            cancel_guard ? cancel_guard_args.data() : NULL);
+            cancel_guard ? cancel_guard_args.data() : NULL,
+            reset_safe_call);
     JL_GC_POP();
     return retval;
 }
@@ -2021,7 +2026,8 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         jl_cgval_t *argv,
         SmallVectorImpl<Value*> &gc_uses,
         bool static_rt,
-        const jl_cgval_t *cancel_guard) const
+        const jl_cgval_t *cancel_guard,
+        bool reset_safe_call) const
 {
     ++EmittedCCalls;
     if (!err_msg.empty()) {
@@ -2284,6 +2290,14 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             argvals,
             bundles);
     ((CallInst*)ret)->setAttributes(attributes);
+
+    if (reset_safe_call) {
+        // `@ccall reset_safe=true`: the callee is audited for an
+        // asynchronous unwind landing anywhere inside it - keep the
+        // enclosing reset region published across this call (the
+        // cancellation-lowering pass otherwise clears it before any call).
+        ret->setMetadata("julia.reset_safe", MDNode::get(ctx.builder.getContext(), {}));
+    }
 
     if (cancel_guard) {
         // Unpublish: the guard buffer's validity ends with the call. (The

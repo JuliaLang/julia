@@ -41,7 +41,10 @@ New language features
     `@ccall cancel_handler=(fn, state) ...`: cancelling the governing token runs the
     C-callable `fn(state, severity)` on the thread executing the call, signal-handler-style,
     so it can tell the library to return early (the pending cancellation is then thrown at
-    the next cancellation point).
+    the next cancellation point). Calls into libraries audited for asynchronous unwinding
+    can be annotated `@ccall reset_safe=true ...` instead, letting a cancellation unwind
+    the foreign computation at an arbitrary instruction; `BigInt` (GMP) arithmetic uses
+    this, so checkless bignum loops now cancel cleanly at the first ^C.
     In interactive sessions, ^C cancels the current evaluation's cancellation scope, with
     graded escalation (safe unwind -> abandoning external waits -> abandoning tasks) on repeated
     presses, and a fresh ^C epoch is re-armed at each prompt; a script that catches a ^C
