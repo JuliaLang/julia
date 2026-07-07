@@ -81,6 +81,10 @@ typedef enum {
 // identify which type vars range over only concrete types.
 typedef struct jl_varbinding_t {
     jl_tvar_t *var; // store NULL to "delete" this from env (temporarily)
+    // the binder this binding was pushed for (rooted as part of the walked
+    // terms); its raw declared bounds classify the binding without
+    // materializing anything
+    jl_unionall_t *u;
     jl_value_t *JL_NONNULL lb;
     jl_value_t *JL_NONNULL ub;
     int8_t existential; // whether this variable should be treated as existential
@@ -1214,6 +1218,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
 static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t param, int limit_slow) JL_CANSAFEPOINT;
 
 static int is_leaf_typevar(jl_tvar_t *v) JL_NOTSAFEPOINT;
+static int is_leaf_binder(jl_varbinding_t *vb) JL_NOTSAFEPOINT;
 
 // Check whether env (variable bounds & diagonality) changed compared to saved env.
 static int env_unchanged(jl_stenv_t *e, jl_savedenv_t *se) JL_NOTSAFEPOINT
@@ -1237,7 +1242,7 @@ static int env_unchanged(jl_stenv_t *e, jl_savedenv_t *se) JL_NOTSAFEPOINT
             int8_t saved_cov = se->buf[j];     // saved occurs_cov
             int8_t saved_diag = se->buf[j+1];  // saved cov_diag
             int8_t saved_max = saved_cov > saved_diag ? saved_cov : saved_diag;
-            if (is_leaf_typevar(v->var) && v->body_occurs_inv == 0 && cov_count(v) > 1 && saved_max <= 1)
+            if (is_leaf_binder(v) && v->body_occurs_inv == 0 && cov_count(v) > 1 && saved_max <= 1)
                 return 0; // check if a variable became diagonal from non-diagonal
             if (v->lb_required != se->buf[j+4])
                 return 0; // check if envout constrainedness changed
@@ -1668,12 +1673,20 @@ int is_leaf_bound(jl_value_t *v) JL_NOTSAFEPOINT
         }
         return ((jl_datatype_t*)v)->isconcretetype;
     }
-    return !jl_is_type(v) && !jl_is_typevar(v);
+    // a bound-variable reference classifies like the variable it stands for
+    return !jl_is_type(v) && !jl_is_typevar(v) && !jl_is_tvarref(v);
 }
 
 static int is_leaf_typevar(jl_tvar_t *v) JL_NOTSAFEPOINT
 {
     return is_leaf_bound(v->lb);
+}
+
+// the diagonal-rule concreteness classification of a binding, from the
+// binder's raw declared lower bound (no variable needs to be materialized)
+static int is_leaf_binder(jl_varbinding_t *vb) JL_NOTSAFEPOINT
+{
+    return is_leaf_bound(vb->u->lb);
 }
 
 // One entry per binder walked past, innermost first: a bound-variable
@@ -2116,6 +2129,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     vb.depth0 = e->invdepth;
     vb.prev = e->vars;
     vb.frame_prev = R ? e->Rframe : e->Lframe;
+    vb.u = u;
     // the body is walked natively: occurrences stay de Bruijn references and
     // resolve positionally through the side's frame chain
     jl_value_t *body = u->body;
@@ -2169,7 +2183,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     // view for checks and envout; keep `vb.lb` structurally precise.
     int widen_lb = !vb.occurs_inv && (diagonal || (vb.occurs_cov == 1 && vb.cov_diag == 0));
     jl_value_t *widened_lb = widen_lb ? widen_Type_if_concrete(vb.lb, e, NULL, e->intersection) : vb.lb;
-    if (ans && (vb.concrete || (diagonal && is_leaf_typevar(vb.var)))) {
+    if (ans && (vb.concrete || (diagonal && is_leaf_binder(&vb)))) {
         jl_value_t *concrete_lb = diagonal ? widened_lb : vb.lb;
         if (vb.concrete && !diagonal && !is_leaf_bound(vb.ub)) {
             // a non-diagonal var can only be a subtype of a diagonal var if its
@@ -5635,7 +5649,7 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
         e->Rframe = vb->frame_prev;
     else
         e->Lframe = vb->frame_prev;
-    vb->concrete |= (cov_count(vb) > 1 && is_leaf_typevar(vb->var) &&
+    vb->concrete |= (cov_count(vb) > 1 && is_leaf_binder(vb) &&
                      !vb->body_occurs_inv);
 
     // handle the "diagonal dispatch" rule, which says that a type var occurring more
@@ -5737,6 +5751,7 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
     memset(&vb, 0, sizeof(vb));
     JL_GC_PUSH5(&res, &vb.lb, &vb.ub, &vb.innervars, &vb.var);
     vb.frame_prev = R ? e->Rframe : e->Lframe;
+    vb.u = u;
     // the binder's bounds live one frame out; re-express any references they
     // carry in variable form (they are typically closed already)
     vb.lb = jl_has_dangling_tvarrefs(u->lb) ? frame_substitute(u->lb, vb.frame_prev, e) : u->lb;
@@ -5752,7 +5767,7 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
     vb.prev = e->vars;
     save_env(e, &se, 1);
     int noinv = !body_occurs_inv;
-    if (is_leaf_typevar(vb.var) && noinv && tvarref_always_occurs_cov(u->body, 1, param))
+    if (is_leaf_binder(&vb) && noinv && tvarref_always_occurs_cov(u->body, 1, param))
         vb.constraintkind = 1;
     res = intersect_unionall_(t, u, e, R, param, &vb);
     vb.intersected = 1;
