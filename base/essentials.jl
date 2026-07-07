@@ -601,6 +601,13 @@ function unionall_open(u::UnionAll)
     return pair[1]::TypeVar, pair[2]
 end
 
+# The positional sibling of `UnionAll(var, body)`: construct the `where` node
+# directly from a binder's fields, around a body that references the binder by
+# position, translating nothing.
+function UnionAll(name::Symbol, @nospecialize(lb), @nospecialize(ub), @nospecialize(body))
+    return ccall(:jl_new_unionall_raw, Any, (Any, Any, Any, Any), name, lb, ub, body)::UnionAll
+end
+
 # remove concrete constraint on diagonal TypeVar if it comes from troot
 function widen_diagonal(@nospecialize(t), troot::UnionAll)
     return ccall(:jl_widen_diagonal, Any, (Any, Any), t, troot)

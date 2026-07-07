@@ -2111,7 +2111,6 @@ end
     tparams = Any[]
     outervars = TypeVar[]
 
-    # first push the tailing vars from headtype into outervars
     nbinders = 0
     let ua = headtype
         while isa(ua, UnionAll)
@@ -2119,20 +2118,10 @@ end
             ua = ua.body
         end
     end
-    outer_start, ua = 0, headtype
-    while isa(ua, UnionAll)
-        if (outer_start += 1) > largs - 1
-            v_, body_ = unionall_open(ua)
-            push!(outervars, v_)
-            ua = body_
-        else
-            ua = ua.body
-        end
-    end
-    if largs - 1 > outer_start && isa(headtype, UnionAll) # e.g. !isvarargtype(ua) && !istuple
+    if largs - 1 > nbinders && isa(headtype, UnionAll) # e.g. !isvarargtype(headtype) && !istuple
         return Bottom # too many arguments
     end
-    outer_start = outer_start - largs + 2
+    # (binders beyond the arguments simply remain in the partial application)
 
     varnamectr = 1
     ua = headtype
@@ -2202,8 +2191,10 @@ end
                 end
                 push!(tparams, ub)
             elseif isT
-                # open the argument's binders: the fresh free TypeVars are
-                # unique by construction and can be re-bound around the result
+                # open the argument's binders: the result mixes material from
+                # several sources under the wrapper's remaining binders, so
+                # position-independent tokens are needed here — the fresh free
+                # TypeVars are unique by construction and re-bind around the result
                 while isa(ai, UnionAll)
                     v_, ai = unionall_open(ai)
                     push!(outervars, v_)
@@ -2249,21 +2240,32 @@ end
         canconst = false
         uncertain = true
         empty!(outervars)
-        outer_start = 1
-        # FIXME: if these vars are substituted with TypeVar here, the result
-        # might be wider than the input, so should we use the `.name.wrapper`
-        # object here instead, to replace all of these outervars with
-        # unconstrained ones? Note that this code is nearly unreachable though,
-        # and possibly should simply return Union{} here also, since
-        # `apply_type` is already quite conservative about detecting and
-        # throwing errors.
+        # FIXME: the result here might be wider than the input, so should we
+        # use the `.name.wrapper` object here instead, to replace all of these
+        # binders with unconstrained ones? Note that this code is nearly
+        # unreachable though, and possibly should simply return Union{} here
+        # also, since `apply_type` is already quite conservative about
+        # detecting and throwing errors.
         appl = headtype
         if isa(appl, UnionAll)
+            # strip the binders the arguments would have consumed and rebuild
+            # their nodes around the widened result: the stripped body's
+            # references resolve through the rebuilt chain, materializing nothing
+            stripped = UnionAll[]
             for _ = 2:largs
                 appl = appl::UnionAll
-                v_, appl = unionall_open(appl)
-                push!(outervars, v_)
+                push!(stripped, appl)
+                appl = appl.body
             end
+            isvarargtype(appl) && return TypeofVararg
+            ans = Type{appl}
+            k = length(stripped)
+            while k > 0
+                node = stripped[k]
+                ans = UnionAll(node.name, node.lb, node.ub, ans)
+                k -= 1
+            end
+            return ans
         end
     end
     # An `==`-only (`Type{X}`) argument still yields a `Const`: datatype instantiation
@@ -2291,7 +2293,7 @@ end
         return Type{<:appl}
     end
     ans = Type{appl}
-    for i = length(outervars):-1:outer_start
+    for i = length(outervars):-1:1
         ans = UnionAll(outervars[i], ans)
     end
     return ans

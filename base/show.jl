@@ -641,18 +641,15 @@ end
 # Return a copy of the type alias `alias` with every bounded binder replaced by
 # an unbounded one, so that `typeintersect_env` can match an open `x` (whose free
 # typevars are not yet known to satisfy the alias' bounds) against the alias.
-# The binders are rewritten from the innermost outward, so that a bound that
-# references an outer binder is rewritten consistently with that binder.
+# Only the binder nodes' bounds change; the positional references to them (in
+# the body and in other bounds) are untouched, so each node rebuilds in place.
 function unbounded_typealias(@nospecialize(alias))
     alias isa UnionAll || return alias
-    var, body0 = unionall_open(alias)
-    body = unbounded_typealias(body0)
-    if var.lb === Union{} && var.ub === Any
-        body === body0 && return alias
-        return UnionAll(var, body)
+    body = unbounded_typealias(alias.body)
+    if body === alias.body && alias.lb === Union{} && alias.ub === Any
+        return alias
     end
-    newvar = TypeVar(var.name)
-    return UnionAll(newvar, UnionAll(var, body){newvar})
+    return UnionAll(alias.name, Union{}, Any, body)
 end
 
 # Reconstruct the closed type that the (possibly open) `x` is a piece of, by

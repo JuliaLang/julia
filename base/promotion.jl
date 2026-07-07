@@ -144,39 +144,34 @@ function typejoin(@nospecialize(a), @nospecialize(b))
             if n == 0
                 return aprimary
             end
-            vars = TypeVar[]
-            for i = 1:n
-                ai, bi = a.parameters[i], b.parameters[i]
-                # references from two different chains compare `===` (they are
-                # interned positionally) without denoting an agreed value
-                agree = !(ai isa Core.TypeVarRef || bi isa Core.TypeVarRef ||
-                          Core.has_dangling_tvarrefs(ai) || Core.has_dangling_tvarrefs(bi)) &&
-                        (ai === bi || (isa(ai,Type) && isa(bi,Type) && ai <: bi && bi <: ai))
-                if agree
-                    aprimary = aprimary{ai}
-                else
-                    # an agreeing (applied) slot must substitute into the
-                    # bounds of later kept binders, so the kept binder is
-                    # materialized from the partially-applied wrapper (through
-                    # the foldable primitive: the fresh variable is re-closed
-                    # below, keeping the result egal across calls)
-                    aprimary = aprimary::UnionAll
-                    v, aprimary = unionall_open(aprimary)
-                    push!(vars, v)
-                end
-            end
-            k = length(vars)
-            while k > 0
-                # (a plain countdown: a StepRange would drag overflow-check
-                # branches into this foldable callgraph)
-                aprimary = UnionAll(vars[k], aprimary)
-                k -= 1
-            end
-            return aprimary
+            return typejoin_apply_params(aprimary, a.parameters, b.parameters, 1)
         end
         b = supertype(b)::DataType
     end
     return Any
+end
+
+# Apply the agreeing parameter joins to the wrapper's binder chain, keeping
+# the binders of the disagreeing slots in place: an agreeing (closed) value
+# substitutes into the fragment below a kept binder capture-free, and a kept
+# binder's node is rebuilt around the result verbatim — its bounds and the
+# references to it are positional, so nothing is materialized or renamed.
+function typejoin_apply_params(@nospecialize(t), ap::Core.SimpleVector, bp::Core.SimpleVector, i::Int)
+    if i > length(ap)
+        return t
+    end
+    ai, bi = ap[i], bp[i]
+    # references from two different chains compare `===` (they are
+    # interned positionally) without denoting an agreed value
+    agree = !(ai isa Core.TypeVarRef || bi isa Core.TypeVarRef ||
+              Core.has_dangling_tvarrefs(ai) || Core.has_dangling_tvarrefs(bi)) &&
+            (ai === bi || (isa(ai,Type) && isa(bi,Type) && ai <: bi && bi <: ai))
+    t = t::UnionAll
+    if agree
+        return typejoin_apply_params(t{ai}, ap, bp, i+1)
+    end
+    body = typejoin_apply_params(t.body, ap, bp, i+1)
+    return UnionAll(t.name, t.lb, t.ub, body)
 end
 
 # return an upper-bound on type `a` with type `b` removed
