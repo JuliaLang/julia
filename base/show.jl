@@ -498,6 +498,8 @@ julia> print("Hello World!")
 Hello World!
 ```
 
+# Extended help
+
 Example of round-tripping:
 ```jldoctest
 julia> Int8(2) == eval(Meta.parse(repr(Int8(2))))
