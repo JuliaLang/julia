@@ -1366,7 +1366,8 @@ static int subtype_ccheck(jl_value_t *x, jl_value_t *y, jl_stenv_t *e) JL_CANSAF
     int saved_channel = e->bound_channel;
     int saved_spell = e->spell_channel;
     int saved_descent = e->value_descent;
-    if (jl_has_free_typevars(x)) {
+    if (has_free_or_dangling_typevars(x)) {
+        // (a raw bound-variable reference is var-dependence all the same)
         if (e->bound_channel > BOUND_PROXY)
             e->bound_channel = BOUND_PROXY;
         if (e->spell_channel > BOUND_PROXY)
@@ -1531,23 +1532,11 @@ static int subtype_singleton_typevar(jl_value_t *a, jl_tvar_t *v) JL_NOTSAFEPOIN
 }
 
 // check that type var `b` is <: `a`, and update b's upper bound.
-static int var_lt_(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t param, jl_varbinding_t *bb, int innervar) JL_CANSAFEPOINT;
-
+// `a` may be a raw fragment of the right term: the subtype checks walk it in
+// place through the frames, and its canonical (variable-form) spelling is
+// computed only where an identity, a cross-position use, or a stored value
+// is needed.
 static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t param, jl_varbinding_t *bb, int innervar) JL_CANSAFEPOINT
-{
-    if (!jl_has_dangling_tvarrefs(a))
-        return var_lt_(b, a, e, param, bb, innervar);
-    // `a` is a fragment of the right term; it must be re-expressed in
-    // variable form before it can be compared against (or stored into)
-    // variable bounds, which outlive its position
-    a = frame_substitute(a, e->Rframe, e);
-    JL_GC_PUSH1(&a);
-    int sub = var_lt_(b, a, e, param, bb, innervar);
-    JL_GC_POP();
-    return sub;
-}
-
-static int var_lt_(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t param, jl_varbinding_t *bb, int innervar)
 {
     if (bb == NULL) {
         assert(b != NULL); // only a real (free or inner) variable has no binding
@@ -1581,7 +1570,10 @@ static int var_lt_(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t pa
         pop_forall_bound_scope(e, saved_fb, nsaved_fb);
         return sub;
     }
-    if (bb_ub == a)
+    // the identity fast path, the intersection (where `a` enters an x
+    // position), and the stored bound need the canonical spelling
+    jl_value_t *av = jl_has_dangling_tvarrefs(a) ? frame_substitute(a, e->Rframe, e) : a;
+    if (bb_ub == av)
         return 1;
     int lb_ok = (bb_lb == jl_bottom_type && !jl_is_type(a) && !jl_is_typevar(a));
     if (!lb_ok) {
@@ -1593,7 +1585,7 @@ static int var_lt_(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t pa
         }
         else {
             bb->in_ccheck = 1;
-            lb_ok = subtype_ccheck(bb_lb, a, e);
+            lb_ok = subtype_ccheck(bb_lb, a, e); // walks `a` natively
             bb->in_ccheck = 0;
         }
     }
@@ -1602,7 +1594,7 @@ static int var_lt_(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t pa
     // for this to work we need to compute issub(left,right) before issub(right,left),
     // since otherwise the issub(a, bb.ub) check in var_gt becomes vacuous.
     if (e->intersection) {
-        jl_value_t *ub = intersect_aside(a, bb_ub, e, bb->depth0);
+        jl_value_t *ub = intersect_aside(av, bb_ub, e, bb->depth0);
         JL_GC_PUSH1(&ub);
         if ((b == NULL || ub != (jl_value_t*)b) &&
             (!jl_is_typevar(ub) || b == NULL || !reachable_var(ub, b, e)))
@@ -1616,28 +1608,17 @@ static int var_lt_(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t pa
         // rather than over-approximating to one side, which would let `b` escape
         // its declared range (e.g. equating `∃b<:Foo` with an outer `∀a<:Bar`
         // even though `Bar ⊄ Foo`). See #61917.
-        bb->ub = simple_meet(bb_ub, a, 1);
+        bb->ub = simple_meet(bb_ub, av, 1);
     }
     assert(bb->ub != (jl_value_t*)b);
     return 1;
 }
 
 // check that type var `b` is >: `a`, and update b's lower bound.
-static int var_gt_(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t param, jl_varbinding_t *bb, int innervar) JL_CANSAFEPOINT;
-
+// `a` may be a raw fragment of the left term: the subtype checks walk it in
+// place through the frames, and its canonical (variable-form) spelling is
+// computed only where an identity or a stored value is needed.
 static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t param, jl_varbinding_t *bb, int innervar) JL_CANSAFEPOINT
-{
-    if (!jl_has_dangling_tvarrefs(a))
-        return var_gt_(b, a, e, param, bb, innervar);
-    // as in var_lt, but `a` is a fragment of the left term
-    a = frame_substitute(a, e->Lframe, e);
-    JL_GC_PUSH1(&a);
-    int sub = var_gt_(b, a, e, param, bb, innervar);
-    JL_GC_POP();
-    return sub;
-}
-
-static int var_gt_(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t param, jl_varbinding_t *bb, int innervar)
 {
     if (bb == NULL) {
         assert(b != NULL); // only a real (free or inner) variable has no binding
@@ -1670,7 +1651,10 @@ static int var_gt_(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t pa
     }
     if (a != jl_bottom_type && bb->lb_certainty < e->bound_channel)
         bb->lb_certainty = e->bound_channel;
-    if (bb_lb == a) {
+    // the identity fast path and the joined bound must see the canonical
+    // spelling (the stored content is in variable form); rooted by the memo
+    jl_value_t *av = jl_has_dangling_tvarrefs(a) ? frame_substitute(a, e->Lframe, e) : a;
+    if (bb_lb == av) {
         if (bb->lb_spell < e->spell_channel)
             bb->lb_spell = e->spell_channel;
         return 1;
@@ -1685,7 +1669,7 @@ static int var_gt_(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t pa
             int saved = e->ignore_lb_required;
             e->ignore_lb_required = 1;
             bb->in_ccheck = 1;
-            ub_ok = subtype_ccheck(a, bb_ub, e);
+            ub_ok = subtype_ccheck(a, bb_ub, e); // walks `a` natively
             bb->in_ccheck = 0;
             e->ignore_lb_required = saved;
         }
@@ -1696,9 +1680,9 @@ static int var_gt_(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t pa
     // join picking `a` proves `lb <= a`, i.e. `a` respells the same type: keep
     // the existing spelling unless `a`'s is more authoritative (see `lb_spell`)
     int pinned = (bb_lb == bb_ub && bb_lb != jl_bottom_type);
-    jl_value_t *lb = simple_join(bb_lb, a);
+    jl_value_t *lb = simple_join(bb_lb, av);
     JL_GC_PUSH1(&lb);
-    if (pinned && lb == a && e->spell_channel <= bb->lb_spell) {
+    if (pinned && lb == av && e->spell_channel <= bb->lb_spell) {
         // keep bb->lb (and bb->ub) as-is
     }
     else if (!e->intersection || !jl_is_typevar(lb) || b == NULL || !reachable_var(lb, b, e)) {
@@ -3876,20 +3860,13 @@ static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t 
     return sub;
 }
 
+// `x` may be a raw fragment of the left term: the subtype checks walk it in
+// place through the frames, and its canonical (variable-form) spelling is
+// computed only where an identity, a cross-position use, or a stored value
+// is needed.
 static int equal_var(jl_tvar_t *v, jl_value_t *x, jl_stenv_t *e) JL_CANSAFEPOINT
 {
     assert(e->Loffset == 0);
-    if (jl_has_dangling_tvarrefs(x)) {
-        // a fragment of the left term: re-express in variable form (cf. var_lt);
-        // references escaping the whole query stay and take the structural rules
-        jl_value_t *x2 = frame_substitute(x, e->Lframe, e);
-        if (x2 != x) {
-            JL_GC_PUSH1(&x2);
-            int sub = equal_var(v, x2, e);
-            JL_GC_POP();
-            return sub;
-        }
-    }
     // Theoretically bounds change would be merged for union inputs.
     // But intersection is not happy as splitting helps to avoid circular env.
     assert(!e->intersection || !jl_is_uniontype(x));
@@ -3909,34 +3886,46 @@ static int equal_var(jl_tvar_t *v, jl_value_t *x, jl_stenv_t *e) JL_CANSAFEPOINT
     if (vb == NULL) {
         if (innervar && e->intersection)
             return 1;
-        if (innervar)
-            return local_forall_exists_subtype(x, v->lb, e, PARAM_INVARIANT, !jl_has_free_typevars(x)) &&
-                   local_forall_exists_subtype(v->ub, x, e, PARAM_NONE, 0);
+        if (innervar) {
+            if (!local_forall_exists_subtype(x, v->lb, e, PARAM_INVARIANT, !has_free_or_dangling_typevars(x)))
+                return 0;
+            // `x` enters a right position here: use the canonical spelling
+            jl_value_t *xv = jl_has_dangling_tvarrefs(x) ? frame_substitute(x, e->Lframe, e) : x;
+            return local_forall_exists_subtype(v->ub, xv, e, PARAM_NONE, 0);
+        }
         return x == (jl_value_t*)v;
     }
-    if (!vb->existential)
-        return local_forall_exists_subtype(x, vb_lb, e, PARAM_INVARIANT, !jl_has_free_typevars(x)) &&
-               local_forall_exists_subtype(vb_ub, x, e, PARAM_NONE, 0);
+    if (!vb->existential) {
+        if (!local_forall_exists_subtype(x, vb_lb, e, PARAM_INVARIANT, !has_free_or_dangling_typevars(x)))
+            return 0;
+        // `x` enters a right position here: use the canonical spelling
+        jl_value_t *xv = jl_has_dangling_tvarrefs(x) ? frame_substitute(x, e->Lframe, e) : x;
+        return local_forall_exists_subtype(vb_ub, xv, e, PARAM_NONE, 0);
+    }
     if (x != jl_bottom_type && vb->lb_certainty < e->bound_channel)
         vb->lb_certainty = e->bound_channel;
-    if (vb_lb == x) {
+    // the identity fast paths and the stored values need the canonical spelling
+    jl_value_t *xv = jl_has_dangling_tvarrefs(x) ? frame_substitute(x, e->Lframe, e) : x;
+    if (vb_lb == xv) {
         if (vb->lb_spell < e->spell_channel)
             vb->lb_spell = e->spell_channel;
-        return var_lt(v, x, e, PARAM_NONE, vb, innervar);
+        // var_lt canonicalizes right-side operands; `x` is a left term, so
+        // hand it the position-free spelling
+        return var_lt(v, xv, e, PARAM_NONE, vb, innervar);
     }
-    if (!subtype_ccheck(x, vb_ub, e))
+    if (!subtype_ccheck(x, vb_ub, e)) // walks `x` natively
         return 0;
     // when the var is pinned (`lb === ub`), `x <= ub` was just checked and a
     // join picking `x` proves `lb <= x`, i.e. `x` respells the same type: keep
     // the existing spelling unless `x`'s is more authoritative (see `lb_spell`)
     int pinned = (vb_lb == vb_ub && vb_lb != jl_bottom_type);
-    jl_value_t *lb = simple_join(vb_lb, x);
+    jl_value_t *lb = simple_join(vb_lb, xv);
     JL_GC_PUSH1(&lb);
-    if (pinned && lb == x && e->spell_channel <= vb->lb_spell) {
+    if (pinned && lb == xv && e->spell_channel <= vb->lb_spell) {
         JL_GC_POP();
         // validate the inclusion the respell path would have checked below,
         // then keep both existing spellings
-        if (!subtype_ccheck(vb_lb, x, e))
+        if (!subtype_ccheck(vb_lb, xv, e))
             return 0;
         return 1;
     }
@@ -3947,14 +3936,14 @@ static int equal_var(jl_tvar_t *v, jl_value_t *x, jl_stenv_t *e) JL_CANSAFEPOINT
         }
     }
     JL_GC_POP();
-    if (vb_ub == x)
+    if (vb_ub == xv)
         return 1;
     // reload through the binding: the joined bound is rooted by its field now
-    if (!subtype_ccheck(binding_lb(e, vb), x, e))
+    if (!subtype_ccheck(binding_lb(e, vb), xv, e))
         return 0;
     // skip `simple_meet` here as we have proven `x <: vb->ub`
-    if (!e->intersection || !reachable_var(x, v, e))
-        vb->ub = x;
+    if (!e->intersection || !reachable_var(xv, v, e))
+        vb->ub = xv;
     return 1;
 }
 
