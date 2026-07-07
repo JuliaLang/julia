@@ -632,6 +632,8 @@ typedef struct {
     uint32_t flags;              // JL_UNIONALL_* bits; upper bits reserved
 } jl_unionall_t;
 #define JL_UNIONALL_VAROCCURS 0x1  // the binder occurs in `body` (memoized)
+#define JL_UNIONALL_ESCAPINGREFS 0x2  // some reference escapes this node (memoized)
+#define JL_UNIONALL_ALWAYSCOV 0x4  // the binder has a guaranteed covariant occurrence in `body` (memoized)
 
 // represents the "name" part of a DataType, describing the syntactic structure
 // of a type and storing all data common to different instantiations of the type,

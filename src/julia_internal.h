@@ -1004,6 +1004,7 @@ JL_DLLEXPORT int jl_tvarref_occurs(jl_value_t *t, size_t idx) JL_NOTSAFEPOINT;
 // binder, dropping the binder (with a downward shift) if it is unused
 JL_DLLEXPORT jl_value_t *jl_rewrap_unionall_one(jl_value_t *t, jl_unionall_t *u) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_new_unionall_raw(jl_sym_t *name, jl_value_t *lb, jl_value_t *ub, jl_value_t *body) JL_CANSAFEPOINT;
+int jl_tvarref_always_occurs_cov_top(jl_value_t *body) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_unwrap_unionall(jl_value_t *v JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_rewrap_unionall(jl_value_t *t, jl_value_t *u) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_rewrap_unionall_(jl_value_t *t, jl_value_t *u) JL_CANSAFEPOINT;

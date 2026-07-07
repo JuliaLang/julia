@@ -129,6 +129,8 @@ static int tvarref_occurs_(jl_value_t *t, size_t idx) JL_NOTSAFEPOINT
             return jl_tvarref_depth(t) == idx;
         if (jl_is_unionall(t)) {
             jl_unionall_t *ua = (jl_unionall_t*)t;
+            if (!(ua->flags & JL_UNIONALL_ESCAPINGREFS))
+                return 0;
             if (tvarref_occurs_(ua->lb, idx) || tvarref_occurs_(ua->ub, idx))
                 return 1;
             idx++;
@@ -185,6 +187,10 @@ static int has_refs_above(jl_value_t *t, size_t depth) JL_NOTSAFEPOINT
             return jl_tvarref_depth(t) > depth;
         if (jl_is_unionall(t)) {
             jl_unionall_t *ua = (jl_unionall_t*)t;
+            if (!(ua->flags & JL_UNIONALL_ESCAPINGREFS))
+                return 0;
+            if (depth == 0)
+                return 1;
             if (has_refs_above(ua->lb, depth) || has_refs_above(ua->ub, depth))
                 return 1;
             depth++;
@@ -1282,7 +1288,20 @@ JL_DLLEXPORT jl_value_t *jl_new_unionall_raw(jl_sym_t *name, jl_value_t *lb, jl_
     u->lb = lb;
     u->ub = ub;
     u->body = body;
-    u->flags = jl_tvarref_occurs(body, 1) ? JL_UNIONALL_VAROCCURS : 0;
+    uint32_t flags = 0;
+    if (tvarref_occurs_(body, 1)) {
+        flags |= JL_UNIONALL_VAROCCURS;
+        if (jl_tvarref_always_occurs_cov_top(body))
+            flags |= JL_UNIONALL_ALWAYSCOV;
+    }
+    // N.B. bootstrap builds one throwaway wrapper whose binder slot holds a
+    // Vararg (`anytuple_params`), where the bound reads are garbage: `lb`
+    // aliases a NULL `N`. Only the fields a raw constructor may legally store
+    // untouched are walked defensively here.
+    if ((lb != NULL && has_refs_above(lb, 0)) || (ub != NULL && has_refs_above(ub, 0)) ||
+        has_refs_above(body, 1))
+        flags |= JL_UNIONALL_ESCAPINGREFS;
+    u->flags = flags;
     return (jl_value_t*)u;
 }
 
