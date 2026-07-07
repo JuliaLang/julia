@@ -6314,6 +6314,11 @@ jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t *
             goto bot;
         if (ltb && !might_intersect_concrete(a))
             goto bot;
+        // A dispatch tuple is a concrete leaf type, so its intersection with any other
+        // type is just itself (when it is a subtype) or empty. The subtype checks above
+        // having failed, the intersection must be empty.
+        if (jl_is_dispatch_tupletype(a) || jl_is_dispatch_tupletype(b))
+            goto bot;
         jl_stenv_t e;
         init_stenv(&e, NULL, 0);
         e.intersection = 1;
