@@ -3957,18 +3957,26 @@ static int equal_var(jl_tvar_t *v, jl_value_t *x, jl_stenv_t *e) JL_CANSAFEPOINT
         if (innervar) {
             if (!local_forall_exists_subtype(x, v->lb, e, PARAM_INVARIANT, !has_free_or_dangling_typevars(x)))
                 return 0;
-            // `x` enters a right position here: use the canonical spelling
-            jl_value_t *xv = jl_has_dangling_tvarrefs(x) ? frame_substitute(x, e->Lframe, e) : x;
-            return local_forall_exists_subtype(v->ub, xv, e, PARAM_NONE, 0);
+            // `x` enters a right position here; this is a pure check, so
+            // rather than re-spelling `x`, give the right side its chain
+            jl_varbinding_t *saveR = e->Rframe;
+            e->Rframe = e->Lframe;
+            int sub = local_forall_exists_subtype(v->ub, x, e, PARAM_NONE, 0);
+            e->Rframe = saveR;
+            return sub;
         }
         return x == (jl_value_t*)v;
     }
     if (!vb->existential) {
         if (!local_forall_exists_subtype(x, vb_lb, e, PARAM_INVARIANT, !has_free_or_dangling_typevars(x)))
             return 0;
-        // `x` enters a right position here: use the canonical spelling
-        jl_value_t *xv = jl_has_dangling_tvarrefs(x) ? frame_substitute(x, e->Lframe, e) : x;
-        return local_forall_exists_subtype(binding_ub(e, vb), xv, e, PARAM_NONE, 0);
+        // `x` enters a right position here; this is a pure check, so
+        // rather than re-spelling `x`, give the right side its chain
+        jl_varbinding_t *saveR = e->Rframe;
+        e->Rframe = e->Lframe;
+        int sub = local_forall_exists_subtype(binding_ub(e, vb), x, e, PARAM_NONE, 0);
+        e->Rframe = saveR;
+        return sub;
     }
     if (x != jl_bottom_type && vb->lb_certainty < e->bound_channel)
         vb->lb_certainty = e->bound_channel;
