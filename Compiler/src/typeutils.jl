@@ -59,30 +59,10 @@ has_concrete_subtype(d::DataType) = d.flags & 0x0020 == 0x0020 # n.b. often comp
 has_dangling_typevar_refs(@nospecialize t) =
     ccall(:jl_has_dangling_tvarrefs, Cint, (Any,), t) !== Int32(0)
 
-# Open all binders of `t` (substituting fresh free TypeVars, cf. `unionall_open`),
-# returning the fully-opened body and the opened vars outermost-first. Use with
-# `rebind_opened` as the de Bruijn replacement for the old
-# `unwrap_unionall`/`.parameters[i]`/`rewrap_unionall` idiom.
-function unionall_open_all(@nospecialize t)
-    vars = TypeVar[]
-    while isa(t, UnionAll)
-        v, t = unionall_open(t)
-        push!(vars, v)
-    end
-    return t, vars
-end
-
-# re-bind the (occurring) opened vars around `t`; a bare opened var normalizes
-# to its upper bound (`T where T` has no distinguishable identity left)
-function rebind_opened(@nospecialize(t), vars::Vector{TypeVar})
-    for i = length(vars):-1:1
-        v = vars[i]
-        if (isa(t, Type) || isa(t, TypeVar)) && has_typevar(t, v)
-            t = UnionAll(v, t)
-        end
-    end
-    return t
-end
+# does the binder `d` levels out occur in `t`? (the positional counterpart of
+# `has_typevar`; binders nested inside `t` are accounted for)
+tvarref_occurs(@nospecialize(t), d::Int) =
+    ccall(:jl_tvarref_occurs, Cint, (Any, Csize_t), t, d) !== Int32(0)
 
 function valid_as_lattice(@nospecialize(x), astag::Bool=false)
     x === Bottom && false

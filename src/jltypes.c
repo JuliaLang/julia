@@ -1948,6 +1948,36 @@ JL_DLLEXPORT jl_value_t *jl_unionall_open(jl_unionall_t *u, jl_tvar_t **vout)
     return body;
 }
 
+// materialize only a binder's variable: a fresh TypeVar carrying the binder's
+// name and bounds, with bound-variable references into the enclosing binders
+// replaced by the (already materialized) enclosing variables `outer[0..nouter)`
+// (outermost first). This is the variable that opening the chain outermost-in
+// with `jl_unionall_open` would produce, but no body is instantiated.
+JL_DLLEXPORT jl_tvar_t *jl_unionall_bind_var(jl_unionall_t *u, jl_svec_t *outer, size_t nouter)
+{
+    jl_value_t *lb = u->lb, *ub = u->ub;
+    JL_GC_PUSH2(&lb, &ub);
+    for (size_t i = nouter; i > 0; i--) {
+        if (!jl_has_dangling_tvarrefs(lb) && !jl_has_dangling_tvarrefs(ub))
+            break;
+        // each substitution consumes the innermost escaping level and shifts
+        // the deeper ones down, so the target is always root-index 1. Invalid
+        // `Union` bound arms drop, as an eager open would have dropped them.
+        jl_value_t *v = jl_svecref(outer, i - 1);
+        if (jl_has_dangling_tvarrefs(lb)) {
+            jl_value_t *lb2 = jl_substitute_tvarref_nothrow(lb, 1, v);
+            lb = lb2 == NULL ? jl_bottom_type : lb2;
+        }
+        if (jl_has_dangling_tvarrefs(ub)) {
+            jl_value_t *ub2 = jl_substitute_tvarref_nothrow(ub, 1, v);
+            ub = ub2 == NULL ? (jl_value_t*)jl_any_type : ub2;
+        }
+    }
+    jl_tvar_t *tv = jl_new_typevar(u->name, lb, ub);
+    JL_GC_POP();
+    return tv;
+}
+
 // variant of `jl_unionall_open` returning `svec(var, body)`, for use from Julia
 JL_DLLEXPORT jl_value_t *jl_unionall_open2(jl_unionall_t *u)
 {

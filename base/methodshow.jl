@@ -55,6 +55,8 @@ end
 function arg_decl_parts(m::Method, html=false)
     tv = Any[]
     sig = m.sig
+    # display boundary: printing needs materialized variables (their names
+    # appear in the argument declarations and the `where` list)
     while isa(sig, UnionAll)
         v, sig = unionall_open(sig)
         push!(tv, v)

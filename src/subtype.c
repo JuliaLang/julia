@@ -373,7 +373,7 @@ static jl_value_t *resolve_tvarref(jl_value_t *t JL_PROPAGATES_ROOT, jl_varbindi
 
 // exchange the two sides' binder chains, for the calls that pass a right
 // term in a left position (or vice versa)
-static void swap_frames(jl_stenv_t *e) JL_NOTSAFEPOINT
+static void flip_frames(jl_stenv_t *e) JL_NOTSAFEPOINT
 {
     jl_varbinding_t *tmp = e->Lframe;
     e->Lframe = e->Rframe;
@@ -1890,10 +1890,93 @@ static int constrains_param_static(jl_tvar_t *var, jl_value_t *typ, int covarian
     return 0;
 }
 
+// positional twin of `constrains_param_static`: does the binder `d` levels
+// out (whose declared upper bound is `Any` iff `ub_is_any`) constrain `typ`?
+static int constrains_ref_static(size_t d, int ub_is_any, jl_value_t *typ, int covariant) JL_NOTSAFEPOINT
+{
+    if (jl_is_tvarref(typ))
+        return jl_tvarref_depth(typ) == d;
+    while (jl_is_unionall(typ)) {
+        jl_unionall_t *ua = (jl_unionall_t*)typ;
+        // A Type{<:...} range can be inhabited by Union{}, which does not
+        // expose the structure of the range bound to static parameters.
+        if (covariant && !unionall_is_Type_range(ua) &&
+            constrains_ref_static(d, ub_is_any, ua->ub, covariant))
+            return 1;
+        // ua->lb doesn't constrain the binder
+        typ = ua->body;
+        d++;
+    }
+    if (jl_is_uniontype(typ)) {
+        // both alternatives must constrain the binder
+        return constrains_ref_static(d, ub_is_any, ((jl_uniontype_t*)typ)->a, covariant) &&
+               constrains_ref_static(d, ub_is_any, ((jl_uniontype_t*)typ)->b, covariant);
+    }
+    else if (jl_is_some_Type(typ)) {
+        jl_value_t *T = jl_some_Type_T(typ);
+        if (jl_is_tvarref(T) && jl_tvarref_depth(T) == d && ub_is_any) {
+            // Types with free type parameters are <: Type, so the binder is
+            // unconstrained (Type{T} with free typevars is illegal)
+            return 0;
+        }
+        return constrains_ref_static(d, ub_is_any, T, 0);
+    }
+    else if (jl_is_datatype(typ)) {
+        jl_datatype_t *dt = (jl_datatype_t*)typ;
+        size_t fc = jl_nparams(dt);
+        if (fc > 0) {
+            if (dt->name == jl_tuple_typename) {
+                for (size_t i = 0; i < fc - 1; i++) {
+                    if (constrains_ref_static(d, ub_is_any, jl_tparam(dt, i), covariant))
+                        return 1;
+                }
+                jl_value_t *lastp = jl_tparam(dt, fc - 1);
+                jl_value_t *vararg = lastp;
+                size_t dv = d;
+                while (jl_is_unionall(vararg)) {
+                    // count the stripped binders so the reference depth is
+                    // still relative to its position
+                    vararg = ((jl_unionall_t*)vararg)->body;
+                    dv++;
+                }
+                if (jl_is_vararg(vararg)) {
+                    jl_value_t *vN = jl_unwrap_vararg_num(vararg);
+                    if (vN) {
+                        if (constrains_ref_static(dv, ub_is_any, vN, covariant))
+                            return 1;
+                    }
+                    else if (constrains_ref_static(d, ub_is_any, lastp, covariant)) {
+                        return 1;
+                    }
+                }
+                else if (constrains_ref_static(d, ub_is_any, lastp, covariant)) {
+                    return 1;
+                }
+            }
+            else {
+                for (size_t i = 0; i < fc; i++) {
+                    if (constrains_ref_static(d, ub_is_any, jl_tparam(dt, i), 0))
+                        return 1;
+                }
+            }
+        }
+    }
+    return 0;
+}
+
 static void mark_required_tuple_element(jl_stenv_t *e, jl_value_t *rhs) JL_NOTSAFEPOINT
 {
     if (e->ignore_lb_required)
         return;
+    // bindings occur in the (raw) walked term as positional references: check
+    // each frame entry at its depth from `rhs`'s position
+    size_t d = 1;
+    for (jl_varbinding_t *b = e->Rframe; b != NULL; b = b->frame_prev, d++) {
+        if (b->existential && b->lb != jl_bottom_type && !b->lb_required &&
+            constrains_ref_static(d, b->var->ub == (jl_value_t*)jl_any_type, rhs, 1))
+            b->lb_required = 1;
+    }
+    // re-expressed (variable-form) content still carries variables
     for (jl_varbinding_t *v = e->vars; v != NULL; v = v->prev) {
         if (v->existential && v->lb != jl_bottom_type && !v->lb_required &&
             constrains_param_static(v->var, rhs, 1))
@@ -3752,16 +3835,10 @@ static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 
     int sub = local_forall_exists_subtype(x, y, e, PARAM_INVARIANT, -1);
     if (sub) {
-        flip_offset(e);
         // the terms swap sides, and their reference frames with them
-        jl_varbinding_t *tmpframe = e->Lframe;
-        e->Lframe = e->Rframe;
-        e->Rframe = tmpframe;
+        flip_offset(e); flip_frames(e);
         sub = local_forall_exists_subtype(y, x, e, PARAM_NONE, 0);
-        tmpframe = e->Lframe;
-        e->Lframe = e->Rframe;
-        e->Rframe = tmpframe;
-        flip_offset(e);
+        flip_offset(e); flip_frames(e);
     }
     pop_unionstate(&e->Lunions, &oldLunions);
     return sub;
@@ -4305,15 +4382,19 @@ JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env, 
         if (envsz != 0) { // quickly copy env from x
             jl_unionall_t *ua = (jl_unionall_t*)x;
             int i;
+            jl_svec_t *vars = NULL;
             jl_tvar_t *v = NULL;
-            jl_value_t *body = NULL;
-            JL_GC_PUSH2(&v, &body);
+            JL_GC_PUSH2(&vars, &v);
+            vars = jl_alloc_svec(envsz);
             for (i = 0; i < envsz; i++) {
                 assert(jl_is_unionall(ua));
-                body = jl_unionall_open(ua, &v);
-                int constrained = constrains_param_static(v, body, 1);
+                // materialize only the binder's variable; the body is walked
+                // in place and the occurrence check is positional
+                v = jl_unionall_bind_var(ua, vars, i);
+                jl_svecset(vars, i, v);
+                int constrained = constrains_ref_static(1, ua->ub == (jl_value_t*)jl_any_type, ua->body, 1);
                 env[i] = wrap_tvar_env((jl_value_t*)v, constrained);
-                ua = (jl_unionall_t*)body;
+                ua = (jl_unionall_t*)ua->body;
             }
             JL_GC_POP();
         }
@@ -6053,12 +6134,12 @@ static jl_value_t *intersect_invariant(jl_value_t *x, jl_value_t *y, jl_stenv_t 
             return NULL;
         // `y` (a right term) is checked in a left position: give the launched
         // query the matching frame orientation
-        flip_vars(e); flip_offset(e); swap_frames(e);
+        flip_vars(e); flip_offset(e); flip_frames(e);
         if (!subtype_in_env(y, jl_bottom_type, e)) {
-            flip_vars(e); flip_offset(e); swap_frames(e);
+            flip_vars(e); flip_offset(e); flip_frames(e);
             return NULL;
         }
-        flip_vars(e); flip_offset(e); swap_frames(e);
+        flip_vars(e); flip_offset(e); flip_frames(e);
         return jl_bottom_type;
     }
     jl_savedenv_t se;
@@ -6068,10 +6149,10 @@ static jl_value_t *intersect_invariant(jl_value_t *x, jl_value_t *y, jl_stenv_t 
         ii = NULL;
     else {
         restore_env(e, &se, 1);
-        flip_offset(e); swap_frames(e);
+        flip_offset(e); flip_frames(e);
         if (!subtype_in_env_existential(y, x, e))
             ii = NULL;
-        flip_offset(e); swap_frames(e);
+        flip_offset(e); flip_frames(e);
     }
     restore_env(e, &se, 1);
     free_env(&se);
