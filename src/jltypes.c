@@ -4164,7 +4164,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_cancel_source_type = (jl_datatype_t*)
         jl_new_datatype(jl_symbol("CancellationTokenSource"), core, jl_any_type,
                         jl_emptysvec,
-                        jl_perm_symsvec(8,
+                        jl_perm_symsvec(9,
                                         "parents",
                                         "children",
                                         "waiters_head",
@@ -4172,8 +4172,9 @@ void jl_init_types(void) JL_GC_DISABLED
                                         "state",
                                         "_lock",
                                         "delivered",
-                                        "watchers"),
-                        jl_svec(8,
+                                        "watchers",
+                                        "origin"),
+                        jl_svec(9,
                                 jl_any_type,
                                 jl_any_type,
                                 jl_any_type,
@@ -4181,12 +4182,14 @@ void jl_init_types(void) JL_GC_DISABLED
                                 jl_uint8_type,
                                 jl_uint8_type,
                                 jl_uint8_type,
+                                jl_any_type,
                                 jl_any_type),
                         jl_emptysvec,
-                        0, 1, 8);
-    // Field 1 (parents) is const; fields 5-7 (state, _lock, delivered) are atomic
-    const static uint32_t cancel_source_constfields[1]  = { 0b00000001 };
-    const static uint32_t cancel_source_atomicfields[1] = { 0b01110000 };
+                        0, 1, 9);
+    // Field 1 (parents) is const; fields 5-7 (state, _lock, delivered) and
+    // field 9 (origin) are atomic
+    const static uint32_t cancel_source_constfields[1]  = { 0b000000001 };
+    const static uint32_t cancel_source_atomicfields[1] = { 0b101110000 };
     jl_cancel_source_type->name->constfields = cancel_source_constfields;
     jl_cancel_source_type->name->atomicfields = cancel_source_atomicfields;
 

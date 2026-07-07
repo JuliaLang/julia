@@ -59,10 +59,19 @@ the severity
 ([`CANCEL_REQUEST_SAFE`](@ref), [`CANCEL_REQUEST_ABANDON_EXTERNAL`](@ref) or
 [`CANCEL_REQUEST_ABANDON_ALL`](@ref)) as observed at delivery time; the
 source may escalate afterwards.
+
+The `origin` field records, as a [`CancellationToken`](@ref), the source the
+cancellation was originally directed at - the one [`cancel!`](@ref) was
+invoked on, which may be an ancestor of the token governing the code that
+observed the request. Use [`caused_by`](@ref) to test it rather than
+accessing the field directly. It is `nothing` in requests that merely
+describe a severity (e.g. the [`cancel!`](@ref) argument constants).
 """
 struct CancellationRequest
     request::UInt8
+    origin::Union{Nothing, CancellationToken}
 end
+CancellationRequest(request::UInt8) = CancellationRequest(request, nothing)
 
 """
     CANCEL_REQUEST_SAFE
@@ -142,13 +151,50 @@ source stays cancelled).
 iscancelled(src::CancellationTokenSource) = (@atomic :monotonic src.state) != 0x00
 iscancelled(tok::CancellationToken) = iscancelled(tok.source)
 
+"""
+    caused_by(exc, src::CancellationTokenSource)::Bool
+    caused_by(exc, tok::CancellationToken)::Bool
+
+Whether `exc` is a [`CancellationRequest`](@ref) whose cancellation was
+originally directed at the given source - that is, [`cancel!`](@ref) was
+invoked on that source itself, rather than the cancellation reaching the
+affected code through an ancestor of it, or through an unrelated token.
+Wrapped exceptions ([`TaskFailedException`](@ref) and
+[`CompositeException`](@ref)) are looked through; any other exception
+returns `false`.
+
+Code that owns a source - a timeout, or any construct that cancels a scope
+it created - can use this at its boundary to decide whether a caught
+cancellation is its own (absorb it and continue) or belongs to an enclosing
+scope (clean up and rethrow). A cancellation of an enclosing scope also
+cancels the owned source through the graph, so `iscancelled` on the owned
+source cannot make this distinction; the recorded origin can:
+
+```julia
+inner = CancellationTokenSource(CANCEL_TOKEN[])
+Timer(t -> cancel!(inner), 2.0)
+try
+    with(CANCEL_TOKEN => CancellationToken(inner)) do
+        work()
+    end
+catch e
+    caused_by(e, inner) || rethrow() # not ours: an outer scope is unwinding
+    fallback
+end
+```
+"""
+caused_by(cr::CancellationRequest, src::CancellationTokenSource) =
+    cr.origin !== nothing && (cr.origin::CancellationToken).source === src
+caused_by(@nospecialize(exc), src::CancellationTokenSource) = false
+caused_by(@nospecialize(exc), tok::CancellationToken) = caused_by(exc, tok.source)
+
 ## Source construction and tree linkage
 
 
 @eval function _new_cancel_source(parents::Union{Nothing, CancellationTokenSource, Core.SimpleVector})
     return $(Expr(:new, :CancellationTokenSource,
                   :parents, nothing, nothing, nothing,
-                  0x00, 0x00, 0x00, nothing))
+                  0x00, 0x00, 0x00, nothing, nothing))
 end
 
 """
@@ -214,9 +260,11 @@ _unlock_source(src::CancellationTokenSource) = (@atomic :release src._lock = 0x0
 function attach_child!(parent::CancellationTokenSource, child::CancellationTokenSource)
     wr = WeakRef(child) # allocated outside the spinlock
     _lock_source(parent)
-    pst = @atomic :monotonic parent.state
+    pst = @atomic :acquire parent.state # acquire: makes parent.origin visible
     if pst != 0x00
-        _raise_state!(child, pst & SEVERITY_MASK)
+        porig = @atomic :monotonic parent.origin
+        _raise_state!(child, pst & SEVERITY_MASK,
+                      porig === nothing ? parent : porig::CancellationTokenSource)
     end
     kids = parent.children
     if kids === nothing
@@ -240,15 +288,33 @@ end
 
 # CAS-max the source's state to (STATE_CANCELLED_BIT | sev). Returns true if
 # the state was raised, false if it was already at (or above) the severity.
-function _raise_state!(src::CancellationTokenSource, sev::UInt8)
+# `origin` records the node the cancellation was originally directed at, for
+# attribution in delivered `CancellationRequest`s. The first recorded origin
+# wins: severity escalations of an already-cancelled node keep it, and the
+# origin store precedes the state CAS, so a reader that acquire-loads a
+# cancelled `state` also observes a non-nothing origin. Under concurrent
+# first cancellations the recorded origin is whichever raced in first;
+# either attribution is genuine.
+function _raise_state!(src::CancellationTokenSource, sev::UInt8, origin::CancellationTokenSource)
     old = @atomic :monotonic src.state
     while true
         if old != 0x00 && (old & SEVERITY_MASK) >= sev
             return false
         end
+        if old == 0x00
+            @atomicreplace :release :monotonic src.origin nothing => origin
+        end
         old, success = @atomicreplace :acquire_release :monotonic src.state old => (STATE_CANCELLED_BIT | sev)
         success && return true
     end
+end
+
+# The recorded origin of a cancelled source, as a token suitable for
+# embedding in a `CancellationRequest`. Callers acquire-load `state` first,
+# which orders this read after the origin store in `_raise_state!`.
+function _origin_token(src::CancellationTokenSource)
+    orig = @atomic :monotonic src.origin
+    return orig === nothing ? nothing : CancellationToken(orig::CancellationTokenSource)
 end
 
 ## The per-task wait state (the "wait node", folded into `Task`)
@@ -458,7 +524,7 @@ function cancel!(src::CancellationTokenSource,
     if !(sev == 0x0 || sev == 0x3 || sev == 0x4)
         throw(ArgumentError("invalid cancellation severity $(repr(request.request))"))
     end
-    _raise_state!(src, sev) || return false
+    _raise_state!(src, sev, src) || return false
     # Pair with the compiler-order-only publication of `bound_cancel_token`
     # (and of foreign-call cancellation guards) at cancellation points: after
     # this fence, either we observe the binding of a running task, or its
@@ -473,7 +539,12 @@ function cancel!(src::CancellationTokenSource,
 end
 
 function _cancel_walk!(node::CancellationTokenSource, sev::UInt8)
-    creq = CancellationRequest(sev)
+    # The node this cancellation was originally directed at (recorded when
+    # the state was raised); children raised below inherit it, so a whole
+    # cancelled subtree reports a single origin.
+    orig = @atomic :monotonic node.origin
+    creq = CancellationRequest(sev, orig === nothing ? nothing :
+                                    CancellationToken(orig::CancellationTokenSource))
     children = nothing
     towake = nothing
     tonotify = nothing
@@ -530,7 +601,7 @@ function _cancel_walk!(node::CancellationTokenSource, sev::UInt8)
             kids[i] = kids[j]
             i += 1
             c = c::CancellationTokenSource
-            _raise_state!(c, sev)
+            _raise_state!(c, sev, orig === nothing ? node : orig::CancellationTokenSource)
             children = (c, children)
         end
         i <= n && resize!(kids, i - 1)
@@ -581,7 +652,7 @@ function redeliver!(src::CancellationTokenSource)
 end
 
 function _cancel_running!(src::CancellationTokenSource, sev::UInt8)
-    creq = CancellationRequest(sev)
+    creq = CancellationRequest(sev, _origin_token(src))
     ct = current_task()
     self_bound = false
     tasks = ccall(:jl_cancel_collect_bound, Any, (Any,), src)::Vector{Any}
@@ -637,7 +708,7 @@ end
     st = @atomic :acquire src.state
     sev = st & SEVERITY_MASK
     _mark_delivered!(src, sev)
-    throw(CancellationRequest(sev))
+    throw(CancellationRequest(sev, _origin_token(src)))
 end
 
 """
@@ -837,7 +908,7 @@ function wait(tok::CancellationToken; cancel::CancelTokenArg=DEFAULT_CANCEL)
     if st != 0x00
         sev = st & SEVERITY_MASK
         _mark_delivered!(src, sev)
-        return CancellationRequest(sev)
+        return CancellationRequest(sev, _origin_token(src))
     end
     ct = current_task()
     @atomic :monotonic ct.wait_state = WAITNODE_WAITING
@@ -847,7 +918,7 @@ function wait(tok::CancellationToken; cancel::CancelTokenArg=DEFAULT_CANCEL)
         st = @atomic :acquire src.state
         sev = st & SEVERITY_MASK
         _mark_delivered!(src, sev)
-        return CancellationRequest(sev)
+        return CancellationRequest(sev, _origin_token(src))
     end
     if govsrc !== nothing && !register_cancellation!(govsrc, ct)
         _unregister_watcher!(src, ct)
