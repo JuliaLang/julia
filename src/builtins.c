@@ -197,8 +197,11 @@ static int egal_types(const jl_value_t *a, const jl_value_t *b, jl_typeenv_t *en
     if (dtag == jl_unionall_tag << 4) {
         jl_unionall_t *ua = (jl_unionall_t*)a;
         jl_unionall_t *ub = (jl_unionall_t*)b;
+        // the binder name is observable (display, reflection), so `===`
+        // distinguishes alpha-renamed binders; `jl_types_struct_equiv`
+        // (`tvar_names == 0`) compares the structure only
         if (tvar_names && ua->name != ub->name)
-            return 0; // only `compare_tvar_names`-style callers reach this
+            return 0;
         if (!(egal_types(ua->lb, ub->lb, env, tvar_names) && egal_types(ua->ub, ub->ub, env, tvar_names)))
             return 0;
         return egal_types(ua->body, ub->body, env, tvar_names);
@@ -208,10 +211,11 @@ static int egal_types(const jl_value_t *a, const jl_value_t *b, jl_typeenv_t *en
             egal_types(((jl_uniontype_t*)a)->b, ((jl_uniontype_t*)b)->b, env, tvar_names);
     }
     if (dtag == jl_typeegal_tag << 4) {
-        // `TypeEgal` parameters are egality keys; under the de Bruijn
-        // representation alpha-renamed types are egal, so this comparison is
-        // name-insensitive like `jl_egal` itself.
-        return egal_types(((jl_typeeq_t*)a)->T, ((jl_typeeq_t*)b)->T, env, tvar_names);
+        // `TypeEgal` parameters are egality keys: alpha-renamed parameters are
+        // `==` but not `===`, so their `TypeEgal`s are distinct types. The
+        // name-insensitive mode (tvar_names==0) must therefore still compare
+        // the parameter by name.
+        return egal_types(((jl_typeeq_t*)a)->T, ((jl_typeeq_t*)b)->T, env, 1);
     }
     if (dtag == jl_typeeq_tag << 4)
         return egal_types(((jl_typeeq_t*)a)->T, ((jl_typeeq_t*)b)->T, env, tvar_names);
@@ -291,16 +295,14 @@ JL_DLLEXPORT int jl_egal__bitstag(const jl_value_t *a JL_MAYBE_UNROOTED, const j
         case jl_quotenode_tag:
             return compare_fields(a, b, jl_quotenode_type);
         case jl_unionall_tag:
-            // binder names are display metadata: alpha-equivalent types are
-            // observationally equivalent, so they must be egal (#53593)
-            return egal_types(a, b, NULL, 0);
+            return egal_types(a, b, NULL, 1);
         case jl_tvarref_tag:
             return jl_tvarref_depth(a) == jl_tvarref_depth(b);
         case jl_uniontype_tag:
             return compare_fields(a, b, jl_uniontype_type);
         case jl_typeeq_tag:
         case jl_typeegal_tag:
-            return egal_types(a, b, NULL, 0);
+            return egal_types(a, b, NULL, 1);
         case jl_vararg_tag:
             return compare_fields(a, b, jl_vararg_type);
         case jl_task_tag:
@@ -422,8 +424,9 @@ static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOIN
     }
     if (tv == jl_unionall_type) {
         jl_unionall_t *u = (jl_unionall_t*)v;
-        // the binder name is display metadata, not part of type identity
-        uintptr_t h = 0x53593a11c0ffee42;
+        // the binder name is observable (display, reflection) and therefore
+        // part of the object's identity, like the rest of the binder
+        uintptr_t h = u->name->hash;
         h = bitmix(h, type_object_id_(u->lb, env));
         h = bitmix(h, type_object_id_(u->ub, env));
         return bitmix(h, type_object_id_(u->body, env));

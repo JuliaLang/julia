@@ -965,8 +965,7 @@ end
 @noinline Base.@nospecializeinfer f55768(@nospecialize z::UnionAll) = z === Vector
 @test f55768(Vector)
 @test f55768(Vector{T} where T)
-# alpha-equal spellings are one canonical object under positional binders
-@test f55768(Vector{S} where S)
+@test !f55768(Vector{S} where S)
 
 # test that values get rooted correctly over throw
 for a in ((@noinline Ref{Int}(2)),
