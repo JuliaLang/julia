@@ -105,8 +105,9 @@ typedef struct {
 #endif
 } jl_ucontext_t;
 
-// The context published in `jl_task_t.reset_ctx` while a task is inside an
-// asynchronously interruptible region. Two flavors, discriminated by `sp`:
+// The context published while a task is inside an asynchronously
+// interruptible region (`jl_task_t.reset_ctx` / `.cancel_handler_ctx`).
+// Two flavors, discriminated by `sp`:
 //  - `sp != 0` ("reset"): established by a compiled cancellation point (see
 //    llvm-cancellation-lowering.cpp); `ctx` holds a setjmp context and `sp`
 //    identifies the establishing frame. Delivery of the cancellation signal
@@ -424,11 +425,17 @@ typedef struct _jl_task_t {
     jl_handler_t *eh;
     // saved thread state
     jl_ucontext_t ctx; // pointer into stkbuf, if suspended
-    // The published context of the current asynchronously interruptible
-    // region (a compiled cancellation reset point, or a foreign call with a
-    // cancellation handler), NULL outside such regions. Only ever consumed
+    // The published reset (sp != 0) context of the current compiled
+    // cancellation region, NULL outside such regions. Only ever consumed
     // for the thread's *current* task.
     volatile jl_reset_ctx_t *reset_ctx;
+    // The published handler (sp == 0) context of the current foreign call
+    // carrying a cancellation handler, NULL outside such calls. May be
+    // active *at the same time* as a reset region, and takes delivery
+    // priority while published: the handler's span (e.g. a protected
+    // allocator) is exactly where a longjmp must not land, and the handler
+    // can defer the cancellation and chain into the reset on region exit.
+    volatile jl_reset_ctx_t *cancel_handler_ctx;
 } jl_task_t;
 
 JL_DLLEXPORT void *jl_get_ptls_states(void);

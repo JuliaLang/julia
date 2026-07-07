@@ -626,9 +626,10 @@ JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT
         ret = thread_set_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, count);
         HANDLE_MACH_ERROR("thread_set_state", ret);
     }
-    // TODO: the sp == 0 (foreign-call cancellation handler) flavor is not
-    // delivered asynchronously on this platform yet; the cancellation is
-    // recovered level-triggered at the task's next cancellation point.
+    // TODO: the handler flavor (task->cancel_handler_ctx, published by
+    // foreign calls with a cancellation handler) is not delivered
+    // asynchronously on this platform yet; the cancellation is recovered
+    // level-triggered at the task's next cancellation point.
     ret = thread_resume(thread);
     HANDLE_MACH_ERROR("thread_resume", ret);
 }

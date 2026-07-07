@@ -2195,11 +2195,13 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     }
 
     // Cancellation guard (`@ccall cancel_handler=(fn, state)`): fill an
-    // sp == 0 jl_reset_ctx_t and publish it in task->reset_ctx around the
-    // call, so that a cancellation of the governing token delivered while
-    // the call runs invokes fn(state, severity) on this thread (see the
-    // usr2_handler request-5 dispatch), instead of waiting for the next
-    // cancellation point.
+    // sp == 0 jl_reset_ctx_t and publish it in task->cancel_handler_ctx
+    // around the call, so that a cancellation of the governing token
+    // delivered while the call runs invokes fn(state, severity) on this
+    // thread (see the usr2_handler request-5 dispatch), instead of waiting
+    // for the next cancellation point. The handler slot is separate from
+    // (and may be active at the same time as) a compiled reset region's
+    // task->reset_ctx, and takes delivery priority while published.
     Value *guard_reset_ctx_ptr = NULL;
     Value *guard_null = NULL;
     if (cancel_guard) {
@@ -2232,7 +2234,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         // Publish (release: the guard contents must be visible before the
         // pointer).
         Value *task = get_current_task(ctx);
-        guard_reset_ctx_ptr = emit_ptrgep(ctx, task, offsetof(jl_task_t, reset_ctx), "reset_ctx_ptr");
+        guard_reset_ctx_ptr = emit_ptrgep(ctx, task, offsetof(jl_task_t, cancel_handler_ctx), "cancel_handler_ctx_ptr");
         StoreInst *pub = ctx.builder.CreateAlignedStore(guard_buf, guard_reset_ctx_ptr, ctx.types().alignof_ptr);
         pub->setOrdering(AtomicOrdering::Release);
         guard_null = ConstantPointerNull::get(cast<PointerType>(guard_buf->getType()));
@@ -2284,10 +2286,12 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     ((CallInst*)ret)->setAttributes(attributes);
 
     if (cancel_guard) {
-        // The guard must stay published across this call (the whole point);
-        // keep the cancellation-lowering pass from clearing it.
-        ret->setMetadata("julia.reset_safe", MDNode::get(ctx.builder.getContext(), {}));
-        // Unpublish: the guard buffer's validity ends with the call.
+        // Unpublish: the guard buffer's validity ends with the call. (The
+        // handler slot is not touched by the cancellation-lowering pass, so
+        // it needs no reset_safe marking to survive the call - and the call
+        // is deliberately *not* marked reset_safe: it has not been audited
+        // for a longjmp landing inside it, so an enclosing reset region is
+        // still cleared before it as usual.)
         StoreInst *unpub = ctx.builder.CreateAlignedStore(guard_null, guard_reset_ctx_ptr, ctx.types().alignof_ptr);
         unpub->setOrdering(AtomicOrdering::Release);
     }
