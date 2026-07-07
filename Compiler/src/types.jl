@@ -251,6 +251,12 @@ Parameters that control abstract interpretation-based type inference operation.
   If `true`, inference will be performed on functions regardless of whether it was disabled
   at the module level via `Base.Experimental.@compiler_options`.
 ---
+- `inf_params.reinfer_image_cis::Bool = false`\\
+  If `true`, the global code cache treats `CodeInstance`s loaded from a system or package
+  image as misses, forcing re-inference of the reachable code. Used by the `--trim`
+  pipeline when the image was inferred under a more conservative regime than the
+  closed-world output requires.
+---
 """
 struct InferenceParams
     max_methods::Int
@@ -263,6 +269,7 @@ struct InferenceParams
     assume_bindings_static::Bool
     ignore_recursion_hardlimit::Bool
     force_enable_inference::Bool
+    reinfer_image_cis::Bool
 
     function InferenceParams(
         max_methods::Int,
@@ -275,6 +282,7 @@ struct InferenceParams
         assume_bindings_static::Bool,
         ignore_recursion_hardlimit::Bool,
         force_enable_inference::Bool,
+        reinfer_image_cis::Bool,
     )
         return new(
             max_methods,
@@ -287,6 +295,7 @@ struct InferenceParams
             assume_bindings_static,
             ignore_recursion_hardlimit,
             force_enable_inference,
+            reinfer_image_cis,
         )
     end
 end
@@ -301,7 +310,8 @@ function InferenceParams(
         #=aggressive_constant_propagation::Bool=# false,
         #=assume_bindings_static::Bool=# false,
         #=ignore_recursion_hardlimit::Bool=# false,
-        #=force_enable_inference::Bool=# false
+        #=force_enable_inference::Bool=# false,
+        #=reinfer_image_cis::Bool=# false
     );
     max_methods::Int = params.max_methods,
     max_union_splitting::Int = params.max_union_splitting,
@@ -313,6 +323,7 @@ function InferenceParams(
     assume_bindings_static::Bool = params.assume_bindings_static,
     ignore_recursion_hardlimit::Bool = params.ignore_recursion_hardlimit,
     force_enable_inference::Bool = params.force_enable_inference,
+    reinfer_image_cis::Bool = params.reinfer_image_cis,
 )
     return InferenceParams(
         max_methods,
@@ -325,6 +336,7 @@ function InferenceParams(
         assume_bindings_static,
         ignore_recursion_hardlimit,
         force_enable_inference,
+        reinfer_image_cis,
     )
 end
 
@@ -600,13 +612,15 @@ end
 code_cache(interp::AbstractInterpreter, #=extended_range=#::WorldRange) = code_cache(interp)
 
 function code_cache(interp::AbstractInterpreter)
-    cache = InternalCodeCache(cache_owner(interp), get_inference_world(interp))
+    cache = InternalCodeCache(cache_owner(interp), WorldRange(get_inference_world(interp)),
+                              InferenceParams(interp).reinfer_image_cis)
     return OverlayCodeCache(cache, get_inference_cache(interp))
 end
 
 function code_cache(interp::NativeInterpreter, extended_range::WorldRange)
     @assert get_inference_world(interp) in extended_range
-    cache = InternalCodeCache(cache_owner(interp), extended_range)
+    cache = InternalCodeCache(cache_owner(interp), extended_range,
+                              InferenceParams(interp).reinfer_image_cis)
     return OverlayCodeCache(cache, get_inference_cache(interp))
 end
 

@@ -1834,7 +1834,7 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
                 # try to reuse an existing CodeInstance from before to avoid making duplicates in the cache
                 if iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), mi, callee))
                     cached = ccall(:jl_get_ci_equiv, Any, (Any, UInt), callee, world)::CodeInstance
-                    if cached === callee
+                    if cached === callee || (InferenceParams(interp).reinfer_image_cis && ci_in_image(cached))
                         code_cache(interp)[mi] = callee
                     else
                         # Use an existing CI from the cache, if there is available one that is compatible
@@ -1856,7 +1856,8 @@ const TRIM_SAFE = 0x1
 const TRIM_UNSAFE = 0x2
 const TRIM_UNSAFE_WARN = 0x3
 function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_mode::UInt8)
-    inf_params = InferenceParams(; force_enable_inference = trim_mode != TRIM_NO)
+    inf_params = InferenceParams(; force_enable_inference = trim_mode != TRIM_NO,
+                                   reinfer_image_cis = trim_mode != TRIM_NO && !BuildSettings.WORLD_SPLITTING)
 
     # Create an "invokelatest" queue to enable eager compilation of speculative
     # invokelatest calls such as from `Core.finalizer` and `ccallable`

@@ -592,3 +592,22 @@ using REPL.REPLCompletions: completions
     Compiler.typeinf_ext_toplevel(interp, mi, Compiler.SOURCE_MODE_NOT_REQUIRED)
     true
 end
+
+reinfer_probe(x) = x + 1
+@testset "reinfer_image_cis code cache filtering" begin
+    world = Base.get_world_counter()
+    image_mi = Base.method_instance(sin, (Float64,))
+    image_ci = image_mi.cache
+    @test Compiler.ci_in_image(image_ci)
+    filtered = Compiler.InternalCodeCache(nothing, Compiler.WorldRange(world), true)
+    unfiltered = Compiler.InternalCodeCache(nothing, Compiler.WorldRange(world), false)
+    @test Compiler.get(unfiltered, image_mi, nothing) isa Core.CodeInstance
+    @test Compiler.get(filtered, image_mi, nothing) === nothing
+    @test !Compiler.haskey(filtered, image_mi)
+
+    precompile(reinfer_probe, (Int,))
+    fresh_mi = Base.method_instance(reinfer_probe, (Int,))
+    fresh_ci = Compiler.get(filtered, fresh_mi, nothing)
+    @test fresh_ci isa Core.CodeInstance
+    @test !Compiler.ci_in_image(fresh_ci)
+end
