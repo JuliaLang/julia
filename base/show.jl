@@ -473,11 +473,15 @@ Write a text representation of a value `x` to the output stream `io`. New types 
 should overload `show(io::IO, x::T)`. The representation used by `show` generally
 includes Julia-specific formatting and type information.
 
-The output _should_ be parseable Julia code that, after parsing and evaluation,
-_should_ be equal to the value, i.e. `eval(Meta.parse(repr(x))) == x` _should_
-hold `true` if there are no technical reasons against it or if such an output
-is not considered to be too verbose for a representation in the REPL. So `show`
-is not a text-based serialization format.
+The output *should* be parseable Julia code that, after parsing and evaluation,
+is equal to the value: that is, `eval(Meta.parse(repr(x))) == x` *should*
+be `true`. However, there are occasional counter-examples of types where
+this is impractical, such as self-referential data structures or cases
+where accurate parsing would require a verbose and awkward `show` format.
+
+`show` is not a text-based serialization format. For more reliable serialization
+of *arbitrary* Julia types, use the `Serialization` standard library or similar
+packages rather than `show`.
 
 [`repr`](@ref) returns the output of `show` as a string.
 
