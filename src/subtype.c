@@ -157,6 +157,10 @@ typedef struct jl_varbinding_t {
     // on its own side of the relation, innermost first; a bound-variable
     // reference of depth d in that side's term resolves to the d-th entry
     struct jl_varbinding_t *frame_prev;
+    // intersection only: the term on the other side of the crossing (used to
+    // avoid conflating a memoized variable already visible there; borrowed
+    // reference, rooted by the crossing's caller)
+    jl_value_t *other_t;
 } jl_varbinding_t;
 
 typedef struct jl_ivarbinding_t {
@@ -307,10 +311,16 @@ static int has_free_or_dangling_typevars(jl_value_t *v) JL_NOTSAFEPOINT;
 // bounds differ. `t`, if given, is the term on the other side of the relation;
 // a variable already visible there would conflate two bindings, so such
 // entries are skipped (intersection leaks binding variables into terms).
+static jl_tvar_t *binding_var(jl_stenv_t *e, jl_varbinding_t *vb) JL_GLOBALLY_ROOTED;
+
+// the returned variable is memoized in (and so rooted by) `e->opened`
 static jl_tvar_t *stenv_binding_var(jl_stenv_t *e, jl_unionall_t *u, jl_value_t *lb, jl_value_t *ub,
-                                    jl_varbinding_t *frame_prev, jl_value_t *t)
+                                    jl_varbinding_t *frame_prev, jl_value_t *t) JL_GLOBALLY_ROOTED
 {
-    jl_value_t *prevkey = frame_prev == NULL ? jl_nothing : (jl_value_t*)frame_prev->var;
+    // the key must identify the whole enclosing chain, so the previous
+    // frame's variable is forced transitively: repeated passes then agree on
+    // every variable an already-memoized bound substitution can contain
+    jl_value_t *prevkey = frame_prev == NULL ? jl_nothing : (jl_value_t*)binding_var(e, frame_prev);
     if (e->opened != NULL) {
         size_t i, l = jl_array_nrows(e->opened);
         for (i = 0; i < l; i += 3) {
@@ -361,16 +371,16 @@ extern jl_varbinding_t *frame_lookup(jl_varbinding_t *frame, size_t d) JL_GLOBAL
 #endif
 jl_varbinding_t *frame_lookup(jl_varbinding_t *frame, size_t d) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
 
-// resolve a bare bound-variable reference to its binding's variable (a
-// still-dangling reference is returned unchanged). The result is as rooted
-// as `t`: a binding's variable is kept alive by its pusher's frame and by
-// the `e->opened` memo.
-static jl_value_t *resolve_tvarref(jl_value_t *t JL_PROPAGATES_ROOT, jl_varbinding_t *frame) JL_NOTSAFEPOINT
+// resolve a bare bound-variable reference to its binding's variable,
+// materializing it on this first use (a still-dangling reference is returned
+// unchanged). The result is as rooted as `t`: a binding's variable is kept
+// alive by its pusher's frame and by the `e->opened` memo.
+static jl_value_t *resolve_tvarref(jl_value_t *t JL_PROPAGATES_ROOT, jl_varbinding_t *frame, jl_stenv_t *e)
 {
     if (jl_is_tvarref(t)) {
         jl_varbinding_t *b = frame_lookup(frame, jl_tvarref_depth(t));
         if (b != NULL)
-            return (jl_value_t*)b->var;
+            return (jl_value_t*)binding_var(e, b);
     }
     return t;
 }
@@ -400,12 +410,18 @@ static jl_value_t *frame_substitute(jl_value_t *t, jl_varbinding_t *frame, jl_st
 {
     if (frame == NULL)
         return t;
+    // the frame's variable disambiguates stack-slot reuse: it transitively
+    // encodes the identity of the whole enclosing chain (its own memo key
+    // includes the previous frame's variable), which the binder object alone
+    // does not. Substitution is itself a forcing consumer, so materializing
+    // it here costs nothing extra.
+    jl_tvar_t *framevar = binding_var(e, frame);
     if (e->substmemo != NULL) {
         size_t i, l = jl_array_nrows(e->substmemo);
         for (i = 0; i < l; i += 4) {
             if (jl_array_ptr_ref(e->substmemo, i) == t &&
                 jl_unbox_voidpointer(jl_array_ptr_ref(e->substmemo, i + 1)) == (void*)frame &&
-                jl_array_ptr_ref(e->substmemo, i + 2) == (jl_value_t*)frame->var)
+                jl_array_ptr_ref(e->substmemo, i + 2) == (jl_value_t*)framevar)
                 return jl_array_ptr_ref(e->substmemo, i + 3);
         }
     }
@@ -424,7 +440,10 @@ static jl_value_t *frame_substitute(jl_value_t *t, jl_varbinding_t *frame, jl_st
         // Invalid `Union` bound arms drop under the substitution; a term
         // invalid beyond that keeps its references (the dangling-binder
         // rules then answer conservatively).
-        jl_value_t *t2 = jl_substitute_tvarref_nothrow(t, 1, (jl_value_t*)f->var);
+        // Only a level that actually occurs forces its binding's variable;
+        // a non-occurring level is a pure shift and any value works.
+        jl_value_t *v = jl_tvarref_occurs(t, 1) ? (jl_value_t*)binding_var(e, f) : jl_bottom_type;
+        jl_value_t *t2 = jl_substitute_tvarref_nothrow(t, 1, v);
         if (t2 == NULL)
             break;
         t = t2;
@@ -439,10 +458,58 @@ static jl_value_t *frame_substitute(jl_value_t *t, jl_varbinding_t *frame, jl_st
     fbox = jl_box_voidpointer((void*)frame);
     jl_array_ptr_1d_push(e->substmemo, t0);
     jl_array_ptr_1d_push(e->substmemo, fbox);
-    jl_array_ptr_1d_push(e->substmemo, (jl_value_t*)frame->var);
+    jl_array_ptr_1d_push(e->substmemo, (jl_value_t*)framevar);
     jl_array_ptr_1d_push(e->substmemo, t);
     JL_GC_POP();
     return t;
+}
+
+// The bounds of a binding are pushed raw (the binder's declared bounds,
+// implicitly under `frame_prev`), and most bindings are never consumed, so
+// their re-expression in variable form is deferred. Rawness is identified by
+// object identity with the binder's own bounds; the accessors below do NOT
+// write the field: the environment save/merge machinery relies on unchanged
+// bounds staying the identical object across a walk, and a walk update
+// always stores an already re-expressed value.
+// rooted: the raw field by the binding's pusher, a substituted view by the
+// substitution memo
+static jl_value_t *binding_lb(jl_stenv_t *e, jl_varbinding_t *vb) JL_GLOBALLY_ROOTED
+{
+    jl_value_t *lb = vb->lb;
+    if (lb == vb->u->lb && jl_has_dangling_tvarrefs(lb))
+        lb = frame_substitute(lb, vb->frame_prev, e); // memoized (stable object)
+    return lb;
+}
+
+static jl_value_t *binding_ub(jl_stenv_t *e, jl_varbinding_t *vb) JL_GLOBALLY_ROOTED
+{
+    jl_value_t *ub = vb->ub;
+    if (ub == vb->u->ub && jl_has_dangling_tvarrefs(ub))
+        ub = frame_substitute(ub, vb->frame_prev, e); // memoized (stable object)
+    return ub;
+}
+
+// write the re-expressed view into the fields. Only legal once the binding
+// can no longer appear in an environment save/merge (it has been popped):
+// the boundary consumers (envout, the intersection result construction)
+// read the fields directly and may update them in place.
+static void binding_force_bounds(jl_stenv_t *e, jl_varbinding_t *vb)
+{
+    vb->lb = binding_lb(e, vb);
+    vb->ub = binding_ub(e, vb);
+}
+
+// force the binding's bookkeeping variable: most binders' variables never
+// occur at a compared position, so the variable (and the bound substitution
+// it snapshots) materializes on first use
+static jl_tvar_t *binding_var(jl_stenv_t *e, jl_varbinding_t *vb) JL_GLOBALLY_ROOTED
+{
+    if (vb->var == NULL) {
+        jl_value_t *lb = binding_lb(e, vb); // rooted by the substitution memo
+        jl_value_t *ub = binding_ub(e, vb);
+        vb->var = stenv_binding_var(e, vb->u, lb, ub, vb->frame_prev, vb->other_t);
+    }
+    return vb->var;
 }
 
 // does `x` contain a reference escaping it that resolves to an existential
@@ -1484,7 +1551,10 @@ static int var_lt_(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t pa
         return singleton_typevar_subtype(b, a);
     }
     record_var_occurrence(bb, e, param);
-    if (jl_has_dangling_tvarrefs(bb->ub) || jl_has_dangling_tvarrefs(bb->lb)) {
+    // the accumulating (variable-form) view of the bounds; writes below go to
+    // the fields directly
+    jl_value_t *bb_lb = binding_lb(e, bb), *bb_ub = binding_ub(e, bb);
+    if (jl_has_dangling_tvarrefs(bb_ub) || jl_has_dangling_tvarrefs(bb_lb)) {
         // the binder of a detached fragment: its bounds reference binders
         // outside the query, so they support no bound reasoning -- only the
         // trivial relations hold (cf. the bare-reference leaf rule)
@@ -1500,13 +1570,13 @@ static int var_lt_(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t pa
         // surrounding tuple body's occurrences.
         int8_t *saved_fb = (int8_t*)alloca(current_env_length(e));
         int nsaved_fb = push_forall_bound_scope(e, saved_fb);
-        int sub = subtype_left_var(bb->ub, a, e, param);
+        int sub = subtype_left_var(bb_ub, a, e, param);
         pop_forall_bound_scope(e, saved_fb, nsaved_fb);
         return sub;
     }
-    if (bb->ub == a)
+    if (bb_ub == a)
         return 1;
-    int lb_ok = (bb->lb == jl_bottom_type && !jl_is_type(a) && !jl_is_typevar(a));
+    int lb_ok = (bb_lb == jl_bottom_type && !jl_is_type(a) && !jl_is_typevar(a));
     if (!lb_ok) {
         if (e->intersection && bb->in_ccheck) {
             // this binding's consistency check is already pending above us
@@ -1516,7 +1586,7 @@ static int var_lt_(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t pa
         }
         else {
             bb->in_ccheck = 1;
-            lb_ok = subtype_ccheck(bb->lb, a, e);
+            lb_ok = subtype_ccheck(bb_lb, a, e);
             bb->in_ccheck = 0;
         }
     }
@@ -1525,7 +1595,7 @@ static int var_lt_(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t pa
     // for this to work we need to compute issub(left,right) before issub(right,left),
     // since otherwise the issub(a, bb.ub) check in var_gt becomes vacuous.
     if (e->intersection) {
-        jl_value_t *ub = intersect_aside(a, bb->ub, e, bb->depth0);
+        jl_value_t *ub = intersect_aside(a, bb_ub, e, bb->depth0);
         JL_GC_PUSH1(&ub);
         if (ub != (jl_value_t*)b && (!jl_is_typevar(ub) || !reachable_var(ub, b, e)))
             bb->ub = ub;
@@ -1538,7 +1608,7 @@ static int var_lt_(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t pa
         // rather than over-approximating to one side, which would let `b` escape
         // its declared range (e.g. equating `∃b<:Foo` with an outer `∀a<:Bar`
         // even though `Bar ⊄ Foo`). See #61917.
-        bb->ub = simple_meet(bb->ub, a, 1);
+        bb->ub = simple_meet(bb_ub, a, 1);
     }
     assert(bb->ub != (jl_value_t*)b);
     return 1;
@@ -1569,7 +1639,10 @@ static int var_gt_(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t pa
         return subtype_singleton_typevar(a, b);
     }
     record_var_occurrence(bb, e, param);
-    if (jl_has_dangling_tvarrefs(bb->ub) || jl_has_dangling_tvarrefs(bb->lb)) {
+    // the accumulating (variable-form) view of the bounds; writes below go to
+    // the fields directly
+    jl_value_t *bb_lb = binding_lb(e, bb), *bb_ub = binding_ub(e, bb);
+    if (jl_has_dangling_tvarrefs(bb_ub) || jl_has_dangling_tvarrefs(bb_lb)) {
         // see var_lt_: a detached fragment's binder supports no bound reasoning
         return a == jl_bottom_type || a == (jl_value_t*)b;
     }
@@ -1582,18 +1655,18 @@ static int var_gt_(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t pa
         // lower bound away from the enclosing tuple body.
         int8_t *saved_fb = (int8_t*)alloca(current_env_length(e));
         int nsaved_fb = push_forall_bound_scope(e, saved_fb);
-        int sub = subtype_left_var(a, bb->lb, e, param);
+        int sub = subtype_left_var(a, bb_lb, e, param);
         pop_forall_bound_scope(e, saved_fb, nsaved_fb);
         return sub;
     }
     if (a != jl_bottom_type && bb->lb_certainty < e->bound_channel)
         bb->lb_certainty = e->bound_channel;
-    if (bb->lb == a) {
+    if (bb_lb == a) {
         if (bb->lb_spell < e->spell_channel)
             bb->lb_spell = e->spell_channel;
         return 1;
     }
-    if (!(bb->ub == (jl_value_t*)jl_any_type && !jl_is_type(a) && !jl_is_typevar(a))) {
+    if (!(bb_ub == (jl_value_t*)jl_any_type && !jl_is_type(a) && !jl_is_typevar(a))) {
         int ub_ok;
         if (e->intersection && bb->in_ccheck) {
             // see var_lt: answer a re-entrant consistency check coinductively
@@ -1603,7 +1676,7 @@ static int var_gt_(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t pa
             int saved = e->ignore_lb_required;
             e->ignore_lb_required = 1;
             bb->in_ccheck = 1;
-            ub_ok = subtype_ccheck(a, bb->ub, e);
+            ub_ok = subtype_ccheck(a, bb_ub, e);
             bb->in_ccheck = 0;
             e->ignore_lb_required = saved;
         }
@@ -1613,14 +1686,14 @@ static int var_gt_(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t pa
     // when the var is pinned (`lb === ub`), `a <= ub` was just checked and a
     // join picking `a` proves `lb <= a`, i.e. `a` respells the same type: keep
     // the existing spelling unless `a`'s is more authoritative (see `lb_spell`)
-    int pinned = (bb->lb == bb->ub && bb->lb != jl_bottom_type);
-    jl_value_t *lb = simple_join(bb->lb, a);
+    int pinned = (bb_lb == bb_ub && bb_lb != jl_bottom_type);
+    jl_value_t *lb = simple_join(bb_lb, a);
     JL_GC_PUSH1(&lb);
     if (pinned && lb == a && e->spell_channel <= bb->lb_spell) {
         // keep bb->lb (and bb->ub) as-is
     }
     else if (!e->intersection || !jl_is_typevar(lb) || !reachable_var(lb, b, e)) {
-        if (bb->lb != lb) {
+        if (bb_lb != lb) {
             bb->lb = lb;
             bb->lb_spell = e->spell_channel;
         }
@@ -1986,7 +2059,7 @@ static void mark_required_tuple_element(jl_stenv_t *e, jl_value_t *rhs) JL_NOTSA
     size_t d = 1;
     for (jl_varbinding_t *b = e->Rframe; b != NULL; b = b->frame_prev, d++) {
         if (b->existential && b->lb != jl_bottom_type && !b->lb_required &&
-            constrains_ref_static(d, b->var->ub == (jl_value_t*)jl_any_type, rhs, 1))
+            constrains_ref_static(d, b->u->ub == (jl_value_t*)jl_any_type, rhs, 1))
             b->lb_required = 1;
     }
     // re-expressed (variable-form) content still carries variables
@@ -2134,14 +2207,13 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     // resolve positionally through the side's frame chain
     jl_value_t *body = u->body;
     JL_GC_PUSH6(&u, &vb.lb, &vb.ub, &vb.innervars, &new_tvar, &vb.var);
-    // the binder's bounds live one frame out; re-express any references they
-    // carry in variable form (they are typically closed already)
-    vb.lb = jl_has_dangling_tvarrefs(u->lb) ? frame_substitute(u->lb, vb.frame_prev, e) : u->lb;
-    vb.ub = jl_has_dangling_tvarrefs(u->ub) ? frame_substitute(u->ub, vb.frame_prev, e) : u->ub;
-    // a variable carries the binding's identity for the bookkeeping (bound
-    // accumulation, envout); it is never substituted into the body, and is
-    // memoized per binder so repeated passes agree on the identity
-    vb.var = stenv_binding_var(e, u, vb.lb, vb.ub, vb.frame_prev, NULL);
+    // the binding starts fully lazy: the bounds hold the binder's raw
+    // declared bounds (implicitly under `frame_prev`), and no bookkeeping
+    // variable exists. Both materialize on first use -- an occurrence
+    // reaching a compared position, a bound update, or the envout -- and
+    // most bindings are never used (see `binding_var`).
+    vb.lb = u->lb;
+    vb.ub = u->ub;
     int body_occurs_inv = tvarref_occurs_invariant(body, 1);
     vb.body_occurs_inv = body_occurs_inv;
     e->vars = &vb;
@@ -2167,8 +2239,14 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
         // Split the bound here by registering one ordinary left-union decision
         // per Union node, so that the enclosing ∀∃ loop enumerates all arms.
         if (!e->intersection && vb.lb == jl_bottom_type && jl_is_uniontype(vb.ub) &&
-            !body_occurs_inv && tvarref_occurs_covariant_only(body, 1, 1))
-            vb.ub = pick_union_element(vb.ub, e, 0);
+            !body_occurs_inv && tvarref_occurs_covariant_only(body, 1, 1)) {
+            jl_value_t *arm = pick_union_element(vb.ub, e, 0);
+            // the arm is a new bound object: store it re-expressed (rawness
+            // is identified by object identity with the declared bound)
+            if (jl_has_dangling_tvarrefs(arm))
+                arm = frame_substitute(arm, vb.frame_prev, e);
+            vb.ub = arm;
+        }
         ans = subtype(body, t, e, param);
     }
 
@@ -2196,6 +2274,13 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
             if (vlb)
                 vlb->concrete = 1;
         }
+        else if (jl_is_tvarref(vb.lb)) {
+            // a still-raw declared lower bound referencing an enclosing
+            // binder: the reference is already the positional pointer
+            jl_varbinding_t *vlb = frame_lookup(vb.frame_prev, jl_tvarref_depth(vb.lb));
+            if (vlb)
+                vlb->concrete = 1;
+        }
         else if (!is_leaf_bound(concrete_lb)) {
             ans = 0;
         }
@@ -2209,6 +2294,13 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     if (!ans) {
         JL_GC_POP();
         return 0;
+    }
+
+    // the envout consumes the materialized view; the binding is popped, so
+    // the fields may now be written in place
+    if (R && e->envidx < e->envsz) {
+        binding_var(e, &vb);
+        binding_force_bounds(e, &vb);
     }
 
     // An internal `Intersect` meet node (see #61917) is exact for subtyping but
@@ -2231,7 +2323,8 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     jl_varbinding_t *outermost = NULL;
     for (jl_varbinding_t *btemp = vb.prev; btemp; btemp = btemp->prev)
         outermost = btemp;
-    for (jl_varbinding_t *btemp = vb.prev; btemp; btemp = btemp->prev) {
+    // a variable that was never materialized cannot occur in any outer bound
+    for (jl_varbinding_t *btemp = vb.var == NULL ? NULL : vb.prev; btemp; btemp = btemp->prev) {
         if (!btemp->existential)
             continue;
 
@@ -2260,6 +2353,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
             // are taken care of by jl_rename_unionall, but of course if the tvar is not in the environment
             // anymore, that code path does not know that it needs to do any renaming.
             if (!new_tvar) {
+                binding_force_bounds(e, &vb); // popped: in-place write is fine
                 new_tvar = (jl_value_t*)jl_new_typevar(vb.var->name, vb.lb, vb.ub);
                 if (outermost != NULL)
                     push_innervar(outermost, new_tvar);
@@ -2367,7 +2461,7 @@ static int check_vararg_length(jl_value_t *v, ssize_t n, jl_stenv_t *e, jl_varbi
             // both check directions see the binding's variable
             jl_varbinding_t *b = frame_lookup(frame, jl_tvarref_depth(N));
             if (b)
-                N = (jl_value_t*)b->var;
+                N = (jl_value_t*)binding_var(e, b);
         }
         jl_value_t *nn = jl_box_long(n);
         JL_GC_PUSH1(&nn);
@@ -2396,12 +2490,12 @@ static int subtype_tuple_varargs(
     if (xp1 && jl_is_tvarref(xp1)) {
         jl_varbinding_t *b = frame_lookup(e->Lframe, jl_tvarref_depth(xp1));
         if (b)
-            xp1 = (jl_value_t*)b->var;
+            xp1 = (jl_value_t*)binding_var(e, b);
     }
     if (yp1 && jl_is_tvarref(yp1)) {
         jl_varbinding_t *b = frame_lookup(e->Rframe, jl_tvarref_depth(yp1));
         if (b)
-            yp1 = (jl_value_t*)b->var;
+            yp1 = (jl_value_t*)binding_var(e, b);
     }
 
     jl_varbinding_t *xlv = NULL, *ylv = NULL;
@@ -3251,8 +3345,8 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
     if (jl_is_tvarref(x) || jl_is_tvarref(y)) {
         // resolve bound-variable references against their side's binder
         // chain; the binding's variable then flows through the ordinary rules
-        x = resolve_tvarref(x, e->Lframe);
-        y = resolve_tvarref(y, e->Rframe);
+        x = resolve_tvarref(x, e->Lframe, e);
+        y = resolve_tvarref(y, e->Rframe, e);
         if (jl_is_tvarref(x) || jl_is_tvarref(y)) {
             // truly dangling (detached subterms passed in by the user);
             // tolerated like free typevars: only comparable structurally
@@ -3278,17 +3372,20 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
             jl_tvar_t *yvar = (jl_tvar_t *)y;
             int yinner = 0;
             jl_varbinding_t *yb = lookup_binding(e, yvar, &yinner);
-            while (e->intersection && yb != NULL && yb->lb == yb->ub && jl_is_typevar(yb->lb)) {
-                yvar = (jl_tvar_t *)yb->lb;
+            while (e->intersection && yb != NULL) {
+                jl_value_t *yb_lb = binding_lb(e, yb);
+                if (!(yb_lb == binding_ub(e, yb) && jl_is_typevar(yb_lb)))
+                    break;
+                yvar = (jl_tvar_t *)yb_lb;
                 yb = lookup_binding(e, yvar, &yinner);
             }
             // Note: `x <: ∃y` performs a local ∀-∃ check between `x` and `yb->ub`.
             // We need to ensure that there's no ∃ typevar as otherwise that check
             // might cause false alarm due to the accumulated env change.
-            if (yb == NULL || !yb->existential || !has_existential_typevar(yb->ub, e))
+            if (yb == NULL || !yb->existential || !has_existential_typevar(binding_ub(e, yb), e))
                 return subtype_var(yvar, x, e, 1, param, yb, yinner);
         }
-        x = resolve_tvarref(pick_union_element(x, e, 0), e->Lframe);
+        x = resolve_tvarref(pick_union_element(x, e, 0), e->Lframe, e);
     }
     if (jl_is_uniontype(y)) {
         if (obviously_in_union(y, x) && !jl_has_dangling_tvarrefs(x))
@@ -3302,7 +3399,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
         // branch with `T' == T` -- which covers all of `Type{T}` or nothing --
         // is still found by the per-branch decomposition below.
         if (jl_is_typeeq(x) && union_has_kind_component(y)) {
-            jl_value_t *xp0 = typeeq_unpin_tvar(resolve_tvarref(jl_typeeq_T(x), e->Lframe));
+            jl_value_t *xp0 = typeeq_unpin_tvar(resolve_tvarref(jl_typeeq_T(x), e->Lframe, e));
             // a dangling-var dispatch key has a single tag, found by the
             // per-branch decomposition instead
             if (!jl_is_typevar(xp0) && !typeeq_is_dangling_key(xp0, e, NULL) &&
@@ -3323,7 +3420,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
             ui = ((xx && xx->existential) || has_free_or_dangling_typevars(y)) && pick_union_decision(e, 1);
         }
         if (ui == 1)
-            y = resolve_tvarref(pick_union_element(y, e, 1), e->Rframe);
+            y = resolve_tvarref(pick_union_element(y, e, 1), e->Rframe, e);
     }
     // An internal `Intersect` meet node is only ever produced as an existential
     // upper bound, so it can appear on the right (`x <: a ∩ b`) but never on the
@@ -3345,11 +3442,11 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
             int yfree_singleton = yy == NULL && !yinner;
             if (xfree_singleton && yfree_singleton)
                 return 0;
-            jl_value_t *xub = xx ? xx->ub : xinner ? ((jl_tvar_t*)x)->ub : x;
-            jl_value_t *ylb = yy ? yy->lb : yinner ? ((jl_tvar_t*)y)->lb : y;
+            jl_value_t *xub = xx ? binding_ub(e, xx) : xinner ? ((jl_tvar_t*)x)->ub : x;
+            jl_value_t *ylb = yy ? binding_lb(e, yy) : yinner ? ((jl_tvar_t*)y)->lb : y;
             if (e->intersection) {
-                jl_value_t *xlb = xx ? xx->lb : xinner ? ((jl_tvar_t*)x)->lb : x;
-                jl_value_t *yub = yy ? yy->ub : yinner ? ((jl_tvar_t*)y)->ub : y;
+                jl_value_t *xlb = xx ? binding_lb(e, xx) : xinner ? ((jl_tvar_t*)x)->lb : x;
+                jl_value_t *yub = yy ? binding_ub(e, yy) : yinner ? ((jl_tvar_t*)y)->ub : y;
                 // find equivalence class for typevars during intersection
                 if (xub != x && ((jl_is_typevar(xub) && xub == xlb) ||
                                   !jl_is_type(xub)))
@@ -3363,7 +3460,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
             if (xr) {
                 if (yr) {
                     // TODO: Why is this sound?
-                    if (e->intersection && try_subtype_by_bounds(xx->lb, yy->ub, e))
+                    if (e->intersection && try_subtype_by_bounds(binding_lb(e, xx), binding_ub(e, yy), e))
                         return 1;
 
                     // Both variables are existential. We need to annotate the constraint
@@ -3394,7 +3491,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
                     // so asking which of these cases we're in is equivalent to
                     // asking whether `B`'s depth is greater than `A`'s depth.
                     if (yy && yy->depth0 < xx->depth0)
-                        return var_gt((jl_tvar_t*)y, xx->ub, e, param, yy, yinner);
+                        return var_gt((jl_tvar_t*)y, binding_ub(e, xx), e, param, yy, yinner);
                 }
                 return var_gt((jl_tvar_t*)y, x, e, param, yy, yinner);
             }
@@ -3521,7 +3618,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
         // `Any`, reachable here when `T` has free vars) need no classification
         if (y == (jl_value_t*)jl_anytype_type || y == (jl_value_t*)jl_any_type)
             return 1;
-        jl_value_t *tp0 = typeeq_unpin_tvar(resolve_tvarref(jl_typeeq_T(x), e->Lframe));
+        jl_value_t *tp0 = typeeq_unpin_tvar(resolve_tvarref(jl_typeeq_T(x), e->Lframe, e));
         if (!jl_is_typevar(tp0)) {
             // a dispatch key for one specific open type object (dangling free
             // typevars, see `typeeq_vars_bound_in_env`) is pinned to that
@@ -3542,7 +3639,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
         return subtype((jl_value_t*)jl_anytype_type, y, e, param);
     }
     if (jl_is_datatype(x) && jl_is_typeeq(y) && x != (jl_value_t*)jl_typeofbottom_type) {
-        jl_value_t *tp0 = resolve_tvarref(jl_typeeq_T(y), e->Rframe);
+        jl_value_t *tp0 = resolve_tvarref(jl_typeeq_T(y), e->Rframe, e);
         if (jl_is_typevar(tp0)) {
             // kinds and `AnyType` are subtypes of `Type` but of no narrower `Type{T'}`,
             // and no `TypeEq` appears in their supertype chains to derive this from; so
@@ -3555,7 +3652,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
         // `Type{Type{T}}` with an unbounded `T` contains every `Type{X}` value
         // (among others), so a kind contained in `TypeEq` is a subtype
         if (jl_is_typeeq(tp0)) {
-            jl_value_t *inner = resolve_tvarref(jl_typeeq_T(tp0), e->Rframe);
+            jl_value_t *inner = resolve_tvarref(jl_typeeq_T(tp0), e->Rframe, e);
             if (jl_is_typevar(inner) && ((jl_tvar_t*)inner)->lb == jl_bottom_type &&
                     ((jl_tvar_t*)inner)->ub == (jl_value_t*)jl_any_type)
                 return subtype(x, (jl_value_t*)jl_typeeq_type, e, param);
@@ -3747,10 +3844,14 @@ static int equal_var(jl_tvar_t *v, jl_value_t *x, jl_stenv_t *e) JL_CANSAFEPOINT
     assert(!e->intersection || !jl_is_uniontype(x));
     int innervar = 0;
     jl_varbinding_t *vb = lookup_binding(e, v, &innervar);
-    if (e->intersection && vb != NULL && vb->lb == vb->ub && jl_is_typevar(vb->lb))
-        return equal_var((jl_tvar_t *)vb->lb, x, e);
+    // the accumulating (variable-form) view of the bounds; writes below go to
+    // the fields directly
+    jl_value_t *vb_lb = vb ? binding_lb(e, vb) : NULL;
+    jl_value_t *vb_ub = vb ? binding_ub(e, vb) : NULL;
+    if (e->intersection && vb != NULL && vb_lb == vb_ub && jl_is_typevar(vb_lb))
+        return equal_var((jl_tvar_t *)vb_lb, x, e);
     record_var_occurrence(vb, e, PARAM_INVARIANT);
-    if (vb != NULL && (jl_has_dangling_tvarrefs(vb->ub) || jl_has_dangling_tvarrefs(vb->lb))) {
+    if (vb != NULL && (jl_has_dangling_tvarrefs(vb_ub) || jl_has_dangling_tvarrefs(vb_lb))) {
         // see var_lt_: a detached fragment's binder supports no bound reasoning
         return x == (jl_value_t*)v;
     }
@@ -3763,41 +3864,42 @@ static int equal_var(jl_tvar_t *v, jl_value_t *x, jl_stenv_t *e) JL_CANSAFEPOINT
         return x == (jl_value_t*)v;
     }
     if (!vb->existential)
-        return local_forall_exists_subtype(x, vb->lb, e, PARAM_INVARIANT, !jl_has_free_typevars(x)) &&
-               local_forall_exists_subtype(vb->ub, x, e, PARAM_NONE, 0);
+        return local_forall_exists_subtype(x, vb_lb, e, PARAM_INVARIANT, !jl_has_free_typevars(x)) &&
+               local_forall_exists_subtype(vb_ub, x, e, PARAM_NONE, 0);
     if (x != jl_bottom_type && vb->lb_certainty < e->bound_channel)
         vb->lb_certainty = e->bound_channel;
-    if (vb->lb == x) {
+    if (vb_lb == x) {
         if (vb->lb_spell < e->spell_channel)
             vb->lb_spell = e->spell_channel;
         return var_lt(v, x, e, PARAM_NONE, vb, innervar);
     }
-    if (!subtype_ccheck(x, vb->ub, e))
+    if (!subtype_ccheck(x, vb_ub, e))
         return 0;
     // when the var is pinned (`lb === ub`), `x <= ub` was just checked and a
     // join picking `x` proves `lb <= x`, i.e. `x` respells the same type: keep
     // the existing spelling unless `x`'s is more authoritative (see `lb_spell`)
-    int pinned = (vb->lb == vb->ub && vb->lb != jl_bottom_type);
-    jl_value_t *lb = simple_join(vb->lb, x);
+    int pinned = (vb_lb == vb_ub && vb_lb != jl_bottom_type);
+    jl_value_t *lb = simple_join(vb_lb, x);
     JL_GC_PUSH1(&lb);
     if (pinned && lb == x && e->spell_channel <= vb->lb_spell) {
         JL_GC_POP();
         // validate the inclusion the respell path would have checked below,
         // then keep both existing spellings
-        if (!subtype_ccheck(vb->lb, x, e))
+        if (!subtype_ccheck(vb_lb, x, e))
             return 0;
         return 1;
     }
     if (!e->intersection || !jl_is_typevar(lb) || !reachable_var(lb, v, e)) {
-        if (vb->lb != lb) {
+        if (vb_lb != lb) {
             vb->lb = lb;
             vb->lb_spell = e->spell_channel;
         }
     }
     JL_GC_POP();
-    if (vb->ub == x)
+    if (vb_ub == x)
         return 1;
-    if (!subtype_ccheck(vb->lb, x, e))
+    // reload through the binding: the joined bound is rooted by its field now
+    if (!subtype_ccheck(binding_lb(e, vb), x, e))
         return 0;
     // skip `simple_meet` here as we have proven `x <: vb->ub`
     if (!e->intersection || !reachable_var(x, v, e))
@@ -3809,8 +3911,8 @@ static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 {
     // a comparison at a walk position: resolve reference operands so the
     // variable fast paths below (equal_var in particular) see the bindings
-    x = resolve_tvarref(x, e->Lframe);
-    y = resolve_tvarref(y, e->Rframe);
+    x = resolve_tvarref(x, e->Lframe, e);
+    y = resolve_tvarref(y, e->Rframe, e);
     if (obviously_egal(x, y) && !jl_has_dangling_tvarrefs(x)) return 1;
 
     if ((is_indefinite_length_tuple_type(x) && is_definite_length_tuple_type(y)) ||
@@ -4736,8 +4838,8 @@ static jl_value_t *intersect_aside(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, 
     int xinner = 0, yinner = 0;
     jl_varbinding_t *xb = jl_is_typevar(x) ? lookup_binding(e, (jl_tvar_t *)x, &xinner) : NULL;
     jl_varbinding_t *yb = jl_is_typevar(y) ? lookup_binding(e, (jl_tvar_t *)y, &yinner) : NULL;
-    int simple_x = jl_is_typevar(x) ? (xb ? !has_free_or_dangling_typevars(xb->ub) : !xinner) : !has_free_or_dangling_typevars(x);
-    int simple_y = jl_is_typevar(y) ? (yb ? !has_free_or_dangling_typevars(yb->ub) : !yinner) : !has_free_or_dangling_typevars(y);
+    int simple_x = jl_is_typevar(x) ? (xb ? !has_free_or_dangling_typevars(binding_ub(e, xb)) : !xinner) : !has_free_or_dangling_typevars(x);
+    int simple_y = jl_is_typevar(y) ? (yb ? !has_free_or_dangling_typevars(binding_ub(e, yb)) : !yinner) : !has_free_or_dangling_typevars(y);
     if (simple_x && simple_y && !(xb && yb)) {
         vars = e->vars;
         e->vars = xb ? xb : yb;
@@ -4881,7 +4983,7 @@ static int try_subtype_by_bounds(jl_value_t *a, jl_value_t *b, jl_stenv_t *e)
     jl_varbinding_t *vb = lookup_binding(e, (jl_tvar_t *)b, &innervar);
     if (vb == NULL && !innervar)
         return subtype_singleton_typevar(a, (jl_tvar_t*)b);
-    jl_value_t *blb = vb ? vb->lb : ((jl_tvar_t *)b)->lb;
+    jl_value_t *blb = vb ? binding_lb(e, vb) : ((jl_tvar_t *)b)->lb;
     return obviously_in_union(a, blb);
 }
 
@@ -4954,8 +5056,10 @@ static int _reachable_var(jl_value_t *x, jl_tvar_t *y, jl_stenv_t *e, jl_typeenv
     jl_varbinding_t *xv = lookup_binding(e, (jl_tvar_t*)x, &innervar);
     if (xv == NULL && !innervar)
         return 0;
-    jl_value_t *lb = xv == NULL ? ((jl_tvar_t*)x)->lb : xv->lb;
-    jl_value_t *ub = xv == NULL ? ((jl_tvar_t*)x)->ub : xv->ub;
+    // cycles can run through a binder's declared bound, so the substituted
+    // view must be chased (a raw reference would hide the edge)
+    jl_value_t *lb = xv == NULL ? ((jl_tvar_t*)x)->lb : binding_lb(e, xv);
+    jl_value_t *ub = xv == NULL ? ((jl_tvar_t*)x)->ub : binding_ub(e, xv);
     jl_typeenv_t newlog = { (jl_tvar_t*)x, NULL, log };
     return _reachable_var(ub, y, e, &newlog) || _reachable_var(lb, y, e, &newlog);
 }
@@ -5001,16 +5105,19 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
             return a;
         return jl_bottom_type;
     }
-    if (jl_has_dangling_tvarrefs(bb->lb) || jl_has_dangling_tvarrefs(bb->ub)) {
+    // the accumulating (variable-form) view of the bounds; writes below go to
+    // the fields directly
+    jl_value_t *bb_lb = binding_lb(e, bb), *bb_ub = binding_ub(e, bb);
+    if (jl_has_dangling_tvarrefs(bb_lb) || jl_has_dangling_tvarrefs(bb_ub)) {
         // the binder of a detached fragment: its bounds reference binders
         // outside the query, so they support no bound reasoning -- over-
         // approximate the meet by the other side (cf. `var_lt_`)
         return a;
     }
-    if (reachable_var(bb->lb, b, e) || reachable_var(bb->ub, b, e))
+    if (reachable_var(bb_lb, b, e) || reachable_var(bb_ub, b, e))
         return a;
-    if (bb->lb == bb->ub && jl_is_typevar(bb->lb))
-        return R ? intersect(a, bb->lb, e, param) : intersect(bb->lb, a, e, param);
+    if (bb_lb == bb_ub && jl_is_typevar(bb_lb))
+        return R ? intersect(a, bb_lb, e, param) : intersect(bb_lb, a, e, param);
     if (!jl_is_type(a) && !jl_is_typevar(a))
         return set_var_to_const(bb, a, e, R);
     if (param == PARAM_INVARIANT) {
@@ -5018,7 +5125,7 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
         JL_GC_PUSH1(&ub);
         if (!jl_has_free_typevars(a)) {
             if (R) flip_offset(e);
-            int ccheck = intersect_var_ccheck_in_env(bb->lb, bb->ub, a, a, e, !R);
+            int ccheck = intersect_var_ccheck_in_env(bb_lb, bb_ub, a, a, e, !R);
             if (R) flip_offset(e);
             if (!ccheck) {
                 JL_GC_POP();
@@ -5027,17 +5134,17 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
             ub = a;
         }
         else {
-            if (jl_subtype(a, bb->ub)) {
+            if (jl_subtype(a, bb_ub)) {
                 ub = a;
             }
             else {
                 e->triangular++;
-                ub = R ? intersect_aside(a, bb->ub, e, bb->depth0) : intersect_aside(bb->ub, a, e, bb->depth0);
+                ub = R ? intersect_aside(a, bb_ub, e, bb->depth0) : intersect_aside(bb_ub, a, e, bb->depth0);
                 e->triangular--;
             }
             jl_savedenv_t se;
             save_env(e, &se, 1);
-            int issub = subtype_in_env_existential(bb->lb, ub, e);
+            int issub = subtype_in_env_existential(bb_lb, ub, e);
             restore_env(e, &se, 1);
             free_env(&se);
             if (!issub) {
@@ -5062,7 +5169,7 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
         JL_GC_POP();
         return ub;
     }
-    jl_value_t *ub = R ? intersect_aside(a, bb->ub, e, bb->depth0) : intersect_aside(bb->ub, a, e, bb->depth0);
+    jl_value_t *ub = R ? intersect_aside(a, bb_ub, e, bb->depth0) : intersect_aside(bb_ub, a, e, bb->depth0);
     if (ub == jl_bottom_type)
         return jl_bottom_type;
     if (e->triangular && param == PARAM_COVARIANT) {
@@ -5079,7 +5186,7 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
         }
         jl_value_t *ub2 = NULL;
         JL_GC_PUSH2(&ub, &ub2);
-        ub2 = widen_Type_to_union(ub, bb->ub, e);
+        ub2 = widen_Type_to_union(ub, bb_ub, e);
         if (ub2 != ub) {
             set_bound(&bb->ub, ub2, b, e);
             if (jl_is_concrete_type(ub2)) {
@@ -5097,7 +5204,7 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
     }
     else if (bb->constraintkind == 0) {
         JL_GC_PUSH1(&ub);
-        if (!jl_is_typevar(a) && try_subtype_in_env(bb->ub, a, e)) {
+        if (!jl_is_typevar(a) && try_subtype_in_env(bb_ub, a, e)) {
             JL_GC_POP();
             return (jl_value_t*)b;
         }
@@ -5105,9 +5212,9 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
         return ub;
     }
     assert(bb->constraintkind == 2);
-    if (ub == a && bb->lb != jl_bottom_type)
+    if (ub == a && bb_lb != jl_bottom_type)
         return ub;
-    if (jl_egal(bb->ub, bb->lb))
+    if (jl_egal(bb_ub, bb_lb))
         return ub;
     if (is_leaf_bound(ub))
         set_bound(&bb->lb, ub, b, e);
@@ -5649,6 +5756,14 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
         e->Rframe = vb->frame_prev;
     else
         e->Lframe = vb->frame_prev;
+    if (res != jl_bottom_type) {
+        // everything below (the diagonal checks, `finish_unionall`, the
+        // re-intersection bookkeeping) consumes the materialized view. The
+        // walk is over: no environment save can see this binding's raw
+        // bounds anymore, so the fields may be written in place.
+        binding_var(e, vb);
+        binding_force_bounds(e, vb);
+    }
     vb->concrete |= (cov_count(vb) > 1 && is_leaf_binder(vb) &&
                      !vb->body_occurs_inv);
 
@@ -5671,8 +5786,9 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
     }
 
     // Propagate "deeper-popped tvar leaks into outer bounds" taint upward.
-    // See the matching block in `subtype_unionall`.
-    for (jl_varbinding_t *btemp = vb->prev; btemp; btemp = btemp->prev) {
+    // See the matching block in `subtype_unionall`. (A never-materialized
+    // variable cannot occur in any outer bound.)
+    for (jl_varbinding_t *btemp = vb->var == NULL ? NULL : vb->prev; btemp; btemp = btemp->prev) {
         if ((vb->depth0 > btemp->depth0 || vb->tainted_inner) &&
             (jl_has_typevar(btemp->lb, vb->var) || jl_has_typevar(btemp->ub, vb->var))) {
             btemp->tainted_inner = 1;
@@ -5752,14 +5868,13 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
     JL_GC_PUSH5(&res, &vb.lb, &vb.ub, &vb.innervars, &vb.var);
     vb.frame_prev = R ? e->Rframe : e->Lframe;
     vb.u = u;
-    // the binder's bounds live one frame out; re-express any references they
-    // carry in variable form (they are typically closed already)
-    vb.lb = jl_has_dangling_tvarrefs(u->lb) ? frame_substitute(u->lb, vb.frame_prev, e) : u->lb;
-    vb.ub = jl_has_dangling_tvarrefs(u->ub) ? frame_substitute(u->ub, vb.frame_prev, e) : u->ub;
-    // the variable carries the binding's identity for the bookkeeping and the
-    // constructed result; the body itself is walked natively, and the
-    // re-intersection passes below share the variable
-    vb.var = stenv_binding_var(e, u, vb.lb, vb.ub, vb.frame_prev, t);
+    // the binding starts lazy (raw declared bounds, no variable); the
+    // fast-failing crossings never materialize anything, and a successful
+    // pass forces the binding before its result is constructed (see
+    // `intersect_unionall_`)
+    vb.lb = u->lb;
+    vb.ub = u->ub;
+    vb.other_t = t;
     int body_occurs_inv = tvarref_occurs_invariant(u->body, 1);
     vb.existential = R;
     vb.body_occurs_inv = body_occurs_inv;
@@ -5831,7 +5946,7 @@ static int intersect_vararg_length(jl_value_t *v, ssize_t n, jl_stenv_t *e, int8
     jl_value_t *N = jl_unwrap_vararg_num(v);
     // resolve a length reference against the vararg's own side
     if (N && jl_is_tvarref(N))
-        N = resolve_tvarref(N, R ? e->Rframe : e->Lframe);
+        N = resolve_tvarref(N, R ? e->Rframe : e->Lframe, e);
     // only do the check if N is free in the tuple type's last parameter
     if (N && jl_is_typevar(N)) {
         jl_value_t *len = jl_box_long(n);
@@ -5854,9 +5969,9 @@ static jl_value_t *intersect_varargs(jl_vararg_t *vmx, jl_vararg_t *vmy, ssize_t
     // rebuilt (with the variable) rather than reused
     jl_value_t *xp2r = xp2, *yp2r = yp2;
     if (xp2 && jl_is_tvarref(xp2))
-        xp2 = resolve_tvarref(xp2, e->Lframe);
+        xp2 = resolve_tvarref(xp2, e->Lframe, e);
     if (yp2 && jl_is_tvarref(yp2))
-        yp2 = resolve_tvarref(yp2, e->Rframe);
+        yp2 = resolve_tvarref(yp2, e->Rframe, e);
     // in Vararg{T1} <: Vararg{T2}, need to check subtype twice to
     // simulate the possibility of multiple arguments, which is needed
     // to implement the diagonal rule correctly.
@@ -5951,7 +6066,7 @@ static jl_value_t *intersect_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_sten
     if (vvx == JL_VARARG_BOUND && (vvy == JL_VARARG_BOUND || vvy == JL_VARARG_UNBOUND)) {
         jl_value_t *xlen = jl_unwrap_vararg_num((jl_vararg_t*)jl_tparam(xd, lx-1));
         assert(xlen != NULL);
-        xlen = resolve_tvarref(xlen, e->Lframe);
+        xlen = resolve_tvarref(xlen, e->Lframe, e);
         jl_varbinding_t *xb = jl_is_typevar(xlen) ? lookup(e, (jl_tvar_t*)xlen) : NULL;
         if (xb && xb->intersected && xb->max_offset > 0) {
             assert(xb->max_offset <= 32);
@@ -5961,7 +6076,7 @@ static jl_value_t *intersect_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_sten
     if (vvy == JL_VARARG_BOUND && (vvx == JL_VARARG_BOUND || vvx == JL_VARARG_UNBOUND)) {
         jl_value_t *ylen = jl_unwrap_vararg_num((jl_vararg_t*)jl_tparam(yd, ly-1));
         assert(ylen != NULL);
-        ylen = resolve_tvarref(ylen, e->Rframe);
+        ylen = resolve_tvarref(ylen, e->Rframe, e);
         jl_varbinding_t *yb = jl_is_typevar(ylen) ? lookup(e, (jl_tvar_t*)ylen) : NULL;
         if (yb && yb->intersected && yb->max_offset > 0) {
             assert(yb->max_offset <= 32);
@@ -6035,10 +6150,10 @@ static jl_value_t *intersect_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_sten
             if (vx && vy) {
                 jl_varbinding_t *xb=NULL, *yb=NULL;
                 jl_value_t *xlen = jl_unwrap_vararg_num(xi);
-                if (xlen) xlen = resolve_tvarref(xlen, e->Lframe);
+                if (xlen) xlen = resolve_tvarref(xlen, e->Lframe, e);
                 if (xlen && jl_is_typevar(xlen)) xb = lookup(e, (jl_tvar_t*)xlen);
                 jl_value_t *ylen = jl_unwrap_vararg_num(yi);
-                if (ylen) ylen = resolve_tvarref(ylen, e->Rframe);
+                if (ylen) ylen = resolve_tvarref(ylen, e->Rframe, e);
                 if (ylen && jl_is_typevar(ylen)) yb = lookup(e, (jl_tvar_t*)ylen);
                 int len = i > j ? i : j;
                 if ((xb && jl_is_long(xb->lb) && llx-1+jl_unbox_long(xb->lb) != len) ||
@@ -6134,8 +6249,8 @@ static jl_value_t *intersect_invariant(jl_value_t *x, jl_value_t *y, jl_stenv_t 
 {
     // resolve bound-variable references so the typevar tests below see the
     // bindings' variables (cf. the resolution at the top of `intersect`)
-    x = resolve_tvarref(x, e->Lframe);
-    y = resolve_tvarref(y, e->Rframe);
+    x = resolve_tvarref(x, e->Lframe, e);
+    y = resolve_tvarref(y, e->Rframe, e);
     if (e->Loffset == 0 && !has_free_or_dangling_typevars(x) && !has_free_or_dangling_typevars(y)) {
         return (jl_subtype(x,y) && jl_subtype(y,x)) ? y : NULL;
     }
@@ -6336,10 +6451,13 @@ static int has_typevar_via_env(jl_value_t *x, jl_tvar_t *t, jl_stenv_t *e)
         while (temp != NULL) {
             if (temp->var == t)
                 break;
-            if (temp->lb == temp->ub &&
-                temp->lb == (jl_value_t *)t &&
-                jl_has_typevar(x, temp->var))
-                return 1;
+            if (temp->var != NULL) {
+                // a pinned binding's edge can live in its declared bound
+                jl_value_t *tlb = binding_lb(e, temp);
+                if (tlb == binding_ub(e, temp) && tlb == (jl_value_t *)t &&
+                    jl_has_typevar(x, temp->var))
+                    return 1;
+            }
             temp = temp->prev;
         }
     }
@@ -6349,8 +6467,8 @@ static int has_typevar_via_env(jl_value_t *x, jl_tvar_t *t, jl_stenv_t *e)
 static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t param)
 {
     // resolve bound-variable references through their side's binder chain
-    x = resolve_tvarref(x, e->Lframe);
-    y = resolve_tvarref(y, e->Rframe);
+    x = resolve_tvarref(x, e->Lframe, e);
+    y = resolve_tvarref(y, e->Rframe, e);
     // interned terms carrying raw references are only identical as objects;
     // under different chains their references mean different bindings
     if (x == y && !jl_has_dangling_tvarrefs(x)) return y;
@@ -6378,8 +6496,8 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_par
             // the binder of a detached fragment supports no bound reasoning
             // (its bounds reference binders outside the query, cf. `var_lt_`);
             // over-approximate by the (arbitrary) right variable
-            if ((xx && (jl_has_dangling_tvarrefs(xx->lb) || jl_has_dangling_tvarrefs(xx->ub))) ||
-                (yy && (jl_has_dangling_tvarrefs(yy->lb) || jl_has_dangling_tvarrefs(yy->ub))))
+            if ((xx && (jl_has_dangling_tvarrefs(binding_lb(e, xx)) || jl_has_dangling_tvarrefs(binding_ub(e, xx)))) ||
+                (yy && (jl_has_dangling_tvarrefs(binding_lb(e, yy)) || jl_has_dangling_tvarrefs(binding_ub(e, yy)))))
                 return y;
             int R = 0;
             if (xx && yy && var_outside(e, (jl_tvar_t*)x, (jl_tvar_t*)y)) {
@@ -6392,14 +6510,14 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_par
                 R = 1;
             }
             if (param == PARAM_INVARIANT) {
-                jl_value_t *xlb = xx ? xx->lb : xinner ? ((jl_tvar_t*)x)->lb : x;
-                jl_value_t *xub = xx ? xx->ub : xinner ? ((jl_tvar_t*)x)->ub : x;
-                jl_value_t *ylb = yy ? yy->lb : yinner ? ((jl_tvar_t*)y)->lb : y;
-                jl_value_t *yub = yy ? yy->ub : yinner ? ((jl_tvar_t*)y)->ub : y;
+                jl_value_t *xlb = xx ? binding_lb(e, xx) : xinner ? ((jl_tvar_t*)x)->lb : x;
+                jl_value_t *xub = xx ? binding_ub(e, xx) : xinner ? ((jl_tvar_t*)x)->ub : x;
+                jl_value_t *ylb = yy ? binding_lb(e, yy) : yinner ? ((jl_tvar_t*)y)->lb : y;
+                jl_value_t *yub = yy ? binding_ub(e, yy) : yinner ? ((jl_tvar_t*)y)->ub : y;
                 if (xx && yy && xx->depth0 != yy->depth0) {
                     record_var_occurrence(xx, e, param);
                     record_var_occurrence(yy, e, param);
-                    return subtype_in_env(yy->ub, yy->lb, e) ? y : jl_bottom_type;
+                    return subtype_in_env(yub, ylb, e) ? y : jl_bottom_type;
                 }
                 if (xub == xlb && jl_is_typevar(xub) && xub != x) {
                     record_var_occurrence(xx, e, param);
