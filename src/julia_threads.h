@@ -105,6 +105,57 @@ typedef struct {
 #endif
 } jl_ucontext_t;
 
+// The context published in `jl_task_t.reset_ctx` while a task is inside an
+// asynchronously interruptible region. Two flavors, discriminated by `sp`:
+//  - `sp != 0` ("reset"): established by a compiled cancellation point (see
+//    llvm-cancellation-lowering.cpp); `ctx` holds a setjmp context and `sp`
+//    identifies the establishing frame. Delivery of the cancellation signal
+//    abandons the interrupted register state and longjmps to the reset
+//    point, whose re-executed check observes the cancellation and throws.
+//  - `sp == 0` ("handler"): established around a foreign call carrying a
+//    cancellation handler (`@ccall cancel_handler=(fn, state) ...`; see
+//    emit_ccall). Delivery runs `fn(state, severity)` on the interrupted
+//    thread like a signal handler - just past the interrupted frame's red
+//    zone, with the interrupted register state preserved around it - and
+//    then resumes the interrupted computation. The handler performs the
+//    library-specific work to abort the foreign operation.
+typedef struct _jl_reset_ctx_t {
+    uintptr_t sp;
+    union {
+        _jl_ucontext_t ctx;
+        struct {
+            void (*fn)(void *state, uint8_t sev);
+            void *state;
+        } handler;
+    };
+} jl_reset_ctx_t;
+
+// Platforms with asynchronous delivery of foreign-call cancellation handlers
+// (the sp == 0 flavor above); elsewhere the cancellation is recovered
+// level-triggered at the task's next cancellation point.
+#if defined(_OS_LINUX_) && (defined(_CPU_X86_64_) || defined(_CPU_AARCH64_))
+#define JL_HAVE_CANCEL_HANDLER_DELIVERY 1
+
+// The interrupted general-purpose register state (plus the handler and its
+// arguments) saved across a cancellation-handler delivery. Only GPRs live
+// here: FP/vector state is the handler's responsibility - its contract is
+// the LLVM `preserve_all` calling convention (it generates whatever stack
+// saves it needs; a handler that touches no FP/vector registers satisfies
+// this trivially).
+typedef struct {
+    void (*fn)(void *state, uint8_t sev);
+    void *state;
+    uint8_t sev;
+#if defined(_CPU_X86_64_)
+    uint64_t gregs[24]; // holds mcontext_t.gregs (NGREG-sized; checked where used)
+#elif defined(_CPU_AARCH64_)
+    uint64_t regs[31];
+    uint64_t sp;
+    uint64_t pc;
+    uint64_t pstate;
+#endif
+} jl_cancel_handler_save_t;
+#endif
 
 // handle to reference an OS thread
 #ifdef _OS_WINDOWS_
@@ -195,6 +246,14 @@ typedef struct _jl_tls_states_t {
     uintptr_t signal_ctx_sp;
     void (*signal_ctx_fptr)(void);
     uintptr_t signal_ctx_arg;
+#endif
+#ifdef JL_HAVE_CANCEL_HANDLER_DELIVERY
+    // Cancellation-handler delivery (see jl_deliver_cancel_handler): the
+    // interrupted GPR state saved across the handler's execution, and
+    // whether a delivery is currently in flight on this thread (at most one
+    // at a time; further deliveries are skipped, level-triggered).
+    jl_cancel_handler_save_t cancel_handler_save;
+    sig_atomic_t cancel_handler_armed;
 #endif
     jl_thread_t system_id;
     _Atomic(int16_t) suspend_count;
@@ -312,12 +371,6 @@ typedef struct _jl_task_t {
     // be stale between cancellation points (benign: level-triggered recovery
     // at the next check).
     _Atomic(jl_value_t *) bound_cancel_token;
-    // Asynchronous cancellation hook - `nothing` or a `(handler, state)` tuple.
-    // When a cancellation is requested for a token this task is bound to,
-    // `cancel!` additionally invokes `handler(state, task)` on the
-    // *cancelling* thread, so that external libraries the task may be blocked
-    // in can be interrupted.
-    _Atomic(jl_value_t *) cancellation_hook;
     // The parked-wait state (a "wait node" folded into the task). Note that
     // this is a *second* link set, disjoint from the scheduler's
     // `next`/`queue` above: a canceller claims a parked waiter and schedules
@@ -371,9 +424,11 @@ typedef struct _jl_task_t {
     jl_handler_t *eh;
     // saved thread state
     jl_ucontext_t ctx; // pointer into stkbuf, if suspended
-    // current reset point for cancellation. Technically, we only need volatile
-    // here, but _Atomic makes the intent clearer.
-    volatile _jl_ucontext_t *reset_ctx;
+    // The published context of the current asynchronously interruptible
+    // region (a compiled cancellation reset point, or a foreign call with a
+    // cancellation handler), NULL outside such regions. Only ever consumed
+    // for the thread's *current* task.
+    volatile jl_reset_ctx_t *reset_ctx;
 } jl_task_t;
 
 JL_DLLEXPORT void *jl_get_ptls_states(void);

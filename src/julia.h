@@ -2458,6 +2458,13 @@ struct _jl_handler_t {
     size_t locks_len;
     jl_timing_block_t *timing_stack;
     size_t world_age;
+    // The published interruptible-region context at handler entry. Restored
+    // when the handler is left or entered exceptionally, so that an exception
+    // thrown through a foreign call with a cancellation handler unpublishes
+    // the guard whose establishing frame the unwind destroyed (and,
+    // conversely, a try/catch running in a callback under such a guard
+    // re-arms it on exit).
+    volatile struct _jl_reset_ctx_t *reset_ctx;
     sig_atomic_t defer_signal;
     int8_t gc_state;
 };
@@ -2474,6 +2481,7 @@ JL_DLLEXPORT int jl_set_task_tid(jl_task_t *task, int16_t tid) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_set_task_threadpoolid(jl_task_t *task, int8_t tpid) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_preempt_thread_task(int16_t tid) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_deliver_cancellation(jl_value_t *src);
 JL_DLLEXPORT void jl_abandon_task(jl_task_t *t, jl_task_t *next_task) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void JL_NORETURN jl_throw(jl_value_t *e JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow(void);

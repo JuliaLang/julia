@@ -695,20 +695,24 @@ JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT
         return;
     // Re-check now that the thread cannot run
     ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
-    _jl_ucontext_t *reset_ctx = ct2 == NULL ? NULL : (_jl_ucontext_t*)ct2->reset_ctx;
-    if (reset_ctx != NULL) {
+    jl_reset_ctx_t *reset_ctx = ct2 == NULL ? NULL : (jl_reset_ctx_t*)ct2->reset_ctx;
+    if (reset_ctx != NULL && reset_ctx->sp != 0) {
         CONTEXT ctxThread;
         memset(&ctxThread, 0, sizeof(CONTEXT));
         ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
         if (GetThreadContext(hThread, &ctxThread)) {
-            // Consume the reset point (prevents a double reset)
+            // Reset flavor: consume the reset point (prevents a double
+            // reset) and longjmp there.
             ct2->reset_ctx = NULL;
-            if (jl_simulate_longjmp(reset_ctx->uc_mcontext, &ctxThread)) {
+            if (jl_simulate_longjmp(reset_ctx->ctx.uc_mcontext, &ctxThread)) {
                 ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
                 SetThreadContext(hThread, &ctxThread);
             }
         }
     }
+    // TODO: the sp == 0 (foreign-call cancellation handler) flavor is not
+    // delivered asynchronously on this platform yet; the cancellation is
+    // recovered level-triggered at the task's next cancellation point.
     ResumeThread(hThread);
 }
 

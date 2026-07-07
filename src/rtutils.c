@@ -267,6 +267,7 @@ JL_DLLEXPORT void jl_enter_handler(jl_task_t *ct, jl_handler_t *eh)
     eh->prev = ct->eh;
     eh->gcstack = ct->gcstack;
     eh->scope = ct->scope;
+    eh->reset_ctx = ct->reset_ctx;
     eh->gc_state = jl_atomic_load_relaxed(&ct->ptls->gc_state);
     eh->locks_len = ct->ptls->locks.len;
     eh->defer_signal = ct->ptls->defer_signal;
@@ -296,6 +297,7 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_task_t *ct, jl_handler_t *eh)
     sig_atomic_t old_defer_signal = ptls->defer_signal;
     ct->eh = eh->prev;
     ct->gcstack = eh->gcstack;
+    ct->reset_ctx = eh->reset_ctx;
     jl_gc_wb_current_task(ct, eh->scope);
     ct->scope = eh->scope;
     small_arraylist_t *locks = &ptls->locks;
@@ -339,6 +341,7 @@ JL_DLLEXPORT void jl_eh_restore_state_noexcept(jl_task_t *ct, jl_handler_t *eh)
     jl_gc_wb_current_task(ct, eh->scope);
     ct->scope = eh->scope;
     ct->eh = eh->prev;
+    ct->reset_ctx = eh->reset_ctx;
     ct->ptls->defer_signal = eh->defer_signal; // optional, but certain try-finally (in stream.jl) may be slightly harder to write without this
 }
 

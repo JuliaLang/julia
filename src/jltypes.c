@@ -4195,7 +4195,7 @@ void jl_init_types(void) JL_GC_DISABLED
                         NULL,
                         jl_any_type,
                         jl_emptysvec,
-                        jl_perm_symsvec(37,
+                        jl_perm_symsvec(36,
                                         "next",
                                         "queue",
                                         "storage",
@@ -4224,7 +4224,6 @@ void jl_init_types(void) JL_GC_DISABLED
                                         "running_time_ns",
                                         "finished_at",
                                         "bound_cancel_token",
-                                        "cancellation_hook",
                                         "wait_queue",
                                         "wait_next",
                                         "wait_token",
@@ -4233,7 +4232,7 @@ void jl_init_types(void) JL_GC_DISABLED
                                         "wait_uvreq",
                                         "wait_min_severity",
                                         "wait_state"),
-                        jl_svec(37,
+                        jl_svec(36,
                                 jl_any_type,
                                 jl_any_type,
                                 jl_any_type,
@@ -4267,7 +4266,6 @@ void jl_init_types(void) JL_GC_DISABLED
                                 jl_any_type,
                                 jl_any_type,
                                 jl_any_type,
-                                jl_any_type,
                                 jl_voidpointer_type,
                                 jl_uint8_type,
                                 jl_uint8_type),
@@ -4276,10 +4274,9 @@ void jl_init_types(void) JL_GC_DISABLED
     XX(task);
     // Set field 20 (metrics_enabled) as const
     // Set fields 8 (_state), 12 (preempt_request), 24-27 (metric counters),
-    // 28 (bound_cancel_token), 29 (cancellation_hook), 37 (wait_state)
-    // as atomic
+    // 28 (bound_cancel_token), 36 (wait_state) as atomic
     const static uint32_t task_constfields[2]  = { 0b000000000010000000000000000000u, 0b0 };
-    const static uint32_t task_atomicfields[2] = { 0b011111100000000000100010000000u, 0b10000u };
+    const static uint32_t task_atomicfields[2] = { 0b001111100000000000100010000000u, 0b1000u };
     jl_task_type->name->constfields = task_constfields;
     jl_task_type->name->atomicfields = task_atomicfields;
 

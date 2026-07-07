@@ -612,19 +612,23 @@ JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT
     HANDLE_MACH_ERROR("thread_suspend", ret);
     // Re-check now that the thread cannot run
     ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
-    _jl_ucontext_t *reset_ctx = ct2 == NULL ? NULL : (_jl_ucontext_t*)ct2->reset_ctx;
-    if (reset_ctx != NULL) {
-        // Consume the reset point (prevents a double reset)
+    jl_reset_ctx_t *reset_ctx = ct2 == NULL ? NULL : (jl_reset_ctx_t*)ct2->reset_ctx;
+    if (reset_ctx != NULL && reset_ctx->sp != 0) {
+        // Reset flavor: consume the reset point (prevents a double reset)
+        // and longjmp there.
         ct2->reset_ctx = NULL;
         host_thread_state_t state;
         unsigned int count = MACH_THREAD_STATE_COUNT;
         memset(&state, 0, sizeof(state));
         ret = thread_get_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, &count);
         HANDLE_MACH_ERROR("thread_get_state", ret);
-        jl_longjmp_in_state(&state, reset_ctx->uc_mcontext);
+        jl_longjmp_in_state(&state, reset_ctx->ctx.uc_mcontext);
         ret = thread_set_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, count);
         HANDLE_MACH_ERROR("thread_set_state", ret);
     }
+    // TODO: the sp == 0 (foreign-call cancellation handler) flavor is not
+    // delivered asynchronously on this platform yet; the cancellation is
+    // recovered level-triggered at the task's next cancellation point.
     ret = thread_resume(thread);
     HANDLE_MACH_ERROR("thread_resume", ret);
 }
