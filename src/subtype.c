@@ -7672,25 +7672,29 @@ static jl_value_t *_widen_diagonal(jl_value_t *t, jl_varbinding_t *troot) JL_CAN
     return insert_nondiagonal(t, troot, 0);
 }
 
-static jl_value_t *widen_diagonal(jl_value_t *t, jl_unionall_t *u, jl_varbinding_t *troot) JL_CANSAFEPOINT
+static jl_value_t *widen_diagonal(jl_value_t *t, jl_unionall_t *u, jl_varbinding_t *troot,
+                                  jl_svec_t *outervars, size_t nouter) JL_CANSAFEPOINT
 {
-    // `t` is a term derived from under `u`'s binder chain; open this (outermost
-    // remaining) binder, rebind t's references to the opened variable, process,
-    // and translate the variable back into references at the end
+    // `t` is a term derived from under `u`'s binder chain. The machinery below
+    // constructs new binders whose placement (and whose bound fields) refer to
+    // this binder from depths that are unknown until every wrap has happened,
+    // so it works with position-free tokens: materialize the binder's variable
+    // -- bounds only, re-expressed against the outer variables; the body is
+    // never instantiated -- rebind `t`'s references to it, process, and
+    // translate the variable back into references at the end.
     size_t nremaining = jl_subtype_env_size((jl_value_t*)u);
     jl_varbinding_t vb;
     memset(&vb, 0, sizeof(vb));
     vb.existential = 1;
     vb.prev = troot;
     jl_value_t *nt = NULL;
-    jl_tvar_t *v = NULL;
-    jl_value_t *body = NULL;
-    JL_GC_PUSH4(&vb.innervars, &nt, &v, &body);
-    body = jl_unionall_open(u, &v);
+    JL_GC_PUSH2(&vb.innervars, &nt);
+    jl_tvar_t *v = jl_unionall_bind_var(u, outervars, nouter);
+    jl_svecset(outervars, nouter, v);
     vb.var = v;
     nt = jl_substitute_tvarref(t, nremaining, (jl_value_t*)v);
-    if (jl_is_unionall(body))
-        nt = widen_diagonal(nt, (jl_unionall_t *)body, &vb);
+    if (jl_is_unionall(u->body))
+        nt = widen_diagonal(nt, (jl_unionall_t *)u->body, &vb, outervars, nouter + 1);
     else
         nt = _widen_diagonal(nt, &vb);
     if (vb.innervars != NULL) {
@@ -7706,7 +7710,11 @@ static jl_value_t *widen_diagonal(jl_value_t *t, jl_unionall_t *u, jl_varbinding
 
 JL_DLLEXPORT jl_value_t *jl_widen_diagonal(jl_value_t *t, jl_unionall_t *ua) JL_CANSAFEPOINT
 {
-    return widen_diagonal(t, ua, NULL);
+    jl_svec_t *outervars = jl_alloc_svec(jl_subtype_env_size((jl_value_t*)ua));
+    JL_GC_PUSH1(&outervars);
+    jl_value_t *nt = widen_diagonal(t, ua, NULL, outervars, 0);
+    JL_GC_POP();
+    return nt;
 }
 
 // specificity comparison
