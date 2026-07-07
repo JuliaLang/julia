@@ -128,6 +128,7 @@ MDB_val mdbVal(T &x) JL_NOTSAFEPOINT
     return {sizeof x, (void *)&x};
 }
 
+namespace {
 class MDBMemoryBuffer : public llvm::MemoryBuffer {
 public:
     MDBMemoryBuffer(MDBTxn Txn, llvm::StringRef Data) JL_NOTSAFEPOINT : Txn(std::move(Txn))
@@ -139,6 +140,7 @@ public:
 private:
     MDBTxn Txn;
 };
+} // anonymous namespace
 
 void ObjCache::initDB()
 {
@@ -276,7 +278,7 @@ constexpr size_t METAKEY_SIZE = 2 + sizeof(int64_t) + sizeof(ObjCache::Hash);
 constexpr char OBJKEY_TAG = 'O';
 constexpr char METAKEY_TAG = 'M';
 
-std::array<uint8_t, OBJKEY_SIZE> toObjKey(const ObjCache::Hash &Hash) JL_NOTSAFEPOINT
+static std::array<uint8_t, OBJKEY_SIZE> toObjKey(const ObjCache::Hash &Hash) JL_NOTSAFEPOINT
 {
     std::array<uint8_t, OBJKEY_SIZE> Ret;
     Ret[0] = OBJKEY_TAG;
@@ -285,8 +287,8 @@ std::array<uint8_t, OBJKEY_SIZE> toObjKey(const ObjCache::Hash &Hash) JL_NOTSAFE
     return Ret;
 }
 
-std::array<uint8_t, METAKEY_SIZE> toMetaKey(int64_t Time,
-                                            const ObjCache::Hash &Hash) JL_NOTSAFEPOINT
+static std::array<uint8_t, METAKEY_SIZE> toMetaKey(int64_t Time,
+                                                   const ObjCache::Hash &Hash) JL_NOTSAFEPOINT
 {
     std::array<uint8_t, METAKEY_SIZE> Ret;
     Ret[0] = METAKEY_TAG;
@@ -296,7 +298,7 @@ std::array<uint8_t, METAKEY_SIZE> toMetaKey(int64_t Time,
     return Ret;
 }
 
-std::pair<int64_t, ObjCache::Hash> fromMetaKey(const char *Key) JL_NOTSAFEPOINT
+static std::pair<int64_t, ObjCache::Hash> fromMetaKey(const char *Key) JL_NOTSAFEPOINT
 {
     assert(Key[0] == METAKEY_TAG && Key[1] == 0);
     ObjCache::Hash Hash;
