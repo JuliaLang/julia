@@ -331,9 +331,17 @@ function mod(x::T, y::T) where T<:Integer
     y == -1 && return T(0)   # avoid potential overflow in fld
     return x - fld(x, y) * y
 end
+# For fixed-width integers the subtraction and product above wrap on valid
+# inputs (`fld(x, y)*y` lies in `(x - y, x + y]`, e.g. `mod(typemin(Int), 3)`)
+# and the result is correct only through the double wrap-cancellation.
+function mod(x::T, y::T) where T<:BitSigned
+    y == -1 && return T(0)   # avoid potential overflow in fld
+    return x -% fld(x, y) *% y
+end
 function mod(x::BitSigned, y::Unsigned)
     remval = rem(x, y) # correct iff  remval>=0
-    return unsigned(remval + (remval<zero(remval))*y)
+    # the addition re-wraps the negative remainder into the unsigned domain
+    return unsigned(remval +% (remval<zero(remval))*y)
 end
 function mod(x::Unsigned, y::Signed)
     remval =  signed(rem(x, y)) #remval>0 so correct iff y>0 or remval==0
