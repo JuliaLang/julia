@@ -10,6 +10,10 @@ SRCCACHE         := $(abspath $(JULIAHOME)/deps/srccache)
 include $(JULIAHOME)/Make.inc
 JULIA_EXECUTABLE := $(call spawn,$(build_bindir)/julia) --startup-file=no
 
+# Doctests document compiled semantics (e.g. @inbounds relies on inlining to
+# elide bounds checks), which tier-0 interpretation does not reproduce.
+export JULIA_TIER_ENABLE := 0
+
 .PHONY: help
 help:
 	@echo "Please use 'make <target>' where <target> is one of"
