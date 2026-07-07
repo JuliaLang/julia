@@ -7710,63 +7710,59 @@ JL_DLLEXPORT jl_value_t *jl_widen_diagonal(jl_value_t *t, jl_unionall_t *ua) JL_
 }
 
 // specificity comparison
-static int count_missing_wrap(jl_value_t *x, jl_typeenv_t *env)
+// positional environment of the specificity walk: one node per stripped
+// `where` binder (per side, innermost first), carrying the binder and the
+// occurrence count of its references in the body it was stripped from
+typedef struct jl_specenv_t {
+    jl_unionall_t *u;
+    int count;
+    struct jl_specenv_t *prev;
+} jl_specenv_t;
+
+static jl_specenv_t *specenv_lookup(jl_specenv_t *env, size_t depth) JL_NOTSAFEPOINT
 {
-    if (!jl_has_free_typevars(x))
-        return 0;
-    jl_typeenv_t *wrapped = NULL;
-    int count = 0;
-    for (jl_typeenv_t *env2 = env; env2 != NULL; env2 = env2->prev) {
-        int need_wrap = 0;
-        for (jl_typeenv_t *env3 = wrapped; env3 != NULL && need_wrap == 0; env3 = env3->prev) {
-            if (env3->var == env2->var)
-                need_wrap = -1;
-            else if (jl_has_typevar(env3->var->lb, env2->var) || jl_has_typevar(env3->var->ub, env2->var))
-                need_wrap = 1;
-        }
-        need_wrap = need_wrap == 0 ? jl_has_typevar(x, env2->var) :
-                    need_wrap == -1 ? 0 : 1;
-        if (need_wrap) {
-            count++;
-            jl_typeenv_t *newenv = (jl_typeenv_t*)alloca(sizeof(jl_typeenv_t));
-            newenv->var = env2->var;
-            newenv->val = NULL;
-            newenv->prev = wrapped;
-            wrapped = newenv;
-        }
+    while (env != NULL && depth > 1) {
+        env = env->prev;
+        depth--;
     }
-    return count;
+    return env;
 }
 
-static int obvious_subtype_msp(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *subtype, int wrapx, int wrapy)
+// how many times does the binder `t` resolves to occur in the body it was
+// stripped from? (a free TypeVar was never counted into a chain)
+static int spec_num_occurs(jl_value_t *t, jl_specenv_t *env) JL_NOTSAFEPOINT
 {
-    if (wrapx != 0 || wrapy != 0) {
-        int wrap_count = wrapx - wrapy;
-        while (wrap_count > 0 && jl_is_unionall(y))
-        {
-            y = ((jl_unionall_t*)y)->body;
-            wrap_count--;
-        }
-        while (wrap_count < 0 && jl_is_unionall(x))
-        {
-            x = ((jl_unionall_t*)x)->body;
-            wrap_count++;
-        }
-        if (wrap_count > 0) {
-            if (obvious_subtype(jl_unwrap_unionall(x), y, y0, subtype) && !*subtype)
-                return 1;
-            return 0;
-        }
+    if (jl_is_tvarref(t)) {
+        jl_specenv_t *node = specenv_lookup(env, jl_tvarref_depth(t));
+        return node == NULL ? 0 : node->count;
     }
-    return obvious_subtype(x, y, y0, subtype);
+    return 0;
 }
 
-static int eq_msp(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_value_t *b0, jl_typeenv_t *env) JL_CANSAFEPOINT
+static int sub_msp(jl_value_t *x, jl_value_t *y, jl_value_t *y0, jl_specenv_t *xenv, jl_specenv_t *yenv);
+static int eq_msp(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_value_t *b0, jl_specenv_t *aenv, jl_specenv_t *benv);
+
+
+
+static int eq_msp(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_value_t *b0, jl_specenv_t *aenv, jl_specenv_t *benv)
 {
     if (!(jl_is_type(a) || jl_is_typevar(a)) ||
         !(jl_is_type(b) || jl_is_typevar(b)))
         return jl_egal(a, b);
-    if (a == b) // assume the TypeVar env is the same??
+    // close each side over its own chain up front: identical raw spellings
+    // under two different chains can denote different binders, so every
+    // structural comparison below must see the closed forms
+    if (jl_has_dangling_tvarrefs(a) || jl_has_dangling_tvarrefs(b)) {
+        JL_GC_PUSH2(&a, &b);
+        for (jl_specenv_t *env = aenv; env != NULL; env = env->prev)
+            a = jl_rewrap_unionall_one(a, env->u);
+        for (jl_specenv_t *env = benv; env != NULL; env = env->prev)
+            b = jl_rewrap_unionall_one(b, env->u);
+        int ret = eq_msp(a, b, a0, b0, NULL, NULL);
+        JL_GC_POP();
+        return ret;
+    }
+    if (a == b)
         return 1;
     if (jl_typeof(a) == jl_typeof(b) && jl_types_struct_equiv(a, b))
         return 1;
@@ -7781,15 +7777,16 @@ static int eq_msp(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_value_t *b0, 
         jl_value_t *temp = a;
         a = b;
         b = temp;
+        jl_specenv_t *tempenv = aenv;
+        aenv = benv;
+        benv = tempenv;
     }
-    int wrapa = count_missing_wrap(a, env);
-    int wrapb = count_missing_wrap(b, env);
     // first check if a <: b has an obvious answer
     int subtype_ab = 2;
     if (b == (jl_value_t*)jl_any_type || a == jl_bottom_type) {
         subtype_ab = 1;
     }
-    else if (obvious_subtype_msp(a, b, b0, &subtype_ab, wrapa, wrapb)) {
+    else if (obvious_subtype(a, b, b0, &subtype_ab)) {
 #ifdef NDEBUG
         if (subtype_ab == 0)
             return 0;
@@ -7803,7 +7800,7 @@ static int eq_msp(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_value_t *b0, 
     if (a == (jl_value_t*)jl_any_type || b == jl_bottom_type) {
         subtype_ba = 1;
     }
-    else if (obvious_subtype_msp(b, a, a0, &subtype_ba, wrapb, wrapa)) {
+    else if (obvious_subtype(b, a, a0, &subtype_ba)) {
 #ifdef NDEBUG
         if (subtype_ba == 0)
             return 0;
@@ -7816,12 +7813,6 @@ static int eq_msp(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_value_t *b0, 
     jl_stenv_t e;
     e.opened = NULL;
     JL_GC_PUSH4(&a, &b, &e.opened, &e.substmemo);
-    jl_typeenv_t *env2 = env;
-    while (env2 != NULL) {
-        a = jl_type_unionall(env2->var, a);
-        b = jl_type_unionall(env2->var, b);
-        env2 = env2->prev;
-    }
 #ifdef NDEBUG
     if (subtype_ab != 1)
 #endif
@@ -7857,11 +7848,24 @@ static int eq_msp(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_value_t *b0, 
     return subtype_ab && subtype_ba;
 }
 
-static int sub_msp(jl_value_t *x, jl_value_t *y, jl_value_t *y0, jl_typeenv_t *env) JL_CANSAFEPOINT
+static int sub_msp(jl_value_t *x, jl_value_t *y, jl_value_t *y0, jl_specenv_t *xenv, jl_specenv_t *yenv)
 {
     jl_stenv_t e;
     if (y == (jl_value_t*)jl_any_type || x == jl_bottom_type)
         return 1;
+    // close each side over its own chain up front: identical raw spellings
+    // under two different chains can denote different binders, so every
+    // structural comparison below must see the closed forms
+    if (jl_has_dangling_tvarrefs(x) || jl_has_dangling_tvarrefs(y)) {
+        JL_GC_PUSH2(&x, &y);
+        for (jl_specenv_t *env = xenv; env != NULL; env = env->prev)
+            x = jl_rewrap_unionall_one(x, env->u);
+        for (jl_specenv_t *env = yenv; env != NULL; env = env->prev)
+            y = jl_rewrap_unionall_one(y, env->u);
+        int ret = sub_msp(x, y, y0, NULL, NULL);
+        JL_GC_POP();
+        return ret;
+    }
     if (x == y ||
         (jl_typeof(x) == jl_typeof(y) &&
          (jl_is_unionall(y) || jl_is_uniontype(y)) &&
@@ -7869,9 +7873,7 @@ static int sub_msp(jl_value_t *x, jl_value_t *y, jl_value_t *y0, jl_typeenv_t *e
         return 1;
     }
     int obvious_sub = 2;
-    int wrapx = count_missing_wrap(x, env);
-    int wrapy = count_missing_wrap(y, env);
-    if (obvious_subtype_msp(x, y, y0, &obvious_sub, wrapx, wrapy)) {
+    if (obvious_subtype(x, y, y0, &obvious_sub)) {
 #ifdef NDEBUG
         return obvious_sub;
 #endif
@@ -7881,13 +7883,6 @@ static int sub_msp(jl_value_t *x, jl_value_t *y, jl_value_t *y0, jl_typeenv_t *e
     }
     e.opened = NULL;
     JL_GC_PUSH4(&x, &y, &e.opened, &e.substmemo);
-    while (env != NULL) {
-        if (jl_is_type(x) || jl_is_typevar(x))
-            x = jl_type_unionall(env->var, x);
-        if (jl_is_type(y) || jl_is_typevar(y))
-            y = jl_type_unionall(env->var, y);
-        env = env->prev;
-    }
     init_stenv(&e, NULL, 0);
     int subtype = forall_exists_subtype(x, y, &e, PARAM_NONE);
     assert(obvious_sub == 3 || obvious_sub == subtype || jl_has_free_typevars(x) || jl_has_free_typevars(y) || jl_has_dangling_tvarrefs(x) || jl_has_dangling_tvarrefs(y));
@@ -7899,9 +7894,28 @@ static int sub_msp(jl_value_t *x, jl_value_t *y, jl_value_t *y0, jl_typeenv_t *e
     return subtype;
 }
 
-static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_value_t *b0, int invariant, jl_typeenv_t *env) JL_CANSAFEPOINT;
+static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_value_t *b0, int invariant, jl_specenv_t *aenv, jl_specenv_t *benv);
 
-static int num_occurs(jl_tvar_t *v, jl_typeenv_t *env);
+// resolve a possible bound-variable reference to an equivalent (free)
+// variable carrying the binder's bounds shifted into the comparison position
+// (their own references then resolve through the same chain); other values
+// pass through. NULL for a detached reference: no bound information.
+static jl_value_t *spec_resolve_ref(jl_value_t *t, jl_specenv_t *env)
+{
+    if (!jl_is_tvarref(t))
+        return t;
+    jl_specenv_t *node = specenv_lookup(env, jl_tvarref_depth(t));
+    if (node == NULL)
+        return NULL;
+    ssize_t d = (ssize_t)jl_tvarref_depth(t);
+    jl_value_t *lb = NULL, *ub = NULL;
+    JL_GC_PUSH2(&lb, &ub);
+    lb = jl_shift_dangling_refs(node->u->lb, d);
+    ub = jl_shift_dangling_refs(node->u->ub, d);
+    jl_value_t *v = (jl_value_t*)jl_new_typevar_raw(node->u->name, lb, ub);
+    JL_GC_POP();
+    return v;
+}
 
 static jl_value_t *nth_tuple_elt(jl_datatype_t *t JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT
 {
@@ -7922,7 +7936,7 @@ static jl_value_t *nth_tuple_elt(jl_datatype_t *t JL_PROPAGATES_ROOT, size_t i) 
     return NULL;
 }
 
-static int tuple_morespecific(jl_datatype_t *cdt, jl_datatype_t *pdt, jl_value_t *c0, jl_value_t *p0, int invariant, jl_typeenv_t *env) JL_CANSAFEPOINT
+static int tuple_morespecific(jl_datatype_t *cdt, jl_datatype_t *pdt, jl_value_t *c0, jl_value_t *p0, int invariant, jl_specenv_t *cenv, jl_specenv_t *penv)
 {
     size_t plen = jl_nparams(pdt);
     if (plen == 0) return 0;
@@ -7952,23 +7966,23 @@ static int tuple_morespecific(jl_datatype_t *cdt, jl_datatype_t *pdt, jl_value_t
             break;
         }
 
-        if (type_morespecific_(pe, ce, p0, c0, invariant, env)) {
-            assert(!type_morespecific_(ce, pe, c0, p0, invariant, env));
+        if (type_morespecific_(pe, ce, p0, c0, invariant, penv, cenv)) {
+            assert(!type_morespecific_(ce, pe, c0, p0, invariant, cenv, penv));
             return 0;
         }
 
-        if (!cdiag && jl_is_typevar(ce) && num_occurs((jl_tvar_t*)ce,env) > 1)
+        if (!cdiag && (jl_is_typevar(ce) || jl_is_tvarref(ce)) && spec_num_occurs(ce, cenv) > 1)
             cdiag = 1;
-        if (!pdiag && jl_is_typevar(pe) && num_occurs((jl_tvar_t*)pe,env) > 1)
+        if (!pdiag && (jl_is_typevar(pe) || jl_is_tvarref(pe)) && spec_num_occurs(pe, penv) > 1)
             pdiag = 1;
 
         // in Tuple{a,b...} and Tuple{c,d...} allow b and d to be disjoint
         if (cva && pva && i >= clen-1 && i >= plen-1 && (some_morespecific || (cdiag && !pdiag)))
             return 1;
 
-        int cms = type_morespecific_(ce, pe, c0, p0, invariant, env);
+        int cms = type_morespecific_(ce, pe, c0, p0, invariant, cenv, penv);
 
-        if (!cms && !sub_msp(ce, pe, p0, env)) {
+        if (!cms && !sub_msp(ce, pe, p0, cenv, penv)) {
             /*
               A bound vararg tuple can be more specific despite disjoint elements in order to
               preserve transitivity. For example in
@@ -7977,12 +7991,12 @@ static int tuple_morespecific(jl_datatype_t *cdt, jl_datatype_t *pdt, jl_value_t
               C = Tuple{AbstractArray, Int, Array}
               we need A < B < C and A < C.
             */
-            return some_morespecific && cva && ckind == JL_VARARG_BOUND && num_occurs((jl_tvar_t*)jl_unwrap_vararg_num(clast), env) > 1;
+            return some_morespecific && cva && ckind == JL_VARARG_BOUND && spec_num_occurs(jl_unwrap_vararg_num(clast), cenv) > 1;
         }
 
         // Tuple{..., T} not more specific than Tuple{..., Vararg{S}} if S is diagonal
-        if (!cms && i == clen-1 && clen == plen && !cva && pva && eq_msp(ce, pe, c0, p0, env) &&
-            jl_is_typevar(ce) && jl_is_typevar(pe) && !cdiag && pdiag)
+        if (!cms && i == clen-1 && clen == plen && !cva && pva && eq_msp(ce, pe, c0, p0, cenv, penv) &&
+            (jl_is_typevar(ce) || jl_is_tvarref(ce)) && (jl_is_typevar(pe) || jl_is_tvarref(pe)) && !cdiag && pdiag)
             return 0;
 
         if (cms) some_morespecific = 1;
@@ -8010,75 +8024,73 @@ static size_t tuple_full_length(jl_value_t *t)
 
 // Called when a is a bound-vararg and b is not a vararg. Sets the vararg length
 // in a to match b, as long as this makes some earlier argument more specific.
-static int args_morespecific_fix1(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_value_t *b0, int swap, jl_typeenv_t *env) JL_CANSAFEPOINT
+static int args_morespecific_fix1(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_value_t *b0, int swap, jl_specenv_t *aenv, jl_specenv_t *benv)
 {
     size_t n = jl_nparams(a);
     int taillen = tuple_full_length(b)-n+1;
     if (taillen <= 0)
         return -1;
     assert(jl_is_va_tuple((jl_datatype_t*)a));
+    jl_value_t *num = jl_unwrap_vararg_num(jl_unwrap_unionall(jl_tparam(a, n-1)));
     jl_datatype_t *new_a = NULL;
-    jl_value_t *e[2] = { jl_unwrap_vararg_num(jl_unwrap_unionall(jl_tparam(a, n-1))), jl_box_long(taillen) };
-    JL_GC_PUSH2(&new_a, &e[1]);
-    new_a = (jl_datatype_t*)jl_instantiate_type_with((jl_value_t*)a, e, 1);
+    jl_value_t *boxlen = jl_box_long(taillen);
+    JL_GC_PUSH2(&new_a, &boxlen);
+    jl_specenv_t *new_aenv = aenv;
     int changed = 0;
-    for (size_t i = 0; i < n-1; i++) {
-        if (jl_tparam(a, i) != jl_tparam(new_a, i)) {
-            changed = 1;
-            break;
+    if (jl_is_tvarref(num)) {
+        // a positional count: does it constrain the fixed prefix?
+        size_t d = jl_tvarref_depth(num);
+        for (size_t i = 0; i < n-1 && !changed; i++)
+            changed = jl_tvarref_occurs(jl_tparam(a, i), d);
+        if (changed) {
+            new_a = (jl_datatype_t*)jl_substitute_tvarref_nothrow((jl_value_t*)a, d, boxlen);
+            if (new_a == NULL)
+                changed = 0;
+            else {
+                // the substitution consumed the binder's level (deeper
+                // references shifted down in step), so the result is
+                // compared under the chain with that node dropped
+                jl_specenv_t *node = specenv_lookup(aenv, d);
+                jl_specenv_t *tail = node == NULL ? NULL : node->prev;
+                size_t nprefix = d - 1;
+                if (nprefix == 0)
+                    new_aenv = tail;
+                else {
+                    jl_specenv_t *copies = (jl_specenv_t*)alloca(nprefix * sizeof(jl_specenv_t));
+                    jl_specenv_t *src = aenv;
+                    for (size_t i = 0; i < nprefix; i++, src = src->prev) {
+                        copies[i] = *src;
+                        copies[i].prev = (i + 1 < nprefix) ? &copies[i + 1] : tail;
+                    }
+                    new_aenv = &copies[0];
+                }
+            }
+        }
+    }
+    else {
+        jl_value_t *e[2] = { num, boxlen };
+        new_a = (jl_datatype_t*)jl_instantiate_type_with((jl_value_t*)a, e, 1);
+        for (size_t i = 0; i < n-1; i++) {
+            if (jl_tparam(a, i) != jl_tparam(new_a, i)) {
+                changed = 1;
+                break;
+            }
         }
     }
     int ret = -1;
     if (changed) {
-        if (eq_msp(b, (jl_value_t*)new_a, b0, a0, env))
+        if (eq_msp(b, (jl_value_t*)new_a, b0, a0, benv, new_aenv))
             ret = swap;
         else if (swap)
-            ret = type_morespecific_(b, (jl_value_t*)new_a, b0, a0, 0, env);
+            ret = type_morespecific_(b, (jl_value_t*)new_a, b0, a0, 0, benv, new_aenv);
         else
-            ret = type_morespecific_((jl_value_t*)new_a, b, a0, b0, 0, env);
+            ret = type_morespecific_((jl_value_t*)new_a, b, a0, b0, 0, new_aenv, benv);
     }
     JL_GC_POP();
     return ret;
 }
 
-static int count_occurs(jl_value_t *t, jl_tvar_t *v) JL_NOTSAFEPOINT
-{
-    if (t == (jl_value_t*)v)
-        return 1;
-    if (jl_is_uniontype(t)) {
-        int a = count_occurs(((jl_uniontype_t*)t)->a, v);
-        int b = count_occurs(((jl_uniontype_t*)t)->b, v);
-        return a > b ? a : b;
-    }
-    if (jl_is_unionall(t)) {
-        return count_occurs(((jl_unionall_t*)t)->body, v);
-    }
-    if (jl_is_vararg(t)) {
-        jl_vararg_t *vm = (jl_vararg_t*)t;
-        if (vm->T) {
-            return count_occurs(vm->T, v) + (vm->N ? count_occurs(vm->N, v) : 0);
-        }
-    }
-    if (jl_is_some_Type(t))
-        return count_occurs(jl_some_Type_T(t), v);
-    if (jl_is_datatype(t)) {
-        int i, c=0;
-        for(i=0; i < jl_nparams(t); i++)
-            c += count_occurs(jl_tparam(t,i), v);
-        return c;
-    }
-    return 0;
-}
 
-static int num_occurs(jl_tvar_t *v, jl_typeenv_t *env)
-{
-    while (env != NULL) {
-        if (env->var == v)
-            return (int)(ssize_t)env->val;
-        env = env->prev;
-    }
-    return 0;
-}
 
 static int tuple_cmp_typeofbottom(jl_datatype_t *a, jl_datatype_t *b)
 {
@@ -8098,31 +8110,85 @@ static int tuple_cmp_typeofbottom(jl_datatype_t *a, jl_datatype_t *b)
 
 #define HANDLE_UNIONALL_A                                               \
     do {                                                                \
-        jl_tvar_t *v_ = NULL;                                           \
-        jl_value_t *body_ = jl_unionall_open((jl_unionall_t*)a, &v_);   \
-        JL_GC_PUSH2(&v_, &body_);                                       \
-        jl_typeenv_t newenv = { v_, 0x0, env };                         \
-        newenv.val = (jl_value_t*)(intptr_t)count_occurs(body_, v_);    \
-        int ret_ = type_morespecific_(body_, b, a0, b0, invariant, &newenv); \
-        JL_GC_POP();                                                    \
-        return ret_;                                                    \
+        jl_unionall_t *ua_ = (jl_unionall_t*)a;                         \
+        jl_specenv_t newenv = { ua_, count_ref_occurs(ua_->body, 1), aenv }; \
+        return type_morespecific_(ua_->body, b, a0, b0, invariant, &newenv, benv); \
     } while (0)
 
 #define HANDLE_UNIONALL_B                                               \
     do {                                                                \
-        jl_tvar_t *v_ = NULL;                                           \
-        jl_value_t *body_ = jl_unionall_open((jl_unionall_t*)b, &v_);   \
-        JL_GC_PUSH2(&v_, &body_);                                       \
-        jl_typeenv_t newenv = { v_, 0x0, env };                         \
-        newenv.val = (jl_value_t*)(intptr_t)count_occurs(body_, v_);    \
-        int ret_ = type_morespecific_(a, body_, a0, b0, invariant, &newenv); \
-        JL_GC_POP();                                                    \
-        return ret_;                                                    \
+        jl_unionall_t *ub_ = (jl_unionall_t*)b;                         \
+        jl_specenv_t newenv = { ub_, count_ref_occurs(ub_->body, 1), benv }; \
+        return type_morespecific_(a, ub_->body, a0, b0, invariant, aenv, &newenv); \
     } while (0)
 
-static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_value_t *b0, int invariant, jl_typeenv_t *env)
+// the variable leaves of `type_morespecific_`: both operands are (free)
+// variables or plain types here; a reference operand was resolved by the
+// caller, with its occurrence count computed from its chain node
+static int type_morespecific_var_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_value_t *b0, int invariant,
+                                  jl_specenv_t *aenv, jl_specenv_t *benv, int acount, int bcount)
 {
-    if (a == b)
+    if (jl_is_typevar(a)) {
+        if (jl_is_typevar(b)) {
+            return (( type_morespecific_((jl_value_t*)((jl_tvar_t*)a)->ub,
+                                         (jl_value_t*)((jl_tvar_t*)b)->ub, a0, b0, 0, aenv, benv) &&
+                     !type_morespecific_((jl_value_t*)((jl_tvar_t*)a)->lb,
+                                         (jl_value_t*)((jl_tvar_t*)b)->lb, a0, b0, 0, aenv, benv)) ||
+                    ( type_morespecific_((jl_value_t*)((jl_tvar_t*)b)->lb,
+                                         (jl_value_t*)((jl_tvar_t*)a)->lb, b0, a0, 0, benv, aenv) &&
+                     !type_morespecific_((jl_value_t*)((jl_tvar_t*)b)->ub,
+                                         (jl_value_t*)((jl_tvar_t*)a)->ub, b0, a0, 0, benv, aenv)));
+        }
+        if (!jl_is_type(b))
+            return 0;
+        if (invariant) {
+            if (((jl_tvar_t*)a)->ub == jl_bottom_type)
+                return 1;
+            if (!has_free_or_dangling_typevars(b))
+                return 0;
+            if (eq_msp(((jl_tvar_t*)a)->ub, b, a0, b0, aenv, benv))
+                return acount >= 2;
+        }
+        else {
+            // need `{T,T} where T` more specific than `{Any, Any}`
+            if (b == (jl_value_t*)jl_any_type && ((jl_tvar_t*)a)->ub == (jl_value_t*)jl_any_type &&
+                acount >= 2)
+                return 1;
+        }
+        return type_morespecific_(((jl_tvar_t*)a)->ub, b, a0, b0, 0, aenv, benv);
+    }
+    if (jl_is_typevar(b)) {
+        if (!jl_is_type(a))
+            return 1;
+        if (invariant) {
+            if (((jl_tvar_t*)b)->ub == jl_bottom_type)
+                return 0;
+            if (has_free_or_dangling_typevars(a)) {
+                if (type_morespecific_(a, ((jl_tvar_t*)b)->ub, a0, b0, 0, aenv, benv))
+                    return 1;
+                if (eq_msp(a, ((jl_tvar_t*)b)->ub, a0, b0, aenv, benv))
+                    return bcount < 2;
+                return 0;
+            }
+            else {
+                if (obviously_disjoint(a, ((jl_tvar_t*)b)->ub, 1))
+                    return 0;
+                if (type_morespecific_(((jl_tvar_t*)b)->ub, a, b0, a0, 0, benv, aenv))
+                    return 0;
+                return 1;
+            }
+        }
+        return type_morespecific_(a, ((jl_tvar_t*)b)->ub, a0, b0, 0, aenv, benv);
+    }
+
+    return 0;
+}
+
+static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_value_t *b0, int invariant, jl_specenv_t *aenv, jl_specenv_t *benv)
+{
+    // (identical raw spellings under two different chains can denote
+    // different binders, so identity requires closed operands)
+    if (a == b && !jl_has_dangling_tvarrefs(a))
         return 0;
 
     if (jl_is_tuple_type(a) && jl_is_tuple_type(b)) {
@@ -8139,19 +8205,19 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_v
         jl_vararg_kind_t bkind = jl_va_tuple_kind((jl_datatype_t*)b);
         int ans = -1;
         if (akind == JL_VARARG_BOUND && bkind < JL_VARARG_BOUND) {
-            ans = args_morespecific_fix1(a, b, a0, b0, 0, env);
+            ans = args_morespecific_fix1(a, b, a0, b0, 0, aenv, benv);
             if (ans == 1) return 1;
         }
         if (bkind == JL_VARARG_BOUND && akind < JL_VARARG_BOUND) {
-            ans = args_morespecific_fix1(b, a, b0, a0, 1, env);
+            ans = args_morespecific_fix1(b, a, b0, a0, 1, benv, aenv);
             if (ans == 0) return 0;
         }
-        return tuple_morespecific((jl_datatype_t*)a, (jl_datatype_t*)b, a0, b0, invariant, env);
+        return tuple_morespecific((jl_datatype_t*)a, (jl_datatype_t*)b, a0, b0, invariant, aenv, benv);
     }
 
     if (!invariant) {
         if ((jl_datatype_t*)a == jl_any_type) return 0;
-        if ((jl_datatype_t*)b == jl_any_type && !jl_is_typevar(a)) return 1;
+        if ((jl_datatype_t*)b == jl_any_type && !jl_is_typevar(a) && !jl_is_tvarref(a)) return 1;
     }
 
     if (jl_is_uniontype(a)) {
@@ -8160,13 +8226,13 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_v
         }
         // Union a is more specific than b if some element of a is more specific than b, but
         // not vice-versa.
-        if (sub_msp(b, a, a0, env))
+        if (sub_msp(b, a, a0, benv, aenv))
             return 0;
         jl_uniontype_t *u = (jl_uniontype_t*)a;
-        if (type_morespecific_(u->a, b, a0, b0, invariant, env) || type_morespecific_(u->b, b, a0, b0, invariant, env)) {
+        if (type_morespecific_(u->a, b, a0, b0, invariant, aenv, benv) || type_morespecific_(u->b, b, a0, b0, invariant, aenv, benv)) {
             if (jl_is_uniontype(b)) {
                 jl_uniontype_t *v = (jl_uniontype_t*)b;
-                if (type_morespecific_(v->a, a, b0, a0, invariant, env) || type_morespecific_(v->b, a, b0, a0, invariant, env))
+                if (type_morespecific_(v->a, a, b0, a0, invariant, benv, aenv) || type_morespecific_(v->b, a, b0, a0, invariant, benv, aenv))
                     return 0;
             }
             return 1;
@@ -8178,13 +8244,21 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_v
         if (b == (jl_value_t*)jl_typeofbottom_type)
             return 0;
         jl_value_t *tp0a = jl_some_Type_T(a);
-        if (jl_is_typevar(tp0a)) {
-            jl_value_t *ub = ((jl_tvar_t*)tp0a)->ub;
-            if (jl_is_kind(b) && !sub_msp((jl_value_t*)jl_any_type, ub, b0, env))
+        if (jl_is_tvarref(tp0a))
+            // resolved to an equivalent free variable (NULL when detached)
+            tp0a = spec_resolve_ref(tp0a, aenv);
+        if (tp0a != NULL && jl_is_typevar(tp0a)) {
+            JL_GC_PUSH1(&tp0a);
+            int msp = jl_is_kind(b) && !sub_msp((jl_value_t*)jl_any_type, ((jl_tvar_t*)tp0a)->ub, b0, NULL, aenv);
+            JL_GC_POP();
+            if (msp)
                 return 1;
         }
+        else if (tp0a == NULL) {
+            // a detached reference supports no bound reasoning
+        }
         else if (tp0a == jl_bottom_type) {
-            if (sub_msp(b, (jl_value_t*)jl_type_type, (jl_value_t*)jl_type_type, env))
+            if (sub_msp(b, (jl_value_t*)jl_type_type, (jl_value_t*)jl_type_type, benv, NULL))
                 return 1;
         }
         else if (b == (jl_value_t*)jl_datatype_type || b == (jl_value_t*)jl_unionall_type ||
@@ -8198,23 +8272,23 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_v
             HANDLE_UNIONALL_A;
         }
         jl_uniontype_t *u = (jl_uniontype_t*)b;
-        if (type_morespecific_(a, u->a, a0, b0, invariant, env) || type_morespecific_(a, u->b, a0, b0, invariant, env))
-            return !type_morespecific_(b, a, b0, a0, invariant, env);
+        if (type_morespecific_(a, u->a, a0, b0, invariant, aenv, benv) || type_morespecific_(a, u->b, a0, b0, invariant, aenv, benv))
+            return !type_morespecific_(b, a, b0, a0, invariant, benv, aenv);
         return 0;
     }
 
     if (jl_is_some_Type(a) && jl_is_some_Type(b)) {
         jl_value_t *apara = jl_some_Type_T(a);
         jl_value_t *bpara = jl_some_Type_T(b);
-        int afree = jl_has_free_typevars(apara);
-        int bfree = jl_has_free_typevars(bpara);
+        int afree = has_free_or_dangling_typevars(apara);
+        int bfree = has_free_or_dangling_typevars(bpara);
         if (!afree && !bfree && !jl_types_equal(apara, bpara))
             return 0;
-        if (type_morespecific_(apara, bpara, a0, b0, 1, env) && (jl_is_typevar(apara) || !afree || bfree))
+        if (type_morespecific_(apara, bpara, a0, b0, 1, aenv, benv) && (jl_is_typevar(apara) || jl_is_tvarref(apara) || !afree || bfree))
             return 1;
-        if (type_morespecific_(bpara, apara, b0, a0, 1, env) && (jl_is_typevar(bpara) || !bfree || afree))
+        if (type_morespecific_(bpara, apara, b0, a0, 1, benv, aenv) && (jl_is_typevar(bpara) || jl_is_tvarref(bpara) || !bfree || afree))
             return 0;
-        if (eq_msp(apara, bpara, a0, b0, env))
+        if (eq_msp(apara, bpara, a0, b0, aenv, benv))
             return !afree && bfree;
         return 0;
     }
@@ -8222,8 +8296,15 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_v
     if (jl_is_kind(a) && jl_is_typeeq(b) && !invariant) {
         // a kind (e.g. `DataType`) is more specific than an unbounded `Type{T}`
         jl_value_t *tp0b = jl_typeeq_T(b);
-        if (jl_is_typevar(tp0b) && sub_msp((jl_value_t*)jl_any_type, ((jl_tvar_t*)tp0b)->ub, b0, env))
-            return 1;
+        if (jl_is_tvarref(tp0b))
+            tp0b = spec_resolve_ref(tp0b, benv);
+        if (tp0b != NULL && jl_is_typevar(tp0b)) {
+            JL_GC_PUSH1(&tp0b);
+            int msp = sub_msp((jl_value_t*)jl_any_type, ((jl_tvar_t*)tp0b)->ub, b0, NULL, benv);
+            JL_GC_POP();
+            if (msp)
+                return 1;
+        }
     }
 
     if (jl_is_datatype(a) && jl_is_datatype(b)) {
@@ -8237,8 +8318,13 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_v
                 if (super) {
                     if (!jl_is_typeeq(b)) return 1;
                     jl_value_t *tp0 = jl_typeeq_T(b);
-                    if (jl_is_typevar(tp0)) {
-                        if (sub_msp((jl_value_t*)jl_any_type, ((jl_tvar_t*)tp0)->ub, b0, env))
+                    if (jl_is_tvarref(tp0))
+                        tp0 = spec_resolve_ref(tp0, benv);
+                    if (tp0 != NULL && jl_is_typevar(tp0)) {
+                        JL_GC_PUSH1(&tp0);
+                        int msp = sub_msp((jl_value_t*)jl_any_type, ((jl_tvar_t*)tp0)->ub, b0, NULL, benv);
+                        JL_GC_POP();
+                        if (msp)
                             return 1;
                     }
                 }
@@ -8247,34 +8333,40 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_v
                 for(size_t i=0; i < jl_nparams(tta); i++) {
                     jl_value_t *apara = jl_tparam(tta,i);
                     jl_value_t *bpara = jl_tparam(ttb,i);
-                    int afree = jl_has_free_typevars(apara);
-                    int bfree = jl_has_free_typevars(bpara);
+                    int afree = has_free_or_dangling_typevars(apara);
+                    int bfree = has_free_or_dangling_typevars(bpara);
                     if (!afree && !bfree && !jl_types_equal(apara, bpara))
                         return 0;
-                    if (type_morespecific_(apara, bpara, a0, b0, 1, env) && (jl_is_typevar(apara) || !afree || bfree))
+                    if (type_morespecific_(apara, bpara, a0, b0, 1, aenv, benv) && (jl_is_typevar(apara) || jl_is_tvarref(apara) || !afree || bfree))
                         ascore += 1;
-                    else if (type_morespecific_(bpara, apara, b0, a0, 1, env) && (jl_is_typevar(bpara) || !bfree || afree))
+                    else if (type_morespecific_(bpara, apara, b0, a0, 1, benv, aenv) && (jl_is_typevar(bpara) || jl_is_tvarref(bpara) || !bfree || afree))
                         bscore += 1;
-                    else if (eq_msp(apara, bpara, a0, b0, env)) {
+                    else if (eq_msp(apara, bpara, a0, b0, aenv, benv)) {
                         if (!afree && bfree)
                             ascore += 1;
                         else if (afree && !bfree)
                             bscore += 1;
                     }
-                    if (jl_is_typevar(bpara) && !jl_is_typevar(apara) && !jl_is_type(apara))
+                    int avar = jl_is_typevar(apara) || jl_is_tvarref(apara);
+                    int bvar = jl_is_typevar(bpara) || jl_is_tvarref(bpara);
+                    if (bvar && !avar && !jl_is_type(apara))
                         ascore1 = 1;
-                    else if (jl_is_typevar(apara) && !jl_is_typevar(bpara) && !jl_is_type(bpara))
+                    else if (avar && !bvar && !jl_is_type(bpara))
                         bscore1 = 1;
-                    if (!adiag && jl_is_typevar(apara)) {
+                    if (!adiag && avar) {
                         for(int j=i+1; j < jl_nparams(tta); j++) {
-                            if (jl_has_typevar(jl_tparam(tta,j), (jl_tvar_t*)apara)) {
+                            jl_value_t *sib = jl_tparam(tta,j);
+                            if (jl_is_typevar(apara) ? jl_has_typevar(sib, (jl_tvar_t*)apara)
+                                                     : jl_tvarref_occurs(sib, jl_tvarref_depth(apara))) {
                                 adiag = 1; break;
                             }
                         }
                     }
-                    if (!bdiag && jl_is_typevar(bpara)) {
+                    if (!bdiag && bvar) {
                         for(int j=i+1; j < jl_nparams(ttb); j++) {
-                            if (jl_has_typevar(jl_tparam(ttb,j), (jl_tvar_t*)bpara)) {
+                            jl_value_t *sib = jl_tparam(ttb,j);
+                            if (jl_is_typevar(bpara) ? jl_has_typevar(sib, (jl_tvar_t*)bpara)
+                                                     : jl_tvarref_occurs(sib, jl_tvarref_depth(bpara))) {
                                 bdiag = 1; break;
                             }
                         }
@@ -8295,59 +8387,18 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_v
         return 0;
     }
 
-    if (jl_is_typevar(a)) {
-        if (jl_is_typevar(b)) {
-            return (( type_morespecific_((jl_value_t*)((jl_tvar_t*)a)->ub,
-                                         (jl_value_t*)((jl_tvar_t*)b)->ub, a0, b0, 0, env) &&
-                     !type_morespecific_((jl_value_t*)((jl_tvar_t*)a)->lb,
-                                         (jl_value_t*)((jl_tvar_t*)b)->lb, a0, b0, 0, env)) ||
-                    ( type_morespecific_((jl_value_t*)((jl_tvar_t*)b)->lb,
-                                         (jl_value_t*)((jl_tvar_t*)a)->lb, b0, a0, 0, env) &&
-                     !type_morespecific_((jl_value_t*)((jl_tvar_t*)b)->ub,
-                                         (jl_value_t*)((jl_tvar_t*)a)->ub, b0, a0, 0, env)));
-        }
-        if (!jl_is_type(b))
-            return 0;
-        if (invariant) {
-            if (((jl_tvar_t*)a)->ub == jl_bottom_type)
-                return 1;
-            if (!jl_has_free_typevars(b))
-                return 0;
-            if (eq_msp(((jl_tvar_t*)a)->ub, b, a0, b0, env))
-                return num_occurs((jl_tvar_t*)a, env) >= 2;
-        }
-        else {
-            // need `{T,T} where T` more specific than `{Any, Any}`
-            if (b == (jl_value_t*)jl_any_type && ((jl_tvar_t*)a)->ub == (jl_value_t*)jl_any_type &&
-                num_occurs((jl_tvar_t*)a, env) >= 2)
-                return 1;
-        }
-        return type_morespecific_(((jl_tvar_t*)a)->ub, b, a0, b0, 0, env);
+    if (jl_is_typevar(a) || jl_is_typevar(b) || jl_is_tvarref(a) || jl_is_tvarref(b)) {
+        int acount = spec_num_occurs(a, aenv);
+        int bcount = spec_num_occurs(b, benv);
+        JL_GC_PUSH2(&a, &b);
+        a = spec_resolve_ref(a, aenv);
+        b = b == NULL ? NULL : spec_resolve_ref(b, benv);
+        int ret = 0; // a detached reference supports no bound reasoning
+        if (a != NULL && b != NULL)
+            ret = type_morespecific_var_(a, b, a0, b0, invariant, aenv, benv, acount, bcount);
+        JL_GC_POP();
+        return ret;
     }
-    if (jl_is_typevar(b)) {
-        if (!jl_is_type(a))
-            return 1;
-        if (invariant) {
-            if (((jl_tvar_t*)b)->ub == jl_bottom_type)
-                return 0;
-            if (jl_has_free_typevars(a)) {
-                if (type_morespecific_(a, ((jl_tvar_t*)b)->ub, a0, b0, 0, env))
-                    return 1;
-                if (eq_msp(a, ((jl_tvar_t*)b)->ub, a0, b0, env))
-                    return num_occurs((jl_tvar_t*)b, env) < 2;
-                return 0;
-            }
-            else {
-                if (obviously_disjoint(a, ((jl_tvar_t*)b)->ub, 1))
-                    return 0;
-                if (type_morespecific_(((jl_tvar_t*)b)->ub, a, b0, a0, 0, env))
-                    return 0;
-                return 1;
-            }
-        }
-        return type_morespecific_(a, ((jl_tvar_t*)b)->ub, a0, b0, 0, env);
-    }
-
     if (jl_is_unionall(a)) {
         HANDLE_UNIONALL_A;
     }
@@ -8362,18 +8413,18 @@ JL_DLLEXPORT int jl_type_morespecific(jl_value_t *a, jl_value_t *b)
 {
     if (obviously_disjoint(a, b, 1))
         return 0;
-    if (jl_has_free_typevars(a) || jl_has_free_typevars(b))
+    if (has_free_or_dangling_typevars(a) || has_free_or_dangling_typevars(b))
         return 0;
     if (jl_subtype(b, a))
         return 0;
     if (jl_subtype(a, b))
         return 1;
-    return type_morespecific_(a, b, a, b, 0, NULL);
+    return type_morespecific_(a, b, a, b, 0, NULL, NULL);
 }
 
 JL_DLLEXPORT int jl_type_morespecific_no_subtype(jl_value_t *a, jl_value_t *b)
 {
-    return type_morespecific_(a, b, a, b, 0, NULL);
+    return type_morespecific_(a, b, a, b, 0, NULL, NULL);
 }
 
 // Equivalent to `jl_type_morespecific` of the signatures, except that more recent
@@ -8384,7 +8435,7 @@ JL_DLLEXPORT int jl_method_morespecific(jl_method_t *ma, jl_method_t *mb)
     jl_value_t *b = (jl_value_t*)mb->sig;
     if (obviously_disjoint(a, b, 1))
         return 0;
-    if (jl_has_free_typevars(a) || jl_has_free_typevars(b))
+    if (has_free_or_dangling_typevars(a) || has_free_or_dangling_typevars(b))
         return 0;
     if (jl_subtype(b, a)) {
         if (jl_types_equal(a, b))
@@ -8393,7 +8444,7 @@ JL_DLLEXPORT int jl_method_morespecific(jl_method_t *ma, jl_method_t *mb)
     }
     if (jl_subtype(a, b))
         return 1;
-    return type_morespecific_(a, b, a, b, 0, NULL);
+    return type_morespecific_(a, b, a, b, 0, NULL, NULL);
 }
 
 #ifdef __cplusplus
