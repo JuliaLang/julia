@@ -820,7 +820,16 @@ static int has_free_or_dangling_typevars(jl_value_t *v) JL_NOTSAFEPOINT
     return jl_has_free_typevars(v) || jl_has_dangling_tvarrefs(v);
 }
 
-int simple_subtype(jl_value_t *a, jl_value_t *b, int hasfree, int isUnion)
+static jl_unionall_t *binderenv_lookup(jl_binderenv_t *env, size_t depth) JL_NOTSAFEPOINT
+{
+    while (env != NULL && depth > 1) {
+        env = env->prev;
+        depth--;
+    }
+    return env == NULL ? NULL : env->u;
+}
+
+int simple_subtype(jl_value_t *a, jl_value_t *b, jl_binderenv_t *env, int hasfree, int isUnion)
 {
     assert(hasfree == (has_free_or_dangling_typevars(a) | (has_free_or_dangling_typevars(b) << 1)));
     if (a == jl_bottom_type || b == (jl_value_t*)jl_any_type)
@@ -837,7 +846,7 @@ int simple_subtype(jl_value_t *a, jl_value_t *b, int hasfree, int isUnion)
     if (jl_is_typevar(a)) {
         jl_value_t *na = ((jl_tvar_t*)a)->ub;
         hasfree &= (has_free_or_dangling_typevars(na) | 2);
-        return simple_subtype(na, b, hasfree, isUnion);
+        return simple_subtype(na, b, env, hasfree, isUnion);
     }
     if (jl_is_typevar(b)) {
         jl_value_t *nb = ((jl_tvar_t*)b)->lb;
@@ -847,7 +856,37 @@ int simple_subtype(jl_value_t *a, jl_value_t *b, int hasfree, int isUnion)
         if (is_leaf_bound(nb))
             return 0;
         hasfree &= ((has_free_or_dangling_typevars(nb) << 1) | 1);
-        return simple_subtype(a, nb, hasfree, isUnion);
+        return simple_subtype(a, nb, env, hasfree, isUnion);
+    }
+    if (jl_is_tvarref(a)) {
+        // a reference behaves like the variable it resolves to: chase its
+        // declared upper bound, re-expressed at the operands' position
+        jl_unionall_t *ua = binderenv_lookup(env, jl_tvarref_depth(a));
+        if (ua == NULL)
+            return 0; // detached (or no environment): no bound information
+        int ret;
+        jl_value_t *na = ua->ub;
+        JL_GC_PUSH1(&na);
+        na = jl_shift_dangling_refs(na, (ssize_t)jl_tvarref_depth(a));
+        ret = simple_subtype(na, b, env, has_free_or_dangling_typevars(na) | (hasfree & 2), isUnion);
+        JL_GC_POP();
+        return ret;
+    }
+    if (jl_is_tvarref(b)) {
+        jl_unionall_t *ub = binderenv_lookup(env, jl_tvarref_depth(b));
+        if (ub == NULL)
+            return 0;
+        jl_value_t *nb = ub->lb;
+        // see the TypeVar case above: unusable under the diagonal rule
+        // (leafness does not depend on the reference spelling)
+        if (is_leaf_bound(nb))
+            return 0;
+        int ret;
+        JL_GC_PUSH1(&nb);
+        nb = jl_shift_dangling_refs(nb, (ssize_t)jl_tvarref_depth(b));
+        ret = simple_subtype(a, nb, env, (has_free_or_dangling_typevars(nb) << 1) | (hasfree & 1), isUnion);
+        JL_GC_POP();
+        return ret;
     }
     if (b == (jl_value_t*)jl_typeofbottom_type) {
         // `Type{Union{}} == TypeofBottom` (the bottom object is unique). No
@@ -904,7 +943,7 @@ STATIC_INLINE void merge_vararg_unions(jl_value_t **temp, size_t nt) JL_CANSAFEP
     }
 }
 
-JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n)
+JL_DLLEXPORT jl_value_t *jl_type_union_env(jl_value_t **ts, size_t n, jl_binderenv_t *env)
 {
     if (n == 0)
         return (jl_value_t*)jl_bottom_type;
@@ -933,7 +972,7 @@ JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n)
         for (j = 0; j < nt; j++) {
             if (j != i && temp[i] && temp[j]) {
                 int has_free2 = has_free | (has_free_or_dangling_typevars(temp[j]) << 1);
-                if (simple_subtype(temp[i], temp[j], has_free2, 1))
+                if (simple_subtype(temp[i], temp[j], env, has_free2, 1))
                     temp[i] = NULL;
             }
         }
@@ -957,7 +996,13 @@ JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n)
     return tu;
 }
 
+JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n)
+{
+    return jl_type_union_env(ts, n, NULL);
+}
+
 static int simple_subtype2(jl_value_t *a, jl_value_t *b, int hasfree, int isUnion) JL_CANSAFEPOINT
+
 {
     assert(hasfree == (has_free_or_dangling_typevars(a) | (has_free_or_dangling_typevars(b) << 1)));
     int subab = 0, subba = 0;
@@ -971,8 +1016,8 @@ static int simple_subtype2(jl_value_t *a, jl_value_t *b, int hasfree, int isUnio
         subba = 1;
     }
     else if (hasfree != 0) {
-        subab = simple_subtype(a, b, hasfree, isUnion);
-        subba = simple_subtype(b, a, ((hasfree & 2) >> 1) | ((hasfree & 1) << 1), isUnion);
+        subab = simple_subtype(a, b, NULL, hasfree, isUnion);
+        subba = simple_subtype(b, a, NULL, ((hasfree & 2) >> 1) | ((hasfree & 1) << 1), isUnion);
     }
     else if (jl_is_typeeq(a) && jl_is_typeeq(b) &&
              jl_typeof(jl_typeeq_T(a)) != jl_typeof(jl_typeeq_T(b))) {
@@ -1039,7 +1084,7 @@ jl_value_t *simple_union(jl_value_t *a, jl_value_t *b)
         for (j = jmin; j < jmax; j++) {
             if (j != i && temp[i] && temp[j]) {
                 int has_free2 = has_free | (has_free_or_dangling_typevars(temp[j]) << 1);
-                if (simple_subtype(temp[i], temp[j], has_free2, 0))
+                if (simple_subtype(temp[i], temp[j], NULL, has_free2, 0))
                     temp[i] = NULL;
             }
         }

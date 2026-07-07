@@ -1254,27 +1254,22 @@ JL_CALLABLE(jl_f_setfieldonce)
     return success ? jl_true : jl_false;
 }
 
-static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f, int dothrow) JL_CANSAFEPOINT
+static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f, int dothrow, jl_binderenv_t *env) JL_CANSAFEPOINT
 {
     if (jl_is_unionall(t)) {
-        // this open is load-bearing, not convenience: a union-typed field
-        // merges the per-arm field types through `jl_type_union`, whose
-        // subsumption checks consult the binders' bounds (e.g. the arms `S`
-        // and `T` of `... where {T, S<:T}` collapse to `T`, which then
-        // normalizes to `T`'s bound on re-close). Bounds live on the binder,
-        // not on a positional reference, so the merge has to run on the
-        // materialized instance. A field type that is exactly the bound
-        // variable comes back as a (free) TypeVar, and one that merely
-        // mentions it gets re-bound around the result.
-        jl_tvar_t *v = NULL;
-        jl_value_t *body = NULL;
-        JL_GC_PUSH2(&v, &body);
-        body = jl_unionall_open((jl_unionall_t*)t, &v);
-        body = get_fieldtype(body, f, dothrow);
-        if (jl_has_typevar(body, v))
-            // note: a field type that is exactly the bound variable normalizes
-            // to the binder's upper bound here
-            body = jl_type_unionall(v, body);
+        // extract from the raw body: the field slot sits at the body's own
+        // binder depth, so its references transfer verbatim; the binder is
+        // then re-formed around the result (or dropped when it does not
+        // occur, or -- when the field type is exactly the bound variable --
+        // normalized to the binder's upper bound). The environment carries
+        // the binder chain so that a union-typed field's merge can chase
+        // reference bounds (see `jl_type_union_env`).
+        jl_binderenv_t newenv = { (jl_unionall_t*)t, env };
+        jl_value_t *body = get_fieldtype(((jl_unionall_t*)t)->body, f, dothrow, &newenv);
+        if (body == NULL)
+            return NULL;
+        JL_GC_PUSH1(&body);
+        body = jl_rewrap_unionall_one(body, (jl_unionall_t*)t);
         JL_GC_POP();
         return body;
     }
@@ -1284,14 +1279,14 @@ static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f, int dothrow) JL_C
         jl_value_t *a = ((jl_uniontype_t*)t)->a;
         jl_value_t *b = ((jl_uniontype_t*)t)->b;
         JL_GC_PUSHARGS(u, 2);
-        u[0] = jl_is_some_Type(a) ? jl_bottom_type : get_fieldtype(a, f, 0);
-        u[1] = jl_is_some_Type(b) ? jl_bottom_type : get_fieldtype(b, f, 0);
+        u[0] = jl_is_some_Type(a) ? jl_bottom_type : get_fieldtype(a, f, 0, env);
+        u[1] = jl_is_some_Type(b) ? jl_bottom_type : get_fieldtype(b, f, 0, env);
         if (u[0] == jl_bottom_type && u[1] == jl_bottom_type && dothrow) {
             // error if all types in the union might have
-            get_fieldtype(a, f, 1);
-            get_fieldtype(b, f, 1);
+            get_fieldtype(a, f, 1, env);
+            get_fieldtype(b, f, 1, env);
         }
-        r = jl_type_union(u, 2);
+        r = jl_type_union_env(u, 2, env);
         JL_GC_POP();
         return r;
     }
@@ -1321,11 +1316,28 @@ static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f, int dothrow) JL_C
             }
         }
         jl_value_t *tt = jl_tparam1(st);
-        while (jl_is_typevar(tt))
-            tt = ((jl_tvar_t*)tt)->ub;
-        if (jl_is_tvarref(tt))
-            // a bound-variable reference: the tuple type is unknown here
-            return (jl_value_t*)jl_any_type;
+        while (1) {
+            if (jl_is_typevar(tt)) {
+                tt = ((jl_tvar_t*)tt)->ub;
+            }
+            else if (jl_is_tvarref(tt)) {
+                // chase the binder's declared bound through the environment
+                size_t d = jl_tvarref_depth(tt);
+                jl_binderenv_t *node = env;
+                while (node != NULL && d > 1) {
+                    node = node->prev;
+                    d--;
+                }
+                if (node == NULL || jl_has_dangling_tvarrefs(node->u->ub))
+                    // detached, or a bound expressed in an outer frame:
+                    // the tuple type is unknown here
+                    return (jl_value_t*)jl_any_type;
+                tt = node->u->ub;
+            }
+            else {
+                break;
+            }
+        }
         if (tt == (jl_value_t*)jl_any_type)
             return (jl_value_t*)jl_any_type;
         if (tt == (jl_value_t*)jl_bottom_type)
@@ -1333,7 +1345,7 @@ static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f, int dothrow) JL_C
         JL_GC_PUSH1(&f);
         if (jl_is_symbol(f))
             f = jl_box_long(field_index+1);
-        jl_value_t *ft = get_fieldtype(tt, f, dothrow);
+        jl_value_t *ft = get_fieldtype(tt, f, dothrow, env);
         JL_GC_POP();
         return ft;
     }
@@ -1359,7 +1371,7 @@ JL_CALLABLE(jl_f_fieldtype)
     if (nargs == 3) {
         JL_TYPECHK(fieldtype, bool, args[2]);
     }
-    jl_value_t *r = get_fieldtype(args[0], args[1], 1);
+    jl_value_t *r = get_fieldtype(args[0], args[1], 1, NULL);
     return r;
 }
 

@@ -2143,7 +2143,16 @@ JL_DLLEXPORT int jl_id_start_char(uint32_t wc) JL_NOTSAFEPOINT; // declared also
 JL_DLLEXPORT int jl_id_char(uint32_t wc) JL_NOTSAFEPOINT; // declared also in flisp.h
 jl_value_t *simple_union(jl_value_t *a, jl_value_t *b) JL_CANSAFEPOINT;
 jl_value_t *simple_intersect(jl_value_t *a, jl_value_t *b, int overesi) JL_CANSAFEPOINT;
-int simple_subtype(jl_value_t *a, jl_value_t *b, int hasfree, int isUnion) JL_CANSAFEPOINT;
+// positional sibling of `jl_typeenv_t`: the chain of enclosing `where` binder
+// nodes, innermost first. The entry `depth` links up describes the binder a
+// `TypeVarRef(depth)` at the chain's position resolves to; the entry's bounds
+// are expressed outside that binder (`depth` frames out from the position).
+typedef struct _jl_binderenv_t {
+    jl_unionall_t *u;
+    struct _jl_binderenv_t *prev;
+} jl_binderenv_t;
+int simple_subtype(jl_value_t *a, jl_value_t *b, jl_binderenv_t *env, int hasfree, int isUnion) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_type_union_env(jl_value_t **ts, size_t n, jl_binderenv_t *env) JL_CANSAFEPOINT;
 void jl_rng_split(uint64_t dst[JL_RNG_SIZE], uint64_t src[JL_RNG_SIZE]) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_coverage_alloc_line(const char *filename, int line) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint64_t *jl_coverage_data_pointer(const char *filename, int line) JL_NOTSAFEPOINT;
