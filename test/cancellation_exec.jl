@@ -332,6 +332,50 @@ end
     @test factorial(big(20)) == 2432902008176640000
 end
 
+@testset "root-task first cancellation point inside a reset_safe call" begin
+    # Regression test: a task's first cancellation point under a *new*
+    # source takes the binding-publication (rebind) path, whose write
+    # barrier is an ordinary call - the region publication must come after
+    # it, or the freshly published reset region is cleared again and the
+    # protected foreign call runs unprotected. The fresh source below forces
+    # the rebind; running on the root task mirrors `julia -e` / REPL
+    # foreground work (spawned tasks are pre-bound by their start-up check
+    # and never caught this).
+    src = CancellationTokenSource()
+    done = Threads.Atomic{Bool}(false)
+    canceller = Threads.@spawn begin
+        t0 = time()
+        while time() < t0 + 1.0
+            # busy-wait: timers must not be needed to cancel a stuck root task
+        end
+        cancel!(src)
+        while !done[] && time() < t0 + 60.0
+            t1 = time()
+            while time() < t1 + 0.1
+            end
+            Base.redeliver!(src)
+        end
+    end
+    t0 = time()
+    cancelled = try
+        with(CANCEL_TOKEN => CancellationToken(src)) do
+            # ~20s of uninterrupted libgmp compute if not cancelled
+            Base.GMP.MPZ.fac_ui(UInt(40_000_000))
+        end
+        false
+    catch e
+        @test e isa CancellationRequest
+        true
+    finally
+        done[] = true
+    end
+    @test cancelled
+    @test time() - t0 < 15.0 # cancelled promptly, not at call completion
+    wait(canceller)
+    # the library stays healthy afterwards
+    @test factorial(big(25)) == prod(big(1):big(25))
+end
+
 @testset "cancel storm" begin
     # Hammer cancellation against tasks in every wait state, from a tight
     # loop with concurrent GC pressure. This is a regression test for the

@@ -5487,10 +5487,6 @@ isdefined_unknown_idx:
         if (!known_union)
             return false; // emit as a runtime call for the dynamic type check
 
-        // Emit the cancellation point intrinsic call first (this is what the
-        // CancellationLowering pass expands into the reset_ctx publication).
-        ctx.builder.CreateCall(prepare_call(jl_cancellation_point_func));
-
         Value *ct = get_current_task(ctx);
         Value *src = boxed(ctx, argv[1]);
         Value *bound_ptr = emit_ptrgep(ctx, ct, offsetof(jl_task_t, bound_cancel_token), "bound_cancel_token");
@@ -5500,6 +5496,7 @@ isdefined_unknown_idx:
 
         BasicBlock *src_bb = BasicBlock::Create(ctx.builder.getContext(), "cancel_pt_src", ctx.f);
         BasicBlock *rebind_bb = BasicBlock::Create(ctx.builder.getContext(), "cancel_pt_rebind", ctx.f);
+        BasicBlock *point_bb = BasicBlock::Create(ctx.builder.getContext(), "cancel_pt_point", ctx.f);
         BasicBlock *loadst_bb = BasicBlock::Create(ctx.builder.getContext(), "cancel_pt_state", ctx.f);
         BasicBlock *nothing_bb = BasicBlock::Create(ctx.builder.getContext(), "cancel_pt_nothing", ctx.f);
         BasicBlock *clear_bb = BasicBlock::Create(ctx.builder.getContext(), "cancel_pt_clear", ctx.f);
@@ -5516,13 +5513,13 @@ isdefined_unknown_idx:
         bound0->setOrdering(AtomicOrdering::Monotonic);
         ai.decorateInst(bound0);
         Value *already_clear = ctx.builder.CreateICmpEQ(decay_derived(ctx, bound0), decay_derived(ctx, nothing_val));
-        ctx.builder.CreateCondBr(already_clear, merge_bb, clear_bb);
+        ctx.builder.CreateCondBr(already_clear, point_bb, clear_bb);
 
         ctx.builder.SetInsertPoint(clear_bb);
         StoreInst *clear_store = ctx.builder.CreateAlignedStore(nothing_val, bound_ptr, ctx.types().alignof_ptr);
         clear_store->setOrdering(AtomicOrdering::Monotonic);
         ai.decorateInst(clear_store);
-        ctx.builder.CreateBr(merge_bb);
+        ctx.builder.CreateBr(point_bb);
 
         // src is a token source: publish the binding (store only on rebind,
         // so steady-state checks in a loop do not dirty the cache line), then
@@ -5532,14 +5529,26 @@ isdefined_unknown_idx:
         bound1->setOrdering(AtomicOrdering::Monotonic);
         ai.decorateInst(bound1);
         Value *same = ctx.builder.CreateICmpEQ(decay_derived(ctx, bound1), decay_derived(ctx, src));
-        ctx.builder.CreateCondBr(same, loadst_bb, rebind_bb);
+        ctx.builder.CreateCondBr(same, point_bb, rebind_bb);
 
         ctx.builder.SetInsertPoint(rebind_bb);
         StoreInst *bind_store = ctx.builder.CreateAlignedStore(src, bound_ptr, ctx.types().alignof_ptr);
         bind_store->setOrdering(AtomicOrdering::Release);
         ai.decorateInst(bind_store);
         emit_write_barrier(ctx, ct, src);
-        ctx.builder.CreateBr(loadst_bb);
+        ctx.builder.CreateBr(point_bb);
+
+        // The cancellation point intrinsic (which the CancellationLowering
+        // pass expands into the reset region publication) must come after all
+        // of the binding bookkeeping above: the rebind path's write barrier
+        // is an ordinary call, so the pass clears the published region before
+        // it. Emitting the intrinsic afterwards keeps the region live from
+        // here through a following reset_safe foreign call; only the state
+        // load below may follow it, so that a longjmp back onto the setjmp
+        // re-reads the now-cancelled state.
+        ctx.builder.SetInsertPoint(point_bb);
+        ctx.builder.CreateCall(prepare_call(jl_cancellation_point_func));
+        ctx.builder.CreateCondBr(is_nothing, merge_bb, loadst_bb);
 
         ctx.builder.SetInsertPoint(loadst_bb);
         Value *state_ptr = emit_ptrgep(ctx, decay_derived(ctx, src), offsetof(jl_cancel_source_t, state), "cancel_state");
@@ -5551,9 +5560,8 @@ isdefined_unknown_idx:
 
         // Merge and fold in the preempt-request bit (0x40)
         ctx.builder.SetInsertPoint(merge_bb);
-        PHINode *st = ctx.builder.CreatePHI(T_int8, 3);
-        st->addIncoming(ConstantInt::get(T_int8, 0), nothing_bb);
-        st->addIncoming(ConstantInt::get(T_int8, 0), clear_bb);
+        PHINode *st = ctx.builder.CreatePHI(T_int8, 2);
+        st->addIncoming(ConstantInt::get(T_int8, 0), point_bb);
         st->addIncoming(st_load, loadst_bb);
         Value *preempt_ptr = emit_ptrgep(ctx, ct, offsetof(jl_task_t, preempt_request), "preempt_request");
         LoadInst *preempt = ctx.builder.CreateAlignedLoad(T_int8, preempt_ptr, Align(1));
