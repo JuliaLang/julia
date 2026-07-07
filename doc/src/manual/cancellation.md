@@ -255,9 +255,27 @@ enough. Placing a check per iteration of an outer loop is a good default; extrem
 loops can rely on an outer check.
 
 Code blocked in a foreign call (e.g. a long-running C library) cannot be unwound safely from
-the outside; libraries that support external interruption can integrate with cancellation
-(as, for example, the LinearAlgebra BLAS wrappers do), but that integration is currently an
-internal interface.
+the outside, but a library that supports external interruption can integrate with
+cancellation through the `cancel_handler` option of [`@ccall`](@ref):
+
+```julia
+# void solver_stop(solver_t *);   -- async-signal-safe, per the library docs
+function cancellable_solve!(solver::Ptr{Cvoid})
+    @ccall cancel_handler=(STOP_HANDLER[], solver) libsolver.solve(solver::Ptr{Cvoid})::Cint
+end
+```
+
+Here `STOP_HANDLER[]` holds a C-callable pointer (e.g. from `@cfunction`) to a
+`handler(state, severity)` function. If the governing token is cancelled while the annotated
+call is running, the runtime invokes the handler on the thread executing the call, like a
+signal handler — at an arbitrary point of the foreign code, on the same stack, resuming the
+call when the handler returns. The handler's job is only to make the foreign call return
+early (set a flag, call the library's own cancellation entry point); the pending cancellation
+is then thrown by the annotated call itself right after it returns, so a partially computed
+result never escapes. The handler must observe signal-handler
+discipline — no allocation, locks, yields or I/O — and must tolerate spurious and repeated
+invocation; see [`@ccall`](@ref) for the full contract. This is the hook by which BLAS
+wrappers can make a long matrix multiplication respond to ^C.
 
 ## Interactive sessions and ^C
 

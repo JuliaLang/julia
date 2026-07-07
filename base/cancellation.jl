@@ -460,9 +460,9 @@ function cancel!(src::CancellationTokenSource,
     end
     _raise_state!(src, sev) || return false
     # Pair with the compiler-order-only publication of `bound_cancel_token`
-    # at cancellation points (and the fence_light in with_cancellation_hook):
-    # after this fence, either we observe the binding/hook of a running task,
-    # or its next cancellation point observes our state write.
+    # (and of foreign-call cancellation guards) at cancellation points: after
+    # this fence, either we observe the binding of a running task, or its
+    # next cancellation point observes our state write.
     Threads.atomic_fence_heavy()
     # Mark and drain the subtree (each node is marked before its children so
     # a concurrent attach_child! is level-triggered), then interrupt running
@@ -470,27 +470,6 @@ function cancel!(src::CancellationTokenSource,
     _cancel_walk!(src, sev)
     _cancel_running!(src, sev)
     return true
-end
-
-# Invoke `t`'s asynchronous cancellation hook (if any) on the cancelling
-# thread; see `with_cancellation_hook`. A failing hook must not disrupt the
-# rest of request delivery, and reporting its error must not park the
-# canceller (which may be the ^C listener on a monopolized thread).
-function _invoke_cancellation_hook!(t::Task)
-    hook = @atomic :acquire t.cancellation_hook
-    hook === nothing && return nothing
-    istaskdone(t) && return nothing
-    (handler, state) = hook::Tuple{Any, Any}
-    try
-        invokelatest(handler, state, t)
-    catch err
-        try
-            Core.print(Core.stderr, "ERROR: cancellation hook handler threw: ")
-            @ccall jl_(err::Any)::Cvoid
-        catch
-        end
-    end
-    nothing
 end
 
 function _cancel_walk!(node::CancellationTokenSource, sev::UInt8)
@@ -559,10 +538,6 @@ function _cancel_walk!(node::CancellationTokenSource, sev::UInt8)
     _unlock_source(node)
     while towake !== nothing
         (t, towake) = towake::Tuple{Task, Any}
-        # A task parked inside a with_cancellation_hook region still gets its
-        # hook invoked (the registered external operation may be in flight on
-        # its behalf).
-        _invoke_cancellation_hook!(t)
         if sev >= CANCEL_REQUEST_ABANDON_ALL.request
             # do not wake the task; freeze it in place
             freeze_task!(t, creq, node)
@@ -584,9 +559,10 @@ function _cancel_walk!(node::CancellationTokenSource, sev::UInt8)
 end
 
 # Interrupt computations currently running on some thread whose published
-# bound token lies in the cancelled subtree: invoke their asynchronous
-# cancellation hooks (foreign waits) and send the cancellation signal that
-# unwinds compiled code to its most recent cancellation point.
+# bound token lies in the cancelled subtree: send the cancellation signal
+# that unwinds compiled code to its most recent cancellation point, or runs
+# the cancellation handler of a foreign call in progress (see the
+# `cancel_handler` option of `@ccall`).
 # Re-run the delivery walk for an already-cancelled source at its current
 # severity: wakes waiters that registered without observing the cancellation
 # and re-sends the interruption signal to bound running computations (the
@@ -612,10 +588,6 @@ function _cancel_running!(src::CancellationTokenSource, sev::UInt8)
     for t in tasks
         t = t::Task
         istaskdone(t) && continue
-        # This handler is called on the *cancelling* thread; the handler
-        # contract requires thread safety and tolerance of spurious/multiple
-        # invocation.
-        _invoke_cancellation_hook!(t)
         if t === ct
             # The canceller itself is governed by the cancelled subtree;
             # deliver to ourselves last (below), so that the remaining tasks
@@ -626,9 +598,11 @@ function _cancel_running!(src::CancellationTokenSource, sev::UInt8)
         else
             tid = ccall(:jl_get_task_tid, Int16, (Any,), t)
             if tid >= 0
-                # Best-effort: the signal only unwinds published (reset-safe)
-                # regions; a miss is recovered level-triggered at the task's
-                # next cancellation point.
+                # Best-effort: the signal only delivers to a published
+                # interruptible-region context (a compiled reset point, or a
+                # foreign call carrying a cancellation handler); a miss is
+                # recovered level-triggered at the task's next cancellation
+                # point.
                 ccall(:jl_send_cancellation_signal, Cvoid, (Int16,), tid)
             end
         end

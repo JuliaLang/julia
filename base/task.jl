@@ -1456,57 +1456,6 @@ yield (preemption) was requested.
 """
 Core.cancellation_point!
 
-"""
-    Base.with_cancellation_hook(f, handler, state)
-
-Run `f()` with an asynchronous cancellation hook `(handler, state)` registered
-for the current task, restoring the previous hook afterwards.
-
-If the cancellation token governing this task is cancelled while `f` is
-running, [`cancel!`](@ref) additionally invokes `handler(state, task)` on the
-*cancelling* thread, concurrently with the task. This gives `f` a chance to
-be interrupted while blocked in an operation that is opaque to the runtime -
-typically a foreign call into a native library. The handler performs the
-library-specific work to abort that operation; the operation then returns
-early and the task observes the pending cancellation at its next cancellation
-point (this function includes one after `f` returns).
-
-The handler must be safe to call from any thread and must tolerate spurious
-invocations: it runs once per `cancel!` call (so possibly multiple times,
-including once per severity escalation), it may run after `f` has already
-returned and the hook was deregistered or replaced, and it may run before the
-external operation has actually started. If the handler needs to distinguish
-these cases, it can revalidate `state` against the current state of the task
-object it is passed.
-
-A cancellation that was already pending when the hook is being registered is
-thrown by the cancellation point at the start of the protected region, before
-`f` runs.
-"""
-function with_cancellation_hook(f, handler, @nospecialize(state))
-    ct = current_task()
-    old = @atomicswap :acquire_release ct.cancellation_hook = (handler, state)
-    # Pairs with atomic_fence_heavy in cancel!: either the canceller observes
-    # the hook we just registered, or the cancellation point below observes
-    # its cancelled token.
-    Threads.atomic_fence_light()
-    local ret
-    try
-        s = default_cancel_source()
-        st = Core.cancellation_point!(s)::UInt8
-        st != 0x00 && handle_cancellation!(s, st)
-        ret = f()
-    finally
-        @atomic :release ct.cancellation_hook = old
-    end
-    # Observe a cancellation that raced the completion of `f` (its external
-    # operation may have been aborted part-way).
-    s = default_cancel_source()
-    st = Core.cancellation_point!(s)::UInt8
-    st != 0x00 && handle_cancellation!(s, st)
-    return ret
-end
-
 # CANCEL_REQUEST_ABANDON_ALL: freeze `t` without letting it unwind. A task
 # running on a thread is ripped away with unsafe_abandon!; a parked or queued
 # task is marked abandoned in place. In the latter case its waitqueue

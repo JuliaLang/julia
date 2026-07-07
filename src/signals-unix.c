@@ -340,6 +340,200 @@ static void jl_throw_in_ctx(jl_task_t *ct, jl_value_t *e, int sig, void *sigctx)
     }
 }
 
+// === Cancellation-handler delivery ==========================================
+// A foreign call annotated with a cancellation handler publishes an sp == 0
+// jl_reset_ctx_t in task->reset_ctx (see emit_ccall). Delivering the
+// cancellation signal to such a region runs the handler *on the interrupted
+// thread*, like a signal handler, and then resumes the interrupted
+// computation:
+//  1. The signal handler copies the interrupted general-purpose registers
+//     from the signal context into ptls->cancel_handler_save and redirects
+//     the context to jl_cancel_handler_shim, dropping sp just past the
+//     interrupted frame's red zone but touching no other register. Nothing
+//     is written to the stack: the memory below the red zone holds only
+//     this signal's own frame, which is dead the moment sigreturn launches
+//     the shim.
+//  2. The shim - running in ordinary, unmasked context once the signal
+//     handler returns - calls jl_cancel_handler_trampoline, which invokes
+//     fn(state, severity) from the save area. GPRs need no care anywhere on
+//     this path: the resume below replays every one of them. FP/vector
+//     state is the *handler's* responsibility: its contract is the LLVM
+//     `preserve_all` calling convention (clang
+//     `__attribute__((preserve_all))`, and reachable from Julia's own LLVM
+//     pipeline), i.e. it generates whatever stack saves it needs - a
+//     handler that touches no FP/vector registers satisfies this trivially.
+//     The runtime pieces on this path are compiled general-regs-only so
+//     they cannot clobber FP state themselves.
+//  3. The shim then calls jl_cancel_handler_resume, which arbitrates the
+//     shared signal_request slot (request 7) and re-raises the signal; the
+//     restore branch copies the saved GPR state back over its own signal
+//     context, so that returning from it resumes the originally interrupted
+//     instruction (the self-signal's frame round-trips the still-live
+//     interrupted FP state through the kernel untouched).
+// The save area holds at most one delivery per thread: while one is in
+// flight (armed), further deliveries are skipped and recovered
+// level-triggered. The region context stays published throughout, so an
+// escalation or redelivery runs the (idempotent) handler again once the
+// current delivery completes.
+
+#ifdef JL_HAVE_CANCEL_HANDLER_DELIVERY
+
+extern void jl_cancel_handler_shim(void);
+void jl_cancel_handler_trampoline(void);
+JL_NORETURN void jl_cancel_handler_resume(void);
+
+#if defined(_CPU_X86_64_)
+_Static_assert(sizeof(((mcontext_t*)0)->gregs) <= sizeof(((jl_cancel_handler_save_t*)0)->gregs),
+               "jl_cancel_handler_save_t.gregs must hold mcontext_t.gregs");
+__asm__(
+    "  .type jl_cancel_handler_shim, @function\n"
+    "jl_cancel_handler_shim:\n"
+    "  .cfi_startproc\n"
+    "  .cfi_signal_frame\n"
+    // Mark as end of stack; the interrupted pc/sp live in the per-thread
+    // save area, not anywhere an unwinder could recover them.
+    "  .cfi_undefined %rip\n"
+    "  .cfi_undefined %rsp\n"
+    // Entered with sp just past the interrupted frame's red zone (16-byte
+    // aligned) and every other register still holding the interrupted
+    // computation's value. GPRs are free to clobber (the resume replays
+    // them from the save area); FP/vector state is preserved by the
+    // handler's preserve_all contract.
+    "  cld\n" // C ABI needs DF clear; the interrupted flags are replayed on resume
+    "  callq jl_cancel_handler_trampoline@PLT\n"
+    "  callq jl_cancel_handler_resume@PLT\n" // does not return
+    "  ud2\n"
+    "  .cfi_endproc\n"
+    "  .size jl_cancel_handler_shim, .-jl_cancel_handler_shim\n"
+);
+#elif defined(_CPU_AARCH64_)
+__asm__(
+    "  .type jl_cancel_handler_shim, @function\n"
+    "jl_cancel_handler_shim:\n"
+    "  .cfi_startproc\n"
+    "  .cfi_signal_frame\n"
+    "  .cfi_undefined 30\n" // end of stack (lr was cleared by the deliverer)
+    // Entered with sp at the (16-byte aligned) interrupted sp - no red zone
+    // on aarch64 - and every other register still holding the interrupted
+    // computation's value. GPRs are free to clobber (the resume replays
+    // them); FP/vector state is preserved by the handler's preserve_all
+    // contract.
+    "  bl jl_cancel_handler_trampoline\n"
+    "  bl jl_cancel_handler_resume\n" // does not return
+    "  brk #1\n"
+    "  .cfi_endproc\n"
+    "  .size jl_cancel_handler_shim, .-jl_cancel_handler_shim\n"
+);
+#endif
+
+// Save the interrupted GPR state into the per-thread save area and rewrite
+// the (suspended) signal context so that sigreturn runs fn(state, sev) on
+// the interrupted thread. Only sp and pc are redirected.
+JL_NO_ASAN static void jl_deliver_cancel_handler(jl_ptls_t ptls, jl_task_t *ct, jl_reset_ctx_t *rctx, void *_ctx) JL_NOTSAFEPOINT
+{
+    // At most one delivery in flight per thread (its state occupies the one
+    // save area); skips are recovered level-triggered.
+    if (ptls->cancel_handler_armed)
+        return;
+    jl_cancel_handler_save_t *save = &ptls->cancel_handler_save;
+    // Severity: the state of the task's bound token source (relaxed; a
+    // spurious delivery passes whatever is current - handlers tolerate it).
+    uint8_t sev = 0;
+    jl_value_t *bound = jl_atomic_load_relaxed(&ct->bound_cancel_token);
+    if (bound != NULL && bound != jl_nothing)
+        sev = jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state) & 0x3f;
+    ucontext_t *ctx = (ucontext_t*)_ctx;
+    save->fn = rctx->handler.fn;
+    save->state = rctx->handler.state;
+    save->sev = sev;
+#if defined(_CPU_X86_64_)
+    memcpy(save->gregs, ctx->uc_mcontext.gregs, sizeof(ctx->uc_mcontext.gregs));
+    ptls->cancel_handler_armed = 1;
+    // Drop sp past the interrupted frame's red zone (the signal frame below
+    // it is dead once sigreturn fires) and redirect to the shim; at the
+    // shim's `call`, sp is 16-aligned as the C ABI requires.
+    uintptr_t sp = ((uintptr_t)ctx->uc_mcontext.gregs[REG_RSP] - 128) & ~(uintptr_t)15;
+    ctx->uc_mcontext.gregs[REG_RSP] = (greg_t)sp;
+    ctx->uc_mcontext.gregs[REG_RIP] = (greg_t)(uintptr_t)&jl_cancel_handler_shim;
+#elif defined(_CPU_AARCH64_)
+    memcpy(save->regs, ctx->uc_mcontext.regs, sizeof(save->regs));
+    save->sp = ctx->uc_mcontext.sp;
+    save->pc = ctx->uc_mcontext.pc;
+    save->pstate = ctx->uc_mcontext.pstate;
+    ptls->cancel_handler_armed = 1;
+    // No red zone on aarch64: the interrupted sp (16-aligned per the ABI) is
+    // directly usable; the dead signal frame lies below it.
+    ctx->uc_mcontext.sp = ctx->uc_mcontext.sp & ~(uintptr_t)15;
+    ctx->uc_mcontext.regs[30] = 0; // clear lr: stop unwinding at the shim
+    ctx->uc_mcontext.pc = (uintptr_t)&jl_cancel_handler_shim;
+#endif
+}
+
+// Copy the saved GPR state back over this signal's own context, so that
+// sigreturn resumes the originally interrupted instruction. (The shim
+// already restored the FP state before raising this signal.)
+JL_NO_ASAN static void jl_cancel_handler_restore(jl_ptls_t ptls, void *_ctx) JL_NOTSAFEPOINT
+{
+    if (!ptls->cancel_handler_armed)
+        return;
+    jl_cancel_handler_save_t *save = &ptls->cancel_handler_save;
+    ucontext_t *ctx = (ucontext_t*)_ctx;
+#if defined(_CPU_X86_64_)
+    memcpy(ctx->uc_mcontext.gregs, save->gregs, sizeof(ctx->uc_mcontext.gregs));
+#elif defined(_CPU_AARCH64_)
+    memcpy(ctx->uc_mcontext.regs, save->regs, sizeof(save->regs));
+    ctx->uc_mcontext.sp = save->sp;
+    ctx->uc_mcontext.pc = save->pc;
+    ctx->uc_mcontext.pstate = save->pstate;
+#endif
+    ptls->cancel_handler_armed = 0;
+}
+
+// Between the (still-FP-live) interrupted context and the final sigreturn,
+// the runtime's own code must not clobber FP/vector registers: the kernel
+// captures the live FP state into the self-signal's frame and sigreturn
+// replays it verbatim. Have the compiler enforce that.
+#define JL_GENERAL_REGS_ONLY __attribute__((target("general-regs-only")))
+
+// Called by the shim: invoke the registered handler with its arguments from
+// the save area. The handler itself preserves all register state it touches
+// (the preserve_all contract).
+JL_GENERAL_REGS_ONLY void jl_cancel_handler_trampoline(void)
+{
+    jl_ptls_t ptls = jl_get_current_task()->ptls;
+    jl_cancel_handler_save_t *save = &ptls->cancel_handler_save;
+    save->fn(save->state, save->sev);
+}
+
+// Called by the shim after the handler returned: hand the saved GPR state
+// to the restore branch (request 7) via a self-signal. Free to clobber any
+// GPR (all of them are replayed).
+JL_GENERAL_REGS_ONLY JL_NORETURN JL_NO_ASAN void jl_cancel_handler_resume(void)
+{
+    jl_ptls_t ptls = jl_get_current_task()->ptls;
+    // Arbitrate the shared signal_request slot: a concurrent suspend/abandon
+    // request holds it transiently, and its delivery interrupts this spin
+    // (we run with the normal signal mask) and releases the slot.
+    for (;;) {
+        sig_atomic_t expected = 0;
+        if (jl_atomic_cmpswap(&ptls->signal_request, &expected, 7))
+            break;
+        // jl_cpu_pause() is spelled out: _mm_pause is an SSE-header intrinsic
+        // that general-regs-only rejects (the instruction itself is fine).
+#if defined(_CPU_X86_64_)
+        __asm__ volatile ("pause" ::: "memory");
+#elif defined(_CPU_AARCH64_)
+        __asm__ volatile ("isb" ::: "memory");
+#endif
+    }
+    pthread_kill(pthread_self(), SIGUSR2);
+    // The restore branch rewrites the self-signal's context to the saved
+    // state, so its handler returns straight to the originally interrupted
+    // instruction; control never reaches this point.
+    abort();
+}
+#endif // JL_HAVE_CANCEL_HANDLER_DELIVERY
+
 static pthread_t signals_thread;
 
 static int is_addr_on_stack(jl_task_t *ct, void *addr) JL_NOTSAFEPOINT
@@ -654,8 +848,9 @@ void jl_thread_resume(int tid)
     pthread_mutex_unlock(&in_signal_lock);
 }
 
-// Send a signal to the specified thread to longjmp to its reset_ctx if available.
-// This is used for task cancellation to interrupt a running task at a safe point.
+// Send a signal to the specified thread to deliver to its current task's
+// published reset_ctx, if available: longjmp to a compiled reset point, or
+// run a foreign call's cancellation handler (see usr2_handler request 5).
 JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
@@ -736,8 +931,12 @@ static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size)
 //     is reached
 //  3: raise `thread0_exit_signo` and try to exit
 //  4: no-op
-//  5: longjmp to reset_ctx if available (for task cancellation)
+//  5: deliver to the current task's published reset_ctx if available (for
+//     task cancellation): longjmp to a reset point, or run a foreign call's
+//     cancellation handler
 //  6: abandon the current task and switch to ptls->abandon_to
+//  7: restore the context saved by a cancellation-handler delivery
+//     (self-sent by jl_cancel_handler_resume)
 void usr2_handler(int sig, siginfo_t *info, void *ctx) JL_CANSAFEPOINT
 {
     jl_task_t *ct = jl_get_current_task();
@@ -771,9 +970,9 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx) JL_CANSAFEPOINT
         usr2_signal_context = NULL;
         assert(request == 2 || request == 3 || request == 4);
     }
-    if (request != 5 && request != 6) {
+    if (request != 5 && request != 6 && request != 7) {
         // Acknowledge the request to its synchronously waiting sender. The
-        // cancellation and abandon senders (requests 5 and 6) are
+        // cancellation, abandon and restore senders (requests 5-7) are
         // fire-and-forget and never consume the token; writing it would
         // poison the next suspend handshake with a stale acknowledgment.
         int err;
@@ -802,16 +1001,48 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx) JL_CANSAFEPOINT
         jl_call_in_ctx(ct->ptls, jl_exit_thread0_cb, sig, ctx);
     }
     else if (request == 5) {
-        // Longjmp to reset_ctx for task cancellation. N.B.: reset_ctx is only
-        // ever consumed for the thread's *current* task, whose stack is live
-        // at its canonical address (copied stacks are swapped in before a
-        // task becomes current), so the buffer address is valid here.
-        _jl_ucontext_t *reset_ctx = (_jl_ucontext_t*)ct->reset_ctx;
+        // Deliver to the published context of the current task's
+        // asynchronously interruptible region, if any. N.B.: reset_ctx is
+        // only ever consumed for the thread's *current* task, whose stack is
+        // live at its canonical address (copied stacks are swapped in before
+        // a task becomes current), so the buffer address is valid here.
+        jl_reset_ctx_t *reset_ctx = (jl_reset_ctx_t*)ct->reset_ctx;
         if (reset_ctx != NULL) {
-            // Clear reset_ctx before longjmp to prevent double-longjmp
-            ct->reset_ctx = NULL;
-            jl_longjmp_in_ctx(sig, ctx, reset_ctx->uc_mcontext);
+            if (reset_ctx->sp != 0) {
+                // Reset flavor: abandon the interrupted register state and
+                // longjmp to the reset point, whose re-executed check
+                // observes the cancellation and throws. Clear reset_ctx
+                // before the longjmp to prevent a double reset.
+                ct->reset_ctx = NULL;
+                jl_longjmp_in_ctx(sig, ctx, reset_ctx->ctx.uc_mcontext);
+            }
+            else {
+                // Handler flavor: run the registered cancellation handler on
+                // this thread, signal-handler-style, and resume. The context
+                // stays published - escalation or redelivery runs the
+                // (idempotent) handler again once this delivery completes.
+                // Only deliver for an actual cancellation of the bound token:
+                // a request-5 signal is also sent for cooperative preemption
+                // (see jl_preempt_thread_task), which cannot be honored
+                // inside a foreign call - aborting the foreign operation for
+                // it would hand the caller a silently incomplete result.
+#ifdef JL_HAVE_CANCEL_HANDLER_DELIVERY
+                jl_value_t *bound = jl_atomic_load_relaxed(&ct->bound_cancel_token);
+                if (bound != NULL && bound != jl_nothing &&
+                    (jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state) & 0x80))
+                    jl_deliver_cancel_handler(ptls, ct, reset_ctx, ctx);
+#endif
+            }
         }
+    }
+    else if (request == 7) {
+        // Restore the interrupted context saved by a cancellation-handler
+        // delivery on this thread (see jl_cancel_handler_trampoline):
+        // returning from this handler then resumes the originally
+        // interrupted instruction.
+#ifdef JL_HAVE_CANCEL_HANDLER_DELIVERY
+        jl_cancel_handler_restore(ptls, ctx);
+#endif
     }
     else if (request == 6) {
         // Task abandonment - call the abandon callback (which must not

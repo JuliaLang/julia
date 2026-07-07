@@ -167,6 +167,7 @@ bool CancellationLowering::runOnFunction(Function &F) {
         LLVMContext &LLVMCtx = F.getContext();
         Type *I8Ty = Type::getInt8Ty(LLVMCtx);
         Type *I32Ty = Type::getInt32Ty(LLVMCtx);
+        Type *I64Ty = Type::getInt64Ty(LLVMCtx);
         Type *PtrTy = PointerType::getUnqual(LLVMCtx);
 
         if (!reset_ctx_ptr) {
@@ -176,9 +177,9 @@ bool CancellationLowering::runOnFunction(Function &F) {
             continue;
         }
 
-        // Allocate a _jl_ucontext_t on the stack
-        const size_t UContextSize = sizeof(_jl_ucontext_t);
-        const size_t UContextAlign = alignof(_jl_ucontext_t);
+        // Allocate a jl_reset_ctx_t on the stack
+        const size_t UContextSize = sizeof(jl_reset_ctx_t);
+        const size_t UContextAlign = alignof(jl_reset_ctx_t);
 
         // Create the alloca at the start of the function
         IRBuilder<> AllocaBuilder(&F.getEntryBlock().front());
@@ -204,12 +205,25 @@ bool CancellationLowering::runOnFunction(Function &F) {
         Type *T_size = F.getParent()->getDataLayout().getIntPtrType(LLVMCtx);
         emit_gc_safepoint(Builder, T_size, ptls, nullptr, false);
 
-        // Call setjmp on the uc_mcontext field (which is at offset 0 of the struct)
+        // Mark the buffer as a reset-flavor context: a nonzero `sp` (the
+        // buffer's own frame address) distinguishes it from the sp == 0
+        // handler flavor published around foreign calls with a cancellation
+        // handler (see the delivery dispatch in the signal handlers). Atomic
+        // monotonic so the unsafe-point walk below does not treat it as a
+        // publication-invalidating store.
+        Value *sp_val = Builder.CreatePtrToInt(UContextBuf, T_size);
+        StoreInst *sp_store = Builder.CreateAlignedStore(sp_val, UContextBuf, Align(alignof(jl_reset_ctx_t)));
+        sp_store->setOrdering(AtomicOrdering::Monotonic);
+
+        // Call setjmp on the ctx.uc_mcontext field.
         // Use the platform-specific setjmp function name defined in julia.h
+        Value *MCtxPtr = Builder.CreateGEP(I8Ty, UContextBuf,
+                                           ConstantInt::get(I64Ty, offsetof(jl_reset_ctx_t, ctx)),
+                                           "cancel_mctx");
         FunctionType *SetjmpTy = FunctionType::get(I32Ty, {PtrTy, I32Ty}, false);
         FunctionCallee SetjmpFn = F.getParent()->getOrInsertFunction(jl_setjmp_name, SetjmpTy);
 
-        CallInst *SetjmpCall = Builder.CreateCall(SetjmpFn, {UContextBuf, ConstantInt::get(I32Ty, 0)});
+        CallInst *SetjmpCall = Builder.CreateCall(SetjmpFn, {MCtxPtr, ConstantInt::get(I32Ty, 0)});
         SetjmpCall->addFnAttr(Attribute::ReturnsTwice);
 
         // Publish the now-valid buffer address to reset_ctx (release, so that

@@ -1122,7 +1122,6 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t *start, jl_value_t *completion_fu
     jl_atomic_store_relaxed(&t->finished_at, 0);
     jl_timing_task_init(t);
     jl_atomic_store_relaxed(&t->bound_cancel_token, jl_nothing);
-    jl_atomic_store_relaxed(&t->cancellation_hook, jl_nothing);
     jl_atomic_store_relaxed(&t->preempt_request, 0);
     t->wait_queue = jl_nothing;
     t->wait_next = jl_nothing;
@@ -1603,7 +1602,6 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
         jl_atomic_store_relaxed(&ct->last_started_running_at, 0);
     }
     jl_atomic_store_relaxed(&ct->bound_cancel_token, jl_nothing);
-    jl_atomic_store_relaxed(&ct->cancellation_hook, jl_nothing);
     jl_atomic_store_relaxed(&ct->preempt_request, 0);
     ct->wait_queue = jl_nothing;
     ct->wait_next = jl_nothing;
@@ -1735,6 +1733,26 @@ JL_DLLEXPORT jl_value_t *jl_cancel_collect_bound(jl_value_t *src)
     return (jl_value_t*)out;
 }
 
+// Deliver a pending cancellation of `src` on the current task: delegates to
+// Base.handle_cancellation!, which records the delivery and throws the
+// corresponding CancellationRequest. Called from the codegen'd guard
+// establishment of a foreign call with a cancellation handler, when the
+// governing source is observed already-cancelled after the guard was
+// published (closing the race against a cancel! whose delivery scan ran
+// before the publication was visible).
+JL_DLLEXPORT void jl_deliver_cancellation(jl_value_t *src)
+{
+    jl_value_t *handlef = jl_get_global(jl_base_module, jl_symbol("handle_cancellation!"));
+    if (handlef == NULL)
+        jl_error("cancellation delivered before Base.handle_cancellation! is defined");
+    uint8_t st = jl_atomic_load_acquire(&((jl_cancel_source_t*)src)->state);
+    jl_value_t *fargs[3] = { handlef, src, jl_box_uint8(st) };
+    jl_apply(fargs, 3);
+    // handle_cancellation! throws for a cancelled source, and our caller
+    // only observes monotonically cancelled state - never reached.
+    jl_error("cancellation guard: pending cancellation was not delivered");
+}
+
 JL_DLLEXPORT void jl_preempt_thread_task(int16_t tid) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
@@ -1753,6 +1771,12 @@ JL_NORETURN void jl_abandon_task_cb(void)
 
     // Clear abandon_to now that we have it
     ptls->abandon_to = NULL;
+
+#ifdef JL_HAVE_CANCEL_HANDLER_DELIVERY
+    // A cancellation-handler delivery in flight on this thread dies with the
+    // abandoned task; disarm so future deliveries are not blocked.
+    ptls->cancel_handler_armed = 0;
+#endif
 
     // The handler only invokes us for a still-current abandoned task with a
     // target set; we cannot return from here (the fake signal frame has no

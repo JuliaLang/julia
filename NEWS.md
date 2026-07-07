@@ -37,6 +37,11 @@ New language features
     point. A task can also wait for a token's cancellation as an event -
     `wait(tok::Base.CancellationToken)` returns the request as a value instead of throwing it -
     which is the building block for cancellation callbacks (watcher tasks).
+    A long-running foreign call can be made cancellable with
+    `@ccall cancel_handler=(fn, state) ...`: cancelling the governing token runs the
+    C-callable `fn(state, severity)` on the thread executing the call, signal-handler-style,
+    so it can tell the library to return early (the pending cancellation is then thrown at
+    the next cancellation point).
     In interactive sessions, ^C cancels the current evaluation's cancellation scope, with
     graded escalation (safe unwind -> abandoning external waits -> abandoning tasks) on repeated
     presses, and a fresh ^C epoch is re-armed at each prompt; a script that catches a ^C
