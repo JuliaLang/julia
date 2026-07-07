@@ -634,20 +634,25 @@ JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT
     // takes priority over (and suppresses) the reset: its span (e.g. a
     // protected allocator) is exactly where a longjmp must not land, and
     // the handler can defer the cancellation and chain into the reset on
-    // region exit.
+    // region exit. Both flavors deliver only for an actual cancellation of
+    // the task's bound token: the signal is also sent for cooperative
+    // preemption, which cannot be honored inside an asynchronously
+    // interruptible region (aborting a foreign call, or unwinding a
+    // protected span just to restart it, would discard its work for a mere
+    // yield request); preemption is instead polled at every cancellation
+    // point.
     ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
+    jl_value_t *bound = ct2 == NULL ? NULL :
+        jl_atomic_load_relaxed(&ct2->bound_cancel_token);
+    int bound_cancelled = bound != NULL && bound != jl_nothing &&
+        (jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state) & 0x80);
     jl_reset_ctx_t *hctx = ct2 == NULL ? NULL : (jl_reset_ctx_t*)ct2->cancel_handler_ctx;
     if (hctx != NULL) {
         // Handler flavor: hijack the thread to run fn(state, severity) on
-        // its own stack via the resumable jl_call_in_state machinery. Only
-        // deliver for an actual cancellation of the bound token (the signal
-        // is also sent for cooperative preemption, which cannot be honored
-        // inside a foreign call), and at most one delivery at a time per
-        // thread (the save area holds one; skips recover level-triggered).
-        jl_value_t *bound = jl_atomic_load_relaxed(&ct2->bound_cancel_token);
-        if (hctx->sp == 0 && !ptls2->cancel_handler_armed &&
-            bound != NULL && bound != jl_nothing &&
-            (jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state) & 0x80)) {
+        // its own stack via the resumable jl_call_in_state machinery - at
+        // most one delivery at a time per thread (the save area holds one;
+        // skips recover level-triggered).
+        if (hctx->sp == 0 && !ptls2->cancel_handler_armed && bound_cancelled) {
             host_thread_state_t state;
             unsigned int count = MACH_THREAD_STATE_COUNT;
             memset(&state, 0, sizeof(state));
@@ -671,7 +676,7 @@ JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT
     }
     else {
         jl_reset_ctx_t *reset_ctx = ct2 == NULL ? NULL : (jl_reset_ctx_t*)ct2->reset_ctx;
-        if (reset_ctx != NULL && reset_ctx->sp != 0) {
+        if (reset_ctx != NULL && reset_ctx->sp != 0 && bound_cancelled) {
             // Reset flavor: consume the reset point (prevents a double
             // reset) and longjmp there.
             ct2->reset_ctx = NULL;

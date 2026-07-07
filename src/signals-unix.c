@@ -1017,28 +1017,32 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx) JL_CANSAFEPOINT
         // a protected allocator) is exactly where a longjmp must not land,
         // and the handler can defer the cancellation and chain into the
         // reset on region exit.
+        // Deliveries are gated on an actual cancellation of the task's bound
+        // token: a request-5 signal is also sent for cooperative preemption
+        // (see jl_preempt_thread_task), which cannot be honored inside an
+        // asynchronously interruptible region - aborting a foreign call (or
+        // unwinding a protected span just to restart it) for a mere yield
+        // request would discard its work for nothing. Preemption is instead
+        // polled at every cancellation point.
+        jl_value_t *bound = jl_atomic_load_relaxed(&ct->bound_cancel_token);
+        int bound_cancelled = bound != NULL && bound != jl_nothing &&
+            (jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state) & 0x80);
         jl_reset_ctx_t *hctx = (jl_reset_ctx_t*)ct->cancel_handler_ctx;
         if (hctx != NULL) {
             // Handler flavor: run the registered cancellation handler on
             // this thread, signal-handler-style, and resume. The context
             // stays published - escalation or redelivery runs the
-            // (idempotent) handler again once this delivery completes.
-            // Only deliver for an actual cancellation of the bound token:
-            // a request-5 signal is also sent for cooperative preemption
-            // (see jl_preempt_thread_task), which cannot be honored inside
-            // a foreign call - aborting the foreign operation for it would
-            // hand the caller a silently incomplete result. (And never fall
-            // through to the reset while the handler region is published.)
+            // (idempotent) handler again once this delivery completes. (And
+            // never fall through to the reset while the handler region is
+            // published.)
 #ifdef JL_HAVE_CANCEL_HANDLER_DELIVERY
-            jl_value_t *bound = jl_atomic_load_relaxed(&ct->bound_cancel_token);
-            if (hctx->sp == 0 && bound != NULL && bound != jl_nothing &&
-                (jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state) & 0x80))
+            if (hctx->sp == 0 && bound_cancelled)
                 jl_deliver_cancel_handler(ptls, ct, hctx, ctx);
 #endif
         }
         else {
             jl_reset_ctx_t *reset_ctx = (jl_reset_ctx_t*)ct->reset_ctx;
-            if (reset_ctx != NULL && reset_ctx->sp != 0) {
+            if (reset_ctx != NULL && reset_ctx->sp != 0 && bound_cancelled) {
                 // Reset flavor: abandon the interrupted register state and
                 // longjmp to the reset point, whose re-executed check
                 // observes the cancellation and throws. Clear reset_ctx

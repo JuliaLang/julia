@@ -389,7 +389,15 @@ function ccall_macro_lower(convention, func, rettype, types, args, gc_safe, canc
         # any other call). The cancellation point emitted here establishes
         # that region (and throws a pending cancellation before the call's
         # arguments are evaluated); an unwind delivered during the call
-        # lands back on it and throws.
+        # lands back on it and throws. N.B.: the point must remain in a
+        # straight line with the call - handle_cancellation! on a branch is
+        # the most that may sit in between. A loop here (e.g. to re-run the
+        # point when handle_cancellation! returns after a preempt-yield)
+        # interleaves two cancellation points, and the lowering pass's
+        # region-clearing then lands between the publication and the call.
+        # The rare cost: a preempt polled at this very point proceeds into
+        # the call with the region cleared, degrading that one call to
+        # level-triggered cancellation (recovered at the next point).
         src = gensym(:cancel_src)
         st = gensym(:cancel_st)
         cconv = Expr(:cconv, (base_cconv..., false, true), nreq)
@@ -405,10 +413,12 @@ function ccall_macro_lower(convention, func, rettype, types, args, gc_safe, canc
     # triple rides as three extra leading foreigncall arguments - peeled off
     # again by codegen, which publishes them as the sp == 0 handler context
     # around the call. An ordinary cancellation point runs first, so a
-    # pending cancellation throws before the call's arguments are evaluated;
-    # another one runs after the call, so a cancellation delivered while it
-    # ran (the handler may have aborted the foreign operation part-way)
-    # throws before the - possibly partial - result can escape.
+    # pending cancellation throws before the call's arguments are evaluated
+    # (codegen's post-publication re-check of the source additionally covers
+    # a cancellation arriving between this check and the call); another one
+    # runs after the call, so a cancellation delivered while it ran (the
+    # handler may have aborted the foreign operation part-way) throws before
+    # the - possibly partial - result can escape.
     fex, sex = cancel
     nreq > 0 && (nreq += 3)
     cconv = Expr(:cconv, reset_safe ? (base_cconv..., true, true) : (base_cconv..., true), nreq)
