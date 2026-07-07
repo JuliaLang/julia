@@ -1257,9 +1257,15 @@ JL_CALLABLE(jl_f_setfieldonce)
 static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f, int dothrow) JL_CANSAFEPOINT
 {
     if (jl_is_unionall(t)) {
-        // open the binder so a field type that is exactly the bound variable
-        // comes back as a (free) TypeVar, and one that merely mentions it gets
-        // re-bound around the result
+        // this open is load-bearing, not convenience: a union-typed field
+        // merges the per-arm field types through `jl_type_union`, whose
+        // subsumption checks consult the binders' bounds (e.g. the arms `S`
+        // and `T` of `... where {T, S<:T}` collapse to `T`, which then
+        // normalizes to `T`'s bound on re-close). Bounds live on the binder,
+        // not on a positional reference, so the merge has to run on the
+        // materialized instance. A field type that is exactly the bound
+        // variable comes back as a (free) TypeVar, and one that merely
+        // mentions it gets re-bound around the result.
         jl_tvar_t *v = NULL;
         jl_value_t *body = NULL;
         JL_GC_PUSH2(&v, &body);
