@@ -27,14 +27,7 @@ void __cdecl fpreset (void);
 #define _FPE_STACKUNDERFLOW 0x8b
 #define _FPE_EXPLICITGEN    0x8c    /* raise( SIGFPE ); */
 
-    case SIGINT:
-        signal(SIGINT, (void (__cdecl *)(int))crt_sig_handler);
-        if (!jl_ignore_sigint()) {
-            if (exit_on_sigint)
-                jl_exit(130); // 128 + SIGINT
-            jl_sigint_request_cancellation();
-        }
-        break;void __cdecl crt_sig_handler(int sig, int num)
+void __cdecl crt_sig_handler(int sig, int num)
 {
     CONTEXT Context;
     switch (sig) {
@@ -725,9 +718,10 @@ JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT
             }
         }
     }
-    // TODO: the sp == 0 (foreign-call cancellation handler) flavor is not
-    // delivered asynchronously on this platform yet; the cancellation is
-    // recovered level-triggered at the task's next cancellation point.
+    // TODO: the handler flavor (task->cancel_handler_ctx, published by
+    // foreign calls with a cancellation handler) is not delivered
+    // asynchronously on this platform yet; the cancellation is recovered
+    // level-triggered at the task's next cancellation point.
     ResumeThread(hThread);
 }
 

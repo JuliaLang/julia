@@ -2526,13 +2526,14 @@ struct _jl_handler_t {
     size_t locks_len;
     jl_timing_block_t *timing_stack;
     size_t world_age;
-    // The published interruptible-region context at handler entry. Restored
+    // The published interruptible-region contexts at handler entry. Restored
     // when the handler is left or entered exceptionally, so that an exception
     // thrown through a foreign call with a cancellation handler unpublishes
     // the guard whose establishing frame the unwind destroyed (and,
     // conversely, a try/catch running in a callback under such a guard
     // re-arms it on exit).
     volatile struct _jl_reset_ctx_t *reset_ctx;
+    volatile struct _jl_reset_ctx_t *cancel_handler_ctx;
     sig_atomic_t defer_signal;
     int8_t gc_state;
 };

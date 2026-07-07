@@ -342,10 +342,12 @@ static void jl_throw_in_ctx(jl_task_t *ct, jl_value_t *e, int sig, void *sigctx)
 
 // === Cancellation-handler delivery ==========================================
 // A foreign call annotated with a cancellation handler publishes an sp == 0
-// jl_reset_ctx_t in task->reset_ctx (see emit_ccall). Delivering the
-// cancellation signal to such a region runs the handler *on the interrupted
-// thread*, like a signal handler, and then resumes the interrupted
-// computation:
+// jl_reset_ctx_t in task->cancel_handler_ctx (see emit_ccall) - a slot
+// separate from a compiled reset region's task->reset_ctx, so both can be
+// active at once (the handler takes delivery priority while published).
+// Delivering the cancellation signal to such a region runs the handler *on
+// the interrupted thread*, like a signal handler, and then resumes the
+// interrupted computation:
 //  1. The signal handler copies the interrupted general-purpose registers
 //     from the signal context into ptls->cancel_handler_save and redirects
 //     the context to jl_cancel_handler_shim, dropping sp just past the
@@ -859,8 +861,9 @@ JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT
     jl_task_t *ct = jl_atomic_load_relaxed(&ptls2->current_task);
     if (ct == NULL)
         return;
-    // Only send if the task has a reset_ctx set (i.e., is at a cancellation point)
-    if (ct->reset_ctx == NULL)
+    // Only send if the task has an interruptible-region context published
+    // (a compiled reset point, or a foreign call with a cancellation handler)
+    if (ct->reset_ctx == NULL && ct->cancel_handler_ctx == NULL)
         return;
     pthread_mutex_lock(&in_signal_lock);
     // This request is best-effort and produces no acknowledgment token (see
@@ -1001,37 +1004,44 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx) JL_CANSAFEPOINT
         jl_call_in_ctx(ct->ptls, jl_exit_thread0_cb, sig, ctx);
     }
     else if (request == 5) {
-        // Deliver to the published context of the current task's
-        // asynchronously interruptible region, if any. N.B.: reset_ctx is
-        // only ever consumed for the thread's *current* task, whose stack is
-        // live at its canonical address (copied stacks are swapped in before
-        // a task becomes current), so the buffer address is valid here.
-        jl_reset_ctx_t *reset_ctx = (jl_reset_ctx_t*)ct->reset_ctx;
-        if (reset_ctx != NULL) {
-            if (reset_ctx->sp != 0) {
+        // Deliver to the published context(s) of the current task's
+        // asynchronously interruptible regions, if any. N.B.: these are only
+        // ever consumed for the thread's *current* task, whose stack is live
+        // at its canonical address (copied stacks are swapped in before a
+        // task becomes current), so the buffer addresses are valid here.
+        // A handler region and a reset region may be active at the same
+        // time; the handler takes priority while published - its span (e.g.
+        // a protected allocator) is exactly where a longjmp must not land,
+        // and the handler can defer the cancellation and chain into the
+        // reset on region exit.
+        jl_reset_ctx_t *hctx = (jl_reset_ctx_t*)ct->cancel_handler_ctx;
+        if (hctx != NULL) {
+            // Handler flavor: run the registered cancellation handler on
+            // this thread, signal-handler-style, and resume. The context
+            // stays published - escalation or redelivery runs the
+            // (idempotent) handler again once this delivery completes.
+            // Only deliver for an actual cancellation of the bound token:
+            // a request-5 signal is also sent for cooperative preemption
+            // (see jl_preempt_thread_task), which cannot be honored inside
+            // a foreign call - aborting the foreign operation for it would
+            // hand the caller a silently incomplete result. (And never fall
+            // through to the reset while the handler region is published.)
+#ifdef JL_HAVE_CANCEL_HANDLER_DELIVERY
+            jl_value_t *bound = jl_atomic_load_relaxed(&ct->bound_cancel_token);
+            if (hctx->sp == 0 && bound != NULL && bound != jl_nothing &&
+                (jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state) & 0x80))
+                jl_deliver_cancel_handler(ptls, ct, hctx, ctx);
+#endif
+        }
+        else {
+            jl_reset_ctx_t *reset_ctx = (jl_reset_ctx_t*)ct->reset_ctx;
+            if (reset_ctx != NULL && reset_ctx->sp != 0) {
                 // Reset flavor: abandon the interrupted register state and
                 // longjmp to the reset point, whose re-executed check
                 // observes the cancellation and throws. Clear reset_ctx
                 // before the longjmp to prevent a double reset.
                 ct->reset_ctx = NULL;
                 jl_longjmp_in_ctx(sig, ctx, reset_ctx->ctx.uc_mcontext);
-            }
-            else {
-                // Handler flavor: run the registered cancellation handler on
-                // this thread, signal-handler-style, and resume. The context
-                // stays published - escalation or redelivery runs the
-                // (idempotent) handler again once this delivery completes.
-                // Only deliver for an actual cancellation of the bound token:
-                // a request-5 signal is also sent for cooperative preemption
-                // (see jl_preempt_thread_task), which cannot be honored
-                // inside a foreign call - aborting the foreign operation for
-                // it would hand the caller a silently incomplete result.
-#ifdef JL_HAVE_CANCEL_HANDLER_DELIVERY
-                jl_value_t *bound = jl_atomic_load_relaxed(&ct->bound_cancel_token);
-                if (bound != NULL && bound != jl_nothing &&
-                    (jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state) & 0x80))
-                    jl_deliver_cancel_handler(ptls, ct, reset_ctx, ctx);
-#endif
             }
         }
     }
