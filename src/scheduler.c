@@ -33,22 +33,18 @@ static const int16_t sleeping_like_the_dead JL_UNUSED = 2;
 // n.b. this may temporarily exceed jl_n_threads
 _Atomic(int) n_threads_running = 0;
 
-// Spinner accounting, following Go's nmspinning protocol. A thread that
-// fails to pop work may become a "spinner": it busy-polls the scheduler
-// queues for up to sleep_threshold ns before parking. At most half of a
-// threadpool's threads may spin at once; a thread denied a spinner slot
-// parks immediately instead of polling, so an idle pool converges to a
-// bounded set of searchers instead of a herd hammering the queues of
-// whichever thread is producing work.
-//  - jl_wakeup_threadpool skips waking anyone while a spinner exists in the
-//    pool (the spinner will find the work). This cannot lose a wakeup:
-//    a spinner leaving to park decrements n_spinning *before* its
-//    sleeping-store + fence + queue recheck, pairing with the enqueuer's
-//    store + fence + n_spinning load ([^store_buffering_1]).
-//  - The last spinner to exit *with work* must wake a successor, so a
-//    burst of enqueues that was absorbed by one spinner still fans out
-//    (and a single post-batch wake can service a whole batch).
-// n.b. like Go, the count may briefly overshoot the cap (load-then-add).
+// Spinner accounting (Go's nmspinning; see devdocs/scheduler-wakeup). A
+// thread that fails to pop work may become a "spinner", busy-polling for up
+// to sleep_threshold ns before parking. At most half of a pool may spin;
+// threads denied a slot park immediately, bounding idle polling pressure.
+// Lost-wakeup safety:
+//  - jl_wakeup_threadpool wakes nobody while a spinner exists; a spinner
+//    leaving to park decrements n_spinning *before* its sleeping-store +
+//    fence + queue recheck, pairing with the enqueuer's store + fence +
+//    load ([^store_buffering_1]).
+//  - the last spinner to exit *with work* wakes a successor, so a burst
+//    absorbed by one spinner still fans out.
+// Like Go, the count may briefly overshoot the cap (load-then-add).
 #define JL_SCHED_MAX_POOLS 8
 typedef struct {
     _Atomic(int32_t) v;
@@ -56,12 +52,10 @@ typedef struct {
 } padded_spin_count_t;
 static padded_spin_count_t n_spinning[JL_SCHED_MAX_POOLS];
 
-// The most recently parked thread of each pool (tid + 1; 0 = none), woken
-// first by jl_wakeup_threadpool. A thread that parked last has the warmest
-// core — waking round-robin instead lands every wake on the coldest sleeper
-// and pays its idle-state exit and cold caches on the wake latency path
-// (measured ~40us extra on a 2-socket EPYC). Same idea as Go's LIFO idle-M
-// stack. This is a hint: no ordering requirements, races are benign.
+// Most recently parked thread per pool (tid + 1; 0 = none), woken first:
+// the last sleeper has the warmest core, while round-robin lands every wake
+// on the coldest one and pays its idle-state exit on the wake latency path
+// (cf. Go's LIFO idle-M stack). Advisory; races are benign.
 typedef struct {
     _Atomic(int16_t) v;
     char pad[64 - sizeof(_Atomic(int16_t))];
@@ -382,10 +376,8 @@ JL_DLLEXPORT void jl_wakeup_threadpool(int8_t tpid)
     if (uvlock == ct)
         uv_stop(jl_global_event_loop());
 
-    // If a spinner is searching this pool, it will find the new work; do
-    // not wake another thread. The fence above pairs with the spinner's
-    // decrement-then-fence-then-recheck exit protocol, so this skip cannot
-    // strand the work (see n_spinning).
+    // A spinner is searching this pool and will find the new work; the skip
+    // cannot strand it (see the exit protocol on n_spinning).
     if (tpid < JL_SCHED_MAX_POOLS && jl_atomic_load_relaxed(&n_spinning[tpid].v) > 0) {
         JULIA_DEBUG_SLEEPWAKE( wakeup_leave = cycleclock() );
         return;
@@ -512,8 +504,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                 int32_t prev = jl_atomic_fetch_add_relaxed(&n_spinning[tpid].v, -1);
                 assert(prev > 0);
                 if (prev == 1)
-                    // last spinner leaving with work: wake a successor so a
-                    // burst absorbed by us still fans out to other threads
+                    // last spinner out with work: wake a successor
                     jl_wakeup_threadpool(tpid);
             }
             return task;
@@ -528,10 +519,8 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                 spinning = 1;
             }
         }
-        // A pooled thread that could not get a spinner slot parks without
-        // polling; enough other threads are already searching, and the
-        // post-fence get_next_task retry below (paired with the enqueuer's
-        // fence) keeps the park race-free.
+        // Denied a spinner slot: park without polling. The post-fence
+        // get_next_task retry below keeps this race-free.
         int force_park = tpid >= 0 && !spinning && !is_io_thread;
 
         // quick, race-y check to see if there seems to be any stuff in there
@@ -544,9 +533,8 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
         jl_cpu_pause();
         if (force_park || sleep_check_after_threshold(&start_cycles) || (is_io_thread && (!jl_atomic_load_relaxed(&_threadedregion) || wait_empty))) {
             if (spinning) {
-                // exit spinning before the sleeping store + fence, so an
-                // enqueuer that skips the wakeup based on n_spinning is
-                // ordered against our queue recheck below
+                // release the slot before the sleeping-store + fence: pairs
+                // with the wakeup gate's n_spinning load
                 spinning = 0;
                 jl_atomic_fetch_add_relaxed(&n_spinning[tpid].v, -1);
             }
