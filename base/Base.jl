@@ -279,12 +279,14 @@ include("initdefs.jl")
 # worker threads
 include("threadcall.jl")
 
-# code loading
+# code loading and package introspection
 include("uuid.jl")
 include("pkgid.jl")
 include("toml/toml.jl")
 include("linking.jl")
 include("loading.jl")
+include("require.jl")
+include("package.jl")
 
 # BinaryPlatforms, used by Artifacts.  Needs `Sort`.
 include("binaryplatforms.jl")
@@ -393,6 +395,11 @@ end
 function __init__()
     # Base library init
     global _atexit_hooks_finished = false
+    # Discard environment state captured while building the sysimage.
+    reset_stdlib_env()
+    empty!(EXPLICIT_ENV_CACHE)
+    _clear_frozen_env_caches()
+    _frozen_env_snapshot[] = nothing
     Filesystem.__postinit__()
     reinit_stdio()
     Multimedia.reinit_displays() # since Multimedia.displays uses stdout as fallback

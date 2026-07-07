@@ -83,7 +83,7 @@ let
         # This should eventually be removed so we only use `BuildSettings`.
         stdlibs = [
             # No dependencies
-            :FileWatching, # used by loading.jl -- implicit assumption that init runs
+            :FileWatching, # used by require.jl -- implicit assumption that init runs
             :Libdl, # Transitive through LinAlg
             :Artifacts, # Transitive through LinAlg
             :SHA, # transitive through Random
