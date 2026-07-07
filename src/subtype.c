@@ -394,6 +394,29 @@ static void flip_frames(jl_stenv_t *e) JL_NOTSAFEPOINT
     e->Rframe = tmp;
 }
 
+// is the binding's declared bound still raw AND resolvable within its own
+// chain? Such a bound can be walked in place under `frame_prev` (which
+// outlives the binding by construction), materializing nothing.
+static int binding_ub_walkable(jl_varbinding_t *vb) JL_NOTSAFEPOINT
+{
+    if (vb->ub != vb->u->ub || !jl_has_dangling_tvarrefs(vb->ub))
+        return 0;
+    size_t n = 0;
+    for (jl_varbinding_t *f = vb->frame_prev; f != NULL; f = f->frame_prev)
+        n++;
+    return !jl_has_refs_above(vb->ub, n);
+}
+
+static int binding_lb_walkable(jl_varbinding_t *vb) JL_NOTSAFEPOINT
+{
+    if (vb->lb != vb->u->lb || !jl_has_dangling_tvarrefs(vb->lb))
+        return 0;
+    size_t n = 0;
+    for (jl_varbinding_t *f = vb->frame_prev; f != NULL; f = f->frame_prev)
+        n++;
+    return !jl_has_refs_above(vb->lb, n);
+}
+
 // re-express a term in variable form: replace the references escaping `t` by
 // the variables of the binders they resolve to in `frame` (deeper unresolved
 // references stay). Used where a walk fragment must outlive its position --
@@ -1331,21 +1354,28 @@ static int push_consistency_scope(jl_stenv_t *e, int8_t *saved) JL_NOTSAFEPOINT;
 static void pop_consistency_scope(jl_stenv_t *e, const int8_t *saved, int nsaved) JL_NOTSAFEPOINT;
 
 // subtype for variable bounds consistency check. needs its own forall/exists environment.
-static int subtype_ccheck(jl_value_t *x, jl_value_t *y, jl_stenv_t *e) JL_CANSAFEPOINT
+static int subtype_ccheck_(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int chain_relative) JL_CANSAFEPOINT
 {
     if (jl_is_long(x) && jl_is_long(y))
         return jl_unbox_long(x) == jl_unbox_long(y) + e->Loffset;
-    if (x == y)
+    // the structural fast paths compare content without consulting the
+    // frames: correct for canonical operands, whose leftover dangling
+    // references are query-global constants (cf. the bare-reference leaf
+    // rule), but not for chain-relative raw operands under differing
+    // chains, where an identical spelling can denote different binders
+    int structural = !chain_relative ||
+        (!jl_has_dangling_tvarrefs(x) && !jl_has_dangling_tvarrefs(y));
+    if (x == y && structural)
         return 1;
     if (x == jl_bottom_type && jl_is_type(y))
         return 1;
     if (y == (jl_value_t*)jl_any_type && jl_is_type(x))
         return 1;
-    if (jl_is_uniontype(x) && jl_egal(x, y))
+    if (jl_is_uniontype(x) && structural && jl_egal(x, y))
         return 1;
     if (x == (jl_value_t*)jl_any_type && jl_is_datatype(y))
         return 0;
-    if (obviously_in_union(y, x))
+    if (structural && obviously_in_union(y, x))
         return 1;
     jl_saved_unionstate_t oldLunions; push_unionstate(&oldLunions, &e->Lunions);
     // Consistency check for a typevar bound: covariant occurrences inside this
@@ -1382,6 +1412,27 @@ static int subtype_ccheck(jl_value_t *x, jl_value_t *y, jl_stenv_t *e) JL_CANSAF
     e->value_descent = saved_descent;
     pop_consistency_scope(e, saved_cov, nsaved_cov);
     pop_unionstate(&e->Lunions, &oldLunions);
+    return sub;
+}
+
+static int subtype_ccheck(jl_value_t *x, jl_value_t *y, jl_stenv_t *e) JL_CANSAFEPOINT
+{
+    return subtype_ccheck_(x, y, e, 0);
+}
+
+// consistency check with explicit per-operand frames: used to walk a
+// still-raw declared bound (under its binding's own chain, which outlives
+// the binding) against a term at the current position, without
+// materializing anything
+static int subtype_ccheck_frames(jl_value_t *x, jl_varbinding_t *xframe,
+                                 jl_value_t *y, jl_varbinding_t *yframe, jl_stenv_t *e) JL_CANSAFEPOINT
+{
+    jl_varbinding_t *saveL = e->Lframe, *saveR = e->Rframe;
+    e->Lframe = xframe;
+    e->Rframe = yframe;
+    int sub = subtype_ccheck_(x, y, e, xframe != yframe);
+    e->Lframe = saveL;
+    e->Rframe = saveR;
     return sub;
 }
 
@@ -1547,10 +1598,12 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t par
         return singleton_typevar_subtype(b, a);
     }
     record_var_occurrence(bb, e, param);
-    // the accumulating (variable-form) view of the bounds; writes below go to
-    // the fields directly
-    jl_value_t *bb_lb = binding_lb(e, bb), *bb_ub = binding_ub(e, bb);
-    if (jl_has_dangling_tvarrefs(bb_ub) || jl_has_dangling_tvarrefs(bb_lb)) {
+    // a still-raw declared lower bound that resolves within its own chain can
+    // be walked in place (under `frame_prev`); the upper bound's view is
+    // computed eagerly, since every successful path stores through it
+    int lb_walk = binding_lb_walkable(bb);
+    jl_value_t *bb_ub = binding_ub(e, bb);
+    if (jl_has_dangling_tvarrefs(bb_ub) || (!lb_walk && jl_has_dangling_tvarrefs(bb->lb))) {
         // the binder of a detached fragment: its bounds reference binders
         // outside the query, so they support no bound reasoning -- only the
         // trivial relations hold (cf. the bare-reference leaf rule)
@@ -1575,7 +1628,7 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t par
     jl_value_t *av = jl_has_dangling_tvarrefs(a) ? frame_substitute(a, e->Rframe, e) : a;
     if (bb_ub == av)
         return 1;
-    int lb_ok = (bb_lb == jl_bottom_type && !jl_is_type(a) && !jl_is_typevar(a));
+    int lb_ok = (bb->lb == jl_bottom_type && !jl_is_type(a) && !jl_is_typevar(a));
     if (!lb_ok) {
         if (e->intersection && bb->in_ccheck) {
             // this binding's consistency check is already pending above us
@@ -1585,7 +1638,8 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t par
         }
         else {
             bb->in_ccheck = 1;
-            lb_ok = subtype_ccheck(bb_lb, a, e); // walks `a` natively
+            lb_ok = lb_walk ? subtype_ccheck_frames(bb->lb, bb->frame_prev, a, e->Rframe, e)
+                            : subtype_ccheck(binding_lb(e, bb), a, e); // walks `a` natively
             bb->in_ccheck = 0;
         }
     }
@@ -1629,10 +1683,12 @@ static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t par
         return subtype_singleton_typevar(a, b);
     }
     record_var_occurrence(bb, e, param);
-    // the accumulating (variable-form) view of the bounds; writes below go to
-    // the fields directly
-    jl_value_t *bb_lb = binding_lb(e, bb), *bb_ub = binding_ub(e, bb);
-    if (jl_has_dangling_tvarrefs(bb_ub) || jl_has_dangling_tvarrefs(bb_lb)) {
+    // a still-raw declared upper bound that resolves within its own chain can
+    // be walked in place (under `frame_prev`); its variable-form view is then
+    // never needed. The lower bound's view is usually free (`Union{}`).
+    int ub_walk = binding_ub_walkable(bb);
+    jl_value_t *bb_lb = binding_lb(e, bb);
+    if ((!ub_walk && jl_has_dangling_tvarrefs(bb->ub)) || jl_has_dangling_tvarrefs(bb_lb)) {
         // see var_lt_: a detached fragment's binder supports no bound reasoning
         return a == jl_bottom_type || (b != NULL && a == (jl_value_t*)b);
     }
@@ -1659,7 +1715,7 @@ static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t par
             bb->lb_spell = e->spell_channel;
         return 1;
     }
-    if (!(bb_ub == (jl_value_t*)jl_any_type && !jl_is_type(a) && !jl_is_typevar(a))) {
+    if (!(bb->ub == (jl_value_t*)jl_any_type && !jl_is_type(a) && !jl_is_typevar(a))) {
         int ub_ok;
         if (e->intersection && bb->in_ccheck) {
             // see var_lt: answer a re-entrant consistency check coinductively
@@ -1669,7 +1725,8 @@ static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t par
             int saved = e->ignore_lb_required;
             e->ignore_lb_required = 1;
             bb->in_ccheck = 1;
-            ub_ok = subtype_ccheck(a, bb_ub, e); // walks `a` natively
+            ub_ok = ub_walk ? subtype_ccheck_frames(a, e->Lframe, bb->ub, bb->frame_prev, e)
+                            : subtype_ccheck(a, binding_ub(e, bb), e); // walks `a` natively
             bb->in_ccheck = 0;
             e->ignore_lb_required = saved;
         }
@@ -1679,7 +1736,8 @@ static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t par
     // when the var is pinned (`lb === ub`), `a <= ub` was just checked and a
     // join picking `a` proves `lb <= a`, i.e. `a` respells the same type: keep
     // the existing spelling unless `a`'s is more authoritative (see `lb_spell`)
-    int pinned = (bb_lb == bb_ub && bb_lb != jl_bottom_type);
+    // (field identity: raw and updated forms never mix in a pinned pair)
+    int pinned = (bb->lb == bb->ub && bb_lb != jl_bottom_type);
     jl_value_t *lb = simple_join(bb_lb, av);
     JL_GC_PUSH1(&lb);
     if (pinned && lb == av && e->spell_channel <= bb->lb_spell) {
@@ -3456,6 +3514,14 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
         jl_intersecttype_t *iy = (jl_intersecttype_t*)y;
         return subtype(x, iy->a, e, param) && subtype(x, iy->b, e, param);
     }
+    // N.B. on the remaining variable lookups below: bound variables still
+    // reach walked positions through accumulated (updated) bound content,
+    // which is stored in variable form on purpose — a stored raw term would
+    // carry a frame chain that pops (deepest-first) while the bound lives on,
+    // so the variable is the pop-safe spelling; the pop boundary that
+    // re-owns leaking inner variables is the outer-existential rename in
+    // `subtype_unionall`. Still-raw declared bounds, by contrast, are walked
+    // in place (see `binding_ub_walkable`) and inject nothing.
     if (jl_is_typevar(x) || xrb != NULL) {
         if (jl_is_typevar(y) || yrb != NULL) {
             // a variable-variable relation reasons with the variables'
@@ -3872,14 +3938,16 @@ static int equal_var(jl_tvar_t *v, jl_value_t *x, jl_stenv_t *e) JL_CANSAFEPOINT
     assert(!e->intersection || !jl_is_uniontype(x));
     int innervar = 0;
     jl_varbinding_t *vb = lookup_binding(e, v, &innervar);
-    // the accumulating (variable-form) view of the bounds; writes below go to
-    // the fields directly
+    // a still-raw declared upper bound that resolves within its own chain is
+    // walked in place; the lower bound's view is usually free (`Union{}`)
+    int ub_walk = vb ? binding_ub_walkable(vb) : 0;
     jl_value_t *vb_lb = vb ? binding_lb(e, vb) : NULL;
-    jl_value_t *vb_ub = vb ? binding_ub(e, vb) : NULL;
-    if (e->intersection && vb != NULL && vb_lb == vb_ub && jl_is_typevar(vb_lb))
+    if (e->intersection && vb != NULL && vb->lb == vb->ub && jl_is_typevar(vb_lb))
+        // pinned to a variable (field identity holds in either form; a raw
+        // pin resolves to the variable through the view)
         return equal_var((jl_tvar_t *)vb_lb, x, e);
     record_var_occurrence(vb, e, PARAM_INVARIANT);
-    if (vb != NULL && (jl_has_dangling_tvarrefs(vb_ub) || jl_has_dangling_tvarrefs(vb_lb))) {
+    if (vb != NULL && ((!ub_walk && jl_has_dangling_tvarrefs(vb->ub)) || jl_has_dangling_tvarrefs(vb_lb))) {
         // see var_lt_: a detached fragment's binder supports no bound reasoning
         return x == (jl_value_t*)v;
     }
@@ -3900,7 +3968,7 @@ static int equal_var(jl_tvar_t *v, jl_value_t *x, jl_stenv_t *e) JL_CANSAFEPOINT
             return 0;
         // `x` enters a right position here: use the canonical spelling
         jl_value_t *xv = jl_has_dangling_tvarrefs(x) ? frame_substitute(x, e->Lframe, e) : x;
-        return local_forall_exists_subtype(vb_ub, xv, e, PARAM_NONE, 0);
+        return local_forall_exists_subtype(binding_ub(e, vb), xv, e, PARAM_NONE, 0);
     }
     if (x != jl_bottom_type && vb->lb_certainty < e->bound_channel)
         vb->lb_certainty = e->bound_channel;
@@ -3913,12 +3981,14 @@ static int equal_var(jl_tvar_t *v, jl_value_t *x, jl_stenv_t *e) JL_CANSAFEPOINT
         // hand it the position-free spelling
         return var_lt(v, xv, e, PARAM_NONE, vb, innervar);
     }
-    if (!subtype_ccheck(x, vb_ub, e)) // walks `x` natively
+    if (ub_walk ? !subtype_ccheck_frames(x, e->Lframe, vb->ub, vb->frame_prev, e)
+                : !subtype_ccheck(x, binding_ub(e, vb), e)) // walks `x` natively
         return 0;
     // when the var is pinned (`lb === ub`), `x <= ub` was just checked and a
     // join picking `x` proves `lb <= x`, i.e. `x` respells the same type: keep
     // the existing spelling unless `x`'s is more authoritative (see `lb_spell`)
-    int pinned = (vb_lb == vb_ub && vb_lb != jl_bottom_type);
+    // (field identity: raw and updated forms never mix in a pinned pair)
+    int pinned = (vb->lb == vb->ub && vb_lb != jl_bottom_type);
     jl_value_t *lb = simple_join(vb_lb, xv);
     JL_GC_PUSH1(&lb);
     if (pinned && lb == xv && e->spell_channel <= vb->lb_spell) {
@@ -3936,7 +4006,7 @@ static int equal_var(jl_tvar_t *v, jl_value_t *x, jl_stenv_t *e) JL_CANSAFEPOINT
         }
     }
     JL_GC_POP();
-    if (vb_ub == xv)
+    if (!ub_walk && binding_ub(e, vb) == xv)
         return 1;
     // reload through the binding: the joined bound is rooted by its field now
     if (!subtype_ccheck(binding_lb(e, vb), xv, e))

@@ -238,6 +238,13 @@ JL_DLLEXPORT int jl_has_dangling_tvarrefs(jl_value_t *v) JL_NOTSAFEPOINT
     return has_refs_above(v, 0);
 }
 
+// whether `t` contains a bound-variable reference pointing above `depth`
+// enclosing binders (i.e., not resolvable within a chain of that length)
+JL_DLLEXPORT int jl_has_refs_above(jl_value_t *v, size_t depth) JL_NOTSAFEPOINT
+{
+    return has_refs_above(v, depth);
+}
+
 
 static int layout_uses_free_typevars(jl_value_t *v, jl_typeenv_t *env) JL_CANSAFEPOINT
 {
