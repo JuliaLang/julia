@@ -1,5 +1,13 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+// GCC 16's `-Warray-bounds=` raises false positives against the inline storage of
+// llvm::unique_function (FunctionExtras.h, via PointerIntPair.h) as inlined into
+// JLJITLinkMemoryManager::InFlightAlloc::finalize below, and merely emitting those
+// diagnostics can crash GCC 16.1 outright (ICE in action_after_output, observed on the
+// mingw64 CI builders). The warnings are attributed to the LLVM headers, so the
+// suppression must precede their inclusion.
+#pragma GCC diagnostic ignored "-Warray-bounds"
+
 #include "llvm-version.h"
 #include "platform.h"
 
