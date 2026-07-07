@@ -202,6 +202,79 @@ include("precompile.jl")
 include("reflection_interface.jl")
 include("opaque_closure.jl")
 
+# Seal Compiler internals. The AbstractInterpreter/lattice extension interface used by
+# external compiler plugins (JET, Cthulhu, GPUCompiler, ...) stays open via the exclusion
+# list; an omission there only deoptimizes/invalidates the plugin's calls, never breaks them.
+let modnames = ccall(:jl_module_names, Vector{Symbol}, (Any, Cint, Cint), Compiler, 1, 1),
+    extended = [:(==), :_topmod, :append!, :convert, :copy, :copy!, :findall, :first, :get, :get!,
+        :getindex, :haskey, :in, :isempty, :isready, :iterate, :last, :length, :max_world,
+        :min_world, :popfirst!, :push!, :resize!, :setindex!, :size, :intersect],
+    extension_interface = [
+        # interpreter configuration & identity
+        :InferenceParams, :OptimizationParams, :InferenceState, :NativeInterpreter,
+        :get_inference_cache, :get_inference_world, :cache_owner, :method_table,
+        :typeinf_lattice, :ipo_lattice, :optimizer_lattice,
+        # abstract interpretation entry points plugins overload on their interpreter type
+        :typeinf, :finish!, :transform_result_for_cache, :add_remark!,
+        :abstract_call_gf_by_type, :abstract_call_known, :abstract_call_method,
+        :abstract_call_method_with_const_args, :abstract_call_opaque_closure,
+        :abstract_eval_special_value, :abstract_eval_value, :abstract_eval_statement_expr,
+        :abstract_eval_globalref_type, :builtin_tfunction, :return_type_tfunc,
+        :concrete_eval_eligible, :const_prop_entry_heuristic, :collect_limitations!,
+        :bail_out_toplevel_call, :bail_out_call, :bail_out_apply, :add_call_backedges!,
+        :may_optimize, :may_compress, :may_discard_trees, :verbose_stmt_info,
+        :src_inlining_policy, :optimize, :ipo_dataflow_analysis!,
+        # lattice extension points (custom lattices and lattice elements)
+        :tmerge, :tmeet, :⊑, :⊏, :⋤, :is_lattice_equal, :has_nontrivial_extended_info,
+        :widenlattice, :is_valid_lattice_norec, :widenconst, :widenreturn,
+        :is_forwardable_argtype, :is_const_prop_profitable_arg,
+    ]
+    # Base/Core-owned bindings are only sealed via these explicit allowlists; anything
+    # the ecosystem extends (any, all, &, string, Colon, ...) must stay open.
+    base_helper_allowlist = [
+        :unwrap_unionall, :rewrap_unionall, :unwrapva, :isvarargtype, :isvatuple,
+        :isType, :isTypeEq, :isTypeEgal, :type_parameter, :has_free_typevars, :has_typevar,
+        :hasintersect, :isdispatchelem, :isconcretedispatch, :isconcretetype, :isdispatchtuple,
+        :datatype_fieldtypes, :datatype_nfields, :datatype_fieldcount, :datatype_pointerfree,
+        :isexpr, :is_meta_expr, :is_meta_expr_head, :quoted, :specialize_method,
+        :_any, :_all, :uniontypes, :unionlen,
+    ]
+    core_type_allowlist = [
+        :Const, :PartialStruct, :InterConditional, :PartialOpaque, :Expr, :PhiNode,
+        :PiNode, :PhiCNode, :UpsilonNode, :GotoNode, :GotoIfNot, :ReturnNode, :EnterNode,
+        :QuoteNode, :SSAValue, :SlotNumber, :Argument, :GlobalRef, :LineNumberNode,
+        :MethodInstance, :CodeInstance, :CodeInfo, :MethodTable, :MethodMatch, :TypeName,
+    ]
+    for name in modnames
+        isdefined(Compiler, name) || continue
+        f = getglobal(Compiler, name)
+        local tn
+        if f isa Function
+            tn = typeof(f).name
+        elseif f isa Type
+            t = unwrap_unionall(f)
+            t isa DataType || continue
+            tn = t.name
+        else
+            continue
+        end
+        # test against singletonname so hidden `var"#f"` function-type bindings are
+        # excluded together with their function
+        (tn.singletonname in extended || tn.singletonname in extension_interface) && continue
+        if tn.module === Compiler
+            ccall(:jl_typename_set_sealed, Cvoid, (Any, Cint), tn, 1)
+        elseif ((tn.module === Base || tn.module === Core) && tn.singletonname in base_helper_allowlist) ||
+               (tn.module === Core && tn.name in core_type_allowlist)
+            ccall(:jl_typename_set_sealed, Cvoid, (Any, Cint), tn, 1)
+        end
+    end
+    mark_sealed_type!(Base.Fix1)
+    mark_sealed_type!(Base.Fix2)
+    mark_sealed_type!(Base.ComposedFunction)
+    mark_sealed!(Base._any)
+    mark_sealed!(Base._all)
+end
+
 baremodule ReinferUtils end
 include(ReinferUtils, "reinfer.jl")
 include(ReinferUtils, "bindinginvalidations.jl")
