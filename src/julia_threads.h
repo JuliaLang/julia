@@ -139,22 +139,30 @@ typedef struct _jl_reset_ctx_t {
 // Platforms with asynchronous delivery of foreign-call cancellation handlers
 // (the sp == 0 flavor above); elsewhere the cancellation is recovered
 // level-triggered at the task's next cancellation point.
-#if defined(_OS_LINUX_) && (defined(_CPU_X86_64_) || defined(_CPU_AARCH64_))
+#if (defined(_OS_LINUX_) || defined(_OS_DARWIN_)) && (defined(_CPU_X86_64_) || defined(_CPU_AARCH64_))
 #define JL_HAVE_CANCEL_HANDLER_DELIVERY 1
+#elif defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
+#define JL_HAVE_CANCEL_HANDLER_DELIVERY 1
+#endif
 
-// The interrupted general-purpose register state (plus the handler and its
-// arguments) saved across a cancellation-handler delivery. Only GPRs live
-// here: FP/vector state is the handler's responsibility - its contract is
-// the LLVM `preserve_all` calling convention (it generates whatever stack
-// saves it needs; a handler that touches no FP/vector registers satisfies
-// this trivially).
+#ifdef JL_HAVE_CANCEL_HANDLER_DELIVERY
+// The state saved across a cancellation-handler delivery. On Linux the
+// interrupted general-purpose registers live here (replayed by the
+// self-signal restore); on macOS and Windows the redirection machinery
+// saves the full interrupted state on the interrupted stack itself (mach
+// jl_call_in_state / the Win32 restore trigger), so only the handler and
+// its arguments do. FP/vector state beyond what the platform machinery
+// preserves is the handler's responsibility - its contract is the LLVM
+// `preserve_all` calling convention (it generates whatever stack saves it
+// needs; a handler that touches no FP/vector registers satisfies this
+// trivially).
 typedef struct {
     void (*fn)(void *state, uint8_t sev);
     void *state;
     uint8_t sev;
-#if defined(_CPU_X86_64_)
+#if defined(_OS_LINUX_) && defined(_CPU_X86_64_)
     uint64_t gregs[24]; // holds mcontext_t.gregs (NGREG-sized; checked where used)
-#elif defined(_CPU_AARCH64_)
+#elif defined(_OS_LINUX_) && defined(_CPU_AARCH64_)
     uint64_t regs[31];
     uint64_t sp;
     uint64_t pc;

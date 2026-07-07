@@ -378,7 +378,10 @@ static void jl_throw_in_ctx(jl_task_t *ct, jl_value_t *e, int sig, void *sigctx)
 // escalation or redelivery runs the (idempotent) handler again once the
 // current delivery completes.
 
-#ifdef JL_HAVE_CANCEL_HANDLER_DELIVERY
+// (On Darwin this file's delivery machinery is replaced by the mach-based
+// implementation in signals-mach.c, which rides the resumable
+// jl_call_in_state + restore-trigger machinery instead of a self-signal.)
+#if defined(JL_HAVE_CANCEL_HANDLER_DELIVERY) && defined(_OS_LINUX_)
 
 extern void jl_cancel_handler_shim(void);
 void jl_cancel_handler_trampoline(void);
@@ -534,7 +537,7 @@ JL_GENERAL_REGS_ONLY JL_NORETURN JL_NO_ASAN void jl_cancel_handler_resume(void)
     // instruction; control never reaches this point.
     abort();
 }
-#endif // JL_HAVE_CANCEL_HANDLER_DELIVERY
+#endif // JL_HAVE_CANCEL_HANDLER_DELIVERY && _OS_LINUX_
 
 static pthread_t signals_thread;
 

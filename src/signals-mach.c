@@ -488,7 +488,8 @@ kern_return_t catch_mach_exception_raise_state_identity(
         return KERN_SUCCESS;
     } else if (jl_addr_is_restore_trigger(fault_addr)) {
         // This is a deliberate fault from jl_mach_restore_trigger, we're
-        // returning from a `jl_call_in_state` (probably the one above).
+        // returning from a `jl_call_in_state` (the safepoint hijack above,
+        // or a cancellation-handler delivery).
 #if defined(_CPU_X86_64_)
         old_state = (thread_state_t)state->__rsp;
 #elif defined(_CPU_AARCH64_)
@@ -500,6 +501,10 @@ kern_return_t catch_mach_exception_raise_state_identity(
         kern_return_t ret = thread_set_state(thread, jl_mach_float_state_info.flavor,
                                              old_fp, jl_mach_float_state_info.count);
         HANDLE_MACH_ERROR("thread_set_state", ret);
+        // A completed cancellation-handler delivery is consumed here (no-op
+        // for other jl_call_in_state users); further deliveries may fire
+        // again once the thread resumes.
+        ptls2->cancel_handler_armed = 0;
         return KERN_SUCCESS;
     }
     if (jl_atomic_load_relaxed(&ptls2->current_task)->eh == NULL)
@@ -599,42 +604,87 @@ void jl_thread_resume(int tid)
     HANDLE_MACH_ERROR("thread_resume", ret);
 }
 
-// Interrupt the target thread's current task at its cancellation reset point,
-// if it has one established (used for task cancellation).
+// Runs on the interrupted thread, hijacked by jl_send_cancellation_signal
+// via jl_call_in_state with the interrupted state saved on the stack below:
+// invoke the registered cancellation handler with its arguments from the
+// per-thread save area. Returning runs into jl_mach_restore_trigger, whose
+// exception-handler branch restores the interrupted state (and disarms).
+static void jl_mach_cancel_handler_trampoline(jl_ptls_t ptls)
+{
+    jl_cancel_handler_save_t *save = &ptls->cancel_handler_save;
+    save->fn(save->state, save->sev);
+}
+
+// Interrupt the target thread's current task through the published context
+// of its asynchronously interruptible region (used for task cancellation):
+// longjmp to a compiled reset point, or run a foreign call's cancellation
+// handler on the interrupted thread and resume.
 JL_DLLEXPORT void jl_send_cancellation_signal(int16_t tid) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
     if (ptls2 == NULL)
         return;
     jl_task_t *ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
-    if (ct2 == NULL || ct2->reset_ctx == NULL)
+    if (ct2 == NULL || (ct2->reset_ctx == NULL && ct2->cancel_handler_ctx == NULL))
         return;
     mach_port_t thread = pthread_mach_thread_np(ptls2->system_id);
     kern_return_t ret = thread_suspend(thread);
     HANDLE_MACH_ERROR("thread_suspend", ret);
     // Re-check now that the thread cannot run. A published handler region
-    // (task->cancel_handler_ctx) suppresses the reset: its span (e.g. a
-    // protected allocator) is exactly where a longjmp must not land.
+    // takes priority over (and suppresses) the reset: its span (e.g. a
+    // protected allocator) is exactly where a longjmp must not land, and
+    // the handler can defer the cancellation and chain into the reset on
+    // region exit.
     ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
-    jl_reset_ctx_t *reset_ctx = (ct2 == NULL || ct2->cancel_handler_ctx != NULL) ?
-        NULL : (jl_reset_ctx_t*)ct2->reset_ctx;
-    if (reset_ctx != NULL && reset_ctx->sp != 0) {
-        // Reset flavor: consume the reset point (prevents a double reset)
-        // and longjmp there.
-        ct2->reset_ctx = NULL;
-        host_thread_state_t state;
-        unsigned int count = MACH_THREAD_STATE_COUNT;
-        memset(&state, 0, sizeof(state));
-        ret = thread_get_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, &count);
-        HANDLE_MACH_ERROR("thread_get_state", ret);
-        jl_longjmp_in_state(&state, reset_ctx->ctx.uc_mcontext);
-        ret = thread_set_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, count);
-        HANDLE_MACH_ERROR("thread_set_state", ret);
+    jl_reset_ctx_t *hctx = ct2 == NULL ? NULL : (jl_reset_ctx_t*)ct2->cancel_handler_ctx;
+    if (hctx != NULL) {
+        // Handler flavor: hijack the thread to run fn(state, severity) on
+        // its own stack via the resumable jl_call_in_state machinery. Only
+        // deliver for an actual cancellation of the bound token (the signal
+        // is also sent for cooperative preemption, which cannot be honored
+        // inside a foreign call), and at most one delivery at a time per
+        // thread (the save area holds one; skips recover level-triggered).
+        jl_value_t *bound = jl_atomic_load_relaxed(&ct2->bound_cancel_token);
+        if (hctx->sp == 0 && !ptls2->cancel_handler_armed &&
+            bound != NULL && bound != jl_nothing &&
+            (jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state) & 0x80)) {
+            host_thread_state_t state;
+            unsigned int count = MACH_THREAD_STATE_COUNT;
+            memset(&state, 0, sizeof(state));
+            ret = thread_get_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, &count);
+            HANDLE_MACH_ERROR("thread_get_state", ret);
+            mach_msg_type_number_t float_count = jl_mach_float_state_info.count;
+            natural_t float_state[JL_MACH_FLOAT_STATE_MAX_COUNT];
+            ret = thread_get_state(thread, jl_mach_float_state_info.flavor,
+                                   (thread_state_t)float_state, &float_count);
+            HANDLE_MACH_ERROR("thread_get_state", ret);
+            jl_cancel_handler_save_t *save = &ptls2->cancel_handler_save;
+            save->fn = hctx->handler.fn;
+            save->state = hctx->handler.state;
+            save->sev = jl_atomic_load_relaxed(&((jl_cancel_source_t*)bound)->state) & 0x3f;
+            ptls2->cancel_handler_armed = 1;
+            jl_call_in_state(&state, (void (*)(void))&jl_mach_cancel_handler_trampoline,
+                             (uintptr_t)ptls2, float_state);
+            ret = thread_set_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, count);
+            HANDLE_MACH_ERROR("thread_set_state", ret);
+        }
     }
-    // TODO: the handler flavor (task->cancel_handler_ctx, published by
-    // foreign calls with a cancellation handler) is not delivered
-    // asynchronously on this platform yet; the cancellation is recovered
-    // level-triggered at the task's next cancellation point.
+    else {
+        jl_reset_ctx_t *reset_ctx = ct2 == NULL ? NULL : (jl_reset_ctx_t*)ct2->reset_ctx;
+        if (reset_ctx != NULL && reset_ctx->sp != 0) {
+            // Reset flavor: consume the reset point (prevents a double
+            // reset) and longjmp there.
+            ct2->reset_ctx = NULL;
+            host_thread_state_t state;
+            unsigned int count = MACH_THREAD_STATE_COUNT;
+            memset(&state, 0, sizeof(state));
+            ret = thread_get_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, &count);
+            HANDLE_MACH_ERROR("thread_get_state", ret);
+            jl_longjmp_in_state(&state, reset_ctx->ctx.uc_mcontext);
+            ret = thread_set_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, count);
+            HANDLE_MACH_ERROR("thread_set_state", ret);
+        }
+    }
     ret = thread_resume(thread);
     HANDLE_MACH_ERROR("thread_resume", ret);
 }

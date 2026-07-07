@@ -979,10 +979,10 @@ for GMP, which is how a `BigInt` loop with no cancellation points of its own can
 first ^C.
 
 !!! note
-    Asynchronous delivery of cancellation handlers and resets is currently implemented on
-    Linux (x86-64 and AArch64). On other platforms the annotations are safe no-ops in this
-    respect: the cancellation is still delivered, level-triggered, once the call returns and
-    the task reaches its next cancellation point.
+    Asynchronous delivery of cancellation handlers is currently implemented on Linux and
+    macOS (x86-64 and AArch64) and on Windows (x86-64). On other platforms the annotation is
+    a safe no-op in this respect: the cancellation is still delivered, level-triggered, once
+    the call returns and the task reaches its next cancellation point.
 
 ## Non-constant Function Specifications
 
