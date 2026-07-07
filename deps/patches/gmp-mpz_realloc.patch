@@ -1,0 +1,62 @@
+--- a/mpz/realloc.c
++++ b/mpz/realloc.c
+@@ -42,29 +42,48 @@
+   if (sizeof (mp_size_t) == sizeof (int))
+     {
+       if (UNLIKELY (new_alloc > ULONG_MAX / GMP_NUMB_BITS))
+-	MPZ_OVERFLOW;
++	__GMP_ALLOC_OVERFLOW_FUNC ();
+     }
+   else
+     {
+       if (UNLIKELY (new_alloc > INT_MAX))
+-	MPZ_OVERFLOW;
++	__GMP_ALLOC_OVERFLOW_FUNC ();
+     }
+ 
+-  if (ALLOC (m) == 0)
++  /* Allocate-copy-install-free-last (rather than realloc-in-place), so the
++     mpz is structurally valid at every interruptible point: an asynchronous
++     unwind (e.g. Julia task cancellation delivered inside GMP) between any
++     two statements leaves PTR/ALLOC/SIZ mutually consistent, at worst
++     leaking the block that was not yet freed.  The realloc-based version
++     has a window where PTR (m) dangles - the old block is freed inside the
++     allocation hook before the new pointer is stored - which a later
++     mpz_clear would double free.  ALLOC is stepped through MIN (old, new)
++     so that capacity is understated, never overstated, in every window.  */
++  mp = __GMP_ALLOCATE_FUNC_LIMBS (new_alloc);
++  if (ALLOC (m) != 0)
+     {
+-      mp = __GMP_ALLOCATE_FUNC_LIMBS (new_alloc);
+-    }
+-  else
+-    {
+-      mp = __GMP_REALLOCATE_FUNC_LIMBS (PTR (m), ALLOC (m), new_alloc);
++      mp_ptr old_mp = PTR (m);
++      mp_size_t old_alloc = ALLOC (m);
++      mp_size_t copy_size = ABSIZ (m);
++      if (copy_size > new_alloc)
++	copy_size = new_alloc;
++      MPN_COPY (mp, old_mp, copy_size);
+ 
+       /* Don't create an invalid number; if the current value doesn't fit after
+ 	 reallocation, clear it to 0.  */
+       if (UNLIKELY (ABSIZ (m) > new_alloc))
+ 	SIZ (m) = 0;
+-    }
+ 
+-  PTR (m) = mp;
+-  ALLOC(m) = new_alloc;
++      if (new_alloc < old_alloc)
++	ALLOC (m) = new_alloc;
++      PTR (m) = mp;
++      ALLOC (m) = new_alloc;
++      __GMP_FREE_FUNC_LIMBS (old_mp, old_alloc);
++    }
++  else
++    {
++      PTR (m) = mp;
++      ALLOC (m) = new_alloc;
++    }
+   return (void *) mp;
+ }

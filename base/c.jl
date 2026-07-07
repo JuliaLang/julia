@@ -263,6 +263,7 @@ The above input outputs this:
 function ccall_macro_parse(exprs)
     gc_safe = false
     cancel = nothing
+    reset_safe = false
     expr = nothing
     if exprs isa Expr
         expr = exprs
@@ -286,8 +287,16 @@ function ccall_macro_parse(exprs)
                     throw(ArgumentError("cancel_handler must be a `(handler, state)` tuple"))
                 end
                 cancel = (value.args[1], value.args[2])
+            elseif name === :reset_safe
+                if value === true
+                    reset_safe = true
+                elseif value === false
+                    reset_safe = false
+                else
+                    throw(ArgumentError("reset_safe must be true or false"))
+                end
             else
-                throw(ArgumentError("@ccall options are `gc_safe = <bool>` and `cancel_handler = (handler, state)`"))
+                throw(ArgumentError("@ccall options are `gc_safe = <bool>`, `reset_safe = <bool>` and `cancel_handler = (handler, state)`"))
             end
             i += 1
         end
@@ -360,22 +369,41 @@ function ccall_macro_parse(exprs)
             pusharg!(a)
         end
     end
-    return func, rettype, types, args, gc_safe, cancel, nreq
+    return func, rettype, types, args, gc_safe, cancel, reset_safe, nreq
 end
 
 
-function ccall_macro_lower(convention, func, rettype, types, args, gc_safe, cancel, nreq)
+function ccall_macro_lower(convention, func, rettype, types, args, gc_safe, cancel, reset_safe, nreq)
     have_cancel = cancel !== nothing
     base_cconv = convention isa Tuple ? (convention..., gc_safe) :
                                         (convention, UInt16(0), gc_safe)
-    if !have_cancel
+    if !have_cancel && !reset_safe
         cconv = Expr(:cconv, base_cconv, nreq)
         return Expr(:call, :ccall, esc(func), cconv, esc(rettype),
                      Expr(:tuple, map!(esc, types, types)...), map!(esc, args, args)...)
     end
+    if !have_cancel
+        # Reset-safe annotation: the call is audited for an asynchronous
+        # unwind landing anywhere inside it, so codegen keeps the enclosing
+        # reset region published across it (instead of clearing it like for
+        # any other call). The cancellation point emitted here establishes
+        # that region (and throws a pending cancellation before the call's
+        # arguments are evaluated); an unwind delivered during the call
+        # lands back on it and throws.
+        src = gensym(:cancel_src)
+        st = gensym(:cancel_st)
+        cconv = Expr(:cconv, (base_cconv..., false, true), nreq)
+        call = Expr(:call, :ccall, esc(func), cconv, esc(rettype),
+                    Expr(:tuple, map!(esc, types, types)...), map!(esc, args, args)...)
+        return Expr(:block,
+            :(local $src = default_cancel_source()),
+            :(local $st = Core.cancellation_point!($src)::UInt8),
+            :($st != 0x00 && handle_cancellation!($src, $st)),
+            call)
+    end
     # Cancellation-handler annotation: the (handler, state, governing source)
     # triple rides as three extra leading foreigncall arguments - peeled off
-    # again by codegen, which publishes them as the sp == 0 reset context
+    # again by codegen, which publishes them as the sp == 0 handler context
     # around the call. An ordinary cancellation point runs first, so a
     # pending cancellation throws before the call's arguments are evaluated;
     # another one runs after the call, so a cancellation delivered while it
@@ -383,7 +411,7 @@ function ccall_macro_lower(convention, func, rettype, types, args, gc_safe, canc
     # throws before the - possibly partial - result can escape.
     fex, sex = cancel
     nreq > 0 && (nreq += 3)
-    cconv = Expr(:cconv, (base_cconv..., true), nreq)
+    cconv = Expr(:cconv, reset_safe ? (base_cconv..., true, true) : (base_cconv..., true), nreq)
     src = gensym(:cancel_src)
     st = gensym(:cancel_st)
     st2 = gensym(:cancel_st)
@@ -504,6 +532,26 @@ remains level-triggered.
 
 !!! compat "Julia 1.14"
     The `cancel_handler` option requires Julia 1.14 or higher.
+
+A foreign call into a library that has been *audited* for asynchronous
+unwinding can instead be annotated `reset_safe = true`:
+
+    @ccall reset_safe=true libgmp.__gmpz_mul(x::mpz_t, a::mpz_t, b::mpz_t)::Cvoid
+
+The annotation emits a cancellation point whose reset region stays published
+across the call (for any other call it would end at the call boundary), so a
+cancellation of the governing token can unwind the foreign computation at an
+*arbitrary* instruction, longjmping back to the cancellation point, which
+throws. This is only sound if interruption at every point of the callee
+leaves the process consistent - no locks held, no torn global state; at
+worst bounded leaks of in-flight temporaries and garbage *values* (with
+valid structure) in the call's discarded outputs. Base's GMP (`BigInt`)
+wrappers use this, in concert with allocation hooks that defer a
+cancellation delivered while inside the allocator itself. This is how a
+checkless `BigInt` loop cancels cleanly at the first ^C.
+
+!!! compat "Julia 1.14"
+    The `reset_safe` option requires Julia 1.14 or higher.
 """
 macro ccall(exprs...)
     return ccall_macro_lower((:ccall), ccall_macro_parse(exprs)...)

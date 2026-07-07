@@ -1772,16 +1772,28 @@ using Base: ccall_macro_parse, ccall_macro_lower
         Any["%s = %d\n", :name, :value],  # argument symbols
         false,                            # is gc_safe
         nothing,                          # cancellation handler
+        false,                            # is reset_safe
         1                                 # number of required arguments (for varargs)
     )
 
-    # leading options: gc_safe and cancel_handler, in either order
+    # leading options: gc_safe, reset_safe and cancel_handler, in any order
     optexpr = ccall_macro_parse((:(gc_safe = true), :(cancel_handler = (h, s)),
                                  :( foo(x::Cint)::Cvoid )))
-    @test optexpr == (:((:foo,)), :Cvoid, Any[:Cint], Any[:x], true, (:h, :s), 0)
+    @test optexpr == (:((:foo,)), :Cvoid, Any[:Cint], Any[:x], true, (:h, :s), false, 0)
     optexpr = ccall_macro_parse((:(cancel_handler = (h, s)), :(gc_safe = true),
                                  :( foo(x::Cint)::Cvoid )))
-    @test optexpr == (:((:foo,)), :Cvoid, Any[:Cint], Any[:x], true, (:h, :s), 0)
+    @test optexpr == (:((:foo,)), :Cvoid, Any[:Cint], Any[:x], true, (:h, :s), false, 0)
+    optexpr = ccall_macro_parse((:(reset_safe = true), :( foo(x::Cint)::Cvoid )))
+    @test optexpr == (:((:foo,)), :Cvoid, Any[:Cint], Any[:x], false, nothing, true, 0)
+
+    # reset_safe lowering: a cancellation point followed by the plain call
+    # with the reset_safe flag in the calling-convention tuple
+    lowered = ccall_macro_lower(:ccall, ccall_macro_parse((:(reset_safe = true),
+        :( foo(x::Cint)::Cvoid )))...)
+    @test Meta.isexpr(lowered, :block)
+    rscall = lowered.args[end]
+    @test Meta.isexpr(rscall, :call) && rscall.args[1] === :ccall
+    @test rscall.args[3].args[1] == (:ccall, UInt16(0), false, false, true)
 
     # the cancel_handler lowering: a block bracketing the foreigncall in
     # cancellation points, with (fn, state, src) prepended to the call

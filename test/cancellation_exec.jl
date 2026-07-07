@@ -280,6 +280,58 @@ end
     end
 end
 
+@testset "BigInt/GMP cancellation at SAFE (reset regions)" begin
+    # No explicit cancellation points in the loop body: cancellation reaches
+    # it through the annotated MPZ entry points - either their own
+    # cancellation point, an asynchronous reset landing inside audited
+    # libgmp compute (the reset region stays published across the annotated
+    # call), or the deferring allocation hooks chaining into the reset on
+    # exit.
+    function bigmul_loop(nbits)
+        b = big(3)^(nbits ÷ 2)
+        m = big(10)^(nbits ÷ 8)
+        while true
+            b = (b * b) % m
+        end
+    end
+    t, src = cancellable_spawn(() -> bigmul_loop(1_000_000))
+    sleep(1.0) # let it get into the multiply/mod cycle
+    cancel!(src)
+    @test wait_cancelled(t, src)
+    @test istaskfailed(t)
+    @test t.result isa CancellationRequest
+    # the library stays healthy: correct arithmetic after the cancellation
+    @test factorial(big(30)) == prod(big(1):big(30))
+    @test string(big(2)^128) == "340282366920938463463374607431768211456"
+
+    # Allocation-churn storm: small, allocation-dominated BigInt work
+    # hammered by cancellation. Deliveries frequently land inside the
+    # deferring jl_gmp_counted_* hooks (the handler region), exercising the
+    # defer-and-chain path; correctness is "no crash, no corruption, clean
+    # arithmetic afterwards".
+    deadline = time() + 8
+    rounds = 0
+    while time() < deadline
+        gsrc = CancellationTokenSource()
+        gt = with(CANCEL_TOKEN => CancellationToken(gsrc)) do
+            Threads.@spawn begin
+                b = big(1)
+                m = big(10)^60
+                while true
+                    b = (b + big(12345))^2 % m
+                end
+            end
+        end
+        rounds % 3 == 0 || sleep(0.02)
+        cancel!(gsrc)
+        @test wait_cancelled(gt, gsrc)
+        @test istaskfailed(gt)
+        rounds += 1
+    end
+    @test rounds > 0
+    @test factorial(big(20)) == 2432902008176640000
+end
+
 @testset "cancel storm" begin
     # Hammer cancellation against tasks in every wait state, from a tight
     # loop with concurrent GC pressure. This is a regression test for the

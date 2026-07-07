@@ -544,6 +544,105 @@ JL_DLLEXPORT void *jl_malloc(size_t sz) JL_CANSAFEPOINT
     return jl_gc_counted_malloc(sz);
 }
 
+// === GMP allocation hooks ===================================================
+// Installed by Base.GMP.__init__ in place of the plain jl_gc_counted_*
+// functions. GMP computations run under a reset region published across the
+// GMP ccall (see the `reset_safe` option of `@ccall`), so an asynchronous
+// cancellation can unwind them at any point - except while inside the
+// allocation hook, where a longjmp could orphan the libc allocator's arena
+// lock, or land mid-GC (jl_gc_counted_* may collect, and collection may run
+// finalizers). These wrappers therefore publish a cancellation-handler
+// region across the whole underlying call: a delivery while inside merely
+// notes the cancellation (and suppresses the reset), and the exit path
+// chains the deferred note into the still-published reset synchronously.
+// If no reset region is published (an unannotated caller), the cancellation
+// stays pending and is recovered level-triggered at the next cancellation
+// point. N.B.: a collection that runs finalizers may execute cancellation
+// points that clear the enclosing reset region; the remaining GMP call then
+// simply degrades to level-triggered cancellation.
+
+#ifdef JL_HAVE_CANCEL_HANDLER_DELIVERY
+// The handler contract is the preserve_all calling convention; keeping the
+// note handler to general registers satisfies it under any compiler.
+__attribute__((target("general-regs-only")))
+#endif
+static void jl_gmp_defer_note(void *state, uint8_t sev)
+{
+    (void)sev;
+    *(volatile sig_atomic_t*)state = 1;
+}
+
+STATIC_INLINE void jl_gmp_guard_enter(jl_task_t *ct, jl_reset_ctx_t *hctx,
+                                      volatile sig_atomic_t *deferred) JL_NOTSAFEPOINT
+{
+    hctx->sp = 0; // handler flavor
+    hctx->handler.fn = &jl_gmp_defer_note;
+    hctx->handler.state = (void*)deferred;
+    jl_signal_fence(); // contents before publication (same-thread signal)
+    ct->cancel_handler_ctx = hctx;
+    jl_signal_fence();
+}
+
+STATIC_INLINE void jl_gmp_guard_leave(jl_task_t *ct, volatile sig_atomic_t *deferred)
+{
+    jl_signal_fence();
+    ct->cancel_handler_ctx = NULL;
+    jl_signal_fence();
+    if (*deferred) {
+        // A cancellation was delivered while inside the allocator: chain
+        // into the reset region published across the enclosing GMP call
+        // (synchronously - this is a safe point by construction). The
+        // re-executed cancellation point at the reset throws the request.
+        jl_reset_ctx_t *rctx = (jl_reset_ctx_t*)ct->reset_ctx;
+        if (rctx != NULL && rctx->sp != 0) {
+            ct->reset_ctx = NULL;
+            jl_longjmp(rctx->ctx.uc_mcontext, 1);
+        }
+    }
+}
+
+JL_DLLEXPORT void *jl_gmp_counted_malloc(size_t sz)
+{
+    jl_task_t *ct = jl_get_current_task();
+    if (ct == NULL || ct->ptls == NULL)
+        return jl_gc_counted_malloc(sz);
+    volatile sig_atomic_t deferred = 0;
+    jl_reset_ctx_t hctx;
+    jl_gmp_guard_enter(ct, &hctx, &deferred);
+    void *data = jl_gc_counted_malloc(sz);
+    // may longjmp; `data` then leaks, like the aborted operation's other
+    // in-flight temporaries (its output is discarded by the unwind anyway)
+    jl_gmp_guard_leave(ct, &deferred);
+    return data;
+}
+
+JL_DLLEXPORT void *jl_gmp_counted_realloc_with_old_size(void *p, size_t old, size_t sz)
+{
+    jl_task_t *ct = jl_get_current_task();
+    if (ct == NULL || ct->ptls == NULL)
+        return jl_gc_counted_realloc_with_old_size(p, old, sz);
+    volatile sig_atomic_t deferred = 0;
+    jl_reset_ctx_t hctx;
+    jl_gmp_guard_enter(ct, &hctx, &deferred);
+    void *data = jl_gc_counted_realloc_with_old_size(p, old, sz);
+    jl_gmp_guard_leave(ct, &deferred);
+    return data;
+}
+
+JL_DLLEXPORT void jl_gmp_counted_free_with_size(void *p, size_t sz)
+{
+    jl_task_t *ct = jl_get_current_task();
+    if (ct == NULL || ct->ptls == NULL) {
+        jl_gc_counted_free_with_size(p, sz);
+        return;
+    }
+    volatile sig_atomic_t deferred = 0;
+    jl_reset_ctx_t hctx;
+    jl_gmp_guard_enter(ct, &hctx, &deferred);
+    jl_gc_counted_free_with_size(p, sz);
+    jl_gmp_guard_leave(ct, &deferred);
+}
+
 //_unchecked_calloc does not check for potential overflow of nm*sz
 STATIC_INLINE void *_unchecked_calloc(size_t nm, size_t sz) JL_CANSAFEPOINT {
     size_t nmsz = nm*sz;
