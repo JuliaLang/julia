@@ -106,8 +106,11 @@ function swapcols!(a::AbstractMatrix, i, j)
     cols = axes(a,2)
     @boundscheck i in cols || throw(BoundsError(a, (:,i)))
     @boundscheck j in cols || throw(BoundsError(a, (:,j)))
+    return @split_effects :nothrow _swapcols_impl!(a, i, j)
+end
+function _swapcols_impl!(a::AbstractMatrix, i, j)
     for k in axes(a,1)
-        @inbounds a[k,i],a[k,j] = a[k,j],a[k,i]
+        a[k,i],a[k,j] = a[k,j],a[k,i]
     end
 end
 
@@ -117,8 +120,11 @@ function swaprows!(a::AbstractMatrix, i, j)
     rows = axes(a,1)
     @boundscheck i in rows || throw(BoundsError(a, (:,i)))
     @boundscheck j in rows || throw(BoundsError(a, (:,j)))
+    return @split_effects :nothrow _swaprows_impl!(a, i, j)
+end
+function _swaprows_impl!(a::AbstractMatrix, i, j)
     for k in axes(a,2)
-        @inbounds a[i,k],a[j,k] = a[j,k],a[i,k]
+        a[i,k],a[j,k] = a[j,k],a[i,k]
     end
 end
 
@@ -287,7 +293,7 @@ function invperm(a::AbstractVector)
     require_one_based_indexing(a)
     b = fill!(similar(a), zero(eltype(a))) # mutable vector of zeros
     n = length(a)
-    @inbounds for (i, j) in enumerate(a)
+    for (i, j) in enumerate(a)
         ((1 <= j <= n) && b[j] == 0) ||
             throw(ArgumentError("argument is not a permutation"))
         b[j] = i

@@ -47,7 +47,7 @@ function copy(x::PhiNode)
     values = x.values
     nvalues = length(values)
     new_values = Vector{Any}(undef, nvalues)
-    @inbounds for i = 1:nvalues
+    for i = 1:nvalues
         isassigned(values, i) || continue
         new_values[i] = copy_exprs(values[i])
     end
@@ -57,7 +57,7 @@ function copy(x::PhiCNode)
     values = x.values
     nvalues = length(values)
     new_values = Vector{Any}(undef, nvalues)
-    @inbounds for i = 1:nvalues
+    for i = 1:nvalues
         isassigned(values, i) || continue
         new_values[i] = copy_exprs(values[i])
     end
@@ -76,7 +76,7 @@ function copy_exprs(@nospecialize(x))
     end
     return x
 end
-copy_exprargs(x::Array{Any,1}) = Any[copy_exprs(@inbounds x[i]) for i in eachindex(x)]
+copy_exprargs(x::Array{Any,1}) = Any[copy_exprs(x[i]) for i in eachindex(x)]
 
 @eval exprarray(head::Symbol, arg::Array{Any,1}) = $(Expr(:new, :Expr, :head, :arg))
 

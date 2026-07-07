@@ -360,7 +360,7 @@ end
 
 function unsafe_read!(dest::Ptr{UInt8}, src::AbstractVector{UInt8}, so::Integer, nbytes::UInt)
     for i in 1:nbytes
-        unsafe_store!(dest, @inbounds(src[so+i-1]), i)
+        unsafe_store!(dest, (src[so+i-1]), i)
     end
 end
 
@@ -435,6 +435,8 @@ function read(from::GenericIOBuffer, T::MultiByteBitNumberType)
     return x
 end
 
+_read_uint8_get(data::AbstractVector{UInt8}, ptr::Int) = data[ptr]::UInt8
+
 @inline function read(from::GenericIOBuffer, ::Type{UInt8})
     from.readable || _throw_not_readable()
     ptr = from.ptr
@@ -442,7 +444,7 @@ end
     if ptr > size
         throw(EOFError())
     end
-    @inbounds byte = from.data[ptr]::UInt8
+    byte = @split_effects :nothrow _read_uint8_get(from.data, ptr)
     from.ptr = ptr + 1
     return byte
 end
@@ -930,7 +932,7 @@ end
     # one char at a time, it's crucial to be fast in the case of small arrays.
     # This optimization only gives a minor 10% speed boost in the best case.
     if nb < 5
-        @inbounds for i in UInt(1):nb
+        for i in UInt(1):nb
             data[from + (i % Int) - 1] = unsafe_load(p, i)
         end
     else

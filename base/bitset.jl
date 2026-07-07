@@ -63,7 +63,7 @@ end
 function _bits_getindex(b::Bits, n::Int, offset::Int)
     ci = _div64(n) - offset + 1
     1 <= ci <= length(b) || return false
-    @inbounds r = (b[ci] & (one(UInt64) << _mod64(n))) != 0
+    r = (b[ci] & (one(UInt64) << _mod64(n))) != 0
     r
 end
 
@@ -117,14 +117,14 @@ end
     len = length(b)
     _growend!(b, nchunks)
     for i in len+1:length(b)
-        @inbounds b[i] = CHK0 # resize! gives dirty memory
+        b[i] = CHK0 # resize! gives dirty memory
     end
 end
 
 @inline function _growbeg0!(b::Bits, nchunks::Int)
     _growbeg!(b, nchunks)
     for i in 1:nchunks
-        @inbounds b[i] = CHK0
+        b[i] = CHK0
     end
 end
 
@@ -154,7 +154,7 @@ function union!(s::BitSet, r::AbstractUnitRange{<:Integer})
     # update s.bits
     i = _mod64(a)
     j = _mod64(b)
-    @inbounds if diffa == diffb
+    if diffa == diffb
         s.bits[diffa + 1] |= (((~CHK0) >> i) << (i+63-j)) >> (63-j)
     else
         s.bits[diffa + 1] |= ((~CHK0) >> i) << i
@@ -194,7 +194,7 @@ function _matched_map!(f, a1::Bits, b1::Int, a2::Bits, b2::Int,
     ediff = e2 - e1
 
     # map! over the common indices
-    @inbounds for i = max(1, 1+bdiff):min(l1, l2+bdiff)
+    for i = max(1, 1+bdiff):min(l1, l2+bdiff)
         a1[i] = f(a1[i], a2[i-bdiff])
     end
 
@@ -205,7 +205,7 @@ function _matched_map!(f, a1::Bits, b1::Int, a2::Bits, b2::Int,
             _growend!(a1, ediff)
             # if a1 and a2 are not overlapping, we infer implied "false" values from a2
             for outer l1 = l1+1:bdiff
-                @inbounds a1[l1] = CHK0
+                a1[l1] = CHK0
             end
             # update ediff in case l1 was updated
             ediff = e2 - l1 - b1
@@ -232,7 +232,7 @@ function _matched_map!(f, a1::Bits, b1::Int, a2::Bits, b2::Int,
             _growbeg!(a1, -bdiff)
             # if a1 and a2 are not overlapping, we infer implied "false" values from a2
             for i = l2+1:-bdiff
-                @inbounds a1[i] = CHK0
+                a1[i] = CHK0
             end
             b1 += bdiff # updated return value
 
@@ -327,17 +327,18 @@ symdiff!(s1::BitSet, s2::BitSet) = _matched_map!(xor, s1, s2)
 
 filter!(f, s::BitSet) = unsafe_filter!(f, s)
 
-@inline in(n::Int, s::BitSet) = _bits_getindex(s.bits, n, s.offset)
+@inline in(n::Int, s::BitSet) = @split_effects :nothrow _bits_getindex(s.bits, n, s.offset)
 @inline in(n::Integer, s::BitSet) = _is_convertible_Int(n) ? in(Int(n), s) : false
 
-function iterate(s::BitSet, (word, idx) = (CHK0, 0))
+function _iterate_impl(s::BitSet, (word, idx))
     while word == 0
         idx == length(s.bits) && return nothing
         idx += 1
-        word = @inbounds s.bits[idx]
+        word = s.bits[idx]
     end
     trailing_zeros(word) + (idx - 1 + s.offset) << 6, (_blsr(word), idx)
 end
+iterate(s::BitSet, (word, idx) = (CHK0, 0)) = @split_effects :nothrow _iterate_impl(s, (word, idx))
 
 @noinline _throw_bitset_notempty_error() =
     throw(ArgumentError("collection must be non-empty"))
@@ -365,12 +366,13 @@ function show(io::IO, s::BitSet)
     print(io, "])")
 end
 
-function _check0(a::Vector{UInt64}, b::Int, e::Int)
-    @inbounds for i in b:e
+function _check0_impl(a::Vector{UInt64}, b::Int, e::Int)
+    for i in b:e
         a[i] == CHK0 || return false
     end
     true
 end
+_check0(a::Vector{UInt64}, b::Int, e::Int) = @split_effects :nothrow _check0_impl(a, b, e)
 
 function ==(s1::BitSet, s2::BitSet)
     # Swap so s1 has always the smallest offset
@@ -406,17 +408,18 @@ function ==(s1::BitSet, s2::BitSet)
     return true
 end
 
-function issubset(a::BitSet, b::BitSet)
+function _issubset_impl(a::BitSet, b::BitSet)
     n = length(a.bits)
     shift = b.offset - a.offset
     i, j = shift, shift + length(b.bits)
 
     f(a, b) = a == a & b
     return (
-        all(@inbounds iszero(a.bits[i]) for i in 1:min(n, i)) &&
-        all(@inbounds f(a.bits[i], b.bits[i - shift]) for i in max(1, i+1):min(n, j)) &&
-        all(@inbounds iszero(a.bits[i]) for i in max(1, j+1):n))
+        all(iszero(a.bits[i]) for i in 1:min(n, i)) &&
+        all(f(a.bits[i], b.bits[i - shift]) for i in max(1, i+1):min(n, j)) &&
+        all(iszero(a.bits[i]) for i in max(1, j+1):n))
 end
+issubset(a::BitSet, b::BitSet) = @split_effects :nothrow _issubset_impl(a, b)
 ⊊(a::BitSet, b::BitSet) = a <= b && a != b
 
 

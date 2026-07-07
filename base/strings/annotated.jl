@@ -185,13 +185,13 @@ unannotate(s::AnnotatedString) = s.string
 
 function unannotate(s::SubString{<:AnnotatedString})
     start_index = first(parentindices(s)[1])
-    @inbounds raw_substring(parent(s).string, start_index, ncodeunits(s))
+    raw_substring(parent(s).string, start_index, ncodeunits(s))
 end
 
 
 function getindex(s::AnnotatedString, i::Integer)
     @boundscheck checkbounds(s, i)
-    @inbounds if isvalid(s, i)
+    if isvalid(s, i)
         AnnotatedChar(s.string[i], Annotation[(; label, value) for (; label, value) in annotations(s, i)])
     else
         string_index_err(s, i)
@@ -511,7 +511,7 @@ Base.length(si::RegionIterator) = length(si.regions)
 
 Base.@propagate_inbounds function Base.iterate(si::RegionIterator, i::Integer=1)
     if i <= length(si.regions)
-        @inbounds ((SubString(si.str, si.regions[i]), si.annotations[i]), i+1)
+        ((SubString(si.str, si.regions[i]), si.annotations[i]), i+1)
     end
 end
 

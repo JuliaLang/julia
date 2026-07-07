@@ -249,9 +249,9 @@ end
 
 IndexStyle(::Type{<:SkipMissing{T}}) where {T} = IndexStyle(T)
 eachindex(itr::SkipMissing) =
-    Iterators.filter(i -> !ismissing(@inbounds(itr.x[i])), eachindex(itr.x))
+    Iterators.filter(i -> !ismissing(@split_effects :nothrow getindex(itr.x, i)), eachindex(itr.x))
 keys(itr::SkipMissing) =
-    Iterators.filter(i -> !ismissing(@inbounds(itr.x[i])), keys(itr.x))
+    Iterators.filter(i -> !ismissing(@split_effects :nothrow getindex(itr.x, i)), keys(itr.x))
 @propagate_inbounds function getindex(itr::SkipMissing, I...)
     v = itr.x[I...]
     ismissing(v) && throw(MissingException(LazyString("the value at index ", I, " is missing")))
@@ -277,7 +277,7 @@ function _mapreduce(f, op, ::IndexLinear, itr::SkipMissing{<:AbstractArray})
     i = first(inds)
     ilast = last(inds)
     for outer i in i:ilast
-        @inbounds ai = A[i]
+        ai = @split_effects :nothrow getindex(A, i)
         !ismissing(ai) && break
     end
     ismissing(ai) && return mapreduce_empty(f, op, eltype(itr))
@@ -286,7 +286,7 @@ function _mapreduce(f, op, ::IndexLinear, itr::SkipMissing{<:AbstractArray})
     i += 1
     ai = missing
     for outer i in i:ilast
-        @inbounds ai = A[i]
+        ai = @split_effects :nothrow getindex(A, i)
         !ismissing(ai) && break
     end
     ismissing(ai) && return mapreduce_first(f, op, a1)
@@ -306,7 +306,7 @@ mapreduce_impl(f, op, A::SkipMissing, ifirst::Integer, ilast::Integer) =
     if ifirst > ilast
         return nothing
     elseif ifirst == ilast
-        @inbounds a1 = A[ifirst]
+        a1 = @split_effects :nothrow getindex(A, ifirst)
         if ismissing(a1)
             return nothing
         else
@@ -317,7 +317,7 @@ mapreduce_impl(f, op, A::SkipMissing, ifirst::Integer, ilast::Integer) =
         ai = missing
         i = ifirst
         for outer i in i:ilast
-            @inbounds ai = A[i]
+            ai = @split_effects :nothrow getindex(A, i)
             !ismissing(ai) && break
         end
         ismissing(ai) && return nothing
@@ -326,7 +326,7 @@ mapreduce_impl(f, op, A::SkipMissing, ifirst::Integer, ilast::Integer) =
         i += 1
         ai = missing
         for outer i in i:ilast
-            @inbounds ai = A[i]
+            ai = @split_effects :nothrow getindex(A, i)
             !ismissing(ai) && break
         end
         ismissing(ai) && return Some(mapreduce_first(f, op, a1))
@@ -335,7 +335,7 @@ mapreduce_impl(f, op, A::SkipMissing, ifirst::Integer, ilast::Integer) =
         i += 1
         v = op(f(a1), f(a2))
         @simd for i = i:ilast
-            @inbounds ai = A[i]
+            ai = A[i]
             if !ismissing(ai)
                 v = op(v, f(ai))
             end

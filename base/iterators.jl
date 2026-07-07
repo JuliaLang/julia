@@ -1445,17 +1445,19 @@ function length(itr::PartitionIterator)
     return cld(l, itr.n)
 end
 
-function iterate(itr::PartitionIterator{<:AbstractRange}, state = firstindex(itr.c))
+function _partition_iterate_range(itr::PartitionIterator{<:AbstractRange}, state)
     state > lastindex(itr.c) && return nothing
     r = min(state + itr.n - 1, lastindex(itr.c))
-    return @inbounds itr.c[state:r], r + 1
+    return itr.c[state:r], r + 1
 end
+iterate(itr::PartitionIterator{<:AbstractRange}, state = firstindex(itr.c)) = Base.@split_effects :nothrow _partition_iterate_range(itr, state)
 
-function iterate(itr::PartitionIterator{<:AbstractArray}, state = firstindex(itr.c))
+function _partition_iterate_array(itr::PartitionIterator{<:AbstractArray}, state)
     state > lastindex(itr.c) && return nothing
     r = min(state + itr.n - 1, lastindex(itr.c))
-    return @inbounds Base.view(itr.c, state:r), r + 1
+    return Base.view(itr.c, state:r), r + 1
 end
+iterate(itr::PartitionIterator{<:AbstractArray}, state = firstindex(itr.c)) = Base.@split_effects :nothrow _partition_iterate_array(itr, state)
 
 struct IterationCutShort; end
 
@@ -1652,7 +1654,7 @@ end
     @boundscheck if length(x) != 1
         throw(ArgumentError("Collection must contain exactly 1 element"))
     end
-    @inbounds first(x)
+    first(x)
 end
 
 @propagate_inbounds only(x::IdDict) = _only(x, first)

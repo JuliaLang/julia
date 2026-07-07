@@ -40,7 +40,7 @@ _crc32c(uuid::UUID, crc::UInt32=0x00000000) = _crc32c(uuid.value, crc)
 
 let
 @inline function uuid_kernel(s, i, u)
-    _c = UInt32(@inbounds codeunit(s, i))
+    _c = UInt32(codeunit(s, i))
     d = __convert_digit(_c, UInt32(16))
     d >= 16 && return nothing
     u <<= 4
@@ -54,22 +54,22 @@ function Base.tryparse(::Type{UUID}, s::AbstractString)
         u = uuid_kernel(s, i, u)
         u === nothing && return nothing
     end
-    @inbounds codeunit(s, 9) == UInt8('-') || return nothing
+    codeunit(s, 9) == UInt8('-') || return nothing
     for i in 10:13
         u = uuid_kernel(s, i, u)
         u === nothing && return nothing
     end
-    @inbounds codeunit(s, 14) == UInt8('-') || return nothing
+    codeunit(s, 14) == UInt8('-') || return nothing
     for i in 15:18
         u = uuid_kernel(s, i, u)
         u === nothing && return nothing
     end
-    @inbounds codeunit(s, 19) == UInt8('-') || return nothing
+    codeunit(s, 19) == UInt8('-') || return nothing
     for i in 20:23
         u = uuid_kernel(s, i, u)
         u === nothing && return nothing
     end
-    @inbounds codeunit(s, 24) == UInt8('-') || return nothing
+    codeunit(s, 24) == UInt8('-') || return nothing
     for i in 25:36
         u = uuid_kernel(s, i, u)
         u === nothing && return nothing
@@ -96,7 +96,7 @@ let groupings = [36:-1:25; 23:-1:20; 18:-1:15; 13:-1:10; 8:-1:1]
         GC.@preserve str begin
             p = pointer(str)
             for i in groupings
-                unsafe_store!(p, @inbounds(hex_chars[1 + u & 0xf]), i)
+                unsafe_store!(p, hex_chars[1 + u & 0xf], i)
                 u >>= 4
             end
             unsafe_store!(p, UInt8('-'), 9)

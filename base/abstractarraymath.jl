@@ -191,7 +191,7 @@ julia> A
  2-2im  3-1im
 ```
 """
-conj!(A::AbstractArray{<:Number}) = (@inbounds broadcast!(conj, A, A); A)
+conj!(A::AbstractArray{<:Number}) = (broadcast!(conj, A, A); A)
 conj!(x::AbstractArray{<:Real}) = x
 conj!(A::AbstractArray) = (foreach(conj!, A); A)
 
@@ -564,7 +564,7 @@ function repeat_outer(a::AbstractMatrix, (m,n)::NTuple{2, Any})
         R = d:d+p-1
         for i=1:m
             c = (i-1)*o+1
-            @inbounds b[c:c+o-1, R] = a
+            b[c:c+o-1, R] = a
         end
     end
     return b
@@ -575,10 +575,12 @@ function repeat_outer(a::AbstractVector, (m,)::Tuple{Any})
     b = similar(a, o*m)
     for i=1:m
         c = (i-1)*o+1
-        @inbounds b[c:c+o-1] = a
+        b[c:c+o-1] = a
     end
     return b
 end
+
+@inline _repeat_scalar_assign!(out, arr, IJ, I) = (out[IJ] = arr[I]; nothing)
 
 function repeat_outer(arr::AbstractArray{<:Any,N}, dims::NTuple{N,Any}) where {N}
     insize  = size(arr)
@@ -590,7 +592,7 @@ function repeat_outer(arr::AbstractArray{<:Any,N}, dims::NTuple{N,Any}) where {N
                 i + d * (j-1)
             end
             IJ = CartesianIndex(TIJ)
-            @inbounds out[IJ] = arr[I]
+            Base.@split_effects :nothrow _repeat_scalar_assign!(out, arr, IJ, I)
         end
     end
     return out
@@ -605,7 +607,7 @@ function repeat_inner(arr, inner)
                 (i-1) * d + j
             end
             IJ = CartesianIndex(TIJ)
-            @inbounds out[IJ] = arr[I]
+            Base.@split_effects :nothrow _repeat_scalar_assign!(out, arr, IJ, I)
         end
     end
     return out

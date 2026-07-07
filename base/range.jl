@@ -1403,6 +1403,13 @@ promote_rule(::Type{LinRange{A,L}}, b::Type{StepRangeLen{T2,R2,S2,L2}}) where {A
 
 ## concatenation ##
 
+# Shared store helper for the range-flattening loops below: outlining the
+# assignment lets the `@inbounds`-free store be reached through
+# `@split_effects`, which synthesizes a nothrow precondition for the fast
+# path while keeping a fully bounds-checked fallback (unlike `@inbounds`,
+# this is always safe).
+_setidx_impl!(a, i, x) = (@inline; a[i] = x; nothing)
+
 function vcat(rs::AbstractRange{T}...) where T
     n::Int = 0
     for ra in rs
@@ -1411,7 +1418,7 @@ function vcat(rs::AbstractRange{T}...) where T
     a = Vector{T}(undef, n)
     i = 1
     for ra in rs, x in ra
-        @inbounds a[i] = x
+        @split_effects :nothrow _setidx_impl!(a, i, x)
         i += 1
     end
     return a
@@ -1426,7 +1433,7 @@ function Array{T,1}(r::AbstractRange{T}) where {T}
     a = Vector{T}(undef, length(r))
     i = 1
     for x in r
-        @inbounds a[i] = x
+        @split_effects :nothrow _setidx_impl!(a, i, x)
         i += 1
     end
     return a

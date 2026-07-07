@@ -98,7 +98,7 @@ sizeof(a::GenericMemory) = Core.sizeof(a)
 function isassigned(a::GenericMemory, i::Int)
     @inline
     @boundscheck checkbounds(Bool, a, i) || return false
-    return @inbounds memoryref_isassigned(memoryref(a, i), default_access_order(a), false)
+    return memoryref_isassigned(memoryref(a, i), default_access_order(a), false)
 end
 
 isassigned(a::GenericMemoryRef) = memoryref_isassigned(a, default_access_order(a), @_boundscheck)
@@ -143,7 +143,7 @@ function unsafe_copyto!(dest::Memory, doffs, src::Memory, soffs, n)
     destp = pointer(dest, doffs)
     srcp = pointer(src, soffs)
     endp = pointer(src, soffs + n - 1)
-    @inbounds if destp < srcp || destp > endp
+    if destp < srcp || destp > endp
         for i = 1:n
             if isassigned(src, soffs + i - 1)
                 dest[doffs + i - 1] = src[soffs + i - 1]
@@ -168,7 +168,7 @@ function copy(a::T) where {T<:Memory}
     # but since we're copying an existing array, we're guaranteed that this will not happen.
     @_nothrow_meta
     newmem = T(undef, length(a))
-    @inbounds unsafe_copyto!(newmem, 1, a, 1, length(a))
+    unsafe_copyto!(newmem, 1, a, 1, length(a))
 end
 
 copyto!(dest::Memory, src::Memory) = copyto!(dest, 1, src, 1, length(src))

@@ -387,7 +387,7 @@ function fieldname(t::DataType, i::Integer)
     n_fields = length(names)::Int
     i > n_fields && throw_field_access(t, i, n_fields)
     i < 1 && throw_need_pos_int(i)
-    return @inbounds names[i]::Symbol
+    return names[i]::Symbol
 end
 
 fieldname(t::UnionAll, i::Integer) = fieldname(unwrap_unionall(t), i)

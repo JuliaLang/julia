@@ -896,9 +896,10 @@ if Limb === UInt64 === UInt
         end
     end
 
-    function Base.iterate(view::UnsafeLimbView, state::Int = 1)
+    Base.iterate(view::UnsafeLimbView, state::Int = 1) = Base.@split_effects :nothrow _iterate_impl(view, state)
+    function _iterate_impl(view::UnsafeLimbView, state::Int)
         state > view.num_bytes && return nothing
-        return @inbounds(view[state]), state + 1
+        return view[state], state + 1
     end
 
     function Base.length(view::UnsafeLimbView)

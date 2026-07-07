@@ -56,7 +56,7 @@ function writeshortest(x::T,
         typed::Bool=false,
         compact::Bool=false) where {T <: Base.IEEEFloat}
     buf = Base.StringVector(neededdigits(T))
-    pos = writeshortest(buf, 1, x, plus, space, hash, precision, expchar, padexp, decchar, typed, compact)
+    pos = Base.@split_effects :nothrow writeshortest(buf, 1, x, plus, space, hash, precision, expchar, padexp, decchar, typed, compact)
     return String(resize!(buf, pos - 1))
 end
 
@@ -122,15 +122,16 @@ function Base.show(io::IO, x::T, forceuntyped::Bool=false, fromprint::Bool=false
     compact = get(io, :compact, false)::Bool
     buf = Memory{UInt8}(undef, neededfloatdigits(T))
     typed = !forceuntyped && !compact && Base.nonnothing_nonmissing_typeinfo(io) !== typeof(x)
-    pos = writeshortest(buf, 1, x, false, false, true, -1,
-        (x isa Float32 && !fromprint) ? UInt8('f') : UInt8('e'), false, UInt8('.'), typed, compact)
+    expc = (x isa Float32 && !fromprint) ? UInt8('f') : UInt8('e')
+    pos = Base.@split_effects :nothrow writeshortest(buf, 1, x, false, false, true, -1,
+        expc, false, UInt8('.'), typed, compact)
     write(io, view(buf, 1:pos - 1))
     return
 end
 
 function Base.string(x::T) where {T <: Base.IEEEFloat}
     buf = Base.StringVector(neededfloatdigits(T))
-    pos = writeshortest(buf, 1, x, false, false, true, -1,
+    pos = Base.@split_effects :nothrow writeshortest(buf, 1, x, false, false, true, -1,
         UInt8('e'), false, UInt8('.'), false, false)
     return String(resize!(buf, pos - 1))
 end

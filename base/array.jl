@@ -208,7 +208,7 @@ isbitsunion(u::Type) = u isa Union && allocatedinline(u)
 function _unsetindex!(A::Array, i::Int)
     @inline
     @boundscheck checkbounds(A, i)
-    @inbounds _unsetindex!(memoryref(A.ref, i))
+    _unsetindex!(memoryref(A.ref, i))
     return A
 end
 
@@ -231,14 +231,14 @@ function isassigned(a::Array, i::Int...)
     @_noub_if_noinbounds_meta
     @boundscheck checkbounds(Bool, a, i...) || return false
     ii = _sub2ind(size(a), i...)
-    return @inbounds isassigned(memoryrefnew(a.ref, ii, false))
+    return isassigned(memoryrefnew(a.ref, ii, false))
 end
 
 function isassigned(a::Vector, i::Int) # slight compiler simplification for the most common case
     @inline
     @_noub_if_noinbounds_meta
     @boundscheck checkbounds(Bool, a, i) || return false
-    return @inbounds isassigned(memoryrefnew(a.ref, i, false))
+    return isassigned(memoryrefnew(a.ref, i, false))
 end
 
 
@@ -300,8 +300,8 @@ function _copyto_impl!(dest::Union{Array,Memory}, doffs::Integer, src::Union{Arr
     n > 0 || _throw_argerror("Number of elements to copy must be non-negative.")
     @boundscheck checkbounds(dest, doffs:doffs+n-1)
     @boundscheck checkbounds(src, soffs:soffs+n-1)
-    @inbounds let dest = memoryref(dest isa Array ? getfield(dest, :ref) : dest, doffs),
-                  src = memoryref(src isa Array ? getfield(src, :ref) : src, soffs)
+    let dest = memoryref(dest isa Array ? getfield(dest, :ref) : dest, doffs),
+        src = memoryref(src isa Array ? getfield(src, :ref) : src, soffs)
         unsafe_copyto!(dest, src, n)
     end
     return dest
@@ -387,7 +387,7 @@ copy
     @_nothrow_meta
     ref = a.ref
     newmem = typeof(ref.mem)(undef, length(a))
-    @inbounds unsafe_copyto!(memoryref(newmem), ref, length(a))
+    unsafe_copyto!(memoryref(newmem), ref, length(a))
     return $(Expr(:new, :(typeof(a)), :(memoryref(newmem)), :(a.size)))
 end
 
@@ -446,7 +446,7 @@ function getindex(::Type{T}, vals...) where T
     else
         # use afoldl to avoid type instability inside loop
         afoldl(1, vals...) do i, v
-            @inbounds a[i] = v
+            a[i] = v
             return i + 1
         end
     end
@@ -874,13 +874,14 @@ function collect_to_with_first!(dest, v1, itr, st)
     return grow_to!(dest, itr, st)
 end
 
+_setindex_widen_store!(new, i, el) = (new[i] = el; new)
+
 function setindex_widen_up_to(dest::AbstractArray{T}, el, i) where T
     @inline
     new = similar(dest, promote_typejoin(T, typeof(el)))
     f = first(LinearIndices(dest))
     copyto!(new, first(LinearIndices(new)), dest, f, i-f)
-    @inbounds new[i] = el
-    return new
+    return @split_effects :nothrow _setindex_widen_store!(new, i, el)
 end
 
 # Batch-widen an array given (index => value) pairs that don't fit the current element type.
@@ -901,12 +902,12 @@ function _setindices_widen_up_to(::Type{T}, dest::AbstractArray, widen_pairs::Ve
     new = similar(dest, T)
     copyto!(new, dest)
     for (idx, val) in widen_pairs
-        @inbounds new[idx] = val
+        new[idx] = val
     end
     return new
 end
 
-function collect_to!(dest::AbstractArray{T}, itr, offs, st) where T
+function _collect_to_impl!(dest::AbstractArray{T}, itr, offs, st) where T
     # collect to dest array, checking the type of each result. if a result does not
     # match, widen the result type and re-dispatch.
     i = offs
@@ -915,7 +916,7 @@ function collect_to!(dest::AbstractArray{T}, itr, offs, st) where T
         y === nothing && break
         el, st = y
         if el isa T
-            @inbounds dest[i] = el
+            dest[i] = el
             i += 1
         else
             new = setindex_widen_up_to(dest, el, i)
@@ -924,6 +925,7 @@ function collect_to!(dest::AbstractArray{T}, itr, offs, st) where T
     end
     return dest
 end
+collect_to!(dest::AbstractArray{T}, itr, offs, st) where {T} = @split_effects :nothrow _collect_to_impl!(dest, itr, offs, st)
 
 function grow_to!(dest, itr)
     y = iterate(itr)
@@ -985,11 +987,11 @@ julia> getindex(A, "a")
 """
 function getindex end
 
-function getindex(A::Array, i1::Int, i2::Int, I::Int...)
-    @inline
+function _getindex_linear_impl(A::Array, i1::Int, i2::Int, I::Int...)
     @boundscheck checkbounds(A, i1, i2, I...) # generally _to_linear_index requires bounds checking
-    return @inbounds A[_to_linear_index(A, i1, i2, I...)]
+    return A[_to_linear_index(A, i1, i2, I...)]
 end
+getindex(A::Array, i1::Int, i2::Int, I::Int...) = (@inline; @split_effects :nothrow _getindex_linear_impl(A, i1, i2, I...))
 
 # Faster contiguous indexing using copyto! for AbstractUnitRange and Colon
 function getindex(A::Array, I::AbstractUnitRange{<:Integer})
@@ -1083,7 +1085,7 @@ function setindex!(A::Array, X::AbstractArray, I::AbstractVector{Int})
     I′ = unalias(A, I)
     count = 1
     for i in I′
-        @inbounds A[i] = X′[count]
+        A[i] = X′[count]
         count += 1
     end
     return A
@@ -1151,7 +1153,7 @@ function _growbeg_internal!(a::Vector, delta::Int, len::Int)
         newmem = mem
         unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
         for j in offset:newoffset+delta-1
-            @inbounds _unsetindex!(mem, j)
+            _unsetindex!(mem, j)
         end
     else
         newmem = array_new_memory(mem, newmemlen)
@@ -1160,7 +1162,7 @@ function _growbeg_internal!(a::Vector, delta::Int, len::Int)
     if ref !== a.ref
         throw(ConcurrencyViolationError("Vector can not be resized concurrently"))
     end
-    setfield!(a, :ref, @inbounds memoryref(newmem, newoffset))
+    setfield!(a, :ref, memoryref(newmem, newoffset))
 end
 
 function _growbeg!(a::Vector, delta::Integer)
@@ -1174,7 +1176,7 @@ function _growbeg!(a::Vector, delta::Integer)
     newlen = len + delta
     # if offset is far enough advanced to fit data in existing memory without copying
     if delta <= offset - 1
-        setfield!(a, :ref, @inbounds memoryref(ref, 1 - delta))
+        setfield!(a, :ref, memoryref(ref, 1 - delta))
         setfield!(a, :size, (newlen,))
     else
         @noinline _growbeg_internal!(a, delta, len)
@@ -1209,7 +1211,7 @@ function _growend_internal!(a::Vector, delta::Int, len::Int)
         newmem = array_new_memory(mem, newmemlen2)
         newoffset = offset
     end
-    newref = @inbounds memoryref(newmem, newoffset)
+    newref = memoryref(newmem, newoffset)
     unsafe_copyto!(newref, ref, len)
     if ref !== a.ref
         @noinline throw(ConcurrencyViolationError("Vector can not be resized concurrently"))
@@ -1256,18 +1258,18 @@ function _growat!(a::Vector, i::Integer, delta::Integer)
     prefer_start = i <= div(len, 2)
     # if offset is far enough advanced to fit data in beginning of the memory
     if prefer_start && delta <= offset - 1
-        newref = @inbounds memoryref(mem, offset - delta)
+        newref = memoryref(mem, offset - delta)
         unsafe_copyto!(newref, ref, i)
         setfield!(a, :ref, newref)
         setfield!(a, :size, (newlen,))
         for j in i:i+delta-1
-            @inbounds _unsetindex!(a, j)
+            _unsetindex!(a, j)
         end
     elseif !prefer_start && memlen >= newmemlen
         unsafe_copyto!(mem, offset - 1 + delta + i, mem, offset - 1 + i, len - i + 1)
         setfield!(a, :size, (newlen,))
         for j in i:i+delta-1
-            @inbounds _unsetindex!(a, j)
+            _unsetindex!(a, j)
         end
     else
         # since we will allocate the array in the middle of the memory we need at least 2*delta extra space
@@ -1275,7 +1277,7 @@ function _growat!(a::Vector, i::Integer, delta::Integer)
         newmemlen = max(overallocation(memlen), len+2*delta+1)
         newoffset = (newmemlen - newlen) ÷ 2 + 1
         newmem = array_new_memory(mem, newmemlen)
-        newref = @inbounds memoryref(newmem, newoffset)
+        newref = memoryref(newmem, newoffset)
         unsafe_copyto!(newref, ref, i-1)
         unsafe_copyto!(newmem, newoffset + delta + i - 1, mem, offset + i - 1, len - i + 1)
         setfield!(a, :ref, newref)
@@ -1292,12 +1294,12 @@ function _deletebeg!(a::Vector, delta::Integer)
         throw(ArgumentError("_deletebeg! requires delta in 0:length(a)"))
     end
     for i in 1:delta
-        @inbounds _unsetindex!(a, i)
+        _unsetindex!(a, i)
     end
     newlen = len - delta
     setfield!(a, :size, (newlen,))
     if newlen != 0 # if newlen==0 we could accidentally index past the memory
-        newref = @inbounds memoryref(a.ref, delta + 1)
+        newref = memoryref(a.ref, delta + 1)
         setfield!(a, :ref, newref)
     end
     return
@@ -1313,7 +1315,7 @@ function _deleteend!(a::Vector, delta::Integer)
     end
     newlen = len - delta
     for i in newlen+1:len
-        @inbounds _unsetindex!(a, i)
+        _unsetindex!(a, i)
     end
     setfield!(a, :size, (newlen,))
     return
@@ -1742,9 +1744,11 @@ function popat!(a::Vector, i::Integer)
     x
 end
 
+_popat_get(a, i) = a[i]
+
 function popat!(a::Vector, i::Integer, default)
     if 1 <= i <= length(a)
-        x = @inbounds a[i]
+        x = @split_effects :nothrow _popat_get(a, i)
         _deleteat!(a, i, 1)
         x
     else
@@ -1865,13 +1869,14 @@ function insert!(a::Vector{T}, i::Integer, item) where T
     item = item isa T ? item : convert(T, item)::T
     return _insert!(a, i, item)
 end
+_insert_store!(a, i, item) = (a[i] = item; a)
+
 function _insert!(a::Vector{T}, i::Integer, item::T) where T
     @_noub_meta
     # Throw convert error before changing the shape of the array
     _growat!(a, i, 1)
     # :noub, because _growat! already did bound check
-    @inbounds a[i] = item
-    return a
+    return @split_effects :nothrow _insert_store!(a, i, item)
 end
 
 """
@@ -1970,7 +1975,7 @@ function _deleteat!(a::Vector, inds, dltd=Nowhere())
     y === nothing && return a
     (p, s) = y
     checkbounds(a, p)
-    @inbounds _push_deleted!(dltd, a, p)
+    _push_deleted!(dltd, a, p)
     q = p+1
     while true
         y = iterate(inds, s)
@@ -1984,14 +1989,14 @@ function _deleteat!(a::Vector, inds, dltd=Nowhere())
             end
         end
         while q < i
-            @inbounds _copy_item!(a, p, q)
+            _copy_item!(a, p, q)
             p += 1; q += 1
         end
-        @inbounds _push_deleted!(dltd, a, i)
+        _push_deleted!(dltd, a, i)
         q = i+1
     end
     while q <= n
-        @inbounds _copy_item!(a, p, q)
+        _copy_item!(a, p, q)
         p += 1; q += 1
     end
     _deleteend!(a, n-p+1)
@@ -2004,7 +2009,7 @@ function deleteat!(a::Vector, inds::AbstractVector{Bool})
     length(inds) == n || throw(BoundsError(a, inds))
     p = 1
     for (q, i) in enumerate(inds)
-        @inbounds _copy_item!(a, p, q)
+        _copy_item!(a, p, q)
         p += !i
     end
     _deleteend!(a, n-p+1)
@@ -2311,7 +2316,7 @@ julia> A
  1
 ```
 """
-function reverse!(v::AbstractVector, start::Integer, stop::Integer=lastindex(v))
+function _reverse_impl!(v::AbstractVector, start::Integer, stop::Integer)
     s, n = Int(start), Int(stop)
     if n > s # non-empty and non-trivial
         liv = LinearIndices(v)
@@ -2321,13 +2326,14 @@ function reverse!(v::AbstractVector, start::Integer, stop::Integer=lastindex(v))
             throw(BoundsError(v, n))
         end
         r = n
-        @inbounds for i in s:midpoint(s, n-1)
+        for i in s:midpoint(s, n-1)
             v[i], v[r] = v[r], v[i]
             r -= 1
         end
     end
     return v
 end
+reverse!(v::AbstractVector, start::Integer, stop::Integer=lastindex(v)) = @split_effects :nothrow _reverse_impl!(v, start, stop)
 
 # concatenations of (in)homogeneous combinations of vectors, horizontal and vertical
 
@@ -2897,9 +2903,13 @@ function indexin(a, b::AbstractArray)
     ]
 end
 
+_getindex_at(a::Tuple, idx) = a[idx]
+_getindex_at(a::AbstractArray, idx) = a[idx]
+
 function _findin(a::Union{AbstractArray, Tuple}, b::AbstractSet)
     ind  = Vector{eltype(keys(a))}()
-    @inbounds for (i,ai) in pairs(a)
+    for i in keys(a)
+        ai = @split_effects :nothrow _getindex_at(a, i)
         ai in b && push!(ind, i)
     end
     ind
@@ -2918,8 +2928,9 @@ function _sortedfindin(v::Union{AbstractArray, Tuple}, w)
     end
     viteri, i = vy
     witerj, j = wy
-    @inbounds begin
-        vi, wj = v[viteri], w[witerj]
+    begin
+        vi = @split_effects :nothrow _getindex_at(v, viteri)
+        wj = @split_effects :nothrow _getindex_at(w, witerj)
         while true
             if isless(vi, wj)
                 vy = iterate(viter, i)
@@ -2927,14 +2938,14 @@ function _sortedfindin(v::Union{AbstractArray, Tuple}, w)
                     break
                 end
                 viteri, i = vy
-                vi        = v[viteri]
+                vi        = @split_effects :nothrow _getindex_at(v, viteri)
             elseif isless(wj, vi)
                 wy = iterate(witer, j)
                 if wy === nothing
                     break
                 end
                 witerj, j = wy
-                wj        = w[witerj]
+                wj        = @split_effects :nothrow _getindex_at(w, witerj)
             else
                 push!(out, viteri)
                 vy = iterate(viter, i)
@@ -2944,7 +2955,7 @@ function _sortedfindin(v::Union{AbstractArray, Tuple}, w)
                 # We only increment the v iterator because v can have
                 # repeated matches to a single value in w
                 viteri, i = vy
-                vi        = v[viteri]
+                vi        = @split_effects :nothrow _getindex_at(v, viteri)
             end
         end
     end
@@ -3014,11 +3025,13 @@ julia> filter(isodd, a)
  9
 ```
 """
+_filter_store!(b, j, ai) = (b[j] = ai; b)
+
 function filter(f, a::Array{T, N}) where {T, N}
     j = 1
     b = Vector{T}(undef, length(a))
     for ai in a
-        @inbounds b[j] = ai
+        @split_effects :nothrow _filter_store!(b, j, ai)
         j = ifelse(f(ai)::Bool, j+1, j)
     end
     resize!(b, j-1)
@@ -3026,14 +3039,16 @@ function filter(f, a::Array{T, N}) where {T, N}
     b
 end
 
+_filter_getidx(a, idx) = a[idx]
+
 function filter(f, a::AbstractArray)
     (IndexStyle(a) != IndexLinear()) && return a[map(f, a)::AbstractArray{Bool}]
 
     j = 1
     idxs = Vector{Int}(undef, length(a))
     for idx in eachindex(a)
-        @inbounds idxs[j] = idx
-        ai = @inbounds a[idx]
+        @split_effects :nothrow _filter_store!(idxs, j, idx)
+        ai = @split_effects :nothrow _filter_getidx(a, idx)
         j = ifelse(f(ai)::Bool, j+1, j)
     end
     resize!(idxs, j-1)
@@ -3063,7 +3078,7 @@ julia> filter!(isodd, Vector(1:10))
 function filter!(f, a::AbstractVector)
     j = firstindex(a)
     for ai in a
-        @inbounds a[j] = ai
+        @split_effects :nothrow _filter_store!(a, j, ai)
         j = ifelse(f(ai)::Bool, nextind(a, j), j)
     end
     j > lastindex(a) && return a

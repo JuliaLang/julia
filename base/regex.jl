@@ -455,10 +455,10 @@ end
 
 function _annotatedmatch(m::RegexMatch{S}, str::AnnotatedString{S}) where {S<:AbstractString}
     RegexMatch{AnnotatedString{S}}(
-        (@inbounds raw_substring(str, m.match.offset + 1, m.match.ncodeunits)),
+        (raw_substring(str, m.match.offset + 1, m.match.ncodeunits)),
         Union{Nothing,SubString{AnnotatedString{S}}}[
             if !isnothing(cap)
-                (@inbounds raw_substring(str, cap.offset + 1, cap.ncodeunits))
+                (raw_substring(str, cap.offset + 1, cap.ncodeunits))
             end for cap in m.captures],
         m.offset, m.offsets, m.regex)
 end
@@ -579,7 +579,7 @@ function count(t::Union{AbstractChar,AbstractString,AbstractPattern}, s::Abstrac
         n += 1
         j = overlap || isempty(r) ? first(r) : last(r)
         j > e && break
-        @inbounds i = nextind(s, j)
+        i = nextind(s, j)
     end
     return n
 end

@@ -239,11 +239,11 @@ end
 
 @inline function getindex(s::Slices{P,SM,AX,S,N}, I::Vararg{Int,N}) where {P,SM,AX,S,N}
     @boundscheck checkbounds(s, I...)
-    @inbounds view(s.parent, _slice_index(s, I...)...)
+    view(s.parent, _slice_index(s, I...)...)
 end
 @inline function setindex!(s::Slices{P,SM,AX,S,N}, val, I::Vararg{Int,N}) where {P,SM,AX,S,N}
     @boundscheck checkbounds(s, I...)
-    @inbounds s.parent[_slice_index(s, I...)...] = val
+    s.parent[_slice_index(s, I...)...] = val
 end
 
 parent(s::Slices) = s.parent

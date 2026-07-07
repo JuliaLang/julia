@@ -231,14 +231,15 @@ Base.unsafe_convert(::Type{Ptr{Limb}}, fd::BigFloatData) = Base.unsafe_convert(P
 function Base.setindex!(fd::BigFloatData, v, i)
     d = getfield(fd, :d)
     @boundscheck 1 <= i <= length(d) - offset_p_limbs || throw(BoundsError(fd, i))
-    @inbounds d[i + offset_p_limbs] = v
+    d[i + offset_p_limbs] = v
     return fd
 end
-function Base.getindex(fd::BigFloatData, i)
+function _getindex_impl(fd::BigFloatData, i)
     d = getfield(fd, :d)
     @boundscheck 1 <= i <= length(d) - offset_p_limbs || throw(BoundsError(fd, i))
-    @inbounds d[i + offset_p_limbs]
+    d[i + offset_p_limbs]
 end
+Base.getindex(fd::BigFloatData, i) = Base.@split_effects :nothrow _getindex_impl(fd, i)
 Base.length(fd::BigFloatData) = length(getfield(fd, :d)) - offset_p_limbs
 Base.copyto!(fd::BigFloatData, limbs) = copyto!(getfield(fd, :d), offset_p_limbs + 1, limbs) # for Random
 
@@ -359,15 +360,15 @@ function BigFloat(x::Float64, r::MPFRRoundingMode=rounding_raw(BigFloat); precis
     zd = z.d
     if Limb === UInt64
         for i in 1:nlimbs-1
-            @inbounds setindex!(zd, 0x0, i)
+            setindex!(zd, 0x0, i)
         end
-        @inbounds setindex!(zd, val, nlimbs)
+        setindex!(zd, val, nlimbs)
     else
         for i in 1:nlimbs-2
-            @inbounds setindex!(zd, 0x0, i)
+            setindex!(zd, 0x0, i)
         end
-        @inbounds setindex!(zd, val % UInt32, nlimbs-1)
-        @inbounds setindex!(zd, (val >> 32) % UInt32, nlimbs)
+        setindex!(zd, val % UInt32, nlimbs-1)
+        setindex!(zd, (val >> 32) % UInt32, nlimbs)
     end
     z
 end

@@ -380,8 +380,8 @@ function _threadsfor_comprehension_fast(esc_range, esc_lidx, esc_body, schedule,
                     # Reads: items, tid. Defines: r, loop_first, loop_last.
                     $work_dist
                     for i = loop_first:loop_last
-                        local $esc_lidx = @inbounds r[i]
-                        @inbounds result[i] = $esc_body
+                        local $esc_lidx = r[i]
+                        result[i] = $esc_body
                     end
                 end
                 $(_threading_run_expr(schedule))
@@ -403,10 +403,10 @@ function _threadsfor_comprehension_fast(esc_range, esc_lidx, esc_body, schedule,
                 $(wrap_final(:(similar(Vector{Any}, axes(items)))))
             else
                 local _skip = firstindex(items)
-                local $esc_lidx = @inbounds items[_skip]
+                local $esc_lidx = items[_skip]
                 local _probe_val = $esc_body
                 local result = similar(Vector{typeof(_probe_val)}, axes(items))
-                @inbounds result[_skip] = _probe_val
+                result[_skip] = _probe_val
                 if niter > 1
                     local _npool = threadpoolsize()
                     local _widen_buffers = [Pair{Int,Any}[] for _ in 1:_npool]
@@ -420,10 +420,10 @@ function _threadsfor_comprehension_fast(esc_range, esc_lidx, esc_body, schedule,
                         local _my_widen = _widen_buffers[tid]
                         for i = loop_first:loop_last
                             i == _skip && continue
-                            local $esc_lidx = @inbounds r[i]
+                            local $esc_lidx = r[i]
                             local _val = $esc_body
                             if _val isa _T
-                                @inbounds result[i] = _val
+                                result[i] = _val
                             else
                                 push!(_my_widen, i => _val)
                             end
@@ -518,7 +518,7 @@ function default_func(itr, lidx, lbody)
             # Reads: items, tid. Defines: r, loop_first, loop_last.
             $work_dist
             for i = loop_first:loop_last
-                local $(esc(lidx)) = @inbounds r[i]
+                local $(esc(lidx)) = r[i]
                 $(esc(lbody))
             end
         end
@@ -555,7 +555,7 @@ function default_comprehension_func(itr, esc_lidx, esc_body, esc_condition, resu
             $work_dist
             local buf = local_bufs[tid]
             for i = loop_first:loop_last
-                local $esc_lidx = @inbounds r[i]
+                local $esc_lidx = r[i]
                 if $esc_condition
                     push!(buf, $esc_body)
                 end

@@ -262,8 +262,8 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted)
         nslices = div(length(A), lsiz)
         ibase = first(LinearIndices(A))-1
         for i in eachindex(R)
-            r = op(@inbounds(R[i]), mapreduce_impl(f, op, A, ibase+1, ibase+lsiz))
-            @inbounds R[i] = r
+            r = op((R[i]), mapreduce_impl(f, op, A, ibase+1, ibase+lsiz))
+            R[i] = r
             ibase += lsiz
         end
         return R
@@ -275,18 +275,18 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted)
         i1 = first(axes1(R))
         for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
-            @inbounds r = R[i1,IR]
+            r = R[i1,IR]
             @simd for i in axes(A, 1)
-                r = op(r, f(@inbounds(A[i, IA])))
+                r = op(r, f((A[i, IA])))
             end
-            @inbounds R[i1,IR] = r
+            R[i1,IR] = r
         end
     else
         for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
             @simd for i in axes(A, 1)
-                v = op(@inbounds(R[i,IR]), f(@inbounds(A[i,IA])))
-                @inbounds R[i,IR] = v
+                v = op((R[i,IR]), f((A[i,IA])))
+                R[i,IR] = v
             end
         end
     end
@@ -1030,31 +1030,31 @@ function findminmax!(f, op, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
         i1 = first(axes1(Rval))
         for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
-            @inbounds tmpRv = Rval[i1,IR]
-            @inbounds tmpRi = Rind[i1,IR]
+            tmpRv = Rval[i1,IR]
+            tmpRi = Rind[i1,IR]
             for i in axes(A,1)
                 k, kss = y::Tuple
-                tmpAv = f(@inbounds(A[i,IA]))
+                tmpAv = f((A[i,IA]))
                 if tmpRi == zi || op(tmpRv, tmpAv)
                     tmpRv = tmpAv
                     tmpRi = k
                 end
                 y = iterate(ks, kss)
             end
-            @inbounds Rval[i1,IR] = tmpRv
-            @inbounds Rind[i1,IR] = tmpRi
+            Rval[i1,IR] = tmpRv
+            Rind[i1,IR] = tmpRi
         end
     else
         for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
             for i in axes(A, 1)
                 k, kss = y::Tuple
-                tmpAv = f(@inbounds(A[i,IA]))
-                @inbounds tmpRv = Rval[i,IR]
-                @inbounds tmpRi = Rind[i,IR]
+                tmpAv = f((A[i,IA]))
+                tmpRv = Rval[i,IR]
+                tmpRi = Rind[i,IR]
                 if tmpRi == zi || op(tmpRv, tmpAv)
-                    @inbounds Rval[i,IR] = tmpAv
-                    @inbounds Rind[i,IR] = k
+                    Rval[i,IR] = tmpAv
+                    Rind[i,IR] = k
                 end
                 y = iterate(ks, kss)
             end

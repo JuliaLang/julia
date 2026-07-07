@@ -67,20 +67,22 @@ function Base.strides(A::PermutedDimsArray{T,N,perm}) where {T,N,perm}
 end
 Base.elsize(::Type{<:PermutedDimsArray{<:Any, <:Any, <:Any, <:Any, P}}) where {P} = Base.elsize(P)
 
-@inline function Base.getindex(A::PermutedDimsArray{T,N,perm,iperm}, I::Vararg{Int,N}) where {T,N,perm,iperm}
+@inline function _getindex_impl(A::PermutedDimsArray{T,N,perm,iperm}, I::Vararg{Int,N}) where {T,N,perm,iperm}
     @boundscheck checkbounds(A, I...)
-    @inbounds val = getindex(A.parent, genperm(I, iperm)...)
+    val = getindex(A.parent, genperm(I, iperm)...)
     val
 end
-@inline function Base.setindex!(A::PermutedDimsArray{T,N,perm,iperm}, val, I::Vararg{Int,N}) where {T,N,perm,iperm}
+Base.getindex(A::PermutedDimsArray{T,N,perm,iperm}, I::Vararg{Int,N}) where {T,N,perm,iperm} = (@inline; Base.@split_effects :nothrow _getindex_impl(A, I...))
+@inline function _setindex_impl!(A::PermutedDimsArray{T,N,perm,iperm}, val, I::Vararg{Int,N}) where {T,N,perm,iperm}
     @boundscheck checkbounds(A, I...)
-    @inbounds setindex!(A.parent, val, genperm(I, iperm)...)
+    setindex!(A.parent, val, genperm(I, iperm)...)
     val
 end
+Base.setindex!(A::PermutedDimsArray{T,N,perm,iperm}, val, I::Vararg{Int,N}) where {T,N,perm,iperm} = (@inline; Base.@split_effects :nothrow _setindex_impl!(A, val, I...); val)
 
 function Base.isassigned(A::PermutedDimsArray{T,N,perm,iperm}, I::Vararg{Int,N}) where {T,N,perm,iperm}
     @boundscheck checkbounds(Bool, A, I...) || return false
-    @inbounds x = isassigned(A.parent, genperm(I, iperm)...)
+    x = isassigned(A.parent, genperm(I, iperm)...)
     x
 end
 
@@ -316,19 +318,29 @@ function _copy!(P::PermutedDimsArray{T,N,perm}, src) where {T,N,perm}
     return P
 end
 
+# Store `src[i,I2,j,I3]` into `P[i,I2,j,I3]`, outlined so the tiled loop in
+# `_permutedims!` can invoke it through `@split_effects` (instead of
+# `@inbounds`) and still get a check-free fast path once the index is
+# proven in-bounds.
+@inline _permutedims_assign!(P, src, i, I2, j, I3) = (P[i, I2, j, I3] = src[i, I2, j, I3]; nothing)
+
 @noinline function _permutedims!(P::PermutedDimsArray, src, R1::CartesianIndices{0}, R2, R3, ds, dp)
     ip, is = axes(src, dp), axes(src, ds)
     for jo in first(ip):8:last(ip), io in first(is):8:last(is)
         for I3 in R3, I2 in R2
             for j in jo:min(jo+7, last(ip))
                 for i in io:min(io+7, last(is))
-                    @inbounds P[i, I2, j, I3] = src[i, I2, j, I3]
+                    Base.@split_effects :nothrow _permutedims_assign!(P, src, i, I2, j, I3)
                 end
             end
         end
     end
     P
 end
+
+# Same as `_permutedims_assign!` above, but for the generic-`R1` case where
+# there is a leading unpermuted dimension prefix (a non-trivial `R1`).
+@inline _permutedims_assign2!(P, src, I1, i, I2, j, I3) = (P[I1, i, I2, j, I3] = src[I1, i, I2, j, I3]; nothing)
 
 @noinline function _permutedims!(P::PermutedDimsArray, src, R1, R2, R3, ds, dp)
     ip, is = axes(src, dp), axes(src, ds)
@@ -337,7 +349,7 @@ end
             for j in jo:min(jo+7, last(ip))
                 for i in io:min(io+7, last(is))
                     for I1 in R1
-                        @inbounds P[I1, i, I2, j, I3] = src[I1, i, I2, j, I3]
+                        Base.@split_effects :nothrow _permutedims_assign2!(P, src, I1, i, I2, j, I3)
                     end
                 end
             end

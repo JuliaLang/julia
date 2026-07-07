@@ -398,7 +398,7 @@ end
 category_string(c) = category_strings[category_code(c)+1]
 # `getindex` on a `const` `Vector{String}` is not inferred as `:nothrow` even with
 # `@inbounds`, but the bounds are guaranteed by the assert above.
-@assume_effects :nothrow :foldable category_string(c::Char) = @inbounds category_strings[category_code(c)+1]
+@assume_effects :nothrow :foldable category_string(c::Char) = category_strings[category_code(c)+1]
 
 isassigned(c) = UTF8PROC_CATEGORY_CN < category_code(c) <= UTF8PROC_CATEGORY_CO
 

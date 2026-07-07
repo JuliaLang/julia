@@ -51,7 +51,7 @@ simd_outer_range(r) = 0:0
 @inline simd_inner_length(r, j) = Base.length(r)
 
 # Construct user-level element from original range, outer loop index j, and inner loop index i.
-@inline simd_index(r, j, i) = (@inbounds ret = r[i+firstindex(r)]; ret)
+@inline simd_index(r, j, i) = (ret = r[i+firstindex(r)]; ret)
 
 # Compile Expr x in context of @simd.
 function compile(x, ivdep)

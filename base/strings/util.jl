@@ -269,7 +269,7 @@ function chopprefix(s::AbstractString, prefix::AbstractString)
     i, j = iterate(s), iterate(prefix)
     while true
         j === nothing && i === nothing && return SubString(s, 1, 0) # s == prefix: empty result
-        j === nothing && return @inbounds SubString(s, k) # ran out of prefix: success!
+        j === nothing && return SubString(s, k) # ran out of prefix: success!
         i === nothing && return SubString(s) # ran out of source: failure
         i[1] == j[1] || return SubString(s) # mismatch: failure
         k = i[2]
@@ -322,7 +322,7 @@ function chopsuffix(s::AbstractString, suffix::AbstractString)
     i, j = iterate(a), iterate(b)
     while true
         j === nothing && i === nothing && return SubString(s, 1, 0) # s == suffix: empty result
-        j === nothing && return @inbounds SubString(s, firstindex(s), k) # ran out of suffix: success!
+        j === nothing && return SubString(s, firstindex(s), k) # ran out of suffix: success!
         i === nothing && return SubString(s) # ran out of source: failure
         i[1] == j[1] || return SubString(s) # mismatch: failure
         k = i[2]
@@ -334,7 +334,7 @@ function chopsuffix(s::Union{String, SubString{String}},
                     suffix::Union{String, SubString{String}})
     if !isempty(suffix) && endswith(s, suffix)
         astart = ncodeunits(s) - ncodeunits(suffix) + 1
-        @inbounds SubString(s, firstindex(s), prevind(s, astart))
+        SubString(s, firstindex(s), prevind(s, astart))
     else
         SubString(s)
     end
@@ -375,20 +375,22 @@ function chomp(s::AbstractString)
     return SubString(s, 1, prevind(s,j))
 end
 
+_chomp_result(s::Union{String,SubString{String}}, len::Int) = raw_substring(s, 1, len)
+
 @assume_effects :removable :foldable function chomp(s::Union{String, SubString{String}})
     cu = codeunits(s)
     ncu = length(cu)
     len = if iszero(ncu)
         0
     else
-        has_lf = @inbounds(cu[ncu]) == 0x0a
+        has_lf = cu[ncu] == 0x0a
         two_bytes = ncu > 1
-        has_cr = has_lf & two_bytes & (@inbounds(cu[ncu - two_bytes]) == 0x0d)
+        has_cr = has_lf & two_bytes & (cu[ncu - two_bytes] == 0x0d)
         ncu - (has_lf + has_cr)
     end
     off = s isa String ? 0 : s.offset
     par = s isa String ? s : s.string
-    @inbounds raw_substring(s, 1, len)
+    @split_effects :nothrow _chomp_result(s, len)
 end
 """
     lstrip([pred=isspace,] str::AbstractString)::SubString
@@ -417,7 +419,7 @@ julia> lstrip(a)
 function lstrip(f, s::AbstractString)
     e = lastindex(s)
     for (i::Int, c::AbstractChar) in pairs(s)
-        !f(c) && return @inbounds SubString(s, i, e)
+        !f(c) && return SubString(s, i, e)
     end
     SubString(s, e+1, e)
 end
@@ -451,7 +453,7 @@ julia> rstrip(a)
 """
 function rstrip(f, s::AbstractString)
     for (i, c) in Iterators.reverse(pairs(s))
-        f(c::AbstractChar) || return @inbounds SubString(s, 1, i::Int)
+        f(c::AbstractChar) || return SubString(s, 1, i::Int)
     end
     SubString(s, 1, 0)
 end
@@ -695,7 +697,7 @@ function string_truncate_boundaries(
     width = textwidth(replacement)
     # used to balance the truncated width on either side
     rm_width_left, rm_width_right, force_other = 0, 0, false
-    @inbounds while true
+    while true
         if mode === :left || (mode === :center && (!prefer_left || left > l0))
             rm_width = textwidth(str[right])
             if mode === :left || (rm_width_right <= rm_width_left || force_other)
@@ -783,7 +785,7 @@ function iterate(iter::SplitIterator, (i, k, n)=(firstindex(iter.str), firstinde
         j, k = first(r), nextind(iter.str, last(r))::Int
         k_ = k <= j ? nextind(iter.str, j)::Int : k
         if i < k
-            substr = @inbounds SubString(iter.str, i, prevind(iter.str, j)::Int)
+            substr = SubString(iter.str, i, prevind(iter.str, j)::Int)
             (iter.keepempty || i < j) && return (substr, (k, k_, n + 1))
             i = k
         end
@@ -791,7 +793,7 @@ function iterate(iter::SplitIterator, (i, k, n)=(firstindex(iter.str), firstinde
         r = findnext(iter.splitter, iter.str, k)::Union{Nothing,Int,UnitRange{Int}}
     end
     iter.keepempty || i <= ncodeunits(iter.str) || return nothing
-    @inbounds SubString(iter.str, i), (ncodeunits(iter.str) + 2, k, n + 1)
+    SubString(iter.str, i), (ncodeunits(iter.str) + 2, k, n + 1)
 end
 
 # Specialization for partition(s,n) to return a SubString
@@ -1247,7 +1249,7 @@ function hex2bytes!(dest::AbstractArray{UInt8}, itr)
     iszero(length(itr)) && return dest
 
     next = iterate(itr)
-    @inbounds for i in eachindex(dest)
+    for i in eachindex(dest)
         x,state = next::NTuple{2,Any}
         y,state = iterate(itr, state)::NTuple{2,Any}
         next = iterate(itr, state)
@@ -1297,14 +1299,17 @@ julia> bytes2hex(b)
 """
 function bytes2hex end
 
+_bytes2hex_hi(x::UInt8) = hex_chars[1 + x >> 4]
+_bytes2hex_lo(x::UInt8) = hex_chars[1 + x & 0xf]
+
 function bytes2hex(itr)
     eltype(itr) === UInt8 || throw(ArgumentError("eltype of iterator not UInt8"))
     str = Base._string_n(2*length(itr))
     GC.@preserve str begin
         p = pointer(str)
         for (i, x) in enumerate(itr)
-            unsafe_store!(p, @inbounds(hex_chars[1 + x >> 4]), 2i - 1)
-            unsafe_store!(p, @inbounds(hex_chars[1 + x & 0xf]), 2i)
+            unsafe_store!(p, @split_effects(:nothrow, _bytes2hex_hi(x)), 2i - 1)
+            unsafe_store!(p, @split_effects(:nothrow, _bytes2hex_lo(x)), 2i)
         end
     end
     return str
@@ -1320,7 +1325,7 @@ end
 # check for pure ASCII-ness
 function ascii(s::String)
     for i in 1:sizeof(s)
-        @inbounds codeunit(s, i) < 0x80 || __throw_invalid_ascii(s, i)
+        codeunit(s, i) < 0x80 || __throw_invalid_ascii(s, i)
     end
     return s
 end

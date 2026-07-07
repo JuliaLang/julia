@@ -182,13 +182,13 @@ partialsort(v::AbstractVector, k::Union{Integer,OrdinalRange}; kws...) =
 
 # index of the first value of vector a that is greater than or equivalent to x;
 # returns lastindex(v)+1 if x is greater than all values in v.
-function searchsortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::keytype(v) where T<:Integer
+function _searchsortedfirst_impl(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::keytype(v) where T<:Integer
     hi = hi + T(1)
     len = hi - lo
     while len != 0
         half_len = len >>> 0x01
         m = lo + half_len
-        if lt(o, @inbounds(v[m]), x)
+        if lt(o, v[m], x)
             lo = m + 1
             len -= half_len + 1
         else
@@ -198,16 +198,18 @@ function searchsortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::key
     end
     return lo
 end
+searchsortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering) where T<:Integer =
+    Base.@split_effects :nothrow _searchsortedfirst_impl(v, x, lo, hi, o)
 
 # index of the last value of vector a that is less than or equivalent to x;
 # returns firstindex(v)-1 if x is less than all values of v.
-function searchsortedlast(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::keytype(v) where T<:Integer
+function _searchsortedlast_impl(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::keytype(v) where T<:Integer
     u = T(1)
     lo = lo - u
     hi = hi + u
     while lo != hi - u
         m = midpoint(lo, hi)
-        if lt(o, x, @inbounds(v[m]))
+        if lt(o, x, v[m])
             hi = m
         else
             lo = m
@@ -215,19 +217,21 @@ function searchsortedlast(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::keyt
     end
     return lo
 end
+searchsortedlast(v::AbstractVector, x, lo::T, hi::T, o::Ordering) where T<:Integer =
+    Base.@split_effects :nothrow _searchsortedlast_impl(v, x, lo, hi, o)
 
 # returns the range of indices of v equivalent to x
 # if v does not contain x, returns a 0-length range
 # indicating the insertion point of x
-function searchsorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering)::UnitRange{keytype(v)} where T<:Integer
+function _searchsorted_impl(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering)::UnitRange{keytype(v)} where T<:Integer
     u = T(1)
     lo = ilo - u
     hi = ihi + u
     while lo != hi - u
         m = midpoint(lo, hi)
-        if lt(o, @inbounds(v[m]), x)
+        if lt(o, v[m], x)
             lo = m
-        elseif lt(o, x, @inbounds(v[m]))
+        elseif lt(o, x, v[m])
             hi = m
         else
             a = searchsortedfirst(v, x, lo+u, m, o)
@@ -237,6 +241,8 @@ function searchsorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering)::UnitRa
     end
     return (lo + 1) : (hi - 1)
 end
+searchsorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering) where T<:Integer =
+    Base.@split_effects :nothrow _searchsorted_impl(v, x, ilo, ihi, o)
 
 
 const FastRangeOrderings = Union{DirectOrdering,Lt{typeof(<)},ReverseOrdering{Lt{typeof(<)}}}
@@ -620,11 +626,11 @@ Preserves the order of the elements that are not sent to the end.
 """
 function send_to_end!(f::F, v::AbstractVector; lo=firstindex(v), hi=lastindex(v)) where F <: Function
     i = lo
-    @inbounds while i <= hi && !f(v[i])
+    while i <= hi && !f(v[i])
         i += 1
     end
     j = i + 1
-    @inbounds while j <= hi
+    while j <= hi
         if !f(v[j])
             v[i], v[j] = v[j], v[i]
             i += 1
@@ -717,9 +723,9 @@ function _sort!(v::AbstractVector, a::IEEEFloatOptimization, o::Ordering, kw)
             _sort!(iv, a.next, Forward, (;kw..., lo=j+1, hi, scratch))
         end
     elseif eltype(v) <: Integer && o isa Perm && o.order isa DirectOrdering && is_concrete_IEEEFloat(eltype(o.data))
-        lo, hi = send_to_end!(i -> isnan(@inbounds o.data[i]), v, o.order, true; lo, hi)
+        lo, hi = send_to_end!(i -> isnan(Base.@split_effects(:nothrow, getindex(o.data, i))), v, o.order, true; lo, hi)
         ip = reinterpret(uinttype(eltype(o.data)), o.data)
-        j = send_to_end!(i -> after_zero(o.order, @inbounds o.data[i]), v; lo, hi)
+        j = send_to_end!(i -> after_zero(o.order, Base.@split_effects(:nothrow, getindex(o.data, i))), v; lo, hi)
         scratch = _sort!(v, a.next, Perm(Reverse, ip), (;kw..., lo, hi=j))
         if scratch === nothing # Union split
             _sort!(v, a.next, Perm(Forward, ip), (;kw..., lo=j+1, hi, scratch))
@@ -744,17 +750,30 @@ struct BoolOptimization{T <: Algorithm} <: Algorithm
     next::T
 end
 _sort!(v::AbstractVector, a::BoolOptimization, o::Ordering, kw) = _sort!(v, a.next, o, kw)
-function _sort!(v::AbstractVector{Bool}, ::BoolOptimization, o::Ordering, kw)
-    first = lt(o, false, true) ? false : lt(o, true, false) ? true : return v
-    @getkw lo hi scratch
+# Count how many elements equal `first`, and fill the front/back runs
+# accordingly. Outlined into two kernels (rather than one) so that the
+# data-driven comparison in the counting loop and the later broadcast stores
+# can each be split off via `Base.@split_effects` independently (see
+# `Core.invoke_split_effects`); combined into one function, the comparison
+# and the stores are analyzed together and the split does not fire.
+function _bool_count(v::AbstractVector{Bool}, lo::Integer, hi::Integer, first::Bool)
     count = 0
-    @inbounds for i in lo:hi
+    for i in lo:hi
         if v[i] == first
             count += 1
         end
     end
-    @inbounds v[lo:lo+count-1] .= first
-    @inbounds v[lo+count:hi] .= !first
+    count
+end
+function _bool_fill!(v::AbstractVector{Bool}, lo::Integer, hi::Integer, count::Integer, first::Bool)
+    v[lo:lo+count-1] .= first
+    v[lo+count:hi] .= !first
+end
+function _sort!(v::AbstractVector{Bool}, ::BoolOptimization, o::Ordering, kw)
+    first = lt(o, false, true) ? false : lt(o, true, false) ? true : return v
+    @getkw lo hi scratch
+    count = Base.@split_effects :nothrow _bool_count(v, lo, hi, first)
+    Base.@split_effects :nothrow _bool_fill!(v, lo, hi, count, first)
     scratch
 end
 
@@ -836,7 +855,7 @@ const SMALL_ALGORITHM = InsertionSortAlg()
 function _sort!(v::AbstractVector, ::InsertionSortAlg, o::Ordering, kw)
     @getkw lo hi scratch
     lo_plus_1 = (lo + 1)::Integer
-    @inbounds for i = lo_plus_1:hi
+    for i = lo_plus_1:hi
         j = i
         x = v[i]
         while j > lo
@@ -891,14 +910,18 @@ dispatch to the `next` algorithm.
 struct ComputeExtrema{T <: Algorithm} <: Algorithm
     next::T
 end
-function _sort!(v::AbstractVector, a::ComputeExtrema, o::Ordering, kw)
-    @getkw lo hi scratch
+function _extrema_kernel(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
     mn = mx = v[lo]
-    @inbounds for i in (lo+1):hi
+    for i in (lo+1):hi
         vi = v[i]
         lt(o, vi, mn) && (mn = vi)
         lt(o, mx, vi) && (mx = vi)
     end
+    mn, mx
+end
+function _sort!(v::AbstractVector, a::ComputeExtrema, o::Ordering, kw)
+    @getkw lo hi scratch
+    mn, mx = Base.@split_effects :nothrow _extrema_kernel(v, lo, hi, o)
 
     lt(o, mn, mx) || return scratch # all same
 
@@ -952,12 +975,12 @@ function _sort!(v::AbstractVector{<:Integer}, ::CountingSort, o::DirectOrdering,
     offs = 1 -% (o === Reverse ? mx : mn)
 
     counts = fill(0, range+1) # TODO use scratch (but be aware of type stability)
-    @inbounds for i = lo:hi
+    for i = lo:hi
         counts[v[i] +% offs] += 1
     end
 
     idx = lo
-    @inbounds for i = maybe_reverse(o, 1:range+1)
+    for i = maybe_reverse(o, 1:range+1)
         lastidx = idx + counts[i] - 1
         val = i -% offs
         for j = idx:lastidx
@@ -1015,6 +1038,11 @@ Each pass divides the input into `2^chunk_size == mask+1` buckets. To do this, i
 `chunk_size` is larger for larger inputs and determined by an empirical heuristic.
 """
 struct RadixSort <: Algorithm end
+function _radix_shift_loop!(u::AbstractVector, lo::Integer, hi::Integer, umn)
+    for i in lo:hi
+        u[i] -= umn
+    end
+end
 function _sort!(v::AbstractVector, a::RadixSort, o::DirectOrdering, kw)
     @getkw lo hi mn mx scratch
     umn = uint_map(mn, o)
@@ -1033,9 +1061,7 @@ function _sort!(v::AbstractVector, a::RadixSort, o::DirectOrdering, kw)
     # the overhead for this subtraction is small enough that it is worthwhile in many cases.
 
     # this is faster than u[lo:hi] .-= umn as of v1.9.0-DEV.100
-    @inbounds for i in lo:hi
-        u[i] -= umn
-    end
+    Base.@split_effects :nothrow _radix_shift_loop!(u, lo, hi, umn)
 
     scratch, t = make_scratch(scratch, eltype(v), hi-lo+1)
     tu = reinterpret(eltype(u), t)
@@ -1091,7 +1117,7 @@ function partition!(t::AbstractVector, lo::Integer, hi::Integer, offset::Integer
     # Ideally we would use `pivot_index = rand(lo:hi)`, but that requires Random.jl
     # and would mutate the global RNG in sorting.
     pivot_index = mod(hash(lo), lo:hi)
-    @inbounds begin
+    begin
         pivot = v[pivot_index]
         while lo < pivot_index
             x = v[lo]
@@ -1229,7 +1255,7 @@ function bracket_kernel!(v::AbstractVector, lo, hi, lo_signpost, hi_signpost, o)
     count_below = 0
     checkbounds(v, lo:hi)
     for j in lo:hi
-        x = @inbounds v[j]
+        x = v[j]
         a = lo_signpost !== nothing && lt(o, x, lo_signpost)
         b = hi_signpost === nothing || !lt(o, hi_signpost, x)
         count_below += a
@@ -1240,7 +1266,7 @@ function bracket_kernel!(v::AbstractVector, lo, hi, lo_signpost, hi_signpost, o)
         c = a != b # JK, this is faster.
         k = i * c + j
         # Invariant: @assert firstindex(v) ≤ lo ≤ i + j ≤ k ≤ j ≤ hi ≤ lastindex(v)
-        @inbounds v[j], v[k] = v[k], v[j]
+        v[j], v[k] = v[k], v[j]
         i += c - 1
     end
     count_below, i+hi
@@ -1402,7 +1428,7 @@ function radix_sort!(v::AbstractVector{U}, lo::Integer, hi::Integer, bits::Unsig
 end
 function radix_sort_pass!(t, lo, hi, offset, counts, v, shift, chunk_size)
     mask = UInt(1) << chunk_size - 1  # mask is defined in pass so that the compiler
-    @inbounds begin                   #  ↳ knows it's shape
+    begin                             #  ↳ knows it's shape
         # counts[2:mask+2] will store the number of elements that fall into each bucket.
         # if chunk_size = 8, counts[2] is bucket 0x00 and counts[257] is bucket 0xff.
         counts .= 0
@@ -1443,13 +1469,14 @@ end
 
 maybe_unsigned(x::Integer) = x # this is necessary to avoid calling unsigned on BigInt
 maybe_unsigned(x::BitSigned) = unsigned(x)
-function _issorted(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
+function _issorted_impl(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
     @boundscheck checkbounds(v, lo:hi)
-    @inbounds for i in (lo+1):hi
+    for i in (lo+1):hi
         lt(o, v[i], v[i-1]) && return false
     end
     true
 end
+_issorted(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering) = Base.@split_effects :nothrow _issorted_impl(v, lo, hi, o)
 
 
 ## default sorting policy ##
@@ -1905,7 +1932,7 @@ function partialsortperm!(ix::AbstractVector{<:Integer}, v::AbstractVector,
         throw(ArgumentError("The index vector is used as scratch space and must have the " *
                             "same length/indices as the source vector, $(axes(ix,1)) != $(axes(v,1))"))
     end
-    @inbounds for i in eachindex(ix)
+    for i in eachindex(ix)
         ix[i] = i
     end
 
@@ -1964,7 +1991,7 @@ julia> sortperm(A, dims = 2)
  2  4
 ```
 """
-function sortperm(A::AbstractArray;
+Base.@constprop :aggressive function sortperm(A::AbstractArray;
                   alg::Algorithm=DEFAULT_UNSTABLE,
                   lt=isless,
                   by=identity,
@@ -1978,7 +2005,7 @@ function sortperm(A::AbstractArray;
         _sortperm(A; alg, order=ord(lt, by, nothing, order), scratch, dims...)
     end
 end
-function _sortperm(A::AbstractArray; alg, order, scratch, dims...)
+Base.@constprop :aggressive function _sortperm(A::AbstractArray; alg, order, scratch, dims...)
     if order === Forward && isa(A,Vector) && eltype(A)<:Integer
         n = length(A)
         if n > 1
@@ -2056,23 +2083,26 @@ julia> sortperm!(p, A; dims=2); p
 end
 
 # sortperm for vectors of few unique integers
+function _cumsum_counts!(counts::AbstractVector) # equivalent to cumsum!(counts, counts)
+    for i = 2:length(counts)
+        counts[i] += counts[i-1]
+    end
+    counts
+end
 function sortperm_int_range(x::Vector{<:Integer}, rangelen, minval)
     offs = 1 -% minval
     n = length(x)
 
     counts = fill(0, rangelen+1)
     counts[1] = 1
-    @inbounds for i = 1:n
+    for i = 1:n
         counts[x[i] +% offs +% 1] += 1
     end
 
-    #cumsum!(counts, counts)
-    @inbounds for i = 2:length(counts)
-        counts[i] += counts[i-1]
-    end
+    Base.@split_effects :nothrow _cumsum_counts!(counts)
 
     P = Vector{Int}(undef, n)
-    @inbounds for i = 1:n
+    for i = 1:n
         label = x[i] +% offs
         P[counts[label]] = i
         counts[label] += 1
@@ -2293,22 +2323,27 @@ UIntMappable(T::Type, order::ReverseOrdering) = UIntMappable(T, order.fwd)
 ### Vectors
 
 # Convert v to unsigned integers in-place, maintaining sort order.
-function uint_map!(v::AbstractVector, lo::Integer, hi::Integer, order::Ordering)
+function _uint_map_impl!(v::AbstractVector, lo::Integer, hi::Integer, order::Ordering)
     u = reinterpret(UIntMappable(eltype(v), order), v)
-    @inbounds for i in lo:hi
+    for i in lo:hi
         u[i] = uint_map(v[i], order)
     end
     u
 end
+uint_map!(v::AbstractVector, lo::Integer, hi::Integer, order::Ordering) =
+    Base.@split_effects :nothrow _uint_map_impl!(v, lo, hi, order)
 
-function uint_unmap!(v::AbstractVector, u::AbstractVector{U}, lo::Integer, hi::Integer,
-                     order::Ordering, offset::U=zero(U),
-                     index_offset::Integer=0) where U <: Unsigned
-    @inbounds for i in lo:hi
+function _uint_unmap_impl!(v::AbstractVector, u::AbstractVector{U}, lo::Integer, hi::Integer,
+                     order::Ordering, offset::U, index_offset::Integer) where U <: Unsigned
+    for i in lo:hi
         v[i] = uint_unmap(eltype(v), u[i+index_offset]+offset, order)
     end
     v
 end
+uint_unmap!(v::AbstractVector, u::AbstractVector{U}, lo::Integer, hi::Integer,
+                     order::Ordering, offset::U=zero(U),
+                     index_offset::Integer=0) where U <: Unsigned =
+    Base.@split_effects :nothrow _uint_unmap_impl!(v, u, lo, hi, order, offset, index_offset)
 
 
 
@@ -2408,7 +2443,7 @@ maybe_apply_initial_optimizations(alg::InsertionSortAlg) = InitialOptimizations(
 # greater than the pivot
 
 @inline function selectpivot!(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
-    @inbounds begin
+    begin
         mi = midpoint(lo, hi)
 
         # sort v[mi] <= v[lo] <= v[hi] such that the pivot is immediately in place
@@ -2437,7 +2472,7 @@ function partition!(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
     pivot = selectpivot!(v, lo, hi, o)
     # pivot == v[lo], v[hi] > pivot
     i, j = lo, hi
-    @inbounds while true
+    while true
         i += 1; j -= 1
         while lt(o, v[i], pivot); i += 1; end;
         while lt(o, pivot, v[j]); j -= 1; end;
@@ -2453,7 +2488,7 @@ function partition!(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
 end
 
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::QuickSortAlg, o::Ordering)
-    @inbounds while lo < hi
+    while lo < hi
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
         j = partition!(v, lo, hi, o)
         if j-lo < hi-j
@@ -2474,7 +2509,7 @@ sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, a::MergeSortAlg, o::Orderi
     invoke(sort!, Tuple{typeof.((v, lo, hi, a, o))..., AbstractVector{T}}, v, lo, hi, a, o, t0) # For disambiguation
 function sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, a::MergeSortAlg, o::Ordering,
         t0::Union{AbstractVector{T}, Nothing}=nothing) where T
-    @inbounds if lo < hi
+    if lo < hi
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
 
         m = midpoint(lo, hi)
@@ -2516,7 +2551,7 @@ end
 
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort,
                o::Ordering)
-    @inbounds while lo < hi
+    while lo < hi
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
         j = partition!(v, lo, hi, o)
 

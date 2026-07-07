@@ -280,7 +280,7 @@ offset_if_vec(i::Integer, axs::Tuple) = i
 @inline function isassigned(A::ReshapedArrayLF, index::Int)
     @boundscheck checkbounds(Bool, A, index) || return false
     indexparent = index - firstindex(A) + firstindex(parent(A))
-    @inbounds ret = isassigned(parent(A), indexparent)
+    ret = isassigned(parent(A), indexparent)
     ret
 end
 @inline function isassigned(A::ReshapedArray{T,N}, indices::Vararg{Int, N}) where {T,N}
@@ -288,24 +288,26 @@ end
     axp = axes(A.parent)
     i = offset_if_vec(_sub2ind(size(A), indices...), axp)
     I = ind2sub_rs(axp, A.mi, i)
-    @inbounds isassigned(A.parent, I...)
+    isassigned(A.parent, I...)
 end
 
-@inline function getindex(A::ReshapedArrayLF, index::Int)
+@inline function _getindex_reshapedlf_impl(A::ReshapedArrayLF, index::Int)
     @boundscheck checkbounds(A, index)
     indexparent = index - firstindex(A) + firstindex(parent(A))
-    @inbounds ret = parent(A)[indexparent]
+    ret = parent(A)[indexparent]
     ret
 end
+getindex(A::ReshapedArrayLF, index::Int) = @split_effects :nothrow _getindex_reshapedlf_impl(A, index)
 @inline function getindex(A::ReshapedArray{T,N}, indices::Vararg{Int,N}) where {T,N}
     @boundscheck checkbounds(A, indices...)
-    _unsafe_getindex(A, indices...)
+    @split_effects :nothrow _unsafe_getindex(A, indices...)
 end
-@inline function getindex(A::ReshapedArray, index::ReshapedIndex)
+@inline function _getindex_reshapedindex_impl(A::ReshapedArray, index::ReshapedIndex)
     @boundscheck checkbounds(parent(A), index.parentindex)
-    @inbounds ret = parent(A)[index.parentindex]
+    ret = parent(A)[index.parentindex]
     ret
 end
+getindex(A::ReshapedArray, index::ReshapedIndex) = @split_effects :nothrow _getindex_reshapedindex_impl(A, index)
 
 @inline function _unsafe_getindex(A::ReshapedArray{T,N}, indices::Vararg{Int,N}) where {T,N}
     axp = axes(A.parent)
@@ -313,29 +315,32 @@ end
     I = ind2sub_rs(axp, A.mi, i)
     _unsafe_getindex_rs(parent(A), I)
 end
-@inline _unsafe_getindex_rs(A, i::Integer) = (@inbounds ret = A[i]; ret)
-@inline _unsafe_getindex_rs(A, I) = (@inbounds ret = A[I...]; ret)
+@inline _unsafe_getindex_rs_impl(A, i::Integer) = (ret = A[i]; ret)
+_unsafe_getindex_rs(A, i::Integer) = @split_effects :nothrow _unsafe_getindex_rs_impl(A, i)
+@inline _unsafe_getindex_rs(A, I) = (ret = A[I...]; ret)
 
-@inline function setindex!(A::ReshapedArrayLF, val, index::Int)
+@inline function _setindex_reshapedlf_impl!(A::ReshapedArrayLF, val, index::Int)
     @boundscheck checkbounds(A, index)
     indexparent = index - firstindex(A) + firstindex(parent(A))
-    @inbounds parent(A)[indexparent] = val
+    parent(A)[indexparent] = val
     val
 end
+setindex!(A::ReshapedArrayLF, val, index::Int) = @split_effects :nothrow _setindex_reshapedlf_impl!(A, val, index)
 @inline function setindex!(A::ReshapedArray{T,N}, val, indices::Vararg{Int,N}) where {T,N}
     @boundscheck checkbounds(A, indices...)
-    _unsafe_setindex!(A, val, indices...)
+    @split_effects :nothrow _unsafe_setindex!(A, val, indices...)
 end
-@inline function setindex!(A::ReshapedArray, val, index::ReshapedIndex)
+@inline function _setindex_reshapedindex_impl!(A::ReshapedArray, val, index::ReshapedIndex)
     @boundscheck checkbounds(parent(A), index.parentindex)
-    @inbounds parent(A)[index.parentindex] = val
+    parent(A)[index.parentindex] = val
     val
 end
+setindex!(A::ReshapedArray, val, index::ReshapedIndex) = @split_effects :nothrow _setindex_reshapedindex_impl!(A, val, index)
 
 @inline function _unsafe_setindex!(A::ReshapedArray{T,N}, val, indices::Vararg{Int,N}) where {T,N}
     axp = axes(A.parent)
     i = offset_if_vec(_sub2ind(size(A), indices...), axp)
-    @inbounds parent(A)[ind2sub_rs(axes(A.parent), A.mi, i)...] = val
+    parent(A)[ind2sub_rs(axes(A.parent), A.mi, i)...] = val
     val
 end
 
