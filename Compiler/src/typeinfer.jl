@@ -1960,7 +1960,7 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
         ci = ci::CodeInstance
         mi = get_ci_mi(ci)
         return !iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), mi, ci)) ||
-            ccall(:jl_get_ci_equiv, Any, (Any, UInt), ci, ci.min_world)::CodeInstance !== ci
+            ccall(:jl_get_ci_equiv, Any, (Any, UInt), ci, 0x0)::CodeInstance !== ci
     end
 
     return Core.svec(codeinfos, cis)

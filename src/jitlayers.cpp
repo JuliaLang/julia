@@ -2301,7 +2301,6 @@ renameLinkGraphSymbol(jitlink::LinkGraph &G, jitlink::Symbol &Sym,
 
 bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferRef ObjBuf,
                            jitlink::LinkGraph &G, std::unique_ptr<jl_linker_info_t> Info)
-    JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
 {
     std::unique_lock Lock{LinkerMutex};
 
