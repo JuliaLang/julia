@@ -3524,7 +3524,10 @@ precompile_test_harness("Ambiguity-pruned dispatch edge revalidation") do load_p
         end
         @test !revalidated
         # Dispatch in the tied region must now throw rather than return the stale result.
-        @test_throws MethodError AmbigPruneB.caller(Int8(1), "hi")
+        # The call must go through `inferencebarrier`: a direct call would be inferred
+        # when this closure is compiled, creating a fresh, valid CodeInstance for the
+        # same `@nospecialize`-widened MethodInstance before the scan above runs.
+        @test_throws MethodError Base.inferencebarrier(AmbigPruneB.caller)(Int8(1), "hi")
     end
 end
 
