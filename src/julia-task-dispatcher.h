@@ -405,16 +405,18 @@ void JuliaTaskDispatcher::shutdown() {
   abort();
 }
 
+#ifdef _OS_WINDOWS_
+extern "C" __declspec(dllimport) void __stdcall Sleep(unsigned long dwMilliseconds);
+#endif
+
 void JuliaTaskDispatcher::work_until(future_base &F) {
   bool WasCooperative = InCooperativeContext;
   InCooperativeContext = true;
   dispatcher_sigdefer_guard defer;
   jl_unique_gcsafe_lock Lock{DispatchMutex};
-#ifndef _OS_WINDOWS_
   int StalledSeconds = 0;
   bool DumpedStall = false;
   uint64_t LastCompleted = TasksCompleted.load(std::memory_order_relaxed);
-#endif
   while (!F.ready()) {
     process_tasks(Lock);
 
@@ -422,25 +424,31 @@ void JuliaTaskDispatcher::work_until(future_base &F) {
     if (F.ready())
       break;
 
-#ifdef _OS_WINDOWS_
-    // A timed condition-variable wait would reference the 64-bit-time
-    // pthread_cond_timedwait, which Julia's winpthreads import library
-    // does not provide, so the stall diagnostic's periodic tick is
-    // unavailable here: wait untimed for other threads to finish work.
-    Lock.wait(WorkFinishedCV);
-#else
     // If we get here, our queue is empty but the future isn't ready.
     // We need to wait for other threads to finish work that should
     // complete our future. Wait in slices and self-diagnose: if the
     // future's completion is lost (wedged materialization, dropped
-    // notification), this would otherwise hang silently — after ~30s
+    // notification), an unsliced wait would hang silently — after ~30s
     // WITHOUT FORWARD PROGRESS anywhere in the dispatcher (no task
     // running, none completed), dump the dispatcher and ORC session
     // state (symbol states and pending queries) to stderr once, then
     // keep waiting. A long wait while another thread is still executing
     // a task (e.g. a large batch-module compile) is not a wedge.
-    if (Lock.wait_for(WorkFinishedCV, std::chrono::seconds(1)) ==
-        std::cv_status::timeout) {
+    bool TimedOut;
+#ifdef _OS_WINDOWS_
+    // A timed condition-variable wait would reference the 64-bit-time
+    // pthread_cond_timedwait, which Julia's winpthreads import library
+    // does not provide; poll with the lock dropped instead, trading up to
+    // a second of wakeup latency for the same slicing.
+    Lock.native.unlock();
+    Sleep(1000);
+    Lock.native.lock();
+    TimedOut = true;
+#else
+    TimedOut = Lock.wait_for(WorkFinishedCV, std::chrono::seconds(1)) ==
+               std::cv_status::timeout;
+#endif
+    if (TimedOut) {
       uint64_t Completed = TasksCompleted.load(std::memory_order_relaxed);
       if (Completed != LastCompleted ||
           ActiveRuns.load(std::memory_order_relaxed) > 0) {
@@ -465,7 +473,6 @@ void JuliaTaskDispatcher::work_until(future_base &F) {
     else {
       StalledSeconds = 0;
     }
-#endif
   }
   InCooperativeContext = WasCooperative;
 }
