@@ -1008,6 +1008,13 @@ cleanup:
 jl_value_t *jl_typeinf_func JL_GLOBALLY_ROOTED = NULL;
 jl_value_t *jl_compile_and_emit_func JL_GLOBALLY_ROOTED = NULL;
 JL_DLLEXPORT size_t jl_typeinf_world = 1;
+JL_DLLEXPORT size_t jl_lowering_world = 0;
+
+// Called by `JuliaLowering.activate!` when a lowerer is (un)installed.
+JL_DLLEXPORT void jl_set_lowering_world(size_t world)
+{
+    jl_lowering_world = world;
+}
 
 // Force Compiler (and staticdata serialization) not to throw away Julia IR,
 // even when it is not needed for inlining, etc. - intended for debugging only
