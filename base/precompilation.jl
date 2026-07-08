@@ -979,7 +979,8 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                             liveprinting = true
                             pkg_liveprinted[] = pkg
                         end
-                        print(io, ansi_cleartoendofline, str)
+                        # in fancy mode clear the progress bar residue from the line first
+                        print(io, fancyprint ? ansi_cleartoendofline : "", str)
                     end
                 end
                 write(get!(IOBuffer, std_outputs, pkg_config), str)
@@ -994,7 +995,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                 else
                     # XXX: don't just re-enable IO for random packages without printing the context for them first
                     !liveprinting && !fancyprint && @lock print_lock begin
-                        print(io, ansi_cleartoendofline, str)
+                        print(io, str)
                     end
                 end
             end
