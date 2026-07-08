@@ -867,8 +867,8 @@ backtrace()
 
 # issue #28442
 @testset "Long stacktrace printing" begin
-    f28442(c) = g28442(c + 1)
-    g28442(c) = c > 10000 ? (return backtrace()) : f28442(c+1)
+    f28442(c) = (Base.Experimental.@force_compile; g28442(c + 1))
+    g28442(c) = (Base.Experimental.@force_compile; c > 10000 ? (return backtrace()) : f28442(c+1))
     bt = f28442(1)
     io = IOBuffer()
     Base.show_backtrace(io, bt)

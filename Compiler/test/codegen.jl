@@ -71,10 +71,14 @@ end
 # that inlining won't happen. (Tests SnoopCompile.jl's @snoopc.)
 function test_jl_dump_compiles()
     mktemp() do tfile, io
+        # suspend tier parking so the call below compiles (and is dumped)
+        # rather than running interpreted
+        ccall(:jl_tier_suspend_parking, Cvoid, ())
         @eval(test_jl_dump_compiles_internal(x) = x)
         ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), io.handle)
         @eval test_jl_dump_compiles_internal(1)
         ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), C_NULL)
+        ccall(:jl_tier_resume_parking, Cvoid, ())
         close(io)
         tstats = stat(tfile)
         tempty = tstats.size == 0
@@ -91,9 +95,14 @@ function test_jl_dump_compiles_toplevel_thunks()
         Core.eval(Main, Any[:(nothing)][1])
         GC.enable(false)  # avoid finalizers to be compiled
         topthunk = Meta.lower(Main, :(for i in 1:10; end))
+        # park the tier worker so background promotions cannot be dumped
+        # into the window that must stay empty
+        ccall(:jl_tier_quiesce, Cvoid, ())
+        ccall(:jl_tier_drain, Cvoid, ())
         ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), io.handle)
         Core.eval(Main, topthunk)
         ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), C_NULL)
+        ccall(:jl_tier_resume, Cvoid, ())
         close(io)
         GC.enable(true)
         tstats = stat(tfile)

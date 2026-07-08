@@ -9009,6 +9009,9 @@ end
 @test @inferred(g56692()) == "true"
 
 # `invoke` of `CodeInstance`
+# (these take `.cache` CodeInstances off freshly-called methods, so they must
+# run compiled rather than tier-parked)
+ccall(:jl_tier_suspend_parking, Cvoid, ())
 f_invalidate_me() = return 1
 f_invoke_me() = return f_invalidate_me()
 @test f_invoke_me() == 1
@@ -9034,6 +9037,7 @@ let this_world = Base.get_world_counter()
     @atomic mysin_ci.min_world = this_world + 10
     @test_throws ErrorException f(1.0)
 end
+ccall(:jl_tier_resume_parking, Cvoid, ())
 
 
 myfun57023a(::Type{T}) where {T} = (x = @ccall mycfun()::Ptr{T}; x)

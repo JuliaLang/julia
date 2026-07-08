@@ -447,7 +447,12 @@ after_comp, after_recomp = Base.cumulative_compile_time_ns() # no need to turn t
 end # redirect_stdout
 
 # issue #48024, avoid overcounting timers
+# (tier suspension keeps compilation synchronous on this thread; background
+# tier-worker compile time would otherwise exceed wall time in the window)
 begin
+    ccall(:jl_tier_suspend_parking, Cvoid, ())
+    ccall(:jl_tier_quiesce, Cvoid, ())
+    ccall(:jl_tier_drain, Cvoid, ())
     double(x::Real) = 2x;
     calldouble(container) = (Base.Experimental.@force_compile; double(container[1]));
     calldouble2(container) = (Base.Experimental.@force_compile; calldouble(container));
@@ -478,6 +483,8 @@ begin
     @test compiles[1] <= elapsed
     # recompile time should be at most compile time
     @test compiles[2] <= compiles[1]
+    ccall(:jl_tier_resume, Cvoid, ())
+    ccall(:jl_tier_resume_parking, Cvoid, ())
 end
 
 macro capture_stdout(ex)
@@ -493,6 +500,11 @@ macro capture_stdout(ex)
 end
 
 # issue #48024, but with the time macro itself
+# (tier suspension as above: the timed windows assert exact presence/absence
+# of reported compilation)
+ccall(:jl_tier_suspend_parking, Cvoid, ())
+ccall(:jl_tier_quiesce, Cvoid, ())
+ccall(:jl_tier_drain, Cvoid, ())
 begin
     double(x::Real) = 2x;
     calldouble(container) = (Base.Experimental.@force_compile; double(container[1]));
@@ -574,6 +586,8 @@ let f = gensym("f"), callf = gensym("callf"), call2f = gensym("call2f")
         @test occursin("% of which was recompilation", out)
     end
 end
+ccall(:jl_tier_resume, Cvoid, ())
+ccall(:jl_tier_resume_parking, Cvoid, ())
 
 # interactive utilities
 
