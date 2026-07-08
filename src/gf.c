@@ -4065,10 +4065,20 @@ static jl_code_instance_t *jl_compile_method_very_internal(jl_method_instance_t 
         int reasons = jl_tier_method_interp_reasons(def);
         int loops_ok = jl_tier_interp_loops_enabled();
         if (reasons == 0 || (loops_ok && (reasons & ~JL_TIER_REJECT_LOOPS) == 0)) {
+            // Park the compileable specialization, not the raw dispatch MI:
+            // promoting a concrete specialization of a @nospecialize method
+            // compiles the widened form and copy_to_mi_cache's copy is not
+            // yet reachable by invalidation (see its TODOs), so it would
+            // keep dispatching stale code across method redefinition.
+            // Interpretation only reads source and sparams, which the
+            // compileable MI shares (guarded by need_copy_to_mi_cache).
+            jl_method_instance_t *pmi = jl_normalize_to_compilable_mi(mi);
+            if (pmi != mi && need_copy_to_mi_cache(mi, pmi, cause))
+                pmi = mi;
             if (reasons & JL_TIER_REJECT_LOOPS)
-                jl_tier_enqueue_mi(mi);
-            promote_cache_method(F, args, nargs, world, mi, mi == mi2 ? mi->specTypes : normalize_to_cacheable_sig(mi), cause);
-            *interp_mi = mi;
+                jl_tier_enqueue_mi(pmi);
+            promote_cache_method(F, args, nargs, world, pmi, mi == pmi ? mi->specTypes : normalize_to_cacheable_sig(mi), cause);
+            *interp_mi = pmi;
             return NULL;
         }
     }
