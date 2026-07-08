@@ -225,10 +225,7 @@ end
     (true, (mod, x)->JuliaLowering.include_string(mod, x; expr_compat_mode=false))
     ]
 
-    # Unlike `public`/`export`, `using`/`import` are never hygienic: the target
-    # module and any relative path are always resolved against the module being
-    # lowered (call_mod), never against a macro's definition module (defs_mod).
-    # In expr_compat_mode this matches the flisp reference exactly.
+    # Unlike `public`/`export`, `using`/`import` are never hygienic
     defs_mod = Module(:Defs)
     call_mod = Module(:CallSite)
     Core.eval(call_mod, :(const Defs = $defs_mod))
@@ -255,12 +252,10 @@ end
             secret = [:secret]
         end))
 
-    # old-style macros (flisp ABI): emit the statement as verbatim source
     fl_eval(defs_mod, :(macro old_use();  :(using .Exporter); end))
     fl_eval(defs_mod, :(macro old_imp();  :(import .Exporter: other as o); end))
     fl_eval(defs_mod, :(macro old_priv(); :(using .OnlyInDefs); end))
 
-    # new-style macros (MacroContext ABI): build the statement from a syntax quote
     JuliaLowering.include_string(defs_mod, raw"""
         macro new_use();  @legacy_quote_to_syntax quote using .Exporter end; end
         macro new_imp();  @legacy_quote_to_syntax quote import .Exporter: other as o end; end
@@ -288,8 +283,6 @@ end
     @test !isdefined(call_mod, :OnlyInDefs)
 
     if is_new
-        # New-style (hygienic) macros behave the same: `using`/`import` still
-        # target and resolve against the lowering module (call_mod).
         run(call_mod, "Defs.@new_use()"); Core.@latestworld
         @test call_mod.val === call_mod.Exporter.val
         @test call_mod.val !== defs_mod.Exporter.val
