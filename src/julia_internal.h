@@ -889,6 +889,7 @@ JL_DLLEXPORT int jl_is_compiled_codeinst(jl_code_instance_t *codeinst) JL_NOTSAF
 JL_DLLEXPORT void jl_compile_method_instance(jl_method_instance_t *mi, jl_tupletype_t *types, size_t world) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_compile_method_sig(jl_method_t *m, jl_value_t *types, jl_svec_t *sparams, size_t world) JL_CANSAFEPOINT;
 JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types) JL_CANSAFEPOINT;
+JL_DLLEXPORT int jl_method_compiled_hint(jl_value_t *types) JL_NOTSAFEPOINT;
 jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *lam JL_PROPAGATES_ROOT, size_t world) JL_CANSAFEPOINT;
 jl_value_t *jl_code_or_ci_for_interpreter(jl_method_instance_t *lam JL_PROPAGATES_ROOT, size_t world) JL_CANSAFEPOINT;
 int jl_code_requires_compiler(jl_code_info_t *src, int include_force_compile) JL_CANSAFEPOINT;

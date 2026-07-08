@@ -526,12 +526,16 @@ end
     # compiled rather than interpreted. Any warmup calls the caller made ran
     # parked (uncompiled), so compile the entry before opening the window or
     # its inference/codegen allocations would be measured. All are no-ops
-    # when tiering is off.
+    # when tiering is off. The compiled-hint guard keeps the steady state
+    # allocation-free so nested measurements still observe zero.
     ccall(:jl_tier_suspend_parking, Cvoid, ())
     ccall(:jl_tier_quiesce, Cvoid, ())
     ccall(:jl_tier_drain, Cvoid, ())
     try
-        precompile(f, ntuple(i -> Core.Typeof(args[i]), Val(N)))
+        tt = Tuple{Core.Typeof(f), ntuple(i -> Core.Typeof(args[i]), Val(N))...}
+        if ccall(:jl_method_compiled_hint, Cint, (Any,), tt) == 0
+            precompile(tt)
+        end
         Base.gc_bytes(b0)
         @noinline f(args...)
         Base.gc_bytes(b1)
@@ -550,7 +554,10 @@ only(methods(allocated)).called = 0xff
     ccall(:jl_tier_quiesce, Cvoid, ())
     ccall(:jl_tier_drain, Cvoid, ())
     try
-        precompile(f, ntuple(i -> Core.Typeof(args[i]), Val(N)))
+        tt = Tuple{Core.Typeof(f), ntuple(i -> Core.Typeof(args[i]), Val(N))...}
+        if ccall(:jl_method_compiled_hint, Cint, (Any,), tt) == 0
+            precompile(tt)
+        end
         stats = Base.gc_num()
         @noinline f(args...)
         diff = Base.GC_Diff(Base.gc_num(), stats)

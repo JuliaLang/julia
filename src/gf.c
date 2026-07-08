@@ -4569,6 +4569,21 @@ JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
     return 1;
 }
 
+// cheap, allocation-free check whether a call of exactly `types` is already
+// backed by compiled code in the current world; false negatives are fine
+// (the caller falls back to jl_compile_hint)
+JL_DLLEXPORT int jl_method_compiled_hint(jl_value_t *types) JL_NOTSAFEPOINT
+{
+    size_t world = jl_current_task->world_age;
+    jl_methcache_t *mc = jl_method_table->cache;
+    jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mc->leafcache);
+    jl_typemap_entry_t *entry = lookup_leafcache(leafcache, types, world);
+    if (entry == NULL)
+        return 0;
+    jl_method_instance_t *mi = entry->func.linfo;
+    return jl_method_compiled(mi, world) != NULL;
+}
+
 
 // add type of `f` to front of argument tuple type
 jl_value_t *jl_argtype_with_function(jl_value_t *f, jl_value_t *types0)
