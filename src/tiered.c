@@ -119,9 +119,11 @@ JL_DLLEXPORT int jl_tier_enabled(void) JL_NOTSAFEPOINT
         if (v && wenv && (wenv[0] == '0' || wenv[0] == 'f' || wenv[0] == 'F' ||
                           wenv[0] == 'n' || wenv[0] == 'N'))
             v = 0;
-        // Sysimage bootstrap (--output-o with no --output-ji): no Base, no
-        // worker thread, nothing can ever promote a parked frame.
-        if (jl_options.outputo != NULL && jl_options.outputji == NULL)
+        // Output generation (sysimage bootstrap or package precompilation):
+        // the workload runs so its compilation is recorded into the image,
+        // and parked frames produce no CodeInstances, so their
+        // specializations would be silently missing from the image.
+        if (jl_generating_output())
             v = 0;
         // Coverage and allocation tracking are codegen-only instrumentation;
         // interpreted frames record nothing.
