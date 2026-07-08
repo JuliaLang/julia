@@ -1,5 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# These tests assert on the shape and attribution of profiled stacks and on
+# sampled allocation counts, which assume the workloads run compiled; suspend
+# tier-0 parking for the file (resumed at the end).
+ccall(:jl_tier_suspend_parking, Cvoid, ())
+
 using Test, Profile, Serialization, Logging
 using Base.StackTraces: StackFrame
 
@@ -557,3 +562,5 @@ include("allocs.jl")
     @test undoc == [:Allocs]
 end
 include("heapsnapshot_reassemble.jl")
+
+ccall(:jl_tier_resume_parking, Cvoid, ())
