@@ -124,6 +124,8 @@ function gen_staged_sig(def::Method, mi::MethodInstance)
 end
 
 function needs_instrumentation(codeinst::CodeInstance, mi::MethodInstance, def::Method, validation_world::UInt)
+    # foreign CIs (owner !== nothing) aren't run as native code here, so instrumenting them is moot
+    codeinst.owner === nothing || return false
     if JLOptions().code_coverage != 0 || JLOptions().malloc_log != 0
         # test if the code needs to run with instrumentation, in which case we cannot use existing generated code
         if isdefined(def, :debuginfo) ? # generated_only functions do not have debuginfo, so fall back to considering their codeinst debuginfo though this may be slower and less reliable
