@@ -61,20 +61,19 @@ Base.cconvert(::Type{Ptr{T}}, A::PermutedDimsArray{T}) where {T} = Base.cconvert
 # or a linear index?
 Base.pointer(A::PermutedDimsArray, i::Integer) = throw(ArgumentError("pointer(A, i) is deliberately unsupported for PermutedDimsArray"))
 
-function Base.try_strides(A::PermutedDimsArray{T,N,perm}) where {T,N,perm}
-    s = @something try_strides(parent(A)) return nothing
-    ntuple(d->s[perm[d]], Val(N))
-end
 function Base.strides(A::PermutedDimsArray{T,N,perm}) where {T,N,perm}
     s = strides(parent(A))
     ntuple(d->s[perm[d]], Val(N))
 end
 Base.elsize(::Type{<:PermutedDimsArray{<:Any, <:Any, <:Any, <:Any, P}}) where {P} = Base.elsize(P)
-function Base.is_ptr_loadable(A::PermutedDimsArray)
-    is_ptr_loadable(parent(A))
+Base.is_ptr_loadable(::Type{<:PermutedDimsArray{<:Any, <:Any, <:Any, <:Any, P}}) where {P} = Base.is_ptr_loadable(P)::Bool
+Base.is_ptr_storable(::Type{<:PermutedDimsArray{<:Any, <:Any, <:Any, <:Any, P}}) where {P} = Base.is_ptr_storable(P)::Bool
+Base.is_strided(::Type{<:PermutedDimsArray{<:Any, <:Any, <:Any, <:Any, P}}) where {P} = Base.is_strided(P)::Bool
+function Base.is_array_layout(::Type{<:PermutedDimsArray{T, N, perm, <:Any, P}}) where {T,N,perm,P}
+    _is_array_layout(P) && ntuple(identity, Val(N)) === perm
 end
-function Base.is_ptr_storable(A::PermutedDimsArray)
-    is_ptr_storable(parent(A))
+function Base.is_vec_strided(::Type{<:PermutedDimsArray{T, N, perm, <:Any, P}}) where {T,N,perm,P}
+    _is_vec_strided(P) && ntuple(identity, Val(N)) === perm
 end
 
 @inline function Base.getindex(A::PermutedDimsArray{T,N,perm,iperm}, I::Vararg{Int,N}) where {T,N,perm,iperm}

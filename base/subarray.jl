@@ -431,7 +431,7 @@ strides(V::SubArray) = substrides(strides(V.parent), V.indices)
 substrides(strds::Tuple{}, ::Tuple{}) = ()
 substrides(strds::NTuple{N,Int}, I::Tuple{ScalarIndex, Vararg{Any}}) where N = (substrides(tail(strds), tail(I))...,)
 substrides(strds::NTuple{N,Int}, I::Tuple{Slice, Vararg{Any}}) where N = (first(strds), substrides(tail(strds), tail(I))...)
-substrides(strds::NTuple{N,Int}, I::Tuple{AbstractRange, Vararg{Any}}) where N = (first(strds)*step(I[1]), substrides(tail(strds), tail(I))...)
+substrides(strds::NTuple{N,Int}, I::Tuple{AbstractRange, Vararg{Any}}) where N = (first(strds)*Int(step(I[1])), substrides(tail(strds), tail(I))...)
 substrides(strds, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError(
     LazyString("strides is invalid for SubArrays with indices of type ", typeof(I[1]))))
 
@@ -448,6 +448,8 @@ compute_stride1(s, inds, I::Tuple{Slice, Vararg{Any}}) = s
 compute_stride1(s, inds, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError(LazyString("invalid strided index type ", typeof(I[1]))))
 
 elsize(::Type{<:SubArray{<:Any,<:Any,P}}) where {P} = elsize(P)
+is_ptr_loadable(::Type{<:SubArray{<:Any,<:Any,P}}) where {P} = is_ptr_loadable(P)
+is_ptr_storable(::Type{<:SubArray{<:Any,<:Any,P}}) where {P} = is_ptr_storable(P)
 
 iscontiguous(A::SubArray) = iscontiguous(typeof(A))
 iscontiguous(::Type{<:SubArray}) = false

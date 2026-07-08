@@ -68,7 +68,11 @@ Base.IndexCartesian
 Base.conj!
 Base.stride
 Base.strides
-Base.try_strides
+Base.is_strided
+Base.is_vec_strided
+Base.is_array_layout
+Base._is_vec_strided
+Base._is_array_layout
 Base.is_ptr_loadable
 Base.is_ptr_storable
 ```

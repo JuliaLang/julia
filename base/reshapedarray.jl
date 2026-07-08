@@ -357,11 +357,11 @@ viewindexing(I::Tuple{ReshapedRange, Vararg{ScalarIndex}}) = IndexLinear()
 compute_stride1(s, inds, I::Tuple{ReshapedRange, Vararg{Any}}) = s*step(I[1].parent)
 compute_offset1(parent::AbstractVector, stride1::Integer, I::Tuple{ReshapedRange}) =
     (@inline; first(I[1]) - first(axes1(I[1]))*stride1)
-substrides(strds::NTuple{N,Int}, I::Tuple{ReshapedUnitRange, Vararg{Any}}) where N =
-    (size_to_strides(strds[1], size(I[1])...)..., substrides(tail(strds), tail(I))...)
+substrides(strds::NTuple{N,Int}, I::Tuple{ReshapedRange{<:Integer}, Vararg{Any}}) where N =
+    (size_to_strides(strds[1]*Int(step(I[1].parent)), size(I[1])...)..., substrides(tail(strds), tail(I))...)
 
 # This exists for backwards compatibility, normally the cconvert method below will be used
-function unsafe_convert(::Type{Ptr{S}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}}) where {S,T,N,P}
+function unsafe_convert(::Type{Ptr{S}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedRange{<:Integer}}}}}) where {S,T,N,P}
     parent = V.parent
     Δmem = if _checkcontiguous(Bool, parent)
         (first_index(V) - firstindex(parent)) * elsize(parent)
@@ -395,7 +395,7 @@ function unsafe_convert(::Type{Ptr{S}}, c::OffsetCConvert{T}) where {S, T}
     Ptr{S}(unsafe_convert(Ptr{T}, c.cconv_parent) + c.byte_offset)
 end
 
-function cconvert(::Type{Ptr{S}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}}) where {S,T,N,P}
+function cconvert(::Type{Ptr{S}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedRange{<:Integer}}}}}) where {S,T,N,P}
     parent = V.parent
     p = cconvert(Ptr{T}, parent)
     Δmem = if _checkcontiguous(Bool, parent)
@@ -410,43 +410,32 @@ function cconvert(::Type{Ptr{S}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIn
     )
 end
 
-function try_strides(V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}}) where {T,N,P}
-    try_substrides(try_strides(V.parent), V.indices)
+# TODO: Views along a constant-step `AbstractRange{<:AbstractCartesianIndex}` are
+# also strided in memory; however, `strides` and `cconvert`
+# do not yet support this.
+function is_strided(::Type{A}) where {T,N,P,A<:SubArray{T,N,P,<:Tuple{Vararg{Union{
+        RangeIndex,
+        ReshapedRange{<:Integer}
+    }}}}}
+    # Some subarrays may be strided even if the
+    # parent is not strided
+    is_vec_strided(A) || is_strided(P)
+end
+function is_vec_strided(::Type{A}) where {T,N,P,A<:FastSubArray{T,N,P}}
+    is_array_layout(A) || _is_vec_strided(P)
+end
+function is_array_layout(::Type{<:FastContiguousSubArray{T,N,P}}) where {T,N,P}
+    _is_array_layout(P)
 end
 
-# Recursively try to calculate the strides
-try_substrides(::Any, ::Any) = nothing
-try_substrides(strds::Tuple{}, ::Tuple{}) = ()
-function try_substrides(strds::Tuple{Int, Vararg{Int}}, I::Tuple{ScalarIndex, Vararg{Any}})
-    try_substrides(tail(strds), tail(I))
-end
-function try_substrides(strds::Tuple{Int, Vararg{Int}}, I::Tuple{Slice, Vararg{Any}})
-    rest = try_substrides(tail(strds), tail(I))
-    isnothing(rest) && return nothing
-    (first(strds), rest...)
-end
-function try_substrides(strds::Tuple{Int, Vararg{Int}}, I::Tuple{AbstractRange, Vararg{Any}})
-    rest = try_substrides(tail(strds), tail(I))
-    isnothing(rest) && return nothing
-    (first(strds)*Int(step(first(I))), rest...)
-end
-function try_substrides(strds::Tuple{Int, Vararg{Int}}, I::Tuple{ReshapedUnitRange, Vararg{Any}})
-    rest = try_substrides(tail(strds), tail(I))
-    isnothing(rest) && return nothing
-    (size_to_strides(first(strds), convert(Dims, size(first(I)))...)..., rest...)
-end
 
-function is_ptr_loadable(V::SubArray)
-    is_ptr_loadable(V.parent)
-end
+is_ptr_loadable(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = is_ptr_loadable(P)
+is_ptr_storable(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = is_ptr_storable(P)
+is_vec_strided(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = _is_vec_strided(P)
+is_array_layout(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = _is_array_layout(P)
 
-function is_ptr_storable(V::SubArray)
-    is_ptr_storable(V.parent)
-end
-
-_checkcontiguous(::Type{Bool}, A::AbstractArray) = false
-# `strides(A::DenseArray)` calls `size_to_strides` by default.
-# Thus it's OK to assume all `DenseArray`s are contiguously stored.
+_checkcontiguous(::Type{Bool}, A::AbstractArray) = _is_array_layout(typeof(A))
+# TODO remove this. DenseArray being contiguous was not part of the DenseArray requirements. See CodeUnits.
 _checkcontiguous(::Type{Bool}, A::DenseArray) = true
 _checkcontiguous(::Type{Bool}, A::ReshapedArray) = _checkcontiguous(Bool, parent(A))
 _checkcontiguous(::Type{Bool}, A::FastContiguousSubArray) = _checkcontiguous(Bool, parent(A))
@@ -473,40 +462,6 @@ function _reshaped_strides(sz::Dims, reshaped::Int, msz::Int, mst::Int, n::Int, 
     end
     sts = _reshaped_strides(tail(sz), reshaped, msz, mst, n, apsz, apst)
     return (st, sts...)
-end
-
-function _try_reshaped_strides(::Dims{0}, reshaped::Int, msz::Int, ::Int, ::Int, ::Dims, ::Dims)
-    return reshaped == msz ? () : nothing
-end
-function _try_reshaped_strides(sz::Dims, reshaped::Int, msz::Int, mst::Int, n::Int, apsz::Dims, apst::Dims)
-    st = reshaped * mst
-    reshaped = reshaped * sz[1]
-    if length(sz) > 1 && reshaped == msz && sz[2] != 1
-        msz, mst, n = merge_adjacent_dim(apsz, apst, n + 1)
-        reshaped = 1
-    end
-    sts = _try_reshaped_strides(tail(sz), reshaped, msz, mst, n, apsz, apst)
-    return isnothing(sts) ? nothing : (st, sts...)
-end
-
-function try_strides(a::ReshapedArray)
-    apst = try_strides(a.parent)
-    isnothing(apst) && return nothing
-    apsz::Dims = size(a.parent)
-    msz, mst, n = merge_adjacent_dim(apsz, apst) # Try to perform "lazy" reshape
-    if n == ndims(a.parent)
-        size_to_strides(mst, size(a)...)::Dims # Parent is stridevector like
-    else
-        _try_reshaped_strides(size(a), 1, msz, mst, n, apsz, apst)
-    end
-end
-
-function is_ptr_loadable(a::ReshapedArray)
-    is_ptr_loadable(a.parent)
-end
-
-function is_ptr_storable(a::ReshapedArray)::Bool
-    is_ptr_storable(a.parent)
 end
 
 merge_adjacent_dim(::Dims{0}, ::Dims{0}) = 1, 1, 0
