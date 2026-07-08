@@ -613,7 +613,7 @@ definitions, and are [`is_vec_strided`](@ref Base.is_vec_strided) and
 Defaults to `false`.
 
 This function is for specializing on new array types; to check the trait, use
-[`Base._is_contiguous`](@ref) instead.
+[`Base.has_contiguous_layout`](@ref) instead.
 
 !!! compat "Julia 1.14"
     This function requires at least Julia 1.14.
@@ -635,7 +635,7 @@ Array types with this trait are [`is_strided`](@ref Base.is_strided) by default.
 Defaults to [`Base.is_contiguous`](@ref) of the type.
 
 This function is for specializing on new array types; to check the trait, use
-[`Base._is_vec_strided`](@ref) instead.
+[`Base.has_vec_strided_layout`](@ref) instead.
 
 !!! compat "Julia 1.14"
     This function requires at least Julia 1.14.
@@ -658,7 +658,7 @@ is_strided(::Type{Union{}}) = false
 is_strided(A::AbstractArray) = is_strided(typeof(A))
 
 """
-    Base._is_contiguous(type)::Bool
+    Base.has_contiguous_layout(type)::Bool
 
 Check the [`Base.is_contiguous`](@ref) trait. Unlike `is_contiguous`, which is only
 for specializing, this also returns `true` for strided zero-dimensional arrays, which
@@ -667,12 +667,12 @@ have the layout of an `Array` trivially.
 !!! compat "Julia 1.14"
     This function requires at least Julia 1.14.
 """
-_is_contiguous(::Type{A}) where {T,A<:AbstractArray{T,0}} = is_strided(A)::Bool
-_is_contiguous(::Type{A}) where {A<:AbstractArray} = is_contiguous(A)::Bool
-_is_contiguous(::Type{Union{}}) = false
+has_contiguous_layout(::Type{A}) where {T,A<:AbstractArray{T,0}} = is_strided(A)::Bool
+has_contiguous_layout(::Type{A}) where {A<:AbstractArray} = is_contiguous(A)::Bool
+has_contiguous_layout(::Type{Union{}}) = false
 
 """
-    Base._is_vec_strided(type)::Bool
+    Base.has_vec_strided_layout(type)::Bool
 
 Check the [`Base.is_vec_strided`](@ref) trait. Unlike `is_vec_strided`, which is only
 for specializing, this also returns `true` for strided zero- and one-dimensional arrays,
@@ -681,14 +681,14 @@ which are vector strided trivially.
 !!! compat "Julia 1.14"
     This function requires at least Julia 1.14.
 """
-_is_vec_strided(::Type{A}) where {T,A<:AbstractArray{T,0}} = is_strided(A)::Bool
-_is_vec_strided(::Type{A}) where {T,A<:AbstractArray{T,1}} = is_strided(A)::Bool
-_is_vec_strided(::Type{A}) where {A<:AbstractArray} = is_vec_strided(A)::Bool
-_is_vec_strided(::Type{Union{}}) = false
+has_vec_strided_layout(::Type{A}) where {T,A<:AbstractArray{T,0}} = is_strided(A)::Bool
+has_vec_strided_layout(::Type{A}) where {T,A<:AbstractArray{T,1}} = is_strided(A)::Bool
+has_vec_strided_layout(::Type{A}) where {A<:AbstractArray} = is_vec_strided(A)::Bool
+has_vec_strided_layout(::Type{Union{}}) = false
 
 
 function elsize(::Type{A}) where {T,A<:AbstractArray{T}}
-    if _is_contiguous(A)
+    if has_contiguous_layout(A)
         elsize(Array{T})
     else
         throw(MethodError(elsize, (A,)))
@@ -715,7 +715,7 @@ julia> strides(A)
 ```
 """
 function strides(x::A) where {A<:AbstractArray}
-    if _is_contiguous(A)
+    if has_contiguous_layout(A)
         size_to_strides(1, size(x)...)
     else
         throw(MethodError(strides, (x,)))

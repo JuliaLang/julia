@@ -70,10 +70,10 @@ Base.is_ptr_loadable(::Type{<:PermutedDimsArray{<:Any, <:Any, <:Any, <:Any, P}})
 Base.is_ptr_storable(::Type{<:PermutedDimsArray{<:Any, <:Any, <:Any, <:Any, P}}) where {P} = Base.is_ptr_storable(P)::Bool
 Base.is_strided(::Type{<:PermutedDimsArray{<:Any, <:Any, <:Any, <:Any, P}}) where {P} = Base.is_strided(P)::Bool
 function Base.is_contiguous(::Type{<:PermutedDimsArray{T, N, perm, <:Any, P}}) where {T,N,perm,P}
-    _is_contiguous(P) && ntuple(identity, Val(N)) === perm
+    has_contiguous_layout(P) && ntuple(identity, Val(N)) === perm
 end
 function Base.is_vec_strided(::Type{<:PermutedDimsArray{T, N, perm, <:Any, P}}) where {T,N,perm,P}
-    _is_vec_strided(P) && ntuple(identity, Val(N)) === perm
+    has_vec_strided_layout(P) && ntuple(identity, Val(N)) === perm
 end
 
 @inline function Base.getindex(A::PermutedDimsArray{T,N,perm,iperm}, I::Vararg{Int,N}) where {T,N,perm,iperm}

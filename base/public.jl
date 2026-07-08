@@ -38,8 +38,8 @@ public
     is_strided,
     is_vec_strided,
     is_contiguous,
-    _is_vec_strided,
-    _is_contiguous,
+    has_vec_strided_layout,
+    has_contiguous_layout,
 
 # collections
     IteratorEltype,

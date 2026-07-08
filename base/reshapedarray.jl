@@ -422,19 +422,19 @@ function is_strided(::Type{A}) where {T,N,P,A<:SubArray{T,N,P,<:Tuple{Vararg{Uni
     is_vec_strided(A) || is_strided(P)
 end
 function is_vec_strided(::Type{A}) where {T,N,P,A<:FastSubArray{T,N,P}}
-    is_contiguous(A) || _is_vec_strided(P)
+    is_contiguous(A) || has_vec_strided_layout(P)
 end
 function is_contiguous(::Type{<:FastContiguousSubArray{T,N,P}}) where {T,N,P}
-    _is_contiguous(P)
+    has_contiguous_layout(P)
 end
 
 
 is_ptr_loadable(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = is_ptr_loadable(P)
 is_ptr_storable(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = is_ptr_storable(P)
-is_vec_strided(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = _is_vec_strided(P)
-is_contiguous(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = _is_contiguous(P)
+is_vec_strided(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = has_vec_strided_layout(P)
+is_contiguous(::Type{<:ReshapedArray{T,N,P}}) where {T,N,P} = has_contiguous_layout(P)
 
-_checkcontiguous(::Type{Bool}, A::AbstractArray) = _is_contiguous(typeof(A))
+_checkcontiguous(::Type{Bool}, A::AbstractArray) = has_contiguous_layout(typeof(A))
 # TODO remove this. DenseArray being contiguous was not part of the DenseArray requirements. See CodeUnits.
 _checkcontiguous(::Type{Bool}, A::DenseArray) = true
 _checkcontiguous(::Type{Bool}, A::ReshapedArray) = _checkcontiguous(Bool, parent(A))

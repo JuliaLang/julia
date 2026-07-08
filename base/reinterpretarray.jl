@@ -206,7 +206,7 @@ function is_strided(::Type{<:ReinterpretArray{T,N,S,P,IsReshaped}}) where {T,N,S
     if !is_strided(P)
         return false
     end
-    if _is_contiguous(P)
+    if has_contiguous_layout(P)
         return true
     end
     els::Int, elp::Int = sizeof(T), sizeof(S)
@@ -219,7 +219,7 @@ function is_strided(::Type{<:ReinterpretArray{T,N,S,P,IsReshaped}}) where {T,N,S
     # Unknown if parent is contiguous in the 1st dimension.
     return false
 end
-is_contiguous(::Type{<:ReinterpretArray{T,N,S,P}}) where {T,N,S,P} = _is_contiguous(P)
+is_contiguous(::Type{<:ReinterpretArray{T,N,S,P}}) where {T,N,S,P} = has_contiguous_layout(P)
 
 function strides(a::ReinterpretArray{T,<:Any,S,<:AbstractArray{S},IsReshaped}) where {T,S,IsReshaped}
     _checkcontiguous(Bool, a) && return size_to_strides(1, size(a)...)
