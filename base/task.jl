@@ -1170,16 +1170,28 @@ function wait_forever()
                 wait()
             end
         catch e
-            local errs = stderr
-            # try to display the failure atomically
-            errio = IOContext(PipeBuffer(), errs::IO)
-            emphasize(errio, "Internal Task ")
-            display_error(errio, current_exceptions())
-            write(errs, errio)
-            # victimize another random Task also
             if Threads.threadid() == 1 && isa(e, InterruptException) && isempty(Workqueue)
+                # A Ctrl-C/SIGINT was delivered to this internal scheduler task while
+                # the thread was idle (it parked here after running a completed task).
+                # Forward it to the REPL backend if it is evaluating user code;
+                # otherwise no task could meaningfully observe it, so drop it (#58689).
                 backend = repl_backend_task()
-                backend isa Task && throwto(backend, e)
+                if backend isa Task
+                    try
+                        throwto(backend, e)
+                    catch
+                        # delivery is best-effort: the backend may have been
+                        # rescheduled concurrently, or a second interrupt may arrive
+                        # while this task is suspended in the switch
+                    end
+                end
+            else
+                local errs = stderr
+                # try to display the failure atomically
+                errio = IOContext(PipeBuffer(), errs::IO)
+                emphasize(errio, "Internal Task ")
+                display_error(errio, current_exceptions())
+                write(errs, errio)
             end
         end
     end
@@ -1238,10 +1250,14 @@ function wait()
     W = workqueue_for(Threads.threadid())
     task = trypoptask(W)
     if task === nothing
-        # No tasks to run; switch to the scheduler task to run the
-        # thread sleep logic.
+        # No tasks to run. If the current task is done, switch to the scheduler task
+        # to run the thread sleep logic, so that this task's stack can be freed
+        # promptly (#57544). Otherwise run the thread sleep logic in the context of
+        # the current task, so that an asynchronous InterruptException (Ctrl-C) is
+        # delivered to a task that can observe it, rather than swallowed by the
+        # internal scheduler task (#58689).
         sched_task = get_sched_task()
-        if ct !== sched_task
+        if ct !== sched_task && istaskdone(ct)
             istaskdone(sched_task) && (sched_task = @task wait())
             return yieldto(sched_task)
         end
