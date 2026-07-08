@@ -76,10 +76,14 @@ CG_LLVMLINK :=
 ifeq ($(JULIACODEGEN),LLVM)
 # Currently these files are used by both GCs. But we should make the list specific to stock, and MMTk should have its own implementation.
 GC_CODEGEN_SRCS := llvm-final-gc-lowering llvm-late-gc-lowering llvm-gc-invariant-verifier
+# paths of the GC codegen sources relative to $(SRCDIR), for CODEGEN_SRCS_HASH
+GC_CODEGEN_SRCS_HASH := $(GC_CODEGEN_SRCS:%=%.cpp)
 ifeq (${USE_THIRD_PARTY_GC},mmtk)
 GC_CODEGEN_SRCS += llvm-final-gc-lowering-mmtk
+GC_CODEGEN_SRCS_HASH += gc-mmtk/llvm-final-gc-lowering-mmtk.cpp
 else
 GC_CODEGEN_SRCS += llvm-final-gc-lowering-stock
+GC_CODEGEN_SRCS_HASH += llvm-final-gc-lowering-stock.cpp
 endif
 # Every file whose contents can change codegen output, used to invalidate the
 # objcache when codegen changes (see objcache.cpp).  The hash is computed per
@@ -97,7 +101,7 @@ CODEGEN_SRCS_HASH := codegen.cpp jitlayers.cpp aotcompile.cpp debuginfo.cpp disa
 	debug-registry.h debuginfo.h intrinsics.h jitlayers.h julia-task-dispatcher.h \
 	llvm-alloc-helpers.h llvm-codegen-shared.h llvm-gc-interface-passes.h llvm-pass-helpers.h \
 	llvm-version.h passes.h \
-	$(GC_CODEGEN_SRCS:%=%.cpp)
+	$(GC_CODEGEN_SRCS_HASH)
 CODEGEN_SRCS := codegen jitlayers aotcompile debuginfo disasm llvm-simdloop \
 	llvm-pass-helpers llvm-ptls llvm-propagate-addrspaces \
 	llvm-multiversioning llvm-alloc-opt llvm-alloc-helpers cgmemmgr llvm-remove-addrspaces \
