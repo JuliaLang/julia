@@ -1471,28 +1471,31 @@ static size_t rec_backtrace_task(jl_task_t *t, bt_context_t *c, int use_ctx,  jl
 
 JL_DLLEXPORT jl_record_backtrace_result_t jl_record_backtrace(jl_task_t *t, jl_bt_element_t *bt_data, size_t max_bt_size, int all_tasks_profiler) JL_NOTSAFEPOINT
 {
-    int16_t tid = INT16_MAX;
-    jl_record_backtrace_result_t result = {0, tid};
+    jl_record_backtrace_result_t result = {0, -1};
+    int16_t tid = INT16_MAX; // assign invalid id to non-native tasks
     jl_task_t *ct = NULL;
-    jl_ptls_t ptls = NULL;
     if (!all_tasks_profiler) {
-        ct = jl_current_task;
-        ptls = ct->ptls;
-        ptls->bt_size = 0;
-        tid = ptls->tid;
-    }
-    if (t == ct) {
-        result.bt_size = rec_backtrace(bt_data, max_bt_size, 0);
-        result.tid = tid;
-        return result;
+        ct = jl_get_current_task();
+        if (ct) {
+            tid = ct->ptls->tid;
+            if (t == ct) {
+                result.bt_size = rec_backtrace(bt_data, max_bt_size, 0);
+                result.tid = tid;
+                return result;
+            }
+        }
     }
     bt_context_t c;
     int16_t old;
     while (1) {
-        old = INT16_MAX;
+        old = -1;
         // Try to lock this task, if free, otherwise get the id of the thread running it
-        if (jl_atomic_cmpswap(&t->tid, &old, tid) || old == tid)
-            break;
+        if (jl_atomic_cmpswap(&t->tid, &old, tid))
+            break; // temporary claim successful
+        if (old == INT16_MAX)
+            return result; // another (non-native) thread already claimed it
+        if (old == tid)
+            break; // already claimed by this thread
         // Try to stop that thread
         if (!jl_thread_suspend(old, &c)) {
             if (jl_atomic_load_relaxed(&t->tid) != old)
@@ -1518,7 +1521,7 @@ JL_DLLEXPORT jl_record_backtrace_result_t jl_record_backtrace(jl_task_t *t, jl_b
     // This task is locked to our thread
     result.bt_size = rec_backtrace_task(t, &c, 0, bt_data, max_bt_size, all_tasks_profiler);
     result.tid = old;
-    if (old == INT16_MAX)
+    if (old == -1)
         jl_atomic_store_relaxed(&t->tid, old);
     return result;
 }
@@ -1568,7 +1571,8 @@ JL_DLLEXPORT void jl_fprint_backtracet(ios_t *s, jl_task_t *t) JL_NOTSAFEPOINT
         ptls->bt_size = 0;
         bt_data = ptls->bt_data;
         max_bt_size = JL_MAX_BT_SIZE;
-    } else {
+    }
+    else {
         max_bt_size = 1024; //8kb of stack should be safe
         bt_data = (jl_bt_element_t *)alloca(max_bt_size * sizeof(jl_bt_element_t));
     }

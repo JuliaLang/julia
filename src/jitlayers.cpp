@@ -901,7 +901,7 @@ public:
                                       MDString::get(*Out.ctx,
                                                     JIT.getTargetFeatureString()));
             Obj = JIT.OCache.get(*Out.module,
-                                 [this]() JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE {
+                                 [this]() JL_CANSAFEPOINT_ENTER_LEAVE {
                                      JIT.optimizeModule(*Out.module);
                                      return JIT.compileModule(*Out.module);
                                  });

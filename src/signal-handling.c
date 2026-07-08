@@ -274,7 +274,7 @@ collect_backtrace:
         return;
     }
 
-    jl_record_backtrace_result_t r = {0, INT16_MAX};
+    jl_record_backtrace_result_t r = {0, -1};
     jl_bt_element_t *bt_data_prof = (jl_bt_element_t*)(profile_bt_data_prof + profile_bt_size_cur);
     size_t bt_size_max = profile_bt_size_max - profile_bt_size_cur - 1;
     if (t == NULL || PROFILE_TASK_DEBUG_FORCE_SAMPLING_FAILURE) {
@@ -295,7 +295,7 @@ collect_backtrace:
     profile_bt_size_cur += r.bt_size;
 
     // store threadid but add 1 as 0 is preserved to indicate end of block
-    profile_bt_data_prof[profile_bt_size_cur++].uintptr = (uintptr_t)r.tid + 1;
+    profile_bt_data_prof[profile_bt_size_cur++].uintptr = r.tid == -1 ? -1 : (uintptr_t)r.tid + 1;
 
     // store task id (never null)
     profile_bt_data_prof[profile_bt_size_cur++].jlvalue = (jl_value_t*)t;

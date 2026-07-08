@@ -572,6 +572,8 @@ static int signals_inflight = 0;
 
 static int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx) JL_NOTSAFEPOINT_ENTER_CONDITIONAL(1)
 {
+    if (tid < 0 || tid >= jl_atomic_load_acquire(&jl_n_threads))
+        return 0;
     int err;
     pthread_mutex_lock(&in_signal_lock);
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
