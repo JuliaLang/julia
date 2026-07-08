@@ -1203,7 +1203,7 @@ z856739 = [:a, :b]
 @test_broken repr(:(:(f($(($z856739)...))))) == ":(:(f(\$([:a, :b]...))))"
 @test repr(eval(:(:(f($(($z856739)...)))))) == ":(f(a, b))"
 
-# string interpolation, if this is what the comment in test_rep function
+# string interpolation, if this is what the comment in test_repr function
 # definition talk about
 @test repr(Expr(:string, "foo", :x, "bar")) == ":(\"foo\$(x)bar\")"
 @test Meta.parse(string(Expr(:string, "foo", :x, "bar"))) == Expr(:string, "foo", :x, "bar")
@@ -2532,6 +2532,31 @@ end
 @test string(Union{AbstractVector, T} where T) == "Union{AbstractVector, T} where T"
 @test string(Union{Array, Memory}) == "Union{Array, Memory}"
 
+# Alias printing should recover the source binder for bounded alias parameters.
+module MBoundedAlias
+export A, B, U
+struct A{T<:Integer} end
+struct B{T<:Integer} end
+const U{T<:Integer} = Union{A{T}, B{T}}
+end
+let S = TypeVar(:S, Union{}, Integer)
+    @test string(UnionAll(S, Union{MBoundedAlias.A{S}, MBoundedAlias.B{S}})) == "$(curmod_prefix)MBoundedAlias.U"
+end
+
+# Alias printing should also recover the binders for an alias with several
+# bounded parameters, including when an inner binder is bounded by an outer one
+# and the printed type carries the matching typevars as free variables.
+module MBoundedAlias2
+export A, B, U
+struct A{T<:Integer, S<:T} end
+struct B{T<:Integer, S<:T} end
+const U{T<:Integer, S<:T} = Union{A{T,S}, B{T,S}}
+end
+let T = TypeVar(:T, Union{}, Integer), S = TypeVar(:S, Union{}, T)
+    @test string(Union{MBoundedAlias2.A{T,S}, MBoundedAlias2.B{T,S}}) ==
+        "$(curmod_prefix)MBoundedAlias2.U{T, S} where {T<:Integer, S<:T}"
+end
+
 @test sprint(show, :(./)) == ":((./))"
 @test sprint(show, :((.|).(.&, b))) == ":((.|).((.&), b))"
 
@@ -2938,5 +2963,66 @@ let m = only(methods(f_show_method))
     end
     let s = sprint(show, m; context=:print_method_signature_only=>true)
         @test "f_show_method(x::T) where T<:Integer" == s
+    end
+end
+
+@testset "issue #54028: Unstable SSA highlighting in code_warntype" begin
+    using InteractiveUtils
+
+    function foo_ssa_test(x)
+        y = x[1]
+        sin(y+1)
+    end
+
+    render_code_warntype(f, tt; color::Bool) = sprint(io -> begin
+        ioc = IOContext(io, :color => color)
+        code_warntype(ioc, f, tt)
+    end)
+
+    has_colored_ssa_lhs(str, color) =
+        occursin(Regex("(\\e\\[$(color)m\\e\\[1m|\\e\\[1m\\e\\[$(color)m)%\\d+(\\e\\[22m\\e\\[39m|\\e\\[39m\\e\\[22m)\\s*="), str)
+
+    has_colored_ssa_rhs(str, color) =
+        occursin(Regex("(\\e\\[$(color)m\\e\\[1m|\\e\\[1m\\e\\[$(color)m)%\\d+(\\e\\[22m\\e\\[39m|\\e\\[39m\\e\\[22m)(?!\\s*=)"), str)
+
+    @testset "strong SSA highlighted for Vector{Any}" begin
+        str = render_code_warntype(foo_ssa_test, (Vector{Any},); color=true)
+        @test has_colored_ssa_lhs(str, "91")
+        @test has_colored_ssa_rhs(str, "91")
+    end
+
+    @testset "strong SSA highlighted for Vector{Real}" begin
+        str = render_code_warntype(foo_ssa_test, (Vector{Real},); color=true)
+        @test has_colored_ssa_lhs(str, "91")
+        @test has_colored_ssa_rhs(str, "91")
+    end
+
+    @testset "mild SSA highlighted for Vector{Union{Int, Float64}}" begin
+        str = render_code_warntype(foo_ssa_test, (Vector{Union{Int, Float64}},); color=true)
+        @test has_colored_ssa_lhs(str, "33") || has_colored_ssa_lhs(str, "93")
+        @test has_colored_ssa_rhs(str, "33") || has_colored_ssa_rhs(str, "93")
+    end
+
+    @testset "no SSA highlighting with color=false" begin
+        str = render_code_warntype(foo_ssa_test, (Vector{Any},); color=false)
+        @test !contains(str, "\e[91m")
+        @test !contains(str, "\e[33m")
+        @test !contains(str, "\e[93m")
+    end
+
+    @testset "no SSA highlighting with InteractiveUtils.highlighting[:warntype]=false" begin
+        InteractiveUtils.highlighting[:warntype] = false
+        str = render_code_warntype(foo_ssa_test, (Vector{Any},); color=true)
+        @test !contains(str, "\e[91m")
+        @test !contains(str, "\e[33m")
+        @test !contains(str, "\e[93m")
+        InteractiveUtils.highlighting[:warntype] = true
+    end
+
+    @testset "stable input has no unstable highlighting" begin
+        str = render_code_warntype(foo_ssa_test, (Vector{Float64},); color=true)
+        @test !contains(str, "\e[91m")
+        @test !contains(str, "\e[33m")
+        @test !contains(str, "\e[93m")
     end
 end

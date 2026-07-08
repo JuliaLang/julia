@@ -14,6 +14,8 @@
         @test parseatom(":(a)") == QuoteNode(:a)
         @test parseatom(":(:a)") == Expr(:quote, QuoteNode(:a))
         @test parseatom(":(1+2)") == Expr(:quote, Expr(:call, :+, 1, 2))
+        @test parseatom(":...") == QuoteNode(Symbol("..."))
+        @test parseatom(":(...)") == QuoteNode(Symbol("..."))
         # Compatibility hack for VERSION >= v"1.4"
         # https://github.com/JuliaLang/julia/pull/34077
         @test parseatom(":true") == Expr(:quote, true)

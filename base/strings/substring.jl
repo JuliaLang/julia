@@ -1,6 +1,52 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
+    raw_substring(s::AbstractString, first_index::Int, n_codeunits::Int)::SubString{typeof(s)}
+    raw_substring(s::SubString{S}, first_index::Int, n_codeunits::Int)::SubString{S}
+
+Create a substring of `s` spanning the codeunits `first_index:(first_index + n_codeunits - 1)`.
+
+If `first_index` < 1, or `first_index + n_codeunits - 1 > ncodeunits(s)`, throw a `BoundsError`.
+
+This function does check bounds, but does not validate that the arguments correspond to valid
+start and end indices in `s`, and so the resulting substring may contain truncated characters.
+The presence of truncated characters is safe and well-defined for `String`, `StringView`, and
+substrings of these, but may not be permitted for custom subtypes of `AbstractString`.
+Note that accessing characters that are whole in the parent string but truncated by the `SubString`
+may throw a `StringIndexError`.
+
+!!! warning
+    For `AbstractString` other than `String`, `StringView` or substrings of those, callers should
+    ensure that the value of `n_codeunits` does not result in truncated codeunits.
+
+# Examples
+```jldoctest
+julia> s = "Hello, Bjørn!";
+
+julia> ss = Base.raw_substring(s, 3, 10)
+"llo, Bjør"
+
+julia> typeof(ss)
+SubString{String}
+
+julia> ss2 = Base.raw_substring(ss, 3, 7)
+"o, Bjø"
+
+julia> typeof(ss2)
+SubString{String}
+
+julia> ss3 = Base.raw_substring(s, 11, 4); ss3[1]
+ERROR: StringIndexError:
+[...]
+```
+
+!!! compat "Julia 1.14"
+    This function requires at least Julia 1.14.
+
+"""
+function raw_substring end
+
+"""
     SubString(s::AbstractString, i::Integer, j::Integer=lastindex(s))
     SubString(s::AbstractString, r::UnitRange{<:Integer})
 
@@ -36,18 +82,30 @@ struct SubString{T<:AbstractString} <: AbstractString
         end
         return new(s, i-1, nextind(s,j)-i)
     end
-    function SubString{T}(s::T, i::Int, j::Int, ::Val{:noshift}) where T<:AbstractString
-        @boundscheck if !(i == j == 0)
-            si, sj = i + 1, prevind(s, j + i + 1)
-            @inbounds isvalid(s, si) || string_index_err(s, si)
-            @inbounds isvalid(s, sj) || string_index_err(s, sj)
+
+    global function raw_substring(s::T, first_index::Int, n_codeunits::Int) where {T <: AbstractString}
+        @boundscheck if n_codeunits < 0 || first_index < 1 || (n_codeunits > ncodeunits(s) - first_index + 1)
+            throw(BoundsError(s, first_index:(first_index+n_codeunits-1)))
         end
-        new(s, i, j)
+        new{T}(s, first_index - 1, n_codeunits)
+    end
+
+    global function raw_substring(s::SubString{T}, first_index::Int, n_codeunits::Int) where {T <: AbstractString}
+        @boundscheck if n_codeunits < 0 || first_index < 1 || (n_codeunits > ncodeunits(s) - first_index + 1)
+            throw(BoundsError(s, first_index:(first_index+n_codeunits-1)))
+        end
+        new{T}(s.string, first_index + s.offset - 1, n_codeunits)
+    end
+
+    # Unlike the un-parameterized SubString constructor, this function must allow creating
+    # e.g. a SubString{SubString{String}}, as this type is what the user may have explicitly
+    # requested.
+    function SubString{T}(s::T) where {T <: AbstractString}
+        new{T}(s, 0, ncodeunits(s))
     end
 end
 
 @propagate_inbounds SubString(s::T, i::Int, j::Int) where {T<:AbstractString} = SubString{T}(s, i, j)
-@propagate_inbounds SubString(s::T, i::Int, j::Int, v::Val{:noshift}) where {T<:AbstractString} = SubString{T}(s, i, j, v)
 @propagate_inbounds SubString(s::AbstractString, i::Integer, j::Integer=lastindex(s)) = SubString(s, Int(i)::Int, Int(j)::Int)
 @propagate_inbounds SubString(s::AbstractString, r::AbstractUnitRange{<:Integer}) = SubString(s, first(r), last(r))
 
@@ -56,8 +114,8 @@ end
     SubString(s.string, s.offset+i, s.offset+j)
 end
 
-SubString(s::AbstractString) = SubString(s, 1, lastindex(s)::Int)
-SubString{T}(s::T) where {T<:AbstractString} = SubString{T}(s, 1, lastindex(s)::Int)
+SubString(s::AbstractString) = @inbounds raw_substring(s, 1, Int(ncodeunits(s))::Int)
+SubString(s::SubString) = s
 
 @propagate_inbounds view(s::AbstractString, r::AbstractUnitRange{<:Integer}) = SubString(s, r)
 @propagate_inbounds maybeview(s::AbstractString, r::AbstractUnitRange{<:Integer}) = view(s, r)

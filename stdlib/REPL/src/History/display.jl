@@ -87,7 +87,7 @@ function redisplay_all(io::IO, oldstate::SelectorState, newstate::SelectorState,
     print(buf, "\e[", textwidth(PROMPT_TEXT) + position(pstate.input_buffer) + 1, 'G')
     synccap && print(buf, SYNC_UPDATE_END)
     if Base.generating_output()
-        # Write output in chunks seems to avoid a hang that happens here during precompilation
+        # Writing output in chunks seems to avoid a hang that happens here during precompilation
         # of the history on mac (io gets full without anything draining it?)
         seekstart(buf.io)
         data = read(buf.io)

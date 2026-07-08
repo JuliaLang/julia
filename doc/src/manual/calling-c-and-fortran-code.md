@@ -32,8 +32,7 @@ The syntax for [`@ccall`](@ref) to generate a call to the library function is:
 @ccall $function_pointer(argvalue1::argtype1, ...)::returntype
 ```
 
-where `library` is a string constant or global variable name (see [Non-constant
-Function -Specifications](@ref) below). The library can be just a name, or it
+where `library` is a string constant or global variable name (see [Non-constant Function Specifications](@ref) below). The library can be just a name, or it
 can specify a full path to the library. The library may be omitted, in which
 case the function name is resolved in the current executable, the current libc,
 or libjulia(-internal). This form can be used to call C library functions,
@@ -42,8 +41,7 @@ Omitting the library *cannot* be used to call a function in any library (like
 specifying `RTLD_DEFAULT` to `dlsym`) as such behavior is slow, complicated,
 and not implemented on all platforms.
 Alternatively, `@ccall` may also be used to call a function pointer
-`$function_pointer`, such as one returned by `Libdl.dlsym`. The `argtype`s
-corresponds to the C-function signature and the `argvalue`s are the actual
+`$function_pointer`, such as one returned by `Libdl.dlsym`. The `argtype`s correspond to the C-function signature and the `argvalue`s are the actual
 argument values to be passed to the function.
 
 !!! note
@@ -199,7 +197,7 @@ julia> function mycompare(a, b)::Cint
        end;
 ```
 
-`qsort` expects a comparison function that return a C `int`, so we annotate the return type
+`qsort` expects a comparison function that returns a C `int`, so we annotate the return type
 to be `Cint`.
 
 In order to pass this function to C, we obtain its address using the macro `@cfunction`:
@@ -976,7 +974,7 @@ The `Libdl.dlopen` function can be overloaded for custom types to provide altern
 However, it is assumed that the library location and handle does not change
 once it is determined, so the result of the call may be cached and reused.
 Therefore, the number of times the `dlopen` expression executes is unspecified,
-and returning different values for multiple calls will results in unspecified
+and returning different values for multiple calls will result in unspecified
 (but valid) behavior.
 
 ### Computed Function Names
@@ -1115,9 +1113,9 @@ The arguments to [`ccall`](@ref) are:
 
 !!! note
     The `(:function, "library")` pair and the input type list must be syntactic tuples
-    (i.e., they can't be variables or values with a type of Tuple.
+    (i.e., they can't be variables or values with a type of Tuple).
 
-    The rettype and argument type values are evaluated at when the containing method is
+    The rettype and argument type values are evaluated when the containing method is
     defined, not runtime.
 
 !!! note "Function Name vs Pointer Syntax"

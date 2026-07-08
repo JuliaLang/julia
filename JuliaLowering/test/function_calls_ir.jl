@@ -356,7 +356,7 @@ ccall((:strlen, libc), Csize_t, (Cstring,), "asdfg")
 1   TestMod.Cstring
 2   (call top.cconvert %₁ "asdfg")
 3   (call top.unsafe_convert %₁ %₂)
-4   (foreigncall (foreigncall_arg1 (tuple-p (inert strlen) TestMod.libc)) (static_eval TestMod.Csize_t) (static_eval (call core.svec TestMod.Cstring)) 0 :ccall %₃ %₂)
+4   (foreigncall (foreignsymbol (tuple-p (inert strlen) TestMod.libc)) (static_eval TestMod.Csize_t) (static_eval (call core.svec TestMod.Cstring)) 0 :ccall %₃ %₂)
 5   (return %₄)
 
 ########################################
@@ -508,21 +508,23 @@ ccall(:foo, Csize_t, (Cstring..., Cstring...), "asdfg", "blah")
 # back before codegen generates code for `cglobal`
 cglobal((:sym, lib), Int)
 #---------------------
-1   TestMod.lib
-2   (call core.tuple :sym %₁)
-3   TestMod.Int
-4   (call (static_eval TestMod.cglobal) %₂ %₃)
+1   TestMod.Int
+2   (call core.apply_type top.Ptr %₁)
+3   (foreignglobal (foreignsymbol (tuple-p (inert sym) TestMod.lib)))
+4   (call top.bitcast %₂ %₃)
 5   (return %₄)
 
 ########################################
 # cglobal - non-tuple expressions in first arg are lowered as normal
 cglobal(f(), Int)
 #---------------------
-1   TestMod.f
-2   (call %₁)
-3   TestMod.Int
-4   (call (static_eval TestMod.cglobal) %₂ %₃)
-5   (return %₄)
+1   TestMod.Int
+2   (call core.apply_type top.Ptr %₁)
+3   TestMod.f
+4   (call %₃)
+5   (foreignglobal %₄)
+6   (call top.bitcast %₂ %₅)
+7   (return %₆)
 
 ########################################
 # Error: cglobal too many arguments

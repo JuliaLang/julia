@@ -227,6 +227,14 @@ end
 #-------------------------------------------------------------------------------
 @testset "`&&` and `||` chains" begin
 
+# 0-1 arguments
+@test jl_eval(test_mod, Expr(:&&)) == true
+@test jl_eval(test_mod, Expr(:&&, true)) == true
+@test jl_eval(test_mod, Expr(:&&, false)) == false
+@test jl_eval(test_mod, Expr(:||)) == false
+@test jl_eval(test_mod, Expr(:||, true)) == true
+@test jl_eval(test_mod, Expr(:||, false)) == false
+
 @test JuliaLowering.include_string(test_mod, """
 true && "hi"
 """) == "hi"

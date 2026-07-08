@@ -76,6 +76,19 @@ tests = [
         "f(x) where S where U = 1" =>  "(function-= (where (where (call f x) S) U) 1)"
         "(f(x)::T) where S = 1" =>  "(function-= (where (parens (::-i (call f x) T)) S) 1)"
         "f(x) = 1 = 2"    =>  "(function-= (call f x) (= 1 2))" # Should be a warning!
+        # Suffixed operators don't form compound assignments (matching the
+        # reference parser): `+₁` is parsed as the operator, leaving a stray `=`
+        "a +₁= b" =>  "(call-i a +₁ (error =))"
+        # ... and likewise operators which simply have no compound-assignment
+        # form are parsed as an identifier being assigned to
+        "⋅ = 5" =>  "(= ⋅ 5)"
+        "⋅=5" =>  "(= ⋅ 5)"
+        # Operators followed by `==`, `===` or `=>` (rather than the single
+        # token `=`) are not compound assignments
+        "a +== b"   => "(call-i a + (call-pre (error ==) b))"
+        "a -=> b"   => "(call-i a - (call-pre (error =>) b))"
+        "a >>>== b" => "(call-i a >>> (call-pre (error ==) b))"
+        "a .+== b"  => "(dotcall-i a + (call-pre (error ==) b))"
     ],
     JuliaSyntax.parse_pair => [
         "a => b"  =>  "(call-i a => b)"
@@ -119,6 +132,8 @@ tests = [
         "x < y"       => "(call-i x < y)"
         "x .< y"      => "(dotcall-i x < y)"
         "x .<: y"     => "(dotcall-i x <: y)"
+        # A dotted operator directly following a float literal
+        "1.1.∈a"      => "(dotcall-i 1.1 ∈ a)"
         ":. == :."    => "(call-i (quote-: .) == (quote-: .))"
         # Comparison chains
         "x < y < z"   => "(comparison x < y < z)"
@@ -141,14 +156,22 @@ tests = [
         "1:\n2"     => "(call-i 1 : (error))"
     ],
     JuliaSyntax.parse_range => [
-        "a..b"       => "(call-i a .. b)"
+        "a..b"       => "(call-i a (DotsIdentifier-2) b)"
+        "-1e10..2"   => "(call-i -1.0e10 (DotsIdentifier-2) 2)"
+        "0x1p3..2"   => "(call-i 8.0 (DotsIdentifier-2) 2)"
+        "a..+b"      => "(call-i a (DotsIdentifier-2) (error-t) (call-pre + b))"
+        # `..` may be directly followed by the operand-starting operators `: :: $ '`
+        "a..:b"      => "(call-i a (DotsIdentifier-2) (quote-: b))"
+        "'a'..'b'"   => "(call-i (char 'a') (DotsIdentifier-2) (char 'b'))"
+        "a..\$b"     => "(call-i a (DotsIdentifier-2) (\$ b))"
+        "a..::b"     => "(call-i a (DotsIdentifier-2) (::-pre b))"
         "a … b"      => "(call-i a … b)"
         "a .… b"     => "(dotcall-i a … b)"
         "[1 :a]"     => "(hcat 1 (quote-: a))"
         "[1 2:3 :a]" =>  "(hcat 1 (call-i 2 : 3) (quote-: a))"
         "x..."     => "(... x)"
         "x:y..."   => "(... (call-i x : y))"
-        "x..y..."  => "(... (call-i x .. y))"
+        "x..y..."  => "(... (call-i x (DotsIdentifier-2) y))"
     ],
     JuliaSyntax.parse_invalid_ops => [
         "a--b"  =>  "(call-i a (ErrorInvalidOperator) b)"
@@ -158,7 +181,7 @@ tests = [
         "a + b + c"  => "(call-i a + b c)"
         "a + b .+ c" => "(dotcall-i (call-i a + b) + c)"
         # parse_with_chains:
-        # The following is two elements of a hcat
+        # The following are two elements of an hcat
         "[x +y]"     =>  "(hcat x (call-pre + y))"
         "[x+y +z]"   =>  "(hcat (call-i x + y) (call-pre + z))"
         # Conversely the following are infix calls
@@ -200,6 +223,9 @@ tests = [
         "x 'y"      =>  "x"
         "x@y"       =>  "x"
         "(begin end)x" => "(parens (block))"
+        # Invalid operators (`**`, `--`) are not juxtaposed
+        "2**2"      =>  "2"
+        "2--2"      =>  "2"
     ],
     JuliaSyntax.parse_unary => [
         ":T"       => "(quote-: T)"
@@ -636,7 +662,7 @@ tests = [
         "function (\n        ::T\n        )(x, y) end" =>  "(function (call (parens (::-pre T)) x y) (block))"
         "function (\n        f::T{g(i)}\n        )() end" => "(function (call (parens (::-i f (curly T (call g i))))) (block))"
         "function (\n        x, y\n        ) x + y end" => "(function (tuple-p x y) (block (call-i x + y)))"
-        "function (:*=(f))() end" => "(function (call (parens (call (quote-: *=) f))) (block))"
+        "function (:*=(f))() end" => "(function (call (parens (call (quote-: (op= *)) f))) (block))"
         "function begin() end" =>  "(function (call (error begin)) (block))"
         "function f() end"     =>  "(function (call f) (block))"
         "function type() end"  =>  "(function (call type) (block))"
@@ -738,7 +764,7 @@ tests = [
         "import A.:(+)" =>  "(import (importpath A (quote-: (parens +))))"
         "import A.=="   =>  "(import (importpath A ==))"
         "import A.⋆.f"  =>  "(import (importpath A ⋆ f))"
-        "import A..."   =>  "(import (importpath A ..))"
+        "import A..."   =>  "(import (importpath A (DotsIdentifier-2)))"
         "import A; B"   =>  "(import (importpath A))"
         # Colons not allowed first in import paths
         # but are allowed in trailing components (#473)
@@ -835,25 +861,25 @@ tests = [
         "&&"  =>  "(error &&)"
         "||"  =>  "(error ||)"
         "."   =>  "(error .)"
-        "..." =>  "(error ...)"
-        "+="  =>  "(error +=)"
-        "-="  =>  "(error -=)"
-        "*="  =>  "(error *=)"
-        "/="  =>  "(error /=)"
-        "//=" =>  "(error //=)"
-        "|="  =>  "(error |=)"
-        "^="  =>  "(error ^=)"
-        "÷="  =>  "(error ÷=)"
-        "%="  =>  "(error %=)"
-        "<<=" =>  "(error <<=)"
-        ">>=" =>  "(error >>=)"
-        ">>>="=>  "(error >>>=)"
-        "\\=" =>  "(error \\=)"
-        "&="  =>  "(error &=)"
-        ":="  =>  "(error :=)"
-        "\$=" =>  "(error \$=)"
-        "⊻="  =>  "(error ⊻=)"
-        ".+=" =>  "(error (. +=))"
+        "..." =>  "(error (DotsIdentifier-3))"
+        "+="  =>  "(error (op= +))"
+        "-="  =>  "(error (op= -))"
+        "*="  =>  "(error (op= *))"
+        "/="  =>  "(error (op= /))"
+        "//=" =>  "(error (op= //))"
+        "|="  =>  "(error (op= |))"
+        "^="  =>  "(error (op= ^))"
+        "÷="  =>  "(error (op= ÷))"
+        "%="  =>  "(error (op= %))"
+        "<<=" =>  "(error (op= <<))"
+        ">>=" =>  "(error (op= >>))"
+        ">>>="=>  "(error (op= >>>))"
+        "\\=" =>  "(error (op= \\))"
+        "&="  =>  "(error (op= &))"
+        ":="  =>  "(error :=)" # Assignment operator, not `:`-update
+        "\$=" =>  "(error (op= \$))"
+        "⊻="  =>  "(error (op= ⊻))"
+        ".+=" =>  "(error (.op= +))"
         # Normal operators
         "+"  =>  "+"
         # Assignment-precedence operators which can be used as identifiers
@@ -862,8 +888,8 @@ tests = [
         "⩴"  =>  "⩴"
         "≕"  =>  "≕"
         # Quoted syntactic operators allowed
-        ":+="  =>  "(quote-: +=)"
-        ":.+=" =>  "(quote-: (. +=))"
+        ":+="  =>  "(quote-: (op= +))"
+        ":.+=" =>  "(quote-: (.op= +))"
         ":.="  =>  "(quote-: (. =))"
         ":.&&" =>  "(quote-: (. &&))"
         # Special symbols quoted
@@ -1226,7 +1252,7 @@ parsestmt_with_kind_tests = [
     "a →  b" => "(call-i a::Identifier →::Identifier b::Identifier)"
     "a < b < c" => "(comparison a::Identifier <::Identifier b::Identifier <::Identifier c::Identifier)"
     "a .<: b"=> "(dotcall-i a::Identifier <:::Identifier b::Identifier)"
-    "a .. b" => "(call-i a::Identifier ..::Identifier b::Identifier)"
+    "a .. b" => "(call-i a::Identifier (DotsIdentifier-2) b::Identifier)"
     "a : b"  => "(call-i a::Identifier :::Identifier b::Identifier)"
     "-2^x"   => "(call-pre -::Identifier (call-i 2::Integer ^::Identifier x::Identifier))"
     "-(2)"   => "(call-pre -::Identifier (parens 2::Integer))"
@@ -1253,8 +1279,8 @@ parsestmt_with_kind_tests = [
     "a += b" => "(op= a::Identifier +::Identifier b::Identifier)"
     "a .+= b" => "(.op= a::Identifier +::Identifier b::Identifier)"
     "a >>= b" => "(op= a::Identifier >>::Identifier b::Identifier)"
-    ":+="    => "(quote-: +=::op=)"
-    ":.+="   => "(quote-: (. +=::op=))"
+    ":+="    => "(quote-: (op= +::Identifier))"
+    ":.+="   => "(quote-: (.op= +::Identifier))"
     # str/cmd macro name kinds
     "x\"str\""   => """(macrocall x::StrMacroName (string-r "str"::String))"""
     "x`str`"     => """(macrocall x::CmdMacroName (cmdstring-r "str"::CmdString))"""

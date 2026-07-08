@@ -1,7 +1,16 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-function collect_limitations!(@nospecialize(typ), ::IRInterpretationState)
-    @assert !isa(typ, LimitedAccuracy) "irinterp is unable to handle heavy recursion correctly"
+function collect_limitations!(@nospecialize(typ), sv::IRInterpretationState)
+    if isa(typ, LimitedAccuracy)
+        parent = frame_parent(sv)
+        while parent isa IRInterpretationState
+            parent = frame_parent(parent)
+        end
+        if parent isa InferenceState
+            union!(parent.pclimitations, typ.causes)
+        end
+        return typ.typ
+    end
     return typ
 end
 
@@ -149,7 +158,7 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
     rt = nothing
     if isa(stmt, Expr)
         head = stmt.head
-        if (head === :call || head === :foreigncall || head === :new || head === :splatnew ||
+        if (head === :call || head === :foreigncall || head === :foreignglobal || head === :new || head === :splatnew ||
             head === :static_parameter || head === :isdefined || head === :boundscheck)
             @assert isempty(irsv.tasks) # TODO: this whole function needs to be converted to a stackless design to be a valid AbsIntState, but this should work here for now
             result = abstract_eval_statement_expr(interp, stmt, StatementState(nothing, false), irsv)
@@ -459,7 +468,7 @@ function ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRI
     end
 
     if irsv.frameid != 0
-        callstack = irsv.callstack::Vector{AbsIntState}
+        callstack = irsv.callstack
         @assert callstack[end] === irsv && length(callstack) == irsv.frameid
         pop!(callstack)
     end

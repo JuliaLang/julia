@@ -862,7 +862,7 @@ function test_ind2sub(::Type{TestAbstractArray})
     end
 end
 
-# A custom linear slow array that insists upon Cartesian indexing
+# A custom slow array that insists upon Cartesian indexing
 mutable struct TSlowNIndexes{T,N} <: AbstractArray{T,N}
     data::Array{T,N}
 end

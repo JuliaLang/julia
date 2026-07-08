@@ -894,8 +894,7 @@ julia> LinearIndices(A)[2, 2]
 
 It's important to note that there's a very large asymmetry in the performance
 of these conversions. Converting a linear index to a set of cartesian indices
-requires dividing and taking the remainder, whereas going the other way is just
-multiplies and adds. In modern processors, integer division can be 10-50 times
+requires dividing and taking the remainder, whereas going the other way is just multiplications and additions. In modern processors, integer division can be 10-50 times
 slower than multiplication. While some arrays — like [`Array`](@ref) itself —
 are implemented using a linear chunk of memory and directly use a linear index
 in their implementations, other arrays — like [`Diagonal`](@ref) — need the
@@ -908,7 +907,7 @@ introspect which is which).
     better to iterate over [`eachindex(A)`](@ref) instead of `1:length(A)`.
     Not only will this be faster in cases where `A` is `IndexCartesian`,
     but it will also support arrays with custom indexing, such as [OffsetArrays](https://github.com/JuliaArrays/OffsetArrays.jl).
-    If only the values are needed, then is better to just iterate the array directly, i.e. `for a in A`.
+    If only the values are needed, then it is better to just iterate the array directly, i.e. `for a in A`.
 
 #### Omitted and extra indices
 

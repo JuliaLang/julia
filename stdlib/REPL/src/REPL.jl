@@ -434,7 +434,7 @@ end
     start_repl_backend(backend::REPLBackend)
 
     Call directly to run backend loop on current Task.
-    Use @async for run backend on new Task.
+    Use @async to run backend on new Task.
 
     Does not return backend until loop is finished.
 """
@@ -451,7 +451,15 @@ function repl_backend_loop(backend::REPLBackend, get_module::Function)
     while true
         tls = task_local_storage()
         tls[:SOURCE_PATH] = nothing
-        ast_or_func, show_value = take!(backend.repl_channel)
+        ast_or_func, show_value = try
+            take!(backend.repl_channel)
+        catch e
+            # An asynchronous interrupt may be forwarded to this task if user code
+            # finished evaluating just as Ctrl-C arrived (issue #58689); ignore it
+            # rather than tearing down the REPL session.
+            e isa InterruptException && continue
+            rethrow()
+        end
         if show_value == -1
             # exit flag
             break

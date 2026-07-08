@@ -60,7 +60,7 @@ static void rebuild_tree(eyt_tree_t *t) JL_NOTSAFEPOINT
     eytzinger(idxs, tree, 0, 1, end);
 
     // Reuse the scratch memory to store the userdata pointers
-    // Still O(nlogn) because binary search
+    // Still O(n log n): n iterations each doing an O(log n) binary search
     for (size_t i = 0; i < end; i++) {
         eyt_range_t *r = &t->ranges[i / 2];
         uintptr_t val = (i & 1) ? r->end : r->start;
