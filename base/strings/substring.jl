@@ -198,7 +198,7 @@ function unsafe_convert(::Type{Ptr{R}}, s::SubString{String}) where R<:Union{Int
 end
 
 is_ptr_loadable(::Type{CodeUnits{UInt8, SubString{String}}}) = true
-is_array_layout(::Type{CodeUnits{UInt8, SubString{String}}}) = true
+is_contiguous(::Type{CodeUnits{UInt8, SubString{String}}}) = true
 
 pointer(x::SubString{String}) = pointer(x.string) + x.offset
 pointer(x::SubString{String}, i::Integer) = pointer(x.string) + x.offset + (i-1)

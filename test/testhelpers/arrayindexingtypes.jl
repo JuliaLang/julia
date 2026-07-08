@@ -73,7 +73,7 @@ Base.strides(A::WrapperArray) = strides(A.parent)
 Base.elsize(::Type{WrapperArray{T,N,A}}) where {T,N,A<:AbstractArray{T,N}} = Base.elsize(A)
 Base.is_ptr_loadable(::Type{WrapperArray{T,N,A}}) where {T,N,A<:AbstractArray{T,N}} = is_ptr_loadable(A)
 Base.is_ptr_storable(::Type{WrapperArray{T,N,A}}) where {T,N,A<:AbstractArray{T,N}} = is_ptr_storable(A)
-Base.is_array_layout(::Type{WrapperArray{T,N,A}}) where {T,N,A<:AbstractArray{T,N}} = Base.is_array_layout(A)
+Base.is_contiguous(::Type{WrapperArray{T,N,A}}) where {T,N,A<:AbstractArray{T,N}} = Base.is_contiguous(A)
 Base.is_vec_strided(::Type{WrapperArray{T,N,A}}) where {T,N,A<:AbstractArray{T,N}} = Base.is_vec_strided(A)
 Base.is_strided(::Type{WrapperArray{T,N,A}}) where {T,N,A<:AbstractArray{T,N}} = Base.is_strided(A)
 

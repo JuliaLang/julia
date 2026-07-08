@@ -38,7 +38,7 @@ function check_strided_traits(a::AbstractArray{T,N}) where {T,N}
     @test Base.elsize(a) isa Int
     # A dim with a single index contributes nothing to any element address, so
     # its stride is unconstrained by the layout traits; only check longer dims.
-    if Base.is_array_layout(typeof(a))
+    if Base.is_contiguous(typeof(a))
         if !isempty(a)
             # Base.size_to_strides is internal, not public API
             expected = Base.size_to_strides(1, size(a)...)

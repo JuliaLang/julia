@@ -406,8 +406,8 @@ perhaps range-types `Ind` of your own design. For more information, see
 | **Optional methods**                            | **Default definition**                 | **Brief description**                                                                                |
 | `stride(A, i::Int)`                             |     `strides(A)[i]`                    | Return the distance in memory (in number of elements) between adjacent elements in dimension i.      |
 | `Base.cconvert(::Type{Ptr{T}}, A)`              |     `A`                                | Return an object that can be converted to the native address of the array with [`Base.unsafe_convert`](@ref) |
-| `Base.is_vec_strided(::Type{<:A})`              |     `Base.is_array_layout(A)`          | Return `true` to declare that the array additionally has evenly spaced elements in column-major order. Implies `Base.is_strided`. |
-| `Base.is_array_layout(::Type{<:A})`             |     `false`                            | Return `true` to declare that the array additionally has the same memory layout as an `Array`. Implies `Base.is_vec_strided` and provides default `strides` and `Base.elsize` definitions. |
+| `Base.is_vec_strided(::Type{<:A})`              |     `Base.is_contiguous(A)`          | Return `true` to declare that the array additionally has evenly spaced elements in column-major order. Implies `Base.is_strided`. |
+| `Base.is_contiguous(::Type{<:A})`             |     `false`                            | Return `true` to declare that the array additionally has the same memory layout as an `Array`. Implies `Base.is_vec_strided` and provides default `strides` and `Base.elsize` definitions. |
 | `is_ptr_loadable(::Type{<:A})`                  |     `false`                            | Return `true` to indicate the element pointer can be used to load elements. |
 | `is_ptr_storable(::Type{<:A})`                  |     `false`                            | Return `true` to indicate the element pointer can be used to store elements. |
 

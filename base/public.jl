@@ -37,9 +37,9 @@ public
     memoryindex,
     is_strided,
     is_vec_strided,
-    is_array_layout,
+    is_contiguous,
     _is_vec_strided,
-    _is_array_layout,
+    _is_contiguous,
 
 # collections
     IteratorEltype,
