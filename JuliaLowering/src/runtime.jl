@@ -7,15 +7,27 @@
 #-------------------------------------------------------------------------------
 # Functions/types used by code emitted from lowering, but not called by it directly
 
+# Re-dispatch `f(args...)` at the pinned lowering world (see `jl_lowering_world`)
+@inline function invoke_in_lowering_world(f::F, @nospecialize(args...)) where {F}
+    w = unsafe_load(cglobal(:jl_lowering_world, Csize_t))
+    if w == 0
+        # Fallback when the Base lowering hook is not set up
+        w = Base.tls_world_age()
+        # FIXME: as a side effect, enabling the Base lowering hook now affects
+        #        JuliaLowering execution not passing through the hook
+    end
+    return Base.invoke_in_world(w, f, args...)
+end
+
 # Return the current exception. In JuliaLowering we use this rather than the
 # special form `K"the_exception"` to reduce the number of special forms.
 Base.@assume_effects :removable function current_exception()
     @ccall jl_current_exception(current_task()::Any)::Any
 end
 
-function _interpolate_expr(@nospecialize(ex), depth, @nospecialize(vals::Tuple), val_i)
+function __interpolate_expr(@nospecialize(ex), depth, @nospecialize(vals::Tuple), val_i)
     if ex isa QuoteNode
-        out = _interpolate_expr(Expr(:inert, ex.value), depth, vals, val_i)
+        out = __interpolate_expr(Expr(:inert, ex.value), depth, vals, val_i)
         QuoteNode(only(out.args))
     elseif !(ex isa Expr)
         ex
@@ -30,18 +42,21 @@ function _interpolate_expr(@nospecialize(ex), depth, @nospecialize(vals::Tuple),
                     push!(cs_out, v)
                 end
             else
-                push!(cs_out, _interpolate_expr(e, inner_depth, vals, val_i))
+                push!(cs_out, __interpolate_expr(e, inner_depth, vals, val_i))
             end
         end
         Expr(ex.head, cs_out...)
     end
 end
-function interpolate_expr(@nospecialize(ex), @nospecialize(values...))
+function _interpolate_expr(@nospecialize(ex), @nospecialize(values::Tuple))
     @jl_assert !Meta.isexpr(ex, :$) (expr_to_est(ex), "expand_quote should handle this")
-    _interpolate_expr(ex, 0, values, Ref(0))
+    __interpolate_expr(ex, 0, values, Ref(0))
+end
+function interpolate_expr(@nospecialize(ex), @nospecialize(values...))
+    return invoke_in_lowering_world(_interpolate_expr, ex, values)
 end
 
-function _interpolate_syntax(st::SyntaxTree, depth, @nospecialize(vals), val_i)
+function __interpolate_syntax(st::SyntaxTree, depth, @nospecialize(vals), val_i)
     is_leaf(st) && return mkleaf(st)
     k = kind(st)
     inner_depth = k == K"syntaxquote" ? depth + 1 :
@@ -58,18 +73,21 @@ function _interpolate_syntax(st::SyntaxTree, depth, @nospecialize(vals), val_i)
                 push!(cs_out, v2)
             end
         else
-            push!(cs_out, _interpolate_syntax(c, inner_depth, vals, val_i))
+            push!(cs_out, __interpolate_syntax(c, inner_depth, vals, val_i))
         end
     end
     mknode(st, cs_out)
 end
-function interpolate_syntax(st::SyntaxTree, @nospecialize(vals...))
+function _interpolate_syntax(st::SyntaxTree, @nospecialize(vals::Tuple))
     st = copy_ast(ensure_macro_attributes!(SyntaxGraph()), st)
     val_i = Ref(0)
-    out = _interpolate_syntax((@ast st._graph st [K"None" st]), 0, vals, val_i)
+    out = __interpolate_syntax((@ast st._graph st [K"None" st]), 0, vals, val_i)
     @jl_assert val_i[] == length(vals) st
     @jl_assert numchildren(out) == 1 st
     out[1]
+end
+function interpolate_syntax(st::SyntaxTree, @nospecialize(vals...))
+    return invoke_in_lowering_world(_interpolate_syntax, st, vals)
 end
 
 #--------------------------------------------------
