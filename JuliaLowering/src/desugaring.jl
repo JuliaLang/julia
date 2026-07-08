@@ -111,6 +111,7 @@ end
 function relayer_global_if_unhygienic(ctx, st::SyntaxTree)
     sc = st.context::SyntaxContext
     relayered = SyntaxList(st._graph)
+    # TODO: is_base_layer(sc) or sc.layer == ctx.layer?
     (!is_flisp_compat(sc) || is_base_layer(sc)) && return st, relayered
     sc2 = escape_layer(sc, true)
     return _relayer_global_if_unhygienic(relayered, st, sc2), relayered

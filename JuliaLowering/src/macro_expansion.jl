@@ -248,7 +248,7 @@ function expand_macro(ctx::MacroExpansionContext, st::SyntaxTree)
         end
     else
         macro_loc = _macrocall_expr_location(st)
-        macro_args = Any[macro_loc, ctx.syntax_context.layer.mod]
+        macro_args = Any[macro_loc, base_layer(ctx.syntax_context).mod]
         for arg in raw_args
             @jl_assert kind(arg) !== K"VERSION" arg # handled in EST conversion
             push!(macro_args, est_to_expr(arg))

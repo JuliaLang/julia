@@ -1374,7 +1374,8 @@ end
     @test JuliaLowering.eval(test_mod, code) == ("outer x", "inner x")
 end
 
-@testset "toplevel macro hygiene" begin
+@testset "toplevel macro hygiene" for run in [JuliaLowering.include_string,
+                                              Base.include_string]
     @eval test_mod global mod = $test_mod
     @eval test_mod module MacroMod
     global mod = MacroMod
@@ -1388,9 +1389,37 @@ end
         Expr(:toplevel, :(mod))
     end
     end
-    @test JuliaLowering.include_string(test_mod, "MacroMod.@escaped_toplevel") === test_mod
-    @test JuliaLowering.include_string(test_mod, "MacroMod.@inner_escaped_toplevel") === test_mod
-    @test JuliaLowering.include_string(test_mod, "MacroMod.@unescaped_toplevel") === test_mod.MacroMod
+    Core.@latestworld
+    @test run(test_mod, "MacroMod.@escaped_toplevel") === test_mod
+    @test run(test_mod, "MacroMod.@inner_escaped_toplevel") === test_mod
+    @test run(test_mod, "MacroMod.@unescaped_toplevel") === test_mod.MacroMod
+
+    unrelated = @newmod(unrelated)
+    @eval unrelated const MacroMod = $(test_mod.MacroMod)
+    @eval unrelated global mod = 123
+
+    @test run(unrelated, "MacroMod.@escaped_toplevel") == 123
+    @test run(unrelated, "MacroMod.@inner_escaped_toplevel") == 123
+    @test run(unrelated, "MacroMod.@unescaped_toplevel") === test_mod.MacroMod
+end
+
+@testset "toplevel macro hygiene: @__MODULE__" for run in [JuliaLowering.include_string,
+                                                           Base.include_string]
+    @eval test_mod module MacroMod
+    macro atmodule_in_toplevel()
+        Expr(:toplevel, :(@__MODULE__))
+    end
+    macro atmodule_in_module()
+        Expr(:toplevel, Expr(:module, true, esc(:atmod_mod), Expr(
+            :block, :(global global_mod = @__MODULE__))))
+    end
+    end
+    Core.@latestworld
+    @test run(test_mod, "MacroMod.@atmodule_in_toplevel") === test_mod
+    @test run(test_mod, "MacroMod.@atmodule_in_module") isa Module
+    Core.@latestworld
+    @test isdefined(test_mod, :atmod_mod)
+    @test test_mod.atmod_mod.global_mod == test_mod.atmod_mod
 end
 
 # JuliaLang/JuliaLowering.jl#120
