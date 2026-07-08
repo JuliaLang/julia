@@ -925,7 +925,11 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     # Base.@trace_compile (local version of the 2 above args)
     let
         io = IOBuffer()
-        v = writereadpipeline(
+        # Pin tiering off: the expected counts assume everything outside the
+        # traced windows was already compiled, but tier-0 parking defers those
+        # compiles into the windows (extra statements, no recompile marker).
+        v = withenv("JULIA_TIER_ENABLE" => "0") do
+            writereadpipeline(
             """
             f(x::Int) = 1
             applyf(container) = f(container[1])
@@ -937,6 +941,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             """,
             `$exename -i`,
             stderr=io)
+        end
         _stderr = String(take!(io))
         @test length(findall(r"precompile\(", _stderr)) == 5
         @test length(findall(r" # recompile", _stderr)) == 1

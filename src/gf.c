@@ -4056,7 +4056,7 @@ static jl_code_instance_t *jl_compile_method_very_internal(jl_method_instance_t 
     // time once codegen is deferred. Only callers that can interpret pass interp_mi
     // (dynamic dispatch); latching consumers pass NULL and fall through to compile.
     if (interp_mi != NULL && compile_option == JL_OPTIONS_COMPILE_DEFAULT &&
-        jl_tier_enabled() && allow_interp &&
+        jl_tier_enabled() && allow_interp && !jl_tier_parking_suspended() &&
         jl_is_method(def) && def->source != NULL && def->source != jl_nothing) {
         // Loop-bearing bodies may also be interpreted when JULIA_TIER_INTERP_LOOPS
         // is on; they are enqueued for promotion immediately so the worker runs

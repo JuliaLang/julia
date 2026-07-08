@@ -127,6 +127,10 @@ JL_DLLEXPORT int jl_tier_enabled(void) JL_NOTSAFEPOINT
         // interpreted frames record nothing.
         if (jl_options.code_coverage || jl_options.malloc_log)
             v = 0;
+        // --trace-compile exists to observe (and collect) compilation;
+        // parking methods in the interpreter would hide those events.
+        if (jl_options.trace_compile != NULL)
+            v = 0;
         jl_atomic_store_relaxed(&tier_enabled, v);
     }
     return v;
@@ -470,6 +474,27 @@ static jl_method_instance_t *tier_pop_locked(int respect_pause) JL_NOTSAFEPOINT
 JL_DLLEXPORT jl_method_instance_t *jl_tier_worker_pop(void) JL_NOTSAFEPOINT
 {
     return tier_pop_locked(/*respect_pause*/1);
+}
+
+// Suspend T0 parking: while the count is nonzero, dispatch compiles instead
+// of interpreting. Observability windows that must see compilation events
+// (Base.@trace_compile, like @allocated's quiesce/drain for GC counters)
+// bracket themselves with this pair. A COUNT, so windows nest.
+static _Atomic(int) tier_parking_suspended = 0;
+
+JL_DLLEXPORT void jl_tier_suspend_parking(void) JL_NOTSAFEPOINT
+{
+    jl_atomic_fetch_add_relaxed(&tier_parking_suspended, 1);
+}
+
+JL_DLLEXPORT void jl_tier_resume_parking(void) JL_NOTSAFEPOINT
+{
+    jl_atomic_fetch_add_relaxed(&tier_parking_suspended, -1);
+}
+
+JL_DLLEXPORT int jl_tier_parking_suspended(void) JL_NOTSAFEPOINT
+{
+    return jl_atomic_load_relaxed(&tier_parking_suspended) != 0;
 }
 
 // Park the worker and wait for any in-flight promotion to finish.

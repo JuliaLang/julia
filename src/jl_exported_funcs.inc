@@ -475,6 +475,8 @@
     XX(jl_tier_start_worker) \
     XX(jl_tier_stop_worker) \
     XX(jl_tier_worker_pop) \
+    XX(jl_tier_suspend_parking) \
+    XX(jl_tier_resume_parking) \
     XX(jl_tier_drain) \
     XX(jl_too_few_args) \
     XX(jl_too_many_args) \

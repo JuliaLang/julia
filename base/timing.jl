@@ -796,12 +796,18 @@ end
 
 macro trace_compile(ex)
     quote
+        # Tracing observes compilation, so suspend tier-0 parking for the
+        # window (like @allocated's quiesce/drain around the GC counters).
+        ccall(:jl_tier_suspend_parking, Cvoid, ())
         ccall(:jl_force_trace_compile_timing_enable, Cvoid, ())
         @__tryfinally(
             # try
             $(esc(ex)),
             # finally
-            ccall(:jl_force_trace_compile_timing_disable, Cvoid, ())
+            begin
+                ccall(:jl_force_trace_compile_timing_disable, Cvoid, ())
+                ccall(:jl_tier_resume_parking, Cvoid, ())
+            end
         )
     end
 end
