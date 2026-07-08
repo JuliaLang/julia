@@ -520,18 +520,24 @@ end
     Experimental.@force_compile
     b0 = Ref{Int64}(0)
     b1 = Ref{Int64}(0)
-    # The GC counters are process-global: drain pending tier promotions
-    # (so warmed-but-unpromoted callees run native inside the window), then
+    # The GC counters are process-global: drain pending tier promotions,
     # park the worker so its re-compilation does not pollute the
-    # measurement. Both are no-ops when tiering is off.
+    # measurement, and suspend tier-0 parking so the measured call runs
+    # compiled rather than interpreted. Any warmup calls the caller made ran
+    # parked (uncompiled), so compile the entry before opening the window or
+    # its inference/codegen allocations would be measured. All are no-ops
+    # when tiering is off.
+    ccall(:jl_tier_suspend_parking, Cvoid, ())
     ccall(:jl_tier_quiesce, Cvoid, ())
     ccall(:jl_tier_drain, Cvoid, ())
     try
+        precompile(f, ntuple(i -> Core.Typeof(args[i]), Val(N)))
         Base.gc_bytes(b0)
         @noinline f(args...)
         Base.gc_bytes(b1)
     finally
         ccall(:jl_tier_resume, Cvoid, ())
+        ccall(:jl_tier_resume_parking, Cvoid, ())
     end
     return b1[] - b0[]
 end
@@ -540,14 +546,17 @@ only(methods(allocated)).called = 0xff
 @constprop :none function allocations(f, args::Vararg{Any,N}) where {N}
     Experimental.@force_compile
     local diff
-    ccall(:jl_tier_quiesce, Cvoid, ()) # see `allocated`
+    ccall(:jl_tier_suspend_parking, Cvoid, ()) # see `allocated`
+    ccall(:jl_tier_quiesce, Cvoid, ())
     ccall(:jl_tier_drain, Cvoid, ())
     try
+        precompile(f, ntuple(i -> Core.Typeof(args[i]), Val(N)))
         stats = Base.gc_num()
         @noinline f(args...)
         diff = Base.GC_Diff(Base.gc_num(), stats)
     finally
         ccall(:jl_tier_resume, Cvoid, ())
+        ccall(:jl_tier_resume_parking, Cvoid, ())
     end
     return Base.gc_alloc_count(diff)
 end
