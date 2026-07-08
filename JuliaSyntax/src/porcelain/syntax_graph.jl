@@ -421,6 +421,7 @@ function fill_context!(st::SyntaxTree, sc::SyntaxContext)
     end
     st
 end
+fill_context(st, sc) = fill_context!(mktree(st), sc)
 
 function remove_context!(st::SyntaxTree)
     sc = get(st, :context, nothing)

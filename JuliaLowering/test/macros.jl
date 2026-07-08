@@ -1622,3 +1622,29 @@ end
         @test _version.syntax == version
     end
 end
+
+# produces import/using in module that is `@eval`ed.
+@testset "safetestset" begin
+    macro_mod = @newmod(macro_mod, test_mod)
+    JuliaLowering.include_string(macro_mod, raw"""
+    macro safetestset(testname, expr)
+        quote
+            @eval module $(gensym("safetestset_mod"))
+            using Test
+            @testset $testname $expr
+            end
+            nothing
+        end
+    end
+    """; expr_compat_mode=true)
+
+    JuliaLowering.include_string(test_mod, """
+    macro_mod.@safetestset "Tests" begin
+        a = 1; b = 2; c = a + b; @test c == 3
+        @isdefined(a) == true
+    end
+    """; expr_compat_mode=true)
+    @test !isdefined(test_mod, :a)
+    @test !isdefined(macro_mod, :a)
+end
+

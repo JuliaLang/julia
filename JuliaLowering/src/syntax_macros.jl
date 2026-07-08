@@ -245,19 +245,20 @@ function Base.Experimental.var"@opaque"(__context__::MacroContext, ex)
     ]
 end
 
-function Base.var"@eval"(__context__::MacroContext, ex)
-    val = remove_context(
-        @ast __context__ __context__.macrocall ("eval_result"::K"Identifier"))
-    q = _legacy_quote_to_syntax(
-        (@ast __context__ __context__.macrocall [K"quote" ex]), 0, true)
-    @ast __context__ __context__.macrocall [K"block"
+# @eval should mostly ignore hygiene against our system's best wishes.  Still
+# attempt to preserve provenance.
+function _at_eval_code(mc::MacroContext, mod_st::SyntaxTree, ex)
+    sc = mc.macrocall.context::SyntaxContext
+    val = remove_context(@ast mc mc.macrocall ("eval_result"::K"Identifier"))
+    q = _legacy_quote_to_syntax((@ast mc mc.macrocall [K"quote" ex]), 0, true)
+    new_sc = SyntaxContext(base_layer(sc).mod, sc.version)
+    @ast mc mc.macrocall [K"block"
         [K"local"
             [K"="
                 val
-                [K"call"
-                    JuliaLowering.eval::K"Value"
-                    syntax_module(__context__.macrocall)::K"Value"
-                    q
+                [K"call" JuliaLowering.eval::K"Value"
+                    mod_st
+                    [K"call" JuliaSyntax.fill_context::K"Value" q new_sc::K"Value"]
                 ]
             ]
         ]
@@ -265,22 +266,14 @@ function Base.var"@eval"(__context__::MacroContext, ex)
         val
     ]
 end
+function Base.var"@eval"(__context__::MacroContext, ex)
+    sc = __context__.macrocall.context::SyntaxContext
+    mod = @ast __context__ __context__.macrocall base_layer(sc).mod::K"Value"
+    _at_eval_code(__context__, mod, ex)
+end
 
 function Base.var"@eval"(__context__::MacroContext, mod, ex)
-    val = remove_context(
-        @ast __context__ __context__.macrocall ("eval_result"::K"Identifier"))
-    q = _legacy_quote_to_syntax(
-        (@ast __context__ __context__.macrocall [K"quote" ex]), 0, true)
-    @ast __context__ __context__.macrocall [K"block"
-        [K"local"
-            [K"="
-                val
-                [K"call" JuliaLowering.eval::K"Value" mod q]
-            ]
-        ]
-        [K"unknown_head"(name_val="latestworld-if-toplevel")]
-        val
-    ]
+    _at_eval_code(__context__, mod, ex)
 end
 
 #--------------------------------------------------------------------------------

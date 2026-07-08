@@ -21,7 +21,7 @@ using .JuliaSyntax: @KSet_str, @stm, Kind, NodeId, SourceAttrType, SourceRef, Sy
     source_location, sourcefile, sourceref, syntax_graph, tree_ids, mapindex, mktree,
     ScopeLayer, SyntaxContext, is_base_layer, base_layer, escape_layer,
     syntax_module, is_flisp_compat, adopt_scope, remove_context, fill_context!,
-    JL_NEW_SYNTAX_VERSION, JL_OLD_SYNTAX_VERSION
+    fill_context, JL_NEW_SYNTAX_VERSION, JL_OLD_SYNTAX_VERSION
 
 const DEBUG = true
 

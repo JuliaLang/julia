@@ -4030,6 +4030,8 @@ function expand_importpath(ctx, path)
     setattr(path, :kind, K".")
 end
 
+# importer does not obey hygiene.  Doesn't bother with relayering any imported
+# items, as the runtime functions don't see hygiene anyway
 function expand_import_or_using(ctx, ex)
     if kind(ex[1]) == K":"
         # import M: x.y as z, w
@@ -4071,7 +4073,7 @@ function expand_import_or_using(ctx, ex)
                 push!(stmts,
                     @ast ctx spec [K"call"
                         eval_using   ::K"Value"
-                        syntax_module(ex)::K"Value"
+                        ctx.layer.mod::K"Value"
                         spec
                     ]
                 )
@@ -4080,7 +4082,7 @@ function expand_import_or_using(ctx, ex)
                     @ast ctx spec [K"call"
                         eval_import   ::K"Value"
                         (!is_using)   ::K"Bool"
-                        syntax_module(ex)::K"Value"
+                        ctx.layer.mod::K"Value"
                         (::K"nothing")
                         spec
                     ]
@@ -4094,7 +4096,7 @@ function expand_import_or_using(ctx, ex)
         push!(stmts, @ast ctx ex [K"call"
             eval_import   ::K"Value"
             (!is_using)   ::K"Bool"
-            syntax_module(ex)::K"Value"
+            ctx.layer.mod::K"Value"
             from_path
             path_specs...
         ])
