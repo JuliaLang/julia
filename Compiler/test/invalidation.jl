@@ -365,7 +365,8 @@ end
 # Test that backedge compaction clears mi.backedges when all backedges are removed
 begin
     pr61102_callee(x) = 2x
-    pr61102_caller(x) = pr61102_callee(x)
+    # the backedge only exists once the caller is compiled; don't tier-park it
+    pr61102_caller(x) = (Base.Experimental.@force_compile; pr61102_callee(x))
     pr61102_caller(0)
     callee_mi = Base.method_instance(pr61102_callee, (Int,))
     @test isdefined(callee_mi, :backedges)

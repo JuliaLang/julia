@@ -2,6 +2,11 @@
 
 # tests for accurate updating of method tables
 
+# These tests observe cached-CodeInstance world ranges across method
+# redefinition; tier-0 parking leaves sub-threshold calls uncached, so
+# compile everything for the duration of the file (resumed at the end).
+ccall(:jl_tier_suspend_parking, Cvoid, ())
+
 using Base: get_world_counter, tls_world_age
 @test typemax(UInt) > get_world_counter() == tls_world_age() > 0
 
@@ -653,3 +658,5 @@ struct W62022{T}; x::T; end
 @noinline foo62022(::W62022{W62022{W62022{W62022{Int}}}}) = false
 @test foo62022(W62022(1)) === false # test for invalidation
 @test foo62022(W62022(W62022(W62022(1)))) === false
+
+ccall(:jl_tier_resume_parking, Cvoid, ())
