@@ -79,7 +79,7 @@ esplit_sum_plain(A::Vector{Int}, upto::Int) = esplit_sum_partial(A, upto)
 esplit_sum_split(A::Vector{Int}, upto::Int) = Core.invoke_split_effects(:nothrow, esplit_sum_partial, A, upto)
 
 @testset "synthesized precondition: runtime semantics" begin
-    A = collect(Int64(1):Int64(100))
+    A = collect(1:100)
     @test esplit_sum_split(A, 100) === esplit_sum_plain(A, 100)
     @test esplit_sum_split(A, 17) === esplit_sum_plain(A, 17)
     @test esplit_sum_split(A, 0) === 0

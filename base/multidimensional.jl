@@ -1143,7 +1143,7 @@ function diff(a::AbstractArray{T,N}; dims::Integer) where {T,N}
 end
 # Outlined so its bounds check can be split off as a separate slow path
 # (see `Core.invoke_split_effects`).
-_diffelt(r::AbstractRange, i::Int) = r[i+1] - r[i]
+_diffelt(r::AbstractRange, i::Integer) = r[i+1] - r[i]
 function diff(r::AbstractRange{T}; dims::Integer=1) where {T}
     dims == 1 || throw(ArgumentError("dimension $dims out of range (1:1)"))
     return [@split_effects :nothrow _diffelt(r, i) for i in firstindex(r):lastindex(r)-1]

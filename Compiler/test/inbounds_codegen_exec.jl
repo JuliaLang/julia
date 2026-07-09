@@ -25,7 +25,10 @@ function nb_throws(@nospecialize(f), @nospecialize(tt))
     return count("throw_boundserror", ir) + count("bounds_error", ir)
 end
 
-if Base.REFLECTION_COMPILER[] === nothing && !CHECK_BOUNDS_OFF && !COVERAGE
+# The entries below were generated and verified against 64-bit x86 codegen;
+# on 32-bit platforms the Int64-typed signatures do not match the `Int`-typed
+# methods and LLVM's check-elision behavior differs, so run only on 64-bit.
+if Base.REFLECTION_COMPILER[] === nothing && !CHECK_BOUNDS_OFF && !COVERAGE && Sys.WORD_SIZE == 64
 @testset "inbounds removal codegen" begin
     # base/abstractarray.jl
     isdefined(Base, Symbol("copyto_unaliased!")) && @test nb_throws(Base.copyto_unaliased!, Tuple{IndexLinear, Vector{Int64}, IndexLinear, Vector{Int64}}) == 0

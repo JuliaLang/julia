@@ -63,7 +63,7 @@ function _wexp_trim(buf, pos, decchar::UInt8, hash::Bool)
     return pos
 end
 
-function _wexp_tail(buf, pos, e::Int)
+function _wexp_tail(buf, pos, e::Integer)
     if e < 0
         buf[pos] = UInt8('-')
         pos += 1
