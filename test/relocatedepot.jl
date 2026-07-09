@@ -58,6 +58,19 @@ if !test_relocated_depot
                 @test Base.replace_depot_path(jlrc) != "@depot-rc2"
                 @test Base.replace_depot_path(jlrc) == jlrc
             end
+
+            # Preserve a dependency's lexical path when it is a symlink within the depot.
+            if !Sys.iswindows()
+                empty!(DEPOT_PATH)
+                mkdepottempdir() do dir
+                    target = joinpath(dir, "target")
+                    link = joinpath(dir, "link")
+                    touch(target)
+                    symlink(target, link)
+                    push!(DEPOT_PATH, dir)
+                    @test Base.replace_depot_path(link) == joinpath("@depot", "link")
+                end
+            end
         end
 
         # deal with and without trailing path separators

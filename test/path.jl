@@ -9,6 +9,8 @@ using Main: samepath
     @testset "isabspath and abspath" begin
         @test abspath(S("foo")) == "$dir$(sep)foo"
         @test abspath(S("foo"), S("bar")) == "$dir$(sep)foo$(sep)bar"
+        @test abspath(S("foo"), S(".."), S("bar"); safe=true) ==
+            joinpath(dir, "foo", "..", "bar")
         @test isabspath(S(homedir()))
         @test !isabspath(S("foo"))
     end
@@ -165,6 +167,7 @@ using Main: samepath
         @test normpath(S(joinpath("foo",".","..","..","bar"))) == "..$(sep)bar"
         @test normpath(S(joinpath("foo","..",".","..","bar"))) == "..$(sep)bar"
         @test normpath(S(joinpath("foo","..","..",".","bar"))) == "..$(sep)bar"
+        @test normpath(S("foo"), S(".."), S("bar"); safe=true) == "foo$(sep)..$(sep)bar"
         @test normpath(normpath(S(joinpath("a", "..", "b", ".", "c")))) == normpath(S(joinpath("a", "..", "b", ".", "c")))
     end
     @test relpath(S(joinpath("foo","bar")), S("foo")) == "bar"
