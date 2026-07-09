@@ -7,7 +7,7 @@ function lower(mod::Module, ex_in::SyntaxTree; expr_compat_mode::Bool=false,
     ex0 = rebase_layers(ex_in, mod, ver)
     world = Base.get_world_counter()
     ex1 = expand_forms_1(ex0, world, true)
-    ctx2, ex2 = expand_forms_2(ex1, mod, world)
+    ctx2, ex2 = expand_forms_2(ex1, world)
     ctx3, ex3 = resolve_scopes(ctx2, ex2; soft_scope)
     ctx4, ex4 = convert_closures(ctx3, ex3)
     _ctx5, ex5 = linearize_ir(ctx4, ex4)
@@ -147,7 +147,7 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt;
         push!(iter.todo, (body, true, 1))
         return Core.svec(:begin_module, version, newmod_name, notbare, loc)
     else
-         ctx2, ex2 = expand_forms_2(ex, mod, world)
+         ctx2, ex2 = expand_forms_2(ex, world)
          ctx3, ex3 = resolve_scopes(ctx2, ex2; soft_scope)
          ctx4, ex4 = convert_closures(ctx3, ex3)
         _ctx5, ex5 = linearize_ir(ctx4, ex4)

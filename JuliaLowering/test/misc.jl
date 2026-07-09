@@ -578,7 +578,7 @@ end
         @eval @doc $"This is a $T" $T = 1
     end
 """; expr_compat_mode=true) === 1
-JuliaLowering.include_string(test_mod, raw"""
+@test JuliaLowering.include_string(test_mod, raw"""
     let T = gensym("documented_sym_no_logspam")
         @eval @doc $"This is a $T" $T = 1
     end

@@ -544,6 +544,27 @@ end
         @toplevel_first_child(@mk_toplevel(x, y, z))
     end
     """) == 1
+
+    # escape should obey quote/unquote
+    JuliaLowering.include_string(test_mod, raw"""
+    macro esc_in_quote(); Expr(:quote, Expr(:escape, :x)); end
+    """; expr_compat_mode=true)
+    @test JuliaLowering.include_string(test_mod, raw"""
+    @esc_in_quote
+    """; expr_compat_mode=true) == Expr(:escape, :x)
+    @test JuliaLowering.include_string(test_mod, raw"""
+    @esc_in_quote
+    """) == Expr(:escape, :x)
+
+    JuliaLowering.include_string(test_mod, raw"""
+    macro esc_in_unquote(); Expr(:quote, Expr(:$, Expr(:escape, :x))); end
+    """; expr_compat_mode=true)
+    @test JuliaLowering.include_string(test_mod, raw"""
+    let x = 1; @esc_in_unquote(); end
+    """; expr_compat_mode=true) == 1
+    @test JuliaLowering.include_string(test_mod, raw"""
+    let x = 1; @esc_in_unquote(); end
+    """) == 1
 end
 
 JuliaLowering.include_string(test_mod, raw"""

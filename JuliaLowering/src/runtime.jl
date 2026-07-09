@@ -267,7 +267,7 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
     ctx1 = MacroExpansionContext(ex0, world, true)
     ex1 = expand_forms_1(ctx1, ex0)
     # Desugaring
-    ctx2, ex2 = expand_forms_2(ex1, base_layer(sc).mod, world)
+    ctx2, ex2 = expand_forms_2(ex1, world)
 
     # Wrap expansion in a non-toplevel lambda and run scope resolution
     ex2 = @ast ctx2 ex0 [K"lambda"(is_toplevel_thunk=false, toplevel_pure=true)

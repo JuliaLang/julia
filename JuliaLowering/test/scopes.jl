@@ -420,7 +420,7 @@ function resolve_and_get_bindings(
     est = JuliaLowering.expr_to_est(ex)
     ex0 = JuliaLowering.rebase_layers(est, mod, JuliaLowering.JL_NEW_SYNTAX_VERSION)
     ex1 = JuliaLowering.expand_forms_1(ex0, world, true)
-    ctx2, ex2 = JuliaLowering.expand_forms_2(ex1, mod, world)
+    ctx2, ex2 = JuliaLowering.expand_forms_2(ex1, world)
     ctx3, _ = JuliaLowering.resolve_scopes(ctx2, ex2; soft_scope)
     return ctx3.bindings.info
 end

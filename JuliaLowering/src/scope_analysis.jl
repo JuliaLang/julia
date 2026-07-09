@@ -10,7 +10,7 @@ end
 
 function NameKey(ex::SyntaxTree)
     @jl_assert kind(ex) === K"Identifier" ex
-    NameKey(ex.name_val, ex.context.layer)
+    NameKey(ex.name_val, (ex.context::SyntaxContext).layer)
 end
 
 struct ScopeInfo

@@ -84,9 +84,9 @@ function expand_syntaxquote(ctx, st)
 end
 
 # Passed to the user as an implicit macro argument
-struct MacroContext <: AbstractLoweringContext
+struct MacroContext{Attrs} <: AbstractLoweringContext
     graph::SyntaxGraph
-    macrocall::Union{SyntaxTree,LineNumberNode,SourceRef}
+    macrocall::SyntaxTree{Attrs}
 end
 
 struct MacroExpansionError <: Exception
@@ -181,7 +181,7 @@ function eval_macro_name(ctx, mctx::MacroContext, st0::SyntaxTree)
             # `ex` might contain a nontrivial mix of scopes so we can't just
             # `eval()` it, as it's already been partially lowered by this point.
             # Instead, we repeat the latter parts of `lower()` here.
-             ctx2, st2 = expand_forms_2(st, syntax_module(st), ctx.world)
+             ctx2, st2 = expand_forms_2(st, ctx.world)
              ctx3, st3 = resolve_scopes(ctx2, st2)
              ctx4, st4 = convert_closures(ctx3, st3)
             _ctx5, st5 = linearize_ir(ctx4, st4)
@@ -274,13 +274,15 @@ function expand_macro(ctx::MacroExpansionContext, st::SyntaxTree)
     sc2 = SyntaxContext(
         ScopeLayer(mod_for_ast, sc_in.layer), st,
         (has_new_macro ? JL_NEW_SYNTAX_VERSION : JL_OLD_SYNTAX_VERSION), false)
-    st_out2 = apply_expansion_layer(ctx, st_out, sc2, true)
+    st_out2 = apply_expansion_layer(ctx, st_out, sc2, true, 0, 0)
     !ctx.recursive ? st_out2 : expand_forms_1(ctx, st_out2)
 end
 
 function known_layer(ctx, sl::Union{Nothing, ScopeLayer})
     isnothing(sl) && return false
-    get!(ctx.known_layers, sl, known_layer(ctx, sl.escaped))
+    get!(ctx.known_layers, sl) do
+        known_layer(ctx, sl.escaped)
+    end
 end
 
 """
@@ -309,14 +311,16 @@ Implementation notes:
   `done`, module/toplevel may contain syntax with arbitrary layers that we must
   clean up now (later, we lose the base layer used to detect new syntax)
 """
-function apply_expansion_layer(ctx, st::SyntaxTree, sc_in::SyntaxContext, done)
+function apply_expansion_layer(ctx, st::SyntaxTree, sc_in::SyntaxContext, done,
+                               qdepth, sqdepth)
     @jl_assert known_layer(ctx, base_layer(sc_in)) st
     sc0 = get(st, :context, nothing)::Union{Nothing, SyntaxContext}
     sc = (isnothing(sc0) || !known_layer(ctx, sc0.layer)) ? sc_in : sc0
     k = kind(st)
+    absorb_esc = done && qdepth == 0 && sqdepth == 0
     out = if is_leaf(st) || numchildren(st) == 0
         setattr(st, :context, sc)
-    elseif k === K"escape" && done
+    elseif k === K"escape" && absorb_esc
         if numchildren(st) !== 1
             throw(LoweringError(st, "`escape` requires one argument"))
         elseif is_base_layer(sc)
@@ -325,8 +329,9 @@ function apply_expansion_layer(ctx, st::SyntaxTree, sc_in::SyntaxContext, done)
             throw(LoweringError(st, "new macros should not use `escape`"))
         end
         st1 = isnothing(sc0) ? st[1] : remove_context(st[1])
-        apply_expansion_layer(ctx, st1, escape_layer(sc, false), true)
-    elseif k === K"hygienic-scope" && done
+        apply_expansion_layer(
+            ctx, st1, escape_layer(sc, false), true, qdepth, sqdepth)
+    elseif k === K"hygienic-scope" && absorb_esc
         if !(2 <= numchildren(st) <= 3)
             throw(LoweringError(st, "`hygienic-scope` requires 2-3 children"))
         elseif kind(st[2]) !== K"Value" || !(st[2].value isa Module)
@@ -337,11 +342,13 @@ function apply_expansion_layer(ctx, st::SyntaxTree, sc_in::SyntaxContext, done)
         new_sl = ScopeLayer(st[2].value::Module, sc.layer)
         st1 = isnothing(sc0) ? st[1] : remove_context(st[1])
         sc2 = SyntaxContext(new_sl, sc.unexpanded, sc.version, sc.internal)
-        apply_expansion_layer(ctx, st1, sc2, true)
+        apply_expansion_layer(ctx, st1, sc2, true, qdepth, sqdepth)
     else
         done2 = done && !(k in KSet"macrocall inert syntaxinert")
-        out = mapchildren(
-            c->apply_expansion_layer(ctx, c, sc_in, done2), ctx, st)
+        qdepth2 = qdepth + (k === K"quote" ? 1 : k === K"$" ? -1 : 0)
+        sqdepth2 = sqdepth + (k === K"syntaxquote" ? 1 : k === K"syntaxunquote" ? -1 : 0)
+        out = mapchildren(c->apply_expansion_layer(
+            ctx, c, sc_in, done2, qdepth2, sqdepth2), ctx, st)
         setattr!(out, :context, sc)
     end
     out
@@ -372,17 +379,16 @@ function expand_forms_1(ctx::MacroExpansionContext, st::SyntaxTree)
         if numchildren(st) !== 1
             throw(LoweringError(st, "`quote` requires one argument"))
         end
-        sc = st.context::SyntaxContext
         expand_forms_1(ctx, expand_quote(ctx, st[1]))
     elseif k === K"syntaxquote"
         if numchildren(st) !== 1
             throw(LoweringError(st, "`syntaxquote` requires one argument"))
         end
-        sc = st.context::SyntaxContext
         expand_forms_1(ctx, expand_syntaxquote(ctx, st[1]))
     elseif k === K"escape" || k === K"hygienic-scope"
         expand_forms_1(
-            ctx, apply_expansion_layer(ctx, st, st.context::SyntaxContext, true))
+            ctx, apply_expansion_layer(
+                ctx, st, st.context::SyntaxContext, true, 0, 0))
     else
         mapchildren(c->expand_forms_1(ctx, c), ctx, st)
     end

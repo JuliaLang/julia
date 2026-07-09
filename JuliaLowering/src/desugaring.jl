@@ -2501,20 +2501,20 @@ end
 
 # The Julia runtime associates the code generator with the non-generated method
 # by adding (meta generated ...) to the non-generated body
+# May need hygiene/provenance adjustments
 function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
     @jl_assert kind(body) === K"_generated_body" && numchildren(body) == 2 body
     gen_name = let mangled = reserve_module_binding_i(
-        syntax_module(src),
+        ctx.layer.mod,
         string("#", kind(mtable) === K"nothing" ? "_" : mtable, "@generator#"))
-        new_global_binding(ctx, src, mangled, syntax_module(src))
+        new_global_binding(ctx, src, mangled, ctx.layer.mod)
     end
 
-    sc = src.context
+    sc = src.context::SyntaxContext
     gen_mdef = let arg1_name = newsym(ctx, argl[1], "#self#"),
          gen_argl = SyntaxList(
              @ast(ctx, src, [K"::" arg1_name [K"function_type" gen_name]]),
              @ast(ctx, src, [K"::"
-                 # TODO: correct scope?
                  "__context__"::K"Identifier"(context=sc)
                  SyntaxContext::K"Value"
              ]),
@@ -2531,7 +2531,7 @@ function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
         nongen_body = @ast ctx body[2] [K"block" [K"meta" "generated"::K"Symbol"
             [K"new"
                 GeneratedFunctionStub::K"Value" # Use stub type from JuliaLowering
-                sc::K"Value"
+                SyntaxContext(ctx.layer.mod, sc.version)::K"Value"
                 gen_name
                 # Truncate provenance to just the source file range, as this
                 # will live permanently in the IR and we probably don't want
@@ -3629,6 +3629,7 @@ function expand_typegroup_def(ctx, ex)
         struct_mod = syntax_module(global_struct_name)
         isnothing(struct_mod_prev) || struct_mod == struct_mod_prev || throw(
             LoweringError(ex, "typegroup of types from multiple modules"))
+        struct_mod_prev = struct_mod
         struct_globalref = setattr!(mkleaf(global_struct_name), :mod, struct_mod)
         push!(global_names, struct_globalref)
         push!(info_vars, ssavar(ctx, sdef, "struct_info"))
@@ -4483,7 +4484,7 @@ ensure_desugaring_attributes!(graph) = ensure_attributes!(
     toplevel_pure=Bool,
     scope_type=Symbol)
 
-@fzone "JL: desugar" function expand_forms_2(ex::SyntaxTree, mod::Module, world::UInt)
+@fzone "JL: desugar" function expand_forms_2(ex::SyntaxTree, world::UInt)
     graph = ensure_desugaring_attributes!(copy_attrs(ex._graph))
     ex = reparent(graph, ex)
     sl = base_layer(ex.context::SyntaxContext)
