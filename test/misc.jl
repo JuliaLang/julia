@@ -1760,21 +1760,37 @@ if !Sys.iswindows() && !running_under_rr()
     end
 
     @testset "SIGINT to a non-interactive process blocked in sleep" begin
-        errfile = tempname()
-        p = run(pipeline(`$(Base.julia_cmd()) --startup-file=no -e "sleep(600)"`;
-                         stdout=devnull, stderr=errfile); wait=false)
-        sleep(3)  # ensure it is sleeping
-        # even 1.11 needed a 2nd SIGINT here, so allow a few attempts
-        for i in 1:3
-            kill(p, 2) # SIGINT
-            timedwait(() -> process_exited(p), 10) === :ok && break
+        # Synchronize on a readiness marker printed from user code (proving the
+        # runtime is up and the SIGINT handler is armed) rather than a racy fixed
+        # sleep. See the "SIGINFO/SIGUSR1 profile triggering" test in
+        # stdlib/Profile for the same pattern.
+        script = """
+            println(stderr, "READY")
+            sleep(600)
+            """
+        iob = Base.BufferStream() # unbounded buffer, so we can read after exit
+        p = run(`$(Base.julia_cmd()) --startup-file=no -e $script`, devnull, devnull, iob; wait=false)
+        reader = @async try # monitor task to set EOF on iob after p exits
+            wait(p)
+        finally
+            closewrite(iob)
         end
-        @test process_exited(p)
-        err = read(errfile, String)
-        @test occursin("InterruptException", err)
-        @test !has_internal_err(err)
-        process_running(p) && kill(p, Base.SIGKILL)
-        wait(p)
+        try
+            @test occursin("READY", readuntil(iob, "READY", keep=true))
+            # even 1.11 needed a 2nd SIGINT here, so allow a few attempts
+            for i in 1:3
+                kill(p, 2) # SIGINT
+                timedwait(() -> process_exited(p), 10) === :ok && break
+            end
+            @test process_exited(p)
+            wait(reader) # wait for iob to reach EOF
+            err = read(iob, String)
+            @test occursin("InterruptException", err)
+            @test !has_internal_err(err)
+        finally
+            process_running(p) && kill(p, Base.SIGKILL)
+            wait(p)
+        end
     end
 
     if Base.identify_package("Distributed") !== nothing
