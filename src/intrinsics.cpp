@@ -436,7 +436,7 @@ static Value *emit_unboxed_coercion(jl_codectx_t &ctx, Type *to, Value *unboxed)
 }
 
 // emit code to unpack a raw value from a box into registers
-static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x)
+static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, MaybeAlign align)
 {
     assert(to != getVoidTy(ctx.builder.getContext()));
     if (x.isghost) {
@@ -477,21 +477,23 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x)
         return unboxed;
     }
 
-    unsigned alignment = julia_alignment(x.typ);
+    Align alignment = align ? *align :
+        jl_is_concrete_type(x.typ) ? Align(julia_alignment(x.typ)) :
+        jl_Module->getDataLayout().getABITypeAlign(to);
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, x.tbaa);
     if (!x.inline_roots.empty()) {
-        AllocaInst *combined = emit_static_alloca(ctx, to, Align(alignment));
+        AllocaInst *combined = emit_static_alloca(ctx, to, alignment);
         setName(ctx.emission_context, combined, [&]() {
             std::string type_str = jl_is_datatype(x.typ) ? jl_symbol_name(((jl_datatype_t*)x.typ)->name->name) : "<unknown type>";
             return "unbox::" + type_str;
         });
         auto combined_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
-        recombine_value(ctx, x, combined, combined_ai, Align(alignment), false);
+        recombine_value(ctx, x, combined, combined_ai, alignment, false);
         p = combined;
         ai = combined_ai;
     }
     assert(p); // clang-sa doesn't know that x.ispointer() implied this is true
-    Instruction *load = ctx.builder.CreateAlignedLoad(to, p, Align(alignment));
+    Instruction *load = ctx.builder.CreateAlignedLoad(to, p, alignment);
     setName(ctx.emission_context, load, p->getName() + ".unbox");
     return ai.decorateInst(load);
 }
