@@ -489,7 +489,16 @@ function repl_backend_loop(backend::REPLBackend, get_module::Function)
         # prompt (or one that raced the end of the previous evaluation,
         # issue #58689) a no-op. The idle wait itself is not cancellable.
         Base.sigint_close_episode!()
-        ast_or_func, show_value = take!(backend.repl_channel; cancel=nothing)
+        ast_or_func, show_value = try
+            take!(backend.repl_channel; cancel=nothing)
+        catch e
+            # ^C never lands here as an exception (the idle wait is not
+            # cancellable), but a stray InterruptException injected into the
+            # backend task by a package or user code must not tear down the
+            # REPL session.
+            e isa InterruptException && continue
+            rethrow()
+        end
         if show_value == -1
             # exit flag
             break
