@@ -29,6 +29,10 @@ Language changes
     (e.g. `Type{Int} <: Union{DataType,UnionAll}` holds). `isa` and dispatch of type *values* are
     unaffected, and a method on `Type{Int}` remains more specific than one on `DataType`
     ([#33136], [#62141]).
+  - Introduced explicitly wrapping arithmetic operators `+%`, `-%`, `*%` to annotate arithmetic operations
+    that are semantically safe to wrap/overflow. Their behavior is currently identical to the default `+`, `-`, `*`
+    operators. However, in a future version, there may be opt-in support to detect unannotated wrapping
+    in the default operators ([#50790]).
 
 Compiler/Runtime improvements
 -----------------------------
