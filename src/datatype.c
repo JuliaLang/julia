@@ -943,7 +943,19 @@ static void jl_setup_type_wrapper(jl_typename_t *tn, jl_svec_t *parameters, jl_v
     // stays reachable through tn->wrapper during this call
     *wrapper = jl_translate_vars_to_refs(*wrapper, parameters, np);
     for (int i = np - 1; i >= 0; i--) {
-        jl_tvar_t *v = (jl_tvar_t*)jl_svecref(parameters, i);
+        jl_value_t *p = jl_svecref(parameters, i);
+        if (!jl_is_typevar(p)) {
+            // bootstrap: `jl_anytuple_type` passes its lone Vararg parameter
+            // through here, building a throwaway wrapper that jl_init_types
+            // replaces right after creation. Do not read TypeVar fields from
+            // the Vararg's slots (`lb` would alias its NULL `N` and `ub` would
+            // read past the object); use trivial bounds instead.
+            *wrapper = jl_new_unionall_raw(jl_symbol("T"), jl_bottom_type,
+                                           (jl_value_t*)jl_any_type, *wrapper);
+            jl_gc_write(tn, tn->wrapper, jl_value_t, *wrapper);
+            continue;
+        }
+        jl_tvar_t *v = (jl_tvar_t*)p;
         jl_value_t *lb = NULL, *ub = NULL;
         JL_GC_PUSH2(&lb, &ub);
         // the binder's bounds live outside its own scope and may reference the

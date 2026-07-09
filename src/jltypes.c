@@ -1339,12 +1339,7 @@ JL_DLLEXPORT jl_value_t *jl_new_unionall_raw(jl_sym_t *name, jl_value_t *lb, jl_
         if (jl_tvarref_always_occurs_cov_top(body))
             flags |= JL_UNIONALL_ALWAYSCOV;
     }
-    // N.B. bootstrap builds one throwaway wrapper whose binder slot holds a
-    // Vararg (`anytuple_params`), where the bound reads are garbage: `lb`
-    // aliases a NULL `N`. Only the fields a raw constructor may legally store
-    // untouched are walked defensively here.
-    if ((lb != NULL && has_refs_above(lb, 0)) || (ub != NULL && has_refs_above(ub, 0)) ||
-        has_refs_above(body, 1))
+    if (has_refs_above(lb, 0) || has_refs_above(ub, 0) || has_refs_above(body, 1))
         flags |= JL_UNIONALL_ESCAPINGREFS;
     u->flags = flags;
     return (jl_value_t*)u;
