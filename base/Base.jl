@@ -394,6 +394,9 @@ end
 function __init__()
     # Base library init
     global _atexit_hooks_finished = false
+    # Environment caches populated at sysimage build time must not be consulted at runtime.
+    reset_stdlib_env()
+    empty!(EXPLICIT_ENV_CACHE)
     Filesystem.__postinit__()
     reinit_stdio()
     Multimedia.reinit_displays() # since Multimedia.displays uses stdout as fallback

@@ -1207,7 +1207,7 @@ function __require(into::Module, mod::Symbol)
         return topmod
     end
     @lock require_lock begin
-    LOADING_CACHE[] = LoadingCache()
+    ENV_STACK[] = EnvironmentStack()
     try
         uuidkey_env = identify_package_env(into, String(mod))
         # Core.println("require($(PkgId(into)), $mod) -> $uuidkey_env")
@@ -1244,7 +1244,7 @@ function __require(into::Module, mod::Symbol)
         end
         return _require_prelocked(uuidkey, env)
     finally
-        LOADING_CACHE[] = nothing
+        ENV_STACK[] = nothing
     end
     end
 end
