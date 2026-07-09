@@ -198,6 +198,7 @@ end
 primitive type Int63 <: Signed 63 end
 primitive type UInt63 <: Unsigned 63 end
 Int63(x::Int64) = Core.Intrinsics.trunc_int(Int63, x)
+Int63(x::Signed) = Core.Intrinsics.trunc_int(Int63, Int64(x))
 UInt63(x::UInt64) = Core.Intrinsics.trunc_int(UInt63, x)
 Base.Int64(x::Int63) = Core.Intrinsics.sext_int(Int64, x)
 Base.UInt64(x::UInt63) = Core.Intrinsics.zext_int(UInt64, x)
@@ -209,6 +210,7 @@ let x = UInt63(0xc000_ba98_8765_4321), y = Int63(-1)
     @test Core.bitsizeof(1.0) == 64
     @test UInt64(x) === 0x4000_ba98_8765_4321
     @test Int64(y) === -1
+    @test Int64(Int63(Int32(-1))) === -1
     # Under Revise`, this `code_llvm` query can fail in InteractiveUtils'
     # reflective inference path before it reaches the actual odd-bit lowering.
     if !isdefined(Main, :Revise)
